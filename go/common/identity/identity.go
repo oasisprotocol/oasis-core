@@ -12,6 +12,7 @@ import (
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature/signers/memory"
 	tlsCert "github.com/oasislabs/oasis-core/go/common/crypto/tls"
 	"github.com/oasislabs/oasis-core/go/common/errors"
+	"github.com/oasislabs/oasis-core/go/common/pubsub"
 )
 
 const (
@@ -52,17 +53,31 @@ type Identity struct {
 	P2PSigner signature.Signer
 	// ConsensusSigner is a node consensus key signer.
 	ConsensusSigner signature.Signer
+
 	// TLSSentryClientCertificate is the client certificate used for
 	// connecting to the sentry node's control connection.  It is never rotated.
 	TLSSentryClientCertificate *tls.Certificate
+
 	// DoNotRotateTLS flag is true if we mustn't rotate the TLS certificates below.
 	DoNotRotateTLS bool
+
 	// tlsSigner is a node TLS certificate signer.
 	tlsSigner signature.Signer
 	// tlsCertificate is a certificate that can be used for TLS.
 	tlsCertificate *tls.Certificate
 	// nextTLSCertificate is a certificate that can be used for TLS in the next rotation.
 	nextTLSCertificate *tls.Certificate
+	// tlsRotationNotifier is a notifier for certificate rotations.
+	tlsRotationNotifier *pubsub.Broker
+}
+
+// WatchCertificateRotations subscribes to TLS certificate rotation notifications.
+func (i *Identity) WatchCertificateRotations() (<-chan struct{}, pubsub.ClosableSubscription) {
+	typedCh := make(chan struct{})
+	sub := i.tlsRotationNotifier.Subscribe()
+	sub.Unwrap(typedCh)
+
+	return typedCh, sub
 }
 
 // RotateCertificates rotates the identity's TLS certificates.
@@ -92,6 +107,8 @@ func (i *Identity) RotateCertificates() error {
 		if err != nil {
 			return err
 		}
+
+		i.tlsRotationNotifier.Broadcast(struct{}{})
 	}
 
 	return nil
@@ -250,6 +267,7 @@ func doLoadOrGenerate(dataDir string, signerFactory signature.SignerFactory, sho
 		nextTLSCertificate:         nextCert,
 		DoNotRotateTLS:             dnr,
 		TLSSentryClientCertificate: sentryClientCert,
+		tlsRotationNotifier:        pubsub.NewBroker(false),
 	}, nil
 }
 

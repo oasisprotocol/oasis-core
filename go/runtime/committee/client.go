@@ -351,14 +351,54 @@ func (cc *committeeClient) deleteConnectionLocked(id signature.PublicKey) {
 	delete(cc.conns, id)
 }
 
+func (cc *committeeClient) refreshConnectionLocked(id signature.PublicKey) {
+	cs := cc.conns[id]
+	if cs == nil {
+		return
+	}
+
+	// TODO: Once https://github.com/grpc/grpc-go/pull/3491 is released (gRPC 1.29) we should just
+	//       emit an empty resolver state (via UpdateState) to clear any connections and then push
+	//       actual addresses.
+	node := cs.node
+	cc.deleteConnectionLocked(id)
+	if err := cc.updateConnectionLocked(node); err != nil {
+		cc.logger.Error("failed to refresh connection",
+			"err", err,
+			"node", node,
+		)
+		cc.deleteConnectionLocked(id)
+	}
+}
+
 func (cc *committeeClient) worker(ctx context.Context, ch <-chan *NodeUpdate, sub pubsub.ClosableSubscription) {
 	defer sub.Close()
+
+	// Subscribe to TLS certificate rotations if needed.
+	var rotCh <-chan struct{}
+	if cc.clientIdentity != nil {
+		var rotSub pubsub.ClosableSubscription
+		rotCh, rotSub = cc.clientIdentity.WatchCertificateRotations()
+		defer rotSub.Close()
+	}
 
 	var initialized bool
 	for {
 		select {
 		case <-ctx.Done():
 			return
+		case <-rotCh:
+			// Local TLS certificates have been rotated, we need to refresh connections.
+			cc.logger.Debug("TLS certificates have been rotated, refreshing connections")
+
+			func() {
+				cc.Lock()
+				defer cc.Unlock()
+
+				for id := range cc.conns {
+					cc.refreshConnectionLocked(id)
+				}
+			}()
 		case u := <-ch:
 			func() {
 				cc.Lock()
