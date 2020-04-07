@@ -4,13 +4,16 @@ package signer
 import (
 	"fmt"
 	"os"
+	"strings"
 
 	flag "github.com/spf13/pflag"
 	"github.com/spf13/viper"
 
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
+	compositeSigner "github.com/oasislabs/oasis-core/go/common/crypto/signature/signers/composite"
 	fileSigner "github.com/oasislabs/oasis-core/go/common/crypto/signature/signers/file"
 	ledgerSigner "github.com/oasislabs/oasis-core/go/common/crypto/signature/signers/ledger"
+	memorySigner "github.com/oasislabs/oasis-core/go/common/crypto/signature/signers/memory"
 	remoteSigner "github.com/oasislabs/oasis-core/go/common/crypto/signature/signers/remote"
 	"github.com/oasislabs/oasis-core/go/common/crypto/tls"
 )
@@ -33,6 +36,8 @@ const (
 	cfgSignerRemoteClientCert = "signer.remote.client.certificate"
 	cfgSignerRemoteClientKey  = "signer.remote.client.key"
 	cfgSignerRemoteServerCert = "signer.remote.server.certificate"
+
+	cfgSignerCompositeBackends = "signer.composite.backends"
 )
 
 var (
@@ -41,6 +46,8 @@ var (
 
 	// CLIFlags has the oasis-node specific signer related flags.
 	CLIFlags = flag.NewFlagSet("", flag.ContinueOnError)
+
+	testingAllowMemory bool
 )
 
 // Backend returns the configured signer backend name.
@@ -75,15 +82,32 @@ func LedgerIndex() uint32 {
 
 // NewFactory returns the appropriate SignerFactory based on flags.
 func NewFactory(signerBackend string, signerDir string, roles ...signature.SignerRole) (signature.SignerFactory, error) {
+	signerBackend = strings.ToLower(signerBackend)
+	if signerBackend != compositeSigner.SignerName {
+		return doNewFactory(signerBackend, signerDir, roles...)
+	}
+
+	// The composite signer needs to instantiate multiple signer factorys
+	// and aggregate them together.
+
+	return doNewComposite(signerDir, roles...)
+}
+
+func doNewFactory(signerBackend string, signerDir string, roles ...signature.SignerRole) (signature.SignerFactory, error) {
 	switch signerBackend {
+	case fileSigner.SignerName:
+		return fileSigner.NewFactory(signerDir, roles...)
 	case ledgerSigner.SignerName:
 		config := &ledgerSigner.FactoryConfig{
 			Address: LedgerAddress(),
 			Index:   LedgerIndex(),
 		}
 		return ledgerSigner.NewFactory(config, roles...)
-	case fileSigner.SignerName:
-		return fileSigner.NewFactory(signerDir, roles...)
+	case memorySigner.SignerName:
+		if !testingAllowMemory {
+			return nil, fmt.Errorf("memory signer backend is only for testing")
+		}
+		return memorySigner.NewFactory(), nil
 	case remoteSigner.SignerName:
 		config := &remoteSigner.FactoryConfig{
 			Address: viper.GetString(cfgSignerRemoteAddress),
@@ -109,14 +133,57 @@ func NewFactory(signerBackend string, signerDir string, roles ...signature.Signe
 	}
 }
 
+func doNewComposite(signerDir string, roles ...signature.SignerRole) (signature.SignerFactory, error) {
+	signerRolesMap := make(map[string][]signature.SignerRole)
+
+	s := viper.GetString(cfgSignerCompositeBackends)
+	sp := strings.Split(s, ",")
+	for _, v := range sp {
+		roleSigner := strings.Split(v, ":")
+		if len(roleSigner) != 2 {
+			return nil, fmt.Errorf("malformed composite role assignment")
+		}
+
+		var role signature.SignerRole
+		if err := role.FromString(roleSigner[0]); err != nil {
+			return nil, err
+		}
+
+		signerStr := strings.ToLower(roleSigner[1])
+		signerRolesMap[signerStr] = append(signerRolesMap[signerStr], role)
+	}
+
+	signerMap := make(map[string]signature.SignerFactory)
+	for k, v := range signerRolesMap {
+		signer, err := doNewFactory(k, signerDir, v...)
+		if err != nil {
+			return nil, err
+		}
+		signerMap[k] = signer
+	}
+
+	cfg := make(compositeSigner.FactoryConfig)
+	for k, v := range signerRolesMap {
+		for _, role := range v {
+			if cfg[role] != nil {
+				return nil, fmt.Errorf("multiple backends configured for role: %v", role)
+			}
+			cfg[role] = signerMap[k]
+		}
+	}
+
+	return compositeSigner.NewFactory(cfg, roles...)
+}
+
 func init() {
-	Flags.StringP(CfgSigner, "s", "file", "signer backend [file, ledger, remote]")
+	Flags.StringP(CfgSigner, "s", "file", "signer backend [file, ledger, remote, composite]")
 	Flags.String(cfgSignerLedgerAddress, "", "Ledger signer: select Ledger device based on this specified address. If blank, any available Ledger device will be connected to.")
 	Flags.Uint32(cfgSignerLedgerIndex, 0, "Ledger signer: address index used to derive address on Ledger device")
 	Flags.String(cfgSignerRemoteAddress, "", "remote signer server address")
 	Flags.String(cfgSignerRemoteClientCert, "", "remote signer client certificate path")
 	Flags.String(cfgSignerRemoteClientKey, "", "remote signer client certificate key path")
 	Flags.String(cfgSignerRemoteServerCert, "", "remote signer server certificate path")
+	Flags.String(cfgSignerCompositeBackends, "", "composite signer backends")
 
 	_ = viper.BindPFlags(Flags)
 

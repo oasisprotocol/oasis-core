@@ -3,8 +3,10 @@ package signature
 import (
 	"crypto/sha512"
 	"errors"
+	"fmt"
 	"io"
 	"os"
+	"strconv"
 	"strings"
 	"sync"
 
@@ -161,7 +163,22 @@ const (
 	SignerConsensus
 
 	// If you add to this, also add the new roles to SignerRoles.
+	maxSignerRole = SignerConsensus
 )
+
+func (role *SignerRole) FromString(str string) error {
+	i, err := strconv.Atoi(str)
+	if err != nil {
+		return fmt.Errorf("signature: unknown signer role: '%v'", str)
+	}
+
+	sRole := SignerRole(i)
+	if sRole == SignerUnknown || sRole > maxSignerRole {
+		return fmt.Errorf("signature: invalid signer role: '%v'", str)
+	}
+	*role = sRole
+	return nil
+}
 
 // SignerFactoryCtor is an SignerFactory constructor.
 type SignerFactoryCtor func(interface{}, ...SignerRole) (SignerFactory, error)
