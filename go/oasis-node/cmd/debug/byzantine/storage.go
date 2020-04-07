@@ -11,11 +11,11 @@ import (
 	"google.golang.org/grpc/balancer/roundrobin"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/resolver"
+	"google.golang.org/grpc/resolver/manual"
 
 	"github.com/oasislabs/oasis-core/go/common"
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
 	cmnGrpc "github.com/oasislabs/oasis-core/go/common/grpc"
-	"github.com/oasislabs/oasis-core/go/common/grpc/resolver/manual"
 	"github.com/oasislabs/oasis-core/go/common/identity"
 	"github.com/oasislabs/oasis-core/go/common/node"
 	scheduler "github.com/oasislabs/oasis-core/go/scheduler/api"
@@ -27,10 +27,9 @@ import (
 var _ storage.Backend = (*honestNodeStorage)(nil)
 
 type honestNodeStorage struct {
-	nodeID            signature.PublicKey
-	client            storage.Backend
-	resolverCleanupCb func()
-	initCh            chan struct{}
+	nodeID signature.PublicKey
+	client storage.Backend
+	initCh chan struct{}
 }
 
 func dialOptionForNode(ourCerts []tls.Certificate, node *node.Node) (grpc.DialOption, error) {
@@ -51,13 +50,15 @@ func dialOptionForNode(ourCerts []tls.Certificate, node *node.Node) (grpc.DialOp
 	return grpc.WithTransportCredentials(creds), nil
 }
 
-func dialNode(node *node.Node, opts grpc.DialOption) (*grpc.ClientConn, func(), error) {
-	manualResolver, address, cleanupCb := manual.NewManualResolver()
+func dialNode(node *node.Node, opts grpc.DialOption) (*grpc.ClientConn, error) {
+	manualResolver := manual.NewBuilderWithScheme("oasis-core-resolver")
 
-	conn, err := cmnGrpc.Dial(address, opts, grpc.WithBalancerName(roundrobin.Name)) //nolint: staticcheck
+	conn, err := cmnGrpc.Dial("oasis-core-resolver:///", opts,
+		grpc.WithBalancerName(roundrobin.Name), // nolint: staticcheck
+		grpc.WithResolvers(manualResolver),
+	)
 	if err != nil {
-		cleanupCb()
-		return nil, nil, errors.Wrap(err, "failed dialing node")
+		return nil, errors.Wrap(err, "failed dialing node")
 	}
 	var resolverState resolver.State
 	for _, addr := range node.Committee.Addresses {
@@ -65,7 +66,7 @@ func dialNode(node *node.Node, opts grpc.DialOption) (*grpc.ClientConn, func(), 
 	}
 	manualResolver.UpdateState(resolverState)
 
-	return conn, cleanupCb, nil
+	return conn, nil
 }
 
 func newHonestNodeStorage(id *identity.Identity, node *node.Node) (*honestNodeStorage, error) {
@@ -73,7 +74,7 @@ func newHonestNodeStorage(id *identity.Identity, node *node.Node) (*honestNodeSt
 	if err != nil {
 		return nil, errors.Wrap(err, "storage client DialOptionForNode")
 	}
-	conn, resolverCleanupCb, err := dialNode(node, opts)
+	conn, err := dialNode(node, opts)
 	if err != nil {
 		return nil, errors.Wrap(err, "storage client DialNode")
 	}
@@ -82,10 +83,9 @@ func newHonestNodeStorage(id *identity.Identity, node *node.Node) (*honestNodeSt
 	close(initCh)
 
 	return &honestNodeStorage{
-		nodeID:            node.ID,
-		client:            storage.NewStorageClient(conn),
-		resolverCleanupCb: resolverCleanupCb,
-		initCh:            initCh,
+		nodeID: node.ID,
+		client: storage.NewStorageClient(conn),
+		initCh: initCh,
 	}, nil
 }
 
@@ -130,7 +130,6 @@ func (hns *honestNodeStorage) GetCheckpointChunk(ctx context.Context, chunk *che
 }
 
 func (hns *honestNodeStorage) Cleanup() {
-	hns.resolverCleanupCb()
 }
 
 func (hns *honestNodeStorage) Initialized() <-chan struct{} {

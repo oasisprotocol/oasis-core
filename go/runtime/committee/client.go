@@ -12,12 +12,12 @@ import (
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/resolver"
+	"google.golang.org/grpc/resolver/manual"
 	"google.golang.org/grpc/security/advancedtls"
 
 	"github.com/oasislabs/oasis-core/go/common/crypto/mathrand"
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
 	cmnGrpc "github.com/oasislabs/oasis-core/go/common/grpc"
-	"github.com/oasislabs/oasis-core/go/common/grpc/resolver/manual"
 	"github.com/oasislabs/oasis-core/go/common/identity"
 	"github.com/oasislabs/oasis-core/go/common/logging"
 	"github.com/oasislabs/oasis-core/go/common/node"
@@ -133,8 +133,7 @@ type clientConnState struct {
 	node *node.Node
 	conn *grpc.ClientConn
 
-	resolver          *manual.Resolver
-	resolverCleanupCb func()
+	resolver *manual.Resolver
 
 	certPool *x509.CertPool
 }
@@ -157,7 +156,8 @@ func (cs *clientConnState) Update(n *node.Node) error {
 	}
 	cs.certPool = certPool
 
-	// Update addresses.
+	// Update addresses. The resolver will propagate addresses to the gRPC load balancer which will
+	// internally update subconns based on address changes.
 	var resolverState resolver.State
 	for _, addr := range n.Committee.Addresses {
 		resolverState.Addresses = append(resolverState.Addresses, resolver.Address{Addr: addr.String()})
@@ -180,11 +180,6 @@ func (cs *clientConnState) Close() {
 	if cs.conn != nil {
 		cs.conn.Close()
 		cs.conn = nil
-	}
-	if cs.resolverCleanupCb != nil {
-		cs.resolverCleanupCb()
-		cs.resolverCleanupCb = nil
-		cs.resolver = nil
 	}
 }
 
@@ -319,26 +314,23 @@ func (cc *committeeClient) updateConnectionLocked(n *node.Node) error {
 			return fmt.Errorf("failed to create TLS client credentials: %w", err)
 		}
 
-		var address string
-		cs.resolver, address, cs.resolverCleanupCb = manual.NewManualResolver()
+		// NOTE: The scheme does not need to be unique as this resolver is not global.
+		cs.resolver = manual.NewBuilderWithScheme("oasis-core-resolver")
 		cs.resolver.InitialState(resolver.State{})
 
 		// Create a virtual connection to the given node.
 		conn, err := cmnGrpc.Dial(
-			address,
+			"oasis-core-resolver:///",
 			grpc.WithTransportCredentials(creds),
 			// https://github.com/grpc/grpc-go/issues/3003
 			grpc.WithDefaultServiceConfig(`{"loadBalancingPolicy":"round_robin"}`),
+			grpc.WithResolvers(cs.resolver),
 		)
 		if err != nil {
 			cc.logger.Warn("failed to dial node",
 				"err", err,
 				"node", n,
 			)
-
-			cs.resolverCleanupCb()
-			cs.resolver = nil
-
 			return fmt.Errorf("failed to dial node: %w", err)
 		}
 		cs.conn = conn

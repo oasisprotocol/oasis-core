@@ -61,8 +61,6 @@ type upstreamConn struct {
 	certs [][]byte
 	// Client connection to the upstream node.
 	conn *grpc.ClientConn
-	// Cleanup callback for the manual resolver.
-	resolverCleanupCb func()
 }
 
 func (g *Worker) authFunction() auth.AuthenticationFunction {
