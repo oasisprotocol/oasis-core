@@ -686,6 +686,7 @@ func (w *Worker) querySentries() ([]node.ConsensusAddress, []node.CommitteeAddre
 				"err", err,
 				"sentry_address", sentryAddr,
 			)
+			continue
 		}
 
 		// Keep sentries updated with our latest TLS certificates.
