@@ -18,6 +18,9 @@ const Scheme = "oasis-core-resolver"
 // global is the global resolver registry instance.
 var global *registry
 
+// Resolver is a manual.Resolver.
+type Resolver = manual.Resolver
+
 // registry is a thread-safe resolver registry.
 type registry struct {
 	sync.Mutex
@@ -30,7 +33,7 @@ func (r *registry) Scheme() string {
 	return Scheme
 }
 
-func (r *registry) Build(target resolver.Target, cc resolver.ClientConn, opts resolver.BuildOption) (resolver.Resolver, error) {
+func (r *registry) Build(target resolver.Target, cc resolver.ClientConn, opts resolver.BuildOptions) (resolver.Resolver, error) {
 	// Fetch the actual resolver based on specified target endpoint.
 	id, err := strconv.ParseUint(target.Endpoint, 10, 64)
 	if err != nil {

@@ -11,8 +11,8 @@ import (
 	"time"
 
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/resolver"
+	"google.golang.org/grpc/security/advancedtls"
 
 	"github.com/oasislabs/oasis-core/go/common/crypto/mathrand"
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
@@ -130,9 +130,41 @@ type Client interface {
 }
 
 type clientConnState struct {
-	node              *node.Node
-	conn              *grpc.ClientConn
+	node *node.Node
+	conn *grpc.ClientConn
+
+	resolver          *manual.Resolver
 	resolverCleanupCb func()
+
+	certPool *x509.CertPool
+}
+
+// Update updates the node connection information without closing the connection.
+func (cs *clientConnState) Update(n *node.Node) error {
+	// Update node descriptor.
+	cs.node = n
+
+	// Update certificate pool.
+	certPool := x509.NewCertPool()
+	for _, addr := range n.Committee.Addresses {
+		nodeCert, err := addr.ParseCertificate()
+		if err != nil {
+			// This should never fail as the consensus layer should validate certificates.
+			return fmt.Errorf("failed to parse node certificate: %w", err)
+		}
+
+		certPool.AddCert(nodeCert)
+	}
+	cs.certPool = certPool
+
+	// Update addresses.
+	var resolverState resolver.State
+	for _, addr := range n.Committee.Addresses {
+		resolverState.Addresses = append(resolverState.Addresses, resolver.Address{Addr: addr.String()})
+	}
+	cs.resolver.UpdateState(resolverState)
+
+	return nil
 }
 
 // DelayedClose closes the connection after the given delay. This method does not block the caller.
@@ -152,6 +184,7 @@ func (cs *clientConnState) Close() {
 	if cs.resolverCleanupCb != nil {
 		cs.resolverCleanupCb()
 		cs.resolverCleanupCb = nil
+		cs.resolver = nil
 	}
 }
 
@@ -244,7 +277,7 @@ func (cc *committeeClient) Initialized() <-chan struct{} {
 }
 
 func (cc *committeeClient) updateConnectionLocked(n *node.Node) error {
-	// Cleanup existing connection.
+	// If the connection to given node already exists, only update its addresses/certificates.
 	var cs *clientConnState
 	if cs = cc.conns[n.ID]; cs != nil {
 		// Only update connections if keys or addresses have changed.
@@ -254,69 +287,66 @@ func (cc *committeeClient) updateConnectionLocked(n *node.Node) error {
 			)
 			return nil
 		}
+	} else {
+		// Create a new connection.
+		cs = new(clientConnState)
 
-		cs.DelayedClose(cc.closeDelay)
-	}
+		// Create TLS credentials.
+		opts := advancedtls.ClientOptions{
+			ServerNameOverride: identity.CommonName, // TODO: Consider using a custom VerifyPeer.
+			RootCertificateOptions: advancedtls.RootCertificateOptions{
+				GetRootCAs: func(params *advancedtls.GetRootCAsParams) (*advancedtls.GetRootCAsResults, error) {
+					cc.RLock()
+					defer cc.RUnlock()
 
-	cs = new(clientConnState)
-	cc.conns[n.ID] = cs
-	cs.node = n
+					return &advancedtls.GetRootCAsResults{TrustCerts: cs.certPool}, nil
+				},
+			},
+		}
+		if cc.clientIdentity != nil {
+			// Configure TLS client authentication if required.
+			opts.GetClientCertificate = func(cri *tls.CertificateRequestInfo) (*tls.Certificate, error) {
+				cert := cc.clientIdentity.GetTLSCertificate()
+				if cert == nil {
+					return &tls.Certificate{}, nil
+				}
+				return cert, nil
+			}
+		}
 
-	// Setup resolver.
-	certPool := x509.NewCertPool()
-	for _, addr := range n.Committee.Addresses {
-		nodeCert, err := addr.ParseCertificate()
+		creds, err := advancedtls.NewClientCreds(&opts)
 		if err != nil {
-			// This should never fail as the consensus layer should validate certificates.
-			cc.logger.Warn("failed to parse TLS certificate for node",
+			return fmt.Errorf("failed to create TLS client credentials: %w", err)
+		}
+
+		var address string
+		cs.resolver, address, cs.resolverCleanupCb = manual.NewManualResolver()
+		cs.resolver.InitialState(resolver.State{})
+
+		// Create a virtual connection to the given node.
+		conn, err := cmnGrpc.Dial(
+			address,
+			grpc.WithTransportCredentials(creds),
+			// https://github.com/grpc/grpc-go/issues/3003
+			grpc.WithDefaultServiceConfig(`{"loadBalancingPolicy":"round_robin"}`),
+		)
+		if err != nil {
+			cc.logger.Warn("failed to dial node",
 				"err", err,
 				"node", n,
 			)
-			return fmt.Errorf("failed to parse node certificate: %w", err)
+
+			cs.resolverCleanupCb()
+			cs.resolver = nil
+
+			return fmt.Errorf("failed to dial node: %w", err)
 		}
+		cs.conn = conn
 
-		certPool.AddCert(nodeCert)
+		cc.conns[n.ID] = cs
 	}
 
-	// Create TLS credentials.
-	tlsCfg := tls.Config{
-		RootCAs:    certPool,
-		ServerName: identity.CommonName,
-	}
-	if cc.clientIdentity != nil && cc.clientIdentity.GetTLSCertificate() != nil {
-		// Configure TLS client authentication if required.
-		tlsCfg.GetClientCertificate = func(cri *tls.CertificateRequestInfo) (*tls.Certificate, error) {
-			return cc.clientIdentity.GetTLSCertificate(), nil
-		}
-	}
-	creds := credentials.NewTLS(&tlsCfg)
-
-	manualResolver, address, cleanup := manual.NewManualResolver()
-	cs.resolverCleanupCb = cleanup
-
-	// Start dialing a gRPC connection to the given node.
-	conn, err := cmnGrpc.Dial(
-		address,
-		grpc.WithTransportCredentials(creds),
-		// https://github.com/grpc/grpc-go/issues/3003
-		grpc.WithDefaultServiceConfig(`{"loadBalancingPolicy":"round_robin"}`),
-	)
-	if err != nil {
-		cc.logger.Warn("failed to dial node",
-			"err", err,
-			"node", n,
-		)
-		return fmt.Errorf("failed to dial node: %w", err)
-	}
-	cs.conn = conn
-
-	var resolverState resolver.State
-	for _, addr := range n.Committee.Addresses {
-		resolverState.Addresses = append(resolverState.Addresses, resolver.Address{Addr: addr.String()})
-	}
-	manualResolver.UpdateState(resolverState)
-
-	return nil
+	return cs.Update(n)
 }
 
 func (cc *committeeClient) deleteConnectionLocked(id signature.PublicKey) {
