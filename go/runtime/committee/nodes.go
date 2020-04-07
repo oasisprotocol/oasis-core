@@ -17,13 +17,14 @@ import (
 
 // NodeUpdate is a node update.
 type NodeUpdate struct {
-	Update *node.Node
-	Reset  bool
-	Freeze *FreezeEvent
+	Update      *node.Node
+	Reset       bool
+	Freeze      *VersionEvent
+	BumpVersion *VersionEvent
 }
 
-// FreezeEvent is a committee freeze event.
-type FreezeEvent struct {
+// VersionEvent is a committee version event.
+type VersionEvent struct {
 	Version int64
 }
 
@@ -55,6 +56,15 @@ type NodeDescriptorWatcher interface {
 	//
 	// The version argument may be used to signal which committee version this is.
 	Freeze(version int64)
+
+	// BumpVersion updates the committee version without performing a reset.
+	//
+	// This method may be used when the new committee version is exactly the same as the old one
+	// without introducing a needless reset.
+	//
+	// The watcher must have previously been frozen. Calling this method on an unfrozen watcher may
+	// result in a panic.
+	BumpVersion(version int64)
 
 	// WatchNode starts watching a given node.
 	//
@@ -92,6 +102,20 @@ func (nw *nodeDescriptorWatcher) Reset() {
 	})
 }
 
+func (nw *nodeDescriptorWatcher) BumpVersion(version int64) {
+	nw.Lock()
+	defer nw.Unlock()
+
+	if !nw.frozen {
+		panic("committee: BumpVersion called on an unfrozed node descriptor watcher")
+	}
+	nw.version = version
+
+	nw.notifier.Broadcast(&NodeUpdate{
+		BumpVersion: &VersionEvent{Version: version},
+	})
+}
+
 func (nw *nodeDescriptorWatcher) Freeze(version int64) {
 	nw.Lock()
 	defer nw.Unlock()
@@ -103,7 +127,7 @@ func (nw *nodeDescriptorWatcher) Freeze(version int64) {
 	nw.version = version
 
 	nw.notifier.Broadcast(&NodeUpdate{
-		Freeze: &FreezeEvent{Version: version},
+		Freeze: &VersionEvent{Version: version},
 	})
 }
 
@@ -224,7 +248,7 @@ func NewNodeDescriptorWatcher(ctx context.Context, registry registry.Backend) (N
 			ch.In() <- &NodeUpdate{Update: n}
 		}
 		if nw.frozen {
-			ch.In() <- &NodeUpdate{Freeze: &FreezeEvent{Version: nw.version}}
+			ch.In() <- &NodeUpdate{Freeze: &VersionEvent{Version: nw.version}}
 		}
 	})
 	nw.Reset()

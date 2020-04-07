@@ -12,12 +12,12 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/resolver"
+	"google.golang.org/grpc/resolver/manual"
 
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
 	cmnGrpc "github.com/oasislabs/oasis-core/go/common/grpc"
 	"github.com/oasislabs/oasis-core/go/common/grpc/policy"
 	"github.com/oasislabs/oasis-core/go/common/grpc/proxy"
-	"github.com/oasislabs/oasis-core/go/common/grpc/resolver/manual"
 	"github.com/oasislabs/oasis-core/go/common/identity"
 	"github.com/oasislabs/oasis-core/go/common/logging"
 	"github.com/oasislabs/oasis-core/go/common/node"
@@ -105,15 +105,15 @@ func initConnection(ctx context.Context, logger *logging.Logger, ident *identity
 	})
 
 	// Dial node
-	manualResolver, address, cleanupCb := manual.NewManualResolver()
-	conn, err := cmnGrpc.Dial(address,
+	manualResolver := manual.NewBuilderWithScheme("oasis-core-resolver")
+	conn, err := cmnGrpc.Dial("oasis-core-resolver:///",
 		grpc.WithTransportCredentials(creds),
 		// https://github.com/grpc/grpc-go/issues/3003
 		grpc.WithDefaultServiceConfig(`{"loadBalancingPolicy":"round_robin"}`),
 		grpc.WithDefaultCallOptions(grpc.WaitForReady(true)),
+		grpc.WithResolvers(manualResolver),
 	) //nolint: staticcheck
 	if err != nil {
-		cleanupCb()
 		return nil, fmt.Errorf("error dialing node: %w", err)
 	}
 	var resolverState resolver.State
@@ -123,10 +123,9 @@ func initConnection(ctx context.Context, logger *logging.Logger, ident *identity
 	manualResolver.UpdateState(resolverState)
 
 	return &upstreamConn{
-		nodeID:            upstreamNodeID,
-		certs:             upstreamCerts,
-		conn:              conn,
-		resolverCleanupCb: cleanupCb,
+		nodeID: upstreamNodeID,
+		certs:  upstreamCerts,
+		conn:   conn,
 	}, nil
 }
 

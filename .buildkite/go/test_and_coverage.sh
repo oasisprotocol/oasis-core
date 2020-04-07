@@ -38,6 +38,6 @@ pushd go
   popd
   # MKVS tests.
   pushd storage/mkvs
-    env -u GOPATH go test -race -coverpkg ./... -coverprofile=../../../../coverage-mkvs.txt -covermode=atomic -v ./...
+    env -u GOPATH go test -race -coverpkg ./... -coverprofile=../../../coverage-mkvs.txt -covermode=atomic -v ./...
   popd
 popd

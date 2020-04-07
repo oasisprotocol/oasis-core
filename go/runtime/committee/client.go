@@ -8,20 +8,23 @@ import (
 	"fmt"
 	"math/rand"
 	"sync"
+	"time"
 
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/resolver"
+	"google.golang.org/grpc/resolver/manual"
+	"google.golang.org/grpc/security/advancedtls"
 
 	"github.com/oasislabs/oasis-core/go/common/crypto/mathrand"
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
 	cmnGrpc "github.com/oasislabs/oasis-core/go/common/grpc"
-	"github.com/oasislabs/oasis-core/go/common/grpc/resolver/manual"
 	"github.com/oasislabs/oasis-core/go/common/identity"
 	"github.com/oasislabs/oasis-core/go/common/logging"
 	"github.com/oasislabs/oasis-core/go/common/node"
 	"github.com/oasislabs/oasis-core/go/common/pubsub"
 )
+
+const defaultCloseDelay = 5 * time.Second
 
 // NodeSelectionFeedback is feedback to the node selection policy.
 type NodeSelectionFeedback struct {
@@ -127,9 +130,57 @@ type Client interface {
 }
 
 type clientConnState struct {
-	node              *node.Node
-	conn              *grpc.ClientConn
-	resolverCleanupCb func()
+	node *node.Node
+	conn *grpc.ClientConn
+
+	resolver *manual.Resolver
+
+	certPool *x509.CertPool
+}
+
+// Update updates the node connection information without closing the connection.
+func (cs *clientConnState) Update(n *node.Node) error {
+	// Update node descriptor.
+	cs.node = n
+
+	// Update certificate pool.
+	certPool := x509.NewCertPool()
+	for _, addr := range n.Committee.Addresses {
+		nodeCert, err := addr.ParseCertificate()
+		if err != nil {
+			// This should never fail as the consensus layer should validate certificates.
+			return fmt.Errorf("failed to parse node certificate: %w", err)
+		}
+
+		certPool.AddCert(nodeCert)
+	}
+	cs.certPool = certPool
+
+	// Update addresses. The resolver will propagate addresses to the gRPC load balancer which will
+	// internally update subconns based on address changes.
+	var resolverState resolver.State
+	for _, addr := range n.Committee.Addresses {
+		resolverState.Addresses = append(resolverState.Addresses, resolver.Address{Addr: addr.String()})
+	}
+	cs.resolver.UpdateState(resolverState)
+
+	return nil
+}
+
+// DelayedClose closes the connection after the given delay. This method does not block the caller.
+func (cs *clientConnState) DelayedClose(delay time.Duration) {
+	go func() {
+		time.Sleep(delay)
+		cs.Close()
+	}()
+}
+
+// Close closes the connection.
+func (cs *clientConnState) Close() {
+	if cs.conn != nil {
+		cs.conn.Close()
+		cs.conn = nil
+	}
 }
 
 type committeeClient struct {
@@ -143,6 +194,7 @@ type committeeClient struct {
 
 	clientIdentity      *identity.Identity
 	nodeSelectionPolicy NodeSelectionPolicy
+	closeDelay          time.Duration
 
 	logger *logging.Logger
 }
@@ -220,7 +272,7 @@ func (cc *committeeClient) Initialized() <-chan struct{} {
 }
 
 func (cc *committeeClient) updateConnectionLocked(n *node.Node) error {
-	// Cleanup existing connection.
+	// If the connection to given node already exists, only update its addresses/certificates.
 	var cs *clientConnState
 	if cs = cc.conns[n.ID]; cs != nil {
 		// Only update connections if keys or addresses have changed.
@@ -230,74 +282,63 @@ func (cc *committeeClient) updateConnectionLocked(n *node.Node) error {
 			)
 			return nil
 		}
-
-		if cs.conn != nil {
-			cs.conn.Close()
-		}
-		if cs.resolverCleanupCb != nil {
-			cs.resolverCleanupCb()
-		}
 	} else {
+		// Create a new connection.
 		cs = new(clientConnState)
-		cc.conns[n.ID] = cs
-	}
-	cs.node = n
 
-	// Setup resolver.
-	certPool := x509.NewCertPool()
-	for _, addr := range n.Committee.Addresses {
-		nodeCert, err := addr.ParseCertificate()
+		// Create TLS credentials.
+		opts := advancedtls.ClientOptions{
+			ServerNameOverride: identity.CommonName, // TODO: Consider using a custom VerifyPeer.
+			RootCertificateOptions: advancedtls.RootCertificateOptions{
+				GetRootCAs: func(params *advancedtls.GetRootCAsParams) (*advancedtls.GetRootCAsResults, error) {
+					cc.RLock()
+					defer cc.RUnlock()
+
+					return &advancedtls.GetRootCAsResults{TrustCerts: cs.certPool}, nil
+				},
+			},
+		}
+		if cc.clientIdentity != nil {
+			// Configure TLS client authentication if required.
+			opts.GetClientCertificate = func(cri *tls.CertificateRequestInfo) (*tls.Certificate, error) {
+				cert := cc.clientIdentity.GetTLSCertificate()
+				if cert == nil {
+					return &tls.Certificate{}, nil
+				}
+				return cert, nil
+			}
+		}
+
+		creds, err := advancedtls.NewClientCreds(&opts)
 		if err != nil {
-			// This should never fail as the consensus layer should validate certificates.
-			cc.logger.Warn("failed to parse TLS certificate for node",
+			return fmt.Errorf("failed to create TLS client credentials: %w", err)
+		}
+
+		// NOTE: The scheme does not need to be unique as this resolver is not global.
+		cs.resolver = manual.NewBuilderWithScheme("oasis-core-resolver")
+		cs.resolver.InitialState(resolver.State{})
+
+		// Create a virtual connection to the given node.
+		conn, err := cmnGrpc.Dial(
+			"oasis-core-resolver:///",
+			grpc.WithTransportCredentials(creds),
+			// https://github.com/grpc/grpc-go/issues/3003
+			grpc.WithDefaultServiceConfig(`{"loadBalancingPolicy":"round_robin"}`),
+			grpc.WithResolvers(cs.resolver),
+		)
+		if err != nil {
+			cc.logger.Warn("failed to dial node",
 				"err", err,
 				"node", n,
 			)
-			return fmt.Errorf("failed to parse node certificate: %w", err)
+			return fmt.Errorf("failed to dial node: %w", err)
 		}
+		cs.conn = conn
 
-		certPool.AddCert(nodeCert)
+		cc.conns[n.ID] = cs
 	}
 
-	// Create TLS credentials.
-	tlsCfg := tls.Config{
-		RootCAs:    certPool,
-		ServerName: identity.CommonName,
-	}
-	if cc.clientIdentity != nil && cc.clientIdentity.GetTLSCertificate() != nil {
-		// Configure TLS client authentication if required.
-		tlsCfg.GetClientCertificate = func(cri *tls.CertificateRequestInfo) (*tls.Certificate, error) {
-			return cc.clientIdentity.GetTLSCertificate(), nil
-		}
-	}
-	creds := credentials.NewTLS(&tlsCfg)
-
-	manualResolver, address, cleanup := manual.NewManualResolver()
-	cs.resolverCleanupCb = cleanup
-
-	// Start dialing a gRPC connection to the given node.
-	conn, err := cmnGrpc.Dial(
-		address,
-		grpc.WithTransportCredentials(creds),
-		// https://github.com/grpc/grpc-go/issues/3003
-		grpc.WithDefaultServiceConfig(`{"loadBalancingPolicy":"round_robin"}`),
-	)
-	if err != nil {
-		cc.logger.Warn("failed to dial node",
-			"err", err,
-			"node", n,
-		)
-		return fmt.Errorf("failed to dial node: %w", err)
-	}
-	cs.conn = conn
-
-	var resolverState resolver.State
-	for _, addr := range n.Committee.Addresses {
-		resolverState.Addresses = append(resolverState.Addresses, resolver.Address{Addr: addr.String()})
-	}
-	manualResolver.UpdateState(resolverState)
-
-	return nil
+	return cs.Update(n)
 }
 
 func (cc *committeeClient) deleteConnectionLocked(id signature.PublicKey) {
@@ -306,23 +347,58 @@ func (cc *committeeClient) deleteConnectionLocked(id signature.PublicKey) {
 		return
 	}
 
-	if cs.conn != nil {
-		cs.conn.Close()
-	}
-	if cs.resolverCleanupCb != nil {
-		cs.resolverCleanupCb()
-	}
+	cs.DelayedClose(cc.closeDelay)
 	delete(cc.conns, id)
+}
+
+func (cc *committeeClient) refreshConnectionLocked(id signature.PublicKey) {
+	cs := cc.conns[id]
+	if cs == nil {
+		return
+	}
+
+	// TODO: Once https://github.com/grpc/grpc-go/pull/3491 is released (gRPC 1.29) we should just
+	//       emit an empty resolver state (via UpdateState) to clear any connections and then push
+	//       actual addresses.
+	node := cs.node
+	cc.deleteConnectionLocked(id)
+	if err := cc.updateConnectionLocked(node); err != nil {
+		cc.logger.Error("failed to refresh connection",
+			"err", err,
+			"node", node,
+		)
+		cc.deleteConnectionLocked(id)
+	}
 }
 
 func (cc *committeeClient) worker(ctx context.Context, ch <-chan *NodeUpdate, sub pubsub.ClosableSubscription) {
 	defer sub.Close()
+
+	// Subscribe to TLS certificate rotations if needed.
+	var rotCh <-chan struct{}
+	if cc.clientIdentity != nil {
+		var rotSub pubsub.ClosableSubscription
+		rotCh, rotSub = cc.clientIdentity.WatchCertificateRotations()
+		defer rotSub.Close()
+	}
 
 	var initialized bool
 	for {
 		select {
 		case <-ctx.Done():
 			return
+		case <-rotCh:
+			// Local TLS certificates have been rotated, we need to refresh connections.
+			cc.logger.Debug("TLS certificates have been rotated, refreshing connections")
+
+			func() {
+				cc.Lock()
+				defer cc.Unlock()
+
+				for id := range cc.conns {
+					cc.refreshConnectionLocked(id)
+				}
+			}()
 		case u := <-ch:
 			func() {
 				cc.Lock()
@@ -343,12 +419,16 @@ func (cc *committeeClient) worker(ctx context.Context, ch <-chan *NodeUpdate, su
 					cc.nodeSelectionPolicy.UpdateNodes(nodes)
 
 					cc.version = u.Freeze.Version
-					cc.notifier.Broadcast(u.Freeze.Version)
+					cc.notifier.Broadcast(cc.version)
 
 					if !initialized {
 						close(cc.initCh)
 						initialized = true
 					}
+				case u.BumpVersion != nil:
+					// Committee version has been bumped while committee stayed the same.
+					cc.version = u.BumpVersion.Version
+					cc.notifier.Broadcast(cc.version)
 				case u.Update != nil:
 					// Node information updated.
 					cc.logger.Debug("updating node connection",
@@ -391,6 +471,16 @@ func WithNodeSelectionPolicy(policy NodeSelectionPolicy) ClientOption {
 	}
 }
 
+// WithCloseDelay is an option for configuring the connection close delay after rotating a
+// connection.
+//
+// If not configured it defaults to 5 seconds.
+func WithCloseDelay(delay time.Duration) ClientOption {
+	return func(cc *committeeClient) {
+		cc.closeDelay = delay
+	}
+}
+
 // NewClient creates a new committee client.
 func NewClient(ctx context.Context, nw NodeDescriptorLookup, options ...ClientOption) (Client, error) {
 	ch, sub, err := nw.WatchNodeUpdates()
@@ -404,6 +494,7 @@ func NewClient(ctx context.Context, nw NodeDescriptorLookup, options ...ClientOp
 		notifier:            pubsub.NewBroker(false),
 		initCh:              make(chan struct{}),
 		nodeSelectionPolicy: NewRoundRobinNodeSelectionPolicy(),
+		closeDelay:          defaultCloseDelay,
 		logger:              logging.GetLogger("runtime/committee/client"),
 	}
 
