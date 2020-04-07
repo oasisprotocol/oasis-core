@@ -22,10 +22,15 @@ jobs:
         uses: actions/setup-go@v1
         with:
           go-version: "1.13.x"
+      - name: Set up Rust
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: nightly-2020-02-16
+          override: true
       - name: Install oasis-node prerequisites
         run: |
           sudo apt-get update
-          sudo apt-get install make libseccomp-dev
+          sudo apt-get install make libseccomp-dev protobuf-compiler
       - name: Install GoReleaser
         run: |
           cd $(mktemp --directory /tmp/goreleaser.XXXXX)

@@ -162,7 +162,12 @@ tag-next-release: fetch-git
 
 # Prepare release.
 release:
+	@$(ECHO) "$(CYAN)*** Building release version of oasis-core-runtime-loader...$(OFF)"
+	@CARGO_TARGET_DIR=target/default cargo build -p oasis-core-runtime-loader --release
+	@cp target/default/release/oasis-core-runtime-loader .
+	@$(ECHO) "$(CYAN)*** Preparing release archive...$(OFF)"
 	@goreleaser $(GORELEASER_ARGS)
+	@rm oasis-core-runtime-loader
 
 # Develop in a Docker container.
 docker-shell:
