@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"math/rand"
 	"path/filepath"
+	"time"
 
 	"github.com/spf13/cobra"
 	flag "github.com/spf13/pflag"
@@ -140,6 +141,9 @@ func doRun(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
+	var checkedTxes, deliveredTxes, numBlocks uint64
+	start := time.Now()
+
 	// Emulate the tendermint block generation loop.
 txLoop:
 	for {
@@ -174,6 +178,8 @@ txLoop:
 			} else if v.Code == types.CodeTypeOK {
 				toDeliver = append(toDeliver, v)
 			}
+
+			checkedTxes++
 		}
 
 		// DeliverTx all the pending transactions for this block.
@@ -186,10 +192,22 @@ txLoop:
 				)
 				return fmt.Errorf("consim: DeliverTx response code mismatch")
 			}
+
+			deliveredTxes++
 		}
 
 		mockChain.endBlock()
+
+		numBlocks++
 	}
+
+	elapsed := time.Since(start)
+	logger.Info("transaction processing complete",
+		"time", elapsed,
+		"check_tx_per_sec", float64(checkedTxes)/elapsed.Seconds(),
+		"deliver_tx_per_sec", float64(deliveredTxes)/elapsed.Seconds(),
+		"blocks_per_sec", float64(numBlocks)/elapsed.Seconds(),
+	)
 
 	// Dump the final state to a JSON document.
 	finalGenesis, err := mockChain.stateToGenesis(ctx)
