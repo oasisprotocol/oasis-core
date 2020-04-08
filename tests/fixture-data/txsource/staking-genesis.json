@@ -17,11 +17,12 @@
       "transfer": 10
     }
   },
-  "total_supply": "90000000000",
+  "total_supply": "100000000000",
   "ledger": {
     "LQu4ZtFg8OJ0MC4M4QMeUR7Is6Xt4A/CW+PK/7TPiH0=": {"general": {"balance": "10000000000"}},
     "IluobMWMoZvxeW5ceAEiQj+TJUXZZJu6ZCWgtZxsHds=": {"general": {"balance": "10000000000"}},
     "toAWSrxsxSFbGXQIhu4p2fOL0z/fnirrGT/MuzRgcW8=": {"general": {"balance": "10000000000"}},
+    "y0if0Aboq7xrydRcwzZRN/IoMEPz8NyxHliAAX3OHIw=": {"general": {"balance": "10000000000"}},
 
     "DbeoxcRwDO4Wh8bwq5rAR7wzhiB+LeYn+y7lFSGAZ7I=": {"general": {"balance": "10000000000"}},
     "oWk0qdNhp7XNQDX4YFJY2KeFM+9u4fo16DeSdW1gChg=": {"general": {"balance": "10000000000"}},
