@@ -25,6 +25,7 @@ type mockChainCfg struct {
 	genesisDoc    *genesis.Document
 	tmChainID     string
 	txAuthHandler abci.TransactionAuthHandler
+	numVersions   int64
 }
 
 type mockChain struct {
@@ -157,6 +158,10 @@ func initMockChain(ctx context.Context, cfg *mockChainCfg) (*mockChain, error) {
 		HaltEpochHeight: math.MaxUint64,
 		MinGasPrice:     0, // XXX: Should this be configurable?
 		OwnTxSigner:     localSigner.Public(),
+	}
+	if cfg.numVersions > 0 {
+		muxCfg.Pruning.Strategy = abci.PruneKeepN
+		muxCfg.Pruning.NumKept = cfg.numVersions
 	}
 	mux, err := abci.NewMockMux(ctx, upgrade.NewDummyUpgradeManager(), muxCfg)
 	if err != nil {

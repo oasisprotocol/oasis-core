@@ -28,6 +28,7 @@ import (
 )
 
 const (
+	cfgNumKept      = "consim.num_kept"
 	cfgWorkload     = "consim.workload"
 	cfgWorkloadSeed = "consim.workload.seed"
 )
@@ -113,6 +114,7 @@ func doRun(cmd *cobra.Command, args []string) error {
 		genesisDoc:    genesisDoc,
 		tmChainID:     tmChainID,
 		txAuthHandler: txAuthApp.(abci.TransactionAuthHandler),
+		numVersions:   viper.GetInt64(cfgNumKept),
 	}
 	mockChain, err := initMockChain(ctx, cfg)
 	if err != nil {
@@ -245,6 +247,7 @@ func Register(parentCmd *cobra.Command) {
 }
 
 func init() {
+	flagsConsim.Int64(cfgNumKept, 0, "number of versions kept (0 = all)")
 	flagsConsim.String(cfgWorkload, fileWorkloadName, "workload to execute")
 	flagsConsim.String(cfgWorkloadSeed, "seeeeeeeeeeeeeeeeeeeeeeeeeeeeeed", "DRBG seed for workloads")
 	_ = viper.BindPFlags(flagsConsim)
