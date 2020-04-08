@@ -51,15 +51,15 @@ func (t *transfer) doTransferTx(ctx context.Context, fromIdx int, toIdx int) err
 	tx := staking.NewTransferTx(from.reckonedNonce, &transaction.Fee{}, &transfer)
 	from.reckonedNonce++
 
-	t.logger.Debug("Transfering tokens",
-		"from", from,
-		"to", to,
+	t.logger.Debug("transfering tokens",
+		"from", from.signer.Public(),
+		"to", to.signer.Public(),
 		"amount", transferAmount,
 	)
 	if err := fundSignAndSubmitTx(ctx, t.logger, t.consensus, from.signer, tx, t.fundingAccount); err != nil {
 		t.logger.Error("failed to sign and submit transfer transaction",
 			"tx", tx,
-			"signer", from.signer,
+			"signer", from.signer.Public(),
 		)
 		return fmt.Errorf("failed to sign and submit tx: %w", err)
 	}
@@ -91,13 +91,13 @@ func (t *transfer) doBurnTx(ctx context.Context, idx int) error {
 	acc.reckonedNonce++
 
 	t.logger.Debug("Burning tokens",
-		"account", acc,
+		"account", acc.signer.Public(),
 		"amount", transferBurnAmount,
 	)
 	if err := fundSignAndSubmitTx(ctx, t.logger, t.consensus, acc.signer, tx, t.fundingAccount); err != nil {
 		t.logger.Error("failed to sign and submit transfer transaction",
 			"tx", tx,
-			"signer", acc.signer,
+			"signer", acc.signer.Public(),
 		)
 		return fmt.Errorf("failed to sign and submit tx: %w", err)
 	}
