@@ -84,7 +84,7 @@ func (d *delegation) doEscrowTx(ctx context.Context, rng *rand.Rand, cnsc consen
 	if err := fundSignAndSubmitTx(ctx, d.logger, cnsc, d.accounts[selectedIdx].signer, tx, d.fundingAccount); err != nil {
 		d.logger.Error("failed to sign and submit escrow transaction",
 			"tx", tx,
-			"signer", d.accounts[selectedIdx].signer,
+			"signer", d.accounts[selectedIdx].signer.Public(),
 		)
 		return fmt.Errorf("failed to sign and submit tx: %w", err)
 	}
@@ -140,7 +140,7 @@ func (d *delegation) doReclaimEscrowTx(ctx context.Context, rng *rand.Rand, cnsc
 	if err = fundSignAndSubmitTx(ctx, d.logger, cnsc, d.accounts[selectedIdx].signer, tx, d.fundingAccount); err != nil {
 		d.logger.Error("failed to sign and submit reclaim escrow transaction",
 			"tx", tx,
-			"signer", d.accounts[selectedIdx].signer,
+			"signer", d.accounts[selectedIdx].signer.Public(),
 		)
 		return fmt.Errorf("failed to sign and submit tx: %w", err)
 	}

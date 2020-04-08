@@ -64,7 +64,7 @@ func fundSignAndSubmitTx(ctx context.Context, logger *logging.Logger, cnsc conse
 	logger.Debug("submitting transaction",
 		"tx", tx,
 		"signed_tx", signedTx,
-		"caller", caller,
+		"tx_caller", caller.Public(),
 	)
 
 	// SubmitTx.
@@ -81,7 +81,7 @@ func fundSignAndSubmitTx(ctx context.Context, logger *logging.Logger, cnsc conse
 			"err", err,
 			"tx", tx,
 			"signed_tx", signedTx,
-			"caller", caller,
+			"tx_caller", caller.Public(),
 		)
 		return fmt.Errorf("cnsc.SubmitTx: %w", err)
 	}
