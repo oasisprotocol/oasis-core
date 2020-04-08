@@ -18,3 +18,6 @@ hfuzz_workspace
 
 # Development-linked Workspaces.
 /thirdparty/
+
+# Required for goreleaser to properly generate an archive.
+/oasis-core-runtime-loader

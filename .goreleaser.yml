@@ -30,8 +30,32 @@ builds:
     goarch:
       - amd64
 
+  - id: oasis-net-runner
+    main: ./oasis-net-runner/net-runner.go
+    binary: oasis-net-runner
+    dir: go/
+    flags:
+      - -trimpath
+    ldflags:
+      # NOTE: At the moment, GoReleaser produces different binaries when
+      # releases are built from different git paths, unless -buildid= is added
+      # to ldflags.
+      # For more details, see: https://github.com/oasislabs/goreleaser/issues/1.
+      - -buildid=
+      - -X github.com/oasislabs/oasis-core/go/common/version.SoftwareVersion={{.Env.VERSION}}
+    goos:
+      - linux
+    goarch:
+      - amd64
+
 archives:
-  - name_template: "{{.Binary}}_{{.Version}}_{{.Os}}_{{.Arch}}"
+  - name_template: "{{replace .ProjectName \" \" \"_\" | tolower}}_{{.Version}}_{{.Os}}_{{.Arch}}"
+    files:
+      - CHANGELOG.md
+      - README.md
+      - LICENSE
+      # NOTE: We assume that the Makefile release target prepares this binary.
+      - oasis-core-runtime-loader
 
 checksum:
   name_template: SHA256SUMS
