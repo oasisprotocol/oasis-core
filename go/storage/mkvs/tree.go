@@ -147,8 +147,3 @@ func (t *tree) Close() {
 	t.cache.close()
 	t.pendingWriteLog = nil
 }
-
-// Implements Tree.
-func (t *tree) Size() uint64 {
-	return t.cache.valueSize + t.cache.internalNodeCount*node.InternalNodeSize
-}
