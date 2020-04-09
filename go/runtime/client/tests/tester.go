@@ -85,15 +85,17 @@ func testQuery(
 
 	blk, err = c.GetBlock(ctx, &api.GetBlockRequest{RuntimeID: runtimeID, Round: 0xffffffffffffffff})
 	// Normal block from TestNode/Client/SubmitTx
+	// There can be multiple of these if ClientImplementationTests is run multiple times.
 	require.NoError(t, err, "GetBlock")
-	require.EqualValues(t, 4, blk.Header.Round)
+	require.True(t, blk.Header.Round >= 4)
+	expectedLatestRound := blk.Header.Round
 
 	blkLatest, err := c.GetBlock(ctx, &api.GetBlockRequest{RuntimeID: runtimeID, Round: api.RoundLatest})
 	require.NoError(t, err, "GetBlock(RoundLatest)")
-	require.EqualValues(t, 4, blkLatest.Header.Round)
+	require.EqualValues(t, expectedLatestRound, blkLatest.Header.Round)
 
 	// Out of bounds block round.
-	_, err = c.GetBlock(ctx, &api.GetBlockRequest{RuntimeID: runtimeID, Round: 5})
+	_, err = c.GetBlock(ctx, &api.GetBlockRequest{RuntimeID: runtimeID, Round: expectedLatestRound + 1})
 	require.Error(t, err, "GetBlock")
 
 	// Fetch transaction.
@@ -107,17 +109,20 @@ func testQuery(
 	_, err = c.GetTx(ctx, &api.GetTxRequest{RuntimeID: runtimeID, Round: 4, Index: 1})
 	require.Error(t, err, "GetTx(1)")
 
+	err = c.WaitBlockIndexed(ctx, &api.WaitBlockIndexedRequest{RuntimeID: runtimeID, Round: expectedLatestRound})
+	require.NoError(t, err, "WaitBlockIndexed")
+
 	// Get transaction by latest round.
 	tx, err = c.GetTx(ctx, &api.GetTxRequest{RuntimeID: runtimeID, Round: api.RoundLatest, Index: 0})
 	require.NoError(t, err, "GetTx(RoundLatest)")
-	require.EqualValues(t, 4, tx.Block.Header.Round)
+	require.EqualValues(t, expectedLatestRound, tx.Block.Header.Round)
 	require.EqualValues(t, testInput, tx.Input)
 	require.EqualValues(t, testOutput, tx.Output)
 
 	// Get transaction by block hash and index.
 	tx, err = c.GetTxByBlockHash(ctx, &api.GetTxByBlockHashRequest{RuntimeID: runtimeID, BlockHash: blk.Header.EncodedHash(), Index: 0})
 	require.NoError(t, err, "GetTxByBlockHash")
-	require.EqualValues(t, 4, tx.Block.Header.Round)
+	require.EqualValues(t, expectedLatestRound, tx.Block.Header.Round)
 	require.EqualValues(t, testInput, tx.Input)
 	require.EqualValues(t, testOutput, tx.Output)
 
@@ -130,7 +135,7 @@ func testQuery(
 	// Check that indexer has indexed the block.
 	blk, err = c.GetBlockByHash(ctx, &api.GetBlockByHashRequest{RuntimeID: runtimeID, BlockHash: blk.Header.EncodedHash()})
 	require.NoError(t, err, "GetBlockByHash")
-	require.EqualValues(t, 4, blk.Header.Round)
+	require.EqualValues(t, expectedLatestRound, blk.Header.Round)
 
 	// Check that indexer has indexed txn keys (check the mock worker for key/values).
 	tx, err = c.QueryTx(ctx, &api.QueryTxRequest{RuntimeID: runtimeID, Key: []byte("txn_foo"), Value: []byte("txn_bar")})
