@@ -1,10 +1,9 @@
-// +build gofuzz
-
 package abci
 
 import (
 	"context"
 
+	epochtime "github.com/oasislabs/oasis-core/go/epochtime/api"
 	upgrade "github.com/oasislabs/oasis-core/go/upgrade/api"
 )
 
@@ -16,6 +15,17 @@ type MockABCIMux struct {
 // MockRegisterApp is used to register apps with this muxer during testing.
 func (mux *MockABCIMux) MockRegisterApp(app Application) error {
 	return mux.doRegister(app)
+}
+
+// MockSetEpochtime sets the timesource used by this muxer when testing.
+func (mux *MockABCIMux) MockSetEpochtime(epochTime epochtime.Backend) {
+	mux.state.timeSource = epochTime
+}
+
+// MockSetTransactionAuthHandler sets the transaction auth hander used by
+// this muxer when testing.
+func (mux *MockABCIMux) MockSetTransactionAuthHandler(handler TransactionAuthHandler) {
+	mux.state.txAuthHandler = handler
 }
 
 // MockClose cleans up the muxer's state; it must be called once the muxer is no longer needed.
