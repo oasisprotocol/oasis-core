@@ -67,6 +67,9 @@ type ApplicationConfig struct {
 
 	// OwnTxSigner is the transaction signer identity of the local node.
 	OwnTxSigner signature.PublicKey
+
+	// TestingMemDB forces the MemDB to be used for the state storage.
+	TestingMemDB bool
 }
 
 // TransactionAuthHandler is the interface for ABCI applications that handle

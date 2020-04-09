@@ -429,8 +429,15 @@ func (s *applicationState) metricsWorker() {
 	}
 }
 
+func newStateDB(cfg *ApplicationConfig) (dbm.DB, error) {
+	if cfg.TestingMemDB {
+		return dbm.NewMemDB(), nil
+	}
+	return db.New(filepath.Join(cfg.DataDir, "abci-mux-state"), false)
+}
+
 func newApplicationState(ctx context.Context, cfg *ApplicationConfig) (*applicationState, error) {
-	db, err := db.New(filepath.Join(cfg.DataDir, "abci-mux-state"), false)
+	db, err := newStateDB(cfg)
 	if err != nil {
 		return nil, err
 	}

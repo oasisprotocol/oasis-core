@@ -26,6 +26,7 @@ type mockChainCfg struct {
 	tmChainID     string
 	txAuthHandler abci.TransactionAuthHandler
 	numVersions   int64
+	memDB         bool
 }
 
 type mockChain struct {
@@ -158,6 +159,7 @@ func initMockChain(ctx context.Context, cfg *mockChainCfg) (*mockChain, error) {
 		HaltEpochHeight: math.MaxUint64,
 		MinGasPrice:     0, // XXX: Should this be configurable?
 		OwnTxSigner:     localSigner.Public(),
+		TestingMemDB:    cfg.memDB,
 	}
 	if cfg.numVersions > 0 {
 		muxCfg.Pruning.Strategy = abci.PruneKeepN
