@@ -1782,6 +1782,9 @@ func testErrors(t *testing.T, ndb db.NodeDB, factory NodeDBFactory) {
 	_, _, err = tree.Commit(ctx, badNs, 0)
 	require.Error(t, err, "Commit should fail for bad namespace")
 	require.Equal(t, db.ErrBadNamespace, err)
+
+	// Using the WithoutWriteLog option together with a remote read syncer should panic.
+	require.Panics(t, func() { New(tree, nil, WithoutWriteLog()) })
 }
 
 func testSpecialCaseFromJSON(t *testing.T, ndb db.NodeDB, fixture string) {
