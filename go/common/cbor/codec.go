@@ -13,7 +13,8 @@ import (
 const maxMessageSize = 104857600 // 100MB
 
 var (
-	errMessageTooLarge = errors.New("codec: message too large")
+	errMessageTooLarge  = errors.New("codec: message too large")
+	errMessageMalformed = errors.New("codec: message is malformed")
 
 	codecValueSize = prometheus.NewSummaryVec(
 		prometheus.SummaryOpts{
@@ -52,15 +53,14 @@ func (c *MessageReader) Read(msg interface{}) error {
 		return errMessageTooLarge
 	}
 
-	// Read message bytes.
-	rawMessage := make([]byte, length)
-	if _, err := io.ReadFull(c.reader, rawMessage); err != nil {
+	// Decode message bytes.
+	r := io.LimitReader(c.reader, int64(length))
+	dec := NewDecoder(r)
+	if err := dec.Decode(msg); err != nil {
 		return err
 	}
-
-	// Decode CBOR into given message.
-	if err := Unmarshal(rawMessage, msg); err != nil {
-		return err
+	if r.(*io.LimitedReader).N > 0 {
+		return errMessageMalformed
 	}
 
 	return nil
