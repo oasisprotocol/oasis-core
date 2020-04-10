@@ -22,22 +22,27 @@ var (
 	ErrKnownRootMismatch = errors.New("mkvs: known root mismatch")
 )
 
-// KeyValueTree is the key-value store tree interface.
-type KeyValueTree interface {
-	// Insert inserts a key/value pair into the tree.
-	Insert(ctx context.Context, key []byte, value []byte) error
-
+// ImmutableKeyValueTree is the immutable key-value store tree interface.
+type ImmutableKeyValueTree interface {
 	// Get looks up an existing key.
 	Get(ctx context.Context, key []byte) ([]byte, error)
+
+	// NewIterator returns a new iterator over the tree.
+	NewIterator(ctx context.Context, options ...IteratorOption) Iterator
+}
+
+// KeyValueTree is the key-value store tree interface.
+type KeyValueTree interface {
+	ImmutableKeyValueTree
+
+	// Insert inserts a key/value pair into the tree.
+	Insert(ctx context.Context, key []byte, value []byte) error
 
 	// RemoveExisting removes a key from the tree and returns the previous value.
 	RemoveExisting(ctx context.Context, key []byte) ([]byte, error)
 
 	// Remove removes a key from the tree.
 	Remove(ctx context.Context, key []byte) error
-
-	// NewIterator returns a new iterator over the tree.
-	NewIterator(ctx context.Context, options ...IteratorOption) Iterator
 }
 
 // ClosableTree is a tree interface that can be closed.

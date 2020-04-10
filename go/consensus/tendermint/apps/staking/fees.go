@@ -5,23 +5,30 @@ import (
 
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
 	"github.com/oasislabs/oasis-core/go/common/quantity"
-	"github.com/oasislabs/oasis-core/go/consensus/tendermint/abci"
+	abciAPI "github.com/oasislabs/oasis-core/go/consensus/tendermint/api"
 	stakingState "github.com/oasislabs/oasis-core/go/consensus/tendermint/apps/staking/state"
 )
 
 // disburseFeesP disburses fees to the proposer and persists the voters' and next proposer's shares of the fees.
 //
 // In case of errors the state may be inconsistent.
-func (app *stakingApplication) disburseFeesP(ctx *abci.Context, stakeState *stakingState.MutableState, proposerEntity *signature.PublicKey, totalFees *quantity.Quantity) error {
+func (app *stakingApplication) disburseFeesP(
+	ctx *abciAPI.Context,
+	stakeState *stakingState.MutableState,
+	proposerEntity *signature.PublicKey,
+	totalFees *quantity.Quantity,
+) error {
 	ctx.Logger().Debug("disbursing proposer fees",
 		"total_amount", totalFees,
 	)
 	if totalFees.IsZero() {
-		stakeState.SetLastBlockFees(totalFees)
+		if err := stakeState.SetLastBlockFees(ctx, totalFees); err != nil {
+			return fmt.Errorf("failed to set last block fees: %w", err)
+		}
 		return nil
 	}
 
-	consensusParameters, err := stakeState.ConsensusParameters()
+	consensusParameters, err := stakeState.ConsensusParameters(ctx)
 	if err != nil {
 		return fmt.Errorf("ConsensusParameters: %w", err)
 	}
@@ -48,29 +55,38 @@ func (app *stakingApplication) disburseFeesP(ctx *abci.Context, stakeState *stak
 	if err = quantity.Move(feePersist, totalFees, feePersistAmt); err != nil {
 		return fmt.Errorf("move feePersist: %w", err)
 	}
-	stakeState.SetLastBlockFees(feePersist)
+	if err = stakeState.SetLastBlockFees(ctx, feePersist); err != nil {
+		return fmt.Errorf("failed to set last block fees: %w", err)
+	}
 
 	// Pay the proposer.
 	feeProposerAmt := totalFees.Clone()
 	if proposerEntity != nil {
-		acct := stakeState.Account(*proposerEntity)
+		acct, err := stakeState.Account(ctx, *proposerEntity)
+		if err != nil {
+			return fmt.Errorf("failed to fetch proposer account: %w", err)
+		}
 		if err = quantity.Move(&acct.General.Balance, totalFees, feeProposerAmt); err != nil {
 			return fmt.Errorf("move feeProposerAmt: %w", err)
 		}
-		stakeState.SetAccount(*proposerEntity, acct)
+		if err = stakeState.SetAccount(ctx, *proposerEntity, acct); err != nil {
+			return fmt.Errorf("failed to set account: %w", err)
+		}
 	}
 
 	// Put the rest into the common pool (in case there is no proposer entity to pay).
 	if !totalFees.IsZero() {
 		remaining := totalFees.Clone()
-		commonPool, err := stakeState.CommonPool()
+		commonPool, err := stakeState.CommonPool(ctx)
 		if err != nil {
 			return fmt.Errorf("CommonPool: %w", err)
 		}
 		if err = quantity.Move(commonPool, totalFees, remaining); err != nil {
 			return fmt.Errorf("move remaining: %w", err)
 		}
-		stakeState.SetCommonPool(commonPool)
+		if err = stakeState.SetCommonPool(ctx, commonPool); err != nil {
+			return fmt.Errorf("failed to set common pool: %w", err)
+		}
 	}
 
 	return nil
@@ -79,8 +95,14 @@ func (app *stakingApplication) disburseFeesP(ctx *abci.Context, stakeState *stak
 // disburseFeesVQ disburses persisted fees to the voters and next proposer.
 //
 // In case of errors the state may be inconsistent.
-func (app *stakingApplication) disburseFeesVQ(ctx *abci.Context, stakeState *stakingState.MutableState, proposerEntity *signature.PublicKey, numEligibleValidators int, votingEntities []signature.PublicKey) error {
-	lastBlockFees, err := stakeState.LastBlockFees()
+func (app *stakingApplication) disburseFeesVQ(
+	ctx *abciAPI.Context,
+	stakeState *stakingState.MutableState,
+	proposerEntity *signature.PublicKey,
+	numEligibleValidators int,
+	votingEntities []signature.PublicKey,
+) error {
+	lastBlockFees, err := stakeState.LastBlockFees(ctx)
 	if err != nil {
 		return fmt.Errorf("staking: failed to query last block fees: %w", err)
 	}
@@ -95,7 +117,7 @@ func (app *stakingApplication) disburseFeesVQ(ctx *abci.Context, stakeState *sta
 		return nil
 	}
 
-	consensusParameters, err := stakeState.ConsensusParameters()
+	consensusParameters, err := stakeState.ConsensusParameters(ctx)
 	if err != nil {
 		return fmt.Errorf("ConsensusParameters: %w", err)
 	}
@@ -140,36 +162,48 @@ func (app *stakingApplication) disburseFeesVQ(ctx *abci.Context, stakeState *sta
 	// Pay the next proposer.
 	if !nextProposerTotal.IsZero() {
 		if proposerEntity != nil {
-			acct := stakeState.Account(*proposerEntity)
+			acct, err := stakeState.Account(ctx, *proposerEntity)
+			if err != nil {
+				return fmt.Errorf("failed to fetch next proposer account: %w", err)
+			}
 			if err = quantity.Move(&acct.General.Balance, lastBlockFees, nextProposerTotal); err != nil {
 				return fmt.Errorf("move nextProposerTotal: %w", err)
 			}
-			stakeState.SetAccount(*proposerEntity, acct)
+			if err = stakeState.SetAccount(ctx, *proposerEntity, acct); err != nil {
+				return fmt.Errorf("failed to set next proposer account: %w", err)
+			}
 		}
 	}
 
 	// Pay the voters.
 	if !shareVote.IsZero() {
 		for _, voterEntity := range votingEntities {
-			acct := stakeState.Account(voterEntity)
+			acct, err := stakeState.Account(ctx, voterEntity)
+			if err != nil {
+				return fmt.Errorf("failed to fetch voter %s account: %w", voterEntity, err)
+			}
 			if err = quantity.Move(&acct.General.Balance, lastBlockFees, shareVote); err != nil {
 				return fmt.Errorf("move shareVote: %w", err)
 			}
-			stakeState.SetAccount(voterEntity, acct)
+			if err = stakeState.SetAccount(ctx, voterEntity, acct); err != nil {
+				return fmt.Errorf("failed to set voter %s account: %w", voterEntity, err)
+			}
 		}
 	}
 
 	// Put the rest into the common pool.
 	if !lastBlockFees.IsZero() {
 		remaining := lastBlockFees.Clone()
-		commonPool, err := stakeState.CommonPool()
+		commonPool, err := stakeState.CommonPool(ctx)
 		if err != nil {
-			return fmt.Errorf("CommonPool: %w", err)
+			return fmt.Errorf("failed to query common pool: %w", err)
 		}
 		if err = quantity.Move(commonPool, lastBlockFees, remaining); err != nil {
 			return fmt.Errorf("move remaining: %w", err)
 		}
-		stakeState.SetCommonPool(commonPool)
+		if err = stakeState.SetCommonPool(ctx, commonPool); err != nil {
+			return fmt.Errorf("failed to set common pool: %w", err)
+		}
 	}
 
 	return nil

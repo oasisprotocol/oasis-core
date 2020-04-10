@@ -1,17 +1,18 @@
 package state
 
 import (
+	"context"
 	"fmt"
-
-	"github.com/tendermint/iavl"
 
 	"github.com/oasislabs/oasis-core/go/common"
 	"github.com/oasislabs/oasis-core/go/common/cbor"
 	"github.com/oasislabs/oasis-core/go/common/keyformat"
 	"github.com/oasislabs/oasis-core/go/consensus/tendermint/abci"
+	abciAPI "github.com/oasislabs/oasis-core/go/consensus/tendermint/api"
 	registry "github.com/oasislabs/oasis-core/go/registry/api"
 	roothash "github.com/oasislabs/oasis-core/go/roothash/api"
 	"github.com/oasislabs/oasis-core/go/roothash/api/block"
+	"github.com/oasislabs/oasis-core/go/storage/mkvs"
 )
 
 var (
@@ -37,82 +38,102 @@ type RuntimeState struct {
 	Timer abci.Timer `json:"timer"`
 }
 
+// ImmutableState is the immutable roothash state wrapper.
 type ImmutableState struct {
-	*abci.ImmutableState
+	is *abciAPI.ImmutableState
 }
 
-func NewImmutableState(state abci.ApplicationState, version int64) (*ImmutableState, error) {
-	inner, err := abci.NewImmutableState(state, version)
+func NewImmutableState(ctx context.Context, state abciAPI.ApplicationState, version int64) (*ImmutableState, error) {
+	is, err := abciAPI.NewImmutableState(ctx, state, version)
 	if err != nil {
 		return nil, err
 	}
 
-	return &ImmutableState{inner}, nil
+	return &ImmutableState{is}, nil
 }
 
-func (s *ImmutableState) RuntimeState(id common.Namespace) (*RuntimeState, error) {
-	_, raw := s.Snapshot.Get(runtimeKeyFmt.Encode(&id))
+// RuntimeState returns the roothash runtime state for a specific runtime.
+func (s *ImmutableState) RuntimeState(ctx context.Context, id common.Namespace) (*RuntimeState, error) {
+	raw, err := s.is.Get(ctx, runtimeKeyFmt.Encode(&id))
+	if err != nil {
+		return nil, abciAPI.UnavailableStateError(err)
+	}
 	if raw == nil {
 		return nil, roothash.ErrInvalidRuntime
 	}
 
 	var state RuntimeState
-	err := cbor.Unmarshal(raw, &state)
-	return &state, err
+	if err = cbor.Unmarshal(raw, &state); err != nil {
+		return nil, abciAPI.UnavailableStateError(err)
+	}
+	return &state, nil
 }
 
-func (s *ImmutableState) Runtimes() []*RuntimeState {
+// Runtimes returns the list of all roothash runtime states.
+func (s *ImmutableState) Runtimes(ctx context.Context) ([]*RuntimeState, error) {
+	it := s.is.NewIterator(ctx)
+	defer it.Close()
+
 	var runtimes []*RuntimeState
-	s.Snapshot.IterateRange(
-		runtimeKeyFmt.Encode(),
-		nil,
-		true,
-		func(key, value []byte) bool {
-			if !runtimeKeyFmt.Decode(key) {
-				return true
-			}
+	for it.Seek(runtimeKeyFmt.Encode()); it.Valid(); it.Next() {
+		if !runtimeKeyFmt.Decode(it.Key()) {
+			break
+		}
 
-			var state RuntimeState
-			cbor.MustUnmarshal(value, &state)
+		var state RuntimeState
+		if err := cbor.Unmarshal(it.Value(), &state); err != nil {
+			return nil, abciAPI.UnavailableStateError(err)
+		}
 
-			runtimes = append(runtimes, &state)
-			return false
-		},
-	)
-
-	return runtimes
+		runtimes = append(runtimes, &state)
+	}
+	if it.Err() != nil {
+		return nil, abciAPI.UnavailableStateError(it.Err())
+	}
+	return runtimes, nil
 }
 
-func (s *ImmutableState) ConsensusParameters() (*roothash.ConsensusParameters, error) {
-	_, raw := s.Snapshot.Get(parametersKeyFmt.Encode())
+// ConsensusParameters returns the roothash consensus parameters.
+func (s *ImmutableState) ConsensusParameters(ctx context.Context) (*roothash.ConsensusParameters, error) {
+	raw, err := s.is.Get(ctx, parametersKeyFmt.Encode())
+	if err != nil {
+		return nil, abciAPI.UnavailableStateError(err)
+	}
 	if raw == nil {
 		return nil, fmt.Errorf("tendermint/roothash: expected consensus parameters to be present in app state")
 	}
 
 	var params roothash.ConsensusParameters
-	err := cbor.Unmarshal(raw, &params)
-	return &params, err
+	if err = cbor.Unmarshal(raw, &params); err != nil {
+		return nil, abciAPI.UnavailableStateError(err)
+	}
+	return &params, nil
 }
 
+// MutableState is the mutable roothash state wrapper.
 type MutableState struct {
 	*ImmutableState
 
-	tree *iavl.MutableTree
+	ms mkvs.KeyValueTree
 }
 
-func NewMutableState(tree *iavl.MutableTree) *MutableState {
-	inner := &abci.ImmutableState{Snapshot: tree.ImmutableTree}
-
+func NewMutableState(tree mkvs.KeyValueTree) *MutableState {
 	return &MutableState{
-		ImmutableState: &ImmutableState{inner},
-		tree:           tree,
+		ImmutableState: &ImmutableState{
+			&abciAPI.ImmutableState{ImmutableKeyValueTree: tree},
+		},
+		ms: tree,
 	}
 }
 
-func (s *MutableState) SetRuntimeState(state *RuntimeState) {
-	s.tree.Set(runtimeKeyFmt.Encode(&state.Runtime.ID), cbor.Marshal(state))
+// SetRuntimeState sets a runtime's roothash state.
+func (s *MutableState) SetRuntimeState(ctx context.Context, state *RuntimeState) error {
+	err := s.ms.Insert(ctx, runtimeKeyFmt.Encode(&state.Runtime.ID), cbor.Marshal(state))
+	return abciAPI.UnavailableStateError(err)
 }
 
-func (s *MutableState) SetConsensusParameters(params *roothash.ConsensusParameters) {
-	s.tree.Set(parametersKeyFmt.Encode(), cbor.Marshal(params))
+// SetConsensusParameters sets roothash consensus parameters.
+func (s *MutableState) SetConsensusParameters(ctx context.Context, params *roothash.ConsensusParameters) error {
+	err := s.ms.Insert(ctx, parametersKeyFmt.Encode(), cbor.Marshal(params))
+	return abciAPI.UnavailableStateError(err)
 }

@@ -1,6 +1,7 @@
 package commitment
 
 import (
+	"context"
 	"crypto/rand"
 	"errors"
 	"testing"
@@ -58,7 +59,7 @@ type staticNodeLookup struct {
 	runtime *node.Runtime
 }
 
-func (n *staticNodeLookup) Node(id signature.PublicKey) (*node.Node, error) {
+func (n *staticNodeLookup) Node(ctx context.Context, id signature.PublicKey) (*node.Node, error) {
 	return &node.Node{
 		ID:       id,
 		Runtimes: []*node.Runtime{n.runtime},
@@ -87,7 +88,7 @@ func TestPoolDefault(t *testing.T) {
 
 	// An empty pool should work but should always error.
 	pool := Pool{}
-	err = pool.AddExecutorCommitment(blk, nopSV, &staticNodeLookup{}, commit)
+	err = pool.AddExecutorCommitment(context.Background(), blk, nopSV, &staticNodeLookup{}, commit)
 	require.Error(t, err, "AddExecutorCommitment")
 	err = pool.CheckEnoughCommitments(false)
 	require.Error(t, err, "CheckEnoughCommitments")
@@ -151,7 +152,7 @@ func TestPoolSingleCommitment(t *testing.T) {
 	}
 
 	// Adding a commitment not based on correct block should fail.
-	err = pool.AddExecutorCommitment(parentBlk, sv, nl, commit)
+	err = pool.AddExecutorCommitment(context.Background(), parentBlk, sv, nl, commit)
 	require.Error(t, err, "AddExecutorCommitment")
 
 	// There should not be enough executor commitments.
@@ -169,7 +170,7 @@ func TestPoolSingleCommitment(t *testing.T) {
 	bodyIncorrectStorageSig.StorageSignatures[0] = generateStorageReceiptSignature(t, parentBlk, &bodyIncorrectStorageSig)
 	incorrectCommit, err := SignExecutorCommitment(sk, &bodyIncorrectStorageSig)
 	require.NoError(t, err, "SignExecutorCommitment")
-	err = pool.AddExecutorCommitment(childBlk, sv, nl, incorrectCommit)
+	err = pool.AddExecutorCommitment(context.Background(), childBlk, sv, nl, incorrectCommit)
 	require.Error(t, err, "AddExecutorCommitment")
 
 	// Adding a commitment having txn scheduler inputs signed with an incorrect
@@ -179,16 +180,16 @@ func TestPoolSingleCommitment(t *testing.T) {
 	bodyIncorrectTxnSchedSig.TxnSchedSig = generateTxnSchedulerSignature(t, childBlk, &bodyIncorrectTxnSchedSig)
 	incorrectCommit, err = SignExecutorCommitment(sk, &bodyIncorrectTxnSchedSig)
 	require.NoError(t, err, "SignExecutorCommitment")
-	err = pool.AddExecutorCommitment(childBlk, sv, nl, incorrectCommit)
+	err = pool.AddExecutorCommitment(context.Background(), childBlk, sv, nl, incorrectCommit)
 	require.Error(t, err, "AddExecutorCommitment")
 
 	// Adding a commitment should succeed.
-	err = pool.AddExecutorCommitment(childBlk, sv, nl, commit)
+	err = pool.AddExecutorCommitment(context.Background(), childBlk, sv, nl, commit)
 	require.NoError(t, err, "AddExecutorCommitment")
 
 	// Adding a commitment twice for the same node should fail.
-	err = pool.AddExecutorCommitment(childBlk, sv, nl, commit)
-	require.Error(t, err, "AddExecutorCommitment(duplicate)")
+	err = pool.AddExecutorCommitment(context.Background(), childBlk, sv, nl, commit)
+	require.Error(t, err, "AddExecutorCommitment(context.Background(), duplicate)")
 
 	// There should be enough executor commitments.
 	err = pool.CheckEnoughCommitments(false)
@@ -263,7 +264,7 @@ func TestPoolSingleCommitmentTEE(t *testing.T) {
 	require.NoError(t, err, "SignExecutorCommitment")
 
 	// Adding a commitment not based on correct block should fail.
-	err = pool.AddExecutorCommitment(parentBlk, nopSV, nl, commit)
+	err = pool.AddExecutorCommitment(context.Background(), parentBlk, nopSV, nl, commit)
 	require.Error(t, err, "AddExecutorCommitment")
 
 	// There should not be enough executor commitments.
@@ -275,12 +276,12 @@ func TestPoolSingleCommitmentTEE(t *testing.T) {
 	require.Equal(t, ErrStillWaiting, err, "CheckEnoughCommitments")
 
 	// Adding a commitment should succeed.
-	err = pool.AddExecutorCommitment(childBlk, nopSV, nl, commit)
+	err = pool.AddExecutorCommitment(context.Background(), childBlk, nopSV, nl, commit)
 	require.NoError(t, err, "AddExecutorCommitment")
 
 	// Adding a commitment twice for the same node should fail.
-	err = pool.AddExecutorCommitment(childBlk, nopSV, nl, commit)
-	require.Error(t, err, "AddExecutorCommitment(duplicate)")
+	err = pool.AddExecutorCommitment(context.Background(), childBlk, nopSV, nl, commit)
+	require.Error(t, err, "AddExecutorCommitment(context.Background(), duplicate)")
 
 	// There should be enough executor commitments.
 	err = pool.CheckEnoughCommitments(false)
@@ -326,12 +327,12 @@ func TestPoolTwoCommitments(t *testing.T) {
 		require.NoError(t, err, "SignExecutorCommitment")
 
 		// Adding a commitment for an invalid committee should fail.
-		err = pool.AddExecutorCommitment(childBlk, nopSV, nl, cInvalidCommit)
+		err = pool.AddExecutorCommitment(context.Background(), childBlk, nopSV, nl, cInvalidCommit)
 		require.Error(t, err, "AddExecutorCommitment")
 		require.Equal(t, ErrInvalidCommitteeID, err, "AddExecutorCommitment")
 
 		// Adding commitment 1 should succeed.
-		err = pool.AddExecutorCommitment(childBlk, nopSV, nl, commit1)
+		err = pool.AddExecutorCommitment(context.Background(), childBlk, nopSV, nl, commit1)
 		require.NoError(t, err, "AddExecutorCommitment")
 
 		// There should not be enough executor commitments.
@@ -343,7 +344,7 @@ func TestPoolTwoCommitments(t *testing.T) {
 		require.Equal(t, ErrStillWaiting, err, "CheckEnoughCommitments")
 
 		// Adding commitment 2 should succeed.
-		err = pool.AddExecutorCommitment(childBlk, nopSV, nl, commit2)
+		err = pool.AddExecutorCommitment(context.Background(), childBlk, nopSV, nl, commit2)
 		require.NoError(t, err, "AddExecutorCommitment")
 
 		// There should be enough executor commitments.
@@ -384,7 +385,7 @@ func TestPoolTwoCommitments(t *testing.T) {
 		require.NoError(t, err, "SignExecutorCommitment")
 
 		// Adding commitment 1 should succeed.
-		err = pool.AddExecutorCommitment(childBlk, nopSV, nl, commit1)
+		err = pool.AddExecutorCommitment(context.Background(), childBlk, nopSV, nl, commit1)
 		require.NoError(t, err, "AddExecutorCommitment")
 
 		// There should not be enough executor commitments.
@@ -396,7 +397,7 @@ func TestPoolTwoCommitments(t *testing.T) {
 		require.Equal(t, ErrStillWaiting, err, "CheckEnoughCommitments")
 
 		// Adding commitment 2 should succeed.
-		err = pool.AddExecutorCommitment(childBlk, nopSV, nl, commit2)
+		err = pool.AddExecutorCommitment(context.Background(), childBlk, nopSV, nl, commit2)
 		require.NoError(t, err, "AddExecutorCommitment")
 
 		// There should be enough executor commitments.
@@ -415,7 +416,7 @@ func TestPoolTwoCommitments(t *testing.T) {
 		require.Equal(t, ErrStillWaiting, err, "CheckEnoughCommitments")
 
 		// Resolve discrepancy with commit from backup worker.
-		err = pool.AddExecutorCommitment(childBlk, nopSV, nl, commit3)
+		err = pool.AddExecutorCommitment(context.Background(), childBlk, nopSV, nl, commit3)
 		require.NoError(t, err, "AddExecutorCommitment")
 
 		// There should be enough executor commitments from backup workers.
@@ -480,7 +481,7 @@ func TestPoolSerialization(t *testing.T) {
 	require.NoError(t, err, "SignExecutorCommitment")
 
 	// Adding a commitment should succeed.
-	err = pool.AddExecutorCommitment(childBlk, nopSV, nl, commit)
+	err = pool.AddExecutorCommitment(context.Background(), childBlk, nopSV, nl, commit)
 	require.NoError(t, err, "AddExecutorCommitment")
 
 	m := cbor.Marshal(pool)
@@ -541,22 +542,22 @@ func TestMultiPoolSerialization(t *testing.T) {
 	require.NoError(t, err, "SignExecutorCommitment")
 
 	// Adding commitment 1 should succeed.
-	sp, err := pool.AddExecutorCommitment(childBlk, nopSV, nl, c1commit1)
+	sp, err := pool.AddExecutorCommitment(context.Background(), childBlk, nopSV, nl, c1commit1)
 	require.NoError(t, err, "AddExecutorCommitment")
 	require.Equal(t, pool.Committees[com1ID], sp, "AddExecutorCommitment")
 
 	// Adding commitment 2 should succeed.
-	sp, err = pool.AddExecutorCommitment(childBlk, nopSV, nl, c1commit2)
+	sp, err = pool.AddExecutorCommitment(context.Background(), childBlk, nopSV, nl, c1commit2)
 	require.NoError(t, err, "AddExecutorCommitment")
 	require.Equal(t, pool.Committees[com1ID], sp, "AddExecutorCommitment")
 
 	// Adding commitment 3 should succeed.
-	sp, err = pool.AddExecutorCommitment(childBlk, nopSV, nl, c2commit1)
+	sp, err = pool.AddExecutorCommitment(context.Background(), childBlk, nopSV, nl, c2commit1)
 	require.NoError(t, err, "AddExecutorCommitment")
 	require.Equal(t, pool.Committees[com2ID], sp, "AddExecutorCommitment")
 
 	// Adding commitment 4 should succeed.
-	sp, err = pool.AddExecutorCommitment(childBlk, nopSV, nl, c2commit2)
+	sp, err = pool.AddExecutorCommitment(context.Background(), childBlk, nopSV, nl, c2commit2)
 	require.NoError(t, err, "AddExecutorCommitment")
 	require.Equal(t, pool.Committees[com2ID], sp, "AddExecutorCommitment")
 
@@ -617,7 +618,7 @@ func TestPoolMergeCommitment(t *testing.T) {
 		require.NoError(t, err, "SignMergeCommitment")
 
 		// Adding commitment 1 should succeed.
-		err = mergePool.AddMergeCommitment(childBlk, nopSV, nl, mergeCommit1, &executorPool)
+		err = mergePool.AddMergeCommitment(context.Background(), childBlk, nopSV, nl, mergeCommit1, &executorPool)
 		require.NoError(t, err, "AddMergeCommitment")
 
 		// There should not be enough merge commitments.
@@ -629,7 +630,7 @@ func TestPoolMergeCommitment(t *testing.T) {
 		require.Equal(t, ErrStillWaiting, err, "CheckEnoughCommitments")
 
 		// Adding commitment 2 should succeed.
-		err = mergePool.AddMergeCommitment(childBlk, nopSV, nl, mergeCommit2, &executorPool)
+		err = mergePool.AddMergeCommitment(context.Background(), childBlk, nopSV, nl, mergeCommit2, &executorPool)
 		require.NoError(t, err, "AddExecutorCommitment")
 
 		m := cbor.Marshal(executorPool)
@@ -695,7 +696,7 @@ func TestPoolMergeCommitment(t *testing.T) {
 		require.NoError(t, err, "SignMergeCommitment")
 
 		// Adding commitment 1 should succeed.
-		err = mergePool.AddMergeCommitment(childBlk, nopSV, nl, mergeCommit1, &executorPool)
+		err = mergePool.AddMergeCommitment(context.Background(), childBlk, nopSV, nl, mergeCommit1, &executorPool)
 		require.NoError(t, err, "AddMergeCommitment")
 
 		// There should not be enough merge commitments.
@@ -707,7 +708,7 @@ func TestPoolMergeCommitment(t *testing.T) {
 		require.Equal(t, ErrStillWaiting, err, "CheckEnoughCommitments")
 
 		// Adding commitment 2 should succeed.
-		err = mergePool.AddMergeCommitment(childBlk, nopSV, nl, mergeCommit2, &executorPool)
+		err = mergePool.AddMergeCommitment(context.Background(), childBlk, nopSV, nl, mergeCommit2, &executorPool)
 		require.NoError(t, err, "AddExecutorCommitment")
 
 		m := cbor.Marshal(executorPool)
@@ -777,12 +778,12 @@ func TestMultiPool(t *testing.T) {
 		require.NoError(t, err, "SignExecutorCommitment")
 
 		// Adding a commitment for an invalid committee should fail.
-		_, err = pool.AddExecutorCommitment(childBlk, nopSV, nl, cInvalidCommit)
+		_, err = pool.AddExecutorCommitment(context.Background(), childBlk, nopSV, nl, cInvalidCommit)
 		require.Error(t, err, "AddExecutorCommitment")
 		require.Equal(t, ErrInvalidCommitteeID, err, "AddExecutorCommitment")
 
 		// Adding commitment 1 should succeed.
-		sp, err := pool.AddExecutorCommitment(childBlk, nopSV, nl, c1commit1)
+		sp, err := pool.AddExecutorCommitment(context.Background(), childBlk, nopSV, nl, c1commit1)
 		require.NoError(t, err, "AddExecutorCommitment")
 		require.Equal(t, pool.Committees[com1ID], sp, "AddExecutorCommitment")
 
@@ -792,7 +793,7 @@ func TestMultiPool(t *testing.T) {
 		require.Equal(t, ErrStillWaiting, err, "CheckEnoughCommitments")
 
 		// Adding commitment 2 should succeed.
-		sp, err = pool.AddExecutorCommitment(childBlk, nopSV, nl, c1commit2)
+		sp, err = pool.AddExecutorCommitment(context.Background(), childBlk, nopSV, nl, c1commit2)
 		require.NoError(t, err, "AddExecutorCommitment")
 		require.Equal(t, pool.Committees[com1ID], sp, "AddExecutorCommitment")
 
@@ -802,7 +803,7 @@ func TestMultiPool(t *testing.T) {
 		require.Equal(t, ErrStillWaiting, err, "CheckEnoughCommitments")
 
 		// Adding commitment 3 should succeed.
-		sp, err = pool.AddExecutorCommitment(childBlk, nopSV, nl, c2commit1)
+		sp, err = pool.AddExecutorCommitment(context.Background(), childBlk, nopSV, nl, c2commit1)
 		require.NoError(t, err, "AddExecutorCommitment")
 		require.Equal(t, pool.Committees[com2ID], sp, "AddExecutorCommitment")
 
@@ -812,7 +813,7 @@ func TestMultiPool(t *testing.T) {
 		require.Equal(t, ErrStillWaiting, err, "CheckEnoughCommitments")
 
 		// Adding commitment 4 should succeed.
-		sp, err = pool.AddExecutorCommitment(childBlk, nopSV, nl, c2commit2)
+		sp, err = pool.AddExecutorCommitment(context.Background(), childBlk, nopSV, nl, c2commit2)
 		require.NoError(t, err, "AddExecutorCommitment")
 		require.Equal(t, pool.Committees[com2ID], sp, "AddExecutorCommitment")
 
@@ -859,7 +860,7 @@ func TestMultiPool(t *testing.T) {
 		require.NoError(t, err, "SignExecutorCommitment")
 
 		// Adding commitment 1 should succeed.
-		_, err = pool.AddExecutorCommitment(childBlk, nopSV, nl, c1commit1)
+		_, err = pool.AddExecutorCommitment(context.Background(), childBlk, nopSV, nl, c1commit1)
 		require.NoError(t, err, "AddExecutorCommitment")
 
 		// There should not be enough executor commitments.
@@ -868,7 +869,7 @@ func TestMultiPool(t *testing.T) {
 		require.Equal(t, ErrStillWaiting, err, "CheckEnoughCommitments")
 
 		// Adding commitment 2 should succeed.
-		_, err = pool.AddExecutorCommitment(childBlk, nopSV, nl, c1commit2)
+		_, err = pool.AddExecutorCommitment(context.Background(), childBlk, nopSV, nl, c1commit2)
 		require.NoError(t, err, "AddExecutorCommitment")
 
 		// There should not be enough executor commitments.
@@ -877,7 +878,7 @@ func TestMultiPool(t *testing.T) {
 		require.Equal(t, ErrStillWaiting, err, "CheckEnoughCommitments")
 
 		// Adding commitment 3 should succeed.
-		_, err = pool.AddExecutorCommitment(childBlk, nopSV, nl, c2commit1)
+		_, err = pool.AddExecutorCommitment(context.Background(), childBlk, nopSV, nl, c2commit1)
 		require.NoError(t, err, "AddExecutorCommitment")
 
 		// There should not be enough executor commitments.
@@ -886,7 +887,7 @@ func TestMultiPool(t *testing.T) {
 		require.Equal(t, ErrStillWaiting, err, "CheckEnoughCommitments")
 
 		// Adding commitment 4 should succeed.
-		_, err = pool.AddExecutorCommitment(childBlk, nopSV, nl, c2commit2)
+		_, err = pool.AddExecutorCommitment(context.Background(), childBlk, nopSV, nl, c2commit2)
 		require.NoError(t, err, "AddExecutorCommitment")
 
 		// There should be enough executor commitments.
@@ -930,12 +931,12 @@ func TestTryFinalize(t *testing.T) {
 		require.NoError(t, err, "SignExecutorCommitment")
 
 		// Adding a commitment for an invalid committee should fail.
-		err = pool.AddExecutorCommitment(childBlk, nopSV, nl, cInvalidCommit)
+		err = pool.AddExecutorCommitment(context.Background(), childBlk, nopSV, nl, cInvalidCommit)
 		require.Error(t, err, "AddExecutorCommitment")
 		require.Equal(t, ErrInvalidCommitteeID, err, "AddExecutorCommitment")
 
 		// Adding commitment 1 should succeed.
-		err = pool.AddExecutorCommitment(childBlk, nopSV, nl, commit1)
+		err = pool.AddExecutorCommitment(context.Background(), childBlk, nopSV, nl, commit1)
 		require.NoError(t, err, "AddExecutorCommitment")
 
 		_, err = pool.TryFinalize(now, roundTimeout, false, true)
@@ -944,7 +945,7 @@ func TestTryFinalize(t *testing.T) {
 		require.EqualValues(t, now.Add(roundTimeout).Round(time.Second), pool.NextTimeout, "NextTimeout should be set")
 
 		// Adding commitment 2 should succeed.
-		err = pool.AddExecutorCommitment(childBlk, nopSV, nl, commit2)
+		err = pool.AddExecutorCommitment(context.Background(), childBlk, nopSV, nl, commit2)
 		require.NoError(t, err, "AddExecutorCommitment")
 
 		dc, err := pool.TryFinalize(now, roundTimeout, false, true)
@@ -980,7 +981,7 @@ func TestTryFinalize(t *testing.T) {
 		require.NoError(t, err, "SignExecutorCommitment")
 
 		// Adding commitment 1 should succeed.
-		err = pool.AddExecutorCommitment(childBlk, nopSV, nl, commit1)
+		err = pool.AddExecutorCommitment(context.Background(), childBlk, nopSV, nl, commit1)
 		require.NoError(t, err, "AddExecutorCommitment")
 
 		_, err = pool.TryFinalize(now, roundTimeout, false, true)
@@ -989,7 +990,7 @@ func TestTryFinalize(t *testing.T) {
 		require.EqualValues(t, now.Add(roundTimeout).Round(time.Second), pool.NextTimeout, "NextTimeout should be set")
 
 		// Adding commitment 2 should succeed.
-		err = pool.AddExecutorCommitment(childBlk, nopSV, nl, commit2)
+		err = pool.AddExecutorCommitment(context.Background(), childBlk, nopSV, nl, commit2)
 		require.NoError(t, err, "AddExecutorCommitment")
 
 		// There should be a discrepancy.
@@ -1004,7 +1005,7 @@ func TestTryFinalize(t *testing.T) {
 		require.Equal(t, ErrStillWaiting, err)
 
 		// Resolve discrepancy with commit from backup worker.
-		err = pool.AddExecutorCommitment(childBlk, nopSV, nl, commit3)
+		err = pool.AddExecutorCommitment(context.Background(), childBlk, nopSV, nl, commit3)
 		require.NoError(t, err, "AddExecutorCommitment")
 
 		dc, err := pool.TryFinalize(now, roundTimeout, false, true)
@@ -1033,7 +1034,7 @@ func TestTryFinalize(t *testing.T) {
 		correctHeader := body.Header
 
 		// Adding commitment 1 should succeed.
-		err = pool.AddExecutorCommitment(childBlk, nopSV, nl, commit1)
+		err = pool.AddExecutorCommitment(context.Background(), childBlk, nopSV, nl, commit1)
 		require.NoError(t, err, "AddExecutorCommitment")
 
 		_, err = pool.TryFinalize(now, roundTimeout, false, true)
@@ -1065,7 +1066,7 @@ func TestTryFinalize(t *testing.T) {
 		require.EqualValues(t, nowAfterTimeout.Add(roundTimeout).Round(time.Second), pool.NextTimeout, "NextTimeout should be set")
 
 		// Resolve discrepancy with commit from backup worker.
-		err = pool.AddExecutorCommitment(childBlk, nopSV, nl, commit3)
+		err = pool.AddExecutorCommitment(context.Background(), childBlk, nopSV, nl, commit3)
 		require.NoError(t, err, "AddExecutorCommitment")
 
 		dc, err := pool.TryFinalize(now, roundTimeout, false, true)

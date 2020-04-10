@@ -8,7 +8,7 @@ import (
 
 	"github.com/oasislabs/oasis-core/go/common/entity"
 	"github.com/oasislabs/oasis-core/go/common/quantity"
-	"github.com/oasislabs/oasis-core/go/consensus/tendermint/abci"
+	abciAPI "github.com/oasislabs/oasis-core/go/consensus/tendermint/api"
 	staking "github.com/oasislabs/oasis-core/go/staking/api"
 )
 
@@ -16,8 +16,8 @@ func TestStakeAccumulatorCache(t *testing.T) {
 	require := require.New(t)
 
 	now := time.Unix(1580461674, 0)
-	appState := abci.NewMockApplicationState(abci.MockApplicationStateConfig{})
-	ctx := appState.NewContext(abci.ContextBeginBlock, now)
+	appState := abciAPI.NewMockApplicationState(abciAPI.MockApplicationStateConfig{})
+	ctx := appState.NewContext(abciAPI.ContextBeginBlock, now)
 	defer ctx.Close()
 
 	_, err := NewStakeAccumulatorCache(ctx)
@@ -26,11 +26,12 @@ func TestStakeAccumulatorCache(t *testing.T) {
 	stakeState := NewMutableState(ctx.State())
 	var q quantity.Quantity
 	_ = q.FromInt64(1_000)
-	stakeState.SetConsensusParameters(&staking.ConsensusParameters{
+	err = stakeState.SetConsensusParameters(ctx, &staking.ConsensusParameters{
 		Thresholds: map[staking.ThresholdKind]quantity.Quantity{
 			staking.KindEntity: *q.Clone(),
 		},
 	})
+	require.NoError(err, "SetConsensusParameters")
 
 	acc, err := NewStakeAccumulatorCache(ctx)
 	require.NoError(err, "NewStakeAccumulatorCache")
@@ -42,7 +43,8 @@ func TestStakeAccumulatorCache(t *testing.T) {
 	ent, _, _ := entity.TestEntity()
 	var acct staking.Account
 	acct.Escrow.Active.Balance = *q.Clone()
-	stakeState.SetAccount(ent.ID, &acct)
+	err = stakeState.SetAccount(ctx, ent.ID, &acct)
+	require.NoError(err, "SetAccount")
 
 	err = acc.AddStakeClaim(ent.ID, staking.StakeClaim("claim"), []staking.ThresholdKind{staking.KindEntity})
 	require.NoError(err, "AddStakeClaim")
@@ -50,27 +52,33 @@ func TestStakeAccumulatorCache(t *testing.T) {
 	err = acc.CheckStakeClaims(ent.ID)
 	require.NoError(err, "CheckStakeClaims")
 
-	balance := acc.GetEscrowBalance(ent.ID)
-	require.Equal(acct.Escrow.Active.Balance, balance, "GetEscrowBalance should return the correct balance")
+	balance, err := acc.GetEscrowBalance(ent.ID)
+	require.NoError(err, "GetEscrowBalance")
+	require.Equal(&acct.Escrow.Active.Balance, balance, "GetEscrowBalance should return the correct balance")
 
 	// Check that nothing has been committed yet.
-	acct2 := stakeState.Account(ent.ID)
+	acct2, err := stakeState.Account(ctx, ent.ID)
+	require.NoError(err, "Account")
 	require.Len(acct2.Escrow.StakeAccumulator.Claims, 0, "claims should not be updated yet")
 
 	// Now commit and re-check.
-	acc.Commit()
-	acct2 = stakeState.Account(ent.ID)
+	err = acc.Commit()
+	require.NoError(err, "Commit")
+	acct2, err = stakeState.Account(ctx, ent.ID)
+	require.NoError(err, "Account")
 	require.Len(acct2.Escrow.StakeAccumulator.Claims, 1, "claims should be correct")
 
 	err = acc.RemoveStakeClaim(ent.ID, staking.StakeClaim("claim"))
 	require.NoError(err, "RemoveStakeClaim")
 
 	// Check that nothing has been committed.
-	acct2 = stakeState.Account(ent.ID)
+	acct2, err = stakeState.Account(ctx, ent.ID)
+	require.NoError(err, "Account")
 	require.Len(acct2.Escrow.StakeAccumulator.Claims, 1, "claims should not be updated")
 
 	acc.Discard()
-	acct2 = stakeState.Account(ent.ID)
+	acct2, err = stakeState.Account(ctx, ent.ID)
+	require.NoError(err, "Account")
 	require.Len(acct2.Escrow.StakeAccumulator.Claims, 1, "claims should not be updated")
 
 	// Test convenience functions.

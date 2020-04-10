@@ -10,14 +10,14 @@ import (
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
 	"github.com/oasislabs/oasis-core/go/common/node"
 	consensus "github.com/oasislabs/oasis-core/go/consensus/api"
-	"github.com/oasislabs/oasis-core/go/consensus/tendermint/abci"
+	abciAPI "github.com/oasislabs/oasis-core/go/consensus/tendermint/api"
 	registryState "github.com/oasislabs/oasis-core/go/consensus/tendermint/apps/registry/state"
 	schedulerState "github.com/oasislabs/oasis-core/go/consensus/tendermint/apps/scheduler/state"
 	genesis "github.com/oasislabs/oasis-core/go/genesis/api"
 	scheduler "github.com/oasislabs/oasis-core/go/scheduler/api"
 )
 
-func (app *schedulerApplication) InitChain(ctx *abci.Context, req types.RequestInitChain, doc *genesis.Document) error {
+func (app *schedulerApplication) InitChain(ctx *abciAPI.Context, req types.RequestInitChain, doc *genesis.Document) error {
 	baseEpoch, err := app.state.GetBaseEpoch()
 	if err != nil {
 		return fmt.Errorf("tendermint/scheduler: couldn't get base epoch: %w", err)
@@ -25,7 +25,9 @@ func (app *schedulerApplication) InitChain(ctx *abci.Context, req types.RequestI
 	app.baseEpoch = baseEpoch
 
 	state := schedulerState.NewMutableState(ctx.State())
-	state.SetConsensusParameters(&doc.Scheduler.Parameters)
+	if err = state.SetConsensusParameters(ctx, &doc.Scheduler.Parameters); err != nil {
+		return fmt.Errorf("failed to set consensus parameters: %w", err)
+	}
 
 	if doc.Scheduler.Parameters.DebugStaticValidators {
 		ctx.Logger().Warn("static validators are configured")
@@ -55,7 +57,9 @@ func (app *schedulerApplication) InitChain(ctx *abci.Context, req types.RequestI
 		}
 
 		// Add the current validator set to ABCI, so that we can query it later.
-		state.PutCurrentValidators(staticValidators)
+		if err = state.PutCurrentValidators(ctx, staticValidators); err != nil {
+			return fmt.Errorf("failed to set validator set: %w", err)
+		}
 
 		return nil
 	}
@@ -77,7 +81,7 @@ func (app *schedulerApplication) InitChain(ctx *abci.Context, req types.RequestI
 	}
 
 	regState := registryState.NewMutableState(ctx.State())
-	nodes, err := regState.Nodes()
+	nodes, err := regState.Nodes(ctx)
 	if err != nil {
 		return fmt.Errorf("tendermint/scheduler: couldn't get nodes: %w", err)
 	}
@@ -139,13 +143,15 @@ func (app *schedulerApplication) InitChain(ctx *abci.Context, req types.RequestI
 	//
 	// Sort of stupid it needs to be done this way, but tendermint doesn't
 	// appear to pass ABCI the validator set anywhere other than InitChain.
-	state.PutCurrentValidators(currentValidators)
+	if err := state.PutCurrentValidators(ctx, currentValidators); err != nil {
+		return fmt.Errorf("failed to set validator set: %w", err)
+	}
 
 	return nil
 }
 
 func (sq *schedulerQuerier) Genesis(ctx context.Context) (*scheduler.Genesis, error) {
-	params, err := sq.state.ConsensusParameters()
+	params, err := sq.state.ConsensusParameters(ctx)
 	if err != nil {
 		return nil, err
 	}

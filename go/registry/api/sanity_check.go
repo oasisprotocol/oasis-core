@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"fmt"
 	"time"
 
@@ -59,7 +60,8 @@ func SanityCheckEntities(logger *logging.Logger, entities []*entity.SignedEntity
 }
 
 // SanityCheckRuntimes examines the runtimes table.
-func SanityCheckRuntimes(logger *logging.Logger,
+func SanityCheckRuntimes(
+	logger *logging.Logger,
 	params *ConsensusParameters,
 	runtimes []*SignedRuntime,
 	suspendedRuntimes []*SignedRuntime,
@@ -95,7 +97,7 @@ func SanityCheckRuntimes(logger *logging.Logger,
 			if rt.Kind != KindCompute {
 				continue
 			}
-			if err := VerifyRegisterComputeRuntimeArgs(logger, rt, lookup); err != nil {
+			if err := VerifyRegisterComputeRuntimeArgs(context.Background(), logger, rt, lookup); err != nil {
 				return nil, fmt.Errorf("compute runtime sanity check failed: %w", err)
 			}
 		}
@@ -136,7 +138,9 @@ func SanityCheckNodes(
 			return fmt.Errorf("registry: sanity check failed node: %s references a missing entity", n.ID.String())
 		}
 
-		node, _, err := VerifyRegisterNodeArgs(params,
+		node, _, err := VerifyRegisterNodeArgs(
+			context.Background(),
+			params,
 			logger,
 			sn,
 			entity,
@@ -186,7 +190,7 @@ func newSanityCheckRuntimeLookup(runtimes []*Runtime, suspendedRuntimes []*Runti
 	return &sanityCheckRuntimeLookup{rtsMap, sRtsMap}, nil
 }
 
-func (r *sanityCheckRuntimeLookup) Runtime(id common.Namespace) (*Runtime, error) {
+func (r *sanityCheckRuntimeLookup) Runtime(ctx context.Context, id common.Namespace) (*Runtime, error) {
 	rt, ok := r.runtimes[id]
 	if !ok {
 		return nil, fmt.Errorf("runtime not found")
@@ -194,7 +198,7 @@ func (r *sanityCheckRuntimeLookup) Runtime(id common.Namespace) (*Runtime, error
 	return rt, nil
 }
 
-func (r *sanityCheckRuntimeLookup) SuspendedRuntime(id common.Namespace) (*Runtime, error) {
+func (r *sanityCheckRuntimeLookup) SuspendedRuntime(ctx context.Context, id common.Namespace) (*Runtime, error) {
 	srt, ok := r.suspendedRuntimes[id]
 	if !ok {
 		return nil, ErrNoSuchRuntime
@@ -202,7 +206,7 @@ func (r *sanityCheckRuntimeLookup) SuspendedRuntime(id common.Namespace) (*Runti
 	return srt, nil
 }
 
-func (r *sanityCheckRuntimeLookup) AnyRuntime(id common.Namespace) (*Runtime, error) {
+func (r *sanityCheckRuntimeLookup) AnyRuntime(ctx context.Context, id common.Namespace) (*Runtime, error) {
 	rt, ok := r.runtimes[id]
 	if !ok {
 		srt, ok := r.suspendedRuntimes[id]
@@ -220,7 +224,7 @@ type sanityCheckNodeLookup struct {
 	nodesCertHashes map[hash.Hash]*node.Node
 }
 
-func (n *sanityCheckNodeLookup) NodeByConsensusOrP2PKey(key signature.PublicKey) (*node.Node, error) {
+func (n *sanityCheckNodeLookup) NodeByConsensusOrP2PKey(ctx context.Context, key signature.PublicKey) (*node.Node, error) {
 	node, ok := n.nodes[key]
 	if !ok {
 		return nil, ErrNoSuchNode
@@ -228,7 +232,7 @@ func (n *sanityCheckNodeLookup) NodeByConsensusOrP2PKey(key signature.PublicKey)
 	return node, nil
 }
 
-func (n *sanityCheckNodeLookup) NodeByCertificate(cert []byte) (*node.Node, error) {
+func (n *sanityCheckNodeLookup) NodeByCertificate(ctx context.Context, cert []byte) (*node.Node, error) {
 	var h = hash.Hash{}
 	h.FromBytes(cert)
 

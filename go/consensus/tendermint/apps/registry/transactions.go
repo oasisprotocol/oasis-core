@@ -6,7 +6,6 @@ import (
 	"github.com/oasislabs/oasis-core/go/common/cbor"
 	"github.com/oasislabs/oasis-core/go/common/entity"
 	"github.com/oasislabs/oasis-core/go/common/node"
-	"github.com/oasislabs/oasis-core/go/consensus/tendermint/abci"
 	"github.com/oasislabs/oasis-core/go/consensus/tendermint/api"
 	registryState "github.com/oasislabs/oasis-core/go/consensus/tendermint/apps/registry/state"
 	stakingState "github.com/oasislabs/oasis-core/go/consensus/tendermint/apps/staking/state"
@@ -15,7 +14,7 @@ import (
 )
 
 func (app *registryApplication) registerEntity(
-	ctx *abci.Context,
+	ctx *api.Context,
 	state *registryState.MutableState,
 	sigEnt *entity.SignedEntity,
 ) error {
@@ -29,7 +28,7 @@ func (app *registryApplication) registerEntity(
 	}
 
 	// Charge gas for this transaction.
-	params, err := state.ConsensusParameters()
+	params, err := state.ConsensusParameters(ctx)
 	if err != nil {
 		ctx.Logger().Error("RegisterEntity: failed to fetch consensus parameters",
 			"err", err,
@@ -60,7 +59,9 @@ func (app *registryApplication) registerEntity(
 		}
 	}
 
-	state.SetEntity(ent, sigEnt)
+	if err = state.SetEntity(ctx, ent, sigEnt); err != nil {
+		return fmt.Errorf("failed to set entity: %w", err)
+	}
 
 	ctx.Logger().Debug("RegisterEntity: registered",
 		"entity", ent,
@@ -71,13 +72,13 @@ func (app *registryApplication) registerEntity(
 	return nil
 }
 
-func (app *registryApplication) deregisterEntity(ctx *abci.Context, state *registryState.MutableState) error {
+func (app *registryApplication) deregisterEntity(ctx *api.Context, state *registryState.MutableState) error {
 	if ctx.IsCheckOnly() {
 		return nil
 	}
 
 	// Charge gas for this transaction.
-	params, err := state.ConsensusParameters()
+	params, err := state.ConsensusParameters(ctx)
 	if err != nil {
 		ctx.Logger().Error("DeregisterEntity: failed to fetch consensus parameters",
 			"err", err,
@@ -91,7 +92,7 @@ func (app *registryApplication) deregisterEntity(ctx *abci.Context, state *regis
 	id := ctx.TxSigner()
 
 	// Prevent entity deregistration if there are any registered nodes.
-	hasNodes, err := state.HasEntityNodes(id)
+	hasNodes, err := state.HasEntityNodes(ctx, id)
 	if err != nil {
 		ctx.Logger().Error("DeregisterEntity: failed to check for nodes",
 			"err", err,
@@ -105,7 +106,7 @@ func (app *registryApplication) deregisterEntity(ctx *abci.Context, state *regis
 		return registry.ErrEntityHasNodes
 	}
 	// Prevent entity deregistration if there are any registered runtimes.
-	hasRuntimes, err := state.HasEntityRuntimes(id)
+	hasRuntimes, err := state.HasEntityRuntimes(ctx, id)
 	if err != nil {
 		ctx.Logger().Error("DeregisterEntity: failed to check for runtimes",
 			"err", err,
@@ -119,9 +120,13 @@ func (app *registryApplication) deregisterEntity(ctx *abci.Context, state *regis
 		return registry.ErrEntityHasRuntimes
 	}
 
-	removedEntity, err := state.RemoveEntity(id)
-	if err != nil {
+	removedEntity, err := state.RemoveEntity(ctx, id)
+	switch err {
+	case nil:
+	case registry.ErrNoSuchEntity:
 		return err
+	default:
+		return fmt.Errorf("DeregisterEntity: failed to remove entity: %w", err)
 	}
 
 	if !params.DebugBypassStake {
@@ -143,7 +148,7 @@ func (app *registryApplication) deregisterEntity(ctx *abci.Context, state *regis
 }
 
 func (app *registryApplication) registerNode( // nolint: gocyclo
-	ctx *abci.Context,
+	ctx *api.Context,
 	state *registryState.MutableState,
 	sigNode *node.MultiSignedNode,
 ) error {
@@ -160,7 +165,7 @@ func (app *registryApplication) registerNode( // nolint: gocyclo
 		)
 		return err
 	}
-	untrustedEntity, err := state.Entity(untrustedNode.EntityID)
+	untrustedEntity, err := state.Entity(ctx, untrustedNode.EntityID)
 	if err != nil {
 		ctx.Logger().Error("RegisterNode: failed to query owning entity",
 			"err", err,
@@ -169,7 +174,7 @@ func (app *registryApplication) registerNode( // nolint: gocyclo
 		return err
 	}
 
-	params, err := state.ConsensusParameters()
+	params, err := state.ConsensusParameters(ctx)
 	if err != nil {
 		ctx.Logger().Error("RegisterNode: failed to fetch consensus parameters",
 			"err", err,
@@ -177,7 +182,7 @@ func (app *registryApplication) registerNode( // nolint: gocyclo
 		return err
 	}
 
-	epoch, err := app.state.GetEpoch(ctx.Ctx(), ctx.BlockHeight()+1)
+	epoch, err := app.state.GetEpoch(ctx, ctx.BlockHeight()+1)
 	if err != nil {
 		ctx.Logger().Error("RegisterNode: failed to get epoch",
 			"err", err,
@@ -186,6 +191,7 @@ func (app *registryApplication) registerNode( // nolint: gocyclo
 	}
 
 	newNode, paidRuntimes, err := registry.VerifyRegisterNodeArgs(
+		ctx,
 		params,
 		ctx.Logger(),
 		sigNode,
@@ -254,7 +260,7 @@ func (app *registryApplication) registerNode( // nolint: gocyclo
 	}
 
 	// Check if node exists.
-	existingNode, err := state.Node(newNode.ID)
+	existingNode, err := state.Node(ctx, newNode.ID)
 	isNewNode := err == registry.ErrNoSuchNode
 	isExpiredNode := err == nil && existingNode.IsExpired(uint64(epoch))
 	if !isNewNode && err != nil {
@@ -287,14 +293,8 @@ func (app *registryApplication) registerNode( // nolint: gocyclo
 	}
 
 	// Create a new state checkpoint and rollback in case we fail.
-	var ok bool
-	sc := ctx.NewStateCheckpoint()
-	defer func() {
-		if !ok {
-			sc.Rollback()
-		}
-		sc.Close()
-	}()
+	sc := ctx.StartCheckpoint()
+	defer sc.Close()
 
 	// Check that the entity has enough stake for this node registration.
 	var stakeAcc *stakingState.StakeAccumulatorCache
@@ -314,24 +314,26 @@ func (app *registryApplication) registerNode( // nolint: gocyclo
 			)
 			return err
 		}
-		stakeAcc.Commit()
+		if err = stakeAcc.Commit(); err != nil {
+			return fmt.Errorf("failed to commit stake accumulator updates: %w", err)
+		}
 	}
 
 	if isNewNode || isExpiredNode {
 		// Node doesn't exist (or is expired). Create node.
-		if err = state.SetNode(newNode, sigNode); err != nil {
+		if err = state.SetNode(ctx, newNode, sigNode); err != nil {
 			ctx.Logger().Error("RegisterNode: failed to create node",
 				"err", err,
 				"node", newNode,
 				"entity", newNode.EntityID,
 			)
-			return registry.ErrBadEntityForNode
+			return fmt.Errorf("failed to set node: %w", err)
 		}
 
 		var status *registry.NodeStatus
 		if existingNode != nil {
 			// Node exists but is expired, fetch existing status.
-			if status, err = state.NodeStatus(newNode.ID); err != nil {
+			if status, err = state.NodeStatus(ctx, newNode.ID); err != nil {
 				ctx.Logger().Error("RegisterNode: failed to get node status",
 					"err", err,
 				)
@@ -345,11 +347,11 @@ func (app *registryApplication) registerNode( // nolint: gocyclo
 			status = &registry.NodeStatus{}
 		}
 
-		if err = state.SetNodeStatus(newNode.ID, status); err != nil {
+		if err = state.SetNodeStatus(ctx, newNode.ID, status); err != nil {
 			ctx.Logger().Error("RegisterNode: failed to set node status",
 				"err", err,
 			)
-			return registry.ErrInvalidArgument
+			return fmt.Errorf("failed to set node status: %w", err)
 		}
 	} else {
 		// The node already exists, validate and update the node's entry.
@@ -362,13 +364,13 @@ func (app *registryApplication) registerNode( // nolint: gocyclo
 			)
 			return err
 		}
-		if err = state.SetNode(newNode, sigNode); err != nil {
+		if err = state.SetNode(ctx, newNode, sigNode); err != nil {
 			ctx.Logger().Error("RegisterNode: failed to update node",
 				"err", err,
 				"node", newNode,
 				"entity", newNode.EntityID,
 			)
-			return registry.ErrBadEntityForNode
+			return fmt.Errorf("failed to set node: %w", err)
 		}
 	}
 
@@ -383,7 +385,7 @@ func (app *registryApplication) registerNode( // nolint: gocyclo
 			}
 		}
 
-		err := state.ResumeRuntime(rt.ID)
+		err := state.ResumeRuntime(ctx, rt.ID)
 		switch err {
 		case nil:
 			ctx.Logger().Debug("RegisterNode: resumed runtime",
@@ -402,7 +404,7 @@ func (app *registryApplication) registerNode( // nolint: gocyclo
 		}
 	}
 
-	ok = true
+	sc.Commit()
 
 	ctx.Logger().Debug("RegisterNode: registered",
 		"node", newNode,
@@ -415,7 +417,7 @@ func (app *registryApplication) registerNode( // nolint: gocyclo
 }
 
 func (app *registryApplication) unfreezeNode(
-	ctx *abci.Context,
+	ctx *api.Context,
 	state *registryState.MutableState,
 	unfreeze *registry.UnfreezeNode,
 ) error {
@@ -424,7 +426,7 @@ func (app *registryApplication) unfreezeNode(
 	}
 
 	// Charge gas for this transaction.
-	params, err := state.ConsensusParameters()
+	params, err := state.ConsensusParameters(ctx)
 	if err != nil {
 		ctx.Logger().Error("UnfreezeNode: failed to fetch consensus parameters",
 			"err", err,
@@ -436,7 +438,7 @@ func (app *registryApplication) unfreezeNode(
 	}
 
 	// Fetch node descriptor.
-	node, err := state.Node(unfreeze.NodeID)
+	node, err := state.Node(ctx, unfreeze.NodeID)
 	if err != nil {
 		ctx.Logger().Error("UnfreezeNode: failed to fetch node",
 			"err", err,
@@ -450,7 +452,7 @@ func (app *registryApplication) unfreezeNode(
 	}
 
 	// Fetch node status.
-	status, err := state.NodeStatus(unfreeze.NodeID)
+	status, err := state.NodeStatus(ctx, unfreeze.NodeID)
 	if err != nil {
 		ctx.Logger().Error("UnfreezeNode: failed to fetch node status",
 			"err", err,
@@ -461,7 +463,7 @@ func (app *registryApplication) unfreezeNode(
 	}
 
 	// Ensure if we can actually unfreeze.
-	epoch, err := app.state.GetEpoch(ctx.Ctx(), ctx.BlockHeight()+1)
+	epoch, err := app.state.GetEpoch(ctx, ctx.BlockHeight()+1)
 	if err != nil {
 		return err
 	}
@@ -471,8 +473,8 @@ func (app *registryApplication) unfreezeNode(
 
 	// Reset frozen status.
 	status.Unfreeze()
-	if err = state.SetNodeStatus(node.ID, status); err != nil {
-		return err
+	if err = state.SetNodeStatus(ctx, node.ID, status); err != nil {
+		return fmt.Errorf("failed to set node status: %w", err)
 	}
 
 	ctx.Logger().Debug("UnfreezeNode: unfrozen",
@@ -485,11 +487,11 @@ func (app *registryApplication) unfreezeNode(
 }
 
 func (app *registryApplication) registerRuntime( // nolint: gocyclo
-	ctx *abci.Context,
+	ctx *api.Context,
 	state *registryState.MutableState,
 	sigRt *registry.SignedRuntime,
 ) error {
-	params, err := state.ConsensusParameters()
+	params, err := state.ConsensusParameters(ctx)
 	if err != nil {
 		ctx.Logger().Error("RegisterRuntime: failed to fetch consensus parameters",
 			"err", err,
@@ -518,7 +520,7 @@ func (app *registryApplication) registerRuntime( // nolint: gocyclo
 	}
 
 	if rt.Kind == registry.KindCompute {
-		if err = registry.VerifyRegisterComputeRuntimeArgs(ctx.Logger(), rt, state); err != nil {
+		if err = registry.VerifyRegisterComputeRuntimeArgs(ctx, ctx.Logger(), rt, state); err != nil {
 			return err
 		}
 	}
@@ -555,12 +557,12 @@ func (app *registryApplication) registerRuntime( // nolint: gocyclo
 
 	// Make sure the runtime doesn't exist yet.
 	var suspended bool
-	existingRt, err := state.Runtime(rt.ID)
+	existingRt, err := state.Runtime(ctx, rt.ID)
 	switch err {
 	case nil:
 	case registry.ErrNoSuchRuntime:
 		// Make sure the runtime isn't suspended.
-		existingRt, err = state.SuspendedRuntime(rt.ID)
+		existingRt, err = state.SuspendedRuntime(ctx, rt.ID)
 		switch err {
 		case nil:
 			suspended = true
@@ -593,13 +595,13 @@ func (app *registryApplication) registerRuntime( // nolint: gocyclo
 		}
 	}
 
-	if err = state.SetRuntime(rt, sigRt, suspended); err != nil {
+	if err = state.SetRuntime(ctx, rt, sigRt, suspended); err != nil {
 		ctx.Logger().Error("RegisterRuntime: failed to create runtime",
 			"err", err,
 			"runtime", rt,
 			"entity", rt.EntityID,
 		)
-		return registry.ErrBadEntityForRuntime
+		return fmt.Errorf("failed to set runtime: %w", err)
 	}
 
 	if !suspended {

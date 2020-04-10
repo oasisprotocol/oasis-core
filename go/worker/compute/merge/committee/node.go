@@ -294,7 +294,7 @@ func (n *Node) handleResultsLocked(ctx context.Context, commit *commitment.Execu
 	)
 
 	epoch := n.commonNode.Group.GetEpochSnapshot()
-	sp, err := state.pool.AddExecutorCommitment(n.commonNode.CurrentBlock, epoch, epoch, commit)
+	sp, err := state.pool.AddExecutorCommitment(ctx, n.commonNode.CurrentBlock, epoch, epoch, commit)
 	if err != nil {
 		return err
 	}

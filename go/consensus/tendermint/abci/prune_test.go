@@ -1,36 +1,77 @@
 package abci
 
 import (
+	"context"
 	"fmt"
+	"io/ioutil"
+	"os"
 	"testing"
 
 	"github.com/stretchr/testify/require"
-	"github.com/tendermint/iavl"
-	dbm "github.com/tendermint/tm-db"
+
+	"github.com/oasislabs/oasis-core/go/common"
+	"github.com/oasislabs/oasis-core/go/common/crypto/hash"
+	"github.com/oasislabs/oasis-core/go/storage/mkvs"
+	mkvsDB "github.com/oasislabs/oasis-core/go/storage/mkvs/db/api"
+	mkvsBadgerDB "github.com/oasislabs/oasis-core/go/storage/mkvs/db/badger"
 )
 
 func TestPruneKeepN(t *testing.T) {
-	db := dbm.NewMemDB()
-	tree := iavl.NewMutableTree(db, 128)
+	require := require.New(t)
 
-	for i := int64(1); i <= 11; i++ {
-		tree.Set([]byte(fmt.Sprintf("key:%d", i)), []byte(fmt.Sprintf("value:%d", i)))
-		_, ver, err := tree.SaveVersion()
-		require.NoError(t, err, "SaveVersion: %d", i)
-		require.Equal(t, i, ver, "incorrect version on save")
+	// Create a new random temporary directory under /tmp.
+	dir, err := ioutil.TempDir("", "abci-prune.test.badger")
+	require.NoError(err, "TempDir")
+	defer os.RemoveAll(dir)
+
+	// Create a Badger-backed Node DB.
+	ndb, err := mkvsBadgerDB.New(&mkvsDB.Config{
+		DB:           dir,
+		NoFsync:      true,
+		MaxCacheSize: 16 * 1024 * 1024,
+	})
+	require.NoError(err, "New")
+	tree := mkvs.New(nil, ndb)
+
+	ctx := context.Background()
+	for i := uint64(1); i <= 11; i++ {
+		err = tree.Insert(ctx, []byte(fmt.Sprintf("key:%d", i)), []byte(fmt.Sprintf("value:%d", i)))
+		require.NoError(err, "Insert")
+
+		var rootHash hash.Hash
+		_, rootHash, err = tree.Commit(ctx, common.Namespace{}, i)
+		require.NoError(err, "Commit")
+		err = ndb.Finalize(ctx, i, []hash.Hash{rootHash})
+		require.NoError(err, "Finalize")
 	}
+
+	earliestVersion, err := ndb.GetEarliestVersion(ctx)
+	require.NoError(err, "GetEarliestVersion")
+	require.EqualValues(1, earliestVersion, "earliest version should be correct")
+	latestVersion, err := ndb.GetLatestVersion(ctx)
+	require.NoError(err, "GetLatestVersion")
+	require.EqualValues(11, latestVersion, "latest version should be correct")
 
 	pruner, err := newStatePruner(&PruneConfig{
 		Strategy: PruneKeepN,
 		NumKept:  2,
-	}, tree, 10)
-	require.NoError(t, err, "newStatePruner failed")
+	}, ndb, 10)
+	require.NoError(err, "newStatePruner failed")
 
-	for i := int64(1); i <= 10; i++ {
-		require.Equal(t, i >= 8, tree.VersionExists(i), "VersionExists(%d)", i)
-	}
+	earliestVersion, err = ndb.GetEarliestVersion(ctx)
+	require.NoError(err, "GetEarliestVersion")
+	require.EqualValues(8, earliestVersion, "earliest version should be correct")
+	latestVersion, err = ndb.GetLatestVersion(ctx)
+	require.NoError(err, "GetLatestVersion")
+	require.EqualValues(11, latestVersion, "latest version should be correct")
 
-	pruner.Prune(11)
-	require.False(t, tree.VersionExists(8), "VersionExists(8), should be pruned")
-	require.True(t, tree.VersionExists(11), "VersionExists(11)")
+	err = pruner.Prune(ctx, 11)
+	require.NoError(err, "Prune")
+
+	earliestVersion, err = ndb.GetEarliestVersion(ctx)
+	require.NoError(err, "GetEarliestVersion")
+	require.EqualValues(9, earliestVersion, "earliest version should be correct")
+	latestVersion, err = ndb.GetLatestVersion(ctx)
+	require.NoError(err, "GetLatestVersion")
+	require.EqualValues(11, latestVersion, "latest version should be correct")
 }

@@ -5,7 +5,6 @@ import (
 	"encoding/hex"
 	"fmt"
 
-	"github.com/pkg/errors"
 	"github.com/tendermint/tendermint/abci/types"
 	"golang.org/x/crypto/sha3"
 
@@ -26,7 +25,7 @@ import (
 var emptyHashSha3 = sha3.Sum256(nil)
 
 type keymanagerApplication struct {
-	state abci.ApplicationState
+	state tmapi.ApplicationState
 }
 
 func (app *keymanagerApplication) Name() string {
@@ -49,20 +48,20 @@ func (app *keymanagerApplication) Dependencies() []string {
 	return []string{registryapp.AppName}
 }
 
-func (app *keymanagerApplication) OnRegister(state abci.ApplicationState) {
+func (app *keymanagerApplication) OnRegister(state tmapi.ApplicationState) {
 	app.state = state
 }
 
 func (app *keymanagerApplication) OnCleanup() {}
 
-func (app *keymanagerApplication) BeginBlock(ctx *abci.Context, request types.RequestBeginBlock) error {
+func (app *keymanagerApplication) BeginBlock(ctx *tmapi.Context, request types.RequestBeginBlock) error {
 	if changed, epoch := app.state.EpochChanged(ctx); changed {
 		return app.onEpochChange(ctx, epoch)
 	}
 	return nil
 }
 
-func (app *keymanagerApplication) ExecuteTx(ctx *abci.Context, tx *transaction.Transaction) error {
+func (app *keymanagerApplication) ExecuteTx(ctx *tmapi.Context, tx *transaction.Transaction) error {
 	state := keymanagerState.NewMutableState(ctx.State())
 
 	switch tx.Method {
@@ -77,26 +76,26 @@ func (app *keymanagerApplication) ExecuteTx(ctx *abci.Context, tx *transaction.T
 	}
 }
 
-func (app *keymanagerApplication) ForeignExecuteTx(ctx *abci.Context, other abci.Application, tx *transaction.Transaction) error {
+func (app *keymanagerApplication) ForeignExecuteTx(ctx *tmapi.Context, other abci.Application, tx *transaction.Transaction) error {
 	return nil
 }
 
-func (app *keymanagerApplication) EndBlock(ctx *abci.Context, request types.RequestEndBlock) (types.ResponseEndBlock, error) {
+func (app *keymanagerApplication) EndBlock(ctx *tmapi.Context, request types.RequestEndBlock) (types.ResponseEndBlock, error) {
 	return types.ResponseEndBlock{}, nil
 }
 
-func (app *keymanagerApplication) FireTimer(ctx *abci.Context, timer *abci.Timer) error {
-	return errors.New("tendermint/keymanager: unexpected timer")
+func (app *keymanagerApplication) FireTimer(ctx *tmapi.Context, timer *abci.Timer) error {
+	return fmt.Errorf("tendermint/keymanager: unexpected timer")
 }
 
-func (app *keymanagerApplication) onEpochChange(ctx *abci.Context, epoch epochtime.EpochTime) error {
+func (app *keymanagerApplication) onEpochChange(ctx *tmapi.Context, epoch epochtime.EpochTime) error {
 	// Query the runtime and node lists.
 	regState := registryState.NewMutableState(ctx.State())
-	runtimes, _ := regState.Runtimes()
-	nodes, _ := regState.Nodes()
+	runtimes, _ := regState.Runtimes(ctx)
+	nodes, _ := regState.Nodes(ctx)
 	registry.SortNodeList(nodes)
 
-	params, err := regState.ConsensusParameters()
+	params, err := regState.ConsensusParameters(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to get consensus parameters: %w", err)
 	}
@@ -130,7 +129,7 @@ func (app *keymanagerApplication) onEpochChange(ctx *abci.Context, epoch epochti
 				)
 
 				// Suspend runtime.
-				if err := regState.SuspendRuntime(rt.ID); err != nil {
+				if err := regState.SuspendRuntime(ctx, rt.ID); err != nil {
 					return err
 				}
 
@@ -139,7 +138,7 @@ func (app *keymanagerApplication) onEpochChange(ctx *abci.Context, epoch epochti
 		}
 
 		var forceEmit bool
-		oldStatus, err := state.Status(rt.ID)
+		oldStatus, err := state.Status(ctx, rt.ID)
 		switch err {
 		case nil:
 		case api.ErrNoSuchStatus:
@@ -154,7 +153,7 @@ func (app *keymanagerApplication) onEpochChange(ctx *abci.Context, epoch epochti
 				"id", rt.ID,
 				"err", err,
 			)
-			return errors.Wrap(err, "failed to query key manager status")
+			return fmt.Errorf("failed to query key manager status: %w", err)
 		}
 
 		newStatus := app.generateStatus(ctx, rt, oldStatus, nodes)
@@ -168,7 +167,9 @@ func (app *keymanagerApplication) onEpochChange(ctx *abci.Context, epoch epochti
 			)
 
 			// Set, enqueue for emit.
-			state.SetStatus(newStatus)
+			if err := state.SetStatus(ctx, newStatus); err != nil {
+				return fmt.Errorf("failed to set key manager status: %w", err)
+			}
 			toEmit = append(toEmit, newStatus)
 		}
 	}
@@ -184,7 +185,7 @@ func (app *keymanagerApplication) onEpochChange(ctx *abci.Context, epoch epochti
 	return nil
 }
 
-func (app *keymanagerApplication) generateStatus(ctx *abci.Context, kmrt *registry.Runtime, oldStatus *api.Status, nodes []*node.Node) *api.Status {
+func (app *keymanagerApplication) generateStatus(ctx *tmapi.Context, kmrt *registry.Runtime, oldStatus *api.Status, nodes []*node.Node) *api.Status {
 	status := &api.Status{
 		ID:            kmrt.ID,
 		IsInitialized: oldStatus.IsInitialized,

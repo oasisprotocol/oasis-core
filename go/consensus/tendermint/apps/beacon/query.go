@@ -4,7 +4,6 @@ import (
 	"context"
 
 	beacon "github.com/oasislabs/oasis-core/go/beacon/api"
-	"github.com/oasislabs/oasis-core/go/consensus/tendermint/abci"
 	beaconState "github.com/oasislabs/oasis-core/go/consensus/tendermint/apps/beacon/state"
 )
 
@@ -21,27 +20,10 @@ type QueryFactory struct {
 
 // QueryAt returns the beacon query interface for a specific height.
 func (sf *QueryFactory) QueryAt(ctx context.Context, height int64) (Query, error) {
-	var state *beaconState.ImmutableState
-	var err error
-	abciCtx := abci.FromCtx(ctx)
-
-	// If this request was made from InitChain, no blocks and states have been
-	// submitted yet, so we use the existing state instead.
-	if abciCtx != nil && abciCtx.IsInitChain() {
-		state = beaconState.NewMutableState(abciCtx.State()).ImmutableState
-	} else {
-		state, err = beaconState.NewImmutableState(sf.app.state, height)
-		if err != nil {
-			return nil, err
-		}
+	state, err := beaconState.NewImmutableState(ctx, sf.app.state, height)
+	if err != nil {
+		return nil, err
 	}
-
-	// If this request was made from an ABCI app, make sure to use the associated
-	// context for querying state instead of the default one.
-	if abciCtx != nil && height == abciCtx.BlockHeight()+1 {
-		state.Snapshot = abciCtx.State().ImmutableTree
-	}
-
 	return &beaconQuerier{state}, nil
 }
 
@@ -50,7 +32,7 @@ type beaconQuerier struct {
 }
 
 func (bq *beaconQuerier) Beacon(ctx context.Context) ([]byte, error) {
-	return bq.state.Beacon()
+	return bq.state.Beacon(ctx)
 }
 
 func (app *beaconApplication) QueryFactory() interface{} {

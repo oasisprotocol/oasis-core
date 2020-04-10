@@ -4,12 +4,12 @@ import (
 	"math/rand"
 
 	"github.com/pkg/errors"
-	"github.com/tendermint/iavl"
 	"github.com/tendermint/tendermint/abci/types"
 
 	"github.com/oasislabs/oasis-core/go/common/logging"
 	"github.com/oasislabs/oasis-core/go/consensus/api/transaction"
 	"github.com/oasislabs/oasis-core/go/consensus/tendermint/abci"
+	abciAPI "github.com/oasislabs/oasis-core/go/consensus/tendermint/api"
 	stakingState "github.com/oasislabs/oasis-core/go/consensus/tendermint/apps/staking/state"
 	epochtime "github.com/oasislabs/oasis-core/go/epochtime/api"
 	"github.com/oasislabs/oasis-core/go/genesis/api"
@@ -26,7 +26,7 @@ var (
 // It's okay for it to have this additional local state, because it won't affect anything that needs to be agreed upon
 // in consensus.
 type supplementarySanityApplication struct {
-	state           abci.ApplicationState
+	state           abciAPI.ApplicationState
 	interval        int64
 	currentInterval int64
 	checkHeight     int64
@@ -56,34 +56,34 @@ func (app *supplementarySanityApplication) QueryFactory() interface{} {
 	return nil
 }
 
-func (app *supplementarySanityApplication) OnRegister(state abci.ApplicationState) {
+func (app *supplementarySanityApplication) OnRegister(state abciAPI.ApplicationState) {
 	app.state = state
 }
 
 func (app *supplementarySanityApplication) OnCleanup() {
 }
 
-func (app *supplementarySanityApplication) ExecuteTx(*abci.Context, *transaction.Transaction) error {
+func (app *supplementarySanityApplication) ExecuteTx(*abciAPI.Context, *transaction.Transaction) error {
 	return errors.New("supplementarysanity: unexpected transaction")
 }
 
-func (app *supplementarySanityApplication) ForeignExecuteTx(*abci.Context, abci.Application, *transaction.Transaction) error {
+func (app *supplementarySanityApplication) ForeignExecuteTx(*abciAPI.Context, abci.Application, *transaction.Transaction) error {
 	return nil
 }
 
-func (app *supplementarySanityApplication) InitChain(*abci.Context, types.RequestInitChain, *api.Document) error {
+func (app *supplementarySanityApplication) InitChain(*abciAPI.Context, types.RequestInitChain, *api.Document) error {
 	return nil
 }
 
-func (app *supplementarySanityApplication) BeginBlock(*abci.Context, types.RequestBeginBlock) error {
+func (app *supplementarySanityApplication) BeginBlock(*abciAPI.Context, types.RequestBeginBlock) error {
 	return nil
 }
 
-func (app *supplementarySanityApplication) EndBlock(ctx *abci.Context, request types.RequestEndBlock) (types.ResponseEndBlock, error) {
+func (app *supplementarySanityApplication) EndBlock(ctx *abciAPI.Context, request types.RequestEndBlock) (types.ResponseEndBlock, error) {
 	return types.ResponseEndBlock{}, app.endBlockImpl(ctx, request)
 }
 
-func (app *supplementarySanityApplication) endBlockImpl(ctx *abci.Context, request types.RequestEndBlock) error {
+func (app *supplementarySanityApplication) endBlockImpl(ctx *abciAPI.Context, request types.RequestEndBlock) error {
 	if request.Height == 1 {
 		logger.Debug("skipping checks before InitChain")
 		return nil
@@ -107,14 +107,13 @@ func (app *supplementarySanityApplication) endBlockImpl(ctx *abci.Context, reque
 
 	logger.Debug("checking this block", "height", request.Height)
 
-	now, err := app.state.GetEpoch(ctx.Ctx(), ctx.BlockHeight()+1)
+	now, err := app.state.GetEpoch(ctx, ctx.BlockHeight()+1)
 	if err != nil {
 		return errors.Wrap(err, "GetEpoch")
 	}
-	state := ctx.State()
 	for _, tt := range []struct {
 		name    string
-		checker func(state *iavl.MutableTree, now epochtime.EpochTime) error
+		checker func(ctx *abciAPI.Context, now epochtime.EpochTime) error
 	}{
 		{"checkEpochTime", checkEpochTime},
 		{"checkRegistry", checkRegistry},
@@ -127,7 +126,7 @@ func (app *supplementarySanityApplication) endBlockImpl(ctx *abci.Context, reque
 		{"checkHalt", checkHalt},
 		{"checkStakeClaims", checkStakeClaims},
 	} {
-		if err := tt.checker(state, now); err != nil {
+		if err := tt.checker(ctx, now); err != nil {
 			return errors.Wrap(err, tt.name)
 		}
 	}
@@ -135,7 +134,7 @@ func (app *supplementarySanityApplication) endBlockImpl(ctx *abci.Context, reque
 	return nil
 }
 
-func (app *supplementarySanityApplication) FireTimer(*abci.Context, *abci.Timer) error {
+func (app *supplementarySanityApplication) FireTimer(*abciAPI.Context, *abci.Timer) error {
 	return errors.New("supplementarysanity: unexpected timer")
 }
 

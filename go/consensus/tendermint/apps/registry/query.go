@@ -8,7 +8,6 @@ import (
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
 	"github.com/oasislabs/oasis-core/go/common/entity"
 	"github.com/oasislabs/oasis-core/go/common/node"
-	"github.com/oasislabs/oasis-core/go/consensus/tendermint/abci"
 	registryState "github.com/oasislabs/oasis-core/go/consensus/tendermint/apps/registry/state"
 	registry "github.com/oasislabs/oasis-core/go/registry/api"
 )
@@ -30,42 +29,12 @@ type QueryFactory struct {
 	app *registryApplication
 }
 
-// ImmutableStateAt creates a registry ImmutableState suitable for use
-// from external query instances.
-func ImmutableStateAt(ctx context.Context, appState abci.ApplicationState, height int64) (*registryState.ImmutableState, error) {
-	var (
-		state *registryState.ImmutableState
-		err   error
-	)
-	abciCtx := abci.FromCtx(ctx)
-
-	// If this request was made from InitChain, no blocks and states have been
-	// submitted yet, so we use the existing state instead.
-	if abciCtx != nil && abciCtx.IsInitChain() {
-		state = registryState.NewMutableState(abciCtx.State()).ImmutableState
-	} else {
-		state, err = registryState.NewImmutableState(appState, height)
-		if err != nil {
-			return nil, err
-		}
-	}
-
-	// If this request was made from an ABCI app, make sure to use the associated
-	// context for querying state instead of the default one.
-	if abciCtx != nil && height == abciCtx.BlockHeight()+1 {
-		state.Snapshot = abciCtx.State().ImmutableTree
-	}
-
-	return state, nil
-}
-
 // QueryAt returns the registry query interface for a specific height.
 func (sf *QueryFactory) QueryAt(ctx context.Context, height int64) (Query, error) {
-	state, err := ImmutableStateAt(ctx, sf.app.state, height)
+	state, err := registryState.NewImmutableState(ctx, sf.app.state, height)
 	if err != nil {
 		return nil, err
 	}
-
 	return &registryQuerier{sf.app, state, height}, nil
 }
 
@@ -76,11 +45,11 @@ type registryQuerier struct {
 }
 
 func (rq *registryQuerier) Entity(ctx context.Context, id signature.PublicKey) (*entity.Entity, error) {
-	return rq.state.Entity(id)
+	return rq.state.Entity(ctx, id)
 }
 
 func (rq *registryQuerier) Entities(ctx context.Context) ([]*entity.Entity, error) {
-	return rq.state.Entities()
+	return rq.state.Entities(ctx)
 }
 
 func (rq *registryQuerier) Node(ctx context.Context, id signature.PublicKey) (*node.Node, error) {
@@ -89,7 +58,7 @@ func (rq *registryQuerier) Node(ctx context.Context, id signature.PublicKey) (*n
 		return nil, fmt.Errorf("failed to get epoch: %w", err)
 	}
 
-	node, err := rq.state.Node(id)
+	node, err := rq.state.Node(ctx, id)
 	if err != nil {
 		return nil, err
 	}
@@ -102,7 +71,7 @@ func (rq *registryQuerier) Node(ctx context.Context, id signature.PublicKey) (*n
 }
 
 func (rq *registryQuerier) NodeStatus(ctx context.Context, id signature.PublicKey) (*registry.NodeStatus, error) {
-	return rq.state.NodeStatus(id)
+	return rq.state.NodeStatus(ctx, id)
 }
 
 func (rq *registryQuerier) Nodes(ctx context.Context) ([]*node.Node, error) {
@@ -111,7 +80,7 @@ func (rq *registryQuerier) Nodes(ctx context.Context) ([]*node.Node, error) {
 		return nil, fmt.Errorf("failed to get epoch: %w", err)
 	}
 
-	nodes, err := rq.state.Nodes()
+	nodes, err := rq.state.Nodes(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -128,11 +97,11 @@ func (rq *registryQuerier) Nodes(ctx context.Context) ([]*node.Node, error) {
 }
 
 func (rq *registryQuerier) Runtime(ctx context.Context, id common.Namespace) (*registry.Runtime, error) {
-	return rq.state.Runtime(id)
+	return rq.state.Runtime(ctx, id)
 }
 
 func (rq *registryQuerier) Runtimes(ctx context.Context) ([]*registry.Runtime, error) {
-	return rq.state.Runtimes()
+	return rq.state.Runtimes(ctx)
 }
 
 func (app *registryApplication) QueryFactory() interface{} {

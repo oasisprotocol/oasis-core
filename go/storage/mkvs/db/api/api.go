@@ -53,6 +53,9 @@ type Config struct { // nolint: maligned
 	// NoFsync will disable fsync() where possible.
 	NoFsync bool
 
+	// MemoryOnly will make the storage memory-only (if the backend supports it).
+	MemoryOnly bool
+
 	// Namespace is the namespace contained within the database.
 	Namespace common.Namespace
 

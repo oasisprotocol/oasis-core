@@ -4,7 +4,6 @@ import (
 	"fmt"
 
 	"github.com/oasislabs/oasis-core/go/common/cbor"
-	"github.com/oasislabs/oasis-core/go/consensus/tendermint/abci"
 	tmapi "github.com/oasislabs/oasis-core/go/consensus/tendermint/api"
 	keymanagerState "github.com/oasislabs/oasis-core/go/consensus/tendermint/apps/keymanager/state"
 	registryState "github.com/oasislabs/oasis-core/go/consensus/tendermint/apps/registry/state"
@@ -13,13 +12,13 @@ import (
 )
 
 func (app *keymanagerApplication) updatePolicy(
-	ctx *abci.Context,
+	ctx *tmapi.Context,
 	state *keymanagerState.MutableState,
 	sigPol *api.SignedPolicySGX,
 ) error {
 	// Ensure that the runtime exists and is a key manager.
 	regState := registryState.NewMutableState(ctx.State())
-	rt, err := regState.Runtime(sigPol.Policy.ID)
+	rt, err := regState.Runtime(ctx, sigPol.Policy.ID)
 	if err != nil {
 		return err
 	}
@@ -33,7 +32,7 @@ func (app *keymanagerApplication) updatePolicy(
 	}
 
 	// Get the existing policy document, if one exists.
-	oldStatus, err := state.Status(rt.ID)
+	oldStatus, err := state.Status(ctx, rt.ID)
 	if err != nil {
 		return err
 	}
@@ -48,7 +47,7 @@ func (app *keymanagerApplication) updatePolicy(
 	}
 
 	// Charge gas for this operation.
-	regParams, err := regState.ConsensusParameters()
+	regParams, err := regState.ConsensusParameters(ctx)
 	if err != nil {
 		return err
 	}
@@ -67,10 +66,12 @@ func (app *keymanagerApplication) updatePolicy(
 	// TODO: It would be possible to update the cohort on each
 	// node-reregistration, but I'm not sure how often the policy
 	// will get updated.
-	nodes, _ := regState.Nodes()
+	nodes, _ := regState.Nodes(ctx)
 	registry.SortNodeList(nodes)
 	newStatus := app.generateStatus(ctx, rt, oldStatus, nodes)
-	state.SetStatus(newStatus)
+	if err := state.SetStatus(ctx, newStatus); err != nil {
+		panic(fmt.Errorf("failed to set keymanager status: %w", err))
+	}
 
 	ctx.EmitEvent(tmapi.NewEventBuilder(app.Name()).Attribute(KeyStatusUpdate, cbor.Marshal([]*api.Status{newStatus})))
 

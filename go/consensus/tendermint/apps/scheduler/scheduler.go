@@ -46,7 +46,7 @@ var (
 )
 
 type schedulerApplication struct {
-	state abci.ApplicationState
+	state api.ApplicationState
 
 	baseEpoch epochtime.EpochTime
 }
@@ -71,13 +71,13 @@ func (app *schedulerApplication) Dependencies() []string {
 	return []string{beaconapp.AppName, registryapp.AppName, stakingapp.AppName}
 }
 
-func (app *schedulerApplication) OnRegister(state abci.ApplicationState) {
+func (app *schedulerApplication) OnRegister(state api.ApplicationState) {
 	app.state = state
 }
 
 func (app *schedulerApplication) OnCleanup() {}
 
-func (app *schedulerApplication) BeginBlock(ctx *abci.Context, request types.RequestBeginBlock) error {
+func (app *schedulerApplication) BeginBlock(ctx *api.Context, request types.RequestBeginBlock) error {
 	// Check if any stake slashing has occurred in the staking layer.
 	// NOTE: This will NOT trigger for any slashing that happens as part of
 	//       any transactions being submitted to the chain.
@@ -97,17 +97,17 @@ func (app *schedulerApplication) BeginBlock(ctx *abci.Context, request types.Req
 		}
 
 		beacState := beaconState.NewMutableState(ctx.State())
-		beacon, err := beacState.Beacon()
+		beacon, err := beacState.Beacon(ctx)
 		if err != nil {
 			return errors.Wrap(err, "tendermint/scheduler: couldn't get beacon")
 		}
 
 		regState := registryState.NewMutableState(ctx.State())
-		runtimes, err := regState.Runtimes()
+		runtimes, err := regState.Runtimes(ctx)
 		if err != nil {
 			return errors.Wrap(err, "tendermint/scheduler: couldn't get runtimes")
 		}
-		allNodes, err := regState.Nodes()
+		allNodes, err := regState.Nodes(ctx)
 		if err != nil {
 			return errors.Wrap(err, "tendermint/scheduler: couldn't get nodes")
 		}
@@ -116,7 +116,7 @@ func (app *schedulerApplication) BeginBlock(ctx *abci.Context, request types.Req
 		var nodes []*node.Node
 		for _, node := range allNodes {
 			var status *registry.NodeStatus
-			status, err = regState.NodeStatus(node.ID)
+			status, err = regState.NodeStatus(ctx, node.ID)
 			if err != nil {
 				return errors.Wrap(err, "tendermint/scheduler: couldn't get node status")
 			}
@@ -134,7 +134,7 @@ func (app *schedulerApplication) BeginBlock(ctx *abci.Context, request types.Req
 		}
 
 		state := schedulerState.NewMutableState(ctx.State())
-		params, err := state.ConsensusParameters()
+		params, err := state.ConsensusParameters(ctx)
 		if err != nil {
 			ctx.Logger().Error("failed to fetch consensus parameters",
 				"err", err,
@@ -198,7 +198,7 @@ func (app *schedulerApplication) BeginBlock(ctx *abci.Context, request types.Req
 		if entitiesEligibleForReward != nil {
 			accounts := publicKeyMapToSortedSlice(entitiesEligibleForReward)
 			stakingSt := stakingState.NewMutableState(ctx.State())
-			if err = stakingSt.AddRewards(epoch, &params.RewardFactorEpochElectionAny, accounts); err != nil {
+			if err = stakingSt.AddRewards(ctx, epoch, &params.RewardFactorEpochElectionAny, accounts); err != nil {
 				return errors.Wrap(err, "adding rewards")
 			}
 		}
@@ -206,19 +206,19 @@ func (app *schedulerApplication) BeginBlock(ctx *abci.Context, request types.Req
 	return nil
 }
 
-func (app *schedulerApplication) ExecuteTx(ctx *abci.Context, tx *transaction.Transaction) error {
+func (app *schedulerApplication) ExecuteTx(ctx *api.Context, tx *transaction.Transaction) error {
 	return errUnexpectedTransaction
 }
 
-func (app *schedulerApplication) ForeignExecuteTx(ctx *abci.Context, other abci.Application, tx *transaction.Transaction) error {
+func (app *schedulerApplication) ForeignExecuteTx(ctx *api.Context, other abci.Application, tx *transaction.Transaction) error {
 	return nil
 }
 
-func (app *schedulerApplication) EndBlock(ctx *abci.Context, req types.RequestEndBlock) (types.ResponseEndBlock, error) {
+func (app *schedulerApplication) EndBlock(ctx *api.Context, req types.RequestEndBlock) (types.ResponseEndBlock, error) {
 	var resp types.ResponseEndBlock
 
 	state := schedulerState.NewMutableState(ctx.State())
-	pendingValidators, err := state.PendingValidators()
+	pendingValidators, err := state.PendingValidators(ctx)
 	if err != nil {
 		return resp, errors.Wrap(err, "scheduler/tendermint: failed to query pending validators")
 	}
@@ -227,13 +227,15 @@ func (app *schedulerApplication) EndBlock(ctx *abci.Context, req types.RequestEn
 		return resp, nil
 	}
 
-	currentValidators, err := state.CurrentValidators()
+	currentValidators, err := state.CurrentValidators(ctx)
 	if err != nil {
 		return resp, errors.Wrap(err, "scheduler/tendermint: failed to query current validators")
 	}
 
 	// Clear out the pending validator update.
-	state.PutPendingValidators(nil)
+	if err = state.PutPendingValidators(ctx, nil); err != nil {
+		return resp, fmt.Errorf("failed to clear validators: %w", err)
+	}
 
 	// Tendermint expects a vector of ValidatorUpdate that expresses
 	// the difference between the current validator set (tracked manually
@@ -284,16 +286,18 @@ func (app *schedulerApplication) EndBlock(ctx *abci.Context, req types.RequestEn
 	resp.ValidatorUpdates = updates
 
 	// Stash the updated validator set.
-	state.PutCurrentValidators(pendingValidators)
+	if err = state.PutCurrentValidators(ctx, pendingValidators); err != nil {
+		return resp, fmt.Errorf("failed to set validators: %w", err)
+	}
 
 	return resp, nil
 }
 
-func (app *schedulerApplication) FireTimer(ctx *abci.Context, t *abci.Timer) error {
+func (app *schedulerApplication) FireTimer(ctx *api.Context, t *abci.Timer) error {
 	return errors.New("tendermint/scheduler: unexpected timer")
 }
 
-func (app *schedulerApplication) isSuitableExecutorWorker(ctx *abci.Context, n *node.Node, rt *registry.Runtime) bool {
+func (app *schedulerApplication) isSuitableExecutorWorker(ctx *api.Context, n *node.Node, rt *registry.Runtime) bool {
 	if !n.HasRoles(node.RoleComputeWorker) {
 		return false
 	}
@@ -329,7 +333,7 @@ func (app *schedulerApplication) isSuitableExecutorWorker(ctx *abci.Context, n *
 	return false
 }
 
-func (app *schedulerApplication) isSuitableStorageWorker(ctx *abci.Context, n *node.Node, rt *registry.Runtime) bool {
+func (app *schedulerApplication) isSuitableStorageWorker(ctx *api.Context, n *node.Node, rt *registry.Runtime) bool {
 	if !n.HasRoles(node.RoleStorageWorker) {
 		return false
 	}
@@ -342,7 +346,7 @@ func (app *schedulerApplication) isSuitableStorageWorker(ctx *abci.Context, n *n
 	return false
 }
 
-func (app *schedulerApplication) isSuitableTransactionScheduler(ctx *abci.Context, n *node.Node, rt *registry.Runtime) bool {
+func (app *schedulerApplication) isSuitableTransactionScheduler(ctx *api.Context, n *node.Node, rt *registry.Runtime) bool {
 	if !n.HasRoles(node.RoleComputeWorker) {
 		return false
 	}
@@ -355,7 +359,7 @@ func (app *schedulerApplication) isSuitableTransactionScheduler(ctx *abci.Contex
 	return false
 }
 
-func (app *schedulerApplication) isSuitableMergeWorker(ctx *abci.Context, n *node.Node, rt *registry.Runtime) bool {
+func (app *schedulerApplication) isSuitableMergeWorker(ctx *api.Context, n *node.Node, rt *registry.Runtime) bool {
 	if !n.HasRoles(node.RoleComputeWorker) {
 		return false
 	}
@@ -382,7 +386,7 @@ func GetPerm(beacon []byte, runtimeID common.Namespace, rngCtx []byte, nrNodes i
 // Return error if node should crash.
 // For non-fatal problems, save a problem condition to the state and return successfully.
 func (app *schedulerApplication) electCommittee(
-	ctx *abci.Context,
+	ctx *api.Context,
 	epoch epochtime.EpochTime,
 	beacon []byte,
 	stakeAcc *stakingState.StakeAccumulatorCache,
@@ -402,7 +406,7 @@ func (app *schedulerApplication) electCommittee(
 		nodeList []*node.Node
 
 		rngCtx       []byte
-		isSuitableFn func(*abci.Context, *node.Node, *registry.Runtime) bool
+		isSuitableFn func(*api.Context, *node.Node, *registry.Runtime) bool
 
 		workerSize, backupSize int
 	)
@@ -456,7 +460,9 @@ func (app *schedulerApplication) electCommittee(
 			"kind", kind,
 			"runtime_id", rt.ID,
 		)
-		schedulerState.NewMutableState(ctx.State()).DropCommittee(kind, rt.ID)
+		if err = schedulerState.NewMutableState(ctx.State()).DropCommittee(ctx, kind, rt.ID); err != nil {
+			return fmt.Errorf("failed to drop committee: %w", err)
+		}
 		return nil
 	}
 
@@ -469,7 +475,9 @@ func (app *schedulerApplication) electCommittee(
 			"backup_size", backupSize,
 			"nr_nodes", nrNodes,
 		)
-		schedulerState.NewMutableState(ctx.State()).DropCommittee(kind, rt.ID)
+		if err = schedulerState.NewMutableState(ctx.State()).DropCommittee(ctx, kind, rt.ID); err != nil {
+			return fmt.Errorf("failed to drop committee: %w", err)
+		}
 		return nil
 	}
 
@@ -504,22 +512,27 @@ func (app *schedulerApplication) electCommittee(
 			"backup_size", backupSize,
 			"available", len(members),
 		)
-		schedulerState.NewMutableState(ctx.State()).DropCommittee(kind, rt.ID)
+		if err = schedulerState.NewMutableState(ctx.State()).DropCommittee(ctx, kind, rt.ID); err != nil {
+			return fmt.Errorf("failed to drop committee: %w", err)
+		}
 		return nil
 	}
 
-	schedulerState.NewMutableState(ctx.State()).PutCommittee(&scheduler.Committee{
+	err = schedulerState.NewMutableState(ctx.State()).PutCommittee(ctx, &scheduler.Committee{
 		Kind:      kind,
 		RuntimeID: rt.ID,
 		Members:   members,
 		ValidFor:  epoch,
 	})
+	if err != nil {
+		return fmt.Errorf("failed to save committee: %w", err)
+	}
 	return nil
 }
 
 // Operates on consensus connection.
 func (app *schedulerApplication) electAllCommittees(
-	ctx *abci.Context,
+	ctx *api.Context,
 	request types.RequestBeginBlock,
 	epoch epochtime.EpochTime,
 	beacon []byte,
@@ -538,7 +551,7 @@ func (app *schedulerApplication) electAllCommittees(
 }
 
 func (app *schedulerApplication) electValidators(
-	ctx *abci.Context,
+	ctx *api.Context,
 	beacon []byte,
 	stakeAcc *stakingState.StakeAccumulatorCache,
 	entitiesEligibleForReward map[signature.PublicKey]bool,
@@ -632,7 +645,9 @@ electLoop:
 	// Set the new pending validator set in the ABCI state.  It needs to be
 	// applied in EndBlock.
 	state := schedulerState.NewMutableState(ctx.State())
-	state.PutPendingValidators(newValidators)
+	if err = state.PutPendingValidators(ctx, newValidators); err != nil {
+		return fmt.Errorf("failed to set pending validators: %w", err)
+	}
 
 	return nil
 }
@@ -662,12 +677,24 @@ func publicKeyMapToSliceByStake(
 		return entities, nil
 	}
 
-	// Stable-sort the shuffled slice by decending escrow balance.
+	// Stable-sort the shuffled slice by descending escrow balance.
+	var balanceErr error
 	sort.SliceStable(entities, func(i, j int) bool {
-		iBal := stakeAcc.GetEscrowBalance(entities[i])
-		jBal := stakeAcc.GetEscrowBalance(entities[j])
-		return iBal.Cmp(&jBal) == 1 // Note: Not -1 to get a reversed sort.
+		iBal, err := stakeAcc.GetEscrowBalance(entities[i])
+		if err != nil {
+			balanceErr = err
+			return false
+		}
+		jBal, err := stakeAcc.GetEscrowBalance(entities[j])
+		if err != nil {
+			balanceErr = err
+			return false
+		}
+		return iBal.Cmp(jBal) == 1 // Note: Not -1 to get a reversed sort.
 	})
+	if balanceErr != nil {
+		return nil, fmt.Errorf("failed to fetch escrow balance: %w", balanceErr)
+	}
 
 	return entities, nil
 }

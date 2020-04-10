@@ -7,7 +7,7 @@ import (
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
 	"github.com/oasislabs/oasis-core/go/common/quantity"
 	"github.com/oasislabs/oasis-core/go/consensus/api/transaction"
-	"github.com/oasislabs/oasis-core/go/consensus/tendermint/abci"
+	abciAPI "github.com/oasislabs/oasis-core/go/consensus/tendermint/api"
 )
 
 // feeAccumulatorKey is the block context key.
@@ -29,7 +29,7 @@ type feeAccumulator struct {
 // This method transfers the fees to the per-block fee accumulator which is
 // persisted at the end of the block.
 func AuthenticateAndPayFees(
-	ctx *abci.Context,
+	ctx *abciAPI.Context,
 	id signature.PublicKey,
 	nonce uint64,
 	fee *transaction.Fee,
@@ -39,13 +39,16 @@ func AuthenticateAndPayFees(
 	if ctx.IsSimulation() {
 		// If this is a simulation, the caller can use any amount of gas (as we usually want to
 		// estimate the amount of gas needed).
-		ctx.SetGasAccountant(abci.NewGasAccountant(transaction.Gas(math.MaxUint64)))
+		ctx.SetGasAccountant(abciAPI.NewGasAccountant(transaction.Gas(math.MaxUint64)))
 
 		return nil
 	}
 
 	// Fetch account and make sure the nonce is correct.
-	account := state.Account(id)
+	account, err := state.Account(ctx, id)
+	if err != nil {
+		return fmt.Errorf("failed to fetch account state: %w", err)
+	}
 	if account.General.Nonce != nonce {
 		logger.Error("invalid account nonce",
 			"account_id", id,
@@ -61,7 +64,7 @@ func AuthenticateAndPayFees(
 
 	if ctx.IsCheckOnly() {
 		// Configure gas accountant on the context so that we can report gas wanted.
-		ctx.SetGasAccountant(abci.NewGasAccountant(fee.Gas))
+		ctx.SetGasAccountant(abciAPI.NewGasAccountant(fee.Gas))
 
 		// Check that there is enough balance to pay fees. For the non-CheckTx case
 		// this happens during Move below.
@@ -89,19 +92,21 @@ func AuthenticateAndPayFees(
 	}
 
 	account.General.Nonce++
-	state.SetAccount(id, account)
+	if err := state.SetAccount(ctx, id, account); err != nil {
+		return fmt.Errorf("failed to set account: %w", err)
+	}
 
 	// Configure gas accountant on the context.
-	ctx.SetGasAccountant(abci.NewCompositeGasAccountant(
-		abci.NewGasAccountant(fee.Gas),
-		ctx.BlockContext().Get(abci.GasAccountantKey{}).(abci.GasAccountant),
+	ctx.SetGasAccountant(abciAPI.NewCompositeGasAccountant(
+		abciAPI.NewGasAccountant(fee.Gas),
+		ctx.BlockContext().Get(abciAPI.GasAccountantKey{}).(abciAPI.GasAccountant),
 	))
 
 	return nil
 }
 
 // BlockFees returns the accumulated fee balance for the current block.
-func BlockFees(ctx *abci.Context) quantity.Quantity {
+func BlockFees(ctx *abciAPI.Context) quantity.Quantity {
 	// Fetch accumulated fees in the current block.
 	return ctx.BlockContext().Get(feeAccumulatorKey{}).(*feeAccumulator).balance
 }
@@ -114,10 +119,10 @@ func (pk proposerKey) NewDefault() interface{} {
 	return empty
 }
 
-func SetBlockProposer(ctx *abci.Context, p *signature.PublicKey) {
+func SetBlockProposer(ctx *abciAPI.Context, p *signature.PublicKey) {
 	ctx.BlockContext().Set(proposerKey{}, p)
 }
 
-func BlockProposer(ctx *abci.Context) *signature.PublicKey {
+func BlockProposer(ctx *abciAPI.Context) *signature.PublicKey {
 	return ctx.BlockContext().Get(proposerKey{}).(*signature.PublicKey)
 }

@@ -1,15 +1,15 @@
 package state
 
 import (
+	"context"
 	"errors"
 	"fmt"
-
-	"github.com/tendermint/iavl"
 
 	beacon "github.com/oasislabs/oasis-core/go/beacon/api"
 	"github.com/oasislabs/oasis-core/go/common/cbor"
 	"github.com/oasislabs/oasis-core/go/common/keyformat"
-	"github.com/oasislabs/oasis-core/go/consensus/tendermint/abci"
+	abciAPI "github.com/oasislabs/oasis-core/go/consensus/tendermint/api"
+	"github.com/oasislabs/oasis-core/go/storage/mkvs"
 )
 
 var (
@@ -23,67 +23,75 @@ var (
 	parametersKeyFmt = keyformat.New(0x41)
 )
 
+// ImmutableState is the immutable beacon state wrapper.
 type ImmutableState struct {
-	*abci.ImmutableState
+	is *abciAPI.ImmutableState
 }
 
-func NewImmutableState(state abci.ApplicationState, version int64) (*ImmutableState, error) {
-	inner, err := abci.NewImmutableState(state, version)
+func NewImmutableState(ctx context.Context, state abciAPI.ApplicationState, version int64) (*ImmutableState, error) {
+	is, err := abciAPI.NewImmutableState(ctx, state, version)
 	if err != nil {
 		return nil, err
 	}
 
-	return &ImmutableState{inner}, nil
+	return &ImmutableState{is}, nil
 }
 
 // Beacon gets the current random beacon value.
-func (s *ImmutableState) Beacon() ([]byte, error) {
-	_, b := s.Snapshot.Get(beaconKeyFmt.Encode())
-	if b == nil {
+func (s *ImmutableState) Beacon(ctx context.Context) ([]byte, error) {
+	data, err := s.is.Get(ctx, beaconKeyFmt.Encode())
+	if err != nil {
+		return nil, abciAPI.UnavailableStateError(err)
+	}
+	if data == nil {
 		return nil, beacon.ErrBeaconNotAvailable
 	}
-
-	return b, nil
+	return data, nil
 }
 
-func (s *ImmutableState) ConsensusParameters() (*beacon.ConsensusParameters, error) {
-	_, raw := s.Snapshot.Get(parametersKeyFmt.Encode())
-	if raw == nil {
+func (s *ImmutableState) ConsensusParameters(ctx context.Context) (*beacon.ConsensusParameters, error) {
+	data, err := s.is.Get(ctx, parametersKeyFmt.Encode())
+	if err != nil {
+		return nil, abciAPI.UnavailableStateError(err)
+	}
+	if data == nil {
 		return nil, errors.New("tendermint/beacon: expected consensus parameters to be present in app state")
 	}
 
 	var params beacon.ConsensusParameters
-	err := cbor.Unmarshal(raw, &params)
-	return &params, err
+	if err = cbor.Unmarshal(data, &params); err != nil {
+		return nil, abciAPI.UnavailableStateError(err)
+	}
+	return &params, nil
 }
 
 // MutableState is a mutable beacon state wrapper.
 type MutableState struct {
 	*ImmutableState
 
-	tree *iavl.MutableTree
+	ms mkvs.KeyValueTree
 }
 
-func (s *MutableState) SetBeacon(newBeacon []byte) error {
+func (s *MutableState) SetBeacon(ctx context.Context, newBeacon []byte) error {
 	if l := len(newBeacon); l != beacon.BeaconSize {
 		return fmt.Errorf("tendermint/beacon: unexpected beacon size: %d", l)
 	}
 
-	s.tree.Set(beaconKeyFmt.Encode(), newBeacon)
-
-	return nil
+	err := s.ms.Insert(ctx, beaconKeyFmt.Encode(), newBeacon)
+	return abciAPI.UnavailableStateError(err)
 }
 
-func (s *MutableState) SetConsensusParameters(params *beacon.ConsensusParameters) {
-	s.tree.Set(parametersKeyFmt.Encode(), cbor.Marshal(params))
+func (s *MutableState) SetConsensusParameters(ctx context.Context, params *beacon.ConsensusParameters) error {
+	err := s.ms.Insert(ctx, parametersKeyFmt.Encode(), cbor.Marshal(params))
+	return abciAPI.UnavailableStateError(err)
 }
 
 // NewMutableState creates a new mutable beacon state wrapper.
-func NewMutableState(tree *iavl.MutableTree) *MutableState {
-	inner := &abci.ImmutableState{Snapshot: tree.ImmutableTree}
-
+func NewMutableState(tree mkvs.KeyValueTree) *MutableState {
 	return &MutableState{
-		ImmutableState: &ImmutableState{inner},
-		tree:           tree,
+		ImmutableState: &ImmutableState{
+			&abciAPI.ImmutableState{ImmutableKeyValueTree: tree},
+		},
+		ms: tree,
 	}
 }

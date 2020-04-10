@@ -205,7 +205,7 @@ func (e *EpochSnapshot) Nodes() committee.NodeDescriptorLookup {
 // Node looks up a node descriptor.
 //
 // Implements commitment.NodeLookup.
-func (e *EpochSnapshot) Node(id signature.PublicKey) (*node.Node, error) {
+func (e *EpochSnapshot) Node(ctx context.Context, id signature.PublicKey) (*node.Node, error) {
 	n := e.nodes.Lookup(id)
 	if n == nil {
 		return nil, registry.ErrNoSuchNode

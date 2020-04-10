@@ -1,16 +1,16 @@
-package abci
+package api
 
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"time"
 
-	"github.com/tendermint/iavl"
 	"github.com/tendermint/tendermint/abci/types"
 
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
 	"github.com/oasislabs/oasis-core/go/common/logging"
-	"github.com/oasislabs/oasis-core/go/consensus/tendermint/api"
+	"github.com/oasislabs/oasis-core/go/storage/mkvs"
 )
 
 type contextKey struct{}
@@ -57,7 +57,7 @@ func (m ContextMode) String() string {
 
 // Context is the context of processing a transaction/block.
 type Context struct {
-	ctx context.Context
+	context.Context
 
 	mode        ContextMode
 	currentTime time.Time
@@ -69,22 +69,13 @@ type Context struct {
 	txSigner signature.PublicKey
 
 	appState    ApplicationState
-	state       *iavl.MutableTree
+	state       mkvs.Tree
 	blockHeight int64
 	blockCtx    *BlockContext
 
-	logger *logging.Logger
-}
+	stateCheckpoint *StateCheckpoint
 
-// NewMockContext creates a new mock context for use in tests.
-func NewMockContext(mode ContextMode, now time.Time) *Context {
-	return &Context{
-		ctx:           context.Background(),
-		mode:          mode,
-		currentTime:   now,
-		gasAccountant: NewNopGasAccountant(),
-		logger:        logging.GetLogger("consensus/tendermint/abci").With("mode", mode),
-	}
+	logger *logging.Logger
 }
 
 // FromCtx extracts an ABCI context from a context.Context if one has been
@@ -94,28 +85,55 @@ func FromCtx(ctx context.Context) *Context {
 	return abciCtx
 }
 
+// NewContext creates a new context.
+func NewContext(
+	ctx context.Context,
+	mode ContextMode,
+	currentTime time.Time,
+	gasAccountant GasAccountant,
+	appState ApplicationState,
+	state mkvs.Tree,
+	blockHeight int64,
+	blockCtx *BlockContext,
+) *Context {
+	c := &Context{
+		mode:          mode,
+		currentTime:   currentTime,
+		gasAccountant: gasAccountant,
+		appState:      appState,
+		state:         state,
+		blockHeight:   blockHeight,
+		blockCtx:      blockCtx,
+		logger:        logging.GetLogger("consensus/tendermint/abci").With("mode", mode),
+	}
+	c.Context = context.WithValue(ctx, contextKey{}, c)
+	return c
+}
+
 // Close releases all resources associated with this context.
 //
 // After calling this method, the context should no longer be used.
 func (c *Context) Close() {
 	if c.IsSimulation() {
-		c.state.Rollback()
+		if tree, ok := c.state.(mkvs.ClosableTree); ok {
+			tree.Close()
+		}
 	}
 
 	c.events = nil
 	c.appState = nil
 	c.state = nil
 	c.blockCtx = nil
+	c.Context = nil
+
+	if c.stateCheckpoint != nil {
+		panic("context: open checkpoint was never committed or discarded")
+	}
 }
 
 // Logger returns the logger associated with this context.
 func (c *Context) Logger() *logging.Logger {
 	return c.logger
-}
-
-// Ctx returns a context.Context that is associated with this ABCI context.
-func (c *Context) Ctx() context.Context {
-	return c.ctx
 }
 
 // Mode returns the context mode.
@@ -181,7 +199,7 @@ func (c *Context) EmitData(data interface{}) {
 
 // EmitEvent emits an ABCI event for the current transaction/block.
 // Note: If the event has no attributes, this routine will do nothing.
-func (c *Context) EmitEvent(bld *api.EventBuilder) {
+func (c *Context) EmitEvent(bld *EventBuilder) {
 	if bld.Dirty() {
 		c.events = append(c.events, bld.Event())
 	}
@@ -194,7 +212,7 @@ func (c *Context) GetEvents() []types.Event {
 
 // HasEvent checks if a specific event has been emitted.
 func (c *Context) HasEvent(evType string, key []byte) bool {
-	evType = api.EventTypeForApp(evType)
+	evType = EventTypeForApp(evType)
 
 	for _, ev := range c.events {
 		if ev.Type != evType {
@@ -225,8 +243,11 @@ func (c *Context) Now() time.Time {
 	return c.currentTime
 }
 
-// State returns the mutable state tree.
-func (c *Context) State() *iavl.MutableTree {
+// State returns the state tree associated with this context.
+func (c *Context) State() mkvs.KeyValueTree {
+	if c.stateCheckpoint != nil {
+		return c.stateCheckpoint.overlay
+	}
 	return c.state
 }
 
@@ -253,34 +274,51 @@ func (c *Context) BlockContext() *BlockContext {
 	return c.blockCtx
 }
 
-// NewStateCheckpoint creates a new state checkpoint.
-func (c *Context) NewStateCheckpoint() *StateCheckpoint {
-	return &StateCheckpoint{
-		ImmutableTree: *c.State().ImmutableTree,
-		ctx:           c,
+// StartCheckpoint starts a new state checkpoint. Any further updates to the context's state will
+// be performed against the checkpoint and will only be committed in case of an explicit Commit.
+//
+// Any existing references to State() returned prior to calling this method should not be mutated
+// while the checkpoint is open. Doing so may cause updates to leak to into the checkpoint as
+// isolation is only one-way.
+//
+// The caller must make sure to call either Close or Commit on the checkpoint, otherwise this will
+// leak resources.
+func (c *Context) StartCheckpoint() *StateCheckpoint {
+	if c.stateCheckpoint != nil {
+		panic("context: nested checkpoints are not allowed")
 	}
+	c.stateCheckpoint = &StateCheckpoint{
+		ctx:     c,
+		overlay: mkvs.NewOverlay(c.state),
+	}
+	return c.stateCheckpoint
 }
 
 // StateCheckpoint is a state checkpoint that can be used to rollback state.
 type StateCheckpoint struct {
-	iavl.ImmutableTree
-
-	ctx *Context
+	ctx     *Context
+	overlay mkvs.OverlayTree
 }
 
-// Close releases resources associated with the checkpoint.
+// Close releases resources associated with the checkpoint without committing it.
 func (sc *StateCheckpoint) Close() {
-	sc.ctx = nil
-}
-
-// Rollback rolls back the active state to the one from the checkpoint.
-func (sc *StateCheckpoint) Rollback() {
 	if sc.ctx == nil {
 		return
 	}
-	st := sc.ctx.State()
-	st.Rollback()
-	st.ImmutableTree = &sc.ImmutableTree
+	sc.overlay.Close()
+	sc.ctx.stateCheckpoint = nil
+	sc.ctx = nil
+}
+
+// Commit commits any changes performed since the checkpoint was created.
+func (sc *StateCheckpoint) Commit() {
+	if sc.ctx == nil {
+		return
+	}
+	if err := sc.overlay.Commit(sc.ctx); err != nil {
+		panic(fmt.Errorf("context: failed to commit checkpoint: %w", err))
+	}
+	sc.Close()
 }
 
 // BlockContextKey is an interface for a block context key.

@@ -5,8 +5,6 @@ import (
 
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
 	consensus "github.com/oasislabs/oasis-core/go/consensus/api"
-	"github.com/oasislabs/oasis-core/go/consensus/tendermint/abci"
-	registryapp "github.com/oasislabs/oasis-core/go/consensus/tendermint/apps/registry"
 	registryState "github.com/oasislabs/oasis-core/go/consensus/tendermint/apps/registry/state"
 	schedulerState "github.com/oasislabs/oasis-core/go/consensus/tendermint/apps/scheduler/state"
 	scheduler "github.com/oasislabs/oasis-core/go/scheduler/api"
@@ -27,29 +25,13 @@ type QueryFactory struct {
 
 // QueryAt returns the scheduler query interface for a specific height.
 func (sf *QueryFactory) QueryAt(ctx context.Context, height int64) (Query, error) {
-	var state *schedulerState.ImmutableState
-	var err error
-	abciCtx := abci.FromCtx(ctx)
-
-	// If this request was made from InitChain, no blocks and states have been
-	// submitted yet, so we use the existing state instead.
-	if abciCtx != nil && abciCtx.IsInitChain() {
-		state = schedulerState.NewMutableState(abciCtx.State()).ImmutableState
-	} else {
-		state, err = schedulerState.NewImmutableState(sf.app.state, height)
-		if err != nil {
-			return nil, err
-		}
-	}
-
-	// If this request was made from an ABCI app, make sure to use the associated
-	// context for querying state instead of the default one.
-	if abciCtx != nil && height == abciCtx.BlockHeight()+1 {
-		state.Snapshot = abciCtx.State().ImmutableTree
+	state, err := schedulerState.NewImmutableState(ctx, sf.app.state, height)
+	if err != nil {
+		return nil, err
 	}
 
 	// Some queries need access to the registry to give useful responses.
-	regState, err := registryapp.ImmutableStateAt(ctx, sf.app.state, height)
+	regState, err := registryState.NewImmutableState(ctx, sf.app.state, height)
 	if err != nil {
 		return nil, err
 	}
@@ -63,12 +45,12 @@ type schedulerQuerier struct {
 }
 
 func (sq *schedulerQuerier) Validators(ctx context.Context) ([]*scheduler.Validator, error) {
-	valPks, err := sq.state.CurrentValidators()
+	valPks, err := sq.state.CurrentValidators(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	params, err := sq.state.ConsensusParameters()
+	params, err := sq.state.ConsensusParameters(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -93,7 +75,7 @@ func (sq *schedulerQuerier) Validators(ctx context.Context) ([]*scheduler.Valida
 			// node identifiers for validators, because user queries are
 			// likely more infrequent than all the business of actually
 			// scheduling...
-			node, err := sq.regState.NodeByConsensusOrP2PKey(v)
+			node, err := sq.regState.NodeByConsensusOrP2PKey(ctx, v)
 			if err != nil {
 				// Should NEVER happen.
 				return nil, err
@@ -112,11 +94,11 @@ func (sq *schedulerQuerier) Validators(ctx context.Context) ([]*scheduler.Valida
 }
 
 func (sq *schedulerQuerier) AllCommittees(ctx context.Context) ([]*scheduler.Committee, error) {
-	return sq.state.AllCommittees()
+	return sq.state.AllCommittees(ctx)
 }
 
 func (sq *schedulerQuerier) KindsCommittees(ctx context.Context, kinds []scheduler.CommitteeKind) ([]*scheduler.Committee, error) {
-	return sq.state.KindsCommittees(kinds)
+	return sq.state.KindsCommittees(ctx, kinds)
 }
 
 func (app *schedulerApplication) QueryFactory() interface{} {

@@ -290,10 +290,10 @@ type NodeList struct {
 // functions to look-up nodes in the registry's state.
 type NodeLookup interface {
 	// Returns the node that corresponds to the given consensus or P2P ID.
-	NodeByConsensusOrP2PKey(key signature.PublicKey) (*node.Node, error)
+	NodeByConsensusOrP2PKey(ctx context.Context, key signature.PublicKey) (*node.Node, error)
 
 	// Returns the node that corresponds to the given committee certificate.
-	NodeByCertificate(cert []byte) (*node.Node, error)
+	NodeByCertificate(ctx context.Context, cert []byte) (*node.Node, error)
 }
 
 // RuntimeLookup interface implements various ways for the verification
@@ -302,14 +302,14 @@ type RuntimeLookup interface {
 	// Runtime looks up a runtime by its identifier and returns it.
 	//
 	// This excludes any suspended runtimes, use SuspendedRuntime to query suspended runtimes only.
-	Runtime(id common.Namespace) (*Runtime, error)
+	Runtime(ctx context.Context, id common.Namespace) (*Runtime, error)
 
 	// SuspendedRuntime looks up a suspended runtime by its identifier and
 	// returns it.
-	SuspendedRuntime(id common.Namespace) (*Runtime, error)
+	SuspendedRuntime(ctx context.Context, id common.Namespace) (*Runtime, error)
 
 	// AnyRuntime looks up either an active or suspended runtime by its identifier and returns it.
-	AnyRuntime(id common.Namespace) (*Runtime, error)
+	AnyRuntime(ctx context.Context, id common.Namespace) (*Runtime, error)
 }
 
 // VerifyRegisterEntityArgs verifies arguments for RegisterEntity.
@@ -368,6 +368,7 @@ func VerifyRegisterEntityArgs(logger *logging.Logger, sigEnt *entity.SignedEntit
 //
 // Returns the node descriptor and a list of runtime descriptors the node is registering for.
 func VerifyRegisterNodeArgs( // nolint: gocyclo
+	ctx context.Context,
 	params *ConsensusParameters,
 	logger *logging.Logger,
 	sigNode *node.MultiSignedNode,
@@ -383,15 +384,15 @@ func VerifyRegisterNodeArgs( // nolint: gocyclo
 		return nil, nil, ErrInvalidArgument
 	}
 
-	var ctx signature.Context
+	var sigCtx signature.Context
 	switch isGenesis {
 	case true:
-		ctx = RegisterGenesisNodeSignatureContext
+		sigCtx = RegisterGenesisNodeSignatureContext
 	case false:
-		ctx = RegisterNodeSignatureContext
+		sigCtx = RegisterNodeSignatureContext
 	}
 
-	if err := sigNode.Open(ctx, &n); err != nil {
+	if err := sigNode.Open(sigCtx, &n); err != nil {
 		logger.Error("RegisterNode: invalid signature",
 			"signed_node", sigNode,
 		)
@@ -503,7 +504,7 @@ func VerifyRegisterNodeArgs( // nolint: gocyclo
 			rtMap[rt.ID] = true
 
 			// Make sure that the claimed runtime actually exists.
-			regRt, err := runtimeLookup.AnyRuntime(rt.ID)
+			regRt, err := runtimeLookup.AnyRuntime(ctx, rt.ID)
 			if err != nil {
 				logger.Error("RegisterNode: failed to fetch supported runtime",
 					"err", err,
@@ -644,7 +645,7 @@ func VerifyRegisterNodeArgs( // nolint: gocyclo
 		return nil, nil, fmt.Errorf("%w: P2P and Consensus IDs not unique", ErrInvalidArgument)
 	}
 
-	existingNode, err := nodeLookup.NodeByConsensusOrP2PKey(n.Consensus.ID)
+	existingNode, err := nodeLookup.NodeByConsensusOrP2PKey(ctx, n.Consensus.ID)
 	if err != nil && err != ErrNoSuchNode {
 		logger.Error("RegisterNode: failed to get node by consensus ID",
 			"err", err,
@@ -660,7 +661,7 @@ func VerifyRegisterNodeArgs( // nolint: gocyclo
 		return nil, nil, fmt.Errorf("%w: duplicate node consensus ID", ErrInvalidArgument)
 	}
 
-	existingNode, err = nodeLookup.NodeByConsensusOrP2PKey(n.P2P.ID)
+	existingNode, err = nodeLookup.NodeByConsensusOrP2PKey(ctx, n.P2P.ID)
 	if err != nil && err != ErrNoSuchNode {
 		logger.Error("RegisterNode: failed to get node by P2P ID",
 			"err", err,
@@ -676,7 +677,7 @@ func VerifyRegisterNodeArgs( // nolint: gocyclo
 		return nil, nil, fmt.Errorf("%w: duplicate node P2P ID", ErrInvalidArgument)
 	}
 
-	existingNode, err = nodeLookup.NodeByCertificate(n.Committee.Certificate)
+	existingNode, err = nodeLookup.NodeByCertificate(ctx, n.Committee.Certificate)
 	if err != nil && err != ErrNoSuchNode {
 		logger.Error("RegisterNode: failed to get node by committee certificate",
 			"err", err,
@@ -1189,10 +1190,10 @@ func VerifyRegisterRuntimeStorageArgs(rt *Runtime, logger *logging.Logger) error
 }
 
 // VerifyRegisterComputeRuntimeArgs verifies compute runtime-specific arguments for RegisterRuntime.
-func VerifyRegisterComputeRuntimeArgs(logger *logging.Logger, rt *Runtime, runtimeLookup RuntimeLookup) error {
+func VerifyRegisterComputeRuntimeArgs(ctx context.Context, logger *logging.Logger, rt *Runtime, runtimeLookup RuntimeLookup) error {
 	// Check runtime's key manager, if key manager ID is set.
 	if rt.KeyManager != nil {
-		km, err := runtimeLookup.AnyRuntime(*rt.KeyManager)
+		km, err := runtimeLookup.AnyRuntime(ctx, *rt.KeyManager)
 		if err != nil {
 			logger.Error("RegisterRuntime: error when fetching the runtime's key manager from registry",
 				"runtime", rt.ID,

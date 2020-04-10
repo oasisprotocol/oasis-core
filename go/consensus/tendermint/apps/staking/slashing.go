@@ -8,7 +8,7 @@ import (
 
 	tmcrypto "github.com/tendermint/tendermint/crypto"
 
-	"github.com/oasislabs/oasis-core/go/consensus/tendermint/abci"
+	abciAPI "github.com/oasislabs/oasis-core/go/consensus/tendermint/api"
 	registryState "github.com/oasislabs/oasis-core/go/consensus/tendermint/apps/registry/state"
 	stakingState "github.com/oasislabs/oasis-core/go/consensus/tendermint/apps/staking/state"
 	epochtime "github.com/oasislabs/oasis-core/go/epochtime/api"
@@ -17,7 +17,7 @@ import (
 )
 
 func onEvidenceDoubleSign(
-	ctx *abci.Context,
+	ctx *abciAPI.Context,
 	addr tmcrypto.Address,
 	height int64,
 	time time.Time,
@@ -29,7 +29,7 @@ func onEvidenceDoubleSign(
 	// Resolve consensus node. Note that in order for this to work even in light
 	// of node expirations, the node descriptor must be available for at least
 	// the debonding period after expiration.
-	node, err := regState.NodeByConsensusAddress(addr)
+	node, err := regState.NodeByConsensusAddress(ctx, addr)
 	if err != nil {
 		ctx.Logger().Warn("failed to get validator node",
 			"err", err,
@@ -38,7 +38,7 @@ func onEvidenceDoubleSign(
 		return nil
 	}
 
-	nodeStatus, err := regState.NodeStatus(node.ID)
+	nodeStatus, err := regState.NodeStatus(ctx, node.ID)
 	if err != nil {
 		ctx.Logger().Warn("failed to get validator node status",
 			"err", err,
@@ -58,7 +58,7 @@ func onEvidenceDoubleSign(
 	}
 
 	// Retrieve the slash procedure for double signing.
-	st, err := stakeState.Slashing()
+	st, err := stakeState.Slashing(ctx)
 	if err != nil {
 		ctx.Logger().Error("failed to get slashing table entry for double signing",
 			"err", err,
@@ -96,7 +96,7 @@ func onEvidenceDoubleSign(
 		return err
 	}
 
-	if err = regState.SetNodeStatus(node.ID, nodeStatus); err != nil {
+	if err = regState.SetNodeStatus(ctx, node.ID, nodeStatus); err != nil {
 		ctx.Logger().Error("failed to set validator node status",
 			"err", err,
 			"node_id", node.ID,

@@ -1,9 +1,8 @@
 package state
 
 import (
+	"context"
 	"errors"
-
-	"github.com/tendermint/iavl"
 
 	"github.com/oasislabs/oasis-core/go/common"
 	"github.com/oasislabs/oasis-core/go/common/cbor"
@@ -12,13 +11,15 @@ import (
 	"github.com/oasislabs/oasis-core/go/common/entity"
 	"github.com/oasislabs/oasis-core/go/common/keyformat"
 	"github.com/oasislabs/oasis-core/go/common/node"
-	"github.com/oasislabs/oasis-core/go/consensus/tendermint/abci"
+	abciAPI "github.com/oasislabs/oasis-core/go/consensus/tendermint/api"
 	tmcrypto "github.com/oasislabs/oasis-core/go/consensus/tendermint/crypto"
 	registry "github.com/oasislabs/oasis-core/go/registry/api"
+	"github.com/oasislabs/oasis-core/go/storage/mkvs"
 )
 
 var (
-	_ registry.NodeLookup = (*ImmutableState)(nil)
+	_ registry.NodeLookup    = (*ImmutableState)(nil)
+	_ registry.RuntimeLookup = (*ImmutableState)(nil)
 
 	// signedEntityKeyFmt is the key format used for signed entities.
 	//
@@ -75,93 +76,97 @@ var (
 	signedRuntimeByEntityKeyFmt = keyformat.New(0x1a, &signature.PublicKey{}, &common.Namespace{})
 )
 
+// ImmutableState is the immutable registry state wrapper.
 type ImmutableState struct {
-	*abci.ImmutableState
+	is *abciAPI.ImmutableState
 }
 
-func (s *ImmutableState) getSignedEntityRaw(id signature.PublicKey) ([]byte, error) {
-	_, value := s.Snapshot.Get(signedEntityKeyFmt.Encode(&id))
-	return value, nil
+func (s *ImmutableState) getSignedEntityRaw(ctx context.Context, id signature.PublicKey) ([]byte, error) {
+	data, err := s.is.Get(ctx, signedEntityKeyFmt.Encode(&id))
+	return data, abciAPI.UnavailableStateError(err)
 }
 
-func (s *ImmutableState) Entity(id signature.PublicKey) (*entity.Entity, error) {
-	signedEntityRaw, err := s.getSignedEntityRaw(id)
-	if err != nil || signedEntityRaw == nil {
+// Entity looks up a registered entity by its identifier.
+func (s *ImmutableState) Entity(ctx context.Context, id signature.PublicKey) (*entity.Entity, error) {
+	signedEntityRaw, err := s.getSignedEntityRaw(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	if signedEntityRaw == nil {
 		return nil, registry.ErrNoSuchEntity
 	}
 
 	var signedEntity entity.SignedEntity
 	if err = cbor.Unmarshal(signedEntityRaw, &signedEntity); err != nil {
-		return nil, err
+		return nil, abciAPI.UnavailableStateError(err)
 	}
 	var entity entity.Entity
 	if err = cbor.Unmarshal(signedEntity.Blob, &entity); err != nil {
-		return nil, err
+		return nil, abciAPI.UnavailableStateError(err)
 	}
 	return &entity, nil
 }
 
-func (s *ImmutableState) Entities() ([]*entity.Entity, error) {
+// Entities returns a list of all registered entities.
+func (s *ImmutableState) Entities(ctx context.Context) ([]*entity.Entity, error) {
+	it := s.is.NewIterator(ctx)
+	defer it.Close()
+
 	var entities []*entity.Entity
-	s.Snapshot.IterateRange(
-		signedEntityKeyFmt.Encode(),
-		nil,
-		true,
-		func(key, value []byte) bool {
-			if !signedEntityKeyFmt.Decode(key) {
-				return true
-			}
+	for it.Seek(signedEntityKeyFmt.Encode()); it.Valid(); it.Next() {
+		if !signedEntityKeyFmt.Decode(it.Key()) {
+			break
+		}
 
-			var signedEntity entity.SignedEntity
-			if err := cbor.Unmarshal(value, &signedEntity); err != nil {
-				panic("tendermint/registry: corrupted state: " + err.Error())
-			}
-			var entity entity.Entity
-			if err := cbor.Unmarshal(signedEntity.Blob, &entity); err != nil {
-				panic("tendermint/registry: corrupted state: " + err.Error())
-			}
+		var signedEntity entity.SignedEntity
+		if err := cbor.Unmarshal(it.Value(), &signedEntity); err != nil {
+			return nil, abciAPI.UnavailableStateError(err)
+		}
+		var entity entity.Entity
+		if err := cbor.Unmarshal(signedEntity.Blob, &entity); err != nil {
+			return nil, abciAPI.UnavailableStateError(err)
+		}
 
-			entities = append(entities, &entity)
-
-			return false
-		},
-	)
-
+		entities = append(entities, &entity)
+	}
+	if it.Err() != nil {
+		return nil, abciAPI.UnavailableStateError(it.Err())
+	}
 	return entities, nil
 }
 
-func (s *ImmutableState) SignedEntities() ([]*entity.SignedEntity, error) {
+// SignedEntities returns a list of all registered entities (signed).
+func (s *ImmutableState) SignedEntities(ctx context.Context) ([]*entity.SignedEntity, error) {
+	it := s.is.NewIterator(ctx)
+	defer it.Close()
+
 	var entities []*entity.SignedEntity
-	s.Snapshot.IterateRange(
-		signedEntityKeyFmt.Encode(),
-		nil,
-		true,
-		func(key, value []byte) bool {
-			if !signedEntityKeyFmt.Decode(key) {
-				return true
-			}
+	for it.Seek(signedEntityKeyFmt.Encode()); it.Valid(); it.Next() {
+		if !signedEntityKeyFmt.Decode(it.Key()) {
+			break
+		}
 
-			var signedEntity entity.SignedEntity
-			if err := cbor.Unmarshal(value, &signedEntity); err != nil {
-				panic("tendermint/registry: corrupted state: " + err.Error())
-			}
+		var signedEntity entity.SignedEntity
+		if err := cbor.Unmarshal(it.Value(), &signedEntity); err != nil {
+			return nil, abciAPI.UnavailableStateError(err)
+		}
 
-			entities = append(entities, &signedEntity)
-
-			return false
-		},
-	)
-
+		entities = append(entities, &signedEntity)
+	}
+	if it.Err() != nil {
+		return nil, abciAPI.UnavailableStateError(it.Err())
+	}
 	return entities, nil
 }
 
-func (s *ImmutableState) getSignedNodeRaw(id signature.PublicKey) ([]byte, error) {
-	_, value := s.Snapshot.Get(signedNodeKeyFmt.Encode(&id))
-	return value, nil
+func (s *ImmutableState) getSignedNodeRaw(ctx context.Context, id signature.PublicKey) ([]byte, error) {
+	data, err := s.is.Get(ctx, signedNodeKeyFmt.Encode(&id))
+	return data, abciAPI.UnavailableStateError(err)
 }
 
-func (s *ImmutableState) Node(id signature.PublicKey) (*node.Node, error) {
-	signedNodeRaw, err := s.getSignedNodeRaw(id)
+// Node looks up a specific node by its identifier.
+func (s *ImmutableState) Node(ctx context.Context, id signature.PublicKey) (*node.Node, error) {
+	signedNodeRaw, err := s.getSignedNodeRaw(ctx, id)
 	if err != nil {
 		return nil, err
 	}
@@ -171,103 +176,108 @@ func (s *ImmutableState) Node(id signature.PublicKey) (*node.Node, error) {
 
 	var signedNode node.MultiSignedNode
 	if err = cbor.Unmarshal(signedNodeRaw, &signedNode); err != nil {
-		return nil, err
+		return nil, abciAPI.UnavailableStateError(err)
 	}
 	var node node.Node
 	if err = cbor.Unmarshal(signedNode.Blob, &node); err != nil {
-		return nil, err
+		return nil, abciAPI.UnavailableStateError(err)
 	}
 	return &node, nil
 }
 
-func (s *ImmutableState) NodeByConsensusAddress(address []byte) (*node.Node, error) {
-	_, rawID := s.Snapshot.Get(nodeByConsAddressKeyFmt.Encode(address))
+// NodeByConsensusAddress looks up a specific node by its consensus address.
+func (s *ImmutableState) NodeByConsensusAddress(ctx context.Context, address []byte) (*node.Node, error) {
+	rawID, err := s.is.Get(ctx, nodeByConsAddressKeyFmt.Encode(address))
+	if err != nil {
+		return nil, abciAPI.UnavailableStateError(err)
+	}
 	if rawID == nil {
 		return nil, registry.ErrNoSuchNode
 	}
 
 	var id signature.PublicKey
 	if err := id.UnmarshalBinary(rawID); err != nil {
-		return nil, err
+		return nil, abciAPI.UnavailableStateError(err)
 	}
-	return s.Node(id)
+	return s.Node(ctx, id)
 }
 
-func (s *ImmutableState) Nodes() ([]*node.Node, error) {
+// Nodes returns a list of all registered nodes.
+func (s *ImmutableState) Nodes(ctx context.Context) ([]*node.Node, error) {
+	it := s.is.NewIterator(ctx)
+	defer it.Close()
+
 	var nodes []*node.Node
-	s.Snapshot.IterateRange(
-		signedNodeKeyFmt.Encode(),
-		nil,
-		true,
-		func(key, value []byte) bool {
-			if !signedNodeKeyFmt.Decode(key) {
-				return true
-			}
+	for it.Seek(signedNodeKeyFmt.Encode()); it.Valid(); it.Next() {
+		if !signedNodeKeyFmt.Decode(it.Key()) {
+			break
+		}
 
-			var signedNode node.MultiSignedNode
-			if err := cbor.Unmarshal(value, &signedNode); err != nil {
-				panic("tendermint/registry: corrupted state: " + err.Error())
-			}
-			var node node.Node
-			if err := cbor.Unmarshal(signedNode.Blob, &node); err != nil {
-				panic("tendermint/registry: corrupted state: " + err.Error())
-			}
+		var signedNode node.MultiSignedNode
+		if err := cbor.Unmarshal(it.Value(), &signedNode); err != nil {
+			return nil, abciAPI.UnavailableStateError(err)
+		}
+		var node node.Node
+		if err := cbor.Unmarshal(signedNode.Blob, &node); err != nil {
+			return nil, abciAPI.UnavailableStateError(err)
+		}
 
-			nodes = append(nodes, &node)
-
-			return false
-		},
-	)
-
+		nodes = append(nodes, &node)
+	}
+	if it.Err() != nil {
+		return nil, abciAPI.UnavailableStateError(it.Err())
+	}
 	return nodes, nil
 }
 
-func (s *ImmutableState) SignedNodes() ([]*node.MultiSignedNode, error) {
+// SignedNodes returns a list of all registered nodes (in signed form).
+func (s *ImmutableState) SignedNodes(ctx context.Context) ([]*node.MultiSignedNode, error) {
+	it := s.is.NewIterator(ctx)
+	defer it.Close()
+
 	var nodes []*node.MultiSignedNode
-	s.Snapshot.IterateRange(
-		signedNodeKeyFmt.Encode(),
-		nil,
-		true,
-		func(key, value []byte) bool {
-			if !signedNodeKeyFmt.Decode(key) {
-				return true
-			}
+	for it.Seek(signedNodeKeyFmt.Encode()); it.Valid(); it.Next() {
+		if !signedNodeKeyFmt.Decode(it.Key()) {
+			break
+		}
 
-			var signedNode node.MultiSignedNode
-			if err := cbor.Unmarshal(value, &signedNode); err != nil {
-				panic("tendermint/registry: corrupted state: " + err.Error())
-			}
+		var signedNode node.MultiSignedNode
+		if err := cbor.Unmarshal(it.Value(), &signedNode); err != nil {
+			return nil, abciAPI.UnavailableStateError(err)
+		}
 
-			nodes = append(nodes, &signedNode)
-
-			return false
-		},
-	)
-
+		nodes = append(nodes, &signedNode)
+	}
+	if it.Err() != nil {
+		return nil, abciAPI.UnavailableStateError(it.Err())
+	}
 	return nodes, nil
 }
 
-func (s *ImmutableState) getSignedRuntime(keyFmt *keyformat.KeyFormat, id common.Namespace) (*registry.SignedRuntime, error) {
-	_, raw := s.Snapshot.Get(keyFmt.Encode(&id))
+func (s *ImmutableState) getSignedRuntime(ctx context.Context, keyFmt *keyformat.KeyFormat, id common.Namespace) (*registry.SignedRuntime, error) {
+	raw, err := s.is.Get(ctx, keyFmt.Encode(&id))
+	if err != nil {
+		return nil, abciAPI.UnavailableStateError(err)
+	}
 	if raw == nil {
 		return nil, registry.ErrNoSuchRuntime
 	}
 
 	var signedRuntime registry.SignedRuntime
 	if err := cbor.Unmarshal(raw, &signedRuntime); err != nil {
-		return nil, err
+		return nil, abciAPI.UnavailableStateError(err)
 	}
 	return &signedRuntime, nil
 }
 
-func (s *ImmutableState) getRuntime(keyFmt *keyformat.KeyFormat, id common.Namespace) (*registry.Runtime, error) {
-	signedRuntime, err := s.getSignedRuntime(keyFmt, id)
+func (s *ImmutableState) getRuntime(ctx context.Context, keyFmt *keyformat.KeyFormat, id common.Namespace) (*registry.Runtime, error) {
+	signedRuntime, err := s.getSignedRuntime(ctx, keyFmt, id)
 	if err != nil {
 		return nil, err
 	}
 	var runtime registry.Runtime
 	if err = cbor.Unmarshal(signedRuntime.Blob, &runtime); err != nil {
-		return nil, err
+		return nil, abciAPI.UnavailableStateError(err)
 	}
 	return &runtime, nil
 }
@@ -276,21 +286,21 @@ func (s *ImmutableState) getRuntime(keyFmt *keyformat.KeyFormat, id common.Names
 //
 // This excludes any suspended runtimes, use SuspendedRuntime to query
 // suspended runtimes only.
-func (s *ImmutableState) Runtime(id common.Namespace) (*registry.Runtime, error) {
-	return s.getRuntime(signedRuntimeKeyFmt, id)
+func (s *ImmutableState) Runtime(ctx context.Context, id common.Namespace) (*registry.Runtime, error) {
+	return s.getRuntime(ctx, signedRuntimeKeyFmt, id)
 }
 
 // SuspendedRuntime looks up a suspended runtime by its identifier and
 // returns it.
-func (s *ImmutableState) SuspendedRuntime(id common.Namespace) (*registry.Runtime, error) {
-	return s.getRuntime(suspendedRuntimeKeyFmt, id)
+func (s *ImmutableState) SuspendedRuntime(ctx context.Context, id common.Namespace) (*registry.Runtime, error) {
+	return s.getRuntime(ctx, suspendedRuntimeKeyFmt, id)
 }
 
 // AnyRuntime looks up either an active or suspended runtime by its identifier and returns it.
-func (s *ImmutableState) AnyRuntime(id common.Namespace) (rt *registry.Runtime, err error) {
-	rt, err = s.Runtime(id)
+func (s *ImmutableState) AnyRuntime(ctx context.Context, id common.Namespace) (rt *registry.Runtime, err error) {
+	rt, err = s.Runtime(ctx, id)
 	if err == registry.ErrNoSuchRuntime {
-		rt, err = s.SuspendedRuntime(id)
+		rt, err = s.SuspendedRuntime(ctx, id)
 	}
 	return
 }
@@ -299,224 +309,231 @@ func (s *ImmutableState) AnyRuntime(id common.Namespace) (rt *registry.Runtime, 
 //
 // This excludes any suspended runtimes, use SuspendedSignedRuntime to query
 // suspended runtimes only.
-func (s *ImmutableState) SignedRuntime(id common.Namespace) (*registry.SignedRuntime, error) {
-	return s.getSignedRuntime(signedRuntimeKeyFmt, id)
+func (s *ImmutableState) SignedRuntime(ctx context.Context, id common.Namespace) (*registry.SignedRuntime, error) {
+	return s.getSignedRuntime(ctx, signedRuntimeKeyFmt, id)
 }
 
 // SignedSuspendedRuntime looks up a (signed) suspended runtime by its identifier and returns it.
-func (s *ImmutableState) SignedSuspendedRuntime(id common.Namespace) (*registry.SignedRuntime, error) {
-	return s.getSignedRuntime(suspendedRuntimeKeyFmt, id)
+func (s *ImmutableState) SignedSuspendedRuntime(ctx context.Context, id common.Namespace) (*registry.SignedRuntime, error) {
+	return s.getSignedRuntime(ctx, suspendedRuntimeKeyFmt, id)
 }
 
 func (s *ImmutableState) iterateRuntimes(
+	ctx context.Context,
 	keyFmt *keyformat.KeyFormat,
-	cb func(*registry.SignedRuntime),
-) {
-	s.Snapshot.IterateRange(
-		keyFmt.Encode(),
-		nil,
-		true,
-		func(key, value []byte) bool {
-			if !keyFmt.Decode(key) {
-				return true
-			}
+	cb func(*registry.SignedRuntime) error,
+) error {
+	it := s.is.NewIterator(ctx)
+	defer it.Close()
 
-			var signedRt registry.SignedRuntime
-			if err := cbor.Unmarshal(value, &signedRt); err != nil {
-				panic("tendermint/registry: corrupted state: " + err.Error())
-			}
+	for it.Seek(keyFmt.Encode()); it.Valid(); it.Next() {
+		if !keyFmt.Decode(it.Key()) {
+			break
+		}
 
-			cb(&signedRt)
+		var signedRt registry.SignedRuntime
+		if err := cbor.Unmarshal(it.Value(), &signedRt); err != nil {
+			return abciAPI.UnavailableStateError(err)
+		}
 
-			return false
-		},
-	)
+		if err := cb(&signedRt); err != nil {
+			return err
+		}
+	}
+	return abciAPI.UnavailableStateError(it.Err())
 }
 
 // SignedRuntimes returns a list of all registered runtimes (signed).
 //
 // This excludes any suspended runtimes.
-func (s *ImmutableState) SignedRuntimes() ([]*registry.SignedRuntime, error) {
+func (s *ImmutableState) SignedRuntimes(ctx context.Context) ([]*registry.SignedRuntime, error) {
 	var runtimes []*registry.SignedRuntime
-	s.iterateRuntimes(signedRuntimeKeyFmt, func(rt *registry.SignedRuntime) {
+	err := s.iterateRuntimes(ctx, signedRuntimeKeyFmt, func(rt *registry.SignedRuntime) error {
 		runtimes = append(runtimes, rt)
+		return nil
 	})
-
+	if err != nil {
+		return nil, err
+	}
 	return runtimes, nil
 }
 
 // SuspendedRuntimes returns a list of all suspended runtimes (signed).
-func (s *ImmutableState) SuspendedRuntimes() ([]*registry.SignedRuntime, error) {
+func (s *ImmutableState) SuspendedRuntimes(ctx context.Context) ([]*registry.SignedRuntime, error) {
 	var runtimes []*registry.SignedRuntime
-	s.iterateRuntimes(suspendedRuntimeKeyFmt, func(rt *registry.SignedRuntime) {
+	err := s.iterateRuntimes(ctx, suspendedRuntimeKeyFmt, func(rt *registry.SignedRuntime) error {
 		runtimes = append(runtimes, rt)
+		return nil
 	})
-
+	if err != nil {
+		return nil, err
+	}
 	return runtimes, nil
 }
 
 // AllSignedRuntimes returns a list of all runtimes (suspended included).
-func (s *ImmutableState) AllSignedRuntimes() ([]*registry.SignedRuntime, error) {
+func (s *ImmutableState) AllSignedRuntimes(ctx context.Context) ([]*registry.SignedRuntime, error) {
 	var runtimes []*registry.SignedRuntime
-	s.iterateRuntimes(signedRuntimeKeyFmt, func(rt *registry.SignedRuntime) {
+	err := s.iterateRuntimes(ctx, signedRuntimeKeyFmt, func(rt *registry.SignedRuntime) error {
 		runtimes = append(runtimes, rt)
+		return nil
 	})
-	s.iterateRuntimes(suspendedRuntimeKeyFmt, func(rt *registry.SignedRuntime) {
+	if err != nil {
+		return nil, err
+	}
+	err = s.iterateRuntimes(ctx, suspendedRuntimeKeyFmt, func(rt *registry.SignedRuntime) error {
 		runtimes = append(runtimes, rt)
+		return nil
 	})
-
+	if err != nil {
+		return nil, err
+	}
 	return runtimes, nil
 }
 
 // Runtimes returns a list of all registered runtimes.
 //
 // This excludes any suspended runtimes.
-func (s *ImmutableState) Runtimes() ([]*registry.Runtime, error) {
+func (s *ImmutableState) Runtimes(ctx context.Context) ([]*registry.Runtime, error) {
 	var runtimes []*registry.Runtime
-	s.iterateRuntimes(signedRuntimeKeyFmt, func(sigRt *registry.SignedRuntime) {
+	err := s.iterateRuntimes(ctx, signedRuntimeKeyFmt, func(sigRt *registry.SignedRuntime) error {
 		var rt registry.Runtime
 		if err := cbor.Unmarshal(sigRt.Blob, &rt); err != nil {
-			panic("tendermint/registry: corrupted state: " + err.Error())
+			return abciAPI.UnavailableStateError(err)
 		}
 		runtimes = append(runtimes, &rt)
+		return nil
 	})
-
+	if err != nil {
+		return nil, err
+	}
 	return runtimes, nil
 }
 
 // AllRuntimes returns a list of all registered runtimes (suspended included).
-func (s *ImmutableState) AllRuntimes() ([]*registry.Runtime, error) {
+func (s *ImmutableState) AllRuntimes(ctx context.Context) ([]*registry.Runtime, error) {
 	var runtimes []*registry.Runtime
-	unpackFn := func(sigRt *registry.SignedRuntime) {
+	unpackFn := func(sigRt *registry.SignedRuntime) error {
 		var rt registry.Runtime
 		if err := cbor.Unmarshal(sigRt.Blob, &rt); err != nil {
-			panic("tendermint/registry: corrupted state: " + err.Error())
+			return abciAPI.UnavailableStateError(err)
 		}
 		runtimes = append(runtimes, &rt)
+		return nil
 	}
-	s.iterateRuntimes(signedRuntimeKeyFmt, unpackFn)
-	s.iterateRuntimes(suspendedRuntimeKeyFmt, unpackFn)
-
+	if err := s.iterateRuntimes(ctx, signedRuntimeKeyFmt, unpackFn); err != nil {
+		return nil, err
+	}
+	if err := s.iterateRuntimes(ctx, suspendedRuntimeKeyFmt, unpackFn); err != nil {
+		return nil, err
+	}
 	return runtimes, nil
 }
 
-func (s *ImmutableState) NodeStatus(id signature.PublicKey) (*registry.NodeStatus, error) {
-	_, value := s.Snapshot.Get(nodeStatusKeyFmt.Encode(&id))
+// NodeStatus returns a specific node status.
+func (s *ImmutableState) NodeStatus(ctx context.Context, id signature.PublicKey) (*registry.NodeStatus, error) {
+	value, err := s.is.Get(ctx, nodeStatusKeyFmt.Encode(&id))
+	if err != nil {
+		return nil, abciAPI.UnavailableStateError(err)
+	}
 	if value == nil {
 		return nil, registry.ErrNoSuchNode
 	}
 
 	var status registry.NodeStatus
 	if err := cbor.Unmarshal(value, &status); err != nil {
-		return nil, err
+		return nil, abciAPI.UnavailableStateError(err)
 	}
 	return &status, nil
 }
 
-func (s *ImmutableState) NodeStatuses() (map[signature.PublicKey]*registry.NodeStatus, error) {
+// NodeStatuses returns all of the node statuses.
+func (s *ImmutableState) NodeStatuses(ctx context.Context) (map[signature.PublicKey]*registry.NodeStatus, error) {
+	it := s.is.NewIterator(ctx)
+	defer it.Close()
+
 	statuses := make(map[signature.PublicKey]*registry.NodeStatus)
-	s.Snapshot.IterateRange(
-		nodeStatusKeyFmt.Encode(),
-		nil,
-		true,
-		func(key, value []byte) bool {
-			var nodeID signature.PublicKey
-			if !nodeStatusKeyFmt.Decode(key, &nodeID) {
-				return true
-			}
+	for it.Seek(nodeStatusKeyFmt.Encode()); it.Valid(); it.Next() {
+		var nodeID signature.PublicKey
+		if !nodeStatusKeyFmt.Decode(it.Key(), &nodeID) {
+			break
+		}
 
-			var status registry.NodeStatus
-			if err := cbor.Unmarshal(value, &status); err != nil {
-				panic("tendermint/registry: corrupted state: " + err.Error())
-			}
+		var status registry.NodeStatus
+		if err := cbor.Unmarshal(it.Value(), &status); err != nil {
+			return nil, abciAPI.UnavailableStateError(err)
+		}
 
-			statuses[nodeID] = &status
-
-			return false
-		},
-	)
-
+		statuses[nodeID] = &status
+	}
+	if it.Err() != nil {
+		return nil, abciAPI.UnavailableStateError(it.Err())
+	}
 	return statuses, nil
 }
 
-func (s *ImmutableState) HasEntityNodes(id signature.PublicKey) (bool, error) {
-	result := true
-	s.Snapshot.IterateRange(
-		signedNodeByEntityKeyFmt.Encode(&id),
-		nil,
-		true,
-		func(key, value []byte) bool {
-			var entityID signature.PublicKey
-			if !signedNodeByEntityKeyFmt.Decode(key, &entityID) || !entityID.Equal(id) {
-				result = false
-			}
-			// Stop immediately as we are only interested in one result.
-			return true
-		},
-	)
-	return result, nil
+// HasEntityNodes checks whether an entity has any registered nodes.
+func (s *ImmutableState) HasEntityNodes(ctx context.Context, id signature.PublicKey) (bool, error) {
+	it := s.is.NewIterator(ctx)
+	defer it.Close()
+
+	if it.Seek(signedNodeByEntityKeyFmt.Encode(&id)); it.Valid() {
+		var entityID signature.PublicKey
+		if !signedNodeByEntityKeyFmt.Decode(it.Key(), &entityID) || !entityID.Equal(id) {
+			return false, nil
+		}
+		return true, nil
+	}
+	return false, abciAPI.UnavailableStateError(it.Err())
 }
 
-func (s *ImmutableState) NumEntityNodes(id signature.PublicKey) (int, error) {
-	var n int
-	s.Snapshot.IterateRange(
-		signedNodeByEntityKeyFmt.Encode(&id),
-		nil,
-		true,
-		func(key, value []byte) bool {
-			var entityID signature.PublicKey
-			if !signedNodeByEntityKeyFmt.Decode(key, &entityID) || !entityID.Equal(id) {
-				return true
-			}
+// HasEntityRuntimes checks whether an entity has any registered runtimes.
+func (s *ImmutableState) HasEntityRuntimes(ctx context.Context, id signature.PublicKey) (bool, error) {
+	it := s.is.NewIterator(ctx)
+	defer it.Close()
 
-			n++
-
-			return false
-		},
-	)
-	return n, nil
+	if it.Seek(signedRuntimeByEntityKeyFmt.Encode(&id)); it.Valid() {
+		var entityID signature.PublicKey
+		if !signedRuntimeByEntityKeyFmt.Decode(it.Key(), &entityID) || !entityID.Equal(id) {
+			return false, nil
+		}
+		return true, nil
+	}
+	return false, abciAPI.UnavailableStateError(it.Err())
 }
 
-func (s *ImmutableState) HasEntityRuntimes(id signature.PublicKey) (bool, error) {
-	result := true
-	s.Snapshot.IterateRange(
-		signedRuntimeByEntityKeyFmt.Encode(&id),
-		nil,
-		true,
-		func(key, value []byte) bool {
-			var entityID signature.PublicKey
-			if !signedRuntimeByEntityKeyFmt.Decode(key, &entityID) || !entityID.Equal(id) {
-				result = false
-			}
-			// Stop immediately as we are only interested in one result.
-			return true
-		},
-	)
-	return result, nil
-}
-
-func (s *ImmutableState) ConsensusParameters() (*registry.ConsensusParameters, error) {
-	_, raw := s.Snapshot.Get(parametersKeyFmt.Encode())
+// ConsensusParameters returns the registry consensus parameters.
+func (s *ImmutableState) ConsensusParameters(ctx context.Context) (*registry.ConsensusParameters, error) {
+	raw, err := s.is.Get(ctx, parametersKeyFmt.Encode())
+	if err != nil {
+		return nil, abciAPI.UnavailableStateError(err)
+	}
 	if raw == nil {
 		return nil, errors.New("tendermint/registry: expected consensus parameters to be present in app state")
 	}
 
 	var params registry.ConsensusParameters
-	err := cbor.Unmarshal(raw, &params)
-	return &params, err
+	if err := cbor.Unmarshal(raw, &params); err != nil {
+		return nil, abciAPI.UnavailableStateError(err)
+	}
+	return &params, nil
 }
 
-func (s *ImmutableState) NodeByConsensusOrP2PKey(key signature.PublicKey) (*node.Node, error) {
-	_, rawID := s.Snapshot.Get(keyMapKeyFmt.Encode(&key))
+// NodeByConsensusOrP2PKey looks up a specific node by its consensus or P2P key.
+func (s *ImmutableState) NodeByConsensusOrP2PKey(ctx context.Context, key signature.PublicKey) (*node.Node, error) {
+	rawID, err := s.is.Get(ctx, keyMapKeyFmt.Encode(&key))
+	if err != nil {
+		return nil, abciAPI.UnavailableStateError(err)
+	}
 	if rawID == nil {
 		return nil, registry.ErrNoSuchNode
 	}
 
 	var id signature.PublicKey
 	if err := id.UnmarshalBinary(rawID); err != nil {
-		return nil, err
+		return nil, abciAPI.UnavailableStateError(err)
 	}
-	return s.Node(id)
+	return s.Node(ctx, id)
 }
 
 // Hashes a node's committee certificate into a key for the certificate to node ID map.
@@ -526,149 +543,191 @@ func nodeCertificateToMapKey(cert []byte) hash.Hash {
 	return h
 }
 
-func (s *ImmutableState) NodeByCertificate(cert []byte) (*node.Node, error) {
+// NodeByCertificate looks up a specific node by its certificate.
+func (s *ImmutableState) NodeByCertificate(ctx context.Context, cert []byte) (*node.Node, error) {
 	certHash := nodeCertificateToMapKey(cert)
-	_, rawID := s.Snapshot.Get(certificateMapKeyFmt.Encode(&certHash))
+	rawID, err := s.is.Get(ctx, certificateMapKeyFmt.Encode(&certHash))
+	if err != nil {
+		return nil, abciAPI.UnavailableStateError(err)
+	}
 	if rawID == nil {
 		return nil, registry.ErrNoSuchNode
 	}
 
 	var id signature.PublicKey
 	if err := id.UnmarshalBinary(rawID); err != nil {
-		return nil, err
+		return nil, abciAPI.UnavailableStateError(err)
 	}
-	return s.Node(id)
+	return s.Node(ctx, id)
 }
 
-func NewImmutableState(state abci.ApplicationState, version int64) (*ImmutableState, error) {
-	inner, err := abci.NewImmutableState(state, version)
+func NewImmutableState(ctx context.Context, state abciAPI.ApplicationState, version int64) (*ImmutableState, error) {
+	is, err := abciAPI.NewImmutableState(ctx, state, version)
 	if err != nil {
 		return nil, err
 	}
 
-	return &ImmutableState{inner}, nil
+	return &ImmutableState{is}, nil
 }
 
 // MutableState is a mutable registry state wrapper.
 type MutableState struct {
 	*ImmutableState
 
-	tree *iavl.MutableTree
+	ms mkvs.KeyValueTree
 }
 
-func (s *MutableState) SetEntity(ent *entity.Entity, sigEnt *entity.SignedEntity) {
-	s.tree.Set(signedEntityKeyFmt.Encode(&ent.ID), cbor.Marshal(sigEnt))
+// SetEntity sets a signed entity descriptor for a registered entity.
+func (s *MutableState) SetEntity(ctx context.Context, ent *entity.Entity, sigEnt *entity.SignedEntity) error {
+	err := s.ms.Insert(ctx, signedEntityKeyFmt.Encode(&ent.ID), cbor.Marshal(sigEnt))
+	return abciAPI.UnavailableStateError(err)
 }
 
-func (s *MutableState) RemoveEntity(id signature.PublicKey) (*entity.Entity, error) {
-	data, removed := s.tree.Remove(signedEntityKeyFmt.Encode(&id))
-	if removed {
+// RemoveEntity removes a previously registered entity.
+func (s *MutableState) RemoveEntity(ctx context.Context, id signature.PublicKey) (*entity.Entity, error) {
+	data, err := s.ms.RemoveExisting(ctx, signedEntityKeyFmt.Encode(&id))
+	if err != nil {
+		return nil, abciAPI.UnavailableStateError(err)
+	}
+	if data != nil {
 		var removedSignedEntity entity.SignedEntity
+		if err = cbor.Unmarshal(data, &removedSignedEntity); err != nil {
+			return nil, abciAPI.UnavailableStateError(err)
+		}
 		var removedEntity entity.Entity
-
-		cbor.MustUnmarshal(data, &removedSignedEntity)
-		cbor.MustUnmarshal(removedSignedEntity.Blob, &removedEntity)
+		if err = cbor.Unmarshal(removedSignedEntity.Blob, &removedEntity); err != nil {
+			return nil, abciAPI.UnavailableStateError(err)
+		}
 		return &removedEntity, nil
 	}
-
 	return nil, registry.ErrNoSuchEntity
 }
 
-func (s *MutableState) SetNode(node *node.Node, signedNode *node.MultiSignedNode) error {
-	// Ensure that the entity exists.
-	ent, err := s.getSignedEntityRaw(node.EntityID)
-	if ent == nil || err != nil {
-		return registry.ErrNoSuchEntity
-	}
-
-	s.tree.Set(signedNodeKeyFmt.Encode(&node.ID), cbor.Marshal(signedNode))
-	s.tree.Set(signedNodeByEntityKeyFmt.Encode(&node.EntityID, &node.ID), []byte(""))
-
+// SetNode sets a signed node descriptor for a registered node.
+func (s *MutableState) SetNode(ctx context.Context, node *node.Node, signedNode *node.MultiSignedNode) error {
 	address := []byte(tmcrypto.PublicKeyToTendermint(&node.Consensus.ID).Address())
 	rawNodeID, err := node.ID.MarshalBinary()
 	if err != nil {
 		return err
 	}
-	s.tree.Set(nodeByConsAddressKeyFmt.Encode(address), rawNodeID)
 
-	s.tree.Set(keyMapKeyFmt.Encode(&node.Consensus.ID), rawNodeID)
-	s.tree.Set(keyMapKeyFmt.Encode(&node.P2P.ID), rawNodeID)
+	if err = s.ms.Insert(ctx, signedNodeKeyFmt.Encode(&node.ID), cbor.Marshal(signedNode)); err != nil {
+		return abciAPI.UnavailableStateError(err)
+	}
+	if err = s.ms.Insert(ctx, signedNodeByEntityKeyFmt.Encode(&node.EntityID, &node.ID), []byte("")); err != nil {
+		return abciAPI.UnavailableStateError(err)
+	}
+
+	if err = s.ms.Insert(ctx, nodeByConsAddressKeyFmt.Encode(address), rawNodeID); err != nil {
+		return abciAPI.UnavailableStateError(err)
+	}
+
+	if err = s.ms.Insert(ctx, keyMapKeyFmt.Encode(&node.Consensus.ID), rawNodeID); err != nil {
+		return abciAPI.UnavailableStateError(err)
+	}
+	if err = s.ms.Insert(ctx, keyMapKeyFmt.Encode(&node.P2P.ID), rawNodeID); err != nil {
+		return abciAPI.UnavailableStateError(err)
+	}
 
 	certHash := nodeCertificateToMapKey(node.Committee.Certificate)
-	s.tree.Set(certificateMapKeyFmt.Encode(&certHash), rawNodeID)
+	if err = s.ms.Insert(ctx, certificateMapKeyFmt.Encode(&certHash), rawNodeID); err != nil {
+		return abciAPI.UnavailableStateError(err)
+	}
 
 	return nil
 }
 
-func (s *MutableState) RemoveNode(node *node.Node) {
-	s.tree.Remove(signedNodeKeyFmt.Encode(&node.ID))
-	s.tree.Remove(signedNodeByEntityKeyFmt.Encode(&node.EntityID, &node.ID))
-	s.tree.Remove(nodeStatusKeyFmt.Encode(&node.ID))
+// RemoveNode removes a registered node.
+func (s *MutableState) RemoveNode(ctx context.Context, node *node.Node) error {
+	if err := s.ms.Remove(ctx, signedNodeKeyFmt.Encode(&node.ID)); err != nil {
+		return abciAPI.UnavailableStateError(err)
+	}
+	if err := s.ms.Remove(ctx, signedNodeByEntityKeyFmt.Encode(&node.EntityID, &node.ID)); err != nil {
+		return abciAPI.UnavailableStateError(err)
+	}
+	if err := s.ms.Remove(ctx, nodeStatusKeyFmt.Encode(&node.ID)); err != nil {
+		return abciAPI.UnavailableStateError(err)
+	}
 
 	address := []byte(tmcrypto.PublicKeyToTendermint(&node.Consensus.ID).Address())
-	s.tree.Remove(nodeByConsAddressKeyFmt.Encode(address))
+	if err := s.ms.Remove(ctx, nodeByConsAddressKeyFmt.Encode(address)); err != nil {
+		return abciAPI.UnavailableStateError(err)
+	}
 
-	s.tree.Remove(keyMapKeyFmt.Encode(&node.Consensus.ID))
-	s.tree.Remove(keyMapKeyFmt.Encode(&node.P2P.ID))
+	if err := s.ms.Remove(ctx, keyMapKeyFmt.Encode(&node.Consensus.ID)); err != nil {
+		return abciAPI.UnavailableStateError(err)
+	}
+	if err := s.ms.Remove(ctx, keyMapKeyFmt.Encode(&node.P2P.ID)); err != nil {
+		return abciAPI.UnavailableStateError(err)
+	}
 
 	certHash := nodeCertificateToMapKey(node.Committee.Certificate)
-	s.tree.Remove(certificateMapKeyFmt.Encode(&certHash))
-}
-
-func (s *MutableState) SetRuntime(rt *registry.Runtime, sigRt *registry.SignedRuntime, suspended bool) error {
-	ent, err := s.getSignedEntityRaw(rt.EntityID)
-	if ent == nil || err != nil {
-		return registry.ErrNoSuchEntity
+	if err := s.ms.Remove(ctx, certificateMapKeyFmt.Encode(&certHash)); err != nil {
+		return abciAPI.UnavailableStateError(err)
 	}
 
-	s.tree.Set(signedRuntimeByEntityKeyFmt.Encode(&rt.EntityID, &rt.ID), []byte(""))
+	return nil
+}
 
+// SetRuntime sets a signed runtime descriptor for a registered runtime.
+func (s *MutableState) SetRuntime(ctx context.Context, rt *registry.Runtime, sigRt *registry.SignedRuntime, suspended bool) error {
+	if err := s.ms.Insert(ctx, signedRuntimeByEntityKeyFmt.Encode(&rt.EntityID, &rt.ID), []byte("")); err != nil {
+		return abciAPI.UnavailableStateError(err)
+	}
+
+	var err error
 	if suspended {
-		s.tree.Set(suspendedRuntimeKeyFmt.Encode(&rt.ID), cbor.Marshal(sigRt))
+		err = s.ms.Insert(ctx, suspendedRuntimeKeyFmt.Encode(&rt.ID), cbor.Marshal(sigRt))
 	} else {
-		s.tree.Set(signedRuntimeKeyFmt.Encode(&rt.ID), cbor.Marshal(sigRt))
+		err = s.ms.Insert(ctx, signedRuntimeKeyFmt.Encode(&rt.ID), cbor.Marshal(sigRt))
 	}
-
-	return nil
+	return abciAPI.UnavailableStateError(err)
 }
 
-func (s *MutableState) SuspendRuntime(id common.Namespace) error {
-	_, raw := s.Snapshot.Get(signedRuntimeKeyFmt.Encode(&id))
-	if raw == nil {
+// SuspendRuntime marks a runtime as suspended.
+func (s *MutableState) SuspendRuntime(ctx context.Context, id common.Namespace) error {
+	data, err := s.ms.RemoveExisting(ctx, signedRuntimeKeyFmt.Encode(&id))
+	if err != nil {
+		return abciAPI.UnavailableStateError(err)
+	}
+	if data == nil {
 		return registry.ErrNoSuchRuntime
 	}
-
-	s.tree.Remove(signedRuntimeKeyFmt.Encode(&id))
-	s.tree.Set(suspendedRuntimeKeyFmt.Encode(&id), raw)
-	return nil
+	err = s.ms.Insert(ctx, suspendedRuntimeKeyFmt.Encode(&id), data)
+	return abciAPI.UnavailableStateError(err)
 }
 
-func (s *MutableState) ResumeRuntime(id common.Namespace) error {
-	_, raw := s.Snapshot.Get(suspendedRuntimeKeyFmt.Encode(&id))
-	if raw == nil {
+// ResumeRuntime resumes a previously suspended runtime.
+func (s *MutableState) ResumeRuntime(ctx context.Context, id common.Namespace) error {
+	data, err := s.ms.RemoveExisting(ctx, suspendedRuntimeKeyFmt.Encode(&id))
+	if err != nil {
+		return abciAPI.UnavailableStateError(err)
+	}
+	if data == nil {
 		return registry.ErrNoSuchRuntime
 	}
-
-	s.tree.Remove(suspendedRuntimeKeyFmt.Encode(&id))
-	s.tree.Set(signedRuntimeKeyFmt.Encode(&id), raw)
-	return nil
+	err = s.ms.Insert(ctx, signedRuntimeKeyFmt.Encode(&id), data)
+	return abciAPI.UnavailableStateError(err)
 }
 
-func (s *MutableState) SetNodeStatus(id signature.PublicKey, status *registry.NodeStatus) error {
-	s.tree.Set(nodeStatusKeyFmt.Encode(&id), cbor.Marshal(status))
-	return nil
+// SetNodeStatus sets a status for a registered node.
+func (s *MutableState) SetNodeStatus(ctx context.Context, id signature.PublicKey, status *registry.NodeStatus) error {
+	err := s.ms.Insert(ctx, nodeStatusKeyFmt.Encode(&id), cbor.Marshal(status))
+	return abciAPI.UnavailableStateError(err)
 }
 
-func (s *MutableState) SetConsensusParameters(params *registry.ConsensusParameters) {
-	s.tree.Set(parametersKeyFmt.Encode(), cbor.Marshal(params))
+// SetConsensusParameters sets registry consensus parameters.
+func (s *MutableState) SetConsensusParameters(ctx context.Context, params *registry.ConsensusParameters) error {
+	err := s.ms.Insert(ctx, parametersKeyFmt.Encode(), cbor.Marshal(params))
+	return abciAPI.UnavailableStateError(err)
 }
 
 // NewMutableState creates a new mutable registry state wrapper.
-func NewMutableState(tree *iavl.MutableTree) *MutableState {
-	inner := &abci.ImmutableState{Snapshot: tree.ImmutableTree}
-
+func NewMutableState(tree mkvs.KeyValueTree) *MutableState {
 	return &MutableState{
-		ImmutableState: &ImmutableState{inner},
-		tree:           tree,
+		ImmutableState: &ImmutableState{
+			&abciAPI.ImmutableState{ImmutableKeyValueTree: tree},
+		},
+		ms: tree,
 	}
 }

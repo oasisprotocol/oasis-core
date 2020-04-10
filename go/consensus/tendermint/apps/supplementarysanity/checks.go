@@ -3,11 +3,10 @@ package supplementarysanity
 import (
 	"fmt"
 
-	"github.com/tendermint/iavl"
-
 	"github.com/oasislabs/oasis-core/go/common"
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
 	"github.com/oasislabs/oasis-core/go/common/quantity"
+	abciAPI "github.com/oasislabs/oasis-core/go/consensus/tendermint/api"
 	keymanagerState "github.com/oasislabs/oasis-core/go/consensus/tendermint/apps/keymanager/state"
 	registryState "github.com/oasislabs/oasis-core/go/consensus/tendermint/apps/registry/state"
 	roothashState "github.com/oasislabs/oasis-core/go/consensus/tendermint/apps/roothash/state"
@@ -20,7 +19,7 @@ import (
 	staking "github.com/oasislabs/oasis-core/go/staking/api"
 )
 
-func checkEpochTime(state *iavl.MutableTree, now epochtime.EpochTime) error {
+func checkEpochTime(ctx *abciAPI.Context, now epochtime.EpochTime) error {
 	if now == epochtime.EpochInvalid {
 		return fmt.Errorf("current epoch is invalid")
 	}
@@ -29,11 +28,11 @@ func checkEpochTime(state *iavl.MutableTree, now epochtime.EpochTime) error {
 	return nil
 }
 
-func checkRegistry(state *iavl.MutableTree, now epochtime.EpochTime) error {
-	st := registryState.NewMutableState(state)
+func checkRegistry(ctx *abciAPI.Context, now epochtime.EpochTime) error {
+	st := registryState.NewMutableState(ctx.State())
 
 	// Check entities.
-	entities, err := st.SignedEntities()
+	entities, err := st.SignedEntities(ctx)
 	if err != nil {
 		return fmt.Errorf("SignedEntities: %w", err)
 	}
@@ -43,15 +42,15 @@ func checkRegistry(state *iavl.MutableTree, now epochtime.EpochTime) error {
 	}
 
 	// Check runtimes.
-	runtimes, err := st.SignedRuntimes()
+	runtimes, err := st.SignedRuntimes(ctx)
 	if err != nil {
 		return fmt.Errorf("AllSignedRuntimes: %w", err)
 	}
-	suspendedRuntimes, err := st.SuspendedRuntimes()
+	suspendedRuntimes, err := st.SuspendedRuntimes(ctx)
 	if err != nil {
 		return fmt.Errorf("SuspendedRuntimes: %w", err)
 	}
-	params, err := st.ConsensusParameters()
+	params, err := st.ConsensusParameters(ctx)
 	if err != nil {
 		return fmt.Errorf("ConsensusParameters: %w", err)
 	}
@@ -61,7 +60,7 @@ func checkRegistry(state *iavl.MutableTree, now epochtime.EpochTime) error {
 	}
 
 	// Check nodes.
-	nodes, err := st.SignedNodes()
+	nodes, err := st.SignedNodes(ctx)
 	if err != nil {
 		return fmt.Errorf("SignedNodes: %w", err)
 	}
@@ -73,17 +72,20 @@ func checkRegistry(state *iavl.MutableTree, now epochtime.EpochTime) error {
 	return nil
 }
 
-func checkRootHash(state *iavl.MutableTree, now epochtime.EpochTime) error {
-	st := roothashState.NewMutableState(state)
+func checkRootHash(ctx *abciAPI.Context, now epochtime.EpochTime) error {
+	st := roothashState.NewMutableState(ctx.State())
 
 	// Check blocks.
-	runtimes := st.Runtimes()
+	runtimes, err := st.Runtimes(ctx)
+	if err != nil {
+		return fmt.Errorf("Runtimes: %w", err)
+	}
 
 	blocks := make(map[common.Namespace]*block.Block)
 	for _, rt := range runtimes {
 		blocks[rt.Runtime.ID] = rt.CurrentBlock
 	}
-	err := roothash.SanityCheckBlocks(blocks)
+	err = roothash.SanityCheckBlocks(blocks)
 	if err != nil {
 		return fmt.Errorf("SanityCheckBlocks: %w", err)
 	}
@@ -92,15 +94,15 @@ func checkRootHash(state *iavl.MutableTree, now epochtime.EpochTime) error {
 	return nil
 }
 
-func checkStaking(state *iavl.MutableTree, now epochtime.EpochTime) error {
-	st := stakingState.NewMutableState(state)
+func checkStaking(ctx *abciAPI.Context, now epochtime.EpochTime) error {
+	st := stakingState.NewMutableState(ctx.State())
 
-	parameters, err := st.ConsensusParameters()
+	parameters, err := st.ConsensusParameters(ctx)
 	if err != nil {
 		return fmt.Errorf("ConsensusParameters: %w", err)
 	}
 
-	totalSupply, err := st.TotalSupply()
+	totalSupply, err := st.TotalSupply(ctx)
 	if err != nil {
 		return fmt.Errorf("TotalSupply: %w", err)
 	}
@@ -108,7 +110,7 @@ func checkStaking(state *iavl.MutableTree, now epochtime.EpochTime) error {
 		return fmt.Errorf("total supply %v is invalid", totalSupply)
 	}
 
-	commonPool, err := st.CommonPool()
+	commonPool, err := st.CommonPool(ctx)
 	if err != nil {
 		return fmt.Errorf("CommonPool: %w", err)
 	}
@@ -119,18 +121,23 @@ func checkStaking(state *iavl.MutableTree, now epochtime.EpochTime) error {
 	// Check if the total supply adds up (common pool + all balances in the ledger).
 	// Check all commission schedules.
 	var total quantity.Quantity
-	accounts, err := st.Accounts()
+	accounts, err := st.Accounts(ctx)
 	if err != nil {
 		return fmt.Errorf("Accounts: %w", err)
 	}
+	var acct *staking.Account
 	for _, id := range accounts {
-		err = staking.SanityCheckAccount(&total, parameters, now, id, st.Account(id))
+		acct, err = st.Account(ctx, id)
+		if err != nil {
+			return fmt.Errorf("Account: %w", err)
+		}
+		err = staking.SanityCheckAccount(&total, parameters, now, id, acct)
 		if err != nil {
 			return fmt.Errorf("SanityCheckAccount %s: %w", id, err)
 		}
 	}
 
-	totalFees, err := st.LastBlockFees()
+	totalFees, err := st.LastBlockFees(ctx)
 	if err != nil {
 		return fmt.Errorf("LastBlockFees: %w", err)
 	}
@@ -145,30 +152,42 @@ func checkStaking(state *iavl.MutableTree, now epochtime.EpochTime) error {
 	}
 
 	// All shares of all delegations for a given account must add up to account's Escrow.Active.TotalShares.
-	delegationses, err := st.Delegations()
+	delegationses, err := st.Delegations(ctx)
 	if err != nil {
 		return fmt.Errorf("Delegations: %w", err)
 	}
 	for id, delegations := range delegationses {
-		if err = staking.SanityCheckDelegations(id, st.Account(id), delegations); err != nil {
+		acct, err = st.Account(ctx, id)
+		if err != nil {
+			return fmt.Errorf("Account: %w", err)
+		}
+		if err = staking.SanityCheckDelegations(id, acct, delegations); err != nil {
 			return err
 		}
 	}
 
 	// All shares of all debonding delegations for a given account must add up to account's Escrow.Debonding.TotalShares.
-	debondingDelegationses, err := st.DebondingDelegations()
+	debondingDelegationses, err := st.DebondingDelegations(ctx)
 	if err != nil {
 		return fmt.Errorf("DebondingDelegations: %w", err)
 	}
 	for id, debondingDelegations := range debondingDelegationses {
-		if err = staking.SanityCheckDebondingDelegations(id, st.Account(id), debondingDelegations); err != nil {
+		acct, err = st.Account(ctx, id)
+		if err != nil {
+			return fmt.Errorf("Account: %w", err)
+		}
+		if err = staking.SanityCheckDebondingDelegations(id, acct, debondingDelegations); err != nil {
 			return err
 		}
 	}
 
 	// Check the above two invariants for each account as well.
 	for _, id := range accounts {
-		if err = staking.SanityCheckAccountShares(id, st.Account(id), delegationses[id], debondingDelegationses[id]); err != nil {
+		acct, err = st.Account(ctx, id)
+		if err != nil {
+			return fmt.Errorf("Account: %w", err)
+		}
+		if err = staking.SanityCheckAccountShares(id, acct, delegationses[id], debondingDelegationses[id]); err != nil {
 			return err
 		}
 	}
@@ -176,10 +195,10 @@ func checkStaking(state *iavl.MutableTree, now epochtime.EpochTime) error {
 	return nil
 }
 
-func checkKeyManager(state *iavl.MutableTree, now epochtime.EpochTime) error {
-	st := keymanagerState.NewMutableState(state)
+func checkKeyManager(ctx *abciAPI.Context, now epochtime.EpochTime) error {
+	st := keymanagerState.NewMutableState(ctx.State())
 
-	statuses, err := st.Statuses()
+	statuses, err := st.Statuses(ctx)
 	if err != nil {
 		return fmt.Errorf("Statuses: %w", err)
 	}
@@ -191,31 +210,31 @@ func checkKeyManager(state *iavl.MutableTree, now epochtime.EpochTime) error {
 	return nil
 }
 
-func checkScheduler(*iavl.MutableTree, epochtime.EpochTime) error {
+func checkScheduler(*abciAPI.Context, epochtime.EpochTime) error {
 	// nothing to check yet
 	return nil
 }
 
-func checkBeacon(*iavl.MutableTree, epochtime.EpochTime) error {
+func checkBeacon(*abciAPI.Context, epochtime.EpochTime) error {
 	// nothing to check yet
 	return nil
 }
 
-func checkConsensus(*iavl.MutableTree, epochtime.EpochTime) error {
+func checkConsensus(*abciAPI.Context, epochtime.EpochTime) error {
 	// nothing to check yet
 	return nil
 }
 
-func checkHalt(*iavl.MutableTree, epochtime.EpochTime) error {
+func checkHalt(*abciAPI.Context, epochtime.EpochTime) error {
 	// nothing to check yet
 	return nil
 }
 
-func checkStakeClaims(state *iavl.MutableTree, now epochtime.EpochTime) error {
-	regSt := registryState.NewMutableState(state)
-	stakeSt := stakingState.NewMutableState(state)
+func checkStakeClaims(ctx *abciAPI.Context, now epochtime.EpochTime) error {
+	regSt := registryState.NewMutableState(ctx.State())
+	stakeSt := stakingState.NewMutableState(ctx.State())
 
-	params, err := regSt.ConsensusParameters()
+	params, err := regSt.ConsensusParameters(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to get consensus parameters: %w", err)
 	}
@@ -228,7 +247,7 @@ func checkStakeClaims(state *iavl.MutableTree, now epochtime.EpochTime) error {
 	// Claims in the stake accumulators should be consistent with general state.
 	claims := make(map[signature.PublicKey]map[staking.StakeClaim][]staking.ThresholdKind)
 	// Entity registrations.
-	entities, err := regSt.Entities()
+	entities, err := regSt.Entities(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to get entities: %w", err)
 	}
@@ -238,7 +257,7 @@ func checkStakeClaims(state *iavl.MutableTree, now epochtime.EpochTime) error {
 		}
 	}
 	// Node registrations.
-	nodes, err := regSt.Nodes()
+	nodes, err := regSt.Nodes(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to get node registrations: %w", err)
 	}
@@ -246,7 +265,7 @@ func checkStakeClaims(state *iavl.MutableTree, now epochtime.EpochTime) error {
 		claims[node.EntityID][registry.StakeClaimForNode(node.ID)] = registry.StakeThresholdsForNode(node)
 	}
 	// Runtime registrations.
-	runtimes, err := regSt.AllRuntimes()
+	runtimes, err := regSt.AllRuntimes(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to get runtime registrations: %w", err)
 	}
@@ -256,7 +275,10 @@ func checkStakeClaims(state *iavl.MutableTree, now epochtime.EpochTime) error {
 
 	// Compare with actual accumulator state.
 	for _, entity := range entities {
-		acct := stakeSt.Account(entity.ID)
+		acct, err := stakeSt.Account(ctx, entity.ID)
+		if err != nil {
+			return fmt.Errorf("failed to fetch account: %w", err)
+		}
 		expectedClaims := claims[entity.ID]
 		actualClaims := acct.Escrow.StakeAccumulator.Claims
 		if len(expectedClaims) != len(actualClaims) {

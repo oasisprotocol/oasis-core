@@ -7,15 +7,19 @@ import (
 	"github.com/tendermint/tendermint/abci/types"
 
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
-	"github.com/oasislabs/oasis-core/go/consensus/tendermint/abci"
+	abciAPI "github.com/oasislabs/oasis-core/go/consensus/tendermint/api"
 	registryState "github.com/oasislabs/oasis-core/go/consensus/tendermint/apps/registry/state"
 	stakingState "github.com/oasislabs/oasis-core/go/consensus/tendermint/apps/staking/state"
 	epochtime "github.com/oasislabs/oasis-core/go/epochtime/api"
 )
 
-func (app *stakingApplication) resolveEntityIDFromProposer(regState *registryState.MutableState, request types.RequestBeginBlock, ctx *abci.Context) *signature.PublicKey {
+func (app *stakingApplication) resolveEntityIDFromProposer(
+	ctx *abciAPI.Context,
+	regState *registryState.MutableState,
+	request types.RequestBeginBlock,
+) *signature.PublicKey {
 	var proposingEntity *signature.PublicKey
-	proposerNode, err := regState.NodeByConsensusAddress(request.Header.ProposerAddress)
+	proposerNode, err := regState.NodeByConsensusAddress(ctx, request.Header.ProposerAddress)
 	if err != nil {
 		ctx.Logger().Warn("failed to get proposer node",
 			"err", err,
@@ -27,17 +31,22 @@ func (app *stakingApplication) resolveEntityIDFromProposer(regState *registrySta
 	return proposingEntity
 }
 
-func (app *stakingApplication) rewardBlockProposing(ctx *abci.Context, stakeState *stakingState.MutableState, proposingEntity *signature.PublicKey, numEligibleValidators int, numSigningEntities int) error {
+func (app *stakingApplication) rewardBlockProposing(
+	ctx *abciAPI.Context,
+	stakeState *stakingState.MutableState,
+	proposingEntity *signature.PublicKey,
+	numEligibleValidators, numSigningEntities int,
+) error {
 	if proposingEntity == nil {
 		return nil
 	}
 
-	params, err := stakeState.ConsensusParameters()
+	params, err := stakeState.ConsensusParameters(ctx)
 	if err != nil {
 		return fmt.Errorf("staking mutable state getting consensus parameters: %w", err)
 	}
 
-	epoch, err := app.state.GetCurrentEpoch(ctx.Ctx())
+	epoch, err := app.state.GetCurrentEpoch(ctx)
 	if err != nil {
 		return fmt.Errorf("app state getting current epoch: %w", err)
 	}
@@ -47,7 +56,7 @@ func (app *stakingApplication) rewardBlockProposing(ctx *abci.Context, stakeStat
 		return nil
 	}
 	// Reward the proposer based on the `(number of included votes) / (size of the validator set)` ratio.
-	if err = stakeState.AddRewardSingleAttenuated(epoch, &params.RewardFactorBlockProposed, numSigningEntities, numEligibleValidators, *proposingEntity); err != nil {
+	if err = stakeState.AddRewardSingleAttenuated(ctx, epoch, &params.RewardFactorBlockProposed, numSigningEntities, numEligibleValidators, *proposingEntity); err != nil {
 		return fmt.Errorf("adding rewards: %w", err)
 	}
 	return nil

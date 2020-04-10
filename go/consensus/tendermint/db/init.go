@@ -19,6 +19,11 @@ const cfgBackend = "tendermint.db.backend"
 // Flags has the configuration flags.
 var Flags = flag.NewFlagSet("", flag.ContinueOnError)
 
+// GetBackendName returns the currently configured Tendermint database backend.
+func GetBackendName() string {
+	return viper.GetString(cfgBackend)
+}
+
 // GetProvider returns the currently configured Tendermint DBProvider.
 func GetProvider() (node.DBProvider, error) {
 	backend := viper.GetString(cfgBackend)

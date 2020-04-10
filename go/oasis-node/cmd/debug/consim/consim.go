@@ -115,7 +115,7 @@ func doRun(cmd *cobra.Command, args []string) error {
 		genesisDoc:    genesisDoc,
 		tmChainID:     tmChainID,
 		txAuthHandler: txAuthApp.(abci.TransactionAuthHandler),
-		numVersions:   viper.GetInt64(cfgNumKept),
+		numVersions:   viper.GetUint64(cfgNumKept),
 		memDB:         viper.GetBool(cfgMemDB),
 	}
 	mockChain, err := initMockChain(ctx, cfg)
@@ -249,7 +249,7 @@ func Register(parentCmd *cobra.Command) {
 }
 
 func init() {
-	flagsConsim.Int64(cfgNumKept, 0, "number of versions kept (0 = all)")
+	flagsConsim.Uint64(cfgNumKept, 0, "number of versions kept (0 = all)")
 	flagsConsim.Bool(cfgMemDB, false, "use memory to store state")
 	flagsConsim.String(cfgWorkload, fileWorkloadName, "workload to execute")
 	flagsConsim.String(cfgWorkloadSeed, "seeeeeeeeeeeeeeeeeeeeeeeeeeeeeed", "DRBG seed for workloads")
