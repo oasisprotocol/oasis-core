@@ -1,5 +1,4 @@
-// Package benchmark implements the storage benchmark sub-command.
-package benchmark
+package storage
 
 import (
 	"context"
@@ -33,13 +32,13 @@ const (
 )
 
 var (
-	benchmarkStorageCmd = &cobra.Command{
+	storageBenchmarkCmd = &cobra.Command{
 		Use:   "benchmark",
 		Short: "benchmark storage backend",
 		Run:   doBenchmark,
 	}
 
-	flags = flag.NewFlagSet("", flag.ContinueOnError)
+	storageBenchmarkFlags = flag.NewFlagSet("", flag.ContinueOnError)
 )
 
 func doBenchmark(cmd *cobra.Command, args []string) { // nolint: gocyclo
@@ -315,15 +314,9 @@ func doBenchmark(cmd *cobra.Command, args []string) { // nolint: gocyclo
 	}
 }
 
-// Register registers the storage benchmark sub-command.
-func Register(parentCmd *cobra.Command) {
-	benchmarkStorageCmd.Flags().AddFlagSet(flags)
-	parentCmd.AddCommand(benchmarkStorageCmd)
-}
-
 func init() {
-	flags.Bool(cfgProfileCPU, false, "Enable CPU profiling in benchmark")
-	flags.Bool(cfgProfileMEM, false, "Enable memory profiling in benchmark")
-	_ = viper.BindPFlags(flags)
-	flags.AddFlagSet(storage.Flags)
+	storageBenchmarkFlags.Bool(cfgProfileCPU, false, "Enable CPU profiling in benchmark")
+	storageBenchmarkFlags.Bool(cfgProfileMEM, false, "Enable memory profiling in benchmark")
+	_ = viper.BindPFlags(storageBenchmarkFlags)
+	storageBenchmarkFlags.AddFlagSet(storage.Flags)
 }

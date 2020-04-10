@@ -284,8 +284,11 @@ func Register(parentCmd *cobra.Command) {
 	storageExportCmd.Flags().AddFlagSet(cmdFlags.DebugDontBlameOasisFlag)
 	storageExportCmd.Flags().AddFlagSet(storageExportFlags)
 
+	storageBenchmarkCmd.Flags().AddFlagSet(storageBenchmarkFlags)
+
 	storageCmd.AddCommand(storageCheckRootsCmd)
 	storageCmd.AddCommand(storageForceFinalizeCmd)
 	storageCmd.AddCommand(storageExportCmd)
+	storageCmd.AddCommand(storageBenchmarkCmd)
 	parentCmd.AddCommand(storageCmd)
 }
