@@ -110,10 +110,6 @@ func IsAddrPort(s string) error {
 		return errors.New("port is mandatory")
 	}
 
-	if len(h) == 0 || len(p) == 0 {
-		return errors.New("host and port are both mandatory")
-	}
-
 	return nil
 }
 

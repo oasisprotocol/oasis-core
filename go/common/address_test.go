@@ -25,6 +25,13 @@ func TestGetHostPort(t *testing.T) {
 	address, _ = GetHostPort("http://example.org")
 	require.Equal(t, "example.org:80", address)
 
+	address, _ = GetHostPort("https://[::]")
+	require.Equal(t, "[::]:443", address)
+	address, _ = GetHostPort("https://127.0.0.1")
+	require.Equal(t, "127.0.0.1:443", address)
+	address, _ = GetHostPort("https://example.org")
+	require.Equal(t, "example.org:443", address)
+
 	// Complete URL, shouldn't contain a path.
 	_, err := GetHostPort("http://example.org:42/")
 	require.Error(t, err)
@@ -44,4 +51,26 @@ func TestGetHostPort(t *testing.T) {
 	require.Error(t, err)
 	_, err = GetHostPort("foo://127.0.0.1")
 	require.Error(t, err)
+}
+
+func TestIsAddrPort(t *testing.T) {
+	for _, v := range []struct {
+		data string
+		ok   bool
+	}{
+		{"foo:123", false},
+		{"127.0.0.1", false},
+		{"127.0.0.1:123", true},
+		{"127.0.0.1:0", false},
+		{"127.0.0.1:bah", false},
+		{"", false},
+		{":123", false},
+	} {
+		err := IsAddrPort(v.data)
+		if v.ok {
+			require.NoError(t, err)
+		} else {
+			require.Error(t, err)
+		}
+	}
 }
