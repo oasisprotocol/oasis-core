@@ -12,6 +12,316 @@ The format is inspired by [Keep a Changelog].
 
 <!-- TOWNCRIER -->
 
+## 20.5 (2020-04-10)
+
+### Process
+
+- Include oasis-core-runtime-loader and oasis-net-runner in releases
+  ([#2780](https://github.com/oasislabs/oasis-core/issues/2780))
+
+### Removals and Breaking changes
+
+- storage: Rename "round" to "version"
+  ([#2734](https://github.com/oasislabs/oasis-core/issues/2734))
+
+  Previously the MKVS used the term "round" to mean a monotonically increasing
+  version number. This choice was due to the fact that it was initially used to
+  only store runtime state which has a concept of rounds.
+
+  As we expand its use it makes more sense to generalize this and call it
+  version.
+
+- go staking: Remove locked accounts
+  ([#2753](https://github.com/oasislabs/oasis-core/issues/2753))
+
+  We expect not to need this feature.
+
+- go/consensus: Introduce gas cost based on tx size
+  ([#2761](https://github.com/oasislabs/oasis-core/issues/2761))
+
+- storage/mkvs: Only nil value should mean deletion
+  ([#2775](https://github.com/oasislabs/oasis-core/issues/2775))
+
+  Previously an empty value in the write log signalled that the given entry is a
+  delete operation instead of an insert one. This was incorrect as inserting an
+  empty byte string is allowed. The value is now wrapped in an `Option`, with
+  `None` (`nil` in Go) meaning delete and `Some(vec![])` (`[]byte{}` in Go)
+  meaning insert empty value.
+
+  This change is BREAKING as it changes write log semantics and thus it breaks
+  the runtime worker-host protocol.
+
+- go/staking: include LastBlockFees in genesis
+  ([#2777](https://github.com/oasislabs/oasis-core/issues/2777))
+
+  Previosuly last block fees in the block of the genesis dump were lost. In the
+  case when these fees were non-zero this also caused a missmatch in total token
+  supply. Last block fees are now exported and during initialization of the new
+  chain moved to the common pool.
+
+- go/staking: Three-way fee split
+  ([#2794](https://github.com/oasislabs/oasis-core/issues/2794))
+
+  We should give more to the previous block proposer, which is the block
+  that first ran the transactions that paid the fees in the
+  `LastBlockFees`.
+  Currently they only get paid as a voter.
+
+  See
+  [oasis-core#2794](https://github.com/oasislabs/oasis-core/pull/2794)
+  for a description of the new fee split.
+
+  Instructions for genesis document maintainers:
+
+  1. Rename `fee_split_vote` to `fee_split_weight_vote` and
+     `fee_split_propose` to `fee_split_weight_next_propose` and
+     add `fee_split_weight_propose` in `.staking.params`.
+
+### Features
+
+- node: Add automatic TLS certificate rotation support
+  ([#2098](https://github.com/oasislabs/oasis-core/issues/2098))
+
+  It is now possible to automatically rotate the node's TLS
+  certificates every N epochs by passing the command-line flag
+  `worker.registration.rotate_certs`.
+  Do not use this option on sentry nodes or IAS proxies.
+
+- go/storage/mkvs: Use Badger to manage versions
+  ([#2674](https://github.com/oasislabs/oasis-core/issues/2674))
+
+  By restricting how Prune behaves (it can now only remove the earliest round)
+  we can leverage Badger's managed mode to have it manage versions for us. This
+  avoids the need to track node lifetimes separately.
+
+- go/common/crypto/signature/signer/composite: Initial import
+  ([#2684](https://github.com/oasislabs/oasis-core/issues/2684))
+
+  This adds a composite signer factory that can aggregate multiple signer
+  factories.  This could be used (for example), to use multiple signer
+  backends simultaneously, depending on the key role.
+
+  Eg: The P2P link signer could use a local file, while the consensus
+  signer can be backed by a remote HSM.
+
+- e2e tests: Test debonding entries from genesis
+  ([#2747](https://github.com/oasislabs/oasis-core/issues/2747))
+
+  Here's an e2e test scenario that exercises debonding delegation records
+  from the genesis document.
+
+- Add support for custom runtime dispatchers
+  ([#2749](https://github.com/oasislabs/oasis-core/issues/2749))
+
+  This reorganizes the dispatching code to work with a trait rather than a
+  concrete dispatcher object, enabling runtimes to have their own
+  dispatchers.
+
+- txsource: delegation workload
+  ([#2752](https://github.com/oasislabs/oasis-core/issues/2752))
+
+- txsource: add a runtime workload
+  ([#2759](https://github.com/oasislabs/oasis-core/issues/2759))
+
+  The added runtime workload submits simiple-keyvalue runtime requests.
+
+- go/txsource: add a commission schedule amendments workload
+  ([#2766](https://github.com/oasislabs/oasis-core/issues/2766))
+
+  The added workload generated commission schedule amendment requests.
+
+- go/staking: add LastBlockFees query method
+  ([#2769](https://github.com/oasislabs/oasis-core/issues/2769))
+
+  LastBlockFees returns the collected fees for previous block.
+
+- txsource/queries: workload doing historical queries
+  ([#2769](https://github.com/oasislabs/oasis-core/issues/2769))
+
+  Queries workload continuously performs various historic queries using the
+  exposed APIs and makes sure the responses make sense.
+
+- go/txsource/transfer: inlcude burn transactions in transfer workload
+  ([#2773](https://github.com/oasislabs/oasis-core/issues/2773))
+
+- go/oasis-node/cmd/debug/consim: Initial import
+  ([#2784](https://github.com/oasislabs/oasis-core/issues/2784))
+
+  Add the ability to exercise some backends without tendermint, while
+  attempting to preserve some of the semantics.
+
+- go/runtime/client: expose GetGenesisBlock method in runtime client
+  ([#2796](https://github.com/oasislabs/oasis-core/issues/2796))
+
+### Bug Fixes
+
+- staking/state: fix DelegationsFor queries
+  ([#2756](https://github.com/oasislabs/oasis-core/issues/2756))
+
+  DelegationFor and DebondingDelegationsFor would stop traversing the state to
+  soon in some cases.
+
+- staking/api/commission: fix possible panic in validation check
+  ([#2763](https://github.com/oasislabs/oasis-core/issues/2763))
+
+  The validation check would panic whenever the number of bound steps was
+  greater than `rate_steps + 2`.
+
+- go/storage/mkvs: Don't forget to include siblings in SyncGet proof
+  ([#2775](https://github.com/oasislabs/oasis-core/issues/2775))
+
+- storage/mkvs: Don't try to sync dirty keys
+  ([#2775](https://github.com/oasislabs/oasis-core/issues/2775))
+
+- go/storage/client: Refresh connections when retrying
+  ([#2783](https://github.com/oasislabs/oasis-core/issues/2783))
+
+  Previously the storage client did not refresh connections on each retry, so in
+  case a committee change happened while an operation was in progress, all
+  operations continued to use the old connection (which was closed) and thus
+  failed. We now refresh connections on each retry.
+
+- go/storage/client: Don't treat "no nodes" as a permanent error
+  ([#2785](https://github.com/oasislabs/oasis-core/issues/2785))
+
+- go/consensus/tendermint: Use our notion of latest height
+  ([#2786](https://github.com/oasislabs/oasis-core/issues/2786))
+
+  Do not let Tendermint determine the latest height as that completely ignores
+  ABCI processing so it can return a block for which local state does not yet
+  exist.
+
+- go/runtime/client: use history for GetBlock(latest)
+  ([#2795](https://github.com/oasislabs/oasis-core/issues/2795))
+
+  Using history for all GetBlock requests prevents the case where the latest
+  block would already be available but not yet in history, leading to
+  inconsistent results compared to querying by specific block number.
+
+- go/storage/mkvs: Use cbor.UnmarshalTrusted for internal metadata
+  ([#2800](https://github.com/oasislabs/oasis-core/issues/2800))
+
+- go/consensus: Shorten gas import
+  ([#2802](https://github.com/oasislabs/oasis-core/issues/2802))
+
+  Switch to more concise `FromUint64`.
+
+- go/consensus/tendermint/apps/staking: Propagate error in initTotalSupply
+  ([#2809](https://github.com/oasislabs/oasis-core/issues/2809))
+
+- go/staking: Use uint16 for limits in CommissionScheduleRules
+  ([#2810](https://github.com/oasislabs/oasis-core/issues/2810))
+
+- go/txsource/queries: Wait for indexed blocks before GetBlockByHash
+  ([#2814](https://github.com/oasislabs/oasis-core/issues/2814))
+
+- go/worker/registration: Fix crash when failing to query sentry addresses
+  ([#2825](https://github.com/oasislabs/oasis-core/issues/2825))
+
+- go/consensus/tendermint: Bump Tendermint Core to 0.32.10
+  ([#2833](https://github.com/oasislabs/oasis-core/issues/2833))
+
+### Documentation improvements
+
+- README: Update Rust-related installation instructions
+  ([#2745](https://github.com/oasislabs/oasis-core/issues/2745))
+
+### Internal changes
+
+- Move storage/mkvs/urkel to just storage/mkvs
+  ([#2657](https://github.com/oasislabs/oasis-core/issues/2657))
+
+  The MKVS implementation has been changed from the initial "Urkel tree"
+  structure and it is no longer an actual "Urkel tree" so having "urkel" in its
+  name is just confusing.
+
+- runtime: Add hongfuzz fuzzing targets
+  ([#2705](https://github.com/oasislabs/oasis-core/issues/2705))
+
+- go/staking/api: Add more details to sanity check errors
+  ([#2760](https://github.com/oasislabs/oasis-core/issues/2760))
+
+- Make: Allow running Go unit tests and node tests independently
+  ([#2776](https://github.com/oasislabs/oasis-core/issues/2776))
+
+  They can be run using the new `test-unit` and `test-node` targets.
+
+- txsource/workload/queries: Add num last kept versions argument
+  ([#2783](https://github.com/oasislabs/oasis-core/issues/2783))
+
+- go/runtime/client: Use prefetch (GetTransactionMultiple) in QueryTxs
+  ([#2783](https://github.com/oasislabs/oasis-core/issues/2783))
+
+  Previously if multiple transactions in the same block were returned as
+  QueryTxs results, each transaction was queried independently, resulting in
+  multiple round trips. Now we use GetTransactionMultiple to prefetch multiple
+  transactions in a single round trip which should improve latency.
+
+- txsource/queries: increase the odds of querying the latest height
+  ([#2787](https://github.com/oasislabs/oasis-core/issues/2787))
+
+- go/txsource/queries: obtain earliest runtime round from runtime genesis
+  ([#2796](https://github.com/oasislabs/oasis-core/issues/2796))
+
+- go/common/cbor: Add UnmarshalTrusted for trusted inputs
+  ([#2800](https://github.com/oasislabs/oasis-core/issues/2800))
+
+  The new method relaxes some decoding restrictions for cases where the inputs
+  are trusted (e.g., because they are known to be generated by the local node
+  itself).
+
+- oasis-test-runner/txsource: increase number of validators
+  ([#2815](https://github.com/oasislabs/oasis-core/issues/2815))
+
+  Increase the number of validators used in txsource tests so that consensus can
+  keep making progress when one of the nodes is restarted.
+
+- go/consensus/tendermint: support DebugUnsafeReplayRecoverCorruptedWAL
+  ([#2815](https://github.com/oasislabs/oasis-core/issues/2815))
+
+  Adds support for setting tendermint DebugUnsafeReplayRecoverCorruptedWAL and
+  enables it in daily txsource test runs.
+
+- oasis-test-runner/txsource: disable LogAssertNoTimeouts if restarts
+  ([#2817](https://github.com/oasislabs/oasis-core/issues/2817))
+
+- go/extra/stats: Update availability score formula
+  ([#2819](https://github.com/oasislabs/oasis-core/issues/2819))
+
+  As per
+  <https://docs.oasis.dev/operators/the-quest-rules.html#types-of-challenges>,
+  the availability score formula has changed from "Blocks Signed + 50 x Blocks
+  Proposed" to "Blocks Signed + 50 x Blocks Proposed in Round 0".
+
+- oasis-test-runner/txsource: disable Merge Discrepancy checker
+  ([#2821](https://github.com/oasislabs/oasis-core/issues/2821))
+
+  Timeout due to validator restarting also causes a merge discrepancy. Since
+  timeouts can happen, also disable the Merge discrepancy checker.
+
+- go/runtime/committee: Introduce close delay when rotating connections
+  ([#2822](https://github.com/oasislabs/oasis-core/issues/2822))
+
+  Previously a connection was immediately closed, interrupting any in-flight
+  requests. This introduces a configurable (via WithCloseDelay option) close
+  delay so rotated connections are only closed after some time.
+
+- go/common/grpc: Remove manual resolver hack
+  ([#2822](https://github.com/oasislabs/oasis-core/issues/2822))
+
+  Since gRPC supports the WithResolvers option to specify local resolvers there
+  is no need to use the global resolver registry hack.
+
+- go/runtime/committee: Don't reset committees when they don't change
+  ([#2822](https://github.com/oasislabs/oasis-core/issues/2822))
+
+  Previously each committee election triggered a reset of all connections for
+  that committee. This changes the logic to just bump the committee version in
+  case all the committee members are the same.
+
+- tests/fixture/txsources: add initial balance for validator-3
+  ([#2830](https://github.com/oasislabs/oasis-core/issues/2830))
+
 ## 20.4 (2020-03-04)
 
 ### Removals and Breaking changes
