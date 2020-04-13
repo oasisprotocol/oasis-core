@@ -61,7 +61,7 @@ func resolveRuntimeBinary(runtimeBinary string) (string, error) {
 }
 
 func resolveDefaultKeyManagerBinary() (string, error) {
-	return resolveRuntimeBinary("oasis-core-keymanager-runtime")
+	return resolveRuntimeBinary("simple-keymanager")
 }
 
 func startClient(env *env.Env, net *oasis.Network, binary string, clientArgs []string) (*exec.Cmd, error) {

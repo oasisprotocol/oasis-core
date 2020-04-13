@@ -3,8 +3,8 @@
 include common.mk
 
 # List of runtimes to build.
-RUNTIMES := keymanager-runtime \
-	tests/runtimes/simple-keyvalue
+RUNTIMES := tests/runtimes/simple-keyvalue \
+	tests/runtimes/simple-keymanager
 
 # Set all target as the default target.
 all: build
