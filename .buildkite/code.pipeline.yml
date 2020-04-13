@@ -102,6 +102,7 @@ steps:
       - buildkite-agent artifact upload oasis-node.test
       - cd /workdir/go/oasis-test-runner
       - buildkite-agent artifact upload oasis-test-runner
+      - buildkite-agent artifact upload oasis-test-runner.test
       - cd /workdir/go/oasis-net-runner
       - buildkite-agent artifact upload oasis-net-runner
       - cd /workdir/go/oasis-remote-signer

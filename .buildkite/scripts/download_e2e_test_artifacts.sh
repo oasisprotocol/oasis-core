@@ -16,6 +16,7 @@ source .buildkite/scripts/common.sh
 download_artifact oasis-node go/oasis-node 755
 download_artifact oasis-node.test go/oasis-node 755
 download_artifact oasis-test-runner go/oasis-test-runner 755
+download_artifact oasis-test-runner.test go/oasis-test-runner 755
 download_artifact oasis-remote-signer go/oasis-remote-signer 755
 download_artifact oasis-core-runtime-loader target/default/debug 755
 
