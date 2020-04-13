@@ -233,7 +233,7 @@ func (r *registryCLIImpl) listEntities(childEnv *env.Env) ([]signature.PublicKey
 
 		var ent signature.PublicKey
 		if err = ent.UnmarshalText([]byte(entStr)); err != nil {
-			return nil, err
+			return nil, fmt.Errorf("failed to parse entity ID (%s): error: %w output: %s", entStr, err, out.String())
 		}
 		entities = append(entities, ent)
 	}
