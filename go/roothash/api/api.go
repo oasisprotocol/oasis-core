@@ -91,6 +91,9 @@ type Backend interface {
 	// StateToGenesis returns the genesis state at specified block height.
 	StateToGenesis(ctx context.Context, height int64) (*Genesis, error)
 
+	// GetEvents returns the events at specified block height.
+	GetEvents(ctx context.Context, height int64) (*[]Event, error)
+
 	// Cleanup cleans up the roothash backend.
 	Cleanup()
 }

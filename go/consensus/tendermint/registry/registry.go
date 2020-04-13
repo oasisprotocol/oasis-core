@@ -8,9 +8,11 @@ import (
 	"github.com/eapache/channels"
 	"github.com/pkg/errors"
 	abcitypes "github.com/tendermint/tendermint/abci/types"
+	tmrpctypes "github.com/tendermint/tendermint/rpc/core/types"
 	tmtypes "github.com/tendermint/tendermint/types"
 
 	"github.com/oasislabs/oasis-core/go/common/cbor"
+	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
 	"github.com/oasislabs/oasis-core/go/common/entity"
 	"github.com/oasislabs/oasis-core/go/common/logging"
 	"github.com/oasislabs/oasis-core/go/common/node"
@@ -148,6 +150,113 @@ func (tb *tendermintBackend) StateToGenesis(ctx context.Context, height int64) (
 	}
 
 	return q.Genesis(ctx)
+}
+
+func (tb *tendermintBackend) GetEvents(ctx context.Context, height int64) (*[]api.Event, error) {
+	// Get block results at given height.
+	var results *tmrpctypes.ResultBlockResults
+	results, err := tb.service.GetBlockResults(&height)
+	if err != nil {
+		tb.logger.Error("failed to get tendermint block results",
+			"err", err,
+			"height", height,
+		)
+		return nil, err
+	}
+
+	// Decode events from block results.
+	tmEvents := append(results.Results.BeginBlock.GetEvents(), results.Results.EndBlock.GetEvents()...)
+	for _, txResults := range results.Results.DeliverTx {
+		tmEvents = append(tmEvents, txResults.GetEvents()...)
+	}
+	events := []api.Event{}
+	for _, tmEv := range tmEvents {
+		// Ignore events that don't relate to the registry app.
+		if tmEv.GetType() != app.EventType {
+			continue
+		}
+
+		for _, pair := range tmEv.GetAttributes() {
+			key := pair.GetKey()
+			val := pair.GetValue()
+			if bytes.Equal(key, app.KeyRuntimeRegistered) {
+				// Runtime registered event.
+				var rt api.Runtime
+				if err := cbor.Unmarshal(val, &rt); err != nil {
+					return nil, errors.Wrap(err, "registry: corrupt RuntimeRegistered event")
+				}
+				evt := api.Event{
+					RuntimeEvent: &api.RuntimeEvent{Runtime: &rt},
+				}
+				events = append(events, evt)
+			} else if bytes.Equal(key, app.KeyEntityRegistered) {
+				// Entity registered event.
+				var ent entity.Entity
+				if err := cbor.Unmarshal(val, &ent); err != nil {
+					return nil, errors.Wrap(err, "registry: corrupt EntityRegistered event")
+				}
+				evt := api.Event{
+					EntityEvent: &api.EntityEvent{
+						Entity:         &ent,
+						IsRegistration: true,
+					},
+				}
+				events = append(events, evt)
+			} else if bytes.Equal(key, app.KeyEntityDeregistered) {
+				// Entity deregistered event.
+				var dereg app.EntityDeregistration
+				if err := cbor.Unmarshal(val, &dereg); err != nil {
+					return nil, errors.Wrap(err, "registry: corrupt EntityDeregistered event")
+				}
+				evt := api.Event{
+					EntityEvent: &api.EntityEvent{
+						Entity:         &dereg.Entity,
+						IsRegistration: false,
+					},
+				}
+				events = append(events, evt)
+			} else if bytes.Equal(key, app.KeyNodeRegistered) {
+				// Node registered event.
+				var n node.Node
+				if err := cbor.Unmarshal(val, &n); err != nil {
+					return nil, errors.Wrap(err, "registry: corrupt NodeRegistered event")
+				}
+				evt := api.Event{
+					NodeEvent: &api.NodeEvent{
+						Node:           &n,
+						IsRegistration: true,
+					},
+				}
+				events = append(events, evt)
+			} else if bytes.Equal(key, app.KeyNodesExpired) {
+				// Nodes expired event.
+				var nodes []*node.Node
+				if err := cbor.Unmarshal(val, &nodes); err != nil {
+					return nil, errors.Wrap(err, "registry: corrupt NodesExpired event")
+				}
+				evt := api.Event{
+					NodesExpiredEvent: &api.NodesExpiredEvent{
+						Nodes: nodes,
+					},
+				}
+				events = append(events, evt)
+			} else if bytes.Equal(key, app.KeyNodeUnfrozen) {
+				// Node unfrozen event.
+				var nid signature.PublicKey
+				if err := cbor.Unmarshal(val, &nid); err != nil {
+					return nil, errors.Wrap(err, "registry: corrupt NodeUnfrozen event")
+				}
+				evt := api.Event{
+					NodeUnfrozenEvent: &api.NodeUnfrozenEvent{
+						NodeID: nid,
+					},
+				}
+				events = append(events, evt)
+			}
+		}
+	}
+
+	return &events, nil
 }
 
 func (tb *tendermintBackend) worker(ctx context.Context) {

@@ -33,6 +33,8 @@ var (
 	methodGetNodeList = serviceName.NewMethod("GetNodeList", int64(0))
 	// methodStateToGenesis is the StateToGenesis method.
 	methodStateToGenesis = serviceName.NewMethod("StateToGenesis", int64(0))
+	// methodGetEvents is the GetEvents method.
+	methodGetEvents = serviceName.NewMethod("GetEvents", int64(0))
 
 	// methodWatchEntities is the WatchEntities method.
 	methodWatchEntities = serviceName.NewMethod("WatchEntities", nil)
@@ -83,6 +85,10 @@ var (
 			{
 				MethodName: methodStateToGenesis.ShortName(),
 				Handler:    handlerStateToGenesis,
+			},
+			{
+				MethodName: methodGetEvents.ShortName(),
+				Handler:    handlerGetEvents,
 			},
 		},
 		Streams: []grpc.StreamDesc{
@@ -313,6 +319,29 @@ func handlerStateToGenesis( // nolint: golint
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(Backend).StateToGenesis(ctx, req.(int64))
+	}
+	return interceptor(ctx, height, info, handler)
+}
+
+func handlerGetEvents( // nolint: golint
+	srv interface{},
+	ctx context.Context,
+	dec func(interface{}) error,
+	interceptor grpc.UnaryServerInterceptor,
+) (interface{}, error) {
+	var height int64
+	if err := dec(&height); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(Backend).GetEvents(ctx, height)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: methodGetEvents.FullName(),
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(Backend).GetEvents(ctx, req.(int64))
 	}
 	return interceptor(ctx, height, info, handler)
 }
@@ -648,6 +677,14 @@ func (c *registryClient) StateToGenesis(ctx context.Context, height int64) (*Gen
 		return nil, err
 	}
 	return &rsp, nil
+}
+
+func (c *registryClient) GetEvents(ctx context.Context, height int64) (*[]Event, error) {
+	var rsp *[]Event
+	if err := c.conn.Invoke(ctx, methodGetEvents.FullName(), height, &rsp); err != nil {
+		return nil, err
+	}
+	return rsp, nil
 }
 
 func (c *registryClient) Cleanup() {

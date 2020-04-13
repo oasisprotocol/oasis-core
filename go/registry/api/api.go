@@ -226,6 +226,9 @@ type Backend interface {
 	// StateToGenesis returns the genesis state at specified block height.
 	StateToGenesis(context.Context, int64) (*Genesis, error)
 
+	// GetEvents returns the events at specified block height.
+	GetEvents(ctx context.Context, height int64) (*[]Event, error)
+
 	// Cleanup cleans up the registry backend.
 	Cleanup()
 }
@@ -279,6 +282,30 @@ type EntityEvent struct {
 type NodeEvent struct {
 	Node           *node.Node
 	IsRegistration bool
+}
+
+// RuntimeEvent signifies new runtime registration.
+type RuntimeEvent struct {
+	Runtime *Runtime
+}
+
+// NodesExpiredEvent signifies node expirations.
+type NodesExpiredEvent struct {
+	Nodes []*node.Node
+}
+
+// NodeUnfrozenEvent signifies when node becomes unfrozen.
+type NodeUnfrozenEvent struct {
+	NodeID signature.PublicKey
+}
+
+// Event is a registry event returned via GetEvents.
+type Event struct {
+	RuntimeEvent      *RuntimeEvent
+	EntityEvent       *EntityEvent
+	NodeEvent         *NodeEvent
+	NodesExpiredEvent *NodesExpiredEvent
+	NodeUnfrozenEvent *NodeUnfrozenEvent
 }
 
 // NodeList is a per-epoch immutable node list.

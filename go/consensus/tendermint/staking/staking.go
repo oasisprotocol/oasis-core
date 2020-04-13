@@ -5,7 +5,10 @@ import (
 	"bytes"
 	"context"
 
+	"github.com/pkg/errors"
+
 	abcitypes "github.com/tendermint/tendermint/abci/types"
+	tmrpctypes "github.com/tendermint/tendermint/rpc/core/types"
 	tmtypes "github.com/tendermint/tendermint/types"
 
 	"github.com/oasislabs/oasis-core/go/common/cbor"
@@ -138,6 +141,96 @@ func (tb *tendermintBackend) StateToGenesis(ctx context.Context, height int64) (
 	}
 
 	return q.Genesis(ctx)
+}
+
+func (tb *tendermintBackend) GetEvents(ctx context.Context, height int64) (*[]api.Event, error) {
+	// Get block results at given height.
+	var results *tmrpctypes.ResultBlockResults
+	results, err := tb.service.GetBlockResults(&height)
+	if err != nil {
+		tb.logger.Error("failed to get tendermint block results",
+			"err", err,
+			"height", height,
+		)
+		return nil, err
+	}
+
+	// Decode events from block results.
+	tmEvents := append(results.Results.BeginBlock.GetEvents(), results.Results.EndBlock.GetEvents()...)
+	for _, txResults := range results.Results.DeliverTx {
+		tmEvents = append(tmEvents, txResults.GetEvents()...)
+	}
+	events := []api.Event{}
+	for _, tmEv := range tmEvents {
+		// Ignore events that don't relate to the staking app.
+		if tmEv.GetType() != app.EventType {
+			continue
+		}
+
+		for _, pair := range tmEv.GetAttributes() {
+			key := pair.GetKey()
+			val := pair.GetValue()
+			if bytes.Equal(key, app.KeyTransfer) {
+				// Transfer event.
+				var te api.TransferEvent
+				if err := cbor.Unmarshal(val, &te); err != nil {
+					return nil, errors.Wrap(err, "staking: corrupt Transfer event")
+				}
+				evt := api.Event{
+					TransferEvent: &te,
+				}
+				events = append(events, evt)
+			} else if bytes.Equal(key, app.KeyBurn) {
+				// Burn event.
+				var be api.BurnEvent
+				if err := cbor.Unmarshal(val, &be); err != nil {
+					return nil, errors.Wrap(err, "staking: corrupt Burn event")
+				}
+				evt := api.Event{
+					BurnEvent: &be,
+				}
+				events = append(events, evt)
+			} else if bytes.Equal(key, app.KeyAddEscrow) {
+				// Add escrow event.
+				var aee api.AddEscrowEvent
+				if err := cbor.Unmarshal(val, &aee); err != nil {
+					return nil, errors.Wrap(err, "staking: corrupt AddEscrow event")
+				}
+				evt := api.Event{
+					EscrowEvent: &api.EscrowEvent{
+						Add: &aee,
+					},
+				}
+				events = append(events, evt)
+			} else if bytes.Equal(key, app.KeyTakeEscrow) {
+				// Take escrow event.
+				var tee api.TakeEscrowEvent
+				if err := cbor.Unmarshal(val, &tee); err != nil {
+					return nil, errors.Wrap(err, "staking: corrupt TakeEscrow event")
+				}
+				evt := api.Event{
+					EscrowEvent: &api.EscrowEvent{
+						Take: &tee,
+					},
+				}
+				events = append(events, evt)
+			} else if bytes.Equal(key, app.KeyReclaimEscrow) {
+				// Reclaim escrow event.
+				var ree api.ReclaimEscrowEvent
+				if err := cbor.Unmarshal(val, &ree); err != nil {
+					return nil, errors.Wrap(err, "staking: corrupt ReclaimEscrow event")
+				}
+				evt := api.Event{
+					EscrowEvent: &api.EscrowEvent{
+						Reclaim: &ree,
+					},
+				}
+				events = append(events, evt)
+			}
+		}
+	}
+
+	return &events, nil
 }
 
 func (tb *tendermintBackend) ConsensusParameters(ctx context.Context, height int64) (*api.ConsensusParameters, error) {

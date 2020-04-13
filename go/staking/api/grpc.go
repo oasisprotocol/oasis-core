@@ -35,6 +35,8 @@ var (
 	methodStateToGenesis = serviceName.NewMethod("StateToGenesis", int64(0))
 	// methodConsensusParameters is the ConsensusParameters method.
 	methodConsensusParameters = serviceName.NewMethod("ConsensusParameters", int64(0))
+	// methodGetEvents is the GetEvents method.
+	methodGetEvents = serviceName.NewMethod("GetEvents", int64(0))
 
 	// methodWatchTransfers is the WatchTransfers method.
 	methodWatchTransfers = serviceName.NewMethod("WatchTransfers", nil)
@@ -87,6 +89,10 @@ var (
 			{
 				MethodName: methodConsensusParameters.ShortName(),
 				Handler:    handlerConsensusParameters,
+			},
+			{
+				MethodName: methodGetEvents.ShortName(),
+				Handler:    handlerGetEvents,
 			},
 		},
 		Streams: []grpc.StreamDesc{
@@ -339,6 +345,29 @@ func handlerConsensusParameters( // nolint: golint
 	return interceptor(ctx, height, info, handler)
 }
 
+func handlerGetEvents( // nolint: golint
+	srv interface{},
+	ctx context.Context,
+	dec func(interface{}) error,
+	interceptor grpc.UnaryServerInterceptor,
+) (interface{}, error) {
+	var height int64
+	if err := dec(&height); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(Backend).GetEvents(ctx, height)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: methodGetEvents.FullName(),
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(Backend).GetEvents(ctx, req.(int64))
+	}
+	return interceptor(ctx, height, info, handler)
+}
+
 func handlerWatchTransfers(srv interface{}, stream grpc.ServerStream) error {
 	if err := stream.RecvMsg(nil); err != nil {
 		return err
@@ -510,6 +539,14 @@ func (c *stakingClient) ConsensusParameters(ctx context.Context, height int64) (
 		return nil, err
 	}
 	return &rsp, nil
+}
+
+func (c *stakingClient) GetEvents(ctx context.Context, height int64) (*[]Event, error) {
+	var rsp *[]Event
+	if err := c.conn.Invoke(ctx, methodGetEvents.FullName(), height, &rsp); err != nil {
+		return nil, err
+	}
+	return rsp, nil
 }
 
 func (c *stakingClient) WatchTransfers(ctx context.Context) (<-chan *TransferEvent, pubsub.ClosableSubscription, error) {

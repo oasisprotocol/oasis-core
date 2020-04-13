@@ -196,6 +196,54 @@ func (tb *tendermintBackend) StateToGenesis(ctx context.Context, height int64) (
 	return q.Genesis(ctx)
 }
 
+func (tb *tendermintBackend) GetEvents(ctx context.Context, height int64) (*[]api.Event, error) {
+	// Get block results at given height.
+	var results *tmrpctypes.ResultBlockResults
+	results, err := tb.service.GetBlockResults(&height)
+	if err != nil {
+		tb.logger.Error("failed to get tendermint block results",
+			"err", err,
+			"height", height,
+		)
+		return nil, err
+	}
+
+	// Decode events from block results.
+	tmEvents := append(results.Results.BeginBlock.GetEvents(), results.Results.EndBlock.GetEvents()...)
+	for _, txResults := range results.Results.DeliverTx {
+		tmEvents = append(tmEvents, txResults.GetEvents()...)
+	}
+	events := []api.Event{}
+	for _, tmEv := range tmEvents {
+		// Ignore events that don't relate to the roothash app.
+		if tmEv.GetType() != app.EventType {
+			continue
+		}
+
+		for _, pair := range tmEv.GetAttributes() {
+			if bytes.Equal(pair.GetKey(), app.KeyMergeDiscrepancyDetected) {
+				// Merge discrepancy event.
+				evt := api.Event{
+					MergeDiscrepancyDetected: &api.MergeDiscrepancyDetectedEvent{},
+				}
+				events = append(events, evt)
+			} else if bytes.Equal(pair.GetKey(), app.KeyExecutionDiscrepancyDetected) {
+				// Execution discrepancy event.
+				var eddValue app.ValueExecutionDiscrepancyDetected
+				if err := cbor.Unmarshal(pair.GetValue(), &eddValue); err != nil {
+					return nil, errors.Wrap(err, "roothash: corrupt ExecutionDiscrepancyDetected tag")
+				}
+				evt := api.Event{
+					ExecutionDiscrepancyDetected: &eddValue.Event,
+				}
+				events = append(events, evt)
+			}
+		}
+	}
+
+	return &events, nil
+}
+
 func (tb *tendermintBackend) Cleanup() {
 	tb.closeOnce.Do(func() {
 		<-tb.closedCh
