@@ -20,6 +20,10 @@ go-binaries := oasis-node oasis-test-runner oasis-net-runner oasis-remote-signer
 $(go-binaries):
 	@$(ECHO) "$(MAGENTA)*** Building $@...$(OFF)"
 	@$(GO) build $(GOFLAGS) $(GO_EXTRA_FLAGS) -o ./$@/$(notdir $@) ./$@
+ifeq ($(GO_BUILD_E2E_COVERAGE),1)
+	@$(ECHO) "$(MAGENTA)*** Building $@ with E2E coverage...$(OFF)"
+	@$(GO) test $(GOFLAGS) -c -tags e2ecoverage -covermode=atomic -coverpkg=./... -o ./$@/$(notdir $@).test ./$@
+endif
 
 build: $(go-binaries)
 
@@ -71,11 +75,6 @@ test: $(test-targets)
 force-test:
 	@$(ECHO) "$(CYAN)*** Running Go unit tests in force mode...$(OFF)"
 	@$(MAKE) test GO_TEST_FLAGS=-count=1
-
-# Test oasis-node with coverage.
-integrationrunner:
-	@$(ECHO) "$(CYAN)*** Testing oasis-node with coverate...$(OFF)"
-	@$(GO) test $(GOFLAGS) -c -covermode=atomic -coverpkg=./... -o oasis-node/$@/$@.test ./oasis-node/$@
 
 # Fuzzing.
 fuzz-targets := fuzz-consensus \
@@ -138,7 +137,7 @@ clean:
 	$(test-helpers) build-helpers \
 	$(test-vectors) gen-test-vectors \
 	fmt lint \
-	$(test-targets) test force-test integrationrunner \
+	$(test-targets) test force-test \
 	$(fuzz-targets) build-fuzz \
 	clean all
 

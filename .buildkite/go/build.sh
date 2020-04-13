@@ -25,5 +25,5 @@ pushd go
     exit 1
   fi
 
-  make all integrationrunner
+  make all GO_BUILD_E2E_COVERAGE=1
 popd

@@ -99,8 +99,7 @@ steps:
       # Upload the built artifacts.
       - cd /workdir/go/oasis-node
       - buildkite-agent artifact upload oasis-node
-      - cd /workdir/go/oasis-node/integrationrunner
-      - buildkite-agent artifact upload integrationrunner.test
+      - buildkite-agent artifact upload oasis-node.test
       - cd /workdir/go/oasis-test-runner
       - buildkite-agent artifact upload oasis-test-runner
       - cd /workdir/go/oasis-net-runner
