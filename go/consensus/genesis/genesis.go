@@ -20,10 +20,11 @@ type Parameters struct {
 	SkipTimeoutCommit  bool          `json:"skip_timeout_commit"`
 	EmptyBlockInterval time.Duration `json:"empty_block_interval"`
 
-	MaxTxSize      uint64          `json:"max_tx_size"`
-	MaxBlockSize   uint64          `json:"max_block_size"`
-	MaxBlockGas    transaction.Gas `json:"max_block_gas"`
-	MaxEvidenceAge uint64          `json:"max_evidence_age"`
+	MaxTxSize            uint64          `json:"max_tx_size"`
+	MaxBlockSize         uint64          `json:"max_block_size"`
+	MaxBlockGas          transaction.Gas `json:"max_block_gas"`
+	MaxEvidenceAgeBlocks uint64          `json:"max_evidence_age_blocks"`
+	MaxEvidenceAgeTime   time.Duration   `json:"max_evidence_age_time"`
 
 	// GasCosts are the base transaction gas costs.
 	GasCosts transaction.Costs `json:"gas_costs,omitempty"`

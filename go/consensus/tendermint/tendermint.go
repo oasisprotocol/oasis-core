@@ -1073,8 +1073,8 @@ func genesisToTendermint(d *genesisAPI.Document) (*tmtypes.GenesisDoc, error) {
 				TimeIotaMs: 1000,
 			},
 			Evidence: tmtypes.EvidenceParams{
-				MaxAgeNumBlocks: int64(d.Consensus.Parameters.MaxEvidenceAge),
-				MaxAgeDuration:  48 * time.Hour, // XXX: Change the tm default?
+				MaxAgeNumBlocks: int64(d.Consensus.Parameters.MaxEvidenceAgeBlocks),
+				MaxAgeDuration:  d.Consensus.Parameters.MaxEvidenceAgeTime,
 			},
 			Validator: tmtypes.ValidatorParams{
 				PubKeyTypes: []string{tmtypes.ABCIPubKeyTypeEd25519},

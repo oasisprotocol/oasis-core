@@ -79,14 +79,15 @@ const (
 	cfgRoothashDebugBypassStake          = "roothash.debug.bypass_stake" // nolint: gosec
 
 	// Tendermint config flags.
-	cfgConsensusTimeoutCommit      = "consensus.tendermint.timeout_commit"
-	cfgConsensusSkipTimeoutCommit  = "consensus.tendermint.skip_timeout_commit"
-	cfgConsensusEmptyBlockInterval = "consensus.tendermint.empty_block_interval"
-	cfgConsensusMaxTxSizeBytes     = "consensus.tendermint.max_tx_size"
-	cfgConsensusMaxBlockSizeBytes  = "consensus.tendermint.max_block_size"
-	cfgConsensusMaxBlockGas        = "consensus.tendermint.max_block_gas"
-	cfgConsensusMaxEvidenceAge     = "consensus.tendermint.max_evidence_age"
-	CfgConsensusGasCostsTxByte     = "consensus.gas_costs.tx_byte"
+	cfgConsensusTimeoutCommit        = "consensus.tendermint.timeout_commit"
+	cfgConsensusSkipTimeoutCommit    = "consensus.tendermint.skip_timeout_commit"
+	cfgConsensusEmptyBlockInterval   = "consensus.tendermint.empty_block_interval"
+	cfgConsensusMaxTxSizeBytes       = "consensus.tendermint.max_tx_size"
+	cfgConsensusMaxBlockSizeBytes    = "consensus.tendermint.max_block_size"
+	cfgConsensusMaxBlockGas          = "consensus.tendermint.max_block_gas"
+	cfgConsensusMaxEvidenceAgeBlocks = "consensus.tendermint.max_evidence_age_blocks"
+	cfgConsensusMaxEvidenceAgeTime   = "consensus.tendermint.max_evidence_age_time"
+	CfgConsensusGasCostsTxByte       = "consensus.gas_costs.tx_byte"
 
 	// Consensus backend config flag.
 	cfgConsensusBackend = "consensus.backend"
@@ -217,13 +218,14 @@ func doInitGenesis(cmd *cobra.Command, args []string) {
 	doc.Consensus = consensusGenesis.Genesis{
 		Backend: viper.GetString(cfgConsensusBackend),
 		Parameters: consensusGenesis.Parameters{
-			TimeoutCommit:      viper.GetDuration(cfgConsensusTimeoutCommit),
-			SkipTimeoutCommit:  viper.GetBool(cfgConsensusSkipTimeoutCommit),
-			EmptyBlockInterval: viper.GetDuration(cfgConsensusEmptyBlockInterval),
-			MaxTxSize:          uint64(viper.GetSizeInBytes(cfgConsensusMaxTxSizeBytes)),
-			MaxBlockSize:       uint64(viper.GetSizeInBytes(cfgConsensusMaxBlockSizeBytes)),
-			MaxBlockGas:        transaction.Gas(viper.GetUint64(cfgConsensusMaxBlockGas)),
-			MaxEvidenceAge:     viper.GetUint64(cfgConsensusMaxEvidenceAge),
+			TimeoutCommit:        viper.GetDuration(cfgConsensusTimeoutCommit),
+			SkipTimeoutCommit:    viper.GetBool(cfgConsensusSkipTimeoutCommit),
+			EmptyBlockInterval:   viper.GetDuration(cfgConsensusEmptyBlockInterval),
+			MaxTxSize:            uint64(viper.GetSizeInBytes(cfgConsensusMaxTxSizeBytes)),
+			MaxBlockSize:         uint64(viper.GetSizeInBytes(cfgConsensusMaxBlockSizeBytes)),
+			MaxBlockGas:          transaction.Gas(viper.GetUint64(cfgConsensusMaxBlockGas)),
+			MaxEvidenceAgeBlocks: viper.GetUint64(cfgConsensusMaxEvidenceAgeBlocks),
+			MaxEvidenceAgeTime:   viper.GetDuration(cfgConsensusMaxEvidenceAgeTime),
 			GasCosts: transaction.Costs{
 				consensusGenesis.GasOpTxByte: transaction.Gas(viper.GetUint64(CfgConsensusGasCostsTxByte)),
 			},
@@ -723,7 +725,8 @@ func init() {
 	initGenesisFlags.String(cfgConsensusMaxTxSizeBytes, "32kb", "tendermint maximum transaction size (in bytes)")
 	initGenesisFlags.String(cfgConsensusMaxBlockSizeBytes, "21mb", "tendermint maximum block size (in bytes)")
 	initGenesisFlags.Uint64(cfgConsensusMaxBlockGas, 0, "tendermint max gas used per block")
-	initGenesisFlags.Uint64(cfgConsensusMaxEvidenceAge, 100000, "tendermint max evidence age (in blocks)")
+	initGenesisFlags.Uint64(cfgConsensusMaxEvidenceAgeBlocks, 100000, "tendermint max evidence age (in blocks)")
+	initGenesisFlags.Duration(cfgConsensusMaxEvidenceAgeTime, 48*time.Hour, "tendermint max evidence age (in time)")
 	initGenesisFlags.Uint64(CfgConsensusGasCostsTxByte, 1, "consensus gas costs: each transaction byte")
 
 	// Consensus backend flag.
