@@ -2,20 +2,24 @@ package ias
 
 import (
 	"context"
+	"fmt"
 	"sync"
 	"time"
 
-	"github.com/pkg/errors"
+	"github.com/cenkalti/backoff/v4"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 	"google.golang.org/grpc"
 
 	"github.com/oasislabs/oasis-core/go/common/logging"
+	"github.com/oasislabs/oasis-core/go/common/pubsub"
 	ias "github.com/oasislabs/oasis-core/go/ias/api"
 	iasProxy "github.com/oasislabs/oasis-core/go/ias/proxy"
 	cmdGrpc "github.com/oasislabs/oasis-core/go/oasis-node/cmd/common/grpc"
 	registry "github.com/oasislabs/oasis-core/go/registry/api"
 )
+
+const registryRetryInterval = 2 * time.Second
 
 type registryAuthenticator struct {
 	logger *logging.Logger
@@ -53,12 +57,32 @@ func (auth *registryAuthenticator) VerifyEvidence(ctx context.Context, evidence 
 	return nil
 }
 
-func (auth *registryAuthenticator) dialRegistry(ctx context.Context) (*grpc.ClientConn, error) {
-	conn, err := cmdGrpc.NewClient(auth.cmd)
-	if err != nil {
-		return nil, errors.Wrap(err, "ias: failed to create gRPC client")
+func (auth *registryAuthenticator) watchRuntimes(ctx context.Context, conn *grpc.ClientConn) (
+	ch <-chan *registry.Runtime,
+	sub pubsub.ClosableSubscription,
+	err error,
+) {
+	op := func() error {
+		client := registry.NewRegistryClient(conn)
+
+		// Subscribe to runtimes.
+		ch, sub, err = client.WatchRuntimes(ctx)
+		if err != nil {
+			return err
+		}
+
+		return nil
 	}
-	return conn, nil
+
+	sched := backoff.NewConstantBackOff(registryRetryInterval)
+	err = backoff.Retry(op, backoff.WithContext(sched, ctx))
+	if err != nil {
+		auth.logger.Error("unable to connect to registry",
+			"err", err,
+		)
+	}
+
+	return
 }
 
 func (auth *registryAuthenticator) worker(ctx context.Context) {
@@ -67,61 +91,59 @@ func (auth *registryAuthenticator) worker(ctx context.Context) {
 		close(auth.initCh)
 	}
 
-	var redialAttempts uint
-
-Redial:
-	redialAttempts++
-	conn, err := auth.dialRegistry(ctx)
+	// Create a new gRPC connection to an Oasis Node.
+	conn, err := cmdGrpc.NewClient(auth.cmd)
 	if err != nil {
-		auth.logger.Error("unable to connect to registry",
+		auth.logger.Error("unable to dial the Oasis Node",
 			"err", err,
 		)
-		if redialAttempts < 10 {
-			time.Sleep(2 * time.Second)
-			auth.logger.Info("attempting to re-dial registry")
-			goto Redial
-		}
-		panic("unable to connect to registry")
+		panic(fmt.Errorf("ias: failed to create gRPC client: %w", err))
 	}
 	defer conn.Close()
-	client := registry.NewRegistryClient(conn)
 
-	ch, sub, err := client.WatchRuntimes(ctx)
-	if err != nil {
-		auth.logger.Error("failed to start the WatchRuntimes stream",
-			"err", err,
-		)
-		panic("unable to watch runtimes")
-	}
-	defer sub.Close()
-
-	redialAttempts = 0
-
+RedialLoop:
 	for {
-		var runtime *registry.Runtime
-		select {
-		case runtime = <-ch:
-			if runtime == nil {
-				auth.logger.Warn("data source stream closed by peer, re-dialing")
-				goto Redial
-			}
-		case <-ctx.Done():
+		ch, sub, err := auth.watchRuntimes(ctx, conn)
+		if err != nil {
+			// This can only fail in case the context is cancelled.
+			auth.logger.Info("terminating",
+				"err", err,
+			)
 			return
 		}
+		defer sub.Close()
 
-		n, err := auth.enclaves.addRuntime(runtime)
-		if err != nil {
-			auth.logger.Error("failed to add runtime",
-				"err", err,
-				"id", runtime.ID,
-			)
-			continue
-		}
-		if waitRuntimes > 0 && n == waitRuntimes {
-			auth.logger.Info("sufficient runtimes received, starting verification")
-			auth.initOnce.Do(func() {
-				close(auth.initCh)
-			})
+		// Watch runtime added events in the registry.
+		for {
+			var runtime *registry.Runtime
+			select {
+			case runtime = <-ch:
+				if runtime == nil {
+					auth.logger.Warn("data source stream closed by peer, re-dialing")
+
+					// Close existing subscription and redial.
+					sub.Close()
+					continue RedialLoop
+				}
+			case <-ctx.Done():
+				return
+			}
+
+			var n int
+			n, err = auth.enclaves.addRuntime(runtime)
+			if err != nil {
+				auth.logger.Error("failed to add runtime",
+					"err", err,
+					"id", runtime.ID,
+				)
+				continue
+			}
+			if waitRuntimes > 0 && n == waitRuntimes {
+				auth.logger.Info("sufficient runtimes received, starting verification")
+				auth.initOnce.Do(func() {
+					close(auth.initCh)
+				})
+			}
 		}
 	}
 }
