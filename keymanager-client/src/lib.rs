@@ -7,7 +7,7 @@ use std::sync::Arc;
 
 use io_context::Context;
 use oasis_core_client::BoxFuture;
-use oasis_core_keymanager_api;
+use oasis_core_keymanager_api_common;
 
 /// Key manager client interface.
 pub trait KeyManagerClient: Send + Sync {
@@ -57,4 +57,4 @@ impl<T: ?Sized + KeyManagerClient> KeyManagerClient for Arc<T> {
 }
 
 // Re-exports.
-pub use self::{client::RemoteClient, oasis_core_keymanager_api::*};
+pub use self::{client::RemoteClient, oasis_core_keymanager_api_common::*};

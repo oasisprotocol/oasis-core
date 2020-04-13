@@ -806,23 +806,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "oasis-core-keymanager-api"
-version = "0.3.0-alpha"
-dependencies = [
- "base64 0.10.1 (registry+https://github.com/rust-lang/crates.io-index)",
- "failure 0.1.7 (registry+https://github.com/rust-lang/crates.io-index)",
- "lazy_static 1.4.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "oasis-core-keymanager-api-common 0.3.0-alpha",
- "oasis-core-runtime 0.3.0-alpha",
- "rand 0.7.3 (registry+https://github.com/rust-lang/crates.io-index)",
- "rustc-hex 2.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "serde 1.0.105 (registry+https://github.com/rust-lang/crates.io-index)",
- "serde_bytes 0.10.5 (registry+https://github.com/rust-lang/crates.io-index)",
- "serde_derive 1.0.105 (registry+https://github.com/rust-lang/crates.io-index)",
- "x25519-dalek 0.6.0 (registry+https://github.com/rust-lang/crates.io-index)",
-]
-
-[[package]]
 name = "oasis-core-keymanager-api-common"
 version = "0.3.0-alpha"
 dependencies = [
@@ -848,7 +831,7 @@ dependencies = [
  "io-context 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "lru 0.1.17 (registry+https://github.com/rust-lang/crates.io-index)",
  "oasis-core-client 0.3.0-alpha",
- "oasis-core-keymanager-api 0.3.0-alpha",
+ "oasis-core-keymanager-api-common 0.3.0-alpha",
  "oasis-core-runtime 0.3.0-alpha",
 ]
 
@@ -869,17 +852,6 @@ dependencies = [
  "tiny-keccak 1.5.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "x25519-dalek 0.6.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "zeroize 0.6.0 (registry+https://github.com/rust-lang/crates.io-index)",
-]
-
-[[package]]
-name = "oasis-core-keymanager-runtime"
-version = "0.3.0-alpha"
-dependencies = [
- "failure 0.1.7 (registry+https://github.com/rust-lang/crates.io-index)",
- "lazy_static 1.4.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "oasis-core-keymanager-api 0.3.0-alpha",
- "oasis-core-keymanager-lib 0.3.0-alpha",
- "oasis-core-runtime 0.3.0-alpha",
 ]
 
 [[package]]
@@ -1355,16 +1327,27 @@ dependencies = [
 ]
 
 [[package]]
+name = "simple-keymanager"
+version = "0.3.0-alpha"
+dependencies = [
+ "oasis-core-keymanager-api-common 0.3.0-alpha",
+ "oasis-core-keymanager-lib 0.3.0-alpha",
+ "oasis-core-runtime 0.3.0-alpha",
+ "oasis-core-tools 0.3.0-alpha",
+]
+
+[[package]]
 name = "simple-keyvalue"
 version = "0.3.0-alpha"
 dependencies = [
  "failure 0.1.7 (registry+https://github.com/rust-lang/crates.io-index)",
  "io-context 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "oasis-core-client 0.3.0-alpha",
- "oasis-core-keymanager-api 0.3.0-alpha",
+ "oasis-core-keymanager-api-common 0.3.0-alpha",
  "oasis-core-keymanager-client 0.3.0-alpha",
  "oasis-core-runtime 0.3.0-alpha",
  "oasis-core-tools 0.3.0-alpha",
+ "simple-keymanager 0.3.0-alpha",
  "simple-keyvalue-api 0.3.0-alpha",
 ]
 

@@ -1,6 +1,6 @@
 extern crate failure;
 extern crate io_context;
-extern crate oasis_core_keymanager_api;
+extern crate oasis_core_keymanager_api_common;
 extern crate oasis_core_keymanager_client;
 extern crate oasis_core_runtime;
 extern crate simple_keyvalue_api;
@@ -27,6 +27,7 @@ use oasis_core_runtime::{
     transaction::{dispatcher::CheckOnlySuccess, Context as TxnContext},
     version_from_cargo, Protocol, RpcDemux, RpcDispatcher, TxnDispatcher, TxnMethDispatcher,
 };
+use simple_keymanager::trusted_policy_signers;
 use simple_keyvalue_api::{with_api, KeyValue};
 
 struct Context {
@@ -259,6 +260,7 @@ fn main() {
             protocol.clone(),
             rak.clone(),
             1024,
+            trusted_policy_signers(),
         ));
 
         txn.set_context_initializer(move |ctx: &mut TxnContext| {

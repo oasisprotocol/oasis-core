@@ -275,7 +275,7 @@ runtime, do:
   --net.node.binary go/oasis-node/oasis-node \
   --net.runtime.binary target/default/debug/simple-keyvalue \
   --net.runtime.loader target/default/debug/oasis-core-runtime-loader \
-  --net.keymanager.binary target/default/debug/oasis-core-keymanager-runtime
+  --net.keymanager.binary target/default/debug/simple-keymanager
 ```
 
 Wait for the network to start, there should be messages about nodes being
@@ -361,7 +361,7 @@ except the `oasis-net-runner` invocation:
   --net.node.binary go/oasis-node/oasis-node \
   --net.runtime.binary target/sgx/x86_64-fortanix-unknown-sgx/debug/simple-keyvalue.sgxs \
   --net.runtime.loader target/default/debug/oasis-core-runtime-loader \
-  --net.keymanager.binary target/sgx/x86_64-fortanix-unknown-sgx/debug/oasis-core-keymanager-runtime.sgxs
+  --net.keymanager.binary target/sgx/x86_64-fortanix-unknown-sgx/debug/simple-keymanager.sgxs
 ```
 <!-- markdownlint-enable line-length -->
 
@@ -408,8 +408,9 @@ For even more output, check the other `*.log` files.
 * `client`: Client library for talking with the runtimes.
 * `docker`: Docker environment definitions.
 * `go`: Oasis node.
+* `keymanager-api-common`: Common keymanager code shared between client and lib.
 * `keymanager-client`: Client crate for the key manager.
-* `keymanager-runtime`: (INSECURE) key manager implementation.
+* `keymanager-lib`: Keymanager library crate.
 * `runtime`: The runtime library that simplifies writing SGX and non-SGX
   runtimes.
 * `runtime-loader`: The SGX and non-SGX runtime loader process.

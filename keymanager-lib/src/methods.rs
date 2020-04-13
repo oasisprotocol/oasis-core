@@ -1,9 +1,9 @@
 //! Methods exported to remote clients via EnclaveRPC.
 use failure::Fallible;
-use oasis_core_keymanager_api::*;
+use oasis_core_keymanager_api_common::*;
 use oasis_core_runtime::rpc::Context as RpcContext;
 
-use oasis_core_keymanager_lib::{kdf::Kdf, policy::Policy};
+use crate::{kdf::Kdf, policy::Policy};
 
 /// See `Kdf::get_or_create_keys`.
 pub fn get_or_create_keys(req: &RequestIds, ctx: &mut RpcContext) -> Fallible<ContractKey> {

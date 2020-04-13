@@ -1,22 +1,20 @@
 use std::sync::Arc;
 
-mod methods;
-
 use failure::Fallible;
 
-use oasis_core_keymanager_api::*;
+use oasis_core_keymanager_api_common::*;
 use oasis_core_runtime::{
-    common::version::Version,
+    dispatcher::Initializer,
     rak::RAK,
     register_runtime_rpc_methods,
     rpc::{
         dispatcher::{Method as RpcMethod, MethodDescriptor as RpcMethodDescriptor},
         Context as RpcContext,
     },
-    version_from_cargo, Protocol, RpcDemux, RpcDispatcher, TxnDispatcher,
+    Protocol, RpcDemux, RpcDispatcher, TxnDispatcher,
 };
 
-use oasis_core_keymanager_lib::{context, kdf::Kdf, policy::Policy};
+use crate::{context, kdf::Kdf, policy::Policy};
 
 /// Initialize the Kdf.
 fn init_kdf(req: &InitRequest, ctx: &mut RpcContext) -> Fallible<SignedInitResponse> {
@@ -24,15 +22,16 @@ fn init_kdf(req: &InitRequest, ctx: &mut RpcContext) -> Fallible<SignedInitRespo
     Kdf::global().init(&req, ctx, policy_checksum)
 }
 
-fn main() {
+/// Initialize a keymanager with trusted policy signers.
+pub fn new_keymanager(signers: TrustedPolicySigners) -> Box<dyn Initializer> {
     // Initializer.
-    let init = |protocol: &Arc<Protocol>,
-                _rak: &Arc<RAK>,
-                _rpc_demux: &mut RpcDemux,
-                rpc: &mut RpcDispatcher|
-     -> Option<Box<dyn TxnDispatcher>> {
+    let init = move |protocol: &Arc<Protocol>,
+                     _rak: &Arc<RAK>,
+                     _rpc_demux: &mut RpcDemux,
+                     rpc: &mut RpcDispatcher|
+          -> Option<Box<dyn TxnDispatcher>> {
         // Initialize the set of trusted policy signers.
-        init_trusted_policy_signers();
+        set_trusted_policy_signers(signers.clone());
 
         // Register RPC methods exposed via EnclaveRPC to remote clients.
         {
@@ -65,6 +64,5 @@ fn main() {
         None
     };
 
-    // Start the runtime.
-    oasis_core_runtime::start_runtime(Box::new(init), version_from_cargo!());
+    Box::new(init)
 }

@@ -1,17 +1,9 @@
+use oasis_core_keymanager_api_common::*;
+use oasis_core_runtime::common::crypto::signature::PrivateKey as OasisPrivateKey;
 use std::collections::HashSet;
 
-use oasis_core_runtime::common::crypto::signature::PrivateKey as OasisPrivateKey;
-
-#[macro_use]
-mod api;
-
-// Re-exports.
-pub use api::*;
-pub use oasis_core_keymanager_api_common::*;
-
-/// Initializes the set of trusted policy signers for this key manager.
-pub fn init_trusted_policy_signers() {
-    set_trusted_policy_signers(TrustedPolicySigners {
+pub fn trusted_policy_signers() -> TrustedPolicySigners {
+    TrustedPolicySigners {
         signers: {
             let mut set = HashSet::new();
             if option_env!("OASIS_UNSAFE_KM_POLICY_KEYS").is_some() {
@@ -31,5 +23,5 @@ pub fn init_trusted_policy_signers() {
             set
         },
         threshold: 9001, // TODO: Set this to a real value.
-    });
+    }
 }
