@@ -4,6 +4,7 @@ package badger
 import (
 	"bytes"
 	"fmt"
+	"os"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -87,11 +88,11 @@ func New(fn string, noSuffix bool) (dbm.DB, error) {
 	return impl, nil
 }
 
-func (d *badgerDBImpl) Get(key []byte) []byte {
+func (d *badgerDBImpl) Get(key []byte) ([]byte, error) {
 	k := toDBKey(key)
 
 	var value []byte
-	if err := d.db.View(func(tx *badger.Txn) error {
+	err := d.db.View(func(tx *badger.Txn) error {
 		item, txErr := tx.Get(k)
 		switch txErr {
 		case nil:
@@ -105,22 +106,22 @@ func (d *badgerDBImpl) Get(key []byte) []byte {
 			value = append([]byte{}, val...)
 			return nil
 		})
-	}); err != nil {
+	})
+	if err != nil {
 		d.logger.Error("Get failed",
 			"err", err,
 			"key", string(key),
 		)
-		panic(err)
 	}
 
-	return value
+	return value, err
 }
 
-func (d *badgerDBImpl) Has(key []byte) bool {
+func (d *badgerDBImpl) Has(key []byte) (bool, error) {
 	k := toDBKey(key)
 
 	var exists bool
-	if err := d.db.View(func(tx *badger.Txn) error {
+	err := d.db.View(func(tx *badger.Txn) error {
 		_, txErr := tx.Get(k)
 		switch txErr {
 		case nil:
@@ -130,49 +131,55 @@ func (d *badgerDBImpl) Has(key []byte) bool {
 			return txErr
 		}
 		return nil
-	}); err != nil {
+	})
+	if err != nil {
 		d.logger.Error("Has failed",
 			"err", err,
 			"key", string(key),
 		)
-		panic(err)
 	}
 
-	return exists
+	return exists, err
 }
 
-func (d *badgerDBImpl) Set(key, value []byte) {
+func (d *badgerDBImpl) Set(key, value []byte) error {
 	k := toDBKey(key)
 
-	if err := d.db.Update(func(tx *badger.Txn) error {
+	err := d.db.Update(func(tx *badger.Txn) error {
 		return tx.Set(k, value)
-	}); err != nil {
+	})
+	if err != nil {
 		d.logger.Error("Set failed",
 			"err", err,
 			"key", string(key),
 		)
-		panic(err)
 	}
+
+	return nil
 }
 
-func (d *badgerDBImpl) SetSync(key, value []byte) {
-	d.Set(key, value)
-	d.sync()
+func (d *badgerDBImpl) SetSync(key, value []byte) error {
+	err := d.Set(key, value)
+	if err == nil {
+		err = d.sync()
+	}
+	return err
 }
 
-func (d *badgerDBImpl) sync() {
-	if err := d.db.Sync(); err != nil {
+func (d *badgerDBImpl) sync() error {
+	err := d.db.Sync()
+	if err != nil {
 		d.logger.Error("Sync failed",
 			"err", err,
 		)
-		panic(err)
 	}
+	return err
 }
 
-func (d *badgerDBImpl) Delete(key []byte) {
+func (d *badgerDBImpl) Delete(key []byte) error {
 	k := toDBKey(key)
 
-	if err := d.db.Update(func(tx *badger.Txn) error {
+	err := d.db.Update(func(tx *badger.Txn) error {
 		txErr := tx.Delete(k)
 		switch txErr {
 		case nil, badger.ErrKeyNotFound:
@@ -180,39 +187,45 @@ func (d *badgerDBImpl) Delete(key []byte) {
 			return txErr
 		}
 		return nil
-	}); err != nil {
+	})
+	if err != nil {
 		d.logger.Error("Delete failed",
 			"err", err,
 			"key", string(key),
 		)
-		panic(err)
 	}
+	return err
 }
 
-func (d *badgerDBImpl) DeleteSync(key []byte) {
-	d.Delete(key)
-	d.sync()
+func (d *badgerDBImpl) DeleteSync(key []byte) error {
+	err := d.Delete(key)
+	if err == nil {
+		err = d.sync()
+	}
+	return err
 }
 
-func (d *badgerDBImpl) Iterator(start, end []byte) dbm.Iterator {
-	return d.newIterator(start, end, true)
+func (d *badgerDBImpl) Iterator(start, end []byte) (dbm.Iterator, error) {
+	return d.newIterator(start, end, true), nil
 }
 
-func (d *badgerDBImpl) ReverseIterator(start, end []byte) dbm.Iterator {
-	return d.newIterator(start, end, false)
+func (d *badgerDBImpl) ReverseIterator(start, end []byte) (dbm.Iterator, error) {
+	return d.newIterator(start, end, false), nil
 }
 
-func (d *badgerDBImpl) Close() {
+func (d *badgerDBImpl) Close() error {
+	err := os.ErrClosed
 	d.closeOnce.Do(func() {
 		d.gc.Close()
 
-		if err := d.db.Close(); err != nil {
+		if err = d.db.Close(); err != nil {
 			d.logger.Error("Close failed",
 				"err", err,
 			)
-			// Log but ignore the error.
 		}
 	})
+
+	return err
 }
 
 func (d *badgerDBImpl) NewBatch() dbm.Batch {
@@ -221,9 +234,11 @@ func (d *badgerDBImpl) NewBatch() dbm.Batch {
 	}
 }
 
-func (d *badgerDBImpl) Print() {
+func (d *badgerDBImpl) Print() error {
 	// There's better ways to dump a database...
 	d.logger.Debug("Print() refusing to dump the database")
+
+	return nil
 }
 
 func (d *badgerDBImpl) Stats() map[string]string {
@@ -363,6 +378,10 @@ func (it *badgerDBIterator) Value() []byte {
 	return value
 }
 
+func (it *badgerDBIterator) Error() error {
+	return nil
+}
+
 func (it *badgerDBIterator) Close() {
 	if it.iter != nil {
 		it.iter.Close()
@@ -425,7 +444,7 @@ func (ba *badgerDBBatch) Delete(key []byte) {
 	})
 }
 
-func (ba *badgerDBBatch) Write() {
+func (ba *badgerDBBatch) Write() error {
 	wb := ba.db.db.NewWriteBatch()
 	defer wb.Cancel()
 
@@ -435,7 +454,7 @@ func (ba *badgerDBBatch) Write() {
 				"err", err,
 				"cmd", cmd,
 			)
-			panic(err)
+			return err
 		}
 	}
 
@@ -443,11 +462,15 @@ func (ba *badgerDBBatch) Write() {
 		ba.db.logger.Error("failed to flush WriteBatch",
 			"err", err,
 		)
-		panic(err)
+		return err
 	}
+
+	ba.Close()
+
+	return nil
 }
 
-func (ba *badgerDBBatch) WriteSync() {
+func (ba *badgerDBBatch) WriteSync() error {
 	tx := ba.db.db.NewTransaction(true)
 	defer tx.Discard()
 
@@ -457,7 +480,7 @@ func (ba *badgerDBBatch) WriteSync() {
 				"err", err,
 				"cmd", cmd,
 			)
-			panic(err)
+			return err
 		}
 	}
 
@@ -465,10 +488,14 @@ func (ba *badgerDBBatch) WriteSync() {
 		ba.db.logger.Error("failed to commit Tx",
 			"err", err,
 		)
-		panic(err)
+		return err
 	}
 
-	ba.db.sync()
+	err := ba.db.sync()
+
+	ba.Close()
+
+	return err
 }
 
 func (ba *badgerDBBatch) Close() {

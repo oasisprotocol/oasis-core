@@ -6,7 +6,7 @@ import (
 	"strings"
 
 	"github.com/tendermint/tendermint/abci/types"
-	tmcmn "github.com/tendermint/tendermint/libs/common"
+	"github.com/tendermint/tendermint/libs/kv"
 	tmpubsub "github.com/tendermint/tendermint/libs/pubsub"
 	tmquery "github.com/tendermint/tendermint/libs/pubsub/query"
 	tmp2p "github.com/tendermint/tendermint/p2p"
@@ -84,7 +84,7 @@ type EventBuilder struct {
 
 // Attribute appends a key/value pair to the event.
 func (bld *EventBuilder) Attribute(key, value []byte) *EventBuilder {
-	bld.ev.Attributes = append(bld.ev.Attributes, tmcmn.KVPair{
+	bld.ev.Attributes = append(bld.ev.Attributes, kv.Pair{
 		Key:   key,
 		Value: value,
 	})

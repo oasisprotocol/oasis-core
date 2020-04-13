@@ -18,39 +18,76 @@ func TestTendermintDB(t *testing.T, db dbm.DB) {
 }
 
 func testBasicOps(t *testing.T, db dbm.DB) {
+	require := require.New(t)
+
 	// Non-existent keys, don't exist.
-	require.False(t, db.Has([]byte("non-existent")), "Has(non-existent)")
-	require.Nil(t, db.Get([]byte("non-existent")), "Get(non-existent")
+	exists, err := db.Has([]byte("non-existent"))
+	require.NoError(err, "Has(non-existent)")
+	require.False(exists, "Has(non-existent)")
+	v, err := db.Get([]byte("non-existent"))
+	require.NoError(err, "Get(non-existent)")
+	require.Nil(v, "Get(non-existent")
 
 	// The nil key should work, as an empty byte slice.
-	v := []byte("Can I has nil key?")
-	db.Set(nil, v)
-	require.True(t, db.Has(nil), "Has(nil)")
-	require.True(t, db.Has([]byte{}), "Has([]byte{})")
-	require.EqualValues(t, v, db.Get(nil), "Get(nil)")
-	require.EqualValues(t, v, db.Get([]byte{}), "Get([]byte{})")
-	db.Delete(nil)
-	require.False(t, db.Has(nil), "Has(nil), post Delete()")
+	v = []byte("Can I has nil key?")
+	err = db.Set(nil, v)
+	require.NoError(err, "Set(nil)")
+	exists, err = db.Has(nil)
+	require.NoError(err, "Has(nil)")
+	require.True(exists, "Has(nil)")
+	exists, err = db.Has([]byte{})
+	require.NoError(err, "Has([]byte{})")
+	require.True(exists, "Has([]byte{})")
+	vv, err := db.Get(nil)
+	require.NoError(err, "Get(nil)")
+	require.EqualValues(v, vv, "Get(nil)")
+	vv, err = db.Get([]byte{})
+	require.NoError(err, "Get([]byte{})")
+	require.EqualValues(v, vv, "Get([]byte{})")
+	err = db.Delete(nil)
+	require.NoError(err, "Delete(nil)")
+	exists, err = db.Has(nil)
+	require.NoError(err, "Has(nil), post Delete()")
+	require.False(exists, "Has(nil), post Delete()")
 
 	// An actual key should also work.
 	key, value := []byte("Yog-Sothoth"), []byte("is the key and guardian of the gate.")
-	db.Set(key, value)
-	require.True(t, db.Has(key), "Has()")
-	require.EqualValues(t, value, db.Get(key), "Get()")
-	db.Delete(key)
-	require.False(t, db.Has(key), "Has(), post Delete()")
+	err = db.Set(key, value)
+	require.NoError(err, "Set(k,v)")
+	exists, err = db.Has(key)
+	require.NoError(err, "Has(k)")
+	require.True(exists, "Has(k)")
+	vv, err = db.Get(key)
+	require.NoError(err, "Get(k)")
+	require.EqualValues(value, vv, "Get(k)")
+	err = db.Delete(key)
+	require.NoError(err, "Delete(k)")
+	exists, err = db.Has(key)
+	require.NoError(err, "Has(k), post Delete()")
+	require.False(exists, "Has(k), post Delete()")
 
 	// The sync equivalents to Set/Delete() should work.
-	db.SetSync(key, value)
-	require.True(t, db.Has(key), "Has() - SetSync()")
-	require.EqualValues(t, value, db.Get(key), "Get() - SetSync()")
-	db.DeleteSync(key)
-	require.False(t, db.Has(key), "Has(), post DeleteSync()")
+	err = db.SetSync(key, value)
+	require.NoError(err, "SetSync(k,v)")
+	exists, err = db.Has(key)
+	require.NoError(err, "Has(k) - SetSync()")
+	require.True(exists, "Has(k) - SetSync()")
+	vv, err = db.Get(key)
+	require.NoError(err, "Get(k) - SetSync()")
+	require.EqualValues(value, vv, "Get(k) - SetSync()")
+	err = db.DeleteSync(key)
+	require.NoError(err, "DeleteSync(k)")
+	exists, err = db.Has(key)
+	require.NoError(err, "Has(k), post DeleteSync()")
+	require.False(exists, "Has(k), post DeleteSync()")
 }
 
 func testBatchOps(t *testing.T, db dbm.DB) {
+	require := require.New(t)
+
 	toDeleteKey := []byte("to-delete")
-	db.Set(toDeleteKey, []byte("some value"))
+	err := db.Set(toDeleteKey, []byte("some value"))
+	require.NoError(err, "Set(toDelete)")
 
 	// Build and execute the batch.
 	k1, k2 := []byte("key1"), []byte("key2")
@@ -59,25 +96,38 @@ func testBatchOps(t *testing.T, db dbm.DB) {
 	batch.Set(k1, v1)
 	batch.Set(k2, v2)
 	batch.Delete(toDeleteKey)
-	batch.Write()
+	err = batch.Write()
+	require.NoError(err, "batch.Write()")
 
-	require.EqualValues(t, v1, db.Get(k1), "Get(key1)")
-	require.EqualValues(t, v2, db.Get(k2), "Get(key2)")
-	require.False(t, db.Has(toDeleteKey), "Has(deleted)")
+	vv, err := db.Get(k1)
+	require.NoError(err, "Get(k1)")
+	require.EqualValues(v1, vv, "Get(k1)")
+	vv, err = db.Get(k2)
+	require.NoError(err, "Get(k2)")
+	require.EqualValues(v2, vv, "Get(k2)")
+	exists, err := db.Has(toDeleteKey)
+	require.NoError(err, "Has(deleted)")
+	require.False(exists, "Has(deleted)")
 
 	// Build and execute the clean-up batch.
 	batch = db.NewBatch()
 	batch.Delete(k1)
 	batch.Delete(k2)
-	batch.WriteSync()
-
-	require.False(t, db.Has(k1), "Has(key1), post WriteSync")
-	require.False(t, db.Has(k2), "Has(key2), post WriteSync")
+	err = batch.WriteSync()
+	require.NoError(err, "batch.WriteSync()")
+	exists, err = db.Has(k1)
+	require.NoError(err, "Has(k1), post WriteSync")
+	require.False(exists, "Has(k1), post WriteSync")
+	exists, err = db.Has(k2)
+	require.NoError(err, "Has(k2), post WriteSync")
+	require.False(exists, "Has(k2), post WriteSync")
 }
 
 func testIterator(t *testing.T, db dbm.DB) {
 	// Note: Weird failures will happen if the database isn't empty
 	// due to prior tests not running to completion.
+
+	require := require.New(t)
 
 	entries := []struct {
 		key, value []byte
@@ -100,88 +150,98 @@ func testIterator(t *testing.T, db dbm.DB) {
 	for _, ent := range entries {
 		batch.Set(ent.key, ent.value)
 	}
-	batch.Write()
+	err := batch.Write()
+	require.NoError(err, "batch.Write()")
 
 	// Traverse forward (entire range).
-	fwdIter := db.Iterator(nil, nil)
+	fwdIter, err := db.Iterator(nil, nil)
+	require.NoError(err, "db.Iterator(nil, nil)")
 	for i, ent := range entries {
-		require.True(t, fwdIter.Valid(), "Fwd[%d]: Valid()", i)
-		require.EqualValues(t, ent.key, fwdIter.Key(), "Fwd[%d]: Key()", i)
-		require.EqualValues(t, ent.value, fwdIter.Value(), "Fwd[%d]: Value()", i)
+		require.True(fwdIter.Valid(), "Fwd[%d]: Valid()", i)
+		require.EqualValues(ent.key, fwdIter.Key(), "Fwd[%d]: Key()", i)
+		require.EqualValues(ent.value, fwdIter.Value(), "Fwd[%d]: Value()", i)
 		fwdIter.Next()
 	}
-	require.False(t, fwdIter.Valid(), "Fwd[tail]: Valid()")
+	require.False(fwdIter.Valid(), "Fwd[tail]: Valid()")
 
 	// Ensure the accessors for an invalid iterator panic.
-	require.Panics(t, func() { fwdIter.Key() }, "Key(), invalid iterator")
-	require.Panics(t, func() { fwdIter.Value() }, "Value(), invalid iterator")
-	require.Panics(t, func() { fwdIter.Value() }, "Next(), invalid iterator")
+	require.Panics(func() { fwdIter.Key() }, "Key(), invalid iterator")
+	require.Panics(func() { fwdIter.Value() }, "Value(), invalid iterator")
+	require.Panics(func() { fwdIter.Value() }, "Next(), invalid iterator")
 
 	fwdIter.Close()
 
 	// Traverse forward (subset).
-	fwdSubIter := db.Iterator([]byte("a"), []byte("b"))
+	fwdSubIter, err := db.Iterator([]byte("a"), []byte("b"))
+	require.NoError(err, "db.Iterator(a, b)")
 	for i := subStart; i < subEnd; i++ {
 		ent := entries[i]
-		require.True(t, fwdSubIter.Valid(), "Fwd[%d]: Valid(), skip", i)
-		require.EqualValues(t, ent.key, fwdSubIter.Key(), "Fwd[%d]: Key(), skip", i)
-		require.EqualValues(t, ent.value, fwdSubIter.Value(), "Fwd[%d]: Value(), skip", i)
+		require.True(fwdSubIter.Valid(), "Fwd[%d]: Valid(), skip", i)
+		require.EqualValues(ent.key, fwdSubIter.Key(), "Fwd[%d]: Key(), skip", i)
+		require.EqualValues(ent.value, fwdSubIter.Value(), "Fwd[%d]: Value(), skip", i)
 		fwdSubIter.Next()
 	}
-	require.False(t, fwdSubIter.Valid(), "Fwd[tail]: Valid(), skip")
+	require.False(fwdSubIter.Valid(), "Fwd[tail]: Valid(), skip")
 
 	start, end := fwdSubIter.Domain() // Might as well do this here.
-	require.EqualValues(t, []byte("a"), start, "Domain() start")
-	require.EqualValues(t, []byte("b"), end, "Domain() end")
+	require.EqualValues([]byte("a"), start, "Domain() start")
+	require.EqualValues([]byte("b"), end, "Domain() end")
 	fwdSubIter.Close()
 
 	// Traverse backward (entire range).
-	revIter := db.ReverseIterator(nil, nil)
+	revIter, err := db.ReverseIterator(nil, nil)
+	require.NoError(err, "db.ReverseIterator(nil, nil)")
 	for i := len(entries) - 1; i >= 0; i-- {
 		ent := entries[i]
-		require.True(t, revIter.Valid(), "Rev[%d]: Valid()", i)
-		require.EqualValues(t, ent.key, revIter.Key(), "Rev[%d]: Key()", i)
-		require.EqualValues(t, ent.value, revIter.Value(), "Rev[%d]: Value()", i)
+		require.True(revIter.Valid(), "Rev[%d]: Valid()", i)
+		require.EqualValues(ent.key, revIter.Key(), "Rev[%d]: Key()", i)
+		require.EqualValues(ent.value, revIter.Value(), "Rev[%d]: Value()", i)
 		revIter.Next()
 	}
-	require.False(t, revIter.Valid(), "Rev[tail]: Valid()")
+	require.False(revIter.Valid(), "Rev[tail]: Valid()")
 	revIter.Close()
 
 	// Traverse backward (subset).
-	revSubIter := db.ReverseIterator([]byte("a"), []byte("b"))
+	revSubIter, err := db.ReverseIterator([]byte("a"), []byte("b"))
+	require.NoError(err, "db.ReverseIterator(a, b)")
 	for i := subEnd - 1; i >= subStart; i-- { // End is exclusive (v0.27.0)
 		ent := entries[i]
-		require.True(t, revSubIter.Valid(), "Rev[%d]: Valid(), skip", i)
-		require.EqualValues(t, ent.key, revSubIter.Key(), "Rev[%d]: Key(), skip", i)
-		require.EqualValues(t, ent.value, revSubIter.Value(), "Rev[%d]: Value(), skip", i)
+		require.True(revSubIter.Valid(), "Rev[%d]: Valid(), skip", i)
+		require.EqualValues(ent.key, revSubIter.Key(), "Rev[%d]: Key(), skip", i)
+		require.EqualValues(ent.value, revSubIter.Value(), "Rev[%d]: Value(), skip", i)
 		revSubIter.Next()
 	}
-	require.False(t, revSubIter.Valid(), "Rev[tail]: Valid(), skip")
+	require.False(revSubIter.Valid(), "Rev[tail]: Valid(), skip")
 
 	// Traverse backward (subset, inexact end).
-	revSubIEIter := db.ReverseIterator([]byte("a"), []byte("ad"))
+	revSubIEIter, err := db.ReverseIterator([]byte("a"), []byte("ad"))
+	require.NoError(err, "db.ReverseIterator(a, ad)")
 	for i := subEnd - 1; i >= subStart; i-- { // End is exclusive (v0.27.0)
 		ent := entries[i]
-		require.True(t, revSubIEIter.Valid(), "RevSubIE[%d]: Valid(), skip", i)
-		require.EqualValues(t, ent.key, revSubIEIter.Key(), "RevSubIE[%d]: Key(), skip", i)
-		require.EqualValues(t, ent.value, revSubIEIter.Value(), "RevSubIE[%d]: Value(), skip", i)
+		require.True(revSubIEIter.Valid(), "RevSubIE[%d]: Valid(), skip", i)
+		require.EqualValues(ent.key, revSubIEIter.Key(), "RevSubIE[%d]: Key(), skip", i)
+		require.EqualValues(ent.value, revSubIEIter.Value(), "RevSubIE[%d]: Value(), skip", i)
 		revSubIEIter.Next()
 	}
-	require.False(t, revSubIEIter.Valid(), "RevSubIE[tail]: Valid(), skip")
+	require.False(revSubIEIter.Valid(), "RevSubIE[tail]: Valid(), skip")
 
 	// Deliberately leave revSubIter un-Close()ed, to test that the
 	// Next() call that invalidated the iterator cleans everything up.
 	//
-	// Note: This is only possible with the BoltDB backend.
+	// Note: This is only possible with the BoltDB backend, which
+	// doesn't exist anymore.
 	stats := db.Stats()
 	if stats["database.type"] == "BoltDB" {
-		require.Equal(t, "0", stats["database.tx.read.open"], "Dangling transactions???")
+		require.Equal("0", stats["database.tx.read.open"], "Dangling transactions???")
 	}
 }
 
 func testMisc(t *testing.T, db dbm.DB) {
+	require := require.New(t)
+
 	stats := db.Stats()
 	t.Logf("DB Stats(): %+v", stats)
 
-	db.Print() // Produces no output, though it does log at debug level.
+	err := db.Print() // Produces no output, though it does log at debug level.
+	require.NoError(err, "Print()")
 }

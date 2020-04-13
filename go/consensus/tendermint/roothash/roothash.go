@@ -262,9 +262,9 @@ func (tb *tendermintBackend) reindexBlocks(bh api.BlockHistory) error {
 		}
 
 		// Index block.
-		tmEvents := append(results.Results.BeginBlock.GetEvents(), results.Results.EndBlock.GetEvents()...)
-		for _, txResults := range results.Results.DeliverTx {
-			tmEvents = append(tmEvents, txResults.GetEvents()...)
+		tmEvents := append(results.BeginBlockEvents, results.EndBlockEvents...)
+		for _, txResults := range results.TxsResults {
+			tmEvents = append(tmEvents, txResults.Events...)
 		}
 		for _, tmEv := range tmEvents {
 			if tmEv.GetType() != app.EventType {

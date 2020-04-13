@@ -10,6 +10,7 @@ import (
 
 	"github.com/spf13/cobra"
 	flag "github.com/spf13/pflag"
+	tmbytes "github.com/tendermint/tendermint/libs/bytes"
 
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
 	"github.com/oasislabs/oasis-core/go/common/identity"
@@ -17,7 +18,6 @@ import (
 	"github.com/oasislabs/oasis-core/go/consensus/tendermint/crypto"
 	cmdCommon "github.com/oasislabs/oasis-core/go/oasis-node/cmd/common"
 	cmdFlags "github.com/oasislabs/oasis-core/go/oasis-node/cmd/common/flags"
-	tmCommon "github.com/tendermint/tendermint/libs/common"
 )
 
 var (
@@ -62,7 +62,7 @@ func printTmAddress(desc string, keyFile string) {
 	if cmdFlags.Verbose() {
 		descBytes := []byte(desc)
 		descBytes[0] = byte(unicode.ToUpper(rune(descBytes[0])))
-		fmt.Printf("%s: %s (fingerprint: %X)\n", descBytes, tmAddress, tmCommon.Fingerprint(tmAddress))
+		fmt.Printf("%s: %s (fingerprint: %X)\n", descBytes, tmAddress, tmbytes.Fingerprint(tmAddress))
 	} else {
 		fmt.Println(tmAddress)
 	}
