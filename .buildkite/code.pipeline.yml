@@ -275,22 +275,9 @@ steps:
     plugins:
       <<: *docker_plugin
 
-  ##################################
-  # Deploy jobs (master and devnet2)
-  ##################################
-
   # Wait for all jobs defined before this point
   # to finish running in parallel before continuing.
   - wait
-
-  - label: ":rocket: Deploy image"
-    trigger: oasis-core-build-image-context
-    async: true
-    branches: master devnet2
-    build:
-      message: "${BUILDKITE_MESSAGE}"
-      commit: "${BUILDKITE_COMMIT}"
-      branch: "${BUILDKITE_BRANCH}"
 
   ###########################
   # Merge coverage and upload
