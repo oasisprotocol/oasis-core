@@ -146,7 +146,7 @@ func (tb *tendermintBackend) StateToGenesis(ctx context.Context, height int64) (
 func (tb *tendermintBackend) GetEvents(ctx context.Context, height int64) (*[]api.Event, error) {
 	// Get block results at given height.
 	var results *tmrpctypes.ResultBlockResults
-	results, err := tb.service.GetBlockResults(&height)
+	results, err := tb.service.GetBlockResults(height)
 	if err != nil {
 		tb.logger.Error("failed to get tendermint block results",
 			"err", err,
