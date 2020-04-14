@@ -34,6 +34,4 @@ popd
 tar -czf "$dst" \
     go/oasis-node/oasis-node \
     target/release/oasis-core-runtime-loader \
-    target/release/oasis-core-keymanager-runtime \
-    target/x86_64-fortanix-unknown-sgx/release/oasis-core-keymanager-runtime.sgxs \
     docker/deployment/Dockerfile

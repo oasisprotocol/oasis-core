@@ -1,5 +1,5 @@
 [package]
-name = "simple-keyvalue"
+name = "simple-keymanager"
 version = "0.3.0-alpha"
 authors = ["Oasis Labs Inc. <info@oasislabs.com>"]
 edition = "2018"
@@ -11,14 +11,8 @@ threads = 2
 
 [dependencies]
 oasis-core-runtime = { path = "../../../runtime" }
-oasis-core-client = { path = "../../../client" }
-oasis-core-keymanager-client = { path = "../../../keymanager-client" }
+oasis-core-keymanager-lib = { path = "../../../keymanager-lib" }
 oasis-core-keymanager-api-common = { path = "../../../keymanager-api-common" }
-simple-keymanager = { path = "../simple-keymanager" }
-simple-keyvalue-api = { path = "./api" }
-
-failure = "0.1.5"
-io-context = "0.2.0"
 
 [build-dependencies]
 oasis-core-tools = { path = "../../../tools" }

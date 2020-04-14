@@ -24,11 +24,6 @@ if [ ! -d $src_dir ]; then
 fi
 shift
 
-#########################################
-# Additional args passed to `cargo build`
-#########################################
-extra_args=$*
-
 source .buildkite/rust/common.sh
 
 #####################################################################

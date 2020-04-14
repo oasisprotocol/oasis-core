@@ -138,7 +138,7 @@ func init() {
 	Flags.String(cfgRuntimeBinary, "simple-keyvalue", "path to the runtime binary")
 	Flags.String(cfgRuntimeGenesisState, "", "path to the runtime genesis state")
 	Flags.String(cfgRuntimeLoader, "oasis-core-runtime-loader", "path to the runtime loader")
-	Flags.String(cfgKeymanagerBinary, "oasis-core-keymanager-runtime", "path to the keymanager runtime")
+	Flags.String(cfgKeymanagerBinary, "simple-keymanager", "path to the keymanager runtime")
 	Flags.String(cfgTEEHardware, "", "TEE hardware to use")
 	Flags.Bool(cfgEpochtimeMock, false, "use mock epochtime")
 	Flags.Uint64(cfgHaltEpoch, math.MaxUint64, "halt epoch height")

@@ -16,7 +16,7 @@ use std::iter::FromIterator;
 use oasis_core_runtime::{common::cbor, protocol::ProtocolError, types::Body};
 
 use oasis_core_client::{create_rpc_api_client, BoxFuture, RpcClient};
-use oasis_core_keymanager_api::*;
+use oasis_core_keymanager_api_common::*;
 use oasis_core_runtime::{
     common::{runtime::RuntimeId, sgx::avr::EnclaveIdentity},
     protocol::Protocol,
@@ -92,9 +92,10 @@ impl RemoteClient {
         protocol: Arc<Protocol>,
         rak: Arc<RAK>,
         keys_cache_sizes: usize,
+        signers: TrustedPolicySigners,
     ) -> Self {
         #[cfg(target_env = "sgx")]
-        init_trusted_policy_signers();
+        set_trusted_policy_signers(signers);
 
         #[cfg(target_env = "sgx")]
         let enclaves: Option<HashSet<EnclaveIdentity>> = match protocol
