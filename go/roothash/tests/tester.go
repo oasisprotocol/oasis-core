@@ -377,6 +377,11 @@ func (s *runtimeState) testSuccessfulRound(t *testing.T, backend api.Backend, co
 			require.EqualValues(parent.Header.IORoot, header.IORoot, "block I/O root")
 			require.EqualValues(parent.Header.StateRoot, header.StateRoot, "block root hash")
 
+			// There should be no discrepancy events.
+			evts, err := backend.GetEvents(ctx, consensusAPI.HeightLatest)
+			require.NoError(err, "GetEvents")
+			require.EqualValues(0, len(*evts), "should have no discrepancy events")
+
 			// Nothing more to do after the block was received.
 			return
 		case <-time.After(recvTimeout):

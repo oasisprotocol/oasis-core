@@ -165,9 +165,9 @@ func (tb *tendermintBackend) GetEvents(ctx context.Context, height int64) (*[]ap
 	}
 
 	// Decode events from block results.
-	tmEvents := append(results.Results.BeginBlock.GetEvents(), results.Results.EndBlock.GetEvents()...)
-	for _, txResults := range results.Results.DeliverTx {
-		tmEvents = append(tmEvents, txResults.GetEvents()...)
+	tmEvents := append(results.BeginBlockEvents, results.EndBlockEvents...)
+	for _, txResults := range results.TxsResults {
+		tmEvents = append(tmEvents, txResults.Events...)
 	}
 	events := []api.Event{}
 	for _, tmEv := range tmEvents {
