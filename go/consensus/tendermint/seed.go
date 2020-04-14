@@ -116,17 +116,17 @@ func NewSeed(dataDir string, identity *identity.Identity, genesisProvider genesi
 			version.BlockProtocol,
 			0,
 		),
-		ID_:        nodeKey.ID(),
-		ListenAddr: viper.GetString(CfgCoreListenAddress),
-		Network:    doc.ChainContext()[:types.MaxChainIDLen],
-		Version:    "0.0.1",
-		Channels:   []byte{pex.PexChannel},
-		Moniker:    "oasis-seed-" + identity.NodeSigner.Public().String(),
+		DefaultNodeID: nodeKey.ID(),
+		ListenAddr:    viper.GetString(CfgCoreListenAddress),
+		Network:       doc.ChainContext()[:types.MaxChainIDLen],
+		Version:       "0.0.1",
+		Channels:      []byte{pex.PexChannel},
+		Moniker:       "oasis-seed-" + identity.NodeSigner.Public().String(),
 	}
 
 	// Carve out all of the services.
 	logger := newLogAdapter(!viper.GetBool(cfgLogDebug))
-	if srv.addr, err = p2p.NewNetAddressString(p2p.IDAddressString(nodeInfo.ID_, nodeInfo.ListenAddr)); err != nil {
+	if srv.addr, err = p2p.NewNetAddressString(p2p.IDAddressString(nodeInfo.DefaultNodeID, nodeInfo.ListenAddr)); err != nil {
 		return nil, errors.Wrap(err, "tendermint/seed: failed to create seed address")
 	}
 	srv.transport = p2p.NewMultiplexTransport(nodeInfo, *nodeKey, p2p.MConnConfig(cfg))
@@ -141,7 +141,7 @@ func NewSeed(dataDir string, identity *identity.Identity, genesisProvider genesi
 		return nil, errors.Wrap(err, "tendermint/seed: failed to populate address book from genesis")
 	}
 
-	pexReactor := pex.NewPEXReactor(srv.addrBook, &pex.PEXReactorConfig{SeedMode: cfg.SeedMode})
+	pexReactor := pex.NewReactor(srv.addrBook, &pex.ReactorConfig{SeedMode: cfg.SeedMode})
 	pexReactor.SetLogger(logger.With("module", "pex"))
 
 	srv.p2pSwitch = p2p.NewSwitch(cfg, srv.transport)

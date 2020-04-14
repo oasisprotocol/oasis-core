@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 	tmtypes "github.com/tendermint/tendermint/types"
@@ -56,17 +57,18 @@ func MakeDoubleSignEvidence(t *testing.T, ident *identity.Identity) consensus.Ev
 			Hash:  []byte("partshashpartshashpartshashpart2"),
 		},
 	}
+	now := time.Now()
 	ev := &tmtypes.DuplicateVoteEvidence{
 		PubKey: pv1.GetPubKey(),
 		// NOTE: ChainID must match the unit test genesis block.
-		VoteA: makeVote(pv1, genesisTestHelpers.TestChainID, 0, 1, 2, 1, blockID1),
-		VoteB: makeVote(pv2, genesisTestHelpers.TestChainID, 0, 1, 2, 1, blockID2),
+		VoteA: makeVote(pv1, genesisTestHelpers.TestChainID, 0, 1, 2, 1, blockID1, now),
+		VoteB: makeVote(pv2, genesisTestHelpers.TestChainID, 0, 1, 2, 1, blockID2, now),
 	}
 	return consensus.NewConsensusEvidence(ev)
 }
 
 // makeVote copied from Tendermint test suite.
-func makeVote(val tmtypes.PrivValidator, chainID string, valIndex int, height int64, round, step int, blockID tmtypes.BlockID) *tmtypes.Vote {
+func makeVote(val tmtypes.PrivValidator, chainID string, valIndex int, height int64, round, step int, blockID tmtypes.BlockID, ts time.Time) *tmtypes.Vote {
 	addr := val.GetPubKey().Address()
 	v := &tmtypes.Vote{
 		ValidatorAddress: addr,
@@ -75,6 +77,7 @@ func makeVote(val tmtypes.PrivValidator, chainID string, valIndex int, height in
 		Round:            round,
 		Type:             tmtypes.SignedMsgType(step),
 		BlockID:          blockID,
+		Timestamp:        ts,
 	}
 	err := val.SignVote(chainID, v)
 	if err != nil {

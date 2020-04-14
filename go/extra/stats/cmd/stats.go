@@ -293,11 +293,9 @@ func getStats(ctx context.Context, consensus consensusAPI.ClientBackend, registr
 		}
 
 		// Go over all signatures for a block.
-		// XXX: In tendermint master (not yet released) the signatures are
-		// obtained in LastCommit.Signatures.
-		for _, sig := range tmBlockMeta.LastCommit.Precommits {
-			if sig == nil {
-				logger.Debug("skipping nil-votes")
+		for _, sig := range tmBlockMeta.LastCommit.Signatures {
+			if sig.Absent() {
+				logger.Debug("skipping absent signature")
 				continue
 			}
 			nodeTmAddr := sig.ValidatorAddress.String()
@@ -322,7 +320,7 @@ func getStats(ctx context.Context, consensus consensusAPI.ClientBackend, registr
 		// Add proposer sum (previous proposer).
 		if previousProposerAddr != "" {
 			// Only count round 0 proposals.
-			if tmBlockMeta.LastCommit.Round() == 0 {
+			if tmBlockMeta.LastCommit.Round == 0 {
 				if err := ensureNodeTracking(ctx, stats, previousProposerAddr, height, registry); err != nil {
 					logger.Error("failed to query registry",
 						"err", err,

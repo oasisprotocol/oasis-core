@@ -205,7 +205,7 @@ import (
 
 	"github.com/pkg/errors"
 	tmcrypto "github.com/tendermint/tendermint/crypto"
-	tmcmn "github.com/tendermint/tendermint/libs/common"
+	"github.com/tendermint/tendermint/libs/tempfile"
 	"github.com/tendermint/tendermint/privval"
 	tmtypes "github.com/tendermint/tendermint/types"
 
@@ -337,7 +337,7 @@ func (pv *privVal) save() error {
 	if err != nil {
 		return err
 	}
-	if err = tmcmn.WriteFileAtomic(pv.filePath, b, 0600); err != nil {
+	if err = tempfile.WriteFileAtomic(pv.filePath, b, 0600); err != nil {
 		return errors.Wrap(err, "tendermint/crypto: failed to save private validator file")
 	}
 
