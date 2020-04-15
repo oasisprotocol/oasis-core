@@ -839,12 +839,25 @@ func (t *tendermintService) GetHeight(ctx context.Context) (int64, error) {
 	return blk.Header.Height, nil
 }
 
-func (t *tendermintService) GetBlockResults(height *int64) (*tmrpctypes.ResultBlockResults, error) {
+func (t *tendermintService) GetBlockResults(height int64) (*tmrpctypes.ResultBlockResults, error) {
 	if t.client == nil {
 		panic("client not available yet")
 	}
 
-	result, err := t.client.BlockResults(height)
+	// As in GetTendermintBlock above, get the latest tendermint block height
+	// from our mux.
+	var tmHeight int64
+	if height == consensusAPI.HeightLatest {
+		tmHeight = t.mux.BlockHeight()
+		if tmHeight == 0 {
+			// No committed blocks yet.
+			return nil, nil
+		}
+	} else {
+		tmHeight = height
+	}
+
+	result, err := t.client.BlockResults(&tmHeight)
 	if err != nil {
 		return nil, fmt.Errorf("tendermint: block results query failed: %w", err)
 	}
