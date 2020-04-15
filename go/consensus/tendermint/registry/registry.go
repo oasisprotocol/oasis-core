@@ -4,9 +4,9 @@ package registry
 import (
 	"bytes"
 	"context"
+	"fmt"
 
 	"github.com/eapache/channels"
-	"github.com/pkg/errors"
 	abcitypes "github.com/tendermint/tendermint/abci/types"
 	tmrpctypes "github.com/tendermint/tendermint/rpc/core/types"
 	tmtypes "github.com/tendermint/tendermint/types"
@@ -152,7 +152,7 @@ func (tb *tendermintBackend) StateToGenesis(ctx context.Context, height int64) (
 	return q.Genesis(ctx)
 }
 
-func (tb *tendermintBackend) GetEvents(ctx context.Context, height int64) (*[]api.Event, error) {
+func (tb *tendermintBackend) GetEvents(ctx context.Context, height int64) ([]api.Event, error) {
 	// Get block results at given height.
 	var results *tmrpctypes.ResultBlockResults
 	results, err := tb.service.GetBlockResults(height)
@@ -218,8 +218,8 @@ func (tb *tendermintBackend) onEventDataTx(ctx context.Context, tx tmtypes.Event
 	_, _ = tb.onABCIEvents(ctx, tx.Result.Events, tx.Height, true)
 }
 
-func (tb *tendermintBackend) onABCIEvents(ctx context.Context, tmEvents []abcitypes.Event, height int64, doBroadcast bool) (*[]api.Event, error) { // nolint: gocyclo
-	events := []api.Event{}
+func (tb *tendermintBackend) onABCIEvents(ctx context.Context, tmEvents []abcitypes.Event, height int64, doBroadcast bool) ([]api.Event, error) { // nolint: gocyclo
+	var events []api.Event
 	for _, tmEv := range tmEvents {
 		// Ignore events that don't relate to the registry app.
 		if tmEv.GetType() != app.EventType {
@@ -236,8 +236,10 @@ func (tb *tendermintBackend) onABCIEvents(ctx context.Context, tmEvents []abcity
 					tb.logger.Error("worker: failed to get nodes from tag",
 						"err", err,
 					)
-					if !doBroadcast {
-						return nil, errors.Wrap(err, "registry: corrupt NodesExpired event")
+					if doBroadcast {
+						continue
+					} else {
+						return nil, fmt.Errorf("registry: corrupt NodesExpired event: %w", err)
 					}
 				}
 
@@ -276,7 +278,7 @@ func (tb *tendermintBackend) onABCIEvents(ctx context.Context, tmEvents []abcity
 					if doBroadcast {
 						continue
 					} else {
-						return nil, errors.Wrap(err, "registry: corrupt RuntimeRegistered event")
+						return nil, fmt.Errorf("registry: corrupt RuntimeRegistered event: %w", err)
 					}
 				}
 
@@ -298,7 +300,7 @@ func (tb *tendermintBackend) onABCIEvents(ctx context.Context, tmEvents []abcity
 					if doBroadcast {
 						continue
 					} else {
-						return nil, errors.Wrap(err, "registry: corrupt EntityRegistered event")
+						return nil, fmt.Errorf("registry: corrupt EntityRegistered event: %w", err)
 					}
 				}
 
@@ -322,7 +324,7 @@ func (tb *tendermintBackend) onABCIEvents(ctx context.Context, tmEvents []abcity
 					if doBroadcast {
 						continue
 					} else {
-						return nil, errors.Wrap(err, "registry: corrupt EntityDeregistered event")
+						return nil, fmt.Errorf("registry: corrupt EntityDeregistered event: %w", err)
 					}
 				}
 
@@ -357,7 +359,7 @@ func (tb *tendermintBackend) onABCIEvents(ctx context.Context, tmEvents []abcity
 					if doBroadcast {
 						continue
 					} else {
-						return nil, errors.Wrap(err, "registry: corrupt NodeRegistered event")
+						return nil, fmt.Errorf("registry: corrupt NodeRegistered event: %w", err)
 					}
 				}
 
@@ -375,7 +377,7 @@ func (tb *tendermintBackend) onABCIEvents(ctx context.Context, tmEvents []abcity
 				// Node unfrozen event.
 				var nid signature.PublicKey
 				if err := cbor.Unmarshal(val, &nid); err != nil {
-					return nil, errors.Wrap(err, "registry: corrupt NodeUnfrozen event")
+					return nil, fmt.Errorf("registry: corrupt NodeUnfrozen event: %w", err)
 				}
 				evt := api.Event{
 					NodeUnfrozenEvent: &api.NodeUnfrozenEvent{
@@ -386,7 +388,7 @@ func (tb *tendermintBackend) onABCIEvents(ctx context.Context, tmEvents []abcity
 			}
 		}
 	}
-	return &events, nil
+	return events, nil
 }
 
 func (tb *tendermintBackend) getNodeList(ctx context.Context, height int64) (*api.NodeList, error) {
@@ -398,7 +400,7 @@ func (tb *tendermintBackend) getNodeList(ctx context.Context, height int64) (*ap
 
 	nodes, err := q.Nodes(ctx)
 	if err != nil {
-		return nil, errors.Wrap(err, "registry: failed to query nodes")
+		return nil, fmt.Errorf("registry: failed to query nodes: %w", err)
 	}
 
 	api.SortNodeList(nodes)

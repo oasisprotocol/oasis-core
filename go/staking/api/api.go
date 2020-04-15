@@ -115,7 +115,7 @@ type Backend interface {
 	WatchEscrows(ctx context.Context) (<-chan *EscrowEvent, pubsub.ClosableSubscription, error)
 
 	// GetEvents returns the events at specified block height.
-	GetEvents(ctx context.Context, height int64) (*[]Event, error)
+	GetEvents(ctx context.Context, height int64) ([]Event, error)
 
 	// Cleanup cleans up the backend.
 	Cleanup()
@@ -156,9 +156,9 @@ type EscrowEvent struct {
 
 // Event signifies a staking event, returned via GetEvents.
 type Event struct {
-	TransferEvent *TransferEvent
-	BurnEvent     *BurnEvent
-	EscrowEvent   *EscrowEvent
+	TransferEvent *TransferEvent `json:"transfer,omitempty"`
+	BurnEvent     *BurnEvent     `json:"burn,omitempty"`
+	EscrowEvent   *EscrowEvent   `json:"escrow,omitempty"`
 }
 
 // AddEscrowEvent is the event emitted when a balance is transfered into a escrow

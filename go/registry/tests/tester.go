@@ -90,7 +90,7 @@ func testRegistryEntityNodes( // nolint: gocyclo
 				evts, grr := backend.GetEvents(context.Background(), consensusAPI.HeightLatest)
 				require.NoError(grr, "GetEvents")
 				var gotIt bool
-				for _, evt := range *evts {
+				for _, evt := range evts {
 					if evt.EntityEvent != nil {
 						if evt.EntityEvent.Entity.ID.Equal(ev.Entity.ID) && evt.EntityEvent.IsRegistration {
 							gotIt = true
@@ -186,7 +186,7 @@ func testRegistryEntityNodes( // nolint: gocyclo
 					evts, grr := backend.GetEvents(context.Background(), consensusAPI.HeightLatest)
 					require.NoError(grr, "GetEvents")
 					var gotIt bool
-					for _, evt := range *evts {
+					for _, evt := range evts {
 						if evt.NodeEvent != nil {
 							if evt.NodeEvent.Node.ID.Equal(tn.Node.ID) && evt.NodeEvent.IsRegistration {
 								gotIt = true
@@ -335,7 +335,7 @@ func testRegistryEntityNodes( // nolint: gocyclo
 				evts, grr := backend.GetEvents(context.Background(), consensusAPI.HeightLatest)
 				require.NoError(grr, "GetEvents")
 				var gotIt bool
-				for _, evt := range *evts {
+				for _, evt := range evts {
 					if evt.NodeEvent != nil {
 						if evt.NodeEvent.Node.ID.Equal(ev.Node.ID) && !evt.NodeEvent.IsRegistration {
 							gotIt = true
@@ -403,7 +403,7 @@ func testRegistryEntityNodes( // nolint: gocyclo
 			evts, err := backend.GetEvents(context.Background(), consensusAPI.HeightLatest)
 			require.NoError(err, "GetEvents")
 			var gotIt bool
-			for _, evt := range *evts {
+			for _, evt := range evts {
 				if evt.EntityEvent != nil {
 					if evt.EntityEvent.Entity.ID.Equal(ev.Entity.ID) && !evt.EntityEvent.IsRegistration {
 						gotIt = true
@@ -440,7 +440,7 @@ func testRegistryEntityNodes( // nolint: gocyclo
 				evts, err := backend.GetEvents(context.Background(), consensusAPI.HeightLatest)
 				require.NoError(err, "GetEvents")
 				var gotIt bool
-				for _, evt := range *evts {
+				for _, evt := range evts {
 					if evt.EntityEvent != nil {
 						if evt.EntityEvent.Entity.ID.Equal(ev.Entity.ID) && !evt.EntityEvent.IsRegistration {
 							gotIt = true
@@ -1115,7 +1115,7 @@ func (rt *TestRuntime) MustRegister(t *testing.T, backend api.Backend, consensus
 				evts, err := backend.GetEvents(context.Background(), consensusAPI.HeightLatest)
 				require.NoError(err, "GetEvents")
 				var gotIt bool
-				for _, evt := range *evts {
+				for _, evt := range evts {
 					if evt.RuntimeEvent != nil {
 						if evt.RuntimeEvent.Runtime.ID.Equal(&v.ID) {
 							gotIt = true
@@ -1182,7 +1182,7 @@ func BulkPopulate(t *testing.T, backend api.Backend, consensus consensusAPI.Back
 		evts, grr := backend.GetEvents(context.Background(), consensusAPI.HeightLatest)
 		require.NoError(grr, "GetEvents")
 		var gotIt bool
-		for _, evt := range *evts {
+		for _, evt := range evts {
 			if evt.EntityEvent != nil {
 				if evt.EntityEvent.Entity.ID.Equal(ev.Entity.ID) && evt.EntityEvent.IsRegistration {
 					gotIt = true
@@ -1229,7 +1229,7 @@ func BulkPopulate(t *testing.T, backend api.Backend, consensus consensusAPI.Back
 			evts, grr := backend.GetEvents(context.Background(), consensusAPI.HeightLatest)
 			require.NoError(grr, "GetEvents")
 			var gotIt bool
-			for _, evt := range *evts {
+			for _, evt := range evts {
 				if evt.NodeEvent != nil {
 					if evt.NodeEvent.Node.ID.Equal(ev.Node.ID) && evt.NodeEvent.IsRegistration {
 						gotIt = true

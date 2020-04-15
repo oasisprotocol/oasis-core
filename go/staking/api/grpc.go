@@ -541,8 +541,8 @@ func (c *stakingClient) ConsensusParameters(ctx context.Context, height int64) (
 	return &rsp, nil
 }
 
-func (c *stakingClient) GetEvents(ctx context.Context, height int64) (*[]Event, error) {
-	var rsp *[]Event
+func (c *stakingClient) GetEvents(ctx context.Context, height int64) ([]Event, error) {
+	var rsp []Event
 	if err := c.conn.Invoke(ctx, methodGetEvents.FullName(), height, &rsp); err != nil {
 		return nil, err
 	}

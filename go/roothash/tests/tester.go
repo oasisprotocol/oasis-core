@@ -380,7 +380,7 @@ func (s *runtimeState) testSuccessfulRound(t *testing.T, backend api.Backend, co
 			// There should be no discrepancy events.
 			evts, err := backend.GetEvents(ctx, consensusAPI.HeightLatest)
 			require.NoError(err, "GetEvents")
-			require.EqualValues(0, len(*evts), "should have no discrepancy events")
+			require.EqualValues(0, len(evts), "should have no discrepancy events")
 
 			// Nothing more to do after the block was received.
 			return

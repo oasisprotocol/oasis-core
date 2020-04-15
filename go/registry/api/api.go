@@ -227,7 +227,7 @@ type Backend interface {
 	StateToGenesis(context.Context, int64) (*Genesis, error)
 
 	// GetEvents returns the events at specified block height.
-	GetEvents(ctx context.Context, height int64) (*[]Event, error)
+	GetEvents(ctx context.Context, height int64) ([]Event, error)
 
 	// Cleanup cleans up the registry backend.
 	Cleanup()
@@ -273,44 +273,44 @@ func NewRegisterRuntimeTx(nonce uint64, fee *transaction.Fee, sigRt *SignedRunti
 // EntityEvent is the event that is returned via WatchEntities to signify
 // entity registration changes and updates.
 type EntityEvent struct {
-	Entity         *entity.Entity
-	IsRegistration bool
+	Entity         *entity.Entity `json:"entity"`
+	IsRegistration bool           `json:"is_registration"`
 }
 
 // NodeEvent is the event that is returned via WatchNodes to signify node
 // registration changes and updates.
 type NodeEvent struct {
-	Node           *node.Node
-	IsRegistration bool
+	Node           *node.Node `json:"node"`
+	IsRegistration bool       `json:"is_registration"`
 }
 
 // RuntimeEvent signifies new runtime registration.
 type RuntimeEvent struct {
-	Runtime *Runtime
+	Runtime *Runtime `json:"runtime"`
 }
 
 // NodesExpiredEvent signifies node expirations.
 type NodesExpiredEvent struct {
-	Nodes []*node.Node
+	Nodes []*node.Node `json:"nodes"`
 }
 
 // NodeUnfrozenEvent signifies when node becomes unfrozen.
 type NodeUnfrozenEvent struct {
-	NodeID signature.PublicKey
+	NodeID signature.PublicKey `json:"node_id"`
 }
 
 // Event is a registry event returned via GetEvents.
 type Event struct {
-	RuntimeEvent      *RuntimeEvent
-	EntityEvent       *EntityEvent
-	NodeEvent         *NodeEvent
-	NodesExpiredEvent *NodesExpiredEvent
-	NodeUnfrozenEvent *NodeUnfrozenEvent
+	RuntimeEvent      *RuntimeEvent      `json:"runtime,omitempty"`
+	EntityEvent       *EntityEvent       `json:"entity,omitempty"`
+	NodeEvent         *NodeEvent         `json:"node,omitempty"`
+	NodesExpiredEvent *NodesExpiredEvent `json:"nodes_expired,omitempty"`
+	NodeUnfrozenEvent *NodeUnfrozenEvent `json:"node_unfrozen,omitempty"`
 }
 
 // NodeList is a per-epoch immutable node list.
 type NodeList struct {
-	Nodes []*node.Node
+	Nodes []*node.Node `json:"nodes"`
 }
 
 // NodeLookup interface implements various ways for the verification

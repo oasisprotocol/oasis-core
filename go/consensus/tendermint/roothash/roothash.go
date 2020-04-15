@@ -4,11 +4,11 @@ package roothash
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"math"
 	"sync"
 
 	"github.com/eapache/channels"
-	"github.com/pkg/errors"
 	"github.com/tendermint/tendermint/abci/types"
 	tmrpctypes "github.com/tendermint/tendermint/rpc/core/types"
 	tmtypes "github.com/tendermint/tendermint/types"
@@ -146,16 +146,16 @@ func (tb *tendermintBackend) WatchBlocks(id common.Namespace) (<-chan *api.Annot
 func (tb *tendermintBackend) getBlockFromFinalizedTag(ctx context.Context, rawValue []byte, height int64) (*block.Block, *app.ValueFinalized, error) {
 	var value app.ValueFinalized
 	if err := cbor.Unmarshal(rawValue, &value); err != nil {
-		return nil, nil, errors.Wrap(err, "roothash: corrupt finalized tag")
+		return nil, nil, fmt.Errorf("roothash: corrupt finalized tag: %w", err)
 	}
 
 	block, err := tb.getLatestBlockAt(ctx, value.ID, height)
 	if err != nil {
-		return nil, nil, errors.Wrap(err, "roothash: failed to fetch block")
+		return nil, nil, fmt.Errorf("roothash: failed to fetch block: %w", err)
 	}
 
 	if block.Header.Round != value.Round {
-		return nil, nil, errors.Errorf("roothash: tag/query round mismatch (tag: %d, query: %d)", value.Round, block.Header.Round)
+		return nil, nil, fmt.Errorf("roothash: tag/query round mismatch (tag: %d, query: %d)", value.Round, block.Header.Round)
 	}
 
 	return block, &value, nil
@@ -196,7 +196,7 @@ func (tb *tendermintBackend) StateToGenesis(ctx context.Context, height int64) (
 	return q.Genesis(ctx)
 }
 
-func (tb *tendermintBackend) GetEvents(ctx context.Context, height int64) (*[]api.Event, error) {
+func (tb *tendermintBackend) GetEvents(ctx context.Context, height int64) ([]api.Event, error) {
 	// Get block results at given height.
 	var results *tmrpctypes.ResultBlockResults
 	results, err := tb.service.GetBlockResults(height)
@@ -213,7 +213,7 @@ func (tb *tendermintBackend) GetEvents(ctx context.Context, height int64) (*[]ap
 	for _, txResults := range results.TxsResults {
 		tmEvents = append(tmEvents, txResults.Events...)
 	}
-	events := []api.Event{}
+	var events []api.Event
 	for _, tmEv := range tmEvents {
 		// Ignore events that don't relate to the roothash app.
 		if tmEv.GetType() != app.EventType {
@@ -231,7 +231,7 @@ func (tb *tendermintBackend) GetEvents(ctx context.Context, height int64) (*[]ap
 				// Execution discrepancy event.
 				var eddValue app.ValueExecutionDiscrepancyDetected
 				if err := cbor.Unmarshal(pair.GetValue(), &eddValue); err != nil {
-					return nil, errors.Wrap(err, "roothash: corrupt ExecutionDiscrepancyDetected tag")
+					return nil, fmt.Errorf("roothash: corrupt ExecutionDiscrepancyDetected event: %w", err)
 				}
 				evt := api.Event{
 					ExecutionDiscrepancyDetected: &eddValue.Event,
@@ -241,7 +241,7 @@ func (tb *tendermintBackend) GetEvents(ctx context.Context, height int64) (*[]ap
 		}
 	}
 
-	return &events, nil
+	return events, nil
 }
 
 func (tb *tendermintBackend) Cleanup() {

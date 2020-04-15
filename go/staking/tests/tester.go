@@ -171,7 +171,7 @@ func testTransfer(t *testing.T, backend api.Backend, consensus consensusAPI.Back
 		evts, grr := backend.GetEvents(context.Background(), consensusAPI.HeightLatest)
 		require.NoError(grr, "GetEvents")
 		var gotIt bool
-		for _, evt := range *evts {
+		for _, evt := range evts {
 			if evt.TransferEvent != nil {
 				if evt.TransferEvent.From.Equal(ev.From) && evt.TransferEvent.To.Equal(ev.To) && evt.TransferEvent.Tokens.Cmp(&ev.Tokens) == 0 {
 					gotIt = true
@@ -275,7 +275,7 @@ func testBurn(t *testing.T, backend api.Backend, consensus consensusAPI.Backend)
 		evts, grr := backend.GetEvents(context.Background(), consensusAPI.HeightLatest)
 		require.NoError(grr, "GetEvents")
 		var gotIt bool
-		for _, evt := range *evts {
+		for _, evt := range evts {
 			if evt.BurnEvent != nil {
 				if evt.BurnEvent.Owner.Equal(ev.Owner) && evt.BurnEvent.Tokens.Cmp(&ev.Tokens) == 0 {
 					gotIt = true
@@ -359,7 +359,7 @@ func testEscrowEx( // nolint: gocyclo
 		evts, grr := backend.GetEvents(context.Background(), consensusAPI.HeightLatest)
 		require.NoError(grr, "GetEvents")
 		var gotIt bool
-		for _, evt := range *evts {
+		for _, evt := range evts {
 			if evt.EscrowEvent != nil && evt.EscrowEvent.Add != nil {
 				if evt.EscrowEvent.Add.Owner.Equal(ev.Owner) && evt.EscrowEvent.Add.Escrow.Equal(ev.Escrow) && evt.EscrowEvent.Add.Tokens.Cmp(&ev.Tokens) == 0 {
 					gotIt = true
@@ -421,7 +421,7 @@ func testEscrowEx( // nolint: gocyclo
 		evts, grr := backend.GetEvents(context.Background(), consensusAPI.HeightLatest)
 		require.NoError(grr, "GetEvents")
 		var gotIt bool
-		for _, evt := range *evts {
+		for _, evt := range evts {
 			if evt.EscrowEvent != nil && evt.EscrowEvent.Add != nil {
 				if evt.EscrowEvent.Add.Owner.Equal(ev.Owner) && evt.EscrowEvent.Add.Escrow.Equal(ev.Escrow) && evt.EscrowEvent.Add.Tokens.Cmp(&ev.Tokens) == 0 {
 					gotIt = true
@@ -497,7 +497,7 @@ func testEscrowEx( // nolint: gocyclo
 		evts, grr := backend.GetEvents(context.Background(), consensusAPI.HeightLatest)
 		require.NoError(grr, "GetEvents")
 		var gotIt bool
-		for _, evt := range *evts {
+		for _, evt := range evts {
 			if evt.EscrowEvent != nil && evt.EscrowEvent.Reclaim != nil {
 				if evt.EscrowEvent.Reclaim.Owner.Equal(ev.Owner) && evt.EscrowEvent.Reclaim.Escrow.Equal(ev.Escrow) && evt.EscrowEvent.Reclaim.Tokens.Cmp(&ev.Tokens) == 0 {
 					gotIt = true

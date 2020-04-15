@@ -4,8 +4,7 @@ package staking
 import (
 	"bytes"
 	"context"
-
-	"github.com/pkg/errors"
+	"fmt"
 
 	abcitypes "github.com/tendermint/tendermint/abci/types"
 	tmrpctypes "github.com/tendermint/tendermint/rpc/core/types"
@@ -143,7 +142,7 @@ func (tb *tendermintBackend) StateToGenesis(ctx context.Context, height int64) (
 	return q.Genesis(ctx)
 }
 
-func (tb *tendermintBackend) GetEvents(ctx context.Context, height int64) (*[]api.Event, error) {
+func (tb *tendermintBackend) GetEvents(ctx context.Context, height int64) ([]api.Event, error) {
 	// Get block results at given height.
 	var results *tmrpctypes.ResultBlockResults
 	results, err := tb.service.GetBlockResults(height)
@@ -221,8 +220,8 @@ func (tb *tendermintBackend) onEventDataTx(ctx context.Context, tx tmtypes.Event
 	_, _ = tb.onABCIEvents(ctx, tx.Result.Events, tx.Height, true)
 }
 
-func (tb *tendermintBackend) onABCIEvents(context context.Context, tmEvents []abcitypes.Event, height int64, doBroadcast bool) (*[]api.Event, error) {
-	events := []api.Event{}
+func (tb *tendermintBackend) onABCIEvents(context context.Context, tmEvents []abcitypes.Event, height int64, doBroadcast bool) ([]api.Event, error) {
+	var events []api.Event
 	for _, tmEv := range tmEvents {
 		// Ignore events that don't relate to the staking app.
 		if tmEv.GetType() != app.EventType {
@@ -242,7 +241,7 @@ func (tb *tendermintBackend) onABCIEvents(context context.Context, tmEvents []ab
 					if doBroadcast {
 						continue
 					} else {
-						return nil, errors.Wrap(err, "staking: corrupt TakeEscrow event")
+						return nil, fmt.Errorf("staking: corrupt TakeEscrow event: %w", err)
 					}
 				}
 
@@ -263,7 +262,7 @@ func (tb *tendermintBackend) onABCIEvents(context context.Context, tmEvents []ab
 					if doBroadcast {
 						continue
 					} else {
-						return nil, errors.Wrap(err, "staking: corrupt Transfer event")
+						return nil, fmt.Errorf("staking: corrupt Transfer event: %w", err)
 					}
 				}
 
@@ -282,7 +281,7 @@ func (tb *tendermintBackend) onABCIEvents(context context.Context, tmEvents []ab
 					if doBroadcast {
 						continue
 					} else {
-						return nil, errors.Wrap(err, "staking: corrupt ReclaimEscrow event")
+						return nil, fmt.Errorf("staking: corrupt ReclaimEscrow event: %w", err)
 					}
 				}
 
@@ -303,7 +302,7 @@ func (tb *tendermintBackend) onABCIEvents(context context.Context, tmEvents []ab
 					if doBroadcast {
 						continue
 					} else {
-						return nil, errors.Wrap(err, "staking: corrupt AddEscrow event")
+						return nil, fmt.Errorf("staking: corrupt AddEscrow event: %w", err)
 					}
 				}
 
@@ -324,7 +323,7 @@ func (tb *tendermintBackend) onABCIEvents(context context.Context, tmEvents []ab
 					if doBroadcast {
 						continue
 					} else {
-						return nil, errors.Wrap(err, "staking: corrupt Burn event")
+						return nil, fmt.Errorf("staking: corrupt Burn event: %w", err)
 					}
 				}
 
@@ -336,7 +335,7 @@ func (tb *tendermintBackend) onABCIEvents(context context.Context, tmEvents []ab
 			}
 		}
 	}
-	return &events, nil
+	return events, nil
 }
 
 // New constructs a new tendermint backed staking Backend instance.
