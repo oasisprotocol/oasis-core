@@ -255,6 +255,16 @@ func (tb *tendermintBackend) onABCIEvents(ctx context.Context, tmEvents []abcity
 						},
 					}
 					events = append(events, evt)
+
+					// For compatibility, we also emit NodeEvents with
+					// IsRegistration set to false, as in the broadcast case
+					// above.
+					for _, node := range nodes {
+						events = append(events, api.Event{NodeEvent: &api.NodeEvent{
+							Node:           node,
+							IsRegistration: false,
+						}})
+					}
 				}
 			} else if bytes.Equal(key, app.KeyRuntimeRegistered) {
 				// Runtime registered event.

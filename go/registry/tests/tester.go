@@ -330,6 +330,20 @@ func testRegistryEntityNodes( // nolint: gocyclo
 			case ev := <-nodeCh:
 				require.False(ev.IsRegistration, "event is deregistration")
 				deregisteredNodes[ev.Node.ID] = ev.Node
+
+				// Make sure that GetEvents also returns the deregistration event.
+				evts, grr := backend.GetEvents(context.Background(), consensusAPI.HeightLatest)
+				require.NoError(grr, "GetEvents")
+				var gotIt bool
+				for _, evt := range *evts {
+					if evt.NodeEvent != nil {
+						if evt.NodeEvent.Node.ID.Equal(ev.Node.ID) && !evt.NodeEvent.IsRegistration {
+							gotIt = true
+							break
+						}
+					}
+				}
+				require.EqualValues(true, gotIt, "GetEvents should return node deregistration event")
 			case <-time.After(recvTimeout):
 				t.Fatalf("failed to receive node deregistration event")
 			}
@@ -1163,6 +1177,20 @@ func BulkPopulate(t *testing.T, backend api.Backend, consensus consensusAPI.Back
 	case ev := <-entityCh:
 		require.EqualValues(entity.Entity, ev.Entity, "registered entity")
 		require.True(ev.IsRegistration, "event is registration")
+
+		// Make sure that GetEvents also returns the registration event.
+		evts, grr := backend.GetEvents(context.Background(), consensusAPI.HeightLatest)
+		require.NoError(grr, "GetEvents")
+		var gotIt bool
+		for _, evt := range *evts {
+			if evt.EntityEvent != nil {
+				if evt.EntityEvent.Entity.ID.Equal(ev.Entity.ID) && evt.EntityEvent.IsRegistration {
+					gotIt = true
+					break
+				}
+			}
+		}
+		require.EqualValues(true, gotIt, "GetEvents should return entity registration event")
 	case <-time.After(recvTimeout):
 		t.Fatalf("failed to receive entity registration event")
 	}
@@ -1196,6 +1224,20 @@ func BulkPopulate(t *testing.T, backend api.Backend, consensus consensusAPI.Back
 		case ev := <-nodeCh:
 			require.EqualValues(node.Node, ev.Node, "registered node")
 			require.True(ev.IsRegistration, "event is registration")
+
+			// Make sure that GetEvents also returns the registration event.
+			evts, grr := backend.GetEvents(context.Background(), consensusAPI.HeightLatest)
+			require.NoError(grr, "GetEvents")
+			var gotIt bool
+			for _, evt := range *evts {
+				if evt.NodeEvent != nil {
+					if evt.NodeEvent.Node.ID.Equal(ev.Node.ID) && evt.NodeEvent.IsRegistration {
+						gotIt = true
+						break
+					}
+				}
+			}
+			require.EqualValues(true, gotIt, "GetEvents should return node registration event")
 		case <-time.After(recvTimeout):
 			t.Fatalf("failed to receive node registration event")
 		}
