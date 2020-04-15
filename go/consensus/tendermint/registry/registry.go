@@ -4,13 +4,15 @@ package registry
 import (
 	"bytes"
 	"context"
+	"fmt"
 
 	"github.com/eapache/channels"
-	"github.com/pkg/errors"
 	abcitypes "github.com/tendermint/tendermint/abci/types"
+	tmrpctypes "github.com/tendermint/tendermint/rpc/core/types"
 	tmtypes "github.com/tendermint/tendermint/types"
 
 	"github.com/oasislabs/oasis-core/go/common/cbor"
+	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
 	"github.com/oasislabs/oasis-core/go/common/entity"
 	"github.com/oasislabs/oasis-core/go/common/logging"
 	"github.com/oasislabs/oasis-core/go/common/node"
@@ -150,6 +152,26 @@ func (tb *tendermintBackend) StateToGenesis(ctx context.Context, height int64) (
 	return q.Genesis(ctx)
 }
 
+func (tb *tendermintBackend) GetEvents(ctx context.Context, height int64) ([]api.Event, error) {
+	// Get block results at given height.
+	var results *tmrpctypes.ResultBlockResults
+	results, err := tb.service.GetBlockResults(height)
+	if err != nil {
+		tb.logger.Error("failed to get tendermint block results",
+			"err", err,
+			"height", height,
+		)
+		return nil, err
+	}
+
+	// Decode events from block results.
+	tmEvents := append(results.BeginBlockEvents, results.EndBlockEvents...)
+	for _, txResults := range results.TxsResults {
+		tmEvents = append(tmEvents, txResults.Events...)
+	}
+	return tb.onABCIEvents(ctx, tmEvents, height, false)
+}
+
 func (tb *tendermintBackend) worker(ctx context.Context) {
 	// Subscribe to transactions which modify state.
 	sub, err := tb.service.Subscribe("registry-worker", app.QueryApp)
@@ -189,72 +211,123 @@ func (tb *tendermintBackend) onEventDataNewBlock(ctx context.Context, ev tmtypes
 	events := append([]abcitypes.Event{}, ev.ResultBeginBlock.GetEvents()...)
 	events = append(events, ev.ResultEndBlock.GetEvents()...)
 
-	tb.onABCIEvents(ctx, events, ev.Block.Header.Height)
+	_, _ = tb.onABCIEvents(ctx, events, ev.Block.Header.Height, true)
 }
 
 func (tb *tendermintBackend) onEventDataTx(ctx context.Context, tx tmtypes.EventDataTx) {
-	tb.onABCIEvents(ctx, tx.Result.Events, tx.Height)
+	_, _ = tb.onABCIEvents(ctx, tx.Result.Events, tx.Height, true)
 }
 
-func (tb *tendermintBackend) onABCIEvents(ctx context.Context, events []abcitypes.Event, height int64) {
-	for _, tmEv := range events {
+func (tb *tendermintBackend) onABCIEvents(ctx context.Context, tmEvents []abcitypes.Event, height int64, doBroadcast bool) ([]api.Event, error) { // nolint: gocyclo
+	var events []api.Event
+	for _, tmEv := range tmEvents {
+		// Ignore events that don't relate to the registry app.
 		if tmEv.GetType() != app.EventType {
 			continue
 		}
 
 		for _, pair := range tmEv.GetAttributes() {
-			if bytes.Equal(pair.GetKey(), app.KeyNodesExpired) {
+			key := pair.GetKey()
+			val := pair.GetValue()
+			if bytes.Equal(key, app.KeyNodesExpired) {
+				// Nodes expired event.
 				var nodes []*node.Node
-				if err := cbor.Unmarshal(pair.GetValue(), &nodes); err != nil {
+				if err := cbor.Unmarshal(val, &nodes); err != nil {
 					tb.logger.Error("worker: failed to get nodes from tag",
 						"err", err,
 					)
+					if doBroadcast {
+						continue
+					} else {
+						return nil, fmt.Errorf("registry: corrupt NodesExpired event: %w", err)
+					}
 				}
 
+				// Generate node deregistration events.
 				for _, node := range nodes {
-					tb.nodeNotifier.Broadcast(&api.NodeEvent{
+					ne := &api.NodeEvent{
 						Node:           node,
 						IsRegistration: false,
-					})
+					}
+
+					if doBroadcast {
+						tb.nodeNotifier.Broadcast(ne)
+					} else {
+						events = append(events, api.Event{NodeEvent: ne})
+					}
 				}
-			} else if bytes.Equal(pair.GetKey(), app.KeyRuntimeRegistered) {
+			} else if bytes.Equal(key, app.KeyRuntimeRegistered) {
+				// Runtime registered event.
 				var rt api.Runtime
-				if err := cbor.Unmarshal(pair.GetValue(), &rt); err != nil {
+				if err := cbor.Unmarshal(val, &rt); err != nil {
 					tb.logger.Error("worker: failed to get runtime from tag",
 						"err", err,
 					)
-					continue
+					if doBroadcast {
+						continue
+					} else {
+						return nil, fmt.Errorf("registry: corrupt RuntimeRegistered event: %w", err)
+					}
 				}
 
-				tb.runtimeNotifier.Broadcast(&rt)
-			} else if bytes.Equal(pair.GetKey(), app.KeyEntityRegistered) {
+				if doBroadcast {
+					tb.runtimeNotifier.Broadcast(&rt)
+				} else {
+					evt := api.Event{
+						RuntimeEvent: &api.RuntimeEvent{Runtime: &rt},
+					}
+					events = append(events, evt)
+				}
+			} else if bytes.Equal(key, app.KeyEntityRegistered) {
+				// Entity registered event.
 				var ent entity.Entity
-				if err := cbor.Unmarshal(pair.GetValue(), &ent); err != nil {
+				if err := cbor.Unmarshal(val, &ent); err != nil {
 					tb.logger.Error("worker: failed to get entity from tag",
 						"err", err,
 					)
-					continue
+					if doBroadcast {
+						continue
+					} else {
+						return nil, fmt.Errorf("registry: corrupt EntityRegistered event: %w", err)
+					}
 				}
 
-				tb.entityNotifier.Broadcast(&api.EntityEvent{
+				eev := &api.EntityEvent{
 					Entity:         &ent,
 					IsRegistration: true,
-				})
-			} else if bytes.Equal(pair.GetKey(), app.KeyEntityDeregistered) {
+				}
+
+				if doBroadcast {
+					tb.entityNotifier.Broadcast(eev)
+				} else {
+					events = append(events, api.Event{EntityEvent: eev})
+				}
+			} else if bytes.Equal(key, app.KeyEntityDeregistered) {
+				// Entity deregistered event.
 				var dereg app.EntityDeregistration
-				if err := cbor.Unmarshal(pair.GetValue(), &dereg); err != nil {
+				if err := cbor.Unmarshal(val, &dereg); err != nil {
 					tb.logger.Error("worker: failed to get entity deregistration from tag",
 						"err", err,
 					)
-					continue
+					if doBroadcast {
+						continue
+					} else {
+						return nil, fmt.Errorf("registry: corrupt EntityDeregistered event: %w", err)
+					}
 				}
 
-				// Entity deregistration.
-				tb.entityNotifier.Broadcast(&api.EntityEvent{
+				eev := &api.EntityEvent{
 					Entity:         &dereg.Entity,
 					IsRegistration: false,
-				})
-			} else if bytes.Equal(pair.GetKey(), app.KeyRegistryNodeListEpoch) {
+				}
+
+				if doBroadcast {
+					tb.entityNotifier.Broadcast(eev)
+				} else {
+					events = append(events, api.Event{EntityEvent: eev})
+				}
+			} else if bytes.Equal(key, app.KeyRegistryNodeListEpoch) && doBroadcast {
+				// Node list epoch event.
 				nl, err := tb.getNodeList(ctx, height)
 				if err != nil {
 					tb.logger.Error("worker: failed to get node list",
@@ -264,22 +337,46 @@ func (tb *tendermintBackend) onABCIEvents(ctx context.Context, events []abcitype
 					continue
 				}
 				tb.nodeListNotifier.Broadcast(nl)
-			} else if bytes.Equal(pair.GetKey(), app.KeyNodeRegistered) {
+			} else if bytes.Equal(key, app.KeyNodeRegistered) {
+				// Node registered event.
 				var n node.Node
-				if err := cbor.Unmarshal(pair.GetValue(), &n); err != nil {
+				if err := cbor.Unmarshal(val, &n); err != nil {
 					tb.logger.Error("worker: failed to get node from tag",
 						"err", err,
 					)
-					continue
+					if doBroadcast {
+						continue
+					} else {
+						return nil, fmt.Errorf("registry: corrupt NodeRegistered event: %w", err)
+					}
 				}
 
-				tb.nodeNotifier.Broadcast(&api.NodeEvent{
+				nev := &api.NodeEvent{
 					Node:           &n,
 					IsRegistration: true,
-				})
+				}
+
+				if doBroadcast {
+					tb.nodeNotifier.Broadcast(nev)
+				} else {
+					events = append(events, api.Event{NodeEvent: nev})
+				}
+			} else if bytes.Equal(key, app.KeyNodeUnfrozen) && !doBroadcast {
+				// Node unfrozen event.
+				var nid signature.PublicKey
+				if err := cbor.Unmarshal(val, &nid); err != nil {
+					return nil, fmt.Errorf("registry: corrupt NodeUnfrozen event: %w", err)
+				}
+				evt := api.Event{
+					NodeUnfrozenEvent: &api.NodeUnfrozenEvent{
+						NodeID: nid,
+					},
+				}
+				events = append(events, evt)
 			}
 		}
 	}
+	return events, nil
 }
 
 func (tb *tendermintBackend) getNodeList(ctx context.Context, height int64) (*api.NodeList, error) {
@@ -291,7 +388,7 @@ func (tb *tendermintBackend) getNodeList(ctx context.Context, height int64) (*ap
 
 	nodes, err := q.Nodes(ctx)
 	if err != nil {
-		return nil, errors.Wrap(err, "registry: failed to query nodes")
+		return nil, fmt.Errorf("registry: failed to query nodes: %w", err)
 	}
 
 	api.SortNodeList(nodes)
