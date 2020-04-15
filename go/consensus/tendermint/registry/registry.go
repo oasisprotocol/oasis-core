@@ -243,29 +243,17 @@ func (tb *tendermintBackend) onABCIEvents(ctx context.Context, tmEvents []abcity
 					}
 				}
 
-				if doBroadcast {
-					for _, node := range nodes {
-						tb.nodeNotifier.Broadcast(&api.NodeEvent{
-							Node:           node,
-							IsRegistration: false,
-						})
+				// Generate node deregistration events.
+				for _, node := range nodes {
+					ne := &api.NodeEvent{
+						Node:           node,
+						IsRegistration: false,
 					}
-				} else {
-					evt := api.Event{
-						NodesExpiredEvent: &api.NodesExpiredEvent{
-							Nodes: nodes,
-						},
-					}
-					events = append(events, evt)
 
-					// For compatibility, we also emit NodeEvents with
-					// IsRegistration set to false, as in the broadcast case
-					// above.
-					for _, node := range nodes {
-						events = append(events, api.Event{NodeEvent: &api.NodeEvent{
-							Node:           node,
-							IsRegistration: false,
-						}})
+					if doBroadcast {
+						tb.nodeNotifier.Broadcast(ne)
+					} else {
+						events = append(events, api.Event{NodeEvent: ne})
 					}
 				}
 			} else if bytes.Equal(key, app.KeyRuntimeRegistered) {

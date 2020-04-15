@@ -289,11 +289,6 @@ type RuntimeEvent struct {
 	Runtime *Runtime `json:"runtime"`
 }
 
-// NodesExpiredEvent signifies node expirations.
-type NodesExpiredEvent struct {
-	Nodes []*node.Node `json:"nodes"`
-}
-
 // NodeUnfrozenEvent signifies when node becomes unfrozen.
 type NodeUnfrozenEvent struct {
 	NodeID signature.PublicKey `json:"node_id"`
@@ -304,7 +299,6 @@ type Event struct {
 	RuntimeEvent      *RuntimeEvent      `json:"runtime,omitempty"`
 	EntityEvent       *EntityEvent       `json:"entity,omitempty"`
 	NodeEvent         *NodeEvent         `json:"node,omitempty"`
-	NodesExpiredEvent *NodesExpiredEvent `json:"nodes_expired,omitempty"`
 	NodeUnfrozenEvent *NodeUnfrozenEvent `json:"node_unfrozen,omitempty"`
 }
 
