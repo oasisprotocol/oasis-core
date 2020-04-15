@@ -160,77 +160,7 @@ func (tb *tendermintBackend) GetEvents(ctx context.Context, height int64) (*[]ap
 	for _, txResults := range results.TxsResults {
 		tmEvents = append(tmEvents, txResults.Events...)
 	}
-	events := []api.Event{}
-	for _, tmEv := range tmEvents {
-		// Ignore events that don't relate to the staking app.
-		if tmEv.GetType() != app.EventType {
-			continue
-		}
-
-		for _, pair := range tmEv.GetAttributes() {
-			key := pair.GetKey()
-			val := pair.GetValue()
-			if bytes.Equal(key, app.KeyTransfer) {
-				// Transfer event.
-				var te api.TransferEvent
-				if err := cbor.Unmarshal(val, &te); err != nil {
-					return nil, errors.Wrap(err, "staking: corrupt Transfer event")
-				}
-				evt := api.Event{
-					TransferEvent: &te,
-				}
-				events = append(events, evt)
-			} else if bytes.Equal(key, app.KeyBurn) {
-				// Burn event.
-				var be api.BurnEvent
-				if err := cbor.Unmarshal(val, &be); err != nil {
-					return nil, errors.Wrap(err, "staking: corrupt Burn event")
-				}
-				evt := api.Event{
-					BurnEvent: &be,
-				}
-				events = append(events, evt)
-			} else if bytes.Equal(key, app.KeyAddEscrow) {
-				// Add escrow event.
-				var aee api.AddEscrowEvent
-				if err := cbor.Unmarshal(val, &aee); err != nil {
-					return nil, errors.Wrap(err, "staking: corrupt AddEscrow event")
-				}
-				evt := api.Event{
-					EscrowEvent: &api.EscrowEvent{
-						Add: &aee,
-					},
-				}
-				events = append(events, evt)
-			} else if bytes.Equal(key, app.KeyTakeEscrow) {
-				// Take escrow event.
-				var tee api.TakeEscrowEvent
-				if err := cbor.Unmarshal(val, &tee); err != nil {
-					return nil, errors.Wrap(err, "staking: corrupt TakeEscrow event")
-				}
-				evt := api.Event{
-					EscrowEvent: &api.EscrowEvent{
-						Take: &tee,
-					},
-				}
-				events = append(events, evt)
-			} else if bytes.Equal(key, app.KeyReclaimEscrow) {
-				// Reclaim escrow event.
-				var ree api.ReclaimEscrowEvent
-				if err := cbor.Unmarshal(val, &ree); err != nil {
-					return nil, errors.Wrap(err, "staking: corrupt ReclaimEscrow event")
-				}
-				evt := api.Event{
-					EscrowEvent: &api.EscrowEvent{
-						Reclaim: &ree,
-					},
-				}
-				events = append(events, evt)
-			}
-		}
-	}
-
-	return &events, nil
+	return tb.onABCIEvents(ctx, tmEvents, height, false)
 }
 
 func (tb *tendermintBackend) ConsensusParameters(ctx context.Context, height int64) (*api.ConsensusParameters, error) {
@@ -284,73 +214,129 @@ func (tb *tendermintBackend) onEventDataNewBlock(ctx context.Context, ev tmtypes
 	events := append([]abcitypes.Event{}, ev.ResultBeginBlock.GetEvents()...)
 	events = append(events, ev.ResultEndBlock.GetEvents()...)
 
-	tb.onABCIEvents(ctx, events, ev.Block.Header.Height)
+	_, _ = tb.onABCIEvents(ctx, events, ev.Block.Header.Height, true)
 }
 
-func (tb *tendermintBackend) onABCIEvents(context context.Context, events []abcitypes.Event, height int64) {
-	for _, tmEv := range events {
+func (tb *tendermintBackend) onEventDataTx(ctx context.Context, tx tmtypes.EventDataTx) {
+	_, _ = tb.onABCIEvents(ctx, tx.Result.Events, tx.Height, true)
+}
+
+func (tb *tendermintBackend) onABCIEvents(context context.Context, tmEvents []abcitypes.Event, height int64, doBroadcast bool) (*[]api.Event, error) {
+	events := []api.Event{}
+	for _, tmEv := range tmEvents {
+		// Ignore events that don't relate to the staking app.
 		if tmEv.GetType() != app.EventType {
 			continue
 		}
 
 		for _, pair := range tmEv.GetAttributes() {
-			if bytes.Equal(pair.GetKey(), app.KeyTakeEscrow) {
+			key := pair.GetKey()
+			val := pair.GetValue()
+			if bytes.Equal(key, app.KeyTakeEscrow) {
+				// Take escrow event.
 				var e api.TakeEscrowEvent
-				if err := cbor.Unmarshal(pair.GetValue(), &e); err != nil {
+				if err := cbor.Unmarshal(val, &e); err != nil {
 					tb.logger.Error("worker: failed to get take escrow event from tag",
 						"err", err,
 					)
-					continue
+					if doBroadcast {
+						continue
+					} else {
+						return nil, errors.Wrap(err, "staking: corrupt TakeEscrow event")
+					}
 				}
 
-				tb.escrowNotifier.Broadcast(&api.EscrowEvent{Take: &e})
-			} else if bytes.Equal(pair.GetKey(), app.KeyTransfer) {
+				ee := &api.EscrowEvent{Take: &e}
+
+				if doBroadcast {
+					tb.escrowNotifier.Broadcast(ee)
+				} else {
+					events = append(events, api.Event{EscrowEvent: ee})
+				}
+			} else if bytes.Equal(key, app.KeyTransfer) {
+				// Transfer event.
 				var e api.TransferEvent
-				if err := cbor.Unmarshal(pair.GetValue(), &e); err != nil {
+				if err := cbor.Unmarshal(val, &e); err != nil {
 					tb.logger.Error("worker: failed to get transfer event from tag",
 						"err", err,
 					)
-					continue
+					if doBroadcast {
+						continue
+					} else {
+						return nil, errors.Wrap(err, "staking: corrupt Transfer event")
+					}
 				}
 
-				tb.transferNotifier.Broadcast(&e)
-			} else if bytes.Equal(pair.GetKey(), app.KeyReclaimEscrow) {
+				if doBroadcast {
+					tb.transferNotifier.Broadcast(&e)
+				} else {
+					events = append(events, api.Event{TransferEvent: &e})
+				}
+			} else if bytes.Equal(key, app.KeyReclaimEscrow) {
+				// Reclaim escrow event.
 				var e api.ReclaimEscrowEvent
-				if err := cbor.Unmarshal(pair.GetValue(), &e); err != nil {
+				if err := cbor.Unmarshal(val, &e); err != nil {
 					tb.logger.Error("worker: failed to get reclaim escrow event from tag",
 						"err", err,
 					)
-					continue
+					if doBroadcast {
+						continue
+					} else {
+						return nil, errors.Wrap(err, "staking: corrupt ReclaimEscrow event")
+					}
 				}
 
-				tb.escrowNotifier.Broadcast(&api.EscrowEvent{Reclaim: &e})
-			} else if bytes.Equal(pair.GetKey(), app.KeyAddEscrow) {
+				ee := &api.EscrowEvent{Reclaim: &e}
+
+				if doBroadcast {
+					tb.escrowNotifier.Broadcast(ee)
+				} else {
+					events = append(events, api.Event{EscrowEvent: ee})
+				}
+			} else if bytes.Equal(key, app.KeyAddEscrow) {
+				// Add escrow event.
 				var e api.AddEscrowEvent
-				if err := cbor.Unmarshal(pair.GetValue(), &e); err != nil {
+				if err := cbor.Unmarshal(val, &e); err != nil {
 					tb.logger.Error("worker: failed to get escrow event from tag",
 						"err", err,
 					)
-					continue
+					if doBroadcast {
+						continue
+					} else {
+						return nil, errors.Wrap(err, "staking: corrupt AddEscrow event")
+					}
 				}
 
-				tb.escrowNotifier.Broadcast(&api.EscrowEvent{Add: &e})
-			} else if bytes.Equal(pair.GetKey(), app.KeyBurn) {
+				ee := &api.EscrowEvent{Add: &e}
+
+				if doBroadcast {
+					tb.escrowNotifier.Broadcast(ee)
+				} else {
+					events = append(events, api.Event{EscrowEvent: ee})
+				}
+			} else if bytes.Equal(key, app.KeyBurn) {
+				// Burn event.
 				var e api.BurnEvent
-				if err := cbor.Unmarshal(pair.GetValue(), &e); err != nil {
+				if err := cbor.Unmarshal(val, &e); err != nil {
 					tb.logger.Error("worker: failed to get burn event from tag",
 						"err", err,
 					)
-					continue
+					if doBroadcast {
+						continue
+					} else {
+						return nil, errors.Wrap(err, "staking: corrupt Burn event")
+					}
 				}
 
-				tb.burnNotifier.Broadcast(&e)
+				if doBroadcast {
+					tb.burnNotifier.Broadcast(&e)
+				} else {
+					events = append(events, api.Event{BurnEvent: &e})
+				}
 			}
 		}
 	}
-}
-
-func (tb *tendermintBackend) onEventDataTx(ctx context.Context, tx tmtypes.EventDataTx) {
-	tb.onABCIEvents(ctx, tx.Result.Events, tx.Height)
+	return &events, nil
 }
 
 // New constructs a new tendermint backed staking Backend instance.
