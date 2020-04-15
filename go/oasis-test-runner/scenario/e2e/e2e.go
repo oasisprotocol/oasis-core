@@ -91,6 +91,8 @@ func RegisterScenarios() error {
 		SentryEncryption,
 		// Keymanager restart test.
 		KeymanagerRestart,
+		// Keymanager replicate test.
+		KeymanagerReplicate,
 		// Dump/restore test.
 		DumpRestore,
 		// Halt test.

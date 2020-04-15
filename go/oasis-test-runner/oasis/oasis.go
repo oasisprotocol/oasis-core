@@ -197,6 +197,8 @@ type Network struct {
 	clients        []*Client
 	byzantine      []*Byzantine
 
+	keymanagerPolicy *KeymanagerPolicy
+
 	seedNode *seedNode
 	iasProxy *iasProxy
 
@@ -737,6 +739,11 @@ func (net *Network) makeGenesis() error {
 	}
 	for _, v := range net.runtimes {
 		args = append(args, v.toGenesisArgs()...)
+	}
+	if net.keymanagerPolicy != nil {
+		if err := net.keymanagerPolicy.provision(); err != nil {
+			return err
+		}
 	}
 	for _, v := range net.keymanagers {
 		if err := v.provisionGenesis(); err != nil {
