@@ -6,6 +6,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"runtime/debug"
 	"sort"
 	"strings"
 	"sync"
@@ -407,7 +408,7 @@ func runRoot(cmd *cobra.Command, args []string) error {
 func doScenario(childEnv *env.Env, sc scenario.Scenario) (err error) {
 	defer func() {
 		if r := recover(); r != nil {
-			err = fmt.Errorf("root: panic caught running test case: %v", r)
+			err = fmt.Errorf("root: panic caught running test case: %v: %s", r, debug.Stack())
 		}
 	}()
 
@@ -470,7 +471,7 @@ func doScenario(childEnv *env.Env, sc scenario.Scenario) (err error) {
 func doCleanup(childEnv *env.Env) (err error) {
 	defer func() {
 		if r := recover(); r != nil {
-			err = fmt.Errorf("root: panic caught cleaning up test case: %v", r)
+			err = fmt.Errorf("root: panic caught cleaning up test case: %v, %s", r, debug.Stack())
 		}
 	}()
 
