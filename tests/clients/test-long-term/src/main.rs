@@ -1,14 +1,6 @@
-#[macro_use]
-extern crate clap;
-extern crate grpcio;
-extern crate oasis_core_client;
-extern crate oasis_core_runtime;
-extern crate simple_keyvalue_api;
-extern crate tokio;
-
 use std::{sync::Arc, thread, time};
 
-use clap::{App, Arg};
+use clap::{value_t_or_exit, App, Arg};
 use grpcio::EnvBuilder;
 use tokio::runtime::Runtime;
 

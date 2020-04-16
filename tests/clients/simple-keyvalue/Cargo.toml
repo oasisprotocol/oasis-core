@@ -3,6 +3,7 @@ name = "simple-keyvalue-client"
 version = "0.3.0-alpha"
 authors = ["Oasis Labs Inc. <info@oasislabs.com>"]
 description = "Key value test client"
+edition = "2018"
 
 [dependencies]
 oasis-core-client = { path = "../../../client" }

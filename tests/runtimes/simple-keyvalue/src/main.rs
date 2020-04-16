@@ -1,10 +1,3 @@
-extern crate failure;
-extern crate io_context;
-extern crate oasis_core_keymanager_api_common;
-extern crate oasis_core_keymanager_client;
-extern crate oasis_core_runtime;
-extern crate simple_keyvalue_api;
-
 use std::sync::Arc;
 
 use failure::{format_err, Fallible};

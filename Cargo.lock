@@ -1379,7 +1379,9 @@ version = "0.3.0-alpha"
 dependencies = [
  "clap 2.33.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "grpcio 0.4.7 (registry+https://github.com/rust-lang/crates.io-index)",
+ "io-context 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "oasis-core-client 0.3.0-alpha",
+ "oasis-core-keymanager-client 0.3.0-alpha",
  "oasis-core-runtime 0.3.0-alpha",
  "simple-keyvalue-api 0.3.0-alpha",
  "tokio 0.1.22 (registry+https://github.com/rust-lang/crates.io-index)",
