@@ -72,7 +72,7 @@ func (c *Client) CallRemote(ctx context.Context, data []byte) ([]byte, error) {
 			c.logger.Error("no key manager connection for runtime")
 			return backoff.Permanent(ErrKeyManagerNotAvailable)
 		}
-		client := enclaverpc.NewTransportClient(api.Service, conn)
+		client := enclaverpc.NewTransportClient(conn)
 
 		var err error
 		resp, err = client.CallEnclave(ctx, &enclaverpc.CallEnclaveRequest{

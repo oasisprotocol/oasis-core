@@ -32,7 +32,6 @@ import (
 	genesisTestHelpers "github.com/oasislabs/oasis-core/go/genesis/tests"
 	"github.com/oasislabs/oasis-core/go/ias"
 	iasAPI "github.com/oasislabs/oasis-core/go/ias/api"
-	keymanagerAPI "github.com/oasislabs/oasis-core/go/keymanager/api"
 	cmdCommon "github.com/oasislabs/oasis-core/go/oasis-node/cmd/common"
 	"github.com/oasislabs/oasis-core/go/oasis-node/cmd/common/background"
 	"github.com/oasislabs/oasis-core/go/oasis-node/cmd/common/flags"
@@ -45,6 +44,7 @@ import (
 	registryAPI "github.com/oasislabs/oasis-core/go/registry/api"
 	runtimeClient "github.com/oasislabs/oasis-core/go/runtime/client"
 	runtimeClientAPI "github.com/oasislabs/oasis-core/go/runtime/client/api"
+	enclaverpc "github.com/oasislabs/oasis-core/go/runtime/enclaverpc/api"
 	runtimeRegistry "github.com/oasislabs/oasis-core/go/runtime/registry"
 	scheduler "github.com/oasislabs/oasis-core/go/scheduler/api"
 	"github.com/oasislabs/oasis-core/go/sentry"
@@ -698,7 +698,7 @@ func newNode(testNode bool) (*Node, error) { // nolint: gocyclo
 	}
 	node.svcMgr.RegisterCleanupOnly(node.RuntimeClient, "client service")
 	runtimeClientAPI.RegisterService(node.grpcInternal.Server(), node.RuntimeClient)
-	keymanagerAPI.Service.RegisterService(node.grpcInternal.Server(), node.RuntimeClient)
+	enclaverpc.RegisterService(node.grpcInternal.Server(), node.RuntimeClient)
 
 	// Start metric server.
 	if err = metrics.Start(); err != nil {
