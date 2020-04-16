@@ -19,27 +19,25 @@ var (
 
 	// MethodCallEnclave is the CallEnclave method.
 	MethodCallEnclave = ServiceName.NewMethod("CallEnclave", CallEnclaveRequest{}).
-				WithNamespaceExtractor(func(req interface{}) (common.Namespace, error) {
+				WithNamespaceExtractor(func(ctx context.Context, req interface{}) (common.Namespace, error) {
 			r, ok := req.(*CallEnclaveRequest)
 			if !ok {
 				return common.Namespace{}, errInvalidRequestType
 			}
 			return r.RuntimeID, nil
 		}).
-		WithAccessControl(func(req interface{}) bool {
+		WithAccessControl(func(ctx context.Context, req interface{}) (bool, error) {
 			r, ok := req.(*CallEnclaveRequest)
 			if !ok {
-				return false //, errInvalidRequestType
+				return false, errInvalidRequestType
 			}
 
 			endpoint, ok := registeredEndpoints.Load(r.Endpoint)
 			if !ok {
-				return false //, fmt.Errorf("enclaverpc: unsupported endpoint: %s", r.Endpoint)
+				return false, fmt.Errorf("enclaverpc: unsupported endpoint: %s", r.Endpoint)
 			}
 
-			// TODO: Make WithAccessControl accept a context and return an error.
-			ok, _ = endpoint.(Endpoint).AccessControlRequired(context.TODO(), r)
-			return ok
+			return endpoint.(Endpoint).AccessControlRequired(ctx, r)
 		})
 
 	// serviceDesc is the gRPC service descriptor.

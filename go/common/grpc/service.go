@@ -1,6 +1,7 @@
 package grpc
 
 import (
+	"context"
 	"fmt"
 	"reflect"
 	"strings"
@@ -18,8 +19,12 @@ var registeredMethods sync.Map
 // ServiceName is a gRPC service name.
 type ServiceName string
 
-// NamespaceExtractor extracts namespce from a method request.
-type NamespaceExtractor func(req interface{}) (common.Namespace, error)
+// NamespaceExtractorFunc extracts namespce from a method request.
+type NamespaceExtractorFunc func(ctx context.Context, req interface{}) (common.Namespace, error)
+
+// AccessControlFunc is a function that decides whether access control policy lookup is required for
+// a specific request. In case an error is returned the request is aborted.
+type AccessControlFunc func(ctx context.Context, req interface{}) (bool, error)
 
 // ServiceNameFromMethod extract service name from method name.
 func ServiceNameFromMethod(methodName string) ServiceName {
@@ -55,10 +60,9 @@ func (sn ServiceName) NewMethod(name string, requestType interface{}) *MethodDes
 	}
 
 	md := &MethodDesc{
-		short:         name,
-		full:          fmt.Sprintf("/%s/%s", sn, name),
-		requestType:   requestType,
-		accessControl: func(req interface{}) bool { return false },
+		short:       name,
+		full:        fmt.Sprintf("/%s/%s", sn, name),
+		requestType: requestType,
 	}
 
 	if _, isRegistered := registeredMethods.Load(md.FullName()); isRegistered {
@@ -71,13 +75,13 @@ func (sn ServiceName) NewMethod(name string, requestType interface{}) *MethodDes
 
 // WithNamespaceExtractor tells weather the endpoint does have namespace
 // extractor defined.
-func (m *MethodDesc) WithNamespaceExtractor(f NamespaceExtractor) *MethodDesc {
+func (m *MethodDesc) WithNamespaceExtractor(f NamespaceExtractorFunc) *MethodDesc {
 	m.namespaceExtractor = f
 	return m
 }
 
 // WithAccessControl tells weather the endpoint does have access control.
-func (m *MethodDesc) WithAccessControl(f func(req interface{}) bool) *MethodDesc {
+func (m *MethodDesc) WithAccessControl(f AccessControlFunc) *MethodDesc {
 	m.accessControl = f
 	return m
 }
@@ -88,8 +92,8 @@ type MethodDesc struct {
 	full        string
 	requestType interface{}
 
-	accessControl      func(req interface{}) bool
-	namespaceExtractor NamespaceExtractor
+	accessControl      AccessControlFunc
+	namespaceExtractor NamespaceExtractorFunc
 }
 
 // ShortName returns the short method name.
@@ -103,8 +107,11 @@ func (m *MethodDesc) FullName() string {
 }
 
 // IsAccessControlled retruns if method is access controlled.
-func (m *MethodDesc) IsAccessControlled(req interface{}) bool {
-	return m.accessControl(req)
+func (m *MethodDesc) IsAccessControlled(ctx context.Context, req interface{}) (bool, error) {
+	if m.accessControl == nil {
+		return false, nil
+	}
+	return m.accessControl(ctx, req)
 }
 
 // UnmarshalRawMessage unmarshals `cbor.RawMessage` request.
@@ -123,9 +130,9 @@ func (m *MethodDesc) HasNamespaceExtractor() bool {
 }
 
 // ExtractNamespace extracts the from the method request.
-func (m *MethodDesc) ExtractNamespace(req interface{}) (common.Namespace, error) {
+func (m *MethodDesc) ExtractNamespace(ctx context.Context, req interface{}) (common.Namespace, error) {
 	if m.namespaceExtractor == nil {
 		return common.Namespace{}, fmt.Errorf("method not namespaced")
 	}
-	return m.namespaceExtractor(req)
+	return m.namespaceExtractor(ctx, req)
 }

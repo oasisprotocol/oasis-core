@@ -28,93 +28,93 @@ var (
 	MethodSyncIterate = ServiceName.NewMethod("SyncIterate", IterateRequest{})
 	// MethodApply is the Apply method.
 	MethodApply = ServiceName.NewMethod("Apply", ApplyRequest{}).
-			WithNamespaceExtractor(func(req interface{}) (common.Namespace, error) {
+			WithNamespaceExtractor(func(ctx context.Context, req interface{}) (common.Namespace, error) {
 			r, ok := req.(*ApplyRequest)
 			if !ok {
 				return common.Namespace{}, errInvalidRequestType
 			}
 			return r.Namespace, nil
 		}).
-		WithAccessControl(func(req interface{}) bool {
-			return true
+		WithAccessControl(func(ctx context.Context, req interface{}) (bool, error) {
+			return true, nil
 		})
 
 	// MethodApplyBatch is the ApplyBatch method.
 	MethodApplyBatch = ServiceName.NewMethod("ApplyBatch", ApplyBatchRequest{}).
-				WithNamespaceExtractor(func(req interface{}) (common.Namespace, error) {
+				WithNamespaceExtractor(func(ctx context.Context, req interface{}) (common.Namespace, error) {
 			r, ok := req.(*ApplyBatchRequest)
 			if !ok {
 				return common.Namespace{}, errInvalidRequestType
 			}
 			return r.Namespace, nil
 		}).
-		WithAccessControl(func(req interface{}) bool {
-			return true
+		WithAccessControl(func(ctx context.Context, req interface{}) (bool, error) {
+			return true, nil
 		})
 
 	// MethodMerge is the Merge method.
 	MethodMerge = ServiceName.NewMethod("Merge", MergeRequest{}).
-			WithNamespaceExtractor(func(req interface{}) (common.Namespace, error) {
+			WithNamespaceExtractor(func(ctx context.Context, req interface{}) (common.Namespace, error) {
 			r, ok := req.(*MergeRequest)
 			if !ok {
 				return common.Namespace{}, errInvalidRequestType
 			}
 			return r.Namespace, nil
 		}).
-		WithAccessControl(func(req interface{}) bool {
-			return true
+		WithAccessControl(func(ctx context.Context, req interface{}) (bool, error) {
+			return true, nil
 		})
 
 	// MethodMergeBatch is the MergeBatch method.
 	MethodMergeBatch = ServiceName.NewMethod("MergeBatch", MergeBatchRequest{}).
-				WithNamespaceExtractor(func(req interface{}) (common.Namespace, error) {
+				WithNamespaceExtractor(func(ctx context.Context, req interface{}) (common.Namespace, error) {
 			r, ok := req.(*MergeBatchRequest)
 			if !ok {
 				return common.Namespace{}, errInvalidRequestType
 			}
 			return r.Namespace, nil
 		}).
-		WithAccessControl(func(req interface{}) bool {
-			return true
+		WithAccessControl(func(ctx context.Context, req interface{}) (bool, error) {
+			return true, nil
 		})
 
 	// MethodGetDiff is the GetDiff method.
 	MethodGetDiff = ServiceName.NewMethod("GetDiff", GetDiffRequest{}).
-			WithNamespaceExtractor(func(req interface{}) (common.Namespace, error) {
+			WithNamespaceExtractor(func(ctx context.Context, req interface{}) (common.Namespace, error) {
 			r, ok := req.(*GetDiffRequest)
 			if !ok {
 				return common.Namespace{}, errInvalidRequestType
 			}
 			return r.StartRoot.Namespace, nil
 		}).
-		WithAccessControl(func(req interface{}) bool {
-			return true
+		WithAccessControl(func(ctx context.Context, req interface{}) (bool, error) {
+			return true, nil
 		})
 
 	// MethodGetCheckpoints is the GetCheckpoints method.
 	MethodGetCheckpoints = ServiceName.NewMethod("GetCheckpoints", checkpoint.GetCheckpointsRequest{}).
-				WithNamespaceExtractor(func(req interface{}) (common.Namespace, error) {
+				WithNamespaceExtractor(func(ctx context.Context, req interface{}) (common.Namespace, error) {
 			r, ok := req.(*checkpoint.GetCheckpointsRequest)
 			if !ok {
 				return common.Namespace{}, errInvalidRequestType
 			}
 			return r.Namespace, nil
 		}).
-		WithAccessControl(func(req interface{}) bool {
-			return true
+		WithAccessControl(func(ctx context.Context, req interface{}) (bool, error) {
+			return true, nil
 		})
 
 	// MethodGetCheckpointChunk is the GetCheckpointChunk method.
 	MethodGetCheckpointChunk = ServiceName.NewMethod("GetCheckpointChunk", checkpoint.ChunkMetadata{}).
-					WithNamespaceExtractor(func(req interface{}) (common.Namespace, error) {
+					WithNamespaceExtractor(func(ctx context.Context, req interface{}) (common.Namespace, error) {
 			cm, ok := req.(*checkpoint.ChunkMetadata)
 			if !ok {
 				return common.Namespace{}, errInvalidRequestType
 			}
 			return cm.Root.Namespace, nil
 		}).
-		WithAccessControl(func(req interface{}) bool {
-			return true
+		WithAccessControl(func(ctx context.Context, req interface{}) (bool, error) {
+			return true, nil
 		})
 
 	// serviceDesc is the gRPC service descriptor.
