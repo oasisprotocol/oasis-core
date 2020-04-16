@@ -1,11 +1,9 @@
-// Package fixtures provides network configuration fixtures.
 package fixtures
 
 import (
 	"math"
 	"time"
 
-	flag "github.com/spf13/pflag"
 	"github.com/spf13/viper"
 
 	"github.com/oasislabs/oasis-core/go/common"
@@ -17,26 +15,23 @@ import (
 )
 
 const (
-	cfgNodeBinary          = "net.node.binary"
-	cfgRuntimeBinary       = "net.runtime.binary"
-	cfgRuntimeGenesisState = "net.runtime.genesis_state"
-	cfgRuntimeLoader       = "net.runtime.loader"
-	cfgKeymanagerBinary    = "net.keymanager.binary"
-	cfgTEEHardware         = "net.tee_hardware"
-	cfgEpochtimeMock       = "net.epochtime_mock"
-	cfgHaltEpoch           = "net.halt_epoch"
+	cfgEpochtimeMock       = "fixture.default.epochtime_mock"
+	cfgHaltEpoch           = "fixture.default.halt_epoch"
+	cfgKeymanagerBinary    = "fixture.default.keymanager.binary"
+	cfgNodeBinary          = "fixture.default.node.binary"
+	cfgRuntimeBinary       = "fixture.default.runtime.binary"
+	cfgRuntimeGenesisState = "fixture.default.runtime.genesis_state"
+	cfgRuntimeLoader       = "fixture.default.runtime.loader"
+	cfgTEEHardware         = "fixture.default.tee_hardware"
 )
 
 var (
-	// Flags is the command line flags for the fixtures.
-	Flags = flag.NewFlagSet("", flag.ContinueOnError)
-
 	runtimeID    common.Namespace
 	keymanagerID common.Namespace
 )
 
-// NewDefaultFixture returns a default network fixture.
-func NewDefaultFixture() (*oasis.NetworkFixture, error) {
+// newDefaultFixture returns a default network fixture.
+func newDefaultFixture() (*oasis.NetworkFixture, error) {
 	var tee node.TEEHardware
 	err := tee.FromString(viper.GetString(cfgTEEHardware))
 	if err != nil {
@@ -134,15 +129,15 @@ func NewDefaultFixture() (*oasis.NetworkFixture, error) {
 }
 
 func init() {
-	Flags.String(cfgNodeBinary, "oasis-node", "path to the oasis-node binary")
-	Flags.String(cfgRuntimeBinary, "simple-keyvalue", "path to the runtime binary")
-	Flags.String(cfgRuntimeGenesisState, "", "path to the runtime genesis state")
-	Flags.String(cfgRuntimeLoader, "oasis-core-runtime-loader", "path to the runtime loader")
-	Flags.String(cfgKeymanagerBinary, "simple-keymanager", "path to the keymanager runtime")
-	Flags.String(cfgTEEHardware, "", "TEE hardware to use")
-	Flags.Bool(cfgEpochtimeMock, false, "use mock epochtime")
-	Flags.Uint64(cfgHaltEpoch, math.MaxUint64, "halt epoch height")
-	_ = viper.BindPFlags(Flags)
+	DefaultFixtureFlags.Bool(cfgEpochtimeMock, false, "use mock epochtime")
+	DefaultFixtureFlags.Uint64(cfgHaltEpoch, math.MaxUint64, "halt epoch height")
+	DefaultFixtureFlags.String(cfgKeymanagerBinary, "simple-keymanager", "path to the keymanager runtime")
+	DefaultFixtureFlags.String(cfgNodeBinary, "oasis-node", "path to the oasis-node binary")
+	DefaultFixtureFlags.String(cfgRuntimeBinary, "simple-keyvalue", "path to the runtime binary")
+	DefaultFixtureFlags.String(cfgRuntimeGenesisState, "", "path to the runtime genesis state")
+	DefaultFixtureFlags.String(cfgRuntimeLoader, "oasis-core-runtime-loader", "path to the runtime loader")
+	DefaultFixtureFlags.String(cfgTEEHardware, "", "TEE hardware to use")
+	_ = viper.BindPFlags(DefaultFixtureFlags)
 
 	_ = runtimeID.UnmarshalHex("8000000000000000000000000000000000000000000000000000000000000000")
 	_ = keymanagerID.UnmarshalHex("c000000000000000ffffffffffffffffffffffffffffffffffffffffffffffff")

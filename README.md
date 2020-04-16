@@ -274,10 +274,10 @@ runtime, do:
 
 ```
 ./go/oasis-net-runner/oasis-net-runner \
-  --net.node.binary go/oasis-node/oasis-node \
-  --net.runtime.binary target/default/debug/simple-keyvalue \
-  --net.runtime.loader target/default/debug/oasis-core-runtime-loader \
-  --net.keymanager.binary target/default/debug/simple-keymanager
+  --fixture.default.node.binary go/oasis-node/oasis-node \
+  --fixture.default.runtime.binary target/default/debug/simple-keyvalue \
+  --fixture.default.runtime.loader target/default/debug/oasis-core-runtime-loader \
+  --fixture.default.keymanager.binary target/default/debug/simple-keymanager
 ```
 
 Wait for the network to start, there should be messages about nodes being
@@ -321,7 +321,6 @@ slightly different environmental variables set:
 export OASIS_UNSAFE_SKIP_AVR_VERIFY="1"
 export OASIS_UNSAFE_KM_POLICY_KEYS="1"
 export OASIS_UNSAFE_ALLOW_DEBUG_ENCLAVES="1"
-export OASIS_TEE_HARDWARE=intel-sgx
 make
 ```
 
@@ -360,10 +359,11 @@ except the `oasis-net-runner` invocation:
 <!-- markdownlint-disable line-length -->
 ```
 ./go/oasis-net-runner/oasis-net-runner \
-  --net.node.binary go/oasis-node/oasis-node \
-  --net.runtime.binary target/sgx/x86_64-fortanix-unknown-sgx/debug/simple-keyvalue.sgxs \
-  --net.runtime.loader target/default/debug/oasis-core-runtime-loader \
-  --net.keymanager.binary target/sgx/x86_64-fortanix-unknown-sgx/debug/simple-keymanager.sgxs
+  --fixture.default.tee_hardware intel-sgx \
+  --fixture.default.node.binary go/oasis-node/oasis-node \
+  --fixture.default.runtime.binary target/sgx/x86_64-fortanix-unknown-sgx/debug/simple-keyvalue.sgxs \
+  --fixture.default.runtime.loader target/default/debug/oasis-core-runtime-loader \
+  --fixture.default.keymanager.binary target/sgx/x86_64-fortanix-unknown-sgx/debug/simple-keymanager.sgxs
 ```
 <!-- markdownlint-enable line-length -->
 
@@ -389,8 +389,12 @@ To run all tests:
 make test
 ```
 
-Do not forget to set `OASIS_TEE_HARDWARE` flag (see above), if you want to
-execute tests under SGX.
+To execute tests using SGX set the following environmental variable before
+running the tests:
+
+```
+export OASIS_TEE_HARDWARE=intel-sgx
+```
 
 ### Troubleshooting
 
