@@ -22,22 +22,22 @@ var (
 	QueryApp = api.QueryForApp(AppName)
 
 	// KeyTakeEscrow is an ABCI event attribute key for TakeEscrow calls
-	// (value is an app.TakeEscrowEvent).
+	// (value is an api.TakeEscrowEvent).
 	KeyTakeEscrow = stakingState.KeyTakeEscrow
 
 	// KeyReclaimEscrow is an ABCI event attribute key for ReclaimEscrow
-	// calls (value is an app.ReclaimEscrowEvent).
+	// calls (value is an api.ReclaimEscrowEvent).
 	KeyReclaimEscrow = []byte("reclaim_escrow")
 
 	// KeyTransfer is an ABCI event attribute key for Transfers (value is
-	// an app.TransferEvent).
+	// an api.TransferEvent).
 	KeyTransfer = stakingState.KeyTransfer
 
 	// KeyBurn is an ABCI event attribute key for Burn calls (value is
-	// an app.BurnEvent).
+	// an api.BurnEvent).
 	KeyBurn = []byte("burn")
 
 	// KeyAddEscrow is an ABCI event attribute key for AddEscrow calls
-	// (value is an app.EscrowEvent).
+	// (value is an api.AddEscrowEvent).
 	KeyAddEscrow = []byte("add_escrow")
 )

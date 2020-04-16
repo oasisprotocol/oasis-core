@@ -75,9 +75,6 @@ type Tree interface {
 	// The caller is responsible for calling Commit.
 	ApplyWriteLog(ctx context.Context, wl writelog.Iterator) error
 
-	// Size calculates the size of the tree in bytes.
-	Size() uint64
-
 	// CommitKnown checks that the computed root matches a known root and
 	// if so, commits tree updates to the underlying database and returns
 	// the write log.

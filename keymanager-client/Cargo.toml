@@ -7,7 +7,7 @@ edition = "2018"
 [dependencies]
 oasis-core-client = { path = "../client" }
 oasis-core-runtime = { path = "../runtime" }
-oasis-core-keymanager-api = { path = "../keymanager-runtime/api" }
+oasis-core-keymanager-api-common = { path = "../keymanager-api-common" }
 failure = "0.1.5"
 futures = "0.1.25"
 io-context = "0.2.0"

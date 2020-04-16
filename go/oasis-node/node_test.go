@@ -30,6 +30,7 @@ import (
 	registry "github.com/oasislabs/oasis-core/go/registry/api"
 	registryTests "github.com/oasislabs/oasis-core/go/registry/tests"
 	roothashTests "github.com/oasislabs/oasis-core/go/roothash/tests"
+	runtimeClient "github.com/oasislabs/oasis-core/go/runtime/client/api"
 	clientTests "github.com/oasislabs/oasis-core/go/runtime/client/tests"
 	runtimeRegistry "github.com/oasislabs/oasis-core/go/runtime/registry"
 	scheduler "github.com/oasislabs/oasis-core/go/scheduler/api"
@@ -232,8 +233,8 @@ func TestNode(t *testing.T) {
 		// StorageWorker test case
 		{"StorageWorker", testStorageWorker},
 
-		// Client tests also need a functional runtime.
-		{"Client", testClient},
+		// Runtime client tests also need a functional runtime.
+		{"RuntimeClient", testRuntimeClient},
 
 		// Staking requires a registered node that is a validator.
 		{"Staking", testStaking},
@@ -411,6 +412,7 @@ func testSchedulerClient(t *testing.T, node *testNode) {
 	// Create a client backend connected to the local node's internal socket.
 	conn, err := cmnGrpc.Dial("unix:"+filepath.Join(node.dataDir, "internal.sock"), grpc.WithInsecure())
 	require.NoError(t, err, "Dial")
+	defer conn.Close()
 
 	client := scheduler.NewSchedulerClient(conn)
 	schedulerTests.SchedulerImplementationTests(t, "client", client, node.Consensus)
@@ -424,6 +426,7 @@ func testStakingClient(t *testing.T, node *testNode) {
 	// Create a client backend connected to the local node's internal socket.
 	conn, err := cmnGrpc.Dial("unix:"+filepath.Join(node.dataDir, "internal.sock"), grpc.WithInsecure())
 	require.NoError(t, err, "Dial")
+	defer conn.Close()
 
 	client := staking.NewStakingClient(conn)
 	stakingTests.StakingClientImplementationTests(t, client, node.Consensus)
@@ -459,8 +462,22 @@ func testTransactionSchedulerWorker(t *testing.T, node *testNode) {
 	)
 }
 
-func testClient(t *testing.T, node *testNode) {
-	clientTests.ClientImplementationTests(t, node.RuntimeClient, node.runtimeID)
+func testRuntimeClient(t *testing.T, node *testNode) {
+	// Directly.
+	t.Run("Direct", func(t *testing.T) {
+		clientTests.ClientImplementationTests(t, node.RuntimeClient, node.runtimeID)
+	})
+
+	// Over gRPC.
+	t.Run("OverGrpc", func(t *testing.T) {
+		// Create a client backend connected to the local node's internal socket.
+		conn, err := cmnGrpc.Dial("unix:"+filepath.Join(node.dataDir, "internal.sock"), grpc.WithInsecure())
+		require.NoError(t, err, "Dial")
+		defer conn.Close()
+
+		cli := runtimeClient.NewRuntimeClient(conn)
+		clientTests.ClientImplementationTests(t, cli, node.runtimeID)
+	})
 }
 
 func testStorageClientWithNode(t *testing.T, node *testNode) {

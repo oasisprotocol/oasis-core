@@ -14,6 +14,7 @@ import (
 	"github.com/oasislabs/oasis-core/go/common/node"
 	ias "github.com/oasislabs/oasis-core/go/ias/api"
 	"github.com/oasislabs/oasis-core/go/keymanager/api"
+	enclaverpc "github.com/oasislabs/oasis-core/go/runtime/enclaverpc/api"
 	"github.com/oasislabs/oasis-core/go/runtime/localstorage"
 	runtimeRegistry "github.com/oasislabs/oasis-core/go/runtime/registry"
 	workerCommon "github.com/oasislabs/oasis-core/go/worker/common"
@@ -73,7 +74,7 @@ func New(
 		initCh:       make(chan struct{}),
 		commonWorker: commonWorker,
 		backend:      backend,
-		grpcPolicy:   policy.NewDynamicRuntimePolicyChecker(api.Service.ServiceName, commonWorker.GrpcPolicyWatcher),
+		grpcPolicy:   policy.NewDynamicRuntimePolicyChecker(enclaverpc.ServiceName, commonWorker.GrpcPolicyWatcher),
 		enabled:      Enabled(),
 		mayGenerate:  viper.GetBool(CfgMayGenerate),
 	}
@@ -120,7 +121,7 @@ func New(
 		}
 
 		// Register the Keymanager EnclaveRPC transport gRPC service.
-		api.Service.RegisterService(w.commonWorker.Grpc.Server(), w)
+		enclaverpc.RegisterService(w.commonWorker.Grpc.Server(), w)
 	}
 
 	return w, nil

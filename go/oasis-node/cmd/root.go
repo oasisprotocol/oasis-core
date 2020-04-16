@@ -19,7 +19,6 @@ import (
 	"github.com/oasislabs/oasis-core/go/oasis-node/cmd/registry"
 	"github.com/oasislabs/oasis-core/go/oasis-node/cmd/signer"
 	"github.com/oasislabs/oasis-core/go/oasis-node/cmd/stake"
-	"github.com/oasislabs/oasis-core/go/oasis-node/cmd/storage"
 )
 
 var (
@@ -81,7 +80,6 @@ func init() {
 		registry.Register,
 		signer.Register,
 		stake.Register,
-		storage.Register,
 		consensus.Register,
 		node.Register,
 	} {

@@ -4,7 +4,7 @@ use std::{collections::HashMap, sync::Mutex};
 use futures::{future, Future};
 use io_context::Context;
 use oasis_core_client::BoxFuture;
-use oasis_core_keymanager_api::*;
+use oasis_core_keymanager_api_common::*;
 use oasis_core_runtime::common::crypto::signature::Signature;
 
 use super::KeyManagerClient;

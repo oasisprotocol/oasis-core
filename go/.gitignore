@@ -2,8 +2,9 @@
 *~
 
 oasis-node/oasis-node
-oasis-node/integrationrunner/integrationrunner.test
+oasis-node/oasis-node.test
 oasis-test-runner/oasis-test-runner
+oasis-test-runner/oasis-test-runner.test
 oasis-net-runner/oasis-net-runner
 oasis-remote-signer/oasis-remote-signer
 storage/mkvs/interop/mkvs-test-helpers

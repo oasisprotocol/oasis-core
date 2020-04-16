@@ -15,7 +15,7 @@ use oasis_core_runtime::{
         runtime::RuntimeId,
         sgx::avr::EnclaveIdentity,
     },
-    impl_bytes,
+    impl_bytes, runtime_api,
 };
 
 impl_bytes!(ContractId, 32, "A 256-bit contract identifier.");
@@ -173,7 +173,7 @@ impl InputKeyPair {
 pub const PUBLIC_KEY_CONTEXT: [u8; 8] = *b"EkKmPubK";
 
 /// Signed public key.
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub struct SignedPublicKey {
     /// Public key.
     pub key: PublicKey,
@@ -247,4 +247,12 @@ impl Default for TrustedPolicySigners {
             threshold: 9001,
         }
     }
+}
+
+runtime_api! {
+    pub fn get_or_create_keys(RequestIds) -> ContractKey;
+
+    pub fn get_public_key(RequestIds) -> Option<SignedPublicKey>;
+
+    pub fn replicate_master_secret(ReplicateRequest) -> ReplicateResponse;
 }

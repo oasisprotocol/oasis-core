@@ -42,7 +42,8 @@ var (
 	_ syncer.ReadSyncer = (*dummySerialSyncer)(nil)
 )
 
-type NodeDBFactory func() db.NodeDB
+// NodeDBFactory is a function that creates a new node database for the given namespace.
+type NodeDBFactory func(ns common.Namespace) (db.NodeDB, error)
 
 type dummySerialSyncer struct {
 	backing syncer.ReadSyncer
@@ -1018,6 +1019,68 @@ func testHasRoot(t *testing.T, ndb db.NodeDB, factory NodeDBFactory) {
 	require.True(t, ndb.HasRoot(root), "HasRoot should return true for existing root")
 }
 
+func testGetRootsForVersion(t *testing.T, ndb db.NodeDB, factory NodeDBFactory) {
+	ctx := context.Background()
+
+	// Create two roots in version 10.
+	tree := New(nil, ndb)
+	err := tree.Insert(ctx, []byte("foo"), []byte("bar"))
+	require.NoError(t, err, "Insert")
+	_, rootHash1, err := tree.Commit(ctx, testNs, 10)
+	require.NoError(t, err, "Commit")
+
+	tree = New(nil, ndb)
+	err = tree.Insert(ctx, []byte("bar"), []byte("foo"))
+	require.NoError(t, err, "Insert")
+	_, rootHash2, err := tree.Commit(ctx, testNs, 10)
+	require.NoError(t, err, "Commit")
+
+	// Finalize version 10.
+	err = ndb.Finalize(ctx, 10, []hash.Hash{rootHash1, rootHash2})
+	require.NoError(t, err, "Finalize")
+
+	roots, err := ndb.GetRootsForVersion(ctx, 10)
+	require.NoError(t, err, "GetRootsForVersion")
+	require.Len(t, roots, 2, "GetRootsForVersion should return the correct number of roots")
+	require.Contains(t, roots, rootHash1, "GetRootsForVersion should return the correct roots")
+	require.Contains(t, roots, rootHash2, "GetRootsForVersion should return the correct roots")
+
+	roots, err = ndb.GetRootsForVersion(ctx, 1)
+	require.NoError(t, err, "GetRootsForVersion")
+	require.Len(t, roots, 0, "GetRootsForVersion should return no roots for eaerlier versions")
+
+	roots, err = ndb.GetRootsForVersion(ctx, 11)
+	require.NoError(t, err, "GetRootsForVersion")
+	require.Len(t, roots, 0, "GetRootsForVersion should return no roots for later versions")
+}
+
+func testSize(t *testing.T, ndb db.NodeDB, factory NodeDBFactory) {
+	ctx := context.Background()
+
+	size, err := ndb.Size()
+	require.NoError(t, err, "Size")
+
+	// Put something in the database.
+	tree := New(nil, ndb)
+	err = tree.Insert(ctx, []byte("foo"), []byte("bar"))
+	require.NoError(t, err, "Insert")
+	_, rootHash1, err := tree.Commit(ctx, testNs, 0)
+	require.NoError(t, err, "Commit")
+	err = ndb.Finalize(ctx, 0, []hash.Hash{rootHash1})
+	require.NoError(t, err, "Finalize")
+
+	// Reopen database to force flush.
+	ndb.Close()
+	ndb, err = factory(testNs)
+	require.NoError(t, err, "ndb.New")
+	defer ndb.Close()
+
+	// Make sure size reports something that makes sense.
+	newSize, err := ndb.Size()
+	require.NoError(t, err, "Size")
+	require.True(t, newSize > size, "Size should be greater than before")
+}
+
 func testMergeWriteLog(t *testing.T, ndb db.NodeDB, factory NodeDBFactory) {
 	ctx := context.Background()
 
@@ -1161,7 +1224,8 @@ func testPruneBasic(t *testing.T, ndb db.NodeDB, factory NodeDBFactory) {
 
 	// Reopen database to force compaction.
 	ndb.Close()
-	ndb = factory()
+	ndb, err = factory(testNs)
+	require.NoError(t, err, "ndb.New")
 	defer ndb.Close()
 
 	earliestVersion, err = ndb.GetEarliestVersion(ctx)
@@ -1222,7 +1286,8 @@ func testPruneManyVersions(t *testing.T, ndb db.NodeDB, factory NodeDBFactory) {
 
 	// Reopen database to force compaction.
 	ndb.Close()
-	ndb = factory()
+	ndb, err := factory(testNs)
+	require.NoError(t, err, "ndb.New")
 	defer ndb.Close()
 
 	// Check that the latest version has all the keys.
@@ -1319,7 +1384,8 @@ func testPruneForkedRoots(t *testing.T, ndb db.NodeDB, factory NodeDBFactory) {
 
 	// Reopen database to force compaction.
 	ndb.Close()
-	ndb = factory()
+	ndb, err = factory(testNs)
+	require.NoError(t, err, "ndb.New")
 	defer ndb.Close()
 
 	// Make sure all the keys are there.
@@ -1681,7 +1747,8 @@ func testPruneLoneRoots(t *testing.T, ndb db.NodeDB, factory NodeDBFactory) {
 
 	// Reopen database to force compaction.
 	ndb.Close()
-	ndb = factory()
+	ndb, err = factory(testNs)
+	require.NoError(t, err, "ndb.New")
 	defer ndb.Close()
 
 	// Check that roots in version 0 and 2 are still there.
@@ -1782,6 +1849,19 @@ func testErrors(t *testing.T, ndb db.NodeDB, factory NodeDBFactory) {
 	_, _, err = tree.Commit(ctx, badNs, 0)
 	require.Error(t, err, "Commit should fail for bad namespace")
 	require.Equal(t, db.ErrBadNamespace, err)
+
+	// Using the WithoutWriteLog option together with a remote read syncer should panic.
+	require.Panics(t, func() { New(tree, nil, WithoutWriteLog()) })
+}
+
+func testIncompatibleDB(t *testing.T, ndb db.NodeDB, factory NodeDBFactory) {
+	// Database has been created with namespace testNs.
+	ndb.Close()
+
+	// Try to open the same database with a different namespace.
+	testNs2 := common.NewTestNamespaceFromSeed([]byte("oasis mkvs test ns 2"), 0)
+	_, err := factory(testNs2)
+	require.Error(t, err, "using a different namespace should fail")
 }
 
 func testSpecialCaseFromJSON(t *testing.T, ndb db.NodeDB, fixture string) {
@@ -1935,6 +2015,8 @@ func testBackend(
 		{"OnCommitHooks", testOnCommitHooks},
 		{"MergeWriteLog", testMergeWriteLog},
 		{"HasRoot", testHasRoot},
+		{"GetRootsForVersion", testGetRootsForVersion},
+		{"Size", testSize},
 		{"PruneBasic", testPruneBasic},
 		{"PruneManyVersions", testPruneManyVersions},
 		{"PruneLoneRoots", testPruneLoneRoots},
@@ -1948,6 +2030,7 @@ func testBackend(
 		{"SpecialCase5", testSpecialCase5},
 		{"LargeUpdates", testLargeUpdates},
 		{"Errors", testErrors},
+		{"IncompatibleDB", testIncompatibleDB},
 	}
 
 	skipMap := make(map[string]bool, len(skipTests))
@@ -1962,7 +2045,8 @@ func testBackend(
 			}
 
 			factory, cleanup := initBackend(t)
-			backend := factory()
+			backend, err := factory(testNs)
+			require.NoError(t, err, "ndb.New")
 			defer cleanup()
 			tc.fn(t, backend, factory)
 		})
@@ -1976,15 +2060,13 @@ func TestBadgerBackend(t *testing.T) {
 		require.NoError(t, err, "TempDir")
 
 		// Create a Badger-backed Node DB factory.
-		factory := func() db.NodeDB {
-			ndb, err := badgerDb.New(&db.Config{
+		factory := func(ns common.Namespace) (db.NodeDB, error) {
+			return badgerDb.New(&db.Config{
 				DB:           dir,
 				NoFsync:      true,
-				Namespace:    testNs,
+				Namespace:    ns,
 				MaxCacheSize: 16 * 1024 * 1024,
 			})
-			require.NoError(t, err, "New")
-			return ndb
 		}
 
 		cleanup := func() {

@@ -166,6 +166,20 @@ func testTransfer(t *testing.T, backend api.Backend, consensus consensusAPI.Back
 		require.Equal(SrcID, ev.From, "Event: from")
 		require.Equal(DestID, ev.To, "Event: to")
 		require.Equal(xfer.Tokens, ev.Tokens, "Event: tokens")
+
+		// Make sure that GetEvents also returns the transfer event.
+		evts, grr := backend.GetEvents(context.Background(), consensusAPI.HeightLatest)
+		require.NoError(grr, "GetEvents")
+		var gotIt bool
+		for _, evt := range evts {
+			if evt.TransferEvent != nil {
+				if evt.TransferEvent.From.Equal(ev.From) && evt.TransferEvent.To.Equal(ev.To) && evt.TransferEvent.Tokens.Cmp(&ev.Tokens) == 0 {
+					gotIt = true
+					break
+				}
+			}
+		}
+		require.EqualValues(true, gotIt, "GetEvents should return transfer event")
 	case <-time.After(recvTimeout):
 		t.Fatalf("failed to receive transfer event")
 	}
@@ -256,6 +270,20 @@ func testBurn(t *testing.T, backend api.Backend, consensus consensusAPI.Backend)
 	case ev := <-ch:
 		require.Equal(SrcID, ev.Owner, "Event: owner")
 		require.Equal(burn.Tokens, ev.Tokens, "Event: tokens")
+
+		// Make sure that GetEvents also returns the burn event.
+		evts, grr := backend.GetEvents(context.Background(), consensusAPI.HeightLatest)
+		require.NoError(grr, "GetEvents")
+		var gotIt bool
+		for _, evt := range evts {
+			if evt.BurnEvent != nil {
+				if evt.BurnEvent.Owner.Equal(ev.Owner) && evt.BurnEvent.Tokens.Cmp(&ev.Tokens) == 0 {
+					gotIt = true
+					break
+				}
+			}
+		}
+		require.EqualValues(true, gotIt, "GetEvents should return burn event")
 	case <-time.After(recvTimeout):
 		t.Fatalf("failed to receive burn event")
 	}
@@ -280,7 +308,7 @@ func testSelfEscrow(t *testing.T, backend api.Backend, consensus consensusAPI.Ba
 	testEscrowEx(t, backend, consensus, SrcID, srcSigner, SrcID)
 }
 
-func testEscrowEx(
+func testEscrowEx( // nolint: gocyclo
 	t *testing.T,
 	backend api.Backend,
 	consensus consensusAPI.Backend,
@@ -326,6 +354,20 @@ func testEscrowEx(
 		require.Equal(srcID, ev.Owner, "Event: owner")
 		require.Equal(dstID, ev.Escrow, "Event: escrow")
 		require.Equal(escrow.Tokens, ev.Tokens, "Event: tokens")
+
+		// Make sure that GetEvents also returns the add escrow event.
+		evts, grr := backend.GetEvents(context.Background(), consensusAPI.HeightLatest)
+		require.NoError(grr, "GetEvents")
+		var gotIt bool
+		for _, evt := range evts {
+			if evt.EscrowEvent != nil && evt.EscrowEvent.Add != nil {
+				if evt.EscrowEvent.Add.Owner.Equal(ev.Owner) && evt.EscrowEvent.Add.Escrow.Equal(ev.Escrow) && evt.EscrowEvent.Add.Tokens.Cmp(&ev.Tokens) == 0 {
+					gotIt = true
+					break
+				}
+			}
+		}
+		require.EqualValues(true, gotIt, "GetEvents should return add escrow event")
 	case <-time.After(recvTimeout):
 		t.Fatalf("failed to receive escrow event")
 	}
@@ -374,6 +416,20 @@ func testEscrowEx(
 		require.Equal(srcID, ev.Owner, "Event: owner")
 		require.Equal(dstID, ev.Escrow, "Event: escrow")
 		require.Equal(escrow.Tokens, ev.Tokens, "Event: tokens")
+
+		// Make sure that GetEvents also returns the add escrow event.
+		evts, grr := backend.GetEvents(context.Background(), consensusAPI.HeightLatest)
+		require.NoError(grr, "GetEvents")
+		var gotIt bool
+		for _, evt := range evts {
+			if evt.EscrowEvent != nil && evt.EscrowEvent.Add != nil {
+				if evt.EscrowEvent.Add.Owner.Equal(ev.Owner) && evt.EscrowEvent.Add.Escrow.Equal(ev.Escrow) && evt.EscrowEvent.Add.Tokens.Cmp(&ev.Tokens) == 0 {
+					gotIt = true
+					break
+				}
+			}
+		}
+		require.EqualValues(true, gotIt, "GetEvents should return add escrow event")
 	case <-time.After(recvTimeout):
 		t.Fatalf("failed to receive escrow event")
 	}
@@ -436,6 +492,20 @@ func testEscrowEx(
 		require.Equal(srcID, ev.Owner, "Event: owner")
 		require.Equal(dstID, ev.Escrow, "Event: escrow")
 		require.Equal(&totalEscrowed, &ev.Tokens, "Event: tokens")
+
+		// Make sure that GetEvents also returns the reclaim escrow event.
+		evts, grr := backend.GetEvents(context.Background(), consensusAPI.HeightLatest)
+		require.NoError(grr, "GetEvents")
+		var gotIt bool
+		for _, evt := range evts {
+			if evt.EscrowEvent != nil && evt.EscrowEvent.Reclaim != nil {
+				if evt.EscrowEvent.Reclaim.Owner.Equal(ev.Owner) && evt.EscrowEvent.Reclaim.Escrow.Equal(ev.Escrow) && evt.EscrowEvent.Reclaim.Tokens.Cmp(&ev.Tokens) == 0 {
+					gotIt = true
+					break
+				}
+			}
+		}
+		require.EqualValues(true, gotIt, "GetEvents should return reclaim escrow event")
 	case <-time.After(recvTimeout):
 		t.Fatalf("failed to receive reclaim escrow event")
 	}

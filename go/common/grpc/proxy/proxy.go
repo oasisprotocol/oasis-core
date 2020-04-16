@@ -65,13 +65,16 @@ func (p *proxy) handler(srv interface{}, stream grpc.ServerStream) error {
 	}
 	sub, err := policy.SubjectFromGRPCContext(upstreamCtx)
 	if err != nil {
-		p.logger.Error("failed extracting peer from context",
+		// Connections without TLS client authentication are allowed as there may be methods which
+		// do not require access control. We still need to pass an (empty) forwarded subject as
+		// otherwise the connection may be treated as not forwarded through the proxy.
+		sub = ""
+
+		p.logger.Debug("failed extracting peer from context (unauthenticated connection)",
 			"err", err,
 		)
-		// XXX: failing here means proxy will only work with TLS Authenticated
-		// connections but that is fine.
-		return status.Errorf(codes.Internal, "failed extracting peer from context")
 	}
+
 	// Pass subject header upstream.
 	upstreamCtx = metadata.AppendToOutgoingContext(upstreamCtx, policy.ForwardedSubjectMD, sub)
 

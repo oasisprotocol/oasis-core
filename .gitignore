@@ -21,3 +21,7 @@ hfuzz_workspace
 
 # Required for goreleaser to properly generate an archive.
 /oasis-core-runtime-loader
+
+# Coverage files.
+coverage-e2e-*.txt
+

@@ -232,6 +232,12 @@ func (q *queries) doRegistryQueries(ctx context.Context, rng *rand.Rand, height 
 		}
 	}
 
+	// Events.
+	_, err = q.registry.GetEvents(ctx, height)
+	if err != nil {
+		return fmt.Errorf("GetEvents error at height %d: %w", height, err)
+	}
+
 	q.logger.Debug("Done registry queries",
 		"height", height,
 	)
@@ -314,6 +320,12 @@ func (q *queries) doStakingQueries(ctx context.Context, rng *rand.Rand, height i
 			"accounts", len(accounts),
 		)
 		return fmt.Errorf("staking total supply mismatch")
+	}
+
+	// Events.
+	_, grr := q.staking.GetEvents(ctx, height)
+	if grr != nil {
+		return fmt.Errorf("GetEvents error at height %d: %w", height, grr)
 	}
 
 	q.logger.Debug("Done staking queries",

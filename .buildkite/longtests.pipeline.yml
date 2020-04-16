@@ -45,10 +45,10 @@ steps:
       # Upload the built artifacts.
       - cd /workdir/go/oasis-node
       - buildkite-agent artifact upload oasis-node
-      - cd /workdir/go/oasis-node/integrationrunner
-      - buildkite-agent artifact upload integrationrunner.test
+      - buildkite-agent artifact upload oasis-node.test
       - cd /workdir/go/oasis-test-runner
       - buildkite-agent artifact upload oasis-test-runner
+      - buildkite-agent artifact upload oasis-test-runner.test
       - cd /workdir/go/oasis-net-runner
       - buildkite-agent artifact upload oasis-net-runner
       - cd /workdir/go/oasis-remote-signer
@@ -79,15 +79,15 @@ steps:
 
   - label: Build key manager runtime
     command:
-      - .buildkite/rust/build_runtime.sh keymanager-runtime
+      - .buildkite/rust/build_runtime.sh tests/runtimes/simple-keymanager
       - .buildkite/rust/build_runtime.sh tests/runtimes/simple-keyvalue
 
       # Upload the built artifacts.
       - cd /var/tmp/artifacts/sgx/x86_64-fortanix-unknown-sgx/debug
-      - buildkite-agent artifact upload oasis-core-keymanager-runtime.sgxs
+      - buildkite-agent artifact upload simple-keymanager.sgxs
       - buildkite-agent artifact upload simple-keyvalue.sgxs
       - cd /var/tmp/artifacts/default/debug
-      - buildkite-agent artifact upload oasis-core-keymanager-runtime
+      - buildkite-agent artifact upload simple-keymanager
       - buildkite-agent artifact upload simple-keyvalue
     agents:
       buildkite_agent_size: large

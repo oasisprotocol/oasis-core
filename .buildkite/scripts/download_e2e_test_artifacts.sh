@@ -14,14 +14,15 @@ source .buildkite/scripts/common.sh
 
 # Oasis node, test runner, remote signer and runtime loader.
 download_artifact oasis-node go/oasis-node 755
-download_artifact integrationrunner.test go/oasis-node/integrationrunner 755
+download_artifact oasis-node.test go/oasis-node 755
 download_artifact oasis-test-runner go/oasis-test-runner 755
+download_artifact oasis-test-runner.test go/oasis-test-runner 755
 download_artifact oasis-remote-signer go/oasis-remote-signer 755
 download_artifact oasis-core-runtime-loader target/default/debug 755
 
-# Key manager runtime.
-download_artifact oasis-core-keymanager-runtime.sgxs target/sgx/x86_64-fortanix-unknown-sgx/debug 755
-download_artifact oasis-core-keymanager-runtime target/default/debug 755
+# Simple Key manager runtime.
+download_artifact simple-keymanager.sgxs target/sgx/x86_64-fortanix-unknown-sgx/debug 755
+download_artifact simple-keymanager target/default/debug 755
 
 # Test simple-keyvalue runtime and clients.
 download_artifact test-long-term-client target/default/debug 755
