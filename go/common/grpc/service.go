@@ -76,7 +76,7 @@ func (m *MethodDesc) WithNamespaceExtractor(f NamespaceExtractor) *MethodDesc {
 	return m
 }
 
-// WithAccessControl tells weather the endpoint does have access controll.
+// WithAccessControl tells weather the endpoint does have access control.
 func (m *MethodDesc) WithAccessControl(f func(req interface{}) bool) *MethodDesc {
 	m.accessControl = f
 	return m

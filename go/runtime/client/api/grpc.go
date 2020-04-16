@@ -11,7 +11,6 @@ import (
 	"github.com/oasislabs/oasis-core/go/common/errors"
 	cmnGrpc "github.com/oasislabs/oasis-core/go/common/grpc"
 	"github.com/oasislabs/oasis-core/go/common/pubsub"
-	keymanager "github.com/oasislabs/oasis-core/go/keymanager/api"
 	roothash "github.com/oasislabs/oasis-core/go/roothash/api"
 	"github.com/oasislabs/oasis-core/go/roothash/api/block"
 	enclaverpc "github.com/oasislabs/oasis-core/go/runtime/enclaverpc/api"
@@ -527,9 +526,7 @@ func (c *runtimeClient) Cleanup() {
 // NewRuntimeClient creates a new gRPC runtime client service.
 func NewRuntimeClient(c *grpc.ClientConn) RuntimeClient {
 	return &runtimeClient{
-		/// XXX: keymanager is the only one that currently implements the gRPC client.
-		// In future, the client here should depend on the type of the node connecting to.
-		Transport: enclaverpc.NewTransportClient(keymanager.Service, c),
+		Transport: enclaverpc.NewTransportClient(c),
 		conn:      c,
 	}
 }
