@@ -12,6 +12,60 @@ The format is inspired by [Keep a Changelog].
 
 <!-- TOWNCRIER -->
 
+## 20.5.1 (2020-04-16)
+
+### Removals and Breaking changes
+
+- go/runtime/enclaverpc: Refactor gRPC endpoint routing
+  ([#2844](https://github.com/oasislabs/oasis-core/issues/2844))
+
+  Previously each endpoint required its own gRPC service. But since all
+  EnclaveRPC requests already include an "endpoint" field, it is better to use
+  that for routing requests.
+
+  This commit adds a new enclaverpc.Endpoint interface that is used as an
+  endpoint descriptor. All endpoints must be registered in advance (e.g.,
+  during init). It also changes the key manager EnclaveRPC support to use the
+  new API.
+
+### Features
+
+- Add `GetEvents` to backends
+  ([#2778](https://github.com/oasislabs/oasis-core/issues/2778))
+
+  The new `GetEvents` call returns all events at a specific height,
+  without having to watch for them using the `Watch*` methods.
+  It is currently implemented for the registry, roothash, and staking
+  backends.
+
+### Bug Fixes
+
+- go/oasis-node/cmd/ias: Fix WatchRuntimes retry
+  ([#2832](https://github.com/oasislabs/oasis-core/issues/2832))
+
+  Previously the IAS proxy could incorrectly panic during shutdown when the
+  context was cancelled.
+
+### Internal changes
+
+- go: Refactor E2E coverage integration test wrapper
+  ([#2832](https://github.com/oasislabs/oasis-core/issues/2832))
+
+  This makes it possible to easily have E2E coverage instrumented binaries for
+  things other than oasis-node.
+
+- go/oasis-node: Move storage benchmark subcommand under debug
+  ([#2832](https://github.com/oasislabs/oasis-core/issues/2832))
+
+- keymanager-runtime: replace with test/simple-keymanager
+  ([#2837](https://github.com/oasislabs/oasis-core/issues/2837))
+
+  Common keymanager initalization code is extracted into the keymanager-lib
+  crate. This enables for the actual key manager implementation to only
+  provide a set of key manager policy signers.
+  Aditionally the `keymanager-runtime` crate is removed and replaced with
+  a test `simple-keymanager` runtime that is used in E2E tests.
+
 ## 20.5 (2020-04-10)
 
 ### Process
