@@ -80,6 +80,11 @@ func (rr *roundRobinNodeSelectionPolicy) Pick() signature.PublicKey {
 }
 
 func (rr *roundRobinNodeSelectionPolicy) UpdatePolicy(feedback NodeSelectionFeedback) {
+	if feedback.Bad == nil {
+		// Don't rotate nodes if the feedback was good.
+		return
+	}
+
 	rr.Lock()
 	defer rr.Unlock()
 
@@ -87,7 +92,7 @@ func (rr *roundRobinNodeSelectionPolicy) UpdatePolicy(feedback NodeSelectionFeed
 		return
 	}
 
-	// The round-robin policy ignores any feedback.
+	// The round-robin policy ignores any bad feedback.
 	rr.index = (rr.index + 1) % len(rr.nodes)
 }
 
@@ -233,7 +238,12 @@ func (cc *committeeClient) GetConnection() *grpc.ClientConn {
 	}
 
 	id := cc.nodeSelectionPolicy.Pick()
-	return cc.conns[id].conn
+	c := cc.conns[id]
+	if c == nil {
+		// Node selection policy may not have been updated yet.
+		return nil
+	}
+	return c.conn
 }
 
 func (cc *committeeClient) UpdateNodeSelectionPolicy(feedback NodeSelectionFeedback) {
