@@ -48,11 +48,15 @@ func GRPCAuthenticationFunction(policy RuntimePolicyChecker) auth.Authentication
 			return status.Errorf(codes.PermissionDenied, "invalid request method")
 		}
 
-		if !md.IsAccessControlled(req) {
+		ac, err := md.IsAccessControlled(ctx, req)
+		if err != nil {
+			return status.Errorf(codes.PermissionDenied, "internal error: %s", err.Error())
+		}
+		if !ac {
 			return nil
 		}
 
-		namespace, err := md.ExtractNamespace(req)
+		namespace, err := md.ExtractNamespace(ctx, req)
 		if err != nil {
 			return status.Errorf(codes.PermissionDenied, "invalid request namespace")
 		}

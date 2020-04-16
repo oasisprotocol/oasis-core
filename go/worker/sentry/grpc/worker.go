@@ -106,11 +106,6 @@ func (g *Worker) authFunction() auth.AuthenticationFunction {
 			return status.Errorf(codes.PermissionDenied, "not allowed")
 		}
 
-		if !methodDesc.IsAccessControlled(req) {
-			// No access controll, allow.
-			return nil
-		}
-
 		// Proxy defers unmarshaling.
 		rawCBOR, ok := req.(*cbor.RawMessage)
 		if !ok {
@@ -131,8 +126,21 @@ func (g *Worker) authFunction() auth.AuthenticationFunction {
 			return status.Errorf(codes.PermissionDenied, "invalid request")
 		}
 
+		// Check whether access control checeks must be done for this request.
+		ac, err := methodDesc.IsAccessControlled(ctx, request)
+		if err != nil {
+			g.logger.Error("failed to check if request is access controlled",
+				"err", err,
+			)
+			return status.Errorf(codes.PermissionDenied, "internal error")
+		}
+		if !ac {
+			// No access control, allow.
+			return nil
+		}
+
 		// Extract namespace.
-		namespace, err := methodDesc.ExtractNamespace(request)
+		namespace, err := methodDesc.ExtractNamespace(ctx, request)
 		if err != nil {
 			g.logger.Error("error extracting namespace from request",
 				"err", err,

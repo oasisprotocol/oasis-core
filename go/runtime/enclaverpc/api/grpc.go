@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"fmt"
+	"sync"
 
 	"google.golang.org/grpc"
 
@@ -10,25 +11,54 @@ import (
 	cmnGrpc "github.com/oasislabs/oasis-core/go/common/grpc"
 )
 
-var errInvalidRequestType = fmt.Errorf("invalid request type")
+var (
+	errInvalidRequestType = fmt.Errorf("invalid request type")
 
-const (
-	serviceNameBase = "EnclaveRPC"
+	// ServiceName is the gRPC service name.
+	ServiceName = cmnGrpc.NewServiceName("EnclaveRPC")
 
-	methodCallEnclaveName = "CallEnclave"
+	// MethodCallEnclave is the CallEnclave method.
+	MethodCallEnclave = ServiceName.NewMethod("CallEnclave", CallEnclaveRequest{}).
+				WithNamespaceExtractor(func(ctx context.Context, req interface{}) (common.Namespace, error) {
+			r, ok := req.(*CallEnclaveRequest)
+			if !ok {
+				return common.Namespace{}, errInvalidRequestType
+			}
+			return r.RuntimeID, nil
+		}).
+		WithAccessControl(func(ctx context.Context, req interface{}) (bool, error) {
+			r, ok := req.(*CallEnclaveRequest)
+			if !ok {
+				return false, errInvalidRequestType
+			}
+
+			endpoint, ok := registeredEndpoints.Load(r.Endpoint)
+			if !ok {
+				return false, fmt.Errorf("enclaverpc: unsupported endpoint: %s", r.Endpoint)
+			}
+
+			return endpoint.(Endpoint).AccessControlRequired(ctx, r)
+		})
+
+	// serviceDesc is the gRPC service descriptor.
+	serviceDesc = grpc.ServiceDesc{
+		ServiceName: string(ServiceName),
+		HandlerType: (*Transport)(nil),
+		Methods: []grpc.MethodDesc{
+			{
+				MethodName: MethodCallEnclave.ShortName(),
+				Handler:    handlerCallEnclave,
+			},
+		},
+		Streams: []grpc.StreamDesc{},
+	}
+
+	// registeredEndpoints is a map of registered EnclaveRPC endpoints. It maps endpoint names
+	// to instances of the Endpoint interface.
+	registeredEndpoints sync.Map
 )
 
-// Service is the enclave RPC gRPC service.
-type Service struct {
-	// ServiceName is the EnclaveRPC service name.
-	ServiceName cmnGrpc.ServiceName
-	// MethodCallEnclave is the EnclaveRPC CallEnclave method descriptor.
-	MethodCallEnclave *cmnGrpc.MethodDesc
-	// ServiceDesc is the EnclaveRPC gRPC service descriptor.
-	ServiceDesc grpc.ServiceDesc
-}
-
-func (e *Service) handlerCallEnclave( // nolint: golint
+func handlerCallEnclave( // nolint: golint
 	srv interface{},
 	ctx context.Context,
 	dec func(interface{}) error,
@@ -43,7 +73,7 @@ func (e *Service) handlerCallEnclave( // nolint: golint
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: e.MethodCallEnclave.FullName(),
+		FullMethod: MethodCallEnclave.FullName(),
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(Transport).CallEnclave(ctx, req.(*CallEnclaveRequest))
@@ -52,59 +82,31 @@ func (e *Service) handlerCallEnclave( // nolint: golint
 }
 
 // RegisterService registers a new EnclaveRPC transport service with the given gRPC server.
-func (e *Service) RegisterService(server *grpc.Server, service Transport) {
-	server.RegisterService(&e.ServiceDesc, service)
+func RegisterService(server *grpc.Server, service Transport) {
+	server.RegisterService(&serviceDesc, service)
 }
 
-// NewService creates a new EnclaveRPC gRPC service.
-func NewService(serviceNamePrefix string, accessControl func(req interface{}) bool) *Service {
-	serviceName := cmnGrpc.NewServiceName(serviceNamePrefix + "." + serviceNameBase)
-
-	methodCallEnclave := serviceName.NewMethod(methodCallEnclaveName, CallEnclaveRequest{}).
-		WithNamespaceExtractor(func(req interface{}) (common.Namespace, error) {
-			r, ok := req.(*CallEnclaveRequest)
-			if !ok {
-				return common.Namespace{}, errInvalidRequestType
-			}
-			return r.RuntimeID, nil
-		}).
-		WithAccessControl(accessControl)
-
-	erpc := &Service{
-		ServiceName:       serviceName,
-		MethodCallEnclave: methodCallEnclave,
-		ServiceDesc: grpc.ServiceDesc{
-			ServiceName: string(serviceName),
-			HandlerType: (*Transport)(nil),
-			Methods:     []grpc.MethodDesc{},
-			Streams:     []grpc.StreamDesc{},
-		},
+// NewEndpoint registers a new EnclaveRPC endpoint.
+func NewEndpoint(name string, endpoint Endpoint) {
+	if _, isRegistered := registeredEndpoints.Load(name); isRegistered {
+		panic(fmt.Errorf("enclaverpc: endpoint already registered: %s", name))
 	}
-
-	erpc.ServiceDesc.Methods = []grpc.MethodDesc{
-		{
-			MethodName: methodCallEnclave.ShortName(),
-			Handler:    erpc.handlerCallEnclave,
-		},
-	}
-
-	return erpc
+	registeredEndpoints.Store(name, endpoint)
 }
 
 type transportClient struct {
-	conn    *grpc.ClientConn
-	service *Service
+	conn *grpc.ClientConn
 }
 
 func (c *transportClient) CallEnclave(ctx context.Context, request *CallEnclaveRequest) ([]byte, error) {
 	var rsp []byte
-	if err := c.conn.Invoke(ctx, c.service.MethodCallEnclave.FullName(), request, &rsp); err != nil {
+	if err := c.conn.Invoke(ctx, MethodCallEnclave.FullName(), request, &rsp); err != nil {
 		return nil, err
 	}
 	return rsp, nil
 }
 
 // NewTransportClient creates a new EnclaveRPC gRPC transport client service.
-func NewTransportClient(service *Service, c *grpc.ClientConn) Transport {
-	return &transportClient{c, service}
+func NewTransportClient(c *grpc.ClientConn) Transport {
+	return &transportClient{c}
 }

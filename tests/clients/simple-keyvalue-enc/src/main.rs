@@ -1,19 +1,13 @@
-#[macro_use]
-extern crate clap;
-extern crate grpcio;
-extern crate oasis_core_client;
-extern crate oasis_core_runtime;
-extern crate simple_keyvalue_api;
-extern crate tokio;
-
 use std::sync::Arc;
 
-use clap::{App, Arg};
+use clap::{value_t_or_exit, App, Arg};
 use grpcio::EnvBuilder;
+use io_context::Context;
 use tokio::runtime::Runtime;
 
 use oasis_core_client::{create_txn_api_client, Node, TxnClient};
-use oasis_core_runtime::common::runtime::RuntimeId;
+use oasis_core_keymanager_client::{self, ContractId, KeyManagerClient};
+use oasis_core_runtime::common::{crypto::hash::Hash, runtime::RuntimeId};
 use simple_keyvalue_api::{with_api, KeyValue};
 
 with_api! {
@@ -89,6 +83,29 @@ fn main() {
         None => println!("Key not found anymore"),
     }
     assert_eq!(r, None, "key should not exist anymore");
+
+    // Test that key manager connection via EnclaveRPC works.
+    println!("Testing key manager connection via gRPC transport...");
+    // TODO: Key manager MRENCLAVE.
+    let km_client = Arc::new(oasis_core_keymanager_client::RemoteClient::new_grpc(
+        runtime_id,
+        None,
+        node.channel(),
+        1024,
+    ));
+
+    // Request public key for some "contract id".
+    let contract_id = ContractId::from(Hash::empty_hash().as_ref());
+    let r = rt
+        .block_on(km_client.get_public_key(Context::background(), contract_id))
+        .unwrap();
+    assert!(r.is_some(), "get_public_key should return a public key");
+    let pkey = r;
+
+    let r = rt
+        .block_on(km_client.get_public_key(Context::background(), contract_id))
+        .unwrap();
+    assert_eq!(r, pkey, "get_public_key should return the same public key");
 
     println!("Simple key/value client finished.");
 }

@@ -173,7 +173,7 @@ impl InputKeyPair {
 pub const PUBLIC_KEY_CONTEXT: [u8; 8] = *b"EkKmPubK";
 
 /// Signed public key.
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub struct SignedPublicKey {
     /// Public key.
     pub key: PublicKey,

@@ -97,6 +97,9 @@ impl RemoteClient {
         #[cfg(target_env = "sgx")]
         set_trusted_policy_signers(signers);
 
+        #[cfg(not(target_env = "sgx"))]
+        let _ = signers;
+
         #[cfg(target_env = "sgx")]
         let enclaves: Option<HashSet<EnclaveIdentity>> = match protocol
             .make_request(Context::background(), Body::HostKeyManagerPolicyRequest {})
