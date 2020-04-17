@@ -82,6 +82,8 @@ const (
 
 	// CfgP2PPersistentPeer configures tendermint's persistent peer(s).
 	CfgP2PPersistentPeer = "tendermint.p2p.persistent_peer"
+	// CfgP2PPersistenPeersMaxDialPeriod configures the tendermint's peristent peer max dial period.
+	CfgP2PPersistenPeersMaxDialPeriod = "tendermint.p2p.persistent_peers_max_dial_period"
 	// CfgP2PDisablePeerExchange disables tendermint's peer-exchange (Pex) reactor.
 	CfgP2PDisablePeerExchange = "tendermint.p2p.disable_peer_exchange"
 	// CfgP2PSeeds configures tendermint's seed node(s).
@@ -962,6 +964,7 @@ func (t *tendermintService) lazyInit() error {
 	// Since persistent peers is expected to be in comma-delimited ID@host:port format,
 	// lowercasing the whole string is ok.
 	tenderConfig.P2P.PersistentPeers = strings.ToLower(strings.Join(viper.GetStringSlice(CfgP2PPersistentPeer), ","))
+	tenderConfig.P2P.PersistentPeersMaxDialPeriod = viper.GetDuration(CfgP2PPersistenPeersMaxDialPeriod)
 	// Unconditional peer IDs need to be lowercase as p2p/transport.go:MultiplexTransport.upgrade()
 	// uses a case sensitive string comparision to validate public keys.
 	// Since persistent peers is expected to be in comma-delimited ID format,
@@ -1386,6 +1389,7 @@ func init() {
 	Flags.StringSlice(CfgP2PUnconditionalPeerIDs, []string{}, "Tendermint unconditional peer IDs")
 	Flags.Bool(CfgP2PDisablePeerExchange, false, "Disable Tendermint's peer-exchange reactor")
 	Flags.Bool(CfgP2PSeedMode, false, "run the tendermint node in seed mode")
+	Flags.Duration(CfgP2PPersistenPeersMaxDialPeriod, 0*time.Second, "Tendermint max timeout when redialing a persistent peer (default: unlimited)")
 	Flags.Int(CfgP2PMaxNumInboundPeers, 40, "Max number of inbound peers")
 	Flags.Int(CfgP2PMaxNumOutboundPeers, 20, "Max number of outbound peers (excluding persistent peers)")
 	Flags.Int64(CfgP2PSendRate, 5120000, "Rate at which packets can be sent (bytes/sec)")
