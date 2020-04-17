@@ -76,6 +76,22 @@ func (rt *Runtime) ID() common.Namespace {
 	return rt.id
 }
 
+// Kind returns the runtime kind.
+func (rt *Runtime) Kind() registry.RuntimeKind {
+	return rt.kind
+}
+
+// GetEnclaveIdentity returns the runtime's enclave ID.
+func (rt *Runtime) GetEnclaveIdentity() *sgx.EnclaveIdentity {
+	if rt.mrEnclave != nil && rt.mrSigner != nil {
+		return &sgx.EnclaveIdentity{
+			MrEnclave: *rt.mrEnclave,
+			MrSigner:  *rt.mrSigner,
+		}
+	}
+	return nil
+}
+
 func (rt *Runtime) toGenesisArgs() []string {
 	if rt.excludeFromGenesis {
 		return []string{}

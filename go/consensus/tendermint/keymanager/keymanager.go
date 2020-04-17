@@ -8,6 +8,7 @@ import (
 
 	"github.com/eapache/channels"
 	"github.com/pkg/errors"
+	abcitypes "github.com/tendermint/tendermint/abci/types"
 	tmtypes "github.com/tendermint/tendermint/types"
 
 	"github.com/oasislabs/oasis-core/go/common"
@@ -88,17 +89,27 @@ func (tb *tendermintBackend) worker(ctx context.Context) {
 
 		switch ev := event.(type) {
 		case tmtypes.EventDataNewBlock:
-			tb.onEventDataNewBlock(ev)
+			tb.onEventDataNewBlock(ctx, ev)
+		case tmtypes.EventDataTx:
+			tb.onEventDataTx(ctx, ev)
 		default:
 		}
 	}
 }
 
-func (tb *tendermintBackend) onEventDataNewBlock(ev tmtypes.EventDataNewBlock) {
-	events := ev.ResultBeginBlock.GetEvents()
+func (tb *tendermintBackend) onEventDataNewBlock(ctx context.Context, ev tmtypes.EventDataNewBlock) {
+	events := append([]abcitypes.Event{}, ev.ResultBeginBlock.GetEvents()...)
 	events = append(events, ev.ResultEndBlock.GetEvents()...)
 
-	for _, tmEv := range events {
+	tb.onABCIEvents(ctx, events)
+}
+
+func (tb *tendermintBackend) onEventDataTx(ctx context.Context, tx tmtypes.EventDataTx) {
+	tb.onABCIEvents(ctx, tx.Result.Events)
+}
+
+func (tb *tendermintBackend) onABCIEvents(ctx context.Context, tmEvents []abcitypes.Event) {
+	for _, tmEv := range tmEvents {
 		if tmEv.GetType() != app.EventType {
 			continue
 		}
