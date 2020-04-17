@@ -96,6 +96,8 @@ const (
 	CfgP2PSendRate = "tendermint.p2p.send_rate"
 	// CfgP2PRecvRate is the rate at which packets can be received, in bytes/second.
 	CfgP2PRecvRate = "tendermint.p2p.recv_rate"
+	// CfgP2PUnconditionalPeerIDs configures tendermint's unconditional peer(s).
+	CfgP2PUnconditionalPeerIDs = "tendermint.p2p.unconditional_peer_ids"
 
 	cfgLogDebug = "tendermint.log.debug"
 
@@ -960,6 +962,11 @@ func (t *tendermintService) lazyInit() error {
 	// Since persistent peers is expected to be in comma-delimited ID@host:port format,
 	// lowercasing the whole string is ok.
 	tenderConfig.P2P.PersistentPeers = strings.ToLower(strings.Join(viper.GetStringSlice(CfgP2PPersistentPeer), ","))
+	// Unconditional peer IDs need to be lowercase as p2p/transport.go:MultiplexTransport.upgrade()
+	// uses a case sensitive string comparision to validate public keys.
+	// Since persistent peers is expected to be in comma-delimited ID format,
+	// lowercasing the whole string is ok.
+	tenderConfig.P2P.UnconditionalPeerIDs = strings.ToLower(strings.Join(viper.GetStringSlice(CfgP2PUnconditionalPeerIDs), ","))
 	tenderConfig.P2P.SeedMode = viper.GetBool(CfgP2PSeedMode)
 	// Seed Ids need to be lowercase as p2p/transport.go:MultiplexTransport.upgrade()
 	// uses a case sensitive string comparision to validate public keys.
@@ -974,9 +981,8 @@ func (t *tendermintService) lazyInit() error {
 	if len(sentryUpstreamAddrs) > 0 {
 		t.Logger.Info("Acting as a tendermint sentry", "addrs", sentryUpstreamAddrs)
 
-		// Append sentry addresses to persistent peers.
-		tenderConfig.P2P.PersistentPeers = tenderConfig.P2P.PersistentPeers + "," +
-			strings.ToLower(strings.Join(sentryUpstreamAddrs, ","))
+		// Append upstream addresses to persistent, private and unconditional peers.
+		tenderConfig.P2P.PersistentPeers += "," + strings.ToLower(strings.Join(sentryUpstreamAddrs, ","))
 
 		var sentryUpstreamIDs []string
 		for _, addr := range sentryUpstreamAddrs {
@@ -987,12 +993,12 @@ func (t *tendermintService) lazyInit() error {
 			sentryUpstreamIDs = append(sentryUpstreamIDs, parts[0])
 		}
 
-		// Convert persistent peer IDs to lowercase (like other IDs) since
+		// Convert upstream node IDs to lowercase (like other IDs) since
 		// Tendermint stores them in a map and uses a case sensitive string
 		// comparison to check ID equality.
-		tenderConfig.P2P.PrivatePeerIDs = strings.ToLower(strings.Join(sentryUpstreamIDs, ","))
-
-		// XXX: tendermint v0.33 adds: `unconditional_peer_ids` which should also be set here.
+		sentryUpstreamIDsStr := strings.ToLower(strings.Join(sentryUpstreamIDs, ","))
+		tenderConfig.P2P.PrivatePeerIDs += "," + sentryUpstreamIDsStr
+		tenderConfig.P2P.UnconditionalPeerIDs += "," + sentryUpstreamIDsStr
 	}
 
 	if !tenderConfig.P2P.PexReactor {
@@ -1377,6 +1383,7 @@ func init() {
 	Flags.Uint64(cfgABCIPruneNumKept, 3600, "ABCI state versions kept (when applicable)")
 	Flags.StringSlice(CfgSentryUpstreamAddress, []string{}, "Tendermint nodes for which we act as sentry of the form ID@ip:port")
 	Flags.StringSlice(CfgP2PPersistentPeer, []string{}, "Tendermint persistent peer(s) of the form ID@ip:port")
+	Flags.StringSlice(CfgP2PUnconditionalPeerIDs, []string{}, "Tendermint unconditional peer IDs")
 	Flags.Bool(CfgP2PDisablePeerExchange, false, "Disable Tendermint's peer-exchange reactor")
 	Flags.Bool(CfgP2PSeedMode, false, "run the tendermint node in seed mode")
 	Flags.Int(CfgP2PMaxNumInboundPeers, 40, "Max number of inbound peers")
