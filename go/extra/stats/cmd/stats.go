@@ -14,7 +14,6 @@ import (
 	"github.com/oasislabs/oasis-core/go/common/cbor"
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
 	"github.com/oasislabs/oasis-core/go/common/logging"
-	"github.com/oasislabs/oasis-core/go/common/node"
 	consensusAPI "github.com/oasislabs/oasis-core/go/consensus/api"
 	tmApi "github.com/oasislabs/oasis-core/go/consensus/tendermint/api"
 	tmcrypto "github.com/oasislabs/oasis-core/go/consensus/tendermint/crypto"
@@ -155,62 +154,36 @@ func newStats() *stats {
 }
 
 func (s *stats) addRegistryData(ctx context.Context, registry registryAPI.Backend, height int64) error {
-	// Fetch entities.
-	entities, err := registry.GetEntities(ctx, height)
-	if err != nil {
-		return err
-	}
-
 	// Fetch nodes.
 	nodes, err := registry.GetNodes(ctx, height)
 	if err != nil {
 		return err
 	}
 
-	// Map: nodeID -> Node
-	nodesMap := make(map[signature.PublicKey]*node.Node)
+	// Update stored mappings.
 	for _, n := range nodes {
-		nodesMap[n.ID] = n
-	}
-
-	// Store new nodes and entities info.
-	for _, ent := range entities {
 		var es *entityStats
 		var ok bool
-
-		// Since registry data can be fetched at multiple heights, entities might
-		// already exist.
-		if es, ok = s.entities[ent.ID]; !ok {
+		// Get or create node entity.
+		if es, ok = s.entities[n.EntityID]; !ok {
 			es = &entityStats{
-				id:             ent.ID,
+				id:             n.EntityID,
 				nodeSignatures: make(map[signature.PublicKey]int64),
 				nodeProposals:  make(map[signature.PublicKey]int64),
 			}
-			s.entities[ent.ID] = es
+			s.entities[n.EntityID] = es
 		}
 
-		for _, nodeID := range ent.Nodes {
-			node, ok := nodesMap[nodeID]
-			if !ok {
-				// Skip entity nodes that are not registered.
-				logger.Debug("skipping not registered entity node",
-					"node_id", nodeID,
-				)
-				continue
+		// Initialize node stats if missing.
+		if _, ok := es.nodeSignatures[n.ID]; !ok {
+			es.nodeSignatures[n.ID] = 0
+			es.nodeProposals[n.ID] = 0
+			cID := n.Consensus.ID
+			tmAddr := tmcrypto.PublicKeyToTendermint(&cID).Address().String()
+			s.nodeAddressMap[tmAddr] = nodeIDs{
+				entityID: n.EntityID,
+				nodeID:   n.ID,
 			}
-
-			// Add missing nodes.
-			if _, ok := es.nodeSignatures[nodeID]; !ok {
-				es.nodeSignatures[nodeID] = 0
-				es.nodeProposals[nodeID] = 0
-				cID := node.Consensus.ID
-				tmADdr := tmcrypto.PublicKeyToTendermint(&cID).Address().String()
-				s.nodeAddressMap[tmADdr] = nodeIDs{
-					entityID: ent.ID,
-					nodeID:   nodeID,
-				}
-			}
-
 		}
 	}
 
