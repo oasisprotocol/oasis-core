@@ -3,6 +3,8 @@ package e2e
 import (
 	"context"
 	"crypto"
+	cryptoRand "crypto/rand"
+	"encoding/hex"
 	"fmt"
 	"math"
 	"math/rand"
@@ -82,7 +84,8 @@ type txSourceImpl struct {
 
 	tendermintRecoverCorruptedWAL bool
 
-	rng *rand.Rand
+	rng  *rand.Rand
+	seed string
 }
 
 func (sc *txSourceImpl) Fixture() (*oasis.NetworkFixture, error) {
@@ -141,11 +144,22 @@ func (sc *txSourceImpl) Fixture() (*oasis.NetworkFixture, error) {
 func (sc *txSourceImpl) Init(childEnv *env.Env, net *oasis.Network) error {
 	sc.net = net
 
+	// Generate a new random seed and log it so we can reproduce the run.
+	// TODO: Allow the seed to be overriden in order to reproduce randomness (minus timing).
+	rawSeed := make([]byte, 16)
+	_, err := cryptoRand.Read(rawSeed)
+	if err != nil {
+		return fmt.Errorf("failed to generate random seed: %w", err)
+	}
+	sc.seed = hex.EncodeToString(rawSeed)
+
+	sc.logger.Info("using random seed",
+		"seed", sc.seed,
+	)
+
 	// Set up the deterministic random source.
 	hash := crypto.SHA512
-	// TODO: Make the seed configurable.
-	seed := []byte("seeeeeeeeeeeeeeeeeeeeeeeeeeeeeed")
-	src, err := drbg.New(hash, seed, nil, []byte("txsource scenario"))
+	src, err := drbg.New(hash, []byte(sc.seed), nil, []byte("txsource scenario"))
 	if err != nil {
 		return fmt.Errorf("failed to create random source: %w", err)
 	}
@@ -270,6 +284,7 @@ func (sc *txSourceImpl) startWorkload(childEnv *env.Env, errCh chan error, name 
 		"--" + workload.CfgRuntimeID, runtimeID.String(),
 		"--" + txsource.CfgWorkload, name,
 		"--" + txsource.CfgTimeLimit, sc.timeLimit.String(),
+		"--" + txsource.CfgSeed, sc.seed,
 	}
 	nodeBinary := sc.net.Config().NodeBinary
 
