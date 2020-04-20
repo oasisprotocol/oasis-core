@@ -78,6 +78,10 @@ func (km *Keymanager) Start() error {
 }
 
 func (km *Keymanager) provisionGenesis() error {
+	if km.runtime.excludeFromGenesis {
+		return nil
+	}
+
 	// Provision status and policy. We can only provision this here as we need
 	// a list of runtimes allowed to query the key manager.
 	statusArgs := []string{
@@ -174,6 +178,10 @@ func (km *Keymanager) provisionGenesis() error {
 }
 
 func (km *Keymanager) toGenesisArgs() []string {
+	if km.runtime.excludeFromGenesis {
+		return nil
+	}
+
 	return []string{
 		"--keymanager", filepath.Join(km.dir.String(), kmStatusFile),
 	}

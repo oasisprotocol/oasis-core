@@ -29,8 +29,9 @@ func (b *helpersBase) runSubCommandWithOutput(name string, args []string) (bytes
 
 // Helpers are the oasis-node cli helpers.
 type Helpers struct {
-	Consensus *ConsensusHelpers
-	Registry  *RegistryHelpers
+	Consensus  *ConsensusHelpers
+	Registry   *RegistryHelpers
+	Keymanager *KeymanagerHelpers
 }
 
 // New creates new oasis-node cli helpers.
@@ -42,8 +43,9 @@ func New(env *env.Env, net *oasis.Network, logger *logging.Logger) *Helpers {
 	}
 
 	return &Helpers{
-		Consensus: &ConsensusHelpers{base},
-		Registry:  &RegistryHelpers{base},
+		Consensus:  &ConsensusHelpers{base},
+		Registry:   &RegistryHelpers{base},
+		Keymanager: &KeymanagerHelpers{base},
 	}
 }
 

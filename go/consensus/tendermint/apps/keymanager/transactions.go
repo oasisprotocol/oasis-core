@@ -33,7 +33,14 @@ func (app *keymanagerApplication) updatePolicy(
 
 	// Get the existing policy document, if one exists.
 	oldStatus, err := state.Status(ctx, rt.ID)
-	if err != nil {
+	switch err {
+	case nil:
+	case api.ErrNoSuchStatus:
+		// This must be a new key manager runtime.
+		oldStatus = &api.Status{
+			ID: rt.ID,
+		}
+	default:
 		return err
 	}
 
@@ -68,6 +75,7 @@ func (app *keymanagerApplication) updatePolicy(
 	// will get updated.
 	nodes, _ := regState.Nodes(ctx)
 	registry.SortNodeList(nodes)
+	oldStatus.Policy = sigPol
 	newStatus := app.generateStatus(ctx, rt, oldStatus, nodes)
 	if err := state.SetStatus(ctx, newStatus); err != nil {
 		panic(fmt.Errorf("failed to set keymanager status: %w", err))

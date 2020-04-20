@@ -19,6 +19,7 @@ import (
 	stakingState "github.com/oasislabs/oasis-core/go/consensus/tendermint/apps/staking/state"
 	epochtime "github.com/oasislabs/oasis-core/go/epochtime/api"
 	"github.com/oasislabs/oasis-core/go/keymanager/api"
+	keymanager "github.com/oasislabs/oasis-core/go/keymanager/api"
 	registry "github.com/oasislabs/oasis-core/go/registry/api"
 )
 
@@ -37,7 +38,7 @@ func (app *keymanagerApplication) ID() uint8 {
 }
 
 func (app *keymanagerApplication) Methods() []transaction.MethodName {
-	return nil
+	return keymanager.Methods
 }
 
 func (app *keymanagerApplication) Blessed() bool {

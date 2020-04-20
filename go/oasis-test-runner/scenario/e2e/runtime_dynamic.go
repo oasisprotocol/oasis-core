@@ -6,11 +6,14 @@ import (
 	"path/filepath"
 	"time"
 
+	"github.com/oasislabs/oasis-core/go/common"
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
 	"github.com/oasislabs/oasis-core/go/common/quantity"
+	"github.com/oasislabs/oasis-core/go/common/sgx"
 	consensus "github.com/oasislabs/oasis-core/go/consensus/api"
 	"github.com/oasislabs/oasis-core/go/consensus/api/transaction"
 	epochtime "github.com/oasislabs/oasis-core/go/epochtime/api"
+	keymanager "github.com/oasislabs/oasis-core/go/keymanager/api"
 	"github.com/oasislabs/oasis-core/go/oasis-test-runner/env"
 	"github.com/oasislabs/oasis-core/go/oasis-test-runner/oasis"
 	"github.com/oasislabs/oasis-core/go/oasis-test-runner/oasis/cli"
@@ -49,12 +52,7 @@ func (sc *runtimeDynamicImpl) Fixture() (*oasis.NetworkFixture, error) {
 	// Avoid unexpected blocks.
 	f.Network.EpochtimeMock = true
 	// Exclude all runtimes from genesis as we will register those dynamically.
-	for i, rt := range f.Runtimes {
-		// TODO: This should not be needed once dynamic keymanager policy document registration
-		//       is supported (see oasis-core#2516).
-		if rt.Kind != registry.KindCompute {
-			continue
-		}
+	for i := range f.Runtimes {
 		f.Runtimes[i].ExcludeFromGenesis = true
 	}
 
@@ -87,9 +85,8 @@ func (sc *runtimeDynamicImpl) Run(childEnv *env.Env) error { // nolint: gocyclo
 		return err
 	}
 
-	// TODO: Once dynamic key manager registration is supported, waiting for keymanagers
-	// shouldn't be needed.
-	numNodes := len(sc.net.Validators()) + len(sc.net.Keymanagers())
+	// Wait for enough nodes to register.
+	numNodes := len(sc.net.Validators())
 	sc.logger.Info("waiting for (some) nodes to register",
 		"num_nodes", numNodes,
 	)
@@ -103,14 +100,99 @@ func (sc *runtimeDynamicImpl) Run(childEnv *env.Env) error { // nolint: gocyclo
 		return err
 	}
 
-	// TODO: Register a new key manager runtime and status (see oasis-core#2516).
+	// Nonce used for transactions (increase this by 1 after each transaction).
+	var nonce uint64
+
+	// Register a new keymanager runtime.
+	kmRt := sc.net.Runtimes()[0]
+	kmRtDesc := kmRt.ToRuntimeDescriptor()
+	kmTxPath := filepath.Join(childEnv.Dir(), "register_km_runtime.json")
+	if err := cli.Registry.GenerateRegisterRuntimeTx(nonce, kmRtDesc, kmTxPath, ""); err != nil {
+		return fmt.Errorf("failed to generate register KM runtime tx: %w", err)
+	}
+	nonce++
+	if err := cli.Consensus.SubmitTx(kmTxPath); err != nil {
+		return fmt.Errorf("failed to register KM runtime: %w", err)
+	}
+
+	// Generate and update the new keymanager runtime's policy.
+	kmPolicyPath := filepath.Join(childEnv.Dir(), "km_policy.cbor")
+	kmPolicySig1Path := filepath.Join(childEnv.Dir(), "km_policy_sig1.pem")
+	kmPolicySig2Path := filepath.Join(childEnv.Dir(), "km_policy_sig2.pem")
+	kmPolicySig3Path := filepath.Join(childEnv.Dir(), "km_policy_sig3.pem")
+	kmUpdateTxPath := filepath.Join(childEnv.Dir(), "km_gen_update.json")
+	sc.logger.Info("building KM SGX policy enclave policies map")
+	enclavePolicies := make(map[sgx.EnclaveIdentity]*keymanager.EnclavePolicySGX)
+	kmRtEncID := kmRt.GetEnclaveIdentity()
+	var havePolicy bool
+	if kmRtEncID != nil {
+		enclavePolicies[*kmRtEncID] = &keymanager.EnclavePolicySGX{}
+		enclavePolicies[*kmRtEncID].MayQuery = make(map[common.Namespace][]sgx.EnclaveIdentity)
+		enclavePolicies[*kmRtEncID].MayReplicate = []sgx.EnclaveIdentity{}
+		for _, rt := range sc.net.Runtimes() {
+			if rt.Kind() != registry.KindCompute {
+				continue
+			}
+			if eid := rt.GetEnclaveIdentity(); eid != nil {
+				enclavePolicies[*kmRtEncID].MayQuery[rt.ID()] = []sgx.EnclaveIdentity{*eid}
+				// This is set only in SGX mode.
+				havePolicy = true
+			}
+		}
+	}
+	sc.logger.Info("initing KM policy")
+	if err := cli.Keymanager.InitPolicy(kmRt.ID(), 1, enclavePolicies, kmPolicyPath); err != nil {
+		return err
+	}
+	sc.logger.Info("signing KM policy")
+	if err := cli.Keymanager.SignPolicy("1", kmPolicyPath, kmPolicySig1Path); err != nil {
+		return err
+	}
+	if err := cli.Keymanager.SignPolicy("2", kmPolicyPath, kmPolicySig2Path); err != nil {
+		return err
+	}
+	if err := cli.Keymanager.SignPolicy("3", kmPolicyPath, kmPolicySig3Path); err != nil {
+		return err
+	}
+	if havePolicy {
+		// In SGX mode, we can update the policy as intended.
+		sc.logger.Info("updating KM policy")
+		if err := cli.Keymanager.GenUpdate(nonce, kmPolicyPath, []string{kmPolicySig1Path, kmPolicySig2Path, kmPolicySig3Path}, kmUpdateTxPath); err != nil {
+			return err
+		}
+		nonce++
+		if err := cli.Consensus.SubmitTx(kmUpdateTxPath); err != nil {
+			return fmt.Errorf("failed to update KM policy: %w", err)
+		}
+	} else {
+		// In non-SGX mode, the policy update fails with a policy checksum
+		// mismatch (the non-SGX KM returns an empty policy), so we need to
+		// do an epoch transition instead (to complete the KM runtime
+		// registration).
+		if err := sc.epochTransition(ctx); err != nil {
+			return err
+		}
+	}
+
+	// Wait for enough nodes to register, then make another epoch transition.
+	numNodes += len(sc.net.Keymanagers())
+	sc.logger.Info("waiting for (some) nodes to register (again)",
+		"num_nodes", numNodes,
+	)
+	if err := sc.net.Controller().WaitNodesRegistered(ctx, numNodes); err != nil {
+		return err
+	}
+	if err := sc.epochTransition(ctx); err != nil {
+		return err
+	}
 
 	// Register a new compute runtime.
 	compRt := sc.net.Runtimes()[1].ToRuntimeDescriptor()
 	txPath := filepath.Join(childEnv.Dir(), "register_compute_runtime.json")
-	if err := cli.Registry.GenerateRegisterRuntimeTx(0, compRt, txPath, ""); err != nil {
-		return fmt.Errorf("failed to generate register runtime tx: %w", err)
+	if err := cli.Registry.GenerateRegisterRuntimeTx(nonce, compRt, txPath, ""); err != nil {
+		return fmt.Errorf("failed to generate register compute runtime tx: %w", err)
 	}
+	nonce++
 	if err := cli.Consensus.SubmitTx(txPath); err != nil {
 		return fmt.Errorf("failed to register compute runtime: %w", err)
 	}
@@ -218,10 +300,11 @@ func (sc *runtimeDynamicImpl) Run(childEnv *env.Env) error { // nolint: gocyclo
 	entSigner := sc.net.Entities()[0].Signer()
 	var oneShare quantity.Quantity
 	_ = oneShare.FromUint64(1)
-	tx := staking.NewReclaimEscrowTx(1, &transaction.Fee{Gas: 10000}, &staking.ReclaimEscrow{
+	tx := staking.NewReclaimEscrowTx(nonce, &transaction.Fee{Gas: 10000}, &staking.ReclaimEscrow{
 		Account: entSigner.Public(),
 		Shares:  oneShare,
 	})
+	nonce++
 	sigTx, err := transaction.Sign(entSigner, tx)
 	if err != nil {
 		return fmt.Errorf("failed to sign reclaim: %w", err)
@@ -312,10 +395,11 @@ func (sc *runtimeDynamicImpl) Run(childEnv *env.Env) error { // nolint: gocyclo
 	sc.logger.Info("escrowing stake back")
 	var enoughTokens quantity.Quantity
 	_ = enoughTokens.FromUint64(100_000)
-	tx = staking.NewAddEscrowTx(2, &transaction.Fee{Gas: 10000}, &staking.Escrow{
+	tx = staking.NewAddEscrowTx(nonce, &transaction.Fee{Gas: 10000}, &staking.Escrow{
 		Account: entSigner.Public(),
 		Tokens:  enoughTokens,
 	})
+	nonce++ // nolint: ineffassign
 	sigTx, err = transaction.Sign(entSigner, tx)
 	if err != nil {
 		return fmt.Errorf("failed to sign escrow: %w", err)
