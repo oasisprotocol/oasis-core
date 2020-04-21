@@ -279,10 +279,11 @@ func getStats(ctx context.Context, consensus consensusAPI.ClientBackend, registr
 			}
 			nodeTmAddr := sig.ValidatorAddress.String()
 
-			if err := ensureNodeTracking(ctx, stats, nodeTmAddr, height, registry); err != nil {
+			// Signatures are for previous height.
+			if err := ensureNodeTracking(ctx, stats, nodeTmAddr, height-1, registry); err != nil {
 				logger.Error("failed to query registry",
 					"err", err,
-					"height", height,
+					"height", height-1,
 				)
 				os.Exit(1)
 			}
@@ -300,10 +301,11 @@ func getStats(ctx context.Context, consensus consensusAPI.ClientBackend, registr
 		if previousProposerAddr != "" {
 			// Only count round 0 proposals.
 			if tmBlockMeta.LastCommit.Round() == 0 {
-				if err := ensureNodeTracking(ctx, stats, previousProposerAddr, height, registry); err != nil {
+				// Proposers are for previous height.
+				if err := ensureNodeTracking(ctx, stats, previousProposerAddr, height-1, registry); err != nil {
 					logger.Error("failed to query registry",
 						"err", err,
-						"height", height,
+						"height", height-1,
 					)
 					os.Exit(1)
 				}
