@@ -25,6 +25,7 @@ import (
 	runtimeCommittee "github.com/oasislabs/oasis-core/go/runtime/committee"
 	storageApi "github.com/oasislabs/oasis-core/go/storage/api"
 	"github.com/oasislabs/oasis-core/go/storage/client"
+	"github.com/oasislabs/oasis-core/go/storage/mkvs/checkpoint"
 	mkvsDB "github.com/oasislabs/oasis-core/go/storage/mkvs/db/api"
 	mkvsNode "github.com/oasislabs/oasis-core/go/storage/mkvs/node"
 	workerCommon "github.com/oasislabs/oasis-core/go/worker/common"
@@ -162,7 +163,7 @@ type Node struct {
 
 	workerCommonCfg workerCommon.Config
 
-	checkpointer *checkpointer
+	checkpointer checkpoint.Checkpointer
 
 	syncedLock  sync.RWMutex
 	syncedState watcherState
@@ -185,7 +186,7 @@ func NewNode(
 	store *persistent.ServiceStore,
 	roleProvider registration.RoleProvider,
 	workerCommonCfg workerCommon.Config,
-	checkpointerCfg CheckpointerConfig,
+	checkpointerCfg checkpoint.CheckpointerConfig,
 ) (*Node, error) {
 	localStorage, ok := commonNode.Storage.(storageApi.LocalBackend)
 	if !ok {
@@ -225,19 +226,43 @@ func NewNode(
 
 	node.ctx, node.ctxCancel = context.WithCancel(context.Background())
 
-	var ns common.Namespace
-	runtimeID := commonNode.Runtime.ID()
-	copy(ns[:], runtimeID[:])
-
 	// Create a new storage client that will be used for remote sync.
-	scl, err := client.New(node.ctx, ns, node.commonNode.Identity, node.commonNode.Consensus.Scheduler(), node.commonNode.Consensus.Registry())
+	scl, err := client.New(node.ctx, commonNode.Runtime.ID(), node.commonNode.Identity, node.commonNode.Consensus.Scheduler(), node.commonNode.Consensus.Registry())
 	if err != nil {
 		return nil, fmt.Errorf("storage worker: failed to create client: %w", err)
 	}
 	node.storageClient = scl.(storageApi.ClientBackend)
 
 	// Create a new checkpointer.
-	node.checkpointer, err = newCheckpointer(node.ctx, commonNode.Runtime, localStorage.Checkpointer(), checkpointerCfg)
+	checkpointerCfg = checkpoint.CheckpointerConfig{
+		Namespace:       commonNode.Runtime.ID(),
+		CheckInterval:   checkpointerCfg.CheckInterval,
+		RootsPerVersion: 2, // State root and I/O root.
+		GetParameters: func(ctx context.Context) (*checkpoint.CreationParameters, error) {
+			rt, rerr := commonNode.Runtime.RegistryDescriptor(ctx)
+			if rerr != nil {
+				return nil, rerr
+			}
+
+			return &checkpoint.CreationParameters{
+				Interval:  rt.Storage.CheckpointInterval,
+				NumKept:   rt.Storage.CheckpointNumKept,
+				ChunkSize: rt.Storage.CheckpointChunkSize,
+			}, nil
+		},
+		GetRoots: func(ctx context.Context, version uint64) ([]hash.Hash, error) {
+			blk, berr := commonNode.Runtime.History().GetBlock(ctx, version)
+			if berr != nil {
+				return nil, berr
+			}
+
+			return []hash.Hash{
+				blk.Header.IORoot,
+				blk.Header.StateRoot,
+			}, nil
+		},
+	}
+	node.checkpointer, err = checkpoint.NewCheckpointer(node.ctx, localStorage.NodeDB(), localStorage.Checkpointer(), checkpointerCfg)
 	if err != nil {
 		return nil, fmt.Errorf("storage worker: failed to create checkpointer: %w", err)
 	}
@@ -717,8 +742,8 @@ mainLoop:
 				n.logger.Error("can't store watcher state to database", "err", err)
 			}
 
-			// Notify the checkpointer that there is a new round.
-			n.checkpointer.notifyNewBlock(finalized.Round)
+			// Notify the checkpointer that there is a new finalized round.
+			n.checkpointer.NotifyNewVersion(finalized.Round)
 
 		case <-n.ctx.Done():
 			break mainLoop
