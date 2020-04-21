@@ -19,6 +19,22 @@ var (
 
 	// ErrChunkNotFound is the error when a chunk is not found.
 	ErrChunkNotFound = errors.New(moduleName, 2, "checkpoint: chunk not found")
+
+	// ErrRestoreAlreadyInProgress is the error when a checkpoint restore is already in progress and
+	// the caller wanted to start another restore.
+	ErrRestoreAlreadyInProgress = errors.New(moduleName, 3, "checkpoint: restore already in progress")
+
+	// ErrNoRestoreInProgress is the error when no checkpoint restore is currently in progress.
+	ErrNoRestoreInProgress = errors.New(moduleName, 4, "checkpoint: no restore in progress")
+
+	// ErrChunkAlreadyRestored is the error when a chunk has already been restored.
+	ErrChunkAlreadyRestored = errors.New(moduleName, 5, "checkpoint: chunk already restored")
+
+	// ErrChunkProofVerificationFailed is the error when a chunk fails proof verification.
+	ErrChunkProofVerificationFailed = errors.New(moduleName, 6, "chunk: chunk proof verification failed")
+
+	// ErrChunkCorrupted is the error when a chunk is corrupted.
+	ErrChunkCorrupted = errors.New(moduleName, 7, "chunk: corrupted chunk")
 )
 
 // ChunkProvider is a chunk provider.
@@ -64,8 +80,15 @@ type DeleteCheckpointRequest struct {
 
 // Restorer is a checkpoint restorer.
 type Restorer interface {
+	// StartRestore starts a checkpoint restoration process.
+	StartRestore(ctx context.Context, checkpoint *Metadata) error
+
 	// RestoreChunk restores the given chunk into the underlying node database.
-	RestoreChunk(ctx context.Context, chunk *ChunkMetadata, r io.Reader) error
+	//
+	// This method requires that a restoration is in progress.
+	//
+	// Returns true when the checkpoint has been fully restored.
+	RestoreChunk(ctx context.Context, index uint64, r io.Reader) (bool, error)
 }
 
 // CreateRestorer is an interface that combines the checkpoint creator and restorer.

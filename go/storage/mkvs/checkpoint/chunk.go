@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/ioutil"
 
 	"github.com/golang/snappy"
 
@@ -77,10 +78,12 @@ func createChunk(
 
 func restoreChunk(ctx context.Context, ndb db.NodeDB, chunk *ChunkMetadata, r io.Reader) error {
 	hb := hash.NewBuilder()
-	sr := snappy.NewReader(io.TeeReader(r, hb))
+	tr := io.TeeReader(r, hb)
+	sr := snappy.NewReader(tr)
 	dec := cbor.NewDecoder(sr)
 
 	// Reconstruct the proof.
+	var decodeErr error
 	var p syncer.Proof
 	for {
 		if ctx.Err() != nil {
@@ -92,7 +95,12 @@ func restoreChunk(ctx context.Context, ndb db.NodeDB, chunk *ChunkMetadata, r io
 			if errors.Is(err, io.EOF) {
 				break
 			}
-			return fmt.Errorf("chunk: failed to decode chunk: %w", err)
+
+			decodeErr = fmt.Errorf("failed to decode chunk: %w", err)
+
+			// Read everything until EOF so we can verify the overall chunk integrity.
+			_, _ = io.Copy(ioutil.Discard, tr)
+			break
 		}
 
 		p.Entries = append(p.Entries, entry)
@@ -102,17 +110,23 @@ func restoreChunk(ctx context.Context, ndb db.NodeDB, chunk *ChunkMetadata, r io
 	// Verify overall chunk integrity.
 	chunkHash := hb.Build()
 	if !chunk.Digest.Equal(&chunkHash) {
-		return fmt.Errorf("chunk: digest incorrect (expected: %s got: %s)",
+		return fmt.Errorf("%w: digest incorrect (expected: %s got: %s)",
+			ErrChunkCorrupted,
 			chunk.Digest,
 			chunkHash,
 		)
+	}
+
+	// Treat decode errors after integrity verification as proof verification failures.
+	if decodeErr != nil {
+		return fmt.Errorf("%w: %s", ErrChunkProofVerificationFailed, decodeErr.Error())
 	}
 
 	// Verify the proof.
 	var pv syncer.ProofVerifier
 	ptr, err := pv.VerifyProof(ctx, chunk.Root.Hash, &p)
 	if err != nil {
-		return fmt.Errorf("chunk: chunk proof verification failed: %w", err)
+		return fmt.Errorf("%w: %s", ErrChunkProofVerificationFailed, err.Error())
 	}
 
 	// Import chunk into the node database.
