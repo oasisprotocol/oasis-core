@@ -20,6 +20,7 @@ import (
 	"github.com/oasislabs/oasis-core/go/oasis-node/cmd/common/flags"
 	registry "github.com/oasislabs/oasis-core/go/registry/api"
 	"github.com/oasislabs/oasis-core/go/storage/api"
+	"github.com/oasislabs/oasis-core/go/storage/mkvs/checkpoint"
 	workerCommon "github.com/oasislabs/oasis-core/go/worker/common"
 	committeeCommon "github.com/oasislabs/oasis-core/go/worker/common/committee"
 	"github.com/oasislabs/oasis-core/go/worker/registration"
@@ -126,7 +127,7 @@ func New(
 			debugRejectUpdates: viper.GetBool(CfgWorkerDebugIgnoreApply) && flags.DebugDontBlameOasis(),
 		})
 
-		checkpointerCfg := committee.CheckpointerConfig{
+		checkpointerCfg := checkpoint.CheckpointerConfig{
 			CheckInterval: viper.GetDuration(CfgWorkerCheckpointCheckInterval),
 		}
 
@@ -144,7 +145,7 @@ func New(
 	return s, nil
 }
 
-func (s *Worker) registerRuntime(commonNode *committeeCommon.Node, checkpointerCfg committee.CheckpointerConfig) error {
+func (s *Worker) registerRuntime(commonNode *committeeCommon.Node, checkpointerCfg checkpoint.CheckpointerConfig) error {
 	id := commonNode.Runtime.ID()
 	s.logger.Info("registering new runtime",
 		"runtime_id", id,

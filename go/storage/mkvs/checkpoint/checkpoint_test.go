@@ -3,15 +3,18 @@ package checkpoint
 import (
 	"bytes"
 	"context"
+	"errors"
 	"io/ioutil"
 	"os"
 	"path/filepath"
 	"strconv"
 	"testing"
 
+	"github.com/golang/snappy"
 	"github.com/stretchr/testify/require"
 
 	"github.com/oasislabs/oasis-core/go/common"
+	"github.com/oasislabs/oasis-core/go/common/cbor"
 	"github.com/oasislabs/oasis-core/go/common/crypto/hash"
 	"github.com/oasislabs/oasis-core/go/storage/mkvs"
 	db "github.com/oasislabs/oasis-core/go/storage/mkvs/db/api"
@@ -124,16 +127,89 @@ func TestFileCheckpointCreator(t *testing.T) {
 	// Try to restore some chunks.
 	rs, err := NewRestorer(ndb2)
 	require.NoError(err, "NewRestorer")
-	for i := 0; i < len(cp.Chunks); i++ {
+
+	_, err = rs.RestoreChunk(ctx, 0, &buf)
+	require.Error(err, "RestoreChunk should fail when no restore is in progress")
+	require.True(errors.Is(err, ErrNoRestoreInProgress))
+
+	// Generate a bogus manifest which does not verify by corrupting chunk at index 1.
+	bogusCp, err := fc.GetCheckpoint(ctx, &GetCheckpointRequest{Version: 1, Root: root})
+	require.NoError(err, "GetCheckpoint")
+	require.Equal(cp, bogusCp)
+
+	buf.Reset()
+	sw := snappy.NewBufferedWriter(&buf)
+	enc := cbor.NewEncoder(sw)
+	_ = enc.Encode([]byte("this chunk is bogus"))
+	sw.Close()
+
+	bogusChunk := make([]byte, buf.Len())
+	copy(bogusChunk, buf.Bytes())
+	// Make sure that the chunk integrity is correct.
+	bogusCp.Chunks[1].FromBytes(bogusChunk)
+
+	err = rs.StartRestore(ctx, bogusCp)
+	require.NoError(err, "StartRestore")
+	for i := 0; i < len(bogusCp.Chunks); i++ {
 		var cm *ChunkMetadata
 		cm, err = cp.GetChunkMetadata(uint64(i))
 		require.NoError(err, "GetChunkMetadata")
 
 		buf.Reset()
+		if i == 1 {
+			// Substitute the bogus chunk.
+			_, _ = buf.Write(bogusChunk)
+		} else {
+			err = fc.GetCheckpointChunk(ctx, cm, &buf)
+			require.NoError(err, "GetChunk")
+		}
+		var done bool
+		done, err = rs.RestoreChunk(ctx, uint64(i), &buf)
+		require.False(done, "RestoreChunk should not signal completed restoration")
+		if i == 1 {
+			require.Error(err, "RestoreChunk should fail with bogus chunk")
+			require.True(errors.Is(err, ErrChunkProofVerificationFailed))
+			// Restorer should be reset.
+			break
+		} else {
+			require.NoError(err, "RestoreChunk")
+		}
+	}
+
+	// Try to correctly restore.
+	err = rs.StartRestore(ctx, cp)
+	require.NoError(err, "StartRestore")
+	err = rs.StartRestore(ctx, cp)
+	require.Error(err, "StartRestore should fail when a restore is already in progress")
+	require.True(errors.Is(err, ErrRestoreAlreadyInProgress))
+	for i := 0; i < len(cp.Chunks); i++ {
+		var cm *ChunkMetadata
+		cm, err = cp.GetChunkMetadata(uint64(i))
+		require.NoError(err, "GetChunkMetadata")
+
+		// Try with a corrupted chunk first.
+		buf.Reset()
+		_, _ = buf.Write([]byte("corrupted chunk"))
+		_, err = rs.RestoreChunk(ctx, uint64(i), &buf)
+		require.Error(err, "RestoreChunk should fail with corrupted chunk")
+
+		buf.Reset()
 		err = fc.GetCheckpointChunk(ctx, cm, &buf)
 		require.NoError(err, "GetChunk")
-		err = rs.RestoreChunk(ctx, cm, &buf)
+
+		var done bool
+		done, err = rs.RestoreChunk(ctx, uint64(i), &buf)
 		require.NoError(err, "RestoreChunk")
+
+		if i == len(cp.Chunks)-1 {
+			require.True(done, "RestoreChunk should signal completed restoration when done")
+		} else {
+			require.False(done, "RestoreChunk should not signal completed restoration early")
+
+			_, err = rs.RestoreChunk(ctx, uint64(i), &buf)
+			require.Error(err, "RestoreChunk should fail if the same chunk has already been restored")
+			require.True(errors.Is(err, ErrChunkAlreadyRestored))
+		}
 	}
 	err = ndb2.Finalize(ctx, root.Version, []hash.Hash{root.Hash})
 	require.NoError(err, "Finalize")
