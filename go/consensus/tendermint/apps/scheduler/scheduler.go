@@ -16,7 +16,6 @@ import (
 	"github.com/oasislabs/oasis-core/go/common/crypto/mathrand"
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
 	"github.com/oasislabs/oasis-core/go/common/node"
-	consensus "github.com/oasislabs/oasis-core/go/consensus/api"
 	"github.com/oasislabs/oasis-core/go/consensus/api/transaction"
 	"github.com/oasislabs/oasis-core/go/consensus/tendermint/abci"
 	"github.com/oasislabs/oasis-core/go/consensus/tendermint/api"
@@ -242,45 +241,31 @@ func (app *schedulerApplication) EndBlock(ctx *api.Context, req types.RequestEnd
 	// from InitChain), and the new validator set, which is a huge pain
 	// in the ass.
 
-	currentMap := make(map[signature.PublicKey]bool)
-	for _, v := range currentValidators {
-		currentMap[v] = true
-	}
-
-	pendingMap := make(map[signature.PublicKey]bool)
-	for _, v := range pendingValidators {
-		pendingMap[v] = true
-	}
-
 	var updates []types.ValidatorUpdate
-	for _, v := range currentValidators {
-		switch pendingMap[v] {
-		case false:
-			// Existing validator is not part of the new set, reduce it's
+	for v := range currentValidators {
+		if _, ok := pendingValidators[v]; !ok {
+			// Existing validator is not part of the new set, reduce its
 			// voting power to 0, to indicate removal.
 			ctx.Logger().Debug("removing existing validator from validator set",
 				"id", v,
 			)
 			updates = append(updates, api.PublicKeyToValidatorUpdate(v, 0))
-		case true:
-			// Existing validator is part of the new set, remove it from
-			// the pending map, since there is nothing to be done.
-			pendingMap[v] = false
 		}
 	}
 
-	for _, v := range pendingValidators {
-		if pendingMap[v] {
-			// This is a validator that is not part of the current set.
-			ctx.Logger().Debug("adding new validator to validator set",
-				"id", v,
-			)
-			updates = append(updates, api.PublicKeyToValidatorUpdate(v, consensus.VotingPower))
-		} else {
+	for v, newPower := range pendingValidators {
+		if curPower, ok := currentValidators[v]; ok && curPower == newPower {
 			ctx.Logger().Debug("keeping existing validator in the validator set",
 				"id", v,
 			)
+			continue
 		}
+		// We're adding this validator or changing its power.
+		ctx.Logger().Debug("upserting validator to validator set",
+			"id", v,
+			"power", newPower,
+		)
+		updates = append(updates, api.PublicKeyToValidatorUpdate(v, newPower))
 	}
 
 	resp.ValidatorUpdates = updates
