@@ -9,7 +9,6 @@ import (
 
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
 	"github.com/oasislabs/oasis-core/go/common/node"
-	consensus "github.com/oasislabs/oasis-core/go/consensus/api"
 	abciAPI "github.com/oasislabs/oasis-core/go/consensus/tendermint/api"
 	registryState "github.com/oasislabs/oasis-core/go/consensus/tendermint/apps/registry/state"
 	schedulerState "github.com/oasislabs/oasis-core/go/consensus/tendermint/apps/scheduler/state"
@@ -32,7 +31,7 @@ func (app *schedulerApplication) InitChain(ctx *abciAPI.Context, req types.Reque
 	if doc.Scheduler.Parameters.DebugStaticValidators {
 		ctx.Logger().Warn("static validators are configured")
 
-		var staticValidators []signature.PublicKey
+		staticValidators := make(map[signature.PublicKey]int64)
 		for _, v := range req.Validators {
 			tmPk := v.GetPubKey()
 
@@ -53,7 +52,8 @@ func (app *schedulerApplication) InitChain(ctx *abciAPI.Context, req types.Reque
 				return fmt.Errorf("scheduler: invalid static validator public key: %w", err)
 			}
 
-			staticValidators = append(staticValidators, id)
+			// Use a flat vote weight in this simplified configuration.
+			staticValidators[id] = 1
 		}
 
 		// Add the current validator set to ABCI, so that we can query it later.
@@ -95,7 +95,7 @@ func (app *schedulerApplication) InitChain(ctx *abciAPI.Context, req types.Reque
 
 	// Assemble the list of the tendermint genesis validators, and do some
 	// sanity checking.
-	var currentValidators []signature.PublicKey
+	currentValidators := make(map[signature.PublicKey]int64)
 	for _, v := range req.Validators {
 		tmPk := v.GetPubKey()
 
@@ -116,14 +116,6 @@ func (app *schedulerApplication) InitChain(ctx *abciAPI.Context, req types.Reque
 			return fmt.Errorf("scheduler: invalid genesis validator public key: %w", err)
 		}
 
-		if power := v.GetPower(); power != consensus.VotingPower {
-			ctx.Logger().Error("invalid voting power",
-				"id", id,
-				"power", power,
-			)
-			return fmt.Errorf("scheduler: invalid genesis validator voting power: %v", power)
-		}
-
 		n := registeredValidators[id]
 		if n == nil {
 			ctx.Logger().Error("genesis validator not in registry",
@@ -134,7 +126,7 @@ func (app *schedulerApplication) InitChain(ctx *abciAPI.Context, req types.Reque
 		ctx.Logger().Debug("adding validator to current validator set",
 			"id", id,
 		)
-		currentValidators = append(currentValidators, n.Consensus.ID)
+		currentValidators[n.Consensus.ID] = v.Power
 	}
 
 	// TODO/security: Enforce genesis validator staking.
