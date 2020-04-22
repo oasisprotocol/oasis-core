@@ -3,7 +3,7 @@ FROM ubuntu:18.04
 # Package versions.
 ARG GO_VERSION=1.13.8
 ARG GO_PROTOC_VERSION=3.6.1
-ARG GO_PROTOC_GEN_GO_VERSION=1.2.0
+ARG GO_PROTOC_GEN_GO_VERSION=1.21.0
 ARG GOLANGCILINT_VERSION=1.23.6
 ARG GOCOVMERGE_VERSION=b5bfa59ec0adc420475f97f89b58045c721d761c
 ARG RUST_NIGHTLY_VERSION=2020-02-16
@@ -53,7 +53,7 @@ RUN wget https://dl.google.com/go/go${GO_VERSION}.linux-amd64.tar.gz && \
     rm go${GO_VERSION}.linux-amd64.tar.gz && \
     mkdir -p /go/bin && \
     # Install a specific version of protoc-gen-go.
-    GO111MODULE=on go get github.com/golang/protobuf/protoc-gen-go@v${GO_PROTOC_GEN_GO_VERSION} && \
+    GO111MODULE=on go get google.golang.org/protobuf/cmd/protoc-gen-go@v${GO_PROTOC_GEN_GO_VERSION} && \
     # Install golangci-lint.
     curl -sfL https://install.goreleaser.com/github.com/golangci/golangci-lint.sh | bash -s -- -b /tmp/bin v${GOLANGCILINT_VERSION} && \
     mv /tmp/bin/golangci-lint /go/bin && \

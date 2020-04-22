@@ -33,6 +33,8 @@ syntax = "proto2";
 
 package aesm;
 
+option go_package = ".;aesm";
+
 message Request{
 
     message InitQuoteRequest{
