@@ -58,8 +58,10 @@ func MakeDoubleSignEvidence(t *testing.T, ident *identity.Identity) consensus.Ev
 		},
 	}
 	now := time.Now()
+	pk, err := pv1.GetPubKey()
+	require.NoError(err, "GetPubKey")
 	ev := &tmtypes.DuplicateVoteEvidence{
-		PubKey: pv1.GetPubKey(),
+		PubKey: pk,
 		// NOTE: ChainID must match the unit test genesis block.
 		VoteA: makeVote(pv1, genesisTestHelpers.TestChainID, 0, 1, 2, 1, blockID1, now),
 		VoteB: makeVote(pv2, genesisTestHelpers.TestChainID, 0, 1, 2, 1, blockID2, now),
@@ -69,7 +71,11 @@ func MakeDoubleSignEvidence(t *testing.T, ident *identity.Identity) consensus.Ev
 
 // makeVote copied from Tendermint test suite.
 func makeVote(val tmtypes.PrivValidator, chainID string, valIndex int, height int64, round, step int, blockID tmtypes.BlockID, ts time.Time) *tmtypes.Vote {
-	addr := val.GetPubKey().Address()
+	pk, err := val.GetPubKey()
+	if err != nil {
+		panic(err)
+	}
+	addr := pk.Address()
 	v := &tmtypes.Vote{
 		ValidatorAddress: addr,
 		ValidatorIndex:   valIndex,
@@ -79,7 +85,7 @@ func makeVote(val tmtypes.PrivValidator, chainID string, valIndex int, height in
 		BlockID:          blockID,
 		Timestamp:        ts,
 	}
-	err := val.SignVote(chainID, v)
+	err = val.SignVote(chainID, v)
 	if err != nil {
 		panic(err)
 	}

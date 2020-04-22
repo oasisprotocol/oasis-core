@@ -22,7 +22,7 @@ import (
 	tmnode "github.com/tendermint/tendermint/node"
 	tmp2p "github.com/tendermint/tendermint/p2p"
 	tmproxy "github.com/tendermint/tendermint/proxy"
-	tmcli "github.com/tendermint/tendermint/rpc/client"
+	tmcli "github.com/tendermint/tendermint/rpc/client/local"
 	tmrpctypes "github.com/tendermint/tendermint/rpc/core/types"
 	tmtypes "github.com/tendermint/tendermint/types"
 
@@ -186,7 +186,7 @@ type tendermintService struct {
 	upgrader      upgradeAPI.Backend
 	mux           *abci.ApplicationServer
 	node          *tmnode.Node
-	client        tmcli.Client
+	client        *tmcli.Local
 	blockNotifier *pubsub.Broker
 	failMonitor   *failMonitor
 
@@ -1054,7 +1054,7 @@ func (t *tendermintService) lazyInit() error {
 		if err != nil {
 			return fmt.Errorf("tendermint: failed to create node: %w", err)
 		}
-		t.client = tmcli.NewLocal(t.node)
+		t.client = tmcli.New(t.node)
 		t.failMonitor = newFailMonitor(t.Logger, t.node.ConsensusState().Wait)
 
 		return nil
