@@ -1110,7 +1110,7 @@ func genesisToTendermint(d *genesisAPI.Document) (*tmtypes.GenesisDoc, error) {
 	var tmValidators []tmtypes.GenesisValidator
 	for _, v := range d.Registry.Nodes {
 		var openedNode node.Node
-		if err := v.Open(registryAPI.RegisterGenesisNodeSignatureContext, &openedNode); err != nil {
+		if err = v.Open(registryAPI.RegisterGenesisNodeSignatureContext, &openedNode); err != nil {
 			return nil, fmt.Errorf("tendermint: failed to verify validator: %w", err)
 		}
 		// TODO: This should cross check that the entity is valid.
@@ -1118,11 +1118,30 @@ func genesisToTendermint(d *genesisAPI.Document) (*tmtypes.GenesisDoc, error) {
 			continue
 		}
 
+		var power int64
+		if d.Scheduler.Parameters.DebugBypassStake {
+			power = 1
+		} else {
+			account, ok := d.Staking.Ledger[openedNode.EntityID]
+			if !ok {
+				return nil, fmt.Errorf("tendermint: node %s entity %s has no account", openedNode.ID, openedNode.EntityID)
+			}
+			stake := account.Escrow.Active.Balance.Clone()
+			power, err = schedulerAPI.VotingPowerFromTokens(stake)
+			if err != nil {
+				return nil, fmt.Errorf("tendermint: computing voting power for entity %s with balance %v: %w",
+					openedNode.EntityID,
+					account.Escrow.Active.Balance,
+					err,
+				)
+			}
+		}
+
 		pk := crypto.PublicKeyToTendermint(&openedNode.Consensus.ID)
 		validator := tmtypes.GenesisValidator{
 			Address: pk.Address(),
 			PubKey:  pk,
-			Power:   consensusAPI.VotingPower,
+			Power:   power,
 			Name:    "oasis-validator-" + openedNode.ID.String(),
 		}
 		tmValidators = append(tmValidators, validator)
