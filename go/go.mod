@@ -23,7 +23,7 @@ require (
 	github.com/fxamacker/cbor/v2 v2.2.0
 	github.com/glycerine/goconvey v0.0.0-20190410193231-58a59202ab31 // indirect
 	github.com/go-kit/kit v0.10.0
-	github.com/golang/protobuf v1.3.4
+	github.com/golang/protobuf v1.4.0-rc.4.0.20200313231945-b860323f09d0
 	github.com/golang/snappy v0.0.1
 	github.com/gopherjs/gopherjs v0.0.0-20190430165422-3e4dfb77656c // indirect
 	github.com/grpc-ecosystem/go-grpc-middleware v1.0.1-0.20190118093823-f849b5445de4
@@ -66,6 +66,7 @@ require (
 	google.golang.org/genproto v0.0.0-20190819201941-24fa4b261c55
 	google.golang.org/grpc v1.28.1
 	google.golang.org/grpc/security/advancedtls v0.0.0-20200406221258-98e4c7ad3eef
+	google.golang.org/protobuf v1.21.0
 )
 
 go 1.13

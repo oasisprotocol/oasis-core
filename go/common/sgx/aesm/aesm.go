@@ -10,7 +10,7 @@ import (
 	"net"
 	"time"
 
-	"github.com/golang/protobuf/proto"
+	"google.golang.org/protobuf/proto"
 
 	"github.com/oasislabs/oasis-core/go/common/sgx/ias"
 )
