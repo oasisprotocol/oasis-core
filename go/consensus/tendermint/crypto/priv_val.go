@@ -253,8 +253,8 @@ type privVal struct {
 	signer   signature.Signer
 }
 
-func (pv *privVal) GetPubKey() tmcrypto.PubKey {
-	return PublicKeyToTendermint(&pv.PublicKey)
+func (pv *privVal) GetPubKey() (tmcrypto.PubKey, error) {
+	return PublicKeyToTendermint(&pv.PublicKey), nil
 }
 
 func (pv *privVal) SignVote(chainID string, vote *tmtypes.Vote) error {

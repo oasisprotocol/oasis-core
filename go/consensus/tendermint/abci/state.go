@@ -238,23 +238,23 @@ func (s *applicationState) doInitChain(now time.Time) error {
 	return s.doCommitOrInitChainLocked(now)
 }
 
-func (s *applicationState) doCommit(now time.Time) error {
+func (s *applicationState) doCommit(now time.Time) (uint64, error) {
 	s.blockLock.Lock()
 	defer s.blockLock.Unlock()
 
 	_, stateRootHash, err := s.deliverTxTree.Commit(s.ctx, s.stateRoot.Namespace, s.stateRoot.Version+1)
 	if err != nil {
-		return fmt.Errorf("failed to commit: %w", err)
+		return 0, fmt.Errorf("failed to commit: %w", err)
 	}
 	if err = s.storage.NodeDB().Finalize(s.ctx, s.stateRoot.Version+1, []hash.Hash{stateRootHash}); err != nil {
-		return fmt.Errorf("failed to finalize round %d: %w", s.stateRoot.Version+1, err)
+		return 0, fmt.Errorf("failed to finalize round %d: %w", s.stateRoot.Version+1, err)
 	}
 
 	s.stateRoot.Hash = stateRootHash
 	s.stateRoot.Version++
 
 	if err := s.doCommitOrInitChainLocked(now); err != nil {
-		return err
+		return 0, err
 	}
 
 	// Switch the CheckTx tree to the newly committed version. Note that this is safe as Tendermint
@@ -264,8 +264,10 @@ func (s *applicationState) doCommit(now time.Time) error {
 
 	// Notify pruner of a new block.
 	s.prunerNotifyCh.In() <- s.stateRoot.Version
+	// Discover the version below which all versions can be discarded from block history.
+	lastRetainedVersion := s.statePruner.GetLastRetainedVersion()
 
-	return nil
+	return lastRetainedVersion, nil
 }
 
 // Guarded by s.blockLock.

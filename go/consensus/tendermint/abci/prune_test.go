@@ -65,6 +65,9 @@ func TestPruneKeepN(t *testing.T) {
 	require.NoError(err, "GetLatestVersion")
 	require.EqualValues(11, latestVersion, "latest version should be correct")
 
+	lastRetainedVersion := pruner.GetLastRetainedVersion()
+	require.EqualValues(8, lastRetainedVersion, "last retained version should be correct")
+
 	err = pruner.Prune(ctx, 11)
 	require.NoError(err, "Prune")
 
@@ -74,4 +77,7 @@ func TestPruneKeepN(t *testing.T) {
 	latestVersion, err = ndb.GetLatestVersion(ctx)
 	require.NoError(err, "GetLatestVersion")
 	require.EqualValues(11, latestVersion, "latest version should be correct")
+
+	lastRetainedVersion = pruner.GetLastRetainedVersion()
+	require.EqualValues(9, lastRetainedVersion, "last retained version should be correct")
 }
