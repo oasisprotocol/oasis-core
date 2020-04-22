@@ -148,6 +148,21 @@ func (c *Committee) EncodedMembersHash() hash.Hash {
 	return hh
 }
 
+// TokensPerVotingPower is the ratio of base units staked to validator power.
+var TokensPerVotingPower quantity.Quantity
+
+func VotingPowerFromTokens(t *quantity.Quantity) (int64, error) {
+	powerQ := t.Clone()
+	if err := powerQ.Quo(&TokensPerVotingPower); err != nil {
+		return 0, fmt.Errorf("quo %v / %v: %w", t, &TokensPerVotingPower, err)
+	}
+	powerBI := powerQ.ToBigInt()
+	if !powerBI.IsInt64() {
+		return 0, fmt.Errorf("%v is too many tokens to convert to power", powerQ)
+	}
+	return powerBI.Int64(), nil
+}
+
 // Validator is a consensus validator.
 type Validator struct {
 	// ID is the validator Oasis node identifier.
@@ -232,4 +247,11 @@ func (g *Genesis) SanityCheck() error {
 	}
 
 	return nil
+}
+
+func init() {
+	// 2 allows for up to 1.8e19 base units to be staked.
+	if err := TokensPerVotingPower.FromUint64(2); err != nil {
+		panic(err)
+	}
 }

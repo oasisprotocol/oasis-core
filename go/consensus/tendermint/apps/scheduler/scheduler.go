@@ -16,6 +16,7 @@ import (
 	"github.com/oasislabs/oasis-core/go/common/crypto/mathrand"
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
 	"github.com/oasislabs/oasis-core/go/common/node"
+	"github.com/oasislabs/oasis-core/go/common/quantity"
 	"github.com/oasislabs/oasis-core/go/consensus/api/transaction"
 	"github.com/oasislabs/oasis-core/go/consensus/tendermint/abci"
 	"github.com/oasislabs/oasis-core/go/consensus/tendermint/api"
@@ -591,7 +592,7 @@ func (app *schedulerApplication) electValidators(
 
 	// Go down the list of entities running nodes by stake, picking one node
 	// to act as a validator till the maximum is reached.
-	var newValidators []signature.PublicKey
+	newValidators := make(map[signature.PublicKey]int64)
 electLoop:
 	for _, v := range sortedEntities {
 		vec := entityNodes[v]
@@ -613,7 +614,23 @@ electLoop:
 				entitiesEligibleForReward[n.EntityID] = true
 			}
 
-			newValidators = append(newValidators, n.Consensus.ID)
+			var power int64
+			if stakeAcc == nil {
+				// In simplified no-stake deployments, make validators have flat voting power.
+				power = 1
+			} else {
+				var stake *quantity.Quantity
+				stake, err = stakeAcc.GetEscrowBalance(v)
+				if err != nil {
+					return fmt.Errorf("failed to fetch escrow balance for entity %s: %w", v, err)
+				}
+				power, err = scheduler.VotingPowerFromTokens(stake)
+				if err != nil {
+					return fmt.Errorf("computing voting power for entity %s with balance %v: %w", v, stake, err)
+				}
+			}
+
+			newValidators[n.Consensus.ID] = power
 			if len(newValidators) >= params.MaxValidators {
 				break electLoop
 			}

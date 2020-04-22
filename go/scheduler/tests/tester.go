@@ -155,7 +155,7 @@ func SchedulerImplementationTests(t *testing.T, name string, backend api.Backend
 
 	require.Len(validators, 1, "should be only one static validator")
 	require.Equal(consensus.ConsensusKey(), validators[0].ID)
-	require.EqualValues(consensusAPI.VotingPower, validators[0].VotingPower)
+	require.EqualValues(1, validators[0].VotingPower)
 }
 
 func requireValidCommitteeMembers(t *testing.T, committee *api.Committee, runtime *registry.Runtime, nodes []*node.Node) {
