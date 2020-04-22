@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"sync"
 
 	"github.com/oasislabs/oasis-core/go/common/logging"
 	nodedb "github.com/oasislabs/oasis-core/go/storage/mkvs/db/api"
@@ -66,7 +67,16 @@ type PruneConfig struct {
 type StatePruner interface {
 	// Prune purges unneeded versions from the ABCI mux node database,
 	// given the latest version, based on the underlying strategy.
+	//
+	// This method is NOT safe for concurrent use.
 	Prune(ctx context.Context, latestVersion uint64) error
+
+	// GetLastRetainedVersion returns the earliest version below which all
+	// versions can be discarded from block history. Zero indicates that
+	// no versions can be discarded.
+	//
+	// This method can be called concurrently with Prune.
+	GetLastRetainedVersion() uint64
 }
 
 type statePrunerInitializer interface {
@@ -80,12 +90,19 @@ func (p *nonePruner) Prune(ctx context.Context, latestVersion uint64) error {
 	return nil
 }
 
+func (p *nonePruner) GetLastRetainedVersion() uint64 {
+	return 0
+}
+
 type genericPruner struct {
+	sync.Mutex
+
 	logger *logging.Logger
 	ndb    nodedb.NodeDB
 
-	earliestVersion uint64
-	keepN           uint64
+	earliestVersion     uint64
+	keepN               uint64
+	lastRetainedVersion uint64
 }
 
 func (p *genericPruner) Initialize(latestVersion uint64) error {
@@ -96,6 +113,12 @@ func (p *genericPruner) Initialize(latestVersion uint64) error {
 	}
 
 	return p.doPrune(context.Background(), latestVersion)
+}
+
+func (p *genericPruner) GetLastRetainedVersion() uint64 {
+	p.Lock()
+	defer p.Unlock()
+	return p.lastRetainedVersion
 }
 
 func (p *genericPruner) Prune(ctx context.Context, latestVersion uint64) error {
@@ -142,6 +165,11 @@ func (p *genericPruner) doPrune(ctx context.Context, latestVersion uint64) error
 			return err
 		}
 	}
+
+	// We can discard everything below the earliest version.
+	p.Lock()
+	p.lastRetainedVersion = p.earliestVersion
+	p.Unlock()
 
 	p.logger.Debug("Prune: Finish",
 		"latest_version", latestVersion,

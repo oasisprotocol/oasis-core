@@ -885,7 +885,8 @@ func (mux *abciMux) EndBlock(req types.RequestEndBlock) types.ResponseEndBlock {
 }
 
 func (mux *abciMux) Commit() types.ResponseCommit {
-	if err := mux.state.doCommit(mux.currentTime); err != nil {
+	lastRetainedVersion, err := mux.state.doCommit(mux.currentTime)
+	if err != nil {
 		mux.logger.Error("Commit failed",
 			"err", err,
 		)
@@ -898,9 +899,13 @@ func (mux *abciMux) Commit() types.ResponseCommit {
 	mux.logger.Debug("Commit",
 		"block_height", mux.state.BlockHeight(),
 		"block_hash", hex.EncodeToString(mux.state.BlockHash()),
+		"last_retained_version", lastRetainedVersion,
 	)
 
-	return types.ResponseCommit{Data: mux.state.BlockHash()}
+	return types.ResponseCommit{
+		Data:         mux.state.BlockHash(),
+		RetainHeight: int64(lastRetainedVersion),
+	}
 }
 
 func (mux *abciMux) doCleanup() {
