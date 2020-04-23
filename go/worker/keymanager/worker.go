@@ -25,6 +25,7 @@ import (
 	roothash "github.com/oasislabs/oasis-core/go/roothash/api"
 	"github.com/oasislabs/oasis-core/go/roothash/api/block"
 	runtimeCommittee "github.com/oasislabs/oasis-core/go/runtime/committee"
+	runtimeRegistry "github.com/oasislabs/oasis-core/go/runtime/registry"
 	workerCommon "github.com/oasislabs/oasis-core/go/worker/common"
 	committeeCommon "github.com/oasislabs/oasis-core/go/worker/common/committee"
 	"github.com/oasislabs/oasis-core/go/worker/common/host"
@@ -63,7 +64,7 @@ type Worker struct { // nolint: maligned
 
 	initialSyncDone bool
 
-	runtimeID     common.Namespace
+	runtime       runtimeRegistry.Runtime
 	workerHost    host.Host
 	workerHostCfg host.Config
 
@@ -287,7 +288,7 @@ func (w *Worker) updateStatus(status *api.Status, startedEvent *host.StartedEven
 
 	// Register as we are now ready to handle requests.
 	w.roleProvider.SetAvailable(func(n *node.Node) error {
-		rt := n.AddOrUpdateRuntime(w.runtimeID)
+		rt := n.AddOrUpdateRuntime(w.runtime.ID())
 		rt.Version = startedEvent.Version
 		rt.ExtraInfo = cbor.Marshal(signedInitResp)
 		rt.Capabilities.TEE = startedEvent.CapabilityTEE
@@ -369,9 +370,13 @@ func (w *Worker) worker() { // nolint: gocyclo
 	}
 	defer rtSub.Close()
 
-	var workerHostCh <-chan *host.Event
-	var currentStatus *api.Status
-	var currentStartedEvent *host.StartedEvent
+	var (
+		workerHostCh        <-chan *host.Event
+		currentStatus       *api.Status
+		currentStartedEvent *host.StartedEvent
+
+		runtimeID = w.runtime.ID()
+	)
 	for {
 		select {
 		case ev := <-workerHostCh:
@@ -401,7 +406,7 @@ func (w *Worker) worker() { // nolint: gocyclo
 				)
 			}
 		case status := <-statusCh:
-			if !status.ID.Equal(&w.runtimeID) {
+			if !status.ID.Equal(&runtimeID) {
 				continue
 			}
 
@@ -461,7 +466,7 @@ func (w *Worker) worker() { // nolint: gocyclo
 				continue
 			}
 		case rt := <-rtCh:
-			if rt.Kind != registry.KindCompute || rt.KeyManager == nil || !rt.KeyManager.Equal(&w.runtimeID) {
+			if rt.Kind != registry.KindCompute || rt.KeyManager == nil || !rt.KeyManager.Equal(&runtimeID) {
 				continue
 			}
 			if clientRuntimes[rt.ID] != nil {
@@ -555,10 +560,10 @@ func (crw *clientRuntimeWatcher) updateExternalServicePolicyLocked(snapshot *com
 
 	// Fetch current KM node public keys, get their nodes, apply rules.
 	height := snapshot.GetGroupVersion()
-	status, err := crw.w.backend.GetStatus(crw.w.ctx, crw.w.runtimeID, height)
+	status, err := crw.w.backend.GetStatus(crw.w.ctx, crw.w.runtime.ID(), height)
 	if err != nil {
 		crw.w.logger.Error("worker/keymanager: unable to get KM status",
-			"runtimeID", crw.w.runtimeID,
+			"runtimeID", crw.w.runtime.ID(),
 			"err", err)
 	} else {
 		var kmNodes []*node.Node
