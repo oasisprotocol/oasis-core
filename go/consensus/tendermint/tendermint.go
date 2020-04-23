@@ -36,6 +36,7 @@ import (
 	"github.com/oasislabs/oasis-core/go/common/logging"
 	"github.com/oasislabs/oasis-core/go/common/node"
 	"github.com/oasislabs/oasis-core/go/common/pubsub"
+	"github.com/oasislabs/oasis-core/go/common/quantity"
 	cmservice "github.com/oasislabs/oasis-core/go/common/service"
 	consensusAPI "github.com/oasislabs/oasis-core/go/consensus/api"
 	"github.com/oasislabs/oasis-core/go/consensus/api/transaction"
@@ -1122,16 +1123,18 @@ func genesisToTendermint(d *genesisAPI.Document) (*tmtypes.GenesisDoc, error) {
 		if d.Scheduler.Parameters.DebugBypassStake {
 			power = 1
 		} else {
-			account, ok := d.Staking.Ledger[openedNode.EntityID]
-			if !ok {
-				return nil, fmt.Errorf("tendermint: node %s entity %s has no account", openedNode.ID, openedNode.EntityID)
+			var stake *quantity.Quantity
+			if account, ok := d.Staking.Ledger[openedNode.EntityID]; ok {
+				stake = account.Escrow.Active.Balance.Clone()
+			} else {
+				// If all balances and stuff are zero, it's permitted not to have an account in the ledger at all.
+				stake = &quantity.Quantity{}
 			}
-			stake := account.Escrow.Active.Balance.Clone()
 			power, err = schedulerAPI.VotingPowerFromTokens(stake)
 			if err != nil {
-				return nil, fmt.Errorf("tendermint: computing voting power for entity %s with balance %v: %w",
+				return nil, fmt.Errorf("tendermint: computing voting power for entity %s with stake %v: %w",
 					openedNode.EntityID,
-					account.Escrow.Active.Balance,
+					stake,
 					err,
 				)
 			}
