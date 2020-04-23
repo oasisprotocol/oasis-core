@@ -26,6 +26,7 @@ func (client *Client) startNode() error {
 		debugDontBlameOasis().
 		debugAllowTestKeys().
 		tendermintDebugDisableCheckTx(client.consensus.DisableCheckTx).
+		tendermintPrune(client.consensus.PruneNumKept).
 		tendermintCoreListenAddress(client.consensusPort).
 		storageBackend(storageClient.BackendName).
 		appendNetwork(client.net).

@@ -12,6 +12,7 @@ import (
 	"github.com/oasislabs/oasis-core/go/common/node"
 	"github.com/oasislabs/oasis-core/go/common/sgx"
 	"github.com/oasislabs/oasis-core/go/consensus/tendermint"
+	"github.com/oasislabs/oasis-core/go/consensus/tendermint/abci"
 	epochtime "github.com/oasislabs/oasis-core/go/epochtime/api"
 	"github.com/oasislabs/oasis-core/go/ias"
 	cmdCommon "github.com/oasislabs/oasis-core/go/oasis-node/cmd/common"
@@ -88,6 +89,20 @@ func (args *argBuilder) tendermintSubmissionGasPrice(price uint64) *argBuilder {
 	args.vec = append(args.vec, []string{
 		"--" + tendermint.CfgConsensusSubmissionGasPrice, strconv.Itoa(int(price)),
 	}...)
+	return args
+}
+
+func (args *argBuilder) tendermintPrune(numKept uint64) *argBuilder {
+	if numKept > 0 {
+		args.vec = append(args.vec,
+			"--"+tendermint.CfgABCIPruneStrategy, abci.PruneKeepN.String(),
+			"--"+tendermint.CfgABCIPruneNumKept, strconv.FormatUint(numKept, 10),
+		)
+	} else {
+		args.vec = append(args.vec,
+			"--"+tendermint.CfgABCIPruneStrategy, abci.PruneNone.String(),
+		)
+	}
 	return args
 }
 

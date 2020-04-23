@@ -200,6 +200,7 @@ func (km *Keymanager) startNode() error {
 		debugAllowTestKeys().
 		tendermintCoreListenAddress(km.consensusPort).
 		tendermintSubmissionGasPrice(km.consensus.SubmissionGasPrice).
+		tendermintPrune(km.consensus.PruneNumKept).
 		workerClientPort(km.workerClientPort).
 		workerKeymanagerEnabled().
 		workerKeymanagerRuntimeBinary(km.runtime.binary).

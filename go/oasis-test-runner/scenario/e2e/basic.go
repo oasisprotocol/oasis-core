@@ -67,6 +67,10 @@ func (sc *basicImpl) Name() string {
 	return sc.name
 }
 
+func (sc *basicImpl) PreInit(childEnv *env.Env) error {
+	return nil
+}
+
 func (sc *basicImpl) Fixture() (*oasis.NetworkFixture, error) {
 	var tee node.TEEHardware
 	err := tee.FromString(viper.GetString(cfgTEEHardware))

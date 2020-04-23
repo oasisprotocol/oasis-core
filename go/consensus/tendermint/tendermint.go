@@ -74,8 +74,10 @@ const (
 	CfgCoreListenAddress   = "tendermint.core.listen_address"
 	cfgCoreExternalAddress = "tendermint.core.external_address"
 
-	cfgABCIPruneStrategy = "tendermint.abci.prune.strategy"
-	cfgABCIPruneNumKept  = "tendermint.abci.prune.num_kept"
+	// CfgABCIPruneStrategy configures the ABCI state pruning strategy.
+	CfgABCIPruneStrategy = "tendermint.abci.prune.strategy"
+	// CfgABCIPruneNumKept configures the amount of kept heights if pruning is enabled.
+	CfgABCIPruneNumKept = "tendermint.abci.prune.num_kept"
 
 	// CfgSentryUpstreamAddress defines nodes for which we act as a sentry for.
 	CfgSentryUpstreamAddress = "tendermint.sentry.upstream_address"
@@ -910,11 +912,11 @@ func (t *tendermintService) lazyInit() error {
 
 	// Create Tendermint application mux.
 	var pruneCfg abci.PruneConfig
-	pruneStrat := viper.GetString(cfgABCIPruneStrategy)
+	pruneStrat := viper.GetString(CfgABCIPruneStrategy)
 	if err = pruneCfg.Strategy.FromString(pruneStrat); err != nil {
 		return err
 	}
-	pruneCfg.NumKept = viper.GetUint64(cfgABCIPruneNumKept)
+	pruneCfg.NumKept = viper.GetUint64(CfgABCIPruneNumKept)
 
 	appConfig := &abci.ApplicationConfig{
 		DataDir:         filepath.Join(t.dataDir, StateDir),
@@ -1382,8 +1384,8 @@ func newLogAdapter(suppressDebug bool) tmlog.Logger {
 func init() {
 	Flags.String(CfgCoreListenAddress, "tcp://0.0.0.0:26656", "tendermint core listen address")
 	Flags.String(cfgCoreExternalAddress, "", "tendermint address advertised to other nodes")
-	Flags.String(cfgABCIPruneStrategy, abci.PruneDefault, "ABCI state pruning strategy")
-	Flags.Uint64(cfgABCIPruneNumKept, 3600, "ABCI state versions kept (when applicable)")
+	Flags.String(CfgABCIPruneStrategy, abci.PruneDefault, "ABCI state pruning strategy")
+	Flags.Uint64(CfgABCIPruneNumKept, 3600, "ABCI state versions kept (when applicable)")
 	Flags.StringSlice(CfgSentryUpstreamAddress, []string{}, "Tendermint nodes for which we act as sentry of the form ID@ip:port")
 	Flags.StringSlice(CfgP2PPersistentPeer, []string{}, "Tendermint persistent peer(s) of the form ID@ip:port")
 	Flags.StringSlice(CfgP2PUnconditionalPeerIDs, []string{}, "Tendermint unconditional peer IDs")

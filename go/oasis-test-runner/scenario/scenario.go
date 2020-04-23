@@ -14,6 +14,10 @@ type Scenario interface {
 	// be something suitable for use as a command line argument.
 	Name() string
 
+	// PreInit performs initial scenario initialization. It is guaranteed to be called before
+	// a new fixture is initialized in Fixture.
+	PreInit(childEnv *env.Env) error
+
 	// Fixture returns a network fixture to use for this scenario.
 	//
 	// It may return nil in case the scenario doesn't use a fixture and

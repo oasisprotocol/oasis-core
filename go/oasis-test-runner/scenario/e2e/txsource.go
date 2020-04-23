@@ -48,8 +48,11 @@ var TxSourceMultiShort scenario.Scenario = &txSourceImpl{
 		workload.NameRuntime,
 		workload.NameTransfer,
 	},
-	timeLimit:             timeLimitShort,
-	livenessCheckInterval: livenessCheckInterval,
+	timeLimit:                         timeLimitShort,
+	livenessCheckInterval:             livenessCheckInterval,
+	consensusPruneDisabledProbability: 0.1,
+	consensusPruneMinKept:             1,
+	consensusPruneMaxKept:             100,
 }
 
 // TxSourceMulti uses multiple workloads.
@@ -65,16 +68,19 @@ var TxSourceMulti scenario.Scenario = &txSourceImpl{
 		workload.NameRuntime,
 		workload.NameTransfer,
 	},
-	timeLimit:             timeLimitLong,
-	nodeRestartInterval:   nodeRestartIntervalLong,
-	livenessCheckInterval: livenessCheckInterval,
+	timeLimit:                         timeLimitLong,
+	nodeRestartInterval:               nodeRestartIntervalLong,
+	livenessCheckInterval:             livenessCheckInterval,
+	consensusPruneDisabledProbability: 0.1,
+	consensusPruneMinKept:             1,
+	consensusPruneMaxKept:             1000,
 	// Nodes getting killed commonly result in corrupted tendermint WAL when the
 	// node is restarted. Enable automatic corrupted WAL recovery for validator
 	// nodes.
 	tendermintRecoverCorruptedWAL: true,
 }
 
-type txSourceImpl struct {
+type txSourceImpl struct { // nolint: maligned
 	basicImpl
 
 	workloads             []string
@@ -82,10 +88,51 @@ type txSourceImpl struct {
 	nodeRestartInterval   time.Duration
 	livenessCheckInterval time.Duration
 
+	consensusPruneDisabledProbability float32
+	consensusPruneMinKept             int64
+	consensusPruneMaxKept             int64
+
 	tendermintRecoverCorruptedWAL bool
 
 	rng  *rand.Rand
 	seed string
+}
+
+func (sc *txSourceImpl) PreInit(childEnv *env.Env) error {
+	// Generate a new random seed and log it so we can reproduce the run.
+	// TODO: Allow the seed to be overriden in order to reproduce randomness (minus timing).
+	rawSeed := make([]byte, 16)
+	_, err := cryptoRand.Read(rawSeed)
+	if err != nil {
+		return fmt.Errorf("failed to generate random seed: %w", err)
+	}
+	sc.seed = hex.EncodeToString(rawSeed)
+
+	sc.logger.Info("using random seed",
+		"seed", sc.seed,
+	)
+
+	// Set up the deterministic random source.
+	hash := crypto.SHA512
+	src, err := drbg.New(hash, []byte(sc.seed), nil, []byte("txsource scenario"))
+	if err != nil {
+		return fmt.Errorf("failed to create random source: %w", err)
+	}
+	sc.rng = rand.New(mathrand.New(src))
+
+	return nil
+}
+
+func (sc *txSourceImpl) generateConsensusFixture(f *oasis.ConsensusFixture) {
+	// Randomize pruning configuration.
+	p := sc.rng.Float32()
+	switch {
+	case p < sc.consensusPruneDisabledProbability:
+		f.PruneNumKept = 0
+	default:
+		// [sc.consensusPruneMinKept, sc.consensusPruneMaxKept]
+		f.PruneNumKept = uint64(sc.rng.Int63n(sc.consensusPruneMaxKept-sc.consensusPruneMinKept+1) + sc.consensusPruneMinKept)
+	}
 }
 
 func (sc *txSourceImpl) Fixture() (*oasis.NetworkFixture, error) {
@@ -123,19 +170,24 @@ func (sc *txSourceImpl) Fixture() (*oasis.NetworkFixture, error) {
 		f.Validators[i].Consensus.MinGasPrice = txSourceGasPrice
 		f.Validators[i].Consensus.SubmissionGasPrice = txSourceGasPrice
 		f.Validators[i].Consensus.TendermintRecoverCorruptedWAL = sc.tendermintRecoverCorruptedWAL
+		sc.generateConsensusFixture(&f.Validators[i].Consensus)
 	}
 	// Update all other nodes to use a specific gas price.
 	for i := range f.Keymanagers {
 		f.Keymanagers[i].Consensus.SubmissionGasPrice = txSourceGasPrice
+		sc.generateConsensusFixture(&f.Keymanagers[i].Consensus)
 	}
 	for i := range f.StorageWorkers {
 		f.StorageWorkers[i].Consensus.SubmissionGasPrice = txSourceGasPrice
+		sc.generateConsensusFixture(&f.StorageWorkers[i].Consensus)
 	}
 	for i := range f.ComputeWorkers {
 		f.ComputeWorkers[i].Consensus.SubmissionGasPrice = txSourceGasPrice
+		sc.generateConsensusFixture(&f.ComputeWorkers[i].Consensus)
 	}
 	for i := range f.ByzantineNodes {
 		f.ByzantineNodes[i].Consensus.SubmissionGasPrice = txSourceGasPrice
+		sc.generateConsensusFixture(&f.ByzantineNodes[i].Consensus)
 	}
 
 	return f, nil
@@ -143,28 +195,6 @@ func (sc *txSourceImpl) Fixture() (*oasis.NetworkFixture, error) {
 
 func (sc *txSourceImpl) Init(childEnv *env.Env, net *oasis.Network) error {
 	sc.net = net
-
-	// Generate a new random seed and log it so we can reproduce the run.
-	// TODO: Allow the seed to be overriden in order to reproduce randomness (minus timing).
-	rawSeed := make([]byte, 16)
-	_, err := cryptoRand.Read(rawSeed)
-	if err != nil {
-		return fmt.Errorf("failed to generate random seed: %w", err)
-	}
-	sc.seed = hex.EncodeToString(rawSeed)
-
-	sc.logger.Info("using random seed",
-		"seed", sc.seed,
-	)
-
-	// Set up the deterministic random source.
-	hash := crypto.SHA512
-	src, err := drbg.New(hash, []byte(sc.seed), nil, []byte("txsource scenario"))
-	if err != nil {
-		return fmt.Errorf("failed to create random source: %w", err)
-	}
-	sc.rng = rand.New(mathrand.New(src))
-
 	return nil
 }
 

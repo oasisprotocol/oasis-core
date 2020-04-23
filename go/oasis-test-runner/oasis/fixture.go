@@ -120,6 +120,9 @@ type ConsensusFixture struct { // nolint: maligned
 	// DisableCheckTx causes the consensus layer to skip transaction checks.
 	DisableCheckTx bool `json:"disable_check_tx"`
 
+	// PruneNumKept is the number of blocks to keep (zero disables pruning).
+	PruneNumKept uint64 `json:"prune_num_kept"`
+
 	// TendermintRecoverCorruptedWAL enables automatic recovery of corrupted Tendermint's WAL.
 	TendermintRecoverCorruptedWAL bool `json:"tendermint_recover_corrupted_wal"`
 }

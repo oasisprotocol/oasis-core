@@ -82,6 +82,7 @@ func (worker *Compute) startNode() error {
 		debugAllowTestKeys().
 		tendermintCoreListenAddress(worker.consensusPort).
 		tendermintSubmissionGasPrice(worker.consensus.SubmissionGasPrice).
+		tendermintPrune(worker.consensus.PruneNumKept).
 		storageBackend(storageClient.BackendName).
 		workerClientPort(worker.clientPort).
 		workerP2pPort(worker.p2pPort).

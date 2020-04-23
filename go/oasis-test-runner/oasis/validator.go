@@ -79,6 +79,7 @@ func (val *Validator) startNode() error {
 		tendermintCoreListenAddress(val.consensusPort).
 		tendermintMinGasPrice(val.consensus.MinGasPrice).
 		tendermintSubmissionGasPrice(val.consensus.SubmissionGasPrice).
+		tendermintPrune(val.consensus.PruneNumKept).
 		storageBackend("client").
 		appendNetwork(val.net).
 		appendEntity(val.entity).
