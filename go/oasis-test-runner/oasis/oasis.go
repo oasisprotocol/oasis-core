@@ -71,9 +71,7 @@ type Node struct { // nolint: maligned
 	disableDefaultLogWatcherHandlerFactories bool
 	logWatcherHandlerFactories               []log.WatcherHandlerFactory
 
-	submissionGasPrice            uint64
-	consensusDisableCheckTx       bool
-	tendermintRecoverCorruptedWAL bool
+	consensus ConsensusFixture
 }
 
 // Exit returns a channel that will close once the node shuts down.
@@ -165,9 +163,8 @@ type NodeCfg struct { // nolint: maligned
 	DisableDefaultLogWatcherHandlerFactories bool
 	LogWatcherHandlerFactories               []log.WatcherHandlerFactory
 
-	SubmissionGasPrice            uint64
-	ConsensusDisableCheckTx       bool
-	TendermintRecoverCorruptedWAL bool
+	// Consensus contains configuration for the consensus backend.
+	Consensus ConsensusFixture
 }
 
 // CmdAttrs is the SysProcAttr that will ensure graceful cleanup.

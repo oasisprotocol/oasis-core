@@ -107,7 +107,7 @@ func (sc *txSourceImpl) Fixture() (*oasis.NetworkFixture, error) {
 	}
 
 	// Disable CheckTx on the client node so we can submit invalid transactions.
-	f.Clients[0].ConsensusDisableCheckTx = true
+	f.Clients[0].Consensus.DisableCheckTx = true
 
 	// Use at least 4 validators so that consensus can keep making progress
 	// when a node is being killed and restarted.
@@ -120,22 +120,22 @@ func (sc *txSourceImpl) Fixture() (*oasis.NetworkFixture, error) {
 
 	// Update validators to require fee payments.
 	for i := range f.Validators {
-		f.Validators[i].MinGasPrice = txSourceGasPrice
-		f.Validators[i].SubmissionGasPrice = txSourceGasPrice
-		f.Validators[i].TendermintRecoverCorruptedWAL = sc.tendermintRecoverCorruptedWAL
+		f.Validators[i].Consensus.MinGasPrice = txSourceGasPrice
+		f.Validators[i].Consensus.SubmissionGasPrice = txSourceGasPrice
+		f.Validators[i].Consensus.TendermintRecoverCorruptedWAL = sc.tendermintRecoverCorruptedWAL
 	}
 	// Update all other nodes to use a specific gas price.
 	for i := range f.Keymanagers {
-		f.Keymanagers[i].SubmissionGasPrice = txSourceGasPrice
+		f.Keymanagers[i].Consensus.SubmissionGasPrice = txSourceGasPrice
 	}
 	for i := range f.StorageWorkers {
-		f.StorageWorkers[i].SubmissionGasPrice = txSourceGasPrice
+		f.StorageWorkers[i].Consensus.SubmissionGasPrice = txSourceGasPrice
 	}
 	for i := range f.ComputeWorkers {
-		f.ComputeWorkers[i].SubmissionGasPrice = txSourceGasPrice
+		f.ComputeWorkers[i].Consensus.SubmissionGasPrice = txSourceGasPrice
 	}
 	for i := range f.ByzantineNodes {
-		f.ByzantineNodes[i].SubmissionGasPrice = txSourceGasPrice
+		f.ByzantineNodes[i].Consensus.SubmissionGasPrice = txSourceGasPrice
 	}
 
 	return f, nil

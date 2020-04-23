@@ -34,21 +34,21 @@ func (sc *gasFeesRuntimesImpl) Fixture() (*oasis.NetworkFixture, error) {
 	f.Network.StakingGenesis = "tests/fixture-data/gas-fees-runtimes/staking-genesis.json"
 	// Update validators to require fee payments.
 	for i := range f.Validators {
-		f.Validators[i].MinGasPrice = gasPrice
-		f.Validators[i].SubmissionGasPrice = gasPrice
+		f.Validators[i].Consensus.MinGasPrice = gasPrice
+		f.Validators[i].Consensus.SubmissionGasPrice = gasPrice
 	}
 	// Update all other nodes to use a specific gas price.
 	for i := range f.Keymanagers {
-		f.Keymanagers[i].SubmissionGasPrice = gasPrice
+		f.Keymanagers[i].Consensus.SubmissionGasPrice = gasPrice
 	}
 	for i := range f.StorageWorkers {
-		f.StorageWorkers[i].SubmissionGasPrice = gasPrice
+		f.StorageWorkers[i].Consensus.SubmissionGasPrice = gasPrice
 	}
 	for i := range f.ComputeWorkers {
-		f.ComputeWorkers[i].SubmissionGasPrice = gasPrice
+		f.ComputeWorkers[i].Consensus.SubmissionGasPrice = gasPrice
 	}
 	for i := range f.ByzantineNodes {
-		f.ByzantineNodes[i].SubmissionGasPrice = gasPrice
+		f.ByzantineNodes[i].Consensus.SubmissionGasPrice = gasPrice
 	}
 
 	return f, nil

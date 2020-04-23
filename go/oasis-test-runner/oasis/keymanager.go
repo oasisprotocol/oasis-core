@@ -199,7 +199,7 @@ func (km *Keymanager) startNode() error {
 		debugDontBlameOasis().
 		debugAllowTestKeys().
 		tendermintCoreListenAddress(km.consensusPort).
-		tendermintSubmissionGasPrice(km.submissionGasPrice).
+		tendermintSubmissionGasPrice(km.consensus.SubmissionGasPrice).
 		workerClientPort(km.workerClientPort).
 		workerKeymanagerEnabled().
 		workerKeymanagerRuntimeBinary(km.runtime.binary).
@@ -266,7 +266,7 @@ func (net *Network) NewKeymanager(cfg *KeymanagerCfg) (*Keymanager, error) {
 			termErrorOk:                              cfg.AllowErrorTermination,
 			disableDefaultLogWatcherHandlerFactories: cfg.DisableDefaultLogWatcherHandlerFactories,
 			logWatcherHandlerFactories:               cfg.LogWatcherHandlerFactories,
-			submissionGasPrice:                       cfg.SubmissionGasPrice,
+			consensus:                                cfg.Consensus,
 		},
 		runtime:          cfg.Runtime,
 		entity:           cfg.Entity,

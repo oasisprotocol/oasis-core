@@ -110,6 +110,20 @@ func (f *NetworkFixture) Create(env *env.Env) (*Network, error) {
 	return net, nil
 }
 
+// ConsensusFixture is a fixture containing consensus-related configuration.
+type ConsensusFixture struct { // nolint: maligned
+	// MinGasPrice specifies the minimum gas price accepted by a validator node.
+	MinGasPrice uint64 `json:"min_gas_price"`
+	// SubmissionGasPrice is the gas price to use when submitting consensus transactions.
+	SubmissionGasPrice uint64 `json:"submission_gas_price"`
+
+	// DisableCheckTx causes the consensus layer to skip transaction checks.
+	DisableCheckTx bool `json:"disable_check_tx"`
+
+	// TendermintRecoverCorruptedWAL enables automatic recovery of corrupted Tendermint's WAL.
+	TendermintRecoverCorruptedWAL bool `json:"tendermint_recover_corrupted_wal"`
+}
+
 // TEEFixture is a TEE configuration fixture.
 type TEEFixture struct {
 	Hardware node.TEEHardware `json:"hardware"`
@@ -125,12 +139,10 @@ type ValidatorFixture struct { // nolint: maligned
 
 	LogWatcherHandlerFactories []log.WatcherHandlerFactory `json:"-"`
 
-	MinGasPrice        uint64 `json:"min_gas_price"`
-	SubmissionGasPrice uint64 `json:"submission_gas_price"`
-
 	Sentries []int `json:"sentries,omitempty"`
 
-	TendermintRecoverCorruptedWAL bool `json:"tendermint_recover_corrupted_wal"`
+	// Consensus contains configuration for the consensus backend.
+	Consensus ConsensusFixture `json:"consensus"`
 }
 
 // Create instantiates the validator described by the fixture.
@@ -146,15 +158,13 @@ func (f *ValidatorFixture) Create(net *Network) (*Validator, error) {
 
 	return net.NewValidator(&ValidatorCfg{
 		NodeCfg: NodeCfg{
-			AllowEarlyTermination:         f.AllowEarlyTermination,
-			AllowErrorTermination:         f.AllowErrorTermination,
-			LogWatcherHandlerFactories:    f.LogWatcherHandlerFactories,
-			SubmissionGasPrice:            f.SubmissionGasPrice,
-			TendermintRecoverCorruptedWAL: f.TendermintRecoverCorruptedWAL,
+			AllowEarlyTermination:      f.AllowEarlyTermination,
+			AllowErrorTermination:      f.AllowErrorTermination,
+			LogWatcherHandlerFactories: f.LogWatcherHandlerFactories,
+			Consensus:                  f.Consensus,
 		},
-		Entity:      entity,
-		MinGasPrice: f.MinGasPrice,
-		Sentries:    sentries,
+		Entity:   entity,
+		Sentries: sentries,
 	})
 }
 
@@ -228,9 +238,10 @@ type KeymanagerFixture struct {
 	AllowEarlyTermination bool `json:"allow_early_termination"`
 	AllowErrorTermination bool `json:"allow_error_termination"`
 
-	SubmissionGasPrice uint64 `json:"submission_gas_price"`
-
 	Sentries []int `json:"sentries,omitempty"`
+
+	// Consensus contains configuration for the consensus backend.
+	Consensus ConsensusFixture `json:"consensus"`
 
 	LogWatcherHandlerFactories []log.WatcherHandlerFactory `json:"-"`
 }
@@ -251,7 +262,7 @@ func (f *KeymanagerFixture) Create(net *Network) (*Keymanager, error) {
 			AllowEarlyTermination:      f.AllowEarlyTermination,
 			AllowErrorTermination:      f.AllowErrorTermination,
 			LogWatcherHandlerFactories: f.LogWatcherHandlerFactories,
-			SubmissionGasPrice:         f.SubmissionGasPrice,
+			Consensus:                  f.Consensus,
 		},
 		Runtime:       runtime,
 		Entity:        entity,
@@ -267,11 +278,12 @@ type StorageWorkerFixture struct { // nolint: maligned
 	AllowEarlyTermination bool `json:"allow_early_termination"`
 	AllowErrorTermination bool `json:"allow_error_termination"`
 
-	SubmissionGasPrice uint64 `json:"submission_gas_price"`
-
 	LogWatcherHandlerFactories []log.WatcherHandlerFactory `json:"-"`
 
 	Sentries []int `json:"sentries,omitempty"`
+
+	// Consensus contains configuration for the consensus backend.
+	Consensus ConsensusFixture `json:"consensus"`
 
 	CheckpointCheckInterval time.Duration `json:"checkpoint_check_interval,omitempty"`
 	IgnoreApplies           bool          `json:"ignore_applies,omitempty"`
@@ -289,7 +301,7 @@ func (f *StorageWorkerFixture) Create(net *Network) (*Storage, error) {
 			AllowEarlyTermination:      f.AllowEarlyTermination,
 			AllowErrorTermination:      f.AllowErrorTermination,
 			LogWatcherHandlerFactories: f.LogWatcherHandlerFactories,
-			SubmissionGasPrice:         f.SubmissionGasPrice,
+			Consensus:                  f.Consensus,
 		},
 		Backend:                 f.Backend,
 		Entity:                  entity,
@@ -308,7 +320,8 @@ type ComputeWorkerFixture struct {
 	AllowEarlyTermination bool `json:"allow_early_termination"`
 	AllowErrorTermination bool `json:"allow_error_termination"`
 
-	SubmissionGasPrice uint64 `json:"submission_gas_price"`
+	// Consensus contains configuration for the consensus backend.
+	Consensus ConsensusFixture `json:"consensus"`
 
 	LogWatcherHandlerFactories []log.WatcherHandlerFactory `json:"-"`
 }
@@ -325,7 +338,7 @@ func (f *ComputeWorkerFixture) Create(net *Network) (*Compute, error) {
 			AllowEarlyTermination:      f.AllowEarlyTermination,
 			AllowErrorTermination:      f.AllowErrorTermination,
 			LogWatcherHandlerFactories: f.LogWatcherHandlerFactories,
-			SubmissionGasPrice:         f.SubmissionGasPrice,
+			Consensus:                  f.Consensus,
 		},
 		Entity:         entity,
 		RuntimeBackend: f.RuntimeBackend,
@@ -355,14 +368,15 @@ func (f *SentryFixture) Create(net *Network) (*Sentry, error) {
 
 // ClientFixture is a client node fixture.
 type ClientFixture struct {
-	ConsensusDisableCheckTx bool `json:"consensus_disable_check_tx"`
+	// Consensus contains configuration for the consensus backend.
+	Consensus ConsensusFixture `json:"consensus"`
 }
 
 // Create instantiates the client node described by the fixture.
 func (f *ClientFixture) Create(net *Network) (*Client, error) {
 	return net.NewClient(&ClientCfg{
 		NodeCfg: NodeCfg{
-			ConsensusDisableCheckTx: f.ConsensusDisableCheckTx,
+			Consensus: f.Consensus,
 		},
 	})
 }
@@ -375,7 +389,8 @@ type ByzantineFixture struct {
 
 	ActivationEpoch epochtime.EpochTime `json:"activation_epoch"`
 
-	SubmissionGasPrice uint64 `json:"submission_gas_price"`
+	// Consensus contains configuration for the consensus backend.
+	Consensus ConsensusFixture `json:"consensus"`
 
 	EnableDefaultLogWatcherHandlerFactories bool                        `json:"enable_default_log_fac"`
 	LogWatcherHandlerFactories              []log.WatcherHandlerFactory `json:"-"`
@@ -392,7 +407,7 @@ func (f *ByzantineFixture) Create(net *Network) (*Byzantine, error) {
 		NodeCfg: NodeCfg{
 			DisableDefaultLogWatcherHandlerFactories: !f.EnableDefaultLogWatcherHandlerFactories,
 			LogWatcherHandlerFactories:               f.LogWatcherHandlerFactories,
-			SubmissionGasPrice:                       f.SubmissionGasPrice,
+			Consensus:                                f.Consensus,
 		},
 		Script:          f.Script,
 		IdentitySeed:    f.IdentitySeed,

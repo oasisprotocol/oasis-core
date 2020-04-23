@@ -96,7 +96,7 @@ func (worker *Storage) startNode() error {
 		debugDontBlameOasis().
 		debugAllowTestKeys().
 		tendermintCoreListenAddress(worker.consensusPort).
-		tendermintSubmissionGasPrice(worker.submissionGasPrice).
+		tendermintSubmissionGasPrice(worker.consensus.SubmissionGasPrice).
 		storageBackend(worker.backend).
 		workerClientPort(worker.clientPort).
 		workerP2pPort(worker.p2pPort).
@@ -158,7 +158,7 @@ func (net *Network) NewStorage(cfg *StorageCfg) (*Storage, error) {
 			dir:                                      storageDir,
 			disableDefaultLogWatcherHandlerFactories: cfg.DisableDefaultLogWatcherHandlerFactories,
 			logWatcherHandlerFactories:               cfg.LogWatcherHandlerFactories,
-			submissionGasPrice:                       cfg.SubmissionGasPrice,
+			consensus:                                cfg.Consensus,
 		},
 		backend:                 cfg.Backend,
 		entity:                  cfg.Entity,

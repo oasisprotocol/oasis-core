@@ -21,8 +21,6 @@ type Validator struct {
 
 	entity *Entity
 
-	minGasPrice uint64
-
 	sentries []*Sentry
 
 	tmAddress     string
@@ -34,8 +32,6 @@ type ValidatorCfg struct {
 	NodeCfg
 
 	Entity *Entity
-
-	MinGasPrice uint64
 
 	Sentries []*Sentry
 }
@@ -81,12 +77,12 @@ func (val *Validator) startNode() error {
 		debugAllowTestKeys().
 		consensusValidator().
 		tendermintCoreListenAddress(val.consensusPort).
-		tendermintMinGasPrice(val.minGasPrice).
-		tendermintSubmissionGasPrice(val.submissionGasPrice).
+		tendermintMinGasPrice(val.consensus.MinGasPrice).
+		tendermintSubmissionGasPrice(val.consensus.SubmissionGasPrice).
 		storageBackend("client").
 		appendNetwork(val.net).
 		appendEntity(val.entity).
-		tendermintRecoverCorruptedWAL(val.tendermintRecoverCorruptedWAL)
+		tendermintRecoverCorruptedWAL(val.consensus.TendermintRecoverCorruptedWAL)
 
 	if len(val.sentries) > 0 {
 		args = args.addSentries(val.sentries).
@@ -128,11 +124,9 @@ func (net *Network) NewValidator(cfg *ValidatorCfg) (*Validator, error) {
 			termErrorOk:                              cfg.AllowErrorTermination,
 			disableDefaultLogWatcherHandlerFactories: cfg.DisableDefaultLogWatcherHandlerFactories,
 			logWatcherHandlerFactories:               cfg.LogWatcherHandlerFactories,
-			submissionGasPrice:                       cfg.SubmissionGasPrice,
-			tendermintRecoverCorruptedWAL:            cfg.TendermintRecoverCorruptedWAL,
+			consensus:                                cfg.Consensus,
 		},
 		entity:        cfg.Entity,
-		minGasPrice:   cfg.MinGasPrice,
 		sentries:      cfg.Sentries,
 		consensusPort: net.nextNodePort,
 	}
