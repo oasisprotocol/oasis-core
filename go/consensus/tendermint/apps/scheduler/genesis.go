@@ -135,8 +135,15 @@ func (app *schedulerApplication) InitChain(ctx *abciAPI.Context, req types.Reque
 	//
 	// Sort of stupid it needs to be done this way, but tendermint doesn't
 	// appear to pass ABCI the validator set anywhere other than InitChain.
-	if err := state.PutCurrentValidators(ctx, currentValidators); err != nil {
+	if err = state.PutCurrentValidators(ctx, currentValidators); err != nil {
 		return fmt.Errorf("failed to set validator set: %w", err)
+	}
+
+	if !doc.Scheduler.Parameters.DebugBypassStake {
+		_, err = scheduler.VotingPowerFromTokens(&doc.Staking.TotalSupply)
+		if err != nil {
+			return fmt.Errorf("total supply would break voting power computation: %w", err)
+		}
 	}
 
 	return nil
