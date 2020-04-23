@@ -156,6 +156,12 @@ func VotingPowerFromTokens(t *quantity.Quantity) (int64, error) {
 	if err := powerQ.Quo(&TokensPerVotingPower); err != nil {
 		return 0, fmt.Errorf("quo %v / %v: %w", t, &TokensPerVotingPower, err)
 	}
+	if powerQ.IsZero() {
+		// In some cases, especially in tests, staking is enabled but registration thresholds are zero.
+		// However, if they actually register with zero, give them one free vote power so that Tendermint doesn't
+		// treat it as a removal.
+		return 1, nil
+	}
 	powerBI := powerQ.ToBigInt()
 	if !powerBI.IsInt64() {
 		return 0, fmt.Errorf("%v is too many tokens to convert to power", powerQ)
