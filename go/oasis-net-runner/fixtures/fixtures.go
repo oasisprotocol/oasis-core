@@ -34,7 +34,7 @@ func GetFixture() (f *oasis.NetworkFixture, err error) {
 
 // DumpFixture dumps given fixture to JSON-encoded bytes.
 func DumpFixture(f *oasis.NetworkFixture) ([]byte, error) {
-	data, err := json.Marshal(f)
+	data, err := json.MarshalIndent(f, "", "    ")
 	if err != nil {
 		return nil, err
 	}
