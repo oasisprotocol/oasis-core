@@ -1,4 +1,4 @@
-// Package cmd implements the commands for the net-runner executable.
+// Package cmd implements commands for oasis-net-runner executable.
 package cmd
 
 import (
@@ -32,6 +32,12 @@ var (
 		Short:   "Oasis network runner",
 		Version: version.SoftwareVersion,
 		RunE:    runRoot,
+	}
+
+	dumpFixtureCmd = &cobra.Command{
+		Use:   "dump-fixture",
+		Short: "dump configured fixture to standard output",
+		Run:   doDumpFixture,
 	}
 
 	rootFlags = flag.NewFlagSet("", flag.ContinueOnError)
@@ -118,8 +124,7 @@ func runRoot(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("root: failed to setup child environment: %w", err)
 	}
 
-	// TODO: Support loading network fixtures from JSON files.
-	fixture, err := fixtures.NewDefaultFixture()
+	fixture, err := fixtures.GetFixture()
 	if err != nil {
 		return err
 	}
@@ -161,6 +166,20 @@ func runRoot(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
+func doDumpFixture(cmd *cobra.Command, args []string) {
+	f, err := fixtures.GetFixture()
+	if err != nil {
+		common.EarlyLogAndExit(err)
+	}
+
+	// Encode fixture as JSON and dump it to stdout.
+	data, err := fixtures.DumpFixture(f)
+	if err != nil {
+		common.EarlyLogAndExit(fmt.Errorf("doDumpFixture: failed to marshal fixture: %w", err))
+	}
+	fmt.Printf("%s", data)
+}
+
 func init() {
 	logFmt := logging.FmtLogfmt
 	logLevel := logging.LevelInfo
@@ -173,7 +192,11 @@ func init() {
 
 	rootCmd.PersistentFlags().AddFlagSet(rootFlags)
 	rootCmd.PersistentFlags().AddFlagSet(env.Flags)
-	rootCmd.Flags().AddFlagSet(fixtures.Flags)
+	rootCmd.Flags().AddFlagSet(fixtures.DefaultFixtureFlags)
+	rootCmd.Flags().AddFlagSet(fixtures.FileFixtureFlags)
+
+	dumpFixtureCmd.Flags().AddFlagSet(fixtures.DefaultFixtureFlags)
+	rootCmd.AddCommand(dumpFixtureCmd)
 
 	cobra.OnInitialize(func() {
 		if cfgFile != "" {
