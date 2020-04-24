@@ -244,6 +244,11 @@ func doScenario(childEnv *env.Env, sc scenario.Scenario) (err error) {
 		}
 	}()
 
+	if err = sc.PreInit(childEnv); err != nil {
+		err = fmt.Errorf("root: failed to pre-initialize test case: %w", err)
+		return
+	}
+
 	var fixture *oasis.NetworkFixture
 	if fixture, err = sc.Fixture(); err != nil {
 		err = errors.Wrap(err, "root: failed to initialize network fixture")

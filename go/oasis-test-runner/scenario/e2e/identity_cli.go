@@ -34,6 +34,10 @@ func (ident *identityCLIImpl) Name() string {
 	return "identity-cli"
 }
 
+func (ident *identityCLIImpl) PreInit(childEnv *env.Env) error {
+	return nil
+}
+
 func (ident *identityCLIImpl) Init(childEnv *env.Env, net *oasis.Network) error {
 	ident.nodeBinary = viper.GetString(cfgNodeBinary)
 

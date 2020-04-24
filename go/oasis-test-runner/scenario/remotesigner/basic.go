@@ -44,6 +44,10 @@ func (sc *basicImpl) Name() string {
 	return "remote-signer/basic"
 }
 
+func (sc *basicImpl) PreInit(childEnv *env.Env) error {
+	return nil
+}
+
 func (sc *basicImpl) Fixture() (*oasis.NetworkFixture, error) {
 	return nil, nil
 }

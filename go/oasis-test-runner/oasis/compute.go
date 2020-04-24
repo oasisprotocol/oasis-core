@@ -81,7 +81,8 @@ func (worker *Compute) startNode() error {
 		debugDontBlameOasis().
 		debugAllowTestKeys().
 		tendermintCoreListenAddress(worker.consensusPort).
-		tendermintSubmissionGasPrice(worker.submissionGasPrice).
+		tendermintSubmissionGasPrice(worker.consensus.SubmissionGasPrice).
+		tendermintPrune(worker.consensus.PruneNumKept).
 		storageBackend(storageClient.BackendName).
 		workerClientPort(worker.clientPort).
 		workerP2pPort(worker.p2pPort).
@@ -142,7 +143,7 @@ func (net *Network) NewCompute(cfg *ComputeCfg) (*Compute, error) {
 			termErrorOk:                              cfg.AllowErrorTermination,
 			disableDefaultLogWatcherHandlerFactories: cfg.DisableDefaultLogWatcherHandlerFactories,
 			logWatcherHandlerFactories:               cfg.LogWatcherHandlerFactories,
-			submissionGasPrice:                       cfg.SubmissionGasPrice,
+			consensus:                                cfg.Consensus,
 		},
 		entity:         cfg.Entity,
 		runtimeBackend: cfg.RuntimeBackend,

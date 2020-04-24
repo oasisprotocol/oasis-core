@@ -39,7 +39,7 @@ func (worker *Byzantine) startNode() error {
 		debugAllowTestKeys().
 		tendermintCoreListenAddress(worker.consensusPort).
 		tendermintDebugAddrBookLenient().
-		tendermintSubmissionGasPrice(worker.submissionGasPrice).
+		tendermintSubmissionGasPrice(worker.consensus.SubmissionGasPrice).
 		workerP2pPort(worker.p2pPort).
 		appendSeedNodes(worker.net).
 		appendEntity(worker.entity).
@@ -99,7 +99,7 @@ func (net *Network) NewByzantine(cfg *ByzantineCfg) (*Byzantine, error) {
 			termEarlyOk:                              true,
 			disableDefaultLogWatcherHandlerFactories: cfg.DisableDefaultLogWatcherHandlerFactories,
 			logWatcherHandlerFactories:               cfg.LogWatcherHandlerFactories,
-			submissionGasPrice:                       cfg.SubmissionGasPrice,
+			consensus:                                cfg.Consensus,
 		},
 		script:          cfg.Script,
 		entity:          cfg.Entity,

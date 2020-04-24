@@ -364,7 +364,7 @@ func (q *queries) doRuntimeQueries(ctx context.Context, rng *rand.Rand) error {
 		round = latestRound
 	default:
 		// [q.runtimeGenesisRound, latestRound]
-		round = uint64(rng.Int63n(int64(latestRound) + 1))
+		round = uint64(rng.Int63n(int64(latestRound-q.runtimeGenesisRound)+1)) + q.runtimeGenesisRound
 	}
 
 	// GetBlock.
