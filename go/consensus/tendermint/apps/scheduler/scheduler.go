@@ -15,6 +15,7 @@ import (
 	"github.com/oasislabs/oasis-core/go/common/crypto/drbg"
 	"github.com/oasislabs/oasis-core/go/common/crypto/mathrand"
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
+	"github.com/oasislabs/oasis-core/go/common/logging"
 	"github.com/oasislabs/oasis-core/go/common/node"
 	"github.com/oasislabs/oasis-core/go/common/quantity"
 	"github.com/oasislabs/oasis-core/go/consensus/api/transaction"
@@ -214,6 +215,36 @@ func (app *schedulerApplication) ForeignExecuteTx(ctx *api.Context, other abci.A
 	return nil
 }
 
+func diffValidators(logger *logging.Logger, current map[signature.PublicKey]int64, pending map[signature.PublicKey]int64) []types.ValidatorUpdate {
+	var updates []types.ValidatorUpdate
+	for v := range current {
+		if _, ok := pending[v]; !ok {
+			// Existing validator is not part of the new set, reduce its
+			// voting power to 0, to indicate removal.
+			logger.Debug("removing existing validator from validator set",
+				"id", v,
+			)
+			updates = append(updates, api.PublicKeyToValidatorUpdate(v, 0))
+		}
+	}
+
+	for v, newPower := range pending {
+		if curPower, ok := current[v]; ok && curPower == newPower {
+			logger.Debug("keeping existing validator in the validator set",
+				"id", v,
+			)
+			continue
+		}
+		// We're adding this validator or changing its power.
+		logger.Debug("upserting validator to validator set",
+			"id", v,
+			"power", newPower,
+		)
+		updates = append(updates, api.PublicKeyToValidatorUpdate(v, newPower))
+	}
+	return updates
+}
+
 func (app *schedulerApplication) EndBlock(ctx *api.Context, req types.RequestEndBlock) (types.ResponseEndBlock, error) {
 	var resp types.ResponseEndBlock
 
@@ -242,34 +273,7 @@ func (app *schedulerApplication) EndBlock(ctx *api.Context, req types.RequestEnd
 	// from InitChain), and the new validator set, which is a huge pain
 	// in the ass.
 
-	var updates []types.ValidatorUpdate
-	for v := range currentValidators {
-		if _, ok := pendingValidators[v]; !ok {
-			// Existing validator is not part of the new set, reduce its
-			// voting power to 0, to indicate removal.
-			ctx.Logger().Debug("removing existing validator from validator set",
-				"id", v,
-			)
-			updates = append(updates, api.PublicKeyToValidatorUpdate(v, 0))
-		}
-	}
-
-	for v, newPower := range pendingValidators {
-		if curPower, ok := currentValidators[v]; ok && curPower == newPower {
-			ctx.Logger().Debug("keeping existing validator in the validator set",
-				"id", v,
-			)
-			continue
-		}
-		// We're adding this validator or changing its power.
-		ctx.Logger().Debug("upserting validator to validator set",
-			"id", v,
-			"power", newPower,
-		)
-		updates = append(updates, api.PublicKeyToValidatorUpdate(v, newPower))
-	}
-
-	resp.ValidatorUpdates = updates
+	resp.ValidatorUpdates = diffValidators(ctx.Logger(), currentValidators, pendingValidators)
 
 	// Stash the updated validator set.
 	if err = state.PutCurrentValidators(ctx, pendingValidators); err != nil {
