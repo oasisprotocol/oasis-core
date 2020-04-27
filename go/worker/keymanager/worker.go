@@ -189,6 +189,22 @@ func (w *Worker) callLocal(ctx context.Context, data []byte) ([]byte, error) {
 }
 
 func (w *Worker) updateStatus(status *api.Status, startedEvent *host.StartedEvent) error {
+	var initOk bool
+	defer func() {
+		if !initOk {
+			// This is likely a new key manager that needs to replicate.
+			// Send a node registration anyway, so that other nodes know
+			// to update their access control.
+			w.roleProvider.SetAvailable(func(n *node.Node) error {
+				rt := n.AddOrUpdateRuntime(w.runtime.ID())
+				rt.Version = startedEvent.Version
+				rt.ExtraInfo = nil
+				rt.Capabilities.TEE = startedEvent.CapabilityTEE
+				return nil
+			})
+		}
+	}()
+
 	// Initialize the key manager.
 	type InitRequest struct {
 		Checksum    []byte `json:"checksum"`
@@ -287,6 +303,7 @@ func (w *Worker) updateStatus(status *api.Status, startedEvent *host.StartedEven
 	)
 
 	// Register as we are now ready to handle requests.
+	initOk = true
 	w.roleProvider.SetAvailable(func(n *node.Node) error {
 		rt := n.AddOrUpdateRuntime(w.runtime.ID())
 		rt.Version = startedEvent.Version
@@ -352,6 +369,11 @@ func (w *Worker) worker() { // nolint: gocyclo
 		return
 	case <-w.commonWorker.Consensus.Synced():
 	}
+
+	// Need to explicitly watch for updates related to the key manager runtime
+	// itself.
+	knw := newKmNodeWatcher(w)
+	go knw.watchNodes()
 
 	// Subscribe to key manager status updates.
 	statusCh, statusSub := w.backend.WatchStatuses()
@@ -558,30 +580,8 @@ func (crw *clientRuntimeWatcher) updateExternalServicePolicyLocked(snapshot *com
 		sentryNodesPolicy.AddCertPolicy(&policy, cert)
 	}
 
-	// Fetch current KM node public keys, get their nodes, apply rules.
-	height := snapshot.GetGroupVersion()
-	status, err := crw.w.backend.GetStatus(crw.w.ctx, crw.w.runtime.ID(), height)
-	if err != nil {
-		crw.w.logger.Error("worker/keymanager: unable to get KM status",
-			"runtimeID", crw.w.runtime.ID(),
-			"err", err)
-	} else {
-		var kmNodes []*node.Node
-
-		for _, pk := range status.Nodes {
-			n, err := crw.node.Consensus.Registry().GetNode(crw.w.ctx, &registry.IDQuery{ID: pk, Height: height})
-			if err != nil {
-				crw.w.logger.Error("worker/keymanager: unable to get KM node info", "err", err)
-			} else {
-				kmNodes = append(kmNodes, n)
-			}
-		}
-
-		kmNodesPolicy.AddRulesForNodeRoles(&policy, kmNodes, node.RoleKeyManager)
-	}
-
 	crw.w.grpcPolicy.SetAccessPolicy(policy, crw.node.Runtime.ID())
-	crw.w.logger.Debug("worker/keymanager: new access policy in effect", "policy", policy)
+	crw.w.logger.Debug("worker/keymanager: new normal runtime access policy in effect", "policy", policy)
 }
 
 // Guarded by CrossNode.

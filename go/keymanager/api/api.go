@@ -139,6 +139,9 @@ func VerifyExtraInfo(logger *logging.Logger, rt *registry.Runtime, nodeRt *node.
 	} else if err := registry.VerifyNodeRuntimeEnclaveIDs(logger, nodeRt, rt, ts); err != nil {
 		return nil, err
 	}
+	if nodeRt.ExtraInfo == nil {
+		return nil, fmt.Errorf("keymanager: missing ExtraInfo")
+	}
 
 	var untrustedSignedInitResponse SignedInitResponse
 	if err := cbor.Unmarshal(nodeRt.ExtraInfo, &untrustedSignedInitResponse); err != nil {
