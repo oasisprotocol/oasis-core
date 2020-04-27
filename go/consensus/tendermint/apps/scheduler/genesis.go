@@ -142,7 +142,7 @@ func (app *schedulerApplication) InitChain(ctx *abciAPI.Context, req types.Reque
 	if !doc.Scheduler.Parameters.DebugBypassStake {
 		_, err = scheduler.VotingPowerFromTokens(&doc.Staking.TotalSupply)
 		if err != nil {
-			return fmt.Errorf("total supply would break voting power computation: %w", err)
+			return fmt.Errorf("init chain: total supply would break voting power computation: %w", err)
 		}
 	}
 

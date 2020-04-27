@@ -246,10 +246,17 @@ type ConsensusParameters struct {
 }
 
 // SanityCheck does basic sanity checking on the genesis state.
-func (g *Genesis) SanityCheck() error {
+func (g *Genesis) SanityCheck(stakingTotalSupply *quantity.Quantity) error {
 	unsafeFlags := g.Parameters.DebugBypassStake || g.Parameters.DebugStaticValidators
 	if unsafeFlags && !flags.DebugDontBlameOasis() {
 		return fmt.Errorf("scheduler: sanity check failed: one or more unsafe debug flags set")
+	}
+
+	if !g.Parameters.DebugBypassStake {
+		_, err := VotingPowerFromTokens(stakingTotalSupply)
+		if err != nil {
+			return fmt.Errorf("scheduler: sanity check failed: total supply would break voting power computation: %w", err)
+		}
 	}
 
 	return nil
