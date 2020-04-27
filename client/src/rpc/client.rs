@@ -130,13 +130,33 @@ type SendqRequest = (
     usize,
 );
 
-struct Inner {
+struct MultiplexedSession {
     /// Session builder for resetting sessions.
     builder: Builder,
-    /// Underlying protocol session.
-    session: Mutex<Session>,
     /// Unique session identifier.
-    session_id: types::SessionID,
+    id: types::SessionID,
+    /// Current underlying protocol session.
+    inner: Session,
+}
+
+impl MultiplexedSession {
+    fn new(builder: Builder) -> Self {
+        Self {
+            builder: builder.clone(),
+            id: types::SessionID::random(),
+            inner: builder.build_initiator(),
+        }
+    }
+
+    fn reset(&mut self) {
+        self.id = types::SessionID::random();
+        self.inner = self.builder.clone().build_initiator();
+    }
+}
+
+struct Inner {
+    /// Multiplexed session.
+    session: Mutex<MultiplexedSession>,
     /// Used transport.
     transport: Box<dyn Transport>,
     /// Internal send queue receiver, only available until the controller
@@ -161,9 +181,7 @@ impl RpcClient {
 
         Self {
             inner: Arc::new(Inner {
-                builder: builder.clone(),
-                session: Mutex::new(builder.build_initiator()),
-                session_id: types::SessionID::random(),
+                session: Mutex::new(MultiplexedSession::new(builder)),
                 transport,
                 recvq: Mutex::new(Some(rx)),
                 sendq: tx,
@@ -301,15 +319,17 @@ impl RpcClient {
     fn connect(inner: Arc<Inner>, ctx: Context) -> BoxFuture<()> {
         Box::new(future::lazy(move || -> BoxFuture<()> {
             let mut session = inner.session.lock().unwrap();
-            if session.is_connected() {
+            if session.inner.is_connected() {
                 return Box::new(future::ok(()));
             }
 
             let mut buffer = vec![];
             // Handshake1 -> Handshake2
             session
+                .inner
                 .process_data(vec![], &mut buffer)
                 .expect("initiation must always succeed");
+            let session_id = session.id;
             drop(session);
 
             let fctx = ctx.freeze();
@@ -319,12 +339,12 @@ impl RpcClient {
             Box::new(
                 inner
                     .transport
-                    .write_message(ctx, inner.session_id, buffer, String::new())
+                    .write_message(ctx, session_id, buffer, String::new())
                     .and_then(move |data| -> BoxFuture<()> {
                         let mut session = inner.session.lock().unwrap();
                         let mut buffer = vec![];
                         // Handshake2 -> Transport
-                        if let Err(error) = session.process_data(data, &mut buffer) {
+                        if let Err(error) = session.inner.process_data(data, &mut buffer) {
                             return Box::new(future::err(error));
                         }
 
@@ -332,7 +352,7 @@ impl RpcClient {
                         Box::new(
                             inner
                                 .transport
-                                .write_message(ctx, inner.session_id, buffer, String::new())
+                                .write_message(ctx, session.id, buffer, String::new())
                                 .map(|_| ()),
                         )
                     })
@@ -340,7 +360,7 @@ impl RpcClient {
                         // Failed to establish a session, we must reset it as otherwise
                         // it will always fail.
                         let mut session = inner2.session.lock().unwrap();
-                        *session = inner2.builder.clone().build_initiator();
+                        session.reset();
 
                         Err(err)
                     }),
@@ -351,7 +371,10 @@ impl RpcClient {
     fn close(inner: Arc<Inner>) -> BoxFuture<()> {
         let mut session = inner.session.lock().unwrap();
         let mut buffer = vec![];
-        if let Err(error) = session.write_message(types::Message::Close, &mut buffer) {
+        if let Err(error) = session
+            .inner
+            .write_message(types::Message::Close, &mut buffer)
+        {
             return Box::new(future::err(error));
         }
 
@@ -360,17 +383,18 @@ impl RpcClient {
         Box::new(
             inner
                 .transport
-                .write_message(ctx, inner.session_id, buffer, String::new())
+                .write_message(ctx, session.id, buffer, String::new())
                 .and_then(move |data| {
                     // Verify that session is closed.
                     let mut session = inner.session.lock().unwrap();
                     let msg = session
+                        .inner
                         .process_data(data, vec![])?
                         .expect("message must be decoded if there is no error");
 
                     match msg {
                         types::Message::Close => {
-                            session.close();
+                            session.inner.close();
                             Ok(())
                         }
                         msg => Err(RpcClientError::ExpectedCloseMessage(msg).into()),
@@ -388,7 +412,7 @@ impl RpcClient {
         let msg = types::Message::Request(request);
         let mut session = inner.session.lock().unwrap();
         let mut buffer = vec![];
-        if let Err(error) = session.write_message(msg, &mut buffer) {
+        if let Err(error) = session.inner.write_message(msg, &mut buffer) {
             return Box::new(future::err(error));
         }
 
@@ -397,10 +421,11 @@ impl RpcClient {
         Box::new(
             inner
                 .transport
-                .write_message(ctx, inner.session_id, buffer, method)
+                .write_message(ctx, session.id, buffer, method)
                 .and_then(move |data| {
                     let mut session = inner.session.lock().unwrap();
                     let msg = session
+                        .inner
                         .process_data(data, vec![])?
                         .expect("message must be decoded if there is no error");
 
@@ -412,7 +437,7 @@ impl RpcClient {
                 .or_else(move |err| {
                     // Failed to communicate, we must reset it as otherwise it will always fail.
                     let mut session = inner2.session.lock().unwrap();
-                    *session = inner2.builder.clone().build_initiator();
+                    session.reset();
 
                     Err(err)
                 }),
