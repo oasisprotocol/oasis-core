@@ -54,9 +54,6 @@ func (sq *schedulerQuerier) Validators(ctx context.Context) ([]*scheduler.Valida
 		return nil, err
 	}
 
-	// Since we use flat voting power for now, doing it this way saves
-	// having to store consensus.VotingPower repeatedly in the validator set
-	// ABCI state.
 	ret := make([]*scheduler.Validator, 0, len(vals))
 	for v, power := range vals {
 		var id signature.PublicKey
