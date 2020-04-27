@@ -354,7 +354,7 @@ func (f *StorageWorkerFixture) Create(net *Network) (*Storage, error) {
 type ComputeWorkerFixture struct {
 	Entity int `json:"entity"`
 
-	RuntimeBackend string `json:"runtime_backend"`
+	RuntimeProvisioner string `json:"runtime_provisioner"`
 
 	AllowEarlyTermination bool `json:"allow_early_termination"`
 	AllowErrorTermination bool `json:"allow_error_termination"`
@@ -379,8 +379,8 @@ func (f *ComputeWorkerFixture) Create(net *Network) (*Compute, error) {
 			LogWatcherHandlerFactories: f.LogWatcherHandlerFactories,
 			Consensus:                  f.Consensus,
 		},
-		Entity:         entity,
-		RuntimeBackend: f.RuntimeBackend,
+		Entity:             entity,
+		RuntimeProvisioner: f.RuntimeProvisioner,
 	})
 }
 

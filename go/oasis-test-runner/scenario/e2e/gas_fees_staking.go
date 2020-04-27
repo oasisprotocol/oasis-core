@@ -81,7 +81,7 @@ func (sc *gasFeesImpl) Fixture() (*oasis.NetworkFixture, error) {
 	}
 	f.Network = oasis.NetworkCfg{
 		NodeBinary:                        sc.nodeBinary,
-		RuntimeLoaderBinary:               sc.runtimeLoader,
+		RuntimeSGXLoaderBinary:            sc.runtimeLoader,
 		EpochtimeMock:                     true,
 		StakingGenesis:                    "tests/fixture-data/gas-fees/staking-genesis.json",
 		DefaultLogWatcherHandlerFactories: DefaultRuntimeLogWatcherHandlerFactories,

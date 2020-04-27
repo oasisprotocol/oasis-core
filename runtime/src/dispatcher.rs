@@ -173,7 +173,7 @@ impl Dispatcher {
                 Ok((
                     ctx,
                     id,
-                    Body::WorkerRPCCallRequest {
+                    Body::RuntimeRPCCallRequest {
                         request,
                         state_root,
                     },
@@ -192,7 +192,7 @@ impl Dispatcher {
                 Ok((
                     ctx,
                     id,
-                    Body::WorkerLocalRPCCallRequest {
+                    Body::RuntimeLocalRPCCallRequest {
                         request,
                         state_root,
                     },
@@ -210,7 +210,7 @@ impl Dispatcher {
                 Ok((
                     ctx,
                     id,
-                    Body::WorkerExecuteTxBatchRequest {
+                    Body::RuntimeExecuteTxBatchRequest {
                         io_root,
                         inputs,
                         block,
@@ -229,7 +229,7 @@ impl Dispatcher {
                         false,
                     );
                 }
-                Ok((ctx, id, Body::WorkerCheckTxBatchRequest { inputs, block })) => {
+                Ok((ctx, id, Body::RuntimeCheckTxBatchRequest { inputs, block })) => {
                     // Transaction check.
                     self.dispatch_txn(
                         &mut cache,
@@ -300,7 +300,7 @@ impl Dispatcher {
 
             // Send the result back.
             protocol
-                .send_response(id, Body::WorkerCheckTxBatchResponse { results: outputs })
+                .send_response(id, Body::RuntimeCheckTxBatchResponse { results: outputs })
                 .unwrap();
         } else {
             // Finalize state.
@@ -391,7 +391,7 @@ impl Dispatcher {
 
             // Send the result back.
             protocol
-                .send_response(id, Body::WorkerExecuteTxBatchResponse { batch: result })
+                .send_response(id, Body::RuntimeExecuteTxBatchResponse { batch: result })
                 .unwrap();
         }
     }
@@ -419,6 +419,8 @@ impl Dispatcher {
                     .send_response(
                         id,
                         Body::Error {
+                            module: "".to_owned(), // XXX: Error codes.
+                            code: 0,               // XXX: Error codes.
                             message: format!("{}", error),
                         },
                     )
@@ -445,6 +447,8 @@ impl Dispatcher {
                             "method" => ?req.method
                         );
                         let err_reponse = Body::Error {
+                            module: "".to_owned(), // XXX: Error codes.
+                            code: 0,               // XXX: Error codes.
                             message: "Request's method doesn't match untrusted_plaintext copy."
                                 .to_string(),
                         };
@@ -482,7 +486,7 @@ impl Dispatcher {
                     match rpc_demux.write_message(session_id, response, &mut buffer) {
                         Ok(_) => {
                             // Transmit response.
-                            protocol_response = Body::WorkerRPCCallResponse {
+                            protocol_response = Body::RuntimeRPCCallResponse {
                                 response: buffer,
                                 write_log: write_log,
                                 new_state_root,
@@ -491,6 +495,8 @@ impl Dispatcher {
                         Err(error) => {
                             error!(self.logger, "Error while writing response"; "err" => %error);
                             protocol_response = Body::Error {
+                                module: "".to_owned(), // XXX: Error codes.
+                                code: 0,               // XXX: Error codes.
                                 message: format!("{}", error),
                             };
                         }
@@ -502,7 +508,7 @@ impl Dispatcher {
                     match rpc_demux.close(session_id, &mut buffer) {
                         Ok(_) => {
                             // Transmit response.
-                            protocol_response = Body::WorkerRPCCallResponse {
+                            protocol_response = Body::RuntimeRPCCallResponse {
                                 response: buffer,
                                 write_log: vec![],
                                 new_state_root: state_root,
@@ -511,6 +517,8 @@ impl Dispatcher {
                         Err(error) => {
                             error!(self.logger, "Error while closing session"; "err" => %error);
                             protocol_response = Body::Error {
+                                module: "".to_owned(), // XXX: Error codes.
+                                code: 0,               // XXX: Error codes.
                                 message: format!("{}", error),
                             };
                         }
@@ -519,13 +527,15 @@ impl Dispatcher {
                 msg => {
                     warn!(self.logger, "Ignoring invalid RPC message type"; "msg" => ?msg);
                     protocol_response = Body::Error {
+                        module: "".to_owned(), // XXX: Error codes.
+                        code: 0,               // XXX: Error codes.
                         message: "invalid RPC message type".to_owned(),
                     };
                 }
             }
         } else {
             // Send back any handshake frames.
-            protocol_response = Body::WorkerRPCCallResponse {
+            protocol_response = Body::RuntimeRPCCallResponse {
                 response: buffer,
                 write_log: vec![],
                 new_state_root: state_root,
@@ -572,7 +582,7 @@ impl Dispatcher {
         debug!(self.logger, "Local RPC call dispatch complete");
 
         let response = cbor::to_vec(&response);
-        let protocol_response = Body::WorkerLocalRPCCallResponse { response };
+        let protocol_response = Body::RuntimeLocalRPCCallResponse { response };
 
         protocol.send_response(id, protocol_response).unwrap();
     }

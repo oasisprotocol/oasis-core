@@ -22,12 +22,12 @@ import (
 	roothash "github.com/oasislabs/oasis-core/go/roothash/api"
 	"github.com/oasislabs/oasis-core/go/roothash/api/block"
 	runtimeCommittee "github.com/oasislabs/oasis-core/go/runtime/committee"
+	"github.com/oasislabs/oasis-core/go/runtime/host"
+	"github.com/oasislabs/oasis-core/go/runtime/host/protocol"
 	"github.com/oasislabs/oasis-core/go/runtime/transaction"
 	storage "github.com/oasislabs/oasis-core/go/storage/api"
 	commonWorker "github.com/oasislabs/oasis-core/go/worker/common"
 	"github.com/oasislabs/oasis-core/go/worker/common/committee"
-	"github.com/oasislabs/oasis-core/go/worker/common/host"
-	"github.com/oasislabs/oasis-core/go/worker/common/host/protocol"
 	"github.com/oasislabs/oasis-core/go/worker/common/p2p"
 	executorCommittee "github.com/oasislabs/oasis-core/go/worker/compute/executor/committee"
 	txnSchedulerAlgorithm "github.com/oasislabs/oasis-core/go/worker/compute/txnscheduler/algorithm"
@@ -153,49 +153,49 @@ func (n *Node) CheckTx(ctx context.Context, call []byte) error {
 	}
 
 	checkRq := &protocol.Body{
-		WorkerCheckTxBatchRequest: &protocol.WorkerCheckTxBatchRequest{
+		RuntimeCheckTxBatchRequest: &protocol.RuntimeCheckTxBatchRequest{
 			Inputs: transaction.RawBatch{call},
 			Block:  *currentBlock,
 		},
 	}
-	workerHost := n.GetWorkerHost()
-	if workerHost == nil {
-		n.logger.Error("worker host not initialized")
+	rt := n.GetHostedRuntime()
+	if rt == nil {
+		n.logger.Error("hosted runtime not initialized")
 		return api.ErrNotReady
 	}
-	resp, err := workerHost.Call(ctx, checkRq)
+	resp, err := rt.Call(ctx, checkRq)
 	if err != nil {
-		n.logger.Error("worker host CheckTx call error",
+		n.logger.Error("runtime CheckTx call error",
 			"err", err,
 		)
 		return err
 	}
 	if resp == nil {
-		n.logger.Error("worker host CheckTx reponse is nil")
+		n.logger.Error("runtime CheckTx reponse is nil")
 		return api.ErrCheckTxFailed
 	}
-	if resp.WorkerCheckTxBatchResponse.Results == nil {
-		n.logger.Error("worker host CheckTx response contains no results")
+	if resp.RuntimeCheckTxBatchResponse.Results == nil {
+		n.logger.Error("runtime CheckTx response contains no results")
 		return api.ErrCheckTxFailed
 	}
-	if len(resp.WorkerCheckTxBatchResponse.Results) != 1 {
-		n.logger.Error("worker host CheckTx response doesn't contain exactly one result",
-			"num_results", len(resp.WorkerCheckTxBatchResponse.Results),
+	if len(resp.RuntimeCheckTxBatchResponse.Results) != 1 {
+		n.logger.Error("runtime CheckTx response doesn't contain exactly one result",
+			"num_results", len(resp.RuntimeCheckTxBatchResponse.Results),
 		)
 		return api.ErrCheckTxFailed
 	}
 
 	// Interpret CheckTx result.
-	resultRaw := resp.WorkerCheckTxBatchResponse.Results[0]
+	resultRaw := resp.RuntimeCheckTxBatchResponse.Results[0]
 	var result transaction.TxnOutput
 	if err = cbor.Unmarshal(resultRaw, &result); err != nil {
-		n.logger.Error("worker host CheckTx response failed to deserialize",
+		n.logger.Error("runtime CheckTx response failed to deserialize",
 			"err", err,
 		)
 		return api.ErrCheckTxFailed
 	}
 	if result.Error != nil {
-		n.logger.Error("worker CheckTx failed with error",
+		n.logger.Error("runtime CheckTx failed with error",
 			"err", result.Error,
 		)
 		return fmt.Errorf("%w: %s", api.ErrCheckTxFailed, *result.Error)
@@ -487,34 +487,34 @@ func (n *Node) worker() {
 
 	n.logger.Info("starting committee node")
 
-	var workerEventCh <-chan *host.Event
+	var hrtEventCh <-chan *host.Event
 	if n.checkTxEnabled {
-		// Initialize worker host for the new runtime.
-		workerHost, err := n.InitializeRuntimeWorkerHost(n.ctx)
+		// Provision hosted runtime.
+		hrt, err := n.ProvisionHostedRuntime(n.ctx)
 		if err != nil {
-			n.logger.Error("failed to initialize worker host",
+			n.logger.Error("failed to provision hosted runtime",
 				"err", err,
 			)
 			return
 		}
 
-		var workerSub pubsub.ClosableSubscription
-		workerEventCh, workerSub, err = workerHost.WatchEvents(n.ctx)
+		var hrtSub pubsub.ClosableSubscription
+		hrtEventCh, hrtSub, err = hrt.WatchEvents(n.ctx)
 		if err != nil {
-			n.logger.Error("failed to subscribe to worker host events",
+			n.logger.Error("failed to subscribe to hosted runtime events",
 				"err", err,
 			)
 			return
 		}
-		defer workerSub.Close()
+		defer hrtSub.Close()
 
-		if err = workerHost.Start(); err != nil {
-			n.logger.Error("failed to start worker host",
+		if err = hrt.Start(); err != nil {
+			n.logger.Error("failed to start hosted runtime",
 				"err", err,
 			)
 			return
 		}
-		defer n.StopRuntimeWorkerHost()
+		defer hrt.Stop()
 	}
 
 	// Initialize transaction scheduler's algorithm.
@@ -564,13 +564,13 @@ func (n *Node) worker() {
 		case <-n.stopCh:
 			n.logger.Info("termination requested")
 			return
-		case ev := <-workerEventCh:
+		case ev := <-hrtEventCh:
 			switch {
-			case ev.Started != nil:
+			case ev.Started != nil, ev.Updated != nil:
 				// We are now able to service requests for this runtime.
 				n.roleProvider.SetAvailable(func(*node.Node) error { return nil })
-			case ev.FailedToStart != nil:
-				// Worker failed to start -- we can no longer service requests.
+			case ev.FailedToStart != nil, ev.Stopped != nil:
+				// Runtime failed to start or was stopped -- we can no longer service requests.
 				n.roleProvider.SetUnavailable()
 			default:
 				// Unknown event.
@@ -588,18 +588,24 @@ func (n *Node) worker() {
 func NewNode(
 	commonNode *committee.Node,
 	executorNode *executorCommittee.Node,
-	workerHostFactory host.Factory,
 	checkTxEnabled bool,
+	commonCfg commonWorker.Config,
 	roleProvider registration.RoleProvider,
 ) (*Node, error) {
 	metricsOnce.Do(func() {
 		prometheus.MustRegister(nodeCollectors...)
 	})
 
+	// Prepare the runtime host node helpers.
+	rhn, err := commonWorker.NewRuntimeHostNode(commonCfg.RuntimeHost, commonNode)
+	if err != nil {
+		return nil, err
+	}
+
 	ctx, cancel := context.WithCancel(context.Background())
 
 	n := &Node{
-		RuntimeHostNode:  commonWorker.NewRuntimeHostNode(commonNode, workerHostFactory),
+		RuntimeHostNode:  rhn,
 		checkTxEnabled:   checkTxEnabled,
 		commonNode:       commonNode,
 		executorNode:     executorNode,

@@ -1,4 +1,4 @@
-//! Worker side of the worker-host protocol.
+//! Runtime side of the worker-host protocol.
 use std::{
     collections::HashMap,
     io::{BufReader, BufWriter, Read, Write},
@@ -47,7 +47,7 @@ pub enum ProtocolError {
     RuntimeIDNotSet,
 }
 
-/// Worker part of the worker-host protocol.
+/// Runtime part of the runtime host protocol.
 pub struct Protocol {
     /// Logger.
     logger: Logger,
@@ -58,7 +58,7 @@ pub struct Protocol {
     dispatcher: Arc<Dispatcher>,
     /// Mutex for sending outgoing messages.
     outgoing_mutex: Mutex<()>,
-    /// Stream to the worker host.
+    /// Stream to the runtime host.
     stream: Stream,
     /// Outgoing request identifier generator.
     last_request_id: AtomicUsize,
@@ -145,7 +145,7 @@ impl Protocol {
         self.encode_message(message)?;
 
         match rx.recv()? {
-            Body::Error { message } => Err(format_err!("{}", message)),
+            Body::Error { message, .. } => Err(format_err!("{}", message)),
             body => Ok(body),
         }
     }
@@ -206,6 +206,8 @@ impl Protocol {
                         return Ok(());
                     }
                     Err(error) => Body::Error {
+                        module: "".to_owned(), // XXX: Error codes.
+                        code: 0,               // XXX: Error codes.
                         message: format!("{}", error),
                     },
                 };
@@ -249,34 +251,34 @@ impl Protocol {
         request: Body,
     ) -> Fallible<Option<Body>> {
         match request {
-            Body::WorkerInfoRequest { runtime_id } => {
+            Body::RuntimeInfoRequest { runtime_id } => {
                 // Store the passed Runtime ID.
                 *self.runtime_id.lock().unwrap() = Some(runtime_id);
 
                 self.dispatcher.start(self.clone());
 
-                Ok(Some(Body::WorkerInfoResponse {
+                Ok(Some(Body::RuntimeInfoResponse {
                     protocol_version: BUILD_INFO.protocol_version.into(),
                     runtime_version: self.runtime_version.into(),
                 }))
             }
-            Body::WorkerPingRequest {} => Ok(Some(Body::Empty {})),
-            Body::WorkerShutdownRequest {} => {
+            Body::RuntimePingRequest {} => Ok(Some(Body::Empty {})),
+            Body::RuntimeShutdownRequest {} => {
                 info!(self.logger, "Received worker shutdown request");
                 Err(ProtocolError::MethodNotSupported.into())
             }
-            Body::WorkerAbortRequest {} => {
+            Body::RuntimeAbortRequest {} => {
                 info!(self.logger, "Received worker abort request");
                 Err(ProtocolError::MethodNotSupported.into())
             }
             #[cfg(target_env = "sgx")]
-            Body::WorkerCapabilityTEERakInitRequest { target_info } => {
+            Body::RuntimeCapabilityTEERakInitRequest { target_info } => {
                 info!(self.logger, "Initializing the runtime attestation key");
                 self.rak.init_rak(target_info)?;
-                Ok(Some(Body::WorkerCapabilityTEERakInitResponse {}))
+                Ok(Some(Body::RuntimeCapabilityTEERakInitResponse {}))
             }
             #[cfg(target_env = "sgx")]
-            Body::WorkerCapabilityTEERakReportRequest {} => {
+            Body::RuntimeCapabilityTEERakReportRequest {} => {
                 // Initialize the RAK report (for attestation).
                 info!(
                     self.logger,
@@ -287,37 +289,37 @@ impl Protocol {
                 let report: &[u8] = report.as_ref();
                 let report = report.to_vec();
 
-                Ok(Some(Body::WorkerCapabilityTEERakReportResponse {
+                Ok(Some(Body::RuntimeCapabilityTEERakReportResponse {
                     rak_pub,
                     report,
                     nonce,
                 }))
             }
             #[cfg(target_env = "sgx")]
-            Body::WorkerCapabilityTEERakAvrRequest { avr } => {
+            Body::RuntimeCapabilityTEERakAvrRequest { avr } => {
                 info!(
                     self.logger,
                     "Configuring AVR for the runtime attestation key binding"
                 );
                 self.rak.set_avr(avr)?;
-                Ok(Some(Body::WorkerCapabilityTEERakAvrResponse {}))
+                Ok(Some(Body::RuntimeCapabilityTEERakAvrResponse {}))
             }
-            req @ Body::WorkerRPCCallRequest { .. } => {
+            req @ Body::RuntimeRPCCallRequest { .. } => {
                 self.can_handle_runtime_requests()?;
                 self.dispatcher.queue_request(ctx, id, req)?;
                 Ok(None)
             }
-            req @ Body::WorkerLocalRPCCallRequest { .. } => {
+            req @ Body::RuntimeLocalRPCCallRequest { .. } => {
                 self.can_handle_runtime_requests()?;
                 self.dispatcher.queue_request(ctx, id, req)?;
                 Ok(None)
             }
-            req @ Body::WorkerCheckTxBatchRequest { .. } => {
+            req @ Body::RuntimeCheckTxBatchRequest { .. } => {
                 self.can_handle_runtime_requests()?;
                 self.dispatcher.queue_request(ctx, id, req)?;
                 Ok(None)
             }
-            req @ Body::WorkerExecuteTxBatchRequest { .. } => {
+            req @ Body::RuntimeExecuteTxBatchRequest { .. } => {
                 self.can_handle_runtime_requests()?;
                 self.dispatcher.queue_request(ctx, id, req)?;
                 Ok(None)

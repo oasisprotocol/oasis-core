@@ -2,287 +2,85 @@ package common
 
 import (
 	"context"
-	"errors"
 	"fmt"
-	"strings"
+	"sync"
 
-	"github.com/opentracing/opentracing-go"
-
-	"github.com/oasislabs/oasis-core/go/common"
-	"github.com/oasislabs/oasis-core/go/common/cbor"
-	"github.com/oasislabs/oasis-core/go/common/node"
-	consensus "github.com/oasislabs/oasis-core/go/consensus/api"
-	keymanagerApi "github.com/oasislabs/oasis-core/go/keymanager/api"
-	keymanagerClient "github.com/oasislabs/oasis-core/go/keymanager/client"
-	registry "github.com/oasislabs/oasis-core/go/registry/api"
-	"github.com/oasislabs/oasis-core/go/runtime/localstorage"
+	"github.com/oasislabs/oasis-core/go/runtime/host"
+	"github.com/oasislabs/oasis-core/go/runtime/host/protocol"
 	runtimeRegistry "github.com/oasislabs/oasis-core/go/runtime/registry"
-	storage "github.com/oasislabs/oasis-core/go/storage/api"
-	"github.com/oasislabs/oasis-core/go/worker/common/committee"
-	"github.com/oasislabs/oasis-core/go/worker/common/host"
-	"github.com/oasislabs/oasis-core/go/worker/common/host/protocol"
 )
 
-var (
-	errMethodNotSupported   = errors.New("method not supported")
-	errEndpointNotSupported = errors.New("RPC endpoint not supported")
-
-	_ protocol.Handler = (*runtimeHostHandler)(nil)
-	_ host.Factory     = (*runtimeWorkerHostMockFactory)(nil)
-	_ host.Factory     = (*runtimeWorkerHostSandboxedFactory)(nil)
-)
-
-type runtimeHostHandler struct {
-	runtime runtimeRegistry.Runtime
-
-	storage          storage.Backend
-	keyManager       keymanagerApi.Backend
-	keyManagerClient *keymanagerClient.Client
-	localStorage     localstorage.LocalStorage
-}
-
-func (h *runtimeHostHandler) Handle(ctx context.Context, body *protocol.Body) (*protocol.Body, error) {
-	// Key manager.
-	if body.HostKeyManagerPolicyRequest != nil {
-		rt, err := h.runtime.RegistryDescriptor(ctx)
-		if err != nil {
-			return nil, fmt.Errorf("runtime host: failed to obtain runtime descriptor: %w", err)
-		}
-		if rt.KeyManager == nil {
-			return nil, errors.New("runtime has no key manager")
-		}
-		status, err := h.keyManager.GetStatus(ctx, &registry.NamespaceQuery{
-			ID:     *rt.KeyManager,
-			Height: consensus.HeightLatest,
-		})
-		if err != nil {
-			return nil, err
-		}
-
-		var policy keymanagerApi.SignedPolicySGX
-		if status != nil && status.Policy != nil {
-			policy = *status.Policy
-		}
-		return &protocol.Body{HostKeyManagerPolicyResponse: &protocol.HostKeyManagerPolicyResponse{
-			SignedPolicyRaw: cbor.Marshal(policy),
-		}}, nil
-	}
-	// RPC.
-	if body.HostRPCCallRequest != nil {
-		switch body.HostRPCCallRequest.Endpoint {
-		case keymanagerApi.EnclaveRPCEndpoint:
-			// Call into the remote key manager.
-			if h.keyManagerClient == nil {
-				return nil, errEndpointNotSupported
-			}
-			res, err := h.keyManagerClient.CallRemote(ctx, body.HostRPCCallRequest.Request)
-			if err != nil {
-				return nil, err
-			}
-			return &protocol.Body{HostRPCCallResponse: &protocol.HostRPCCallResponse{
-				Response: cbor.FixSliceForSerde(res),
-			}}, nil
-		default:
-			return nil, errEndpointNotSupported
-		}
-	}
-	// Storage.
-	if body.HostStorageSyncRequest != nil {
-		rq := body.HostStorageSyncRequest
-		span, sctx := opentracing.StartSpanFromContext(ctx, "storage.Sync")
-		defer span.Finish()
-
-		var rsp *storage.ProofResponse
-		var err error
-		switch {
-		case rq.SyncGet != nil:
-			rsp, err = h.storage.SyncGet(sctx, rq.SyncGet)
-		case rq.SyncGetPrefixes != nil:
-			rsp, err = h.storage.SyncGetPrefixes(sctx, rq.SyncGetPrefixes)
-		case rq.SyncIterate != nil:
-			rsp, err = h.storage.SyncIterate(sctx, rq.SyncIterate)
-		default:
-			return nil, errMethodNotSupported
-		}
-		if err != nil {
-			return nil, err
-		}
-
-		return &protocol.Body{HostStorageSyncResponse: &protocol.HostStorageSyncResponse{ProofResponse: rsp}}, nil
-	}
-	// Local storage.
-	if body.HostLocalStorageGetRequest != nil {
-		value, err := h.localStorage.Get(body.HostLocalStorageGetRequest.Key)
-		if err != nil {
-			return nil, err
-		}
-		return &protocol.Body{HostLocalStorageGetResponse: &protocol.HostLocalStorageGetResponse{Value: value}}, nil
-	}
-	if body.HostLocalStorageSetRequest != nil {
-		if err := h.localStorage.Set(body.HostLocalStorageSetRequest.Key, body.HostLocalStorageSetRequest.Value); err != nil {
-			return nil, err
-		}
-		return &protocol.Body{HostLocalStorageSetResponse: &protocol.Empty{}}, nil
-	}
-
-	return nil, errMethodNotSupported
-}
-
-// NewRuntimeHostHandler creates a worker host handler for runtime execution.
-func NewRuntimeHostHandler(
-	runtime runtimeRegistry.Runtime,
-	storage storage.Backend,
-	keyManager keymanagerApi.Backend,
-	keyManagerClient *keymanagerClient.Client,
-	localStorage localstorage.LocalStorage,
-) protocol.Handler {
-	return &runtimeHostHandler{runtime, storage, keyManager, keyManagerClient, localStorage}
-}
-
-// RuntimeHostWorker provides methods for workers that need to host runtimes.
-type RuntimeHostWorker struct {
-	commonWorker *Worker
-}
-
-type runtimeWorkerHostMockFactory struct{}
-
-func (f *runtimeWorkerHostMockFactory) NewWorkerHost(cfg host.Config) (host.Host, error) {
-	return host.NewMockHost()
-}
-
-type runtimeWorkerHostSandboxedFactory struct {
-	cfgTemplate host.Config
-}
-
-func (f *runtimeWorkerHostSandboxedFactory) NewWorkerHost(cfg host.Config) (host.Host, error) {
-	// Instantiate the template with the provided configuration values.
-	hostCfg := f.cfgTemplate
-	hostCfg.TEEHardware = cfg.TEEHardware
-	hostCfg.MessageHandler = cfg.MessageHandler
-
-	return host.NewHost(&hostCfg)
-}
-
-// NewRuntimeWorkerHostFactory creates a new worker host factory for the given runtime.
-func (rw *RuntimeHostWorker) NewRuntimeWorkerHostFactory(role node.RolesMask, id common.Namespace) (h host.Factory, err error) {
-	cfg := rw.commonWorker.GetConfig().RuntimeHost
-	rtCfg, ok := cfg.Runtimes[id]
-	if !ok {
-		return nil, fmt.Errorf("runtime host: unknown runtime: %s", id)
-	}
-
-	cfgTemplate := host.Config{
-		Role:          role,
-		ID:            rtCfg.ID,
-		WorkerBinary:  cfg.Loader,
-		RuntimeBinary: rtCfg.Binary,
-		IAS:           rw.commonWorker.IAS,
-	}
-
-	switch strings.ToLower(cfg.Backend) {
-	case host.BackendUnconfined:
-		cfgTemplate.NoSandbox = true
-		fallthrough
-	case host.BackendSandboxed:
-		h = &runtimeWorkerHostSandboxedFactory{cfgTemplate}
-	case host.BackendMock:
-		h = &runtimeWorkerHostMockFactory{}
-	default:
-		err = fmt.Errorf("runtime host: unsupported worker host backend: '%v'", cfg.Backend)
-	}
-	return
-}
-
-// NewRuntimeHostWorker creates a new runtime host worker.
-func NewRuntimeHostWorker(commonWorker *Worker) (*RuntimeHostWorker, error) {
-	cfg := commonWorker.GetConfig().RuntimeHost
-	if cfg == nil {
-		return nil, fmt.Errorf("runtime host: missing configuration")
-	}
-	if cfg.Loader == "" && cfg.Backend != host.BackendMock {
-		return nil, fmt.Errorf("runtime host: no runtime loader binary configured and backend not host.BackendMock")
-	}
-	if len(cfg.Runtimes) == 0 {
-		return nil, fmt.Errorf("runtime host: no runtimes configured")
-	}
-
-	return &RuntimeHostWorker{commonWorker: commonWorker}, nil
-}
-
-// RuntimeHostNode provides methods for committee nodes that need to host runtimes.
+// RuntimeHostNode provides methods for nodes that need to host runtimes.
 type RuntimeHostNode struct {
-	commonNode *committee.Node
+	sync.Mutex
 
-	workerHostFactory host.Factory
-	workerHost        host.Host
+	cfg     *RuntimeHostConfig
+	factory RuntimeHostHandlerFactory
+
+	runtime host.Runtime
 }
 
-// InitializeRuntimeWorkerHost initializes the runtime worker host for this runtime.
+// ProvisionHostedRuntime provisions the configured runtime.
 //
-// NOTE: This does not start the worker host, call Start on the returned worker to do so.
-func (n *RuntimeHostNode) InitializeRuntimeWorkerHost(ctx context.Context) (host.Host, error) {
-	n.commonNode.CrossNode.Lock()
-	defer n.commonNode.CrossNode.Unlock()
-
-	rt, err := n.commonNode.Runtime.RegistryDescriptor(ctx)
+// This method may return before the runtime is fully provisioned. The returned runtime will not be
+// started automatically, you must call Start explicitly.
+func (n *RuntimeHostNode) ProvisionHostedRuntime(ctx context.Context) (host.Runtime, error) {
+	rt, err := n.factory.GetRuntime().RegistryDescriptor(ctx)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to get runtime registry descriptor: %w", err)
 	}
 
-	cfg := host.Config{
-		// This assumes that TEE hardware cannot change once the runtime is registered which is
-		// currently the case in our system.
-		TEEHardware: rt.TEEHardware,
-		MessageHandler: NewRuntimeHostHandler(
-			n.commonNode.Runtime,
-			n.commonNode.Runtime.Storage(),
-			n.commonNode.KeyManager,
-			n.commonNode.KeyManagerClient,
-			n.commonNode.Runtime.LocalStorage(),
-		),
+	provisioner, ok := n.cfg.Provisioners[rt.TEEHardware]
+	if !ok {
+		return nil, fmt.Errorf("no provisioner suitable for TEE hardware '%s'", rt.TEEHardware)
 	}
-	workerHost, err := n.workerHostFactory.NewWorkerHost(cfg)
+
+	// Get a copy of the configuration template for the given runtime and apply updates.
+	cfg, ok := n.cfg.Runtimes[rt.ID]
+	if !ok {
+		return nil, fmt.Errorf("missing runtime host configuration for runtime '%s'", rt.ID)
+	}
+	cfg.MessageHandler = n.factory.NewRuntimeHostHandler()
+
+	// Provision the runtime.
+	prt, err := provisioner.NewRuntime(ctx, cfg)
 	if err != nil {
-		return nil, err
-	}
-	n.workerHost = workerHost
-	return workerHost, nil
-}
-
-// StopRuntimeWorkerHost signals the worker host to stop and waits for it
-// to fully stop.
-func (n *RuntimeHostNode) StopRuntimeWorkerHost() {
-	workerHost := n.GetWorkerHost()
-	if workerHost == nil {
-		return
+		return nil, fmt.Errorf("failed to provision runtime: %w", err)
 	}
 
-	workerHost.Stop()
-	<-workerHost.Quit()
+	n.Lock()
+	n.runtime = prt
+	n.Unlock()
 
-	n.commonNode.CrossNode.Lock()
-	n.workerHost = nil
-	n.commonNode.CrossNode.Unlock()
+	return prt, nil
 }
 
-// GetWorkerHost returns the worker host instance used by this committee node.
-func (n *RuntimeHostNode) GetWorkerHost() host.Host {
-	n.commonNode.CrossNode.Lock()
-	defer n.commonNode.CrossNode.Unlock()
-
-	return n.workerHost
+// GetHostedRuntime returns the provisioned hosted runtime (if any).
+func (n *RuntimeHostNode) GetHostedRuntime() host.Runtime {
+	n.Lock()
+	rt := n.runtime
+	n.Unlock()
+	return rt
 }
 
-// GetWorkerHostLocked is the same as GetWorkerHost but the caller must ensure
-// that the commonNode.CrossNode lock is held while called.
-func (n *RuntimeHostNode) GetWorkerHostLocked() host.Host {
-	return n.workerHost
+// RuntimeHostHandlerFactory is an interface that can be used to create new runtime handlers when
+// provisioning hosted runtimes.
+type RuntimeHostHandlerFactory interface {
+	// GetRuntime returns the registered runtime for which a runtime host handler is to be created.
+	GetRuntime() runtimeRegistry.Runtime
+
+	// NewRuntimeHostHandler creates a new runtime host handler.
+	NewRuntimeHostHandler() protocol.Handler
 }
 
 // NewRuntimeHostNode creates a new runtime host node.
-func NewRuntimeHostNode(commonNode *committee.Node, workerHostFactory host.Factory) *RuntimeHostNode {
-	return &RuntimeHostNode{
-		commonNode:        commonNode,
-		workerHostFactory: workerHostFactory,
+func NewRuntimeHostNode(cfg *RuntimeHostConfig, factory RuntimeHostHandlerFactory) (*RuntimeHostNode, error) {
+	if cfg == nil {
+		return nil, fmt.Errorf("runtime host not configured")
 	}
+
+	return &RuntimeHostNode{
+		cfg:     cfg,
+		factory: factory,
+	}, nil
 }

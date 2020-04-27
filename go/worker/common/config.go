@@ -11,7 +11,12 @@ import (
 	"github.com/oasislabs/oasis-core/go/common"
 	"github.com/oasislabs/oasis-core/go/common/logging"
 	"github.com/oasislabs/oasis-core/go/common/node"
-	runtimeRegistry "github.com/oasislabs/oasis-core/go/runtime/registry"
+	ias "github.com/oasislabs/oasis-core/go/ias/api"
+	cmdFlags "github.com/oasislabs/oasis-core/go/oasis-node/cmd/common/flags"
+	runtimeHost "github.com/oasislabs/oasis-core/go/runtime/host"
+	hostMock "github.com/oasislabs/oasis-core/go/runtime/host/mock"
+	hostSandbox "github.com/oasislabs/oasis-core/go/runtime/host/sandbox"
+	hostSgx "github.com/oasislabs/oasis-core/go/runtime/host/sgx"
 	"github.com/oasislabs/oasis-core/go/worker/common/configparser"
 )
 
@@ -28,17 +33,35 @@ var (
 	// the worker should connect to.
 	CfgSentryCertFiles = "worker.sentry.cert_file"
 
-	// CfgRuntimeBackend configures the runtime backend.
-	CfgRuntimeBackend = "worker.runtime.backend"
-	// CfgRuntimeLoader configures the runtime loader binary.
-	CfgRuntimeLoader = "worker.runtime.loader"
-	// CfgRuntimeBinary confgures the runtime binary.
-	CfgRuntimeBinary = "worker.runtime.binary"
+	// CfgRuntimeProvisioner configures the runtime provisioner.
+	CfgRuntimeProvisioner = "worker.runtime.provisioner"
+	// CfgRuntimeSGXLoader configures the runtime loader binary required for SGX runtimes. A single
+	// loader is used for all runtimes.
+	CfgRuntimeSGXLoader = "worker.runtime.sgx.loader"
+	// CfgRuntimePaths confgures the paths for supported runtimes. The value should be a map of
+	// runtime IDs to corresponding resource paths (type of the resource depends on the
+	// provisioner).
+	CfgRuntimePaths = "worker.runtime.paths"
 
 	cfgStorageCommitTimeout = "worker.storage_commit_timeout"
 
 	// Flags has the configuration flags.
 	Flags = flag.NewFlagSet("", flag.ContinueOnError)
+)
+
+const (
+	// RuntimeProvisionerMock is the name of the mock runtime provisioner.
+	//
+	// Use of this provisioner is only allowed if DebugDontBlameOasis flag is set.
+	RuntimeProvisionerMock = "mock"
+	// RuntimeProvisionerUnconfined is the name of the unconfined runtime provisioner that executes
+	// runtimes as regular processes without any sandboxing.
+	//
+	// Use of this provisioner is only allowed if DebugDontBlameOasis flag is set.
+	RuntimeProvisionerUnconfined = "unconfined"
+	// RuntimeProvisionerSandboxed is the name of the sandboxed runtime provisioner that executes
+	// runtimes as regular processes in a Linux namespaces/cgroups/SECCOMP sandbox.
+	RuntimeProvisionerSandboxed = "sandboxed"
 )
 
 // Config contains common worker config.
@@ -48,9 +71,8 @@ type Config struct { // nolint: maligned
 	SentryAddresses    []node.Address
 	SentryCertificates []*x509.Certificate
 
-	// RuntimeHost contains configuration for a worker that hosts
-	// runtimes. It may be nil if the worker is not configured to
-	// host runtimes.
+	// RuntimeHost contains configuration for a worker that hosts runtimes. It may be nil if the
+	// worker is not configured to host runtimes.
 	RuntimeHost *RuntimeHostConfig
 
 	StorageCommitTimeout time.Duration
@@ -58,17 +80,14 @@ type Config struct { // nolint: maligned
 	logger *logging.Logger
 }
 
-// RuntimeHostRuntimeConfig is a single runtime's host configuration.
-type RuntimeHostRuntimeConfig struct {
-	ID     common.Namespace
-	Binary string
-}
-
 // RuntimeHostConfig is configuration for a worker that hosts runtimes.
 type RuntimeHostConfig struct {
-	Backend  string
-	Loader   string
-	Runtimes map[common.Namespace]RuntimeHostRuntimeConfig
+	// Provisioners contains a set of supported runtime provisioners, based on TEE hardware.
+	Provisioners map[node.TEEHardware]runtimeHost.Provisioner
+
+	// Runtimes contains per-runtime provisioning configuration. Some fields may be omitted as they
+	// are provided when the runtime is provisioned.
+	Runtimes map[common.Namespace]runtimeHost.Config
 }
 
 // GetNodeAddresses returns worker node addresses.
@@ -97,7 +116,7 @@ func (c *Config) GetNodeAddresses() ([]node.Address, error) {
 }
 
 // NewConfig creates a new worker config.
-func NewConfig() (*Config, error) {
+func NewConfig(ias ias.Endpoint) (*Config, error) {
 	// Parse register address overrides.
 	clientAddresses, err := configparser.ParseAddressList(viper.GetStringSlice(cfgClientAddresses))
 	if err != nil {
@@ -123,25 +142,69 @@ func NewConfig() (*Config, error) {
 		logger:               logging.GetLogger("worker/config"),
 	}
 
-	// Check if runtime host is configured for the runtimes.
-	if runtimeLoader := viper.GetString(CfgRuntimeLoader); runtimeLoader != "" {
-		runtimeBinaries, err := runtimeRegistry.ParseRuntimeMap(viper.GetStringSlice(CfgRuntimeBinary))
-		if err != nil {
-			return nil, err
+	// Check if any runtimes are configured to be hosted.
+	if viper.IsSet(CfgRuntimePaths) {
+		var rh RuntimeHostConfig
+
+		// Register provisioners based on the configured provisioner.
+		var insecureNoSandbox bool
+		rh.Provisioners = make(map[node.TEEHardware]runtimeHost.Provisioner)
+		switch p := viper.GetString(CfgRuntimeProvisioner); p {
+		case RuntimeProvisionerMock:
+			// Mock provisioner, only supported when the runtime requires no TEE hardware.
+			if !cmdFlags.DebugDontBlameOasis() {
+				return nil, fmt.Errorf("mock provisioner requires use of unsafe debug flags")
+			}
+
+			rh.Provisioners[node.TEEHardwareInvalid] = hostMock.New()
+		case RuntimeProvisionerUnconfined:
+			// Unconfined provisioner, can be used with no TEE or with Intel SGX.
+			if !cmdFlags.DebugDontBlameOasis() {
+				return nil, fmt.Errorf("unconfined provisioner requires use of unsafe debug flags")
+			}
+
+			insecureNoSandbox = true
+
+			fallthrough
+		case RuntimeProvisionerSandboxed:
+			// Sandboxed provisioner, can be used with no TEE or with Intel SGX.
+			rh.Provisioners[node.TEEHardwareInvalid], err = hostSandbox.New(hostSandbox.Config{
+				InsecureNoSandbox: insecureNoSandbox,
+			})
+			if err != nil {
+				return nil, fmt.Errorf("failed to create runtime provisioner: %w", err)
+			}
+
+			rh.Provisioners[node.TEEHardwareIntelSGX], err = hostSgx.New(hostSgx.Config{
+				LoaderPath:        viper.GetString(CfgRuntimeSGXLoader),
+				IAS:               ias,
+				InsecureNoSandbox: insecureNoSandbox,
+			})
+			if err != nil {
+				return nil, fmt.Errorf("failed to create SGX runtime provisioner: %w", err)
+			}
+		default:
+			return nil, fmt.Errorf("unsupported runtime provisioner: %s", p)
 		}
 
-		cfg.RuntimeHost = &RuntimeHostConfig{
-			Backend:  viper.GetString(CfgRuntimeBackend),
-			Loader:   runtimeLoader,
-			Runtimes: make(map[common.Namespace]RuntimeHostRuntimeConfig),
-		}
+		// Configure runtimes.
+		rh.Runtimes = make(map[common.Namespace]runtimeHost.Config)
+		for runtimeID, path := range viper.GetStringMapString(CfgRuntimePaths) {
+			var id common.Namespace
+			if err := id.UnmarshalHex(runtimeID); err != nil {
+				return nil, fmt.Errorf("bad runtime identifier '%s': %w", runtimeID, err)
+			}
 
-		for id, path := range runtimeBinaries {
-			cfg.RuntimeHost.Runtimes[id] = RuntimeHostRuntimeConfig{
-				ID:     id,
-				Binary: path,
+			rh.Runtimes[id] = runtimeHost.Config{
+				RuntimeID: id,
+				Path:      path,
 			}
 		}
+		if len(rh.Runtimes) == 0 {
+			return nil, fmt.Errorf("no runtimes configured")
+		}
+
+		cfg.RuntimeHost = &rh
 	}
 
 	return &cfg, nil
@@ -153,9 +216,9 @@ func init() {
 	Flags.StringSlice(CfgSentryAddresses, []string{}, fmt.Sprintf("Address(es) of sentry node(s) to connect to (each address should have a corresponding certificate file set in %s)", CfgSentryCertFiles))
 	Flags.StringSlice(CfgSentryCertFiles, []string{}, fmt.Sprintf("Certificate file(s) of sentry node(s) to connect to (each certificate file should have a corresponding address set in %s)", CfgSentryAddresses))
 
-	Flags.String(CfgRuntimeBackend, "sandboxed", "Runtime worker host backend")
-	Flags.String(CfgRuntimeLoader, "", "Path to runtime loader binary")
-	Flags.StringSlice(CfgRuntimeBinary, nil, "Path to runtime binary (format: <runtime-ID>:<path>)")
+	Flags.String(CfgRuntimeProvisioner, RuntimeProvisionerSandboxed, "Runtime provisioner to use")
+	Flags.String(CfgRuntimeSGXLoader, "", "(for SGX runtimes) Path to SGXS runtime loader binary")
+	Flags.StringToString(CfgRuntimePaths, nil, "Paths to runtime resources (format: <rt1-ID>=<path>,<rt2-ID>=<path>)")
 
 	Flags.Duration(cfgStorageCommitTimeout, 5*time.Second, "Storage commit timeout")
 

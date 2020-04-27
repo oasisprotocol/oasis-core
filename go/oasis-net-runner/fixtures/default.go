@@ -49,7 +49,7 @@ func newDefaultFixture() (*oasis.NetworkFixture, error) {
 		},
 		Network: oasis.NetworkCfg{
 			NodeBinary:             viper.GetString(cfgNodeBinary),
-			RuntimeLoaderBinary:    viper.GetString(cfgRuntimeLoader),
+			RuntimeSGXLoaderBinary: viper.GetString(cfgRuntimeLoader),
 			ConsensusTimeoutCommit: 1 * time.Second,
 			EpochtimeMock:          viper.GetBool(cfgEpochtimeMock),
 			HaltEpoch:              viper.GetUint64(cfgHaltEpoch),

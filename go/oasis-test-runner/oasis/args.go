@@ -12,7 +12,6 @@ import (
 
 	"github.com/oasislabs/oasis-core/go/common"
 	commonGrpc "github.com/oasislabs/oasis-core/go/common/grpc"
-	"github.com/oasislabs/oasis-core/go/common/node"
 	"github.com/oasislabs/oasis-core/go/common/sgx"
 	"github.com/oasislabs/oasis-core/go/consensus/tendermint"
 	"github.com/oasislabs/oasis-core/go/consensus/tendermint/abci"
@@ -253,23 +252,23 @@ func (args *argBuilder) workerP2pPort(port uint16) *argBuilder {
 	return args
 }
 
-func (args *argBuilder) workerRuntimeBackend(backend string) *argBuilder {
+func (args *argBuilder) workerRuntimeProvisioner(provisioner string) *argBuilder {
 	args.vec = append(args.vec, []string{
-		"--" + workerCommon.CfgRuntimeBackend, backend,
+		"--" + workerCommon.CfgRuntimeProvisioner, provisioner,
 	}...)
 	return args
 }
 
-func (args *argBuilder) workerRuntimeLoader(fn string) *argBuilder {
+func (args *argBuilder) workerRuntimeSGXLoader(fn string) *argBuilder {
 	args.vec = append(args.vec, []string{
-		"--" + workerCommon.CfgRuntimeLoader, fn,
+		"--" + workerCommon.CfgRuntimeSGXLoader, fn,
 	}...)
 	return args
 }
 
-func (args *argBuilder) workerRuntimeBinary(id common.Namespace, fn string) *argBuilder {
+func (args *argBuilder) workerRuntimePath(id common.Namespace, fn string) *argBuilder {
 	args.vec = append(args.vec, []string{
-		"--" + workerCommon.CfgRuntimeBinary, id.String() + ":" + fn,
+		"--" + workerCommon.CfgRuntimePaths, id.String() + "=" + fn,
 	}...)
 	return args
 }
@@ -281,27 +280,6 @@ func (args *argBuilder) workerComputeEnabled() *argBuilder {
 
 func (args *argBuilder) workerKeymanagerEnabled() *argBuilder {
 	args.vec = append(args.vec, "--"+keymanager.CfgEnabled)
-	return args
-}
-
-func (args *argBuilder) workerKeymanagerRuntimeBinary(fn string) *argBuilder {
-	args.vec = append(args.vec, []string{
-		"--" + keymanager.CfgRuntimeBinary, fn,
-	}...)
-	return args
-}
-
-func (args *argBuilder) workerKeymanagerRuntimeLoader(fn string) *argBuilder {
-	args.vec = append(args.vec, []string{
-		"--" + keymanager.CfgRuntimeLoader, fn,
-	}...)
-	return args
-}
-
-func (args *argBuilder) workerKeymanagerTEEHardware(hw node.TEEHardware) *argBuilder {
-	args.vec = append(args.vec, []string{
-		"--" + keymanager.CfgTEEHardware, hw.String(),
-	}...)
 	return args
 }
 
@@ -488,7 +466,7 @@ func (args *argBuilder) appendRuntimePruner(p *RuntimePrunerCfg) *argBuilder {
 
 func (args *argBuilder) appendComputeNodeRuntime(rt *Runtime) *argBuilder {
 	args = args.runtimeSupported(rt.id).
-		workerRuntimeBinary(rt.id, rt.binary).
+		workerRuntimePath(rt.id, rt.binary).
 		appendRuntimePruner(&rt.pruner)
 	return args
 }

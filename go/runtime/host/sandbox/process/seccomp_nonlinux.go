@@ -1,11 +1,10 @@
 // +build !linux
 
-package host
+package process
 
 import (
+	"errors"
 	"os"
-
-	"github.com/pkg/errors"
 )
 
 func generateSeccompPolicy(out *os.File) error {

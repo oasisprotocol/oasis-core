@@ -14,6 +14,7 @@ import (
 	kmCmd "github.com/oasislabs/oasis-core/go/oasis-node/cmd/keymanager"
 	"github.com/oasislabs/oasis-core/go/oasis-test-runner/env"
 	registry "github.com/oasislabs/oasis-core/go/registry/api"
+	workerCommon "github.com/oasislabs/oasis-core/go/worker/common"
 )
 
 const (
@@ -262,9 +263,10 @@ func (km *Keymanager) startNode() error {
 		tendermintSubmissionGasPrice(km.consensus.SubmissionGasPrice).
 		tendermintPrune(km.consensus.PruneNumKept).
 		workerClientPort(km.workerClientPort).
+		workerRuntimeProvisioner(workerCommon.RuntimeProvisionerSandboxed).
+		workerRuntimeSGXLoader(km.net.cfg.RuntimeSGXLoaderBinary).
+		workerRuntimePath(km.runtime.id, km.runtime.binary).
 		workerKeymanagerEnabled().
-		workerKeymanagerRuntimeBinary(km.runtime.binary).
-		workerKeymanagerRuntimeLoader(km.net.cfg.RuntimeLoaderBinary).
 		workerKeymanagerRuntimeID(km.runtime.id).
 		appendNetwork(km.net).
 		appendSeedNodes(km.net).
@@ -272,10 +274,6 @@ func (km *Keymanager) startNode() error {
 
 	if km.mayGenerate {
 		args = args.workerKeymanagerMayGenerate()
-	}
-
-	if km.runtime.teeHardware != node.TEEHardwareInvalid {
-		args = args.workerKeymanagerTEEHardware(km.runtime.teeHardware)
 	}
 
 	// Sentry configuration.

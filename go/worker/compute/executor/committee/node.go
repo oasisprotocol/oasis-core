@@ -19,17 +19,17 @@ import (
 	"github.com/oasislabs/oasis-core/go/common/node"
 	"github.com/oasislabs/oasis-core/go/common/pubsub"
 	"github.com/oasislabs/oasis-core/go/common/tracing"
+	"github.com/oasislabs/oasis-core/go/common/version"
 	roothash "github.com/oasislabs/oasis-core/go/roothash/api"
 	"github.com/oasislabs/oasis-core/go/roothash/api/block"
 	"github.com/oasislabs/oasis-core/go/roothash/api/commitment"
 	runtimeCommittee "github.com/oasislabs/oasis-core/go/runtime/committee"
+	"github.com/oasislabs/oasis-core/go/runtime/host/protocol"
 	"github.com/oasislabs/oasis-core/go/runtime/transaction"
 	scheduler "github.com/oasislabs/oasis-core/go/scheduler/api"
 	storage "github.com/oasislabs/oasis-core/go/storage/api"
 	commonWorker "github.com/oasislabs/oasis-core/go/worker/common"
 	"github.com/oasislabs/oasis-core/go/worker/common/committee"
-	"github.com/oasislabs/oasis-core/go/worker/common/host"
-	"github.com/oasislabs/oasis-core/go/worker/common/host/protocol"
 	"github.com/oasislabs/oasis-core/go/worker/common/p2p"
 	mergeCommittee "github.com/oasislabs/oasis-core/go/worker/compute/merge/committee"
 	"github.com/oasislabs/oasis-core/go/worker/registration"
@@ -37,7 +37,7 @@ import (
 
 var (
 	errSeenNewerBlock     = errors.New("executor: seen newer block")
-	errWorkerAborted      = errors.New("executor: worker aborted batch processing")
+	errRuntimeAborted     = errors.New("executor: runtime aborted batch processing")
 	errIncompatibleHeader = errors.New("executor: incompatible header")
 	errInvalidReceipt     = errors.New("executor: invalid storage receipt")
 	errStorageFailed      = errors.New("executor: failed to fetch from storage")
@@ -482,7 +482,7 @@ func (n *Node) startProcessingBatchLocked(
 	done := make(chan *protocol.ComputedBatch, 1)
 
 	rq := &protocol.Body{
-		WorkerExecuteTxBatchRequest: &protocol.WorkerExecuteTxBatchRequest{
+		RuntimeExecuteTxBatchRequest: &protocol.RuntimeExecuteTxBatchRequest{
 			IORoot: ioRoot,
 			Inputs: batch,
 			Block:  *n.commonNode.CurrentBlock,
@@ -493,12 +493,12 @@ func (n *Node) startProcessingBatchLocked(
 	batchSize.With(n.getMetricLabels()).Observe(float64(len(batch)))
 	n.transitionLocked(StateProcessingBatch{ioRoot, batch, batchSpanCtx, batchStartTime, cancel, done, txnSchedSig, inputStorageSigs})
 
-	workerHost := n.GetWorkerHostLocked()
-	if workerHost == nil {
+	rt := n.GetHostedRuntime()
+	if rt == nil {
 		// This should not happen as we only register to be an executor worker
-		// once the worker host is ready.
-		n.logger.Error("received a batch while worker host is not yet initialized")
-		n.abortBatchLocked(errWorkerAborted)
+		// once the hosted runtime is ready.
+		n.logger.Error("received a batch while hosted runtime is not yet initialized")
+		n.abortBatchLocked(errRuntimeAborted)
 		return
 	}
 
@@ -519,43 +519,37 @@ func (n *Node) startProcessingBatchLocked(
 			batchRuntimeProcessingTime.With(n.getMetricLabels()).Observe(time.Since(rtStartTime).Seconds())
 		}()
 
-		ch, err := workerHost.MakeRequest(ctx, rq)
-		if err != nil {
-			n.logger.Error("error while sending batch processing request to worker host",
+		rsp, err := rt.Call(ctx, rq)
+		switch {
+		case err == nil:
+		case errors.Is(err, context.Canceled):
+			// Context was canceled while the runtime was processing a request.
+			n.logger.Error("batch processing aborted by context, restarting runtime")
+
+			// Restart the runtime, so we can start processing the next batch.
+			if err = rt.Restart(n.ctx); err != nil {
+				n.logger.Error("failed to restart the runtime",
+					"err", err,
+				)
+			}
+			return
+		default:
+			n.logger.Error("error while sending batch processing request to runtime",
 				"err", err,
 			)
 			return
 		}
 		crash.Here(crashPointBatchProcessStartAfter)
 
-		select {
-		case response := <-ch:
-			if response == nil {
-				n.logger.Error("worker channel closed while processing batch")
-				return
-			}
-
-			rsp := response.WorkerExecuteTxBatchResponse
-			if rsp == nil {
-				n.logger.Error("malformed response from worker",
-					"response", response,
-				)
-				return
-			}
-
-			done <- &rsp.Batch
-		case <-ctx.Done():
-			n.logger.Error("batch processing aborted by context, interrupting worker")
-
-			// Interrupt the worker, so we can start processing the next batch.
-			err = workerHost.InterruptWorker(n.ctx)
-			if err != nil {
-				n.logger.Error("failed to interrupt the worker",
-					"err", err,
-				)
-			}
+		if rsp.RuntimeExecuteTxBatchResponse == nil {
+			n.logger.Error("malformed response from runtime",
+				"response", rsp,
+			)
 			return
 		}
+
+		// Submit response to the executor worker.
+		done <- &rsp.RuntimeExecuteTxBatchResponse.Batch
 	}()
 }
 
@@ -872,35 +866,36 @@ func (n *Node) worker() {
 
 	n.logger.Info("starting committee node")
 
-	// Initialize worker host for the new runtime.
-	workerHost, err := n.InitializeRuntimeWorkerHost(n.ctx)
+	// Provision the hosted runtime.
+	hrt, err := n.ProvisionHostedRuntime(n.ctx)
 	if err != nil {
-		n.logger.Error("failed to initialize worker host",
+		n.logger.Error("failed to provision hosted runtime",
 			"err", err,
 		)
 		return
 	}
 
-	workerEventCh, workerSub, err := workerHost.WatchEvents(n.ctx)
+	hrtEventCh, hrtSub, err := hrt.WatchEvents(n.ctx)
 	if err != nil {
-		n.logger.Error("failed to subscribe to worker host events",
+		n.logger.Error("failed to subscribe to hosted runtime events",
 			"err", err,
 		)
 		return
 	}
-	defer workerSub.Close()
+	defer hrtSub.Close()
 
-	if err = workerHost.Start(); err != nil {
-		n.logger.Error("failed to start worker host",
+	if err = hrt.Start(); err != nil {
+		n.logger.Error("failed to start hosted runtime",
 			"err", err,
 		)
 		return
 	}
-	defer n.StopRuntimeWorkerHost()
+	defer hrt.Stop()
 
 	// We are initialized.
 	close(n.initCh)
 
+	var runtimeVersion version.Version
 	for {
 		// Check if we are currently processing a batch. In this case, we also
 		// need to select over the result channel.
@@ -919,18 +914,28 @@ func (n *Node) worker() {
 		case <-n.stopCh:
 			n.logger.Info("termination requested")
 			return
-		case ev := <-workerEventCh:
+		case ev := <-hrtEventCh:
 			switch {
 			case ev.Started != nil:
 				// We are now able to service requests for this runtime.
+				runtimeVersion = ev.Started.Version
+
 				n.roleProvider.SetAvailable(func(nd *node.Node) error {
 					rt := nd.AddOrUpdateRuntime(n.commonNode.Runtime.ID())
-					rt.Version = ev.Started.Version
+					rt.Version = runtimeVersion
 					rt.Capabilities.TEE = ev.Started.CapabilityTEE
 					return nil
 				})
-			case ev.FailedToStart != nil:
-				// Worker failed to start -- we can no longer service requests.
+			case ev.Updated != nil:
+				// Update runtime capabilities.
+				n.roleProvider.SetAvailable(func(nd *node.Node) error {
+					rt := nd.AddOrUpdateRuntime(n.commonNode.Runtime.ID())
+					rt.Version = runtimeVersion
+					rt.Capabilities.TEE = ev.Updated.CapabilityTEE
+					return nil
+				})
+			case ev.FailedToStart != nil, ev.Stopped != nil:
+				// Runtime failed to start or was stopped -- we can no longer service requests.
 				n.roleProvider.SetUnavailable()
 			default:
 				// Unknown event.
@@ -950,7 +955,7 @@ func (n *Node) worker() {
 					if state, ok := n.state.(StateProcessingBatch); !ok || state.done != processingDoneCh {
 						return
 					}
-					n.abortBatchLocked(errWorkerAborted)
+					n.abortBatchLocked(errRuntimeAborted)
 				}()
 				break
 			}
@@ -976,7 +981,6 @@ func (n *Node) worker() {
 func NewNode(
 	commonNode *committee.Node,
 	mergeNode *mergeCommittee.Node,
-	workerHostFactory host.Factory,
 	commonCfg commonWorker.Config,
 	roleProvider registration.RoleProvider,
 ) (*Node, error) {
@@ -984,10 +988,16 @@ func NewNode(
 		prometheus.MustRegister(nodeCollectors...)
 	})
 
+	// Prepare the runtime host node helpers.
+	rhn, err := commonWorker.NewRuntimeHostNode(commonCfg.RuntimeHost, commonNode)
+	if err != nil {
+		return nil, err
+	}
+
 	ctx, cancel := context.WithCancel(context.Background())
 
 	n := &Node{
-		RuntimeHostNode:  commonWorker.NewRuntimeHostNode(commonNode, workerHostFactory),
+		RuntimeHostNode:  rhn,
 		commonNode:       commonNode,
 		mergeNode:        mergeNode,
 		commonCfg:        commonCfg,

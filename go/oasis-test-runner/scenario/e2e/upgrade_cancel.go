@@ -78,7 +78,7 @@ func (sc *nodeUpgradeCancelImpl) Fixture() (*oasis.NetworkFixture, error) {
 		},
 		Network: oasis.NetworkCfg{
 			NodeBinary:                        sc.nodeBinary,
-			RuntimeLoaderBinary:               sc.runtimeLoader,
+			RuntimeSGXLoaderBinary:            sc.runtimeLoader,
 			EpochtimeMock:                     true,
 			DefaultLogWatcherHandlerFactories: DefaultRuntimeLogWatcherHandlerFactories,
 		},
