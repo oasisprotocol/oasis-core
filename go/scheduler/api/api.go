@@ -151,6 +151,9 @@ func (c *Committee) EncodedMembersHash() hash.Hash {
 // TokensPerVotingPower is the ratio of base units staked to validator power.
 var TokensPerVotingPower quantity.Quantity
 
+// VotingPowerFromTokens computes that by dividing by TokensPerVotingPower. It's not that we're implementation-hiding
+// the conversion though. It's just that otherwise if we accidentally skip the `IsInt64`, it would still appear to
+// work, and that would be a bad thing to have in a routine that's written multiple times.
 func VotingPowerFromTokens(t *quantity.Quantity) (int64, error) {
 	powerQ := t.Clone()
 	if err := powerQ.Quo(&TokensPerVotingPower); err != nil {
