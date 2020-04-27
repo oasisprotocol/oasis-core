@@ -12,8 +12,10 @@ import (
 	abciAPI "github.com/oasislabs/oasis-core/go/consensus/tendermint/api"
 	registryState "github.com/oasislabs/oasis-core/go/consensus/tendermint/apps/registry/state"
 	schedulerState "github.com/oasislabs/oasis-core/go/consensus/tendermint/apps/scheduler/state"
+	stakingState "github.com/oasislabs/oasis-core/go/consensus/tendermint/apps/staking/state"
 	genesis "github.com/oasislabs/oasis-core/go/genesis/api"
 	scheduler "github.com/oasislabs/oasis-core/go/scheduler/api"
+	staking "github.com/oasislabs/oasis-core/go/staking/api"
 )
 
 func (app *schedulerApplication) InitChain(ctx *abciAPI.Context, req types.RequestInitChain, doc *genesis.Document) error {
@@ -93,6 +95,8 @@ func (app *schedulerApplication) InitChain(ctx *abciAPI.Context, req types.Reque
 		}
 	}
 
+	stakeState := stakingState.NewMutableState(ctx.State())
+
 	// Assemble the list of the tendermint genesis validators, and do some
 	// sanity checking.
 	currentValidators := make(map[signature.PublicKey]int64)
@@ -123,13 +127,61 @@ func (app *schedulerApplication) InitChain(ctx *abciAPI.Context, req types.Reque
 			)
 			return fmt.Errorf("scheduler: genesis validator not in registry")
 		}
+
+		var expectedPower int64
+		if doc.Scheduler.Parameters.DebugBypassStake {
+			expectedPower = 1
+		} else {
+			var account *staking.Account
+			account, err = stakeState.Account(ctx, n.EntityID)
+			if err != nil {
+				ctx.Logger().Error("couldn't get account for genesis validator entity",
+					"err", err,
+					"node_id", n.ID,
+					"entity_id", n.EntityID,
+				)
+				return fmt.Errorf("scheduler: getting account %s for genesis validator %s entity: %w",
+					n.EntityID,
+					n.ID,
+					err,
+				)
+			}
+			expectedPower, err = scheduler.VotingPowerFromTokens(&account.Escrow.Active.Balance)
+			if err != nil {
+				ctx.Logger().Error("computing voting power from tokens failed",
+					"err", err,
+					"node_id", n.ID,
+					"entity_id", n.EntityID,
+					"tokens", &account.Escrow.Active.Balance,
+				)
+				return fmt.Errorf("scheduler: getting computing voting power from tokens (node %s entity %s tokens %v): %w",
+					n.ID,
+					n.EntityID,
+					&account.Escrow.Active.Balance,
+					err,
+				)
+			}
+		}
+		if v.Power != expectedPower {
+			ctx.Logger().Error("validator power is wrong",
+				"node_id", n.ID,
+				"expected_power", expectedPower,
+				"validator_power", v.Power,
+			)
+			return fmt.Errorf("scheduler: genesis validator node %s has wrong power %d, expected %d",
+				n.ID,
+				v.Power,
+				expectedPower,
+			)
+		}
+
 		ctx.Logger().Debug("adding validator to current validator set",
 			"id", id,
 		)
 		currentValidators[n.Consensus.ID] = v.Power
 	}
 
-	// TODO/security: Enforce genesis validator staking.
+	// TODO/security: Enforce genesis validator staking thresholds.
 
 	// Add the current validator set to ABCI, so that we can alter it later.
 	//
