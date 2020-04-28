@@ -646,7 +646,10 @@ func (net *Network) startOasisNode(
 			tendermintDebugAllowDuplicateIP()
 	}
 	if net.cfg.UseCustomGrpcSocketPath {
-		node.customGrpcSocketPath = net.genTempSocketPath()
+		// Keep the socket, if it was already generated!
+		if node.customGrpcSocketPath == "" {
+			node.customGrpcSocketPath = net.genTempSocketPath()
+		}
 		extraArgs = extraArgs.debugDontBlameOasis()
 		extraArgs = extraArgs.grpcDebugGrpcSocketPath(node.customGrpcSocketPath)
 	}
