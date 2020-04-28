@@ -36,6 +36,7 @@ import (
 	"github.com/oasislabs/oasis-core/go/common/logging"
 	"github.com/oasislabs/oasis-core/go/common/node"
 	"github.com/oasislabs/oasis-core/go/common/pubsub"
+	"github.com/oasislabs/oasis-core/go/common/quantity"
 	cmservice "github.com/oasislabs/oasis-core/go/common/service"
 	consensusAPI "github.com/oasislabs/oasis-core/go/consensus/api"
 	"github.com/oasislabs/oasis-core/go/consensus/api/transaction"
@@ -1110,7 +1111,7 @@ func genesisToTendermint(d *genesisAPI.Document) (*tmtypes.GenesisDoc, error) {
 	var tmValidators []tmtypes.GenesisValidator
 	for _, v := range d.Registry.Nodes {
 		var openedNode node.Node
-		if err := v.Open(registryAPI.RegisterGenesisNodeSignatureContext, &openedNode); err != nil {
+		if err = v.Open(registryAPI.RegisterGenesisNodeSignatureContext, &openedNode); err != nil {
 			return nil, fmt.Errorf("tendermint: failed to verify validator: %w", err)
 		}
 		// TODO: This should cross check that the entity is valid.
@@ -1118,11 +1119,32 @@ func genesisToTendermint(d *genesisAPI.Document) (*tmtypes.GenesisDoc, error) {
 			continue
 		}
 
+		var power int64
+		if d.Scheduler.Parameters.DebugBypassStake {
+			power = 1
+		} else {
+			var stake *quantity.Quantity
+			if account, ok := d.Staking.Ledger[openedNode.EntityID]; ok {
+				stake = account.Escrow.Active.Balance.Clone()
+			} else {
+				// If all balances and stuff are zero, it's permitted not to have an account in the ledger at all.
+				stake = &quantity.Quantity{}
+			}
+			power, err = schedulerAPI.VotingPowerFromTokens(stake)
+			if err != nil {
+				return nil, fmt.Errorf("tendermint: computing voting power for entity %s with stake %v: %w",
+					openedNode.EntityID,
+					stake,
+					err,
+				)
+			}
+		}
+
 		pk := crypto.PublicKeyToTendermint(&openedNode.Consensus.ID)
 		validator := tmtypes.GenesisValidator{
 			Address: pk.Address(),
 			PubKey:  pk,
-			Power:   consensusAPI.VotingPower,
+			Power:   power,
 			Name:    "oasis-validator-" + openedNode.ID.String(),
 		}
 		tmValidators = append(tmValidators, validator)

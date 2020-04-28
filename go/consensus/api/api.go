@@ -27,9 +27,6 @@ const (
 
 	// HeightLatest is the height that represents the most recent block height.
 	HeightLatest int64 = 0
-
-	// VotingPower is the default voting power for all validator nodes.
-	VotingPower = 1
 )
 
 var (

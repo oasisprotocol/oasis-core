@@ -9,12 +9,13 @@ import (
 
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
 	"github.com/oasislabs/oasis-core/go/common/node"
-	consensus "github.com/oasislabs/oasis-core/go/consensus/api"
 	abciAPI "github.com/oasislabs/oasis-core/go/consensus/tendermint/api"
 	registryState "github.com/oasislabs/oasis-core/go/consensus/tendermint/apps/registry/state"
 	schedulerState "github.com/oasislabs/oasis-core/go/consensus/tendermint/apps/scheduler/state"
+	stakingState "github.com/oasislabs/oasis-core/go/consensus/tendermint/apps/staking/state"
 	genesis "github.com/oasislabs/oasis-core/go/genesis/api"
 	scheduler "github.com/oasislabs/oasis-core/go/scheduler/api"
+	staking "github.com/oasislabs/oasis-core/go/staking/api"
 )
 
 func (app *schedulerApplication) InitChain(ctx *abciAPI.Context, req types.RequestInitChain, doc *genesis.Document) error {
@@ -32,7 +33,7 @@ func (app *schedulerApplication) InitChain(ctx *abciAPI.Context, req types.Reque
 	if doc.Scheduler.Parameters.DebugStaticValidators {
 		ctx.Logger().Warn("static validators are configured")
 
-		var staticValidators []signature.PublicKey
+		staticValidators := make(map[signature.PublicKey]int64)
 		for _, v := range req.Validators {
 			tmPk := v.GetPubKey()
 
@@ -53,7 +54,8 @@ func (app *schedulerApplication) InitChain(ctx *abciAPI.Context, req types.Reque
 				return fmt.Errorf("scheduler: invalid static validator public key: %w", err)
 			}
 
-			staticValidators = append(staticValidators, id)
+			// Use a flat vote weight in this simplified configuration.
+			staticValidators[id] = 1
 		}
 
 		// Add the current validator set to ABCI, so that we can query it later.
@@ -93,9 +95,11 @@ func (app *schedulerApplication) InitChain(ctx *abciAPI.Context, req types.Reque
 		}
 	}
 
+	stakeState := stakingState.NewMutableState(ctx.State())
+
 	// Assemble the list of the tendermint genesis validators, and do some
 	// sanity checking.
-	var currentValidators []signature.PublicKey
+	currentValidators := make(map[signature.PublicKey]int64)
 	for _, v := range req.Validators {
 		tmPk := v.GetPubKey()
 
@@ -116,14 +120,6 @@ func (app *schedulerApplication) InitChain(ctx *abciAPI.Context, req types.Reque
 			return fmt.Errorf("scheduler: invalid genesis validator public key: %w", err)
 		}
 
-		if power := v.GetPower(); power != consensus.VotingPower {
-			ctx.Logger().Error("invalid voting power",
-				"id", id,
-				"power", power,
-			)
-			return fmt.Errorf("scheduler: invalid genesis validator voting power: %v", power)
-		}
-
 		n := registeredValidators[id]
 		if n == nil {
 			ctx.Logger().Error("genesis validator not in registry",
@@ -131,20 +127,75 @@ func (app *schedulerApplication) InitChain(ctx *abciAPI.Context, req types.Reque
 			)
 			return fmt.Errorf("scheduler: genesis validator not in registry")
 		}
+
+		var expectedPower int64
+		if doc.Scheduler.Parameters.DebugBypassStake {
+			expectedPower = 1
+		} else {
+			var account *staking.Account
+			account, err = stakeState.Account(ctx, n.EntityID)
+			if err != nil {
+				ctx.Logger().Error("couldn't get account for genesis validator entity",
+					"err", err,
+					"node_id", n.ID,
+					"entity_id", n.EntityID,
+				)
+				return fmt.Errorf("scheduler: getting account %s for genesis validator %s entity: %w",
+					n.EntityID,
+					n.ID,
+					err,
+				)
+			}
+			expectedPower, err = scheduler.VotingPowerFromTokens(&account.Escrow.Active.Balance)
+			if err != nil {
+				ctx.Logger().Error("computing voting power from tokens failed",
+					"err", err,
+					"node_id", n.ID,
+					"entity_id", n.EntityID,
+					"tokens", &account.Escrow.Active.Balance,
+				)
+				return fmt.Errorf("scheduler: getting computing voting power from tokens (node %s entity %s tokens %v): %w",
+					n.ID,
+					n.EntityID,
+					&account.Escrow.Active.Balance,
+					err,
+				)
+			}
+		}
+		if v.Power != expectedPower {
+			ctx.Logger().Error("validator power is wrong",
+				"node_id", n.ID,
+				"expected_power", expectedPower,
+				"validator_power", v.Power,
+			)
+			return fmt.Errorf("scheduler: genesis validator node %s has wrong power %d, expected %d",
+				n.ID,
+				v.Power,
+				expectedPower,
+			)
+		}
+
 		ctx.Logger().Debug("adding validator to current validator set",
 			"id", id,
 		)
-		currentValidators = append(currentValidators, n.Consensus.ID)
+		currentValidators[n.Consensus.ID] = v.Power
 	}
 
-	// TODO/security: Enforce genesis validator staking.
+	// TODO/security: Enforce genesis validator staking thresholds.
 
 	// Add the current validator set to ABCI, so that we can alter it later.
 	//
 	// Sort of stupid it needs to be done this way, but tendermint doesn't
 	// appear to pass ABCI the validator set anywhere other than InitChain.
-	if err := state.PutCurrentValidators(ctx, currentValidators); err != nil {
+	if err = state.PutCurrentValidators(ctx, currentValidators); err != nil {
 		return fmt.Errorf("failed to set validator set: %w", err)
+	}
+
+	if !doc.Scheduler.Parameters.DebugBypassStake {
+		_, err = scheduler.VotingPowerFromTokens(&doc.Staking.TotalSupply)
+		if err != nil {
+			return fmt.Errorf("init chain: total supply would break voting power computation: %w", err)
+		}
 	}
 
 	return nil

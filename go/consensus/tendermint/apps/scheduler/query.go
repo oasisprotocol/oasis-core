@@ -4,7 +4,6 @@ import (
 	"context"
 
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
-	consensus "github.com/oasislabs/oasis-core/go/consensus/api"
 	registryState "github.com/oasislabs/oasis-core/go/consensus/tendermint/apps/registry/state"
 	schedulerState "github.com/oasislabs/oasis-core/go/consensus/tendermint/apps/scheduler/state"
 	scheduler "github.com/oasislabs/oasis-core/go/scheduler/api"
@@ -45,7 +44,7 @@ type schedulerQuerier struct {
 }
 
 func (sq *schedulerQuerier) Validators(ctx context.Context) ([]*scheduler.Validator, error) {
-	valPks, err := sq.state.CurrentValidators(ctx)
+	vals, err := sq.state.CurrentValidators(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -55,11 +54,8 @@ func (sq *schedulerQuerier) Validators(ctx context.Context) ([]*scheduler.Valida
 		return nil, err
 	}
 
-	// Since we use flat voting power for now, doing it this way saves
-	// having to store consensus.VotingPower repeatedly in the validator set
-	// ABCI state.
-	ret := make([]*scheduler.Validator, 0, len(valPks))
-	for _, v := range valPks {
+	ret := make([]*scheduler.Validator, 0, len(vals))
+	for v, power := range vals {
 		var id signature.PublicKey
 
 		if params.DebugStaticValidators {
@@ -86,7 +82,7 @@ func (sq *schedulerQuerier) Validators(ctx context.Context) ([]*scheduler.Valida
 
 		ret = append(ret, &scheduler.Validator{
 			ID:          id,
-			VotingPower: consensus.VotingPower,
+			VotingPower: power,
 		})
 	}
 

@@ -36,7 +36,7 @@ func (d *Document) SanityCheck() error {
 	if err = d.KeyManager.SanityCheck(); err != nil {
 		return err
 	}
-	if err = d.Scheduler.SanityCheck(); err != nil {
+	if err = d.Scheduler.SanityCheck(&d.Staking.TotalSupply); err != nil {
 		return err
 	}
 	if err = d.Beacon.SanityCheck(); err != nil {

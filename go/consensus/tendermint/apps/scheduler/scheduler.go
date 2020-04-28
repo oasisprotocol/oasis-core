@@ -15,8 +15,9 @@ import (
 	"github.com/oasislabs/oasis-core/go/common/crypto/drbg"
 	"github.com/oasislabs/oasis-core/go/common/crypto/mathrand"
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
+	"github.com/oasislabs/oasis-core/go/common/logging"
 	"github.com/oasislabs/oasis-core/go/common/node"
-	consensus "github.com/oasislabs/oasis-core/go/consensus/api"
+	"github.com/oasislabs/oasis-core/go/common/quantity"
 	"github.com/oasislabs/oasis-core/go/consensus/api/transaction"
 	"github.com/oasislabs/oasis-core/go/consensus/tendermint/abci"
 	"github.com/oasislabs/oasis-core/go/consensus/tendermint/api"
@@ -214,6 +215,36 @@ func (app *schedulerApplication) ForeignExecuteTx(ctx *api.Context, other abci.A
 	return nil
 }
 
+func diffValidators(logger *logging.Logger, current map[signature.PublicKey]int64, pending map[signature.PublicKey]int64) []types.ValidatorUpdate {
+	var updates []types.ValidatorUpdate
+	for v := range current {
+		if _, ok := pending[v]; !ok {
+			// Existing validator is not part of the new set, reduce its
+			// voting power to 0, to indicate removal.
+			logger.Debug("removing existing validator from validator set",
+				"id", v,
+			)
+			updates = append(updates, api.PublicKeyToValidatorUpdate(v, 0))
+		}
+	}
+
+	for v, newPower := range pending {
+		if curPower, ok := current[v]; ok && curPower == newPower {
+			logger.Debug("keeping existing validator in the validator set",
+				"id", v,
+			)
+			continue
+		}
+		// We're adding this validator or changing its power.
+		logger.Debug("upserting validator to validator set",
+			"id", v,
+			"power", newPower,
+		)
+		updates = append(updates, api.PublicKeyToValidatorUpdate(v, newPower))
+	}
+	return updates
+}
+
 func (app *schedulerApplication) EndBlock(ctx *api.Context, req types.RequestEndBlock) (types.ResponseEndBlock, error) {
 	var resp types.ResponseEndBlock
 
@@ -242,48 +273,7 @@ func (app *schedulerApplication) EndBlock(ctx *api.Context, req types.RequestEnd
 	// from InitChain), and the new validator set, which is a huge pain
 	// in the ass.
 
-	currentMap := make(map[signature.PublicKey]bool)
-	for _, v := range currentValidators {
-		currentMap[v] = true
-	}
-
-	pendingMap := make(map[signature.PublicKey]bool)
-	for _, v := range pendingValidators {
-		pendingMap[v] = true
-	}
-
-	var updates []types.ValidatorUpdate
-	for _, v := range currentValidators {
-		switch pendingMap[v] {
-		case false:
-			// Existing validator is not part of the new set, reduce it's
-			// voting power to 0, to indicate removal.
-			ctx.Logger().Debug("removing existing validator from validator set",
-				"id", v,
-			)
-			updates = append(updates, api.PublicKeyToValidatorUpdate(v, 0))
-		case true:
-			// Existing validator is part of the new set, remove it from
-			// the pending map, since there is nothing to be done.
-			pendingMap[v] = false
-		}
-	}
-
-	for _, v := range pendingValidators {
-		if pendingMap[v] {
-			// This is a validator that is not part of the current set.
-			ctx.Logger().Debug("adding new validator to validator set",
-				"id", v,
-			)
-			updates = append(updates, api.PublicKeyToValidatorUpdate(v, consensus.VotingPower))
-		} else {
-			ctx.Logger().Debug("keeping existing validator in the validator set",
-				"id", v,
-			)
-		}
-	}
-
-	resp.ValidatorUpdates = updates
+	resp.ValidatorUpdates = diffValidators(ctx.Logger(), currentValidators, pendingValidators)
 
 	// Stash the updated validator set.
 	if err = state.PutCurrentValidators(ctx, pendingValidators); err != nil {
@@ -606,7 +596,7 @@ func (app *schedulerApplication) electValidators(
 
 	// Go down the list of entities running nodes by stake, picking one node
 	// to act as a validator till the maximum is reached.
-	var newValidators []signature.PublicKey
+	newValidators := make(map[signature.PublicKey]int64)
 electLoop:
 	for _, v := range sortedEntities {
 		vec := entityNodes[v]
@@ -628,7 +618,23 @@ electLoop:
 				entitiesEligibleForReward[n.EntityID] = true
 			}
 
-			newValidators = append(newValidators, n.Consensus.ID)
+			var power int64
+			if stakeAcc == nil {
+				// In simplified no-stake deployments, make validators have flat voting power.
+				power = 1
+			} else {
+				var stake *quantity.Quantity
+				stake, err = stakeAcc.GetEscrowBalance(v)
+				if err != nil {
+					return fmt.Errorf("failed to fetch escrow balance for entity %s: %w", v, err)
+				}
+				power, err = scheduler.VotingPowerFromTokens(stake)
+				if err != nil {
+					return fmt.Errorf("computing voting power for entity %s with balance %v: %w", v, stake, err)
+				}
+			}
+
+			newValidators[n.Consensus.ID] = power
 			if len(newValidators) >= params.MaxValidators {
 				break electLoop
 			}

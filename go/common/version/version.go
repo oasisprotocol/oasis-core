@@ -71,7 +71,7 @@ var (
 	//
 	// NOTE: Any change in the major or minor versions are considered
 	//       breaking changes for the protocol.
-	ConsensusProtocol = Version{Major: 0, Minor: 24, Patch: 0}
+	ConsensusProtocol = Version{Major: 0, Minor: 25, Patch: 0}
 
 	// Tendermint exposes the tendermint core version.
 	Tendermint = parseSemVerStr(version.TMCoreSemVer)
