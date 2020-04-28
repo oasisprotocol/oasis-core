@@ -73,7 +73,7 @@ pub struct RAK {
 
 impl RAK {
     /// Create an uninitialized runtime attestation key instance.
-    pub(crate) fn new() -> Self {
+    pub fn new() -> Self {
         Self {
             inner: RwLock::new(Inner {
                 private_key: None,
