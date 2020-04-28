@@ -407,6 +407,11 @@ func (sc *runtimeImpl) dumpRestoreNetwork(childEnv *env.Env, fixture *oasis.Netw
 		return err
 	}
 
+	// If network is used, enable shorter per-node socket paths, because some e2e test datadir exceed maximum unix
+	// socket path length.
+	if sc.net != nil {
+		sc.net.Config().UseCustomGrpcSocketPath = true
+	}
 	return nil
 }
 

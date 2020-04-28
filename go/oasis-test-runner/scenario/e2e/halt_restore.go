@@ -211,6 +211,12 @@ func (sc *haltRestoreImpl) Run(childEnv *env.Env) error {
 		return err
 	}
 
+	// If network is used, enable shorter per-node socket paths, because some e2e test datadir exceed maximum unix
+	// socket path length.
+	if sc.runtimeImpl.net != nil {
+		sc.runtimeImpl.net.Config().UseCustomGrpcSocketPath = true
+	}
+
 	sc.runtimeImpl.clientArgs = []string{"--mode", "part2"}
 	return sc.runtimeImpl.Run(childEnv)
 }
