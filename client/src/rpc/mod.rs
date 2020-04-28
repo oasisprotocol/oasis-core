@@ -4,6 +4,7 @@
 mod api;
 pub mod client;
 pub mod macros;
+mod transport;
 
 // Re-exports.
 pub use self::client::RpcClient;

@@ -25,11 +25,13 @@ use oasis_core_runtime::{
         session::{Builder, Session},
         types,
     },
-    types::Body,
 };
 
 #[cfg(not(target_env = "sgx"))]
-use super::api::{CallEnclaveRequest, EnclaveRPCClient};
+use super::api::EnclaveRPCClient;
+#[cfg(not(target_env = "sgx"))]
+use super::transport::GrpcTransport;
+use super::transport::{RuntimeTransport, Transport};
 use crate::BoxFuture;
 
 /// Internal send queue backlog.
@@ -37,7 +39,7 @@ const SENDQ_BACKLOG: usize = 10;
 
 /// RPC client error.
 #[derive(Debug, Fail)]
-enum RpcClientError {
+pub enum RpcClientError {
     #[fail(display = "call failed: {}", 0)]
     CallFailed(String),
     #[fail(display = "expected response message, received: {:?}", 0)]
@@ -48,79 +50,6 @@ enum RpcClientError {
     Transport,
     #[fail(display = "client dropped")]
     Dropped,
-}
-
-trait Transport: Send + Sync {
-    fn write_message(
-        &self,
-        ctx: Context,
-        session_id: types::SessionID,
-        data: Vec<u8>,
-        untrusted_plaintext: String,
-    ) -> BoxFuture<Vec<u8>> {
-        // Frame message.
-        let frame = types::Frame {
-            session: session_id,
-            untrusted_plaintext: untrusted_plaintext,
-            payload: data,
-        };
-
-        self.write_message_impl(ctx, cbor::to_vec(&frame))
-    }
-
-    fn write_message_impl(&self, ctx: Context, data: Vec<u8>) -> BoxFuture<Vec<u8>>;
-}
-
-struct RuntimeTransport {
-    protocol: Arc<Protocol>,
-    endpoint: String,
-}
-
-impl Transport for RuntimeTransport {
-    fn write_message_impl(&self, ctx: Context, data: Vec<u8>) -> BoxFuture<Vec<u8>> {
-        // NOTE: This is not actually async in SGX, but futures should be
-        //       dispatched on the current thread anyway.
-        let rsp = self.protocol.make_request(
-            ctx,
-            Body::HostRPCCallRequest {
-                endpoint: self.endpoint.clone(),
-                request: data,
-            },
-        );
-
-        let rsp = match rsp {
-            Ok(rsp) => rsp,
-            Err(error) => return Box::new(future::err(error)),
-        };
-
-        match rsp {
-            Body::HostRPCCallResponse { response } => Box::new(future::ok(response)),
-            _ => Box::new(future::err(RpcClientError::Transport.into())),
-        }
-    }
-}
-
-#[cfg(not(target_env = "sgx"))]
-struct GrpcTransport {
-    grpc_client: EnclaveRPCClient,
-    runtime_id: RuntimeId,
-    endpoint: String,
-}
-
-#[cfg(not(target_env = "sgx"))]
-impl Transport for GrpcTransport {
-    fn write_message_impl(&self, _ctx: Context, data: Vec<u8>) -> BoxFuture<Vec<u8>> {
-        let req = CallEnclaveRequest {
-            runtime_id: self.runtime_id,
-            endpoint: self.endpoint.clone(),
-            payload: data,
-        };
-
-        match self.grpc_client.call_enclave(&req, Default::default()) {
-            Ok(rsp) => Box::new(rsp.map(|r| r.into()).map_err(|error| error.into())),
-            Err(error) => Box::new(future::err(error.into())),
-        }
-    }
 }
 
 type SendqRequest = (
