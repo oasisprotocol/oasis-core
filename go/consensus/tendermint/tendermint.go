@@ -127,6 +127,12 @@ const (
 	// StateDir is the name of the directory located inside the node's data
 	// directory which contains the tendermint state.
 	StateDir = "tendermint"
+
+	// Time difference threshold used when considering if node is done with
+	// initial syncing. If difference is greater than the specified threshold
+	// the node is considered not yet synced.
+	// NOTE: this is only used during the initial sync.
+	syncWorkerLastBlockTimeDiffThreshold = 1 * time.Minute
 )
 
 var (
@@ -1195,17 +1201,38 @@ func (t *tendermintService) syncWorker() {
 		case <-t.node.Quit():
 			return
 		case <-time.After(1 * time.Second):
-			isSyncing, err := checkSyncFn()
+			isFastSyncing, err := checkSyncFn()
 			if err != nil {
 				t.Logger.Error("Failed to poll FastSync",
 					"err", err,
 				)
 				return
 			}
-			if !isSyncing {
+			if !isFastSyncing {
 				t.Logger.Info("Tendermint Node finished fast-sync")
-				close(t.syncedCh)
-				return
+
+				// Check latest block time.
+				tmBlock, err := t.GetTendermintBlock(t.ctx, consensusAPI.HeightLatest)
+				if err != nil {
+					t.Logger.Error("Failed to get tendermint block",
+						"err", err,
+					)
+					return
+				}
+
+				now := time.Now()
+				// No committed blocks or latest block within threshold.
+				if tmBlock == nil || now.Sub(tmBlock.Header.Time) < syncWorkerLastBlockTimeDiffThreshold {
+					t.Logger.Info("Tendermint Node finished initial sync")
+					close(t.syncedCh)
+					return
+				}
+
+				t.Logger.Debug("Node still syncing",
+					"currentTime", now,
+					"latestBlockTime", tmBlock.Time,
+					"diff", now.Sub(tmBlock.Time),
+				)
 			}
 		}
 	}
