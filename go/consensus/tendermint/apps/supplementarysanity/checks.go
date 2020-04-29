@@ -31,18 +31,23 @@ func checkEpochTime(ctx *abciAPI.Context, now epochtime.EpochTime) error {
 func checkRegistry(ctx *abciAPI.Context, now epochtime.EpochTime) error {
 	st := registryState.NewMutableState(ctx.State())
 
+	params, err := st.ConsensusParameters(ctx)
+	if err != nil {
+		return fmt.Errorf("ConsensusParameters: %w", err)
+	}
+
 	// Check entities.
-	entities, err := st.SignedEntities(ctx)
+	signedEntities, err := st.SignedEntities(ctx)
 	if err != nil {
 		return fmt.Errorf("SignedEntities: %w", err)
 	}
-	seenEntities, err := registry.SanityCheckEntities(logger, entities)
+	seenEntities, err := registry.SanityCheckEntities(logger, signedEntities)
 	if err != nil {
 		return fmt.Errorf("SanityCheckEntities: %w", err)
 	}
 
 	// Check runtimes.
-	runtimes, err := st.SignedRuntimes(ctx)
+	signedRuntimes, err := st.SignedRuntimes(ctx)
 	if err != nil {
 		return fmt.Errorf("AllSignedRuntimes: %w", err)
 	}
@@ -50,21 +55,18 @@ func checkRegistry(ctx *abciAPI.Context, now epochtime.EpochTime) error {
 	if err != nil {
 		return fmt.Errorf("SuspendedRuntimes: %w", err)
 	}
-	params, err := st.ConsensusParameters(ctx)
-	if err != nil {
-		return fmt.Errorf("ConsensusParameters: %w", err)
-	}
-	runtimeLookup, err := registry.SanityCheckRuntimes(logger, params, runtimes, suspendedRuntimes, false)
+
+	runtimeLookup, err := registry.SanityCheckRuntimes(logger, params, signedRuntimes, suspendedRuntimes, false)
 	if err != nil {
 		return fmt.Errorf("SanityCheckRuntimes: %w", err)
 	}
 
 	// Check nodes.
-	nodes, err := st.SignedNodes(ctx)
+	signedNodes, err := st.SignedNodes(ctx)
 	if err != nil {
 		return fmt.Errorf("SignedNodes: %w", err)
 	}
-	_, err = registry.SanityCheckNodes(logger, params, nodes, seenEntities, runtimeLookup, false, now)
+	_, err = registry.SanityCheckNodes(logger, params, signedNodes, seenEntities, runtimeLookup, false, now)
 	if err != nil {
 		return fmt.Errorf("SanityCheckNodes: %w", err)
 	}
@@ -232,89 +234,49 @@ func checkHalt(*abciAPI.Context, epochtime.EpochTime) error {
 
 func checkStakeClaims(ctx *abciAPI.Context, now epochtime.EpochTime) error {
 	regSt := registryState.NewMutableState(ctx.State())
-	stakeSt := stakingState.NewMutableState(ctx.State())
+	stakingSt := stakingState.NewMutableState(ctx.State())
 
-	params, err := regSt.ConsensusParameters(ctx)
+	regParams, err := regSt.ConsensusParameters(ctx)
 	if err != nil {
-		return fmt.Errorf("failed to get consensus parameters: %w", err)
+		return fmt.Errorf("failed to get registry consensus parameters: %w", err)
+	}
+	stakingParams, err := stakingSt.ConsensusParameters(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to get staking consensus parameters: %w", err)
 	}
 
 	// Skip checks if stake is being bypassed.
-	if params.DebugBypassStake {
+	if regParams.DebugBypassStake {
 		return nil
 	}
 
-	// Claims in the stake accumulators should be consistent with general state.
-	claims := make(map[signature.PublicKey]map[staking.StakeClaim][]staking.ThresholdKind)
-	// Entity registrations.
+	// Get registered entities.
 	entities, err := regSt.Entities(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to get entities: %w", err)
 	}
-	for _, entity := range entities {
-		claims[entity.ID] = map[staking.StakeClaim][]staking.ThresholdKind{
-			registry.StakeClaimRegisterEntity: []staking.ThresholdKind{staking.KindEntity},
-		}
-	}
-	// Node registrations.
+	// Get registered nodes.
 	nodes, err := regSt.Nodes(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to get node registrations: %w", err)
 	}
-	for _, node := range nodes {
-		claims[node.EntityID][registry.StakeClaimForNode(node.ID)] = registry.StakeThresholdsForNode(node)
-	}
-	// Runtime registrations.
+	// Get registered runtimes.
 	runtimes, err := regSt.AllRuntimes(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to get runtime registrations: %w", err)
 	}
-	for _, rt := range runtimes {
-		claims[rt.EntityID][registry.StakeClaimForRuntime(rt.ID)] = registry.StakeThresholdsForRuntime(rt)
+	// Get staking accounts.
+	accounts := make(map[signature.PublicKey]*staking.Account)
+	accountIDs, err := stakingSt.Accounts(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to get staking accounts: %w", err)
 	}
-
-	// Compare with actual accumulator state.
-	for _, entity := range entities {
-		acct, err := stakeSt.Account(ctx, entity.ID)
+	for _, id := range accountIDs {
+		accounts[id], err = stakingSt.Account(ctx, id)
 		if err != nil {
-			return fmt.Errorf("failed to fetch account: %w", err)
-		}
-		expectedClaims := claims[entity.ID]
-		actualClaims := acct.Escrow.StakeAccumulator.Claims
-		if len(expectedClaims) != len(actualClaims) {
-			return fmt.Errorf("incorrect number of stake claims for account %s (expected: %d got: %d)",
-				entity.ID,
-				len(expectedClaims),
-				len(actualClaims),
-			)
-		}
-		for claim, expectedThresholds := range expectedClaims {
-			thresholds, ok := actualClaims[claim]
-			if !ok {
-				return fmt.Errorf("missing claim %s for account %s", claim, entity.ID)
-			}
-			if len(thresholds) != len(expectedThresholds) {
-				return fmt.Errorf("incorrect number of thresholds for claim %s for account %s (expected: %d got: %d)",
-					claim,
-					entity.ID,
-					len(expectedThresholds),
-					len(thresholds),
-				)
-			}
-			for i, expectedThreshold := range expectedThresholds {
-				threshold := thresholds[i]
-				if threshold != expectedThreshold {
-					return fmt.Errorf("incorrect threshold in position %d for claim %s for account %s (expected: %s got: %s)",
-						i,
-						claim,
-						entity.ID,
-						expectedThreshold,
-						threshold,
-					)
-				}
-			}
+			return fmt.Errorf("failed to get staking account with id %s: %w", id, err)
 		}
 	}
 
-	return nil
+	return registry.SanityCheckStake(entities, accounts, nodes, runtimes, stakingParams.Thresholds, false)
 }

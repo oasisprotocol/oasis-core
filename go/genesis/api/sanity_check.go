@@ -24,7 +24,7 @@ func (d *Document) SanityCheck() error {
 	if err = d.EpochTime.SanityCheck(); err != nil {
 		return err
 	}
-	if err = d.Registry.SanityCheck(d.EpochTime.Base); err != nil {
+	if err = d.Registry.SanityCheck(d.EpochTime.Base, d.Staking.Ledger, d.Staking.Parameters.Thresholds); err != nil {
 		return err
 	}
 	if err = d.RootHash.SanityCheck(); err != nil {
