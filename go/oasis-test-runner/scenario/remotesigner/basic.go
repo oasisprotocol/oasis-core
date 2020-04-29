@@ -37,7 +37,6 @@ func (sc *basicImpl) Clone() scenario.Scenario {
 }
 
 func (sc *basicImpl) Run(childEnv *env.Env) error {
-	fmt.Println("matevz: ", childEnv.Dir())
 	// Provision the server keys.
 	sc.logger.Info("provisioning the server keys")
 	if err := cli.RunSubCommand(
