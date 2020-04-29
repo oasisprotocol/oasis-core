@@ -64,7 +64,7 @@ func checkRegistry(ctx *abciAPI.Context, now epochtime.EpochTime) error {
 	if err != nil {
 		return fmt.Errorf("SignedNodes: %w", err)
 	}
-	err = registry.SanityCheckNodes(logger, params, nodes, seenEntities, runtimeLookup, false, now)
+	_, err = registry.SanityCheckNodes(logger, params, nodes, seenEntities, runtimeLookup, false, now)
 	if err != nil {
 		return fmt.Errorf("SanityCheckNodes: %w", err)
 	}
