@@ -22,15 +22,15 @@ type Scenario interface {
 	// Parameters returns the settable test parameters.
 	Parameters() *flag.FlagSet
 
+	// PreInit performs initial scenario initialization. It is guaranteed to be called before
+	// a new fixture is initialized in Fixture.
+	PreInit(childEnv *env.Env) error
+
 	// Fixture returns a network fixture to use for this scenario.
 	//
 	// It may return nil in case the scenario doesn't use a fixture and
 	// performs all setup in Init.
 	Fixture() (*oasis.NetworkFixture, error)
-
-	// PreInit performs initial scenario initialization. It is guaranteed to be called before
-	// a new fixture is initialized in Fixture.
-	PreInit(childEnv *env.Env) error
 
 	// Init initializes the scenario.
 	//

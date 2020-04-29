@@ -2,7 +2,6 @@
 package grpc
 
 import (
-	"crypto/sha256"
 	"crypto/tls"
 	"errors"
 	"fmt"
@@ -31,8 +30,10 @@ const (
 	// CfgDebugGrpcInternalSocketPath sets custom internal socket path.
 	CfgDebugGrpcInternalSocketPath = "debug.grpc.internal.socket_path"
 
-	defaultAddress      = "unix:" + LocalSocketFilename
+	// LocalSocketFilename is the filename of the unix socket in node datadir.
 	LocalSocketFilename = "internal.sock"
+
+	defaultAddress = "unix:" + LocalSocketFilename
 )
 
 var (
@@ -74,6 +75,7 @@ func NewServerLocal(installWrapper bool) (*cmnGrpc.Server, error) {
 	}
 	path := filepath.Join(dataDir, LocalSocketFilename)
 	if viper.IsSet(CfgDebugGrpcInternalSocketPath) && flags.DebugDontBlameOasis() {
+		logger.Info("overriding internal socket path", "path", viper.GetString(CfgDebugGrpcInternalSocketPath))
 		path = viper.GetString(CfgDebugGrpcInternalSocketPath)
 	}
 
@@ -108,12 +110,6 @@ func NewClient(cmd *cobra.Command) (*grpc.ClientConn, error) {
 	}
 
 	return conn, nil
-}
-
-// GetAbstractSocketAddress returns abstract socket address for internal gRPC based on hashed datadir.
-func GetAbstractSocketAddress(datadir string) string {
-	p := sha256.Sum256([]byte(datadir))
-	return fmt.Sprintf("@oasis-%x", p[0:4])
 }
 
 func init() {

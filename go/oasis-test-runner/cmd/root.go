@@ -432,10 +432,10 @@ func doScenario(childEnv *env.Env, sc scenario.Scenario) (err error) {
 		}
 	}
 
-	// If network is used, enable shorter per-node socket paths, because some e2e test datadir exceed maximum unix
-	// socket path length.
+	// If network is used, enable shorter per-node socket paths, because some e2e test datadir
+	// exceed maximum unix socket path length.
 	if net != nil {
-		net.Config().UseCustomGrpcSocketPath = true
+		net.Config().UseCustomGrpcSocketPaths = true
 	}
 
 	if err = sc.Init(childEnv, net); err != nil {

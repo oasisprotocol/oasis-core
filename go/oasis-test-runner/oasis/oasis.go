@@ -254,11 +254,9 @@ type NetworkCfg struct { // nolint: maligned
 	// created in this test network.
 	DefaultLogWatcherHandlerFactories []log.WatcherHandlerFactory `json:"-"`
 
-	// UseCustomGrpcSocketPath specifies whether nodes should use internal.sock in datadir or externally-provided.
-	//
-	// WARNING: Using arbitrary unix socket paths poses security risk! This flag should only be used for debugging and
-	// end-to-end tests!
-	UseCustomGrpcSocketPath bool `json:"-"`
+	// UseCustomGrpcSocketPaths specifies whether nodes should use internal.sock in datadir or
+	// externally-provided.
+	UseCustomGrpcSocketPaths bool `json:"-"`
 }
 
 // Config returns the network configuration.
@@ -611,11 +609,11 @@ func (net *Network) generateDeterministicNodeIdentity(dir *env.Dir, rawSeed stri
 	return nil
 }
 
-// genTempSocketPath returns unique filename for internal socket in test base dir.
+// generateTempSocketPath returns a unique filename for a node's internal socket in the test base dir
 //
-// This function is used to obtain shorter socket path than the one in datadir since that one might be too long for unix
-// socket path.
-func (net *Network) genTempSocketPath() string {
+// This function is used to obtain shorter socket path than the one in datadir since that one might
+// be too long for unix socket path.
+func (net *Network) generateTempSocketPath() string {
 	f, err := ioutil.TempFile(env.GetRootDir().String(), "internal-*.sock")
 	if err != nil {
 		return ""
@@ -645,13 +643,13 @@ func (net *Network) startOasisNode(
 			tendermintDebugAddrBookLenient().
 			tendermintDebugAllowDuplicateIP()
 	}
-	if net.cfg.UseCustomGrpcSocketPath {
+	if net.cfg.UseCustomGrpcSocketPaths {
 		// Keep the socket, if it was already generated!
 		if node.customGrpcSocketPath == "" {
-			node.customGrpcSocketPath = net.genTempSocketPath()
+			node.customGrpcSocketPath = net.generateTempSocketPath()
 		}
 		extraArgs = extraArgs.debugDontBlameOasis()
-		extraArgs = extraArgs.grpcDebugGrpcSocketPath(node.customGrpcSocketPath)
+		extraArgs = extraArgs.grpcDebugGrpcInternalSocketPath(node.customGrpcSocketPath)
 	}
 	if viper.IsSet(metrics.CfgMetricsAddr) {
 		extraArgs = extraArgs.appendNodeMetrics(node)

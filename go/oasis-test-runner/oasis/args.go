@@ -81,7 +81,7 @@ func (args *argBuilder) grpcLogDebug() *argBuilder {
 	return args
 }
 
-func (args *argBuilder) grpcDebugGrpcSocketPath(path string) *argBuilder {
+func (args *argBuilder) grpcDebugGrpcInternalSocketPath(path string) *argBuilder {
 	args.vec = append(args.vec, "--"+grpc.CfgDebugGrpcInternalSocketPath, path)
 	return args
 }

@@ -35,8 +35,8 @@ func (ias *iasProxy) startNode() error {
 		iasSPID(mockSPID)
 	if ias.useRegistry {
 		// XXX: IAS proxy is started before the validators. Pregenerate temp validator internal socket path, if needed.
-		if ias.net.cfg.UseCustomGrpcSocketPath && ias.net.validators[0].customGrpcSocketPath == "" {
-			ias.net.validators[0].customGrpcSocketPath = ias.net.genTempSocketPath()
+		if ias.net.cfg.UseCustomGrpcSocketPaths && ias.net.validators[0].customGrpcSocketPath == "" {
+			ias.net.validators[0].customGrpcSocketPath = ias.net.generateTempSocketPath()
 		}
 
 		args = args.internalSocketAddress(ias.net.validators[0].SocketPath())
