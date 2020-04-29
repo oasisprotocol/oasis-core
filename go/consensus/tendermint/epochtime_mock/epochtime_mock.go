@@ -80,6 +80,14 @@ func (t *tendermintMockBackend) WatchEpochs() (<-chan api.EpochTime, *pubsub.Sub
 	return typedCh, sub
 }
 
+func (t *tendermintMockBackend) WatchLatestEpoch() (<-chan api.EpochTime, *pubsub.Subscription) {
+	typedCh := make(chan api.EpochTime)
+	sub := t.notifier.SubscribeBuffered(1)
+	sub.Unwrap(typedCh)
+
+	return typedCh, sub
+}
+
 func (t *tendermintMockBackend) StateToGenesis(ctx context.Context, height int64) (*api.Genesis, error) {
 	now, err := t.GetEpoch(ctx, height)
 	if err != nil {
@@ -232,7 +240,7 @@ func New(ctx context.Context, service service.TendermintService) (api.SetableBac
 		service: service,
 		querier: a.QueryFactory().(*app.QueryFactory),
 	}
-	r.notifier = pubsub.NewBrokerEx(func(ch *channels.InfiniteChannel) {
+	r.notifier = pubsub.NewBrokerEx(func(ch channels.Channel) {
 		r.RLock()
 		defer r.RUnlock()
 

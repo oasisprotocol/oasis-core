@@ -37,6 +37,10 @@ func (b *simTimeSource) WatchEpochs() (<-chan api.EpochTime, *pubsub.Subscriptio
 	panic("consim/epochtime: WatchEpochs not supported")
 }
 
+func (b *simTimeSource) WatchLatestEpoch() (<-chan api.EpochTime, *pubsub.Subscription) {
+	panic("consim/epochtime: WatchLatestEpoch not supported")
+}
+
 func (b *simTimeSource) StateToGenesis(ctx context.Context, height int64) (*api.Genesis, error) {
 	// WARNING: This ignores the height because it's only used for the final
 	// dump.

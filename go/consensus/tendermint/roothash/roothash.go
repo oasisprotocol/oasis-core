@@ -104,7 +104,7 @@ func (tb *tendermintBackend) getLatestBlockAt(ctx context.Context, id common.Nam
 func (tb *tendermintBackend) WatchBlocks(id common.Namespace) (<-chan *api.AnnotatedBlock, *pubsub.Subscription, error) {
 	notifiers := tb.getRuntimeNotifiers(id)
 
-	sub := notifiers.blockNotifier.SubscribeEx(func(ch *channels.InfiniteChannel) {
+	sub := notifiers.blockNotifier.SubscribeEx(-1, func(ch channels.Channel) {
 		// Replay the latest block if it exists.
 		notifiers.Lock()
 		defer notifiers.Unlock()

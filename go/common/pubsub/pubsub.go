@@ -13,7 +13,7 @@ type broadcastedValue struct {
 }
 
 type cmdCtx struct {
-	ch              *channels.InfiniteChannel
+	ch              channels.Channel
 	errCh           chan error
 	onSubscribeHook OnSubscribeHook
 
@@ -46,7 +46,7 @@ func NewContextSubscription(ctx context.Context) (context.Context, ClosableSubsc
 // Subscription is a Broker subscription instance.
 type Subscription struct {
 	b  *Broker
-	ch *channels.InfiniteChannel
+	ch channels.Channel
 }
 
 // Untyped returns the subscription's untyped output.  Effort should be
@@ -77,24 +77,34 @@ func (s *Subscription) Close() {
 
 // Broker is a pub/sub broker instance.
 type Broker struct {
-	subscribers     map[*channels.InfiniteChannel]bool
+	subscribers     map[channels.Channel]bool
 	cmdCh           chan *cmdCtx
-	broadcastCh     *channels.InfiniteChannel
+	broadcastCh     channels.Channel
 	lastBroadcasted *broadcastedValue
 
 	onSubscribeHook OnSubscribeHook
 }
 
 // OnSubscribeHook is the on-subscribe callback hook prototype.
-type OnSubscribeHook func(*channels.InfiniteChannel)
+type OnSubscribeHook func(channels.Channel)
 
 // Subscribe subscribes to the Broker's broadcasts, and returns a
 // subscription handle that can be used to receive broadcasts.
 //
 // Note: The returned subscription's channel will have an unbounded
-// capacity.
+// capacity, use SubscribeBuffered to use a bounded ring channel.
 func (b *Broker) Subscribe() *Subscription {
-	return b.SubscribeEx(nil)
+	return b.SubscribeEx(int64(channels.Infinity), nil)
+}
+
+// SubscribeBuffered subscribes to the Broker's broadcasts, and returns a
+// subscription handle that can be used to receive broadcasts.
+//
+// Buffer controlls the capacity of a ring buffer - when buffer is full the
+// oldest value will be discarded. In case buffer is negative (or zero) an
+// unbounded channel is used.
+func (b *Broker) SubscribeBuffered(buffer int64) *Subscription {
+	return b.SubscribeEx(buffer, nil)
 }
 
 // SubscribeEx subscribes to the Broker's broadcasts, and returns a
@@ -102,12 +112,17 @@ func (b *Broker) Subscribe() *Subscription {
 // addition it also takes a per-subscription on-subscribe callback
 // hook.
 //
-// Note: The returned subscription's channel will have an unbounded
-// capacity.  If there is a Broker wide hook set, it will be called
+// Note: If there is a Broker wide hook set, it will be called
 // after the per-subscription hook is called.
-func (b *Broker) SubscribeEx(onSubscribeHook OnSubscribeHook) *Subscription {
+func (b *Broker) SubscribeEx(buffer int64, onSubscribeHook OnSubscribeHook) *Subscription {
+	var ch channels.Channel
+	if buffer <= 0 {
+		ch = channels.NewInfiniteChannel()
+	} else {
+		ch = channels.NewRingChannel(channels.BufferCap(buffer))
+	}
 	ctx := &cmdCtx{
-		ch:              channels.NewInfiniteChannel(),
+		ch:              ch,
 		errCh:           make(chan error),
 		onSubscribeHook: onSubscribeHook,
 		isSubscribe:     true,
@@ -167,7 +182,7 @@ func (b *Broker) worker() {
 func NewBroker(pubLastOnSubscribe bool) *Broker {
 	b := newBroker()
 	if pubLastOnSubscribe {
-		b.onSubscribeHook = func(ch *channels.InfiniteChannel) {
+		b.onSubscribeHook = func(ch channels.Channel) {
 			if b.lastBroadcasted != nil {
 				ch.In() <- b.lastBroadcasted.v
 			}
@@ -192,7 +207,7 @@ func NewBrokerEx(onSubscribeHook OnSubscribeHook) *Broker {
 
 func newBroker() *Broker {
 	return &Broker{
-		subscribers: make(map[*channels.InfiniteChannel]bool),
+		subscribers: make(map[channels.Channel]bool),
 		cmdCh:       make(chan *cmdCtx),
 		broadcastCh: channels.NewInfiniteChannel(),
 	}

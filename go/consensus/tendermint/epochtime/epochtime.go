@@ -63,6 +63,14 @@ func (t *tendermintBackend) WatchEpochs() (<-chan api.EpochTime, *pubsub.Subscri
 	return typedCh, sub
 }
 
+func (t *tendermintBackend) WatchLatestEpoch() (<-chan api.EpochTime, *pubsub.Subscription) {
+	typedCh := make(chan api.EpochTime)
+	sub := t.notifier.SubscribeBuffered(1)
+	sub.Unwrap(typedCh)
+
+	return typedCh, sub
+}
+
 func (t *tendermintBackend) StateToGenesis(ctx context.Context, height int64) (*api.Genesis, error) {
 	now, err := t.GetEpoch(ctx, height)
 	if err != nil {
@@ -125,7 +133,7 @@ func New(ctx context.Context, service service.TendermintService, interval int64)
 		base:     base,
 		epoch:    base,
 	}
-	r.notifier = pubsub.NewBrokerEx(func(ch *channels.InfiniteChannel) {
+	r.notifier = pubsub.NewBrokerEx(func(ch channels.Channel) {
 		r.RLock()
 		defer r.RUnlock()
 

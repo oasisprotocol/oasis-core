@@ -182,7 +182,7 @@ func New(ctx context.Context, service service.TendermintService) (api.Backend, e
 		service: service,
 		querier: a.QueryFactory().(*app.QueryFactory),
 	}
-	tb.notifier = pubsub.NewBrokerEx(func(ch *channels.InfiniteChannel) {
+	tb.notifier = pubsub.NewBrokerEx(func(ch channels.Channel) {
 		currentCommittees, err := tb.getCurrentCommittees()
 		if err != nil {
 			tb.logger.Error("couldn't get current committees. won't send them. good luck to the subscriber",
