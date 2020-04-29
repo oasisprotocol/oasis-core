@@ -39,28 +39,28 @@ var (
 	discrepancyDetectedCount = prometheus.NewCounterVec(
 		prometheus.CounterOpts{
 			Name: "oasis_worker_merge_discrepancy_detected_count",
-			Help: "Number of detected merge discrepancies",
+			Help: "Number of detected merge discrepancies.",
 		},
 		[]string{"runtime"},
 	)
 	roothashCommitLatency = prometheus.NewSummaryVec(
 		prometheus.SummaryOpts{
 			Name: "oasis_worker_roothash_merge_commit_latency",
-			Help: "Latency of roothash merge commit",
+			Help: "Latency of roothash merge commit (seconds).",
 		},
 		[]string{"runtime"},
 	)
 	abortedMergeCount = prometheus.NewCounterVec(
 		prometheus.CounterOpts{
 			Name: "oasis_worker_aborted_merge_count",
-			Help: "Number of aborted merges",
+			Help: "Number of aborted merges.",
 		},
 		[]string{"runtime"},
 	)
 	inconsistentMergeRootCount = prometheus.NewCounterVec(
 		prometheus.CounterOpts{
 			Name: "oasis_worker_inconsistent_merge_root_count",
-			Help: "Number of inconsistent merge roots",
+			Help: "Number of inconsistent merge roots.",
 		},
 		[]string{"runtime"},
 	)

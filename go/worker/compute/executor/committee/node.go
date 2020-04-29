@@ -50,56 +50,49 @@ var (
 	discrepancyDetectedCount = prometheus.NewCounterVec(
 		prometheus.CounterOpts{
 			Name: "oasis_worker_execution_discrepancy_detected_count",
-			Help: "Number of detected execute discrepancies",
+			Help: "Number of detected execute discrepancies.",
 		},
 		[]string{"runtime"},
 	)
 	abortedBatchCount = prometheus.NewCounterVec(
 		prometheus.CounterOpts{
 			Name: "oasis_worker_aborted_batch_count",
-			Help: "Number of aborted batches",
+			Help: "Number of aborted batches.",
 		},
 		[]string{"runtime"},
 	)
 	storageCommitLatency = prometheus.NewSummaryVec(
 		prometheus.SummaryOpts{
 			Name: "oasis_worker_storage_commit_latency",
-			Help: "Latency of storage commit calls (state + outputs)",
+			Help: "Latency of storage commit calls (state + outputs) (seconds).",
 		},
 		[]string{"runtime"},
 	)
 	batchReadTime = prometheus.NewSummaryVec(
 		prometheus.SummaryOpts{
 			Name: "oasis_worker_batch_read_time",
-			Help: "Time it takes to read a batch from storage",
+			Help: "Time it takes to read a batch from storage (seconds).",
 		},
 		[]string{"runtime"},
 	)
 	batchProcessingTime = prometheus.NewSummaryVec(
 		prometheus.SummaryOpts{
 			Name: "oasis_worker_batch_processing_time",
-			Help: "Time it takes for a batch to finalize",
+			Help: "Time it takes for a batch to finalize (seconds).",
 		},
 		[]string{"runtime"},
 	)
 	batchRuntimeProcessingTime = prometheus.NewSummaryVec(
 		prometheus.SummaryOpts{
 			Name: "oasis_worker_batch_runtime_processing_time",
-			Help: "Time it takes for a batch to be processed by the runtime",
+			Help: "Time it takes for a batch to be processed by the runtime (seconds).",
 		},
 		[]string{"runtime"},
 	)
 	batchSize = prometheus.NewSummaryVec(
 		prometheus.SummaryOpts{
 			Name: "oasis_worker_batch_size",
-			Help: "Number of transactions is a batch",
-		},
-		[]string{"runtime"},
-	)
-	roothashCommitLatency = prometheus.NewSummaryVec(
-		prometheus.SummaryOpts{
-			Name: "oasis_worker_roothash_commit_latency",
-			Help: "Latency of roothash commit",
+			Help: "Number of transactions in a batch.",
 		},
 		[]string{"runtime"},
 	)
@@ -111,7 +104,6 @@ var (
 		batchProcessingTime,
 		batchRuntimeProcessingTime,
 		batchSize,
-		roothashCommitLatency,
 	}
 
 	metricsOnce sync.Once

@@ -45,7 +45,7 @@ var (
 	incomingQueueSize = prometheus.NewGaugeVec(
 		prometheus.GaugeOpts{
 			Name: "oasis_worker_txnscheduler_incoming_queue_size",
-			Help: "Size of the incoming queue (number of entries)",
+			Help: "Size of the incoming queue (number of entries).",
 		},
 		[]string{"runtime"},
 	)

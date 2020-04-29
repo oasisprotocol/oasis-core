@@ -48,7 +48,7 @@ var (
 	abciSize = prometheus.NewGauge(
 		prometheus.GaugeOpts{
 			Name: "oasis_abci_db_size",
-			Help: "Total size of the ABCI database (MiB)",
+			Help: "Total size of the ABCI database (MiB).",
 		},
 	)
 	abciCollectors = []prometheus.Collector{

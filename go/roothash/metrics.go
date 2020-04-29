@@ -15,13 +15,13 @@ var (
 	rootHashFinalizedRounds = prometheus.NewCounter(
 		prometheus.CounterOpts{
 			Name: "oasis_finalized_rounds",
-			Help: "Number of finalized rounds",
+			Help: "Number of finalized rounds.",
 		},
 	)
 	rootHashBlockInterval = prometheus.NewSummaryVec(
 		prometheus.SummaryOpts{
 			Name: "oasis_roothash_block_interval",
-			Help: "Time between roothash blocks",
+			Help: "Time between roothash blocks (seconds).",
 		},
 		[]string{"runtime"},
 	)

@@ -22,21 +22,21 @@ var (
 	diskUsageGauge = prometheus.NewGauge(
 		prometheus.GaugeOpts{
 			Name: MetricDiskUsageBytes,
-			Help: "Size of datadir of the worker",
+			Help: "Size of datadir of the worker (bytes).",
 		},
 	)
 
 	diskIOReadBytesGauge = prometheus.NewGauge(
 		prometheus.GaugeOpts{
 			Name: MetricDiskReadBytes,
-			Help: "Read bytes by the worker",
+			Help: "Read data from block storage by the worker as reported by /proc/<PID>/io (bytes).",
 		},
 	)
 
 	diskIOWrittenBytesGauge = prometheus.NewGauge(
 		prometheus.GaugeOpts{
 			Name: MetricDiskWrittenBytes,
-			Help: "Written bytes by the worker",
+			Help: "Written data from block storage by the worker as reported by /proc/<PID>/io (bytes)",
 		},
 	)
 

@@ -48,6 +48,10 @@ build-helpers: build-helpers-go
 build-go-generate:
 	@$(MAKE) -C go generate
 
+# Generate source Markdown documentation.
+update-docs: build-go
+	@$(MAKE) -C docs update
+
 # Format code.
 fmt-targets := fmt-rust fmt-go
 
@@ -184,6 +188,7 @@ docker-shell:
 .PHONY: \
 	$(build-targets) go build \
 	build-helpers-go build-helpers build-go-generate \
+	update-docs \
 	$(fmt-targets) fmt \
 	$(lint-targets) lint \
 	$(test-unit-targets) $(test-targets) test \
