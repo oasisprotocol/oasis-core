@@ -1,7 +1,6 @@
 package storage
 
 import (
-	"context"
 	"fmt"
 	"time"
 
@@ -9,7 +8,6 @@ import (
 	"github.com/spf13/viper"
 
 	"github.com/oasislabs/oasis-core/go/common"
-	"github.com/oasislabs/oasis-core/go/common/crypto/hash"
 	"github.com/oasislabs/oasis-core/go/common/grpc"
 	"github.com/oasislabs/oasis-core/go/common/grpc/policy"
 	"github.com/oasislabs/oasis-core/go/common/logging"
@@ -18,7 +16,6 @@ import (
 	"github.com/oasislabs/oasis-core/go/common/workerpool"
 	genesis "github.com/oasislabs/oasis-core/go/genesis/api"
 	"github.com/oasislabs/oasis-core/go/oasis-node/cmd/common/flags"
-	registry "github.com/oasislabs/oasis-core/go/registry/api"
 	"github.com/oasislabs/oasis-core/go/storage/api"
 	"github.com/oasislabs/oasis-core/go/storage/mkvs/checkpoint"
 	workerCommon "github.com/oasislabs/oasis-core/go/worker/common"
@@ -100,24 +97,6 @@ func New(
 		if err != nil {
 			return nil, err
 		}
-
-		// Populate storage from genesis.
-		s.commonWorker.Consensus.RegisterGenesisHook(func() {
-			doc, err := genesis.GetGenesisDocument()
-			if err != nil {
-				s.logger.Error("failed to get genesis document",
-					"err", err,
-				)
-				panic("failed to get genesis document")
-			}
-
-			if err = s.initGenesis(doc); err != nil {
-				s.logger.Error("failed to initialize storage from genesis",
-					"err", err,
-				)
-				panic("storage: failed to initialize storage from genesis")
-			}
-		})
 
 		// Attach storage interface to gRPC server.
 		s.grpcPolicy = policy.NewDynamicRuntimePolicyChecker(api.ServiceName, s.commonWorker.GrpcPolicyWatcher)
@@ -256,56 +235,6 @@ func (s *Worker) Quit() <-chan struct{} {
 
 // Cleanup performs the service specific post-termination cleanup.
 func (s *Worker) Cleanup() {
-}
-
-func (s *Worker) initGenesis(gen *genesis.Document) error {
-	ctx := context.Background()
-
-	s.logger.Info("initializing storage from genesis")
-
-	// Iterate through all runtimes and see if any specify non-empty state. Initialize
-	// storage for those runtimes.
-	if gen.Registry.Runtimes != nil {
-		var emptyRoot hash.Hash
-		emptyRoot.Empty()
-
-		for _, sigRt := range gen.Registry.Runtimes {
-			rt, err := registry.VerifyRegisterRuntimeArgs(&gen.Registry.Parameters, s.logger, sigRt, true)
-			if err != nil {
-				return err
-			}
-
-			regRt, err := s.commonWorker.RuntimeRegistry.GetRuntime(rt.ID)
-			if err != nil {
-				// Skip unsupported runtimes.
-				s.logger.Warn("skipping unsupported runtime",
-					"runtime_id", rt.ID,
-				)
-				continue
-			}
-
-			if rt.Genesis.State != nil {
-				var ns common.Namespace
-				copy(ns[:], rt.ID[:])
-
-				_, err = regRt.Storage().Apply(ctx, &api.ApplyRequest{
-					Namespace: ns,
-					SrcRound:  0,
-					SrcRoot:   emptyRoot,
-					DstRound:  0,
-					DstRoot:   rt.Genesis.StateRoot,
-					WriteLog:  rt.Genesis.State,
-				})
-				if err != nil {
-					return err
-				}
-			} else if !rt.Genesis.StateRoot.IsEmpty() {
-				return fmt.Errorf("storage: runtime %s has non-empty state root and nil state", rt.ID)
-			}
-		}
-	}
-
-	return nil
 }
 
 func init() {

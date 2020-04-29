@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/oasislabs/oasis-core/go/common"
+	"github.com/oasislabs/oasis-core/go/common/cbor"
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
 	"github.com/oasislabs/oasis-core/go/common/quantity"
 	"github.com/oasislabs/oasis-core/go/common/sgx"
@@ -62,6 +63,9 @@ func (sc *runtimeDynamicImpl) Fixture() (*oasis.NetworkFixture, error) {
 	for i := range f.Runtimes {
 		f.Runtimes[i].ExcludeFromGenesis = true
 	}
+	// Test storage genesis state for compute runtimes. Also test with a non-zero round.
+	f.Runtimes[1].GenesisRound = 42
+	f.Runtimes[1].GenesisState = "tests/fixture-data/runtime-dynamic/runtime-genesis-state.json"
 
 	return f, nil
 }
@@ -194,9 +198,10 @@ func (sc *runtimeDynamicImpl) Run(childEnv *env.Env) error { // nolint: gocyclo
 	}
 
 	// Register a new compute runtime.
-	compRt := sc.net.Runtimes()[1].ToRuntimeDescriptor()
+	compRt := sc.net.Runtimes()[1]
+	compRtDesc := compRt.ToRuntimeDescriptor()
 	txPath := filepath.Join(childEnv.Dir(), "register_compute_runtime.json")
-	if err := cli.Registry.GenerateRegisterRuntimeTx(nonce, compRt, txPath, ""); err != nil {
+	if err := cli.Registry.GenerateRegisterRuntimeTx(nonce, compRtDesc, txPath, compRt.GetGenesisStatePath()); err != nil {
 		return fmt.Errorf("failed to generate register compute runtime tx: %w", err)
 	}
 	nonce++
@@ -221,11 +226,27 @@ func (sc *runtimeDynamicImpl) Run(childEnv *env.Env) error { // nolint: gocyclo
 		// Wait a bit after epoch transitions.
 		time.Sleep(1 * time.Second)
 
+		if i == 0 {
+			sc.logger.Info("checking if genesis state has been initialized")
+			var rawRsp cbor.RawMessage
+			var err error
+			if rawRsp, err = sc.submitRuntimeTx(ctx, runtimeID, "get", "genesis state"); err != nil {
+				return fmt.Errorf("failed to submit get tx to runtime: %w", err)
+			}
+			var rsp string
+			if err = cbor.Unmarshal(rawRsp, &rsp); err != nil {
+				return fmt.Errorf("failed to unmarshal response from runtime: %w", err)
+			}
+			if rsp != "hello world" {
+				return fmt.Errorf("incorrect value returned by runtime: %s", rsp)
+			}
+		}
+
 		// Submit a runtime transaction.
 		sc.logger.Info("submitting transaction to runtime",
 			"seq", i,
 		)
-		if err := sc.submitRuntimeTx(ctx, runtimeID, "hello", fmt.Sprintf("world %d", i)); err != nil {
+		if err := sc.submitKeyValueRuntimeInsertTx(ctx, runtimeID, "hello", fmt.Sprintf("world %d", i)); err != nil {
 			return err
 		}
 	}
@@ -259,7 +280,7 @@ func (sc *runtimeDynamicImpl) Run(childEnv *env.Env) error { // nolint: gocyclo
 	sc.logger.Info("checking that runtime got suspended")
 	_, err := sc.net.Controller().Registry.GetRuntime(ctx, &registry.NamespaceQuery{
 		Height: consensus.HeightLatest,
-		ID:     compRt.ID,
+		ID:     compRtDesc.ID,
 	})
 	switch err {
 	case nil:
@@ -298,7 +319,7 @@ func (sc *runtimeDynamicImpl) Run(childEnv *env.Env) error { // nolint: gocyclo
 
 	// Submit a runtime transaction to check whether the runtimes got resumed.
 	sc.logger.Info("submitting transaction to runtime")
-	if err = sc.submitRuntimeTx(ctx, runtimeID, "hello", "final world"); err != nil {
+	if err = sc.submitKeyValueRuntimeInsertTx(ctx, runtimeID, "hello", "final world"); err != nil {
 		return err
 	}
 
@@ -437,7 +458,7 @@ func (sc *runtimeDynamicImpl) Run(childEnv *env.Env) error { // nolint: gocyclo
 
 	// Submit a runtime transaction to check whether the runtimes got resumed.
 	sc.logger.Info("submitting transaction to runtime")
-	if err = sc.submitRuntimeTx(ctx, runtimeID, "hello", "final world for sure"); err != nil {
+	if err = sc.submitKeyValueRuntimeInsertTx(ctx, runtimeID, "hello", "final world for sure"); err != nil {
 		return err
 	}
 

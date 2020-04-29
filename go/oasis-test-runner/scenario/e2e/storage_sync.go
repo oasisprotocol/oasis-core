@@ -89,7 +89,7 @@ func (sc *storageSyncImpl) Run(childEnv *env.Env) error {
 		sc.logger.Info("submitting transaction to runtime",
 			"seq", i,
 		)
-		if err = sc.submitRuntimeTx(ctx, runtimeID, "checkpoint", fmt.Sprintf("my cp %d", i)); err != nil {
+		if err = sc.submitKeyValueRuntimeInsertTx(ctx, runtimeID, "checkpoint", fmt.Sprintf("my cp %d", i)); err != nil {
 			return err
 		}
 	}

@@ -451,7 +451,7 @@ func (sc *runtimeImpl) Run(childEnv *env.Env) error {
 	return sc.wait(childEnv, cmd, clientErrCh)
 }
 
-func (sc *runtimeImpl) submitRuntimeTx(ctx context.Context, id common.Namespace, key, value string) error {
+func (sc *runtimeImpl) submitRuntimeTx(ctx context.Context, id common.Namespace, method string, args interface{}) (cbor.RawMessage, error) {
 	c := sc.net.ClientController().RuntimeClient
 
 	// Submit a transaction and check the result.
@@ -459,26 +459,31 @@ func (sc *runtimeImpl) submitRuntimeTx(ctx context.Context, id common.Namespace,
 	rawRsp, err := c.SubmitTx(ctx, &runtimeClient.SubmitTxRequest{
 		RuntimeID: id,
 		Data: cbor.Marshal(&runtimeTransaction.TxnCall{
-			Method: "insert",
-			Args: struct {
-				Key   string `json:"key"`
-				Value string `json:"value"`
-			}{
-				Key:   key,
-				Value: value,
-			},
+			Method: method,
+			Args:   args,
 		}),
 	})
 	if err != nil {
-		return fmt.Errorf("failed to submit runtime tx: %w", err)
+		return nil, fmt.Errorf("failed to submit runtime tx: %w", err)
 	}
 	if err = cbor.Unmarshal(rawRsp, &rsp); err != nil {
-		return fmt.Errorf("malformed tx output from runtime: %w", err)
+		return nil, fmt.Errorf("malformed tx output from runtime: %w", err)
 	}
 	if rsp.Error != nil {
-		return fmt.Errorf("runtime tx failed: %s", *rsp.Error)
+		return nil, fmt.Errorf("runtime tx failed: %s", *rsp.Error)
 	}
-	return nil
+	return rsp.Success, nil
+}
+
+func (sc *runtimeImpl) submitKeyValueRuntimeInsertTx(ctx context.Context, id common.Namespace, key, value string) error {
+	_, err := sc.submitRuntimeTx(ctx, id, "insert", struct {
+		Key   string `json:"key"`
+		Value string `json:"value"`
+	}{
+		Key:   key,
+		Value: value,
+	})
+	return err
 }
 
 func (sc *runtimeImpl) waitNodesSynced() error {

@@ -36,6 +36,7 @@ type Runtime struct { // nolint: maligned
 
 	excludeFromGenesis bool
 	descriptor         registry.Runtime
+	genesisState       string
 }
 
 // RuntimeCfg is the Oasis runtime provisioning configuration.
@@ -105,6 +106,11 @@ func (rt *Runtime) toGenesisArgs() []string {
 // ToRuntimeDescriptor returns a registry runtime descriptor for this runtime.
 func (rt *Runtime) ToRuntimeDescriptor() registry.Runtime {
 	return rt.descriptor
+}
+
+// GetGenesisStatePath returns the path to the runtime genesis state file (if any).
+func (rt *Runtime) GetGenesisStatePath() string {
+	return rt.genesisState
 }
 
 // NewRuntime provisions a new runtime and adds it to the network.
@@ -237,6 +243,7 @@ func (net *Network) NewRuntime(cfg *RuntimeCfg) (*Runtime, error) {
 		pruner:             cfg.Pruner,
 		excludeFromGenesis: cfg.ExcludeFromGenesis,
 		descriptor:         descriptor,
+		genesisState:       cfg.GenesisState,
 	}
 	net.runtimes = append(net.runtimes, rt)
 

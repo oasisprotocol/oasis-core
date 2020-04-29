@@ -170,7 +170,7 @@ func (mr *multipleRuntimesImpl) Run(childEnv *env.Env) error {
 					"runtime_id", rt.ID,
 				)
 
-				if err := mr.submitRuntimeTx(ctx, rt.ID, "hello", fmt.Sprintf("world at iteration %d from %s", i, rt.ID)); err != nil {
+				if err := mr.submitKeyValueRuntimeInsertTx(ctx, rt.ID, "hello", fmt.Sprintf("world at iteration %d from %s", i, rt.ID)); err != nil {
 					return err
 				}
 
