@@ -206,7 +206,7 @@ func (w *Worker) registrationLoop() { // nolint: gocyclo
 	// (re-)register the node on each epoch transition. This doesn't
 	// need to be strict block-epoch time, since it just serves to
 	// extend the node's expiration.
-	ch, sub := w.epochtime.WatchEpochs()
+	ch, sub := w.epochtime.WatchLatestEpoch()
 	defer sub.Close()
 
 	regFn := func(epoch epochtime.EpochTime, hook RegisterNodeHook, retry bool) error {

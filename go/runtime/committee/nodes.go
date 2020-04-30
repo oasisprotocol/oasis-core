@@ -239,7 +239,7 @@ func NewNodeDescriptorWatcher(ctx context.Context, registry registry.Backend) (N
 		ctx:      ctx,
 		logger:   logging.GetLogger("runtime/committee/nodedescriptorwatcher"),
 	}
-	nw.notifier = pubsub.NewBrokerEx(func(ch *channels.InfiniteChannel) {
+	nw.notifier = pubsub.NewBrokerEx(func(ch channels.Channel) {
 		nw.RLock()
 		defer nw.RUnlock()
 

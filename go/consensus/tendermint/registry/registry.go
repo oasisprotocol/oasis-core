@@ -414,7 +414,7 @@ func New(ctx context.Context, service service.TendermintService) (api.Backend, e
 		nodeNotifier:     pubsub.NewBroker(false),
 		nodeListNotifier: pubsub.NewBroker(true),
 	}
-	tb.runtimeNotifier = pubsub.NewBrokerEx(func(ch *channels.InfiniteChannel) {
+	tb.runtimeNotifier = pubsub.NewBrokerEx(func(ch channels.Channel) {
 		wr := ch.In()
 		runtimes, err := tb.GetRuntimes(ctx, consensus.HeightLatest)
 		if err != nil {

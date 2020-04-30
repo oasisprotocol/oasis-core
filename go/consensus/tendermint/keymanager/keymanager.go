@@ -145,7 +145,7 @@ func New(ctx context.Context, service service.TendermintService) (api.Backend, e
 		service: service,
 		querier: a.QueryFactory().(*app.QueryFactory),
 	}
-	tb.notifier = pubsub.NewBrokerEx(func(ch *channels.InfiniteChannel) {
+	tb.notifier = pubsub.NewBrokerEx(func(ch channels.Channel) {
 		statuses, err := tb.GetStatuses(ctx, consensus.HeightLatest)
 		if err != nil {
 			tb.logger.Error("status notifier: unable to get a list of statuses",

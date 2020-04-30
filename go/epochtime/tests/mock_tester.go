@@ -37,6 +37,15 @@ func EpochtimeSetableImplementationTest(t *testing.T, backend api.Backend) {
 		t.Fatalf("failed to receive current epoch on WatchEpochs")
 	}
 
+	latestCh, subCh := timeSource.WatchLatestEpoch()
+	defer subCh.Close()
+	select {
+	case e = <-latestCh:
+		require.Equal(epoch, e, "WatchLatestEpoch initial")
+	case <-time.After(recvTimeout):
+		t.Fatalf("failed to receive current epoch on WatchLatestEpoch")
+	}
+
 	epoch++
 	err = timeSource.SetEpoch(context.Background(), epoch)
 	require.NoError(err, "SetEpoch")
@@ -46,6 +55,13 @@ func EpochtimeSetableImplementationTest(t *testing.T, backend api.Backend) {
 		require.Equal(epoch, e, "WatchEpochs after set")
 	case <-time.After(recvTimeout):
 		t.Fatalf("failed to receive epoch notification after transition")
+	}
+
+	select {
+	case e = <-latestCh:
+		require.Equal(epoch, e, "WatchLatestEpoch after set")
+	case <-time.After(recvTimeout):
+		t.Fatalf("failed to receive latest epoch after transition")
 	}
 
 	e, err = timeSource.GetEpoch(context.Background(), consensus.HeightLatest)

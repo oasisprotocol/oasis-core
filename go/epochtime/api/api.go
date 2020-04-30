@@ -36,6 +36,13 @@ type Backend interface {
 	// Upon subscription the current epoch is sent immediately.
 	WatchEpochs() (<-chan EpochTime, *pubsub.Subscription)
 
+	// WatchLatestEpoch returns a channel that produces a stream of messages on
+	// epoch transitions. If an epoch transition hapens before previous epoch
+	// is read from channel, the old epochs is overwritten.
+	//
+	// Upon subscription the current epoch is sent immediately.
+	WatchLatestEpoch() (<-chan EpochTime, *pubsub.Subscription)
+
 	// StateToGenesis returns the genesis state at the specified block height.
 	StateToGenesis(ctx context.Context, height int64) (*Genesis, error)
 }
