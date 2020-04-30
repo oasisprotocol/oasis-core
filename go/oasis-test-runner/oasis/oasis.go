@@ -254,9 +254,9 @@ type NetworkCfg struct { // nolint: maligned
 	// created in this test network.
 	DefaultLogWatcherHandlerFactories []log.WatcherHandlerFactory `json:"-"`
 
-	// UseCustomGrpcSocketPaths specifies whether nodes should use internal.sock in datadir or
+	// UseShortGrpcSocketPaths specifies whether nodes should use internal.sock in datadir or
 	// externally-provided.
-	UseCustomGrpcSocketPaths bool `json:"-"`
+	UseShortGrpcSocketPaths bool `json:"-"`
 }
 
 // Config returns the network configuration.
@@ -643,7 +643,7 @@ func (net *Network) startOasisNode(
 			tendermintDebugAddrBookLenient().
 			tendermintDebugAllowDuplicateIP()
 	}
-	if net.cfg.UseCustomGrpcSocketPaths {
+	if net.cfg.UseShortGrpcSocketPaths {
 		// Keep the socket, if it was already generated!
 		if node.customGrpcSocketPath == "" {
 			node.customGrpcSocketPath = net.generateTempSocketPath()
