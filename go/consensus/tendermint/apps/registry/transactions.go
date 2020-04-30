@@ -512,13 +512,6 @@ func (app *registryApplication) registerRuntime( // nolint: gocyclo
 		return registry.ErrForbidden
 	}
 
-	// Runtime with genesis stateroot only allowed in genesis.
-	if !ctx.IsInitChain() && !rt.Genesis.StateRoot.IsEmpty() {
-		ctx.Logger().Error("RegisterRuntime: runtime genesis state root not empty")
-		// TODO: Verify storage receipt for the state root, reject such registrations for now. See oasis-core#1686.
-		return registry.ErrInvalidArgument
-	}
-
 	if rt.Kind == registry.KindCompute {
 		if err = registry.VerifyRegisterComputeRuntimeArgs(ctx, ctx.Logger(), rt, state); err != nil {
 			return err

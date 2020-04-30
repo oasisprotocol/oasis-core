@@ -214,13 +214,6 @@ func (a *ApplicationServer) Register(app Application) error {
 	return a.mux.doRegister(app)
 }
 
-// RegisterGenesisHook registers a function to be called when the
-// consensus backend is initialized from genesis (e.g., on fresh
-// start).
-func (a *ApplicationServer) RegisterGenesisHook(hook func()) {
-	a.mux.registerGenesisHook(hook)
-}
-
 // RegisterHaltHook registers a function to be called when the
 // consensus Halt epoch height is reached.
 func (a *ApplicationServer) RegisterHaltHook(hook func(ctx context.Context, blockHeight int64, epoch epochtime.EpochTime)) {
@@ -306,8 +299,7 @@ type abciMux struct {
 	lastBeginBlock int64
 	currentTime    time.Time
 
-	genesisHooks []func()
-	haltHooks    []func(context.Context, int64, epochtime.EpochTime)
+	haltHooks []func(context.Context, int64, epochtime.EpochTime)
 
 	// invalidatedTxs maps transaction hashes (hash.Hash) to a subscriber
 	// waiting for that transaction to become invalid.
@@ -344,13 +336,6 @@ func (mux *abciMux) watchInvalidatedTx(txHash hash.Hash) (<-chan error, pubsub.C
 	}
 
 	return resultCh, sub, nil
-}
-
-func (mux *abciMux) registerGenesisHook(hook func()) {
-	mux.Lock()
-	defer mux.Unlock()
-
-	mux.genesisHooks = append(mux.genesisHooks, hook)
 }
 
 func (mux *abciMux) registerHaltHook(hook func(context.Context, int64, epochtime.EpochTime)) {
@@ -413,20 +398,6 @@ func (mux *abciMux) InitChain(req types.RequestInitChain) types.ResponseInitChai
 	if len(resp.Validators) == 0 && resp.ConsensusParams == nil {
 		resp.ConsensusParams = req.ConsensusParams
 	}
-
-	// Dispatch registered genesis hooks.
-	func() {
-		mux.RLock()
-		defer mux.RUnlock()
-
-		mux.logger.Debug("Dispatching genesis hooks")
-
-		for _, hook := range mux.genesisHooks {
-			hook()
-		}
-
-		mux.logger.Debug("Genesis hook dispatch complete")
-	}()
 
 	// Call InitChain() on all applications.
 	mux.logger.Debug("InitChain: initializing applications")

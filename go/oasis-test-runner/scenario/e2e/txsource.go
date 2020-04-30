@@ -51,8 +51,8 @@ var TxSourceMultiShort scenario.Scenario = &txSourceImpl{
 	timeLimit:                         timeLimitShort,
 	livenessCheckInterval:             livenessCheckInterval,
 	consensusPruneDisabledProbability: 0.1,
-	consensusPruneMinKept:             1,
-	consensusPruneMaxKept:             100,
+	consensusPruneMinKept:             100,
+	consensusPruneMaxKept:             200,
 }
 
 // TxSourceMulti uses multiple workloads.
@@ -72,7 +72,7 @@ var TxSourceMulti scenario.Scenario = &txSourceImpl{
 	nodeRestartInterval:               nodeRestartIntervalLong,
 	livenessCheckInterval:             livenessCheckInterval,
 	consensusPruneDisabledProbability: 0.1,
-	consensusPruneMinKept:             1,
+	consensusPruneMinKept:             100,
 	consensusPruneMaxKept:             1000,
 	// Nodes getting killed commonly result in corrupted tendermint WAL when the
 	// node is restarted. Enable automatic corrupted WAL recovery for validator

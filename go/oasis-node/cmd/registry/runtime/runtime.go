@@ -338,10 +338,8 @@ func runtimeFromFlags() (*registry.Runtime, signature.Signer, error) {
 			}
 		}
 
-		var ns common.Namespace
-		copy(ns[:], id[:])
 		var newRoot hash.Hash
-		_, newRoot, err = tree.Commit(ctx, ns, 0)
+		_, newRoot, err = tree.Commit(ctx, id, gen.Round)
 		if err != nil {
 			logger.Error("failed to apply runtime genesis storage state",
 				"err", err,

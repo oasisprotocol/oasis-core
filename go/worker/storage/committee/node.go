@@ -20,6 +20,7 @@ import (
 	"github.com/oasislabs/oasis-core/go/common/persistent"
 	"github.com/oasislabs/oasis-core/go/common/workerpool"
 	consensus "github.com/oasislabs/oasis-core/go/consensus/api"
+	registryApi "github.com/oasislabs/oasis-core/go/registry/api"
 	roothashApi "github.com/oasislabs/oasis-core/go/roothash/api"
 	"github.com/oasislabs/oasis-core/go/roothash/api/block"
 	runtimeCommittee "github.com/oasislabs/oasis-core/go/runtime/committee"
@@ -496,6 +497,45 @@ type inFlight struct {
 	awaitingRetry outstandingMask
 }
 
+func (n *Node) initGenesis(rt *registryApi.Runtime) error {
+	n.logger.Info("initializing storage at genesis")
+
+	if rt.Genesis.State != nil {
+		var emptyRoot hash.Hash
+		emptyRoot.Empty()
+
+		n.logger.Info("applying genesis state",
+			"state_root", rt.Genesis.StateRoot,
+		)
+
+		_, err := n.localStorage.Apply(n.ctx, &storageApi.ApplyRequest{
+			Namespace: rt.ID,
+			SrcRound:  rt.Genesis.Round,
+			SrcRoot:   emptyRoot,
+			DstRound:  rt.Genesis.Round,
+			DstRoot:   rt.Genesis.StateRoot,
+			WriteLog:  rt.Genesis.State,
+		})
+		if err != nil {
+			return err
+		}
+	} else if !rt.Genesis.StateRoot.IsEmpty() {
+		// Non-empty state root and nil state. This is only allowed in case the storage node already
+		// has the state or can replicate it from some other node which has the state.
+		if !n.localStorage.NodeDB().HasRoot(storageApi.Root{
+			Namespace: rt.ID,
+			Version:   rt.Genesis.Round,
+			Hash:      rt.Genesis.StateRoot,
+		}) {
+			n.logger.Warn("non-empty state root but no state specified, assuming replication",
+				"state_root", rt.Genesis.StateRoot,
+			)
+		}
+	}
+
+	return nil
+}
+
 func (n *Node) worker() { // nolint: gocyclo
 	defer close(n.quitCh)
 	defer close(n.diffCh)
@@ -524,6 +564,24 @@ func (n *Node) worker() { // nolint: gocyclo
 	n.syncedLock.RUnlock()
 	if cachedLastRound == defaultUndefinedRound || cachedLastRound < genesisBlock.Header.Round {
 		cachedLastRound = n.undefinedRound
+	}
+
+	// Initialize genesis from the runtime descriptor.
+	if cachedLastRound == n.undefinedRound {
+		var rt *registryApi.Runtime
+		rt, err = n.commonNode.Runtime.RegistryDescriptor(n.ctx)
+		if err != nil {
+			n.logger.Error("failed to retrieve runtime registry descriptor",
+				"err", err,
+			)
+			return
+		}
+		if err = n.initGenesis(rt); err != nil {
+			n.logger.Error("failed to initialize storage at genesis",
+				"err", err,
+			)
+			return
+		}
 	}
 
 	n.logger.Info("worker initialized",

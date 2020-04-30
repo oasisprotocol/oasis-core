@@ -79,9 +79,9 @@ func (r *runtime) validateResponse(key string, rsp *runtimeTransaction.TxnOutput
 	case true:
 		// If existing key was inserted/deleted/queried, existing value is
 		// expected in response.
-		prev, ok := rsp.Success.(string)
-		if !ok {
-			return fmt.Errorf("expected non-nil response")
+		var prev string
+		if err := cbor.Unmarshal(rsp.Success, &prev); err != nil {
+			return fmt.Errorf("expected valid response: %w", err)
 		}
 		if prev != r.reckonedKeyValueState[key] {
 			return fmt.Errorf("invalid response value, expected: '%s', got: '%s'", r.reckonedKeyValueState[key], prev)
@@ -89,7 +89,11 @@ func (r *runtime) validateResponse(key string, rsp *runtimeTransaction.TxnOutput
 	case false:
 		// If a non existing key was inserted/deleted/queried, empty response is
 		// expected.
-		if rsp.Success != nil {
+		var prev *string
+		if err := cbor.Unmarshal(rsp.Success, &prev); err != nil {
+			return fmt.Errorf("expected valid response: %w", err)
+		}
+		if prev != nil {
 			return fmt.Errorf("expected nil response, got: '%s'", rsp.Success)
 		}
 	}

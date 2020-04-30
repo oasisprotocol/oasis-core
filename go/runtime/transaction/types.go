@@ -1,5 +1,7 @@
 package transaction
 
+import "github.com/oasislabs/oasis-core/go/common/cbor"
+
 // NOTE: These types must be synchronized with runtime/src/transaction/types.rs.
 
 // TxnCall is a transaction call.
@@ -13,7 +15,7 @@ type TxnCall struct {
 // TxnOutput is a transaction call output.
 type TxnOutput struct {
 	// Success can be of any type.
-	Success interface{}
+	Success cbor.RawMessage
 	// Error is a string describing the error message.
 	Error *string
 }

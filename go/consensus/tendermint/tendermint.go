@@ -446,14 +446,6 @@ func (t *tendermintService) StateToGenesis(ctx context.Context, blockHeight int6
 	}, nil
 }
 
-func (t *tendermintService) RegisterGenesisHook(hook func()) {
-	if !t.initialized() {
-		return
-	}
-
-	t.mux.RegisterGenesisHook(hook)
-}
-
 func (t *tendermintService) RegisterHaltHook(hook func(context.Context, int64, epochtimeAPI.EpochTime)) {
 	if !t.initialized() {
 		return
