@@ -17,6 +17,7 @@ import (
 	"github.com/oasislabs/oasis-core/go/common/identity"
 	"github.com/oasislabs/oasis-core/go/common/logging"
 	"github.com/oasislabs/oasis-core/go/oasis-node/cmd/common"
+	"github.com/oasislabs/oasis-core/go/oasis-node/cmd/common/flags"
 )
 
 const (
@@ -26,9 +27,13 @@ const (
 	CfgAddress = "address"
 	// CfgWait waits for the remote address to become available.
 	CfgWait = "wait"
+	// CfgDebugGrpcInternalSocketPath sets custom internal socket path.
+	CfgDebugGrpcInternalSocketPath = "debug.grpc.internal.socket_path"
 
-	defaultAddress      = "unix:" + localSocketFilename
-	localSocketFilename = "internal.sock"
+	// LocalSocketFilename is the filename of the unix socket in node datadir.
+	LocalSocketFilename = "internal.sock"
+
+	defaultAddress = "unix:" + LocalSocketFilename
 )
 
 var (
@@ -68,7 +73,11 @@ func NewServerLocal(installWrapper bool) (*cmnGrpc.Server, error) {
 	if dataDir == "" {
 		return nil, errors.New("data directory must be set")
 	}
-	path := filepath.Join(dataDir, localSocketFilename)
+	path := filepath.Join(dataDir, LocalSocketFilename)
+	if viper.IsSet(CfgDebugGrpcInternalSocketPath) && flags.DebugDontBlameOasis() {
+		logger.Info("overriding internal socket path", "path", viper.GetString(CfgDebugGrpcInternalSocketPath))
+		path = viper.GetString(CfgDebugGrpcInternalSocketPath)
+	}
 
 	config := &cmnGrpc.ServerConfig{
 		Name:           "internal",
@@ -108,6 +117,9 @@ func init() {
 	_ = viper.BindPFlags(ServerTCPFlags)
 	ServerTCPFlags.AddFlagSet(cmnGrpc.Flags)
 
+	ServerLocalFlags.String(CfgDebugGrpcInternalSocketPath, "", "use custom internal unix socket path")
+	_ = ServerLocalFlags.MarkHidden(CfgDebugGrpcInternalSocketPath)
+	_ = viper.BindPFlags(ServerLocalFlags)
 	ServerLocalFlags.AddFlagSet(cmnGrpc.Flags)
 
 	ClientFlags.StringP(CfgAddress, "a", defaultAddress, "remote gRPC address")

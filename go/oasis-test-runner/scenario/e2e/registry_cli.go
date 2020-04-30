@@ -36,16 +36,22 @@ import (
 var (
 	// RegistryCLI is the staking scenario.
 	RegistryCLI scenario.Scenario = &registryCLIImpl{
-		basicImpl: *newBasicImpl("registry-cli", "", nil),
+		runtimeImpl: *newRuntimeImpl("registry-cli", "", nil),
 	}
 )
 
 type registryCLIImpl struct {
-	basicImpl
+	runtimeImpl
+}
+
+func (r *registryCLIImpl) Clone() scenario.Scenario {
+	return &registryCLIImpl{
+		runtimeImpl: *r.runtimeImpl.Clone().(*runtimeImpl),
+	}
 }
 
 func (r *registryCLIImpl) Fixture() (*oasis.NetworkFixture, error) {
-	f, err := r.basicImpl.Fixture()
+	f, err := r.runtimeImpl.Fixture()
 	if err != nil {
 		return nil, err
 	}
@@ -110,7 +116,7 @@ func (r *registryCLIImpl) testEntityAndNode(childEnv *env.Env, cli *cli.Helpers)
 		return fmt.Errorf("initial node list wrong number of nodes: %d, expected at least: %d. Nodes: %s", len(nodes), 3, nodes)
 	}
 	// Check that is-registered subcommand detects all validators as registered.
-	for _, val := range r.basicImpl.net.Validators() {
+	for _, val := range r.runtimeImpl.net.Validators() {
 		if err = r.isRegistered(childEnv, val.Name, val.DataDir()); err != nil {
 			return err
 		}
@@ -216,9 +222,9 @@ func (r *registryCLIImpl) listEntities(childEnv *env.Env) ([]signature.PublicKey
 	r.logger.Info("listing all entities")
 	args := []string{
 		"registry", "entity", "list",
-		"--" + grpc.CfgAddress, "unix:" + r.basicImpl.net.Validators()[0].SocketPath(),
+		"--" + grpc.CfgAddress, "unix:" + r.runtimeImpl.net.Validators()[0].SocketPath(),
 	}
-	out, err := cli.RunSubCommandWithOutput(childEnv, r.logger, "list", r.basicImpl.net.Config().NodeBinary, args)
+	out, err := cli.RunSubCommandWithOutput(childEnv, r.logger, "list", r.runtimeImpl.net.Config().NodeBinary, args)
 	if err != nil {
 		return nil, fmt.Errorf("failed to list entities: error: %w output: %s", err, out.String())
 	}
@@ -264,7 +270,7 @@ func (r *registryCLIImpl) initEntity(childEnv *env.Env, entDir string) (*entity.
 		"--" + cmdSigner.CfgSigner, fileSigner.SignerName,
 		"--" + cmdSigner.CfgCLISignerDir, entDir,
 	}
-	out, err := cli.RunSubCommandWithOutput(childEnv, r.logger, "entity-init", r.basicImpl.net.Config().NodeBinary, args)
+	out, err := cli.RunSubCommandWithOutput(childEnv, r.logger, "entity-init", r.runtimeImpl.net.Config().NodeBinary, args)
 	if err != nil {
 		return nil, fmt.Errorf("failed to init entity: error: %w output: %s", err, out.String())
 	}
@@ -288,7 +294,7 @@ func (r *registryCLIImpl) updateEntity(childEnv *env.Env, nodes []*node.Node, no
 		"--" + cmdRegEnt.CfgNodeID, strings.Join(nodeIDs, ","),
 		"--" + cmdRegEnt.CfgNodeDescriptor, strings.Join(nodeGenesisFiles, ","),
 	}
-	out, err := cli.RunSubCommandWithOutput(childEnv, r.logger, "entity-update", r.basicImpl.net.Config().NodeBinary, args)
+	out, err := cli.RunSubCommandWithOutput(childEnv, r.logger, "entity-update", r.runtimeImpl.net.Config().NodeBinary, args)
 	if err != nil {
 		return nil, fmt.Errorf("failed to update entity: error: %w output: %s", err, out.String())
 	}
@@ -301,9 +307,9 @@ func (r *registryCLIImpl) listNodes(childEnv *env.Env) ([]signature.PublicKey, e
 	r.logger.Info("listing all nodes")
 	args := []string{
 		"registry", "node", "list",
-		"--" + grpc.CfgAddress, "unix:" + r.basicImpl.net.Validators()[0].SocketPath(),
+		"--" + grpc.CfgAddress, "unix:" + r.runtimeImpl.net.Validators()[0].SocketPath(),
 	}
-	out, err := cli.RunSubCommandWithOutput(childEnv, r.logger, "node-list", r.basicImpl.net.Config().NodeBinary, args)
+	out, err := cli.RunSubCommandWithOutput(childEnv, r.logger, "node-list", r.runtimeImpl.net.Config().NodeBinary, args)
 	if err != nil {
 		return nil, fmt.Errorf("failed to list nodes: error: %w output: %s", err, out.String())
 	}
@@ -331,10 +337,10 @@ func (r *registryCLIImpl) isRegistered(childEnv *env.Env, nodeName, nodeDataDir 
 	r.logger.Info(fmt.Sprintf("checking if node %s is registered", nodeName))
 	args := []string{
 		"registry", "node", "is-registered",
-		"--" + grpc.CfgAddress, "unix:" + r.basicImpl.net.Validators()[0].SocketPath(),
+		"--" + grpc.CfgAddress, "unix:" + r.runtimeImpl.net.Validators()[0].SocketPath(),
 		"--" + cmdCommon.CfgDataDir, nodeDataDir,
 	}
-	out, err := cli.RunSubCommandWithOutput(childEnv, r.logger, "is-registered", r.basicImpl.net.Config().NodeBinary, args)
+	out, err := cli.RunSubCommandWithOutput(childEnv, r.logger, "is-registered", r.runtimeImpl.net.Config().NodeBinary, args)
 	if err != nil {
 		return fmt.Errorf("failed to check if node %s is registered: error: %w output: %s", nodeName, err, out.String())
 	}
@@ -450,7 +456,7 @@ func (r *registryCLIImpl) initNode(childEnv *env.Env, ent *entity.Entity, entDir
 			"--" + cmdCommon.CfgDataDir, dataDir,
 		}
 		var out bytes.Buffer
-		out, err = cli.RunSubCommandWithOutput(childEnv, r.logger, "init-node", r.basicImpl.net.Config().NodeBinary, args)
+		out, err = cli.RunSubCommandWithOutput(childEnv, r.logger, "init-node", r.runtimeImpl.net.Config().NodeBinary, args)
 		if err != nil {
 			return nil, fmt.Errorf("failed to init node: error: %w, output: %s", err, out.String())
 		}
@@ -549,9 +555,9 @@ func (r *registryCLIImpl) genRegisterEntityTx(childEnv *env.Env, nonce int, txPa
 		"--" + cmdCommon.CfgDebugAllowTestKeys,
 		"--" + cmdSigner.CfgSigner, fileSigner.SignerName,
 		"--" + cmdSigner.CfgCLISignerDir, entDir,
-		"--" + flags.CfgGenesisFile, r.basicImpl.net.GenesisPath(),
+		"--" + flags.CfgGenesisFile, r.runtimeImpl.net.GenesisPath(),
 	}
-	if out, err := cli.RunSubCommandWithOutput(childEnv, r.logger, "gen_register", r.basicImpl.net.Config().NodeBinary, args); err != nil {
+	if out, err := cli.RunSubCommandWithOutput(childEnv, r.logger, "gen_register", r.runtimeImpl.net.Config().NodeBinary, args); err != nil {
 		return fmt.Errorf("failed to generate register entity tx: error: %w output: %s", err, out.String())
 	}
 
@@ -572,9 +578,9 @@ func (r *registryCLIImpl) genDeregisterEntityTx(childEnv *env.Env, nonce int, tx
 		"--" + cmdCommon.CfgDebugAllowTestKeys,
 		"--" + cmdSigner.CfgSigner, fileSigner.SignerName,
 		"--" + cmdSigner.CfgCLISignerDir, entDir,
-		"--" + flags.CfgGenesisFile, r.basicImpl.net.GenesisPath(),
+		"--" + flags.CfgGenesisFile, r.runtimeImpl.net.GenesisPath(),
 	}
-	if out, err := cli.RunSubCommandWithOutput(childEnv, r.logger, "gen_deregister", r.basicImpl.net.Config().NodeBinary, args); err != nil {
+	if out, err := cli.RunSubCommandWithOutput(childEnv, r.logger, "gen_deregister", r.runtimeImpl.net.Config().NodeBinary, args); err != nil {
 		return fmt.Errorf("failed to generate deregister entity tx: error: %w output: %s", err, out.String())
 	}
 
@@ -685,9 +691,9 @@ func (r *registryCLIImpl) listRuntimes(childEnv *env.Env) (map[common.Namespace]
 	args := []string{
 		"registry", "runtime", "list",
 		"-v",
-		"--" + grpc.CfgAddress, "unix:" + r.basicImpl.net.Validators()[0].SocketPath(),
+		"--" + grpc.CfgAddress, "unix:" + r.runtimeImpl.net.Validators()[0].SocketPath(),
 	}
-	out, err := cli.RunSubCommandWithOutput(childEnv, r.logger, "list", r.basicImpl.net.Config().NodeBinary, args)
+	out, err := cli.RunSubCommandWithOutput(childEnv, r.logger, "list", r.runtimeImpl.net.Config().NodeBinary, args)
 	if err != nil {
 		return nil, fmt.Errorf("failed to list runtimes: error: %w output: %s", err, out.String())
 	}

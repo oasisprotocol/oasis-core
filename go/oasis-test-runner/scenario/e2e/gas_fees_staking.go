@@ -5,11 +5,8 @@ import (
 	"crypto/rand"
 	"fmt"
 
-	"github.com/spf13/viper"
-
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
 	memorySigner "github.com/oasislabs/oasis-core/go/common/crypto/signature/signers/memory"
-	"github.com/oasislabs/oasis-core/go/common/logging"
 	"github.com/oasislabs/oasis-core/go/common/node"
 	"github.com/oasislabs/oasis-core/go/common/quantity"
 	"github.com/oasislabs/oasis-core/go/common/sgx"
@@ -25,23 +22,21 @@ import (
 var (
 	// GasFeesStaking is the staking gas fees scenario.
 	GasFeesStaking scenario.Scenario = &gasFeesImpl{
-		basicImpl: *newBasicImpl(
+		runtimeImpl: *newRuntimeImpl(
 			"gas-fees/staking",
 			"",
 			nil,
 		),
-		logger: logging.GetLogger("scenario/e2e/gas-fees/staking"),
 	}
 
 	// GasFeesStakingDumpRestore is the staking gas fees scenario with
 	// dump-restore.
 	GasFeesStakingDumpRestore scenario.Scenario = &gasFeesImpl{
-		basicImpl: *newBasicImpl(
+		runtimeImpl: *newRuntimeImpl(
 			"gas-fees/staking-dump-restore",
 			"",
 			nil,
 		),
-		logger:      logging.GetLogger("scenario/e2e/gas-fees/staking-dump-restore"),
 		dumpRestore: true,
 	}
 
@@ -52,20 +47,26 @@ var (
 )
 
 type gasFeesImpl struct {
-	basicImpl
+	runtimeImpl
 
-	logger      *logging.Logger
 	dumpRestore bool
 }
 
+func (sc *gasFeesImpl) Clone() scenario.Scenario {
+	return &gasFeesImpl{
+		runtimeImpl: *sc.runtimeImpl.Clone().(*runtimeImpl),
+		dumpRestore: sc.dumpRestore,
+	}
+}
+
 func (sc *gasFeesImpl) Fixture() (*oasis.NetworkFixture, error) {
-	f, err := sc.basicImpl.Fixture()
+	f, err := sc.runtimeImpl.Fixture()
 	if err != nil {
 		return nil, err
 	}
 
 	var tee node.TEEHardware
-	err = tee.FromString(viper.GetString(cfgTEEHardware))
+	err = tee.FromString(sc.TEEHardware)
 	if err != nil {
 		return nil, err
 	}
@@ -79,11 +80,11 @@ func (sc *gasFeesImpl) Fixture() (*oasis.NetworkFixture, error) {
 		MrSigner: mrSigner,
 	}
 	f.Network = oasis.NetworkCfg{
-		NodeBinary:                        viper.GetString(cfgNodeBinary),
-		RuntimeLoaderBinary:               viper.GetString(cfgRuntimeLoader),
+		NodeBinary:                        sc.nodeBinary,
+		RuntimeLoaderBinary:               sc.runtimeLoader,
 		EpochtimeMock:                     true,
 		StakingGenesis:                    "tests/fixture-data/gas-fees/staking-genesis.json",
-		DefaultLogWatcherHandlerFactories: DefaultBasicLogWatcherHandlerFactories,
+		DefaultLogWatcherHandlerFactories: DefaultRuntimeLogWatcherHandlerFactories,
 		ConsensusGasCostsTxByte:           0, // So we can control gas more easily.
 	}
 	f.Entities = []oasis.EntityCfg{

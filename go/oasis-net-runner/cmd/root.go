@@ -116,7 +116,7 @@ func runRoot(cmd *cobra.Command, args []string) error {
 	defer rootEnv.Cleanup()
 	logger := logging.GetLogger("net-runner")
 
-	childEnv, err := rootEnv.NewChild("net-runner")
+	childEnv, err := rootEnv.NewChild("net-runner", nil)
 	if err != nil {
 		logger.Error("failed to setup child environment",
 			"err", err,

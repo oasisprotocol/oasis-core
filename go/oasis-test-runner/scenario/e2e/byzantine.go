@@ -56,7 +56,7 @@ var (
 )
 
 type byzantineImpl struct {
-	basicImpl
+	runtimeImpl
 
 	script                     string
 	identitySeed               string
@@ -65,7 +65,7 @@ type byzantineImpl struct {
 
 func newByzantineImpl(script string, logWatcherHandlerFactories []log.WatcherHandlerFactory, identitySeed string) scenario.Scenario {
 	return &byzantineImpl{
-		basicImpl: *newBasicImpl(
+		runtimeImpl: *newRuntimeImpl(
 			"byzantine/"+script,
 			"simple-keyvalue-ops-client",
 			[]string{"set", "hello_key", "hello_value"},
@@ -76,8 +76,17 @@ func newByzantineImpl(script string, logWatcherHandlerFactories []log.WatcherHan
 	}
 }
 
+func (sc *byzantineImpl) Clone() scenario.Scenario {
+	return &byzantineImpl{
+		runtimeImpl:                *sc.runtimeImpl.Clone().(*runtimeImpl),
+		script:                     sc.script,
+		identitySeed:               sc.identitySeed,
+		logWatcherHandlerFactories: sc.logWatcherHandlerFactories,
+	}
+}
+
 func (sc *byzantineImpl) Fixture() (*oasis.NetworkFixture, error) {
-	f, err := sc.basicImpl.Fixture()
+	f, err := sc.runtimeImpl.Fixture()
 	if err != nil {
 		return nil, err
 	}
@@ -104,7 +113,7 @@ func (sc *byzantineImpl) Fixture() (*oasis.NetworkFixture, error) {
 }
 
 func (sc *byzantineImpl) Run(childEnv *env.Env) error {
-	clientErrCh, cmd, err := sc.basicImpl.start(childEnv)
+	clientErrCh, cmd, err := sc.runtimeImpl.start(childEnv)
 	if err != nil {
 		return err
 	}

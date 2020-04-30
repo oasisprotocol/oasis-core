@@ -16,17 +16,17 @@ var (
 const lateStartInitialWait = 2 * time.Minute
 
 type lateStartImpl struct {
-	basicImpl
+	runtimeImpl
 }
 
 func newLateStartImpl(name, clientBinary string, clientArgs []string) scenario.Scenario {
 	return &lateStartImpl{
-		basicImpl: *newBasicImpl(name, clientBinary, clientArgs),
+		runtimeImpl: *newRuntimeImpl(name, clientBinary, clientArgs),
 	}
 }
 
 func (sc *lateStartImpl) Fixture() (*oasis.NetworkFixture, error) {
-	f, err := sc.basicImpl.Fixture()
+	f, err := sc.runtimeImpl.Fixture()
 	if err != nil {
 		return nil, err
 	}
@@ -60,7 +60,7 @@ func (sc *lateStartImpl) Run(childEnv *env.Env) error {
 	}
 
 	sc.logger.Info("Starting the basic client")
-	cmd, err := startClient(childEnv, sc.net, resolveClientBinary(sc.clientBinary), sc.clientArgs)
+	cmd, err := sc.startClient(childEnv)
 	if err != nil {
 		return err
 	}

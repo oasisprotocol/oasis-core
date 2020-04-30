@@ -9,8 +9,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/spf13/viper"
-
 	"github.com/oasislabs/oasis-core/go/common/crypto/hash"
 	"github.com/oasislabs/oasis-core/go/common/node"
 	"github.com/oasislabs/oasis-core/go/common/persistent"
@@ -57,7 +55,7 @@ var (
 )
 
 type nodeUpgradeImpl struct {
-	basicImpl
+	runtimeImpl
 
 	validator  *oasis.Validator
 	controller *oasis.Controller
@@ -114,19 +112,22 @@ func (sc *nodeUpgradeImpl) restart(wait bool) error {
 
 func newNodeUpgradeImpl() scenario.Scenario {
 	sc := &nodeUpgradeImpl{
-		basicImpl: *newBasicImpl("node-upgrade", "", nil),
-		ctx:       context.Background(),
+		runtimeImpl: *newRuntimeImpl("node-upgrade", "", nil),
+		ctx:         context.Background(),
 	}
 	return sc
 }
 
-func (sc *nodeUpgradeImpl) Name() string {
-	return "node-upgrade"
+func (sc *nodeUpgradeImpl) Clone() scenario.Scenario {
+	return &nodeUpgradeImpl{
+		runtimeImpl: *sc.runtimeImpl.Clone().(*runtimeImpl),
+		ctx:         context.Background(),
+	}
 }
 
 func (sc *nodeUpgradeImpl) Fixture() (*oasis.NetworkFixture, error) {
 	var tee node.TEEHardware
-	err := tee.FromString(viper.GetString(cfgTEEHardware))
+	err := tee.FromString(sc.TEEHardware)
 	if err != nil {
 		return nil, err
 	}
@@ -141,8 +142,8 @@ func (sc *nodeUpgradeImpl) Fixture() (*oasis.NetworkFixture, error) {
 			MrSigner: mrSigner,
 		},
 		Network: oasis.NetworkCfg{
-			NodeBinary:          viper.GetString(cfgNodeBinary),
-			RuntimeLoaderBinary: viper.GetString(cfgRuntimeLoader),
+			NodeBinary:          sc.nodeBinary,
+			RuntimeLoaderBinary: sc.runtimeLoader,
 			EpochtimeMock:       true,
 			DefaultLogWatcherHandlerFactories: []log.WatcherHandlerFactory{
 				oasis.LogAssertUpgradeStartup(),

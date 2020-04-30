@@ -11,12 +11,12 @@ var (
 )
 
 type dumpRestoreImpl struct {
-	basicImpl
+	runtimeImpl
 }
 
 func newDumpRestoreImpl() scenario.Scenario {
 	sc := &dumpRestoreImpl{
-		basicImpl: *newBasicImpl(
+		runtimeImpl: *newRuntimeImpl(
 			"dump-restore",
 			"test-long-term-client",
 			[]string{"--mode", "part1"},
@@ -25,15 +25,21 @@ func newDumpRestoreImpl() scenario.Scenario {
 	return sc
 }
 
+func (sc *dumpRestoreImpl) Clone() scenario.Scenario {
+	return &dumpRestoreImpl{
+		runtimeImpl: *sc.runtimeImpl.Clone().(*runtimeImpl),
+	}
+}
+
 func (sc *dumpRestoreImpl) Run(childEnv *env.Env) error {
-	clientErrCh, cmd, err := sc.basicImpl.start(childEnv)
+	clientErrCh, cmd, err := sc.runtimeImpl.start(childEnv)
 	if err != nil {
 		return err
 	}
 
 	// Wait for the client to exit.
 	select {
-	case err = <-sc.basicImpl.net.Errors():
+	case err = <-sc.runtimeImpl.net.Errors():
 		_ = cmd.Process.Kill()
 	case err = <-clientErrCh:
 	}
@@ -51,6 +57,6 @@ func (sc *dumpRestoreImpl) Run(childEnv *env.Env) error {
 	}
 
 	// Check that everything works with restored state.
-	sc.basicImpl.clientArgs = []string{"--mode", "part2"}
-	return sc.basicImpl.Run(childEnv)
+	sc.runtimeImpl.clientArgs = []string{"--mode", "part2"}
+	return sc.runtimeImpl.Run(childEnv)
 }

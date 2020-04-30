@@ -3,9 +3,14 @@ package pprof
 
 import (
 	"context"
+	"fmt"
+	"io/ioutil"
 	"net"
 	"net/http"
 	"net/http/pprof"
+	"os"
+	"runtime"
+	runtimePprof "runtime/pprof"
 
 	flag "github.com/spf13/pflag"
 	"github.com/spf13/viper"
@@ -28,6 +33,28 @@ type pprofService struct {
 
 	ctx   context.Context
 	errCh chan error
+}
+
+// DumpHeapToFile writes the current process heap to given file with unique suffix.
+func DumpHeapToFile(name string) error {
+	// Find unique filename.
+	wd, err := os.Getwd()
+	if err != nil {
+		return fmt.Errorf("failed to determine current working directory for memory profiler output: %w", err)
+	}
+	mprof, merr := ioutil.TempFile(wd, name+".*.pb")
+	if merr != nil {
+		return fmt.Errorf("failed to create file for memory profiler output: %w", merr)
+	}
+	defer mprof.Close()
+
+	// Write memory profiling data.
+	runtime.GC()
+	if merr = runtimePprof.WriteHeapProfile(mprof); merr != nil {
+		return fmt.Errorf("failed to write heap profile: %w", merr)
+	}
+
+	return nil
 }
 
 func (p *pprofService) Start() error {

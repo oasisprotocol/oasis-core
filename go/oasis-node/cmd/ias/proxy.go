@@ -283,6 +283,7 @@ func init() {
 
 	_ = viper.BindPFlags(proxyFlags)
 	proxyFlags.AddFlagSet(metrics.Flags)
+	proxyFlags.AddFlagSet(cmdGrpc.ServerLocalFlags)
 	proxyFlags.AddFlagSet(cmdGrpc.ServerTCPFlags)
 	proxyFlags.AddFlagSet(cmdGrpc.ClientFlags)
 	proxyFlags.AddFlagSet(flags.GenesisFileFlags)

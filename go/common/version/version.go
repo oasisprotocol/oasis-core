@@ -55,6 +55,11 @@ var (
 	// by the linker.
 	SoftwareVersion = "0.0-unset"
 
+	// GitBranch is the name of the git branch of Oasis Core.
+	//
+	// This is mostly used for reporting and metrics.
+	GitBranch = ""
+
 	// RuntimeProtocol versions the protocol between the Oasis node(s) and
 	// the runtime.
 	//

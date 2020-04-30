@@ -17,6 +17,8 @@ import (
 	epochtime "github.com/oasislabs/oasis-core/go/epochtime/api"
 	"github.com/oasislabs/oasis-core/go/oasis-node/cmd/common"
 	"github.com/oasislabs/oasis-core/go/oasis-node/cmd/common/flags"
+	"github.com/oasislabs/oasis-core/go/oasis-node/cmd/common/grpc"
+	"github.com/oasislabs/oasis-core/go/oasis-node/cmd/common/metrics"
 	"github.com/oasislabs/oasis-core/go/roothash/api/commitment"
 	"github.com/oasislabs/oasis-core/go/runtime/transaction"
 	scheduler "github.com/oasislabs/oasis-core/go/scheduler/api"
@@ -759,9 +761,11 @@ func init() {
 	_ = viper.BindPFlags(fs)
 	byzantineCmd.PersistentFlags().AddFlagSet(fs)
 
+	byzantineCmd.PersistentFlags().AddFlagSet(metrics.Flags)
 	byzantineCmd.PersistentFlags().AddFlagSet(flags.GenesisFileFlags)
 	byzantineCmd.PersistentFlags().AddFlagSet(flags.DebugDontBlameOasisFlag)
 	byzantineCmd.PersistentFlags().AddFlagSet(flags.DebugTestEntityFlags)
+	byzantineCmd.PersistentFlags().AddFlagSet(grpc.ServerLocalFlags)
 	byzantineCmd.PersistentFlags().AddFlagSet(p2p.Flags)
 	byzantineCmd.PersistentFlags().AddFlagSet(tendermint.Flags)
 	byzantineCmd.PersistentFlags().AddFlagSet(registration.Flags)

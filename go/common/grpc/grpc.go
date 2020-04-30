@@ -341,6 +341,8 @@ func (s *Server) Start() error {
 			)
 			return err
 		}
+		s.Logger.Info("gRPC server started", "network", cfg.network, "address", cfg.address)
+
 		s.startedListeners = append(s.startedListeners, ln)
 
 		go func() {

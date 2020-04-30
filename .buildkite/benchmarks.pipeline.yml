@@ -1,0 +1,147 @@
+# Copied from pipeline.yml.
+docker_plugin_default_config: &docker_plugin_default_config
+  image: "oasislabs/testing:0.3.0"
+  always_pull: true
+  workdir: /workdir
+  volumes:
+    - /var/lib/buildkite-agent/.coveralls:/root/.coveralls
+    - /var/lib/buildkite-agent/.codecov:/root/.codecov
+    # Shared Rust incremental compile caches.
+    - /var/tmp/cargo_ic/debug:/var/tmp/artifacts/debug/incremental
+    - /var/tmp/cargo_ic/debug_sgx:/var/tmp/artifacts/x86_64-unknown-linux-sgx/debug/incremental
+    # Shared Rust package checkouts directory.
+    - /var/tmp/cargo_pkg/git:/root/.cargo/git
+    - /var/tmp/cargo_pkg/registry:/root/.cargo/registry
+    # Shared Rust SGX standard library artifacts cache.
+    - /var/tmp/xargo_cache:/root/.xargo
+    # Shared Go package checkouts directory.
+    - /var/tmp/go_pkg:/root/go/pkg
+    # Intel SGX Application Enclave Services Manager (AESM) daemon running on
+    # the Buildkite host.
+    - /var/run/aesmd/aesm.socket:/var/run/aesmd/aesm.socket
+    - /var/tmp/benchmarks:/var/tmp/benchmarks
+  environment:
+    - "LC_ALL=C.UTF-8"
+    - "LANG=C.UTF-8"
+    - "CARGO_TARGET_DIR=/var/tmp/artifacts"
+    - "CARGO_INSTALL_ROOT=/root/.cargo"
+    - "GOPROXY=https://proxy.golang.org/"
+    - "BUILDKITE_PIPELINE_NAME"
+    - "BUILDKITE_BUILD_NUMBER"
+    - "BUILDKITE_BUILD_URL"
+    - "TESTS"
+    - "NUM_RUNS"
+    - "SLACK_WEBHOOK_URL"
+    - "METRICS_PUSH_ADDR"
+    - "METRICS_QUERY_ADDR"
+    - "METRICS_SOURCE_GIT_BRANCH"
+    - "METRICS_TARGET_GIT_BRANCH"
+    - "METRICS_THRESHOLDS"
+  propagate-environment: true
+  unconfined: true
+
+docker_plugin: &docker_plugin
+  oasislabs/docker#v3.0.1-oasis1:
+    <<: *docker_plugin_default_config
+
+steps:
+  ###############################################################
+  # The following three steps are copied from code.pipeline.yml #
+  ###############################################################
+  ############
+  # Build jobs
+  ############
+  - label: Build Go node
+    command:
+      - .buildkite/go/build.sh
+
+      # Upload the built artifacts.
+      - cd /workdir/go/oasis-node
+      - buildkite-agent artifact upload oasis-node
+      - buildkite-agent artifact upload oasis-node.test
+      - cd /workdir/go/oasis-test-runner
+      - buildkite-agent artifact upload oasis-test-runner
+      - buildkite-agent artifact upload oasis-test-runner.test
+      - cd /workdir/go/oasis-net-runner
+      - buildkite-agent artifact upload oasis-net-runner
+      - cd /workdir/go/oasis-remote-signer
+      - buildkite-agent artifact upload oasis-remote-signer
+    plugins:
+      <<: *docker_plugin
+
+  - label: Build Rust runtime loader
+    command:
+      - .buildkite/rust/build_generic.sh /workdir -p oasis-core-runtime-loader
+      - .buildkite/rust/build_generic.sh /workdir -p test-long-term-client
+      - .buildkite/rust/build_generic.sh /workdir -p simple-keyvalue-client
+      - .buildkite/rust/build_generic.sh /workdir -p simple-keyvalue-enc-client
+      - .buildkite/rust/build_generic.sh /workdir -p simple-keyvalue-ops-client
+
+      # Upload the built artifacts.
+      - cd /var/tmp/artifacts/default/debug
+      - buildkite-agent artifact upload oasis-core-runtime-loader
+      # Clients for E2E tests.
+      - buildkite-agent artifact upload test-long-term-client
+      - buildkite-agent artifact upload simple-keyvalue-client
+      - buildkite-agent artifact upload simple-keyvalue-enc-client
+      - buildkite-agent artifact upload simple-keyvalue-ops-client
+    agents:
+      buildkite_agent_size: large
+    plugins:
+      <<: *docker_plugin
+
+  ####################
+  # Runtime build jobs
+  ####################
+  - label: Build key manager runtime
+    command:
+      - .buildkite/rust/build_runtime.sh tests/runtimes/simple-keymanager
+      - .buildkite/rust/build_runtime.sh tests/runtimes/simple-keyvalue
+
+      # Upload the built artifacts.
+      - cd /var/tmp/artifacts/sgx/x86_64-fortanix-unknown-sgx/debug
+      - buildkite-agent artifact upload simple-keymanager.sgxs
+      - buildkite-agent artifact upload simple-keyvalue.sgxs
+      - cd /var/tmp/artifacts/default/debug
+      - buildkite-agent artifact upload simple-keymanager
+      - buildkite-agent artifact upload simple-keyvalue
+    agents:
+      buildkite_agent_size: large
+    plugins:
+      <<: *docker_plugin
+
+  # Wait for all jobs defined before this point
+  # to finish running in parallel before continuing.
+  - wait
+
+  #########################################
+  # E2E test jobs with enabled benchmarking
+  #########################################
+  - label: E2E tests
+    parallelism: 7
+    timeout_in_minutes: 30
+    command:
+      - .buildkite/scripts/download_e2e_test_artifacts.sh
+      - rm -rf /var/tmp/benchmarks/*
+      - .buildkite/scripts/test_e2e.sh --metrics.address $METRICS_PUSH_ADDR --metrics.interval 5s --metrics.labels instance=\$BUILDKITE_PIPELINE_NAME-\$BUILDKITE_BUILD_NUMBER --num_runs $NUM_RUNS -t $TESTS
+    env:
+      TEST_BASE_DIR: /var/tmp/benchmarks
+    agents:
+      buildkite_agent_size: large
+      buildkite_agent_class: stable
+    plugins:
+      <<: *docker_plugin
+
+  # Wait for all jobs defined before this point
+  # to finish running in parallel before continuing.
+  - wait
+
+  ###########################
+  # Compare benchmark results
+  ###########################
+  - label: Benchmark analysis
+    command:
+      - .buildkite/scripts/download_e2e_test_artifacts.sh
+      - .buildkite/scripts/daily_benchmark_analysis.sh
+    plugins:
+      <<: *docker_plugin

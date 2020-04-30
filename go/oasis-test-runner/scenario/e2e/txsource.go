@@ -37,7 +37,7 @@ const (
 
 // TxSourceMultiShort uses multiple workloads for a short time.
 var TxSourceMultiShort scenario.Scenario = &txSourceImpl{
-	basicImpl: *newBasicImpl("txsource-multi-short", "", nil),
+	runtimeImpl: *newRuntimeImpl("txsource-multi-short", "", nil),
 	workloads: []string{
 		workload.NameCommission,
 		workload.NameDelegation,
@@ -57,7 +57,7 @@ var TxSourceMultiShort scenario.Scenario = &txSourceImpl{
 
 // TxSourceMulti uses multiple workloads.
 var TxSourceMulti scenario.Scenario = &txSourceImpl{
-	basicImpl: *newBasicImpl("txsource-multi", "", nil),
+	runtimeImpl: *newRuntimeImpl("txsource-multi", "", nil),
 	workloads: []string{
 		workload.NameCommission,
 		workload.NameDelegation,
@@ -81,7 +81,7 @@ var TxSourceMulti scenario.Scenario = &txSourceImpl{
 }
 
 type txSourceImpl struct { // nolint: maligned
-	basicImpl
+	runtimeImpl
 
 	workloads             []string
 	timeLimit             time.Duration
@@ -100,17 +100,19 @@ type txSourceImpl struct { // nolint: maligned
 
 func (sc *txSourceImpl) PreInit(childEnv *env.Env) error {
 	// Generate a new random seed and log it so we can reproduce the run.
-	// TODO: Allow the seed to be overriden in order to reproduce randomness (minus timing).
-	rawSeed := make([]byte, 16)
-	_, err := cryptoRand.Read(rawSeed)
-	if err != nil {
-		return fmt.Errorf("failed to generate random seed: %w", err)
-	}
-	sc.seed = hex.EncodeToString(rawSeed)
+	// Use existing seed, if it already exists.
+	if sc.seed == "" {
+		rawSeed := make([]byte, 16)
+		_, err := cryptoRand.Read(rawSeed)
+		if err != nil {
+			return fmt.Errorf("failed to generate random seed: %w", err)
+		}
+		sc.seed = hex.EncodeToString(rawSeed)
 
-	sc.logger.Info("using random seed",
-		"seed", sc.seed,
-	)
+		sc.logger.Info("using random seed",
+			"seed", sc.seed,
+		)
+	}
 
 	// Set up the deterministic random source.
 	hash := crypto.SHA512
@@ -136,7 +138,7 @@ func (sc *txSourceImpl) generateConsensusFixture(f *oasis.ConsensusFixture) {
 }
 
 func (sc *txSourceImpl) Fixture() (*oasis.NetworkFixture, error) {
-	f, err := sc.basicImpl.Fixture()
+	f, err := sc.runtimeImpl.Fixture()
 	if err != nil {
 		return nil, err
 	}
@@ -191,11 +193,6 @@ func (sc *txSourceImpl) Fixture() (*oasis.NetworkFixture, error) {
 	}
 
 	return f, nil
-}
-
-func (sc *txSourceImpl) Init(childEnv *env.Env, net *oasis.Network) error {
-	sc.net = net
-	return nil
 }
 
 func (sc *txSourceImpl) manager(env *env.Env, errCh chan error) {
@@ -340,6 +337,22 @@ func (sc *txSourceImpl) startWorkload(childEnv *env.Env, errCh chan error, name 
 	}()
 
 	return nil
+}
+
+func (sc *txSourceImpl) Clone() scenario.Scenario {
+	return &txSourceImpl{
+		runtimeImpl:                       *sc.runtimeImpl.Clone().(*runtimeImpl),
+		workloads:                         sc.workloads,
+		timeLimit:                         sc.timeLimit,
+		nodeRestartInterval:               sc.nodeRestartInterval,
+		livenessCheckInterval:             sc.livenessCheckInterval,
+		consensusPruneDisabledProbability: sc.consensusPruneDisabledProbability,
+		consensusPruneMinKept:             sc.consensusPruneMinKept,
+		consensusPruneMaxKept:             sc.consensusPruneMaxKept,
+		tendermintRecoverCorruptedWAL:     sc.tendermintRecoverCorruptedWAL,
+		seed:                              sc.seed,
+		// rng must always be reinitialized from seed by calling PreInit().
+	}
 }
 
 func (sc *txSourceImpl) Run(childEnv *env.Env) error {
