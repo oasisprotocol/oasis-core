@@ -50,6 +50,10 @@ type ChunkProvider interface {
 type GetCheckpointsRequest struct {
 	Version   uint16           `json:"version"`
 	Namespace common.Namespace `json:"namespace"`
+
+	// RootVersion specifies an optional root version to limit the request to. If specified, only
+	// checkpoints for roots with the specific version will be considered.
+	RootVersion *uint64 `json:"root_version,omitempty"`
 }
 
 // Creator is a checkpoint creator.
