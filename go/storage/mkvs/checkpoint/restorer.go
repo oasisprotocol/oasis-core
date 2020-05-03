@@ -40,6 +40,18 @@ func (rs *restorer) StartRestore(ctx context.Context, checkpoint *Metadata) erro
 	return nil
 }
 
+func (rs *restorer) GetCurrentCheckpoint() *Metadata {
+	rs.Lock()
+	defer rs.Unlock()
+
+	if rs.currentCheckpoint == nil {
+		return nil
+	}
+
+	cp := *rs.currentCheckpoint
+	return &cp
+}
+
 // Implements Restorer.
 func (rs *restorer) RestoreChunk(ctx context.Context, idx uint64, r io.Reader) (bool, error) {
 	chunk, err := func() (*ChunkMetadata, error) {

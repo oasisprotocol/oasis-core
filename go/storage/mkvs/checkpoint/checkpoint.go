@@ -87,6 +87,10 @@ type Restorer interface {
 	// StartRestore starts a checkpoint restoration process.
 	StartRestore(ctx context.Context, checkpoint *Metadata) error
 
+	// GetCurrentCheckpoint returns the checkpoint that is being restored. If no restoration is in
+	// progress, this method may return nil.
+	GetCurrentCheckpoint() *Metadata
+
 	// RestoreChunk restores the given chunk into the underlying node database.
 	//
 	// This method requires that a restoration is in progress.
