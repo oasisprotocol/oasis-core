@@ -133,16 +133,25 @@ type Metadata struct {
 	Chunks  []hash.Hash `json:"chunks"`
 }
 
+// EncodedHash returns the encoded cryptographic hash of the checkpoint metadata.
+func (m *Metadata) EncodedHash() hash.Hash {
+	var hh hash.Hash
+
+	hh.From(m)
+
+	return hh
+}
+
 // GetChunkMetadata returns the chunk metadata for the corresponding chunk.
-func (c Metadata) GetChunkMetadata(idx uint64) (*ChunkMetadata, error) {
-	if idx >= uint64(len(c.Chunks)) {
+func (m Metadata) GetChunkMetadata(idx uint64) (*ChunkMetadata, error) {
+	if idx >= uint64(len(m.Chunks)) {
 		return nil, ErrChunkNotFound
 	}
 
 	return &ChunkMetadata{
-		Version: c.Version,
-		Root:    c.Root,
+		Version: m.Version,
+		Root:    m.Root,
 		Index:   idx,
-		Digest:  c.Chunks[int(idx)],
+		Digest:  m.Chunks[int(idx)],
 	}, nil
 }
