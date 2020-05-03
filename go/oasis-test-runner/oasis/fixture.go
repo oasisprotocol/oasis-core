@@ -133,6 +133,9 @@ type ConsensusFixture struct { // nolint: maligned
 
 	// TendermintRecoverCorruptedWAL enables automatic recovery of corrupted Tendermint's WAL.
 	TendermintRecoverCorruptedWAL bool `json:"tendermint_recover_corrupted_wal"`
+
+	// EnableConsensusRPCWorker enables the public consensus RPC services worker.
+	EnableConsensusRPCWorker bool `json:"enable_consensusrpc_worker,omitempty"`
 }
 
 // TEEFixture is a TEE configuration fixture.

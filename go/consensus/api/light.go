@@ -36,9 +36,8 @@ type ValidatorSet struct {
 type Parameters struct {
 	// Height contains the block height these consensus parameters are for.
 	Height int64 `json:"height"`
-
-	// TODO: Consider also including consensus/genesis.Parameters which are backend-agnostic.
-
 	// Meta contains the consensus backend specific consensus parameters.
 	Meta []byte `json:"meta"`
+
+	// TODO: Consider also including consensus/genesis.Parameters which are backend-agnostic.
 }

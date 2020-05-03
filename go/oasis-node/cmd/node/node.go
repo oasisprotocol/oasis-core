@@ -61,6 +61,7 @@ import (
 	"github.com/oasislabs/oasis-core/go/worker/compute/executor"
 	"github.com/oasislabs/oasis-core/go/worker/compute/merge"
 	"github.com/oasislabs/oasis-core/go/worker/compute/txnscheduler"
+	workerConsensusRPC "github.com/oasislabs/oasis-core/go/worker/consensusrpc"
 	workerKeymanager "github.com/oasislabs/oasis-core/go/worker/keymanager"
 	"github.com/oasislabs/oasis-core/go/worker/registration"
 	workerSentry "github.com/oasislabs/oasis-core/go/worker/sentry"
@@ -126,6 +127,7 @@ type Node struct {
 	P2P                        *p2p.P2P
 	RegistrationWorker         *registration.Worker
 	KeymanagerWorker           *workerKeymanager.Worker
+	ConsensusWorker            *workerConsensusRPC.Worker
 }
 
 // Cleanup cleans up after the node has terminated.
@@ -340,6 +342,13 @@ func (n *Node) initWorkers(logger *logging.Logger) error {
 	}
 	n.svcMgr.Register(n.TransactionSchedulerWorker)
 
+	// Initialize the public consensus services worker.
+	n.ConsensusWorker, err = workerConsensusRPC.New(n.CommonWorker, n.RegistrationWorker)
+	if err != nil {
+		return err
+	}
+	n.svcMgr.Register(n.ConsensusWorker)
+
 	return nil
 }
 
@@ -384,8 +393,18 @@ func (n *Node) startWorkers(logger *logging.Logger) error {
 		return err
 	}
 
+	// Start the public consensus services worker.
+	if err := n.ConsensusWorker.Start(); err != nil {
+		return fmt.Errorf("consensus worker: %w", err)
+	}
+
 	// Only start the external gRPC server if any workers are enabled.
-	if n.StorageWorker.Enabled() || n.TransactionSchedulerWorker.Enabled() || n.MergeWorker.Enabled() || n.KeymanagerWorker.Enabled() {
+	if n.StorageWorker.Enabled() ||
+		n.TransactionSchedulerWorker.Enabled() ||
+		n.MergeWorker.Enabled() ||
+		n.KeymanagerWorker.Enabled() ||
+		n.ConsensusWorker.Enabled() {
+
 		if err := n.CommonWorker.Grpc.Start(); err != nil {
 			logger.Error("failed to start external gRPC server",
 				"err", err,
@@ -793,6 +812,7 @@ func init() {
 		workerCommon.Flags,
 		workerStorage.Flags,
 		workerSentry.Flags,
+		workerConsensusRPC.Flags,
 		crash.InitFlags(),
 	} {
 		Flags.AddFlagSet(v)

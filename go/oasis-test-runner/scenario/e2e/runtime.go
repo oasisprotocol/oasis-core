@@ -193,9 +193,9 @@ func (sc *runtimeImpl) Fixture() (*oasis.NetworkFixture, error) {
 			},
 		},
 		Validators: []oasis.ValidatorFixture{
-			oasis.ValidatorFixture{Entity: 1},
-			oasis.ValidatorFixture{Entity: 1},
-			oasis.ValidatorFixture{Entity: 1},
+			oasis.ValidatorFixture{Entity: 1, Consensus: oasis.ConsensusFixture{EnableConsensusRPCWorker: true}},
+			oasis.ValidatorFixture{Entity: 1, Consensus: oasis.ConsensusFixture{EnableConsensusRPCWorker: true}},
+			oasis.ValidatorFixture{Entity: 1, Consensus: oasis.ConsensusFixture{EnableConsensusRPCWorker: true}},
 		},
 		KeymanagerPolicies: []oasis.KeymanagerPolicyFixture{
 			oasis.KeymanagerPolicyFixture{Runtime: 0, Serial: 1},

@@ -69,18 +69,20 @@ type Node struct {
 type RolesMask uint32
 
 const (
-	// RoleComputeWorker is Oasis compute worker role.
+	// RoleComputeWorker is the compute worker role.
 	RoleComputeWorker RolesMask = 1 << 0
-	// RoleStorageWorker is Oasis storage worker role.
+	// RoleStorageWorker is the storage worker role.
 	RoleStorageWorker RolesMask = 1 << 1
-	// RoleKeyManager is the Oasis key manager role.
+	// RoleKeyManager is the the key manager role.
 	RoleKeyManager RolesMask = 1 << 2
-	// RoleValidator is the Oasis validator role.
+	// RoleValidator is the validator role.
 	RoleValidator RolesMask = 1 << 3
+	// RoleConsensusRPC is the public consensus RPC services worker role.
+	RoleConsensusRPC RolesMask = 1 << 4
 
 	// RoleReserved are all the bits of the Oasis node roles bitmask
 	// that are reserved and must not be used.
-	RoleReserved RolesMask = ((1 << 32) - 1) & ^((RoleValidator << 1) - 1)
+	RoleReserved RolesMask = ((1 << 32) - 1) & ^((RoleConsensusRPC << 1) - 1)
 )
 
 // IsSingleRole returns true if RolesMask encodes a single valid role.
@@ -102,10 +104,13 @@ func (m RolesMask) String() string {
 		ret = append(ret, "storage")
 	}
 	if m&RoleKeyManager != 0 {
-		ret = append(ret, "key_manager")
+		ret = append(ret, "key-manager")
 	}
 	if m&RoleValidator != 0 {
 		ret = append(ret, "validator")
+	}
+	if m&RoleConsensusRPC != 0 {
+		ret = append(ret, "consensus-rpc")
 	}
 
 	return strings.Join(ret, ",")

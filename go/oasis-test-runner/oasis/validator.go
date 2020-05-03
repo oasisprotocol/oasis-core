@@ -25,6 +25,7 @@ type Validator struct {
 
 	tmAddress     string
 	consensusPort uint16
+	clientPort    uint16
 }
 
 // ValidatorCfg is the Oasis validator provisioning configuration.
@@ -66,6 +67,11 @@ func (val *Validator) ExportsPath() string {
 	return nodeExportsPath(val.dir)
 }
 
+// ExternalGRPCAddress returns the address of the node's external gRPC server.
+func (val *Validator) ExternalGRPCAddress() string {
+	return fmt.Sprintf("127.0.0.1:%d", val.clientPort)
+}
+
 // Start starts an Oasis node.
 func (val *Validator) Start() error {
 	return val.startNode()
@@ -90,6 +96,10 @@ func (val *Validator) startNode() error {
 			tendermintDisablePeerExchange()
 	} else {
 		args = args.appendSeedNodes(val.net)
+	}
+	if val.consensus.EnableConsensusRPCWorker {
+		args = args.workerClientPort(val.clientPort).
+			workerConsensusRPCEnabled()
 	}
 
 	if len(val.net.validators) >= 1 && val == val.net.validators[0] {
@@ -130,6 +140,7 @@ func (net *Network) NewValidator(cfg *ValidatorCfg) (*Validator, error) {
 		entity:        cfg.Entity,
 		sentries:      cfg.Sentries,
 		consensusPort: net.nextNodePort,
+		clientPort:    net.nextNodePort + 1,
 	}
 	val.doStartNode = val.startNode
 
@@ -191,7 +202,7 @@ func (net *Network) NewValidator(cfg *ValidatorCfg) (*Validator, error) {
 	}
 
 	net.validators = append(net.validators, val)
-	net.nextNodePort++
+	net.nextNodePort += 2
 
 	if err := net.AddLogWatcher(&val.Node); err != nil {
 		net.logger.Error("failed to add log watcher",
