@@ -1273,7 +1273,7 @@ func (t *fullService) syncWorker() {
 			}
 		}()
 
-		return t.node.ConsensusReactor().FastSync(), nil
+		return t.node.ConsensusReactor().WaitSync(), nil
 	}
 
 	for {

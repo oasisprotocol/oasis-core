@@ -37,20 +37,20 @@ func (app *schedulerApplication) InitChain(ctx *abciAPI.Context, req types.Reque
 		staticValidators := make(map[signature.PublicKey]int64)
 		for _, v := range req.Validators {
 			tmPk := v.GetPubKey()
+			pk := tmPk.GetEd25519()
 
-			if t := tmPk.GetType(); t != types.PubKeyEd25519 {
+			if pk == nil {
 				ctx.Logger().Error("invalid static validator public key type",
-					"public_key", hex.EncodeToString(tmPk.GetData()),
-					"type", t,
+					"type", v.GetPubKey(),
 				)
-				return fmt.Errorf("scheduler: invalid static validator public key type: '%v'", t)
+				return fmt.Errorf("scheduler: invalid static validator public key type: '%v'", v.GetPubKey())
 			}
 
 			var id signature.PublicKey
-			if err = id.UnmarshalBinary(tmPk.GetData()); err != nil {
+			if err = id.UnmarshalBinary(pk); err != nil {
 				ctx.Logger().Error("invalid static validator public key",
 					"err", err,
-					"public_key", hex.EncodeToString(tmPk.GetData()),
+					"public_key", hex.EncodeToString(pk),
 				)
 				return fmt.Errorf("scheduler: invalid static validator public key: %w", err)
 			}
@@ -103,20 +103,20 @@ func (app *schedulerApplication) InitChain(ctx *abciAPI.Context, req types.Reque
 	currentValidators := make(map[signature.PublicKey]int64)
 	for _, v := range req.Validators {
 		tmPk := v.GetPubKey()
+		pk := tmPk.GetEd25519()
 
-		if t := tmPk.GetType(); t != types.PubKeyEd25519 {
+		if pk == nil {
 			ctx.Logger().Error("invalid genesis validator public key type",
-				"public_key", hex.EncodeToString(tmPk.GetData()),
-				"type", t,
+				"type", v.GetPubKey(),
 			)
-			return fmt.Errorf("scheduler: invalid genesis validator public key type: '%v'", t)
+			return fmt.Errorf("scheduler: invalid genesis validator public key type: '%v'", v.GetPubKey())
 		}
 
 		var id signature.PublicKey
-		if err = id.UnmarshalBinary(tmPk.GetData()); err != nil {
+		if err = id.UnmarshalBinary(pk); err != nil {
 			ctx.Logger().Error("invalid genesis validator public key",
 				"err", err,
-				"public_key", hex.EncodeToString(tmPk.GetData()),
+				"public_key", hex.EncodeToString(pk),
 			)
 			return fmt.Errorf("scheduler: invalid genesis validator public key: %w", err)
 		}

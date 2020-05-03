@@ -5,12 +5,14 @@ import (
 	"fmt"
 	"time"
 
+	tmproto "github.com/tendermint/tendermint/proto/tendermint/types"
 	tmtypes "github.com/tendermint/tendermint/types"
 
 	"github.com/oasisprotocol/oasis-core/go/common/node"
 	"github.com/oasisprotocol/oasis-core/go/common/quantity"
 	"github.com/oasisprotocol/oasis-core/go/consensus/tendermint/crypto"
 	genesis "github.com/oasisprotocol/oasis-core/go/genesis/api"
+	cmdFlags "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/flags"
 	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
 	scheduler "github.com/oasisprotocol/oasis-core/go/scheduler/api"
 	staking "github.com/oasisprotocol/oasis-core/go/staking/api"
@@ -69,20 +71,36 @@ func genesisToTendermint(d *genesis.Document) (*tmtypes.GenesisDoc, error) {
 		maxBlockGas = -1
 	}
 
+	// Automatically compute evidence parameters based on debonding period.
+	debondingInterval := int64(d.Staking.Parameters.DebondingInterval)
+	if debondingInterval == 0 && cmdFlags.DebugDontBlameOasis() {
+		// Use a default of 1 epoch in case debonding is disabled and we are using debug mode. If
+		// not in debug mode, this will just cause startup to fail which is good.
+		debondingInterval = 1
+	}
+	epochInterval := d.EpochTime.Parameters.Interval
+	if epochInterval == 0 && cmdFlags.DebugDontBlameOasis() && d.EpochTime.Parameters.DebugMockBackend {
+		// Use a default of 100 blocks in case epoch interval is unset and we are using debug mode.
+		epochInterval = 100
+	}
+
+	var evCfg tmproto.EvidenceParams
+	evCfg.MaxNum = d.Consensus.Parameters.MaxEvidenceNum
+	evCfg.MaxAgeNumBlocks = debondingInterval * epochInterval
+	evCfg.MaxAgeDuration = time.Duration(evCfg.MaxAgeNumBlocks) * (d.Consensus.Parameters.TimeoutCommit + 1*time.Second)
+	evCfg.ProofTrialPeriod = evCfg.MaxAgeNumBlocks / 2
+
 	doc := tmtypes.GenesisDoc{
 		ChainID:     d.ChainContext()[:tmtypes.MaxChainIDLen],
 		GenesisTime: d.Time,
-		ConsensusParams: &tmtypes.ConsensusParams{
-			Block: tmtypes.BlockParams{
+		ConsensusParams: &tmproto.ConsensusParams{
+			Block: tmproto.BlockParams{
 				MaxBytes:   int64(d.Consensus.Parameters.MaxBlockSize),
 				MaxGas:     maxBlockGas,
 				TimeIotaMs: 1000,
 			},
-			Evidence: tmtypes.EvidenceParams{
-				MaxAgeNumBlocks: int64(d.Consensus.Parameters.MaxEvidenceAgeBlocks),
-				MaxAgeDuration:  d.Consensus.Parameters.MaxEvidenceAgeTime,
-			},
-			Validator: tmtypes.ValidatorParams{
+			Evidence: evCfg,
+			Validator: tmproto.ValidatorParams{
 				PubKeyTypes: []string{tmtypes.ABCIPubKeyTypeEd25519},
 			},
 		},

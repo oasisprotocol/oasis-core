@@ -12,17 +12,17 @@ var tendermintSignatureContext = signature.NewContext("oasis-core/tendermint")
 
 // PublicKeyToTendermint converts a signature.PublicKey to the
 // tendermint equivalent.
-func PublicKeyToTendermint(k *signature.PublicKey) tmed.PubKeyEd25519 {
-	var tk tmed.PubKeyEd25519
+func PublicKeyToTendermint(k *signature.PublicKey) tmed.PubKey {
+	tk := make(tmed.PubKey, tmed.PubKeySize)
 	copy(tk[:], (*k)[:])
 	return tk
 }
 
 // PublicKeyFromTendermint converts a tendermint public key to a
 // signature.PublicKey.
-func PublicKeyFromTendermint(tk *tmed.PubKeyEd25519) signature.PublicKey {
+func PublicKeyFromTendermint(tk *tmed.PubKey) signature.PublicKey {
 	var k signature.PublicKey
-	_ = k.UnmarshalBinary(tk[:])
+	_ = k.UnmarshalBinary(tk.Bytes())
 	return k
 }
 
@@ -54,6 +54,10 @@ func (s *tmSigner) PubKey() crypto.PubKey {
 
 func (s *tmSigner) Equals(other crypto.PrivKey) bool {
 	return s.PubKey().Equals(other.PubKey())
+}
+
+func (s *tmSigner) Type() string {
+	return "ed25519"
 }
 
 func init() {

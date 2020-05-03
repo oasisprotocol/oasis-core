@@ -86,8 +86,7 @@ const (
 	cfgConsensusMaxTxSizeBytes           = "consensus.tendermint.max_tx_size"
 	cfgConsensusMaxBlockSizeBytes        = "consensus.tendermint.max_block_size"
 	cfgConsensusMaxBlockGas              = "consensus.tendermint.max_block_gas"
-	cfgConsensusMaxEvidenceAgeBlocks     = "consensus.tendermint.max_evidence_age_blocks"
-	cfgConsensusMaxEvidenceAgeTime       = "consensus.tendermint.max_evidence_age_time"
+	cfgConsensusMaxEvidenceNum           = "consensus.tendermint.max_evidence_num"
 	cfgConsensusStateCheckpointInterval  = "consensus.state_checkpoint.interval"
 	cfgConsensusStateCheckpointNumKept   = "consensus.state_checkpoint.num_kept"
 	cfgConsensusStateCheckpointChunkSize = "consensus.state_checkpoint.chunk_size"
@@ -241,8 +240,7 @@ func doInitGenesis(cmd *cobra.Command, args []string) {
 			MaxTxSize:                uint64(viper.GetSizeInBytes(cfgConsensusMaxTxSizeBytes)),
 			MaxBlockSize:             uint64(viper.GetSizeInBytes(cfgConsensusMaxBlockSizeBytes)),
 			MaxBlockGas:              transaction.Gas(viper.GetUint64(cfgConsensusMaxBlockGas)),
-			MaxEvidenceAgeBlocks:     viper.GetUint64(cfgConsensusMaxEvidenceAgeBlocks),
-			MaxEvidenceAgeTime:       viper.GetDuration(cfgConsensusMaxEvidenceAgeTime),
+			MaxEvidenceNum:           viper.GetUint32(cfgConsensusMaxEvidenceNum),
 			StateCheckpointInterval:  viper.GetUint64(cfgConsensusStateCheckpointInterval),
 			StateCheckpointNumKept:   viper.GetUint64(cfgConsensusStateCheckpointNumKept),
 			StateCheckpointChunkSize: uint64(viper.GetSizeInBytes(cfgConsensusStateCheckpointChunkSize)),
@@ -696,8 +694,7 @@ func init() {
 	initGenesisFlags.String(cfgConsensusMaxTxSizeBytes, "32kb", "tendermint maximum transaction size (in bytes)")
 	initGenesisFlags.String(cfgConsensusMaxBlockSizeBytes, "21mb", "tendermint maximum block size (in bytes)")
 	initGenesisFlags.Uint64(cfgConsensusMaxBlockGas, 0, "tendermint max gas used per block")
-	initGenesisFlags.Uint64(cfgConsensusMaxEvidenceAgeBlocks, 100000, "tendermint max evidence age (in blocks)")
-	initGenesisFlags.Duration(cfgConsensusMaxEvidenceAgeTime, 48*time.Hour, "tendermint max evidence age (in time)")
+	initGenesisFlags.Uint32(cfgConsensusMaxEvidenceNum, 50, "tendermint max evidence num")
 	initGenesisFlags.Uint64(cfgConsensusStateCheckpointInterval, 10000, "consensus state checkpoint interval (in blocks)")
 	initGenesisFlags.Uint64(cfgConsensusStateCheckpointNumKept, 2, "number of kept consensus state checkpoints")
 	initGenesisFlags.String(cfgConsensusStateCheckpointChunkSize, "8mb", "consensus state checkpoint chunk size (in bytes)")
