@@ -68,7 +68,7 @@ type nodeUpgradeImpl struct {
 
 func (sc *nodeUpgradeImpl) writeDescriptor(name string, content []byte) (string, error) {
 	filePath := path.Join(sc.net.BasePath(), "upgrade-"+name+".json")
-	if err := ioutil.WriteFile(filePath, content, 0644); err != nil {
+	if err := ioutil.WriteFile(filePath, content, 0644); err != nil { //nolint: gosec
 		sc.logger.Error("can't write descriptor to network directory",
 			"err", err,
 			"name", name,

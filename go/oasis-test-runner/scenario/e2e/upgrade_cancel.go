@@ -126,7 +126,7 @@ func (sc *nodeUpgradeCancelImpl) Run(childEnv *env.Env) error {
 	descriptor := fmt.Sprintf(descriptorTemplate, nodeHash.String())
 
 	filePath := path.Join(sc.net.BasePath(), "upgrade-descriptor.json")
-	if err = ioutil.WriteFile(filePath, []byte(descriptor), 0644); err != nil {
+	if err = ioutil.WriteFile(filePath, []byte(descriptor), 0644); err != nil { //nolint: gosec
 		return fmt.Errorf("can't write descriptor to network directory: %w", err)
 	}
 
