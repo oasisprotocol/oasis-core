@@ -80,7 +80,7 @@ impl serde::Serialize for LogEntry {
 pub type WriteLog = Vec<LogEntry>;
 
 /// A key prefix.
-#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, Default, Eq, PartialEq, PartialOrd, Ord, Serialize, Deserialize)]
 pub struct Prefix(#[serde(with = "serde_bytes")] Vec<u8>);
 
 impl AsRef<[u8]> for Prefix {

@@ -42,12 +42,12 @@ impl<'a> Context<'a> {
     }
 
     /// Start a new transaction.
-    pub(crate) fn start_transaction(&mut self) {
+    pub fn start_transaction(&mut self) {
         self.tags.push(Tags::new());
     }
 
     /// Close the context and return the emitted tags and sent roothash messages.
-    pub(crate) fn close(self) -> (Vec<Tags>, Vec<Message>) {
+    pub fn close(self) -> (Vec<Tags>, Vec<Message>) {
         (self.tags, self.messages)
     }
 
