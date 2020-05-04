@@ -3,10 +3,7 @@ package ias
 
 import (
 	"context"
-	"crypto/tls"
-	"crypto/x509"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"strings"
@@ -31,10 +28,10 @@ import (
 )
 
 const (
-	cfgAuthCertFile  = "ias.auth.cert"
-	cfgAuthKeyFile   = "ias.auth.cert.key"
-	cfgAuthCertCA    = "ias.auth.cert.ca"
+	envAuthAPIKey    = "OASIS_IAS_APIKEY"
+	cfgAuthAPIKey    = "ias.auth.api_key"
 	cfgIsProduction  = "ias.production"
+	envSPID          = "OASIS_IAS_SPID"
 	cfgSPID          = "ias.spid"
 	cfgQuoteSigType  = "ias.quote.signature_type"
 	cfgDebugMock     = "ias.debug.mock"
@@ -209,35 +206,18 @@ func iasEndpointFromFlags() (ias.Endpoint, error) {
 		return nil, fmt.Errorf("ias: invalid signature type: %s", quoteSigType)
 	}
 
-	if !viper.GetBool(cfgDebugMock) {
-		if authCertCA := viper.GetString(cfgAuthCertCA); authCertCA != "" {
-			certData, err := ioutil.ReadFile(authCertCA)
-			if err != nil {
-				return nil, err
-			}
-
-			cfg.AuthCertCA, _, err = cmnIAS.CertFromPEM(certData)
-			if err != nil {
-				return nil, err
-			}
-		}
-
-		authCert, err := tls.LoadX509KeyPair(viper.GetString(cfgAuthCertFile), viper.GetString(cfgAuthKeyFile))
-		if err != nil {
-			return nil, fmt.Errorf("ias: failed to load client certificate: %s", err)
-		}
-		authCert.Leaf, err = x509.ParseCertificate(authCert.Certificate[0])
-		if err != nil {
-			return nil, fmt.Errorf("ias: failed to parse client leaf certificate: %s", err)
-		}
-		cfg.AuthCert = &authCert
-
-		cfg.IsProduction = viper.GetBool(cfgIsProduction)
-	} else {
+	if viper.GetBool(cfgDebugMock) {
 		if !flags.DebugDontBlameOasis() {
 			return nil, fmt.Errorf("ias: refusing to mock IAS responses")
 		}
 		cfg.DebugIsMock = true
+	} else {
+		apiKey := viper.GetString(cfgAuthAPIKey)
+		if apiKey == "" {
+			return nil, fmt.Errorf("ias: missing IAS Client API key")
+		}
+		cfg.SubscriptionKey = apiKey
+		cfg.IsProduction = viper.GetBool(cfgIsProduction)
 	}
 
 	return iasHTTP.New(cfg)
@@ -267,9 +247,7 @@ func Register(parentCmd *cobra.Command) {
 }
 
 func init() {
-	proxyFlags.String(cfgAuthCertFile, "", "the file with the client certificate")
-	proxyFlags.String(cfgAuthKeyFile, "", "the file with the client private key")
-	proxyFlags.String(cfgAuthCertCA, "", "the file with the CA that signed the client certificate")
+	proxyFlags.String(cfgAuthAPIKey, "", "the IAS subscription API key")
 	proxyFlags.String(cfgSPID, "", "SPID associated with the client certificate")
 	proxyFlags.String(cfgQuoteSigType, "linkable", "quote signature type associated with the SPID")
 	proxyFlags.Bool(cfgIsProduction, false, "use the production IAS endpoint")
@@ -280,6 +258,9 @@ func init() {
 
 	_ = proxyFlags.MarkHidden(cfgDebugMock)
 	_ = proxyFlags.MarkHidden(cfgDebugSkipAuth)
+
+	_ = viper.BindEnv(cfgAuthAPIKey, envAuthAPIKey)
+	_ = viper.BindEnv(cfgSPID, envSPID)
 
 	_ = viper.BindPFlags(proxyFlags)
 	proxyFlags.AddFlagSet(metrics.Flags)

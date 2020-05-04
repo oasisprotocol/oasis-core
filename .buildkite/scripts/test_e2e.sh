@@ -41,6 +41,11 @@ if [[ ${OASIS_E2E_COVERAGE:-""} != "" ]]; then
     node_binary="${WORKDIR}/scripts/e2e-coverage-wrapper-env.sh"
 fi
 
+ias_mock="true"
+if [[ ${OASIS_IAS_APIKEY:-""} != "" ]]; then
+    ias_mock="false"
+fi
+
 # Run Oasis test runner.
 ${test_runner_binary} \
     ${BUILDKITE:+--basedir ${TEST_BASE_DIR:-$PWD}/e2e} \
@@ -50,6 +55,9 @@ ${test_runner_binary} \
     --e2e/runtime.runtime.binary_dir ${WORKDIR}/target/${runtime_target}/debug \
     --e2e/runtime.runtime.loader ${WORKDIR}/target/default/debug/oasis-core-runtime-loader \
     --e2e/runtime.tee_hardware ${OASIS_TEE_HARDWARE:-""} \
+    --e2e/runtime.ias.mock=${ias_mock} \
+    ${OASIS_IAS_SPID:+--e2e/runtime.ias.spid ${OASIS_IAS_SPID}} \
+    ${OASIS_IAS_APIKEY:+--e2e/runtime.ias.api_key ${OASIS_IAS_APIKEY}} \
     --remote-signer.binary ${WORKDIR}/go/oasis-remote-signer/oasis-remote-signer \
     --log.level info \
     ${BUILDKITE_PARALLEL_JOB_COUNT:+--parallel.job_count ${BUILDKITE_PARALLEL_JOB_COUNT}} \

@@ -213,6 +213,16 @@ type Network struct {
 	errCh chan error
 }
 
+// IASCfg is the Oasis test network IAS configuration.
+type IASCfg struct {
+	// UseRegistry specifies whether the IAS proxy should use the registry
+	// instead of the genesis document for authenticating runtime IDs.
+	UseRegistry bool `json:"use_registry,omitempty"`
+
+	// Mock specifies if Mock IAS Proxy should be used.
+	Mock bool `json:"mock,omitempty"`
+}
+
 // NetworkCfg is the Oasis test network configuration.
 type NetworkCfg struct { // nolint: maligned
 	// GenesisFile is an optional genesis file to use.
@@ -245,9 +255,8 @@ type NetworkCfg struct { // nolint: maligned
 	// DeterministicIdentities is the deterministic identities flag.
 	DeterministicIdentities bool `json:"deterministic_identities"`
 
-	// IASUseRegistry specifies whether the IAS proxy should use the registry instead of the
-	// genesis document for authenticating runtime IDs.
-	IASUseRegistry bool `json:"ias_use_registry,omitempty"`
+	// IAS is the Network IAS configuration.
+	IAS IASCfg `json:"ias"`
 
 	// StakingGenesis is the name of a file with a staking genesis document to use if GenesisFile isn't set.
 	StakingGenesis string `json:"staking_genesis"`
