@@ -33,7 +33,7 @@ var (
 			Help: "Number of registry runtimes.",
 		},
 	)
-	registeryCollectors = []prometheus.Collector{
+	registryCollectors = []prometheus.Collector{
 		registryNodes,
 		registryEntities,
 		registryRuntimes,
@@ -105,7 +105,7 @@ func (m *MetricsUpdater) updatePeriodicMetrics(ctx context.Context) {
 // NewMetricsUpdater creates a new registry metrics updater.
 func NewMetricsUpdater(ctx context.Context, backend api.Backend) *MetricsUpdater {
 	metricsOnce.Do(func() {
-		prometheus.MustRegister(registeryCollectors...)
+		prometheus.MustRegister(registryCollectors...)
 	})
 
 	m := &MetricsUpdater{

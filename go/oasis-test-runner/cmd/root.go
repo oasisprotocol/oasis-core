@@ -254,7 +254,7 @@ func initRootEnv(cmd *cobra.Command) (*env.Env, error) {
 func runRoot(cmd *cobra.Command, args []string) error {
 	cmd.SilenceUsage = true
 
-	if viper.GetString(metrics.CfgMetricsAddr) != "" {
+	if viper.IsSet(metrics.CfgMetricsAddr) {
 		oasisTestRunnerOnce.Do(func() {
 			prometheus.MustRegister(oasisTestRunnerCollectors...)
 		})
@@ -360,7 +360,7 @@ func runRoot(cmd *cobra.Command, args []string) error {
 				}
 
 				// Init per-run prometheus pusher, if metrics are enabled.
-				if viper.GetString(metrics.CfgMetricsAddr) != "" {
+				if viper.IsSet(metrics.CfgMetricsAddr) {
 					pusher = push.New(viper.GetString(metrics.CfgMetricsAddr), metrics.MetricsJobTestRunner)
 					labels := metrics.GetDefaultPushLabels(childEnv.TestInfo())
 					for k, v := range labels {

@@ -1,6 +1,7 @@
 package tendermint
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -12,6 +13,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/prometheus/client_golang/prometheus"
 	flag "github.com/spf13/pflag"
 	"github.com/spf13/viper"
 	tmabcitypes "github.com/tendermint/tendermint/abci/types"
@@ -42,6 +44,7 @@ import (
 	"github.com/oasislabs/oasis-core/go/common/version"
 	consensusAPI "github.com/oasislabs/oasis-core/go/consensus/api"
 	"github.com/oasislabs/oasis-core/go/consensus/api/transaction"
+	"github.com/oasislabs/oasis-core/go/consensus/metrics"
 	"github.com/oasislabs/oasis-core/go/consensus/tendermint/abci"
 	"github.com/oasislabs/oasis-core/go/consensus/tendermint/api"
 	tmbeacon "github.com/oasislabs/oasis-core/go/consensus/tendermint/beacon"
@@ -60,6 +63,7 @@ import (
 	keymanagerAPI "github.com/oasislabs/oasis-core/go/keymanager/api"
 	cmbackground "github.com/oasislabs/oasis-core/go/oasis-node/cmd/common/background"
 	cmflags "github.com/oasislabs/oasis-core/go/oasis-node/cmd/common/flags"
+	cmmetrics "github.com/oasislabs/oasis-core/go/oasis-node/cmd/common/metrics"
 	"github.com/oasislabs/oasis-core/go/registry"
 	registryAPI "github.com/oasislabs/oasis-core/go/registry/api"
 	"github.com/oasislabs/oasis-core/go/roothash"
@@ -138,6 +142,8 @@ const (
 
 var (
 	_ service.TendermintService = (*tendermintService)(nil)
+
+	labelTendermint = prometheus.Labels{"backend": "tendermint"}
 
 	// Flags has the configuration flags.
 	Flags = flag.NewFlagSet("", flag.ContinueOnError)
@@ -258,6 +264,9 @@ func (t *tendermintService) Start() error {
 		}
 		go t.syncWorker()
 		go t.worker()
+		if viper.GetString(cmmetrics.CfgMetricsMode) != cmmetrics.MetricsModeNone {
+			go t.metrics()
+		}
 	case false:
 		close(t.syncedCh)
 	}
@@ -1312,6 +1321,54 @@ func (t *tendermintService) worker() {
 		case v := <-sub.Out():
 			ev := v.Data().(tmtypes.EventDataNewBlock)
 			t.blockNotifier.Broadcast(ev.Block)
+		}
+	}
+}
+
+// metrics updates oasis_consensus metrics by checking last accepted block info.
+func (t *tendermintService) metrics() {
+	sub, err := t.Subscribe("tendermint/metrics", tmtypes.EventQueryNewBlock)
+	if err != nil {
+		t.Logger.Error("worker: failed to subscribe to new block events",
+			"err", err,
+		)
+		return
+	}
+	defer t.Unsubscribe("tendermint/metrics", tmtypes.EventQueryNewBlock) // nolint:errcheck
+
+	// Tendermint uses specific public key encoding.
+	pubKey := t.consensusSigner.Public()
+	myAddr := []byte(crypto.PublicKeyToTendermint(&pubKey).Address())
+	for {
+		var blk *tmtypes.Block
+		select {
+		case <-t.node.Quit():
+			return
+		case <-sub.Cancelled():
+			return
+		case v := <-sub.Out():
+			ev := v.Data().(tmtypes.EventDataNewBlock)
+			blk = ev.Block
+		}
+
+		// Was block proposed by our node.
+		if bytes.Equal(myAddr, blk.ProposerAddress) {
+			metrics.ProposedBlocks.With(labelTendermint).Inc()
+		}
+
+		// Was block voted for by our node. Ignore if there was no previous block.
+		if blk.LastCommit != nil {
+			for _, sig := range blk.LastCommit.Signatures {
+				if sig.Absent() || sig.BlockIDFlag == tmtypes.BlockIDFlagNil {
+					// Vote is missing, ignore.
+					continue
+				}
+
+				if bytes.Equal(myAddr, sig.ValidatorAddress) {
+					metrics.SignedBlocks.With(labelTendermint).Inc()
+					break
+				}
+			}
 		}
 	}
 }

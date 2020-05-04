@@ -73,6 +73,12 @@ jobs:
           make lint-changelog
         # Always run this step so that all linting errors can be seen at once.
         if: always()
+      - name: Check documentation synchronized with source code
+        run: |
+          pushd go/extra/extract-metrics && go build && popd
+          make lint-docs
+        # Always run this step so that all linting errors can be seen at once.
+        if: always()
       - name: Check go mod tidy
         # NOTE: go mod tidy doesn't implement a check mode yet.
         # For more details, see: https://github.com/golang/go/issues/27005.

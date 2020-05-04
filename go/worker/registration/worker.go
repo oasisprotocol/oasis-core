@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/cenkalti/backoff/v4"
+	"github.com/prometheus/client_golang/prometheus"
 	flag "github.com/spf13/pflag"
 	"github.com/spf13/viper"
 
@@ -53,6 +54,19 @@ var (
 	Flags = flag.NewFlagSet("", flag.ContinueOnError)
 
 	allowUnroutableAddresses bool
+
+	workerNodeRegistered = prometheus.NewGauge(
+		prometheus.GaugeOpts{
+			Name: "oasis_worker_node_registered",
+			Help: "Is oasis node registered (binary).",
+		},
+	)
+
+	nodeCollectors = []prometheus.Collector{
+		workerNodeRegistered,
+	}
+
+	metricsOnce sync.Once
 )
 
 // RegisterNodeHook is a function that is used to update the node descriptor.
@@ -240,7 +254,14 @@ func (w *Worker) registrationLoop() { // nolint: gocyclo
 			default:
 			}
 
-			return w.registerNode(epoch, hook)
+			err := w.registerNode(epoch, hook)
+			switch err {
+			case nil:
+				workerNodeRegistered.Set(1.0)
+			default:
+				workerNodeRegistered.Set(0.0)
+			}
+			return err
 		}, off)
 	}
 
@@ -358,6 +379,7 @@ Loop:
 
 func (w *Worker) doNodeRegistration() {
 	defer close(w.quitCh)
+	defer workerNodeRegistered.Set(0.0)
 
 	if !w.storedDeregister {
 		w.registrationLoop()
@@ -949,6 +971,10 @@ func (w *Worker) Cleanup() {
 }
 
 func init() {
+	metricsOnce.Do(func() {
+		prometheus.MustRegister(nodeCollectors...)
+	})
+
 	Flags.String(CfgRegistrationEntity, "", "entity to use as the node owner in registrations")
 	Flags.String(CfgDebugRegistrationPrivateKey, "", "private key to use to sign node registrations")
 	Flags.Bool(CfgRegistrationForceRegister, false, "override a previously saved deregistration request")
