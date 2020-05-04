@@ -130,7 +130,10 @@ func (c *Client) worker() {
 			}
 
 			// Fetch current key manager status.
-			st, err := c.backend.GetStatus(c.ctx, *rt.KeyManager, consensus.HeightLatest)
+			st, err := c.backend.GetStatus(c.ctx, &registry.NamespaceQuery{
+				ID:     *kmID,
+				Height: consensus.HeightLatest,
+			})
 			if err != nil {
 				c.logger.Warn("failed to get key manager status",
 					"err", err,

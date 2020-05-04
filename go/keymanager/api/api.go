@@ -77,7 +77,7 @@ type Status struct {
 // Backend is a key manager management implementation.
 type Backend interface {
 	// GetStatus returns a key manager status by key manager ID.
-	GetStatus(context.Context, common.Namespace, int64) (*Status, error)
+	GetStatus(context.Context, *registry.NamespaceQuery) (*Status, error)
 
 	// GetStatuses returns all currently tracked key manager statuses.
 	GetStatuses(context.Context, int64) ([]*Status, error)

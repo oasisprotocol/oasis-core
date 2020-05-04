@@ -14,6 +14,7 @@ import (
 	consensus "github.com/oasislabs/oasis-core/go/consensus/api"
 	keymanagerApi "github.com/oasislabs/oasis-core/go/keymanager/api"
 	keymanagerClient "github.com/oasislabs/oasis-core/go/keymanager/client"
+	registry "github.com/oasislabs/oasis-core/go/registry/api"
 	"github.com/oasislabs/oasis-core/go/runtime/localstorage"
 	runtimeRegistry "github.com/oasislabs/oasis-core/go/runtime/registry"
 	storage "github.com/oasislabs/oasis-core/go/storage/api"
@@ -50,7 +51,10 @@ func (h *runtimeHostHandler) Handle(ctx context.Context, body *protocol.Body) (*
 		if rt.KeyManager == nil {
 			return nil, errors.New("runtime has no key manager")
 		}
-		status, err := h.keyManager.GetStatus(ctx, *rt.KeyManager, consensus.HeightLatest)
+		status, err := h.keyManager.GetStatus(ctx, &registry.NamespaceQuery{
+			ID:     *rt.KeyManager,
+			Height: consensus.HeightLatest,
+		})
 		if err != nil {
 			return nil, err
 		}
