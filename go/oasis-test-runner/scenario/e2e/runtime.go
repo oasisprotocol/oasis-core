@@ -197,6 +197,9 @@ func (sc *runtimeImpl) Fixture() (*oasis.NetworkFixture, error) {
 			oasis.ValidatorFixture{Entity: 1},
 			oasis.ValidatorFixture{Entity: 1},
 		},
+		KeymanagerPolicies: []oasis.KeymanagerPolicyFixture{
+			oasis.KeymanagerPolicyFixture{Runtime: 0, Serial: 1},
+		},
 		Keymanagers: []oasis.KeymanagerFixture{
 			oasis.KeymanagerFixture{Runtime: 0, Entity: 1},
 		},

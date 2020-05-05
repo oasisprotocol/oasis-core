@@ -111,6 +111,9 @@ func newDefaultFixture() (*oasis.NetworkFixture, error) {
 		Validators: []oasis.ValidatorFixture{
 			oasis.ValidatorFixture{Entity: 1},
 		},
+		KeymanagerPolicies: []oasis.KeymanagerPolicyFixture{
+			oasis.KeymanagerPolicyFixture{Runtime: 0, Serial: 1},
+		},
 		Keymanagers: []oasis.KeymanagerFixture{
 			oasis.KeymanagerFixture{Runtime: 0, Entity: 1},
 		},

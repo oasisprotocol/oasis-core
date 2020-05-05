@@ -137,6 +137,7 @@
         {
             "runtime": 0,
             "entity": 1,
+            "policy": 0,
             "allow_early_termination": false,
             "allow_error_termination": false,
             "consensus": {
@@ -146,6 +147,12 @@
                 "prune_num_kept": 0,
                 "tendermint_recover_corrupted_wal": false
             }
+        }
+    ],
+    "keymanager_policies": [
+        {
+            "runtime": 0,
+            "serial": 1
         }
     ],
     "storage_workers": [

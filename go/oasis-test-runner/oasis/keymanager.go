@@ -131,14 +131,15 @@ func (net *Network) NewKeymanagerPolicy(cfg *KeymanagerPolicyCfg) (*KeymanagerPo
 		return nil, errors.Wrap(err, "oasis/keymanager: failed to create keymanager policy subdir")
 	}
 
-	net.keymanagerPolicy = &KeymanagerPolicy{
+	newPol := &KeymanagerPolicy{
 		net:     net,
 		dir:     policyDir,
 		runtime: cfg.Runtime,
 		serial:  cfg.Serial,
 	}
+	net.keymanagerPolicies = append(net.keymanagerPolicies, newPol)
 
-	return net.keymanagerPolicy, nil
+	return newPol, nil
 }
 
 // Keymanager is an Oasis key manager.
@@ -149,6 +150,7 @@ type Keymanager struct { // nolint: maligned
 
 	runtime *Runtime
 	entity  *Entity
+	policy  *KeymanagerPolicy
 
 	tmAddress        string
 	consensusPort    uint16
@@ -165,6 +167,7 @@ type KeymanagerCfg struct {
 
 	Runtime *Runtime
 	Entity  *Entity
+	Policy  *KeymanagerPolicy
 }
 
 // IdentityKeyPath returns the paths to the node's identity key.
@@ -216,7 +219,7 @@ func (km *Keymanager) provisionGenesis() error {
 		"--" + kmCmd.CfgStatusID, km.runtime.id.String(),
 		"--" + kmCmd.CfgStatusFile, filepath.Join(km.dir.String(), kmStatusFile),
 	}
-	statusArgs = append(statusArgs, km.net.keymanagerPolicy.provisionStatusArgs()...)
+	statusArgs = append(statusArgs, km.policy.provisionStatusArgs()...)
 
 	w, err := km.dir.NewLogWriter("provision-status.log")
 	if err != nil {
@@ -302,14 +305,8 @@ func (net *Network) NewKeymanager(cfg *KeymanagerCfg) (*Keymanager, error) {
 		return nil, errors.Wrap(err, "oasis/keymanager: failed to create keymanager subdir")
 	}
 
-	// HACK HACK HACK: Not sure how to fit this into the fixture stuff.
-	if net.keymanagerPolicy == nil {
-		if _, err = net.NewKeymanagerPolicy(&KeymanagerPolicyCfg{
-			Runtime: cfg.Runtime,
-			Serial:  1,
-		}); err != nil {
-			return nil, err
-		}
+	if cfg.Policy == nil {
+		return nil, fmt.Errorf("oasis/keymanager: missing policy")
 	}
 
 	// Pre-provision the node identity so that we can update the entity.
@@ -335,6 +332,7 @@ func (net *Network) NewKeymanager(cfg *KeymanagerCfg) (*Keymanager, error) {
 		},
 		runtime:          cfg.Runtime,
 		entity:           cfg.Entity,
+		policy:           cfg.Policy,
 		sentryIndices:    cfg.SentryIndices,
 		tmAddress:        crypto.PublicKeyToTendermint(&publicKey).Address().String(),
 		consensusPort:    net.nextNodePort,
