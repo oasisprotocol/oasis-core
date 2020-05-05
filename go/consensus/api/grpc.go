@@ -15,6 +15,8 @@ import (
 var (
 	// serviceName is the gRPC service name.
 	serviceName = cmnGrpc.NewServiceName("Consensus")
+	// lightServiceName is the gRPC service name for the light consensus interface.
+	lightServiceName = cmnGrpc.NewServiceName("ConsensusLight")
 
 	// methodSubmitTx is the SubmitTx method.
 	methodSubmitTx = serviceName.NewMethod("SubmitTx", transaction.SignedTransaction{})
@@ -36,10 +38,17 @@ var (
 	// methodWatchBlocks is the WatchBlocks method.
 	methodWatchBlocks = serviceName.NewMethod("WatchBlocks", nil)
 
+	// methodGetSignedHeader is the GetSignedHeader method.
+	methodGetSignedHeader = lightServiceName.NewMethod("GetSignedHeader", int64(0))
+	// methodGetValidatorSet is the GetValidatorSet method.
+	methodGetValidatorSet = lightServiceName.NewMethod("GetValidatorSet", int64(0))
+	// methodGetParameters is the GetParameters method.
+	methodGetParameters = lightServiceName.NewMethod("GetParameters", int64(0))
+
 	// serviceDesc is the gRPC service descriptor.
 	serviceDesc = grpc.ServiceDesc{
 		ServiceName: string(serviceName),
-		HandlerType: (*Backend)(nil),
+		HandlerType: (*ClientBackend)(nil),
 		Methods: []grpc.MethodDesc{
 			{
 				MethodName: methodSubmitTx.ShortName(),
@@ -82,6 +91,26 @@ var (
 			},
 		},
 	}
+
+	// lightServiceDesc is the gRPC service descriptor for the light consensus service.
+	lightServiceDesc = grpc.ServiceDesc{
+		ServiceName: string(lightServiceName),
+		HandlerType: (*LightClientBackend)(nil),
+		Methods: []grpc.MethodDesc{
+			{
+				MethodName: methodGetSignedHeader.ShortName(),
+				Handler:    handlerGetSignedHeader,
+			},
+			{
+				MethodName: methodGetValidatorSet.ShortName(),
+				Handler:    handlerGetValidatorSet,
+			},
+			{
+				MethodName: methodGetParameters.ShortName(),
+				Handler:    handlerGetParameters,
+			},
+		},
+	}
 )
 
 func handlerSubmitTx( // nolint: golint
@@ -95,14 +124,14 @@ func handlerSubmitTx( // nolint: golint
 		return nil, err
 	}
 	if interceptor == nil {
-		return nil, srv.(Backend).SubmitTx(ctx, rq)
+		return nil, srv.(ClientBackend).SubmitTx(ctx, rq)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
 		FullMethod: methodSubmitTx.FullName(),
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return nil, srv.(Backend).SubmitTx(ctx, req.(*transaction.SignedTransaction))
+		return nil, srv.(ClientBackend).SubmitTx(ctx, req.(*transaction.SignedTransaction))
 	}
 	return interceptor(ctx, rq, info, handler)
 }
@@ -118,14 +147,14 @@ func handlerStateToGenesis( // nolint: golint
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(Backend).StateToGenesis(ctx, height)
+		return srv.(ClientBackend).StateToGenesis(ctx, height)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
 		FullMethod: methodStateToGenesis.FullName(),
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(Backend).StateToGenesis(ctx, req.(int64))
+		return srv.(ClientBackend).StateToGenesis(ctx, req.(int64))
 	}
 	return interceptor(ctx, height, info, handler)
 }
@@ -141,14 +170,14 @@ func handlerEstimateGas( // nolint: golint
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(Backend).EstimateGas(ctx, rq)
+		return srv.(ClientBackend).EstimateGas(ctx, rq)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
 		FullMethod: methodEstimateGas.FullName(),
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(Backend).EstimateGas(ctx, req.(*EstimateGasRequest))
+		return srv.(ClientBackend).EstimateGas(ctx, req.(*EstimateGasRequest))
 	}
 	return interceptor(ctx, rq, info, handler)
 }
@@ -164,14 +193,14 @@ func handlerGetSignerNonce( // nolint: golint
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(Backend).GetSignerNonce(ctx, rq)
+		return srv.(ClientBackend).GetSignerNonce(ctx, rq)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
 		FullMethod: methodGetSignerNonce.FullName(),
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(Backend).GetSignerNonce(ctx, req.(*GetSignerNonceRequest))
+		return srv.(ClientBackend).GetSignerNonce(ctx, req.(*GetSignerNonceRequest))
 	}
 	return interceptor(ctx, rq, info, handler)
 }
@@ -187,14 +216,14 @@ func handlerGetEpoch( // nolint: golint
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(Backend).GetEpoch(ctx, height)
+		return srv.(ClientBackend).GetEpoch(ctx, height)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
 		FullMethod: methodGetEpoch.FullName(),
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(Backend).GetEpoch(ctx, req.(int64))
+		return srv.(ClientBackend).GetEpoch(ctx, req.(int64))
 	}
 	return interceptor(ctx, height, info, handler)
 }
@@ -210,14 +239,14 @@ func handlerWaitEpoch( // nolint: golint
 		return nil, err
 	}
 	if interceptor == nil {
-		return nil, srv.(Backend).WaitEpoch(ctx, epoch)
+		return nil, srv.(ClientBackend).WaitEpoch(ctx, epoch)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
 		FullMethod: methodWaitEpoch.FullName(),
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return nil, srv.(Backend).WaitEpoch(ctx, req.(epochtime.EpochTime))
+		return nil, srv.(ClientBackend).WaitEpoch(ctx, req.(epochtime.EpochTime))
 	}
 	return interceptor(ctx, epoch, info, handler)
 }
@@ -233,14 +262,14 @@ func handlerGetBlock( // nolint: golint
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(Backend).GetBlock(ctx, height)
+		return srv.(ClientBackend).GetBlock(ctx, height)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
 		FullMethod: methodGetBlock.FullName(),
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(Backend).GetBlock(ctx, req.(int64))
+		return srv.(ClientBackend).GetBlock(ctx, req.(int64))
 	}
 	return interceptor(ctx, height, info, handler)
 }
@@ -256,14 +285,14 @@ func handlerGetTransactions( // nolint: golint
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(Backend).GetTransactions(ctx, height)
+		return srv.(ClientBackend).GetTransactions(ctx, height)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
 		FullMethod: methodGetTransactions.FullName(),
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(Backend).GetTransactions(ctx, req.(int64))
+		return srv.(ClientBackend).GetTransactions(ctx, req.(int64))
 	}
 	return interceptor(ctx, height, info, handler)
 }
@@ -274,7 +303,7 @@ func handlerWatchBlocks(srv interface{}, stream grpc.ServerStream) error {
 	}
 
 	ctx := stream.Context()
-	ch, sub, err := srv.(Backend).WatchBlocks(ctx)
+	ch, sub, err := srv.(ClientBackend).WatchBlocks(ctx)
 	if err != nil {
 		return err
 	}
@@ -296,13 +325,120 @@ func handlerWatchBlocks(srv interface{}, stream grpc.ServerStream) error {
 	}
 }
 
-// RegisterService registers a new consensus backend service with the
-// given gRPC server.
-func RegisterService(server *grpc.Server, service Backend) {
+func handlerGetSignedHeader( // nolint: golint
+	srv interface{},
+	ctx context.Context,
+	dec func(interface{}) error,
+	interceptor grpc.UnaryServerInterceptor,
+) (interface{}, error) {
+	var height int64
+	if err := dec(&height); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(LightClientBackend).GetSignedHeader(ctx, height)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: methodGetSignedHeader.FullName(),
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(LightClientBackend).GetSignedHeader(ctx, req.(int64))
+	}
+	return interceptor(ctx, height, info, handler)
+}
+
+func handlerGetValidatorSet( // nolint: golint
+	srv interface{},
+	ctx context.Context,
+	dec func(interface{}) error,
+	interceptor grpc.UnaryServerInterceptor,
+) (interface{}, error) {
+	var height int64
+	if err := dec(&height); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(LightClientBackend).GetValidatorSet(ctx, height)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: methodGetValidatorSet.FullName(),
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(LightClientBackend).GetValidatorSet(ctx, req.(int64))
+	}
+	return interceptor(ctx, height, info, handler)
+}
+
+func handlerGetParameters( // nolint: golint
+	srv interface{},
+	ctx context.Context,
+	dec func(interface{}) error,
+	interceptor grpc.UnaryServerInterceptor,
+) (interface{}, error) {
+	var height int64
+	if err := dec(&height); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(LightClientBackend).GetParameters(ctx, height)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: methodGetParameters.FullName(),
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(LightClientBackend).GetParameters(ctx, req.(int64))
+	}
+	return interceptor(ctx, height, info, handler)
+}
+
+// RegisterService registers a new client backend service with the given gRPC server.
+func RegisterService(server *grpc.Server, service ClientBackend) {
 	server.RegisterService(&serviceDesc, service)
+	RegisterLightService(server, service)
+}
+
+// RegisterLightService registers a new light client backend service with the given gRPC server.
+func RegisterLightService(server *grpc.Server, service LightClientBackend) {
+	server.RegisterService(&lightServiceDesc, service)
+}
+
+type consensusLightClient struct {
+	conn *grpc.ClientConn
+}
+
+// Implements LightClientBackend.
+func (c *consensusLightClient) GetSignedHeader(ctx context.Context, height int64) (*SignedHeader, error) {
+	var rsp SignedHeader
+	if err := c.conn.Invoke(ctx, methodGetSignedHeader.FullName(), height, &rsp); err != nil {
+		return nil, err
+	}
+	return &rsp, nil
+}
+
+// Implements LightClientBackend.
+func (c *consensusLightClient) GetValidatorSet(ctx context.Context, height int64) (*ValidatorSet, error) {
+	var rsp ValidatorSet
+	if err := c.conn.Invoke(ctx, methodGetValidatorSet.FullName(), height, &rsp); err != nil {
+		return nil, err
+	}
+	return &rsp, nil
+}
+
+// Implements LightClientBackend.
+func (c *consensusLightClient) GetParameters(ctx context.Context, height int64) (*Parameters, error) {
+	var rsp Parameters
+	if err := c.conn.Invoke(ctx, methodGetParameters.FullName(), height, &rsp); err != nil {
+		return nil, err
+	}
+	return &rsp, nil
 }
 
 type consensusClient struct {
+	consensusLightClient
+
 	conn *grpc.ClientConn
 }
 
@@ -399,5 +535,13 @@ func (c *consensusClient) WatchBlocks(ctx context.Context) (<-chan *Block, pubsu
 
 // NewConsensusClient creates a new gRPC consensus client service.
 func NewConsensusClient(c *grpc.ClientConn) ClientBackend {
-	return &consensusClient{c}
+	return &consensusClient{
+		consensusLightClient: consensusLightClient{c},
+		conn:                 c,
+	}
+}
+
+// NewConsensusLightClient creates a new gRPC consensus light client service.
+func NewConsensusLightClient(c *grpc.ClientConn) LightClientBackend {
+	return &consensusLightClient{c}
 }
