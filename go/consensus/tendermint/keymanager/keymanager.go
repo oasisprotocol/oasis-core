@@ -11,7 +11,6 @@ import (
 	abcitypes "github.com/tendermint/tendermint/abci/types"
 	tmtypes "github.com/tendermint/tendermint/types"
 
-	"github.com/oasislabs/oasis-core/go/common"
 	"github.com/oasislabs/oasis-core/go/common/cbor"
 	"github.com/oasislabs/oasis-core/go/common/logging"
 	"github.com/oasislabs/oasis-core/go/common/pubsub"
@@ -19,6 +18,7 @@ import (
 	app "github.com/oasislabs/oasis-core/go/consensus/tendermint/apps/keymanager"
 	"github.com/oasislabs/oasis-core/go/consensus/tendermint/service"
 	"github.com/oasislabs/oasis-core/go/keymanager/api"
+	registry "github.com/oasislabs/oasis-core/go/registry/api"
 )
 
 type tendermintBackend struct {
@@ -30,13 +30,13 @@ type tendermintBackend struct {
 	notifier *pubsub.Broker
 }
 
-func (tb *tendermintBackend) GetStatus(ctx context.Context, id common.Namespace, height int64) (*api.Status, error) {
-	q, err := tb.querier.QueryAt(ctx, height)
+func (tb *tendermintBackend) GetStatus(ctx context.Context, query *registry.NamespaceQuery) (*api.Status, error) {
+	q, err := tb.querier.QueryAt(ctx, query.Height)
 	if err != nil {
 		return nil, err
 	}
 
-	return q.Status(ctx, id)
+	return q.Status(ctx, query.ID)
 }
 
 func (tb *tendermintBackend) GetStatuses(ctx context.Context, height int64) ([]*api.Status, error) {

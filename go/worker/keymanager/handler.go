@@ -3,20 +3,61 @@ package keymanager
 import (
 	"context"
 	"errors"
+	"sync"
 
+	"github.com/oasislabs/oasis-core/go/common/cbor"
+	"github.com/oasislabs/oasis-core/go/keymanager/api"
+	"github.com/oasislabs/oasis-core/go/keymanager/client"
 	"github.com/oasislabs/oasis-core/go/runtime/localstorage"
+	workerCommon "github.com/oasislabs/oasis-core/go/worker/common"
 	"github.com/oasislabs/oasis-core/go/worker/common/host/protocol"
 )
 
 var (
-	errMethodNotSupported = errors.New("worker/keymanager: method not supported")
+	errEndpointNotSupported = errors.New("worker/keymanager: RPC endpoint not supported")
+	errMethodNotSupported   = errors.New("worker/keymanager: method not supported")
 
 	_ protocol.Handler = (*hostHandler)(nil)
 )
 
 type hostHandler struct {
+	sync.Mutex
+
 	w            *Worker
+	remoteClient *client.Client
 	localStorage localstorage.LocalStorage
+}
+
+func (h *hostHandler) initRemoteClient(commonWorker *workerCommon.Worker) {
+	remoteClient, err := client.New(h.w.ctx, h.w.runtime, commonWorker.KeyManager, commonWorker.Consensus.Registry(), commonWorker.Identity)
+	if err != nil {
+		h.w.logger.Error("failed to create remote client",
+			"err", err,
+		)
+		return
+	}
+
+	select {
+	case <-h.w.ctx.Done():
+		h.w.logger.Error("failed to wait for key manager",
+			"err", h.w.ctx.Err(),
+		)
+	case <-remoteClient.Initialized():
+		h.Lock()
+		defer h.Unlock()
+		h.remoteClient = remoteClient
+	}
+}
+
+func (h *hostHandler) getRemoteClient() (*client.Client, error) {
+	h.Lock()
+	defer h.Unlock()
+
+	if h.remoteClient != nil {
+		return h.remoteClient, nil
+	}
+
+	return nil, errEndpointNotSupported
 }
 
 func (h *hostHandler) Handle(ctx context.Context, body *protocol.Body) (*protocol.Body, error) {
@@ -34,10 +75,38 @@ func (h *hostHandler) Handle(ctx context.Context, body *protocol.Body) (*protoco
 		}
 		return &protocol.Body{HostLocalStorageSetResponse: &protocol.Empty{}}, nil
 	}
+	// RPC.
+	if body.HostRPCCallRequest != nil {
+		switch body.HostRPCCallRequest.Endpoint {
+		case api.EnclaveRPCEndpoint:
+			remoteClient, err := h.getRemoteClient()
+			if err != nil {
+				return nil, err
+			}
+
+			// Call into the remote key manager.
+			res, err := remoteClient.CallRemote(ctx, body.HostRPCCallRequest.Request)
+			if err != nil {
+				return nil, err
+			}
+			return &protocol.Body{HostRPCCallResponse: &protocol.HostRPCCallResponse{
+				Response: cbor.FixSliceForSerde(res),
+			}}, nil
+		default:
+			return nil, errEndpointNotSupported
+		}
+	}
 
 	return nil, errMethodNotSupported
 }
 
-func newHostHandler(w *Worker, localStorage localstorage.LocalStorage) protocol.Handler {
-	return &hostHandler{w, localStorage}
+func newHostHandler(w *Worker, commonWorker *workerCommon.Worker, localStorage localstorage.LocalStorage) protocol.Handler {
+	h := &hostHandler{
+		w:            w,
+		localStorage: localStorage,
+	}
+
+	go h.initRemoteClient(commonWorker)
+
+	return h
 }

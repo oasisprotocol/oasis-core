@@ -125,12 +125,21 @@ func (c *Client) worker() {
 		case rt := <-rtCh:
 			kmID = rt.KeyManager
 			if kmID == nil {
-				c.logger.Warn("runtime indicates no key manager is needed")
-				continue
+				if rt.Kind != registry.KindKeyManager {
+					c.logger.Warn("runtime indicates no key manager is needed")
+					continue
+				}
+
+				// We're a key manager client, that's interested in other
+				// instances of ourself.
+				kmID = &rt.ID
 			}
 
 			// Fetch current key manager status.
-			st, err := c.backend.GetStatus(c.ctx, *rt.KeyManager, consensus.HeightLatest)
+			st, err := c.backend.GetStatus(c.ctx, &registry.NamespaceQuery{
+				ID:     *kmID,
+				Height: consensus.HeightLatest,
+			})
 			if err != nil {
 				c.logger.Warn("failed to get key manager status",
 					"err", err,

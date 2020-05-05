@@ -5,10 +5,10 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/pkg/errors"
 	flag "github.com/spf13/pflag"
 	"github.com/spf13/viper"
 
+	"github.com/oasislabs/oasis-core/go/common"
 	"github.com/oasislabs/oasis-core/go/common/grpc/policy"
 	"github.com/oasislabs/oasis-core/go/common/logging"
 	"github.com/oasislabs/oasis-core/go/common/node"
@@ -84,8 +84,9 @@ func New(
 			panic("common worker should have been enabled for key manager worker")
 		}
 
-		if err := w.runtimeID.UnmarshalHex(viper.GetString(CfgRuntimeID)); err != nil {
-			return nil, errors.Wrap(err, "worker/keymanager: failed to parse runtime ID")
+		var runtimeID common.Namespace
+		if err := runtimeID.UnmarshalHex(viper.GetString(CfgRuntimeID)); err != nil {
+			return nil, fmt.Errorf("worker/keymanager: failed to parse runtime ID: %w", err)
 		}
 
 		if workerRuntimeLoaderBinary == "" {
@@ -96,28 +97,33 @@ func New(
 		}
 
 		// Create local storage for the key manager.
-		path, err := runtimeRegistry.EnsureRuntimeStateDir(dataDir, w.runtimeID)
+		path, err := runtimeRegistry.EnsureRuntimeStateDir(dataDir, runtimeID)
 		if err != nil {
 			return nil, fmt.Errorf("worker/keymanager: failed to ensure runtime state directory: %w", err)
 		}
-		localStorage, err := localstorage.New(path, runtimeRegistry.LocalStorageFile, w.runtimeID)
+		localStorage, err := localstorage.New(path, runtimeRegistry.LocalStorageFile, runtimeID)
 		if err != nil {
 			return nil, fmt.Errorf("worker/keymanager: cannot create local storage: %w", err)
 		}
 
-		w.roleProvider, err = r.NewRuntimeRoleProvider(node.RoleKeyManager, w.runtimeID)
+		w.roleProvider, err = r.NewRuntimeRoleProvider(node.RoleKeyManager, runtimeID)
 		if err != nil {
-			return nil, fmt.Errorf("failed to create role provider: %w", err)
+			return nil, fmt.Errorf("worker/keymanager: failed to create role provider: %w", err)
+		}
+
+		w.runtime, err = commonWorker.RuntimeRegistry.NewUnmanagedRuntime(ctx, runtimeID)
+		if err != nil {
+			return nil, fmt.Errorf("worker/keymanager: failed to create runtime registry entry: %w", err)
 		}
 
 		w.workerHostCfg = host.Config{
 			Role:           node.RoleKeyManager,
-			ID:             w.runtimeID,
+			ID:             runtimeID,
 			WorkerBinary:   workerRuntimeLoaderBinary,
 			RuntimeBinary:  runtimeBinary,
 			TEEHardware:    teeHardware,
 			IAS:            ias,
-			MessageHandler: newHostHandler(w, localStorage),
+			MessageHandler: newHostHandler(w, commonWorker, localStorage),
 		}
 
 		// Register the Keymanager EnclaveRPC transport gRPC service.

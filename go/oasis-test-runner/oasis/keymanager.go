@@ -3,11 +3,16 @@ package oasis
 import (
 	"fmt"
 	"path/filepath"
+	"strconv"
 
 	"github.com/pkg/errors"
 
 	"github.com/oasislabs/oasis-core/go/common/node"
 	"github.com/oasislabs/oasis-core/go/consensus/tendermint/crypto"
+	"github.com/oasislabs/oasis-core/go/oasis-node/cmd/common"
+	"github.com/oasislabs/oasis-core/go/oasis-node/cmd/common/flags"
+	kmCmd "github.com/oasislabs/oasis-core/go/oasis-node/cmd/keymanager"
+	"github.com/oasislabs/oasis-core/go/oasis-test-runner/env"
 	registry "github.com/oasislabs/oasis-core/go/registry/api"
 )
 
@@ -18,6 +23,125 @@ const (
 	keymanagerIdentitySeedTemplate = "ekiden node keymanager %d"
 )
 
+// KeymanagerPolicy is an Oasis key manager policy document.
+type KeymanagerPolicy struct {
+	net *Network
+	dir *env.Dir
+
+	statusArgs []string
+
+	runtime *Runtime
+	serial  int
+}
+
+// KeymanagerPolicyCfg is an Oasis key manager policy document configuration.
+type KeymanagerPolicyCfg struct {
+	Runtime *Runtime
+	Serial  int
+}
+
+func (pol *KeymanagerPolicy) provisionStatusArgs() []string {
+	return pol.statusArgs
+}
+
+func (pol *KeymanagerPolicy) provision() error {
+	if pol.runtime.teeHardware == node.TEEHardwareInvalid {
+		// No policy document.
+		pol.statusArgs = append(pol.statusArgs, "--"+kmCmd.CfgPolicyFile, "")
+	} else {
+		// Policy signed with test keys.
+		policyPath := filepath.Join(pol.dir.String(), kmPolicyFile)
+		policyArgs := []string{
+			"keymanager", "init_policy",
+			"--" + flags.CfgDebugDontBlameOasis,
+			"--" + kmCmd.CfgPolicyFile, policyPath,
+			"--" + kmCmd.CfgPolicyID, pol.runtime.id.String(),
+			"--" + kmCmd.CfgPolicySerial, strconv.Itoa(pol.serial),
+			"--" + kmCmd.CfgPolicyEnclaveID, pol.runtime.mrEnclave.String() + pol.runtime.mrSigner.String(),
+		}
+
+		for _, rt := range pol.net.runtimes {
+			if rt.teeHardware == node.TEEHardwareInvalid || rt.kind != registry.KindCompute {
+				continue
+			}
+
+			arg := fmt.Sprintf("%s=%s%s", rt.id, rt.mrEnclave, rt.mrSigner)
+			policyArgs = append(policyArgs, "--"+kmCmd.CfgPolicyMayQuery, arg)
+		}
+
+		w, err := pol.dir.NewLogWriter("provision-policy.log")
+		if err != nil {
+			return err
+		}
+		defer w.Close()
+
+		if err = pol.net.runNodeBinary(w, policyArgs...); err != nil {
+			pol.net.logger.Error("failed to provision keymanager policy",
+				"err", err,
+			)
+			return errors.Wrap(err, "oasis/keymanager: failed to provision keymanager policy")
+		}
+
+		// Sign policy with test keys.
+		signArgsTpl := []string{
+			"keymanager", "sign_policy",
+			"--" + common.CfgDebugAllowTestKeys,
+			"--" + flags.CfgDebugDontBlameOasis,
+			"--" + kmCmd.CfgPolicyFile, policyPath,
+		}
+		for i := 1; i <= 3; i++ {
+			signatureFile := filepath.Join(pol.dir.String(), fmt.Sprintf("%s.sign.%d", kmPolicyFile, i))
+			signArgs := append([]string{}, signArgsTpl...)
+			signArgs = append(signArgs, []string{
+				"--" + kmCmd.CfgPolicySigFile, signatureFile,
+				"--" + kmCmd.CfgPolicyTestKey, fmt.Sprintf("%d", i),
+			}...)
+			pol.statusArgs = append(pol.statusArgs, "--"+kmCmd.CfgPolicySigFile, signatureFile)
+
+			w, err := pol.dir.NewLogWriter("provision-policy-sign.log")
+			if err != nil {
+				return err
+			}
+			defer w.Close()
+
+			if err = pol.net.runNodeBinary(w, signArgs...); err != nil {
+				pol.net.logger.Error("failed to sign keymanager policy",
+					"err", err,
+				)
+				return errors.Wrap(err, "oasis/keymanager: failed to sign keymanager policy")
+			}
+		}
+
+		pol.statusArgs = append(pol.statusArgs, "--"+kmCmd.CfgPolicyFile, policyPath)
+	}
+
+	return nil
+}
+
+// NewKeymanagerPolicy provisions a new keymanager policy and adds it to the
+// network.
+func (net *Network) NewKeymanagerPolicy(cfg *KeymanagerPolicyCfg) (*KeymanagerPolicy, error) {
+	policyName := fmt.Sprintf("keymanager-policy-%d", cfg.Serial)
+
+	policyDir, err := net.baseDir.NewSubDir(policyName)
+	if err != nil {
+		net.logger.Error("failed to create keymanager policy subdir",
+			"err", err,
+		)
+		return nil, errors.Wrap(err, "oasis/keymanager: failed to create keymanager policy subdir")
+	}
+
+	newPol := &KeymanagerPolicy{
+		net:     net,
+		dir:     policyDir,
+		runtime: cfg.Runtime,
+		serial:  cfg.Serial,
+	}
+	net.keymanagerPolicies = append(net.keymanagerPolicies, newPol)
+
+	return newPol, nil
+}
+
 // Keymanager is an Oasis key manager.
 type Keymanager struct { // nolint: maligned
 	Node
@@ -26,10 +150,13 @@ type Keymanager struct { // nolint: maligned
 
 	runtime *Runtime
 	entity  *Entity
+	policy  *KeymanagerPolicy
 
 	tmAddress        string
 	consensusPort    uint16
 	workerClientPort uint16
+
+	mayGenerate bool
 }
 
 // KeymanagerCfg is the Oasis key manager provisioning configuration.
@@ -40,6 +167,7 @@ type KeymanagerCfg struct {
 
 	Runtime *Runtime
 	Entity  *Entity
+	Policy  *KeymanagerPolicy
 }
 
 // IdentityKeyPath returns the paths to the node's identity key.
@@ -82,84 +210,16 @@ func (km *Keymanager) provisionGenesis() error {
 		return nil
 	}
 
-	// Provision status and policy. We can only provision this here as we need
+	// Provision status. We can only provision this here as we need
 	// a list of runtimes allowed to query the key manager.
 	statusArgs := []string{
 		"keymanager", "init_status",
-		"--debug.dont_blame_oasis",
-		"--debug.allow_test_keys",
-		"--keymanager.status.id", km.runtime.id.String(),
-		"--keymanager.status.file", filepath.Join(km.dir.String(), kmStatusFile),
+		"--" + common.CfgDebugAllowTestKeys,
+		"--" + flags.CfgDebugDontBlameOasis,
+		"--" + kmCmd.CfgStatusID, km.runtime.id.String(),
+		"--" + kmCmd.CfgStatusFile, filepath.Join(km.dir.String(), kmStatusFile),
 	}
-	if km.runtime.teeHardware == node.TEEHardwareInvalid {
-		// Status without policy.
-		statusArgs = append(statusArgs, "--keymanager.policy.file", "")
-	} else {
-		// Status and policy signed with test keys.
-		kmPolicyPath := filepath.Join(km.dir.String(), kmPolicyFile)
-		policyArgs := []string{
-			"keymanager", "init_policy",
-			"--debug.dont_blame_oasis",
-			"--keymanager.policy.file", kmPolicyPath,
-			"--keymanager.policy.id", km.runtime.id.String(),
-			"--keymanager.policy.serial", "1",
-			"--keymanager.policy.enclave.id", km.runtime.mrEnclave.String() + km.runtime.mrSigner.String(),
-		}
-
-		for _, rt := range km.net.runtimes {
-			if rt.teeHardware == node.TEEHardwareInvalid || rt.kind != registry.KindCompute {
-				continue
-			}
-
-			arg := fmt.Sprintf("%s=%s%s", rt.id, rt.mrEnclave, rt.mrSigner)
-			policyArgs = append(policyArgs, "--keymanager.policy.may.query", arg)
-		}
-
-		w, err := km.dir.NewLogWriter("provision-policy.log")
-		if err != nil {
-			return err
-		}
-		defer w.Close()
-
-		if err = km.net.runNodeBinary(w, policyArgs...); err != nil {
-			km.net.logger.Error("failed to provision keymanager policy",
-				"err", err,
-			)
-			return errors.Wrap(err, "oasis/keymanager: failed to provision keymanager policy")
-		}
-
-		// Sign policy with test keys.
-		signArgsTpl := []string{
-			"keymanager", "sign_policy",
-			"--debug.allow_test_keys",
-			"--debug.dont_blame_oasis",
-			"--keymanager.policy.file", kmPolicyPath,
-		}
-		for i := 1; i <= 3; i++ {
-			signatureFile := filepath.Join(km.dir.String(), fmt.Sprintf("%s.sign.%d", kmPolicyFile, i))
-			signArgs := append([]string{}, signArgsTpl...)
-			signArgs = append(signArgs, []string{
-				"--keymanager.policy.signature.file", signatureFile,
-				"--keymanager.policy.testkey", fmt.Sprintf("%d", i),
-			}...)
-			statusArgs = append(statusArgs, "--keymanager.policy.signature.file", signatureFile)
-
-			w, err := km.dir.NewLogWriter("provision-policy-sign.log")
-			if err != nil {
-				return err
-			}
-			defer w.Close()
-
-			if err = km.net.runNodeBinary(w, signArgs...); err != nil {
-				km.net.logger.Error("failed to sign keymanager policy",
-					"err", err,
-				)
-				return errors.Wrap(err, "oasis/keymanager: failed to sign keymanager policy")
-			}
-		}
-
-		statusArgs = append(statusArgs, "--keymanager.policy.file", kmPolicyPath)
-	}
+	statusArgs = append(statusArgs, km.policy.provisionStatusArgs()...)
 
 	w, err := km.dir.NewLogWriter("provision-status.log")
 	if err != nil {
@@ -206,10 +266,13 @@ func (km *Keymanager) startNode() error {
 		workerKeymanagerRuntimeBinary(km.runtime.binary).
 		workerKeymanagerRuntimeLoader(km.net.cfg.RuntimeLoaderBinary).
 		workerKeymanagerRuntimeID(km.runtime.id).
-		workerKeymanagerMayGenerate().
 		appendNetwork(km.net).
 		appendSeedNodes(km.net).
 		appendEntity(km.entity)
+
+	if km.mayGenerate {
+		args = args.workerKeymanagerMayGenerate()
+	}
 
 	if km.runtime.teeHardware != node.TEEHardwareInvalid {
 		args = args.workerKeymanagerTEEHardware(km.runtime.teeHardware)
@@ -232,12 +295,7 @@ func (km *Keymanager) startNode() error {
 
 // NewKeymanager provisions a new keymanager and adds it to the network.
 func (net *Network) NewKeymanager(cfg *KeymanagerCfg) (*Keymanager, error) {
-	// XXX: Technically there can be more than one keymanager.
-	if len(net.keymanagers) == 1 {
-		return nil, errors.New("oasis/keymanager: already provisioned")
-	}
-
-	kmName := "keymanager"
+	kmName := fmt.Sprintf("keymanager-%d", len(net.keymanagers))
 
 	kmDir, err := net.baseDir.NewSubDir(kmName)
 	if err != nil {
@@ -247,9 +305,12 @@ func (net *Network) NewKeymanager(cfg *KeymanagerCfg) (*Keymanager, error) {
 		return nil, errors.Wrap(err, "oasis/keymanager: failed to create keymanager subdir")
 	}
 
+	if cfg.Policy == nil {
+		return nil, fmt.Errorf("oasis/keymanager: missing policy")
+	}
+
 	// Pre-provision the node identity so that we can update the entity.
-	// TODO: Use proper key manager index when multiple key managers are supported.
-	seed := fmt.Sprintf(keymanagerIdentitySeedTemplate, 0)
+	seed := fmt.Sprintf(keymanagerIdentitySeedTemplate, len(net.keymanagers))
 	publicKey, err := net.provisionNodeIdentity(kmDir, seed, false)
 	if err != nil {
 		return nil, errors.Wrap(err, "oasis/keymanager: failed to provision node identity")
@@ -271,10 +332,12 @@ func (net *Network) NewKeymanager(cfg *KeymanagerCfg) (*Keymanager, error) {
 		},
 		runtime:          cfg.Runtime,
 		entity:           cfg.Entity,
+		policy:           cfg.Policy,
 		sentryIndices:    cfg.SentryIndices,
 		tmAddress:        crypto.PublicKeyToTendermint(&publicKey).Address().String(),
 		consensusPort:    net.nextNodePort,
 		workerClientPort: net.nextNodePort + 1,
+		mayGenerate:      len(net.keymanagers) == 0,
 	}
 	km.doStartNode = km.startNode
 	copy(km.NodeID[:], publicKey[:])

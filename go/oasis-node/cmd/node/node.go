@@ -32,6 +32,7 @@ import (
 	genesisTestHelpers "github.com/oasislabs/oasis-core/go/genesis/tests"
 	"github.com/oasislabs/oasis-core/go/ias"
 	iasAPI "github.com/oasislabs/oasis-core/go/ias/api"
+	keymanagerAPI "github.com/oasislabs/oasis-core/go/keymanager/api"
 	cmdCommon "github.com/oasislabs/oasis-core/go/oasis-node/cmd/common"
 	"github.com/oasislabs/oasis-core/go/oasis-node/cmd/common/background"
 	"github.com/oasislabs/oasis-core/go/oasis-node/cmd/common/flags"
@@ -185,6 +186,7 @@ func (n *Node) initBackends() error {
 	scheduler.RegisterService(grpcSrv, n.Consensus.Scheduler())
 	registryAPI.RegisterService(grpcSrv, n.Consensus.Registry())
 	stakingAPI.RegisterService(grpcSrv, n.Consensus.Staking())
+	keymanagerAPI.RegisterService(grpcSrv, n.Consensus.KeyManager())
 	consensusAPI.RegisterService(grpcSrv, n.Consensus)
 
 	cmdCommon.Logger().Debug("backends initialized")

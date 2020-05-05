@@ -17,17 +17,18 @@ import (
 // NetworkFixture describes configuration for the test Oasis network and
 // all the spawned nodes.
 type NetworkFixture struct {
-	TEE            TEEFixture             `json:"tee,omitempty"`
-	Network        NetworkCfg             `json:"network,omitempty"`
-	Entities       []EntityCfg            `json:"entities,omitempty"`
-	Runtimes       []RuntimeFixture       `json:"runtimes,omitempty"`
-	Validators     []ValidatorFixture     `json:"validators,omitempty"`
-	Keymanagers    []KeymanagerFixture    `json:"keymanagers,omitempty"`
-	StorageWorkers []StorageWorkerFixture `json:"storage_workers,omitempty"`
-	ComputeWorkers []ComputeWorkerFixture `json:"compute_workers,omitempty"`
-	Sentries       []SentryFixture        `json:"sentries,omitempty"`
-	Clients        []ClientFixture        `json:"clients,omitempty"`
-	ByzantineNodes []ByzantineFixture     `json:"byzantine_nodes,omitempty"`
+	TEE                TEEFixture                `json:"tee,omitempty"`
+	Network            NetworkCfg                `json:"network,omitempty"`
+	Entities           []EntityCfg               `json:"entities,omitempty"`
+	Runtimes           []RuntimeFixture          `json:"runtimes,omitempty"`
+	Validators         []ValidatorFixture        `json:"validators,omitempty"`
+	Keymanagers        []KeymanagerFixture       `json:"keymanagers,omitempty"`
+	KeymanagerPolicies []KeymanagerPolicyFixture `json:"keymanager_policies,omitempty"`
+	StorageWorkers     []StorageWorkerFixture    `json:"storage_workers,omitempty"`
+	ComputeWorkers     []ComputeWorkerFixture    `json:"compute_workers,omitempty"`
+	Sentries           []SentryFixture           `json:"sentries,omitempty"`
+	Clients            []ClientFixture           `json:"clients,omitempty"`
+	ByzantineNodes     []ByzantineFixture        `json:"byzantine_nodes,omitempty"`
 }
 
 // Create instantiates the network described by the fixture.
@@ -67,6 +68,13 @@ func (f *NetworkFixture) Create(env *env.Env) (*Network, error) {
 
 	// Provision validators.
 	for _, fx := range f.Validators {
+		if _, err = fx.Create(net); err != nil {
+			return nil, err
+		}
+	}
+
+	// Provision key manager policies.
+	for _, fx := range f.KeymanagerPolicies {
 		if _, err = fx.Create(net); err != nil {
 			return nil, err
 		}
@@ -233,10 +241,30 @@ func (f *RuntimeFixture) Create(netFixture *NetworkFixture, net *Network) (*Runt
 	})
 }
 
+// KeymangerPolicyFixgure is a key manager policy fixture.
+type KeymanagerPolicyFixture struct {
+	Runtime int `json:"runtime"`
+	Serial  int `json:"serial"`
+}
+
+// Create instantiates the key manager policy described in the fixture.
+func (f *KeymanagerPolicyFixture) Create(net *Network) (*KeymanagerPolicy, error) {
+	runtime, err := resolveRuntimeOfKind(net, f.Runtime, registry.KindKeyManager)
+	if err != nil {
+		return nil, err
+	}
+
+	return net.NewKeymanagerPolicy(&KeymanagerPolicyCfg{
+		Runtime: runtime,
+		Serial:  f.Serial,
+	})
+}
+
 // KeymanagerFixture is a key manager fixture.
 type KeymanagerFixture struct {
 	Runtime int `json:"runtime"`
 	Entity  int `json:"entity"`
+	Policy  int `json:"policy"`
 
 	AllowEarlyTermination bool `json:"allow_early_termination"`
 	AllowErrorTermination bool `json:"allow_error_termination"`
@@ -259,6 +287,10 @@ func (f *KeymanagerFixture) Create(net *Network) (*Keymanager, error) {
 	if err != nil {
 		return nil, err
 	}
+	policy, err := resolveKMPolicy(net, f.Policy)
+	if err != nil {
+		return nil, err
+	}
 
 	return net.NewKeymanager(&KeymanagerCfg{
 		NodeCfg: NodeCfg{
@@ -269,6 +301,7 @@ func (f *KeymanagerFixture) Create(net *Network) (*Keymanager, error) {
 		},
 		Runtime:       runtime,
 		Entity:        entity,
+		Policy:        policy,
 		SentryIndices: f.Sentries,
 	})
 }
@@ -496,4 +529,12 @@ func resolveSentries(net *Network, indices []int) ([]*Sentry, error) {
 		sentries = append(sentries, allSentries[index])
 	}
 	return sentries, nil
+}
+
+func resolveKMPolicy(net *Network, index int) (*KeymanagerPolicy, error) {
+	policies := net.keymanagerPolicies
+	if index < 0 || index >= len(policies) {
+		return nil, fmt.Errorf("invalid policy index: %d", index)
+	}
+	return policies[index], nil
 }

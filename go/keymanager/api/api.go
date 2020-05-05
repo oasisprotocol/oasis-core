@@ -77,7 +77,7 @@ type Status struct {
 // Backend is a key manager management implementation.
 type Backend interface {
 	// GetStatus returns a key manager status by key manager ID.
-	GetStatus(context.Context, common.Namespace, int64) (*Status, error)
+	GetStatus(context.Context, *registry.NamespaceQuery) (*Status, error)
 
 	// GetStatuses returns all currently tracked key manager statuses.
 	GetStatuses(context.Context, int64) ([]*Status, error)
@@ -138,6 +138,9 @@ func VerifyExtraInfo(logger *logging.Logger, rt *registry.Runtime, nodeRt *node.
 		return nil, fmt.Errorf("keymanager: TEEHardware mismatch")
 	} else if err := registry.VerifyNodeRuntimeEnclaveIDs(logger, nodeRt, rt, ts); err != nil {
 		return nil, err
+	}
+	if nodeRt.ExtraInfo == nil {
+		return nil, fmt.Errorf("keymanager: missing ExtraInfo")
 	}
 
 	var untrustedSignedInitResponse SignedInitResponse
