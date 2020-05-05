@@ -21,12 +21,10 @@ type kmReplicateImpl struct {
 }
 
 func newKmReplicateImpl() scenario.Scenario {
-	// BUG/2885: This should use `simple-keyvalue-enc-client`, but the client
-	// panics when the request goes to the replica.
 	return &kmReplicateImpl{
 		runtimeImpl: *newRuntimeImpl(
 			"keymanager-replication",
-			"simple-keyvalue-client",
+			"simple-keyvalue-enc-client",
 			nil,
 		),
 	}

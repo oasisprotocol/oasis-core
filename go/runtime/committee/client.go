@@ -64,9 +64,23 @@ func (rr *roundRobinNodeSelectionPolicy) UpdateNodes(nodes []signature.PublicKey
 	})
 
 	rr.Lock()
+	defer rr.Unlock()
+
+	// Restore the node that was picked last if possible to avoid the node changing just because of
+	// a new randomized order.
+	var newIndex int
+	if len(rr.nodes) > 0 {
+		lastNode := rr.nodes[rr.index]
+		for idx, n := range nodes {
+			if n.Equal(lastNode) {
+				newIndex = idx
+				break
+			}
+		}
+	}
+
 	rr.nodes = nodes
-	rr.index = 0
-	rr.Unlock()
+	rr.index = newIndex
 }
 
 func (rr *roundRobinNodeSelectionPolicy) Pick() signature.PublicKey {
