@@ -459,6 +459,8 @@ func (c *runtimeClient) CallEnclave(ctx context.Context, request *enclaverpc.Cal
 		var km *keymanager.Client
 		c.Lock()
 		if km = c.kmClients[rt.ID()]; km == nil {
+			c.logger.Debug("creating new key manager client instance")
+
 			km, err = keymanager.New(c.common.ctx, rt, c.common.consensus.KeyManager(), c.common.consensus.Registry(), nil)
 			if err != nil {
 				c.Unlock()
@@ -467,6 +469,7 @@ func (c *runtimeClient) CallEnclave(ctx context.Context, request *enclaverpc.Cal
 				)
 				return nil, api.ErrInternal
 			}
+			c.kmClients[rt.ID()] = km
 		}
 		c.Unlock()
 
@@ -504,8 +507,9 @@ func New(
 			runtimeRegistry: runtimeRegistry,
 			ctx:             ctx,
 		},
-		watchers: make(map[common.Namespace]*blockWatcher),
-		logger:   logging.GetLogger("runtime/client"),
+		watchers:  make(map[common.Namespace]*blockWatcher),
+		kmClients: make(map[common.Namespace]*keymanager.Client),
+		logger:    logging.GetLogger("runtime/client"),
 	}
 	return c, nil
 }
