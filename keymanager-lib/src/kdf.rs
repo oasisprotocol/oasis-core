@@ -218,7 +218,7 @@ impl Kdf {
             // once.
 
             // Attempt to load the master secret.
-            let (master_secret, did_replicate) = match Self::load_master_secret() {
+            let (master_secret, did_replicate) = match Self::load_master_secret(&km_runtime_id) {
                 Some(master_secret) => (master_secret, false),
                 None => {
                     // Couldn't load, fetch the master secret from another
@@ -253,7 +253,7 @@ impl Kdf {
             // The loaded/replicated master secret is consistent with the rest
             // of the world.   Ok to proceed.
             if did_replicate {
-                Self::save_master_secret(&master_secret);
+                Self::save_master_secret(&master_secret, &km_runtime_id);
             }
             inner.master_secret = Some(master_secret);
             inner.checksum = Some(checksum);
@@ -264,7 +264,7 @@ impl Kdf {
 
             // Attempt to load the master secret, the caller may just be
             // behind the rest of the world.
-            let master_secret = match Self::load_master_secret() {
+            let master_secret = match Self::load_master_secret(&km_runtime_id) {
                 Some(master_secret) => master_secret,
                 None => {
                     // Unable to load, perhaps we can generate?
@@ -272,7 +272,7 @@ impl Kdf {
                         return Err(KeyManagerError::ReplicationRequired.into());
                     }
 
-                    Self::generate_master_secret()
+                    Self::generate_master_secret(&km_runtime_id)
                 }
             };
 
@@ -379,7 +379,7 @@ impl Kdf {
         }
     }
 
-    fn load_master_secret() -> Option<MasterSecret> {
+    fn load_master_secret(runtime_id: &RuntimeId) -> Option<MasterSecret> {
         let ciphertext = StorageContext::with_current(|_mkvs, untrusted_local| {
             untrusted_local.get(MASTER_SECRET_STORAGE_KEY.to_vec())
         })
@@ -401,20 +401,24 @@ impl Kdf {
         // Decrypt the persisted master secret.
         let d2 = Self::new_d2();
         let plaintext = d2
-            .open(&nonce, ciphertext.to_vec(), vec![])
+            .open(&nonce, ciphertext.to_vec(), runtime_id.as_ref().to_vec())
             .expect("persisted state is corrupted");
 
         Some(MasterSecret::from(plaintext))
     }
 
-    fn save_master_secret(master_secret: &MasterSecret) {
+    fn save_master_secret(master_secret: &MasterSecret, runtime_id: &RuntimeId) {
         let mut rng = OsRng {};
 
         // Encrypt the master secret.
         let mut nonce = [0u8; NONCE_SIZE];
         rng.fill(&mut nonce);
         let d2 = Self::new_d2();
-        let mut ciphertext = d2.seal(&nonce, master_secret.as_ref().to_vec(), vec![]);
+        let mut ciphertext = d2.seal(
+            &nonce,
+            master_secret.as_ref().to_vec(),
+            runtime_id.as_ref().to_vec(),
+        );
         ciphertext.extend_from_slice(&nonce);
 
         // Persist the encrypted master secret.
@@ -424,7 +428,7 @@ impl Kdf {
         .expect("failed to persist master secret");
     }
 
-    fn generate_master_secret() -> MasterSecret {
+    fn generate_master_secret(runtime_id: &RuntimeId) -> MasterSecret {
         let mut rng = OsRng {};
 
         // TODO: Support static keying for debugging.
@@ -432,7 +436,7 @@ impl Kdf {
         rng.fill(&mut master_secret);
         let master_secret = MasterSecret::from(master_secret.to_vec());
 
-        Self::save_master_secret(&master_secret);
+        Self::save_master_secret(&master_secret, runtime_id);
 
         master_secret
     }
