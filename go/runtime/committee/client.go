@@ -157,6 +157,12 @@ type clientConnState struct {
 	certPool *x509.CertPool
 }
 
+// Refresh refreshes the node connection without closing the virtual connection.
+func (cs *clientConnState) Refresh() error {
+	cs.resolver.UpdateState(resolver.State{})
+	return cs.Update(cs.node)
+}
+
 // Update updates the node connection information without closing the connection.
 func (cs *clientConnState) Update(n *node.Node) error {
 	// Update node descriptor.
@@ -381,15 +387,10 @@ func (cc *committeeClient) refreshConnectionLocked(id signature.PublicKey) {
 		return
 	}
 
-	// TODO: Once https://github.com/grpc/grpc-go/pull/3491 is released (gRPC 1.29) we should just
-	//       emit an empty resolver state (via UpdateState) to clear any connections and then push
-	//       actual addresses.
-	node := cs.node
-	cc.deleteConnectionLocked(id)
-	if err := cc.updateConnectionLocked(node); err != nil {
+	if err := cs.Refresh(); err != nil {
 		cc.logger.Error("failed to refresh connection",
 			"err", err,
-			"node", node,
+			"node", cs.node,
 		)
 		cc.deleteConnectionLocked(id)
 	}
