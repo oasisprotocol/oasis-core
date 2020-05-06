@@ -262,8 +262,8 @@ func (g *Genesis) SanityCheck(stakingTotalSupply *quantity.Quantity) error {
 }
 
 func init() {
-	// 2 allows for up to 1.8e19 base units to be staked.
-	if err := TokensPerVotingPower.FromUint64(2); err != nil {
+	// 16 allows for up to 1.8e19 base units to be staked.
+	if err := TokensPerVotingPower.FromUint64(16); err != nil {
 		panic(err)
 	}
 }
