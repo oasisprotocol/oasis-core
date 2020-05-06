@@ -88,8 +88,7 @@ func (q *incomingQueue) addCallLocked(call []byte, callHash hash.Hash) {
 
 // Add adds a call to the incoming queue.
 func (q *incomingQueue) Add(call []byte) error {
-	var callHash hash.Hash
-	callHash.FromBytes(call)
+	callHash := hash.NewFromBytes(call)
 
 	q.Lock()
 	defer q.Unlock()
@@ -113,8 +112,7 @@ func (q *incomingQueue) AddBatch(batch transaction.RawBatch) error {
 	// Compute all hashes before taking the lock.
 	var callHashes []hash.Hash
 	for _, call := range batch {
-		var callHash hash.Hash
-		callHash.FromBytes(call)
+		callHash := hash.NewFromBytes(call)
 		callHashes = append(callHashes, callHash)
 	}
 
@@ -181,8 +179,7 @@ func (q *incomingQueue) Take(force bool) (transaction.RawBatch, error) {
 			returned = append(returned, call)
 			returnedSizeBytes += callSize
 
-			var callHash hash.Hash
-			callHash.FromBytes(call)
+			callHash := hash.NewFromBytes(call)
 			returnedCallHashes[callHash] = true
 			continue
 		}

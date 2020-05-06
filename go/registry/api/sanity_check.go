@@ -187,8 +187,7 @@ func SanityCheckNodes(
 		nodeLookup.nodes[node.P2P.ID] = node
 		nodeLookup.nodesList = append(nodeLookup.nodesList, node)
 
-		var h = hash.Hash{}
-		h.FromBytes(node.Committee.Certificate)
+		h := hash.NewFromBytes(node.Committee.Certificate)
 		nodeLookup.nodesCertHashes[h] = node
 	}
 
@@ -397,8 +396,7 @@ func (n *sanityCheckNodeLookup) NodeByConsensusOrP2PKey(ctx context.Context, key
 }
 
 func (n *sanityCheckNodeLookup) NodeByCertificate(ctx context.Context, cert []byte) (*node.Node, error) {
-	var h = hash.Hash{}
-	h.FromBytes(cert)
+	h := hash.NewFromBytes(cert)
 
 	node, ok := n.nodesCertHashes[h]
 	if !ok {

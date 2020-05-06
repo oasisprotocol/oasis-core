@@ -98,11 +98,7 @@ func (h *Header) MostlyEqual(cmp *Header) bool {
 
 // EncodedHash returns the encoded cryptographic hash of the header.
 func (h *Header) EncodedHash() hash.Hash {
-	var hh hash.Hash
-
-	hh.From(h)
-
-	return hh
+	return hash.NewFrom(h)
 }
 
 // StorageRoots returns the storage roots contained in this header.

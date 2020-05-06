@@ -122,8 +122,7 @@ func TestProof(t *testing.T) {
 	require.Error(err, "VerifyProof should fail with empty proof")
 
 	// Different root.
-	var bogusHash hash.Hash
-	bogusHash.FromBytes([]byte("i am a bogus hash"))
+	bogusHash := hash.NewFromBytes([]byte("i am a bogus hash"))
 	_, err = pv.VerifyProof(ctx, bogusHash, proof)
 	require.Error(err, "VerifyProof should fail with proof for a different root")
 

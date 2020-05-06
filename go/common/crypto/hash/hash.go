@@ -109,6 +109,18 @@ func (h Hash) String() string {
 	return hex.EncodeToString(h[:])
 }
 
+// NewFrom creates a new hash by hashing the CBOR representation of the given type.
+func NewFrom(v interface{}) (h Hash) {
+	h.From(v)
+	return
+}
+
+// NewFromBytes creates a new hash by hashing the provided byte string(s).
+func NewFromBytes(data ...[]byte) (h Hash) {
+	h.FromBytes(data...)
+	return
+}
+
 // Builder is a hash builder that can be used to compute hashes iteratively.
 type Builder struct {
 	hasher hash.Hash

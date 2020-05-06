@@ -57,8 +57,7 @@ func testScheduleTransactions(t *testing.T, td *testDispatcher, algorithm api.Al
 
 	// Test ScheduleTx.
 	testTx := []byte("hello world")
-	var txBytes hash.Hash
-	txBytes.FromBytes(testTx)
+	txBytes := hash.NewFromBytes(testTx)
 	err := algorithm.ScheduleTx(testTx)
 	require.NoError(t, err, "ScheduleTx(testTx)")
 	require.True(t, algorithm.IsQueued(txBytes), "IsQueued(tx)")
@@ -75,8 +74,7 @@ func testScheduleTransactions(t *testing.T, td *testDispatcher, algorithm api.Al
 	td.Clear()
 	td.ShouldFail = true
 	testTx2 := []byte("hello world2")
-	var tx2Bytes hash.Hash
-	tx2Bytes.FromBytes(testTx2)
+	tx2Bytes := hash.NewFromBytes(testTx2)
 
 	err = algorithm.ScheduleTx(testTx2)
 	require.NoError(t, err, "ScheduleTx(testTx2)")

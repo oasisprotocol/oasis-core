@@ -113,9 +113,7 @@ type SignedTransaction struct {
 
 // Hash returns the cryptographic hash of the encoded transaction.
 func (s *SignedTransaction) Hash() hash.Hash {
-	var hash hash.Hash
-	hash.From(s)
-	return hash
+	return hash.NewFrom(s)
 }
 
 // PrettyPrint writes a pretty-printed representation of the type

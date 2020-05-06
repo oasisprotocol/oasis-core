@@ -141,11 +141,7 @@ func (c Committee) String() string {
 
 // EncodedMembersHash returns the encoded cryptographic hash of the committee members.
 func (c *Committee) EncodedMembersHash() hash.Hash {
-	var hh hash.Hash
-
-	hh.From(c.Members)
-
-	return hh
+	return hash.NewFrom(c.Members)
 }
 
 // TokensPerVotingPower is the ratio of base units staked to validator power.

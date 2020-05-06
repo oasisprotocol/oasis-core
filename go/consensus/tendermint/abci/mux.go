@@ -711,8 +711,7 @@ func (mux *abciMux) CheckTx(req types.RequestCheckTx) types.ResponseCheckTx {
 		// Blindly accept all transactions if configured to do so. We still need to periodically
 		// remove old transactions as otherwise the mempool will fill up, so keep track of when
 		// transactions were added and invalidate them after the configured interval.
-		var txHash hash.Hash
-		txHash.FromBytes(req.Tx)
+		txHash := hash.NewFromBytes(req.Tx)
 
 		if req.Type == types.CheckTxType_Recheck {
 			// Check timestamp.
@@ -750,8 +749,7 @@ func (mux *abciMux) CheckTx(req types.RequestCheckTx) types.ResponseCheckTx {
 
 			// XXX: The Tendermint mempool should have provisions for this instead
 			//      of us hacking our way through this here.
-			var txHash hash.Hash
-			txHash.FromBytes(req.Tx)
+			txHash := hash.NewFromBytes(req.Tx)
 
 			mux.notifyInvalidatedCheckTx(txHash, err)
 		}

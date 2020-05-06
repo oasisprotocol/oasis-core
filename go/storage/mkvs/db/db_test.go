@@ -35,8 +35,7 @@ func TestHashedWriteLog(t *testing.T) {
 	wla := make(writelog.Annotations, len(wl))
 	hashes := make(map[hash.Hash]*node.Pointer)
 	for i := 0; i < len(wl); i++ {
-		var h hash.Hash
-		h.FromBytes(wl[i].Value)
+		h := hash.NewFromBytes(wl[i].Value)
 		ptr := &node.Pointer{
 			Clean: true,
 			Hash:  h,

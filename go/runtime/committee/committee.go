@@ -108,8 +108,7 @@ Members:
 
 	// If the set of (filtered) committee members did not change, there is no need to trigger a
 	// reset and recreate everything. Nodes will be updated anyway.
-	var cid hash.Hash
-	cid.From(filtered)
+	cid := hash.NewFrom(filtered)
 
 	if cw.lastCommitteeID.Equal(&cid) {
 		cw.logger.Debug("not updating committee as members/roles have not changed",

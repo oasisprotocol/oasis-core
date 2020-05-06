@@ -538,9 +538,7 @@ func (s *ImmutableState) NodeByConsensusOrP2PKey(ctx context.Context, key signat
 
 // Hashes a node's committee certificate into a key for the certificate to node ID map.
 func nodeCertificateToMapKey(cert []byte) hash.Hash {
-	var h hash.Hash
-	h.FromBytes(cert)
-	return h
+	return hash.NewFromBytes(cert)
 }
 
 // NodeByCertificate looks up a specific node by its certificate.

@@ -44,8 +44,7 @@ func TestTransaction(t *testing.T) {
 	require.NoError(t, err, "GetTransactions")
 	require.Len(t, txns, 1, "there should be one transaction")
 
-	var txHash hash.Hash
-	txHash.FromBytes(tx.Input)
+	txHash := hash.NewFromBytes(tx.Input)
 
 	require.True(t, txns[0].Equal(&tx), "transaction should have correct artifacts")
 
@@ -87,8 +86,7 @@ func TestTransaction(t *testing.T) {
 	require.NoError(t, err, "GetTransaction")
 	require.True(t, rtx.Equal(&tx), "transaction should have correct artifacts")
 
-	var missingHash hash.Hash
-	missingHash.FromBytes([]byte("this transaction does not exist"))
+	missingHash := hash.NewFromBytes([]byte("this transaction does not exist"))
 
 	_, err = tree.GetTransaction(ctx, missingHash)
 	require.Error(t, err, "GetTransaction")
