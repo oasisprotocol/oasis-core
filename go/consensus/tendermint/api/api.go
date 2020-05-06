@@ -149,6 +149,8 @@ func NewBlock(blk *tmtypes.Block) *consensus.Block {
 
 	return &consensus.Block{
 		Height: blk.Header.Height,
+		Hash:   blk.Header.Hash(),
+		Time:   blk.Header.Time,
 		Meta:   rawMeta,
 	}
 }

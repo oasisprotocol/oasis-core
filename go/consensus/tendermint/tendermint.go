@@ -25,6 +25,7 @@ import (
 	tmcli "github.com/tendermint/tendermint/rpc/client/local"
 	tmrpctypes "github.com/tendermint/tendermint/rpc/core/types"
 	tmtypes "github.com/tendermint/tendermint/types"
+	tmdb "github.com/tendermint/tm-db"
 
 	beaconAPI "github.com/oasislabs/oasis-core/go/beacon/api"
 	"github.com/oasislabs/oasis-core/go/common"
@@ -198,6 +199,8 @@ type tendermintService struct {
 	client        *tmcli.Local
 	blockNotifier *pubsub.Broker
 	failMonitor   *failMonitor
+
+	stateDb tmdb.DB
 
 	beacon          beaconAPI.Backend
 	epochtime       epochtimeAPI.Backend
@@ -728,6 +731,20 @@ func (t *tendermintService) WatchBlocks(ctx context.Context) (<-chan *consensusA
 	return mapCh, sub, nil
 }
 
+func (t *tendermintService) ensureStarted(ctx context.Context) error {
+	// Make sure that the Tendermint service has started so that we
+	// have the client interface available.
+	select {
+	case <-t.startedCh:
+	case <-t.ctx.Done():
+		return t.ctx.Err()
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+
+	return nil
+}
+
 func (t *tendermintService) initialize() error {
 	t.Lock()
 	defer t.Unlock()
@@ -802,14 +819,8 @@ func (t *tendermintService) initialize() error {
 }
 
 func (t *tendermintService) GetTendermintBlock(ctx context.Context, height int64) (*tmtypes.Block, error) {
-	// Make sure that the Tendermint service has started so that we
-	// have the client interface available.
-	select {
-	case <-t.startedCh:
-	case <-t.ctx.Done():
-		return nil, t.ctx.Err()
-	case <-ctx.Done():
-		return nil, ctx.Err()
+	if err := t.ensureStarted(ctx); err != nil {
+		return nil, err
 	}
 
 	var tmHeight int64
@@ -1035,6 +1046,25 @@ func (t *tendermintService) lazyInit() error {
 		return err
 	}
 
+	// HACK: Wrap the provider so we can extract the state database handle. This is required because
+	// Tendermint does not expose a way to access the state database and we need it to bypass some
+	// stupid things like pagination on the in-process "client".
+	wrapDbProvider := func(dbCtx *tmnode.DBContext) (tmdb.DB, error) {
+		db, derr := dbProvider(dbCtx)
+		if derr != nil {
+			return nil, derr
+		}
+
+		switch dbCtx.ID {
+		case "state":
+			// Tendermint state database.
+			t.stateDb = db
+		default:
+		}
+
+		return db, nil
+	}
+
 	// HACK: tmnode.NewNode() triggers block replay and or ABCI chain
 	// initialization, instead of t.node.Start().  This is a problem
 	// because at the time that lazyInit() is called, none of the ABCI
@@ -1048,12 +1078,16 @@ func (t *tendermintService) lazyInit() error {
 			&tmp2p.NodeKey{PrivKey: crypto.SignerToTendermint(t.nodeSigner)},
 			tmproxy.NewLocalClientCreator(t.mux.Mux()),
 			tendermintGenesisProvider,
-			dbProvider,
+			wrapDbProvider,
 			tmnode.DefaultMetricsProvider(tenderConfig.Instrumentation),
 			newLogAdapter(!viper.GetBool(cfgLogDebug)),
 		)
 		if err != nil {
 			return fmt.Errorf("tendermint: failed to create node: %w", err)
+		}
+		if t.stateDb == nil {
+			// Sanity check for the above wrapDbProvider hack in case the DB provider changes.
+			panic("tendermint: state database not set")
 		}
 		t.client = tmcli.New(t.node)
 		t.failMonitor = newFailMonitor(t.Logger, t.node.ConsensusState().Wait)

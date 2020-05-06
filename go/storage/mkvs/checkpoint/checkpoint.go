@@ -50,6 +50,10 @@ type ChunkProvider interface {
 type GetCheckpointsRequest struct {
 	Version   uint16           `json:"version"`
 	Namespace common.Namespace `json:"namespace"`
+
+	// RootVersion specifies an optional root version to limit the request to. If specified, only
+	// checkpoints for roots with the specific version will be considered.
+	RootVersion *uint64 `json:"root_version,omitempty"`
 }
 
 // Creator is a checkpoint creator.
@@ -82,6 +86,10 @@ type DeleteCheckpointRequest struct {
 type Restorer interface {
 	// StartRestore starts a checkpoint restoration process.
 	StartRestore(ctx context.Context, checkpoint *Metadata) error
+
+	// GetCurrentCheckpoint returns the checkpoint that is being restored. If no restoration is in
+	// progress, this method may return nil.
+	GetCurrentCheckpoint() *Metadata
 
 	// RestoreChunk restores the given chunk into the underlying node database.
 	//
@@ -125,16 +133,25 @@ type Metadata struct {
 	Chunks  []hash.Hash `json:"chunks"`
 }
 
+// EncodedHash returns the encoded cryptographic hash of the checkpoint metadata.
+func (m *Metadata) EncodedHash() hash.Hash {
+	var hh hash.Hash
+
+	hh.From(m)
+
+	return hh
+}
+
 // GetChunkMetadata returns the chunk metadata for the corresponding chunk.
-func (c Metadata) GetChunkMetadata(idx uint64) (*ChunkMetadata, error) {
-	if idx >= uint64(len(c.Chunks)) {
+func (m Metadata) GetChunkMetadata(idx uint64) (*ChunkMetadata, error) {
+	if idx >= uint64(len(m.Chunks)) {
 		return nil, ErrChunkNotFound
 	}
 
 	return &ChunkMetadata{
-		Version: c.Version,
-		Root:    c.Root,
+		Version: m.Version,
+		Root:    m.Root,
 		Index:   idx,
-		Digest:  c.Chunks[int(idx)],
+		Digest:  m.Chunks[int(idx)],
 	}, nil
 }

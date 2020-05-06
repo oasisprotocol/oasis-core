@@ -182,6 +182,9 @@ func TestFileCheckpointCreator(t *testing.T) {
 	err = rs.StartRestore(ctx, cp)
 	require.Error(err, "StartRestore should fail when a restore is already in progress")
 	require.True(errors.Is(err, ErrRestoreAlreadyInProgress))
+	rcp := rs.GetCurrentCheckpoint()
+	require.EqualValues(rcp, cp, "GetCurrentCheckpoint should return the checkpoint being restored")
+	require.NotSame(rcp, cp, "GetCurrentCheckpoint should return a copy")
 	for i := 0; i < len(cp.Chunks); i++ {
 		var cm *ChunkMetadata
 		cm, err = cp.GetChunkMetadata(uint64(i))

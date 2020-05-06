@@ -30,6 +30,7 @@ import (
 	"github.com/oasislabs/oasis-core/go/worker/common/p2p"
 	"github.com/oasislabs/oasis-core/go/worker/compute"
 	"github.com/oasislabs/oasis-core/go/worker/compute/txnscheduler"
+	workerConsensusRPC "github.com/oasislabs/oasis-core/go/worker/consensusrpc"
 	"github.com/oasislabs/oasis-core/go/worker/keymanager"
 	"github.com/oasislabs/oasis-core/go/worker/registration"
 	workerSentry "github.com/oasislabs/oasis-core/go/worker/sentry"
@@ -374,6 +375,11 @@ func (args *argBuilder) workerStorageCheckpointCheckInterval(interval time.Durat
 
 func (args *argBuilder) workerTxnschedulerCheckTxEnabled() *argBuilder {
 	args.vec = append(args.vec, "--"+txnscheduler.CfgCheckTxEnabled)
+	return args
+}
+
+func (args *argBuilder) workerConsensusRPCEnabled() *argBuilder {
+	args.vec = append(args.vec, "--"+workerConsensusRPC.CfgWorkerEnabled)
 	return args
 }
 

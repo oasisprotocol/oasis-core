@@ -110,7 +110,13 @@ func (fc *fileCreator) GetCheckpoints(ctx context.Context, request *GetCheckpoin
 		return []*Metadata{}, nil
 	}
 
-	matches, err := filepath.Glob(filepath.Join(fc.dataDir, "*", "*", checkpointMetadataFile))
+	// Apply optional root version filter.
+	versionGlob := "*"
+	if request.RootVersion != nil {
+		versionGlob = strconv.FormatUint(*request.RootVersion, 10)
+	}
+
+	matches, err := filepath.Glob(filepath.Join(fc.dataDir, versionGlob, "*", checkpointMetadataFile))
 	if err != nil {
 		return nil, fmt.Errorf("checkpoint: failed to enumerate checkpoints: %w", err)
 	}

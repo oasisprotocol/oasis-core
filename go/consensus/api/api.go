@@ -4,6 +4,7 @@ package api
 
 import (
 	"context"
+	"time"
 
 	beacon "github.com/oasislabs/oasis-core/go/beacon/api"
 	"github.com/oasislabs/oasis-core/go/common/cbor"
@@ -42,9 +43,10 @@ var (
 	ErrVersionNotFound = errors.New(moduleName, 3, "consensus: version not found")
 )
 
-// ClientBackend is a limited consensus interface used by clients that
-// connect to the local node.
+// ClientBackend is a limited consensus interface used by clients that connect to the local full
+// node. This is separate from light clients which use the LightClientBackend interface.
 type ClientBackend interface {
+	LightClientBackend
 	TransactionAuthHandler
 
 	// SubmitTx submits a signed consensus transaction.
@@ -87,6 +89,10 @@ type ClientBackend interface {
 type Block struct {
 	// Height contains the block height.
 	Height int64 `json:"height"`
+	// Hash contains the block header hash.
+	Hash []byte `json:"hash"`
+	// Time is the second-granular consensus time.
+	Time time.Time `json:"time"`
 	// Meta contains the consensus backend specific block metadata.
 	Meta cbor.RawMessage `json:"meta"`
 }

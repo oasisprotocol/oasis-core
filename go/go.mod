@@ -55,7 +55,7 @@ require (
 	github.com/spf13/viper v1.6.3
 	github.com/steveyen/gtreap v0.0.0-20150807155958-0abe01ef9be2 // indirect
 	github.com/stretchr/testify v1.5.1
-	github.com/tendermint/go-amino v0.15.0 // indirect
+	github.com/tendermint/go-amino v0.15.0
 	github.com/tendermint/tendermint v0.32.8
 	github.com/tendermint/tm-db v0.5.1
 	github.com/thepudds/fzgo v0.2.2
