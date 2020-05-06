@@ -315,6 +315,9 @@ type NodeLookup interface {
 
 	// Returns the node that corresponds to the given committee certificate.
 	NodeByCertificate(ctx context.Context, cert []byte) (*node.Node, error)
+
+	// Returns a list of all nodes.
+	Nodes(ctx context.Context) ([]*node.Node, error)
 }
 
 // RuntimeLookup interface implements various ways for the verification
@@ -331,6 +334,9 @@ type RuntimeLookup interface {
 
 	// AnyRuntime looks up either an active or suspended runtime by its identifier and returns it.
 	AnyRuntime(ctx context.Context, id common.Namespace) (*Runtime, error)
+
+	// AllRuntimes returns a list of all runtimes (including suspended ones).
+	AllRuntimes(ctx context.Context) ([]*Runtime, error)
 }
 
 // VerifyRegisterEntityArgs verifies arguments for RegisterEntity.
