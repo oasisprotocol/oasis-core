@@ -11,6 +11,7 @@ import (
 	tmtypes "github.com/tendermint/tendermint/types"
 
 	"github.com/oasislabs/oasis-core/go/common/cbor"
+	"github.com/oasislabs/oasis-core/go/common/crypto/hash"
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
 	"github.com/oasislabs/oasis-core/go/common/logging"
 	"github.com/oasislabs/oasis-core/go/common/pubsub"
@@ -35,6 +36,14 @@ type tendermintBackend struct {
 	escrowNotifier   *pubsub.Broker
 
 	closedCh chan struct{}
+}
+
+// Extend the abci Event struct with the transaction hash if the event was
+// the result of a transaction.  Block events have Hash set to the empty hash.
+type abciEventWithHash struct {
+	abcitypes.Event
+
+	TxHash hash.Hash
 }
 
 func (tb *tendermintBackend) TotalSupply(ctx context.Context, height int64) (*quantity.Quantity, error) {
@@ -142,6 +151,23 @@ func (tb *tendermintBackend) StateToGenesis(ctx context.Context, height int64) (
 	return q.Genesis(ctx)
 }
 
+func convertTmBlockEvents(beginBlockEvents []abcitypes.Event, endBlockEvents []abcitypes.Event) []abciEventWithHash {
+	var tmEvents []abciEventWithHash
+	for _, bbe := range beginBlockEvents {
+		var ev abciEventWithHash
+		ev.Event = bbe
+		ev.TxHash.Empty()
+		tmEvents = append(tmEvents, ev)
+	}
+	for _, ebe := range endBlockEvents {
+		var ev abciEventWithHash
+		ev.Event = ebe
+		ev.TxHash.Empty()
+		tmEvents = append(tmEvents, ev)
+	}
+	return tmEvents
+}
+
 func (tb *tendermintBackend) GetEvents(ctx context.Context, height int64) ([]api.Event, error) {
 	// Get block results at given height.
 	var results *tmrpctypes.ResultBlockResults
@@ -154,10 +180,33 @@ func (tb *tendermintBackend) GetEvents(ctx context.Context, height int64) ([]api
 		return nil, err
 	}
 
+	// Get transactions at given height.
+	txns, err := tb.service.GetTransactions(ctx, height)
+	if err != nil {
+		tb.logger.Error("failed to get tendermint transactions",
+			"err", err,
+			"height", height,
+		)
+		return nil, err
+	}
+
 	// Decode events from block results.
-	tmEvents := append(results.BeginBlockEvents, results.EndBlockEvents...)
-	for _, txResults := range results.TxsResults {
-		tmEvents = append(tmEvents, txResults.Events...)
+	tmEvents := convertTmBlockEvents(results.BeginBlockEvents, results.EndBlockEvents)
+	for txIdx, txResults := range results.TxsResults {
+		// The order of transactions in txns and results.TxsResults is
+		// supposed to match, so the same index in both slices refers to the
+		// same transaction.
+
+		// Generate hash of transaction.
+		evHash := hash.NewFromBytes(txns[txIdx])
+
+		// Append hash to each event.
+		for _, tmEv := range txResults.Events {
+			var ev abciEventWithHash
+			ev.Event = tmEv
+			ev.TxHash = evHash
+			tmEvents = append(tmEvents, ev)
+		}
 	}
 	return tb.onABCIEvents(ctx, tmEvents, height, false)
 }
@@ -210,23 +259,34 @@ func (tb *tendermintBackend) worker(ctx context.Context) {
 }
 
 func (tb *tendermintBackend) onEventDataNewBlock(ctx context.Context, ev tmtypes.EventDataNewBlock) {
-	events := append([]abcitypes.Event{}, ev.ResultBeginBlock.GetEvents()...)
-	events = append(events, ev.ResultEndBlock.GetEvents()...)
+	events := convertTmBlockEvents(ev.ResultBeginBlock.GetEvents(), ev.ResultEndBlock.GetEvents())
 
 	_, _ = tb.onABCIEvents(ctx, events, ev.Block.Header.Height, true)
 }
 
 func (tb *tendermintBackend) onEventDataTx(ctx context.Context, tx tmtypes.EventDataTx) {
-	_, _ = tb.onABCIEvents(ctx, tx.Result.Events, tx.Height, true)
+	evHash := hash.NewFromBytes(tx.Tx)
+
+	var events []abciEventWithHash
+	for _, tmEv := range tx.Result.Events {
+		var ev abciEventWithHash
+		ev.Event = tmEv
+		ev.TxHash = evHash
+		events = append(events, ev)
+	}
+
+	_, _ = tb.onABCIEvents(ctx, events, tx.Height, true)
 }
 
-func (tb *tendermintBackend) onABCIEvents(context context.Context, tmEvents []abcitypes.Event, height int64, doBroadcast bool) ([]api.Event, error) {
+func (tb *tendermintBackend) onABCIEvents(context context.Context, tmEvents []abciEventWithHash, height int64, doBroadcast bool) ([]api.Event, error) {
 	var events []api.Event
 	for _, tmEv := range tmEvents {
 		// Ignore events that don't relate to the staking app.
 		if tmEv.GetType() != app.EventType {
 			continue
 		}
+
+		eh := tmEv.TxHash
 
 		for _, pair := range tmEv.GetAttributes() {
 			key := pair.GetKey()
@@ -250,7 +310,7 @@ func (tb *tendermintBackend) onABCIEvents(context context.Context, tmEvents []ab
 				if doBroadcast {
 					tb.escrowNotifier.Broadcast(ee)
 				} else {
-					events = append(events, api.Event{EscrowEvent: ee})
+					events = append(events, api.Event{TxHash: eh, EscrowEvent: ee})
 				}
 			} else if bytes.Equal(key, app.KeyTransfer) {
 				// Transfer event.
@@ -269,7 +329,7 @@ func (tb *tendermintBackend) onABCIEvents(context context.Context, tmEvents []ab
 				if doBroadcast {
 					tb.transferNotifier.Broadcast(&e)
 				} else {
-					events = append(events, api.Event{TransferEvent: &e})
+					events = append(events, api.Event{TxHash: eh, TransferEvent: &e})
 				}
 			} else if bytes.Equal(key, app.KeyReclaimEscrow) {
 				// Reclaim escrow event.
@@ -290,7 +350,7 @@ func (tb *tendermintBackend) onABCIEvents(context context.Context, tmEvents []ab
 				if doBroadcast {
 					tb.escrowNotifier.Broadcast(ee)
 				} else {
-					events = append(events, api.Event{EscrowEvent: ee})
+					events = append(events, api.Event{TxHash: eh, EscrowEvent: ee})
 				}
 			} else if bytes.Equal(key, app.KeyAddEscrow) {
 				// Add escrow event.
@@ -311,7 +371,7 @@ func (tb *tendermintBackend) onABCIEvents(context context.Context, tmEvents []ab
 				if doBroadcast {
 					tb.escrowNotifier.Broadcast(ee)
 				} else {
-					events = append(events, api.Event{EscrowEvent: ee})
+					events = append(events, api.Event{TxHash: eh, EscrowEvent: ee})
 				}
 			} else if bytes.Equal(key, app.KeyBurn) {
 				// Burn event.
@@ -330,7 +390,7 @@ func (tb *tendermintBackend) onABCIEvents(context context.Context, tmEvents []ab
 				if doBroadcast {
 					tb.burnNotifier.Broadcast(&e)
 				} else {
-					events = append(events, api.Event{BurnEvent: &e})
+					events = append(events, api.Event{TxHash: eh, BurnEvent: &e})
 				}
 			}
 		}
