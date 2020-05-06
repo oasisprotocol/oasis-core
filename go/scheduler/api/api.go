@@ -4,9 +4,8 @@ package api
 import (
 	"context"
 	"fmt"
+	"math"
 	"strings"
-
-	tmtypes "github.com/tendermint/tendermint/types"
 
 	"github.com/oasislabs/oasis-core/go/common"
 	"github.com/oasislabs/oasis-core/go/common/crypto/hash"
@@ -258,8 +257,11 @@ func (g *Genesis) SanityCheck(stakingTotalSupply *quantity.Quantity) error {
 		if err != nil {
 			return fmt.Errorf("scheduler: sanity check failed: total supply would break voting power computation: %w", err)
 		}
-		if supplyPower > tmtypes.MaxTotalVotingPower {
-			return fmt.Errorf("init chain: total supply power %d exceeds Tendermint voting power limit %d", supplyPower, tmtypes.MaxTotalVotingPower)
+		// I've been advised not to import implementation details.
+		// Instead, here's our own number that satisfies all current implementations' limits.
+		maxTotalVotingPower := int64(math.MaxInt64) / 8
+		if supplyPower > maxTotalVotingPower {
+			return fmt.Errorf("init chain: total supply power %d exceeds Tendermint voting power limit %d", supplyPower, maxTotalVotingPower)
 		}
 	}
 
