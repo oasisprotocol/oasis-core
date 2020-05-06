@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"strings"
 
+	tmtypes "github.com/tendermint/tendermint/types"
+
 	"github.com/oasislabs/oasis-core/go/common"
 	"github.com/oasislabs/oasis-core/go/common/crypto/hash"
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
@@ -252,9 +254,12 @@ func (g *Genesis) SanityCheck(stakingTotalSupply *quantity.Quantity) error {
 	}
 
 	if !g.Parameters.DebugBypassStake {
-		_, err := VotingPowerFromTokens(stakingTotalSupply)
+		supplyPower, err := VotingPowerFromTokens(stakingTotalSupply)
 		if err != nil {
 			return fmt.Errorf("scheduler: sanity check failed: total supply would break voting power computation: %w", err)
+		}
+		if supplyPower > tmtypes.MaxTotalVotingPower {
+			return fmt.Errorf("init chain: total supply power %d exceeds Tendermint voting power limit %d", supplyPower, tmtypes.MaxTotalVotingPower)
 		}
 	}
 
