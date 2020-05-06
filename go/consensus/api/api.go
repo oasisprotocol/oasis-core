@@ -80,6 +80,9 @@ type ClientBackend interface {
 	// WatchBlocks returns a channel that produces a stream of consensus
 	// blocks as they are being finalized.
 	WatchBlocks(ctx context.Context) (<-chan *Block, pubsub.ClosableSubscription, error)
+
+	// GetGenesisDocument returns the original genesis document.
+	GetGenesisDocument(ctx context.Context) (*genesis.Document, error)
 }
 
 // Block is a consensus block.

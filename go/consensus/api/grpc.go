@@ -34,6 +34,8 @@ var (
 	methodGetBlock = serviceName.NewMethod("GetBlock", int64(0))
 	// methodGetTransactions is the GetTransactions method.
 	methodGetTransactions = serviceName.NewMethod("GetTransactions", int64(0))
+	// methodGetGenesisDocument is the GetGenesisDocument method.
+	methodGetGenesisDocument = serviceName.NewMethod("GetGenesisDocument", nil)
 
 	// methodWatchBlocks is the WatchBlocks method.
 	methodWatchBlocks = serviceName.NewMethod("WatchBlocks", nil)
@@ -81,6 +83,10 @@ var (
 			{
 				MethodName: methodGetTransactions.ShortName(),
 				Handler:    handlerGetTransactions,
+			},
+			{
+				MethodName: methodGetGenesisDocument.ShortName(),
+				Handler:    handlerGetGenesisDocument,
 			},
 		},
 		Streams: []grpc.StreamDesc{
@@ -297,6 +303,25 @@ func handlerGetTransactions( // nolint: golint
 	return interceptor(ctx, height, info, handler)
 }
 
+func handlerGetGenesisDocument( // nolint: golint
+	srv interface{},
+	ctx context.Context,
+	dec func(interface{}) error,
+	interceptor grpc.UnaryServerInterceptor,
+) (interface{}, error) {
+	if interceptor == nil {
+		return srv.(Backend).GetGenesisDocument(ctx)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: methodGetGenesisDocument.FullName(),
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(Backend).GetGenesisDocument(ctx)
+	}
+	return interceptor(ctx, nil, info, handler)
+}
+
 func handlerWatchBlocks(srv interface{}, stream grpc.ServerStream) error {
 	if err := stream.RecvMsg(nil); err != nil {
 		return err
@@ -496,6 +521,14 @@ func (c *consensusClient) GetTransactions(ctx context.Context, height int64) ([]
 		return nil, err
 	}
 	return rsp, nil
+}
+
+func (c *consensusClient) GetGenesisDocument(ctx context.Context) (*genesis.Document, error) {
+	var rsp genesis.Document
+	if err := c.conn.Invoke(ctx, methodGetGenesisDocument.FullName(), nil, &rsp); err != nil {
+		return nil, err
+	}
+	return &rsp, nil
 }
 
 func (c *consensusClient) WatchBlocks(ctx context.Context) (<-chan *Block, pubsub.ClosableSubscription, error) {
