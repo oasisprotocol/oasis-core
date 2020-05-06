@@ -131,9 +131,8 @@ type Transaction struct {
 // Hash returns the hash of the transaction.
 //
 // This requires the input artifact to be available.
-func (t Transaction) Hash() (h hash.Hash) {
-	h.FromBytes(t.Input)
-	return
+func (t Transaction) Hash() hash.Hash {
+	return hash.NewFromBytes(t.Input)
 }
 
 // Equal checks whether the transaction is equal to another.

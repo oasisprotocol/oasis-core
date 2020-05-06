@@ -130,8 +130,7 @@ func NewNamespace(id [NamespaceIDSize]byte, flags NamespaceFlag) (Namespace, err
 
 // NewTestNamespaceFromSeed returns a test namespace from a seed and flags.
 func NewTestNamespaceFromSeed(seed []byte, flags NamespaceFlag) Namespace {
-	var h hash.Hash
-	h.FromBytes(seed)
+	h := hash.NewFromBytes(seed)
 
 	var rtID [NamespaceIDSize]byte
 	copy(rtID[:], h[:])

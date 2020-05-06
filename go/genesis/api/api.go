@@ -55,9 +55,7 @@ type Document struct {
 
 // Hash returns the cryptographic hash of the encoded genesis document.
 func (d *Document) Hash() hash.Hash {
-	var h hash.Hash
-	h.From(d)
-	return h
+	return hash.NewFrom(d)
 }
 
 // ChainContext returns a string that can be used as a chain domain separation

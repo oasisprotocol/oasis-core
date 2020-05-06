@@ -20,8 +20,7 @@ func SubjectFromX509Certificate(cert *x509.Certificate) Subject {
 // SubjectFromDER returns a Subject from the given certificate's ASN.1 DER
 // representation. To do so, it computes the hash of the DER representation.
 func SubjectFromDER(der []byte) Subject {
-	var h = hash.Hash{}
-	h.FromBytes(der)
+	h := hash.NewFromBytes(der)
 	return Subject(h.String())
 }
 

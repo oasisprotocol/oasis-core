@@ -475,8 +475,7 @@ func (t *tendermintService) SubmitTx(ctx context.Context, tx *transaction.Signed
 	defer t.Unsubscribe(subID, query) // nolint: errcheck
 
 	// Subscribe to the transaction becoming invalid.
-	var txHash hash.Hash
-	txHash.FromBytes(data)
+	txHash := hash.NewFromBytes(data)
 
 	recheckCh, recheckSub, err := t.mux.WatchInvalidatedTx(txHash)
 	if err != nil {

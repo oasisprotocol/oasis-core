@@ -122,9 +122,7 @@ func (r *Root) Follows(other *Root) bool {
 
 // EncodedHash returns the encoded cryptographic hash of the storage root.
 func (r *Root) EncodedHash() hash.Hash {
-	var hh hash.Hash
-	hh.From(r)
-	return hh
+	return hash.NewFrom(r)
 }
 
 // Pointer is a pointer to another node.

@@ -46,11 +46,7 @@ func (h *ComputeResultsHeader) IsParentOf(child *block.Header) bool {
 
 // EncodedHash returns the encoded cryptographic hash of the header.
 func (h *ComputeResultsHeader) EncodedHash() hash.Hash {
-	var hh hash.Hash
-
-	hh.From(h)
-
-	return hh
+	return hash.NewFrom(h)
 }
 
 // ComputeBody holds the data signed in a compute worker commitment.

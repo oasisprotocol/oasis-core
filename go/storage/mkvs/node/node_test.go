@@ -39,10 +39,8 @@ func TestSerializationInternalNode(t *testing.T) {
 	}
 	leafNode.UpdateHash()
 
-	var leftHash hash.Hash
-	leftHash.FromBytes([]byte("everyone move to the left"))
-	var rightHash hash.Hash
-	rightHash.FromBytes([]byte("everyone move to the right"))
+	leftHash := hash.NewFromBytes([]byte("everyone move to the left"))
+	rightHash := hash.NewFromBytes([]byte("everyone move to the right"))
 	var label = Key("abc")
 	var labelBitLength = Depth(24)
 
@@ -98,12 +96,9 @@ func TestHashLeafNode(t *testing.T) {
 }
 
 func TestHashInternalNode(t *testing.T) {
-	var leafNodeHash hash.Hash
-	leafNodeHash.FromBytes([]byte("everyone stop here"))
-	var leftHash hash.Hash
-	leftHash.FromBytes([]byte("everyone move to the left"))
-	var rightHash hash.Hash
-	rightHash.FromBytes([]byte("everyone move to the right"))
+	leafNodeHash := hash.NewFromBytes([]byte("everyone stop here"))
+	leftHash := hash.NewFromBytes([]byte("everyone move to the left"))
+	rightHash := hash.NewFromBytes([]byte("everyone move to the right"))
 
 	intNode := &InternalNode{
 		Version:        0xDEADBEEF,
@@ -138,10 +133,8 @@ func TestExtractLeafNode(t *testing.T) {
 }
 
 func TestExtractInternalNode(t *testing.T) {
-	var leftHash hash.Hash
-	leftHash.FromBytes([]byte("everyone move to the left"))
-	var rightHash hash.Hash
-	rightHash.FromBytes([]byte("everyone move to the right"))
+	leftHash := hash.NewFromBytes([]byte("everyone move to the left"))
+	rightHash := hash.NewFromBytes([]byte("everyone move to the right"))
 
 	intNode := &InternalNode{
 		Clean:   true,

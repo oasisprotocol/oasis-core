@@ -135,11 +135,7 @@ type Metadata struct {
 
 // EncodedHash returns the encoded cryptographic hash of the checkpoint metadata.
 func (m *Metadata) EncodedHash() hash.Hash {
-	var hh hash.Hash
-
-	hh.From(m)
-
-	return hh
+	return hash.NewFrom(m)
 }
 
 // GetChunkMetadata returns the chunk metadata for the corresponding chunk.

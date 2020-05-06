@@ -46,8 +46,7 @@ func ClientWorkerTests(
 	require.NoError(err, "NewStorageClient")
 
 	// Create mock root hash.
-	var rootHash hash.Hash
-	rootHash.FromBytes([]byte("non-existing"))
+	rootHash := hash.NewFromBytes([]byte("non-existing"))
 
 	root := api.Root{
 		Namespace: ns,

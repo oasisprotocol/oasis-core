@@ -238,8 +238,7 @@ func testBasic(t *testing.T, ndb db.NodeDB, factory NodeDBFactory) {
 	})
 	require.NoError(t, err, "CommitKnown")
 
-	var bogusRoot hash.Hash
-	bogusRoot.FromBytes([]byte("bogus root"))
+	bogusRoot := hash.NewFromBytes([]byte("bogus root"))
 	_, err = tree.CommitKnown(ctx, node.Root{
 		Namespace: testNs,
 		Version:   0,
@@ -1812,8 +1811,7 @@ func testErrors(t *testing.T, ndb db.NodeDB, factory NodeDBFactory) {
 	require.Equal(t, db.ErrRootNotFound, err)
 
 	// Commit with non-existent old root should fail.
-	var bogusRoot hash.Hash
-	bogusRoot.FromBytes([]byte("bogus root"))
+	bogusRoot := hash.NewFromBytes([]byte("bogus root"))
 	tree = NewWithRoot(nil, ndb, node.Root{Namespace: testNs, Version: 0, Hash: bogusRoot})
 	_, _, err = tree.Commit(ctx, testNs, 1)
 	require.Error(t, err, "Commit should fail for invalid root")

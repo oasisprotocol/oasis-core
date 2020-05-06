@@ -41,9 +41,8 @@ func hashSelf() (*hash.Hash, error) {
 		return nil, err
 	}
 
-	var hash hash.Hash
-	hash.FromBytes(contents)
-	return &hash, nil
+	h := hash.NewFromBytes(contents)
+	return &h, nil
 }
 
 func makeVersionString() string {

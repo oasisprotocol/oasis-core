@@ -100,8 +100,7 @@ type EpochSnapshot struct {
 
 // NewMockEpochSnapshot returns a mock epoch snapshot to be used in tests.
 func NewMockEpochSnapshot() *EpochSnapshot {
-	var executorCommitteeID hash.Hash
-	executorCommitteeID.FromBytes([]byte("mock committee id"))
+	executorCommitteeID := hash.NewFromBytes([]byte("mock committee id"))
 
 	return &EpochSnapshot{
 		executorCommitteeID: executorCommitteeID,
