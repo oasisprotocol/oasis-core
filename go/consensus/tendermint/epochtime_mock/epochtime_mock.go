@@ -249,7 +249,12 @@ func New(ctx context.Context, service service.TendermintService) (api.SetableBac
 		}
 	})
 
-	if base := service.GetGenesis().EpochTime.Base; base != 0 {
+	genDoc, err := service.GetGenesisDocument(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	if base := genDoc.EpochTime.Base; base != 0 {
 		r.logger.Warn("ignoring non-zero base genesis epoch",
 			"base", base,
 		)

@@ -56,7 +56,6 @@ import (
 	tmstaking "github.com/oasislabs/oasis-core/go/consensus/tendermint/staking"
 	epochtimeAPI "github.com/oasislabs/oasis-core/go/epochtime/api"
 	genesisAPI "github.com/oasislabs/oasis-core/go/genesis/api"
-	"github.com/oasislabs/oasis-core/go/genesis/file"
 	keymanagerAPI "github.com/oasislabs/oasis-core/go/keymanager/api"
 	cmbackground "github.com/oasislabs/oasis-core/go/oasis-node/cmd/common/background"
 	cmflags "github.com/oasislabs/oasis-core/go/oasis-node/cmd/common/flags"
@@ -361,16 +360,9 @@ func (t *tendermintService) StateToGenesis(ctx context.Context, blockHeight int6
 	blockHeight = blk.Header.Height
 
 	// Get initial genesis doc.
-	genesisFileProvider, err := file.DefaultFileProvider()
+	genesisDoc, err := t.GetGenesisDocument(ctx)
 	if err != nil {
-		t.Logger.Error("failed getting genesis file provider",
-			"err", err,
-		)
-		return nil, err
-	}
-	genesisDoc, err := genesisFileProvider.GetGenesisDocument()
-	if err != nil {
-		t.Logger.Error("failed getting genesis document from file provider",
+		t.Logger.Error("failed getting genesis document",
 			"err", err,
 		)
 		return nil, err
@@ -447,6 +439,10 @@ func (t *tendermintService) StateToGenesis(ctx context.Context, blockHeight int6
 		Beacon:     genesisDoc.Beacon,
 		Consensus:  genesisDoc.Consensus,
 	}, nil
+}
+
+func (t *tendermintService) GetGenesisDocument(ctx context.Context) (*genesisAPI.Document, error) {
+	return t.genesis, nil
 }
 
 func (t *tendermintService) RegisterHaltHook(hook func(context.Context, int64, epochtimeAPI.EpochTime)) {
@@ -616,10 +612,6 @@ func (t *tendermintService) RegisterApplication(app abci.Application) error {
 
 func (t *tendermintService) SetTransactionAuthHandler(handler abci.TransactionAuthHandler) error {
 	return t.mux.SetTransactionAuthHandler(handler)
-}
-
-func (t *tendermintService) GetGenesis() *genesisAPI.Document {
-	return t.genesis
 }
 
 func (t *tendermintService) TransactionAuthHandler() consensusAPI.TransactionAuthHandler {

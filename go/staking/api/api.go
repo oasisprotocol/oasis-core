@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/oasislabs/oasis-core/go/common/crypto/hash"
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
 	"github.com/oasislabs/oasis-core/go/common/errors"
 	"github.com/oasislabs/oasis-core/go/common/pubsub"
@@ -156,6 +157,8 @@ type EscrowEvent struct {
 
 // Event signifies a staking event, returned via GetEvents.
 type Event struct {
+	TxHash hash.Hash `json:"tx_hash,omitempty"`
+
 	TransferEvent *TransferEvent `json:"transfer,omitempty"`
 	BurnEvent     *BurnEvent     `json:"burn,omitempty"`
 	EscrowEvent   *EscrowEvent   `json:"escrow,omitempty"`

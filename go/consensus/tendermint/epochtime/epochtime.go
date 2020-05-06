@@ -125,7 +125,12 @@ func (t *tendermintBackend) updateCached(ctx context.Context, block *tmtypes.Blo
 // New constructs a new tendermint backed epochtime Backend instance,
 // with the specified epoch interval.
 func New(ctx context.Context, service service.TendermintService, interval int64) (api.Backend, error) {
-	base := service.GetGenesis().EpochTime.Base
+	genDoc, err := service.GetGenesisDocument(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	base := genDoc.EpochTime.Base
 	r := &tendermintBackend{
 		logger:   logging.GetLogger("epochtime/tendermint"),
 		service:  service,

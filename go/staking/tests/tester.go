@@ -193,6 +193,7 @@ func testTransfer(t *testing.T, state *stakingTestsState, backend api.Backend, c
 			if evt.TransferEvent != nil {
 				if evt.TransferEvent.From.Equal(ev.From) && evt.TransferEvent.To.Equal(ev.To) && evt.TransferEvent.Tokens.Cmp(&ev.Tokens) == 0 {
 					gotIt = true
+					require.True(!evt.TxHash.IsEmpty(), "GetEvents should return valid txn hash")
 					break
 				}
 			}

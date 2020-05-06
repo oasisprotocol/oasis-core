@@ -12,7 +12,6 @@ import (
 	"github.com/oasislabs/oasis-core/go/common/service"
 	consensus "github.com/oasislabs/oasis-core/go/consensus/api"
 	"github.com/oasislabs/oasis-core/go/consensus/tendermint/abci"
-	genesis "github.com/oasislabs/oasis-core/go/genesis/api"
 )
 
 // TendermintService provides Tendermint access to Oasis core backends.
@@ -32,9 +31,6 @@ type TendermintService interface {
 	// SetTransactionAuthHandler configures the transaction fee handler for the
 	// ABCI multiplexer.
 	SetTransactionAuthHandler(abci.TransactionAuthHandler) error
-
-	// GetGenesis will return the oasis genesis document.
-	GetGenesis() *genesis.Document
 
 	// GetHeight returns the Tendermint block height.
 	GetHeight(ctx context.Context) (int64, error)

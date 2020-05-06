@@ -28,6 +28,10 @@ func ConsensusImplementationTests(t *testing.T, backend consensus.ClientBackend)
 	ctx, cancel := context.WithTimeout(context.Background(), recvTimeout)
 	defer cancel()
 
+	genDoc, err := backend.GetGenesisDocument(ctx)
+	require.NoError(err, "GetGenesisDocument")
+	require.NotNil(genDoc, "returned genesis document should not be nil")
+
 	blk, err := backend.GetBlock(ctx, consensus.HeightLatest)
 	require.NoError(err, "GetBlock")
 	require.NotNil(blk, "returned block should not be nil")
