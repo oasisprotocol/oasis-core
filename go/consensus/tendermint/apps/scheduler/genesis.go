@@ -6,6 +6,7 @@ import (
 	"fmt"
 
 	"github.com/tendermint/tendermint/abci/types"
+	tmtypes "github.com/tendermint/tendermint/types"
 
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
 	"github.com/oasislabs/oasis-core/go/common/node"
@@ -192,9 +193,12 @@ func (app *schedulerApplication) InitChain(ctx *abciAPI.Context, req types.Reque
 	}
 
 	if !doc.Scheduler.Parameters.DebugBypassStake {
-		_, err = scheduler.VotingPowerFromTokens(&doc.Staking.TotalSupply)
+		supplyPower, err := scheduler.VotingPowerFromTokens(&doc.Staking.TotalSupply)
 		if err != nil {
 			return fmt.Errorf("init chain: total supply would break voting power computation: %w", err)
+		}
+		if supplyPower > tmtypes.MaxTotalVotingPower {
+			return fmt.Errorf("init chain: total supply power %d exceeds Tendermint voting power limit %d", supplyPower, tmtypes.MaxTotalVotingPower)
 		}
 	}
 

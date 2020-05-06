@@ -4,6 +4,7 @@ package api
 import (
 	"context"
 	"fmt"
+	"math"
 	"strings"
 
 	"github.com/oasislabs/oasis-core/go/common"
@@ -252,9 +253,15 @@ func (g *Genesis) SanityCheck(stakingTotalSupply *quantity.Quantity) error {
 	}
 
 	if !g.Parameters.DebugBypassStake {
-		_, err := VotingPowerFromTokens(stakingTotalSupply)
+		supplyPower, err := VotingPowerFromTokens(stakingTotalSupply)
 		if err != nil {
 			return fmt.Errorf("scheduler: sanity check failed: total supply would break voting power computation: %w", err)
+		}
+		// I've been advised not to import implementation details.
+		// Instead, here's our own number that satisfies all current implementations' limits.
+		maxTotalVotingPower := int64(math.MaxInt64) / 8
+		if supplyPower > maxTotalVotingPower {
+			return fmt.Errorf("init chain: total supply power %d exceeds Tendermint voting power limit %d", supplyPower, maxTotalVotingPower)
 		}
 	}
 
@@ -262,8 +269,8 @@ func (g *Genesis) SanityCheck(stakingTotalSupply *quantity.Quantity) error {
 }
 
 func init() {
-	// 2 allows for up to 1.8e19 base units to be staked.
-	if err := TokensPerVotingPower.FromUint64(2); err != nil {
+	// 16 allows for up to 1.8e19 base units to be staked.
+	if err := TokensPerVotingPower.FromUint64(16); err != nil {
 		panic(err)
 	}
 }
