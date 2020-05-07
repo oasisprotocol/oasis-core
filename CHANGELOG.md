@@ -12,6 +12,409 @@ The format is inspired by [Keep a Changelog].
 
 <!-- TOWNCRIER -->
 
+## 20.6 (2020-05-07)
+
+### Removals and Breaking changes
+
+- go/consensus/tendermint: Use MKVS for storing application state
+  ([#1898](https://github.com/oasislabs/oasis-core/issues/1898))
+
+- `oasis-node`: Refactor `metrics` parameters
+  ([#2687](https://github.com/oasislabs/oasis-core/issues/2687))
+
+  - `--metrics.push.job_name` renamed to `--metrics.job_name`.
+  - `--metrics.push.interval` renamed to `--metrics.interval`.
+  - `--metrics.push.instance_label` replaced with more general
+    `--metrics.labels` map parameter where `instance` is a required key, if
+    metrics are enabled. For example `--metrics.push.instance_label abc` now
+    becomes `--metrics.labels instance=abc`. User can also set other
+    arbitrary Prometheus labels, for example
+    `--metrics.labels instance=abc,cpu=intel_i7-8750`.
+
+- go/consensus/tendermint: Store consensus parameters in ABCI state
+  ([#2710](https://github.com/oasislabs/oasis-core/issues/2710))
+
+- go: Bump tendermint to v0.33.3-oasis1
+  ([#2834](https://github.com/oasislabs/oasis-core/issues/2834))
+
+  This is breaking as the tendermint block format has changed.
+
+- go/consensus/genesis: Make max evidence age block and time based
+  ([#2834](https://github.com/oasislabs/oasis-core/issues/2834))
+
+  - Rename `max_evidence_age` -> `max_evidence_age_blocks`
+  - Add `max_evidence_age_time` (default 48h)
+
+  This is obviously breaking.
+
+- keymanager-lib: Bind persisted state to the runtime ID
+  ([#2843](https://github.com/oasislabs/oasis-core/issues/2843))
+
+  It is likely prudent to bind the persisted master secret to the runtime
+  ID.  This change does so by including the key manager runtime ID as the
+  AAD when sealing the master secret.
+
+  This is backward incompatible with all current key manager instances as
+  the existing persisted master secret will not decrypt.
+
+- go/runtime/enclaverpc: Refactor gRPC endpoint routing
+  ([#2844](https://github.com/oasislabs/oasis-core/issues/2844))
+
+  Previously each endpoint required its own gRPC service. But since all
+  EnclaveRPC requests already include an "endpoint" field, it is better to use
+  that for routing requests.
+
+  This commit adds a new enclaverpc.Endpoint interface that is used as an
+  endpoint descriptor. All endpoints must be registered in advance (e.g.,
+  during init). It also changes the key manager EnclaveRPC support to use the
+  new API.
+
+- `oasis-net-runner`: `--net.*` flags renamed to `--fixture.default.*`
+  ([#2848](https://github.com/oasislabs/oasis-core/issues/2848))
+
+  For example `--net.node.binary mynode/oasis-node` becomes
+  `--fixture.default.node.binary mynode/oasis-node`.
+
+- go/consensus: Stake weighted voting
+  ([#2868](https://github.com/oasislabs/oasis-core/issues/2868))
+
+  That is, validator voting power proportional to entity stake
+  (previously: "flat" all-validators-equal voting power).
+  Radical!
+
+- go/common/node: Add RoleConsensusRPC role bit
+  ([#2881](https://github.com/oasislabs/oasis-core/issues/2881))
+
+### Features
+
+- go/worker/consensusrpc: Add public consensus RPC services worker
+  ([#2440](https://github.com/oasislabs/oasis-core/issues/2440))
+
+  A public consensus services worker enables any full consensus node to expose
+  light client services to other nodes that may need them (e.g., they are needed
+  to support light clients).
+
+  The worker can be enabled using `--worker.consensusrpc.enabled` and is
+  disabled by default. Enabling the public consensus services worker exposes
+  the light consensus client interface over publicly accessible gRPC.
+
+- go/consensus: Add basic API for supporting light consensus clients
+  ([#2440](https://github.com/oasislabs/oasis-core/issues/2440))
+
+- `oasis-node`: Add benchmarking utilities
+  ([#2687](https://github.com/oasislabs/oasis-core/issues/2687))
+
+  - New Prometheus metrics for:
+    - datadir space usage,
+    - I/O (read/written bytes),
+    - memory usage (VMSize, RssAnon, RssFile, RssShmem),
+    - CPU (utime and stime),
+    - network interfaces (rx/tx bytes/packets),
+  - Bumps `prometheus/go_client` to latest version which fixes sending label
+    values containing non-url characters.
+  - Bumps `spf13/viper` which fixes `IsSet()` behavior.
+
+- Add `GetEvents` to backends
+  ([#2778](https://github.com/oasislabs/oasis-core/issues/2778))
+
+  The new `GetEvents` call returns all events at a specific height,
+  without having to watch for them using the `Watch*` methods.
+  It is currently implemented for the registry, roothash, and staking
+  backends.
+
+- go/keymanager/api: Add a gRPC endpoint for status queries
+  ([#2843](https://github.com/oasislabs/oasis-core/issues/2843))
+
+  Mostly so that the test cases can query statuses.
+
+- go/oasis-test-runner/oasis: Add a keymanager replication test
+  ([#2843](https://github.com/oasislabs/oasis-core/issues/2843))
+
+- `oasis-net-runner`: Add support for fixtures in JSON file
+  ([#2848](https://github.com/oasislabs/oasis-core/issues/2848))
+
+  New flag `--fixture.file` allows user to load default fixture from JSON file.
+  In addition `dump-fixture` command dumps configured JSON-encoded fixture to
+  standard output which can serve as a template.
+
+- go/consensus/tendermint: Expose new config options added in Tendermint 0.33
+  ([#2855](https://github.com/oasislabs/oasis-core/issues/2855))
+
+  Tendermint 0.33 added the concept of unconditional P2P peers. Support for
+  setting the unconditional peers via `tendermint.p2p.unconditional_peer_ids`
+  configuration flag is added. On sentry node, upstream nodes will automatically
+  be set as unconditional peers.
+
+  Tendermint 0.33 added support for setting maximum re-dial period when
+  dialing persistent peers. This adds support for setting the period via
+  `tendermint.p2p.persistent_peers_max_dial_period` flag.
+
+- go/consensus/tendermint: Signal RetainHeight on Commit
+  ([#2863](https://github.com/oasislabs/oasis-core/issues/2863))
+
+  This allows Tendermint Core to discard data for any heights that were pruned
+  from application state.
+
+- go/consensus/tendermint: Bump Tendermint Core to 0.33.4
+  ([#2863](https://github.com/oasislabs/oasis-core/issues/2863))
+
+- go/consensus/tendermint: sync-worker additionally check block timestamps
+  ([#2873](https://github.com/oasislabs/oasis-core/issues/2873))
+
+  Sync-worker relied on Tendermint fast-sync to determine if the node is still
+  catching up. This PR adds aditional condition that the latest block is not
+  older than 1 minute. This prevents cases where node would report as caught up
+  after stopping fast-sync, but before it has actually caught up.
+
+- go/consensus: Add GetGenesisDocument
+  ([#2889](https://github.com/oasislabs/oasis-core/issues/2889))
+
+  The consensus client now has a new method to return the original
+  genesis document.
+
+- go/staking: Add event hashes
+  ([#2889](https://github.com/oasislabs/oasis-core/issues/2889))
+
+  Staking events now have a new `TxHash` field, which contains
+  the hash of the transaction that caused the event (or the empty
+  hash in case of block events).
+
+### Bug Fixes
+
+- go: Extract and generalize registry's staking sanity checks
+  ([#2748](https://github.com/oasislabs/oasis-core/issues/2748))
+
+  Augment the checks to check if an entity has enough stake for all stake claims
+  in the Genesis document to prevent panics at oasis-node start-up due to
+  entities not having enough stake in the escrow to satisfy all their stake
+  claims.
+
+- go/oasis-node/cmd/ias: Fix WatchRuntimes retry
+  ([#2832](https://github.com/oasislabs/oasis-core/issues/2832))
+
+  Previously the IAS proxy could incorrectly panic during shutdown when the
+  context was cancelled.
+
+- go/worker/keymanager: Add an enclave rpc handler
+  ([#2843](https://github.com/oasislabs/oasis-core/issues/2843))
+
+- go/worker/keymanager: Actually allow replication to maybe work
+  ([#2843](https://github.com/oasislabs/oasis-core/issues/2843))
+
+  Access control forbidding replication may be more secure, but is not all
+  that useful.
+
+- go/keymanager/client: Support km->km connections
+  ([#2843](https://github.com/oasislabs/oasis-core/issues/2843))
+
+- go/common/crypto/mrae/deoxysii: Use SHA512/256 for the KDF
+  ([#2853](https://github.com/oasislabs/oasis-core/issues/2853))
+
+  Following 73aacaa73d7116a6be0443e70f2d10d0c7a4b76e, this should also use
+  the correct hash algorithm for the KDF.
+
+- go/extra/stats: fix & simplify node-entity mapping
+  ([#2856](https://github.com/oasislabs/oasis-core/issues/2856))
+
+  Instead of separately querying for entities and nodes, we can get Entity IDs
+  from nodes directly.
+
+  This change also fixes a case that previous variant missed: node that was
+  removed from entity list of nodes, but has not yet expired.
+
+- go/extra/stats: fix heights at which missing nodes should be queried
+  ([#2858](https://github.com/oasislabs/oasis-core/issues/2858))
+
+  If a missing signature is encountered, the registry should be queried at
+  previous height, since that is the height at which the vote was made.
+
+- client/rpc: Change session identifier on reset
+  ([#2872](https://github.com/oasislabs/oasis-core/issues/2872))
+
+  Previously the EnclaveRPC client did not change the session identifier on
+  reset, resulting in unnecessary round-trips during a transport error. The
+  EnclaveRPC client now changes the session identifier whenever resetting the
+  session.
+
+- go/worker/storage: Correctly apply genesis storage state
+  ([#2874](https://github.com/oasislabs/oasis-core/issues/2874))
+
+  Previously genesis storage state was only applied at consensus genesis which
+  did not support dynamically registered runtimes. Now genesis state is
+  correctly applied when the storage node initializes for the first time (e.g.,
+  when it sees the registered runtime).
+
+  This also removes the now unused RegisterGenesisHook method from the
+  consensus backend API.
+
+- worker/registration: use WatchLatestEpoch when watching for registrations
+  ([#2876](https://github.com/oasislabs/oasis-core/issues/2876))
+
+  By using WatchLatestEpoch the worker will always try to register for latest
+  known epoch, which should prevent cases where registration worker fell behind
+  and was trying to register for past epochs.
+
+- go/runtime/client: Actually store the created key manager client
+  ([#2885](https://github.com/oasislabs/oasis-core/issues/2885))
+
+- go/runtime/committee: Restore previously picked node in RR selection
+  ([#2885](https://github.com/oasislabs/oasis-core/issues/2885))
+
+  Previously the round-robin node selection policy would randomize the order on
+  every update ignoring the currently picked node. This would cause the current
+  node to flip on each update causing problems with EnclaveRPC which is
+  stateful.
+
+  The fix makes the round-robin node selection policy attempt to restore the
+  currently picked node on each update. This means that in case the node is
+  still in the node list, it will not change.
+
+- go/scheduler: Increase tokens per voting power
+  ([#2892](https://github.com/oasislabs/oasis-core/issues/2892))
+
+  We'll need this to fit under tendermint's maximum total voting power
+  limit.
+
+### Documentation improvements
+
+- Refactor documentation, add architecture overview
+  ([#2791](https://github.com/oasislabs/oasis-core/issues/2791))
+
+### Internal changes
+
+- `oasis-test-runner`: Add benchmarking utilities
+  ([#2687](https://github.com/oasislabs/oasis-core/issues/2687))
+
+  - `oasis-test-runner` now accepts `--metrics.address` and `--metrics.interval`
+    parameters which are forwarded to `oasis-node` workers.
+  - `oasis-test-runner` now signals `oasis_up` metric to Prometheus when a test
+    starts and when it finishes.
+  - `--num_runs` parameter added which specifies how many times each test should
+    be run.
+  - `basic` E2E test was renamed to `runtime`.
+  - Scenario names now use corresponding namespace. e.g. `halt-restore` is now
+    `e2e/runtime/halt-restore`.
+  - Scenario parameters are now exposed and settable via CLI by reimplementing
+    `scenario.Parameters()` and setting it with `--<test_name>.<param>=<val>`.
+  - Scenario parameters can also be generally set, for example
+    `--e2e.node.binary` will set `node.binary` parameter for all E2E tests and
+    `--e2e/runtime.node.binary` will set it for tests which inherit `runtime`.
+  - Multiple parameter values can be provided in form
+    `--<test_name>.<param>=<val1>,<val2>,...`. In this case, `oasis-test-runner`
+    combines them with other parameters and generates unique parameter sets for
+    each test.
+  - Each scenario is run in a unique datadir per parameter set of form
+    `oasis-test-runnerXXXXXX/<test_name>/<run_id>`.
+  - Due to very long datadir for some e2e tests, custom internal gRPC socket
+    names are provided to `oasis-node`.
+  - If metrics are enabled, new labels are passed to oasis-nodes and pushed to
+    Prometheus for each test:
+    - `instance`,
+    - `run`,
+    - `test`,
+    - `software_version`,
+    - `git_branch`,
+    - whole test-specific parameter set.
+  - New `version.GitBranch` variable determined and set during compilation.
+  - Current parameter set, run number, and test name dumped to `test_info.json`
+    in corresponding datadir. This is useful when packing whole datadir for
+    external debugging.
+  - New `cmp` command for analyzing benchmark results has been added which
+    fetches the last two batches of benchmark results from Prometheus and
+    compares them. For more information, see `README.md` in
+    `go/oasis-test-runner` folder.
+
+- ci: New benchmarks pipeline has been added
+  ([#2687](https://github.com/oasislabs/oasis-core/issues/2687))
+
+  `benchmarks.pipeline.yml` runs all E2E tests and compares the benchmark
+  results from the previous batch using the new `oasis-test-runner cmp` command.
+
+- `oasis-node`: Add custom internal socket path flag (for E2E tests only!)
+  ([#2687](https://github.com/oasislabs/oasis-core/issues/2687))
+
+  `--debug.grpc.internal.socket_name` flag was added which forces `oasis-node`
+  to use the given path for the internal gRPC socket. This was necessary,
+  because some E2E test names became very lengthy and original datadir exceeded
+  the maximum unix socket path length. `oasis-test-runner` now generates
+  shorter socket names in `/tmp/oasis-test-runnerXXXXXX` directory and provides
+  them to `oasis-node`. **Due to security risks never ever use this flag in
+  production-like environments. Internal gRPC sockets should always reside in
+  node datadir!**
+
+- go/registry/api: Extend `NodeLookup` and `RuntimeLookup` interfaces
+  ([#2748](https://github.com/oasislabs/oasis-core/issues/2748))
+
+  Define `Nodes()` and `AllRuntimes()` methods.
+
+- go/staking/tests: Add escrow and delegations to debug genesis state
+  ([#2767](https://github.com/oasislabs/oasis-core/issues/2767))
+
+  Introduce `stakingTestsState` that holds the current state of staking
+  tests and enable the staking implementation tests
+  (`StakingImplementationTest`, `StakingClientImplementationTests`) to always
+  use this up-to-date state.
+
+- go/runtime/committee: Don't close gRPC connections on connection refresh
+  ([#2826](https://github.com/oasislabs/oasis-core/issues/2826))
+
+- go: Refactor E2E coverage integration test wrapper
+  ([#2832](https://github.com/oasislabs/oasis-core/issues/2832))
+
+  This makes it possible to easily have E2E coverage instrumented binaries for
+  things other than oasis-node.
+
+- go/oasis-node: Move storage benchmark subcommand under debug
+  ([#2832](https://github.com/oasislabs/oasis-core/issues/2832))
+
+- keymanager-runtime: replace with test/simple-keymanager
+  ([#2837](https://github.com/oasislabs/oasis-core/issues/2837))
+
+  Common keymanager initalization code is extracted into the keymanager-lib
+  crate. This enables for the actual key manager implementation to only
+  provide a set of key manager policy signers.
+  Aditionally the `keymanager-runtime` crate is removed and replaced with
+  a test `simple-keymanager` runtime that is used in E2E tests.
+
+- docker: remove docker image build pipelines and cleanup testing image
+  ([#2838](https://github.com/oasislabs/oasis-core/issues/2838))
+
+- go/oasis-test-runner: Generate a new random seed on each run
+  ([#2849](https://github.com/oasislabs/oasis-core/issues/2849))
+
+- go/storage/mkvs/checkpoint: Refactor restorer interface
+  ([#2860](https://github.com/oasislabs/oasis-core/issues/2860))
+
+- go/storage/mkvs/checkpoint: Add common checkpointer implementation
+  ([#2860](https://github.com/oasislabs/oasis-core/issues/2860))
+
+  Previously there was a checkpointer implemented in the storage worker
+  but since this may be useful in multiple places, the checkpointer
+  implementation is generalized and moved to the checkpoint package.
+
+- go/oasis-test-runner: Configure consensus state pruning
+  ([#2866](https://github.com/oasislabs/oasis-core/issues/2866))
+
+- go: Start using new protobuf module location
+  ([#2867](https://github.com/oasislabs/oasis-core/issues/2867))
+
+  The previous location has been deprecated.
+
+- go/common/pubsub: support subscriptions based on bounded ring channels
+  ([#2876](https://github.com/oasislabs/oasis-core/issues/2876))
+
+- go/epochtime: add WatchLatestEpoch method
+  ([#2876](https://github.com/oasislabs/oasis-core/issues/2876))
+
+  The method is similar to the existing WatchEpochs method, with the change that
+  unread epochs get overridden with latest epoch.
+
+- go/common/crypto/hash: Add NewFrom and NewFromBytes functions
+  ([#2890](https://github.com/oasislabs/oasis-core/issues/2890))
+
+- ci: automatically retry jobs due to host agent failures
+  ([#2894](https://github.com/oasislabs/oasis-core/issues/2894))
+
 ## 20.5 (2020-04-10)
 
 ### Process
