@@ -12,7 +12,6 @@ import (
 	"time"
 
 	"github.com/oasislabs/oasis-core/go/common/sgx"
-	"github.com/oasislabs/oasis-core/go/common/sgx/ias"
 )
 
 const (
@@ -55,7 +54,7 @@ type Sigstruct struct { //nolint: maligned
 	SwDefined      [4]byte
 	MiscSelect     uint32
 	MiscSelectMask uint32
-	Attributes     ias.Attributes
+	Attributes     sgx.Attributes
 	AttributesMask [2]uint64
 	EnclaveHash    sgx.MrEnclave
 	ISVProdID      uint16
@@ -212,7 +211,7 @@ func WithMiscSelectMask(miscSelectMask uint32) Option {
 }
 
 // WithAttributes sets the ATTRIBUTES field.
-func WithAttributes(attributes ias.Attributes) Option {
+func WithAttributes(attributes sgx.Attributes) Option {
 	return func(s *Sigstruct) {
 		s.Attributes = attributes
 	}

@@ -25,6 +25,29 @@ const (
 	ModulusSize = 3072
 )
 
+// AttributesFlags is attributes flags inside enclave report attributes.
+type AttributesFlags uint64
+
+// Predefined enclave report attributes flags.
+const (
+	AttributeInit          AttributesFlags = 0b0000_0001
+	AttributeDebug         AttributesFlags = 0b0000_0010
+	AttributeMode64Bit     AttributesFlags = 0b0000_0100
+	AttributeProvisionKey  AttributesFlags = 0b0001_0000
+	AttributeEInitTokenKey AttributesFlags = 0b0010_0000
+)
+
+// Attributes is a SGX enclave attributes value inside report.
+type Attributes struct {
+	Flags AttributesFlags
+	Xfrm  uint64
+}
+
+// GetFlagInit returns value of given flag attribute of the Report.
+func (a AttributesFlags) Contains(flag AttributesFlags) bool {
+	return (uint64(a) & uint64(flag)) != 0
+}
+
 // Mrenclave is a SGX enclave identity register value (MRENCLAVE).
 type MrEnclave [MrEnclaveSize]byte
 

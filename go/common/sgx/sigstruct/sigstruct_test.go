@@ -11,7 +11,6 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/oasislabs/oasis-core/go/common/sgx"
-	"github.com/oasislabs/oasis-core/go/common/sgx/ias"
 )
 
 func TestSigstruct(t *testing.T) {
@@ -27,7 +26,7 @@ func TestSigstruct(t *testing.T) {
 	// Generate a SIGSTRUCT.
 	builder := New(
 		WithBuildDate(time.Date(2016, 01, 9, 0, 0, 0, 0, time.UTC)),
-		WithAttributes(ias.Attributes{
+		WithAttributes(sgx.Attributes{
 			Flags: 0x04,
 			Xfrm:  0x03,
 		}),

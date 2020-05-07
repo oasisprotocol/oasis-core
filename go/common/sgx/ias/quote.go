@@ -85,34 +85,11 @@ func (b *Body) MarshalBinary() ([]byte, error) {
 	return bBin, nil
 }
 
-// AttributesFlags is attributes flags inside enclave report attributes.
-type AttributesFlags uint64
-
-// Predefined enclave report attributes flags.
-const (
-	AttributeInit          AttributesFlags = 0b0000_0001
-	AttributeDebug         AttributesFlags = 0b0000_0010
-	AttributeMode64Bit     AttributesFlags = 0b0000_0100
-	AttributeProvisionKey  AttributesFlags = 0b0001_0000
-	AttributeEInitTokenKey AttributesFlags = 0b0010_0000
-)
-
-// Attributes is a SGX enclave attributes value inside report.
-type Attributes struct {
-	Flags AttributesFlags
-	Xfrm  uint64
-}
-
-// GetFlagInit returns value of given flag attribute of the Report.
-func (a AttributesFlags) Contains(flag AttributesFlags) bool {
-	return (uint64(a) & uint64(flag)) != 0
-}
-
 // Report is an enclave report body.
 type Report struct { // nolint: maligned
 	CPUSVN     [16]byte
 	MiscSelect uint32
-	Attributes Attributes
+	Attributes sgx.Attributes
 	MRENCLAVE  sgx.MrEnclave
 	MRSIGNER   sgx.MrSigner
 	ISVProdID  uint16
@@ -153,7 +130,7 @@ func (r *Report) MarshalBinary() ([]byte, error) {
 func (r *Report) UnmarshalBinary(data []byte) error {
 	copy(r.CPUSVN[:], data[0:])
 	r.MiscSelect = binary.LittleEndian.Uint32(data[16:])
-	r.Attributes.Flags = AttributesFlags(binary.LittleEndian.Uint64(data[48:]))
+	r.Attributes.Flags = sgx.AttributesFlags(binary.LittleEndian.Uint64(data[48:]))
 	r.Attributes.Xfrm = binary.LittleEndian.Uint64(data[56:])
 	_ = r.MRENCLAVE.UnmarshalBinary(data[64 : 64+sgx.MrEnclaveSize])
 	_ = r.MRSIGNER.UnmarshalBinary(data[128 : 128+sgx.MrSignerSize])
@@ -177,12 +154,12 @@ func (q *Quote) Verify() error {
 
 	if !unsafeAllowDebugEnclaves {
 		// Disallow debug enclaves, if we are in production mode.
-		if q.Report.Attributes.Flags.Contains(AttributeDebug) {
+		if q.Report.Attributes.Flags.Contains(sgx.AttributeDebug) {
 			return fmt.Errorf("ias/avr: disallowed debug enclave since we are in production mode")
 		}
 	} else {
 		// Disallow non-debug enclaves, if we are in debug mode.
-		if !q.Report.Attributes.Flags.Contains(AttributeDebug) {
+		if !q.Report.Attributes.Flags.Contains(sgx.AttributeDebug) {
 			return fmt.Errorf("ias/avr: disallowed production enclave since we are in debug mode")
 		}
 	}
