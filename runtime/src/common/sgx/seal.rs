@@ -101,7 +101,7 @@ mod tests {
     #[should_panic]
     fn test_incorrect_ciphertext_b() {
         let mut sealed_b = seal(Keypolicy::MRENCLAVE, b"MRENCLAVE", b"Mr. Enclave");
-        sealed_b[0] = 0x00;
+        sealed_b[0] = sealed_b[0].wrapping_add(1);
         unseal(Keypolicy::MRENCLAVE, b"MRENCLAVE", &sealed_b);
     }
 }
