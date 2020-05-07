@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"os"
@@ -10,6 +11,9 @@ import (
 	"github.com/spf13/cobra"
 	flag "github.com/spf13/pflag"
 	"github.com/spf13/viper"
+	tmamino "github.com/tendermint/go-amino"
+	tmrpctypes "github.com/tendermint/tendermint/rpc/core/types"
+	tmtypes "github.com/tendermint/tendermint/types"
 
 	"github.com/oasislabs/oasis-core/go/common/cbor"
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
@@ -26,9 +30,6 @@ const (
 	cfgStartBlock = "start-block"
 	cfgEndBlock   = "end-block"
 	cfgTopN       = "top-n"
-
-	availabilityScorePerSignature = 1
-	availabilityScorePerProposal  = 50
 )
 
 var (
@@ -41,13 +42,22 @@ var (
 	}
 
 	logger = logging.GetLogger("cmd/stats")
+
+	// We must use Tendermint's amino codec as some Tendermint's types are not easily unmarshallable.
+	aminoCodec = tmamino.NewCodec()
 )
+
+type nodeStats struct {
+	elections  int64
+	signatures int64
+	selections int64
+	proposals  int64
+}
 
 // entityStats are per entity stats.
 type entityStats struct {
-	id             signature.PublicKey
-	nodeSignatures map[signature.PublicKey]int64
-	nodeProposals  map[signature.PublicKey]int64
+	id    signature.PublicKey
+	nodes map[signature.PublicKey]*nodeStats
 }
 
 // nodeIDs are node identifiers.
@@ -67,39 +77,44 @@ type stats struct {
 	nodeAddressMap map[string]nodeIDs
 }
 
-// printEntitySignatures prints topN entities by block signature counts.
-func (s stats) printEntitySignatures(topN int) {
+// printEntityAvailability prints topN entities by availability score.
+func (s stats) printEntityAvailability(topN int) {
 	type results struct {
-		entityID         signature.PublicKey
-		signatures       int64
-		proposals        int64
-		nodes            int
-		availablityScore int64
+		entityID          signature.PublicKey
+		elections         int64
+		signatures        int64
+		selections        int64
+		proposals         int64
+		nodes             int
+		availabilityScore int64
 	}
 	res := []results{}
 
-	// Compute per entity signature and proposal counts.
+	// Compute per entity stats.
 	for eID, eStats := range s.entities {
-		entity := results{entityID: eID, nodes: len(eStats.nodeSignatures)}
-		for _, signs := range eStats.nodeSignatures {
-			entity.signatures += signs
+		entity := results{entityID: eID, nodes: len(eStats.nodes)}
+		for _, ns := range eStats.nodes {
+			entity.elections += ns.elections
+			entity.signatures += ns.signatures
+			entity.selections += ns.selections
+			entity.proposals += ns.proposals
 		}
-		for _, proposals := range eStats.nodeProposals {
-			entity.proposals += proposals
+		entity.availabilityScore = entity.signatures
+		if entity.selections > 0 {
+			entity.availabilityScore += entity.proposals * entity.elections / entity.selections
 		}
-		entity.availablityScore = availabilityScorePerSignature*entity.signatures + availabilityScorePerProposal*entity.proposals
 		res = append(res, entity)
 	}
 
 	sort.Slice(res, func(i, j int) bool {
-		return res[i].availablityScore > res[j].availablityScore
+		return res[i].availabilityScore > res[j].availabilityScore
 	})
 
 	// Print results.
-	fmt.Printf("|%-5s|%-64s|%-6s|%10s|%10s|%18s|\n", "Rank", "Entity ID", "Nodes", "Signatures", "Proposals (round 0)", "Availability score")
-	fmt.Println(strings.Repeat("-", 5+64+6+10+19+18+7))
+	written, _ := fmt.Printf("|%-5s|%-64s|%-6s|%13s|%10s|%14s|%9s|%18s|\n", "Rank", "Entity ID", "Nodes", "Had validator", "Signatures", "Times selected", "Proposals", "Availability score")
+	fmt.Println(strings.Repeat("-", written-1))
 	for idx, r := range res {
-		fmt.Printf("|%-5d|%-64s|%6d|%10d|%19d|%18d|\n", idx+1, r.entityID, r.nodes, r.signatures, r.proposals, r.availablityScore)
+		fmt.Printf("|%-5d|%-64s|%6d|%13d|%10d|%14d|%9d|%18d|\n", idx+1, r.entityID, r.nodes, r.elections, r.signatures, r.selections, r.proposals, r.availabilityScore)
 	}
 }
 
@@ -109,39 +124,21 @@ func (s stats) nodeExists(nodeAddr string) bool {
 	return ok
 }
 
-// addNodeSignature adds node signature.
-func (s stats) addNodeSignature(nodeAddr string) error {
+// getNodeStats gives you a pointer to the nodeStats struct for a node.
+func (s stats) getNodeStats(nodeAddr string) (*nodeStats, error) {
 	node, ok := s.nodeAddressMap[nodeAddr]
 	if !ok {
-		return fmt.Errorf("missing node address map, address: %s", nodeAddr)
+		return nil, fmt.Errorf("missing node address map, address: %s", nodeAddr)
 	}
 	entity, ok := s.entities[node.entityID]
 	if !ok {
-		return fmt.Errorf("missing entity for node, address: %s", nodeAddr)
+		return nil, fmt.Errorf("missing entity for node, address: %s", nodeAddr)
 	}
-	_, ok = entity.nodeSignatures[node.nodeID]
+	ns, ok := entity.nodes[node.nodeID]
 	if !ok {
-		return fmt.Errorf("missing entity node: %s", nodeAddr)
+		return nil, fmt.Errorf("missing entity node: %s", nodeAddr)
 	}
-	entity.nodeSignatures[node.nodeID]++
-	return nil
-}
-
-func (s stats) addNodeProposal(nodeAddr string) error {
-	node, ok := s.nodeAddressMap[nodeAddr]
-	if !ok {
-		return fmt.Errorf("missing node address map, address: %s", nodeAddr)
-	}
-	entity, ok := s.entities[node.entityID]
-	if !ok {
-		return fmt.Errorf("missing entity for node, address: %s", nodeAddr)
-	}
-	_, ok = entity.nodeProposals[node.nodeID]
-	if !ok {
-		return fmt.Errorf("missing entity node: %s", nodeAddr)
-	}
-	entity.nodeProposals[node.nodeID]++
-	return nil
+	return ns, nil
 }
 
 // newStats initializes empty stats.
@@ -167,17 +164,15 @@ func (s *stats) addRegistryData(ctx context.Context, registry registryAPI.Backen
 		// Get or create node entity.
 		if es, ok = s.entities[n.EntityID]; !ok {
 			es = &entityStats{
-				id:             n.EntityID,
-				nodeSignatures: make(map[signature.PublicKey]int64),
-				nodeProposals:  make(map[signature.PublicKey]int64),
+				id:    n.EntityID,
+				nodes: make(map[signature.PublicKey]*nodeStats),
 			}
 			s.entities[n.EntityID] = es
 		}
 
 		// Initialize node stats if missing.
-		if _, ok := es.nodeSignatures[n.ID]; !ok {
-			es.nodeSignatures[n.ID] = 0
-			es.nodeProposals[n.ID] = 0
+		if _, ok := es.nodes[n.ID]; !ok {
+			es.nodes[n.ID] = &nodeStats{}
 			cID := n.Consensus.ID
 			tmAddr := tmcrypto.PublicKeyToTendermint(&cID).Address().String()
 			s.nodeAddressMap[tmAddr] = nodeIDs{
@@ -190,9 +185,9 @@ func (s *stats) addRegistryData(ctx context.Context, registry registryAPI.Backen
 	return nil
 }
 
-func ensureNodeTracking(ctx context.Context, stats *stats, nodeTmAddr string, height int64, registry registryAPI.Backend) error {
+func (s stats) ensureNodeTracking(ctx context.Context, nodeTmAddr string, height int64, registry registryAPI.Backend) error {
 	// Check if node is already being tracked.
-	if stats.nodeExists(nodeTmAddr) {
+	if s.nodeExists(nodeTmAddr) {
 		return nil
 	}
 
@@ -202,7 +197,46 @@ func ensureNodeTracking(ctx context.Context, stats *stats, nodeTmAddr string, he
 	)
 
 	// Query registry at current height.
-	return stats.addRegistryData(ctx, registry, height)
+	return s.addRegistryData(ctx, registry, height)
+}
+
+func (s stats) nodeStatsOrExit(ctx context.Context, registry registryAPI.Backend, height int64, nodeAddr string) *nodeStats {
+	if err := s.ensureNodeTracking(ctx, nodeAddr, height, registry); err != nil {
+		logger.Error("failed to query registry",
+			"err", err,
+			"height", height,
+		)
+		os.Exit(1)
+	}
+
+	ns, err := s.getNodeStats(nodeAddr)
+	if err != nil {
+		logger.Error("node stats absent",
+			"err", err,
+		)
+		os.Exit(1)
+	}
+	return ns
+}
+
+func getTmBlockMetaOrExit(ctx context.Context, consensus consensusAPI.ClientBackend, height int64) tmApi.BlockMeta {
+	block, err := consensus.GetBlock(ctx, height)
+	if err != nil {
+		logger.Error("failed to query block",
+			"err", err,
+			"height", height,
+		)
+		os.Exit(1)
+	}
+	var tmBlockMeta tmApi.BlockMeta
+	if err := cbor.Unmarshal(block.Meta, &tmBlockMeta); err != nil {
+		logger.Error("unmarshal error",
+			"meta", block.Meta,
+			"err", err,
+		)
+		os.Exit(1)
+	}
+	return tmBlockMeta
 }
 
 // getStats queries node for entity stats between 'start' and 'end' block heights.
@@ -237,7 +271,7 @@ func getStats(ctx context.Context, consensus consensusAPI.ClientBackend, registr
 	}
 
 	// Track previous proposer address.
-	var previousProposerAddr string
+	var previousProposerAddr tmtypes.Address
 
 	// Block traversal.
 	for height := start; height <= end; height++ {
@@ -248,74 +282,84 @@ func getStats(ctx context.Context, consensus consensusAPI.ClientBackend, registr
 		}
 
 		// Get block.
-		block, err := consensus.GetBlock(ctx, height)
-		if err != nil {
-			logger.Error("failed to query block",
-				"err", err,
-				"height", height,
-			)
-			os.Exit(1)
-		}
-		var tmBlockMeta tmApi.BlockMeta
-		if err := cbor.Unmarshal(block.Meta, &tmBlockMeta); err != nil {
-			logger.Error("unmarshal error",
-				"meta", block.Meta,
-				"err", err,
-			)
-			os.Exit(1)
-		}
+		tmBlockMeta := getTmBlockMetaOrExit(ctx, consensus, height)
 
-		// Go over all signatures for a block.
-		for _, sig := range tmBlockMeta.LastCommit.Signatures {
-			if sig.Absent() {
-				logger.Debug("skipping absent signature")
-				continue
-			}
-			nodeTmAddr := sig.ValidatorAddress.String()
+		// Process the commit that is put on chain in this block.
+		if height > 1 {
+			// Commit is for previous height.
+			lastCommitHeight := height - 1
 
-			// Signatures are for previous height.
-			if err := ensureNodeTracking(ctx, stats, nodeTmAddr, height-1, registry); err != nil {
-				logger.Error("failed to query registry",
+			// Get validators.
+			// Hypothesis: this gets the validator set with priorities after they're incremented to get the round 0
+			// proposer.
+			vs, err := consensus.GetValidatorSet(ctx, lastCommitHeight)
+			if err != nil {
+				logger.Error("failed to query validators",
 					"err", err,
-					"height", height-1,
+					"height", lastCommitHeight,
+				)
+				os.Exit(1)
+			}
+			var vals tmtypes.ValidatorSet
+			if err := aminoCodec.UnmarshalBinaryBare(vs.Meta, &vals); err != nil {
+				logger.Error("unmarshal validator set error",
+					"meta", vs.Meta,
+					"err", err,
+					"height", lastCommitHeight,
 				)
 				os.Exit(1)
 			}
 
-			// Add signatures.
-			if err := stats.addNodeSignature(nodeTmAddr); err != nil {
-				logger.Error("failure adding signature",
-					"err", err,
+			// Go over all validators.
+			for _, val := range vals.Validators {
+				stats.nodeStatsOrExit(ctx, registry, lastCommitHeight, val.Address.String()).elections++
+			}
+
+			// Go over all signatures for a block.
+			for _, sig := range tmBlockMeta.LastCommit.Signatures {
+				if sig.Absent() {
+					logger.Debug("skipping absent signature")
+					continue
+				}
+
+				stats.nodeStatsOrExit(ctx, registry, lastCommitHeight, sig.ValidatorAddress.String()).signatures++
+			}
+
+			for i := 0; i < tmBlockMeta.LastCommit.Round; i++ {
+				// This round selected a validator to propose, but it didn't go through.
+				logger.Debug("failed round",
+					"height", lastCommitHeight,
+					"round", i,
+					"selected", vals.Proposer.Address,
+				)
+
+				stats.nodeStatsOrExit(ctx, registry, lastCommitHeight, vals.Proposer.Address.String()).selections++
+
+				vals.IncrementProposerPriority(1)
+			}
+
+			if previousProposerAddr == nil {
+				// Access one block back from the beginning to confirm the correct proposer.
+				prevTmBlockMeta := getTmBlockMetaOrExit(ctx, consensus, lastCommitHeight)
+				previousProposerAddr = prevTmBlockMeta.Header.ProposerAddress
+			}
+			if !bytes.Equal(vals.Proposer.Address, previousProposerAddr) {
+				logger.Error("reckoned proposer selection didn't match proposer on chain",
+					"height", lastCommitHeight,
+					"round", tmBlockMeta.LastCommit.Round,
+					"reckoned", vals.Proposer.Address,
+					"proposer", previousProposerAddr,
 				)
 				os.Exit(1)
 			}
-		}
 
-		// Add proposer sum (previous proposer).
-		if previousProposerAddr != "" {
-			// Only count round 0 proposals.
-			if tmBlockMeta.LastCommit.Round == 0 {
-				// Proposers are for previous height.
-				if err := ensureNodeTracking(ctx, stats, previousProposerAddr, height-1, registry); err != nil {
-					logger.Error("failed to query registry",
-						"err", err,
-						"height", height-1,
-					)
-					os.Exit(1)
-				}
-
-				// Add proposal.
-				if err := stats.addNodeProposal(previousProposerAddr); err != nil {
-					logger.Error("failure adding proposal",
-						"err", err,
-					)
-					os.Exit(1)
-				}
-			}
+			nsProposer := stats.nodeStatsOrExit(ctx, registry, lastCommitHeight, previousProposerAddr.String())
+			nsProposer.selections++
+			nsProposer.proposals++
 		}
 
 		// Update previous proposer address.
-		previousProposerAddr = tmBlockMeta.Header.ProposerAddress.String()
+		previousProposerAddr = tmBlockMeta.Header.ProposerAddress
 	}
 
 	return stats
@@ -348,7 +392,7 @@ func doPrintStats(cmd *cobra.Command, args []string) {
 	// Load stats.
 	stats := getStats(ctx, consClient, regClient, start, end)
 
-	stats.printEntitySignatures(topN)
+	stats.printEntityAvailability(topN)
 }
 
 // Register stats cmd sub-command and all of it's children.
@@ -362,4 +406,8 @@ func RegisterStatsCmd(parentCmd *cobra.Command) {
 	printStatsCmd.PersistentFlags().AddFlagSet(cmdGrpc.ClientFlags)
 
 	parentCmd.AddCommand(printStatsCmd)
+}
+
+func init() {
+	tmrpctypes.RegisterAmino(aminoCodec)
 }
