@@ -12,6 +12,8 @@ docker_plugin_default_config: &docker_plugin_default_config
   volumes:
     - /var/lib/buildkite-agent/.coveralls:/root/.coveralls
     - /var/lib/buildkite-agent/.codecov:/root/.codecov
+    # IAS Development API keys.
+    - /var/lib/buildkite-agent/.oasis-ias:/root/.oasis-ias
     # Shared Rust incremental compile caches.
     - /var/tmp/cargo_ic/debug:/var/tmp/artifacts/default/debug/incremental
     - /var/tmp/cargo_ic/debug_sgx:/var/tmp/artifacts/sgx/x86_64-unknown-linux-sgx/debug/incremental
@@ -252,7 +254,31 @@ steps:
       - .buildkite/scripts/download_e2e_test_artifacts.sh
       - .buildkite/scripts/test_e2e.sh
     artifact_paths:
-      - coverage-merged-e2e-sgx-*.txt
+      - coverage-merged-e2e-*.txt
+      - /tmp/e2e/**/*.log
+    env:
+      OASIS_E2E_COVERAGE: enable
+      TEST_BASE_DIR: /tmp
+    agents:
+      queue: intel-sgx
+    retry:
+      <<: *retry_agent_failure
+    plugins:
+      <<: *docker_plugin_sgx
+
+  ###############################
+  # E2E test - intel-sgx with IAS
+  ###############################
+  - label: E2E tests - intel-sgx - IAS
+    timeout_in_minutes: 10
+    command:
+      - .buildkite/scripts/sgx_ias_tests.sh
+    # A unique string to identify the step. The value is available in the
+    # BUILDKITE_STEP_KEY and is used to ensure the generated coverage file
+    # names are unique across this pipeline.
+    key: sgx-ias
+    artifact_paths:
+      - coverage-merged-e2e-*.txt
       - /tmp/e2e/**/*.log
     env:
       OASIS_E2E_COVERAGE: enable
