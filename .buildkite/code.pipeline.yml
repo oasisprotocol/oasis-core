@@ -60,6 +60,13 @@ docker_plugin_sgx: &docker_plugin_sgx
   oasislabs/docker#v3.0.1-oasis1:
     <<: *docker_plugin_sgx_config
 
+retry: &retry_agent_failure
+  automatic:
+    - exit_status: -1  # Agent was lost
+      limit: 2
+    - exit_status: 255 # Forced agent shutdown
+      limit: 2
+
 steps:
   ###########
   # Lint jobs
@@ -69,21 +76,29 @@ steps:
       - .buildkite/go/lint.sh
     agents:
       buildkite_agent_size: large
+    retry:
+      <<: *retry_agent_failure
     plugins:
       <<: *docker_plugin
 
   - label: Lint Rust crate versions
     command: .buildkite/rust/lint_crate_versions.sh
+    retry:
+      <<: *retry_agent_failure
     plugins:
       <<: *docker_plugin
 
   - label: Audit Rust dependencies for vulnerabilities
     command: .buildkite/rust/cargo_audit.sh
+    retry:
+      <<: *retry_agent_failure
     plugins:
       <<: *docker_plugin
 
   - label: Audit Go dependencies for vulnerabilities
     command: .buildkite/go/nancy_audit.sh
+    retry:
+      <<: *retry_agent_failure
     plugins:
       <<: *docker_plugin
 
@@ -105,6 +120,8 @@ steps:
       - buildkite-agent artifact upload oasis-net-runner
       - cd /workdir/go/oasis-remote-signer
       - buildkite-agent artifact upload oasis-remote-signer
+    retry:
+      <<: *retry_agent_failure
     plugins:
       <<: *docker_plugin
 
@@ -126,6 +143,8 @@ steps:
       - buildkite-agent artifact upload simple-keyvalue-ops-client
     agents:
       buildkite_agent_size: large
+    retry:
+      <<: *retry_agent_failure
     plugins:
       <<: *docker_plugin
 
@@ -146,6 +165,8 @@ steps:
       - buildkite-agent artifact upload simple-keyvalue
     agents:
       buildkite_agent_size: large
+    retry:
+      <<: *retry_agent_failure
     plugins:
       <<: *docker_plugin
 
@@ -160,6 +181,8 @@ steps:
       - .buildkite/rust/test_generic.sh .
     agents:
       buildkite_agent_size: large
+    retry:
+      <<: *retry_agent_failure
     plugins:
       <<: *docker_plugin
 
@@ -176,6 +199,8 @@ steps:
       # TODO: Consider making this a part of the development Docker image.
       - go get -u github.com/dvyukov/go-fuzz/go-fuzz github.com/dvyukov/go-fuzz/go-fuzz-build
       - make -C go build-fuzz
+    retry:
+      <<: *retry_agent_failure
     plugins:
       <<: *docker_plugin
 
@@ -190,6 +215,8 @@ steps:
       - coverage-oasis-node.txt
       - coverage-mkvs.txt
       - /tmp/oasis-node-test_*/test-node.log
+    retry:
+      <<: *retry_agent_failure
     plugins:
       <<: *docker_plugin
 
@@ -210,6 +237,8 @@ steps:
       TEST_BASE_DIR: /tmp
     agents:
       buildkite_agent_size: large
+    retry:
+      <<: *retry_agent_failure
     plugins:
       <<: *docker_plugin
 
@@ -230,6 +259,8 @@ steps:
       TEST_BASE_DIR: /tmp
     agents:
       queue: intel-sgx
+    retry:
+      <<: *retry_agent_failure
     plugins:
       <<: *docker_plugin_sgx
 
@@ -248,6 +279,8 @@ steps:
       TEST_BASE_DIR: /tmp
     agents:
       buildkite_agent_size: large
+    retry:
+      <<: *retry_agent_failure
     plugins:
       <<: *docker_plugin
 
@@ -266,6 +299,8 @@ steps:
     soft_fail: true
     agents:
       buildkite_agent_size: large
+    retry:
+      <<: *retry_agent_failure
     plugins:
       <<: *docker_plugin
 
@@ -284,5 +319,7 @@ steps:
     artifact_paths:
       - merged-coverage.txt
     soft_fail: true
+    retry:
+      <<: *retry_agent_failure
     plugins:
       <<: *docker_plugin
