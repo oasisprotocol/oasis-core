@@ -320,6 +320,9 @@ func getStats(ctx context.Context, consensus consensusAPI.ClientBackend, registr
 				if sig.Absent() {
 					logger.Debug("skipping absent signature")
 					continue
+				} else if sig.BlockIDFlag == tmtypes.BlockIDFlagNil {
+					logger.Debug("skipping signature for nil")
+					continue
 				}
 
 				stats.nodeStatsOrExit(ctx, registry, lastCommitHeight, sig.ValidatorAddress.String()).signatures++
