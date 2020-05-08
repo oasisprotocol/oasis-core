@@ -287,7 +287,7 @@ func getStats(ctx context.Context, consensus consensusAPI.ClientBackend, registr
 		// Process the commit that is put on chain in this block.
 		if height > 1 {
 			// Commit is for previous height.
-			lastCommitHeight := height - 1
+			lastCommitHeight := tmBlockMeta.LastCommit.Height
 
 			// Get validators.
 			// Hypothesis: this gets the validator set with priorities after they're incremented to get the round 0
