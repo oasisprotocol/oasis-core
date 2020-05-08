@@ -272,6 +272,18 @@ func GetDefaultPushLabels(ti *env.TestInstanceInfo) map[string]string {
 		for k, v := range flags.GetStringMapString(CfgMetricsLabels) {
 			labels[k] = v
 		}
+
+		// Remove empty label values - workaround for
+		// https://github.com/prometheus/pushgateway/issues/344
+		var emptyKeys []string
+		for k, v := range labels {
+			if v == "" {
+				emptyKeys = append(emptyKeys, k)
+			}
+		}
+		for _, k := range emptyKeys {
+			delete(labels, k)
+		}
 	}
 
 	return labels
