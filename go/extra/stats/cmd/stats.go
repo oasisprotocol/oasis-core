@@ -316,13 +316,34 @@ func getStats(ctx context.Context, consensus consensusAPI.ClientBackend, registr
 			}
 
 			// Go over all signatures for a block.
-			for _, sig := range tmBlockMeta.LastCommit.Signatures {
+			for i, sig := range tmBlockMeta.LastCommit.Signatures {
+				valAddr := vals.Validators[i].Address
 				if sig.Absent() {
-					logger.Debug("skipping absent signature")
+					logger.Debug("skipping absent signature",
+						"height", lastCommitHeight,
+						"round", tmBlockMeta.LastCommit.Round,
+						"addr", valAddr,
+					)
 					continue
 				} else if sig.BlockIDFlag == tmtypes.BlockIDFlagNil {
-					logger.Debug("skipping signature for nil")
+					logger.Debug("skipping signature for nil",
+						"height", lastCommitHeight,
+						"round", tmBlockMeta.LastCommit.Round,
+						"addr", valAddr,
+						"sig_ts", sig.Timestamp,
+					)
 					continue
+				}
+
+				if !bytes.Equal(sig.ValidatorAddress, valAddr) {
+					logger.Error("validator address mismatch",
+						"height", lastCommitHeight,
+						"round", tmBlockMeta.LastCommit.Round,
+						"i", i,
+						"sigs_addr", sig.ValidatorAddress,
+						"vals_addr", valAddr,
+					)
+					os.Exit(1)
 				}
 
 				stats.nodeStatsOrExit(ctx, registry, lastCommitHeight, sig.ValidatorAddress.String()).signatures++
