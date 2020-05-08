@@ -66,6 +66,8 @@ retry: &retry_agent_failure
   automatic:
     - exit_status: -1  # Agent was lost
       limit: 2
+    - exit_status: 125 # ERRO[0092] error waiting for container: unexpected EOF
+      limit: 2
     - exit_status: 255 # Forced agent shutdown
       limit: 2
 
