@@ -510,9 +510,11 @@ func (args *argBuilder) appendIASProxy(iasProxy *iasProxy) *argBuilder {
 		args.vec = append(args.vec, []string{
 			"--" + ias.CfgProxyAddress, "127.0.0.1:" + strconv.Itoa(int(iasProxy.grpcPort)),
 			"--" + ias.CfgTLSCertFile, iasProxy.tlsCertPath(),
-			"--" + ias.CfgDebugSkipVerify,
 			"--" + ias.CfgAllowDebugEnclaves,
 		}...)
+		if iasProxy.mock {
+			args.vec = append(args.vec, "--"+ias.CfgDebugSkipVerify)
+		}
 	}
 	return args
 }

@@ -11,8 +11,6 @@ import (
 	"net/url"
 	"time"
 
-	"github.com/pkg/errors"
-
 	"github.com/oasislabs/oasis-core/go/common/sgx"
 )
 
@@ -32,14 +30,16 @@ const TimestampFormat = "2006-01-02T15:04:05.999999999"
 
 var (
 	isvQuoteFwdMap = map[string]ISVEnclaveQuoteStatus{
-		"OK":                     QuoteOK,
-		"SIGNATURE_INVALID":      QuoteSignatureInvalid,
-		"GROUP_REVOKED":          QuoteGroupRevoked,
-		"SIGNATURE_REVOKED":      QuoteSignatureRevoked,
-		"KEY_REVOKED":            QuoteKeyRevoked,
-		"SIGRL_VERSION_MISMATCH": QuoteSigRLVersionMismatch,
-		"GROUP_OUT_OF_DATE":      QuoteGroupOutOfDate,
-		"CONFIGURATION_NEEDED":   QuoteConfigurationNeeded,
+		"OK":                                    QuoteOK,
+		"SIGNATURE_INVALID":                     QuoteSignatureInvalid,
+		"GROUP_REVOKED":                         QuoteGroupRevoked,
+		"SIGNATURE_REVOKED":                     QuoteSignatureRevoked,
+		"KEY_REVOKED":                           QuoteKeyRevoked,
+		"SIGRL_VERSION_MISMATCH":                QuoteSigRLVersionMismatch,
+		"GROUP_OUT_OF_DATE":                     QuoteGroupOutOfDate,
+		"CONFIGURATION_NEEDED":                  QuoteConfigurationNeeded,
+		"SW_HARDENING_NEEDED":                   QuoteSwHardeningNeeded,
+		"CONFIGURATION_AND_SW_HARDENING_NEEDED": QuoteConfigurationAndSwHardeningNeeded,
 	}
 	isvQuoteRevMap = make(map[ISVEnclaveQuoteStatus]string)
 
@@ -88,6 +88,8 @@ const (
 	QuoteSigRLVersionMismatch
 	QuoteGroupOutOfDate
 	QuoteConfigurationNeeded
+	QuoteSwHardeningNeeded
+	QuoteConfigurationAndSwHardeningNeeded
 )
 
 // UnmarshalText implements the encoding.TextUnmarshaler interface.
@@ -208,6 +210,8 @@ type AttestationVerificationReport struct {
 	PlatformInfoBlob      string                `json:"platformInfoBlob"`
 	Nonce                 string                `json:"nonce"`
 	EPIDPseudonym         []byte                `json:"epidPseudonym"`
+	AdvisoryURL           string                `json:"advisoryURL"`
+	AdvisoryIDs           []string              `json:"advisoryIDs"`
 }
 
 // Quote decodes and returns the enclave quote component of an Attestation
@@ -227,10 +231,10 @@ func (a *AttestationVerificationReport) validate() error { // nolint: gocyclo
 	)
 
 	if _, err := time.Parse(TimestampFormat, a.Timestamp); err != nil {
-		return errors.Wrap(err, "ias/avr: invalid timestamp")
+		return fmt.Errorf("ias/avr: invalid timestamp: %w", err)
 	}
 
-	// TODO: Enforce version once version 3 test vectors are available.
+	// TODO: Enforce version once version 4 test vectors are available.
 
 	if a.ISVEnclaveQuoteStatus == quoteFieldMissing {
 		return fmt.Errorf("ias/avr: missing isvEnclaveQuoteStatus")
@@ -241,10 +245,10 @@ func (a *AttestationVerificationReport) validate() error { // nolint: gocyclo
 	case quoteLen:
 		untrustedQuote, err := a.Quote()
 		if err != nil {
-			return errors.Wrap(err, "ias/avr: malformed quote")
+			return fmt.Errorf("ias/avr: malformed quote: %w", err)
 		}
 		if err = untrustedQuote.Verify(); err != nil {
-			return errors.Wrap(err, "ias/avr: invalid quote")
+			return fmt.Errorf("ias/avr: invalid quote: %w", err)
 		}
 	default:
 		return fmt.Errorf("ias/avr: invalid isvEnclaveQuoteBody length")
@@ -260,7 +264,7 @@ func (a *AttestationVerificationReport) validate() error { // nolint: gocyclo
 
 	if a.PSEManifestStatus != nil {
 		switch a.ISVEnclaveQuoteStatus {
-		case QuoteOK, QuoteGroupOutOfDate, QuoteConfigurationNeeded:
+		case QuoteOK, QuoteGroupOutOfDate, QuoteConfigurationNeeded, QuoteSwHardeningNeeded, QuoteConfigurationAndSwHardeningNeeded:
 		default:
 			return fmt.Errorf("ias/avr: unexpected pseManifestStatus")
 		}
@@ -268,7 +272,7 @@ func (a *AttestationVerificationReport) validate() error { // nolint: gocyclo
 
 	pseHash, err := hex.DecodeString(a.PSEManifestHash)
 	if err != nil {
-		return errors.Wrap(err, "ias/avr: failed to decode pseManifestHash")
+		return fmt.Errorf("ias/avr: failed to decode pseManifestHash: %w", err)
 	}
 	switch len(pseHash) {
 	case 0, pseManifestHashLen:
@@ -278,13 +282,13 @@ func (a *AttestationVerificationReport) validate() error { // nolint: gocyclo
 
 	piBlob, err := hex.DecodeString(a.PlatformInfoBlob)
 	if err != nil {
-		return errors.Wrap(err, "ias/avr: failed to decode platformInfoBlob")
+		return fmt.Errorf("ias/avr: failed to decode platformInfoBlob: %w", err)
 	}
 	if len(piBlob) > 0 {
 		var canHas bool
 
 		switch a.ISVEnclaveQuoteStatus {
-		case QuoteGroupRevoked, QuoteGroupOutOfDate, QuoteConfigurationNeeded:
+		case QuoteGroupRevoked, QuoteGroupOutOfDate, QuoteConfigurationNeeded, QuoteSwHardeningNeeded, QuoteConfigurationAndSwHardeningNeeded:
 			canHas = true
 		default:
 		}
@@ -333,7 +337,7 @@ func DecodeAVR(data, encodedSignature, encodedCertChain []byte, trustRoots *x509
 	}
 
 	if err := json.Unmarshal(data, a); err != nil {
-		return nil, errors.Wrap(err, "ias/avr: failed to parse JSON")
+		return nil, fmt.Errorf("ias/avr: failed to parse JSON: %w", err)
 	}
 
 	if err := a.validate(); err != nil {
@@ -346,7 +350,7 @@ func DecodeAVR(data, encodedSignature, encodedCertChain []byte, trustRoots *x509
 func validateAVRSignature(data, encodedSignature, encodedCertChain []byte, trustRoots *x509.CertPool, ts time.Time) error {
 	decoded, err := url.QueryUnescape(string(encodedCertChain))
 	if err != nil {
-		return errors.Wrap(err, "ias/avr: failed to decode certificate chain")
+		return fmt.Errorf("ias/avr: failed to decode certificate chain: %w", err)
 	}
 	pemCerts := []byte(decoded)
 
@@ -372,7 +376,7 @@ func validateAVRSignature(data, encodedSignature, encodedCertChain []byte, trust
 		CurrentTime: ts,
 	})
 	if err != nil {
-		return errors.Wrap(err, "ias/avr: failed to verify certificate chain")
+		return fmt.Errorf("ias/avr: failed to verify certificate chain: %w", err)
 	}
 	if !certRootsAChain(rootCert, certChains) {
 		return fmt.Errorf("ias/avr: unexpected root in certificate chain")
@@ -380,11 +384,11 @@ func validateAVRSignature(data, encodedSignature, encodedCertChain []byte, trust
 
 	signature, err := base64.StdEncoding.DecodeString(string(encodedSignature))
 	if err != nil {
-		return errors.Wrap(err, "ias/avr: failed to decode signature")
+		return fmt.Errorf("ias/avr: failed to decode signature: %w", err)
 	}
 
 	if err = signingCert.CheckSignature(x509.SHA256WithRSA, data, signature); err != nil {
-		return errors.Wrap(err, "ias/avr: failed to verify AVR signature")
+		return fmt.Errorf("ias/avr: failed to verify AVR signature: %w", err)
 	}
 
 	return nil

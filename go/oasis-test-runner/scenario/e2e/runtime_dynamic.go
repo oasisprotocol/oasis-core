@@ -56,7 +56,7 @@ func (sc *runtimeDynamicImpl) Fixture() (*oasis.NetworkFixture, error) {
 	// Allocate stake and set runtime thresholds.
 	f.Network.StakingGenesis = "tests/fixture-data/runtime-dynamic/staking-genesis.json"
 	// We need IAS proxy to use the registry as we are registering runtimes dynamically.
-	f.Network.IASUseRegistry = true
+	f.Network.IAS.UseRegistry = true
 	// Avoid unexpected blocks.
 	f.Network.EpochtimeMock = true
 	// Exclude all runtimes from genesis as we will register those dynamically.

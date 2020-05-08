@@ -33,6 +33,8 @@ const (
 	cfgRuntimeBinaryDir = "runtime.binary_dir"
 	cfgRuntimeLoader    = "runtime.loader"
 	cfgTEEHardware      = "tee_hardware"
+
+	cfgIasMock = "ias.mock"
 )
 
 var (
@@ -70,6 +72,8 @@ type runtimeImpl struct {
 	runtimeBinaryDir string
 	runtimeLoader    string
 	TEEHardware      string
+
+	iasMock bool
 }
 
 func newRuntimeImpl(name, clientBinary string, clientArgs []string) *runtimeImpl {
@@ -93,6 +97,7 @@ func (sc *runtimeImpl) Clone() scenario.Scenario {
 		runtimeBinaryDir: sc.runtimeBinaryDir,
 		runtimeLoader:    sc.runtimeLoader,
 		TEEHardware:      sc.TEEHardware,
+		iasMock:          sc.iasMock,
 	}
 }
 
@@ -102,6 +107,9 @@ func (sc *runtimeImpl) Parameters() *flag.FlagSet {
 	f.StringVar(&sc.runtimeBinaryDir, cfgRuntimeBinaryDir, sc.runtimeBinaryDir, "path to the runtime binaries directory")
 	f.StringVar(&sc.runtimeLoader, cfgRuntimeLoader, sc.runtimeLoader, "path to the runtime loader")
 	f.StringVar(&sc.TEEHardware, cfgTEEHardware, sc.TEEHardware, "TEE hardware to use")
+	// XXX: change the default to `true` after:
+	// https://github.com/oasislabs/oasis-core/issues/2897
+	f.BoolVar(&sc.iasMock, cfgIasMock, sc.iasMock, "if mock IAS service should be used")
 
 	return f
 }
@@ -139,6 +147,9 @@ func (sc *runtimeImpl) Fixture() (*oasis.NetworkFixture, error) {
 			RuntimeLoaderBinary:               sc.runtimeLoader,
 			DefaultLogWatcherHandlerFactories: DefaultRuntimeLogWatcherHandlerFactories,
 			ConsensusGasCostsTxByte:           1,
+			IAS: oasis.IASCfg{
+				Mock: sc.iasMock,
+			},
 		},
 		Entities: []oasis.EntityCfg{
 			oasis.EntityCfg{IsDebugTestEntity: true},

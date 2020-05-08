@@ -16,6 +16,7 @@ var mockSPID []byte
 type iasProxy struct {
 	Node
 
+	mock        bool
 	useRegistry bool
 	grpcPort    uint16
 }
@@ -30,17 +31,21 @@ func (ias *iasProxy) startNode() error {
 		debugDontBlameOasis().
 		debugAllowTestKeys().
 		grpcServerPort(ias.grpcPort).
-		grpcWait().
-		iasDebugMock().
-		iasSPID(mockSPID)
-	if ias.useRegistry {
+		grpcWait()
+
+	// If non-mock, IAS Proxy should get the SPID and API key through env vars.
+	if ias.mock {
+		args = args.iasDebugMock().iasSPID(mockSPID)
+	}
+
+	switch ias.useRegistry {
+	case true:
 		// XXX: IAS proxy is started before the validators. Pregenerate temp validator internal socket path, if needed.
 		if ias.net.cfg.UseShortGrpcSocketPaths && ias.net.validators[0].customGrpcSocketPath == "" {
 			ias.net.validators[0].customGrpcSocketPath = ias.net.generateTempSocketPath()
 		}
-
 		args = args.internalSocketAddress(ias.net.validators[0].SocketPath())
-	} else {
+	case false:
 		args = args.iasUseGenesis()
 	}
 
@@ -82,7 +87,8 @@ func (net *Network) newIASProxy() (*iasProxy, error) {
 			net:  net,
 			dir:  iasDir,
 		},
-		useRegistry: net.cfg.IASUseRegistry,
+		useRegistry: net.cfg.IAS.UseRegistry,
+		mock:        net.cfg.IAS.Mock,
 		grpcPort:    net.nextNodePort,
 	}
 	net.iasProxy.doStartNode = net.iasProxy.startNode
