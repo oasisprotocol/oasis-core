@@ -7,7 +7,6 @@ import (
 	"github.com/oasislabs/oasis-core/go/common"
 	"github.com/oasislabs/oasis-core/go/common/node"
 	"github.com/oasislabs/oasis-core/go/common/sgx"
-	"github.com/oasislabs/oasis-core/go/common/sgx/ias"
 	epochtime "github.com/oasislabs/oasis-core/go/epochtime/api"
 	"github.com/oasislabs/oasis-core/go/oasis-test-runner/env"
 	"github.com/oasislabs/oasis-core/go/oasis-test-runner/log"
@@ -35,7 +34,7 @@ type NetworkFixture struct {
 func (f *NetworkFixture) Create(env *env.Env) (*Network, error) {
 	// Use default MRSIGNER if not provided.
 	if f.TEE.Hardware == node.TEEHardwareIntelSGX && f.TEE.MrSigner == nil {
-		f.TEE.MrSigner = &ias.FortanixTestMrSigner
+		f.TEE.MrSigner = &sgx.FortanixDummyMrSigner
 	}
 
 	// Create the top level Oasis network.

@@ -9,7 +9,6 @@ import (
 	"github.com/oasislabs/oasis-core/go/common/crypto/hash"
 	"github.com/oasislabs/oasis-core/go/common/node"
 	"github.com/oasislabs/oasis-core/go/common/sgx"
-	"github.com/oasislabs/oasis-core/go/common/sgx/ias"
 	epoch "github.com/oasislabs/oasis-core/go/epochtime/api"
 	"github.com/oasislabs/oasis-core/go/oasis-test-runner/env"
 	"github.com/oasislabs/oasis-core/go/oasis-test-runner/oasis"
@@ -68,7 +67,7 @@ func (sc *nodeUpgradeCancelImpl) Fixture() (*oasis.NetworkFixture, error) {
 	}
 	var mrSigner *sgx.MrSigner
 	if tee == node.TEEHardwareIntelSGX {
-		mrSigner = &ias.FortanixTestMrSigner
+		mrSigner = &sgx.FortanixDummyMrSigner
 	}
 
 	return &oasis.NetworkFixture{

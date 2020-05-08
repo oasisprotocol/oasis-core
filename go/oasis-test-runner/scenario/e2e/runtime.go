@@ -14,7 +14,6 @@ import (
 	"github.com/oasislabs/oasis-core/go/common/cbor"
 	"github.com/oasislabs/oasis-core/go/common/node"
 	"github.com/oasislabs/oasis-core/go/common/sgx"
-	"github.com/oasislabs/oasis-core/go/common/sgx/ias"
 	cmdCommon "github.com/oasislabs/oasis-core/go/oasis-node/cmd/common"
 	cmdNode "github.com/oasislabs/oasis-core/go/oasis-node/cmd/node"
 	"github.com/oasislabs/oasis-core/go/oasis-test-runner/env"
@@ -126,7 +125,7 @@ func (sc *runtimeImpl) Fixture() (*oasis.NetworkFixture, error) {
 	}
 	var mrSigner *sgx.MrSigner
 	if tee == node.TEEHardwareIntelSGX {
-		mrSigner = &ias.FortanixTestMrSigner
+		mrSigner = &sgx.FortanixDummyMrSigner
 	}
 	keyManagerBinary, err := sc.resolveDefaultKeyManagerBinary()
 	if err != nil {

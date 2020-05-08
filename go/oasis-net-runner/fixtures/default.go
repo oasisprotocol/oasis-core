@@ -9,7 +9,6 @@ import (
 	"github.com/oasislabs/oasis-core/go/common"
 	"github.com/oasislabs/oasis-core/go/common/node"
 	"github.com/oasislabs/oasis-core/go/common/sgx"
-	"github.com/oasislabs/oasis-core/go/common/sgx/ias"
 	"github.com/oasislabs/oasis-core/go/oasis-test-runner/oasis"
 	registry "github.com/oasislabs/oasis-core/go/registry/api"
 )
@@ -39,7 +38,7 @@ func newDefaultFixture() (*oasis.NetworkFixture, error) {
 	}
 	var mrSigner *sgx.MrSigner
 	if tee == node.TEEHardwareIntelSGX {
-		mrSigner = &ias.FortanixTestMrSigner
+		mrSigner = &sgx.FortanixDummyMrSigner
 	}
 
 	return &oasis.NetworkFixture{
