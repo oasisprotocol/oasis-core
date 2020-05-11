@@ -14,7 +14,7 @@ func TestQuote(t *testing.T) {
 	SetAllowDebugEnclaves()
 	defer UnsetAllowDebugEnclaves()
 
-	raw, sig, certs := loadAVRv2(t)
+	raw, sig, certs := loadAVRv4(t)
 	avr, err := DecodeAVR(raw, sig, certs, IntelTrustRoots, time.Now())
 	require.NoError(t, err, "DecodeAVR")
 
@@ -25,34 +25,34 @@ func TestQuote(t *testing.T) {
 
 	require.EqualValues(t, 2, quote.Body.Version, "VERSION")
 	require.Equal(t, SignatureLinkable, quote.Body.SignatureType, "SIGNATURE_TYPE")
-	require.EqualValues(t, 0x00000ae3, quote.Body.GID, "GID")
-	require.EqualValues(t, 5, quote.Body.ISVSVNQuotingEnclave, "ISVSVN_QE")
-	require.EqualValues(t, 4, quote.Body.ISVSVNProvisioningCertificationEnclave, "ISVSVN_PCE")
+	require.EqualValues(t, 0xbc5, quote.Body.GID, "GID")
+	require.EqualValues(t, 0xb, quote.Body.ISVSVNQuotingEnclave, "ISVSVN_QE")
+	require.EqualValues(t, 0xa, quote.Body.ISVSVNProvisioningCertificationEnclave, "ISVSVN_PCE")
 	require.Equal(
 		t,
-		"b8c38a06855ded89a028a0db48dbc68400000000000000000000000000000000",
+		"14b5c60777a13ac77c732ce4d12d95b700000000000000000000000000000000",
 		hex.EncodeToString(quote.Body.Basename[:]),
 		"BASENAME",
 	)
 
 	require.Equal(
 		t,
-		"0207ffff010100000000000000000000",
+		"0f0f0205ff8007000000000000000000",
 		hex.EncodeToString(quote.Report.CPUSVN[:]),
 		"CPUSVN",
 	)
 	require.EqualValues(t, 0x00000000, quote.Report.MiscSelect, "MISCSELECT")
 	require.EqualValues(t, 0x0000000000000007, quote.Report.Attributes.Flags, "ATTRIBUTES.FLAGS")
-	require.EqualValues(t, 0x0000000000000007, quote.Report.Attributes.Xfrm, "ATTRIBUTES.XFRM")
+	require.EqualValues(t, 0x1f, quote.Report.Attributes.Xfrm, "ATTRIBUTES.XFRM")
 	require.Equal(
 		t,
-		"83d1607d933a8f1970fa30ac94cdb6921fd8ffb8414650af06fe63c008a4a9af",
+		"92143ea742e1628677b5a8e280173b7264470bfb0611d520c2474aab9846168e",
 		hex.EncodeToString(quote.Report.MRENCLAVE[:]),
 		"MRENCLAVE",
 	)
 	require.Equal(
 		t,
-		"83d719e77deaca1470f6baf62a4d774303c899db69020f9c70ee1dfc08c7ce9e",
+		"9affcfae47b848ec2caf1c49b4b283531e1cc425f93582b36806e52a43d78d1a",
 		hex.EncodeToString(quote.Report.MRSIGNER[:]),
 		"MRSIGNER",
 	)
@@ -60,7 +60,7 @@ func TestQuote(t *testing.T) {
 	require.EqualValues(t, 0x0000, quote.Report.ISVSVN, "ISVSVN")
 	require.Equal(
 		t,
-		"456b512d4964656e000000000000000000000000000000000000000000000000cf471ab9465815c56c21d467dab38abd01e2e1e308011085f3214bcb86a430af",
+		"6e90dd30d40b9813abb7f437a969de4fa2f9421df82519b9a507e3176cb3e1e062694e4d714241755450463268702f3066586134503373706c526b4c484a6630",
 		hex.EncodeToString(quote.Report.ReportData[:]),
 		"ReportData",
 	)
