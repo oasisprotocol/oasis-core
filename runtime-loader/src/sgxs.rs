@@ -9,7 +9,7 @@ use enclave_runner::{
     usercalls::{SyncStream, UsercallExtension},
     EnclaveBuilder,
 };
-use failure::Fallible;
+use failure::{format_err, Fallible};
 use sgxs_loaders::isgx::Device as IsgxDevice;
 
 use crate::Loader;
@@ -48,15 +48,26 @@ impl UsercallExtension for HostService {
 pub struct SgxsLoader;
 
 impl Loader for SgxsLoader {
-    fn run(&self, filename: String, host_socket: String) -> Fallible<()> {
+    fn run(
+        &self,
+        filename: String,
+        signature_filename: Option<&str>,
+        host_socket: String,
+    ) -> Fallible<()> {
+        let sig = match signature_filename {
+            Some(f) => f,
+            None => {
+                return Err(format_err!("signature file is required"));
+            }
+        };
+
         // Spawn the SGX enclave.
         let mut device = IsgxDevice::new()?
             .einittoken_provider(AesmClient::new())
             .build();
 
         let mut enclave_builder = EnclaveBuilder::new(filename.as_ref());
-        // TODO: Use non-dummy signature.
-        enclave_builder.dummy_signature();
+        enclave_builder.signature(sig)?;
         enclave_builder.usercall_extension(HostService::new(host_socket));
         let enclave = enclave_builder.build(&mut device)?;
 

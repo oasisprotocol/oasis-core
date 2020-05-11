@@ -9,7 +9,12 @@ use crate::Loader;
 pub struct ElfLoader;
 
 impl Loader for ElfLoader {
-    fn run(&self, filename: String, host_socket: String) -> Fallible<()> {
+    fn run(
+        &self,
+        filename: String,
+        _signature_filename: Option<&str>,
+        host_socket: String,
+    ) -> Fallible<()> {
         Command::new(filename)
             .env("OASIS_WORKER_HOST", host_socket)
             .spawn()?
