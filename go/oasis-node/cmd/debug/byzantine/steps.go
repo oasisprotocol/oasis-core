@@ -93,6 +93,7 @@ func initFakeCapabilitiesSGX() (signature.Signer, *node.Capabilities, error) {
 
 	// Manage AVRBundle's Body.
 	body, _ := json.Marshal(&ias.AttestationVerificationReport{
+		Version:               4,
 		Timestamp:             time.Now().UTC().Format(ias.TimestampFormat),
 		ISVEnclaveQuoteStatus: ias.QuoteOK,
 		ISVEnclaveQuoteBody:   quoteBinary,

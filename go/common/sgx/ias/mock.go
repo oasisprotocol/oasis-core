@@ -6,6 +6,7 @@ import (
 )
 
 type mockAVR struct {
+	Version               int    `json:"version"`
 	Timestamp             string `json:"timestamp"`
 	ISVEnclaveQuoteStatus string `json:"isvEnclaveQuoteStatus"`
 	ISVEnclaveQuoteBody   []byte `json:"isvEnclaveQuoteBody"`
@@ -19,6 +20,7 @@ type mockAVR struct {
 // compile time (ie: built with `OASIS_UNSAFE_SKIP_AVR_VERIFY=1`).
 func NewMockAVR(quote []byte, nonce string) ([]byte, error) {
 	mockAVR := &mockAVR{
+		Version:               4,
 		Timestamp:             time.Now().UTC().Format(TimestampFormat),
 		ISVEnclaveQuoteStatus: "OK",
 		ISVEnclaveQuoteBody:   quote[:quoteLen],

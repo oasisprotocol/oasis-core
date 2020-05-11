@@ -17,6 +17,9 @@ import (
 // NonceMaxLen is the maximum length of the AVR nonce.
 const NonceMaxLen = 32
 
+// requiredAVRVersion is the required AV report version.
+const requiredAVRVersion = 4
+
 var (
 	unsafeSkipVerify         bool
 	unsafeAllowDebugEnclaves bool
@@ -234,7 +237,9 @@ func (a *AttestationVerificationReport) validate() error { // nolint: gocyclo
 		return fmt.Errorf("ias/avr: invalid timestamp: %w", err)
 	}
 
-	// TODO: Enforce version once version 4 test vectors are available.
+	if a.Version != requiredAVRVersion {
+		return fmt.Errorf("ias/avr: invalid report version, got: %d, required: %d", a.Version, requiredAVRVersion)
+	}
 
 	if a.ISVEnclaveQuoteStatus == quoteFieldMissing {
 		return fmt.Errorf("ias/avr: missing isvEnclaveQuoteStatus")
