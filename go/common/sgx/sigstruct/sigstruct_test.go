@@ -40,6 +40,11 @@ func TestSigstruct(t *testing.T) {
 	expected, err := ioutil.ReadFile("../testdata/sig1.sigstruct.bin")
 	require.NoError(err, "ioutil.ReadFile(sig1.sigstruct.bin)")
 	require.Equal(expected, sigstruct, "SIGSTRUCT should match Fortanix's")
+
+	extractedPublicKey, derivedBuilder, err := Verify(sigstruct)
+	require.NoError(err, "SIGSTRUCT should validate")
+	require.EqualValues(builder, derivedBuilder, "Parsed SIGSTRUCT should match builder")
+	require.EqualValues(privateKey.Public(), extractedPublicKey, "SIGSTRUCT public key extraction")
 }
 
 func loadTestPrivateKey() (*rsa.PrivateKey, error) {

@@ -23,6 +23,8 @@ const (
 
 	// ModulusSize is the required RSA modulus size in bits.
 	ModulusSize = 3072
+
+	modulusBytes = ModulusSize / 8
 )
 
 // AttributesFlags is attributes flags inside enclave report attributes.
@@ -164,24 +166,41 @@ func (m *MrSigner) FromPublicKey(pk *rsa.PublicKey) error {
 func To3072le(z *big.Int, mayPad bool) ([]byte, error) {
 	buf := z.Bytes()
 
-	const expectedSize = ModulusSize / 8
 	sz := len(buf)
-	if sz != expectedSize {
-		padLen := expectedSize - sz
+	if sz != modulusBytes {
+		padLen := modulusBytes - sz
 		if !mayPad || padLen < 0 {
-			return nil, fmt.Errorf("sgx: big int is not 3072 bits: %v", expectedSize)
+			return nil, fmt.Errorf("sgx: big int is not %v bits: %v", ModulusSize, sz)
 		}
 
 		// Pad before reversing.
-		padded := make([]byte, padLen, expectedSize)
+		padded := make([]byte, padLen, modulusBytes)
 		buf = append(padded, buf...)
 	}
 
+	buf = reverseBuffer(buf)
+
+	return buf, nil
+}
+
+// From3072le converts a 3072 bit buffer to the corresponding big.Int, assuming
+// that the buffer is in little endian representation.
+func From3072le(b []byte) (*big.Int, error) {
+	if sz := len(b); sz != modulusBytes {
+		return nil, fmt.Errorf("sgx: buffer is not %v bits: %v", modulusBytes, sz)
+	}
+
+	buf := reverseBuffer(b)
+	var ret big.Int
+	return ret.SetBytes(buf), nil
+}
+
+func reverseBuffer(b []byte) []byte {
+	buf := append([]byte{}, b...)
 	for left, right := 0, len(buf)-1; left < right; left, right = left+1, right-1 {
 		buf[left], buf[right] = buf[right], buf[left]
 	}
-
-	return buf, nil
+	return buf
 }
 
 // String returns the string representation of a MrSigner.
