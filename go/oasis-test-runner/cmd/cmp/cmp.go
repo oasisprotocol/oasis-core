@@ -16,7 +16,6 @@ import (
 
 	"github.com/oasislabs/oasis-core/go/common/logging"
 	nodeCommon "github.com/oasislabs/oasis-core/go/oasis-node/cmd/common"
-	"github.com/oasislabs/oasis-core/go/oasis-node/cmd/common/flags"
 	"github.com/oasislabs/oasis-core/go/oasis-node/cmd/common/metrics"
 	"github.com/oasislabs/oasis-core/go/oasis-test-runner/cmd/common"
 )
@@ -442,7 +441,7 @@ func runCmp(cmd *cobra.Command, args []string) {
 
 		// Set other required Prometheus labels, if passed.
 		// TODO: Integrate test parameters and parameter set combinations if multiple values provided like we do in oasis-test-runner.
-		for k, v := range flags.GetStringMapString(metrics.CfgMetricsLabels) {
+		for k, v := range viper.GetStringMapString(metrics.CfgMetricsLabels) {
 			sLabels[k] = v
 			tLabels[k] = v
 		}
