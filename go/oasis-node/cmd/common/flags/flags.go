@@ -3,8 +3,6 @@
 package flags
 
 import (
-	"strings"
-
 	flag "github.com/spf13/pflag"
 	"github.com/spf13/viper"
 )
@@ -90,27 +88,6 @@ func DebugDontBlameOasis() bool {
 // DryRun returns true iff the dry-run flag is set.
 func DryRun() bool {
 	return viper.GetBool(CfgDryRun)
-}
-
-// GetStringMapString is a drop-in replacement for viper.GetStringMapString due to https://github.com/spf13/viper/issues/608.
-func GetStringMapString(key string) map[string]string {
-	labels := map[string]string{}
-	val := viper.GetString(key)
-
-	// viper.GetString() wraps the string inside [] parenthesis, unwrap it.
-	if len(val) < 2 {
-		return labels
-	}
-	val = val[1 : len(val)-1]
-
-	for _, lPair := range strings.Split(val, ",") {
-		kv := strings.Split(lPair, "=")
-		if len(kv) != 2 || kv[0] == "" {
-			continue
-		}
-		labels[kv[0]] = kv[1]
-	}
-	return labels
 }
 
 func init() {

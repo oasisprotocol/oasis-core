@@ -18,7 +18,6 @@ import (
 
 	"github.com/oasislabs/oasis-core/go/common/service"
 	"github.com/oasislabs/oasis-core/go/common/version"
-	"github.com/oasislabs/oasis-core/go/oasis-node/cmd/common/flags"
 	"github.com/oasislabs/oasis-core/go/oasis-test-runner/env"
 )
 
@@ -199,7 +198,7 @@ func (s *pushService) worker() {
 func newPushService() (service.BackgroundService, error) {
 	addr := viper.GetString(CfgMetricsAddr)
 	jobName := viper.GetString(CfgMetricsJobName)
-	labels := flags.GetStringMapString(CfgMetricsLabels)
+	labels := viper.GetStringMapString(CfgMetricsLabels)
 	interval := viper.GetDuration(CfgMetricsInterval)
 
 	if jobName == "" {
@@ -269,7 +268,7 @@ func GetDefaultPushLabels(ti *env.TestInstanceInfo) map[string]string {
 			labels[EscapeLabelCharacters(f.Name)] = f.Value.String()
 		})
 		// Override any labels passed to oasis-test-runner via CLI.
-		for k, v := range flags.GetStringMapString(CfgMetricsLabels) {
+		for k, v := range viper.GetStringMapString(CfgMetricsLabels) {
 			labels[k] = v
 		}
 
