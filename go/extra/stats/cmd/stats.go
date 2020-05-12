@@ -113,8 +113,14 @@ func (s stats) printEntityAvailability(topN int) {
 	// Print results.
 	written, _ := fmt.Printf("|%-5s|%-64s|%-6s|%13s|%10s|%14s|%9s|%18s|\n", "Rank", "Entity ID", "Nodes", "Had validator", "Signatures", "Times selected", "Proposals", "Availability score")
 	fmt.Println(strings.Repeat("-", written-1))
+	rank := 0
+	tieScore := int64(0)
 	for idx, r := range res {
-		fmt.Printf("|%-5d|%-64s|%6d|%13d|%10d|%14d|%9d|%18d|\n", idx+1, r.entityID, r.nodes, r.elections, r.signatures, r.selections, r.proposals, r.availabilityScore)
+		if idx == 0 || r.availabilityScore != tieScore {
+			rank = idx + 1
+			tieScore = r.availabilityScore
+		}
+		fmt.Printf("|%-5d|%-64s|%6d|%13d|%10d|%14d|%9d|%18d|\n", rank, r.entityID, r.nodes, r.elections, r.signatures, r.selections, r.proposals, r.availabilityScore)
 	}
 }
 
