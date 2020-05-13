@@ -42,6 +42,10 @@ var (
 	// runtime IDs to corresponding resource paths (type of the resource depends on the
 	// provisioner).
 	CfgRuntimePaths = "worker.runtime.paths"
+	// CfgRuntimeSGXSignatures configures signatures for supported runtimes.
+	// The value should be a map of runtime IDs to corresponding resource
+	// paths.
+	CfgRuntimeSGXSignatures = "worker.runtime.sgx.signatures"
 
 	cfgStorageCommitTimeout = "worker.storage_commit_timeout"
 
@@ -188,6 +192,7 @@ func NewConfig(ias ias.Endpoint) (*Config, error) {
 		}
 
 		// Configure runtimes.
+		runtimeSGXSignatures := viper.GetStringMapString(CfgRuntimeSGXSignatures)
 		rh.Runtimes = make(map[common.Namespace]runtimeHost.Config)
 		for runtimeID, path := range viper.GetStringMapString(CfgRuntimePaths) {
 			var id common.Namespace
@@ -195,10 +200,26 @@ func NewConfig(ias ias.Endpoint) (*Config, error) {
 				return nil, fmt.Errorf("bad runtime identifier '%s': %w", runtimeID, err)
 			}
 
-			rh.Runtimes[id] = runtimeHost.Config{
+			runtimeHostCfg := runtimeHost.Config{
 				RuntimeID: id,
 				Path:      path,
 			}
+
+			// This config is SGX specific, but that's all that's supported
+			// right now that needs this anyway, the non-SGX provisioner
+			// currently ignores this.
+			if sigPath := runtimeSGXSignatures[runtimeID]; sigPath != "" {
+				runtimeHostCfg.Extra = &hostSgx.RuntimeExtra{
+					SignaturePath: sigPath,
+				}
+			} else {
+				// HACK HACK HACK: Allow dummy SIGSTRUCT generation.
+				runtimeHostCfg.Extra = &hostSgx.RuntimeExtra{
+					UnsafeDebugGenerateSigstruct: true,
+				}
+			}
+
+			rh.Runtimes[id] = runtimeHostCfg
 		}
 		if len(rh.Runtimes) == 0 {
 			return nil, fmt.Errorf("no runtimes configured")
@@ -219,6 +240,7 @@ func init() {
 	Flags.String(CfgRuntimeProvisioner, RuntimeProvisionerSandboxed, "Runtime provisioner to use")
 	Flags.String(CfgRuntimeSGXLoader, "", "(for SGX runtimes) Path to SGXS runtime loader binary")
 	Flags.StringToString(CfgRuntimePaths, nil, "Paths to runtime resources (format: <rt1-ID>=<path>,<rt2-ID>=<path>)")
+	Flags.StringToString(CfgRuntimeSGXSignatures, nil, "(for SGX runtimes) Paths to signatures (format: <rt1-ID>=<path>,<rt2-ID>=<path>")
 
 	Flags.Duration(cfgStorageCommitTimeout, 5*time.Second, "Storage commit timeout")
 
