@@ -144,7 +144,7 @@ func (sc *runtimeImpl) Fixture() (*oasis.NetworkFixture, error) {
 		},
 		Network: oasis.NetworkCfg{
 			NodeBinary:                        sc.nodeBinary,
-			RuntimeLoaderBinary:               sc.runtimeLoader,
+			RuntimeSGXLoaderBinary:            sc.runtimeLoader,
 			DefaultLogWatcherHandlerFactories: DefaultRuntimeLogWatcherHandlerFactories,
 			ConsensusGasCostsTxByte:           1,
 			IAS: oasis.IASCfg{

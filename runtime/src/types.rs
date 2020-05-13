@@ -45,7 +45,7 @@ pub enum StorageSyncResponse {
     ProofResponse(sync::ProofResponse),
 }
 
-/// Worker protocol message body.
+/// Runtime host protocol message body.
 #[derive(Debug, Serialize, Deserialize)]
 pub enum Body {
     // An empty body.
@@ -53,70 +53,75 @@ pub enum Body {
 
     // An error response.
     Error {
+        #[serde(default)]
+        module: String,
+        #[serde(default)]
+        code: u32,
+        #[serde(default)]
         message: String,
     },
 
-    // Runtime worker interface.
-    WorkerInfoRequest {
+    // Runtime interface.
+    RuntimeInfoRequest {
         runtime_id: RuntimeId,
     },
-    WorkerInfoResponse {
+    RuntimeInfoResponse {
         protocol_version: u64,
         runtime_version: u64,
     },
-    WorkerPingRequest {},
-    WorkerShutdownRequest {},
-    WorkerAbortRequest {},
-    WorkerAbortResponse {},
-    WorkerCapabilityTEERakInitRequest {
+    RuntimePingRequest {},
+    RuntimeShutdownRequest {},
+    RuntimeAbortRequest {},
+    RuntimeAbortResponse {},
+    RuntimeCapabilityTEERakInitRequest {
         #[serde(with = "serde_bytes")]
         target_info: Vec<u8>,
     },
-    WorkerCapabilityTEERakInitResponse {},
-    WorkerCapabilityTEERakReportRequest {},
-    WorkerCapabilityTEERakReportResponse {
+    RuntimeCapabilityTEERakInitResponse {},
+    RuntimeCapabilityTEERakReportRequest {},
+    RuntimeCapabilityTEERakReportResponse {
         rak_pub: PublicKey,
         #[serde(with = "serde_bytes")]
         report: Vec<u8>,
         nonce: String,
     },
-    WorkerCapabilityTEERakAvrRequest {
+    RuntimeCapabilityTEERakAvrRequest {
         avr: AVR,
     },
-    WorkerCapabilityTEERakAvrResponse {},
-    WorkerRPCCallRequest {
+    RuntimeCapabilityTEERakAvrResponse {},
+    RuntimeRPCCallRequest {
         #[serde(with = "serde_bytes")]
         request: Vec<u8>,
         state_root: Hash,
     },
-    WorkerRPCCallResponse {
+    RuntimeRPCCallResponse {
         #[serde(with = "serde_bytes")]
         response: Vec<u8>,
         write_log: WriteLog,
         new_state_root: Hash,
     },
-    WorkerLocalRPCCallRequest {
+    RuntimeLocalRPCCallRequest {
         #[serde(with = "serde_bytes")]
         request: Vec<u8>,
         state_root: Hash,
     },
-    WorkerLocalRPCCallResponse {
+    RuntimeLocalRPCCallResponse {
         #[serde(with = "serde_bytes")]
         response: Vec<u8>,
     },
-    WorkerCheckTxBatchRequest {
+    RuntimeCheckTxBatchRequest {
         inputs: TxnBatch,
         block: Block,
     },
-    WorkerCheckTxBatchResponse {
+    RuntimeCheckTxBatchResponse {
         results: TxnBatch,
     },
-    WorkerExecuteTxBatchRequest {
+    RuntimeExecuteTxBatchRequest {
         io_root: Hash,
         inputs: TxnBatch,
         block: Block,
     },
-    WorkerExecuteTxBatchResponse {
+    RuntimeExecuteTxBatchResponse {
         batch: ComputedBatch,
     },
 
@@ -197,7 +202,7 @@ impl<'de> serde::Deserialize<'de> for MessageType {
     }
 }
 
-/// Worker protocol message.
+/// Runtime protocol message.
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Message {
     /// Unique request identifier.

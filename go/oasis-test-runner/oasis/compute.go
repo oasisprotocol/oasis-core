@@ -7,7 +7,7 @@ import (
 
 	registry "github.com/oasislabs/oasis-core/go/registry/api"
 	storageClient "github.com/oasislabs/oasis-core/go/storage/client"
-	workerHost "github.com/oasislabs/oasis-core/go/worker/common/host"
+	commonWorker "github.com/oasislabs/oasis-core/go/worker/common"
 )
 
 const (
@@ -25,7 +25,7 @@ type Compute struct { // nolint: maligned
 
 	entity *Entity
 
-	runtimeBackend string
+	runtimeProvisioner string
 
 	consensusPort uint16
 	clientPort    uint16
@@ -38,7 +38,7 @@ type ComputeCfg struct {
 
 	Entity *Entity
 
-	RuntimeBackend string
+	RuntimeProvisioner string
 }
 
 // IdentityKeyPath returns the path to the node's identity key.
@@ -87,8 +87,8 @@ func (worker *Compute) startNode() error {
 		workerClientPort(worker.clientPort).
 		workerP2pPort(worker.p2pPort).
 		workerComputeEnabled().
-		workerRuntimeBackend(worker.runtimeBackend).
-		workerRuntimeLoader(worker.net.cfg.RuntimeLoaderBinary).
+		workerRuntimeProvisioner(worker.runtimeProvisioner).
+		workerRuntimeSGXLoader(worker.net.cfg.RuntimeSGXLoaderBinary).
 		workerTxnschedulerCheckTxEnabled().
 		appendNetwork(worker.net).
 		appendSeedNodes(worker.net).
@@ -130,8 +130,8 @@ func (net *Network) NewCompute(cfg *ComputeCfg) (*Compute, error) {
 		return nil, err
 	}
 
-	if cfg.RuntimeBackend == "" {
-		cfg.RuntimeBackend = workerHost.BackendSandboxed
+	if cfg.RuntimeProvisioner == "" {
+		cfg.RuntimeProvisioner = commonWorker.RuntimeProvisionerSandboxed
 	}
 
 	worker := &Compute{
@@ -145,11 +145,11 @@ func (net *Network) NewCompute(cfg *ComputeCfg) (*Compute, error) {
 			logWatcherHandlerFactories:               cfg.LogWatcherHandlerFactories,
 			consensus:                                cfg.Consensus,
 		},
-		entity:         cfg.Entity,
-		runtimeBackend: cfg.RuntimeBackend,
-		consensusPort:  net.nextNodePort,
-		clientPort:     net.nextNodePort + 1,
-		p2pPort:        net.nextNodePort + 2,
+		entity:             cfg.Entity,
+		runtimeProvisioner: cfg.RuntimeProvisioner,
+		consensusPort:      net.nextNodePort,
+		clientPort:         net.nextNodePort + 1,
+		p2pPort:            net.nextNodePort + 2,
 	}
 	worker.doStartNode = worker.startNode
 	copy(worker.NodeID[:], publicKey[:])

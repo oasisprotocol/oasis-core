@@ -1,6 +1,8 @@
 package protocol
 
 import (
+	"fmt"
+
 	"github.com/oasislabs/oasis-core/go/common"
 	"github.com/oasislabs/oasis-core/go/common/crypto/hash"
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
@@ -25,7 +27,7 @@ func (m MessageType) String() string {
 	case MessageResponse:
 		return "response"
 	default:
-		return "invalid"
+		return fmt.Sprintf("[malformed: %d]", m)
 	}
 }
 
@@ -53,27 +55,27 @@ type Body struct {
 	Empty *Empty `json:",omitempty"`
 	Error *Error `json:",omitempty"`
 
-	// Worker interface.
-	WorkerInfoRequest                    *WorkerInfoRequest                    `json:",omitempty"`
-	WorkerInfoResponse                   *WorkerInfoResponse                   `json:",omitempty"`
-	WorkerPingRequest                    *Empty                                `json:",omitempty"`
-	WorkerShutdownRequest                *Empty                                `json:",omitempty"`
-	WorkerCapabilityTEERakInitRequest    *WorkerCapabilityTEERakInitRequest    `json:",omitempty"`
-	WorkerCapabilityTEERakInitResponse   *Empty                                `json:",omitempty"`
-	WorkerCapabilityTEERakReportRequest  *Empty                                `json:",omitempty"`
-	WorkerCapabilityTEERakReportResponse *WorkerCapabilityTEERakReportResponse `json:",omitempty"`
-	WorkerCapabilityTEERakAvrRequest     *WorkerCapabilityTEERakAvrRequest     `json:",omitempty"`
-	WorkerCapabilityTEERakAvrResponse    *Empty                                `json:",omitempty"`
-	WorkerRPCCallRequest                 *WorkerRPCCallRequest                 `json:",omitempty"`
-	WorkerRPCCallResponse                *WorkerRPCCallResponse                `json:",omitempty"`
-	WorkerLocalRPCCallRequest            *WorkerLocalRPCCallRequest            `json:",omitempty"`
-	WorkerLocalRPCCallResponse           *WorkerLocalRPCCallResponse           `json:",omitempty"`
-	WorkerCheckTxBatchRequest            *WorkerCheckTxBatchRequest            `json:",omitempty"`
-	WorkerCheckTxBatchResponse           *WorkerCheckTxBatchResponse           `json:",omitempty"`
-	WorkerExecuteTxBatchRequest          *WorkerExecuteTxBatchRequest          `json:",omitempty"`
-	WorkerExecuteTxBatchResponse         *WorkerExecuteTxBatchResponse         `json:",omitempty"`
-	WorkerAbortRequest                   *Empty                                `json:",omitempty"`
-	WorkerAbortResponse                  *Empty                                `json:",omitempty"`
+	// Runtime interface.
+	RuntimeInfoRequest                    *RuntimeInfoRequest                    `json:",omitempty"`
+	RuntimeInfoResponse                   *RuntimeInfoResponse                   `json:",omitempty"`
+	RuntimePingRequest                    *Empty                                 `json:",omitempty"`
+	RuntimeShutdownRequest                *Empty                                 `json:",omitempty"`
+	RuntimeCapabilityTEERakInitRequest    *RuntimeCapabilityTEERakInitRequest    `json:",omitempty"`
+	RuntimeCapabilityTEERakInitResponse   *Empty                                 `json:",omitempty"`
+	RuntimeCapabilityTEERakReportRequest  *Empty                                 `json:",omitempty"`
+	RuntimeCapabilityTEERakReportResponse *RuntimeCapabilityTEERakReportResponse `json:",omitempty"`
+	RuntimeCapabilityTEERakAvrRequest     *RuntimeCapabilityTEERakAvrRequest     `json:",omitempty"`
+	RuntimeCapabilityTEERakAvrResponse    *Empty                                 `json:",omitempty"`
+	RuntimeRPCCallRequest                 *RuntimeRPCCallRequest                 `json:",omitempty"`
+	RuntimeRPCCallResponse                *RuntimeRPCCallResponse                `json:",omitempty"`
+	RuntimeLocalRPCCallRequest            *RuntimeLocalRPCCallRequest            `json:",omitempty"`
+	RuntimeLocalRPCCallResponse           *RuntimeLocalRPCCallResponse           `json:",omitempty"`
+	RuntimeCheckTxBatchRequest            *RuntimeCheckTxBatchRequest            `json:",omitempty"`
+	RuntimeCheckTxBatchResponse           *RuntimeCheckTxBatchResponse           `json:",omitempty"`
+	RuntimeExecuteTxBatchRequest          *RuntimeExecuteTxBatchRequest          `json:",omitempty"`
+	RuntimeExecuteTxBatchResponse         *RuntimeExecuteTxBatchResponse         `json:",omitempty"`
+	RuntimeAbortRequest                   *Empty                                 `json:",omitempty"`
+	RuntimeAbortResponse                  *Empty                                 `json:",omitempty"`
 
 	// Host interface.
 	HostKeyManagerPolicyRequest  *HostKeyManagerPolicyRequest  `json:",omitempty"`
@@ -94,17 +96,19 @@ type Empty struct {
 
 // Error is a message body representing an error.
 type Error struct {
-	Message string `json:"message"`
+	Module  string `json:"module,omitempty"`
+	Code    uint32 `json:"code,omitempty"`
+	Message string `json:"message,omitempty"`
 }
 
-// WorkerInfoRequest is a worker info request message body.
-type WorkerInfoRequest struct {
+// RuntimeInfoRequest is a worker info request message body.
+type RuntimeInfoRequest struct {
 	// RuntimeID is the assigned runtime ID of the loaded runtime.
 	RuntimeID common.Namespace `json:"runtime_id"`
 }
 
-// WorkerInfoResponse is a worker info response message body.
-type WorkerInfoResponse struct {
+// RuntimeInfoResponse is a worker info response message body.
+type RuntimeInfoResponse struct {
 	// ProtocolVersion is the runtime protocol version supported by the worker.
 	ProtocolVersion uint64 `json:"protocol_version"`
 
@@ -112,34 +116,34 @@ type WorkerInfoResponse struct {
 	RuntimeVersion uint64 `json:"runtime_version"`
 }
 
-// WorkerCapabilityTEERakInitRequest is a worker RFC 0009 CapabilityTEE
+// RuntimeCapabilityTEERakInitRequest is a worker RFC 0009 CapabilityTEE
 // initialization request message body.
-type WorkerCapabilityTEERakInitRequest struct {
+type RuntimeCapabilityTEERakInitRequest struct {
 	TargetInfo []byte `json:"target_info"`
 }
 
-// WorkerCapabilityTEERakReportResponse is a worker RFC 0009 CapabilityTEE RAK response message body.
-type WorkerCapabilityTEERakReportResponse struct {
+// RuntimeCapabilityTEERakReportResponse is a worker RFC 0009 CapabilityTEE RAK response message body.
+type RuntimeCapabilityTEERakReportResponse struct {
 	RakPub signature.PublicKey `json:"rak_pub"`
 	Report []byte              `json:"report"`
 	Nonce  string              `json:"nonce"`
 }
 
-// WorkerCapabilityTEERakAvrRequest is a worker RFC 0009 CapabilityTEE RAK AVR setup request message body.
-type WorkerCapabilityTEERakAvrRequest struct {
+// RuntimeCapabilityTEERakAvrRequest is a worker RFC 0009 CapabilityTEE RAK AVR setup request message body.
+type RuntimeCapabilityTEERakAvrRequest struct {
 	AVR ias.AVRBundle `json:"avr"`
 }
 
-// WorkerRPCCallRequest is a worker RPC call request message body.
-type WorkerRPCCallRequest struct {
+// RuntimeRPCCallRequest is a worker RPC call request message body.
+type RuntimeRPCCallRequest struct {
 	// Request.
 	Request []byte `json:"request"`
 	// State root hash.
 	StateRoot hash.Hash `json:"state_root"`
 }
 
-// WorkerRPCCallResponse is a worker RPC call response message body.
-type WorkerRPCCallResponse struct {
+// RuntimeRPCCallResponse is a worker RPC call response message body.
+type RuntimeRPCCallResponse struct {
 	// Response.
 	Response []byte `json:"response"`
 	// Batch of storage write operations.
@@ -148,30 +152,30 @@ type WorkerRPCCallResponse struct {
 	NewStateRoot hash.Hash `json:"new_state_root"`
 }
 
-// WorkerLocalRPCCallRequest is a worker local RPC call request message body.
-type WorkerLocalRPCCallRequest struct {
+// RuntimeLocalRPCCallRequest is a worker local RPC call request message body.
+type RuntimeLocalRPCCallRequest struct {
 	// Request.
 	Request []byte `json:"request"`
 	// State root hash.
 	StateRoot hash.Hash `json:"state_root"`
 }
 
-// WorkerLocalRPCCallResponse is a worker local RPC call response message body.
-type WorkerLocalRPCCallResponse struct {
+// RuntimeLocalRPCCallResponse is a worker local RPC call response message body.
+type RuntimeLocalRPCCallResponse struct {
 	// Response.
 	Response []byte `json:"response"`
 }
 
-// WorkerCheckTxBatchRequest is a worker check tx batch request message body.
-type WorkerCheckTxBatchRequest struct {
+// RuntimeCheckTxBatchRequest is a worker check tx batch request message body.
+type RuntimeCheckTxBatchRequest struct {
 	// Batch of runtime inputs to check.
 	Inputs transaction.RawBatch `json:"inputs"`
 	// Block on which the batch check should be based.
 	Block roothash.Block `json:"block"`
 }
 
-// WorkerCheckTxBatchResponse is a worker check tx batch response message body.
-type WorkerCheckTxBatchResponse struct {
+// RuntimeCheckTxBatchResponse is a worker check tx batch response message body.
+type RuntimeCheckTxBatchResponse struct {
 	// Batch of runtime check results.
 	Results transaction.RawBatch `json:"results"`
 }
@@ -194,8 +198,8 @@ func (b *ComputedBatch) String() string {
 	return "<ComputedBatch>"
 }
 
-// WorkerExecuteTxBatchRequest is a worker execute tx batch request message body.
-type WorkerExecuteTxBatchRequest struct {
+// RuntimeExecuteTxBatchRequest is a worker execute tx batch request message body.
+type RuntimeExecuteTxBatchRequest struct {
 	// IORoot is the I/O root containing the inputs (transactions) that
 	// the compute node should use. It must match what is passed in "inputs".
 	IORoot hash.Hash `json:"io_root"`
@@ -205,8 +209,8 @@ type WorkerExecuteTxBatchRequest struct {
 	Block roothash.Block `json:"block"`
 }
 
-// WorkerExecuteTxBatchResponse is a worker execute tx batch response message body.
-type WorkerExecuteTxBatchResponse struct {
+// RuntimeExecuteTxBatchResponse is a worker execute tx batch response message body.
+type RuntimeExecuteTxBatchResponse struct {
 	Batch ComputedBatch `json:"batch"`
 }
 

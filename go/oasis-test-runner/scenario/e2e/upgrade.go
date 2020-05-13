@@ -142,9 +142,9 @@ func (sc *nodeUpgradeImpl) Fixture() (*oasis.NetworkFixture, error) {
 			MrSigner: mrSigner,
 		},
 		Network: oasis.NetworkCfg{
-			NodeBinary:          sc.nodeBinary,
-			RuntimeLoaderBinary: sc.runtimeLoader,
-			EpochtimeMock:       true,
+			NodeBinary:             sc.nodeBinary,
+			RuntimeSGXLoaderBinary: sc.runtimeLoader,
+			EpochtimeMock:          true,
 			DefaultLogWatcherHandlerFactories: []log.WatcherHandlerFactory{
 				oasis.LogAssertUpgradeStartup(),
 				oasis.LogAssertUpgradeConsensus(),

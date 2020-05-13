@@ -17,8 +17,6 @@ import (
 
 // Worker is a transaction scheduler handling many runtimes.
 type Worker struct {
-	*workerCommon.RuntimeHostWorker
-
 	enabled        bool
 	checkTxEnabled bool
 
@@ -151,14 +149,8 @@ func (w *Worker) registerRuntime(commonNode *committeeCommon.Node) error {
 		return fmt.Errorf("failed to create role provider: %w", err)
 	}
 
-	// Create worker host for the given runtime.
-	workerHostFactory, err := w.NewRuntimeWorkerHostFactory(node.RoleComputeWorker, id)
-	if err != nil {
-		return fmt.Errorf("failed to create worker host: %w", err)
-	}
-
 	// Create committee node for the given runtime.
-	node, err := committee.NewNode(commonNode, executorNode, workerHostFactory, w.checkTxEnabled, rp)
+	node, err := committee.NewNode(commonNode, executorNode, w.checkTxEnabled, w.commonWorker.GetConfig(), rp)
 	if err != nil {
 		return err
 	}
@@ -200,20 +192,12 @@ func newWorker(
 			panic("common worker should have been enabled for transaction scheduler")
 		}
 
-		var err error
-
-		// Create the runtime host worker.
-		w.RuntimeHostWorker, err = workerCommon.NewRuntimeHostWorker(commonWorker)
-		if err != nil {
-			return nil, err
-		}
-
 		// Use existing gRPC server passed from the node.
 		api.RegisterService(commonWorker.Grpc.Server(), w)
 
 		// Register all configured runtimes.
 		for _, rt := range commonWorker.GetRuntimes() {
-			if err = w.registerRuntime(rt); err != nil {
+			if err := w.registerRuntime(rt); err != nil {
 				return nil, err
 			}
 		}

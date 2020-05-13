@@ -16,8 +16,6 @@ import (
 
 // Worker is an executor worker handling many runtimes.
 type Worker struct {
-	*workerCommon.RuntimeHostWorker
-
 	enabled bool
 
 	commonWorker *workerCommon.Worker
@@ -151,14 +149,8 @@ func (w *Worker) registerRuntime(commonNode *committeeCommon.Node) error {
 		return fmt.Errorf("failed to create role provider: %w", err)
 	}
 
-	// Create worker host for the given runtime.
-	workerHostFactory, err := w.NewRuntimeWorkerHostFactory(node.RoleComputeWorker, id)
-	if err != nil {
-		return fmt.Errorf("failed to create worker host: %w", err)
-	}
-
 	// Create committee node for the given runtime.
-	node, err := committee.NewNode(commonNode, mergeNode, workerHostFactory, w.commonWorker.GetConfig(), rp)
+	node, err := committee.NewNode(commonNode, mergeNode, w.commonWorker.GetConfig(), rp)
 	if err != nil {
 		return err
 	}
@@ -200,16 +192,9 @@ func newWorker(
 			panic("common worker should have been enabled for executor worker")
 		}
 
-		// Create the runtime host worker.
-		var err error
-		w.RuntimeHostWorker, err = workerCommon.NewRuntimeHostWorker(commonWorker)
-		if err != nil {
-			return nil, err
-		}
-
 		// Register all configured runtimes.
 		for _, rt := range commonWorker.GetRuntimes() {
-			if err = w.registerRuntime(rt); err != nil {
+			if err := w.registerRuntime(rt); err != nil {
 				return nil, err
 			}
 		}

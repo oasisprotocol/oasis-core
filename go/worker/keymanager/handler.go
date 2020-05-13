@@ -8,9 +8,9 @@ import (
 	"github.com/oasislabs/oasis-core/go/common/cbor"
 	"github.com/oasislabs/oasis-core/go/keymanager/api"
 	"github.com/oasislabs/oasis-core/go/keymanager/client"
+	"github.com/oasislabs/oasis-core/go/runtime/host/protocol"
 	"github.com/oasislabs/oasis-core/go/runtime/localstorage"
 	workerCommon "github.com/oasislabs/oasis-core/go/worker/common"
-	"github.com/oasislabs/oasis-core/go/worker/common/host/protocol"
 )
 
 var (

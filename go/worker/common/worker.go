@@ -260,7 +260,7 @@ func New(
 	runtimeRegistry runtimeRegistry.Registry,
 	genesisDoc *genesis.Document,
 ) (*Worker, error) {
-	cfg, err := NewConfig()
+	cfg, err := NewConfig(ias)
 	if err != nil {
 		return nil, fmt.Errorf("worker/common: failed to initialize config: %w", err)
 	}

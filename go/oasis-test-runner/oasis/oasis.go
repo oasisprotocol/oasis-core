@@ -231,8 +231,8 @@ type NetworkCfg struct { // nolint: maligned
 	// NodeBinary is the path to the Oasis node binary.
 	NodeBinary string `json:"node_binary"`
 
-	// RuntimeLoaderBinary is the path to the Oasis runtime loader.
-	RuntimeLoaderBinary string `json:"runtime_loader_binary"`
+	// RuntimeSGXLoaderBinary is the path to the Oasis SGX runtime loader.
+	RuntimeSGXLoaderBinary string `json:"runtime_loader_binary"`
 
 	// ConsensusBackend is the consensus backend for all the nodes.
 	ConsensusBackend string `json:"consensus_backend"`

@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/hex"
 	"fmt"
-	"io"
 	"sync"
 	"time"
 
@@ -25,11 +24,11 @@ import (
 	roothash "github.com/oasislabs/oasis-core/go/roothash/api"
 	"github.com/oasislabs/oasis-core/go/roothash/api/block"
 	runtimeCommittee "github.com/oasislabs/oasis-core/go/runtime/committee"
+	"github.com/oasislabs/oasis-core/go/runtime/host"
+	"github.com/oasislabs/oasis-core/go/runtime/host/protocol"
 	runtimeRegistry "github.com/oasislabs/oasis-core/go/runtime/registry"
 	workerCommon "github.com/oasislabs/oasis-core/go/worker/common"
 	committeeCommon "github.com/oasislabs/oasis-core/go/worker/common/committee"
-	"github.com/oasislabs/oasis-core/go/worker/common/host"
-	"github.com/oasislabs/oasis-core/go/worker/common/host/protocol"
 	"github.com/oasislabs/oasis-core/go/worker/common/p2p"
 	"github.com/oasislabs/oasis-core/go/worker/registration"
 )
@@ -53,6 +52,7 @@ var (
 // runtimes in order to update the access control lists.
 type Worker struct { // nolint: maligned
 	sync.RWMutex
+	*workerCommon.RuntimeHostNode
 
 	logger *logging.Logger
 
@@ -64,9 +64,8 @@ type Worker struct { // nolint: maligned
 
 	initialSyncDone bool
 
-	runtime       runtimeRegistry.Runtime
-	workerHost    host.Host
-	workerHostCfg host.Config
+	runtime            runtimeRegistry.Runtime
+	runtimeHostHandler protocol.Handler
 
 	commonWorker  *workerCommon.Worker
 	roleProvider  registration.RoleProvider
@@ -121,11 +120,14 @@ func (w *Worker) Quit() <-chan struct{} {
 func (w *Worker) Cleanup() {
 }
 
-func (w *Worker) getWorkerHost() host.Host {
-	w.RLock()
-	defer w.RUnlock()
+// Implements workerCommon.RuntimeHostHandlerFactory.
+func (w *Worker) GetRuntime() runtimeRegistry.Runtime {
+	return w.runtime
+}
 
-	return w.workerHost
+// Implements workerCommon.RuntimeHostHandlerFactory.
+func (w *Worker) NewRuntimeHostHandler() protocol.Handler {
+	return w.runtimeHostHandler
 }
 
 func (w *Worker) callLocal(ctx context.Context, data []byte) ([]byte, error) {
@@ -140,52 +142,38 @@ func (w *Worker) callLocal(ctx context.Context, data []byte) ([]byte, error) {
 	}
 
 	req := &protocol.Body{
-		WorkerRPCCallRequest: &protocol.WorkerRPCCallRequest{
+		RuntimeRPCCallRequest: &protocol.RuntimeRPCCallRequest{
 			Request:   data,
 			StateRoot: emptyRoot,
 		},
 	}
 
-	// NOTE: Worker host should not be nil as we wait for initialization above.
-	workerHost := w.getWorkerHost()
-	ch, err := workerHost.MakeRequest(ctx, req)
+	// NOTE: Hosted runtime should not be nil as we wait for initialization above.
+	rt := w.GetHostedRuntime()
+	response, err := rt.Call(ctx, req)
 	if err != nil {
-		w.logger.Error("failed to dispatch RPC call to worker host",
+		w.logger.Error("failed to dispatch RPC call to runtime",
 			"err", err,
 		)
 		return nil, err
 	}
 
-	select {
-	case response := <-ch:
-		if response == nil {
-			w.logger.Error("channel closed during RPC call",
-				"err", io.EOF,
-			)
-			return nil, errors.Wrap(io.EOF, "worker/keymanager: channel closed during RPC call")
-		}
-
-		if response.Error != nil {
-			w.logger.Error("error from runtime",
-				"err", response.Error.Message,
-			)
-			return nil, fmt.Errorf("worker/keymanager: error from runtime: %s", response.Error.Message)
-		}
-
-		resp := response.WorkerRPCCallResponse
-		if resp == nil {
-			w.logger.Error("malformed response from worker",
-				"response", response,
-			)
-			return nil, errMalformedResponse
-		}
-
-		return resp.Response, nil
-	case <-ctx.Done():
-		return nil, ctx.Err()
-	case <-w.stopCh:
-		return nil, fmt.Errorf("worker/keymanager: terminating")
+	if response.Error != nil {
+		w.logger.Error("error from runtime",
+			"err", response.Error.Message,
+		)
+		return nil, fmt.Errorf("worker/keymanager: error from runtime: %s", response.Error.Message)
 	}
+
+	resp := response.RuntimeRPCCallResponse
+	if resp == nil {
+		w.logger.Error("malformed response from runtime",
+			"response", response,
+		)
+		return nil, errMalformedResponse
+	}
+
+	return resp.Response, nil
 }
 
 func (w *Worker) updateStatus(status *api.Status, startedEvent *host.StartedEvent) error {
@@ -230,14 +218,14 @@ func (w *Worker) updateStatus(status *api.Status, startedEvent *host.StartedEven
 		},
 	}
 	req := &protocol.Body{
-		WorkerLocalRPCCallRequest: &protocol.WorkerLocalRPCCallRequest{
+		RuntimeLocalRPCCallRequest: &protocol.RuntimeLocalRPCCallRequest{
 			Request:   cbor.Marshal(&call),
 			StateRoot: emptyRoot,
 		},
 	}
 
-	workerHost := w.getWorkerHost()
-	response, err := workerHost.Call(w.ctx, req)
+	rt := w.GetHostedRuntime()
+	response, err := rt.Call(w.ctx, req)
 	if err != nil {
 		w.logger.Error("failed to initialize enclave",
 			"err", err,
@@ -251,7 +239,7 @@ func (w *Worker) updateStatus(status *api.Status, startedEvent *host.StartedEven
 		return fmt.Errorf("worker/keymanager: error initializing enclave: %s", response.Error.Message)
 	}
 
-	resp := response.WorkerLocalRPCCallResponse
+	resp := response.RuntimeLocalRPCCallResponse
 	if resp == nil {
 		w.logger.Error("malformed response initializing enclave",
 			"response", response,
@@ -393,7 +381,7 @@ func (w *Worker) worker() { // nolint: gocyclo
 	defer rtSub.Close()
 
 	var (
-		workerHostCh        <-chan *host.Event
+		hrtEventCh          <-chan *host.Event
 		currentStatus       *api.Status
 		currentStartedEvent *host.StartedEvent
 
@@ -401,9 +389,9 @@ func (w *Worker) worker() { // nolint: gocyclo
 	)
 	for {
 		select {
-		case ev := <-workerHostCh:
+		case ev := <-hrtEventCh:
 			switch {
-			case ev.Started != nil:
+			case ev.Started != nil, ev.Updated != nil:
 				// Runtime has started successfully.
 				currentStartedEvent = ev.Started
 				if currentStatus == nil {
@@ -411,14 +399,14 @@ func (w *Worker) worker() { // nolint: gocyclo
 				}
 
 				// Forward status update to key manager runtime.
-				if err := w.updateStatus(currentStatus, currentStartedEvent); err != nil {
+				if err = w.updateStatus(currentStatus, currentStartedEvent); err != nil {
 					w.logger.Error("failed to handle status update",
 						"err", err,
 					)
 					continue
 				}
-			case ev.FailedToStart != nil:
-				// Worker failed to start -- we can no longer service requests.
+			case ev.FailedToStart != nil, ev.Stopped != nil:
+				// Worker failed to start or was stopped -- we can no longer service requests.
 				currentStartedEvent = nil
 				w.roleProvider.SetUnavailable()
 			default:
@@ -436,43 +424,35 @@ func (w *Worker) worker() { // nolint: gocyclo
 
 			// Check if this is the first update and we need to initialize the
 			// worker host.
-			workerHost := w.getWorkerHost()
-			if workerHost == nil {
-				// Start key manager runtime worker host.
-				w.logger.Info("starting key manager runtime")
+			hrt := w.GetHostedRuntime()
+			if hrt == nil {
+				// Start key manager runtime.
+				w.logger.Info("provisioning key manager runtime")
 
-				var err error
-				workerHost, err = host.NewHost(&w.workerHostCfg)
+				hrt, err = w.ProvisionHostedRuntime(w.ctx)
 				if err != nil {
-					w.logger.Error("failed to create worker host",
+					w.logger.Error("failed to provision key manager runtime",
 						"err", err,
 					)
 					return
 				}
 
 				var sub pubsub.ClosableSubscription
-				if workerHostCh, sub, err = workerHost.WatchEvents(w.ctx); err != nil {
-					w.logger.Error("failed to subscribe to worker host events",
+				if hrtEventCh, sub, err = hrt.WatchEvents(w.ctx); err != nil {
+					w.logger.Error("failed to subscribe to runtime events",
 						"err", err,
 					)
 					return
 				}
 				defer sub.Close()
 
-				if err := workerHost.Start(); err != nil {
-					w.logger.Error("failed to start worker host",
+				if err = hrt.Start(); err != nil {
+					w.logger.Error("failed to start runtime",
 						"err", err,
 					)
 					return
 				}
-				defer func() {
-					workerHost.Stop()
-					<-workerHost.Quit()
-				}()
-
-				w.Lock()
-				w.workerHost = workerHost
-				w.Unlock()
+				defer hrt.Stop()
 			}
 
 			currentStatus = status
