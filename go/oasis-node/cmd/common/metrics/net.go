@@ -19,7 +19,7 @@ var (
 	receiveBytesGauge = prometheus.NewGaugeVec(
 		prometheus.GaugeOpts{
 			Name: MetricNetReceiveBytesTotal,
-			Help: "Number of received bytes",
+			Help: "Received data for each network device as reported by /proc/net/dev (bytes).",
 		},
 		[]string{
 			// Interface name, e.g. eth0.
@@ -29,7 +29,7 @@ var (
 	receivePacketsGauge = prometheus.NewGaugeVec(
 		prometheus.GaugeOpts{
 			Name: MetricNetReceivePacketsTotal,
-			Help: "Number of received packets",
+			Help: "Received data for each network device as reported by /proc/net/dev (packets).",
 		},
 		[]string{
 			// Interface name, e.g. eth0.
@@ -39,7 +39,7 @@ var (
 	transmitBytesGauge = prometheus.NewGaugeVec(
 		prometheus.GaugeOpts{
 			Name: MetricNetTransmitBytesTotal,
-			Help: "Number of transmitted bytes",
+			Help: "Transmitted data for each network device as reported by /proc/net/dev (bytes).",
 		},
 		[]string{
 			// Interface name, e.g. eth0.
@@ -49,7 +49,7 @@ var (
 	transmitPacketsGauge = prometheus.NewGaugeVec(
 		prometheus.GaugeOpts{
 			Name: MetricNetTransmitPacketsTotal,
-			Help: "Number of transmitted packets",
+			Help: "Transmitted data for each network device as reported by /proc/net/dev (packets).",
 		},
 		[]string{
 			// Interface name, e.g. eth0.

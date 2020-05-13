@@ -50,7 +50,7 @@ var (
 	UpGauge = prometheus.NewGauge(
 		prometheus.GaugeOpts{
 			Name: MetricUp,
-			Help: "Is oasis-test-runner or oasis-node active",
+			Help: "Is oasis-test-runner active for specific test.",
 		},
 	)
 )

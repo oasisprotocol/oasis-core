@@ -20,28 +20,28 @@ var (
 	vmSizeGauge = prometheus.NewGauge(
 		prometheus.GaugeOpts{
 			Name: MetricMemVmSizeBytes,
-			Help: "Virtual memory size of worker",
+			Help: "Virtual memory size of worker (bytes).",
 		},
 	)
 
 	rssAnonGauge = prometheus.NewGauge(
 		prometheus.GaugeOpts{
 			Name: MetricMemRssAnonBytes,
-			Help: "Size of resident anonymous memory of worker",
+			Help: "Size of resident anonymous memory of worker as reported by /proc/<PID>/status (bytes).",
 		},
 	)
 
 	rssFileGauge = prometheus.NewGauge(
 		prometheus.GaugeOpts{
 			Name: MetricMemRssFileBytes,
-			Help: "Size of resident file mappings of worker",
+			Help: "Size of resident file mappings of worker as reported by /proc/<PID>/status (bytes)",
 		},
 	)
 
 	rssShmemGauge = prometheus.NewGauge(
 		prometheus.GaugeOpts{
 			Name: MetricMemRssShmemBytes,
-			Help: "Size of resident shared memory of worker",
+			Help: "Size of resident shared memory of worker.",
 		},
 	)
 

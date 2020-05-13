@@ -53,14 +53,14 @@ var (
 	grpcLatency = prometheus.NewSummaryVec(
 		prometheus.SummaryOpts{
 			Name: "oasis_grpc_latency",
-			Help: "gRPC call latency.",
+			Help: "gRPC call latency (seconds).",
 		},
 		[]string{"call"},
 	)
 	grpcStreamWrites = prometheus.NewCounterVec(
 		prometheus.CounterOpts{
 			Name: "oasis_grpc_stream_writes",
-			Help: "Number of gRPC stream writes",
+			Help: "Number of gRPC stream writes.",
 		},
 		[]string{"call"},
 	)

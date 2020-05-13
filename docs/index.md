@@ -50,6 +50,7 @@ implementations.
     * Storage Nodes
 * Oasis Node (`oasis-node`)
   * [RPC](oasis-node/rpc.md)
+  * [Metrics](oasis-node/metrics.md)
 
 ## Common Functionality
 

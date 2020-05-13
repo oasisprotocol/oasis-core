@@ -30,14 +30,14 @@ var (
 	storageLatency = prometheus.NewSummaryVec(
 		prometheus.SummaryOpts{
 			Name: "oasis_storage_latency",
-			Help: "Storage call latency",
+			Help: "Storage call latency (seconds).",
 		},
 		[]string{"call"},
 	)
 	storageValueSize = prometheus.NewSummaryVec(
 		prometheus.SummaryOpts{
 			Name: "oasis_storage_value_size",
-			Help: "Storage call value size",
+			Help: "Storage call value size (bytes).",
 		},
 		[]string{"call"},
 	)

@@ -24,28 +24,28 @@ var (
 	processedBlockCount = prometheus.NewCounterVec(
 		prometheus.CounterOpts{
 			Name: "oasis_worker_processed_block_count",
-			Help: "Number of processed roothash blocks",
+			Help: "Number of processed roothash blocks.",
 		},
 		[]string{"runtime"},
 	)
 	processedEventCount = prometheus.NewCounterVec(
 		prometheus.CounterOpts{
 			Name: "oasis_worker_processed_event_count",
-			Help: "Number of processed roothash events",
+			Help: "Number of processed roothash events.",
 		},
 		[]string{"runtime"},
 	)
 	failedRoundCount = prometheus.NewCounterVec(
 		prometheus.CounterOpts{
 			Name: "oasis_worker_failed_round_count",
-			Help: "Number of failed roothash rounds",
+			Help: "Number of failed roothash rounds.",
 		},
 		[]string{"runtime"},
 	)
 	epochTransitionCount = prometheus.NewCounterVec(
 		prometheus.CounterOpts{
 			Name: "oasis_worker_epoch_transition_count",
-			Help: "Number of epoch transitions",
+			Help: "Number of epoch transitions.",
 		},
 		[]string{"runtime"},
 	)

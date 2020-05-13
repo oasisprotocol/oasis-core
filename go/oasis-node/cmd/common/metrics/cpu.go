@@ -21,14 +21,14 @@ var (
 	utimeGauge = prometheus.NewGauge(
 		prometheus.GaugeOpts{
 			Name: MetricCPUUTimeSeconds,
-			Help: "CPU user time spent by worker",
+			Help: "CPU user time spent by worker as reported by /proc/<PID>/stat (seconds).",
 		},
 	)
 
 	stimeGauge = prometheus.NewGauge(
 		prometheus.GaugeOpts{
 			Name: MetricCPUSTimeSeconds,
-			Help: "CPU system time spent by worker",
+			Help: "CPU system time spent by worker as reported by /proc/<PID>/stat (seconds).",
 		},
 	)
 
