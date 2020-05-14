@@ -120,6 +120,13 @@ pub trait MKVS: Send + Sync {
     /// Fetch entry with given key.
     fn get(&self, ctx: Context, key: &[u8]) -> Option<Vec<u8>>;
 
+    /// Check if the local MKVS cache contains the given key.
+    ///
+    /// While get can be used to check if the MKVS as a whole contains
+    /// a given key, this function specifically guarantees that no remote
+    /// syncing will be invoked, only checking the local cache.
+    fn cache_contains_key(&self, ctx: Context, key: &[u8]) -> bool;
+
     /// Update entry with given key.
     ///
     /// If the database did not have this key present, [`None`] is returned.

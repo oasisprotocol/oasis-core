@@ -79,11 +79,13 @@ pub trait Cache {
     /// Dereference a node pointer into a concrete node object.
     ///
     /// Calling this method may invoke the underlying read syncer.
+    /// Giving a None fetcher forces the dereference to be local-only,
+    /// without invoking the read syncer.
     fn deref_node_ptr<F: ReadSyncFetcher>(
         &mut self,
         ctx: &Arc<Context>,
         ptr: NodePtrRef,
-        fetcher: F,
+        fetcher: Option<F>,
     ) -> Fallible<Option<NodeRef>>;
     /// Perform a remote sync with the configured remote syncer.
     fn remote_sync<F: ReadSyncFetcher>(

@@ -54,7 +54,7 @@ impl Tree {
         let node_ref = self.cache.borrow_mut().deref_node_ptr(
             ctx,
             ptr.clone(),
-            FetcherSyncGet::new(key, true),
+            Some(FetcherSyncGet::new(key, true)),
         )?;
 
         match classify_noderef!(?node_ref) {
@@ -106,12 +106,12 @@ impl Tree {
                     remaining_left = self.cache.borrow_mut().deref_node_ptr(
                         ctx,
                         n.left.clone(),
-                        FetcherSyncGet::new(key, true),
+                        Some(FetcherSyncGet::new(key, true)),
                     )?;
                     remaining_right = self.cache.borrow_mut().deref_node_ptr(
                         ctx,
                         n.right.clone(),
-                        FetcherSyncGet::new(key, true),
+                        Some(FetcherSyncGet::new(key, true)),
                     )?;
                 } else {
                     unreachable!("node kind is Internal");

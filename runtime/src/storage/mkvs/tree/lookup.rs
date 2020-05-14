@@ -45,6 +45,19 @@ impl<'a> ReadSyncFetcher for FetcherSyncGet<'a> {
 impl Tree {
     /// Get an existing key.
     pub fn get(&self, ctx: Context, key: &[u8]) -> Fallible<Option<Vec<u8>>> {
+        self._get_top(ctx, key, false)
+    }
+
+    /// Check if the key exists in the local cache.
+    pub fn cache_contains_key(&self, ctx: Context, key: &[u8]) -> bool {
+        match self._get_top(ctx, key, true) {
+            Ok(Some(_)) => true,
+            Ok(None) => false,
+            Err(_) => false,
+        }
+    }
+
+    fn _get_top(&self, ctx: Context, key: &[u8], check_only: bool) -> Fallible<Option<Vec<u8>>> {
         let ctx = ctx.freeze();
         let boxed_key = key.to_vec();
         let pending_root = self.cache.borrow().get_pending_root();
@@ -57,7 +70,7 @@ impl Tree {
         // Remember where the path from root to target node ends (will end).
         self.cache.borrow_mut().mark_position();
 
-        Ok(self._get(&ctx, pending_root, 0, &boxed_key, 0)?)
+        Ok(self._get(&ctx, pending_root, 0, &boxed_key, 0, check_only)?)
     }
 
     fn _get(
@@ -67,11 +80,17 @@ impl Tree {
         bit_depth: Depth,
         key: &Key,
         depth: Depth,
+        check_only: bool,
     ) -> Fallible<Option<Value>> {
-        let node_ref =
-            self.cache
-                .borrow_mut()
-                .deref_node_ptr(ctx, ptr, FetcherSyncGet::new(key, false))?;
+        let node_ref = self.cache.borrow_mut().deref_node_ptr(
+            ctx,
+            ptr,
+            if check_only {
+                None
+            } else {
+                Some(FetcherSyncGet::new(key, false))
+            },
+        )?;
 
         match classify_noderef!(?node_ref) {
             NodeKind::None => {
@@ -90,6 +109,7 @@ impl Tree {
                             bit_depth + n.label_bit_length,
                             key,
                             depth,
+                            check_only,
                         );
                     }
 
@@ -106,6 +126,7 @@ impl Tree {
                             bit_depth + n.label_bit_length,
                             key,
                             depth + 1,
+                            check_only,
                         );
                     } else {
                         return self._get(
@@ -114,6 +135,7 @@ impl Tree {
                             bit_depth + n.label_bit_length,
                             key,
                             depth + 1,
+                            check_only,
                         );
                     }
                 }
