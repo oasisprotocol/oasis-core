@@ -3,8 +3,6 @@ package oasis
 import (
 	"fmt"
 
-	"github.com/pkg/errors"
-
 	registry "github.com/oasislabs/oasis-core/go/registry/api"
 	storageClient "github.com/oasislabs/oasis-core/go/storage/client"
 	commonWorker "github.com/oasislabs/oasis-core/go/worker/common"
@@ -117,14 +115,14 @@ func (net *Network) NewCompute(cfg *ComputeCfg) (*Compute, error) {
 			"err", err,
 			"compute_name", computeName,
 		)
-		return nil, errors.Wrap(err, "oasis/compute: failed to create compute subdir")
+		return nil, fmt.Errorf("oasis/compute: failed to create compute subdir: %w", err)
 	}
 
 	// Pre-provision the node identity so that we can update the entity.
 	seed := fmt.Sprintf(computeIdentitySeedTemplate, len(net.computeWorkers))
 	publicKey, err := net.provisionNodeIdentity(computeDir, seed, false)
 	if err != nil {
-		return nil, errors.Wrap(err, "oasis/compute: failed to provision node identity")
+		return nil, fmt.Errorf("oasis/compute: failed to provision node identity: %w", err)
 	}
 	if err := cfg.Entity.addNode(publicKey); err != nil {
 		return nil, err

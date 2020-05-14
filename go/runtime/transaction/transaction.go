@@ -4,9 +4,9 @@ package transaction
 import (
 	"bytes"
 	"context"
+	"errors"
+	"fmt"
 	"sort"
-
-	"github.com/pkg/errors"
 
 	"github.com/oasislabs/oasis-core/go/common/cbor"
 	"github.com/oasislabs/oasis-core/go/common/crypto/hash"
@@ -176,7 +176,7 @@ func (t *Tree) Close() {
 // the transaction.
 func (t *Tree) AddTransaction(ctx context.Context, tx Transaction, tags Tags) error {
 	if len(tx.Input) == 0 {
-		return errors.New("transaction: no input artifact given")
+		return fmt.Errorf("transaction: no input artifact given")
 	}
 
 	// Compute the transaction hash.
@@ -184,17 +184,17 @@ func (t *Tree) AddTransaction(ctx context.Context, tx Transaction, tags Tags) er
 
 	// Add transaction artifacts.
 	if err := t.tree.Insert(ctx, txnKeyFmt.Encode(&txHash, kindInput), cbor.Marshal(tx.asInputArtifacts())); err != nil {
-		return errors.Wrap(err, "transaction: input artifacts insert failed")
+		return fmt.Errorf("transaction: input artifacts insert failed: %w", err)
 	}
 	if tx.Output != nil {
 		if err := t.tree.Insert(ctx, txnKeyFmt.Encode(&txHash, kindOutput), cbor.Marshal(tx.asOutputArtifacts())); err != nil {
-			return errors.Wrap(err, "transaction: output artifacts insert failed")
+			return fmt.Errorf("transaction: output artifacts insert failed: %w", err)
 		}
 	}
 	// Add tags if specified.
 	for _, tag := range tags {
 		if err := t.tree.Insert(ctx, tagKeyFmt.Encode(tag.Key, &txHash), tag.Value); err != nil {
-			return errors.Wrap(err, "transaction: tag insert failed")
+			return fmt.Errorf("transaction: tag insert failed: %w", err)
 		}
 	}
 
@@ -235,14 +235,14 @@ func (t *Tree) GetInputBatch(ctx context.Context) (RawBatch, error) {
 
 		var ia inputArtifacts
 		if err := cbor.Unmarshal(it.Value(), &ia); err != nil {
-			return nil, errors.Wrap(err, "transaction: malformed input artifacts")
+			return nil, fmt.Errorf("transaction: malformed input artifacts: %w", err)
 		}
 
 		bo.batch = append(bo.batch, ia.Input)
 		bo.order = append(bo.order, ia.BatchOrder)
 	}
 	if it.Err() != nil {
-		return nil, errors.Wrap(it.Err(), "transaction: get input batch failed")
+		return nil, fmt.Errorf("transaction: get input batch failed: %w", it.Err())
 	}
 
 	// Sort transactions to be in batch order.
@@ -273,7 +273,7 @@ func (t *Tree) GetTransactions(ctx context.Context) ([]*Transaction, error) {
 		case kindInput:
 			var ia inputArtifacts
 			if err := cbor.Unmarshal(it.Value(), &ia); err != nil {
-				return nil, errors.Wrap(err, "transaction: malformed input artifacts")
+				return nil, fmt.Errorf("transaction: malformed input artifacts: %w", err)
 			}
 
 			curTx = decHash
@@ -284,12 +284,12 @@ func (t *Tree) GetTransactions(ctx context.Context) ([]*Transaction, error) {
 		case kindOutput:
 			// Input artifacts always come before output artifacts.
 			if !curTx.Equal(&decHash) {
-				return nil, errors.New("transaction: malformed transaction tree")
+				return nil, fmt.Errorf("transaction: malformed transaction tree")
 			}
 
 			var oa outputArtifacts
 			if err := cbor.Unmarshal(it.Value(), &oa); err != nil {
-				return nil, errors.Wrap(err, "transaction: malformed output artifacts")
+				return nil, fmt.Errorf("transaction: malformed output artifacts: %w", err)
 			}
 
 			tx := txs[len(txs)-1]
@@ -298,7 +298,7 @@ func (t *Tree) GetTransactions(ctx context.Context) ([]*Transaction, error) {
 
 	}
 	if it.Err() != nil {
-		return nil, errors.Wrap(it.Err(), "transaction: get transactions failed")
+		return nil, fmt.Errorf("transaction: get transactions failed: %w", it.Err())
 	}
 
 	return txs, nil
@@ -322,7 +322,7 @@ func (t *Tree) GetTransaction(ctx context.Context, txHash hash.Hash) (*Transacti
 		case kindInput:
 			var ia inputArtifacts
 			if err := cbor.Unmarshal(it.Value(), &ia); err != nil {
-				return nil, errors.Wrap(err, "transaction: malformed input artifacts")
+				return nil, fmt.Errorf("transaction: malformed input artifacts: %w", err)
 			}
 
 			tx.Input = ia.Input
@@ -330,7 +330,7 @@ func (t *Tree) GetTransaction(ctx context.Context, txHash hash.Hash) (*Transacti
 		case kindOutput:
 			var oa outputArtifacts
 			if err := cbor.Unmarshal(it.Value(), &oa); err != nil {
-				return nil, errors.Wrap(err, "transaction: malformed output artifacts")
+				return nil, fmt.Errorf("transaction: malformed output artifacts: %w", err)
 			}
 
 			tx.Output = oa.Output
@@ -338,7 +338,7 @@ func (t *Tree) GetTransaction(ctx context.Context, txHash hash.Hash) (*Transacti
 
 	}
 	if it.Err() != nil {
-		return nil, errors.Wrap(it.Err(), "transaction: get transaction failed")
+		return nil, fmt.Errorf("transaction: get transaction failed: %w", it.Err())
 	}
 	if len(tx.Input) == 0 {
 		return nil, ErrNotFound
@@ -361,7 +361,7 @@ func (t *Tree) GetTransactionMultiple(ctx context.Context, txHashes []hash.Hash)
 		keys = append(keys, txnKeyFmt.Encode(&txHash))
 	}
 	if err := t.tree.PrefetchPrefixes(ctx, keys, prefetchArtifactCount); err != nil {
-		return nil, errors.Wrap(err, "transaction: prefetch failed")
+		return nil, fmt.Errorf("transaction: prefetch failed: %w", err)
 	}
 
 	// Look up each transaction.
@@ -404,7 +404,7 @@ func (t *Tree) GetTags(ctx context.Context) (Tags, error) {
 		})
 	}
 	if it.Err() != nil {
-		return nil, errors.Wrap(it.Err(), "transaction: get tags failed")
+		return nil, fmt.Errorf("transaction: get tags failed: %w", it.Err())
 	}
 
 	return tags, nil

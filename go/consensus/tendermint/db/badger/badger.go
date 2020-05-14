@@ -11,7 +11,6 @@ import (
 
 	"github.com/dgraph-io/badger/v2"
 	"github.com/dgraph-io/badger/v2/options"
-	"github.com/pkg/errors"
 	"github.com/tendermint/tendermint/node"
 	dbm "github.com/tendermint/tm-db"
 
@@ -76,7 +75,7 @@ func New(fn string, noSuffix bool) (dbm.DB, error) {
 
 	db, err := badger.Open(opts)
 	if err != nil {
-		return nil, errors.Wrap(err, "tendermint/db/badger: failed to open database")
+		return nil, fmt.Errorf("tendermint/db/badger: failed to open database: %w", err)
 	}
 
 	impl := &badgerDBImpl{

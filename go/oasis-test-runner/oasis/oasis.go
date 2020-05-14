@@ -15,7 +15,6 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/pkg/errors"
 	"github.com/spf13/viper"
 
 	"github.com/oasislabs/oasis-core/go/common/crypto/drbg"
@@ -390,7 +389,7 @@ func (net *Network) CheckLogWatchers() (err error) {
 				"name", w.Name(),
 				"err", logErr,
 			)
-			err = errors.Wrapf(logErr, "log watcher %s", w.Name())
+			err = fmt.Errorf("log watcher %s: %w", w.Name(), logErr)
 		}
 	}
 	return
@@ -561,7 +560,7 @@ func (net *Network) Start() error {
 			net.logger.Error("failed to create controller",
 				"err", err,
 			)
-			return errors.Wrap(err, "oasis: failed to create controller")
+			return fmt.Errorf("oasis: failed to create controller: %w", err)
 		}
 	}
 	// Create a client controller for the first client node.
@@ -570,7 +569,7 @@ func (net *Network) Start() error {
 			net.logger.Error("failed to create client controller",
 				"err", err,
 			)
-			return errors.Wrap(err, "oasis: failed to create client controller")
+			return fmt.Errorf("oasis: failed to create client controller: %w", err)
 		}
 	}
 
@@ -781,7 +780,7 @@ func (net *Network) makeGenesis() error {
 		net.logger.Error("failed to create genesis file",
 			"err", err,
 		)
-		return errors.Wrap(err, "oasis: failed to create genesis file")
+		return fmt.Errorf("oasis: failed to create genesis file: %w", err)
 	}
 
 	return nil
@@ -803,17 +802,17 @@ func (net *Network) BasePath() string {
 func (net *Network) provisionNodeIdentity(dataDir *env.Dir, seed string, persistTLS bool) (signature.PublicKey, error) {
 	if net.cfg.DeterministicIdentities {
 		if err := net.generateDeterministicNodeIdentity(dataDir, seed); err != nil {
-			return signature.PublicKey{}, errors.Wrap(err, "oasis: failed to generate deterministic identity")
+			return signature.PublicKey{}, fmt.Errorf("oasis: failed to generate deterministic identity: %w", err)
 		}
 	}
 
 	signerFactory, err := fileSigner.NewFactory(dataDir.String(), signature.SignerNode, signature.SignerP2P, signature.SignerConsensus)
 	if err != nil {
-		return signature.PublicKey{}, errors.Wrap(err, "oasis: failed to create node file signer factory")
+		return signature.PublicKey{}, fmt.Errorf("oasis: failed to create node file signer factory: %w", err)
 	}
 	nodeIdentity, err := identity.LoadOrGenerate(dataDir.String(), signerFactory, persistTLS)
 	if err != nil {
-		return signature.PublicKey{}, errors.Wrap(err, "oasis: failed to provision node identity")
+		return signature.PublicKey{}, fmt.Errorf("oasis: failed to provision node identity: %w", err)
 	}
 	return nodeIdentity.NodeSigner.Public(), nil
 }
@@ -822,7 +821,7 @@ func (net *Network) provisionNodeIdentity(dataDir *env.Dir, seed string, persist
 func New(env *env.Env, cfg *NetworkCfg) (*Network, error) {
 	baseDir, err := env.NewSubDir("network")
 	if err != nil {
-		return nil, errors.Wrap(err, "oasis: failed to create network sub-directory")
+		return nil, fmt.Errorf("oasis: failed to create network sub-directory: %w", err)
 	}
 
 	// Copy the config and apply some sane defaults.

@@ -5,9 +5,9 @@ package keymanager
 import (
 	"bytes"
 	"context"
+	"fmt"
 
 	"github.com/eapache/channels"
-	"github.com/pkg/errors"
 	abcitypes "github.com/tendermint/tendermint/abci/types"
 	tmtypes "github.com/tendermint/tendermint/types"
 
@@ -137,7 +137,7 @@ func (tb *tendermintBackend) onABCIEvents(ctx context.Context, tmEvents []abcity
 func New(ctx context.Context, service service.TendermintService) (api.Backend, error) {
 	a := app.New()
 	if err := service.RegisterApplication(a); err != nil {
-		return nil, errors.Wrap(err, "keymanager/tendermint: failed to register app")
+		return nil, fmt.Errorf("keymanager/tendermint: failed to register app: %w", err)
 	}
 
 	tb := &tendermintBackend{

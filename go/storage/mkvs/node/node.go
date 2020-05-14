@@ -6,10 +6,9 @@ import (
 	"container/list"
 	"encoding"
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"unsafe"
-
-	"github.com/pkg/errors"
 
 	"github.com/oasislabs/oasis-core/go/common"
 	"github.com/oasislabs/oasis-core/go/common/crypto/hash"
@@ -377,7 +376,7 @@ func (n *InternalNode) CompactMarshalBinary() (data []byte, err error) {
 		leafNodeBinary[0] = PrefixNilNode
 	} else {
 		if leafNodeBinary, err = n.LeafNode.Node.MarshalBinary(); err != nil {
-			return nil, errors.Wrap(err, "mkvs: failed to marshal leaf node")
+			return nil, fmt.Errorf("mkvs: failed to marshal leaf node: %w", err)
 		}
 	}
 
@@ -432,7 +431,7 @@ func (n *InternalNode) SizedUnmarshalBinary(data []byte) (int, error) {
 	pos += VersionSize
 
 	if _, err := n.LabelBitLength.UnmarshalBinary(data[pos:]); err != nil {
-		return 0, errors.Wrap(err, "mkvs: failed to unmarshal LabelBitLength")
+		return 0, fmt.Errorf("mkvs: failed to unmarshal LabelBitLength: %w", err)
 	}
 	labelLen := n.LabelBitLength.ToBytes()
 	pos += DepthSize
@@ -455,7 +454,7 @@ func (n *InternalNode) SizedUnmarshalBinary(data []byte) (int, error) {
 		var leafNodeBinarySize int
 		var err error
 		if leafNodeBinarySize, err = leafNode.SizedUnmarshalBinary(data[pos:]); err != nil {
-			return 0, errors.Wrap(err, "mkvs: failed to unmarshal leaf node")
+			return 0, fmt.Errorf("mkvs: failed to unmarshal leaf node: %w", err)
 		}
 		n.LeafNode = &Pointer{Clean: true, Hash: leafNode.Hash, Node: &leafNode}
 		pos += leafNodeBinarySize
@@ -465,12 +464,12 @@ func (n *InternalNode) SizedUnmarshalBinary(data []byte) (int, error) {
 	if len(data) >= pos+hash.Size*2 {
 		var leftHash hash.Hash
 		if err := leftHash.UnmarshalBinary(data[pos : pos+hash.Size]); err != nil {
-			return 0, errors.Wrap(err, "mkvs: failed to unmarshal left hash")
+			return 0, fmt.Errorf("mkvs: failed to unmarshal left hash: %w", err)
 		}
 		pos += hash.Size
 		var rightHash hash.Hash
 		if err := rightHash.UnmarshalBinary(data[pos : pos+hash.Size]); err != nil {
-			return 0, errors.Wrapf(err, "mkvs: failed to unmarshal right hash")
+			return 0, fmt.Errorf("mkvs: failed to unmarshal right hash: %w", err)
 		}
 		pos += hash.Size
 

@@ -7,7 +7,6 @@ import (
 	"math/big"
 	"os"
 
-	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
 	flag "github.com/spf13/pflag"
 	"github.com/spf13/viper"
@@ -231,7 +230,7 @@ func scanRateStep(dst *staking.CommissionRateStep, raw string) error {
 		return fmt.Errorf("scanned %d tokens (need 2)", n)
 	}
 	if err = dst.Rate.FromBigInt(&rateBI); err != nil {
-		return errors.Wrap(err, "rate")
+		return fmt.Errorf("rate: %w", err)
 	}
 	return nil
 }
@@ -247,10 +246,10 @@ func scanBoundStep(dst *staking.CommissionRateBoundStep, raw string) error {
 		return fmt.Errorf("scanned %d tokens (need 3)", n)
 	}
 	if err = dst.RateMin.FromBigInt(&rateMinBI); err != nil {
-		return errors.Wrap(err, "rate min")
+		return fmt.Errorf("rate min: %w", err)
 	}
 	if err = dst.RateMax.FromBigInt(&rateMaxBI); err != nil {
-		return errors.Wrap(err, "rate max")
+		return fmt.Errorf("rate max: %w", err)
 	}
 	return nil
 }

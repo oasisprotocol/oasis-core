@@ -5,8 +5,6 @@ import (
 	"io"
 	"path/filepath"
 
-	"github.com/pkg/errors"
-
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
 	fileSigner "github.com/oasislabs/oasis-core/go/common/crypto/signature/signers/file"
 	"github.com/oasislabs/oasis-core/go/common/entity"
@@ -111,7 +109,7 @@ func (ent *Entity) update() error {
 		ent.net.logger.Error("failed to update entity",
 			"err", err,
 		)
-		return errors.Wrap(err, "oasis/entity: failed to update entity")
+		return fmt.Errorf("oasis/entity: failed to update entity: %w", err)
 	}
 
 	return nil
@@ -138,7 +136,7 @@ func (net *Network) NewEntity(cfg *EntityCfg) (*Entity, error) {
 				"err", err,
 				"entity_name", entName,
 			)
-			return nil, errors.Wrap(err, "oasis/entity: failed to create entity subdir")
+			return nil, fmt.Errorf("oasis/entity: failed to create entity subdir: %w", err)
 		}
 
 		if !cfg.Restore {
@@ -160,7 +158,7 @@ func (net *Network) NewEntity(cfg *EntityCfg) (*Entity, error) {
 					"err", err,
 					"entity_name", entName,
 				)
-				return nil, errors.Wrap(err, "oasis/entity: failed to provision entity")
+				return nil, fmt.Errorf("oasis/entity: failed to provision entity: %w", err)
 			}
 		}
 
@@ -174,7 +172,7 @@ func (net *Network) NewEntity(cfg *EntityCfg) (*Entity, error) {
 				"err", err,
 				"entity_name", entName,
 			)
-			return nil, errors.Wrap(err, "oasis/entity: failed to create entity file signer")
+			return nil, fmt.Errorf("oasis/entity: failed to create entity file signer: %w", err)
 		}
 		ent.entity, ent.entitySigner, err = entity.Load(entityDir.String(), signerFactory)
 		if err != nil {
@@ -182,7 +180,7 @@ func (net *Network) NewEntity(cfg *EntityCfg) (*Entity, error) {
 				"err", err,
 				"entity_name", entName,
 			)
-			return nil, errors.Wrap(err, "oasis/entity: failed to load newly provisioned entity")
+			return nil, fmt.Errorf("oasis/entity: failed to load newly provisioned entity: %w", err)
 		}
 	}
 

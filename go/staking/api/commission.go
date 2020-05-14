@@ -3,8 +3,6 @@ package api
 import (
 	"fmt"
 
-	"github.com/pkg/errors"
-
 	"github.com/oasislabs/oasis-core/go/common/quantity"
 	epochtime "github.com/oasislabs/oasis-core/go/epochtime/api"
 )
@@ -247,7 +245,7 @@ func (cs *CommissionSchedule) PruneAndValidateForGenesis(rules *CommissionSchedu
 	// prune step too at this time.
 	cs.Prune(now)
 	if err := cs.validateWithinBound(now); err != nil {
-		return errors.Wrap(err, "after pruning")
+		return fmt.Errorf("after pruning: %w", err)
 	}
 	return nil
 }
@@ -256,21 +254,21 @@ func (cs *CommissionSchedule) PruneAndValidateForGenesis(rules *CommissionSchedu
 // Returns an error if there is a validation failure. If it does, the schedule may be amended and pruned already.
 func (cs *CommissionSchedule) AmendAndPruneAndValidate(amendment *CommissionSchedule, rules *CommissionScheduleRules, now epochtime.EpochTime) error {
 	if err := amendment.validateComplexity(rules); err != nil {
-		return errors.Wrap(err, "amendment")
+		return fmt.Errorf("amendment: %w", err)
 	}
 	if err := amendment.validateNondegenerate(rules); err != nil {
-		return errors.Wrap(err, "amendment")
+		return fmt.Errorf("amendment: %w", err)
 	}
 	if err := amendment.validateAmendmentAcceptable(rules, now); err != nil {
-		return errors.Wrap(err, "amendment")
+		return fmt.Errorf("amendment: %w", err)
 	}
 	cs.Prune(now)
 	cs.amend(amendment)
 	if err := cs.validateComplexity(rules); err != nil {
-		return errors.Wrap(err, "after pruning and amending")
+		return fmt.Errorf("after pruning and amending: %w", err)
 	}
 	if err := cs.validateWithinBound(now); err != nil {
-		return errors.Wrap(err, "after pruning and amending")
+		return fmt.Errorf("after pruning and amending: %w", err)
 	}
 	return nil
 }

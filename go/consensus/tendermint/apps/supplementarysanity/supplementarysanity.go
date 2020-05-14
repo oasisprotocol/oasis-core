@@ -1,9 +1,9 @@
 package supplementarysanity
 
 import (
+	"fmt"
 	"math/rand"
 
-	"github.com/pkg/errors"
 	"github.com/tendermint/tendermint/abci/types"
 
 	"github.com/oasislabs/oasis-core/go/common/logging"
@@ -64,7 +64,7 @@ func (app *supplementarySanityApplication) OnCleanup() {
 }
 
 func (app *supplementarySanityApplication) ExecuteTx(*abciAPI.Context, *transaction.Transaction) error {
-	return errors.New("supplementarysanity: unexpected transaction")
+	return fmt.Errorf("tendermint/supplementarysanity: unexpected transaction")
 }
 
 func (app *supplementarySanityApplication) ForeignExecuteTx(*abciAPI.Context, abci.Application, *transaction.Transaction) error {
@@ -109,7 +109,7 @@ func (app *supplementarySanityApplication) endBlockImpl(ctx *abciAPI.Context, re
 
 	now, err := app.state.GetEpoch(ctx, ctx.BlockHeight()+1)
 	if err != nil {
-		return errors.Wrap(err, "GetEpoch")
+		return fmt.Errorf("tendermint/supplementarysanity: failed to GetEpoch: %w", err)
 	}
 	for _, tt := range []struct {
 		name    string
@@ -127,7 +127,7 @@ func (app *supplementarySanityApplication) endBlockImpl(ctx *abciAPI.Context, re
 		{"checkStakeClaims", checkStakeClaims},
 	} {
 		if err := tt.checker(ctx, now); err != nil {
-			return errors.Wrap(err, tt.name)
+			return fmt.Errorf("tendermint/supplementarysanity: check failed %s: %w", tt.name, err)
 		}
 	}
 
@@ -135,7 +135,7 @@ func (app *supplementarySanityApplication) endBlockImpl(ctx *abciAPI.Context, re
 }
 
 func (app *supplementarySanityApplication) FireTimer(*abciAPI.Context, *abci.Timer) error {
-	return errors.New("supplementarysanity: unexpected timer")
+	return fmt.Errorf("tendermint/supplementarysanity: unexpected timer")
 }
 
 func New(interval int64) abci.Application {

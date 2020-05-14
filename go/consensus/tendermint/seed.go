@@ -1,10 +1,10 @@
 package tendermint
 
 import (
+	"fmt"
 	"path/filepath"
 	"sync"
 
-	"github.com/pkg/errors"
 	"github.com/spf13/viper"
 	"github.com/tendermint/tendermint/config"
 	"github.com/tendermint/tendermint/p2p"
@@ -42,12 +42,12 @@ func (srv *SeedService) Name() string {
 // Start starts the service.
 func (srv *SeedService) Start() error {
 	if err := srv.transport.Listen(*srv.addr); err != nil {
-		return errors.Wrap(err, "tendermint/seed: failed to listen on transport")
+		return fmt.Errorf("tendermint/seed: failed to listen on transport: %w", err)
 	}
 
 	// Start switch.
 	if err := srv.p2pSwitch.Start(); err != nil {
-		return errors.Wrap(err, "tendermint/seed: failed to start P2P switch")
+		return fmt.Errorf("tendermint/seed: failed to start P2P switch: %w", err)
 	}
 
 	return nil
@@ -94,7 +94,7 @@ func NewSeed(dataDir string, identity *identity.Identity, genesisProvider genesi
 
 	seedDataDir := filepath.Join(dataDir, "tendermint-seed")
 	if err = initDataDir(seedDataDir); err != nil {
-		return nil, errors.Wrap(err, "tendermint/seed: failed to initialize data dir")
+		return nil, fmt.Errorf("tendermint/seed: failed to initialize data dir: %w", err)
 	}
 
 	cfg := config.DefaultP2PConfig()
@@ -107,7 +107,7 @@ func NewSeed(dataDir string, identity *identity.Identity, genesisProvider genesi
 
 	doc, err := genesisProvider.GetGenesisDocument()
 	if err != nil {
-		return nil, errors.Wrap(err, "tendermint/seed: failed to get genesis document")
+		return nil, fmt.Errorf("tendermint/seed: failed to get genesis document: %w", err)
 	}
 
 	nodeInfo := p2p.DefaultNodeInfo{
@@ -127,7 +127,7 @@ func NewSeed(dataDir string, identity *identity.Identity, genesisProvider genesi
 	// Carve out all of the services.
 	logger := newLogAdapter(!viper.GetBool(cfgLogDebug))
 	if srv.addr, err = p2p.NewNetAddressString(p2p.IDAddressString(nodeInfo.DefaultNodeID, nodeInfo.ListenAddr)); err != nil {
-		return nil, errors.Wrap(err, "tendermint/seed: failed to create seed address")
+		return nil, fmt.Errorf("tendermint/seed: failed to create seed address: %w", err)
 	}
 	srv.transport = p2p.NewMultiplexTransport(nodeInfo, *nodeKey, p2p.MConnConfig(cfg))
 
@@ -135,10 +135,10 @@ func NewSeed(dataDir string, identity *identity.Identity, genesisProvider genesi
 	srv.addrBook = pex.NewAddrBook(addrBookPath, cfg.AddrBookStrict)
 	srv.addrBook.SetLogger(logger.With("module", "book"))
 	if err = srv.addrBook.Start(); err != nil {
-		return nil, errors.Wrap(err, "tendermint/seed: failed to start address book")
+		return nil, fmt.Errorf("tendermint/seed: failed to start address book: %w", err)
 	}
 	if err = populateAddrBookFromGenesis(srv.addrBook, doc, srv.addr); err != nil {
-		return nil, errors.Wrap(err, "tendermint/seed: failed to populate address book from genesis")
+		return nil, fmt.Errorf("tendermint/seed: failed to populate address book from genesis: %w", err)
 	}
 
 	pexReactor := pex.NewReactor(srv.addrBook, &pex.ReactorConfig{SeedMode: cfg.SeedMode})
@@ -155,13 +155,12 @@ func NewSeed(dataDir string, identity *identity.Identity, genesisProvider genesi
 }
 
 func populateAddrBookFromGenesis(addrBook p2p.AddrBook, doc *genesis.Document, ourAddr *p2p.NetAddress) error {
-
 	// Convert to a representation suitable for address book population.
 	var addrs []*p2p.NetAddress
 	for _, v := range doc.Registry.Nodes {
 		var openedNode node.Node
 		if err := v.Open(registry.RegisterGenesisNodeSignatureContext, &openedNode); err != nil {
-			return errors.Wrap(err, "tendermint/seed: failed to verify validator")
+			return fmt.Errorf("tendermint/seed: failed to verify validator: %w", err)
 		}
 		// TODO: This should cross check that the entity is valid.
 		if !openedNode.HasRoles(node.RoleValidator) {

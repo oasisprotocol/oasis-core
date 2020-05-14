@@ -4,8 +4,6 @@ import (
 	"encoding/hex"
 	"fmt"
 
-	"github.com/pkg/errors"
-
 	tlsCert "github.com/oasislabs/oasis-core/go/common/crypto/tls"
 	iasProxyApi "github.com/oasislabs/oasis-core/go/ias/proxy"
 	iasCmd "github.com/oasislabs/oasis-core/go/oasis-node/cmd/ias"
@@ -58,7 +56,7 @@ func (ias *iasProxy) startNode() error {
 
 func (net *Network) newIASProxy() (*iasProxy, error) {
 	if net.iasProxy != nil {
-		return nil, errors.New("oasis/ias: already provisioned")
+		return nil, fmt.Errorf("oasis/ias: already provisioned")
 	}
 
 	iasName := "ias-proxy"
@@ -68,7 +66,7 @@ func (net *Network) newIASProxy() (*iasProxy, error) {
 		net.logger.Error("failed to create ias proxy subdir",
 			"err", err,
 		)
-		return nil, errors.Wrap(err, "oasis/ias: failed to create ias proxy subdir")
+		return nil, fmt.Errorf("oasis/ias: failed to create ias proxy subdir: %w", err)
 	}
 
 	// Pre-provision the IAS TLS certificates as they are used by other nodes
@@ -78,7 +76,7 @@ func (net *Network) newIASProxy() (*iasProxy, error) {
 		net.logger.Error("failed to generate IAS proxy TLS cert",
 			"err", err,
 		)
-		return nil, errors.Wrap(err, "oasis/ias: failed to generate IAS proxy TLS cert")
+		return nil, fmt.Errorf("oasis/ias: failed to generate IAS proxy TLS cert: %w", err)
 	}
 
 	net.iasProxy = &iasProxy{

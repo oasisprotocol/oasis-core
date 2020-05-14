@@ -2,8 +2,9 @@
 package log
 
 import (
+	"fmt"
+
 	"github.com/hpcloud/tail"
-	"github.com/pkg/errors"
 )
 
 // WatcherHandlerFactory is a factory interface for log file watcher handlers.
@@ -67,7 +68,7 @@ func NewWatcher(cfg *WatcherConfig) (*Watcher, error) {
 		Logger: tail.DiscardingLogger,
 	})
 	if err != nil {
-		return nil, errors.Wrap(err, "log: failed to tail file")
+		return nil, fmt.Errorf("log: failed to tail file: %w", err)
 	}
 
 	errCh := make(chan error)

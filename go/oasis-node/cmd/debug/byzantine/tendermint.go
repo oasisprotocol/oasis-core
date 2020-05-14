@@ -2,8 +2,7 @@ package byzantine
 
 import (
 	"context"
-
-	"github.com/pkg/errors"
+	"fmt"
 
 	"github.com/oasislabs/oasis-core/go/common/identity"
 	"github.com/oasislabs/oasis-core/go/consensus/tendermint"
@@ -22,12 +21,12 @@ func newHonestTendermint() *honestTendermint {
 
 func (ht *honestTendermint) start(id *identity.Identity, dataDir string) error {
 	if ht.service != nil {
-		return errors.New("honest Tendermint service already started")
+		return fmt.Errorf("honest Tendermint service already started")
 	}
 
 	genesis, err := genesis.DefaultFileProvider()
 	if err != nil {
-		return errors.Wrap(err, "genesis DefaultFileProvider")
+		return fmt.Errorf("genesis DefaultFileProvider: %w", err)
 	}
 
 	// Retrieve the genesis document and use it to configure the ChainID for
@@ -40,7 +39,7 @@ func (ht *honestTendermint) start(id *identity.Identity, dataDir string) error {
 
 	ht.service, err = tendermint.New(context.Background(), dataDir, id, upgrade.NewDummyUpgradeManager(), genesis)
 	if err != nil {
-		return errors.Wrap(err, "tendermint New")
+		return fmt.Errorf("tendermint New: %w", err)
 	}
 
 	// Wait for height=1 to pass, during which mux apps perform deferred initialization.
@@ -58,7 +57,7 @@ func (ht *honestTendermint) start(id *identity.Identity, dataDir string) error {
 	}()
 
 	if err = ht.service.Start(); err != nil {
-		return errors.Wrap(err, "honest Tendermint service Start")
+		return fmt.Errorf("honest Tendermint service Start: %w", err)
 	}
 	logger.Debug("honest Tendermint service waiting for Tendermint start")
 	<-ht.service.Started()
@@ -73,7 +72,7 @@ func (ht *honestTendermint) start(id *identity.Identity, dataDir string) error {
 
 func (ht honestTendermint) stop() error {
 	if ht.service == nil {
-		return errors.New("honest Tendermint service not started")
+		return fmt.Errorf("honest Tendermint service not started")
 	}
 
 	ht.service.Stop()

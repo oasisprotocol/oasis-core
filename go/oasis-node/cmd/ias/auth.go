@@ -1,9 +1,8 @@
 package ias
 
 import (
+	"fmt"
 	"sync"
-
-	"github.com/pkg/errors"
 
 	"github.com/oasislabs/oasis-core/go/common"
 	"github.com/oasislabs/oasis-core/go/common/cbor"
@@ -26,12 +25,12 @@ func (st *enclaveStore) verifyEvidence(evidence *ias.Evidence) error {
 
 	enclaveIDs, ok := st.enclaves[evidence.RuntimeID]
 	if !ok {
-		return errors.New("ias: unknown runtime")
+		return fmt.Errorf("ias: unknown runtime: %v", evidence.RuntimeID)
 	}
 
 	var quote cmnIAS.Quote
 	if err := quote.UnmarshalBinary(evidence.Quote); err != nil {
-		return errors.Wrap(err, "ias: evidence contains an invalid quote")
+		return fmt.Errorf("ias: evidence contains an invalid quote: %w", err)
 	}
 
 	id := sgx.EnclaveIdentity{
@@ -45,7 +44,7 @@ func (st *enclaveStore) verifyEvidence(evidence *ias.Evidence) error {
 		}
 	}
 
-	return errors.New("ias: enclave identity not in runtime descriptor")
+	return fmt.Errorf("ias: enclave identity not in runtime descriptor: %v", id)
 }
 
 func (st *enclaveStore) addRuntime(runtime *registry.Runtime) (int, error) {

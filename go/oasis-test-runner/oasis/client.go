@@ -3,8 +3,6 @@ package oasis
 import (
 	"fmt"
 
-	"github.com/pkg/errors"
-
 	registry "github.com/oasislabs/oasis-core/go/registry/api"
 	storageClient "github.com/oasislabs/oasis-core/go/storage/client"
 )
@@ -62,7 +60,7 @@ func (net *Network) NewClient(cfg *ClientCfg) (*Client, error) {
 			"err", err,
 			"client_name", clientName,
 		)
-		return nil, errors.Wrap(err, "oasis/client: failed to create client subdir")
+		return nil, fmt.Errorf("oasis/client: failed to create client subdir: %w", err)
 	}
 
 	client := &Client{

@@ -5,8 +5,6 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/pkg/errors"
-
 	"github.com/oasislabs/oasis-core/go/consensus/tendermint/crypto"
 	registry "github.com/oasislabs/oasis-core/go/registry/api"
 	"github.com/oasislabs/oasis-core/go/storage/database"
@@ -139,14 +137,14 @@ func (net *Network) NewStorage(cfg *StorageCfg) (*Storage, error) {
 			"err", err,
 			"storage_name", storageName,
 		)
-		return nil, errors.Wrap(err, "oasis/storage: failed to create storage subdir")
+		return nil, fmt.Errorf("oasis/storage: failed to create storage subdir: %w", err)
 	}
 
 	// Pre-provision the node identity so that we can update the entity.
 	seed := fmt.Sprintf(storageIdentitySeedTemplate, len(net.storageWorkers))
 	publicKey, err := net.provisionNodeIdentity(storageDir, seed, false)
 	if err != nil {
-		return nil, errors.Wrap(err, "oasis/storage: failed to provision node identity")
+		return nil, fmt.Errorf("oasis/storage: failed to provision node identity: %w", err)
 	}
 	if err := cfg.Entity.addNode(publicKey); err != nil {
 		return nil, err

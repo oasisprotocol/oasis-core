@@ -2,8 +2,7 @@ package byzantine
 
 import (
 	"context"
-
-	"github.com/pkg/errors"
+	"fmt"
 
 	"github.com/oasislabs/oasis-core/go/common"
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
@@ -19,10 +18,10 @@ import (
 func registryRegisterNode(svc service.TendermintService, id *identity.Identity, dataDir string, addresses []node.Address, p2pAddresses []node.Address, runtimeID common.Namespace, capabilities *node.Capabilities, roles node.RolesMask) error {
 	entityID, registrationSigner, err := registration.GetRegistrationSigner(logging.GetLogger("cmd/byzantine/registration"), dataDir, id)
 	if err != nil {
-		return errors.Wrap(err, "registration GetRegistrationSigner")
+		return fmt.Errorf("registration GetRegistrationSigner: %w", err)
 	}
 	if registrationSigner == nil {
-		return errors.New("nil registrationSigner")
+		return fmt.Errorf("nil registrationSigner")
 	}
 
 	var runtimes []*node.Runtime
@@ -74,12 +73,12 @@ func registryRegisterNode(svc service.TendermintService, id *identity.Identity, 
 		nodeDesc,
 	)
 	if err != nil {
-		return errors.Wrap(err, "node SignNode")
+		return fmt.Errorf("node SignNode: %w", err)
 	}
 
 	tx := registry.NewRegisterNodeTx(0, nil, signedNode)
 	if err := consensus.SignAndSubmitTx(context.Background(), svc, registrationSigner, tx); err != nil {
-		return errors.Wrap(err, "consensus RegisterNode tx")
+		return fmt.Errorf("consensus RegisterNode tx: %w", err)
 	}
 	return nil
 }

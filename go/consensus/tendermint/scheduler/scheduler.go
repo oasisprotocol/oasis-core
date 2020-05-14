@@ -4,9 +4,9 @@ package scheduler
 import (
 	"bytes"
 	"context"
+	"fmt"
 
 	"github.com/eapache/channels"
-	"github.com/pkg/errors"
 	tmtypes "github.com/tendermint/tendermint/types"
 
 	"github.com/oasislabs/oasis-core/go/common/cbor"
@@ -32,7 +32,7 @@ type tendermintBackend struct {
 func (tb *tendermintBackend) StateToGenesis(ctx context.Context, height int64) (*api.Genesis, error) {
 	q, err := tb.querier.QueryAt(ctx, height)
 	if err != nil {
-		return nil, errors.Wrap(err, "scheduler: genesis query failed")
+		return nil, fmt.Errorf("scheduler: genesis query failed: %w", err)
 	}
 	return q.Genesis(ctx)
 }

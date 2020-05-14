@@ -5,8 +5,6 @@ import (
 	"path/filepath"
 	"strconv"
 
-	"github.com/pkg/errors"
-
 	"github.com/oasislabs/oasis-core/go/common/node"
 	"github.com/oasislabs/oasis-core/go/consensus/tendermint/crypto"
 	"github.com/oasislabs/oasis-core/go/oasis-node/cmd/common"
@@ -80,7 +78,7 @@ func (pol *KeymanagerPolicy) provision() error {
 			pol.net.logger.Error("failed to provision keymanager policy",
 				"err", err,
 			)
-			return errors.Wrap(err, "oasis/keymanager: failed to provision keymanager policy")
+			return fmt.Errorf("oasis/keymanager: failed to provision keymanager policy: %w", err)
 		}
 
 		// Sign policy with test keys.
@@ -109,7 +107,7 @@ func (pol *KeymanagerPolicy) provision() error {
 				pol.net.logger.Error("failed to sign keymanager policy",
 					"err", err,
 				)
-				return errors.Wrap(err, "oasis/keymanager: failed to sign keymanager policy")
+				return fmt.Errorf("oasis/keymanager: failed to sign keymanager policy: %w", err)
 			}
 		}
 
@@ -129,7 +127,7 @@ func (net *Network) NewKeymanagerPolicy(cfg *KeymanagerPolicyCfg) (*KeymanagerPo
 		net.logger.Error("failed to create keymanager policy subdir",
 			"err", err,
 		)
-		return nil, errors.Wrap(err, "oasis/keymanager: failed to create keymanager policy subdir")
+		return nil, fmt.Errorf("oasis/keymanager: failed to create keymanager policy subdir: %w", err)
 	}
 
 	newPol := &KeymanagerPolicy{
@@ -232,7 +230,7 @@ func (km *Keymanager) provisionGenesis() error {
 		km.net.logger.Error("failed to provision keymanager status",
 			"err", err,
 		)
-		return errors.Wrap(err, "oasis/keymanager: failed to provision keymanager status")
+		return fmt.Errorf("oasis/keymanager: failed to provision keymanager status: %w", err)
 	}
 
 	return nil
@@ -300,7 +298,7 @@ func (net *Network) NewKeymanager(cfg *KeymanagerCfg) (*Keymanager, error) {
 		net.logger.Error("failed to create keymanager subdir",
 			"err", err,
 		)
-		return nil, errors.Wrap(err, "oasis/keymanager: failed to create keymanager subdir")
+		return nil, fmt.Errorf("oasis/keymanager: failed to create keymanager subdir: %w", err)
 	}
 
 	if cfg.Policy == nil {
@@ -311,7 +309,7 @@ func (net *Network) NewKeymanager(cfg *KeymanagerCfg) (*Keymanager, error) {
 	seed := fmt.Sprintf(keymanagerIdentitySeedTemplate, len(net.keymanagers))
 	publicKey, err := net.provisionNodeIdentity(kmDir, seed, false)
 	if err != nil {
-		return nil, errors.Wrap(err, "oasis/keymanager: failed to provision node identity")
+		return nil, fmt.Errorf("oasis/keymanager: failed to provision node identity: %w", err)
 	}
 	if err := cfg.Entity.addNode(publicKey); err != nil {
 		return nil, err

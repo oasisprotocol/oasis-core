@@ -7,7 +7,6 @@ import (
 	"net"
 	"time"
 
-	"github.com/pkg/errors"
 	"github.com/spf13/viper"
 
 	"github.com/oasislabs/oasis-core/go/common"
@@ -40,11 +39,11 @@ var (
 func initDefaultIdentity(dataDir string) (*identity.Identity, error) {
 	signerFactory, err := fileSigner.NewFactory(dataDir, signature.SignerNode, signature.SignerP2P, signature.SignerEntity, signature.SignerConsensus)
 	if err != nil {
-		return nil, errors.Wrap(err, "identity NewFactory")
+		return nil, fmt.Errorf("identity NewFactory: %w", err)
 	}
 	id, err := identity.LoadOrGenerate(dataDir, signerFactory, false)
 	if err != nil {
-		return nil, errors.Wrap(err, "identity LoadOrGenerate")
+		return nil, fmt.Errorf("identity LoadOrGenerate: %w", err)
 	}
 	return id, nil
 }

@@ -1,7 +1,8 @@
 package supplementarysanity
 
 import (
-	"github.com/pkg/errors"
+	"fmt"
+
 	flag "github.com/spf13/pflag"
 	"github.com/spf13/viper"
 
@@ -27,7 +28,7 @@ func Enabled() bool {
 func New(tm service.TendermintService) error {
 	fta := app.New(viper.GetInt64(CfgInterval))
 	if err := tm.RegisterApplication(fta); err != nil {
-		return errors.Wrap(err, "RegisterApplication supplementarysanity app")
+		return fmt.Errorf("RegisterApplication supplementarysanity app: %w", err)
 	}
 	return nil
 }

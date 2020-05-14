@@ -2,8 +2,7 @@ package byzantine
 
 import (
 	"context"
-
-	"github.com/pkg/errors"
+	"fmt"
 
 	"github.com/oasislabs/oasis-core/go/common"
 	"github.com/oasislabs/oasis-core/go/common/cbor"
@@ -47,11 +46,11 @@ func (cbc *computeBatchContext) receiveBatch(ph *p2pHandle) error {
 	req.responseCh <- nil
 
 	if req.msg.SignedTxnSchedulerBatchDispatch == nil {
-		return errors.Errorf("expecting signed transaction scheduler batch dispatch message, got %+v", req.msg)
+		return fmt.Errorf("expecting signed transaction scheduler batch dispatch message, got %+v", req.msg)
 	}
 
 	if err := req.msg.SignedTxnSchedulerBatchDispatch.Open(&cbc.bd); err != nil {
-		return errors.Wrap(err, "request message SignedTxnSchedulerBatchDispatch Open")
+		return fmt.Errorf("request message SignedTxnSchedulerBatchDispatch Open: %w", err)
 	}
 
 	cbc.bdSig = req.msg.SignedTxnSchedulerBatchDispatch.Signature
@@ -68,7 +67,7 @@ func (cbc *computeBatchContext) openTrees(ctx context.Context, rs syncer.ReadSyn
 
 	cbc.txs, err = cbc.ioTree.GetTransactions(ctx)
 	if err != nil {
-		return errors.Wrap(err, "IO tree GetTransactions")
+		return fmt.Errorf("IO tree GetTransactions: %w", err)
 	}
 
 	cbc.stateTree = mkvs.NewWithRoot(rs, nil, storage.Root{
@@ -91,7 +90,7 @@ func (cbc *computeBatchContext) addResult(ctx context.Context, tx *transaction.T
 
 	// This rewrites the input artifact, but it shouldn't affect the root hash.
 	if err := cbc.ioTree.AddTransaction(ctx, txCopy, tags); err != nil {
-		return errors.Wrap(err, "IO tree AddTransaction")
+		return fmt.Errorf("IO tree AddTransaction: %w", err)
 	}
 
 	return nil
@@ -119,12 +118,12 @@ func (cbc *computeBatchContext) commitTrees(ctx context.Context) error {
 	var err error
 	cbc.stateWriteLog, cbc.newStateRoot, err = cbc.stateTree.Commit(ctx, cbc.bd.Header.Namespace, cbc.bd.Header.Round+1)
 	if err != nil {
-		return errors.Wrap(err, "state tree Commit")
+		return fmt.Errorf("state tree Commit: %w", err)
 	}
 
 	cbc.ioWriteLog, cbc.newIORoot, err = cbc.ioTree.Commit(ctx)
 	if err != nil {
-		return errors.Wrap(err, "state tree Commit")
+		return fmt.Errorf("state tree Commit: %w", err)
 	}
 
 	return nil
@@ -147,7 +146,7 @@ func (cbc *computeBatchContext) uploadBatch(ctx context.Context, hnss []*honestN
 		},
 	})
 	if err != nil {
-		return errors.Wrap(err, "storage broadcast apply batch")
+		return fmt.Errorf("storage broadcast apply batch: %w", err)
 	}
 
 	return nil
@@ -176,7 +175,7 @@ func (cbc *computeBatchContext) createCommitment(id *identity.Identity, rak sign
 	if rak != nil {
 		rakSig, err := signature.Sign(rak, commitment.ComputeResultsHeaderSignatureContext, cbor.Marshal(header))
 		if err != nil {
-			return errors.Wrapf(err, "signature Sign RAK")
+			return fmt.Errorf("signature Sign RAK: %w", err)
 		}
 
 		computeBody.RakSig = rakSig.Signature
@@ -184,7 +183,7 @@ func (cbc *computeBatchContext) createCommitment(id *identity.Identity, rak sign
 	var err error
 	cbc.commit, err = commitment.SignExecutorCommitment(id.NodeSigner, computeBody)
 	if err != nil {
-		return errors.Wrap(err, "commitment sign executor commitment")
+		return fmt.Errorf("commitment sign executor commitment: %w", err)
 	}
 
 	return nil
@@ -199,7 +198,7 @@ func (cbc *computeBatchContext) publishToCommittee(ht *honestTendermint, height 
 			Commitment: *cbc.commit,
 		},
 	}); err != nil {
-		return errors.Wrap(err, "scheduler publish to committee")
+		return fmt.Errorf("scheduler publish to committee: %w", err)
 	}
 
 	return nil

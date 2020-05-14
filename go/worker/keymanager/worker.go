@@ -7,8 +7,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/pkg/errors"
-
 	"github.com/oasislabs/oasis-core/go/common"
 	"github.com/oasislabs/oasis-core/go/common/accessctl"
 	"github.com/oasislabs/oasis-core/go/common/cbor"
@@ -252,7 +250,7 @@ func (w *Worker) updateStatus(status *api.Status, startedEvent *host.StartedEven
 		w.logger.Error("failed to extract rpc response payload",
 			"err", err,
 		)
-		return errors.Wrap(err, "worker/keymanager: failed to extract rpc response payload")
+		return fmt.Errorf("worker/keymanager: failed to extract rpc response payload: %w", err)
 	}
 
 	var signedInitResp api.SignedInitResponse
@@ -261,7 +259,7 @@ func (w *Worker) updateStatus(status *api.Status, startedEvent *host.StartedEven
 			"err", err,
 			"response", innerResp,
 		)
-		return errors.Wrap(err, "worker/keymanager: failed to parse response initializing enclave")
+		return fmt.Errorf("worker/keymanager: failed to parse response initializing enclave: %w", err)
 	}
 
 	// Validate the signature.
@@ -278,7 +276,7 @@ func (w *Worker) updateStatus(status *api.Status, startedEvent *host.StartedEven
 		}
 
 		if err = signedInitResp.Verify(signingKey); err != nil {
-			return errors.Wrap(err, "worker/keymanager: failed to validate initialziation response signature")
+			return fmt.Errorf("worker/keymanager: failed to validate initialziation response signature: %w", err)
 		}
 	}
 
@@ -329,7 +327,7 @@ func extractMessageResponsePayload(raw []byte) ([]byte, error) {
 
 	var msg MessageResponse
 	if err := cbor.Unmarshal(raw, &msg); err != nil {
-		return nil, errors.Wrap(err, "malformed message envelope")
+		return nil, fmt.Errorf("malformed message envelope: %w", err)
 	}
 
 	if msg.Response == nil {

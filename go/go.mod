@@ -41,7 +41,6 @@ require (
 	github.com/oasislabs/ed25519 v0.0.0-20191122104632-9d9ffc15f526
 	github.com/opentracing/opentracing-go v1.1.0
 	github.com/pelletier/go-toml v1.7.0 // indirect
-	github.com/pkg/errors v0.9.1
 	github.com/prometheus/client_golang v1.5.1
 	github.com/prometheus/common v0.9.1
 	github.com/prometheus/procfs v0.0.8

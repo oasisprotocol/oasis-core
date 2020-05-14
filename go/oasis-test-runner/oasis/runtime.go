@@ -1,12 +1,11 @@
 package oasis
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"strconv"
 	"time"
-
-	"github.com/pkg/errors"
 
 	"github.com/oasislabs/oasis-core/go/common"
 	"github.com/oasislabs/oasis-core/go/common/cbor"
@@ -132,7 +131,7 @@ func (net *Network) NewRuntime(cfg *RuntimeCfg) (*Runtime, error) {
 		net.logger.Error("failed to create runtime subdir",
 			"err", err,
 		)
-		return nil, errors.Wrap(err, "oasis/runtime: failed to create runtime subdir")
+		return nil, fmt.Errorf("oasis/runtime: failed to create runtime subdir: %w", err)
 	}
 
 	args := []string{
@@ -215,7 +214,7 @@ func (net *Network) NewRuntime(cfg *RuntimeCfg) (*Runtime, error) {
 			)
 		}
 	} else {
-		return nil, errors.New("invalid admission policy")
+		return nil, fmt.Errorf("invalid admission policy")
 	}
 	args = append(args, cfg.Entity.toGenesisArgs()...)
 
@@ -229,7 +228,7 @@ func (net *Network) NewRuntime(cfg *RuntimeCfg) (*Runtime, error) {
 		net.logger.Error("failed to provision runtime",
 			"err", err,
 		)
-		return nil, errors.Wrap(err, "oasis/runtime: failed to provision runtime")
+		return nil, fmt.Errorf("oasis/runtime: failed to provision runtime: %w", err)
 	}
 
 	rt := &Runtime{
@@ -253,7 +252,7 @@ func (net *Network) NewRuntime(cfg *RuntimeCfg) (*Runtime, error) {
 func deriveMrEnclave(f string) (*sgx.MrEnclave, error) {
 	r, err := os.Open(f)
 	if err != nil {
-		return nil, errors.Wrap(err, "oasis: failed to open enclave binary")
+		return nil, fmt.Errorf("oasis: failed to open enclave binary: %w", err)
 	}
 	defer r.Close()
 

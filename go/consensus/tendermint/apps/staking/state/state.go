@@ -7,8 +7,6 @@ import (
 	"math"
 	"sort"
 
-	"github.com/pkg/errors"
-
 	"github.com/oasislabs/oasis-core/go/common/cbor"
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
 	"github.com/oasislabs/oasis-core/go/common/keyformat"
@@ -117,7 +115,7 @@ func (s *ImmutableState) ConsensusParameters(ctx context.Context) (*staking.Cons
 		return nil, abciAPI.UnavailableStateError(err)
 	}
 	if raw == nil {
-		return nil, errors.New("tendermint/staking: expected consensus parameters to be present in app state")
+		return nil, fmt.Errorf("tendermint/staking: expected consensus parameters to be present in app state")
 	}
 
 	var params staking.ConsensusParameters
@@ -589,14 +587,14 @@ func slashPool(dst *quantity.Quantity, p *staking.SharePool, amount, total *quan
 	// slashAmount = amount * p.Balance / total
 	slashAmount := p.Balance.Clone()
 	if err := slashAmount.Mul(amount); err != nil {
-		return errors.Wrap(err, "slashAmount.Mul")
+		return fmt.Errorf("tendermint/staking: slashAmount.Mul: %w", err)
 	}
 	if err := slashAmount.Quo(total); err != nil {
-		return errors.Wrap(err, "slashAmount.Quo")
+		return fmt.Errorf("tendermint/staking: slashAmount.Quo: %w", err)
 	}
 
 	if _, err := quantity.MoveUpTo(dst, &p.Balance, slashAmount); err != nil {
-		return errors.Wrap(err, "moving tokens")
+		return fmt.Errorf("tendermint/staking: failed moving tokens: %w", err)
 	}
 
 	return nil
@@ -611,27 +609,27 @@ func slashPool(dst *quantity.Quantity, p *staking.SharePool, amount, total *quan
 func (s *MutableState) SlashEscrow(ctx *abciAPI.Context, fromID signature.PublicKey, amount *quantity.Quantity) (bool, error) {
 	commonPool, err := s.CommonPool(ctx)
 	if err != nil {
-		return false, fmt.Errorf("staking: failed to query common pool for slash: %w", err)
+		return false, fmt.Errorf("tendermint/staking: failed to query common pool for slash: %w", err)
 	}
 
 	from, err := s.Account(ctx, fromID)
 	if err != nil {
-		return false, fmt.Errorf("staking: failed to query account %s: %w", fromID, err)
+		return false, fmt.Errorf("tendermint/staking: failed to query account %s: %w", fromID, err)
 	}
 
 	// Compute the amount we need to slash each pool. The amount is split
 	// between the pools based on relative total balance.
 	total := from.Escrow.Active.Balance.Clone()
 	if err = total.Add(&from.Escrow.Debonding.Balance); err != nil {
-		return false, fmt.Errorf("staking: compute total balance: %w", err)
+		return false, fmt.Errorf("tendermint/staking: compute total balance: %w", err)
 	}
 
 	var slashed quantity.Quantity
 	if err = slashPool(&slashed, &from.Escrow.Active, amount, total); err != nil {
-		return false, errors.Wrap(err, "slashing active escrow")
+		return false, fmt.Errorf("tendermint/staking: failed slashing active escrow: %w", err)
 	}
 	if err = slashPool(&slashed, &from.Escrow.Debonding, amount, total); err != nil {
-		return false, errors.Wrap(err, "slashing debonding escrow")
+		return false, fmt.Errorf("tendermint/staking: failed slashing debonding escrow: %w", err)
 	}
 
 	if slashed.IsZero() {
@@ -641,14 +639,14 @@ func (s *MutableState) SlashEscrow(ctx *abciAPI.Context, fromID signature.Public
 	totalSlashed := slashed.Clone()
 
 	if err = quantity.Move(commonPool, &slashed, totalSlashed); err != nil {
-		return false, errors.Wrap(err, "moving tokens to common pool")
+		return false, fmt.Errorf("tendermint/staking: failed moving tokens to common pool: %w", err)
 	}
 
 	if err = s.SetCommonPool(ctx, commonPool); err != nil {
-		return false, fmt.Errorf("failed to set common pool: %w", err)
+		return false, fmt.Errorf("tendermint/staking: failed to set common pool: %w", err)
 	}
 	if err = s.SetAccount(ctx, fromID, from); err != nil {
-		return false, fmt.Errorf("failed to set account. %w", err)
+		return false, fmt.Errorf("tendermint/staking: failed to set account. %w", err)
 	}
 
 	if !ctx.IsCheckOnly() {
@@ -671,25 +669,25 @@ func (s *MutableState) SlashEscrow(ctx *abciAPI.Context, fromID signature.Public
 func (s *MutableState) TransferFromCommon(ctx *abciAPI.Context, toID signature.PublicKey, amount *quantity.Quantity) (bool, error) {
 	commonPool, err := s.CommonPool(ctx)
 	if err != nil {
-		return false, errors.Wrap(err, "staking: failed to query common pool for transfer")
+		return false, fmt.Errorf("tendermint/staking: failed to query common pool for transfer: %w", err)
 	}
 
 	to, err := s.Account(ctx, toID)
 	if err != nil {
-		return false, fmt.Errorf("failed to query account %s: %w", toID, err)
+		return false, fmt.Errorf("tendermint/staking: failed to query account %s: %w", toID, err)
 	}
 	transfered, err := quantity.MoveUpTo(&to.General.Balance, commonPool, amount)
 	if err != nil {
-		return false, errors.Wrap(err, "staking: failed to transfer from common pool")
+		return false, fmt.Errorf("tendermint/staking: failed to transfer from common pool: %w", err)
 	}
 
 	ret := !transfered.IsZero()
 	if ret {
 		if err = s.SetCommonPool(ctx, commonPool); err != nil {
-			return false, fmt.Errorf("failed to set common pool: %w", err)
+			return false, fmt.Errorf("tendermint/staking: failed to set common pool: %w", err)
 		}
 		if err = s.SetAccount(ctx, toID, to); err != nil {
-			return false, fmt.Errorf("failed to set account %s: %w", toID, err)
+			return false, fmt.Errorf("tendermint/staking: failed to set account %s: %w", toID, err)
 		}
 
 		if !ctx.IsCheckOnly() {
@@ -735,26 +733,26 @@ func (s *MutableState) AddRewards(
 
 	commonPool, err := s.CommonPool(ctx)
 	if err != nil {
-		return fmt.Errorf("loading common pool: %w", err)
+		return fmt.Errorf("tendermint/staking: loading common pool: %w", err)
 	}
 
 	for _, id := range accounts {
 		var ent *staking.Account
 		ent, err = s.Account(ctx, id)
 		if err != nil {
-			return fmt.Errorf("failed to fetch account %s: %w", id, err)
+			return fmt.Errorf("tendermint/staking: failed to fetch account %s: %w", id, err)
 		}
 
 		q := ent.Escrow.Active.Balance.Clone()
 		// Multiply first.
 		if err = q.Mul(factor); err != nil {
-			return errors.Wrap(err, "multiplying by reward factor")
+			return fmt.Errorf("tendermint/staking: failed multiplying by reward factor: %w", err)
 		}
 		if err = q.Mul(&activeStep.Scale); err != nil {
-			return errors.Wrap(err, "multiplying by reward step scale")
+			return fmt.Errorf("tendermint/staking: failed multiplying by reward step scale: %w", err)
 		}
 		if err = q.Quo(staking.RewardAmountDenominator); err != nil {
-			return errors.Wrap(err, "dividing by reward amount denominator")
+			return fmt.Errorf("tendermint/staking: failed dividing by reward amount denominator: %w", err)
 		}
 
 		if q.IsZero() {
@@ -767,20 +765,20 @@ func (s *MutableState) AddRewards(
 			com = q.Clone()
 			// Multiply first.
 			if err = com.Mul(rate); err != nil {
-				return errors.Wrap(err, "multiplying by commission rate")
+				return fmt.Errorf("tendermint/staking: failed multiplying by commission rate: %w", err)
 			}
 			if err = com.Quo(staking.CommissionRateDenominator); err != nil {
-				return errors.Wrap(err, "dividing by commission rate denominator")
+				return fmt.Errorf("tendermint/staking: failed dividing by commission rate denominator: %w", err)
 			}
 
 			if err = q.Sub(com); err != nil {
-				return errors.Wrap(err, "subtracting commission")
+				return fmt.Errorf("tendermint/staking: failed subtracting commission: %w", err)
 			}
 		}
 
 		if !q.IsZero() {
 			if err = quantity.Move(&ent.Escrow.Active.Balance, commonPool, q); err != nil {
-				return errors.Wrap(err, "transferring to active escrow balance from common pool")
+				return fmt.Errorf("tendermint/staking: failed transferring to active escrow balance from common pool: %w", err)
 			}
 		}
 
@@ -788,25 +786,25 @@ func (s *MutableState) AddRewards(
 			var delegation *staking.Delegation
 			delegation, err = s.Delegation(ctx, id, id)
 			if err != nil {
-				return fmt.Errorf("failed to query delegation: %w", err)
+				return fmt.Errorf("tendermint/staking: failed to query delegation: %w", err)
 			}
 
 			if err = ent.Escrow.Active.Deposit(&delegation.Shares, commonPool, com); err != nil {
-				return errors.Wrap(err, "depositing commission")
+				return fmt.Errorf("tendermint/staking: depositing commission: %w", err)
 			}
 
 			if err = s.SetDelegation(ctx, id, id, delegation); err != nil {
-				return fmt.Errorf("failed to set delegation: %w", err)
+				return fmt.Errorf("tendermint/staking: failed to set delegation: %w", err)
 			}
 		}
 
 		if err = s.SetAccount(ctx, id, ent); err != nil {
-			return fmt.Errorf("failed to set account: %w", err)
+			return fmt.Errorf("tendermint/staking: failed to set account: %w", err)
 		}
 	}
 
 	if err = s.SetCommonPool(ctx, commonPool); err != nil {
-		return fmt.Errorf("failed to set common pool")
+		return fmt.Errorf("tendermint/staking: failed to set common pool: %w", err)
 	}
 
 	return nil
@@ -838,38 +836,38 @@ func (s *MutableState) AddRewardSingleAttenuated(
 
 	var numQ, denQ quantity.Quantity
 	if err = numQ.FromInt64(int64(attenuationNumerator)); err != nil {
-		return errors.Wrapf(err, "importing attenuation numerator %d", attenuationNumerator)
+		return fmt.Errorf("tendermint/staking: failed importing attenuation numerator %d: %w", attenuationNumerator, err)
 	}
 	if err = denQ.FromInt64(int64(attenuationDenominator)); err != nil {
-		return errors.Wrapf(err, "importing attenuation denominator %d", attenuationDenominator)
+		return fmt.Errorf("tendermint/staking: failed importing attenuation denominator %d: %w", attenuationDenominator, err)
 	}
 
 	commonPool, err := s.CommonPool(ctx)
 	if err != nil {
-		return fmt.Errorf("loading common pool: %w", err)
+		return fmt.Errorf("tendermint/staking: failed loading common pool: %w", err)
 	}
 
 	ent, err := s.Account(ctx, account)
 	if err != nil {
-		return fmt.Errorf("failed to query account %s: %w", account, err)
+		return fmt.Errorf("tendermint/staking: failed to query account %s: %w", account, err)
 	}
 
 	q := ent.Escrow.Active.Balance.Clone()
 	// Multiply first.
 	if err = q.Mul(factor); err != nil {
-		return errors.Wrap(err, "multiplying by reward factor")
+		return fmt.Errorf("tendermint/staking: failed multiplying by reward factor: %w", err)
 	}
 	if err = q.Mul(&activeStep.Scale); err != nil {
-		return errors.Wrap(err, "multiplying by reward step scale")
+		return fmt.Errorf("tendermint/staking: failed multiplying by reward step scale: %w", err)
 	}
 	if err = q.Mul(&numQ); err != nil {
-		return errors.Wrap(err, "multiplying by attenuation numerator")
+		return fmt.Errorf("tendermint/staking: failed multiplying by attenuation numerator: %w", err)
 	}
 	if err = q.Quo(staking.RewardAmountDenominator); err != nil {
-		return errors.Wrap(err, "dividing by reward amount denominator")
+		return fmt.Errorf("tendermint/staking: failed dividing by reward amount denominator: %w", err)
 	}
 	if err = q.Quo(&denQ); err != nil {
-		return errors.Wrap(err, "dividing by attenuation denominator")
+		return fmt.Errorf("tendermint/staking: failed dividing by attenuation denominator: %w", err)
 	}
 
 	if q.IsZero() {
@@ -882,20 +880,20 @@ func (s *MutableState) AddRewardSingleAttenuated(
 		com = q.Clone()
 		// Multiply first.
 		if err = com.Mul(rate); err != nil {
-			return errors.Wrap(err, "multiplying by commission rate")
+			return fmt.Errorf("tendermint/staking: failed multiplying by commission rate: %w", err)
 		}
 		if err = com.Quo(staking.CommissionRateDenominator); err != nil {
-			return errors.Wrap(err, "dividing by commission rate denominator")
+			return fmt.Errorf("tendermint/staking: failed dividing by commission rate denominator: %w", err)
 		}
 
 		if err = q.Sub(com); err != nil {
-			return errors.Wrap(err, "subtracting commission")
+			return fmt.Errorf("tendermint/staking: failed subtracting commission: %w", err)
 		}
 	}
 
 	if !q.IsZero() {
 		if err = quantity.Move(&ent.Escrow.Active.Balance, commonPool, q); err != nil {
-			return errors.Wrap(err, "transferring to active escrow balance from common pool")
+			return fmt.Errorf("tendermint/staking: failed transferring to active escrow balance from common pool: %w", err)
 		}
 	}
 
@@ -903,24 +901,24 @@ func (s *MutableState) AddRewardSingleAttenuated(
 		var delegation *staking.Delegation
 		delegation, err = s.Delegation(ctx, account, account)
 		if err != nil {
-			return fmt.Errorf("failed to query delegation: %w", err)
+			return fmt.Errorf("tendermint/staking: failed to query delegation: %w", err)
 		}
 
 		if err = ent.Escrow.Active.Deposit(&delegation.Shares, commonPool, com); err != nil {
-			return errors.Wrap(err, "depositing commission")
+			return fmt.Errorf("tendermint/staking: failed depositing commission: %w", err)
 		}
 
 		if err = s.SetDelegation(ctx, account, account, delegation); err != nil {
-			return fmt.Errorf("failed to set delegation: %w", err)
+			return fmt.Errorf("tendermint/staking: failed to set delegation: %w", err)
 		}
 	}
 
 	if err = s.SetAccount(ctx, account, ent); err != nil {
-		return fmt.Errorf("failed to set account: %w", err)
+		return fmt.Errorf("tendermint/staking: failed to set account: %w", err)
 	}
 
 	if err = s.SetCommonPool(ctx, commonPool); err != nil {
-		return fmt.Errorf("failed to set common pool: %w", err)
+		return fmt.Errorf("tendermint/staking: failed to set common pool: %w", err)
 	}
 
 	return nil

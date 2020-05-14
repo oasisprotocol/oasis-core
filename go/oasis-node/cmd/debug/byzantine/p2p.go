@@ -2,8 +2,7 @@ package byzantine
 
 import (
 	"context"
-
-	"github.com/pkg/errors"
+	"fmt"
 
 	"github.com/oasislabs/oasis-core/go/common"
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
@@ -57,14 +56,14 @@ func (h *p2pRecvHandler) HandlePeerMessage(peerID signature.PublicKey, msg *p2p.
 
 func (ph *p2pHandle) start(id *identity.Identity, runtimeID common.Namespace) error {
 	if ph.service != nil {
-		return errors.New("P2P service already started")
+		return fmt.Errorf("P2P service already started")
 	}
 
 	ph.context, ph.cancel = context.WithCancel(context.Background())
 	var err error
 	ph.service, err = p2p.New(ph.context, id)
 	if err != nil {
-		return errors.Wrap(err, "P2P service New")
+		return fmt.Errorf("P2P service New: %w", err)
 	}
 
 	ph.service.RegisterHandler(runtimeID, &p2pRecvHandler{
@@ -76,7 +75,7 @@ func (ph *p2pHandle) start(id *identity.Identity, runtimeID common.Namespace) er
 
 func (ph *p2pHandle) stop() error {
 	if ph.service == nil {
-		return errors.New("P2P service not started")
+		return fmt.Errorf("P2P service not started")
 	}
 
 	ph.cancel()
