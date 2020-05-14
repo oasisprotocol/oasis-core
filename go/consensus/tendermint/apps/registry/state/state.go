@@ -1,6 +1,7 @@
 package state
 
 import (
+	"bytes"
 	"context"
 	"errors"
 
@@ -602,8 +603,7 @@ func (s *MutableState) RemoveEntity(ctx context.Context, id signature.PublicKey)
 }
 
 // SetNode sets a signed node descriptor for a registered node.
-func (s *MutableState) SetNode(ctx context.Context, node *node.Node, signedNode *node.MultiSignedNode) error {
-	address := []byte(tmcrypto.PublicKeyToTendermint(&node.Consensus.ID).Address())
+func (s *MutableState) SetNode(ctx context.Context, existingNode *node.Node, node *node.Node, signedNode *node.MultiSignedNode) error {
 	rawNodeID, err := node.ID.MarshalBinary()
 	if err != nil {
 		return err
@@ -616,17 +616,46 @@ func (s *MutableState) SetNode(ctx context.Context, node *node.Node, signedNode 
 		return abciAPI.UnavailableStateError(err)
 	}
 
+	// Update indices mapping various keys to nodes.
+
+	// Consensus key.
+	if existingNode != nil && !existingNode.Consensus.ID.Equal(node.Consensus.ID) {
+		// Remove old consensus address mapping if it has changed.
+		address := []byte(tmcrypto.PublicKeyToTendermint(&existingNode.Consensus.ID).Address())
+		if err = s.ms.Remove(ctx, nodeByConsAddressKeyFmt.Encode(address)); err != nil {
+			return abciAPI.UnavailableStateError(err)
+		}
+		if err = s.ms.Remove(ctx, keyMapKeyFmt.Encode(&existingNode.Consensus.ID)); err != nil {
+			return abciAPI.UnavailableStateError(err)
+		}
+	}
+	address := []byte(tmcrypto.PublicKeyToTendermint(&node.Consensus.ID).Address())
 	if err = s.ms.Insert(ctx, nodeByConsAddressKeyFmt.Encode(address), rawNodeID); err != nil {
 		return abciAPI.UnavailableStateError(err)
 	}
-
 	if err = s.ms.Insert(ctx, keyMapKeyFmt.Encode(&node.Consensus.ID), rawNodeID); err != nil {
 		return abciAPI.UnavailableStateError(err)
+	}
+
+	// Committee P2P key.
+	if existingNode != nil && !existingNode.P2P.ID.Equal(node.P2P.ID) {
+		// Remove old P2P key mapping if it has changed.
+		if err = s.ms.Remove(ctx, keyMapKeyFmt.Encode(&existingNode.P2P.ID)); err != nil {
+			return abciAPI.UnavailableStateError(err)
+		}
 	}
 	if err = s.ms.Insert(ctx, keyMapKeyFmt.Encode(&node.P2P.ID), rawNodeID); err != nil {
 		return abciAPI.UnavailableStateError(err)
 	}
 
+	// Committee TLS key.
+	if existingNode != nil && !bytes.Equal(existingNode.Committee.Certificate, node.Committee.Certificate) {
+		// Remove old TLS key mapping if it has changed.
+		certHash := nodeCertificateToMapKey(existingNode.Committee.Certificate)
+		if err = s.ms.Remove(ctx, certificateMapKeyFmt.Encode(&certHash)); err != nil {
+			return abciAPI.UnavailableStateError(err)
+		}
+	}
 	certHash := nodeCertificateToMapKey(node.Committee.Certificate)
 	if err = s.ms.Insert(ctx, certificateMapKeyFmt.Encode(&certHash), rawNodeID); err != nil {
 		return abciAPI.UnavailableStateError(err)

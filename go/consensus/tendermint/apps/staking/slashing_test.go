@@ -58,7 +58,7 @@ func TestOnEvidenceDoubleSign(t *testing.T) {
 	}
 	sigNode, err := node.MultiSignNode([]signature.Signer{nodeSigner}, registry.RegisterNodeSignatureContext, nod)
 	require.NoError(err, "MultiSignNode")
-	err = regState.SetNode(ctx, nod, sigNode)
+	err = regState.SetNode(ctx, nil, nod, sigNode)
 	require.NoError(err, "SetNode")
 
 	// Should not fail if node status is not available.
