@@ -2,8 +2,7 @@ package byzantine
 
 import (
 	"context"
-
-	"github.com/pkg/errors"
+	"fmt"
 
 	"github.com/oasislabs/oasis-core/go/common"
 	"github.com/oasislabs/oasis-core/go/common/crypto/hash"
@@ -32,7 +31,7 @@ func (mbc *mergeBatchContext) loadCurrentBlock(ht *honestTendermint, runtimeID c
 	var err error
 	mbc.currentBlock, err = roothashGetLatestBlock(ht, 0, runtimeID)
 	if err != nil {
-		return errors.Wrap(err, "roothash get latest block")
+		return fmt.Errorf("roothash get latest block: %w", err)
 	}
 
 	return nil
@@ -43,12 +42,12 @@ func mergeReceiveCommitment(ph *p2pHandle) (*commitment.OpenExecutorCommitment, 
 	req.responseCh <- nil
 
 	if req.msg.ExecutorWorkerFinished == nil {
-		return nil, errors.Errorf("expecting executor worker finished message, got %+v", req.msg)
+		return nil, fmt.Errorf("expecting executor worker finished message, got %+v", req.msg)
 	}
 
 	openCom, err := req.msg.ExecutorWorkerFinished.Commitment.Open()
 	if err != nil {
-		return nil, errors.Wrap(err, "request message ExecutorWorkerFinished Open")
+		return nil, fmt.Errorf("request message ExecutorWorkerFinished Open: %w", err)
 	}
 
 	return openCom, nil
@@ -58,7 +57,7 @@ func (mbc *mergeBatchContext) receiveCommitments(ph *p2pHandle, count int) error
 	for i := 0; i < count; i++ {
 		openCom, err := mergeReceiveCommitment(ph)
 		if err != nil {
-			return errors.Wrapf(err, "merge receive commitments %d", i)
+			return fmt.Errorf("merge receive commitments %d: %w", i, err)
 		}
 		mbc.commitments = append(mbc.commitments, openCom)
 	}
@@ -97,12 +96,12 @@ func (mbc *mergeBatchContext) process(ctx context.Context, hnss []*honestNodeSto
 		},
 	})
 	if err != nil {
-		return errors.Wrap(err, "storage broadcast merge batch")
+		return fmt.Errorf("storage broadcast merge batch: %w", err)
 	}
 
 	var firstReceiptBody storage.ReceiptBody
 	if err := mbc.storageReceipts[0].Open(&firstReceiptBody); err != nil {
-		return errors.Wrap(err, "storage receipt Open")
+		return fmt.Errorf("storage receipt Open: %w", err)
 	}
 	var signatures []signature.Signature
 	for _, receipt := range mbc.storageReceipts {
@@ -129,7 +128,7 @@ func (mbc *mergeBatchContext) createCommitment(id *identity.Identity) error {
 		Header:          mbc.newBlock.Header,
 	})
 	if err != nil {
-		return errors.Wrap(err, "commitment sign merge commitment")
+		return fmt.Errorf("commitment sign merge commitment: %w", err)
 	}
 
 	return nil
@@ -137,7 +136,7 @@ func (mbc *mergeBatchContext) createCommitment(id *identity.Identity) error {
 
 func (mbc *mergeBatchContext) publishToChain(svc service.TendermintService, id *identity.Identity, runtimeID common.Namespace) error {
 	if err := roothashMergeCommit(svc, id, runtimeID, []commitment.MergeCommitment{*mbc.commit}); err != nil {
-		return errors.Wrap(err, "roothash merge commentment")
+		return fmt.Errorf("roothash merge commentment: %w", err)
 	}
 
 	return nil

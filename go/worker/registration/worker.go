@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"github.com/cenkalti/backoff/v4"
-	"github.com/pkg/errors"
 	flag "github.com/spf13/pflag"
 	"github.com/spf13/viper"
 
@@ -769,7 +768,7 @@ func GetRegistrationSigner(logger *logging.Logger, dataDir string, identity *ide
 	// Attempt to load the entity descriptor.
 	entity, err := entity.LoadDescriptor(f)
 	if err != nil {
-		return defaultPk, nil, errors.Wrap(err, "worker/registration: failed to load entity descriptor")
+		return defaultPk, nil, fmt.Errorf("worker/registration: failed to load entity descriptor: %w", err)
 	}
 	if !entity.AllowEntitySignedNodes {
 		// If the entity does not allow any entity-signed nodes, then
@@ -812,12 +811,12 @@ func GetRegistrationSigner(logger *logging.Logger, dataDir string, identity *ide
 
 	factory, err := fileSigner.NewFactory(dataDir, signature.SignerEntity)
 	if err != nil {
-		return defaultPk, nil, errors.Wrap(err, "worker/registration: failed to create entity signer factory")
+		return defaultPk, nil, fmt.Errorf("worker/registration: failed to create entity signer factory: %w", err)
 	}
 	fileFactory := factory.(*fileSigner.Factory)
 	entitySigner, err := fileFactory.ForceLoad(f)
 	if err != nil {
-		return defaultPk, nil, errors.Wrap(err, "worker/registration: failed to load entity signing key")
+		return defaultPk, nil, fmt.Errorf("worker/registration: failed to load entity signing key: %w", err)
 	}
 
 	return entity.ID, entitySigner, nil

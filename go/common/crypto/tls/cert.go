@@ -8,12 +8,11 @@ import (
 	"crypto/x509"
 	"crypto/x509/pkix"
 	"encoding/pem"
+	"fmt"
 	"io/ioutil"
 	"math/big"
 	"os"
 	"time"
-
-	"github.com/pkg/errors"
 )
 
 const (
@@ -38,7 +37,7 @@ func LoadOrGenerate(certPath, keyPath, commonName string) (*tls.Certificate, err
 		return cert, nil
 	}
 	if !os.IsNotExist(err) {
-		return nil, errors.Wrap(err, "tls: failed to load certificate or private key")
+		return nil, fmt.Errorf("tls: failed to load certificate or private key: %w", err)
 	}
 
 	cert, err = Generate(commonName)
@@ -57,7 +56,7 @@ func LoadOrGenerate(certPath, keyPath, commonName string) (*tls.Certificate, err
 func Generate(commonName string) (*tls.Certificate, error) {
 	pubKey, privKey, err := ed25519.GenerateKey(rand.Reader)
 	if err != nil {
-		return nil, errors.Wrap(err, "tls: failed to generate keypair")
+		return nil, fmt.Errorf("tls: failed to generate keypair: %w", err)
 	}
 
 	// Tweak the template for the cert.
@@ -73,7 +72,7 @@ func Generate(commonName string) (*tls.Certificate, error) {
 
 	certDER, err := x509.CreateCertificate(rand.Reader, &template, &template, pubKey, privKey)
 	if err != nil {
-		return nil, errors.Wrap(err, "tls: failed to create certificate")
+		return nil, fmt.Errorf("tls: failed to create certificate: %w", err)
 	}
 
 	return &tls.Certificate{
@@ -99,11 +98,11 @@ func Load(certPath, keyPath string) (*tls.Certificate, error) {
 func ImportPEM(certPEM, keyPEM []byte) (*tls.Certificate, error) {
 	blk, _ := pem.Decode(keyPEM)
 	if blk == nil || blk.Type != keyPEMType {
-		return nil, errors.New("tls: failed to parse private key PEM")
+		return nil, fmt.Errorf("tls: failed to parse private key PEM")
 	}
 	key, err := x509.ParsePKCS8PrivateKey(blk.Bytes)
 	if err != nil {
-		return nil, errors.Wrap(err, "tls: failed to parse private key")
+		return nil, fmt.Errorf("tls: failed to parse private key: %w", err)
 	}
 
 	cert, err := ImportCertificatePEM(certPEM)
@@ -128,7 +127,7 @@ func LoadCertificate(certPath string) (*tls.Certificate, error) {
 func ImportCertificatePEM(certPEM []byte) (*tls.Certificate, error) {
 	blk, _ := pem.Decode(certPEM)
 	if blk == nil || blk.Type != certPEMType {
-		return nil, errors.New("tls: failed to parse certificate PEM")
+		return nil, fmt.Errorf("tls: failed to parse certificate PEM")
 	}
 
 	return &tls.Certificate{
@@ -144,11 +143,11 @@ func Save(certPath, keyPath string, cert *tls.Certificate) error {
 	}
 
 	if err = ioutil.WriteFile(keyPath, keyPEM, 0600); err != nil {
-		return errors.Wrap(err, "tls: failed to write private key")
+		return fmt.Errorf("tls: failed to write private key: %w", err)
 	}
 
 	if err = ioutil.WriteFile(certPath, certPEM, 0644); err != nil {
-		return errors.Wrap(err, "tls: failed to write certificate")
+		return fmt.Errorf("tls: failed to write certificate: %w", err)
 	}
 
 	return nil
@@ -158,7 +157,7 @@ func Save(certPath, keyPath string, cert *tls.Certificate) error {
 func ExportPEM(cert *tls.Certificate) ([]byte, []byte, error) {
 	der, err := x509.MarshalPKCS8PrivateKey(cert.PrivateKey)
 	if err != nil {
-		return nil, nil, errors.Wrap(err, "tls: failed to serialize private key")
+		return nil, nil, fmt.Errorf("tls: failed to serialize private key: %w", err)
 	}
 	keyPEM := pem.EncodeToMemory(&pem.Block{
 		Type:  keyPEMType,

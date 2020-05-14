@@ -3,8 +3,6 @@ package oasis
 import (
 	"fmt"
 
-	"github.com/pkg/errors"
-
 	"github.com/oasislabs/oasis-core/go/common/node"
 	epochtime "github.com/oasislabs/oasis-core/go/epochtime/api"
 	registry "github.com/oasislabs/oasis-core/go/registry/api"
@@ -69,23 +67,23 @@ func (net *Network) NewByzantine(cfg *ByzantineCfg) (*Byzantine, error) {
 			"err", err,
 			"byzantine_name", byzantineName,
 		)
-		return nil, errors.Wrap(err, "oasis/byzantine: failed to create byzantine node subdir")
+		return nil, fmt.Errorf("oasis/byzantine: failed to create byzantine node subdir: %w", err)
 	}
 
 	if cfg.Script == "" {
-		return nil, errors.New("oasis/byzantine: empty script name")
+		return nil, fmt.Errorf("oasis/byzantine: empty script name: %w", err)
 	}
 
 	// Generate a deterministic identity as the Byzantine node scripts usually
 	// require specific roles in the first round.
 	if cfg.IdentitySeed == "" {
-		return nil, errors.New("oasis/byzantine: empty identity seed")
+		return nil, fmt.Errorf("oasis/byzantine: empty identity seed")
 	}
 
 	// Pre-provision the node identity so that we can update the entity.
 	publicKey, err := net.provisionNodeIdentity(byzantineDir, cfg.IdentitySeed, false)
 	if err != nil {
-		return nil, errors.Wrap(err, "oasis/byzantine: failed to provision node identity")
+		return nil, fmt.Errorf("oasis/byzantine: failed to provision node identity: %w", err)
 	}
 	if err := cfg.Entity.addNode(publicKey); err != nil {
 		return nil, err

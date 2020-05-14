@@ -4,9 +4,9 @@ import (
 	"context"
 	"crypto/tls"
 	"crypto/x509"
+	"fmt"
 	"io"
 
-	"github.com/pkg/errors"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/balancer/roundrobin"
 	"google.golang.org/grpc/credentials"
@@ -37,7 +37,7 @@ func dialOptionForNode(ourCerts []tls.Certificate, node *node.Node) (grpc.DialOp
 	for _, addr := range node.Committee.Addresses {
 		nodeCert, err := addr.ParseCertificate()
 		if err != nil {
-			return nil, errors.Wrap(err, "failed to parse node's address certificate")
+			return nil, fmt.Errorf("failed to parse node's address certificate: %w", err)
 		}
 		certPool.AddCert(nodeCert)
 	}
@@ -58,7 +58,7 @@ func dialNode(node *node.Node, opts grpc.DialOption) (*grpc.ClientConn, error) {
 		grpc.WithResolvers(manualResolver),
 	)
 	if err != nil {
-		return nil, errors.Wrap(err, "failed dialing node")
+		return nil, fmt.Errorf("failed dialing node: %w", err)
 	}
 	var resolverState resolver.State
 	for _, addr := range node.Committee.Addresses {
@@ -72,11 +72,11 @@ func dialNode(node *node.Node, opts grpc.DialOption) (*grpc.ClientConn, error) {
 func newHonestNodeStorage(id *identity.Identity, node *node.Node) (*honestNodeStorage, error) {
 	opts, err := dialOptionForNode([]tls.Certificate{*id.GetTLSCertificate()}, node)
 	if err != nil {
-		return nil, errors.Wrap(err, "storage client DialOptionForNode")
+		return nil, fmt.Errorf("storage client DialOptionForNode: %w", err)
 	}
 	conn, err := dialNode(node, opts)
 	if err != nil {
-		return nil, errors.Wrap(err, "storage client DialNode")
+		return nil, fmt.Errorf("storage client DialNode: %w", err)
 	}
 
 	initCh := make(chan struct{})
@@ -141,7 +141,7 @@ func storageConnectToCommittee(ht *honestTendermint, height int64, committee *sc
 	if err := schedulerForRoleInCommittee(ht, height, committee, role, func(n *node.Node) error {
 		hns, err := newHonestNodeStorage(id, n)
 		if err != nil {
-			return errors.Wrapf(err, "new honest node storage %s", n.ID)
+			return fmt.Errorf("new honest node storage %s: %w", n.ID, err)
 		}
 
 		hnss = append(hnss, hns)
@@ -171,7 +171,7 @@ func storageBroadcastApplyBatch(
 	for _, hns := range hnss {
 		r, err := hns.ApplyBatch(ctx, &storage.ApplyBatchRequest{Namespace: ns, DstRound: dstRound, Ops: ops})
 		if err != nil {
-			return receipts, errors.Wrapf(err, "honest node storage ApplyBatch %s", hns.nodeID)
+			return receipts, fmt.Errorf("honest node storage ApplyBatch %s: %w", hns.nodeID, err)
 		}
 
 		receipts = append(receipts, r...)
@@ -191,7 +191,7 @@ func storageBroadcastMergeBatch(
 	for _, hns := range hnss {
 		r, err := hns.MergeBatch(ctx, &storage.MergeBatchRequest{Namespace: ns, Round: round, Ops: ops})
 		if err != nil {
-			return receipts, errors.Wrapf(err, "honest node storage MergeBatch %s", hns.nodeID)
+			return receipts, fmt.Errorf("honest node storage MergeBatch %s: %w", hns.nodeID, err)
 		}
 
 		receipts = append(receipts, r...)

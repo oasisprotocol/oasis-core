@@ -2,8 +2,7 @@ package e2e
 
 import (
 	"context"
-
-	"github.com/pkg/errors"
+	"fmt"
 
 	"github.com/oasislabs/oasis-core/go/oasis-test-runner/env"
 	"github.com/oasislabs/oasis-core/go/oasis-test-runner/oasis"
@@ -69,7 +68,7 @@ func (sc *nodeShutdownImpl) Run(childEnv *env.Env) error {
 		"--address", "unix:" + computeWorker.SocketPath(),
 	}
 	if err = cli.RunSubCommand(childEnv, sc.logger, "control-shutdown", sc.runtimeImpl.net.Config().NodeBinary, args); err != nil {
-		return errors.Wrap(err, "scenario/e2e/node_shutdown: send request failed")
+		return fmt.Errorf("scenario/e2e/node_shutdown: send request failed: %w", err)
 	}
 
 	// Wait for the node to exit.

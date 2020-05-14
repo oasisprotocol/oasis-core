@@ -4,8 +4,6 @@ import (
 	"crypto/x509"
 	"encoding/pem"
 	"fmt"
-
-	"github.com/pkg/errors"
 )
 
 const iasTrustRootCert = `-----BEGIN CERTIFICATE-----
@@ -54,7 +52,7 @@ func CertFromPEM(raw []byte) (*x509.Certificate, []byte, error) {
 
 	cert, err := x509.ParseCertificate(block.Bytes)
 	if err != nil {
-		return nil, nil, errors.Wrap(err, "ias/avr: failed to parse certificate")
+		return nil, nil, fmt.Errorf("ias/avr: failed to parse certificate: %w", err)
 	}
 
 	return cert, rest, nil

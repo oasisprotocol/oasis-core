@@ -1,13 +1,13 @@
 package env
 
 import (
+	"fmt"
 	"io"
 	"io/ioutil"
 	"os"
 	"path/filepath"
 	"strings"
 
-	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
 	flag "github.com/spf13/pflag"
 	"github.com/spf13/viper"
@@ -42,7 +42,7 @@ func (d *Dir) String() string {
 // Init initializes the Dir, creating it iff it does not yet exist.
 func (d *Dir) Init(cmd *cobra.Command) error {
 	if d.dir != "" {
-		return errors.New("env: base directory already initialized")
+		return fmt.Errorf("env: base directory already initialized")
 	}
 
 	d.dir = viper.GetString(cfgBaseDir)
@@ -57,7 +57,7 @@ func (d *Dir) Init(cmd *cobra.Command) error {
 		var err error
 		splitUse := strings.Split(cmd.Use, " ")
 		if d.dir, err = ioutil.TempDir(d.dir, splitUse[0]); err != nil {
-			return errors.Wrap(err, "env: failed to create default base directory")
+			return fmt.Errorf("env: failed to create default base directory: %w", err)
 		}
 	}
 
@@ -74,7 +74,7 @@ func (d *Dir) SetNoCleanup(v bool) {
 func (d *Dir) NewSubDir(subDirName string) (*Dir, error) {
 	dirName := filepath.Join(d.String(), subDirName)
 	if err := common.Mkdir(dirName); err != nil {
-		return nil, errors.Wrap(err, "env: failed to create sub-directory")
+		return nil, fmt.Errorf("env: failed to create sub-directory: %w", err)
 	}
 
 	return &Dir{
@@ -88,7 +88,7 @@ func (d *Dir) NewLogWriter(name string) (io.WriteCloser, error) {
 	fn := filepath.Join(d.String(), name)
 	w, err := os.OpenFile(fn, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0600)
 	if err != nil {
-		return nil, errors.Wrap(err, "env: failed to create file for append")
+		return nil, fmt.Errorf("env: failed to create file for append: %w", err)
 	}
 
 	return w, nil

@@ -3,8 +3,6 @@ package roothash
 import (
 	"fmt"
 
-	"github.com/pkg/errors"
-
 	"github.com/oasislabs/oasis-core/go/common"
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
 	abciAPI "github.com/oasislabs/oasis-core/go/consensus/tendermint/api"
@@ -49,7 +47,7 @@ func (sv *roothashSignatureVerifier) VerifyCommitteeSignatures(kind scheduler.Co
 
 	for _, sig := range sigs {
 		if !pks[sig.PublicKey] {
-			return errors.New("roothash: signature is not from a valid committee member")
+			return fmt.Errorf("roothash: signature is not from a valid committee member")
 		}
 	}
 	return nil

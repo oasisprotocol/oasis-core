@@ -7,7 +7,6 @@ import (
 	"math/rand"
 	"sort"
 
-	"github.com/pkg/errors"
 	"github.com/tendermint/tendermint/abci/types"
 
 	"github.com/oasislabs/oasis-core/go/common"
@@ -42,8 +41,6 @@ var (
 	RNGContextMerge                = []byte("EkS-ABCI-Merge")
 	RNGContextValidators           = []byte("EkS-ABCI-Validators")
 	RNGContextEntities             = []byte("EkS-ABCI-Entities")
-
-	errUnexpectedTransaction = errors.New("tendermint/scheduler: unexpected transaction")
 )
 
 type schedulerApplication struct {
@@ -100,17 +97,17 @@ func (app *schedulerApplication) BeginBlock(ctx *api.Context, request types.Requ
 		beacState := beaconState.NewMutableState(ctx.State())
 		beacon, err := beacState.Beacon(ctx)
 		if err != nil {
-			return errors.Wrap(err, "tendermint/scheduler: couldn't get beacon")
+			return fmt.Errorf("tendermint/scheduler: couldn't get beacon: %w", err)
 		}
 
 		regState := registryState.NewMutableState(ctx.State())
 		runtimes, err := regState.Runtimes(ctx)
 		if err != nil {
-			return errors.Wrap(err, "tendermint/scheduler: couldn't get runtimes")
+			return fmt.Errorf("tendermint/scheduler: couldn't get runtimes: %w", err)
 		}
 		allNodes, err := regState.Nodes(ctx)
 		if err != nil {
-			return errors.Wrap(err, "tendermint/scheduler: couldn't get nodes")
+			return fmt.Errorf("tendermint/scheduler: couldn't get nodes: %w", err)
 		}
 
 		// Filter nodes.
@@ -119,7 +116,7 @@ func (app *schedulerApplication) BeginBlock(ctx *api.Context, request types.Requ
 			var status *registry.NodeStatus
 			status, err = regState.NodeStatus(ctx, node.ID)
 			if err != nil {
-				return errors.Wrap(err, "tendermint/scheduler: couldn't get node status")
+				return fmt.Errorf("tendermint/scheduler: couldn't get node status: %w", err)
 			}
 
 			// Nodes which are currently frozen cannot be scheduled.
@@ -165,7 +162,7 @@ func (app *schedulerApplication) BeginBlock(ctx *api.Context, request types.Requ
 				// It is unclear what the behavior should be if the validator
 				// election fails.  The system can not ensure integrity, so
 				// presumably manual intervention is required...
-				return errors.Wrap(err, "tendermint/scheduler: couldn't elect validators")
+				return fmt.Errorf("tendermint/scheduler: couldn't elect validators: %w", err)
 			}
 		}
 
@@ -177,7 +174,7 @@ func (app *schedulerApplication) BeginBlock(ctx *api.Context, request types.Requ
 		}
 		for _, kind := range kinds {
 			if err = app.electAllCommittees(ctx, request, epoch, beacon, stakeAcc, entitiesEligibleForReward, runtimes, nodes, kind); err != nil {
-				return errors.Wrap(err, fmt.Sprintf("tendermint/scheduler: couldn't elect %s committees", kind))
+				return fmt.Errorf("tendermint/scheduler: couldn't elect %s committees: %w", kind, err)
 			}
 		}
 		ctx.EmitEvent(api.NewEventBuilder(app.Name()).Attribute(KeyElected, cbor.Marshal(kinds)))
@@ -200,7 +197,7 @@ func (app *schedulerApplication) BeginBlock(ctx *api.Context, request types.Requ
 			accounts := publicKeyMapToSortedSlice(entitiesEligibleForReward)
 			stakingSt := stakingState.NewMutableState(ctx.State())
 			if err = stakingSt.AddRewards(ctx, epoch, &params.RewardFactorEpochElectionAny, accounts); err != nil {
-				return errors.Wrap(err, "adding rewards")
+				return fmt.Errorf("tendermint/scheduler: failed to add rewards: %w", err)
 			}
 		}
 	}
@@ -208,7 +205,7 @@ func (app *schedulerApplication) BeginBlock(ctx *api.Context, request types.Requ
 }
 
 func (app *schedulerApplication) ExecuteTx(ctx *api.Context, tx *transaction.Transaction) error {
-	return errUnexpectedTransaction
+	return fmt.Errorf("tendermint/scheduler: unexpected transaction")
 }
 
 func (app *schedulerApplication) ForeignExecuteTx(ctx *api.Context, other abci.Application, tx *transaction.Transaction) error {
@@ -251,7 +248,7 @@ func (app *schedulerApplication) EndBlock(ctx *api.Context, req types.RequestEnd
 	state := schedulerState.NewMutableState(ctx.State())
 	pendingValidators, err := state.PendingValidators(ctx)
 	if err != nil {
-		return resp, errors.Wrap(err, "scheduler/tendermint: failed to query pending validators")
+		return resp, fmt.Errorf("scheduler/tendermint: failed to query pending validators: %w", err)
 	}
 	if pendingValidators == nil {
 		// No validator updates to apply.
@@ -260,12 +257,12 @@ func (app *schedulerApplication) EndBlock(ctx *api.Context, req types.RequestEnd
 
 	currentValidators, err := state.CurrentValidators(ctx)
 	if err != nil {
-		return resp, errors.Wrap(err, "scheduler/tendermint: failed to query current validators")
+		return resp, fmt.Errorf("scheduler/tendermint: failed to query current validators: %w", err)
 	}
 
 	// Clear out the pending validator update.
 	if err = state.PutPendingValidators(ctx, nil); err != nil {
-		return resp, fmt.Errorf("failed to clear validators: %w", err)
+		return resp, fmt.Errorf("scheduler/tendermint: failed to clear validators: %w", err)
 	}
 
 	// Tendermint expects a vector of ValidatorUpdate that expresses
@@ -277,14 +274,14 @@ func (app *schedulerApplication) EndBlock(ctx *api.Context, req types.RequestEnd
 
 	// Stash the updated validator set.
 	if err = state.PutCurrentValidators(ctx, pendingValidators); err != nil {
-		return resp, fmt.Errorf("failed to set validators: %w", err)
+		return resp, fmt.Errorf("scheduler/tendermint: failed to set validators: %w", err)
 	}
 
 	return resp, nil
 }
 
 func (app *schedulerApplication) FireTimer(ctx *api.Context, t *abci.Timer) error {
-	return errors.New("tendermint/scheduler: unexpected timer")
+	return fmt.Errorf("tendermint/scheduler: unexpected timer")
 }
 
 func (app *schedulerApplication) isSuitableExecutorWorker(ctx *api.Context, n *node.Node, rt *registry.Runtime) bool {
@@ -366,7 +363,7 @@ func (app *schedulerApplication) isSuitableMergeWorker(ctx *api.Context, n *node
 func GetPerm(beacon []byte, runtimeID common.Namespace, rngCtx []byte, nrNodes int) ([]int, error) {
 	drbg, err := drbg.New(crypto.SHA512, beacon, runtimeID[:], rngCtx)
 	if err != nil {
-		return nil, errors.Wrap(err, "tendermint/scheduler: couldn't instantiate DRBG")
+		return nil, fmt.Errorf("tendermint/scheduler: couldn't instantiate DRBG: %w", err)
 	}
 	rng := rand.New(mathrand.New(drbg))
 	return rng.Perm(nrNodes), nil
@@ -575,7 +572,7 @@ func (app *schedulerApplication) electValidators(
 	// Shuffle the node list.
 	drbg, err := drbg.New(crypto.SHA512, beacon, nil, RNGContextValidators)
 	if err != nil {
-		return errors.Wrap(err, "tendermint/scheduler: couldn't instantiate DRBG")
+		return fmt.Errorf("tendermint/scheduler: couldn't instantiate DRBG: %w", err)
 	}
 	rngSrc := mathrand.New(drbg)
 	rng := rand.New(rngSrc)
@@ -670,7 +667,7 @@ func publicKeyMapToSliceByStake(
 	// Shuffle the sorted slice to make tie-breaks "random".
 	drbg, err := drbg.New(crypto.SHA512, beacon, nil, RNGContextEntities)
 	if err != nil {
-		return nil, errors.Wrap(err, "tendermint/scheduler: couldn't instantiate DRBG")
+		return nil, fmt.Errorf("tendermint/scheduler: couldn't instantiate DRBG: %w", err)
 	}
 	rngSrc := mathrand.New(drbg)
 	rng := rand.New(rngSrc)

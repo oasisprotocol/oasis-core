@@ -5,8 +5,6 @@ import (
 	netPkg "net"
 	"path/filepath"
 
-	"github.com/pkg/errors"
-
 	"github.com/oasislabs/oasis-core/go/common/node"
 	"github.com/oasislabs/oasis-core/go/consensus/tendermint/crypto"
 	cmdCommon "github.com/oasislabs/oasis-core/go/oasis-node/cmd/common"
@@ -168,7 +166,7 @@ func (net *Network) NewValidator(cfg *ValidatorCfg) (*Validator, error) {
 	seed := fmt.Sprintf(validatorIdentitySeedTemplate, len(net.validators))
 	valPublicKey, err := net.provisionNodeIdentity(valDir, seed, false)
 	if err != nil {
-		return nil, errors.Wrap(err, "oasis/validator: failed to provision node identity")
+		return nil, fmt.Errorf("oasis/validator: failed to provision node identity: %w", err)
 	}
 	copy(val.NodeID[:], valPublicKey[:])
 	val.tmAddress = crypto.PublicKeyToTendermint(&val.NodeID).Address().String()
@@ -198,7 +196,7 @@ func (net *Network) NewValidator(cfg *ValidatorCfg) (*Validator, error) {
 			"err", err,
 			"validator_name", valName,
 		)
-		return nil, errors.Wrap(err, "oasis/validator: failed to provision validator")
+		return nil, fmt.Errorf("oasis/validator: failed to provision validator: %w", err)
 	}
 
 	net.validators = append(net.validators, val)

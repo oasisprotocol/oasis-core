@@ -3,8 +3,6 @@ package oasis
 import (
 	"fmt"
 
-	"github.com/pkg/errors"
-
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
 	fileSigner "github.com/oasislabs/oasis-core/go/common/crypto/signature/signers/file"
 	"github.com/oasislabs/oasis-core/go/common/identity"
@@ -34,7 +32,7 @@ func (seed *seedNode) startNode() error {
 
 func (net *Network) newSeedNode() (*seedNode, error) {
 	if net.seedNode != nil {
-		return nil, errors.New("oasis/seed: already provisioned")
+		return nil, fmt.Errorf("oasis/seed: already provisioned")
 	}
 
 	// Why, yes, this *could* probably just use Oasis node's integrated seed
@@ -47,7 +45,7 @@ func (net *Network) newSeedNode() (*seedNode, error) {
 		net.logger.Error("failed to create seed node subdir",
 			"err", err,
 		)
-		return nil, errors.Wrap(err, "oasis/seed: failed to create seed subdir")
+		return nil, fmt.Errorf("oasis/seed: failed to create seed subdir: %w", err)
 	}
 
 	// Pre-provision the node identity, so that we can figure out what
@@ -55,11 +53,11 @@ func (net *Network) newSeedNode() (*seedNode, error) {
 	// start the node and fork out to `oasis-node debug tendermint show-node-id`.
 	signerFactory, err := fileSigner.NewFactory(seedDir.String(), signature.SignerNode, signature.SignerP2P, signature.SignerConsensus)
 	if err != nil {
-		return nil, errors.Wrap(err, "oasis/seed: failed to create seed signer factory")
+		return nil, fmt.Errorf("oasis/seed: failed to create seed signer factory: %w", err)
 	}
 	seedIdentity, err := identity.LoadOrGenerate(seedDir.String(), signerFactory, false)
 	if err != nil {
-		return nil, errors.Wrap(err, "oasis/seed: failed to provision seed identity")
+		return nil, fmt.Errorf("oasis/seed: failed to provision seed identity: %w", err)
 	}
 	seedPublicKey := seedIdentity.NodeSigner.Public()
 

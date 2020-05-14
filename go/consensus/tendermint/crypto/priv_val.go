@@ -197,13 +197,13 @@ package crypto
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"io/ioutil"
 	"os"
 	"path/filepath"
 	"time"
 	_ "unsafe" // For go:linkname.
 
-	"github.com/pkg/errors"
 	tmcrypto "github.com/tendermint/tendermint/crypto"
 	"github.com/tendermint/tendermint/libs/tempfile"
 	"github.com/tendermint/tendermint/privval"
@@ -262,7 +262,7 @@ func (pv *privVal) SignVote(chainID string, vote *tmtypes.Vote) error {
 
 	doubleSigned, err := pv.CheckHRS(height, round, step)
 	if err != nil {
-		return errors.Wrap(err, "tendermint/crypto: failed to check vote H/R/S")
+		return fmt.Errorf("tendermint/crypto: failed to check vote H/R/S: %w", err)
 	}
 
 	signBytes := vote.SignBytes(chainID)
@@ -273,14 +273,14 @@ func (pv *privVal) SignVote(chainID string, vote *tmtypes.Vote) error {
 			vote.Timestamp = ts
 			vote.Signature = pv.Signature
 		} else {
-			err = errors.New("tendermint/crypto: conflicting vote")
+			err = fmt.Errorf("tendermint/crypto: conflicting vote")
 		}
 		return err
 	}
 
 	sig, err := pv.signer.ContextSign(tendermintSignatureContext, signBytes)
 	if err != nil {
-		return errors.Wrap(err, "tendermint/crypto: failed to sign vote")
+		return fmt.Errorf("tendermint/crypto: failed to sign vote: %w", err)
 	}
 	if err = pv.update(height, round, step, signBytes, sig); err != nil {
 		return err
@@ -295,7 +295,7 @@ func (pv *privVal) SignProposal(chainID string, proposal *tmtypes.Proposal) erro
 
 	doubleSigned, err := pv.CheckHRS(height, round, step)
 	if err != nil {
-		return errors.Wrap(err, "tendermint/crypto: failed to check proposal H/R/S")
+		return fmt.Errorf("tendermint/crypto: failed to check proposal H/R/S: %w", err)
 	}
 
 	signBytes := proposal.SignBytes(chainID)
@@ -306,14 +306,14 @@ func (pv *privVal) SignProposal(chainID string, proposal *tmtypes.Proposal) erro
 			proposal.Timestamp = ts
 			proposal.Signature = pv.Signature
 		} else {
-			err = errors.New("tendermint/crypto: conflicting proposal")
+			err = fmt.Errorf("tendermint/crypto: conflicting proposal")
 		}
 		return err
 	}
 
 	sig, err := pv.signer.ContextSign(tendermintSignatureContext, signBytes)
 	if err != nil {
-		return errors.Wrap(err, "tendermint/crypto: failed to sign proposal")
+		return fmt.Errorf("tendermint/crypto: failed to sign proposal: %w", err)
 	}
 	if err = pv.update(height, round, step, signBytes, sig); err != nil {
 		return err
@@ -338,7 +338,7 @@ func (pv *privVal) save() error {
 		return err
 	}
 	if err = tempfile.WriteFileAtomic(pv.filePath, b, 0600); err != nil {
-		return errors.Wrap(err, "tendermint/crypto: failed to save private validator file")
+		return fmt.Errorf("tendermint/crypto: failed to save private validator file: %w", err)
 	}
 
 	return nil
@@ -357,21 +357,21 @@ func LoadOrGeneratePrivVal(baseDir string, signer signature.Signer) (tmtypes.Pri
 	b, err := ioutil.ReadFile(fn)
 	if err == nil {
 		if err = json.Unmarshal(b, &pv); err != nil {
-			return nil, errors.Wrap(err, "tendermint/crypto: failed to parse private validator file")
+			return nil, fmt.Errorf("tendermint/crypto: failed to parse private validator file: %w", err)
 		}
 
 		// Tendermint doesn't do this, but it's cheap insurance.
 		if !signer.Public().Equal(pv.PublicKey) {
-			return nil, errors.Wrap(err, "tendermint/crypto: public key mismatch, state corruption?")
+			return nil, fmt.Errorf("tendermint/crypto: public key mismatch, state corruption?: %w", err)
 		}
 	} else if os.IsNotExist(err) {
 		pv.PublicKey = signer.Public()
 
 		if err = pv.save(); err != nil {
-			return nil, err
+			return nil, fmt.Errorf("tendermint/crypto: failed to save newly generate key: %w", err)
 		}
 	} else {
-		return nil, errors.Wrap(err, "tendermint/crypto: failed to load private validator file")
+		return nil, fmt.Errorf("tendermint/crypto: failed to load private validator file: %w", err)
 	}
 
 	return pv, nil

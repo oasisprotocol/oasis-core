@@ -4,8 +4,8 @@ package beacon
 import (
 	"encoding/binary"
 	"encoding/hex"
+	"fmt"
 
-	"github.com/pkg/errors"
 	"github.com/tendermint/tendermint/abci/types"
 	"golang.org/x/crypto/sha3"
 
@@ -17,9 +17,6 @@ import (
 )
 
 var (
-	errUnexpectedTransaction = errors.New("beacon: unexpected transaction")
-	errUnexpectedTimer       = errors.New("beacon: unexpected timer")
-
 	prodEntropyCtx  = []byte("EkB-tmnt")
 	DebugEntropyCtx = []byte("Ekb-Dumm")
 
@@ -65,7 +62,7 @@ func (app *beaconApplication) BeginBlock(ctx *api.Context, req types.RequestBegi
 }
 
 func (app *beaconApplication) ExecuteTx(ctx *api.Context, tx *transaction.Transaction) error {
-	return errUnexpectedTransaction
+	return fmt.Errorf("beacon: unexpected transaction")
 }
 
 func (app *beaconApplication) ForeignExecuteTx(ctx *api.Context, other abci.Application, tx *transaction.Transaction) error {
@@ -77,7 +74,7 @@ func (app *beaconApplication) EndBlock(ctx *api.Context, req types.RequestEndBlo
 }
 
 func (app *beaconApplication) FireTimer(ctx *api.Context, t *abci.Timer) error {
-	return errUnexpectedTimer
+	return fmt.Errorf("beacon: unexpected timer")
 }
 
 func (app *beaconApplication) onBeaconEpochChange(ctx *api.Context, epoch epochtime.EpochTime, req types.RequestBeginBlock) error {
@@ -115,7 +112,7 @@ func (app *beaconApplication) onBeaconEpochChange(ctx *api.Context, epoch epocht
 			entropy = req.Header.GetLastCommitHash()
 		}
 		if len(entropy) == 0 {
-			return errors.New("onBeaconEpochChange: failed to obtain entropy")
+			return fmt.Errorf("onBeaconEpochChange: failed to obtain entropy")
 		}
 	case true:
 		// UNSAFE/DEBUG - Deterministic beacon.
@@ -147,7 +144,7 @@ func (app *beaconApplication) onNewBeacon(ctx *api.Context, beacon []byte) error
 		ctx.Logger().Error("onNewBeacon: failed to set beacon",
 			"err", err,
 		)
-		return errors.Wrap(err, "tendermint/beacon: failed to set beacon")
+		return fmt.Errorf("tendermint/beacon: failed to set beacon: %w", err)
 	}
 
 	ctx.EmitEvent(api.NewEventBuilder(app.Name()).Attribute(KeyGenerated, beacon))
