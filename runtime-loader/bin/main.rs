@@ -26,6 +26,12 @@ fn main() {
                 .required(true),
         )
         .arg(
+            Arg::with_name("signature")
+                .long("signature")
+                .help("Signature filename")
+                .takes_value(true),
+        )
+        .arg(
             Arg::with_name("host-socket")
                 .long("host-socket")
                 .takes_value(true)
@@ -42,6 +48,7 @@ fn main() {
     // Decode arguments.
     let host_socket = value_t!(matches, "host-socket", String).unwrap_or_else(|e| e.exit());
     let mode = matches.value_of("type").unwrap();
+    let signature = matches.value_of("signature");
 
     // Create appropriate loader and run the runtime.
     let loader: Box<dyn Loader> = match mode {
@@ -50,6 +57,6 @@ fn main() {
         _ => panic!("Invalid runtime type specified"),
     };
     loader
-        .run(filename, host_socket)
+        .run(filename, signature, host_socket)
         .expect("runtime execution failed");
 }

@@ -2,9 +2,13 @@
 package sgx
 
 import (
+	"bytes"
 	"context"
 	"encoding/binary"
 	"fmt"
+	"io"
+	"io/ioutil"
+	"path/filepath"
 	"sync"
 	"time"
 
@@ -12,10 +16,13 @@ import (
 	"github.com/oasislabs/oasis-core/go/common/cbor"
 	"github.com/oasislabs/oasis-core/go/common/logging"
 	"github.com/oasislabs/oasis-core/go/common/node"
+	"github.com/oasislabs/oasis-core/go/common/sgx"
 	"github.com/oasislabs/oasis-core/go/common/sgx/aesm"
 	cmnIAS "github.com/oasislabs/oasis-core/go/common/sgx/ias"
+	"github.com/oasislabs/oasis-core/go/common/sgx/sigstruct"
 	"github.com/oasislabs/oasis-core/go/common/version"
 	ias "github.com/oasislabs/oasis-core/go/ias/api"
+	cmdFlags "github.com/oasislabs/oasis-core/go/oasis-node/cmd/common/flags"
 	"github.com/oasislabs/oasis-core/go/runtime/host"
 	"github.com/oasislabs/oasis-core/go/runtime/host/protocol"
 	"github.com/oasislabs/oasis-core/go/runtime/host/sandbox"
@@ -26,7 +33,8 @@ const (
 	// TODO: Support different locations for the AESMD socket.
 	aesmdSocketPath = "/var/run/aesmd/aesm.socket"
 
-	sandboxMountRuntime = "/runtime"
+	sandboxMountRuntime   = "/runtime"
+	sandboxMountSignature = "/runtime.sig"
 
 	// Runtime RAK initialization timeout.
 	//
@@ -53,6 +61,16 @@ type Config struct {
 	InsecureNoSandbox bool
 }
 
+// RuntimeExtra is the extra configuration for SGX runtimes.
+type RuntimeExtra struct {
+	// SignaturePath is the path to the runtime (enclave) SIGSTRUCT.
+	SignaturePath string
+
+	// UnsafeDebugGenerateSigstruct allows the generation of a dummy SIGSTRUCT
+	// if an actual signature is unavailable.
+	UnsafeDebugGenerateSigstruct bool
+}
+
 type teeState struct {
 	runtimeID    common.Namespace
 	eventEmitter host.RuntimeEventEmitter
@@ -74,10 +92,67 @@ type sgxProvisioner struct {
 	logger *logging.Logger
 }
 
-func (s *sgxProvisioner) getSandboxConfig(rtCfg host.Config, socketPath string, runtimeDir string) process.Config {
-	runtimePath := rtCfg.Path
-	if !s.cfg.InsecureNoSandbox {
-		runtimePath = sandboxMountRuntime
+func (s *sgxProvisioner) loadEnclaveBinaries(rtCfg host.Config) ([]byte, []byte, error) {
+	var (
+		sig, sgxs   []byte
+		enclaveHash sgx.MrEnclave
+		err         error
+	)
+
+	if sgxs, err = ioutil.ReadFile(rtCfg.Path); err != nil {
+		return nil, nil, fmt.Errorf("failed to load enclave: %w", err)
+	}
+	if err = enclaveHash.FromSgxsBytes(sgxs); err != nil {
+		return nil, nil, fmt.Errorf("failed to derive EnclaveHash: %w", err)
+	}
+
+	// If the path to an existing SIGSTRUCT is provided, load it.
+	rtExtra, ok := rtCfg.Extra.(*RuntimeExtra)
+	if !ok {
+		return nil, nil, fmt.Errorf("sgx enclave configuration not available")
+	}
+
+	if rtExtra.SignaturePath != "" {
+		sig, err = ioutil.ReadFile(rtExtra.SignaturePath)
+		if err != nil {
+			return nil, nil, fmt.Errorf("failed to load SIGSTRUCT: %w", err)
+		}
+	} else if rtExtra.UnsafeDebugGenerateSigstruct && cmdFlags.DebugDontBlameOasis() {
+		s.logger.Warn("generating dummy enclave SIGSTRUCT",
+			"enclave_hash", enclaveHash,
+		)
+		if sig, err = sigstruct.UnsafeDebugForEnclave(sgxs); err != nil {
+			return nil, nil, fmt.Errorf("failed to generate debug SIGSTRUCT: %w", err)
+		}
+	} else {
+		return nil, nil, fmt.Errorf("enclave SIGSTRUCT not available")
+	}
+
+	_, parsed, err := sigstruct.Verify(sig)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to validate SIGSTRUCT: %w", err)
+	}
+	if parsed.EnclaveHash != enclaveHash {
+		return nil, nil, fmt.Errorf("enclave/SIGSTRUCT mismatch")
+	}
+
+	return sgxs, sig, nil
+}
+
+func (s *sgxProvisioner) getSandboxConfig(rtCfg host.Config, socketPath string, runtimeDir string) (process.Config, error) {
+	// To try to avoid bad things from happening if the signature/enclave
+	// binaries change out from under us, and because the enclave binary
+	// needs to be loaded into memory anyway, this always injects
+	// (or copies).
+	runtimePath, signaturePath := sandboxMountRuntime, sandboxMountSignature
+	if s.cfg.InsecureNoSandbox {
+		runtimePath = filepath.Join(runtimeDir, runtimePath)
+		signaturePath = filepath.Join(runtimeDir, signaturePath)
+	}
+
+	sgxs, sig, err := s.loadEnclaveBinaries(rtCfg)
+	if err != nil {
+		return process.Config{}, fmt.Errorf("host/sgx: failed to load enclave/signature: %w", err)
 	}
 
 	return process.Config{
@@ -85,10 +160,8 @@ func (s *sgxProvisioner) getSandboxConfig(rtCfg host.Config, socketPath string, 
 		Args: []string{
 			"--host-socket", socketPath,
 			"--type", "sgxs",
+			"--signature", signaturePath,
 			runtimePath,
-		},
-		BindRO: map[string]string{
-			rtCfg.Path: sandboxMountRuntime,
 		},
 		BindRW: map[string]string{
 			aesmdSocketPath: "/var/run/aesmd/aesm.socket",
@@ -97,7 +170,11 @@ func (s *sgxProvisioner) getSandboxConfig(rtCfg host.Config, socketPath string, 
 			// TODO: Support different kinds of SGX drivers.
 			"/dev/isgx": "/dev/isgx",
 		},
-	}
+		BindData: map[string]io.Reader{
+			runtimePath:   bytes.NewReader(sgxs),
+			signaturePath: bytes.NewReader(sig),
+		},
+	}, nil
 }
 
 func (s *sgxProvisioner) hostInitializer(

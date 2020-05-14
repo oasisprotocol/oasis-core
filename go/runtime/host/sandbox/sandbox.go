@@ -37,7 +37,7 @@ const (
 type Config struct {
 	// GetSandboxConfig is a function that generates the sandbox configuration. In case it is not
 	// specified a default function is used.
-	GetSandboxConfig func(cfg host.Config, socketPath string, runtimeDir string) process.Config
+	GetSandboxConfig func(cfg host.Config, socketPath string, runtimeDir string) (process.Config, error)
 
 	// HostInitializer is a function that additionally initializes the runtime host. In case it is
 	// not specified a default function is used.
@@ -198,7 +198,10 @@ func (r *sandboxedRuntime) startProcess() (err error) {
 		// No sandbox.
 		r.logger.Warn("starting an UNSANDBOXED runtime")
 
-		cfg := r.cfg.GetSandboxConfig(r.rtCfg, hostSocket, runtimeDir)
+		cfg, cErr := r.cfg.GetSandboxConfig(r.rtCfg, hostSocket, runtimeDir)
+		if cErr != nil {
+			return fmt.Errorf("failed to configure process: %w", cErr)
+		}
 
 		p, err = process.NewNaked(cfg)
 		if err != nil {
@@ -206,7 +209,10 @@ func (r *sandboxedRuntime) startProcess() (err error) {
 		}
 	case false:
 		// With sandbox.
-		cfg := r.cfg.GetSandboxConfig(r.rtCfg, bindHostSocketPath, runtimeDir)
+		cfg, cErr := r.cfg.GetSandboxConfig(r.rtCfg, bindHostSocketPath, runtimeDir)
+		if cErr != nil {
+			return fmt.Errorf("failed to configure sandbox: %w", cErr)
+		}
 
 		if cfg.BindRW == nil {
 			cfg.BindRW = make(map[string]string)
@@ -475,13 +481,13 @@ func (r *sandboxedRuntime) manager() {
 func New(cfg Config) (host.Provisioner, error) {
 	// Use a default GetSandboxConfig if none was provided.
 	if cfg.GetSandboxConfig == nil {
-		cfg.GetSandboxConfig = func(cfg host.Config, socketPath string, runtimeDir string) process.Config {
+		cfg.GetSandboxConfig = func(cfg host.Config, socketPath string, runtimeDir string) (process.Config, error) {
 			return process.Config{
 				Path: cfg.Path,
 				Env: map[string]string{
 					"OASIS_WORKER_HOST": socketPath,
 				},
-			}
+			}, nil
 		}
 	}
 	// Use a default HostInitializer if none was provided.

@@ -12,7 +12,12 @@ use failure::Fallible;
 /// Runtime loader.
 pub trait Loader {
     /// Load and run the specified runtime.
-    fn run(&self, filename: String, host_socket: String) -> Fallible<()>;
+    fn run(
+        &self,
+        filename: String,
+        signature_filename: Option<&str>,
+        host_socket: String,
+    ) -> Fallible<()>;
 }
 
 // Re-exports.

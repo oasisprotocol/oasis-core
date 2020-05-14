@@ -70,11 +70,6 @@ var (
 	}
 
 	mrSignerBlacklist = make(map[sgx.MrSigner]bool)
-
-	// FortanixTestMrSigner is the MRSIGNER value corresponding to the Fortanix
-	// test signing key that is used by default if no other signing key is
-	// specified.
-	FortanixTestMrSigner sgx.MrSigner
 )
 
 // ISVEnclaveQuoteStatus is the status of an enclave quote.
@@ -421,7 +416,7 @@ func UnsetAllowDebugEnclaves() {
 func BuildMrSignerBlacklist(allowTestKeys bool) {
 	if !allowTestKeys {
 		for _, v := range []string{
-			FortanixTestMrSigner.String(),
+			sgx.FortanixDummyMrSigner.String(),
 		} {
 			var signer sgx.MrSigner
 			if err := signer.UnmarshalHex(v); err != nil {
@@ -433,9 +428,6 @@ func BuildMrSignerBlacklist(allowTestKeys bool) {
 }
 
 func init() {
-	// Fortanix test key.
-	_ = FortanixTestMrSigner.UnmarshalHex("9affcfae47b848ec2caf1c49b4b283531e1cc425f93582b36806e52a43d78d1a")
-
 	for k, v := range isvQuoteFwdMap {
 		isvQuoteRevMap[v] = k
 	}

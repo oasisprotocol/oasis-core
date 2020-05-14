@@ -6,9 +6,9 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/hex"
+	"fmt"
 	"io"
-
-	"github.com/pkg/errors"
+	"math/big"
 )
 
 const (
@@ -20,7 +20,35 @@ const (
 
 	// enclaveIdentitySize is the total size of EnclaveIdentity in bytes.
 	enclaveIdentitySize = MrSignerSize + MrEnclaveSize
+
+	// ModulusSize is the required RSA modulus size in bits.
+	ModulusSize = 3072
+
+	modulusBytes = ModulusSize / 8
 )
+
+// AttributesFlags is attributes flags inside enclave report attributes.
+type AttributesFlags uint64
+
+// Predefined enclave report attributes flags.
+const (
+	AttributeInit          AttributesFlags = 0b0000_0001
+	AttributeDebug         AttributesFlags = 0b0000_0010
+	AttributeMode64Bit     AttributesFlags = 0b0000_0100
+	AttributeProvisionKey  AttributesFlags = 0b0001_0000
+	AttributeEInitTokenKey AttributesFlags = 0b0010_0000
+)
+
+// Attributes is a SGX enclave attributes value inside report.
+type Attributes struct {
+	Flags AttributesFlags
+	Xfrm  uint64
+}
+
+// GetFlagInit returns value of given flag attribute of the Report.
+func (a AttributesFlags) Contains(flag AttributesFlags) bool {
+	return (uint64(a) & uint64(flag)) != 0
+}
 
 // Mrenclave is a SGX enclave identity register value (MRENCLAVE).
 type MrEnclave [MrEnclaveSize]byte
@@ -34,7 +62,7 @@ func (m *MrEnclave) MarshalBinary() (data []byte, err error) {
 // UnmarshalBinary decodes a binary marshaled Mrenclave.
 func (m *MrEnclave) UnmarshalBinary(data []byte) error {
 	if len(data) != MrEnclaveSize {
-		return errors.New("sgx: malformed MRENCLAVE")
+		return fmt.Errorf("sgx: malformed MRENCLAVE")
 	}
 
 	copy(m[:], data)
@@ -70,7 +98,7 @@ readLoop:
 		case io.EOF:
 			break readLoop
 		default:
-			return errors.Wrap(err, "sgx: failed to read .sgxs")
+			return fmt.Errorf("sgx: failed to read .sgxs: %w", err)
 		}
 	}
 
@@ -102,7 +130,7 @@ func (m *MrSigner) MarshalBinary() (data []byte, err error) {
 // UnmarshalBinary decodes a binary marshaled MrSigner.
 func (m *MrSigner) UnmarshalBinary(data []byte) error {
 	if len(data) != MrSignerSize {
-		return errors.New("sgx: malformed MRSIGNER")
+		return fmt.Errorf("sgx: malformed MRSIGNER")
 	}
 
 	copy(m[:], data)
@@ -122,20 +150,57 @@ func (m *MrSigner) UnmarshalHex(text string) error {
 
 // FromPublicKey derives a MrSigner from a RSA public key.
 func (m *MrSigner) FromPublicKey(pk *rsa.PublicKey) error {
-	const modulusBits = 3072 // Hardware constraint.
-	if pk.Size() != modulusBits/8 {
-		return errors.New("sgx: invalid RSA public key for SGX signing")
-	}
-
 	// The MRSIGNER is the SHA256 digest of the little endian representation
 	// of the RSA public key modulus.
-	modulus := pk.N.Bytes()
-	for left, right := 0, len(modulus)-1; left < right; left, right = left+1, right-1 {
-		modulus[left], modulus[right] = modulus[right], modulus[left]
+	modulus, err := To3072le(pk.N, false)
+	if err != nil {
+		return err
 	}
 
 	sum := sha256.Sum256(modulus)
 	return m.UnmarshalBinary(sum[:])
+}
+
+// To3072le converts a big.Int to a 3072 bit little endian representation,
+// padding if allowed AND required.
+func To3072le(z *big.Int, mayPad bool) ([]byte, error) {
+	buf := z.Bytes()
+
+	sz := len(buf)
+	if sz != modulusBytes {
+		padLen := modulusBytes - sz
+		if !mayPad || padLen < 0 {
+			return nil, fmt.Errorf("sgx: big int is not %v bits: %v", ModulusSize, sz)
+		}
+
+		// Pad before reversing.
+		padded := make([]byte, padLen, modulusBytes)
+		buf = append(padded, buf...)
+	}
+
+	buf = reverseBuffer(buf)
+
+	return buf, nil
+}
+
+// From3072le converts a 3072 bit buffer to the corresponding big.Int, assuming
+// that the buffer is in little endian representation.
+func From3072le(b []byte) (*big.Int, error) {
+	if sz := len(b); sz != modulusBytes {
+		return nil, fmt.Errorf("sgx: buffer is not %v bits: %v", modulusBytes, sz)
+	}
+
+	buf := reverseBuffer(b)
+	var ret big.Int
+	return ret.SetBytes(buf), nil
+}
+
+func reverseBuffer(b []byte) []byte {
+	buf := append([]byte{}, b...)
+	for left, right := 0, len(buf)-1; left < right; left, right = left+1, right-1 {
+		buf[left], buf[right] = buf[right], buf[left]
+	}
+	return buf
 }
 
 // String returns the string representation of a MrSigner.
@@ -158,13 +223,13 @@ func (id EnclaveIdentity) MarshalText() (data []byte, err error) {
 func (id *EnclaveIdentity) UnmarshalText(text []byte) error {
 	b, err := base64.StdEncoding.DecodeString(string(text))
 	if err != nil {
-		return errors.Wrap(err, "sgx: malformed EnclaveIdentity")
+		return fmt.Errorf("sgx: malformed EnclaveIdentity: %w", err)
 	}
 	if err := id.MrEnclave.UnmarshalBinary(b[:MrEnclaveSize]); err != nil {
-		return errors.Wrap(err, "sgx: malformed MrEnclave in EnclaveIdentity")
+		return fmt.Errorf("sgx: malformed MrEnclave in EnclaveIdentity: %w", err)
 	}
 	if err := id.MrSigner.UnmarshalBinary(b[MrEnclaveSize:]); err != nil {
-		return errors.Wrap(err, "sgx: malformed MrSigner in EnclaveIdentity")
+		return fmt.Errorf("sgx: malformed MrSigner in EnclaveIdentity: %w", err)
 	}
 
 	return nil
@@ -174,7 +239,7 @@ func (id *EnclaveIdentity) UnmarshalText(text []byte) error {
 func (id *EnclaveIdentity) UnmarshalHex(text string) error {
 	b, err := hex.DecodeString(text)
 	if err != nil || len(b) != enclaveIdentitySize {
-		return errors.Wrap(err, "sgx: malformed EnclaveIdentity")
+		return fmt.Errorf("sgx: malformed EnclaveIdentity: %w", err)
 	}
 
 	copy(id.MrEnclave[:], b[:MrEnclaveSize])
