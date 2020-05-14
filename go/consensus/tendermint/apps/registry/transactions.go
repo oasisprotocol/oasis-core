@@ -321,7 +321,7 @@ func (app *registryApplication) registerNode( // nolint: gocyclo
 
 	if isNewNode || isExpiredNode {
 		// Node doesn't exist (or is expired). Create node.
-		if err = state.SetNode(ctx, newNode, sigNode); err != nil {
+		if err = state.SetNode(ctx, existingNode, newNode, sigNode); err != nil {
 			ctx.Logger().Error("RegisterNode: failed to create node",
 				"err", err,
 				"node", newNode,
@@ -364,7 +364,7 @@ func (app *registryApplication) registerNode( // nolint: gocyclo
 			)
 			return err
 		}
-		if err = state.SetNode(ctx, newNode, sigNode); err != nil {
+		if err = state.SetNode(ctx, existingNode, newNode, sigNode); err != nil {
 			ctx.Logger().Error("RegisterNode: failed to update node",
 				"err", err,
 				"node", newNode,
