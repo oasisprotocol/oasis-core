@@ -27,7 +27,12 @@ import (
 	cmdSigner "github.com/oasislabs/oasis-core/go/oasis-node/cmd/common/signer"
 )
 
-const cfgClientCertificate = "client.certificate"
+const (
+	cfgClientCertificate = "client.certificate"
+
+	// clientCommonName is the common name on the client TLS certificates.
+	clientCommonName = "remote-signer-client"
+)
 
 var (
 	rootCmd = &cobra.Command{
@@ -131,7 +136,7 @@ func doClientInit(cmd *cobra.Command, args []string) {
 		_, err = tls.LoadOrGenerate(
 			filepath.Join(dataDir, "remote_signer_client_cert.pem"),
 			filepath.Join(dataDir, "remote_signer_client_key.pem"),
-			"remote-signer-client",
+			clientCommonName,
 		)
 		return err
 	}(); err != nil {
@@ -172,10 +177,11 @@ func runRoot(cmd *cobra.Command, args []string) error {
 
 	// Initialize the gRPC server.
 	svrCfg := &grpc.ServerConfig{
-		Name:     "remote-signer",
-		Port:     uint16(viper.GetInt(cmdGrpc.CfgServerPort)),
-		Identity: &identity.Identity{},
-		AuthFunc: peerCertAuth.AuthFunc,
+		Name:             "remote-signer",
+		Port:             uint16(viper.GetInt(cmdGrpc.CfgServerPort)),
+		Identity:         &identity.Identity{},
+		AuthFunc:         peerCertAuth.AuthFunc,
+		ClientCommonName: clientCommonName,
 	}
 	svrCfg.Identity.SetTLSCertificate(cert)
 	svr, err := grpc.NewServer(svrCfg)

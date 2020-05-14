@@ -220,15 +220,6 @@ func (args *argBuilder) workerCommonSentryAddresses(addrs []string) *argBuilder 
 	return args
 }
 
-func (args *argBuilder) workerCommonSentryCertFiles(certFiles []string) *argBuilder {
-	for _, certFile := range certFiles {
-		args.vec = append(args.vec, []string{
-			"--" + workerCommon.CfgSentryCertFiles, certFile,
-		}...)
-	}
-	return args
-}
-
 func (args *argBuilder) workerSentryGrpcClientAddress(addrs []string) *argBuilder {
 	for _, addr := range addrs {
 		args.vec = append(args.vec, []string{
@@ -379,12 +370,11 @@ func (args *argBuilder) iasSPID(spid []byte) *argBuilder {
 }
 
 func (args *argBuilder) addSentries(sentries []*Sentry) *argBuilder {
-	var addrs, certFiles []string
+	var addrs []string
 	for _, sentry := range sentries {
-		addrs = append(addrs, fmt.Sprintf("127.0.0.1:%d", sentry.controlPort))
-		certFiles = append(certFiles, sentry.TLSCertPath())
+		addrs = append(addrs, fmt.Sprintf("%s@127.0.0.1:%d", sentry.tlsPublicKey.String(), sentry.controlPort))
 	}
-	return args.workerCommonSentryAddresses(addrs).workerCommonSentryCertFiles(certFiles)
+	return args.workerCommonSentryAddresses(addrs)
 }
 
 func (args *argBuilder) addValidatorsAsSentryUpstreams(validators []*Validator) *argBuilder {

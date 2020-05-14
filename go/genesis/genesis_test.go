@@ -1,7 +1,6 @@
 package genesis
 
 import (
-	"crypto/ed25519"
 	"encoding/hex"
 	"math"
 	"testing"
@@ -14,7 +13,6 @@ import (
 	"github.com/oasislabs/oasis-core/go/common/crypto/hash"
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
 	memorySigner "github.com/oasislabs/oasis-core/go/common/crypto/signature/signers/memory"
-	"github.com/oasislabs/oasis-core/go/common/crypto/tls"
 	"github.com/oasislabs/oasis-core/go/common/entity"
 	"github.com/oasislabs/oasis-core/go/common/node"
 	consensus "github.com/oasislabs/oasis-core/go/consensus/genesis"
@@ -143,6 +141,7 @@ func TestGenesisSanityCheck(t *testing.T) {
 	nodeSigner := memorySigner.NewTestSigner("node genesis sanity checks signer")
 	nodeConsensusSigner := memorySigner.NewTestSigner("node consensus genesis sanity checks signer")
 	nodeP2PSigner := memorySigner.NewTestSigner("node P2P genesis sanity checks signer")
+	nodeTLSSigner := memorySigner.NewTestSigner("node TLS genesis sanity checks signer")
 	validPK := signer.Public()
 	var validNS common.Namespace
 	_ = validNS.UnmarshalBinary(validPK[:])
@@ -217,10 +216,6 @@ func TestGenesisSanityCheck(t *testing.T) {
 	}
 	signedTestRuntime := signRuntimeOrDie(signer, testRuntime)
 
-	dummyCert, err := tls.Generate("genesis sanity check dummy cert")
-	if err != nil {
-		panic(err)
-	}
 	var testConsensusAddress node.ConsensusAddress
 	_ = testConsensusAddress.UnmarshalText([]byte("AAAAAAAAAAAAAAAAAAAABBBBBBBBBBBBBBBBBBBBBBA=@127.0.0.1:1234"))
 	var testAddress node.Address
@@ -231,10 +226,10 @@ func TestGenesisSanityCheck(t *testing.T) {
 		EntityID:          testEntity.ID,
 		Expiration:        10,
 		Roles:             node.RoleValidator,
-		Committee: node.CommitteeInfo{
-			Certificate: dummyCert.Certificate[0],
-			Addresses: []node.CommitteeAddress{
-				{Certificate: dummyCert.Certificate[0], Address: testAddress},
+		TLS: node.TLSInfo{
+			PubKey: nodeTLSSigner.Public(),
+			Addresses: []node.TLSAddress{
+				{PubKey: nodeTLSSigner.Public(), Address: testAddress},
 			},
 		},
 		P2P: node.P2PInfo{
@@ -246,7 +241,6 @@ func TestGenesisSanityCheck(t *testing.T) {
 			Addresses: []node.ConsensusAddress{testConsensusAddress},
 		},
 	}
-	nodeTLSSigner := memorySigner.NewFromRuntime(dummyCert.PrivateKey.(ed25519.PrivateKey))
 	nodeSigners := []signature.Signer{
 		nodeSigner,
 		nodeP2PSigner,
@@ -324,7 +318,7 @@ func TestGenesisSanityCheck(t *testing.T) {
 	// First we define a helper function for calling the SanityCheck() on RuntimeStates.
 	rtsSanityCheck := func(g roothashAPI.Genesis, isGenesis bool) error {
 		for _, rts := range g.RuntimeStates {
-			if err = rts.SanityCheck(isGenesis); err != nil {
+			if err := rts.SanityCheck(isGenesis); err != nil {
 				return err
 			}
 		}
@@ -418,7 +412,7 @@ func TestGenesisSanityCheck(t *testing.T) {
 
 	d = *testDoc
 	te = *testEntity
-	signedBrokenEntity, err = entity.SignEntity(signer, signature.NewContext("genesis sanity check invalid ctx"), &te)
+	signedBrokenEntity, err := entity.SignEntity(signer, signature.NewContext("genesis sanity check invalid ctx"), &te)
 	if err != nil {
 		panic(err)
 	}
@@ -527,12 +521,12 @@ func TestGenesisSanityCheck(t *testing.T) {
 
 	d = *testDoc
 	tn = *testNode
-	tn.Committee.Certificate = []byte{1, 2, 3}
+	tn.TLS.PubKey = signature.PublicKey{}
 	signedBrokenTestNode = signNodeOrDie(nodeSigners, &tn)
 	d.Registry.Entities = []*entity.SignedEntity{signedEntityWithTestNode}
 	d.Registry.Runtimes = []*registry.SignedRuntime{signedTestKMRuntime}
 	d.Registry.Nodes = []*node.MultiSignedNode{signedBrokenTestNode}
-	require.Error(d.SanityCheck(), "node with invalid committee certificate should be rejected")
+	require.Error(d.SanityCheck(), "node with invalid TLS public key should be rejected")
 
 	d = *testDoc
 	tn = *testNode

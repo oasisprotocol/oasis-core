@@ -100,12 +100,12 @@ func getNodeDesc(rng *rand.Rand, nodeIdentity *identity.Identity, entityID signa
 		EntityID:          entityID,
 		Expiration:        0,
 		Roles:             availableRoles[rng.Intn(len(availableRoles))],
-		Committee: node.CommitteeInfo{
-			Certificate: nodeIdentity.GetTLSCertificate().Certificate[0],
-			Addresses: []node.CommitteeAddress{
+		TLS: node.TLSInfo{
+			PubKey: nodeIdentity.GetTLSSigner().Public(),
+			Addresses: []node.TLSAddress{
 				{
-					Certificate: nodeIdentity.GetTLSCertificate().Certificate[0],
-					Address:     nodeAddr,
+					PubKey:  nodeIdentity.GetTLSSigner().Public(),
+					Address: nodeAddr,
 				},
 			},
 		},

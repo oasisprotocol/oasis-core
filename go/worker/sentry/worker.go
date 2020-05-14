@@ -40,7 +40,6 @@ type Worker struct {
 	grpcServer *grpc.Server
 
 	quitCh chan struct{}
-	initCh chan struct{}
 
 	logger *logging.Logger
 }
@@ -71,7 +70,14 @@ func (w *Worker) Start() error {
 		return err
 	}
 
-	close(w.initCh)
+	// Stop the gRPC server when the worker quits.
+	go func() {
+		defer close(w.quitCh)
+
+		<-w.grpcWorker.Quit()
+		w.logger.Debug("sentry gRPC worker quit, stopping sentry gRPC server")
+		w.grpcServer.Stop()
+	}()
 
 	return nil
 }
@@ -84,8 +90,7 @@ func (w *Worker) Stop() {
 	}
 
 	w.grpcWorker.Stop()
-	w.grpcServer.Stop()
-	close(w.quitCh)
+	// The gRPC server will terminate once the worker quits.
 }
 
 // Enabled returns true if worker is enabled.
@@ -114,7 +119,6 @@ func New(backend api.Backend, identity *identity.Identity) (*Worker, error) {
 		enabled: Enabled(),
 		backend: backend,
 		quitCh:  make(chan struct{}),
-		initCh:  make(chan struct{}),
 		logger:  logging.GetLogger("worker/sentry"),
 	}
 
@@ -138,12 +142,6 @@ func New(backend api.Backend, identity *identity.Identity) (*Worker, error) {
 		return nil, fmt.Errorf("worker/sentry: failed to create a new sentry grpc worker: %w", err)
 	}
 	w.grpcWorker = sentryGrpcWorker
-
-	// Stop in case of grpc/worker quitting.
-	go func() {
-		<-w.grpcWorker.Quit()
-		w.Stop()
-	}()
 
 	return w, nil
 }

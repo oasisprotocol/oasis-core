@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"github.com/oasislabs/oasis-core/go/common"
-	"github.com/oasislabs/oasis-core/go/common/crypto/hash"
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
 	"github.com/oasislabs/oasis-core/go/common/entity"
 	"github.com/oasislabs/oasis-core/go/common/logging"
@@ -147,8 +146,7 @@ func SanityCheckNodes(
 ) (NodeLookup, error) { // nolint: gocyclo
 
 	nodeLookup := &sanityCheckNodeLookup{
-		nodes:           make(map[signature.PublicKey]*node.Node),
-		nodesCertHashes: make(map[hash.Hash]*node.Node),
+		nodes: make(map[signature.PublicKey]*node.Node),
 	}
 
 	for _, signedNode := range nodes {
@@ -186,10 +184,8 @@ func SanityCheckNodes(
 		// Add validated node to nodeLookup.
 		nodeLookup.nodes[node.Consensus.ID] = node
 		nodeLookup.nodes[node.P2P.ID] = node
+		nodeLookup.nodes[node.TLS.PubKey] = node
 		nodeLookup.nodesList = append(nodeLookup.nodesList, node)
-
-		h := hash.NewFromBytes(node.Committee.Certificate)
-		nodeLookup.nodesCertHashes[h] = node
 	}
 
 	return nodeLookup, nil
@@ -382,24 +378,13 @@ func (r *sanityCheckRuntimeLookup) AllRuntimes(ctx context.Context) ([]*Runtime,
 
 // Node lookup used in sanity checks.
 type sanityCheckNodeLookup struct {
-	nodes           map[signature.PublicKey]*node.Node
-	nodesCertHashes map[hash.Hash]*node.Node
+	nodes map[signature.PublicKey]*node.Node
 
 	nodesList []*node.Node
 }
 
-func (n *sanityCheckNodeLookup) NodeByConsensusOrP2PKey(ctx context.Context, key signature.PublicKey) (*node.Node, error) {
+func (n *sanityCheckNodeLookup) NodeBySubKey(ctx context.Context, key signature.PublicKey) (*node.Node, error) {
 	node, ok := n.nodes[key]
-	if !ok {
-		return nil, ErrNoSuchNode
-	}
-	return node, nil
-}
-
-func (n *sanityCheckNodeLookup) NodeByCertificate(ctx context.Context, cert []byte) (*node.Node, error) {
-	h := hash.NewFromBytes(cert)
-
-	node, ok := n.nodesCertHashes[h]
 	if !ok {
 		return nil, ErrNoSuchNode
 	}

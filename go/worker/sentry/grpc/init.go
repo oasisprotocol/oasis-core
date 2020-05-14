@@ -4,13 +4,11 @@ package grpc
 import (
 	"context"
 	tlsPkg "crypto/tls"
-	"crypto/x509"
 	"fmt"
 
 	flag "github.com/spf13/pflag"
 	"github.com/spf13/viper"
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/resolver/manual"
 
@@ -74,35 +72,32 @@ func initConnection(ctx context.Context, logger *logging.Logger, ident *identity
 		"upstream_node_id", upstreamNodeIDRaw,
 	)
 
-	// Get upstream node's certificates.
-	upstreamCerts, err := backend.GetUpstreamTLSCertificates(ctx)
+	// Get upstream node's TLS public keys.
+	upstreamPubKeys, err := backend.GetUpstreamTLSPubKeys(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get upstream node's TLS certificates: %w", err)
+		return nil, fmt.Errorf("failed to get upstream node's TLS public keys: %w", err)
 	}
-	if len(upstreamCerts) == 0 {
-		return nil, fmt.Errorf("upstream node has no defined TLS certificates")
+	if len(upstreamPubKeys) == 0 {
+		return nil, fmt.Errorf("upstream node has no defined TLS public keys")
 	}
-	logger.Info("found certificates for upstream node",
-		"num_certs", len(upstreamCerts),
+	logger.Info("found public keys for upstream node",
+		"num_keys", len(upstreamPubKeys),
 	)
 
-	certPool := x509.NewCertPool()
-	for _, cert := range upstreamCerts {
-		// Parse cert and add it to the pool.
-		parsedCert, grr := x509.ParseCertificate(cert)
-		if grr != nil {
-			// This should never happen.
-			return nil, fmt.Errorf("unable to parse certificate: %w", grr)
-		}
-		certPool.AddCert(parsedCert)
+	pubKeys := make(map[signature.PublicKey]bool)
+	for _, pk := range upstreamPubKeys {
+		pubKeys[pk] = true
 	}
-	creds := credentials.NewTLS(&tlsPkg.Config{
-		RootCAs:    certPool,
-		ServerName: identity.CommonName,
+	creds, err := cmnGrpc.NewClientCreds(&cmnGrpc.ClientOptions{
+		CommonName:    identity.CommonName,
+		ServerPubKeys: pubKeys,
 		GetClientCertificate: func(cri *tlsPkg.CertificateRequestInfo) (*tlsPkg.Certificate, error) {
 			return ident.GetTLSCertificate(), nil
 		},
 	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to create TLS credentials: %w", err)
+	}
 
 	// Dial node
 	manualResolver := manual.NewBuilderWithScheme("oasis-core-resolver")
@@ -123,9 +118,9 @@ func initConnection(ctx context.Context, logger *logging.Logger, ident *identity
 	manualResolver.UpdateState(resolverState)
 
 	return &upstreamConn{
-		nodeID: upstreamNodeID,
-		certs:  upstreamCerts,
-		conn:   conn,
+		nodeID:  upstreamNodeID,
+		pubKeys: upstreamPubKeys,
+		conn:    conn,
 	}, nil
 }
 

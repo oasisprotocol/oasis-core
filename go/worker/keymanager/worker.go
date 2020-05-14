@@ -553,9 +553,8 @@ func (crw *clientRuntimeWatcher) updateExternalServicePolicyLocked(snapshot *com
 	}
 
 	// Apply rules for configured sentry nodes.
-	sentryCerts := crw.w.commonWorker.GetConfig().SentryCertificates
-	for _, cert := range sentryCerts {
-		sentryNodesPolicy.AddCertPolicy(&policy, cert)
+	for _, addr := range crw.w.commonWorker.GetConfig().SentryAddresses {
+		sentryNodesPolicy.AddPublicKeyPolicy(&policy, addr.PubKey)
 	}
 
 	crw.w.grpcPolicy.SetAccessPolicy(policy, crw.node.Runtime.ID())

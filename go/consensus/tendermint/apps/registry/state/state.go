@@ -1,13 +1,11 @@
 package state
 
 import (
-	"bytes"
 	"context"
 	"errors"
 
 	"github.com/oasislabs/oasis-core/go/common"
 	"github.com/oasislabs/oasis-core/go/common/cbor"
-	"github.com/oasislabs/oasis-core/go/common/crypto/hash"
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
 	"github.com/oasislabs/oasis-core/go/common/entity"
 	"github.com/oasislabs/oasis-core/go/common/keyformat"
@@ -61,20 +59,15 @@ var (
 	//
 	// Value is binary signature.PublicKey (node ID).
 	keyMapKeyFmt = keyformat.New(0x17, &signature.PublicKey{})
-	// certificateMapKeyFmt is the key format used for certificate-to-node-id map.
-	// This stores the hash-of-certificate to Node ID mappings.
-	//
-	// Value is binary signature.PublicKey (node ID).
-	certificateMapKeyFmt = keyformat.New(0x18, &hash.Hash{})
 	// suspendedRuntimeKeyFmt is the key format used for suspended runtimes.
 	//
 	// Value is CBOR-serialized signed runtime.
-	suspendedRuntimeKeyFmt = keyformat.New(0x19, &common.Namespace{})
+	suspendedRuntimeKeyFmt = keyformat.New(0x18, &common.Namespace{})
 	// signedRuntimeByEntityKeyFmt is the key format used for signed runtime by entity
 	// index.
 	//
 	// Value is empty.
-	signedRuntimeByEntityKeyFmt = keyformat.New(0x1a, &signature.PublicKey{}, &common.Namespace{})
+	signedRuntimeByEntityKeyFmt = keyformat.New(0x19, &signature.PublicKey{}, &common.Namespace{})
 )
 
 // ImmutableState is the immutable registry state wrapper.
@@ -520,32 +513,9 @@ func (s *ImmutableState) ConsensusParameters(ctx context.Context) (*registry.Con
 	return &params, nil
 }
 
-// NodeByConsensusOrP2PKey looks up a specific node by its consensus or P2P key.
-func (s *ImmutableState) NodeByConsensusOrP2PKey(ctx context.Context, key signature.PublicKey) (*node.Node, error) {
+// NodeBySubKey looks up a specific node by its consensus, P2P or TLS key.
+func (s *ImmutableState) NodeBySubKey(ctx context.Context, key signature.PublicKey) (*node.Node, error) {
 	rawID, err := s.is.Get(ctx, keyMapKeyFmt.Encode(&key))
-	if err != nil {
-		return nil, abciAPI.UnavailableStateError(err)
-	}
-	if rawID == nil {
-		return nil, registry.ErrNoSuchNode
-	}
-
-	var id signature.PublicKey
-	if err := id.UnmarshalBinary(rawID); err != nil {
-		return nil, abciAPI.UnavailableStateError(err)
-	}
-	return s.Node(ctx, id)
-}
-
-// Hashes a node's committee certificate into a key for the certificate to node ID map.
-func nodeCertificateToMapKey(cert []byte) hash.Hash {
-	return hash.NewFromBytes(cert)
-}
-
-// NodeByCertificate looks up a specific node by its certificate.
-func (s *ImmutableState) NodeByCertificate(ctx context.Context, cert []byte) (*node.Node, error) {
-	certHash := nodeCertificateToMapKey(cert)
-	rawID, err := s.is.Get(ctx, certificateMapKeyFmt.Encode(&certHash))
 	if err != nil {
 		return nil, abciAPI.UnavailableStateError(err)
 	}
@@ -649,15 +619,13 @@ func (s *MutableState) SetNode(ctx context.Context, existingNode *node.Node, nod
 	}
 
 	// Committee TLS key.
-	if existingNode != nil && !bytes.Equal(existingNode.Committee.Certificate, node.Committee.Certificate) {
+	if existingNode != nil && !existingNode.TLS.PubKey.Equal(node.TLS.PubKey) {
 		// Remove old TLS key mapping if it has changed.
-		certHash := nodeCertificateToMapKey(existingNode.Committee.Certificate)
-		if err = s.ms.Remove(ctx, certificateMapKeyFmt.Encode(&certHash)); err != nil {
+		if err = s.ms.Remove(ctx, keyMapKeyFmt.Encode(&existingNode.TLS.PubKey)); err != nil {
 			return abciAPI.UnavailableStateError(err)
 		}
 	}
-	certHash := nodeCertificateToMapKey(node.Committee.Certificate)
-	if err = s.ms.Insert(ctx, certificateMapKeyFmt.Encode(&certHash), rawNodeID); err != nil {
+	if err = s.ms.Insert(ctx, keyMapKeyFmt.Encode(&node.TLS.PubKey), rawNodeID); err != nil {
 		return abciAPI.UnavailableStateError(err)
 	}
 
@@ -687,9 +655,7 @@ func (s *MutableState) RemoveNode(ctx context.Context, node *node.Node) error {
 	if err := s.ms.Remove(ctx, keyMapKeyFmt.Encode(&node.P2P.ID)); err != nil {
 		return abciAPI.UnavailableStateError(err)
 	}
-
-	certHash := nodeCertificateToMapKey(node.Committee.Certificate)
-	if err := s.ms.Remove(ctx, certificateMapKeyFmt.Encode(&certHash)); err != nil {
+	if err := s.ms.Remove(ctx, keyMapKeyFmt.Encode(&node.TLS.PubKey)); err != nil {
 		return abciAPI.UnavailableStateError(err)
 	}
 

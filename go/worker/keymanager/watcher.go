@@ -74,9 +74,8 @@ func (knw *kmNodeWatcher) watchNodes() {
 		// Rebuild the access policy, something has changed.
 		policy := accessctl.NewPolicy()
 
-		sentryCerts := knw.w.commonWorker.GetConfig().SentryCertificates
-		for _, cert := range sentryCerts {
-			sentryNodesPolicy.AddCertPolicy(&policy, cert)
+		for _, addr := range knw.w.commonWorker.GetConfig().SentryAddresses {
+			sentryNodesPolicy.AddPublicKeyPolicy(&policy, addr.PubKey)
 		}
 
 		var nodes []*node.Node

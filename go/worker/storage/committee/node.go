@@ -317,9 +317,8 @@ func (n *Node) updateExternalServicePolicyLocked(snapshot *committee.EpochSnapsh
 	policy := accessctl.NewPolicy()
 
 	// Add policy for configured sentry nodes.
-	sentryCerts := n.workerCommonCfg.SentryCertificates
-	for _, cert := range sentryCerts {
-		sentryNodesPolicy.AddCertPolicy(&policy, cert)
+	for _, addr := range n.workerCommonCfg.SentryAddresses {
+		sentryNodesPolicy.AddPublicKeyPolicy(&policy, addr.PubKey)
 	}
 
 	for _, xc := range snapshot.GetExecutorCommittees() {

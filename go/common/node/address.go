@@ -1,10 +1,7 @@
 package node
 
 import (
-	"bytes"
-	"crypto/x509"
 	"encoding"
-	"encoding/base64"
 	"errors"
 	"fmt"
 	"net"
@@ -20,9 +17,8 @@ var (
 	// ErrConsensusAddressNoID is the error returned when a consensus address
 	// doesn't have the ID@ part.
 	ErrConsensusAddressNoID = errors.New("node: consensus address doesn't have ID@ part")
-	// ErrCommitteeAddressNoCertificate is the error returned when a committee address
-	// doesn't have the Certificate@ part.
-	ErrCommitteeAddressNoCertificate = errors.New("node: certificate address missing Certificate@ part")
+	// ErrTLSAddressNoPubKey is the error returned when a TLS address doesn't have the PubKey@ part.
+	ErrTLSAddressNoPubKey = errors.New("node: TLS address missing PubKey@ part")
 
 	unroutableNetworks []net.IPNet
 
@@ -140,63 +136,61 @@ func (ca *ConsensusAddress) String() string {
 	return fmt.Sprintf("%s@%s", ca.ID, ca.Address)
 }
 
-// CommitteeAddress represents an Oasis committee address that includes a
-// server certificate and a TCP address.
-// NOTE: The address certificate can be different from the actual node
-// certificate to allow using a sentry node's addresses.
-type CommitteeAddress struct {
-	// Certificate is the certificate for establishing TLS connections.
-	Certificate []byte `json:"certificate"`
-	// Address is the address at which the node can be reached
+// TLSAddress represents an Oasis committee address that includes a TLS public key and a TCP
+// address.
+//
+// NOTE: The address TLS public key can be different from the actual node TLS public key to allow
+// using a sentry node's addresses.
+type TLSAddress struct {
+	// PubKey is the public key used for establishing TLS connections.
+	PubKey signature.PublicKey `json:"pub_key"`
+
+	// Address is the address at which the node can be reached.
 	Address Address `json:"address"`
 }
 
-// Equal compares vs another CommitteeInfo for equality.
-func (ca *CommitteeAddress) Equal(other *CommitteeAddress) bool {
-	if !bytes.Equal(ca.Certificate, other.Certificate) {
+// Equal compares vs another TLSAddress for equality.
+func (ta *TLSAddress) Equal(other *TLSAddress) bool {
+	if !ta.PubKey.Equal(other.PubKey) {
 		return false
 	}
-	if !ca.Address.Equal(&other.Address) {
+	if !ta.Address.Equal(&other.Address) {
 		return false
 	}
 	return true
 }
 
-// ParseCertificate returns the parsed x509 certificate.
-func (ca *CommitteeAddress) ParseCertificate() (*x509.Certificate, error) {
-	return x509.ParseCertificate(ca.Certificate)
-}
-
 // MarshalText implements the encoding.TextMarshaler interface.
-func (ca *CommitteeAddress) MarshalText() ([]byte, error) {
-	certificateStr := base64.StdEncoding.EncodeToString(ca.Certificate[:])
-	addrStr, err := ca.Address.MarshalText()
+func (ta *TLSAddress) MarshalText() ([]byte, error) {
+	pubKeyStr, err := ta.PubKey.MarshalText()
 	if err != nil {
-		return nil, fmt.Errorf("node: error marshalling committee address' TCP address: %w", err)
+		return nil, fmt.Errorf("node: error marshalling TLS address' public key: %w", err)
 	}
-	return []byte(fmt.Sprintf("%s@%s", certificateStr, addrStr)), nil
+	addrStr, err := ta.Address.MarshalText()
+	if err != nil {
+		return nil, fmt.Errorf("node: error marshalling TLS address' TCP address: %w", err)
+	}
+	return []byte(fmt.Sprintf("%s@%s", pubKeyStr, addrStr)), nil
 }
 
 // UnmarshalText implements the encoding.TextUnmarshaler interface.
-func (ca *CommitteeAddress) UnmarshalText(text []byte) error {
+func (ta *TLSAddress) UnmarshalText(text []byte) error {
 	spl := strings.Split(string(text), "@")
 	if len(spl) != 2 {
-		return ErrCommitteeAddressNoCertificate
+		return ErrTLSAddressNoPubKey
 	}
-	cert, err := base64.StdEncoding.DecodeString(spl[0])
-	if err != nil {
-		return fmt.Errorf("node: unable to parse committee address' Certificate: %w", err)
+	if err := ta.PubKey.UnmarshalText([]byte(spl[0])); err != nil {
+		return fmt.Errorf("node: unable to parse TLS address' public key: %w", err)
 	}
-	ca.Certificate = cert
-	if err := ca.Address.UnmarshalText([]byte(spl[1])); err != nil {
-		return fmt.Errorf("node: unable to parse committee address' TCP address: %w", err)
+	if err := ta.Address.UnmarshalText([]byte(spl[1])); err != nil {
+		return fmt.Errorf("node: unable to parse TLS address' TCP address: %w", err)
 	}
 	return nil
 }
 
-// String returns a string representation of a committee address.
-func (ca *CommitteeAddress) String() string {
-	return ca.Address.String()
+// String returns a string representation of a TLS address.
+func (ta *TLSAddress) String() string {
+	return ta.Address.String()
 }
 
 func init() {

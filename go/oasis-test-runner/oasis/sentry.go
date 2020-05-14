@@ -18,6 +18,7 @@ type Sentry struct {
 	keymanagerIndices []int
 
 	publicKey     signature.PublicKey
+	tlsPublicKey  signature.PublicKey
 	tmAddress     string
 	consensusPort uint16
 	controlPort   uint16
@@ -123,6 +124,7 @@ func (net *Network) NewSentry(cfg *SentryCfg) (*Sentry, error) {
 		return nil, fmt.Errorf("oasis/sentry: failed to provision sentry identity: %w", err)
 	}
 	sentryPublicKey := sentryIdentity.NodeSigner.Public()
+	sentryTLSPublicKey := sentryIdentity.GetTLSSigner().Public()
 
 	sentry := &Sentry{
 		Node: Node{
@@ -136,6 +138,7 @@ func (net *Network) NewSentry(cfg *SentryCfg) (*Sentry, error) {
 		storageIndices:    cfg.StorageIndices,
 		keymanagerIndices: cfg.KeymanagerIndices,
 		publicKey:         sentryPublicKey,
+		tlsPublicKey:      sentryTLSPublicKey,
 		tmAddress:         crypto.PublicKeyToTendermint(&sentryPublicKey).Address().String(),
 		consensusPort:     net.nextNodePort,
 		controlPort:       net.nextNodePort + 1,

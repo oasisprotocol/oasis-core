@@ -4,7 +4,6 @@ import (
 	"context"
 	cryptorand "crypto/rand"
 	"crypto/tls"
-	"crypto/x509"
 	"fmt"
 	"math/rand"
 	"sync"
@@ -13,7 +12,6 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/resolver/manual"
-	"google.golang.org/grpc/security/advancedtls"
 
 	"github.com/oasislabs/oasis-core/go/common/crypto/mathrand"
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
@@ -152,9 +150,9 @@ type clientConnState struct {
 	node *node.Node
 	conn *grpc.ClientConn
 
-	resolver *manual.Resolver
+	tlsKeys map[signature.PublicKey]bool
 
-	certPool *x509.CertPool
+	resolver *manual.Resolver
 }
 
 // Refresh refreshes the node connection without closing the virtual connection.
@@ -168,23 +166,12 @@ func (cs *clientConnState) Update(n *node.Node) error {
 	// Update node descriptor.
 	cs.node = n
 
-	// Update certificate pool.
-	certPool := x509.NewCertPool()
-	for _, addr := range n.Committee.Addresses {
-		nodeCert, err := addr.ParseCertificate()
-		if err != nil {
-			// This should never fail as the consensus layer should validate certificates.
-			return fmt.Errorf("failed to parse node certificate: %w", err)
-		}
-
-		certPool.AddCert(nodeCert)
-	}
-	cs.certPool = certPool
-
-	// Update addresses. The resolver will propagate addresses to the gRPC load balancer which will
-	// internally update subconns based on address changes.
+	// Update addresses and TLS keys. The resolver will propagate addresses to the gRPC load
+	// balancer which will internally update subconns based on address changes.
 	var resolverState resolver.State
-	for _, addr := range n.Committee.Addresses {
+	cs.tlsKeys = make(map[signature.PublicKey]bool)
+	for _, addr := range n.TLS.Addresses {
+		cs.tlsKeys[addr.PubKey] = true
 		resolverState.Addresses = append(resolverState.Addresses, resolver.Address{Addr: addr.String()})
 	}
 	cs.resolver.UpdateState(resolverState)
@@ -305,9 +292,9 @@ func (cc *committeeClient) updateConnectionLocked(n *node.Node) error {
 	// If the connection to given node already exists, only update its addresses/certificates.
 	var cs *clientConnState
 	if cs = cc.conns[n.ID]; cs != nil {
-		// Only update connections if keys or addresses have changed.
-		if n.Committee.Equal(&cs.node.Committee) {
-			cc.logger.Debug("not updating connection as addresses have not changed",
+		// Only update connections if TLS keys or addresses have changed.
+		if n.TLS.Equal(&cs.node.TLS) {
+			cc.logger.Debug("not updating connection as TLS info has not changed",
 				"node", n,
 			)
 			return nil
@@ -317,15 +304,13 @@ func (cc *committeeClient) updateConnectionLocked(n *node.Node) error {
 		cs = new(clientConnState)
 
 		// Create TLS credentials.
-		opts := advancedtls.ClientOptions{
-			ServerNameOverride: identity.CommonName, // TODO: Consider using a custom VerifyPeer.
-			RootCertificateOptions: advancedtls.RootCertificateOptions{
-				GetRootCAs: func(params *advancedtls.GetRootCAsParams) (*advancedtls.GetRootCAsResults, error) {
-					cc.RLock()
-					defer cc.RUnlock()
-
-					return &advancedtls.GetRootCAsResults{TrustCerts: cs.certPool}, nil
-				},
+		opts := cmnGrpc.ClientOptions{
+			CommonName: identity.CommonName,
+			GetServerPubKeys: func() (map[signature.PublicKey]bool, error) {
+				cc.RLock()
+				keys := cs.tlsKeys
+				cc.RUnlock()
+				return keys, nil
 			},
 		}
 		if cc.clientIdentity != nil {
@@ -339,7 +324,7 @@ func (cc *committeeClient) updateConnectionLocked(n *node.Node) error {
 			}
 		}
 
-		creds, err := advancedtls.NewClientCreds(&opts)
+		creds, err := cmnGrpc.NewClientCreds(&opts)
 		if err != nil {
 			return fmt.Errorf("failed to create TLS client credentials: %w", err)
 		}

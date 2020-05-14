@@ -33,11 +33,11 @@ func registryRegisterNode(svc service.TendermintService, id *identity.Identity, 
 		}
 	}
 
-	var committeeAddresses []node.CommitteeAddress
+	var tlsAddresses []node.TLSAddress
 	for _, addr := range addresses {
-		committeeAddresses = append(committeeAddresses, node.CommitteeAddress{
-			Certificate: id.GetTLSCertificate().Certificate[0],
-			Address:     addr,
+		tlsAddresses = append(tlsAddresses, node.TLSAddress{
+			PubKey:  id.GetTLSSigner().Public(),
+			Address: addr,
 		})
 	}
 
@@ -46,9 +46,9 @@ func registryRegisterNode(svc service.TendermintService, id *identity.Identity, 
 		ID:                id.NodeSigner.Public(),
 		EntityID:          entityID,
 		Expiration:        1000,
-		Committee: node.CommitteeInfo{
-			Certificate: id.GetTLSCertificate().Certificate[0],
-			Addresses:   committeeAddresses,
+		TLS: node.TLSInfo{
+			PubKey:    id.GetTLSSigner().Public(),
+			Addresses: tlsAddresses,
 		},
 		P2P: node.P2PInfo{
 			ID:        id.P2PSigner.Public(),
