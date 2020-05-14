@@ -24,6 +24,17 @@ const (
 )
 
 var (
+	// CommonPoolAccountID signifies the common pool in staking events.
+	// The ID is invalid to prevent it being accidentally used in the
+	// actual ledger.
+	CommonPoolAccountID = signature.NewBlacklistedKey("1abe11edc001ffffffffffffffffffffffffffffffffffffffffffffffffffff")
+
+	// FeeAccumulatorAccountID signifies the staking fee accumulator in
+	// staking events.
+	// The ID is invalid to prevent it being accidentally used in the
+	// actual ledger.
+	FeeAccumulatorAccountID = signature.NewBlacklistedKey("1abe11edfeeaccffffffffffffffffffffffffffffffffffffffffffffffffff")
+
 	// ErrInvalidArgument is the error returned on malformed arguments.
 	ErrInvalidArgument = errors.New(ModuleName, 1, "staking: invalid argument")
 
@@ -164,23 +175,23 @@ type Event struct {
 	EscrowEvent   *EscrowEvent   `json:"escrow,omitempty"`
 }
 
-// AddEscrowEvent is the event emitted when a balance is transfered into a escrow
-// balance.
+// AddEscrowEvent is the event emitted when a balance is transfered into
+// an escrow balance.
 type AddEscrowEvent struct {
 	Owner  signature.PublicKey `json:"owner"`
 	Escrow signature.PublicKey `json:"escrow"`
 	Tokens quantity.Quantity   `json:"tokens"`
 }
 
-// TakeEscrowEvent is the event emitted when balanace is deducted from a escrow
-// balance (stake is slashed).
+// TakeEscrowEvent is the event emitted when balance is deducted from an
+// escrow balance (stake is slashed).
 type TakeEscrowEvent struct {
 	Owner  signature.PublicKey `json:"owner"`
 	Tokens quantity.Quantity   `json:"tokens"`
 }
 
-// ReclaimEscrowEvent is the event emitted when tokens are relaimed from a
-// escrow balance back into the entitie's general balance.
+// ReclaimEscrowEvent is the event emitted when tokens are reclaimed from an
+// escrow balance back into the entity's general balance.
 type ReclaimEscrowEvent struct {
 	Owner  signature.PublicKey `json:"owner"`
 	Escrow signature.PublicKey `json:"escrow"`

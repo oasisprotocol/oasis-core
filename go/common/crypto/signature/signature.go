@@ -666,3 +666,22 @@ func BuildPublicKeyBlacklist(allowTestKeys bool) {
 		blacklistedPublicKeys.Store(pk, true)
 	}
 }
+
+// NewBlacklistedKey returns the PublicKey from the given hex or panics.
+// The given key is also added to the blacklist.
+func NewBlacklistedKey(hex string) PublicKey {
+	var pk PublicKey
+	if err := pk.UnmarshalHex(hex); err != nil {
+		panic(err)
+	}
+
+	// Make sure that the key doesn't already exist in the blacklist.
+	if pk.isBlacklisted() {
+		panic("key already exists in blacklist, use another")
+	}
+
+	// Blacklist key.
+	blacklistedPublicKeys.Store(pk, true)
+
+	return pk
+}
