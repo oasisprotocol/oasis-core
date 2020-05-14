@@ -39,5 +39,5 @@ var (
 
 	// KeyAddEscrow is an ABCI event attribute key for AddEscrow calls
 	// (value is an api.AddEscrowEvent).
-	KeyAddEscrow = []byte("add_escrow")
+	KeyAddEscrow = stakingState.KeyAddEscrow
 )

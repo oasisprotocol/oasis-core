@@ -3,10 +3,12 @@ package staking
 import (
 	"fmt"
 
+	"github.com/oasislabs/oasis-core/go/common/cbor"
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
 	"github.com/oasislabs/oasis-core/go/common/quantity"
 	abciAPI "github.com/oasislabs/oasis-core/go/consensus/tendermint/api"
 	stakingState "github.com/oasislabs/oasis-core/go/consensus/tendermint/apps/staking/state"
+	staking "github.com/oasislabs/oasis-core/go/staking/api"
 )
 
 // disburseFeesP disburses fees to the proposer and persists the voters' and next proposer's shares of the fees.
@@ -72,6 +74,14 @@ func (app *stakingApplication) disburseFeesP(
 		if err = stakeState.SetAccount(ctx, *proposerEntity, acct); err != nil {
 			return fmt.Errorf("failed to set account: %w", err)
 		}
+
+		// Emit transfer event.
+		evt := &staking.TransferEvent{
+			From:   staking.FeeAccumulatorAccountID,
+			To:     *proposerEntity,
+			Tokens: *feeProposerAmt,
+		}
+		ctx.EmitEvent(abciAPI.NewEventBuilder(app.Name()).Attribute(KeyTransfer, cbor.Marshal(evt)))
 	}
 
 	// Put the rest into the common pool (in case there is no proposer entity to pay).
@@ -87,6 +97,14 @@ func (app *stakingApplication) disburseFeesP(
 		if err = stakeState.SetCommonPool(ctx, commonPool); err != nil {
 			return fmt.Errorf("failed to set common pool: %w", err)
 		}
+
+		// Emit transfer event.
+		evt := &staking.TransferEvent{
+			From:   staking.FeeAccumulatorAccountID,
+			To:     staking.CommonPoolAccountID,
+			Tokens: *remaining,
+		}
+		ctx.EmitEvent(abciAPI.NewEventBuilder(app.Name()).Attribute(KeyTransfer, cbor.Marshal(evt)))
 	}
 
 	return nil
@@ -173,6 +191,14 @@ func (app *stakingApplication) disburseFeesVQ(
 				return fmt.Errorf("failed to set next proposer account: %w", err)
 			}
 		}
+
+		// Emit transfer event.
+		evt := &staking.TransferEvent{
+			From:   staking.FeeAccumulatorAccountID,
+			To:     *proposerEntity,
+			Tokens: *nextProposerTotal,
+		}
+		ctx.EmitEvent(abciAPI.NewEventBuilder(app.Name()).Attribute(KeyTransfer, cbor.Marshal(evt)))
 	}
 
 	// Pay the voters.
@@ -188,6 +214,14 @@ func (app *stakingApplication) disburseFeesVQ(
 			if err = stakeState.SetAccount(ctx, voterEntity, acct); err != nil {
 				return fmt.Errorf("failed to set voter %s account: %w", voterEntity, err)
 			}
+
+			// Emit transfer event.
+			evt := &staking.TransferEvent{
+				From:   staking.FeeAccumulatorAccountID,
+				To:     voterEntity,
+				Tokens: *shareVote,
+			}
+			ctx.EmitEvent(abciAPI.NewEventBuilder(app.Name()).Attribute(KeyTransfer, cbor.Marshal(evt)))
 		}
 	}
 
@@ -204,6 +238,14 @@ func (app *stakingApplication) disburseFeesVQ(
 		if err = stakeState.SetCommonPool(ctx, commonPool); err != nil {
 			return fmt.Errorf("failed to set common pool: %w", err)
 		}
+
+		// Emit transfer event.
+		evt := &staking.TransferEvent{
+			From:   staking.FeeAccumulatorAccountID,
+			To:     staking.CommonPoolAccountID,
+			Tokens: *remaining,
+		}
+		ctx.EmitEvent(abciAPI.NewEventBuilder(app.Name()).Attribute(KeyTransfer, cbor.Marshal(evt)))
 	}
 
 	return nil

@@ -22,6 +22,9 @@ import (
 var (
 	// AppName is the ABCI application name.
 	AppName = "100_staking"
+	// KeyAddEscrow is an ABCI event attribute key for AddEscrow calls
+	// (value is an api.AddEscrowEvent).
+	KeyAddEscrow = []byte("add_escrow")
 	// KeyTakeEscrow is an ABCI event attribute key for TakeEscrow calls
 	// (value is an app.TakeEscrowEvent).
 	KeyTakeEscrow = []byte("take_escrow")
@@ -692,7 +695,7 @@ func (s *MutableState) TransferFromCommon(ctx *abciAPI.Context, toID signature.P
 
 		if !ctx.IsCheckOnly() {
 			ev := cbor.Marshal(&staking.TransferEvent{
-				// XXX: Reserve an id for the common pool?
+				From:   staking.CommonPoolAccountID,
 				To:     toID,
 				Tokens: *transfered,
 			})
@@ -710,7 +713,7 @@ func (s *MutableState) TransferFromCommon(ctx *abciAPI.Context, toID signature.P
 // be safe for the caller to roll back to an earlier state tree and continue from
 // there.
 func (s *MutableState) AddRewards(
-	ctx context.Context,
+	ctx *abciAPI.Context,
 	time epochtime.EpochTime,
 	factor *quantity.Quantity,
 	accounts []signature.PublicKey,
@@ -780,6 +783,12 @@ func (s *MutableState) AddRewards(
 			if err = quantity.Move(&ent.Escrow.Active.Balance, commonPool, q); err != nil {
 				return fmt.Errorf("tendermint/staking: failed transferring to active escrow balance from common pool: %w", err)
 			}
+			ev := cbor.Marshal(&staking.AddEscrowEvent{
+				Owner:  staking.CommonPoolAccountID,
+				Escrow: id,
+				Tokens: *q,
+			})
+			ctx.EmitEvent(api.NewEventBuilder(AppName).Attribute(KeyAddEscrow, ev))
 		}
 
 		if com != nil && !com.IsZero() {
@@ -812,7 +821,7 @@ func (s *MutableState) AddRewards(
 
 // AddRewardSingleAttenuated computes, scales, and transfers a staking reward to an active escrow account.
 func (s *MutableState) AddRewardSingleAttenuated(
-	ctx context.Context,
+	ctx *abciAPI.Context,
 	time epochtime.EpochTime,
 	factor *quantity.Quantity,
 	attenuationNumerator, attenuationDenominator int,
@@ -895,6 +904,12 @@ func (s *MutableState) AddRewardSingleAttenuated(
 		if err = quantity.Move(&ent.Escrow.Active.Balance, commonPool, q); err != nil {
 			return fmt.Errorf("tendermint/staking: failed transferring to active escrow balance from common pool: %w", err)
 		}
+		ev := cbor.Marshal(&staking.AddEscrowEvent{
+			Owner:  staking.CommonPoolAccountID,
+			Escrow: account,
+			Tokens: *q,
+		})
+		ctx.EmitEvent(api.NewEventBuilder(AppName).Attribute(KeyAddEscrow, ev))
 	}
 
 	if com != nil && !com.IsZero() {
