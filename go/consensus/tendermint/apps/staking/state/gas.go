@@ -4,10 +4,12 @@ import (
 	"fmt"
 	"math"
 
+	"github.com/oasislabs/oasis-core/go/common/cbor"
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
 	"github.com/oasislabs/oasis-core/go/common/quantity"
 	"github.com/oasislabs/oasis-core/go/consensus/api/transaction"
 	abciAPI "github.com/oasislabs/oasis-core/go/consensus/tendermint/api"
+	staking "github.com/oasislabs/oasis-core/go/staking/api"
 )
 
 // feeAccumulatorKey is the block context key.
@@ -95,6 +97,14 @@ func AuthenticateAndPayFees(
 	if err := state.SetAccount(ctx, id, account); err != nil {
 		return fmt.Errorf("failed to set account: %w", err)
 	}
+
+	// Emit transfer event.
+	ev := cbor.Marshal(&staking.TransferEvent{
+		From:   id,
+		To:     staking.FeeAccumulatorAccountID,
+		Tokens: fee.Amount,
+	})
+	ctx.EmitEvent(abciAPI.NewEventBuilder(AppName).Attribute(KeyTransfer, ev))
 
 	// Configure gas accountant on the context.
 	ctx.SetGasAccountant(abciAPI.NewCompositeGasAccountant(
