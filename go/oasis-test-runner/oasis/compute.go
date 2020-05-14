@@ -95,7 +95,8 @@ func (worker *Compute) startNode() error {
 		if v.kind != registry.KindCompute {
 			continue
 		}
-		args = args.appendComputeNodeRuntime(v)
+		// XXX: could support configurable binary idx if ever needed.
+		args = args.appendComputeNodeRuntime(v, 0)
 	}
 
 	if err := worker.net.startOasisNode(&worker.Node, nil, args); err != nil {

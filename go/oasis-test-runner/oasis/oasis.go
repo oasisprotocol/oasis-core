@@ -68,6 +68,7 @@ type Node struct { // nolint: maligned
 	termErrorOk bool
 	doStartNode func() error
 	isStopping  bool
+	noAutoStart bool
 
 	disableDefaultLogWatcherHandlerFactories bool
 	logWatcherHandlerFactories               []log.WatcherHandlerFactory
@@ -166,6 +167,8 @@ func (n *Node) handleExit(cmdErr error) error {
 type NodeCfg struct { // nolint: maligned
 	AllowEarlyTermination bool
 	AllowErrorTermination bool
+
+	NoAutoStart bool
 
 	DisableDefaultLogWatcherHandlerFactories bool
 	LogWatcherHandlerFactories               []log.WatcherHandlerFactory
@@ -289,7 +292,7 @@ func (net *Network) Runtimes() []*Runtime {
 	return net.runtimes
 }
 
-// Keymanager returns the keymanagers associated with the network.
+// Keymanagers returns the keymanagers associated with the network.
 func (net *Network) Keymanagers() []*Keymanager {
 	return net.keymanagers
 }
@@ -379,7 +382,7 @@ func (net *Network) AddLogWatcher(node *Node) error {
 	return nil
 }
 
-// CloseLogWatchers closes all log watchers and checks if any errors were reported
+// CheckLogWatchers closes all log watchers and checks if any errors were reported
 // while the log watchers were running.
 func (net *Network) CheckLogWatchers() (err error) {
 	for _, w := range net.logWatchers {
@@ -396,7 +399,7 @@ func (net *Network) CheckLogWatchers() (err error) {
 }
 
 // Start starts the network.
-func (net *Network) Start() error {
+func (net *Network) Start() error { // nolint: gocyclo
 	net.logger.Info("starting network")
 
 	// Figure out if the IAS proxy is needed by peeking at all the
@@ -467,16 +470,22 @@ func (net *Network) Start() error {
 		}
 	}
 
-	net.logger.Debug("starting seed node")
-	if err = net.seedNode.startNode(); err != nil {
-		net.logger.Error("failed to start seed node",
-			"err", err,
-		)
-		return err
+	if !net.seedNode.noAutoStart {
+		net.logger.Debug("starting seed node")
+		if err = net.seedNode.startNode(); err != nil {
+			net.logger.Error("failed to start seed node",
+				"err", err,
+			)
+			return err
+		}
 	}
 
 	net.logger.Debug("starting validator node(s)")
 	for _, v := range net.validators {
+		if v.noAutoStart {
+			continue
+		}
+
 		if err = v.startNode(); err != nil {
 			net.logger.Error("failed to start validator",
 				"err", err,
@@ -494,8 +503,12 @@ func (net *Network) Start() error {
 		time.Sleep(validatorStartDelay)
 	}
 
+	net.logger.Debug("starting keymanager(s)")
 	for _, km := range net.keymanagers {
-		net.logger.Debug("starting keymanager")
+		if km.noAutoStart {
+			continue
+		}
+
 		if err = km.startNode(); err != nil {
 			net.logger.Error("failed to start keymanager node",
 				"err", err,
@@ -506,6 +519,10 @@ func (net *Network) Start() error {
 
 	net.logger.Debug("starting storage node(s)")
 	for _, v := range net.storageWorkers {
+		if v.noAutoStart {
+			continue
+		}
+
 		if err = v.startNode(); err != nil {
 			net.logger.Error("failed to start storage worker",
 				"err", err,
@@ -516,6 +533,10 @@ func (net *Network) Start() error {
 
 	net.logger.Debug("starting compute node(s)")
 	for _, v := range net.computeWorkers {
+		if v.noAutoStart {
+			continue
+		}
+
 		if err = v.startNode(); err != nil {
 			net.logger.Error("failed to start compute worker",
 				"err", err,
@@ -526,16 +547,25 @@ func (net *Network) Start() error {
 
 	net.logger.Debug("starting sentry node(s)")
 	for _, v := range net.sentries {
+		if v.noAutoStart {
+			continue
+		}
+
 		if err = v.startNode(); err != nil {
 			net.logger.Error("failed to start sentry node",
 				"err", err,
 			)
 			return err
 		}
+
 	}
 
 	net.logger.Debug("starting client node(s)")
 	for _, v := range net.clients {
+		if v.noAutoStart {
+			continue
+		}
+
 		if err = v.startNode(); err != nil {
 			net.logger.Error("failed to start client node",
 				"err", err,
@@ -546,6 +576,10 @@ func (net *Network) Start() error {
 
 	net.logger.Debug("starting byzantine node(s)")
 	for _, v := range net.byzantine {
+		if v.noAutoStart {
+			continue
+		}
+
 		if err = v.startNode(); err != nil {
 			net.logger.Error("failed to start byzantine node",
 				"err", err,
@@ -554,23 +588,34 @@ func (net *Network) Start() error {
 		}
 	}
 
-	// Use the first validator as a controller.
-	if len(net.validators) >= 1 {
+	// Use the first started validator as a controller.
+	for _, v := range net.validators {
+		if v.noAutoStart {
+			continue
+		}
+
 		if net.controller, err = NewController(net.validators[0].SocketPath()); err != nil {
 			net.logger.Error("failed to create controller",
 				"err", err,
 			)
 			return fmt.Errorf("oasis: failed to create controller: %w", err)
 		}
+		break
 	}
-	// Create a client controller for the first client node.
-	if len(net.clients) >= 1 {
+
+	// Create a client controller for the first started client node.
+	for _, v := range net.clients {
+		if v.noAutoStart {
+			continue
+		}
+
 		if net.clientController, err = NewController(net.clients[0].SocketPath()); err != nil {
 			net.logger.Error("failed to create client controller",
 				"err", err,
 			)
 			return fmt.Errorf("oasis: failed to create client controller: %w", err)
 		}
+		break
 	}
 
 	net.logger.Info("network started")

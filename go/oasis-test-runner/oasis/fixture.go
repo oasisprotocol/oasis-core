@@ -188,9 +188,9 @@ type RuntimeFixture struct { // nolint: maligned
 	Entity     int                  `json:"entity"`
 	Keymanager int                  `json:"keymanager"`
 
-	Binary       string `json:"binary"`
-	GenesisState string `json:"genesis_state"`
-	GenesisRound uint64 `json:"genesis_round"`
+	Binaries     []string `json:"binaries"`
+	GenesisState string   `json:"genesis_state"`
+	GenesisRound uint64   `json:"genesis_round"`
 
 	Executor     registry.ExecutorParameters     `json:"executor"`
 	Merge        registry.MergeParameters        `json:"merge"`
@@ -235,7 +235,7 @@ func (f *RuntimeFixture) Create(netFixture *NetworkFixture, net *Network) (*Runt
 		TxnScheduler:       f.TxnScheduler,
 		Storage:            f.Storage,
 		AdmissionPolicy:    f.AdmissionPolicy,
-		Binary:             f.Binary,
+		Binaries:           f.Binaries,
 		GenesisState:       f.GenesisState,
 		GenesisRound:       f.GenesisRound,
 		Pruner:             f.Pruner,
@@ -271,6 +271,8 @@ type KeymanagerFixture struct {
 	AllowEarlyTermination bool `json:"allow_early_termination"`
 	AllowErrorTermination bool `json:"allow_error_termination"`
 
+	NoAutoStart bool `json:"no_auto_start,omitempty"`
+
 	Sentries []int `json:"sentries,omitempty"`
 
 	// Consensus contains configuration for the consensus backend.
@@ -300,6 +302,7 @@ func (f *KeymanagerFixture) Create(net *Network) (*Keymanager, error) {
 			AllowErrorTermination:      f.AllowErrorTermination,
 			LogWatcherHandlerFactories: f.LogWatcherHandlerFactories,
 			Consensus:                  f.Consensus,
+			NoAutoStart:                f.NoAutoStart,
 		},
 		Runtime:       runtime,
 		Entity:        entity,

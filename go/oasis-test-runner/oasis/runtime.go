@@ -26,9 +26,9 @@ type Runtime struct { // nolint: maligned
 	id   common.Namespace
 	kind registry.RuntimeKind
 
-	binary      string
+	binaries    []string
 	teeHardware node.TEEHardware
-	mrEnclave   *sgx.MrEnclave
+	mrEnclaves  []*sgx.MrEnclave
 	mrSigner    *sgx.MrSigner
 
 	pruner RuntimePrunerCfg
@@ -47,7 +47,7 @@ type RuntimeCfg struct { // nolint: maligned
 	TEEHardware node.TEEHardware
 	MrSigner    *sgx.MrSigner
 
-	Binary       string
+	Binaries     []string
 	GenesisState string
 	GenesisRound uint64
 
@@ -83,9 +83,9 @@ func (rt *Runtime) Kind() registry.RuntimeKind {
 
 // GetEnclaveIdentity returns the runtime's enclave ID.
 func (rt *Runtime) GetEnclaveIdentity() *sgx.EnclaveIdentity {
-	if rt.mrEnclave != nil && rt.mrSigner != nil {
+	if rt.mrEnclaves != nil && rt.mrSigner != nil {
 		return &sgx.EnclaveIdentity{
-			MrEnclave: *rt.mrEnclave,
+			MrEnclave: *rt.mrEnclaves[0],
 			MrSigner:  *rt.mrSigner,
 		}
 	}
@@ -176,22 +176,26 @@ func (net *Network) NewRuntime(cfg *RuntimeCfg) (*Runtime, error) {
 			// TODO: Support genesis state.
 		}
 	}
-	var mrEnclave *sgx.MrEnclave
+	var mrEnclaves []*sgx.MrEnclave
 	if cfg.TEEHardware == node.TEEHardwareIntelSGX {
-		if mrEnclave, err = deriveMrEnclave(cfg.Binary); err != nil {
-			return nil, err
+		enclaveIdentities := []sgx.EnclaveIdentity{}
+		for _, binary := range cfg.Binaries {
+			var mrEnclave *sgx.MrEnclave
+			if mrEnclave, err = deriveMrEnclave(binary); err != nil {
+				return nil, err
+			}
+			enclaveIdentities = append(enclaveIdentities, sgx.EnclaveIdentity{MrEnclave: *mrEnclave, MrSigner: *cfg.MrSigner})
+			args = append(args, []string{
+				"--" + cmdRegRt.CfgVersionEnclave, mrEnclave.String() + cfg.MrSigner.String(),
+			}...)
+			mrEnclaves = append(mrEnclaves, mrEnclave)
 		}
-
+		descriptor.Version.TEE = cbor.Marshal(registry.VersionInfoIntelSGX{
+			Enclaves: enclaveIdentities,
+		})
 		args = append(args, []string{
 			"--" + cmdRegRt.CfgTEEHardware, cfg.TEEHardware.String(),
-			"--" + cmdRegRt.CfgVersionEnclave, mrEnclave.String() + cfg.MrSigner.String(),
 		}...)
-
-		descriptor.Version.TEE = cbor.Marshal(registry.VersionInfoIntelSGX{
-			Enclaves: []sgx.EnclaveIdentity{
-				{MrEnclave: *mrEnclave, MrSigner: *cfg.MrSigner},
-			},
-		})
 	}
 	if cfg.Keymanager != nil {
 		args = append(args, []string{
@@ -236,9 +240,9 @@ func (net *Network) NewRuntime(cfg *RuntimeCfg) (*Runtime, error) {
 		dir:                rtDir,
 		id:                 cfg.ID,
 		kind:               cfg.Kind,
-		binary:             cfg.Binary,
+		binaries:           cfg.Binaries,
 		teeHardware:        cfg.TEEHardware,
-		mrEnclave:          mrEnclave,
+		mrEnclaves:         mrEnclaves,
 		mrSigner:           cfg.MrSigner,
 		pruner:             cfg.Pruner,
 		excludeFromGenesis: cfg.ExcludeFromGenesis,

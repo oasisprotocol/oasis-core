@@ -56,6 +56,7 @@ func New(
 		stopCh:       make(chan struct{}),
 		quitCh:       make(chan struct{}),
 		initCh:       make(chan struct{}),
+		initTickerCh: nil,
 		commonWorker: commonWorker,
 		backend:      backend,
 		grpcPolicy:   policy.NewDynamicRuntimePolicyChecker(enclaverpc.ServiceName, commonWorker.GrpcPolicyWatcher),

@@ -1,0 +1,18 @@
+[package]
+name = "simple-keymanager-upgrade"
+version = "0.3.0-alpha"
+authors = ["Oasis Labs Inc. <info@oasislabs.com>"]
+edition = "2018"
+
+[package.metadata.fortanix-sgx]
+heap-size = 134217728
+stack-size = 2097152
+threads = 2
+
+[dependencies]
+oasis-core-runtime = { path = "../../../runtime" }
+oasis-core-keymanager-lib = { path = "../../../keymanager-lib" }
+oasis-core-keymanager-api-common = { path = "../../../keymanager-api-common" }
+
+[build-dependencies]
+oasis-core-tools = { path = "../../../tools" }

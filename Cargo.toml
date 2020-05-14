@@ -11,6 +11,8 @@ members = [
     # Test runtimes.
     "tests/runtimes/simple-keyvalue",
     "tests/runtimes/simple-keymanager",
+    "tests/runtimes/simple-keymanager-upgrade",
+
     # Test clients.
     "tests/clients/simple-keyvalue",
     "tests/clients/simple-keyvalue-enc",

@@ -164,7 +164,7 @@ func (sc *runtimeImpl) Fixture() (*oasis.NetworkFixture, error) {
 				AdmissionPolicy: registry.RuntimeAdmissionPolicy{
 					AnyNode: &registry.AnyNodeRuntimeAdmissionPolicy{},
 				},
-				Binary: keyManagerBinary,
+				Binaries: []string{keyManagerBinary},
 			},
 			// Compute runtime.
 			oasis.RuntimeFixture{
@@ -172,7 +172,7 @@ func (sc *runtimeImpl) Fixture() (*oasis.NetworkFixture, error) {
 				Kind:       registry.KindCompute,
 				Entity:     0,
 				Keymanager: 0,
-				Binary:     runtimeBinary,
+				Binaries:   []string{runtimeBinary},
 				Executor: registry.ExecutorParameters{
 					GroupSize:       2,
 					GroupBackupSize: 1,
@@ -552,6 +552,11 @@ func (sc *runtimeImpl) initialEpochTransitions() error {
 		sc.logger.Info("waiting for (some) nodes to register",
 			"num_nodes", numNodes,
 		)
+
+		// TODO: once #2130 is done, aditionally wait for nodes to be Ready here.
+		// As generally a keymanager can register (with missing extra info)
+		// before actually being initialized and triggering an epoch transition
+		// at that point would be too soon.
 
 		if err := sc.net.Controller().WaitNodesRegistered(ctx, numNodes); err != nil {
 			return fmt.Errorf("failed to wait for nodes: %w", err)

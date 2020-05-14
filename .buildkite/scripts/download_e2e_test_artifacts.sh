@@ -24,6 +24,10 @@ download_artifact oasis-core-runtime-loader target/default/debug 755
 download_artifact simple-keymanager.sgxs target/sgx/x86_64-fortanix-unknown-sgx/debug 755
 download_artifact simple-keymanager target/default/debug 755
 
+# Simple Key manager runtime used in keymenager upgrade test.
+download_artifact simple-keymanager-upgrade.sgxs target/sgx/x86_64-fortanix-unknown-sgx/debug 755
+download_artifact simple-keymanager-upgrade target/default/debug 755
+
 # Test simple-keyvalue runtime and clients.
 download_artifact test-long-term-client target/default/debug 755
 download_artifact simple-keyvalue-client target/default/debug 755
