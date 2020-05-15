@@ -171,8 +171,23 @@ type RuntimeAdmissionPolicy struct {
 	EntityWhitelist *EntityWhitelistRuntimeAdmissionPolicy `json:"entity_whitelist,omitempty"`
 }
 
+const (
+	// LatestRuntimeDescriptorVersion is the latest entity descriptor version that should be used
+	// for all new descriptors. Using earlier versions may be rejected.
+	LatestRuntimeDescriptorVersion = 1
+
+	// Minimum and maximum descriptor versions that are allowed.
+	minRuntimeDescriptorVersion = 0
+	maxRuntimeDescriptorVersion = LatestRuntimeDescriptorVersion
+)
+
 // Runtime represents a runtime.
-type Runtime struct {
+type Runtime struct { // nolint: maligned
+	// DescriptorVersion is the runtime descriptor version.
+	//
+	// It should be bumped whenever breaking changes are made to the descriptor.
+	DescriptorVersion uint16 `json:"v,omitempty"`
+
 	// ID is a globally unique long term identifier of the runtime.
 	ID common.Namespace `json:"id"`
 
@@ -212,14 +227,37 @@ type Runtime struct {
 	AdmissionPolicy RuntimeAdmissionPolicy `json:"admission_policy"`
 }
 
+// ValidateBasic performs basic descriptor validity checks.
+func (r *Runtime) ValidateBasic(strictVersion bool) error {
+	switch strictVersion {
+	case true:
+		// Only the latest version is allowed.
+		if r.DescriptorVersion != LatestRuntimeDescriptorVersion {
+			return fmt.Errorf("invalid runtime descriptor version (expected: %d got: %d)",
+				LatestRuntimeDescriptorVersion,
+				r.DescriptorVersion,
+			)
+		}
+	case false:
+		// A range of versions is allowed.
+		if r.DescriptorVersion < minRuntimeDescriptorVersion || r.DescriptorVersion > maxRuntimeDescriptorVersion {
+			return fmt.Errorf("invalid runtime descriptor version (min: %d max: %d)",
+				minRuntimeDescriptorVersion,
+				maxRuntimeDescriptorVersion,
+			)
+		}
+	}
+	return nil
+}
+
 // String returns a string representation of itself.
-func (c Runtime) String() string {
-	return "<Runtime id=" + c.ID.String() + ">"
+func (r Runtime) String() string {
+	return "<Runtime id=" + r.ID.String() + ">"
 }
 
 // IsCompute returns true iff the runtime is a generic compute runtime.
-func (c *Runtime) IsCompute() bool {
-	return c.Kind == KindCompute
+func (r *Runtime) IsCompute() bool {
+	return r.Kind == KindCompute
 }
 
 // SignedRuntime is a signed blob containing a CBOR-serialized Runtime.

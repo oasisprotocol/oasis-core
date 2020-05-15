@@ -569,9 +569,10 @@ func (w *Worker) registerNode(epoch epochtime.EpochTime, hook RegisterNodeHook) 
 	}
 
 	nodeDesc := node.Node{
-		ID:         identityPublic,
-		EntityID:   w.entityID,
-		Expiration: uint64(epoch) + 2,
+		DescriptorVersion: node.LatestNodeDescriptorVersion,
+		ID:                identityPublic,
+		EntityID:          w.entityID,
+		Expiration:        uint64(epoch) + 2,
 		Committee: node.CommitteeInfo{
 			Certificate:     w.identity.GetTLSCertificate().Certificate[0],
 			NextCertificate: nextCert,

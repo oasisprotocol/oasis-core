@@ -49,7 +49,7 @@ func (app *registryApplication) InitChain(ctx *abciAPI.Context, request types.Re
 			if v == nil {
 				return fmt.Errorf("registry: genesis runtime index %d is nil", i)
 			}
-			rt, err := registry.VerifyRegisterRuntimeArgs(&st.Parameters, ctx.Logger(), v, ctx.IsInitChain())
+			rt, err := registry.VerifyRegisterRuntimeArgs(&st.Parameters, ctx.Logger(), v, ctx.IsInitChain(), false)
 			if err != nil {
 				return err
 			}

@@ -79,6 +79,7 @@ var (
 	}
 
 	testRuntime = &registry.Runtime{
+		DescriptorVersion: registry.LatestRuntimeDescriptorVersion,
 		// ID: default value,
 		// EntityID: test entity,
 		Kind: registry.KindCompute,

@@ -78,7 +78,13 @@ func testRegistryEntityNodes( // nolint: gocyclo
 		require := require.New(t)
 
 		for _, v := range entities {
-			err = v.Register(consensus)
+			// First try registering invalid cases and make sure they fail.
+			for _, inv := range v.invalidBefore {
+				err = v.Register(consensus, inv.signed)
+				require.Error(err, inv.descr)
+			}
+
+			err = v.Register(consensus, v.SignedRegistration)
 			require.NoError(err, "RegisterEntity")
 
 			select {
@@ -612,11 +618,18 @@ type TestEntity struct {
 	Signer signature.Signer
 
 	SignedRegistration *entity.SignedEntity
+
+	invalidBefore []*invalidEntityRegistration
 }
 
-// Register attempts to register the entity.
-func (ent *TestEntity) Register(consensus consensusAPI.Backend) error {
-	return consensusAPI.SignAndSubmitTx(context.Background(), consensus, ent.Signer, api.NewRegisterEntityTx(0, nil, ent.SignedRegistration))
+type invalidEntityRegistration struct {
+	descr  string
+	signed *entity.SignedEntity
+}
+
+// Register attempts to register an entity.
+func (ent *TestEntity) Register(consensus consensusAPI.Backend, sigEnt *entity.SignedEntity) error {
+	return consensusAPI.SignAndSubmitTx(context.Background(), consensus, ent.Signer, api.NewRegisterEntityTx(0, nil, sigEnt))
 }
 
 // Deregister attempts to deregister the entity.
@@ -714,11 +727,12 @@ func (ent *TestEntity) NewTestNodes(nCompute int, nStorage int, idNonce []byte, 
 		}
 
 		nod.Node = &node.Node{
-			ID:         nod.Signer.Public(),
-			EntityID:   ent.Entity.ID,
-			Expiration: uint64(expiration),
-			Runtimes:   runtimes,
-			Roles:      role,
+			DescriptorVersion: node.LatestNodeDescriptorVersion,
+			ID:                nod.Signer.Public(),
+			EntityID:          ent.Entity.ID,
+			Expiration:        uint64(expiration),
+			Runtimes:          runtimes,
+			Roles:             role,
 		}
 		addr := node.Address{
 			TCPAddr: net.TCPAddr{
@@ -975,11 +989,12 @@ func (ent *TestEntity) NewTestNodes(nCompute int, nStorage int, idNonce []byte, 
 
 		// Add another Re-Registration with different address field.
 		nod.UpdatedNode = &node.Node{
-			ID:         nod.Signer.Public(),
-			EntityID:   ent.Entity.ID,
-			Expiration: uint64(expiration),
-			Runtimes:   runtimes,
-			Roles:      role,
+			DescriptorVersion: node.LatestNodeDescriptorVersion,
+			ID:                nod.Signer.Public(),
+			EntityID:          ent.Entity.ID,
+			Expiration:        uint64(expiration),
+			Runtimes:          runtimes,
+			Roles:             role,
 		}
 		addr = node.Address{
 			TCPAddr: net.TCPAddr{
@@ -1005,13 +1020,14 @@ func (ent *TestEntity) NewTestNodes(nCompute int, nStorage int, idNonce []byte, 
 		newRuntimes := append([]*node.Runtime(nil), runtimes...)
 		newRuntimes = append(newRuntimes, &node.Runtime{ID: publicKeyToNamespace(testRuntimeSigner.Public(), false)})
 		newNode := &node.Node{
-			ID:         nod.Signer.Public(),
-			EntityID:   ent.Entity.ID,
-			Expiration: uint64(expiration),
-			Runtimes:   newRuntimes,
-			Roles:      role,
-			P2P:        nod.Node.P2P,
-			Committee:  nod.Node.Committee,
+			DescriptorVersion: node.LatestNodeDescriptorVersion,
+			ID:                nod.Signer.Public(),
+			EntityID:          ent.Entity.ID,
+			Expiration:        uint64(expiration),
+			Runtimes:          newRuntimes,
+			Roles:             role,
+			P2P:               nod.Node.P2P,
+			Committee:         nod.Node.Committee,
 		}
 		newNode.P2P.ID = invalidIdentity.P2PSigner.Public()
 		newNode.Consensus.ID = invalidIdentity.ConsensusSigner.Public()
@@ -1031,6 +1047,28 @@ func (ent *TestEntity) NewTestNodes(nCompute int, nStorage int, idNonce []byte, 
 			return nil, err
 		}
 		nod.invalidReReg = append(nod.invalidReReg, invalid14)
+
+		// Add a registration with an old version.
+		invalid15 := &invalidNodeRegistration{
+			descr: "Registering with an old descriptor should fail",
+		}
+		invNode15 := *nod.Node
+		invNode15.DescriptorVersion = 0
+		invalid15.signed, err = node.MultiSignNode(
+			[]signature.Signer{
+				nodeIdentity.NodeSigner,
+				ent.Signer,
+				nodeIdentity.ConsensusSigner,
+				nodeIdentity.P2PSigner,
+				nodeIdentity.GetTLSSigner(),
+			},
+			api.RegisterNodeSignatureContext,
+			&invNode15,
+		)
+		if err != nil {
+			return nil, err
+		}
+		nod.invalidBefore = append(nod.invalidBefore, invalid15)
 
 		nodes = append(nodes, &nod)
 	}
@@ -1053,15 +1091,27 @@ func NewTestEntities(seed []byte, n int) ([]*TestEntity, error) {
 			return nil, err
 		}
 		ent.Entity = &entity.Entity{
+			DescriptorVersion:      entity.LatestEntityDescriptorVersion,
 			ID:                     ent.Signer.Public(),
 			AllowEntitySignedNodes: true,
 		}
 
-		signed, err := signature.SignSigned(ent.Signer, api.RegisterEntitySignatureContext, ent.Entity)
+		ent.SignedRegistration, err = entity.SignEntity(ent.Signer, api.RegisterEntitySignatureContext, ent.Entity)
 		if err != nil {
 			return nil, err
 		}
-		ent.SignedRegistration = &entity.SignedEntity{Signed: *signed}
+
+		// Add a registration with an old version.
+		invalid1 := &invalidEntityRegistration{
+			descr: "Registering with an old descriptor should fail",
+		}
+		invEnt1 := *ent.Entity
+		invEnt1.DescriptorVersion = 0
+		invalid1.signed, err = entity.SignEntity(ent.Signer, api.RegisterEntitySignatureContext, &invEnt1)
+		if err != nil {
+			return nil, err
+		}
+		ent.invalidBefore = append(ent.invalidBefore, invalid1)
 
 		entities = append(entities, &ent)
 	}
@@ -1171,7 +1221,7 @@ func BulkPopulate(t *testing.T, backend api.Backend, consensus consensusAPI.Back
 	entities, err := NewTestEntities(seed, 1)
 	require.NoError(err, "NewTestEntities")
 	entity := entities[0]
-	err = entity.Register(consensus)
+	err = entity.Register(consensus, entity.SignedRegistration)
 	require.NoError(err, "RegisterEntity")
 	select {
 	case ev := <-entityCh:
@@ -1322,9 +1372,10 @@ func NewTestRuntime(seed []byte, ent *TestEntity, isKeyManager bool) (*TestRunti
 	var rt TestRuntime
 	rt.Signer = ent.Signer
 	rt.Runtime = &api.Runtime{
-		ID:       id,
-		EntityID: ent.Entity.ID,
-		Kind:     api.KindCompute,
+		DescriptorVersion: api.LatestRuntimeDescriptorVersion,
+		ID:                id,
+		EntityID:          ent.Entity.ID,
+		Kind:              api.KindCompute,
 		Executor: api.ExecutorParameters{
 			GroupSize:         3,
 			GroupBackupSize:   5,

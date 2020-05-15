@@ -77,7 +77,7 @@ func (g *Genesis) SanityCheck(
 func SanityCheckEntities(logger *logging.Logger, entities []*entity.SignedEntity) (map[signature.PublicKey]*entity.Entity, error) {
 	seenEntities := make(map[signature.PublicKey]*entity.Entity)
 	for _, signedEnt := range entities {
-		entity, err := VerifyRegisterEntityArgs(logger, signedEnt, true)
+		entity, err := VerifyRegisterEntityArgs(logger, signedEnt, true, true)
 		if err != nil {
 			return nil, fmt.Errorf("entity sanity check failed: %w", err)
 		}
@@ -98,7 +98,7 @@ func SanityCheckRuntimes(
 	// First go through all runtimes and perform general sanity checks.
 	seenRuntimes := []*Runtime{}
 	for _, signedRt := range runtimes {
-		rt, err := VerifyRegisterRuntimeArgs(params, logger, signedRt, isGenesis)
+		rt, err := VerifyRegisterRuntimeArgs(params, logger, signedRt, isGenesis, true)
 		if err != nil {
 			return nil, fmt.Errorf("runtime sanity check failed: %w", err)
 		}
@@ -107,7 +107,7 @@ func SanityCheckRuntimes(
 
 	seenSuspendedRuntimes := []*Runtime{}
 	for _, signedRt := range suspendedRuntimes {
-		rt, err := VerifyRegisterRuntimeArgs(params, logger, signedRt, isGenesis)
+		rt, err := VerifyRegisterRuntimeArgs(params, logger, signedRt, isGenesis, true)
 		if err != nil {
 			return nil, fmt.Errorf("runtime sanity check failed: %w", err)
 		}
@@ -174,6 +174,7 @@ func SanityCheckNodes(
 			entity,
 			time.Now(),
 			isGenesis,
+			true,
 			epoch,
 			runtimesLookup,
 			nodeLookup,

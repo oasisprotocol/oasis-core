@@ -61,8 +61,9 @@ type staticNodeLookup struct {
 
 func (n *staticNodeLookup) Node(ctx context.Context, id signature.PublicKey) (*node.Node, error) {
 	return &node.Node{
-		ID:       id,
-		Runtimes: []*node.Runtime{n.runtime},
+		DescriptorVersion: node.LatestNodeDescriptorVersion,
+		ID:                id,
+		Runtimes:          []*node.Runtime{n.runtime},
 	}, nil
 }
 
@@ -109,9 +110,10 @@ func TestPoolSingleCommitment(t *testing.T) {
 	_ = rtID.UnmarshalHex("0000000000000000000000000000000000000000000000000000000000000000")
 
 	rt := &registry.Runtime{
-		ID:          rtID,
-		Kind:        registry.KindCompute,
-		TEEHardware: node.TEEHardwareInvalid,
+		DescriptorVersion: registry.LatestRuntimeDescriptorVersion,
+		ID:                rtID,
+		Kind:              registry.KindCompute,
+		TEEHardware:       node.TEEHardwareInvalid,
 	}
 
 	// Generate a commitment signing key.
@@ -211,9 +213,10 @@ func TestPoolSingleCommitmentTEE(t *testing.T) {
 	_ = rtID.UnmarshalHex("0000000000000000000000000000000000000000000000000000000000000000")
 
 	rt := &registry.Runtime{
-		ID:          rtID,
-		Kind:        registry.KindCompute,
-		TEEHardware: node.TEEHardwareIntelSGX,
+		DescriptorVersion: registry.LatestRuntimeDescriptorVersion,
+		ID:                rtID,
+		Kind:              registry.KindCompute,
+		TEEHardware:       node.TEEHardwareIntelSGX,
 	}
 
 	// Generate a commitment signing key.
@@ -442,9 +445,10 @@ func TestPoolSerialization(t *testing.T) {
 	_ = rtID.UnmarshalHex("0000000000000000000000000000000000000000000000000000000000000000")
 
 	rt := &registry.Runtime{
-		ID:          rtID,
-		Kind:        registry.KindCompute,
-		TEEHardware: node.TEEHardwareInvalid,
+		DescriptorVersion: registry.LatestRuntimeDescriptorVersion,
+		ID:                rtID,
+		Kind:              registry.KindCompute,
+		TEEHardware:       node.TEEHardwareInvalid,
 	}
 
 	// Generate a commitment signing key.
@@ -1088,9 +1092,10 @@ func generateMockCommittee(t *testing.T) (
 	_ = rtID.UnmarshalHex("0000000000000000000000000000000000000000000000000000000000000000")
 
 	rt = &registry.Runtime{
-		ID:          rtID,
-		Kind:        registry.KindCompute,
-		TEEHardware: node.TEEHardwareInvalid,
+		DescriptorVersion: registry.LatestRuntimeDescriptorVersion,
+		ID:                rtID,
+		Kind:              registry.KindCompute,
+		TEEHardware:       node.TEEHardwareInvalid,
 	}
 
 	// Generate commitment signing keys.

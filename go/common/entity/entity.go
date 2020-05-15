@@ -28,9 +28,24 @@ var (
 	_ prettyprint.PrettyPrinter = (*SignedEntity)(nil)
 )
 
+const (
+	// LatestEntityDescriptorVersion is the latest entity descriptor version that should be used for
+	// all new descriptors. Using earlier versions may be rejected.
+	LatestEntityDescriptorVersion = 1
+
+	// Minimum and maximum descriptor versions that are allowed.
+	minEntityDescriptorVersion = 0
+	maxEntityDescriptorVersion = LatestEntityDescriptorVersion
+)
+
 // Entity represents an entity that controls one or more Nodes and or
 // services.
-type Entity struct {
+type Entity struct { // nolint: maligned
+	// DescriptorVersion is the entity descriptor version.
+	//
+	// It should be bumped whenever breaking changes are made to the descriptor.
+	DescriptorVersion uint16 `json:"v,omitempty"`
+
 	// ID is the public key identifying the entity.
 	ID signature.PublicKey `json:"id"`
 
@@ -42,6 +57,29 @@ type Entity struct {
 	// AllowEntitySignedNodes is true iff nodes belonging to this entity
 	// may be signed with the entity signing key.
 	AllowEntitySignedNodes bool `json:"allow_entity_signed_nodes"`
+}
+
+// ValidateBasic performs basic descriptor validity checks.
+func (e *Entity) ValidateBasic(strictVersion bool) error {
+	switch strictVersion {
+	case true:
+		// Only the latest version is allowed.
+		if e.DescriptorVersion != LatestEntityDescriptorVersion {
+			return fmt.Errorf("invalid entity descriptor version (expected: %d got: %d)",
+				LatestEntityDescriptorVersion,
+				e.DescriptorVersion,
+			)
+		}
+	case false:
+		// A range of versions is allowed.
+		if e.DescriptorVersion < minEntityDescriptorVersion || e.DescriptorVersion > maxEntityDescriptorVersion {
+			return fmt.Errorf("invalid entity descriptor version (min: %d max: %d)",
+				minEntityDescriptorVersion,
+				maxEntityDescriptorVersion,
+			)
+		}
+	}
+	return nil
 }
 
 // String returns a string representation of itself.
@@ -109,7 +147,8 @@ func Generate(baseDir string, signerFactory signature.SignerFactory, template *E
 		return nil, nil, err
 	}
 	ent := &Entity{
-		ID: signer.Public(),
+		DescriptorVersion: LatestEntityDescriptorVersion,
+		ID:                signer.Public(),
 	}
 	if template != nil {
 		ent.Nodes = template.Nodes
@@ -166,6 +205,7 @@ func SignEntity(signer signature.Signer, context signature.Context, entity *Enti
 func init() {
 	testEntitySigner = memorySigner.NewTestSigner("ekiden test entity key seed")
 
+	testEntity.DescriptorVersion = LatestEntityDescriptorVersion
 	testEntity.ID = testEntitySigner.Public()
 	testEntity.AllowEntitySignedNodes = true
 }

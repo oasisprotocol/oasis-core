@@ -340,7 +340,7 @@ type RuntimeLookup interface {
 }
 
 // VerifyRegisterEntityArgs verifies arguments for RegisterEntity.
-func VerifyRegisterEntityArgs(logger *logging.Logger, sigEnt *entity.SignedEntity, isGenesis bool) (*entity.Entity, error) {
+func VerifyRegisterEntityArgs(logger *logging.Logger, sigEnt *entity.SignedEntity, isGenesis bool, isSanityCheck bool) (*entity.Entity, error) {
 	var ent entity.Entity
 	if sigEnt == nil {
 		return nil, ErrInvalidArgument
@@ -363,6 +363,13 @@ func VerifyRegisterEntityArgs(logger *logging.Logger, sigEnt *entity.SignedEntit
 	if err := sigEnt.Signed.Signature.SanityCheck(ent.ID); err != nil {
 		logger.Error("RegisterEntity: invalid argument(s)",
 			"signed_entity", sigEnt,
+			"entity", ent,
+			"err", err,
+		)
+		return nil, ErrInvalidArgument
+	}
+	if err := ent.ValidateBasic(!isGenesis && !isSanityCheck); err != nil {
+		logger.Error("RegisterEntity: invalid entity descriptor",
 			"entity", ent,
 			"err", err,
 		)
@@ -402,6 +409,7 @@ func VerifyRegisterNodeArgs( // nolint: gocyclo
 	entity *entity.Entity,
 	now time.Time,
 	isGenesis bool,
+	isSanityCheck bool,
 	epoch epochtime.EpochTime,
 	runtimeLookup RuntimeLookup,
 	nodeLookup NodeLookup,
@@ -424,6 +432,13 @@ func VerifyRegisterNodeArgs( // nolint: gocyclo
 			"signed_node", sigNode,
 		)
 		return nil, nil, ErrInvalidSignature
+	}
+	if err := n.ValidateBasic(!isGenesis && !isSanityCheck); err != nil {
+		logger.Error("RegisterNode: invalid node descriptor",
+			"node", n,
+			"err", err,
+		)
+		return nil, nil, ErrInvalidArgument
 	}
 
 	// This should never happen, unless there's a bug in the caller.
@@ -1039,6 +1054,7 @@ func VerifyRegisterRuntimeArgs(
 	logger *logging.Logger,
 	sigRt *SignedRuntime,
 	isGenesis bool,
+	isSanityCheck bool,
 ) (*Runtime, error) {
 	var rt Runtime
 	if sigRt == nil {
@@ -1062,6 +1078,13 @@ func VerifyRegisterRuntimeArgs(
 	if err := sigRt.Signed.Signature.SanityCheck(rt.EntityID); err != nil {
 		logger.Error("RegisterRuntime: invalid argument(s)",
 			"signed_runtime", sigRt,
+			"runtime", rt,
+			"err", err,
+		)
+		return nil, ErrInvalidArgument
+	}
+	if err := rt.ValidateBasic(!isGenesis && !isSanityCheck); err != nil {
+		logger.Error("RegisterRuntime: invalid runtime descriptor",
 			"runtime", rt,
 			"err", err,
 		)

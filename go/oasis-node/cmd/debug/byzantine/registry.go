@@ -42,9 +42,10 @@ func registryRegisterNode(svc service.TendermintService, id *identity.Identity, 
 	}
 
 	nodeDesc := &node.Node{
-		ID:         id.NodeSigner.Public(),
-		EntityID:   entityID,
-		Expiration: 1000,
+		DescriptorVersion: node.LatestNodeDescriptorVersion,
+		ID:                id.NodeSigner.Public(),
+		EntityID:          entityID,
+		Expiration:        1000,
 		Committee: node.CommitteeInfo{
 			Certificate: id.GetTLSCertificate().Certificate[0],
 			Addresses:   committeeAddresses,
