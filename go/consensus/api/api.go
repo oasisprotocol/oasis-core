@@ -83,6 +83,9 @@ type ClientBackend interface {
 
 	// GetGenesisDocument returns the original genesis document.
 	GetGenesisDocument(ctx context.Context) (*genesis.Document, error)
+
+	// GetStatus returns the current status overview.
+	GetStatus(ctx context.Context) (*Status, error)
 }
 
 // Block is a consensus block.
@@ -98,6 +101,29 @@ type Block struct {
 	Time time.Time `json:"time"`
 	// Meta contains the consensus backend specific block metadata.
 	Meta cbor.RawMessage `json:"meta"`
+}
+
+// Status is the current status overview.
+type Status struct {
+	// ConsensusVersion is the version of the consensus protocol that the node is using.
+	ConsensusVersion string `json:"consensus_version"`
+	// Backend is the consensus backend identifier.
+	Backend string `json:"backend"`
+
+	// NodePeers is a list of node's peers.
+	NodePeers []string `json:"node_peers"`
+
+	// LatestHeight is the height of the latest block.
+	LatestHeight int64 `json:"latest_height"`
+	// LatestHash is the hash of the latest block.
+	LatestHash []byte `json:"latest_hash"`
+	// LatestTime is the timestamp of the latest block.
+	LatestTime time.Time `json:"latest_time"`
+
+	// GenesisHeight is the height of the genesis block.
+	GenesisHeight int64 `json:"genesis_height"`
+	// GenesisHash is the hash of the genesis block.
+	GenesisHash []byte `json:"genesis_hash"`
 }
 
 // Backend is an interface that a consensus backend must provide.
