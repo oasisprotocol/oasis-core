@@ -18,7 +18,7 @@ func (app *registryApplication) registerEntity(
 	state *registryState.MutableState,
 	sigEnt *entity.SignedEntity,
 ) error {
-	ent, err := registry.VerifyRegisterEntityArgs(ctx.Logger(), sigEnt, ctx.IsInitChain())
+	ent, err := registry.VerifyRegisterEntityArgs(ctx.Logger(), sigEnt, ctx.IsInitChain(), false)
 	if err != nil {
 		return err
 	}
@@ -198,6 +198,7 @@ func (app *registryApplication) registerNode( // nolint: gocyclo
 		untrustedEntity,
 		ctx.Now(),
 		ctx.IsInitChain(),
+		false,
 		epoch,
 		state,
 		state,
@@ -503,7 +504,7 @@ func (app *registryApplication) registerRuntime( // nolint: gocyclo
 		return registry.ErrForbidden
 	}
 
-	rt, err := registry.VerifyRegisterRuntimeArgs(params, ctx.Logger(), sigRt, ctx.IsInitChain())
+	rt, err := registry.VerifyRegisterRuntimeArgs(params, ctx.Logger(), sigRt, ctx.IsInitChain(), false)
 	if err != nil {
 		return err
 	}

@@ -176,9 +176,10 @@ func doInit(cmd *cobra.Command, args []string) { // nolint: gocyclo
 	}
 
 	n := &node.Node{
-		ID:         nodeIdentity.NodeSigner.Public(),
-		EntityID:   entityID,
-		Expiration: viper.GetUint64(CfgExpiration),
+		DescriptorVersion: node.LatestNodeDescriptorVersion,
+		ID:                nodeIdentity.NodeSigner.Public(),
+		EntityID:          entityID,
+		Expiration:        viper.GetUint64(CfgExpiration),
 		Committee: node.CommitteeInfo{
 			Certificate:     nodeIdentity.GetTLSCertificate().Certificate[0],
 			NextCertificate: nextCert,

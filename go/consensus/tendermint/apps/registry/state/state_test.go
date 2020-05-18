@@ -40,7 +40,8 @@ func TestNodeUpdate(t *testing.T) {
 
 	// Create a new node.
 	n := node.Node{
-		ID: nodeSigner.Public(),
+		DescriptorVersion: node.LatestNodeDescriptorVersion,
+		ID:                nodeSigner.Public(),
 		P2P: node.P2PInfo{
 			ID: p2pSigner1.Public(),
 		},

@@ -42,9 +42,10 @@ type registration struct {
 
 func getRuntime(entityID signature.PublicKey, id common.Namespace) *registry.Runtime {
 	rt := &registry.Runtime{
-		ID:       id,
-		EntityID: entityID,
-		Kind:     registry.KindCompute,
+		DescriptorVersion: registry.LatestRuntimeDescriptorVersion,
+		ID:                id,
+		EntityID:          entityID,
+		Kind:              registry.KindCompute,
 		Executor: registry.ExecutorParameters{
 			GroupSize:    1,
 			RoundTimeout: 1 * time.Second,
@@ -94,10 +95,11 @@ func getNodeDesc(rng *rand.Rand, nodeIdentity *identity.Identity, entityID signa
 	}
 
 	nodeDesc := node.Node{
-		ID:         nodeIdentity.NodeSigner.Public(),
-		EntityID:   entityID,
-		Expiration: 0,
-		Roles:      availableRoles[rng.Intn(len(availableRoles))],
+		DescriptorVersion: node.LatestNodeDescriptorVersion,
+		ID:                nodeIdentity.NodeSigner.Public(),
+		EntityID:          entityID,
+		Expiration:        0,
+		Roles:             availableRoles[rng.Intn(len(availableRoles))],
 		Committee: node.CommitteeInfo{
 			Certificate: nodeIdentity.GetTLSCertificate().Certificate[0],
 			Addresses: []node.CommitteeAddress{
@@ -204,7 +206,8 @@ func (r *registration) Run( // nolint: gocyclo
 		}
 
 		ent := &entity.Entity{
-			ID: entityAccs[i].signer.Public(),
+			DescriptorVersion: entity.LatestEntityDescriptorVersion,
+			ID:                entityAccs[i].signer.Public(),
 		}
 
 		// Generate entity node identities.

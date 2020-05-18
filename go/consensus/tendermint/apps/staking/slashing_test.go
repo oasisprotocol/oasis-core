@@ -50,8 +50,9 @@ func TestOnEvidenceDoubleSign(t *testing.T) {
 	// Add node.
 	nodeSigner := memorySigner.NewTestSigner("node test signer")
 	nod := &node.Node{
-		ID:       nodeSigner.Public(),
-		EntityID: ent.ID,
+		DescriptorVersion: node.LatestNodeDescriptorVersion,
+		ID:                nodeSigner.Public(),
+		EntityID:          ent.ID,
 		Consensus: node.ConsensusInfo{
 			ID: consensusID,
 		},

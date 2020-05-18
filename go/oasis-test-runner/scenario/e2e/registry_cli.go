@@ -402,9 +402,10 @@ func (r *registryCLIImpl) newTestNode(entityID signature.PublicKey) (*node.Node,
 	}
 
 	testNode := node.Node{
-		ID:         signature.PublicKey{}, // ID is generated afterwards.
-		EntityID:   entityID,
-		Expiration: 42,
+		DescriptorVersion: node.LatestNodeDescriptorVersion,
+		ID:                signature.PublicKey{}, // ID is generated afterwards.
+		EntityID:          entityID,
+		Expiration:        42,
 		Committee: node.CommitteeInfo{
 			Certificate: []byte{}, // Certificate is generated afterwards.
 			Addresses:   testCommitteeAddresses,
@@ -605,8 +606,9 @@ func (r *registryCLIImpl) testRuntime(childEnv *env.Env, cli *cli.Helpers) error
 		return fmt.Errorf("TestEntity: %w", err)
 	}
 	testRuntime := registry.Runtime{
-		EntityID: testEntity.ID,
-		Kind:     registry.KindCompute,
+		DescriptorVersion: registry.LatestRuntimeDescriptorVersion,
+		EntityID:          testEntity.ID,
+		Kind:              registry.KindCompute,
 		Executor: registry.ExecutorParameters{
 			GroupSize:         1,
 			GroupBackupSize:   2,

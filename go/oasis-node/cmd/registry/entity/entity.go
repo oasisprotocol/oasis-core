@@ -374,6 +374,7 @@ func loadOrGenerateEntity(dataDir string, generate bool) (*entity.Entity, signat
 
 	if generate {
 		template := &entity.Entity{
+			DescriptorVersion:      entity.LatestEntityDescriptorVersion,
 			AllowEntitySignedNodes: viper.GetBool(cfgAllowEntitySignedNodes),
 		}
 

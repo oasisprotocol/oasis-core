@@ -35,8 +35,23 @@ var (
 	_ prettyprint.PrettyPrinter = (*MultiSignedNode)(nil)
 )
 
+const (
+	// LatestNodeDescriptorVersion is the latest node descriptor version that should be used for all
+	// new descriptors. Using earlier versions may be rejected.
+	LatestNodeDescriptorVersion = 1
+
+	// Minimum and maximum descriptor versions that are allowed.
+	minNodeDescriptorVersion = 0
+	maxNodeDescriptorVersion = LatestNodeDescriptorVersion
+)
+
 // Node represents public connectivity information about an Oasis node.
-type Node struct {
+type Node struct { // nolint: maligned
+	// DescriptorVersion is the node descriptor version.
+	//
+	// It should be bumped whenever breaking changes are made to the descriptor.
+	DescriptorVersion uint16 `json:"v,omitempty"`
+
 	// ID is the public key identifying the node.
 	ID signature.PublicKey `json:"id"`
 
@@ -114,6 +129,29 @@ func (m RolesMask) String() string {
 	}
 
 	return strings.Join(ret, ",")
+}
+
+// ValidateBasic performs basic descriptor validity checks.
+func (n *Node) ValidateBasic(strictVersion bool) error {
+	switch strictVersion {
+	case true:
+		// Only the latest version is allowed.
+		if n.DescriptorVersion != LatestNodeDescriptorVersion {
+			return fmt.Errorf("invalid node descriptor version (expected: %d got: %d)",
+				LatestNodeDescriptorVersion,
+				n.DescriptorVersion,
+			)
+		}
+	case false:
+		// A range of versions is allowed.
+		if n.DescriptorVersion < minNodeDescriptorVersion || n.DescriptorVersion > maxNodeDescriptorVersion {
+			return fmt.Errorf("invalid node descriptor version (min: %d max: %d)",
+				minNodeDescriptorVersion,
+				maxNodeDescriptorVersion,
+			)
+		}
+	}
+	return nil
 }
 
 // AddRoles adds the Node roles
