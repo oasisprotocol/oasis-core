@@ -614,6 +614,10 @@ func VerifyRegisterNodeArgs( // nolint: gocyclo
 			return nil, nil, err
 		}
 
+		logger.Warn("RegisterNode: using v0 node descriptor",
+			"node", n,
+		)
+
 		expectedSigners = append(expectedSigners, legacyTLSKey)
 	} else {
 		if !n.TLS.PubKey.IsValid() {

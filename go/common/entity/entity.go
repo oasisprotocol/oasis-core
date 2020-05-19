@@ -139,13 +139,9 @@ func LoadDescriptor(f string) (*Entity, error) {
 	return &ent, nil
 }
 
-// Generate generates a new entity and serializes it to disk.
-func Generate(baseDir string, signerFactory signature.SignerFactory, template *Entity) (*Entity, signature.Signer, error) {
+// GenerateWithSigner generates a new entity using an existing signer and serializes it to disk.
+func GenerateWithSigner(baseDir string, signer signature.Signer, template *Entity) (*Entity, error) {
 	// Generate a new entity.
-	signer, err := signerFactory.Generate(signature.SignerEntity, rand.Reader)
-	if err != nil {
-		return nil, nil, err
-	}
 	ent := &Entity{
 		DescriptorVersion: LatestEntityDescriptorVersion,
 		ID:                signer.Public(),
@@ -155,10 +151,23 @@ func Generate(baseDir string, signerFactory signature.SignerFactory, template *E
 		ent.AllowEntitySignedNodes = template.AllowEntitySignedNodes
 	}
 
-	if err = ent.Save(baseDir); err != nil {
+	if err := ent.Save(baseDir); err != nil {
+		return nil, err
+	}
+	return ent, nil
+}
+
+// Generate generates a new entity and serializes it to disk.
+func Generate(baseDir string, signerFactory signature.SignerFactory, template *Entity) (*Entity, signature.Signer, error) {
+	// Generate a new entity.
+	signer, err := signerFactory.Generate(signature.SignerEntity, rand.Reader)
+	if err != nil {
 		return nil, nil, err
 	}
-
+	ent, err := GenerateWithSigner(baseDir, signer, template)
+	if err != nil {
+		return nil, nil, err
+	}
 	return ent, signer, nil
 }
 

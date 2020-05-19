@@ -31,6 +31,7 @@ const (
 	cfgAllowEntitySignedNodes = "entity.debug.allow_entity_signed_nodes"
 	CfgNodeID                 = "entity.node.id"
 	CfgNodeDescriptor         = "entity.node.descriptor"
+	CfgReuseSigner            = "entity.reuse_signer"
 
 	entityGenesisFilename = "entity_genesis.json"
 )
@@ -378,6 +379,14 @@ func loadOrGenerateEntity(dataDir string, generate bool) (*entity.Entity, signat
 			AllowEntitySignedNodes: viper.GetBool(cfgAllowEntitySignedNodes),
 		}
 
+		if viper.GetBool(CfgReuseSigner) {
+			signer, err := entitySignerFactory.Load(signature.SignerEntity)
+			if err != nil {
+				return nil, nil, fmt.Errorf("loadOrGenerateEntity: failed to load existing signer: %w", err)
+			}
+			ent, err := entity.GenerateWithSigner(dataDir, signer, template)
+			return ent, signer, err
+		}
 		return entity.Generate(dataDir, entitySignerFactory, template)
 	}
 
@@ -414,10 +423,12 @@ func init() {
 	_ = entityFlags.MarkHidden(cfgAllowEntitySignedNodes)
 	_ = viper.BindPFlags(entityFlags)
 
+	initFlags.Bool(CfgReuseSigner, false, "Reuse entity signer instead of generating a new one")
 	initFlags.AddFlagSet(cmdFlags.ForceFlags)
 	initFlags.AddFlagSet(cmdFlags.DebugTestEntityFlags)
 	initFlags.AddFlagSet(cmdFlags.DebugDontBlameOasisFlag)
 	initFlags.AddFlagSet(entityFlags)
+	_ = viper.BindPFlags(initFlags)
 
 	updateFlags.StringSlice(CfgNodeID, nil, "ID(s) of nodes associated with this entity")
 	updateFlags.StringSlice(CfgNodeDescriptor, nil, "Node genesis descriptor(s) of nodes associated with this entity")

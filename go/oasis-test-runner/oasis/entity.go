@@ -11,8 +11,11 @@ import (
 	"github.com/oasislabs/oasis-core/go/oasis-node/cmd/common"
 	"github.com/oasislabs/oasis-core/go/oasis-node/cmd/common/flags"
 	cmdSigner "github.com/oasislabs/oasis-core/go/oasis-node/cmd/common/signer"
+	cmdEntity "github.com/oasislabs/oasis-core/go/oasis-node/cmd/registry/entity"
 	"github.com/oasislabs/oasis-core/go/oasis-test-runner/env"
 )
+
+const entityIdentitySeedTemplate = "oasis entity %d"
 
 var entityArgsDebugTest = []string{
 	"--" + flags.CfgDebugDontBlameOasis,
@@ -139,12 +142,31 @@ func (net *Network) NewEntity(cfg *EntityCfg) (*Entity, error) {
 			return nil, fmt.Errorf("oasis/entity: failed to create entity subdir: %w", err)
 		}
 
-		if !cfg.Restore {
+		var extraArgs []string
+		switch {
+		case cfg.Restore:
+			// Restore an existing entity.
+		case net.cfg.DeterministicIdentities:
+			// Generate a deterministic entity.
+			err = net.generateDeterministicIdentity(
+				entityDir,
+				fmt.Sprintf(entityIdentitySeedTemplate, len(net.entities)),
+				[]signature.SignerRole{signature.SignerEntity},
+			)
+			if err != nil {
+				return nil, fmt.Errorf("oasis/entity: failed to create deterministic identity: %w", err)
+			}
+			extraArgs = append(extraArgs, "--"+cmdEntity.CfgReuseSigner)
+
+			fallthrough
+		default:
+			// Generate a fresh new entity.
 			args := []string{
 				"registry", "entity", "init",
 				"--" + cmdSigner.CfgSigner, fileSigner.SignerName,
 				"--" + cmdSigner.CfgCLISignerDir, entityDir.String(),
 			}
+			args = append(args, extraArgs...)
 
 			var w io.WriteCloser
 			w, err = entityDir.NewLogWriter("provision.log")

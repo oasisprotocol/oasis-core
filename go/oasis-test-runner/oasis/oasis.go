@@ -599,7 +599,7 @@ func (net *Network) runNodeBinary(consoleWriter io.Writer, args ...string) error
 	return cmd.Run()
 }
 
-func (net *Network) generateDeterministicNodeIdentity(dir *env.Dir, rawSeed string) error {
+func (net *Network) generateDeterministicIdentity(dir *env.Dir, rawSeed string, roles []signature.SignerRole) error {
 	h := crypto.SHA512.New()
 	_, _ = h.Write([]byte(rawSeed))
 	seed := h.Sum(nil)
@@ -609,14 +609,25 @@ func (net *Network) generateDeterministicNodeIdentity(dir *env.Dir, rawSeed stri
 		return err
 	}
 
-	factory, err := fileSigner.NewFactory(dir.String(), signature.SignerNode)
-	if err != nil {
-		return err
+	for _, role := range roles {
+		factory, err := fileSigner.NewFactory(dir.String(), role)
+		if err != nil {
+			return err
+		}
+		if _, err = factory.Generate(role, rng); err != nil {
+			return err
+		}
 	}
-	if _, err = factory.Generate(signature.SignerNode, rng); err != nil {
-		return err
-	}
+
 	return nil
+}
+
+func (net *Network) generateDeterministicNodeIdentity(dir *env.Dir, rawSeed string) error {
+	return net.generateDeterministicIdentity(dir, rawSeed, []signature.SignerRole{
+		signature.SignerNode,
+		signature.SignerP2P,
+		signature.SignerConsensus,
+	})
 }
 
 // generateTempSocketPath returns a unique filename for a node's internal socket in the test base dir
