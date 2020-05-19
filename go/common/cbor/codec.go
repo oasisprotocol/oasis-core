@@ -21,15 +21,12 @@ var (
 			Name: "oasis_codec_size",
 			Help: "CBOR codec message size (bytes).",
 		},
-		[]string{"call"},
+		[]string{"call", "module"},
 	)
 
 	codecCollectors = []prometheus.Collector{
 		codecValueSize,
 	}
-
-	labelRead  = prometheus.Labels{"call": "read"}
-	labelWrite = prometheus.Labels{"call": "write"}
 
 	metricsOnce sync.Once
 )
@@ -37,6 +34,9 @@ var (
 // MessageReader is a reader wrapper that decodes CBOR-encoded Message structures.
 type MessageReader struct {
 	reader io.Reader
+
+	// module is the module name where the message is read to.
+	module string
 }
 
 // Read deserializes a single CBOR-encoded Message from the underlying reader.
@@ -47,8 +47,9 @@ func (c *MessageReader) Read(msg interface{}) error {
 		return err
 	}
 
+	labels := prometheus.Labels{"module": c.module, "call": "read"}
 	length := binary.BigEndian.Uint32(rawLength)
-	codecValueSize.With(labelRead).Observe(float64(length))
+	codecValueSize.With(labels).Observe(float64(length))
 	if length > maxMessageSize {
 		return errMessageTooLarge
 	}
@@ -69,6 +70,9 @@ func (c *MessageReader) Read(msg interface{}) error {
 // MessageWriter is a writer wrapper that encodes Messages structures to CBOR.
 type MessageWriter struct {
 	writer io.Writer
+
+	// module is the module name where the message was created.
+	module string
 }
 
 // Write serializes a single Message to CBOR and writes it to the underlying writer.
@@ -76,7 +80,8 @@ func (c *MessageWriter) Write(msg interface{}) error {
 	// Encode into CBOR.
 	data := Marshal(msg)
 	length := len(data)
-	codecValueSize.With(labelWrite).Observe(float64(length))
+	labels := prometheus.Labels{"module": c.module, "call": "write"}
+	codecValueSize.With(labels).Observe(float64(length))
 	if length > maxMessageSize {
 		return errMessageTooLarge
 	}
@@ -101,13 +106,13 @@ type MessageCodec struct {
 }
 
 // NewMessageCodec constructs a new Message encoder/decoder.
-func NewMessageCodec(rw io.ReadWriter) *MessageCodec {
+func NewMessageCodec(rw io.ReadWriter, module string) *MessageCodec {
 	metricsOnce.Do(func() {
 		prometheus.MustRegister(codecCollectors...)
 	})
 
 	return &MessageCodec{
-		MessageReader: MessageReader{reader: rw},
-		MessageWriter: MessageWriter{writer: rw},
+		MessageReader: MessageReader{module: module, reader: rw},
+		MessageWriter: MessageWriter{module: module, writer: rw},
 	}
 }

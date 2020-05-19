@@ -2,6 +2,7 @@ package protocol
 
 import (
 	"fmt"
+	"reflect"
 
 	"github.com/oasislabs/oasis-core/go/common"
 	"github.com/oasislabs/oasis-core/go/common/crypto/hash"
@@ -88,6 +89,17 @@ type Body struct {
 	HostLocalStorageGetResponse  *HostLocalStorageGetResponse  `json:",omitempty"`
 	HostLocalStorageSetRequest   *HostLocalStorageSetRequest   `json:",omitempty"`
 	HostLocalStorageSetResponse  *Empty                        `json:",omitempty"`
+}
+
+// Type returns the message type by determining the name of the first non-nil member.
+func (body Body) Type() string {
+	b := reflect.ValueOf(body)
+	for i := 0; i < b.NumField(); i++ {
+		if !b.Field(i).IsNil() {
+			return reflect.TypeOf(body).Field(i).Name
+		}
+	}
+	return ""
 }
 
 // Empty is an empty message body.

@@ -6,9 +6,12 @@ import (
 	"fmt"
 	"net"
 	"sync"
+	"time"
 
 	"github.com/opentracing/opentracing-go"
 	opentracingExt "github.com/opentracing/opentracing-go/ext"
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/spf13/viper"
 
 	"github.com/oasislabs/oasis-core/go/common"
 	"github.com/oasislabs/oasis-core/go/common/cbor"
@@ -16,12 +19,45 @@ import (
 	"github.com/oasislabs/oasis-core/go/common/logging"
 	"github.com/oasislabs/oasis-core/go/common/tracing"
 	"github.com/oasislabs/oasis-core/go/common/version"
+	"github.com/oasislabs/oasis-core/go/oasis-node/cmd/common/metrics"
 )
 
 const moduleName = "rhp/internal"
 
 // ErrNotReady is the error reported when the Runtime Host Protocol is not initialized.
-var ErrNotReady = errors.New(moduleName, 1, "rhp: not ready")
+var (
+	ErrNotReady = errors.New(moduleName, 1, "rhp: not ready")
+
+	rhpLatency = prometheus.NewSummaryVec(
+		prometheus.SummaryOpts{
+			Name: "oasis_rhp_latency",
+			Help: "Runtime Host call latency (seconds).",
+		},
+		[]string{"call"},
+	)
+	rhpCallSuccesses = prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "oasis_rhp_successes",
+			Help: "Number of successful Runtime Host calls.",
+		},
+		[]string{"call"},
+	)
+	rhpCallFailures = prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "oasis_rhp_failures",
+			Help: "Number of failed Runtime Host calls.",
+		},
+		[]string{"call"},
+	)
+
+	rhpCollectors = []prometheus.Collector{
+		rhpLatency,
+		rhpCallSuccesses,
+		rhpCallFailures,
+	}
+
+	metricsOnce sync.Once
+)
 
 // Handler is a protocol message handler interface.
 type Handler interface {
@@ -167,10 +203,23 @@ func (c *connection) Call(ctx context.Context, body *Body) (*Body, error) {
 		return nil, ErrNotReady
 	}
 
-	return c.call(ctx, body)
+	b, err := c.call(ctx, body)
+	return b, err
 }
 
-func (c *connection) call(ctx context.Context, body *Body) (*Body, error) {
+func (c *connection) call(ctx context.Context, body *Body) (result *Body, err error) {
+	start := time.Now()
+	defer func() {
+		if viper.GetString(metrics.CfgMetricsMode) != metrics.MetricsModeNone {
+			rhpLatency.With(prometheus.Labels{"call": body.Type()}).Observe(time.Since(start).Seconds())
+			if err != nil {
+				rhpCallFailures.With(prometheus.Labels{"call": body.Type()}).Inc()
+			} else {
+				rhpCallSuccesses.With(prometheus.Labels{"call": body.Type()}).Inc()
+			}
+		}
+	}()
+
 	respCh, err := c.makeRequest(ctx, body)
 	if err != nil {
 		return nil, err
@@ -409,7 +458,7 @@ func (c *connection) initConn(conn net.Conn) {
 	}
 
 	c.conn = conn
-	c.codec = cbor.NewMessageCodec(conn)
+	c.codec = cbor.NewMessageCodec(conn, moduleName)
 
 	c.quitWg.Add(2)
 	go c.workerIncoming()
@@ -475,6 +524,10 @@ func (c *connection) InitHost(ctx context.Context, conn net.Conn) (*version.Vers
 
 // NewConnection creates a new uninitialized RHP connection.
 func NewConnection(logger *logging.Logger, runtimeID common.Namespace, handler Handler) (Connection, error) {
+	metricsOnce.Do(func() {
+		prometheus.MustRegister(rhpCollectors...)
+	})
+
 	c := &connection{
 		runtimeID:       runtimeID,
 		handler:         handler,
