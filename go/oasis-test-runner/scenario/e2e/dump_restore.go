@@ -52,7 +52,7 @@ func (sc *dumpRestoreImpl) Run(childEnv *env.Env) error {
 	if err != nil {
 		return err
 	}
-	if err = sc.dumpRestoreNetwork(childEnv, fixture); err != nil {
+	if err = sc.dumpRestoreNetwork(childEnv, fixture, true); err != nil {
 		return err
 	}
 
