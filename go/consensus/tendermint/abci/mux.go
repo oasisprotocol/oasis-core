@@ -72,6 +72,9 @@ type ApplicationConfig struct {
 
 	// MemoryOnlyStorage forces in-memory storage to be used for the state storage.
 	MemoryOnlyStorage bool
+
+	// ReadOnlyStorage forces read-only access for the state storage.
+	ReadOnlyStorage bool
 }
 
 // TransactionAuthHandler is the interface for ABCI applications that handle

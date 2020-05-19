@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"os"
 	"path/filepath"
 	"sync"
 	"time"
@@ -359,16 +360,31 @@ func (s *applicationState) pruneWorker() {
 	}
 }
 
-func newApplicationState(ctx context.Context, cfg *ApplicationConfig) (*applicationState, error) {
+// InitStateStorage initializes the internal ABCI state storage.
+func InitStateStorage(ctx context.Context, cfg *ApplicationConfig) (storage.LocalBackend, storage.NodeDB, *storage.Root, error) {
 	baseDir := filepath.Join(cfg.DataDir, appStateDir)
-	if err := common.Mkdir(baseDir); err != nil {
-		return nil, fmt.Errorf("failed to create application state directory: %w", err)
+	switch cfg.ReadOnlyStorage {
+	case true:
+		// Note: I'm not sure what badger does when given a path that
+		// doesn't actually contain a database, when it's set to
+		// read-only.  Hopefully it's something sensible.
+		fi, err := os.Lstat(baseDir)
+		if err != nil {
+			return nil, nil, nil, fmt.Errorf("failed to stat application state directory: %w", err)
+		}
+		if !fi.Mode().IsDir() {
+			return nil, nil, nil, fmt.Errorf("application state path is not a directory: %v", fi.Mode())
+		}
+	default:
+		if err := common.Mkdir(baseDir); err != nil {
+			return nil, nil, nil, fmt.Errorf("failed to create application state directory: %w", err)
+		}
 	}
 
 	switch cfg.StorageBackend {
 	case storageDB.BackendNameBadgerDB:
 	default:
-		return nil, fmt.Errorf("unsupported storage backend: %s", cfg.StorageBackend)
+		return nil, nil, nil, fmt.Errorf("unsupported storage backend: %s", cfg.StorageBackend)
 	}
 
 	db, err := storageDB.New(&storage.Config{
@@ -378,9 +394,10 @@ func newApplicationState(ctx context.Context, cfg *ApplicationConfig) (*applicat
 		DiscardWriteLogs: true,
 		NoFsync:          true, // This is safe as Tendermint will replay on crash.
 		MemoryOnly:       cfg.MemoryOnlyStorage,
+		ReadOnly:         cfg.ReadOnlyStorage,
 	})
 	if err != nil {
-		return nil, err
+		return nil, nil, nil, err
 	}
 	ldb := db.(storage.LocalBackend)
 	ndb := ldb.NodeDB()
@@ -396,20 +413,20 @@ func newApplicationState(ctx context.Context, cfg *ApplicationConfig) (*applicat
 	// Figure out the latest version/hash if any, and use that as the block height/hash.
 	latestVersion, err := ndb.GetLatestVersion(ctx)
 	if err != nil {
-		return nil, err
+		return nil, nil, nil, err
 	}
 	roots, err := ndb.GetRootsForVersion(ctx, latestVersion)
 	if err != nil {
-		return nil, err
+		return nil, nil, nil, err
 	}
-	stateRoot := storage.Root{
+	stateRoot := &storage.Root{
 		Version: latestVersion,
 	}
 	switch len(roots) {
 	case 0:
 		// No roots -- empty database.
 		if latestVersion != 0 {
-			return nil, fmt.Errorf("state: no roots at non-zero height, corrupted database?")
+			return nil, nil, nil, fmt.Errorf("state: no roots at non-zero height, corrupted database?")
 		}
 		stateRoot.Hash.Empty()
 	case 1:
@@ -417,12 +434,25 @@ func newApplicationState(ctx context.Context, cfg *ApplicationConfig) (*applicat
 		stateRoot.Hash = roots[0]
 	default:
 		// More roots -- should not happen for our use case.
-		return nil, fmt.Errorf("state: more than one root, corrupted database?")
+		return nil, nil, nil, fmt.Errorf("state: more than one root, corrupted database?")
 	}
 
+	ok = true
+
+	return ldb, ndb, stateRoot, nil
+}
+
+func newApplicationState(ctx context.Context, cfg *ApplicationConfig) (*applicationState, error) {
+	// Initialize the state storage.
+	ldb, ndb, stateRoot, err := InitStateStorage(ctx, cfg)
+	if err != nil {
+		return nil, err
+	}
+	latestVersion := stateRoot.Version
+
 	// Use the node database directly to avoid going through the syncer interface.
-	deliverTxTree := mkvs.NewWithRoot(nil, ndb, stateRoot, mkvs.WithoutWriteLog())
-	checkTxTree := mkvs.NewWithRoot(nil, ndb, stateRoot, mkvs.WithoutWriteLog())
+	deliverTxTree := mkvs.NewWithRoot(nil, ndb, *stateRoot, mkvs.WithoutWriteLog())
+	checkTxTree := mkvs.NewWithRoot(nil, ndb, *stateRoot, mkvs.WithoutWriteLog())
 
 	// Initialize the state pruner.
 	statePruner, err := newStatePruner(&cfg.Pruning, ndb, latestVersion)
@@ -443,7 +473,7 @@ func newApplicationState(ctx context.Context, cfg *ApplicationConfig) (*applicat
 		cancelCtx:       cancelCtx,
 		deliverTxTree:   deliverTxTree,
 		checkTxTree:     checkTxTree,
-		stateRoot:       stateRoot,
+		stateRoot:       *stateRoot,
 		storage:         ldb,
 		statePruner:     statePruner,
 		prunerClosedCh:  make(chan struct{}),
@@ -461,8 +491,6 @@ func newApplicationState(ctx context.Context, cfg *ApplicationConfig) (*applicat
 			return nil, fmt.Errorf("state: failed to run initial state commit hook: %w", err)
 		}
 	}
-
-	ok = true
 
 	go s.metricsWorker()
 	go s.pruneWorker()
