@@ -859,7 +859,7 @@ func (n *Node) worker() {
 	n.logger.Info("starting committee node")
 
 	// Provision the hosted runtime.
-	hrt, err := n.ProvisionHostedRuntime(n.ctx)
+	hrt, hrtNotifier, err := n.ProvisionHostedRuntime(n.ctx)
 	if err != nil {
 		n.logger.Error("failed to provision hosted runtime",
 			"err", err,
@@ -883,6 +883,14 @@ func (n *Node) worker() {
 		return
 	}
 	defer hrt.Stop()
+
+	if err = hrtNotifier.Start(); err != nil {
+		n.logger.Error("failed to start runtime notifier",
+			"err", err,
+		)
+		return
+	}
+	defer hrtNotifier.Stop()
 
 	// We are initialized.
 	close(n.initCh)

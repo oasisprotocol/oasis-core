@@ -65,6 +65,28 @@ type Handler interface {
 	Handle(ctx context.Context, body *Body) (*Body, error)
 }
 
+// Notifier is a protocol runtime notifier interface.
+type Notifier interface {
+	// Start the notifier.
+	Start() error
+
+	// Stop the notifier.
+	Stop()
+}
+
+// NoOpNotifier is the default no-op runtime notifier implementation.
+type NoOpNotifier struct {
+}
+
+// Start the no-op notifier.
+func (n *NoOpNotifier) Start() error {
+	return nil
+}
+
+// Stop the no-op notifier.
+func (n *NoOpNotifier) Stop() {
+}
+
 // Connection is a Runtime Host Protocol connection interface.
 type Connection interface {
 	// Close closes the connection.
@@ -340,10 +362,6 @@ func (c *connection) handleMessage(ctx context.Context, message *Message) {
 		var allowed bool
 		state := c.getState()
 		switch {
-		case state == stateInitializing:
-			// Only whitelisted methods are allowed.
-			body := message.Body
-			allowed = body.HostKeyManagerPolicyRequest != nil
 		case state == stateReady:
 			// All requests allowed.
 			allowed = true

@@ -124,12 +124,17 @@ impl Method {
     }
 }
 
+/// Key manager policy update handler callback.
+pub type KeyManagerPolicyHandler = dyn Fn(Vec<u8>) -> ();
+
 /// RPC call dispatcher.
 pub struct Dispatcher {
     /// Registered RPC methods.
     methods: HashMap<String, Method>,
     /// Registered local RPC methods.
     local_methods: HashMap<String, Method>,
+    /// Registered key manager policy handler.
+    km_policy_handler: Option<Box<KeyManagerPolicyHandler>>,
     /// Registered context initializer.
     ctx_initializer: Option<Box<dyn ContextInitializer>>,
 }
@@ -140,6 +145,7 @@ impl Dispatcher {
         Self {
             methods: HashMap::new(),
             local_methods: HashMap::new(),
+            km_policy_handler: None,
             ctx_initializer: None,
         }
     }
@@ -210,5 +216,20 @@ impl Dispatcher {
                 body: Body::Error(format!("{}", error)),
             },
         }
+    }
+
+    /// Handle key manager policy update.
+    pub fn handle_km_policy_update(&self, signed_policy_raw: Vec<u8>) {
+        self.km_policy_handler
+            .as_ref()
+            .map(|handler| handler(signed_policy_raw));
+    }
+
+    /// Update key manager policy update handler.
+    pub fn set_keymanager_policy_update_handler(
+        &mut self,
+        f: Option<Box<KeyManagerPolicyHandler>>,
+    ) {
+        self.km_policy_handler = f;
     }
 }

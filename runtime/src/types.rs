@@ -124,13 +124,13 @@ pub enum Body {
     RuntimeExecuteTxBatchResponse {
         batch: ComputedBatch,
     },
-
-    // Host interface.
-    HostKeyManagerPolicyRequest {},
-    HostKeyManagerPolicyResponse {
+    RuntimeKeyManagerPolicyUpdateRequest {
         #[serde(with = "serde_bytes")]
         signed_policy_raw: Vec<u8>,
     },
+    RuntimeKeyManagerPolicyUpdateResponse {},
+
+    // Host interface.
     HostRPCCallRequest {
         endpoint: String,
         #[serde(with = "serde_bytes")]
