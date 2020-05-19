@@ -14,7 +14,6 @@ import (
 	"path/filepath"
 	"regexp"
 	"sort"
-	"strconv"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -74,7 +73,6 @@ func markdownTable(metrics map[string]Metric) string {
 		pkg, _ := filepath.Rel(viper.GetString(CfgCodebasePath), m.Filename)
 		pkg = filepath.Dir(pkg)
 		fileURL, _ := filepath.Rel(tplDir, m.Filename)
-		fileURL += "#L" + strconv.Itoa(m.Line)
 		desc := html.EscapeString(m.Help)
 
 		mdTable += fmt.Sprintf("%s | %s | %s | [%s](%s)\n", m.Name, m.Type, desc,
