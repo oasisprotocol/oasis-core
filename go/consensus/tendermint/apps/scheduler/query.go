@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
+	abciAPI "github.com/oasislabs/oasis-core/go/consensus/tendermint/api"
 	registryState "github.com/oasislabs/oasis-core/go/consensus/tendermint/apps/registry/state"
 	schedulerState "github.com/oasislabs/oasis-core/go/consensus/tendermint/apps/scheduler/state"
 	scheduler "github.com/oasislabs/oasis-core/go/scheduler/api"
@@ -19,18 +20,18 @@ type Query interface {
 
 // QueryFactory is the scheduler query factory.
 type QueryFactory struct {
-	app *schedulerApplication
+	state abciAPI.ApplicationQueryState
 }
 
 // QueryAt returns the scheduler query interface for a specific height.
 func (sf *QueryFactory) QueryAt(ctx context.Context, height int64) (Query, error) {
-	state, err := schedulerState.NewImmutableState(ctx, sf.app.state, height)
+	state, err := schedulerState.NewImmutableState(ctx, sf.state, height)
 	if err != nil {
 		return nil, err
 	}
 
 	// Some queries need access to the registry to give useful responses.
-	regState, err := registryState.NewImmutableState(ctx, sf.app.state, height)
+	regState, err := registryState.NewImmutableState(ctx, sf.state, height)
 	if err != nil {
 		return nil, err
 	}
@@ -98,5 +99,11 @@ func (sq *schedulerQuerier) KindsCommittees(ctx context.Context, kinds []schedul
 }
 
 func (app *schedulerApplication) QueryFactory() interface{} {
-	return &QueryFactory{app}
+	return &QueryFactory{app.state}
+}
+
+// NewQueryFactory returns a new QueryFactory backed by the given state
+// instance.
+func NewQueryFactory(state abciAPI.ApplicationQueryState) *QueryFactory {
+	return &QueryFactory{state}
 }

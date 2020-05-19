@@ -25,11 +25,7 @@ var (
 
 // ApplicationState is the overall past, present and future state of all multiplexed applications.
 type ApplicationState interface {
-	// Storage returns the storage backend.
-	Storage() storage.LocalBackend
-
-	// BlockHeight returns the last committed block height.
-	BlockHeight() int64
+	ApplicationQueryState
 
 	// BlockHash returns the last committed block hash.
 	BlockHash() []byte
@@ -49,9 +45,6 @@ type ApplicationState interface {
 	// GetBaseEpoch returns the base epoch.
 	GetBaseEpoch() (epochtime.EpochTime, error)
 
-	// GetEpoch returns epoch at block height.
-	GetEpoch(ctx context.Context, blockHeight int64) (epochtime.EpochTime, error)
-
 	// GetCurrentEpoch returns the epoch at the current block height.
 	GetCurrentEpoch(ctx context.Context) (epochtime.EpochTime, error)
 
@@ -67,6 +60,19 @@ type ApplicationState interface {
 
 	// NewContext creates a new application processing context.
 	NewContext(mode ContextMode, now time.Time) *Context
+}
+
+// ApplicationQueryState is minimum methods required to service
+// ApplicationState queries.
+type ApplicationQueryState interface {
+	// Storage returns the storage backend.
+	Storage() storage.LocalBackend
+
+	// BlockHeight returns the last committed block height.
+	BlockHeight() int64
+
+	// GetEpoch returns epoch at block height.
+	GetEpoch(ctx context.Context, blockHeight int64) (epochtime.EpochTime, error)
 }
 
 // MockApplicationStateConfig is the configuration for the mock application state.
@@ -203,7 +209,7 @@ func (s *ImmutableState) Close() {
 }
 
 // NewImmutableState creates a new immutable state wrapper.
-func NewImmutableState(ctx context.Context, state ApplicationState, version int64) (*ImmutableState, error) {
+func NewImmutableState(ctx context.Context, state ApplicationQueryState, version int64) (*ImmutableState, error) {
 	if state == nil {
 		return nil, ErrNoState
 	}

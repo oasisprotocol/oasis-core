@@ -74,7 +74,7 @@ func (st *ImmutableState) Status(ctx context.Context, id common.Namespace) (*api
 	return &status, nil
 }
 
-func NewImmutableState(ctx context.Context, state abciAPI.ApplicationState, version int64) (*ImmutableState, error) {
+func NewImmutableState(ctx context.Context, state abciAPI.ApplicationQueryState, version int64) (*ImmutableState, error) {
 	is, err := abciAPI.NewImmutableState(ctx, state, version)
 	if err != nil {
 		return nil, err

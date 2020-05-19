@@ -5,6 +5,7 @@ import (
 
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
 	"github.com/oasislabs/oasis-core/go/common/quantity"
+	abciAPI "github.com/oasislabs/oasis-core/go/consensus/tendermint/api"
 	stakingState "github.com/oasislabs/oasis-core/go/consensus/tendermint/apps/staking/state"
 	epochtime "github.com/oasislabs/oasis-core/go/epochtime/api"
 	staking "github.com/oasislabs/oasis-core/go/staking/api"
@@ -27,12 +28,12 @@ type Query interface {
 
 // QueryFactory is the staking query factory.
 type QueryFactory struct {
-	app *stakingApplication
+	state abciAPI.ApplicationQueryState
 }
 
 // QueryAt returns the staking query interface for a specific height.
 func (sf *QueryFactory) QueryAt(ctx context.Context, height int64) (Query, error) {
-	state, err := stakingState.NewImmutableState(ctx, sf.app.state, height)
+	state, err := stakingState.NewImmutableState(ctx, sf.state, height)
 	if err != nil {
 		return nil, err
 	}
@@ -93,5 +94,11 @@ func (sq *stakingQuerier) ConsensusParameters(ctx context.Context) (*staking.Con
 }
 
 func (app *stakingApplication) QueryFactory() interface{} {
-	return &QueryFactory{app}
+	return &QueryFactory{app.state}
+}
+
+// NewQueryFactory returns a new QueryFactory backed by the given state
+// instance.
+func NewQueryFactory(state abciAPI.ApplicationQueryState) *QueryFactory {
+	return &QueryFactory{state}
 }

@@ -63,7 +63,7 @@ func (s *immutableState) getFutureEpoch(ctx context.Context) (*mockEpochTimeStat
 	return &state, nil
 }
 
-func newImmutableState(ctx context.Context, state abciAPI.ApplicationState, version int64) (*immutableState, error) {
+func newImmutableState(ctx context.Context, state abciAPI.ApplicationQueryState, version int64) (*immutableState, error) {
 	is, err := abciAPI.NewImmutableState(ctx, state, version)
 	if err != nil {
 		return nil, err
