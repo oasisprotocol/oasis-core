@@ -5,6 +5,7 @@ import (
 	"context"
 
 	"github.com/oasislabs/oasis-core/go/common/errors"
+	consensus "github.com/oasislabs/oasis-core/go/consensus/api"
 	epochtime "github.com/oasislabs/oasis-core/go/epochtime/api"
 	upgrade "github.com/oasislabs/oasis-core/go/upgrade/api"
 )
@@ -32,6 +33,18 @@ type NodeController interface {
 
 	// CancelUpgrade cancels a pending upgrade, unless it is already in progress.
 	CancelUpgrade(ctx context.Context) error
+
+	// GetStatus returns the current status overview of the node.
+	GetStatus(ctx context.Context) (*Status, error)
+}
+
+// Status is the current status overview.
+type Status struct {
+	// SoftwareVersion is the oasis-node software version.
+	SoftwareVersion string `json:"software_version"`
+
+	// Consensus is the status overview of the consensus layer.
+	Consensus consensus.Status `json:"consensus"`
 }
 
 // Shutdownable is an interface the node presents for shutting itself down.

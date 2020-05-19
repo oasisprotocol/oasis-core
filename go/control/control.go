@@ -4,6 +4,7 @@ package control
 import (
 	"context"
 
+	"github.com/oasislabs/oasis-core/go/common/version"
 	consensus "github.com/oasislabs/oasis-core/go/consensus/api"
 	control "github.com/oasislabs/oasis-core/go/control/api"
 	upgrade "github.com/oasislabs/oasis-core/go/upgrade/api"
@@ -57,6 +58,18 @@ func (c *nodeController) UpgradeBinary(ctx context.Context, descriptor *upgrade.
 
 func (c *nodeController) CancelUpgrade(ctx context.Context) error {
 	return c.upgrader.CancelUpgrade(ctx)
+}
+
+func (c *nodeController) GetStatus(ctx context.Context) (*control.Status, error) {
+	cs, err := c.consensus.GetStatus(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	return &control.Status{
+		SoftwareVersion: version.SoftwareVersion,
+		Consensus:       *cs,
+	}, nil
 }
 
 // New creates a new oasis-node controller.
