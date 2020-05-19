@@ -69,6 +69,8 @@ var (
 	ErrRootNotFound = nodedb.ErrRootNotFound
 	// ErrRootMustFollowOld indicates that the passed new root does not follow old root.
 	ErrRootMustFollowOld = nodedb.ErrRootMustFollowOld
+	// ErrReadOnly indicates that the storage backend is read-only.
+	ErrReadOnly = nodedb.ErrReadOnly
 
 	// ReceiptSignatureContext is the signature context used for verifying MKVS receipts.
 	ReceiptSignatureContext = signature.NewContext("oasis-core/storage: receipt", signature.WithChainSeparation())
@@ -105,6 +107,9 @@ type Config struct { // nolint: maligned
 
 	// MemoryOnly will make the storage memory-only (if the backend supports it).
 	MemoryOnly bool
+
+	// ReadOnly will make the storage read-only.
+	ReadOnly bool
 }
 
 // ToNodeDB converts from a Config to a node DB Config.
@@ -115,6 +120,7 @@ func (cfg *Config) ToNodeDB() *nodedb.Config {
 		MaxCacheSize:     cfg.MaxCacheSize,
 		NoFsync:          cfg.NoFsync,
 		MemoryOnly:       cfg.MemoryOnly,
+		ReadOnly:         cfg.ReadOnly,
 		DiscardWriteLogs: cfg.DiscardWriteLogs,
 	}
 }

@@ -43,6 +43,8 @@ var (
 	ErrBadNamespace = errors.New(ModuleName, 10, "mkvs: bad namespace")
 	// ErrNotEarliest indicates that the given version is not the earliest version.
 	ErrNotEarliest = errors.New(ModuleName, 11, "mkvs: version is not the earliest version")
+	// ErrReadOnly indicates that a write operation failed due to a read-only database.
+	ErrReadOnly = errors.New(ModuleName, 12, "mkvs: read-only database")
 )
 
 // Config is the node database backend configuration.
@@ -55,6 +57,9 @@ type Config struct { // nolint: maligned
 
 	// MemoryOnly will make the storage memory-only (if the backend supports it).
 	MemoryOnly bool
+
+	// ReadOnly will make the storage read-only.
+	ReadOnly bool
 
 	// Namespace is the namespace contained within the database.
 	Namespace common.Namespace
