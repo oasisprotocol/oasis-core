@@ -48,7 +48,7 @@ build-helpers: build-helpers-go
 build-go-generate:
 	@$(MAKE) -C go generate
 
-# Generate source Markdown documentation.
+# Synchronize source Markdown documentation.
 update-docs: build-go
 	@$(MAKE) -C docs update
 
@@ -65,7 +65,7 @@ fmt-go:
 fmt: $(fmt-targets)
 
 # Lint code, commits and documentation.
-lint-targets := lint-go lint-git lint-md lint-changelog
+lint-targets := lint-go lint-git lint-md lint-changelog lint-docs
 
 lint-go:
 	@$(MAKE) -C go lint
@@ -90,6 +90,10 @@ lint-changelog:
 		gitlint --msg-filename $$fragment -c title-max-length.line-length=78 || exit_status=$$?; \
 	done; \
 	exit $$exit_status
+
+# Check whether docs are synced with source code.
+lint-docs:
+	@$(MAKE) -C docs check
 
 lint: $(lint-targets)
 

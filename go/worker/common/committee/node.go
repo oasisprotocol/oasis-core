@@ -49,11 +49,20 @@ var (
 		},
 		[]string{"runtime"},
 	)
+	epochNumber = prometheus.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Name: "oasis_worker_epoch_number",
+			Help: "Current epoch number as seen by the worker.",
+		},
+		[]string{"runtime"},
+	)
+
 	nodeCollectors = []prometheus.Collector{
 		processedBlockCount,
 		processedEventCount,
 		failedRoundCount,
 		epochTransitionCount,
+		epochNumber,
 	}
 
 	metricsOnce sync.Once
@@ -175,6 +184,7 @@ func (n *Node) handleEpochTransitionLocked(height int64) {
 	}
 
 	epoch := n.Group.GetEpochSnapshot()
+	epochNumber.With(n.getMetricLabels()).Set(float64(epoch.epochNumber))
 	for _, hooks := range n.hooks {
 		hooks.HandleEpochTransitionLocked(epoch)
 	}
