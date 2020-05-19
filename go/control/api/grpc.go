@@ -23,6 +23,8 @@ var (
 	methodUpgradeBinary = serviceName.NewMethod("UpgradeBinary", upgradeApi.Descriptor{})
 	// methodCancelUpgrade is the CancelUpgrade method.
 	methodCancelUpgrade = serviceName.NewMethod("CancelUpgrade", nil)
+	// methodGetStatus is the GetStatus method.
+	methodGetStatus = serviceName.NewMethod("GetStatus", nil)
 
 	// serviceDesc is the gRPC service descriptor.
 	serviceDesc = grpc.ServiceDesc{
@@ -48,6 +50,10 @@ var (
 			{
 				MethodName: methodCancelUpgrade.ShortName(),
 				Handler:    handlerCancelUpgrade,
+			},
+			{
+				MethodName: methodGetStatus.ShortName(),
+				Handler:    handlerGetStatus,
 			},
 		},
 		Streams: []grpc.StreamDesc{},
@@ -157,6 +163,25 @@ func handlerCancelUpgrade( // nolint: golint
 	return interceptor(ctx, nil, info, handler)
 }
 
+func handlerGetStatus( // nolint: golint
+	srv interface{},
+	ctx context.Context,
+	dec func(interface{}) error,
+	interceptor grpc.UnaryServerInterceptor,
+) (interface{}, error) {
+	if interceptor == nil {
+		return srv.(NodeController).GetStatus(ctx)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: methodGetStatus.FullName(),
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(NodeController).GetStatus(ctx)
+	}
+	return interceptor(ctx, nil, info, handler)
+}
+
 // RegisterService registers a new node controller service with the given gRPC server.
 func RegisterService(server *grpc.Server, service NodeController) {
 	server.RegisterService(&serviceDesc, service)
@@ -188,6 +213,14 @@ func (c *nodeControllerClient) UpgradeBinary(ctx context.Context, descriptor *up
 
 func (c *nodeControllerClient) CancelUpgrade(ctx context.Context) error {
 	return c.conn.Invoke(ctx, methodCancelUpgrade.FullName(), nil, nil)
+}
+
+func (c *nodeControllerClient) GetStatus(ctx context.Context) (*Status, error) {
+	var rsp Status
+	if err := c.conn.Invoke(ctx, methodGetStatus.FullName(), nil, &rsp); err != nil {
+		return nil, err
+	}
+	return &rsp, nil
 }
 
 // NewNodeControllerClient creates a new gRPC node controller client service.
