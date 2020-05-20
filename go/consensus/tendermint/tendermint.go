@@ -710,12 +710,12 @@ func (t *tendermintService) GetTransactions(ctx context.Context, height int64) (
 }
 
 func (t *tendermintService) GetStatus(ctx context.Context) (*consensusAPI.Status, error) {
-	genDoc, err := t.GetGenesisDocument(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	genBlk, err := t.GetBlock(ctx, genDoc.Height)
+	// Genesis block is hardcoded as block 1, since tendermint doesn't have
+	// a genesis block as such, but some external tooling expects there to be
+	// one, so here we are.
+	// This may soon change if the following tendermint issue gets fixed:
+	// https://github.com/tendermint/tendermint/issues/2543
+	genBlk, err := t.GetBlock(ctx, 1)
 	if err != nil {
 		return nil, err
 	}
@@ -739,7 +739,7 @@ func (t *tendermintService) GetStatus(ctx context.Context) (*consensusAPI.Status
 		LatestHeight:     latestBlk.Height,
 		LatestHash:       latestBlk.Hash,
 		LatestTime:       latestBlk.Time,
-		GenesisHeight:    genDoc.Height,
+		GenesisHeight:    1, // See above for an explanation why this is 1.
 		GenesisHash:      genBlk.Hash,
 	}, nil
 }

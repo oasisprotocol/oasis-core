@@ -40,7 +40,7 @@ func ConsensusImplementationTests(t *testing.T, backend consensus.ClientBackend)
 	status, err := backend.GetStatus(ctx)
 	require.NoError(err, "GetStatus")
 	require.NotNil(status, "returned status should not be nil")
-	require.EqualValues(genDoc.Height, status.GenesisHeight)
+	require.EqualValues(1, status.GenesisHeight, "genesis height must be 1")
 	require.EqualValues(blk.Height, status.LatestHeight, "latest block heights should match")
 	require.EqualValues(blk.Hash, status.LatestHash, "latest block hashes should match")
 
