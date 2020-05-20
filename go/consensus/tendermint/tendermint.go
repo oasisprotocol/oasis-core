@@ -434,9 +434,9 @@ func (t *tendermintService) StateToGenesis(ctx context.Context, blockHeight int6
 	}
 
 	return &genesisAPI.Document{
-		// XXX: Tendermint doesn't support restoring from non-0 height.
+		// XXX: Tendermint doesn't support restoring from non-1 height.
 		// https://github.com/tendermint/tendermint/issues/2543
-		Height:     blockHeight,
+		Height:     1,
 		ChainID:    genesisDoc.ChainID,
 		HaltEpoch:  genesisDoc.HaltEpoch,
 		Time:       blk.Header.Time,

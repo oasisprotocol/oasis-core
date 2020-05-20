@@ -37,6 +37,7 @@ var testDoc = &genesis.Document{
 	ChainID:   genesisTestHelpers.TestChainID,
 	Time:      time.Unix(1574858284, 0),
 	HaltEpoch: epochtime.EpochTime(math.MaxUint64),
+	Height:    1,
 	EpochTime: epochtime.Genesis{
 		Parameters: epochtime.ConsensusParameters{
 			DebugMockBackend: true,
@@ -128,7 +129,7 @@ func TestGenesisChainContext(t *testing.T) {
 	//       on each run.
 	stableDoc.Staking = staking.Genesis{}
 
-	require.Equal(t, "1024b5ca04a34e17cab59fdae43c32c05e1a51875841b99ea49321a4ec83adb3", stableDoc.ChainContext())
+	require.Equal(t, "db0de68bff0d34754613c8c0294eb8a3b7a69d5ad2bf5f3832a3cb5ae7de3984", stableDoc.ChainContext())
 }
 
 func TestGenesisSanityCheck(t *testing.T) {

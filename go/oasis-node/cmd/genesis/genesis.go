@@ -157,6 +157,7 @@ func doInitGenesis(cmd *cobra.Command, args []string) {
 		ChainID:   chainID,
 		Time:      time.Now(),
 		HaltEpoch: epochtime.EpochTime(viper.GetUint64(cfgHaltEpoch)),
+		Height:    1,
 	}
 	entities := viper.GetStringSlice(viperEntity)
 	runtimes := viper.GetStringSlice(cfgRuntime)
