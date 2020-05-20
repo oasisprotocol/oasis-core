@@ -48,6 +48,7 @@ implementations.
     * Executor Nodes
     * Merge Nodes
     * Storage Nodes
+    * Key Manager Nodes
 * Oasis Node (`oasis-node`)
   * [RPC](oasis-node/rpc.md)
   * [Metrics](oasis-node/metrics.md)
@@ -56,6 +57,8 @@ implementations.
 
 * [Serialization](encoding.md)
 * [Cryptography](crypto.md)
+* Protocols
+  * [Authenticated gRPC](authenticated-grpc.md)
 * [Merklized Key-Value Store (MKVS)](mkvs.md)
 
 ## Processes

@@ -134,8 +134,8 @@ The node descriptor structure MUST be signed by all of the following keys:
 
 * Node identity key.
 * Consensus key.
-* Committee TLS certificate key.
-* Committee P2P key.
+* TLS key.
+* P2P key.
 
 Registering a node may require sufficient stake in the owning entity's
 [escrow account]. The exact stake threshold is a consensus parameter (see
