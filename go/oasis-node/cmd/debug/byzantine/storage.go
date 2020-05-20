@@ -3,13 +3,11 @@ package byzantine
 import (
 	"context"
 	"crypto/tls"
-	"crypto/x509"
 	"fmt"
 	"io"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/balancer/roundrobin"
-	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/resolver/manual"
 
@@ -33,20 +31,19 @@ type honestNodeStorage struct {
 }
 
 func dialOptionForNode(ourCerts []tls.Certificate, node *node.Node) (grpc.DialOption, error) {
-	certPool := x509.NewCertPool()
-	for _, addr := range node.Committee.Addresses {
-		nodeCert, err := addr.ParseCertificate()
-		if err != nil {
-			return nil, fmt.Errorf("failed to parse node's address certificate: %w", err)
-		}
-		certPool.AddCert(nodeCert)
+	tlsKeys := make(map[signature.PublicKey]bool)
+	for _, addr := range node.TLS.Addresses {
+		tlsKeys[addr.PubKey] = true
 	}
 
-	creds := credentials.NewTLS(&tls.Config{
-		Certificates: ourCerts,
-		RootCAs:      certPool,
-		ServerName:   identity.CommonName,
+	creds, err := cmnGrpc.NewClientCreds(&cmnGrpc.ClientOptions{
+		CommonName:    identity.CommonName,
+		ServerPubKeys: tlsKeys,
+		Certificates:  ourCerts,
 	})
+	if err != nil {
+		return nil, err
+	}
 	return grpc.WithTransportCredentials(creds), nil
 }
 
@@ -61,7 +58,7 @@ func dialNode(node *node.Node, opts grpc.DialOption) (*grpc.ClientConn, error) {
 		return nil, fmt.Errorf("failed dialing node: %w", err)
 	}
 	var resolverState resolver.State
-	for _, addr := range node.Committee.Addresses {
+	for _, addr := range node.TLS.Addresses {
 		resolverState.Addresses = append(resolverState.Addresses, resolver.Address{Addr: addr.String()})
 	}
 	manualResolver.UpdateState(resolverState)

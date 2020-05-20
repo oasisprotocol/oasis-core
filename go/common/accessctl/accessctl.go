@@ -2,10 +2,11 @@
 package accessctl
 
 import (
+	"crypto/ed25519"
 	"crypto/x509"
 	"fmt"
 
-	"github.com/oasislabs/oasis-core/go/common/crypto/hash"
+	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
 )
 
 // Subject is an access control subject.
@@ -14,14 +15,23 @@ type Subject string
 // SubjectFromX509Certificate returns a Subject from the given X.509
 // certificate.
 func SubjectFromX509Certificate(cert *x509.Certificate) Subject {
-	return SubjectFromDER(cert.Raw)
+	pk, ok := cert.PublicKey.(ed25519.PublicKey)
+	if !ok {
+		// This should never happen if certificates are properly verified.
+		return ""
+	}
+	var spk signature.PublicKey
+	if err := spk.UnmarshalBinary(pk[:]); err != nil {
+		// This should NEVER happen.
+		return ""
+	}
+
+	return SubjectFromPublicKey(spk)
 }
 
-// SubjectFromDER returns a Subject from the given certificate's ASN.1 DER
-// representation. To do so, it computes the hash of the DER representation.
-func SubjectFromDER(der []byte) Subject {
-	h := hash.NewFromBytes(der)
-	return Subject(h.String())
+// SubjectFromPublicKey returns a Subject from the given public key.
+func SubjectFromPublicKey(pubKey signature.PublicKey) Subject {
+	return Subject(pubKey.String())
 }
 
 // Action is an access control action.

@@ -3,12 +3,11 @@ package client
 
 import (
 	"crypto/tls"
-	"crypto/x509"
 	"fmt"
 
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials"
 
+	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
 	cmnGrpc "github.com/oasislabs/oasis-core/go/common/grpc"
 	"github.com/oasislabs/oasis-core/go/common/identity"
 	"github.com/oasislabs/oasis-core/go/common/logging"
@@ -24,10 +23,8 @@ type Client struct {
 
 	logger *logging.Logger
 
-	sentryAddress *node.Address
-	sentryCert    *x509.Certificate
-
-	nodeIdentity *identity.Identity
+	sentryAddress node.TLSAddress
+	identity      *identity.Identity
 
 	conn *grpc.ClientConn
 }
@@ -42,13 +39,16 @@ func (c *Client) Close() {
 
 func (c *Client) createConnection() error {
 	// Setup a secure gRPC connection.
-	certPool := x509.NewCertPool()
-	certPool.AddCert(c.sentryCert)
-	creds := credentials.NewTLS(&tls.Config{
-		RootCAs:      certPool,
-		ServerName:   identity.CommonName,
-		Certificates: []tls.Certificate{*c.nodeIdentity.TLSSentryClientCertificate},
+	creds, err := cmnGrpc.NewClientCreds(&cmnGrpc.ClientOptions{
+		CommonName: identity.CommonName,
+		ServerPubKeys: map[signature.PublicKey]bool{
+			c.sentryAddress.PubKey: true,
+		},
+		Certificates: []tls.Certificate{*c.identity.TLSSentryClientCertificate},
 	})
+	if err != nil {
+		return err
+	}
 	opts := grpc.WithTransportCredentials(creds)
 
 	conn, err := cmnGrpc.Dial(c.sentryAddress.String(), opts) // nolint: staticcheck
@@ -65,16 +65,11 @@ func (c *Client) createConnection() error {
 }
 
 // New creates a new sentry client.
-func New(
-	sentryAddress *node.Address,
-	sentryCert *x509.Certificate,
-	nodeIdentity *identity.Identity,
-) (*Client, error) {
+func New(sentryAddress node.TLSAddress, identity *identity.Identity) (*Client, error) {
 	c := &Client{
 		logger:        logging.GetLogger("sentry/client"),
 		sentryAddress: sentryAddress,
-		sentryCert:    sentryCert,
-		nodeIdentity:  nodeIdentity,
+		identity:      identity,
 	}
 
 	if err := c.createConnection(); err != nil {

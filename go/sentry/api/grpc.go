@@ -5,6 +5,7 @@ import (
 
 	"google.golang.org/grpc"
 
+	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
 	cmnGrpc "github.com/oasislabs/oasis-core/go/common/grpc"
 )
 
@@ -15,11 +16,11 @@ var (
 	// methodGetAddresses is the GetAddresses method.
 	methodGetAddresses = serviceName.NewMethod("GetAddresses", nil)
 
-	// methodSetUpstreamTLSCertificates is the SetUpstreamTLSCertificates method.
-	methodSetUpstreamTLSCertificates = serviceName.NewMethod("SetUpstreamTLSCertificates", [][]byte{})
+	// methodSetUpstreamTLSPubKeys is the SetUpstreamTLSPubKeys method.
+	methodSetUpstreamTLSPubKeys = serviceName.NewMethod("SetUpstreamTLSPubKeys", []signature.PublicKey{})
 
-	// methodGetUpstreamTLSCertificates is the GetUpstreamTLSCertificates method.
-	methodGetUpstreamTLSCertificates = serviceName.NewMethod("GetUpstreamTLSCertificates", nil)
+	// methodGetUpstreamTLSPubKeys is the GetUpstreamTLSPubKeys method.
+	methodGetUpstreamTLSPubKeys = serviceName.NewMethod("GetUpstreamTLSPubKeys", nil)
 
 	// serviceDesc is the gRPC service descriptor.
 	serviceDesc = grpc.ServiceDesc{
@@ -31,12 +32,12 @@ var (
 				Handler:    handlerGetAddresses,
 			},
 			{
-				MethodName: methodSetUpstreamTLSCertificates.ShortName(),
-				Handler:    handlerSetUpstreamTLSCertificates,
+				MethodName: methodSetUpstreamTLSPubKeys.ShortName(),
+				Handler:    handlerSetUpstreamTLSPubKeys,
 			},
 			{
-				MethodName: methodGetUpstreamTLSCertificates.ShortName(),
-				Handler:    handlerGetUpstreamTLSCertificates,
+				MethodName: methodGetUpstreamTLSPubKeys.ShortName(),
+				Handler:    handlerGetUpstreamTLSPubKeys,
 			},
 		},
 		Streams: []grpc.StreamDesc{},
@@ -62,44 +63,44 @@ func handlerGetAddresses( // nolint: golint
 	return interceptor(ctx, nil, info, handler)
 }
 
-func handlerSetUpstreamTLSCertificates( // nolint: golint
+func handlerSetUpstreamTLSPubKeys( // nolint: golint
 	srv interface{},
 	ctx context.Context,
 	dec func(interface{}) error,
 	interceptor grpc.UnaryServerInterceptor,
 ) (interface{}, error) {
-	var req [][]byte
+	var req []signature.PublicKey
 	if err := dec(&req); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return nil, srv.(Backend).SetUpstreamTLSCertificates(ctx, req)
+		return nil, srv.(Backend).SetUpstreamTLSPubKeys(ctx, req)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: methodSetUpstreamTLSCertificates.FullName(),
+		FullMethod: methodSetUpstreamTLSPubKeys.FullName(),
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return nil, srv.(Backend).SetUpstreamTLSCertificates(ctx, *req.(*[][]byte))
+		return nil, srv.(Backend).SetUpstreamTLSPubKeys(ctx, *req.(*[]signature.PublicKey))
 	}
 	return interceptor(ctx, &req, info, handler)
 }
 
-func handlerGetUpstreamTLSCertificates( // nolint: golint
+func handlerGetUpstreamTLSPubKeys( // nolint: golint
 	srv interface{},
 	ctx context.Context,
 	dec func(interface{}) error,
 	interceptor grpc.UnaryServerInterceptor,
 ) (interface{}, error) {
 	if interceptor == nil {
-		return srv.(Backend).GetUpstreamTLSCertificates(ctx)
+		return srv.(Backend).GetUpstreamTLSPubKeys(ctx)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: methodGetUpstreamTLSCertificates.FullName(),
+		FullMethod: methodGetUpstreamTLSPubKeys.FullName(),
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(Backend).GetUpstreamTLSCertificates(ctx)
+		return srv.(Backend).GetUpstreamTLSPubKeys(ctx)
 	}
 	return interceptor(ctx, nil, info, handler)
 }
@@ -121,16 +122,16 @@ func (c *sentryClient) GetAddresses(ctx context.Context) (*SentryAddresses, erro
 	return &rsp, nil
 }
 
-func (c *sentryClient) SetUpstreamTLSCertificates(ctx context.Context, certs [][]byte) error {
-	if err := c.conn.Invoke(ctx, methodSetUpstreamTLSCertificates.FullName(), certs, nil); err != nil {
+func (c *sentryClient) SetUpstreamTLSPubKeys(ctx context.Context, pubKeys []signature.PublicKey) error {
+	if err := c.conn.Invoke(ctx, methodSetUpstreamTLSPubKeys.FullName(), pubKeys, nil); err != nil {
 		return err
 	}
 	return nil
 }
 
-func (c *sentryClient) GetUpstreamTLSCertificates(ctx context.Context) ([][]byte, error) {
-	var rsp [][]byte
-	if err := c.conn.Invoke(ctx, methodGetUpstreamTLSCertificates.FullName(), nil, &rsp); err != nil {
+func (c *sentryClient) GetUpstreamTLSPubKeys(ctx context.Context) ([]signature.PublicKey, error) {
+	var rsp []signature.PublicKey
+	if err := c.conn.Invoke(ctx, methodGetUpstreamTLSPubKeys.FullName(), nil, &rsp); err != nil {
 		return nil, err
 	}
 	return rsp, nil

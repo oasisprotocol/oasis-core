@@ -57,8 +57,8 @@ type Worker struct { // nolint: maligned
 type upstreamConn struct {
 	// ID of the upstream node.
 	nodeID signature.PublicKey
-	// TLS certificates for the upstream node.
-	certs [][]byte
+	// TLS public keys for the upstream node.
+	pubKeys []signature.PublicKey
 	// Client connection to the upstream node.
 	conn *grpc.ClientConn
 }
@@ -258,6 +258,7 @@ func (g *Worker) Name() string {
 // Stop halts the worker.
 func (g *Worker) Stop() {
 	if !g.enabled {
+		close(g.quitCh)
 		close(g.stopCh)
 		return
 	}

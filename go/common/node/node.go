@@ -4,8 +4,6 @@
 package node
 
 import (
-	"bytes"
-	"crypto/x509"
 	"errors"
 	"fmt"
 	"io"
@@ -62,11 +60,10 @@ type Node struct { // nolint: maligned
 	// Expiration is the epoch in which this node's commitment expires.
 	Expiration uint64 `json:"expiration"`
 
-	// Committee contains information for connecting to this node as a committee
-	// member.
-	Committee CommitteeInfo `json:"committee"`
+	// TLS contains information for connecting to this node via TLS.
+	TLS TLSInfo `json:"tls"`
 
-	// P2P contains information for connecting to this node via P2P transport.
+	// P2P contains information for connecting to this node via P2P.
 	P2P P2PInfo `json:"p2p"`
 
 	// Consensus contains information for connecting to this node as a
@@ -154,14 +151,19 @@ func (n *Node) ValidateBasic(strictVersion bool) error {
 	return nil
 }
 
-// AddRoles adds the Node roles
+// AddRoles adds a new node role to the existing roles mask.
 func (n *Node) AddRoles(r RolesMask) {
 	n.Roles |= r
 }
 
-// HasRoles checks if Node has roles
+// HasRoles checks if the node has the specified roles.
 func (n *Node) HasRoles(r RolesMask) bool {
 	return n.Roles&r != 0
+}
+
+// OnlyHasRoles checks if the node only has the specified roles and no others.
+func (n *Node) OnlyHasRoles(r RolesMask) bool {
+	return n.Roles == r
 }
 
 // IsExpired returns true if the node expiration epoch is strictly smaller
@@ -211,50 +213,39 @@ type Runtime struct {
 	ExtraInfo []byte `json:"extra_info"`
 }
 
-// CommitteeInfo contains information for connecting to this node as a
-// committee member.
-type CommitteeInfo struct {
-	// Certificate is the certificate for establishing TLS connections.
-	Certificate []byte `json:"certificate"`
+// TLSInfo contains information for connecting to this node via TLS.
+type TLSInfo struct {
+	// PubKey is the public key used for establishing TLS connections.
+	PubKey signature.PublicKey `json:"pub_key"`
 
-	// NextCertificate is the certificate that will be used for establishing
-	// TLS connections after certificate rotation (if enabled).
-	NextCertificate []byte `json:"next_certificate,omitempty"`
+	// NextPubKey is the public key that will be used for establishing TLS connections after
+	// certificate rotation (if enabled).
+	NextPubKey signature.PublicKey `json:"next_pub_key,omitempty"`
 
-	// Addresses is the list of committee addresses at which the node can be reached.
-	Addresses []CommitteeAddress `json:"addresses"`
+	// Addresses is the list of addresses at which the node can be reached.
+	Addresses []TLSAddress `json:"addresses"`
 }
 
-// Equal compares vs another CommitteeInfo for equality.
-func (c *CommitteeInfo) Equal(other *CommitteeInfo) bool {
-	if !bytes.Equal(c.Certificate, other.Certificate) {
+// Equal compares vs another TLSInfo for equality.
+func (t *TLSInfo) Equal(other *TLSInfo) bool {
+	if !t.PubKey.Equal(other.PubKey) {
 		return false
 	}
 
-	if !bytes.Equal(c.NextCertificate, other.NextCertificate) {
+	if !t.NextPubKey.Equal(other.NextPubKey) {
 		return false
 	}
 
-	if len(c.Addresses) != len(other.Addresses) {
+	if len(t.Addresses) != len(other.Addresses) {
 		return false
 	}
-	for i, ca := range c.Addresses {
+	for i, ca := range t.Addresses {
 		if !ca.Equal(&other.Addresses[i]) {
 			return false
 		}
 	}
 
 	return true
-}
-
-// ParseCertificate returns the parsed x509 certificate.
-func (c *CommitteeInfo) ParseCertificate() (*x509.Certificate, error) {
-	return x509.ParseCertificate(c.Certificate)
-}
-
-// ParseCertificate returns the parsed x509 next certificate.
-func (c *CommitteeInfo) ParseNextCertificate() (*x509.Certificate, error) {
-	return x509.ParseCertificate(c.NextCertificate)
 }
 
 // P2PInfo contains information for connecting to this node via P2P transport.

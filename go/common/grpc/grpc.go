@@ -4,6 +4,7 @@ package grpc
 import (
 	"context"
 	"crypto/tls"
+	"crypto/x509"
 	"fmt"
 	"net"
 	"os"
@@ -22,6 +23,7 @@ import (
 	"google.golang.org/grpc/grpclog"
 	"google.golang.org/grpc/keepalive"
 
+	cmnTLS "github.com/oasislabs/oasis-core/go/common/crypto/tls"
 	"github.com/oasislabs/oasis-core/go/common/grpc/auth"
 	"github.com/oasislabs/oasis-core/go/common/identity"
 	"github.com/oasislabs/oasis-core/go/common/logging"
@@ -306,6 +308,9 @@ type ServerConfig struct { // nolint: maligned
 	InstallWrapper bool
 	// AuthFunc is the authentication function for access control.
 	AuthFunc auth.AuthenticationFunction
+	// ClientCommonName is the expected common name on client TLS certificates. If not specified,
+	// the default identity.CommonName will be used.
+	ClientCommonName string
 	// CustomOptions is an array of extra options for the grpc server.
 	CustomOptions []grpc.ServerOption
 }
@@ -450,6 +455,10 @@ func NewServer(config *ServerConfig) (*Server, error) {
 		// Default to NoAuth.
 		config.AuthFunc = auth.NoAuth
 	}
+	if config.ClientCommonName == "" {
+		// Default to identity.CommonName.
+		config.ClientCommonName = identity.CommonName
+	}
 	var wrapper *grpcWrapper
 	unaryInterceptors := []grpc.UnaryServerInterceptor{
 		logAdapter.unaryLogger,
@@ -479,6 +488,13 @@ func NewServer(config *ServerConfig) (*Server, error) {
 	if config.Identity != nil && config.Identity.GetTLSCertificate() != nil {
 		tlsConfig := &tls.Config{
 			ClientAuth: clientAuthType,
+			VerifyPeerCertificate: func(rawCerts [][]byte, verifiedChains [][]*x509.Certificate) error {
+				return cmnTLS.VerifyCertificate(rawCerts, cmnTLS.VerifyOptions{
+					CommonName:         config.ClientCommonName,
+					AllowUnknownKeys:   true,
+					AllowNoCertificate: true,
+				})
+			},
 			GetCertificate: func(ch *tls.ClientHelloInfo) (*tls.Certificate, error) {
 				return config.Identity.GetTLSCertificate(), nil
 			},

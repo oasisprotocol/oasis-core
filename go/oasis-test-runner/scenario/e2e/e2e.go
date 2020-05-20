@@ -124,6 +124,8 @@ func RegisterScenarios() error {
 		Debond,
 		// Late start test.
 		LateStart,
+		// Restore from v20.6 genesis file.
+		RestoreV206,
 	} {
 		if err := cmd.Register(s); err != nil {
 			return err

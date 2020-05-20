@@ -4,8 +4,6 @@ package api
 import (
 	"bytes"
 	"context"
-	goEd25519 "crypto/ed25519"
-	"crypto/x509"
 	"encoding/json"
 	"fmt"
 	"sort"
@@ -167,8 +165,8 @@ var (
 	// ConsensusAddressRequiredRoles are the Node roles that require Consensus Address.
 	ConsensusAddressRequiredRoles = node.RoleValidator
 
-	// CommitteeAddressRequiredRoles are the Node roles that require Committee Address.
-	CommitteeAddressRequiredRoles = (node.RoleComputeWorker |
+	// TLSAddressRequiredRoles are the Node roles that require TLS Address.
+	TLSAddressRequiredRoles = (node.RoleComputeWorker |
 		node.RoleStorageWorker |
 		node.RoleKeyManager)
 
@@ -310,11 +308,8 @@ type NodeList struct {
 // NodeLookup interface implements various ways for the verification
 // functions to look-up nodes in the registry's state.
 type NodeLookup interface {
-	// Returns the node that corresponds to the given consensus or P2P ID.
-	NodeByConsensusOrP2PKey(ctx context.Context, key signature.PublicKey) (*node.Node, error)
-
-	// Returns the node that corresponds to the given committee certificate.
-	NodeByCertificate(ctx context.Context, cert []byte) (*node.Node, error)
+	// NodeBySubKey looks up a specific node by its consensus, P2P or TLS key.
+	NodeBySubKey(ctx context.Context, key signature.PublicKey) (*node.Node, error)
 
 	// Returns a list of all nodes.
 	Nodes(ctx context.Context) ([]*node.Node, error)
@@ -598,55 +593,57 @@ func VerifyRegisterNodeArgs( // nolint: gocyclo
 		return nil, nil, err
 	}
 
-	// Validate CommitteeInfo.
-	// Verify that certificate is well-formed.
-	if _, err := n.Committee.ParseCertificate(); err != nil {
-		logger.Error("RegisterNode: invalid committee TLS certificate",
+	// Validate TLSInfo.
+	if n.DescriptorVersion == 0 {
+		// Old descriptor that used full TLS certificates instead of just public keys. We allow old
+		// descriptors iff this is the chain being initialized from genesis and the node only has
+		// the validator role (because validators do not expose any TLS services).
+		// TODO: Drop support for node descriptor version 0 (oasis-core#2918).
+		if !isGenesis && !isSanityCheck {
+			return nil, nil, fmt.Errorf("%w: v0 descriptor only allowed at genesis time", ErrInvalidArgument)
+		}
+		if !n.OnlyHasRoles(node.RoleValidator) {
+			logger.Error("RegisterNode: v0 descriptor for non-validator node",
+				"node", n,
+			)
+			return nil, nil, fmt.Errorf("%w: v0 descriptor for non-validator node", ErrInvalidArgument)
+		}
+
+		legacyTLSKey, err := nodeV0parseTLSPubKey(logger, sigNode)
+		if err != nil {
+			return nil, nil, err
+		}
+
+		logger.Warn("RegisterNode: using v0 node descriptor",
 			"node", n,
-			"err", err,
 		)
-		return nil, nil, fmt.Errorf("%w: invalid committee TLS certificate", ErrInvalidArgument)
-	}
-	committeeAddressRequired := n.HasRoles(CommitteeAddressRequiredRoles)
-	if err := verifyAddresses(params, committeeAddressRequired, n.Committee.Addresses); err != nil {
-		addrs, _ := json.Marshal(n.Committee.Addresses)
-		logger.Error("RegisterNode: missing/invalid committee addresses",
-			"node", n,
-			"committee_addrs", addrs,
-		)
-		return nil, nil, err
-	}
 
-	certPub, err := verifyNodeCertificate(logger, &n, false)
-	if err != nil {
-		return nil, nil, err
-	}
+		expectedSigners = append(expectedSigners, legacyTLSKey)
+	} else {
+		if !n.TLS.PubKey.IsValid() {
+			logger.Error("RegisterNode: invalid TLS public key",
+				"node", n,
+			)
+			return nil, nil, fmt.Errorf("%w: invalid TLS public key", ErrInvalidArgument)
+		}
+		tlsAddressRequired := n.HasRoles(TLSAddressRequiredRoles)
+		if err := verifyAddresses(params, tlsAddressRequired, n.TLS.Addresses); err != nil {
+			addrs, _ := json.Marshal(n.TLS.Addresses)
+			logger.Error("RegisterNode: missing/invalid committee addresses",
+				"node", n,
+				"committee_addrs", addrs,
+			)
+			return nil, nil, err
+		}
 
-	if !sigNode.MultiSigned.IsSignedBy(certPub) {
-		if n.Committee.NextCertificate != nil {
-			nextCertPub, grr := verifyNodeCertificate(logger, &n, true)
-			if grr != nil {
-				return nil, nil, grr
-			}
-
-			if !sigNode.MultiSigned.IsSignedBy(nextCertPub) {
-				logger.Error("RegisterNode: not signed by any TLS certificate key",
-					"signed_node", sigNode,
-					"node", n,
-				)
-				return nil, nil, fmt.Errorf("%w: registration not signed by any TLS certificate key", ErrInvalidArgument)
-			}
-
-			expectedSigners = append(expectedSigners, nextCertPub)
-		} else {
+		if !sigNode.MultiSigned.IsSignedBy(n.TLS.PubKey) {
 			logger.Error("RegisterNode: not signed by TLS certificate key",
 				"signed_node", sigNode,
 				"node", n,
 			)
 			return nil, nil, fmt.Errorf("%w: registration not signed by TLS certificate key", ErrInvalidArgument)
 		}
-	} else {
-		expectedSigners = append(expectedSigners, certPub)
+		expectedSigners = append(expectedSigners, n.TLS.PubKey)
 	}
 
 	// Validate P2PInfo.
@@ -665,7 +662,7 @@ func VerifyRegisterNodeArgs( // nolint: gocyclo
 	}
 	expectedSigners = append(expectedSigners, n.P2P.ID)
 	p2pAddressRequired := n.HasRoles(P2PAddressRequiredRoles)
-	if err = verifyAddresses(params, p2pAddressRequired, n.P2P.Addresses); err != nil {
+	if err := verifyAddresses(params, p2pAddressRequired, n.P2P.Addresses); err != nil {
 		addrs, _ := json.Marshal(n.P2P.Addresses)
 		logger.Error("RegisterNode: missing/invald P2P addresses",
 			"node", n,
@@ -674,20 +671,20 @@ func VerifyRegisterNodeArgs( // nolint: gocyclo
 		return nil, nil, err
 	}
 
-	// Make sure that the consensus and P2P keys, as well as the committee
-	// certificate are unique (between themselves and compared to other nodes).
+	// Make sure that the consensus, TLS and P2P keys are unique (between
+	// themselves and compared to other nodes).
 	//
 	// Note that if a key exists and belongs to the same node ID, this is not
 	// counted as an error, since it is possible that the node descriptor is
 	// just being updated (this check is called in both cases).
-	if n.Consensus.ID.Equal(n.P2P.ID) {
-		logger.Error("RegisterNode: node consensus and P2P IDs must differ",
+	if n.Consensus.ID.Equal(n.P2P.ID) || n.Consensus.ID.Equal(n.TLS.PubKey) || n.P2P.ID.Equal(n.TLS.PubKey) {
+		logger.Error("RegisterNode: node consensus, P2P and TLS keys must differ",
 			"node", n,
 		)
-		return nil, nil, fmt.Errorf("%w: P2P and Consensus IDs not unique", ErrInvalidArgument)
+		return nil, nil, fmt.Errorf("%w: P2P, consensus and TLS keys not unique", ErrInvalidArgument)
 	}
 
-	existingNode, err := nodeLookup.NodeByConsensusOrP2PKey(ctx, n.Consensus.ID)
+	existingNode, err := nodeLookup.NodeBySubKey(ctx, n.Consensus.ID)
 	if err != nil && err != ErrNoSuchNode {
 		logger.Error("RegisterNode: failed to get node by consensus ID",
 			"err", err,
@@ -703,7 +700,7 @@ func VerifyRegisterNodeArgs( // nolint: gocyclo
 		return nil, nil, fmt.Errorf("%w: duplicate node consensus ID", ErrInvalidArgument)
 	}
 
-	existingNode, err = nodeLookup.NodeByConsensusOrP2PKey(ctx, n.P2P.ID)
+	existingNode, err = nodeLookup.NodeBySubKey(ctx, n.P2P.ID)
 	if err != nil && err != ErrNoSuchNode {
 		logger.Error("RegisterNode: failed to get node by P2P ID",
 			"err", err,
@@ -719,19 +716,21 @@ func VerifyRegisterNodeArgs( // nolint: gocyclo
 		return nil, nil, fmt.Errorf("%w: duplicate node P2P ID", ErrInvalidArgument)
 	}
 
-	existingNode, err = nodeLookup.NodeByCertificate(ctx, n.Committee.Certificate)
+	existingNode, err = nodeLookup.NodeBySubKey(ctx, n.TLS.PubKey)
 	if err != nil && err != ErrNoSuchNode {
-		logger.Error("RegisterNode: failed to get node by committee certificate",
+		logger.Error("RegisterNode: failed to get node by TLS public key",
 			"err", err,
+			"tls_pub_key", n.TLS.PubKey.String(),
 		)
 		return nil, nil, ErrInvalidArgument
 	}
-	if existingNode != nil && existingNode.ID != n.ID {
-		logger.Error("RegisterNode: duplicate node committee certificate",
+	// TODO: Drop support for node descriptor version 0 (oasis-core#2918).
+	if existingNode != nil && existingNode.ID != n.ID && n.DescriptorVersion != 0 {
+		logger.Error("RegisterNode: duplicate node TLS public key",
 			"node_id", n.ID,
 			"existing_node_id", existingNode.ID,
 		)
-		return nil, nil, fmt.Errorf("%w: duplicate node committee certificate", ErrInvalidArgument)
+		return nil, nil, fmt.Errorf("%w: duplicate node TLS public key", ErrInvalidArgument)
 	}
 
 	// Ensure that only the expected signatures are present, and nothing more.
@@ -744,49 +743,6 @@ func VerifyRegisterNodeArgs( // nolint: gocyclo
 	}
 
 	return &n, runtimes, nil
-}
-
-func verifyNodeCertificate(logger *logging.Logger, node *node.Node, useNextCert bool) (signature.PublicKey, error) {
-	var (
-		cert    *x509.Certificate
-		certPub signature.PublicKey
-		err     error
-	)
-
-	if useNextCert {
-		cert, err = node.Committee.ParseNextCertificate()
-	} else {
-		cert, err = node.Committee.ParseCertificate()
-	}
-	if err != nil {
-		logger.Error("RegisterNode: failed to parse committee certificate",
-			"err", err,
-			"node", node,
-			"use_next_cert", useNextCert,
-		)
-		return certPub, fmt.Errorf("%w: failed to parse committee certificate", ErrInvalidArgument)
-	}
-
-	edPub, ok := cert.PublicKey.(goEd25519.PublicKey)
-	if !ok {
-		logger.Error("RegisterNode: incorrect committee certifiate signing algorithm",
-			"node", node,
-			"use_next_cert", useNextCert,
-		)
-		return certPub, fmt.Errorf("%w: incorrect committee certificate signing algorithm", ErrInvalidArgument)
-	}
-
-	if err = certPub.UnmarshalBinary(edPub); err != nil {
-		// This should NEVER happen.
-		logger.Error("RegisterNode: malformed committee certificate signing key",
-			"err", err,
-			"node", node,
-			"use_next_cert", useNextCert,
-		)
-		return certPub, fmt.Errorf("%w: malformed committee certificate signing key", ErrInvalidArgument)
-	}
-
-	return certPub, nil
 }
 
 // VerifyNodeRuntimeEnclaveIDs verifies TEE-specific attributes of the node's runtime.
@@ -896,13 +852,13 @@ func verifyAddresses(params *ConsensusParameters, addressRequired bool, addresse
 				return err
 			}
 		}
-	case []node.CommitteeAddress:
+	case []node.TLSAddress:
 		if len(addrs) == 0 && addressRequired {
-			return fmt.Errorf("%w: missing committee address", ErrInvalidArgument)
+			return fmt.Errorf("%w: missing TLS address", ErrInvalidArgument)
 		}
 		for _, v := range addrs {
-			if _, err := v.ParseCertificate(); err != nil {
-				return fmt.Errorf("%w: committee address certificate invalid", ErrInvalidArgument)
+			if !v.PubKey.IsValid() {
+				return fmt.Errorf("%w: TLS address public key invalid", ErrInvalidArgument)
 			}
 			if err := VerifyAddress(v.Address, params.DebugAllowUnroutableAddresses); err != nil {
 				return err

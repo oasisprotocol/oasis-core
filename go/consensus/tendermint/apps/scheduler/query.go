@@ -71,7 +71,7 @@ func (sq *schedulerQuerier) Validators(ctx context.Context) ([]*scheduler.Valida
 			// node identifiers for validators, because user queries are
 			// likely more infrequent than all the business of actually
 			// scheduling...
-			node, err := sq.regState.NodeByConsensusOrP2PKey(ctx, v)
+			node, err := sq.regState.NodeBySubKey(ctx, v)
 			if err != nil {
 				// Should NEVER happen.
 				return nil, err

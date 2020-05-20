@@ -1,7 +1,6 @@
 package common
 
 import (
-	"crypto/x509"
 	"fmt"
 	"time"
 
@@ -26,12 +25,9 @@ var (
 
 	cfgClientAddresses = "worker.client.addresses"
 
-	// CfgSentryAddresses configures addresses of sentry nodes the worker
-	// should connect to.
+	// CfgSentryAddresses configures addresses and public keys of sentry nodes the worker should
+	// connect to.
 	CfgSentryAddresses = "worker.sentry.address"
-	// CfgSentryCertFiles configures paths to certificates of the sentry nodes
-	// the worker should connect to.
-	CfgSentryCertFiles = "worker.sentry.cert_file"
 
 	// CfgRuntimeProvisioner configures the runtime provisioner.
 	CfgRuntimeProvisioner = "worker.runtime.provisioner"
@@ -70,10 +66,9 @@ const (
 
 // Config contains common worker config.
 type Config struct { // nolint: maligned
-	ClientPort         uint16
-	ClientAddresses    []node.Address
-	SentryAddresses    []node.Address
-	SentryCertificates []*x509.Certificate
+	ClientPort      uint16
+	ClientAddresses []node.Address
+	SentryAddresses []node.TLSAddress
 
 	// RuntimeHost contains configuration for a worker that hosts runtimes. It may be nil if the
 	// worker is not configured to host runtimes.
@@ -127,21 +122,20 @@ func NewConfig(ias ias.Endpoint) (*Config, error) {
 		return nil, err
 	}
 
-	sentryAddresses, err := configparser.ParseAddressList(viper.GetStringSlice(CfgSentryAddresses))
-	if err != nil {
-		return nil, err
-	}
-
-	sentryCerts, err := configparser.ParseCertificateFiles(viper.GetStringSlice(CfgSentryCertFiles))
-	if err != nil {
-		return nil, err
+	// Parse sentry configuration.
+	var sentryAddresses []node.TLSAddress
+	for _, v := range viper.GetStringSlice(CfgSentryAddresses) {
+		var tlsAddr node.TLSAddress
+		if err = tlsAddr.UnmarshalText([]byte(v)); err != nil {
+			return nil, fmt.Errorf("worker: bad sentry address (%s): %w", v, err)
+		}
+		sentryAddresses = append(sentryAddresses, tlsAddr)
 	}
 
 	cfg := Config{
 		ClientPort:           uint16(viper.GetInt(CfgClientPort)),
 		ClientAddresses:      clientAddresses,
 		SentryAddresses:      sentryAddresses,
-		SentryCertificates:   sentryCerts,
 		StorageCommitTimeout: viper.GetDuration(cfgStorageCommitTimeout),
 		logger:               logging.GetLogger("worker/config"),
 	}
@@ -234,8 +228,7 @@ func NewConfig(ias ias.Endpoint) (*Config, error) {
 func init() {
 	Flags.Uint16(CfgClientPort, 9100, "Port to use for incoming gRPC client connections")
 	Flags.StringSlice(cfgClientAddresses, []string{}, "Address/port(s) to use for client connections when registering this node (if not set, all non-loopback local interfaces will be used)")
-	Flags.StringSlice(CfgSentryAddresses, []string{}, fmt.Sprintf("Address(es) of sentry node(s) to connect to (each address should have a corresponding certificate file set in %s)", CfgSentryCertFiles))
-	Flags.StringSlice(CfgSentryCertFiles, []string{}, fmt.Sprintf("Certificate file(s) of sentry node(s) to connect to (each certificate file should have a corresponding address set in %s)", CfgSentryAddresses))
+	Flags.StringSlice(CfgSentryAddresses, []string{}, fmt.Sprintf("Address(es) of sentry node(s) to connect to of the form [PubKey@]ip:port (where PubKey@ part represents base64 encoded node TLS public key)"))
 
 	Flags.String(CfgRuntimeProvisioner, RuntimeProvisionerSandboxed, "Runtime provisioner to use")
 	Flags.String(CfgRuntimeSGXLoader, "", "(for SGX runtimes) Path to SGXS runtime loader binary")

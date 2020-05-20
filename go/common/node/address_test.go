@@ -70,23 +70,23 @@ func TestConsensusAddress(t *testing.T) {
 	}
 }
 
-func TestCommitteeAddress(t *testing.T) {
+func TestTLSAddress(t *testing.T) {
 	type testCase struct {
-		committeeAddress string
+		tlsAddress string
 	}
 
 	testCases := []testCase{
 		{
-			committeeAddress: "MIIBSjCB8KADAgECAgEBMAoGCCqGSM49BAMCMBUxEzARBgNVBAMTCm9hc2lzLW5vZGUwHhcNMjAwMTE0MTQyMzU5WhcNMjEwMTE0MTUyMzU5WjAVMRMwEQYDVQQDEwpvYXNpcy1ub2RlMFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEAml6sfT1v+1fnwADmKLT0fsXkhJE1bQDol/utnC2SOApROfdK53koFdNjV+e7i6TMH7JijFls6GmkTd6nIC+jaMxMC8wDgYDVR0PAQH/BAQDAgKkMB0GA1UdJQQWMBQGCCsGAQUFBwMBBggrBgEFBQcDAjAKBggqhkjOPQQDAgNJADBGAiEAhh8Y41Ahhe6YfX9gJlcKEfaZF1pSoErmnuu3//7twtUCIQC9fUavln6Inj/zEK2jYp9WNzaA6SqGkj01mhKJxlINPQ==@127.0.0.1:8000",
+			tlsAddress: "K1bw65BZsB8s2U6nGLE+eVCCBsJ3BTnK+k9s8hXN/pI=@127.0.0.1:8000",
 		},
 	}
 
 	for _, testCase := range testCases {
-		// Construct a CommitteeAddress object and check if text marshalling works.
-		var committeeAddress CommitteeAddress
-		require.NoError(t, committeeAddress.UnmarshalText([]byte(testCase.committeeAddress)), "error unmarshaling committee address")
-		committeeAddrBytes, err := committeeAddress.MarshalText()
-		require.NoError(t, err, "error marshalling commmittee address")
-		require.Equal(t, testCase.committeeAddress, string(committeeAddrBytes), "marshalled committee address does not match")
+		// Construct a TLSAddress object and check if text marshalling works.
+		var tlsAddress TLSAddress
+		require.NoError(t, tlsAddress.UnmarshalText([]byte(testCase.tlsAddress)), "error unmarshaling TLS address")
+		committeeAddrBytes, err := tlsAddress.MarshalText()
+		require.NoError(t, err, "error marshalling TLS address")
+		require.Equal(t, testCase.tlsAddress, string(committeeAddrBytes), "marshalled TLS address does not match")
 	}
 }

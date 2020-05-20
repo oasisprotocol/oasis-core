@@ -1,9 +1,8 @@
 package committee
 
 import (
-	"crypto/x509"
-
 	"github.com/oasislabs/oasis-core/go/common/accessctl"
+	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
 	"github.com/oasislabs/oasis-core/go/common/logging"
 	"github.com/oasislabs/oasis-core/go/common/node"
 	"github.com/oasislabs/oasis-core/go/runtime/committee"
@@ -30,15 +29,15 @@ func (ap AccessPolicy) AddRulesForCommittee(policy *accessctl.Policy, committee 
 		}
 
 		// Allow the node to perform actions from the given access policy.
-		subject := accessctl.SubjectFromDER(node.Committee.Certificate)
+		subject := accessctl.SubjectFromPublicKey(node.TLS.PubKey)
 		for _, action := range ap.Actions {
 			policy.Allow(subject, action)
 		}
 
 		// Make sure to also allow the node to perform actions after it has
 		// rotated its TLS certificates.
-		if node.Committee.NextCertificate != nil {
-			subject := accessctl.SubjectFromDER(node.Committee.NextCertificate)
+		if node.TLS.NextPubKey.IsValid() {
+			subject := accessctl.SubjectFromPublicKey(node.TLS.NextPubKey)
 			for _, action := range ap.Actions {
 				policy.Allow(subject, action)
 			}
@@ -46,10 +45,10 @@ func (ap AccessPolicy) AddRulesForCommittee(policy *accessctl.Policy, committee 
 	}
 }
 
-// AddCertPolicy augments the given policy by allowing actions in the current AccessPolicy
-// to given certificate.
-func (ap AccessPolicy) AddCertPolicy(policy *accessctl.Policy, cert *x509.Certificate) {
-	subject := accessctl.SubjectFromX509Certificate(cert)
+// AddPublicKeyPolicy augments the given policy by allowing actions in the current AccessPolicy
+// to given TLS public key.
+func (ap AccessPolicy) AddPublicKeyPolicy(policy *accessctl.Policy, pubKey signature.PublicKey) {
+	subject := accessctl.SubjectFromPublicKey(pubKey)
 	for _, action := range ap.Actions {
 		policy.Allow(subject, action)
 	}
@@ -64,15 +63,15 @@ func (ap AccessPolicy) AddRulesForNodeRoles(
 ) {
 	for _, n := range nodes {
 		if n.HasRoles(roles) {
-			subject := accessctl.SubjectFromDER(n.Committee.Certificate)
+			subject := accessctl.SubjectFromPublicKey(n.TLS.PubKey)
 			for _, action := range ap.Actions {
 				policy.Allow(subject, action)
 			}
 
 			// Make sure to also allow the node to perform actions after is has
 			// rotated its TLS certificates.
-			if n.Committee.NextCertificate != nil {
-				subject := accessctl.SubjectFromDER(n.Committee.NextCertificate)
+			if n.TLS.NextPubKey.IsValid() {
+				subject := accessctl.SubjectFromPublicKey(n.TLS.NextPubKey)
 				for _, action := range ap.Actions {
 					policy.Allow(subject, action)
 				}

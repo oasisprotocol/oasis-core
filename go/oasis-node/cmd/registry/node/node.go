@@ -33,7 +33,7 @@ import (
 const (
 	CfgEntityID         = "node.entity_id"
 	CfgExpiration       = "node.expiration"
-	CfgCommitteeAddress = "node.committee_address"
+	CfgTLSAddress       = "node.tls_address"
 	CfgP2PAddress       = "node.p2p_address"
 	CfgConsensusAddress = "node.consensus_address"
 	CfgRole             = "node.role"
@@ -170,9 +170,9 @@ func doInit(cmd *cobra.Command, args []string) { // nolint: gocyclo
 		os.Exit(1)
 	}
 
-	var nextCert []byte
-	if c := nodeIdentity.GetNextTLSCertificate(); c != nil {
-		nextCert = c.Certificate[0]
+	var nextPubKey signature.PublicKey
+	if s := nodeIdentity.GetNextTLSSigner(); s != nil {
+		nextPubKey = s.Public()
 	}
 
 	n := &node.Node{
@@ -180,9 +180,9 @@ func doInit(cmd *cobra.Command, args []string) { // nolint: gocyclo
 		ID:                nodeIdentity.NodeSigner.Public(),
 		EntityID:          entityID,
 		Expiration:        viper.GetUint64(CfgExpiration),
-		Committee: node.CommitteeInfo{
-			Certificate:     nodeIdentity.GetTLSCertificate().Certificate[0],
-			NextCertificate: nextCert,
+		TLS: node.TLSInfo{
+			PubKey:     nodeIdentity.GetTLSSigner().Public(),
+			NextPubKey: nextPubKey,
 		},
 		P2P: node.P2PInfo{
 			ID: nodeIdentity.P2PSigner.Public(),
@@ -211,21 +211,20 @@ func doInit(cmd *cobra.Command, args []string) { // nolint: gocyclo
 		n.Runtimes = append(n.Runtimes, runtime)
 	}
 
-	for _, v := range viper.GetStringSlice(CfgCommitteeAddress) {
-
-		var committeeAddr node.CommitteeAddress
-		if committeeAddrErr := committeeAddr.UnmarshalText([]byte(v)); committeeAddrErr != nil {
-			if addrErr := committeeAddr.Address.UnmarshalText([]byte(v)); addrErr != nil {
-				logger.Error("failed to parse node's committee address",
+	for _, v := range viper.GetStringSlice(CfgTLSAddress) {
+		var tlsAddr node.TLSAddress
+		if tlsAddrErr := tlsAddr.UnmarshalText([]byte(v)); tlsAddrErr != nil {
+			if addrErr := tlsAddr.Address.UnmarshalText([]byte(v)); addrErr != nil {
+				logger.Error("failed to parse node's TLS address",
 					"addrErr", addrErr,
-					"committeeAddrErr", committeeAddrErr,
+					"tlsAddrErr", tlsAddrErr,
 					"addr", v,
 				)
 				os.Exit(1)
 			}
-			committeeAddr.Certificate = n.Committee.Certificate
+			tlsAddr.PubKey = n.TLS.PubKey
 		}
-		n.Committee.Addresses = append(n.Committee.Addresses, committeeAddr)
+		n.TLS.Addresses = append(n.TLS.Addresses, tlsAddr)
 	}
 
 	for _, v := range viper.GetStringSlice(CfgP2PAddress) {
@@ -239,8 +238,8 @@ func doInit(cmd *cobra.Command, args []string) { // nolint: gocyclo
 		}
 		n.P2P.Addresses = append(n.P2P.Addresses, addr)
 	}
-	if n.HasRoles(maskCommitteeMember) && (len(n.Committee.Addresses) == 0 || len(n.P2P.Addresses) == 0) {
-		logger.Error("nodes that are committee members require at least 1 committee and 1 P2P address")
+	if n.HasRoles(maskCommitteeMember) && (len(n.TLS.Addresses) == 0 || len(n.P2P.Addresses) == 0) {
+		logger.Error("nodes that are committee members require at least 1 TLS and 1 P2P address")
 		os.Exit(1)
 	}
 
@@ -420,7 +419,7 @@ func Register(parentCmd *cobra.Command) {
 func init() {
 	flags.String(CfgEntityID, "", "Entity ID that controls this node")
 	flags.Uint64(CfgExpiration, 0, "Epoch that the node registration should expire")
-	flags.StringSlice(CfgCommitteeAddress, nil, "Address(es) the node can be reached as a committee member of the form [Certificate@]ip:port (where Certificate@ part is optional and represents base64 encoded node certificate for TLS)")
+	flags.StringSlice(CfgTLSAddress, nil, "Address(es) the node can be reached over TLS of the form [PubKey@]ip:port (where PubKey@ part is optional and represents base64 encoded node TLS public key)")
 	flags.StringSlice(CfgP2PAddress, nil, "Address(es) the node can be reached over the P2P transport")
 	flags.StringSlice(CfgConsensusAddress, nil, "Address(es) the node can be reached as a consensus member of the form [ID@]ip:port (where the ID@ part is optional and ID represents the node's public key)")
 	flags.StringSlice(CfgRole, nil, "Role(s) of the node.  Supported values are \"compute-worker\", \"storage-worker\", \"transaction-scheduler\", \"key-manager\", \"merge-worker\", and \"validator\"")

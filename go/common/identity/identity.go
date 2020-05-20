@@ -65,6 +65,8 @@ type Identity struct {
 	tlsSigner signature.Signer
 	// tlsCertificate is a certificate that can be used for TLS.
 	tlsCertificate *tls.Certificate
+	// nextTLSSigner is a node TLS certificate signer that can be used in the next rotation.
+	nextTLSSigner signature.Signer
 	// nextTLSCertificate is a certificate that can be used for TLS in the next rotation.
 	nextTLSCertificate *tls.Certificate
 	// tlsRotationNotifier is a notifier for certificate rotations.
@@ -98,7 +100,7 @@ func (i *Identity) RotateCertificates() error {
 		// Use the prepared certificate.
 		if i.nextTLSCertificate != nil {
 			i.tlsCertificate = i.nextTLSCertificate
-			i.tlsSigner = memory.NewFromRuntime(i.tlsCertificate.PrivateKey.(ed25519.PrivateKey))
+			i.tlsSigner = i.nextTLSSigner
 		}
 
 		// Generate a new TLS certificate to be used in the next rotation.
@@ -107,6 +109,7 @@ func (i *Identity) RotateCertificates() error {
 		if err != nil {
 			return err
 		}
+		i.nextTLSSigner = memory.NewFromRuntime(i.nextTLSCertificate.PrivateKey.(ed25519.PrivateKey))
 
 		i.tlsRotationNotifier.Broadcast(struct{}{})
 	}
@@ -120,14 +123,6 @@ func (i *Identity) GetTLSSigner() signature.Signer {
 	defer i.RUnlock()
 
 	return i.tlsSigner
-}
-
-// SetTLSSigner sets the current TLS signer.
-func (i *Identity) SetTLSSigner(s signature.Signer) {
-	i.Lock()
-	defer i.Unlock()
-
-	i.tlsSigner = s
 }
 
 // GetTLSCertificate returns the current TLS certificate.
@@ -144,6 +139,15 @@ func (i *Identity) SetTLSCertificate(cert *tls.Certificate) {
 	defer i.Unlock()
 
 	i.tlsCertificate = cert
+	i.tlsSigner = memory.NewFromRuntime(cert.PrivateKey.(ed25519.PrivateKey))
+}
+
+// GetNextTLSSigner returns the next TLS signer.
+func (i *Identity) GetNextTLSSigner() signature.Signer {
+	i.RLock()
+	defer i.RUnlock()
+
+	return i.nextTLSSigner
 }
 
 // GetNextTLSCertificate returns the next TLS certificate.
@@ -154,12 +158,19 @@ func (i *Identity) GetNextTLSCertificate() *tls.Certificate {
 	return i.nextTLSCertificate
 }
 
-// SetNextTLSCertificate sets the next TLS certificate.
-func (i *Identity) SetNextTLSCertificate(nextCert *tls.Certificate) {
-	i.Lock()
-	defer i.Unlock()
+// GetTLSPubKeys returns a list of currently valid TLS public keys.
+func (i *Identity) GetTLSPubKeys() []signature.PublicKey {
+	i.RLock()
+	defer i.RUnlock()
 
-	i.nextTLSCertificate = nextCert
+	var pubKeys []signature.PublicKey
+	if i.tlsSigner != nil {
+		pubKeys = append(pubKeys, i.tlsSigner.Public())
+	}
+	if i.nextTLSSigner != nil {
+		pubKeys = append(pubKeys, i.nextTLSSigner.Public())
+	}
+	return pubKeys
 }
 
 // Load loads an identity.
@@ -206,8 +217,9 @@ func doLoadOrGenerate(dataDir string, signerFactory signature.SignerFactory, sho
 	}
 
 	var (
-		nextCert *tls.Certificate
-		dnr      bool
+		nextCert   *tls.Certificate
+		nextSigner signature.Signer
+		dnr        bool
 	)
 
 	// First, check if we can load the TLS certificate from disk.
@@ -239,6 +251,8 @@ func doLoadOrGenerate(dataDir string, signerFactory signature.SignerFactory, sho
 			if err != nil {
 				return nil, err
 			}
+
+			nextSigner = memory.NewFromRuntime(nextCert.PrivateKey.(ed25519.PrivateKey))
 		}
 	}
 
@@ -264,6 +278,7 @@ func doLoadOrGenerate(dataDir string, signerFactory signature.SignerFactory, sho
 		ConsensusSigner:            signers[2],
 		tlsSigner:                  memory.NewFromRuntime(cert.PrivateKey.(ed25519.PrivateKey)),
 		tlsCertificate:             cert,
+		nextTLSSigner:              nextSigner,
 		nextTLSCertificate:         nextCert,
 		DoNotRotateTLS:             dnr,
 		TLSSentryClientCertificate: sentryClientCert,

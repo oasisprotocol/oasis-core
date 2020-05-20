@@ -4,7 +4,6 @@ package tests
 import (
 	"context"
 	"crypto"
-	"crypto/ed25519"
 	"errors"
 	"net"
 	"testing"
@@ -685,7 +684,6 @@ func randomIdentity(rng *drbg.Drbg) *identity.Identity {
 		panic(err)
 	}
 	ident.SetTLSCertificate(cert)
-	ident.SetTLSSigner(memorySigner.NewFromRuntime(cert.PrivateKey.(ed25519.PrivateKey)))
 
 	return ident
 }
@@ -744,11 +742,11 @@ func (ent *TestEntity) NewTestNodes(nCompute int, nStorage int, idNonce []byte, 
 		nod.Node.P2P.Addresses = append(nod.Node.P2P.Addresses, addr)
 		nod.Node.Consensus.ID = nodeIdentity.ConsensusSigner.Public()
 		// Generate dummy TLS certificate.
-		nod.Node.Committee.Certificate = nodeIdentity.GetTLSCertificate().Certificate[0]
-		nod.Node.Committee.Addresses = []node.CommitteeAddress{
-			node.CommitteeAddress{
-				Certificate: nod.Node.Committee.Certificate,
-				Address:     addr,
+		nod.Node.TLS.PubKey = nodeIdentity.GetTLSSigner().Public()
+		nod.Node.TLS.Addresses = []node.TLSAddress{
+			node.TLSAddress{
+				PubKey:  nod.Node.TLS.PubKey,
+				Address: addr,
 			},
 		}
 
@@ -771,24 +769,24 @@ func (ent *TestEntity) NewTestNodes(nCompute int, nStorage int, idNonce []byte, 
 			nod.invalidBefore = append(nod.invalidBefore, invalid1)
 		}
 
-		// Add a registration with no committee addresses.
+		// Add a registration with no TLS addresses.
 		invalid2 := &invalidNodeRegistration{
-			descr: "register committee node without committee addresses",
+			descr: "register node without TLS addresses",
 		}
 		invNode2 := *nod.Node
-		invNode2.Committee.Addresses = nil
+		invNode2.TLS.Addresses = nil
 		invalid2.signed, err = node.MultiSignNode(nodeSigners, api.RegisterNodeSignatureContext, &invNode2)
 		if err != nil {
 			return nil, err
 		}
 		nod.invalidBefore = append(nod.invalidBefore, invalid2)
 
-		// Add a registration with no committee certificate.
+		// Add a registration with no TLS public key.
 		invalid3 := &invalidNodeRegistration{
-			descr: "register committee node without committee certificate",
+			descr: "register node without TLS public key",
 		}
 		invNode3 := *nod.Node
-		invNode3.Committee.Certificate = nil
+		invNode3.TLS.PubKey = signature.PublicKey{}
 		invalid3.signed, err = node.MultiSignNode(
 			[]signature.Signer{
 				nodeIdentity.NodeSigner,
@@ -922,7 +920,7 @@ func (ent *TestEntity) NewTestNodes(nCompute int, nStorage int, idNonce []byte, 
 		invNode11 := *nod.Node
 		invNode11.ID = invalidIdentity.NodeSigner.Public()
 		invNode11.Consensus.ID = invalidIdentity.ConsensusSigner.Public()
-		invNode11.Committee.Certificate = invalidIdentity.GetTLSCertificate().Certificate[0]
+		invNode11.TLS.PubKey = invalidIdentity.GetTLSSigner().Public()
 		invalid11.signed, err = node.MultiSignNode(
 			[]signature.Signer{
 				invalidIdentity.NodeSigner,
@@ -946,7 +944,7 @@ func (ent *TestEntity) NewTestNodes(nCompute int, nStorage int, idNonce []byte, 
 		invNode12 := *nod.Node
 		invNode12.ID = invalidIdentity.NodeSigner.Public()
 		invNode12.P2P.ID = invalidIdentity.ConsensusSigner.Public()
-		invNode12.Committee.Certificate = invalidIdentity.GetTLSCertificate().Certificate[0]
+		invNode12.TLS.PubKey = invalidIdentity.GetTLSSigner().Public()
 		invalid12.signed, err = node.MultiSignNode(
 			[]signature.Signer{
 				invalidIdentity.NodeSigner,
@@ -1004,8 +1002,8 @@ func (ent *TestEntity) NewTestNodes(nCompute int, nStorage int, idNonce []byte, 
 		}
 		nod.UpdatedNode.P2P.ID = nod.Node.P2P.ID
 		nod.UpdatedNode.P2P.Addresses = append(nod.UpdatedNode.P2P.Addresses, addr)
-		nod.UpdatedNode.Committee.Certificate = nod.Node.Committee.Certificate
-		nod.UpdatedNode.Committee.Addresses = nod.Node.Committee.Addresses
+		nod.UpdatedNode.TLS.PubKey = nod.Node.TLS.PubKey
+		nod.UpdatedNode.TLS.Addresses = nod.Node.TLS.Addresses
 		nod.UpdatedNode.Consensus.ID = nod.Node.Consensus.ID // This should remain the same or we'll get "node update not allowed".
 		nod.SignedValidReRegistration, err = node.MultiSignNode(nodeSigners, api.RegisterNodeSignatureContext, nod.UpdatedNode)
 		if err != nil {
@@ -1027,11 +1025,11 @@ func (ent *TestEntity) NewTestNodes(nCompute int, nStorage int, idNonce []byte, 
 			Runtimes:          newRuntimes,
 			Roles:             role,
 			P2P:               nod.Node.P2P,
-			Committee:         nod.Node.Committee,
+			TLS:               nod.Node.TLS,
 		}
 		newNode.P2P.ID = invalidIdentity.P2PSigner.Public()
 		newNode.Consensus.ID = invalidIdentity.ConsensusSigner.Public()
-		newNode.Committee.Certificate = invalidIdentity.GetTLSCertificate().Certificate[0]
+		newNode.TLS.PubKey = invalidIdentity.GetTLSSigner().Public()
 		invalid14.signed, err = node.MultiSignNode(
 			[]signature.Signer{
 				nodeIdentity.NodeSigner,

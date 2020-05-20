@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"sync"
 
+	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
 	"github.com/oasislabs/oasis-core/go/common/identity"
 	"github.com/oasislabs/oasis-core/go/common/logging"
 	"github.com/oasislabs/oasis-core/go/common/node"
@@ -24,7 +25,7 @@ type backend struct {
 	consensus consensus.Backend
 	identity  *identity.Identity
 
-	upstreamTLSCertificates [][]byte
+	upstreamTLSPubKeys []signature.PublicKey
 }
 
 func (b *backend) GetAddresses(ctx context.Context) (*api.SentryAddresses, error) {
@@ -37,48 +38,48 @@ func (b *backend) GetAddresses(ctx context.Context) (*api.SentryAddresses, error
 		"addresses", consensusAddrs,
 	)
 
-	// Committee addresses - only available if gRPC sentry is enabled.
-	committeeAddrs, err := grpcSentry.GetNodeAddresses()
+	// TLS addresses -- only available if gRPC sentry is enabled.
+	tlsAddrs, err := grpcSentry.GetNodeAddresses()
 	if err != nil {
 		return nil, fmt.Errorf("sentry: error obtaining sentry worker addresses: %w", err)
 	}
-	var committeeAddresses []node.CommitteeAddress
+	var tlsAddresses []node.TLSAddress
 
-	for _, addr := range committeeAddrs {
-		committeeAddresses = append(committeeAddresses, node.CommitteeAddress{
-			Certificate: b.identity.GetTLSCertificate().Certificate[0],
-			Address:     addr,
+	for _, addr := range tlsAddrs {
+		tlsAddresses = append(tlsAddresses, node.TLSAddress{
+			PubKey:  b.identity.GetTLSSigner().Public(),
+			Address: addr,
 		})
 		// Make sure to also include the certificate that will be valid
 		// in the next epoch, so that the node remains reachable.
-		if nextCert := b.identity.GetNextTLSCertificate(); nextCert != nil {
-			committeeAddresses = append(committeeAddresses, node.CommitteeAddress{
-				Certificate: nextCert.Certificate[0],
-				Address:     addr,
+		if nextSigner := b.identity.GetNextTLSSigner(); nextSigner != nil {
+			tlsAddresses = append(tlsAddresses, node.TLSAddress{
+				PubKey:  nextSigner.Public(),
+				Address: addr,
 			})
 		}
 	}
 
 	return &api.SentryAddresses{
-		Committee: committeeAddresses,
 		Consensus: consensusAddrs,
+		TLS:       tlsAddresses,
 	}, nil
 }
 
-func (b *backend) SetUpstreamTLSCertificates(ctx context.Context, certs [][]byte) error {
+func (b *backend) SetUpstreamTLSPubKeys(ctx context.Context, pubKeys []signature.PublicKey) error {
 	b.Lock()
 	defer b.Unlock()
 
-	b.upstreamTLSCertificates = certs
+	b.upstreamTLSPubKeys = pubKeys
 
 	return nil
 }
 
-func (b *backend) GetUpstreamTLSCertificates(ctx context.Context) ([][]byte, error) {
+func (b *backend) GetUpstreamTLSPubKeys(ctx context.Context) ([]signature.PublicKey, error) {
 	b.RLock()
 	defer b.RUnlock()
 
-	return b.upstreamTLSCertificates, nil
+	return b.upstreamTLSPubKeys, nil
 }
 
 // New constructs a new sentry Backend instance.

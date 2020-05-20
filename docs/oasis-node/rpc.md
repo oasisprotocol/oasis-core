@@ -8,6 +8,10 @@ located in the node's data directory. **This interface should NEVER be directly
 exposed over the network as it has no authentication and allows full control,
 including shutdown, of a node.**
 
+In order to support remote clients and different protocols (e.g. REST), a
+gateway that handles things like authentication and rate limiting should be
+used. We may provide implementations of such gateways in the future.
+
 [consensus]: ../consensus/index.md
 [runtime]: ../runtime/index.md
 [submit transactions]: ../consensus/transactions.md#submission
@@ -15,7 +19,7 @@ including shutdown, of a node.**
 ## Protocol
 
 Like other parts of Oasis Core, the RPC interface exposed by Oasis Node uses the
-[gRPC protocol] with the CBOR codec (instead of Protocol Buffers). If your
+[gRPC protocol] with the [CBOR codec (instead of Protocol Buffers)]. If your
 application is written in Go, you can use the convenience gRPC wrappers provided
 by Oasis Core to create clients (we also provide limited gRPC wrappers for Rust,
 see example in [`client/src/transaction/api/client.rs`]).
@@ -39,32 +43,18 @@ the gRPC helpers see the [API documentation].
 
 <!-- markdownlint-disable line-length -->
 [gRPC protocol]: https://grpc.io
+[CBOR codec (instead of Protocol Buffers)]: ../authenticated-grpc.md#cbor-codec
 [`client/src/transaction/api/client.rs`]: ../../client/src/transaction/api/client.rs
 [API documentation]: https://pkg.go.dev/github.com/oasislabs/oasis-core/go/common/grpc?tab=doc
 <!-- markdownlint-enable line-length -->
 
 ## Errors
 
-As gRPC provides very limited error reporting capability in the form of a few
-defined error codes, we extend this mechanism to support proper error remapping.
+We use a specific convention to provide more information about the exact error
+that occurred when processing a gRPC request. See the [gRPC specifics] section
+for details.
 
-Detailed errors are returned as part of the [gRPC error details structure]. The
-`Value` field of the first detail element contains the following CBOR-serialized
-structure that specifies the (namespaced) error:
-
-```golang
-type grpcError struct {
-    Module string `json:"module,omitempty"`
-    Code   uint32 `json:"code,omitempty"`
-}
-```
-
-If you use the provided gRPC helpers any errors will be mapped to registered
-error types automatically.
-
-<!-- markdownlint-disable line-length -->
-[gRPC error details structure]: https://pkg.go.dev/google.golang.org/genproto/googleapis/rpc/status?tab=doc#Status
-<!-- markdownlint-enable line-length -->
+[gRPC specifics]: ../authenticated-grpc.md#errors
 
 ## Services
 

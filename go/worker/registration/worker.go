@@ -2,7 +2,6 @@ package registration
 
 import (
 	"context"
-	"crypto/x509"
 	"fmt"
 	"sync"
 	"sync/atomic"
@@ -131,8 +130,7 @@ type Worker struct { // nolint: maligned
 	entityID           signature.PublicKey
 	registrationSigner signature.Signer
 
-	sentryAddresses []node.Address
-	sentryCerts     []*x509.Certificate
+	sentryAddresses []node.TLSAddress
 
 	runtimeRegistry runtimeRegistry.Registry
 	epochtime       epochtime.Backend
@@ -162,43 +160,27 @@ func DebugForceAllowUnroutableAddresses() {
 
 func (w *Worker) registrationLoop() { // nolint: gocyclo
 	// If we have any sentry nodes, let them know about our TLS certs.
-	sentryAddrs := w.sentryAddresses
-	sentryCerts := w.sentryCerts
-	if len(sentryAddrs) > 0 {
-		for i, sentryAddr := range sentryAddrs {
-			var numRetries uint
-
+	if len(w.sentryAddresses) > 0 {
+		pubKeys := w.identity.GetTLSPubKeys()
+		for _, sentryAddr := range w.sentryAddresses {
 			pushCerts := func() error {
-				client, err := sentryClient.New(&sentryAddr, sentryCerts[i], w.identity)
-				if err != nil {
-					if numRetries < 60 {
-						numRetries++
-						return err
-					}
-					return backoff.Permanent(err)
-				}
-				defer client.Close()
-
-				certs := [][]byte{}
-				if c := w.identity.GetTLSCertificate(); c != nil {
-					certs = append(certs, c.Certificate[0])
-				}
-				if c := w.identity.GetNextTLSCertificate(); c != nil {
-					certs = append(certs, c.Certificate[0])
-				}
-
-				err = client.SetUpstreamTLSCertificates(w.ctx, certs)
+				client, err := sentryClient.New(sentryAddr, w.identity)
 				if err != nil {
 					return err
 				}
+				defer client.Close()
 
+				err = client.SetUpstreamTLSPubKeys(w.ctx, pubKeys)
+				if err != nil {
+					return err
+				}
 				return nil
 			}
 
-			sched := backoff.NewConstantBackOff(1 * time.Second)
+			sched := backoff.WithMaxRetries(backoff.NewConstantBackOff(1*time.Second), 60)
 			err := backoff.Retry(pushCerts, backoff.WithContext(sched, w.ctx))
 			if err != nil {
-				w.logger.Error("unable to push upstream TLS certificates to sentry node!",
+				w.logger.Error("unable to push upstream TLS certificates to sentry node",
 					"err", err,
 					"sentry_address", sentryAddr,
 				)
@@ -294,14 +276,14 @@ Loop:
 							"err", err,
 						)
 					} else {
-						cert1 := w.identity.GetTLSCertificate().Certificate[0]
-						cert2 := w.identity.GetNextTLSCertificate().Certificate[0]
+						pub1 := w.identity.GetTLSSigner().Public()
+						pub2 := w.identity.GetNextTLSSigner().Public()
 						tlsRotationPending = true
 
 						w.logger.Info("node TLS certificates have been rotated",
 							"new_epoch", epoch,
-							"new_cert1", accessctl.SubjectFromDER(cert1),
-							"new_cert2", accessctl.SubjectFromDER(cert2),
+							"new_pub1", accessctl.SubjectFromPublicKey(pub1),
+							"new_pub2", accessctl.SubjectFromPublicKey(pub2),
 						)
 					}
 				}
@@ -521,42 +503,41 @@ func (w *Worker) gatherConsensusAddresses(sentryConsensusAddrs []node.ConsensusA
 	return validatedAddrs, nil
 }
 
-func (w *Worker) gatherCommitteeAddresses(sentryCommitteeAddrs []node.CommitteeAddress) ([]node.CommitteeAddress, error) {
-	var committeeAddresses []node.CommitteeAddress
+func (w *Worker) gatherTLSAddresses(sentryTLSAddrs []node.TLSAddress) ([]node.TLSAddress, error) {
+	var tlsAddresses []node.TLSAddress
 
 	switch len(w.sentryAddresses) > 0 {
 	// If sentry nodes are used, use sentry addresses.
 	case true:
-		committeeAddresses = sentryCommitteeAddrs
-	// Otherwise gather committee addresses.
+		tlsAddresses = sentryTLSAddrs
+	// Otherwise gather TLS addresses.
 	case false:
 		addrs, err := w.workerCommonCfg.GetNodeAddresses()
 		if err != nil {
 			return nil, fmt.Errorf("worker/registration: failed to register node: unable to get node addresses: %w", err)
 		}
 		for _, addr := range addrs {
-			committeeAddresses = append(committeeAddresses, node.CommitteeAddress{
-				Certificate: w.identity.GetTLSCertificate().Certificate[0],
-				Address:     addr,
+			tlsAddresses = append(tlsAddresses, node.TLSAddress{
+				PubKey:  w.identity.GetTLSSigner().Public(),
+				Address: addr,
 			})
 			// Make sure to also include the certificate that will be valid
 			// in the next epoch, so that the node remains reachable.
-			if nextCert := w.identity.GetNextTLSCertificate(); nextCert != nil {
-				committeeAddresses = append(committeeAddresses, node.CommitteeAddress{
-					Certificate: nextCert.Certificate[0],
-					Address:     addr,
+			if nextSigner := w.identity.GetNextTLSSigner(); nextSigner != nil {
+				tlsAddresses = append(tlsAddresses, node.TLSAddress{
+					PubKey:  nextSigner.Public(),
+					Address: addr,
 				})
 			}
 		}
 	}
 
 	// Filter out any potentially invalid addresses.
-	var validatedAddrs []node.CommitteeAddress
-	for _, addr := range committeeAddresses {
-		if _, err := addr.ParseCertificate(); err != nil {
-			w.logger.Error("worker/registration: skipping node address due to invalid certificate",
+	var validatedAddrs []node.TLSAddress
+	for _, addr := range tlsAddresses {
+		if !addr.PubKey.IsValid() {
+			w.logger.Error("worker/registration: skipping node address due to invalid public key",
 				"addr", addr,
-				"err", err,
 			)
 			continue
 		}
@@ -572,7 +553,7 @@ func (w *Worker) gatherCommitteeAddresses(sentryCommitteeAddrs []node.CommitteeA
 	}
 
 	if len(validatedAddrs) == 0 {
-		return nil, fmt.Errorf("worker/registration: node has no valid committee addresses")
+		return nil, fmt.Errorf("worker/registration: node has no valid TLS addresses")
 	}
 
 	return validatedAddrs, nil
@@ -585,9 +566,9 @@ func (w *Worker) registerNode(epoch epochtime.EpochTime, hook RegisterNodeHook) 
 		"node_id", identityPublic.String(),
 	)
 
-	var nextCert []byte
-	if c := w.identity.GetNextTLSCertificate(); c != nil {
-		nextCert = c.Certificate[0]
+	var nextPubKey signature.PublicKey
+	if s := w.identity.GetNextTLSSigner(); s != nil {
+		nextPubKey = s.Public()
 	}
 
 	nodeDesc := node.Node{
@@ -595,9 +576,9 @@ func (w *Worker) registerNode(epoch epochtime.EpochTime, hook RegisterNodeHook) 
 		ID:                identityPublic,
 		EntityID:          w.entityID,
 		Expiration:        uint64(epoch) + 2,
-		Committee: node.CommitteeInfo{
-			Certificate:     w.identity.GetTLSCertificate().Certificate[0],
-			NextCertificate: nextCert,
+		TLS: node.TLSInfo{
+			PubKey:     w.identity.GetTLSSigner().Public(),
+			NextPubKey: nextPubKey,
 		},
 		P2P: node.P2PInfo{
 			ID: w.identity.P2PSigner.Public(),
@@ -621,9 +602,9 @@ func (w *Worker) registerNode(epoch epochtime.EpochTime, hook RegisterNodeHook) 
 	}
 
 	var sentryConsensusAddrs []node.ConsensusAddress
-	var sentryCommitteeAddrs []node.CommitteeAddress
+	var sentryTLSAddrs []node.TLSAddress
 	if len(w.sentryAddresses) > 0 {
-		sentryConsensusAddrs, sentryCommitteeAddrs = w.querySentries()
+		sentryConsensusAddrs, sentryTLSAddrs = w.querySentries()
 	}
 
 	// Add Consensus Addresses if required.
@@ -635,13 +616,13 @@ func (w *Worker) registerNode(epoch epochtime.EpochTime, hook RegisterNodeHook) 
 		nodeDesc.Consensus.Addresses = addrs
 	}
 
-	// Add Committee Addresses if required.
-	if nodeDesc.HasRoles(registry.CommitteeAddressRequiredRoles) {
-		addrs, err := w.gatherCommitteeAddresses(sentryCommitteeAddrs)
+	// Add TLS Addresses if required.
+	if nodeDesc.HasRoles(registry.TLSAddressRequiredRoles) {
+		addrs, err := w.gatherTLSAddresses(sentryTLSAddrs)
 		if err != nil {
-			return fmt.Errorf("error gathering committee addresses: %w", err)
+			return fmt.Errorf("error gathering TLS addresses: %w", err)
 		}
-		nodeDesc.Committee.Addresses = addrs
+		nodeDesc.TLS.Addresses = addrs
 	}
 
 	// Add P2P Addresses if required.
@@ -682,16 +663,15 @@ func (w *Worker) registerNode(epoch epochtime.EpochTime, hook RegisterNodeHook) 
 	return nil
 }
 
-func (w *Worker) querySentries() ([]node.ConsensusAddress, []node.CommitteeAddress) {
+func (w *Worker) querySentries() ([]node.ConsensusAddress, []node.TLSAddress) {
 	var consensusAddrs []node.ConsensusAddress
-	var committeeAddrs []node.CommitteeAddress
+	var tlsAddrs []node.TLSAddress
 	var err error
 
-	sentryAddrs := w.sentryAddresses
-	sentryCerts := w.sentryCerts
-	for i, sentryAddr := range sentryAddrs {
+	pubKeys := w.identity.GetTLSPubKeys()
+	for _, sentryAddr := range w.sentryAddresses {
 		var client *sentryClient.Client
-		client, err = sentryClient.New(&sentryAddr, sentryCerts[i], w.identity)
+		client, err = sentryClient.New(sentryAddr, w.identity)
 		if err != nil {
 			w.logger.Warn("failed to create client to a sentry node",
 				"err", err,
@@ -712,14 +692,7 @@ func (w *Worker) querySentries() ([]node.ConsensusAddress, []node.CommitteeAddre
 		}
 
 		// Keep sentries updated with our latest TLS certificates.
-		certs := [][]byte{}
-		if c := w.identity.GetTLSCertificate(); c != nil {
-			certs = append(certs, c.Certificate[0])
-		}
-		if c := w.identity.GetNextTLSCertificate(); c != nil {
-			certs = append(certs, c.Certificate[0])
-		}
-		err = client.SetUpstreamTLSCertificates(w.ctx, certs)
+		err = client.SetUpstreamTLSPubKeys(w.ctx, pubKeys)
 		if err != nil {
 			w.logger.Warn("failed to provide upstream TLS certificates to sentry node",
 				"err", err,
@@ -728,23 +701,21 @@ func (w *Worker) querySentries() ([]node.ConsensusAddress, []node.CommitteeAddre
 		}
 
 		consensusAddrs = append(consensusAddrs, sentryAddresses.Consensus...)
-		committeeAddrs = append(committeeAddrs, sentryAddresses.Committee...)
+		tlsAddrs = append(tlsAddrs, sentryAddresses.TLS...)
 	}
 
 	if len(consensusAddrs) == 0 {
-		errMsg := "failed to obtain any consensus address from the configured sentry nodes"
-		w.logger.Error(errMsg,
-			"sentry_addresses", sentryAddrs,
+		w.logger.Error("failed to obtain any consensus address from the configured sentry nodes",
+			"sentry_addresses", w.sentryAddresses,
 		)
 	}
-	if len(committeeAddrs) == 0 {
-		errMsg := "failed to obtain any committee address from the configured sentry nodes"
-		w.logger.Error(errMsg,
-			"sentry_addresses", sentryAddrs,
+	if len(tlsAddrs) == 0 {
+		w.logger.Error("failed to obtain any TLS address from the configured sentry nodes",
+			"sentry_addresses", w.sentryAddresses,
 		)
 	}
 
-	return consensusAddrs, committeeAddrs
+	return consensusAddrs, tlsAddrs
 }
 
 // RequestDeregistration requests that the node not register itself in the next epoch.
@@ -898,7 +869,6 @@ func New(
 		delegate:           delegate,
 		entityID:           entityID,
 		sentryAddresses:    workerCommonCfg.SentryAddresses,
-		sentryCerts:        workerCommonCfg.SentryCertificates,
 		registrationSigner: registrationSigner,
 		runtimeRegistry:    runtimeRegistry,
 		epochtime:          epochtime,

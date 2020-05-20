@@ -22,6 +22,7 @@ func TestLoadOrGenerate(t *testing.T) {
 	// Generate a new identity.
 	identity, err := LoadOrGenerate(dataDir, factory, true)
 	require.NoError(t, err, "LoadOrGenerate")
+	require.EqualValues(t, []signature.PublicKey{identity.GetTLSSigner().Public()}, identity.GetTLSPubKeys())
 
 	// Load an existing identity.
 	identity2, err := LoadOrGenerate(dataDir, factory, false)
@@ -31,6 +32,7 @@ func TestLoadOrGenerate(t *testing.T) {
 	require.EqualValues(t, identity.ConsensusSigner, identity2.ConsensusSigner)
 	require.EqualValues(t, identity.GetTLSSigner(), identity2.GetTLSSigner())
 	require.EqualValues(t, identity.GetTLSCertificate(), identity2.GetTLSCertificate())
+	require.EqualValues(t, identity.GetTLSPubKeys(), identity2.GetTLSPubKeys())
 
 	dataDir2, err := ioutil.TempDir("", "oasis-identity-test2_")
 	require.NoError(t, err, "create data dir (2)")
@@ -39,6 +41,10 @@ func TestLoadOrGenerate(t *testing.T) {
 	// Generate a new identity again, this time without persisting TLS certs.
 	identity3, err := LoadOrGenerate(dataDir2, factory, false)
 	require.NoError(t, err, "LoadOrGenerate (3)")
+	require.EqualValues(t, []signature.PublicKey{
+		identity3.GetTLSSigner().Public(),
+		identity3.GetNextTLSSigner().Public(),
+	}, identity3.GetTLSPubKeys())
 
 	// Load it back.
 	identity4, err := LoadOrGenerate(dataDir2, factory, false)
