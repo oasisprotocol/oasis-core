@@ -15,7 +15,7 @@ var (
 	// statusKeyFmt is the key manager status key format.
 	//
 	// Value is CBOR-serialized key manager status.
-	statusKeyFmt = keyformat.New(0x70, &common.Namespace{})
+	statusKeyFmt = keyformat.New(0x70, keyformat.H(&common.Namespace{}))
 )
 
 // ImmutableState is the immutable key manager state wrapper.

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/oasislabs/oasis-core/go/common/crypto/hash"
 	"github.com/oasislabs/oasis-core/go/common/keyformat"
 	"github.com/oasislabs/oasis-core/go/common/logging"
 	"github.com/oasislabs/oasis-core/go/consensus/tendermint/api"
@@ -68,6 +69,9 @@ type Timer struct {
 func NewTimer(ctx *api.Context, app Application, kind uint8, id []byte, data []byte) *Timer {
 	if data == nil {
 		data = []byte{}
+	} else {
+		h := hash.NewFromBytes(data)
+		data = h[:]
 	}
 
 	state := &timerState{

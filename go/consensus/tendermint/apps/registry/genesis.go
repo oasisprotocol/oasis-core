@@ -8,6 +8,7 @@ import (
 	"github.com/tendermint/tendermint/abci/types"
 
 	"github.com/oasislabs/oasis-core/go/common/cbor"
+	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
 	"github.com/oasislabs/oasis-core/go/common/node"
 	abciAPI "github.com/oasislabs/oasis-core/go/consensus/tendermint/api"
 	registryState "github.com/oasislabs/oasis-core/go/consensus/tendermint/apps/registry/state"
@@ -147,20 +148,25 @@ func (rq *registryQuerier) Genesis(ctx context.Context) (*registry.Genesis, erro
 	// BUG: If the debonding period will apply to other nodes,
 	// then we need to basically persist everything.
 	validatorNodes := make([]*node.MultiSignedNode, 0)
+	nodeStatuses := make(map[signature.PublicKey]*registry.NodeStatus)
 	for _, sn := range signedNodes {
 		var n node.Node
 		if err = cbor.Unmarshal(sn.Blob, &n); err != nil {
 			return nil, err
 		}
 
-		if n.HasRoles(node.RoleValidator) {
-			validatorNodes = append(validatorNodes, sn)
+		if !n.HasRoles(node.RoleValidator) {
+			continue
 		}
-	}
 
-	nodeStatuses, err := rq.state.NodeStatuses(ctx)
-	if err != nil {
-		return nil, err
+		var status *registry.NodeStatus
+		status, err = rq.state.NodeStatus(ctx, n.ID)
+		if err != nil {
+			return nil, err
+		}
+
+		validatorNodes = append(validatorNodes, sn)
+		nodeStatuses[n.ID] = status
 	}
 
 	params, err := rq.state.ConsensusParameters(ctx)

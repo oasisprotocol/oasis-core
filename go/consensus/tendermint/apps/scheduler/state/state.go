@@ -17,7 +17,7 @@ var (
 	// committeeKeyFmt is the key format used for committees.
 	//
 	// Value is CBOR-serialized committee.
-	committeeKeyFmt = keyformat.New(0x60, uint8(0), &common.Namespace{})
+	committeeKeyFmt = keyformat.New(0x60, uint8(0), keyformat.H(&common.Namespace{}))
 	// validatorsCurrentKeyFmt is the key format used for the current set of
 	// validators.
 	//
@@ -64,14 +64,14 @@ func (s *ImmutableState) AllCommittees(ctx context.Context) ([]*api.Committee, e
 	var committees []*api.Committee
 	for it.Seek(committeeKeyFmt.Encode()); it.Valid(); it.Next() {
 		var k uint8
-		var runtimeID common.Namespace
-		if !committeeKeyFmt.Decode(it.Key(), &k, &runtimeID) {
+		var hRuntimeID keyformat.PreHashed
+		if !committeeKeyFmt.Decode(it.Key(), &k, &hRuntimeID) {
 			break
 		}
 
 		var c api.Committee
 		if err := cbor.Unmarshal(it.Value(), &c); err != nil {
-			err = fmt.Errorf("malformed committee %s (kind %d): %w", runtimeID, k, err)
+			err = fmt.Errorf("malformed committee %s (kind %d): %w", hRuntimeID, k, err)
 			return nil, abciAPI.UnavailableStateError(err)
 		}
 
@@ -92,14 +92,14 @@ func (s *ImmutableState) KindsCommittees(ctx context.Context, kinds []api.Commit
 	for _, kind := range kinds {
 		for it.Seek(committeeKeyFmt.Encode(uint8(kind))); it.Valid(); it.Next() {
 			var k uint8
-			var runtimeID common.Namespace
-			if !committeeKeyFmt.Decode(it.Key(), &k, &runtimeID) || k != uint8(kind) {
+			var hRuntimeID keyformat.PreHashed
+			if !committeeKeyFmt.Decode(it.Key(), &k, &hRuntimeID) || k != uint8(kind) {
 				break
 			}
 
 			var c api.Committee
 			if err := cbor.Unmarshal(it.Value(), &c); err != nil {
-				err = fmt.Errorf("malformed committee %s (kind %d): %w", runtimeID, k, err)
+				err = fmt.Errorf("malformed committee %s (kind %d): %w", hRuntimeID, k, err)
 				return nil, abciAPI.UnavailableStateError(err)
 			}
 
