@@ -454,9 +454,9 @@ func (args *argBuilder) appendRuntimePruner(p *RuntimePrunerCfg) *argBuilder {
 	return args
 }
 
-func (args *argBuilder) appendComputeNodeRuntime(rt *Runtime) *argBuilder {
+func (args *argBuilder) appendComputeNodeRuntime(rt *Runtime, binaryIdx int) *argBuilder {
 	args = args.runtimeSupported(rt.id).
-		workerRuntimePath(rt.id, rt.binary).
+		workerRuntimePath(rt.id, rt.binaries[binaryIdx]).
 		appendRuntimePruner(&rt.pruner)
 	return args
 }
@@ -494,7 +494,7 @@ func (args *argBuilder) byzantineFakeSGX() *argBuilder {
 
 func (args *argBuilder) byzantineVersionFakeEnclaveID(rt *Runtime) *argBuilder {
 	eid := sgx.EnclaveIdentity{
-		MrEnclave: *rt.mrEnclave,
+		MrEnclave: *rt.mrEnclaves[0],
 		MrSigner:  *rt.mrSigner,
 	}
 	args.vec = append(args.vec, "--"+byzantine.CfgVersionFakeEnclaveID, eid.String())

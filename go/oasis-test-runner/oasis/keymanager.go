@@ -56,7 +56,11 @@ func (pol *KeymanagerPolicy) provision() error {
 			"--" + kmCmd.CfgPolicyFile, policyPath,
 			"--" + kmCmd.CfgPolicyID, pol.runtime.id.String(),
 			"--" + kmCmd.CfgPolicySerial, strconv.Itoa(pol.serial),
-			"--" + kmCmd.CfgPolicyEnclaveID, pol.runtime.mrEnclave.String() + pol.runtime.mrSigner.String(),
+		}
+		for _, mrEnclave := range pol.runtime.mrEnclaves {
+			policyArgs = append(policyArgs, []string{
+				"--" + kmCmd.CfgPolicyEnclaveID, mrEnclave.String() + pol.runtime.mrSigner.String(),
+			}...)
 		}
 
 		for _, rt := range pol.net.runtimes {
@@ -64,8 +68,10 @@ func (pol *KeymanagerPolicy) provision() error {
 				continue
 			}
 
-			arg := fmt.Sprintf("%s=%s%s", rt.id, rt.mrEnclave, rt.mrSigner)
-			policyArgs = append(policyArgs, "--"+kmCmd.CfgPolicyMayQuery, arg)
+			for _, mrEnclave := range rt.mrEnclaves {
+				arg := fmt.Sprintf("%s=%s%s", rt.id, mrEnclave, rt.mrSigner)
+				policyArgs = append(policyArgs, "--"+kmCmd.CfgPolicyMayQuery, arg)
+			}
 		}
 
 		w, err := pol.dir.NewLogWriter("provision-policy.log")
@@ -263,7 +269,8 @@ func (km *Keymanager) startNode() error {
 		workerClientPort(km.workerClientPort).
 		workerRuntimeProvisioner(workerCommon.RuntimeProvisionerSandboxed).
 		workerRuntimeSGXLoader(km.net.cfg.RuntimeSGXLoaderBinary).
-		workerRuntimePath(km.runtime.id, km.runtime.binary).
+		// XXX: could support configurable binary idx if ever needed.
+		workerRuntimePath(km.runtime.id, km.runtime.binaries[0]).
 		workerKeymanagerEnabled().
 		workerKeymanagerRuntimeID(km.runtime.id).
 		appendNetwork(km.net).
@@ -325,6 +332,7 @@ func (net *Network) NewKeymanager(cfg *KeymanagerCfg) (*Keymanager, error) {
 			disableDefaultLogWatcherHandlerFactories: cfg.DisableDefaultLogWatcherHandlerFactories,
 			logWatcherHandlerFactories:               cfg.LogWatcherHandlerFactories,
 			consensus:                                cfg.Consensus,
+			noAutoStart:                              cfg.NoAutoStart,
 		},
 		runtime:          cfg.Runtime,
 		entity:           cfg.Entity,

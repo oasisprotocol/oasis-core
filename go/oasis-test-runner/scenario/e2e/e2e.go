@@ -126,6 +126,8 @@ func RegisterScenarios() error {
 		LateStart,
 		// Restore from v20.6 genesis file.
 		RestoreV206,
+		// KeymanagerUpgrade test.
+		KeymanagerUpgrade,
 	} {
 		if err := cmd.Register(s); err != nil {
 			return err

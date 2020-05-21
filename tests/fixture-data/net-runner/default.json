@@ -34,7 +34,9 @@
             "kind": 2,
             "entity": 0,
             "keymanager": -1,
-            "binary": "simple-keymanager",
+            "binaries": [
+                "simple-keymanager"
+            ],
             "genesis_state": "",
             "genesis_round": 0,
             "executor": {
@@ -80,7 +82,9 @@
             "kind": 1,
             "entity": 0,
             "keymanager": 0,
-            "binary": "simple-keyvalue",
+            "binaries": [
+                "simple-keyvalue"
+            ],
             "genesis_state": "",
             "genesis_round": 0,
             "executor": {

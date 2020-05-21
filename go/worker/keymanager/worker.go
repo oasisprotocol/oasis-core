@@ -7,6 +7,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/cenkalti/backoff/v4"
+
 	"github.com/oasislabs/oasis-core/go/common"
 	"github.com/oasislabs/oasis-core/go/common/accessctl"
 	"github.com/oasislabs/oasis-core/go/common/cbor"
@@ -59,6 +61,9 @@ type Worker struct { // nolint: maligned
 	stopCh    chan struct{}
 	quitCh    chan struct{}
 	initCh    chan struct{}
+
+	initTicker   *backoff.Ticker
+	initTickerCh <-chan time.Time
 
 	initialSyncDone bool
 
@@ -178,6 +183,10 @@ func (w *Worker) updateStatus(status *api.Status, startedEvent *host.StartedEven
 	var initOk bool
 	defer func() {
 		if !initOk {
+			// TODO: once #2130 is done and keymanager reports as Ready only
+			// after initialization succeeds, change this to always pre-register
+			// on the initial updateStatus call (and not only after the first
+			// initialization fails as it is done currently).
 			// This is likely a new key manager that needs to replicate.
 			// Send a node registration anyway, so that other nodes know
 			// to update their access control.
@@ -188,6 +197,12 @@ func (w *Worker) updateStatus(status *api.Status, startedEvent *host.StartedEven
 				rt.Capabilities.TEE = startedEvent.CapabilityTEE
 				return nil
 			})
+
+			// If initialization failed setup a retry ticker.
+			if w.initTicker == nil {
+				w.initTicker = backoff.NewTicker(backoff.NewExponentialBackOff())
+				w.initTickerCh = w.initTicker.C
+			}
 		}
 	}()
 
@@ -287,6 +302,11 @@ func (w *Worker) updateStatus(status *api.Status, startedEvent *host.StartedEven
 	w.logger.Info("Key manager initialized",
 		"checksum", hex.EncodeToString(signedInitResp.InitResponse.Checksum),
 	)
+	if w.initTicker != nil {
+		w.initTickerCh = nil
+		w.initTicker.Stop()
+		w.initTicker = nil
+	}
 
 	// Register as we are now ready to handle requests.
 	initOk = true
@@ -459,11 +479,18 @@ func (w *Worker) worker() { // nolint: gocyclo
 			}
 
 			// Forward status update to key manager runtime.
-			if err := w.updateStatus(currentStatus, currentStartedEvent); err != nil {
+			if err = w.updateStatus(currentStatus, currentStartedEvent); err != nil {
 				w.logger.Error("failed to handle status update",
 					"err", err,
 				)
 				continue
+			}
+		case <-w.initTickerCh:
+			if currentStatus == nil || currentStartedEvent == nil {
+				continue
+			}
+			if err = w.updateStatus(currentStatus, currentStartedEvent); err != nil {
+				w.logger.Error("failed to handle status update", "err", err)
 			}
 		case rt := <-rtCh:
 			if rt.Kind != registry.KindCompute || rt.KeyManager == nil || !rt.KeyManager.Equal(&runtimeID) {

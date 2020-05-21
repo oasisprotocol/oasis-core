@@ -84,7 +84,7 @@ func (mr *multipleRuntimesImpl) Fixture() (*oasis.NetworkFixture, error) {
 		if rt.Kind == registry.KindCompute {
 			if runtimeBinary == "" {
 				copy(id[:], rt.ID[:])
-				runtimeBinary = rt.Binary
+				runtimeBinary = rt.Binaries[0]
 			}
 		} else {
 			rts = append(rts, rt)
@@ -105,7 +105,7 @@ func (mr *multipleRuntimesImpl) Fixture() (*oasis.NetworkFixture, error) {
 			Kind:       registry.KindCompute,
 			Entity:     0,
 			Keymanager: 0,
-			Binary:     runtimeBinary,
+			Binaries:   []string{runtimeBinary},
 			Executor: registry.ExecutorParameters{
 				GroupSize:       uint64(mr.executorGroupSize),
 				GroupBackupSize: 0,
