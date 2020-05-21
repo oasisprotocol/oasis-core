@@ -24,7 +24,7 @@ type ImmutableState struct {
 }
 
 // NewImmutableState creates a new immutable consensus backend state wrapper.
-func NewImmutableState(ctx context.Context, state api.ApplicationState, version int64) (*ImmutableState, error) {
+func NewImmutableState(ctx context.Context, state api.ApplicationQueryState, version int64) (*ImmutableState, error) {
 	is, err := api.NewImmutableState(ctx, state, version)
 	if err != nil {
 		return nil, err

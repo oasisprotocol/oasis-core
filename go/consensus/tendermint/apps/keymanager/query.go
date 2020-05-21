@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/oasislabs/oasis-core/go/common"
+	abciAPI "github.com/oasislabs/oasis-core/go/consensus/tendermint/api"
 	keymanagerState "github.com/oasislabs/oasis-core/go/consensus/tendermint/apps/keymanager/state"
 	keymanager "github.com/oasislabs/oasis-core/go/keymanager/api"
 )
@@ -17,12 +18,12 @@ type Query interface {
 
 // QueryFactory is the key manager query factory.
 type QueryFactory struct {
-	app *keymanagerApplication
+	state abciAPI.ApplicationQueryState
 }
 
 // QueryAt returns the key manager query interface for a specific height.
 func (sf *QueryFactory) QueryAt(ctx context.Context, height int64) (Query, error) {
-	state, err := keymanagerState.NewImmutableState(ctx, sf.app.state, height)
+	state, err := keymanagerState.NewImmutableState(ctx, sf.state, height)
 	if err != nil {
 		return nil, err
 	}
@@ -42,5 +43,11 @@ func (kq *keymanagerQuerier) Statuses(ctx context.Context) ([]*keymanager.Status
 }
 
 func (app *keymanagerApplication) QueryFactory() interface{} {
-	return &QueryFactory{app}
+	return &QueryFactory{app.state}
+}
+
+// NewQueryFactory returns a new QueryFactory backed by the given state
+// instance.
+func NewQueryFactory(state abciAPI.ApplicationQueryState) *QueryFactory {
+	return &QueryFactory{state}
 }

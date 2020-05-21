@@ -121,7 +121,7 @@ func (sc *gasFeesImpl) Run(childEnv *env.Env) error {
 		if err != nil {
 			return err
 		}
-		if err := sc.dumpRestoreNetwork(childEnv, fixture); err != nil {
+		if err := sc.dumpRestoreNetwork(childEnv, fixture, false); err != nil {
 			return err
 		}
 		if err := sc.runTests(ctx); err != nil {

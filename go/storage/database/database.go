@@ -44,6 +44,8 @@ type databaseBackend struct {
 
 	signer signature.Signer
 	initCh chan struct{}
+
+	readOnly bool
 }
 
 // New constructs a new database backed storage Backend instance.
@@ -92,10 +94,15 @@ func New(cfg *api.Config) (api.Backend, error) {
 		rootCache:    rootCache,
 		signer:       cfg.Signer,
 		initCh:       initCh,
+		readOnly:     cfg.ReadOnly,
 	}, nil
 }
 
 func (ba *databaseBackend) Apply(ctx context.Context, request *api.ApplyRequest) ([]*api.Receipt, error) {
+	if ba.readOnly {
+		return nil, fmt.Errorf("storage/database: failed to Apply: %w", api.ErrReadOnly)
+	}
+
 	newRoot, err := ba.rootCache.Apply(
 		ctx,
 		request.Namespace,
@@ -114,6 +121,10 @@ func (ba *databaseBackend) Apply(ctx context.Context, request *api.ApplyRequest)
 }
 
 func (ba *databaseBackend) ApplyBatch(ctx context.Context, request *api.ApplyBatchRequest) ([]*api.Receipt, error) {
+	if ba.readOnly {
+		return nil, fmt.Errorf("storage/database: failed to ApplyBatch: %w", api.ErrReadOnly)
+	}
+
 	newRoots := make([]hash.Hash, 0, len(request.Ops))
 	for _, op := range request.Ops {
 		newRoot, err := ba.rootCache.Apply(ctx, request.Namespace, op.SrcRound, op.SrcRoot, request.DstRound, op.DstRoot, op.WriteLog)
@@ -128,6 +139,10 @@ func (ba *databaseBackend) ApplyBatch(ctx context.Context, request *api.ApplyBat
 }
 
 func (ba *databaseBackend) Merge(ctx context.Context, request *api.MergeRequest) ([]*api.Receipt, error) {
+	if ba.readOnly {
+		return nil, fmt.Errorf("storage/database: failed to Merge: %w", api.ErrReadOnly)
+	}
+
 	newRoot, err := ba.rootCache.Merge(ctx, request.Namespace, request.Round, request.Base, request.Others)
 	if err != nil {
 		return nil, fmt.Errorf("storage/database: failed to Merge: %w", err)
@@ -138,6 +153,10 @@ func (ba *databaseBackend) Merge(ctx context.Context, request *api.MergeRequest)
 }
 
 func (ba *databaseBackend) MergeBatch(ctx context.Context, request *api.MergeBatchRequest) ([]*api.Receipt, error) {
+	if ba.readOnly {
+		return nil, fmt.Errorf("storage/database: failed to MergeBatch: %w", api.ErrReadOnly)
+	}
+
 	newRoots := make([]hash.Hash, 0, len(request.Ops))
 	for _, op := range request.Ops {
 		newRoot, err := ba.rootCache.Merge(ctx, request.Namespace, request.Round, op.Base, op.Others)

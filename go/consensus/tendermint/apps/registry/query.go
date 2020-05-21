@@ -8,6 +8,7 @@ import (
 	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
 	"github.com/oasislabs/oasis-core/go/common/entity"
 	"github.com/oasislabs/oasis-core/go/common/node"
+	abciAPI "github.com/oasislabs/oasis-core/go/consensus/tendermint/api"
 	registryState "github.com/oasislabs/oasis-core/go/consensus/tendermint/apps/registry/state"
 	registry "github.com/oasislabs/oasis-core/go/registry/api"
 )
@@ -26,22 +27,22 @@ type Query interface {
 
 // QueryFactory is the registry query factory.
 type QueryFactory struct {
-	app *registryApplication
+	state abciAPI.ApplicationQueryState
 }
 
 // QueryAt returns the registry query interface for a specific height.
 func (sf *QueryFactory) QueryAt(ctx context.Context, height int64) (Query, error) {
-	state, err := registryState.NewImmutableState(ctx, sf.app.state, height)
+	state, err := registryState.NewImmutableState(ctx, sf.state, height)
 	if err != nil {
 		return nil, err
 	}
-	return &registryQuerier{sf.app, state, height}, nil
+	return &registryQuerier{sf.state, state, height}, nil
 }
 
 type registryQuerier struct {
-	app    *registryApplication
-	state  *registryState.ImmutableState
-	height int64
+	queryState abciAPI.ApplicationQueryState
+	state      *registryState.ImmutableState
+	height     int64
 }
 
 func (rq *registryQuerier) Entity(ctx context.Context, id signature.PublicKey) (*entity.Entity, error) {
@@ -53,7 +54,7 @@ func (rq *registryQuerier) Entities(ctx context.Context) ([]*entity.Entity, erro
 }
 
 func (rq *registryQuerier) Node(ctx context.Context, id signature.PublicKey) (*node.Node, error) {
-	epoch, err := rq.app.state.GetEpoch(ctx, rq.height)
+	epoch, err := rq.queryState.GetEpoch(ctx, rq.height)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get epoch: %w", err)
 	}
@@ -75,7 +76,7 @@ func (rq *registryQuerier) NodeStatus(ctx context.Context, id signature.PublicKe
 }
 
 func (rq *registryQuerier) Nodes(ctx context.Context) ([]*node.Node, error) {
-	epoch, err := rq.app.state.GetEpoch(ctx, rq.height)
+	epoch, err := rq.queryState.GetEpoch(ctx, rq.height)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get epoch: %w", err)
 	}
@@ -105,5 +106,11 @@ func (rq *registryQuerier) Runtimes(ctx context.Context) ([]*registry.Runtime, e
 }
 
 func (app *registryApplication) QueryFactory() interface{} {
-	return &QueryFactory{app}
+	return &QueryFactory{app.state}
+}
+
+// NewQueryFactory returns a new QueryFactory backed by the given state
+// instance.
+func NewQueryFactory(state abciAPI.ApplicationQueryState) *QueryFactory {
+	return &QueryFactory{state}
 }

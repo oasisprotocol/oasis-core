@@ -53,6 +53,7 @@ func New(cfg *api.Config) (api.NodeDB, error) {
 	db := &badgerNodeDB{
 		logger:           logging.GetLogger("mkvs/db/badger"),
 		namespace:        cfg.Namespace,
+		readOnly:         cfg.ReadOnly,
 		discardWriteLogs: cfg.DiscardWriteLogs,
 	}
 
@@ -64,6 +65,7 @@ func New(cfg *api.Config) (api.NodeDB, error) {
 	opts = opts.WithTruncate(true)
 	opts = opts.WithCompression(options.Snappy)
 	opts = opts.WithMaxCacheSize(cfg.MaxCacheSize)
+	opts = opts.WithReadOnly(cfg.ReadOnly)
 
 	if cfg.MemoryOnly {
 		db.logger.Warn("using memory-only mode, data will not be persisted")
@@ -94,6 +96,7 @@ type badgerNodeDB struct { // nolint: maligned
 
 	namespace common.Namespace
 
+	readOnly         bool
 	discardWriteLogs bool
 
 	db *badger.DB
@@ -403,6 +406,10 @@ func (d *badgerNodeDB) HasRoot(root node.Root) bool {
 }
 
 func (d *badgerNodeDB) Finalize(ctx context.Context, version uint64, roots []hash.Hash) error { // nolint: gocyclo
+	if d.readOnly {
+		return api.ErrReadOnly
+	}
+
 	d.metaUpdateLock.Lock()
 	defer d.metaUpdateLock.Unlock()
 
@@ -559,6 +566,10 @@ func (d *badgerNodeDB) Finalize(ctx context.Context, version uint64, roots []has
 }
 
 func (d *badgerNodeDB) Prune(ctx context.Context, version uint64) error {
+	if d.readOnly {
+		return api.ErrReadOnly
+	}
+
 	d.metaUpdateLock.Lock()
 	defer d.metaUpdateLock.Unlock()
 
@@ -742,6 +753,11 @@ func (ba *badgerBatch) RemoveNodes(nodes []node.Node) error {
 }
 
 func (ba *badgerBatch) Commit(root node.Root) error {
+	// XXX: Ideally this would fail at batch creation.
+	if ba.db.readOnly {
+		return api.ErrReadOnly
+	}
+
 	ba.db.metaUpdateLock.Lock()
 	defer ba.db.metaUpdateLock.Unlock()
 

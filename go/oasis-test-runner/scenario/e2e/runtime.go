@@ -1,7 +1,9 @@
 package e2e
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"os/exec"
 	"path/filepath"
@@ -14,6 +16,7 @@ import (
 	"github.com/oasislabs/oasis-core/go/common/cbor"
 	"github.com/oasislabs/oasis-core/go/common/node"
 	"github.com/oasislabs/oasis-core/go/common/sgx"
+	genesisFile "github.com/oasislabs/oasis-core/go/genesis/file"
 	cmdCommon "github.com/oasislabs/oasis-core/go/oasis-node/cmd/common"
 	cmdNode "github.com/oasislabs/oasis-core/go/oasis-node/cmd/node"
 	"github.com/oasislabs/oasis-core/go/oasis-test-runner/env"
@@ -362,7 +365,7 @@ func (sc *runtimeImpl) cleanTendermintStorage(childEnv *env.Env) error {
 	return nil
 }
 
-func (sc *runtimeImpl) dumpRestoreNetwork(childEnv *env.Env, fixture *oasis.NetworkFixture) error {
+func (sc *runtimeImpl) dumpRestoreNetwork(childEnv *env.Env, fixture *oasis.NetworkFixture, doDbDump bool) error {
 	// Dump-restore network.
 	sc.logger.Info("dumping network state",
 		"child", childEnv,
@@ -383,6 +386,12 @@ func (sc *runtimeImpl) dumpRestoreNetwork(childEnv *env.Env, fixture *oasis.Netw
 	// Stop the network.
 	logger.Info("stopping the network")
 	sc.net.Stop()
+
+	if doDbDump {
+		if err := sc.dumpDatabase(childEnv, fixture, dumpPath); err != nil {
+			return fmt.Errorf("scenario/e2e/dump_restore: failed to dump database: %w", err)
+		}
+	}
 
 	if len(sc.net.StorageWorkers()) > 0 {
 		// Dump storage.
@@ -423,6 +432,63 @@ func (sc *runtimeImpl) dumpRestoreNetwork(childEnv *env.Env, fixture *oasis.Netw
 	// If network is used, enable shorter per-node socket paths, because some e2e test datadir
 	// exceed maximum unix socket path length.
 	sc.net.Config().UseShortGrpcSocketPaths = true
+
+	return nil
+}
+
+func (sc *runtimeImpl) dumpDatabase(childEnv *env.Env, fixture *oasis.NetworkFixture, exportPath string) error {
+	// Load the existing export.
+	eFp, err := genesisFile.NewFileProvider(exportPath)
+	if err != nil {
+		return fmt.Errorf("failed to instantiate file provider (export): %w", err)
+	}
+	exportedDoc, err := eFp.GetGenesisDocument()
+	if err != nil {
+		return fmt.Errorf("failed to get genesis doc (export): %w", err)
+	}
+
+	logger.Info("dumping via debug dumpdb")
+
+	// Dump the state with the debug command off one of the validators.
+	dbDumpPath := filepath.Join(childEnv.Dir(), "debug_dump.json")
+	args := []string{
+		"debug", "dumpdb",
+		"--datadir", sc.net.Validators()[0].DataDir(),
+		"-g", sc.net.GenesisPath(),
+		"--dump.version", fmt.Sprintf("%d", exportedDoc.Height),
+		"--dump.output", dbDumpPath,
+		"--debug.dont_blame_oasis",
+		"--debug.allow_test_keys",
+	}
+	if err = cli.RunSubCommand(childEnv, logger, "debug-dump", sc.net.Config().NodeBinary, args); err != nil {
+		return fmt.Errorf("failed to dump database: %w", err)
+	}
+
+	// Load the dumped state.
+	fp, err := genesisFile.NewFileProvider(dbDumpPath)
+	if err != nil {
+		return fmt.Errorf("failed to instantiate file provider (db): %w", err)
+	}
+	dbDoc, err := fp.GetGenesisDocument()
+	if err != nil {
+		return fmt.Errorf("failed to get genesis doc (dump): %w", err)
+	}
+
+	// Compare the two documents for approximate equality.  Note: Certain
+	// fields will be different, so those are fixed up before the comparison.
+	dbDoc.EpochTime.Base = exportedDoc.EpochTime.Base
+	dbDoc.Time = exportedDoc.Time
+	dbRaw, err := json.Marshal(dbDoc)
+	if err != nil {
+		return fmt.Errorf("failed to marshal fixed up dump: %w", err)
+	}
+	expRaw, err := json.Marshal(exportedDoc)
+	if err != nil {
+		return fmt.Errorf("failed to re-marshal export doc: %w", err)
+	}
+	if !bytes.Equal(expRaw, dbRaw) {
+		return fmt.Errorf("dump does not match state export")
+	}
 
 	return nil
 }

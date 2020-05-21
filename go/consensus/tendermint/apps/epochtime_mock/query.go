@@ -3,6 +3,7 @@ package epochtimemock
 import (
 	"context"
 
+	abciAPI "github.com/oasislabs/oasis-core/go/consensus/tendermint/api"
 	epochtime "github.com/oasislabs/oasis-core/go/epochtime/api"
 )
 
@@ -13,12 +14,12 @@ type Query interface {
 
 // QueryFactory is the mock epochtime query factory.
 type QueryFactory struct {
-	app *epochTimeMockApplication
+	state abciAPI.ApplicationQueryState
 }
 
 // QueryAt returns the mock epochtime query interface for a specific height.
 func (sf *QueryFactory) QueryAt(ctx context.Context, height int64) (Query, error) {
-	state, err := newImmutableState(ctx, sf.app.state, height)
+	state, err := newImmutableState(ctx, sf.state, height)
 	if err != nil {
 		return nil, err
 	}
@@ -34,5 +35,11 @@ func (eq *epochtimeMockQuerier) Epoch(ctx context.Context) (epochtime.EpochTime,
 }
 
 func (app *epochTimeMockApplication) QueryFactory() interface{} {
-	return &QueryFactory{app}
+	return &QueryFactory{app.state}
+}
+
+// NewQueryFactory returns a new QueryFactory backed by the given state
+// instance.
+func NewQueryFactory(state abciAPI.ApplicationQueryState) *QueryFactory {
+	return &QueryFactory{state}
 }
