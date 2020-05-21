@@ -11,26 +11,26 @@ import (
 var CommissionRateDenominator *quantity.Quantity
 
 type CommissionScheduleRules struct {
-	RateChangeInterval epochtime.EpochTime `json:"rate_change_interval,omitempty"`
-	RateBoundLead      epochtime.EpochTime `json:"rate_bound_lead,omitempty"`
-	MaxRateSteps       uint16              `json:"max_rate_steps,omitempty"`
-	MaxBoundSteps      uint16              `json:"max_bound_steps,omitempty"`
+	RateChangeInterval epochtime.EpochTime `cbor:"1,keyasint,omitempty" json:"rate_change_interval,omitempty"`
+	RateBoundLead      epochtime.EpochTime `cbor:"2,keyasint,omitempty" json:"rate_bound_lead,omitempty"`
+	MaxRateSteps       uint16              `cbor:"3,keyasint,omitempty" json:"max_rate_steps,omitempty"`
+	MaxBoundSteps      uint16              `cbor:"4,keyasint,omitempty" json:"max_bound_steps,omitempty"`
 }
 
 type CommissionRateStep struct {
-	Start epochtime.EpochTime `json:"start"`
-	Rate  quantity.Quantity   `json:"rate"`
+	Start epochtime.EpochTime `cbor:"1,keyasint,omitempty" json:"start"`
+	Rate  quantity.Quantity   `cbor:"2,keyasint,omitempty" json:"rate"`
 }
 
 type CommissionRateBoundStep struct {
-	Start   epochtime.EpochTime `json:"start"`
-	RateMin quantity.Quantity   `json:"rate_min"`
-	RateMax quantity.Quantity   `json:"rate_max"`
+	Start   epochtime.EpochTime `cbor:"1,keyasint,omitempty" json:"start"`
+	RateMin quantity.Quantity   `cbor:"2,keyasint,omitempty" json:"rate_min"`
+	RateMax quantity.Quantity   `cbor:"3,keyasint,omitempty" json:"rate_max"`
 }
 
 type CommissionSchedule struct {
-	Rates  []CommissionRateStep      `json:"rates"`
-	Bounds []CommissionRateBoundStep `json:"bounds"`
+	Rates  []CommissionRateStep      `cbor:"1,keyasint,omitempty" json:"rates"`
+	Bounds []CommissionRateBoundStep `cbor:"2,keyasint,omitempty" json:"bounds"`
 }
 
 func (cs *CommissionSchedule) validateComplexity(rules *CommissionScheduleRules) error {

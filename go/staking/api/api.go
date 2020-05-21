@@ -254,8 +254,8 @@ func NewAmendCommissionScheduleTx(nonce uint64, fee *transaction.Fee, amend *Ame
 // SharePool is a combined balance of several entries, the relative sizes
 // of which are tracked through shares.
 type SharePool struct {
-	Balance     quantity.Quantity `json:"balance"`
-	TotalShares quantity.Quantity `json:"total_shares"`
+	Balance     quantity.Quantity `cbor:"1,keyasint,omitempty" json:"balance"`
+	TotalShares quantity.Quantity `cbor:"2,keyasint,omitempty" json:"total_shares"`
 }
 
 // sharesForTokens computes the amount of shares for the given amount of tokens.
@@ -400,7 +400,7 @@ type StakeClaim string
 type StakeAccumulator struct {
 	// Claims are the stake claims that must be satisfied at any given point. Adding a new claim is
 	// only possible if all of the existing claims plus the new claim is satisfied.
-	Claims map[StakeClaim][]ThresholdKind `json:"claims,omitempty"`
+	Claims map[StakeClaim][]ThresholdKind `cbor:"1,keyasint,omitempty" json:"claims,omitempty"`
 }
 
 // AddClaimUnchecked adds a new claim without checking its validity.
@@ -448,17 +448,17 @@ func (sa *StakeAccumulator) TotalClaims(thresholds map[ThresholdKind]quantity.Qu
 
 // GeneralAccount is a general-purpose account.
 type GeneralAccount struct {
-	Balance quantity.Quantity `json:"balance"`
-	Nonce   uint64            `json:"nonce"`
+	Balance quantity.Quantity `cbor:"1,keyasint,omitempty" json:"balance"`
+	Nonce   uint64            `cbor:"2,keyasint,omitempty" json:"nonce"`
 }
 
 // EscrowAccount is an escrow account the balance of which is subject to
 // special delegation provisions and a debonding period.
 type EscrowAccount struct {
-	Active             SharePool          `json:"active"`
-	Debonding          SharePool          `json:"debonding"`
-	CommissionSchedule CommissionSchedule `json:"commission_schedule"`
-	StakeAccumulator   StakeAccumulator   `json:"stake_accumulator,omitempty"`
+	Active             SharePool          `cbor:"1,keyasint,omitempty" json:"active"`
+	Debonding          SharePool          `cbor:"2,keyasint,omitempty" json:"debonding"`
+	CommissionSchedule CommissionSchedule `cbor:"3,keyasint,omitempty" json:"commission_schedule"`
+	StakeAccumulator   StakeAccumulator   `cbor:"4,keyasint,omitempty" json:"stake_accumulator,omitempty"`
 }
 
 // CheckStakeClaims checks whether the escrow account balance satisfies all the stake claims.
@@ -513,19 +513,19 @@ func (e *EscrowAccount) RemoveStakeClaim(claim StakeClaim) error {
 // The same ledger entry can hold both general and escrow accounts. Escrow
 // acounts are used to hold funds delegated for staking.
 type Account struct {
-	General GeneralAccount `json:"general"`
-	Escrow  EscrowAccount  `json:"escrow"`
+	General GeneralAccount `cbor:"1,keyasint,omitempty" json:"general"`
+	Escrow  EscrowAccount  `cbor:"2,keyasint,omitempty" json:"escrow"`
 }
 
 // Delegation is a delegation descriptor.
 type Delegation struct {
-	Shares quantity.Quantity `json:"shares"`
+	Shares quantity.Quantity `json:"shares" cbor:"1,keyasint,omitempty"`
 }
 
 // DebondingDelegation is a debonding delegation descriptor.
 type DebondingDelegation struct {
-	Shares        quantity.Quantity   `json:"shares"`
-	DebondEndTime epochtime.EpochTime `json:"debond_end"`
+	Shares        quantity.Quantity   `cbor:"1,keyasint,omitempty" json:"shares"`
+	DebondEndTime epochtime.EpochTime `cbor:"2,keyasint,omitempty" json:"debond_end"`
 }
 
 // Genesis is the initial ledger balances at genesis for use in the genesis
