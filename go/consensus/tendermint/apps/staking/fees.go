@@ -190,15 +190,15 @@ func (app *stakingApplication) disburseFeesVQ(
 			if err = stakeState.SetAccount(ctx, *proposerEntity, acct); err != nil {
 				return fmt.Errorf("failed to set next proposer account: %w", err)
 			}
-		}
 
-		// Emit transfer event.
-		evt := &staking.TransferEvent{
-			From:   staking.FeeAccumulatorAccountID,
-			To:     *proposerEntity,
-			Tokens: *nextProposerTotal,
+			// Emit transfer event.
+			evt := &staking.TransferEvent{
+				From:   staking.FeeAccumulatorAccountID,
+				To:     *proposerEntity,
+				Tokens: *nextProposerTotal,
+			}
+			ctx.EmitEvent(abciAPI.NewEventBuilder(app.Name()).Attribute(KeyTransfer, cbor.Marshal(evt)))
 		}
-		ctx.EmitEvent(abciAPI.NewEventBuilder(app.Name()).Attribute(KeyTransfer, cbor.Marshal(evt)))
 	}
 
 	// Pay the voters.

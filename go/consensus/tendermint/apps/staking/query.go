@@ -77,7 +77,30 @@ func (sq *stakingQuerier) Accounts(ctx context.Context) ([]signature.PublicKey, 
 }
 
 func (sq *stakingQuerier) AccountInfo(ctx context.Context, id signature.PublicKey) (*staking.Account, error) {
-	return sq.state.Account(ctx, id)
+	switch {
+	case id.Equal(staking.CommonPoolAccountID):
+		cp, err := sq.state.CommonPool(ctx)
+		if err != nil {
+			return nil, err
+		}
+		return &staking.Account{
+			General: staking.GeneralAccount{
+				Balance: *cp,
+			},
+		}, nil
+	case id.Equal(staking.FeeAccumulatorAccountID):
+		fa, err := sq.state.LastBlockFees(ctx)
+		if err != nil {
+			return nil, err
+		}
+		return &staking.Account{
+			General: staking.GeneralAccount{
+				Balance: *fa,
+			},
+		}, nil
+	default:
+		return sq.state.Account(ctx, id)
+	}
 }
 
 func (sq *stakingQuerier) Delegations(ctx context.Context, id signature.PublicKey) (map[signature.PublicKey]*staking.Delegation, error) {
