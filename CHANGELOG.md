@@ -12,6 +12,52 @@ The format is inspired by [Keep a Changelog].
 
 <!-- TOWNCRIER -->
 
+## 20.6.1 (2020-05-22)
+
+### Features
+
+- consensus: Add GetStatus method to API
+  ([#2902](https://github.com/oasislabs/oasis-core/issues/2902))
+
+  A new `GetStatus` method has been added to the consensus API.
+  It returns useful information about the latest block, the genesis
+  block, and the node itself.
+
+- control: Add GetStatus method to API
+  ([#2902](https://github.com/oasislabs/oasis-core/issues/2902))
+
+  A new `GetStatus` method has been added to the control API.
+  It returns the software version and the status of the consensus layer.
+
+### Bug Fixes
+
+- staking: Emit events when disbursing fees and rewards
+  ([#2909](https://github.com/oasislabs/oasis-core/issues/2909))
+
+  Staking events are now generated when disbursing fees and rewards.
+  There are two new special account IDs -- `CommonPoolAccountID` and
+  `FeeAccumulatorAccountID` (both defined in `go/staking/api/api.go`),
+  which are used only in events to signify the common pool and the fee
+  accumulator respectively.
+  These account IDs are invalid by design to prevent misusing them
+  anywhere else.
+
+### Internal changes
+
+- go: update dependencies depending on `websocket@v1.4.0`
+  ([#2927](https://github.com/oasislabs/oasis-core/issues/2927))
+
+  Due to a vulnerability in `websocket@1.4.0`: CWE-190.
+
+  Updated libraries:
+
+  - `github.com/libp2p/go-libp2p@v0.1.1` to `github.com/libp2p/go-libp2p@v0.9.1`
+
+  - `github.com/spf13/viper@v1.6.3` to `github.com/spf13/viper@v1.7.0`
+
+  - replace `github.com/gorilla/websocket` with
+  `github.com/gorilla/websocket v1.4.2`
+
 ## 20.6 (2020-05-07)
 
 ### Removals and Breaking changes
