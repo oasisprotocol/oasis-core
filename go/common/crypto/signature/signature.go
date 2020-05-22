@@ -19,6 +19,7 @@ import (
 	"github.com/oasislabs/ed25519"
 
 	"github.com/oasislabs/oasis-core/go/common/cbor"
+	"github.com/oasislabs/oasis-core/go/common/crypto/hash"
 	"github.com/oasislabs/oasis-core/go/common/pem"
 	"github.com/oasislabs/oasis-core/go/common/prettyprint"
 )
@@ -208,6 +209,11 @@ func (k *PublicKey) LoadPEM(fn string, signer Signer) error {
 	}
 
 	return nil
+}
+
+// Hash returns a cryptographic hash of the public key.
+func (k PublicKey) Hash() hash.Hash {
+	return hash.NewFromBytes(k[:])
 }
 
 func (k PublicKey) isBlacklisted() bool {

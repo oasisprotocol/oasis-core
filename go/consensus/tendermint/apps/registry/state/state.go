@@ -23,20 +23,20 @@ var (
 	// signedEntityKeyFmt is the key format used for signed entities.
 	//
 	// Value is CBOR-serialized signed entity.
-	signedEntityKeyFmt = keyformat.New(0x10, &signature.PublicKey{})
+	signedEntityKeyFmt = keyformat.New(0x10, keyformat.H(&signature.PublicKey{}))
 	// signedNodeKeyFmt is the key format used for signed nodes.
 	//
 	// Value is CBOR-serialized signed node.
-	signedNodeKeyFmt = keyformat.New(0x11, &signature.PublicKey{})
+	signedNodeKeyFmt = keyformat.New(0x11, keyformat.H(&signature.PublicKey{}))
 	// signedNodeByEntityKeyFmt is the key format used for signed node by entity
 	// index.
 	//
 	// Value is empty.
-	signedNodeByEntityKeyFmt = keyformat.New(0x12, &signature.PublicKey{}, &signature.PublicKey{})
+	signedNodeByEntityKeyFmt = keyformat.New(0x12, keyformat.H(&signature.PublicKey{}), keyformat.H(&signature.PublicKey{}))
 	// signedRuntimeKeyFmt is the key format used for signed runtimes.
 	//
 	// Value is CBOR-serialized signed runtime.
-	signedRuntimeKeyFmt = keyformat.New(0x13, &common.Namespace{})
+	signedRuntimeKeyFmt = keyformat.New(0x13, keyformat.H(&common.Namespace{}))
 	// nodeByConsAddressKeyFmt is the key format used for the consensus address to
 	// node public key mapping.
 	//
@@ -49,25 +49,26 @@ var (
 	// nodeStatusKeyFmt is the key format used for node statuses.
 	//
 	// Value is CBOR-serialized node status.
-	nodeStatusKeyFmt = keyformat.New(0x15, &signature.PublicKey{})
+	nodeStatusKeyFmt = keyformat.New(0x15, keyformat.H(&signature.PublicKey{}))
 	// parametersKeyFmt is the key format used for consensus parameters.
 	//
 	// Value is CBOR-serialized registry.ConsensusParameters.
 	parametersKeyFmt = keyformat.New(0x16)
 	// keyMapKeyFmt is the key format used for key-to-node-id map.
-	// This stores the consensus and P2P to Node ID mappings.
+	//
+	// This stores the consensus, P2P and TLS public keys to node ID mappings.
 	//
 	// Value is binary signature.PublicKey (node ID).
-	keyMapKeyFmt = keyformat.New(0x17, &signature.PublicKey{})
+	keyMapKeyFmt = keyformat.New(0x17, keyformat.H(&signature.PublicKey{}))
 	// suspendedRuntimeKeyFmt is the key format used for suspended runtimes.
 	//
 	// Value is CBOR-serialized signed runtime.
-	suspendedRuntimeKeyFmt = keyformat.New(0x18, &common.Namespace{})
+	suspendedRuntimeKeyFmt = keyformat.New(0x18, keyformat.H(&common.Namespace{}))
 	// signedRuntimeByEntityKeyFmt is the key format used for signed runtime by entity
 	// index.
 	//
 	// Value is empty.
-	signedRuntimeByEntityKeyFmt = keyformat.New(0x19, &signature.PublicKey{}, &common.Namespace{})
+	signedRuntimeByEntityKeyFmt = keyformat.New(0x19, keyformat.H(&signature.PublicKey{}), keyformat.H(&common.Namespace{}))
 )
 
 // ImmutableState is the immutable registry state wrapper.
@@ -221,6 +222,7 @@ func (s *ImmutableState) Nodes(ctx context.Context) ([]*node.Node, error) {
 	if it.Err() != nil {
 		return nil, abciAPI.UnavailableStateError(it.Err())
 	}
+	registry.SortNodeList(nodes)
 	return nodes, nil
 }
 
@@ -441,39 +443,15 @@ func (s *ImmutableState) NodeStatus(ctx context.Context, id signature.PublicKey)
 	return &status, nil
 }
 
-// NodeStatuses returns all of the node statuses.
-func (s *ImmutableState) NodeStatuses(ctx context.Context) (map[signature.PublicKey]*registry.NodeStatus, error) {
-	it := s.is.NewIterator(ctx)
-	defer it.Close()
-
-	statuses := make(map[signature.PublicKey]*registry.NodeStatus)
-	for it.Seek(nodeStatusKeyFmt.Encode()); it.Valid(); it.Next() {
-		var nodeID signature.PublicKey
-		if !nodeStatusKeyFmt.Decode(it.Key(), &nodeID) {
-			break
-		}
-
-		var status registry.NodeStatus
-		if err := cbor.Unmarshal(it.Value(), &status); err != nil {
-			return nil, abciAPI.UnavailableStateError(err)
-		}
-
-		statuses[nodeID] = &status
-	}
-	if it.Err() != nil {
-		return nil, abciAPI.UnavailableStateError(it.Err())
-	}
-	return statuses, nil
-}
-
 // HasEntityNodes checks whether an entity has any registered nodes.
 func (s *ImmutableState) HasEntityNodes(ctx context.Context, id signature.PublicKey) (bool, error) {
 	it := s.is.NewIterator(ctx)
 	defer it.Close()
 
+	hID := keyformat.PreHashed(id.Hash())
 	if it.Seek(signedNodeByEntityKeyFmt.Encode(&id)); it.Valid() {
-		var entityID signature.PublicKey
-		if !signedNodeByEntityKeyFmt.Decode(it.Key(), &entityID) || !entityID.Equal(id) {
+		var hEntityID keyformat.PreHashed
+		if !signedNodeByEntityKeyFmt.Decode(it.Key(), &hEntityID) || !hEntityID.Equal(&hID) {
 			return false, nil
 		}
 		return true, nil
@@ -486,9 +464,10 @@ func (s *ImmutableState) HasEntityRuntimes(ctx context.Context, id signature.Pub
 	it := s.is.NewIterator(ctx)
 	defer it.Close()
 
+	hID := keyformat.PreHashed(id.Hash())
 	if it.Seek(signedRuntimeByEntityKeyFmt.Encode(&id)); it.Valid() {
-		var entityID signature.PublicKey
-		if !signedRuntimeByEntityKeyFmt.Decode(it.Key(), &entityID) || !entityID.Equal(id) {
+		var hEntityID keyformat.PreHashed
+		if !signedRuntimeByEntityKeyFmt.Decode(it.Key(), &hEntityID) || !hEntityID.Equal(&hID) {
 			return false, nil
 		}
 		return true, nil
