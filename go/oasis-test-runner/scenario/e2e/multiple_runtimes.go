@@ -5,10 +5,7 @@ import (
 	"fmt"
 	"time"
 
-	flag "github.com/spf13/pflag"
-
 	"github.com/oasislabs/oasis-core/go/common"
-	"github.com/oasislabs/oasis-core/go/common/logging"
 	epochtime "github.com/oasislabs/oasis-core/go/epochtime/api"
 	"github.com/oasislabs/oasis-core/go/oasis-test-runner/env"
 	"github.com/oasislabs/oasis-core/go/oasis-test-runner/oasis"
@@ -16,57 +13,40 @@ import (
 	registry "github.com/oasislabs/oasis-core/go/registry/api"
 )
 
+const (
+	// cfgNumComputeRuntimes is the number of runtimes, all with common runtimeBinary registered.
+	cfgNumComputeRuntimes = "num_compute_runtimes"
+	// cfgNumComputeRuntimeTxns is the number of insert test transactions sent to each runtime.
+	cfgNumComputeRuntimeTxns = "num_compute_runtime_txns"
+	// cfgNumComputeWorkers is the number of compute workers.
+	cfgNumComputeWorkers = "num_compute_workers"
+	// cfgExecutorGroupSize is the number of executor nodes.
+	cfgExecutorGroupSize = "executor_group_size"
+)
+
 var (
 	// MultipleRuntimes is a scenario which tests running multiple runtimes on one node.
-	MultipleRuntimes scenario.Scenario = &multipleRuntimesImpl{
-		runtimeImpl: *newRuntimeImpl("multiple-runtimes", "simple-keyvalue-client", nil),
-		logger:      logging.GetLogger("scenario/e2e/multiple_runtimes"),
+	MultipleRuntimes = func() scenario.Scenario {
+		sc := &multipleRuntimesImpl{
+			runtimeImpl: *newRuntimeImpl("multiple-runtimes", "simple-keyvalue-client", nil),
+		}
+		sc.flags.Int(cfgNumComputeRuntimes, 2, "number of compute runtimes per worker")
+		sc.flags.Int(cfgNumComputeRuntimeTxns, 2, "number of transactions to perform")
+		sc.flags.Int(cfgNumComputeWorkers, 2, "number of workers to initiate")
+		sc.flags.Int(cfgExecutorGroupSize, 2, "number of executor workers in committee")
 
-		numComputeRuntimes:    2,
-		numComputeRuntimeTxns: 2,
-		numComputeWorkers:     2,
-		executorGroupSize:     2,
-	}
+		return sc
+	}()
 )
 
 type multipleRuntimesImpl struct {
 	runtimeImpl
-
-	logger *logging.Logger
-
-	// numComputeRuntimes is the number of runtimes, all with common runtimeBinary registered.
-	numComputeRuntimes int
-
-	// numComputeRuntimeTxns is the number of insert test transactions sent to each runtime.
-	numComputeRuntimeTxns int
-
-	// numComputeWorkers is the number of compute workers.
-	numComputeWorkers int
-
-	// executorGroupSize is the number of executor nodes.
-	executorGroupSize int
 }
 
 func (mr *multipleRuntimesImpl) Clone() scenario.Scenario {
 	return &multipleRuntimesImpl{
 		runtimeImpl: *mr.runtimeImpl.Clone().(*runtimeImpl),
-		logger:      mr.logger,
-
-		numComputeRuntimes:    mr.numComputeRuntimes,
-		numComputeRuntimeTxns: mr.numComputeRuntimeTxns,
-		numComputeWorkers:     mr.numComputeWorkers,
-		executorGroupSize:     mr.executorGroupSize,
 	}
-}
-
-func (mr *multipleRuntimesImpl) Parameters() *flag.FlagSet {
-	fs := mr.runtimeImpl.Parameters()
-	fs.IntVar(&mr.numComputeRuntimes, "num_compute_runtimes", mr.numComputeRuntimes, "number of compute runtimes per worker")
-	fs.IntVar(&mr.numComputeRuntimeTxns, "num_compute_runtime_txns", mr.numComputeRuntimeTxns, "number of transactions to perform")
-	fs.IntVar(&mr.numComputeWorkers, "num_compute_workers", mr.numComputeWorkers, "number of workers to initiate")
-	fs.IntVar(&mr.executorGroupSize, "executor_group_size", mr.executorGroupSize, "number of executor workers in committee")
-
-	return fs
 }
 
 func (mr *multipleRuntimesImpl) Fixture() (*oasis.NetworkFixture, error) {
@@ -96,7 +76,9 @@ func (mr *multipleRuntimesImpl) Fixture() (*oasis.NetworkFixture, error) {
 	f.Network.EpochtimeMock = true
 
 	// Add some more consecutive runtime IDs with the same binary.
-	for i := 1; i <= mr.numComputeRuntimes; i++ {
+	numComputeRuntimes, _ := mr.flags.GetInt(cfgNumComputeRuntimes)
+	executorGroupSize, _ := mr.flags.GetInt(cfgExecutorGroupSize)
+	for i := 1; i <= numComputeRuntimes; i++ {
 		// Increase LSB by 1.
 		id[len(id)-1]++
 
@@ -107,7 +89,7 @@ func (mr *multipleRuntimesImpl) Fixture() (*oasis.NetworkFixture, error) {
 			Keymanager: 0,
 			Binaries:   []string{runtimeBinary},
 			Executor: registry.ExecutorParameters{
-				GroupSize:       uint64(mr.executorGroupSize),
+				GroupSize:       uint64(executorGroupSize),
 				GroupBackupSize: 0,
 				RoundTimeout:    10 * time.Second,
 			},
@@ -139,8 +121,9 @@ func (mr *multipleRuntimesImpl) Fixture() (*oasis.NetworkFixture, error) {
 	}
 
 	// Use numComputeWorkers compute worker fixtures.
+	numComputeWorkers, _ := mr.flags.GetInt(cfgNumComputeWorkers)
 	f.ComputeWorkers = []oasis.ComputeWorkerFixture{}
-	for i := 0; i < mr.numComputeWorkers; i++ {
+	for i := 0; i < numComputeWorkers; i++ {
 		f.ComputeWorkers = append(f.ComputeWorkers, oasis.ComputeWorkerFixture{Entity: 1})
 	}
 
@@ -161,10 +144,11 @@ func (mr *multipleRuntimesImpl) Run(childEnv *env.Env) error {
 
 	// Submit transactions.
 	epoch := epochtime.EpochTime(3)
+	numComputeRuntimeTxns, _ := mr.flags.GetInt(cfgNumComputeRuntimeTxns)
 	for _, r := range mr.net.Runtimes() {
 		rt := r.ToRuntimeDescriptor()
 		if rt.Kind == registry.KindCompute {
-			for i := 0; i < mr.numComputeRuntimeTxns; i++ {
+			for i := 0; i < numComputeRuntimeTxns; i++ {
 				mr.logger.Info("submitting transaction to runtime",
 					"seq", i,
 					"runtime_id", rt.ID,

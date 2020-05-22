@@ -60,8 +60,7 @@ func (sc *nodeUpgradeCancelImpl) Clone() scenario.Scenario {
 }
 
 func (sc *nodeUpgradeCancelImpl) Fixture() (*oasis.NetworkFixture, error) {
-	var tee node.TEEHardware
-	err := tee.FromString(sc.TEEHardware)
+	tee, err := sc.getTEEHardware()
 	if err != nil {
 		return nil, err
 	}
@@ -69,15 +68,16 @@ func (sc *nodeUpgradeCancelImpl) Fixture() (*oasis.NetworkFixture, error) {
 	if tee == node.TEEHardwareIntelSGX {
 		mrSigner = &sgx.FortanixDummyMrSigner
 	}
-
+	nodeBinary, _ := sc.flags.GetString(cfgNodeBinary)
+	runtimeLoader, _ := sc.flags.GetString(cfgRuntimeLoader)
 	return &oasis.NetworkFixture{
 		TEE: oasis.TEEFixture{
 			Hardware: tee,
 			MrSigner: mrSigner,
 		},
 		Network: oasis.NetworkCfg{
-			NodeBinary:                        sc.nodeBinary,
-			RuntimeSGXLoaderBinary:            sc.runtimeLoader,
+			NodeBinary:                        nodeBinary,
+			RuntimeSGXLoaderBinary:            runtimeLoader,
 			EpochtimeMock:                     true,
 			DefaultLogWatcherHandlerFactories: DefaultRuntimeLogWatcherHandlerFactories,
 		},

@@ -57,7 +57,8 @@ func (ident *identityCLIImpl) Run(childEnv *env.Env) error {
 		"identity", "init",
 		"--" + common.CfgDataDir, ident.dataDir,
 	}
-	if err := cli.RunSubCommand(childEnv, ident.logger, "identity-init", ident.nodeBinary, args); err != nil {
+	nodeBinary, _ := ident.flags.GetString(cfgNodeBinary)
+	if err := cli.RunSubCommand(childEnv, ident.logger, "identity-init", nodeBinary, args); err != nil {
 		return fmt.Errorf("scenario/e2e/identity_cli: failed provision node's identity: %w", err)
 	}
 
@@ -96,7 +97,8 @@ func (ident *identityCLIImpl) tendermintShowAddress(childEnv *env.Env, addrName 
 		"identity", "tendermint", subCmd,
 		"--" + common.CfgDataDir, ident.dataDir,
 	}
-	if out, err := cli.RunSubCommandWithOutput(childEnv, ident.logger, subCmd, ident.nodeBinary, args); err != nil {
+	nodeBinary, _ := ident.flags.GetString(cfgNodeBinary)
+	if out, err := cli.RunSubCommandWithOutput(childEnv, ident.logger, subCmd, nodeBinary, args); err != nil {
 		return fmt.Errorf("failed to get %s's tendermint address: error: %w output: %s", addrName, err, out.String())
 	}
 	return nil
