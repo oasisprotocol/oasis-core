@@ -792,6 +792,7 @@ func (mux *abciMux) DeliverTx(req types.RequestDeliverTx) types.ResponseDeliverT
 			Codespace: module,
 			Code:      code,
 			Log:       err.Error(),
+			Events:    ctx.GetEvents(),
 			GasWanted: int64(ctx.Gas().GasWanted()),
 			GasUsed:   int64(ctx.Gas().GasUsed()),
 		}
