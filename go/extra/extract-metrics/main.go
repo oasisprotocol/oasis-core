@@ -44,12 +44,13 @@ and it will embed the table in place of the placeholder in the provided template
 )
 
 type Metric struct {
-	Name     string `json:"name"`
-	Type     string `json:"type"`
-	Help     string `json:"help"`
-	Filename string `json:"filename"`
-	Line     int    `json:"line"`
-	Vec      bool   `json:"vec"`
+	Name     string   `json:"name"`
+	Type     string   `json:"type"`
+	Help     string   `json:"help"`
+	Labels   []string `json:"labels"`
+	Filename string   `json:"filename"`
+	Line     int      `json:"line"`
+	Vec      bool     `json:"vec"`
 }
 
 func markdownTable(metrics map[string]Metric) string {
@@ -66,17 +67,18 @@ func markdownTable(metrics map[string]Metric) string {
 		tplDir = filepath.Dir(viper.GetString(CfgMarkdownTplFile))
 	}
 
-	mdTable := "Name | Type | Description | Package\n"
-	mdTable += "-----|------|-------------|--------\n"
+	mdTable := "Name | Type | Description | Labels | Package\n"
+	mdTable += "-----|------|-------------|--------|--------\n"
 	for _, k := range ordKeys {
 		m := metrics[k]
 		pkg, _ := filepath.Rel(viper.GetString(CfgCodebasePath), m.Filename)
 		pkg = filepath.Dir(pkg)
 		fileURL, _ := filepath.Rel(tplDir, m.Filename)
 		desc := html.EscapeString(m.Help)
+		labels := strings.Join(m.Labels, ", ")
 
-		mdTable += fmt.Sprintf("%s | %s | %s | [%s](%s)\n", m.Name, m.Type, desc,
-			pkg, fileURL)
+		mdTable += fmt.Sprintf("%s | %s | %s | %s | [%s](%s)\n", m.Name, m.Type, desc,
+			labels, pkg, fileURL)
 	}
 
 	return mdTable
@@ -156,11 +158,12 @@ func doExtractMetrics(cmd *cobra.Command, args []string) {
 // Example code in go:
 //
 // ```
-// registryNodes = prometheus.NewGauge(
-//		prometheus.GaugeOpts{
-//			Name: "oasis_registry_nodes",
-//			Help: "Number of registry nodes.",
-//		},
+// rhpLatency = prometheus.NewSummaryVec(
+//   prometheus.SummaryOpts{
+//     Name: "oasis_rhp_latency",
+//     Help: "Runtime Host call latency (seconds).",
+//   },
+//   []string{"call"},
 // )
 // ```
 //
@@ -219,6 +222,18 @@ func checkNewPrometheusMetric(f *token.FileSet, n ast.Node) (m Metric, ok bool) 
 		}
 		return true
 	})
+
+	// If labels are defined, extract them.
+	if len(c.Args) > 1 {
+		l, okL := c.Args[1].(*ast.CompositeLit)
+		if !okL {
+			return
+		}
+		for _, e := range l.Elts {
+			m.Labels = append(m.Labels, extractValue(e))
+		}
+	}
+
 	return
 }
 

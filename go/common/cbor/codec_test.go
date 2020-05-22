@@ -18,7 +18,7 @@ func TestCodecRoundTrip(t *testing.T) {
 	}
 
 	var buffer bytes.Buffer
-	codec := NewMessageCodec(&buffer)
+	codec := NewMessageCodec(&buffer, t.Name())
 	err := codec.Write(&msg)
 	require.NoError(t, err, "Write (1st)")
 
@@ -40,7 +40,7 @@ func TestCodecOversized(t *testing.T) {
 	require := require.New(t)
 
 	var buffer bytes.Buffer
-	codec := NewMessageCodec(&buffer)
+	codec := NewMessageCodec(&buffer, t.Name())
 
 	err := codec.Write(42)
 	require.NoError(err, "Write")
@@ -58,7 +58,7 @@ func TestCodecMalformed(t *testing.T) {
 	require := require.New(t)
 
 	var buffer bytes.Buffer
-	codec := NewMessageCodec(&buffer)
+	codec := NewMessageCodec(&buffer, t.Name())
 
 	err := codec.Write(42)
 	require.NoError(err, "Write")

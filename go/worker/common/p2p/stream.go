@@ -8,6 +8,8 @@ import (
 	"github.com/oasislabs/oasis-core/go/common/cbor"
 )
 
+const moduleName = "p2p"
+
 // Stream is a CBOR message stream wrapper.
 type Stream struct {
 	core.Stream
@@ -40,7 +42,7 @@ func (s *Stream) Write(msg interface{}) error {
 func NewStream(stream core.Stream) *Stream {
 	return &Stream{
 		Stream:       stream,
-		codec:        cbor.NewMessageCodec(stream),
+		codec:        cbor.NewMessageCodec(stream, moduleName),
 		readTimeout:  5 * time.Second,
 		writeTimeout: 5 * time.Second,
 	}
