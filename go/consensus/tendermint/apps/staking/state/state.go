@@ -185,6 +185,10 @@ func (s *ImmutableState) Accounts(ctx context.Context) ([]signature.PublicKey, e
 }
 
 func (s *ImmutableState) Account(ctx context.Context, id signature.PublicKey) (*staking.Account, error) {
+	if !id.IsValid() {
+		return nil, fmt.Errorf("tendermint/staking: invalid account ID")
+	}
+
 	value, err := s.is.Get(ctx, accountKeyFmt.Encode(&id))
 	if err != nil {
 		return nil, abciAPI.UnavailableStateError(err)
@@ -805,6 +809,13 @@ func (s *MutableState) AddRewards(
 			if err = s.SetDelegation(ctx, id, id, delegation); err != nil {
 				return fmt.Errorf("tendermint/staking: failed to set delegation: %w", err)
 			}
+
+			ev := cbor.Marshal(&staking.AddEscrowEvent{
+				Owner:  staking.CommonPoolAccountID,
+				Escrow: id,
+				Tokens: *com,
+			})
+			ctx.EmitEvent(api.NewEventBuilder(AppName).Attribute(KeyAddEscrow, ev))
 		}
 
 		if err = s.SetAccount(ctx, id, ent); err != nil {
@@ -926,6 +937,13 @@ func (s *MutableState) AddRewardSingleAttenuated(
 		if err = s.SetDelegation(ctx, account, account, delegation); err != nil {
 			return fmt.Errorf("tendermint/staking: failed to set delegation: %w", err)
 		}
+
+		ev := cbor.Marshal(&staking.AddEscrowEvent{
+			Owner:  staking.CommonPoolAccountID,
+			Escrow: account,
+			Tokens: *com,
+		})
+		ctx.EmitEvent(api.NewEventBuilder(AppName).Attribute(KeyAddEscrow, ev))
 	}
 
 	if err = s.SetAccount(ctx, account, ent); err != nil {
