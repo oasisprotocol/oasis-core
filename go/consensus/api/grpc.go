@@ -36,6 +36,8 @@ var (
 	methodGetTransactions = serviceName.NewMethod("GetTransactions", int64(0))
 	// methodGetGenesisDocument is the GetGenesisDocument method.
 	methodGetGenesisDocument = serviceName.NewMethod("GetGenesisDocument", nil)
+	// methodGetStatus is the GetStatus method.
+	methodGetStatus = serviceName.NewMethod("GetStatus", nil)
 
 	// methodWatchBlocks is the WatchBlocks method.
 	methodWatchBlocks = serviceName.NewMethod("WatchBlocks", nil)
@@ -87,6 +89,10 @@ var (
 			{
 				MethodName: methodGetGenesisDocument.ShortName(),
 				Handler:    handlerGetGenesisDocument,
+			},
+			{
+				MethodName: methodGetStatus.ShortName(),
+				Handler:    handlerGetStatus,
 			},
 		},
 		Streams: []grpc.StreamDesc{
@@ -310,14 +316,33 @@ func handlerGetGenesisDocument( // nolint: golint
 	interceptor grpc.UnaryServerInterceptor,
 ) (interface{}, error) {
 	if interceptor == nil {
-		return srv.(Backend).GetGenesisDocument(ctx)
+		return srv.(ClientBackend).GetGenesisDocument(ctx)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
 		FullMethod: methodGetGenesisDocument.FullName(),
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(Backend).GetGenesisDocument(ctx)
+		return srv.(ClientBackend).GetGenesisDocument(ctx)
+	}
+	return interceptor(ctx, nil, info, handler)
+}
+
+func handlerGetStatus( // nolint: golint
+	srv interface{},
+	ctx context.Context,
+	dec func(interface{}) error,
+	interceptor grpc.UnaryServerInterceptor,
+) (interface{}, error) {
+	if interceptor == nil {
+		return srv.(ClientBackend).GetStatus(ctx)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: methodGetStatus.FullName(),
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ClientBackend).GetStatus(ctx)
 	}
 	return interceptor(ctx, nil, info, handler)
 }
@@ -526,6 +551,14 @@ func (c *consensusClient) GetTransactions(ctx context.Context, height int64) ([]
 func (c *consensusClient) GetGenesisDocument(ctx context.Context) (*genesis.Document, error) {
 	var rsp genesis.Document
 	if err := c.conn.Invoke(ctx, methodGetGenesisDocument.FullName(), nil, &rsp); err != nil {
+		return nil, err
+	}
+	return &rsp, nil
+}
+
+func (c *consensusClient) GetStatus(ctx context.Context) (*Status, error) {
+	var rsp Status
+	if err := c.conn.Invoke(ctx, methodGetStatus.FullName(), nil, &rsp); err != nil {
 		return nil, err
 	}
 	return &rsp, nil

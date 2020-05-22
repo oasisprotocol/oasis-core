@@ -24,6 +24,9 @@ import (
 var (
 	// AppName is the ABCI application name.
 	AppName = "100_staking"
+	// KeyAddEscrow is an ABCI event attribute key for AddEscrow calls
+	// (value is an api.AddEscrowEvent).
+	KeyAddEscrow = []byte("add_escrow")
 	// KeyTakeEscrow is an ABCI event attribute key for TakeEscrow calls
 	// (value is an app.TakeEscrowEvent).
 	KeyTakeEscrow = []byte("take_escrow")
@@ -184,6 +187,10 @@ func (s *ImmutableState) Accounts(ctx context.Context) ([]signature.PublicKey, e
 }
 
 func (s *ImmutableState) Account(ctx context.Context, id signature.PublicKey) (*staking.Account, error) {
+	if !id.IsValid() {
+		return nil, fmt.Errorf("tendermint/staking: invalid account ID")
+	}
+
 	value, err := s.is.Get(ctx, accountKeyFmt.Encode(&id))
 	if err != nil {
 		return nil, abciAPI.UnavailableStateError(err)
@@ -694,7 +701,7 @@ func (s *MutableState) TransferFromCommon(ctx *abciAPI.Context, toID signature.P
 
 		if !ctx.IsCheckOnly() {
 			ev := cbor.Marshal(&staking.TransferEvent{
-				// XXX: Reserve an id for the common pool?
+				From:   staking.CommonPoolAccountID,
 				To:     toID,
 				Tokens: *transfered,
 			})
@@ -712,7 +719,7 @@ func (s *MutableState) TransferFromCommon(ctx *abciAPI.Context, toID signature.P
 // be safe for the caller to roll back to an earlier state tree and continue from
 // there.
 func (s *MutableState) AddRewards(
-	ctx context.Context,
+	ctx *abciAPI.Context,
 	time epochtime.EpochTime,
 	factor *quantity.Quantity,
 	accounts []signature.PublicKey,
@@ -782,6 +789,12 @@ func (s *MutableState) AddRewards(
 			if err = quantity.Move(&ent.Escrow.Active.Balance, commonPool, q); err != nil {
 				return errors.Wrap(err, "transferring to active escrow balance from common pool")
 			}
+			ev := cbor.Marshal(&staking.AddEscrowEvent{
+				Owner:  staking.CommonPoolAccountID,
+				Escrow: id,
+				Tokens: *q,
+			})
+			ctx.EmitEvent(api.NewEventBuilder(AppName).Attribute(KeyAddEscrow, ev))
 		}
 
 		if com != nil && !com.IsZero() {
@@ -798,6 +811,13 @@ func (s *MutableState) AddRewards(
 			if err = s.SetDelegation(ctx, id, id, delegation); err != nil {
 				return fmt.Errorf("failed to set delegation: %w", err)
 			}
+
+			ev := cbor.Marshal(&staking.AddEscrowEvent{
+				Owner:  staking.CommonPoolAccountID,
+				Escrow: id,
+				Tokens: *com,
+			})
+			ctx.EmitEvent(api.NewEventBuilder(AppName).Attribute(KeyAddEscrow, ev))
 		}
 
 		if err = s.SetAccount(ctx, id, ent); err != nil {
@@ -814,7 +834,7 @@ func (s *MutableState) AddRewards(
 
 // AddRewardSingleAttenuated computes, scales, and transfers a staking reward to an active escrow account.
 func (s *MutableState) AddRewardSingleAttenuated(
-	ctx context.Context,
+	ctx *abciAPI.Context,
 	time epochtime.EpochTime,
 	factor *quantity.Quantity,
 	attenuationNumerator, attenuationDenominator int,
@@ -897,6 +917,12 @@ func (s *MutableState) AddRewardSingleAttenuated(
 		if err = quantity.Move(&ent.Escrow.Active.Balance, commonPool, q); err != nil {
 			return errors.Wrap(err, "transferring to active escrow balance from common pool")
 		}
+		ev := cbor.Marshal(&staking.AddEscrowEvent{
+			Owner:  staking.CommonPoolAccountID,
+			Escrow: account,
+			Tokens: *q,
+		})
+		ctx.EmitEvent(api.NewEventBuilder(AppName).Attribute(KeyAddEscrow, ev))
 	}
 
 	if com != nil && !com.IsZero() {
@@ -913,6 +939,13 @@ func (s *MutableState) AddRewardSingleAttenuated(
 		if err = s.SetDelegation(ctx, account, account, delegation); err != nil {
 			return fmt.Errorf("failed to set delegation: %w", err)
 		}
+
+		ev := cbor.Marshal(&staking.AddEscrowEvent{
+			Owner:  staking.CommonPoolAccountID,
+			Escrow: account,
+			Tokens: *com,
+		})
+		ctx.EmitEvent(api.NewEventBuilder(AppName).Attribute(KeyAddEscrow, ev))
 	}
 
 	if err = s.SetAccount(ctx, account, ent); err != nil {

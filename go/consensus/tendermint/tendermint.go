@@ -39,6 +39,7 @@ import (
 	"github.com/oasislabs/oasis-core/go/common/pubsub"
 	"github.com/oasislabs/oasis-core/go/common/quantity"
 	cmservice "github.com/oasislabs/oasis-core/go/common/service"
+	"github.com/oasislabs/oasis-core/go/common/version"
 	consensusAPI "github.com/oasislabs/oasis-core/go/consensus/api"
 	"github.com/oasislabs/oasis-core/go/consensus/api/transaction"
 	"github.com/oasislabs/oasis-core/go/consensus/tendermint/abci"
@@ -697,6 +698,41 @@ func (t *tendermintService) GetTransactions(ctx context.Context, height int64) (
 		txs = append(txs, v[:])
 	}
 	return txs, nil
+}
+
+func (t *tendermintService) GetStatus(ctx context.Context) (*consensusAPI.Status, error) {
+	// Genesis block is hardcoded as block 1, since tendermint doesn't have
+	// a genesis block as such, but some external tooling expects there to be
+	// one, so here we are.
+	// This may soon change if the following tendermint issue gets fixed:
+	// https://github.com/tendermint/tendermint/issues/2543
+	genBlk, err := t.GetBlock(ctx, 1)
+	if err != nil {
+		return nil, err
+	}
+
+	latestBlk, err := t.GetBlock(ctx, consensusAPI.HeightLatest)
+	if err != nil {
+		return nil, err
+	}
+
+	tmpeers := t.node.Switch().Peers().List()
+	peers := make([]string, 0, len(tmpeers))
+	for _, tmpeer := range tmpeers {
+		p := string(tmpeer.ID()) + "@" + tmpeer.RemoteAddr().String()
+		peers = append(peers, p)
+	}
+
+	return &consensusAPI.Status{
+		ConsensusVersion: version.ConsensusProtocol.String(),
+		Backend:          api.BackendName,
+		NodePeers:        peers,
+		LatestHeight:     latestBlk.Height,
+		LatestHash:       latestBlk.Hash,
+		LatestTime:       latestBlk.Time,
+		GenesisHeight:    1, // See above for an explanation why this is 1.
+		GenesisHash:      genBlk.Hash,
+	}, nil
 }
 
 func (t *tendermintService) WatchBlocks(ctx context.Context) (<-chan *consensusAPI.Block, pubsub.ClosableSubscription, error) {
