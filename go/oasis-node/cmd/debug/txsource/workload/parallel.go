@@ -45,7 +45,7 @@ func (parallel) Run(
 	// Estimate gas needed for the used transfer transaction.
 	var txGasAmount transaction.Gas
 	xfer := &staking.Transfer{
-		To: fundingAccount.Public(),
+		To: staking.NewAddress(fundingAccount.Public()),
 	}
 	if err = xfer.Tokens.FromInt64(parallelTxTransferAmount); err != nil {
 		return fmt.Errorf("transfer tokens FromInt64 %d: %w", parallelTxTransferAmount, err)
@@ -69,7 +69,8 @@ func (parallel) Run(
 		// Initial funding of accounts.
 		fundAmount := parallelTxTransferAmount + // self transfer amount
 			parallelTxFundInterval*txGasAmount*gasPrice // gas for `parallelTxFundInterval` transfers.
-		if err = transferFunds(ctx, parallelLogger, cnsc, fundingAccount, accounts[i].Public(), int64(fundAmount)); err != nil {
+		addr := staking.NewAddress(accounts[i].Public())
+		if err = transferFunds(ctx, parallelLogger, cnsc, fundingAccount, addr, int64(fundAmount)); err != nil {
 			return fmt.Errorf("account funding failure: %w", err)
 		}
 	}
@@ -93,9 +94,11 @@ func (parallel) Run(
 			go func(txSigner signature.Signer, nonce uint64) {
 				defer wg.Done()
 
+				addr := staking.NewAddress(txSigner.Public())
+
 				// Transfer tx.
 				transfer := staking.Transfer{
-					To: txSigner.Public(),
+					To: addr,
 				}
 				if err = transfer.Tokens.FromInt64(parallelTxTransferAmount); err != nil {
 					errCh <- fmt.Errorf("transfer tokens FromInt64 %d: %w", parallelTxTransferAmount, err)
@@ -112,7 +115,7 @@ func (parallel) Run(
 				}
 
 				parallelLogger.Debug("submitting self transfer",
-					"account", txSigner.Public(),
+					"account", addr,
 				)
 				if err = cnsc.SubmitTx(ctx, signedTx); err != nil {
 					parallelLogger.Error("SubmitTx error", "err", err)
@@ -152,7 +155,8 @@ func (parallel) Run(
 			// Re-fund accounts for next `parallelTxFundInterval` transfers.
 			for i := range accounts {
 				fundAmount := parallelTxFundInterval * txGasAmount * gasPrice // gas for `parallelTxFundInterval` transfers.
-				if err = transferFunds(ctx, parallelLogger, cnsc, fundingAccount, accounts[i].Public(), int64(fundAmount)); err != nil {
+				addr := staking.NewAddress(accounts[i].Public())
+				if err = transferFunds(ctx, parallelLogger, cnsc, fundingAccount, addr, int64(fundAmount)); err != nil {
 					return fmt.Errorf("account funding failure: %w", err)
 				}
 			}

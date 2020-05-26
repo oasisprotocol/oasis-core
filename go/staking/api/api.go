@@ -24,16 +24,17 @@ const (
 )
 
 var (
-	// CommonPoolAccountID signifies the common pool in staking events.
-	// The ID is invalid to prevent it being accidentally used in the
-	// actual ledger.
-	CommonPoolAccountID = signature.NewBlacklistedKey("1abe11edc001ffffffffffffffffffffffffffffffffffffffffffffffffffff")
+	// CommonPoolAddress signifies the common pool in staking events.
+	// The address is reserved to prevent it being accidentally used in the actual ledger.
+	CommonPoolAddress = NewReservedAddress(
+		signature.NewPublicKey("1abe11edc001ffffffffffffffffffffffffffffffffffffffffffffffffffff"),
+	)
 
-	// FeeAccumulatorAccountID signifies the staking fee accumulator in
-	// staking events.
-	// The ID is invalid to prevent it being accidentally used in the
-	// actual ledger.
-	FeeAccumulatorAccountID = signature.NewBlacklistedKey("1abe11edfeeaccffffffffffffffffffffffffffffffffffffffffffffffffff")
+	// FeeAccumulatorAddress signifies the staking fee accumulator in staking events.
+	// The address is reserved to prevent it being accidentally used in the actual ledger.
+	FeeAccumulatorAddress = NewReservedAddress(
+		signature.NewPublicKey("1abe11edfeeaccffffffffffffffffffffffffffffffffffffffffffffffffff"),
+	)
 
 	// ErrInvalidArgument is the error returned on malformed arguments.
 	ErrInvalidArgument = errors.New(ModuleName, 1, "staking: invalid argument")
@@ -92,20 +93,20 @@ type Backend interface {
 	// Threshold returns the specific staking threshold by kind.
 	Threshold(ctx context.Context, query *ThresholdQuery) (*quantity.Quantity, error)
 
-	// Accounts returns the IDs of all accounts with a non-zero general
-	// or escrow balance.
-	Accounts(ctx context.Context, height int64) ([]signature.PublicKey, error)
+	// Accounts returns the addresses of all accounts with a non-zero general or
+	// escrow balance.
+	Accounts(ctx context.Context, height int64) ([]Address, error)
 
 	// AccountInfo returns the account descriptor for the given account.
 	AccountInfo(ctx context.Context, query *OwnerQuery) (*Account, error)
 
 	// Delegations returns the list of delegations for the given owner
 	// (delegator).
-	Delegations(ctx context.Context, query *OwnerQuery) (map[signature.PublicKey]*Delegation, error)
+	Delegations(ctx context.Context, query *OwnerQuery) (map[Address]*Delegation, error)
 
 	// DebondingDelegations returns the list of debonding delegations for
 	// the given owner (delegator).
-	DebondingDelegations(ctx context.Context, query *OwnerQuery) (map[signature.PublicKey][]*DebondingDelegation, error)
+	DebondingDelegations(ctx context.Context, query *OwnerQuery) (map[Address][]*DebondingDelegation, error)
 
 	// StateToGenesis returns the genesis state at specified block height.
 	StateToGenesis(ctx context.Context, height int64) (*Genesis, error)
@@ -144,22 +145,22 @@ type ThresholdQuery struct {
 
 // OwnerQuery is an owner query.
 type OwnerQuery struct {
-	Height int64               `json:"height"`
-	Owner  signature.PublicKey `json:"owner"`
+	Height int64   `json:"height"`
+	Owner  Address `json:"owner"`
 }
 
 // TransferEvent is the event emitted when a balance is transfered, either by
 // a call to Transfer or Withdraw.
 type TransferEvent struct {
-	From   signature.PublicKey `json:"from"`
-	To     signature.PublicKey `json:"to"`
-	Tokens quantity.Quantity   `json:"tokens"`
+	From   Address           `json:"from"`
+	To     Address           `json:"to"`
+	Tokens quantity.Quantity `json:"tokens"`
 }
 
 // BurnEvent is the event emitted when tokens are destroyed via a call to Burn.
 type BurnEvent struct {
-	Owner  signature.PublicKey `json:"owner"`
-	Tokens quantity.Quantity   `json:"tokens"`
+	Owner  Address           `json:"owner"`
+	Tokens quantity.Quantity `json:"tokens"`
 }
 
 // EscrowEvent is an escrow event.
@@ -182,30 +183,30 @@ type Event struct {
 // AddEscrowEvent is the event emitted when a balance is transfered into
 // an escrow balance.
 type AddEscrowEvent struct {
-	Owner  signature.PublicKey `json:"owner"`
-	Escrow signature.PublicKey `json:"escrow"`
-	Tokens quantity.Quantity   `json:"tokens"`
+	Owner  Address           `json:"owner"`
+	Escrow Address           `json:"escrow"`
+	Tokens quantity.Quantity `json:"tokens"`
 }
 
 // TakeEscrowEvent is the event emitted when balance is deducted from an
 // escrow balance (stake is slashed).
 type TakeEscrowEvent struct {
-	Owner  signature.PublicKey `json:"owner"`
-	Tokens quantity.Quantity   `json:"tokens"`
+	Owner  Address           `json:"owner"`
+	Tokens quantity.Quantity `json:"tokens"`
 }
 
 // ReclaimEscrowEvent is the event emitted when tokens are reclaimed from an
 // escrow balance back into the entity's general balance.
 type ReclaimEscrowEvent struct {
-	Owner  signature.PublicKey `json:"owner"`
-	Escrow signature.PublicKey `json:"escrow"`
-	Tokens quantity.Quantity   `json:"tokens"`
+	Owner  Address           `json:"owner"`
+	Escrow Address           `json:"escrow"`
+	Tokens quantity.Quantity `json:"tokens"`
 }
 
 // Transfer is a token transfer.
 type Transfer struct {
-	To     signature.PublicKey `json:"xfer_to"`
-	Tokens quantity.Quantity   `json:"xfer_tokens"`
+	To     Address           `json:"xfer_to"`
+	Tokens quantity.Quantity `json:"xfer_tokens"`
 }
 
 // NewTransferTx creates a new transfer transaction.
@@ -225,8 +226,8 @@ func NewBurnTx(nonce uint64, fee *transaction.Fee, burn *Burn) *transaction.Tran
 
 // Escrow is a token escrow.
 type Escrow struct {
-	Account signature.PublicKey `json:"escrow_account"`
-	Tokens  quantity.Quantity   `json:"escrow_tokens"`
+	Account Address           `json:"escrow_account"`
+	Tokens  quantity.Quantity `json:"escrow_tokens"`
 }
 
 // NewAddEscrowTx creates a new add escrow transaction.
@@ -234,10 +235,10 @@ func NewAddEscrowTx(nonce uint64, fee *transaction.Fee, escrow *Escrow) *transac
 	return transaction.NewTransaction(nonce, fee, MethodAddEscrow, escrow)
 }
 
-// ReclaimEscrow is a token escrow reclimation.
+// ReclaimEscrow is a token escrow reclamation.
 type ReclaimEscrow struct {
-	Account signature.PublicKey `json:"escrow_account"`
-	Shares  quantity.Quantity   `json:"reclaim_shares"`
+	Account Address           `json:"escrow_account"`
+	Shares  quantity.Quantity `json:"reclaim_shares"`
 }
 
 // NewReclaimEscrowTx creates a new reclaim escrow transaction.
@@ -541,10 +542,10 @@ type Genesis struct {
 	CommonPool    quantity.Quantity `json:"common_pool"`
 	LastBlockFees quantity.Quantity `json:"last_block_fees"`
 
-	Ledger map[signature.PublicKey]*Account `json:"ledger,omitempty"`
+	Ledger map[Address]*Account `json:"ledger,omitempty"`
 
-	Delegations          map[signature.PublicKey]map[signature.PublicKey]*Delegation            `json:"delegations,omitempty"`
-	DebondingDelegations map[signature.PublicKey]map[signature.PublicKey][]*DebondingDelegation `json:"debonding_delegations,omitempty"`
+	Delegations          map[Address]map[Address]*Delegation            `json:"delegations,omitempty"`
+	DebondingDelegations map[Address]map[Address][]*DebondingDelegation `json:"debonding_delegations,omitempty"`
 }
 
 // ConsensusParameters are the staking consensus parameters.
@@ -559,9 +560,9 @@ type ConsensusParameters struct {
 	GasCosts                          transaction.Costs                   `json:"gas_costs,omitempty"`
 	MinDelegationAmount               quantity.Quantity                   `json:"min_delegation"`
 
-	DisableTransfers       bool                         `json:"disable_transfers,omitempty"`
-	DisableDelegation      bool                         `json:"disable_delegation,omitempty"`
-	UndisableTransfersFrom map[signature.PublicKey]bool `json:"undisable_transfers_from,omitempty"`
+	DisableTransfers       bool             `json:"disable_transfers,omitempty"`
+	DisableDelegation      bool             `json:"disable_delegation,omitempty"`
+	UndisableTransfersFrom map[Address]bool `json:"undisable_transfers_from,omitempty"`
 
 	// FeeSplitWeightPropose is the proportion of block fee portions that go to the proposer.
 	FeeSplitWeightPropose quantity.Quantity `json:"fee_split_weight_propose"`

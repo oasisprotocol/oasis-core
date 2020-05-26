@@ -28,12 +28,25 @@ const (
 )
 
 // FundAccountFromTestEntity funds an account from test entity.
-func FundAccountFromTestEntity(ctx context.Context, logger *logging.Logger, cnsc consensus.ClientBackend, to signature.PublicKey) error {
+func FundAccountFromTestEntity(
+	ctx context.Context,
+	logger *logging.Logger,
+	cnsc consensus.ClientBackend,
+	to signature.Signer,
+) error {
 	_, testEntitySigner, _ := entity.TestEntity()
-	return transferFunds(ctx, logger, cnsc, testEntitySigner, to, fundAccountAmount)
+	toAddr := staking.NewAddress(to.Public())
+	return transferFunds(ctx, logger, cnsc, testEntitySigner, toAddr, fundAccountAmount)
 }
 
-func fundSignAndSubmitTx(ctx context.Context, logger *logging.Logger, cnsc consensus.ClientBackend, caller signature.Signer, tx *transaction.Transaction, fundingAccount signature.Signer) error {
+func fundSignAndSubmitTx(
+	ctx context.Context,
+	logger *logging.Logger,
+	cnsc consensus.ClientBackend,
+	caller signature.Signer,
+	tx *transaction.Transaction,
+	fundingAccount signature.Signer,
+) error {
 	// Estimate gas needed if not set.
 	if tx.Fee.Gas == 0 {
 		gas, err := cnsc.EstimateGas(ctx, &consensus.EstimateGasRequest{
@@ -51,7 +64,8 @@ func fundSignAndSubmitTx(ctx context.Context, logger *logging.Logger, cnsc conse
 	if err := tx.Fee.Amount.FromInt64(feeAmount); err != nil {
 		return fmt.Errorf("fee amount from int64: %w", err)
 	}
-	if err := transferFunds(ctx, logger, cnsc, fundingAccount, caller.Public(), feeAmount); err != nil {
+	callerAddr := staking.NewAddress(caller.Public())
+	if err := transferFunds(ctx, logger, cnsc, fundingAccount, callerAddr, feeAmount); err != nil {
 		return fmt.Errorf("account funding failure: %w", err)
 	}
 
@@ -88,7 +102,14 @@ func fundSignAndSubmitTx(ctx context.Context, logger *logging.Logger, cnsc conse
 }
 
 // transferFunds transfer funds between accounts.
-func transferFunds(ctx context.Context, logger *logging.Logger, cnsc consensus.ClientBackend, from signature.Signer, to signature.PublicKey, transferAmount int64) error {
+func transferFunds(
+	ctx context.Context,
+	logger *logging.Logger,
+	cnsc consensus.ClientBackend,
+	from signature.Signer,
+	to staking.Address,
+	transferAmount int64,
+) error {
 	sched := backoff.NewExponentialBackOff()
 	sched.MaxInterval = maxSubmissionRetryInterval
 	sched.MaxElapsedTime = maxSubmissionRetryElapsedTime

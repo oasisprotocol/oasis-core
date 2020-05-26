@@ -11,7 +11,6 @@ import (
 	flag "github.com/spf13/pflag"
 	"github.com/spf13/viper"
 
-	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	cmdCommon "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common"
 	cmdConsensus "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/consensus"
 	cmdFlags "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/flags"
@@ -20,8 +19,8 @@ import (
 )
 
 const (
-	// CfgAccountID configures the account address.
-	CfgAccountID = "stake.account.id"
+	// CfgAccountAddr configures the account address.
+	CfgAccountAddr = "stake.account.address"
 
 	// CfgAmount configures the amount of tokens.
 	CfgAmount = "stake.amount"
@@ -97,9 +96,9 @@ func doAccountInfo(cmd *cobra.Command, args []string) {
 		cmdCommon.EarlyLogAndExit(err)
 	}
 
-	var id signature.PublicKey
-	if err := id.UnmarshalText([]byte(viper.GetString(CfgAccountID))); err != nil {
-		logger.Error("failed to parse account ID",
+	var addr staking.Address
+	if err := addr.UnmarshalText([]byte(viper.GetString(CfgAccountAddr))); err != nil {
+		logger.Error("failed to parse account address",
 			"err", err,
 		)
 		os.Exit(1)
@@ -109,7 +108,7 @@ func doAccountInfo(cmd *cobra.Command, args []string) {
 	defer conn.Close()
 
 	ctx := context.Background()
-	ai := getAccountInfo(ctx, cmd, id, client)
+	ai := getAccountInfo(ctx, cmd, addr, client)
 	b, _ := json.Marshal(ai)
 	fmt.Printf("%v\n", string(b))
 }
@@ -124,7 +123,7 @@ func doAccountTransfer(cmd *cobra.Command, args []string) {
 
 	var xfer staking.Transfer
 	if err := xfer.To.UnmarshalText([]byte(viper.GetString(CfgTransferDestination))); err != nil {
-		logger.Error("failed to parse transfer destination ID",
+		logger.Error("failed to parse transfer destination account address",
 			"err", err,
 		)
 		os.Exit(1)
@@ -322,7 +321,7 @@ func registerAccountCmd() {
 }
 
 func init() {
-	accountInfoFlags.String(CfgAccountID, "", "ID of the account")
+	accountInfoFlags.String(CfgAccountAddr, "", "Address of the account")
 	_ = viper.BindPFlags(accountInfoFlags)
 	accountInfoFlags.AddFlagSet(cmdFlags.RetriesFlags)
 	accountInfoFlags.AddFlagSet(cmdGrpc.ClientFlags)
@@ -333,12 +332,12 @@ func init() {
 	sharesFlags.String(CfgShares, "0", "amount of shares for the transaction")
 	_ = viper.BindPFlags(sharesFlags)
 
-	accountTransferFlags.String(CfgTransferDestination, "", "transfer destination account ID")
+	accountTransferFlags.String(CfgTransferDestination, "", "transfer destination account address")
 	_ = viper.BindPFlags(accountTransferFlags)
 	accountTransferFlags.AddFlagSet(cmdConsensus.TxFlags)
 	accountTransferFlags.AddFlagSet(amountFlags)
 
-	commonEscrowFlags.String(CfgEscrowAccount, "", "ID of the escrow account")
+	commonEscrowFlags.String(CfgEscrowAccount, "", "address of the escrow account")
 	_ = viper.BindPFlags(commonEscrowFlags)
 	commonEscrowFlags.AddFlagSet(cmdConsensus.TxFlags)
 

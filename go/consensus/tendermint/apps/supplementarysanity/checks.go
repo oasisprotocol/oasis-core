@@ -4,7 +4,6 @@ import (
 	"fmt"
 
 	"github.com/oasisprotocol/oasis-core/go/common"
-	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	"github.com/oasisprotocol/oasis-core/go/common/quantity"
 	abciAPI "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/api"
 	keymanagerState "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/apps/keymanager/state"
@@ -123,19 +122,19 @@ func checkStaking(ctx *abciAPI.Context, now epochtime.EpochTime) error {
 	// Check if the total supply adds up (common pool + all balances in the ledger).
 	// Check all commission schedules.
 	var total quantity.Quantity
-	accounts, err := st.Accounts(ctx)
+	addresses, err := st.Accounts(ctx)
 	if err != nil {
 		return fmt.Errorf("Accounts: %w", err)
 	}
 	var acct *staking.Account
-	for _, id := range accounts {
-		acct, err = st.Account(ctx, id)
+	for _, addr := range addresses {
+		acct, err = st.Account(ctx, addr)
 		if err != nil {
 			return fmt.Errorf("Account: %w", err)
 		}
-		err = staking.SanityCheckAccount(&total, parameters, now, id, acct)
+		err = staking.SanityCheckAccount(&total, parameters, now, addr, acct)
 		if err != nil {
-			return fmt.Errorf("SanityCheckAccount %s: %w", id, err)
+			return fmt.Errorf("SanityCheckAccount %s: %w", addr, err)
 		}
 	}
 
@@ -150,46 +149,52 @@ func checkStaking(ctx *abciAPI.Context, now epochtime.EpochTime) error {
 	_ = total.Add(commonPool)
 	_ = total.Add(totalFees)
 	if total.Cmp(totalSupply) != 0 {
-		return fmt.Errorf("balances in accounts plus common pool (%s) plus last block fees (%s) does not add up to total supply (%s)", total.String(), totalFees.String(), totalSupply.String())
+		return fmt.Errorf(
+			"balances in accounts plus common pool (%s) plus last block fees (%s) does not add up to total supply (%s)",
+			total.String(), totalFees.String(), totalSupply.String(),
+		)
 	}
 
 	// All shares of all delegations for a given account must add up to account's Escrow.Active.TotalShares.
-	delegationses, err := st.Delegations(ctx)
+	addressesDelegationsMap, err := st.Delegations(ctx)
 	if err != nil {
 		return fmt.Errorf("Delegations: %w", err)
 	}
-	for id, delegations := range delegationses {
-		acct, err = st.Account(ctx, id)
+	for address, delegations := range addressesDelegationsMap {
+		acct, err = st.Account(ctx, address)
 		if err != nil {
-			return fmt.Errorf("Account: %w", err)
+			return fmt.Errorf("Account %s: %w", address, err)
 		}
-		if err = staking.SanityCheckDelegations(id, acct, delegations); err != nil {
+		if err = staking.SanityCheckDelegations(address, acct, delegations); err != nil {
 			return err
 		}
 	}
 
 	// All shares of all debonding delegations for a given account must add up to account's Escrow.Debonding.TotalShares.
-	debondingDelegationses, err := st.DebondingDelegations(ctx)
+	addressesDebondingDelegationsMap, err := st.DebondingDelegations(ctx)
 	if err != nil {
 		return fmt.Errorf("DebondingDelegations: %w", err)
 	}
-	for id, debondingDelegations := range debondingDelegationses {
-		acct, err = st.Account(ctx, id)
+	for address, debondingDelegations := range addressesDebondingDelegationsMap {
+		acct, err = st.Account(ctx, address)
 		if err != nil {
-			return fmt.Errorf("Account: %w", err)
+			return fmt.Errorf("Account %s: %w", address, err)
 		}
-		if err = staking.SanityCheckDebondingDelegations(id, acct, debondingDelegations); err != nil {
+		if err = staking.SanityCheckDebondingDelegations(address, acct, debondingDelegations); err != nil {
 			return err
 		}
 	}
 
 	// Check the above two invariants for each account as well.
-	for _, id := range accounts {
-		acct, err = st.Account(ctx, id)
+	for _, addr := range addresses {
+		acct, err = st.Account(ctx, addr)
 		if err != nil {
 			return fmt.Errorf("Account: %w", err)
 		}
-		if err = staking.SanityCheckAccountShares(id, acct, delegationses[id], debondingDelegationses[id]); err != nil {
+		if err = staking.SanityCheckAccountShares(
+			addr, acct, addressesDelegationsMap[addr],
+			addressesDebondingDelegationsMap[addr],
+		); err != nil {
 			return err
 		}
 	}
@@ -266,15 +271,15 @@ func checkStakeClaims(ctx *abciAPI.Context, now epochtime.EpochTime) error {
 		return fmt.Errorf("failed to get runtime registrations: %w", err)
 	}
 	// Get staking accounts.
-	accounts := make(map[signature.PublicKey]*staking.Account)
-	accountIDs, err := stakingSt.Accounts(ctx)
+	accounts := make(map[staking.Address]*staking.Account)
+	addresses, err := stakingSt.Accounts(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to get staking accounts: %w", err)
 	}
-	for _, id := range accountIDs {
-		accounts[id], err = stakingSt.Account(ctx, id)
+	for _, addr := range addresses {
+		accounts[addr], err = stakingSt.Account(ctx, addr)
 		if err != nil {
-			return fmt.Errorf("failed to get staking account with id %s: %w", id, err)
+			return fmt.Errorf("failed to get staking account %s: %w", addr, err)
 		}
 	}
 

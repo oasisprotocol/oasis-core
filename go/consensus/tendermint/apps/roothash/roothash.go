@@ -29,6 +29,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/roothash/api/block"
 	"github.com/oasisprotocol/oasis-core/go/roothash/api/commitment"
 	scheduler "github.com/oasisprotocol/oasis-core/go/scheduler/api"
+	staking "github.com/oasisprotocol/oasis-core/go/staking/api"
 )
 
 // timerKindRound is the round timer kind.
@@ -135,10 +136,12 @@ func (app *rootHashApplication) onCommitteeChanged(ctx *tmapi.Context, epoch epo
 		// suspended anyway due to nobody being there to pay maintenance fees).
 		sufficientStake := true
 		if !empty && !params.DebugBypassStake {
-			if err = stakeAcc.CheckStakeClaims(rt.EntityID); err != nil {
+			acctAddr := staking.NewAddress(rt.EntityID)
+			if err = stakeAcc.CheckStakeClaims(acctAddr); err != nil {
 				ctx.Logger().Warn("insufficient stake for runtime operation",
 					"err", err,
-					"entity_id", rt.EntityID,
+					"entity", rt.EntityID,
+					"account", acctAddr,
 				)
 				sufficientStake = false
 			}

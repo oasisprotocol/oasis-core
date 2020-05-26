@@ -1216,7 +1216,8 @@ func genesisToTendermint(d *genesisAPI.Document) (*tmtypes.GenesisDoc, error) {
 			power = 1
 		} else {
 			var stake *quantity.Quantity
-			if account, ok := d.Staking.Ledger[openedNode.EntityID]; ok {
+			acctAddr := stakingAPI.NewAddress(openedNode.EntityID)
+			if account, ok := d.Staking.Ledger[acctAddr]; ok {
 				stake = account.Escrow.Active.Balance.Clone()
 			} else {
 				// If all balances and stuff are zero, it's permitted not to have an account in the ledger at all.
@@ -1224,8 +1225,9 @@ func genesisToTendermint(d *genesisAPI.Document) (*tmtypes.GenesisDoc, error) {
 			}
 			power, err = schedulerAPI.VotingPowerFromTokens(stake)
 			if err != nil {
-				return nil, fmt.Errorf("tendermint: computing voting power for entity %s with stake %v: %w",
+				return nil, fmt.Errorf("tendermint: computing voting power for entity %s with account %s and stake %v: %w",
 					openedNode.EntityID,
+					acctAddr,
 					stake,
 					err,
 				)

@@ -44,26 +44,26 @@ func TestDelegationQueries(t *testing.T) {
 	// Generate escrow account.
 	escrowSigner, err := fac.Generate(signature.SignerEntity, rand.Reader)
 	require.NoError(err, "generating escrow signer")
-	escrowID := escrowSigner.Public()
+	escrowAddr := staking.NewAddress(escrowSigner.Public())
 
 	var escrowAccount staking.Account
-	err = s.SetAccount(ctx, escrowID, &escrowAccount)
+	err = s.SetAccount(ctx, escrowAddr, &escrowAccount)
 	require.NoError(err, "SetAccount")
 
 	// Generate delegator accounts.
-	var delegatorIDs []signature.PublicKey
+	var delegatorAddrs []staking.Address
 	// Store expected delegations.
-	expectedDelegations := make(map[signature.PublicKey]map[signature.PublicKey]*staking.Delegation)
-	expectedDelegations[escrowID] = map[signature.PublicKey]*staking.Delegation{}
-	expectedDebDelegations := make(map[signature.PublicKey]map[signature.PublicKey][]*staking.DebondingDelegation)
-	expectedDebDelegations[escrowID] = map[signature.PublicKey][]*staking.DebondingDelegation{}
+	expectedDelegations := make(map[staking.Address]map[staking.Address]*staking.Delegation)
+	expectedDelegations[escrowAddr] = map[staking.Address]*staking.Delegation{}
+	expectedDebDelegations := make(map[staking.Address]map[staking.Address][]*staking.DebondingDelegation)
+	expectedDebDelegations[escrowAddr] = map[staking.Address][]*staking.DebondingDelegation{}
 
 	for i := int64(1); i <= int64(numDelegatorAccounts); i++ {
 		signer, serr := fac.Generate(signature.SignerEntity, rand.Reader)
 		require.NoError(serr, "memory signer factory Generate account")
-		id := signer.Public()
+		addr := staking.NewAddress(signer.Public())
 
-		delegatorIDs = append(delegatorIDs, id)
+		delegatorAddrs = append(delegatorAddrs, addr)
 
 		// Init account.
 		var account staking.Account
@@ -75,30 +75,30 @@ func TestDelegationQueries(t *testing.T) {
 		var del staking.Delegation
 		err = escrowAccount.Escrow.Active.Deposit(&del.Shares, &account.General.Balance, mustInitQuantityP(t, i*100))
 		require.NoError(err, "active escrow deposit")
-		expectedDelegations[escrowID][id] = &del
+		expectedDelegations[escrowAddr][addr] = &del
 
 		// Init debonding delegation.
 		var deb staking.DebondingDelegation
 		deb.DebondEndTime = epochtime.EpochTime(i)
 		err = escrowAccount.Escrow.Debonding.Deposit(&deb.Shares, &account.General.Balance, mustInitQuantityP(t, i*100))
 		require.NoError(err, "debonding escrow deposit")
-		expectedDebDelegations[escrowID][id] = []*staking.DebondingDelegation{&deb}
+		expectedDebDelegations[escrowAddr][addr] = []*staking.DebondingDelegation{&deb}
 
 		// Update state.
-		err = s.SetAccount(ctx, id, &account)
+		err = s.SetAccount(ctx, addr, &account)
 		require.NoError(err, "SetAccount")
-		err = s.SetDelegation(ctx, id, escrowID, &del)
+		err = s.SetDelegation(ctx, addr, escrowAddr, &del)
 		require.NoError(err, "SetDelegation")
-		err = s.SetDebondingDelegation(ctx, id, escrowID, uint64(i), &deb)
+		err = s.SetDebondingDelegation(ctx, addr, escrowAddr, uint64(i), &deb)
 		require.NoError(err, "SetDebondingDelegation")
 	}
 
 	// Test delegation queries.
-	for _, id := range delegatorIDs {
-		accDelegations, derr := s.DelegationsFor(ctx, id)
+	for _, addr := range delegatorAddrs {
+		accDelegations, derr := s.DelegationsFor(ctx, addr)
 		require.NoError(derr, "DelegationsFor")
-		expectedDelegation := map[signature.PublicKey]*staking.Delegation{
-			escrowID: expectedDelegations[escrowID][id],
+		expectedDelegation := map[staking.Address]*staking.Delegation{
+			escrowAddr: expectedDelegations[escrowAddr][addr],
 		}
 		require.EqualValues(expectedDelegation, accDelegations, "DelegationsFor account should match expected delegations")
 	}
@@ -107,11 +107,11 @@ func TestDelegationQueries(t *testing.T) {
 	require.EqualValues(expectedDelegations, delegations, "Delegations should match expected delegations")
 
 	// Test debonding delegation queries.
-	for _, id := range delegatorIDs {
-		accDebDelegations, derr := s.DebondingDelegationsFor(ctx, id)
+	for _, addr := range delegatorAddrs {
+		accDebDelegations, derr := s.DebondingDelegationsFor(ctx, addr)
 		require.NoError(derr, "DebondingDelegationsFor")
-		expectedDebDelegation := map[signature.PublicKey][]*staking.DebondingDelegation{
-			escrowID: expectedDebDelegations[escrowID][id],
+		expectedDebDelegation := map[staking.Address][]*staking.DebondingDelegation{
+			escrowAddr: expectedDebDelegations[escrowAddr][addr],
 		}
 		require.EqualValues(expectedDebDelegation, accDebDelegations, "DebondingDelegationsFor account should match expected")
 	}
@@ -125,7 +125,7 @@ func TestRewardAndSlash(t *testing.T) {
 
 	delegatorSigner, err := memorySigner.NewSigner(rand.Reader)
 	require.NoError(err, "generating delegator signer")
-	delegatorID := delegatorSigner.Public()
+	delegatorAddr := staking.NewAddress(delegatorSigner.Public())
 	delegatorAccount := &staking.Account{}
 	delegatorAccount.General.Nonce = 10
 	err = delegatorAccount.General.Balance.FromBigInt(big.NewInt(300))
@@ -133,8 +133,8 @@ func TestRewardAndSlash(t *testing.T) {
 
 	escrowSigner, err := memorySigner.NewSigner(rand.Reader)
 	require.NoError(err, "generating escrow signer")
-	escrowID := escrowSigner.Public()
-	escrowAccountOnly := []signature.PublicKey{escrowID}
+	escrowAddr := staking.NewAddress(escrowSigner.Public())
+	escrowAddrAsList := []staking.Address{escrowAddr}
 	escrowAccount := &staking.Account{}
 	escrowAccount.Escrow.CommissionSchedule = staking.CommissionSchedule{
 		Rates: []staking.CommissionRateStep{
@@ -199,33 +199,33 @@ func TestRewardAndSlash(t *testing.T) {
 	err = s.SetCommonPool(ctx, mustInitQuantityP(t, 10000))
 	require.NoError(err, "SetCommonPool")
 
-	err = s.SetAccount(ctx, delegatorID, delegatorAccount)
+	err = s.SetAccount(ctx, delegatorAddr, delegatorAccount)
 	require.NoError(err, "SetAccount")
-	err = s.SetAccount(ctx, escrowID, escrowAccount)
+	err = s.SetAccount(ctx, escrowAddr, escrowAccount)
 	require.NoError(err, "SetAccount")
-	err = s.SetDelegation(ctx, delegatorID, escrowID, del)
+	err = s.SetDelegation(ctx, delegatorAddr, escrowAddr, del)
 	require.NoError(err, "SetDelegation")
-	err = s.SetDebondingDelegation(ctx, delegatorID, escrowID, 1, &deb)
+	err = s.SetDebondingDelegation(ctx, delegatorAddr, escrowAddr, 1, &deb)
 	require.NoError(err, "SetDebondingDelegation")
 
 	// Epoch 10 is during the first step.
-	require.NoError(s.AddRewards(ctx, 10, mustInitQuantityP(t, 100), escrowAccountOnly), "add rewards epoch 10")
+	require.NoError(s.AddRewards(ctx, 10, mustInitQuantityP(t, 100), escrowAddrAsList), "add rewards epoch 10")
 
 	// 100% gain.
-	delegatorAccount, err = s.Account(ctx, delegatorID)
+	delegatorAccount, err = s.Account(ctx, delegatorAddr)
 	require.NoError(err, "Account")
 	require.Equal(mustInitQuantity(t, 100), delegatorAccount.General.Balance, "reward first step - delegator general")
-	escrowAccount, err = s.Account(ctx, escrowID)
+	escrowAccount, err = s.Account(ctx, escrowAddr)
 	require.NoError(err, "Account")
 	require.Equal(mustInitQuantity(t, 200), escrowAccount.Escrow.Active.Balance, "reward first step - escrow active escrow")
 	require.Equal(mustInitQuantity(t, 100), escrowAccount.Escrow.Debonding.Balance, "reward first step - escrow debonding escrow")
 	// Reward is 100 tokens, with 80 added to the pool and 20 deposited as commission.
 	// We add to the pool first, so the delegation becomes 100 shares : 180 tokens.
 	// Then we deposit the 20 for commission, which comes out to 11 shares.
-	del, err = s.Delegation(ctx, delegatorID, escrowID)
+	del, err = s.Delegation(ctx, delegatorAddr, escrowAddr)
 	require.NoError(err, "Delegation")
 	require.Equal(mustInitQuantity(t, 100), del.Shares, "reward first step - delegation shares")
-	escrowSelfDel, err := s.Delegation(ctx, escrowID, escrowID)
+	escrowSelfDel, err := s.Delegation(ctx, escrowAddr, escrowAddr)
 	require.NoError(err, "Delegation")
 	require.Equal(mustInitQuantity(t, 11), escrowSelfDel.Shares, "reward first step - escrow self delegation shares")
 	commonPool, err := s.CommonPool(ctx)
@@ -233,10 +233,10 @@ func TestRewardAndSlash(t *testing.T) {
 	require.Equal(mustInitQuantityP(t, 9900), commonPool, "reward first step - common pool")
 
 	// Epoch 30 is in the second step.
-	require.NoError(s.AddRewards(ctx, 30, mustInitQuantityP(t, 100), escrowAccountOnly), "add rewards epoch 30")
+	require.NoError(s.AddRewards(ctx, 30, mustInitQuantityP(t, 100), escrowAddrAsList), "add rewards epoch 30")
 
 	// 50% gain.
-	escrowAccount, err = s.Account(ctx, escrowID)
+	escrowAccount, err = s.Account(ctx, escrowAddr)
 	require.NoError(err, "Account")
 	require.Equal(mustInitQuantity(t, 300), escrowAccount.Escrow.Active.Balance, "reward boundary epoch - escrow active escrow")
 	commonPool, err = s.CommonPool(ctx)
@@ -244,22 +244,22 @@ func TestRewardAndSlash(t *testing.T) {
 	require.Equal(mustInitQuantityP(t, 9800), commonPool, "reward first step - common pool")
 
 	// Epoch 99 is after the end of the schedule
-	require.NoError(s.AddRewards(ctx, 99, mustInitQuantityP(t, 100), escrowAccountOnly), "add rewards epoch 99")
+	require.NoError(s.AddRewards(ctx, 99, mustInitQuantityP(t, 100), escrowAddrAsList), "add rewards epoch 99")
 
 	// No change.
-	escrowAccount, err = s.Account(ctx, escrowID)
+	escrowAccount, err = s.Account(ctx, escrowAddr)
 	require.NoError(err, "Account")
 	require.Equal(mustInitQuantity(t, 300), escrowAccount.Escrow.Active.Balance, "reward late epoch - escrow active escrow")
 
-	slashedNonzero, err := s.SlashEscrow(ctx, escrowID, mustInitQuantityP(t, 40))
+	slashedNonzero, err := s.SlashEscrow(ctx, escrowAddr, mustInitQuantityP(t, 40))
 	require.NoError(err, "slash escrow")
 	require.True(slashedNonzero, "slashed nonzero")
 
 	// 40 token loss.
-	delegatorAccount, err = s.Account(ctx, delegatorID)
+	delegatorAccount, err = s.Account(ctx, delegatorAddr)
 	require.NoError(err, "Account")
 	require.Equal(mustInitQuantity(t, 100), delegatorAccount.General.Balance, "slash - delegator general")
-	escrowAccount, err = s.Account(ctx, escrowID)
+	escrowAccount, err = s.Account(ctx, escrowAddr)
 	require.NoError(err, "Account")
 	require.Equal(mustInitQuantity(t, 270), escrowAccount.Escrow.Active.Balance, "slash - escrow active escrow")
 	require.Equal(mustInitQuantity(t, 90), escrowAccount.Escrow.Debonding.Balance, "slash - escrow debonding escrow")
@@ -268,10 +268,10 @@ func TestRewardAndSlash(t *testing.T) {
 	require.Equal(mustInitQuantityP(t, 9840), commonPool, "slash - common pool")
 
 	// Epoch 10 is during the first step.
-	require.NoError(s.AddRewardSingleAttenuated(ctx, 10, mustInitQuantityP(t, 10), 5, 10, escrowID), "add attenuated rewards epoch 30")
+	require.NoError(s.AddRewardSingleAttenuated(ctx, 10, mustInitQuantityP(t, 10), 5, 10, escrowAddr), "add attenuated rewards epoch 30")
 
 	// 5% gain.
-	escrowAccount, err = s.Account(ctx, escrowID)
+	escrowAccount, err = s.Account(ctx, escrowAddr)
 	require.NoError(err, "Account")
 	require.Equal(mustInitQuantity(t, 283), escrowAccount.Escrow.Active.Balance, "attenuated reward - escrow active escrow")
 	commonPool, err = s.CommonPool(ctx)

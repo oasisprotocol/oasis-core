@@ -32,7 +32,7 @@ type feeAccumulator struct {
 // persisted at the end of the block.
 func AuthenticateAndPayFees(
 	ctx *abciAPI.Context,
-	id signature.PublicKey,
+	signer signature.PublicKey,
 	nonce uint64,
 	fee *transaction.Fee,
 ) error {
@@ -46,14 +46,17 @@ func AuthenticateAndPayFees(
 		return nil
 	}
 
+	// Convert signer's public key to account address.
+	addr := staking.NewAddress(signer)
+
 	// Fetch account and make sure the nonce is correct.
-	account, err := state.Account(ctx, id)
+	account, err := state.Account(ctx, addr)
 	if err != nil {
 		return fmt.Errorf("failed to fetch account state: %w", err)
 	}
 	if account.General.Nonce != nonce {
 		logger.Error("invalid account nonce",
-			"account_id", id,
+			"account_addr", addr,
 			"account_nonce", account.General.Nonce,
 			"nonce", nonce,
 		)
@@ -77,7 +80,7 @@ func AuthenticateAndPayFees(
 		// Check fee against minimum gas price if in CheckTx. Always accept own transactions.
 		// NOTE: This is non-deterministic as it is derived from the local validator
 		//       configuration, but as long as it is only done in CheckTx, this is ok.
-		if !ctx.AppState().OwnTxSigner().Equal(id) {
+		if !ctx.AppState().OwnTxSignerAddress().Equal(addr) {
 			callerGasPrice := fee.GasPrice()
 			if fee.Gas > 0 && callerGasPrice.Cmp(ctx.AppState().MinGasPrice()) < 0 {
 				return transaction.ErrGasPriceTooLow
@@ -94,15 +97,15 @@ func AuthenticateAndPayFees(
 	}
 
 	account.General.Nonce++
-	if err := state.SetAccount(ctx, id, account); err != nil {
+	if err := state.SetAccount(ctx, addr, account); err != nil {
 		return fmt.Errorf("failed to set account: %w", err)
 	}
 
 	// Emit transfer event if fee is non-zero.
 	if !fee.Amount.IsZero() {
 		ev := cbor.Marshal(&staking.TransferEvent{
-			From:   id,
-			To:     staking.FeeAccumulatorAccountID,
+			From:   addr,
+			To:     staking.FeeAccumulatorAddress,
 			Tokens: fee.Amount,
 		})
 		ctx.EmitEvent(abciAPI.NewEventBuilder(AppName).Attribute(KeyTransfer, ev))

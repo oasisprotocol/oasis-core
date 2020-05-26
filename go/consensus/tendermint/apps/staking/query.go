@@ -3,7 +3,6 @@ package staking
 import (
 	"context"
 
-	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	"github.com/oasisprotocol/oasis-core/go/common/quantity"
 	abciAPI "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/api"
 	stakingState "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/apps/staking/state"
@@ -18,10 +17,10 @@ type Query interface {
 	LastBlockFees(context.Context) (*quantity.Quantity, error)
 	Threshold(context.Context, staking.ThresholdKind) (*quantity.Quantity, error)
 	DebondingInterval(context.Context) (epochtime.EpochTime, error)
-	Accounts(context.Context) ([]signature.PublicKey, error)
-	AccountInfo(context.Context, signature.PublicKey) (*staking.Account, error)
-	Delegations(context.Context, signature.PublicKey) (map[signature.PublicKey]*staking.Delegation, error)
-	DebondingDelegations(context.Context, signature.PublicKey) (map[signature.PublicKey][]*staking.DebondingDelegation, error)
+	Accounts(context.Context) ([]staking.Address, error)
+	AccountInfo(context.Context, staking.Address) (*staking.Account, error)
+	Delegations(context.Context, staking.Address) (map[staking.Address]*staking.Delegation, error)
+	DebondingDelegations(context.Context, staking.Address) (map[staking.Address][]*staking.DebondingDelegation, error)
 	Genesis(context.Context) (*staking.Genesis, error)
 	ConsensusParameters(context.Context) (*staking.ConsensusParameters, error)
 }
@@ -73,13 +72,13 @@ func (sq *stakingQuerier) DebondingInterval(ctx context.Context) (epochtime.Epoc
 	return sq.state.DebondingInterval(ctx)
 }
 
-func (sq *stakingQuerier) Accounts(ctx context.Context) ([]signature.PublicKey, error) {
+func (sq *stakingQuerier) Accounts(ctx context.Context) ([]staking.Address, error) {
 	return sq.state.Accounts(ctx)
 }
 
-func (sq *stakingQuerier) AccountInfo(ctx context.Context, id signature.PublicKey) (*staking.Account, error) {
+func (sq *stakingQuerier) AccountInfo(ctx context.Context, addr staking.Address) (*staking.Account, error) {
 	switch {
-	case id.Equal(staking.CommonPoolAccountID):
+	case addr.Equal(staking.CommonPoolAddress):
 		cp, err := sq.state.CommonPool(ctx)
 		if err != nil {
 			return nil, err
@@ -89,7 +88,7 @@ func (sq *stakingQuerier) AccountInfo(ctx context.Context, id signature.PublicKe
 				Balance: *cp,
 			},
 		}, nil
-	case id.Equal(staking.FeeAccumulatorAccountID):
+	case addr.Equal(staking.FeeAccumulatorAddress):
 		fa, err := sq.state.LastBlockFees(ctx)
 		if err != nil {
 			return nil, err
@@ -100,16 +99,16 @@ func (sq *stakingQuerier) AccountInfo(ctx context.Context, id signature.PublicKe
 			},
 		}, nil
 	default:
-		return sq.state.Account(ctx, id)
+		return sq.state.Account(ctx, addr)
 	}
 }
 
-func (sq *stakingQuerier) Delegations(ctx context.Context, id signature.PublicKey) (map[signature.PublicKey]*staking.Delegation, error) {
-	return sq.state.DelegationsFor(ctx, id)
+func (sq *stakingQuerier) Delegations(ctx context.Context, addr staking.Address) (map[staking.Address]*staking.Delegation, error) {
+	return sq.state.DelegationsFor(ctx, addr)
 }
 
-func (sq *stakingQuerier) DebondingDelegations(ctx context.Context, id signature.PublicKey) (map[signature.PublicKey][]*staking.DebondingDelegation, error) {
-	return sq.state.DebondingDelegationsFor(ctx, id)
+func (sq *stakingQuerier) DebondingDelegations(ctx context.Context, addr staking.Address) (map[staking.Address][]*staking.DebondingDelegation, error) {
+	return sq.state.DebondingDelegationsFor(ctx, addr)
 }
 
 func (sq *stakingQuerier) ConsensusParameters(ctx context.Context) (*staking.ConsensusParameters, error) {

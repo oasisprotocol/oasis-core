@@ -5,7 +5,6 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	staking "github.com/oasisprotocol/oasis-core/go/staking/api"
 )
 
@@ -13,13 +12,13 @@ func TestIsTransferPermitted(t *testing.T) {
 	for _, tt := range []struct {
 		msg       string
 		params    *staking.ConsensusParameters
-		fromID    signature.PublicKey
+		fromAddr  staking.Address
 		permitted bool
 	}{
 		{
 			"no disablement",
 			&staking.ConsensusParameters{},
-			signature.PublicKey{},
+			staking.Address{},
 			true,
 		},
 		{
@@ -27,32 +26,32 @@ func TestIsTransferPermitted(t *testing.T) {
 			&staking.ConsensusParameters{
 				DisableTransfers: true,
 			},
-			signature.PublicKey{},
+			staking.Address{},
 			false,
 		},
 		{
 			"not whitelisted",
 			&staking.ConsensusParameters{
 				DisableTransfers: true,
-				UndisableTransfersFrom: map[signature.PublicKey]bool{
-					signature.PublicKey{1}: true,
+				UndisableTransfersFrom: map[staking.Address]bool{
+					staking.Address{1}: true,
 				},
 			},
-			signature.PublicKey{},
+			staking.Address{},
 			false,
 		},
 		{
 			"whitelisted",
 			&staking.ConsensusParameters{
 				DisableTransfers: true,
-				UndisableTransfersFrom: map[signature.PublicKey]bool{
-					signature.PublicKey{}: true,
+				UndisableTransfersFrom: map[staking.Address]bool{
+					staking.Address{}: true,
 				},
 			},
-			signature.PublicKey{},
+			staking.Address{},
 			true,
 		},
 	} {
-		require.Equal(t, tt.permitted, isTransferPermitted(tt.params, tt.fromID), tt.msg)
+		require.Equal(t, tt.permitted, isTransferPermitted(tt.params, tt.fromAddr), tt.msg)
 	}
 }

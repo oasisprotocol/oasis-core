@@ -34,6 +34,7 @@ type transfer struct {
 
 	accounts []struct {
 		signer          signature.Signer
+		address         staking.Address
 		reckonedNonce   uint64
 		reckonedBalance quantity.Quantity
 	}
@@ -44,7 +45,7 @@ func (t *transfer) doTransferTx(ctx context.Context, fromIdx int, toIdx int) err
 	from := &t.accounts[fromIdx]
 	to := &t.accounts[toIdx]
 
-	transfer := staking.Transfer{To: to.signer.Public()}
+	transfer := staking.Transfer{To: to.address}
 	if err := transfer.Tokens.FromInt64(transferAmount); err != nil {
 		return fmt.Errorf("transfer tokens FromInt64 %d: %w", transferAmount, err)
 	}
@@ -52,8 +53,8 @@ func (t *transfer) doTransferTx(ctx context.Context, fromIdx int, toIdx int) err
 	from.reckonedNonce++
 
 	t.logger.Debug("transfering tokens",
-		"from", from.signer.Public(),
-		"to", to.signer.Public(),
+		"from", from.address,
+		"to", to.address,
 		"amount", transferAmount,
 	)
 	if err := fundSignAndSubmitTx(ctx, t.logger, t.consensus, from.signer, tx, t.fundingAccount); err != nil {
@@ -79,7 +80,7 @@ func (t *transfer) doBurnTx(ctx context.Context, idx int) error {
 	acc := &t.accounts[idx]
 
 	// Fund account with tokens that will be burned.
-	if err := transferFunds(ctx, t.logger, t.consensus, t.fundingAccount, acc.signer.Public(), int64(transferBurnAmount)); err != nil {
+	if err := transferFunds(ctx, t.logger, t.consensus, t.fundingAccount, acc.address, int64(transferBurnAmount)); err != nil {
 		return fmt.Errorf("workload/transfer: account funding failure: %w", err)
 	}
 
@@ -91,7 +92,7 @@ func (t *transfer) doBurnTx(ctx context.Context, idx int) error {
 	acc.reckonedNonce++
 
 	t.logger.Debug("Burning tokens",
-		"account", acc.signer.Public(),
+		"account", acc.address,
 		"amount", transferBurnAmount,
 	)
 	if err := fundSignAndSubmitTx(ctx, t.logger, t.consensus, acc.signer, tx, t.fundingAccount); err != nil {
@@ -112,13 +113,13 @@ func (t *transfer) Run(
 	cnsc consensus.ClientBackend,
 	fundingAccount signature.Signer,
 ) error {
-	var err error
 	ctx := context.Background()
 
 	t.logger = logging.GetLogger("cmd/txsource/workload/transfer")
 	t.consensus = cnsc
 	t.accounts = make([]struct {
 		signer          signature.Signer
+		address         staking.Address
 		reckonedNonce   uint64
 		reckonedBalance quantity.Quantity
 	}, transferNumAccounts)
@@ -128,30 +129,32 @@ func (t *transfer) Run(
 	// Load all the keys up front. Like, how annoyed would you be if down the line one of them turned out to be
 	// corrupted or something, ya know?
 	for i := range t.accounts {
-		t.accounts[i].signer, err = fac.Generate(signature.SignerEntity, rng)
+		signer, err := fac.Generate(signature.SignerEntity, rng)
 		if err != nil {
 			return fmt.Errorf("memory signer factory Generate account %d: %w", i, err)
 		}
+		t.accounts[i].signer = signer
+		t.accounts[i].address = staking.NewAddress(signer.Public())
 	}
 
 	// Read all the account info up front.
 	stakingClient := staking.NewStakingClient(conn)
 	for i := range t.accounts {
 		fundAmount := transferAmount // funds for for a transfer
-		if err = transferFunds(ctx, t.logger, cnsc, t.fundingAccount, t.accounts[i].signer.Public(), int64(fundAmount)); err != nil {
+		if err := transferFunds(ctx, t.logger, cnsc, t.fundingAccount, t.accounts[i].address, int64(fundAmount)); err != nil {
 			return fmt.Errorf("workload/transfer: account funding failure: %w", err)
 		}
 		var account *staking.Account
-		account, err = stakingClient.AccountInfo(ctx, &staking.OwnerQuery{
+		account, err := stakingClient.AccountInfo(ctx, &staking.OwnerQuery{
 			Height: consensus.HeightLatest,
-			Owner:  t.accounts[i].signer.Public(),
+			Owner:  t.accounts[i].address,
 		})
 		if err != nil {
-			return fmt.Errorf("stakingClient.AccountInfo %s: %w", t.accounts[i].signer.Public(), err)
+			return fmt.Errorf("stakingClient.AccountInfo %s: %w", t.accounts[i].address, err)
 		}
 		t.logger.Debug("account info",
 			"i", i,
-			"pub", t.accounts[i].signer.Public(),
+			"address", t.accounts[i].address,
 			"info", account,
 		)
 		t.accounts[i].reckonedNonce = account.General.Nonce
@@ -159,7 +162,7 @@ func (t *transfer) Run(
 	}
 
 	var minBalance quantity.Quantity
-	if err = minBalance.FromInt64(transferAmount); err != nil {
+	if err := minBalance.FromInt64(transferAmount); err != nil {
 		return fmt.Errorf("min balance FromInt64 %d: %w", transferAmount, err)
 	}
 	for {
@@ -180,12 +183,12 @@ func (t *transfer) Run(
 			}
 			toPermIdx := (fromPermIdx + 1) % transferNumAccounts
 
-			if err = t.doTransferTx(ctx, perm[fromPermIdx], perm[toPermIdx]); err != nil {
+			if err := t.doTransferTx(ctx, perm[fromPermIdx], perm[toPermIdx]); err != nil {
 				return fmt.Errorf("transfer tx failure: %w", err)
 			}
 		case 1:
 			// Burn tx.
-			if err = t.doBurnTx(ctx, rng.Intn(transferNumAccounts)); err != nil {
+			if err := t.doBurnTx(ctx, rng.Intn(transferNumAccounts)); err != nil {
 				return fmt.Errorf("burn tx failure: %w", err)
 			}
 

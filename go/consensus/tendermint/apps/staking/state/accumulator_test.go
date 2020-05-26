@@ -41,51 +41,52 @@ func TestStakeAccumulatorCache(t *testing.T) {
 	//       changes are propagated correctly.
 
 	ent, _, _ := entity.TestEntity()
+	addr := staking.NewAddress(ent.ID)
 	var acct staking.Account
 	acct.Escrow.Active.Balance = *q.Clone()
-	err = stakeState.SetAccount(ctx, ent.ID, &acct)
+	err = stakeState.SetAccount(ctx, addr, &acct)
 	require.NoError(err, "SetAccount")
 
-	err = acc.AddStakeClaim(ent.ID, staking.StakeClaim("claim"), []staking.ThresholdKind{staking.KindEntity})
+	err = acc.AddStakeClaim(addr, staking.StakeClaim("claim"), []staking.ThresholdKind{staking.KindEntity})
 	require.NoError(err, "AddStakeClaim")
 
-	err = acc.CheckStakeClaims(ent.ID)
+	err = acc.CheckStakeClaims(addr)
 	require.NoError(err, "CheckStakeClaims")
 
-	balance, err := acc.GetEscrowBalance(ent.ID)
+	balance, err := acc.GetEscrowBalance(addr)
 	require.NoError(err, "GetEscrowBalance")
 	require.Equal(&acct.Escrow.Active.Balance, balance, "GetEscrowBalance should return the correct balance")
 
 	// Check that nothing has been committed yet.
-	acct2, err := stakeState.Account(ctx, ent.ID)
+	acct2, err := stakeState.Account(ctx, addr)
 	require.NoError(err, "Account")
 	require.Len(acct2.Escrow.StakeAccumulator.Claims, 0, "claims should not be updated yet")
 
 	// Now commit and re-check.
 	err = acc.Commit()
 	require.NoError(err, "Commit")
-	acct2, err = stakeState.Account(ctx, ent.ID)
+	acct2, err = stakeState.Account(ctx, addr)
 	require.NoError(err, "Account")
 	require.Len(acct2.Escrow.StakeAccumulator.Claims, 1, "claims should be correct")
 
-	err = acc.RemoveStakeClaim(ent.ID, staking.StakeClaim("claim"))
+	err = acc.RemoveStakeClaim(addr, staking.StakeClaim("claim"))
 	require.NoError(err, "RemoveStakeClaim")
 
 	// Check that nothing has been committed.
-	acct2, err = stakeState.Account(ctx, ent.ID)
+	acct2, err = stakeState.Account(ctx, addr)
 	require.NoError(err, "Account")
 	require.Len(acct2.Escrow.StakeAccumulator.Claims, 1, "claims should not be updated")
 
 	acc.Discard()
-	acct2, err = stakeState.Account(ctx, ent.ID)
+	acct2, err = stakeState.Account(ctx, addr)
 	require.NoError(err, "Account")
 	require.Len(acct2.Escrow.StakeAccumulator.Claims, 1, "claims should not be updated")
 
 	// Test convenience functions.
-	err = AddStakeClaim(ctx, ent.ID, staking.StakeClaim("claim"), []staking.ThresholdKind{staking.KindEntity})
+	err = AddStakeClaim(ctx, addr, staking.StakeClaim("claim"), []staking.ThresholdKind{staking.KindEntity})
 	require.NoError(err, "AddStakeClaim")
-	err = RemoveStakeClaim(ctx, ent.ID, staking.StakeClaim("claim"))
+	err = RemoveStakeClaim(ctx, addr, staking.StakeClaim("claim"))
 	require.NoError(err, "RemoveStakeClaim")
-	err = CheckStakeClaims(ctx, ent.ID)
+	err = CheckStakeClaims(ctx, addr)
 	require.NoError(err, "CheckStakeClaims")
 }

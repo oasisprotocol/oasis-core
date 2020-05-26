@@ -21,6 +21,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/keymanager/api"
 	keymanager "github.com/oasisprotocol/oasis-core/go/keymanager/api"
 	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
+	staking "github.com/oasisprotocol/oasis-core/go/staking/api"
 )
 
 var emptyHashSha3 = sha3.Sum256(nil)
@@ -123,10 +124,12 @@ func (app *keymanagerApplication) onEpochChange(ctx *tmapi.Context, epoch epocht
 		// Suspend the runtime in case the registering entity no longer has enough stake to cover
 		// the entity and runtime deposits.
 		if !params.DebugBypassStake {
-			if err = stakeAcc.CheckStakeClaims(rt.EntityID); err != nil {
+			acctAddr := staking.NewAddress(rt.EntityID)
+			if err = stakeAcc.CheckStakeClaims(acctAddr); err != nil {
 				ctx.Logger().Warn("insufficient stake for key manager runtime operation",
 					"err", err,
-					"entity_id", rt.EntityID,
+					"entity", rt.EntityID,
+					"account", acctAddr,
 				)
 
 				// Suspend runtime.

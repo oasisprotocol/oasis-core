@@ -40,6 +40,7 @@ func (oversized) Run(
 	if err != nil {
 		return fmt.Errorf("failed to generate signer key: %w", err)
 	}
+	txSignerAddr := staking.NewAddress(txSigner.Public())
 
 	ctx := context.Background()
 
@@ -62,12 +63,12 @@ func (oversized) Run(
 	for {
 		// Generate a big transfer transaction which is valid, but oversized.
 		type customTransfer struct {
-			To   signature.PublicKey `json:"xfer_to"`
-			Data []byte              `json:"xfer_data"`
+			To   staking.Address `json:"xfer_to"`
+			Data []byte          `json:"xfer_data"`
 		}
 		xfer := customTransfer{
 			// Send zero tokens to self, so the transaction will be valid.
-			To: txSigner.Public(),
+			To: txSignerAddr,
 			// Include some extra random data so we are over the MaxTxSize limit.
 			Data: make([]byte, genesisDoc.Consensus.Parameters.MaxTxSize),
 		}
@@ -75,7 +76,14 @@ func (oversized) Run(
 			return fmt.Errorf("failed to generate bogus transaction: %w", err)
 		}
 
-		if err = transferFunds(ctx, oversizedLogger, cnsc, fundingAccount, txSigner.Public(), int64(oversizedTxGasAmount*gasPrice)); err != nil {
+		if err = transferFunds(
+			ctx,
+			oversizedLogger,
+			cnsc,
+			fundingAccount,
+			txSignerAddr,
+			int64(oversizedTxGasAmount*gasPrice),
+		); err != nil {
 			return fmt.Errorf("workload/oversized: account funding failure: %w", err)
 		}
 

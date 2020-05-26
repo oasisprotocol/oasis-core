@@ -32,7 +32,8 @@ type commission struct {
 	logger *logging.Logger
 
 	rules          staking.CommissionScheduleRules
-	account        signature.Signer
+	signer         signature.Signer
+	address        staking.Address
 	reckonedNonce  uint64
 	fundingAccount signature.Signer
 }
@@ -136,10 +137,10 @@ func (c *commission) doAmendCommissionSchedule(ctx context.Context, rng *rand.Ra
 	var account *staking.Account
 	account, err = stakingClient.AccountInfo(ctx, &staking.OwnerQuery{
 		Height: consensus.HeightLatest,
-		Owner:  c.account.Public(),
+		Owner:  c.address,
 	})
 	if err != nil {
-		return fmt.Errorf("stakingClient.AccountInfo %s: %w", c.account.Public(), err)
+		return fmt.Errorf("stakingClient.AccountInfo %s: %w", c.address, err)
 	}
 	existingCommissionSchedule := account.Escrow.CommissionSchedule
 	existingCommissionSchedule.Prune(currentEpoch)
@@ -317,7 +318,7 @@ func (c *commission) doAmendCommissionSchedule(ctx context.Context, rng *rand.Ra
 
 	// Estimate gas.
 	gas, err := cnsc.EstimateGas(ctx, &consensus.EstimateGasRequest{
-		Caller:      c.account.Public(),
+		Caller:      c.signer.Public(),
 		Transaction: tx,
 	})
 	if err != nil {
@@ -331,18 +332,19 @@ func (c *commission) doAmendCommissionSchedule(ctx context.Context, rng *rand.Ra
 
 	// Fund account to cover AmendCommissionSchedule transaction fees.
 	fundAmount := int64(gas) * gasPrice // transaction costs
-	if err = transferFunds(ctx, c.logger, cnsc, c.fundingAccount, c.account.Public(), fundAmount); err != nil {
+	if err = transferFunds(ctx, c.logger, cnsc, c.fundingAccount, c.address, fundAmount); err != nil {
 		return fmt.Errorf("account funding failure: %w", err)
 	}
 
 	// Sign transaction.
-	signedTx, err := transaction.Sign(c.account, tx)
+	signedTx, err := transaction.Sign(c.signer, tx)
 	if err != nil {
 		return fmt.Errorf("transaction.Sign: %w", err)
 	}
 
 	c.logger.Debug("submitting amend commission schedule transaction",
-		"account", c.account.Public(),
+		"signer", c.signer.Public(),
+		"account", c.address,
 		"amendment", amendSchedule,
 		"existing", existingCommissionSchedule,
 	)
@@ -363,10 +365,11 @@ func (c *commission) Run(gracefulExit context.Context, rng *rand.Rand, conn *grp
 	c.fundingAccount = fundingAccount
 
 	fac := memorySigner.NewFactory()
-	c.account, err = fac.Generate(signature.SignerEntity, rng)
+	c.signer, err = fac.Generate(signature.SignerEntity, rng)
 	if err != nil {
 		return fmt.Errorf("memory signer factory Generate account: %w", err)
 	}
+	c.address = staking.NewAddress(c.signer.Public())
 
 	stakingClient := staking.NewStakingClient(conn)
 

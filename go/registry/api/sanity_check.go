@@ -19,7 +19,7 @@ import (
 // SanityCheck does basic sanity checking on the genesis state.
 func (g *Genesis) SanityCheck(
 	baseEpoch epochtime.EpochTime,
-	stakeLedger map[signature.PublicKey]*staking.Account,
+	stakeLedger map[staking.Address]*staking.Account,
 	stakeThresholds map[staking.ThresholdKind]quantity.Quantity,
 	publicKeyBlacklist map[signature.PublicKey]bool,
 ) error {
@@ -212,19 +212,20 @@ func SanityCheckNodes(
 // their registered nodes and runtimes.
 func SanityCheckStake(
 	entities []*entity.Entity,
-	accounts map[signature.PublicKey]*staking.Account,
+	accounts map[staking.Address]*staking.Account,
 	nodes []*node.Node,
 	runtimes []*Runtime,
 	stakeThresholds map[staking.ThresholdKind]quantity.Quantity,
 	isGenesis bool,
 ) error {
 	// Entities' escrow accounts for checking claims and stake.
-	generatedEscrows := make(map[signature.PublicKey]*staking.EscrowAccount)
+	generatedEscrows := make(map[staking.Address]*staking.EscrowAccount)
 
 	// Generate escrow account for all entities.
 	for _, entity := range entities {
 		var escrow *staking.EscrowAccount
-		acct, ok := accounts[entity.ID]
+		addr := staking.NewAddress(entity.ID)
+		acct, ok := accounts[addr]
 		if ok {
 			// Generate an escrow account with the same active balance and shares number.
 			escrow = &staking.EscrowAccount{
@@ -241,23 +242,26 @@ func SanityCheckStake(
 		// Add entity stake claim.
 		escrow.StakeAccumulator.AddClaimUnchecked(StakeClaimRegisterEntity, []staking.ThresholdKind{staking.KindEntity})
 
-		generatedEscrows[entity.ID] = escrow
+		generatedEscrows[addr] = escrow
 	}
 
 	for _, node := range nodes {
 		// Add node stake claims.
-		generatedEscrows[node.EntityID].StakeAccumulator.AddClaimUnchecked(StakeClaimForNode(node.ID), StakeThresholdsForNode(node))
+		addr := staking.NewAddress(node.EntityID)
+		generatedEscrows[addr].StakeAccumulator.AddClaimUnchecked(StakeClaimForNode(node.ID), StakeThresholdsForNode(node))
 	}
 	for _, rt := range runtimes {
 		// Add runtime stake claims.
-		generatedEscrows[rt.EntityID].StakeAccumulator.AddClaimUnchecked(StakeClaimForRuntime(rt.ID), StakeThresholdsForRuntime(rt))
+		addr := staking.NewAddress(rt.EntityID)
+		generatedEscrows[addr].StakeAccumulator.AddClaimUnchecked(StakeClaimForRuntime(rt.ID), StakeThresholdsForRuntime(rt))
 	}
 
 	// Compare entities' generated escrow accounts with actual ones.
 	for _, entity := range entities {
 		var generatedEscrow, actualEscrow *staking.EscrowAccount
-		generatedEscrow = generatedEscrows[entity.ID]
-		acct, ok := accounts[entity.ID]
+		addr := staking.NewAddress(entity.ID)
+		generatedEscrow = generatedEscrows[addr]
+		acct, ok := accounts[addr]
 		if ok {
 			actualEscrow = &acct.Escrow
 		} else {
@@ -277,7 +281,7 @@ func SanityCheckStake(
 					expected = expectedQty.String()
 				}
 				return fmt.Errorf("insufficient stake for account %s (expected: %s got: %s): %w",
-					entity.ID,
+					addr,
 					expected,
 					generatedEscrow.Active.Balance,
 					err,
@@ -287,11 +291,11 @@ func SanityCheckStake(
 			// Otherwise, compare the expected accumulator state with the actual one.
 			// NOTE: We can't perform this check for the Genesis document since it is not allowed to
 			// have non-empty stake accumulators.
-			expectedClaims := generatedEscrows[entity.ID].StakeAccumulator.Claims
+			expectedClaims := generatedEscrows[addr].StakeAccumulator.Claims
 			actualClaims := actualEscrow.StakeAccumulator.Claims
 			if len(expectedClaims) != len(actualClaims) {
 				return fmt.Errorf("incorrect number of stake claims for account %s (expected: %d got: %d)",
-					entity.ID,
+					addr,
 					len(expectedClaims),
 					len(actualClaims),
 				)
@@ -299,12 +303,12 @@ func SanityCheckStake(
 			for claim, expectedThresholds := range expectedClaims {
 				thresholds, ok := actualClaims[claim]
 				if !ok {
-					return fmt.Errorf("missing claim %s for account %s", claim, entity.ID)
+					return fmt.Errorf("missing claim %s for account %s", claim, addr)
 				}
 				if len(thresholds) != len(expectedThresholds) {
 					return fmt.Errorf("incorrect number of thresholds for claim %s for account %s (expected: %d got: %d)",
 						claim,
-						entity.ID,
+						addr,
 						len(expectedThresholds),
 						len(thresholds),
 					)
@@ -315,7 +319,7 @@ func SanityCheckStake(
 						return fmt.Errorf("incorrect threshold in position %d for claim %s for account %s (expected: %s got: %s)",
 							i,
 							claim,
-							entity.ID,
+							addr,
 							expectedThreshold,
 							threshold,
 						)

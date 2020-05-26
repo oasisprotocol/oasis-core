@@ -134,16 +134,19 @@ func (app *schedulerApplication) InitChain(ctx *abciAPI.Context, req types.Reque
 			expectedPower = 1
 		} else {
 			var account *staking.Account
-			account, err = stakeState.Account(ctx, n.EntityID)
+			acctAddr := staking.NewAddress(n.EntityID)
+			account, err = stakeState.Account(ctx, acctAddr)
 			if err != nil {
 				ctx.Logger().Error("couldn't get account for genesis validator entity",
 					"err", err,
-					"node_id", n.ID,
-					"entity_id", n.EntityID,
+					"node", n.ID,
+					"entity", n.EntityID,
+					"accont", acctAddr,
 				)
-				return fmt.Errorf("scheduler: getting account %s for genesis validator %s entity: %w",
-					n.EntityID,
+				return fmt.Errorf("scheduler: getting account %s for genesis validator %s of entity %s: %w",
+					acctAddr,
 					n.ID,
+					n.EntityID,
 					err,
 				)
 			}
@@ -151,13 +154,15 @@ func (app *schedulerApplication) InitChain(ctx *abciAPI.Context, req types.Reque
 			if err != nil {
 				ctx.Logger().Error("computing voting power from tokens failed",
 					"err", err,
-					"node_id", n.ID,
-					"entity_id", n.EntityID,
+					"node", n.ID,
+					"entity", n.EntityID,
+					"account", acctAddr,
 					"tokens", &account.Escrow.Active.Balance,
 				)
-				return fmt.Errorf("scheduler: getting computing voting power from tokens (node %s entity %s tokens %v): %w",
+				return fmt.Errorf("scheduler: getting computing voting power from tokens (node %s entity %s account %s tokens %v): %w",
 					n.ID,
 					n.EntityID,
+					acctAddr,
 					&account.Escrow.Active.Balance,
 					err,
 				)

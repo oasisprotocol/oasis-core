@@ -111,7 +111,7 @@ func doRun(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("memory signer factory generate funding account %w", err)
 	}
-	if err = workload.FundAccountFromTestEntity(ctx, logger, cnsc, fundingAccount.Public()); err != nil {
+	if err = workload.FundAccountFromTestEntity(ctx, logger, cnsc, fundingAccount); err != nil {
 		return fmt.Errorf("test entity account funding failure: %w", err)
 	}
 

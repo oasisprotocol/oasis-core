@@ -5,7 +5,6 @@ import (
 
 	"google.golang.org/grpc"
 
-	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	cmnGrpc "github.com/oasisprotocol/oasis-core/go/common/grpc"
 	"github.com/oasisprotocol/oasis-core/go/common/pubsub"
 	"github.com/oasisprotocol/oasis-core/go/common/quantity"
@@ -528,8 +527,8 @@ func (c *stakingClient) Threshold(ctx context.Context, query *ThresholdQuery) (*
 	return &rsp, nil
 }
 
-func (c *stakingClient) Accounts(ctx context.Context, height int64) ([]signature.PublicKey, error) {
-	var rsp []signature.PublicKey
+func (c *stakingClient) Accounts(ctx context.Context, height int64) ([]Address, error) {
+	var rsp []Address
 	if err := c.conn.Invoke(ctx, methodAccounts.FullName(), height, &rsp); err != nil {
 		return nil, err
 	}
@@ -544,16 +543,16 @@ func (c *stakingClient) AccountInfo(ctx context.Context, query *OwnerQuery) (*Ac
 	return &rsp, nil
 }
 
-func (c *stakingClient) Delegations(ctx context.Context, query *OwnerQuery) (map[signature.PublicKey]*Delegation, error) {
-	var rsp map[signature.PublicKey]*Delegation
+func (c *stakingClient) Delegations(ctx context.Context, query *OwnerQuery) (map[Address]*Delegation, error) {
+	var rsp map[Address]*Delegation
 	if err := c.conn.Invoke(ctx, methodDelegations.FullName(), query, &rsp); err != nil {
 		return nil, err
 	}
 	return rsp, nil
 }
 
-func (c *stakingClient) DebondingDelegations(ctx context.Context, query *OwnerQuery) (map[signature.PublicKey][]*DebondingDelegation, error) {
-	var rsp map[signature.PublicKey][]*DebondingDelegation
+func (c *stakingClient) DebondingDelegations(ctx context.Context, query *OwnerQuery) (map[Address][]*DebondingDelegation, error) {
+	var rsp map[Address][]*DebondingDelegation
 	if err := c.conn.Invoke(ctx, methodDebondingDelegations.FullName(), query, &rsp); err != nil {
 		return nil, err
 	}

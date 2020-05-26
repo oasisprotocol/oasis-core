@@ -493,7 +493,7 @@ func AppendKeyManagerState(doc *genesis.Document, statuses []string, l *logging.
 // AppendStakingState appends the staking genesis state given a state file name.
 func AppendStakingState(doc *genesis.Document, state string, l *logging.Logger) error {
 	stakingSt := staking.Genesis{
-		Ledger: make(map[signature.PublicKey]*staking.Account),
+		Ledger: make(map[staking.Address]*staking.Account),
 	}
 	if err := stakingSt.Parameters.FeeSplitWeightVote.FromInt64(1); err != nil {
 		return fmt.Errorf("couldn't set default fee split: %w", err)
@@ -527,6 +527,7 @@ func AppendStakingState(doc *genesis.Document, state string, l *logging.Logger) 
 			)
 			return err
 		}
+		entAddr := staking.NewAddress(ent.ID)
 
 		// Ok then, we hold the world ransom for One Hundred Billion Dollars.
 		var q quantity.Quantity
@@ -537,7 +538,7 @@ func AppendStakingState(doc *genesis.Document, state string, l *logging.Logger) 
 			return err
 		}
 
-		stakingSt.Ledger[ent.ID] = &staking.Account{
+		stakingSt.Ledger[entAddr] = &staking.Account{
 			General: staking.GeneralAccount{
 				Balance: q,
 				Nonce:   0,
@@ -549,9 +550,9 @@ func AppendStakingState(doc *genesis.Document, state string, l *logging.Logger) 
 				},
 			},
 		}
-		stakingSt.Delegations = map[signature.PublicKey]map[signature.PublicKey]*staking.Delegation{
-			ent.ID: map[signature.PublicKey]*staking.Delegation{
-				ent.ID: &staking.Delegation{
+		stakingSt.Delegations = map[staking.Address]map[staking.Address]*staking.Delegation{
+			entAddr: map[staking.Address]*staking.Delegation{
+				entAddr: &staking.Delegation{
 					Shares: stakingTests.QtyFromInt(1),
 				},
 			},

@@ -2,7 +2,6 @@ package e2e
 
 import (
 	"context"
-	"crypto/rand"
 	"fmt"
 
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
@@ -39,10 +38,18 @@ var (
 		dumpRestore: true,
 	}
 
-	// srcSigner is the signer for public key defined in the staking genesis
+	// Signer for the staking account address defined in the staking genesis
 	// fixture used in this scenario.
-	srcSigner    = memorySigner.NewTestSigner("oasis gas fees e2e test signer: src")
-	escrowSigner = memorySigner.NewTestSigner("oasis gas fees e2e test signer: escrow")
+	srcSigner = memorySigner.NewTestSigner("oasis gas fees e2e test signer: src")
+
+	// Testing destination account address.
+	dstAddr = staking.NewAddress(
+		signature.NewPublicKey("badfffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"),
+	)
+	// Testing escrow account address.
+	escrowAddr = staking.NewAddress(
+		signature.NewPublicKey("badbadffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"),
+	)
 )
 
 type gasFeesImpl struct {
@@ -265,14 +272,16 @@ func (sc *gasFeesImpl) getTotalEntityBalance(ctx context.Context) (*quantity.Qua
 	var total quantity.Quantity
 	for _, e := range sc.net.Entities()[1:] { // Only count entities with validators.
 		ent, _ := e.Inner()
+		addr := staking.NewAddress(ent.ID)
 
-		acct, err := st.AccountInfo(ctx, &staking.OwnerQuery{Owner: ent.ID, Height: consensus.HeightLatest})
+		acct, err := st.AccountInfo(ctx, &staking.OwnerQuery{Owner: addr, Height: consensus.HeightLatest})
 		if err != nil {
-			return nil, fmt.Errorf("failed to get account info: %w", err)
+			return nil, fmt.Errorf("failed to get account info for %s: %w", addr, err)
 		}
 
 		sc.logger.Debug("fetched balance",
-			"entity_id", ent.ID,
+			"entity", ent.ID,
+			"address", addr,
 			"balance", acct.General.Balance,
 		)
 
@@ -284,14 +293,8 @@ func (sc *gasFeesImpl) getTotalEntityBalance(ctx context.Context) (*quantity.Qua
 
 func (sc *gasFeesImpl) testTransfer(ctx context.Context, signer signature.Signer) (*quantity.Quantity, error) {
 	return sc.testStakingGas(ctx, signer, true, func(acct *staking.Account, fee transaction.Fee, amount int64) error {
-		// Generate random destination account.
-		dstSigner, err := memorySigner.NewSigner(rand.Reader)
-		if err != nil {
-			return fmt.Errorf("failed to generate destination account: %w", err)
-		}
-
 		transfer := staking.Transfer{
-			To: dstSigner.Public(),
+			To: dstAddr,
 		}
 		_ = transfer.Tokens.FromInt64(amount)
 
@@ -321,7 +324,7 @@ func (sc *gasFeesImpl) testBurn(ctx context.Context, signer signature.Signer) (*
 func (sc *gasFeesImpl) testAddEscrow(ctx context.Context, signer signature.Signer) (*quantity.Quantity, error) {
 	return sc.testStakingGas(ctx, signer, true, func(acct *staking.Account, fee transaction.Fee, amount int64) error {
 		escrow := staking.Escrow{
-			Account: escrowSigner.Public(),
+			Account: escrowAddr,
 		}
 		_ = escrow.Tokens.FromInt64(amount)
 
@@ -337,7 +340,7 @@ func (sc *gasFeesImpl) testAddEscrow(ctx context.Context, signer signature.Signe
 func (sc *gasFeesImpl) testReclaimEscrow(ctx context.Context, signer signature.Signer) (*quantity.Quantity, error) {
 	return sc.testStakingGas(ctx, signer, false, func(acct *staking.Account, fee transaction.Fee, shares int64) error {
 		escrow := staking.ReclaimEscrow{
-			Account: escrowSigner.Public(),
+			Account: escrowAddr,
 		}
 		_ = escrow.Shares.FromInt64(shares)
 
@@ -440,7 +443,8 @@ func (sc *gasFeesImpl) testStakingGasOp(
 	st := sc.net.Controller().Staking
 
 	// Fetch initial account info.
-	acct, err := st.AccountInfo(ctx, &staking.OwnerQuery{Owner: signer.Public(), Height: consensus.HeightLatest})
+	addr := staking.NewAddress(signer.Public())
+	acct, err := st.AccountInfo(ctx, &staking.OwnerQuery{Owner: addr, Height: consensus.HeightLatest})
 	if err != nil {
 		return fmt.Errorf("failed to get account info: %w", err)
 	}
@@ -493,7 +497,7 @@ func (sc *gasFeesImpl) testStakingGasOp(
 	}
 
 	// Check account after the (failed) operation.
-	newAcct, err := st.AccountInfo(ctx, &staking.OwnerQuery{Owner: signer.Public(), Height: consensus.HeightLatest})
+	newAcct, err := st.AccountInfo(ctx, &staking.OwnerQuery{Owner: addr, Height: consensus.HeightLatest})
 	if err != nil {
 		return fmt.Errorf("failed to get account info: %w", err)
 	}

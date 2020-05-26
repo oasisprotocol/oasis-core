@@ -4,18 +4,17 @@ import (
 	"fmt"
 
 	"github.com/oasisprotocol/oasis-core/go/common/cbor"
-	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	"github.com/oasisprotocol/oasis-core/go/common/quantity"
 	"github.com/oasisprotocol/oasis-core/go/consensus/tendermint/api"
 	stakingState "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/apps/staking/state"
 	staking "github.com/oasisprotocol/oasis-core/go/staking/api"
 )
 
-func isTransferPermitted(params *staking.ConsensusParameters, fromID signature.PublicKey) (permitted bool) {
+func isTransferPermitted(params *staking.ConsensusParameters, fromAddr staking.Address) (permitted bool) {
 	permitted = true
 	if params.DisableTransfers {
 		permitted = false
-		if params.UndisableTransfersFrom != nil && params.UndisableTransfersFrom[fromID] {
+		if params.UndisableTransfersFrom != nil && params.UndisableTransfersFrom[fromAddr] {
 			permitted = true
 		}
 	}
@@ -36,23 +35,23 @@ func (app *stakingApplication) transfer(ctx *api.Context, state *stakingState.Mu
 		return err
 	}
 
-	fromID := ctx.TxSigner()
-	if !isTransferPermitted(params, fromID) {
+	fromAddr := staking.NewAddress(ctx.TxSigner())
+	if !isTransferPermitted(params, fromAddr) {
 		return staking.ErrForbidden
 	}
 
-	from, err := state.Account(ctx, fromID)
+	from, err := state.Account(ctx, fromAddr)
 	if err != nil {
 		return fmt.Errorf("failed to fetch account: %w", err)
 	}
 
-	if fromID.Equal(xfer.To) {
+	if fromAddr.Equal(xfer.To) {
 		// Handle transfer to self as just a balance check.
 		if from.General.Balance.Cmp(&xfer.Tokens) < 0 {
 			err = staking.ErrInsufficientBalance
 			ctx.Logger().Error("Transfer: self-transfer greater than balance",
 				"err", err,
-				"from", fromID,
+				"from", fromAddr,
 				"to", xfer.To,
 				"amount", xfer.Tokens,
 			)
@@ -69,7 +68,7 @@ func (app *stakingApplication) transfer(ctx *api.Context, state *stakingState.Mu
 		if err = quantity.Move(&to.General.Balance, &from.General.Balance, &xfer.Tokens); err != nil {
 			ctx.Logger().Error("Transfer: failed to move balance",
 				"err", err,
-				"from", fromID,
+				"from", fromAddr,
 				"to", xfer.To,
 				"amount", xfer.Tokens,
 			)
@@ -81,18 +80,18 @@ func (app *stakingApplication) transfer(ctx *api.Context, state *stakingState.Mu
 		}
 	}
 
-	if err = state.SetAccount(ctx, fromID, from); err != nil {
+	if err = state.SetAccount(ctx, fromAddr, from); err != nil {
 		return fmt.Errorf("failed to fetch account: %w", err)
 	}
 
 	ctx.Logger().Debug("Transfer: executed transfer",
-		"from", fromID,
+		"from", fromAddr,
 		"to", xfer.To,
 		"amount", xfer.Tokens,
 	)
 
 	evt := &staking.TransferEvent{
-		From:   fromID,
+		From:   fromAddr,
 		To:     xfer.To,
 		Tokens: xfer.Tokens,
 	}
@@ -115,8 +114,8 @@ func (app *stakingApplication) burn(ctx *api.Context, state *stakingState.Mutabl
 		return err
 	}
 
-	id := ctx.TxSigner()
-	from, err := state.Account(ctx, id)
+	fromAddr := staking.NewAddress(ctx.TxSigner())
+	from, err := state.Account(ctx, fromAddr)
 	if err != nil {
 		return fmt.Errorf("failed to fetch account: %w", err)
 	}
@@ -124,7 +123,8 @@ func (app *stakingApplication) burn(ctx *api.Context, state *stakingState.Mutabl
 	if err = from.General.Balance.Sub(&burn.Tokens); err != nil {
 		ctx.Logger().Error("Burn: failed to burn tokens",
 			"err", err,
-			"from", id, "amount", burn.Tokens,
+			"from", fromAddr,
+			"amount", burn.Tokens,
 		)
 		return err
 	}
@@ -136,7 +136,7 @@ func (app *stakingApplication) burn(ctx *api.Context, state *stakingState.Mutabl
 
 	_ = totalSupply.Sub(&burn.Tokens)
 
-	if err = state.SetAccount(ctx, id, from); err != nil {
+	if err = state.SetAccount(ctx, fromAddr, from); err != nil {
 		return fmt.Errorf("failed to set account: %w", err)
 	}
 	if err = state.SetTotalSupply(ctx, totalSupply); err != nil {
@@ -144,12 +144,12 @@ func (app *stakingApplication) burn(ctx *api.Context, state *stakingState.Mutabl
 	}
 
 	ctx.Logger().Debug("Burn: burnt tokens",
-		"from", id,
+		"from", fromAddr,
 		"amount", burn.Tokens,
 	)
 
 	evt := &staking.BurnEvent{
-		Owner:  id,
+		Owner:  fromAddr,
 		Tokens: burn.Tokens,
 	}
 	ctx.EmitEvent(api.NewEventBuilder(app.Name()).Attribute(KeyBurn, cbor.Marshal(evt)))
@@ -176,8 +176,8 @@ func (app *stakingApplication) addEscrow(ctx *api.Context, state *stakingState.M
 		return staking.ErrInvalidArgument
 	}
 
-	id := ctx.TxSigner()
-	from, err := state.Account(ctx, id)
+	fromAddr := staking.NewAddress(ctx.TxSigner())
+	from, err := state.Account(ctx, fromAddr)
 	if err != nil {
 		return fmt.Errorf("failed to fetch account: %w", err)
 	}
@@ -187,7 +187,7 @@ func (app *stakingApplication) addEscrow(ctx *api.Context, state *stakingState.M
 	// NOTE: Could be the same account, so make sure to not have two duplicate
 	//       copies of it and overwrite it later.
 	var to *staking.Account
-	if id.Equal(escrow.Account) {
+	if fromAddr.Equal(escrow.Account) {
 		to = from
 	} else {
 		if params.DisableDelegation {
@@ -200,7 +200,7 @@ func (app *stakingApplication) addEscrow(ctx *api.Context, state *stakingState.M
 	}
 
 	// Fetch delegation.
-	delegation, err := state.Delegation(ctx, id, escrow.Account)
+	delegation, err := state.Delegation(ctx, fromAddr, escrow.Account)
 	if err != nil {
 		return fmt.Errorf("failed to fetch delegation: %w", err)
 	}
@@ -208,7 +208,7 @@ func (app *stakingApplication) addEscrow(ctx *api.Context, state *stakingState.M
 	if err = to.Escrow.Active.Deposit(&delegation.Shares, &from.General.Balance, &escrow.Tokens); err != nil {
 		ctx.Logger().Error("AddEscrow: failed to escrow tokens",
 			"err", err,
-			"from", id,
+			"from", fromAddr,
 			"to", escrow.Account,
 			"amount", escrow.Tokens,
 		)
@@ -216,27 +216,27 @@ func (app *stakingApplication) addEscrow(ctx *api.Context, state *stakingState.M
 	}
 
 	// Commit accounts.
-	if err = state.SetAccount(ctx, id, from); err != nil {
+	if err = state.SetAccount(ctx, fromAddr, from); err != nil {
 		return fmt.Errorf("failed to set account: %w", err)
 	}
-	if !id.Equal(escrow.Account) {
+	if !fromAddr.Equal(escrow.Account) {
 		if err = state.SetAccount(ctx, escrow.Account, to); err != nil {
 			return fmt.Errorf("failed to set account: %w", err)
 		}
 	}
 	// Commit delegation descriptor.
-	if err = state.SetDelegation(ctx, id, escrow.Account, delegation); err != nil {
+	if err = state.SetDelegation(ctx, fromAddr, escrow.Account, delegation); err != nil {
 		return fmt.Errorf("failed to set delegation: %w", err)
 	}
 
 	ctx.Logger().Debug("AddEscrow: escrowed tokens",
-		"from", id,
+		"from", fromAddr,
 		"to", escrow.Account,
 		"amount", escrow.Tokens,
 	)
 
 	evt := &staking.AddEscrowEvent{
-		Owner:  id,
+		Owner:  fromAddr,
 		Escrow: escrow.Account,
 		Tokens: escrow.Tokens,
 	}
@@ -264,8 +264,8 @@ func (app *stakingApplication) reclaimEscrow(ctx *api.Context, state *stakingSta
 		return err
 	}
 
-	id := ctx.TxSigner()
-	to, err := state.Account(ctx, id)
+	toAddr := staking.NewAddress(ctx.TxSigner())
+	to, err := state.Account(ctx, toAddr)
 	if err != nil {
 		return fmt.Errorf("failed to fetch account: %w", err)
 	}
@@ -275,7 +275,7 @@ func (app *stakingApplication) reclaimEscrow(ctx *api.Context, state *stakingSta
 	// NOTE: Could be the same account, so make sure to not have two duplicate
 	//       copies of it and overwrite it later.
 	var from *staking.Account
-	if id.Equal(reclaim.Account) {
+	if toAddr.Equal(reclaim.Account) {
 		from = to
 	} else {
 		if params.DisableDelegation {
@@ -288,7 +288,7 @@ func (app *stakingApplication) reclaimEscrow(ctx *api.Context, state *stakingSta
 	}
 
 	// Fetch delegation.
-	delegation, err := state.Delegation(ctx, id, reclaim.Account)
+	delegation, err := state.Delegation(ctx, toAddr, reclaim.Account)
 	if err != nil {
 		return fmt.Errorf("failed to fetch delegation: %w", err)
 	}
@@ -315,7 +315,7 @@ func (app *stakingApplication) reclaimEscrow(ctx *api.Context, state *stakingSta
 	if err = from.Escrow.Active.Withdraw(&tokens, &delegation.Shares, &reclaim.Shares); err != nil {
 		ctx.Logger().Error("ReclaimEscrow: failed to redeem escrow shares",
 			"err", err,
-			"to", id,
+			"to", toAddr,
 			"from", reclaim.Account,
 			"shares", reclaim.Shares,
 		)
@@ -326,7 +326,7 @@ func (app *stakingApplication) reclaimEscrow(ctx *api.Context, state *stakingSta
 	if err = from.Escrow.Debonding.Deposit(&deb.Shares, &tokens, tokenAmount); err != nil {
 		ctx.Logger().Error("ReclaimEscrow: failed to debond shares",
 			"err", err,
-			"to", id,
+			"to", toAddr,
 			"from", reclaim.Account,
 			"shares", reclaim.Shares,
 		)
@@ -341,17 +341,17 @@ func (app *stakingApplication) reclaimEscrow(ctx *api.Context, state *stakingSta
 	}
 
 	// Include the nonce as the final disambiguator to prevent overwriting debonding delegations.
-	if err = state.SetDebondingDelegation(ctx, id, reclaim.Account, to.General.Nonce, &deb); err != nil {
+	if err = state.SetDebondingDelegation(ctx, toAddr, reclaim.Account, to.General.Nonce, &deb); err != nil {
 		return fmt.Errorf("failed to set debonding delegation: %w", err)
 	}
 
-	if err = state.SetDelegation(ctx, id, reclaim.Account, delegation); err != nil {
+	if err = state.SetDelegation(ctx, toAddr, reclaim.Account, delegation); err != nil {
 		return fmt.Errorf("failed to set delegation: %w", err)
 	}
-	if err = state.SetAccount(ctx, id, to); err != nil {
+	if err = state.SetAccount(ctx, toAddr, to); err != nil {
 		return fmt.Errorf("failed to set account: %w", err)
 	}
-	if !id.Equal(reclaim.Account) {
+	if !toAddr.Equal(reclaim.Account) {
 		if err = state.SetAccount(ctx, reclaim.Account, from); err != nil {
 			return fmt.Errorf("failed to set account: %w", err)
 		}
@@ -383,8 +383,8 @@ func (app *stakingApplication) amendCommissionSchedule(
 		return err
 	}
 
-	id := ctx.TxSigner()
-	from, err := state.Account(ctx, id)
+	fromAddr := staking.NewAddress(ctx.TxSigner())
+	from, err := state.Account(ctx, fromAddr)
 	if err != nil {
 		return fmt.Errorf("failed to fetch account: %w", err)
 	}
@@ -392,12 +392,12 @@ func (app *stakingApplication) amendCommissionSchedule(
 	if err = from.Escrow.CommissionSchedule.AmendAndPruneAndValidate(&amendCommissionSchedule.Amendment, &params.CommissionScheduleRules, epoch); err != nil {
 		ctx.Logger().Error("AmendCommissionSchedule: amendment not acceptable",
 			"err", err,
-			"from", id,
+			"from", fromAddr,
 		)
 		return err
 	}
 
-	if err = state.SetAccount(ctx, id, from); err != nil {
+	if err = state.SetAccount(ctx, fromAddr, from); err != nil {
 		return fmt.Errorf("failed to set account: %w", err)
 	}
 

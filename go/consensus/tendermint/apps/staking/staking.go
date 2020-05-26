@@ -171,17 +171,17 @@ func (app *stakingApplication) onEpochChange(ctx *api.Context, epoch epochtime.E
 	for _, e := range expiredDebondingQueue {
 		deb := e.Delegation
 		shareAmount := deb.Shares.Clone()
-		delegator, err := state.Account(ctx, e.DelegatorID)
+		delegator, err := state.Account(ctx, e.DelegatorAddr)
 		if err != nil {
 			return fmt.Errorf("failed to query delegator account: %w", err)
 		}
 		// NOTE: Could be the same account, so make sure to not have two duplicate
 		//       copies of it and overwrite it later.
 		var escrow *staking.Account
-		if e.DelegatorID.Equal(e.EscrowID) {
+		if e.DelegatorAddr.Equal(e.EscrowAddr) {
 			escrow = delegator
 		} else {
-			escrow, err = state.Account(ctx, e.EscrowID)
+			escrow, err = state.Account(ctx, e.EscrowAddr)
 			if err != nil {
 				return fmt.Errorf("failed to query escrow account: %w", err)
 			}
@@ -191,8 +191,8 @@ func (app *stakingApplication) onEpochChange(ctx *api.Context, epoch epochtime.E
 		if err = escrow.Escrow.Debonding.Withdraw(&tokens, &deb.Shares, shareAmount); err != nil {
 			ctx.Logger().Error("failed to redeem debonding shares",
 				"err", err,
-				"escrow_id", e.EscrowID,
-				"delegator_id", e.DelegatorID,
+				"escrow_addr", e.EscrowAddr,
+				"delegator_addr", e.DelegatorAddr,
 				"shares", deb.Shares,
 			)
 			return fmt.Errorf("staking/tendermint: failed to redeem debonding shares: %w", err)
@@ -202,38 +202,38 @@ func (app *stakingApplication) onEpochChange(ctx *api.Context, epoch epochtime.E
 		if err = quantity.Move(&delegator.General.Balance, &tokens, tokenAmount); err != nil {
 			ctx.Logger().Error("failed to move debonded tokens",
 				"err", err,
-				"escrow_id", e.EscrowID,
-				"delegator_id", e.DelegatorID,
+				"escrow_addr", e.EscrowAddr,
+				"delegator_addr", e.DelegatorAddr,
 				"shares", deb.Shares,
 			)
 			return fmt.Errorf("staking/tendermint: failed to redeem debonding shares: %w", err)
 		}
 
 		// Update state.
-		if err = state.RemoveFromDebondingQueue(ctx, e.Epoch, e.DelegatorID, e.EscrowID, e.Seq); err != nil {
+		if err = state.RemoveFromDebondingQueue(ctx, e.Epoch, e.DelegatorAddr, e.EscrowAddr, e.Seq); err != nil {
 			return fmt.Errorf("failed to remove from debonding queue: %w", err)
 		}
-		if err = state.SetDebondingDelegation(ctx, e.DelegatorID, e.EscrowID, e.Seq, nil); err != nil {
+		if err = state.SetDebondingDelegation(ctx, e.DelegatorAddr, e.EscrowAddr, e.Seq, nil); err != nil {
 			return fmt.Errorf("failed to set debonding delegation: %w", err)
 		}
-		if err = state.SetAccount(ctx, e.DelegatorID, delegator); err != nil {
-			return fmt.Errorf("failed to set delegator (%s) account: %w", e.DelegatorID, err)
+		if err = state.SetAccount(ctx, e.DelegatorAddr, delegator); err != nil {
+			return fmt.Errorf("failed to set delegator (%s) account: %w", e.DelegatorAddr, err)
 		}
-		if !e.DelegatorID.Equal(e.EscrowID) {
-			if err = state.SetAccount(ctx, e.EscrowID, escrow); err != nil {
-				return fmt.Errorf("failed to set escrow (%s) account: %w", e.EscrowID, err)
+		if !e.DelegatorAddr.Equal(e.EscrowAddr) {
+			if err = state.SetAccount(ctx, e.EscrowAddr, escrow); err != nil {
+				return fmt.Errorf("failed to set escrow (%s) account: %w", e.EscrowAddr, err)
 			}
 		}
 
 		ctx.Logger().Debug("released tokens",
-			"escrow_id", e.EscrowID,
-			"delegator_id", e.DelegatorID,
+			"escrow_addr", e.EscrowAddr,
+			"delegator_addr", e.DelegatorAddr,
 			"amount", tokenAmount,
 		)
 
 		evt := staking.ReclaimEscrowEvent{
-			Owner:  e.DelegatorID,
-			Escrow: e.EscrowID,
+			Owner:  e.DelegatorAddr,
+			Escrow: e.EscrowAddr,
 			Tokens: *tokenAmount,
 		}
 		ctx.EmitEvent(api.NewEventBuilder(app.Name()).Attribute(KeyReclaimEscrow, cbor.Marshal(evt)))

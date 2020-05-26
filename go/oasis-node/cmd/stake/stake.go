@@ -11,7 +11,6 @@ import (
 	flag "github.com/spf13/pflag"
 	"google.golang.org/grpc"
 
-	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	"github.com/oasisprotocol/oasis-core/go/common/errors"
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
 	"github.com/oasisprotocol/oasis-core/go/common/quantity"
@@ -172,32 +171,32 @@ func doList(cmd *cobra.Command, args []string) {
 
 	ctx := context.Background()
 
-	var ids []signature.PublicKey
+	var addrs []api.Address
 	doWithRetries(cmd, "query accounts", func() error {
 		var err error
-		ids, err = client.Accounts(ctx, consensus.HeightLatest)
+		addrs, err = client.Accounts(ctx, consensus.HeightLatest)
 		return err
 	})
 
 	if cmdFlags.Verbose() {
-		accts := make(map[signature.PublicKey]*api.Account)
-		for _, v := range ids {
+		accts := make(map[api.Address]*api.Account)
+		for _, v := range addrs {
 			accts[v] = getAccountInfo(ctx, cmd, v, client)
 		}
 		b, _ := json.Marshal(accts)
 		fmt.Printf("%v\n", string(b))
 	} else {
-		for _, v := range ids {
+		for _, v := range addrs {
 			fmt.Printf("%v\n", v)
 		}
 	}
 }
 
-func getAccountInfo(ctx context.Context, cmd *cobra.Command, id signature.PublicKey, client api.Backend) *api.Account {
+func getAccountInfo(ctx context.Context, cmd *cobra.Command, addr api.Address, client api.Backend) *api.Account {
 	var acct *api.Account
-	doWithRetries(cmd, "query account "+id.String(), func() error {
+	doWithRetries(cmd, "query account "+addr.String(), func() error {
 		var err error
-		acct, err = client.AccountInfo(ctx, &api.OwnerQuery{Owner: id, Height: consensus.HeightLatest})
+		acct, err = client.AccountInfo(ctx, &api.OwnerQuery{Owner: addr, Height: consensus.HeightLatest})
 		return err
 	})
 

@@ -30,6 +30,7 @@ import (
 	epochtime "github.com/oasisprotocol/oasis-core/go/epochtime/api"
 	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
 	scheduler "github.com/oasisprotocol/oasis-core/go/scheduler/api"
+	staking "github.com/oasisprotocol/oasis-core/go/staking/api"
 )
 
 var (
@@ -149,10 +150,10 @@ func (app *schedulerApplication) BeginBlock(ctx *api.Context, request types.Requ
 			defer stakeAcc.Discard()
 		}
 
-		var entitiesEligibleForReward map[signature.PublicKey]bool
+		var entitiesEligibleForReward map[staking.Address]bool
 		if epochChanged {
 			// For elections on epoch changes, distribute rewards to entities with any eligible nodes.
-			entitiesEligibleForReward = make(map[signature.PublicKey]bool)
+			entitiesEligibleForReward = make(map[staking.Address]bool)
 		}
 
 		// Handle the validator election first, because no consensus is
@@ -194,9 +195,9 @@ func (app *schedulerApplication) BeginBlock(ctx *api.Context, request types.Requ
 		)
 
 		if entitiesEligibleForReward != nil {
-			accounts := publicKeyMapToSortedSlice(entitiesEligibleForReward)
+			accountAddrs := stakingAddressMapToSortedSlice(entitiesEligibleForReward)
 			stakingSt := stakingState.NewMutableState(ctx.State())
-			if err = stakingSt.AddRewards(ctx, epoch, &params.RewardFactorEpochElectionAny, accounts); err != nil {
+			if err = stakingSt.AddRewards(ctx, epoch, &params.RewardFactorEpochElectionAny, accountAddrs); err != nil {
 				return fmt.Errorf("tendermint/scheduler: failed to add rewards: %w", err)
 			}
 		}
@@ -377,7 +378,7 @@ func (app *schedulerApplication) electCommittee(
 	epoch epochtime.EpochTime,
 	beacon []byte,
 	stakeAcc *stakingState.StakeAccumulatorCache,
-	entitiesEligibleForReward map[signature.PublicKey]bool,
+	entitiesEligibleForReward map[staking.Address]bool,
 	rt *registry.Runtime,
 	nodes []*node.Node,
 	kind scheduler.CommitteeKind,
@@ -428,15 +429,16 @@ func (app *schedulerApplication) electCommittee(
 
 	for _, n := range nodes {
 		// Check if an entity has enough stake.
+		entAddr := staking.NewAddress(n.EntityID)
 		if stakeAcc != nil {
-			if err = stakeAcc.CheckStakeClaims(n.EntityID); err != nil {
+			if err = stakeAcc.CheckStakeClaims(entAddr); err != nil {
 				continue
 			}
 		}
 		if isSuitableFn(ctx, n, rt) {
 			nodeList = append(nodeList, n)
 			if entitiesEligibleForReward != nil {
-				entitiesEligibleForReward[n.EntityID] = true
+				entitiesEligibleForReward[entAddr] = true
 			}
 		}
 	}
@@ -524,7 +526,7 @@ func (app *schedulerApplication) electAllCommittees(
 	epoch epochtime.EpochTime,
 	beacon []byte,
 	stakeAcc *stakingState.StakeAccumulatorCache,
-	entitiesEligibleForReward map[signature.PublicKey]bool,
+	entitiesEligibleForReward map[staking.Address]bool,
 	runtimes []*registry.Runtime,
 	nodes []*node.Node,
 	kind scheduler.CommitteeKind,
@@ -541,30 +543,31 @@ func (app *schedulerApplication) electValidators(
 	ctx *api.Context,
 	beacon []byte,
 	stakeAcc *stakingState.StakeAccumulatorCache,
-	entitiesEligibleForReward map[signature.PublicKey]bool,
+	entitiesEligibleForReward map[staking.Address]bool,
 	nodes []*node.Node,
 	params *scheduler.ConsensusParameters,
 ) error {
 	// Filter the node list based on eligibility and minimum required
 	// entity stake.
 	var nodeList []*node.Node
-	entMap := make(map[signature.PublicKey]bool)
+	entities := make(map[staking.Address]bool)
 	for _, n := range nodes {
 		if !n.HasRoles(node.RoleValidator) {
 			continue
 		}
+		entAddr := staking.NewAddress(n.EntityID)
 		if stakeAcc != nil {
-			if err := stakeAcc.CheckStakeClaims(n.EntityID); err != nil {
+			if err := stakeAcc.CheckStakeClaims(entAddr); err != nil {
 				continue
 			}
 		}
 		nodeList = append(nodeList, n)
-		entMap[n.EntityID] = true
+		entities[entAddr] = true
 	}
 
 	// Sort all of the entities that are actually running eligible validator
 	// nodes by descending stake.
-	sortedEntities, err := publicKeyMapToSliceByStake(entMap, stakeAcc, beacon)
+	sortedEntities, err := stakingAddressMapToSliceByStake(entities, stakeAcc, beacon)
 	if err != nil {
 		return err
 	}
@@ -580,39 +583,39 @@ func (app *schedulerApplication) electValidators(
 	idxs := rng.Perm(len(nodeList))
 
 	// Gather all the entities nodes.  If the entity has more than one node,
-	// ordering will be determistically random due to the shuffle.
-	entityNodes := make(map[signature.PublicKey][]*node.Node)
+	// ordering will be deterministically random due to the shuffle.
+	entityNodesMap := make(map[staking.Address][]*node.Node)
 	for i := 0; i < len(idxs); i++ {
 		n := nodeList[idxs[i]]
-		id := n.EntityID
+		entAddr := staking.NewAddress(n.EntityID)
 
-		vec := entityNodes[id]
-		vec = append(vec, n)
-		entityNodes[id] = vec
+		entNodes := entityNodesMap[entAddr]
+		entNodes = append(entNodes, n)
+		entityNodesMap[entAddr] = entNodes
 	}
 
 	// Go down the list of entities running nodes by stake, picking one node
 	// to act as a validator till the maximum is reached.
 	newValidators := make(map[signature.PublicKey]int64)
 electLoop:
-	for _, v := range sortedEntities {
-		vec := entityNodes[v]
+	for _, entAddr := range sortedEntities {
+		nodes := entityNodesMap[entAddr]
 
 		// This is usually a maximum of 1, but if more are allowed,
 		// like in certain test scenarios, then pick as many nodes
 		// as the entity's stake allows
 		for i := 0; i < params.MaxValidatorsPerEntity; i++ {
-			if i >= len(vec) {
+			if i >= len(nodes) {
 				break
 			}
 
-			n := vec[i]
+			n := nodes[i]
 
 			// If the entity gets a validator elected, it is eligible
 			// for rewards, but only once regardless of the number
 			// of validators owned by the entity in the set.
 			if entitiesEligibleForReward != nil {
-				entitiesEligibleForReward[n.EntityID] = true
+				entitiesEligibleForReward[entAddr] = true
 			}
 
 			var power int64
@@ -621,13 +624,15 @@ electLoop:
 				power = 1
 			} else {
 				var stake *quantity.Quantity
-				stake, err = stakeAcc.GetEscrowBalance(v)
+				stake, err = stakeAcc.GetEscrowBalance(entAddr)
 				if err != nil {
-					return fmt.Errorf("failed to fetch escrow balance for entity %s: %w", v, err)
+					return fmt.Errorf("failed to fetch escrow balance for account %s: %w", entAddr, err)
 				}
 				power, err = scheduler.VotingPowerFromTokens(stake)
 				if err != nil {
-					return fmt.Errorf("computing voting power for entity %s with balance %v: %w", v, stake, err)
+					return fmt.Errorf("computing voting power for account %s with balance %v: %w",
+						entAddr, stake, err,
+					)
 				}
 			}
 
@@ -655,14 +660,14 @@ electLoop:
 	return nil
 }
 
-func publicKeyMapToSliceByStake(
-	entMap map[signature.PublicKey]bool,
+func stakingAddressMapToSliceByStake(
+	entMap map[staking.Address]bool,
 	stakeAcc *stakingState.StakeAccumulatorCache,
 	beacon []byte,
-) ([]signature.PublicKey, error) {
-	// Convert the map of entity public keys to a lexographically
-	// sorted slice (ie: make it deterministic).
-	entities := publicKeyMapToSortedSlice(entMap)
+) ([]staking.Address, error) {
+	// Convert the map of entity's stake account addresses to a lexicographically
+	// sorted slice (i.e. make it deterministic).
+	entities := stakingAddressMapToSortedSlice(entMap)
 
 	// Shuffle the sorted slice to make tie-breaks "random".
 	drbg, err := drbg.New(crypto.SHA512, beacon, nil, RNGContextEntities)
@@ -702,15 +707,15 @@ func publicKeyMapToSliceByStake(
 	return entities, nil
 }
 
-func publicKeyMapToSortedSlice(m map[signature.PublicKey]bool) []signature.PublicKey {
-	v := make([]signature.PublicKey, 0, len(m))
+func stakingAddressMapToSortedSlice(m map[staking.Address]bool) []staking.Address {
+	sorted := make([]staking.Address, 0, len(m))
 	for mk := range m {
-		v = append(v, mk)
+		sorted = append(sorted, mk)
 	}
-	sort.Slice(v, func(i, j int) bool {
-		return bytes.Compare(v[i][:], v[j][:]) < 0
+	sort.Slice(sorted, func(i, j int) bool {
+		return bytes.Compare(sorted[i][:], sorted[j][:]) < 0
 	})
-	return v
+	return sorted
 }
 
 // New constructs a new scheduler application instance.

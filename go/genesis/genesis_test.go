@@ -655,29 +655,29 @@ func TestGenesisSanityCheck(t *testing.T) {
 	require.Error(d.SanityCheck(), "invalid last block fees should be rejected")
 
 	d = *testDoc
-	d.Staking.Ledger[stakingTests.DebugStateSrcID].General.Balance = stakingTests.QtyFromInt(100)
+	d.Staking.Ledger[stakingTests.DebugStateSrcAddress].General.Balance = stakingTests.QtyFromInt(100)
 	require.Error(d.SanityCheck(), "invalid general balance should be rejected")
 
 	d = *testDoc
-	d.Staking.Ledger[stakingTests.DebugStateSrcID].Escrow.Active.Balance = stakingTests.QtyFromInt(100)
+	d.Staking.Ledger[stakingTests.DebugStateSrcAddress].Escrow.Active.Balance = stakingTests.QtyFromInt(100)
 	require.Error(d.SanityCheck(), "invalid escrow active balance should be rejected")
 
 	d = *testDoc
-	d.Staking.Ledger[stakingTests.DebugStateSrcID].Escrow.Debonding.Balance = stakingTests.QtyFromInt(100)
+	d.Staking.Ledger[stakingTests.DebugStateSrcAddress].Escrow.Debonding.Balance = stakingTests.QtyFromInt(100)
 	require.Error(d.SanityCheck(), "invalid escrow debonding balance should be rejected")
 
 	d = *testDoc
-	d.Staking.Ledger[stakingTests.DebugStateSrcID].Escrow.Active.TotalShares = stakingTests.QtyFromInt(1)
+	d.Staking.Ledger[stakingTests.DebugStateSrcAddress].Escrow.Active.TotalShares = stakingTests.QtyFromInt(1)
 	require.Error(d.SanityCheck(), "invalid escrow active total shares should be rejected")
 
 	d = *testDoc
-	d.Staking.Ledger[stakingTests.DebugStateSrcID].Escrow.Debonding.TotalShares = stakingTests.QtyFromInt(1)
+	d.Staking.Ledger[stakingTests.DebugStateSrcAddress].Escrow.Debonding.TotalShares = stakingTests.QtyFromInt(1)
 	require.Error(d.SanityCheck(), "invalid escrow debonding total shares should be rejected")
 
 	d = *testDoc
-	d.Staking.Delegations = map[signature.PublicKey]map[signature.PublicKey]*staking.Delegation{
-		stakingTests.DebugStateSrcID: map[signature.PublicKey]*staking.Delegation{
-			stakingTests.DebugStateDestID: &staking.Delegation{
+	d.Staking.Delegations = map[staking.Address]map[staking.Address]*staking.Delegation{
+		stakingTests.DebugStateSrcAddress: map[staking.Address]*staking.Delegation{
+			stakingTests.DebugStateDestAddress: &staking.Delegation{
 				Shares: stakingTests.QtyFromInt(1),
 			},
 		},
@@ -685,9 +685,9 @@ func TestGenesisSanityCheck(t *testing.T) {
 	require.Error(d.SanityCheck(), "invalid delegation should be rejected")
 
 	d = *testDoc
-	d.Staking.DebondingDelegations = map[signature.PublicKey]map[signature.PublicKey][]*staking.DebondingDelegation{
-		stakingTests.DebugStateSrcID: map[signature.PublicKey][]*staking.DebondingDelegation{
-			stakingTests.DebugStateDestID: []*staking.DebondingDelegation{
+	d.Staking.DebondingDelegations = map[staking.Address]map[staking.Address][]*staking.DebondingDelegation{
+		stakingTests.DebugStateSrcAddress: map[staking.Address][]*staking.DebondingDelegation{
+			stakingTests.DebugStateDestAddress: []*staking.DebondingDelegation{
 				&staking.DebondingDelegation{
 					Shares:        stakingTests.QtyFromInt(1),
 					DebondEndTime: 10,
