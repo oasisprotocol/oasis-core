@@ -159,7 +159,11 @@ func newPullService(ctx context.Context) (service.BackgroundService, error) {
 type pushService struct {
 	service.BaseBackgroundService
 
-	pusher   *push.Pusher
+	pusher *push.Pusher
+
+	addr     string
+	jobName  string
+	labels   map[string]string
 	interval time.Duration
 
 	rsvc *resourceService
@@ -191,44 +195,57 @@ func (s *pushService) worker() {
 			s.Logger.Warn("Push: failed",
 				"err", err,
 			)
+
+			// Once a pusher fails to push, it fails forever,
+			// so re-create the pusher.
+			s.initPusher(true)
 		}
 	}
 }
 
-func newPushService() (service.BackgroundService, error) {
-	addr := viper.GetString(CfgMetricsAddr)
-	jobName := viper.GetString(CfgMetricsJobName)
-	labels := viper.GetStringMapString(CfgMetricsLabels)
-	interval := viper.GetDuration(CfgMetricsInterval)
-
-	if jobName == "" {
-		return nil, fmt.Errorf("metrics: %s required for push mode", CfgMetricsJobName)
-	}
-	if labels["instance"] == "" {
-		return nil, fmt.Errorf("metrics: at least 'instance' key should be set for %s. Provided labels: %v", CfgMetricsLabels, labels)
+func (s *pushService) initPusher(isReinit bool) {
+	if !isReinit {
+		s.Logger.Debug("initializing metrics push service",
+			"mode", MetricsModePush,
+			"addr", s.addr,
+			"job_name", s.jobName,
+			"labels", s.labels,
+			"push_interval", s.interval,
+		)
 	}
 
-	svc := *service.NewBaseBackgroundService("metrics")
-
-	svc.Logger.Debug("Metrics Server Params",
-		"mode", MetricsModePush,
-		"addr", addr,
-		"job_name", jobName,
-		"labels", labels,
-		"push_interval", interval,
-	)
-
-	pusher := push.New(addr, jobName)
-	for k, v := range labels {
+	pusher := push.New(s.addr, s.jobName)
+	for k, v := range s.labels {
 		pusher = pusher.Grouping(k, v)
 	}
 
-	return &pushService{
-		BaseBackgroundService: svc,
-		pusher:                pusher,
-		interval:              interval,
+	if isReinit {
+		pusher = pusher.Gatherer(prometheus.DefaultGatherer)
+	}
+
+	s.pusher = pusher
+}
+
+func newPushService() (service.BackgroundService, error) {
+	svc := &pushService{
+		BaseBackgroundService: *service.NewBaseBackgroundService("metrics"),
+		addr:                  viper.GetString(CfgMetricsAddr),
+		jobName:               viper.GetString(CfgMetricsJobName),
+		labels:                viper.GetStringMapString(CfgMetricsLabels),
+		interval:              viper.GetDuration(CfgMetricsInterval),
 		rsvc:                  newResourceService(viper.GetDuration(CfgMetricsInterval)),
-	}, nil
+	}
+
+	if svc.jobName == "" {
+		return nil, fmt.Errorf("metrics: %s required for push mode", CfgMetricsJobName)
+	}
+	if svc.labels["instance"] == "" {
+		return nil, fmt.Errorf("metrics: at least 'instance' key should be set for %s. Provided labels: %v", CfgMetricsLabels, svc.labels)
+	}
+
+	svc.initPusher(false)
+
+	return svc, nil
 }
 
 // New constructs a new metrics service.
