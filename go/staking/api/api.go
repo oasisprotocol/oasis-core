@@ -254,8 +254,8 @@ func NewAmendCommissionScheduleTx(nonce uint64, fee *transaction.Fee, amend *Ame
 // SharePool is a combined balance of several entries, the relative sizes
 // of which are tracked through shares.
 type SharePool struct {
-	Balance     quantity.Quantity `json:"balance"`
-	TotalShares quantity.Quantity `json:"total_shares"`
+	Balance     quantity.Quantity `json:"balance,omitempty"`
+	TotalShares quantity.Quantity `json:"total_shares,omitempty"`
 }
 
 // sharesForTokens computes the amount of shares for the given amount of tokens.
@@ -448,16 +448,16 @@ func (sa *StakeAccumulator) TotalClaims(thresholds map[ThresholdKind]quantity.Qu
 
 // GeneralAccount is a general-purpose account.
 type GeneralAccount struct {
-	Balance quantity.Quantity `json:"balance"`
-	Nonce   uint64            `json:"nonce"`
+	Balance quantity.Quantity `json:"balance,omitempty"`
+	Nonce   uint64            `json:"nonce,omitempty"`
 }
 
 // EscrowAccount is an escrow account the balance of which is subject to
 // special delegation provisions and a debonding period.
 type EscrowAccount struct {
-	Active             SharePool          `json:"active"`
-	Debonding          SharePool          `json:"debonding"`
-	CommissionSchedule CommissionSchedule `json:"commission_schedule"`
+	Active             SharePool          `json:"active,omitempty"`
+	Debonding          SharePool          `json:"debonding,omitempty"`
+	CommissionSchedule CommissionSchedule `json:"commission_schedule,omitempty"`
 	StakeAccumulator   StakeAccumulator   `json:"stake_accumulator,omitempty"`
 }
 
@@ -513,8 +513,8 @@ func (e *EscrowAccount) RemoveStakeClaim(claim StakeClaim) error {
 // The same ledger entry can hold both general and escrow accounts. Escrow
 // acounts are used to hold funds delegated for staking.
 type Account struct {
-	General GeneralAccount `json:"general"`
-	Escrow  EscrowAccount  `json:"escrow"`
+	General GeneralAccount `json:"general,omitempty"`
+	Escrow  EscrowAccount  `json:"escrow,omitempty"`
 }
 
 // Delegation is a delegation descriptor.
