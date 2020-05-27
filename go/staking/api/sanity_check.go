@@ -42,9 +42,6 @@ func (p *ConsensusParameters) SanityCheck() error {
 // SanityCheckAccount examines an account's balances.
 // Adds the balances to a running total `total`.
 func SanityCheckAccount(total *quantity.Quantity, parameters *ConsensusParameters, now epochtime.EpochTime, id signature.PublicKey, acct *Account) error {
-	if !id.IsValid() {
-		return fmt.Errorf("staking: sanity check failed: account has invalid ID: %s", id)
-	}
 	if !acct.General.Balance.IsValid() {
 		return fmt.Errorf("staking: sanity check failed: general balance is invalid for account with ID: %s", id)
 	}
