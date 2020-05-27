@@ -18,6 +18,7 @@ import (
 
 	"github.com/oasislabs/oasis-core/go/common/service"
 	"github.com/oasislabs/oasis-core/go/common/version"
+	"github.com/oasislabs/oasis-core/go/oasis-node/cmd/common/flags"
 	"github.com/oasislabs/oasis-core/go/oasis-test-runner/env"
 )
 
@@ -250,15 +251,16 @@ func newPushService() (service.BackgroundService, error) {
 
 // New constructs a new metrics service.
 func New(ctx context.Context) (service.BackgroundService, error) {
-	mode := viper.GetString(CfgMetricsMode)
-	switch strings.ToLower(mode) {
+	mode := strings.ToLower(viper.GetString(CfgMetricsMode))
+	switch mode {
 	case MetricsModeNone:
 		return newStubService()
 	case MetricsModePull:
 		return newPullService(ctx)
-	case MetricsModePush:
-		return newPushService()
 	default:
+		if mode == MetricsModePush && flags.DebugDontBlameOasis() {
+			return newPushService()
+		}
 		return nil, fmt.Errorf("metrics: unsupported mode: '%v'", mode)
 	}
 }
@@ -306,11 +308,17 @@ func GetDefaultPushLabels(ti *env.TestInstanceInfo) map[string]string {
 }
 
 func init() {
-	Flags.String(CfgMetricsMode, MetricsModeNone, "metrics mode: none, pull, push")
-	Flags.String(CfgMetricsAddr, "127.0.0.1:3000", "metrics pull/push address")
+	Flags.String(CfgMetricsMode, MetricsModeNone, "metrics mode: none, pull")
+	Flags.String(CfgMetricsAddr, "127.0.0.1:3000", "metrics pull address")
+
+	// MetricsModePush is a debug only option that is not officially
+	// supported, so hide the related config options.
 	Flags.String(CfgMetricsJobName, "", "metrics push job name")
 	Flags.StringToString(CfgMetricsLabels, map[string]string{}, "metrics push instance label")
 	Flags.Duration(CfgMetricsInterval, 5*time.Second, "metrics push interval")
+	_ = Flags.MarkHidden(CfgMetricsJobName)
+	_ = Flags.MarkHidden(CfgMetricsLabels)
+	_ = Flags.MarkHidden(CfgMetricsInterval)
 
 	_ = viper.BindPFlags(Flags)
 }

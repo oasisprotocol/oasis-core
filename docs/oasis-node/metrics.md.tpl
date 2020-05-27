@@ -1,12 +1,11 @@
 # Metrics
 
 `oasis-node` can report a number of metrics to Prometheus server. By default,
-no metrics are collected and reported. There are two ways to enable metrics
+no metrics are collected and reported. There is one way to enable metrics
 reporting:
 
 * *Pull mode* listens on given address and waits for Prometheus to scrape the
   metrics.
-* *Push mode* regularly pushes metrics to the provided Prometheus push gateway.
 
 ## Configuring `oasis-node` in Pull Mode
 
@@ -27,20 +26,6 @@ Prometheus:
 
     static_configs:
       - targets: ['localhost:3000']
-```
-
-## Configuring `oasis-node` in Push Mode
-
-First run Prometheus server and Prometheus push gateway. Then run `oasis-node`
-in *push mode* by setting flag `--metrics.mode push` and provide:
-
-* push gateway address with `--metrics.address`, and
-* push interval with `--metrics.interval`.
-
-For example:
-
-```
-oasis-node --metrics.mode push --metrics.address localhost:9091 --metrics.interval 5s
 ```
 
 ## Metrics Reported by `oasis-node`
