@@ -12,6 +12,17 @@ The format is inspired by [Keep a Changelog].
 
 <!-- TOWNCRIER -->
 
+## 20.6.2 (2020-05-27)
+
+### Bug Fixes
+
+- go/staking: Relax account identifier sanity check added in 20.6.1
+  ([#2945](https://github.com/oasislabs/oasis-core/issues/2945))
+
+  Version 20.6.1 introduced an additional sanity check for account identifier
+  validity, but this actually breaks some existing deployments. This revert
+  makes the checks consistent with 20.6 behavior.
+
 ## 20.6.1 (2020-05-22)
 
 ### Features
