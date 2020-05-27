@@ -18,19 +18,19 @@ type CommissionScheduleRules struct {
 }
 
 type CommissionRateStep struct {
-	Start epochtime.EpochTime `json:"start"`
-	Rate  quantity.Quantity   `json:"rate"`
+	Start epochtime.EpochTime `json:"start,omitempty"`
+	Rate  quantity.Quantity   `json:"rate,omitempty"`
 }
 
 type CommissionRateBoundStep struct {
-	Start   epochtime.EpochTime `json:"start"`
-	RateMin quantity.Quantity   `json:"rate_min"`
-	RateMax quantity.Quantity   `json:"rate_max"`
+	Start   epochtime.EpochTime `json:"start,omitempty"`
+	RateMin quantity.Quantity   `json:"rate_min,omitempty"`
+	RateMax quantity.Quantity   `json:"rate_max,omitempty"`
 }
 
 type CommissionSchedule struct {
-	Rates  []CommissionRateStep      `json:"rates"`
-	Bounds []CommissionRateBoundStep `json:"bounds"`
+	Rates  []CommissionRateStep      `json:"rates,omitempty"`
+	Bounds []CommissionRateBoundStep `json:"bounds,omitempty"`
 }
 
 func (cs *CommissionSchedule) validateComplexity(rules *CommissionScheduleRules) error {
