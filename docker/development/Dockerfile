@@ -1,7 +1,7 @@
 FROM ubuntu:18.04
 
 # Package versions.
-ARG GO_VERSION=1.13.8
+ARG GO_VERSION=1.14.3
 ARG GO_PROTOC_VERSION=3.6.1
 ARG GO_PROTOC_GEN_GO_VERSION=1.21.0
 ARG GOLANGCILINT_VERSION=1.23.6
@@ -44,7 +44,8 @@ RUN curl "https://sh.rustup.rs" -sfo rustup.sh && \
     sh rustup.sh -y --default-toolchain nightly-${RUST_NIGHTLY_VERSION} && \
     rustup target add x86_64-fortanix-unknown-sgx && \
     rustup component add rustfmt && \
-    cargo install fortanix-sgx-tools sgxs-tools && \
+    cargo install --version 0.3.1 fortanix-sgx-tools && \
+    cargo install --version 0.7.0 sgxs-tools && \
     cargo install cargo-audit
 
 # Install Go and utilities.

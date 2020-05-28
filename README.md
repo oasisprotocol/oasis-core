@@ -81,7 +81,7 @@ Prerequisites:
   sudo apt install bubblewrap gcc g++ protobuf-compiler make cmake libssl-dev libseccomp-dev
   ```
 
-* [Go] (at least version 1.13.8).
+* [Go] (at least version 1.14.3).
 
   If your distribution provides a new-enough version of Go, just use that.
 
@@ -90,18 +90,18 @@ Prerequisites:
   * [ensure `$GOPATH/bin` is in your `PATH`](
     https://tip.golang.org/doc/code.html#GOPATH),
   * [install the desired version of Go](
-    https://golang.org/doc/install#extra_versions), e.g. 1.13.8, with:
+    https://golang.org/doc/install#extra_versions), e.g. 1.14.3, with:
 
     ```
-    go get golang.org/dl/go1.13.8
-    go1.13.8 download
+    go get golang.org/dl/go1.14.3
+    go1.14.3 download
     ```
 
   * instruct the build system to use this particular version of Go by setting
     the `OASIS_GO` environment variable in your `~/.bashrc`:
 
     ```
-    export OASIS_GO=go1.13.8
+    export OASIS_GO=go1.14.3
     ```
 
 * [Rust].
@@ -137,7 +137,8 @@ Prerequisites:
   Then install the Fortanix Rust EDP utilities by running:
 
   ```
-  cargo +nightly install fortanix-sgx-tools sgxs-tools
+  cargo +nightly install --version 0.3.1 fortanix-sgx-tools
+  cargo +nightly install --version 0.7.0 sgxs-tools
   ```
 
   _NOTE: These utilities must be compiled with a nightly version of the Rust
