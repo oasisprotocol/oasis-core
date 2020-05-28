@@ -137,7 +137,8 @@ Prerequisites:
   Then install the Fortanix Rust EDP utilities by running:
 
   ```
-  cargo +nightly install fortanix-sgx-tools sgxs-tools
+  cargo +nightly install --version 0.3.1 fortanix-sgx-tools
+  cargo +nightly install --version 0.7.0 sgxs-tools
   ```
 
   _NOTE: These utilities must be compiled with a nightly version of the Rust

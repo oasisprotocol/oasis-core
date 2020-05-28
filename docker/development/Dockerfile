@@ -44,7 +44,8 @@ RUN curl "https://sh.rustup.rs" -sfo rustup.sh && \
     sh rustup.sh -y --default-toolchain nightly-${RUST_NIGHTLY_VERSION} && \
     rustup target add x86_64-fortanix-unknown-sgx && \
     rustup component add rustfmt && \
-    cargo install fortanix-sgx-tools sgxs-tools && \
+    cargo install --version 0.3.1 fortanix-sgx-tools && \
+    cargo install --version 0.7.0 sgxs-tools && \
     cargo install cargo-audit
 
 # Install Go and utilities.
