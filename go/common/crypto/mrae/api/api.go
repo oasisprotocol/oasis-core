@@ -10,9 +10,8 @@ import (
 	"io"
 	"testing"
 
+	curve25519 "github.com/oasisprotocol/ed25519/extra/x25519"
 	"github.com/stretchr/testify/require"
-
-	curve25519 "github.com/oasislabs/ed25519/extra/x25519"
 )
 
 // Resetable is the interface implemented by cipher.AEAD implementations

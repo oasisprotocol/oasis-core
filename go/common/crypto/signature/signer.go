@@ -10,7 +10,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/oasislabs/ed25519"
+	"github.com/oasisprotocol/ed25519"
 )
 
 const (

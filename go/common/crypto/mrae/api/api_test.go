@@ -4,9 +4,8 @@ import (
 	"crypto/rand"
 	"testing"
 
+	curve25519 "github.com/oasisprotocol/ed25519/extra/x25519"
 	"github.com/stretchr/testify/require"
-
-	curve25519 "github.com/oasislabs/ed25519/extra/x25519"
 )
 
 func Test_GenerateKeypair(t *testing.T) {
