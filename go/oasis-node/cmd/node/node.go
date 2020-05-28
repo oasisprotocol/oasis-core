@@ -798,6 +798,7 @@ func init() {
 		metrics.Flags,
 		tracing.Flags,
 		cmdGrpc.ServerLocalFlags,
+		cmdSigner.Flags,
 		pprof.Flags,
 		storage.Flags,
 		supplementarysanity.Flags,
