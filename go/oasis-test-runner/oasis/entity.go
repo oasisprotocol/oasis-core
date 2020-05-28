@@ -70,7 +70,7 @@ func (ent *Entity) Signer() signature.Signer {
 
 func (ent *Entity) toGenesisArgs() []string {
 	if ent.dir != nil {
-		return []string{"--signer", fileSigner.SignerName, "--signer.dir", ent.dir.String()}
+		return []string{"--" + cmdSigner.CfgSigner, fileSigner.SignerName, "--" + cmdSigner.CfgCLISignerDir, ent.dir.String()}
 	} else if ent.isDebugTestEntity {
 		return entityArgsDebugTest
 	}
@@ -99,7 +99,7 @@ func (ent *Entity) update() error {
 		"--" + cmdSigner.CfgCLISignerDir, ent.dir.String(),
 	}
 	for _, n := range ent.nodes {
-		args = append(args, "--entity.node.id", n.String())
+		args = append(args, "--"+cmdEntity.CfgNodeID, n.String())
 	}
 
 	w, err := ent.dir.NewLogWriter("update.log")
