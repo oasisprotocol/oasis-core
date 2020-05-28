@@ -16,7 +16,7 @@ import (
 	"os"
 	"sync"
 
-	"github.com/oasislabs/ed25519"
+	"github.com/oasisprotocol/ed25519"
 
 	"github.com/oasislabs/oasis-core/go/common/cbor"
 	"github.com/oasislabs/oasis-core/go/common/crypto/hash"

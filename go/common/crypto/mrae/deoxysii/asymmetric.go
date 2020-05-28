@@ -4,7 +4,8 @@ package deoxysii
 import (
 	"crypto/sha512"
 
-	"github.com/oasislabs/deoxysii"
+	"github.com/oasisprotocol/deoxysii"
+
 	"github.com/oasislabs/oasis-core/go/common/crypto/mrae/api"
 )
 
