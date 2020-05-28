@@ -20,7 +20,7 @@ import (
 
 const (
 	// CfgSigner is the flag used to specify the backend of the signer.
-	CfgSigner = "signer"
+	CfgSigner = "signer.backend"
 
 	// CfgCLISignerDir is the flag used to specify the directory with the
 	// entity files, for the purpose of some of the node sub-command's
