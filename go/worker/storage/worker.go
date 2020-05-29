@@ -190,7 +190,8 @@ func (s *Worker) Start() error {
 
 	// Start all runtimes and wait for initialization.
 	go func() {
-		s.logger.Info("starting per-runtime block watchers")
+		s.logger.Info("starting storage sync services", "num_runtimes", len(s.runtimes))
+
 		for _, r := range s.runtimes {
 			_ = r.Start()
 		}

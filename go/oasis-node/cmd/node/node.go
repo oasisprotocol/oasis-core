@@ -69,7 +69,7 @@ import (
 )
 
 var (
-	_ controlAPI.Shutdownable = (*Node)(nil)
+	_ controlAPI.ControlledNode = (*Node)(nil)
 
 	// Flags has the configuration flags.
 	Flags = flag.NewFlagSet("", flag.ContinueOnError)
@@ -133,6 +133,7 @@ type Node struct {
 	RegistrationWorker         *registration.Worker
 	KeymanagerWorker           *workerKeymanager.Worker
 	ConsensusWorker            *workerConsensusRPC.Worker
+	readyCh                    chan struct{}
 }
 
 // Cleanup cleans up after the node has terminated.
@@ -168,6 +169,55 @@ func (n *Node) RequestShutdown() (<-chan struct{}, error) {
 	// get notified once everything is already torn down - perhaps
 	// including the server.
 	return n.RegistrationWorker.Quit(), nil
+}
+
+// Ready returns the ready channel which gets closed once the node is ready.
+func (n *Node) Ready() <-chan struct{} {
+	return n.readyCh
+}
+
+func (n *Node) waitReady(logger *logging.Logger) {
+	if n.NodeController == nil {
+		logger.Error("failed while waiting for node: node controller not initialized")
+		return
+	}
+
+	if err := n.NodeController.WaitSync(context.Background()); err != nil {
+		logger.Error("failed while waiting for node consensus sync", "err", err)
+		return
+	}
+
+	// Wait for storage worker.
+	if n.StorageWorker.Enabled() {
+		<-n.StorageWorker.Initialized()
+	}
+
+	// Wait for executor worker (also waits runtimes to initialize).
+	if n.ExecutorWorker.Enabled() {
+		<-n.ExecutorWorker.Initialized()
+	}
+
+	// Wait for key manager worker.
+	if n.KeymanagerWorker.Enabled() {
+		<-n.KeymanagerWorker.Initialized()
+	}
+
+	// Wait for transaction scheduler.
+	if n.TransactionSchedulerWorker.Enabled() {
+		<-n.TransactionSchedulerWorker.Initialized()
+	}
+
+	// Wait for the merge worker.
+	if n.MergeWorker.Enabled() {
+		<-n.MergeWorker.Initialized()
+	}
+
+	// Wait for the common worker.
+	if n.CommonWorker.Enabled() {
+		<-n.CommonWorker.Initialized()
+	}
+
+	close(n.readyCh)
 }
 
 func (n *Node) RegistrationStopped() {
@@ -417,6 +467,9 @@ func (n *Node) startWorkers(logger *logging.Logger) error {
 		}
 	}
 
+	// Close readyCh once all workers and runtimes are initialized.
+	go n.waitReady(logger)
+
 	return nil
 }
 
@@ -491,7 +544,8 @@ func newNode(testNode bool) (node *Node, err error) { // nolint: gocyclo
 	logger := cmdCommon.Logger()
 
 	node = &Node{
-		svcMgr: background.NewServiceManager(logger),
+		svcMgr:  background.NewServiceManager(logger),
+		readyCh: make(chan struct{}),
 	}
 
 	var startOk bool
@@ -743,14 +797,6 @@ func newNode(testNode bool) (node *Node, err error) { // nolint: gocyclo
 		return nil, err
 	}
 
-	// Start workers.
-	if err = node.startWorkers(logger); err != nil {
-		logger.Error("failed to start workers",
-			"err", err,
-		)
-		return nil, err
-	}
-
 	// Initialize and start the node controller.
 	node.NodeController = control.New(node, node.Consensus, node.Upgrader)
 	controlAPI.RegisterService(node.grpcInternal.Server(), node.NodeController)
@@ -758,6 +804,14 @@ func newNode(testNode bool) (node *Node, err error) { // nolint: gocyclo
 		// Initialize and start the debug controller if we are in debug mode.
 		node.DebugController = control.NewDebug(node.Consensus)
 		controlAPI.RegisterDebugService(node.grpcInternal.Server(), node.DebugController)
+	}
+
+	// Start workers (requires NodeController for checking, if nodes are synced).
+	if err = node.startWorkers(logger); err != nil {
+		logger.Error("failed to start workers",
+			"err", err,
+		)
+		return nil, err
 	}
 
 	// Start the tendermint service.

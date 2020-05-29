@@ -607,20 +607,22 @@ func (sc *runtimeImpl) initialEpochTransitions() error {
 	if len(sc.net.Keymanagers()) > 0 {
 		// First wait for validator and key manager nodes to register. Then perform an epoch
 		// transition which will cause the compute and storage nodes to register.
-		numNodes := len(sc.net.Validators()) + len(sc.net.Keymanagers())
-		sc.logger.Info("waiting for (some) nodes to register",
-			"num_nodes", numNodes,
+		sc.logger.Info("waiting for validators to initialize",
+			"num_validators", len(sc.net.Validators()),
 		)
-
-		// TODO: once #2130 is done, aditionally wait for nodes to be Ready here.
-		// As generally a keymanager can register (with missing extra info)
-		// before actually being initialized and triggering an epoch transition
-		// at that point would be too soon.
-
-		if err := sc.net.Controller().WaitNodesRegistered(ctx, numNodes); err != nil {
-			return fmt.Errorf("failed to wait for nodes: %w", err)
+		for _, n := range sc.net.Validators() {
+			if err := n.WaitReady(ctx); err != nil {
+				return fmt.Errorf("failed to wait for a validator: %w", err)
+			}
 		}
-
+		sc.logger.Info("waiting for key managers to initialize",
+			"num_keymanagers", len(sc.net.Keymanagers()),
+		)
+		for _, n := range sc.net.Keymanagers() {
+			if err := n.WaitReady(ctx); err != nil {
+				return fmt.Errorf("failed to wait for a key manager: %w", err)
+			}
+		}
 		sc.logger.Info("triggering epoch transition")
 		if err := sc.net.Controller().SetEpoch(ctx, 1); err != nil {
 			return fmt.Errorf("failed to set epoch: %w", err)
@@ -628,13 +630,33 @@ func (sc *runtimeImpl) initialEpochTransitions() error {
 		sc.logger.Info("epoch transition done")
 	}
 
-	// Wait for all nodes to register.
-	sc.logger.Info("waiting for (all) nodes to register",
-		"num_nodes", sc.net.NumRegisterNodes(),
+	// Wait for storage workers and compute workers to become ready.
+	sc.logger.Info("waiting for storage workers to initialize",
+		"num_storage_workers", len(sc.net.StorageWorkers()),
 	)
+	for _, n := range sc.net.StorageWorkers() {
+		if err := n.WaitReady(ctx); err != nil {
+			return fmt.Errorf("failed to wait for a storage worker: %w", err)
+		}
+	}
+	sc.logger.Info("waiting for compute workers to initialize",
+		"num_compute_workers", len(sc.net.ComputeWorkers()),
+	)
+	for _, n := range sc.net.ComputeWorkers() {
+		if err := n.WaitReady(ctx); err != nil {
+			return fmt.Errorf("failed to wait for a compute worker: %w", err)
+		}
+	}
 
-	if err := sc.net.Controller().WaitNodesRegistered(ctx, sc.net.NumRegisterNodes()); err != nil {
-		return fmt.Errorf("failed to wait for nodes: %w", err)
+	// Byzantine nodes can only registered. If defined, since we cannot control them directly, wait
+	// for all nodes to become registered.
+	if len(sc.net.Byzantine()) > 0 {
+		sc.logger.Info("waiting for (all) nodes to register",
+			"num_nodes", sc.net.NumRegisterNodes(),
+		)
+		if err := sc.net.Controller().WaitNodesRegistered(ctx, sc.net.NumRegisterNodes()); err != nil {
+			return fmt.Errorf("failed to wait for nodes: %w", err)
+		}
 	}
 
 	// Then perform another epoch transition to elect the committees.
@@ -643,5 +665,6 @@ func (sc *runtimeImpl) initialEpochTransitions() error {
 		return fmt.Errorf("failed to set epoch: %w", err)
 	}
 	sc.logger.Info("epoch transition done")
+
 	return nil
 }
