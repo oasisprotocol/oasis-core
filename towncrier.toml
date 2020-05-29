@@ -8,10 +8,11 @@ template = ".changelog/template.md.j2"
 # Custom definition of Change Log fragment types.
 type = [
   { name = "Process", directory = "process", showcontent = true },
-  { name = "Removals and Breaking changes", directory = "breaking", showcontent = true },
+  { name = "Removals and Breaking Changes", directory = "breaking", showcontent = true },
+  { name = "Configuration Changes", directory = "cfg", showcontent = true },
   { name = "Features", directory = "feature", showcontent = true },
   { name = "Bug Fixes", directory = "bugfix", showcontent = true },
-  { name = "Documentation improvements", directory = "doc", showcontent = true },
-  { name = "Internal changes", directory = "internal", showcontent = true },
-  { name = "Trivial changes", directory = "trivial", showcontent = false },
+  { name = "Documentation Improvements", directory = "doc", showcontent = true },
+  { name = "Internal Changes", directory = "internal", showcontent = true },
+  { name = "Trivial Changes", directory = "trivial", showcontent = false },
 ]

@@ -65,6 +65,7 @@ where:
   - `process`: a change in Oasis Core's processes (e.g. development process,
     release process, ...),
   - `breaking`: a removal of functionality or a breaking change,
+  - `cfg`: a (possibly breaking) configuration change,
   - `feature`: a new feature,
   - `bugfix`: a bug fix,
   - `doc`: a documentation-related change,
