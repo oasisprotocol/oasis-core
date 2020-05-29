@@ -330,21 +330,21 @@ func (sq *stakingQuerier) Genesis(ctx context.Context) (*staking.Genesis, error)
 		return nil, err
 	}
 
-	accounts, err := sq.state.Accounts(ctx)
+	addresses, err := sq.state.Addresses(ctx)
 	if err != nil {
 		return nil, err
 	}
 	ledger := make(map[staking.Address]*staking.Account)
-	for _, acctID := range accounts {
+	for _, addr := range addresses {
 		var acct *staking.Account
-		acct, err = sq.state.Account(ctx, acctID)
+		acct, err = sq.state.Account(ctx, addr)
 		if err != nil {
 			return nil, fmt.Errorf("tendermint/staking: failed to fetch account: %w", err)
 		}
 		// Make sure that export resets the stake accumulator state as that should be re-initialized
 		// during genesis (a genesis document with non-empty stake accumulator is invalid).
 		acct.Escrow.StakeAccumulator = staking.StakeAccumulator{}
-		ledger[acctID] = acct
+		ledger[addr] = acct
 	}
 
 	delegations, err := sq.state.Delegations(ctx)

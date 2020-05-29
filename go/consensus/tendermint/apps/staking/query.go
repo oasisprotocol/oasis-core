@@ -17,8 +17,8 @@ type Query interface {
 	LastBlockFees(context.Context) (*quantity.Quantity, error)
 	Threshold(context.Context, staking.ThresholdKind) (*quantity.Quantity, error)
 	DebondingInterval(context.Context) (epochtime.EpochTime, error)
-	Accounts(context.Context) ([]staking.Address, error)
-	AccountInfo(context.Context, staking.Address) (*staking.Account, error)
+	Addresses(context.Context) ([]staking.Address, error)
+	Account(context.Context, staking.Address) (*staking.Account, error)
 	Delegations(context.Context, staking.Address) (map[staking.Address]*staking.Delegation, error)
 	DebondingDelegations(context.Context, staking.Address) (map[staking.Address][]*staking.DebondingDelegation, error)
 	Genesis(context.Context) (*staking.Genesis, error)
@@ -72,11 +72,11 @@ func (sq *stakingQuerier) DebondingInterval(ctx context.Context) (epochtime.Epoc
 	return sq.state.DebondingInterval(ctx)
 }
 
-func (sq *stakingQuerier) Accounts(ctx context.Context) ([]staking.Address, error) {
-	return sq.state.Accounts(ctx)
+func (sq *stakingQuerier) Addresses(ctx context.Context) ([]staking.Address, error) {
+	return sq.state.Addresses(ctx)
 }
 
-func (sq *stakingQuerier) AccountInfo(ctx context.Context, addr staking.Address) (*staking.Account, error) {
+func (sq *stakingQuerier) Account(ctx context.Context, addr staking.Address) (*staking.Account, error) {
 	switch {
 	case addr.Equal(staking.CommonPoolAddress):
 		cp, err := sq.state.CommonPool(ctx)

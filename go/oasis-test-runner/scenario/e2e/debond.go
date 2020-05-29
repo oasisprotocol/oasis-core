@@ -62,9 +62,9 @@ func (s *debondImpl) Run(*env.Env) error {
 		return fmt.Errorf("failed to unmarshal lockup account address: %w", err)
 	}
 	s.logger.Info("checking balance at beginning")
-	acct, err := s.net.Controller().Staking.AccountInfo(ctx, &lockupQuery)
+	acct, err := s.net.Controller().Staking.Account(ctx, &lockupQuery)
 	if err != nil {
-		return fmt.Errorf("beginning AccountInfo: %w", err)
+		return fmt.Errorf("beginning Account: %w", err)
 	}
 	if !acct.General.Balance.IsZero() {
 		return fmt.Errorf("beginning balance %v should be zero", acct.General.Balance)
@@ -81,9 +81,9 @@ func (s *debondImpl) Run(*env.Env) error {
 		return fmt.Errorf("import first debonding expected balance: %w", err)
 	}
 	s.logger.Info("checking balance at first debonding")
-	acct, err = s.net.Controller().Staking.AccountInfo(ctx, &lockupQuery)
+	acct, err = s.net.Controller().Staking.Account(ctx, &lockupQuery)
 	if err != nil {
-		return fmt.Errorf("first debonding AccountInfo: %w", err)
+		return fmt.Errorf("first debonding Account: %w", err)
 	}
 	if acct.General.Balance.Cmp(&expected) != 0 {
 		return fmt.Errorf("first debonding balance %v should be %v", acct.General.Balance, expected)
@@ -99,9 +99,9 @@ func (s *debondImpl) Run(*env.Env) error {
 		return fmt.Errorf("import second debonding expected balance: %w", err)
 	}
 	s.logger.Info("checking balance at second debonding")
-	acct, err = s.net.Controller().Staking.AccountInfo(ctx, &lockupQuery)
+	acct, err = s.net.Controller().Staking.Account(ctx, &lockupQuery)
 	if err != nil {
-		return fmt.Errorf("second debonding AccountInfo: %w", err)
+		return fmt.Errorf("second debonding Account: %w", err)
 	}
 	if acct.General.Balance.Cmp(&expected) != 0 {
 		return fmt.Errorf("second debonding balance %v should be %v", acct.General.Balance, expected)

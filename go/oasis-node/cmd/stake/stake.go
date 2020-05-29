@@ -172,16 +172,16 @@ func doList(cmd *cobra.Command, args []string) {
 	ctx := context.Background()
 
 	var addrs []api.Address
-	doWithRetries(cmd, "query accounts", func() error {
+	doWithRetries(cmd, "query addresses", func() error {
 		var err error
-		addrs, err = client.Accounts(ctx, consensus.HeightLatest)
+		addrs, err = client.Addresses(ctx, consensus.HeightLatest)
 		return err
 	})
 
 	if cmdFlags.Verbose() {
 		accts := make(map[api.Address]*api.Account)
 		for _, v := range addrs {
-			accts[v] = getAccountInfo(ctx, cmd, v, client)
+			accts[v] = getAccount(ctx, cmd, v, client)
 		}
 		b, _ := json.Marshal(accts)
 		fmt.Printf("%v\n", string(b))
@@ -192,11 +192,11 @@ func doList(cmd *cobra.Command, args []string) {
 	}
 }
 
-func getAccountInfo(ctx context.Context, cmd *cobra.Command, addr api.Address, client api.Backend) *api.Account {
+func getAccount(ctx context.Context, cmd *cobra.Command, addr api.Address, client api.Backend) *api.Account {
 	var acct *api.Account
 	doWithRetries(cmd, "query account "+addr.String(), func() error {
 		var err error
-		acct, err = client.AccountInfo(ctx, &api.OwnerQuery{Owner: addr, Height: consensus.HeightLatest})
+		acct, err = client.Account(ctx, &api.OwnerQuery{Owner: addr, Height: consensus.HeightLatest})
 		return err
 	})
 

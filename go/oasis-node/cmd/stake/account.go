@@ -108,9 +108,9 @@ func doAccountInfo(cmd *cobra.Command, args []string) {
 	defer conn.Close()
 
 	ctx := context.Background()
-	ai := getAccountInfo(ctx, cmd, addr, client)
-	b, _ := json.Marshal(ai)
-	fmt.Printf("%v\n", string(b))
+	acct := getAccount(ctx, cmd, addr, client)
+	acctData, _ := json.Marshal(acct)
+	fmt.Printf("%v\n", string(acctData))
 }
 
 func doAccountTransfer(cmd *cobra.Command, args []string) {

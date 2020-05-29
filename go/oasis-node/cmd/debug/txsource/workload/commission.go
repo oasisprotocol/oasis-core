@@ -135,12 +135,12 @@ func (c *commission) doAmendCommissionSchedule(ctx context.Context, rng *rand.Ra
 	}
 
 	var account *staking.Account
-	account, err = stakingClient.AccountInfo(ctx, &staking.OwnerQuery{
+	account, err = stakingClient.Account(ctx, &staking.OwnerQuery{
 		Height: consensus.HeightLatest,
 		Owner:  c.address,
 	})
 	if err != nil {
-		return fmt.Errorf("stakingClient.AccountInfo %s: %w", c.address, err)
+		return fmt.Errorf("stakingClient.Account %s: %w", c.address, err)
 	}
 	existingCommissionSchedule := account.Escrow.CommissionSchedule
 	existingCommissionSchedule.Prune(currentEpoch)

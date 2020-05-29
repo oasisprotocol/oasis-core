@@ -166,23 +166,23 @@ func (s *ImmutableState) Thresholds(ctx context.Context) (map[staking.ThresholdK
 	return params.Thresholds, nil
 }
 
-func (s *ImmutableState) Accounts(ctx context.Context) ([]staking.Address, error) {
+func (s *ImmutableState) Addresses(ctx context.Context) ([]staking.Address, error) {
 	it := s.is.NewIterator(ctx)
 	defer it.Close()
 
-	var accounts []staking.Address
+	var addresses []staking.Address
 	for it.Seek(accountKeyFmt.Encode()); it.Valid(); it.Next() {
 		var addr staking.Address
 		if !accountKeyFmt.Decode(it.Key(), &addr) {
 			break
 		}
 
-		accounts = append(accounts, addr)
+		addresses = append(addresses, addr)
 	}
 	if it.Err() != nil {
 		return nil, abciAPI.UnavailableStateError(it.Err())
 	}
-	return accounts, nil
+	return addresses, nil
 }
 
 // Account returns the staking account for the given account address.

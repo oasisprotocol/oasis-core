@@ -274,7 +274,7 @@ func (sc *gasFeesImpl) getTotalEntityBalance(ctx context.Context) (*quantity.Qua
 		ent, _ := e.Inner()
 		addr := staking.NewAddress(ent.ID)
 
-		acct, err := st.AccountInfo(ctx, &staking.OwnerQuery{Owner: addr, Height: consensus.HeightLatest})
+		acct, err := st.Account(ctx, &staking.OwnerQuery{Owner: addr, Height: consensus.HeightLatest})
 		if err != nil {
 			return nil, fmt.Errorf("failed to get account info for %s: %w", addr, err)
 		}
@@ -444,7 +444,7 @@ func (sc *gasFeesImpl) testStakingGasOp(
 
 	// Fetch initial account info.
 	addr := staking.NewAddress(signer.Public())
-	acct, err := st.AccountInfo(ctx, &staking.OwnerQuery{Owner: addr, Height: consensus.HeightLatest})
+	acct, err := st.Account(ctx, &staking.OwnerQuery{Owner: addr, Height: consensus.HeightLatest})
 	if err != nil {
 		return fmt.Errorf("failed to get account info: %w", err)
 	}
@@ -497,7 +497,7 @@ func (sc *gasFeesImpl) testStakingGasOp(
 	}
 
 	// Check account after the (failed) operation.
-	newAcct, err := st.AccountInfo(ctx, &staking.OwnerQuery{Owner: addr, Height: consensus.HeightLatest})
+	newAcct, err := st.Account(ctx, &staking.OwnerQuery{Owner: addr, Height: consensus.HeightLatest})
 	if err != nil {
 		return fmt.Errorf("failed to get account info: %w", err)
 	}

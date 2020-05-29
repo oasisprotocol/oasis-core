@@ -22,10 +22,10 @@ var (
 	methodLastBlockFees = serviceName.NewMethod("LastBlockFees", int64(0))
 	// methodThreshold is the Threshold method.
 	methodThreshold = serviceName.NewMethod("Threshold", ThresholdQuery{})
-	// methodAccounts is the Accounts method.
-	methodAccounts = serviceName.NewMethod("Accounts", int64(0))
-	// methodAccountInfo is the AccountInfo method.
-	methodAccountInfo = serviceName.NewMethod("AccountInfo", OwnerQuery{})
+	// methodAddresses is the Addresses method.
+	methodAddresses = serviceName.NewMethod("Addresses", int64(0))
+	// methodAccount is the Account method.
+	methodAccount = serviceName.NewMethod("Account", OwnerQuery{})
 	// methodDelegations is the Delegations method.
 	methodDelegations = serviceName.NewMethod("Delegations", OwnerQuery{})
 	// methodDebondingDelegations is the DebondingDelegations method.
@@ -68,12 +68,12 @@ var (
 				Handler:    handlerThreshold,
 			},
 			{
-				MethodName: methodAccounts.ShortName(),
-				Handler:    handlerAccounts,
+				MethodName: methodAddresses.ShortName(),
+				Handler:    handlerAddresses,
 			},
 			{
-				MethodName: methodAccountInfo.ShortName(),
-				Handler:    handlerAccountInfo,
+				MethodName: methodAccount.ShortName(),
+				Handler:    handlerAccount,
 			},
 			{
 				MethodName: methodDelegations.ShortName(),
@@ -213,7 +213,7 @@ func handlerThreshold( // nolint: golint
 	return interceptor(ctx, &query, info, handler)
 }
 
-func handlerAccounts( // nolint: golint
+func handlerAddresses( // nolint: golint
 	srv interface{},
 	ctx context.Context,
 	dec func(interface{}) error,
@@ -224,19 +224,19 @@ func handlerAccounts( // nolint: golint
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(Backend).Accounts(ctx, height)
+		return srv.(Backend).Addresses(ctx, height)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: methodAccounts.FullName(),
+		FullMethod: methodAddresses.FullName(),
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(Backend).Accounts(ctx, req.(int64))
+		return srv.(Backend).Addresses(ctx, req.(int64))
 	}
 	return interceptor(ctx, height, info, handler)
 }
 
-func handlerAccountInfo( // nolint: golint
+func handlerAccount( // nolint: golint
 	srv interface{},
 	ctx context.Context,
 	dec func(interface{}) error,
@@ -247,14 +247,14 @@ func handlerAccountInfo( // nolint: golint
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(Backend).AccountInfo(ctx, &query)
+		return srv.(Backend).Account(ctx, &query)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: methodAccountInfo.FullName(),
+		FullMethod: methodAccount.FullName(),
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(Backend).AccountInfo(ctx, req.(*OwnerQuery))
+		return srv.(Backend).Account(ctx, req.(*OwnerQuery))
 	}
 	return interceptor(ctx, &query, info, handler)
 }
@@ -527,17 +527,17 @@ func (c *stakingClient) Threshold(ctx context.Context, query *ThresholdQuery) (*
 	return &rsp, nil
 }
 
-func (c *stakingClient) Accounts(ctx context.Context, height int64) ([]Address, error) {
+func (c *stakingClient) Addresses(ctx context.Context, height int64) ([]Address, error) {
 	var rsp []Address
-	if err := c.conn.Invoke(ctx, methodAccounts.FullName(), height, &rsp); err != nil {
+	if err := c.conn.Invoke(ctx, methodAddresses.FullName(), height, &rsp); err != nil {
 		return nil, err
 	}
 	return rsp, nil
 }
 
-func (c *stakingClient) AccountInfo(ctx context.Context, query *OwnerQuery) (*Account, error) {
+func (c *stakingClient) Account(ctx context.Context, query *OwnerQuery) (*Account, error) {
 	var rsp Account
-	if err := c.conn.Invoke(ctx, methodAccountInfo.FullName(), query, &rsp); err != nil {
+	if err := c.conn.Invoke(ctx, methodAccount.FullName(), query, &rsp); err != nil {
 		return nil, err
 	}
 	return &rsp, nil

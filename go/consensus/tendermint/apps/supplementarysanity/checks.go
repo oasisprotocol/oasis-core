@@ -122,9 +122,9 @@ func checkStaking(ctx *abciAPI.Context, now epochtime.EpochTime) error {
 	// Check if the total supply adds up (common pool + all balances in the ledger).
 	// Check all commission schedules.
 	var total quantity.Quantity
-	addresses, err := st.Accounts(ctx)
+	addresses, err := st.Addresses(ctx)
 	if err != nil {
-		return fmt.Errorf("Accounts: %w", err)
+		return fmt.Errorf("Addresses: %w", err)
 	}
 	var acct *staking.Account
 	for _, addr := range addresses {
@@ -272,9 +272,9 @@ func checkStakeClaims(ctx *abciAPI.Context, now epochtime.EpochTime) error {
 	}
 	// Get staking accounts.
 	accounts := make(map[staking.Address]*staking.Account)
-	addresses, err := stakingSt.Accounts(ctx)
+	addresses, err := stakingSt.Addresses(ctx)
 	if err != nil {
-		return fmt.Errorf("failed to get staking accounts: %w", err)
+		return fmt.Errorf("failed to get staking addresses: %w", err)
 	}
 	for _, addr := range addresses {
 		accounts[addr], err = stakingSt.Account(ctx, addr)

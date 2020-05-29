@@ -284,22 +284,22 @@ func (q *queries) doStakingQueries(ctx context.Context, rng *rand.Rand, height i
 		return fmt.Errorf("Invalid treshold")
 	}
 
-	accounts, err := q.staking.Accounts(ctx, height)
+	addresses, err := q.staking.Addresses(ctx, height)
 	if err != nil {
-		return fmt.Errorf("staking.Accounts: %w", err)
+		return fmt.Errorf("staking.Addresses: %w", err)
 	}
 
 	// Make sure total supply matches sum of all balances and fees.
 	var accSum, totalSum quantity.Quantity
-	for _, sig := range accounts {
-		acc, err := q.staking.AccountInfo(ctx, &staking.OwnerQuery{Owner: sig, Height: height})
+	for _, addr := range addresses {
+		acc, err := q.staking.Account(ctx, &staking.OwnerQuery{Owner: addr, Height: height})
 		if err != nil {
 			q.logger.Error("Error querying AcccountInfo",
 				"height", height,
-				"owner", sig,
+				"address", addr,
 				"err", err,
 			)
-			return fmt.Errorf("staking.AccountInfo: %w", err)
+			return fmt.Errorf("staking.Account: %w", err)
 		}
 		_ = accSum.Add(&acc.General.Balance)
 		_ = accSum.Add(&acc.Escrow.Active.Balance)
@@ -317,7 +317,7 @@ func (q *queries) doStakingQueries(ctx context.Context, rng *rand.Rand, height i
 			"accounts_sum", accSum,
 			"total_sum", totalSum,
 			"total", total,
-			"accounts", len(accounts),
+			"n_addresses", len(addresses),
 		)
 		return fmt.Errorf("staking total supply mismatch")
 	}

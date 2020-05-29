@@ -145,12 +145,12 @@ func (t *transfer) Run(
 			return fmt.Errorf("workload/transfer: account funding failure: %w", err)
 		}
 		var account *staking.Account
-		account, err := stakingClient.AccountInfo(ctx, &staking.OwnerQuery{
+		account, err := stakingClient.Account(ctx, &staking.OwnerQuery{
 			Height: consensus.HeightLatest,
 			Owner:  t.accounts[i].address,
 		})
 		if err != nil {
-			return fmt.Errorf("stakingClient.AccountInfo %s: %w", t.accounts[i].address, err)
+			return fmt.Errorf("stakingClient.Account %s: %w", t.accounts[i].address, err)
 		}
 		t.logger.Debug("account info",
 			"i", i,
