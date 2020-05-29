@@ -170,8 +170,8 @@ Prerequisites:
   active toolchain
   ----------------
 
-  nightly-2020-02-16-x86_64-unknown-linux-gnu (overridden by '/oasis-core/rust-toolchain')
-  rustc 1.43.0-nightly (61d9231ff 2020-02-15)
+  nightly-2020-05-27-x86_64-unknown-linux-gnu (overridden by '/oasis-core/rust-toolchain')
+  rustc 1.45.0-nightly (5239f5c57 2020-05-26)
   ```
 
   Then add the Fortanix SGX Rust target to this version of the Rust toolchain by
