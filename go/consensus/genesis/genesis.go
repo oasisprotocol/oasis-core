@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
 	"github.com/oasislabs/oasis-core/go/consensus/api/transaction"
 )
 
@@ -28,6 +29,9 @@ type Parameters struct {
 
 	// GasCosts are the base transaction gas costs.
 	GasCosts transaction.Costs `json:"gas_costs,omitempty"`
+
+	// PublicKeyBlacklist is the network-wide public key blacklist.
+	PublicKeyBlacklist []signature.PublicKey `json:"public_key_blacklist,omitempty"`
 }
 
 const (
@@ -39,6 +43,18 @@ const (
 func (g *Genesis) SanityCheck() error {
 	if g.Parameters.TimeoutCommit < 1*time.Millisecond && !g.Parameters.SkipTimeoutCommit {
 		return fmt.Errorf("consensus: sanity check failed: timeout commit must be >= 1ms")
+	}
+
+	// Check for duplicate entries in the pk blacklist.
+	m := make(map[signature.PublicKey]bool)
+	for _, v := range g.Parameters.PublicKeyBlacklist {
+		if m[v] {
+			return fmt.Errorf("consensus: sanity check failed: redundant blacklisted public key: '%s'", v)
+		}
+		if v.IsBlacklisted() {
+			return fmt.Errorf("consensus: sanity check failed: public key already in blacklist: '%s'", v)
+		}
+		m[v] = true
 	}
 
 	return nil

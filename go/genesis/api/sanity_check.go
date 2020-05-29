@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"strings"
 	"time"
+
+	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
 )
 
 // SanityCheck does basic sanity checking on the contents of the genesis document.
@@ -20,29 +22,33 @@ func (d *Document) SanityCheck() error {
 		return fmt.Errorf("genesis: sanity check failed: chain ID must not be empty")
 	}
 
-	var err error
-	if err = d.EpochTime.SanityCheck(); err != nil {
+	if err := d.Consensus.SanityCheck(); err != nil {
 		return err
 	}
-	if err = d.Registry.SanityCheck(d.EpochTime.Base, d.Staking.Ledger, d.Staking.Parameters.Thresholds); err != nil {
+	pkBlacklist := make(map[signature.PublicKey]bool)
+	for _, v := range d.Consensus.Parameters.PublicKeyBlacklist {
+		pkBlacklist[v] = true
+	}
+
+	if err := d.EpochTime.SanityCheck(); err != nil {
 		return err
 	}
-	if err = d.RootHash.SanityCheck(); err != nil {
+	if err := d.Registry.SanityCheck(d.EpochTime.Base, d.Staking.Ledger, d.Staking.Parameters.Thresholds, pkBlacklist); err != nil {
 		return err
 	}
-	if err = d.Staking.SanityCheck(d.EpochTime.Base); err != nil {
+	if err := d.RootHash.SanityCheck(); err != nil {
 		return err
 	}
-	if err = d.KeyManager.SanityCheck(); err != nil {
+	if err := d.Staking.SanityCheck(d.EpochTime.Base); err != nil {
 		return err
 	}
-	if err = d.Scheduler.SanityCheck(&d.Staking.TotalSupply); err != nil {
+	if err := d.KeyManager.SanityCheck(); err != nil {
 		return err
 	}
-	if err = d.Beacon.SanityCheck(); err != nil {
+	if err := d.Scheduler.SanityCheck(&d.Staking.TotalSupply); err != nil {
 		return err
 	}
-	if err = d.Consensus.SanityCheck(); err != nil {
+	if err := d.Beacon.SanityCheck(); err != nil {
 		return err
 	}
 
