@@ -28,30 +28,6 @@ type mockMessageHandler struct{}
 
 // Implements host.Handler.
 func (h *mockMessageHandler) Handle(ctx context.Context, body *protocol.Body) (*protocol.Body, error) {
-	// Key manager.
-	if body.HostKeyManagerPolicyRequest != nil {
-		// Generate a dummy key manager policy for tests.
-		policy := keymanager.PolicySGX{
-			Serial:   1,
-			Enclaves: map[sgx.EnclaveIdentity]*keymanager.EnclavePolicySGX{},
-		}
-		sigPolicy := keymanager.SignedPolicySGX{
-			Policy: policy,
-		}
-		for _, signer := range keymanager.TestSigners[1:] {
-			sig, err := signature.Sign(signer, keymanager.PolicySGXSignatureContext, cbor.Marshal(policy))
-			if err != nil {
-				return nil, fmt.Errorf("failed to sign mock policy: %w", err)
-			}
-
-			sigPolicy.Signatures = append(sigPolicy.Signatures, *sig)
-		}
-
-		return &protocol.Body{HostKeyManagerPolicyResponse: &protocol.HostKeyManagerPolicyResponse{
-			SignedPolicyRaw: cbor.Marshal(sigPolicy),
-		}}, nil
-	}
-
 	return nil, fmt.Errorf("method not supported")
 }
 
@@ -97,6 +73,29 @@ func TestProvisioner(
 	}
 }
 
+func mockKeyManagerPolicyRequest() (*protocol.Body, error) {
+	// Generate a dummy key manager policy for tests.
+	policy := keymanager.PolicySGX{
+		Serial:   1,
+		Enclaves: map[sgx.EnclaveIdentity]*keymanager.EnclavePolicySGX{},
+	}
+	sigPolicy := keymanager.SignedPolicySGX{
+		Policy: policy,
+	}
+	for _, signer := range keymanager.TestSigners[1:] {
+		sig, err := signature.Sign(signer, keymanager.PolicySGXSignatureContext, cbor.Marshal(policy))
+		if err != nil {
+			return nil, fmt.Errorf("failed to sign mock policy: %w", err)
+		}
+
+		sigPolicy.Signatures = append(sigPolicy.Signatures, *sig)
+	}
+
+	return &protocol.Body{RuntimeKeyManagerPolicyUpdateRequest: &protocol.RuntimeKeyManagerPolicyUpdateRequest{
+		SignedPolicyRaw: cbor.Marshal(sigPolicy),
+	}}, nil
+}
+
 func testBasic(t *testing.T, cfg host.Config, p host.Provisioner) {
 	require := require.New(t)
 
@@ -124,6 +123,13 @@ func testBasic(t *testing.T, cfg host.Config, p host.Provisioner) {
 	rsp, err := r.Call(ctx, &protocol.Body{RuntimePingRequest: &protocol.Empty{}})
 	require.NoError(err, "Call")
 	require.NotNil(rsp.Empty, "runtime response to RuntimePingRequest should return an Empty body")
+
+	req, err := mockKeyManagerPolicyRequest()
+	require.NoError(err, "mockKeyManagerPolicyRequest")
+
+	rsp, err = r.Call(ctx, req)
+	require.NoError(err, "KeyManagerPolicyRequest Call")
+	require.NotNil(rsp.RuntimeKeyManagerPolicyUpdateResponse, "runtime response to KeyManagerPolicyRequest should return an RuntimeKeyManagerPolicyUpdateResponse body")
 
 	// Request the runtime to stop.
 	r.Stop()

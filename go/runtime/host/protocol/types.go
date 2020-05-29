@@ -51,6 +51,12 @@ type Message struct {
 	SpanContext []byte      `json:"span_context"`
 }
 
+// RuntimeKeyManagerPolicyUpdateRequest is a runtime key manager policy request
+// message body.
+type RuntimeKeyManagerPolicyUpdateRequest struct {
+	SignedPolicyRaw []byte `json:"signed_policy_raw"`
+}
+
 // Body is a protocol message body.
 type Body struct {
 	Empty *Empty `json:",omitempty"`
@@ -77,18 +83,18 @@ type Body struct {
 	RuntimeExecuteTxBatchResponse         *RuntimeExecuteTxBatchResponse         `json:",omitempty"`
 	RuntimeAbortRequest                   *Empty                                 `json:",omitempty"`
 	RuntimeAbortResponse                  *Empty                                 `json:",omitempty"`
+	RuntimeKeyManagerPolicyUpdateRequest  *RuntimeKeyManagerPolicyUpdateRequest  `json:",omitempty"`
+	RuntimeKeyManagerPolicyUpdateResponse *Empty                                 `json:",omitempty"`
 
 	// Host interface.
-	HostKeyManagerPolicyRequest  *HostKeyManagerPolicyRequest  `json:",omitempty"`
-	HostKeyManagerPolicyResponse *HostKeyManagerPolicyResponse `json:",omitempty"`
-	HostRPCCallRequest           *HostRPCCallRequest           `json:",omitempty"`
-	HostRPCCallResponse          *HostRPCCallResponse          `json:",omitempty"`
-	HostStorageSyncRequest       *HostStorageSyncRequest       `json:",omitempty"`
-	HostStorageSyncResponse      *HostStorageSyncResponse      `json:",omitempty"`
-	HostLocalStorageGetRequest   *HostLocalStorageGetRequest   `json:",omitempty"`
-	HostLocalStorageGetResponse  *HostLocalStorageGetResponse  `json:",omitempty"`
-	HostLocalStorageSetRequest   *HostLocalStorageSetRequest   `json:",omitempty"`
-	HostLocalStorageSetResponse  *Empty                        `json:",omitempty"`
+	HostRPCCallRequest          *HostRPCCallRequest          `json:",omitempty"`
+	HostRPCCallResponse         *HostRPCCallResponse         `json:",omitempty"`
+	HostStorageSyncRequest      *HostStorageSyncRequest      `json:",omitempty"`
+	HostStorageSyncResponse     *HostStorageSyncResponse     `json:",omitempty"`
+	HostLocalStorageGetRequest  *HostLocalStorageGetRequest  `json:",omitempty"`
+	HostLocalStorageGetResponse *HostLocalStorageGetResponse `json:",omitempty"`
+	HostLocalStorageSetRequest  *HostLocalStorageSetRequest  `json:",omitempty"`
+	HostLocalStorageSetResponse *Empty                       `json:",omitempty"`
 }
 
 // Type returns the message type by determining the name of the first non-nil member.
@@ -224,15 +230,6 @@ type RuntimeExecuteTxBatchRequest struct {
 // RuntimeExecuteTxBatchResponse is a worker execute tx batch response message body.
 type RuntimeExecuteTxBatchResponse struct {
 	Batch ComputedBatch `json:"batch"`
-}
-
-// HostKeyManagerPolicyRequest is a host key manager policy request message body.
-type HostKeyManagerPolicyRequest struct {
-}
-
-// HostKeyManagerPolicyResponse is a host key manager policy response message body.
-type HostKeyManagerPolicyResponse struct {
-	SignedPolicyRaw []byte `json:"signed_policy_raw"`
 }
 
 // HostRPCCallRequest is a host RPC call request message body.

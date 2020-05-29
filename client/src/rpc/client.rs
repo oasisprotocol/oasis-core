@@ -1,7 +1,10 @@
 //! Enclave RPC client.
-use std::sync::{
-    atomic::{AtomicBool, Ordering},
-    Arc, Mutex,
+use std::{
+    collections::HashSet,
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc, Mutex,
+    },
 };
 
 use failure::{Fail, Fallible};
@@ -19,7 +22,7 @@ use tokio_executor::spawn;
 #[cfg(not(target_env = "sgx"))]
 use oasis_core_runtime::common::runtime::RuntimeId;
 use oasis_core_runtime::{
-    common::cbor,
+    common::{cbor, sgx::avr::EnclaveIdentity},
     protocol::Protocol,
     rpc::{
         session::{Builder, Session},
@@ -371,6 +374,15 @@ impl RpcClient {
                     Err(err)
                 }),
         )
+    }
+
+    /// Update session enclaves if changed.
+    pub fn update_enclaves(&self, enclaves: Option<HashSet<EnclaveIdentity>>) {
+        let mut session = self.inner.session.lock().unwrap();
+        if session.builder.get_remote_enclaves() != &enclaves {
+            session.builder = session.builder.clone().remote_enclaves(enclaves);
+            session.reset();
+        }
     }
 }
 

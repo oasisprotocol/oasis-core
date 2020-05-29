@@ -129,6 +129,11 @@ func (w *Worker) GetRuntime() runtimeRegistry.Runtime {
 }
 
 // Implements workerCommon.RuntimeHostHandlerFactory.
+func (w *Worker) NewNotifier(ctx context.Context, host host.Runtime) protocol.Notifier {
+	return &protocol.NoOpNotifier{}
+}
+
+// Implements workerCommon.RuntimeHostHandlerFactory.
 func (w *Worker) NewRuntimeHostHandler() protocol.Handler {
 	return w.runtimeHostHandler
 }
@@ -159,13 +164,6 @@ func (w *Worker) callLocal(ctx context.Context, data []byte) ([]byte, error) {
 			"err", err,
 		)
 		return nil, err
-	}
-
-	if response.Error != nil {
-		w.logger.Error("error from runtime",
-			"err", response.Error.Message,
-		)
-		return nil, fmt.Errorf("worker/keymanager: error from runtime: %s", response.Error.Message)
 	}
 
 	resp := response.RuntimeRPCCallResponse
@@ -244,12 +242,6 @@ func (w *Worker) updateStatus(status *api.Status, startedEvent *host.StartedEven
 			"err", err,
 		)
 		return err
-	}
-	if response.Error != nil {
-		w.logger.Error("error initializing enclave",
-			"err", response.Error.Message,
-		)
-		return fmt.Errorf("worker/keymanager: error initializing enclave: %s", response.Error.Message)
 	}
 
 	resp := response.RuntimeLocalRPCCallResponse
@@ -447,7 +439,8 @@ func (w *Worker) worker() { // nolint: gocyclo
 				// Start key manager runtime.
 				w.logger.Info("provisioning key manager runtime")
 
-				hrt, err = w.ProvisionHostedRuntime(w.ctx)
+				var hrtNotifier protocol.Notifier
+				hrt, hrtNotifier, err = w.ProvisionHostedRuntime(w.ctx)
 				if err != nil {
 					w.logger.Error("failed to provision key manager runtime",
 						"err", err,
@@ -471,6 +464,14 @@ func (w *Worker) worker() { // nolint: gocyclo
 					return
 				}
 				defer hrt.Stop()
+
+				if err = hrtNotifier.Start(); err != nil {
+					w.logger.Error("failed to start runtime notifier",
+						"err", err,
+					)
+					return
+				}
+				defer hrtNotifier.Stop()
 			}
 
 			currentStatus = status

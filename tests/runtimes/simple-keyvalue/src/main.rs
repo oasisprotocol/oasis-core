@@ -241,7 +241,7 @@ fn main() {
     let init = |protocol: &Arc<Protocol>,
                 rak: &Arc<RAK>,
                 _rpc_demux: &mut RpcDemux,
-                _rpc: &mut RpcDispatcher|
+                rpc: &mut RpcDispatcher|
      -> Option<Box<dyn TxnDispatcher>> {
         let mut txn = TxnMethDispatcher::new();
         with_api! { register_runtime_txn_methods!(txn, api); }
@@ -255,11 +255,21 @@ fn main() {
             1024,
             trusted_policy_signers(),
         ));
+        let initializer_km_client = km_client.clone();
+
+        #[cfg(not(target_env = "sgx"))]
+        let _ = rpc;
+        #[cfg(target_env = "sgx")]
+        rpc.set_keymanager_policy_update_handler(Some(Box::new(move |raw_signed_policy| {
+            km_client
+                .set_policy(raw_signed_policy)
+                .expect("failed to update km client policy");
+        })));
 
         txn.set_context_initializer(move |ctx: &mut TxnContext| {
             ctx.runtime = Box::new(Context {
                 test_runtime_id: rt_id.clone(),
-                km_client: km_client.clone(),
+                km_client: initializer_km_client.clone(),
             })
         });
 

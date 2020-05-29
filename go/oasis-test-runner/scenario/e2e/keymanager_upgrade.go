@@ -294,21 +294,16 @@ func (sc *kmUpgradeImpl) Run(childEnv *env.Env) error {
 		return fmt.Errorf("old keymanager node shutdown: %w", err)
 	}
 
-	// The last part of the test won't work until:
-	// https://github.com/oasislabs/oasis-core/issues/2919
-	/*
-		// Run test again.
-		sc.logger.Info("starting a second client to check if key manager works")
-		sc.runtimeImpl.clientArgs = []string{"--key", "key2"}
-		cmd, err = sc.startClient(childEnv)
-		if err != nil {
-			return err
-		}
-		client2ErrCh := make(chan error)
-		go func() {
-			client2ErrCh <- cmd.Wait()
-		}()
-		return sc.wait(childEnv, cmd, client2ErrCh)
-	*/
-	return nil
+	// Run client again.
+	sc.logger.Info("starting a second client to check if key manager works")
+	sc.runtimeImpl.clientArgs = []string{"--key", "key2"}
+	cmd, err = sc.startClient(childEnv)
+	if err != nil {
+		return err
+	}
+	client2ErrCh := make(chan error)
+	go func() {
+		client2ErrCh <- cmd.Wait()
+	}()
+	return sc.wait(childEnv, cmd, client2ErrCh)
 }

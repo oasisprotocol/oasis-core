@@ -490,7 +490,7 @@ func (n *Node) worker() {
 	var hrtEventCh <-chan *host.Event
 	if n.checkTxEnabled {
 		// Provision hosted runtime.
-		hrt, err := n.ProvisionHostedRuntime(n.ctx)
+		hrt, hrtNotifier, err := n.ProvisionHostedRuntime(n.ctx)
 		if err != nil {
 			n.logger.Error("failed to provision hosted runtime",
 				"err", err,
@@ -515,6 +515,14 @@ func (n *Node) worker() {
 			return
 		}
 		defer hrt.Stop()
+
+		if err = hrtNotifier.Start(); err != nil {
+			n.logger.Error("failed to start runtime notifier",
+				"err", err,
+			)
+			return
+		}
+		defer hrtNotifier.Stop()
 	}
 
 	// Initialize transaction scheduler's algorithm.

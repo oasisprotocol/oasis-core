@@ -243,6 +243,16 @@ impl Dispatcher {
                         true,
                     );
                 }
+                Ok((ctx, id, Body::RuntimeKeyManagerPolicyUpdateRequest { signed_policy_raw })) => {
+                    // KeyManager policy update local RPC call.
+                    self.handle_km_policy_update(
+                        &mut rpc_dispatcher,
+                        &protocol,
+                        ctx,
+                        id,
+                        signed_policy_raw,
+                    );
+                }
                 Ok(_) => {
                     error!(self.logger, "Unsupported request type");
                     break 'dispatch;
@@ -585,6 +595,23 @@ impl Dispatcher {
         let protocol_response = Body::RuntimeLocalRPCCallResponse { response };
 
         protocol.send_response(id, protocol_response).unwrap();
+    }
+
+    fn handle_km_policy_update(
+        &self,
+        rpc_dispatcher: &mut RpcDispatcher,
+        protocol: &Arc<Protocol>,
+        _ctx: Context,
+        id: u64,
+        signed_policy_raw: Vec<u8>,
+    ) {
+        debug!(self.logger, "Received km policy update request");
+        rpc_dispatcher.handle_km_policy_update(signed_policy_raw);
+        debug!(self.logger, "KM policy update request complete");
+
+        protocol
+            .send_response(id, Body::RuntimeKeyManagerPolicyUpdateResponse {})
+            .unwrap();
     }
 }
 
