@@ -793,6 +793,17 @@ func (t *tendermintService) initialize() error {
 		return err
 	}
 
+	// Apply the genesis public key blacklist.
+	for _, v := range t.genesis.Consensus.Parameters.PublicKeyBlacklist {
+		if err := v.Blacklist(); err != nil {
+			t.Logger.Error("initialize: failed to blacklist key",
+				"err", err,
+				"pk", v,
+			)
+			return err
+		}
+	}
+
 	if err := t.initEpochtime(); err != nil {
 		return err
 	}

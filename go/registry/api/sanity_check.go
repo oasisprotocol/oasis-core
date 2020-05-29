@@ -21,6 +21,7 @@ func (g *Genesis) SanityCheck(
 	baseEpoch epochtime.EpochTime,
 	stakeLedger map[signature.PublicKey]*staking.Account,
 	stakeThresholds map[staking.ThresholdKind]quantity.Quantity,
+	publicKeyBlacklist map[signature.PublicKey]bool,
 ) error {
 	logger := logging.GetLogger("genesis/sanity-check")
 
@@ -51,15 +52,30 @@ func (g *Genesis) SanityCheck(
 		return err
 	}
 
+	// Check for blacklisted public keys.
+	entities := []*entity.Entity{}
+	for k, ent := range seenEntities {
+		if publicKeyBlacklist[k] {
+			return fmt.Errorf("registry: sanity check failed: entity public key blacklisted: '%s'", k)
+		}
+		entities = append(entities, ent)
+	}
+	runtimes, err := runtimesLookup.AllRuntimes(context.Background())
+	if err != nil {
+		return fmt.Errorf("registry: sanity check failed: could not obtain all runtimes from runtimesLookup: %w", err)
+	}
+	for _, rt := range runtimes {
+		if publicKeyBlacklist[rt.EntityID] {
+			return fmt.Errorf("registry: sanity check failed: runtime '%s' owned by blacklisted entity: '%s'", rt.ID, rt.EntityID)
+		}
+	}
+	for k := range publicKeyBlacklist {
+		if node, _ := nodeLookup.NodeBySubKey(context.Background(), k); node != nil {
+			return fmt.Errorf("registry: sanity check failed: node '%s' uses blacklisted key: '%s'", node.ID, k)
+		}
+	}
+
 	if !g.Parameters.DebugBypassStake {
-		entities := []*entity.Entity{}
-		for _, ent := range seenEntities {
-			entities = append(entities, ent)
-		}
-		runtimes, err := runtimesLookup.AllRuntimes(context.Background())
-		if err != nil {
-			return fmt.Errorf("registry: sanity check failed: could not obtain all runtimes from runtimesLookup: %w", err)
-		}
 		nodes, err := nodeLookup.Nodes(context.Background())
 		if err != nil {
 			return fmt.Errorf("registry: sanity check failed: could not obtain node list from nodeLookup: %w", err)
