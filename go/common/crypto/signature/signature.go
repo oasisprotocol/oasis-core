@@ -77,7 +77,7 @@ func (k PublicKey) Verify(context Context, message, sig []byte) bool {
 	if len(sig) != SignatureSize {
 		return false
 	}
-	if k.isBlacklisted() {
+	if k.IsBlacklisted() {
 		return false
 	}
 
@@ -167,7 +167,7 @@ func (k PublicKey) IsValid() bool {
 	if len(k) != PublicKeySize {
 		return false
 	}
-	if k.isBlacklisted() {
+	if k.IsBlacklisted() {
 		return false
 	}
 	return true
@@ -216,9 +216,20 @@ func (k PublicKey) Hash() hash.Hash {
 	return hash.NewFromBytes(k[:])
 }
 
-func (k PublicKey) isBlacklisted() bool {
+// IsBlacklisted returns true iff the public key is blacklisted, prohibiting
+// it from use.
+func (k PublicKey) IsBlacklisted() bool {
 	_, isBlacklisted := blacklistedPublicKeys.Load(k)
 	return isBlacklisted
+}
+
+// Blacklist adds the public key to the blacklist.
+func (k PublicKey) Blacklist() error {
+	_, loaded := blacklistedPublicKeys.LoadOrStore(k, true)
+	if loaded {
+		return fmt.Errorf("signature: public key '%s' already in blacklist", k)
+	}
+	return nil
 }
 
 // RawSignature is a raw signature.
@@ -575,7 +586,7 @@ func VerifyManyToOne(context Context, message []byte, sigs []Signature) bool {
 
 	for i := range sigs {
 		v := sigs[i] // This is deliberate.
-		if v.PublicKey.isBlacklisted() {
+		if v.PublicKey.IsBlacklisted() {
 			return false
 		}
 
@@ -607,7 +618,7 @@ func VerifyBatch(context Context, messages [][]byte, sigs []Signature) bool {
 
 	for i := range sigs {
 		v := sigs[i] // This is deliberate.
-		if v.PublicKey.isBlacklisted() {
+		if v.PublicKey.IsBlacklisted() {
 			return false
 		}
 		pks = append(pks, ed25519.PublicKey(v.PublicKey[:]))
@@ -664,12 +675,7 @@ func BuildPublicKeyBlacklist(allowTestKeys bool) {
 		// p+1 (=1, order 1).
 		"eeffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7f",
 	} {
-		var pk PublicKey
-		if err := pk.UnmarshalHex(v); err != nil {
-			panic(err)
-		}
-
-		blacklistedPublicKeys.Store(pk, true)
+		NewBlacklistedKey(v)
 	}
 }
 
@@ -681,13 +687,9 @@ func NewBlacklistedKey(hex string) PublicKey {
 		panic(err)
 	}
 
-	// Make sure that the key doesn't already exist in the blacklist.
-	if pk.isBlacklisted() {
-		panic("key already exists in blacklist, use another")
+	if err := pk.Blacklist(); err != nil {
+		panic(err)
 	}
-
-	// Blacklist key.
-	blacklistedPublicKeys.Store(pk, true)
 
 	return pk
 }
