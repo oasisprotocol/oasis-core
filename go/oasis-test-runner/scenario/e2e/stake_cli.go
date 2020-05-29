@@ -94,11 +94,11 @@ func (s *stakeCLIImpl) Run(childEnv *env.Env) error {
 	}
 
 	ctx := context.Background()
-	logger.Info("waiting for nodes to register")
+	s.logger.Info("waiting for nodes to register")
 	if err := s.net.Controller().WaitNodesRegistered(ctx, 3); err != nil {
 		return fmt.Errorf("waiting for nodes to register: %w", err)
 	}
-	logger.Info("nodes registered")
+	s.logger.Info("nodes registered")
 
 	cli := cli.New(childEnv, s.net, s.logger)
 

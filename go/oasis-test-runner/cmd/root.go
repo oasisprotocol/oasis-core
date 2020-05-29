@@ -94,7 +94,7 @@ func RegisterNondefault(s scenario.Scenario) error {
 // RegisterTestParams registers given scenario parameters as string slices regardless of actual type.
 //
 // Later we combine specific parameter sets and execute tests with all parameter combinations.
-func RegisterTestParams(name string, p *flag.FlagSet) {
+func RegisterTestParams(name string, p *env.ParameterFlagSet) {
 	fs := flag.NewFlagSet(name, flag.ContinueOnError)
 	p.VisitAll(func(f *flag.Flag) {
 		fs.StringSlice(name+"."+f.Name, []string{f.Value.String()}, f.Usage)
@@ -342,7 +342,7 @@ func runRoot(cmd *cobra.Command, args []string) error {
 				childEnv, err := rootEnv.NewChild(n, &env.TestInstanceInfo{
 					Test:         v.Name(),
 					Instance:     filepath.Base(rootEnv.Dir()),
-					ParameterSet: &env.ParameterFlagSet{FlagSet: *v.Parameters()},
+					ParameterSet: v.Parameters(),
 					Run:          run,
 				})
 				if err != nil {

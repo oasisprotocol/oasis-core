@@ -8,6 +8,7 @@ import (
 	"io/ioutil"
 	"os/exec"
 	"path/filepath"
+	"reflect"
 	"sync"
 	"syscall"
 	"time"
@@ -25,6 +26,9 @@ type CleanupFn func()
 // ParameterFlagSet is a wrapper for flag.FlagSet to produce nicer JSON output.
 type ParameterFlagSet struct {
 	flag.FlagSet
+
+	name          string
+	errorHandling flag.ErrorHandling
 }
 
 // TestInstanceInfo contains information of the current test run.
@@ -50,6 +54,34 @@ func (pfs *ParameterFlagSet) MarshalJSON() ([]byte, error) {
 	})
 
 	return json.Marshal(ps)
+}
+
+// Clone clones the parameter flagset.
+//
+// This function is usually called when cloning scenarios where we also want to clone existing
+// parameter values.
+func (pfs *ParameterFlagSet) Clone() *ParameterFlagSet {
+	newPfs := NewParameterFlagSet(pfs.name, pfs.errorHandling)
+	pfs.VisitAll(func(f *flag.Flag) {
+		// Clone concrete members of Flag.
+		fl := *f
+		// Clone Value interface.
+		fl.Value = reflect.New(reflect.TypeOf(fl.Value).Elem()).Interface().(flag.Value)
+		// And actual flag value.
+		_ = fl.Value.Set(f.Value.String())
+		newPfs.AddFlag(&fl)
+	})
+
+	return newPfs
+}
+
+// NewParameterFlagSet returns new instance of ParameterFlagSet.
+func NewParameterFlagSet(name string, eh flag.ErrorHandling) *ParameterFlagSet {
+	return &ParameterFlagSet{
+		FlagSet:       *flag.NewFlagSet(name, eh),
+		name:          name,
+		errorHandling: eh,
+	}
 }
 
 // Env is a (nested) test environment.

@@ -12,35 +12,44 @@ import (
 )
 
 const (
+	// cfgServerBinary is path to remote-signer server executable.
 	cfgServerBinary = "binary"
 )
 
 var (
-	// RemoteSignerParamsDummy is a dummy instance of remoteSignerImpl used to register remote-signer-wise parameters.
-	RemoteSignerParamsDummy *remoteSignerImpl = &remoteSignerImpl{name: "remote-signer"}
+	// RemoteSignerParamsDummy is a dummy instance of remoteSignerImpl used to register global
+	// remote-signer flags.
+	RemoteSignerParamsDummy *remoteSignerImpl = newRemoteSignerImpl("")
 )
 
 type remoteSignerImpl struct {
 	name   string
 	logger *logging.Logger
-
-	// binary is the path to remote-signer server executable.
-	serverBinary string
+	flags  *env.ParameterFlagSet
 }
 
 func newRemoteSignerImpl(name string) *remoteSignerImpl {
-	return &remoteSignerImpl{
-		name:         "remote-signer/" + name,
-		logger:       logging.GetLogger("scenario/remote-signer/" + name),
-		serverBinary: "oasis-remote-signer",
+	// Empty scenario name is used for registering global parameters only.
+	fullName := "remote-signer"
+	if name != "" {
+		fullName += "/" + name
 	}
+
+	sc := &remoteSignerImpl{
+		name:   fullName,
+		logger: logging.GetLogger("scenario/" + fullName),
+		flags:  env.NewParameterFlagSet(fullName, flag.ContinueOnError),
+	}
+	sc.flags.String(cfgServerBinary, "oasis-remote-signer", "runtime binary")
+
+	return sc
 }
 
 func (sc *remoteSignerImpl) Clone() remoteSignerImpl {
 	return remoteSignerImpl{
-		name:         sc.name,
-		logger:       sc.logger,
-		serverBinary: sc.serverBinary,
+		name:   sc.name,
+		logger: sc.logger,
+		flags:  sc.flags.Clone(),
 	}
 }
 
@@ -48,11 +57,8 @@ func (sc *remoteSignerImpl) Name() string {
 	return sc.name
 }
 
-func (sc *remoteSignerImpl) Parameters() *flag.FlagSet {
-	fs := flag.NewFlagSet(sc.Name(), flag.ContinueOnError)
-	fs.StringVar(&sc.serverBinary, cfgServerBinary, sc.serverBinary, "runtime binary")
-
-	return fs
+func (sc *remoteSignerImpl) Parameters() *env.ParameterFlagSet {
+	return sc.flags
 }
 
 func (sc *remoteSignerImpl) PreInit(childEnv *env.Env) error {

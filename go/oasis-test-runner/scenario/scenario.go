@@ -2,8 +2,6 @@
 package scenario
 
 import (
-	flag "github.com/spf13/pflag"
-
 	"github.com/oasislabs/oasis-core/go/oasis-test-runner/env"
 	"github.com/oasislabs/oasis-core/go/oasis-test-runner/oasis"
 )
@@ -20,7 +18,7 @@ type Scenario interface {
 	Name() string
 
 	// Parameters returns the settable test parameters.
-	Parameters() *flag.FlagSet
+	Parameters() *env.ParameterFlagSet
 
 	// PreInit performs initial scenario initialization. It is guaranteed to be called before
 	// a new fixture is initialized in Fixture.

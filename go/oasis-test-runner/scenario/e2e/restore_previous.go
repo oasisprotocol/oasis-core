@@ -3,6 +3,7 @@ package e2e
 import (
 	"fmt"
 
+	"github.com/oasislabs/oasis-core/go/common/node"
 	"github.com/oasislabs/oasis-core/go/oasis-test-runner/env"
 	"github.com/oasislabs/oasis-core/go/oasis-test-runner/oasis"
 	"github.com/oasislabs/oasis-core/go/oasis-test-runner/scenario"
@@ -46,7 +47,11 @@ func (sc *restorePrevious) Fixture() (*oasis.NetworkFixture, error) {
 
 func (sc *restorePrevious) Run(childEnv *env.Env) error {
 	// Restore tests use a fixed genesis that only works on non-TEE environments.
-	if sc.TEEHardware != "" {
+	tee, err := sc.getTEEHardware()
+	if err != nil {
+		return err
+	}
+	if tee != node.TEEHardwareInvalid {
 		sc.logger.Info("skipping test due to incompatible TEE hardware")
 		return nil
 	}
