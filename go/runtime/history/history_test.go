@@ -185,6 +185,22 @@ func TestHistoryPrune(t *testing.T) {
 		t.Fatalf("failed to wait for prune to complete")
 	}
 
+	// Wait until the pruning transaction has been committed. This is needed because doneCh may be
+	// closed before the database transaction commits so the pruning may not yet be visible.
+	ctx, cancel := context.WithTimeout(context.Background(), recvTimeout)
+	defer cancel()
+	for {
+		_, err = history.GetBlock(ctx, 0)
+		if err == nil {
+			time.Sleep(10 * time.Millisecond)
+			continue
+		}
+
+		require.Error(err, "GetBlock should fail for pruned block 0")
+		require.Equal(roothash.ErrNotFound, err)
+		break
+	}
+
 	// Ensure we can only lookup the last 10 blocks.
 	for i := 0; i <= 50; i++ {
 		_, err = history.GetBlock(context.Background(), uint64(i))
