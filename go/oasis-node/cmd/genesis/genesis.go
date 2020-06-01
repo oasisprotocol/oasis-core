@@ -88,6 +88,7 @@ const (
 	cfgConsensusMaxEvidenceAgeBlocks = "consensus.tendermint.max_evidence_age_blocks"
 	cfgConsensusMaxEvidenceAgeTime   = "consensus.tendermint.max_evidence_age_time"
 	CfgConsensusGasCostsTxByte       = "consensus.gas_costs.tx_byte"
+	cfgConsensusBlacklistPublicKey   = "consensus.blacklist_public_key"
 
 	// Consensus backend config flag.
 	cfgConsensusBackend = "consensus.backend"
@@ -215,6 +216,18 @@ func doInitGenesis(cmd *cobra.Command, args []string) {
 		},
 	}
 
+	var pkBlacklist []signature.PublicKey
+	for _, pkStr := range viper.GetStringSlice(cfgConsensusBlacklistPublicKey) {
+		var pk signature.PublicKey
+		if err := pk.UnmarshalText([]byte(pkStr)); err != nil {
+			logger.Error("failed to parse blacklisted public key",
+				"err", err,
+			)
+			return
+		}
+		pkBlacklist = append(pkBlacklist, pk)
+	}
+
 	doc.Consensus = consensusGenesis.Genesis{
 		Backend: viper.GetString(cfgConsensusBackend),
 		Parameters: consensusGenesis.Parameters{
@@ -229,6 +242,7 @@ func doInitGenesis(cmd *cobra.Command, args []string) {
 			GasCosts: transaction.Costs{
 				consensusGenesis.GasOpTxByte: transaction.Gas(viper.GetUint64(CfgConsensusGasCostsTxByte)),
 			},
+			PublicKeyBlacklist: pkBlacklist,
 		},
 	}
 
@@ -728,6 +742,7 @@ func init() {
 	initGenesisFlags.Uint64(cfgConsensusMaxEvidenceAgeBlocks, 100000, "tendermint max evidence age (in blocks)")
 	initGenesisFlags.Duration(cfgConsensusMaxEvidenceAgeTime, 48*time.Hour, "tendermint max evidence age (in time)")
 	initGenesisFlags.Uint64(CfgConsensusGasCostsTxByte, 1, "consensus gas costs: each transaction byte")
+	initGenesisFlags.StringSlice(cfgConsensusBlacklistPublicKey, nil, "blacklist public key")
 
 	// Consensus backend flag.
 	initGenesisFlags.String(cfgConsensusBackend, tendermint.BackendName, "consensus backend")
