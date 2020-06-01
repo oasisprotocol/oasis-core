@@ -482,21 +482,21 @@ func (n *Node) initGenesis(testNode bool) error {
 			// Well, there wasn't a genesis document and we're running unit tests,
 			// so use a test node one.
 			if n.Genesis, err = tendermintTestsGenesis.NewTestNodeGenesisProvider(n.Identity); err != nil {
-				return err
+				return fmt.Errorf("initGenesis: failed to create test node genesis: %w", err)
 			}
 
 			// In case of a test node, always use the test chain context.
 			genesisTestHelpers.SetTestChainContext()
 			return nil
 		}
-		return err
+		return fmt.Errorf("initGenesis: failed to create local genesis file provider: %w", err)
 	}
 
 	// Retrieve the genesis document and use it to configure the ChainID for
 	// signature domain separation. We do this as early as possible.
 	genesisDoc, err := n.Genesis.GetGenesisDocument()
 	if err != nil {
-		return err
+		return fmt.Errorf("initGenesis: failed to get genesis: %w", err)
 	}
 	genesisDoc.SetChainContext()
 
