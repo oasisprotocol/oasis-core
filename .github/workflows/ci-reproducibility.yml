@@ -35,7 +35,7 @@ jobs:
       - name: Set up Rust
         uses: actions-rs/toolchain@v1
         with:
-          toolchain: nightly-2020-05-15
+          toolchain: nightly-2020-05-31
           override: true
       - name: Install oasis-node build prerequisites
         run: |
