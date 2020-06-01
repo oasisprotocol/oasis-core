@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"sync/atomic"
+	"sync"
 
 	"github.com/spf13/cobra"
 	flag "github.com/spf13/pflag"
@@ -100,7 +100,7 @@ type Node struct {
 	svcTmnt      tmService.TendermintService
 	svcTmntSeed  *tendermint.SeedService
 
-	stopping uint32
+	stopOnce sync.Once
 
 	commonStore *persistent.CommonStore
 
@@ -143,10 +143,9 @@ func (n *Node) Cleanup() {
 
 // Stop gracefully terminates the node.
 func (n *Node) Stop() {
-	if !atomic.CompareAndSwapUint32(&n.stopping, 0, 1) {
-		return
-	}
-	n.svcMgr.Stop()
+	n.stopOnce.Do(func() {
+		n.svcMgr.Stop()
+	})
 }
 
 // Wait waits for the node to gracefully terminate.  Callers MUST
