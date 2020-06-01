@@ -140,6 +140,9 @@ func (h *runtimeHistory) LastConsensusHeight() (int64, error) {
 }
 
 func (h *runtimeHistory) GetBlock(ctx context.Context, round uint64) (*block.Block, error) {
+	if ctx.Err() != nil {
+		return nil, ctx.Err()
+	}
 	annBlk, err := h.db.getBlock(round)
 	if err != nil {
 		return nil, err
@@ -149,6 +152,9 @@ func (h *runtimeHistory) GetBlock(ctx context.Context, round uint64) (*block.Blo
 }
 
 func (h *runtimeHistory) GetLatestBlock(ctx context.Context) (*block.Block, error) {
+	if ctx.Err() != nil {
+		return nil, ctx.Err()
+	}
 	meta, err := h.db.metadata()
 	if err != nil {
 		return nil, err
