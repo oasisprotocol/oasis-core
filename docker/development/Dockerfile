@@ -6,7 +6,7 @@ ARG GO_PROTOC_VERSION=3.6.1
 ARG GO_PROTOC_GEN_GO_VERSION=1.21.0
 ARG GOLANGCILINT_VERSION=1.23.6
 ARG GOCOVMERGE_VERSION=b5bfa59ec0adc420475f97f89b58045c721d761c
-ARG RUST_NIGHTLY_VERSION=2020-05-15
+ARG RUST_NIGHTLY_VERSION=2020-05-31
 
 ARG DEBIAN_FRONTEND=noninteractive
 
@@ -44,8 +44,8 @@ RUN curl "https://sh.rustup.rs" -sfo rustup.sh && \
     sh rustup.sh -y --default-toolchain nightly-${RUST_NIGHTLY_VERSION} && \
     rustup target add x86_64-fortanix-unknown-sgx && \
     rustup component add rustfmt && \
-    cargo install --version 0.3.1 fortanix-sgx-tools && \
-    cargo install --version 0.7.0 sgxs-tools && \
+    cargo install --version 0.4.0 fortanix-sgx-tools && \
+    cargo install --version 0.8.2 sgxs-tools && \
     cargo install cargo-audit
 
 # Install Go and utilities.

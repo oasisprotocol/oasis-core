@@ -137,8 +137,8 @@ Prerequisites:
   Then install the Fortanix Rust EDP utilities by running:
 
   ```
-  cargo +nightly install --version 0.3.1 fortanix-sgx-tools
-  cargo +nightly install --version 0.7.0 sgxs-tools
+  cargo +nightly install --version 0.4.0 fortanix-sgx-tools
+  cargo +nightly install --version 0.8.2 sgxs-tools
   ```
 
   _NOTE: These utilities must be compiled with a nightly version of the Rust
@@ -170,8 +170,8 @@ Prerequisites:
   active toolchain
   ----------------
 
-  nightly-2020-05-27-x86_64-unknown-linux-gnu (overridden by '/oasis-core/rust-toolchain')
-  rustc 1.45.0-nightly (5239f5c57 2020-05-26)
+  nightly-2020-05-31-x86_64-unknown-linux-gnu (overridden by '/oasis-core/rust-toolchain')
+  rustc 1.45.0-nightly (74e804683 2020-05-30)
   ```
 
   Then add the Fortanix SGX Rust target to this version of the Rust toolchain by
