@@ -415,7 +415,7 @@ impl Cache for LRUCache {
         &mut self,
         ctx: &Arc<Context>,
         ptr: NodePtrRef,
-        fetcher: F,
+        fetcher: Option<F>,
     ) -> Fallible<Option<NodeRef>> {
         let ptr_ref = ptr;
         let ptr = ptr_ref.borrow();
@@ -447,7 +447,13 @@ impl Cache for LRUCache {
         }
 
         // Node not available locally, fetch from read syncer.
-        self.remote_sync(ctx, ptr_ref.clone(), fetcher)?;
+        if let Some(fetcher) = fetcher {
+            self.remote_sync(ctx, ptr_ref.clone(), fetcher)?;
+        } else {
+            return Err(format_err!(
+                "mkvs: node to dereference not available locally and no fetcher provided"
+            ));
+        }
 
         let ptr = ptr_ref.borrow();
         if ptr.node.is_none() {

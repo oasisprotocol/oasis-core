@@ -17,6 +17,11 @@ impl MKVS for Tree {
         self.get(ctx, key).unwrap()
     }
 
+    fn cache_contains_key(&self, ctx: Context, key: &[u8]) -> bool {
+        let _lock = self.lock.lock().unwrap();
+        self.cache_contains_key(ctx, key)
+    }
+
     fn insert(&mut self, ctx: Context, key: &[u8], value: &[u8]) -> Option<Vec<u8>> {
         let lock = self.lock.clone();
         let _guard = lock.lock().unwrap();

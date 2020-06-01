@@ -66,6 +66,14 @@ fn test_basic() {
             .expect("insert"),
         None
     );
+    assert_eq!(
+        tree.cache_contains_key(Context::background(), key_zero),
+        true
+    );
+    assert_eq!(
+        tree.cache_contains_key(Context::background(), key_one),
+        false
+    );
     let value = tree
         .get(Context::background(), key_zero)
         .expect("get")
@@ -78,6 +86,14 @@ fn test_basic() {
             .expect("insert_some")
             .as_slice(),
         value_zero
+    );
+    assert_eq!(
+        tree.cache_contains_key(Context::background(), key_zero),
+        true
+    );
+    assert_eq!(
+        tree.cache_contains_key(Context::background(), key_one),
+        false
     );
     let value = tree
         .get(Context::background(), key_zero)
@@ -107,6 +123,14 @@ fn test_basic() {
             .expect("insert"),
         None
     );
+    assert_eq!(
+        tree.cache_contains_key(Context::background(), key_zero),
+        true
+    );
+    assert_eq!(
+        tree.cache_contains_key(Context::background(), key_one),
+        true
+    );
     let value = tree
         .get(Context::background(), key_one)
         .expect("get")
@@ -119,6 +143,14 @@ fn test_basic() {
             .expect("insert_some")
             .as_slice(),
         value_zero
+    );
+    assert_eq!(
+        tree.cache_contains_key(Context::background(), key_zero),
+        true
+    );
+    assert_eq!(
+        tree.cache_contains_key(Context::background(), key_one),
+        true
     );
     let value = tree
         .get(Context::background(), key_zero)
@@ -142,6 +174,14 @@ fn test_basic() {
         tree.remove(Context::background(), key_one).expect("remove"),
         None
     );
+    assert_eq!(
+        tree.cache_contains_key(Context::background(), key_zero),
+        true
+    );
+    assert_eq!(
+        tree.cache_contains_key(Context::background(), key_one),
+        false
+    );
     assert_eq!(None, tree.get(Context::background(), key_one).expect("get"));
     let value = tree
         .get(Context::background(), key_zero)
@@ -153,6 +193,14 @@ fn test_basic() {
         tree.insert(Context::background(), key_one, value_one_alt)
             .expect("insert"),
         None
+    );
+    assert_eq!(
+        tree.cache_contains_key(Context::background(), key_zero),
+        true
+    );
+    assert_eq!(
+        tree.cache_contains_key(Context::background(), key_one),
+        true
     );
     let value = tree
         .get(Context::background(), key_zero)
@@ -233,6 +281,14 @@ fn test_basic() {
     assert_eq!(log[0].kind(), LogEntryKind::Delete);
     tree.remove(Context::background(), key_zero)
         .expect("remove");
+    assert_eq!(
+        tree.cache_contains_key(Context::background(), key_zero),
+        false
+    );
+    assert_eq!(
+        tree.cache_contains_key(Context::background(), key_one),
+        false
+    );
 }
 
 #[test]
@@ -256,6 +312,10 @@ fn test_long_keys() {
     }
 
     for i in 0..keys.len() {
+        assert_eq!(
+            tree.cache_contains_key(Context::background(), keys[i].as_slice()),
+            true
+        );
         let value = tree
             .get(Context::background(), keys[i].as_slice())
             .expect("get")
@@ -269,6 +329,10 @@ fn test_long_keys() {
         tree.remove(Context::background(), keys[i].as_slice())
             .expect("remove");
 
+        assert_eq!(
+            tree.cache_contains_key(Context::background(), keys[i].as_slice()),
+            false
+        );
         assert_eq!(
             None,
             tree.get(Context::background(), keys[i].as_slice())
@@ -296,9 +360,17 @@ fn test_empty_keys() {
         let empty_key = b"";
         let empty_value = b"empty value";
 
+        assert_eq!(
+            tree.cache_contains_key(Context::background(), empty_key),
+            false
+        );
         tree.insert(Context::background(), empty_key, empty_value)
             .expect("insert");
 
+        assert_eq!(
+            tree.cache_contains_key(Context::background(), empty_key),
+            true
+        );
         let value = tree
             .get(Context::background(), empty_key)
             .expect("get")
@@ -308,6 +380,10 @@ fn test_empty_keys() {
         tree.remove(Context::background(), empty_key)
             .expect("remove");
 
+        assert_eq!(
+            tree.cache_contains_key(Context::background(), empty_key),
+            false
+        );
         assert_eq!(
             None,
             tree.get(Context::background(), empty_key).expect("get")
@@ -466,6 +542,10 @@ fn test_remove() {
     let mut roots: Vec<Hash> = Vec::new();
     let (keys, values) = generate_key_value_pairs();
     for i in 0..keys.len() {
+        assert_eq!(
+            tree.cache_contains_key(Context::background(), keys[i].as_slice()),
+            false
+        );
         tree.insert(
             Context::background(),
             keys[i].as_slice(),
@@ -473,6 +553,10 @@ fn test_remove() {
         )
         .expect("insert");
 
+        assert_eq!(
+            tree.cache_contains_key(Context::background(), keys[i].as_slice()),
+            true
+        );
         let value = tree
             .get(Context::background(), keys[i].as_slice())
             .expect("get")
@@ -487,9 +571,17 @@ fn test_remove() {
     assert_eq!(format!("{:?}", roots[roots.len() - 1]), ALL_ITEMS_ROOT);
 
     for i in (1..keys.len()).rev() {
+        assert_eq!(
+            tree.cache_contains_key(Context::background(), keys[i].as_slice()),
+            true
+        );
         tree.remove(Context::background(), keys[i].as_slice())
             .expect("remove");
 
+        assert_eq!(
+            tree.cache_contains_key(Context::background(), keys[i].as_slice()),
+            false
+        );
         assert_eq!(
             None,
             tree.get(Context::background(), keys[i].as_slice())
@@ -509,6 +601,10 @@ fn test_remove() {
 
     // Now re-insert keys n..0, remove them in order 0..n.
     for i in (0..keys.len()).rev() {
+        assert_eq!(
+            tree.cache_contains_key(Context::background(), keys[i].as_slice()),
+            false
+        );
         tree.insert(
             Context::background(),
             keys[i].as_slice(),
@@ -516,6 +612,10 @@ fn test_remove() {
         )
         .expect("insert");
 
+        assert_eq!(
+            tree.cache_contains_key(Context::background(), keys[i].as_slice()),
+            true
+        );
         let value = tree
             .get(Context::background(), keys[i].as_slice())
             .expect("get")
@@ -527,9 +627,17 @@ fn test_remove() {
     }
 
     for i in 0..keys.len() {
+        assert_eq!(
+            tree.cache_contains_key(Context::background(), keys[i].as_slice()),
+            true
+        );
         tree.remove(Context::background(), keys[i].as_slice())
             .expect("remove");
 
+        assert_eq!(
+            tree.cache_contains_key(Context::background(), keys[i].as_slice()),
+            false
+        );
         assert_eq!(
             None,
             tree.get(Context::background(), keys[i].as_slice())

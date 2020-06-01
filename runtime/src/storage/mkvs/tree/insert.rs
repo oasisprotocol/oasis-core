@@ -53,7 +53,7 @@ impl Tree {
         let node_ref = self.cache.borrow_mut().deref_node_ptr(
             ctx,
             ptr.clone(),
-            FetcherSyncGet::new(key, false),
+            Some(FetcherSyncGet::new(key, false)),
         )?;
 
         let (_, key_remainder) = key.split(bit_depth, key.bit_length());

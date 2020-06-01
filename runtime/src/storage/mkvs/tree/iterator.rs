@@ -195,7 +195,7 @@ impl<'tree> TreeIterator<'tree> {
         let node_ref = self.tree.cache.borrow_mut().deref_node_ptr(
             &self.ctx,
             ptr.clone(),
-            FetcherSyncIterate::new(&key, self.prefetch),
+            Some(FetcherSyncIterate::new(&key, self.prefetch)),
         )?;
 
         match classify_noderef!(?node_ref) {

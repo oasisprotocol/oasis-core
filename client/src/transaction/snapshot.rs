@@ -107,6 +107,10 @@ impl MKVS for BlockSnapshot {
         MKVS::get(&self.mkvs, ctx, key)
     }
 
+    fn cache_contains_key(&self, ctx: Context, key: &[u8]) -> bool {
+        MKVS::cache_contains_key(&self.mkvs, ctx, key)
+    }
+
     fn insert(&mut self, _ctx: Context, _key: &[u8], _value: &[u8]) -> Option<Vec<u8>> {
         unimplemented!("block snapshot is read-only");
     }
