@@ -492,7 +492,7 @@ func newNode(testNode bool) (*Node, error) { // nolint: gocyclo
 	var startOk bool
 	defer func() {
 		if !startOk {
-			node.svcMgr.Stop()
+			node.Stop()
 			node.Cleanup()
 		}
 	}()
