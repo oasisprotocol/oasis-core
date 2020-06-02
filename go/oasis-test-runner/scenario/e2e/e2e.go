@@ -127,8 +127,6 @@ func RegisterScenarios() error {
 		Debond,
 		// Late start test.
 		LateStart,
-		// Restore from v20.6 genesis file.
-		RestoreV206,
 		// KeymanagerUpgrade test.
 		KeymanagerUpgrade,
 	} {

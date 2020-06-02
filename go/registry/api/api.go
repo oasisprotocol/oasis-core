@@ -594,57 +594,30 @@ func VerifyRegisterNodeArgs( // nolint: gocyclo
 	}
 
 	// Validate TLSInfo.
-	if n.DescriptorVersion == 0 {
-		// Old descriptor that used full TLS certificates instead of just public keys. We allow old
-		// descriptors iff this is the chain being initialized from genesis and the node only has
-		// the validator role (because validators do not expose any TLS services).
-		// TODO: Drop support for node descriptor version 0 (oasis-core#2918).
-		if !isGenesis && !isSanityCheck {
-			return nil, nil, fmt.Errorf("%w: v0 descriptor only allowed at genesis time", ErrInvalidArgument)
-		}
-		if !n.OnlyHasRoles(node.RoleValidator) {
-			logger.Error("RegisterNode: v0 descriptor for non-validator node",
-				"node", n,
-			)
-			return nil, nil, fmt.Errorf("%w: v0 descriptor for non-validator node", ErrInvalidArgument)
-		}
-
-		legacyTLSKey, err := nodeV0parseTLSPubKey(logger, sigNode)
-		if err != nil {
-			return nil, nil, err
-		}
-
-		logger.Warn("RegisterNode: using v0 node descriptor",
+	if !n.TLS.PubKey.IsValid() {
+		logger.Error("RegisterNode: invalid TLS public key",
 			"node", n,
 		)
-
-		expectedSigners = append(expectedSigners, legacyTLSKey)
-	} else {
-		if !n.TLS.PubKey.IsValid() {
-			logger.Error("RegisterNode: invalid TLS public key",
-				"node", n,
-			)
-			return nil, nil, fmt.Errorf("%w: invalid TLS public key", ErrInvalidArgument)
-		}
-		tlsAddressRequired := n.HasRoles(TLSAddressRequiredRoles)
-		if err := verifyAddresses(params, tlsAddressRequired, n.TLS.Addresses); err != nil {
-			addrs, _ := json.Marshal(n.TLS.Addresses)
-			logger.Error("RegisterNode: missing/invalid committee addresses",
-				"node", n,
-				"committee_addrs", addrs,
-			)
-			return nil, nil, err
-		}
-
-		if !sigNode.MultiSigned.IsSignedBy(n.TLS.PubKey) {
-			logger.Error("RegisterNode: not signed by TLS certificate key",
-				"signed_node", sigNode,
-				"node", n,
-			)
-			return nil, nil, fmt.Errorf("%w: registration not signed by TLS certificate key", ErrInvalidArgument)
-		}
-		expectedSigners = append(expectedSigners, n.TLS.PubKey)
+		return nil, nil, fmt.Errorf("%w: invalid TLS public key", ErrInvalidArgument)
 	}
+	tlsAddressRequired := n.HasRoles(TLSAddressRequiredRoles)
+	if err := verifyAddresses(params, tlsAddressRequired, n.TLS.Addresses); err != nil {
+		addrs, _ := json.Marshal(n.TLS.Addresses)
+		logger.Error("RegisterNode: missing/invalid committee addresses",
+			"node", n,
+			"committee_addrs", addrs,
+		)
+		return nil, nil, err
+	}
+
+	if !sigNode.MultiSigned.IsSignedBy(n.TLS.PubKey) {
+		logger.Error("RegisterNode: not signed by TLS certificate key",
+			"signed_node", sigNode,
+			"node", n,
+		)
+		return nil, nil, fmt.Errorf("%w: registration not signed by TLS certificate key", ErrInvalidArgument)
+	}
+	expectedSigners = append(expectedSigners, n.TLS.PubKey)
 
 	// Validate P2PInfo.
 	if !n.P2P.ID.IsValid() {
@@ -724,8 +697,7 @@ func VerifyRegisterNodeArgs( // nolint: gocyclo
 		)
 		return nil, nil, ErrInvalidArgument
 	}
-	// TODO: Drop support for node descriptor version 0 (oasis-core#2918).
-	if existingNode != nil && existingNode.ID != n.ID && n.DescriptorVersion != 0 {
+	if existingNode != nil && existingNode.ID != n.ID {
 		logger.Error("RegisterNode: duplicate node TLS public key",
 			"node_id", n.ID,
 			"existing_node_id", existingNode.ID,
