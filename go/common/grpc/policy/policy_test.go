@@ -14,13 +14,13 @@ import (
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/status"
 
-	"github.com/oasislabs/oasis-core/go/common"
-	"github.com/oasislabs/oasis-core/go/common/accessctl"
-	cmnGrpc "github.com/oasislabs/oasis-core/go/common/grpc"
-	"github.com/oasislabs/oasis-core/go/common/grpc/policy"
-	"github.com/oasislabs/oasis-core/go/common/grpc/policy/api"
-	cmnTesting "github.com/oasislabs/oasis-core/go/common/grpc/testing"
-	"github.com/oasislabs/oasis-core/go/common/identity"
+	"github.com/oasisprotocol/oasis-core/go/common"
+	"github.com/oasisprotocol/oasis-core/go/common/accessctl"
+	cmnGrpc "github.com/oasisprotocol/oasis-core/go/common/grpc"
+	"github.com/oasisprotocol/oasis-core/go/common/grpc/policy"
+	"github.com/oasisprotocol/oasis-core/go/common/grpc/policy/api"
+	cmnTesting "github.com/oasisprotocol/oasis-core/go/common/grpc/testing"
+	"github.com/oasisprotocol/oasis-core/go/common/identity"
 )
 
 var testNs = common.NewTestNamespaceFromSeed([]byte("oasis common grpc policy test ns"), 0)

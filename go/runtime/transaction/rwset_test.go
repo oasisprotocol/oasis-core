@@ -5,7 +5,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/oasislabs/oasis-core/go/common/cbor"
+	"github.com/oasisprotocol/oasis-core/go/common/cbor"
 )
 
 func TestReadWriteSetSerialization(t *testing.T) {

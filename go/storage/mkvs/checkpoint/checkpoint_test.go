@@ -13,13 +13,13 @@ import (
 	"github.com/golang/snappy"
 	"github.com/stretchr/testify/require"
 
-	"github.com/oasislabs/oasis-core/go/common"
-	"github.com/oasislabs/oasis-core/go/common/cbor"
-	"github.com/oasislabs/oasis-core/go/common/crypto/hash"
-	"github.com/oasislabs/oasis-core/go/storage/mkvs"
-	db "github.com/oasislabs/oasis-core/go/storage/mkvs/db/api"
-	badgerDb "github.com/oasislabs/oasis-core/go/storage/mkvs/db/badger"
-	"github.com/oasislabs/oasis-core/go/storage/mkvs/node"
+	"github.com/oasisprotocol/oasis-core/go/common"
+	"github.com/oasisprotocol/oasis-core/go/common/cbor"
+	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
+	"github.com/oasisprotocol/oasis-core/go/storage/mkvs"
+	db "github.com/oasisprotocol/oasis-core/go/storage/mkvs/db/api"
+	badgerDb "github.com/oasisprotocol/oasis-core/go/storage/mkvs/db/badger"
+	"github.com/oasisprotocol/oasis-core/go/storage/mkvs/node"
 )
 
 var testNs = common.NewTestNamespaceFromSeed([]byte("oasis mkvs checkpoint test ns"), 0)

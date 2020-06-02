@@ -6,8 +6,8 @@ import (
 	flag "github.com/spf13/pflag"
 	"github.com/spf13/viper"
 
-	app "github.com/oasislabs/oasis-core/go/consensus/tendermint/apps/supplementarysanity"
-	"github.com/oasislabs/oasis-core/go/consensus/tendermint/service"
+	app "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/apps/supplementarysanity"
+	"github.com/oasisprotocol/oasis-core/go/consensus/tendermint/service"
 )
 
 // Flags has the configuration flags.

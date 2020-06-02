@@ -7,16 +7,16 @@ import (
 	flag "github.com/spf13/pflag"
 	"github.com/spf13/viper"
 
-	"github.com/oasislabs/oasis-core/go/common"
-	"github.com/oasislabs/oasis-core/go/common/logging"
-	"github.com/oasislabs/oasis-core/go/common/node"
-	ias "github.com/oasislabs/oasis-core/go/ias/api"
-	cmdFlags "github.com/oasislabs/oasis-core/go/oasis-node/cmd/common/flags"
-	runtimeHost "github.com/oasislabs/oasis-core/go/runtime/host"
-	hostMock "github.com/oasislabs/oasis-core/go/runtime/host/mock"
-	hostSandbox "github.com/oasislabs/oasis-core/go/runtime/host/sandbox"
-	hostSgx "github.com/oasislabs/oasis-core/go/runtime/host/sgx"
-	"github.com/oasislabs/oasis-core/go/worker/common/configparser"
+	"github.com/oasisprotocol/oasis-core/go/common"
+	"github.com/oasisprotocol/oasis-core/go/common/logging"
+	"github.com/oasisprotocol/oasis-core/go/common/node"
+	ias "github.com/oasisprotocol/oasis-core/go/ias/api"
+	cmdFlags "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/flags"
+	runtimeHost "github.com/oasisprotocol/oasis-core/go/runtime/host"
+	hostMock "github.com/oasisprotocol/oasis-core/go/runtime/host/mock"
+	hostSandbox "github.com/oasisprotocol/oasis-core/go/runtime/host/sandbox"
+	hostSgx "github.com/oasisprotocol/oasis-core/go/runtime/host/sgx"
+	"github.com/oasisprotocol/oasis-core/go/worker/common/configparser"
 )
 
 var (

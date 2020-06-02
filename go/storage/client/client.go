@@ -14,14 +14,14 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
-	"github.com/oasislabs/oasis-core/go/common"
-	"github.com/oasislabs/oasis-core/go/common/crypto/hash"
-	"github.com/oasislabs/oasis-core/go/common/crypto/mathrand"
-	"github.com/oasislabs/oasis-core/go/common/logging"
-	"github.com/oasislabs/oasis-core/go/common/node"
-	"github.com/oasislabs/oasis-core/go/runtime/committee"
-	"github.com/oasislabs/oasis-core/go/storage/api"
-	"github.com/oasislabs/oasis-core/go/storage/mkvs/checkpoint"
+	"github.com/oasisprotocol/oasis-core/go/common"
+	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
+	"github.com/oasisprotocol/oasis-core/go/common/crypto/mathrand"
+	"github.com/oasisprotocol/oasis-core/go/common/logging"
+	"github.com/oasisprotocol/oasis-core/go/common/node"
+	"github.com/oasisprotocol/oasis-core/go/runtime/committee"
+	"github.com/oasisprotocol/oasis-core/go/storage/api"
+	"github.com/oasisprotocol/oasis-core/go/storage/mkvs/checkpoint"
 )
 
 var (
@@ -209,7 +209,7 @@ func (b *storageClientBackend) writeWithClient(
 			continue
 		}
 		// TODO: Only wait for F+1 successful writes:
-		// https://github.com/oasislabs/oasis-core/issues/1821.
+		// https://github.com/oasisprotocol/oasis-core/issues/1821.
 		receipts = append(receipts, receipt)
 	}
 
@@ -297,7 +297,7 @@ func (b *storageClientBackend) readWithClient(
 
 		// TODO: Use a more clever approach to choose the order in which to read
 		// from the connected nodes:
-		// https://github.com/oasislabs/oasis-core/issues/1815.
+		// https://github.com/oasisprotocol/oasis-core/issues/1815.
 		rng := rand.New(mathrand.New(cryptorand.Reader))
 
 		var err error

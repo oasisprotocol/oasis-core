@@ -1,7 +1,7 @@
 // Package block implements the roothash block and header.
 package block
 
-import "github.com/oasislabs/oasis-core/go/common"
+import "github.com/oasisprotocol/oasis-core/go/common"
 
 // Block is an Oasis block.
 //

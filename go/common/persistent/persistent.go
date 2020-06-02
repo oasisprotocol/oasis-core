@@ -11,9 +11,9 @@ import (
 	"github.com/dgraph-io/badger/v2"
 	"github.com/dgraph-io/badger/v2/options"
 
-	cmnBadger "github.com/oasislabs/oasis-core/go/common/badger"
-	"github.com/oasislabs/oasis-core/go/common/cbor"
-	"github.com/oasislabs/oasis-core/go/common/logging"
+	cmnBadger "github.com/oasisprotocol/oasis-core/go/common/badger"
+	"github.com/oasisprotocol/oasis-core/go/common/cbor"
+	"github.com/oasisprotocol/oasis-core/go/common/logging"
 )
 
 const dbName = "persistent-store.badger.db"

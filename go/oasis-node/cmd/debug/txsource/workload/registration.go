@@ -12,17 +12,17 @@ import (
 	"github.com/spf13/viper"
 	"google.golang.org/grpc"
 
-	"github.com/oasislabs/oasis-core/go/common"
-	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
-	memorySigner "github.com/oasislabs/oasis-core/go/common/crypto/signature/signers/memory"
-	"github.com/oasislabs/oasis-core/go/common/entity"
-	"github.com/oasislabs/oasis-core/go/common/identity"
-	"github.com/oasislabs/oasis-core/go/common/logging"
-	"github.com/oasislabs/oasis-core/go/common/node"
-	consensus "github.com/oasislabs/oasis-core/go/consensus/api"
-	"github.com/oasislabs/oasis-core/go/consensus/api/transaction"
-	cmdCommon "github.com/oasislabs/oasis-core/go/oasis-node/cmd/common"
-	registry "github.com/oasislabs/oasis-core/go/registry/api"
+	"github.com/oasisprotocol/oasis-core/go/common"
+	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
+	memorySigner "github.com/oasisprotocol/oasis-core/go/common/crypto/signature/signers/memory"
+	"github.com/oasisprotocol/oasis-core/go/common/entity"
+	"github.com/oasisprotocol/oasis-core/go/common/identity"
+	"github.com/oasisprotocol/oasis-core/go/common/logging"
+	"github.com/oasisprotocol/oasis-core/go/common/node"
+	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
+	"github.com/oasisprotocol/oasis-core/go/consensus/api/transaction"
+	cmdCommon "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common"
+	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
 )
 
 const (

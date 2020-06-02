@@ -8,8 +8,8 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	consensus "github.com/oasislabs/oasis-core/go/consensus/api"
-	"github.com/oasislabs/oasis-core/go/epochtime/api"
+	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
+	"github.com/oasisprotocol/oasis-core/go/epochtime/api"
 )
 
 const recvTimeout = 5 * time.Second

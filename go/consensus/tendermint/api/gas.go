@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"math"
 
-	"github.com/oasislabs/oasis-core/go/consensus/api/transaction"
+	"github.com/oasisprotocol/oasis-core/go/consensus/api/transaction"
 )
 
 var (

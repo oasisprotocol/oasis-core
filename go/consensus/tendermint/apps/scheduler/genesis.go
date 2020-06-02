@@ -8,15 +8,15 @@ import (
 	"github.com/tendermint/tendermint/abci/types"
 	tmtypes "github.com/tendermint/tendermint/types"
 
-	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
-	"github.com/oasislabs/oasis-core/go/common/node"
-	abciAPI "github.com/oasislabs/oasis-core/go/consensus/tendermint/api"
-	registryState "github.com/oasislabs/oasis-core/go/consensus/tendermint/apps/registry/state"
-	schedulerState "github.com/oasislabs/oasis-core/go/consensus/tendermint/apps/scheduler/state"
-	stakingState "github.com/oasislabs/oasis-core/go/consensus/tendermint/apps/staking/state"
-	genesis "github.com/oasislabs/oasis-core/go/genesis/api"
-	scheduler "github.com/oasislabs/oasis-core/go/scheduler/api"
-	staking "github.com/oasislabs/oasis-core/go/staking/api"
+	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
+	"github.com/oasisprotocol/oasis-core/go/common/node"
+	abciAPI "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/api"
+	registryState "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/apps/registry/state"
+	schedulerState "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/apps/scheduler/state"
+	stakingState "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/apps/staking/state"
+	genesis "github.com/oasisprotocol/oasis-core/go/genesis/api"
+	scheduler "github.com/oasisprotocol/oasis-core/go/scheduler/api"
+	staking "github.com/oasisprotocol/oasis-core/go/staking/api"
 )
 
 func (app *schedulerApplication) InitChain(ctx *abciAPI.Context, req types.RequestInitChain, doc *genesis.Document) error {

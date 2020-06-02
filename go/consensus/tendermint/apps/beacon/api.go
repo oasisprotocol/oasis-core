@@ -1,6 +1,6 @@
 package beacon
 
-import "github.com/oasislabs/oasis-core/go/consensus/tendermint/api"
+import "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/api"
 
 const (
 	// AppID is the unique application identifier.

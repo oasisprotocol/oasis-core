@@ -4,11 +4,11 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/oasislabs/oasis-core/go/common/identity"
-	"github.com/oasislabs/oasis-core/go/consensus/tendermint"
-	"github.com/oasislabs/oasis-core/go/consensus/tendermint/service"
-	genesis "github.com/oasislabs/oasis-core/go/genesis/file"
-	"github.com/oasislabs/oasis-core/go/upgrade"
+	"github.com/oasisprotocol/oasis-core/go/common/identity"
+	"github.com/oasisprotocol/oasis-core/go/consensus/tendermint"
+	"github.com/oasisprotocol/oasis-core/go/consensus/tendermint/service"
+	genesis "github.com/oasisprotocol/oasis-core/go/genesis/file"
+	"github.com/oasisprotocol/oasis-core/go/upgrade"
 )
 
 type honestTendermint struct {

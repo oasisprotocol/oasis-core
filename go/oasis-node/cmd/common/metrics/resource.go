@@ -3,7 +3,7 @@ package metrics
 import (
 	"time"
 
-	"github.com/oasislabs/oasis-core/go/common/service"
+	"github.com/oasisprotocol/oasis-core/go/common/service"
 )
 
 // ResourceCollector is interface for monitoring resources (cpu, mem, disk, net).

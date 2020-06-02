@@ -7,14 +7,14 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/oasislabs/oasis-core/go/common"
-	"github.com/oasislabs/oasis-core/go/common/cbor"
-	"github.com/oasislabs/oasis-core/go/common/node"
-	"github.com/oasislabs/oasis-core/go/common/sgx"
-	cmdCommon "github.com/oasislabs/oasis-core/go/oasis-node/cmd/common"
-	cmdRegRt "github.com/oasislabs/oasis-core/go/oasis-node/cmd/registry/runtime"
-	"github.com/oasislabs/oasis-core/go/oasis-test-runner/env"
-	registry "github.com/oasislabs/oasis-core/go/registry/api"
+	"github.com/oasisprotocol/oasis-core/go/common"
+	"github.com/oasisprotocol/oasis-core/go/common/cbor"
+	"github.com/oasisprotocol/oasis-core/go/common/node"
+	"github.com/oasisprotocol/oasis-core/go/common/sgx"
+	cmdCommon "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common"
+	cmdRegRt "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/registry/runtime"
+	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/env"
+	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
 )
 
 const rtDescriptorFile = "runtime_genesis.json"

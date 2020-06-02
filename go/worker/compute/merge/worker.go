@@ -4,13 +4,13 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/oasislabs/oasis-core/go/common"
-	"github.com/oasislabs/oasis-core/go/common/logging"
-	"github.com/oasislabs/oasis-core/go/common/node"
-	workerCommon "github.com/oasislabs/oasis-core/go/worker/common"
-	committeeCommon "github.com/oasislabs/oasis-core/go/worker/common/committee"
-	"github.com/oasislabs/oasis-core/go/worker/compute/merge/committee"
-	"github.com/oasislabs/oasis-core/go/worker/registration"
+	"github.com/oasisprotocol/oasis-core/go/common"
+	"github.com/oasisprotocol/oasis-core/go/common/logging"
+	"github.com/oasisprotocol/oasis-core/go/common/node"
+	workerCommon "github.com/oasisprotocol/oasis-core/go/worker/common"
+	committeeCommon "github.com/oasisprotocol/oasis-core/go/worker/common/committee"
+	"github.com/oasisprotocol/oasis-core/go/worker/compute/merge/committee"
+	"github.com/oasisprotocol/oasis-core/go/worker/registration"
 )
 
 // Worker is a merge worker.

@@ -15,15 +15,15 @@ import (
 	tmrpctypes "github.com/tendermint/tendermint/rpc/core/types"
 	tmtypes "github.com/tendermint/tendermint/types"
 
-	"github.com/oasislabs/oasis-core/go/common/cbor"
-	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
-	"github.com/oasislabs/oasis-core/go/common/logging"
-	consensusAPI "github.com/oasislabs/oasis-core/go/consensus/api"
-	tmApi "github.com/oasislabs/oasis-core/go/consensus/tendermint/api"
-	tmcrypto "github.com/oasislabs/oasis-core/go/consensus/tendermint/crypto"
-	nodeCmdCommon "github.com/oasislabs/oasis-core/go/oasis-node/cmd/common"
-	cmdGrpc "github.com/oasislabs/oasis-core/go/oasis-node/cmd/common/grpc"
-	registryAPI "github.com/oasislabs/oasis-core/go/registry/api"
+	"github.com/oasisprotocol/oasis-core/go/common/cbor"
+	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
+	"github.com/oasisprotocol/oasis-core/go/common/logging"
+	consensusAPI "github.com/oasisprotocol/oasis-core/go/consensus/api"
+	tmApi "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/api"
+	tmcrypto "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/crypto"
+	nodeCmdCommon "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common"
+	cmdGrpc "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/grpc"
+	registryAPI "github.com/oasisprotocol/oasis-core/go/registry/api"
 )
 
 const (

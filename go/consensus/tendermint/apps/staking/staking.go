@@ -7,15 +7,15 @@ import (
 	"github.com/tendermint/tendermint/abci/types"
 	tmtypes "github.com/tendermint/tendermint/types"
 
-	"github.com/oasislabs/oasis-core/go/common/cbor"
-	"github.com/oasislabs/oasis-core/go/common/quantity"
-	"github.com/oasislabs/oasis-core/go/consensus/api/transaction"
-	"github.com/oasislabs/oasis-core/go/consensus/tendermint/abci"
-	"github.com/oasislabs/oasis-core/go/consensus/tendermint/api"
-	registryState "github.com/oasislabs/oasis-core/go/consensus/tendermint/apps/registry/state"
-	stakingState "github.com/oasislabs/oasis-core/go/consensus/tendermint/apps/staking/state"
-	epochtime "github.com/oasislabs/oasis-core/go/epochtime/api"
-	staking "github.com/oasislabs/oasis-core/go/staking/api"
+	"github.com/oasisprotocol/oasis-core/go/common/cbor"
+	"github.com/oasisprotocol/oasis-core/go/common/quantity"
+	"github.com/oasisprotocol/oasis-core/go/consensus/api/transaction"
+	"github.com/oasisprotocol/oasis-core/go/consensus/tendermint/abci"
+	"github.com/oasisprotocol/oasis-core/go/consensus/tendermint/api"
+	registryState "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/apps/registry/state"
+	stakingState "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/apps/staking/state"
+	epochtime "github.com/oasisprotocol/oasis-core/go/epochtime/api"
+	staking "github.com/oasisprotocol/oasis-core/go/staking/api"
 )
 
 var _ abci.Application = (*stakingApplication)(nil)

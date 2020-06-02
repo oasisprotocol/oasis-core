@@ -3,7 +3,7 @@ package transaction
 import (
 	"bytes"
 
-	"github.com/oasislabs/oasis-core/go/common/cbor"
+	"github.com/oasisprotocol/oasis-core/go/common/cbor"
 )
 
 // CoarsenedKey is a coarsened key prefix that represents any key that

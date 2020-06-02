@@ -1,9 +1,9 @@
 package epochtimemock
 
 import (
-	"github.com/oasislabs/oasis-core/go/consensus/api/transaction"
-	"github.com/oasislabs/oasis-core/go/consensus/tendermint/api"
-	epochtime "github.com/oasislabs/oasis-core/go/epochtime/api"
+	"github.com/oasisprotocol/oasis-core/go/consensus/api/transaction"
+	"github.com/oasisprotocol/oasis-core/go/consensus/tendermint/api"
+	epochtime "github.com/oasisprotocol/oasis-core/go/epochtime/api"
 )
 
 const (

@@ -9,7 +9,7 @@ the [consensus service API documentation].
 
 <!-- markdownlint-disable line-length -->
 [`go/registry/api`]: ../../go/registry/api
-[consensus service API documentation]: https://pkg.go.dev/github.com/oasislabs/oasis-core/go/registry/api?tab=doc
+[consensus service API documentation]: https://pkg.go.dev/github.com/oasisprotocol/oasis-core/go/registry/api?tab=doc
 <!-- markdownlint-enable line-length -->
 
 ## Resources
@@ -60,7 +60,7 @@ the future to enable runtimes to be self-governing.
 
 <!-- markdownlint-disable line-length -->
 [runtime]: ../runtime/index.md
-[the `Runtime` structure]: https://pkg.go.dev/github.com/oasislabs/oasis-core/go/registry/api?tab=doc#Runtime
+[the `Runtime` structure]: https://pkg.go.dev/github.com/oasisprotocol/oasis-core/go/registry/api?tab=doc#Runtime
 <!-- markdownlint-enable line-length -->
 
 ## Methods
@@ -84,9 +84,9 @@ Registering an entity may require sufficient stake in the entity's
 [escrow account].
 
 <!-- markdownlint-disable line-length -->
-[`NewRegisterEntityTx`]: https://pkg.go.dev/github.com/oasislabs/oasis-core/go/registry/api?tab=doc#NewRegisterEntityTx
-[`SignedEntity`]: https://pkg.go.dev/github.com/oasislabs/oasis-core/go/common/entity?tab=doc#SignedEntity
-[`Entity`]: https://pkg.go.dev/github.com/oasislabs/oasis-core/go/common/entity?tab=doc#Entity
+[`NewRegisterEntityTx`]: https://pkg.go.dev/github.com/oasisprotocol/oasis-core/go/registry/api?tab=doc#NewRegisterEntityTx
+[`SignedEntity`]: https://pkg.go.dev/github.com/oasisprotocol/oasis-core/go/common/entity?tab=doc#SignedEntity
+[`Entity`]: https://pkg.go.dev/github.com/oasisprotocol/oasis-core/go/common/entity?tab=doc#Entity
 [signed envelope]: ../crypto.md#signed-envelope
 [escrow account]: staking.md#escrow
 <!-- markdownlint-enable line-length -->
@@ -109,7 +109,7 @@ _If an entity still has either nodes or runtimes registered, it is not possible
 to deregister an entity and such a transaction will fail._
 
 <!-- markdownlint-disable line-length -->
-[`NewDeregisterEntityTx`]: https://pkg.go.dev/github.com/oasislabs/oasis-core/go/registry/api?tab=doc#NewDeregisterEntityTx
+[`NewDeregisterEntityTx`]: https://pkg.go.dev/github.com/oasisprotocol/oasis-core/go/registry/api?tab=doc#NewDeregisterEntityTx
 <!-- markdownlint-enable line-length -->
 
 ### Register Node
@@ -142,11 +142,11 @@ Registering a node may require sufficient stake in the owning entity's
 [`Thresholds` in staking consensus parameters]).
 
 <!-- markdownlint-disable line-length -->
-[`NewRegisterNodeTx`]: https://pkg.go.dev/github.com/oasislabs/oasis-core/go/registry/api?tab=doc#NewRegisterNodeTx
-[`MultiSignedNode`]: https://pkg.go.dev/github.com/oasislabs/oasis-core/go/common/node?tab=doc#MultiSignedNode
-[`Node`]: https://pkg.go.dev/github.com/oasislabs/oasis-core/go/common/node?tab=doc#Node
+[`NewRegisterNodeTx`]: https://pkg.go.dev/github.com/oasisprotocol/oasis-core/go/registry/api?tab=doc#NewRegisterNodeTx
+[`MultiSignedNode`]: https://pkg.go.dev/github.com/oasisprotocol/oasis-core/go/common/node?tab=doc#MultiSignedNode
+[`Node`]: https://pkg.go.dev/github.com/oasisprotocol/oasis-core/go/common/node?tab=doc#Node
 [multi-signed envelope]: ../crypto.md#multi-signed-envelope
-[`Thresholds` in staking consensus parameters]: https://pkg.go.dev/github.com/oasislabs/oasis-core/go/staking/api?tab=doc#ConsensusParameters.Thresholds
+[`Thresholds` in staking consensus parameters]: https://pkg.go.dev/github.com/oasisprotocol/oasis-core/go/staking/api?tab=doc#ConsensusParameters.Thresholds
 <!-- markdownlint-enable line-length -->
 
 ### Unfreeze Node
@@ -180,8 +180,8 @@ freeze period for any given attributable fault (e.g., double signing) is a
 consensus parameter (see [`Slashing` in staking consensus parameters]).
 
 <!-- markdownlint-disable line-length -->
-[`NewUnfreezeNodeTx`]: https://pkg.go.dev/github.com/oasislabs/oasis-core/go/registry/api?tab=doc#NewUnfreezeNodeTx
-[`Slashing` in staking consensus parameters]: https://pkg.go.dev/github.com/oasislabs/oasis-core/go/staking/api?tab=doc#ConsensusParameters.Slashing
+[`NewUnfreezeNodeTx`]: https://pkg.go.dev/github.com/oasisprotocol/oasis-core/go/registry/api?tab=doc#NewUnfreezeNodeTx
+[`Slashing` in staking consensus parameters]: https://pkg.go.dev/github.com/oasisprotocol/oasis-core/go/staking/api?tab=doc#ConsensusParameters.Slashing
 <!-- markdownlint-enable line-length -->
 
 ### Register Runtime
@@ -203,9 +203,9 @@ Registering a runtime may require sufficient stake in the owning entity's
 [escrow account].
 
 <!-- markdownlint-disable line-length -->
-[`NewRegisterRuntimeTx`]: https://pkg.go.dev/github.com/oasislabs/oasis-core/go/registry/api?tab=doc#NewRegisterRuntimeTx
-[`SignedRuntime`]: https://pkg.go.dev/github.com/oasislabs/oasis-core/go/registry/api?tab=doc#SignedRuntime
-[`Runtime`]: https://pkg.go.dev/github.com/oasislabs/oasis-core/go/registry/api?tab=doc#Runtime
+[`NewRegisterRuntimeTx`]: https://pkg.go.dev/github.com/oasisprotocol/oasis-core/go/registry/api?tab=doc#NewRegisterRuntimeTx
+[`SignedRuntime`]: https://pkg.go.dev/github.com/oasisprotocol/oasis-core/go/registry/api?tab=doc#SignedRuntime
+[`Runtime`]: https://pkg.go.dev/github.com/oasisprotocol/oasis-core/go/registry/api?tab=doc#Runtime
 <!-- markdownlint-enable line-length -->
 
 ## Events

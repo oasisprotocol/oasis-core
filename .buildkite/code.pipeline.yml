@@ -78,8 +78,6 @@ steps:
   - label: Lint Go node
     command:
       - .buildkite/go/lint.sh
-    agents:
-      buildkite_agent_size: large
     retry:
       <<: *retry_agent_failure
     plugins:
@@ -145,8 +143,6 @@ steps:
       - buildkite-agent artifact upload simple-keyvalue-client
       - buildkite-agent artifact upload simple-keyvalue-enc-client
       - buildkite-agent artifact upload simple-keyvalue-ops-client
-    agents:
-      buildkite_agent_size: large
     retry:
       <<: *retry_agent_failure
     plugins:
@@ -170,8 +166,6 @@ steps:
       - buildkite-agent artifact upload simple-keymanager
       - buildkite-agent artifact upload simple-keyvalue
       - buildkite-agent artifact upload simple-keymanager-upgrade
-    agents:
-      buildkite_agent_size: large
     retry:
       <<: *retry_agent_failure
     plugins:
@@ -186,8 +180,6 @@ steps:
       - make build-helpers
       - export OASIS_STORAGE_PROTOCOL_SERVER_BINARY=$(realpath go/storage/mkvs/interop/mkvs-test-helpers)
       - .buildkite/rust/test_generic.sh .
-    agents:
-      buildkite_agent_size: large
     retry:
       <<: *retry_agent_failure
     plugins:
@@ -242,8 +234,6 @@ steps:
     env:
       OASIS_E2E_COVERAGE: enable
       TEST_BASE_DIR: /tmp
-    agents:
-      buildkite_agent_size: large
     retry:
       <<: *retry_agent_failure
     plugins:
@@ -308,8 +298,6 @@ steps:
       - /tmp/consim-datadir/consim.log
     env:
       TEST_BASE_DIR: /tmp
-    agents:
-      buildkite_agent_size: large
     retry:
       <<: *retry_agent_failure
     plugins:
@@ -328,8 +316,6 @@ steps:
       - .buildkite/rust/coverage.sh
     # Don't cause the build to fail, as tarpaulin is pretty unstable at the moment.
     soft_fail: true
-    agents:
-      buildkite_agent_size: large
     retry:
       <<: *retry_agent_failure
     plugins:

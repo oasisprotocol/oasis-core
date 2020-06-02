@@ -4,13 +4,13 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/oasislabs/oasis-core/go/common"
-	"github.com/oasislabs/oasis-core/go/common/cbor"
-	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
-	"github.com/oasislabs/oasis-core/go/common/keyformat"
-	abciAPI "github.com/oasislabs/oasis-core/go/consensus/tendermint/api"
-	"github.com/oasislabs/oasis-core/go/scheduler/api"
-	"github.com/oasislabs/oasis-core/go/storage/mkvs"
+	"github.com/oasisprotocol/oasis-core/go/common"
+	"github.com/oasisprotocol/oasis-core/go/common/cbor"
+	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
+	"github.com/oasisprotocol/oasis-core/go/common/keyformat"
+	abciAPI "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/api"
+	"github.com/oasisprotocol/oasis-core/go/scheduler/api"
+	"github.com/oasisprotocol/oasis-core/go/storage/mkvs"
 )
 
 var (

@@ -5,8 +5,8 @@ import (
 
 	"google.golang.org/grpc"
 
-	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
-	cmnGrpc "github.com/oasislabs/oasis-core/go/common/grpc"
+	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
+	cmnGrpc "github.com/oasisprotocol/oasis-core/go/common/grpc"
 )
 
 var (

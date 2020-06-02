@@ -3,11 +3,11 @@ package policy
 import (
 	"context"
 
-	"github.com/oasislabs/oasis-core/go/common"
-	"github.com/oasislabs/oasis-core/go/common/accessctl"
-	"github.com/oasislabs/oasis-core/go/common/grpc"
-	"github.com/oasislabs/oasis-core/go/common/grpc/policy/api"
-	"github.com/oasislabs/oasis-core/go/common/pubsub"
+	"github.com/oasisprotocol/oasis-core/go/common"
+	"github.com/oasisprotocol/oasis-core/go/common/accessctl"
+	"github.com/oasisprotocol/oasis-core/go/common/grpc"
+	"github.com/oasisprotocol/oasis-core/go/common/grpc/policy/api"
+	"github.com/oasisprotocol/oasis-core/go/common/pubsub"
 )
 
 var _ api.PolicyWatcher = (*policyWatcher)(nil)

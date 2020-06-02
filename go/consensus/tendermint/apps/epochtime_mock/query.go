@@ -3,8 +3,8 @@ package epochtimemock
 import (
 	"context"
 
-	abciAPI "github.com/oasislabs/oasis-core/go/consensus/tendermint/api"
-	epochtime "github.com/oasislabs/oasis-core/go/epochtime/api"
+	abciAPI "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/api"
+	epochtime "github.com/oasisprotocol/oasis-core/go/epochtime/api"
 )
 
 // Query is the mock epochtime query interface.

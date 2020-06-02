@@ -6,13 +6,13 @@ import (
 	"fmt"
 	"math"
 
-	"github.com/oasislabs/oasis-core/go/common/crypto/hash"
-	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
-	memorySigner "github.com/oasislabs/oasis-core/go/common/crypto/signature/signers/memory"
-	"github.com/oasislabs/oasis-core/go/common/quantity"
-	"github.com/oasislabs/oasis-core/go/consensus/api/transaction"
-	epochtime "github.com/oasislabs/oasis-core/go/epochtime/api"
-	staking "github.com/oasislabs/oasis-core/go/staking/api"
+	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
+	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
+	memorySigner "github.com/oasisprotocol/oasis-core/go/common/crypto/signature/signers/memory"
+	"github.com/oasisprotocol/oasis-core/go/common/quantity"
+	"github.com/oasisprotocol/oasis-core/go/consensus/api/transaction"
+	epochtime "github.com/oasisprotocol/oasis-core/go/epochtime/api"
+	staking "github.com/oasisprotocol/oasis-core/go/staking/api"
 )
 
 func quantityInt64(v int64) quantity.Quantity {

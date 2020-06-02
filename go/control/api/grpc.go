@@ -5,8 +5,8 @@ import (
 
 	"google.golang.org/grpc"
 
-	cmnGrpc "github.com/oasislabs/oasis-core/go/common/grpc"
-	upgradeApi "github.com/oasislabs/oasis-core/go/upgrade/api"
+	cmnGrpc "github.com/oasisprotocol/oasis-core/go/common/grpc"
+	upgradeApi "github.com/oasisprotocol/oasis-core/go/upgrade/api"
 )
 
 var (

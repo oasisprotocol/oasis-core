@@ -21,7 +21,7 @@ build-tools:
 
 # NOTE: We epxplictly set CARGO_TARGET_DIR as a workaround to avoid
 #       recompilations in newer cargo nightly builds.
-#       See https://github.com/oasislabs/oasis-core/pull/2673 for details.
+#       See https://github.com/oasisprotocol/oasis-core/pull/2673 for details.
 build-runtimes:
 	@CARGO_TARGET_ROOT=$(shell pwd)/target && for e in $(RUNTIMES); do \
 		$(ECHO) "$(MAGENTA)*** Building runtime: $$e...$(OFF)"; \

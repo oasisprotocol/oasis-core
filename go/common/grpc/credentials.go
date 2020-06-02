@@ -6,8 +6,8 @@ import (
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/security/advancedtls"
 
-	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
-	cmnTLS "github.com/oasislabs/oasis-core/go/common/crypto/tls"
+	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
+	cmnTLS "github.com/oasisprotocol/oasis-core/go/common/crypto/tls"
 )
 
 // ClientOptions contains all the fields needed to configure a TLS client.

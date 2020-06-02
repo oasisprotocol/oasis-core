@@ -3,11 +3,11 @@ package staking
 import (
 	"context"
 
-	"github.com/oasislabs/oasis-core/go/consensus/api"
-	"github.com/oasislabs/oasis-core/go/consensus/api/transaction"
-	"github.com/oasislabs/oasis-core/go/consensus/tendermint/abci"
-	abciAPI "github.com/oasislabs/oasis-core/go/consensus/tendermint/api"
-	stakingState "github.com/oasislabs/oasis-core/go/consensus/tendermint/apps/staking/state"
+	"github.com/oasisprotocol/oasis-core/go/consensus/api"
+	"github.com/oasisprotocol/oasis-core/go/consensus/api/transaction"
+	"github.com/oasisprotocol/oasis-core/go/consensus/tendermint/abci"
+	abciAPI "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/api"
+	stakingState "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/apps/staking/state"
 )
 
 var _ abci.TransactionAuthHandler = (*stakingApplication)(nil)

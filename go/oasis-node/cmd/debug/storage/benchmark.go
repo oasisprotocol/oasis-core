@@ -16,14 +16,14 @@ import (
 	flag "github.com/spf13/pflag"
 	"github.com/spf13/viper"
 
-	"github.com/oasislabs/oasis-core/go/common"
-	"github.com/oasislabs/oasis-core/go/common/crypto/hash"
-	memorySigner "github.com/oasislabs/oasis-core/go/common/crypto/signature/signers/memory"
-	"github.com/oasislabs/oasis-core/go/common/identity"
-	"github.com/oasislabs/oasis-core/go/common/logging"
-	cmdCommon "github.com/oasislabs/oasis-core/go/oasis-node/cmd/common"
-	"github.com/oasislabs/oasis-core/go/storage"
-	storageAPI "github.com/oasislabs/oasis-core/go/storage/api"
+	"github.com/oasisprotocol/oasis-core/go/common"
+	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
+	memorySigner "github.com/oasisprotocol/oasis-core/go/common/crypto/signature/signers/memory"
+	"github.com/oasisprotocol/oasis-core/go/common/identity"
+	"github.com/oasisprotocol/oasis-core/go/common/logging"
+	cmdCommon "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common"
+	"github.com/oasisprotocol/oasis-core/go/storage"
+	storageAPI "github.com/oasisprotocol/oasis-core/go/storage/api"
 )
 
 const (

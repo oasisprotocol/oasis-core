@@ -7,7 +7,7 @@ import (
 
 	"github.com/eapache/channels"
 
-	"github.com/oasislabs/oasis-core/go/common/logging"
+	"github.com/oasisprotocol/oasis-core/go/common/logging"
 )
 
 type jobDescriptor struct {

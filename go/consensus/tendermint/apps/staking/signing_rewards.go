@@ -3,10 +3,10 @@ package staking
 import (
 	"fmt"
 
-	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
-	abciAPI "github.com/oasislabs/oasis-core/go/consensus/tendermint/api"
-	stakingState "github.com/oasislabs/oasis-core/go/consensus/tendermint/apps/staking/state"
-	epochtime "github.com/oasislabs/oasis-core/go/epochtime/api"
+	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
+	abciAPI "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/api"
+	stakingState "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/apps/staking/state"
+	epochtime "github.com/oasisprotocol/oasis-core/go/epochtime/api"
 )
 
 func (app *stakingApplication) updateEpochSigning(

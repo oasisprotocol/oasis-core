@@ -11,12 +11,12 @@ import (
 
 	"github.com/tendermint/tendermint/abci/types"
 
-	"github.com/oasislabs/oasis-core/go/common/crypto/signature/signers/memory"
-	"github.com/oasislabs/oasis-core/go/consensus/tendermint/abci"
-	registryApp "github.com/oasislabs/oasis-core/go/consensus/tendermint/apps/registry"
-	stakingApp "github.com/oasislabs/oasis-core/go/consensus/tendermint/apps/staking"
-	genesis "github.com/oasislabs/oasis-core/go/genesis/api"
-	"github.com/oasislabs/oasis-core/go/upgrade"
+	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature/signers/memory"
+	"github.com/oasisprotocol/oasis-core/go/consensus/tendermint/abci"
+	registryApp "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/apps/registry"
+	stakingApp "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/apps/staking"
+	genesis "github.com/oasisprotocol/oasis-core/go/genesis/api"
+	"github.com/oasisprotocol/oasis-core/go/upgrade"
 )
 
 type mockChainCfg struct {

@@ -4,12 +4,12 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/oasislabs/oasis-core/go/common/quantity"
-	consensus "github.com/oasislabs/oasis-core/go/consensus/api"
-	"github.com/oasislabs/oasis-core/go/oasis-test-runner/env"
-	"github.com/oasislabs/oasis-core/go/oasis-test-runner/oasis"
-	"github.com/oasislabs/oasis-core/go/oasis-test-runner/scenario"
-	staking "github.com/oasislabs/oasis-core/go/staking/api"
+	"github.com/oasisprotocol/oasis-core/go/common/quantity"
+	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
+	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/env"
+	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/oasis"
+	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/scenario"
+	staking "github.com/oasisprotocol/oasis-core/go/staking/api"
 )
 
 // Debond tests debonding records created in the genesis document.

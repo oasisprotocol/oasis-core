@@ -11,7 +11,7 @@ import (
 	"net/url"
 	"time"
 
-	"github.com/oasislabs/oasis-core/go/common/sgx"
+	"github.com/oasisprotocol/oasis-core/go/common/sgx"
 )
 
 // NonceMaxLen is the maximum length of the AVR nonce.

@@ -2,10 +2,10 @@
 package main
 
 import (
-	"github.com/oasislabs/oasis-core/go/oasis-node/cmd/common"
-	"github.com/oasislabs/oasis-core/go/oasis-test-runner/cmd"
-	"github.com/oasislabs/oasis-core/go/oasis-test-runner/scenario/e2e"
-	"github.com/oasislabs/oasis-core/go/oasis-test-runner/scenario/remotesigner"
+	"github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common"
+	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/cmd"
+	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/scenario/e2e"
+	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/scenario/remotesigner"
 )
 
 func main() {

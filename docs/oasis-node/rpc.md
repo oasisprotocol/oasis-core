@@ -29,7 +29,7 @@ by your local node at `/path/to/datadir/internal.sock` you can do:
 
 ```golang
 import (
-    oasisGrpc "github.com/oasislabs/oasis-core/go/common/grpc"
+    oasisGrpc "github.com/oasisprotocol/oasis-core/go/common/grpc"
 )
 
 // ...
@@ -45,7 +45,7 @@ the gRPC helpers see the [API documentation].
 [gRPC protocol]: https://grpc.io
 [CBOR codec (instead of Protocol Buffers)]: ../authenticated-grpc.md#cbor-codec
 [`client/src/transaction/api/client.rs`]: ../../client/src/transaction/api/client.rs
-[API documentation]: https://pkg.go.dev/github.com/oasislabs/oasis-core/go/common/grpc?tab=doc
+[API documentation]: https://pkg.go.dev/github.com/oasisprotocol/oasis-core/go/common/grpc?tab=doc
 <!-- markdownlint-enable line-length -->
 
 ## Errors
@@ -79,13 +79,13 @@ For more details about what the exposed services do see the respective
 documentation sections.
 
 <!-- markdownlint-disable line-length -->
-[Control]: https://pkg.go.dev/github.com/oasislabs/oasis-core/go/control/api?tab=doc#NodeController
-[Consensus (client subset)]: https://pkg.go.dev/github.com/oasislabs/oasis-core/go/consensus/api?tab=doc#ClientBackend
-[Consensus (light client subset)]: https://pkg.go.dev/github.com/oasislabs/oasis-core/go/consensus/api?tab=doc#LightClientBackend
-[Staking]: https://pkg.go.dev/github.com/oasislabs/oasis-core/go/staking/api?tab=doc#Backend
-[Registry]: https://pkg.go.dev/github.com/oasislabs/oasis-core/go/registry/api?tab=doc#Backend
-[Scheduler]: https://pkg.go.dev/github.com/oasislabs/oasis-core/go/scheduler/api?tab=doc#Backend
-[Storage]: https://pkg.go.dev/github.com/oasislabs/oasis-core/go/storage/api?tab=doc#Backend
-[Runtime Client]: https://pkg.go.dev/github.com/oasislabs/oasis-core/go/runtime/client/api?tab=doc#RuntimeClient
-[EnclaveRPC]: https://pkg.go.dev/github.com/oasislabs/oasis-core/go/runtime/enclaverpc/api?tab=doc#Transport
+[Control]: https://pkg.go.dev/github.com/oasisprotocol/oasis-core/go/control/api?tab=doc#NodeController
+[Consensus (client subset)]: https://pkg.go.dev/github.com/oasisprotocol/oasis-core/go/consensus/api?tab=doc#ClientBackend
+[Consensus (light client subset)]: https://pkg.go.dev/github.com/oasisprotocol/oasis-core/go/consensus/api?tab=doc#LightClientBackend
+[Staking]: https://pkg.go.dev/github.com/oasisprotocol/oasis-core/go/staking/api?tab=doc#Backend
+[Registry]: https://pkg.go.dev/github.com/oasisprotocol/oasis-core/go/registry/api?tab=doc#Backend
+[Scheduler]: https://pkg.go.dev/github.com/oasisprotocol/oasis-core/go/scheduler/api?tab=doc#Backend
+[Storage]: https://pkg.go.dev/github.com/oasisprotocol/oasis-core/go/storage/api?tab=doc#Backend
+[Runtime Client]: https://pkg.go.dev/github.com/oasisprotocol/oasis-core/go/runtime/client/api?tab=doc#RuntimeClient
+[EnclaveRPC]: https://pkg.go.dev/github.com/oasisprotocol/oasis-core/go/runtime/enclaverpc/api?tab=doc#Transport
 <!-- markdownlint-enable line-length -->

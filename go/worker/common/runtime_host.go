@@ -5,9 +5,9 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/oasislabs/oasis-core/go/runtime/host"
-	"github.com/oasislabs/oasis-core/go/runtime/host/protocol"
-	runtimeRegistry "github.com/oasislabs/oasis-core/go/runtime/registry"
+	"github.com/oasisprotocol/oasis-core/go/runtime/host"
+	"github.com/oasisprotocol/oasis-core/go/runtime/host/protocol"
+	runtimeRegistry "github.com/oasisprotocol/oasis-core/go/runtime/registry"
 )
 
 // RuntimeHostNode provides methods for nodes that need to host runtimes.

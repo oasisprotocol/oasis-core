@@ -8,12 +8,12 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/oasislabs/oasis-core/go/common"
-	"github.com/oasislabs/oasis-core/go/common/crash"
-	memorySigner "github.com/oasislabs/oasis-core/go/common/crypto/signature/signers/memory"
-	"github.com/oasislabs/oasis-core/go/storage/api"
-	"github.com/oasislabs/oasis-core/go/storage/database"
-	"github.com/oasislabs/oasis-core/go/storage/tests"
+	"github.com/oasisprotocol/oasis-core/go/common"
+	"github.com/oasisprotocol/oasis-core/go/common/crash"
+	memorySigner "github.com/oasisprotocol/oasis-core/go/common/crypto/signature/signers/memory"
+	"github.com/oasisprotocol/oasis-core/go/storage/api"
+	"github.com/oasisprotocol/oasis-core/go/storage/database"
+	"github.com/oasisprotocol/oasis-core/go/storage/tests"
 )
 
 func TestCrashingBackendDoNotInterfere(t *testing.T) {

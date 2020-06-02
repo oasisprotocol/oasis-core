@@ -19,9 +19,9 @@ import (
 
 	"golang.org/x/net/context/ctxhttp"
 
-	"github.com/oasislabs/oasis-core/go/common/logging"
-	"github.com/oasislabs/oasis-core/go/common/sgx/ias"
-	"github.com/oasislabs/oasis-core/go/ias/api"
+	"github.com/oasisprotocol/oasis-core/go/common/logging"
+	"github.com/oasisprotocol/oasis-core/go/common/sgx/ias"
+	"github.com/oasisprotocol/oasis-core/go/ias/api"
 )
 
 var (

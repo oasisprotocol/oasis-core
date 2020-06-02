@@ -2,7 +2,7 @@
 package main
 
 import (
-	"github.com/oasislabs/oasis-core/go/extra/stats/cmd"
+	"github.com/oasisprotocol/oasis-core/go/extra/stats/cmd"
 )
 
 func main() {

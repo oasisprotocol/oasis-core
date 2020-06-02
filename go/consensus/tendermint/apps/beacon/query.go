@@ -3,9 +3,9 @@ package beacon
 import (
 	"context"
 
-	beacon "github.com/oasislabs/oasis-core/go/beacon/api"
-	abciAPI "github.com/oasislabs/oasis-core/go/consensus/tendermint/api"
-	beaconState "github.com/oasislabs/oasis-core/go/consensus/tendermint/apps/beacon/state"
+	beacon "github.com/oasisprotocol/oasis-core/go/beacon/api"
+	abciAPI "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/api"
+	beaconState "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/apps/beacon/state"
 )
 
 // Query is the beacon query interface.

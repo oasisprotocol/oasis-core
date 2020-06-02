@@ -4,9 +4,9 @@ import (
 	"context"
 	"errors"
 
-	"github.com/oasislabs/oasis-core/go/common/crypto/hash"
-	"github.com/oasislabs/oasis-core/go/storage/mkvs/node"
-	"github.com/oasislabs/oasis-core/go/storage/mkvs/syncer"
+	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
+	"github.com/oasisprotocol/oasis-core/go/storage/mkvs/node"
+	"github.com/oasisprotocol/oasis-core/go/storage/mkvs/syncer"
 )
 
 var errClosed = errors.New("iterator: use of closed iterator")

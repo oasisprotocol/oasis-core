@@ -6,10 +6,10 @@ import (
 
 	"google.golang.org/grpc"
 
-	"github.com/oasislabs/oasis-core/go/common/cbor"
-	cmnGrpc "github.com/oasislabs/oasis-core/go/common/grpc"
-	registry "github.com/oasislabs/oasis-core/go/registry/api"
-	enclaverpc "github.com/oasislabs/oasis-core/go/runtime/enclaverpc/api"
+	"github.com/oasisprotocol/oasis-core/go/common/cbor"
+	cmnGrpc "github.com/oasisprotocol/oasis-core/go/common/grpc"
+	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
+	enclaverpc "github.com/oasisprotocol/oasis-core/go/runtime/enclaverpc/api"
 )
 
 var (

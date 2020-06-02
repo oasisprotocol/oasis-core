@@ -4,13 +4,13 @@ import (
 	"context"
 	"math"
 
-	"github.com/oasislabs/oasis-core/go/common"
-	"github.com/oasislabs/oasis-core/go/common/crypto/hash"
-	"github.com/oasislabs/oasis-core/go/common/errors"
-	"github.com/oasislabs/oasis-core/go/common/pubsub"
-	roothash "github.com/oasislabs/oasis-core/go/roothash/api"
-	"github.com/oasislabs/oasis-core/go/roothash/api/block"
-	enclaverpc "github.com/oasislabs/oasis-core/go/runtime/enclaverpc/api"
+	"github.com/oasisprotocol/oasis-core/go/common"
+	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
+	"github.com/oasisprotocol/oasis-core/go/common/errors"
+	"github.com/oasisprotocol/oasis-core/go/common/pubsub"
+	roothash "github.com/oasisprotocol/oasis-core/go/roothash/api"
+	"github.com/oasisprotocol/oasis-core/go/roothash/api/block"
+	enclaverpc "github.com/oasisprotocol/oasis-core/go/runtime/enclaverpc/api"
 )
 
 const (

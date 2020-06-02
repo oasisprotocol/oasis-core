@@ -11,28 +11,28 @@ import (
 
 	"github.com/eapache/channels"
 
-	"github.com/oasislabs/oasis-core/go/common"
-	"github.com/oasislabs/oasis-core/go/common/accessctl"
-	"github.com/oasislabs/oasis-core/go/common/crypto/hash"
-	"github.com/oasislabs/oasis-core/go/common/grpc/policy"
-	"github.com/oasislabs/oasis-core/go/common/logging"
-	"github.com/oasislabs/oasis-core/go/common/node"
-	"github.com/oasislabs/oasis-core/go/common/persistent"
-	"github.com/oasislabs/oasis-core/go/common/workerpool"
-	consensus "github.com/oasislabs/oasis-core/go/consensus/api"
-	registryApi "github.com/oasislabs/oasis-core/go/registry/api"
-	roothashApi "github.com/oasislabs/oasis-core/go/roothash/api"
-	"github.com/oasislabs/oasis-core/go/roothash/api/block"
-	runtimeCommittee "github.com/oasislabs/oasis-core/go/runtime/committee"
-	storageApi "github.com/oasislabs/oasis-core/go/storage/api"
-	"github.com/oasislabs/oasis-core/go/storage/client"
-	"github.com/oasislabs/oasis-core/go/storage/mkvs/checkpoint"
-	mkvsDB "github.com/oasislabs/oasis-core/go/storage/mkvs/db/api"
-	mkvsNode "github.com/oasislabs/oasis-core/go/storage/mkvs/node"
-	workerCommon "github.com/oasislabs/oasis-core/go/worker/common"
-	"github.com/oasislabs/oasis-core/go/worker/common/committee"
-	"github.com/oasislabs/oasis-core/go/worker/common/p2p"
-	"github.com/oasislabs/oasis-core/go/worker/registration"
+	"github.com/oasisprotocol/oasis-core/go/common"
+	"github.com/oasisprotocol/oasis-core/go/common/accessctl"
+	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
+	"github.com/oasisprotocol/oasis-core/go/common/grpc/policy"
+	"github.com/oasisprotocol/oasis-core/go/common/logging"
+	"github.com/oasisprotocol/oasis-core/go/common/node"
+	"github.com/oasisprotocol/oasis-core/go/common/persistent"
+	"github.com/oasisprotocol/oasis-core/go/common/workerpool"
+	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
+	registryApi "github.com/oasisprotocol/oasis-core/go/registry/api"
+	roothashApi "github.com/oasisprotocol/oasis-core/go/roothash/api"
+	"github.com/oasisprotocol/oasis-core/go/roothash/api/block"
+	runtimeCommittee "github.com/oasisprotocol/oasis-core/go/runtime/committee"
+	storageApi "github.com/oasisprotocol/oasis-core/go/storage/api"
+	"github.com/oasisprotocol/oasis-core/go/storage/client"
+	"github.com/oasisprotocol/oasis-core/go/storage/mkvs/checkpoint"
+	mkvsDB "github.com/oasisprotocol/oasis-core/go/storage/mkvs/db/api"
+	mkvsNode "github.com/oasisprotocol/oasis-core/go/storage/mkvs/node"
+	workerCommon "github.com/oasisprotocol/oasis-core/go/worker/common"
+	"github.com/oasisprotocol/oasis-core/go/worker/common/committee"
+	"github.com/oasisprotocol/oasis-core/go/worker/common/p2p"
+	"github.com/oasisprotocol/oasis-core/go/worker/registration"
 )
 
 var (
@@ -333,7 +333,7 @@ func (n *Node) updateExternalServicePolicyLocked(snapshot *committee.EpochSnapsh
 		mergeCommitteePolicy.AddRulesForCommittee(&policy, mc, snapshot.Nodes())
 	}
 	// TODO: Query registry only for storage nodes after
-	// https://github.com/oasislabs/oasis-core/issues/1923 is implemented.
+	// https://github.com/oasisprotocol/oasis-core/issues/1923 is implemented.
 	nodes, err := n.commonNode.Consensus.Registry().GetNodes(context.Background(), snapshot.GetGroupVersion())
 	if nodes != nil {
 		storageNodesPolicy.AddRulesForNodeRoles(&policy, nodes, node.RoleStorageWorker)

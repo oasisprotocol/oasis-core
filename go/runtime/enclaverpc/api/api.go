@@ -4,7 +4,7 @@ package api
 import (
 	"context"
 
-	"github.com/oasislabs/oasis-core/go/common"
+	"github.com/oasisprotocol/oasis-core/go/common"
 )
 
 // Transport is the EnclaveRPC transport interface.

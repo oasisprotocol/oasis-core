@@ -14,10 +14,10 @@ import (
 	flag "github.com/spf13/pflag"
 	"github.com/spf13/viper"
 
-	"github.com/oasislabs/oasis-core/go/common/logging"
-	nodeCommon "github.com/oasislabs/oasis-core/go/oasis-node/cmd/common"
-	"github.com/oasislabs/oasis-core/go/oasis-node/cmd/common/metrics"
-	"github.com/oasislabs/oasis-core/go/oasis-test-runner/cmd/common"
+	"github.com/oasisprotocol/oasis-core/go/common/logging"
+	nodeCommon "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common"
+	"github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/metrics"
+	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/cmd/common"
 )
 
 const (

@@ -4,9 +4,9 @@ import (
 	"encoding/hex"
 	"fmt"
 
-	tlsCert "github.com/oasislabs/oasis-core/go/common/crypto/tls"
-	iasProxyApi "github.com/oasislabs/oasis-core/go/ias/proxy"
-	iasCmd "github.com/oasislabs/oasis-core/go/oasis-node/cmd/ias"
+	tlsCert "github.com/oasisprotocol/oasis-core/go/common/crypto/tls"
+	iasProxyApi "github.com/oasisprotocol/oasis-core/go/ias/proxy"
+	iasCmd "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/ias"
 )
 
 var mockSPID []byte

@@ -6,19 +6,19 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/oasislabs/oasis-core/go/common/version"
-	cmdCommon "github.com/oasislabs/oasis-core/go/oasis-node/cmd/common"
-	"github.com/oasislabs/oasis-core/go/oasis-node/cmd/consensus"
-	"github.com/oasislabs/oasis-core/go/oasis-node/cmd/control"
-	"github.com/oasislabs/oasis-core/go/oasis-node/cmd/debug"
-	"github.com/oasislabs/oasis-core/go/oasis-node/cmd/genesis"
-	"github.com/oasislabs/oasis-core/go/oasis-node/cmd/ias"
-	"github.com/oasislabs/oasis-core/go/oasis-node/cmd/identity"
-	"github.com/oasislabs/oasis-core/go/oasis-node/cmd/keymanager"
-	"github.com/oasislabs/oasis-core/go/oasis-node/cmd/node"
-	"github.com/oasislabs/oasis-core/go/oasis-node/cmd/registry"
-	"github.com/oasislabs/oasis-core/go/oasis-node/cmd/signer"
-	"github.com/oasislabs/oasis-core/go/oasis-node/cmd/stake"
+	"github.com/oasisprotocol/oasis-core/go/common/version"
+	cmdCommon "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common"
+	"github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/consensus"
+	"github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/control"
+	"github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/debug"
+	"github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/genesis"
+	"github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/ias"
+	"github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/identity"
+	"github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/keymanager"
+	"github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/node"
+	"github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/registry"
+	"github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/signer"
+	"github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/stake"
 )
 
 var (

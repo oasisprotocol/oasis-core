@@ -7,13 +7,13 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
-	fileSigner "github.com/oasislabs/oasis-core/go/common/crypto/signature/signers/file"
-	"github.com/oasislabs/oasis-core/go/common/identity"
-	"github.com/oasislabs/oasis-core/go/common/logging"
-	cmdCommon "github.com/oasislabs/oasis-core/go/oasis-node/cmd/common"
-	cmdFlags "github.com/oasislabs/oasis-core/go/oasis-node/cmd/common/flags"
-	"github.com/oasislabs/oasis-core/go/oasis-node/cmd/identity/tendermint"
+	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
+	fileSigner "github.com/oasisprotocol/oasis-core/go/common/crypto/signature/signers/file"
+	"github.com/oasisprotocol/oasis-core/go/common/identity"
+	"github.com/oasisprotocol/oasis-core/go/common/logging"
+	cmdCommon "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common"
+	cmdFlags "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/flags"
+	"github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/identity/tendermint"
 )
 
 var (

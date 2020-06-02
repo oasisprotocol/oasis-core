@@ -5,7 +5,7 @@ import (
 	"crypto/x509"
 	"encoding/pem"
 
-	cmdFlags "github.com/oasislabs/oasis-core/go/oasis-node/cmd/common/flags"
+	cmdFlags "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/flags"
 )
 
 var (

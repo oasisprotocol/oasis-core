@@ -3,14 +3,14 @@ package migrations
 import (
 	"fmt"
 
-	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
-	"github.com/oasislabs/oasis-core/go/common/crypto/signature/signers/memory"
-	"github.com/oasislabs/oasis-core/go/common/entity"
-	abciAPI "github.com/oasislabs/oasis-core/go/consensus/tendermint/api"
-	registryState "github.com/oasislabs/oasis-core/go/consensus/tendermint/apps/registry/state"
-	stakingState "github.com/oasislabs/oasis-core/go/consensus/tendermint/apps/staking/state"
-	registry "github.com/oasislabs/oasis-core/go/registry/api"
-	staking "github.com/oasislabs/oasis-core/go/staking/api"
+	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
+	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature/signers/memory"
+	"github.com/oasisprotocol/oasis-core/go/common/entity"
+	abciAPI "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/api"
+	registryState "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/apps/registry/state"
+	stakingState "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/apps/staking/state"
+	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
+	staking "github.com/oasisprotocol/oasis-core/go/staking/api"
 )
 
 const (

@@ -2,7 +2,7 @@
 
 package fuzz
 
-import "github.com/oasislabs/oasis-core/go/storage/mkvs/node"
+import "github.com/oasisprotocol/oasis-core/go/storage/mkvs/node"
 
 func FuzzNode(data []byte) int {
     n, err := node.UnmarshalBinary(data)

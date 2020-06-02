@@ -11,11 +11,11 @@ import (
 	"sort"
 	"io/ioutil"
 
-	"github.com/oasislabs/oasis-core/go/common"
-	commonFuzz "github.com/oasislabs/oasis-core/go/common/fuzz"
-	"github.com/oasislabs/oasis-core/go/storage/mkvs"
-	mkvsNode "github.com/oasislabs/oasis-core/go/storage/mkvs/node"
-	mkvsTests "github.com/oasislabs/oasis-core/go/storage/mkvs/tests"
+	"github.com/oasisprotocol/oasis-core/go/common"
+	commonFuzz "github.com/oasisprotocol/oasis-core/go/common/fuzz"
+	"github.com/oasisprotocol/oasis-core/go/storage/mkvs"
+	mkvsNode "github.com/oasisprotocol/oasis-core/go/storage/mkvs/node"
+	mkvsTests "github.com/oasisprotocol/oasis-core/go/storage/mkvs/tests"
 )
 
 var treeFuzzer *commonFuzz.InterfaceFuzzer

@@ -6,16 +6,16 @@ import (
 	"fmt"
 	"path/filepath"
 
-	"github.com/oasislabs/oasis-core/go/common"
-	"github.com/oasislabs/oasis-core/go/common/cbor"
-	"github.com/oasislabs/oasis-core/go/common/sgx"
-	epochtime "github.com/oasislabs/oasis-core/go/epochtime/api"
-	keymanager "github.com/oasislabs/oasis-core/go/keymanager/api"
-	"github.com/oasislabs/oasis-core/go/oasis-test-runner/env"
-	"github.com/oasislabs/oasis-core/go/oasis-test-runner/oasis"
-	"github.com/oasislabs/oasis-core/go/oasis-test-runner/oasis/cli"
-	"github.com/oasislabs/oasis-core/go/oasis-test-runner/scenario"
-	registry "github.com/oasislabs/oasis-core/go/registry/api"
+	"github.com/oasisprotocol/oasis-core/go/common"
+	"github.com/oasisprotocol/oasis-core/go/common/cbor"
+	"github.com/oasisprotocol/oasis-core/go/common/sgx"
+	epochtime "github.com/oasisprotocol/oasis-core/go/epochtime/api"
+	keymanager "github.com/oasisprotocol/oasis-core/go/keymanager/api"
+	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/env"
+	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/oasis"
+	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/oasis/cli"
+	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/scenario"
+	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
 )
 
 // KeymanagerUpgrade is the keymanager upgrade scenario.

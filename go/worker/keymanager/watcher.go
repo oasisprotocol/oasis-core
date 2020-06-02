@@ -1,11 +1,11 @@
 package keymanager
 
 import (
-	"github.com/oasislabs/oasis-core/go/common/accessctl"
-	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
-	"github.com/oasislabs/oasis-core/go/common/node"
-	registry "github.com/oasislabs/oasis-core/go/registry/api"
-	"github.com/oasislabs/oasis-core/go/runtime/committee"
+	"github.com/oasisprotocol/oasis-core/go/common/accessctl"
+	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
+	"github.com/oasisprotocol/oasis-core/go/common/node"
+	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
+	"github.com/oasisprotocol/oasis-core/go/runtime/committee"
 )
 
 type kmNodeWatcher struct {

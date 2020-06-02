@@ -4,8 +4,8 @@ package api
 import (
 	"context"
 
-	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
-	"github.com/oasislabs/oasis-core/go/common/node"
+	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
+	"github.com/oasisprotocol/oasis-core/go/common/node"
 )
 
 // SentryAddresses contains sentry node consensus and TLS addresses.

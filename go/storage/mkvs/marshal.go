@@ -1,7 +1,7 @@
 package mkvs
 
 import (
-	"github.com/oasislabs/oasis-core/go/storage/mkvs/node"
+	"github.com/oasisprotocol/oasis-core/go/storage/mkvs/node"
 )
 
 var (

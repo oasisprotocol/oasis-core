@@ -8,17 +8,17 @@ import (
 	flag "github.com/spf13/pflag"
 	"github.com/spf13/viper"
 
-	"github.com/oasislabs/oasis-core/go/common"
-	"github.com/oasislabs/oasis-core/go/common/grpc/policy"
-	"github.com/oasislabs/oasis-core/go/common/logging"
-	"github.com/oasislabs/oasis-core/go/common/node"
-	ias "github.com/oasislabs/oasis-core/go/ias/api"
-	"github.com/oasislabs/oasis-core/go/keymanager/api"
-	enclaverpc "github.com/oasislabs/oasis-core/go/runtime/enclaverpc/api"
-	"github.com/oasislabs/oasis-core/go/runtime/localstorage"
-	runtimeRegistry "github.com/oasislabs/oasis-core/go/runtime/registry"
-	workerCommon "github.com/oasislabs/oasis-core/go/worker/common"
-	"github.com/oasislabs/oasis-core/go/worker/registration"
+	"github.com/oasisprotocol/oasis-core/go/common"
+	"github.com/oasisprotocol/oasis-core/go/common/grpc/policy"
+	"github.com/oasisprotocol/oasis-core/go/common/logging"
+	"github.com/oasisprotocol/oasis-core/go/common/node"
+	ias "github.com/oasisprotocol/oasis-core/go/ias/api"
+	"github.com/oasisprotocol/oasis-core/go/keymanager/api"
+	enclaverpc "github.com/oasisprotocol/oasis-core/go/runtime/enclaverpc/api"
+	"github.com/oasisprotocol/oasis-core/go/runtime/localstorage"
+	runtimeRegistry "github.com/oasisprotocol/oasis-core/go/runtime/registry"
+	workerCommon "github.com/oasisprotocol/oasis-core/go/worker/common"
+	"github.com/oasisprotocol/oasis-core/go/worker/registration"
 )
 
 const (

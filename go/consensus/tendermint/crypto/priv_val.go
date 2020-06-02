@@ -209,7 +209,7 @@ import (
 	"github.com/tendermint/tendermint/privval"
 	tmtypes "github.com/tendermint/tendermint/types"
 
-	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
+	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 )
 
 // This derives heavily from `tendermint/privval/file.go` for reasons that should

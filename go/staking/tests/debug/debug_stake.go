@@ -5,10 +5,10 @@ import (
 	"math"
 	"math/big"
 
-	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
-	memorySigner "github.com/oasislabs/oasis-core/go/common/crypto/signature/signers/memory"
-	"github.com/oasislabs/oasis-core/go/common/quantity"
-	"github.com/oasislabs/oasis-core/go/staking/api"
+	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
+	memorySigner "github.com/oasisprotocol/oasis-core/go/common/crypto/signature/signers/memory"
+	"github.com/oasisprotocol/oasis-core/go/common/quantity"
+	"github.com/oasisprotocol/oasis-core/go/staking/api"
 )
 
 var (

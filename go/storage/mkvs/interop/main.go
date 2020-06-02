@@ -2,7 +2,7 @@
 package main
 
 import (
-	"github.com/oasislabs/oasis-core/go/storage/mkvs/interop/cmd"
+	"github.com/oasisprotocol/oasis-core/go/storage/mkvs/interop/cmd"
 )
 
 func main() {

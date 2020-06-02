@@ -10,7 +10,7 @@ the [consensus service API documentation].
 
 <!-- markdownlint-disable line-length -->
 [`go/keymanager/api`]: ../../go/keymanager/api
-[consensus service API documentation]: https://pkg.go.dev/github.com/oasislabs/oasis-core/go/keymanager/api?tab=doc
+[consensus service API documentation]: https://pkg.go.dev/github.com/oasisprotocol/oasis-core/go/keymanager/api?tab=doc
 <!-- markdownlint-enable line-length -->
 
 ## Policies
@@ -38,7 +38,7 @@ authorized public keys that can sign the policy are hardcoded in the key manager
 enclave.
 
 <!-- markdownlint-disable line-length -->
-[policy document]: https://pkg.go.dev/github.com/oasislabs/oasis-core/go/keymanager/api?tab=doc#PolicySGX
+[policy document]: https://pkg.go.dev/github.com/oasisprotocol/oasis-core/go/keymanager/api?tab=doc#PolicySGX
 <!-- markdownlint-enable line-length -->
 
 ## Methods
@@ -60,8 +60,8 @@ a signed key manager access control policy. The signer of the transaction must
 be the key manager runtime's owning entity.
 
 <!-- markdownlint-disable line-length -->
-[`NewUpdatePolicyTx`]: https://pkg.go.dev/github.com/oasislabs/oasis-core/go/keymanager/api?tab=doc#NewUpdatePolicyTx
-[`SignedPolicySGX`]: https://pkg.go.dev/github.com/oasislabs/oasis-core/go/keymanager/api?tab=doc#SignedPolicySGX
+[`NewUpdatePolicyTx`]: https://pkg.go.dev/github.com/oasisprotocol/oasis-core/go/keymanager/api?tab=doc#NewUpdatePolicyTx
+[`SignedPolicySGX`]: https://pkg.go.dev/github.com/oasisprotocol/oasis-core/go/keymanager/api?tab=doc#SignedPolicySGX
 <!-- markdownlint-enable line-length -->
 
 ## Events

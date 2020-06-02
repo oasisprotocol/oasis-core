@@ -5,8 +5,8 @@ import (
 	"context"
 	"errors"
 
-	"github.com/oasislabs/oasis-core/go/common/crypto/hash"
-	"github.com/oasislabs/oasis-core/go/storage/mkvs/node"
+	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
+	"github.com/oasisprotocol/oasis-core/go/storage/mkvs/node"
 )
 
 var (

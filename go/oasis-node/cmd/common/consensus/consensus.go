@@ -9,13 +9,13 @@ import (
 	flag "github.com/spf13/pflag"
 	"github.com/spf13/viper"
 
-	"github.com/oasislabs/oasis-core/go/common/logging"
-	"github.com/oasislabs/oasis-core/go/consensus/api/transaction"
-	genesisAPI "github.com/oasislabs/oasis-core/go/genesis/api"
-	genesisFile "github.com/oasislabs/oasis-core/go/genesis/file"
-	cmdCommon "github.com/oasislabs/oasis-core/go/oasis-node/cmd/common"
-	cmdFlags "github.com/oasislabs/oasis-core/go/oasis-node/cmd/common/flags"
-	cmdSigner "github.com/oasislabs/oasis-core/go/oasis-node/cmd/common/signer"
+	"github.com/oasisprotocol/oasis-core/go/common/logging"
+	"github.com/oasisprotocol/oasis-core/go/consensus/api/transaction"
+	genesisAPI "github.com/oasisprotocol/oasis-core/go/genesis/api"
+	genesisFile "github.com/oasisprotocol/oasis-core/go/genesis/file"
+	cmdCommon "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common"
+	cmdFlags "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/flags"
+	cmdSigner "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/signer"
 )
 
 const (

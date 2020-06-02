@@ -7,13 +7,13 @@ import (
 
 	"github.com/cenkalti/backoff/v4"
 
-	"github.com/oasislabs/oasis-core/go/common"
-	"github.com/oasislabs/oasis-core/go/common/logging"
-	"github.com/oasislabs/oasis-core/go/common/service"
-	roothash "github.com/oasislabs/oasis-core/go/roothash/api"
-	"github.com/oasislabs/oasis-core/go/runtime/history"
-	"github.com/oasislabs/oasis-core/go/runtime/transaction"
-	storage "github.com/oasislabs/oasis-core/go/storage/api"
+	"github.com/oasisprotocol/oasis-core/go/common"
+	"github.com/oasisprotocol/oasis-core/go/common/logging"
+	"github.com/oasisprotocol/oasis-core/go/common/service"
+	roothash "github.com/oasisprotocol/oasis-core/go/roothash/api"
+	"github.com/oasisprotocol/oasis-core/go/runtime/history"
+	"github.com/oasisprotocol/oasis-core/go/runtime/transaction"
+	storage "github.com/oasisprotocol/oasis-core/go/storage/api"
 )
 
 const (

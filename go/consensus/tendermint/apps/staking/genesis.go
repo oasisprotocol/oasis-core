@@ -6,12 +6,12 @@ import (
 
 	"github.com/tendermint/tendermint/abci/types"
 
-	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
-	"github.com/oasislabs/oasis-core/go/common/quantity"
-	abciAPI "github.com/oasislabs/oasis-core/go/consensus/tendermint/api"
-	stakingState "github.com/oasislabs/oasis-core/go/consensus/tendermint/apps/staking/state"
-	genesis "github.com/oasislabs/oasis-core/go/genesis/api"
-	staking "github.com/oasislabs/oasis-core/go/staking/api"
+	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
+	"github.com/oasisprotocol/oasis-core/go/common/quantity"
+	abciAPI "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/api"
+	stakingState "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/apps/staking/state"
+	genesis "github.com/oasisprotocol/oasis-core/go/genesis/api"
+	staking "github.com/oasisprotocol/oasis-core/go/staking/api"
 )
 
 func (app *stakingApplication) initParameters(ctx *abciAPI.Context, state *stakingState.MutableState, st *staking.Genesis) error {

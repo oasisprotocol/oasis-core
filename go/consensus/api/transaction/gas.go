@@ -1,8 +1,8 @@
 package transaction
 
 import (
-	"github.com/oasislabs/oasis-core/go/common/errors"
-	"github.com/oasislabs/oasis-core/go/common/quantity"
+	"github.com/oasisprotocol/oasis-core/go/common/errors"
+	"github.com/oasisprotocol/oasis-core/go/common/quantity"
 )
 
 var (

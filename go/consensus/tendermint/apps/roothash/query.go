@@ -3,11 +3,11 @@ package roothash
 import (
 	"context"
 
-	"github.com/oasislabs/oasis-core/go/common"
-	abciAPI "github.com/oasislabs/oasis-core/go/consensus/tendermint/api"
-	roothashState "github.com/oasislabs/oasis-core/go/consensus/tendermint/apps/roothash/state"
-	roothash "github.com/oasislabs/oasis-core/go/roothash/api"
-	"github.com/oasislabs/oasis-core/go/roothash/api/block"
+	"github.com/oasisprotocol/oasis-core/go/common"
+	abciAPI "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/api"
+	roothashState "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/apps/roothash/state"
+	roothash "github.com/oasisprotocol/oasis-core/go/roothash/api"
+	"github.com/oasisprotocol/oasis-core/go/roothash/api/block"
 )
 
 // Query is the roothash query interface.

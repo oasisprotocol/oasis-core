@@ -7,8 +7,8 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/oasislabs/oasis-core/go/common"
-	"github.com/oasislabs/oasis-core/go/common/cbor"
+	"github.com/oasisprotocol/oasis-core/go/common"
+	"github.com/oasisprotocol/oasis-core/go/common/cbor"
 )
 
 // ServicePrefix is a prefix given to all gRPC services defined by oasis-core.

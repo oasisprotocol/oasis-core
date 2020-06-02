@@ -9,7 +9,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
 
-	"github.com/oasislabs/oasis-core/go/common/errors"
+	"github.com/oasisprotocol/oasis-core/go/common/errors"
 )
 
 var errTest = errors.New("test/grpc/errors", 1, "just testing errors")

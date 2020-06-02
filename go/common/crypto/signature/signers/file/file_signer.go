@@ -11,8 +11,8 @@ import (
 
 	"github.com/oasisprotocol/ed25519"
 
-	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
-	"github.com/oasislabs/oasis-core/go/common/pem"
+	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
+	"github.com/oasisprotocol/oasis-core/go/common/pem"
 )
 
 const (

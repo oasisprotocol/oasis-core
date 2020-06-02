@@ -9,7 +9,7 @@ import (
 	"github.com/oasisprotocol/ed25519"
 	"github.com/stretchr/testify/require"
 
-	"github.com/oasislabs/oasis-core/go/common/crypto/drbg"
+	"github.com/oasisprotocol/oasis-core/go/common/crypto/drbg"
 )
 
 func generateDeterministicNodeKeys(t *testing.T, rawSeed string) (ed25519.PublicKey, ed25519.PrivateKey) {

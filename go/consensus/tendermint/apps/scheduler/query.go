@@ -3,11 +3,11 @@ package scheduler
 import (
 	"context"
 
-	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
-	abciAPI "github.com/oasislabs/oasis-core/go/consensus/tendermint/api"
-	registryState "github.com/oasislabs/oasis-core/go/consensus/tendermint/apps/registry/state"
-	schedulerState "github.com/oasislabs/oasis-core/go/consensus/tendermint/apps/scheduler/state"
-	scheduler "github.com/oasislabs/oasis-core/go/scheduler/api"
+	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
+	abciAPI "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/api"
+	registryState "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/apps/registry/state"
+	schedulerState "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/apps/scheduler/state"
+	scheduler "github.com/oasisprotocol/oasis-core/go/scheduler/api"
 )
 
 // Query is the scheduler query interface.

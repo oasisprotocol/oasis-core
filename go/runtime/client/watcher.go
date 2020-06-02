@@ -4,16 +4,16 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/oasislabs/oasis-core/go/common"
-	"github.com/oasislabs/oasis-core/go/common/crypto/hash"
-	"github.com/oasislabs/oasis-core/go/common/service"
-	"github.com/oasislabs/oasis-core/go/epochtime/api"
-	"github.com/oasislabs/oasis-core/go/roothash/api/block"
-	"github.com/oasislabs/oasis-core/go/runtime/committee"
-	"github.com/oasislabs/oasis-core/go/runtime/transaction"
-	scheduler "github.com/oasislabs/oasis-core/go/scheduler/api"
-	storage "github.com/oasislabs/oasis-core/go/storage/api"
-	txnscheduler "github.com/oasislabs/oasis-core/go/worker/compute/txnscheduler/api"
+	"github.com/oasisprotocol/oasis-core/go/common"
+	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
+	"github.com/oasisprotocol/oasis-core/go/common/service"
+	"github.com/oasisprotocol/oasis-core/go/epochtime/api"
+	"github.com/oasisprotocol/oasis-core/go/roothash/api/block"
+	"github.com/oasisprotocol/oasis-core/go/runtime/committee"
+	"github.com/oasisprotocol/oasis-core/go/runtime/transaction"
+	scheduler "github.com/oasisprotocol/oasis-core/go/scheduler/api"
+	storage "github.com/oasisprotocol/oasis-core/go/storage/api"
+	txnscheduler "github.com/oasisprotocol/oasis-core/go/worker/compute/txnscheduler/api"
 )
 
 type watchRequest struct {

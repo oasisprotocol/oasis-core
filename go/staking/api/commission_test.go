@@ -5,8 +5,8 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/oasislabs/oasis-core/go/common/quantity"
-	epochtime "github.com/oasislabs/oasis-core/go/epochtime/api"
+	"github.com/oasisprotocol/oasis-core/go/common/quantity"
+	epochtime "github.com/oasisprotocol/oasis-core/go/epochtime/api"
 )
 
 func mustInitQuantity(t *testing.T, i int64) (q quantity.Quantity) {

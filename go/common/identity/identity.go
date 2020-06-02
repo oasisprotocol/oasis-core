@@ -8,11 +8,11 @@ import (
 	"path/filepath"
 	"sync"
 
-	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
-	"github.com/oasislabs/oasis-core/go/common/crypto/signature/signers/memory"
-	tlsCert "github.com/oasislabs/oasis-core/go/common/crypto/tls"
-	"github.com/oasislabs/oasis-core/go/common/errors"
-	"github.com/oasislabs/oasis-core/go/common/pubsub"
+	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
+	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature/signers/memory"
+	tlsCert "github.com/oasisprotocol/oasis-core/go/common/crypto/tls"
+	"github.com/oasisprotocol/oasis-core/go/common/errors"
+	"github.com/oasisprotocol/oasis-core/go/common/pubsub"
 )
 
 const (

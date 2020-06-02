@@ -14,10 +14,10 @@ import (
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/status"
 
-	commonGrpc "github.com/oasislabs/oasis-core/go/common/grpc"
-	"github.com/oasislabs/oasis-core/go/common/grpc/auth"
-	cmnTesting "github.com/oasislabs/oasis-core/go/common/grpc/testing"
-	"github.com/oasislabs/oasis-core/go/common/identity"
+	commonGrpc "github.com/oasisprotocol/oasis-core/go/common/grpc"
+	"github.com/oasisprotocol/oasis-core/go/common/grpc/auth"
+	cmnTesting "github.com/oasisprotocol/oasis-core/go/common/grpc/testing"
+	"github.com/oasisprotocol/oasis-core/go/common/identity"
 )
 
 const (

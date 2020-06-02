@@ -8,12 +8,12 @@ import (
 
 	tmcrypto "github.com/tendermint/tendermint/crypto"
 
-	abciAPI "github.com/oasislabs/oasis-core/go/consensus/tendermint/api"
-	registryState "github.com/oasislabs/oasis-core/go/consensus/tendermint/apps/registry/state"
-	stakingState "github.com/oasislabs/oasis-core/go/consensus/tendermint/apps/staking/state"
-	epochtime "github.com/oasislabs/oasis-core/go/epochtime/api"
-	registry "github.com/oasislabs/oasis-core/go/registry/api"
-	staking "github.com/oasislabs/oasis-core/go/staking/api"
+	abciAPI "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/api"
+	registryState "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/apps/registry/state"
+	stakingState "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/apps/staking/state"
+	epochtime "github.com/oasisprotocol/oasis-core/go/epochtime/api"
+	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
+	staking "github.com/oasisprotocol/oasis-core/go/staking/api"
 )
 
 func onEvidenceDoubleSign(

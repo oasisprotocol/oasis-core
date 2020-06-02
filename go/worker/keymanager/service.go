@@ -3,9 +3,9 @@ package keymanager
 import (
 	"context"
 
-	"github.com/oasislabs/oasis-core/go/common/grpc/auth"
-	"github.com/oasislabs/oasis-core/go/common/grpc/policy"
-	"github.com/oasislabs/oasis-core/go/runtime/enclaverpc/api"
+	"github.com/oasisprotocol/oasis-core/go/common/grpc/auth"
+	"github.com/oasisprotocol/oasis-core/go/common/grpc/policy"
+	"github.com/oasisprotocol/oasis-core/go/runtime/enclaverpc/api"
 )
 
 var (

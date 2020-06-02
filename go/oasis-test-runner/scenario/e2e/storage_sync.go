@@ -5,13 +5,13 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/oasislabs/oasis-core/go/oasis-test-runner/env"
-	"github.com/oasislabs/oasis-core/go/oasis-test-runner/oasis"
-	"github.com/oasislabs/oasis-core/go/oasis-test-runner/oasis/cli"
-	"github.com/oasislabs/oasis-core/go/oasis-test-runner/scenario"
-	runtimeClient "github.com/oasislabs/oasis-core/go/runtime/client/api"
-	"github.com/oasislabs/oasis-core/go/storage/database"
-	"github.com/oasislabs/oasis-core/go/storage/mkvs/checkpoint"
+	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/env"
+	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/oasis"
+	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/oasis/cli"
+	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/scenario"
+	runtimeClient "github.com/oasisprotocol/oasis-core/go/runtime/client/api"
+	"github.com/oasisprotocol/oasis-core/go/storage/database"
+	"github.com/oasisprotocol/oasis-core/go/storage/mkvs/checkpoint"
 )
 
 var (

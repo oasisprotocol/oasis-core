@@ -6,10 +6,10 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/oasislabs/oasis-core/go/common/logging"
-	cmdCommon "github.com/oasislabs/oasis-core/go/oasis-node/cmd/common"
-	cmdSigner "github.com/oasislabs/oasis-core/go/oasis-node/cmd/common/signer"
-	"github.com/oasislabs/oasis-core/go/oasis-node/cmd/signer/ledger"
+	"github.com/oasisprotocol/oasis-core/go/common/logging"
+	cmdCommon "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common"
+	cmdSigner "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/signer"
+	"github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/signer/ledger"
 )
 
 var (

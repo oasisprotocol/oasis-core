@@ -10,16 +10,16 @@ import (
 	"github.com/eapache/channels"
 	tmtypes "github.com/tendermint/tendermint/types"
 
-	"github.com/oasislabs/oasis-core/go/common/cbor"
-	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
-	memorySigner "github.com/oasislabs/oasis-core/go/common/crypto/signature/signers/memory"
-	"github.com/oasislabs/oasis-core/go/common/logging"
-	"github.com/oasislabs/oasis-core/go/common/pubsub"
-	consensus "github.com/oasislabs/oasis-core/go/consensus/api"
-	"github.com/oasislabs/oasis-core/go/consensus/api/transaction"
-	app "github.com/oasislabs/oasis-core/go/consensus/tendermint/apps/epochtime_mock"
-	"github.com/oasislabs/oasis-core/go/consensus/tendermint/service"
-	"github.com/oasislabs/oasis-core/go/epochtime/api"
+	"github.com/oasisprotocol/oasis-core/go/common/cbor"
+	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
+	memorySigner "github.com/oasisprotocol/oasis-core/go/common/crypto/signature/signers/memory"
+	"github.com/oasisprotocol/oasis-core/go/common/logging"
+	"github.com/oasisprotocol/oasis-core/go/common/pubsub"
+	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
+	"github.com/oasisprotocol/oasis-core/go/consensus/api/transaction"
+	app "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/apps/epochtime_mock"
+	"github.com/oasisprotocol/oasis-core/go/consensus/tendermint/service"
+	"github.com/oasisprotocol/oasis-core/go/epochtime/api"
 )
 
 var (

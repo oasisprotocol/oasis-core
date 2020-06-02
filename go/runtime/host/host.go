@@ -4,11 +4,11 @@ package host
 import (
 	"context"
 
-	"github.com/oasislabs/oasis-core/go/common"
-	"github.com/oasislabs/oasis-core/go/common/node"
-	"github.com/oasislabs/oasis-core/go/common/pubsub"
-	"github.com/oasislabs/oasis-core/go/common/version"
-	"github.com/oasislabs/oasis-core/go/runtime/host/protocol"
+	"github.com/oasisprotocol/oasis-core/go/common"
+	"github.com/oasisprotocol/oasis-core/go/common/node"
+	"github.com/oasisprotocol/oasis-core/go/common/pubsub"
+	"github.com/oasisprotocol/oasis-core/go/common/version"
+	"github.com/oasisprotocol/oasis-core/go/runtime/host/protocol"
 )
 
 // Config contains common configuration for the provisioned runtime.

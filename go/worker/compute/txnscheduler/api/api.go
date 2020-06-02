@@ -3,10 +3,10 @@ package api
 import (
 	"context"
 
-	"github.com/oasislabs/oasis-core/go/common"
-	"github.com/oasislabs/oasis-core/go/common/crypto/hash"
-	"github.com/oasislabs/oasis-core/go/common/errors"
-	epochtime "github.com/oasislabs/oasis-core/go/epochtime/api"
+	"github.com/oasisprotocol/oasis-core/go/common"
+	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
+	"github.com/oasisprotocol/oasis-core/go/common/errors"
+	epochtime "github.com/oasisprotocol/oasis-core/go/epochtime/api"
 )
 
 // ModuleName is the transaction scheduler module name.

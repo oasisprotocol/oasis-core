@@ -3,8 +3,8 @@ package api
 import (
 	"context"
 
-	"github.com/oasislabs/oasis-core/go/common"
-	"github.com/oasislabs/oasis-core/go/roothash/api/block"
+	"github.com/oasisprotocol/oasis-core/go/common"
+	"github.com/oasisprotocol/oasis-core/go/roothash/api/block"
 )
 
 // BlockHistory is the root hash block history keeper interface.

@@ -4,8 +4,8 @@ import (
 	"os"
 	"testing"
 
-	"github.com/oasislabs/oasis-core/go/runtime/host"
-	"github.com/oasislabs/oasis-core/go/runtime/host/tests"
+	"github.com/oasisprotocol/oasis-core/go/runtime/host"
+	"github.com/oasisprotocol/oasis-core/go/runtime/host/tests"
 )
 
 var envRuntimePath = os.Getenv("OASIS_TEST_RUNTIME_HOST_RUNTIME_PATH")

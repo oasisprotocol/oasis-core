@@ -11,10 +11,10 @@ import (
 	"github.com/dgraph-io/badger/v2"
 	"github.com/dgraph-io/badger/v2/options"
 
-	"github.com/oasislabs/oasis-core/go/common"
-	cmnBadger "github.com/oasislabs/oasis-core/go/common/badger"
-	"github.com/oasislabs/oasis-core/go/common/cbor"
-	"github.com/oasislabs/oasis-core/go/common/logging"
+	"github.com/oasisprotocol/oasis-core/go/common"
+	cmnBadger "github.com/oasisprotocol/oasis-core/go/common/badger"
+	"github.com/oasisprotocol/oasis-core/go/common/cbor"
+	"github.com/oasisprotocol/oasis-core/go/common/logging"
 )
 
 var (

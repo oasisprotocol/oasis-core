@@ -4,9 +4,9 @@ package registry
 import (
 	"github.com/spf13/cobra"
 
-	"github.com/oasislabs/oasis-core/go/oasis-node/cmd/registry/entity"
-	"github.com/oasislabs/oasis-core/go/oasis-node/cmd/registry/node"
-	"github.com/oasislabs/oasis-core/go/oasis-node/cmd/registry/runtime"
+	"github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/registry/entity"
+	"github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/registry/node"
+	"github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/registry/runtime"
 )
 
 var (

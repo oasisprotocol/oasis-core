@@ -6,8 +6,8 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/oasislabs/oasis-core/go/common/logging"
-	nodedb "github.com/oasislabs/oasis-core/go/storage/mkvs/db/api"
+	"github.com/oasisprotocol/oasis-core/go/common/logging"
+	nodedb "github.com/oasisprotocol/oasis-core/go/storage/mkvs/db/api"
 )
 
 const (

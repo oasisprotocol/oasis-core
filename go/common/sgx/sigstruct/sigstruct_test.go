@@ -10,7 +10,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/oasislabs/oasis-core/go/common/sgx"
+	"github.com/oasisprotocol/oasis-core/go/common/sgx"
 )
 
 func TestSigstruct(t *testing.T) {

@@ -10,13 +10,13 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 
-	tlsCert "github.com/oasislabs/oasis-core/go/common/crypto/tls"
-	cmnGrpc "github.com/oasislabs/oasis-core/go/common/grpc"
-	"github.com/oasislabs/oasis-core/go/common/identity"
-	"github.com/oasislabs/oasis-core/go/common/logging"
-	"github.com/oasislabs/oasis-core/go/common/sgx/ias"
-	"github.com/oasislabs/oasis-core/go/ias/api"
-	"github.com/oasislabs/oasis-core/go/ias/proxy"
+	tlsCert "github.com/oasisprotocol/oasis-core/go/common/crypto/tls"
+	cmnGrpc "github.com/oasisprotocol/oasis-core/go/common/grpc"
+	"github.com/oasisprotocol/oasis-core/go/common/identity"
+	"github.com/oasisprotocol/oasis-core/go/common/logging"
+	"github.com/oasisprotocol/oasis-core/go/common/sgx/ias"
+	"github.com/oasisprotocol/oasis-core/go/ias/api"
+	"github.com/oasisprotocol/oasis-core/go/ias/proxy"
 )
 
 var _ api.Endpoint = (*proxyClient)(nil)

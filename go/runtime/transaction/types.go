@@ -1,6 +1,6 @@
 package transaction
 
-import "github.com/oasislabs/oasis-core/go/common/cbor"
+import "github.com/oasisprotocol/oasis-core/go/common/cbor"
 
 // NOTE: These types must be synchronized with runtime/src/transaction/types.rs.
 

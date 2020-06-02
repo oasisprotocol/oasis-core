@@ -5,13 +5,13 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/oasislabs/oasis-core/go/common"
-	"github.com/oasislabs/oasis-core/go/common/sgx"
-	keymanager "github.com/oasislabs/oasis-core/go/keymanager/api"
-	cmdCommon "github.com/oasislabs/oasis-core/go/oasis-node/cmd/common"
-	cmdConsensus "github.com/oasislabs/oasis-core/go/oasis-node/cmd/common/consensus"
-	"github.com/oasislabs/oasis-core/go/oasis-node/cmd/common/flags"
-	cmdKM "github.com/oasislabs/oasis-core/go/oasis-node/cmd/keymanager"
+	"github.com/oasisprotocol/oasis-core/go/common"
+	"github.com/oasisprotocol/oasis-core/go/common/sgx"
+	keymanager "github.com/oasisprotocol/oasis-core/go/keymanager/api"
+	cmdCommon "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common"
+	cmdConsensus "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/consensus"
+	"github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/flags"
+	cmdKM "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/keymanager"
 )
 
 // KeymanagerHelpers contains the oasis-node keymanager CLI helpers.

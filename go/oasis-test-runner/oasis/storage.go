@@ -5,9 +5,9 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/oasislabs/oasis-core/go/consensus/tendermint/crypto"
-	registry "github.com/oasislabs/oasis-core/go/registry/api"
-	"github.com/oasislabs/oasis-core/go/storage/database"
+	"github.com/oasisprotocol/oasis-core/go/consensus/tendermint/crypto"
+	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
+	"github.com/oasisprotocol/oasis-core/go/storage/database"
 )
 
 const storageIdentitySeedTemplate = "ekiden node storage %d"

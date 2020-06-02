@@ -6,10 +6,10 @@ import (
 
 	"github.com/tendermint/tendermint/abci/types"
 
-	beacon "github.com/oasislabs/oasis-core/go/beacon/api"
-	abciAPI "github.com/oasislabs/oasis-core/go/consensus/tendermint/api"
-	beaconState "github.com/oasislabs/oasis-core/go/consensus/tendermint/apps/beacon/state"
-	genesis "github.com/oasislabs/oasis-core/go/genesis/api"
+	beacon "github.com/oasisprotocol/oasis-core/go/beacon/api"
+	abciAPI "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/api"
+	beaconState "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/apps/beacon/state"
+	genesis "github.com/oasisprotocol/oasis-core/go/genesis/api"
 )
 
 func (app *beaconApplication) InitChain(ctx *abciAPI.Context, req types.RequestInitChain, doc *genesis.Document) error {

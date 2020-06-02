@@ -8,13 +8,13 @@ import (
 	"fmt"
 	"sort"
 
-	"github.com/oasislabs/oasis-core/go/common/cbor"
-	"github.com/oasislabs/oasis-core/go/common/crypto/hash"
-	"github.com/oasislabs/oasis-core/go/common/keyformat"
-	"github.com/oasislabs/oasis-core/go/storage/mkvs"
-	"github.com/oasislabs/oasis-core/go/storage/mkvs/node"
-	"github.com/oasislabs/oasis-core/go/storage/mkvs/syncer"
-	"github.com/oasislabs/oasis-core/go/storage/mkvs/writelog"
+	"github.com/oasisprotocol/oasis-core/go/common/cbor"
+	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
+	"github.com/oasisprotocol/oasis-core/go/common/keyformat"
+	"github.com/oasisprotocol/oasis-core/go/storage/mkvs"
+	"github.com/oasisprotocol/oasis-core/go/storage/mkvs/node"
+	"github.com/oasisprotocol/oasis-core/go/storage/mkvs/syncer"
+	"github.com/oasisprotocol/oasis-core/go/storage/mkvs/writelog"
 )
 
 // NOTE: This should be kept in sync with runtime/src/transaction/tree.rs.

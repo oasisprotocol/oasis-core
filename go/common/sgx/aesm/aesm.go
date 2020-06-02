@@ -12,7 +12,7 @@ import (
 
 	"google.golang.org/protobuf/proto"
 
-	"github.com/oasislabs/oasis-core/go/common/sgx/ias"
+	"github.com/oasisprotocol/oasis-core/go/common/sgx/ias"
 )
 
 //go:generate protoc --go_out=. aesm_proto.proto

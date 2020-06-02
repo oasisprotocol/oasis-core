@@ -6,15 +6,15 @@ import (
 
 	"github.com/tendermint/tendermint/abci/types"
 
-	"github.com/oasislabs/oasis-core/go/common"
-	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
-	abciAPI "github.com/oasislabs/oasis-core/go/consensus/tendermint/api"
-	registryState "github.com/oasislabs/oasis-core/go/consensus/tendermint/apps/registry/state"
-	roothashState "github.com/oasislabs/oasis-core/go/consensus/tendermint/apps/roothash/state"
-	genesisAPI "github.com/oasislabs/oasis-core/go/genesis/api"
-	"github.com/oasislabs/oasis-core/go/registry/api"
-	roothashAPI "github.com/oasislabs/oasis-core/go/roothash/api"
-	storageAPI "github.com/oasislabs/oasis-core/go/storage/api"
+	"github.com/oasisprotocol/oasis-core/go/common"
+	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
+	abciAPI "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/api"
+	registryState "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/apps/registry/state"
+	roothashState "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/apps/roothash/state"
+	genesisAPI "github.com/oasisprotocol/oasis-core/go/genesis/api"
+	"github.com/oasisprotocol/oasis-core/go/registry/api"
+	roothashAPI "github.com/oasisprotocol/oasis-core/go/roothash/api"
+	storageAPI "github.com/oasisprotocol/oasis-core/go/storage/api"
 )
 
 func (app *rootHashApplication) InitChain(ctx *abciAPI.Context, request types.RequestInitChain, doc *genesisAPI.Document) error {

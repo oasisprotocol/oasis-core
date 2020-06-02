@@ -7,18 +7,18 @@ import (
 
 	tmtypes "github.com/tendermint/tendermint/types"
 
-	"github.com/oasislabs/oasis-core/go/common/identity"
-	consensus "github.com/oasislabs/oasis-core/go/consensus/genesis"
-	tendermint "github.com/oasislabs/oasis-core/go/consensus/tendermint/api"
-	"github.com/oasislabs/oasis-core/go/consensus/tendermint/crypto"
-	"github.com/oasislabs/oasis-core/go/consensus/tendermint/service"
-	epochtime "github.com/oasislabs/oasis-core/go/epochtime/api"
-	genesis "github.com/oasislabs/oasis-core/go/genesis/api"
-	genesisTestHelpers "github.com/oasislabs/oasis-core/go/genesis/tests"
-	registry "github.com/oasislabs/oasis-core/go/registry/api"
-	roothash "github.com/oasislabs/oasis-core/go/roothash/api"
-	scheduler "github.com/oasislabs/oasis-core/go/scheduler/api"
-	stakingTests "github.com/oasislabs/oasis-core/go/staking/tests/debug"
+	"github.com/oasisprotocol/oasis-core/go/common/identity"
+	consensus "github.com/oasisprotocol/oasis-core/go/consensus/genesis"
+	tendermint "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/api"
+	"github.com/oasisprotocol/oasis-core/go/consensus/tendermint/crypto"
+	"github.com/oasisprotocol/oasis-core/go/consensus/tendermint/service"
+	epochtime "github.com/oasisprotocol/oasis-core/go/epochtime/api"
+	genesis "github.com/oasisprotocol/oasis-core/go/genesis/api"
+	genesisTestHelpers "github.com/oasisprotocol/oasis-core/go/genesis/tests"
+	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
+	roothash "github.com/oasisprotocol/oasis-core/go/roothash/api"
+	scheduler "github.com/oasisprotocol/oasis-core/go/scheduler/api"
+	stakingTests "github.com/oasisprotocol/oasis-core/go/staking/tests/debug"
 )
 
 var _ service.GenesisProvider = (*testNodeGenesisProvider)(nil)

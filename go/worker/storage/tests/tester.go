@@ -6,7 +6,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/oasislabs/oasis-core/go/worker/storage"
+	"github.com/oasisprotocol/oasis-core/go/worker/storage"
 )
 
 // WorkerImplementationTests runs the storage worker implementation tests.

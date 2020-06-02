@@ -4,13 +4,13 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/oasislabs/oasis-core/go/common"
-	"github.com/oasislabs/oasis-core/go/common/node"
-	"github.com/oasislabs/oasis-core/go/common/sgx"
-	epochtime "github.com/oasislabs/oasis-core/go/epochtime/api"
-	"github.com/oasislabs/oasis-core/go/oasis-test-runner/env"
-	"github.com/oasislabs/oasis-core/go/oasis-test-runner/log"
-	registry "github.com/oasislabs/oasis-core/go/registry/api"
+	"github.com/oasisprotocol/oasis-core/go/common"
+	"github.com/oasisprotocol/oasis-core/go/common/node"
+	"github.com/oasisprotocol/oasis-core/go/common/sgx"
+	epochtime "github.com/oasisprotocol/oasis-core/go/epochtime/api"
+	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/env"
+	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/log"
+	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
 )
 
 // NetworkFixture describes configuration for the test Oasis network and

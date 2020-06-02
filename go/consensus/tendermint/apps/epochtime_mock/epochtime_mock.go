@@ -6,12 +6,12 @@ import (
 
 	"github.com/tendermint/tendermint/abci/types"
 
-	"github.com/oasislabs/oasis-core/go/common/cbor"
-	"github.com/oasislabs/oasis-core/go/consensus/api/transaction"
-	"github.com/oasislabs/oasis-core/go/consensus/tendermint/abci"
-	"github.com/oasislabs/oasis-core/go/consensus/tendermint/api"
-	epochtime "github.com/oasislabs/oasis-core/go/epochtime/api"
-	genesis "github.com/oasislabs/oasis-core/go/genesis/api"
+	"github.com/oasisprotocol/oasis-core/go/common/cbor"
+	"github.com/oasisprotocol/oasis-core/go/consensus/api/transaction"
+	"github.com/oasisprotocol/oasis-core/go/consensus/tendermint/abci"
+	"github.com/oasisprotocol/oasis-core/go/consensus/tendermint/api"
+	epochtime "github.com/oasisprotocol/oasis-core/go/epochtime/api"
+	genesis "github.com/oasisprotocol/oasis-core/go/genesis/api"
 )
 
 var _ abci.Application = (*epochTimeMockApplication)(nil)

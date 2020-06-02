@@ -6,7 +6,7 @@ import (
 	"io"
 	"sync"
 
-	db "github.com/oasislabs/oasis-core/go/storage/mkvs/db/api"
+	db "github.com/oasisprotocol/oasis-core/go/storage/mkvs/db/api"
 )
 
 // restorer is a checkpoint restorer.

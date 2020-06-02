@@ -3,10 +3,10 @@ package keymanager
 import (
 	"context"
 
-	"github.com/oasislabs/oasis-core/go/common"
-	abciAPI "github.com/oasislabs/oasis-core/go/consensus/tendermint/api"
-	keymanagerState "github.com/oasislabs/oasis-core/go/consensus/tendermint/apps/keymanager/state"
-	keymanager "github.com/oasislabs/oasis-core/go/keymanager/api"
+	"github.com/oasisprotocol/oasis-core/go/common"
+	abciAPI "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/api"
+	keymanagerState "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/apps/keymanager/state"
+	keymanager "github.com/oasisprotocol/oasis-core/go/keymanager/api"
 )
 
 // Query is the key manager query interface.

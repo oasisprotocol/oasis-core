@@ -38,7 +38,7 @@ consensus backend agnostic).
 <!-- markdownlint-disable line-length -->
 [`go/consensus`]: ../../go/consensus
 [`go/consensus/api`]: ../../go/consensus/api
-[consensus backend API documentation]: https://pkg.go.dev/github.com/oasislabs/oasis-core/go/consensus/api?tab=doc
+[consensus backend API documentation]: https://pkg.go.dev/github.com/oasisprotocol/oasis-core/go/consensus/api?tab=doc
 [Tendermint]: https://tendermint.com/
 [Epoch Time]: epochtime.md
 [Random Beacon]: beacon.md

@@ -5,7 +5,7 @@ import (
 
 	"github.com/libp2p/go-libp2p-core"
 
-	"github.com/oasislabs/oasis-core/go/common/cbor"
+	"github.com/oasisprotocol/oasis-core/go/common/cbor"
 )
 
 const moduleName = "p2p"

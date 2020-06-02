@@ -2,7 +2,7 @@
 package main
 
 import (
-	"github.com/oasislabs/oasis-core/go/oasis-remote-signer/cmd"
+	"github.com/oasisprotocol/oasis-core/go/oasis-remote-signer/cmd"
 )
 
 func main() {

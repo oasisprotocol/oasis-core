@@ -8,7 +8,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/oasislabs/oasis-core/go/common"
+	"github.com/oasisprotocol/oasis-core/go/common"
 )
 
 // RunMain runs the specified main function inside unit tests. This is usually used in E2E coverage

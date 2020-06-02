@@ -16,15 +16,15 @@ import (
 	"github.com/tendermint/tendermint/abci/types"
 	tmtypes "github.com/tendermint/tendermint/types"
 
-	"github.com/oasislabs/oasis-core/go/common/crypto/drbg"
-	"github.com/oasislabs/oasis-core/go/common/crypto/mathrand"
-	"github.com/oasislabs/oasis-core/go/common/logging"
-	"github.com/oasislabs/oasis-core/go/consensus/tendermint/abci"
-	registryApp "github.com/oasislabs/oasis-core/go/consensus/tendermint/apps/registry"
-	stakingApp "github.com/oasislabs/oasis-core/go/consensus/tendermint/apps/staking"
-	genesisFile "github.com/oasislabs/oasis-core/go/genesis/file"
-	cmdCommon "github.com/oasislabs/oasis-core/go/oasis-node/cmd/common"
-	cmdFlags "github.com/oasislabs/oasis-core/go/oasis-node/cmd/common/flags"
+	"github.com/oasisprotocol/oasis-core/go/common/crypto/drbg"
+	"github.com/oasisprotocol/oasis-core/go/common/crypto/mathrand"
+	"github.com/oasisprotocol/oasis-core/go/common/logging"
+	"github.com/oasisprotocol/oasis-core/go/consensus/tendermint/abci"
+	registryApp "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/apps/registry"
+	stakingApp "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/apps/staking"
+	genesisFile "github.com/oasisprotocol/oasis-core/go/genesis/file"
+	cmdCommon "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common"
+	cmdFlags "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/flags"
 )
 
 const (

@@ -7,10 +7,10 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/oasislabs/oasis-core/go/beacon/api"
-	consensus "github.com/oasislabs/oasis-core/go/consensus/api"
-	epochtime "github.com/oasislabs/oasis-core/go/epochtime/api"
-	epochtimeTests "github.com/oasislabs/oasis-core/go/epochtime/tests"
+	"github.com/oasisprotocol/oasis-core/go/beacon/api"
+	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
+	epochtime "github.com/oasisprotocol/oasis-core/go/epochtime/api"
+	epochtimeTests "github.com/oasisprotocol/oasis-core/go/epochtime/tests"
 )
 
 // BeaconImplementationTests exercises the basic functionality of a

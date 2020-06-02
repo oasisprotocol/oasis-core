@@ -3,7 +3,7 @@ package sigstruct
 import (
 	"fmt"
 
-	"github.com/oasislabs/oasis-core/go/common/sgx"
+	"github.com/oasisprotocol/oasis-core/go/common/sgx"
 )
 
 // UnsafeDebugForEnclave returns the SIGSTRUCT corresponding to the provided

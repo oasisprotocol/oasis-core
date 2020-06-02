@@ -2,7 +2,7 @@
 package main
 
 import (
-	"github.com/oasislabs/oasis-core/go/oasis-node/cmd"
+	"github.com/oasisprotocol/oasis-core/go/oasis-node/cmd"
 )
 
 func main() {

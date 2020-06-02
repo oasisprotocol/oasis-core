@@ -5,8 +5,8 @@ import (
 
 	"google.golang.org/grpc"
 
-	cmnGrpc "github.com/oasislabs/oasis-core/go/common/grpc"
-	epochtime "github.com/oasislabs/oasis-core/go/epochtime/api"
+	cmnGrpc "github.com/oasisprotocol/oasis-core/go/common/grpc"
+	epochtime "github.com/oasisprotocol/oasis-core/go/epochtime/api"
 )
 
 var (

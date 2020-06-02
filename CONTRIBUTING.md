@@ -38,15 +38,15 @@ most effective at receiving input and making progress.
 
 If the feature is **small** - a change to a single piece of functionality, or an
 addition that can be expressed clearly and succinctly in a few sentences, then
-the most appropriate place to propose it is as a [new Feature request](
-https://github.com/oasislabs/oasis-core/issues/new?template=feature_request.md)
-in this repository.
-Such issues will typically receive `p:3` priority in their initial triage.
+the most appropriate place to propose it is as a [new Feature request] in this
+repository. Such issues will typically receive `p:3` priority in their initial
+triage.
 
 If the feature is **more complicated**, involves protocol changes, or has
 potential safety or performance implications, then first check with us whether
 it is something we are willing to consider and is in-scope for our project.
 
+<!-- TODO: Change when moving to ADRs in this repository. -->
 If the feedback is positive, then please draft an RFC and submit it as a
 pull request to our [RFCs repository](https://github.com/oasislabs/rfcs).
 This will allow a structured review and commenting of the proposed changes.
@@ -54,6 +54,10 @@ You should aim to reach consensus before starting on implementation.
 
 *Note that we as project's maintainers still have the final word on what we
 will accept into the project.*
+
+<!-- markdownlint-disable line-length -->
+[new Feature request]: https://github.com/oasisprotocol/oasis-core/issues/new?template=feature_request.md
+<!-- markdownlint-enable line-length -->
 
 ## Bug Reports
 
@@ -63,20 +67,22 @@ about!
 If you believe a bug report presents a security risk, please follow
 [responsible disclosure](https://en.wikipedia.org/wiki/Responsible_disclosure)
 and report it directly to security@oasislabs.com instead of filing a public
-issue or posting it to a public forum.
-We will get back to you promptly.
+issue or posting it to a public forum. We will get back to you promptly.
 
-Otherwise, please, first search between [existing issues in our repository](
-https://github.com/oasislabs/oasis-core/issues) and if the issue is not reported
-yet, [file a new one](
-https://github.com/oasislabs/oasis-core/issues/new?template=bug_report.md).
+Otherwise, please, first search between [existing issues in our repository] and
+if the issue is not reported yet, [file a new one].
+
+<!-- markdownlint-disable line-length -->
+[existing issues in our repository]: https://github.com/oasisprotocol/oasis-core/issues
+[file a new one]: https://github.com/oasisprotocol/oasis-core/issues/new?template=bug_report.md
+<!-- markdownlint-enable line-length -->
 
 ## Development
 
 ### Building
 
 Our development environment is documented in our [README](
-https://github.com/oasislabs/oasis-core/blob/master/README.md).
+https://github.com/oasisprotocol/oasis-core/blob/master/README.md).
 
 ### Contributing Code
 
@@ -208,7 +214,7 @@ import (
   "github.com/opentracing/opentracing-go"
 
   // Internal imports.
-  "github.com/oasislabs/oasis-core/go/common/crypto/hash"
+  "github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
 )
 ```
 

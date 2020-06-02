@@ -3,10 +3,10 @@ package mkvs
 import (
 	"context"
 
-	db "github.com/oasislabs/oasis-core/go/storage/mkvs/db/api"
-	"github.com/oasislabs/oasis-core/go/storage/mkvs/node"
-	"github.com/oasislabs/oasis-core/go/storage/mkvs/syncer"
-	"github.com/oasislabs/oasis-core/go/storage/mkvs/writelog"
+	db "github.com/oasisprotocol/oasis-core/go/storage/mkvs/db/api"
+	"github.com/oasisprotocol/oasis-core/go/storage/mkvs/node"
+	"github.com/oasisprotocol/oasis-core/go/storage/mkvs/syncer"
+	"github.com/oasisprotocol/oasis-core/go/storage/mkvs/writelog"
 )
 
 var _ Tree = (*tree)(nil)

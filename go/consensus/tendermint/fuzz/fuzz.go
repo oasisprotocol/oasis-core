@@ -7,16 +7,16 @@ import (
 
 	"github.com/tendermint/tendermint/abci/types"
 
-	"github.com/oasislabs/oasis-core/go/common/cbor"
-	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
-	"github.com/oasislabs/oasis-core/go/common/crypto/signature/signers/memory"
-	"github.com/oasislabs/oasis-core/go/common/fuzz"
-	"github.com/oasislabs/oasis-core/go/consensus/api/transaction"
-	"github.com/oasislabs/oasis-core/go/consensus/tendermint/abci"
-	"github.com/oasislabs/oasis-core/go/consensus/tendermint/apps/epochtime_mock"
-	registryApp "github.com/oasislabs/oasis-core/go/consensus/tendermint/apps/registry"
-	stakingApp "github.com/oasislabs/oasis-core/go/consensus/tendermint/apps/staking"
-	"github.com/oasislabs/oasis-core/go/upgrade"
+	"github.com/oasisprotocol/oasis-core/go/common/cbor"
+	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
+	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature/signers/memory"
+	"github.com/oasisprotocol/oasis-core/go/common/fuzz"
+	"github.com/oasisprotocol/oasis-core/go/consensus/api/transaction"
+	"github.com/oasisprotocol/oasis-core/go/consensus/tendermint/abci"
+	"github.com/oasisprotocol/oasis-core/go/consensus/tendermint/apps/epochtime_mock"
+	registryApp "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/apps/registry"
+	stakingApp "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/apps/staking"
+	"github.com/oasisprotocol/oasis-core/go/upgrade"
 )
 
 var (

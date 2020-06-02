@@ -1,8 +1,8 @@
 package api
 
 import (
-	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
-	epochtime "github.com/oasislabs/oasis-core/go/epochtime/api"
+	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
+	epochtime "github.com/oasisprotocol/oasis-core/go/epochtime/api"
 )
 
 // FreezeForever is an epoch that can be used to freeze a node for

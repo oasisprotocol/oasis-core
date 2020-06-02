@@ -4,12 +4,12 @@ import (
 	"fmt"
 	"math"
 
-	"github.com/oasislabs/oasis-core/go/common/cbor"
-	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
-	"github.com/oasislabs/oasis-core/go/common/quantity"
-	"github.com/oasislabs/oasis-core/go/consensus/api/transaction"
-	abciAPI "github.com/oasislabs/oasis-core/go/consensus/tendermint/api"
-	staking "github.com/oasislabs/oasis-core/go/staking/api"
+	"github.com/oasisprotocol/oasis-core/go/common/cbor"
+	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
+	"github.com/oasisprotocol/oasis-core/go/common/quantity"
+	"github.com/oasisprotocol/oasis-core/go/consensus/api/transaction"
+	abciAPI "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/api"
+	staking "github.com/oasisprotocol/oasis-core/go/staking/api"
 )
 
 // feeAccumulatorKey is the block context key.

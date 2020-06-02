@@ -18,16 +18,16 @@ import (
 	flag "github.com/spf13/pflag"
 	"github.com/spf13/viper"
 
-	"github.com/oasislabs/oasis-core/go/common/logging"
-	"github.com/oasislabs/oasis-core/go/common/version"
-	nodeCommon "github.com/oasislabs/oasis-core/go/oasis-node/cmd/common"
-	nodeFlags "github.com/oasislabs/oasis-core/go/oasis-node/cmd/common/flags"
-	"github.com/oasislabs/oasis-core/go/oasis-node/cmd/common/metrics"
-	"github.com/oasislabs/oasis-core/go/oasis-test-runner/cmd/cmp"
-	"github.com/oasislabs/oasis-core/go/oasis-test-runner/cmd/common"
-	"github.com/oasislabs/oasis-core/go/oasis-test-runner/env"
-	"github.com/oasislabs/oasis-core/go/oasis-test-runner/oasis"
-	"github.com/oasislabs/oasis-core/go/oasis-test-runner/scenario"
+	"github.com/oasisprotocol/oasis-core/go/common/logging"
+	"github.com/oasisprotocol/oasis-core/go/common/version"
+	nodeCommon "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common"
+	nodeFlags "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/flags"
+	"github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/metrics"
+	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/cmd/cmp"
+	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/cmd/common"
+	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/env"
+	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/oasis"
+	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/scenario"
 )
 
 const (

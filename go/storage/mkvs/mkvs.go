@@ -6,11 +6,11 @@ import (
 	"errors"
 	"io"
 
-	"github.com/oasislabs/oasis-core/go/common"
-	"github.com/oasislabs/oasis-core/go/common/crypto/hash"
-	"github.com/oasislabs/oasis-core/go/storage/mkvs/node"
-	"github.com/oasislabs/oasis-core/go/storage/mkvs/syncer"
-	"github.com/oasislabs/oasis-core/go/storage/mkvs/writelog"
+	"github.com/oasisprotocol/oasis-core/go/common"
+	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
+	"github.com/oasisprotocol/oasis-core/go/storage/mkvs/node"
+	"github.com/oasisprotocol/oasis-core/go/storage/mkvs/syncer"
+	"github.com/oasisprotocol/oasis-core/go/storage/mkvs/writelog"
 )
 
 var (

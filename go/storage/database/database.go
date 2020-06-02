@@ -8,12 +8,12 @@ import (
 	"io"
 	"path/filepath"
 
-	"github.com/oasislabs/oasis-core/go/common/crypto/hash"
-	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
-	"github.com/oasislabs/oasis-core/go/storage/api"
-	"github.com/oasislabs/oasis-core/go/storage/mkvs/checkpoint"
-	nodedb "github.com/oasislabs/oasis-core/go/storage/mkvs/db/api"
-	badgerNodedb "github.com/oasislabs/oasis-core/go/storage/mkvs/db/badger"
+	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
+	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
+	"github.com/oasisprotocol/oasis-core/go/storage/api"
+	"github.com/oasisprotocol/oasis-core/go/storage/mkvs/checkpoint"
+	nodedb "github.com/oasisprotocol/oasis-core/go/storage/mkvs/db/api"
+	badgerNodedb "github.com/oasisprotocol/oasis-core/go/storage/mkvs/db/badger"
 )
 
 const (

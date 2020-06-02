@@ -5,7 +5,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/oasislabs/oasis-core/go/common"
+	"github.com/oasisprotocol/oasis-core/go/common"
 )
 
 func TestNodeDescriptor(t *testing.T) {

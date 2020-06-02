@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
-	"github.com/oasislabs/oasis-core/go/consensus/api/transaction"
+	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
+	"github.com/oasisprotocol/oasis-core/go/consensus/api/transaction"
 )
 
 // Genesis contains various consensus config flags that should be part of the genesis state.

@@ -3,9 +3,9 @@ package oasis
 import (
 	"fmt"
 
-	registry "github.com/oasislabs/oasis-core/go/registry/api"
-	storageClient "github.com/oasislabs/oasis-core/go/storage/client"
-	commonWorker "github.com/oasislabs/oasis-core/go/worker/common"
+	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
+	storageClient "github.com/oasisprotocol/oasis-core/go/storage/client"
+	commonWorker "github.com/oasisprotocol/oasis-core/go/worker/common"
 )
 
 const (

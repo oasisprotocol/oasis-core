@@ -5,11 +5,11 @@ import (
 
 	"google.golang.org/grpc"
 
-	cmnGrpc "github.com/oasislabs/oasis-core/go/common/grpc"
-	"github.com/oasislabs/oasis-core/go/common/pubsub"
-	"github.com/oasislabs/oasis-core/go/consensus/api/transaction"
-	epochtime "github.com/oasislabs/oasis-core/go/epochtime/api"
-	genesis "github.com/oasislabs/oasis-core/go/genesis/api"
+	cmnGrpc "github.com/oasisprotocol/oasis-core/go/common/grpc"
+	"github.com/oasisprotocol/oasis-core/go/common/pubsub"
+	"github.com/oasisprotocol/oasis-core/go/consensus/api/transaction"
+	epochtime "github.com/oasisprotocol/oasis-core/go/epochtime/api"
+	genesis "github.com/oasisprotocol/oasis-core/go/genesis/api"
 )
 
 var (

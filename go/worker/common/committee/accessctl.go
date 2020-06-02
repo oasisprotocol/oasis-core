@@ -1,11 +1,11 @@
 package committee
 
 import (
-	"github.com/oasislabs/oasis-core/go/common/accessctl"
-	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
-	"github.com/oasislabs/oasis-core/go/common/logging"
-	"github.com/oasislabs/oasis-core/go/common/node"
-	"github.com/oasislabs/oasis-core/go/runtime/committee"
+	"github.com/oasisprotocol/oasis-core/go/common/accessctl"
+	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
+	"github.com/oasisprotocol/oasis-core/go/common/logging"
+	"github.com/oasisprotocol/oasis-core/go/common/node"
+	"github.com/oasisprotocol/oasis-core/go/runtime/committee"
 )
 
 var logger = logging.GetLogger("worker/common/committee/accessctl")

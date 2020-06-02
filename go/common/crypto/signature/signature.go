@@ -18,10 +18,10 @@ import (
 
 	"github.com/oasisprotocol/ed25519"
 
-	"github.com/oasislabs/oasis-core/go/common/cbor"
-	"github.com/oasislabs/oasis-core/go/common/crypto/hash"
-	"github.com/oasislabs/oasis-core/go/common/pem"
-	"github.com/oasislabs/oasis-core/go/common/prettyprint"
+	"github.com/oasisprotocol/oasis-core/go/common/cbor"
+	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
+	"github.com/oasisprotocol/oasis-core/go/common/pem"
+	"github.com/oasisprotocol/oasis-core/go/common/prettyprint"
 )
 
 const (

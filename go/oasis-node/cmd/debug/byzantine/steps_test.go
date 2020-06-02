@@ -6,7 +6,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/oasislabs/oasis-core/go/common/sgx/ias"
+	"github.com/oasisprotocol/oasis-core/go/common/sgx/ias"
 )
 
 func TestFakeCapabilitySGX(t *testing.T) {

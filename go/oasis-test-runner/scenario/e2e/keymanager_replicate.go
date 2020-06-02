@@ -5,12 +5,12 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/oasislabs/oasis-core/go/common/cbor"
-	keymanager "github.com/oasislabs/oasis-core/go/keymanager/api"
-	"github.com/oasislabs/oasis-core/go/oasis-test-runner/env"
-	"github.com/oasislabs/oasis-core/go/oasis-test-runner/oasis"
-	"github.com/oasislabs/oasis-core/go/oasis-test-runner/scenario"
-	registry "github.com/oasislabs/oasis-core/go/registry/api"
+	"github.com/oasisprotocol/oasis-core/go/common/cbor"
+	keymanager "github.com/oasisprotocol/oasis-core/go/keymanager/api"
+	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/env"
+	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/oasis"
+	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/scenario"
+	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
 )
 
 // KeymanagerReplicate is the keymanager replication scenario.

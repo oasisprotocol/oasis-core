@@ -9,15 +9,15 @@ import (
 	"github.com/cenkalti/backoff/v4"
 	"github.com/opentracing/opentracing-go"
 
-	"github.com/oasislabs/oasis-core/go/common/cbor"
-	"github.com/oasislabs/oasis-core/go/common/logging"
-	keymanagerApi "github.com/oasislabs/oasis-core/go/keymanager/api"
-	keymanagerClient "github.com/oasislabs/oasis-core/go/keymanager/client"
-	"github.com/oasislabs/oasis-core/go/runtime/host"
-	"github.com/oasislabs/oasis-core/go/runtime/host/protocol"
-	"github.com/oasislabs/oasis-core/go/runtime/localstorage"
-	runtimeRegistry "github.com/oasislabs/oasis-core/go/runtime/registry"
-	storage "github.com/oasislabs/oasis-core/go/storage/api"
+	"github.com/oasisprotocol/oasis-core/go/common/cbor"
+	"github.com/oasisprotocol/oasis-core/go/common/logging"
+	keymanagerApi "github.com/oasisprotocol/oasis-core/go/keymanager/api"
+	keymanagerClient "github.com/oasisprotocol/oasis-core/go/keymanager/client"
+	"github.com/oasisprotocol/oasis-core/go/runtime/host"
+	"github.com/oasisprotocol/oasis-core/go/runtime/host/protocol"
+	"github.com/oasisprotocol/oasis-core/go/runtime/localstorage"
+	runtimeRegistry "github.com/oasisprotocol/oasis-core/go/runtime/registry"
+	storage "github.com/oasisprotocol/oasis-core/go/storage/api"
 )
 
 const (

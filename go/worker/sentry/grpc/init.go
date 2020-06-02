@@ -12,16 +12,16 @@ import (
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/resolver/manual"
 
-	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
-	cmnGrpc "github.com/oasislabs/oasis-core/go/common/grpc"
-	"github.com/oasislabs/oasis-core/go/common/grpc/policy"
-	"github.com/oasislabs/oasis-core/go/common/grpc/proxy"
-	"github.com/oasislabs/oasis-core/go/common/identity"
-	"github.com/oasislabs/oasis-core/go/common/logging"
-	"github.com/oasislabs/oasis-core/go/common/node"
-	cmdGrpc "github.com/oasislabs/oasis-core/go/oasis-node/cmd/common/grpc"
-	sentry "github.com/oasislabs/oasis-core/go/sentry/api"
-	"github.com/oasislabs/oasis-core/go/worker/common/configparser"
+	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
+	cmnGrpc "github.com/oasisprotocol/oasis-core/go/common/grpc"
+	"github.com/oasisprotocol/oasis-core/go/common/grpc/policy"
+	"github.com/oasisprotocol/oasis-core/go/common/grpc/proxy"
+	"github.com/oasisprotocol/oasis-core/go/common/identity"
+	"github.com/oasisprotocol/oasis-core/go/common/logging"
+	"github.com/oasisprotocol/oasis-core/go/common/node"
+	cmdGrpc "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/grpc"
+	sentry "github.com/oasisprotocol/oasis-core/go/sentry/api"
+	"github.com/oasisprotocol/oasis-core/go/worker/common/configparser"
 )
 
 const (

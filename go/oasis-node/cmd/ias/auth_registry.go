@@ -11,12 +11,12 @@ import (
 	"github.com/spf13/viper"
 	"google.golang.org/grpc"
 
-	"github.com/oasislabs/oasis-core/go/common/logging"
-	"github.com/oasislabs/oasis-core/go/common/pubsub"
-	ias "github.com/oasislabs/oasis-core/go/ias/api"
-	iasProxy "github.com/oasislabs/oasis-core/go/ias/proxy"
-	cmdGrpc "github.com/oasislabs/oasis-core/go/oasis-node/cmd/common/grpc"
-	registry "github.com/oasislabs/oasis-core/go/registry/api"
+	"github.com/oasisprotocol/oasis-core/go/common/logging"
+	"github.com/oasisprotocol/oasis-core/go/common/pubsub"
+	ias "github.com/oasisprotocol/oasis-core/go/ias/api"
+	iasProxy "github.com/oasisprotocol/oasis-core/go/ias/proxy"
+	cmdGrpc "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/grpc"
+	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
 )
 
 const registryRetryInterval = 2 * time.Second

@@ -6,13 +6,13 @@ import (
 
 	"github.com/tendermint/tendermint/abci/types"
 
-	"github.com/oasislabs/oasis-core/go/common/logging"
-	"github.com/oasislabs/oasis-core/go/consensus/api/transaction"
-	"github.com/oasislabs/oasis-core/go/consensus/tendermint/abci"
-	abciAPI "github.com/oasislabs/oasis-core/go/consensus/tendermint/api"
-	stakingState "github.com/oasislabs/oasis-core/go/consensus/tendermint/apps/staking/state"
-	epochtime "github.com/oasislabs/oasis-core/go/epochtime/api"
-	"github.com/oasislabs/oasis-core/go/genesis/api"
+	"github.com/oasisprotocol/oasis-core/go/common/logging"
+	"github.com/oasisprotocol/oasis-core/go/consensus/api/transaction"
+	"github.com/oasisprotocol/oasis-core/go/consensus/tendermint/abci"
+	abciAPI "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/api"
+	stakingState "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/apps/staking/state"
+	epochtime "github.com/oasisprotocol/oasis-core/go/epochtime/api"
+	"github.com/oasisprotocol/oasis-core/go/genesis/api"
 )
 
 var (

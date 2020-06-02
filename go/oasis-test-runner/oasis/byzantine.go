@@ -3,9 +3,9 @@ package oasis
 import (
 	"fmt"
 
-	"github.com/oasislabs/oasis-core/go/common/node"
-	epochtime "github.com/oasislabs/oasis-core/go/epochtime/api"
-	registry "github.com/oasislabs/oasis-core/go/registry/api"
+	"github.com/oasisprotocol/oasis-core/go/common/node"
+	epochtime "github.com/oasisprotocol/oasis-core/go/epochtime/api"
+	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
 )
 
 // Byzantine is an Oasis byzantine node.

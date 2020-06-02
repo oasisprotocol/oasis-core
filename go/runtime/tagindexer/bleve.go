@@ -10,13 +10,13 @@ import (
 	"github.com/blevesearch/bleve/index/scorch"
 	bleveQuery "github.com/blevesearch/bleve/search/query"
 
-	"github.com/oasislabs/oasis-core/go/common"
-	"github.com/oasislabs/oasis-core/go/common/crypto/hash"
-	"github.com/oasislabs/oasis-core/go/common/keyformat"
-	"github.com/oasislabs/oasis-core/go/common/logging"
-	"github.com/oasislabs/oasis-core/go/common/pubsub"
-	"github.com/oasislabs/oasis-core/go/runtime/client/api"
-	"github.com/oasislabs/oasis-core/go/runtime/transaction"
+	"github.com/oasisprotocol/oasis-core/go/common"
+	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
+	"github.com/oasisprotocol/oasis-core/go/common/keyformat"
+	"github.com/oasisprotocol/oasis-core/go/common/logging"
+	"github.com/oasisprotocol/oasis-core/go/common/pubsub"
+	"github.com/oasisprotocol/oasis-core/go/runtime/client/api"
+	"github.com/oasisprotocol/oasis-core/go/runtime/transaction"
 )
 
 const (

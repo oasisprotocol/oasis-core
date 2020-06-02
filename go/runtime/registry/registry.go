@@ -10,17 +10,17 @@ import (
 
 	"github.com/spf13/viper"
 
-	"github.com/oasislabs/oasis-core/go/common"
-	"github.com/oasislabs/oasis-core/go/common/identity"
-	"github.com/oasislabs/oasis-core/go/common/logging"
-	"github.com/oasislabs/oasis-core/go/common/pubsub"
-	consensus "github.com/oasislabs/oasis-core/go/consensus/api"
-	registry "github.com/oasislabs/oasis-core/go/registry/api"
-	"github.com/oasislabs/oasis-core/go/runtime/history"
-	"github.com/oasislabs/oasis-core/go/runtime/localstorage"
-	"github.com/oasislabs/oasis-core/go/runtime/tagindexer"
-	"github.com/oasislabs/oasis-core/go/storage"
-	storageAPI "github.com/oasislabs/oasis-core/go/storage/api"
+	"github.com/oasisprotocol/oasis-core/go/common"
+	"github.com/oasisprotocol/oasis-core/go/common/identity"
+	"github.com/oasisprotocol/oasis-core/go/common/logging"
+	"github.com/oasisprotocol/oasis-core/go/common/pubsub"
+	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
+	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
+	"github.com/oasisprotocol/oasis-core/go/runtime/history"
+	"github.com/oasisprotocol/oasis-core/go/runtime/localstorage"
+	"github.com/oasisprotocol/oasis-core/go/runtime/tagindexer"
+	"github.com/oasisprotocol/oasis-core/go/storage"
+	storageAPI "github.com/oasisprotocol/oasis-core/go/storage/api"
 )
 
 const (

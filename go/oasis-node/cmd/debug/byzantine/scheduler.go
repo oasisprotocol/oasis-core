@@ -7,14 +7,14 @@ import (
 
 	tmtypes "github.com/tendermint/tendermint/types"
 
-	"github.com/oasislabs/oasis-core/go/common"
-	"github.com/oasislabs/oasis-core/go/common/cbor"
-	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
-	"github.com/oasislabs/oasis-core/go/common/node"
-	schedulerapp "github.com/oasislabs/oasis-core/go/consensus/tendermint/apps/scheduler"
-	"github.com/oasislabs/oasis-core/go/consensus/tendermint/service"
-	scheduler "github.com/oasislabs/oasis-core/go/scheduler/api"
-	"github.com/oasislabs/oasis-core/go/worker/common/p2p"
+	"github.com/oasisprotocol/oasis-core/go/common"
+	"github.com/oasisprotocol/oasis-core/go/common/cbor"
+	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
+	"github.com/oasisprotocol/oasis-core/go/common/node"
+	schedulerapp "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/apps/scheduler"
+	"github.com/oasisprotocol/oasis-core/go/consensus/tendermint/service"
+	scheduler "github.com/oasisprotocol/oasis-core/go/scheduler/api"
+	"github.com/oasisprotocol/oasis-core/go/worker/common/p2p"
 )
 
 func schedulerNextElectionHeight(svc service.TendermintService, kind scheduler.CommitteeKind) (int64, error) {

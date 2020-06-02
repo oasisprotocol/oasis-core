@@ -9,12 +9,12 @@ import (
 	"path/filepath"
 	"strconv"
 
-	"github.com/oasislabs/oasis-core/go/common"
-	"github.com/oasislabs/oasis-core/go/common/cbor"
-	"github.com/oasislabs/oasis-core/go/common/crypto/hash"
-	"github.com/oasislabs/oasis-core/go/storage/mkvs"
-	db "github.com/oasislabs/oasis-core/go/storage/mkvs/db/api"
-	"github.com/oasislabs/oasis-core/go/storage/mkvs/node"
+	"github.com/oasisprotocol/oasis-core/go/common"
+	"github.com/oasisprotocol/oasis-core/go/common/cbor"
+	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
+	"github.com/oasisprotocol/oasis-core/go/storage/mkvs"
+	db "github.com/oasisprotocol/oasis-core/go/storage/mkvs/db/api"
+	"github.com/oasisprotocol/oasis-core/go/storage/mkvs/node"
 )
 
 const (

@@ -13,9 +13,9 @@ import (
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 
-	"github.com/oasislabs/oasis-core/go/common/cbor"
-	policy "github.com/oasislabs/oasis-core/go/common/grpc/policy/api"
-	"github.com/oasislabs/oasis-core/go/common/logging"
+	"github.com/oasisprotocol/oasis-core/go/common/cbor"
+	policy "github.com/oasisprotocol/oasis-core/go/common/grpc/policy/api"
+	"github.com/oasisprotocol/oasis-core/go/common/logging"
 )
 
 // Dialer should return a gRPC ClientConn that will be used

@@ -38,7 +38,7 @@ For details on how certificate verification is performed see
 <!-- markdownlint-disable line-length -->
 [registry service]: consensus/registry.md
 [consensus layer]: consensus/index.md
-[signed node descriptor]: https://pkg.go.dev/github.com/oasislabs/oasis-core/go/common/node?tab=doc#Node
+[signed node descriptor]: https://pkg.go.dev/github.com/oasisprotocol/oasis-core/go/common/node?tab=doc#Node
 [Ed25519 key pair]: crypto.md
 [the `VerifyCertificate` implementation]: ../go/common/crypto/tls/verify.go
 [`go/common/crypto/tls`]: ../go/common/crypto/tls
@@ -64,7 +64,7 @@ files in various `api` packages).
 
 <!-- markdownlint-disable line-length -->
 [CBOR]: encoding.md
-[gRPC helpers]: https://pkg.go.dev/github.com/oasislabs/oasis-core/go/common/grpc?tab=doc
+[gRPC helpers]: https://pkg.go.dev/github.com/oasisprotocol/oasis-core/go/common/grpc?tab=doc
 <!-- markdownlint-enable line-length -->
 
 ### Errors

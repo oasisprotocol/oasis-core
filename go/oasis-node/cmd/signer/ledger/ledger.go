@@ -4,8 +4,8 @@ package ledger
 import (
 	"github.com/spf13/cobra"
 
-	ledgerCommon "github.com/oasislabs/oasis-core/go/common/ledger"
-	cmdCommon "github.com/oasislabs/oasis-core/go/oasis-node/cmd/common"
+	ledgerCommon "github.com/oasisprotocol/oasis-core/go/common/ledger"
+	cmdCommon "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common"
 )
 
 var (

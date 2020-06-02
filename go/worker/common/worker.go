@@ -3,19 +3,19 @@ package common
 import (
 	"fmt"
 
-	"github.com/oasislabs/oasis-core/go/common"
-	"github.com/oasislabs/oasis-core/go/common/grpc"
-	"github.com/oasislabs/oasis-core/go/common/grpc/policy"
-	policyAPI "github.com/oasislabs/oasis-core/go/common/grpc/policy/api"
-	"github.com/oasislabs/oasis-core/go/common/identity"
-	"github.com/oasislabs/oasis-core/go/common/logging"
-	consensus "github.com/oasislabs/oasis-core/go/consensus/api"
-	genesis "github.com/oasislabs/oasis-core/go/genesis/api"
-	ias "github.com/oasislabs/oasis-core/go/ias/api"
-	keymanagerApi "github.com/oasislabs/oasis-core/go/keymanager/api"
-	runtimeRegistry "github.com/oasislabs/oasis-core/go/runtime/registry"
-	"github.com/oasislabs/oasis-core/go/worker/common/committee"
-	"github.com/oasislabs/oasis-core/go/worker/common/p2p"
+	"github.com/oasisprotocol/oasis-core/go/common"
+	"github.com/oasisprotocol/oasis-core/go/common/grpc"
+	"github.com/oasisprotocol/oasis-core/go/common/grpc/policy"
+	policyAPI "github.com/oasisprotocol/oasis-core/go/common/grpc/policy/api"
+	"github.com/oasisprotocol/oasis-core/go/common/identity"
+	"github.com/oasisprotocol/oasis-core/go/common/logging"
+	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
+	genesis "github.com/oasisprotocol/oasis-core/go/genesis/api"
+	ias "github.com/oasisprotocol/oasis-core/go/ias/api"
+	keymanagerApi "github.com/oasisprotocol/oasis-core/go/keymanager/api"
+	runtimeRegistry "github.com/oasisprotocol/oasis-core/go/runtime/registry"
+	"github.com/oasisprotocol/oasis-core/go/worker/common/committee"
+	"github.com/oasisprotocol/oasis-core/go/worker/common/p2p"
 )
 
 // Worker is a garbage bag with lower level services and common runtime objects.
