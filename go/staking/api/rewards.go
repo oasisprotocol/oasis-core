@@ -3,8 +3,8 @@ package api
 import (
 	"math/big"
 
-	"github.com/oasislabs/oasis-core/go/common/quantity"
-	epochtime "github.com/oasislabs/oasis-core/go/epochtime/api"
+	"github.com/oasisprotocol/oasis-core/go/common/quantity"
+	epochtime "github.com/oasisprotocol/oasis-core/go/epochtime/api"
 )
 
 // RewardAmountDenominator is the denominator for the reward rate.

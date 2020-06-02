@@ -5,7 +5,7 @@ import (
 
 	"google.golang.org/grpc"
 
-	cmnGrpc "github.com/oasislabs/oasis-core/go/common/grpc"
+	cmnGrpc "github.com/oasisprotocol/oasis-core/go/common/grpc"
 )
 
 var (

@@ -4,14 +4,14 @@ import (
 	"fmt"
 	"reflect"
 
-	"github.com/oasislabs/oasis-core/go/common"
-	"github.com/oasislabs/oasis-core/go/common/crypto/hash"
-	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
-	"github.com/oasislabs/oasis-core/go/common/sgx/ias"
-	roothash "github.com/oasislabs/oasis-core/go/roothash/api/block"
-	"github.com/oasislabs/oasis-core/go/roothash/api/commitment"
-	"github.com/oasislabs/oasis-core/go/runtime/transaction"
-	storage "github.com/oasislabs/oasis-core/go/storage/api"
+	"github.com/oasisprotocol/oasis-core/go/common"
+	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
+	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
+	"github.com/oasisprotocol/oasis-core/go/common/sgx/ias"
+	roothash "github.com/oasisprotocol/oasis-core/go/roothash/api/block"
+	"github.com/oasisprotocol/oasis-core/go/roothash/api/commitment"
+	"github.com/oasisprotocol/oasis-core/go/runtime/transaction"
+	storage "github.com/oasisprotocol/oasis-core/go/storage/api"
 )
 
 // NOTE: Bump RuntimeProtocol version in go/common/version if you

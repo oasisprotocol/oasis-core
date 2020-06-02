@@ -63,11 +63,11 @@ test-targets := test-unit test-node
 test-unit:
 	@$(ECHO) "$(CYAN)*** Running Go unit tests...$(OFF)"
 	@$(GO) test -timeout 5m -race -v $(GO_TEST_FLAGS) \
-	  $$($(GO) list ./... | grep --invert-match github.com/oasislabs/oasis-core/go/oasis-node)
+	  $$($(GO) list ./... | grep --invert-match github.com/oasisprotocol/oasis-core/go/oasis-node)
 
 test-node:
 	@$(ECHO) "$(CYAN)*** Running Go node tests...$(OFF)"
-	@$(GO) test -timeout 5m -race -v $(GO_TEST_FLAGS) github.com/oasislabs/oasis-core/go/oasis-node/...
+	@$(GO) test -timeout 5m -race -v $(GO_TEST_FLAGS) github.com/oasisprotocol/oasis-core/go/oasis-node/...
 
 test: $(test-targets)
 

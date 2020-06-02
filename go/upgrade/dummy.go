@@ -3,8 +3,8 @@ package upgrade
 import (
 	"context"
 
-	epochtime "github.com/oasislabs/oasis-core/go/epochtime/api"
-	"github.com/oasislabs/oasis-core/go/upgrade/api"
+	epochtime "github.com/oasisprotocol/oasis-core/go/epochtime/api"
+	"github.com/oasisprotocol/oasis-core/go/upgrade/api"
 )
 
 var (

@@ -14,19 +14,19 @@ work around that and make the second (non-header) row also bold. -->
 
 <!-- markdownlint-disable line-length -->
 [buildkite-badge]: https://badge.buildkite.com/15a8faccee0d5b5ab1af7e75eb6f9daf2d493c543fbc67dce5.svg?branch=master
-[buildkite-link]: https://buildkite.com/oasislabs/oasis-core-ci
-[github-ci-lint-badge]: https://github.com/oasislabs/oasis-core/workflows/ci-lint/badge.svg
-[github-ci-lint-link]: https://github.com/oasislabs/oasis-core/actions?query=workflow:ci-lint
-[github-ci-repr-badge]: https://github.com/oasislabs/oasis-core/workflows/ci-reproducibility/badge.svg
-[github-ci-repr-link]: https://github.com/oasislabs/oasis-core/actions?query=workflow:ci-reproducibility
-[github-release-badge]: https://github.com/oasislabs/oasis-core/workflows/release/badge.svg
-[github-release-link]: https://github.com/oasislabs/oasis-core/actions?query=workflow:release
-[codecov-badge]: https://codecov.io/gh/oasislabs/oasis-core/branch/master/graph/badge.svg
-[codecov-link]: https://codecov.io/gh/oasislabs/oasis-core
-[coveralls-badge]: https://coveralls.io/repos/github/oasislabs/oasis-core/badge.svg
-[coveralls-link]: https://coveralls.io/github/oasislabs/oasis-core
-[godoc-badge]: https://godoc.org/github.com/oasislabs/oasis-core?status.svg
-[godoc-link]: https://godoc.org/github.com/oasislabs/oasis-core
+[buildkite-link]: https://buildkite.com/oasisprotocol/oasis-core-ci
+[github-ci-lint-badge]: https://github.com/oasisprotocol/oasis-core/workflows/ci-lint/badge.svg
+[github-ci-lint-link]: https://github.com/oasisprotocol/oasis-core/actions?query=workflow:ci-lint
+[github-ci-repr-badge]: https://github.com/oasisprotocol/oasis-core/workflows/ci-reproducibility/badge.svg
+[github-ci-repr-link]: https://github.com/oasisprotocol/oasis-core/actions?query=workflow:ci-reproducibility
+[github-release-badge]: https://github.com/oasisprotocol/oasis-core/workflows/release/badge.svg
+[github-release-link]: https://github.com/oasisprotocol/oasis-core/actions?query=workflow:release
+[codecov-badge]: https://codecov.io/gh/oasisprotocol/oasis-core/branch/master/graph/badge.svg
+[codecov-link]: https://codecov.io/gh/oasisprotocol/oasis-core
+[coveralls-badge]: https://coveralls.io/repos/github/oasisprotocol/oasis-core/badge.svg
+[coveralls-link]: https://coveralls.io/github/oasisprotocol/oasis-core
+[godoc-badge]: https://godoc.org/github.com/oasisprotocol/oasis-core?status.svg
+[godoc-link]: https://godoc.org/github.com/oasisprotocol/oasis-core
 <!-- markdownlint-enable line-length -->
 
 ## Note

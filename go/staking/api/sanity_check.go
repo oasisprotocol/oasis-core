@@ -4,9 +4,9 @@ package api
 import (
 	"fmt"
 
-	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
-	"github.com/oasislabs/oasis-core/go/common/quantity"
-	epochtime "github.com/oasislabs/oasis-core/go/epochtime/api"
+	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
+	"github.com/oasisprotocol/oasis-core/go/common/quantity"
+	epochtime "github.com/oasisprotocol/oasis-core/go/epochtime/api"
 )
 
 // SanityCheck performs a sanity check on the consensus parameters.

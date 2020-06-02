@@ -5,7 +5,7 @@ import (
 	"errors"
 	"io"
 
-	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
+	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 )
 
 // SignerName is the name used to identify the composite signer.

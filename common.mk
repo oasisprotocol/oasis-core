@@ -32,7 +32,7 @@ define CONFIRM_ACTION =
 endef
 
 # Name of git remote pointing to the canonical upstream git repository, i.e.
-# git@github.com:oasislabs/oasis-core.git.
+# git@github.com:oasisprotocol/oasis-core.git.
 OASIS_CORE_GIT_ORIGIN_REMOTE ?= origin
 
 # Name of the branch where to tag the next release.
@@ -92,7 +92,7 @@ GOFLAGS ?= -trimpath -v
 
 # Add Oasis Core's version as a linker string value definition.
 ifneq ($(VERSION),)
-	export GOLDFLAGS ?= "-X github.com/oasislabs/oasis-core/go/common/version.SoftwareVersion=$(VERSION) -X github.com/oasislabs/oasis-core/go/common/version.GitBranch=$(GIT_BRANCH)"
+	export GOLDFLAGS ?= "-X github.com/oasisprotocol/oasis-core/go/common/version.SoftwareVersion=$(VERSION) -X github.com/oasisprotocol/oasis-core/go/common/version.GitBranch=$(GIT_BRANCH)"
 endif
 
 # Go build command to use by default.
@@ -155,7 +155,7 @@ the [Change Log] for **Removals and Breaking changes**.*
 If you would like to become a node operator for the Oasis Network, see the
 [Operator Docs](https://docs.oasis.dev/operators/overview.html).
 
-[Change Log]: https://github.com/oasislabs/oasis-core/blob/v$(VERSION)/CHANGELOG.md
+[Change Log]: https://github.com/oasisprotocol/oasis-core/blob/v$(VERSION)/CHANGELOG.md
 
 endef
 

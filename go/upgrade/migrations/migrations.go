@@ -2,8 +2,8 @@
 package migrations
 
 import (
-	"github.com/oasislabs/oasis-core/go/common/logging"
-	upgradeApi "github.com/oasislabs/oasis-core/go/upgrade/api"
+	"github.com/oasisprotocol/oasis-core/go/common/logging"
+	upgradeApi "github.com/oasisprotocol/oasis-core/go/upgrade/api"
 )
 
 const (

@@ -4,13 +4,13 @@ import (
 	"fmt"
 	"strconv"
 
-	"github.com/oasislabs/oasis-core/go/common/cbor"
-	"github.com/oasislabs/oasis-core/go/common/node"
-	cmdCommon "github.com/oasislabs/oasis-core/go/oasis-node/cmd/common"
-	"github.com/oasislabs/oasis-core/go/oasis-node/cmd/common/consensus"
-	"github.com/oasislabs/oasis-core/go/oasis-node/cmd/common/flags"
-	cmdRegRt "github.com/oasislabs/oasis-core/go/oasis-node/cmd/registry/runtime"
-	registry "github.com/oasislabs/oasis-core/go/registry/api"
+	"github.com/oasisprotocol/oasis-core/go/common/cbor"
+	"github.com/oasisprotocol/oasis-core/go/common/node"
+	cmdCommon "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common"
+	"github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/consensus"
+	"github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/flags"
+	cmdRegRt "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/registry/runtime"
+	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
 )
 
 // RegistryHelpers contains the oasis-node registry CLI helpers.

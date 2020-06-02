@@ -94,7 +94,7 @@ consensus layer actually know that?
 [committee scheduler]: ../consensus/scheduler.md
 [random beacon]: ../consensus/beacon.md
 [client RPC API]: ../oasis-node/rpc.md
-[`SubmitTx`]: https://pkg.go.dev/github.com/oasislabs/oasis-core/go/runtime/client/api?tab=doc#RuntimeClient.SubmitTx
+[`SubmitTx`]: https://pkg.go.dev/github.com/oasisprotocol/oasis-core/go/runtime/client/api?tab=doc#RuntimeClient.SubmitTx
 [roothash service]: ../consensus/roothash.md
 <!-- markdownlint-enable line-length -->
 

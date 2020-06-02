@@ -1,10 +1,10 @@
 package e2e
 
 import (
-	"github.com/oasislabs/oasis-core/go/oasis-test-runner/log"
-	"github.com/oasislabs/oasis-core/go/oasis-test-runner/oasis"
-	"github.com/oasislabs/oasis-core/go/oasis-test-runner/scenario"
-	"github.com/oasislabs/oasis-core/go/storage/database"
+	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/log"
+	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/oasis"
+	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/scenario"
+	"github.com/oasisprotocol/oasis-core/go/storage/database"
 )
 
 var (

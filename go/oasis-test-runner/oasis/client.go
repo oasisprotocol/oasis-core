@@ -3,8 +3,8 @@ package oasis
 import (
 	"fmt"
 
-	registry "github.com/oasislabs/oasis-core/go/registry/api"
-	storageClient "github.com/oasislabs/oasis-core/go/storage/client"
+	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
+	storageClient "github.com/oasisprotocol/oasis-core/go/storage/client"
 )
 
 // Client is an Oasis client node.

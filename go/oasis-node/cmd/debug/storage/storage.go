@@ -9,18 +9,18 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/oasislabs/oasis-core/go/common"
-	"github.com/oasislabs/oasis-core/go/common/logging"
-	cmdFlags "github.com/oasislabs/oasis-core/go/oasis-node/cmd/common/flags"
-	cmdGrpc "github.com/oasislabs/oasis-core/go/oasis-node/cmd/common/grpc"
-	cmdControl "github.com/oasislabs/oasis-core/go/oasis-node/cmd/control"
-	"github.com/oasislabs/oasis-core/go/roothash/api/block"
-	runtimeClient "github.com/oasislabs/oasis-core/go/runtime/client/api"
-	"github.com/oasislabs/oasis-core/go/storage"
-	storageAPI "github.com/oasislabs/oasis-core/go/storage/api"
-	"github.com/oasislabs/oasis-core/go/storage/mkvs/node"
-	storageWorkerAPI "github.com/oasislabs/oasis-core/go/worker/storage/api"
-	"github.com/oasislabs/oasis-core/go/worker/storage/committee"
+	"github.com/oasisprotocol/oasis-core/go/common"
+	"github.com/oasisprotocol/oasis-core/go/common/logging"
+	cmdFlags "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/flags"
+	cmdGrpc "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/grpc"
+	cmdControl "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/control"
+	"github.com/oasisprotocol/oasis-core/go/roothash/api/block"
+	runtimeClient "github.com/oasisprotocol/oasis-core/go/runtime/client/api"
+	"github.com/oasisprotocol/oasis-core/go/storage"
+	storageAPI "github.com/oasisprotocol/oasis-core/go/storage/api"
+	"github.com/oasisprotocol/oasis-core/go/storage/mkvs/node"
+	storageWorkerAPI "github.com/oasisprotocol/oasis-core/go/worker/storage/api"
+	"github.com/oasisprotocol/oasis-core/go/worker/storage/committee"
 )
 
 const (

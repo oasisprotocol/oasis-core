@@ -1,8 +1,8 @@
 package p2p
 
 import (
-	"github.com/oasislabs/oasis-core/go/common"
-	"github.com/oasislabs/oasis-core/go/roothash/api/commitment"
+	"github.com/oasisprotocol/oasis-core/go/common"
+	"github.com/oasisprotocol/oasis-core/go/roothash/api/commitment"
 )
 
 // NOTE: Bump CommitteeProtocol version in go/common/version if you

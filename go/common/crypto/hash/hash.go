@@ -10,7 +10,7 @@ import (
 	"errors"
 	"hash"
 
-	"github.com/oasislabs/oasis-core/go/common/cbor"
+	"github.com/oasisprotocol/oasis-core/go/common/cbor"
 )
 
 // Size is the size of the cryptographic hash in bytes.

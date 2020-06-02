@@ -7,11 +7,11 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/oasislabs/oasis-core/go/common"
-	"github.com/oasislabs/oasis-core/go/consensus/tendermint/apps/beacon"
-	schedulerapp "github.com/oasislabs/oasis-core/go/consensus/tendermint/apps/scheduler"
-	epochtime "github.com/oasislabs/oasis-core/go/epochtime/api"
-	scheduler "github.com/oasislabs/oasis-core/go/scheduler/api"
+	"github.com/oasisprotocol/oasis-core/go/common"
+	"github.com/oasisprotocol/oasis-core/go/consensus/tendermint/apps/beacon"
+	schedulerapp "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/apps/scheduler"
+	epochtime "github.com/oasisprotocol/oasis-core/go/epochtime/api"
+	scheduler "github.com/oasisprotocol/oasis-core/go/scheduler/api"
 )
 
 func hasSuitablePermutations(t *testing.T, beacon []byte, runtimeID common.Namespace) bool {

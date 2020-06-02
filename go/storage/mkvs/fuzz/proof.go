@@ -5,8 +5,8 @@ package fuzz
 import (
     "context"
 
-    commonFuzz "github.com/oasislabs/oasis-core/go/common/fuzz"
-    "github.com/oasislabs/oasis-core/go/storage/mkvs/syncer"
+    commonFuzz "github.com/oasisprotocol/oasis-core/go/common/fuzz"
+    "github.com/oasisprotocol/oasis-core/go/storage/mkvs/syncer"
 )
 
 var proofFuzzer *commonFuzz.InterfaceFuzzer

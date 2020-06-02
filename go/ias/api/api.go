@@ -4,8 +4,8 @@ package api
 import (
 	"context"
 
-	"github.com/oasislabs/oasis-core/go/common"
-	"github.com/oasislabs/oasis-core/go/common/sgx/ias"
+	"github.com/oasisprotocol/oasis-core/go/common"
+	"github.com/oasisprotocol/oasis-core/go/common/sgx/ias"
 )
 
 // Endpoint is an attestation validation endpoint, likely remote.

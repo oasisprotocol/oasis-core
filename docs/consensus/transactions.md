@@ -11,7 +11,7 @@ you can also check out the [consensus backend API documentation].
 <!-- markdownlint-disable line-length -->
 [consensus backend]: index.md
 [`go/consensus/api/transaction`]: ../../go/consensus/api/transaction
-[consensus backend API documentation]: https://pkg.go.dev/github.com/oasislabs/oasis-core/go/consensus/api/transaction?tab=doc
+[consensus backend API documentation]: https://pkg.go.dev/github.com/oasisprotocol/oasis-core/go/consensus/api/transaction?tab=doc
 <!-- markdownlint-enable line-length -->
 
 ## Format
@@ -104,7 +104,7 @@ some kind of simulation of transaction execution to derive the maximum amount
 consumed by execution.
 
 <!-- markdownlint-disable line-length -->
-[`EstimateGas`]: https://pkg.go.dev/github.com/oasislabs/oasis-core/go/consensus/api?tab=doc#ClientBackend.EstimateGas
+[`EstimateGas`]: https://pkg.go.dev/github.com/oasisprotocol/oasis-core/go/consensus/api?tab=doc#ClientBackend.EstimateGas
 [backend-specific]: index.md
 <!-- markdownlint-enable line-length -->
 
@@ -118,7 +118,7 @@ The consensus backend API provides a submission manager for cases where the
 It is available via the [`SignAndSubmitTx`] function.
 
 <!-- markdownlint-disable line-length -->
-[`SubmitTx`]: https://pkg.go.dev/github.com/oasislabs/oasis-core/go/consensus/api?tab=doc#ClientBackend.SubmitTx
+[`SubmitTx`]: https://pkg.go.dev/github.com/oasisprotocol/oasis-core/go/consensus/api?tab=doc#ClientBackend.SubmitTx
 [signer]: ../crypto.md
-[`SignAndSubmitTx`]: https://pkg.go.dev/github.com/oasislabs/oasis-core/go/consensus/api?tab=doc#SignAndSubmitTx
+[`SignAndSubmitTx`]: https://pkg.go.dev/github.com/oasisprotocol/oasis-core/go/consensus/api?tab=doc#SignAndSubmitTx
 <!-- markdownlint-disable line-length -->

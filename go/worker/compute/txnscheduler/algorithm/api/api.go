@@ -2,9 +2,9 @@
 package api
 
 import (
-	"github.com/oasislabs/oasis-core/go/common/crypto/hash"
-	"github.com/oasislabs/oasis-core/go/runtime/transaction"
-	"github.com/oasislabs/oasis-core/go/worker/common/committee"
+	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
+	"github.com/oasisprotocol/oasis-core/go/runtime/transaction"
+	"github.com/oasisprotocol/oasis-core/go/worker/common/committee"
 )
 
 // Algorithm defines an algorithm for scheduling incoming transaction.

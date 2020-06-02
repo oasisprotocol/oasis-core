@@ -1,7 +1,7 @@
 package scheduler
 
 import (
-	"github.com/oasislabs/oasis-core/go/consensus/tendermint/api"
+	"github.com/oasisprotocol/oasis-core/go/consensus/tendermint/api"
 )
 
 const (

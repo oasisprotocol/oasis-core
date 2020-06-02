@@ -7,10 +7,10 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/oasislabs/oasis-core/go/common/crypto/hash"
-	db "github.com/oasislabs/oasis-core/go/storage/mkvs/db/api"
-	"github.com/oasislabs/oasis-core/go/storage/mkvs/node"
-	"github.com/oasislabs/oasis-core/go/storage/mkvs/syncer"
+	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
+	db "github.com/oasisprotocol/oasis-core/go/storage/mkvs/db/api"
+	"github.com/oasisprotocol/oasis-core/go/storage/mkvs/node"
+	"github.com/oasisprotocol/oasis-core/go/storage/mkvs/syncer"
 )
 
 var errRemoveLocked = errors.New("mkvs: tried to remove locked pointer")

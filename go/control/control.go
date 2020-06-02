@@ -4,10 +4,10 @@ package control
 import (
 	"context"
 
-	"github.com/oasislabs/oasis-core/go/common/version"
-	consensus "github.com/oasislabs/oasis-core/go/consensus/api"
-	control "github.com/oasislabs/oasis-core/go/control/api"
-	upgrade "github.com/oasislabs/oasis-core/go/upgrade/api"
+	"github.com/oasisprotocol/oasis-core/go/common/version"
+	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
+	control "github.com/oasisprotocol/oasis-core/go/control/api"
+	upgrade "github.com/oasisprotocol/oasis-core/go/upgrade/api"
 )
 
 type nodeController struct {

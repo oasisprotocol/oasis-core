@@ -5,8 +5,8 @@ import (
 	"net"
 	"strconv"
 
-	"github.com/oasislabs/oasis-core/go/common"
-	"github.com/oasislabs/oasis-core/go/common/node"
+	"github.com/oasisprotocol/oasis-core/go/common"
+	"github.com/oasisprotocol/oasis-core/go/common/node"
 )
 
 // ParseAddressList parses addresses.

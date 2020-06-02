@@ -8,11 +8,11 @@ import (
 	"github.com/spf13/cobra"
 	"google.golang.org/grpc"
 
-	"github.com/oasislabs/oasis-core/go/common/logging"
-	control "github.com/oasislabs/oasis-core/go/control/api"
-	epochtime "github.com/oasislabs/oasis-core/go/epochtime/api"
-	cmdCommon "github.com/oasislabs/oasis-core/go/oasis-node/cmd/common"
-	cmdGrpc "github.com/oasislabs/oasis-core/go/oasis-node/cmd/common/grpc"
+	"github.com/oasisprotocol/oasis-core/go/common/logging"
+	control "github.com/oasisprotocol/oasis-core/go/control/api"
+	epochtime "github.com/oasisprotocol/oasis-core/go/epochtime/api"
+	cmdCommon "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common"
+	cmdGrpc "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/grpc"
 )
 
 var (

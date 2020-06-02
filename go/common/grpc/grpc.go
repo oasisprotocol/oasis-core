@@ -23,11 +23,11 @@ import (
 	"google.golang.org/grpc/grpclog"
 	"google.golang.org/grpc/keepalive"
 
-	cmnTLS "github.com/oasislabs/oasis-core/go/common/crypto/tls"
-	"github.com/oasislabs/oasis-core/go/common/grpc/auth"
-	"github.com/oasislabs/oasis-core/go/common/identity"
-	"github.com/oasislabs/oasis-core/go/common/logging"
-	"github.com/oasislabs/oasis-core/go/common/service"
+	cmnTLS "github.com/oasisprotocol/oasis-core/go/common/crypto/tls"
+	"github.com/oasisprotocol/oasis-core/go/common/grpc/auth"
+	"github.com/oasisprotocol/oasis-core/go/common/identity"
+	"github.com/oasisprotocol/oasis-core/go/common/logging"
+	"github.com/oasisprotocol/oasis-core/go/common/service"
 )
 
 const (

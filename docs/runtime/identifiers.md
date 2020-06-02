@@ -17,5 +17,5 @@ Note: Unless the registry consensus parameter `DebugAllowTestRuntimes` is
 set, attempts to register a test runtime will be rejected.
 
 <!-- markdownlint-disable line-length -->
-[`common.Namespace`]: https://pkg.go.dev/github.com/oasislabs/oasis-core/go/common?tab=doc#Namespace
+[`common.Namespace`]: https://pkg.go.dev/github.com/oasisprotocol/oasis-core/go/common?tab=doc#Namespace
 <!-- markdownlint-enable line-length -->

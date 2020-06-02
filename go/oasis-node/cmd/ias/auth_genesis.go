@@ -3,11 +3,11 @@ package ias
 import (
 	"context"
 
-	"github.com/oasislabs/oasis-core/go/common/logging"
-	genesis "github.com/oasislabs/oasis-core/go/genesis/file"
-	ias "github.com/oasislabs/oasis-core/go/ias/api"
-	iasProxy "github.com/oasislabs/oasis-core/go/ias/proxy"
-	registry "github.com/oasislabs/oasis-core/go/registry/api"
+	"github.com/oasisprotocol/oasis-core/go/common/logging"
+	genesis "github.com/oasisprotocol/oasis-core/go/genesis/file"
+	ias "github.com/oasisprotocol/oasis-core/go/ias/api"
+	iasProxy "github.com/oasisprotocol/oasis-core/go/ias/proxy"
+	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
 )
 
 type genesisAuthenticator struct {

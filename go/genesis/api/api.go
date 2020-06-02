@@ -7,16 +7,16 @@ import (
 	"io/ioutil"
 	"time"
 
-	beacon "github.com/oasislabs/oasis-core/go/beacon/api"
-	"github.com/oasislabs/oasis-core/go/common/crypto/hash"
-	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
-	consensus "github.com/oasislabs/oasis-core/go/consensus/genesis"
-	epochtime "github.com/oasislabs/oasis-core/go/epochtime/api"
-	keymanager "github.com/oasislabs/oasis-core/go/keymanager/api"
-	registry "github.com/oasislabs/oasis-core/go/registry/api"
-	roothash "github.com/oasislabs/oasis-core/go/roothash/api"
-	scheduler "github.com/oasislabs/oasis-core/go/scheduler/api"
-	staking "github.com/oasislabs/oasis-core/go/staking/api"
+	beacon "github.com/oasisprotocol/oasis-core/go/beacon/api"
+	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
+	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
+	consensus "github.com/oasisprotocol/oasis-core/go/consensus/genesis"
+	epochtime "github.com/oasisprotocol/oasis-core/go/epochtime/api"
+	keymanager "github.com/oasisprotocol/oasis-core/go/keymanager/api"
+	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
+	roothash "github.com/oasisprotocol/oasis-core/go/roothash/api"
+	scheduler "github.com/oasisprotocol/oasis-core/go/scheduler/api"
+	staking "github.com/oasisprotocol/oasis-core/go/staking/api"
 )
 
 const filePerm = 0600

@@ -3,9 +3,9 @@ package cli
 import (
 	"fmt"
 
-	"github.com/oasislabs/oasis-core/go/oasis-node/cmd/common"
-	"github.com/oasislabs/oasis-core/go/oasis-node/cmd/common/consensus"
-	"github.com/oasislabs/oasis-core/go/oasis-node/cmd/common/grpc"
+	"github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common"
+	"github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/consensus"
+	"github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/grpc"
 )
 
 // ConsensusHelpers contains the oasis-node consensus CLI helpers.

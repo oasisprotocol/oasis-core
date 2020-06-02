@@ -5,14 +5,14 @@ import (
 	"io"
 	"path/filepath"
 
-	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
-	fileSigner "github.com/oasislabs/oasis-core/go/common/crypto/signature/signers/file"
-	"github.com/oasislabs/oasis-core/go/common/entity"
-	"github.com/oasislabs/oasis-core/go/oasis-node/cmd/common"
-	"github.com/oasislabs/oasis-core/go/oasis-node/cmd/common/flags"
-	cmdSigner "github.com/oasislabs/oasis-core/go/oasis-node/cmd/common/signer"
-	cmdEntity "github.com/oasislabs/oasis-core/go/oasis-node/cmd/registry/entity"
-	"github.com/oasislabs/oasis-core/go/oasis-test-runner/env"
+	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
+	fileSigner "github.com/oasisprotocol/oasis-core/go/common/crypto/signature/signers/file"
+	"github.com/oasisprotocol/oasis-core/go/common/entity"
+	"github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common"
+	"github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/flags"
+	cmdSigner "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/signer"
+	cmdEntity "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/registry/entity"
+	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/env"
 )
 
 const entityIdentitySeedTemplate = "oasis entity %d"

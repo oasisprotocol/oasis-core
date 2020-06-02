@@ -3,8 +3,8 @@ package storage
 import (
 	"context"
 
-	"github.com/oasislabs/oasis-core/go/common/crash"
-	"github.com/oasislabs/oasis-core/go/storage/api"
+	"github.com/oasisprotocol/oasis-core/go/common/crash"
+	"github.com/oasisprotocol/oasis-core/go/storage/api"
 )
 
 const (

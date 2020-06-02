@@ -9,13 +9,13 @@ import (
 	flag "github.com/spf13/pflag"
 	"github.com/spf13/viper"
 
-	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
-	compositeSigner "github.com/oasislabs/oasis-core/go/common/crypto/signature/signers/composite"
-	fileSigner "github.com/oasislabs/oasis-core/go/common/crypto/signature/signers/file"
-	ledgerSigner "github.com/oasislabs/oasis-core/go/common/crypto/signature/signers/ledger"
-	memorySigner "github.com/oasislabs/oasis-core/go/common/crypto/signature/signers/memory"
-	remoteSigner "github.com/oasislabs/oasis-core/go/common/crypto/signature/signers/remote"
-	"github.com/oasislabs/oasis-core/go/common/crypto/tls"
+	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
+	compositeSigner "github.com/oasisprotocol/oasis-core/go/common/crypto/signature/signers/composite"
+	fileSigner "github.com/oasisprotocol/oasis-core/go/common/crypto/signature/signers/file"
+	ledgerSigner "github.com/oasisprotocol/oasis-core/go/common/crypto/signature/signers/ledger"
+	memorySigner "github.com/oasisprotocol/oasis-core/go/common/crypto/signature/signers/memory"
+	remoteSigner "github.com/oasisprotocol/oasis-core/go/common/crypto/signature/signers/remote"
+	"github.com/oasisprotocol/oasis-core/go/common/crypto/tls"
 )
 
 const (

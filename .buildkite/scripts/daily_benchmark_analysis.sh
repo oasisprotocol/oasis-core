@@ -7,7 +7,7 @@
 #
 # Script should be invoked from .buildkite/benchmarks.pipeline.yml. Required
 # env variables:
-# BUILDKITE_BUILD_URL - URL for seeing detailed testing and comparison log (e.g. https://buildkite.com/oasislabs/oasis-core-daily-benchmarks/builds/xx)
+# BUILDKITE_BUILD_URL - URL for seeing detailed testing and comparison log (e.g. https://buildkite.com/oasisprotocol/oasis-core-daily-benchmarks/builds/xx)
 # METRICS_QUERY_ADDR - address of Prometheus server (e.g. http://localhost:9090)
 # METRICS_SOURCE_GIT_BRANCH - name of feature branch on git (e.g. jsmith/feature/abc)
 # METRICS_TARGET_GIT_BRANCH - name of master branch on git (e.g. master)

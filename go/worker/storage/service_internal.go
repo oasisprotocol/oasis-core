@@ -3,7 +3,7 @@ package storage
 import (
 	"context"
 
-	"github.com/oasislabs/oasis-core/go/worker/storage/api"
+	"github.com/oasisprotocol/oasis-core/go/worker/storage/api"
 )
 
 var _ api.StorageWorker = (*Worker)(nil)

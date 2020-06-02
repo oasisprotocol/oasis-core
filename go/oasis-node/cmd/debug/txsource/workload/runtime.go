@@ -10,13 +10,13 @@ import (
 	"github.com/spf13/viper"
 	"google.golang.org/grpc"
 
-	"github.com/oasislabs/oasis-core/go/common"
-	"github.com/oasislabs/oasis-core/go/common/cbor"
-	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
-	"github.com/oasislabs/oasis-core/go/common/logging"
-	consensus "github.com/oasislabs/oasis-core/go/consensus/api"
-	runtimeClient "github.com/oasislabs/oasis-core/go/runtime/client/api"
-	runtimeTransaction "github.com/oasislabs/oasis-core/go/runtime/transaction"
+	"github.com/oasisprotocol/oasis-core/go/common"
+	"github.com/oasisprotocol/oasis-core/go/common/cbor"
+	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
+	"github.com/oasisprotocol/oasis-core/go/common/logging"
+	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
+	runtimeClient "github.com/oasisprotocol/oasis-core/go/runtime/client/api"
+	runtimeTransaction "github.com/oasisprotocol/oasis-core/go/runtime/transaction"
 )
 
 const (

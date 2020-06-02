@@ -1,4 +1,4 @@
-module github.com/oasislabs/oasis-core/go
+module github.com/oasisprotocol/oasis-core/go
 
 replace (
 	// Updates the version used in spf13/cobra (dependency via tendermint) as

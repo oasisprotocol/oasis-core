@@ -8,13 +8,13 @@ import (
 
 	"github.com/tendermint/tendermint/abci/types"
 
-	"github.com/oasislabs/oasis-core/go/common"
-	"github.com/oasislabs/oasis-core/go/common/cbor"
-	tmapi "github.com/oasislabs/oasis-core/go/consensus/tendermint/api"
-	keymanagerState "github.com/oasislabs/oasis-core/go/consensus/tendermint/apps/keymanager/state"
-	genesis "github.com/oasislabs/oasis-core/go/genesis/api"
-	keymanager "github.com/oasislabs/oasis-core/go/keymanager/api"
-	registry "github.com/oasislabs/oasis-core/go/registry/api"
+	"github.com/oasisprotocol/oasis-core/go/common"
+	"github.com/oasisprotocol/oasis-core/go/common/cbor"
+	tmapi "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/api"
+	keymanagerState "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/apps/keymanager/state"
+	genesis "github.com/oasisprotocol/oasis-core/go/genesis/api"
+	keymanager "github.com/oasisprotocol/oasis-core/go/keymanager/api"
+	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
 )
 
 func (app *keymanagerApplication) InitChain(ctx *tmapi.Context, request types.RequestInitChain, doc *genesis.Document) error {

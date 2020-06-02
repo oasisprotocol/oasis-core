@@ -4,13 +4,13 @@ package debug
 import (
 	"github.com/spf13/cobra"
 
-	"github.com/oasislabs/oasis-core/go/oasis-node/cmd/debug/byzantine"
-	"github.com/oasislabs/oasis-core/go/oasis-node/cmd/debug/consim"
-	"github.com/oasislabs/oasis-core/go/oasis-node/cmd/debug/control"
-	"github.com/oasislabs/oasis-core/go/oasis-node/cmd/debug/dumpdb"
-	"github.com/oasislabs/oasis-core/go/oasis-node/cmd/debug/fixgenesis"
-	"github.com/oasislabs/oasis-core/go/oasis-node/cmd/debug/storage"
-	"github.com/oasislabs/oasis-core/go/oasis-node/cmd/debug/txsource"
+	"github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/debug/byzantine"
+	"github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/debug/consim"
+	"github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/debug/control"
+	"github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/debug/dumpdb"
+	"github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/debug/fixgenesis"
+	"github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/debug/storage"
+	"github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/debug/txsource"
 )
 
 var debugCmd = &cobra.Command{

@@ -9,11 +9,11 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/oasislabs/oasis-core/go/common"
-	"github.com/oasislabs/oasis-core/go/common/crypto/hash"
-	"github.com/oasislabs/oasis-core/go/storage/mkvs"
-	mkvsDB "github.com/oasislabs/oasis-core/go/storage/mkvs/db/api"
-	mkvsBadgerDB "github.com/oasislabs/oasis-core/go/storage/mkvs/db/badger"
+	"github.com/oasisprotocol/oasis-core/go/common"
+	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
+	"github.com/oasisprotocol/oasis-core/go/storage/mkvs"
+	mkvsDB "github.com/oasisprotocol/oasis-core/go/storage/mkvs/db/api"
+	mkvsBadgerDB "github.com/oasisprotocol/oasis-core/go/storage/mkvs/db/badger"
 )
 
 func TestPruneKeepN(t *testing.T) {

@@ -85,8 +85,6 @@ steps:
       - buildkite-agent artifact upload simple-keyvalue-client
       - buildkite-agent artifact upload simple-keyvalue-enc-client
       - buildkite-agent artifact upload simple-keyvalue-ops-client
-    agents:
-      buildkite_agent_size: large
     plugins:
       <<: *docker_plugin
 
@@ -108,8 +106,6 @@ steps:
       - buildkite-agent artifact upload simple-keymanager
       - buildkite-agent artifact upload simple-keyvalue
       - buildkite-agent artifact upload simple-keymanager-upgrade
-    agents:
-      buildkite_agent_size: large
     plugins:
       <<: *docker_plugin
 
@@ -130,7 +126,6 @@ steps:
     env:
       TEST_BASE_DIR: /var/tmp/benchmarks
     agents:
-      buildkite_agent_size: large
       buildkite_agent_class: stable
     plugins:
       <<: *docker_plugin

@@ -2,11 +2,11 @@ package control
 
 import (
 	"context"
-	consensus "github.com/oasislabs/oasis-core/go/consensus/api"
+	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
 
-	"github.com/oasislabs/oasis-core/go/control/api"
-	epochtime "github.com/oasislabs/oasis-core/go/epochtime/api"
-	registry "github.com/oasislabs/oasis-core/go/registry/api"
+	"github.com/oasisprotocol/oasis-core/go/control/api"
+	epochtime "github.com/oasisprotocol/oasis-core/go/epochtime/api"
+	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
 )
 
 type debugController struct {

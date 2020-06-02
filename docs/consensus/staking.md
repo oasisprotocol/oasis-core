@@ -10,7 +10,7 @@ the [consensus service API documentation].
 
 <!-- markdownlint-disable line-length -->
 [`go/staking/api`]: ../../go/staking/api
-[consensus service API documentation]: https://pkg.go.dev/github.com/oasislabs/oasis-core/go/staking/api?tab=doc
+[consensus service API documentation]: https://pkg.go.dev/github.com/oasisprotocol/oasis-core/go/staking/api?tab=doc
 <!-- markdownlint-enable line-length -->
 
 ## Test Vectors
@@ -63,7 +63,7 @@ type Transfer struct {
 The transaction signer implicitly specifies the source account.
 
 <!-- markdownlint-disable line-length -->
-[`NewTransferTx`]: https://pkg.go.dev/github.com/oasislabs/oasis-core/go/staking/api?tab=doc#NewTransferTx
+[`NewTransferTx`]: https://pkg.go.dev/github.com/oasisprotocol/oasis-core/go/staking/api?tab=doc#NewTransferTx
 <!-- markdownlint-enable line-length -->
 
 ### Burn
@@ -92,7 +92,7 @@ type Burn struct {
 The transaction signer implicitly specifies the caller's account.
 
 <!-- markdownlint-disable line-length -->
-[`NewBurnTx`]: https://pkg.go.dev/github.com/oasislabs/oasis-core/go/staking/api?tab=doc#NewBurnTx
+[`NewBurnTx`]: https://pkg.go.dev/github.com/oasisprotocol/oasis-core/go/staking/api?tab=doc#NewBurnTx
 <!-- markdownlint-enable line-length -->
 
 ### Add Escrow
@@ -127,7 +127,7 @@ type Escrow struct {
 The transaction signer implicitly specifies the source account.
 
 <!-- markdownlint-disable line-length -->
-[`NewAddEscrowTx`]: https://pkg.go.dev/github.com/oasislabs/oasis-core/go/staking/api?tab=doc#NewAddEscrowTx
+[`NewAddEscrowTx`]: https://pkg.go.dev/github.com/oasisprotocol/oasis-core/go/staking/api?tab=doc#NewAddEscrowTx
 <!-- markdownlint-enable line-length -->
 
 ### Reclaim Escrow
@@ -160,7 +160,7 @@ type ReclaimEscrow struct {
 The transaction signer implicitly specifies the destination account.
 
 <!-- markdownlint-disable line-length -->
-[`NewReclaimEscrowTx`]: https://pkg.go.dev/github.com/oasislabs/oasis-core/go/staking/api?tab=doc#NewReclaimEscrowTx
+[`NewReclaimEscrowTx`]: https://pkg.go.dev/github.com/oasisprotocol/oasis-core/go/staking/api?tab=doc#NewReclaimEscrowTx
 <!-- markdownlint-enable line-length -->
 
 ### Amend Commission Schedule
@@ -190,7 +190,7 @@ type AmendCommissionSchedule struct {
 The transaction signer implicitly specifies the escrow account.
 
 <!-- markdownlint-disable line-length -->
-[`NewAmendCommissionScheduleTx`]: https://pkg.go.dev/github.com/oasislabs/oasis-core/go/staking/api?tab=doc#NewAmendCommissionScheduleTx
+[`NewAmendCommissionScheduleTx`]: https://pkg.go.dev/github.com/oasisprotocol/oasis-core/go/staking/api?tab=doc#NewAmendCommissionScheduleTx
 <!-- markdownlint-enable line-length -->
 
 ## Events

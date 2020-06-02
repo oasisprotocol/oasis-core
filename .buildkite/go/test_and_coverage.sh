@@ -28,8 +28,8 @@ pushd go
   # We need to do multiple test passes for different parts to get correct coverage.
   env -u GOPATH go test -race -coverprofile=../coverage-misc.txt -covermode=atomic -v \
     $(go list ./... | \
-        grep -v github.com/oasislabs/oasis-core/go/oasis-node | \
-        grep -v github.com/oasislabs/oasis-core/go/storage/mkvs )
+        grep -v github.com/oasisprotocol/oasis-core/go/oasis-node | \
+        grep -v github.com/oasisprotocol/oasis-core/go/storage/mkvs )
   # Oasis node tests.
   pushd oasis-node
     env -u GOPATH go test -race -coverpkg ../... -coverprofile=../../coverage-oasis-node.txt -covermode=atomic -v ./...

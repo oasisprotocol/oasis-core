@@ -3,14 +3,14 @@ package oasis
 import (
 	"google.golang.org/grpc"
 
-	cmnGrpc "github.com/oasislabs/oasis-core/go/common/grpc"
-	consensus "github.com/oasislabs/oasis-core/go/consensus/api"
-	control "github.com/oasislabs/oasis-core/go/control/api"
-	keymanager "github.com/oasislabs/oasis-core/go/keymanager/api"
-	registry "github.com/oasislabs/oasis-core/go/registry/api"
-	runtimeClient "github.com/oasislabs/oasis-core/go/runtime/client/api"
-	staking "github.com/oasislabs/oasis-core/go/staking/api"
-	storage "github.com/oasislabs/oasis-core/go/storage/api"
+	cmnGrpc "github.com/oasisprotocol/oasis-core/go/common/grpc"
+	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
+	control "github.com/oasisprotocol/oasis-core/go/control/api"
+	keymanager "github.com/oasisprotocol/oasis-core/go/keymanager/api"
+	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
+	runtimeClient "github.com/oasisprotocol/oasis-core/go/runtime/client/api"
+	staking "github.com/oasisprotocol/oasis-core/go/staking/api"
+	storage "github.com/oasisprotocol/oasis-core/go/storage/api"
 )
 
 // Controller is a network controller that connects to one of the

@@ -8,10 +8,10 @@ import (
 
 	"google.golang.org/grpc"
 
-	"github.com/oasislabs/oasis-core/go/common"
-	cmnGrpc "github.com/oasislabs/oasis-core/go/common/grpc"
-	"github.com/oasislabs/oasis-core/go/storage/mkvs/checkpoint"
-	"github.com/oasislabs/oasis-core/go/storage/mkvs/writelog"
+	"github.com/oasisprotocol/oasis-core/go/common"
+	cmnGrpc "github.com/oasisprotocol/oasis-core/go/common/grpc"
+	"github.com/oasisprotocol/oasis-core/go/storage/mkvs/checkpoint"
+	"github.com/oasisprotocol/oasis-core/go/storage/mkvs/writelog"
 )
 
 var (

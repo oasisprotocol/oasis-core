@@ -9,7 +9,7 @@ the [consensus service API documentation].
 
 <!-- markdownlint-disable line-length -->
 [`go/roothash/api`]: ../../go/roothash/api
-[consensus service API documentation]: https://pkg.go.dev/github.com/oasislabs/oasis-core/go/roothash/api?tab=doc
+[consensus service API documentation]: https://pkg.go.dev/github.com/oasisprotocol/oasis-core/go/roothash/api?tab=doc
 <!-- markdownlint-enable line-length -->
 
 ## Methods
@@ -41,9 +41,9 @@ type ExecutorCommit struct {
 * `commits` are the [executor commitments].
 
 <!-- markdownlint-disable line-length -->
-[`NewExecutorCommitTx`]: https://pkg.go.dev/github.com/oasislabs/oasis-core/go/roothash/api?tab=doc#NewExecutorCommitTx
+[`NewExecutorCommitTx`]: https://pkg.go.dev/github.com/oasisprotocol/oasis-core/go/roothash/api?tab=doc#NewExecutorCommitTx
 [runtime identifier]: ../runtime/identifiers.md
-[executor commitments]: https://pkg.go.dev/github.com/oasislabs/oasis-core/go/roothash/api/commitment?tab=doc#ExecutorCommitment
+[executor commitments]: https://pkg.go.dev/github.com/oasisprotocol/oasis-core/go/roothash/api/commitment?tab=doc#ExecutorCommitment
 <!-- markdownlint-enable line-length -->
 
 ### Merge Commit
@@ -73,8 +73,8 @@ type ExecutorCommit struct {
 * `commits` are the [merge commitments].
 
 <!-- markdownlint-disable line-length -->
-[`NewMergeCommitTx`]: https://pkg.go.dev/github.com/oasislabs/oasis-core/go/roothash/api?tab=doc#NewMergeCommitTx
-[merge commitments]: https://pkg.go.dev/github.com/oasislabs/oasis-core/go/roothash/api/commitment?tab=doc#MergeCommitment
+[`NewMergeCommitTx`]: https://pkg.go.dev/github.com/oasisprotocol/oasis-core/go/roothash/api?tab=doc#NewMergeCommitTx
+[merge commitments]: https://pkg.go.dev/github.com/oasisprotocol/oasis-core/go/roothash/api/commitment?tab=doc#MergeCommitment
 <!-- markdownlint-enable line-length -->
 
 ## Events

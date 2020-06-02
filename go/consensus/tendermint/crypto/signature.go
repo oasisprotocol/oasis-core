@@ -5,7 +5,7 @@ import (
 	"github.com/tendermint/tendermint/crypto"
 	tmed "github.com/tendermint/tendermint/crypto/ed25519"
 
-	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
+	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 )
 
 var tendermintSignatureContext = signature.NewContext("oasis-core/tendermint")

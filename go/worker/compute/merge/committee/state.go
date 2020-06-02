@@ -4,9 +4,9 @@ import (
 	"context"
 	"time"
 
-	"github.com/oasislabs/oasis-core/go/common/crypto/hash"
-	roothash "github.com/oasislabs/oasis-core/go/roothash/api"
-	"github.com/oasislabs/oasis-core/go/roothash/api/commitment"
+	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
+	roothash "github.com/oasisprotocol/oasis-core/go/roothash/api"
+	"github.com/oasisprotocol/oasis-core/go/roothash/api/commitment"
 )
 
 // StateName is a symbolic state without the attached values.

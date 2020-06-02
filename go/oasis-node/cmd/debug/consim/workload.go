@@ -7,7 +7,7 @@ import (
 
 	"github.com/spf13/viper"
 
-	genesis "github.com/oasislabs/oasis-core/go/genesis/api"
+	genesis "github.com/oasisprotocol/oasis-core/go/genesis/api"
 )
 
 // Tx is a single transaction, and the expected Check/DeliverTx status

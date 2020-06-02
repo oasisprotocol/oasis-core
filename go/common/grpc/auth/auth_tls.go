@@ -11,7 +11,7 @@ import (
 	"google.golang.org/grpc/peer"
 	"google.golang.org/grpc/status"
 
-	"github.com/oasislabs/oasis-core/go/common/accessctl"
+	"github.com/oasisprotocol/oasis-core/go/common/accessctl"
 )
 
 // PeerCertAuthenticator is a server side gRPC authentication function

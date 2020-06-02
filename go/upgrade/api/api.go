@@ -4,8 +4,8 @@ package api
 import (
 	"context"
 
-	"github.com/oasislabs/oasis-core/go/common/errors"
-	epochtime "github.com/oasislabs/oasis-core/go/epochtime/api"
+	"github.com/oasisprotocol/oasis-core/go/common/errors"
+	epochtime "github.com/oasisprotocol/oasis-core/go/epochtime/api"
 )
 
 const (

@@ -13,13 +13,13 @@ import (
 	"os"
 	"sync"
 
-	"github.com/oasislabs/oasis-core/go/common/crypto/hash"
-	"github.com/oasislabs/oasis-core/go/common/logging"
-	"github.com/oasislabs/oasis-core/go/common/persistent"
-	"github.com/oasislabs/oasis-core/go/common/version"
-	epochtime "github.com/oasislabs/oasis-core/go/epochtime/api"
-	"github.com/oasislabs/oasis-core/go/upgrade/api"
-	"github.com/oasislabs/oasis-core/go/upgrade/migrations"
+	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
+	"github.com/oasisprotocol/oasis-core/go/common/logging"
+	"github.com/oasisprotocol/oasis-core/go/common/persistent"
+	"github.com/oasisprotocol/oasis-core/go/common/version"
+	epochtime "github.com/oasisprotocol/oasis-core/go/epochtime/api"
+	"github.com/oasisprotocol/oasis-core/go/upgrade/api"
+	"github.com/oasisprotocol/oasis-core/go/upgrade/migrations"
 )
 
 var (

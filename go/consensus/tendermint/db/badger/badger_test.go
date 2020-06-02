@@ -8,7 +8,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/oasislabs/oasis-core/go/consensus/tendermint/db/tests"
+	"github.com/oasisprotocol/oasis-core/go/consensus/tendermint/db/tests"
 )
 
 func TestBadgerTendermintDB(t *testing.T) {

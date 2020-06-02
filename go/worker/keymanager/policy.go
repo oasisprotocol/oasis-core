@@ -1,9 +1,9 @@
 package keymanager
 
 import (
-	"github.com/oasislabs/oasis-core/go/common/accessctl"
-	enclaverpc "github.com/oasislabs/oasis-core/go/runtime/enclaverpc/api"
-	"github.com/oasislabs/oasis-core/go/worker/common/committee"
+	"github.com/oasisprotocol/oasis-core/go/common/accessctl"
+	enclaverpc "github.com/oasisprotocol/oasis-core/go/runtime/enclaverpc/api"
+	"github.com/oasisprotocol/oasis-core/go/worker/common/committee"
 )
 
 // Only members of the current executor committee and other key manager nodes

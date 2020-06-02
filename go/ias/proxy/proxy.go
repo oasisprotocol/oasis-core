@@ -4,9 +4,9 @@ package proxy
 import (
 	"context"
 
-	"github.com/oasislabs/oasis-core/go/common/logging"
-	"github.com/oasislabs/oasis-core/go/common/sgx/ias"
-	"github.com/oasislabs/oasis-core/go/ias/api"
+	"github.com/oasisprotocol/oasis-core/go/common/logging"
+	"github.com/oasisprotocol/oasis-core/go/common/sgx/ias"
+	"github.com/oasisprotocol/oasis-core/go/ias/api"
 )
 
 // CommonName is the CommonName for the IAS proxy TLS certificate.

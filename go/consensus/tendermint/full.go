@@ -8,7 +8,7 @@ import (
 	tmrpctypes "github.com/tendermint/tendermint/rpc/core/types"
 	tmstate "github.com/tendermint/tendermint/state"
 
-	consensusAPI "github.com/oasislabs/oasis-core/go/consensus/api"
+	consensusAPI "github.com/oasisprotocol/oasis-core/go/consensus/api"
 )
 
 // We must use Tendermint's amino codec as some Tendermint's types are not easily unmarshallable.

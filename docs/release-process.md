@@ -116,10 +116,12 @@ checksums, and publish a GitHub Release that accompanies the versioned git tag.
 Browse to [Oasis Core's releases page] and make sure the new release is properly
 published.
 
-[canonical git repository]: https://github.com/oasislabs/oasis-core
+<!-- markdownlint-disable line-length -->
+[canonical git repository]: https://github.com/oasisprotocol/oasis-core
 [Release manager workflow]: ../.github/workflows/release.yml
 [GoReleaser]: https://goreleaser.com/
-[Oasis Core's releases page]: https://github.com/oasislabs/oasis-core/releases
+[Oasis Core's releases page]: https://github.com/oasisprotocol/oasis-core/releases
+<!-- markdownlint-enable line-length -->
 
 ## Preparing a bugfix/stable release
 

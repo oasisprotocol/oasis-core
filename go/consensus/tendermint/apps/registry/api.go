@@ -1,8 +1,8 @@
 package registry
 
 import (
-	"github.com/oasislabs/oasis-core/go/common/entity"
-	"github.com/oasislabs/oasis-core/go/consensus/tendermint/api"
+	"github.com/oasisprotocol/oasis-core/go/common/entity"
+	"github.com/oasisprotocol/oasis-core/go/consensus/tendermint/api"
 )
 
 const (

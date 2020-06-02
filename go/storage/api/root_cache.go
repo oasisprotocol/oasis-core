@@ -5,13 +5,13 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/oasislabs/oasis-core/go/common"
-	"github.com/oasislabs/oasis-core/go/common/cache/lru"
-	"github.com/oasislabs/oasis-core/go/common/crypto/hash"
-	"github.com/oasislabs/oasis-core/go/storage/mkvs"
-	nodedb "github.com/oasislabs/oasis-core/go/storage/mkvs/db/api"
-	"github.com/oasislabs/oasis-core/go/storage/mkvs/syncer"
-	"github.com/oasislabs/oasis-core/go/storage/mkvs/writelog"
+	"github.com/oasisprotocol/oasis-core/go/common"
+	"github.com/oasisprotocol/oasis-core/go/common/cache/lru"
+	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
+	"github.com/oasisprotocol/oasis-core/go/storage/mkvs"
+	nodedb "github.com/oasisprotocol/oasis-core/go/storage/mkvs/db/api"
+	"github.com/oasisprotocol/oasis-core/go/storage/mkvs/syncer"
+	"github.com/oasisprotocol/oasis-core/go/storage/mkvs/writelog"
 )
 
 // RootCache is a LRU based tree cache.

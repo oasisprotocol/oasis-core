@@ -1,9 +1,9 @@
 package roothash
 
 import (
-	"github.com/oasislabs/oasis-core/go/common"
-	"github.com/oasislabs/oasis-core/go/consensus/tendermint/api"
-	roothash "github.com/oasislabs/oasis-core/go/roothash/api"
+	"github.com/oasisprotocol/oasis-core/go/common"
+	"github.com/oasisprotocol/oasis-core/go/consensus/tendermint/api"
+	roothash "github.com/oasisprotocol/oasis-core/go/roothash/api"
 )
 
 const (

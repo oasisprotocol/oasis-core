@@ -9,19 +9,19 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/oasislabs/oasis-core/go/common"
-	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
-	"github.com/oasislabs/oasis-core/go/common/entity"
-	"github.com/oasislabs/oasis-core/go/common/identity"
-	"github.com/oasislabs/oasis-core/go/common/quantity"
-	consensusAPI "github.com/oasislabs/oasis-core/go/consensus/api"
-	tendermintTests "github.com/oasislabs/oasis-core/go/consensus/tendermint/tests"
-	epochtime "github.com/oasislabs/oasis-core/go/epochtime/api"
-	epochtimeTests "github.com/oasislabs/oasis-core/go/epochtime/tests"
-	registry "github.com/oasislabs/oasis-core/go/registry/api"
-	"github.com/oasislabs/oasis-core/go/roothash/api/block"
-	"github.com/oasislabs/oasis-core/go/staking/api"
-	"github.com/oasislabs/oasis-core/go/staking/tests/debug"
+	"github.com/oasisprotocol/oasis-core/go/common"
+	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
+	"github.com/oasisprotocol/oasis-core/go/common/entity"
+	"github.com/oasisprotocol/oasis-core/go/common/identity"
+	"github.com/oasisprotocol/oasis-core/go/common/quantity"
+	consensusAPI "github.com/oasisprotocol/oasis-core/go/consensus/api"
+	tendermintTests "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/tests"
+	epochtime "github.com/oasisprotocol/oasis-core/go/epochtime/api"
+	epochtimeTests "github.com/oasisprotocol/oasis-core/go/epochtime/tests"
+	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
+	"github.com/oasisprotocol/oasis-core/go/roothash/api/block"
+	"github.com/oasisprotocol/oasis-core/go/staking/api"
+	"github.com/oasisprotocol/oasis-core/go/staking/tests/debug"
 )
 
 const recvTimeout = 5 * time.Second

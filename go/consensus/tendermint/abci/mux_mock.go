@@ -3,8 +3,8 @@ package abci
 import (
 	"context"
 
-	epochtime "github.com/oasislabs/oasis-core/go/epochtime/api"
-	upgrade "github.com/oasislabs/oasis-core/go/upgrade/api"
+	epochtime "github.com/oasisprotocol/oasis-core/go/epochtime/api"
+	upgrade "github.com/oasisprotocol/oasis-core/go/upgrade/api"
 )
 
 // MockABCIMux exports some of the muxer's internal methods for testing use.

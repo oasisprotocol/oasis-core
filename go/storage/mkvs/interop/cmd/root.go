@@ -4,7 +4,7 @@ package cmd
 import (
 	"github.com/spf13/cobra"
 
-	"github.com/oasislabs/oasis-core/go/common/version"
+	"github.com/oasisprotocol/oasis-core/go/common/version"
 )
 
 var (

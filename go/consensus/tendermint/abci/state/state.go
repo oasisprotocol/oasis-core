@@ -4,11 +4,11 @@ import (
 	"context"
 	"errors"
 
-	"github.com/oasislabs/oasis-core/go/common/cbor"
-	"github.com/oasislabs/oasis-core/go/common/keyformat"
-	consensusGenesis "github.com/oasislabs/oasis-core/go/consensus/genesis"
-	"github.com/oasislabs/oasis-core/go/consensus/tendermint/api"
-	"github.com/oasislabs/oasis-core/go/storage/mkvs"
+	"github.com/oasisprotocol/oasis-core/go/common/cbor"
+	"github.com/oasisprotocol/oasis-core/go/common/keyformat"
+	consensusGenesis "github.com/oasisprotocol/oasis-core/go/consensus/genesis"
+	"github.com/oasisprotocol/oasis-core/go/consensus/tendermint/api"
+	"github.com/oasisprotocol/oasis-core/go/storage/mkvs"
 )
 
 var (

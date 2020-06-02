@@ -4,13 +4,13 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/oasislabs/oasis-core/go/common"
-	"github.com/oasislabs/oasis-core/go/common/cbor"
-	"github.com/oasislabs/oasis-core/go/common/node"
-	"github.com/oasislabs/oasis-core/go/common/sgx"
-	cmnIAS "github.com/oasislabs/oasis-core/go/common/sgx/ias"
-	ias "github.com/oasislabs/oasis-core/go/ias/api"
-	registry "github.com/oasislabs/oasis-core/go/registry/api"
+	"github.com/oasisprotocol/oasis-core/go/common"
+	"github.com/oasisprotocol/oasis-core/go/common/cbor"
+	"github.com/oasisprotocol/oasis-core/go/common/node"
+	"github.com/oasisprotocol/oasis-core/go/common/sgx"
+	cmnIAS "github.com/oasisprotocol/oasis-core/go/common/sgx/ias"
+	ias "github.com/oasisprotocol/oasis-core/go/ias/api"
+	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
 )
 
 type enclaveStore struct {

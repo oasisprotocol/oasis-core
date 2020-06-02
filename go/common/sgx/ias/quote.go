@@ -4,7 +4,7 @@ import (
 	"encoding/binary"
 	"fmt"
 
-	"github.com/oasislabs/oasis-core/go/common/sgx"
+	"github.com/oasisprotocol/oasis-core/go/common/sgx"
 )
 
 const (

@@ -5,7 +5,7 @@ package main
 import (
 	"testing"
 
-	cmnTesting "github.com/oasislabs/oasis-core/go/common/testing"
+	cmnTesting "github.com/oasisprotocol/oasis-core/go/common/testing"
 )
 
 func TestCoverageE2E(t *testing.T) {

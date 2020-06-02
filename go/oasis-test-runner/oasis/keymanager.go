@@ -5,14 +5,14 @@ import (
 	"path/filepath"
 	"strconv"
 
-	"github.com/oasislabs/oasis-core/go/common/node"
-	"github.com/oasislabs/oasis-core/go/consensus/tendermint/crypto"
-	"github.com/oasislabs/oasis-core/go/oasis-node/cmd/common"
-	"github.com/oasislabs/oasis-core/go/oasis-node/cmd/common/flags"
-	kmCmd "github.com/oasislabs/oasis-core/go/oasis-node/cmd/keymanager"
-	"github.com/oasislabs/oasis-core/go/oasis-test-runner/env"
-	registry "github.com/oasislabs/oasis-core/go/registry/api"
-	workerCommon "github.com/oasislabs/oasis-core/go/worker/common"
+	"github.com/oasisprotocol/oasis-core/go/common/node"
+	"github.com/oasisprotocol/oasis-core/go/consensus/tendermint/crypto"
+	"github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common"
+	"github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/flags"
+	kmCmd "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/keymanager"
+	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/env"
+	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
+	workerCommon "github.com/oasisprotocol/oasis-core/go/worker/common"
 )
 
 const (

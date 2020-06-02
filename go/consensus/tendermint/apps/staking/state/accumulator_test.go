@@ -6,10 +6,10 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/oasislabs/oasis-core/go/common/entity"
-	"github.com/oasislabs/oasis-core/go/common/quantity"
-	abciAPI "github.com/oasislabs/oasis-core/go/consensus/tendermint/api"
-	staking "github.com/oasislabs/oasis-core/go/staking/api"
+	"github.com/oasisprotocol/oasis-core/go/common/entity"
+	"github.com/oasisprotocol/oasis-core/go/common/quantity"
+	abciAPI "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/api"
+	staking "github.com/oasisprotocol/oasis-core/go/staking/api"
 )
 
 func TestStakeAccumulatorCache(t *testing.T) {

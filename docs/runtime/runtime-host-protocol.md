@@ -31,7 +31,7 @@ Maximum allowed message size is 104857600 bytes.
 See the [API reference] for a list of all supported messages.
 
 <!-- markdownlint-disable line-length -->
-[API reference]: https://pkg.go.dev/github.com/oasislabs/oasis-core/go/worker/common/host/protocol?tab=doc#Body
+[API reference]: https://pkg.go.dev/github.com/oasisprotocol/oasis-core/go/worker/common/host/protocol?tab=doc#Body
 <!-- markdownlint-enable line-length -->
 
 ## Operation

@@ -3,9 +3,9 @@ package api
 import (
 	"context"
 
-	"github.com/oasislabs/oasis-core/go/common"
-	"github.com/oasislabs/oasis-core/go/common/errors"
-	storage "github.com/oasislabs/oasis-core/go/storage/api"
+	"github.com/oasisprotocol/oasis-core/go/common"
+	"github.com/oasisprotocol/oasis-core/go/common/errors"
+	storage "github.com/oasisprotocol/oasis-core/go/storage/api"
 )
 
 // ModuleName is the storage worker module name.

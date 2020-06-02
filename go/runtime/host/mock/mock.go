@@ -5,14 +5,14 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/oasislabs/oasis-core/go/common"
-	"github.com/oasislabs/oasis-core/go/common/crypto/hash"
-	"github.com/oasislabs/oasis-core/go/common/pubsub"
-	"github.com/oasislabs/oasis-core/go/roothash/api/commitment"
-	"github.com/oasislabs/oasis-core/go/runtime/host"
-	"github.com/oasislabs/oasis-core/go/runtime/host/protocol"
-	"github.com/oasislabs/oasis-core/go/runtime/transaction"
-	mkvsNode "github.com/oasislabs/oasis-core/go/storage/mkvs/node"
+	"github.com/oasisprotocol/oasis-core/go/common"
+	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
+	"github.com/oasisprotocol/oasis-core/go/common/pubsub"
+	"github.com/oasisprotocol/oasis-core/go/roothash/api/commitment"
+	"github.com/oasisprotocol/oasis-core/go/runtime/host"
+	"github.com/oasisprotocol/oasis-core/go/runtime/host/protocol"
+	"github.com/oasisprotocol/oasis-core/go/runtime/transaction"
+	mkvsNode "github.com/oasisprotocol/oasis-core/go/storage/mkvs/node"
 )
 
 type provisioner struct {

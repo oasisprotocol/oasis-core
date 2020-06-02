@@ -3,12 +3,12 @@ package keymanager
 import (
 	"fmt"
 
-	"github.com/oasislabs/oasis-core/go/common/cbor"
-	tmapi "github.com/oasislabs/oasis-core/go/consensus/tendermint/api"
-	keymanagerState "github.com/oasislabs/oasis-core/go/consensus/tendermint/apps/keymanager/state"
-	registryState "github.com/oasislabs/oasis-core/go/consensus/tendermint/apps/registry/state"
-	"github.com/oasislabs/oasis-core/go/keymanager/api"
-	registry "github.com/oasislabs/oasis-core/go/registry/api"
+	"github.com/oasisprotocol/oasis-core/go/common/cbor"
+	tmapi "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/api"
+	keymanagerState "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/apps/keymanager/state"
+	registryState "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/apps/registry/state"
+	"github.com/oasisprotocol/oasis-core/go/keymanager/api"
+	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
 )
 
 func (app *keymanagerApplication) updatePolicy(

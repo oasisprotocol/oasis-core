@@ -4,10 +4,10 @@ import (
 	flag "github.com/spf13/pflag"
 	"github.com/spf13/viper"
 
-	workerCommon "github.com/oasislabs/oasis-core/go/worker/common"
-	"github.com/oasislabs/oasis-core/go/worker/compute/executor"
-	txnSchedulerAlgorithm "github.com/oasislabs/oasis-core/go/worker/compute/txnscheduler/algorithm"
-	"github.com/oasislabs/oasis-core/go/worker/registration"
+	workerCommon "github.com/oasisprotocol/oasis-core/go/worker/common"
+	"github.com/oasisprotocol/oasis-core/go/worker/compute/executor"
+	txnSchedulerAlgorithm "github.com/oasisprotocol/oasis-core/go/worker/compute/txnscheduler/algorithm"
+	"github.com/oasisprotocol/oasis-core/go/worker/registration"
 )
 
 const (

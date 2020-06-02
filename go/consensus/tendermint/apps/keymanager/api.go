@@ -1,7 +1,7 @@
 // Package keymanager implementes the key manager management applicaiton.
 package keymanager
 
-import api "github.com/oasislabs/oasis-core/go/consensus/tendermint/api"
+import api "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/api"
 
 const (
 	// AppID is the unique application identifier.

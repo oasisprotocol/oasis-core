@@ -9,13 +9,13 @@ import (
 	"github.com/eapache/channels"
 	tmtypes "github.com/tendermint/tendermint/types"
 
-	"github.com/oasislabs/oasis-core/go/common/cbor"
-	"github.com/oasislabs/oasis-core/go/common/logging"
-	"github.com/oasislabs/oasis-core/go/common/pubsub"
-	consensus "github.com/oasislabs/oasis-core/go/consensus/api"
-	app "github.com/oasislabs/oasis-core/go/consensus/tendermint/apps/scheduler"
-	"github.com/oasislabs/oasis-core/go/consensus/tendermint/service"
-	"github.com/oasislabs/oasis-core/go/scheduler/api"
+	"github.com/oasisprotocol/oasis-core/go/common/cbor"
+	"github.com/oasisprotocol/oasis-core/go/common/logging"
+	"github.com/oasisprotocol/oasis-core/go/common/pubsub"
+	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
+	app "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/apps/scheduler"
+	"github.com/oasisprotocol/oasis-core/go/consensus/tendermint/service"
+	"github.com/oasisprotocol/oasis-core/go/scheduler/api"
 )
 
 var _ api.Backend = (*tendermintBackend)(nil)

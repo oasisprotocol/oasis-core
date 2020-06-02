@@ -11,13 +11,13 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/oasislabs/oasis-core/go/common"
-	"github.com/oasislabs/oasis-core/go/common/crypto/hash"
-	genesisTestHelpers "github.com/oasislabs/oasis-core/go/genesis/tests"
-	"github.com/oasislabs/oasis-core/go/storage/api"
-	"github.com/oasislabs/oasis-core/go/storage/mkvs"
-	"github.com/oasislabs/oasis-core/go/storage/mkvs/checkpoint"
-	"github.com/oasislabs/oasis-core/go/storage/mkvs/writelog"
+	"github.com/oasisprotocol/oasis-core/go/common"
+	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
+	genesisTestHelpers "github.com/oasisprotocol/oasis-core/go/genesis/tests"
+	"github.com/oasisprotocol/oasis-core/go/storage/api"
+	"github.com/oasisprotocol/oasis-core/go/storage/mkvs"
+	"github.com/oasisprotocol/oasis-core/go/storage/mkvs/checkpoint"
+	"github.com/oasisprotocol/oasis-core/go/storage/mkvs/writelog"
 )
 
 var testValues = [][]byte{

@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
+	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 )
 
 // VerifyOptions are the certificate verification options.

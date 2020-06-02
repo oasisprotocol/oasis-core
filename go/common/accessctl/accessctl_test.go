@@ -8,8 +8,8 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	memorySigner "github.com/oasislabs/oasis-core/go/common/crypto/signature/signers/memory"
-	"github.com/oasislabs/oasis-core/go/common/identity"
+	memorySigner "github.com/oasisprotocol/oasis-core/go/common/crypto/signature/signers/memory"
+	"github.com/oasisprotocol/oasis-core/go/common/identity"
 )
 
 func TestPolicy(t *testing.T) {

@@ -6,11 +6,11 @@ import (
 	flag "github.com/spf13/pflag"
 	"github.com/spf13/viper"
 
-	"github.com/oasislabs/oasis-core/go/common/grpc"
-	"github.com/oasislabs/oasis-core/go/common/identity"
-	"github.com/oasislabs/oasis-core/go/common/logging"
-	"github.com/oasislabs/oasis-core/go/sentry/api"
-	workerGrpcSentry "github.com/oasislabs/oasis-core/go/worker/sentry/grpc"
+	"github.com/oasisprotocol/oasis-core/go/common/grpc"
+	"github.com/oasisprotocol/oasis-core/go/common/identity"
+	"github.com/oasisprotocol/oasis-core/go/common/logging"
+	"github.com/oasisprotocol/oasis-core/go/sentry/api"
+	workerGrpcSentry "github.com/oasisprotocol/oasis-core/go/worker/sentry/grpc"
 )
 
 const (

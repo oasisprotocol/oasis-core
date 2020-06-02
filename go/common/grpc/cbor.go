@@ -3,7 +3,7 @@ package grpc
 import (
 	"google.golang.org/grpc/encoding"
 
-	"github.com/oasislabs/oasis-core/go/common/cbor"
+	"github.com/oasisprotocol/oasis-core/go/common/cbor"
 )
 
 // cborCodecName is the name of the CBOR gRPC codec.

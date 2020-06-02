@@ -1,11 +1,11 @@
 package oasis
 
 import (
-	"github.com/oasislabs/oasis-core/go/common/logging"
-	tendermint "github.com/oasislabs/oasis-core/go/consensus/tendermint/api"
-	"github.com/oasislabs/oasis-core/go/oasis-test-runner/log"
-	roothash "github.com/oasislabs/oasis-core/go/roothash/api"
-	upgrade "github.com/oasislabs/oasis-core/go/upgrade/api"
+	"github.com/oasisprotocol/oasis-core/go/common/logging"
+	tendermint "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/api"
+	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/log"
+	roothash "github.com/oasisprotocol/oasis-core/go/roothash/api"
+	upgrade "github.com/oasisprotocol/oasis-core/go/upgrade/api"
 )
 
 // LogAssertEvent returns a handler which checks whether a specific log event was

@@ -8,8 +8,8 @@ import (
 	flag "github.com/spf13/pflag"
 	"github.com/spf13/viper"
 
-	"github.com/oasislabs/oasis-core/go/runtime/history"
-	"github.com/oasislabs/oasis-core/go/runtime/tagindexer"
+	"github.com/oasisprotocol/oasis-core/go/runtime/history"
+	"github.com/oasisprotocol/oasis-core/go/runtime/tagindexer"
 )
 
 const (

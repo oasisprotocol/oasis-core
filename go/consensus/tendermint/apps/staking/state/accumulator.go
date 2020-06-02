@@ -4,10 +4,10 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
-	"github.com/oasislabs/oasis-core/go/common/quantity"
-	abciAPI "github.com/oasislabs/oasis-core/go/consensus/tendermint/api"
-	staking "github.com/oasislabs/oasis-core/go/staking/api"
+	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
+	"github.com/oasisprotocol/oasis-core/go/common/quantity"
+	abciAPI "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/api"
+	staking "github.com/oasisprotocol/oasis-core/go/staking/api"
 )
 
 // StakeAccumulatorCache is a thin wrapper around an underlying escrow accounts which caches some

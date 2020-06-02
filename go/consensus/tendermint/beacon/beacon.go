@@ -4,10 +4,10 @@ package beacon
 import (
 	"context"
 
-	"github.com/oasislabs/oasis-core/go/beacon/api"
-	"github.com/oasislabs/oasis-core/go/common/logging"
-	app "github.com/oasislabs/oasis-core/go/consensus/tendermint/apps/beacon"
-	"github.com/oasislabs/oasis-core/go/consensus/tendermint/service"
+	"github.com/oasisprotocol/oasis-core/go/beacon/api"
+	"github.com/oasisprotocol/oasis-core/go/common/logging"
+	app "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/apps/beacon"
+	"github.com/oasisprotocol/oasis-core/go/consensus/tendermint/service"
 )
 
 var _ api.Backend = (*tendermintBackend)(nil)

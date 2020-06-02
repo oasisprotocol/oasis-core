@@ -5,10 +5,10 @@ import (
 	netPkg "net"
 	"path/filepath"
 
-	"github.com/oasislabs/oasis-core/go/common/node"
-	"github.com/oasislabs/oasis-core/go/consensus/tendermint/crypto"
-	cmdCommon "github.com/oasislabs/oasis-core/go/oasis-node/cmd/common"
-	cmdRegNode "github.com/oasislabs/oasis-core/go/oasis-node/cmd/registry/node"
+	"github.com/oasisprotocol/oasis-core/go/common/node"
+	"github.com/oasisprotocol/oasis-core/go/consensus/tendermint/crypto"
+	cmdCommon "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common"
+	cmdRegNode "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/registry/node"
 )
 
 const validatorIdentitySeedTemplate = "ekiden node validator %d"

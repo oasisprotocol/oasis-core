@@ -8,12 +8,12 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
-	memorySigner "github.com/oasislabs/oasis-core/go/common/crypto/signature/signers/memory"
-	"github.com/oasislabs/oasis-core/go/common/quantity"
-	abciAPI "github.com/oasislabs/oasis-core/go/consensus/tendermint/api"
-	epochtime "github.com/oasislabs/oasis-core/go/epochtime/api"
-	staking "github.com/oasislabs/oasis-core/go/staking/api"
+	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
+	memorySigner "github.com/oasisprotocol/oasis-core/go/common/crypto/signature/signers/memory"
+	"github.com/oasisprotocol/oasis-core/go/common/quantity"
+	abciAPI "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/api"
+	epochtime "github.com/oasisprotocol/oasis-core/go/epochtime/api"
+	staking "github.com/oasisprotocol/oasis-core/go/staking/api"
 )
 
 func mustInitQuantity(t *testing.T, i int64) (q quantity.Quantity) {

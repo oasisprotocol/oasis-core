@@ -11,18 +11,18 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/oasislabs/oasis-core/go/common"
-	"github.com/oasislabs/oasis-core/go/common/crypto/drbg"
-	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
-	memorySigner "github.com/oasislabs/oasis-core/go/common/crypto/signature/signers/memory"
-	"github.com/oasislabs/oasis-core/go/common/crypto/tls"
-	"github.com/oasislabs/oasis-core/go/common/entity"
-	"github.com/oasislabs/oasis-core/go/common/identity"
-	"github.com/oasislabs/oasis-core/go/common/node"
-	consensusAPI "github.com/oasislabs/oasis-core/go/consensus/api"
-	epochtime "github.com/oasislabs/oasis-core/go/epochtime/api"
-	epochtimeTests "github.com/oasislabs/oasis-core/go/epochtime/tests"
-	"github.com/oasislabs/oasis-core/go/registry/api"
+	"github.com/oasisprotocol/oasis-core/go/common"
+	"github.com/oasisprotocol/oasis-core/go/common/crypto/drbg"
+	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
+	memorySigner "github.com/oasisprotocol/oasis-core/go/common/crypto/signature/signers/memory"
+	"github.com/oasisprotocol/oasis-core/go/common/crypto/tls"
+	"github.com/oasisprotocol/oasis-core/go/common/entity"
+	"github.com/oasisprotocol/oasis-core/go/common/identity"
+	"github.com/oasisprotocol/oasis-core/go/common/node"
+	consensusAPI "github.com/oasisprotocol/oasis-core/go/consensus/api"
+	epochtime "github.com/oasisprotocol/oasis-core/go/epochtime/api"
+	epochtimeTests "github.com/oasisprotocol/oasis-core/go/epochtime/tests"
+	"github.com/oasisprotocol/oasis-core/go/registry/api"
 )
 
 const (

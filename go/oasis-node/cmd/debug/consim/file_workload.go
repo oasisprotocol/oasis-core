@@ -10,7 +10,7 @@ import (
 	flag "github.com/spf13/pflag"
 	"github.com/spf13/viper"
 
-	genesis "github.com/oasislabs/oasis-core/go/genesis/api"
+	genesis "github.com/oasisprotocol/oasis-core/go/genesis/api"
 )
 
 const (

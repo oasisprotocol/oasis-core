@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"io"
 
-	"github.com/oasislabs/oasis-core/go/common/crypto/signature"
-	ledgerCommon "github.com/oasislabs/oasis-core/go/common/ledger"
+	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
+	ledgerCommon "github.com/oasisprotocol/oasis-core/go/common/ledger"
 )
 
 const (

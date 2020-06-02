@@ -7,17 +7,17 @@ import (
 
 	"github.com/prometheus/client_golang/prometheus"
 
-	"github.com/oasislabs/oasis-core/go/common/identity"
-	"github.com/oasislabs/oasis-core/go/common/logging"
-	consensus "github.com/oasislabs/oasis-core/go/consensus/api"
-	keymanagerApi "github.com/oasislabs/oasis-core/go/keymanager/api"
-	keymanagerClient "github.com/oasislabs/oasis-core/go/keymanager/client"
-	roothash "github.com/oasislabs/oasis-core/go/roothash/api"
-	"github.com/oasislabs/oasis-core/go/roothash/api/block"
-	"github.com/oasislabs/oasis-core/go/runtime/committee"
-	runtimeRegistry "github.com/oasislabs/oasis-core/go/runtime/registry"
-	storage "github.com/oasislabs/oasis-core/go/storage/api"
-	"github.com/oasislabs/oasis-core/go/worker/common/p2p"
+	"github.com/oasisprotocol/oasis-core/go/common/identity"
+	"github.com/oasisprotocol/oasis-core/go/common/logging"
+	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
+	keymanagerApi "github.com/oasisprotocol/oasis-core/go/keymanager/api"
+	keymanagerClient "github.com/oasisprotocol/oasis-core/go/keymanager/client"
+	roothash "github.com/oasisprotocol/oasis-core/go/roothash/api"
+	"github.com/oasisprotocol/oasis-core/go/roothash/api/block"
+	"github.com/oasisprotocol/oasis-core/go/runtime/committee"
+	runtimeRegistry "github.com/oasisprotocol/oasis-core/go/runtime/registry"
+	storage "github.com/oasisprotocol/oasis-core/go/storage/api"
+	"github.com/oasisprotocol/oasis-core/go/worker/common/p2p"
 )
 
 var (

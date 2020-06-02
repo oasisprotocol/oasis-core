@@ -11,10 +11,10 @@ import (
 	"path/filepath"
 	"reflect"
 
-	genesis "github.com/oasislabs/oasis-core/go/genesis/file"
-	"github.com/oasislabs/oasis-core/go/oasis-test-runner/env"
-	"github.com/oasislabs/oasis-core/go/oasis-test-runner/oasis"
-	"github.com/oasislabs/oasis-core/go/oasis-test-runner/scenario"
+	genesis "github.com/oasisprotocol/oasis-core/go/genesis/file"
+	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/env"
+	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/oasis"
+	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/scenario"
 )
 
 var (

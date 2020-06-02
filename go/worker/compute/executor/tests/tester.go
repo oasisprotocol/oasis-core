@@ -5,11 +5,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/oasislabs/oasis-core/go/common"
-	epochtime "github.com/oasislabs/oasis-core/go/epochtime/api"
-	epochtimeTests "github.com/oasislabs/oasis-core/go/epochtime/tests"
-	"github.com/oasislabs/oasis-core/go/worker/compute/executor"
-	"github.com/oasislabs/oasis-core/go/worker/compute/executor/committee"
+	"github.com/oasisprotocol/oasis-core/go/common"
+	epochtime "github.com/oasisprotocol/oasis-core/go/epochtime/api"
+	epochtimeTests "github.com/oasisprotocol/oasis-core/go/epochtime/tests"
+	"github.com/oasisprotocol/oasis-core/go/worker/compute/executor"
+	"github.com/oasisprotocol/oasis-core/go/worker/compute/executor/committee"
 )
 
 const recvTimeout = 5 * time.Second

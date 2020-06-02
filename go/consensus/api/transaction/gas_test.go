@@ -5,7 +5,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/oasislabs/oasis-core/go/common/quantity"
+	"github.com/oasisprotocol/oasis-core/go/common/quantity"
 )
 
 func TestFeeGasPrice(t *testing.T) {
