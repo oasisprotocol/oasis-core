@@ -1,14 +1,14 @@
-IMG_ORG ?= oasislabs
-IMG_VER ?= latest
+IMG_ORG ?= oasisprotocol
+IMG_VER ?= master
 
-IMAGES = development testing
+IMAGES = oasis-core-dev oasis-core-ci
 
 .PHONY: all $(IMAGES)
 
 all: $(IMAGES)
 
-development: development/Dockerfile
+oasis-core-dev: development/Dockerfile
 	docker build $@ -t $(IMG_ORG)/$@:$(IMG_VER)
 
-testing: testing/Dockerfile development/Dockerfile
-	docker build $@ -t $(IMG_ORG)/$@:$(IMG_VER)
+oasis-core-ci: testing/Dockerfile development/Dockerfile
+	docker build --build-arg OASIS_CORE_DEV_BASE_TAG=$(IMG_VER) $@ -t $(IMG_ORG)/$@:$(IMG_VER)

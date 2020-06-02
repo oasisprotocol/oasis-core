@@ -1,0 +1,53 @@
+# NOTE: This name appears in GitHub's Checks API and in workflow's status badge.
+name: docker
+
+# Trigger the workflow when:
+on:
+  # A push occurs to one of the matched branches and at least one modified file matches the configured paths.
+  push:
+    branches:
+      - master
+      - stable/*
+    paths:
+      - docker/**
+  # Or every day at 04:00 UTC (for the default/master branch).
+  schedule:
+    - cron: "0 4 * * *"
+
+jobs:
+
+  build-images:
+    # NOTE: This name appears in GitHub's Checks API.
+    name: build-images
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+      - name: Determine tag name
+        id: determine_tag
+        shell: bash
+        run: |
+          branch=${GITHUB_REF#refs/heads/}
+          branch=${branch//\//-}
+          echo "##[set-output name=tag;]$(echo ${branch})"
+      - name: "Rebuild oasisprotocol/oasis-core-dev:${{ steps.determine_tag.outputs.tag }}"
+        uses: docker/build-push-action@v1
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_ACCESS_TOKEN }}
+          repository: oasisprotocol/oasis-core-dev
+          tags: ${{ steps.determine_tag.outputs.tag }}
+          add_git_labels: true
+          path: docker/development
+          always_pull: true
+      - name: "Rebuild oasisprotocol/oasis-core-ci:${{ steps.determine_tag.outputs.tag }}"
+        uses: docker/build-push-action@v1
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_ACCESS_TOKEN }}
+          repository: oasisprotocol/oasis-core-ci
+          tags: ${{ steps.determine_tag.outputs.tag }}
+          add_git_labels: true
+          path: docker/testing
+          build_args: OASIS_CORE_DEV_BASE_TAG=${{ steps.determine_tag.outputs.tag }}
+          always_pull: true
