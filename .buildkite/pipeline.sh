@@ -38,8 +38,22 @@ pr_and_no_code_related_changes() {
       ':(exclude)towncrier.toml'
 }
 
-if pr_and_no_code_related_changes; then
-    cat .buildkite/code-skip.pipeline.yml
+# Determine the oasis-core-ci Docker image tag to use for tests.
+if [[ -n $BUILDKITE_PULL_REQUEST_BASE_BRANCH ]]; then
+  branch=$BUILDKITE_PULL_REQUEST_BASE_BRANCH
 else
-    cat .buildkite/code.pipeline.yml
+  branch=$BUILDKITE_BRANCH
 fi
+branch=${branch//\//-}
+
+export DOCKER_OASIS_CORE_CI_BASE_TAG=$branch
+
+# Decide which pipeline to use.
+pipeline=.buildkite/code.pipeline.yml
+if pr_and_no_code_related_changes; then
+    pipeline=.buildkite/code-skip.pipeline.yml
+fi
+
+# Upload the selected pipeline.
+cat $pipeline | buildkite-agent pipeline upload
+
