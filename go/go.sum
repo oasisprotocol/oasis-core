@@ -905,8 +905,8 @@ github.com/zondax/ledger-oasis-go v0.3.0 h1:SC+J8lZiF+XHqcO7CMaAXDFH/IdxnuJ6MRE3
 github.com/zondax/ledger-oasis-go v0.3.0/go.mod h1:czCs1jEu/4KYz3mYgALCedjgKxaFygAQxJ1di+3hHoI=
 gitlab.com/yawning/bsaes.git v0.0.0-20190805113838-0a714cd429ec h1:FpfFs4EhNehiVfzQttTuxanPIT43FtkkCFypIod8LHo=
 gitlab.com/yawning/bsaes.git v0.0.0-20190805113838-0a714cd429ec/go.mod h1:BZ1RAoRPbCxum9Grlv5aeksu2H8BiKehBYooU2LFiOQ=
-gitlab.com/yawning/dynlib.git v0.0.0-20190911075527-1e6ab3739fd8 h1:wrAqF2qnhhJpaRy6v+aJBLuKiUxqwHN4Pa+/d9Epe7c=
-gitlab.com/yawning/dynlib.git v0.0.0-20190911075527-1e6ab3739fd8/go.mod h1:U41r+zgpFRTlkSzMhBjUqbupvVBafgokFFkKn0j+874=
+gitlab.com/yawning/dynlib.git v0.0.0-20200603163025-35fe007b0761 h1:27Qf3BkBLzRQ8tZbGy77kh+n+0MtnA/ucg1fAf7l9S0=
+gitlab.com/yawning/dynlib.git v0.0.0-20200603163025-35fe007b0761/go.mod h1:U41r+zgpFRTlkSzMhBjUqbupvVBafgokFFkKn0j+874=
 gitlab.com/yawning/slice.git v0.0.0-20190714152416-bc4ae2510529 h1:GeSIG/kLmenUveo0XvlLXXtcKDeeItKA8iFnf0osNfg=
 gitlab.com/yawning/slice.git v0.0.0-20190714152416-bc4ae2510529/go.mod h1:sgaKGjNNjAAVrZvQQhE3oYIbnFZVaCBE2T7PmbpKJ4U=
 go.etcd.io/bbolt v1.3.2/go.mod h1:IbVyRI1SCnLcuJnV2u8VeU0CEYM7e686BmAb1XKL+uU=
