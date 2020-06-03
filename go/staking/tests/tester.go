@@ -96,6 +96,7 @@ func StakingImplementationTests(
 		{"Thresholds", testThresholds},
 		{"LastBlockFees", testLastBlockFees},
 		{"Transfer", testTransfer},
+		{"TransferWatchEvents", testTransferWatchEvents},
 		{"TransferSelf", testSelfTransfer},
 		{"Burn", testBurn},
 		{"Escrow", testEscrow},
@@ -122,6 +123,7 @@ func StakingClientImplementationTests(t *testing.T, backend api.Backend, consens
 		{"Thresholds", testThresholds},
 		{"LastBlockFees", testLastBlockFees},
 		{"Transfer", testTransfer},
+		{"TransferWatchEvents", testTransferWatchEvents},
 		{"TransferSelf", testSelfTransfer},
 		{"Burn", testBurn},
 		{"Escrow", testEscrow},
@@ -245,6 +247,75 @@ TransferWaitLoop:
 	tx = api.NewTransferTx(newSrcAcc.General.Nonce, nil, xfer)
 	err = consensusAPI.SignAndSubmitTx(context.Background(), consensus, srcSigner, tx)
 	require.Error(err, "Transfer - more than available balance")
+}
+
+func testTransferWatchEvents(t *testing.T, state *stakingTestsState, backend api.Backend, consensus consensusAPI.Backend) {
+	require := require.New(t)
+
+	srcAcc, err := backend.AccountInfo(context.Background(), &api.OwnerQuery{Owner: SrcID, Height: consensusAPI.HeightLatest})
+	require.NoError(err, "AccountInfo")
+
+	ch, sub, err := backend.WatchEvents(context.Background())
+	require.NoError(err, "WatchEvents")
+	defer sub.Close()
+
+	xfer := &api.Transfer{
+		To:     DestID,
+		Tokens: debug.QtyFromInt(math.MaxUint8),
+	}
+	tx := api.NewTransferTx(srcAcc.General.Nonce, nil, xfer)
+	err = consensusAPI.SignAndSubmitTx(context.Background(), consensus, srcSigner, tx)
+	require.NoError(err, "SignAndSubmitTx")
+
+	var gotCommon bool
+	var gotFeeAcc bool
+	var gotTransfer bool
+
+TransferWaitLoop:
+	for {
+		select {
+		case ev := <-ch:
+			// We're only interested in transfer events.
+			if ev.TransferEvent == nil {
+				continue
+			}
+
+			from := ev.TransferEvent.From
+			to := ev.TransferEvent.To
+
+			// We should also get some traffic to/from the common pool and fee accumulator.
+			if from.Equal(api.CommonPoolAccountID) || to.Equal(api.CommonPoolAccountID) {
+				gotCommon = true
+				continue
+			}
+			if from.Equal(api.FeeAccumulatorAccountID) || to.Equal(api.FeeAccumulatorAccountID) {
+				gotFeeAcc = true
+				continue
+			}
+
+			if !gotTransfer {
+				require.Equal(SrcID, from, "Event: from")
+				require.Equal(DestID, to, "Event: to")
+				require.Equal(xfer.Tokens, ev.TransferEvent.Tokens, "Event: tokens")
+
+				// Height must be valid.
+				status, err := consensus.GetStatus(context.Background())
+				require.NoError(err, "GetStatus")
+				require.NotNil(status, "GetStatus")
+				require.EqualValues(status.LatestHeight, ev.Height, "Event: height")
+
+				gotTransfer = true
+			}
+
+			if (gotCommon || gotFeeAcc) && gotTransfer {
+				break TransferWaitLoop
+			}
+		case <-time.After(recvTimeout):
+			t.Fatalf("failed to receive transfer event")
+		}
+	}
+
+	require.True(gotCommon || gotFeeAcc, "WatchEvents should also return transfer events related to the common pool and/or the fee accumulator")
 }
 
 func testSelfTransfer(t *testing.T, state *stakingTestsState, backend api.Backend, consensus consensusAPI.Backend) {

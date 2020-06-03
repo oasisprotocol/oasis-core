@@ -34,6 +34,7 @@ type tendermintBackend struct {
 	approvalNotifier *pubsub.Broker
 	burnNotifier     *pubsub.Broker
 	escrowNotifier   *pubsub.Broker
+	eventNotifier    *pubsub.Broker
 
 	closedCh chan struct{}
 }
@@ -211,6 +212,14 @@ func (tb *tendermintBackend) GetEvents(ctx context.Context, height int64) ([]api
 	return tb.onABCIEvents(ctx, tmEvents, height, false)
 }
 
+func (tb *tendermintBackend) WatchEvents(ctx context.Context) (<-chan *api.Event, pubsub.ClosableSubscription, error) {
+	typedCh := make(chan *api.Event)
+	sub := tb.eventNotifier.Subscribe()
+	sub.Unwrap(typedCh)
+
+	return typedCh, sub, nil
+}
+
 func (tb *tendermintBackend) ConsensusParameters(ctx context.Context, height int64) (*api.ConsensusParameters, error) {
 	q, err := tb.querier.QueryAt(ctx, height)
 	if err != nil {
@@ -306,11 +315,13 @@ func (tb *tendermintBackend) onABCIEvents(context context.Context, tmEvents []ab
 				}
 
 				ee := &api.EscrowEvent{Take: &e}
+				evt := &api.Event{Height: height, TxHash: eh, EscrowEvent: ee}
 
 				if doBroadcast {
 					tb.escrowNotifier.Broadcast(ee)
+					tb.eventNotifier.Broadcast(evt)
 				} else {
-					events = append(events, api.Event{TxHash: eh, EscrowEvent: ee})
+					events = append(events, *evt)
 				}
 			} else if bytes.Equal(key, app.KeyTransfer) {
 				// Transfer event.
@@ -326,10 +337,13 @@ func (tb *tendermintBackend) onABCIEvents(context context.Context, tmEvents []ab
 					}
 				}
 
+				evt := &api.Event{Height: height, TxHash: eh, TransferEvent: &e}
+
 				if doBroadcast {
 					tb.transferNotifier.Broadcast(&e)
+					tb.eventNotifier.Broadcast(evt)
 				} else {
-					events = append(events, api.Event{TxHash: eh, TransferEvent: &e})
+					events = append(events, *evt)
 				}
 			} else if bytes.Equal(key, app.KeyReclaimEscrow) {
 				// Reclaim escrow event.
@@ -346,11 +360,13 @@ func (tb *tendermintBackend) onABCIEvents(context context.Context, tmEvents []ab
 				}
 
 				ee := &api.EscrowEvent{Reclaim: &e}
+				evt := &api.Event{Height: height, TxHash: eh, EscrowEvent: ee}
 
 				if doBroadcast {
 					tb.escrowNotifier.Broadcast(ee)
+					tb.eventNotifier.Broadcast(evt)
 				} else {
-					events = append(events, api.Event{TxHash: eh, EscrowEvent: ee})
+					events = append(events, *evt)
 				}
 			} else if bytes.Equal(key, app.KeyAddEscrow) {
 				// Add escrow event.
@@ -367,11 +383,13 @@ func (tb *tendermintBackend) onABCIEvents(context context.Context, tmEvents []ab
 				}
 
 				ee := &api.EscrowEvent{Add: &e}
+				evt := &api.Event{Height: height, TxHash: eh, EscrowEvent: ee}
 
 				if doBroadcast {
 					tb.escrowNotifier.Broadcast(ee)
+					tb.eventNotifier.Broadcast(evt)
 				} else {
-					events = append(events, api.Event{TxHash: eh, EscrowEvent: ee})
+					events = append(events, *evt)
 				}
 			} else if bytes.Equal(key, app.KeyBurn) {
 				// Burn event.
@@ -387,10 +405,13 @@ func (tb *tendermintBackend) onABCIEvents(context context.Context, tmEvents []ab
 					}
 				}
 
+				evt := &api.Event{Height: height, TxHash: eh, BurnEvent: &e}
+
 				if doBroadcast {
 					tb.burnNotifier.Broadcast(&e)
+					tb.eventNotifier.Broadcast(evt)
 				} else {
-					events = append(events, api.Event{TxHash: eh, BurnEvent: &e})
+					events = append(events, *evt)
 				}
 			}
 		}
@@ -419,6 +440,7 @@ func New(ctx context.Context, service service.TendermintService) (api.Backend, e
 		approvalNotifier: pubsub.NewBroker(false),
 		burnNotifier:     pubsub.NewBroker(false),
 		escrowNotifier:   pubsub.NewBroker(false),
+		eventNotifier:    pubsub.NewBroker(false),
 		closedCh:         make(chan struct{}),
 	}
 

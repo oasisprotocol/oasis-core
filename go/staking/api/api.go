@@ -129,6 +129,9 @@ type Backend interface {
 	// GetEvents returns the events at specified block height.
 	GetEvents(ctx context.Context, height int64) ([]Event, error)
 
+	// WatchEvents returns a channel that produces a stream of Events.
+	WatchEvents(ctx context.Context) (<-chan *Event, pubsub.ClosableSubscription, error)
+
 	// Cleanup cleans up the backend.
 	Cleanup()
 }
@@ -168,6 +171,7 @@ type EscrowEvent struct {
 
 // Event signifies a staking event, returned via GetEvents.
 type Event struct {
+	Height int64     `json:"height,omitempty"`
 	TxHash hash.Hash `json:"tx_hash,omitempty"`
 
 	TransferEvent *TransferEvent `json:"transfer,omitempty"`
