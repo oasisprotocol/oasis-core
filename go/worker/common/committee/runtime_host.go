@@ -4,9 +4,7 @@ import (
 	"context"
 	"errors"
 	"sync"
-	"time"
 
-	"github.com/cenkalti/backoff/v4"
 	"github.com/opentracing/opentracing-go"
 
 	"github.com/oasisprotocol/oasis-core/go/common/cbor"
@@ -18,11 +16,6 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/runtime/localstorage"
 	runtimeRegistry "github.com/oasisprotocol/oasis-core/go/runtime/registry"
 	storage "github.com/oasisprotocol/oasis-core/go/storage/api"
-)
-
-const (
-	retryInterval = 1 * time.Second
-	maxRetries    = 15
 )
 
 var (
@@ -164,21 +157,7 @@ func (n *computeRuntimeHostNotifier) watchPolicyUpdates() {
 				SignedPolicyRaw: raw,
 			}}
 
-			var response *protocol.Body
-			call := func() error {
-				resp, err := n.host.Call(n.ctx, req)
-				if err != nil {
-					n.logger.Error("failed to dispatch RPC call to runtime",
-						"err", err,
-					)
-					return err
-				}
-				response = resp
-				return nil
-			}
-
-			retry := backoff.WithMaxRetries(backoff.NewConstantBackOff(retryInterval), maxRetries)
-			err := backoff.Retry(call, backoff.WithContext(retry, n.ctx))
+			response, err := n.host.Call(n.ctx, req)
 			if err != nil {
 				n.logger.Error("failed dispatching key manager policy update to runtime",
 					"err", err,

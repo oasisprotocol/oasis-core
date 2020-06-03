@@ -98,15 +98,26 @@ func (r *sandboxedRuntime) ID() common.Namespace {
 }
 
 // Implements host.Runtime.
-func (r *sandboxedRuntime) Call(ctx context.Context, body *protocol.Body) (*protocol.Body, error) {
-	r.RLock()
-	conn := r.conn
-	r.RUnlock()
+func (r *sandboxedRuntime) Call(ctx context.Context, body *protocol.Body) (rsp *protocol.Body, err error) {
+	callFn := func() error {
+		r.RLock()
+		conn := r.conn
+		r.RUnlock()
 
-	if conn == nil {
-		return nil, fmt.Errorf("runtime is not ready")
+		if conn == nil {
+			return fmt.Errorf("runtime is not ready")
+		}
+		rsp, err = r.conn.Call(ctx, body)
+		if err != nil {
+			// All protocol-level errors are permanent.
+			return backoff.Permanent(err)
+		}
+		return nil
 	}
-	return r.conn.Call(ctx, body)
+
+	// Retry call in case the runtime is not yet ready.
+	err = backoff.Retry(callFn, backoff.WithContext(backoff.NewExponentialBackOff(), ctx))
+	return
 }
 
 // Implements host.Runtime.
