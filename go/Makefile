@@ -55,7 +55,7 @@ fmt:
 # Lint.
 lint:
 	@$(ECHO) "$(CYAN)*** Running Go linters...$(OFF)"
-	@env -u GOPATH golangci-lint run --timeout 2m
+	@env -u GOPATH golangci-lint run --timeout 4m
 
 # Test.
 test-targets := test-unit test-node
