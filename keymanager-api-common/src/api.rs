@@ -18,7 +18,7 @@ use oasis_core_runtime::{
     impl_bytes, runtime_api,
 };
 
-impl_bytes!(ContractId, 32, "A 256-bit contract identifier.");
+impl_bytes!(KeyPairId, 32, "A 256-bit key pair identifier.");
 impl_bytes!(PrivateKey, 32, "A private key.");
 impl_bytes!(PublicKey, 32, "A public key.");
 impl_bytes!(StateKey, 32, "A state key.");
@@ -74,33 +74,33 @@ pub struct ReplicateResponse {
     pub master_secret: MasterSecret,
 }
 
-/// Request runtime/contract id tuple.
+/// Request runtime/key pair id tuple.
 #[derive(Clone, Serialize, Deserialize)]
 pub struct RequestIds {
     /// Runtime ID.
     pub runtime_id: RuntimeId,
-    /// Contract ID.
-    pub contract_id: ContractId,
+    /// Key pair ID.
+    pub key_pair_id: KeyPairId,
 }
 
 impl RequestIds {
-    pub fn new(runtime_id: RuntimeId, contract_id: ContractId) -> Self {
+    pub fn new(runtime_id: RuntimeId, key_pair_id: KeyPairId) -> Self {
         Self {
             runtime_id,
-            contract_id,
+            key_pair_id,
         }
     }
 
     pub fn to_cache_key(&self) -> Vec<u8> {
         let mut k = self.runtime_id.as_ref().to_vec();
-        k.extend_from_slice(self.contract_id.as_ref());
+        k.extend_from_slice(self.key_pair_id.as_ref());
         k
     }
 }
 
-/// Keys for a contract.
+/// A key pair managed by the key manager.
 #[derive(Clone, Serialize, Deserialize)]
-pub struct ContractKey {
+pub struct KeyPair {
     /// Input key pair (pk, sk)
     pub input_keypair: InputKeyPair,
     /// State encryption key
@@ -110,7 +110,7 @@ pub struct ContractKey {
     pub checksum: Vec<u8>,
 }
 
-impl ContractKey {
+impl KeyPair {
     /// Generate a new random key (for testing).
     pub fn generate_mock() -> Self {
         let mut rng = OsRng {};
@@ -120,7 +120,7 @@ impl ContractKey {
         let mut state_key = StateKey::default();
         rng.fill(&mut state_key.0);
 
-        ContractKey::new(
+        KeyPair::new(
             PublicKey(*pk.as_bytes()),
             PrivateKey(sk.to_bytes()),
             state_key,
@@ -128,7 +128,7 @@ impl ContractKey {
         )
     }
 
-    /// Create a set of `ContractKey`.
+    /// Create a `KeyPair`.
     pub fn new(pk: PublicKey, sk: PrivateKey, k: StateKey, sum: Vec<u8>) -> Self {
         Self {
             input_keypair: InputKeyPair::new(pk, sk),
@@ -137,7 +137,7 @@ impl ContractKey {
         }
     }
 
-    /// Create a set of `ContractKey` with only the public key.
+    /// Create a `KeyPair` with only the public key.
     pub fn from_public_key(k: PublicKey, sum: Vec<u8>) -> Self {
         Self {
             input_keypair: InputKeyPair::new(k, PrivateKey::default()),
@@ -250,7 +250,7 @@ impl Default for TrustedPolicySigners {
 }
 
 runtime_api! {
-    pub fn get_or_create_keys(RequestIds) -> ContractKey;
+    pub fn get_or_create_keys(RequestIds) -> KeyPair;
 
     pub fn get_public_key(RequestIds) -> Option<SignedPublicKey>;
 

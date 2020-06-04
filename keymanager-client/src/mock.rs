@@ -11,7 +11,7 @@ use super::KeyManagerClient;
 
 /// Mock key manager client which stores everything locally.
 pub struct MockClient {
-    keys: Mutex<HashMap<ContractId, ContractKey>>,
+    keys: Mutex<HashMap<KeyPairId, KeyPair>>,
 }
 
 impl MockClient {
@@ -26,13 +26,13 @@ impl MockClient {
 impl KeyManagerClient for MockClient {
     fn clear_cache(&self) {}
 
-    fn get_or_create_keys(&self, _ctx: Context, contract_id: ContractId) -> BoxFuture<ContractKey> {
+    fn get_or_create_keys(&self, _ctx: Context, key_pair_id: KeyPairId) -> BoxFuture<KeyPair> {
         let mut keys = self.keys.lock().unwrap();
-        let key = match keys.get(&contract_id) {
+        let key = match keys.get(&key_pair_id) {
             Some(key) => key.clone(),
             None => {
-                let key = ContractKey::generate_mock();
-                keys.insert(contract_id, key.clone());
+                let key = KeyPair::generate_mock();
+                keys.insert(key_pair_id, key.clone());
                 key
             }
         };
@@ -43,9 +43,9 @@ impl KeyManagerClient for MockClient {
     fn get_public_key(
         &self,
         ctx: Context,
-        contract_id: ContractId,
+        key_pair_id: KeyPairId,
     ) -> BoxFuture<Option<SignedPublicKey>> {
-        Box::new(self.get_or_create_keys(ctx, contract_id).map(|ck| {
+        Box::new(self.get_or_create_keys(ctx, key_pair_id).map(|ck| {
             Some(SignedPublicKey {
                 key: ck.input_keypair.get_pk(),
                 checksum: vec![],

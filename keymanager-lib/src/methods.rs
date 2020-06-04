@@ -6,7 +6,7 @@ use oasis_core_runtime::rpc::Context as RpcContext;
 use crate::{kdf::Kdf, policy::Policy};
 
 /// See `Kdf::get_or_create_keys`.
-pub fn get_or_create_keys(req: &RequestIds, ctx: &mut RpcContext) -> Fallible<ContractKey> {
+pub fn get_or_create_keys(req: &RequestIds, ctx: &mut RpcContext) -> Fallible<KeyPair> {
     // Authenticate the source enclave based on the MRSIGNER/MRENCLAVE/request
     // so that the keys are never released to an incorrect enclave.
     if !Policy::unsafe_skip() {

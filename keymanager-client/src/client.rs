@@ -36,9 +36,9 @@ struct Inner {
     /// RPC client.
     rpc_client: Client,
     /// Local cache for the get_or_create_keys KeyManager endpoint.
-    get_or_create_secret_keys_cache: RwLock<LruCache<ContractId, ContractKey>>,
+    get_or_create_secret_keys_cache: RwLock<LruCache<KeyPairId, KeyPair>>,
     /// Local cache for the get_public_key KeyManager endpoint.
-    get_public_key_cache: RwLock<LruCache<ContractId, SignedPublicKey>>,
+    get_public_key_cache: RwLock<LruCache<KeyPairId, SignedPublicKey>>,
 }
 
 /// A key manager client which talks to a remote key manager enclave.
@@ -158,9 +158,9 @@ impl KeyManagerClient for RemoteClient {
         drop(cache);
     }
 
-    fn get_or_create_keys(&self, ctx: Context, contract_id: ContractId) -> BoxFuture<ContractKey> {
+    fn get_or_create_keys(&self, ctx: Context, key_pair_id: KeyPairId) -> BoxFuture<KeyPair> {
         let mut cache = self.inner.get_or_create_secret_keys_cache.write().unwrap();
-        if let Some(keys) = cache.get(&contract_id) {
+        if let Some(keys) = cache.get(&key_pair_id) {
             return Box::new(future::ok(keys.clone()));
         }
 
@@ -169,10 +169,10 @@ impl KeyManagerClient for RemoteClient {
         Box::new(
             self.inner
                 .rpc_client
-                .get_or_create_keys(ctx, RequestIds::new(inner.runtime_id, contract_id))
+                .get_or_create_keys(ctx, RequestIds::new(inner.runtime_id, key_pair_id))
                 .and_then(move |keys| {
                     let mut cache = inner.get_or_create_secret_keys_cache.write().unwrap();
-                    cache.put(contract_id, keys.clone());
+                    cache.put(key_pair_id, keys.clone());
 
                     Ok(keys)
                 }),
@@ -182,10 +182,10 @@ impl KeyManagerClient for RemoteClient {
     fn get_public_key(
         &self,
         ctx: Context,
-        contract_id: ContractId,
+        key_pair_id: KeyPairId,
     ) -> BoxFuture<Option<SignedPublicKey>> {
         let mut cache = self.inner.get_public_key_cache.write().unwrap();
-        if let Some(key) = cache.get(&contract_id) {
+        if let Some(key) = cache.get(&key_pair_id) {
             return Box::new(future::ok(Some(key.clone())));
         }
 
@@ -194,11 +194,11 @@ impl KeyManagerClient for RemoteClient {
         Box::new(
             self.inner
                 .rpc_client
-                .get_public_key(ctx, RequestIds::new(inner.runtime_id, contract_id))
+                .get_public_key(ctx, RequestIds::new(inner.runtime_id, key_pair_id))
                 .and_then(move |key| match key {
                     Some(key) => {
                         let mut cache = inner.get_public_key_cache.write().unwrap();
-                        cache.put(contract_id, key.clone());
+                        cache.put(key_pair_id, key.clone());
 
                         Ok(Some(key))
                     }
