@@ -1,4 +1,6 @@
-FROM oasislabs/development:0.3.0
+ARG OASIS_CORE_DEV_BASE_TAG=master
+
+FROM oasisprotocol/oasis-core-dev:${OASIS_CORE_DEV_BASE_TAG}
 
 RUN apt-get install -y \
     unzip jq \

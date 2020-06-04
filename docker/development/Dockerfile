@@ -66,15 +66,6 @@ RUN wget https://dl.google.com/go/go${GO_VERSION}.linux-amd64.tar.gz && \
     mv nancy /go/bin/nancy && \
     chmod +x /go/bin/nancy
 
-# Install node / npm / truffle.
-RUN curl -o- https://raw.githubusercontent.com/creationix/nvm/v0.33.11/install.sh | bash
-ENV NVM_DIR="${HOME}/.nvm"
-RUN . $NVM_DIR/nvm.sh && \
-    nvm install lts/carbon --latest-npm && \
-    nvm use lts/carbon && \
-    nvm alias default node && \
-    npm install -g truffle-oasis
-
 # Install bubblewrap (we need version 0.3.3 which is not available for 18.04).
 RUN wget http://archive.ubuntu.com/ubuntu/pool/main/b/bubblewrap/bubblewrap_0.3.3-2_amd64.deb && \
     echo '1cf9bdae5cfab75f292fad9ee0ef76a7c55243dbc0515709624b2a9573d19447 bubblewrap_0.3.3-2_amd64.deb' | sha256sum -c && \

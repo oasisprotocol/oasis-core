@@ -1,6 +1,6 @@
 # Copied from pipeline.yml.
 docker_plugin_default_config: &docker_plugin_default_config
-  image: "oasislabs/testing:0.3.0"
+  image: "oasisprotocol/oasis-core-ci:master"
   always_pull: true
   workdir: /workdir
   volumes:
