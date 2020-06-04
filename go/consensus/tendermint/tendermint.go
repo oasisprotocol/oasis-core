@@ -1119,7 +1119,20 @@ func (t *tendermintService) lazyInit() error {
 	//
 	// Defer actually initializing the node till after everything
 	// else is setup.
-	t.startFn = func() error {
+	t.startFn = func() (err error) {
+		defer func() {
+			// The node constructor can panic early in case an error occurrs during block replay as
+			// the fail monitor is not yet initialized in that case. Propagate the error.
+			if p := recover(); p != nil {
+				switch pt := p.(type) {
+				case error:
+					err = pt
+				default:
+					err = fmt.Errorf("%v", pt)
+				}
+			}
+		}()
+
 		t.node, err = tmnode.NewNode(tenderConfig,
 			tendermintPV,
 			&tmp2p.NodeKey{PrivKey: crypto.SignerToTendermint(t.nodeSigner)},
@@ -1134,7 +1147,7 @@ func (t *tendermintService) lazyInit() error {
 		}
 		if t.stateDb == nil {
 			// Sanity check for the above wrapDbProvider hack in case the DB provider changes.
-			panic("tendermint: state database not set")
+			return fmt.Errorf("tendermint: internal error: state database not set")
 		}
 		t.client = tmcli.New(t.node)
 		t.failMonitor = newFailMonitor(t.Logger, t.node.ConsensusState().Wait)

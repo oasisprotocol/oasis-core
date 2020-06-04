@@ -82,7 +82,12 @@ func Run(cmd *cobra.Command, args []string) {
 	cmdCommon.SetIsNodeCmd(true)
 
 	node, err := NewNode()
-	if err != nil {
+	switch {
+	case err == nil:
+	case errors.Is(err, context.Canceled):
+		// Shutdown requested during startup.
+		return
+	default:
 		os.Exit(1)
 	}
 	defer node.Cleanup()
@@ -482,22 +487,26 @@ func NewTestNode() (*Node, error) {
 	return newNode(true)
 }
 
-func newNode(testNode bool) (*Node, error) { // nolint: gocyclo
+func newNode(testNode bool) (node *Node, err error) { // nolint: gocyclo
 	logger := cmdCommon.Logger()
 
-	node := &Node{
+	node = &Node{
 		svcMgr: background.NewServiceManager(logger),
 	}
 
 	var startOk bool
 	defer func() {
 		if !startOk {
+			if cErr := node.svcMgr.Ctx.Err(); cErr != nil {
+				err = cErr
+			}
+
 			node.Stop()
 			node.Cleanup()
 		}
 	}()
 
-	if err := cmdCommon.Init(); err != nil {
+	if err = cmdCommon.Init(); err != nil {
 		// Common stuff like logger not correcty initialized. Print to stderr
 		_, _ = fmt.Fprintln(os.Stderr, err)
 		return nil, err
@@ -511,8 +520,6 @@ func newNode(testNode bool) (*Node, error) { // nolint: gocyclo
 
 	// Load configured values for all registered crash points.
 	crash.LoadViperArgValues()
-
-	var err error
 
 	// Open the common node store.
 	node.commonStore, err = persistent.NewCommonStore(dataDir)
