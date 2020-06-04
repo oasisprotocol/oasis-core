@@ -3,7 +3,7 @@ use std::sync::Arc;
 use failure::{format_err, Fallible};
 use io_context::Context as IoContext;
 
-use oasis_core_keymanager_client::{ContractId, KeyManagerClient};
+use oasis_core_keymanager_client::{KeyManagerClient, KeyPairId};
 use oasis_core_runtime::{
     common::{
         crypto::{
@@ -88,12 +88,12 @@ fn remove(args: &String, ctx: &mut TxnContext) -> Fallible<Option<String>> {
 fn get_encryption_context(ctx: &mut TxnContext, key: &[u8]) -> Fallible<EncryptionContext> {
     let rctx = runtime_context!(ctx, Context);
 
-    // Derive contract ID based on key.
-    let contract_id = ContractId::from(Hash::digest_bytes(key).as_ref());
+    // Derive key pair ID based on key.
+    let key_pair_id = KeyPairId::from(Hash::digest_bytes(key).as_ref());
 
     // Fetch encryption keys.
     let io_ctx = IoContext::create_child(&ctx.io_ctx);
-    let result = rctx.km_client.get_or_create_keys(io_ctx, contract_id);
+    let result = rctx.km_client.get_or_create_keys(io_ctx, key_pair_id);
     let key = Executor::with_current(|executor| executor.block_on(result))?;
 
     Ok(EncryptionContext::new(key.state_key.as_ref()))

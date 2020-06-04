@@ -12,7 +12,7 @@ use x25519_dalek;
 use zeroize::Zeroize;
 
 use oasis_core_keymanager_api_common::{
-    ContractKey, InitRequest, InitResponse, KeyManagerError, MasterSecret, PrivateKey, PublicKey,
+    InitRequest, InitResponse, KeyManagerError, KeyPair, MasterSecret, PrivateKey, PublicKey,
     ReplicateResponse, RequestIds, SignedInitResponse, SignedPublicKey, StateKey,
     INIT_RESPONSE_CONTEXT, PUBLIC_KEY_CONTEXT,
 };
@@ -88,7 +88,7 @@ struct Inner {
     checksum: Option<Vec<u8>>,
     runtime_id: Option<RuntimeId>,
     signer: Option<Arc<dyn signature::Signer>>,
-    cache: LruCache<Vec<u8>, ContractKey>,
+    cache: LruCache<Vec<u8>, KeyPair>,
 }
 
 impl Inner {
@@ -100,7 +100,7 @@ impl Inner {
         self.cache.clear();
     }
 
-    fn derive_contract_key(&self, req: &RequestIds) -> Fallible<ContractKey> {
+    fn derive_contract_key(&self, req: &RequestIds) -> Fallible<KeyPair> {
         let checksum = self.get_checksum()?;
         let mut contract_secret = self.derive_contract_secret(req)?;
 
@@ -121,7 +121,7 @@ impl Inner {
         k.zeroize();
         let pk = x25519_dalek::PublicKey::from(&sk);
 
-        Ok(ContractKey::new(
+        Ok(KeyPair::new(
             PublicKey(*pk.as_bytes()),
             PrivateKey(sk.to_bytes()),
             state_key,
@@ -140,7 +140,7 @@ impl Inner {
         // KMAC256(master_secret, runtimeID || contractID, 32, "ekiden-derive-runtime-secret")
         let mut f = KMac::new_kmac256(master_secret.as_ref(), &RUNTIME_KDF_CUSTOM);
         f.update(req.runtime_id.as_ref());
-        f.update(req.contract_id.as_ref());
+        f.update(req.key_pair_id.as_ref());
         f.finalize(&mut k);
 
         Ok(k.to_vec())
@@ -326,7 +326,7 @@ impl Kdf {
     }
 
     // Get or create keys.
-    pub fn get_or_create_keys(&self, req: &RequestIds) -> Fallible<ContractKey> {
+    pub fn get_or_create_keys(&self, req: &RequestIds) -> Fallible<KeyPair> {
         let cache_key = req.to_cache_key();
 
         // Check to see if the cached value exists.

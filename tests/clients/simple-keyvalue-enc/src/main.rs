@@ -6,7 +6,7 @@ use io_context::Context;
 use tokio::runtime::Runtime;
 
 use oasis_core_client::{create_txn_api_client, Node, TxnClient};
-use oasis_core_keymanager_client::{self, ContractId, KeyManagerClient};
+use oasis_core_keymanager_client::{self, KeyManagerClient, KeyPairId};
 use oasis_core_runtime::common::{crypto::hash::Hash, runtime::RuntimeId};
 use simple_keyvalue_api::{with_api, KeyValue};
 
@@ -94,16 +94,16 @@ fn main() {
         1024,
     ));
 
-    // Request public key for some "contract id".
-    let contract_id = ContractId::from(Hash::empty_hash().as_ref());
+    // Request public key for some "key pair id".
+    let key_pair_id = KeyPairId::from(Hash::empty_hash().as_ref());
     let r = rt
-        .block_on(km_client.get_public_key(Context::background(), contract_id))
+        .block_on(km_client.get_public_key(Context::background(), key_pair_id))
         .unwrap();
     assert!(r.is_some(), "get_public_key should return a public key");
     let pkey = r;
 
     let r = rt
-        .block_on(km_client.get_public_key(Context::background(), contract_id))
+        .block_on(km_client.get_public_key(Context::background(), key_pair_id))
         .unwrap();
     assert_eq!(r, pkey, "get_public_key should return the same public key");
 
