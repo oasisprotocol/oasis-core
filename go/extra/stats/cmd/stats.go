@@ -7,6 +7,7 @@ import (
 	"os"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/spf13/cobra"
 	flag "github.com/spf13/pflag"
@@ -31,6 +32,10 @@ const (
 	cfgEndBlock   = "end-block"
 	cfgTopN       = "top-n"
 )
+
+// endTime is when this segment of the challenge ends, exclusive. That is, it ends at the end of June 4 2020 UTC, with
+// anything from 00:00:00 on June 5 (encoded below) excluded.
+var endTime = time.Date(2020, 6, 5, 0, 0, 0, 0, time.UTC)
 
 var (
 	printStatsFlags = flag.NewFlagSet("", flag.ContinueOnError)
@@ -289,6 +294,15 @@ func getStats(ctx context.Context, consensus consensusAPI.ClientBackend, registr
 
 		// Get block.
 		tmBlockMeta := getTmBlockMetaOrExit(ctx, consensus, height)
+
+		if !tmBlockMeta.Header.Time.Before(endTime) {
+			logger.Debug("ending",
+				"end_time", endTime,
+				"header_time", tmBlockMeta.Header.Time,
+				"excl_block", height,
+			)
+			break
+		}
 
 		// Process the commit that is put on chain in this block.
 		if height > 1 {
