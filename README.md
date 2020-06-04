@@ -3,6 +3,7 @@
 [![Build status][buildkite-badge]][buildkite-link]
 [![CI lint status][github-ci-lint-badge]][github-ci-lint-link]
 [![CI reproducibility status][github-ci-repr-badge]][github-ci-repr-link]
+[![Docker status][github-docker-badge]][github-docker-link]
 [![Release status][github-release-badge]][github-release-link]
 [![GoDoc][godoc-badge]][godoc-link]
 
@@ -19,6 +20,8 @@ work around that and make the second (non-header) row also bold. -->
 [github-ci-lint-link]: https://github.com/oasisprotocol/oasis-core/actions?query=workflow:ci-lint
 [github-ci-repr-badge]: https://github.com/oasisprotocol/oasis-core/workflows/ci-reproducibility/badge.svg
 [github-ci-repr-link]: https://github.com/oasisprotocol/oasis-core/actions?query=workflow:ci-reproducibility
+[github-docker-badge]: https://github.com/oasisprotocol/oasis-core/workflows/docker/badge.svg
+[github-docker-link]: https://github.com/oasisprotocol/oasis-core/actions?query=workflow:docker
 [github-release-badge]: https://github.com/oasisprotocol/oasis-core/workflows/release/badge.svg
 [github-release-link]: https://github.com/oasisprotocol/oasis-core/actions?query=workflow:release
 [codecov-badge]: https://codecov.io/gh/oasisprotocol/oasis-core/branch/master/graph/badge.svg
@@ -232,7 +235,7 @@ you have a [recent version of Docker installed](
 https://docs.docker.com/install/).
 
 Oasis development environment with all the dependencies preinstalled is
-available in the `oasislabs/development:0.3.0` image.
+available in the `oasisprotocol/oasis-core-dev:master` image.
 To run a container, do the following in the top-level directory:
 
 ```bash
@@ -248,7 +251,7 @@ docker run -t -i \
   --security-opt seccomp=unconfined \
   -v $(pwd):/code \
   -w /code \
-  oasislabs/development:0.3.0 \
+  oasisprotocol/oasis-core-dev:master \
   bash
 ```
 
