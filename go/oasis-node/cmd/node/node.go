@@ -616,7 +616,10 @@ func newNode(testNode bool) (node *Node, err error) { // nolint: gocyclo
 	}
 
 	logger.Info("loaded/generated node identity",
-		"public_key", node.Identity.NodeSigner.Public(),
+		"node_pk", node.Identity.NodeSigner.Public(),
+		"p2p_pk", node.Identity.P2PSigner.Public(),
+		"consensus_pk", node.Identity.ConsensusSigner.Public(),
+		"tls_pk", node.Identity.GetTLSSigner().Public(),
 	)
 
 	// Initialize the tracing client.
