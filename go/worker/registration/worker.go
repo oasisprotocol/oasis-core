@@ -71,6 +71,9 @@ var (
 // RegisterNodeHook is a function that is used to update the node descriptor.
 type RegisterNodeHook func(*node.Node) error
 
+// RegisterNodeCallback is a function that is called after a successful registration.
+type RegisterNodeCallback func(context.Context) error
+
 // Delegate is the interface for objects that wish to know about the worker's events.
 type Delegate interface {
 	// RegistrationStopped is called by the worker when the registration loop exits cleanly.
@@ -89,6 +92,13 @@ type RoleProvider interface {
 	// thus proceed.
 	SetAvailable(hook RegisterNodeHook)
 
+	// SetAvailableWithCallback signals that the role provider is available and that node
+	// registration can thus proceed.
+	//
+	// If the passed cb is non-nil, it will be called once after the next successful registration
+	// that includes the node descriptor updated by the passed hook.
+	SetAvailableWithCallback(hook RegisterNodeHook, cb RegisterNodeCallback)
+
 	// SetUnavailable signals that the role provider is unavailable and that node registration
 	// should be blocked until the role provider becomes available.
 	SetUnavailable()
@@ -99,14 +109,22 @@ type roleProvider struct {
 
 	w *Worker
 
+	version   uint64
 	role      node.RolesMask
 	runtimeID *common.Namespace
 	hook      RegisterNodeHook
+	cb        RegisterNodeCallback
 }
 
 func (rp *roleProvider) SetAvailable(hook RegisterNodeHook) {
+	rp.SetAvailableWithCallback(hook, nil)
+}
+
+func (rp *roleProvider) SetAvailableWithCallback(hook RegisterNodeHook, cb RegisterNodeCallback) {
 	rp.Lock()
+	rp.version++
 	rp.hook = hook
+	rp.cb = cb
 	rp.Unlock()
 
 	rp.w.registerCh <- struct{}{}
@@ -294,7 +312,7 @@ Loop:
 
 		// If there are any role providers which are still not ready, we must wait for more
 		// notifications.
-		hooks := func() (h []RegisterNodeHook) {
+		hooks, cbs, vers := func() (h []RegisterNodeHook, cbs []RegisterNodeCallback, vers []uint64) {
 			w.RLock()
 			defer w.RUnlock()
 
@@ -302,16 +320,20 @@ Loop:
 				rp.Lock()
 				role := rp.role
 				hook := rp.hook
+				cb := rp.cb
+				ver := rp.version
 				rp.Unlock()
 
 				if hook == nil {
-					return nil
+					return nil, nil, nil
 				}
 
 				h = append(h, func(n *node.Node) error {
 					n.AddRoles(role)
 					return hook(n)
 				})
+				cbs = append(cbs, cb)
+				vers = append(vers, ver)
 			}
 			return
 		}()
@@ -350,6 +372,29 @@ Loop:
 			close(w.initialRegCh)
 			first = false
 		}
+
+		// Call any registration callbacks.
+		func() {
+			w.RLock()
+			defer w.RUnlock()
+
+			for i, rp := range w.roleProviders {
+				// Only clear the pending callback in case the hook/call have not been modified.
+				rp.Lock()
+				if rp.version == vers[i] {
+					rp.cb = nil
+				}
+				rp.Unlock()
+
+				if cb := cbs[i]; cb != nil {
+					if err := cb(w.ctx); err != nil {
+						w.logger.Error("register node callback failed",
+							"err", err,
+						)
+					}
+				}
+			}
+		}()
 
 		// Do not perform TLS rotation unless we have successfully (re-)registered.
 		if tlsRotationPending {
