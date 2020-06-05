@@ -540,10 +540,10 @@ func NewTestNode() (*Node, error) {
 	return newNode(true)
 }
 
-func newNode(testNode bool) (node *Node, err error) { // nolint: gocyclo
+func newNode(testNode bool) (n *Node, err error) { // nolint: gocyclo
 	logger := cmdCommon.Logger()
 
-	node = &Node{
+	node := &Node{
 		svcMgr:  background.NewServiceManager(logger),
 		readyCh: make(chan struct{}),
 	}
