@@ -162,7 +162,7 @@ func (m *failMonitor) markCleanShutdown() {
 	m.isCleanShutdown = true
 }
 
-func newFailMonitor(logger *logging.Logger, fn func()) *failMonitor {
+func newFailMonitor(ctx context.Context, logger *logging.Logger, fn func()) *failMonitor {
 	// Tendermint in it's infinite wisdom, doesn't terminate when
 	// consensus fails, instead opting to "just" log, and tear down
 	// the ConsensusState.  Since this behavior is stupid, watch for
@@ -178,7 +178,7 @@ func newFailMonitor(logger *logging.Logger, fn func()) *failMonitor {
 		m.Lock()
 		defer m.Unlock()
 
-		if !m.isCleanShutdown {
+		if !m.isCleanShutdown && ctx.Err() == nil {
 			logger.Error("unexpected termination detected")
 			panic("tendermint: unexpected termination detected, consensus failure?")
 		}
@@ -1150,7 +1150,7 @@ func (t *tendermintService) lazyInit() error {
 			return fmt.Errorf("tendermint: internal error: state database not set")
 		}
 		t.client = tmcli.New(t.node)
-		t.failMonitor = newFailMonitor(t.Logger, t.node.ConsensusState().Wait)
+		t.failMonitor = newFailMonitor(t.ctx, t.Logger, t.node.ConsensusState().Wait)
 
 		return nil
 	}
