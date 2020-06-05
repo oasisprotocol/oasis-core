@@ -18,6 +18,6 @@ oasis-core-build: build/Dockerfile
 
 # Generates and copies the tarball in current directory.
 reproducible: oasis-core-build
-	docker run -e IMG_VER=$(IMG_VER) --name oasis-reproducible -ti $(IMG_ORG)/oasis-core-build:$(IMG_VER) bash -c "`cat build/reproducible.sh`"
+	docker run -e GIT_TAG=$(IMG_VER) --name oasis-reproducible -ti $(IMG_ORG)/oasis-core-build:$(IMG_VER) bash -c "`cat build/reproducible.sh`"
 	docker cp oasis-reproducible:/root/oasis-core/oasis_core_reproducible_${IMG_VER}_linux_amd64.tar.gz .
 	docker rm oasis-reproducible
