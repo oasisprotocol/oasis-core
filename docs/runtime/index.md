@@ -43,7 +43,7 @@ own virtual machine and with other confidential computing technologies.
 
 The relationship between [consensus layer services] and runtime services is best
 described by a simple example of a "Runtime A" that is created and receives
-transactions from clients.
+transactions from clients (also see the figure above for an overview).
 
 1. The runtime first needs to be created. In addition to developing code that
    will run in the runtime itself, we also need to specify some metadata related

@@ -8,3 +8,9 @@ Merklized [Patricia trie].
 [authenticated data structure (ADS)]: https://www.cs.umd.edu/~mwh/papers/gpads.pdf
 [Patricia trie]: https://en.wikipedia.org/wiki/Radix_tree#PATRICIA
 <!-- markdownlint-enable line-length -->
+
+## Interfaces
+
+### Updates
+
+### Read Syncer
