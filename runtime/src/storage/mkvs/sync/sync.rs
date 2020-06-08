@@ -1,6 +1,6 @@
 use std::any::Any;
 
-use failure::Fallible;
+use anyhow::Result;
 use io_context::Context;
 use serde_bytes;
 use serde_derive::{Deserialize, Serialize};
@@ -62,16 +62,16 @@ pub trait ReadSync {
     fn as_any(&self) -> &dyn Any;
 
     /// Fetch a single key and returns the corresponding proof.
-    fn sync_get(&mut self, ctx: Context, request: GetRequest) -> Fallible<ProofResponse>;
+    fn sync_get(&mut self, ctx: Context, request: GetRequest) -> Result<ProofResponse>;
 
     /// Fetch all keys under the given prefixes and returns the corresponding proofs.
     fn sync_get_prefixes(
         &mut self,
         ctx: Context,
         request: GetPrefixesRequest,
-    ) -> Fallible<ProofResponse>;
+    ) -> Result<ProofResponse>;
 
     /// Seek to a given key and then fetch the specified number of following items
     /// based on key iteration order.
-    fn sync_iterate(&mut self, ctx: Context, request: IterateRequest) -> Fallible<ProofResponse>;
+    fn sync_iterate(&mut self, ctx: Context, request: IterateRequest) -> Result<ProofResponse>;
 }

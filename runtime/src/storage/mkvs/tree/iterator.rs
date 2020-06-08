@@ -1,7 +1,7 @@
 //! Tree iterator.
 use std::{collections::VecDeque, fmt, iter::Iterator, mem::replace, sync::Arc};
 
-use failure::{Error, Fallible};
+use anyhow::{Error, Result};
 use io_context::Context;
 
 use crate::storage::mkvs::{cache::*, sync::*, tree::*};
@@ -24,7 +24,7 @@ impl<'a> ReadSyncFetcher for FetcherSyncIterate<'a> {
         root: Root,
         ptr: NodePtrRef,
         rs: &mut Box<dyn ReadSync>,
-    ) -> Fallible<Proof> {
+    ) -> Result<Proof> {
         let rsp = rs.sync_iterate(
             ctx,
             IterateRequest {
@@ -59,7 +59,7 @@ struct PathAtom {
 }
 
 impl fmt::Debug for PathAtom {
-    fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> std::result::Result<(), fmt::Error> {
         f.debug_struct("PathAtom")
             .field("bit_depth", &self.bit_depth)
             .field("path", &self.path)
@@ -191,7 +191,7 @@ impl<'tree> TreeIterator<'tree> {
         path: Key,
         mut key: Key,
         mut state: VisitState,
-    ) -> Fallible<()> {
+    ) -> Result<()> {
         let node_ref = self.tree.cache.borrow_mut().deref_node_ptr(
             &self.ctx,
             ptr.clone(),

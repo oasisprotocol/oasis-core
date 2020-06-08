@@ -8,11 +8,12 @@ use std::{
     },
 };
 
+use anyhow::{anyhow, Result};
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 use crossbeam::channel;
-use failure::Fallible;
 use io_context::Context;
 use slog::Logger;
+use thiserror::Error;
 
 use crate::{
     common::{cbor, logger::get_logger, runtime::RuntimeId, version::Version},
@@ -32,18 +33,18 @@ pub type Stream = ::std::net::TcpStream;
 /// Maximum message size.
 const MAX_MESSAGE_SIZE: usize = 104_857_600; // 100MB
 
-#[derive(Debug, Fail)]
+#[derive(Error, Debug)]
 pub enum ProtocolError {
-    #[fail(display = "message too large")]
+    #[error("message too large")]
     MessageTooLarge,
-    #[fail(display = "method not supported")]
+    #[error("method not supported")]
     MethodNotSupported,
-    #[fail(display = "invalid response")]
+    #[error("invalid response")]
     InvalidResponse,
-    #[fail(display = "attestation required")]
+    #[error("attestation required")]
     #[allow(unused)]
     AttestationRequired,
-    #[fail(display = "runtime id not set")]
+    #[error("runtime id not set")]
     RuntimeIDNotSet,
 }
 
@@ -124,7 +125,7 @@ impl Protocol {
     }
 
     /// Make a new request to the worker host and wait for the response.
-    pub fn make_request(&self, ctx: Context, body: Body) -> Fallible<Body> {
+    pub fn make_request(&self, ctx: Context, body: Body) -> Result<Body> {
         let id = self.last_request_id.fetch_add(1, Ordering::SeqCst) as u64;
         let span_context = tracing::get_span_context(&ctx).unwrap_or(&vec![]).clone();
         let message = Message {
@@ -145,13 +146,13 @@ impl Protocol {
         self.encode_message(message)?;
 
         match rx.recv()? {
-            Body::Error { message, .. } => Err(format_err!("{}", message)),
+            Body::Error { message, .. } => Err(anyhow!("{}", message)),
             body => Ok(body),
         }
     }
 
     /// Send an async response to a previous request back to the worker host.
-    pub fn send_response(&self, id: u64, body: Body) -> Fallible<()> {
+    pub fn send_response(&self, id: u64, body: Body) -> Result<()> {
         self.encode_message(Message {
             id,
             body,
@@ -160,7 +161,7 @@ impl Protocol {
         })
     }
 
-    fn decode_message<R: Read>(&self, mut reader: R) -> Fallible<Message> {
+    fn decode_message<R: Read>(&self, mut reader: R) -> Result<Message> {
         let length = reader.read_u32::<BigEndian>()? as usize;
         if length > MAX_MESSAGE_SIZE {
             return Err(ProtocolError::MessageTooLarge.into());
@@ -173,7 +174,7 @@ impl Protocol {
         Ok(cbor::from_slice(&buffer)?)
     }
 
-    fn encode_message(&self, message: Message) -> Fallible<()> {
+    fn encode_message(&self, message: Message) -> Result<()> {
         let _guard = self.outgoing_mutex.lock().unwrap();
         let mut writer = BufWriter::new(&self.stream);
 
@@ -188,7 +189,7 @@ impl Protocol {
         Ok(())
     }
 
-    fn handle_message<R: Read>(self: &Arc<Protocol>, reader: R) -> Fallible<()> {
+    fn handle_message<R: Read>(self: &Arc<Protocol>, reader: R) -> Result<()> {
         let message = self.decode_message(reader)?;
 
         match message.message_type {
@@ -249,7 +250,7 @@ impl Protocol {
         ctx: Context,
         id: u64,
         request: Body,
-    ) -> Fallible<Option<Body>> {
+    ) -> Result<Option<Body>> {
         match request {
             Body::RuntimeInfoRequest { runtime_id } => {
                 // Store the passed Runtime ID.
@@ -337,7 +338,7 @@ impl Protocol {
         }
     }
 
-    fn can_handle_runtime_requests(&self) -> Fallible<()> {
+    fn can_handle_runtime_requests(&self) -> Result<()> {
         if self.runtime_id.lock().unwrap().is_none() {
             return Err(ProtocolError::RuntimeIDNotSet.into());
         }
@@ -375,7 +376,7 @@ impl ProtocolUntrustedLocalStorage {
 }
 
 impl KeyValue for ProtocolUntrustedLocalStorage {
-    fn get(&self, key: Vec<u8>) -> Fallible<Vec<u8>> {
+    fn get(&self, key: Vec<u8>) -> Result<Vec<u8>> {
         let ctx = Context::create_child(&self.ctx);
 
         match self
@@ -388,7 +389,7 @@ impl KeyValue for ProtocolUntrustedLocalStorage {
         }
     }
 
-    fn insert(&self, key: Vec<u8>, value: Vec<u8>) -> Fallible<()> {
+    fn insert(&self, key: Vec<u8>, value: Vec<u8>) -> Result<()> {
         let ctx = Context::create_child(&self.ctx);
 
         match self

@@ -1,4 +1,4 @@
-use failure::Fallible;
+use anyhow::Result;
 use io_context::Context;
 
 use crate::storage::mkvs::{cache::*, sync::*, tree::*, Prefix};
@@ -21,7 +21,7 @@ impl<'a> ReadSyncFetcher for FetcherSyncGetPrefixes<'a> {
         root: Root,
         ptr: NodePtrRef,
         rs: &mut Box<dyn ReadSync>,
-    ) -> Fallible<Proof> {
+    ) -> Result<Proof> {
         let rsp = rs.sync_get_prefixes(
             ctx,
             GetPrefixesRequest {
@@ -44,7 +44,7 @@ impl Tree {
         ctx: Context,
         prefixes: &Vec<Prefix>,
         limit: u16,
-    ) -> Fallible<()> {
+    ) -> Result<()> {
         let ctx = ctx.freeze();
         let pending_root = self.cache.borrow().get_pending_root();
         self.cache.borrow_mut().remote_sync(

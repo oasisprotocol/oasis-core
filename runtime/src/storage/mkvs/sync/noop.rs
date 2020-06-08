@@ -1,6 +1,6 @@
 use std::any::Any;
 
-use failure::Fallible;
+use anyhow::Result;
 use io_context::Context;
 
 use crate::storage::mkvs::sync::*;
@@ -13,7 +13,7 @@ impl ReadSync for NoopReadSyncer {
         self
     }
 
-    fn sync_get(&mut self, _ctx: Context, _request: GetRequest) -> Fallible<ProofResponse> {
+    fn sync_get(&mut self, _ctx: Context, _request: GetRequest) -> Result<ProofResponse> {
         Err(SyncerError::Unsupported.into())
     }
 
@@ -21,11 +21,11 @@ impl ReadSync for NoopReadSyncer {
         &mut self,
         _ctx: Context,
         _request: GetPrefixesRequest,
-    ) -> Fallible<ProofResponse> {
+    ) -> Result<ProofResponse> {
         Err(SyncerError::Unsupported.into())
     }
 
-    fn sync_iterate(&mut self, _ctx: Context, _request: IterateRequest) -> Fallible<ProofResponse> {
+    fn sync_iterate(&mut self, _ctx: Context, _request: IterateRequest) -> Result<ProofResponse> {
         Err(SyncerError::Unsupported.into())
     }
 }

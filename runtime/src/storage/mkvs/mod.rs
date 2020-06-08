@@ -1,8 +1,8 @@
 //! Merklized key-value store.
 use std::ops::{Deref, DerefMut};
 
+use anyhow::Result;
 use base64;
-use failure::Fallible;
 use io_context::Context;
 use serde::{self, ser::SerializeSeq, Serializer};
 use serde_bytes::Bytes;
@@ -150,7 +150,7 @@ pub trait MKVS: Send + Sync {
         ctx: Context,
         namespace: Namespace,
         version: u64,
-    ) -> Fallible<(WriteLog, Hash)>;
+    ) -> Result<(WriteLog, Hash)>;
 
     /// Rollback any pending changes.
     fn rollback(&mut self);

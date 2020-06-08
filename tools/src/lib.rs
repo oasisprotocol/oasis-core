@@ -1,5 +1,5 @@
 //! Oasis core build tools.
-extern crate failure;
+extern crate anyhow;
 extern crate serde_derive;
 extern crate toml;
 

@@ -7,7 +7,7 @@ use std::{
     },
 };
 
-use failure::{Fail, Fallible};
+use anyhow::Result;
 use futures::{
     future,
     prelude::*,
@@ -17,6 +17,7 @@ use futures::{
 use grpcio::Channel;
 use io_context::Context;
 use serde::{de::DeserializeOwned, Serialize};
+use thiserror::Error;
 use tokio_executor::spawn;
 
 #[cfg(not(target_env = "sgx"))]
@@ -41,24 +42,24 @@ use crate::BoxFuture;
 const SENDQ_BACKLOG: usize = 10;
 
 /// RPC client error.
-#[derive(Debug, Fail)]
+#[derive(Error, Debug)]
 pub enum RpcClientError {
-    #[fail(display = "call failed: {}", 0)]
+    #[error("call failed: {0}")]
     CallFailed(String),
-    #[fail(display = "expected response message, received: {:?}", 0)]
+    #[error("expected response message, received: {0:?}")]
     ExpectedResponseMessage(types::Message),
-    #[fail(display = "expected close message, received: {:?}", 0)]
+    #[error("expected close message, received: {0:?}")]
     ExpectedCloseMessage(types::Message),
-    #[fail(display = "transport error")]
+    #[error("transport error")]
     Transport,
-    #[fail(display = "client dropped")]
+    #[error("client dropped")]
     Dropped,
 }
 
 type SendqRequest = (
     Arc<Context>,
     types::Request,
-    oneshot::Sender<Fallible<types::Response>>,
+    oneshot::Sender<Result<types::Response>>,
     usize,
 );
 
@@ -393,7 +394,7 @@ mod test {
         Arc, Mutex,
     };
 
-    use failure::format_err;
+    use anyhow::anyhow;
     use futures::future;
     use io_context::Context;
     use tokio::runtime::Runtime;
@@ -440,7 +441,7 @@ mod test {
                 .next_error
                 .compare_and_swap(true, false, Ordering::SeqCst)
             {
-                return Box::new(future::err(format_err!("transport error")));
+                return Box::new(future::err(anyhow!("transport error")));
             }
 
             let mut demux = self.demux.lock().unwrap();

@@ -1,9 +1,9 @@
-use failure::Fail;
+use thiserror::Error;
 
-#[derive(Debug, Fail)]
+#[derive(Error, Debug)]
 pub enum TreeError {
-    #[fail(display = "mkvs: malformed node")]
+    #[error("mkvs: malformed node")]
     MalformedNode,
-    #[fail(display = "mkvs: malformed key")]
+    #[error("mkvs: malformed key")]
     MalformedKey,
 }

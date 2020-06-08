@@ -1,8 +1,9 @@
 //! Runtime transaction batch dispatcher.
 use std::collections::HashMap;
 
-use failure::{Fallible, ResultExt};
+use anyhow::{Context as AnyContext, Result};
 use serde::{de::DeserializeOwned, Serialize};
+use thiserror::Error;
 
 use super::{
     context::Context,
@@ -12,15 +13,15 @@ use super::{
 use crate::common::{cbor, crypto::hash::Hash, roothash::Message as RoothashMessage};
 
 /// Dispatch error.
-#[derive(Debug, Fail)]
+#[derive(Error, Debug)]
 enum DispatchError {
-    #[fail(display = "method not found: {}", method)]
+    #[error("method not found: {method:?}")]
     MethodNotFound { method: String },
 }
 
 /// Error indicating that performing a transaction check was successful.
-#[derive(Debug, Default, Fail)]
-#[fail(display = "transaction check successful")]
+#[derive(Error, Debug, Default)]
+#[error("transaction check successful")]
 pub struct CheckOnlySuccess(pub TxnCheckResult);
 
 /// Custom batch handler.
@@ -81,16 +82,16 @@ pub struct MethodDescriptor {
 /// Handler for a runtime method.
 pub trait MethodHandler<Call, Output> {
     /// Invoke the method implementation and return a response.
-    fn handle(&self, call: &Call, ctx: &mut Context) -> Fallible<Output>;
+    fn handle(&self, call: &Call, ctx: &mut Context) -> Result<Output>;
 }
 
 impl<Call, Output, F> MethodHandler<Call, Output> for F
 where
     Call: 'static,
     Output: 'static,
-    F: Fn(&Call, &mut Context) -> Fallible<Output> + 'static,
+    F: Fn(&Call, &mut Context) -> Result<Output> + 'static,
 {
-    fn handle(&self, call: &Call, ctx: &mut Context) -> Fallible<Output> {
+    fn handle(&self, call: &Call, ctx: &mut Context) -> Result<Output> {
         (*self)(&call, ctx)
     }
 }
@@ -101,7 +102,7 @@ pub trait MethodHandlerDispatch {
     fn get_descriptor(&self) -> &MethodDescriptor;
 
     /// Dispatches the given raw call.
-    fn dispatch(&self, call: TxnCall, ctx: &mut Context) -> Fallible<cbor::Value>;
+    fn dispatch(&self, call: TxnCall, ctx: &mut Context) -> Result<cbor::Value>;
 }
 
 struct MethodHandlerDispatchImpl<Call, Output> {
@@ -120,7 +121,7 @@ where
         &self.descriptor
     }
 
-    fn dispatch(&self, call: TxnCall, ctx: &mut Context) -> Fallible<cbor::Value> {
+    fn dispatch(&self, call: TxnCall, ctx: &mut Context) -> Result<cbor::Value> {
         let call = cbor::from_value(call.args).context("unable to parse call arguments")?;
         let response = self.handler.handle(&call, ctx)?;
 
@@ -156,7 +157,7 @@ impl Method {
     }
 
     /// Dispatch method call.
-    pub fn dispatch(&self, call: TxnCall, ctx: &mut Context) -> Fallible<cbor::Value> {
+    pub fn dispatch(&self, call: TxnCall, ctx: &mut Context) -> Result<cbor::Value> {
         self.dispatcher.dispatch(call, ctx)
     }
 }
@@ -273,7 +274,7 @@ impl MethodDispatcher {
         cbor::to_vec(&rsp)
     }
 
-    fn dispatch_fallible(&self, call: &Vec<u8>, ctx: &mut Context) -> Fallible<cbor::Value> {
+    fn dispatch_fallible(&self, call: &Vec<u8>, ctx: &mut Context) -> Result<cbor::Value> {
         let call: TxnCall = cbor::from_slice(call).context("unable to parse call")?;
 
         match self.methods.get(&call.method) {
@@ -352,7 +353,7 @@ mod tests {
             MethodDescriptor {
                 name: "dummy".to_owned(),
             },
-            |call: &Complex, ctx: &mut Context| -> Fallible<Complex> {
+            |call: &Complex, ctx: &mut Context| -> Result<Complex> {
                 assert_eq!(ctx.header.timestamp, TEST_TIMESTAMP);
 
                 Ok(Complex {

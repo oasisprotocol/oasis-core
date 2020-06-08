@@ -1,10 +1,10 @@
 //! Attestation verification report handling.
 use std::io::{Cursor, Read, Seek, SeekFrom};
 
+use anyhow::{anyhow, Result};
 use base64;
 use byteorder::{LittleEndian, ReadBytesExt};
 use chrono::prelude::*;
-use failure::Fallible;
 use pem_iterator::{
     body::Single,
     boundary::{BoundaryParser, BoundaryType, LabelMatcher},
@@ -13,36 +13,37 @@ use percent_encoding;
 use serde_derive::{Deserialize, Serialize};
 use serde_json;
 use sgx_isa::{AttributesFlags, Report};
+use thiserror::Error;
 use webpki;
 
 use crate::common::time::{insecure_posix_time, update_insecure_posix_time};
 
 /// AVR verification error.
-#[derive(Debug, Fail)]
+#[derive(Error, Debug)]
 enum AVRError {
-    #[fail(display = "failed to parse report body")]
+    #[error("failed to parse report body")]
     MalformedReportBody,
-    #[fail(display = "report body did not contain timestamp")]
+    #[error("report body did not contain timestamp")]
     MissingTimestamp,
-    #[fail(display = "failed to parse timestamp")]
+    #[error("failed to parse timestamp")]
     MalformedTimestamp,
-    #[fail(display = "timestamp differs by more than 1 day")]
+    #[error("timestamp differs by more than 1 day")]
     TimestampOutOfRange,
-    #[fail(display = "rejecting quote status ({})", status)]
+    #[error("rejecting quote status ({status:?})")]
     QuoteStatusInvalid { status: String },
-    #[fail(display = "debug enclaves not allowed")]
+    #[error("debug enclaves not allowed")]
     DebugEnclave,
-    #[fail(display = "production enclaves not allowed")]
+    #[error("production enclaves not allowed")]
     ProductionEnclave,
-    #[fail(display = "AVR did not contain quote status")]
+    #[error("AVR did not contain quote status")]
     MissingQuoteStatus,
-    #[fail(display = "AVR did not contain quote body")]
+    #[error("AVR did not contain quote body")]
     MissingQuoteBody,
-    #[fail(display = "AVR did not contain nonce")]
+    #[error("AVR did not contain nonce")]
     MissingNonce,
-    #[fail(display = "failed to parse quote")]
+    #[error("failed to parse quote")]
     MalformedQuote,
-    #[fail(display = "unable to find any certificates")]
+    #[error("unable to find any certificates")]
     NoCertificates,
 }
 
@@ -144,7 +145,7 @@ struct QuoteBody {
 
 impl QuoteBody {
     /// Decode quote body.
-    fn decode(quote_body: &Vec<u8>) -> Fallible<QuoteBody> {
+    fn decode(quote_body: &Vec<u8>) -> Result<QuoteBody> {
         let mut reader = Cursor::new(quote_body);
         let mut quote_body: QuoteBody = QuoteBody::default();
 
@@ -199,7 +200,7 @@ pub(crate) struct ParsedAVR {
 }
 
 impl ParsedAVR {
-    pub(crate) fn new(avr: &AVR) -> Fallible<Self> {
+    pub(crate) fn new(avr: &AVR) -> Result<Self> {
         let body = match serde_json::from_slice(&avr.body) {
             Ok(avr_body) => avr_body,
             _ => return Err(AVRError::MalformedReportBody.into()),
@@ -207,21 +208,21 @@ impl ParsedAVR {
         Ok(Self { body })
     }
 
-    fn isv_enclave_quote_status(&self) -> Fallible<String> {
+    fn isv_enclave_quote_status(&self) -> Result<String> {
         match self.body["isvEnclaveQuoteStatus"].as_str() {
             Some(status) => Ok(status.to_string()),
             None => Err(AVRError::MissingQuoteStatus.into()),
         }
     }
 
-    fn isv_enclave_quote_body(&self) -> Fallible<String> {
+    fn isv_enclave_quote_body(&self) -> Result<String> {
         match self.body["isvEnclaveQuoteBody"].as_str() {
             Some(quote_body) => Ok(quote_body.to_string()),
             None => Err(AVRError::MissingQuoteBody.into()),
         }
     }
 
-    fn timestamp(&self) -> Fallible<i64> {
+    fn timestamp(&self) -> Result<i64> {
         let timestamp = match self.body["timestamp"].as_str() {
             Some(timestamp) => timestamp,
             None => {
@@ -231,7 +232,7 @@ impl ParsedAVR {
         parse_avr_timestamp(&timestamp)
     }
 
-    pub(crate) fn nonce(&self) -> Fallible<String> {
+    pub(crate) fn nonce(&self) -> Result<String> {
         match self.body["nonce"].as_str() {
             Some(nonce) => Ok(nonce.to_string()),
             None => Err(AVRError::MissingNonce.into()),
@@ -240,7 +241,7 @@ impl ParsedAVR {
 }
 
 /// Verify attestation report.
-pub fn verify(avr: &AVR) -> Fallible<AuthenticatedAVR> {
+pub fn verify(avr: &AVR) -> Result<AuthenticatedAVR> {
     let unsafe_skip_avr_verification = option_env!("OASIS_UNSAFE_SKIP_AVR_VERIFY").is_some();
     let strict_avr_verification = option_env!("OASIS_STRICT_AVR_VERIFY").is_some();
 
@@ -328,7 +329,7 @@ pub fn verify(avr: &AVR) -> Fallible<AuthenticatedAVR> {
     })
 }
 
-fn parse_avr_timestamp(timestamp: &str) -> Fallible<i64> {
+fn parse_avr_timestamp(timestamp: &str) -> Result<i64> {
     let timestamp_unix = match Utc.datetime_from_str(&timestamp, IAS_TS_FMT) {
         Ok(timestamp) => timestamp.timestamp(),
         _ => return Err(AVRError::MalformedTimestamp.into()),
@@ -341,7 +342,7 @@ fn validate_avr_signature(
     message: &[u8],
     signature: &[u8],
     unix_time: u64,
-) -> Fallible<()> {
+) -> Result<()> {
     // Load the Intel SGX Attestation Report Signing CA certificate.
     let anchors = webpki::TLSServerTrustAnchors(&IAS_ANCHORS);
 
@@ -360,7 +361,7 @@ fn validate_avr_signature(
     // Do all the actual validation.
     match validate_decoded_avr_signature(&anchors, &cert_chain, message, signature, time) {
         Ok(_) => Ok(()),
-        Err(err) => bail!("Failed to validate AVR signature: {:?}", err),
+        Err(err) => Err(anyhow!("Failed to validate AVR signature: {:?}", err)),
     }
 }
 
@@ -370,7 +371,7 @@ fn validate_decoded_avr_signature(
     message: &[u8],
     signature: Vec<u8>,
     time: webpki::Time,
-) -> Fallible<()> {
+) -> Result<()> {
     assert!(cert_ders.len() >= 1);
     let (cert_der, inter_ders) = cert_ders.split_at(1);
     let inter_ders: Vec<_> = inter_ders.iter().map(|der| &der[..]).collect();

@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use failure::Fallible;
+use anyhow::Result;
 use io_context::Context;
 
 use crate::{
@@ -16,7 +16,7 @@ impl Tree {
         ctx: Context,
         namespace: Namespace,
         version: u64,
-    ) -> Fallible<(WriteLog, Hash)> {
+    ) -> Result<(WriteLog, Hash)> {
         let ctx = ctx.freeze();
         let mut update_list: UpdateList<LRUCache> = UpdateList::new();
         let pending_root = self.cache.borrow().get_pending_root();
@@ -52,7 +52,7 @@ pub fn _commit<C: Cache>(
     ptr: NodePtrRef,
     update_list: &mut UpdateList<C>,
     version: Option<u64>,
-) -> Fallible<Hash> {
+) -> Result<Hash> {
     if ptr.borrow().clean {
         return Ok(ptr.borrow().hash);
     }

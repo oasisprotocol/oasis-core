@@ -5,7 +5,7 @@ use std::{
     sync::{Arc, RwLock},
 };
 
-use failure::Fallible;
+use anyhow::Result;
 use futures::{future, prelude::*};
 #[cfg(not(target_env = "sgx"))]
 use grpcio::Channel;
@@ -134,7 +134,7 @@ impl RemoteClient {
     }
 
     /// Set client allowed enclaves from key manager policy.
-    pub fn set_policy(&self, signed_policy_raw: Vec<u8>) -> Fallible<()> {
+    pub fn set_policy(&self, signed_policy_raw: Vec<u8>) -> Result<()> {
         let untrusted_policy: SignedPolicySGX = cbor::from_slice(&signed_policy_raw)?;
         let policy = untrusted_policy.verify()?;
         let client = &self.inner.rpc_client.rpc_client;

@@ -1,5 +1,5 @@
 //! Transaction I/O tree.
-use failure::{format_err, Fallible};
+use anyhow::{anyhow, Result};
 use io_context::Context;
 use serde::{self, ser::SerializeSeq, Serializer};
 use serde_bytes::{self, Bytes};
@@ -163,9 +163,9 @@ impl Tree {
     }
 
     /// Add an input transaction artifact.
-    pub fn add_input(&mut self, ctx: Context, input: Vec<u8>, batch_order: u32) -> Fallible<()> {
+    pub fn add_input(&mut self, ctx: Context, input: Vec<u8>, batch_order: u32) -> Result<()> {
         if input.is_empty() {
-            return Err(format_err!("transaction: no input given"));
+            return Err(anyhow!("transaction: no input given"));
         }
 
         let tx_hash = Hash::digest_bytes(&input);
@@ -190,7 +190,7 @@ impl Tree {
         tx_hash: Hash,
         output: Vec<u8>,
         tags: Tags,
-    ) -> Fallible<()> {
+    ) -> Result<()> {
         let ctx = ctx.freeze();
 
         self.tree.insert(
@@ -221,7 +221,7 @@ impl Tree {
 
     /// Commit updates to the underlying Merkle tree and return the write
     /// log and root hash.
-    pub fn commit(&mut self, ctx: Context) -> Fallible<(WriteLog, Hash)> {
+    pub fn commit(&mut self, ctx: Context) -> Result<(WriteLog, Hash)> {
         self.tree
             .commit(ctx, self.io_root.namespace, self.io_root.version)
     }

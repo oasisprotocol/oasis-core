@@ -8,7 +8,7 @@ use std::{
     sync::Arc,
 };
 
-use failure::Fallible;
+use anyhow::Result;
 use grpcio::{ChannelBuilder, EnvBuilder};
 use io_context::Context;
 use tempfile::{self, TempDir};
@@ -115,7 +115,7 @@ impl ReadSync for ProtocolServerReadSyncer {
         self
     }
 
-    fn sync_get(&mut self, _ctx: Context, request: GetRequest) -> Fallible<ProofResponse> {
+    fn sync_get(&mut self, _ctx: Context, request: GetRequest) -> Result<ProofResponse> {
         Ok(self.client.sync_get(&request)?)
     }
 
@@ -123,11 +123,11 @@ impl ReadSync for ProtocolServerReadSyncer {
         &mut self,
         _ctx: Context,
         request: GetPrefixesRequest,
-    ) -> Fallible<ProofResponse> {
+    ) -> Result<ProofResponse> {
         Ok(self.client.sync_get_prefixes(&request)?)
     }
 
-    fn sync_iterate(&mut self, _ctx: Context, request: IterateRequest) -> Fallible<ProofResponse> {
+    fn sync_iterate(&mut self, _ctx: Context, request: IterateRequest) -> Result<ProofResponse> {
         Ok(self.client.sync_iterate(&request)?)
     }
 }

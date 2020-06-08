@@ -9,7 +9,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use failure::{format_err, Fallible};
+use anyhow::{anyhow, Result};
 use serde_derive::Deserialize;
 use toml;
 
@@ -69,7 +69,7 @@ pub struct PackageRoot {
 
 impl PackageRoot {
     /// Attempts to discover the root of the current package.
-    pub fn discover() -> Fallible<Self> {
+    pub fn discover() -> Result<Self> {
         // Start with the current directory and recursively move up if Cargo.toml
         // cannot be found in the given directory.
         let mut current_dir: &Path = &env::current_dir()?;
@@ -82,13 +82,13 @@ impl PackageRoot {
                 current_dir = parent;
             } else {
                 // We've reached the root.
-                return Err(format_err!("failed to discover package root"));
+                return Err(anyhow!("failed to discover package root"));
             }
         }
     }
 
     /// Parse Cargo manifest file.
-    fn parse_manifest<P: AsRef<Path>>(path: P) -> Fallible<Manifest> {
+    fn parse_manifest<P: AsRef<Path>>(path: P) -> Result<Manifest> {
         // Parse configuration file.
         let mut data = String::new();
         File::open(path)?.read_to_string(&mut data)?;
@@ -97,7 +97,7 @@ impl PackageRoot {
     }
 
     /// Create new project root.
-    pub fn new(path: PathBuf) -> Fallible<Self> {
+    pub fn new(path: PathBuf) -> Result<Self> {
         let manifest = Self::parse_manifest(path.join("Cargo.toml"))?;
         let workspace_path = if manifest.workspace.is_some() {
             // This is already a workspace.
@@ -128,7 +128,7 @@ impl PackageRoot {
                                 .iter()
                                 .any(|m| path.starts_with(current_dir.join(m)))
                             {
-                                return Err(format_err!(
+                                return Err(anyhow!(
                                     "current package believes it's in a workspace when it's not: \n\
                                     current:   {}\n\
                                     workspace: {}\n\

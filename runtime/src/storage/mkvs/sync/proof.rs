@@ -1,7 +1,7 @@
 use std::ops::{Deref, DerefMut};
 
+use anyhow::{anyhow, Result};
 use arbitrary::Arbitrary;
-use failure::{format_err, Fallible};
 use io_context::Context;
 use serde_bytes;
 use serde_derive::{Deserialize, Serialize};
@@ -69,24 +69,24 @@ pub struct ProofVerifier;
 impl ProofVerifier {
     /// Verify a proof and generate an in-memory subtree representing the
     /// nodes which are included in the proof.
-    pub fn verify_proof(&self, _ctx: Context, root: Hash, proof: &Proof) -> Fallible<NodePtrRef> {
+    pub fn verify_proof(&self, _ctx: Context, root: Hash, proof: &Proof) -> Result<NodePtrRef> {
         // Sanity check that the proof is for the correct root (as otherwise it
         // makes no sense to verify the proof).
         if proof.untrusted_root != root {
-            return Err(format_err!(
+            return Err(anyhow!(
                 "verifier: got proof for unexpected root (expected: {:?} got {:?})",
                 root,
                 proof.untrusted_root,
             ));
         }
         if proof.entries.is_empty() {
-            return Err(format_err!("verifier: empty proof"));
+            return Err(anyhow!("verifier: empty proof"));
         }
 
         let (_, root_node) = self._verify_proof(proof, 0)?;
         let root_hash = root_node.borrow().hash;
         if root_hash != root {
-            return Err(format_err!(
+            return Err(anyhow!(
                 "verifier: bad root (expected: {:?} got {:?})",
                 root,
                 root_hash,
@@ -96,16 +96,16 @@ impl ProofVerifier {
         Ok(root_node)
     }
 
-    fn _verify_proof(&self, proof: &Proof, idx: usize) -> Fallible<(usize, NodePtrRef)> {
+    fn _verify_proof(&self, proof: &Proof, idx: usize) -> Result<(usize, NodePtrRef)> {
         if idx >= proof.entries.len() {
-            return Err(format_err!("verifier: malformed proof"));
+            return Err(anyhow!("verifier: malformed proof"));
         }
         let entry = match &proof.entries[idx] {
             Some(entry) => entry.as_ref(),
             None => return Ok((idx + 1, NodePointer::null_ptr())),
         };
         if entry.is_empty() {
-            return Err(format_err!("verifier: malformed proof"));
+            return Err(anyhow!("verifier: malformed proof"));
         }
 
         match entry[0] {
@@ -136,12 +136,12 @@ impl ProofVerifier {
                 // Hash of a node.
                 let entry = &entry[1..];
                 if entry.len() != Hash::len() {
-                    return Err(format_err!("verifier: malformed hash entry"));
+                    return Err(anyhow!("verifier: malformed hash entry"));
                 }
 
                 Ok((idx + 1, NodePointer::hash_ptr(entry.into())))
             }
-            entry_type => Err(format_err!(
+            entry_type => Err(anyhow!(
                 "verifier: unexpected entry in proof ({:?})",
                 entry_type
             )),

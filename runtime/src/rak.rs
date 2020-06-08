@@ -1,8 +1,9 @@
 //! Runtime attestation key handling.
 use std::sync::{Arc, RwLock};
 
-use failure::Fallible;
+use anyhow::Result;
 use sgx_isa::Targetinfo;
+use thiserror::Error;
 
 #[cfg_attr(not(target_env = "sgx"), allow(unused))]
 use crate::common::crypto::hash::Hash;
@@ -24,27 +25,27 @@ use sgx_isa::Report;
 const RAK_HASH_CONTEXT: &'static [u8] = b"oasis-core/node: TEE RAK binding";
 
 /// RAK-related error.
-#[derive(Debug, Fail)]
+#[derive(Error, Debug)]
 enum RAKError {
-    #[fail(display = "RAK is not configured")]
+    #[error("RAK is not configured")]
     NotConfigured,
-    #[fail(display = "RAK binding mismatch")]
+    #[error("RAK binding mismatch")]
     BindingMismatch,
-    #[fail(display = "malformed report data")]
+    #[error("malformed report data")]
     MalformedReportData,
 }
 
 /// AVR-related errors.
 #[cfg(target_env = "sgx")]
-#[derive(Debug, Fail)]
+#[derive(Error, Debug)]
 enum AVRError {
-    #[fail(display = "malformed target_info")]
+    #[error("malformed target_info")]
     MalformedTargetInfo,
-    #[fail(display = "MRENCLAVE mismatch")]
+    #[error("MRENCLAVE mismatch")]
     MrEnclaveMismatch,
-    #[fail(display = "MRSIGNER mismatch")]
+    #[error("MRSIGNER mismatch")]
     MrSignerMismatch,
-    #[fail(display = "AVR nonce mismatch")]
+    #[error("AVR nonce mismatch")]
     NonceMismatch,
 }
 
@@ -122,7 +123,7 @@ impl RAK {
 
     /// Initialize the RAK.
     #[cfg(target_env = "sgx")]
-    pub(crate) fn init_rak(&self, target_info: Vec<u8>) -> Fallible<()> {
+    pub(crate) fn init_rak(&self, target_info: Vec<u8>) -> Result<()> {
         let mut inner = self.inner.write().unwrap();
 
         // Set the Quoting Enclave target_info first, as unlike key generation
@@ -172,7 +173,7 @@ impl RAK {
 
     /// Configure the attestation verification report for RAK.
     #[cfg(target_env = "sgx")]
-    pub(crate) fn set_avr(&self, avr: avr::AVR) -> Fallible<()> {
+    pub(crate) fn set_avr(&self, avr: avr::AVR) -> Result<()> {
         let rak_pub = self.public_key().expect("RAK must be configured");
 
         let mut inner = self.inner.write().unwrap();
@@ -270,7 +271,7 @@ impl RAK {
     }
 
     /// Verify a provided RAK binding.
-    pub fn verify_binding(avr: &avr::AuthenticatedAVR, rak: &PublicKey) -> Fallible<()> {
+    pub fn verify_binding(avr: &avr::AuthenticatedAVR, rak: &PublicKey) -> Result<()> {
         if avr.report_data.len() < 32 {
             return Err(RAKError::MalformedReportData.into());
         }
@@ -284,7 +285,7 @@ impl RAK {
 
 impl Signer for RAK {
     /// Generate a RAK signature with the private key over the context and message.
-    fn sign(&self, context: &[u8], message: &[u8]) -> Fallible<Signature> {
+    fn sign(&self, context: &[u8], message: &[u8]) -> Result<Signature> {
         let inner = self.inner.read().unwrap();
         match inner.private_key {
             Some(ref key) => Ok(key.sign(context, message)?),

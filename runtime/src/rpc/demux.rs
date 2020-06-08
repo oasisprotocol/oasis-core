@@ -1,7 +1,8 @@
 //! Session demultiplexer.
 use std::{collections::HashMap, io::Write, sync::Arc, time::SystemTime};
 
-use failure::Fallible;
+use anyhow::Result;
+use thiserror::Error;
 
 use super::{
     session::{Builder, Session, SessionInfo},
@@ -22,11 +23,11 @@ const DEFAULT_STALE_SESSION_TIMEOUT_SECS: u64 = 60;
 const STALE_SESSIONS_CHECK_TIMEOUT_SECS: u64 = 10;
 
 /// Demux error.
-#[derive(Debug, Fail)]
+#[derive(Error, Debug)]
 enum DemuxError {
-    #[fail(display = "session not found for id {}", session)]
+    #[error("session not found for id {session:?}")]
     SessionNotFound { session: SessionID },
-    #[fail(display = "max concurrent sessions reached")]
+    #[error("max concurrent sessions reached")]
     MaxConcurrentSessions,
 }
 
@@ -90,7 +91,7 @@ impl Demux {
         &mut self,
         data: Vec<u8>,
         writer: W,
-    ) -> Fallible<Option<SessionMessage>> {
+    ) -> Result<Option<SessionMessage>> {
         let frame: Frame = cbor::from_slice(&data)?;
         let id = frame.session.clone();
         let untrusted_plaintext = frame.untrusted_plaintext.clone();
@@ -165,7 +166,7 @@ impl Demux {
         id: SessionID,
         msg: Message,
         mut writer: W,
-    ) -> Fallible<()> {
+    ) -> Result<()> {
         match self.sessions.get_mut(&id) {
             Some(enriched_session) => {
                 // Responses don't need framing as they are linked at the
@@ -178,7 +179,7 @@ impl Demux {
     }
 
     /// Close the session and generate a response.
-    pub fn close<W: Write>(&mut self, id: SessionID, mut writer: W) -> Fallible<()> {
+    pub fn close<W: Write>(&mut self, id: SessionID, mut writer: W) -> Result<()> {
         match self.sessions.remove(&id) {
             Some(mut enriched_session) => {
                 // Responses don't need framing as they are linked at the

@@ -1,7 +1,7 @@
 //! Cargo-aware elf2sgxs wrapper.
 extern crate ansi_term;
+extern crate anyhow;
 extern crate clap;
-extern crate failure;
 extern crate serde;
 extern crate serde_derive;
 
@@ -11,9 +11,10 @@ use std::{
 };
 
 use ansi_term::Color::{Green, Red, White};
+use anyhow::{anyhow, Context as AnyContext, Result};
 use clap::{App, Arg, SubCommand};
-use failure::{format_err, Fail, Fallible, ResultExt};
 use oasis_core_tools::cargo;
+use thiserror::Error;
 
 /// Target tripe for SGX platform.
 const TARGET_TRIPLE: &'static str = "x86_64-fortanix-unknown-sgx";
@@ -28,11 +29,11 @@ const DEFAULT_THREADS: u32 = 2;
 /// Default value of debug mode for SGX enclaves.
 const DEFAULT_DEBUG: bool = true;
 
-#[derive(Debug, Fail)]
+#[derive(Error, Debug)]
 enum CommandFail {
-    #[fail(display = "failed to run {}, {}", _0, _1)]
+    #[error("failed to run {0}, {1}")]
     Io(String, io::Error),
-    #[fail(display = "while running {} got {}", _0, _1)]
+    #[error("while running {0} got {1}")]
     Status(String, ExitStatus),
 }
 
@@ -44,7 +45,7 @@ fn run_command(mut cmd: Command) -> Result<(), CommandFail> {
     }
 }
 
-fn real_main() -> Fallible<()> {
+fn real_main() -> Result<()> {
     let matches = App::new("cargo")
         .subcommand(
             SubCommand::with_name("elf2sgxs").arg(
@@ -62,7 +63,7 @@ fn real_main() -> Fallible<()> {
 
     let package_root = cargo::PackageRoot::discover()?;
     if !package_root.is_package() {
-        return Err(format_err!(
+        return Err(anyhow!(
             "manifest path `{}` is a virtual manifest, but this command requires running \
              against an actual package in this workspace",
             package_root.manifest_path().to_str().unwrap(),

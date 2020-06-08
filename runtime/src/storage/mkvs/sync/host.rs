@@ -1,6 +1,6 @@
 use std::{any::Any, sync::Arc};
 
-use failure::Fallible;
+use anyhow::Result;
 use io_context::Context;
 
 use crate::{
@@ -24,7 +24,7 @@ impl HostReadSyncer {
         &self,
         ctx: Context,
         request: StorageSyncRequest,
-    ) -> Fallible<ProofResponse> {
+    ) -> Result<ProofResponse> {
         let request = Body::HostStorageSyncRequest { request };
         match self.protocol.make_request(ctx, request) {
             Ok(Body::HostStorageSyncResponse {
@@ -41,7 +41,7 @@ impl ReadSync for HostReadSyncer {
         self
     }
 
-    fn sync_get(&mut self, ctx: Context, request: GetRequest) -> Fallible<ProofResponse> {
+    fn sync_get(&mut self, ctx: Context, request: GetRequest) -> Result<ProofResponse> {
         self.make_request_with_proof(ctx, StorageSyncRequest::SyncGet(request))
     }
 
@@ -49,11 +49,11 @@ impl ReadSync for HostReadSyncer {
         &mut self,
         ctx: Context,
         request: GetPrefixesRequest,
-    ) -> Fallible<ProofResponse> {
+    ) -> Result<ProofResponse> {
         self.make_request_with_proof(ctx, StorageSyncRequest::SyncGetPrefixes(request))
     }
 
-    fn sync_iterate(&mut self, ctx: Context, request: IterateRequest) -> Fallible<ProofResponse> {
+    fn sync_iterate(&mut self, ctx: Context, request: IterateRequest) -> Result<ProofResponse> {
         self.make_request_with_proof(ctx, StorageSyncRequest::SyncIterate(request))
     }
 }

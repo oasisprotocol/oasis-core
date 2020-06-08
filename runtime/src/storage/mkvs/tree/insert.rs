@@ -1,6 +1,6 @@
 use std::{mem, sync::Arc};
 
-use failure::Fallible;
+use anyhow::{anyhow, Result};
 use io_context::Context;
 
 use crate::storage::mkvs::{cache::*, tree::*};
@@ -9,7 +9,7 @@ use super::lookup::FetcherSyncGet;
 
 impl Tree {
     /// Insert a key/value pair into the tree.
-    pub fn insert(&mut self, ctx: Context, key: &[u8], value: &[u8]) -> Fallible<Option<Vec<u8>>> {
+    pub fn insert(&mut self, ctx: Context, key: &[u8], value: &[u8]) -> Result<Option<Vec<u8>>> {
         let ctx = ctx.freeze();
         let pending_root = self.cache.borrow().get_pending_root();
         let boxed_key = key.to_vec();
@@ -49,7 +49,7 @@ impl Tree {
         key: &Key,
         val: Value,
         depth: Depth,
-    ) -> Fallible<(NodePtrRef, Option<Value>)> {
+    ) -> Result<(NodePtrRef, Option<Value>)> {
         let node_ref = self.cache.borrow_mut().deref_node_ptr(
             ctx,
             ptr.clone(),
@@ -162,7 +162,7 @@ impl Tree {
                         }
                     }
                 } else {
-                    return Err(format_err!(
+                    return Err(anyhow!(
                         "insert.rs: unknown internal node_ref {:?}",
                         node_ref
                     ));
@@ -246,10 +246,7 @@ impl Tree {
                         }
                     }
                 } else {
-                    return Err(format_err!(
-                        "insert.rs: invalid leaf node_ref {:?}",
-                        node_ref
-                    ));
+                    return Err(anyhow!("insert.rs: invalid leaf node_ref {:?}", node_ref));
                 }
 
                 let new_internal = self.cache.borrow_mut().new_internal_node(

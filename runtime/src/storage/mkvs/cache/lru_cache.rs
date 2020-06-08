@@ -1,13 +1,14 @@
 use std::{any::Any, cell::RefCell, pin::Pin, ptr::NonNull, rc::Rc, sync::Arc};
 
-use failure::Fallible;
+use anyhow::{anyhow, Result};
 use intrusive_collections::{IntrusivePointer, LinkedList, LinkedListLink};
 use io_context::Context;
+use thiserror::Error;
 
 use crate::storage::mkvs::{cache::*, sync::*, tree::*};
 
-#[derive(Debug, Fail)]
-#[fail(display = "mkvs: tried to remove locked node")]
+#[derive(Error, Debug)]
+#[error("mkvs: tried to remove locked node")]
 struct RemoveLockedError;
 
 #[derive(Clone, Default)]
@@ -416,7 +417,7 @@ impl Cache for LRUCache {
         ctx: &Arc<Context>,
         ptr: NodePtrRef,
         fetcher: Option<F>,
-    ) -> Fallible<Option<NodeRef>> {
+    ) -> Result<Option<NodeRef>> {
         let ptr_ref = ptr;
         let ptr = ptr_ref.borrow();
 
@@ -450,14 +451,14 @@ impl Cache for LRUCache {
         if let Some(fetcher) = fetcher {
             self.remote_sync(ctx, ptr_ref.clone(), fetcher)?;
         } else {
-            return Err(format_err!(
+            return Err(anyhow!(
                 "mkvs: node to dereference not available locally and no fetcher provided"
             ));
         }
 
         let ptr = ptr_ref.borrow();
         if ptr.node.is_none() {
-            return Err(format_err!(
+            return Err(anyhow!(
                 "mkvs: received result did not contain node (or cache too small)"
             ));
         }
@@ -469,7 +470,7 @@ impl Cache for LRUCache {
         ctx: &Arc<Context>,
         ptr: NodePtrRef,
         fetcher: F,
-    ) -> Fallible<()> {
+    ) -> Result<()> {
         let proof = fetcher.fetch(
             Context::create_child(&ctx),
             self.sync_root,
@@ -486,7 +487,7 @@ impl Cache for LRUCache {
         } else if proof.untrusted_root == self.sync_root.hash {
             (self.pending_root.clone(), self.sync_root.hash)
         } else {
-            return Err(format_err!(
+            return Err(anyhow!(
                 "mkvs: got proof for unexpected root ({:?})",
                 proof.untrusted_root
             ));

@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use failure::Fallible;
+use anyhow::Result;
 use io_context::Context;
 
 use crate::storage::mkvs::{cache::*, tree::*};
@@ -9,7 +9,7 @@ use super::lookup::FetcherSyncGet;
 
 impl Tree {
     /// Remove a key from the tree and return true if the tree was modified.
-    pub fn remove(&mut self, ctx: Context, key: &[u8]) -> Fallible<Option<Vec<u8>>> {
+    pub fn remove(&mut self, ctx: Context, key: &[u8]) -> Result<Option<Vec<u8>>> {
         let ctx = ctx.freeze();
         let boxed_key = key.to_vec();
         let pending_root = self.cache.borrow().get_pending_root();
@@ -50,7 +50,7 @@ impl Tree {
         bit_depth: Depth,
         key: &Key,
         depth: Depth,
-    ) -> Fallible<(NodePtrRef, bool, Option<Value>)> {
+    ) -> Result<(NodePtrRef, bool, Option<Value>)> {
         let node_ref = self.cache.borrow_mut().deref_node_ptr(
             ctx,
             ptr.clone(),

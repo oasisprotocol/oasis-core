@@ -4,9 +4,9 @@ use std::{
 };
 
 use base64;
-use failure::Fail;
 use rand::{rngs::OsRng, Rng};
 use serde_derive::{Deserialize, Serialize};
+use thiserror::Error;
 use x25519_dalek;
 
 use oasis_core_runtime::{
@@ -185,27 +185,27 @@ pub struct SignedPublicKey {
 }
 
 /// Key manager error.
-#[derive(Debug, Fail)]
+#[derive(Error, Debug)]
 pub enum KeyManagerError {
-    #[fail(display = "client session is not authenticated")]
+    #[error("client session is not authenticated")]
     NotAuthenticated,
-    #[fail(display = "client session authentication is invalid")]
+    #[error("client session authentication is invalid")]
     InvalidAuthentication,
-    #[fail(display = "key manager is not initialized")]
+    #[error("key manager is not initialized")]
     NotInitialized,
-    #[fail(display = "key manager state corrupted")]
+    #[error("key manager state corrupted")]
     StateCorrupted,
-    #[fail(display = "key manager replication required")]
+    #[error("key manager replication required")]
     ReplicationRequired,
-    #[fail(display = "policy rollback")]
+    #[error("policy rollback")]
     PolicyRollback,
-    #[fail(display = "policy alteration, without serial increment")]
+    #[error("policy alteration, without serial increment")]
     PolicyChanged,
-    #[fail(display = "policy is malformed or invalid")]
+    #[error("policy is malformed or invalid")]
     PolicyInvalid,
-    #[fail(display = "policy failed signature verification")]
+    #[error("policy failed signature verification")]
     PolicyInvalidSignature,
-    #[fail(display = "policy has insufficient signatures")]
+    #[error("policy has insufficient signatures")]
     PolicyInsufficientSignatures,
 }
 

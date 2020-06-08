@@ -1,7 +1,7 @@
 ///! Key Derivation Function.
 use std::sync::{Arc, RwLock};
 
-use failure::Fallible;
+use anyhow::Result;
 use io_context::Context as IoContext;
 use lazy_static::lazy_static;
 use lru::LruCache;
@@ -100,7 +100,7 @@ impl Inner {
         self.cache.clear();
     }
 
-    fn derive_contract_key(&self, req: &RequestIds) -> Fallible<KeyPair> {
+    fn derive_contract_key(&self, req: &RequestIds) -> Result<KeyPair> {
         let checksum = self.get_checksum()?;
         let mut contract_secret = self.derive_contract_secret(req)?;
 
@@ -129,7 +129,7 @@ impl Inner {
         ))
     }
 
-    fn derive_contract_secret(&self, req: &RequestIds) -> Fallible<Vec<u8>> {
+    fn derive_contract_secret(&self, req: &RequestIds) -> Result<Vec<u8>> {
         let master_secret = match self.master_secret.as_ref() {
             Some(master_secret) => master_secret,
             None => return Err(KeyManagerError::NotInitialized.into()),
@@ -146,7 +146,7 @@ impl Inner {
         Ok(k.to_vec())
     }
 
-    fn get_checksum(&self) -> Fallible<Vec<u8>> {
+    fn get_checksum(&self) -> Result<Vec<u8>> {
         match self.checksum.as_ref() {
             Some(checksum) => Ok(checksum.clone()),
             None => Err(KeyManagerError::NotInitialized.into()),
@@ -179,7 +179,7 @@ impl Kdf {
         req: &InitRequest,
         ctx: &mut RpcContext,
         policy_checksum: Vec<u8>,
-    ) -> Fallible<SignedInitResponse> {
+    ) -> Result<SignedInitResponse> {
         let mut inner = self.inner.write().unwrap();
 
         let rctx = runtime_context!(ctx, KmContext);
@@ -326,7 +326,7 @@ impl Kdf {
     }
 
     // Get or create keys.
-    pub fn get_or_create_keys(&self, req: &RequestIds) -> Fallible<KeyPair> {
+    pub fn get_or_create_keys(&self, req: &RequestIds) -> Result<KeyPair> {
         let cache_key = req.to_cache_key();
 
         // Check to see if the cached value exists.
@@ -343,13 +343,13 @@ impl Kdf {
     }
 
     /// Get the public part of the key.
-    pub fn get_public_key(&self, req: &RequestIds) -> Fallible<Option<PublicKey>> {
+    pub fn get_public_key(&self, req: &RequestIds) -> Result<Option<PublicKey>> {
         let contract_keys = self.get_or_create_keys(req)?;
         Ok(Some(contract_keys.input_keypair.get_pk()))
     }
 
     /// Signs the public key using the key manager key.
-    pub fn sign_public_key(&self, key: PublicKey) -> Fallible<SignedPublicKey> {
+    pub fn sign_public_key(&self, key: PublicKey) -> Result<SignedPublicKey> {
         let mut body = key.as_ref().to_vec();
 
         let inner = self.inner.read().unwrap();
@@ -370,7 +370,7 @@ impl Kdf {
     }
 
     // Replicate master secret.
-    pub fn replicate_master_secret(&self) -> Fallible<ReplicateResponse> {
+    pub fn replicate_master_secret(&self) -> Result<ReplicateResponse> {
         let inner = self.inner.read().unwrap();
 
         match inner.master_secret {

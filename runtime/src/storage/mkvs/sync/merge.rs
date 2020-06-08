@@ -1,4 +1,4 @@
-use failure::{format_err, Fallible};
+use anyhow::{anyhow, Result};
 
 use crate::storage::mkvs::tree::*;
 
@@ -7,7 +7,7 @@ pub fn merge_verified_subtree(
     dst: NodePtrRef,
     subtree: NodePtrRef,
     updater: &mut Vec<NodePtrRef>,
-) -> Fallible<()> {
+) -> Result<()> {
     let dst_ref = dst;
     let mut dst = dst_ref.borrow_mut();
     let subtree = subtree.borrow();
@@ -19,7 +19,7 @@ pub fn merge_verified_subtree(
         // TODO: Support merging into non-clean subtrees. If a subtree
         //       is not clean, this means that the tree structure may
         //       be changed.
-        return Err(format_err!(
+        return Err(anyhow!(
             "merger: merging into non-clean subtree not yet supported"
         ));
     }
@@ -27,7 +27,7 @@ pub fn merge_verified_subtree(
     // If the destination pointer is clean, sanity check that we are
     // merging correct nodes.
     if dst.hash != subtree.hash {
-        return Err(format_err!(
+        return Err(anyhow!(
             "merger: hash mismatch during merge (expected: {:?} got: {:?})",
             dst.hash,
             subtree.hash,

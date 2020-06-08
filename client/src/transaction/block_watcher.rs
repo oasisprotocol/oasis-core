@@ -4,16 +4,16 @@ use std::sync::{
     Arc, Mutex,
 };
 
-use failure::Fail;
 use futures::{prelude::*, stream::Fuse, try_ready};
+use thiserror::Error;
 use tokio::{spawn, sync::watch};
 
 use super::snapshot::BlockSnapshot;
 
 /// Block watcher error.
-#[derive(Debug, Fail)]
+#[derive(Error, Debug)]
 pub enum WatchError {
-    #[fail(display = "block watcher closed")]
+    #[error("block watcher closed")]
     WatcherClosed,
 }
 

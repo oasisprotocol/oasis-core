@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use failure::Fallible;
+use anyhow::Result;
 
 use oasis_core_keymanager_api_common::*;
 use oasis_core_runtime::{
@@ -17,7 +17,7 @@ use oasis_core_runtime::{
 use crate::{context, kdf::Kdf, policy::Policy};
 
 /// Initialize the Kdf.
-fn init_kdf(req: &InitRequest, ctx: &mut RpcContext) -> Fallible<SignedInitResponse> {
+fn init_kdf(req: &InitRequest, ctx: &mut RpcContext) -> Result<SignedInitResponse> {
     let policy_checksum = Policy::global().init(ctx, &req.policy)?;
     Kdf::global().init(&req, ctx, policy_checksum)
 }

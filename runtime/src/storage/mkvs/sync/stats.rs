@@ -1,6 +1,6 @@
 use std::any::Any;
 
-use failure::Fallible;
+use anyhow::Result;
 use io_context::Context;
 
 use crate::storage::mkvs::sync::*;
@@ -34,7 +34,7 @@ impl ReadSync for StatsCollector {
         self
     }
 
-    fn sync_get(&mut self, ctx: Context, request: GetRequest) -> Fallible<ProofResponse> {
+    fn sync_get(&mut self, ctx: Context, request: GetRequest) -> Result<ProofResponse> {
         self.sync_get_count += 1;
         self.rs.sync_get(ctx, request)
     }
@@ -43,12 +43,12 @@ impl ReadSync for StatsCollector {
         &mut self,
         ctx: Context,
         request: GetPrefixesRequest,
-    ) -> Fallible<ProofResponse> {
+    ) -> Result<ProofResponse> {
         self.sync_get_prefixes_count += 1;
         self.rs.sync_get_prefixes(ctx, request)
     }
 
-    fn sync_iterate(&mut self, ctx: Context, request: IterateRequest) -> Fallible<ProofResponse> {
+    fn sync_iterate(&mut self, ctx: Context, request: IterateRequest) -> Result<ProofResponse> {
         self.sync_iterate_count += 1;
         self.rs.sync_iterate(ctx, request)
     }

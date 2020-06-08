@@ -1,5 +1,5 @@
 //! Key manager API common types and functions.
-use failure::Fallible;
+use anyhow::Result;
 use lazy_static::lazy_static;
 use oasis_core_runtime::common::{cbor, crypto::signature::PublicKey as OasisPublicKey};
 use std::{
@@ -35,7 +35,7 @@ const POLICY_SIGN_CONTEXT: &'static [u8] = b"oasis-core/keymanager: policy";
 
 impl SignedPolicySGX {
     /// Verify the signatures and return the PolicySGX, if the signatures are correct.
-    pub fn verify(&self) -> Fallible<PolicySGX> {
+    pub fn verify(&self) -> Result<PolicySGX> {
         // Verify the signatures.
         let untrusted_policy_raw = cbor::to_vec(&self.policy);
         let mut signers: HashSet<OasisPublicKey> = HashSet::new();

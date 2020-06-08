@@ -25,7 +25,7 @@ macro_rules! register_runtime_txn_methods {
                     },
                     |args: &$arguments_type,
                      ctx: &mut $crate::transaction::context::Context|
-                        -> ::failure::Fallible<$output_type> {
+                        -> ::anyhow::Result<$output_type> {
                         $method_name(args, ctx)
                     },
                 )

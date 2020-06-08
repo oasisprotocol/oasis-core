@@ -1,11 +1,12 @@
 //! Signature types.
 use std::io::Cursor;
 
+use anyhow::Result;
 use byteorder::{LittleEndian, ReadBytesExt};
 use ed25519_dalek;
-use failure::Fallible;
 use rand::rngs::OsRng;
 use serde_derive::{Deserialize, Serialize};
+use thiserror::Error;
 use zeroize::Zeroize;
 
 use super::hash::Hash;
@@ -17,9 +18,9 @@ impl_bytes!(
 );
 
 /// Signature error.
-#[derive(Debug, Fail)]
+#[derive(Error, Debug)]
 enum SignatureError {
-    #[fail(display = "signature malleability check failed")]
+    #[error("signature malleability check failed")]
     MalleabilityError,
 }
 
@@ -78,7 +79,7 @@ impl PrivateKey {
 }
 
 impl Signer for PrivateKey {
-    fn sign(&self, context: &[u8], message: &[u8]) -> Fallible<Signature> {
+    fn sign(&self, context: &[u8], message: &[u8]) -> Result<Signature> {
         // TODO/#2103: Replace this with Ed25519ctx.
         let digest = Hash::digest_bytes_list(&[context, message]);
 
@@ -90,7 +91,7 @@ impl_bytes!(Signature, 64, "An Ed25519 signature.");
 
 impl Signature {
     /// Verify signature.
-    pub fn verify(&self, pk: &PublicKey, context: &[u8], message: &[u8]) -> Fallible<()> {
+    pub fn verify(&self, pk: &PublicKey, context: &[u8], message: &[u8]) -> Result<()> {
         // TODO/#2103: Replace this with Ed25519ctx.
         let pk = ed25519_dalek::PublicKey::from_bytes(pk.as_ref()).unwrap();
         let digest = Hash::digest_bytes_list(&[context, message]);
@@ -119,7 +120,7 @@ pub struct SignatureBundle {
 /// A abstract signer.
 pub trait Signer: Send + Sync {
     /// Generates a signature over the context and message.
-    fn sign(&self, context: &[u8], message: &[u8]) -> Fallible<Signature>;
+    fn sign(&self, context: &[u8], message: &[u8]) -> Result<Signature>;
 }
 
 // Check if s < L, per RFC 8032, inspired by the Go runtime library's version

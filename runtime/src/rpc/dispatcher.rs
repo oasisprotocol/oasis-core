@@ -1,8 +1,9 @@
 //! RPC dispatcher.
 use std::collections::HashMap;
 
-use failure::Fallible;
+use anyhow::Result;
 use serde::{de::DeserializeOwned, Serialize};
+use thiserror::Error;
 
 use super::{
     context::Context,
@@ -11,9 +12,9 @@ use super::{
 use crate::common::cbor;
 
 /// Dispatch error.
-#[derive(Debug, Fail)]
+#[derive(Error, Debug)]
 enum DispatchError {
-    #[fail(display = "method not found: {}", method)]
+    #[error("method not found: {method:?}")]
     MethodNotFound { method: String },
 }
 
@@ -42,16 +43,16 @@ pub struct MethodDescriptor {
 /// Handler for a RPC method.
 pub trait MethodHandler<Rq, Rsp> {
     /// Invoke the method implementation and return a response.
-    fn handle(&self, request: &Rq, ctx: &mut Context) -> Fallible<Rsp>;
+    fn handle(&self, request: &Rq, ctx: &mut Context) -> Result<Rsp>;
 }
 
 impl<Rq, Rsp, F> MethodHandler<Rq, Rsp> for F
 where
     Rq: 'static,
     Rsp: 'static,
-    F: Fn(&Rq, &mut Context) -> Fallible<Rsp> + 'static,
+    F: Fn(&Rq, &mut Context) -> Result<Rsp> + 'static,
 {
-    fn handle(&self, request: &Rq, ctx: &mut Context) -> Fallible<Rsp> {
+    fn handle(&self, request: &Rq, ctx: &mut Context) -> Result<Rsp> {
         (*self)(&request, ctx)
     }
 }
@@ -62,7 +63,7 @@ pub trait MethodHandlerDispatch {
     fn get_descriptor(&self) -> &MethodDescriptor;
 
     /// Dispatch request.
-    fn dispatch(&self, request: Request, ctx: &mut Context) -> Fallible<Response>;
+    fn dispatch(&self, request: Request, ctx: &mut Context) -> Result<Response>;
 }
 
 struct MethodHandlerDispatchImpl<Rq, Rsp> {
@@ -81,7 +82,7 @@ where
         &self.descriptor
     }
 
-    fn dispatch(&self, request: Request, ctx: &mut Context) -> Fallible<Response> {
+    fn dispatch(&self, request: Request, ctx: &mut Context) -> Result<Response> {
         let request = cbor::from_value(request.args)?;
         let response = self.handler.handle(&request, ctx)?;
 
@@ -119,7 +120,7 @@ impl Method {
     }
 
     /// Dispatch a request.
-    pub fn dispatch(&self, request: Request, ctx: &mut Context) -> Fallible<Response> {
+    pub fn dispatch(&self, request: Request, ctx: &mut Context) -> Result<Response> {
         self.dispatcher.dispatch(request, ctx)
     }
 }
@@ -185,7 +186,7 @@ impl Dispatcher {
         request: Request,
         ctx: &mut Context,
         is_local: bool,
-    ) -> Fallible<Response> {
+    ) -> Result<Response> {
         let vtbl = match is_local {
             false => &self.methods,
             true => &self.local_methods,
