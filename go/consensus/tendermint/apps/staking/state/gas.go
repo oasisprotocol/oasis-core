@@ -48,6 +48,9 @@ func AuthenticateAndPayFees(
 
 	// Convert signer's public key to account address.
 	addr := staking.NewAddress(signer)
+	if addr.IsReserved() {
+		return fmt.Errorf("using reserved account address %s is prohibited", addr)
+	}
 
 	// Fetch account and make sure the nonce is correct.
 	account, err := state.Account(ctx, addr)

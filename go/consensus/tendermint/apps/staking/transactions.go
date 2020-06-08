@@ -36,7 +36,7 @@ func (app *stakingApplication) transfer(ctx *api.Context, state *stakingState.Mu
 	}
 
 	fromAddr := staking.NewAddress(ctx.TxSigner())
-	if !isTransferPermitted(params, fromAddr) {
+	if fromAddr.IsReserved() || !isTransferPermitted(params, fromAddr) {
 		return staking.ErrForbidden
 	}
 
@@ -115,6 +115,10 @@ func (app *stakingApplication) burn(ctx *api.Context, state *stakingState.Mutabl
 	}
 
 	fromAddr := staking.NewAddress(ctx.TxSigner())
+	if fromAddr.IsReserved() {
+		return staking.ErrForbidden
+	}
+
 	from, err := state.Account(ctx, fromAddr)
 	if err != nil {
 		return fmt.Errorf("failed to fetch account: %w", err)
@@ -177,6 +181,10 @@ func (app *stakingApplication) addEscrow(ctx *api.Context, state *stakingState.M
 	}
 
 	fromAddr := staking.NewAddress(ctx.TxSigner())
+	if fromAddr.IsReserved() {
+		return staking.ErrForbidden
+	}
+
 	from, err := state.Account(ctx, fromAddr)
 	if err != nil {
 		return fmt.Errorf("failed to fetch account: %w", err)
@@ -265,6 +273,10 @@ func (app *stakingApplication) reclaimEscrow(ctx *api.Context, state *stakingSta
 	}
 
 	toAddr := staking.NewAddress(ctx.TxSigner())
+	if toAddr.IsReserved() {
+		return staking.ErrForbidden
+	}
+
 	to, err := state.Account(ctx, toAddr)
 	if err != nil {
 		return fmt.Errorf("failed to fetch account: %w", err)
@@ -384,6 +396,10 @@ func (app *stakingApplication) amendCommissionSchedule(
 	}
 
 	fromAddr := staking.NewAddress(ctx.TxSigner())
+	if fromAddr.IsReserved() {
+		return staking.ErrForbidden
+	}
+
 	from, err := state.Account(ctx, fromAddr)
 	if err != nil {
 		return fmt.Errorf("failed to fetch account: %w", err)
