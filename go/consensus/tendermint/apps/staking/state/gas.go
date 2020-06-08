@@ -98,13 +98,15 @@ func AuthenticateAndPayFees(
 		return fmt.Errorf("failed to set account: %w", err)
 	}
 
-	// Emit transfer event.
-	ev := cbor.Marshal(&staking.TransferEvent{
-		From:   id,
-		To:     staking.FeeAccumulatorAccountID,
-		Tokens: fee.Amount,
-	})
-	ctx.EmitEvent(abciAPI.NewEventBuilder(AppName).Attribute(KeyTransfer, ev))
+	// Emit transfer event if fee is non-zero.
+	if !fee.Amount.IsZero() {
+		ev := cbor.Marshal(&staking.TransferEvent{
+			From:   id,
+			To:     staking.FeeAccumulatorAccountID,
+			Tokens: fee.Amount,
+		})
+		ctx.EmitEvent(abciAPI.NewEventBuilder(AppName).Attribute(KeyTransfer, ev))
+	}
 
 	// Configure gas accountant on the context.
 	ctx.SetGasAccountant(abciAPI.NewCompositeGasAccountant(
