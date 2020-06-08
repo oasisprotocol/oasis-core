@@ -8,7 +8,7 @@ use super::{
     x25519_dalek,
 };
 
-use failure::Fallible;
+use anyhow::Result;
 use rand::rngs::OsRng;
 
 type Kdf = Hmac<Sha512Trunc256>;
@@ -54,7 +54,7 @@ pub fn box_seal(
     additional_data: Vec<u8>,
     peers_public_key: &[u8; 32],
     private_key: &[u8; 32],
-) -> Fallible<Vec<u8>> {
+) -> Result<Vec<u8>> {
     let key = derive_symmetric_key(peers_public_key, private_key);
 
     let d2 = DeoxysII::new(&key);
@@ -73,7 +73,7 @@ pub fn box_open(
     additional_data: Vec<u8>,
     peers_public_key: &[u8; 32],
     private_key: &[u8; 32],
-) -> Fallible<Vec<u8>> {
+) -> Result<Vec<u8>> {
     let key = derive_symmetric_key(peers_public_key, private_key);
 
     let d2 = DeoxysII::new(&key);

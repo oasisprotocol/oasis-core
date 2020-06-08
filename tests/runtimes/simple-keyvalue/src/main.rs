@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use failure::{format_err, Fallible};
+use anyhow::{anyhow, Result};
 use io_context::Context as IoContext;
 
 use oasis_core_keymanager_client::{KeyManagerClient, KeyPairId};
@@ -29,16 +29,16 @@ struct Context {
 }
 
 /// Return previously set runtime ID of this runtime.
-fn get_runtime_id(_args: &(), ctx: &mut TxnContext) -> Fallible<Option<String>> {
+fn get_runtime_id(_args: &(), ctx: &mut TxnContext) -> Result<Option<String>> {
     let rctx = runtime_context!(ctx, Context);
 
     Ok(Some(rctx.test_runtime_id.to_string()))
 }
 
 /// Insert a key/value pair.
-fn insert(args: &KeyValue, ctx: &mut TxnContext) -> Fallible<Option<String>> {
+fn insert(args: &KeyValue, ctx: &mut TxnContext) -> Result<Option<String>> {
     if args.value.as_bytes().len() > 128 {
-        return Err(format_err!("Value too big to be inserted."));
+        return Err(anyhow!("Value too big to be inserted."));
     }
     if ctx.check_only {
         return Err(CheckOnlySuccess::default().into());
@@ -57,7 +57,7 @@ fn insert(args: &KeyValue, ctx: &mut TxnContext) -> Fallible<Option<String>> {
 }
 
 /// Retrieve a key/value pair.
-fn get(args: &String, ctx: &mut TxnContext) -> Fallible<Option<String>> {
+fn get(args: &String, ctx: &mut TxnContext) -> Result<Option<String>> {
     if ctx.check_only {
         return Err(CheckOnlySuccess::default().into());
     }
@@ -71,7 +71,7 @@ fn get(args: &String, ctx: &mut TxnContext) -> Fallible<Option<String>> {
 }
 
 /// Remove a key/value pair.
-fn remove(args: &String, ctx: &mut TxnContext) -> Fallible<Option<String>> {
+fn remove(args: &String, ctx: &mut TxnContext) -> Result<Option<String>> {
     if ctx.check_only {
         return Err(CheckOnlySuccess::default().into());
     }
@@ -85,7 +85,7 @@ fn remove(args: &String, ctx: &mut TxnContext) -> Fallible<Option<String>> {
 }
 
 /// Helper for doing encrypted MKVS operations.
-fn get_encryption_context(ctx: &mut TxnContext, key: &[u8]) -> Fallible<EncryptionContext> {
+fn get_encryption_context(ctx: &mut TxnContext, key: &[u8]) -> Result<EncryptionContext> {
     let rctx = runtime_context!(ctx, Context);
 
     // Derive key pair ID based on key.
@@ -100,7 +100,7 @@ fn get_encryption_context(ctx: &mut TxnContext, key: &[u8]) -> Fallible<Encrypti
 }
 
 /// (encrypted) Insert a key/value pair.
-fn enc_insert(args: &KeyValue, ctx: &mut TxnContext) -> Fallible<Option<String>> {
+fn enc_insert(args: &KeyValue, ctx: &mut TxnContext) -> Result<Option<String>> {
     // NOTE: This is only for example purposes, the correct way would be
     //       to also generate a (deterministic) nonce.
     let nonce = [0u8; NONCE_SIZE];
@@ -119,7 +119,7 @@ fn enc_insert(args: &KeyValue, ctx: &mut TxnContext) -> Fallible<Option<String>>
 }
 
 /// (encrypted) Retrieve a key/value pair.
-fn enc_get(args: &String, ctx: &mut TxnContext) -> Fallible<Option<String>> {
+fn enc_get(args: &String, ctx: &mut TxnContext) -> Result<Option<String>> {
     let enc_ctx = get_encryption_context(ctx, args.as_bytes())?;
     let existing = StorageContext::with_current(|mkvs, _untrusted_local| {
         enc_ctx.get(mkvs, IoContext::create_child(&ctx.io_ctx), args.as_bytes())
@@ -128,7 +128,7 @@ fn enc_get(args: &String, ctx: &mut TxnContext) -> Fallible<Option<String>> {
 }
 
 /// (encrypted) Remove a key/value pair.
-fn enc_remove(args: &String, ctx: &mut TxnContext) -> Fallible<Option<String>> {
+fn enc_remove(args: &String, ctx: &mut TxnContext) -> Result<Option<String>> {
     let enc_ctx = get_encryption_context(ctx, args.as_bytes())?;
     let existing = StorageContext::with_current(|mkvs, _untrusted_local| {
         enc_ctx.remove(mkvs, IoContext::create_child(&ctx.io_ctx), args.as_bytes())

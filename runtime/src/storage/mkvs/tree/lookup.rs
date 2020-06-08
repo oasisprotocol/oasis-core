@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use failure::Fallible;
+use anyhow::Result;
 use io_context::Context;
 
 use crate::storage::mkvs::{cache::*, sync::*, tree::*};
@@ -26,7 +26,7 @@ impl<'a> ReadSyncFetcher for FetcherSyncGet<'a> {
         root: Root,
         ptr: NodePtrRef,
         rs: &mut Box<dyn ReadSync>,
-    ) -> Fallible<Proof> {
+    ) -> Result<Proof> {
         let rsp = rs.sync_get(
             ctx,
             GetRequest {
@@ -44,7 +44,7 @@ impl<'a> ReadSyncFetcher for FetcherSyncGet<'a> {
 
 impl Tree {
     /// Get an existing key.
-    pub fn get(&self, ctx: Context, key: &[u8]) -> Fallible<Option<Vec<u8>>> {
+    pub fn get(&self, ctx: Context, key: &[u8]) -> Result<Option<Vec<u8>>> {
         self._get_top(ctx, key, false)
     }
 
@@ -57,7 +57,7 @@ impl Tree {
         }
     }
 
-    fn _get_top(&self, ctx: Context, key: &[u8], check_only: bool) -> Fallible<Option<Vec<u8>>> {
+    fn _get_top(&self, ctx: Context, key: &[u8], check_only: bool) -> Result<Option<Vec<u8>>> {
         let ctx = ctx.freeze();
         let boxed_key = key.to_vec();
         let pending_root = self.cache.borrow().get_pending_root();
@@ -81,7 +81,7 @@ impl Tree {
         key: &Key,
         depth: Depth,
         check_only: bool,
-    ) -> Fallible<Option<Value>> {
+    ) -> Result<Option<Value>> {
         let node_ref = self.cache.borrow_mut().deref_node_ptr(
             ctx,
             ptr,

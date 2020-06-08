@@ -6,8 +6,8 @@ use std::{
     thread,
 };
 
+use anyhow::Result;
 use crossbeam::channel;
-use failure::Fallible;
 use io_context::Context;
 use slog::Logger;
 
@@ -137,7 +137,7 @@ impl Dispatcher {
     }
 
     /// Queue a new request to be dispatched.
-    pub fn queue_request(&self, ctx: Context, id: u64, body: Body) -> Fallible<()> {
+    pub fn queue_request(&self, ctx: Context, id: u64, body: Body) -> Result<()> {
         self.queue_tx.try_send((ctx, id, body))?;
         Ok(())
     }

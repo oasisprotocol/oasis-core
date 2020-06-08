@@ -1,8 +1,8 @@
 //! Nonce utility used to ensure nonces are safely incremented.
 use std::ops::Deref;
 
+use anyhow::{anyhow, Result};
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
-use failure::{format_err, Fallible};
 
 /// Size of the nonce in bytes.
 pub use super::deoxysii::NONCE_SIZE;
@@ -34,7 +34,7 @@ impl Nonce {
     /// Returns an error iff we've exceeded our nonce's counter capacity, i.e.,
     /// we've incremented 2^32 times. In this case, the Nonce remains unchanged,
     /// and all subsequent calls to this method will return an Error.
-    pub fn increment(&mut self) -> Fallible<()> {
+    pub fn increment(&mut self) -> Result<()> {
         // Extract the current counter out of the nonce.
         let mut counter_array = &self.current_value.clone()[TAG_SIZE..];
         // Increment the count and wrap to 0 if necessary.
@@ -61,7 +61,7 @@ impl Nonce {
         };
         // If we've exhausted all 2^32 counters, then error.
         if new_value == self.start_value {
-            return Err(format_err!(
+            return Err(anyhow!(
                 "This nonce has been exhausted, and a new one must be created",
             ));
         }

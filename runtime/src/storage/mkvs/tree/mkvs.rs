@@ -1,4 +1,4 @@
-use failure::Fallible;
+use anyhow::Result;
 use io_context::Context;
 
 use crate::{
@@ -45,7 +45,7 @@ impl MKVS for Tree {
         ctx: Context,
         namespace: Namespace,
         version: u64,
-    ) -> Fallible<(WriteLog, Hash)> {
+    ) -> Result<(WriteLog, Hash)> {
         let lock = self.lock.clone();
         let _guard = lock.lock().unwrap();
         Tree::commit(self, ctx, namespace, version)

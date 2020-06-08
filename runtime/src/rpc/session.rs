@@ -1,9 +1,10 @@
 //! Secure channel session.
 use std::{collections::HashSet, io::Write, mem, sync::Arc};
 
-use failure::Fallible;
+use anyhow::Result;
 use serde_derive::{Deserialize, Serialize};
 use snow;
+use thiserror::Error;
 
 use super::types::Message;
 use crate::{
@@ -21,15 +22,15 @@ const NOISE_PATTERN: &'static str = "Noise_XX_25519_ChaChaPoly_SHA256";
 const RAK_SESSION_BINDING_CONTEXT: [u8; 8] = *b"EkRakRpc";
 
 /// Session-related error.
-#[derive(Debug, Fail)]
+#[derive(Error, Debug)]
 enum SessionError {
-    #[fail(display = "invalid input")]
+    #[error("invalid input")]
     InvalidInput,
-    #[fail(display = "invalid state")]
+    #[error("invalid state")]
     InvalidState,
-    #[fail(display = "session closed")]
+    #[error("session closed")]
     Closed,
-    #[fail(display = "mismatched enclave identity")]
+    #[error("mismatched enclave identity")]
     MismatchedEnclaveIdentity,
 }
 
@@ -82,7 +83,7 @@ impl Session {
         &mut self,
         data: Vec<u8>,
         mut writer: W,
-    ) -> Fallible<Option<Message>> {
+    ) -> Result<Option<Message>> {
         // Replace the state with a closed state. In case processing fails for whatever
         // reason, this will cause the session to be torn down.
         match mem::replace(&mut self.state, State::Closed) {
@@ -151,7 +152,7 @@ impl Session {
     ///
     /// The `writer` will be used for protocol message output which should
     /// be transmitted to the remote session counterpart.
-    pub fn write_message<W: Write>(&mut self, msg: Message, mut writer: W) -> Fallible<()> {
+    pub fn write_message<W: Write>(&mut self, msg: Message, mut writer: W) -> Result<()> {
         if let State::Transport(ref mut state) = self.state {
             let msg = cbor::to_vec(&msg);
             let len = state.write_message(&msg, &mut self.buf)?;
@@ -198,7 +199,7 @@ impl Session {
         &self,
         rak_binding: &[u8],
         remote_static: &[u8],
-    ) -> Fallible<Option<Arc<SessionInfo>>> {
+    ) -> Result<Option<Arc<SessionInfo>>> {
         if rak_binding.is_empty() {
             // If enclave identity verification is required and no RAK binding
             // has been provided, we must abort the session.

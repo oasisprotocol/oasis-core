@@ -4,7 +4,7 @@ use std::{
     sync::RwLock,
 };
 
-use failure::Fallible;
+use anyhow::Result;
 use lazy_static::lazy_static;
 use sgx_isa::Keypolicy;
 use tiny_keccak::sha3_256;
@@ -58,7 +58,7 @@ impl Policy {
     }
 
     /// Initialize (or update) the policy state.
-    pub fn init(&self, ctx: &mut RpcContext, raw_policy: &Vec<u8>) -> Fallible<Vec<u8>> {
+    pub fn init(&self, ctx: &mut RpcContext, raw_policy: &Vec<u8>) -> Result<Vec<u8>> {
         // If this is an insecure build, don't bother trying to apply any policy.
         if Self::unsafe_skip() {
             return Ok(vec![]);
@@ -113,7 +113,7 @@ impl Policy {
         &self,
         remote_enclave: &EnclaveIdentity,
         req: &RequestIds,
-    ) -> Fallible<()> {
+    ) -> Result<()> {
         let inner = self.inner.read().unwrap();
         let policy = match inner.policy.as_ref() {
             Some(policy) => policy,
@@ -126,7 +126,7 @@ impl Policy {
     }
 
     /// Check if the MRENCLAVE/MRSIGNER may replicate.
-    pub fn may_replicate_master_secret(&self, remote_enclave: &EnclaveIdentity) -> Fallible<()> {
+    pub fn may_replicate_master_secret(&self, remote_enclave: &EnclaveIdentity) -> Result<()> {
         // Always allow replication to ourselves, if it is possible to do so in
         // an authenticated manner.
         #[cfg(target_env = "sgx")]
@@ -203,7 +203,7 @@ struct CachedPolicy {
 }
 
 impl CachedPolicy {
-    fn parse(raw: &Vec<u8>) -> Fallible<Self> {
+    fn parse(raw: &Vec<u8>) -> Result<Self> {
         // Parse out the signed policy.
         let untrusted_policy: SignedPolicySGX = cbor::from_slice(&raw)?;
         let policy = untrusted_policy.verify()?;

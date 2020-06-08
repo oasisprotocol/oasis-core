@@ -1,6 +1,6 @@
 use std::{any::Any, ptr::NonNull, sync::Arc};
 
-use failure::Fallible;
+use anyhow::Result;
 use io_context::Context;
 
 use crate::storage::mkvs::{cache::lru_cache::CacheItemBox, sync::*, tree::*};
@@ -23,12 +23,12 @@ pub trait ReadSyncFetcher {
         root: Root,
         ptr: NodePtrRef,
         rs: &mut Box<dyn ReadSync>,
-    ) -> Fallible<Proof>;
+    ) -> Result<Proof>;
 }
 
 impl<F> ReadSyncFetcher for F
 where
-    F: Fn(Context, Root, NodePtrRef, &mut Box<dyn ReadSync>) -> Fallible<Proof>,
+    F: Fn(Context, Root, NodePtrRef, &mut Box<dyn ReadSync>) -> Result<Proof>,
 {
     fn fetch(
         &self,
@@ -36,7 +36,7 @@ where
         root: Root,
         ptr: NodePtrRef,
         rs: &mut Box<dyn ReadSync>,
-    ) -> Fallible<Proof> {
+    ) -> Result<Proof> {
         (*self)(ctx, root, ptr, rs)
     }
 }
@@ -86,14 +86,14 @@ pub trait Cache {
         ctx: &Arc<Context>,
         ptr: NodePtrRef,
         fetcher: Option<F>,
-    ) -> Fallible<Option<NodeRef>>;
+    ) -> Result<Option<NodeRef>>;
     /// Perform a remote sync with the configured remote syncer.
     fn remote_sync<F: ReadSyncFetcher>(
         &mut self,
         ctx: &Arc<Context>,
         ptr: NodePtrRef,
         fetcher: F,
-    ) -> Fallible<()>;
+    ) -> Result<()>;
 
     /// Mark that a tree node was just used.
     fn use_node(&mut self, ptr: NodePtrRef) -> bool;

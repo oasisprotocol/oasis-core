@@ -1,12 +1,13 @@
 //! Transaction client.
 use std::time::Duration;
 
-use failure::{Error, Fail, Fallible};
+use anyhow::{Error, Result};
 use futures::{future, prelude::*};
 use grpcio::{Channel, Error::RpcFailure, RpcStatus, RpcStatusCode};
 use rustracing::{sampler::AllSampler, tag};
 use rustracing_jaeger::{span::Span, Tracer};
 use serde::{de::DeserializeOwned, Serialize};
+use thiserror::Error;
 
 use oasis_core_runtime::{
     common::{cbor, crypto::hash::Hash, runtime::RuntimeId},
@@ -21,13 +22,13 @@ use super::{
 use crate::BoxFuture;
 
 /// Transaction client error.
-#[derive(Debug, Fail)]
+#[derive(Error, Debug)]
 pub enum TxnClientError {
-    #[fail(display = "node call failed: {}", 0)]
+    #[error("node call failed: {0}")]
     CallFailed(String),
-    #[fail(display = "block watcher closed")]
+    #[error("block watcher closed")]
     WatcherClosed,
-    #[fail(display = "transaction failed: {}", 0)]
+    #[error("transaction failed: {0}")]
     TxnFailed(String),
 }
 
@@ -445,7 +446,7 @@ impl TxnClient {
 }
 
 /// Parse runtime call output.
-pub fn parse_call_output<O>(output: Vec<u8>) -> Fallible<O>
+pub fn parse_call_output<O>(output: Vec<u8>) -> Result<O>
 where
     O: DeserializeOwned,
 {

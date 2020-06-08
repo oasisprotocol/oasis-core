@@ -1,6 +1,6 @@
 use std::{cell::RefCell, mem::size_of, rc::Rc};
 
-use failure::Fallible;
+use anyhow::Result;
 
 use crate::{
     common::crypto::hash::Hash,
@@ -13,14 +13,14 @@ const VERSION_SIZE: usize = size_of::<u64>();
 const VALUE_LENGTH_SIZE: usize = size_of::<u32>();
 
 impl Marshal for NodeBox {
-    fn marshal_binary(&self) -> Fallible<Vec<u8>> {
+    fn marshal_binary(&self) -> Result<Vec<u8>> {
         match self {
             NodeBox::Internal(ref n) => n.marshal_binary(),
             NodeBox::Leaf(ref n) => n.marshal_binary(),
         }
     }
 
-    fn unmarshal_binary(&mut self, data: &[u8]) -> Fallible<usize> {
+    fn unmarshal_binary(&mut self, data: &[u8]) -> Result<usize> {
         if data.len() < 1 {
             Err(TreeError::MalformedNode.into())
         } else {
@@ -50,11 +50,11 @@ impl Marshal for NodeBox {
 }
 
 impl Marshal for NodeKind {
-    fn marshal_binary(&self) -> Fallible<Vec<u8>> {
+    fn marshal_binary(&self) -> Result<Vec<u8>> {
         Ok(vec![*self as u8])
     }
 
-    fn unmarshal_binary(&mut self, data: &[u8]) -> Fallible<usize> {
+    fn unmarshal_binary(&mut self, data: &[u8]) -> Result<usize> {
         if data.len() < 1 {
             Err(TreeError::MalformedNode.into())
         } else {
@@ -73,7 +73,7 @@ impl Marshal for NodeKind {
 }
 
 impl Marshal for InternalNode {
-    fn marshal_binary(&self) -> Fallible<Vec<u8>> {
+    fn marshal_binary(&self) -> Result<Vec<u8>> {
         let leaf_node_binary: Vec<u8>;
         if self.leaf_node.borrow().is_null() {
             leaf_node_binary = vec![NodeKind::None as u8];
@@ -95,7 +95,7 @@ impl Marshal for InternalNode {
         Ok(result)
     }
 
-    fn unmarshal_binary(&mut self, data: &[u8]) -> Fallible<usize> {
+    fn unmarshal_binary(&mut self, data: &[u8]) -> Result<usize> {
         let mut pos = 0;
         if data.len() < 1 + VERSION_SIZE + size_of::<Depth>() + 1
             || data[pos] != NodeKind::Internal as u8
@@ -174,7 +174,7 @@ impl Marshal for InternalNode {
 }
 
 impl Marshal for LeafNode {
-    fn marshal_binary(&self) -> Fallible<Vec<u8>> {
+    fn marshal_binary(&self) -> Result<Vec<u8>> {
         let mut result: Vec<u8> = Vec::with_capacity(1 + VERSION_SIZE + VALUE_LENGTH_SIZE);
         result.push(NodeKind::Leaf as u8);
         result.append(&mut self.version.marshal_binary()?);
@@ -185,7 +185,7 @@ impl Marshal for LeafNode {
         Ok(result)
     }
 
-    fn unmarshal_binary(&mut self, data: &[u8]) -> Fallible<usize> {
+    fn unmarshal_binary(&mut self, data: &[u8]) -> Result<usize> {
         if data.len() < 1 + VERSION_SIZE + size_of::<Depth>() + VALUE_LENGTH_SIZE
             || data[0] != NodeKind::Leaf as u8
         {
@@ -225,14 +225,14 @@ impl Marshal for LeafNode {
 }
 
 impl Marshal for Key {
-    fn marshal_binary(&self) -> Fallible<Vec<u8>> {
+    fn marshal_binary(&self) -> Result<Vec<u8>> {
         let mut result: Vec<u8> = Vec::new();
         result.append(&mut (self.len() as Depth).marshal_binary()?);
         result.extend_from_slice(self);
         Ok(result)
     }
 
-    fn unmarshal_binary(&mut self, data: &[u8]) -> Fallible<usize> {
+    fn unmarshal_binary(&mut self, data: &[u8]) -> Result<usize> {
         if data.len() < size_of::<Depth>() {
             return Err(TreeError::MalformedKey.into());
         }

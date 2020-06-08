@@ -1,7 +1,7 @@
 //! A block snapshot.
 use std::any::Any;
 
-use failure::{Fallible, ResultExt};
+use anyhow::{Context as AnyContext, Result};
 use grpcio::CallOption;
 use io_context::Context;
 use oasis_core_runtime::{
@@ -39,7 +39,7 @@ impl TransactionSnapshot {
         index: u32,
         input: Vec<u8>,
         output: Vec<u8>,
-    ) -> Fallible<Self> {
+    ) -> Result<Self> {
         Ok(Self {
             block_snapshot: BlockSnapshot::new(storage_client, block),
             index,
@@ -128,7 +128,7 @@ impl MKVS for BlockSnapshot {
         _ctx: Context,
         _namespace: Namespace,
         _round: u64,
-    ) -> Fallible<(WriteLog, Hash)> {
+    ) -> Result<(WriteLog, Hash)> {
         unimplemented!("block snapshot is read-only");
     }
 
@@ -145,7 +145,7 @@ impl ReadSync for RemoteReadSync {
         self
     }
 
-    fn sync_get(&mut self, _ctx: Context, request: GetRequest) -> Fallible<ProofResponse> {
+    fn sync_get(&mut self, _ctx: Context, request: GetRequest) -> Result<ProofResponse> {
         Ok(self
             .0
             .sync_get(&request, CallOption::default().wait_for_ready(true))
@@ -156,14 +156,14 @@ impl ReadSync for RemoteReadSync {
         &mut self,
         _ctx: Context,
         request: GetPrefixesRequest,
-    ) -> Fallible<ProofResponse> {
+    ) -> Result<ProofResponse> {
         Ok(self
             .0
             .sync_get_prefixes(&request, CallOption::default().wait_for_ready(true))
             .map_err(|error| TxnClientError::CallFailed(format!("{}", error)))?)
     }
 
-    fn sync_iterate(&mut self, _ctx: Context, request: IterateRequest) -> Fallible<ProofResponse> {
+    fn sync_iterate(&mut self, _ctx: Context, request: IterateRequest) -> Result<ProofResponse> {
         Ok(self
             .0
             .sync_iterate(&request, CallOption::default().wait_for_ready(true))

@@ -1,7 +1,7 @@
-use failure::Fail;
+use thiserror::Error;
 
-#[derive(Debug, Fail)]
+#[derive(Error, Debug)]
 pub enum SyncerError {
-    #[fail(display = "mkvs: method not supported")]
+    #[error("mkvs: method not supported")]
     Unsupported,
 }

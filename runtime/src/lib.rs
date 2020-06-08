@@ -16,6 +16,10 @@
 
 #[macro_use]
 extern crate slog;
+extern crate anyhow;
+extern crate base64;
+extern crate bincode;
+extern crate chrono;
 extern crate crossbeam;
 extern crate lazy_static;
 extern crate serde_bytes;
@@ -26,11 +30,6 @@ extern crate serde_repr;
 extern crate slog_json;
 extern crate slog_scope;
 extern crate slog_stdlog;
-#[macro_use]
-extern crate failure;
-extern crate base64;
-extern crate bincode;
-extern crate chrono;
 #[macro_use]
 extern crate intrusive_collections;
 extern crate io_context;

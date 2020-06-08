@@ -1,12 +1,12 @@
 //! Methods exported to remote clients via EnclaveRPC.
-use failure::Fallible;
+use anyhow::Result;
 use oasis_core_keymanager_api_common::*;
 use oasis_core_runtime::rpc::Context as RpcContext;
 
 use crate::{kdf::Kdf, policy::Policy};
 
 /// See `Kdf::get_or_create_keys`.
-pub fn get_or_create_keys(req: &RequestIds, ctx: &mut RpcContext) -> Fallible<KeyPair> {
+pub fn get_or_create_keys(req: &RequestIds, ctx: &mut RpcContext) -> Result<KeyPair> {
     // Authenticate the source enclave based on the MRSIGNER/MRENCLAVE/request
     // so that the keys are never released to an incorrect enclave.
     if !Policy::unsafe_skip() {
@@ -21,10 +21,7 @@ pub fn get_or_create_keys(req: &RequestIds, ctx: &mut RpcContext) -> Fallible<Ke
 }
 
 /// See `Kdf::get_public_key`.
-pub fn get_public_key(
-    req: &RequestIds,
-    _ctx: &mut RpcContext,
-) -> Fallible<Option<SignedPublicKey>> {
+pub fn get_public_key(req: &RequestIds, _ctx: &mut RpcContext) -> Result<Option<SignedPublicKey>> {
     let kdf = Kdf::global();
 
     // No authentication, absolutely anyone is allowed to query public keys.
@@ -37,7 +34,7 @@ pub fn get_public_key(
 pub fn replicate_master_secret(
     _req: &ReplicateRequest,
     ctx: &mut RpcContext,
-) -> Fallible<ReplicateResponse> {
+) -> Result<ReplicateResponse> {
     // Authenticate the source enclave based on the MRSIGNER/MRNELCAVE.
     if !Policy::unsafe_skip() {
         let si = ctx.session_info.as_ref();
