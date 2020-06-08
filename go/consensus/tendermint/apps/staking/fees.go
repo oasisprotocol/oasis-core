@@ -63,7 +63,7 @@ func (app *stakingApplication) disburseFeesP(
 
 	// Pay the proposer.
 	feeProposerAmt := totalFees.Clone()
-	if proposerEntity != nil {
+	if proposerEntity != nil && !feeProposerAmt.IsZero() {
 		acct, err := stakeState.Account(ctx, *proposerEntity)
 		if err != nil {
 			return fmt.Errorf("failed to fetch proposer account: %w", err)

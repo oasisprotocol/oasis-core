@@ -181,8 +181,6 @@ func testTransfer(t *testing.T, state *stakingTestsState, backend api.Backend, c
 	err = consensusAPI.SignAndSubmitTx(context.Background(), consensus, srcSigner, tx)
 	require.NoError(err, "Transfer")
 
-	var gotCommon bool
-	var gotFeeAcc bool
 	var gotTransfer bool
 
 TransferWaitLoop:
@@ -190,11 +188,11 @@ TransferWaitLoop:
 		select {
 		case ev := <-ch:
 			if ev.From.Equal(api.CommonPoolAccountID) || ev.To.Equal(api.CommonPoolAccountID) {
-				gotCommon = true
+				require.False(ev.Tokens.IsZero(), "CommonPool xfer: amount should be non-zero")
 				continue
 			}
 			if ev.From.Equal(api.FeeAccumulatorAccountID) || ev.To.Equal(api.FeeAccumulatorAccountID) {
-				gotFeeAcc = true
+				require.False(ev.Tokens.IsZero(), "FeeAccumulator xfer: amount should be non-zero")
 				continue
 			}
 
@@ -218,15 +216,13 @@ TransferWaitLoop:
 				require.True(gotTransfer, "GetEvents should return transfer event")
 			}
 
-			if (gotCommon || gotFeeAcc) && gotTransfer {
+			if gotTransfer {
 				break TransferWaitLoop
 			}
 		case <-time.After(recvTimeout):
 			t.Fatalf("failed to receive transfer event")
 		}
 	}
-
-	require.True(gotCommon || gotFeeAcc, "WatchTransfers should also return transfers related to the common pool and/or the fee accumulator")
 
 	_ = srcAcc.General.Balance.Sub(&xfer.Tokens)
 	newSrcAcc, err := backend.AccountInfo(context.Background(), &api.OwnerQuery{Owner: SrcID, Height: consensusAPI.HeightLatest})
@@ -267,8 +263,6 @@ func testTransferWatchEvents(t *testing.T, state *stakingTestsState, backend api
 	err = consensusAPI.SignAndSubmitTx(context.Background(), consensus, srcSigner, tx)
 	require.NoError(err, "SignAndSubmitTx")
 
-	var gotCommon bool
-	var gotFeeAcc bool
 	var gotTransfer bool
 
 TransferWaitLoop:
@@ -282,14 +276,15 @@ TransferWaitLoop:
 
 			from := ev.TransferEvent.From
 			to := ev.TransferEvent.To
+			tokens := ev.TransferEvent.Tokens
 
 			// We should also get some traffic to/from the common pool and fee accumulator.
 			if from.Equal(api.CommonPoolAccountID) || to.Equal(api.CommonPoolAccountID) {
-				gotCommon = true
+				require.False(tokens.IsZero(), "CommonPool xfer: amount should be non-zero")
 				continue
 			}
 			if from.Equal(api.FeeAccumulatorAccountID) || to.Equal(api.FeeAccumulatorAccountID) {
-				gotFeeAcc = true
+				require.False(tokens.IsZero(), "FeeAccumulator xfer: amount should be non-zero")
 				continue
 			}
 
@@ -307,15 +302,13 @@ TransferWaitLoop:
 				gotTransfer = true
 			}
 
-			if (gotCommon || gotFeeAcc) && gotTransfer {
+			if gotTransfer {
 				break TransferWaitLoop
 			}
 		case <-time.After(recvTimeout):
 			t.Fatalf("failed to receive transfer event")
 		}
 	}
-
-	require.True(gotCommon || gotFeeAcc, "WatchEvents should also return transfer events related to the common pool and/or the fee accumulator")
 }
 
 func testSelfTransfer(t *testing.T, state *stakingTestsState, backend api.Backend, consensus consensusAPI.Backend) {
@@ -336,8 +329,6 @@ func testSelfTransfer(t *testing.T, state *stakingTestsState, backend api.Backen
 	err = consensusAPI.SignAndSubmitTx(context.Background(), consensus, srcSigner, tx)
 	require.NoError(err, "Transfer")
 
-	var gotCommon bool
-	var gotFeeAcc bool
 	var gotTransfer bool
 
 TransferWaitLoop:
@@ -345,11 +336,11 @@ TransferWaitLoop:
 		select {
 		case ev := <-ch:
 			if ev.From.Equal(api.CommonPoolAccountID) || ev.To.Equal(api.CommonPoolAccountID) {
-				gotCommon = true
+				require.False(ev.Tokens.IsZero(), "CommonPool xfer: amount should be non-zero")
 				continue
 			}
 			if ev.From.Equal(api.FeeAccumulatorAccountID) || ev.To.Equal(api.FeeAccumulatorAccountID) {
-				gotFeeAcc = true
+				require.False(ev.Tokens.IsZero(), "FeeAccumulator xfer: amount should be non-zero")
 				continue
 			}
 
@@ -360,15 +351,13 @@ TransferWaitLoop:
 				gotTransfer = true
 			}
 
-			if (gotCommon || gotFeeAcc) && gotTransfer {
+			if gotTransfer {
 				break TransferWaitLoop
 			}
 		case <-time.After(recvTimeout):
 			t.Fatalf("failed to receive transfer event")
 		}
 	}
-
-	require.True(gotCommon || gotFeeAcc, "WatchTransfers should also return transfers related to the common pool and/or the fee accumulator")
 
 	newSrcAcc, err := backend.AccountInfo(context.Background(), &api.OwnerQuery{Owner: SrcID, Height: consensusAPI.HeightLatest})
 	require.NoError(err, "src: AccountInfo - after")
