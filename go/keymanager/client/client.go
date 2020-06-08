@@ -6,6 +6,7 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/cenkalti/backoff/v4"
@@ -80,14 +81,26 @@ func (c *Client) CallRemote(ctx context.Context, data []byte) ([]byte, error) {
 			Endpoint:  api.EnclaveRPCEndpoint,
 			Payload:   data,
 		})
-		if status.Code(err) == codes.PermissionDenied {
+		switch {
+		case err == nil:
+		case status.Code(err) == codes.PermissionDenied:
 			// Calls can fail around epoch transitions, as the access policy
 			// is being updated, so we must retry.
 			return err
+		case status.Code(err) == codes.Unavailable:
+			// XXX: HACK: Find a better way to determine the root cause.
+			if strings.Contains(err.Error(), "tls: bad public key") {
+				// Retry as the access policy could be in the process of being updated.
+				return err
+			}
+
+			fallthrough
+		default:
+			// Request failed, communicate that to the node selection policy.
+			c.committeeClient.UpdateNodeSelectionPolicy(committee.NodeSelectionFeedback{Bad: err})
+			return backoff.Permanent(err)
 		}
-		// Request failed, communicate that to the node selection policy.
-		c.committeeClient.UpdateNodeSelectionPolicy(committee.NodeSelectionFeedback{Bad: err})
-		return backoff.Permanent(err)
+		return nil
 	}
 
 	retry := backoff.WithMaxRetries(backoff.NewConstantBackOff(retryInterval), maxRetries)

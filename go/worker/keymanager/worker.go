@@ -65,8 +65,6 @@ type Worker struct { // nolint: maligned
 	initTicker   *backoff.Ticker
 	initTickerCh <-chan time.Time
 
-	initialSyncDone bool
-
 	runtime            runtimeRegistry.Runtime
 	runtimeHostHandler protocol.Handler
 
@@ -121,6 +119,12 @@ func (w *Worker) Quit() <-chan struct{} {
 }
 
 func (w *Worker) Cleanup() {
+}
+
+// Initialized returns a channel that will be closed when the worker is initialized, ready to
+// service requests and registered with the consensus layer.
+func (w *Worker) Initialized() <-chan struct{} {
+	return w.initCh
 }
 
 // Implements workerCommon.RuntimeHostHandlerFactory.
@@ -181,21 +185,6 @@ func (w *Worker) updateStatus(status *api.Status, startedEvent *host.StartedEven
 	var initOk bool
 	defer func() {
 		if !initOk {
-			// TODO: once #2130 is done and keymanager reports as Ready only
-			// after initialization succeeds, change this to always pre-register
-			// on the initial updateStatus call (and not only after the first
-			// initialization fails as it is done currently).
-			// This is likely a new key manager that needs to replicate.
-			// Send a node registration anyway, so that other nodes know
-			// to update their access control.
-			w.roleProvider.SetAvailable(func(n *node.Node) error {
-				rt := n.AddOrUpdateRuntime(w.runtime.ID())
-				rt.Version = startedEvent.Version
-				rt.ExtraInfo = nil
-				rt.Capabilities.TEE = startedEvent.CapabilityTEE
-				return nil
-			})
-
 			// If initialization failed setup a retry ticker.
 			if w.initTicker == nil {
 				w.initTicker = backoff.NewTicker(backoff.NewExponentialBackOff())
@@ -302,11 +291,21 @@ func (w *Worker) updateStatus(status *api.Status, startedEvent *host.StartedEven
 
 	// Register as we are now ready to handle requests.
 	initOk = true
-	w.roleProvider.SetAvailable(func(n *node.Node) error {
+	w.roleProvider.SetAvailableWithCallback(func(n *node.Node) error {
 		rt := n.AddOrUpdateRuntime(w.runtime.ID())
 		rt.Version = startedEvent.Version
 		rt.ExtraInfo = cbor.Marshal(signedInitResp)
 		rt.Capabilities.TEE = startedEvent.CapabilityTEE
+		return nil
+	}, func(context.Context) error {
+		w.logger.Info("Key manager registered")
+
+		// Signal that we are initialized.
+		select {
+		case <-w.initCh:
+		default:
+			close(w.initCh)
+		}
 		return nil
 	})
 
@@ -315,12 +314,6 @@ func (w *Worker) updateStatus(status *api.Status, startedEvent *host.StartedEven
 	defer w.Unlock()
 
 	w.enclaveStatus = &signedInitResp
-
-	if !w.initialSyncDone {
-		// Signal that we are initialized.
-		close(w.initCh)
-		w.initialSyncDone = true
-	}
 
 	return nil
 }
@@ -406,6 +399,18 @@ func (w *Worker) worker() { // nolint: gocyclo
 				currentStartedEvent = ev.Started
 				if currentStatus == nil {
 					continue
+				}
+
+				// Send a node preregistration, so that other nodes know to update their access
+				// control.
+				if w.enclaveStatus == nil {
+					w.roleProvider.SetAvailable(func(n *node.Node) error {
+						rt := n.AddOrUpdateRuntime(w.runtime.ID())
+						rt.Version = currentStartedEvent.Version
+						rt.ExtraInfo = nil
+						rt.Capabilities.TEE = currentStartedEvent.CapabilityTEE
+						return nil
+					})
 				}
 
 				// Forward status update to key manager runtime.

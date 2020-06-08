@@ -19,12 +19,16 @@ type NodeController interface {
 	RequestShutdown(ctx context.Context, wait bool) error
 
 	// WaitSync waits for the node to finish syncing.
-	// TODO: These should be replaced with WaitReady (see oasis-core#2130).
 	WaitSync(ctx context.Context) error
 
 	// IsSynced checks whether the node has finished syncing.
-	// TODO: These should be replaced with IsReady (see oasis-core#2130).
 	IsSynced(ctx context.Context) (bool, error)
+
+	// WaitReady waits for the node to accept runtime work.
+	WaitReady(ctx context.Context) error
+
+	// IsReady checks whether the node is ready to accept runtime work.
+	IsReady(ctx context.Context) (bool, error)
 
 	// UpgradeBinary submits an upgrade descriptor to a running node.
 	// The node will wait for the appropriate epoch, then update its binaries
@@ -47,10 +51,13 @@ type Status struct {
 	Consensus consensus.Status `json:"consensus"`
 }
 
-// Shutdownable is an interface the node presents for shutting itself down.
-type Shutdownable interface {
+// ControlledNode is an interface the node presents for shutting itself down.
+type ControlledNode interface {
 	// RequestShutdown is the method called by the control server to trigger node shutdown.
 	RequestShutdown() (<-chan struct{}, error)
+
+	// Ready returns a channel that is closed once node is ready.
+	Ready() <-chan struct{}
 }
 
 // DebugModuleName is the module name for the debug controller service.

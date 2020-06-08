@@ -13,6 +13,7 @@ import (
 	epochtime "github.com/oasisprotocol/oasis-core/go/epochtime/api"
 	cmdCommon "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common"
 	cmdGrpc "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/grpc"
+	cmdControl "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/control"
 )
 
 var (
@@ -34,6 +35,14 @@ var (
 		Use:   "wait-nodes",
 		Short: "wait for specific number of nodes to register",
 		Run:   doWaitNodes,
+	}
+
+	controlWaitReadyCmd = &cobra.Command{
+		Use:   "wait-ready",
+		Short: "wait for node to become ready",
+		Long: "Wait for the consensus backend to be synced and runtimes being registered, " +
+			"initialized, and ready to accept the workload.",
+		Run: doWaitReady,
 	}
 
 	logger = logging.GetLogger("cmd/debug/control")
@@ -90,6 +99,22 @@ func doWaitNodes(cmd *cobra.Command, args []string) {
 	logger.Info("enough nodes have been registered")
 }
 
+func doWaitReady(cmd *cobra.Command, args []string) {
+	conn, client := cmdControl.DoConnect(cmd)
+	defer conn.Close()
+
+	logger.Debug("waiting for ready status")
+
+	// Use background context to block until the result comes in.
+	err := client.WaitReady(context.Background())
+	if err != nil {
+		logger.Error("failed to wait for ready status",
+			"err", err,
+		)
+		os.Exit(1)
+	}
+}
+
 // Register registers the dummy sub-command and all of its children.
 func Register(parentCmd *cobra.Command) {
 	controlCmd.PersistentFlags().AddFlagSet(cmdGrpc.ClientFlags)
@@ -98,5 +123,6 @@ func Register(parentCmd *cobra.Command) {
 
 	controlCmd.AddCommand(controlSetEpochCmd)
 	controlCmd.AddCommand(controlWaitNodesCmd)
+	controlCmd.AddCommand(controlWaitReadyCmd)
 	parentCmd.AddCommand(controlCmd)
 }

@@ -2,6 +2,7 @@
 package oasis
 
 import (
+	"context"
 	"crypto"
 	"fmt"
 	"io"
@@ -144,6 +145,19 @@ func (n *Node) BinaryPath() string {
 	}
 
 	return fmt.Sprintf("/proc/%d/exe", n.cmd.Process.Pid)
+}
+
+// WaitReady is a helper for creating a controller and calling node's WaitReady.
+func (n *Node) WaitReady(ctx context.Context) error {
+	nodeCtrl, err := NewController(n.SocketPath())
+	if err != nil {
+		return err
+	}
+	if err = nodeCtrl.WaitReady(ctx); err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func (n *Node) handleExit(cmdErr error) error {

@@ -19,6 +19,10 @@ var (
 	methodWaitSync = serviceName.NewMethod("WaitSync", nil)
 	// methodIsSynced is the IsSynced method.
 	methodIsSynced = serviceName.NewMethod("IsSynced", nil)
+	// methodWaitReady is the WaitReady method.
+	methodWaitReady = serviceName.NewMethod("WaitReady", nil)
+	// methodIsReady is the IsReady method.
+	methodIsReady = serviceName.NewMethod("IsReady", nil)
 	// methodUpgradeBinary is the UpgradeBinary method.
 	methodUpgradeBinary = serviceName.NewMethod("UpgradeBinary", upgradeApi.Descriptor{})
 	// methodCancelUpgrade is the CancelUpgrade method.
@@ -42,6 +46,14 @@ var (
 			{
 				MethodName: methodIsSynced.ShortName(),
 				Handler:    handlerIsSynced,
+			},
+			{
+				MethodName: methodWaitReady.ShortName(),
+				Handler:    handlerWaitReady,
+			},
+			{
+				MethodName: methodIsReady.ShortName(),
+				Handler:    handlerIsReady,
 			},
 			{
 				MethodName: methodUpgradeBinary.ShortName(),
@@ -117,6 +129,44 @@ func handlerIsSynced( // nolint: golint
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(NodeController).IsSynced(ctx)
+	}
+	return interceptor(ctx, nil, info, handler)
+}
+
+func handlerWaitReady( // nolint: golint
+	srv interface{},
+	ctx context.Context,
+	dec func(interface{}) error,
+	interceptor grpc.UnaryServerInterceptor,
+) (interface{}, error) {
+	if interceptor == nil {
+		return nil, srv.(NodeController).WaitReady(ctx)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: methodWaitReady.FullName(),
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return nil, srv.(NodeController).WaitReady(ctx)
+	}
+	return interceptor(ctx, nil, info, handler)
+}
+
+func handlerIsReady( // nolint: golint
+	srv interface{},
+	ctx context.Context,
+	dec func(interface{}) error,
+	interceptor grpc.UnaryServerInterceptor,
+) (interface{}, error) {
+	if interceptor == nil {
+		return srv.(NodeController).IsReady(ctx)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: methodIsSynced.FullName(),
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(NodeController).IsReady(ctx)
 	}
 	return interceptor(ctx, nil, info, handler)
 }
@@ -202,6 +252,18 @@ func (c *nodeControllerClient) WaitSync(ctx context.Context) error {
 func (c *nodeControllerClient) IsSynced(ctx context.Context) (bool, error) {
 	var rsp bool
 	if err := c.conn.Invoke(ctx, methodIsSynced.FullName(), nil, &rsp); err != nil {
+		return false, err
+	}
+	return rsp, nil
+}
+
+func (c *nodeControllerClient) WaitReady(ctx context.Context) error {
+	return c.conn.Invoke(ctx, methodWaitReady.FullName(), nil, nil)
+}
+
+func (c *nodeControllerClient) IsReady(ctx context.Context) (bool, error) {
+	var rsp bool
+	if err := c.conn.Invoke(ctx, methodIsReady.FullName(), nil, &rsp); err != nil {
 		return false, err
 	}
 	return rsp, nil
