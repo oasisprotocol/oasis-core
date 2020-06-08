@@ -12,6 +12,413 @@ The format is inspired by [Keep a Changelog].
 
 <!-- TOWNCRIER -->
 
+## 20.7 (2020-06-08)
+
+### Removals and Breaking Changes
+
+- go/registry: Avoid storing full TLS certificates
+  ([#2556](https://github.com/oasisprotocol/oasis-core/issues/2556))
+
+  Previously the node registry descriptor contained full TLS certificates for
+  talking with nodes via gRPC. This changes it so that only TLS public keys are
+  used when verifying peer certificates for TLS authentication.
+
+  This makes the registry descriptors smaller and also makes it easier to pass
+  around TLS identities (as public keys are much shorter).
+
+  Obviously, this change BREAKS the consensus protocol and all previously
+  signed node descriptors.
+
+  The following configuration changes are needed due to this change:
+
+  - In `oasis-node registry node` CLI, the `--node.committee_address` option
+    has been renamed to `--node.tls_address` and the format has changed from
+    `<certificate>@ip:port` to `<pubkey>@ip:port`.
+
+  - For configuring sentry nodes on the workers, the
+    `--worker.sentry.cert_file` has been _removed_. Instead, the
+    `--worker.sentry.address` now takes the same address format as specified
+    above (`<pubkey>@ip:port`).
+
+  Previously signed node descriptors (v0) are considered valid at genesis time
+  iff the node is exclusively a validator node as indicated by the role bits.
+  Other nodes will need to be removed from genesis.
+
+- Make `oasis_` Prometheus metrics help consistent
+  ([#2602](https://github.com/oasisprotocol/oasis-core/issues/2602))
+
+  Help messages for metrics starting with `oasis_` were revisited and made
+  consistent. If you are using Prometheus and/or Push Gateway, you will need to
+  clear Prometheus `data/` directory and restart the services to avoid
+  inconsistency warnings.
+
+- Refactor the runtime host APIs
+  ([#2801](https://github.com/oasisprotocol/oasis-core/issues/2801))
+
+  Several changes were made to the runtime host APIs used to provision and
+  communicate with runtimes:
+
+  - The runtime host implementation has been moved to `go/runtime/host`.
+
+  - Some of the runtime host protocol types have been changed, all references
+    to `Worker` in messages were renamed to `Runtime` to make it more clear
+    what they refer to. Additionally, the `Error` message type has been changed
+    to include additional fields (module and code) to make it easier to remap
+    errors automatically.
+
+    This makes it a BREAKING change for any existing runtimes.
+
+  - Provisioning of a runtime is now performed by a `Provisioner` which is an
+    interface. Implementations exist for (sandboxed) ELF binaries and Intel SGX
+    enclaves. The implementations have been refactored to be more composable,
+    so for example the SGX implementation only implements the SGX-related bits
+    but uses the regular provisioner otherwise.
+
+  - Configuration options for hosted runtimes have changed so existing configs
+    will need to be _updated_ as follows:
+
+    - The `--worker.runtime.backend` option has been renamed to
+      `--worker.runtime.provisioner`.
+
+    - The `--worker.runtime.loader` option has been renamed to
+      `--worker.runtime.sgx.loader` and is now only required for supporting
+      SGX runtimes. Non-SGX runtimes no longer need a loader.
+
+    - The `--worker.runtime.binary` option has been renamed to
+      `--worker.runtime.paths` and the value format has changed to be either
+      a YAML map or a set of comma-separated key-value pairs separated by
+      `=` (e.g., `<runtime-ID>=/path/to/binary`).
+
+  - The key manager worker has been slightly changed to use the common runtime
+    provisioning code. The following configuration options have been _removed_:
+
+    - `--worker.keymanager.tee_hardware` as the TEE hardware is inferred
+      from the runtime descriptor.
+
+    - `--worker.keymanager.runtime.loader` and
+      `--worker.keymanager.runtime.binary` as the common options mentioned
+      above should be used instead.
+
+- go/consensus/tendermint: Clean up indices in SetNode
+  ([#2910](https://github.com/oasisprotocol/oasis-core/issues/2910))
+
+- go/registry: Drop support for v0 node descriptor
+  ([#2918](https://github.com/oasisprotocol/oasis-core/issues/2918))
+
+### Configuration Changes
+
+- go/oasis-node: Fix signer configuration via YAML
+  ([#2949](https://github.com/oasisprotocol/oasis-core/issues/2949))
+
+  The `--signer` argument has been renamed to `--signer.backend` to allow
+  signer configuration to be passed via a YAML config. Previously, this would
+  be impossible as `signer` would need to be both a string and a map at the
+  same time when set via a YAML config.
+
+### Features
+
+- go/runtime/host/sgx: Add support for SIGSTRUCTs
+  ([#1707](https://github.com/oasisprotocol/oasis-core/issues/1707))
+
+  For now this will just generate one, signed with the same key that
+  `runtime-loader` used to use (the Fortanix dummy key), but this will
+  also support using file backed signatures, once we have an idea on how
+  we are going to handle the process for such things.
+
+- Add metrics for inter-node communcation
+  ([#1771](https://github.com/oasisprotocol/oasis-core/issues/1771))
+
+  - New `module` label was added to `oasis_codec_size` metric which contains
+    information of the caller. Currently `p2p` value denotes a peer-to-peer
+    message among Oasis nodes and `runtime-host` a message from/to enclave.
+  - New `oasis_rhp_latency` summary metric for measuring Runtime Host
+    communication latency was added.
+  - New `oasis_rhp_successes` and `oasis_rhp_failures` counter metrics for
+    counting number of successful and failed Runtime Host calls respectively
+    were added.
+
+- go/oasis-node/cmd/debug: Add the `dumpdb` command
+  ([#2359](https://github.com/oasisprotocol/oasis-core/issues/2359))
+
+  This command will attempt to extract the ABCI state from a combination
+  of a shutdown node's on-disk database and the genesis document currently
+  being used by the network, and will write the output as a JSON formatted
+  genesis document.
+
+  Some caveats:
+
+  - It is not guaranteed that the dumped output will be usable as an
+    actual genesis document without manual intervention.
+
+  - Only the state that would be exported via a normal dump from a running
+    node will be present in the dump.
+
+  - The epochtime base will be that of the original genesis document, and
+    not the most recent epoch (different from a genesis dump).
+
+- e2e/tests: added keymanager runtime upgrade test
+  ([#2517](https://github.com/oasisprotocol/oasis-core/issues/2517))
+
+- Version signed entity, node and runtime descriptors
+  ([#2581](https://github.com/oasisprotocol/oasis-core/issues/2581))
+
+  This introduces a DescriptorVersion field to all entity, node and runtime
+  descriptors to support future updates and handling of legacy descriptors at
+  genesis.
+
+  All new registrations only accept the latest version while initializing from
+  genesis is also allowed with an older version to support a dump/restore
+  upgrade.
+
+- Add new consensus-related Prometheus metrics
+  ([#2842](https://github.com/oasisprotocol/oasis-core/issues/2842))
+
+  Four new metrics have been added:
+
+  - `oasis_worker_epoch_number` is the current epoch number as seen by the
+    worker.
+  - `oasis_worker_node_registered` is a binary metric which denotes, if the
+    node is registered.
+  - `oasis_consensus_proposed_blocks` is the number of proposed Tendermint
+    blocks by the node.
+  - `oasis_consensus_signed_blocks` is the number of Tendermint blocks the node
+    voted for.
+
+- keymanager: Rename APIs referencing "contracts"
+  ([#2844](https://github.com/oasisprotocol/oasis-core/issues/2844))
+
+  Each runtime does not neccecarily have a notion for contracts, so the
+  key manager now operates in terms of `KeyPairId`s that identify a given
+  `KeyPair`.
+
+- oasis-net-runner: add support for running networks with non-mock IAS
+  ([#2883](https://github.com/oasisprotocol/oasis-core/issues/2883))
+
+- go/stats: New availability v3 formula
+  ([#2896](https://github.com/oasisprotocol/oasis-core/issues/2896))
+
+  Here's the implementation of the new availability score v3 for May.
+
+- consensus: Add GetStatus method to API
+  ([#2902](https://github.com/oasisprotocol/oasis-core/issues/2902))
+
+  A new `GetStatus` method has been added to the consensus API.
+  It returns useful information about the latest block, the genesis
+  block, and the node itself.
+
+- control: Add GetStatus method to API
+  ([#2902](https://github.com/oasisprotocol/oasis-core/issues/2902))
+
+  A new `GetStatus` method has been added to the control API.
+  It returns the software version and the status of the consensus layer.
+
+- go/extra/stats: Give ties the same rank
+  ([#2908](https://github.com/oasisprotocol/oasis-core/issues/2908))
+
+  Previously records tied by availability score would get different
+  ranks, which was wrong.
+
+- go/oasis-node/cmd/common/metrics: Deprecate formal pushgateway support
+  ([#2936](https://github.com/oasisprotocol/oasis-core/issues/2936))
+
+  The prometheus authors do not recommend using it for most situations,
+  it appears to be somewhat fragile, and we shouldn't be using it
+  internally, so the functionality is now only usable if the correct
+  debug-only flags are set.
+
+- runtime/storage/mkvs: Add method for checking local key existence
+  ([#2938](https://github.com/oasisprotocol/oasis-core/issues/2938))
+
+  Adds a method to probe the local cache for key existence, guaranteeing
+  that no remote syncing will be done.
+
+- staking: Add WatchEvents
+  ([#2944](https://github.com/oasisprotocol/oasis-core/issues/2944))
+
+  A new method was added to the staking API, `WatchEvents`.  It returns
+  a channel that produces a stream of staking `Event`s.
+  The `Event` structure was also extended to include the block height.
+
+- go/consensus/genesis: Add a public key blacklist
+  ([#2948](https://github.com/oasisprotocol/oasis-core/issues/2948))
+
+  This change adds a public key blacklist to the consensus parameters.
+  All signatures made by public keys in the blacklist will be rejected.
+
+  WARNING: For now the node will panic on startup if the genesis staking
+  ledger has entries for blacklisted public keys.  By the time this
+  feature is actually put to use (hopefully never), the staking ledger
+  address format will be changed, resolving this caveat.
+
+### Bug Fixes
+
+- go/worker/keymanager: retry initialization in case of failure
+  ([#2517](https://github.com/oasisprotocol/oasis-core/issues/2517))
+
+  The keymanager worker registers only after the initialization either fails or
+  succeeds. In case the worker needs to replicate the first initialization will
+  always fail, since other nodes' access control prevents it from replicating.
+  In that case the initialization should be retried.
+
+- ias: support for IAS API v4
+  ([#2883](https://github.com/oasisprotocol/oasis-core/issues/2883))
+
+  IAS-proxy now proxies to IAS v4 endpoint. Attestation code now works with v4
+  IAS API spec.
+
+- common/flags: Fix parsing of metrics.labels, if provided in config .yml
+  ([#2905](https://github.com/oasisprotocol/oasis-core/issues/2905))
+
+  [Bug in viper library](https://github.com/spf13/viper/issues/608) was fixed
+  upstream and drop-in replacement for `GetStringMapString` was removed.
+
+- staking: Emit events when disbursing fees and rewards
+  ([#2909](https://github.com/oasisprotocol/oasis-core/issues/2909))
+
+  Staking events are now generated when disbursing fees and rewards.
+  There are two new special account IDs -- `CommonPoolAccountID` and
+  `FeeAccumulatorAccountID` (both defined in `go/staking/api/api.go`),
+  which are used only in events to signify the common pool and the fee
+  accumulator respectively.
+  These account IDs are invalid by design to prevent misusing them
+  anywhere else.
+
+- runtime: Notify runtimes of its key manager policy updates
+  ([#2919](https://github.com/oasisprotocol/oasis-core/issues/2919))
+
+  Before runtimes were unaware of any key-manager policy updates. The runtime
+  only queried for the active key-manager policy at startup. This is now changed
+  so that the host notifies runtimes of any key-manager policy changes and
+  runtime updates the policies.
+
+- go/consensus: Hash user-controlled storage key elements
+  ([#2929](https://github.com/oasisprotocol/oasis-core/issues/2929))
+
+- go/oasis-node/cmd/common/metrics: Re-create the pusher on failure
+  ([#2936](https://github.com/oasisprotocol/oasis-core/issues/2936))
+
+  When using prometheus' push client, any single failure causes the client
+  to be unusable for future requests.  Re-create the client on failure, so
+  that metrics might start working again.
+
+- go/oasis-node: Fix parsing of signer configuration
+  ([#2950](https://github.com/oasisprotocol/oasis-core/issues/2950))
+
+- go/oasis-node: Make sure the node only tries to stop once
+  ([#2964](https://github.com/oasisprotocol/oasis-core/issues/2964))
+
+  This could previously result in a panic during shutdown.
+
+- go/oasis-node: Don't bypass Stop in newNode failure handler
+  ([#2966](https://github.com/oasisprotocol/oasis-core/issues/2966))
+
+- go/runtime/host/sandbox: Retry Call in case the runtime is not yet ready
+  ([#2967](https://github.com/oasisprotocol/oasis-core/issues/2967))
+
+- go/oasis-node: Properly handle shutdown during startup
+  ([#2975](https://github.com/oasisprotocol/oasis-core/issues/2975))
+
+- go/consensus/tendermint: Don't panic on context cancellation
+  ([#2982](https://github.com/oasisprotocol/oasis-core/issues/2982))
+
+### Documentation Improvements
+
+- docs: Add documentation around our gRPC over TLS flavor
+  ([#2556](https://github.com/oasisprotocol/oasis-core/issues/2556))
+
+- Document all Prometheus metrics produced by `oasis-node`
+  ([#2602](https://github.com/oasisprotocol/oasis-core/issues/2602))
+
+  List of metrics including the description, metric type, metric-specific
+  labels, and location in the source is now available in
+  [docs/oasis-node/metrics.md](../docs/oasis-node/metrics.md) Markdown file. To
+  automate generation of this list, a new `go/extra/extract-metric` tool was
+  introduced. To update the list of metrics, execute `make update-docs` in the
+  project root. Documentation needs to be up to date for `lint` rule to succeed.
+
+### Internal Changes
+
+- ci: Automatically rebuild development/CI Docker images
+  ([#295](https://github.com/oasisprotocol/oasis-core/issues/295))
+
+- go: Replace the use of `pkg/error` with `fmt`
+  ([#2057](https://github.com/oasisprotocol/oasis-core/issues/2057))
+
+  I also tried to make some of the error messages more consistent but gave
+  up when I got to the staking/byzantine node related ones because none of
+  them are following our convention.
+
+- go/control: Add IsReady() and WaitReady() RPC methods
+  ([#2130](https://github.com/oasisprotocol/oasis-core/issues/2130))
+
+  Beside `IsSynced()` and `WaitSynced()` which are triggered when the consensus
+  backend is synced, new `IsReady()` and `WaitReady()` methods have been added
+  to the client protocol. These are triggered when all node workers have been
+  initialized (including the runtimes) and the hosted processes are ready to
+  process requests.
+
+  In addition new `oasis-node debug control wait-ready`
+  command was added which blocks the client until the node is ready.
+
+- ci: Add CI test for running E2E tests with IAS development API
+  ([#2883](https://github.com/oasisprotocol/oasis-core/issues/2883))
+
+- oasis-test-runner: Refactor initialization of scenario flags
+  ([#2897](https://github.com/oasisprotocol/oasis-core/issues/2897))
+
+  Implementations of `Parameters()` function defined in test-runner's scenario
+  interface have been revised. All scenario-settable flags are now explicitly
+  initialized and scenarios call standard `FlagSet` accessors to fetch
+  scenario-specific parameters.
+
+- ci: automatically rety exit status 125 failures
+  ([#2900](https://github.com/oasisprotocol/oasis-core/issues/2900))
+
+- go/ias: update test vector to a v4 report
+  ([#2901](https://github.com/oasisprotocol/oasis-core/issues/2901))
+
+- go: Bump Go to 1.14.3
+  ([#2913](https://github.com/oasisprotocol/oasis-core/issues/2913))
+
+- go: update dependencies depending on `websocket@v1.4.0`
+  ([#2927](https://github.com/oasisprotocol/oasis-core/issues/2927))
+
+  Due to a vulnerability in `websocket@1.4.0`: CWE-190.
+
+  Updated libraries:
+
+  - `github.com/libp2p/go-libp2p@v0.1.1` to `github.com/libp2p/go-libp2p@v0.9.1`
+
+  - `github.com/spf13/viper@v1.6.3` to `github.com/spf13/viper@v1.7.0`
+
+  - replace `github.com/gorilla/websocket` with
+  `github.com/gorilla/websocket v1.4.2`
+
+- changelog: Add a changelog fragment type for configuration changes
+  ([#2952](https://github.com/oasisprotocol/oasis-core/issues/2952))
+
+- runtime-loader: Bump Fortanix EDP crate versions
+  ([#2955](https://github.com/oasisprotocol/oasis-core/issues/2955))
+
+  Also bumps Rust nightly to 2020-05-15 as that is required to build the new
+  versions.
+
+- go/worker/registration: Add SetAvailableWithCallback to RoleProvider
+  ([#2957](https://github.com/oasisprotocol/oasis-core/issues/2957))
+
+  The new method allows the caller to register a callback that will be invoked
+  on a successful registration that includes the node descriptor updated by the
+  passed hook.
+
+- Transfer oasis-core repository to oasisprotocol
+  ([#2968](https://github.com/oasisprotocol/oasis-core/issues/2968))
+
+- ci: don't retry jobs that timeout
+  ([#2969](https://github.com/oasisprotocol/oasis-core/issues/2969))
+
+- go: update dynlib dep
+  ([#2974](https://github.com/oasisprotocol/oasis-core/issues/2974))
+
 ## 20.6 (2020-05-07)
 
 ### Removals and Breaking changes
