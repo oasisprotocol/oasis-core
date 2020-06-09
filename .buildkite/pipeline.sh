@@ -38,15 +38,37 @@ pr_and_no_code_related_changes() {
       ':(exclude)towncrier.toml'
 }
 
+# Helper that checks if anything under docker/ has been modified in a pull request.
+pr_and_docker_changes() {
+  # Check if the build was triggered for a pull request.
+  if [[ -z $BUILDKITE_PULL_REQUEST_BASE_BRANCH ]]; then
+    return 1
+  fi
+  # Get the list of changed files under docker/.
+  ! git diff --name-only --exit-code "refs/remotes/origin/$BUILDKITE_PULL_REQUEST_BASE_BRANCH.." 1>&2 -- \
+    'docker/'
+}
+
 # Determine the oasis-core-ci Docker image tag to use for tests.
 if [[ -n $BUILDKITE_PULL_REQUEST_BASE_BRANCH ]]; then
-  branch=$BUILDKITE_PULL_REQUEST_BASE_BRANCH
+  docker_tag=$BUILDKITE_PULL_REQUEST_BASE_BRANCH
 else
-  branch=$BUILDKITE_BRANCH
+  docker_tag=$BUILDKITE_BRANCH
 fi
-branch=${branch//\//-}
 
-export DOCKER_OASIS_CORE_CI_BASE_TAG=$branch
+# If anything under docker/ has been modified, assume a per-branch tag. Note that this will fail until
+# the corresponding GitHub Action that rebuilds the Docker images runs.
+if pr_and_docker_changes; then
+  # Override the Docker tag that should be used.
+  docker_tag=pr-$(git describe --always --match '' --abbrev=7)
+  # Fail if the Docker image does not exist.
+  DOCKER_CLI_EXPERIMENTAL=enabled docker manifest inspect oasisprotocol/oasis-core-ci:${docker_tag} || {
+    echo "Updated Docker image does not yet exist. Wait for it to be rebuilt and retry."
+    exit 1
+  }
+fi
+
+export DOCKER_OASIS_CORE_CI_BASE_TAG=${docker_tag//\//-}
 
 # Decide which pipeline to use.
 pipeline=.buildkite/code.pipeline.yml

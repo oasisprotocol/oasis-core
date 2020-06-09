@@ -10,6 +10,16 @@ on:
       - stable/*
     paths:
       - docker/**
+  # Or when a pull request event occurs for a pull request against one of the matched branches and at least
+  # one modified file matches the configured paths.
+  #
+  # NOTE: We use this to be able to easily test Docker image changes.
+  pull_request:
+    branches:
+      - master
+      - stable/*
+    paths:
+      - docker/**
   # Or every day at 04:00 UTC (for the default/master branch).
   schedule:
     - cron: "0 4 * * *"
@@ -23,11 +33,20 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v2
+        with:
+          # Check out pull request's HEAD commit instead of the merge commit.
+          ref: ${{ github.event.pull_request.head.sha }}
       - name: Determine tag name
         id: determine_tag
         shell: bash
         run: |
-          branch=${GITHUB_REF#refs/heads/}
+          if [[ -z $GITHUB_BASE_REF ]]; then
+            # On master/stable branches.
+            branch=${GITHUB_REF#refs/heads/}
+          else
+            # On pull request branches.
+            branch=pr-$(git describe --always --match '' --abbrev=7)
+          fi
           branch=${branch//\//-}
           echo "##[set-output name=tag;]$(echo ${branch})"
       - name: "Rebuild oasisprotocol/oasis-core-dev:${{ steps.determine_tag.outputs.tag }}"
