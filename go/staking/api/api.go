@@ -374,44 +374,143 @@ const (
 	KindRuntimeKeyManager ThresholdKind = 6
 
 	KindMax = KindRuntimeKeyManager
+
+	KindEntityName            = "entity"
+	KindNodeValidatorName     = "node-validator"
+	KindNodeComputeName       = "node-compute"
+	KindNodeStorageName       = "node-storage"
+	KindNodeKeyManagerName    = "node-keymanager"
+	KindRuntimeComputeName    = "runtime-compute"
+	KindRuntimeKeyManagerName = "runtime-keymanager"
 )
 
 // String returns the string representation of a ThresholdKind.
 func (k ThresholdKind) String() string {
 	switch k {
 	case KindEntity:
-		return "entity"
+		return KindEntityName
 	case KindNodeValidator:
-		return "validator node"
+		return KindNodeValidatorName
 	case KindNodeCompute:
-		return "compute node"
+		return KindNodeComputeName
 	case KindNodeStorage:
-		return "storage node"
+		return KindNodeStorageName
 	case KindNodeKeyManager:
-		return "key manager node"
+		return KindNodeKeyManagerName
 	case KindRuntimeCompute:
-		return "compute runtime"
+		return KindRuntimeComputeName
 	case KindRuntimeKeyManager:
-		return "key manager runtime"
+		return KindRuntimeKeyManagerName
 	default:
 		return "[unknown threshold kind]"
 	}
 }
 
+// MarshalText encodes a ThresholdKind into text form.
+func (k ThresholdKind) MarshalText() ([]byte, error) {
+	return []byte(k.String()), nil
+}
+
+// UnmarshalText decodes a text slice into a ThresholdKind.
+func (k *ThresholdKind) UnmarshalText(text []byte) error {
+	switch string(text) {
+	case KindEntityName:
+		*k = KindEntity
+	case KindNodeValidatorName:
+		*k = KindNodeValidator
+	case KindNodeComputeName:
+		*k = KindNodeCompute
+	case KindNodeStorageName:
+		*k = KindNodeStorage
+	case KindNodeKeyManagerName:
+		*k = KindNodeKeyManager
+	case KindRuntimeComputeName:
+		*k = KindRuntimeCompute
+	case KindRuntimeKeyManagerName:
+		*k = KindRuntimeKeyManager
+	default:
+		return fmt.Errorf("%w: %s", ErrInvalidThreshold, string(text))
+	}
+	return nil
+}
+
 // StakeClaim is a unique stake claim identifier.
 type StakeClaim string
+
+// StakeThreshold is a stake threshold as used in the stake accumulator.
+type StakeThreshold struct {
+	// Global is a reference to a global stake threshold.
+	Global *ThresholdKind `json:"global,omitempty"`
+	// Constant is the value for a specific threshold.
+	Constant *quantity.Quantity `json:"const,omitempty"`
+}
+
+// String returns a string representation of a stake threshold.
+func (st StakeThreshold) String() string {
+	switch {
+	case st.Global != nil:
+		return fmt.Sprintf("<global: %s>", *st.Global)
+	case st.Constant != nil:
+		return fmt.Sprintf("<constant: %s>", st.Constant)
+	default:
+		return "<malformed>"
+	}
+}
+
+// Equal compares vs another stake threshold for equality.
+func (st *StakeThreshold) Equal(cmp *StakeThreshold) bool {
+	if cmp == nil {
+		return false
+	}
+	switch {
+	case st.Global != nil:
+		return cmp.Global != nil && *st.Global == *cmp.Global
+	case st.Constant != nil:
+		return cmp.Constant != nil && st.Constant.Cmp(cmp.Constant) == 0
+	default:
+		return false
+	}
+}
+
+// Value returns the value of the stake threshold.
+func (st *StakeThreshold) Value(tm map[ThresholdKind]quantity.Quantity) (*quantity.Quantity, error) {
+	switch {
+	case st.Global != nil:
+		// Reference to a global threshold.
+		q := tm[*st.Global]
+		return &q, nil
+	case st.Constant != nil:
+		// Direct constant threshold.
+		return st.Constant, nil
+	default:
+		return nil, fmt.Errorf("staking: invalid claim threshold: %+v", st)
+	}
+}
+
+// GlobalStakeTreshold creates a new global StakeThreshold.
+func GlobalStakeThreshold(kind ThresholdKind) StakeThreshold {
+	return StakeThreshold{Global: &kind}
+}
+
+// GlobalStakeTresholds creates a new list of global StakeThresholds.
+func GlobalStakeThresholds(kinds ...ThresholdKind) (sts []StakeThreshold) {
+	for _, k := range kinds {
+		sts = append(sts, GlobalStakeThreshold(k))
+	}
+	return
+}
 
 // StakeAccumulator is a per-escrow-account stake accumulator.
 type StakeAccumulator struct {
 	// Claims are the stake claims that must be satisfied at any given point. Adding a new claim is
 	// only possible if all of the existing claims plus the new claim is satisfied.
-	Claims map[StakeClaim][]ThresholdKind `json:"claims,omitempty"`
+	Claims map[StakeClaim][]StakeThreshold `json:"claims,omitempty"`
 }
 
 // AddClaimUnchecked adds a new claim without checking its validity.
-func (sa *StakeAccumulator) AddClaimUnchecked(claim StakeClaim, thresholds []ThresholdKind) {
+func (sa *StakeAccumulator) AddClaimUnchecked(claim StakeClaim, thresholds []StakeThreshold) {
 	if sa.Claims == nil {
-		sa.Claims = make(map[StakeClaim][]ThresholdKind)
+		sa.Claims = make(map[StakeClaim][]StakeThreshold)
 	}
 
 	sa.Claims[claim] = thresholds
@@ -441,9 +540,13 @@ func (sa *StakeAccumulator) TotalClaims(thresholds map[ThresholdKind]quantity.Qu
 			continue
 		}
 
-		for _, kind := range claim {
-			q := thresholds[kind]
-			if err := total.Add(&q); err != nil {
+		for _, t := range claim {
+			q, err := t.Value(thresholds)
+			if err != nil {
+				return nil, err
+			}
+
+			if err = total.Add(q); err != nil {
 				return nil, fmt.Errorf("staking: failed to accumulate threshold: %w", err)
 			}
 		}
@@ -482,7 +585,7 @@ func (e *EscrowAccount) CheckStakeClaims(tm map[ThresholdKind]quantity.Quantity)
 //
 // In case there is insufficient stake to cover the claim or an error occurrs, no modifications are
 // made to the stake accumulator.
-func (e *EscrowAccount) AddStakeClaim(tm map[ThresholdKind]quantity.Quantity, claim StakeClaim, thresholds []ThresholdKind) error {
+func (e *EscrowAccount) AddStakeClaim(tm map[ThresholdKind]quantity.Quantity, claim StakeClaim, thresholds []StakeThreshold) error {
 	// Compute total amount of claims excluding the claim that we are just adding. This is needed
 	// in case the claim is being updated to avoid counting it twice.
 	totalClaims, err := e.StakeAccumulator.TotalClaims(tm, &claim)
@@ -490,9 +593,13 @@ func (e *EscrowAccount) AddStakeClaim(tm map[ThresholdKind]quantity.Quantity, cl
 		return err
 	}
 
-	for _, kind := range thresholds {
-		q := tm[kind]
-		if err := totalClaims.Add(&q); err != nil {
+	for _, t := range thresholds {
+		q, err := t.Value(tm)
+		if err != nil {
+			return err
+		}
+
+		if err = totalClaims.Add(q); err != nil {
 			return fmt.Errorf("staking: failed to accumulate threshold: %w", err)
 		}
 	}

@@ -240,15 +240,23 @@ func SanityCheckStake(
 		}
 
 		// Add entity stake claim.
-		escrow.StakeAccumulator.AddClaimUnchecked(StakeClaimRegisterEntity, []staking.ThresholdKind{staking.KindEntity})
+		escrow.StakeAccumulator.AddClaimUnchecked(StakeClaimRegisterEntity, staking.GlobalStakeThresholds(staking.KindEntity))
 
 		generatedEscrows[addr] = escrow
 	}
 
+	runtimeMap := make(map[common.Namespace]*Runtime)
+	for _, rt := range runtimes {
+		runtimeMap[rt.ID] = rt
+	}
 	for _, node := range nodes {
+		var nodeRts []*Runtime
+		for _, rt := range node.Runtimes {
+			nodeRts = append(nodeRts, runtimeMap[rt.ID])
+		}
 		// Add node stake claims.
 		addr := staking.NewAddress(node.EntityID)
-		generatedEscrows[addr].StakeAccumulator.AddClaimUnchecked(StakeClaimForNode(node.ID), StakeThresholdsForNode(node))
+		generatedEscrows[addr].StakeAccumulator.AddClaimUnchecked(StakeClaimForNode(node.ID), StakeThresholdsForNode(node, nodeRts))
 	}
 	for _, rt := range runtimes {
 		// Add runtime stake claims.
@@ -315,7 +323,7 @@ func SanityCheckStake(
 				}
 				for i, expectedThreshold := range expectedThresholds {
 					threshold := thresholds[i]
-					if threshold != expectedThreshold {
+					if !threshold.Equal(&expectedThreshold) {
 						return fmt.Errorf("incorrect threshold in position %d for claim %s for account %s (expected: %s got: %s)",
 							i,
 							claim,

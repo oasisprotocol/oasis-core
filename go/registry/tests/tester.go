@@ -19,10 +19,12 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/entity"
 	"github.com/oasisprotocol/oasis-core/go/common/identity"
 	"github.com/oasisprotocol/oasis-core/go/common/node"
+	"github.com/oasisprotocol/oasis-core/go/common/quantity"
 	consensusAPI "github.com/oasisprotocol/oasis-core/go/consensus/api"
 	epochtime "github.com/oasisprotocol/oasis-core/go/epochtime/api"
 	epochtimeTests "github.com/oasisprotocol/oasis-core/go/epochtime/tests"
 	"github.com/oasisprotocol/oasis-core/go/registry/api"
+	staking "github.com/oasisprotocol/oasis-core/go/staking/api"
 )
 
 const (
@@ -516,57 +518,145 @@ func testRegistryRuntime(t *testing.T, backend api.Backend, consensus consensusA
 		Signer: testEntitySigner,
 	}
 
-	// Runtime without key manager set.
-	rtMap := make(map[common.Namespace]*api.Runtime)
-	rt, err := NewTestRuntime([]byte("testRegistryRuntime"), entity, false)
-	require.NoError(err, "NewTestRuntime")
-	rtMap[rt.Runtime.ID] = rt.Runtime
-
-	rt.MustRegister(t, backend, consensus)
-
-	// Runtime using entity whitelist node admission policy.
-	rtEW, err := NewTestRuntime([]byte("testRegistryRuntimeEntityWhitelist"), entity, false)
-	require.NoError(err, "NewTestRuntime entity whitelist")
-	nodeEntities, err := NewTestEntities(entityNodeSeed, 3)
-	require.NoError(err, "NewTestEntities with entity node seed")
-	rtEW.Runtime.AdmissionPolicy = api.RuntimeAdmissionPolicy{
-		EntityWhitelist: &api.EntityWhitelistRuntimeAdmissionPolicy{
-			Entities: map[signature.PublicKey]bool{
-				nodeEntities[1].Entity.ID: true,
+	// Runtime registration test cases.
+	rtMapByName := make(map[string]*api.Runtime)
+	tcs := []struct {
+		name       string
+		prepareFn  func(rt *api.Runtime)
+		keyManager bool
+		valid      bool
+	}{
+		// Runtime without key manager set.
+		{"WithoutKM", nil, false, true},
+		// Runtime using entity whitelist node admission policy.
+		{
+			"EntityWhitelist",
+			func(rt *api.Runtime) {
+				var nodeEntities []*TestEntity
+				nodeEntities, err = NewTestEntities(entityNodeSeed, 3)
+				require.NoError(err, "NewTestEntities with entity node seed")
+				rt.AdmissionPolicy = api.RuntimeAdmissionPolicy{
+					EntityWhitelist: &api.EntityWhitelistRuntimeAdmissionPolicy{
+						Entities: map[signature.PublicKey]bool{
+							nodeEntities[1].Entity.ID: true,
+						},
+					},
+				}
 			},
+			false,
+			true,
+		},
+		// Runtime with unset node admission policy.
+		{
+			"UnsetAdmissionPolicy",
+			func(rt *api.Runtime) {
+				rt.AdmissionPolicy = api.RuntimeAdmissionPolicy{}
+			},
+			false,
+			false,
+		},
+		// Runtime using custom staking thresholds.
+		{
+			"StakingThresholds",
+			func(rt *api.Runtime) {
+				var q quantity.Quantity
+				_ = q.FromUint64(1000)
+
+				rt.Staking = api.RuntimeStakingParameters{
+					Thresholds: map[staking.ThresholdKind]quantity.Quantity{
+						staking.KindNodeCompute: q,
+						staking.KindNodeStorage: q,
+					},
+				}
+			},
+			false,
+			true,
+		},
+		// Runtime using invalid custom staking thresholds.
+		{
+			"StakingThresholdsInvalid1",
+			func(rt *api.Runtime) {
+				var q quantity.Quantity
+				_ = q.FromUint64(1000)
+
+				rt.Staking = api.RuntimeStakingParameters{
+					Thresholds: map[staking.ThresholdKind]quantity.Quantity{
+						staking.KindNodeCompute:   q,
+						staking.KindNodeStorage:   q,
+						staking.KindNodeValidator: q,
+					},
+				}
+			},
+			false,
+			false,
+		},
+		{
+			"StakingThresholdsInvalid2",
+			func(rt *api.Runtime) {
+				var q quantity.Quantity
+				_ = q.FromUint64(1000)
+
+				rt.Staking = api.RuntimeStakingParameters{
+					Thresholds: map[staking.ThresholdKind]quantity.Quantity{
+						staking.KindNodeKeyManager: q,
+					},
+				}
+			},
+			false,
+			false,
+		},
+		// Key manager runtime.
+		{
+			"KeyManager",
+			func(rt *api.Runtime) {
+				rt.Kind = api.KindKeyManager
+			},
+			true,
+			true,
+		},
+		// Runtime with key manager set.
+		{
+			"WithKM",
+			func(rt *api.Runtime) {
+				rt.KeyManager = &rtMapByName["KeyManager"].ID
+			},
+			false,
+			true,
+		},
+		// Runtime with bad key manager.
+		{
+			"WithInvalidKM",
+			func(rt *api.Runtime) {
+				rt.KeyManager = &common.Namespace{0xab}
+			},
+			false,
+			false,
 		},
 	}
-	rtMap[rtEW.Runtime.ID] = rtEW.Runtime
 
-	rtEW.MustRegister(t, backend, consensus)
+	rtMap := make(map[common.Namespace]*api.Runtime)
+	for _, tc := range tcs {
+		var rt *TestRuntime
+		rt, err = NewTestRuntime([]byte(tc.name), entity, tc.keyManager)
+		require.NoError(err, "NewTestRuntime (%s)", tc.name)
+		if tc.prepareFn != nil {
+			tc.prepareFn(rt.Runtime)
+		}
 
-	// Runtime with unset node admission policy.
-	rtUnsetAdmissionPolicy, err := NewTestRuntime([]byte("testRegistryRuntimeUnsetAdmissionPolicy"), entity, false)
-	require.NoError(err, "NewTestRuntime unset admission policy")
-	rtUnsetAdmissionPolicy.Runtime.AdmissionPolicy = api.RuntimeAdmissionPolicy{}
+		switch tc.valid {
+		case true:
+			rtMap[rt.Runtime.ID] = rt.Runtime
+			rt.MustRegister(t, backend, consensus)
+		case false:
+			rt.MustNotRegister(t, backend, consensus)
+		}
 
-	rtUnsetAdmissionPolicy.MustNotRegister(t, backend, consensus)
-
-	// Register key manager runtime.
-	km, err := NewTestRuntime([]byte("testRegistryKM"), entity, true)
-	km.Runtime.Kind = api.KindKeyManager
-	require.NoError(err, "NewTestKm")
-	km.MustRegister(t, backend, consensus)
-	rtMap[km.Runtime.ID] = km.Runtime
-
-	// Runtime with key manager set.
-	rtKm, err := NewTestRuntime([]byte("testRegistryRuntimeWithKM"), entity, false)
-	require.NoError(err, "NewTestRuntimeWithKM")
-	rtKm.Runtime.KeyManager = &km.Runtime.ID
-	rtKm.MustRegister(t, backend, consensus)
-	rtMap[rtKm.Runtime.ID] = rtKm.Runtime
+		rtMapByName[tc.name] = rt.Runtime
+	}
 
 	registeredRuntimes, err := backend.GetRuntimes(context.Background(), consensusAPI.HeightLatest)
 	require.NoError(err, "GetRuntimes")
-	// NOTE: There can be two runtimes registered here instead of one because the worker
-	//       tests that run before this register their own runtime and this runtime
-	//       cannot be deregistered.
-	require.Len(registeredRuntimes, len(existingRuntimes)+4, "registry has four new runtimes")
+	require.Len(registeredRuntimes, len(existingRuntimes)+len(rtMap), "registry has all the new runtimes")
 	for _, regRuntime := range registeredRuntimes {
 		if rtMap[regRuntime.ID] != nil {
 			require.EqualValues(rtMap[regRuntime.ID], regRuntime, "expected runtime is registered")
@@ -575,22 +665,9 @@ func testRegistryRuntime(t *testing.T, backend api.Backend, consensus consensusA
 	}
 	require.Len(rtMap, 0, "all runtimes were registered")
 
-	// Test runtime registration failures.
-	// Non-existent key manager.
-	rtWrongKm, err := NewTestRuntime([]byte("testRegistryRuntimeWithWrongKM"), entity, false)
-	require.NoError(err, "NewTestRuntimeWithWrongKM")
-	// Set Key manager ID to some wrong value.
-	rtWrongKm.Runtime.KeyManager = &common.Namespace{0xab}
-
-	rtWrongKm.MustNotRegister(t, backend, consensus)
-
-	registeredRuntimesAfterFailures, err := backend.GetRuntimes(context.Background(), consensusAPI.HeightLatest)
-	require.NoError(err, "GetRuntimes")
-	require.Len(registeredRuntimesAfterFailures, len(registeredRuntimes), "wrong runtimes not registered")
-
 	// No way to de-register the runtime or the controlling entity, so it will be left there.
 
-	return rt.Runtime.ID, rtEW.Runtime.ID
+	return rtMapByName["WithoutKM"].ID, rtMapByName["EntityWhitelist"].ID
 }
 
 // EnsureRegistryEmpty enforces that the registry has no entities or nodes

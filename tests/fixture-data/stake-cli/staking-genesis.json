@@ -7,13 +7,13 @@
       "max_bound_steps": 12
     },
     "thresholds": {
-      "0": "0",
-      "1": "0",
-      "2": "0",
-      "3": "0",
-      "4": "0",
-      "5": "0",
-      "6": "0"
+      "entity": "0",
+      "node-validator": "0",
+      "node-compute": "0",
+      "node-storage": "0",
+      "node-keymanager": "0",
+      "runtime-compute": "0",
+      "runtime-keymanager": "0"
     }
   }
 }

@@ -71,6 +71,7 @@
             "admission_policy": {
                 "any_node": {}
             },
+            "staking": {},
             "pruner": {
                 "strategy": "",
                 "interval": 0,
@@ -119,6 +120,7 @@
             "admission_policy": {
                 "any_node": {}
             },
+            "staking": {},
             "pruner": {
                 "strategy": "",
                 "interval": 0,

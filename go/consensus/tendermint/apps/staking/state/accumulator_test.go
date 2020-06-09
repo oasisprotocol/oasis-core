@@ -47,7 +47,7 @@ func TestStakeAccumulatorCache(t *testing.T) {
 	err = stakeState.SetAccount(ctx, addr, &acct)
 	require.NoError(err, "SetAccount")
 
-	err = acc.AddStakeClaim(addr, staking.StakeClaim("claim"), []staking.ThresholdKind{staking.KindEntity})
+	err = acc.AddStakeClaim(addr, staking.StakeClaim("claim"), staking.GlobalStakeThresholds(staking.KindEntity))
 	require.NoError(err, "AddStakeClaim")
 
 	err = acc.CheckStakeClaims(addr)
@@ -83,7 +83,7 @@ func TestStakeAccumulatorCache(t *testing.T) {
 	require.Len(acct2.Escrow.StakeAccumulator.Claims, 1, "claims should not be updated")
 
 	// Test convenience functions.
-	err = AddStakeClaim(ctx, addr, staking.StakeClaim("claim"), []staking.ThresholdKind{staking.KindEntity})
+	err = AddStakeClaim(ctx, addr, staking.StakeClaim("claim"), staking.GlobalStakeThresholds(staking.KindEntity))
 	require.NoError(err, "AddStakeClaim")
 	err = RemoveStakeClaim(ctx, addr, staking.StakeClaim("claim"))
 	require.NoError(err, "RemoveStakeClaim")

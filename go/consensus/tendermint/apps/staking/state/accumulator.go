@@ -56,7 +56,7 @@ func (c *StakeAccumulatorCache) CheckStakeClaims(addr staking.Address) error {
 func (c *StakeAccumulatorCache) AddStakeClaim(
 	addr staking.Address,
 	claim staking.StakeClaim,
-	thresholds []staking.ThresholdKind,
+	thresholds []staking.StakeThreshold,
 ) error {
 	acct, err := c.getAccount(addr)
 	if err != nil {
@@ -128,7 +128,7 @@ func AddStakeClaim(
 	ctx *abciAPI.Context,
 	addr staking.Address,
 	claim staking.StakeClaim,
-	thresholds []staking.ThresholdKind,
+	thresholds []staking.StakeThreshold,
 ) error {
 	sa, err := NewStakeAccumulatorCache(ctx)
 	if err != nil {

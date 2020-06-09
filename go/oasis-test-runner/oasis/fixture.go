@@ -197,7 +197,8 @@ type RuntimeFixture struct { // nolint: maligned
 	TxnScheduler registry.TxnSchedulerParameters `json:"txn_scheduler"`
 	Storage      registry.StorageParameters      `json:"storage"`
 
-	AdmissionPolicy registry.RuntimeAdmissionPolicy `json:"admission_policy"`
+	AdmissionPolicy registry.RuntimeAdmissionPolicy   `json:"admission_policy"`
+	Staking         registry.RuntimeStakingParameters `json:"staking,omitempty"`
 
 	Pruner RuntimePrunerCfg `json:"pruner,omitempty"`
 
@@ -235,6 +236,7 @@ func (f *RuntimeFixture) Create(netFixture *NetworkFixture, net *Network) (*Runt
 		TxnScheduler:       f.TxnScheduler,
 		Storage:            f.Storage,
 		AdmissionPolicy:    f.AdmissionPolicy,
+		Staking:            f.Staking,
 		Binaries:           f.Binaries,
 		GenesisState:       f.GenesisState,
 		GenesisRound:       f.GenesisRound,
