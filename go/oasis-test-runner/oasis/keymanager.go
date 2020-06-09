@@ -274,7 +274,6 @@ func (km *Keymanager) startNode() error {
 		workerKeymanagerEnabled().
 		workerKeymanagerRuntimeID(km.runtime.id).
 		appendNetwork(km.net).
-		appendSeedNodes(km.net).
 		appendEntity(km.entity)
 
 	if km.mayGenerate {
