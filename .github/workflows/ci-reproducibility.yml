@@ -28,6 +28,11 @@ jobs:
           # NOTE: We make a git checkout to a unique directory for each build to
           # catch reproducibility issues with code in different local paths.
           path: build${{ matrix.build_number }}
+      - name: Copy rust-toolchain file
+        run: |
+          # Copy rust-toolchain file as it gets checked out into a subdir which is not
+          # supported by actions-rs/toolchain.
+          cp build${{ matrix.build_number }}/rust-toolchain .
       - name: Set up Go 1.14
         uses: actions/setup-go@v1.1.2
         with:
