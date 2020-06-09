@@ -103,7 +103,6 @@ func (worker *Storage) startNode() error {
 		workerStorageDebugIgnoreApplies(worker.ignoreApplies).
 		workerStorageCheckpointCheckInterval(worker.checkpointCheckInterval).
 		appendNetwork(worker.net).
-		appendSeedNodes(worker.net).
 		appendEntity(worker.entity)
 	for _, v := range worker.net.runtimes {
 		if v.kind != registry.KindCompute {
