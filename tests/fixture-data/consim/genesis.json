@@ -1,1 +1,327 @@
-{"height":0,"genesis_time":"2020-04-01T11:27:11.906400344Z","chain_id":"test","epochtime":{"params":{"interval":86400,"debug_mock_backend":false},"base":0},"registry":{"params":{"gas_costs":{"deregister_entity":1000,"register_entity":1000,"register_node":1000,"register_runtime":1000,"runtime_epoch_maintenance":1000,"unfreeze_node":1000,"update_keymanager":1000},"max_node_expiration":5},"entities":[{"untrusted_raw_value":"o2JpZFggTqUyj5Q+9vZtqu10yw6Zw7HEX3Ywe0JQA9vHyzY47TVlbm9kZXP2eBlhbGxvd19lbnRpdHlfc2lnbmVkX25vZGVz9Q==","signature":{"public_key":"TqUyj5Q+9vZtqu10yw6Zw7HEX3Ywe0JQA9vHyzY47TU=","signature":"5CnlsannKM749UmwEadxMJ6WTAQA4tffytgwUm8WLYdpcMEBXv9aK4qwATUrO5O3hJyob0uCRRX3MHk8o/qWDw=="}}]},"roothash":{"params":{"gas_costs":{"compute_commit":1000,"merge_commit":1000}}},"staking":{"params":{"thresholds":{"0":"0","1":"0","2":"0","3":"0","4":"0","5":"0","6":"0"},"debonding_interval":2,"commission_schedule_rules":{"rate_change_interval":10,"rate_bound_lead":30,"max_rate_steps":12,"max_bound_steps":12},"gas_costs":{"add_escrow":10,"burn":10,"reclaim_escrow":10,"transfer":10},"min_delegation":"0","fee_split_weight_propose":"2","fee_split_weight_vote":"1","fee_split_weight_next_propose":"1","reward_factor_epoch_signed":"0","reward_factor_block_proposed":"0"},"total_supply":"290000000000","common_pool":"0","last_block_fees":"0","ledger":{"B14NG+Joea3j09rVt0SEPQ4Z6Ned1EEi6rzZoa2YrYw=":{"general":{"balance":"10000000000","nonce":0},"escrow":{"active":{"balance":"0","total_shares":"0"},"debonding":{"balance":"0","total_shares":"0"},"commission_schedule":{"rates":null,"bounds":null},"stake_accumulator":{}}},"DbeoxcRwDO4Wh8bwq5rAR7wzhiB+LeYn+y7lFSGAZ7I=":{"general":{"balance":"10000000000","nonce":0},"escrow":{"active":{"balance":"0","total_shares":"0"},"debonding":{"balance":"0","total_shares":"0"},"commission_schedule":{"rates":null,"bounds":null},"stake_accumulator":{}}},"IluobMWMoZvxeW5ceAEiQj+TJUXZZJu6ZCWgtZxsHds=":{"general":{"balance":"10000000000","nonce":0},"escrow":{"active":{"balance":"0","total_shares":"0"},"debonding":{"balance":"0","total_shares":"0"},"commission_schedule":{"rates":null,"bounds":null},"stake_accumulator":{}}},"LQu4ZtFg8OJ0MC4M4QMeUR7Is6Xt4A/CW+PK/7TPiH0=":{"general":{"balance":"10000000000","nonce":0},"escrow":{"active":{"balance":"0","total_shares":"0"},"debonding":{"balance":"0","total_shares":"0"},"commission_schedule":{"rates":null,"bounds":null},"stake_accumulator":{}}},"TqUyj5Q+9vZtqu10yw6Zw7HEX3Ywe0JQA9vHyzY47TU=":{"general":{"balance":"100000000000","nonce":0},"escrow":{"active":{"balance":"100000000000","total_shares":"1"},"debonding":{"balance":"0","total_shares":"0"},"commission_schedule":{"rates":null,"bounds":null},"stake_accumulator":{}}},"hcWVUucu/MwOyEDmj5T4TACwpgre5e2cJLczBggxxm0=":{"general":{"balance":"10000000000","nonce":0},"escrow":{"active":{"balance":"0","total_shares":"0"},"debonding":{"balance":"0","total_shares":"0"},"commission_schedule":{"rates":null,"bounds":null},"stake_accumulator":{}}},"iPYyR3I45FRGK568PTJIZUmELgcFYPhIb80e2GxrIf0=":{"general":{"balance":"10000000000","nonce":0},"escrow":{"active":{"balance":"0","total_shares":"0"},"debonding":{"balance":"0","total_shares":"0"},"commission_schedule":{"rates":null,"bounds":null},"stake_accumulator":{}}},"mh+b9hN+2oLAflZACgBgVHA0EjeZK3ew6kml75s2wN4=":{"general":{"balance":"10000000000","nonce":0},"escrow":{"active":{"balance":"0","total_shares":"0"},"debonding":{"balance":"0","total_shares":"0"},"commission_schedule":{"rates":null,"bounds":null},"stake_accumulator":{}}},"oWk0qdNhp7XNQDX4YFJY2KeFM+9u4fo16DeSdW1gChg=":{"general":{"balance":"10000000000","nonce":0},"escrow":{"active":{"balance":"0","total_shares":"0"},"debonding":{"balance":"0","total_shares":"0"},"commission_schedule":{"rates":null,"bounds":null},"stake_accumulator":{}}},"toAWSrxsxSFbGXQIhu4p2fOL0z/fnirrGT/MuzRgcW8=":{"general":{"balance":"10000000000","nonce":0},"escrow":{"active":{"balance":"0","total_shares":"0"},"debonding":{"balance":"0","total_shares":"0"},"commission_schedule":{"rates":null,"bounds":null},"stake_accumulator":{}}}},"delegations":{"TqUyj5Q+9vZtqu10yw6Zw7HEX3Ywe0JQA9vHyzY47TU=":{"TqUyj5Q+9vZtqu10yw6Zw7HEX3Ywe0JQA9vHyzY47TU=":{"shares":"1"}}}},"keymanager":{},"scheduler":{"params":{"min_validators":1,"max_validators":100,"max_validators_per_entity":1,"debug_bypass_stake":false,"debug_static_validators":false,"reward_factor_epoch_election_any":"0"}},"beacon":{"params":{"debug_deterministic":false}},"consensus":{"backend":"tendermint","params":{"timeout_commit":1000000000,"skip_timeout_commit":false,"empty_block_interval":0,"max_tx_size":32768,"max_block_size":22020096,"max_block_gas":0,"max_evidence_age":100000}},"halt_epoch":18446744073709551615,"extra_data":null}
+{
+  "height": 0,
+  "genesis_time": "2020-04-01T11:27:11.906400344Z",
+  "chain_id": "test",
+  "epochtime": {
+    "params": {
+      "interval": 86400,
+      "debug_mock_backend": false
+    },
+    "base": 0
+  },
+  "registry": {
+    "params": {
+      "gas_costs": {
+        "deregister_entity": 1000,
+        "register_entity": 1000,
+        "register_node": 1000,
+        "register_runtime": 1000,
+        "runtime_epoch_maintenance": 1000,
+        "unfreeze_node": 1000,
+        "update_keymanager": 1000
+      },
+      "max_node_expiration": 5
+    },
+    "entities": [
+      {
+        "untrusted_raw_value": "o2JpZFggTqUyj5Q+9vZtqu10yw6Zw7HEX3Ywe0JQA9vHyzY47TVlbm9kZXP2eBlhbGxvd19lbnRpdHlfc2lnbmVkX25vZGVz9Q==",
+        "signature": {
+          "public_key": "TqUyj5Q+9vZtqu10yw6Zw7HEX3Ywe0JQA9vHyzY47TU=",
+          "signature": "5CnlsannKM749UmwEadxMJ6WTAQA4tffytgwUm8WLYdpcMEBXv9aK4qwATUrO5O3hJyob0uCRRX3MHk8o/qWDw=="
+        }
+      }
+    ]
+  },
+  "roothash": {
+    "params": {
+      "gas_costs": {
+        "compute_commit": 1000,
+        "merge_commit": 1000
+      }
+    }
+  },
+  "staking": {
+    "params": {
+      "thresholds": {
+        "0": "0",
+        "1": "0",
+        "2": "0",
+        "3": "0",
+        "4": "0",
+        "5": "0",
+        "6": "0"
+      },
+      "debonding_interval": 2,
+      "commission_schedule_rules": {
+        "rate_change_interval": 10,
+        "rate_bound_lead": 30,
+        "max_rate_steps": 12,
+        "max_bound_steps": 12
+      },
+      "gas_costs": {
+        "add_escrow": 10,
+        "burn": 10,
+        "reclaim_escrow": 10,
+        "transfer": 10
+      },
+      "min_delegation": "0",
+      "fee_split_weight_propose": "2",
+      "fee_split_weight_vote": "1",
+      "fee_split_weight_next_propose": "1",
+      "reward_factor_epoch_signed": "0",
+      "reward_factor_block_proposed": "0"
+    },
+    "total_supply": "290000000000",
+    "common_pool": "0",
+    "last_block_fees": "0",
+    "ledger": {
+      "B14NG+Joea3j09rVt0SEPQ4Z6Ned1EEi6rzZoa2YrYw=": {
+        "general": {
+          "balance": "10000000000",
+          "nonce": 0
+        },
+        "escrow": {
+          "active": {
+            "balance": "0",
+            "total_shares": "0"
+          },
+          "debonding": {
+            "balance": "0",
+            "total_shares": "0"
+          },
+          "commission_schedule": {
+            "rates": null,
+            "bounds": null
+          },
+          "stake_accumulator": {}
+        }
+      },
+      "DbeoxcRwDO4Wh8bwq5rAR7wzhiB+LeYn+y7lFSGAZ7I=": {
+        "general": {
+          "balance": "10000000000",
+          "nonce": 0
+        },
+        "escrow": {
+          "active": {
+            "balance": "0",
+            "total_shares": "0"
+          },
+          "debonding": {
+            "balance": "0",
+            "total_shares": "0"
+          },
+          "commission_schedule": {
+            "rates": null,
+            "bounds": null
+          },
+          "stake_accumulator": {}
+        }
+      },
+      "IluobMWMoZvxeW5ceAEiQj+TJUXZZJu6ZCWgtZxsHds=": {
+        "general": {
+          "balance": "10000000000",
+          "nonce": 0
+        },
+        "escrow": {
+          "active": {
+            "balance": "0",
+            "total_shares": "0"
+          },
+          "debonding": {
+            "balance": "0",
+            "total_shares": "0"
+          },
+          "commission_schedule": {
+            "rates": null,
+            "bounds": null
+          },
+          "stake_accumulator": {}
+        }
+      },
+      "LQu4ZtFg8OJ0MC4M4QMeUR7Is6Xt4A/CW+PK/7TPiH0=": {
+        "general": {
+          "balance": "10000000000",
+          "nonce": 0
+        },
+        "escrow": {
+          "active": {
+            "balance": "0",
+            "total_shares": "0"
+          },
+          "debonding": {
+            "balance": "0",
+            "total_shares": "0"
+          },
+          "commission_schedule": {
+            "rates": null,
+            "bounds": null
+          },
+          "stake_accumulator": {}
+        }
+      },
+      "TqUyj5Q+9vZtqu10yw6Zw7HEX3Ywe0JQA9vHyzY47TU=": {
+        "general": {
+          "balance": "100000000000",
+          "nonce": 0
+        },
+        "escrow": {
+          "active": {
+            "balance": "100000000000",
+            "total_shares": "1"
+          },
+          "debonding": {
+            "balance": "0",
+            "total_shares": "0"
+          },
+          "commission_schedule": {
+            "rates": null,
+            "bounds": null
+          },
+          "stake_accumulator": {}
+        }
+      },
+      "hcWVUucu/MwOyEDmj5T4TACwpgre5e2cJLczBggxxm0=": {
+        "general": {
+          "balance": "10000000000",
+          "nonce": 0
+        },
+        "escrow": {
+          "active": {
+            "balance": "0",
+            "total_shares": "0"
+          },
+          "debonding": {
+            "balance": "0",
+            "total_shares": "0"
+          },
+          "commission_schedule": {
+            "rates": null,
+            "bounds": null
+          },
+          "stake_accumulator": {}
+        }
+      },
+      "iPYyR3I45FRGK568PTJIZUmELgcFYPhIb80e2GxrIf0=": {
+        "general": {
+          "balance": "10000000000",
+          "nonce": 0
+        },
+        "escrow": {
+          "active": {
+            "balance": "0",
+            "total_shares": "0"
+          },
+          "debonding": {
+            "balance": "0",
+            "total_shares": "0"
+          },
+          "commission_schedule": {
+            "rates": null,
+            "bounds": null
+          },
+          "stake_accumulator": {}
+        }
+      },
+      "mh+b9hN+2oLAflZACgBgVHA0EjeZK3ew6kml75s2wN4=": {
+        "general": {
+          "balance": "10000000000",
+          "nonce": 0
+        },
+        "escrow": {
+          "active": {
+            "balance": "0",
+            "total_shares": "0"
+          },
+          "debonding": {
+            "balance": "0",
+            "total_shares": "0"
+          },
+          "commission_schedule": {
+            "rates": null,
+            "bounds": null
+          },
+          "stake_accumulator": {}
+        }
+      },
+      "oWk0qdNhp7XNQDX4YFJY2KeFM+9u4fo16DeSdW1gChg=": {
+        "general": {
+          "balance": "10000000000",
+          "nonce": 0
+        },
+        "escrow": {
+          "active": {
+            "balance": "0",
+            "total_shares": "0"
+          },
+          "debonding": {
+            "balance": "0",
+            "total_shares": "0"
+          },
+          "commission_schedule": {
+            "rates": null,
+            "bounds": null
+          },
+          "stake_accumulator": {}
+        }
+      },
+      "toAWSrxsxSFbGXQIhu4p2fOL0z/fnirrGT/MuzRgcW8=": {
+        "general": {
+          "balance": "10000000000",
+          "nonce": 0
+        },
+        "escrow": {
+          "active": {
+            "balance": "0",
+            "total_shares": "0"
+          },
+          "debonding": {
+            "balance": "0",
+            "total_shares": "0"
+          },
+          "commission_schedule": {
+            "rates": null,
+            "bounds": null
+          },
+          "stake_accumulator": {}
+        }
+      }
+    },
+    "delegations": {
+      "TqUyj5Q+9vZtqu10yw6Zw7HEX3Ywe0JQA9vHyzY47TU=": {
+        "TqUyj5Q+9vZtqu10yw6Zw7HEX3Ywe0JQA9vHyzY47TU=": {
+          "shares": "1"
+        }
+      }
+    }
+  },
+  "keymanager": {},
+  "scheduler": {
+    "params": {
+      "min_validators": 1,
+      "max_validators": 100,
+      "max_validators_per_entity": 1,
+      "debug_bypass_stake": false,
+      "debug_static_validators": false,
+      "reward_factor_epoch_election_any": "0"
+    }
+  },
+  "beacon": {
+    "params": {
+      "debug_deterministic": false
+    }
+  },
+  "consensus": {
+    "backend": "tendermint",
+    "params": {
+      "timeout_commit": 1000000000,
+      "skip_timeout_commit": false,
+      "empty_block_interval": 0,
+      "max_tx_size": 32768,
+      "max_block_size": 22020096,
+      "max_block_gas": 0,
+      "max_evidence_age": 100000
+    }
+  },
+  "halt_epoch": 18446744073709551615,
+  "extra_data": null
+}
