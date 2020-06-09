@@ -1,5 +1,5 @@
 # Since nancy doesn't respect replace directive, this check will fail until
 # upstream tendermint depends on websocket@1.4.0. We force a fixed version of
-# the websocket in go.mod: https://github.com/oasislabs/oasis-core/issues/2931
+# the websocket in go.mod: https://github.com/oasisprotocol/oasis-core/issues/2931
 # https://ossindex.sonatype.org/vuln/5f259e63-3efb-4c47-b593-d175dca716b0
 5f259e63-3efb-4c47-b593-d175dca716b0
