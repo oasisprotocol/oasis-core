@@ -34,7 +34,7 @@ const (
 	LatestEntityDescriptorVersion = 1
 
 	// Minimum and maximum descriptor versions that are allowed.
-	minEntityDescriptorVersion = 0
+	minEntityDescriptorVersion = 1
 	maxEntityDescriptorVersion = LatestEntityDescriptorVersion
 )
 
@@ -52,11 +52,11 @@ type Entity struct { // nolint: maligned
 	// Nodes is the vector of node identity keys owned by this entity, that
 	// will sign the descriptor with the node signing key rather than the
 	// entity signing key.
-	Nodes []signature.PublicKey `json:"nodes"`
+	Nodes []signature.PublicKey `json:"nodes,omitempty"`
 
 	// AllowEntitySignedNodes is true iff nodes belonging to this entity
 	// may be signed with the entity signing key.
-	AllowEntitySignedNodes bool `json:"allow_entity_signed_nodes"`
+	AllowEntitySignedNodes bool `json:"allow_entity_signed_nodes,omitempty"`
 }
 
 // ValidateBasic performs basic descriptor validity checks.

@@ -177,7 +177,7 @@ const (
 	LatestRuntimeDescriptorVersion = 1
 
 	// Minimum and maximum descriptor versions that are allowed.
-	minRuntimeDescriptorVersion = 0
+	minRuntimeDescriptorVersion = 1
 	maxRuntimeDescriptorVersion = LatestRuntimeDescriptorVersion
 )
 
