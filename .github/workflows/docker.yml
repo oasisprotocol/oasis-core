@@ -3,13 +3,17 @@ name: docker
 
 # Trigger the workflow when:
 on:
-  # A push occurs to one of the matched branches and at least one modified file matches the configured paths.
+  # A push occurs to one of the matched branches.
   push:
+    # XXX: ideally on master branches we would build the image only if there are changes in the
+    # 'docker/' directory (as we do in pull_requests). However, this doesn't work when pushing a new
+    # 'stable/*' branch - the build on a new branch does not trigger unless there are changes
+    # compared to master on the filtered path.
+    # If this is ever fixed, or per branch filters are possible, bring back the path filter to only
+    # build the image when there are changes within 'docker/' directory.
     branches:
       - master
       - stable/*
-    paths:
-      - docker/**
   # Or every day at 04:00 UTC (for the default/master branch).
   schedule:
     - cron: "0 4 * * *"
