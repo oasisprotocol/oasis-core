@@ -140,11 +140,11 @@ func (q *queries) doSchedulerQueries(ctx context.Context, rng *rand.Rand, height
 	}
 	// In the E2E-tests we only validators are present in the genesis documents,
 	// meaning there will be no other committees in the first epoch (epoch=0).
-	// In epoch 0 the key-manager will register, but not yet compute/storage
+	// In epoch 1 the key-manager will register, but not yet compute/storage
 	// workers, since those will wait for key-manager committee to be available.
-	// This means that compute/storage nodes will register during epoch 1 and
-	// the committee should be elected from epoch 2 onward.
-	if epoch > 1 {
+	// This means that compute/storage nodes will register during epoch 2 and
+	// the committee should be elected from epoch 3 onward.
+	if epoch > 2 {
 		if committees == nil {
 			q.logger.Error("Missing committee for simple-keyvalue runtime",
 				"height", height,
