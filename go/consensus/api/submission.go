@@ -12,6 +12,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
 	"github.com/oasisprotocol/oasis-core/go/common/quantity"
 	"github.com/oasisprotocol/oasis-core/go/consensus/api/transaction"
+	staking "github.com/oasisprotocol/oasis-core/go/staking/api"
 )
 
 const (
@@ -63,7 +64,9 @@ type submissionManager struct {
 func (m *submissionManager) signAndSubmitTx(ctx context.Context, signer signature.Signer, tx *transaction.Transaction) error {
 	// Update transaction nonce.
 	var err error
-	tx.Nonce, err = m.backend.GetSignerNonce(ctx, &GetSignerNonceRequest{ID: signer.Public(), Height: HeightLatest})
+	signerAddr := staking.NewAddress(signer.Public())
+
+	tx.Nonce, err = m.backend.GetSignerNonce(ctx, &GetSignerNonceRequest{AccountAddress: signerAddr, Height: HeightLatest})
 	if err != nil {
 		if errors.Is(err, ErrNoCommittedBlocks) {
 			// No committed blocks available, retry submission.
@@ -123,7 +126,7 @@ func (m *submissionManager) signAndSubmitTx(ctx context.Context, signer signatur
 		if errors.Is(err, transaction.ErrInvalidNonce) {
 			// Invalid nonce, retry submission.
 			m.logger.Debug("retrying transaction submission due to invalid nonce",
-				"account_id", signer.Public(),
+				"account_address", signerAddr,
 				"nonce", tx.Nonce,
 			)
 			return err

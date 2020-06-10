@@ -120,10 +120,11 @@ func transferFunds(
 	// Maybe just expose the SignAndSubmit() method in the
 	// consensus.ClientBackend?
 	return backoff.Retry(func() error {
+		fromAddr := staking.NewAddress(from.Public())
 		// Get test entity nonce.
 		nonce, err := cnsc.GetSignerNonce(ctx, &consensus.GetSignerNonceRequest{
-			ID:     from.Public(),
-			Height: consensus.HeightLatest,
+			AccountAddress: fromAddr,
+			Height:         consensus.HeightLatest,
 		})
 		if err != nil {
 			return backoff.Permanent(fmt.Errorf("GetSignerNonce TestEntity error: %w", err))
