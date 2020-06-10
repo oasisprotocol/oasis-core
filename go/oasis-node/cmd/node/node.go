@@ -20,6 +20,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
 	"github.com/oasisprotocol/oasis-core/go/common/persistent"
 	"github.com/oasisprotocol/oasis-core/go/common/service"
+	"github.com/oasisprotocol/oasis-core/go/common/version"
 	consensusAPI "github.com/oasisprotocol/oasis-core/go/consensus/api"
 	"github.com/oasisprotocol/oasis-core/go/consensus/tendermint"
 	tmService "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/service"
@@ -565,6 +566,12 @@ func newNode(testNode bool) (n *Node, err error) { // nolint: gocyclo
 		_, _ = fmt.Fprintln(os.Stderr, err)
 		return nil, err
 	}
+
+	// Log the version of the binary so that we can figure out what the
+	// binary is from the logs.
+	logger.Info("Starting oasis-node",
+		"Version", version.SoftwareVersion,
+	)
 
 	dataDir := cmdCommon.DataDir()
 	if dataDir == "" {
