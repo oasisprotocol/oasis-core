@@ -27,7 +27,7 @@ untrusted = "0.7.0"
 bincode = "1.0.0"
 snow = { version = "0.6.2", default-features = false, features = ["ring-accelerated"] }
 percent-encoding = "1.0.1"
-pem-iterator = "0.2.0"
+pem = "0.8.1"
 chrono = "0.4.6"
 base64 = "0.10.1"
 rustc-hex = "2.0.1"

@@ -33,7 +33,7 @@ extern crate slog_stdlog;
 #[macro_use]
 extern crate intrusive_collections;
 extern crate io_context;
-extern crate pem_iterator;
+extern crate pem;
 extern crate percent_encoding;
 extern crate rand;
 extern crate rustc_hex;

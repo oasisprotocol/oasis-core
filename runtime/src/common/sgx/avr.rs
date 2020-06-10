@@ -5,10 +5,7 @@ use anyhow::{anyhow, Result};
 use base64;
 use byteorder::{LittleEndian, ReadBytesExt};
 use chrono::prelude::*;
-use pem_iterator::{
-    body::Single,
-    boundary::{BoundaryParser, BoundaryType, LabelMatcher},
-};
+use pem::parse_many;
 use percent_encoding;
 use serde_derive::{Deserialize, Serialize};
 use serde_json;
@@ -45,6 +42,8 @@ enum AVRError {
     MalformedQuote,
     #[error("unable to find any certificates")]
     NoCertificates,
+    #[error("malformed certificate PEM")]
+    MalformedCertificatePEM,
 }
 
 pub const QUOTE_CONTEXT_LEN: usize = 8;
@@ -347,8 +346,14 @@ fn validate_avr_signature(
     let anchors = webpki::TLSServerTrustAnchors(&IAS_ANCHORS);
 
     // Decode the certificate chain.
-    let cert_chain = percent_encoding::percent_decode(cert_chain).decode_utf8()?;
-    let cert_chain = pem_parse_many(&cert_chain, PEM_CERTIFICATE_LABEL);
+    let raw_pem = percent_encoding::percent_decode(cert_chain).decode_utf8()?;
+    let mut cert_chain = Vec::new();
+    for pem in parse_many(&raw_pem.as_bytes()) {
+        if pem.tag != PEM_CERTIFICATE_LABEL {
+            return Err(AVRError::MalformedCertificatePEM.into());
+        }
+        cert_chain.push(pem.contents);
+    }
     if cert_chain.len() == 0 {
         return Err(AVRError::NoCertificates.into());
     }
@@ -378,62 +383,6 @@ fn validate_decoded_avr_signature(
     let cert = webpki::EndEntityCert::from(&cert_der[0])?;
     cert.verify_is_valid_tls_server_cert(IAS_SIG_ALGS, &anchors, &inter_ders, time)?;
     Ok(cert.verify_signature(IAS_SIG_ALGS[0], message, &signature)?)
-}
-
-fn pem_parse_many(input: &str, label: &str) -> Vec<Vec<u8>> {
-    // This routine superficially mimics the pem crate's pem::parse_many
-    // routine with the pem_iterator crate as the former does not build
-    // in the SGX enviornment due to dependencies.
-    //
-    // Invalid PEM will cause the parsing to terminate, and an empty vector
-    // to be returned.
-
-    let mut contents = Vec::new();
-
-    let input = input.trim();
-    let mut input = input.chars().enumerate();
-
-    loop {
-        // Find the begining label.
-        {
-            let mut parser = BoundaryParser::from_chars(
-                BoundaryType::Begin,
-                &mut input,
-                LabelMatcher(label.chars()),
-            );
-            if parser.next() != None || parser.complete() != Ok(()) {
-                break;
-            }
-        }
-
-        // Parse the body.
-        let data: Result<Vec<u8>, _> = Single::from_chars(&mut input).collect();
-        let data = match data {
-            Ok(data) => data,
-            Err(_) => {
-                contents.truncate(0);
-                break;
-            }
-        };
-
-        // Find the terminal label.
-        {
-            let mut parser = BoundaryParser::from_chars(
-                BoundaryType::End,
-                &mut input,
-                LabelMatcher(label.chars()),
-            );
-            if parser.next() != None || parser.complete() != Ok(()) {
-                contents.truncate(0);
-                break;
-            }
-        }
-
-        // The PEM block was well formed, append the data.
-        contents.push(data);
-    }
-
-    contents
 }
 
 /// Return true iff the (POXIX) timestamp is considered "fresh" for the purposes
@@ -489,15 +438,6 @@ mod tests {
 
     const IAS_CERT_CHAIN: &[u8] =
         include_bytes!("../../../testdata/avr_certificates_urlencoded.pem");
-
-    #[test]
-    fn test_pem_parse_many() {
-        let cert_chain = percent_encoding::percent_decode(IAS_CERT_CHAIN)
-            .decode_utf8()
-            .unwrap();
-        let cert_chain = pem_parse_many(&cert_chain, PEM_CERTIFICATE_LABEL);
-        assert_eq!(cert_chain.len(), 2);
-    }
 
     #[test]
     fn test_validate_avr_signature() {
