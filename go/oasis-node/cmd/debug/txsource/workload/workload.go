@@ -50,7 +50,7 @@ func fundSignAndSubmitTx(
 	// Estimate gas needed if not set.
 	if tx.Fee.Gas == 0 {
 		gas, err := cnsc.EstimateGas(ctx, &consensus.EstimateGasRequest{
-			Caller:      caller.Public(),
+			Signer:      caller.Public(),
 			Transaction: tx,
 		})
 		if err != nil {
@@ -142,7 +142,7 @@ func transferFunds(
 		tx := staking.NewTransferTx(nonce, &fee, &transfer)
 		// Estimate fee.
 		gas, err := cnsc.EstimateGas(ctx, &consensus.EstimateGasRequest{
-			Caller:      from.Public(),
+			Signer:      from.Public(),
 			Transaction: tx,
 		})
 		if err != nil {

@@ -232,7 +232,7 @@ func NewConsensusEvidence(inner interface{}) ConsensusEvidence {
 
 // EstimateGasRequest is a EstimateGas request.
 type EstimateGasRequest struct {
-	Caller      signature.PublicKey      `json:"caller"`
+	Signer      signature.PublicKey      `json:"signer"`
 	Transaction *transaction.Transaction `json:"transaction"`
 }
 

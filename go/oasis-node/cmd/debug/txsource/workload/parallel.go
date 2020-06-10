@@ -51,7 +51,7 @@ func (parallel) Run(
 		return fmt.Errorf("transfer tokens FromInt64 %d: %w", parallelTxTransferAmount, err)
 	}
 	txGasAmount, err = cnsc.EstimateGas(ctx, &consensus.EstimateGasRequest{
-		Caller:      fundingAccount.Public(),
+		Signer:      fundingAccount.Public(),
 		Transaction: staking.NewTransferTx(0, nil, xfer),
 	})
 	if err != nil {

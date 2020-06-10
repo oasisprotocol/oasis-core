@@ -318,7 +318,7 @@ func (c *commission) doAmendCommissionSchedule(ctx context.Context, rng *rand.Ra
 
 	// Estimate gas.
 	gas, err := cnsc.EstimateGas(ctx, &consensus.EstimateGasRequest{
-		Caller:      c.signer.Public(),
+		Signer:      c.signer.Public(),
 		Transaction: tx,
 	})
 	if err != nil {

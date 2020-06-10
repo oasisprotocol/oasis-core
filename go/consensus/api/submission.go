@@ -80,7 +80,7 @@ func (m *submissionManager) signAndSubmitTx(ctx context.Context, signer signatur
 	if tx.Fee == nil {
 		// Estimate amount of gas needed to perform the update.
 		var gas transaction.Gas
-		gas, err = m.backend.EstimateGas(ctx, &EstimateGasRequest{Caller: signer.Public(), Transaction: tx})
+		gas, err = m.backend.EstimateGas(ctx, &EstimateGasRequest{Signer: signer.Public(), Transaction: tx})
 		if err != nil {
 			return fmt.Errorf("failed to estimate gas: %w", err)
 		}
