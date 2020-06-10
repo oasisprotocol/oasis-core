@@ -106,6 +106,15 @@ while tagging the next release.
 
 After those checks have passed, it will ask for confirmation before proceeding.
 
+### Create a `stable/YY.MINOR.x` branch
+
+Prepare a new stable branch from the tag and push it to the origin:
+
+```bash
+git checkout -b stable/${TAG_VERSION}.x v${TAG_VERSION}
+git push -u origin stable/${TAG_VERSION}.x
+```
+
 ### Ensure a GitHub release was published
 
 After the tag with the next release is pushed to the [canonical git repository],
@@ -139,15 +148,6 @@ BACKPORT_VERSION="20.1"
 ```
 
 [Versioning scheme]: versioning.md
-
-### Create a `stable/YY.MINOR.x` branch
-
-Prepare a new branch from the appropriate tag and push it to the origin:
-
-```bash
-git checkout -b stable/${BACKPORT_VERSION}.x v${BACKPORT_VERSION}
-git push -u origin stable/${BACKPORT_VERSION}.x
-```
 
 ### Back-port the changes
 
