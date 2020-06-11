@@ -138,8 +138,17 @@ The node descriptor structure MUST be signed by all of the following keys:
 * P2P key.
 
 Registering a node may require sufficient stake in the owning entity's
-[escrow account]. The exact stake threshold is a consensus parameter (see
-[`Thresholds` in staking consensus parameters]).
+[escrow account]. There are two kinds of thresholds that the node may need to
+satisfy:
+
+* Global thresholds are the same for all runtimes and are defined by the
+  consensus parameters (see [`Thresholds` in staking consensus parameters]).
+
+* In _addition_ to the global thresholds, each runtime the node is registering
+  for may define their own thresholds. In case the node is registering for
+  multiple runtimes, it needs to satisfy the maximum threshold of all the
+  runtimes it is registering for. The runtime-specific thresholds are defined
+  in the [`Staking` field] in the runtime descriptor.
 
 <!-- markdownlint-disable line-length -->
 [`NewRegisterNodeTx`]: https://pkg.go.dev/github.com/oasisprotocol/oasis-core/go/registry/api?tab=doc#NewRegisterNodeTx
@@ -147,6 +156,7 @@ Registering a node may require sufficient stake in the owning entity's
 [`Node`]: https://pkg.go.dev/github.com/oasisprotocol/oasis-core/go/common/node?tab=doc#Node
 [multi-signed envelope]: ../crypto.md#multi-signed-envelope
 [`Thresholds` in staking consensus parameters]: https://pkg.go.dev/github.com/oasisprotocol/oasis-core/go/staking/api?tab=doc#ConsensusParameters.Thresholds
+[`Staking` field]: https://pkg.go.dev/github.com/oasisprotocol/oasis-core/go/registry/api?tab=doc#Runtime.Staking
 <!-- markdownlint-enable line-length -->
 
 ### Unfreeze Node

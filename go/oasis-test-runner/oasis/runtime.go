@@ -57,6 +57,7 @@ type RuntimeCfg struct { // nolint: maligned
 	Storage      registry.StorageParameters
 
 	AdmissionPolicy registry.RuntimeAdmissionPolicy
+	Staking         registry.RuntimeStakingParameters
 
 	Pruner RuntimePrunerCfg
 
@@ -125,6 +126,7 @@ func (net *Network) NewRuntime(cfg *RuntimeCfg) (*Runtime, error) {
 		TxnScheduler:      cfg.TxnScheduler,
 		Storage:           cfg.Storage,
 		AdmissionPolicy:   cfg.AdmissionPolicy,
+		Staking:           cfg.Staking,
 	}
 
 	rtDir, err := net.baseDir.NewSubDir("runtime-" + cfg.ID.String())
@@ -221,6 +223,16 @@ func (net *Network) NewRuntime(cfg *RuntimeCfg) (*Runtime, error) {
 	} else {
 		return nil, fmt.Errorf("invalid admission policy")
 	}
+
+	for kind, value := range cfg.Staking.Thresholds {
+		kindRaw, _ := kind.MarshalText()
+		valueRaw, _ := value.MarshalText()
+
+		args = append(args,
+			"--"+cmdRegRt.CfgStakingThreshold, fmt.Sprintf("%s=%s", string(kindRaw), string(valueRaw)),
+		)
+	}
+
 	args = append(args, cfg.Entity.toGenesisArgs()...)
 
 	w, err := rtDir.NewLogWriter("provision.log")

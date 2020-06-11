@@ -207,6 +207,15 @@ func NewQuantity() (q *Quantity) {
 	return &Quantity{}
 }
 
+// NewFromUint64 creates a new Quantity from an uint64 or panics.
+func NewFromUint64(n uint64) *Quantity {
+	var q Quantity
+	if err := q.FromUint64(n); err != nil {
+		panic(err)
+	}
+	return &q
+}
+
 func isValid(n *big.Int) bool {
 	return n.Cmp(&zero) >= 0
 }

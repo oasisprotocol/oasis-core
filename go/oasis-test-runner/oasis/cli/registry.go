@@ -108,6 +108,15 @@ func (r *RegistryHelpers) GenerateRegisterRuntimeTx(
 		return fmt.Errorf("invalid admission policy")
 	}
 
+	for kind, value := range runtime.Staking.Thresholds {
+		kindRaw, _ := kind.MarshalText()
+		valueRaw, _ := value.MarshalText()
+
+		args = append(args,
+			"--"+cmdRegRt.CfgStakingThreshold, fmt.Sprintf("%s=%s", string(kindRaw), string(valueRaw)),
+		)
+	}
+
 	if out, err := r.runSubCommandWithOutput("registry-runtime-gen_register", args); err != nil {
 		return fmt.Errorf("failed to generate register runtime tx: error: %w output: %s", err, out.String())
 	}

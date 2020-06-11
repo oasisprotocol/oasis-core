@@ -19,6 +19,7 @@ import (
 	fileSigner "github.com/oasisprotocol/oasis-core/go/common/crypto/signature/signers/file"
 	"github.com/oasisprotocol/oasis-core/go/common/entity"
 	"github.com/oasisprotocol/oasis-core/go/common/node"
+	"github.com/oasisprotocol/oasis-core/go/common/quantity"
 	cmdCommon "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common"
 	"github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/consensus"
 	"github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/flags"
@@ -31,10 +32,11 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/oasis/cli"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/scenario"
 	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
+	staking "github.com/oasisprotocol/oasis-core/go/staking/api"
 )
 
 var (
-	// RegistryCLI is the staking scenario.
+	// RegistryCLI is the registry CLI test scenario.
 	RegistryCLI scenario.Scenario = &registryCLIImpl{
 		runtimeImpl: *newRuntimeImpl("registry-cli", "", nil),
 	}
@@ -605,6 +607,8 @@ func (r *registryCLIImpl) testRuntime(childEnv *env.Env, cli *cli.Helpers) error
 	if err != nil {
 		return fmt.Errorf("TestEntity: %w", err)
 	}
+	var q quantity.Quantity
+	_ = q.FromUint64(100)
 	testRuntime := registry.Runtime{
 		DescriptorVersion: registry.LatestRuntimeDescriptorVersion,
 		EntityID:          testEntity.ID,
@@ -640,6 +644,12 @@ func (r *registryCLIImpl) testRuntime(childEnv *env.Env, cli *cli.Helpers) error
 				Entities: map[signature.PublicKey]bool{
 					testEntity.ID: true,
 				},
+			},
+		},
+		Staking: registry.RuntimeStakingParameters{
+			Thresholds: map[staking.ThresholdKind]quantity.Quantity{
+				staking.KindNodeCompute: q,
+				staking.KindNodeStorage: q,
 			},
 		},
 	}

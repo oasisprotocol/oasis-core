@@ -62,10 +62,10 @@ func (th *dummyMigrationHandler) ConsensusUpgrade(ctx *Context, privateCtx inter
 	err = stakeState.SetAccount(abciCtx, testEntityAddr, &staking.Account{
 		Escrow: staking.EscrowAccount{
 			StakeAccumulator: staking.StakeAccumulator{
-				Claims: map[staking.StakeClaim][]staking.ThresholdKind{
-					registry.StakeClaimRegisterEntity: []staking.ThresholdKind{
+				Claims: map[staking.StakeClaim][]staking.StakeThreshold{
+					registry.StakeClaimRegisterEntity: staking.GlobalStakeThresholds(
 						staking.KindEntity,
-					},
+					),
 				},
 			},
 		},

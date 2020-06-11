@@ -13,8 +13,10 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	"github.com/oasisprotocol/oasis-core/go/common/node"
 	"github.com/oasisprotocol/oasis-core/go/common/prettyprint"
+	"github.com/oasisprotocol/oasis-core/go/common/quantity"
 	"github.com/oasisprotocol/oasis-core/go/common/sgx"
 	"github.com/oasisprotocol/oasis-core/go/common/version"
+	staking "github.com/oasisprotocol/oasis-core/go/staking/api"
 	storage "github.com/oasisprotocol/oasis-core/go/storage/api"
 )
 
@@ -22,9 +24,6 @@ var (
 	// ErrUnsupportedRuntimeKind is the error returned when the parsed runtime
 	// kind is malformed or unknown.
 	ErrUnsupportedRuntimeKind = errors.New("runtime: unsupported runtime kind")
-	// ErrMalformedStoreID is the error returned when a storage service
-	// ID is malformed.
-	ErrMalformedStoreID = errors.New("runtime: Malformed store ID")
 
 	_ prettyprint.PrettyPrinter = (*SignedRuntime)(nil)
 )
@@ -171,6 +170,39 @@ type RuntimeAdmissionPolicy struct {
 	EntityWhitelist *EntityWhitelistRuntimeAdmissionPolicy `json:"entity_whitelist,omitempty"`
 }
 
+// RuntimeStakingParameters are the stake-related parameters for a runtime.
+type RuntimeStakingParameters struct {
+	// Thresholds are the minimum stake thresholds for a runtime. These per-runtime thresholds are
+	// in addition to the global thresholds. May be left unspecified.
+	//
+	// In case a node is registered for multiple runtimes, it will need to satisfy the maximum
+	// threshold of all the runtimes.
+	Thresholds map[staking.ThresholdKind]quantity.Quantity `json:"thresholds,omitempty"`
+}
+
+// ValidateBasic performs basic descriptor validity checks.
+func (s *RuntimeStakingParameters) ValidateBasic(runtimeKind RuntimeKind) error {
+	for kind, q := range s.Thresholds {
+		switch kind {
+		case staking.KindNodeCompute, staking.KindNodeStorage:
+			if runtimeKind != KindCompute {
+				return fmt.Errorf("unsupported staking threshold kind for runtime: %s", kind)
+			}
+		case staking.KindNodeKeyManager:
+			if runtimeKind != KindKeyManager {
+				return fmt.Errorf("unsupported staking threshold kind for runtime: %s", kind)
+			}
+		default:
+			return fmt.Errorf("unsupported staking threshold kind for runtime: %s", kind)
+		}
+
+		if !q.IsValid() {
+			return fmt.Errorf("invalid threshold of kind %s specified", kind)
+		}
+	}
+	return nil
+}
+
 const (
 	// LatestRuntimeDescriptorVersion is the latest entity descriptor version that should be used
 	// for all new descriptors. Using earlier versions may be rejected.
@@ -225,6 +257,9 @@ type Runtime struct { // nolint: maligned
 	// AdmissionPolicy sets which nodes are allowed to register for this runtime.
 	// This policy applies to all roles.
 	AdmissionPolicy RuntimeAdmissionPolicy `json:"admission_policy"`
+
+	// Staking stores the runtime's staking-related parameters.
+	Staking RuntimeStakingParameters `json:"staking,omitempty"`
 }
 
 // ValidateBasic performs basic descriptor validity checks.
@@ -246,6 +281,10 @@ func (r *Runtime) ValidateBasic(strictVersion bool) error {
 				maxRuntimeDescriptorVersion,
 			)
 		}
+	}
+
+	if err := r.Staking.ValidateBasic(r.Kind); err != nil {
+		return fmt.Errorf("bad staking parameters: %w", err)
 	}
 	return nil
 }

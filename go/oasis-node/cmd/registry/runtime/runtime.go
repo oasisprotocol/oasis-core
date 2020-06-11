@@ -21,6 +21,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
 	"github.com/oasisprotocol/oasis-core/go/common/node"
+	"github.com/oasisprotocol/oasis-core/go/common/quantity"
 	"github.com/oasisprotocol/oasis-core/go/common/sgx"
 	"github.com/oasisprotocol/oasis-core/go/common/version"
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
@@ -30,6 +31,7 @@ import (
 	cmdGrpc "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/grpc"
 	cmdSigner "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/signer"
 	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
+	staking "github.com/oasisprotocol/oasis-core/go/staking/api"
 	storage "github.com/oasisprotocol/oasis-core/go/storage/api"
 	"github.com/oasisprotocol/oasis-core/go/storage/mkvs"
 )
@@ -79,6 +81,9 @@ const (
 	CfgAdmissionPolicyEntityWhitelist  = "runtime.admission_policy_entity_whitelist"
 	AdmissionPolicyNameAnyNode         = "any-node"
 	AdmissionPolicyNameEntityWhitelist = "entity-whitelist"
+
+	// Staking parameters flags.
+	CfgStakingThreshold = "runtime.staking.threshold"
 
 	runtimeGenesisFilename = "runtime_genesis.json"
 )
@@ -224,7 +229,7 @@ func doList(cmd *cobra.Command, args []string) {
 	}
 }
 
-func runtimeFromFlags() (*registry.Runtime, signature.Signer, error) {
+func runtimeFromFlags() (*registry.Runtime, signature.Signer, error) { // nolint: gocyclo
 	var id common.Namespace
 	if err := id.UnmarshalHex(viper.GetString(CfgID)); err != nil {
 		logger.Error("failed to parse runtime ID",
@@ -433,6 +438,33 @@ func runtimeFromFlags() (*registry.Runtime, signature.Signer, error) {
 		return nil, nil, fmt.Errorf("invalid runtime admission policy")
 	}
 
+	// Staking parameters.
+	if th := viper.GetStringMapString(CfgStakingThreshold); th != nil {
+		rt.Staking.Thresholds = make(map[staking.ThresholdKind]quantity.Quantity)
+		for kindRaw, valueRaw := range th {
+			var (
+				kind  staking.ThresholdKind
+				value quantity.Quantity
+			)
+
+			if err = kind.UnmarshalText([]byte(kindRaw)); err != nil {
+				return nil, nil, fmt.Errorf("staking: bad threshold kind (%s): %w", kindRaw, err)
+			}
+			if err = value.UnmarshalText([]byte(valueRaw)); err != nil {
+				return nil, nil, fmt.Errorf("staking: bad threshold value (%s): %w", valueRaw, err)
+			}
+
+			if _, ok := rt.Staking.Thresholds[kind]; ok {
+				return nil, nil, fmt.Errorf("staking: duplicate value for threshold '%s'", kind)
+			}
+			rt.Staking.Thresholds[kind] = value
+		}
+	}
+
+	// Validate descriptor.
+	if err = rt.ValidateBasic(true); err != nil {
+		return nil, nil, fmt.Errorf("invalid runtime descriptor: %w", err)
+	}
 	// Validate storage configuration.
 	if err = registry.VerifyRegisterRuntimeStorageArgs(rt, logger); err != nil {
 		return nil, nil, fmt.Errorf("invalid runtime storage configuration: %w", err)
@@ -536,6 +568,9 @@ func init() {
 	// Init Admission policy flags.
 	runtimeFlags.String(CfgAdmissionPolicy, "", "What type of node admission policy to have")
 	runtimeFlags.StringSlice(CfgAdmissionPolicyEntityWhitelist, nil, "For entity whitelist node admission policies, the IDs (hex) of the entities in the whitelist")
+
+	// Init Staking flags.
+	runtimeFlags.StringToString(CfgStakingThreshold, nil, "Additional staking threshold for this runtime (<kind>=<value>)")
 
 	_ = viper.BindPFlags(runtimeFlags)
 	runtimeFlags.AddFlagSet(cmdSigner.Flags)

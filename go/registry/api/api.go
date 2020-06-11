@@ -17,6 +17,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
 	"github.com/oasisprotocol/oasis-core/go/common/node"
 	"github.com/oasisprotocol/oasis-core/go/common/pubsub"
+	"github.com/oasisprotocol/oasis-core/go/common/quantity"
 	"github.com/oasisprotocol/oasis-core/go/common/sgx/ias"
 	"github.com/oasisprotocol/oasis-core/go/consensus/api/transaction"
 	epochtime "github.com/oasisprotocol/oasis-core/go/epochtime/api"
@@ -1353,29 +1354,56 @@ func StakeClaimForRuntime(id common.Namespace) staking.StakeClaim {
 }
 
 // StakeThresholdsForNode returns the staking thresholds for the given node.
-func StakeThresholdsForNode(n *node.Node) (thresholds []staking.ThresholdKind) {
+//
+// The passed list of runtimes must be runtime descriptors for all runtimes that the node is
+// registered for in the same order as they appear in the node descriptor (for example as returned
+// by the VerifyRegisterNodeArgs function).
+func StakeThresholdsForNode(n *node.Node, rts []*Runtime) (thresholds []staking.StakeThreshold) {
+	var rtKinds []staking.ThresholdKind
 	if n.HasRoles(node.RoleKeyManager) {
-		thresholds = append(thresholds, staking.KindNodeKeyManager)
+		thresholds = append(thresholds, staking.GlobalStakeThreshold(staking.KindNodeKeyManager))
+		rtKinds = append(rtKinds, staking.KindNodeKeyManager)
 	}
 	if n.HasRoles(node.RoleComputeWorker) {
-		thresholds = append(thresholds, staking.KindNodeCompute)
+		thresholds = append(thresholds, staking.GlobalStakeThreshold(staking.KindNodeCompute))
+		rtKinds = append(rtKinds, staking.KindNodeCompute)
 	}
 	if n.HasRoles(node.RoleStorageWorker) {
-		thresholds = append(thresholds, staking.KindNodeStorage)
+		thresholds = append(thresholds, staking.GlobalStakeThreshold(staking.KindNodeStorage))
+		rtKinds = append(rtKinds, staking.KindNodeStorage)
 	}
 	if n.HasRoles(node.RoleValidator) {
-		thresholds = append(thresholds, staking.KindNodeValidator)
+		thresholds = append(thresholds, staking.GlobalStakeThreshold(staking.KindNodeValidator))
 	}
+
+	// Determine the maximum runtime-specific thresholds (if any) and add them to the returned
+	// stake thresholds.
+	maxThresholds := make(map[staking.ThresholdKind]quantity.Quantity)
+	for i, rt := range rts {
+		if !n.Runtimes[i].ID.Equal(&rt.ID) {
+			panic(fmt.Errorf("registry: mismatched runtime order"))
+		}
+
+		for _, k := range rtKinds {
+			if v, q := rt.Staking.Thresholds[k], maxThresholds[k]; v.Cmp(&q) > 0 {
+				maxThresholds[k] = v
+			}
+		}
+	}
+	for _, t := range maxThresholds {
+		thresholds = append(thresholds, staking.StakeThreshold{Constant: t.Clone()})
+	}
+
 	return
 }
 
 // StakeThresholdsForRuntime returns the staking thresholds for the given runtime.
-func StakeThresholdsForRuntime(rt *Runtime) (thresholds []staking.ThresholdKind) {
+func StakeThresholdsForRuntime(rt *Runtime) (thresholds []staking.StakeThreshold) {
 	switch rt.Kind {
 	case KindCompute:
-		thresholds = append(thresholds, staking.KindRuntimeCompute)
+		thresholds = append(thresholds, staking.GlobalStakeThreshold(staking.KindRuntimeCompute))
 	case KindKeyManager:
-		thresholds = append(thresholds, staking.KindRuntimeKeyManager)
+		thresholds = append(thresholds, staking.GlobalStakeThreshold(staking.KindRuntimeKeyManager))
 	default:
 		panic(fmt.Errorf("registry: unknown runtime kind: %s", rt.Kind))
 	}

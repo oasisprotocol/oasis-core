@@ -1,13 +1,13 @@
 {
   "params": {
     "thresholds": {
-      "0": "0",
-      "1": "0",
-      "2": "0",
-      "3": "0",
-      "4": "0",
-      "5": "1000",
-      "6": "1000"
+      "entity": "0",
+      "node-validator": "0",
+      "node-compute": "0",
+      "node-storage": "0",
+      "node-keymanager": "0",
+      "runtime-compute": "1000",
+      "runtime-keymanager": "1000"
     }
   }
 }
