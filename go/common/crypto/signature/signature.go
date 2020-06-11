@@ -225,8 +225,7 @@ func (k PublicKey) IsBlacklisted() bool {
 
 // Blacklist adds the public key to the blacklist.
 func (k PublicKey) Blacklist() error {
-	_, loaded := blacklistedPublicKeys.LoadOrStore(k, true)
-	if loaded {
+	if _, loaded := blacklistedPublicKeys.LoadOrStore(k, true); loaded {
 		return fmt.Errorf("signature: public key '%s' already in blacklist", k)
 	}
 	return nil
