@@ -13,11 +13,11 @@ import (
 
 func TestNakedSandbox(t *testing.T) {
 	t.Run("BindData", func(t *testing.T) {
-		testBindData(t, NewNaked)
+		testBindData(t, NewNaked, "")
 	})
 }
 
-func testBindData(t *testing.T, factory func(Config) (Process, error)) {
+func testBindData(t *testing.T, factory func(Config) (Process, error), sandboxBinary string) {
 	require := require.New(t)
 
 	dir, err := ioutil.TempDir("", "oasis-runtime-host-sandbox-test_")
@@ -34,7 +34,8 @@ func testBindData(t *testing.T, factory func(Config) (Process, error)) {
 		BindData: map[string]io.Reader{
 			boundPath: bytes.NewBufferString("hello world"),
 		},
-		Stdout: &stdout,
+		Stdout:            &stdout,
+		SandboxBinaryPath: sandboxBinary,
 	})
 	require.NoError(err, "NewNaked")
 
