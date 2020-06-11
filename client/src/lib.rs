@@ -3,10 +3,9 @@
 #[cfg(not(target_env = "sgx"))]
 #[macro_use]
 pub mod grpc;
+pub mod enclave_rpc;
 #[cfg(not(target_env = "sgx"))]
 pub mod node;
-// TODO: Rename "rpc" module to "enclave_rpc" or similar.
-pub mod rpc;
 #[cfg(not(target_env = "sgx"))]
 pub mod transaction;
 
@@ -14,6 +13,6 @@ pub mod transaction;
 pub type BoxFuture<T> = Box<dyn futures::Future<Item = T, Error = anyhow::Error> + Send>;
 
 // Re-exports.
-pub use self::rpc::RpcClient;
+pub use self::enclave_rpc::RpcClient;
 #[cfg(not(target_env = "sgx"))]
 pub use self::{node::Node, transaction::TxnClient};
