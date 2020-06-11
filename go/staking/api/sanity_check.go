@@ -84,10 +84,19 @@ func SanityCheckAccount(
 
 // SanityCheckDelegations examines an account's delegations.
 func SanityCheckDelegations(addr Address, account *Account, delegations map[Address]*Delegation) error {
+	if !addr.IsValid() {
+		return fmt.Errorf("staking: sanity check failed: delegation to %s: address is invalid", addr)
+	}
 	var shares quantity.Quantity
 	var numDelegations uint64
-	for _, d := range delegations {
-		_ = shares.Add(&d.Shares)
+	for delegatorAddr, delegation := range delegations {
+		if !delegatorAddr.IsValid() {
+			return fmt.Errorf(
+				"staking: sanity check failed: delegation from %s to %s: delegator address is invalid",
+				delegatorAddr, addr,
+			)
+		}
+		_ = shares.Add(&delegation.Shares)
 		numDelegations++
 	}
 
@@ -115,11 +124,20 @@ func SanityCheckDelegations(addr Address, account *Account, delegations map[Addr
 
 // SanityCheckDebondingDelegations examines an account's debonding delegations.
 func SanityCheckDebondingDelegations(addr Address, account *Account, delegations map[Address][]*DebondingDelegation) error {
+	if !addr.IsValid() {
+		return fmt.Errorf("staking: sanity check failed: debonding delegation to %s: address is invalid", addr)
+	}
 	var shares quantity.Quantity
 	var numDebondingDelegations uint64
-	for _, dels := range delegations {
-		for _, d := range dels {
-			_ = shares.Add(&d.Shares)
+	for delegatorAddr, dels := range delegations {
+		if !delegatorAddr.IsValid() {
+			return fmt.Errorf(
+				"staking: sanity check failed: debonding delegation from %s to %s: delegator address is invalid",
+				delegatorAddr, addr,
+			)
+		}
+		for _, delegation := range dels {
+			_ = shares.Add(&delegation.Shares)
 			numDebondingDelegations++
 		}
 	}

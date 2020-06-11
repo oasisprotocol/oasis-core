@@ -73,6 +73,9 @@ func (app *stakingApplication) initLedger(
 		if acct == nil {
 			return fmt.Errorf("tendermint/staking: genesis ledger account %s is nil", addr)
 		}
+		if !addr.IsValid() {
+			return fmt.Errorf("tendermint/staking: genesis ledger account %s: address is invalid", addr)
+		}
 		if !acct.General.Balance.IsValid() {
 			ctx.Logger().Error("InitChain: invalid genesis general balance",
 				"address", addr,
@@ -156,10 +159,23 @@ func (app *stakingApplication) initTotalSupply(
 
 func (app *stakingApplication) initDelegations(ctx *abciAPI.Context, state *stakingState.MutableState, st *staking.Genesis) error {
 	for escrowAddr, delegations := range st.Delegations {
+		if !escrowAddr.IsValid() {
+			return fmt.Errorf("tendermint/staking: failed to set genesis delegations to %s: address is invalid",
+				escrowAddr,
+			)
+		}
 		delegationShares := quantity.NewQuantity()
 		for delegatorAddr, delegation := range delegations {
+			if !delegatorAddr.IsValid() {
+				return fmt.Errorf(
+					"tendermint/staking: failed to set genesis delegation from %s to %s: delegator address is invalid",
+					delegatorAddr, escrowAddr,
+				)
+			}
 			if delegation == nil {
-				return fmt.Errorf("tendermint/staking: genesis delegation to %s from %s is nil", escrowAddr, delegatorAddr)
+				return fmt.Errorf("tendermint/staking: genesis delegation from %s to %s is nil",
+					delegatorAddr, escrowAddr,
+				)
 			}
 			if err := delegationShares.Add(&delegation.Shares); err != nil {
 				ctx.Logger().Error("InitChain: failed to add delegation shares",
@@ -196,12 +212,25 @@ func (app *stakingApplication) initDelegations(ctx *abciAPI.Context, state *stak
 
 func (app *stakingApplication) initDebondingDelegations(ctx *abciAPI.Context, state *stakingState.MutableState, st *staking.Genesis) error {
 	for escrowAddr, delegators := range st.DebondingDelegations {
+		if !escrowAddr.IsValid() {
+			return fmt.Errorf("tendermint/staking: failed to set genesis debonding delegations to %s: address is invalid",
+				escrowAddr,
+			)
+		}
 		debondingShares := quantity.NewQuantity()
 		for delegatorAddr, delegations := range delegators {
+			if !delegatorAddr.IsValid() {
+				return fmt.Errorf(
+					"tendermint/staking: failed to set genesis debonding delegation from %s to %s: delegator address is invalid",
+					delegatorAddr, escrowAddr,
+				)
+			}
 			for idx, delegation := range delegations {
+
 				if delegation == nil {
-					return fmt.Errorf("tendermint/staking: genesis debonding delegation to %s from %s index %d is nil",
-						escrowAddr, delegatorAddr, idx,
+					return fmt.Errorf(
+						"tendermint/staking: genesis debonding delegation from %s to %s with index %d is nil",
+						delegatorAddr, escrowAddr, idx,
 					)
 				}
 				if err := debondingShares.Add(&delegation.Shares); err != nil {
