@@ -39,7 +39,7 @@ const (
 	LatestNodeDescriptorVersion = 1
 
 	// Minimum and maximum descriptor versions that are allowed.
-	minNodeDescriptorVersion = 0
+	minNodeDescriptorVersion = 1
 	maxNodeDescriptorVersion = LatestNodeDescriptorVersion
 )
 

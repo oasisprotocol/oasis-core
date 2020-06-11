@@ -30,6 +30,7 @@ var (
 
 func init() {
 	entitySigner = memory.NewTestSigner(testSigningSeed)
+	TestEntity.DescriptorVersion = entity.LatestEntityDescriptorVersion
 	TestEntity.ID = entitySigner.Public()
 }
 
