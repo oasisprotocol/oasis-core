@@ -1,7 +1,7 @@
 //! Methods exported to remote clients via EnclaveRPC.
 use anyhow::Result;
 use oasis_core_keymanager_api_common::*;
-use oasis_core_runtime::rpc::Context as RpcContext;
+use oasis_core_runtime::enclave_rpc::Context as RpcContext;
 
 use crate::{kdf::Kdf, policy::Policy};
 

@@ -21,14 +21,14 @@ use crate::{
         logger::get_logger,
         roothash::{Block, ComputeResultsHeader, COMPUTE_RESULTS_HEADER_CONTEXT},
     },
-    protocol::{Protocol, ProtocolUntrustedLocalStorage},
-    rak::RAK,
-    rpc::{
+    enclave_rpc::{
         demux::Demux as RpcDemux,
         dispatcher::Dispatcher as RpcDispatcher,
         types::{Message as RpcMessage, Request as RpcRequest},
         Context as RpcContext,
     },
+    protocol::{Protocol, ProtocolUntrustedLocalStorage},
+    rak::RAK,
     storage::{
         mkvs::{
             sync::{HostReadSyncer, NoopReadSyncer},

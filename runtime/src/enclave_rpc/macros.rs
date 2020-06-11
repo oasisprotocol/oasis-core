@@ -19,12 +19,12 @@ macro_rules! register_runtime_rpc_methods {
     ) => {
         $(
             $rpc_dispatcher.add_method(
-                $crate::rpc::dispatcher::Method::new(
-                    $crate::rpc::dispatcher::MethodDescriptor {
+                $crate::enclave_rpc::dispatcher::Method::new(
+                    $crate::enclave_rpc::dispatcher::MethodDescriptor {
                         name: stringify!($method_name).to_owned(),
                     },
                     |args: &$arguments_type,
-                     ctx: &mut $crate::rpc::context::Context|
+                     ctx: &mut $crate::enclave_rpc::context::Context|
                         -> ::anyhow::Result<$output_type> {
                         $method_name(args, ctx)
                     },

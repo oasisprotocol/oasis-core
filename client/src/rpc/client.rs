@@ -24,11 +24,11 @@ use tokio_executor::spawn;
 use oasis_core_runtime::common::runtime::RuntimeId;
 use oasis_core_runtime::{
     common::{cbor, sgx::avr::EnclaveIdentity},
-    protocol::Protocol,
-    rpc::{
+    enclave_rpc::{
         session::{Builder, Session},
         types,
     },
+    protocol::Protocol,
 };
 
 #[cfg(not(target_env = "sgx"))]
@@ -400,8 +400,8 @@ mod test {
     use tokio::runtime::Runtime;
 
     use oasis_core_runtime::{
+        enclave_rpc::{demux::Demux, session, types},
         rak::RAK,
-        rpc::{demux::Demux, session, types},
     };
 
     use super::{super::transport::Transport, RpcClient};
