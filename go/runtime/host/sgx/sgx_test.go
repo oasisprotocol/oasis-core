@@ -37,6 +37,8 @@ func skipIfMissingDeps(t *testing.T) {
 }
 
 func TestProvisionerSGX(t *testing.T) {
+	const bwrapPath = "/usr/bin/bwrap" // Sensible systems only.
+
 	skipIfMissingDeps(t)
 
 	require := require.New(t)
@@ -63,6 +65,7 @@ func TestProvisionerSGX(t *testing.T) {
 				IAS:                   ias,
 				RuntimeAttestInterval: 2 * time.Second,
 				InsecureNoSandbox:     true,
+				SandboxBinaryPath:     bwrapPath,
 			})
 		}, extraTests)
 	})
@@ -73,6 +76,7 @@ func TestProvisionerSGX(t *testing.T) {
 				LoaderPath:            envRuntimeLoaderPath,
 				RuntimeAttestInterval: 2 * time.Second,
 				IAS:                   ias,
+				SandboxBinaryPath:     bwrapPath,
 			})
 		}, extraTests)
 	})

@@ -16,9 +16,9 @@ use oasis_core_client::{create_rpc_api_client, BoxFuture, RpcClient};
 use oasis_core_keymanager_api_common::*;
 use oasis_core_runtime::{
     common::{cbor, runtime::RuntimeId, sgx::avr::EnclaveIdentity},
+    enclave_rpc::session,
     protocol::Protocol,
     rak::RAK,
-    rpc::session,
 };
 
 use super::KeyManagerClient;

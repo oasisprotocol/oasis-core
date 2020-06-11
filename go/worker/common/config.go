@@ -2,6 +2,7 @@ package common
 
 import (
 	"fmt"
+	"os"
 	"time"
 
 	flag "github.com/spf13/pflag"
@@ -43,6 +44,7 @@ var (
 	// paths.
 	CfgRuntimeSGXSignatures = "worker.runtime.sgx.signatures"
 
+	cfgSandboxBinary        = "worker.runtime.sandbox_binary"
 	cfgStorageCommitTimeout = "worker.storage_commit_timeout"
 
 	// Flags has the configuration flags.
@@ -146,6 +148,7 @@ func NewConfig(ias ias.Endpoint) (*Config, error) {
 
 		// Register provisioners based on the configured provisioner.
 		var insecureNoSandbox bool
+		sandboxBinary := viper.GetString(cfgSandboxBinary)
 		rh.Provisioners = make(map[node.TEEHardware]runtimeHost.Provisioner)
 		switch p := viper.GetString(CfgRuntimeProvisioner); p {
 		case RuntimeProvisionerMock:
@@ -165,9 +168,15 @@ func NewConfig(ias ias.Endpoint) (*Config, error) {
 
 			fallthrough
 		case RuntimeProvisionerSandboxed:
+			if !insecureNoSandbox {
+				if _, err = os.Stat(sandboxBinary); err != nil {
+					return nil, fmt.Errorf("failed to stat sandbox binary: %w", err)
+				}
+			}
 			// Sandboxed provisioner, can be used with no TEE or with Intel SGX.
 			rh.Provisioners[node.TEEHardwareInvalid], err = hostSandbox.New(hostSandbox.Config{
 				InsecureNoSandbox: insecureNoSandbox,
+				SandboxBinaryPath: sandboxBinary,
 			})
 			if err != nil {
 				return nil, fmt.Errorf("failed to create runtime provisioner: %w", err)
@@ -176,6 +185,7 @@ func NewConfig(ias ias.Endpoint) (*Config, error) {
 			rh.Provisioners[node.TEEHardwareIntelSGX], err = hostSgx.New(hostSgx.Config{
 				LoaderPath:        viper.GetString(CfgRuntimeSGXLoader),
 				IAS:               ias,
+				SandboxBinaryPath: sandboxBinary,
 				InsecureNoSandbox: insecureNoSandbox,
 			})
 			if err != nil {
@@ -234,6 +244,8 @@ func init() {
 	Flags.String(CfgRuntimeSGXLoader, "", "(for SGX runtimes) Path to SGXS runtime loader binary")
 	Flags.StringToString(CfgRuntimePaths, nil, "Paths to runtime resources (format: <rt1-ID>=<path>,<rt2-ID>=<path>)")
 	Flags.StringToString(CfgRuntimeSGXSignatures, nil, "(for SGX runtimes) Paths to signatures (format: <rt1-ID>=<path>,<rt2-ID>=<path>")
+
+	Flags.String(cfgSandboxBinary, "/usr/bin/bwrap", "Path to the sandbox binary (bubblewrap)")
 
 	Flags.Duration(cfgStorageCommitTimeout, 5*time.Second, "Storage commit timeout")
 

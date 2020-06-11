@@ -51,12 +51,12 @@ use sgx_isa::{AttributesFlags, Report};
 #[macro_use]
 pub mod common;
 pub mod dispatcher;
+pub mod enclave_rpc;
 pub mod executor;
 pub mod init;
 pub mod macros;
 pub mod protocol;
 pub mod rak;
-pub mod rpc;
 pub mod storage;
 pub mod tracing;
 pub mod transaction;
@@ -121,8 +121,8 @@ pub struct BuildInfo {
 
 // Re-exports.
 pub use self::{
+    enclave_rpc::{demux::Demux as RpcDemux, dispatcher::Dispatcher as RpcDispatcher},
     init::start_runtime,
     protocol::Protocol,
-    rpc::{demux::Demux as RpcDemux, dispatcher::Dispatcher as RpcDispatcher},
     transaction::dispatcher::{Dispatcher as TxnDispatcher, MethodDispatcher as TxnMethDispatcher},
 };

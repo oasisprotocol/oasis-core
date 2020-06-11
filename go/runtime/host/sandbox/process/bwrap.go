@@ -16,8 +16,6 @@ const (
 
 	sandboxMountBinary = "/entrypoint"
 	sandboxMountLibDir = "/usr/lib"
-
-	bwrapPath = "/usr/bin/bwrap"
 )
 
 type bwrap struct {
@@ -164,7 +162,7 @@ func NewBubbleWrap(cfg Config) (Process, error) {
 
 	// Start our sandbox.
 	n, err := NewNaked(Config{
-		Path:   bwrapPath,
+		Path:   cfg.SandboxBinaryPath,
 		Args:   cliArgs,
 		Stdout: cfg.Stdout,
 		Stderr: cfg.Stderr,

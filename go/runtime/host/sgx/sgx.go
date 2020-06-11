@@ -57,6 +57,9 @@ type Config struct {
 	// a default will be used.
 	RuntimeAttestInterval time.Duration
 
+	// SandboxBinaryPath is the path to the sandbox support binary.
+	SandboxBinaryPath string
+
 	// InsecureNoSandbox disables the sandbox and runs the loader directly.
 	InsecureNoSandbox bool
 }
@@ -174,6 +177,7 @@ func (s *sgxProvisioner) getSandboxConfig(rtCfg host.Config, socketPath string, 
 			runtimePath:   bytes.NewReader(sgxs),
 			signaturePath: bytes.NewReader(sig),
 		},
+		SandboxBinaryPath: s.cfg.SandboxBinaryPath,
 	}, nil
 }
 

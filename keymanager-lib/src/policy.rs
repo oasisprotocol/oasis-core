@@ -19,7 +19,7 @@ use oasis_core_runtime::{
             seal::{seal, unseal},
         },
     },
-    rpc::Context as RpcContext,
+    enclave_rpc::Context as RpcContext,
     runtime_context,
     storage::StorageContext,
 };

@@ -5,13 +5,12 @@ use anyhow::Result;
 use oasis_core_keymanager_api_common::*;
 use oasis_core_runtime::{
     dispatcher::Initializer,
-    rak::RAK,
-    register_runtime_rpc_methods,
-    rpc::{
+    enclave_rpc::{
         dispatcher::{Method as RpcMethod, MethodDescriptor as RpcMethodDescriptor},
         Context as RpcContext,
     },
-    Protocol, RpcDemux, RpcDispatcher, TxnDispatcher,
+    rak::RAK,
+    register_runtime_rpc_methods, Protocol, RpcDemux, RpcDispatcher, TxnDispatcher,
 };
 
 use crate::{context, kdf::Kdf, policy::Policy};

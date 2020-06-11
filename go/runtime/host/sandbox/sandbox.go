@@ -47,6 +47,9 @@ type Config struct {
 	// default logger will be created.
 	Logger *logging.Logger
 
+	// SandboxBinaryPath is the path to the sandbox support binary.
+	SandboxBinaryPath string
+
 	// InsecureNoSandbox disables the sandbox and runs the runtime binary directly.
 	InsecureNoSandbox bool
 }
@@ -492,12 +495,13 @@ func (r *sandboxedRuntime) manager() {
 func New(cfg Config) (host.Provisioner, error) {
 	// Use a default GetSandboxConfig if none was provided.
 	if cfg.GetSandboxConfig == nil {
-		cfg.GetSandboxConfig = func(cfg host.Config, socketPath string, runtimeDir string) (process.Config, error) {
+		cfg.GetSandboxConfig = func(hostCfg host.Config, socketPath string, runtimeDir string) (process.Config, error) {
 			return process.Config{
-				Path: cfg.Path,
+				Path: hostCfg.Path,
 				Env: map[string]string{
 					"OASIS_WORKER_HOST": socketPath,
 				},
+				SandboxBinaryPath: cfg.SandboxBinaryPath,
 			}, nil
 		}
 	}

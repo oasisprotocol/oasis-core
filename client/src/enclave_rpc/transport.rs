@@ -7,7 +7,7 @@ use io_context::Context;
 
 #[cfg(not(target_env = "sgx"))]
 use oasis_core_runtime::common::runtime::RuntimeId;
-use oasis_core_runtime::{common::cbor, protocol::Protocol, rpc::types, types::Body};
+use oasis_core_runtime::{common::cbor, enclave_rpc::types, protocol::Protocol, types::Body};
 
 #[cfg(not(target_env = "sgx"))]
 use super::api::{CallEnclaveRequest, EnclaveRPCClient};

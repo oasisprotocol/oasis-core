@@ -39,6 +39,9 @@ type Config struct {
 	// process' os.Stderr will be used.
 	Stderr io.Writer
 
+	// SandboxBinaryPath is the path to the sandbox support binary.
+	SandboxBinaryPath string
+
 	extraFiles []*os.File
 }
 
