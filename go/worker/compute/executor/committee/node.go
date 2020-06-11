@@ -519,7 +519,7 @@ func (n *Node) startProcessingBatchLocked(
 			n.logger.Error("batch processing aborted by context, restarting runtime")
 
 			// Restart the runtime, so we can start processing the next batch.
-			if err = rt.Restart(n.ctx); err != nil {
+			if err = rt.Restart(n.ctx, false); err != nil {
 				n.logger.Error("failed to restart the runtime",
 					"err", err,
 				)

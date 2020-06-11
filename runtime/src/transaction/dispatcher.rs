@@ -1,7 +1,13 @@
 //! Runtime transaction batch dispatcher.
-use std::collections::HashMap;
+use std::{
+    collections::HashMap,
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc,
+    },
+};
 
-use anyhow::{Context as AnyContext, Result};
+use anyhow::{anyhow, Context as AnyContext, Result};
 use serde::{de::DeserializeOwned, Serialize};
 use thiserror::Error;
 
@@ -172,9 +178,11 @@ pub trait Dispatcher {
         &self,
         batch: &TxnBatch,
         ctx: Context,
-    ) -> (TxnBatch, Vec<Tags>, Vec<RoothashMessage>);
+    ) -> Result<(TxnBatch, Vec<Tags>, Vec<RoothashMessage>)>;
     /// Invoke the finalizer (if any).
     fn finalize(&self, new_storage_root: Hash);
+    /// Configure abort batch flag.
+    fn set_abort_batch_flag(&mut self, abort_batch: Arc<AtomicBool>);
 }
 
 /// No-op dispatcher.
@@ -194,14 +202,18 @@ impl Dispatcher for NoopDispatcher {
         &self,
         _batch: &TxnBatch,
         ctx: Context,
-    ) -> (TxnBatch, Vec<Tags>, Vec<RoothashMessage>) {
+    ) -> Result<(TxnBatch, Vec<Tags>, Vec<RoothashMessage>)> {
         let outputs = TxnBatch::new(Vec::new());
         let (tags, roothash_messages) = ctx.close();
-        (outputs, tags, roothash_messages)
+        Ok((outputs, tags, roothash_messages))
     }
 
     fn finalize(&self, _new_storage_root: Hash) {
         // Nothing to do here.
+    }
+
+    fn set_abort_batch_flag(&mut self, _abort_batch: Arc<AtomicBool>) {
+        // Nothing to abort.
     }
 }
 
@@ -219,6 +231,8 @@ pub struct MethodDispatcher {
     ctx_initializer: Option<Box<dyn ContextInitializer>>,
     /// Registered finalizer.
     finalizer: Option<Box<dyn Finalizer>>,
+    /// Abort batch flag.
+    abort_batch: Option<Arc<AtomicBool>>,
 }
 
 impl MethodDispatcher {
@@ -229,6 +243,7 @@ impl MethodDispatcher {
             batch_handler: None,
             ctx_initializer: None,
             finalizer: None,
+            abort_batch: None,
         }
     }
 
@@ -292,7 +307,7 @@ impl Dispatcher for MethodDispatcher {
         &self,
         batch: &TxnBatch,
         mut ctx: Context,
-    ) -> (TxnBatch, Vec<Tags>, Vec<RoothashMessage>) {
+    ) -> Result<(TxnBatch, Vec<Tags>, Vec<RoothashMessage>)> {
         if let Some(ref ctx_init) = self.ctx_initializer {
             ctx_init.init(&mut ctx);
         }
@@ -303,15 +318,20 @@ impl Dispatcher for MethodDispatcher {
         }
 
         // Process batch.
-        let outputs = TxnBatch::new(
-            batch
-                .iter()
-                .map(|call| {
-                    ctx.start_transaction();
-                    self.dispatch(call, &mut ctx)
-                })
-                .collect(),
-        );
+        let mut vec = Vec::new();
+        for call in batch.iter() {
+            if self
+                .abort_batch
+                .as_ref()
+                .map(|b| b.load(Ordering::SeqCst))
+                .unwrap_or(false)
+            {
+                return Err(anyhow!("batch aborted"));
+            }
+            ctx.start_transaction();
+            vec.push(self.dispatch(call, &mut ctx));
+        }
+        let outputs = TxnBatch::new(vec);
 
         // Invoke end batch handler.
         if let Some(ref handler) = self.batch_handler {
@@ -319,13 +339,18 @@ impl Dispatcher for MethodDispatcher {
         }
 
         let (tags, roothash_messages) = ctx.close();
-        (outputs, tags, roothash_messages)
+        Ok((outputs, tags, roothash_messages))
     }
 
     fn finalize(&self, new_storage_root: Hash) {
         if let Some(ref finalizer) = self.finalizer {
             finalizer.finalize(new_storage_root);
         }
+    }
+
+    /// Configure abort batch flag.
+    fn set_abort_batch_flag(&mut self, abort_batch: Arc<AtomicBool>) {
+        self.abort_batch = Some(abort_batch);
     }
 }
 

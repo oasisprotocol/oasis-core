@@ -74,7 +74,8 @@ func (p *provisioner) NewRuntime(ctx context.Context, cfg host.Config) (host.Run
 
 // restartRequest is a request to the runtime manager goroutine to restart the runtime.
 type restartRequest struct {
-	ch chan<- error
+	ch    chan<- error
+	force bool
 }
 
 type sandboxedRuntime struct {
@@ -148,11 +149,11 @@ func (r *sandboxedRuntime) Start() error {
 }
 
 // Implements host.Runtime.
-func (r *sandboxedRuntime) Restart(ctx context.Context) error {
+func (r *sandboxedRuntime) Restart(ctx context.Context, force bool) error {
 	// Send internal request to the manager goroutine.
 	ch := make(chan error, 1)
 	select {
-	case r.ctrlCh <- &restartRequest{ch: ch}:
+	case r.ctrlCh <- &restartRequest{ch: ch, force: force}:
 	case <-ctx.Done():
 		return ctx.Err()
 	}
@@ -345,12 +346,12 @@ func (r *sandboxedRuntime) handleRestartRequest(rq *restartRequest) error {
 	defer cancel()
 
 	response, err := r.conn.Call(ctx, &protocol.Body{RuntimeAbortRequest: &protocol.Empty{}})
-	if err == nil && response.RuntimeAbortResponse != nil {
-		// Successful response, assume runtime is done.
+	if err == nil && response.RuntimeAbortResponse != nil && !rq.force {
+		// Successful response, and no force restart required.
 		return nil
 	}
 
-	r.logger.Warn("graceful interrupt failed, killing runtime")
+	r.logger.Warn("restarting runtime", "force_restart", rq.force, "abbort_err", err, "abort_resp", response)
 
 	// Failed to gracefully interrupt the runtime. Kill the runtime and it will be automatically
 	// restarted by the manager after it dies.

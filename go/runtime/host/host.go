@@ -53,7 +53,7 @@ type Runtime interface {
 	Start() error
 
 	// Restart attempts to restart a runtime so that it will be ready to service new requests.
-	Restart(ctx context.Context) error
+	Restart(ctx context.Context, force bool) error
 
 	// Stop signals the provisioned runtime to stop.
 	Stop()

@@ -109,7 +109,7 @@ func (r *runtime) Start() error {
 }
 
 // Implements host.Runtime.
-func (r *runtime) Restart(ctx context.Context) error {
+func (r *runtime) Restart(ctx context.Context, force bool) error {
 	return nil
 }
 
