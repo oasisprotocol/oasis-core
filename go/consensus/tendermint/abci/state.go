@@ -22,6 +22,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/consensus/tendermint/api"
 	epochtime "github.com/oasisprotocol/oasis-core/go/epochtime/api"
 	genesis "github.com/oasisprotocol/oasis-core/go/genesis/api"
+	staking "github.com/oasisprotocol/oasis-core/go/staking/api"
 	storage "github.com/oasisprotocol/oasis-core/go/storage/api"
 	storageDB "github.com/oasisprotocol/oasis-core/go/storage/database"
 	"github.com/oasisprotocol/oasis-core/go/storage/mkvs"
@@ -59,9 +60,10 @@ type applicationState struct { // nolint: maligned
 	haltMode        bool
 	haltEpochHeight epochtime.EpochTime
 
-	minGasPrice    quantity.Quantity
-	ownTxSigner    signature.PublicKey
-	disableCheckTx bool
+	minGasPrice        quantity.Quantity
+	ownTxSigner        signature.PublicKey
+	ownTxSignerAddress staking.Address
+	disableCheckTx     bool
 
 	metricsClosedCh chan struct{}
 }
@@ -200,6 +202,10 @@ func (s *applicationState) MinGasPrice() *quantity.Quantity {
 
 func (s *applicationState) OwnTxSigner() signature.PublicKey {
 	return s.ownTxSigner
+}
+
+func (s *applicationState) OwnTxSignerAddress() staking.Address {
+	return s.ownTxSignerAddress
 }
 
 func (s *applicationState) inHaltEpoch(ctx *api.Context) bool {
@@ -468,21 +474,22 @@ func newApplicationState(ctx context.Context, cfg *ApplicationConfig) (*applicat
 	ctx, cancelCtx := context.WithCancel(ctx)
 
 	s := &applicationState{
-		logger:          logging.GetLogger("abci-mux/state"),
-		ctx:             ctx,
-		cancelCtx:       cancelCtx,
-		deliverTxTree:   deliverTxTree,
-		checkTxTree:     checkTxTree,
-		stateRoot:       *stateRoot,
-		storage:         ldb,
-		statePruner:     statePruner,
-		prunerClosedCh:  make(chan struct{}),
-		prunerNotifyCh:  channels.NewRingChannel(1),
-		haltEpochHeight: cfg.HaltEpochHeight,
-		minGasPrice:     minGasPrice,
-		ownTxSigner:     cfg.OwnTxSigner,
-		disableCheckTx:  cfg.DisableCheckTx,
-		metricsClosedCh: make(chan struct{}),
+		logger:             logging.GetLogger("abci-mux/state"),
+		ctx:                ctx,
+		cancelCtx:          cancelCtx,
+		deliverTxTree:      deliverTxTree,
+		checkTxTree:        checkTxTree,
+		stateRoot:          *stateRoot,
+		storage:            ldb,
+		statePruner:        statePruner,
+		prunerClosedCh:     make(chan struct{}),
+		prunerNotifyCh:     channels.NewRingChannel(1),
+		haltEpochHeight:    cfg.HaltEpochHeight,
+		minGasPrice:        minGasPrice,
+		ownTxSigner:        cfg.OwnTxSigner,
+		ownTxSignerAddress: staking.NewAddress(cfg.OwnTxSigner),
+		disableCheckTx:     cfg.DisableCheckTx,
+		metricsClosedCh:    make(chan struct{}),
 	}
 
 	// Refresh consensus parameters when loading state if we are past genesis.

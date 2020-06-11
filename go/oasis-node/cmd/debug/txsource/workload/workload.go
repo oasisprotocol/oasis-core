@@ -28,16 +28,29 @@ const (
 )
 
 // FundAccountFromTestEntity funds an account from test entity.
-func FundAccountFromTestEntity(ctx context.Context, logger *logging.Logger, cnsc consensus.ClientBackend, to signature.PublicKey) error {
+func FundAccountFromTestEntity(
+	ctx context.Context,
+	logger *logging.Logger,
+	cnsc consensus.ClientBackend,
+	to signature.Signer,
+) error {
 	_, testEntitySigner, _ := entity.TestEntity()
-	return transferFunds(ctx, logger, cnsc, testEntitySigner, to, fundAccountAmount)
+	toAddr := staking.NewAddress(to.Public())
+	return transferFunds(ctx, logger, cnsc, testEntitySigner, toAddr, fundAccountAmount)
 }
 
-func fundSignAndSubmitTx(ctx context.Context, logger *logging.Logger, cnsc consensus.ClientBackend, caller signature.Signer, tx *transaction.Transaction, fundingAccount signature.Signer) error {
+func fundSignAndSubmitTx(
+	ctx context.Context,
+	logger *logging.Logger,
+	cnsc consensus.ClientBackend,
+	caller signature.Signer,
+	tx *transaction.Transaction,
+	fundingAccount signature.Signer,
+) error {
 	// Estimate gas needed if not set.
 	if tx.Fee.Gas == 0 {
 		gas, err := cnsc.EstimateGas(ctx, &consensus.EstimateGasRequest{
-			Caller:      caller.Public(),
+			Signer:      caller.Public(),
 			Transaction: tx,
 		})
 		if err != nil {
@@ -51,7 +64,8 @@ func fundSignAndSubmitTx(ctx context.Context, logger *logging.Logger, cnsc conse
 	if err := tx.Fee.Amount.FromInt64(feeAmount); err != nil {
 		return fmt.Errorf("fee amount from int64: %w", err)
 	}
-	if err := transferFunds(ctx, logger, cnsc, fundingAccount, caller.Public(), feeAmount); err != nil {
+	callerAddr := staking.NewAddress(caller.Public())
+	if err := transferFunds(ctx, logger, cnsc, fundingAccount, callerAddr, feeAmount); err != nil {
 		return fmt.Errorf("account funding failure: %w", err)
 	}
 
@@ -88,7 +102,14 @@ func fundSignAndSubmitTx(ctx context.Context, logger *logging.Logger, cnsc conse
 }
 
 // transferFunds transfer funds between accounts.
-func transferFunds(ctx context.Context, logger *logging.Logger, cnsc consensus.ClientBackend, from signature.Signer, to signature.PublicKey, transferAmount int64) error {
+func transferFunds(
+	ctx context.Context,
+	logger *logging.Logger,
+	cnsc consensus.ClientBackend,
+	from signature.Signer,
+	to staking.Address,
+	transferAmount int64,
+) error {
 	sched := backoff.NewExponentialBackOff()
 	sched.MaxInterval = maxSubmissionRetryInterval
 	sched.MaxElapsedTime = maxSubmissionRetryElapsedTime
@@ -99,10 +120,11 @@ func transferFunds(ctx context.Context, logger *logging.Logger, cnsc consensus.C
 	// Maybe just expose the SignAndSubmit() method in the
 	// consensus.ClientBackend?
 	return backoff.Retry(func() error {
+		fromAddr := staking.NewAddress(from.Public())
 		// Get test entity nonce.
 		nonce, err := cnsc.GetSignerNonce(ctx, &consensus.GetSignerNonceRequest{
-			ID:     from.Public(),
-			Height: consensus.HeightLatest,
+			AccountAddress: fromAddr,
+			Height:         consensus.HeightLatest,
 		})
 		if err != nil {
 			return backoff.Permanent(fmt.Errorf("GetSignerNonce TestEntity error: %w", err))
@@ -120,7 +142,7 @@ func transferFunds(ctx context.Context, logger *logging.Logger, cnsc consensus.C
 		tx := staking.NewTransferTx(nonce, &fee, &transfer)
 		// Estimate fee.
 		gas, err := cnsc.EstimateGas(ctx, &consensus.EstimateGasRequest{
-			Caller:      from.Public(),
+			Signer:      from.Public(),
 			Transaction: tx,
 		})
 		if err != nil {

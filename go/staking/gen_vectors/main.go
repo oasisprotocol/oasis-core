@@ -42,10 +42,11 @@ func main() {
 		for _, nonce := range []uint64{0, 1, 10, 42, 1000, 1_000_000, 10_000_000, math.MaxUint64} {
 			// Valid transfer transactions.
 			transferDst := memorySigner.NewTestSigner("oasis-core staking test vectors: Transfer dst")
+			transferDstAddr := staking.NewAddress(transferDst.Public())
 			for _, amt := range []int64{0, 1000, 10_000_000} {
 				for _, tx := range []*transaction.Transaction{
 					staking.NewTransferTx(nonce, fee, &staking.Transfer{
-						To:     transferDst.Public(),
+						To:     transferDstAddr,
 						Tokens: quantityInt64(amt),
 					}),
 				} {
@@ -66,10 +67,11 @@ func main() {
 
 			// Valid escrow transactions.
 			escrowDst := memorySigner.NewTestSigner("oasis-core staking test vectors: Escrow dst")
+			escrowDstAddr := staking.NewAddress(escrowDst.Public())
 			for _, amt := range []int64{0, 1000, 10_000_000} {
 				for _, tx := range []*transaction.Transaction{
 					staking.NewAddEscrowTx(nonce, fee, &staking.Escrow{
-						Account: escrowDst.Public(),
+						Account: escrowDstAddr,
 						Tokens:  quantityInt64(amt),
 					}),
 				} {
@@ -79,10 +81,11 @@ func main() {
 
 			// Valid reclaim escrow transactions.
 			escrowSrc := memorySigner.NewTestSigner("oasis-core staking test vectors: ReclaimEscrow src")
+			escrowSrcAddr := staking.NewAddress(escrowSrc.Public())
 			for _, amt := range []int64{0, 1000, 10_000_000} {
 				for _, tx := range []*transaction.Transaction{
 					staking.NewReclaimEscrowTx(nonce, fee, &staking.ReclaimEscrow{
-						Account: escrowSrc.Public(),
+						Account: escrowSrcAddr,
 						Shares:  quantityInt64(amt),
 					}),
 				} {

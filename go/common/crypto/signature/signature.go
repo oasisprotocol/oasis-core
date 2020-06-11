@@ -225,8 +225,7 @@ func (k PublicKey) IsBlacklisted() bool {
 
 // Blacklist adds the public key to the blacklist.
 func (k PublicKey) Blacklist() error {
-	_, loaded := blacklistedPublicKeys.LoadOrStore(k, true)
-	if loaded {
+	if _, loaded := blacklistedPublicKeys.LoadOrStore(k, true); loaded {
 		return fmt.Errorf("signature: public key '%s' already in blacklist", k)
 	}
 	return nil
@@ -640,6 +639,15 @@ func VerifyBatch(context Context, messages [][]byte, sigs []Signature) bool {
 	return allOk
 }
 
+// NewPublicKey creates a new public key from the given hex representation or
+// panics.
+func NewPublicKey(hex string) (pk PublicKey) {
+	if err := pk.UnmarshalHex(hex); err != nil {
+		panic(err)
+	}
+	return
+}
+
 // RegisterTestPublicKey registers a hardcoded test public key with the
 // internal public key blacklist.
 func RegisterTestPublicKey(pk PublicKey) {
@@ -675,17 +683,14 @@ func BuildPublicKeyBlacklist(allowTestKeys bool) {
 		// p+1 (=1, order 1).
 		"eeffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7f",
 	} {
-		NewBlacklistedKey(v)
+		NewBlacklistedPublicKey(v)
 	}
 }
 
-// NewBlacklistedKey returns the PublicKey from the given hex or panics.
-// The given key is also added to the blacklist.
-func NewBlacklistedKey(hex string) PublicKey {
-	var pk PublicKey
-	if err := pk.UnmarshalHex(hex); err != nil {
-		panic(err)
-	}
+// NewBlacklistedPublicKey creates a new blacklisted public key from the given
+// hex representation or panics.
+func NewBlacklistedPublicKey(hex string) PublicKey {
+	pk := NewPublicKey(hex)
 
 	if err := pk.Blacklist(); err != nil {
 		panic(err)

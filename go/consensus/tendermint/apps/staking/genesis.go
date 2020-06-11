@@ -6,7 +6,6 @@ import (
 
 	"github.com/tendermint/tendermint/abci/types"
 
-	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	"github.com/oasisprotocol/oasis-core/go/common/quantity"
 	abciAPI "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/api"
 	stakingState "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/apps/staking/state"
@@ -70,62 +69,65 @@ func (app *stakingApplication) initLedger(
 	st *staking.Genesis,
 	totalSupply *quantity.Quantity,
 ) error {
-	for id, v := range st.Ledger {
-		if v == nil {
-			return fmt.Errorf("tendermint/staking: genesis ledger account %s is nil", id)
+	for addr, acct := range st.Ledger {
+		if acct == nil {
+			return fmt.Errorf("tendermint/staking: genesis ledger account %s is nil", addr)
 		}
-		if !v.General.Balance.IsValid() {
+		if !addr.IsValid() {
+			return fmt.Errorf("tendermint/staking: genesis ledger account %s: address is invalid", addr)
+		}
+		if !acct.General.Balance.IsValid() {
 			ctx.Logger().Error("InitChain: invalid genesis general balance",
-				"id", id,
-				"general_balance", v.General.Balance,
+				"address", addr,
+				"general_balance", acct.General.Balance,
 			)
-			return fmt.Errorf("tendermint/staking: invalid genesis general balance")
+			return fmt.Errorf("tendermint/staking: invalid genesis general balance for account %s", addr)
 		}
-		if !v.Escrow.Active.Balance.IsValid() {
+		if !acct.Escrow.Active.Balance.IsValid() {
 			ctx.Logger().Error("InitChain: invalid genesis active escrow balance",
-				"id", id,
-				"escrow_balance", v.Escrow.Active.Balance,
+				"address", addr,
+				"escrow_balance", acct.Escrow.Active.Balance,
 			)
-			return fmt.Errorf("tendermint/staking: invalid genesis active escrow balance")
+			return fmt.Errorf("tendermint/staking: invalid genesis active escrow balance for account %s", addr)
 		}
-		if !v.Escrow.Debonding.Balance.IsValid() {
+		if !acct.Escrow.Debonding.Balance.IsValid() {
 			ctx.Logger().Error("InitChain: invalid genesis debonding escrow balance",
-				"id", id,
-				"debonding_balance", v.Escrow.Debonding.Balance,
+				"address", addr,
+				"debonding_balance", acct.Escrow.Debonding.Balance,
 			)
-			return fmt.Errorf("tendermint/staking: invalid genesis debonding escrow balance")
+			return fmt.Errorf("tendermint/staking: invalid genesis debonding escrow balance for account %s", addr)
 		}
 
 		// Make sure that the stake accumulator is empty as otherwise it could be inconsistent with
 		// what is registered in the genesis block.
-		if len(v.Escrow.StakeAccumulator.Claims) > 0 {
+		if len(acct.Escrow.StakeAccumulator.Claims) > 0 {
 			ctx.Logger().Error("InitChain: non-empty stake accumulator",
-				"id", id,
+				"address", addr,
 			)
-			return fmt.Errorf("tendermint/staking: non-empty stake accumulator in genesis")
+			return fmt.Errorf("tendermint/staking: non-empty stake accumulator in genesis for account %s", addr)
 		}
 
-		if err := totalSupply.Add(&v.General.Balance); err != nil {
+		if err := totalSupply.Add(&acct.General.Balance); err != nil {
 			ctx.Logger().Error("InitChain: failed to add general balance",
 				"err", err,
 			)
 			return fmt.Errorf("tendermint/staking: failed to add general balance: %w", err)
 		}
-		if err := totalSupply.Add(&v.Escrow.Active.Balance); err != nil {
+		if err := totalSupply.Add(&acct.Escrow.Active.Balance); err != nil {
 			ctx.Logger().Error("InitChain: failed to add active escrow balance",
 				"err", err,
 			)
 			return fmt.Errorf("tendermint/staking: failed to add active escrow balance: %w", err)
 		}
-		if err := totalSupply.Add(&v.Escrow.Debonding.Balance); err != nil {
+		if err := totalSupply.Add(&acct.Escrow.Debonding.Balance); err != nil {
 			ctx.Logger().Error("InitChain: failed to add debonding escrow balance",
 				"err", err,
 			)
 			return fmt.Errorf("tendermint/staking: failed to add debonding escrow balance: %w", err)
 		}
 
-		if err := state.SetAccount(ctx, id, v); err != nil {
-			return fmt.Errorf("tendermint/staking: failed to set account: %w", err)
+		if err := state.SetAccount(ctx, addr, acct); err != nil {
+			return fmt.Errorf("tendermint/staking: failed to set account %s: %w", addr, err)
 		}
 	}
 	return nil
@@ -156,71 +158,111 @@ func (app *stakingApplication) initTotalSupply(
 }
 
 func (app *stakingApplication) initDelegations(ctx *abciAPI.Context, state *stakingState.MutableState, st *staking.Genesis) error {
-	for escrowID, delegations := range st.Delegations {
+	for escrowAddr, delegations := range st.Delegations {
+		if !escrowAddr.IsValid() {
+			return fmt.Errorf("tendermint/staking: failed to set genesis delegations to %s: address is invalid",
+				escrowAddr,
+			)
+		}
 		delegationShares := quantity.NewQuantity()
-		for delegatorID, delegation := range delegations {
+		for delegatorAddr, delegation := range delegations {
+			if !delegatorAddr.IsValid() {
+				return fmt.Errorf(
+					"tendermint/staking: failed to set genesis delegation from %s to %s: delegator address is invalid",
+					delegatorAddr, escrowAddr,
+				)
+			}
 			if delegation == nil {
-				return fmt.Errorf("tendermint/staking: genesis delegation to %s from %s is nil", escrowID, delegatorID)
+				return fmt.Errorf("tendermint/staking: genesis delegation from %s to %s is nil",
+					delegatorAddr, escrowAddr,
+				)
 			}
 			if err := delegationShares.Add(&delegation.Shares); err != nil {
 				ctx.Logger().Error("InitChain: failed to add delegation shares",
 					"err", err,
 				)
-				return fmt.Errorf("tendermint/staking: failed to add delegation shares: %w", err)
+				return fmt.Errorf("tendermint/staking: failed to add delegation shares to %s from %s: %w",
+					escrowAddr, delegatorAddr, err,
+				)
 			}
-			if err := state.SetDelegation(ctx, delegatorID, escrowID, delegation); err != nil {
-				return fmt.Errorf("tendermint/staking: failed to set delegation: %w", err)
+			if err := state.SetDelegation(ctx, delegatorAddr, escrowAddr, delegation); err != nil {
+				return fmt.Errorf("tendermint/staking: failed to set delegation to %s from %s: %w",
+					escrowAddr, delegatorAddr, err,
+				)
 			}
 		}
 
-		acc, err := state.Account(ctx, escrowID)
+		acc, err := state.Account(ctx, escrowAddr)
 		if err != nil {
-			return fmt.Errorf("tendermint/staking: failed to fetch account: %w", err)
+			return fmt.Errorf("tendermint/staking: failed to fetch escrow account %s: %w", escrowAddr, err)
 		}
 		if acc.Escrow.Active.TotalShares.Cmp(delegationShares) != 0 {
-			ctx.Logger().Error("InitChain: total shares mismatch",
-				"escrow_id", escrowID,
+			ctx.Logger().Error("InitChain: total active shares mismatch",
+				"escrow_address", escrowAddr,
 				"expected", acc.Escrow.Active.TotalShares,
 				"actual", delegationShares,
 			)
-			return fmt.Errorf("tendermint/staking: total shares mismatch")
+			return fmt.Errorf("tendermint/staking: total active shares mismatch for account %s: actual: %s (expected: %s)",
+				escrowAddr, delegationShares, acc.Escrow.Active.TotalShares,
+			)
 		}
 	}
 	return nil
 }
 
 func (app *stakingApplication) initDebondingDelegations(ctx *abciAPI.Context, state *stakingState.MutableState, st *staking.Genesis) error {
-	for escrowID, delegators := range st.DebondingDelegations {
+	for escrowAddr, delegators := range st.DebondingDelegations {
+		if !escrowAddr.IsValid() {
+			return fmt.Errorf("tendermint/staking: failed to set genesis debonding delegations to %s: address is invalid",
+				escrowAddr,
+			)
+		}
 		debondingShares := quantity.NewQuantity()
-		for delegatorID, delegations := range delegators {
+		for delegatorAddr, delegations := range delegators {
+			if !delegatorAddr.IsValid() {
+				return fmt.Errorf(
+					"tendermint/staking: failed to set genesis debonding delegation from %s to %s: delegator address is invalid",
+					delegatorAddr, escrowAddr,
+				)
+			}
 			for idx, delegation := range delegations {
+
 				if delegation == nil {
-					return fmt.Errorf("tendermint/staking: genesis debonding delegation to %s from %s index %d is nil", escrowID, delegatorID, idx)
+					return fmt.Errorf(
+						"tendermint/staking: genesis debonding delegation from %s to %s with index %d is nil",
+						delegatorAddr, escrowAddr, idx,
+					)
 				}
 				if err := debondingShares.Add(&delegation.Shares); err != nil {
 					ctx.Logger().Error("InitChain: failed to add debonding delegation shares",
 						"err", err,
 					)
-					return fmt.Errorf("tendermint/staking: failed to add debonding delegation shares: %w", err)
+					return fmt.Errorf("tendermint/staking: failed to add debonding delegation shares to %s from %s index %d: %w",
+						escrowAddr, delegatorAddr, idx, err,
+					)
 				}
 
-				if err := state.SetDebondingDelegation(ctx, delegatorID, escrowID, uint64(idx), delegation); err != nil {
-					return fmt.Errorf("tendermint/staking: failed to set debonding delegation: %w", err)
+				if err := state.SetDebondingDelegation(ctx, delegatorAddr, escrowAddr, uint64(idx), delegation); err != nil {
+					return fmt.Errorf("tendermint/staking: failed to set debonding delegation to %s from %s index %d: %w",
+						escrowAddr, delegatorAddr, idx, err,
+					)
 				}
 			}
 		}
 
-		acc, err := state.Account(ctx, escrowID)
+		acc, err := state.Account(ctx, escrowAddr)
 		if err != nil {
-			return fmt.Errorf("tendermint/staking: failed to fetch account: %w", err)
+			return fmt.Errorf("tendermint/staking: failed to fetch escrow account %s: %w", escrowAddr, err)
 		}
 		if acc.Escrow.Debonding.TotalShares.Cmp(debondingShares) != 0 {
-			ctx.Logger().Error("InitChain: debonding shares mismatch",
-				"escrow_id", escrowID,
+			ctx.Logger().Error("InitChain: total debonding shares mismatch",
+				"escrow_address", escrowAddr,
 				"expected", acc.Escrow.Debonding.TotalShares,
 				"actual", debondingShares,
 			)
-			return fmt.Errorf("tendermint/staking: debonding shares mismatch")
+			return fmt.Errorf("tendermint/staking: total debonding shares mismatch for account %s: actual: %s (expected: %s)",
+				escrowAddr, debondingShares, acc.Escrow.Debonding.TotalShares,
+			)
 		}
 	}
 	return nil
@@ -288,21 +330,21 @@ func (sq *stakingQuerier) Genesis(ctx context.Context) (*staking.Genesis, error)
 		return nil, err
 	}
 
-	accounts, err := sq.state.Accounts(ctx)
+	addresses, err := sq.state.Addresses(ctx)
 	if err != nil {
 		return nil, err
 	}
-	ledger := make(map[signature.PublicKey]*staking.Account)
-	for _, acctID := range accounts {
+	ledger := make(map[staking.Address]*staking.Account)
+	for _, addr := range addresses {
 		var acct *staking.Account
-		acct, err = sq.state.Account(ctx, acctID)
+		acct, err = sq.state.Account(ctx, addr)
 		if err != nil {
 			return nil, fmt.Errorf("tendermint/staking: failed to fetch account: %w", err)
 		}
 		// Make sure that export resets the stake accumulator state as that should be re-initialized
 		// during genesis (a genesis document with non-empty stake accumulator is invalid).
 		acct.Escrow.StakeAccumulator = staking.StakeAccumulator{}
-		ledger[acctID] = acct
+		ledger[addr] = acct
 	}
 
 	delegations, err := sq.state.Delegations(ctx)

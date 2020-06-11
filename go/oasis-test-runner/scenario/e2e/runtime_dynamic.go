@@ -326,10 +326,11 @@ func (sc *runtimeDynamicImpl) Run(childEnv *env.Env) error { // nolint: gocyclo
 	// Now reclaim all stake from the debug entity which owns the runtime.
 	sc.logger.Info("reclaiming stake from entity which owns the runtime")
 	entSigner := sc.net.Entities()[0].Signer()
+	entAddr := staking.NewAddress(entSigner.Public())
 	var oneShare quantity.Quantity
 	_ = oneShare.FromUint64(1)
 	tx := staking.NewReclaimEscrowTx(nonce, &transaction.Fee{Gas: 10000}, &staking.ReclaimEscrow{
-		Account: entSigner.Public(),
+		Account: entAddr,
 		Shares:  oneShare,
 	})
 	nonce++
@@ -424,7 +425,7 @@ func (sc *runtimeDynamicImpl) Run(childEnv *env.Env) error { // nolint: gocyclo
 	var enoughTokens quantity.Quantity
 	_ = enoughTokens.FromUint64(100_000)
 	tx = staking.NewAddEscrowTx(nonce, &transaction.Fee{Gas: 10000}, &staking.Escrow{
-		Account: entSigner.Public(),
+		Account: entAddr,
 		Tokens:  enoughTokens,
 	})
 	nonce++ // nolint: ineffassign

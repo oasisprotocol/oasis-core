@@ -57,7 +57,8 @@ func (th *dummyMigrationHandler) ConsensusUpgrade(ctx *Context, privateCtx inter
 	}
 
 	// Set this entity's staking properly.
-	err = stakeState.SetAccount(abciCtx, TestEntity.ID, &staking.Account{
+	testEntityAddr := staking.NewAddress(TestEntity.ID)
+	err = stakeState.SetAccount(abciCtx, testEntityAddr, &staking.Account{
 		Escrow: staking.EscrowAccount{
 			StakeAccumulator: staking.StakeAccumulator{
 				Claims: map[staking.StakeClaim][]staking.ThresholdKind{

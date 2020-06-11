@@ -11,6 +11,7 @@ import (
 	registryState "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/apps/registry/state"
 	stakingState "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/apps/staking/state"
 	epochtime "github.com/oasisprotocol/oasis-core/go/epochtime/api"
+	staking "github.com/oasisprotocol/oasis-core/go/staking/api"
 )
 
 func (app *stakingApplication) resolveEntityIDFromProposer(
@@ -40,6 +41,7 @@ func (app *stakingApplication) rewardBlockProposing(
 	if proposingEntity == nil {
 		return nil
 	}
+	proposerAddr := staking.NewAddress(*proposingEntity)
 
 	params, err := stakeState.ConsensusParameters(ctx)
 	if err != nil {
@@ -56,7 +58,14 @@ func (app *stakingApplication) rewardBlockProposing(
 		return nil
 	}
 	// Reward the proposer based on the `(number of included votes) / (size of the validator set)` ratio.
-	if err = stakeState.AddRewardSingleAttenuated(ctx, epoch, &params.RewardFactorBlockProposed, numSigningEntities, numEligibleValidators, *proposingEntity); err != nil {
+	if err = stakeState.AddRewardSingleAttenuated(
+		ctx,
+		epoch,
+		&params.RewardFactorBlockProposed,
+		numSigningEntities,
+		numEligibleValidators,
+		proposerAddr,
+	); err != nil {
 		return fmt.Errorf("adding rewards: %w", err)
 	}
 	return nil

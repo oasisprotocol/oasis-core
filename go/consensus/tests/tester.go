@@ -8,10 +8,12 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	memorySigner "github.com/oasisprotocol/oasis-core/go/common/crypto/signature/signers/memory"
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
 	"github.com/oasisprotocol/oasis-core/go/consensus/api/transaction"
 	"github.com/oasisprotocol/oasis-core/go/consensus/tendermint/apps/epochtime_mock"
+	staking "github.com/oasisprotocol/oasis-core/go/staking/api"
 )
 
 const (
@@ -68,13 +70,15 @@ func ConsensusImplementationTests(t *testing.T, backend consensus.ClientBackend)
 	require.True(epoch > 0, "epoch height should be greater than zero")
 
 	_, err = backend.EstimateGas(ctx, &consensus.EstimateGasRequest{
-		Caller:      memorySigner.NewTestSigner("estimate gas signer").Public(),
+		Signer:      memorySigner.NewTestSigner("estimate gas signer").Public(),
 		Transaction: transaction.NewTransaction(0, nil, epochtimemock.MethodSetEpoch, 0),
 	})
 	require.NoError(err, "EstimateGas")
 
 	nonce, err := backend.GetSignerNonce(ctx, &consensus.GetSignerNonceRequest{
-		ID:     memorySigner.NewTestSigner("get signer nonce signer").Public(),
+		AccountAddress: staking.NewAddress(
+			signature.NewPublicKey("badfffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"),
+		),
 		Height: consensus.HeightLatest,
 	})
 	require.NoError(err, "GetSignerNonce")

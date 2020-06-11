@@ -19,6 +19,8 @@ const Size = 32
 var (
 	// ErrMalformed is the error returned when a hash is malformed.
 	ErrMalformed = errors.New("hash: malformed hash")
+	// ErrTruncateSize is the error returned when trying to truncate a hash to an invalid size.
+	ErrTruncateSize = errors.New("hash: invalid truncate size")
 
 	emptyHash = sha512.Sum512_256([]byte{})
 
@@ -107,6 +109,14 @@ func (h *Hash) IsEmpty() bool {
 // String returns the string representation of a hash.
 func (h Hash) String() string {
 	return hex.EncodeToString(h[:])
+}
+
+// Truncate returns the first n bytes of a hash.
+func (h Hash) Truncate(n int) ([]byte, error) {
+	if n <= 0 || n > Size {
+		return nil, ErrTruncateSize
+	}
+	return append([]byte{}, h[:n]...), nil
 }
 
 // NewFrom creates a new hash by hashing the CBOR representation of the given type.

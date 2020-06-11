@@ -14,6 +14,7 @@ import (
 	consensusGenesis "github.com/oasisprotocol/oasis-core/go/consensus/genesis"
 	epochtime "github.com/oasisprotocol/oasis-core/go/epochtime/api"
 	genesis "github.com/oasisprotocol/oasis-core/go/genesis/api"
+	staking "github.com/oasisprotocol/oasis-core/go/staking/api"
 	storage "github.com/oasisprotocol/oasis-core/go/storage/api"
 	"github.com/oasisprotocol/oasis-core/go/storage/mkvs"
 )
@@ -58,6 +59,9 @@ type ApplicationState interface {
 	// OwnTxSigner returns the transaction signer identity of the local node.
 	OwnTxSigner() signature.PublicKey
 
+	// OwnTxSignerAddress returns the transaction signer's staking address of the local node.
+	OwnTxSignerAddress() staking.Address
+
 	// NewContext creates a new application processing context.
 	NewContext(mode ContextMode, now time.Time) *Context
 }
@@ -95,8 +99,9 @@ type MockApplicationStateConfig struct {
 type mockApplicationState struct {
 	cfg MockApplicationStateConfig
 
-	blockCtx *BlockContext
-	tree     mkvs.Tree
+	blockCtx           *BlockContext
+	tree               mkvs.Tree
+	ownTxSignerAddress staking.Address
 }
 
 func (ms *mockApplicationState) Storage() storage.LocalBackend {
@@ -139,6 +144,10 @@ func (ms *mockApplicationState) OwnTxSigner() signature.PublicKey {
 	return ms.cfg.OwnTxSigner
 }
 
+func (ms *mockApplicationState) OwnTxSignerAddress() staking.Address {
+	return ms.ownTxSignerAddress
+}
+
 func (ms *mockApplicationState) ConsensusParameters() *consensusGenesis.Parameters {
 	return &ms.cfg.Genesis.Consensus.Parameters
 }
@@ -171,9 +180,10 @@ func NewMockApplicationState(cfg MockApplicationStateConfig) ApplicationState {
 	}
 
 	return &mockApplicationState{
-		cfg:      cfg,
-		blockCtx: blockCtx,
-		tree:     tree,
+		cfg:                cfg,
+		blockCtx:           blockCtx,
+		tree:               tree,
+		ownTxSignerAddress: staking.NewAddress(cfg.OwnTxSigner),
 	}
 }
 

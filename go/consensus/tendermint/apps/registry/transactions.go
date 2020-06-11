@@ -50,10 +50,12 @@ func (app *registryApplication) registerEntity(
 	}
 
 	if !params.DebugBypassStake {
-		if err = stakingState.AddStakeClaim(ctx, ent.ID, registry.StakeClaimRegisterEntity, []staking.ThresholdKind{staking.KindEntity}); err != nil {
-			ctx.Logger().Error("RegisterEntity: Insufficent stake",
+		acctAddr := staking.NewAddress(ent.ID)
+		if err = stakingState.AddStakeClaim(ctx, acctAddr, registry.StakeClaimRegisterEntity, []staking.ThresholdKind{staking.KindEntity}); err != nil {
+			ctx.Logger().Error("RegisterEntity: Insufficient stake",
 				"err", err,
-				"id", ent.ID,
+				"entity", ent.ID,
+				"account", acctAddr,
 			)
 			return err
 		}
@@ -130,7 +132,8 @@ func (app *registryApplication) deregisterEntity(ctx *api.Context, state *regist
 	}
 
 	if !params.DebugBypassStake {
-		if err = stakingState.RemoveStakeClaim(ctx, id, registry.StakeClaimRegisterEntity); err != nil {
+		acctAddr := staking.NewAddress(id)
+		if err = stakingState.RemoveStakeClaim(ctx, acctAddr, registry.StakeClaimRegisterEntity); err != nil {
 			panic(fmt.Errorf("DeregisterEntity: failed to remove stake claim: %w", err))
 		}
 	}
@@ -307,11 +310,13 @@ func (app *registryApplication) registerNode( // nolint: gocyclo
 
 		claim := registry.StakeClaimForNode(newNode.ID)
 		thresholds := registry.StakeThresholdsForNode(newNode)
+		acctAddr := staking.NewAddress(newNode.EntityID)
 
-		if err = stakeAcc.AddStakeClaim(newNode.EntityID, claim, thresholds); err != nil {
+		if err = stakeAcc.AddStakeClaim(acctAddr, claim, thresholds); err != nil {
 			ctx.Logger().Error("RegisterNode: insufficient stake for new node",
 				"err", err,
 				"entity", newNode.EntityID,
+				"account", acctAddr,
 			)
 			return err
 		}
@@ -381,7 +386,8 @@ func (app *registryApplication) registerNode( // nolint: gocyclo
 		// Only resume a runtime if the entity has enough stake to avoid having the runtime be
 		// suspended again on the next epoch transition.
 		if !params.DebugBypassStake {
-			if err = stakeAcc.CheckStakeClaims(rt.EntityID); err != nil {
+			acctAddr := staking.NewAddress(rt.EntityID)
+			if err = stakeAcc.CheckStakeClaims(acctAddr); err != nil {
 				continue
 			}
 		}
@@ -579,11 +585,13 @@ func (app *registryApplication) registerRuntime( // nolint: gocyclo
 	if !params.DebugBypassStake {
 		claim := registry.StakeClaimForRuntime(rt.ID)
 		thresholds := registry.StakeThresholdsForRuntime(rt)
+		acctAddr := staking.NewAddress(rt.EntityID)
 
-		if err = stakingState.AddStakeClaim(ctx, rt.EntityID, claim, thresholds); err != nil {
-			ctx.Logger().Error("RegisterRuntime: Insufficent stake",
+		if err = stakingState.AddStakeClaim(ctx, acctAddr, claim, thresholds); err != nil {
+			ctx.Logger().Error("RegisterRuntime: Insufficient stake",
 				"err", err,
-				"entity_id", rt.EntityID,
+				"entity", rt.EntityID,
+				"account", acctAddr,
 			)
 			return err
 		}

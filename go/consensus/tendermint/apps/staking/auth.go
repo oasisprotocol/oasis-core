@@ -19,7 +19,7 @@ func (app *stakingApplication) GetSignerNonce(ctx context.Context, req *api.GetS
 		return 0, err
 	}
 
-	acct, err := q.AccountInfo(ctx, req.ID)
+	acct, err := q.Account(ctx, req.AccountAddress)
 	if err != nil {
 		return 0, err
 	}

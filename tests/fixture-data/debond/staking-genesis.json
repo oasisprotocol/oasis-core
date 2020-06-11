@@ -18,7 +18,7 @@
   },
   "total_supply": "1000",
   "ledger": {
-    "ADoWBAua0sJigqXO82hLaC0dDahZwm8bXQHNj7/xtKQ=": {
+    "oasis1qq7us2p22udg2t24u6ry4m29wzql005pjsske8gt": {
       "escrow": {
         "debonding": {
           "balance": "1000",
@@ -28,8 +28,8 @@
     }
   },
   "debonding_delegations": {
-    "ADoWBAua0sJigqXO82hLaC0dDahZwm8bXQHNj7/xtKQ=": {
-      "LQu4ZtFg8OJ0MC4M4QMeUR7Is6Xt4A/CW+PK/7TPiH0=": [
+    "oasis1qq7us2p22udg2t24u6ry4m29wzql005pjsske8gt": {
+      "oasis1qpt202cf6t0s5ugkk34p83yf0c30gpjkny92u7dh": [
         {
           "shares": "500",
           "debond_end": 1

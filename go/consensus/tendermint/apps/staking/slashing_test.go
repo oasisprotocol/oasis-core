@@ -92,12 +92,15 @@ func TestOnEvidenceDoubleSign(t *testing.T) {
 	err = onEvidenceDoubleSign(ctx, validatorAddress, 1, now, 1)
 	require.Error(err, "should fail when validator has no stake")
 
+	// Computes entity's staking address.
+	addr := staking.NewAddress(ent.ID)
+
 	// Get the validator some stake.
 	var balance quantity.Quantity
 	_ = balance.FromUint64(200)
 	var totalShares quantity.Quantity
 	_ = totalShares.FromUint64(200)
-	err = stakeState.SetAccount(ctx, ent.ID, &staking.Account{
+	err = stakeState.SetAccount(ctx, addr, &staking.Account{
 		Escrow: staking.EscrowAccount{
 			Active: staking.SharePool{
 				Balance:     balance,
@@ -112,7 +115,7 @@ func TestOnEvidenceDoubleSign(t *testing.T) {
 	require.NoError(err, "slashing should succeed")
 
 	// Entity stake should be slashed.
-	acct, err := stakeState.Account(ctx, ent.ID)
+	acct, err := stakeState.Account(ctx, addr)
 	require.NoError(err, "Account")
 	_ = balance.Sub(&slashAmount)
 	require.EqualValues(balance, acct.Escrow.Active.Balance, "entity stake should be slashed")

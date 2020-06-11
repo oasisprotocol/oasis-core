@@ -50,14 +50,14 @@ staking.Transfer
 
 ```golang
 type Transfer struct {
-    To     signature.PublicKey `json:"xfer_to"`
-    Tokens quantity.Quantity   `json:"xfer_tokens"`
+    To     Address           `json:"xfer_to"`
+    Tokens quantity.Quantity `json:"xfer_tokens"`
 }
 ```
 
 **Fields:**
 
-* `xfer_to` specifies the destination account.
+* `xfer_to` specifies the destination account's address.
 * `xfer_tokens` specifies the amount of tokens to transfer.
 
 The transaction signer implicitly specifies the source account.
@@ -114,14 +114,14 @@ staking.AddEscrow
 
 ```golang
 type Escrow struct {
-    Account signature.PublicKey `json:"escrow_account"`
-    Tokens  quantity.Quantity   `json:"escrow_tokens"`
+    Account Address           `json:"escrow_account"`
+    Tokens  quantity.Quantity `json:"escrow_tokens"`
 }
 ```
 
 **Fields:**
 
-* `escrow_account` specifies the destination escrow account.
+* `escrow_account` specifies the destination escrow account's address.
 * `escrow_tokens` specifies the amount of tokens to transfer.
 
 The transaction signer implicitly specifies the source account.
@@ -147,14 +147,14 @@ staking.ReclaimEscrow
 
 ```golang
 type ReclaimEscrow struct {
-    Account signature.PublicKey `json:"escrow_account"`
-    Shares  quantity.Quantity   `json:"reclaim_shares"`
+    Account Address           `json:"escrow_account"`
+    Shares  quantity.Quantity `json:"reclaim_shares"`
 }
 ```
 
 **Fields:**
 
-* `escrow_account` specifies the source escrow account.
+* `escrow_account` specifies the source escrow account's address.
 * `reclaim_shares` specifies the amount of shares to reclaim.
 
 The transaction signer implicitly specifies the destination account.

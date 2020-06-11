@@ -23,6 +23,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/consensus/api/transaction"
 	cmdCommon "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common"
 	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
+	staking "github.com/oasisprotocol/oasis-core/go/staking/api"
 )
 
 const (
@@ -181,16 +182,19 @@ func (r *registration) Run( // nolint: gocyclo
 	}
 	entityAccs := make([]struct {
 		signer         signature.Signer
+		address        staking.Address
 		reckonedNonce  uint64
 		nodeIdentities []*nodeAcc
 	}, registryNumEntities)
 
 	fac := memorySigner.NewFactory()
 	for i := range entityAccs {
-		entityAccs[i].signer, err = fac.Generate(signature.SignerEntity, rng)
+		signer, err2 := fac.Generate(signature.SignerEntity, rng)
 		if err != nil {
-			return fmt.Errorf("memory signer factory Generate account %d: %w", i, err)
+			return fmt.Errorf("memory signer factory Generate account %d: %w", i, err2)
 		}
+		entityAccs[i].signer = signer
+		entityAccs[i].address = staking.NewAddress(signer.Public())
 	}
 
 	// Register entities.
@@ -198,8 +202,8 @@ func (r *registration) Run( // nolint: gocyclo
 	// periodically register new entities.
 	for i := range entityAccs {
 		entityAccs[i].reckonedNonce, err = cnsc.GetSignerNonce(ctx, &consensus.GetSignerNonceRequest{
-			ID:     entityAccs[i].signer.Public(),
-			Height: consensus.HeightLatest,
+			AccountAddress: entityAccs[i].address,
+			Height:         consensus.HeightLatest,
 		})
 		if err != nil {
 			return fmt.Errorf("GetSignerNonce error: %w", err)
@@ -223,12 +227,13 @@ func (r *registration) Run( // nolint: gocyclo
 			nodeDesc := getNodeDesc(rng, ident, entityAccs[i].signer.Public(), r.ns)
 
 			var nodeAccNonce uint64
+			nodeAccAddress := staking.NewAddress(ident.NodeSigner.Public())
 			nodeAccNonce, err = cnsc.GetSignerNonce(ctx, &consensus.GetSignerNonceRequest{
-				ID:     ident.NodeSigner.Public(),
-				Height: consensus.HeightLatest,
+				AccountAddress: nodeAccAddress,
+				Height:         consensus.HeightLatest,
 			})
 			if err != nil {
-				return fmt.Errorf("GetSignerNonce error: %w", err)
+				return fmt.Errorf("GetSignerNonce error for accout %s: %w", nodeAccAddress, err)
 			}
 
 			entityAccs[i].nodeIdentities = append(entityAccs[i].nodeIdentities, &nodeAcc{ident, nodeDesc, nodeAccNonce})

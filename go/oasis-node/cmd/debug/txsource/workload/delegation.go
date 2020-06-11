@@ -30,8 +30,9 @@ type delegation struct {
 	accounts []struct {
 		signer        signature.Signer
 		reckonedNonce uint64
-		delegatedTo   signature.PublicKey
 		debondEndTime uint64
+		address       staking.Address
+		delegatedTo   staking.Address
 	}
 	fundingAccount signature.Signer
 }
@@ -48,7 +49,7 @@ func (d *delegation) doEscrowTx(ctx context.Context, rng *rand.Rand, cnsc consen
 	// Select an account that has no active delegations nor debonding funds.
 	perm := rng.Perm(delegationNumAccounts)
 	fromPermIdx := -1
-	var empty signature.PublicKey
+	var empty staking.Address
 	for i := range d.accounts {
 		if d.accounts[perm[i]].delegatedTo == empty && d.accounts[perm[i]].debondEndTime < uint64(epoch) {
 			fromPermIdx = i
@@ -67,7 +68,7 @@ func (d *delegation) doEscrowTx(ctx context.Context, rng *rand.Rand, cnsc consen
 	selectedIdx := perm[fromPermIdx]
 
 	// Update local state.
-	d.accounts[selectedIdx].delegatedTo = d.accounts[perm[toPermIdx]].signer.Public()
+	d.accounts[selectedIdx].delegatedTo = d.accounts[perm[toPermIdx]].address
 
 	// Create escrow tx.
 	escrow := &staking.Escrow{
@@ -98,7 +99,7 @@ func (d *delegation) doReclaimEscrowTx(ctx context.Context, rng *rand.Rand, cnsc
 	// Select an account that has active delegation.
 	perm := rng.Perm(delegationNumAccounts)
 	fromPermIdx := -1
-	var empty signature.PublicKey
+	var empty staking.Address
 	for i := range d.accounts {
 		if d.accounts[perm[i]].delegatedTo != empty {
 			fromPermIdx = i
@@ -114,7 +115,7 @@ func (d *delegation) doReclaimEscrowTx(ctx context.Context, rng *rand.Rand, cnsc
 	// Query amount of delegated shares for the account.
 	delegations, err := stakingClient.Delegations(ctx, &staking.OwnerQuery{
 		Height: consensus.HeightLatest,
-		Owner:  d.accounts[selectedIdx].signer.Public(),
+		Owner:  d.accounts[selectedIdx].address,
 	})
 	if err != nil {
 		return fmt.Errorf("stakingClient.Delegations %s: %w", d.accounts[selectedIdx].signer.Public(), err)
@@ -146,10 +147,10 @@ func (d *delegation) doReclaimEscrowTx(ctx context.Context, rng *rand.Rand, cnsc
 	}
 
 	// Query debonding end epoch for the account.
-	var debondingDelegations map[signature.PublicKey][]*staking.DebondingDelegation
+	var debondingDelegations map[staking.Address][]*staking.DebondingDelegation
 	debondingDelegations, err = stakingClient.DebondingDelegations(ctx, &staking.OwnerQuery{
 		Height: consensus.HeightLatest,
-		Owner:  d.accounts[selectedIdx].signer.Public(),
+		Owner:  d.accounts[selectedIdx].address,
 	})
 	if err != nil {
 		return fmt.Errorf("stakingClient.Delegations %s: %w", d.accounts[selectedIdx].signer.Public(), err)
@@ -179,7 +180,6 @@ func (d *delegation) Run(
 	cnsc consensus.ClientBackend,
 	fundingAccount signature.Signer,
 ) error {
-	var err error
 	ctx := context.Background()
 
 	d.logger = logging.GetLogger("cmd/txsource/workload/delegation")
@@ -189,19 +189,22 @@ func (d *delegation) Run(
 	d.accounts = make([]struct {
 		signer        signature.Signer
 		reckonedNonce uint64
-		delegatedTo   signature.PublicKey
 		debondEndTime uint64
+		address       staking.Address
+		delegatedTo   staking.Address
 	}, delegationNumAccounts)
 
 	for i := range d.accounts {
-		d.accounts[i].signer, err = fac.Generate(signature.SignerEntity, rng)
+		signer, err := fac.Generate(signature.SignerEntity, rng)
 		if err != nil {
 			return fmt.Errorf("memory signer factory Generate account %d: %w", i, err)
 		}
+		d.accounts[i].signer = signer
+		d.accounts[i].address = staking.NewAddress(signer.Public())
 
 		// Fund the account with delegation amount.
-		// Funds for fee's will be transferred before making transactions.
-		if err = transferFunds(ctx, d.logger, cnsc, fundingAccount, d.accounts[i].signer.Public(), delegateAmount); err != nil {
+		// Funds for fees will be transferred before making transactions.
+		if err = transferFunds(ctx, d.logger, cnsc, fundingAccount, d.accounts[i].address, delegateAmount); err != nil {
 			return fmt.Errorf("account funding failure: %w", err)
 		}
 	}
@@ -211,11 +214,11 @@ func (d *delegation) Run(
 	for {
 		switch rng.Intn(2) {
 		case 0:
-			if err = d.doEscrowTx(ctx, rng, cnsc); err != nil {
+			if err := d.doEscrowTx(ctx, rng, cnsc); err != nil {
 				return err
 			}
 		case 1:
-			if err = d.doReclaimEscrowTx(ctx, rng, cnsc, stakingClient); err != nil {
+			if err := d.doReclaimEscrowTx(ctx, rng, cnsc, stakingClient); err != nil {
 				return err
 			}
 		default:
