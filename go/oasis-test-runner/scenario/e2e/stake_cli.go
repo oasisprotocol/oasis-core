@@ -45,21 +45,26 @@ const (
 
 	// Transaction fee gas.
 	feeGas = 10000
+
+	// Testing source account public key (hex-encoded).
+	srcPubkeyHex = "4ea5328f943ef6f66daaed74cb0e99c3b1c45f76307b425003dbc7cb3638ed35"
+
+	// Testing destination account public key (hex-encoded).
+	dstPubkeyHex = "5ea5328f943ef6f66daaed74cb0e99c3b1c45f76307b425003dbc7cb3638ed35"
+
+	// Testing escrow account public key (hex-encoded).
+	escrowPubkeyHex = "6ea5328f943ef6f66daaed74cb0e99c3b1c45f76307b425003dbc7cb3638ed35"
 )
 
 var (
 	// Testing source account address.
-	srcAddress = api.NewAddress(
-		signature.NewPublicKey("4ea5328f943ef6f66daaed74cb0e99c3b1c45f76307b425003dbc7cb3638ed35"),
-	)
+	srcAddress = api.NewAddress(signature.NewPublicKey(srcPubkeyHex))
+
 	// Testing destination account address.
-	dstAddress = api.NewAddress(
-		signature.NewPublicKey("5ea5328f943ef6f66daaed74cb0e99c3b1c45f76307b425003dbc7cb3638ed35"),
-	)
+	dstAddress = api.NewAddress(signature.NewPublicKey(dstPubkeyHex))
+
 	// Testing escrow account address.
-	escrowAddress = api.NewAddress(
-		signature.NewPublicKey("6ea5328f943ef6f66daaed74cb0e99c3b1c45f76307b425003dbc7cb3638ed35"),
-	)
+	escrowAddress = api.NewAddress(signature.NewPublicKey(escrowPubkeyHex))
 
 	// StakeCLI is the staking scenario.
 	StakeCLI scenario.Scenario = &stakeCLIImpl{
@@ -137,6 +142,32 @@ func (s *stakeCLIImpl) Run(childEnv *env.Env) error {
 	}
 
 	// Run the tests
+
+	// Ensure converting public keys to staking account addresses works.
+	pubkey2AddressTestVectors := []struct {
+		publicKeyText string
+		addressText   string
+		expectError   bool
+	}{
+		{signature.NewPublicKey(srcPubkeyHex).String(), srcAddress.String(), false},
+		{signature.NewPublicKey(dstPubkeyHex).String(), dstAddress.String(), false},
+		{signature.NewPublicKey(escrowPubkeyHex).String(), escrowAddress.String(), false},
+		// Empty public key.
+		{"", "", true},
+		// Invalid public key.
+		{"BadPubKey=", "", true},
+	}
+	s.logger.Info("test converting public keys to staking account addresses")
+	for _, vector := range pubkey2AddressTestVectors {
+		err = s.testPubkey2Address(childEnv, vector.publicKeyText, vector.addressText)
+		if err != nil && !vector.expectError {
+			return fmt.Errorf("scenario/e2e/stake: unexpected pubkey2address error: %w", err)
+		}
+		if err == nil && vector.expectError {
+			return fmt.Errorf("scenario/e2e/stake: pubkey2address for public key '%s' should error", vector.publicKeyText)
+		}
+	}
+
 	// Transfer
 	if err = s.testTransfer(childEnv, cli, srcAddress, dstAddress); err != nil {
 		return fmt.Errorf("scenario/e2e/stake: error while running Transfer test: %w", err)
@@ -165,6 +196,31 @@ func (s *stakeCLIImpl) Run(childEnv *env.Env) error {
 	// Stop the network.
 	s.logger.Info("stopping the network")
 	s.net.Stop()
+
+	return nil
+}
+
+func (s *stakeCLIImpl) testPubkey2Address(childEnv *env.Env, publicKeyText string, addressText string) error {
+	args := []string{
+		"stake", "pubkey2address",
+		"--" + stake.CfgPublicKey, publicKeyText,
+	}
+
+	out, err := cli.RunSubCommandWithOutput(childEnv, s.logger, "info", s.runtimeImpl.net.Config().NodeBinary, args)
+	if err != nil {
+		return fmt.Errorf("failed to convert public key to address: error: %w output: %s", err, out.String())
+	}
+
+	var addr api.Address
+	if err = addr.UnmarshalText(bytes.TrimSpace(out.Bytes())); err != nil {
+		return err
+	}
+
+	if addr.String() != addressText {
+		return fmt.Errorf("pubkey2address converted public key %s to address %s (expected address: %s)",
+			publicKeyText, addr, addressText,
+		)
+	}
 
 	return nil
 }
