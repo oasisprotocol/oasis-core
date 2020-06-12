@@ -2,6 +2,20 @@
 
 ![Architecture](images/oasis-core-high-level.svg)
 
+## Development Setup
+
+Here are instructions on how to set up the local build environment, run the
+tests and some examples on how to prepare test networks for local development of
+Oasis Core components.
+
+* Build Environment Setup and Building
+  * [Prerequisites](setup/prerequisites.md)
+  * [Building](setup/building.md)
+* Running Tests and Development Networks
+  * [Running Tests](setup/running-tests.md)
+  * [Local Network Runner With a Simple Runtime](setup/oasis-net-runner.md)
+  * [Single Validator Node Network](setup/single-validator-node-network.md)
+
 ## High-Level Components
 
 At the highest level, Oasis Core is divided into two major layers: the
