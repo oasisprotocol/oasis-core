@@ -1,0 +1,66 @@
+# Building
+
+This section contains a description of steps required to build Oasis Core.
+Before proceeding, make sure to look at the [prerequisites] required for running
+an Oasis Core environment.
+
+[prerequisites]: prerequisites.md
+
+## Unsafe Non-SGX Environment
+
+To build everything required for running an Oasis node locally, simply execute
+the following in the top-level directory:
+
+```
+export OASIS_UNSAFE_SKIP_AVR_VERIFY="1"
+export OASIS_UNSAFE_SKIP_KM_POLICY="1"
+make
+```
+
+This will build all the required parts (build tools, Oasis node, runtime
+libraries, runtime loader, key manager and test runtimes). The AVR and KM flags
+are supported on production SGX systems only and these features must be disabled
+in our environment.
+
+## SGX Environment
+
+Compilation procedure under SGX environment is similar to the non-SGX with
+slightly different environmental variables set:
+
+```
+export OASIS_UNSAFE_SKIP_AVR_VERIFY="1"
+export OASIS_UNSAFE_KM_POLICY_KEYS="1"
+export OASIS_UNSAFE_ALLOW_DEBUG_ENCLAVES="1"
+make
+```
+
+The AVR flag is there because we are running a node in a local development
+environment and we will not do any attestation with Intel's remote servers. The
+KM policy keys flag allows testing keys to be used while verifying the security
+policy of the node. TEE hardware flag denotes the trusted execution environment
+engine for running the Oasis node and the tests below.
+
+To run an Oasis node under SGX make sure:
+
+* Your hardware has SGX support.
+* You either explicitly enabled SGX in BIOS or made a
+  `sgx_cap_enable_device()` system call, if SGX is in software controlled state.
+* You installed [Intel's SGX driver] (check that `/dev/isgx` exists).
+* You have the AESM daemon running. The easiest way is to just run it in a
+  Docker container by doing (this will keep the container running and it will
+  be automatically started on boot):
+
+  ```
+  docker run \
+    --detach \
+    --restart always \
+    --device /dev/isgx \
+    --volume /var/run/aesmd:/var/run/aesmd \
+    --name aesmd \
+    fortanix/aesmd
+  ```
+
+Run `sgx-detect` (part of fortanix rust tools) to verify that everything is
+configured correctly.
+
+[Intel's SGX driver]: https://github.com/intel/linux-sgx-driver
