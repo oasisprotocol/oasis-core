@@ -89,9 +89,14 @@ func (c *Client) CallRemote(ctx context.Context, data []byte) ([]byte, error) {
 			return err
 		case status.Code(err) == codes.Unavailable:
 			// XXX: HACK: Find a better way to determine the root cause.
-			if strings.Contains(err.Error(), "tls: bad public key") {
+			switch {
+			case strings.Contains(err.Error(), "tls: bad public key"):
 				// Retry as the access policy could be in the process of being updated.
 				return err
+			case strings.Contains(err.Error(), "last resolver error: produced zero addresses"):
+				// Retry as the connection may be in the process of being updated.
+				return err
+			default:
 			}
 
 			fallthrough
