@@ -291,7 +291,7 @@ func (tb *tendermintBackend) onABCIEvents(ctx context.Context, tmEvents []tmapi.
 				}
 
 				ee := &api.EscrowEvent{Take: &e}
-				evt := &api.Event{Height: height, TxHash: eh, EscrowEvent: ee}
+				evt := &api.Event{Height: height, TxHash: eh, Escrow: ee}
 
 				if doBroadcast {
 					tb.escrowNotifier.Broadcast(ee)
@@ -313,7 +313,7 @@ func (tb *tendermintBackend) onABCIEvents(ctx context.Context, tmEvents []tmapi.
 					}
 				}
 
-				evt := &api.Event{Height: height, TxHash: eh, TransferEvent: &e}
+				evt := &api.Event{Height: height, TxHash: eh, Transfer: &e}
 
 				if doBroadcast {
 					tb.transferNotifier.Broadcast(&e)
@@ -336,7 +336,7 @@ func (tb *tendermintBackend) onABCIEvents(ctx context.Context, tmEvents []tmapi.
 				}
 
 				ee := &api.EscrowEvent{Reclaim: &e}
-				evt := &api.Event{Height: height, TxHash: eh, EscrowEvent: ee}
+				evt := &api.Event{Height: height, TxHash: eh, Escrow: ee}
 
 				if doBroadcast {
 					tb.escrowNotifier.Broadcast(ee)
@@ -359,7 +359,7 @@ func (tb *tendermintBackend) onABCIEvents(ctx context.Context, tmEvents []tmapi.
 				}
 
 				ee := &api.EscrowEvent{Add: &e}
-				evt := &api.Event{Height: height, TxHash: eh, EscrowEvent: ee}
+				evt := &api.Event{Height: height, TxHash: eh, Escrow: ee}
 
 				if doBroadcast {
 					tb.escrowNotifier.Broadcast(ee)
@@ -381,7 +381,7 @@ func (tb *tendermintBackend) onABCIEvents(ctx context.Context, tmEvents []tmapi.
 					}
 				}
 
-				evt := &api.Event{Height: height, TxHash: eh, BurnEvent: &e}
+				evt := &api.Event{Height: height, TxHash: eh, Burn: &e}
 
 				if doBroadcast {
 					tb.burnNotifier.Broadcast(&e)

@@ -205,8 +205,8 @@ TransferWaitLoop:
 				evts, grr := backend.GetEvents(context.Background(), consensusAPI.HeightLatest)
 				require.NoError(grr, "GetEvents")
 				for _, evt := range evts {
-					if evt.TransferEvent != nil {
-						if evt.TransferEvent.From.Equal(ev.From) && evt.TransferEvent.To.Equal(ev.To) && evt.TransferEvent.Tokens.Cmp(&ev.Tokens) == 0 {
+					if evt.Transfer != nil {
+						if evt.Transfer.From.Equal(ev.From) && evt.Transfer.To.Equal(ev.To) && evt.Transfer.Tokens.Cmp(&ev.Tokens) == 0 {
 							gotTransfer = true
 							require.True(!evt.TxHash.IsEmpty(), "GetEvents should return valid txn hash")
 							break
@@ -270,13 +270,13 @@ TransferWaitLoop:
 		select {
 		case ev := <-ch:
 			// We're only interested in transfer events.
-			if ev.TransferEvent == nil {
+			if ev.Transfer == nil {
 				continue
 			}
 
-			from := ev.TransferEvent.From
-			to := ev.TransferEvent.To
-			tokens := ev.TransferEvent.Tokens
+			from := ev.Transfer.From
+			to := ev.Transfer.To
+			tokens := ev.Transfer.Tokens
 
 			// We should also get some traffic to/from the common pool and fee accumulator.
 			if from.Equal(api.CommonPoolAddress) || to.Equal(api.CommonPoolAddress) {
@@ -291,7 +291,7 @@ TransferWaitLoop:
 			if !gotTransfer {
 				require.Equal(SrcAddr, from, "Event: from")
 				require.Equal(DestAddr, to, "Event: to")
-				require.Equal(xfer.Tokens, ev.TransferEvent.Tokens, "Event: tokens")
+				require.Equal(xfer.Tokens, ev.Transfer.Tokens, "Event: tokens")
 
 				// Height must be valid.
 				status, err := consensus.GetStatus(context.Background())
@@ -403,8 +403,8 @@ func testBurn(t *testing.T, state *stakingTestsState, backend api.Backend, conse
 		require.NoError(grr, "GetEvents")
 		var gotIt bool
 		for _, evt := range evts {
-			if evt.BurnEvent != nil {
-				if evt.BurnEvent.Owner.Equal(ev.Owner) && evt.BurnEvent.Tokens.Cmp(&ev.Tokens) == 0 {
+			if evt.Burn != nil {
+				if evt.Burn.Owner.Equal(ev.Owner) && evt.Burn.Tokens.Cmp(&ev.Tokens) == 0 {
 					gotIt = true
 					break
 				}
@@ -492,8 +492,8 @@ func testEscrowEx( // nolint: gocyclo
 		require.NoError(grr, "GetEvents")
 		var gotIt bool
 		for _, evt := range evts {
-			if evt.EscrowEvent != nil && evt.EscrowEvent.Add != nil {
-				if evt.EscrowEvent.Add.Owner.Equal(ev.Owner) && evt.EscrowEvent.Add.Escrow.Equal(ev.Escrow) && evt.EscrowEvent.Add.Tokens.Cmp(&ev.Tokens) == 0 {
+			if evt.Escrow != nil && evt.Escrow.Add != nil {
+				if evt.Escrow.Add.Owner.Equal(ev.Owner) && evt.Escrow.Add.Escrow.Equal(ev.Escrow) && evt.Escrow.Add.Tokens.Cmp(&ev.Tokens) == 0 {
 					gotIt = true
 					break
 				}
@@ -555,8 +555,8 @@ func testEscrowEx( // nolint: gocyclo
 		require.NoError(grr, "GetEvents")
 		var gotIt bool
 		for _, evt := range evts {
-			if evt.EscrowEvent != nil && evt.EscrowEvent.Add != nil {
-				if evt.EscrowEvent.Add.Owner.Equal(ev.Owner) && evt.EscrowEvent.Add.Escrow.Equal(ev.Escrow) && evt.EscrowEvent.Add.Tokens.Cmp(&ev.Tokens) == 0 {
+			if evt.Escrow != nil && evt.Escrow.Add != nil {
+				if evt.Escrow.Add.Owner.Equal(ev.Owner) && evt.Escrow.Add.Escrow.Equal(ev.Escrow) && evt.Escrow.Add.Tokens.Cmp(&ev.Tokens) == 0 {
 					gotIt = true
 					break
 				}
@@ -632,8 +632,8 @@ func testEscrowEx( // nolint: gocyclo
 		require.NoError(grr, "GetEvents")
 		var gotIt bool
 		for _, evt := range evts {
-			if evt.EscrowEvent != nil && evt.EscrowEvent.Reclaim != nil {
-				if evt.EscrowEvent.Reclaim.Owner.Equal(ev.Owner) && evt.EscrowEvent.Reclaim.Escrow.Equal(ev.Escrow) && evt.EscrowEvent.Reclaim.Tokens.Cmp(&ev.Tokens) == 0 {
+			if evt.Escrow != nil && evt.Escrow.Reclaim != nil {
+				if evt.Escrow.Reclaim.Owner.Equal(ev.Owner) && evt.Escrow.Reclaim.Escrow.Equal(ev.Escrow) && evt.Escrow.Reclaim.Tokens.Cmp(&ev.Tokens) == 0 {
 					gotIt = true
 					break
 				}
