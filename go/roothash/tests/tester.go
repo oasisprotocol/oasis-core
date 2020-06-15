@@ -377,10 +377,20 @@ func (s *runtimeState) testSuccessfulRound(t *testing.T, backend api.Backend, co
 			require.EqualValues(parent.Header.IORoot, header.IORoot, "block I/O root")
 			require.EqualValues(parent.Header.StateRoot, header.StateRoot, "block root hash")
 
-			// There should be no discrepancy events.
-			evts, err := backend.GetEvents(ctx, consensusAPI.HeightLatest)
+			// There should be merge commitment events for all commitments.
+			evts, err := backend.GetEvents(ctx, blk.Height)
 			require.NoError(err, "GetEvents")
-			require.EqualValues(0, len(evts), "should have no discrepancy events")
+			require.Len(evts, len(mergeCommits), "should have all events")
+			for i, ev := range evts {
+				switch {
+				case ev.MergeCommitted != nil:
+					// Merge commitment event.
+					require.EqualValues(mergeCommits[i], ev.MergeCommitted.Commit, "merge commitment event should have the right commitment")
+				default:
+					// There should be no other event types.
+					t.Fatalf("unexpected event: %+v", ev)
+				}
+			}
 
 			// Nothing more to do after the block was received.
 			return

@@ -136,6 +136,18 @@ type AnnotatedBlock struct {
 	Block *block.Block `json:"block"`
 }
 
+// ExecutorCommittedEvent is an event emitted each time an executor node commits.
+type ExecutorCommittedEvent struct {
+	// Commit is the executor commitment.
+	Commit commitment.ExecutorCommitment `json:"commit"`
+}
+
+// MergeCommittedEvent is an event emitted each time a merge node commits.
+type MergeCommittedEvent struct {
+	// Commit is the merge commitment.
+	Commit commitment.MergeCommitment `json:"commit"`
+}
+
 // ExecutionDiscrepancyDetectedEvent is an execute discrepancy detected event.
 type ExecutionDiscrepancyDetectedEvent struct {
 	// CommitteeID is the identifier of the executor committee where a
@@ -155,6 +167,8 @@ type Event struct {
 	Height int64     `json:"height,omitempty"`
 	TxHash hash.Hash `json:"tx_hash,omitempty"`
 
+	ExecutorCommitted            *ExecutorCommittedEvent            `json:"executor_committed,omitempty"`
+	MergeCommitted               *MergeCommittedEvent               `json:"merge_committed,omitempty"`
 	ExecutionDiscrepancyDetected *ExecutionDiscrepancyDetectedEvent `json:"execution_discrepancy,omitempty"`
 	MergeDiscrepancyDetected     *MergeDiscrepancyDetectedEvent     `json:"merge_discrepancy,omitempty"`
 }

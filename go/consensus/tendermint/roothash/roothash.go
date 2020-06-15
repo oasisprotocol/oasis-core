@@ -458,6 +458,7 @@ func (tb *tendermintBackend) onABCIEvents(
 
 			switch {
 			case bytes.Equal(key, app.KeyFinalized):
+				// A runtime block has been finalized.
 				if !doBroadcast {
 					// Ignore finalization event when querying events in GetEvents.
 					continue
@@ -508,9 +509,10 @@ func (tb *tendermintBackend) onABCIEvents(
 				tb.allBlockNotifier.Broadcast(blk)
 				notifiers.blockNotifier.Broadcast(annBlk)
 			case bytes.Equal(key, app.KeyMergeDiscrepancyDetected):
+				// A merge discrepancy has been detected.
 				var value app.ValueMergeDiscrepancyDetected
 				if err := cbor.Unmarshal(val, &value); err != nil {
-					tb.logger.Error("failed to get discrepancy from tag",
+					tb.logger.Error("failed to unmarshal merge discrepancy from event",
 						"err", err,
 					)
 					continue
@@ -525,15 +527,52 @@ func (tb *tendermintBackend) onABCIEvents(
 					events = append(events, ev)
 				}
 			case bytes.Equal(key, app.KeyExecutionDiscrepancyDetected):
+				// An execution discrepancy has been detected.
 				var value app.ValueExecutionDiscrepancyDetected
 				if err := cbor.Unmarshal(val, &value); err != nil {
-					tb.logger.Error("failed to get discrepancy from tag",
+					tb.logger.Error("failed to unmarshal execution discrepancy from event",
 						"err", err,
 					)
 					continue
 				}
 
 				ev := api.Event{Height: height, TxHash: eh, ExecutionDiscrepancyDetected: &value.Event}
+
+				if doBroadcast {
+					notifiers := tb.getRuntimeNotifiers(value.ID)
+					notifiers.eventNotifier.Broadcast(&ev)
+				} else {
+					events = append(events, ev)
+				}
+			case bytes.Equal(key, app.KeyExecutorCommitted):
+				// An executor commit has been processed.
+				var value app.ValueExecutorCommitted
+				if err := cbor.Unmarshal(val, &value); err != nil {
+					tb.logger.Error("failed to unmarshal executor committed event",
+						"err", err,
+					)
+					continue
+				}
+
+				ev := api.Event{Height: height, TxHash: eh, ExecutorCommitted: &value.Event}
+
+				if doBroadcast {
+					notifiers := tb.getRuntimeNotifiers(value.ID)
+					notifiers.eventNotifier.Broadcast(&ev)
+				} else {
+					events = append(events, ev)
+				}
+			case bytes.Equal(key, app.KeyMergeCommitted):
+				// A merge commit has been processed.
+				var value app.ValueMergeCommitted
+				if err := cbor.Unmarshal(val, &value); err != nil {
+					tb.logger.Error("failed to unmarshal executor committed event",
+						"err", err,
+					)
+					continue
+				}
+
+				ev := api.Event{Height: height, TxHash: eh, MergeCommitted: &value.Event}
 
 				if doBroadcast {
 					notifiers := tb.getRuntimeNotifiers(value.ID)
