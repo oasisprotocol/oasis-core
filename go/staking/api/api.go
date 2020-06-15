@@ -175,9 +175,9 @@ type Event struct {
 	Height int64     `json:"height,omitempty"`
 	TxHash hash.Hash `json:"tx_hash,omitempty"`
 
-	TransferEvent *TransferEvent `json:"transfer,omitempty"`
-	BurnEvent     *BurnEvent     `json:"burn,omitempty"`
-	EscrowEvent   *EscrowEvent   `json:"escrow,omitempty"`
+	Transfer *TransferEvent `json:"transfer,omitempty"`
+	Burn     *BurnEvent     `json:"burn,omitempty"`
+	Escrow   *EscrowEvent   `json:"escrow,omitempty"`
 }
 
 // AddEscrowEvent is the event emitted when a balance is transfered into

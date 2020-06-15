@@ -22,6 +22,12 @@ var (
 	// roothash application.
 	QueryApp = api.QueryForApp(AppName)
 
+	// KeyExecutorCommitted is an ABCI event attribute key for executor
+	// commit events (value is CBOR-serialized ValueExecutorCommitted).
+	KeyExecutorCommitted = []byte("executor-commit")
+	// KeyMergeCommitted is an ABCI event attribute key for merge
+	// commit events (value is CBOR-serialized ValueMergeCommitted).
+	KeyMergeCommitted = []byte("merge-commit")
 	// KeyMergeDiscrepancyDetected is an ABCI event attribute key for
 	// merge discrepancy detected events (value is a CBOR serialized
 	// ValueMergeDiscrepancyDetected).
@@ -35,21 +41,31 @@ var (
 	KeyFinalized = []byte("finalized")
 )
 
+// ValueExecutorCommitted is the value component of a KeyExecutorCommitted.
+type ValueExecutorCommitted struct {
+	ID    common.Namespace                `json:"id"`
+	Event roothash.ExecutorCommittedEvent `json:"event"`
+}
+
+// ValueMergeCommitted is the value component of a KeyMergeCommitted.
+type ValueMergeCommitted struct {
+	ID    common.Namespace             `json:"id"`
+	Event roothash.MergeCommittedEvent `json:"event"`
+}
+
 // ValueFinalized is the value component of a TagFinalized.
 type ValueFinalized struct {
 	ID    common.Namespace `json:"id"`
 	Round uint64           `json:"round"`
 }
 
-// ValueMergeDiscrepancyDetected is the value component of a
-// TagMergeDiscrepancyDetected.
+// ValueMergeDiscrepancyDetected is the value component of a KeyMergeDiscrepancyDetected.
 type ValueMergeDiscrepancyDetected struct {
 	Event roothash.MergeDiscrepancyDetectedEvent `json:"event"`
 	ID    common.Namespace                       `json:"id"`
 }
 
-// ValueExecutionDiscrepancyDetected is the value component of a
-// TagMergeDiscrepancyDetected.
+// ValueExecutionDiscrepancyDetected is the value component of a KeyMergeDiscrepancyDetected.
 type ValueExecutionDiscrepancyDetected struct {
 	ID    common.Namespace                           `json:"id"`
 	Event roothash.ExecutionDiscrepancyDetectedEvent `json:"event"`

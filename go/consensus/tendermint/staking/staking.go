@@ -6,7 +6,6 @@ import (
 	"context"
 	"fmt"
 
-	abcitypes "github.com/tendermint/tendermint/abci/types"
 	tmrpctypes "github.com/tendermint/tendermint/rpc/core/types"
 	tmtypes "github.com/tendermint/tendermint/types"
 
@@ -16,6 +15,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/pubsub"
 	"github.com/oasisprotocol/oasis-core/go/common/quantity"
 	"github.com/oasisprotocol/oasis-core/go/consensus/tendermint/abci"
+	tmapi "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/api"
 	app "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/apps/staking"
 	"github.com/oasisprotocol/oasis-core/go/consensus/tendermint/service"
 	"github.com/oasisprotocol/oasis-core/go/staking/api"
@@ -36,14 +36,6 @@ type tendermintBackend struct {
 	eventNotifier    *pubsub.Broker
 
 	closedCh chan struct{}
-}
-
-// Extend the abci Event struct with the transaction hash if the event was
-// the result of a transaction.  Block events have Hash set to the empty hash.
-type abciEventWithHash struct {
-	abcitypes.Event
-
-	TxHash hash.Hash
 }
 
 func (tb *tendermintBackend) TotalSupply(ctx context.Context, height int64) (*quantity.Quantity, error) {
@@ -151,23 +143,6 @@ func (tb *tendermintBackend) StateToGenesis(ctx context.Context, height int64) (
 	return q.Genesis(ctx)
 }
 
-func convertTmBlockEvents(beginBlockEvents []abcitypes.Event, endBlockEvents []abcitypes.Event) []abciEventWithHash {
-	var tmEvents []abciEventWithHash
-	for _, bbe := range beginBlockEvents {
-		var ev abciEventWithHash
-		ev.Event = bbe
-		ev.TxHash.Empty()
-		tmEvents = append(tmEvents, ev)
-	}
-	for _, ebe := range endBlockEvents {
-		var ev abciEventWithHash
-		ev.Event = ebe
-		ev.TxHash.Empty()
-		tmEvents = append(tmEvents, ev)
-	}
-	return tmEvents
-}
-
 func (tb *tendermintBackend) GetEvents(ctx context.Context, height int64) ([]api.Event, error) {
 	// Get block results at given height.
 	var results *tmrpctypes.ResultBlockResults
@@ -191,7 +166,7 @@ func (tb *tendermintBackend) GetEvents(ctx context.Context, height int64) ([]api
 	}
 
 	// Decode events from block results.
-	tmEvents := convertTmBlockEvents(results.BeginBlockEvents, results.EndBlockEvents)
+	tmEvents := tmapi.ConvertBlockEvents(results.BeginBlockEvents, results.EndBlockEvents)
 	for txIdx, txResults := range results.TxsResults {
 		// The order of transactions in txns and results.TxsResults is
 		// supposed to match, so the same index in both slices refers to the
@@ -202,7 +177,7 @@ func (tb *tendermintBackend) GetEvents(ctx context.Context, height int64) ([]api
 
 		// Append hash to each event.
 		for _, tmEv := range txResults.Events {
-			var ev abciEventWithHash
+			var ev tmapi.EventWithHash
 			ev.Event = tmEv
 			ev.TxHash = evHash
 			tmEvents = append(tmEvents, ev)
@@ -267,7 +242,7 @@ func (tb *tendermintBackend) worker(ctx context.Context) {
 }
 
 func (tb *tendermintBackend) onEventDataNewBlock(ctx context.Context, ev tmtypes.EventDataNewBlock) {
-	events := convertTmBlockEvents(ev.ResultBeginBlock.GetEvents(), ev.ResultEndBlock.GetEvents())
+	events := tmapi.ConvertBlockEvents(ev.ResultBeginBlock.GetEvents(), ev.ResultEndBlock.GetEvents())
 
 	_, _ = tb.onABCIEvents(ctx, events, ev.Block.Header.Height, true)
 }
@@ -275,9 +250,9 @@ func (tb *tendermintBackend) onEventDataNewBlock(ctx context.Context, ev tmtypes
 func (tb *tendermintBackend) onEventDataTx(ctx context.Context, tx tmtypes.EventDataTx) {
 	evHash := hash.NewFromBytes(tx.Tx)
 
-	var events []abciEventWithHash
+	var events []tmapi.EventWithHash
 	for _, tmEv := range tx.Result.Events {
-		var ev abciEventWithHash
+		var ev tmapi.EventWithHash
 		ev.Event = tmEv
 		ev.TxHash = evHash
 		events = append(events, ev)
@@ -286,7 +261,7 @@ func (tb *tendermintBackend) onEventDataTx(ctx context.Context, tx tmtypes.Event
 	_, _ = tb.onABCIEvents(ctx, events, tx.Height, true)
 }
 
-func (tb *tendermintBackend) onABCIEvents(context context.Context, tmEvents []abciEventWithHash, height int64, doBroadcast bool) ([]api.Event, error) {
+func (tb *tendermintBackend) onABCIEvents(ctx context.Context, tmEvents []tmapi.EventWithHash, height int64, doBroadcast bool) ([]api.Event, error) {
 	var events []api.Event
 	for _, tmEv := range tmEvents {
 		// Ignore events that don't relate to the staking app.
@@ -299,7 +274,9 @@ func (tb *tendermintBackend) onABCIEvents(context context.Context, tmEvents []ab
 		for _, pair := range tmEv.GetAttributes() {
 			key := pair.GetKey()
 			val := pair.GetValue()
-			if bytes.Equal(key, app.KeyTakeEscrow) {
+
+			switch {
+			case bytes.Equal(key, app.KeyTakeEscrow):
 				// Take escrow event.
 				var e api.TakeEscrowEvent
 				if err := cbor.Unmarshal(val, &e); err != nil {
@@ -314,7 +291,7 @@ func (tb *tendermintBackend) onABCIEvents(context context.Context, tmEvents []ab
 				}
 
 				ee := &api.EscrowEvent{Take: &e}
-				evt := &api.Event{Height: height, TxHash: eh, EscrowEvent: ee}
+				evt := &api.Event{Height: height, TxHash: eh, Escrow: ee}
 
 				if doBroadcast {
 					tb.escrowNotifier.Broadcast(ee)
@@ -322,7 +299,7 @@ func (tb *tendermintBackend) onABCIEvents(context context.Context, tmEvents []ab
 				} else {
 					events = append(events, *evt)
 				}
-			} else if bytes.Equal(key, app.KeyTransfer) {
+			case bytes.Equal(key, app.KeyTransfer):
 				// Transfer event.
 				var e api.TransferEvent
 				if err := cbor.Unmarshal(val, &e); err != nil {
@@ -336,7 +313,7 @@ func (tb *tendermintBackend) onABCIEvents(context context.Context, tmEvents []ab
 					}
 				}
 
-				evt := &api.Event{Height: height, TxHash: eh, TransferEvent: &e}
+				evt := &api.Event{Height: height, TxHash: eh, Transfer: &e}
 
 				if doBroadcast {
 					tb.transferNotifier.Broadcast(&e)
@@ -344,7 +321,7 @@ func (tb *tendermintBackend) onABCIEvents(context context.Context, tmEvents []ab
 				} else {
 					events = append(events, *evt)
 				}
-			} else if bytes.Equal(key, app.KeyReclaimEscrow) {
+			case bytes.Equal(key, app.KeyReclaimEscrow):
 				// Reclaim escrow event.
 				var e api.ReclaimEscrowEvent
 				if err := cbor.Unmarshal(val, &e); err != nil {
@@ -359,7 +336,7 @@ func (tb *tendermintBackend) onABCIEvents(context context.Context, tmEvents []ab
 				}
 
 				ee := &api.EscrowEvent{Reclaim: &e}
-				evt := &api.Event{Height: height, TxHash: eh, EscrowEvent: ee}
+				evt := &api.Event{Height: height, TxHash: eh, Escrow: ee}
 
 				if doBroadcast {
 					tb.escrowNotifier.Broadcast(ee)
@@ -367,7 +344,7 @@ func (tb *tendermintBackend) onABCIEvents(context context.Context, tmEvents []ab
 				} else {
 					events = append(events, *evt)
 				}
-			} else if bytes.Equal(key, app.KeyAddEscrow) {
+			case bytes.Equal(key, app.KeyAddEscrow):
 				// Add escrow event.
 				var e api.AddEscrowEvent
 				if err := cbor.Unmarshal(val, &e); err != nil {
@@ -382,7 +359,7 @@ func (tb *tendermintBackend) onABCIEvents(context context.Context, tmEvents []ab
 				}
 
 				ee := &api.EscrowEvent{Add: &e}
-				evt := &api.Event{Height: height, TxHash: eh, EscrowEvent: ee}
+				evt := &api.Event{Height: height, TxHash: eh, Escrow: ee}
 
 				if doBroadcast {
 					tb.escrowNotifier.Broadcast(ee)
@@ -390,7 +367,7 @@ func (tb *tendermintBackend) onABCIEvents(context context.Context, tmEvents []ab
 				} else {
 					events = append(events, *evt)
 				}
-			} else if bytes.Equal(key, app.KeyBurn) {
+			case bytes.Equal(key, app.KeyBurn):
 				// Burn event.
 				var e api.BurnEvent
 				if err := cbor.Unmarshal(val, &e); err != nil {
@@ -404,7 +381,7 @@ func (tb *tendermintBackend) onABCIEvents(context context.Context, tmEvents []ab
 					}
 				}
 
-				evt := &api.Event{Height: height, TxHash: eh, BurnEvent: &e}
+				evt := &api.Event{Height: height, TxHash: eh, Burn: &e}
 
 				if doBroadcast {
 					tb.burnNotifier.Broadcast(&e)
@@ -412,6 +389,11 @@ func (tb *tendermintBackend) onABCIEvents(context context.Context, tmEvents []ab
 				} else {
 					events = append(events, *evt)
 				}
+			default:
+				tb.logger.Warn("unknown event type",
+					"key", key,
+					"value", val,
+				)
 			}
 		}
 	}

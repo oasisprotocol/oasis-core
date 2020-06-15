@@ -4,8 +4,10 @@ import (
 	"fmt"
 
 	"github.com/oasisprotocol/oasis-core/go/common"
+	"github.com/oasisprotocol/oasis-core/go/common/cbor"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	abciAPI "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/api"
+	tmapi "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/api"
 	registryState "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/apps/registry/state"
 	roothashState "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/apps/roothash/state"
 	schedulerState "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/apps/scheduler/state"
@@ -144,6 +146,17 @@ func (app *rootHashApplication) executorCommit(
 		return fmt.Errorf("failed to set runtime state: %w", err)
 	}
 
+	// Emit events for all accepted commits.
+	for _, commit := range cc.Commits {
+		evV := ValueExecutorCommitted{
+			ID: cc.ID,
+			Event: roothash.ExecutorCommittedEvent{
+				Commit: commit,
+			},
+		}
+		ctx.EmitEvent(tmapi.NewEventBuilder(app.Name()).Attribute(KeyExecutorCommitted, cbor.Marshal(evV)))
+	}
+
 	return nil
 }
 
@@ -195,6 +208,17 @@ func (app *rootHashApplication) mergeCommit(
 	// Update runtime state.
 	if err = state.SetRuntimeState(ctx, rtState); err != nil {
 		return fmt.Errorf("failed to set runtime state: %w", err)
+	}
+
+	// Emit events for all accepted commits.
+	for _, commit := range mc.Commits {
+		evV := ValueMergeCommitted{
+			ID: mc.ID,
+			Event: roothash.MergeCommittedEvent{
+				Commit: commit,
+			},
+		}
+		ctx.EmitEvent(tmapi.NewEventBuilder(app.Name()).Attribute(KeyMergeCommitted, cbor.Marshal(evV)))
 	}
 
 	return nil
