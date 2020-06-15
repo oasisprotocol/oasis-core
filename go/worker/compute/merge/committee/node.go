@@ -8,6 +8,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/cenkalti/backoff/v4"
 	"github.com/opentracing/opentracing-go"
 	"github.com/prometheus/client_golang/prometheus"
 
@@ -273,12 +274,20 @@ func (n *Node) HandleNewBlockLocked(blk *block.Block) {
 // HandleResultsFromExecutorWorkerLocked processes results from an executor worker.
 // Guarded by n.commonNode.CrossNode.
 func (n *Node) HandleResultsFromExecutorWorkerLocked(spanCtx opentracing.SpanContext, commit *commitment.ExecutorCommitment) {
-	// TODO: Context.
-	if err := n.handleResultsLocked(context.TODO(), commit); err != nil {
-		n.logger.Warn("failed to handle results from local executor worker",
-			"err", err,
-		)
-	}
+	// Spawn retry in a goroutine to prevent blocking processing.
+	go func() {
+		call := func() error {
+			n.commonNode.CrossNode.Lock()
+			defer n.commonNode.CrossNode.Unlock()
+			return n.handleResultsLocked(n.roundCtx, commit)
+		}
+		bkoff := backoff.WithContext(backoff.NewExponentialBackOff(), n.roundCtx)
+		if err := backoff.Retry(call, bkoff); err != nil {
+			n.logger.Warn("failed to handle results from local executor worker",
+				"err", err,
+			)
+		}
+	}()
 }
 
 // Guarded by n.commonNode.CrossNode.
