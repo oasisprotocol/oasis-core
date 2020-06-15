@@ -141,6 +141,7 @@ type ExecutionDiscrepancyDetectedEvent struct {
 	// CommitteeID is the identifier of the executor committee where a
 	// discrepancy has been detected.
 	CommitteeID hash.Hash `json:"cid"`
+
 	// Timeout signals whether the discrepancy was due to a timeout.
 	Timeout bool `json:"timeout"`
 }
@@ -149,8 +150,11 @@ type ExecutionDiscrepancyDetectedEvent struct {
 type MergeDiscrepancyDetectedEvent struct {
 }
 
-// Event is a protocol event.
+// Event is a roothash event.
 type Event struct {
+	Height int64     `json:"height,omitempty"`
+	TxHash hash.Hash `json:"tx_hash,omitempty"`
+
 	ExecutionDiscrepancyDetected *ExecutionDiscrepancyDetectedEvent `json:"execution_discrepancy,omitempty"`
 	MergeDiscrepancyDetected     *MergeDiscrepancyDetectedEvent     `json:"merge_discrepancy,omitempty"`
 }

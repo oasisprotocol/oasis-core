@@ -9,16 +9,17 @@ import (
 	"sync"
 
 	"github.com/eapache/channels"
-	"github.com/tendermint/tendermint/abci/types"
 	tmrpctypes "github.com/tendermint/tendermint/rpc/core/types"
 	tmtypes "github.com/tendermint/tendermint/types"
 
 	"github.com/oasisprotocol/oasis-core/go/common"
 	"github.com/oasisprotocol/oasis-core/go/common/cbor"
 	"github.com/oasisprotocol/oasis-core/go/common/crash"
+	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
 	"github.com/oasisprotocol/oasis-core/go/common/pubsub"
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
+	tmapi "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/api"
 	app "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/apps/roothash"
 	"github.com/oasisprotocol/oasis-core/go/consensus/tendermint/service"
 	"github.com/oasisprotocol/oasis-core/go/roothash/api"
@@ -208,40 +209,35 @@ func (tb *tendermintBackend) GetEvents(ctx context.Context, height int64) ([]api
 		return nil, err
 	}
 
+	// Get transactions at given height.
+	txns, err := tb.service.GetTransactions(ctx, height)
+	if err != nil {
+		tb.logger.Error("failed to get tendermint transactions",
+			"err", err,
+			"height", height,
+		)
+		return nil, err
+	}
+
 	// Decode events from block results.
-	tmEvents := append(results.BeginBlockEvents, results.EndBlockEvents...)
-	for _, txResults := range results.TxsResults {
-		tmEvents = append(tmEvents, txResults.Events...)
-	}
-	var events []api.Event
-	for _, tmEv := range tmEvents {
-		// Ignore events that don't relate to the roothash app.
-		if tmEv.GetType() != app.EventType {
-			continue
-		}
+	tmEvents := tmapi.ConvertBlockEvents(results.BeginBlockEvents, results.EndBlockEvents)
+	for txIdx, txResults := range results.TxsResults {
+		// The order of transactions in txns and results.TxsResults is
+		// supposed to match, so the same index in both slices refers to the
+		// same transaction.
 
-		for _, pair := range tmEv.GetAttributes() {
-			if bytes.Equal(pair.GetKey(), app.KeyMergeDiscrepancyDetected) {
-				// Merge discrepancy event.
-				evt := api.Event{
-					MergeDiscrepancyDetected: &api.MergeDiscrepancyDetectedEvent{},
-				}
-				events = append(events, evt)
-			} else if bytes.Equal(pair.GetKey(), app.KeyExecutionDiscrepancyDetected) {
-				// Execution discrepancy event.
-				var eddValue app.ValueExecutionDiscrepancyDetected
-				if err := cbor.Unmarshal(pair.GetValue(), &eddValue); err != nil {
-					return nil, fmt.Errorf("roothash: corrupt ExecutionDiscrepancyDetected event: %w", err)
-				}
-				evt := api.Event{
-					ExecutionDiscrepancyDetected: &eddValue.Event,
-				}
-				events = append(events, evt)
-			}
+		// Generate hash of transaction.
+		evHash := hash.NewFromBytes(txns[txIdx])
+
+		// Append hash to each event.
+		for _, tmEv := range txResults.Events {
+			var ev tmapi.EventWithHash
+			ev.Event = tmEv
+			ev.TxHash = evHash
+			tmEvents = append(tmEvents, ev)
 		}
 	}
-
-	return events, nil
+	return tb.onABCIEvents(ctx, tmEvents, height, false, nil)
 }
 
 func (tb *tendermintBackend) Cleanup() {
@@ -398,102 +394,162 @@ func (tb *tendermintBackend) worker(ctx context.Context) { // nolint: gocyclo
 			return
 		}
 
-		// Extract relevant events.
-		var height int64
-		var tmEvents []types.Event
 		switch ev := event.(type) {
 		case tmtypes.EventDataNewBlock:
-			height = ev.Block.Header.Height
-			tmEvents = append([]types.Event{}, ev.ResultBeginBlock.GetEvents()...)
-			tmEvents = append(tmEvents, ev.ResultEndBlock.GetEvents()...)
+			tb.Lock()
+			tb.lastBlockHeight = ev.Block.Header.Height
+			tb.Unlock()
+
+			tb.onEventDataNewBlock(ctx, ev, blockHistory)
 		case tmtypes.EventDataTx:
-			height = ev.Height
-			tmEvents = ev.Result.GetEvents()
+			tb.onEventDataTx(ctx, ev, blockHistory)
 		default:
+		}
+	}
+}
+
+func (tb *tendermintBackend) onEventDataNewBlock(
+	ctx context.Context,
+	ev tmtypes.EventDataNewBlock,
+	blockHistory map[common.Namespace]api.BlockHistory,
+) {
+	events := tmapi.ConvertBlockEvents(ev.ResultBeginBlock.GetEvents(), ev.ResultEndBlock.GetEvents())
+
+	_, _ = tb.onABCIEvents(ctx, events, ev.Block.Header.Height, true, blockHistory)
+}
+
+func (tb *tendermintBackend) onEventDataTx(
+	ctx context.Context,
+	tx tmtypes.EventDataTx,
+	blockHistory map[common.Namespace]api.BlockHistory,
+) {
+	evHash := hash.NewFromBytes(tx.Tx)
+
+	var events []tmapi.EventWithHash
+	for _, tmEv := range tx.Result.Events {
+		var ev tmapi.EventWithHash
+		ev.Event = tmEv
+		ev.TxHash = evHash
+		events = append(events, ev)
+	}
+
+	_, _ = tb.onABCIEvents(ctx, events, tx.Height, true, blockHistory)
+}
+
+func (tb *tendermintBackend) onABCIEvents(
+	ctx context.Context,
+	tmEvents []tmapi.EventWithHash,
+	height int64,
+	doBroadcast bool,
+	blockHistory map[common.Namespace]api.BlockHistory,
+) ([]api.Event, error) {
+	var events []api.Event
+	for _, tmEv := range tmEvents {
+		// Ignore events that don't relate to the roothash app.
+		if tmEv.GetType() != app.EventType {
 			continue
 		}
 
-		tb.Lock()
-		tb.lastBlockHeight = height
-		tb.Unlock()
+		eh := tmEv.TxHash
 
-		for _, tmEv := range tmEvents {
-			if tmEv.GetType() != app.EventType {
-				continue
-			}
+		for _, pair := range tmEv.GetAttributes() {
+			key := pair.GetKey()
+			val := pair.GetValue()
 
-			for _, pair := range tmEv.GetAttributes() {
-				if bytes.Equal(pair.GetKey(), app.KeyFinalized) {
-					blk, value, err := tb.getBlockFromFinalizedTag(tb.ctx, pair.GetValue(), height)
-					if err != nil {
-						tb.logger.Error("worker: failed to get block from tag",
-							"err", err,
-						)
-						continue
-					}
-
-					notifiers := tb.getRuntimeNotifiers(value.ID)
-
-					// Ensure latest block is set.
-					notifiers.Lock()
-					notifiers.lastBlock = blk
-					notifiers.lastBlockHeight = height
-					notifiers.Unlock()
-
-					annBlk := &api.AnnotatedBlock{
-						Height: height,
-						Block:  blk,
-					}
-
-					// Commit the block to history if needed.
-					if bh, ok := blockHistory[value.ID]; ok {
-						crash.Here(crashPointBlockBeforeIndex)
-
-						err = bh.Commit(annBlk)
-						if err != nil {
-							tb.logger.Error("failed to commit block to history keeper",
-								"err", err,
-								"runtime_id", value.ID,
-								"height", height,
-								"round", blk.Header.Round,
-							)
-							// Panic as otherwise the history would become out of sync with
-							// what was emitted from the roothash backend. The only reason
-							// why something like this could happen is a problem with the
-							// history database.
-							panic("roothash: failed to index block")
-						}
-					}
-
-					// Broadcast new block.
-					tb.allBlockNotifier.Broadcast(blk)
-					notifiers.blockNotifier.Broadcast(annBlk)
-				} else if bytes.Equal(pair.GetKey(), app.KeyMergeDiscrepancyDetected) {
-					var value app.ValueMergeDiscrepancyDetected
-					if err := cbor.Unmarshal(pair.GetValue(), &value); err != nil {
-						tb.logger.Error("worker: failed to get discrepancy from tag",
-							"err", err,
-						)
-						continue
-					}
-
-					notifiers := tb.getRuntimeNotifiers(value.ID)
-					notifiers.eventNotifier.Broadcast(&api.Event{MergeDiscrepancyDetected: &value.Event})
-				} else if bytes.Equal(pair.GetKey(), app.KeyExecutionDiscrepancyDetected) {
-					var value app.ValueExecutionDiscrepancyDetected
-					if err := cbor.Unmarshal(pair.GetValue(), &value); err != nil {
-						tb.logger.Error("worker: failed to get discrepancy from tag",
-							"err", err,
-						)
-						continue
-					}
-
-					notifiers := tb.getRuntimeNotifiers(value.ID)
-					notifiers.eventNotifier.Broadcast(&api.Event{ExecutionDiscrepancyDetected: &value.Event})
+			switch {
+			case bytes.Equal(key, app.KeyFinalized):
+				if !doBroadcast {
+					// Ignore finalization event when querying events in GetEvents.
+					continue
 				}
+
+				blk, value, err := tb.getBlockFromFinalizedTag(tb.ctx, val, height)
+				if err != nil {
+					tb.logger.Error("worker: failed to get block from tag",
+						"err", err,
+					)
+					continue
+				}
+
+				notifiers := tb.getRuntimeNotifiers(value.ID)
+
+				// Ensure latest block is set.
+				notifiers.Lock()
+				notifiers.lastBlock = blk
+				notifiers.lastBlockHeight = height
+				notifiers.Unlock()
+
+				annBlk := &api.AnnotatedBlock{
+					Height: height,
+					Block:  blk,
+				}
+
+				// Commit the block to history if needed.
+				if bh, ok := blockHistory[value.ID]; ok {
+					crash.Here(crashPointBlockBeforeIndex)
+
+					err = bh.Commit(annBlk)
+					if err != nil {
+						tb.logger.Error("failed to commit block to history keeper",
+							"err", err,
+							"runtime_id", value.ID,
+							"height", height,
+							"round", blk.Header.Round,
+						)
+						// Panic as otherwise the history would become out of sync with
+						// what was emitted from the roothash backend. The only reason
+						// why something like this could happen is a problem with the
+						// history database.
+						panic("roothash: failed to index block")
+					}
+				}
+
+				// Broadcast new block.
+				tb.allBlockNotifier.Broadcast(blk)
+				notifiers.blockNotifier.Broadcast(annBlk)
+			case bytes.Equal(key, app.KeyMergeDiscrepancyDetected):
+				var value app.ValueMergeDiscrepancyDetected
+				if err := cbor.Unmarshal(val, &value); err != nil {
+					tb.logger.Error("failed to get discrepancy from tag",
+						"err", err,
+					)
+					continue
+				}
+
+				ev := api.Event{Height: height, TxHash: eh, MergeDiscrepancyDetected: &value.Event}
+
+				if doBroadcast {
+					notifiers := tb.getRuntimeNotifiers(value.ID)
+					notifiers.eventNotifier.Broadcast(&ev)
+				} else {
+					events = append(events, ev)
+				}
+			case bytes.Equal(key, app.KeyExecutionDiscrepancyDetected):
+				var value app.ValueExecutionDiscrepancyDetected
+				if err := cbor.Unmarshal(val, &value); err != nil {
+					tb.logger.Error("failed to get discrepancy from tag",
+						"err", err,
+					)
+					continue
+				}
+
+				ev := api.Event{Height: height, TxHash: eh, ExecutionDiscrepancyDetected: &value.Event}
+
+				if doBroadcast {
+					notifiers := tb.getRuntimeNotifiers(value.ID)
+					notifiers.eventNotifier.Broadcast(&ev)
+				} else {
+					events = append(events, ev)
+				}
+			default:
+				tb.logger.Warn("unknown event type",
+					"key", key,
+					"value", val,
+				)
 			}
 		}
 	}
+	return events, nil
 }
 
 // New constructs a new tendermint-based root hash backend.
