@@ -321,7 +321,7 @@ func registerAccountCmd() {
 }
 
 func init() {
-	accountInfoFlags.String(CfgAccountAddr, "", "Address of the account")
+	accountInfoFlags.String(CfgAccountAddr, "", "account address")
 	_ = viper.BindPFlags(accountInfoFlags)
 	accountInfoFlags.AddFlagSet(cmdFlags.RetriesFlags)
 	accountInfoFlags.AddFlagSet(cmdGrpc.ClientFlags)
