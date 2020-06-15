@@ -155,9 +155,15 @@ func doInit(cmd *cobra.Command, args []string) { // nolint: gocyclo
 	}
 
 	// Provision the node identity.
-	nodeSignerFactory, err := fileSigner.NewFactory(dataDir, signature.SignerNode, signature.SignerP2P, signature.SignerConsensus)
+	nodeSignerFactory, err := cmdSigner.NewFactory(
+		cmdSigner.Backend(),
+		dataDir,
+		signature.SignerNode,
+		signature.SignerP2P,
+		signature.SignerConsensus,
+	)
 	if err != nil {
-		logger.Error("failed to create node identity signer factory",
+		logger.Error("failed to initialize signer backend",
 			"err", err,
 		)
 		os.Exit(1)
