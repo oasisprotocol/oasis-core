@@ -148,7 +148,17 @@ func (c *ExecutorCommitment) Equal(cmp *ExecutorCommitment) bool {
 type OpenExecutorCommitment struct {
 	ExecutorCommitment
 
-	Body *ComputeBody `json:"body"`
+	Body *ComputeBody `json:"-"` // No need to serialize as it can be reconstructed.
+}
+
+// UnmarshalCBOR handles CBOR unmarshalling from passed data.
+func (c *OpenExecutorCommitment) UnmarshalCBOR(data []byte) error {
+	if err := cbor.Unmarshal(data, &c.ExecutorCommitment); err != nil {
+		return err
+	}
+
+	c.Body = new(ComputeBody)
+	return cbor.Unmarshal(c.Blob, c.Body)
 }
 
 // MostlyEqual returns true if the commitment is mostly equal to another
