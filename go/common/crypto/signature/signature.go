@@ -426,6 +426,14 @@ func (s *Signed) Open(context Context, dst interface{}) error {
 	return cbor.Unmarshal(s.Blob, dst)
 }
 
+// Equal compares vs another Signed for equality.
+func (s *Signed) Equal(cmp *Signed) bool {
+	if !s.Signature.Equal(&cmp.Signature) {
+		return false
+	}
+	return bytes.Equal(s.Blob, cmp.Blob)
+}
+
 // PrettySigned is used for pretty-printing signed messages so that
 // the actual content is displayed instead of the binary blob.
 //

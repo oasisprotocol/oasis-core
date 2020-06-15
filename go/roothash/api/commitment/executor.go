@@ -136,6 +136,11 @@ type ExecutorCommitment struct {
 	signature.Signed
 }
 
+// Equal compares vs another ExecutorCommitment for equality.
+func (c *ExecutorCommitment) Equal(cmp *ExecutorCommitment) bool {
+	return c.Signed.Equal(&cmp.Signed)
+}
+
 // OpenExecutorCommitment is an executor commitment that has been verified and
 // deserialized.
 //

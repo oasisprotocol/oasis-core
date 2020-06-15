@@ -25,6 +25,11 @@ type MergeCommitment struct {
 	signature.Signed
 }
 
+// Equal compares vs another MergeCommitment for equality.
+func (c *MergeCommitment) Equal(cmp *MergeCommitment) bool {
+	return c.Signed.Equal(&cmp.Signed)
+}
+
 // OpenMergeCommitment is a merge commitment that has been verified and
 // deserialized.
 //
