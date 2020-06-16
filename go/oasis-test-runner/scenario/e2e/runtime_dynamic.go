@@ -96,13 +96,14 @@ func (sc *runtimeDynamicImpl) Run(childEnv *env.Env) error { // nolint: gocyclo
 		return err
 	}
 
-	// Wait for enough nodes to register.
-	numNodes := len(sc.net.Validators())
-	sc.logger.Info("waiting for (some) nodes to register",
-		"num_nodes", numNodes,
+	// Wait for validator nodes to register.
+	sc.logger.Info("waiting for validator nodes to initialize",
+		"num_validators", len(sc.net.Validators()),
 	)
-	if err := sc.net.Controller().WaitNodesRegistered(ctx, numNodes); err != nil {
-		return err
+	for _, n := range sc.net.Validators() {
+		if err := n.WaitReady(ctx); err != nil {
+			return fmt.Errorf("failed to wait for a validator: %w", err)
+		}
 	}
 
 	// Perform an initial epoch transition to make sure that the nodes can handle it even though
@@ -185,13 +186,14 @@ func (sc *runtimeDynamicImpl) Run(childEnv *env.Env) error { // nolint: gocyclo
 		}
 	}
 
-	// Wait for enough nodes to register, then make another epoch transition.
-	numNodes += len(sc.net.Keymanagers())
-	sc.logger.Info("waiting for (some) nodes to register (again)",
-		"num_nodes", numNodes,
+	// Wait for key manager nodes to register, then make another epoch transition.
+	sc.logger.Info("waiting for key manager nodes to initialize",
+		"num_keymanagers", len(sc.net.Keymanagers()),
 	)
-	if err := sc.net.Controller().WaitNodesRegistered(ctx, numNodes); err != nil {
-		return err
+	for _, n := range sc.net.Keymanagers() {
+		if err := n.WaitReady(ctx); err != nil {
+			return fmt.Errorf("failed to wait for a validator: %w", err)
+		}
 	}
 	if err := sc.epochTransition(ctx); err != nil {
 		return err
@@ -209,12 +211,22 @@ func (sc *runtimeDynamicImpl) Run(childEnv *env.Env) error { // nolint: gocyclo
 		return fmt.Errorf("failed to register compute runtime: %w", err)
 	}
 
-	// Wait for all nodes to register.
-	sc.logger.Info("waiting for runtime nodes to register",
-		"num_nodes", sc.net.NumRegisterNodes(),
+	// Wait for storage workers and compute workers to become ready.
+	sc.logger.Info("waiting for storage workers to initialize",
+		"num_storage_workers", len(sc.net.StorageWorkers()),
 	)
-	if err := sc.net.Controller().WaitNodesRegistered(ctx, sc.net.NumRegisterNodes()); err != nil {
-		return err
+	for _, n := range sc.net.StorageWorkers() {
+		if err := n.WaitReady(ctx); err != nil {
+			return fmt.Errorf("failed to wait for a storage worker: %w", err)
+		}
+	}
+	sc.logger.Info("waiting for compute workers to initialize",
+		"num_compute_workers", len(sc.net.ComputeWorkers()),
+	)
+	for _, n := range sc.net.ComputeWorkers() {
+		if err := n.WaitReady(ctx); err != nil {
+			return fmt.Errorf("failed to wait for a compute worker: %w", err)
+		}
 	}
 
 	for i := 0; i < 5; i++ {
@@ -305,11 +317,21 @@ func (sc *runtimeDynamicImpl) Run(childEnv *env.Env) error { // nolint: gocyclo
 		}
 	}
 
-	sc.logger.Info("waiting for runtime nodes to register",
-		"num_nodes", sc.net.NumRegisterNodes(),
+	sc.logger.Info("waiting for storage workers to initialize",
+		"num_storage_workers", len(sc.net.StorageWorkers()),
 	)
-	if err = sc.net.Controller().WaitNodesRegistered(ctx, sc.net.NumRegisterNodes()); err != nil {
-		return err
+	for _, n := range sc.net.StorageWorkers() {
+		if err = n.WaitReady(ctx); err != nil {
+			return fmt.Errorf("failed to wait for a storage worker: %w", err)
+		}
+	}
+	sc.logger.Info("waiting for compute workers to initialize",
+		"num_compute_workers", len(sc.net.ComputeWorkers()),
+	)
+	for _, n := range sc.net.ComputeWorkers() {
+		if err = n.WaitReady(ctx); err != nil {
+			return fmt.Errorf("failed to wait for a compute worker: %w", err)
+		}
 	}
 
 	// Epoch transition.
