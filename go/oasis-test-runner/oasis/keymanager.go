@@ -1,10 +1,12 @@
 package oasis
 
 import (
+	"crypto/ed25519"
 	"fmt"
 	"path/filepath"
 	"strconv"
 
+	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	"github.com/oasisprotocol/oasis-core/go/common/node"
 	"github.com/oasisprotocol/oasis-core/go/consensus/tendermint/crypto"
 	"github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common"
@@ -157,6 +159,7 @@ type Keymanager struct { // nolint: maligned
 	entity  *Entity
 	policy  *KeymanagerPolicy
 
+	sentryPubKey     signature.PublicKey
 	tmAddress        string
 	consensusPort    uint16
 	workerClientPort uint16
@@ -313,12 +316,21 @@ func (net *Network) NewKeymanager(cfg *KeymanagerCfg) (*Keymanager, error) {
 
 	// Pre-provision the node identity so that we can update the entity.
 	seed := fmt.Sprintf(keymanagerIdentitySeedTemplate, len(net.keymanagers))
-	publicKey, err := net.provisionNodeIdentity(kmDir, seed, false)
+	publicKey, sentryClientCert, err := net.provisionNodeIdentity(kmDir, seed, false)
 	if err != nil {
 		return nil, fmt.Errorf("oasis/keymanager: failed to provision node identity: %w", err)
 	}
 	if err := cfg.Entity.addNode(publicKey); err != nil {
 		return nil, err
+	}
+	// Sentry client cert.
+	pk, ok := sentryClientCert.PublicKey.(ed25519.PublicKey)
+	if !ok {
+		return nil, fmt.Errorf("oasis/keymanager: bad sentry client public key type (expected: Ed25519 got: %T)", sentryClientCert.PublicKey)
+	}
+	var sentryPubKey signature.PublicKey
+	if err := sentryPubKey.UnmarshalBinary(pk[:]); err != nil {
+		return nil, fmt.Errorf("oasis/keymanager: sentry client public key unmarshal failure: %w", err)
 	}
 
 	km := &Keymanager{
@@ -338,6 +350,7 @@ func (net *Network) NewKeymanager(cfg *KeymanagerCfg) (*Keymanager, error) {
 		policy:           cfg.Policy,
 		sentryIndices:    cfg.SentryIndices,
 		tmAddress:        crypto.PublicKeyToTendermint(&publicKey).Address().String(),
+		sentryPubKey:     sentryPubKey,
 		consensusPort:    net.nextNodePort,
 		workerClientPort: net.nextNodePort + 1,
 		mayGenerate:      len(net.keymanagers) == 0,

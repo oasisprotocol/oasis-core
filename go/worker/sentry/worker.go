@@ -6,7 +6,9 @@ import (
 	flag "github.com/spf13/pflag"
 	"github.com/spf13/viper"
 
+	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	"github.com/oasisprotocol/oasis-core/go/common/grpc"
+	"github.com/oasisprotocol/oasis-core/go/common/grpc/auth"
 	"github.com/oasisprotocol/oasis-core/go/common/identity"
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
 	"github.com/oasisprotocol/oasis-core/go/sentry/api"
@@ -17,7 +19,10 @@ const (
 	// CfgEnabled enables the sentry worker.
 	CfgEnabled = "worker.sentry.enabled"
 	// CfgControlPort configures the sentry worker's control port.
-	CfgControlPort = "worker.sentry.control_port"
+	CfgControlPort = "worker.sentry.control.port"
+	// CfgAuthorizedControlPubkeys configures the public keys of upstream nodes
+	// that are allowed to connect to the sentry control endpoint.
+	CfgAuthorizedControlPubkeys = "worker.sentry.control.authorized_pubkey"
 )
 
 // Flags has the configuration flags.
@@ -123,10 +128,19 @@ func New(backend api.Backend, identity *identity.Identity) (*Worker, error) {
 	}
 
 	if w.enabled {
+		peerPubkeyAuth := auth.NewPeerPubkeyAuthenticator()
+		for _, pubkey := range viper.GetStringSlice(CfgAuthorizedControlPubkeys) {
+			var pk signature.PublicKey
+			if err := pk.UnmarshalText([]byte(pubkey)); err != nil {
+				return nil, fmt.Errorf("worker/sentry: failed unmarshalling upstream public key: %s: %w", pubkey, err)
+			}
+			peerPubkeyAuth.AllowPeerPublicKey(pk)
+		}
 		grpcServer, err := grpc.NewServer(&grpc.ServerConfig{
 			Name:     "sentry",
 			Port:     uint16(viper.GetInt(CfgControlPort)),
 			Identity: identity,
+			AuthFunc: peerPubkeyAuth.AuthFunc,
 		})
 		if err != nil {
 			return nil, fmt.Errorf("worker/sentry: failed to create a new gRPC server: %w", err)
@@ -149,6 +163,7 @@ func New(backend api.Backend, identity *identity.Identity) (*Worker, error) {
 func init() {
 	Flags.Bool(CfgEnabled, false, "Enable Sentry worker (NOTE: This should only be enabled on Sentry nodes.)")
 	Flags.Uint16(CfgControlPort, 9009, "Sentry worker's gRPC server port (NOTE: This should only be enabled on Sentry nodes.)")
+	Flags.StringSlice(CfgAuthorizedControlPubkeys, []string{}, "Public keys of upstream nodes that are allowed to connect to sentry control endpoint.")
 	Flags.AddFlagSet(workerGrpcSentry.Flags)
 
 	_ = viper.BindPFlags(Flags)

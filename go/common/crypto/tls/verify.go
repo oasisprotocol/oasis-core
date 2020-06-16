@@ -49,7 +49,7 @@ func VerifyCertificate(rawCerts [][]byte, opts VerifyOptions) error {
 	pk, ok := cert.PublicKey.(ed25519.PublicKey)
 	if !ok {
 		// This should never happen due to the above check.
-		return fmt.Errorf("tls: bad public key type (expected: Ed2551 got: %T)", cert.PublicKey)
+		return fmt.Errorf("tls: bad public key type (expected: Ed25519 got: %T)", cert.PublicKey)
 	}
 	if !opts.AllowUnknownKeys || opts.Keys != nil {
 		var spk signature.PublicKey
