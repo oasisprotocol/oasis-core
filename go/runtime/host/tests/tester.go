@@ -164,9 +164,9 @@ func testRestart(t *testing.T, cfg host.Config, p host.Provisioner) {
 		t.Fatalf("Failed to receive event")
 	}
 
-	// Trigger a force restart.
-	err = r.Restart(context.Background(), true)
-	require.NoError(err, "Restart")
+	// Trigger a force abort (should restart the runtime).
+	err = r.Abort(context.Background(), true)
+	require.NoError(err, "Abort(force=true)")
 
 	// Wait for a stop event.
 	select {
@@ -184,9 +184,9 @@ func testRestart(t *testing.T, cfg host.Config, p host.Provisioner) {
 		t.Fatalf("Failed to receive event")
 	}
 
-	// Trigger a non-force restart.
-	err = r.Restart(context.Background(), false)
-	require.NoError(err, "Restart")
+	// Trigger a non-force abort (runtime should not be restarted).
+	err = r.Abort(context.Background(), false)
+	require.NoError(err, "Abort(force=false)")
 
 	// There should be no stop event.
 	select {

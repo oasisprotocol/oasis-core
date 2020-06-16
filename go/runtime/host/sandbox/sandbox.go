@@ -72,8 +72,9 @@ func (p *provisioner) NewRuntime(ctx context.Context, cfg host.Config) (host.Run
 	return r, nil
 }
 
-// restartRequest is a request to the runtime manager goroutine to restart the runtime.
-type restartRequest struct {
+// abortRequest is a request to the runtime manager goroutine to abort the runtime.
+// In case of failures or if force flag is set, the runtime is restarted.
+type abortRequest struct {
 	ch    chan<- error
 	force bool
 }
@@ -149,11 +150,11 @@ func (r *sandboxedRuntime) Start() error {
 }
 
 // Implements host.Runtime.
-func (r *sandboxedRuntime) Restart(ctx context.Context, force bool) error {
+func (r *sandboxedRuntime) Abort(ctx context.Context, force bool) error {
 	// Send internal request to the manager goroutine.
 	ch := make(chan error, 1)
 	select {
-	case r.ctrlCh <- &restartRequest{ch: ch, force: force}:
+	case r.ctrlCh <- &abortRequest{ch: ch, force: force}:
 	case <-ctx.Done():
 		return ctx.Err()
 	}
@@ -338,7 +339,7 @@ func (r *sandboxedRuntime) startProcess() (err error) {
 	return nil
 }
 
-func (r *sandboxedRuntime) handleRestartRequest(rq *restartRequest) error {
+func (r *sandboxedRuntime) handleAbortRequest(rq *abortRequest) error {
 	r.logger.Warn("interrupting runtime")
 
 	// First attempt to gracefully interrupt the runtime by sending a request.
@@ -460,9 +461,9 @@ func (r *sandboxedRuntime) manager() {
 		select {
 		case grq := <-r.ctrlCh:
 			switch rq := grq.(type) {
-			case *restartRequest:
-				// Request to restart the process.
-				rq.ch <- r.handleRestartRequest(rq)
+			case *abortRequest:
+				// Request to abort the runtime.
+				rq.ch <- r.handleAbortRequest(rq)
 				close(rq.ch)
 			default:
 				r.logger.Error("received unknown request type",

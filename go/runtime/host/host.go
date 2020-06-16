@@ -52,8 +52,9 @@ type Runtime interface {
 	// Start attempts to start the runtime.
 	Start() error
 
-	// Restart attempts to restart a runtime so that it will be ready to service new requests.
-	Restart(ctx context.Context, force bool) error
+	// Abort attempts to abort a runtime so that it will be ready to service new requests.
+	// In case abort fails or force flag is set, the runtime will be restarted.
+	Abort(ctx context.Context, force bool) error
 
 	// Stop signals the provisioned runtime to stop.
 	Stop()
