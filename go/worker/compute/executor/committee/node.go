@@ -129,10 +129,17 @@ type Node struct {
 	// Mutable and shared with common node's worker.
 	// Guarded by .commonNode.CrossNode.
 	state NodeState
+	// Context valid until the next round.
+	// Guarded by .commonNode.CrossNode.
+	roundCtx       context.Context
+	roundCancelCtx context.CancelFunc
 
 	stateTransitions *pubsub.Broker
 	// Bump this when we need to change what the worker selects over.
 	reselect chan struct{}
+
+	// Guarded by .commonNode.CrossNode.
+	faultDetector *faultDetector
 
 	logger *logging.Logger
 }
@@ -369,6 +376,12 @@ func (n *Node) HandleNewBlockEarlyLocked(blk *block.Block) {
 // Guarded by n.commonNode.CrossNode.
 func (n *Node) HandleNewBlockLocked(blk *block.Block) {
 	header := blk.Header
+
+	// Cancel old round context, start a new one.
+	if n.roundCancelCtx != nil {
+		(n.roundCancelCtx)()
+	}
+	n.roundCtx, n.roundCancelCtx = context.WithCancel(n.ctx)
 
 	// Perform actions based on current state.
 	switch state := n.state.(type) {
@@ -703,8 +716,10 @@ func (n *Node) proposeBatchLocked(batch *protocol.ComputedBatch) {
 
 	// TODO: Add crash point.
 
-	// TODO: Record commitment locally so we can submit it independently in case
-	//       it is not included in a block.
+	// Set up the fault detector so that we can submit the commitment independently from any other
+	// merge nodes in case a fault is detected (which would indicate that the entire merge committee
+	// is faulty).
+	n.faultDetector = newFaultDetector(n.roundCtx, n.commonNode.Runtime, commit, newNodeFaultSubmitter(n))
 
 	n.transitionLocked(StateWaitingForFinalize{
 		batchStartTime: state.batchStartTime,
@@ -724,6 +739,11 @@ func (n *Node) proposeBatchLocked(batch *protocol.ComputedBatch) {
 // HandleNewEventLocked implements NodeHooks.
 // Guarded by n.commonNode.CrossNode.
 func (n *Node) HandleNewEventLocked(ev *roothash.Event) {
+	// In case a fault detector exists, notify it of events.
+	if n.faultDetector != nil {
+		n.faultDetector.notify(ev)
+	}
+
 	dis := ev.ExecutionDiscrepancyDetected
 	if dis == nil {
 		// Ignore other events.

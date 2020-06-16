@@ -4,6 +4,7 @@ package commitment
 import (
 	"errors"
 
+	"github.com/oasisprotocol/oasis-core/go/common/cbor"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	"github.com/oasisprotocol/oasis-core/go/roothash/api/block"
@@ -25,6 +26,11 @@ type MergeCommitment struct {
 	signature.Signed
 }
 
+// Equal compares vs another MergeCommitment for equality.
+func (c *MergeCommitment) Equal(cmp *MergeCommitment) bool {
+	return c.Signed.Equal(&cmp.Signed)
+}
+
 // OpenMergeCommitment is a merge commitment that has been verified and
 // deserialized.
 //
@@ -32,7 +38,17 @@ type MergeCommitment struct {
 type OpenMergeCommitment struct {
 	MergeCommitment
 
-	Body *MergeBody `json:"body"`
+	Body *MergeBody `json:"-"` // No need to serialize as it can be reconstructed.
+}
+
+// UnmarshalCBOR handles CBOR unmarshalling from passed data.
+func (c *OpenMergeCommitment) UnmarshalCBOR(data []byte) error {
+	if err := cbor.Unmarshal(data, &c.MergeCommitment); err != nil {
+		return err
+	}
+
+	c.Body = new(MergeBody)
+	return cbor.Unmarshal(c.Blob, c.Body)
 }
 
 // MostlyEqual returns true if the commitment is mostly equal to another
