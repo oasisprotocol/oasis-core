@@ -323,6 +323,15 @@ func (args *argBuilder) workerSentryControlPort(port uint16) *argBuilder {
 	return args
 }
 
+func (args *argBuilder) workerSentryUpstreamTLSKeys(keys []string) *argBuilder {
+	for _, key := range keys {
+		args.vec = append(args.vec, []string{
+			"--" + workerSentry.CfgAuthorizedControlPubkeys, key,
+		}...)
+	}
+	return args
+}
+
 func (args *argBuilder) workerStorageEnabled() *argBuilder {
 	args.vec = append(args.vec, "--"+workerStorage.CfgWorkerEnabled)
 	return args
@@ -378,32 +387,43 @@ func (args *argBuilder) addSentries(sentries []*Sentry) *argBuilder {
 }
 
 func (args *argBuilder) addValidatorsAsSentryUpstreams(validators []*Validator) *argBuilder {
-	var addrs, ids []string
+	var addrs, sentryPubKeys []string
 	for _, val := range validators {
 		addrs = append(addrs, fmt.Sprintf("%s@127.0.0.1:%d", val.tmAddress, val.consensusPort))
-		ids = append(ids, val.NodeID.String())
+		key, _ := val.sentryPubKey.MarshalText()
+		sentryPubKeys = append(sentryPubKeys, string(key))
 	}
-	return args.tendermintSentryUpstreamAddress(addrs).grpcSentryUpstreamIDs(ids)
+	return args.tendermintSentryUpstreamAddress(addrs).workerSentryUpstreamTLSKeys(sentryPubKeys)
 }
 
 func (args *argBuilder) addSentryStorageWorkers(storageWorkers []*Storage) *argBuilder {
-	var addrs, ids, tmAddrs []string
+	var addrs, ids, tmAddrs, sentryPubKeys []string
 	for _, storageWorker := range storageWorkers {
 		addrs = append(addrs, fmt.Sprintf("127.0.0.1:%d", storageWorker.clientPort))
 		ids = append(ids, storageWorker.NodeID.String())
 		tmAddrs = append(tmAddrs, fmt.Sprintf("%s@127.0.0.1:%d", storageWorker.tmAddress, storageWorker.consensusPort))
+		key, _ := storageWorker.sentryPubKey.MarshalText()
+		sentryPubKeys = append(sentryPubKeys, string(key))
 	}
-	return args.grpcSentryUpstreamAddresses(addrs).grpcSentryUpstreamIDs(ids).tendermintSentryUpstreamAddress(tmAddrs)
+	return args.grpcSentryUpstreamAddresses(addrs).
+		grpcSentryUpstreamIDs(ids).
+		tendermintSentryUpstreamAddress(tmAddrs).
+		workerSentryUpstreamTLSKeys(sentryPubKeys)
 }
 
 func (args *argBuilder) addSentryKeymanagerWorkers(keymanagerWorkers []*Keymanager) *argBuilder {
-	var addrs, ids, tmAddrs []string
+	var addrs, ids, tmAddrs, sentryPubKeys []string
 	for _, keymanager := range keymanagerWorkers {
 		addrs = append(addrs, fmt.Sprintf("127.0.0.1:%d", keymanager.workerClientPort))
 		ids = append(ids, keymanager.NodeID.String())
 		tmAddrs = append(tmAddrs, fmt.Sprintf("%s@127.0.0.1:%d", keymanager.tmAddress, keymanager.consensusPort))
+		key, _ := keymanager.sentryPubKey.MarshalText()
+		sentryPubKeys = append(sentryPubKeys, string(key))
 	}
-	return args.grpcSentryUpstreamAddresses(addrs).grpcSentryUpstreamIDs(ids).tendermintSentryUpstreamAddress(tmAddrs)
+	return args.grpcSentryUpstreamAddresses(addrs).
+		grpcSentryUpstreamIDs(ids).
+		tendermintSentryUpstreamAddress(tmAddrs).
+		workerSentryUpstreamTLSKeys(sentryPubKeys)
 }
 
 func (args *argBuilder) appendSeedNodes(net *Network) *argBuilder {

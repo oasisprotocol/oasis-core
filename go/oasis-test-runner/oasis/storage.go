@@ -1,10 +1,12 @@
 package oasis
 
 import (
+	"crypto/ed25519"
 	"fmt"
 	"path/filepath"
 	"time"
 
+	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	"github.com/oasisprotocol/oasis-core/go/consensus/tendermint/crypto"
 	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
 	"github.com/oasisprotocol/oasis-core/go/storage/database"
@@ -24,6 +26,7 @@ type Storage struct { // nolint: maligned
 	ignoreApplies           bool
 	checkpointCheckInterval time.Duration
 
+	sentryPubKey  signature.PublicKey
 	tmAddress     string
 	consensusPort uint16
 	clientPort    uint16
@@ -141,12 +144,21 @@ func (net *Network) NewStorage(cfg *StorageCfg) (*Storage, error) {
 
 	// Pre-provision the node identity so that we can update the entity.
 	seed := fmt.Sprintf(storageIdentitySeedTemplate, len(net.storageWorkers))
-	publicKey, err := net.provisionNodeIdentity(storageDir, seed, false)
+	publicKey, sentryClientCert, err := net.provisionNodeIdentity(storageDir, seed, false)
 	if err != nil {
 		return nil, fmt.Errorf("oasis/storage: failed to provision node identity: %w", err)
 	}
 	if err := cfg.Entity.addNode(publicKey); err != nil {
 		return nil, err
+	}
+	// Sentry client cert.
+	pk, ok := sentryClientCert.PublicKey.(ed25519.PublicKey)
+	if !ok {
+		return nil, fmt.Errorf("oasis/storage: bad sentry client public key type (expected: Ed25519 got: %T)", sentryClientCert.PublicKey)
+	}
+	var sentryPubKey signature.PublicKey
+	if err := sentryPubKey.UnmarshalBinary(pk[:]); err != nil {
+		return nil, fmt.Errorf("oasis/storage: sentry client public key unmarshal failure: %w", err)
 	}
 
 	worker := &Storage{
@@ -163,6 +175,7 @@ func (net *Network) NewStorage(cfg *StorageCfg) (*Storage, error) {
 		sentryIndices:           cfg.SentryIndices,
 		ignoreApplies:           cfg.IgnoreApplies,
 		checkpointCheckInterval: cfg.CheckpointCheckInterval,
+		sentryPubKey:            sentryPubKey,
 		tmAddress:               crypto.PublicKeyToTendermint(&publicKey).Address().String(),
 		consensusPort:           net.nextNodePort,
 		clientPort:              net.nextNodePort + 1,

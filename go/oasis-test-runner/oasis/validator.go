@@ -1,10 +1,12 @@
 package oasis
 
 import (
+	"crypto/ed25519"
 	"fmt"
 	netPkg "net"
 	"path/filepath"
 
+	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	"github.com/oasisprotocol/oasis-core/go/common/node"
 	"github.com/oasisprotocol/oasis-core/go/consensus/tendermint/crypto"
 	cmdCommon "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common"
@@ -22,6 +24,7 @@ type Validator struct {
 	sentries []*Sentry
 
 	tmAddress     string
+	sentryPubKey  signature.PublicKey
 	consensusPort uint16
 	clientPort    uint16
 }
@@ -164,7 +167,7 @@ func (net *Network) NewValidator(cfg *ValidatorCfg) (*Validator, error) {
 	// Load node's identity, so that we can pass the validator's Tendermint
 	// address to sentry node(s) to configure it as a private peer.
 	seed := fmt.Sprintf(validatorIdentitySeedTemplate, len(net.validators))
-	valPublicKey, err := net.provisionNodeIdentity(valDir, seed, false)
+	valPublicKey, sentryClientCert, err := net.provisionNodeIdentity(valDir, seed, false)
 	if err != nil {
 		return nil, fmt.Errorf("oasis/validator: failed to provision node identity: %w", err)
 	}
@@ -172,6 +175,15 @@ func (net *Network) NewValidator(cfg *ValidatorCfg) (*Validator, error) {
 	val.tmAddress = crypto.PublicKeyToTendermint(&val.NodeID).Address().String()
 	if err = cfg.Entity.addNode(val.NodeID); err != nil {
 		return nil, err
+	}
+
+	// Sentry client cert.
+	pk, ok := sentryClientCert.PublicKey.(ed25519.PublicKey)
+	if !ok {
+		return nil, fmt.Errorf("oasis/validator: bad sentry client public key type (expected: Ed25519 got: %T)", sentryClientCert.PublicKey)
+	}
+	if err = val.sentryPubKey.UnmarshalBinary(pk[:]); err != nil {
+		return nil, fmt.Errorf("oasis/validator: sentry client public key unmarshal failure: %w", err)
 	}
 
 	args := []string{
