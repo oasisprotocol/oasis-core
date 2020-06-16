@@ -49,6 +49,12 @@ pr_and_docker_changes() {
     'docker/'
 }
 
+# Helper that checks if the given tag of the oasisprotocol/oasis-core-ci Docker image exists.
+check_docker_ci_image_tag_exists() {
+  local tag=$1
+  DOCKER_CLI_EXPERIMENTAL=enabled docker manifest inspect oasisprotocol/oasis-core-ci:${tag}
+}
+
 # Determine the oasis-core-ci Docker image tag to use for tests.
 if [[ -n $BUILDKITE_PULL_REQUEST_BASE_BRANCH ]]; then
   docker_tag=$BUILDKITE_PULL_REQUEST_BASE_BRANCH
@@ -62,10 +68,15 @@ if pr_and_docker_changes; then
   # Override the Docker tag that should be used.
   docker_tag=pr-$(git describe --always --match '' --abbrev=7)
   # Fail if the Docker image does not exist.
-  DOCKER_CLI_EXPERIMENTAL=enabled docker manifest inspect oasisprotocol/oasis-core-ci:${docker_tag} || {
-    echo "Updated Docker image does not yet exist. Wait for it to be rebuilt and retry."
+  if ! check_docker_ci_image_tag_exists "${docker_tag}"; then
+    echo 1>&2 "Updated Docker image does not yet exist. Wait for it to be rebuilt and retry."
     exit 1
-  }
+  fi
+fi
+
+if ! check_docker_ci_image_tag_exists "${docker_tag}"; then
+    echo 1>&2 "Docker image 'oasisprotocol/oasis-core-ci:${docker_tag}' does not exist."
+    exit 1
 fi
 
 export DOCKER_OASIS_CORE_CI_BASE_TAG=${docker_tag//\//-}

@@ -171,24 +171,28 @@ func doList(cmd *cobra.Command, args []string) {
 
 	ctx := context.Background()
 
-	var addrs []api.Address
+	var addresses []api.Address
 	doWithRetries(cmd, "query addresses", func() error {
 		var err error
-		addrs, err = client.Addresses(ctx, consensus.HeightLatest)
+		addresses, err = client.Addresses(ctx, consensus.HeightLatest)
 		return err
 	})
 
-	if cmdFlags.Verbose() {
-		accts := make(map[api.Address]*api.Account)
-		for _, v := range addrs {
-			accts[v] = getAccount(ctx, cmd, v, client)
+	for _, addr := range addresses {
+		var s string
+		switch cmdFlags.Verbose() {
+		case true:
+			// NOTE: getAccount()'s output doesn't contain an account's address,
+			// so we need to add it manually.
+			acctMap := make(map[api.Address]*api.Account)
+			acctMap[addr] = getAccount(ctx, cmd, addr, client)
+			b, _ := json.Marshal(acctMap)
+			s = string(b)
+		default:
+			s = addr.String()
 		}
-		b, _ := json.Marshal(accts)
-		fmt.Printf("%v\n", string(b))
-	} else {
-		for _, v := range addrs {
-			fmt.Printf("%v\n", v)
-		}
+
+		fmt.Printf("%v\n", s)
 	}
 }
 
