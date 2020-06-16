@@ -270,7 +270,10 @@ impl Protocol {
             }
             Body::RuntimeAbortRequest {} => {
                 info!(self.logger, "Received worker abort request");
-                Err(ProtocolError::MethodNotSupported.into())
+                self.can_handle_runtime_requests()?;
+                self.dispatcher.abort_and_wait()?;
+                info!(self.logger, "Handled worker abort request");
+                Ok(Some(Body::RuntimeAbortResponse {}))
             }
             #[cfg(target_env = "sgx")]
             Body::RuntimeCapabilityTEERakInitRequest { target_info } => {
