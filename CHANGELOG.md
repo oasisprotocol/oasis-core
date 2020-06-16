@@ -12,6 +12,257 @@ The format is inspired by [Keep a Changelog].
 
 <!-- TOWNCRIER -->
 
+## 20.8 (2020-06-16)
+
+### Process
+
+- release: Create a stable branch when preparing a new release
+  ([#2993](https://github.com/oasisprotocol/oasis-core/issues/2993))
+
+  Currently we create a stable release branch only once we need to backport some
+  changes. This PR changes the release process to create the stable branch when
+  creating a new release. This will ensure CI jobs hooked to stable/ branches,
+  such as building a release tagged CI docker image, will be run for every
+  release.
+
+### Removals and Breaking Changes
+
+- Change staking account ids/addresses to truncated hash of the public key
+  ([#2928](https://github.com/oasisprotocol/oasis-core/issues/2928))
+
+  Previously, staking account identifiers were called ids and were represented
+  by a corresponding entity's public key.
+
+  Now, they are called addresses and are represented by a truncated hash of a
+  corresponding entity's public key, prefixed by a 1 byte address version.
+
+  Furthermore, the new staking account addresses use the newly added Bech32
+  encoding for text serialization with `oasis` as their human readable part
+  (HRP) prefix.
+
+- go/common/crypto/signature: Rename `NewBlacklistedKey()` function
+  ([#2940](https://github.com/oasisprotocol/oasis-core/issues/2940))
+
+  Rename it to `NewBlacklistedPublicKey()` for consistency with the newly added
+  `NewPublicKey()` function.
+
+- go/staking/api: Rename `Accounts()` and `AccountInfo()` functions
+  ([#2940](https://github.com/oasisprotocol/oasis-core/issues/2940))
+
+  Rename `Accounts()` function to `Addresses()` and `AccountInfo()` function to
+  `Account()` to avoid ambiguity and better reflect their return value.
+
+- go/consensus/api: Rename `Caller` field in `EstimateGasRequest` type
+  ([#2940](https://github.com/oasisprotocol/oasis-core/issues/2940))
+
+  Rename `EstimateGasRequest`'s `Caller` field to `Signer` to better describe
+  the field's value which is the public key of the transaction's signer.
+
+- go/consensus/api: Use `staking.Address` in `GetSignerNonceRequest` type
+  ([#2940](https://github.com/oasisprotocol/oasis-core/issues/2940))
+
+  Replace `GetSignerNonceRequest`'s `ID` field with `AccountAddress` field to
+  reflect the recent staking account id/address change.
+
+- Disallow v0 entity/node/runtime descriptors
+  ([#2992](https://github.com/oasisprotocol/oasis-core/issues/2992))
+
+- registry: Add runtime-specific staking thresholds
+  ([#2995](https://github.com/oasisprotocol/oasis-core/issues/2995))
+
+- go/staking: Rename fields in `Event` structure
+  ([#3013](https://github.com/oasisprotocol/oasis-core/issues/3013))
+
+  Fields in the `Event` structure are renamed to drop the `Event` suffix,
+  breaking Go API compatibility. This has the following effect:
+
+  - `TransferEvent` field is renamed to `Transfer`.
+
+  - `BurnEvent` field is renamed to `Burn`.
+
+  - `EscrowEvent` field is renamed to `Escrow`.
+
+  The wire format of the event structure is unchanged.
+
+- go/oasis-node/cmd/stake: Make `list` command's verbose output consistent
+  ([#3016](https://github.com/oasisprotocol/oasis-core/issues/3016))
+
+  Change `oasis-node stake list --verbose` CLI command's output to not list
+  all accounts' information as a single-line JSON string but rather output
+  each account's JSON string on a separate line.
+
+### Configuration Changes
+
+- Change staking account ids/addresses to truncated hash of the public key
+  ([#2928](https://github.com/oasisprotocol/oasis-core/issues/2928))
+
+  Due to this breaking change described above, the following configuration
+  changes are needed:
+
+  - In `oasis-node staking account info` CLI, the `--stake.account.id`
+    option has been renamed to `--stake.account.address` and now accepts a
+    Bech32 encoded account address.
+  - In `oasis-node staking account gen_transfer` CLI, the
+    `--stake.transfer.destination` option now accepts a Bech32 encoded account
+    address.
+  - In `oasis-node staking account gen_escrow` and
+    `oasis-node staking account gen_reclaim_escrow` CLI, the
+    `--stake.escrow.account` option now accepts a Bech32 encoded account
+    address.
+
+- go/worker/sentry: Do client authentication on sentry control grpc
+  ([#3018](https://github.com/oasisprotocol/oasis-core/issues/3018))
+
+  The following configuration changes are needed due to this change:
+
+  - Added: `worker.sentry.control.authorized_pubkey` option to configure
+  allowed upstream nodes. This should be set to sentry client TLS keys of
+  upstream nodes.
+  - Renamed: `worker.sentry.control_port` option to
+  `worker.sentry.control.port`.
+
+### Features
+
+- go/worker/common: Allow specifying the path to the bwrap binary
+  ([#1599](https://github.com/oasisprotocol/oasis-core/issues/1599))
+
+  This adds a new config option `--worker.runtime.sandbox_binary` that
+  allows overriding the path to the sandbox support binary (ie: bwrap).
+
+- worker/compute/executor: Independently submit commit in case of faults
+  ([#1807](https://github.com/oasisprotocol/oasis-core/issues/1807))
+
+- go/common/encoding: Add `bech32` package implementing Bech32 encoding
+  ([#2940](https://github.com/oasisprotocol/oasis-core/issues/2940))
+
+- go/consensus/tendermint/apps/staking: Forbid txs for reserved addresses
+  ([#2940](https://github.com/oasisprotocol/oasis-core/issues/2940))
+
+  Prevent reserved staking addresses (e.g. the common pool address) from being
+  used as the from address in staking transactions.
+
+- go/common/crypto: Add `address` package implementing a generic crypto address
+  ([#2940](https://github.com/oasisprotocol/oasis-core/issues/2940))
+
+  It supports versioning and context separation and can be used to implement
+  specific addresses, e.g. the staking account address.
+
+- go/staking: Forbid reserved addresses in the Genesis
+  ([#2940](https://github.com/oasisprotocol/oasis-core/issues/2940))
+
+  Prevent reserved staking addresses (e.g. the common pool address) from being
+  used as an account in the Genesis' staking ledger or as an address in the
+  Genesis' (debonding) delegations.
+
+- go/common/crypto/signature: Add `NewPublicKey()` function
+  ([#2940](https://github.com/oasisprotocol/oasis-core/issues/2940))
+
+  It creates a new public key from the given hex representation or panics.
+
+- go/consensus/tendermint/api: Add `OwnTxSignerAddress()` to `ApplicationState`
+  ([#2940](https://github.com/oasisprotocol/oasis-core/issues/2940))
+
+  It returns the transaction signer's staking address of the local node.
+
+- go/staking/api: Add `Address` type for representing staking account addresses
+  ([#2940](https://github.com/oasisprotocol/oasis-core/issues/2940))
+
+- go/common/crypto/hash: Add `Truncate()` method to `Hash`
+  ([#2940](https://github.com/oasisprotocol/oasis-core/issues/2940))
+
+  It returns the first `n` bytes of a hash.
+
+- runtime: Handle runtime interruptions gracefully
+  ([#2991](https://github.com/oasisprotocol/oasis-core/issues/2991))
+
+- go/oasis-node/cmd/stake: Add `pubkey2address` commmand
+  ([#3003](https://github.com/oasisprotocol/oasis-core/issues/3003))
+
+  Add `oasis-node stake pubkey2address` CLI command for converting a public key
+  (e.g. an entity's ID) to a staking account address.
+
+- go/roothash: Add commitment events
+  ([#3013](https://github.com/oasisprotocol/oasis-core/issues/3013))
+
+  The following two kinds of events are added to the roothash service:
+
+  - `ExecutorCommittedEvent` emitted when the roothash service processes a
+    commitment from an executor node.
+
+  - `MergeCommittedEvent` emitted when the roothash service processes a
+    commitment from a merge node.
+
+### Bug Fixes
+
+- staking: Don't emit zero-amount staking events
+  ([#2983](https://github.com/oasisprotocol/oasis-core/issues/2983))
+
+  If fees were set to 0, staking events related to the fee accumulator
+  would still get emitted with zero amounts, which is pointless.
+
+  This fix affects only events related to the internal fee accumulator
+  and common pool accounts, manual transfers with 0 as the amount will
+  still get emitted.
+
+- Bump Rust toolchain to 2020-06-09 for LVI mitigations
+  ([#2987](https://github.com/oasisprotocol/oasis-core/issues/2987))
+
+- worker/compute: Retry local dispatch between workers
+  ([#3000](https://github.com/oasisprotocol/oasis-core/issues/3000))
+
+  If a node has multiple roles simultaneously, the local submissions
+  don't go through P2P, but via a direct function call.
+  This function call is now retried in case of errors.
+
+- go/txsource: fix queries workload earliest committee epoch
+  ([#3001](https://github.com/oasisprotocol/oasis-core/issues/3001))
+
+- go/oasis-node: Support non-file signers in registry node init
+  ([#3011](https://github.com/oasisprotocol/oasis-core/issues/3011))
+
+### Documentation Improvements
+
+- docs: Refactor setup instructions, add single validator node setup
+  ([#3006](https://github.com/oasisprotocol/oasis-core/issues/3006))
+
+### Internal Changes
+
+- client: Rename the rpc crate to enclave_rpc
+  ([#2469](https://github.com/oasisprotocol/oasis-core/issues/2469))
+
+- runtime: Rename the rpc crate to enclave_rpc
+  ([#2469](https://github.com/oasisprotocol/oasis-core/issues/2469))
+
+- rust: Remove the use of the `failure` crate
+  ([#2755](https://github.com/oasisprotocol/oasis-core/issues/2755))
+
+  Using this crate is no longer considered best practice, and bugs in it
+  have broken the build before.
+
+  Note: Unfortunately the `runtime-loader` crate still uses this `failure`
+  nonsense since the external Intel AESM client crate uses it for error
+  handling.  Since it is a stand-alone binary it has been left as is.
+
+- Makefile: update docker-shell target
+  ([#2985](https://github.com/oasisprotocol/oasis-core/issues/2985))
+
+- test/e2e/sentry: don't set seed node for nodes running with sentries
+  ([#2989](https://github.com/oasisprotocol/oasis-core/issues/2989))
+
+- ci: Remove push path filters for dockerfile build action
+  ([#2997](https://github.com/oasisprotocol/oasis-core/issues/2997))
+
+- go/consensus/tendermint: Refactor roothash event handling
+  ([#3013](https://github.com/oasisprotocol/oasis-core/issues/3013))
+
+  This makes roothash event handling similar to staking event handling, with
+  common code paths for pubsub and polling-based calls.
+
+  It also adds `Height` and `TxHash` to roothash events.
+
+- ci: Make Buildkite fail if desired tag of Docker CI image doesn't exist
+  ([#3016](https://github.com/oasisprotocol/oasis-core/issues/3016))
+
 ## 20.7 (2020-06-08)
 
 ### Removals and Breaking Changes
