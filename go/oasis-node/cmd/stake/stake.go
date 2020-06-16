@@ -9,8 +9,10 @@ import (
 
 	"github.com/spf13/cobra"
 	flag "github.com/spf13/pflag"
+	"github.com/spf13/viper"
 	"google.golang.org/grpc"
 
+	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	"github.com/oasisprotocol/oasis-core/go/common/errors"
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
 	"github.com/oasisprotocol/oasis-core/go/common/quantity"
@@ -19,7 +21,11 @@ import (
 	cmdFlags "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/flags"
 	cmdGrpc "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/grpc"
 	"github.com/oasisprotocol/oasis-core/go/staking/api"
+	staking "github.com/oasisprotocol/oasis-core/go/staking/api"
 )
+
+// CfgPublicKey configures the public key.
+const CfgPublicKey = "public_key"
 
 var (
 	stakeCmd = &cobra.Command{
@@ -39,10 +45,17 @@ var (
 		Run:   doList,
 	}
 
+	pubkey2AddressCmd = &cobra.Command{
+		Use:   "pubkey2address",
+		Short: "convert a public key (e.g. entity's ID) to an account address",
+		Run:   doPubkey2Address,
+	}
+
 	logger = logging.GetLogger("cmd/stake")
 
-	infoFlags = flag.NewFlagSet("", flag.ContinueOnError)
-	listFlags = flag.NewFlagSet("", flag.ContinueOnError)
+	infoFlags           = flag.NewFlagSet("", flag.ContinueOnError)
+	listFlags           = flag.NewFlagSet("", flag.ContinueOnError)
+	pubkey2AddressFlags = flag.NewFlagSet("", flag.ContinueOnError)
 )
 
 func doConnect(cmd *cobra.Command) (*grpc.ClientConn, api.Backend) {
@@ -207,12 +220,35 @@ func getAccount(ctx context.Context, cmd *cobra.Command, addr api.Address, clien
 	return acct
 }
 
+func doPubkey2Address(cmd *cobra.Command, args []string) {
+	if err := cmdCommon.Init(); err != nil {
+		cmdCommon.EarlyLogAndExit(err)
+	}
+
+	pkString := viper.GetString(CfgPublicKey)
+	if pkString == "" {
+		logger.Error("cannot convert an empty public key")
+		os.Exit(1)
+	}
+
+	var pk signature.PublicKey
+	if err := pk.UnmarshalText([]byte(pkString)); err != nil {
+		logger.Error("failed to parse public key",
+			"err", err,
+		)
+		os.Exit(1)
+	}
+
+	fmt.Printf("%v\n", staking.NewAddress(pk))
+}
+
 // Register registers the stake sub-command and all of it's children.
 func Register(parentCmd *cobra.Command) {
 	registerAccountCmd()
 	for _, v := range []*cobra.Command{
 		infoCmd,
 		listCmd,
+		pubkey2AddressCmd,
 		accountCmd,
 	} {
 		stakeCmd.AddCommand(v)
@@ -220,6 +256,7 @@ func Register(parentCmd *cobra.Command) {
 
 	infoCmd.Flags().AddFlagSet(infoFlags)
 	listCmd.Flags().AddFlagSet(listFlags)
+	pubkey2AddressCmd.Flags().AddFlagSet(pubkey2AddressFlags)
 
 	parentCmd.AddCommand(stakeCmd)
 }
@@ -231,4 +268,7 @@ func init() {
 	listFlags.AddFlagSet(cmdFlags.RetriesFlags)
 	listFlags.AddFlagSet(cmdFlags.VerboseFlags)
 	listFlags.AddFlagSet(cmdGrpc.ClientFlags)
+
+	pubkey2AddressFlags.String(CfgPublicKey, "", "Public key (Base64-encoded)")
+	_ = viper.BindPFlags(pubkey2AddressFlags)
 }
