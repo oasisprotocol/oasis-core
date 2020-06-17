@@ -42,11 +42,16 @@ func newComputeBatchContext() *computeBatchContext {
 }
 
 func (cbc *computeBatchContext) receiveBatch(ph *p2pHandle) error {
-	req := <-ph.requests
-	req.responseCh <- nil
+	var req p2pReqRes
+	for {
+		req = <-ph.requests
+		req.responseCh <- nil
 
-	if req.msg.SignedTxnSchedulerBatchDispatch == nil {
-		return fmt.Errorf("expecting signed transaction scheduler batch dispatch message, got %+v", req.msg)
+		if req.msg.SignedTxnSchedulerBatchDispatch == nil {
+			continue
+		}
+
+		break
 	}
 
 	if err := req.msg.SignedTxnSchedulerBatchDispatch.Open(&cbc.bd); err != nil {

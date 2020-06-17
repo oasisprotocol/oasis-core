@@ -36,11 +36,11 @@ type p2pRecvHandler struct {
 	target *p2pHandle
 }
 
-// IsPeerAuthorized implements p2p Handler.
-func (h *p2pRecvHandler) IsPeerAuthorized(peerID signature.PublicKey) bool {
+// AuthenticatePeer implements p2p Handler.
+func (h *p2pRecvHandler) AuthenticatePeer(peerID signature.PublicKey) error {
 	// The Byzantine node itself isn't especially robust. We assume that
 	// the other nodes are honest.
-	return true
+	return nil
 }
 
 // HandlePeerMessage implements p2p Handler.
@@ -54,14 +54,14 @@ func (h *p2pRecvHandler) HandlePeerMessage(peerID signature.PublicKey, msg *p2p.
 	return <-responseCh
 }
 
-func (ph *p2pHandle) start(id *identity.Identity, runtimeID common.Namespace) error {
+func (ph *p2pHandle) start(ht *honestTendermint, id *identity.Identity, runtimeID common.Namespace) error {
 	if ph.service != nil {
 		return fmt.Errorf("P2P service already started")
 	}
 
 	ph.context, ph.cancel = context.WithCancel(context.Background())
 	var err error
-	ph.service, err = p2p.New(ph.context, id)
+	ph.service, err = p2p.New(ph.context, id, ht.service)
 	if err != nil {
 		return fmt.Errorf("P2P service New: %w", err)
 	}

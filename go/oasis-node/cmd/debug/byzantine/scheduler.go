@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"time"
 
 	tmtypes "github.com/tendermint/tendermint/types"
 
@@ -122,15 +123,16 @@ func schedulerForRoleInCommittee(ht *honestTendermint, height int64, committee *
 }
 
 func schedulerPublishToCommittee(ht *honestTendermint, height int64, committee *scheduler.Committee, role scheduler.Role, ph *p2pHandle, message *p2p.Message) error {
-	if err := schedulerForRoleInCommittee(ht, height, committee, role, func(n *node.Node) error {
-		ph.service.Publish(ph.context, n, message)
+	// HACK: So, the ever-byzantine debug code is written under the
+	// assumption that it's possible to do p2p message delivery in
+	// a synchronous manner.
+	//
+	// This is no longer possible.  Just publish and strategically
+	// sleep.  Eventually someone could/should rewrite all of this
+	// debug code.   The only thing that uses it is CI anyway.
 
-		return nil
-	}); err != nil {
-		return err
-	}
-
-	ph.service.Flush()
+	ph.service.Publish(ph.context, message)
+	time.Sleep(3 * time.Second) // Sigh
 
 	return nil
 }

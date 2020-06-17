@@ -38,11 +38,16 @@ func (mbc *mergeBatchContext) loadCurrentBlock(ht *honestTendermint, runtimeID c
 }
 
 func mergeReceiveCommitment(ph *p2pHandle) (*commitment.OpenExecutorCommitment, error) {
-	req := <-ph.requests
-	req.responseCh <- nil
+	var req p2pReqRes
+	for {
+		req = <-ph.requests
+		req.responseCh <- nil
 
-	if req.msg.ExecutorWorkerFinished == nil {
-		return nil, fmt.Errorf("expecting executor worker finished message, got %+v", req.msg)
+		if req.msg.ExecutorWorkerFinished == nil {
+			continue
+		}
+
+		break
 	}
 
 	openCom, err := req.msg.ExecutorWorkerFinished.Commitment.Open()

@@ -23,6 +23,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/runtime/committee"
 	scheduler "github.com/oasisprotocol/oasis-core/go/scheduler/api"
 	"github.com/oasisprotocol/oasis-core/go/worker/common/p2p"
+	p2pError "github.com/oasisprotocol/oasis-core/go/worker/common/p2p/error"
 )
 
 // MessageHandler handles messages from other nodes.
@@ -483,14 +484,13 @@ func (g *Group) GetEpochSnapshot() *EpochSnapshot {
 	return s
 }
 
-// IsPeerAuthorized returns true if a given peer should be allowed to send
-// messages to us.
-func (g *Group) IsPeerAuthorized(peerID signature.PublicKey) bool {
+// AuthenticatePeer handles authenticating a peer that send an incoming message.
+func (g *Group) AuthenticatePeer(peerID signature.PublicKey) error {
 	g.RLock()
 	defer g.RUnlock()
 
 	if g.activeEpoch == nil {
-		return false
+		return fmt.Errorf("group: no active epoch")
 	}
 
 	// Assume the peer is not authorized.
@@ -513,7 +513,11 @@ func (g *Group) IsPeerAuthorized(peerID signature.PublicKey) bool {
 		}
 	}
 
-	return authorized
+	if !authorized {
+		return fmt.Errorf("group: peer is not authorized")
+	}
+
+	return nil
 }
 
 // HandlePeerMessage handles an incoming message from a peer.
@@ -527,8 +531,13 @@ func (g *Group) HandlePeerMessage(unusedPeerID signature.PublicKey, message *p2p
 		// Ensure that both peers have the same view of the current group. If this
 		// is not the case, this means that one of the nodes processed an epoch
 		// transition and the other one didn't.
-		if message.GroupVersion != g.activeEpoch.groupVersion {
-			return nil, fmt.Errorf("group version mismatch")
+		switch {
+		case message.GroupVersion < g.activeEpoch.groupVersion:
+			// Stale messages will never become valid.
+			return nil, p2pError.Permanent(fmt.Errorf("group version in the past"))
+		case message.GroupVersion > g.activeEpoch.groupVersion:
+			// Messages from the future may eventually become valid.
+			return nil, fmt.Errorf("group version from the future")
 		}
 
 		return g.activeEpoch.roundCtx, nil
@@ -573,28 +582,7 @@ func (g *Group) publishLocked(
 	msg.SpanContext = scBinary
 
 	// Publish batch to given committee.
-	publicIdentity := g.identity.NodeSigner.Public()
-	for id := range ci.PublicKeys {
-		if id.Equal(publicIdentity) {
-			// Do not publish to self.
-			continue
-		}
-
-		n := g.nodes.Lookup(id)
-		if n == nil {
-			// This should never happen as nodes cannot disappear mid-epoch.
-			g.logger.Warn("ignoring node that disappeared mid-epoch",
-				"node", id,
-			)
-			continue
-		}
-
-		g.logger.Debug("publishing to committee member",
-			"node", n,
-		)
-
-		g.p2p.Publish(pubCtx, n, msg)
-	}
+	g.p2p.Publish(pubCtx, msg)
 
 	return nil
 }

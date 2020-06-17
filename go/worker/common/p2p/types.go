@@ -22,11 +22,6 @@ type Message struct {
 	// Jaeger's span context in binary format.
 	SpanContext []byte `json:"span,omitempty"`
 
-	// Message types.
-
-	Ack   *Ack   `json:"ack,omitempty"`
-	Error *Error `json:"err,omitempty"`
-
 	SignedTxnSchedulerBatchDispatch *commitment.SignedTxnSchedulerBatchDispatch `json:",omitempty"`
 	ExecutorWorkerFinished          *ExecutorWorkerFinished                     `json:",omitempty"`
 }
@@ -37,14 +32,4 @@ type Message struct {
 type ExecutorWorkerFinished struct {
 	// Commitment is an executor worker commitment.
 	Commitment commitment.ExecutorCommitment
-}
-
-// Ack is an acknowledgement that a message was received.
-type Ack struct {
-}
-
-// Error is an error response.
-type Error struct {
-	// Message is an error message.
-	Message string
 }
