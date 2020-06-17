@@ -19,9 +19,14 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/runtime/host/protocol"
 )
 
-// This needs to be large as some runtimes can take a long time to initialize due to remote
-// attestation taking a long time.
-const recvTimeout = 120 * time.Second
+const (
+	// This needs to be large as some runtimes can take a long time to initialize due to remote
+	// attestation taking a long time.
+	recvTimeout = 120 * time.Second
+
+	// Runtime is already started at this point so we can have a smaller timeout than above.
+	recvAbortTimeout = 10 * time.Second
+)
 
 // mockMessageHandler is a mock message handler which only implements a small subset of methods.
 type mockMessageHandler struct{}
@@ -192,7 +197,21 @@ func testRestart(t *testing.T, cfg host.Config, p host.Provisioner) {
 	select {
 	case ev := <-evCh:
 		require.Nil(ev.Stopped, "unexpected stop event")
-	case <-time.After(recvTimeout):
+	case <-time.After(recvAbortTimeout):
 	}
 
+	// Trigger another non-force abort (runtime should not be restarted).
+	// NOTE: the above Abort request makes it to the dispatcher before the first
+	// iteration of the dispatch loop, therefore the request is handled before
+	// the dispatcher is stuck in the recv loop. Here it is ensured that the
+	// runtime dispatcher is already running and waiting on requests.
+	err = r.Abort(context.Background(), false)
+	require.NoError(err, "Abort(force=false)")
+
+	// There should be no stop event.
+	select {
+	case ev := <-evCh:
+		require.Nil(ev.Stopped, "unexpected stop event")
+	case <-time.After(recvAbortTimeout):
+	}
 }

@@ -268,10 +268,10 @@ impl Protocol {
                 info!(self.logger, "Received worker shutdown request");
                 Err(ProtocolError::MethodNotSupported.into())
             }
-            Body::RuntimeAbortRequest {} => {
+            req @ Body::RuntimeAbortRequest {} => {
                 info!(self.logger, "Received worker abort request");
                 self.can_handle_runtime_requests()?;
-                self.dispatcher.abort_and_wait()?;
+                self.dispatcher.abort_and_wait(ctx, id, req)?;
                 info!(self.logger, "Handled worker abort request");
                 Ok(Some(Body::RuntimeAbortResponse {}))
             }
