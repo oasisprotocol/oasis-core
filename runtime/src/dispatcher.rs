@@ -155,8 +155,11 @@ impl Dispatcher {
 
     /// Signals to dispatcher that it should abort and waits for the abort to
     /// complete.
-    pub fn abort_and_wait(&self) -> Result<()> {
+    pub fn abort_and_wait(&self, ctx: Context, id: u64, req: Body) -> Result<()> {
         self.abort_batch.store(true, Ordering::SeqCst);
+        // Queue the request to break the dispatch loop in case nothing is
+        // being processed at the moment.
+        self.queue_request(ctx, id, req)?;
         // Wait for abort.
         self.abort_rx.recv().map_err(|error| anyhow!("{}", error))
     }
@@ -285,6 +288,11 @@ impl Dispatcher {
                         id,
                         signed_policy_raw,
                     );
+                }
+                Ok((_ctx, _id, Body::RuntimeAbortRequest {})) => {
+                    // We handle the RuntimeAbortRequest here so that we break
+                    // the recv loop and re-check abort flag.
+                    info!(self.logger, "Received abort request");
                 }
                 Ok(_) => {
                     error!(self.logger, "Unsupported request type");
