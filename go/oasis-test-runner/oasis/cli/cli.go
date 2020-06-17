@@ -9,22 +9,40 @@ import (
 
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/env"
-	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/oasis"
 )
+
+// Factory is an interface that can be used to construct CLI helpers.
+type Factory interface {
+	// GetCLIConfig returns the configuration required for constructing a CLI helper.
+	GetCLIConfig() Config
+}
+
+// Config is the CLI helper configuration.
+type Config struct {
+	// NodeBinary is the path to the oasis-node binary file.
+	NodeBinary string
+
+	// GenesisFile is the path to the genesis document.
+	GenesisFile string
+
+	// NodeSocketPath is the path to the internal UNIX socket of a node that should be used for any
+	// commands which require talking to a working oasis-node.
+	NodeSocketPath string
+}
 
 type helpersBase struct {
 	env *env.Env
-	net *oasis.Network
+	cfg Config
 
 	logger *logging.Logger
 }
 
 func (b *helpersBase) runSubCommand(name string, args []string) error {
-	return RunSubCommand(b.env, b.logger, name, b.net.Config().NodeBinary, args)
+	return RunSubCommand(b.env, b.logger, name, b.cfg.NodeBinary, args)
 }
 
 func (b *helpersBase) runSubCommandWithOutput(name string, args []string) (bytes.Buffer, error) {
-	return RunSubCommandWithOutput(b.env, b.logger, name, b.net.Config().NodeBinary, args)
+	return RunSubCommandWithOutput(b.env, b.logger, name, b.cfg.NodeBinary, args)
 }
 
 // Helpers are the oasis-node cli helpers.
@@ -35,10 +53,10 @@ type Helpers struct {
 }
 
 // New creates new oasis-node cli helpers.
-func New(env *env.Env, net *oasis.Network, logger *logging.Logger) *Helpers {
+func New(env *env.Env, factory Factory, logger *logging.Logger) *Helpers {
 	base := &helpersBase{
 		env:    env,
-		net:    net,
+		cfg:    factory.GetCLIConfig(),
 		logger: logger,
 	}
 
@@ -52,9 +70,9 @@ func New(env *env.Env, net *oasis.Network, logger *logging.Logger) *Helpers {
 // StartSubCommand launches an oasis-node subcommand.
 //
 // It does not wait for the subcommand to complete.
-func StartSubCommand(env *env.Env, logger *logging.Logger, name, binary string, args []string, stdout io.Writer, stderr io.Writer) (*exec.Cmd, error) {
+func StartSubCommand(childEnv *env.Env, logger *logging.Logger, name, binary string, args []string, stdout io.Writer, stderr io.Writer) (*exec.Cmd, error) {
 	cmd := exec.Command(binary, args...)
-	cmd.SysProcAttr = oasis.CmdAttrs
+	cmd.SysProcAttr = env.CmdAttrs
 	cmd.Stdout = stdout
 	cmd.Stderr = stderr
 

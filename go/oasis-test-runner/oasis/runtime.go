@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"strconv"
 	"time"
 
 	"github.com/oasisprotocol/oasis-core/go/common"
@@ -12,8 +11,8 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/node"
 	"github.com/oasisprotocol/oasis-core/go/common/sgx"
 	cmdCommon "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common"
-	cmdRegRt "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/registry/runtime"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/env"
+	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/oasis/cli"
 	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
 )
 
@@ -137,46 +136,9 @@ func (net *Network) NewRuntime(cfg *RuntimeCfg) (*Runtime, error) {
 		return nil, fmt.Errorf("oasis/runtime: failed to create runtime subdir: %w", err)
 	}
 
-	args := []string{
-		"registry", "runtime", "init_genesis",
-		"--" + cmdCommon.CfgDataDir, rtDir.String(),
-		"--" + cmdRegRt.CfgID, cfg.ID.String(),
-		"--" + cmdRegRt.CfgKind, cfg.Kind.String(),
-	}
-	if cfg.Kind == registry.KindCompute {
-		args = append(args, []string{
-			"--" + cmdRegRt.CfgExecutorGroupSize, strconv.FormatUint(cfg.Executor.GroupSize, 10),
-			"--" + cmdRegRt.CfgExecutorGroupBackupSize, strconv.FormatUint(cfg.Executor.GroupBackupSize, 10),
-			"--" + cmdRegRt.CfgExecutorAllowedStragglers, strconv.FormatUint(cfg.Executor.AllowedStragglers, 10),
-			"--" + cmdRegRt.CfgExecutorRoundTimeout, cfg.Executor.RoundTimeout.String(),
-			"--" + cmdRegRt.CfgMergeGroupSize, strconv.FormatUint(cfg.Merge.GroupSize, 10),
-			"--" + cmdRegRt.CfgMergeGroupBackupSize, strconv.FormatUint(cfg.Merge.GroupBackupSize, 10),
-			"--" + cmdRegRt.CfgMergeAllowedStragglers, strconv.FormatUint(cfg.Merge.AllowedStragglers, 10),
-			"--" + cmdRegRt.CfgMergeRoundTimeout, cfg.Merge.RoundTimeout.String(),
-			"--" + cmdRegRt.CfgTxnSchedulerGroupSize, strconv.FormatUint(cfg.TxnScheduler.GroupSize, 10),
-			"--" + cmdRegRt.CfgTxnSchedulerMaxBatchSize, strconv.FormatUint(cfg.TxnScheduler.MaxBatchSize, 10),
-			"--" + cmdRegRt.CfgTxnSchedulerMaxBatchSizeBytes, strconv.FormatUint(cfg.TxnScheduler.MaxBatchSizeBytes, 10),
-			"--" + cmdRegRt.CfgTxnSchedulerAlgorithm, cfg.TxnScheduler.Algorithm,
-			"--" + cmdRegRt.CfgTxnSchedulerBatchFlushTimeout, cfg.TxnScheduler.BatchFlushTimeout.String(),
-			"--" + cmdRegRt.CfgStorageGroupSize, strconv.FormatUint(cfg.Storage.GroupSize, 10),
-			"--" + cmdRegRt.CfgStorageMaxApplyWriteLogEntries, strconv.FormatUint(cfg.Storage.MaxApplyWriteLogEntries, 10),
-			"--" + cmdRegRt.CfgStorageMaxApplyOps, strconv.FormatUint(cfg.Storage.MaxApplyOps, 10),
-			"--" + cmdRegRt.CfgStorageMaxMergeRoots, strconv.FormatUint(cfg.Storage.MaxMergeRoots, 10),
-			"--" + cmdRegRt.CfgStorageMaxMergeOps, strconv.FormatUint(cfg.Storage.MaxMergeOps, 10),
-			"--" + cmdRegRt.CfgStorageCheckpointInterval, strconv.FormatUint(cfg.Storage.CheckpointInterval, 10),
-			"--" + cmdRegRt.CfgStorageCheckpointNumKept, strconv.FormatUint(cfg.Storage.CheckpointNumKept, 10),
-			"--" + cmdRegRt.CfgStorageCheckpointChunkSize, strconv.FormatUint(cfg.Storage.CheckpointChunkSize, 10),
-		}...)
-
-		if cfg.GenesisState != "" {
-			args = append(args,
-				"--"+cmdRegRt.CfgGenesisRound, strconv.FormatUint(cfg.GenesisRound, 10),
-				"--"+cmdRegRt.CfgGenesisState, cfg.GenesisState,
-			)
-
-			descriptor.Genesis.Round = cfg.GenesisRound
-			// TODO: Support genesis state.
-		}
+	if cfg.GenesisState != "" {
+		descriptor.Genesis.Round = cfg.GenesisRound
+		// TODO: Support inline genesis state.
 	}
 	var mrEnclaves []*sgx.MrEnclave
 	if cfg.TEEHardware == node.TEEHardwareIntelSGX {
@@ -187,61 +149,24 @@ func (net *Network) NewRuntime(cfg *RuntimeCfg) (*Runtime, error) {
 				return nil, err
 			}
 			enclaveIdentities = append(enclaveIdentities, sgx.EnclaveIdentity{MrEnclave: *mrEnclave, MrSigner: *cfg.MrSigner})
-			args = append(args, []string{
-				"--" + cmdRegRt.CfgVersionEnclave, mrEnclave.String() + cfg.MrSigner.String(),
-			}...)
 			mrEnclaves = append(mrEnclaves, mrEnclave)
 		}
 		descriptor.Version.TEE = cbor.Marshal(registry.VersionInfoIntelSGX{
 			Enclaves: enclaveIdentities,
 		})
-		args = append(args, []string{
-			"--" + cmdRegRt.CfgTEEHardware, cfg.TEEHardware.String(),
-		}...)
 	}
 	if cfg.Keymanager != nil {
-		args = append(args, []string{
-			"--" + cmdRegRt.CfgKeyManager, cfg.Keymanager.id.String(),
-		}...)
-
 		descriptor.KeyManager = new(common.Namespace)
 		*descriptor.KeyManager = cfg.Keymanager.id
 	}
-	if cfg.AdmissionPolicy.AnyNode != nil {
-		args = append(args,
-			"--"+cmdRegRt.CfgAdmissionPolicy, cmdRegRt.AdmissionPolicyNameAnyNode,
-		)
-	} else if cfg.AdmissionPolicy.EntityWhitelist != nil {
-		args = append(args,
-			"--"+cmdRegRt.CfgAdmissionPolicy, cmdRegRt.AdmissionPolicyNameEntityWhitelist,
-		)
-		for e := range cfg.AdmissionPolicy.EntityWhitelist.Entities {
-			args = append(args,
-				"--"+cmdRegRt.CfgAdmissionPolicyEntityWhitelist, e.String(),
-			)
-		}
-	} else {
-		return nil, fmt.Errorf("invalid admission policy")
-	}
 
-	for kind, value := range cfg.Staking.Thresholds {
-		kindRaw, _ := kind.MarshalText()
-		valueRaw, _ := value.MarshalText()
-
-		args = append(args,
-			"--"+cmdRegRt.CfgStakingThreshold, fmt.Sprintf("%s=%s", string(kindRaw), string(valueRaw)),
-		)
-	}
-
-	args = append(args, cfg.Entity.toGenesisArgs()...)
-
-	w, err := rtDir.NewLogWriter("provision.log")
-	if err != nil {
-		return nil, err
-	}
-	defer w.Close()
-
-	if err = net.runNodeBinary(w, args...); err != nil {
+	// Provision a runtime descriptor suitable for the genesis block.
+	cli := cli.New(net.env, net, net.logger)
+	extraArgs := append([]string{},
+		"--"+cmdCommon.CfgDataDir, rtDir.String(),
+	)
+	extraArgs = append(extraArgs, cfg.Entity.toGenesisArgs()...)
+	if err = cli.Registry.InitGenesis(descriptor, cfg.GenesisState, extraArgs...); err != nil {
 		net.logger.Error("failed to provision runtime",
 			"err", err,
 		)

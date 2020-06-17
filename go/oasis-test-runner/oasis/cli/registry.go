@@ -18,30 +18,20 @@ type RegistryHelpers struct {
 	*helpersBase
 }
 
-// GenerateRegisterRuntimeTx is a wrapper for "registry runtime gen_register" subcommand.
-func (r *RegistryHelpers) GenerateRegisterRuntimeTx(
-	nonce uint64,
+func (r *RegistryHelpers) runRegistryRuntimeSubcommand(
+	cmd string,
 	runtime registry.Runtime,
-	txPath, genesisStateFile string,
+	genesisStateFile string,
+	extraArgs ...string,
 ) error {
-	r.logger.Info("generating register runtime tx")
-
-	// Generate a runtime register transaction file with debug test entity.
 	args := []string{
-		"registry", "runtime", "gen_register",
+		"registry", "runtime", cmd,
 		"--" + cmdRegRt.CfgID, runtime.ID.String(),
 		"--" + cmdRegRt.CfgTEEHardware, runtime.TEEHardware.String(),
 		"--" + cmdRegRt.CfgKind, runtime.Kind.String(),
 		"--" + cmdRegRt.CfgVersion, runtime.Version.Version.String(),
-		"--" + consensus.CfgTxNonce, strconv.FormatUint(nonce, 10),
-		"--" + consensus.CfgTxFile, txPath,
-		"--" + consensus.CfgTxFeeAmount, strconv.Itoa(0), // TODO: Make fee configurable.
-		"--" + consensus.CfgTxFeeGas, strconv.Itoa(10000), // TODO: Make fee configurable.
-		"--" + flags.CfgDebugDontBlameOasis,
-		"--" + cmdCommon.CfgDebugAllowTestKeys,
-		"--" + flags.CfgDebugTestEntity,
-		"--" + flags.CfgGenesisFile, r.net.GenesisPath(),
 	}
+	args = append(args, extraArgs...)
 
 	switch runtime.TEEHardware {
 	case node.TEEHardwareInvalid:
@@ -117,9 +107,35 @@ func (r *RegistryHelpers) GenerateRegisterRuntimeTx(
 		)
 	}
 
-	if out, err := r.runSubCommandWithOutput("registry-runtime-gen_register", args); err != nil {
-		return fmt.Errorf("failed to generate register runtime tx: error: %w output: %s", err, out.String())
+	if out, err := r.runSubCommandWithOutput("registry-runtime-"+cmd, args); err != nil {
+		return fmt.Errorf("failed to run 'registry runtime %s': error: %w output: %s", cmd, err, out.String())
 	}
 
 	return nil
+}
+
+// GenerateRegisterRuntimeTx is a wrapper for "registry runtime gen_register" subcommand.
+func (r *RegistryHelpers) GenerateRegisterRuntimeTx(
+	nonce uint64,
+	runtime registry.Runtime,
+	txPath, genesisStateFile string,
+) error {
+	r.logger.Info("generating register runtime tx")
+
+	// Generate a runtime register transaction file with debug test entity.
+	return r.runRegistryRuntimeSubcommand("gen_register", runtime, genesisStateFile,
+		"--"+consensus.CfgTxNonce, strconv.FormatUint(nonce, 10),
+		"--"+consensus.CfgTxFile, txPath,
+		"--"+consensus.CfgTxFeeAmount, strconv.Itoa(0), // TODO: Make fee configurable.
+		"--"+consensus.CfgTxFeeGas, strconv.Itoa(10000), // TODO: Make fee configurable.
+		"--"+flags.CfgDebugDontBlameOasis,
+		"--"+cmdCommon.CfgDebugAllowTestKeys,
+		"--"+flags.CfgDebugTestEntity,
+		"--"+flags.CfgGenesisFile, r.cfg.GenesisFile,
+	)
+}
+
+// InitGenesis is a wrapper for "registry runtime init_genesis" subcommand.
+func (r *RegistryHelpers) InitGenesis(runtime registry.Runtime, genesisStateFile string, extraArgs ...string) error {
+	return r.runRegistryRuntimeSubcommand("init_genesis", runtime, genesisStateFile, extraArgs...)
 }

@@ -269,13 +269,13 @@ func (sc *runtimeImpl) resolveDefaultKeyManagerBinary() (string, error) {
 	return sc.resolveRuntimeBinary("simple-keymanager")
 }
 
-func (sc *runtimeImpl) startClient(env *env.Env) (*exec.Cmd, error) {
+func (sc *runtimeImpl) startClient(childEnv *env.Env) (*exec.Cmd, error) {
 	clients := sc.net.Clients()
 	if len(clients) == 0 {
 		return nil, fmt.Errorf("scenario/e2e: network has no client nodes")
 	}
 
-	d, err := env.NewSubDir("client")
+	d, err := childEnv.NewSubDir("client")
 	if err != nil {
 		return nil, err
 	}
@@ -293,7 +293,7 @@ func (sc *runtimeImpl) startClient(env *env.Env) (*exec.Cmd, error) {
 
 	binary := sc.resolveClientBinary(sc.clientBinary)
 	cmd := exec.Command(binary, args...)
-	cmd.SysProcAttr = oasis.CmdAttrs
+	cmd.SysProcAttr = env.CmdAttrs
 	cmd.Stdout = w
 	cmd.Stderr = w
 

@@ -14,7 +14,6 @@ import (
 	"strconv"
 	"strings"
 	"sync"
-	"syscall"
 	"time"
 
 	"github.com/spf13/viper"
@@ -33,6 +32,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/genesis"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/env"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/log"
+	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/oasis/cli"
 	"github.com/oasisprotocol/oasis-core/go/worker/registration"
 )
 
@@ -190,11 +190,6 @@ type NodeCfg struct { // nolint: maligned
 
 	// Consensus contains configuration for the consensus backend.
 	Consensus ConsensusFixture
-}
-
-// CmdAttrs is the SysProcAttr that will ensure graceful cleanup.
-var CmdAttrs = &syscall.SysProcAttr{
-	Pdeathsig: syscall.SIGKILL,
 }
 
 // Network is a test Oasis network.
@@ -646,7 +641,7 @@ func (net *Network) Stop() {
 func (net *Network) runNodeBinary(consoleWriter io.Writer, args ...string) error {
 	nodeBinary := net.cfg.NodeBinary
 	cmd := exec.Command(nodeBinary, args...)
-	cmd.SysProcAttr = CmdAttrs
+	cmd.SysProcAttr = env.CmdAttrs
 	if consoleWriter != nil {
 		cmd.Stdout = consoleWriter
 		cmd.Stderr = consoleWriter
@@ -753,7 +748,7 @@ func (net *Network) startOasisNode(
 
 	oasisBinary := net.cfg.NodeBinary
 	cmd := exec.Command(oasisBinary, args...)
-	cmd.SysProcAttr = CmdAttrs
+	cmd.SysProcAttr = env.CmdAttrs
 	cmd.Stdout = w
 	cmd.Stderr = w
 
@@ -868,6 +863,22 @@ func (net *Network) GenesisPath() string {
 // BasePath returns the path to the network base directory.
 func (net *Network) BasePath() string {
 	return net.baseDir.String()
+}
+
+// Implements cli.Factory.
+func (net *Network) GetCLIConfig() cli.Config {
+	cfg := cli.Config{
+		NodeBinary:  net.cfg.NodeBinary,
+		GenesisFile: net.GenesisPath(),
+	}
+	if len(net.Validators()) > 0 {
+		val := net.Validators()[0]
+		if net.cfg.UseShortGrpcSocketPaths && val.customGrpcSocketPath == "" {
+			val.customGrpcSocketPath = net.generateTempSocketPath()
+		}
+		cfg.NodeSocketPath = val.SocketPath()
+	}
+	return cfg
 }
 
 func (net *Network) provisionNodeIdentity(dataDir *env.Dir, seed string, persistTLS bool) (signature.PublicKey, *x509.Certificate, error) {

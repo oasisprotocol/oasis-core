@@ -20,6 +20,11 @@ import (
 // sub-process termiantes prior to the Cleanup.
 var ErrEarlyTerm = errors.New("env: sub-process exited early")
 
+// CmdAttrs is the SysProcAttr that will ensure graceful cleanup.
+var CmdAttrs = &syscall.SysProcAttr{
+	Pdeathsig: syscall.SIGKILL,
+}
+
 // CleanupFn is the cleanup hook function prototype.
 type CleanupFn func()
 
