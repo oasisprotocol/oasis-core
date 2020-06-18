@@ -57,9 +57,9 @@ check_docker_ci_image_tag_exists() {
 
 # Determine the oasis-core-ci Docker image tag to use for tests.
 if [[ -n $BUILDKITE_PULL_REQUEST_BASE_BRANCH ]]; then
-  docker_tag=$BUILDKITE_PULL_REQUEST_BASE_BRANCH
+  docker_tag=${BUILDKITE_PULL_REQUEST_BASE_BRANCH//\//-}
 else
-  docker_tag=$BUILDKITE_BRANCH
+  docker_tag=${BUILDKITE_BRANCH//\//-}
 fi
 
 # If anything under docker/ has been modified, assume a per-branch tag. Note that this will fail until
@@ -79,7 +79,7 @@ if ! check_docker_ci_image_tag_exists "${docker_tag}"; then
     exit 1
 fi
 
-export DOCKER_OASIS_CORE_CI_BASE_TAG=${docker_tag//\//-}
+export DOCKER_OASIS_CORE_CI_BASE_TAG=${docker_tag}
 
 # Decide which pipeline to use.
 pipeline=.buildkite/code.pipeline.yml
