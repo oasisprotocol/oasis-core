@@ -65,7 +65,12 @@ func (ident *identityCLIImpl) Run(childEnv *env.Env) error {
 	if err := ident.loadIdentity(); err != nil {
 		return fmt.Errorf("scenario/e2e/identity_cli: %w", err)
 	}
-
+	if err := ident.showTLSPubkey(childEnv, false); err != nil {
+		return fmt.Errorf("scenario/e2e/identity_cli: %w", err)
+	}
+	if err := ident.showTLSPubkey(childEnv, true); err != nil {
+		return fmt.Errorf("scenario/e2e/identity_cli: %w", err)
+	}
 	if err := ident.tendermintShowAddress(childEnv, "node"); err != nil {
 		return fmt.Errorf("scenario/e2e/identity_cli: %w", err)
 	}
@@ -85,6 +90,27 @@ func (ident *identityCLIImpl) loadIdentity() error {
 	}
 	if _, err = identity.Load(ident.dataDir, factory); err != nil {
 		return fmt.Errorf("failed to load node's identity: %w", err)
+	}
+	return nil
+}
+
+func (ident *identityCLIImpl) showTLSPubkey(childEnv *env.Env, sentry bool) error {
+	var subCmd string
+	switch sentry {
+	case true:
+		subCmd = "show-sentry-client-pubkey"
+	case false:
+		subCmd = "show-tls-pubkey"
+	}
+	ident.logger.Info(fmt.Sprintf("running %s", subCmd))
+
+	args := []string{
+		"identity", subCmd,
+		"--" + common.CfgDataDir, ident.dataDir,
+	}
+	nodeBinary, _ := ident.flags.GetString(cfgNodeBinary)
+	if out, err := cli.RunSubCommandWithOutput(childEnv, ident.logger, subCmd, nodeBinary, args); err != nil {
+		return fmt.Errorf("failed to run %s: error: %w output: %s", subCmd, err, out.String())
 	}
 	return nil
 }
