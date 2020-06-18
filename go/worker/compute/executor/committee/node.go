@@ -269,18 +269,9 @@ func (n *Node) queueBatchBlocking(
 		Round:     hdr.Round + 1,
 		Roots:     []hash.Hash{ioRootHash},
 	}
-	receipt := storage.Receipt{}
-	receipt.Signed.Blob = cbor.Marshal(receiptBody)
-	for _, sig := range storageSignatures {
-		receipt.Signed.Signature = sig
-		var tmp storage.ReceiptBody
-		if err := receipt.Open(&tmp); err != nil {
-			n.logger.Warn("received invalid storage receipt signature in external batch",
-				"signature", sig,
-				"err", err,
-			)
-			return errInvalidReceipt
-		}
+	if !signature.VerifyManyToOne(storage.ReceiptSignatureContext, cbor.Marshal(receiptBody), storageSignatures) {
+		n.logger.Warn("received invalid storage receipt signature in external batch")
+		return errInvalidReceipt
 	}
 
 	// Fetch inputs from storage.
