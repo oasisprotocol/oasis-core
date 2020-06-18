@@ -33,7 +33,6 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/env"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/log"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/oasis/cli"
-	"github.com/oasisprotocol/oasis-core/go/worker/registration"
 )
 
 const (
@@ -103,6 +102,15 @@ func (n *Node) LogPath() string {
 // DataDir returns the path to the node's data directory.
 func (n *Node) DataDir() string {
 	return n.dir.String()
+}
+
+// LoadIdentity loads the node's identity.
+func (n *Node) LoadIdentity() (*identity.Identity, error) {
+	factory, err := fileSigner.NewFactory(n.dir.String(), signature.SignerNode, signature.SignerP2P, signature.SignerConsensus)
+	if err != nil {
+		return nil, err
+	}
+	return identity.Load(n.dir.String(), factory)
 }
 
 func (n *Node) stopNode() error {
@@ -733,10 +741,6 @@ func (net *Network) startOasisNode(
 	args := append([]string{}, subCmd...)
 	args = append(args, baseArgs...)
 	args = append(args, extraArgs.vec...)
-
-	if !strings.HasPrefix(node.Name, "sentry-") && !strings.HasPrefix(node.Name, "ias-proxy") && len(net.byzantine) == 0 {
-		args = append(args, []string{"--" + registration.CfgRegistrationRotateCerts, "1"}...)
-	}
 
 	w, err := node.dir.NewLogWriter(logConsoleFile)
 	if err != nil {

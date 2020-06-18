@@ -324,6 +324,8 @@ type StorageWorkerFixture struct { // nolint: maligned
 	AllowEarlyTermination bool `json:"allow_early_termination"`
 	AllowErrorTermination bool `json:"allow_error_termination"`
 
+	DisableCertRotation bool `json:"disable_cert_rotation"`
+
 	LogWatcherHandlerFactories []log.WatcherHandlerFactory `json:"-"`
 
 	Sentries []int `json:"sentries,omitempty"`
@@ -354,6 +356,7 @@ func (f *StorageWorkerFixture) Create(net *Network) (*Storage, error) {
 		SentryIndices:           f.Sentries,
 		CheckpointCheckInterval: f.CheckpointCheckInterval,
 		IgnoreApplies:           f.IgnoreApplies,
+		DisableCertRotation:     f.DisableCertRotation,
 	})
 }
 

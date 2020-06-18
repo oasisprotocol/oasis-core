@@ -39,6 +39,21 @@ func (sentry *Sentry) TLSCertPath() string {
 	return nodeTLSCertPath(sentry.dir)
 }
 
+// GetTLSPubKey returns the sentry TLS public key.
+func (sentry *Sentry) GetTLSPubKey() signature.PublicKey {
+	return sentry.tlsPublicKey
+}
+
+// GetSentryAddress returns the sentry grpc endpoint address.
+func (sentry *Sentry) GetSentryAddress() string {
+	return fmt.Sprintf("127.0.0.1:%d", sentry.sentryPort)
+}
+
+// GetSentryControlAddress returns the sentry control endpoint address.
+func (sentry *Sentry) GetSentryControlAddress() string {
+	return fmt.Sprintf("127.0.0.1:%d", sentry.controlPort)
+}
+
 func (sentry *Sentry) startNode() error {
 	validators, err := resolveValidators(sentry.net, sentry.validatorIndices)
 	if err != nil {
@@ -58,6 +73,7 @@ func (sentry *Sentry) startNode() error {
 	args := newArgBuilder().
 		debugDontBlameOasis().
 		debugAllowTestKeys().
+		workerCertificateRotation(false).
 		workerSentryEnabled().
 		workerSentryControlPort(sentry.controlPort).
 		tendermintCoreListenAddress(sentry.consensusPort).

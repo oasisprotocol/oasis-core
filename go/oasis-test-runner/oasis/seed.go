@@ -20,6 +20,7 @@ func (seed *seedNode) startNode() error {
 	args := newArgBuilder().
 		debugDontBlameOasis().
 		debugAllowTestKeys().
+		workerCertificateRotation(true).
 		tendermintCoreListenAddress(seed.consensusPort).
 		tendermintSeedMode()
 

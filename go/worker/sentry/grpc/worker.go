@@ -106,7 +106,7 @@ func (g *Worker) authFunction() auth.AuthenticationFunction {
 			return status.Errorf(codes.PermissionDenied, "not allowed")
 		}
 
-		// Proxy defers unmarshaling.
+		// Proxy defers unmarshalling.
 		rawCBOR, ok := req.(*cbor.RawMessage)
 		if !ok {
 			g.logger.Error("invalid proxy request type, expected *cbor.RawMessage",
@@ -126,7 +126,7 @@ func (g *Worker) authFunction() auth.AuthenticationFunction {
 			return status.Errorf(codes.PermissionDenied, "invalid request")
 		}
 
-		// Check whether access control checeks must be done for this request.
+		// Check whether access control must be done for this request.
 		ac, err := methodDesc.IsAccessControlled(ctx, request)
 		if err != nil {
 			g.logger.Error("failed to check if request is access controlled",
