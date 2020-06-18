@@ -394,7 +394,7 @@ func testStorage(t *testing.T, node *testNode) {
 	require.NoError(t, err, "TempDir")
 	defer os.RemoveAll(dataDir)
 
-	backend, err := storage.New(context.Background(), dataDir, testRuntimeID, node.Identity, node.Consensus.Scheduler(), node.Consensus.Registry())
+	backend, err := storage.New(context.Background(), dataDir, testRuntimeID, node.Identity)
 	require.NoError(t, err, "storage.New")
 	defer backend.Cleanup()
 	// We are always testing a local storage backend here.

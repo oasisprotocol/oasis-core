@@ -237,7 +237,7 @@ func (s *runtimeState) testSuccessfulRound(t *testing.T, backend api.Backend, co
 	var ns common.Namespace
 	copy(ns[:], rt.Runtime.ID[:])
 
-	storageBackend, err := storage.New(context.Background(), dataDir, ns, identity, consensus.Scheduler(), consensus.Registry())
+	storageBackend, err := storage.New(context.Background(), dataDir, ns, identity)
 	require.NoError(err, "storage.New")
 	defer storageBackend.Cleanup()
 

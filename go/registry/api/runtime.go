@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -425,4 +426,11 @@ func (rtg *RuntimeGenesis) SanityCheck(isGenesis bool) error {
 	}
 
 	return nil
+}
+
+// RuntimeDescriptorProvider is an interface that provides access to runtime descriptors.
+type RuntimeDescriptorProvider interface {
+	// RegistryDescriptor waits for the runtime to be registered and then returns its registry
+	// descriptor.
+	RegistryDescriptor(ctx context.Context) (*Runtime, error)
 }

@@ -41,7 +41,7 @@ func init() {
 	}
 
 	// Create the storage backend service.
-	storageBackend, err = storage.New(context.Background(), localDB, common.Namespace{}, identity, nil, nil)
+	storageBackend, err = storage.New(context.Background(), localDB, common.Namespace{}, identity)
 	if err != nil {
 		panic(err)
 	}

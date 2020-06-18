@@ -82,7 +82,7 @@ func doBenchmark(cmd *cobra.Command, args []string) { // nolint: gocyclo
 
 	var ns common.Namespace
 
-	storage, err := storage.New(context.Background(), dataDir, ns, ident, nil, nil)
+	storage, err := storage.New(context.Background(), dataDir, ns, ident)
 	if err != nil {
 		logger.Error("failed to initialize storage",
 			"err", err,

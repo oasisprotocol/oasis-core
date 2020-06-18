@@ -22,6 +22,7 @@ func newClient(
 	namespace common.Namespace,
 	ident *identity.Identity,
 	nodes committee.NodeDescriptorLookup,
+	runtime registry.RuntimeDescriptorProvider,
 ) (api.Backend, error) {
 	committeeClient, err := committee.NewClient(ctx, nodes, committee.WithClientAuthentication(ident))
 	if err != nil {
@@ -32,6 +33,7 @@ func newClient(
 		ctx:             ctx,
 		logger:          logging.GetLogger("storage/client"),
 		committeeClient: committeeClient,
+		runtime:         runtime,
 	}
 	return b, nil
 }
@@ -43,6 +45,7 @@ func New(
 	ident *identity.Identity,
 	schedulerBackend scheduler.Backend,
 	registryBackend registry.Backend,
+	runtime registry.RuntimeDescriptorProvider,
 ) (api.Backend, error) {
 	committeeWatcher, err := committee.NewWatcher(
 		ctx,
@@ -56,7 +59,7 @@ func New(
 		return nil, fmt.Errorf("storage/client: failed to create committee watcher: %w", err)
 	}
 
-	return newClient(ctx, namespace, ident, committeeWatcher.Nodes())
+	return newClient(ctx, namespace, ident, committeeWatcher.Nodes(), runtime)
 }
 
 // NewStatic creates a new storage client that only follows a specific storage node. This is mostly
@@ -73,7 +76,7 @@ func NewStatic(
 		return nil, fmt.Errorf("storage/client: failed to create node descriptor watcher: %w", err)
 	}
 
-	client, err := newClient(ctx, namespace, ident, nw)
+	client, err := newClient(ctx, namespace, ident, nw, nil)
 	if err != nil {
 		return nil, err
 	}

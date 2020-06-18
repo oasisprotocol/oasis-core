@@ -228,7 +228,14 @@ func NewNode(
 	node.ctx, node.ctxCancel = context.WithCancel(context.Background())
 
 	// Create a new storage client that will be used for remote sync.
-	scl, err := client.New(node.ctx, commonNode.Runtime.ID(), node.commonNode.Identity, node.commonNode.Consensus.Scheduler(), node.commonNode.Consensus.Registry())
+	scl, err := client.New(
+		node.ctx,
+		commonNode.Runtime.ID(),
+		node.commonNode.Identity,
+		node.commonNode.Consensus.Scheduler(),
+		node.commonNode.Consensus.Registry(),
+		nil,
+	)
 	if err != nil {
 		return nil, fmt.Errorf("storage worker: failed to create client: %w", err)
 	}

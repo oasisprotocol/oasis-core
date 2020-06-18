@@ -12,9 +12,9 @@ import (
 
 	"github.com/oasisprotocol/oasis-core/go/common"
 	"github.com/oasisprotocol/oasis-core/go/common/identity"
+	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
 	cmdFlags "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/flags"
 	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
-	scheduler "github.com/oasisprotocol/oasis-core/go/scheduler/api"
 	"github.com/oasisprotocol/oasis-core/go/storage/api"
 	"github.com/oasisprotocol/oasis-core/go/storage/client"
 	"github.com/oasisprotocol/oasis-core/go/storage/database"
@@ -37,15 +37,43 @@ const (
 // Flags has the configuration flags.
 var Flags = flag.NewFlagSet("", flag.ContinueOnError)
 
+type options struct {
+	consensus consensus.Backend
+	runtime   registry.RuntimeDescriptorProvider
+}
+
+// Option is a storage configuration option.
+type Option func(o *options)
+
+// WithConsensus configures the consensus backend to use with storage backends which require access
+// to the consensus layer. In case this option is not specified using such backends will fail.
+func WithConsensus(consensus consensus.Backend) Option {
+	return func(o *options) {
+		o.consensus = consensus
+	}
+}
+
+// WithRuntime configures the runtime to use for looking up storage parameters. In case this option
+// is not specified default safe values will be used.
+func WithRuntime(runtime registry.RuntimeDescriptorProvider) Option {
+	return func(o *options) {
+		o.runtime = runtime
+	}
+}
+
 // New constructs a new Backend based on the configuration flags.
 func New(
 	ctx context.Context,
 	dataDir string,
 	namespace common.Namespace,
 	identity *identity.Identity,
-	schedulerBackend scheduler.Backend,
-	registryBackend registry.Backend,
+	opts ...Option,
 ) (api.Backend, error) {
+	var o options
+	for _, opt := range opts {
+		opt(&o)
+	}
+
 	cfg := &api.Config{
 		Backend:            strings.ToLower(viper.GetString(CfgBackend)),
 		DB:                 dataDir,
@@ -65,18 +93,20 @@ func New(
 		cfg.DB = filepath.Join(cfg.DB, database.DefaultFileName(cfg.Backend))
 		impl, err = database.New(cfg)
 	case client.BackendName:
-		impl, err = client.New(ctx, namespace, identity, schedulerBackend, registryBackend)
+		if o.consensus == nil {
+			return nil, fmt.Errorf("storage: backend '%s' requires a consensus backend to be set", cfg.Backend)
+		}
+		impl, err = client.New(ctx, namespace, identity, o.consensus.Scheduler(), o.consensus.Registry(), o.runtime)
 	default:
 		err = fmt.Errorf("storage: unsupported backend: '%v'", cfg.Backend)
+	}
+	if err != nil {
+		return nil, err
 	}
 
 	crashEnabled := viper.GetBool(cfgCrashEnabled) && cmdFlags.DebugDontBlameOasis()
 	if crashEnabled {
 		impl = newCrashingWrapper(impl)
-	}
-
-	if err != nil {
-		return nil, err
 	}
 
 	return newMetricsWrapper(impl), nil
