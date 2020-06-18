@@ -12,6 +12,33 @@ The format is inspired by [Keep a Changelog].
 
 <!-- TOWNCRIER -->
 
+## 20.8.1 (2020-06-18)
+
+### Features
+
+- go/identity/cli: Add show TLS pubkey commands
+  ([#3015](https://github.com/oasisprotocol/oasis-core/issues/3015))
+
+  Adds following CLI helpers for displaying TLS public keys:
+
+  - `oasis-node identity show-tls-pubkey --datadir <datadir>` for displaying
+  the public key used in the external node gRPC endpoints.
+  - `oasis-node identity show-sentry-client-pubkey --datadir <datadir>` for
+  displaying the public key used by the upstream nodes when connecting to the
+  sentry control endpoint.
+
+### Bug Fixes
+
+- runtime/dispatcher: Break recv loop on abort request
+  ([#3023](https://github.com/oasisprotocol/oasis-core/issues/3023))
+
+- go/runtime/host/sandbox: Fix possible data race
+  ([#3024](https://github.com/oasisprotocol/oasis-core/issues/3024))
+
+  The data race existed because the cancel function that is referenced inside a
+  goroutine waiting for initialization to complete was unintentionally
+  overwritten.
+
 ## 20.8 (2020-06-16)
 
 ### Process
