@@ -186,6 +186,101 @@ func TestRegisterNode(t *testing.T) {
 			nil,
 			true,
 		},
+		// Compute node with enough (per-runtime) stake for one runtime, but not for two.
+		{
+			"ComputeNodeWithoutPerRuntimeStakeMulti",
+			func(n *node.Node) []signature.Signer {
+				rtSigner := memorySigner.NewTestSigner("consensus/tendermint/apps/registry: runtime signer: ComputeNodeWithoutPerRuntimeStakeMulti")
+
+				// Create a new runtime.
+				rt1 := registry.Runtime{
+					DescriptorVersion: registry.LatestRuntimeDescriptorVersion,
+					ID:                common.NewTestNamespaceFromSeed([]byte("consensus/tendermint/apps/registry: runtime: ComputeNodeWithoutPerRuntimeStakeMulti 1"), 0),
+					Kind:              registry.KindCompute,
+					Staking: registry.RuntimeStakingParameters{
+						Thresholds: map[staking.ThresholdKind]quantity.Quantity{
+							staking.KindNodeCompute: *quantity.NewFromUint64(1000),
+						},
+					},
+				}
+				sigRt1, _ := registry.SignRuntime(rtSigner, registry.RegisterRuntimeSignatureContext, &rt1)
+				_ = state.SetRuntime(ctx, &rt1, sigRt1, false)
+
+				// Create another runtime with a different identifier.
+				rt2 := rt1
+				rt2.ID = common.NewTestNamespaceFromSeed([]byte("consensus/tendermint/apps/registry: runtime: ComputeNodeWithoutPerRuntimeStakeMulti 2"), 0)
+				sigRt2, _ := registry.SignRuntime(rtSigner, registry.RegisterRuntimeSignatureContext, &rt2)
+				_ = state.SetRuntime(ctx, &rt2, sigRt2, false)
+
+				// Add bonded stake (hacky, without a self-delegation).
+				_ = stakeState.SetAccount(ctx, staking.NewAddress(n.EntityID), &staking.Account{
+					Escrow: staking.EscrowAccount{
+						Active: staking.SharePool{
+							Balance: *quantity.NewFromUint64(1000),
+						},
+					},
+				})
+
+				n.AddRoles(node.RoleComputeWorker)
+				n.Runtimes = []*node.Runtime{
+					&node.Runtime{ID: rt1.ID},
+					&node.Runtime{ID: rt2.ID},
+				}
+				return nil
+			},
+			nil,
+			false,
+		},
+		// Compute node with enough (global) stake for one runtime, but not for two.
+		{
+			"ComputeNodeWithoutGlobalStakeMulti",
+			func(n *node.Node) []signature.Signer {
+				rtSigner := memorySigner.NewTestSigner("consensus/tendermint/apps/registry: runtime signer: ComputeNodeWithoutGlobalStakeMulti")
+
+				// Create a new runtime.
+				rt1 := registry.Runtime{
+					DescriptorVersion: registry.LatestRuntimeDescriptorVersion,
+					ID:                common.NewTestNamespaceFromSeed([]byte("consensus/tendermint/apps/registry: runtime: ComputeNodeWithoutGlobalStakeMulti 1"), 0),
+					Kind:              registry.KindCompute,
+				}
+				sigRt1, _ := registry.SignRuntime(rtSigner, registry.RegisterRuntimeSignatureContext, &rt1)
+				_ = state.SetRuntime(ctx, &rt1, sigRt1, false)
+
+				// Create another runtime with a different identifier.
+				rt2 := rt1
+				rt2.ID = common.NewTestNamespaceFromSeed([]byte("consensus/tendermint/apps/registry: runtime: ComputeNodeWithoutGlobalStakeMulti 2"), 0)
+				sigRt2, _ := registry.SignRuntime(rtSigner, registry.RegisterRuntimeSignatureContext, &rt2)
+				_ = state.SetRuntime(ctx, &rt2, sigRt2, false)
+
+				// Add bonded stake (hacky, without a self-delegation).
+				_ = stakeState.SetAccount(ctx, staking.NewAddress(n.EntityID), &staking.Account{
+					Escrow: staking.EscrowAccount{
+						Active: staking.SharePool{
+							Balance: *quantity.NewFromUint64(1000),
+						},
+					},
+				})
+
+				n.AddRoles(node.RoleComputeWorker)
+				n.Runtimes = []*node.Runtime{
+					&node.Runtime{ID: rt1.ID},
+					&node.Runtime{ID: rt2.ID},
+				}
+				return nil
+			},
+			&staking.ConsensusParameters{
+				Thresholds: map[staking.ThresholdKind]quantity.Quantity{
+					staking.KindEntity:            *quantity.NewFromUint64(0),
+					staking.KindNodeValidator:     *quantity.NewFromUint64(0),
+					staking.KindNodeCompute:       *quantity.NewFromUint64(1000),
+					staking.KindNodeStorage:       *quantity.NewFromUint64(0),
+					staking.KindNodeKeyManager:    *quantity.NewFromUint64(0),
+					staking.KindRuntimeCompute:    *quantity.NewFromUint64(0),
+					staking.KindRuntimeKeyManager: *quantity.NewFromUint64(0),
+				},
+			},
+			false,
+		},
 	}
 
 	for _, tc := range tcs {
