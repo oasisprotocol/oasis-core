@@ -145,10 +145,11 @@ satisfy:
   consensus parameters (see [`Thresholds` in staking consensus parameters]).
 
 * In _addition_ to the global thresholds, each runtime the node is registering
-  for may define their own thresholds. In case the node is registering for
-  multiple runtimes, it needs to satisfy the maximum threshold of all the
-  runtimes it is registering for. The runtime-specific thresholds are defined
-  in the [`Staking` field] in the runtime descriptor.
+  for may define their own thresholds. The runtime-specific thresholds are
+  defined in the [`Staking` field] in the runtime descriptor.
+
+In case the node is registering for multiple runtimes, it needs to satisfy the
+sum of thresholds of all the runtimes it is registering for.
 
 <!-- markdownlint-disable line-length -->
 [`NewRegisterNodeTx`]: https://pkg.go.dev/github.com/oasisprotocol/oasis-core/go/registry/api?tab=doc#NewRegisterNodeTx

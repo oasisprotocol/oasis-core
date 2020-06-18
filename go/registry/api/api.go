@@ -17,7 +17,6 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
 	"github.com/oasisprotocol/oasis-core/go/common/node"
 	"github.com/oasisprotocol/oasis-core/go/common/pubsub"
-	"github.com/oasisprotocol/oasis-core/go/common/quantity"
 	"github.com/oasisprotocol/oasis-core/go/common/sgx/ias"
 	"github.com/oasisprotocol/oasis-core/go/consensus/api/transaction"
 	epochtime "github.com/oasisprotocol/oasis-core/go/epochtime/api"
@@ -1359,41 +1358,38 @@ func StakeClaimForRuntime(id common.Namespace) staking.StakeClaim {
 // registered for in the same order as they appear in the node descriptor (for example as returned
 // by the VerifyRegisterNodeArgs function).
 func StakeThresholdsForNode(n *node.Node, rts []*Runtime) (thresholds []staking.StakeThreshold) {
-	var rtKinds []staking.ThresholdKind
-	if n.HasRoles(node.RoleKeyManager) {
-		thresholds = append(thresholds, staking.GlobalStakeThreshold(staking.KindNodeKeyManager))
-		rtKinds = append(rtKinds, staking.KindNodeKeyManager)
-	}
-	if n.HasRoles(node.RoleComputeWorker) {
-		thresholds = append(thresholds, staking.GlobalStakeThreshold(staking.KindNodeCompute))
-		rtKinds = append(rtKinds, staking.KindNodeCompute)
-	}
-	if n.HasRoles(node.RoleStorageWorker) {
-		thresholds = append(thresholds, staking.GlobalStakeThreshold(staking.KindNodeStorage))
-		rtKinds = append(rtKinds, staking.KindNodeStorage)
-	}
+	// Validator nodes are global.
 	if n.HasRoles(node.RoleValidator) {
 		thresholds = append(thresholds, staking.GlobalStakeThreshold(staking.KindNodeValidator))
 	}
 
-	// Determine the maximum runtime-specific thresholds (if any) and add them to the returned
-	// stake thresholds.
-	maxThresholds := make(map[staking.ThresholdKind]quantity.Quantity)
+	// Add runtime-specific role thresholds for each registered runtime.
 	for i, rt := range rts {
 		if !n.Runtimes[i].ID.Equal(&rt.ID) {
 			panic(fmt.Errorf("registry: mismatched runtime order"))
 		}
 
-		for _, k := range rtKinds {
-			if v, q := rt.Staking.Thresholds[k], maxThresholds[k]; v.Cmp(&q) > 0 {
-				maxThresholds[k] = v
+		var roleThresholds []staking.ThresholdKind
+		if n.HasRoles(node.RoleKeyManager) {
+			roleThresholds = append(roleThresholds, staking.KindNodeKeyManager)
+		}
+		if n.HasRoles(node.RoleComputeWorker) {
+			roleThresholds = append(roleThresholds, staking.KindNodeCompute)
+		}
+		if n.HasRoles(node.RoleStorageWorker) {
+			roleThresholds = append(roleThresholds, staking.KindNodeStorage)
+		}
+
+		rtThresholds := rt.Staking.Thresholds
+		for _, t := range roleThresholds {
+			// Add global threshold.
+			thresholds = append(thresholds, staking.GlobalStakeThreshold(t))
+			// Add per-runtime threshold if non-zero.
+			if q := rtThresholds[t]; !q.IsZero() {
+				thresholds = append(thresholds, staking.StakeThreshold{Constant: q.Clone()})
 			}
 		}
 	}
-	for _, t := range maxThresholds {
-		thresholds = append(thresholds, staking.StakeThreshold{Constant: t.Clone()})
-	}
-
 	return
 }
 
