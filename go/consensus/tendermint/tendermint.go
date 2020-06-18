@@ -367,6 +367,9 @@ func (t *tendermintService) StateToGenesis(ctx context.Context, blockHeight int6
 		)
 		return nil, err
 	}
+	if blk == nil {
+		return nil, consensusAPI.ErrNoCommittedBlocks
+	}
 	blockHeight = blk.Header.Height
 
 	// Get initial genesis doc.
@@ -688,6 +691,9 @@ func (t *tendermintService) GetBlock(ctx context.Context, height int64) (*consen
 	if err != nil {
 		return nil, err
 	}
+	if blk == nil {
+		return nil, consensusAPI.ErrNoCommittedBlocks
+	}
 
 	return api.NewBlock(blk), nil
 }
@@ -700,6 +706,9 @@ func (t *tendermintService) GetTransactions(ctx context.Context, height int64) (
 	blk, err := t.GetTendermintBlock(ctx, height)
 	if err != nil {
 		return nil, err
+	}
+	if blk == nil {
+		return nil, consensusAPI.ErrNoCommittedBlocks
 	}
 
 	txs := make([][]byte, 0, len(blk.Data.Txs))
@@ -895,6 +904,9 @@ func (t *tendermintService) GetHeight(ctx context.Context) (int64, error) {
 	if err != nil {
 		return 0, err
 	}
+	if blk == nil {
+		return 0, consensusAPI.ErrNoCommittedBlocks
+	}
 	return blk.Header.Height, nil
 }
 
@@ -910,7 +922,7 @@ func (t *tendermintService) GetBlockResults(height int64) (*tmrpctypes.ResultBlo
 		tmHeight = t.mux.BlockHeight()
 		if tmHeight == 0 {
 			// No committed blocks yet.
-			return nil, nil
+			return nil, consensusAPI.ErrNoCommittedBlocks
 		}
 	} else {
 		tmHeight = height

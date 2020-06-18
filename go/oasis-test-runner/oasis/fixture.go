@@ -148,6 +148,8 @@ type ValidatorFixture struct { // nolint: maligned
 	AllowEarlyTermination bool `json:"allow_early_termination"`
 	AllowErrorTermination bool `json:"allow_error_termination"`
 
+	NoAutoStart bool `json:"no_auto_start,omitempty"`
+
 	Entity int `json:"entity"`
 
 	LogWatcherHandlerFactories []log.WatcherHandlerFactory `json:"-"`
@@ -175,6 +177,7 @@ func (f *ValidatorFixture) Create(net *Network) (*Validator, error) {
 			AllowErrorTermination:      f.AllowErrorTermination,
 			LogWatcherHandlerFactories: f.LogWatcherHandlerFactories,
 			Consensus:                  f.Consensus,
+			NoAutoStart:                f.NoAutoStart,
 		},
 		Entity:   entity,
 		Sentries: sentries,
