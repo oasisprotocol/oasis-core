@@ -133,6 +133,10 @@ type StorageParameters struct {
 	// GroupSize is the size of the storage group.
 	GroupSize uint64 `json:"group_size"`
 
+	// MinWriteReplication is the number of nodes to which any writes must be replicated before
+	// being assumed to be committed. It must be less than or equal to the GroupSize.
+	MinWriteReplication uint64 `json:"min_write_replication"`
+
 	// MaxApplyWriteLogEntries is the maximum number of write log entries when performing an Apply
 	// operation.
 	MaxApplyWriteLogEntries uint64 `json:"max_apply_write_log_entries"`

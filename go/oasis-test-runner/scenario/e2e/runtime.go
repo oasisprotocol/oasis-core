@@ -177,6 +177,7 @@ func (sc *runtimeImpl) Fixture() (*oasis.NetworkFixture, error) {
 				},
 				Storage: registry.StorageParameters{
 					GroupSize:               2,
+					MinWriteReplication:     2,
 					MaxApplyWriteLogEntries: 100_000,
 					MaxApplyOps:             2,
 					MaxMergeRoots:           8,

@@ -63,6 +63,7 @@ func (r *RegistryHelpers) runRegistryRuntimeSubcommand(
 			"--"+cmdRegRt.CfgMergeAllowedStragglers, strconv.FormatUint(runtime.Merge.AllowedStragglers, 10),
 			"--"+cmdRegRt.CfgMergeRoundTimeout, runtime.Merge.RoundTimeout.String(),
 			"--"+cmdRegRt.CfgStorageGroupSize, strconv.FormatUint(runtime.Storage.GroupSize, 10),
+			"--"+cmdRegRt.CfgStorageMinWriteReplication, strconv.FormatUint(runtime.Storage.MinWriteReplication, 10),
 			"--"+cmdRegRt.CfgStorageMaxApplyWriteLogEntries, strconv.FormatUint(runtime.Storage.MaxApplyWriteLogEntries, 10),
 			"--"+cmdRegRt.CfgStorageMaxApplyOps, strconv.FormatUint(runtime.Storage.MaxApplyOps, 10),
 			"--"+cmdRegRt.CfgStorageMaxMergeRoots, strconv.FormatUint(runtime.Storage.MaxMergeRoots, 10),

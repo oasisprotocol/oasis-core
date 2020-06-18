@@ -61,6 +61,7 @@ const (
 
 	// Storage committee flags.
 	CfgStorageGroupSize               = "runtime.storage.group_size"
+	CfgStorageMinWriteReplication     = "runtime.storage.min_write_replication"
 	CfgStorageMaxApplyWriteLogEntries = "runtime.storage.max_apply_write_log_entries"
 	CfgStorageMaxApplyOps             = "runtime.storage.max_apply_ops"
 	CfgStorageMaxMergeRoots           = "runtime.storage.max_merge_roots"
@@ -389,6 +390,7 @@ func runtimeFromFlags() (*registry.Runtime, signature.Signer, error) { // nolint
 		},
 		Storage: registry.StorageParameters{
 			GroupSize:               viper.GetUint64(CfgStorageGroupSize),
+			MinWriteReplication:     viper.GetUint64(CfgStorageMinWriteReplication),
 			MaxApplyWriteLogEntries: viper.GetUint64(CfgStorageMaxApplyWriteLogEntries),
 			MaxApplyOps:             viper.GetUint64(CfgStorageMaxApplyOps),
 			MaxMergeRoots:           viper.GetUint64(CfgStorageMaxMergeRoots),
@@ -557,6 +559,7 @@ func init() {
 
 	// Init Storage committee flags.
 	runtimeFlags.Uint64(CfgStorageGroupSize, 1, "Number of storage nodes for the runtime")
+	runtimeFlags.Uint64(CfgStorageMinWriteReplication, 1, "Minimum required storage write replication")
 	runtimeFlags.Uint64(CfgStorageMaxApplyWriteLogEntries, 100_000, "Maximum number of write log entries")
 	runtimeFlags.Uint64(CfgStorageMaxApplyOps, 2, "Maximum number of apply operations in a batch")
 	runtimeFlags.Uint64(CfgStorageMaxMergeRoots, 8, "Maximum number of merge roots")

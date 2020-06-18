@@ -102,6 +102,7 @@ var (
 		},
 		Storage: registry.StorageParameters{
 			GroupSize:               1,
+			MinWriteReplication:     1,
 			MaxApplyWriteLogEntries: 100_000,
 			MaxApplyOps:             2,
 			MaxMergeRoots:           8,

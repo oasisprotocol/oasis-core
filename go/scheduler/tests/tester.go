@@ -133,6 +133,7 @@ func SchedulerImplementationTests(t *testing.T, name string, backend api.Backend
 	rt.Runtime.Executor.GroupSize = 2
 	rt.Runtime.Executor.GroupBackupSize = 1
 	rt.Runtime.Storage.GroupSize = 1
+	rt.Runtime.Storage.MinWriteReplication = 1
 	rt.MustRegister(t, consensus.Registry(), consensus)
 
 	epoch = epochtimeTests.MustAdvanceEpoch(t, epochtime, 1)

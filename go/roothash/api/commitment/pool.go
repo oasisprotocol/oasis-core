@@ -33,6 +33,7 @@ var (
 	ErrInvalidCommitteeID     = errors.New(moduleName, 12, "roothash/commitment: invalid committee ID")
 	ErrTxnSchedSigInvalid     = errors.New(moduleName, 13, "roothash/commitment: txn scheduler signature invalid")
 	ErrInvalidMessages        = errors.New(moduleName, 14, "roothash/commitment: invalid messages")
+	ErrBadStorageReceipts     = errors.New(moduleName, 15, "roothash/commitment: bad storage receipts")
 )
 
 var logger *logging.Logger = logging.GetLogger("roothash/commitment/pool")
@@ -244,6 +245,14 @@ func (p *Pool) addOpenExecutorCommitment(
 	}
 
 	// Check if the header refers to merkle roots in storage.
+	if uint64(len(body.StorageSignatures)) < p.Runtime.Storage.MinWriteReplication {
+		logger.Debug("executor commitment doesn't have enough storage receipts",
+			"node_id", id,
+			"min_write_replication", p.Runtime.Storage.MinWriteReplication,
+			"num_receipts", len(body.StorageSignatures),
+		)
+		return ErrBadStorageReceipts
+	}
 	if err := sv.VerifyCommitteeSignatures(scheduler.KindStorage, body.StorageSignatures); err != nil {
 		logger.Debug("executor commitment has bad storage receipt signers",
 			"committee_id", cID,
@@ -608,6 +617,14 @@ func (p *Pool) AddMergeCommitment(
 	}
 
 	// Check if the header refers to merkle roots in storage.
+	if uint64(len(header.StorageSignatures)) < p.Runtime.Storage.MinWriteReplication {
+		logger.Debug("merge commitment doesn't have enough storage receipts",
+			"node_id", id,
+			"min_write_replication", p.Runtime.Storage.MinWriteReplication,
+			"num_receipts", len(header.StorageSignatures),
+		)
+		return ErrBadStorageReceipts
+	}
 	if err = sv.VerifyCommitteeSignatures(scheduler.KindStorage, header.StorageSignatures); err != nil {
 		logger.Debug("merge commitment has bad storage receipt signers",
 			"node_id", id,

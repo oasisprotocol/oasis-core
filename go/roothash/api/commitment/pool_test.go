@@ -114,6 +114,10 @@ func TestPoolSingleCommitment(t *testing.T) {
 		ID:                rtID,
 		Kind:              registry.KindCompute,
 		TEEHardware:       node.TEEHardwareInvalid,
+		Storage: registry.StorageParameters{
+			GroupSize:           1,
+			MinWriteReplication: 1,
+		},
 	}
 
 	// Generate a commitment signing key.
@@ -174,6 +178,15 @@ func TestPoolSingleCommitment(t *testing.T) {
 	require.NoError(t, err, "SignExecutorCommitment")
 	err = pool.AddExecutorCommitment(context.Background(), childBlk, sv, nl, incorrectCommit)
 	require.Error(t, err, "AddExecutorCommitment")
+
+	// Adding a commitment having not enough storage receipts should fail.
+	bodyNotEnoughStorageSig := body
+	bodyNotEnoughStorageSig.StorageSignatures = []signature.Signature{}
+	incorrectCommit, err = SignExecutorCommitment(sk, &bodyNotEnoughStorageSig)
+	require.NoError(t, err, "SignExecutorCommitment")
+	err = pool.AddExecutorCommitment(context.Background(), childBlk, sv, nl, incorrectCommit)
+	require.Error(t, err, "AddExecutorCommitment")
+	require.Equal(t, ErrBadStorageReceipts, err, "AddExecutorCommitment")
 
 	// Adding a commitment having txn scheduler inputs signed with an incorrect
 	// public key should fail.
@@ -620,6 +633,15 @@ func TestPoolMergeCommitment(t *testing.T) {
 
 		mergeCommit2, err := SignMergeCommitment(mergeSks[1], &mergeBody)
 		require.NoError(t, err, "SignMergeCommitment")
+
+		// Adding a commitment having not enough storage receipts should fail.
+		mergeBodyNotEnoughStorageSig := mergeBody
+		mergeBodyNotEnoughStorageSig.Header.StorageSignatures = []signature.Signature{}
+		incorrectCommit, err := SignMergeCommitment(mergeSks[0], &mergeBodyNotEnoughStorageSig)
+		require.NoError(t, err, "SignMergeCommitment")
+		err = mergePool.AddMergeCommitment(context.Background(), childBlk, nopSV, nl, incorrectCommit, &executorPool)
+		require.Error(t, err, "AddMergeCommitment")
+		require.Equal(t, ErrBadStorageReceipts, err, "AddMergeCommitment")
 
 		// Adding commitment 1 should succeed.
 		err = mergePool.AddMergeCommitment(context.Background(), childBlk, nopSV, nl, mergeCommit1, &executorPool)
@@ -1096,6 +1118,10 @@ func generateMockCommittee(t *testing.T) (
 		ID:                rtID,
 		Kind:              registry.KindCompute,
 		TEEHardware:       node.TEEHardwareInvalid,
+		Storage: registry.StorageParameters{
+			GroupSize:           1,
+			MinWriteReplication: 1,
+		},
 	}
 
 	// Generate commitment signing keys.
