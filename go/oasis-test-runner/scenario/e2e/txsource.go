@@ -316,7 +316,7 @@ func (sc *txSourceImpl) startWorkload(childEnv *env.Env, errCh chan error, name 
 	nodeBinary := sc.net.Config().NodeBinary
 
 	cmd := exec.Command(nodeBinary, args...)
-	cmd.SysProcAttr = oasis.CmdAttrs
+	cmd.SysProcAttr = env.CmdAttrs
 	cmd.Stdout = w
 	cmd.Stderr = w
 

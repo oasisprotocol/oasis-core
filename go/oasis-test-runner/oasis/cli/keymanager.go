@@ -101,7 +101,7 @@ func (k *KeymanagerHelpers) GenUpdate(nonce uint64, polPath string, polSigPaths 
 		"--" + flags.CfgDebugDontBlameOasis,
 		"--" + cmdCommon.CfgDebugAllowTestKeys,
 		"--" + flags.CfgDebugTestEntity,
-		"--" + flags.CfgGenesisFile, k.net.GenesisPath(),
+		"--" + flags.CfgGenesisFile, k.cfg.GenesisFile,
 	}
 	for _, sigPath := range polSigPaths {
 		args = append(args, "--"+cmdKM.CfgPolicySigFile, sigPath)

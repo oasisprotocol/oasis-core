@@ -236,7 +236,7 @@ func (r *runtimeRegistry) Cleanup() {
 	}
 }
 
-func (r *runtimeRegistry) addSupportedRuntime(ctx context.Context, id common.Namespace, cfg *RuntimeConfig) error {
+func (r *runtimeRegistry) addSupportedRuntime(ctx context.Context, id common.Namespace, cfg *RuntimeConfig) (rerr error) {
 	r.Lock()
 	defer r.Unlock()
 
@@ -253,26 +253,49 @@ func (r *runtimeRegistry) addSupportedRuntime(ctx context.Context, id common.Nam
 		return err
 	}
 
+	rt, err := newRuntime(ctx, id, r.consensus, r.logger)
+	if err != nil {
+		return err
+	}
+
 	// Create runtime history keeper.
 	history, err := history.New(path, id, &cfg.History)
 	if err != nil {
 		return fmt.Errorf("runtime/registry: cannot create block history for runtime %s: %w", id, err)
 	}
+	defer func() {
+		if rerr != nil {
+			history.Close()
+		}
+	}()
 
 	// Create runtime-specific local storage backend.
 	localStorage, err := localstorage.New(path, LocalStorageFile, id)
 	if err != nil {
 		return fmt.Errorf("runtime/registry: cannot create local storage for runtime %s: %w", id, err)
 	}
+	defer func() {
+		if rerr != nil {
+			localStorage.Stop()
+		}
+	}()
 
 	// Create runtime-specific storage backend.
 	var ns common.Namespace
 	copy(ns[:], id[:])
 
-	storageBackend, err := storage.New(ctx, path, ns, r.identity, r.consensus.Scheduler(), r.consensus.Registry())
+	storageBackend, err := storage.New(ctx, path, ns, r.identity,
+		storage.WithConsensus(r.consensus),
+		storage.WithRuntime(rt),
+	)
 	if err != nil {
 		return fmt.Errorf("runtime/registry: cannot create storage for runtime %s: %w", id, err)
 	}
+	defer func() {
+		if rerr != nil {
+			storageBackend.Cleanup()
+		}
+	}()
 
 	// Create runtime tag indexer.
 	tagIndexer, err := tagindexer.New(path, cfg.TagIndexer, history, r.consensus.RootHash(), storageBackend)
@@ -282,15 +305,15 @@ func (r *runtimeRegistry) addSupportedRuntime(ctx context.Context, id common.Nam
 	if err = tagIndexer.Start(); err != nil {
 		return fmt.Errorf("runtime/registry: failed to start tag indexer for runtime %s: %w", id, err)
 	}
+	defer func() {
+		if rerr != nil {
+			tagIndexer.Stop()
+		}
+	}()
 
 	// Start tracking this runtime.
 	if err = r.consensus.RootHash().TrackRuntime(ctx, history); err != nil {
 		return fmt.Errorf("runtime/registry: cannot track runtime %s: %w", id, err)
-	}
-
-	rt, err := newRuntime(ctx, id, r.consensus, r.logger)
-	if err != nil {
-		return err
 	}
 
 	rt.storage = storageBackend

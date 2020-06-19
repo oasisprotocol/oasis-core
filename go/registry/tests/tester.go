@@ -632,6 +632,33 @@ func testRegistryRuntime(t *testing.T, backend api.Backend, consensus consensusA
 			false,
 			false,
 		},
+		// Runtime with zero minimum storage write replication.
+		{
+			"WithZeroStorageMinWriteReplication",
+			func(rt *api.Runtime) {
+				rt.Storage.MinWriteReplication = 0
+			},
+			false,
+			false,
+		},
+		// Runtime with too high storage write replication.
+		{
+			"WithTooHighStorageMinWriteReplication",
+			func(rt *api.Runtime) {
+				rt.Storage.MinWriteReplication = rt.Storage.GroupSize + 1
+			},
+			false,
+			false,
+		},
+		// Runtime with valid, but not equal to group size storage write replication.
+		{
+			"WithValidStorageMinWriteReplication",
+			func(rt *api.Runtime) {
+				rt.Storage.MinWriteReplication = rt.Storage.GroupSize - 1
+			},
+			false,
+			true,
+		},
 	}
 
 	rtMap := make(map[common.Namespace]*api.Runtime)
@@ -1472,6 +1499,7 @@ func NewTestRuntime(seed []byte, ent *TestEntity, isKeyManager bool) (*TestRunti
 		},
 		Storage: api.StorageParameters{
 			GroupSize:               3,
+			MinWriteReplication:     3,
 			MaxApplyWriteLogEntries: 100_000,
 			MaxApplyOps:             2,
 			MaxMergeRoots:           8,

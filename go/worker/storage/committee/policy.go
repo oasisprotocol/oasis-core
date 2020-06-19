@@ -40,6 +40,8 @@ var (
 	sentryNodesPolicy = &committee.AccessPolicy{
 		Actions: []accessctl.Action{
 			accessctl.Action(api.MethodGetDiff.FullName()),
+			accessctl.Action(api.MethodGetCheckpoints.FullName()),
+			accessctl.Action(api.MethodGetCheckpointChunk.FullName()),
 			accessctl.Action(api.MethodApply.FullName()),
 			accessctl.Action(api.MethodApplyBatch.FullName()),
 			accessctl.Action(api.MethodMerge.FullName()),

@@ -6,6 +6,7 @@ import (
 	"context"
 	cryptorand "crypto/rand"
 	"errors"
+	"fmt"
 	"io"
 	"math/rand"
 	"time"
@@ -19,6 +20,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/mathrand"
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
 	"github.com/oasisprotocol/oasis-core/go/common/node"
+	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
 	"github.com/oasisprotocol/oasis-core/go/runtime/committee"
 	"github.com/oasisprotocol/oasis-core/go/storage/api"
 	"github.com/oasisprotocol/oasis-core/go/storage/mkvs/checkpoint"
@@ -48,6 +50,7 @@ type storageClientBackend struct {
 	logger *logging.Logger
 
 	committeeClient committee.Client
+	runtime         registry.RuntimeDescriptorProvider
 }
 
 // GetConnectedNodes returns registry node information about all connected
@@ -81,6 +84,19 @@ func (b *storageClientBackend) writeWithClient(
 			"runtime_id", ns,
 		)
 		return nil, ErrStorageNotAvailable
+	}
+
+	// Determine the minimum replication factor. In case we don't have a runtime descriptor provider
+	// we make the safe choice of assuming that the replication factor is the same as the size of
+	// the storage committee.
+	minWriteReplication := n
+	if b.runtime != nil {
+		rt, err := b.runtime.RegistryDescriptor(ctx)
+		if err != nil {
+			return nil, fmt.Errorf("failed to fetch registry descriptor: %w", err)
+		}
+
+		minWriteReplication = int(rt.Storage.MinWriteReplication)
 	}
 
 	// Use a buffered channel to allow all "write" goroutines to return as soon
@@ -208,17 +224,19 @@ func (b *storageClientBackend) writeWithClient(
 			)
 			continue
 		}
-		// TODO: Only wait for F+1 successful writes:
-		// https://github.com/oasisprotocol/oasis-core/issues/1821.
+
 		receipts = append(receipts, receipt)
+		if len(receipts) >= minWriteReplication {
+			break
+		}
 	}
 
 	successes := len(receipts)
 	if successes == 0 {
 		return nil, errors.New("storage client: failed to write to any storage node")
-	} else if successes < n {
+	} else if successes < minWriteReplication {
 		b.logger.Warn("write operation only partially applied",
-			"connected_nodes", n,
+			"min_write_replication", minWriteReplication,
 			"successful_writes", successes,
 		)
 	}

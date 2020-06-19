@@ -20,7 +20,7 @@ func (c *ConsensusHelpers) SubmitTx(txPath string) error {
 	args := []string{
 		"consensus", "submit_tx",
 		"--" + consensus.CfgTxFile, txPath,
-		"--" + grpc.CfgAddress, "unix:" + c.net.Validators()[0].SocketPath(),
+		"--" + grpc.CfgAddress, "unix:" + c.cfg.NodeSocketPath,
 		"--" + common.CfgDebugAllowTestKeys,
 	}
 	if err := c.runSubCommand("consensus-submit_tx", args); err != nil {

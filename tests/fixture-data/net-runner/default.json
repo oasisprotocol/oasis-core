@@ -60,6 +60,7 @@
             },
             "storage": {
                 "group_size": 0,
+                "min_write_replication": 0,
                 "max_apply_write_log_entries": 0,
                 "max_apply_ops": 0,
                 "max_merge_roots": 0,
@@ -109,6 +110,7 @@
             },
             "storage": {
                 "group_size": 1,
+                "min_write_replication": 1,
                 "max_apply_write_log_entries": 100000,
                 "max_apply_ops": 2,
                 "max_merge_roots": 8,

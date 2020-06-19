@@ -228,7 +228,14 @@ func NewNode(
 	node.ctx, node.ctxCancel = context.WithCancel(context.Background())
 
 	// Create a new storage client that will be used for remote sync.
-	scl, err := client.New(node.ctx, commonNode.Runtime.ID(), node.commonNode.Identity, node.commonNode.Consensus.Scheduler(), node.commonNode.Consensus.Registry())
+	scl, err := client.New(
+		node.ctx,
+		commonNode.Runtime.ID(),
+		node.commonNode.Identity,
+		node.commonNode.Consensus.Scheduler(),
+		node.commonNode.Consensus.Registry(),
+		nil,
+	)
 	if err != nil {
 		return nil, fmt.Errorf("storage worker: failed to create client: %w", err)
 	}
@@ -335,11 +342,21 @@ func (n *Node) updateExternalServicePolicyLocked(snapshot *committee.EpochSnapsh
 	// TODO: Query registry only for storage nodes after
 	// https://github.com/oasisprotocol/oasis-core/issues/1923 is implemented.
 	nodes, err := n.commonNode.Consensus.Registry().GetNodes(context.Background(), snapshot.GetGroupVersion())
-	if nodes != nil {
-		storageNodesPolicy.AddRulesForNodeRoles(&policy, nodes, node.RoleStorageWorker)
-	} else {
+	if err != nil {
 		n.logger.Error("couldn't get nodes from registry", "err", err)
 	}
+	if len(nodes) > 0 {
+		// Only include nodes for our runtime, do not include all storage nodes.
+		var rtNodes []*node.Node
+		for _, storageNode := range nodes {
+			if storageNode.GetRuntime(n.commonNode.Runtime.ID()) != nil {
+				rtNodes = append(rtNodes, storageNode)
+			}
+		}
+
+		storageNodesPolicy.AddRulesForNodeRoles(&policy, rtNodes, node.RoleStorageWorker)
+	}
+
 	// Update storage gRPC access policy for the current runtime.
 	n.grpcPolicy.SetAccessPolicy(policy, n.commonNode.Runtime.ID())
 	n.logger.Debug("set new storage gRPC access policy", "policy", policy)

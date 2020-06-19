@@ -1116,6 +1116,18 @@ func VerifyRegisterRuntimeStorageArgs(rt *Runtime, logger *logging.Logger) error
 		)
 		return fmt.Errorf("%w: storage group too small", ErrInvalidArgument)
 	}
+	if params.MinWriteReplication == 0 {
+		logger.Error("RegisterRuntime: storage write replication factor is zero",
+			"runtime", rt,
+		)
+		return fmt.Errorf("%w: storage write replication factor must be non-zero", ErrInvalidArgument)
+	}
+	if params.MinWriteReplication > params.GroupSize {
+		logger.Error("RegisterRuntime: storage write replication factor is too high",
+			"runtime", rt,
+		)
+		return fmt.Errorf("%w: storage write replication factor must be less than or equal to group size", ErrInvalidArgument)
+	}
 
 	// Ensure limit parameters have sensible values.
 	if params.MaxApplyWriteLogEntries < 10 {

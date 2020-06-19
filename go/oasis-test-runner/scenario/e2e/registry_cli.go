@@ -634,6 +634,7 @@ func (r *registryCLIImpl) testRuntime(childEnv *env.Env, cli *cli.Helpers) error
 		},
 		Storage: registry.StorageParameters{
 			GroupSize:               9,
+			MinWriteReplication:     9,
 			MaxApplyWriteLogEntries: 10,
 			MaxApplyOps:             11,
 			MaxMergeRoots:           12,
