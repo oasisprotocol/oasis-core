@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/backoff"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/resolver/manual"
 
@@ -22,7 +23,14 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/pubsub"
 )
 
-const defaultCloseDelay = 5 * time.Second
+const (
+	defaultCloseDelay = 5 * time.Second
+
+	// gRPC backoff max delay when establishing connections (default: 120).
+	grpcBackoffMaxDelay = 10 * time.Second
+	// Default.
+	grpcMinConnectTimeout = 20 * time.Second
+)
 
 // NodeSelectionFeedback is feedback to the node selection policy.
 type NodeSelectionFeedback struct {
@@ -333,6 +341,10 @@ func (cc *committeeClient) updateConnectionLocked(n *node.Node) error {
 		cs.resolver = manual.NewBuilderWithScheme("oasis-core-resolver")
 		cs.resolver.InitialState(resolver.State{})
 
+		// Backoff config.
+		backoffConfig := backoff.DefaultConfig
+		backoffConfig.MaxDelay = grpcBackoffMaxDelay
+
 		// Create a virtual connection to the given node.
 		conn, err := cmnGrpc.Dial(
 			"oasis-core-resolver:///",
@@ -340,6 +352,12 @@ func (cc *committeeClient) updateConnectionLocked(n *node.Node) error {
 			// https://github.com/grpc/grpc-go/issues/3003
 			grpc.WithDefaultServiceConfig(`{"loadBalancingPolicy":"round_robin"}`),
 			grpc.WithResolvers(cs.resolver),
+			grpc.WithConnectParams(
+				grpc.ConnectParams{
+					Backoff:           backoffConfig,
+					MinConnectTimeout: grpcMinConnectTimeout,
+				},
+			),
 		)
 		if err != nil {
 			cc.logger.Warn("failed to dial node",
