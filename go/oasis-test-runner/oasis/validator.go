@@ -137,6 +137,7 @@ func (net *Network) NewValidator(cfg *ValidatorCfg) (*Validator, error) {
 			disableDefaultLogWatcherHandlerFactories: cfg.DisableDefaultLogWatcherHandlerFactories,
 			logWatcherHandlerFactories:               cfg.LogWatcherHandlerFactories,
 			consensus:                                cfg.Consensus,
+			noAutoStart:                              cfg.NoAutoStart,
 		},
 		entity:        cfg.Entity,
 		sentries:      cfg.Sentries,

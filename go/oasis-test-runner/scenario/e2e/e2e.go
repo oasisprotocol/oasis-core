@@ -129,6 +129,8 @@ func RegisterScenarios() error {
 		LateStart,
 		// KeymanagerUpgrade test.
 		KeymanagerUpgrade,
+		// Early query test.
+		EarlyQuery,
 	} {
 		if err := cmd.Register(s); err != nil {
 			return err
