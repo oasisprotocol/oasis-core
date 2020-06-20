@@ -50,7 +50,7 @@ func (sc *nodeShutdownImpl) Run(childEnv *env.Env) error {
 		return err
 	}
 
-	sc.logger.Info("requesting node shutdown")
+	sc.logger.Info("waiting for the node to become ready")
 	computeWorker := sc.runtimeImpl.net.ComputeWorkers()[0]
 
 	// Wait for the node to be ready since we didn't wait for any clients.
@@ -58,10 +58,20 @@ func (sc *nodeShutdownImpl) Run(childEnv *env.Env) error {
 	if err != nil {
 		return err
 	}
-	if err = nodeCtrl.WaitSync(context.Background()); err != nil {
+	if err = nodeCtrl.WaitReady(context.Background()); err != nil {
 		return err
 	}
 
+	// Make sure that the GetStatus endpoint returns sensible values.
+	status, err := nodeCtrl.GetStatus(context.Background())
+	if err != nil {
+		return fmt.Errorf("failed to get status for node: %w", err)
+	}
+	if status.Registration.Descriptor == nil {
+		return fmt.Errorf("node has not registered")
+	}
+
+	sc.logger.Info("requesting node shutdown")
 	args := []string{
 		"control", "shutdown",
 		"--log.level", "debug",

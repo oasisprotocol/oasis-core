@@ -17,6 +17,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/node"
 	"github.com/oasisprotocol/oasis-core/go/common/quantity"
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
+	control "github.com/oasisprotocol/oasis-core/go/control/api"
 	epochtime "github.com/oasisprotocol/oasis-core/go/epochtime/api"
 	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
 	runtimeClient "github.com/oasisprotocol/oasis-core/go/runtime/client/api"
@@ -57,6 +58,7 @@ type queries struct {
 	stakingParams   staking.ConsensusParameters
 	schedulerParams scheduler.ConsensusParameters
 
+	control   control.NodeController
 	staking   staking.Backend
 	consensus consensus.ClientBackend
 	registry  registry.Backend
@@ -439,6 +441,19 @@ func (q *queries) doRuntimeQueries(ctx context.Context, rng *rand.Rand) error {
 	return nil
 }
 
+func (q *queries) doControlQueries(ctx context.Context, rng *rand.Rand) error {
+	q.logger.Debug("Doing node control queries")
+
+	_, err := q.control.GetStatus(ctx)
+	if err != nil {
+		return fmt.Errorf("control.GetStatus error: %w", err)
+	}
+
+	q.logger.Debug("Done node control queries")
+
+	return nil
+}
+
 func (q *queries) doQueries(ctx context.Context, rng *rand.Rand) error {
 	block, err := q.consensus.GetBlock(ctx, consensus.HeightLatest)
 	if err != nil {
@@ -470,6 +485,9 @@ func (q *queries) doQueries(ctx context.Context, rng *rand.Rand) error {
 		"height_latest", block.Height,
 	)
 
+	if err := q.doControlQueries(ctx, rng); err != nil {
+		return fmt.Errorf("control queries error: %w", err)
+	}
 	if err := q.doConsensusQueries(ctx, rng, height); err != nil {
 		return fmt.Errorf("consensus queries error: %w", err)
 	}
@@ -499,6 +517,7 @@ func (q *queries) Run(gracefulExit context.Context, rng *rand.Rand, conn *grpc.C
 
 	q.logger = logging.GetLogger("cmd/txsource/workload/queries")
 
+	q.control = control.NewNodeControllerClient(conn)
 	q.consensus = cnsc
 	q.registry = registry.NewRegistryClient(conn)
 	q.runtime = runtimeClient.NewRuntimeClient(conn)

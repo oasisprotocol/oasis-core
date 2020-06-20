@@ -22,6 +22,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/node"
 	"github.com/oasisprotocol/oasis-core/go/common/persistent"
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
+	control "github.com/oasisprotocol/oasis-core/go/control/api"
 	epochtime "github.com/oasisprotocol/oasis-core/go/epochtime/api"
 	"github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/flags"
 	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
@@ -169,6 +170,8 @@ type Worker struct { // nolint: maligned
 
 	roleProviders []*roleProvider
 	registerCh    chan struct{}
+
+	status control.RegistrationStatus
 }
 
 // DebugForceallowUnroutableAddresses allows unroutable addresses.
@@ -461,6 +464,16 @@ func (w *Worker) registrationStopped() {
 	}
 }
 
+// GetRegistrationStatus returns the node's current registration status.
+func (w *Worker) GetRegistrationStatus(ctx context.Context) (*control.RegistrationStatus, error) {
+	w.RLock()
+	defer w.RUnlock()
+
+	status := new(control.RegistrationStatus)
+	*status = w.status
+	return status, nil
+}
+
 // InitialRegistrationCh returns the initial registration channel.
 func (w *Worker) InitialRegistrationCh() chan struct{} {
 	return w.initialRegCh
@@ -703,6 +716,12 @@ func (w *Worker) registerNode(epoch epochtime.EpochTime, hook RegisterNodeHook) 
 		)
 		return err
 	}
+
+	// Update the registration status on successful registration.
+	w.RLock()
+	w.status.LastRegistration = time.Now()
+	w.status.Descriptor = &nodeDesc
+	w.RUnlock()
 
 	w.logger.Info("node registered with the registry")
 	return nil
