@@ -1,11 +1,11 @@
 package common
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/oasisprotocol/oasis-core/go/common"
 	"github.com/oasisprotocol/oasis-core/go/common/grpc"
-	"github.com/oasisprotocol/oasis-core/go/common/grpc/policy"
 	policyAPI "github.com/oasisprotocol/oasis-core/go/common/grpc/policy/api"
 	"github.com/oasisprotocol/oasis-core/go/common/identity"
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
@@ -14,6 +14,7 @@ import (
 	ias "github.com/oasisprotocol/oasis-core/go/ias/api"
 	keymanagerApi "github.com/oasisprotocol/oasis-core/go/keymanager/api"
 	runtimeRegistry "github.com/oasisprotocol/oasis-core/go/runtime/registry"
+	"github.com/oasisprotocol/oasis-core/go/sentry/policywatcher"
 	"github.com/oasisprotocol/oasis-core/go/worker/common/committee"
 	"github.com/oasisprotocol/oasis-core/go/worker/common/p2p"
 )
@@ -35,8 +36,10 @@ type Worker struct {
 
 	runtimes map[common.Namespace]*committee.Node
 
-	quitCh chan struct{}
-	initCh chan struct{}
+	ctx       context.Context
+	cancelCtx context.CancelFunc
+	quitCh    chan struct{}
+	initCh    chan struct{}
 
 	logger *logging.Logger
 }
@@ -107,6 +110,7 @@ func (w *Worker) Stop() {
 	}
 
 	w.Grpc.Stop()
+	w.cancelCtx()
 }
 
 // Enabled returns if worker is enabled.
@@ -205,6 +209,8 @@ func (w *Worker) registerRuntime(runtime runtimeRegistry.Runtime) error {
 }
 
 func newWorker(
+	ctx context.Context,
+	cancelCtx context.CancelFunc,
 	dataDir string,
 	enabled bool,
 	identity *identity.Identity,
@@ -231,6 +237,8 @@ func newWorker(
 		RuntimeRegistry:   runtimeRegistry,
 		GenesisDoc:        genesisDoc,
 		runtimes:          make(map[common.Namespace]*committee.Node),
+		ctx:               ctx,
+		cancelCtx:         cancelCtx,
 		quitCh:            make(chan struct{}),
 		initCh:            make(chan struct{}),
 		logger:            logging.GetLogger("worker/common"),
@@ -276,10 +284,12 @@ func New(
 		return nil, err
 	}
 
-	grpcPolicyWatcher := policy.NewPolicyWatcher()
-	policyAPI.RegisterService(grpc.Server(), grpcPolicyWatcher)
+	ctx, cancelCtx := context.WithCancel(context.Background())
+	grpcPolicyWatcher := policywatcher.New(ctx, cfg.SentryAddresses, identity)
 
 	return newWorker(
+		ctx,
+		cancelCtx,
 		dataDir,
 		enabled,
 		identity,

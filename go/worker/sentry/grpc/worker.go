@@ -4,24 +4,18 @@ import (
 	"context"
 	"fmt"
 	"sync"
-	"time"
 
-	"github.com/cenkalti/backoff/v4"
-	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
 	"github.com/oasisprotocol/oasis-core/go/common/accessctl"
 	"github.com/oasisprotocol/oasis-core/go/common/cbor"
-	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	cmnGrpc "github.com/oasisprotocol/oasis-core/go/common/grpc"
 	"github.com/oasisprotocol/oasis-core/go/common/grpc/auth"
-	"github.com/oasisprotocol/oasis-core/go/common/grpc/policy"
-	policyAPI "github.com/oasisprotocol/oasis-core/go/common/grpc/policy/api"
-	grpcProxy "github.com/oasisprotocol/oasis-core/go/common/grpc/proxy"
 	"github.com/oasisprotocol/oasis-core/go/common/identity"
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
 	"github.com/oasisprotocol/oasis-core/go/common/service"
+	sentry "github.com/oasisprotocol/oasis-core/go/sentry/api"
 )
 
 var _ service.BackgroundService = (*Worker)(nil)
@@ -31,6 +25,7 @@ type Worker struct { // nolint: maligned
 	sync.RWMutex
 
 	enabled bool
+	backend sentry.LocalBackend
 
 	ctx       context.Context
 	cancelCtx context.CancelFunc
@@ -41,26 +36,8 @@ type Worker struct { // nolint: maligned
 
 	logger *logging.Logger
 
-	policyWatcher policyAPI.PolicyWatcherClient
-	// Per service policy checkers.
-	grpcPolicyCheckers map[cmnGrpc.ServiceName]*policy.DynamicRuntimePolicyChecker
-
-	*upstreamConn
-
-	upstreamDialer      grpcProxy.Dialer
-	upstreamDialerMutex sync.Mutex
-
 	grpc     *cmnGrpc.Server
 	identity *identity.Identity
-}
-
-type upstreamConn struct {
-	// ID of the upstream node.
-	nodeID signature.PublicKey
-	// TLS public keys for the upstream node.
-	pubKeys []signature.PublicKey
-	// Client connection to the upstream node.
-	conn *grpc.ClientConn
 }
 
 func (g *Worker) authFunction() auth.AuthenticationFunction {
@@ -97,11 +74,10 @@ func (g *Worker) authFunction() auth.AuthenticationFunction {
 		// services that do not provide at least a single policy checker.
 		// This is not the case in either of currently supported upstreams
 		// (storage and keymanager).
-		p, ok := g.grpcPolicyCheckers[serviceName]
-		if !ok {
+		policyChecker, err := g.backend.GetPolicyChecker(ctx, serviceName)
+		if err != nil {
 			g.logger.Error("no policy checker defined for service",
 				"service_name", serviceName,
-				"policy_checkers", g.grpcPolicyCheckers,
 			)
 			return status.Errorf(codes.PermissionDenied, "not allowed")
 		}
@@ -149,21 +125,7 @@ func (g *Worker) authFunction() auth.AuthenticationFunction {
 			return status.Errorf(codes.PermissionDenied, "invalid request")
 		}
 
-		return p.CheckAccessAllowed(ctx, accessctl.Action(fullMethodName), namespace)
-	}
-}
-
-func (g *Worker) updatePolicies(p policyAPI.ServicePolicies) {
-	g.logger.Debug("updating policies",
-		"policy", p,
-	)
-
-	g.Lock()
-	defer g.Unlock()
-
-	g.grpcPolicyCheckers[p.Service] = policy.NewDynamicRuntimePolicyChecker(p.Service, nil)
-	for namespace, policy := range p.AccessPolicies {
-		g.grpcPolicyCheckers[p.Service].SetAccessPolicy(policy, namespace)
+		return policyChecker.CheckAccessAllowed(ctx, accessctl.Action(fullMethodName), namespace)
 	}
 }
 
@@ -171,49 +133,11 @@ func (g *Worker) worker() {
 	defer close(g.quitCh)
 	defer (g.cancelCtx)()
 
-	if g.upstreamConn == nil {
-		dialUpstream := func() error {
-			_, err := g.upstreamDialer(g.ctx)
-			if err != nil {
-				return err
-			}
-			return nil
-		}
-
-		sched := backoff.WithMaxRetries(backoff.NewConstantBackOff(1*time.Second), 60)
-		err := backoff.Retry(dialUpstream, backoff.WithContext(sched, g.ctx))
-		if err != nil {
-			g.logger.Error("unable to dial upstream node",
-				"err", err,
-			)
-			return
-		}
-	}
-
-	// Initialize policy watcher.
-	g.policyWatcher = policyAPI.NewPolicyWatcherClient(g.conn)
-	ch, sub, err := g.policyWatcher.WatchPolicies(g.ctx)
-	if err != nil {
-		g.logger.Error("failed to watch policies",
-			"err", err,
-		)
-		return
-	}
-	defer sub.Close()
-
 	// Initialization complete.
 	close(g.initCh)
 
-	// Watch policies.
 	for {
 		select {
-		case p, ok := <-ch:
-			if !ok {
-				g.logger.Error("WatchPolicies stream closed")
-				return
-			}
-
-			g.updatePolicies(p)
 		case <-g.stopCh:
 			return
 		case <-g.grpc.Quit():

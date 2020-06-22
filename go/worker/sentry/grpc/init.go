@@ -14,7 +14,6 @@ import (
 
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	cmnGrpc "github.com/oasisprotocol/oasis-core/go/common/grpc"
-	"github.com/oasisprotocol/oasis-core/go/common/grpc/policy"
 	"github.com/oasisprotocol/oasis-core/go/common/grpc/proxy"
 	"github.com/oasisprotocol/oasis-core/go/common/identity"
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
@@ -51,7 +50,7 @@ func GetNodeAddresses() ([]node.Address, error) {
 	return clientAddresses, nil
 }
 
-func initConnection(ctx context.Context, logger *logging.Logger, ident *identity.Identity, backend sentry.Backend) (*upstreamConn, error) {
+func initConnection(ctx context.Context, logger *logging.Logger, ident *identity.Identity, backend sentry.LocalBackend) (*grpc.ClientConn, error) {
 	var err error
 
 	addr := viper.GetString(CfgUpstreamAddress)
@@ -117,15 +116,11 @@ func initConnection(ctx context.Context, logger *logging.Logger, ident *identity
 	}
 	manualResolver.UpdateState(resolverState)
 
-	return &upstreamConn{
-		nodeID:  upstreamNodeID,
-		pubKeys: upstreamPubKeys,
-		conn:    conn,
-	}, nil
+	return conn, nil
 }
 
 // New creates a new sentry grpc worker.
-func New(backend sentry.Backend, identity *identity.Identity) (*Worker, error) {
+func New(backend sentry.LocalBackend, identity *identity.Identity) (*Worker, error) {
 	logger := logging.GetLogger("sentry/grpc/worker")
 
 	enabled := viper.GetBool(CfgEnabled)
@@ -133,30 +128,26 @@ func New(backend sentry.Backend, identity *identity.Identity) (*Worker, error) {
 	ctx, cancelCtx := context.WithCancel(context.Background())
 
 	g := &Worker{
-		enabled:            enabled,
-		ctx:                ctx,
-		cancelCtx:          cancelCtx,
-		initCh:             make(chan struct{}),
-		stopCh:             make(chan struct{}),
-		quitCh:             make(chan struct{}),
-		logger:             logger,
-		identity:           identity,
-		grpcPolicyCheckers: make(map[cmnGrpc.ServiceName]*policy.DynamicRuntimePolicyChecker),
+		enabled:   enabled,
+		ctx:       ctx,
+		cancelCtx: cancelCtx,
+		initCh:    make(chan struct{}),
+		stopCh:    make(chan struct{}),
+		quitCh:    make(chan struct{}),
+		logger:    logger,
+		identity:  identity,
+		backend:   backend,
 	}
 
 	if g.enabled {
 		logger.Info("Initializing gRPC sentry worker")
 
-		g.upstreamDialer = func(ctx context.Context) (*grpc.ClientConn, error) {
-			g.upstreamDialerMutex.Lock()
-			defer g.upstreamDialerMutex.Unlock()
-
-			upstreamConn, err := initConnection(g.ctx, logger, identity, backend)
+		upstreamDialer := func(ctx context.Context) (*grpc.ClientConn, error) {
+			upstreamConn, err := initConnection(ctx, logger, identity, backend)
 			if err != nil {
 				return nil, fmt.Errorf("gRPC sentry worker initializing upstream connection failure: %w", err)
 			}
-			g.upstreamConn = upstreamConn
-			return upstreamConn.conn, nil
+			return upstreamConn, nil
 		}
 
 		// Create externally-accessible proxy gRPC server.
@@ -167,7 +158,7 @@ func New(backend sentry.Backend, identity *identity.Identity) (*Worker, error) {
 			AuthFunc: g.authFunction(),
 			CustomOptions: []grpc.ServerOption{
 				// All unknown requests will be proxied to the upstream grpc server.
-				grpc.UnknownServiceHandler(proxy.Handler(g.upstreamDialer)),
+				grpc.UnknownServiceHandler(proxy.Handler(upstreamDialer)),
 			},
 		}
 		grpcServer, err := cmnGrpc.NewServer(serverConfig)

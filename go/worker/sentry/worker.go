@@ -40,7 +40,7 @@ type Worker struct {
 
 	grpcWorker *workerGrpcSentry.Worker
 
-	backend api.Backend
+	backend api.LocalBackend
 
 	grpcServer *grpc.Server
 
@@ -119,7 +119,7 @@ func (w *Worker) Cleanup() {
 }
 
 // New creates a new sentry worker.
-func New(backend api.Backend, identity *identity.Identity) (*Worker, error) {
+func New(backend api.LocalBackend, identity *identity.Identity) (*Worker, error) {
 	w := &Worker{
 		enabled: Enabled(),
 		backend: backend,
