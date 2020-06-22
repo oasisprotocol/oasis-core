@@ -3,6 +3,7 @@ package control
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/oasisprotocol/oasis-core/go/common/version"
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
@@ -83,12 +84,26 @@ func (c *nodeController) CancelUpgrade(ctx context.Context) error {
 func (c *nodeController) GetStatus(ctx context.Context) (*control.Status, error) {
 	cs, err := c.consensus.GetStatus(ctx)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to get consensus status: %w", err)
 	}
+
+	rs, err := c.node.GetRegistrationStatus(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get registration status: %w", err)
+	}
+
+	ident := c.node.GetIdentity()
 
 	return &control.Status{
 		SoftwareVersion: version.SoftwareVersion,
-		Consensus:       *cs,
+		Identity: control.IdentityStatus{
+			Node:      ident.NodeSigner.Public(),
+			P2P:       ident.P2PSigner.Public(),
+			Consensus: ident.ConsensusSigner.Public(),
+			TLS:       ident.GetTLSSigner().Public(),
+		},
+		Consensus:    *cs,
+		Registration: *rs,
 	}, nil
 }
 

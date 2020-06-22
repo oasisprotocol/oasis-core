@@ -69,12 +69,8 @@ import (
 	workerStorage "github.com/oasisprotocol/oasis-core/go/worker/storage"
 )
 
-var (
-	_ controlAPI.ControlledNode = (*Node)(nil)
-
-	// Flags has the configuration flags.
-	Flags = flag.NewFlagSet("", flag.ContinueOnError)
-)
+// Flags has the configuration flags.
+var Flags = flag.NewFlagSet("", flag.ContinueOnError)
 
 const exportsSubDir = "exports"
 
@@ -159,22 +155,6 @@ func (n *Node) Stop() {
 // call Cleanup() after wait returns.
 func (n *Node) Wait() {
 	n.svcMgr.Wait()
-}
-
-func (n *Node) RequestShutdown() (<-chan struct{}, error) {
-	if err := n.RegistrationWorker.RequestDeregistration(); err != nil {
-		return nil, err
-	}
-	// This returns only the registration worker's event channel,
-	// otherwise the caller (usually the control grpc server) will only
-	// get notified once everything is already torn down - perhaps
-	// including the server.
-	return n.RegistrationWorker.Quit(), nil
-}
-
-// Ready returns the ready channel which gets closed once the node is ready.
-func (n *Node) Ready() <-chan struct{} {
-	return n.readyCh
 }
 
 func (n *Node) waitReady(logger *logging.Logger) {

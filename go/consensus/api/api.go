@@ -124,6 +124,9 @@ type Status struct {
 	GenesisHeight int64 `json:"genesis_height"`
 	// GenesisHash is the hash of the genesis block.
 	GenesisHash []byte `json:"genesis_hash"`
+
+	// IsValidator returns whether the current node is part of the validator set.
+	IsValidator bool `json:"is_validator"`
 }
 
 // Backend is an interface that a consensus backend must provide.
