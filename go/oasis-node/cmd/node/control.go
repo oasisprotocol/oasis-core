@@ -3,6 +3,7 @@ package node
 import (
 	"context"
 
+	"github.com/oasisprotocol/oasis-core/go/common/identity"
 	control "github.com/oasisprotocol/oasis-core/go/control/api"
 )
 
@@ -23,6 +24,11 @@ func (n *Node) RequestShutdown() (<-chan struct{}, error) {
 // Implements control.ControlledNode.
 func (n *Node) Ready() <-chan struct{} {
 	return n.readyCh
+}
+
+// Implements control.ControlledNode.
+func (n *Node) GetIdentity() *identity.Identity {
+	return n.Identity
 }
 
 // Implements control.ControlledNode.

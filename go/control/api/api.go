@@ -5,7 +5,9 @@ import (
 	"context"
 	"time"
 
+	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	"github.com/oasisprotocol/oasis-core/go/common/errors"
+	"github.com/oasisprotocol/oasis-core/go/common/identity"
 	"github.com/oasisprotocol/oasis-core/go/common/node"
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
 	epochtime "github.com/oasisprotocol/oasis-core/go/epochtime/api"
@@ -49,11 +51,30 @@ type Status struct {
 	// SoftwareVersion is the oasis-node software version.
 	SoftwareVersion string `json:"software_version"`
 
+	// Identity is the identity of the node.
+	Identity IdentityStatus `json:"identity"`
+
 	// Consensus is the status overview of the consensus layer.
 	Consensus consensus.Status `json:"consensus"`
 
 	// Registration is the node's registration status.
 	Registration RegistrationStatus `json:"registration"`
+}
+
+// IdentityStatus is the current node identity status, listing all the public keys that identify
+// this node in different contexts.
+type IdentityStatus struct {
+	// Node is the node identity public key.
+	Node signature.PublicKey `json:"node"`
+
+	// P2P is the public key used for p2p communication.
+	P2P signature.PublicKey `json:"p2p"`
+
+	// Consensus is the consensus public key.
+	Consensus signature.PublicKey `json:"consensus"`
+
+	// TLS is the public key used for TLS connections.
+	TLS signature.PublicKey `json:"tls"`
 }
 
 // RegistrationStatus is the node registration status.
@@ -74,6 +95,9 @@ type ControlledNode interface {
 
 	// Ready returns a channel that is closed once node is ready.
 	Ready() <-chan struct{}
+
+	// GetIdentity returns the node's identity.
+	GetIdentity() *identity.Identity
 
 	// GetRegistrationStatus returns the node's current registration status.
 	GetRegistrationStatus(ctx context.Context) (*RegistrationStatus, error)

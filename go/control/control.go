@@ -92,10 +92,18 @@ func (c *nodeController) GetStatus(ctx context.Context) (*control.Status, error)
 		return nil, fmt.Errorf("failed to get registration status: %w", err)
 	}
 
+	ident := c.node.GetIdentity()
+
 	return &control.Status{
 		SoftwareVersion: version.SoftwareVersion,
-		Consensus:       *cs,
-		Registration:    *rs,
+		Identity: control.IdentityStatus{
+			Node:      ident.NodeSigner.Public(),
+			P2P:       ident.P2PSigner.Public(),
+			Consensus: ident.ConsensusSigner.Public(),
+			TLS:       ident.GetTLSSigner().Public(),
+		},
+		Consensus:    *cs,
+		Registration: *rs,
 	}, nil
 }
 
