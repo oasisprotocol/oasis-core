@@ -26,6 +26,7 @@ import (
 	tmproxy "github.com/tendermint/tendermint/proxy"
 	tmcli "github.com/tendermint/tendermint/rpc/client/local"
 	tmrpctypes "github.com/tendermint/tendermint/rpc/core/types"
+	tmstate "github.com/tendermint/tendermint/state"
 	tmtypes "github.com/tendermint/tendermint/types"
 	tmdb "github.com/tendermint/tm-db"
 
@@ -719,38 +720,57 @@ func (t *tendermintService) GetTransactions(ctx context.Context, height int64) (
 }
 
 func (t *tendermintService) GetStatus(ctx context.Context) (*consensusAPI.Status, error) {
+	status := &consensusAPI.Status{
+		ConsensusVersion: version.ConsensusProtocol.String(),
+		Backend:          api.BackendName,
+	}
+
 	// Genesis block is hardcoded as block 1, since tendermint doesn't have
 	// a genesis block as such, but some external tooling expects there to be
 	// one, so here we are.
 	// This may soon change if the following tendermint issue gets fixed:
 	// https://github.com/tendermint/tendermint/issues/2543
+	status.GenesisHeight = 1
 	genBlk, err := t.GetBlock(ctx, 1)
-	if err != nil {
-		return nil, err
+	switch err {
+	case nil:
+		status.GenesisHash = genBlk.Hash
+	default:
+		// We may not be able to fetch the genesis block in case it has been pruned.
 	}
 
+	// Latest block.
 	latestBlk, err := t.GetBlock(ctx, consensusAPI.HeightLatest)
-	if err != nil {
-		return nil, err
+	switch err {
+	case nil:
+		status.LatestHeight = latestBlk.Height
+		status.LatestHash = latestBlk.Hash
+		status.LatestTime = latestBlk.Time
+	case consensusAPI.ErrNoCommittedBlocks:
+		// No committed blocks yet.
+	default:
+		return nil, fmt.Errorf("failed to fetch current block: %w", err)
 	}
 
+	// List of consensus peers.
 	tmpeers := t.node.Switch().Peers().List()
 	peers := make([]string, 0, len(tmpeers))
 	for _, tmpeer := range tmpeers {
 		p := string(tmpeer.ID()) + "@" + tmpeer.RemoteAddr().String()
 		peers = append(peers, p)
 	}
+	status.NodePeers = peers
 
-	return &consensusAPI.Status{
-		ConsensusVersion: version.ConsensusProtocol.String(),
-		Backend:          api.BackendName,
-		NodePeers:        peers,
-		LatestHeight:     latestBlk.Height,
-		LatestHash:       latestBlk.Hash,
-		LatestTime:       latestBlk.Time,
-		GenesisHeight:    1, // See above for an explanation why this is 1.
-		GenesisHash:      genBlk.Hash,
-	}, nil
+	// Check if the local node is in the validator set for the latest (uncommitted) block.
+	vals, err := tmstate.LoadValidators(t.stateDb, status.LatestHeight+1)
+	if err != nil {
+		return nil, fmt.Errorf("failed to load validator set: %w", err)
+	}
+	consensusPk := t.consensusSigner.Public()
+	consensusAddr := []byte(crypto.PublicKeyToTendermint(&consensusPk).Address())
+	status.IsValidator = vals.HasAddress(consensusAddr)
+
+	return status, nil
 }
 
 func (t *tendermintService) WatchBlocks(ctx context.Context) (<-chan *consensusAPI.Block, pubsub.ClosableSubscription, error) {

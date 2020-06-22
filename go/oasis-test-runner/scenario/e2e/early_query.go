@@ -76,5 +76,17 @@ func (sc *earlyQueryImpl) Run(childEnv *env.Env) error {
 		return fmt.Errorf("GetTransactions query should fail with ErrNoCommittedBlocks (got: %s)", err)
 	}
 
+	// GetStatus.
+	status, err := sc.net.Controller().GetStatus(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to get status for node: %w", err)
+	}
+	if status.Consensus.LatestHeight != 0 {
+		return fmt.Errorf("node reports non-zero latest height before chain is initialized")
+	}
+	if !status.Consensus.IsValidator {
+		return fmt.Errorf("node does not report itself to be a validator at genesis")
+	}
+
 	return nil
 }
