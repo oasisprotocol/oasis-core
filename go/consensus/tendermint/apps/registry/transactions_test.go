@@ -23,7 +23,8 @@ func TestRegisterNode(t *testing.T) {
 	require := requirePkg.New(t)
 
 	now := time.Unix(1580461674, 0)
-	appState := abciAPI.NewMockApplicationState(abciAPI.MockApplicationStateConfig{})
+	cfg := abciAPI.MockApplicationStateConfig{}
+	appState := abciAPI.NewMockApplicationState(&cfg)
 	ctx := appState.NewContext(abciAPI.ContextDeliverTx, now)
 	defer ctx.Close()
 
@@ -49,41 +50,55 @@ func TestRegisterNode(t *testing.T) {
 	})
 	require.NoError(err, "registry.SetConsensusParameters")
 
+	// Store all successful registrations in a map for easier reference in later test cases.
+	type testCaseData struct {
+		// Signers.
+		entitySigner    signature.Signer
+		nodeSigner      signature.Signer
+		consensusSigner signature.Signer
+		p2pSigner       signature.Signer
+		tlsSigner       signature.Signer
+
+		// Node descriptor.
+		node node.Node
+	}
+	tcData := make(map[string]*testCaseData)
+
 	tcs := []struct {
 		name        string
-		prepareFn   func(n *node.Node) []signature.Signer
+		prepareFn   func(tcd *testCaseData)
 		stakeParams *staking.ConsensusParameters
 		valid       bool
+		exists      bool
 	}{
 		// Node without any roles.
-		{"WithoutRoles", nil, nil, false},
+		{"WithoutRoles", nil, nil, false, false},
 		// A simple validator node.
 		{
 			"Validator",
-			func(n *node.Node) []signature.Signer {
-				n.AddRoles(node.RoleValidator)
-				return nil
+			func(tcd *testCaseData) {
+				tcd.node.AddRoles(node.RoleValidator)
 			},
 			nil,
+			true,
 			true,
 		},
 		// An expired validator node.
 		{
 			"ExpiredValidator",
-			func(n *node.Node) []signature.Signer {
-				n.AddRoles(node.RoleValidator)
-				n.Expiration = 0
-				return nil
+			func(tcd *testCaseData) {
+				tcd.node.AddRoles(node.RoleValidator)
+				tcd.node.Expiration = 0
 			},
 			nil,
+			false,
 			false,
 		},
 		// Validator without enough stake.
 		{
 			"ValidatorWithoutStake",
-			func(n *node.Node) []signature.Signer {
-				n.AddRoles(node.RoleValidator)
-				return nil
+			func(tcd *testCaseData) {
+				tcd.node.AddRoles(node.RoleValidator)
 			},
 			&staking.ConsensusParameters{
 				Thresholds: map[staking.ThresholdKind]quantity.Quantity{
@@ -97,11 +112,12 @@ func TestRegisterNode(t *testing.T) {
 				},
 			},
 			false,
+			false,
 		},
 		// Compute node.
 		{
 			"ComputeNode",
-			func(n *node.Node) []signature.Signer {
+			func(tcd *testCaseData) {
 				// Create a new runtime.
 				rtSigner := memorySigner.NewTestSigner("consensus/tendermint/apps/registry: runtime signer: ComputeNode")
 				rt := registry.Runtime{
@@ -112,19 +128,19 @@ func TestRegisterNode(t *testing.T) {
 				sigRt, _ := registry.SignRuntime(rtSigner, registry.RegisterRuntimeSignatureContext, &rt)
 				_ = state.SetRuntime(ctx, &rt, sigRt, false)
 
-				n.AddRoles(node.RoleComputeWorker)
-				n.Runtimes = []*node.Runtime{
+				tcd.node.AddRoles(node.RoleComputeWorker)
+				tcd.node.Runtimes = []*node.Runtime{
 					&node.Runtime{ID: rt.ID},
 				}
-				return nil
 			},
 			nil,
+			true,
 			true,
 		},
 		// Compute node without per-runtime stake.
 		{
 			"ComputeNodeWithoutPerRuntimeStake",
-			func(n *node.Node) []signature.Signer {
+			func(tcd *testCaseData) {
 				// Create a new runtime.
 				rtSigner := memorySigner.NewTestSigner("consensus/tendermint/apps/registry: runtime signer: ComputeNodeWithoutPerRuntimeStake")
 				rt := registry.Runtime{
@@ -140,19 +156,19 @@ func TestRegisterNode(t *testing.T) {
 				sigRt, _ := registry.SignRuntime(rtSigner, registry.RegisterRuntimeSignatureContext, &rt)
 				_ = state.SetRuntime(ctx, &rt, sigRt, false)
 
-				n.AddRoles(node.RoleComputeWorker)
-				n.Runtimes = []*node.Runtime{
+				tcd.node.AddRoles(node.RoleComputeWorker)
+				tcd.node.Runtimes = []*node.Runtime{
 					&node.Runtime{ID: rt.ID},
 				}
-				return nil
 			},
 			nil,
+			false,
 			false,
 		},
 		// Compute node with ehough per-runtime stake.
 		{
 			"ComputeNodeWithPerRuntimeStake",
-			func(n *node.Node) []signature.Signer {
+			func(tcd *testCaseData) {
 				// Create a new runtime.
 				rtSigner := memorySigner.NewTestSigner("consensus/tendermint/apps/registry: runtime signer: ComputeNodeWithPerRuntimeStake")
 				rt := registry.Runtime{
@@ -169,7 +185,7 @@ func TestRegisterNode(t *testing.T) {
 				_ = state.SetRuntime(ctx, &rt, sigRt, false)
 
 				// Add bonded stake (hacky, without a self-delegation).
-				_ = stakeState.SetAccount(ctx, staking.NewAddress(n.EntityID), &staking.Account{
+				_ = stakeState.SetAccount(ctx, staking.NewAddress(tcd.node.EntityID), &staking.Account{
 					Escrow: staking.EscrowAccount{
 						Active: staking.SharePool{
 							Balance: *quantity.NewFromUint64(10_000),
@@ -177,19 +193,19 @@ func TestRegisterNode(t *testing.T) {
 					},
 				})
 
-				n.AddRoles(node.RoleComputeWorker)
-				n.Runtimes = []*node.Runtime{
+				tcd.node.AddRoles(node.RoleComputeWorker)
+				tcd.node.Runtimes = []*node.Runtime{
 					&node.Runtime{ID: rt.ID},
 				}
-				return nil
 			},
 			nil,
+			true,
 			true,
 		},
 		// Compute node with enough (per-runtime) stake for one runtime, but not for two.
 		{
 			"ComputeNodeWithoutPerRuntimeStakeMulti",
-			func(n *node.Node) []signature.Signer {
+			func(tcd *testCaseData) {
 				rtSigner := memorySigner.NewTestSigner("consensus/tendermint/apps/registry: runtime signer: ComputeNodeWithoutPerRuntimeStakeMulti")
 
 				// Create a new runtime.
@@ -213,7 +229,7 @@ func TestRegisterNode(t *testing.T) {
 				_ = state.SetRuntime(ctx, &rt2, sigRt2, false)
 
 				// Add bonded stake (hacky, without a self-delegation).
-				_ = stakeState.SetAccount(ctx, staking.NewAddress(n.EntityID), &staking.Account{
+				_ = stakeState.SetAccount(ctx, staking.NewAddress(tcd.node.EntityID), &staking.Account{
 					Escrow: staking.EscrowAccount{
 						Active: staking.SharePool{
 							Balance: *quantity.NewFromUint64(1000),
@@ -221,20 +237,20 @@ func TestRegisterNode(t *testing.T) {
 					},
 				})
 
-				n.AddRoles(node.RoleComputeWorker)
-				n.Runtimes = []*node.Runtime{
+				tcd.node.AddRoles(node.RoleComputeWorker)
+				tcd.node.Runtimes = []*node.Runtime{
 					&node.Runtime{ID: rt1.ID},
 					&node.Runtime{ID: rt2.ID},
 				}
-				return nil
 			},
 			nil,
+			false,
 			false,
 		},
 		// Compute node with enough (global) stake for one runtime, but not for two.
 		{
 			"ComputeNodeWithoutGlobalStakeMulti",
-			func(n *node.Node) []signature.Signer {
+			func(tcd *testCaseData) {
 				rtSigner := memorySigner.NewTestSigner("consensus/tendermint/apps/registry: runtime signer: ComputeNodeWithoutGlobalStakeMulti")
 
 				// Create a new runtime.
@@ -253,7 +269,7 @@ func TestRegisterNode(t *testing.T) {
 				_ = state.SetRuntime(ctx, &rt2, sigRt2, false)
 
 				// Add bonded stake (hacky, without a self-delegation).
-				_ = stakeState.SetAccount(ctx, staking.NewAddress(n.EntityID), &staking.Account{
+				_ = stakeState.SetAccount(ctx, staking.NewAddress(tcd.node.EntityID), &staking.Account{
 					Escrow: staking.EscrowAccount{
 						Active: staking.SharePool{
 							Balance: *quantity.NewFromUint64(1000),
@@ -261,12 +277,11 @@ func TestRegisterNode(t *testing.T) {
 					},
 				})
 
-				n.AddRoles(node.RoleComputeWorker)
-				n.Runtimes = []*node.Runtime{
+				tcd.node.AddRoles(node.RoleComputeWorker)
+				tcd.node.Runtimes = []*node.Runtime{
 					&node.Runtime{ID: rt1.ID},
 					&node.Runtime{ID: rt2.ID},
 				}
-				return nil
 			},
 			&staking.ConsensusParameters{
 				Thresholds: map[staking.ThresholdKind]quantity.Quantity{
@@ -280,6 +295,53 @@ func TestRegisterNode(t *testing.T) {
 				},
 			},
 			false,
+			false,
+		},
+		// Updating a node should be allowed.
+		{
+			"UpdateValidator",
+			func(tcd *testCaseData) {
+				// Use a previous node descriptor and just increase the expiration.
+				*tcd = *tcData["Validator"]
+				tcd.node.Expiration++
+			},
+			nil,
+			true,
+			true,
+		},
+		// Changing the consensus key should not be allowed.
+		{
+			"UpdateValidatorConsensusKeyNotAllowed",
+			func(tcd *testCaseData) {
+				// Use a previous node and just update the consensus key.
+				newConsensusSigner := tcd.consensusSigner
+				*tcd = *tcData["Validator"]
+
+				tcd.consensusSigner = newConsensusSigner
+				tcd.node.Consensus.ID = tcd.consensusSigner.Public()
+			},
+			nil,
+			false,
+			true, // We tried to update an existing node, so it should keep existing.
+		},
+		// Changing the consensus key with a previously expired node should not be allowed.
+		{
+			"UpdateValidatorExpiredConsensusKeyNotAllowed",
+			func(tcd *testCaseData) {
+				// Use a previous node and just update the consensus key.
+				newConsensusSigner := tcd.consensusSigner
+				*tcd = *tcData["Validator"]
+
+				tcd.consensusSigner = newConsensusSigner
+				tcd.node.Consensus.ID = tcd.consensusSigner.Public()
+				tcd.node.Expiration = 12
+
+				// But with a twist -- first make the existing node expired.
+				cfg.CurrentEpoch = 10
+			},
+			nil,
+			false,
+			true, // We tried to update an existing node, so it should keep existing.
 		},
 	}
 
@@ -296,19 +358,21 @@ func TestRegisterNode(t *testing.T) {
 			require.NoError(err, "staking.SetConsensusParameters")
 
 			// Prepare default signers.
-			entitySigner := memorySigner.NewTestSigner("consensus/tendermint/apps/registry: entity signer: " + tc.name)
-			nodeSigner := memorySigner.NewTestSigner("consensus/tendermint/apps/registry: node signer: " + tc.name)
-			consensusSigner := memorySigner.NewTestSigner("consensus/tendermint/apps/registry: consensus signer: " + tc.name)
-			p2pSigner := memorySigner.NewTestSigner("consensus/tendermint/apps/registry: p2p signer: " + tc.name)
-			tlsSigner := memorySigner.NewTestSigner("consensus/tendermint/apps/registry: tls signer: " + tc.name)
+			tcd := &testCaseData{
+				entitySigner:    memorySigner.NewTestSigner("consensus/tendermint/apps/registry: entity signer: " + tc.name),
+				nodeSigner:      memorySigner.NewTestSigner("consensus/tendermint/apps/registry: node signer: " + tc.name),
+				consensusSigner: memorySigner.NewTestSigner("consensus/tendermint/apps/registry: consensus signer: " + tc.name),
+				p2pSigner:       memorySigner.NewTestSigner("consensus/tendermint/apps/registry: p2p signer: " + tc.name),
+				tlsSigner:       memorySigner.NewTestSigner("consensus/tendermint/apps/registry: tls signer: " + tc.name),
+			}
 
 			// Prepare a test entity that owns the nodes.
 			ent := entity.Entity{
 				DescriptorVersion: entity.LatestEntityDescriptorVersion,
-				ID:                entitySigner.Public(),
-				Nodes:             []signature.PublicKey{nodeSigner.Public()},
+				ID:                tcd.entitySigner.Public(),
+				Nodes:             []signature.PublicKey{tcd.nodeSigner.Public()},
 			}
-			sigEnt, err := entity.SignEntity(entitySigner, registry.RegisterEntitySignatureContext, &ent)
+			sigEnt, err := entity.SignEntity(tcd.entitySigner, registry.RegisterEntitySignatureContext, &ent)
 			require.NoError(err, "SignEntity")
 			err = state.SetEntity(ctx, &ent, sigEnt)
 			require.NoError(err, "SetEntity")
@@ -318,60 +382,65 @@ func TestRegisterNode(t *testing.T) {
 			err = address.UnmarshalText([]byte("8.8.8.8:1234"))
 			require.NoError(err, "address.UnmarshalText")
 
-			n := node.Node{
+			tcd.node = node.Node{
 				DescriptorVersion: node.LatestNodeDescriptorVersion,
-				ID:                nodeSigner.Public(),
+				ID:                tcd.nodeSigner.Public(),
 				EntityID:          ent.ID,
 				Expiration:        3,
 				P2P: node.P2PInfo{
-					ID:        p2pSigner.Public(),
+					ID:        tcd.p2pSigner.Public(),
 					Addresses: []node.Address{address},
 				},
 				Consensus: node.ConsensusInfo{
-					ID: consensusSigner.Public(),
+					ID: tcd.consensusSigner.Public(),
 					Addresses: []node.ConsensusAddress{
-						{ID: consensusSigner.Public(), Address: address},
+						{ID: tcd.consensusSigner.Public(), Address: address},
 					},
 				},
 				TLS: node.TLSInfo{
-					PubKey: tlsSigner.Public(),
+					PubKey: tcd.tlsSigner.Public(),
 					Addresses: []node.TLSAddress{
-						{PubKey: tlsSigner.Public(), Address: address},
+						{PubKey: tcd.tlsSigner.Public(), Address: address},
 					},
 				},
 			}
-			var signers []signature.Signer
 			if tc.prepareFn != nil {
-				signers = tc.prepareFn(&n)
+				tc.prepareFn(tcd)
 			}
-			if signers == nil {
-				signers = []signature.Signer{nodeSigner, p2pSigner, consensusSigner, tlsSigner}
-			}
+			signers := []signature.Signer{tcd.nodeSigner, tcd.p2pSigner, tcd.consensusSigner, tcd.tlsSigner}
 
 			// Sign the node.
-			sigNode, err := node.MultiSignNode(signers, registry.RegisterNodeSignatureContext, &n)
+			sigNode, err := node.MultiSignNode(signers, registry.RegisterNodeSignatureContext, &tcd.node)
 			require.NoError(err, "MultiSignNode")
 
 			// Attempt to register the node.
-			ctx.SetTxSigner(nodeSigner.Public())
+			ctx.SetTxSigner(tcd.nodeSigner.Public())
 			err = app.registerNode(ctx, state, sigNode)
 			switch tc.valid {
 			case true:
 				require.NoError(err, "node registration should succeed")
-
-				// Make sure the node has been registered.
-				var regNode *node.Node
-				regNode, err = state.Node(ctx, n.ID)
-				require.NoError(err, "node should be registered")
-				require.EqualValues(&n, regNode, "registered node descriptor should be correct")
 			case false:
 				require.Error(err, "node registration should fail")
+			}
 
+			switch tc.exists {
+			case true:
+				// Make sure the node has been registered.
+				var regNode *node.Node
+				regNode, err = state.Node(ctx, tcd.node.ID)
+				require.NoError(err, "node should be registered")
+
+				if tc.valid {
+					require.EqualValues(&tcd.node, regNode, "registered node descriptor should be correct")
+				}
+			case false:
 				// Make sure the state has not changed.
-				_, err = state.Node(ctx, n.ID)
+				_, err = state.Node(ctx, tcd.node.ID)
 				require.Error(err, "node should not be registered")
 				require.Equal(registry.ErrNoSuchNode, err)
 			}
+
+			tcData[tc.name] = tcd
 		})
 	}
 }

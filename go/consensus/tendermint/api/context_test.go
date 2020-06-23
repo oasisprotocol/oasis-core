@@ -11,7 +11,7 @@ func TestContext(t *testing.T) {
 	require := require.New(t)
 
 	now := time.Unix(1580461674, 0)
-	appState := NewMockApplicationState(MockApplicationStateConfig{})
+	appState := NewMockApplicationState(&MockApplicationStateConfig{})
 	ctx := appState.NewContext(ContextBeginBlock, now)
 	defer ctx.Close()
 

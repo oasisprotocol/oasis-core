@@ -23,7 +23,7 @@ func TestOnEvidenceDoubleSign(t *testing.T) {
 	require := require.New(t)
 
 	now := time.Unix(1580461674, 0)
-	appState := abciAPI.NewMockApplicationState(abciAPI.MockApplicationStateConfig{
+	appState := abciAPI.NewMockApplicationState(&abciAPI.MockApplicationStateConfig{
 		// Use a non-zero current epoch so we test freeze overflow.
 		CurrentEpoch: 42,
 	})

@@ -66,7 +66,7 @@ func TestReservedAddresses(t *testing.T) {
 	var err error
 
 	now := time.Unix(1580461674, 0)
-	appState := abciAPI.NewMockApplicationState(abciAPI.MockApplicationStateConfig{})
+	appState := abciAPI.NewMockApplicationState(&abciAPI.MockApplicationStateConfig{})
 	ctx := appState.NewContext(abciAPI.ContextDeliverTx, now)
 	defer ctx.Close()
 
