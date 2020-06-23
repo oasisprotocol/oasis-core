@@ -1,7 +1,7 @@
 # Staking
 
 The staking service is responsible for managing the staking ledger in the
-consensus layer. It enables operations like transfering tokens between accounts
+consensus layer. It enables operations like transferring tokens between accounts
 and escrowing tokens for specific needs (e.g., operating nodes).
 
 The service interface definition lives in [`go/staking/api`]. It defines the
@@ -25,20 +25,191 @@ make -C go test-vectors/staking
 
 ## Accounts
 
+A staking account is an entry in the staking ledger. It can hold both general
+and escrow accounts.
+
+Each staking account has an address which is derived from the corresponding
+public key as follows:
+
+```
+[ 1 byte <ctx-version> ][ first 20 bytes of SHA512-256(<ctx-identifier> || <pubkey>) ]
+```
+
+where `<ctx-version>` and `<ctx-identifier>` represent the staking account
+address' context version and identifier as defined by the
+[`AddressV0Context` variable],
+and `<pubkey>` represents the account signer's public key (e.g. entity id).
+
+For more details, see the [`NewAddress` function].
+
+Addresses use [Bech32 encoding] for text serialization with `oasis` as its human
+readable part (HRP) prefix.
+
+### Reserved addresses
+
+Some staking account addresses are reserved to prevent them from being
+accidentally used in the actual ledger.
+
+Currently, they are:
+
+* `oasis1qrmufhkkyyf79s5za2r8yga9gnk4t446dcy3a5zm`: common pool address
+  (defined by [`CommonPoolAddress` variable]).
+* `oasis1qqnv3peudzvekhulf8v3ht29z4cthkhy7gkxmph5`: per-block fee accumulator
+  address (defined by [`FeeAccumulatorAddress` variable]).
+
+<!-- markdownlint-disable line-length -->
+[`AddressV0Context` variable]:
+  https://pkg.go.dev/github.com/oasisprotocol/oasis-core/go/staking/api?tab=doc#pkg-variables
+[`NewAddress` function]:
+  https://pkg.go.dev/github.com/oasisprotocol/oasis-core/go/staking/api?tab=doc#NewAddress
+[Bech32 encoding]:
+  https://github.com/bitcoin/bips/blob/master/bip-0173.mediawiki#bech32
+[`CommonPoolAddress` variable]:
+  https://pkg.go.dev/github.com/oasisprotocol/oasis-core/go/staking/api?tab=doc#pkg-variables
+[`FeeAccumulatorAddress` variable]:
+  https://pkg.go.dev/github.com/oasisprotocol/oasis-core/go/staking/api?tab=doc#pkg-variables
+<!-- markdownlint-enable line-length -->
+
 ### General
+
+General accounts store account's general balance and nonce.
+Nonce is the incremental number that must be unique for each account's
+transaction.
 
 ### Escrow
 
-### Commission Schedule
+Escrow accounts are used to hold funds delegated for specific consensus-layer
+operations (e.g., registering and running nodes).
+Their balance is subject to special delegation provisions and a debonding
+period.
 
-## Delegation
+Delegation provisions, also called commissions, are specified by the
+[`CommissionSchedule` field].
+
+An escrow account also has a corresponding stake accumulator.
+It stores stake claims for an escrow account and ensures all claims are
+satisfied at any given point.
+Adding a new claim is only possible if all of the existing claims plus the new
+claim can be satisfied.
+
+<!-- markdownlint-disable line-length -->
+[`CommissionSchedule` field]:
+  https://pkg.go.dev/github.com/oasisprotocol/oasis-core/go/staking/api?tab=doc#CommissionSchedule
+<!-- markdownlint-enable line-length -->
+
+#### Delegation
+
+When a delegator wants to delegate some of amount of tokens to a staking
+account, he needs to escrow tokens using [Add Escrow method].
+
+Similarly, when a delegator wants to reclaim some amount of escrowed tokens back
+to his general account, he needs to reclaim tokens using [Reclaim Escrow
+method].
+
+To simplify accounting, each escrow results in the delegator account being
+issued shares which can be converted back into staking tokens during the reclaim
+escrow operation.
+
+When a delegator delegates some amount of tokens to an escrow account, the
+delegator receives the number of shares proportional to the current
+_share price_ (in tokens) calculated from the total number of tokens
+delegated to an escrow account so far and the number of shares issued so far:
+
+```
+shares_per_token = account_issued_shares / account_delegated_tokens
+```
+
+For example, if an escrow account has the following state:
+
+```json
+"escrow": {
+    "active": {
+        "balance": "250",
+        "total_shares": "1000"
+    },
+    ...
+}
+```
+
+then the current share price (i.e. `shares_per_token`) is 1000 / 250 = 4.
+
+Delegating 500 tokens to this escrow account would result in 500 * 4 = 2000
+newly issued shares.
+
+Thus, the escrow account would have the following state afterwards:
+
+```json
+"escrow": {
+    "active": {
+        "balance": "750",
+        "total_shares": "3000"
+    },
+    ...
+}
+```
+
+When a delegator wants to reclaim a certain number of escrowed tokens, the
+_token price_ (in shares) must be calculated based on the escrow account's
+current active balance and the number of issued shares:
+
+```text
+tokens_per_share = account_delegated_tokens / account_issued_shares
+```
+
+Returning to our example escrow account, the current token price (i.e.
+`tokens_per_share`) is 750 / 3000 = 0.25.
+
+Reclaiming 1200 shares would result in 1200 * 0.25 = 300 tokens being reclaimed.
+
+The escrow account would have the following state afterwards:
+
+```json
+"escrow": {
+    "active": {
+        "balance": "450",
+        "total_shares": "1800"
+    },
+    ...
+}
+```
+
+Reclaiming escrow does not complete immediately, but may be subject to a
+debonding period during in which the tokens still remain escrowed.
+
+[Add Escrow method]: #add-escrow
+[Reclaim Escrow method]: #reclaim-escrow
+
+#### Commission Schedule
+
+A staking account can be configured to take a commission on staking rewards
+given to its node(s). They are defined by the [`CommissionRateStep` type].
+
+The commission rate must be within bounds, which the staking account can also
+specify using the [`CommissionRateBoundStep` type].
+
+The commission rates and rate bounds can change over time which is defined
+by the [`CommissionSchedule` type][`CommissionSchedule` field].
+
+To prevent unexpected changes in commission rates and rate bounds, they must
+be specified a number of epochs in the future, controlled by the
+[`CommissionScheduleRules` consensus parameter].
+
+<!-- markdownlint-disable line-length -->
+[`CommissionRateStep` type]:
+  https://pkg.go.dev/github.com/oasisprotocol/oasis-core/go/staking/api?tab=doc#CommissionRateStep
+[`CommissionRateBoundStep` type]:
+  https://pkg.go.dev/github.com/oasisprotocol/oasis-core/go/staking/api?tab=doc#CommissionRateBoundStep
+[`CommissionScheduleRules` consensus parameter]:
+  https://pkg.go.dev/github.com/oasisprotocol/oasis-core/go/staking/api?tab=doc#CommissionScheduleRules
+<!-- markdownlint-enable line-length -->
 
 ## Methods
 
 ### Transfer
 
 Transfer enables token transfer between different accounts in the staking
-ledger. A new transfer transaction can be generated using [`NewTransferTx`].
+ledger. A new transfer transaction can be generated using
+[`NewTransferTx` function].
 
 **Method name:**
 
@@ -63,13 +234,14 @@ type Transfer struct {
 The transaction signer implicitly specifies the source account.
 
 <!-- markdownlint-disable line-length -->
-[`NewTransferTx`]: https://pkg.go.dev/github.com/oasisprotocol/oasis-core/go/staking/api?tab=doc#NewTransferTx
+[`NewTransferTx` function]:
+  https://pkg.go.dev/github.com/oasisprotocol/oasis-core/go/staking/api?tab=doc#NewTransferTx
 <!-- markdownlint-enable line-length -->
 
 ### Burn
 
 Burn destroys some tokens in the caller's account. A new burn transaction can be
-generated using [`NewBurnTx`].
+generated using [`NewBurnTx` function].
 
 **Method name:**
 
@@ -92,17 +264,15 @@ type Burn struct {
 The transaction signer implicitly specifies the caller's account.
 
 <!-- markdownlint-disable line-length -->
-[`NewBurnTx`]: https://pkg.go.dev/github.com/oasisprotocol/oasis-core/go/staking/api?tab=doc#NewBurnTx
+[`NewBurnTx` function]:
+  https://pkg.go.dev/github.com/oasisprotocol/oasis-core/go/staking/api?tab=doc#NewBurnTx
 <!-- markdownlint-enable line-length -->
 
 ### Add Escrow
 
-Escrow transfers tokens into an escrow account. Escrow accounts are used to keep
-the funds needed for specific consensus-layer operations (e.g., registering and
-running nodes). To simplify accounting, each escrow results in the source
-account being issued shares which can be converted back into staking tokens
-during the reclaim escrow operation. A new add escrow transaction can be
-generated using [`NewAddEscrowTx`].
+Escrow transfers tokens into an escrow account.
+For more details, see the [Delegation section] of this document.
+A new add escrow transaction can be generated using [`NewAddEscrowTx` function].
 
 **Method name:**
 
@@ -127,15 +297,17 @@ type Escrow struct {
 The transaction signer implicitly specifies the source account.
 
 <!-- markdownlint-disable line-length -->
-[`NewAddEscrowTx`]: https://pkg.go.dev/github.com/oasisprotocol/oasis-core/go/staking/api?tab=doc#NewAddEscrowTx
+[Delegation section]: #delegation
+[`NewAddEscrowTx` function]:
+  https://pkg.go.dev/github.com/oasisprotocol/oasis-core/go/staking/api?tab=doc#NewAddEscrowTx
 <!-- markdownlint-enable line-length -->
 
 ### Reclaim Escrow
 
-Reclaim escrow starts the escrow reclamation process. The process does not
-complete immediately but may be subject to a debonding period during which the
-tokens still remain escrowed. A new reclaim escrow transaction can be generated
-using [`NewReclaimEscrowTx`].
+Reclaim escrow starts the escrow reclamation process.
+For more details, see the [Delegation section] of this document.
+A new reclaim escrow transaction can be generated using
+[`NewReclaimEscrowTx` function].
 
 **Method name:**
 
@@ -160,14 +332,17 @@ type ReclaimEscrow struct {
 The transaction signer implicitly specifies the destination account.
 
 <!-- markdownlint-disable line-length -->
-[`NewReclaimEscrowTx`]: https://pkg.go.dev/github.com/oasisprotocol/oasis-core/go/staking/api?tab=doc#NewReclaimEscrowTx
+[`NewReclaimEscrowTx` function]:
+  https://pkg.go.dev/github.com/oasisprotocol/oasis-core/go/staking/api?tab=doc#NewReclaimEscrowTx
 <!-- markdownlint-enable line-length -->
 
 ### Amend Commission Schedule
 
 Amend commission schedule updates the commission schedule specified for the
-given escrow account. A new amend commission schedule transaction can be
-generated using [`NewAmendCommissionScheduleTx`].
+given escrow account.
+For more details, see the [Commission Schedule section] of this document.
+A new amend commission schedule transaction can be
+generated using [`NewAmendCommissionScheduleTx` function].
 
 **Method name:**
 
@@ -190,7 +365,9 @@ type AmendCommissionSchedule struct {
 The transaction signer implicitly specifies the escrow account.
 
 <!-- markdownlint-disable line-length -->
-[`NewAmendCommissionScheduleTx`]: https://pkg.go.dev/github.com/oasisprotocol/oasis-core/go/staking/api?tab=doc#NewAmendCommissionScheduleTx
+[Commission Schedule section]: #commission-schedule
+[`NewAmendCommissionScheduleTx` function]:
+  https://pkg.go.dev/github.com/oasisprotocol/oasis-core/go/staking/api?tab=doc#NewAmendCommissionScheduleTx
 <!-- markdownlint-enable line-length -->
 
 ## Events
