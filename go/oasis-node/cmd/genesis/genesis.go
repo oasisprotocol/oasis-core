@@ -87,9 +87,9 @@ const (
 	cfgConsensusMaxBlockSizeBytes        = "consensus.tendermint.max_block_size"
 	cfgConsensusMaxBlockGas              = "consensus.tendermint.max_block_gas"
 	cfgConsensusMaxEvidenceNum           = "consensus.tendermint.max_evidence_num"
-	cfgConsensusStateCheckpointInterval  = "consensus.state_checkpoint.interval"
-	cfgConsensusStateCheckpointNumKept   = "consensus.state_checkpoint.num_kept"
-	cfgConsensusStateCheckpointChunkSize = "consensus.state_checkpoint.chunk_size"
+	CfgConsensusStateCheckpointInterval  = "consensus.state_checkpoint.interval"
+	CfgConsensusStateCheckpointNumKept   = "consensus.state_checkpoint.num_kept"
+	CfgConsensusStateCheckpointChunkSize = "consensus.state_checkpoint.chunk_size"
 	CfgConsensusGasCostsTxByte           = "consensus.gas_costs.tx_byte"
 	cfgConsensusBlacklistPublicKey       = "consensus.blacklist_public_key"
 
@@ -241,9 +241,9 @@ func doInitGenesis(cmd *cobra.Command, args []string) {
 			MaxBlockSize:             uint64(viper.GetSizeInBytes(cfgConsensusMaxBlockSizeBytes)),
 			MaxBlockGas:              transaction.Gas(viper.GetUint64(cfgConsensusMaxBlockGas)),
 			MaxEvidenceNum:           viper.GetUint32(cfgConsensusMaxEvidenceNum),
-			StateCheckpointInterval:  viper.GetUint64(cfgConsensusStateCheckpointInterval),
-			StateCheckpointNumKept:   viper.GetUint64(cfgConsensusStateCheckpointNumKept),
-			StateCheckpointChunkSize: uint64(viper.GetSizeInBytes(cfgConsensusStateCheckpointChunkSize)),
+			StateCheckpointInterval:  viper.GetUint64(CfgConsensusStateCheckpointInterval),
+			StateCheckpointNumKept:   viper.GetUint64(CfgConsensusStateCheckpointNumKept),
+			StateCheckpointChunkSize: uint64(viper.GetSizeInBytes(CfgConsensusStateCheckpointChunkSize)),
 			GasCosts: transaction.Costs{
 				consensusGenesis.GasOpTxByte: transaction.Gas(viper.GetUint64(CfgConsensusGasCostsTxByte)),
 			},
@@ -695,9 +695,9 @@ func init() {
 	initGenesisFlags.String(cfgConsensusMaxBlockSizeBytes, "21mb", "tendermint maximum block size (in bytes)")
 	initGenesisFlags.Uint64(cfgConsensusMaxBlockGas, 0, "tendermint max gas used per block")
 	initGenesisFlags.Uint32(cfgConsensusMaxEvidenceNum, 50, "tendermint max evidence num")
-	initGenesisFlags.Uint64(cfgConsensusStateCheckpointInterval, 10000, "consensus state checkpoint interval (in blocks)")
-	initGenesisFlags.Uint64(cfgConsensusStateCheckpointNumKept, 2, "number of kept consensus state checkpoints")
-	initGenesisFlags.String(cfgConsensusStateCheckpointChunkSize, "8mb", "consensus state checkpoint chunk size (in bytes)")
+	initGenesisFlags.Uint64(CfgConsensusStateCheckpointInterval, 10000, "consensus state checkpoint interval (in blocks)")
+	initGenesisFlags.Uint64(CfgConsensusStateCheckpointNumKept, 2, "number of kept consensus state checkpoints")
+	initGenesisFlags.String(CfgConsensusStateCheckpointChunkSize, "8mb", "consensus state checkpoint chunk size (in bytes)")
 	initGenesisFlags.Uint64(CfgConsensusGasCostsTxByte, 1, "consensus gas costs: each transaction byte")
 	initGenesisFlags.StringSlice(cfgConsensusBlacklistPublicKey, nil, "blacklist public key")
 

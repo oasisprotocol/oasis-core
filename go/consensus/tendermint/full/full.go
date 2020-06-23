@@ -19,6 +19,7 @@ import (
 	tmabcitypes "github.com/tendermint/tendermint/abci/types"
 	tmconfig "github.com/tendermint/tendermint/config"
 	tmpubsub "github.com/tendermint/tendermint/libs/pubsub"
+	tmlight "github.com/tendermint/tendermint/light"
 	tmmempool "github.com/tendermint/tendermint/mempool"
 	tmnode "github.com/tendermint/tendermint/node"
 	tmp2p "github.com/tendermint/tendermint/p2p"
@@ -26,6 +27,7 @@ import (
 	tmcli "github.com/tendermint/tendermint/rpc/client/local"
 	tmrpctypes "github.com/tendermint/tendermint/rpc/core/types"
 	tmstate "github.com/tendermint/tendermint/state"
+	tmstatesync "github.com/tendermint/tendermint/statesync"
 	tmtypes "github.com/tendermint/tendermint/types"
 	tmdb "github.com/tendermint/tm-db"
 
@@ -55,6 +57,7 @@ import (
 	tmepochtime "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/epochtime"
 	tmepochtimemock "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/epochtime_mock"
 	tmkeymanager "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/keymanager"
+	"github.com/oasisprotocol/oasis-core/go/consensus/tendermint/light"
 	tmregistry "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/registry"
 	tmroothash "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/roothash"
 	tmscheduler "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/scheduler"
@@ -122,6 +125,18 @@ const (
 	CfgSupplementarySanityEnabled = "consensus.tendermint.supplementarysanity.enabled"
 	// CfgSupplementarySanityInterval configures the supplementary sanity check interval.
 	CfgSupplementarySanityInterval = "consensus.tendermint.supplementarysanity.interval"
+
+	// CfgConsensusStateSyncEnabled enabled consensus state sync.
+	CfgConsensusStateSyncEnabled = "consensus.tendermint.state_sync.enabled"
+	// CfgConsensusStateSyncConsensusNode specifies nodes exposing public consensus services which
+	// are used to sync a light client.
+	CfgConsensusStateSyncConsensusNode = "consensus.tendermint.state_sync.consensus_node"
+	// CfgConsensusStateSyncTrustPeriod is the light client trust period.
+	CfgConsensusStateSyncTrustPeriod = "consensus.tendermint.state_sync.trust_period"
+	// CfgConsensusStateSyncTrustHeight is the known trusted height for the light client.
+	CfgConsensusStateSyncTrustHeight = "consensus.tendermint.state_sync.trust_height"
+	// CfgConsensusStateSyncTrustHash is the known trusted block header hash for the light client.
+	CfgConsensusStateSyncTrustHash = "consensus.tendermint.state_sync.trust_hash"
 )
 
 const (
@@ -1217,6 +1232,40 @@ func (t *fullService) lazyInit() error {
 		return db, nil
 	}
 
+	// Configure state sync if enabled.
+	var stateProvider tmstatesync.StateProvider
+	if viper.GetBool(CfgConsensusStateSyncEnabled) {
+		t.Logger.Info("state sync enabled")
+
+		// Enable state sync in the configuration.
+		tenderConfig.StateSync.Enable = true
+		tenderConfig.StateSync.TrustHash = viper.GetString(CfgConsensusStateSyncTrustHash)
+
+		// Create new state sync state provider.
+		cfg := light.ClientConfig{
+			GenesisDocument: tmGenDoc,
+			TrustOptions: tmlight.TrustOptions{
+				Period: viper.GetDuration(CfgConsensusStateSyncTrustPeriod),
+				Height: int64(viper.GetUint64(CfgConsensusStateSyncTrustHeight)),
+				Hash:   tenderConfig.StateSync.TrustHashBytes(),
+			},
+		}
+		for _, rawAddr := range viper.GetStringSlice(CfgConsensusStateSyncConsensusNode) {
+			var addr node.TLSAddress
+			if err = addr.UnmarshalText([]byte(rawAddr)); err != nil {
+				return fmt.Errorf("failed to parse state sync consensus node address (%s): %w", rawAddr, err)
+			}
+
+			cfg.ConsensusNodes = append(cfg.ConsensusNodes, addr)
+		}
+		if stateProvider, err = newStateProvider(t.ctx, cfg); err != nil {
+			t.Logger.Error("failed to create state sync state provider",
+				"err", err,
+			)
+			return fmt.Errorf("failed to create state sync state provider: %w", err)
+		}
+	}
+
 	// HACK: tmnode.NewNode() triggers block replay and or ABCI chain
 	// initialization, instead of t.node.Start().  This is a problem
 	// because at the time that lazyInit() is called, none of the ABCI
@@ -1246,6 +1295,7 @@ func (t *fullService) lazyInit() error {
 			wrapDbProvider,
 			tmnode.DefaultMetricsProvider(tenderConfig.Instrumentation),
 			tmcommon.NewLogAdapter(!viper.GetBool(tmcommon.CfgLogDebug)),
+			tmnode.StateProvider(stateProvider),
 		)
 		if err != nil {
 			return fmt.Errorf("tendermint: failed to create node: %w", err)
@@ -1453,6 +1503,13 @@ func init() {
 
 	Flags.Bool(CfgSupplementarySanityEnabled, false, "enable supplementary sanity checks (slows down consensus)")
 	Flags.Uint64(CfgSupplementarySanityInterval, 10, "supplementary sanity check interval (in blocks)")
+
+	// State sync.
+	Flags.Bool(CfgConsensusStateSyncEnabled, false, "enable state sync")
+	Flags.StringSlice(CfgConsensusStateSyncConsensusNode, []string{}, "state sync: consensus node to use for syncing the light client")
+	Flags.Duration(CfgConsensusStateSyncTrustPeriod, 24*time.Hour, "state sync: light client trust period")
+	Flags.Uint64(CfgConsensusStateSyncTrustHeight, 0, "state sync: light client trusted height")
+	Flags.String(CfgConsensusStateSyncTrustHash, "", "state sync: light client trusted consensus header hash")
 
 	_ = Flags.MarkHidden(CfgDebugP2PAllowDuplicateIP)
 	_ = Flags.MarkHidden(CfgDebugDisableCheckTx)

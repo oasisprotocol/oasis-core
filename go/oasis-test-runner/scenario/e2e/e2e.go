@@ -328,6 +328,8 @@ func RegisterScenarios() error {
 		Debond,
 		// Early query test.
 		EarlyQuery,
+		// Consensus state sync.
+		ConsensusStateSync,
 	} {
 		if err := cmd.Register(s); err != nil {
 			return err

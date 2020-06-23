@@ -7,6 +7,7 @@ import (
 
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	"github.com/oasisprotocol/oasis-core/go/consensus/api/transaction"
+	"github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/flags"
 )
 
 // Genesis contains various consensus config flags that should be part of the genesis state.
@@ -53,7 +54,7 @@ func (g *Genesis) SanityCheck() error {
 		return fmt.Errorf("consensus: sanity check failed: timeout commit must be >= 1ms")
 	}
 
-	if params.StateCheckpointInterval > 0 {
+	if params.StateCheckpointInterval > 0 && !flags.DebugDontBlameOasis() {
 		if params.StateCheckpointInterval < 1000 {
 			return fmt.Errorf("consensus: sanity check failed: state checkpoint interval must be >= 1000")
 		}
