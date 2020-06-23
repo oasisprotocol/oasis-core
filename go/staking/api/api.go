@@ -24,13 +24,14 @@ const (
 )
 
 var (
-	// CommonPoolAddress signifies the common pool in staking events.
+	// CommonPoolAddress is the common pool address.
 	// The address is reserved to prevent it being accidentally used in the actual ledger.
 	CommonPoolAddress = NewReservedAddress(
 		signature.NewPublicKey("1abe11edc001ffffffffffffffffffffffffffffffffffffffffffffffffffff"),
 	)
 
-	// FeeAccumulatorAddress signifies the staking fee accumulator in staking events.
+	// FeeAccumulatorAddress is the per-block fee accumulator address.
+	// It holds all fees from txs in a block which are later disbursed to validators appropriately.
 	// The address is reserved to prevent it being accidentally used in the actual ledger.
 	FeeAccumulatorAddress = NewReservedAddress(
 		signature.NewPublicKey("1abe11edfeeaccffffffffffffffffffffffffffffffffffffffffffffffffff"),

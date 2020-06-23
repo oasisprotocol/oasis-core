@@ -10,26 +10,45 @@ import (
 // CommissionRateDenominator is the denominator for the commission rate.
 var CommissionRateDenominator *quantity.Quantity
 
+// CommissionScheduleRules controls how commission schedule rates and rate
+// bounds are allowed to be changed.
 type CommissionScheduleRules struct {
+	// Epoch period when commission rates are allowed to be changed (e.g.
+	// setting it to 3 means they can be changed every third epoch).
 	RateChangeInterval epochtime.EpochTime `json:"rate_change_interval,omitempty"`
-	RateBoundLead      epochtime.EpochTime `json:"rate_bound_lead,omitempty"`
-	MaxRateSteps       uint16              `json:"max_rate_steps,omitempty"`
-	MaxBoundSteps      uint16              `json:"max_bound_steps,omitempty"`
+	// Number of epochs a commission rate bound change must specified in advance.
+	RateBoundLead epochtime.EpochTime `json:"rate_bound_lead,omitempty"`
+	// Maximum number of commission rate steps a commission schedule can specify.
+	MaxRateSteps uint16 `json:"max_rate_steps,omitempty"`
+	// Maximum number of commission rate bound steps a commission schedule can specify.
+	MaxBoundSteps uint16 `json:"max_bound_steps,omitempty"`
 }
 
+// CommissionRateStep sets a commission rate and its starting time.
 type CommissionRateStep struct {
+	// Epoch when the commission rate will go in effect.
 	Start epochtime.EpochTime `json:"start,omitempty"`
-	Rate  quantity.Quantity   `json:"rate,omitempty"`
+	// Commission rate numerator. The rate is this value divided by CommissionRateDenominator.
+	Rate quantity.Quantity `json:"rate,omitempty"`
 }
 
+// CommissionRateBoundStep sets a commission rate bound (i.e. the minimum and
+// maximum commission rate) and its starting time.
 type CommissionRateBoundStep struct {
-	Start   epochtime.EpochTime `json:"start,omitempty"`
-	RateMin quantity.Quantity   `json:"rate_min,omitempty"`
-	RateMax quantity.Quantity   `json:"rate_max,omitempty"`
+	// Epoch when the commission rate bound will go in effect.
+	Start epochtime.EpochTime `json:"start,omitempty"`
+	// Minimum commission rate numerator. The minimum rate is this value divided by CommissionRateDenominator.
+	RateMin quantity.Quantity `json:"rate_min,omitempty"`
+	// Maximum commission rate numerator. The maximum rate is this value divided by CommissionRateDenominator.
+	RateMax quantity.Quantity `json:"rate_max,omitempty"`
 }
 
+// CommissionSchedule defines a list of commission rates and commission rate
+// bounds and their starting times.
 type CommissionSchedule struct {
-	Rates  []CommissionRateStep      `json:"rates,omitempty"`
+	// List of commission rates and their starting times.
+	Rates []CommissionRateStep `json:"rates,omitempty"`
+	// List of commission rate bounds and their starting times.
 	Bounds []CommissionRateBoundStep `json:"bounds,omitempty"`
 }
 
