@@ -330,17 +330,30 @@ func (app *registryApplication) registerNode( // nolint: gocyclo
 		}
 	}
 
-	if isNewNode || isExpiredNode {
-		// Node doesn't exist (or is expired). Create node.
-		if err = state.SetNode(ctx, existingNode, newNode, sigNode); err != nil {
-			ctx.Logger().Error("RegisterNode: failed to create node",
+	// If the node already exists make sure to verify the node update.
+	if existingNode != nil {
+		if err = registry.VerifyNodeUpdate(ctx.Logger(), existingNode, newNode); err != nil {
+			ctx.Logger().Error("RegisterNode: failed to verify node update",
 				"err", err,
-				"node", newNode,
+				"new_node", newNode,
+				"existing_node", existingNode,
 				"entity", newNode.EntityID,
 			)
-			return fmt.Errorf("failed to set node: %w", err)
+			return err
 		}
+	}
+	if err = state.SetNode(ctx, existingNode, newNode, sigNode); err != nil {
+		ctx.Logger().Error("RegisterNode: failed to create/update node",
+			"err", err,
+			"node", newNode,
+			"entity", newNode.EntityID,
+			"is_creation", existingNode == nil,
+		)
+		return fmt.Errorf("failed to set node: %w", err)
+	}
 
+	if isNewNode || isExpiredNode {
+		// Node doesn't exist (or is expired), initialize/update node status.
 		var status *registry.NodeStatus
 		if existingNode != nil {
 			// Node exists but is expired, fetch existing status.
@@ -363,25 +376,6 @@ func (app *registryApplication) registerNode( // nolint: gocyclo
 				"err", err,
 			)
 			return fmt.Errorf("failed to set node status: %w", err)
-		}
-	} else {
-		// The node already exists, validate and update the node's entry.
-		if err = registry.VerifyNodeUpdate(ctx.Logger(), existingNode, newNode); err != nil {
-			ctx.Logger().Error("RegisterNode: failed to verify node update",
-				"err", err,
-				"new_node", newNode,
-				"existing_node", existingNode,
-				"entity", newNode.EntityID,
-			)
-			return err
-		}
-		if err = state.SetNode(ctx, existingNode, newNode, sigNode); err != nil {
-			ctx.Logger().Error("RegisterNode: failed to update node",
-				"err", err,
-				"node", newNode,
-				"entity", newNode.EntityID,
-			)
-			return fmt.Errorf("failed to set node: %w", err)
 		}
 	}
 

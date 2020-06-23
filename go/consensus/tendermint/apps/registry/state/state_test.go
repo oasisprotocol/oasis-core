@@ -34,7 +34,7 @@ func TestNodeUpdate(t *testing.T) {
 	require := require.New(t)
 
 	now := time.Unix(1580461674, 0)
-	appState := abciAPI.NewMockApplicationState(abciAPI.MockApplicationStateConfig{})
+	appState := abciAPI.NewMockApplicationState(&abciAPI.MockApplicationStateConfig{})
 	ctx := appState.NewContext(abciAPI.ContextBeginBlock, now)
 	defer ctx.Close()
 

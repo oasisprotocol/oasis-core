@@ -97,7 +97,7 @@ type MockApplicationStateConfig struct {
 }
 
 type mockApplicationState struct {
-	cfg MockApplicationStateConfig
+	cfg *MockApplicationStateConfig
 
 	blockCtx           *BlockContext
 	tree               mkvs.Tree
@@ -169,7 +169,7 @@ func (ms *mockApplicationState) NewContext(mode ContextMode, now time.Time) *Con
 }
 
 // NewMockApplicationState creates a new mock application state for testing.
-func NewMockApplicationState(cfg MockApplicationStateConfig) ApplicationState {
+func NewMockApplicationState(cfg *MockApplicationStateConfig) ApplicationState {
 	tree := mkvs.New(nil, nil)
 
 	blockCtx := NewBlockContext()

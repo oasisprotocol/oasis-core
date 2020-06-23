@@ -33,7 +33,7 @@ func TestDelegationQueries(t *testing.T) {
 	require := require.New(t)
 
 	now := time.Unix(1580461674, 0)
-	appState := abciAPI.NewMockApplicationState(abciAPI.MockApplicationStateConfig{})
+	appState := abciAPI.NewMockApplicationState(&abciAPI.MockApplicationStateConfig{})
 	ctx := appState.NewContext(abciAPI.ContextBeginBlock, now)
 	defer ctx.Close()
 
@@ -170,7 +170,7 @@ func TestRewardAndSlash(t *testing.T) {
 	require.NoError(err, "debonding escrow deposit")
 
 	now := time.Unix(1580461674, 0)
-	appState := abciAPI.NewMockApplicationState(abciAPI.MockApplicationStateConfig{})
+	appState := abciAPI.NewMockApplicationState(&abciAPI.MockApplicationStateConfig{})
 	ctx := appState.NewContext(abciAPI.ContextBeginBlock, now)
 	defer ctx.Close()
 
@@ -283,7 +283,7 @@ func TestEpochSigning(t *testing.T) {
 	require := require.New(t)
 
 	now := time.Unix(1580461674, 0)
-	appState := abciAPI.NewMockApplicationState(abciAPI.MockApplicationStateConfig{})
+	appState := abciAPI.NewMockApplicationState(&abciAPI.MockApplicationStateConfig{})
 	ctx := appState.NewContext(abciAPI.ContextBeginBlock, now)
 	defer ctx.Close()
 
