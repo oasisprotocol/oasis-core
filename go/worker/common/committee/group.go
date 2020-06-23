@@ -577,12 +577,11 @@ func (g *Group) publishLocked(
 	}
 
 	// Populate message fields.
-	msg.RuntimeID = g.runtimeID
 	msg.GroupVersion = g.activeEpoch.groupVersion
 	msg.SpanContext = scBinary
 
 	// Publish batch to given committee.
-	g.p2p.Publish(pubCtx, msg)
+	g.p2p.Publish(pubCtx, g.runtimeID, msg)
 
 	return nil
 }
@@ -608,14 +607,14 @@ func (g *Group) PublishScheduledBatch(
 		return nil, fmt.Errorf("group: invalid executor committee")
 	}
 
-	dispatchMsg := &commitment.TxnSchedulerBatchDispatch{
+	dispatchMsg := &commitment.TxnSchedulerBatch{
 		CommitteeID:       committeeID,
 		IORoot:            ioRoot,
 		StorageSignatures: storageSignatures,
 		Header:            hdr,
 	}
 
-	signedDispatchMsg, err := commitment.SignTxnSchedulerBatchDispatch(g.identity.NodeSigner, dispatchMsg)
+	signedDispatchMsg, err := commitment.SignTxnSchedulerBatch(g.identity.NodeSigner, dispatchMsg)
 	if err != nil {
 		return nil, fmt.Errorf("group: unable to sign txn scheduler batch dispatch msg: %w", err)
 	}
@@ -624,7 +623,7 @@ func (g *Group) PublishScheduledBatch(
 		spanCtx,
 		xc,
 		&p2p.Message{
-			SignedTxnSchedulerBatchDispatch: signedDispatchMsg,
+			TxnSchedulerBatch: signedDispatchMsg,
 		},
 	)
 }
@@ -643,9 +642,7 @@ func (g *Group) PublishExecuteFinished(spanCtx opentracing.SpanContext, c *commi
 		spanCtx,
 		g.activeEpoch.mergeCommittee,
 		&p2p.Message{
-			ExecutorWorkerFinished: &p2p.ExecutorWorkerFinished{
-				Commitment: *c,
-			},
+			ExecutorCommit: c,
 		},
 	)
 }

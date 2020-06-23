@@ -85,16 +85,16 @@ func (p *P2P) Addresses() []node.Address {
 }
 
 // Publish publishes a message to the gossip network.
-func (p *P2P) Publish(ctx context.Context, msg *Message) {
+func (p *P2P) Publish(ctx context.Context, runtimeID common.Namespace, msg *Message) {
 	rawMsg := cbor.Marshal(msg)
 
 	p.RLock()
 	defer p.RUnlock()
 
-	h := p.topics[msg.RuntimeID]
+	h := p.topics[runtimeID]
 	if h == nil {
 		p.logger.Error("attempted to publish message for unknown runtime ID",
-			"runtime_id", msg.RuntimeID,
+			"runtime_id", runtimeID,
 		)
 	}
 

@@ -43,14 +43,14 @@ func mergeReceiveCommitment(ph *p2pHandle) (*commitment.OpenExecutorCommitment, 
 		req = <-ph.requests
 		req.responseCh <- nil
 
-		if req.msg.ExecutorWorkerFinished == nil {
+		if req.msg.ExecutorCommit == nil {
 			continue
 		}
 
 		break
 	}
 
-	openCom, err := req.msg.ExecutorWorkerFinished.Commitment.Open()
+	openCom, err := req.msg.ExecutorCommit.Open()
 	if err != nil {
 		return nil, fmt.Errorf("request message ExecutorWorkerFinished Open: %w", err)
 	}

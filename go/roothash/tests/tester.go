@@ -311,7 +311,7 @@ func (s *runtimeState) testSuccessfulRound(t *testing.T, backend api.Backend, co
 		}
 
 		// Fake txn scheduler signature.
-		dispatch := &commitment.TxnSchedulerBatchDispatch{
+		dispatch := &commitment.TxnSchedulerBatch{
 			CommitteeID:       commitBody.CommitteeID,
 			IORoot:            commitBody.InputRoot,
 			StorageSignatures: commitBody.InputStorageSigs,
@@ -319,7 +319,7 @@ func (s *runtimeState) testSuccessfulRound(t *testing.T, backend api.Backend, co
 		}
 		signer := s.txnSchedCommittee.leader.Signer
 		var signedDispatch *signature.Signed
-		signedDispatch, err = signature.SignSigned(signer, commitment.TxnSchedulerBatchDispatchSigCtx, dispatch)
+		signedDispatch, err = signature.SignSigned(signer, commitment.TxnSchedulerBatchSigCtx, dispatch)
 		require.NoError(err, "SignSigned")
 		commitBody.TxnSchedSig = signedDispatch.Signature
 

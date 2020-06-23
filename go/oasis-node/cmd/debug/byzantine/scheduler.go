@@ -122,7 +122,7 @@ func schedulerForRoleInCommittee(ht *honestTendermint, height int64, committee *
 	return nil
 }
 
-func schedulerPublishToCommittee(ht *honestTendermint, height int64, committee *scheduler.Committee, role scheduler.Role, ph *p2pHandle, message *p2p.Message) error {
+func schedulerPublishToCommittee(ph *p2pHandle, runtimeID common.Namespace, message *p2p.Message) error {
 	// HACK: So, the ever-byzantine debug code is written under the
 	// assumption that it's possible to do p2p message delivery in
 	// a synchronous manner.
@@ -131,7 +131,7 @@ func schedulerPublishToCommittee(ht *honestTendermint, height int64, committee *
 	// sleep.  Eventually someone could/should rewrite all of this
 	// debug code.   The only thing that uses it is CI anyway.
 
-	ph.service.Publish(ph.context, message)
+	ph.service.Publish(ph.context, runtimeID, message)
 	time.Sleep(3 * time.Second) // Sigh
 
 	return nil

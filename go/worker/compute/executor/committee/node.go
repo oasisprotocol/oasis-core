@@ -193,10 +193,10 @@ func (n *Node) getMetricLabels() prometheus.Labels {
 
 // HandlePeerMessage implements NodeHooks.
 func (n *Node) HandlePeerMessage(ctx context.Context, message *p2p.Message) (bool, error) {
-	if message.SignedTxnSchedulerBatchDispatch != nil {
+	if message.TxnSchedulerBatch != nil {
 		crash.Here(crashPointBatchReceiveAfter)
 
-		sbd := message.SignedTxnSchedulerBatchDispatch
+		sbd := message.TxnSchedulerBatch
 
 		// Before opening the signed dispatch message, verify that it was
 		// actually signed by the current transaction scheduler.
@@ -209,7 +209,7 @@ func (n *Node) HandlePeerMessage(ctx context.Context, message *p2p.Message) (boo
 
 		// Transaction scheduler checks out, open the signed dispatch message
 		// and add it to the queue.
-		var bd commitment.TxnSchedulerBatchDispatch
+		var bd commitment.TxnSchedulerBatch
 		if err := sbd.Open(&bd); err != nil {
 			return false, p2pError.Permanent(err)
 		}
