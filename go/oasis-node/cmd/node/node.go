@@ -253,7 +253,7 @@ func (n *Node) initWorkers(logger *logging.Logger) error {
 		if genesisDoc.Registry.Parameters.DebugAllowUnroutableAddresses {
 			p2p.DebugForceAllowUnroutableAddresses()
 		}
-		n.P2P, err = p2p.New(p2pCtx, n.Identity)
+		n.P2P, err = p2p.New(p2pCtx, n.Identity, n.Consensus)
 		if err != nil {
 			return err
 		}

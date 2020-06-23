@@ -6,16 +6,16 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/roothash/api/block"
 )
 
-// TxnSchedulerBatchDispatchSigCtx is the context used for signing
+// TxnSchedulerBatchSigCtx is the context used for signing
 // transaction scheduler batch dispatch messages.
-var TxnSchedulerBatchDispatchSigCtx = signature.NewContext("oasis-core/roothash: tx batch dispatch", signature.WithChainSeparation())
+var TxnSchedulerBatchSigCtx = signature.NewContext("oasis-core/roothash: tx batch", signature.WithChainSeparation())
 
-// TxnSchedulerBatchDispatch is the message sent from the transaction
-// scheduler to executor workers after a batch is ready to be executed.
+// TxnSchedulerBatch is the message sent from the transaction scheduler
+// to executor workers after a batch is ready to be executed.
 //
 // Don't forget to bump CommitteeProtocol version in go/common/version
 // if you change anything in this struct.
-type TxnSchedulerBatchDispatch struct {
+type TxnSchedulerBatch struct {
 	// CommitteeID is the committee ID of the target executor committee.
 	CommitteeID hash.Hash `json:"cid"`
 
@@ -30,26 +30,26 @@ type TxnSchedulerBatchDispatch struct {
 	Header block.Header `json:"header"`
 }
 
-// SignedTxnSchedulerBatchDispatch is a TxnSchedulerBatchDispatch, signed by
+// SignedTxnSchedulerBatch is a TxnSchedulerBatch, signed by
 // the transaction scheduler.
-type SignedTxnSchedulerBatchDispatch struct {
+type SignedTxnSchedulerBatch struct {
 	signature.Signed
 }
 
 // Open first verifies the blob signature and then unmarshals the blob.
-func (s *SignedTxnSchedulerBatchDispatch) Open(tsbd *TxnSchedulerBatchDispatch) error {
-	return s.Signed.Open(TxnSchedulerBatchDispatchSigCtx, tsbd)
+func (s *SignedTxnSchedulerBatch) Open(tsbd *TxnSchedulerBatch) error {
+	return s.Signed.Open(TxnSchedulerBatchSigCtx, tsbd)
 }
 
-// SignTxnSchedulerBatchDispatch signs a TxnSchedulerBatchDispatch struct
-// using the given signer.
-func SignTxnSchedulerBatchDispatch(signer signature.Signer, tsbd *TxnSchedulerBatchDispatch) (*SignedTxnSchedulerBatchDispatch, error) {
-	signed, err := signature.SignSigned(signer, TxnSchedulerBatchDispatchSigCtx, tsbd)
+// SignTxnSchedulerBatch signs a TxnSchedulerBatch struct using the
+// given signer.
+func SignTxnSchedulerBatch(signer signature.Signer, tsbd *TxnSchedulerBatch) (*SignedTxnSchedulerBatch, error) {
+	signed, err := signature.SignSigned(signer, TxnSchedulerBatchSigCtx, tsbd)
 	if err != nil {
 		return nil, err
 	}
 
-	return &SignedTxnSchedulerBatchDispatch{
+	return &SignedTxnSchedulerBatch{
 		Signed: *signed,
 	}, nil
 }

@@ -21,7 +21,7 @@ import (
 )
 
 type computeBatchContext struct {
-	bd    commitment.TxnSchedulerBatchDispatch
+	bd    commitment.TxnSchedulerBatch
 	bdSig signature.Signature
 
 	ioTree    *transaction.Tree
@@ -42,18 +42,23 @@ func newComputeBatchContext() *computeBatchContext {
 }
 
 func (cbc *computeBatchContext) receiveBatch(ph *p2pHandle) error {
-	req := <-ph.requests
-	req.responseCh <- nil
+	var req p2pReqRes
+	for {
+		req = <-ph.requests
+		req.responseCh <- nil
 
-	if req.msg.SignedTxnSchedulerBatchDispatch == nil {
-		return fmt.Errorf("expecting signed transaction scheduler batch dispatch message, got %+v", req.msg)
+		if req.msg.TxnSchedulerBatch == nil {
+			continue
+		}
+
+		break
 	}
 
-	if err := req.msg.SignedTxnSchedulerBatchDispatch.Open(&cbc.bd); err != nil {
+	if err := req.msg.TxnSchedulerBatch.Open(&cbc.bd); err != nil {
 		return fmt.Errorf("request message SignedTxnSchedulerBatchDispatch Open: %w", err)
 	}
 
-	cbc.bdSig = req.msg.SignedTxnSchedulerBatchDispatch.Signature
+	cbc.bdSig = req.msg.TxnSchedulerBatch.Signature
 	return nil
 }
 
@@ -190,13 +195,10 @@ func (cbc *computeBatchContext) createCommitment(id *identity.Identity, rak sign
 }
 
 func (cbc *computeBatchContext) publishToCommittee(ht *honestTendermint, height int64, committee *scheduler.Committee, role scheduler.Role, ph *p2pHandle, runtimeID common.Namespace, groupVersion int64) error {
-	if err := schedulerPublishToCommittee(ht, height, committee, role, ph, &p2p.Message{
-		RuntimeID:    runtimeID,
-		GroupVersion: groupVersion,
-		SpanContext:  nil,
-		ExecutorWorkerFinished: &p2p.ExecutorWorkerFinished{
-			Commitment: *cbc.commit,
-		},
+	if err := schedulerPublishToCommittee(ph, runtimeID, &p2p.Message{
+		GroupVersion:   groupVersion,
+		SpanContext:    nil,
+		ExecutorCommit: cbc.commit,
 	}); err != nil {
 		return fmt.Errorf("scheduler publish to committee: %w", err)
 	}

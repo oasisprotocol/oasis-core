@@ -102,7 +102,7 @@ func doExecutorHonest(cmd *cobra.Command, args []string) {
 	}()
 
 	ph := newP2PHandle()
-	if err = ph.start(defaultIdentity, defaultRuntimeID); err != nil {
+	if err = ph.start(ht, defaultIdentity, defaultRuntimeID); err != nil {
 		panic(fmt.Sprintf("P2P start failed: %+v", err))
 	}
 	defer func() {
@@ -234,7 +234,7 @@ func doExecutorWrong(cmd *cobra.Command, args []string) {
 	}()
 
 	ph := newP2PHandle()
-	if err = ph.start(defaultIdentity, defaultRuntimeID); err != nil {
+	if err = ph.start(ht, defaultIdentity, defaultRuntimeID); err != nil {
 		panic(fmt.Sprintf("P2P start failed: %+v", err))
 	}
 	defer func() {
@@ -366,7 +366,7 @@ func doExecutorStraggler(cmd *cobra.Command, args []string) {
 	}()
 
 	ph := newP2PHandle()
-	if err = ph.start(defaultIdentity, defaultRuntimeID); err != nil {
+	if err = ph.start(ht, defaultIdentity, defaultRuntimeID); err != nil {
 		panic(fmt.Sprintf("P2P start failed: %+v", err))
 	}
 	defer func() {
@@ -447,7 +447,7 @@ func doMergeHonest(cmd *cobra.Command, args []string) {
 	}()
 
 	ph := newP2PHandle()
-	if err = ph.start(defaultIdentity, defaultRuntimeID); err != nil {
+	if err = ph.start(ht, defaultIdentity, defaultRuntimeID); err != nil {
 		panic(fmt.Sprintf("P2P start failed: %+v", err))
 	}
 	defer func() {
@@ -555,7 +555,7 @@ func doMergeWrong(cmd *cobra.Command, args []string) {
 	}()
 
 	ph := newP2PHandle()
-	if err = ph.start(defaultIdentity, defaultRuntimeID); err != nil {
+	if err = ph.start(ht, defaultIdentity, defaultRuntimeID); err != nil {
 		panic(fmt.Sprintf("P2P start failed: %+v", err))
 	}
 	defer func() {
@@ -687,7 +687,7 @@ func doMergeStraggler(cmd *cobra.Command, args []string) {
 	}()
 
 	ph := newP2PHandle()
-	if err = ph.start(defaultIdentity, defaultRuntimeID); err != nil {
+	if err = ph.start(ht, defaultIdentity, defaultRuntimeID); err != nil {
 		panic(fmt.Sprintf("P2P start failed: %+v", err))
 	}
 	defer func() {

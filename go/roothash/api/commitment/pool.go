@@ -13,6 +13,7 @@ import (
 	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
 	"github.com/oasisprotocol/oasis-core/go/roothash/api/block"
 	scheduler "github.com/oasisprotocol/oasis-core/go/scheduler/api"
+	p2pError "github.com/oasisprotocol/oasis-core/go/worker/common/p2p/error"
 )
 
 // moduleName is the module name used for namespacing errors.
@@ -31,8 +32,8 @@ var (
 	ErrInsufficientVotes      = errors.New(moduleName, 10, "roothash/commitment: insufficient votes to finalize discrepancy resolution round")
 	ErrBadExecutorCommits     = errors.New(moduleName, 11, "roothash/commitment: bad executor commitments")
 	ErrInvalidCommitteeID     = errors.New(moduleName, 12, "roothash/commitment: invalid committee ID")
-	ErrTxnSchedSigInvalid     = errors.New(moduleName, 13, "roothash/commitment: txn scheduler signature invalid")
-	ErrInvalidMessages        = errors.New(moduleName, 14, "roothash/commitment: invalid messages")
+	ErrTxnSchedSigInvalid     = p2pError.Permanent(errors.New(moduleName, 13, "roothash/commitment: txn scheduler signature invalid"))
+	ErrInvalidMessages        = p2pError.Permanent(errors.New(moduleName, 14, "roothash/commitment: invalid messages"))
 	ErrBadStorageReceipts     = errors.New(moduleName, 15, "roothash/commitment: bad storage receipts")
 )
 
@@ -267,7 +268,7 @@ func (p *Pool) addOpenExecutorCommitment(
 			"node_id", id,
 			"err", err,
 		)
-		return err
+		return p2pError.Permanent(err)
 	}
 
 	// Go through existing commitments and check if the txn scheduler signed
@@ -306,7 +307,7 @@ func (p *Pool) AddExecutorCommitment(
 	// Check the commitment signature and de-serialize into header.
 	openCom, err := commitment.Open()
 	if err != nil {
-		return err
+		return p2pError.Permanent(err)
 	}
 
 	return p.addOpenExecutorCommitment(ctx, blk, sv, nl, openCom)
@@ -678,7 +679,7 @@ func (m *MultiPool) AddExecutorCommitment(
 	// Check the commitment signature and de-serialize into header.
 	openCom, err := commitment.Open()
 	if err != nil {
-		return nil, err
+		return nil, p2pError.Permanent(err)
 	}
 
 	p := m.Committees[openCom.Body.CommitteeID]

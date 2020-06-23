@@ -1,89 +1,54 @@
+// Package p2p implements the worker committee gossip network.
 package p2p
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"net"
 	"sync"
 	"time"
 
-	"github.com/cenkalti/backoff/v4"
 	"github.com/libp2p/go-libp2p"
 	"github.com/libp2p/go-libp2p-core"
-	"github.com/libp2p/go-libp2p-core/helpers"
 	"github.com/libp2p/go-libp2p-core/network"
-	"github.com/libp2p/go-libp2p-core/peer"
-	"github.com/libp2p/go-libp2p-core/peerstore"
 	"github.com/libp2p/go-libp2p-core/transport"
+	"github.com/libp2p/go-libp2p-pubsub"
 	"github.com/multiformats/go-multiaddr"
 	"github.com/multiformats/go-multiaddr-net"
 	"github.com/spf13/viper"
 
 	"github.com/oasisprotocol/oasis-core/go/common"
-	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
+	"github.com/oasisprotocol/oasis-core/go/common/cbor"
 	"github.com/oasisprotocol/oasis-core/go/common/identity"
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
 	"github.com/oasisprotocol/oasis-core/go/common/node"
 	"github.com/oasisprotocol/oasis-core/go/common/version"
+	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
 	registryAPI "github.com/oasisprotocol/oasis-core/go/registry/api"
 	"github.com/oasisprotocol/oasis-core/go/worker/common/configparser"
 )
 
-var (
-	protocolName = core.ProtocolID("/p2p/oasislabs.com/committee/" + version.CommitteeProtocol.String())
-
-	allowUnroutableAddresses bool
-)
+var allowUnroutableAddresses bool
 
 // DebugForceallowUnroutableAddresses allows unroutable addresses.
 func DebugForceAllowUnroutableAddresses() {
 	allowUnroutableAddresses = true
 }
 
-// Handler is a handler for P2P messages.
-type Handler interface {
-	// IsPeerAuthorized returns true if a given peer should be allowed
-	// to send messages to us.
-	IsPeerAuthorized(peerID signature.PublicKey) bool
-
-	// HandlePeerMessage handles an incoming message from a peer.
-	HandlePeerMessage(peerID signature.PublicKey, msg *Message) error
-}
-
 // P2P is a peer-to-peer node using libp2p.
 type P2P struct {
 	sync.RWMutex
-	publishing sync.WaitGroup
+	*PeerManager
+
+	ctx context.Context
+
+	host   core.Host
+	pubsub *pubsub.PubSub
 
 	registerAddresses []multiaddr.Multiaddr
-
-	host     core.Host
-	handlers map[common.Namespace]Handler
+	topics            map[common.Namespace]*topicHandler
 
 	logger *logging.Logger
-}
-
-func publicKeyToPeerID(pk signature.PublicKey) (core.PeerID, error) {
-	pubKey, err := publicKeyToPubKey(pk)
-	if err != nil {
-		return "", err
-	}
-
-	id, err := peer.IDFromPublicKey(pubKey)
-	if err != nil {
-		return "", err
-	}
-
-	return id, nil
-}
-
-func peerIDToPublicKey(peerID core.PeerID) (signature.PublicKey, error) {
-	pk, err := peerID.ExtractPublicKey()
-	if err != nil {
-		return signature.PublicKey{}, err
-	}
-	return pubKeyToPublicKey(pk)
 }
 
 // Addresses returns the P2P addresses of the node.
@@ -119,190 +84,39 @@ func (p *P2P) Addresses() []node.Address {
 	return addresses
 }
 
-func (p *P2P) addPeerInfo(peerID core.PeerID, addresses []node.Address) error {
-	if addresses == nil {
-		return errors.New("nil address list")
-	}
+// Publish publishes a message to the gossip network.
+func (p *P2P) Publish(ctx context.Context, runtimeID common.Namespace, msg *Message) {
+	rawMsg := cbor.Marshal(msg)
 
-	var addrs []multiaddr.Multiaddr
-	for _, nodeAddr := range addresses {
-		mAddr, err := manet.FromNetAddr(&nodeAddr.TCPAddr)
-		if err != nil {
-			return err
-		}
+	p.RLock()
+	defer p.RUnlock()
 
-		addrs = append(addrs, mAddr)
-	}
-
-	ps := p.host.Peerstore()
-	ps.ClearAddrs(peerID)
-	ps.AddAddrs(peerID, addrs, peerstore.RecentlyConnectedAddrTTL)
-
-	return nil
-}
-
-func (p *P2P) publishImpl(ctx context.Context, node *node.Node, msg *Message) error {
-	peerID, err := publicKeyToPeerID(node.P2P.ID)
-	if err != nil {
-		return backoff.Permanent(err)
-	}
-
-	// Update peer address.
-	if perr := p.addPeerInfo(peerID, node.P2P.Addresses); perr != nil {
-		p.logger.Error("failed to update peer address",
-			"err", perr,
-			"node_id", node.ID,
+	h := p.topics[runtimeID]
+	if h == nil {
+		p.logger.Error("attempted to publish message for unknown runtime ID",
+			"runtime_id", runtimeID,
 		)
-		return backoff.Permanent(perr)
 	}
 
-	rawStream, err := p.host.NewStream(ctx, peerID, protocolName)
-	if err != nil {
-		return err
-	}
-	defer func() {
-		_ = helpers.FullClose(rawStream)
-	}()
-
-	stream := NewStream(rawStream)
-	if err := stream.Write(msg); err != nil {
-		return err
-	}
-
-	var response Message
-	if err := stream.Read(&response); err != nil {
-		return err
-	}
-
-	if response.Error != nil {
-		return errors.New(response.Error.Message)
-	} else if response.Ack != nil {
-		return nil
-	} else {
-		return errors.New("invalid response to publish")
-	}
-}
-
-// Publish publishes a message to the destination node.
-//
-// If message publish fails, it is automatically retried until successful,
-// using an exponential backoff.
-func (p *P2P) Publish(ctx context.Context, node *node.Node, msg *Message) {
-	p.publishing.Add(1)
-	go func() {
-		defer p.publishing.Done()
-		bctx := backoff.WithContext(backoff.NewExponentialBackOff(), ctx)
-
-		err := backoff.Retry(func() error {
-			p.logger.Debug("publishing message",
-				"node_id", node.ID,
-			)
-			perr := p.publishImpl(ctx, node, msg)
-			if perr != nil {
-				p.logger.Warn("failed to publish message",
-					"err", perr,
-					"node_id", node.ID,
-				)
-			}
-			return perr
-		}, bctx)
-		if err != nil {
-			p.logger.Warn("failed to publish message, not retrying",
-				"err", err,
-				"node_id", node.ID,
-			)
-			return
-		}
-		p.logger.Debug("successfully published message",
-			"node_id", node.ID,
+	if err := h.topic.Publish(h.ctx, rawMsg); err != nil {
+		h.logger.Error("failed to publish message to the network",
+			"err", err,
 		)
-	}()
+	}
 }
 
-// Wait until Publish routines have finished.
-func (p *P2P) Flush() {
-	p.publishing.Wait()
-}
-
-// RegisterHandler registeres a message handler for the specified runtime.
+// RegisterHandler registers a message handler for the specified runtime.
 func (p *P2P) RegisterHandler(runtimeID common.Namespace, handler Handler) {
 	p.Lock()
-	p.handlers[runtimeID] = handler
-	p.Unlock()
+	defer p.Unlock()
 
-	p.logger.Debug("registered handler",
-		"runtime_id", runtimeID,
-	)
-}
-
-func (p *P2P) handleStreamMessages(stream *Stream) {
-	defer func() {
-		_ = helpers.FullClose(stream.Stream)
-	}()
-
-	peerID := stream.Conn().RemotePeer()
-	p.logger.Debug("new message from peer",
-		"peer_id", peerID,
-	)
-	id, err := peerIDToPublicKey(peerID)
+	topicID, h, err := newTopicHandler(p, runtimeID, handler)
 	if err != nil {
-		p.logger.Error("error while extracting public key from peer ID",
-			"err", err,
-			"peer_id", peerID,
-		)
-		return
+		panic(fmt.Sprintf("worker/common/p2p: failed to initialize topic handler: %s", err))
 	}
 
-	// Currently the protocol is very simple and only supports a single
-	// request/response in a stream.
-	var message Message
-	if err = stream.Read(&message); err != nil {
-		p.logger.Error("error while receiving message from peer",
-			"err", err,
-			"peer_id", peerID,
-		)
-		return
-	}
-
-	// Determine handler based on the runtime identifier.
-	p.RLock()
-	handler, ok := p.handlers[message.RuntimeID]
-	p.RUnlock()
-	if !ok {
-		p.logger.Error("received message for unknown runtime",
-			"runtime_id", message.RuntimeID,
-			"peer_id", peerID,
-		)
-		return
-	}
-
-	// Check if peer is authorized to send messages.
-	if !handler.IsPeerAuthorized(id) {
-		p.logger.Error("dropping stream from unauthorized peer",
-			"runtime_id", message.RuntimeID,
-			"peer_id", peerID,
-		)
-		return
-	}
-
-	err = handler.HandlePeerMessage(id, &message)
-	response := &Message{
-		RuntimeID:    message.RuntimeID,
-		GroupVersion: message.GroupVersion,
-		SpanContext:  nil,
-	}
-	if err == nil {
-		response.Ack = &Ack{}
-	} else {
-		response.Error = &Error{Message: err.Error()}
-	}
-
-	_ = stream.Write(response)
-}
-
-func (p *P2P) handleStream(rawStream core.Stream) {
-	stream := NewStream(rawStream)
-	go p.handleStreamMessages(stream)
+	p.topics[runtimeID] = h
+	_ = p.pubsub.RegisterTopicValidator(topicID, h.topicMessageValidator)
 }
 
 func (p *P2P) handleConnection(conn core.Conn) {
@@ -326,36 +140,23 @@ func (p *P2P) handleConnection(conn core.Conn) {
 		"peer_id", conn.RemotePeer(),
 	)
 
-	id, err := peerIDToPublicKey(conn.RemotePeer())
-	if err != nil {
-		p.logger.Error("error while extracting public key from peer ID",
-			"err", err,
-			"peer_id", conn.RemotePeer(),
-		)
-		return
-	}
-
-	// Make sure that connection is allowed by at least one handler.
-	p.RLock()
-	defer p.RUnlock()
-
-	for _, handler := range p.handlers {
-		if handler.IsPeerAuthorized(id) {
-			allowed = true
-			return
-		}
-	}
+	// Only allow nodes that should be part of the gossipsub network
+	// to connect to us, regardless of handlers, on the hopes that
+	// this increases responsiveness.
+	//
+	// Messages that we aren't interested in will be dropped without
+	// much processing.
+	allowed = p.isPeerAuthorized(conn.RemotePeer())
 }
 
 // New creates a new P2P node.
-func New(ctx context.Context, identity *identity.Identity) (*P2P, error) {
+func New(ctx context.Context, identity *identity.Identity, consensus consensus.Backend) (*P2P, error) {
+	// Instantiate the libp2p host.
 	addresses, err := configparser.ParseAddressList(viper.GetStringSlice(cfgP2pAddresses))
 	if err != nil {
 		return nil, err
 	}
 	port := uint16(viper.GetInt(CfgP2pPort))
-
-	p2pKey := signerToPrivKey(identity.P2PSigner)
 
 	var registerAddresses []multiaddr.Multiaddr
 	for _, addr := range addresses {
@@ -371,43 +172,51 @@ func New(ctx context.Context, identity *identity.Identity) (*P2P, error) {
 		fmt.Sprintf("/ip4/0.0.0.0/tcp/%d", port),
 	)
 
-	// NOTE: Do not initialize NAT functionality as the implementation that
-	//       libp2p currently uses for gateway/default route discovery is
-	//       done badly -- it requires parsing outputs of various CLI binaries
-	//       instead of doing it properly via syscalls/NETLINK.
-	//
-	//       The dependency chain for the used implementation is:
-	//       - https://github.com/libp2p/go-libp2p-nat
-	//       - https://github.com/fd/go-nat
-	//       - https://github.com/jackpal/gateway (the problematic library)
-	//
-	//       If we ever decide that we need NAT functionality we should consider
-	//       switching the implementation with something like:
-	//       - https://gitweb.torproject.org/tor-fw-helper.git/tree/natclient
+	// Oh hey, they finally got around to fixing the NAT traversal code,
+	// so if people feel brave enough to want to interact with the
+	// mountain of terrible uPNP/NAT-PMP implementations out there,
+	// they can.
 	host, err := libp2p.New(
 		ctx,
 		libp2p.ListenAddrs(sourceMultiAddr),
-		libp2p.Identity(p2pKey),
+		libp2p.Identity(signerToPrivKey(identity.P2PSigner)),
 	)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("worker/common/p2p: failed to initialize libp2p host: %w", err)
+	}
+
+	// Initialize the gossipsub router.
+	pubsub, err := pubsub.NewGossipSub(
+		ctx,
+		host,
+		pubsub.WithMessageSigning(true),
+		pubsub.WithStrictSignatureVerification(true),
+		pubsub.WithFloodPublish(true),
+	)
+	if err != nil {
+		return nil, fmt.Errorf("worker/common/p2p: failed to initialize libp2p gossipsub: %w", err)
 	}
 
 	p := &P2P{
-		registerAddresses: registerAddresses,
+		PeerManager:       newPeerManager(ctx, host, consensus),
+		ctx:               ctx,
 		host:              host,
-		handlers:          make(map[common.Namespace]Handler),
+		pubsub:            pubsub,
+		registerAddresses: registerAddresses,
+		topics:            make(map[common.Namespace]*topicHandler),
 		logger:            logging.GetLogger("worker/common/p2p"),
 	}
-
 	p.host.Network().SetConnHandler(p.handleConnection)
-	p.host.SetStreamHandler(protocolName, p.handleStream)
 
 	p.logger.Info("p2p host initialized",
 		"address", fmt.Sprintf("%+v", host.Addrs()),
 	)
 
 	return p, nil
+}
+
+func runtimeIDToTopicID(runtimeID common.Namespace) string {
+	return version.CommitteeProtocol.String() + "/" + runtimeID.String()
 }
 
 func init() {

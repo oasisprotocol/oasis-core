@@ -31,6 +31,7 @@ import (
 	commonWorker "github.com/oasisprotocol/oasis-core/go/worker/common"
 	"github.com/oasisprotocol/oasis-core/go/worker/common/committee"
 	"github.com/oasisprotocol/oasis-core/go/worker/common/p2p"
+	p2pError "github.com/oasisprotocol/oasis-core/go/worker/common/p2p/error"
 	mergeCommittee "github.com/oasisprotocol/oasis-core/go/worker/compute/merge/committee"
 	"github.com/oasisprotocol/oasis-core/go/worker/registration"
 )
@@ -38,9 +39,9 @@ import (
 var (
 	errSeenNewerBlock     = errors.New("executor: seen newer block")
 	errRuntimeAborted     = errors.New("executor: runtime aborted batch processing")
-	errIncompatibleHeader = errors.New("executor: incompatible header")
-	errInvalidReceipt     = errors.New("executor: invalid storage receipt")
-	errStorageFailed      = errors.New("executor: failed to fetch from storage")
+	errIncompatibleHeader = p2pError.Permanent(errors.New("executor: incompatible header"))
+	errInvalidReceipt     = p2pError.Permanent(errors.New("executor: invalid storage receipt"))
+	errStorageFailed      = p2pError.Permanent(errors.New("executor: failed to fetch from storage"))
 	errIncorrectRole      = errors.New("executor: incorrect role")
 	errIncorrectState     = errors.New("executor: incorrect state")
 	errMsgFromNonTxnSched = errors.New("executor: received txn scheduler dispatch msg from non-txn scheduler")
@@ -192,10 +193,10 @@ func (n *Node) getMetricLabels() prometheus.Labels {
 
 // HandlePeerMessage implements NodeHooks.
 func (n *Node) HandlePeerMessage(ctx context.Context, message *p2p.Message) (bool, error) {
-	if message.SignedTxnSchedulerBatchDispatch != nil {
+	if message.TxnSchedulerBatch != nil {
 		crash.Here(crashPointBatchReceiveAfter)
 
-		sbd := message.SignedTxnSchedulerBatchDispatch
+		sbd := message.TxnSchedulerBatch
 
 		// Before opening the signed dispatch message, verify that it was
 		// actually signed by the current transaction scheduler.
@@ -208,9 +209,9 @@ func (n *Node) HandlePeerMessage(ctx context.Context, message *p2p.Message) (boo
 
 		// Transaction scheduler checks out, open the signed dispatch message
 		// and add it to the queue.
-		var bd commitment.TxnSchedulerBatchDispatch
+		var bd commitment.TxnSchedulerBatch
 		if err := sbd.Open(&bd); err != nil {
-			return false, err
+			return false, p2pError.Permanent(err)
 		}
 
 		err := n.queueBatchBlocking(ctx, bd.CommitteeID, bd.IORoot, bd.StorageSignatures, bd.Header, sbd.Signature)
@@ -253,7 +254,7 @@ func (n *Node) queueBatchBlocking(
 		n.logger.Warn("failed to fetch runtime registry descriptor",
 			"err", err,
 		)
-		return err
+		return p2pError.Permanent(err)
 	}
 	if uint64(len(storageSignatures)) < rt.Storage.MinWriteReplication {
 		n.logger.Warn("received external batch with not enough storage receipts",

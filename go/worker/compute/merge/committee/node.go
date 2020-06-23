@@ -154,12 +154,11 @@ func (n *Node) getMetricLabels() prometheus.Labels {
 
 // HandlePeerMessage implements NodeHooks.
 func (n *Node) HandlePeerMessage(ctx context.Context, message *p2p.Message) (bool, error) {
-	if message.ExecutorWorkerFinished != nil {
+	if message.ExecutorCommit != nil {
 		n.commonNode.CrossNode.Lock()
 		defer n.commonNode.CrossNode.Unlock()
 
-		m := message.ExecutorWorkerFinished
-		err := n.handleResultsLocked(ctx, &m.Commitment)
+		err := n.handleResultsLocked(ctx, message.ExecutorCommit)
 		if err != nil {
 			return false, err
 		}

@@ -1204,7 +1204,7 @@ func generateStorageReceiptSignature(t *testing.T, blk *block.Block, body *Compu
 func generateTxnSchedulerSignature(t *testing.T, childBlk *block.Block, body *ComputeBody) signature.Signature {
 	body.InputRoot = hash.Hash{}
 	body.InputStorageSigs = []signature.Signature{}
-	dispatch := &TxnSchedulerBatchDispatch{
+	dispatch := &TxnSchedulerBatch{
 		CommitteeID:       body.CommitteeID,
 		IORoot:            body.InputRoot,
 		StorageSignatures: body.InputStorageSigs,
@@ -1212,7 +1212,7 @@ func generateTxnSchedulerSignature(t *testing.T, childBlk *block.Block, body *Co
 	}
 	sk, err := memorySigner.NewSigner(rand.Reader)
 	require.NoError(t, err, "NewSigner")
-	signedDispatch, err := signature.SignSigned(sk, TxnSchedulerBatchDispatchSigCtx, dispatch)
+	signedDispatch, err := signature.SignSigned(sk, TxnSchedulerBatchSigCtx, dispatch)
 	require.NoError(t, err, "SignSigned")
 
 	return signedDispatch.Signature
