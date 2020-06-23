@@ -17,6 +17,9 @@ import (
 
 // CheckpointerConfig is a checkpointer configuration.
 type CheckpointerConfig struct {
+	// Name identifying this checkpointer in logs.
+	Name string
+
 	// Namespace is the storage namespace this checkpointer is for.
 	Namespace common.Namespace
 
@@ -266,7 +269,7 @@ func NewCheckpointer(
 		ndb:      ndb,
 		creator:  creator,
 		notifyCh: channels.NewRingChannel(1),
-		logger:   logging.GetLogger("storage/mkvs/checkpointer").With("namespace", cfg.Namespace),
+		logger:   logging.GetLogger("storage/mkvs/checkpoint/"+cfg.Name).With("namespace", cfg.Namespace),
 	}
 	go c.worker(ctx)
 	return c, nil
