@@ -243,6 +243,7 @@ func NewNode(
 
 	// Create a new checkpointer.
 	checkpointerCfg = checkpoint.CheckpointerConfig{
+		Name:            "runtime",
 		Namespace:       commonNode.Runtime.ID(),
 		CheckInterval:   checkpointerCfg.CheckInterval,
 		RootsPerVersion: 2, // State root and I/O root.

@@ -79,16 +79,19 @@ const (
 	cfgRoothashDebugBypassStake          = "roothash.debug.bypass_stake" // nolint: gosec
 
 	// Tendermint config flags.
-	cfgConsensusTimeoutCommit        = "consensus.tendermint.timeout_commit"
-	cfgConsensusSkipTimeoutCommit    = "consensus.tendermint.skip_timeout_commit"
-	cfgConsensusEmptyBlockInterval   = "consensus.tendermint.empty_block_interval"
-	cfgConsensusMaxTxSizeBytes       = "consensus.tendermint.max_tx_size"
-	cfgConsensusMaxBlockSizeBytes    = "consensus.tendermint.max_block_size"
-	cfgConsensusMaxBlockGas          = "consensus.tendermint.max_block_gas"
-	cfgConsensusMaxEvidenceAgeBlocks = "consensus.tendermint.max_evidence_age_blocks"
-	cfgConsensusMaxEvidenceAgeTime   = "consensus.tendermint.max_evidence_age_time"
-	CfgConsensusGasCostsTxByte       = "consensus.gas_costs.tx_byte"
-	cfgConsensusBlacklistPublicKey   = "consensus.blacklist_public_key"
+	cfgConsensusTimeoutCommit            = "consensus.tendermint.timeout_commit"
+	cfgConsensusSkipTimeoutCommit        = "consensus.tendermint.skip_timeout_commit"
+	cfgConsensusEmptyBlockInterval       = "consensus.tendermint.empty_block_interval"
+	cfgConsensusMaxTxSizeBytes           = "consensus.tendermint.max_tx_size"
+	cfgConsensusMaxBlockSizeBytes        = "consensus.tendermint.max_block_size"
+	cfgConsensusMaxBlockGas              = "consensus.tendermint.max_block_gas"
+	cfgConsensusMaxEvidenceAgeBlocks     = "consensus.tendermint.max_evidence_age_blocks"
+	cfgConsensusMaxEvidenceAgeTime       = "consensus.tendermint.max_evidence_age_time"
+	cfgConsensusStateCheckpointInterval  = "consensus.state_checkpoint.interval"
+	cfgConsensusStateCheckpointNumKept   = "consensus.state_checkpoint.num_kept"
+	cfgConsensusStateCheckpointChunkSize = "consensus.state_checkpoint.chunk_size"
+	CfgConsensusGasCostsTxByte           = "consensus.gas_costs.tx_byte"
+	cfgConsensusBlacklistPublicKey       = "consensus.blacklist_public_key"
 
 	// Consensus backend config flag.
 	cfgConsensusBackend = "consensus.backend"
@@ -231,14 +234,17 @@ func doInitGenesis(cmd *cobra.Command, args []string) {
 	doc.Consensus = consensusGenesis.Genesis{
 		Backend: viper.GetString(cfgConsensusBackend),
 		Parameters: consensusGenesis.Parameters{
-			TimeoutCommit:        viper.GetDuration(cfgConsensusTimeoutCommit),
-			SkipTimeoutCommit:    viper.GetBool(cfgConsensusSkipTimeoutCommit),
-			EmptyBlockInterval:   viper.GetDuration(cfgConsensusEmptyBlockInterval),
-			MaxTxSize:            uint64(viper.GetSizeInBytes(cfgConsensusMaxTxSizeBytes)),
-			MaxBlockSize:         uint64(viper.GetSizeInBytes(cfgConsensusMaxBlockSizeBytes)),
-			MaxBlockGas:          transaction.Gas(viper.GetUint64(cfgConsensusMaxBlockGas)),
-			MaxEvidenceAgeBlocks: viper.GetUint64(cfgConsensusMaxEvidenceAgeBlocks),
-			MaxEvidenceAgeTime:   viper.GetDuration(cfgConsensusMaxEvidenceAgeTime),
+			TimeoutCommit:            viper.GetDuration(cfgConsensusTimeoutCommit),
+			SkipTimeoutCommit:        viper.GetBool(cfgConsensusSkipTimeoutCommit),
+			EmptyBlockInterval:       viper.GetDuration(cfgConsensusEmptyBlockInterval),
+			MaxTxSize:                uint64(viper.GetSizeInBytes(cfgConsensusMaxTxSizeBytes)),
+			MaxBlockSize:             uint64(viper.GetSizeInBytes(cfgConsensusMaxBlockSizeBytes)),
+			MaxBlockGas:              transaction.Gas(viper.GetUint64(cfgConsensusMaxBlockGas)),
+			MaxEvidenceAgeBlocks:     viper.GetUint64(cfgConsensusMaxEvidenceAgeBlocks),
+			MaxEvidenceAgeTime:       viper.GetDuration(cfgConsensusMaxEvidenceAgeTime),
+			StateCheckpointInterval:  viper.GetUint64(cfgConsensusStateCheckpointInterval),
+			StateCheckpointNumKept:   viper.GetUint64(cfgConsensusStateCheckpointNumKept),
+			StateCheckpointChunkSize: uint64(viper.GetSizeInBytes(cfgConsensusStateCheckpointChunkSize)),
 			GasCosts: transaction.Costs{
 				consensusGenesis.GasOpTxByte: transaction.Gas(viper.GetUint64(CfgConsensusGasCostsTxByte)),
 			},
@@ -742,6 +748,9 @@ func init() {
 	initGenesisFlags.Uint64(cfgConsensusMaxBlockGas, 0, "tendermint max gas used per block")
 	initGenesisFlags.Uint64(cfgConsensusMaxEvidenceAgeBlocks, 100000, "tendermint max evidence age (in blocks)")
 	initGenesisFlags.Duration(cfgConsensusMaxEvidenceAgeTime, 48*time.Hour, "tendermint max evidence age (in time)")
+	initGenesisFlags.Uint64(cfgConsensusStateCheckpointInterval, 10000, "consensus state checkpoint interval (in blocks)")
+	initGenesisFlags.Uint64(cfgConsensusStateCheckpointNumKept, 2, "number of kept consensus state checkpoints")
+	initGenesisFlags.String(cfgConsensusStateCheckpointChunkSize, "8mb", "consensus state checkpoint chunk size (in bytes)")
 	initGenesisFlags.Uint64(CfgConsensusGasCostsTxByte, 1, "consensus gas costs: each transaction byte")
 	initGenesisFlags.StringSlice(cfgConsensusBlacklistPublicKey, nil, "blacklist public key")
 

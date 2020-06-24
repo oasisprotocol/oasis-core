@@ -26,6 +26,7 @@ import (
 	storage "github.com/oasisprotocol/oasis-core/go/storage/api"
 	storageDB "github.com/oasisprotocol/oasis-core/go/storage/database"
 	"github.com/oasisprotocol/oasis-core/go/storage/mkvs"
+	"github.com/oasisprotocol/oasis-core/go/storage/mkvs/checkpoint"
 )
 
 var _ api.ApplicationState = (*applicationState)(nil)
@@ -47,6 +48,8 @@ type applicationState struct { // nolint: maligned
 	statePruner    StatePruner
 	prunerClosedCh chan struct{}
 	prunerNotifyCh *channels.RingChannel
+
+	checkpointer checkpoint.Checkpointer
 
 	blockLock   sync.RWMutex
 	blockTime   time.Time
@@ -269,10 +272,12 @@ func (s *applicationState) doCommit(now time.Time) (uint64, error) {
 	s.checkTxTree.Close()
 	s.checkTxTree = mkvs.NewWithRoot(nil, s.storage.NodeDB(), s.stateRoot, mkvs.WithoutWriteLog())
 
-	// Notify pruner of a new block.
+	// Notify pruner and checkpointer of a new block.
 	s.prunerNotifyCh.In() <- s.stateRoot.Version
 	// Discover the version below which all versions can be discarded from block history.
 	lastRetainedVersion := s.statePruner.GetLastRetainedVersion()
+	// Notify the checkpointer of the new version.
+	s.checkpointer.NotifyNewVersion(s.stateRoot.Version)
 
 	return lastRetainedVersion, nil
 }
@@ -497,6 +502,25 @@ func newApplicationState(ctx context.Context, cfg *ApplicationConfig) (*applicat
 		if err = s.doCommitOrInitChainLocked(time.Time{}); err != nil {
 			return nil, fmt.Errorf("state: failed to run initial state commit hook: %w", err)
 		}
+	}
+
+	// Initialize the checkpointer.
+	checkpointerCfg := checkpoint.CheckpointerConfig{
+		Name:            "consensus",
+		CheckInterval:   1 * time.Minute, // XXX: Make this configurable.
+		RootsPerVersion: 1,
+		GetParameters: func(ctx context.Context) (*checkpoint.CreationParameters, error) {
+			params := s.ConsensusParameters()
+			return &checkpoint.CreationParameters{
+				Interval:  params.StateCheckpointInterval,
+				NumKept:   params.StateCheckpointNumKept,
+				ChunkSize: params.StateCheckpointChunkSize,
+			}, nil
+		},
+	}
+	s.checkpointer, err = checkpoint.NewCheckpointer(s.ctx, ndb, ldb.Checkpointer(), checkpointerCfg)
+	if err != nil {
+		return nil, fmt.Errorf("state: failed to create checkpointer: %w", err)
 	}
 
 	go s.metricsWorker()

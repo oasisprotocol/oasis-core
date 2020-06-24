@@ -27,6 +27,13 @@ type Parameters struct {
 	MaxEvidenceAgeBlocks uint64          `json:"max_evidence_age_blocks"`
 	MaxEvidenceAgeTime   time.Duration   `json:"max_evidence_age_time"`
 
+	// StateCheckpointInterval is the expected state checkpoint interval (in blocks).
+	StateCheckpointInterval uint64 `json:"state_checkpoint_interval"`
+	// StateCheckpointNumKept is the expected minimum number of state checkpoints to keep.
+	StateCheckpointNumKept uint64 `json:"state_checkpoint_num_kept,omitempty"`
+	// StateCheckpointChunkSize is the chunk size parameter for checkpoint creation.
+	StateCheckpointChunkSize uint64 `json:"state_checkpoint_chunk_size,omitempty"`
+
 	// GasCosts are the base transaction gas costs.
 	GasCosts transaction.Costs `json:"gas_costs,omitempty"`
 
@@ -41,13 +48,29 @@ const (
 
 // SanityCheck does basic sanity checking on the genesis state.
 func (g *Genesis) SanityCheck() error {
-	if g.Parameters.TimeoutCommit < 1*time.Millisecond && !g.Parameters.SkipTimeoutCommit {
+	params := g.Parameters
+
+	if params.TimeoutCommit < 1*time.Millisecond && !params.SkipTimeoutCommit {
 		return fmt.Errorf("consensus: sanity check failed: timeout commit must be >= 1ms")
+	}
+
+	if params.StateCheckpointInterval > 0 {
+		if params.StateCheckpointInterval < 1000 {
+			return fmt.Errorf("consensus: sanity check failed: state checkpoint interval must be >= 1000")
+		}
+
+		if params.StateCheckpointNumKept == 0 {
+			return fmt.Errorf("consensus: sanity check failed: number of kept state checkpoints must be > 0")
+		}
+
+		if params.StateCheckpointChunkSize < 1024*1024 {
+			return fmt.Errorf("consensus: sanity check failed: state checkpoint chunk size must be >= 1 MiB")
+		}
 	}
 
 	// Check for duplicate entries in the pk blacklist.
 	m := make(map[signature.PublicKey]bool)
-	for _, v := range g.Parameters.PublicKeyBlacklist {
+	for _, v := range params.PublicKeyBlacklist {
 		if m[v] {
 			return fmt.Errorf("consensus: sanity check failed: redundant blacklisted public key: '%s'", v)
 		}
