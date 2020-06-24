@@ -268,18 +268,20 @@ func runRoot(cmd *cobra.Command, args []string) error {
 	defer rootEnv.Cleanup()
 	logger := logging.GetLogger("test-runner")
 
-	// Enumerate requested test cases.
+	// Enumerate requested scenarios.
 	toRun := common.GetDefaultScenarios() // Run all default scenarios if not set.
 	if vec := viper.GetStringSlice(common.CfgTest); len(vec) > 0 {
 		toRun = nil
 		for _, v := range vec {
-			n := strings.ToLower(v)
+			name := strings.ToLower(v)
 			scenario, ok := common.GetScenarios()[v]
 			if !ok {
-				logger.Error("unknown test case",
-					"test", n,
+				logger.Error("unknown scenario",
+					"scenario", name,
 				)
-				return fmt.Errorf("root: unknown test case: %s", n)
+				return fmt.Errorf("root: unknown scenario: %s\nAvailable scenarios:\n%s",
+					name, strings.Join(common.GetScenarioNames(), "\n"),
+				)
 			}
 			toRun = append(toRun, scenario)
 		}
