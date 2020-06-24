@@ -16,31 +16,26 @@ var (
 	// EarlyQuery is the early query scenario where we query a validator node before the network
 	// has started and there are no committed blocks.
 	EarlyQuery scenario.Scenario = &earlyQueryImpl{
-		runtimeImpl: *newRuntimeImpl("early-query", "", nil),
+		E2E: *NewE2E("early-query"),
 	}
 )
 
 type earlyQueryImpl struct {
-	runtimeImpl
+	E2E
 }
 
 func (sc *earlyQueryImpl) Clone() scenario.Scenario {
 	return &earlyQueryImpl{
-		runtimeImpl: *sc.runtimeImpl.Clone().(*runtimeImpl),
+		E2E: sc.E2E.Clone(),
 	}
 }
 
 func (sc *earlyQueryImpl) Fixture() (*oasis.NetworkFixture, error) {
-	f, err := sc.runtimeImpl.Fixture()
+	f, err := sc.E2E.Fixture()
 	if err != nil {
 		return nil, err
 	}
 
-	// We only need validators.
-	f.Keymanagers = nil
-	f.StorageWorkers = nil
-	f.ComputeWorkers = nil
-	f.Clients = nil
 	// Only one validator should actually start to prevent the network from committing any blocks.
 	f.Validators[1].NoAutoStart = true
 	f.Validators[2].NoAutoStart = true
@@ -51,12 +46,12 @@ func (sc *earlyQueryImpl) Fixture() (*oasis.NetworkFixture, error) {
 func (sc *earlyQueryImpl) Run(childEnv *env.Env) error {
 	// Start the network.
 	var err error
-	if err = sc.net.Start(); err != nil {
+	if err = sc.Net.Start(); err != nil {
 		return err
 	}
 
 	// Perform some queries.
-	cs := sc.net.Controller().Consensus
+	cs := sc.Net.Controller().Consensus
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
 	defer cancel()
 
@@ -77,7 +72,7 @@ func (sc *earlyQueryImpl) Run(childEnv *env.Env) error {
 	}
 
 	// GetStatus.
-	status, err := sc.net.Controller().GetStatus(ctx)
+	status, err := sc.Net.Controller().GetStatus(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to get status for node: %w", err)
 	}

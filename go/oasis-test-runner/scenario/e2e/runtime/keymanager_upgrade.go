@@ -1,4 +1,4 @@
-package e2e
+package runtime
 
 import (
 	"bytes"
@@ -73,7 +73,7 @@ func (sc *kmUpgradeImpl) Clone() scenario.Scenario {
 }
 
 func (sc *kmUpgradeImpl) applyUpgradePolicy(childEnv *env.Env) error {
-	cli := cli.New(childEnv, sc.net, sc.logger)
+	cli := cli.New(childEnv, sc.Net, sc.Logger)
 
 	kmPolicyPath := filepath.Join(childEnv.Dir(), "km_policy.cbor")
 	kmPolicySig1Path := filepath.Join(childEnv.Dir(), "km_policy_sig1.pem")
@@ -81,8 +81,8 @@ func (sc *kmUpgradeImpl) applyUpgradePolicy(childEnv *env.Env) error {
 	kmPolicySig3Path := filepath.Join(childEnv.Dir(), "km_policy_sig3.pem")
 	kmUpdateTxPath := filepath.Join(childEnv.Dir(), "km_gen_update.json")
 
-	oldKMRuntime := sc.net.Runtimes()[0]
-	newKMRuntime := sc.net.Runtimes()[2]
+	oldKMRuntime := sc.Net.Runtimes()[0]
+	newKMRuntime := sc.Net.Runtimes()[2]
 	// Sanity check fixture.
 	if err := func() error {
 		if oldKMRuntime.Kind() != registry.KindKeyManager {
@@ -103,7 +103,7 @@ func (sc *kmUpgradeImpl) applyUpgradePolicy(childEnv *env.Env) error {
 	newKMEncID := newKMRuntime.GetEnclaveIdentity()
 
 	if oldKMEncID == nil && newKMEncID == nil {
-		sc.logger.Info("No SGX runtimes, skipping policy update")
+		sc.Logger.Info("No SGX runtimes, skipping policy update")
 		return nil
 	}
 
@@ -115,7 +115,7 @@ func (sc *kmUpgradeImpl) applyUpgradePolicy(childEnv *env.Env) error {
 	}
 
 	// Build updated SGX policies.
-	sc.logger.Info("building new KM SGX policy enclave policies map")
+	sc.Logger.Info("building new KM SGX policy enclave policies map")
 	enclavePolicies := make(map[sgx.EnclaveIdentity]*keymanager.EnclavePolicySGX)
 
 	enclavePolicies[*newKMEncID] = &keymanager.EnclavePolicySGX{}
@@ -127,7 +127,7 @@ func (sc *kmUpgradeImpl) applyUpgradePolicy(childEnv *env.Env) error {
 	enclavePolicies[*oldKMEncID].MayReplicate = []sgx.EnclaveIdentity{*newKMEncID}
 
 	// Allow compute runtime to query new runtime.
-	for _, rt := range sc.net.Runtimes() {
+	for _, rt := range sc.Net.Runtimes() {
 		if rt.Kind() != registry.KindCompute {
 			continue
 		}
@@ -136,11 +136,11 @@ func (sc *kmUpgradeImpl) applyUpgradePolicy(childEnv *env.Env) error {
 		}
 	}
 
-	sc.logger.Info("initing updated KM policy")
+	sc.Logger.Info("initing updated KM policy")
 	if err := cli.Keymanager.InitPolicy(oldKMRuntime.ID(), 2, enclavePolicies, kmPolicyPath); err != nil {
 		return err
 	}
-	sc.logger.Info("signing updated KM policy")
+	sc.Logger.Info("signing updated KM policy")
 	if err := cli.Keymanager.SignPolicy("1", kmPolicyPath, kmPolicySig1Path); err != nil {
 		return err
 	}
@@ -151,7 +151,7 @@ func (sc *kmUpgradeImpl) applyUpgradePolicy(childEnv *env.Env) error {
 		return err
 	}
 
-	sc.logger.Info("updating KM policy")
+	sc.Logger.Info("updating KM policy")
 	if err := cli.Keymanager.GenUpdate(sc.nonce, kmPolicyPath, []string{kmPolicySig1Path, kmPolicySig2Path, kmPolicySig3Path}, kmUpdateTxPath); err != nil {
 		return err
 	}
@@ -215,16 +215,16 @@ func (sc *kmUpgradeImpl) ensureReplicationWorked(ctx context.Context, km *oasis.
 
 func (sc *kmUpgradeImpl) Run(childEnv *env.Env) error {
 	ctx := context.Background()
-	cli := cli.New(childEnv, sc.net, sc.logger)
+	cli := cli.New(childEnv, sc.Net, sc.Logger)
 
 	clientErrCh, cmd, err := sc.runtimeImpl.start(childEnv)
 	if err != nil {
 		return err
 	}
-	sc.logger.Info("waiting for client to exit")
+	sc.Logger.Info("waiting for client to exit")
 	// Wait for the client to exit.
 	select {
-	case err = <-sc.runtimeImpl.net.Errors():
+	case err = <-sc.Net.Errors():
 		_ = cmd.Process.Kill()
 	case err = <-clientErrCh:
 	}
@@ -239,15 +239,15 @@ func (sc *kmUpgradeImpl) Run(childEnv *env.Env) error {
 	}
 
 	// Start the new keymanager.
-	sc.logger.Info("starting new keymanager")
-	newKm := sc.net.Keymanagers()[1]
+	sc.Logger.Info("starting new keymanager")
+	newKm := sc.Net.Keymanagers()[1]
 	if err = newKm.Start(); err != nil {
 		return fmt.Errorf("starting new key-manager: %w", err)
 	}
 
 	// Update runtime to include the new enclave identity.
-	sc.logger.Info("updating keymanager runtime descriptor")
-	newRt := sc.net.Runtimes()[2]
+	sc.Logger.Info("updating keymanager runtime descriptor")
+	newRt := sc.Net.Runtimes()[2]
 	kmRtDesc := newRt.ToRuntimeDescriptor()
 	kmTxPath := filepath.Join(childEnv.Dir(), "register_update_km_runtime.json")
 	if err = cli.Registry.GenerateRegisterRuntimeTx(sc.nonce, kmRtDesc, kmTxPath, ""); err != nil {
@@ -259,25 +259,25 @@ func (sc *kmUpgradeImpl) Run(childEnv *env.Env) error {
 	}
 
 	// Wait for the new node to register.
-	sc.logger.Info("waiting for new keymanager node to register",
-		"num_nodes", sc.net.NumRegisterNodes(),
+	sc.Logger.Info("waiting for new keymanager node to register",
+		"num_nodes", sc.Net.NumRegisterNodes(),
 	)
 
-	if err = sc.net.Controller().WaitNodesRegistered(ctx, sc.net.NumRegisterNodes()); err != nil {
+	if err = sc.Net.Controller().WaitNodesRegistered(ctx, sc.Net.NumRegisterNodes()); err != nil {
 		return fmt.Errorf("failed to wait for nodes: %w", err)
 	}
 
-	sc.logger.Info("wait for few epochs to ensure replication finishes")
+	sc.Logger.Info("wait for few epochs to ensure replication finishes")
 	var waitEpoch epochtime.EpochTime
-	waitEpoch, err = sc.net.Controller().Consensus.GetEpoch(ctx, 0)
+	waitEpoch, err = sc.Net.Controller().Consensus.GetEpoch(ctx, 0)
 	if err != nil {
 		return err
 	}
 	waitEpoch += 3
-	sc.logger.Info("waiting for epoch",
+	sc.Logger.Info("waiting for epoch",
 		"wait_epoch", waitEpoch,
 	)
-	err = sc.net.Controller().Consensus.WaitEpoch(ctx, waitEpoch)
+	err = sc.Net.Controller().Consensus.WaitEpoch(ctx, waitEpoch)
 	if err != nil {
 		return err
 	}
@@ -288,14 +288,14 @@ func (sc *kmUpgradeImpl) Run(childEnv *env.Env) error {
 	}
 
 	// Shutdown old km.
-	sc.logger.Info("shutting down old keymanager")
-	oldKm := sc.net.Keymanagers()[0]
+	sc.Logger.Info("shutting down old keymanager")
+	oldKm := sc.Net.Keymanagers()[0]
 	if err = oldKm.Stop(); err != nil {
 		return fmt.Errorf("old keymanager node shutdown: %w", err)
 	}
 
 	// Run client again.
-	sc.logger.Info("starting a second client to check if key manager works")
+	sc.Logger.Info("starting a second client to check if key manager works")
 	sc.runtimeImpl.clientArgs = []string{"--key", "key2"}
 	cmd, err = sc.startClient(childEnv)
 	if err != nil {

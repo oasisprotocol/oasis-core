@@ -1,4 +1,4 @@
-package e2e
+package runtime
 
 import (
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/env"
@@ -32,14 +32,14 @@ func (sc *dumpRestoreImpl) Clone() scenario.Scenario {
 }
 
 func (sc *dumpRestoreImpl) Run(childEnv *env.Env) error {
-	clientErrCh, cmd, err := sc.runtimeImpl.start(childEnv)
+	clientErrCh, cmd, err := sc.start(childEnv)
 	if err != nil {
 		return err
 	}
 
 	// Wait for the client to exit.
 	select {
-	case err = <-sc.runtimeImpl.net.Errors():
+	case err = <-sc.Net.Errors():
 		_ = cmd.Process.Kill()
 	case err = <-clientErrCh:
 	}
@@ -52,7 +52,7 @@ func (sc *dumpRestoreImpl) Run(childEnv *env.Env) error {
 	if err != nil {
 		return err
 	}
-	if err = sc.dumpRestoreNetwork(childEnv, fixture, true); err != nil {
+	if err = sc.DumpRestoreNetwork(childEnv, fixture, true); err != nil {
 		return err
 	}
 

@@ -6,9 +6,7 @@ import (
 
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	memorySigner "github.com/oasisprotocol/oasis-core/go/common/crypto/signature/signers/memory"
-	"github.com/oasisprotocol/oasis-core/go/common/node"
 	"github.com/oasisprotocol/oasis-core/go/common/quantity"
-	"github.com/oasisprotocol/oasis-core/go/common/sgx"
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
 	"github.com/oasisprotocol/oasis-core/go/consensus/api/transaction"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/env"
@@ -20,21 +18,13 @@ import (
 var (
 	// GasFeesStaking is the staking gas fees scenario.
 	GasFeesStaking scenario.Scenario = &gasFeesImpl{
-		runtimeImpl: *newRuntimeImpl(
-			"gas-fees/staking",
-			"",
-			nil,
-		),
+		E2E: *NewE2E("gas-fees/staking"),
 	}
 
 	// GasFeesStakingDumpRestore is the staking gas fees scenario with
 	// dump-restore.
 	GasFeesStakingDumpRestore scenario.Scenario = &gasFeesImpl{
-		runtimeImpl: *newRuntimeImpl(
-			"gas-fees/staking-dump-restore",
-			"",
-			nil,
-		),
+		E2E:         *NewE2E("gas-fees/staking-dump-restore"),
 		dumpRestore: true,
 	}
 
@@ -53,67 +43,45 @@ var (
 )
 
 type gasFeesImpl struct {
-	runtimeImpl
+	E2E
 
 	dumpRestore bool
 }
 
 func (sc *gasFeesImpl) Clone() scenario.Scenario {
 	return &gasFeesImpl{
-		runtimeImpl: *sc.runtimeImpl.Clone().(*runtimeImpl),
+		E2E:         sc.E2E.Clone(),
 		dumpRestore: sc.dumpRestore,
 	}
 }
 
 func (sc *gasFeesImpl) Fixture() (*oasis.NetworkFixture, error) {
-	f, err := sc.runtimeImpl.Fixture()
+	f, err := sc.E2E.Fixture()
 	if err != nil {
 		return nil, err
 	}
 
-	tee, err := sc.getTEEHardware()
-	if err != nil {
-		return nil, err
-	}
-	var mrSigner *sgx.MrSigner
-	if tee == node.TEEHardwareIntelSGX {
-		mrSigner = &sgx.FortanixDummyMrSigner
-	}
-
-	f.TEE = oasis.TEEFixture{
-		Hardware: tee,
-		MrSigner: mrSigner,
-	}
-	nodeBinary, _ := sc.flags.GetString(cfgNodeBinary)
-	runtimeLoader, _ := sc.flags.GetString(cfgRuntimeLoader)
-	f.Network = oasis.NetworkCfg{
-		NodeBinary:                        nodeBinary,
-		RuntimeSGXLoaderBinary:            runtimeLoader,
-		EpochtimeMock:                     true,
-		StakingGenesis:                    "tests/fixture-data/gas-fees/staking-genesis.json",
-		DefaultLogWatcherHandlerFactories: DefaultRuntimeLogWatcherHandlerFactories,
-		ConsensusGasCostsTxByte:           0, // So we can control gas more easily.
-	}
-	f.Entities = []oasis.EntityCfg{
-		oasis.EntityCfg{IsDebugTestEntity: true},
-		oasis.EntityCfg{},
-		oasis.EntityCfg{},
-		oasis.EntityCfg{},
-	}
-	f.Validators = []oasis.ValidatorFixture{
-		// Create three validators, each with its own entity so we can test
-		// if gas disbursement works correctly.
-		oasis.ValidatorFixture{Entity: 1, Consensus: oasis.ConsensusFixture{MinGasPrice: 1}},
-		oasis.ValidatorFixture{Entity: 2, Consensus: oasis.ConsensusFixture{MinGasPrice: 1}},
-		oasis.ValidatorFixture{Entity: 3, Consensus: oasis.ConsensusFixture{MinGasPrice: 1}},
-	}
-
-	return f, nil
-}
-
-func (sc *gasFeesImpl) Init(childEnv *env.Env, net *oasis.Network) error {
-	sc.net = net
-	return nil
+	return &oasis.NetworkFixture{
+		Network: oasis.NetworkCfg{
+			NodeBinary:              f.Network.NodeBinary,
+			EpochtimeMock:           true,
+			StakingGenesis:          "tests/fixture-data/gas-fees/staking-genesis.json",
+			ConsensusGasCostsTxByte: 0, // So we can control gas more easily.
+		},
+		Entities: []oasis.EntityCfg{
+			oasis.EntityCfg{IsDebugTestEntity: true},
+			oasis.EntityCfg{},
+			oasis.EntityCfg{},
+			oasis.EntityCfg{},
+		},
+		Validators: []oasis.ValidatorFixture{
+			// Create three validators, each with its own entity so we can test
+			// if gas disbursement works correctly.
+			oasis.ValidatorFixture{Entity: 1, Consensus: oasis.ConsensusFixture{MinGasPrice: 1}},
+			oasis.ValidatorFixture{Entity: 2, Consensus: oasis.ConsensusFixture{MinGasPrice: 1}},
+			oasis.ValidatorFixture{Entity: 3, Consensus: oasis.ConsensusFixture{MinGasPrice: 1}},
+		},
+	}, nil
 }
 
 func (sc *gasFeesImpl) Run(childEnv *env.Env) error {
@@ -129,7 +97,7 @@ func (sc *gasFeesImpl) Run(childEnv *env.Env) error {
 		if err != nil {
 			return err
 		}
-		if err := sc.dumpRestoreNetwork(childEnv, fixture, false); err != nil {
+		if err := sc.DumpRestoreNetwork(childEnv, fixture, false); err != nil {
 			return err
 		}
 		if err := sc.runTests(ctx); err != nil {
@@ -141,13 +109,13 @@ func (sc *gasFeesImpl) Run(childEnv *env.Env) error {
 }
 
 func (sc *gasFeesImpl) runTests(ctx context.Context) error {
-	if err := sc.net.Start(); err != nil {
+	if err := sc.Net.Start(); err != nil {
 		return err
 	}
 
-	sc.logger.Info("waiting for network to come up")
+	sc.Logger.Info("waiting for network to come up")
 
-	if err := sc.net.Controller().WaitNodesRegistered(ctx, 3); err != nil {
+	if err := sc.Net.Controller().WaitNodesRegistered(ctx, 3); err != nil {
 		return err
 	}
 
@@ -173,7 +141,7 @@ func (sc *gasFeesImpl) runTests(ctx context.Context) error {
 		{"AddEscrow", sc.testAddEscrow},
 		{"ReclaimEscrow", sc.testReclaimEscrow},
 	} {
-		sc.logger.Info("testing operation", "op", t.name)
+		sc.Logger.Info("testing operation", "op", t.name)
 
 		var fees *quantity.Quantity
 		if fees, err = t.fn(ctx, srcSigner); err != nil {
@@ -193,7 +161,7 @@ func (sc *gasFeesImpl) runTests(ctx context.Context) error {
 	// up in the common pool. Since in this scenario an operation costs 10 units,
 	// there is only one operation per block and there are 3 validators, each
 	// operation should put 1 unit to the common pool.
-	st := sc.net.Controller().Staking
+	st := sc.Net.Controller().Staking
 	commonPool, err := st.CommonPool(ctx, consensus.HeightLatest)
 	if err != nil {
 		return err
@@ -215,7 +183,7 @@ func (sc *gasFeesImpl) runTests(ctx context.Context) error {
 	// - 12 * 1 * 3 = 36 tokens paid for V roles
 	// - 12 * 1 * 3 = 36 tokens paid for Q role
 	// - 24 + 36 + 36 = 96 tokens `disbursed_fees`
-	sc.logger.Info("making sure that fees have been disbursed",
+	sc.Logger.Info("making sure that fees have been disbursed",
 		"total_fees", totalFees,
 		"disbursed_fees", newTotalEntityBalance,
 		"common_pool", commonPool,
@@ -244,7 +212,7 @@ func (sc *gasFeesImpl) runTests(ctx context.Context) error {
 		)
 	}
 
-	if err := sc.net.CheckLogWatchers(); err != nil {
+	if err := sc.Net.CheckLogWatchers(); err != nil {
 		return err
 	}
 
@@ -252,14 +220,14 @@ func (sc *gasFeesImpl) runTests(ctx context.Context) error {
 }
 
 func (sc *gasFeesImpl) getInitialCommonPoolBalance(ctx context.Context) (*quantity.Quantity, error) {
-	st := sc.net.Controller().Staking
+	st := sc.Net.Controller().Staking
 
 	cmnPool, err := st.CommonPool(ctx, 1)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get initial common pool info: %w", err)
 	}
 
-	sc.logger.Debug("fetched common pool balance",
+	sc.Logger.Debug("fetched common pool balance",
 		"balance", cmnPool,
 	)
 
@@ -267,10 +235,10 @@ func (sc *gasFeesImpl) getInitialCommonPoolBalance(ctx context.Context) (*quanti
 }
 
 func (sc *gasFeesImpl) getTotalEntityBalance(ctx context.Context) (*quantity.Quantity, error) {
-	st := sc.net.Controller().Staking
+	st := sc.Net.Controller().Staking
 
 	var total quantity.Quantity
-	for _, e := range sc.net.Entities()[1:] { // Only count entities with validators.
+	for _, e := range sc.Net.Entities()[1:] { // Only count entities with validators.
 		ent, _ := e.Inner()
 		addr := staking.NewAddress(ent.ID)
 
@@ -279,7 +247,7 @@ func (sc *gasFeesImpl) getTotalEntityBalance(ctx context.Context) (*quantity.Qua
 			return nil, fmt.Errorf("failed to get account info for %s: %w", addr, err)
 		}
 
-		sc.logger.Debug("fetched balance",
+		sc.Logger.Debug("fetched balance",
 			"entity", ent.ID,
 			"address", addr,
 			"balance", acct.General.Balance,
@@ -303,7 +271,7 @@ func (sc *gasFeesImpl) testTransfer(ctx context.Context, signer signature.Signer
 		if err != nil {
 			return fmt.Errorf("failed to sign transfer: %w", err)
 		}
-		return sc.net.Controller().Consensus.SubmitTx(ctx, sigTx)
+		return sc.Net.Controller().Consensus.SubmitTx(ctx, sigTx)
 	})
 }
 
@@ -317,7 +285,7 @@ func (sc *gasFeesImpl) testBurn(ctx context.Context, signer signature.Signer) (*
 		if err != nil {
 			return fmt.Errorf("failed to sign burn: %w", err)
 		}
-		return sc.net.Controller().Consensus.SubmitTx(ctx, sigTx)
+		return sc.Net.Controller().Consensus.SubmitTx(ctx, sigTx)
 	})
 }
 
@@ -333,7 +301,7 @@ func (sc *gasFeesImpl) testAddEscrow(ctx context.Context, signer signature.Signe
 		if err != nil {
 			return fmt.Errorf("failed to sign escrow: %w", err)
 		}
-		return sc.net.Controller().Consensus.SubmitTx(ctx, sigTx)
+		return sc.Net.Controller().Consensus.SubmitTx(ctx, sigTx)
 	})
 }
 
@@ -349,18 +317,18 @@ func (sc *gasFeesImpl) testReclaimEscrow(ctx context.Context, signer signature.S
 		if err != nil {
 			return fmt.Errorf("failed to sign reclaim escrow: %w", err)
 		}
-		if err = sc.net.Controller().Consensus.SubmitTx(ctx, sigTx); err != nil {
+		if err = sc.Net.Controller().Consensus.SubmitTx(ctx, sigTx); err != nil {
 			return fmt.Errorf("failed to reclaim escrow: %w", err)
 		}
 
-		ch, sub, err := sc.net.Controller().Staking.WatchEscrows(ctx)
+		ch, sub, err := sc.Net.Controller().Staking.WatchEscrows(ctx)
 		if err != nil {
 			return fmt.Errorf("failed to watch escrows: %w", err)
 		}
 		defer sub.Close()
 
 		// Advance epochs to trigger reclaim processing.
-		if err = sc.net.Controller().SetEpoch(ctx, 1); err != nil {
+		if err = sc.Net.Controller().SetEpoch(ctx, 1); err != nil {
 			return fmt.Errorf("failed to set epoch: %w", err)
 		}
 
@@ -440,7 +408,7 @@ func (sc *gasFeesImpl) testStakingGasOp(
 	subtract bool,
 	op func(*staking.Account, transaction.Fee, int64) error,
 ) error {
-	st := sc.net.Controller().Staking
+	st := sc.Net.Controller().Staking
 
 	// Fetch initial account info.
 	addr := staking.NewAddress(signer.Public())

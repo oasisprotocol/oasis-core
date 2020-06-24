@@ -1,4 +1,4 @@
-package e2e
+package runtime
 
 import (
 	"context"
@@ -46,12 +46,12 @@ func (sc *nodeShutdownImpl) Fixture() (*oasis.NetworkFixture, error) {
 func (sc *nodeShutdownImpl) Run(childEnv *env.Env) error {
 	var err error
 
-	if err = sc.net.Start(); err != nil {
+	if err = sc.Net.Start(); err != nil {
 		return err
 	}
 
-	sc.logger.Info("waiting for the node to become ready")
-	computeWorker := sc.runtimeImpl.net.ComputeWorkers()[0]
+	sc.Logger.Info("waiting for the node to become ready")
+	computeWorker := sc.Net.ComputeWorkers()[0]
 
 	// Wait for the node to be ready since we didn't wait for any clients.
 	nodeCtrl, err := oasis.NewController(computeWorker.SocketPath())
@@ -71,20 +71,20 @@ func (sc *nodeShutdownImpl) Run(childEnv *env.Env) error {
 		return fmt.Errorf("node has not registered")
 	}
 
-	sc.logger.Info("requesting node shutdown")
+	sc.Logger.Info("requesting node shutdown")
 	args := []string{
 		"control", "shutdown",
 		"--log.level", "debug",
 		"--address", "unix:" + computeWorker.SocketPath(),
 	}
-	if err = cli.RunSubCommand(childEnv, sc.logger, "control-shutdown", sc.runtimeImpl.net.Config().NodeBinary, args); err != nil {
+	if err = cli.RunSubCommand(childEnv, sc.Logger, "control-shutdown", sc.Net.Config().NodeBinary, args); err != nil {
 		return fmt.Errorf("scenario/e2e/node_shutdown: send request failed: %w", err)
 	}
 
 	// Wait for the node to exit.
 	err = <-computeWorker.Exit()
 	if err != env.ErrEarlyTerm {
-		sc.logger.Error("compute worker exited with error",
+		sc.Logger.Error("compute worker exited with error",
 			"err", err,
 		)
 		return err
@@ -96,7 +96,7 @@ func (sc *nodeShutdownImpl) Run(childEnv *env.Env) error {
 	}
 	err = <-computeWorker.Exit()
 	if err != env.ErrEarlyTerm {
-		sc.logger.Error("compute worker exited with error on second run",
+		sc.Logger.Error("compute worker exited with error on second run",
 			"err", err,
 		)
 		return err

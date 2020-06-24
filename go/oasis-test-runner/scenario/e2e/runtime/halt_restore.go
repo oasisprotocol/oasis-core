@@ -1,4 +1,4 @@
-package e2e
+package runtime
 
 import (
 	"bytes"
@@ -63,16 +63,16 @@ func (sc *haltRestoreImpl) getExportedGenesisFiles() ([]string, error) {
 	var nodes []interface {
 		ExportsPath() string
 	}
-	for _, v := range sc.net.Validators() {
+	for _, v := range sc.Net.Validators() {
 		nodes = append(nodes, v)
 	}
-	for _, n := range sc.net.ComputeWorkers() {
+	for _, n := range sc.Net.ComputeWorkers() {
 		nodes = append(nodes, n)
 	}
-	for _, n := range sc.net.StorageWorkers() {
+	for _, n := range sc.Net.StorageWorkers() {
 		nodes = append(nodes, n)
 	}
-	for _, n := range sc.net.Keymanagers() {
+	for _, n := range sc.Net.Keymanagers() {
 		nodes = append(nodes, n)
 	}
 
@@ -127,7 +127,7 @@ func (sc *haltRestoreImpl) Run(childEnv *env.Env) error {
 
 	// Wait for the client to exit.
 	select {
-	case err = <-sc.runtimeImpl.net.Errors():
+	case err = <-sc.Net.Errors():
 		_ = cmd.Process.Kill()
 	case err = <-clientErrCh:
 	}
@@ -137,16 +137,16 @@ func (sc *haltRestoreImpl) Run(childEnv *env.Env) error {
 
 	// Wait for the epoch after the halt epoch.
 	ctx := context.Background()
-	sc.logger.Info("waiting for halt epoch")
+	sc.Logger.Info("waiting for halt epoch")
 	// Wait for halt epoch.
-	err = sc.net.Controller().Consensus.WaitEpoch(ctx, haltEpoch)
+	err = sc.Net.Controller().Consensus.WaitEpoch(ctx, haltEpoch)
 	if err != nil {
-		return fmt.Errorf("scenario/e2e/halt_restore: failed waiting for halt epoch: %w", err)
+		return fmt.Errorf("failed waiting for halt epoch: %w", err)
 	}
 
 	// Wait for validators to exit so that genesis docs are dumped.
 	var exitChs []reflect.SelectCase
-	for _, val := range sc.net.Validators() {
+	for _, val := range sc.Net.Validators() {
 		exitChs = append(exitChs, reflect.SelectCase{
 			Dir:  reflect.SelectRecv,
 			Chan: reflect.ValueOf(val.Exit()),
@@ -155,22 +155,22 @@ func (sc *haltRestoreImpl) Run(childEnv *env.Env) error {
 	// Exit status doesn't matter, we only need one of the validators to stop existing.
 	_, _, _ = reflect.Select(exitChs)
 
-	sc.logger.Info("gathering exported genesis files")
+	sc.Logger.Info("gathering exported genesis files")
 	files, err := sc.getExportedGenesisFiles()
 	if err != nil {
-		return fmt.Errorf("scenario/e2e/halt_restore: failure getting exported genesis files: %w", err)
+		return fmt.Errorf("failure getting exported genesis files: %w", err)
 	}
 
 	// Stop the network.
-	sc.logger.Info("stopping the network")
-	sc.runtimeImpl.net.Stop()
-	if err = sc.cleanTendermintStorage(childEnv); err != nil {
-		return fmt.Errorf("scenario/e2e/halt_restore: failed to clean tendemint storage: %w", err)
+	sc.Logger.Info("stopping the network")
+	sc.Net.Stop()
+	if err = sc.ResetConsensusState(childEnv); err != nil {
+		return fmt.Errorf("failed to reset consensus state: %w", err)
 	}
 
 	// Start the network and the client again and check that everything
 	// works with restored state.
-	sc.logger.Info("starting the network again")
+	sc.Logger.Info("starting the network again")
 
 	fixture, err := sc.Fixture()
 	if err != nil {
@@ -181,7 +181,7 @@ func (sc *haltRestoreImpl) Run(childEnv *env.Env) error {
 	// instantly halt.
 	genesisFileProvider, err := genesis.NewFileProvider(files[0])
 	if err != nil {
-		sc.logger.Error("scenario/e2e/halt_restore: failed getting genesis file provider",
+		sc.Logger.Error("failed getting genesis file provider",
 			"err", err,
 			"genesis_file", files[0],
 		)
@@ -189,14 +189,14 @@ func (sc *haltRestoreImpl) Run(childEnv *env.Env) error {
 	}
 	genesisDoc, err := genesisFileProvider.GetGenesisDocument()
 	if err != nil {
-		sc.logger.Error("scenario/e2e/halt_restore: failed getting genesis document from file provider",
+		sc.Logger.Error("failed getting genesis document from file provider",
 			"err", err,
 		)
 		return err
 	}
 	genesisDoc.HaltEpoch = genesisDoc.EpochTime.Base + haltEpoch
 	if err = genesisDoc.WriteFileJSON(files[0]); err != nil {
-		sc.logger.Error("scenario/e2e/halt_restore: failed to update genesis",
+		sc.Logger.Error("failed to update genesis",
 			"err", err,
 		)
 		return err
@@ -207,13 +207,13 @@ func (sc *haltRestoreImpl) Run(childEnv *env.Env) error {
 	// Make sure to not overwrite the entity.
 	fixture.Entities[1].Restore = true
 
-	if sc.runtimeImpl.net, err = fixture.Create(childEnv); err != nil {
+	if sc.Net, err = fixture.Create(childEnv); err != nil {
 		return err
 	}
 
 	// If network is used, enable shorter per-node socket paths, because some e2e test datadir exceed maximum unix
 	// socket path length.
-	sc.runtimeImpl.net.Config().UseShortGrpcSocketPaths = true
+	sc.Net.Config().UseShortGrpcSocketPaths = true
 
 	sc.runtimeImpl.clientArgs = []string{"--mode", "part2"}
 	return sc.runtimeImpl.Run(childEnv)

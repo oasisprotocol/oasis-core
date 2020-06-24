@@ -1,4 +1,4 @@
-package e2e
+package runtime
 
 import (
 	"context"
@@ -68,16 +68,16 @@ func (sc *storageSyncImpl) Run(childEnv *env.Env) error {
 	}
 
 	// Check if the storage node that ignored applies has synced.
-	sc.logger.Info("checking if roots have been synced")
+	sc.Logger.Info("checking if roots have been synced")
 
-	storageNode := sc.runtimeImpl.net.StorageWorkers()[2]
+	storageNode := sc.Net.StorageWorkers()[2]
 	args := []string{
 		"debug", "storage", "check-roots",
 		"--log.level", "debug",
 		"--address", "unix:" + storageNode.SocketPath(),
-		sc.runtimeImpl.net.Runtimes()[1].ID().String(),
+		sc.Net.Runtimes()[1].ID().String(),
 	}
-	if err = cli.RunSubCommand(childEnv, sc.logger, "storage-check-roots", sc.runtimeImpl.net.Config().NodeBinary, args); err != nil {
+	if err = cli.RunSubCommand(childEnv, sc.Logger, "storage-check-roots", sc.Net.Config().NodeBinary, args); err != nil {
 		return fmt.Errorf("root check failed after sync: %w", err)
 	}
 
@@ -86,7 +86,7 @@ func (sc *storageSyncImpl) Run(childEnv *env.Env) error {
 	// this leaves some space for any unintended epoch transitions.
 	ctx := context.Background()
 	for i := 0; i < 15; i++ {
-		sc.logger.Info("submitting transaction to runtime",
+		sc.Logger.Info("submitting transaction to runtime",
 			"seq", i,
 		)
 		if err = sc.submitKeyValueRuntimeInsertTx(ctx, runtimeID, "checkpoint", fmt.Sprintf("my cp %d", i)); err != nil {
@@ -95,7 +95,7 @@ func (sc *storageSyncImpl) Run(childEnv *env.Env) error {
 	}
 
 	// Make sure that the first storage node created checkpoints.
-	ctrl, err := oasis.NewController(sc.net.StorageWorkers()[0].SocketPath())
+	ctrl, err := oasis.NewController(sc.Net.StorageWorkers()[0].SocketPath())
 	if err != nil {
 		return fmt.Errorf("failed to connect with the first storage node: %w", err)
 	}
@@ -114,9 +114,9 @@ func (sc *storageSyncImpl) Run(childEnv *env.Env) error {
 	}
 
 	// Determine which checkpoints should be there.
-	rt := sc.net.Runtimes()[1].ToRuntimeDescriptor()
+	rt := sc.Net.Runtimes()[1].ToRuntimeDescriptor()
 	lastCheckpoint := (blk.Header.Round / rt.Storage.CheckpointInterval) * rt.Storage.CheckpointInterval
-	sc.logger.Info("determined last expected checkpoint round",
+	sc.Logger.Info("determined last expected checkpoint round",
 		"round", lastCheckpoint,
 	)
 
@@ -149,7 +149,7 @@ func (sc *storageSyncImpl) Run(childEnv *env.Env) error {
 			if !found {
 				return fmt.Errorf("checkpoint for unexpected root %s", cp.Root)
 			}
-			sc.logger.Info("found valid checkpoint",
+			sc.Logger.Info("found valid checkpoint",
 				"round", checkpoint,
 				"root_hash", cp.Root.Hash,
 			)

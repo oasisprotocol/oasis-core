@@ -1,4 +1,4 @@
-package e2e
+package runtime
 
 import (
 	"context"
@@ -109,7 +109,7 @@ func (sc *txSourceImpl) PreInit(childEnv *env.Env) error {
 		}
 		sc.seed = hex.EncodeToString(rawSeed)
 
-		sc.logger.Info("using random seed",
+		sc.Logger.Info("using random seed",
 			"seed", sc.seed,
 		)
 	}
@@ -201,7 +201,7 @@ func (sc *txSourceImpl) manager(env *env.Env, errCh chan error) {
 	env.AddOnCleanup(func() { close(stopCh) })
 
 	if sc.nodeRestartInterval > 0 {
-		sc.logger.Info("random node restarts enabled",
+		sc.Logger.Info("random node restarts enabled",
 			"restart_interval", sc.nodeRestartInterval,
 		)
 	} else {
@@ -210,7 +210,7 @@ func (sc *txSourceImpl) manager(env *env.Env, errCh chan error) {
 
 	// Randomize node order.
 	var nodes []*oasis.Node
-	for _, v := range sc.net.Validators() {
+	for _, v := range sc.Net.Validators() {
 		nodes = append(nodes, &v.Node)
 	}
 	// TODO: Consider including storage/compute workers.
@@ -237,12 +237,12 @@ func (sc *txSourceImpl) manager(env *env.Env, errCh chan error) {
 
 			// Choose a random node and restart it.
 			node := nodes[nodeIndex]
-			sc.logger.Info("restarting node",
+			sc.Logger.Info("restarting node",
 				"node", node.Name,
 			)
 
 			if err := node.Restart(); err != nil {
-				sc.logger.Error("failed to restart node",
+				sc.Logger.Error("failed to restart node",
 					"node", node.Name,
 					"err", err,
 				)
@@ -254,17 +254,17 @@ func (sc *txSourceImpl) manager(env *env.Env, errCh chan error) {
 		case <-livenessTicker.C:
 			// Check if consensus has made any progress.
 			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-			blk, err := sc.net.Controller().Consensus.GetBlock(ctx, consensus.HeightLatest)
+			blk, err := sc.Net.Controller().Consensus.GetBlock(ctx, consensus.HeightLatest)
 			cancel()
 			if err != nil {
-				sc.logger.Warn("failed to query latest consensus block",
+				sc.Logger.Warn("failed to query latest consensus block",
 					"err", err,
 				)
 				continue
 			}
 
 			if blk.Height <= lastHeight {
-				sc.logger.Error("consensus hasn't made any progress since last liveness check",
+				sc.Logger.Error("consensus hasn't made any progress since last liveness check",
 					"last_height", lastHeight,
 					"height", blk.Height,
 				)
@@ -272,7 +272,7 @@ func (sc *txSourceImpl) manager(env *env.Env, errCh chan error) {
 				return
 			}
 
-			sc.logger.Info("current consensus height",
+			sc.Logger.Info("current consensus height",
 				"height", blk.Height,
 			)
 			lastHeight = blk.Height
@@ -281,7 +281,7 @@ func (sc *txSourceImpl) manager(env *env.Env, errCh chan error) {
 }
 
 func (sc *txSourceImpl) startWorkload(childEnv *env.Env, errCh chan error, name string) error {
-	sc.logger.Info("starting workload",
+	sc.Logger.Info("starting workload",
 		"name", name,
 	)
 
@@ -300,27 +300,27 @@ func (sc *txSourceImpl) startWorkload(childEnv *env.Env, errCh chan error, name 
 
 	args := []string{
 		"debug", "txsource",
-		"--address", "unix:" + sc.net.Clients()[0].SocketPath(),
+		"--address", "unix:" + sc.Net.Clients()[0].SocketPath(),
 		"--" + common.CfgDebugAllowTestKeys,
 		"--" + common.CfgDataDir, d.String(),
 		"--" + flags.CfgDebugDontBlameOasis,
 		"--" + flags.CfgDebugTestEntity,
 		"--log.format", logFmt.String(),
 		"--log.level", logLevel.String(),
-		"--" + flags.CfgGenesisFile, sc.net.GenesisPath(),
+		"--" + flags.CfgGenesisFile, sc.Net.GenesisPath(),
 		"--" + workload.CfgRuntimeID, runtimeID.String(),
 		"--" + txsource.CfgWorkload, name,
 		"--" + txsource.CfgTimeLimit, sc.timeLimit.String(),
 		"--" + txsource.CfgSeed, sc.seed,
 	}
-	nodeBinary := sc.net.Config().NodeBinary
+	nodeBinary := sc.Net.Config().NodeBinary
 
 	cmd := exec.Command(nodeBinary, args...)
 	cmd.SysProcAttr = env.CmdAttrs
 	cmd.Stdout = w
 	cmd.Stderr = w
 
-	sc.logger.Info("launching workload binary",
+	sc.Logger.Info("launching workload binary",
 		"args", strings.Join(args, " "),
 	)
 
@@ -331,7 +331,7 @@ func (sc *txSourceImpl) startWorkload(childEnv *env.Env, errCh chan error, name 
 	go func() {
 		errCh <- cmd.Wait()
 
-		sc.logger.Info("workload finished",
+		sc.Logger.Info("workload finished",
 			"name", name,
 		)
 	}()
@@ -356,7 +356,7 @@ func (sc *txSourceImpl) Clone() scenario.Scenario {
 }
 
 func (sc *txSourceImpl) Run(childEnv *env.Env) error {
-	if err := sc.net.Start(); err != nil {
+	if err := sc.Net.Start(); err != nil {
 		return fmt.Errorf("scenario net Start: %w", err)
 	}
 
@@ -367,8 +367,8 @@ func (sc *txSourceImpl) Run(childEnv *env.Env) error {
 
 	ctx := context.Background()
 
-	sc.logger.Info("waiting for network to come up")
-	if err := sc.net.Controller().WaitNodesRegistered(ctx, sc.net.NumRegisterNodes()); err != nil {
+	sc.Logger.Info("waiting for network to come up")
+	if err := sc.Net.Controller().WaitNodesRegistered(ctx, sc.Net.NumRegisterNodes()); err != nil {
 		return fmt.Errorf("WaitNodesRegistered: %w", err)
 	}
 
@@ -385,14 +385,14 @@ func (sc *txSourceImpl) Run(childEnv *env.Env) error {
 	// Wait for any workload to terminate.
 	var err error
 	select {
-	case err = <-sc.net.Errors():
+	case err = <-sc.Net.Errors():
 	case err = <-errCh:
 	}
 	if err != nil {
 		return err
 	}
 
-	if err = sc.net.CheckLogWatchers(); err != nil {
+	if err = sc.Net.CheckLogWatchers(); err != nil {
 		return err
 	}
 

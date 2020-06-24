@@ -1,4 +1,4 @@
-package e2e
+package runtime
 
 import (
 	"bytes"
@@ -59,7 +59,7 @@ func (sc *kmReplicateImpl) Run(childEnv *env.Env) error {
 
 	// Wait for the client to exit.
 	select {
-	case err = <-sc.runtimeImpl.net.Errors():
+	case err = <-sc.Net.Errors():
 		_ = cmd.Process.Kill()
 	case err = <-clientErrCh:
 	}
@@ -68,10 +68,10 @@ func (sc *kmReplicateImpl) Run(childEnv *env.Env) error {
 	}
 
 	// Open a control connection to the replica.
-	if kmLen := len(sc.net.Keymanagers()); kmLen < 2 {
+	if kmLen := len(sc.Net.Keymanagers()); kmLen < 2 {
 		return fmt.Errorf("expected more than 1 keymanager, have: %v", kmLen)
 	}
-	replica := sc.net.Keymanagers()[1]
+	replica := sc.Net.Keymanagers()[1]
 
 	ctrl, err := oasis.NewController(replica.SocketPath())
 	if err != nil {

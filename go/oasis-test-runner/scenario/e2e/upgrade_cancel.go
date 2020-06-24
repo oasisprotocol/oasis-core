@@ -7,8 +7,6 @@ import (
 	"path"
 
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
-	"github.com/oasisprotocol/oasis-core/go/common/node"
-	"github.com/oasisprotocol/oasis-core/go/common/sgx"
 	epoch "github.com/oasisprotocol/oasis-core/go/epochtime/api"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/env"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/oasis"
@@ -30,7 +28,7 @@ var (
 )
 
 type nodeUpgradeCancelImpl struct {
-	runtimeImpl
+	E2E
 
 	ctx          context.Context
 	currentEpoch epoch.EpochTime
@@ -38,7 +36,7 @@ type nodeUpgradeCancelImpl struct {
 
 func (sc *nodeUpgradeCancelImpl) nextEpoch() error {
 	sc.currentEpoch++
-	if err := sc.net.Controller().SetEpoch(sc.ctx, sc.currentEpoch); err != nil {
+	if err := sc.Net.Controller().SetEpoch(sc.ctx, sc.currentEpoch); err != nil {
 		return fmt.Errorf("failed to set epoch to %d: %w", sc.currentEpoch, err)
 	}
 	return nil
@@ -46,40 +44,29 @@ func (sc *nodeUpgradeCancelImpl) nextEpoch() error {
 
 func newNodeUpgradeCancelImpl() scenario.Scenario {
 	sc := &nodeUpgradeCancelImpl{
-		runtimeImpl: *newRuntimeImpl("node-upgrade-cancel", "", nil),
-		ctx:         context.Background(),
+		E2E: *NewE2E("node-upgrade-cancel"),
+		ctx: context.Background(),
 	}
 	return sc
 }
 
 func (sc *nodeUpgradeCancelImpl) Clone() scenario.Scenario {
 	return &nodeUpgradeCancelImpl{
-		runtimeImpl: *sc.runtimeImpl.Clone().(*runtimeImpl),
-		ctx:         context.Background(),
+		E2E: sc.E2E.Clone(),
+		ctx: context.Background(),
 	}
 }
 
 func (sc *nodeUpgradeCancelImpl) Fixture() (*oasis.NetworkFixture, error) {
-	tee, err := sc.getTEEHardware()
+	f, err := sc.E2E.Fixture()
 	if err != nil {
 		return nil, err
 	}
-	var mrSigner *sgx.MrSigner
-	if tee == node.TEEHardwareIntelSGX {
-		mrSigner = &sgx.FortanixDummyMrSigner
-	}
-	nodeBinary, _ := sc.flags.GetString(cfgNodeBinary)
-	runtimeLoader, _ := sc.flags.GetString(cfgRuntimeLoader)
+
 	return &oasis.NetworkFixture{
-		TEE: oasis.TEEFixture{
-			Hardware: tee,
-			MrSigner: mrSigner,
-		},
 		Network: oasis.NetworkCfg{
-			NodeBinary:                        nodeBinary,
-			RuntimeSGXLoaderBinary:            runtimeLoader,
-			EpochtimeMock:                     true,
-			DefaultLogWatcherHandlerFactories: DefaultRuntimeLogWatcherHandlerFactories,
+			NodeBinary:    f.Network.NodeBinary,
+			EpochtimeMock: true,
 		},
 		Entities: []oasis.EntityCfg{
 			oasis.EntityCfg{IsDebugTestEntity: true},
@@ -97,26 +84,26 @@ func (sc *nodeUpgradeCancelImpl) Fixture() (*oasis.NetworkFixture, error) {
 func (sc *nodeUpgradeCancelImpl) Run(childEnv *env.Env) error {
 	var err error
 
-	if err = sc.net.Start(); err != nil {
+	if err = sc.Net.Start(); err != nil {
 		return err
 	}
 
-	sc.logger.Info("waiting for network to come up")
-	if err = sc.net.Controller().WaitNodesRegistered(sc.ctx, len(sc.net.Validators())); err != nil {
+	sc.Logger.Info("waiting for network to come up")
+	if err = sc.Net.Controller().WaitNodesRegistered(sc.ctx, len(sc.Net.Validators())); err != nil {
 		return err
 	}
 	if err = sc.nextEpoch(); err != nil {
 		return err
 	}
 
-	val := sc.net.Validators()[1] // the network controller is on the first one
+	val := sc.Net.Validators()[1] // the network controller is on the first one
 
 	// Submit the descriptor. It's entirely valid, including the handler, so
 	// the node should normally shut down when it reaches the epoch.
-	sc.logger.Info("submitting upgrade descriptor")
+	sc.Logger.Info("submitting upgrade descriptor")
 
 	var nodeHash hash.Hash
-	nodeText, err := ioutil.ReadFile(sc.net.Validators()[0].BinaryPath())
+	nodeText, err := ioutil.ReadFile(sc.Net.Validators()[0].BinaryPath())
 	if err != nil {
 		return fmt.Errorf("can't read node binary for hashing: %w", err)
 	}
@@ -124,7 +111,7 @@ func (sc *nodeUpgradeCancelImpl) Run(childEnv *env.Env) error {
 
 	descriptor := fmt.Sprintf(descriptorTemplate, nodeHash.String())
 
-	filePath := path.Join(sc.net.BasePath(), "upgrade-descriptor.json")
+	filePath := path.Join(sc.Net.BasePath(), "upgrade-descriptor.json")
 	if err = ioutil.WriteFile(filePath, []byte(descriptor), 0644); err != nil { //nolint: gosec
 		return fmt.Errorf("can't write descriptor to network directory: %w", err)
 	}
@@ -136,7 +123,7 @@ func (sc *nodeUpgradeCancelImpl) Run(childEnv *env.Env) error {
 		"--address", "unix:" + val.SocketPath(),
 		filePath,
 	}
-	if err = cli.RunSubCommand(childEnv, sc.logger, "control-upgrade", sc.net.Config().NodeBinary, submitArgs); err != nil {
+	if err = cli.RunSubCommand(childEnv, sc.Logger, "control-upgrade", sc.Net.Config().NodeBinary, submitArgs); err != nil {
 		return fmt.Errorf("error submitting upgrade descriptor to node: %w", err)
 	}
 
@@ -151,7 +138,7 @@ func (sc *nodeUpgradeCancelImpl) Run(childEnv *env.Env) error {
 		"--wait",
 		"--address", "unix:" + val.SocketPath(),
 	}
-	if err = cli.RunSubCommand(childEnv, sc.logger, "control-upgrade", sc.net.Config().NodeBinary, cancelArgs); err != nil {
+	if err = cli.RunSubCommand(childEnv, sc.Logger, "control-upgrade", sc.Net.Config().NodeBinary, cancelArgs); err != nil {
 		return fmt.Errorf("error canceling upgrade: %w", err)
 	}
 

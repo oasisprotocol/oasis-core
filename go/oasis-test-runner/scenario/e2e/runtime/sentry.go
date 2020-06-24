@@ -1,4 +1,4 @@
-package e2e
+package runtime
 
 import (
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/log"
