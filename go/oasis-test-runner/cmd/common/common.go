@@ -3,6 +3,7 @@ package common
 
 import (
 	"fmt"
+	"sort"
 	"strings"
 
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/scenario"
@@ -31,6 +32,15 @@ var (
 // This function *is not* thread-safe.
 func GetScenarios() map[string]scenario.Scenario {
 	return scenarios
+}
+
+// GetScenarioNames returns the names of all scenarios.
+func GetScenarioNames() (names []string) {
+	for name := range scenarios {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	return
 }
 
 // GetDefaultScenarios returns all registered default scenarios.

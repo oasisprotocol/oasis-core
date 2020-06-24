@@ -15,7 +15,6 @@ import (
 	"github.com/spf13/viper"
 
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
-	nodeCommon "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common"
 	"github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/metrics"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/cmd/common"
 )
@@ -120,7 +119,7 @@ func getDuration(ctx context.Context, test string, bi *model.SampleStream) (floa
 	query := fmt.Sprintf("%s %s == 1.0", metrics.MetricUp, bi.Metric.String())
 	result, warnings, err := v1api.QueryRange(ctx, query, r)
 	if err != nil {
-		nodeCommon.EarlyLogAndExit(fmt.Errorf("error querying Prometheus: %w", err))
+		return 0, 0, fmt.Errorf("error querying Prometheus: %w", err)
 	}
 	if len(warnings) > 0 {
 		cmpLogger.Warn("warnings while querying Prometheus", "warnings", warnings)
@@ -206,7 +205,7 @@ func getSummableMetric(ctx context.Context, metric string, test string, bi *mode
 
 	result, warnings, err := v1api.Query(ctx, query, t)
 	if err != nil {
-		nodeCommon.EarlyLogAndExit(fmt.Errorf("error querying Prometheus: %w", err))
+		return 0, 0, fmt.Errorf("error querying Prometheus: %w", err)
 	}
 	if len(warnings) > 0 {
 		cmpLogger.Warn("warnings while querying Prometheus", "warnings", warnings)
@@ -256,7 +255,7 @@ func getNetwork(ctx context.Context, test string, bi *model.SampleStream) (float
 		query := fmt.Sprintf("(%s %s)", rxtx, labels.String())
 		result, warnings, err := v1api.QueryRange(ctx, query, r)
 		if err != nil {
-			nodeCommon.EarlyLogAndExit(fmt.Errorf("error querying Prometheus: %w", err))
+			return 0, 0, fmt.Errorf("error querying Prometheus: %w", err)
 		}
 		if len(warnings) > 0 {
 			cmpLogger.Warn("warnings while querying Prometheus", "warnings", warnings)
