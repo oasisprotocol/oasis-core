@@ -29,9 +29,10 @@ var (
 
 	// decOptions are decoding options for UNTRUSTED inputs (used by default).
 	decOptions = cbor.DecOptions{
-		DupMapKey:   cbor.DupMapKeyEnforcedAPF,
-		IndefLength: cbor.IndefLengthForbidden,
-		TagsMd:      cbor.TagsForbidden,
+		DupMapKey:         cbor.DupMapKeyEnforcedAPF,
+		IndefLength:       cbor.IndefLengthForbidden,
+		TagsMd:            cbor.TagsForbidden,
+		ExtraReturnErrors: cbor.ExtraDecErrorUnknownField,
 	}
 
 	// decOptionsTrusted are decoding options for TRUSTED inputs. They are only used when explicitly

@@ -22,7 +22,7 @@ require (
 	github.com/davidlazar/go-crypto v0.0.0-20200604182044-b73af7476f6c // indirect
 	github.com/dgraph-io/badger/v2 v2.0.3
 	github.com/eapache/channels v1.1.0
-	github.com/fxamacker/cbor/v2 v2.2.0
+	github.com/fxamacker/cbor/v2 v2.2.1-0.20200526031912-58b82b5bfc05
 	github.com/go-kit/kit v0.10.0
 	github.com/golang/protobuf v1.4.0
 	github.com/golang/snappy v0.0.1
