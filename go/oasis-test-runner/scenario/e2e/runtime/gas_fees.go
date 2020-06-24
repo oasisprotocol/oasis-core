@@ -1,4 +1,4 @@
-package e2e
+package runtime
 
 import (
 	"context"
@@ -61,7 +61,7 @@ func (sc *gasFeesRuntimesImpl) Fixture() (*oasis.NetworkFixture, error) {
 }
 
 func (sc *gasFeesRuntimesImpl) Run(childEnv *env.Env) error {
-	if err := sc.net.Start(); err != nil {
+	if err := sc.Net.Start(); err != nil {
 		return err
 	}
 
@@ -73,7 +73,7 @@ func (sc *gasFeesRuntimesImpl) Run(childEnv *env.Env) error {
 	}
 
 	// Submit a runtime transaction to check whether transaction processing works.
-	sc.logger.Info("submitting transaction to runtime")
+	sc.Logger.Info("submitting transaction to runtime")
 	if err := sc.submitKeyValueRuntimeInsertTx(ctx, runtimeID, "hello", "non-free world"); err != nil {
 		return err
 	}

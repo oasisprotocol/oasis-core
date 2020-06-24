@@ -1,4 +1,4 @@
-package e2e
+package runtime
 
 import (
 	"context"
@@ -62,7 +62,7 @@ func (sc *runtimePruneImpl) Fixture() (*oasis.NetworkFixture, error) {
 }
 
 func (sc *runtimePruneImpl) Run(childEnv *env.Env) error {
-	if err := sc.net.Start(); err != nil {
+	if err := sc.Net.Start(); err != nil {
 		return err
 	}
 
@@ -71,11 +71,11 @@ func (sc *runtimePruneImpl) Run(childEnv *env.Env) error {
 	}
 
 	ctx := context.Background()
-	c := sc.net.ClientController().RuntimeClient
+	c := sc.Net.ClientController().RuntimeClient
 
 	// Submit transactions.
 	for i := 0; i < pruneTxCount; i++ {
-		sc.logger.Info("submitting transaction to runtime",
+		sc.Logger.Info("submitting transaction to runtime",
 			"seq", i,
 		)
 
@@ -88,7 +88,7 @@ func (sc *runtimePruneImpl) Run(childEnv *env.Env) error {
 	time.Sleep(pruneInterval + 1*time.Second)
 
 	// Once the transactions are complete, check if blocks got pruned.
-	sc.logger.Info("fetching latest block")
+	sc.Logger.Info("fetching latest block")
 	latestBlk, err := c.GetBlock(ctx, &api.GetBlockRequest{
 		RuntimeID: runtimeID,
 		Round:     api.RoundLatest,
@@ -97,7 +97,7 @@ func (sc *runtimePruneImpl) Run(childEnv *env.Env) error {
 		return fmt.Errorf("failed to fetch latest block: %w", err)
 	}
 
-	sc.logger.Info("checking if blocks got pruned correctly",
+	sc.Logger.Info("checking if blocks got pruned correctly",
 		"latest_round", latestBlk.Header.Round,
 	)
 	for i := uint64(0); i <= latestBlk.Header.Round; i++ {

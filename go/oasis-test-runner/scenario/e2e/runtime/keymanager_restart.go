@@ -1,4 +1,4 @@
-package e2e
+package runtime
 
 import (
 	"context"
@@ -41,7 +41,7 @@ func (sc *kmRestartImpl) Run(childEnv *env.Env) error {
 
 	// Wait for the client to exit.
 	select {
-	case err = <-sc.runtimeImpl.net.Errors():
+	case err = <-sc.Net.Errors():
 		_ = cmd.Process.Kill()
 	case err = <-clientErrCh:
 	}
@@ -50,16 +50,16 @@ func (sc *kmRestartImpl) Run(childEnv *env.Env) error {
 	}
 
 	// XXX: currently assumes single keymanager.
-	km := sc.runtimeImpl.net.Keymanagers()[0]
+	km := sc.Net.Keymanagers()[0]
 
 	// Restart the key manager.
-	sc.logger.Info("restarting the key manager")
+	sc.Logger.Info("restarting the key manager")
 	if err = km.Restart(); err != nil {
 		return err
 	}
 
 	// Wait for the key manager to be ready.
-	sc.logger.Info("waiting for the key manager to become ready")
+	sc.Logger.Info("waiting for the key manager to become ready")
 	kmCtrl, err := oasis.NewController(km.SocketPath())
 	if err != nil {
 		return err
@@ -70,7 +70,7 @@ func (sc *kmRestartImpl) Run(childEnv *env.Env) error {
 
 	// Run the second client on a different key so that it will require
 	// a second trip to the keymanager.
-	sc.logger.Info("starting a second client to check if key manager works")
+	sc.Logger.Info("starting a second client to check if key manager works")
 	sc.runtimeImpl.clientArgs = []string{"--key", "key2"}
 	cmd, err = sc.startClient(childEnv)
 	if err != nil {

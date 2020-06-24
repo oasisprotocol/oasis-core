@@ -26,58 +26,65 @@ const (
 )
 
 var (
-	// E2eParamsDummy is a dummy instance of e2eImpl used to register global e2e flags.
-	E2eParamsDummy *e2eImpl = newE2eImpl("")
+	// E2eParamsDummy is a dummy instance of E2E used to register global e2e flags.
+	E2eParamsDummy *E2E = NewE2E("")
 )
 
-// e2eImpl is a base class for tests involving oasis-node.
-type e2eImpl struct {
-	net    *oasis.Network
-	name   string
-	logger *logging.Logger
-	flags  *env.ParameterFlagSet
+// E2E is a base scenario for oasis-node end-to-end tests.
+type E2E struct {
+	Net    *oasis.Network
+	Flags  *env.ParameterFlagSet
+	Logger *logging.Logger
+
+	name string
 }
 
-func newE2eImpl(name string) *e2eImpl {
+// NewE2E creates a new base scenario for oasis-node end-to-end tests.
+func NewE2E(name string) *E2E {
 	// Empty scenario name is used for registering global parameters only.
 	fullName := "e2e"
 	if name != "" {
 		fullName += "/" + name
 	}
 
-	sc := &e2eImpl{
+	sc := &E2E{
 		name:   fullName,
-		logger: logging.GetLogger("scenario/" + fullName),
-		flags:  env.NewParameterFlagSet(fullName, flag.ContinueOnError),
+		Logger: logging.GetLogger("scenario/" + fullName),
+		Flags:  env.NewParameterFlagSet(fullName, flag.ContinueOnError),
 	}
-	sc.flags.String(cfgNodeBinary, "oasis-node", "path to the node binary")
+	sc.Flags.String(cfgNodeBinary, "oasis-node", "path to the node binary")
 
 	return sc
 }
 
-func (sc *e2eImpl) Clone() e2eImpl {
-	return e2eImpl{
-		net:    sc.net,
+// Implements scenario.Scenario.
+func (sc *E2E) Clone() E2E {
+	return E2E{
+		Net:    sc.Net,
+		Flags:  sc.Flags.Clone(),
+		Logger: sc.Logger,
 		name:   sc.name,
-		logger: sc.logger,
-		flags:  sc.flags.Clone(),
 	}
 }
 
-func (sc *e2eImpl) Name() string {
+// Implements scenario.Scenario.
+func (sc *E2E) Name() string {
 	return sc.name
 }
 
-func (sc *e2eImpl) Parameters() *env.ParameterFlagSet {
-	return sc.flags
+// Implements scenario.Scenario.
+func (sc *E2E) Parameters() *env.ParameterFlagSet {
+	return sc.Flags
 }
 
-func (sc *e2eImpl) PreInit(childEnv *env.Env) error {
+// Implements scenario.Scenario.
+func (sc *E2E) PreInit(childEnv *env.Env) error {
 	return nil
 }
 
-func (sc *e2eImpl) Fixture() (*oasis.NetworkFixture, error) {
-	nodeBinary, _ := sc.flags.GetString(cfgNodeBinary)
+// Implements scenario.Scenario.
+func (sc *E2E) Fixture() (*oasis.NetworkFixture, error) {
+	nodeBinary, _ := sc.Flags.GetString(cfgNodeBinary)
 
 	return &oasis.NetworkFixture{
 		Network: oasis.NetworkCfg{
@@ -96,52 +103,55 @@ func (sc *e2eImpl) Fixture() (*oasis.NetworkFixture, error) {
 	}, nil
 }
 
-func (sc *e2eImpl) Init(childEnv *env.Env, net *oasis.Network) error {
-	sc.net = net
+// Implements scenario.Scenario.
+func (sc *E2E) Init(childEnv *env.Env, net *oasis.Network) error {
+	sc.Net = net
 	return nil
 }
 
-func (sc *e2eImpl) cleanTendermintStorage(childEnv *env.Env) error {
+// ResetConsensusState removes all consensus state, preserving runtime storage and node-local
+// storage databases.
+func (sc *E2E) ResetConsensusState(childEnv *env.Env) error {
 	doClean := func(dataDir string, cleanArgs []string) error {
 		args := append([]string{
 			"unsafe-reset",
 			"--" + cmdCommon.CfgDataDir, dataDir,
 		}, cleanArgs...)
 
-		return cli.RunSubCommand(childEnv, sc.logger, "unsafe-reset", sc.net.Config().NodeBinary, args)
+		return cli.RunSubCommand(childEnv, sc.Logger, "unsafe-reset", sc.Net.Config().NodeBinary, args)
 	}
 
-	for _, val := range sc.net.Validators() {
+	for _, val := range sc.Net.Validators() {
 		if err := doClean(val.DataDir(), nil); err != nil {
 			return err
 		}
 	}
-	for _, cw := range sc.net.ComputeWorkers() {
+	for _, cw := range sc.Net.ComputeWorkers() {
 		if err := doClean(cw.DataDir(), nil); err != nil {
 			return err
 		}
 	}
-	for _, cl := range sc.net.Clients() {
+	for _, cl := range sc.Net.Clients() {
 		if err := doClean(cl.DataDir(), nil); err != nil {
 			return err
 		}
 	}
-	for _, bz := range sc.net.Byzantine() {
+	for _, bz := range sc.Net.Byzantine() {
 		if err := doClean(bz.DataDir(), nil); err != nil {
 			return err
 		}
 	}
-	for _, se := range sc.net.Sentries() {
+	for _, se := range sc.Net.Sentries() {
 		if err := doClean(se.DataDir(), nil); err != nil {
 			return err
 		}
 	}
-	for _, sw := range sc.net.StorageWorkers() {
+	for _, sw := range sc.Net.StorageWorkers() {
 		if err := doClean(sw.DataDir(), []string{"--" + cmdNode.CfgPreserveMKVSDatabase}); err != nil {
 			return err
 		}
 	}
-	for _, kw := range sc.net.Keymanagers() {
+	for _, kw := range sc.Net.Keymanagers() {
 		if err := doClean(kw.DataDir(), []string{"--" + cmdNode.CfgPreserveLocalStorage}); err != nil {
 			return err
 		}
@@ -150,9 +160,10 @@ func (sc *e2eImpl) cleanTendermintStorage(childEnv *env.Env) error {
 	return nil
 }
 
-func (sc *e2eImpl) dumpRestoreNetwork(childEnv *env.Env, fixture *oasis.NetworkFixture, doDbDump bool) error {
+// DumpRestoreNetwork first dumps the current network state and then attempts to restore it.
+func (sc *E2E) DumpRestoreNetwork(childEnv *env.Env, fixture *oasis.NetworkFixture, doDbDump bool) error {
 	// Dump-restore network.
-	sc.logger.Info("dumping network state",
+	sc.Logger.Info("dumping network state",
 		"child", childEnv,
 	)
 
@@ -161,16 +172,16 @@ func (sc *e2eImpl) dumpRestoreNetwork(childEnv *env.Env, fixture *oasis.NetworkF
 		"genesis", "dump",
 		"--height", "0",
 		"--genesis.file", dumpPath,
-		"--address", "unix:" + sc.net.Validators()[0].SocketPath(),
+		"--address", "unix:" + sc.Net.Validators()[0].SocketPath(),
 	}
 
-	if err := cli.RunSubCommand(childEnv, sc.logger, "genesis-dump", sc.net.Config().NodeBinary, args); err != nil {
+	if err := cli.RunSubCommand(childEnv, sc.Logger, "genesis-dump", sc.Net.Config().NodeBinary, args); err != nil {
 		return fmt.Errorf("scenario/e2e/dump_restore: failed to dump state: %w", err)
 	}
 
 	// Stop the network.
-	sc.logger.Info("stopping the network")
-	sc.net.Stop()
+	sc.Logger.Info("stopping the network")
+	sc.Net.Stop()
 
 	if doDbDump {
 		if err := sc.dumpDatabase(childEnv, fixture, dumpPath); err != nil {
@@ -178,28 +189,28 @@ func (sc *e2eImpl) dumpRestoreNetwork(childEnv *env.Env, fixture *oasis.NetworkF
 		}
 	}
 
-	if len(sc.net.StorageWorkers()) > 0 {
+	if len(sc.Net.StorageWorkers()) > 0 {
 		// Dump storage.
 		args = []string{
 			"debug", "storage", "export",
 			"--genesis.file", dumpPath,
-			"--datadir", sc.net.StorageWorkers()[0].DataDir(),
+			"--datadir", sc.Net.StorageWorkers()[0].DataDir(),
 			"--storage.export.dir", filepath.Join(childEnv.Dir(), "storage_dumps"),
 			"--debug.dont_blame_oasis",
 			"--debug.allow_test_keys",
 		}
-		if err := cli.RunSubCommand(childEnv, sc.logger, "storage-dump", sc.net.Config().NodeBinary, args); err != nil {
+		if err := cli.RunSubCommand(childEnv, sc.Logger, "storage-dump", sc.Net.Config().NodeBinary, args); err != nil {
 			return fmt.Errorf("scenario/e2e/dump_restore: failed to dump storage: %w", err)
 		}
 	}
 
 	// Reset all the state back to the vanilla state.
-	if err := sc.cleanTendermintStorage(childEnv); err != nil {
+	if err := sc.ResetConsensusState(childEnv); err != nil {
 		return fmt.Errorf("scenario/e2e/dump_restore: failed to clean tendemint storage: %w", err)
 	}
 
 	// Start the network and the client again.
-	sc.logger.Info("starting the network again")
+	sc.Logger.Info("starting the network again")
 
 	fixture.Network.GenesisFile = dumpPath
 	// Make sure to not overwrite entities.
@@ -210,18 +221,18 @@ func (sc *e2eImpl) dumpRestoreNetwork(childEnv *env.Env, fixture *oasis.NetworkF
 	}
 
 	var err error
-	if sc.net, err = fixture.Create(childEnv); err != nil {
+	if sc.Net, err = fixture.Create(childEnv); err != nil {
 		return err
 	}
 
 	// If network is used, enable shorter per-node socket paths, because some e2e test datadir
 	// exceed maximum unix socket path length.
-	sc.net.Config().UseShortGrpcSocketPaths = true
+	sc.Net.Config().UseShortGrpcSocketPaths = true
 
 	return nil
 }
 
-func (sc *e2eImpl) dumpDatabase(childEnv *env.Env, fixture *oasis.NetworkFixture, exportPath string) error {
+func (sc *E2E) dumpDatabase(childEnv *env.Env, fixture *oasis.NetworkFixture, exportPath string) error {
 	// Load the existing export.
 	eFp, err := genesisFile.NewFileProvider(exportPath)
 	if err != nil {
@@ -232,20 +243,20 @@ func (sc *e2eImpl) dumpDatabase(childEnv *env.Env, fixture *oasis.NetworkFixture
 		return fmt.Errorf("failed to get genesis doc (export): %w", err)
 	}
 
-	sc.logger.Info("dumping via debug dumpdb")
+	sc.Logger.Info("dumping via debug dumpdb")
 
 	// Dump the state with the debug command off one of the validators.
 	dbDumpPath := filepath.Join(childEnv.Dir(), "debug_dump.json")
 	args := []string{
 		"debug", "dumpdb",
-		"--datadir", sc.net.Validators()[0].DataDir(),
-		"-g", sc.net.GenesisPath(),
+		"--datadir", sc.Net.Validators()[0].DataDir(),
+		"-g", sc.Net.GenesisPath(),
 		"--dump.version", fmt.Sprintf("%d", exportedDoc.Height),
 		"--dump.output", dbDumpPath,
 		"--debug.dont_blame_oasis",
 		"--debug.allow_test_keys",
 	}
-	if err = cli.RunSubCommand(childEnv, sc.logger, "debug-dump", sc.net.Config().NodeBinary, args); err != nil {
+	if err = cli.RunSubCommand(childEnv, sc.Logger, "debug-dump", sc.Net.Config().NodeBinary, args); err != nil {
 		return fmt.Errorf("failed to dump database: %w", err)
 	}
 
@@ -278,13 +289,13 @@ func (sc *e2eImpl) dumpDatabase(childEnv *env.Env, fixture *oasis.NetworkFixture
 	return nil
 }
 
-func (sc *e2eImpl) finishWithoutChild() error {
+func (sc *E2E) finishWithoutChild() error {
 	var err error
 	select {
-	case err = <-sc.net.Errors():
+	case err = <-sc.Net.Errors():
 		return err
 	default:
-		return sc.net.CheckLogWatchers()
+		return sc.Net.CheckLogWatchers()
 	}
 }
 
@@ -292,77 +303,27 @@ func (sc *e2eImpl) finishWithoutChild() error {
 func RegisterScenarios() error {
 	// Register non-scenario-specific parameters.
 	cmd.RegisterTestParams(E2eParamsDummy.Name(), E2eParamsDummy.Parameters())
-	cmd.RegisterTestParams(RuntimeParamsDummy.Name(), RuntimeParamsDummy.Parameters())
 
 	// Register default scenarios which are executed, if no test names provided.
 	for _, s := range []scenario.Scenario{
-		// Runtime test.
-		Runtime,
-		RuntimeEncryption,
-		// Byzantine executor node.
-		ByzantineExecutorHonest,
-		ByzantineExecutorWrong,
-		ByzantineExecutorStraggler,
-		// Byzantine merge node.
-		ByzantineMergeHonest,
-		ByzantineMergeWrong,
-		ByzantineMergeStraggler,
-		// Storage sync test.
-		StorageSync,
-		// Sentry test.
-		Sentry,
-		SentryEncryption,
-		// Keymanager restart test.
-		KeymanagerRestart,
-		// Keymanager replicate test.
-		KeymanagerReplicate,
-		// Dump/restore test.
-		DumpRestore,
-		// Halt test.
-		HaltRestore,
-		// Multiple runtimes test.
-		MultipleRuntimes,
 		// Registry CLI test.
 		RegistryCLI,
 		// Stake CLI test.
 		StakeCLI,
-		// Node shutdown test.
-		NodeShutdown,
 		// Gas fees tests.
 		GasFeesStaking,
 		GasFeesStakingDumpRestore,
-		GasFeesRuntimes,
 		// Identity CLI test.
 		IdentityCLI,
-		// Runtime prune test.
-		RuntimePrune,
-		// Runtime dynamic registration test.
-		RuntimeDynamic,
-		// Transaction source test.
-		TxSourceMultiShort,
 		// Node upgrade tests.
 		NodeUpgrade,
 		NodeUpgradeCancel,
 		// Debonding entries from genesis test.
 		Debond,
-		// Late start test.
-		LateStart,
-		// KeymanagerUpgrade test.
-		KeymanagerUpgrade,
 		// Early query test.
 		EarlyQuery,
 	} {
 		if err := cmd.Register(s); err != nil {
-			return err
-		}
-	}
-
-	// Register non-default scenarios which are executed on-demand only.
-	for _, s := range []scenario.Scenario{
-		// Transaction source test. Non-default, because it runs for ~6 hours.
-		TxSourceMulti,
-	} {
-		if err := cmd.RegisterNondefault(s); err != nil {
 			return err
 		}
 	}

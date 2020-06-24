@@ -1,4 +1,4 @@
-package e2e
+package runtime
 
 import (
 	"time"
@@ -40,18 +40,18 @@ func (sc *lateStartImpl) Fixture() (*oasis.NetworkFixture, error) {
 func (sc *lateStartImpl) Run(childEnv *env.Env) error {
 	// Start the network.
 	var err error
-	if err = sc.net.Start(); err != nil {
+	if err = sc.Net.Start(); err != nil {
 		return err
 	}
 
-	sc.logger.Info("Waiting before starting the client node",
+	sc.Logger.Info("Waiting before starting the client node",
 		"wait_for", lateStartInitialWait,
 	)
 	time.Sleep(lateStartInitialWait)
 
-	sc.logger.Info("Starting the client node")
+	sc.Logger.Info("Starting the client node")
 	clientFixture := &oasis.ClientFixture{}
-	client, err := clientFixture.Create(sc.net)
+	client, err := clientFixture.Create(sc.Net)
 	if err != nil {
 		return err
 	}
@@ -59,7 +59,7 @@ func (sc *lateStartImpl) Run(childEnv *env.Env) error {
 		return err
 	}
 
-	sc.logger.Info("Starting the basic client")
+	sc.Logger.Info("Starting the basic client")
 	cmd, err := sc.startClient(childEnv)
 	if err != nil {
 		return err

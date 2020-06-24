@@ -1,4 +1,4 @@
-package e2e
+package runtime
 
 import (
 	"context"
@@ -30,10 +30,10 @@ var (
 		sc := &multipleRuntimesImpl{
 			runtimeImpl: *newRuntimeImpl("multiple-runtimes", "simple-keyvalue-client", nil),
 		}
-		sc.flags.Int(cfgNumComputeRuntimes, 2, "number of compute runtimes per worker")
-		sc.flags.Int(cfgNumComputeRuntimeTxns, 2, "number of transactions to perform")
-		sc.flags.Int(cfgNumComputeWorkers, 2, "number of workers to initiate")
-		sc.flags.Int(cfgExecutorGroupSize, 2, "number of executor workers in committee")
+		sc.Flags.Int(cfgNumComputeRuntimes, 2, "number of compute runtimes per worker")
+		sc.Flags.Int(cfgNumComputeRuntimeTxns, 2, "number of transactions to perform")
+		sc.Flags.Int(cfgNumComputeWorkers, 2, "number of workers to initiate")
+		sc.Flags.Int(cfgExecutorGroupSize, 2, "number of executor workers in committee")
 
 		return sc
 	}()
@@ -43,14 +43,14 @@ type multipleRuntimesImpl struct {
 	runtimeImpl
 }
 
-func (mr *multipleRuntimesImpl) Clone() scenario.Scenario {
+func (sc *multipleRuntimesImpl) Clone() scenario.Scenario {
 	return &multipleRuntimesImpl{
-		runtimeImpl: *mr.runtimeImpl.Clone().(*runtimeImpl),
+		runtimeImpl: *sc.runtimeImpl.Clone().(*runtimeImpl),
 	}
 }
 
-func (mr *multipleRuntimesImpl) Fixture() (*oasis.NetworkFixture, error) {
-	f, err := mr.runtimeImpl.Fixture()
+func (sc *multipleRuntimesImpl) Fixture() (*oasis.NetworkFixture, error) {
+	f, err := sc.runtimeImpl.Fixture()
 	if err != nil {
 		return nil, err
 	}
@@ -76,8 +76,8 @@ func (mr *multipleRuntimesImpl) Fixture() (*oasis.NetworkFixture, error) {
 	f.Network.EpochtimeMock = true
 
 	// Add some more consecutive runtime IDs with the same binary.
-	numComputeRuntimes, _ := mr.flags.GetInt(cfgNumComputeRuntimes)
-	executorGroupSize, _ := mr.flags.GetInt(cfgExecutorGroupSize)
+	numComputeRuntimes, _ := sc.Flags.GetInt(cfgNumComputeRuntimes)
+	executorGroupSize, _ := sc.Flags.GetInt(cfgExecutorGroupSize)
 	for i := 1; i <= numComputeRuntimes; i++ {
 		// Increase LSB by 1.
 		id[len(id)-1]++
@@ -122,7 +122,7 @@ func (mr *multipleRuntimesImpl) Fixture() (*oasis.NetworkFixture, error) {
 	}
 
 	// Use numComputeWorkers compute worker fixtures.
-	numComputeWorkers, _ := mr.flags.GetInt(cfgNumComputeWorkers)
+	numComputeWorkers, _ := sc.Flags.GetInt(cfgNumComputeWorkers)
 	f.ComputeWorkers = []oasis.ComputeWorkerFixture{}
 	for i := 0; i < numComputeWorkers; i++ {
 		f.ComputeWorkers = append(f.ComputeWorkers, oasis.ComputeWorkerFixture{Entity: 1})
@@ -131,13 +131,13 @@ func (mr *multipleRuntimesImpl) Fixture() (*oasis.NetworkFixture, error) {
 	return f, nil
 }
 
-func (mr *multipleRuntimesImpl) Run(childEnv *env.Env) error {
-	if err := mr.net.Start(); err != nil {
+func (sc *multipleRuntimesImpl) Run(childEnv *env.Env) error {
+	if err := sc.Net.Start(); err != nil {
 		return err
 	}
 
 	// Wait for the nodes.
-	if err := mr.initialEpochTransitions(); err != nil {
+	if err := sc.initialEpochTransitions(); err != nil {
 		return err
 	}
 
@@ -145,27 +145,27 @@ func (mr *multipleRuntimesImpl) Run(childEnv *env.Env) error {
 
 	// Submit transactions.
 	epoch := epochtime.EpochTime(3)
-	numComputeRuntimeTxns, _ := mr.flags.GetInt(cfgNumComputeRuntimeTxns)
-	for _, r := range mr.net.Runtimes() {
+	numComputeRuntimeTxns, _ := sc.Flags.GetInt(cfgNumComputeRuntimeTxns)
+	for _, r := range sc.Net.Runtimes() {
 		rt := r.ToRuntimeDescriptor()
 		if rt.Kind == registry.KindCompute {
 			for i := 0; i < numComputeRuntimeTxns; i++ {
-				mr.logger.Info("submitting transaction to runtime",
+				sc.Logger.Info("submitting transaction to runtime",
 					"seq", i,
 					"runtime_id", rt.ID,
 				)
 
-				if err := mr.submitKeyValueRuntimeInsertTx(ctx, rt.ID, "hello", fmt.Sprintf("world at iteration %d from %s", i, rt.ID)); err != nil {
+				if err := sc.submitKeyValueRuntimeInsertTx(ctx, rt.ID, "hello", fmt.Sprintf("world at iteration %d from %s", i, rt.ID)); err != nil {
 					return err
 				}
 
-				mr.logger.Info("triggering epoch transition",
+				sc.Logger.Info("triggering epoch transition",
 					"epoch", epoch,
 				)
-				if err := mr.net.Controller().SetEpoch(context.Background(), epoch); err != nil {
+				if err := sc.Net.Controller().SetEpoch(context.Background(), epoch); err != nil {
 					return fmt.Errorf("failed to set epoch: %w", err)
 				}
-				mr.logger.Info("epoch transition done")
+				sc.Logger.Info("epoch transition done")
 				epoch++
 			}
 		}

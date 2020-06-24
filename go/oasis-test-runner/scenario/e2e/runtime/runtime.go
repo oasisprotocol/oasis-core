@@ -1,4 +1,4 @@
-package e2e
+package runtime
 
 import (
 	"context"
@@ -12,10 +12,12 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/cbor"
 	"github.com/oasisprotocol/oasis-core/go/common/node"
 	"github.com/oasisprotocol/oasis-core/go/common/sgx"
+	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/cmd"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/env"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/log"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/oasis"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/scenario"
+	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/scenario/e2e"
 	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
 	runtimeClient "github.com/oasisprotocol/oasis-core/go/runtime/client/api"
 	runtimeTransaction "github.com/oasisprotocol/oasis-core/go/runtime/transaction"
@@ -56,7 +58,7 @@ var (
 
 // runtimeImpl is a base class for tests involving oasis-node with runtime.
 type runtimeImpl struct {
-	e2eImpl
+	e2e.E2E
 
 	clientBinary string
 	clientArgs   []string
@@ -70,22 +72,22 @@ func newRuntimeImpl(name, clientBinary string, clientArgs []string) *runtimeImpl
 	}
 
 	sc := &runtimeImpl{
-		e2eImpl:      *newE2eImpl(fullName),
+		E2E:          *e2e.NewE2E(fullName),
 		clientBinary: clientBinary,
 		clientArgs:   clientArgs,
 	}
-	sc.flags.String(cfgClientBinaryDir, "", "path to the client binaries directory")
-	sc.flags.String(cfgRuntimeBinaryDir, "", "path to the runtime binaries directory")
-	sc.flags.String(cfgRuntimeLoader, "oasis-core-runtime-loader", "path to the runtime loader")
-	sc.flags.String(cfgTEEHardware, "", "TEE hardware to use")
-	sc.flags.Bool(cfgIasMock, true, "if mock IAS service should be used")
+	sc.Flags.String(cfgClientBinaryDir, "", "path to the client binaries directory")
+	sc.Flags.String(cfgRuntimeBinaryDir, "", "path to the runtime binaries directory")
+	sc.Flags.String(cfgRuntimeLoader, "oasis-core-runtime-loader", "path to the runtime loader")
+	sc.Flags.String(cfgTEEHardware, "", "TEE hardware to use")
+	sc.Flags.Bool(cfgIasMock, true, "if mock IAS service should be used")
 
 	return sc
 }
 
 func (sc *runtimeImpl) Clone() scenario.Scenario {
 	return &runtimeImpl{
-		e2eImpl:      sc.e2eImpl.Clone(),
+		E2E:          sc.E2E.Clone(),
 		clientBinary: sc.clientBinary,
 		clientArgs:   sc.clientArgs,
 	}
@@ -96,6 +98,11 @@ func (sc *runtimeImpl) PreInit(childEnv *env.Env) error {
 }
 
 func (sc *runtimeImpl) Fixture() (*oasis.NetworkFixture, error) {
+	f, err := sc.E2E.Fixture()
+	if err != nil {
+		return nil, err
+	}
+
 	tee, err := sc.getTEEHardware()
 	if err != nil {
 		return nil, err
@@ -112,16 +119,15 @@ func (sc *runtimeImpl) Fixture() (*oasis.NetworkFixture, error) {
 	if err != nil {
 		return nil, err
 	}
-	nodeBinary, _ := sc.flags.GetString(cfgNodeBinary)
-	runtimeLoader, _ := sc.flags.GetString(cfgRuntimeLoader)
-	iasMock, _ := sc.flags.GetBool(cfgIasMock)
+	runtimeLoader, _ := sc.Flags.GetString(cfgRuntimeLoader)
+	iasMock, _ := sc.Flags.GetBool(cfgIasMock)
 	return &oasis.NetworkFixture{
 		TEE: oasis.TEEFixture{
 			Hardware: tee,
 			MrSigner: mrSigner,
 		},
 		Network: oasis.NetworkCfg{
-			NodeBinary:                        nodeBinary,
+			NodeBinary:                        f.Network.NodeBinary,
 			RuntimeSGXLoaderBinary:            runtimeLoader,
 			DefaultLogWatcherHandlerFactories: DefaultRuntimeLogWatcherHandlerFactories,
 			ConsensusGasCostsTxByte:           1,
@@ -211,7 +217,7 @@ func (sc *runtimeImpl) Fixture() (*oasis.NetworkFixture, error) {
 
 func (sc *runtimeImpl) start(childEnv *env.Env) (<-chan error, *exec.Cmd, error) {
 	var err error
-	if err = sc.net.Start(); err != nil {
+	if err = sc.Net.Start(); err != nil {
 		return nil, nil, err
 	}
 
@@ -229,7 +235,7 @@ func (sc *runtimeImpl) start(childEnv *env.Env) (<-chan error, *exec.Cmd, error)
 
 // getTEEHardware returns the configured TEE hardware.
 func (sc *runtimeImpl) getTEEHardware() (node.TEEHardware, error) {
-	teeStr, _ := sc.flags.GetString(cfgTEEHardware)
+	teeStr, _ := sc.Flags.GetString(cfgTEEHardware)
 	var tee node.TEEHardware
 	if err := tee.FromString(teeStr); err != nil {
 		return node.TEEHardwareInvalid, err
@@ -238,7 +244,7 @@ func (sc *runtimeImpl) getTEEHardware() (node.TEEHardware, error) {
 }
 
 func (sc *runtimeImpl) resolveClientBinary(clientBinary string) string {
-	cbDir, _ := sc.flags.GetString(cfgClientBinaryDir)
+	cbDir, _ := sc.Flags.GetString(cfgClientBinaryDir)
 	return filepath.Join(cbDir, clientBinary)
 }
 
@@ -256,7 +262,7 @@ func (sc *runtimeImpl) resolveRuntimeBinary(runtimeBinary string) (string, error
 		runtimeExt = ".sgxs"
 	}
 
-	rtBinDir, _ := sc.flags.GetString(cfgRuntimeBinaryDir)
+	rtBinDir, _ := sc.Flags.GetString(cfgRuntimeBinaryDir)
 	return filepath.Join(rtBinDir, runtimeBinary+runtimeExt), nil
 }
 
@@ -265,7 +271,7 @@ func (sc *runtimeImpl) resolveDefaultKeyManagerBinary() (string, error) {
 }
 
 func (sc *runtimeImpl) startClient(childEnv *env.Env) (*exec.Cmd, error) {
-	clients := sc.net.Clients()
+	clients := sc.Net.Clients()
 	if len(clients) == 0 {
 		return nil, fmt.Errorf("scenario/e2e: network has no client nodes")
 	}
@@ -292,7 +298,7 @@ func (sc *runtimeImpl) startClient(childEnv *env.Env) (*exec.Cmd, error) {
 	cmd.Stdout = w
 	cmd.Stderr = w
 
-	sc.logger.Info("launching client",
+	sc.Logger.Info("launching client",
 		"binary", binary,
 		"args", strings.Join(args, " "),
 	)
@@ -307,7 +313,7 @@ func (sc *runtimeImpl) startClient(childEnv *env.Env) (*exec.Cmd, error) {
 func (sc *runtimeImpl) wait(childEnv *env.Env, cmd *exec.Cmd, clientErrCh <-chan error) error {
 	var err error
 	select {
-	case err = <-sc.net.Errors():
+	case err = <-sc.Net.Errors():
 		_ = cmd.Process.Kill()
 	case err = <-clientErrCh:
 	}
@@ -315,7 +321,7 @@ func (sc *runtimeImpl) wait(childEnv *env.Env, cmd *exec.Cmd, clientErrCh <-chan
 		return err
 	}
 
-	if err = sc.net.CheckLogWatchers(); err != nil {
+	if err = sc.Net.CheckLogWatchers(); err != nil {
 		return err
 	}
 
@@ -332,7 +338,7 @@ func (sc *runtimeImpl) Run(childEnv *env.Env) error {
 }
 
 func (sc *runtimeImpl) submitRuntimeTx(ctx context.Context, id common.Namespace, method string, args interface{}) (cbor.RawMessage, error) {
-	c := sc.net.ClientController().RuntimeClient
+	c := sc.Net.ClientController().RuntimeClient
 
 	// Submit a transaction and check the result.
 	var rsp runtimeTransaction.TxnOutput
@@ -382,75 +388,75 @@ func (sc *runtimeImpl) waitNodesSynced() error {
 		return nil
 	}
 
-	sc.logger.Info("waiting for all nodes to be synced")
+	sc.Logger.Info("waiting for all nodes to be synced")
 
-	for _, n := range sc.net.Validators() {
+	for _, n := range sc.Net.Validators() {
 		if err := checkSynced(&n.Node); err != nil {
 			return err
 		}
 	}
-	for _, n := range sc.net.StorageWorkers() {
+	for _, n := range sc.Net.StorageWorkers() {
 		if err := checkSynced(&n.Node); err != nil {
 			return err
 		}
 	}
-	for _, n := range sc.net.ComputeWorkers() {
+	for _, n := range sc.Net.ComputeWorkers() {
 		if err := checkSynced(&n.Node); err != nil {
 			return err
 		}
 	}
-	for _, n := range sc.net.Clients() {
+	for _, n := range sc.Net.Clients() {
 		if err := checkSynced(&n.Node); err != nil {
 			return err
 		}
 	}
 
-	sc.logger.Info("nodes synced")
+	sc.Logger.Info("nodes synced")
 	return nil
 }
 
 func (sc *runtimeImpl) initialEpochTransitions() error {
 	ctx := context.Background()
 
-	if len(sc.net.Keymanagers()) > 0 {
+	if len(sc.Net.Keymanagers()) > 0 {
 		// First wait for validator and key manager nodes to register. Then perform an epoch
 		// transition which will cause the compute and storage nodes to register.
-		sc.logger.Info("waiting for validators to initialize",
-			"num_validators", len(sc.net.Validators()),
+		sc.Logger.Info("waiting for validators to initialize",
+			"num_validators", len(sc.Net.Validators()),
 		)
-		for _, n := range sc.net.Validators() {
+		for _, n := range sc.Net.Validators() {
 			if err := n.WaitReady(ctx); err != nil {
 				return fmt.Errorf("failed to wait for a validator: %w", err)
 			}
 		}
-		sc.logger.Info("waiting for key managers to initialize",
-			"num_keymanagers", len(sc.net.Keymanagers()),
+		sc.Logger.Info("waiting for key managers to initialize",
+			"num_keymanagers", len(sc.Net.Keymanagers()),
 		)
-		for _, n := range sc.net.Keymanagers() {
+		for _, n := range sc.Net.Keymanagers() {
 			if err := n.WaitReady(ctx); err != nil {
 				return fmt.Errorf("failed to wait for a key manager: %w", err)
 			}
 		}
-		sc.logger.Info("triggering epoch transition")
-		if err := sc.net.Controller().SetEpoch(ctx, 1); err != nil {
+		sc.Logger.Info("triggering epoch transition")
+		if err := sc.Net.Controller().SetEpoch(ctx, 1); err != nil {
 			return fmt.Errorf("failed to set epoch: %w", err)
 		}
-		sc.logger.Info("epoch transition done")
+		sc.Logger.Info("epoch transition done")
 	}
 
 	// Wait for storage workers and compute workers to become ready.
-	sc.logger.Info("waiting for storage workers to initialize",
-		"num_storage_workers", len(sc.net.StorageWorkers()),
+	sc.Logger.Info("waiting for storage workers to initialize",
+		"num_storage_workers", len(sc.Net.StorageWorkers()),
 	)
-	for _, n := range sc.net.StorageWorkers() {
+	for _, n := range sc.Net.StorageWorkers() {
 		if err := n.WaitReady(ctx); err != nil {
 			return fmt.Errorf("failed to wait for a storage worker: %w", err)
 		}
 	}
-	sc.logger.Info("waiting for compute workers to initialize",
-		"num_compute_workers", len(sc.net.ComputeWorkers()),
+	sc.Logger.Info("waiting for compute workers to initialize",
+		"num_compute_workers", len(sc.Net.ComputeWorkers()),
 	)
-	for _, n := range sc.net.ComputeWorkers() {
+	for _, n := range sc.Net.ComputeWorkers() {
 		if err := n.WaitReady(ctx); err != nil {
 			return fmt.Errorf("failed to wait for a compute worker: %w", err)
 		}
@@ -458,21 +464,87 @@ func (sc *runtimeImpl) initialEpochTransitions() error {
 
 	// Byzantine nodes can only registered. If defined, since we cannot control them directly, wait
 	// for all nodes to become registered.
-	if len(sc.net.Byzantine()) > 0 {
-		sc.logger.Info("waiting for (all) nodes to register",
-			"num_nodes", sc.net.NumRegisterNodes(),
+	if len(sc.Net.Byzantine()) > 0 {
+		sc.Logger.Info("waiting for (all) nodes to register",
+			"num_nodes", sc.Net.NumRegisterNodes(),
 		)
-		if err := sc.net.Controller().WaitNodesRegistered(ctx, sc.net.NumRegisterNodes()); err != nil {
+		if err := sc.Net.Controller().WaitNodesRegistered(ctx, sc.Net.NumRegisterNodes()); err != nil {
 			return fmt.Errorf("failed to wait for nodes: %w", err)
 		}
 	}
 
 	// Then perform another epoch transition to elect the committees.
-	sc.logger.Info("triggering epoch transition")
-	if err := sc.net.Controller().SetEpoch(ctx, 2); err != nil {
+	sc.Logger.Info("triggering epoch transition")
+	if err := sc.Net.Controller().SetEpoch(ctx, 2); err != nil {
 		return fmt.Errorf("failed to set epoch: %w", err)
 	}
-	sc.logger.Info("epoch transition done")
+	sc.Logger.Info("epoch transition done")
+
+	return nil
+}
+
+// RegisterScenarios registers all end-to-end scenarios.
+func RegisterScenarios() error {
+	// Register non-scenario-specific parameters.
+	cmd.RegisterTestParams(RuntimeParamsDummy.Name(), RuntimeParamsDummy.Parameters())
+
+	// Register default scenarios which are executed, if no test names provided.
+	for _, s := range []scenario.Scenario{
+		// Runtime test.
+		Runtime,
+		RuntimeEncryption,
+		// Byzantine executor node.
+		ByzantineExecutorHonest,
+		ByzantineExecutorWrong,
+		ByzantineExecutorStraggler,
+		// Byzantine merge node.
+		ByzantineMergeHonest,
+		ByzantineMergeWrong,
+		ByzantineMergeStraggler,
+		// Storage sync test.
+		StorageSync,
+		// Sentry test.
+		Sentry,
+		SentryEncryption,
+		// Keymanager restart test.
+		KeymanagerRestart,
+		// Keymanager replicate test.
+		KeymanagerReplicate,
+		// Dump/restore test.
+		DumpRestore,
+		// Halt test.
+		HaltRestore,
+		// Multiple runtimes test.
+		MultipleRuntimes,
+		// Node shutdown test.
+		NodeShutdown,
+		// Gas fees tests.
+		GasFeesRuntimes,
+		// Runtime prune test.
+		RuntimePrune,
+		// Runtime dynamic registration test.
+		RuntimeDynamic,
+		// Transaction source test.
+		TxSourceMultiShort,
+		// Late start test.
+		LateStart,
+		// KeymanagerUpgrade test.
+		KeymanagerUpgrade,
+	} {
+		if err := cmd.Register(s); err != nil {
+			return err
+		}
+	}
+
+	// Register non-default scenarios which are executed on-demand only.
+	for _, s := range []scenario.Scenario{
+		// Transaction source test. Non-default, because it runs for ~6 hours.
+		TxSourceMulti,
+	} {
+		if err := cmd.RegisterNondefault(s); err != nil {
+			return err
+		}
+	}
 
 	return nil
 }

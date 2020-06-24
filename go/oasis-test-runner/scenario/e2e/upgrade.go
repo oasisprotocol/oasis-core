@@ -52,7 +52,7 @@ var (
 )
 
 type nodeUpgradeImpl struct {
-	e2eImpl
+	E2E
 
 	validator  *oasis.Validator
 	controller *oasis.Controller
@@ -64,9 +64,9 @@ type nodeUpgradeImpl struct {
 }
 
 func (sc *nodeUpgradeImpl) writeDescriptor(name string, content []byte) (string, error) {
-	filePath := path.Join(sc.net.BasePath(), "upgrade-"+name+".json")
+	filePath := path.Join(sc.Net.BasePath(), "upgrade-"+name+".json")
 	if err := ioutil.WriteFile(filePath, content, 0644); err != nil { //nolint: gosec
-		sc.logger.Error("can't write descriptor to network directory",
+		sc.Logger.Error("can't write descriptor to network directory",
 			"err", err,
 			"name", name,
 		)
@@ -77,14 +77,14 @@ func (sc *nodeUpgradeImpl) writeDescriptor(name string, content []byte) (string,
 
 func (sc *nodeUpgradeImpl) nextEpoch() error {
 	sc.currentEpoch++
-	if err := sc.net.Controller().SetEpoch(sc.ctx, sc.currentEpoch); err != nil {
+	if err := sc.Net.Controller().SetEpoch(sc.ctx, sc.currentEpoch); err != nil {
 		return fmt.Errorf("failed to set epoch to %d: %w", sc.currentEpoch, err)
 	}
 	return nil
 }
 
 func (sc *nodeUpgradeImpl) restart(wait bool) error {
-	sc.logger.Debug("restarting validator")
+	sc.Logger.Debug("restarting validator")
 	if err := sc.validator.Restart(); err != nil {
 		return fmt.Errorf("can't restart validator: %w", err)
 	}
@@ -109,21 +109,21 @@ func (sc *nodeUpgradeImpl) restart(wait bool) error {
 
 func newNodeUpgradeImpl() scenario.Scenario {
 	sc := &nodeUpgradeImpl{
-		e2eImpl: *newE2eImpl("node-upgrade"),
-		ctx:     context.Background(),
+		E2E: *NewE2E("node-upgrade"),
+		ctx: context.Background(),
 	}
 	return sc
 }
 
 func (sc *nodeUpgradeImpl) Clone() scenario.Scenario {
 	return &nodeUpgradeImpl{
-		e2eImpl: sc.e2eImpl.Clone(),
-		ctx:     context.Background(),
+		E2E: sc.E2E.Clone(),
+		ctx: context.Background(),
 	}
 }
 
 func (sc *nodeUpgradeImpl) Fixture() (*oasis.NetworkFixture, error) {
-	f, err := sc.e2eImpl.Fixture()
+	f, err := sc.E2E.Fixture()
 	if err != nil {
 		return nil, err
 	}
@@ -154,12 +154,12 @@ func (sc *nodeUpgradeImpl) Run(childEnv *env.Env) error {
 	var err error
 	var descPath string
 
-	if err = sc.net.Start(); err != nil {
+	if err = sc.Net.Start(); err != nil {
 		return err
 	}
 
-	sc.logger.Info("waiting for network to come up")
-	if err = sc.net.Controller().WaitNodesRegistered(sc.ctx, len(sc.net.Validators())); err != nil {
+	sc.Logger.Info("waiting for network to come up")
+	if err = sc.Net.Controller().WaitNodesRegistered(sc.ctx, len(sc.Net.Validators())); err != nil {
 		return err
 	}
 	if err = sc.nextEpoch(); err != nil {
@@ -167,13 +167,13 @@ func (sc *nodeUpgradeImpl) Run(childEnv *env.Env) error {
 	}
 
 	var nodeSub pubsub.ClosableSubscription
-	sc.nodeCh, nodeSub, err = sc.net.Controller().Registry.WatchNodes(sc.ctx)
+	sc.nodeCh, nodeSub, err = sc.Net.Controller().Registry.WatchNodes(sc.ctx)
 	if err != nil {
 		return fmt.Errorf("can't subscribe to registry node events: %w", err)
 	}
 	defer nodeSub.Close()
 
-	sc.validator = sc.net.Validators()[1] // the network controller is on the first one
+	sc.validator = sc.Net.Validators()[1] // the network controller is on the first one
 	submitArgs := []string{
 		"control", "upgrade-binary",
 		"--log.level", "debug",
@@ -192,24 +192,24 @@ func (sc *nodeUpgradeImpl) Run(childEnv *env.Env) error {
 
 	// Try submitting an invalid update descriptor.
 	// This should return immediately and the node should still be running.
-	sc.logger.Info("submitting invalid upgrade descriptor")
+	sc.Logger.Info("submitting invalid upgrade descriptor")
 	if descPath, err = sc.writeDescriptor("malformed", malformedDescriptor); err != nil {
 		return err
 	}
-	if err = cli.RunSubCommand(childEnv, sc.logger, "control-upgrade", sc.net.Config().NodeBinary, append(submitArgs, descPath)); err == nil {
-		sc.logger.Error("submitting malformed descriptor didn't result in an error. that's an error.")
+	if err = cli.RunSubCommand(childEnv, sc.Logger, "control-upgrade", sc.Net.Config().NodeBinary, append(submitArgs, descPath)); err == nil {
+		sc.Logger.Error("submitting malformed descriptor didn't result in an error. that's an error.")
 		return errors.New("there should be errors with malformed descriptor")
 	}
 
 	// Try submitting a well formed descriptor but with an off hash, so no handlers are run.
 	// The node should exit immediately.
-	sc.logger.Info("submitting descriptor with nonexistent upgrade handler")
+	sc.Logger.Info("submitting descriptor with nonexistent upgrade handler")
 	nonexistentDescriptor := fmt.Sprintf(nonexistentDescriptorTemplate, sc.currentEpoch+1)
 	if descPath, err = sc.writeDescriptor("nonexistent", []byte(nonexistentDescriptor)); err != nil {
 		return err
 	}
 
-	if err = cli.RunSubCommand(childEnv, sc.logger, "control-upgrade", sc.net.Config().NodeBinary, append(submitArgs, descPath)); err != nil {
+	if err = cli.RunSubCommand(childEnv, sc.Logger, "control-upgrade", sc.Net.Config().NodeBinary, append(submitArgs, descPath)); err != nil {
 		return fmt.Errorf("error submitting descriptor with nonexistent handler to node: %w", err)
 	}
 
@@ -228,7 +228,7 @@ func (sc *nodeUpgradeImpl) Run(childEnv *env.Env) error {
 	<-sc.validator.Exit()
 
 	// Remove the stored descriptor so we can restart and submit a proper one.
-	sc.logger.Info("clearing stored upgrade descriptor")
+	sc.Logger.Info("clearing stored upgrade descriptor")
 	store, err := persistent.NewCommonStore(sc.validator.DataDir())
 	if err != nil {
 		return fmt.Errorf("can't open upgraded node's persistent store: %w", err)
@@ -248,7 +248,7 @@ func (sc *nodeUpgradeImpl) Run(childEnv *env.Env) error {
 
 	// Generate a valid upgrade descriptor; this should exercise the test handlers in the node.
 	var nodeHash hash.Hash
-	nodeText, err := ioutil.ReadFile(sc.net.Validators()[0].BinaryPath())
+	nodeText, err := ioutil.ReadFile(sc.Net.Validators()[0].BinaryPath())
 	if err != nil {
 		return fmt.Errorf("can't read node binary for hashing: %w", err)
 	}
@@ -266,10 +266,10 @@ func (sc *nodeUpgradeImpl) Run(childEnv *env.Env) error {
 	}
 
 	// Now submit the valid descriptor to all of the validators.
-	sc.logger.Info("submitting valid upgrade descriptor to all validators")
-	for i, val := range sc.net.Validators() {
+	sc.Logger.Info("submitting valid upgrade descriptor to all validators")
+	for i, val := range sc.Net.Validators() {
 		submitArgs[len(submitArgs)-1] = "unix:" + val.SocketPath()
-		if err = cli.RunSubCommand(childEnv, sc.logger, "control-upgrade", sc.net.Config().NodeBinary, append(submitArgs, descPath)); err != nil {
+		if err = cli.RunSubCommand(childEnv, sc.Logger, "control-upgrade", sc.Net.Config().NodeBinary, append(submitArgs, descPath)); err != nil {
 			return fmt.Errorf("failed to submit upgrade descriptor to validator %d: %w", i, err)
 		}
 	}
@@ -277,16 +277,16 @@ func (sc *nodeUpgradeImpl) Run(childEnv *env.Env) error {
 		return err
 	}
 
-	sc.logger.Info("restarting network")
-	errCh := make(chan error, len(sc.net.Validators()))
+	sc.Logger.Info("restarting network")
+	errCh := make(chan error, len(sc.Net.Validators()))
 	var group sync.WaitGroup
-	for i, val := range sc.net.Validators() {
+	for i, val := range sc.Net.Validators() {
 		group.Add(1)
 		go func(i int, val *oasis.Validator) {
 			defer group.Done()
-			sc.logger.Debug("waiting for validator to exit", "num", i)
+			sc.Logger.Debug("waiting for validator to exit", "num", i)
 			<-val.Exit()
-			sc.logger.Debug("restarting validator", "num", i)
+			sc.Logger.Debug("restarting validator", "num", i)
 			if restartError := val.Restart(); err != nil {
 				errCh <- restartError
 			}
@@ -300,11 +300,11 @@ func (sc *nodeUpgradeImpl) Run(childEnv *env.Env) error {
 	default:
 	}
 
-	sc.logger.Info("waiting for network to come back up")
-	if err = sc.net.Controller().WaitNodesRegistered(sc.ctx, len(sc.net.Validators())); err != nil {
+	sc.Logger.Info("waiting for network to come back up")
+	if err = sc.Net.Controller().WaitNodesRegistered(sc.ctx, len(sc.Net.Validators())); err != nil {
 		return err
 	}
-	sc.logger.Info("final epoch advance")
+	sc.Logger.Info("final epoch advance")
 	if err = sc.nextEpoch(); err != nil {
 		return err
 	}
@@ -314,7 +314,7 @@ func (sc *nodeUpgradeImpl) Run(childEnv *env.Env) error {
 		Height: consensus.HeightLatest,
 		ID:     migrations.TestEntity.ID,
 	}
-	_, err = sc.net.Controller().Registry.GetEntity(sc.ctx, idQuery)
+	_, err = sc.Net.Controller().Registry.GetEntity(sc.ctx, idQuery)
 	if err != nil {
 		return fmt.Errorf("can't get registered test entity: %w", err)
 	}

@@ -16,85 +16,85 @@ import (
 var (
 	// IdentityCLI is the identity CLI scenario.
 	IdentityCLI scenario.Scenario = &identityCLIImpl{
-		e2eImpl: *newE2eImpl("identity-cli"),
+		E2E: *NewE2E("identity-cli"),
 	}
 )
 
 type identityCLIImpl struct {
-	e2eImpl
+	E2E
 
 	dataDir string
 }
 
-func (ident *identityCLIImpl) Clone() scenario.Scenario {
+func (sc *identityCLIImpl) Clone() scenario.Scenario {
 	return &identityCLIImpl{
-		e2eImpl: ident.e2eImpl.Clone(),
-		dataDir: ident.dataDir,
+		E2E:     sc.E2E.Clone(),
+		dataDir: sc.dataDir,
 	}
 }
 
-func (ident *identityCLIImpl) PreInit(childEnv *env.Env) error {
+func (sc *identityCLIImpl) PreInit(childEnv *env.Env) error {
 	return nil
 }
 
-func (ident *identityCLIImpl) Init(childEnv *env.Env, net *oasis.Network) error {
+func (sc *identityCLIImpl) Init(childEnv *env.Env, net *oasis.Network) error {
 	dataDir, err := childEnv.NewSubDir("test-identity")
 	if err != nil {
 		return fmt.Errorf("scenario/e2e/identity_cli: init failed to create subdir: %w", err)
 	}
-	ident.dataDir = dataDir.String()
+	sc.dataDir = dataDir.String()
 
 	return nil
 }
 
-func (ident *identityCLIImpl) Fixture() (*oasis.NetworkFixture, error) {
+func (sc *identityCLIImpl) Fixture() (*oasis.NetworkFixture, error) {
 	return nil, nil
 }
 
-func (ident *identityCLIImpl) Run(childEnv *env.Env) error {
+func (sc *identityCLIImpl) Run(childEnv *env.Env) error {
 	// Provision node's identity.
 	args := []string{
 		"identity", "init",
-		"--" + common.CfgDataDir, ident.dataDir,
+		"--" + common.CfgDataDir, sc.dataDir,
 	}
-	nodeBinary, _ := ident.flags.GetString(cfgNodeBinary)
-	if err := cli.RunSubCommand(childEnv, ident.logger, "identity-init", nodeBinary, args); err != nil {
+	nodeBinary, _ := sc.Flags.GetString(cfgNodeBinary)
+	if err := cli.RunSubCommand(childEnv, sc.Logger, "identity-init", nodeBinary, args); err != nil {
 		return fmt.Errorf("scenario/e2e/identity_cli: failed provision node's identity: %w", err)
 	}
 
-	if err := ident.loadIdentity(); err != nil {
+	if err := sc.loadIdentity(); err != nil {
 		return fmt.Errorf("scenario/e2e/identity_cli: %w", err)
 	}
-	if err := ident.showTLSPubkey(childEnv, false); err != nil {
+	if err := sc.showTLSPubkey(childEnv, false); err != nil {
 		return fmt.Errorf("scenario/e2e/identity_cli: %w", err)
 	}
-	if err := ident.showTLSPubkey(childEnv, true); err != nil {
+	if err := sc.showTLSPubkey(childEnv, true); err != nil {
 		return fmt.Errorf("scenario/e2e/identity_cli: %w", err)
 	}
-	if err := ident.tendermintShowAddress(childEnv, "node"); err != nil {
+	if err := sc.tendermintShowAddress(childEnv, "node"); err != nil {
 		return fmt.Errorf("scenario/e2e/identity_cli: %w", err)
 	}
-	if err := ident.tendermintShowAddress(childEnv, "consensus"); err != nil {
+	if err := sc.tendermintShowAddress(childEnv, "consensus"); err != nil {
 		return fmt.Errorf("scenario/e2e/identity_cli: %w", err)
 	}
 
 	return nil
 }
 
-func (ident *identityCLIImpl) loadIdentity() error {
-	ident.logger.Info("loading generated entity")
+func (sc *identityCLIImpl) loadIdentity() error {
+	sc.Logger.Info("loading generated entity")
 
-	factory, err := fileSigner.NewFactory(ident.dataDir, signature.SignerNode, signature.SignerP2P, signature.SignerConsensus)
+	factory, err := fileSigner.NewFactory(sc.dataDir, signature.SignerNode, signature.SignerP2P, signature.SignerConsensus)
 	if err != nil {
 		return fmt.Errorf("failed to create identity file signer: %w", err)
 	}
-	if _, err = identity.Load(ident.dataDir, factory); err != nil {
+	if _, err = identity.Load(sc.dataDir, factory); err != nil {
 		return fmt.Errorf("failed to load node's identity: %w", err)
 	}
 	return nil
 }
 
-func (ident *identityCLIImpl) showTLSPubkey(childEnv *env.Env, sentry bool) error {
+func (sc *identityCLIImpl) showTLSPubkey(childEnv *env.Env, sentry bool) error {
 	var subCmd string
 	switch sentry {
 	case true:
@@ -102,29 +102,29 @@ func (ident *identityCLIImpl) showTLSPubkey(childEnv *env.Env, sentry bool) erro
 	case false:
 		subCmd = "show-tls-pubkey"
 	}
-	ident.logger.Info(fmt.Sprintf("running %s", subCmd))
+	sc.Logger.Info(fmt.Sprintf("running %s", subCmd))
 
 	args := []string{
 		"identity", subCmd,
-		"--" + common.CfgDataDir, ident.dataDir,
+		"--" + common.CfgDataDir, sc.dataDir,
 	}
-	nodeBinary, _ := ident.flags.GetString(cfgNodeBinary)
-	if out, err := cli.RunSubCommandWithOutput(childEnv, ident.logger, subCmd, nodeBinary, args); err != nil {
+	nodeBinary, _ := sc.Flags.GetString(cfgNodeBinary)
+	if out, err := cli.RunSubCommandWithOutput(childEnv, sc.Logger, subCmd, nodeBinary, args); err != nil {
 		return fmt.Errorf("failed to run %s: error: %w output: %s", subCmd, err, out.String())
 	}
 	return nil
 }
 
-func (ident *identityCLIImpl) tendermintShowAddress(childEnv *env.Env, addrName string) error {
+func (sc *identityCLIImpl) tendermintShowAddress(childEnv *env.Env, addrName string) error {
 	subCmd := fmt.Sprintf("show-%s-address", addrName)
-	ident.logger.Info(fmt.Sprintf("running tendermint %s", subCmd))
+	sc.Logger.Info(fmt.Sprintf("running tendermint %s", subCmd))
 
 	args := []string{
 		"identity", "tendermint", subCmd,
-		"--" + common.CfgDataDir, ident.dataDir,
+		"--" + common.CfgDataDir, sc.dataDir,
 	}
-	nodeBinary, _ := ident.flags.GetString(cfgNodeBinary)
-	if out, err := cli.RunSubCommandWithOutput(childEnv, ident.logger, subCmd, nodeBinary, args); err != nil {
+	nodeBinary, _ := sc.Flags.GetString(cfgNodeBinary)
+	if out, err := cli.RunSubCommandWithOutput(childEnv, sc.Logger, subCmd, nodeBinary, args); err != nil {
 		return fmt.Errorf("failed to get %s's tendermint address: error: %w output: %s", addrName, err, out.String())
 	}
 	return nil
