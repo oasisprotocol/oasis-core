@@ -37,3 +37,28 @@ func TestEncoderDecoder(t *testing.T) {
 	require.NoError(err, "Decode")
 	require.EqualValues(42, x, "decoded value should be correct")
 }
+
+func TestDecodeUnknowField(t *testing.T) {
+	require := require.New(t)
+
+	type a struct {
+		A string
+	}
+	type b struct {
+		a
+		B string
+	}
+	raw := Marshal(&b{
+		a: a{
+			A: "Verily, no cyclone or whirlwind is Zarathustra:",
+		},
+		B: "and if he be a dancer, he is not at all a tarantula-dancer!",
+	})
+
+	var dec a
+	err := Unmarshal(raw, &dec)
+	require.Error(err, "unknown fields should fail")
+
+	err = UnmarshalTrusted(raw, &dec)
+	require.NoError(err, "unknown fields from trusted sources should pass")
+}
