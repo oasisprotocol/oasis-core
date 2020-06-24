@@ -16,31 +16,26 @@ var (
 	// EarlyQuery is the early query scenario where we query a validator node before the network
 	// has started and there are no committed blocks.
 	EarlyQuery scenario.Scenario = &earlyQueryImpl{
-		runtimeImpl: *newRuntimeImpl("early-query", "", nil),
+		e2eImpl: *newE2eImpl("early-query"),
 	}
 )
 
 type earlyQueryImpl struct {
-	runtimeImpl
+	e2eImpl
 }
 
 func (sc *earlyQueryImpl) Clone() scenario.Scenario {
 	return &earlyQueryImpl{
-		runtimeImpl: *sc.runtimeImpl.Clone().(*runtimeImpl),
+		e2eImpl: sc.e2eImpl.Clone(),
 	}
 }
 
 func (sc *earlyQueryImpl) Fixture() (*oasis.NetworkFixture, error) {
-	f, err := sc.runtimeImpl.Fixture()
+	f, err := sc.e2eImpl.Fixture()
 	if err != nil {
 		return nil, err
 	}
 
-	// We only need validators.
-	f.Keymanagers = nil
-	f.StorageWorkers = nil
-	f.ComputeWorkers = nil
-	f.Clients = nil
 	// Only one validator should actually start to prevent the network from committing any blocks.
 	f.Validators[1].NoAutoStart = true
 	f.Validators[2].NoAutoStart = true

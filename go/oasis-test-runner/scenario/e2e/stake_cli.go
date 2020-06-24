@@ -68,22 +68,22 @@ var (
 
 	// StakeCLI is the staking scenario.
 	StakeCLI scenario.Scenario = &stakeCLIImpl{
-		runtimeImpl: *newRuntimeImpl("stake-cli", "", nil),
+		e2eImpl: *newE2eImpl("stake-cli"),
 	}
 )
 
 type stakeCLIImpl struct {
-	runtimeImpl
+	e2eImpl
 }
 
 func (s *stakeCLIImpl) Clone() scenario.Scenario {
 	return &stakeCLIImpl{
-		runtimeImpl: *s.runtimeImpl.Clone().(*runtimeImpl),
+		e2eImpl: s.e2eImpl.Clone(),
 	}
 }
 
 func (s *stakeCLIImpl) Fixture() (*oasis.NetworkFixture, error) {
-	f, err := s.runtimeImpl.Fixture()
+	f, err := s.e2eImpl.Fixture()
 	if err != nil {
 		return nil, err
 	}
@@ -124,7 +124,7 @@ func (s *stakeCLIImpl) Run(childEnv *env.Env) error {
 	// In the genesis block, only one account should have a balance.
 	if len(addresses) < 1 {
 		return fmt.Errorf(
-			"scenario/e2e/stake: wrong number of accounts in initial list: %d, expected at least: %d. Accounts: %s",
+			"wrong number of accounts in initial list: %d, expected at least: %d. Accounts: %s",
 			len(addresses), 1, addresses,
 		)
 	}
@@ -138,7 +138,7 @@ func (s *stakeCLIImpl) Run(childEnv *env.Env) error {
 		}
 	}
 	if !found {
-		return fmt.Errorf("scenario/e2e/stake: src account address not found in initial list: %s", srcAddress)
+		return fmt.Errorf("src account address not found in initial list: %s", srcAddress)
 	}
 
 	// Run the tests
@@ -161,36 +161,36 @@ func (s *stakeCLIImpl) Run(childEnv *env.Env) error {
 	for _, vector := range pubkey2AddressTestVectors {
 		err = s.testPubkey2Address(childEnv, vector.publicKeyText, vector.addressText)
 		if err != nil && !vector.expectError {
-			return fmt.Errorf("scenario/e2e/stake: unexpected pubkey2address error: %w", err)
+			return fmt.Errorf("unexpected pubkey2address error: %w", err)
 		}
 		if err == nil && vector.expectError {
-			return fmt.Errorf("scenario/e2e/stake: pubkey2address for public key '%s' should error", vector.publicKeyText)
+			return fmt.Errorf("pubkey2address for public key '%s' should error", vector.publicKeyText)
 		}
 	}
 
 	// Transfer
 	if err = s.testTransfer(childEnv, cli, srcAddress, dstAddress); err != nil {
-		return fmt.Errorf("scenario/e2e/stake: error while running Transfer test: %w", err)
+		return fmt.Errorf("error while running Transfer test: %w", err)
 	}
 
 	// Burn
 	if err = s.testBurn(childEnv, cli, srcAddress); err != nil {
-		return fmt.Errorf("scenario/e2e/stake: error while running Burn test: %w", err)
+		return fmt.Errorf("error while running Burn test: %w", err)
 	}
 
 	// Escrow
 	if err = s.testEscrow(childEnv, cli, srcAddress, escrowAddress); err != nil {
-		return fmt.Errorf("scenario/e2e/stake: error while running Escrow test: %w", err)
+		return fmt.Errorf("error while running Escrow test: %w", err)
 	}
 
 	// ReclaimEscrow
 	if err = s.testReclaimEscrow(childEnv, cli, srcAddress, escrowAddress); err != nil {
-		return fmt.Errorf("scenario/e2e/stake: error while running ReclaimEscrow test: %w", err)
+		return fmt.Errorf("error while running ReclaimEscrow test: %w", err)
 	}
 
 	// AmendCommissionSchedule
 	if err = s.testAmendCommissionSchedule(childEnv, cli, srcAddress); err != nil {
-		return fmt.Errorf("scenario/e2e/stake: error while running AmendCommissionSchedule: %w", err)
+		return fmt.Errorf("error while running AmendCommissionSchedule: %w", err)
 	}
 
 	// Stop the network.
@@ -206,7 +206,7 @@ func (s *stakeCLIImpl) testPubkey2Address(childEnv *env.Env, publicKeyText strin
 		"--" + stake.CfgPublicKey, publicKeyText,
 	}
 
-	out, err := cli.RunSubCommandWithOutput(childEnv, s.logger, "info", s.runtimeImpl.net.Config().NodeBinary, args)
+	out, err := cli.RunSubCommandWithOutput(childEnv, s.logger, "info", s.net.Config().NodeBinary, args)
 	if err != nil {
 		return fmt.Errorf("failed to convert public key to address: error: %w output: %s", err, out.String())
 	}
@@ -256,7 +256,7 @@ func (s *stakeCLIImpl) testTransfer(childEnv *env.Env, cli *cli.Helpers, src api
 		return err
 	}
 	if len(accounts) < 2 {
-		return fmt.Errorf("scenario/e2e/stake: post-transfer stake list wrong number of accounts: %d, expected at least: %d. Accounts: %s", len(accounts), 2, accounts)
+		return fmt.Errorf("post-transfer stake list wrong number of accounts: %d, expected at least: %d. Accounts: %s", len(accounts), 2, accounts)
 	}
 
 	return nil
@@ -284,7 +284,7 @@ func (s *stakeCLIImpl) testBurn(childEnv *env.Env, cli *cli.Helpers, src api.Add
 		return err
 	}
 	if len(accounts) < 2 {
-		return fmt.Errorf("scenario/e2e/stake: post-burn stake list wrong number of accounts: %d, expected at least: %d", len(accounts), 2)
+		return fmt.Errorf("post-burn stake list wrong number of accounts: %d, expected at least: %d", len(accounts), 2)
 	}
 
 	return nil
@@ -315,7 +315,7 @@ func (s *stakeCLIImpl) testEscrow(childEnv *env.Env, cli *cli.Helpers, src api.A
 		return err
 	}
 	if len(accounts) < 3 {
-		return fmt.Errorf("scenario/e2e/stake: post-escrow stake list wrong number of accounts: %d, expected at least: %d", len(accounts), 3)
+		return fmt.Errorf("post-escrow stake list wrong number of accounts: %d, expected at least: %d", len(accounts), 3)
 	}
 
 	return nil
@@ -354,7 +354,7 @@ func (s *stakeCLIImpl) testReclaimEscrow(childEnv *env.Env, cli *cli.Helpers, sr
 		return err
 	}
 	if len(accounts) < 3 {
-		return fmt.Errorf("scenario/e2e/stake: post-reclaim-escrow stake list wrong number of accounts: %d, expected: %d", len(accounts), 3)
+		return fmt.Errorf("post-reclaim-escrow stake list wrong number of accounts: %d, expected: %d", len(accounts), 3)
 	}
 
 	return nil
@@ -403,12 +403,12 @@ func (s *stakeCLIImpl) getInfo(childEnv *env.Env) error {
 	s.logger.Info("querying common token info")
 	args := []string{
 		"stake", "info",
-		"--" + grpc.CfgAddress, "unix:" + s.runtimeImpl.net.Validators()[0].SocketPath(),
+		"--" + grpc.CfgAddress, "unix:" + s.net.Validators()[0].SocketPath(),
 	}
 
-	out, err := cli.RunSubCommandWithOutput(childEnv, s.logger, "info", s.runtimeImpl.net.Config().NodeBinary, args)
+	out, err := cli.RunSubCommandWithOutput(childEnv, s.logger, "info", s.net.Config().NodeBinary, args)
 	if err != nil {
-		return fmt.Errorf("scenario/e2e/stake: failed to query common token info: error: %w output: %s", err, out.String())
+		return fmt.Errorf("failed to query common token info: error: %w output: %s", err, out.String())
 	}
 	return nil
 }
@@ -417,11 +417,11 @@ func (s *stakeCLIImpl) listAccountAddresses(childEnv *env.Env) ([]api.Address, e
 	s.logger.Info("listing all account addresses")
 	args := []string{
 		"stake", "list",
-		"--" + grpc.CfgAddress, "unix:" + s.runtimeImpl.net.Validators()[0].SocketPath(),
+		"--" + grpc.CfgAddress, "unix:" + s.net.Validators()[0].SocketPath(),
 	}
-	out, err := cli.RunSubCommandWithOutput(childEnv, s.logger, "list", s.runtimeImpl.net.Config().NodeBinary, args)
+	out, err := cli.RunSubCommandWithOutput(childEnv, s.logger, "list", s.net.Config().NodeBinary, args)
 	if err != nil {
-		return nil, fmt.Errorf("scenario/e2e/stake: failed to list account addresses: error: %w output: %s",
+		return nil, fmt.Errorf("failed to list account addresses: error: %w output: %s",
 			err, out.String(),
 		)
 	}
@@ -436,7 +436,7 @@ func (s *stakeCLIImpl) listAccountAddresses(childEnv *env.Env) ([]api.Address, e
 
 		var addr api.Address
 		if err = addr.UnmarshalText([]byte(addrText)); err != nil {
-			return nil, fmt.Errorf("scenario/e2e/stake: failed to unmarshal account address: %w", err)
+			return nil, fmt.Errorf("failed to unmarshal account address: %w", err)
 		}
 		addresses = append(addresses, addr)
 	}
@@ -449,12 +449,12 @@ func (s *stakeCLIImpl) getAccountInfo(childEnv *env.Env, src api.Address) (*api.
 	args := []string{
 		"stake", "account", "info",
 		"--" + stake.CfgAccountAddr, src.String(),
-		"--" + grpc.CfgAddress, "unix:" + s.runtimeImpl.net.Validators()[0].SocketPath(),
+		"--" + grpc.CfgAddress, "unix:" + s.net.Validators()[0].SocketPath(),
 	}
 
-	out, err := cli.RunSubCommandWithOutput(childEnv, s.logger, "info", s.runtimeImpl.net.Config().NodeBinary, args)
+	out, err := cli.RunSubCommandWithOutput(childEnv, s.logger, "info", s.net.Config().NodeBinary, args)
 	if err != nil {
-		return nil, fmt.Errorf("scenario/e2e/stake: failed to check account info: error: %w output: %s", err, out.String())
+		return nil, fmt.Errorf("failed to check account info: error: %w output: %s", err, out.String())
 	}
 
 	var acct api.Account
@@ -507,9 +507,9 @@ func (s *stakeCLIImpl) showTx(childEnv *env.Env, txPath string) error {
 		"--" + consensus.CfgTxFile, txPath,
 		"--" + common.CfgDebugAllowTestKeys,
 		"--" + flags.CfgDebugDontBlameOasis,
-		"--" + flags.CfgGenesisFile, s.runtimeImpl.net.GenesisPath(),
+		"--" + flags.CfgGenesisFile, s.net.GenesisPath(),
 	}
-	if out, err := cli.RunSubCommandWithOutput(childEnv, s.logger, "show_tx", s.runtimeImpl.net.Config().NodeBinary, args); err != nil {
+	if out, err := cli.RunSubCommandWithOutput(childEnv, s.logger, "show_tx", s.net.Config().NodeBinary, args); err != nil {
 		return fmt.Errorf("showTx: failed to show tx: error: %w, output: %s", err, out.String())
 	}
 	return nil
@@ -529,9 +529,9 @@ func (s *stakeCLIImpl) genTransferTx(childEnv *env.Env, amount int, nonce int, d
 		"--" + flags.CfgDebugDontBlameOasis,
 		"--" + flags.CfgDebugTestEntity,
 		"--" + common.CfgDebugAllowTestKeys,
-		"--" + flags.CfgGenesisFile, s.runtimeImpl.net.GenesisPath(),
+		"--" + flags.CfgGenesisFile, s.net.GenesisPath(),
 	}
-	if out, err := cli.RunSubCommandWithOutput(childEnv, s.logger, "gen_transfer", s.runtimeImpl.net.Config().NodeBinary, args); err != nil {
+	if out, err := cli.RunSubCommandWithOutput(childEnv, s.logger, "gen_transfer", s.net.Config().NodeBinary, args); err != nil {
 		return fmt.Errorf("genTransferTx: failed to generate transfer tx: error: %w output: %s", err, out.String())
 	}
 	return nil
@@ -550,9 +550,9 @@ func (s *stakeCLIImpl) genBurnTx(childEnv *env.Env, amount int, nonce int, txPat
 		"--" + flags.CfgDebugDontBlameOasis,
 		"--" + flags.CfgDebugTestEntity,
 		"--" + common.CfgDebugAllowTestKeys,
-		"--" + flags.CfgGenesisFile, s.runtimeImpl.net.GenesisPath(),
+		"--" + flags.CfgGenesisFile, s.net.GenesisPath(),
 	}
-	if out, err := cli.RunSubCommandWithOutput(childEnv, s.logger, "gen_burn", s.runtimeImpl.net.Config().NodeBinary, args); err != nil {
+	if out, err := cli.RunSubCommandWithOutput(childEnv, s.logger, "gen_burn", s.net.Config().NodeBinary, args); err != nil {
 		return fmt.Errorf("genBurnTx: failed to generate burn tx: error: %w output: %s", err, out.String())
 	}
 	return nil
@@ -572,9 +572,9 @@ func (s *stakeCLIImpl) genEscrowTx(childEnv *env.Env, amount int, nonce int, esc
 		"--" + flags.CfgDebugDontBlameOasis,
 		"--" + flags.CfgDebugTestEntity,
 		"--" + common.CfgDebugAllowTestKeys,
-		"--" + flags.CfgGenesisFile, s.runtimeImpl.net.GenesisPath(),
+		"--" + flags.CfgGenesisFile, s.net.GenesisPath(),
 	}
-	if out, err := cli.RunSubCommandWithOutput(childEnv, s.logger, "gen_escrow", s.runtimeImpl.net.Config().NodeBinary, args); err != nil {
+	if out, err := cli.RunSubCommandWithOutput(childEnv, s.logger, "gen_escrow", s.net.Config().NodeBinary, args); err != nil {
 		return fmt.Errorf("genEscrowTx: failed to generate escrow tx: error: %w output: %s", err, out.String())
 	}
 	return nil
@@ -594,9 +594,9 @@ func (s *stakeCLIImpl) genReclaimEscrowTx(childEnv *env.Env, shares int, nonce i
 		"--" + flags.CfgDebugDontBlameOasis,
 		"--" + flags.CfgDebugTestEntity,
 		"--" + common.CfgDebugAllowTestKeys,
-		"--" + flags.CfgGenesisFile, s.runtimeImpl.net.GenesisPath(),
+		"--" + flags.CfgGenesisFile, s.net.GenesisPath(),
 	}
-	if out, err := cli.RunSubCommandWithOutput(childEnv, s.logger, "gen_reclaim_escrow", s.runtimeImpl.net.Config().NodeBinary, args); err != nil {
+	if out, err := cli.RunSubCommandWithOutput(childEnv, s.logger, "gen_reclaim_escrow", s.net.Config().NodeBinary, args); err != nil {
 		return fmt.Errorf("genReclaimEscrowTx: failed to generate reclaim escrow tx: error: %w output: %s", err, out.String())
 	}
 	return nil
@@ -614,7 +614,7 @@ func (s *stakeCLIImpl) genAmendCommissionScheduleTx(childEnv *env.Env, nonce int
 		"--" + flags.CfgDebugDontBlameOasis,
 		"--" + flags.CfgDebugTestEntity,
 		"--" + common.CfgDebugAllowTestKeys,
-		"--" + flags.CfgGenesisFile, s.runtimeImpl.net.GenesisPath(),
+		"--" + flags.CfgGenesisFile, s.net.GenesisPath(),
 	}
 	for _, step := range cs.Rates {
 		args = append(args, "--"+stake.CfgCommissionScheduleRates, fmt.Sprintf("%d/%d", step.Start, step.Rate.ToBigInt()))
@@ -622,7 +622,7 @@ func (s *stakeCLIImpl) genAmendCommissionScheduleTx(childEnv *env.Env, nonce int
 	for _, step := range cs.Bounds {
 		args = append(args, "--"+stake.CfgCommissionScheduleBounds, fmt.Sprintf("%d/%d/%d", step.Start, step.RateMin.ToBigInt(), step.RateMax.ToBigInt()))
 	}
-	if out, err := cli.RunSubCommandWithOutput(childEnv, s.logger, "gen_amend_commission_schedule", s.runtimeImpl.net.Config().NodeBinary, args); err != nil {
+	if out, err := cli.RunSubCommandWithOutput(childEnv, s.logger, "gen_amend_commission_schedule", s.net.Config().NodeBinary, args); err != nil {
 		return fmt.Errorf("genAmendCommissionScheduleTx: failed to generate amend commission schedule tx: error: %w output: %s", err, out.String())
 	}
 	return nil

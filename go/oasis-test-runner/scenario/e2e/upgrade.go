@@ -10,10 +10,8 @@ import (
 	"time"
 
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
-	"github.com/oasisprotocol/oasis-core/go/common/node"
 	"github.com/oasisprotocol/oasis-core/go/common/persistent"
 	"github.com/oasisprotocol/oasis-core/go/common/pubsub"
-	"github.com/oasisprotocol/oasis-core/go/common/sgx"
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
 	epoch "github.com/oasisprotocol/oasis-core/go/epochtime/api"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/env"
@@ -54,7 +52,7 @@ var (
 )
 
 type nodeUpgradeImpl struct {
-	runtimeImpl
+	e2eImpl
 
 	validator  *oasis.Validator
 	controller *oasis.Controller
@@ -111,39 +109,29 @@ func (sc *nodeUpgradeImpl) restart(wait bool) error {
 
 func newNodeUpgradeImpl() scenario.Scenario {
 	sc := &nodeUpgradeImpl{
-		runtimeImpl: *newRuntimeImpl("node-upgrade", "", nil),
-		ctx:         context.Background(),
+		e2eImpl: *newE2eImpl("node-upgrade"),
+		ctx:     context.Background(),
 	}
 	return sc
 }
 
 func (sc *nodeUpgradeImpl) Clone() scenario.Scenario {
 	return &nodeUpgradeImpl{
-		runtimeImpl: *sc.runtimeImpl.Clone().(*runtimeImpl),
-		ctx:         context.Background(),
+		e2eImpl: sc.e2eImpl.Clone(),
+		ctx:     context.Background(),
 	}
 }
 
 func (sc *nodeUpgradeImpl) Fixture() (*oasis.NetworkFixture, error) {
-	tee, err := sc.getTEEHardware()
+	f, err := sc.e2eImpl.Fixture()
 	if err != nil {
 		return nil, err
 	}
-	var mrSigner *sgx.MrSigner
-	if tee == node.TEEHardwareIntelSGX {
-		mrSigner = &sgx.FortanixDummyMrSigner
-	}
-	nodeBinary, _ := sc.flags.GetString(cfgNodeBinary)
-	runtimeLoader, _ := sc.flags.GetString(cfgRuntimeLoader)
+
 	return &oasis.NetworkFixture{
-		TEE: oasis.TEEFixture{
-			Hardware: tee,
-			MrSigner: mrSigner,
-		},
 		Network: oasis.NetworkCfg{
-			NodeBinary:             nodeBinary,
-			RuntimeSGXLoaderBinary: runtimeLoader,
-			EpochtimeMock:          true,
+			NodeBinary:    f.Network.NodeBinary,
+			EpochtimeMock: true,
 			DefaultLogWatcherHandlerFactories: []log.WatcherHandlerFactory{
 				oasis.LogAssertUpgradeStartup(),
 				oasis.LogAssertUpgradeConsensus(),

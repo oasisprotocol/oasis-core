@@ -6,9 +6,7 @@ import (
 
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	memorySigner "github.com/oasisprotocol/oasis-core/go/common/crypto/signature/signers/memory"
-	"github.com/oasisprotocol/oasis-core/go/common/node"
 	"github.com/oasisprotocol/oasis-core/go/common/quantity"
-	"github.com/oasisprotocol/oasis-core/go/common/sgx"
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
 	"github.com/oasisprotocol/oasis-core/go/consensus/api/transaction"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/env"
@@ -20,21 +18,13 @@ import (
 var (
 	// GasFeesStaking is the staking gas fees scenario.
 	GasFeesStaking scenario.Scenario = &gasFeesImpl{
-		runtimeImpl: *newRuntimeImpl(
-			"gas-fees/staking",
-			"",
-			nil,
-		),
+		e2eImpl: *newE2eImpl("gas-fees/staking"),
 	}
 
 	// GasFeesStakingDumpRestore is the staking gas fees scenario with
 	// dump-restore.
 	GasFeesStakingDumpRestore scenario.Scenario = &gasFeesImpl{
-		runtimeImpl: *newRuntimeImpl(
-			"gas-fees/staking-dump-restore",
-			"",
-			nil,
-		),
+		e2eImpl:     *newE2eImpl("gas-fees/staking-dump-restore"),
 		dumpRestore: true,
 	}
 
@@ -53,62 +43,45 @@ var (
 )
 
 type gasFeesImpl struct {
-	runtimeImpl
+	e2eImpl
 
 	dumpRestore bool
 }
 
 func (sc *gasFeesImpl) Clone() scenario.Scenario {
 	return &gasFeesImpl{
-		runtimeImpl: *sc.runtimeImpl.Clone().(*runtimeImpl),
+		e2eImpl:     sc.e2eImpl.Clone(),
 		dumpRestore: sc.dumpRestore,
 	}
 }
 
 func (sc *gasFeesImpl) Fixture() (*oasis.NetworkFixture, error) {
-	f, err := sc.runtimeImpl.Fixture()
+	f, err := sc.e2eImpl.Fixture()
 	if err != nil {
 		return nil, err
 	}
 
-	tee, err := sc.getTEEHardware()
-	if err != nil {
-		return nil, err
-	}
-	var mrSigner *sgx.MrSigner
-	if tee == node.TEEHardwareIntelSGX {
-		mrSigner = &sgx.FortanixDummyMrSigner
-	}
-
-	f.TEE = oasis.TEEFixture{
-		Hardware: tee,
-		MrSigner: mrSigner,
-	}
-	nodeBinary, _ := sc.flags.GetString(cfgNodeBinary)
-	runtimeLoader, _ := sc.flags.GetString(cfgRuntimeLoader)
-	f.Network = oasis.NetworkCfg{
-		NodeBinary:                        nodeBinary,
-		RuntimeSGXLoaderBinary:            runtimeLoader,
-		EpochtimeMock:                     true,
-		StakingGenesis:                    "tests/fixture-data/gas-fees/staking-genesis.json",
-		DefaultLogWatcherHandlerFactories: DefaultRuntimeLogWatcherHandlerFactories,
-		ConsensusGasCostsTxByte:           0, // So we can control gas more easily.
-	}
-	f.Entities = []oasis.EntityCfg{
-		oasis.EntityCfg{IsDebugTestEntity: true},
-		oasis.EntityCfg{},
-		oasis.EntityCfg{},
-		oasis.EntityCfg{},
-	}
-	f.Validators = []oasis.ValidatorFixture{
-		// Create three validators, each with its own entity so we can test
-		// if gas disbursement works correctly.
-		oasis.ValidatorFixture{Entity: 1, Consensus: oasis.ConsensusFixture{MinGasPrice: 1}},
-		oasis.ValidatorFixture{Entity: 2, Consensus: oasis.ConsensusFixture{MinGasPrice: 1}},
-		oasis.ValidatorFixture{Entity: 3, Consensus: oasis.ConsensusFixture{MinGasPrice: 1}},
-	}
-
-	return f, nil
+	return &oasis.NetworkFixture{
+		Network: oasis.NetworkCfg{
+			NodeBinary:              f.Network.NodeBinary,
+			EpochtimeMock:           true,
+			StakingGenesis:          "tests/fixture-data/gas-fees/staking-genesis.json",
+			ConsensusGasCostsTxByte: 0, // So we can control gas more easily.
+		},
+		Entities: []oasis.EntityCfg{
+			oasis.EntityCfg{IsDebugTestEntity: true},
+			oasis.EntityCfg{},
+			oasis.EntityCfg{},
+			oasis.EntityCfg{},
+		},
+		Validators: []oasis.ValidatorFixture{
+			// Create three validators, each with its own entity so we can test
+			// if gas disbursement works correctly.
+			oasis.ValidatorFixture{Entity: 1, Consensus: oasis.ConsensusFixture{MinGasPrice: 1}},
+			oasis.ValidatorFixture{Entity: 2, Consensus: oasis.ConsensusFixture{MinGasPrice: 1}},
+			oasis.ValidatorFixture{Entity: 3, Consensus: oasis.ConsensusFixture{MinGasPrice: 1}},
+		},
+	}, nil
 }
 
 func (sc *gasFeesImpl) Init(childEnv *env.Env, net *oasis.Network) error {

@@ -7,8 +7,6 @@ import (
 	"path"
 
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
-	"github.com/oasisprotocol/oasis-core/go/common/node"
-	"github.com/oasisprotocol/oasis-core/go/common/sgx"
 	epoch "github.com/oasisprotocol/oasis-core/go/epochtime/api"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/env"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/oasis"
@@ -30,7 +28,7 @@ var (
 )
 
 type nodeUpgradeCancelImpl struct {
-	runtimeImpl
+	e2eImpl
 
 	ctx          context.Context
 	currentEpoch epoch.EpochTime
@@ -46,40 +44,29 @@ func (sc *nodeUpgradeCancelImpl) nextEpoch() error {
 
 func newNodeUpgradeCancelImpl() scenario.Scenario {
 	sc := &nodeUpgradeCancelImpl{
-		runtimeImpl: *newRuntimeImpl("node-upgrade-cancel", "", nil),
-		ctx:         context.Background(),
+		e2eImpl: *newE2eImpl("node-upgrade-cancel"),
+		ctx:     context.Background(),
 	}
 	return sc
 }
 
 func (sc *nodeUpgradeCancelImpl) Clone() scenario.Scenario {
 	return &nodeUpgradeCancelImpl{
-		runtimeImpl: *sc.runtimeImpl.Clone().(*runtimeImpl),
-		ctx:         context.Background(),
+		e2eImpl: sc.e2eImpl.Clone(),
+		ctx:     context.Background(),
 	}
 }
 
 func (sc *nodeUpgradeCancelImpl) Fixture() (*oasis.NetworkFixture, error) {
-	tee, err := sc.getTEEHardware()
+	f, err := sc.e2eImpl.Fixture()
 	if err != nil {
 		return nil, err
 	}
-	var mrSigner *sgx.MrSigner
-	if tee == node.TEEHardwareIntelSGX {
-		mrSigner = &sgx.FortanixDummyMrSigner
-	}
-	nodeBinary, _ := sc.flags.GetString(cfgNodeBinary)
-	runtimeLoader, _ := sc.flags.GetString(cfgRuntimeLoader)
+
 	return &oasis.NetworkFixture{
-		TEE: oasis.TEEFixture{
-			Hardware: tee,
-			MrSigner: mrSigner,
-		},
 		Network: oasis.NetworkCfg{
-			NodeBinary:                        nodeBinary,
-			RuntimeSGXLoaderBinary:            runtimeLoader,
-			EpochtimeMock:                     true,
-			DefaultLogWatcherHandlerFactories: DefaultRuntimeLogWatcherHandlerFactories,
+			NodeBinary:    f.Network.NodeBinary,
+			EpochtimeMock: true,
 		},
 		Entities: []oasis.EntityCfg{
 			oasis.EntityCfg{IsDebugTestEntity: true},
