@@ -307,7 +307,24 @@ func (n *Node) handleResultsLocked(ctx context.Context, commit *commitment.Execu
 		return err
 	}
 
-	n.tryFinalizeResultsLocked(sp, false)
+	// Attempt finalization. We defer this part in order to not block P2P relaying.
+	expectedRound := n.commonNode.CurrentBlock.Header.Round
+	go func() {
+		n.commonNode.CrossNode.Lock()
+		defer n.commonNode.CrossNode.Unlock()
+
+		// Ignore defered finalization attempt if state has changed.
+		if _, ok := n.state.(StateWaitingForResults); !ok {
+			return
+		}
+
+		// Ignore defered finalization attempt if current block has changed.
+		if n.commonNode.CurrentBlock.Header.Round != expectedRound {
+			return
+		}
+
+		n.tryFinalizeResultsLocked(sp, false)
+	}()
 	return nil
 }
 
