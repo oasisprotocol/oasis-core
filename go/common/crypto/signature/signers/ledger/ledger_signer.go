@@ -2,8 +2,11 @@
 package ledger
 
 import (
+	"errors"
 	"fmt"
 	"io"
+
+	ledger "github.com/zondax/ledger-go"
 
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	ledgerCommon "github.com/oasisprotocol/oasis-core/go/common/ledger"
@@ -33,6 +36,10 @@ var (
 	roleDerivationRootPaths = map[signature.SignerRole][]uint32{
 		signature.SignerEntity: SignerDerivationRootPath,
 	}
+
+	// NOTE: The 0x6986 ISO 7816 error code is returned by the Oasis Ledger App
+	// iff when a user rejects the transaction on the Ledger device.
+	ledgerRejectTxErrorMsg = ledger.ErrorMessage(0x6986)
 )
 
 // Factory is a Ledger backed SignerFactory.
@@ -125,7 +132,19 @@ func (s *Signer) ContextSign(context signature.Context, message []byte) ([]byte,
 	if err != nil {
 		return nil, err
 	}
-	return s.device.SignEd25519(s.path, preparedContext, message)
+	signature, err := s.device.SignEd25519(s.path, preparedContext, message)
+	switch {
+	case err == nil:
+		return signature, nil
+	// XXX: At the moment, ledger-go doesn't use proper Go error semantics and
+	// doesn't expose errors as variables so we can't compare them directly with
+	// errors.Is().
+	case err.Error() == ledgerRejectTxErrorMsg:
+		// Replace Ledger's raw APDU error with a more descriptive one.
+		return nil, errors.New("transaction was rejected on Ledger device")
+	default:
+		return nil, err
+	}
 }
 
 // String returns the address of the account on the Ledger device.
