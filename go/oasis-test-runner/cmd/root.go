@@ -6,6 +6,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"regexp"
 	"runtime/debug"
 	"sort"
 	"strings"
@@ -271,11 +272,23 @@ func runRoot(cmd *cobra.Command, args []string) error {
 	// Enumerate requested scenarios.
 	toRun := common.GetDefaultScenarios() // Run all default scenarios if not set.
 	if vec := viper.GetStringSlice(common.CfgTest); len(vec) > 0 {
-		toRun = nil
+		matched := make(map[scenario.Scenario]bool)
 		for _, v := range vec {
 			name := strings.ToLower(v)
-			scenario, ok := common.GetScenarios()[v]
-			if !ok {
+
+			var anyMatched bool
+			for scName, scenario := range common.GetScenarios() {
+				var match bool
+				match, err = regexp.MatchString(name, scName)
+				if err != nil {
+					return fmt.Errorf("root: bad scenario name regexp: %w", err)
+				}
+				if match {
+					matched[scenario] = true
+					anyMatched = true
+				}
+			}
+			if !anyMatched {
 				logger.Error("unknown scenario",
 					"scenario", name,
 				)
@@ -283,6 +296,9 @@ func runRoot(cmd *cobra.Command, args []string) error {
 					name, strings.Join(common.GetScenarioNames(), "\n"),
 				)
 			}
+		}
+		toRun = nil
+		for scenario := range matched {
 			toRun = append(toRun, scenario)
 		}
 	}
@@ -522,7 +538,7 @@ func init() {
 	persistentFlags := flag.NewFlagSet("", flag.ContinueOnError)
 	persistentFlags.Var(&logFmt, common.CfgLogFmt, "log format")
 	persistentFlags.Var(&logLevel, common.CfgLogLevel, "log level")
-	persistentFlags.StringSliceP(common.CfgTest, common.CfgTestP, nil, "name of test(s)")
+	persistentFlags.StringSliceP(common.CfgTest, common.CfgTestP, nil, "regexp patterns matching names of tests")
 	persistentFlags.String(metrics.CfgMetricsAddr, "", "Prometheus address")
 	persistentFlags.StringToString(metrics.CfgMetricsLabels, map[string]string{}, "override Prometheus labels")
 	_ = viper.BindPFlags(persistentFlags)
