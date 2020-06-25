@@ -18,6 +18,7 @@ import (
 	runtimeRegistry "github.com/oasisprotocol/oasis-core/go/runtime/registry"
 	storage "github.com/oasisprotocol/oasis-core/go/storage/api"
 	"github.com/oasisprotocol/oasis-core/go/worker/common/p2p"
+	p2pError "github.com/oasisprotocol/oasis-core/go/worker/common/p2p/error"
 )
 
 var (
@@ -167,7 +168,7 @@ func (n *Node) HandlePeerMessage(ctx context.Context, message *p2p.Message) erro
 			return nil
 		}
 	}
-	return errors.New("unknown message type")
+	return p2pError.Permanent(errors.New("unknown message type"))
 }
 
 // Guarded by n.CrossNode.
