@@ -4,14 +4,9 @@ import (
 	"context"
 	"time"
 
-	"github.com/opentracing/opentracing-go"
-
-	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
-	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	roothash "github.com/oasisprotocol/oasis-core/go/roothash/api"
 	"github.com/oasisprotocol/oasis-core/go/roothash/api/block"
 	"github.com/oasisprotocol/oasis-core/go/runtime/host/protocol"
-	"github.com/oasisprotocol/oasis-core/go/runtime/transaction"
 )
 
 // StateName is a symbolic state without the attached values.
@@ -131,18 +126,10 @@ func (s StateWaitingForBatch) String() string {
 
 // StateWaitingForBlock is the waiting for block state.
 type StateWaitingForBlock struct {
-	// I/O root from the transaction scheduler containing the inputs.
-	ioRoot hash.Hash
 	// Batch that is waiting to be processed.
-	batch transaction.RawBatch
-	// Tracing for this batch.
-	batchSpanCtx opentracing.SpanContext
+	batch *unresolvedBatch
 	// Header of the block we are waiting for.
 	header *block.Header
-	// Transaction scheduler's signature.
-	txnSchedSig signature.Signature
-	// Storage signatures for the I/O root containing the inputs.
-	inputStorageSigs []signature.Signature
 }
 
 // Name returns the name of the state.
@@ -157,16 +144,8 @@ func (s StateWaitingForBlock) String() string {
 
 // StateWaitingForEvent is the waiting for event state.
 type StateWaitingForEvent struct {
-	// I/O root from the transaction scheduler containing the inputs.
-	ioRoot hash.Hash
 	// Batch that is being processed.
-	batch transaction.RawBatch
-	// Tracing for this batch.
-	batchSpanCtx opentracing.SpanContext
-	// Transaction scheduler's signature.
-	txnSchedSig signature.Signature
-	// Storage signatures for the I/O root containing the inputs.
-	inputStorageSigs []signature.Signature
+	batch *unresolvedBatch
 }
 
 // Name returns the name of the state.
@@ -181,22 +160,14 @@ func (s StateWaitingForEvent) String() string {
 
 // StateProcessingBatch is the processing batch state.
 type StateProcessingBatch struct {
-	// I/O root from the transaction scheduler containing the inputs.
-	ioRoot hash.Hash
 	// Batch that is being processed.
-	batch transaction.RawBatch
-	// Tracing for this batch.
-	batchSpanCtx opentracing.SpanContext
+	batch *unresolvedBatch
 	// Timing for this batch.
 	batchStartTime time.Time
 	// Function for cancelling batch processing.
 	cancelFn context.CancelFunc
 	// Channel which will provide the result.
 	done chan *protocol.ComputedBatch
-	// Transaction scheduler's signature.
-	txnSchedSig signature.Signature
-	// Storage signatures for the I/O root containing the inputs.
-	inputStorageSigs []signature.Signature
 }
 
 // Name returns the name of the state.
