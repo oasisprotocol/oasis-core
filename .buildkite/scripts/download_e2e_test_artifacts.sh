@@ -36,3 +36,5 @@ download_artifact simple-keyvalue-ops-client target/default/debug 755
 
 download_artifact simple-keyvalue.sgxs target/sgx/x86_64-fortanix-unknown-sgx/debug 755
 download_artifact simple-keyvalue target/default/debug 755
+download_artifact simple-keyvalue-upgrade.sgxs target/sgx/x86_64-fortanix-unknown-sgx/debug 755
+download_artifact simple-keyvalue-upgrade target/default/debug 755

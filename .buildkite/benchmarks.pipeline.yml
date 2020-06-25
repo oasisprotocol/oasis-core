@@ -101,10 +101,12 @@ steps:
       - cd /var/tmp/artifacts/sgx/x86_64-fortanix-unknown-sgx/debug
       - buildkite-agent artifact upload simple-keymanager.sgxs
       - buildkite-agent artifact upload simple-keyvalue.sgxs
+      - buildkite-agent artifact upload simple-keyvalue-upgrade.sgxs
       - buildkite-agent artifact upload simple-keymanager-upgrade.sgxs
       - cd /var/tmp/artifacts/default/debug
       - buildkite-agent artifact upload simple-keymanager
       - buildkite-agent artifact upload simple-keyvalue
+      - buildkite-agent artifact upload simple-keyvalue-upgrade
       - buildkite-agent artifact upload simple-keymanager-upgrade
     plugins:
       <<: *docker_plugin
