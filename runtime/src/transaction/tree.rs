@@ -238,7 +238,7 @@ mod test {
     #[test]
     fn test_transaction() {
         let mut tree = Tree::new(
-            Box::new(NoopReadSyncer {}),
+            Box::new(NoopReadSyncer),
             Root {
                 hash: Hash::empty_hash(),
                 ..Default::default()

@@ -12,7 +12,6 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common"
 	"github.com/oasisprotocol/oasis-core/go/common/accessctl"
 	"github.com/oasisprotocol/oasis-core/go/common/cbor"
-	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	"github.com/oasisprotocol/oasis-core/go/common/grpc/policy"
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
@@ -41,8 +40,6 @@ var (
 	_ service.BackgroundService = (*Worker)(nil)
 
 	errMalformedResponse = fmt.Errorf("worker/keymanager: malformed response from worker")
-
-	emptyRoot hash.Hash
 )
 
 // The key manager worker.
@@ -155,8 +152,7 @@ func (w *Worker) callLocal(ctx context.Context, data []byte) ([]byte, error) {
 
 	req := &protocol.Body{
 		RuntimeRPCCallRequest: &protocol.RuntimeRPCCallRequest{
-			Request:   data,
-			StateRoot: emptyRoot,
+			Request: data,
 		},
 	}
 
@@ -219,8 +215,7 @@ func (w *Worker) updateStatus(status *api.Status, startedEvent *host.StartedEven
 	}
 	req := &protocol.Body{
 		RuntimeLocalRPCCallRequest: &protocol.RuntimeLocalRPCCallRequest{
-			Request:   cbor.Marshal(&call),
-			StateRoot: emptyRoot,
+			Request: cbor.Marshal(&call),
 		},
 	}
 

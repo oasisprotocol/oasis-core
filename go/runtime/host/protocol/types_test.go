@@ -4,8 +4,6 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
-
-	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
 )
 
 func TestBody_Type(t *testing.T) {
@@ -22,8 +20,7 @@ func TestBody_Type(t *testing.T) {
 	b = Body{
 		RuntimeCapabilityTEERakInitRequest: &RuntimeCapabilityTEERakInitRequest{TargetInfo: []byte{'a', 'b', 'c', 'd'}},
 		RuntimeRPCCallRequest: &RuntimeRPCCallRequest{
-			Request:   []byte{'a', 'b', 'c', 'd'},
-			StateRoot: hash.Hash{},
+			Request: []byte{'a', 'b', 'c', 'd'},
 		},
 	}
 	// First non-nil member should be considered.
