@@ -110,8 +110,6 @@ func New(
 }
 
 func init() {
-	emptyRoot.Empty()
-
 	Flags.Bool(CfgEnabled, false, "Enable key manager worker")
 
 	Flags.String(CfgRuntimeID, "", "Key manager Runtime ID")

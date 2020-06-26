@@ -6,7 +6,7 @@ use io_context::Context;
 use crate::storage::mkvs::sync::*;
 
 /// A no-op read syncer which doesn't support any of the required operations.
-pub struct NoopReadSyncer {}
+pub struct NoopReadSyncer;
 
 impl ReadSync for NoopReadSyncer {
     fn as_any(&self) -> &dyn Any {

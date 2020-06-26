@@ -51,12 +51,6 @@ type Message struct {
 	SpanContext []byte      `json:"span_context"`
 }
 
-// RuntimeKeyManagerPolicyUpdateRequest is a runtime key manager policy request
-// message body.
-type RuntimeKeyManagerPolicyUpdateRequest struct {
-	SignedPolicyRaw []byte `json:"signed_policy_raw"`
-}
-
 // Body is a protocol message body.
 type Body struct {
 	Empty *Empty `json:",omitempty"`
@@ -156,26 +150,18 @@ type RuntimeCapabilityTEERakAvrRequest struct {
 type RuntimeRPCCallRequest struct {
 	// Request.
 	Request []byte `json:"request"`
-	// State root hash.
-	StateRoot hash.Hash `json:"state_root"`
 }
 
 // RuntimeRPCCallResponse is a worker RPC call response message body.
 type RuntimeRPCCallResponse struct {
 	// Response.
 	Response []byte `json:"response"`
-	// Batch of storage write operations.
-	WriteLog storage.WriteLog `json:"write_log"`
-	// New state root hash.
-	NewStateRoot hash.Hash `json:"new_state_root"`
 }
 
 // RuntimeLocalRPCCallRequest is a worker local RPC call request message body.
 type RuntimeLocalRPCCallRequest struct {
 	// Request.
 	Request []byte `json:"request"`
-	// State root hash.
-	StateRoot hash.Hash `json:"state_root"`
 }
 
 // RuntimeLocalRPCCallResponse is a worker local RPC call response message body.
@@ -230,6 +216,12 @@ type RuntimeExecuteTxBatchRequest struct {
 // RuntimeExecuteTxBatchResponse is a worker execute tx batch response message body.
 type RuntimeExecuteTxBatchResponse struct {
 	Batch ComputedBatch `json:"batch"`
+}
+
+// RuntimeKeyManagerPolicyUpdateRequest is a runtime key manager policy request
+// message body.
+type RuntimeKeyManagerPolicyUpdateRequest struct {
+	SignedPolicyRaw []byte `json:"signed_policy_raw"`
 }
 
 // HostRPCCallRequest is a host RPC call request message body.

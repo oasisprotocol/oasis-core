@@ -92,18 +92,14 @@ pub enum Body {
     RuntimeRPCCallRequest {
         #[serde(with = "serde_bytes")]
         request: Vec<u8>,
-        state_root: Hash,
     },
     RuntimeRPCCallResponse {
         #[serde(with = "serde_bytes")]
         response: Vec<u8>,
-        write_log: WriteLog,
-        new_state_root: Hash,
     },
     RuntimeLocalRPCCallRequest {
         #[serde(with = "serde_bytes")]
         request: Vec<u8>,
-        state_root: Hash,
     },
     RuntimeLocalRPCCallResponse {
         #[serde(with = "serde_bytes")]

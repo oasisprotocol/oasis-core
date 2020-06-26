@@ -11,7 +11,7 @@ use crate::storage::mkvs::{
 fn test_nil_pointers() {
     let server = ProtocolServer::new();
 
-    let mut tree = Tree::make().new(Box::new(NoopReadSyncer {}));
+    let mut tree = Tree::make().new(Box::new(NoopReadSyncer));
 
     // Arbitrary sequence of operations. The point is to produce a tree with
     // an internal node where at least one of the children is a null pointer.
