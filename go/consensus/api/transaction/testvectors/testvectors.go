@@ -1,4 +1,4 @@
-package main
+package testvectors
 
 import (
 	"reflect"
@@ -9,7 +9,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/consensus/api/transaction"
 )
 
-const keySeedPrefix = "oasis-core staking test vectors: "
+const keySeedPrefix = "oasis-core test vectors: "
 
 // TestTransactions is a test transaction suitable for JSON serialization.
 //
@@ -36,8 +36,14 @@ type TestVector struct {
 	SignerPublicKey  signature.PublicKey           `json:"signer_public_key"`
 }
 
-func makeTestVector(kind string, tx *transaction.Transaction) TestVector {
+// MakeTestVector generates a new test vector from a transction.
+func MakeTestVector(kind string, tx *transaction.Transaction) TestVector {
 	signer := memorySigner.NewTestSigner(keySeedPrefix + kind)
+	return MakeTestVectorWithSigner(kind, tx, signer)
+}
+
+// MakeTestVectorWithSigner generates a new test vector from a transction using a specific signer.
+func MakeTestVectorWithSigner(kind string, tx *transaction.Transaction, signer signature.Signer) TestVector {
 	sigTx, err := transaction.Sign(signer, tx)
 	if err != nil {
 		panic(err)
