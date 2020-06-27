@@ -39,7 +39,8 @@ mkvs:
 build-helpers: $(test-helpers)
 
 # List of test vectors to generate.
-test-vectors-targets := staking/gen_vectors
+test-vectors-targets := staking/gen_vectors \
+	registry/gen_vectors
 
 $(test-vectors-targets):
 	@$(ECHO) "$(MAGENTA)*** Generating test vectors ($@)...$(OFF)"
