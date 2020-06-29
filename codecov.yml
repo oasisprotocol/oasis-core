@@ -6,6 +6,7 @@ ignore:
   - "go/oasis-test-runner" # E2E test runner.
   - "go/oasis-net-runner" # Test local network runner.
   - "go/staking/gen_vectors" # Staking test vector generator.
+  - "go/registry/gen_vectors" # Registry test vector generator.
   - "go/storage/fuzz" # Fuzz tests.
   - "go/storage/mkvs/fuzz" # Fuzz tests.
   - "go/consensus/tendermint/fuzz" # Fuzz tests.

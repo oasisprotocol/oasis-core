@@ -13,16 +13,6 @@ the [consensus service API documentation].
 [consensus service API documentation]: https://pkg.go.dev/github.com/oasisprotocol/oasis-core/go/staking/api?tab=doc
 <!-- markdownlint-enable line-length -->
 
-## Test Vectors
-
-To generate test vectors for various staking [transactions], run:
-
-```bash
-make -C go test-vectors/staking
-```
-
-[transactions]: transactions.md
-
 ## Accounts
 
 A staking account is an entry in the staking ledger. It can hold both general
@@ -204,6 +194,15 @@ be specified a number of epochs in the future, controlled by the
 <!-- markdownlint-enable line-length -->
 
 ## Methods
+
+The following sections describe the methods supported by the consensus staking
+service. To generate test vectors for various staking [transactions], run:
+
+```bash
+make -C go staking/gen_vectors
+```
+
+[transactions]: transactions.md
 
 ### Transfer
 

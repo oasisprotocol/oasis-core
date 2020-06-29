@@ -65,6 +65,15 @@ the future to enable runtimes to be self-governing.
 
 ## Methods
 
+The following sections describe the methods supported by the consensus registry
+service. To generate test vectors for various registry [transactions], run:
+
+```bash
+make -C go registry/gen_vectors
+```
+
+[transactions]: transactions.md
+
 ### Register Entity
 
 Entity registration enables a new entity to be created. A new register entity

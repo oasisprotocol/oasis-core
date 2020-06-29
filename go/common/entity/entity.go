@@ -189,14 +189,22 @@ func (s *SignedEntity) Open(context signature.Context, entity *Entity) error { /
 // PrettyPrint writes a pretty-printed representation of the type
 // to the given writer.
 func (s SignedEntity) PrettyPrint(prefix string, w io.Writer) {
-	var e Entity
-	if err := cbor.Unmarshal(s.Signed.Blob, &e); err != nil {
-		fmt.Fprintf(w, "%s<malformed: %s>\n", prefix, err)
+	pt, err := s.PrettyType()
+	if err != nil {
+		fmt.Fprintf(w, "%s<error: %s>\n", prefix, err)
 		return
 	}
 
-	pp := signature.NewPrettySigned(s.Signed, e)
-	pp.PrettyPrint(prefix, w)
+	pt.(prettyprint.PrettyPrinter).PrettyPrint(prefix, w)
+}
+
+// PrettyType returns a representation of the type that can be used for pretty printing.
+func (s SignedEntity) PrettyType() (interface{}, error) {
+	var e Entity
+	if err := cbor.Unmarshal(s.Signed.Blob, &e); err != nil {
+		return nil, fmt.Errorf("malformed signed blob: %w", err)
+	}
+	return signature.NewPrettySigned(s.Signed, e)
 }
 
 // SignEntity serializes the Entity and signs the result.

@@ -39,13 +39,12 @@ mkvs:
 build-helpers: $(test-helpers)
 
 # List of test vectors to generate.
-test-vectors := staking
+test-vectors-targets := staking/gen_vectors \
+	registry/gen_vectors
 
-$(test-vectors):
-	@$(ECHO) "$(MAGENTA)*** Generating test vectors for $@...$(OFF)"
-	@$(GO) run ./$@/gen_vectors
-
-gen-test-vectors: $(test-vectors)
+$(test-vectors-targets):
+	@$(ECHO) "$(MAGENTA)*** Generating test vectors ($@)...$(OFF)"
+	@$(GO) run ./$@
 
 # Format code.
 fmt:
@@ -135,7 +134,7 @@ clean:
 .PHONY: \
 	generate $(go-binaries) build \
 	$(test-helpers) build-helpers \
-	$(test-vectors) gen-test-vectors \
+	$(test-vectors-targets) \
 	fmt lint \
 	$(test-targets) test force-test \
 	$(fuzz-targets) build-fuzz \
