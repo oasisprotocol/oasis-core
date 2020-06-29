@@ -25,6 +25,8 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/identity"
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
 	"github.com/oasisprotocol/oasis-core/go/common/node"
+	"github.com/oasisprotocol/oasis-core/go/consensus/api/transaction"
+	consensusGenesis "github.com/oasisprotocol/oasis-core/go/consensus/genesis"
 	genesisFile "github.com/oasisprotocol/oasis-core/go/genesis/file"
 	genesisTestHelpers "github.com/oasisprotocol/oasis-core/go/genesis/tests"
 	"github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common"
@@ -257,14 +259,8 @@ type NetworkCfg struct { // nolint: maligned
 	// RuntimeSGXLoaderBinary is the path to the Oasis SGX runtime loader.
 	RuntimeSGXLoaderBinary string `json:"runtime_loader_binary"`
 
-	// ConsensusBackend is the consensus backend for all the nodes.
-	ConsensusBackend string `json:"consensus_backend"`
-
-	// ConsensusTimeoutCommit is the consensus commit timeout.
-	ConsensusTimeoutCommit time.Duration `json:"consensus_timeout_commit"`
-
-	// ConsensusGasCostsTxByte is the gas cost of each transaction byte.
-	ConsensusGasCostsTxByte uint64 `json:"consensus_gas_costs_tx_byte"`
+	// Consensus are the network-wide consensus parameters.
+	Consensus consensusGenesis.Genesis `json:"consensus"`
 
 	// HaltEpoch is the halt epoch height flag.
 	HaltEpoch uint64 `json:"halt_epoch"`
@@ -799,13 +795,13 @@ func (net *Network) makeGenesis() error {
 		"--genesis.file", net.GenesisPath(),
 		"--chain.id", genesisTestHelpers.TestChainID,
 		"--halt.epoch", strconv.FormatUint(net.cfg.HaltEpoch, 10),
-		"--consensus.backend", net.cfg.ConsensusBackend,
+		"--consensus.backend", net.cfg.Consensus.Backend,
 		"--epochtime.tendermint.interval", strconv.FormatInt(net.cfg.EpochtimeTendermintInterval, 10),
-		"--consensus.tendermint.timeout_commit", net.cfg.ConsensusTimeoutCommit.String(),
+		"--consensus.tendermint.timeout_commit", net.cfg.Consensus.Parameters.TimeoutCommit.String(),
 		"--registry.debug.allow_unroutable_addresses", "true",
 		"--" + genesis.CfgRegistryDebugAllowTestRuntimes, "true",
 		"--scheduler.max_validators_per_entity", strconv.Itoa(len(net.Validators())),
-		"--" + genesis.CfgConsensusGasCostsTxByte, strconv.FormatUint(net.cfg.ConsensusGasCostsTxByte, 10),
+		"--" + genesis.CfgConsensusGasCostsTxByte, strconv.FormatUint(uint64(net.cfg.Consensus.Parameters.GasCosts[consensusGenesis.GasOpTxByte]), 10),
 		"--" + genesis.CfgStakingTokenSymbol, genesisTestHelpers.TestStakingTokenSymbol,
 		"--" + genesis.CfgStakingTokenValueExponent, strconv.FormatUint(
 			uint64(genesisTestHelpers.TestStakingTokenValueExponent), 10),
@@ -937,11 +933,14 @@ func New(env *env.Env, cfg *NetworkCfg) (*Network, error) {
 
 	// Copy the config and apply some sane defaults.
 	cfgCopy := *cfg
-	if cfgCopy.ConsensusBackend == "" {
-		cfgCopy.ConsensusBackend = defaultConsensusBackend
+	if cfgCopy.Consensus.Backend == "" {
+		cfgCopy.Consensus.Backend = defaultConsensusBackend
 	}
-	if cfgCopy.ConsensusTimeoutCommit == 0 {
-		cfgCopy.ConsensusTimeoutCommit = defaultConsensusTimeoutCommit
+	if cfgCopy.Consensus.Parameters.TimeoutCommit == 0 {
+		cfgCopy.Consensus.Parameters.TimeoutCommit = defaultConsensusTimeoutCommit
+	}
+	if cfgCopy.Consensus.Parameters.GasCosts == nil {
+		cfgCopy.Consensus.Parameters.GasCosts = make(transaction.Costs)
 	}
 	if cfgCopy.EpochtimeTendermintInterval == 0 {
 		cfgCopy.EpochtimeTendermintInterval = defaultEpochtimeTendermintInterval

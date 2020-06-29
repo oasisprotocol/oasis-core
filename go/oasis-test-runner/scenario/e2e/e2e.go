@@ -10,6 +10,8 @@ import (
 	flag "github.com/spf13/pflag"
 
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
+	"github.com/oasisprotocol/oasis-core/go/consensus/api/transaction"
+	consensusGenesis "github.com/oasisprotocol/oasis-core/go/consensus/genesis"
 	genesisFile "github.com/oasisprotocol/oasis-core/go/genesis/file"
 	cmdCommon "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common"
 	cmdNode "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/node"
@@ -86,8 +88,14 @@ func (sc *E2E) Fixture() (*oasis.NetworkFixture, error) {
 
 	return &oasis.NetworkFixture{
 		Network: oasis.NetworkCfg{
-			NodeBinary:              nodeBinary,
-			ConsensusGasCostsTxByte: 1,
+			NodeBinary: nodeBinary,
+			Consensus: consensusGenesis.Genesis{
+				Parameters: consensusGenesis.Parameters{
+					GasCosts: transaction.Costs{
+						consensusGenesis.GasOpTxByte: 1,
+					},
+				},
+			},
 		},
 		Entities: []oasis.EntityCfg{
 			{IsDebugTestEntity: true},
