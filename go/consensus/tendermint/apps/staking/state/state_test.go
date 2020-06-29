@@ -209,7 +209,7 @@ func TestRewardAndSlash(t *testing.T) {
 	require.NoError(err, "SetDebondingDelegation")
 
 	// Epoch 10 is during the first step.
-	require.NoError(s.AddRewards(ctx, 10, mustInitQuantityP(t, 100), escrowAddrAsList), "add rewards epoch 10")
+	require.NoError(s.AddRewards(ctx, 10, mustInitQuantityP(t, 100_000), escrowAddrAsList), "add rewards epoch 10")
 
 	// 100% gain.
 	delegatorAccount, err = s.Account(ctx, delegatorAddr)
@@ -233,7 +233,7 @@ func TestRewardAndSlash(t *testing.T) {
 	require.Equal(mustInitQuantityP(t, 9900), commonPool, "reward first step - common pool")
 
 	// Epoch 30 is in the second step.
-	require.NoError(s.AddRewards(ctx, 30, mustInitQuantityP(t, 100), escrowAddrAsList), "add rewards epoch 30")
+	require.NoError(s.AddRewards(ctx, 30, mustInitQuantityP(t, 100_000), escrowAddrAsList), "add rewards epoch 30")
 
 	// 50% gain.
 	escrowAccount, err = s.Account(ctx, escrowAddr)
@@ -244,7 +244,7 @@ func TestRewardAndSlash(t *testing.T) {
 	require.Equal(mustInitQuantityP(t, 9800), commonPool, "reward first step - common pool")
 
 	// Epoch 99 is after the end of the schedule
-	require.NoError(s.AddRewards(ctx, 99, mustInitQuantityP(t, 100), escrowAddrAsList), "add rewards epoch 99")
+	require.NoError(s.AddRewards(ctx, 99, mustInitQuantityP(t, 100_000), escrowAddrAsList), "add rewards epoch 99")
 
 	// No change.
 	escrowAccount, err = s.Account(ctx, escrowAddr)
@@ -268,7 +268,7 @@ func TestRewardAndSlash(t *testing.T) {
 	require.Equal(mustInitQuantityP(t, 9840), commonPool, "slash - common pool")
 
 	// Epoch 10 is during the first step.
-	require.NoError(s.AddRewardSingleAttenuated(ctx, 10, mustInitQuantityP(t, 10), 5, 10, escrowAddr), "add attenuated rewards epoch 30")
+	require.NoError(s.AddRewardSingleAttenuated(ctx, 10, mustInitQuantityP(t, 10_000), 5, 10, escrowAddr), "add attenuated rewards epoch 30")
 
 	// 5% gain.
 	escrowAccount, err = s.Account(ctx, escrowAddr)
