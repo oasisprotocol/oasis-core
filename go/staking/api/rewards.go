@@ -17,9 +17,9 @@ type RewardStep struct {
 }
 
 func init() {
-	// Denominated in 1000th of a percent.
+	// Denominated in one millionth of a percent.
 	RewardAmountDenominator = quantity.NewQuantity()
-	err := RewardAmountDenominator.FromBigInt(big.NewInt(100_000))
+	err := RewardAmountDenominator.FromBigInt(big.NewInt(100_000_000))
 	if err != nil {
 		panic(err)
 	}
