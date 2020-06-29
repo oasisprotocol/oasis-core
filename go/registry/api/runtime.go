@@ -317,14 +317,22 @@ func (s *SignedRuntime) Open(context signature.Context, runtime *Runtime) error 
 // PrettyPrint writes a pretty-printed representation of the type
 // to the given writer.
 func (s SignedRuntime) PrettyPrint(prefix string, w io.Writer) {
-	var rt Runtime
-	if err := cbor.Unmarshal(s.Signed.Blob, &rt); err != nil {
-		fmt.Fprintf(w, "%s<malformed: %s>\n", prefix, err)
+	pt, err := s.PrettyType()
+	if err != nil {
+		fmt.Fprintf(w, "%s<error: %s>\n", prefix, err)
 		return
 	}
 
-	pp := signature.NewPrettySigned(s.Signed, rt)
-	pp.PrettyPrint(prefix, w)
+	pt.(prettyprint.PrettyPrinter).PrettyPrint(prefix, w)
+}
+
+// PrettyType returns a representation of the type that can be used for pretty printing.
+func (s SignedRuntime) PrettyType() (interface{}, error) {
+	var rt Runtime
+	if err := cbor.Unmarshal(s.Signed.Blob, &rt); err != nil {
+		return nil, fmt.Errorf("malformed signed blob: %w", err)
+	}
+	return signature.NewPrettySigned(s.Signed, rt)
 }
 
 // SignRuntime serializes the Runtime and signs the result.

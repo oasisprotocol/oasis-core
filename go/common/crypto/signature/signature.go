@@ -453,13 +453,25 @@ func (p PrettySigned) PrettyPrint(prefix string, w io.Writer) {
 	fmt.Fprintf(w, "%s%s\n", prefix, data)
 }
 
+// PrettyType returns a representation of the type that can be used for pretty printing.
+func (p PrettySigned) PrettyType() (interface{}, error) {
+	return p, nil
+}
+
 // NewPrettySigned creates a new PrettySigned instance that can be
 // used for pretty printing signed values.
-func NewPrettySigned(s Signed, b interface{}) *PrettySigned {
+func NewPrettySigned(s Signed, b interface{}) (*PrettySigned, error) {
+	if pp, ok := b.(prettyprint.PrettyPrinter); ok {
+		var err error
+		if b, err = pp.PrettyType(); err != nil {
+			return nil, fmt.Errorf("failed to pretty print body: %w", err)
+		}
+	}
+
 	return &PrettySigned{
 		Body:      b,
 		Signature: s.Signature,
-	}
+	}, nil
 }
 
 // MultiSigned is a blob signed by multiple public keys.
@@ -557,13 +569,25 @@ func (p PrettyMultiSigned) PrettyPrint(prefix string, w io.Writer) {
 	fmt.Fprintf(w, "%s%s\n", prefix, data)
 }
 
+// PrettyType returns a representation of the type that can be used for pretty printing.
+func (p PrettyMultiSigned) PrettyType() (interface{}, error) {
+	return p, nil
+}
+
 // NewPrettyMultiSigned creates a new PrettySigned instance that can be
 // used for pretty printing multi-signed values.
-func NewPrettyMultiSigned(s MultiSigned, b interface{}) *PrettyMultiSigned {
+func NewPrettyMultiSigned(s MultiSigned, b interface{}) (*PrettyMultiSigned, error) {
+	if pp, ok := b.(prettyprint.PrettyPrinter); ok {
+		var err error
+		if b, err = pp.PrettyType(); err != nil {
+			return nil, fmt.Errorf("failed to pretty print body: %w", err)
+		}
+	}
+
 	return &PrettyMultiSigned{
 		Body:       b,
 		Signatures: s.Signatures,
-	}
+	}, nil
 }
 
 // SignedPublicKey is a signed blob containing a PublicKey.

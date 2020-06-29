@@ -11,23 +11,11 @@ import (
 
 const keySeedPrefix = "oasis-core test vectors: "
 
-// TestTransactions is a test transaction suitable for JSON serialization.
-//
-// The only difference between this and transaction.Transaction is that
-// body is not represented as raw bytes but rather as an interface so
-// it contains the actual body document.
-type TestTransaction struct {
-	Nonce  uint64                 `json:"nonce"`
-	Fee    *transaction.Fee       `json:"fee,omitempty"`
-	Method transaction.MethodName `json:"method"`
-	Body   interface{}            `json:"body,omitempty"`
-}
-
 // TestVector is a staking message test vector.
 type TestVector struct {
 	Kind             string                        `json:"kind"`
 	SignatureContext string                        `json:"signature_context"`
-	Tx               TestTransaction               `json:"tx"`
+	Tx               interface{}                   `json:"tx"`
 	SignedTx         transaction.SignedTransaction `json:"signed_tx"`
 	EncodedTx        []byte                        `json:"encoded_tx"`
 	EncodedSignedTx  []byte                        `json:"encoded_signed_tx"`
@@ -60,17 +48,15 @@ func MakeTestVectorWithSigner(kind string, tx *transaction.Transaction, signer s
 		panic(err)
 	}
 
-	testTx := TestTransaction{
-		Nonce:  tx.Nonce,
-		Fee:    tx.Fee,
-		Method: tx.Method,
-		Body:   v,
+	prettyTx, err := tx.PrettyType()
+	if err != nil {
+		panic(err)
 	}
 
 	return TestVector{
 		Kind:             kind,
 		SignatureContext: string(sigCtx),
-		Tx:               testTx,
+		Tx:               prettyTx,
 		SignedTx:         *sigTx,
 		EncodedTx:        cbor.Marshal(tx),
 		EncodedSignedTx:  cbor.Marshal(sigTx),

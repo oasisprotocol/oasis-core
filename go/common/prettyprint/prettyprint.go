@@ -8,4 +8,7 @@ type PrettyPrinter interface {
 	// PrettyPrint writes a pretty-printed representation of the type
 	// to the given writer.
 	PrettyPrint(prefix string, w io.Writer)
+
+	// PrettyType returns a representation of the type that can be used for pretty printing.
+	PrettyType() (interface{}, error)
 }

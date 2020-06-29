@@ -394,14 +394,22 @@ func (s *MultiSignedNode) Open(context signature.Context, node *Node) error {
 // PrettyPrint writes a pretty-printed representation of the type
 // to the given writer.
 func (s MultiSignedNode) PrettyPrint(prefix string, w io.Writer) {
-	var n Node
-	if err := cbor.Unmarshal(s.MultiSigned.Blob, &n); err != nil {
-		fmt.Fprintf(w, "%s<malformed: %s>\n", prefix, err)
+	pt, err := s.PrettyType()
+	if err != nil {
+		fmt.Fprintf(w, "%s<error: %s>\n", prefix, err)
 		return
 	}
 
-	pp := signature.NewPrettyMultiSigned(s.MultiSigned, n)
-	pp.PrettyPrint(prefix, w)
+	pt.(prettyprint.PrettyPrinter).PrettyPrint(prefix, w)
+}
+
+// PrettyType returns a representation of the type that can be used for pretty printing.
+func (s MultiSignedNode) PrettyType() (interface{}, error) {
+	var n Node
+	if err := cbor.Unmarshal(s.MultiSigned.Blob, &n); err != nil {
+		return nil, fmt.Errorf("malformed signed blob: %w", err)
+	}
+	return signature.NewPrettyMultiSigned(s.MultiSigned, n)
 }
 
 // MultiSignNode serializes the Node and multi-signs the result.

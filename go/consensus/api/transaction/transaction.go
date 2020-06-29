@@ -86,6 +86,35 @@ func (t Transaction) PrettyPrint(prefix string, w io.Writer) {
 	fmt.Fprintf(w, "%s  %s\n", prefix, data)
 }
 
+// PrettyType returns a representation of the type that can be used for pretty printing.
+func (t *Transaction) PrettyType() (interface{}, error) {
+	bodyType := t.Method.BodyType()
+	if bodyType == nil {
+		return nil, fmt.Errorf("unknown method body type")
+	}
+
+	// Deserialize into correct type.
+	body := reflect.New(reflect.TypeOf(bodyType)).Interface()
+	if err := cbor.Unmarshal(t.Body, body); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal transaction body: %w", err)
+	}
+
+	// If the body type supports pretty printing, use that.
+	if pp, ok := body.(prettyprint.PrettyPrinter); ok {
+		var err error
+		if body, err = pp.PrettyType(); err != nil {
+			return nil, fmt.Errorf("failed to pretty print transaction body: %w", err)
+		}
+	}
+
+	return &PrettyTransaction{
+		Nonce:  t.Nonce,
+		Fee:    t.Fee,
+		Method: t.Method,
+		Body:   body,
+	}, nil
+}
+
 // SanityCheck performs a basic sanity check on the transaction.
 func (t *Transaction) SanityCheck() error {
 	return t.Method.SanityCheck()
@@ -104,6 +133,17 @@ func NewTransaction(nonce uint64, fee *Fee, method MethodName, body interface{})
 		Method: method,
 		Body:   cbor.RawMessage(rawBody),
 	}
+}
+
+// PrettyTransaction is used for pretty-printing transactions so that the actual content is
+// displayed instead of the binary blob.
+//
+// It should only be used for pretty printing.
+type PrettyTransaction struct {
+	Nonce  uint64      `json:"nonce"`
+	Fee    *Fee        `json:"fee,omitempty"`
+	Method MethodName  `json:"method"`
+	Body   interface{} `json:"body,omitempty"`
 }
 
 // SignedTransaction is a signed transaction.
@@ -140,6 +180,15 @@ func (s SignedTransaction) PrettyPrint(prefix string, w io.Writer) {
 	}
 
 	tx.PrettyPrint(prefix+"  ", w)
+}
+
+// PrettyType returns a representation of the type that can be used for pretty printing.
+func (s SignedTransaction) PrettyType() (interface{}, error) {
+	var tx Transaction
+	if err := cbor.Unmarshal(s.Blob, &tx); err != nil {
+		return nil, fmt.Errorf("malformed signed blob: %w", err)
+	}
+	return signature.NewPrettySigned(s.Signed, tx)
 }
 
 // Open first verifies the blob signature and then unmarshals the blob.
