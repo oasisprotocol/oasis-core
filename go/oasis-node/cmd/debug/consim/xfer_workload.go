@@ -154,7 +154,7 @@ func (w *xferWorkload) worker(cancelCh <-chan struct{}, errCh chan<- error) {
 
 	numAccounts, numIterations := len(w.accounts), viper.GetInt(cfgXferIterations)
 
-	// Shuffle tokens around till bored.
+	// Shuffle stake around till bored.
 	for nBlocks := 0; nBlocks < numIterations; nBlocks++ {
 		// Check for cancelation due to errors.
 		select {
@@ -199,7 +199,7 @@ func xferGenTx(from, to *xferAccount, amount uint64) ([]byte, error) {
 	xfer := &staking.Transfer{
 		To: to.address,
 	}
-	if err := xfer.Tokens.FromUint64(amount); err != nil {
+	if err := xfer.Amount.FromUint64(amount); err != nil {
 		return nil, err
 	}
 
@@ -221,7 +221,7 @@ func xferGenTx(from, to *xferAccount, amount uint64) ([]byte, error) {
 	//
 	// Note: The Move call will break if from == to, so don't do that.
 	from.nonce++
-	if err = quantity.Move(&to.balance, &from.balance, &xfer.Tokens); err != nil {
+	if err = quantity.Move(&to.balance, &from.balance, &xfer.Amount); err != nil {
 		return nil, err
 	}
 

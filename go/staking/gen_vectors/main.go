@@ -40,7 +40,7 @@ func main() {
 				for _, tx := range []*transaction.Transaction{
 					staking.NewTransferTx(nonce, fee, &staking.Transfer{
 						To:     transferDstAddr,
-						Tokens: *quantity.NewFromUint64(amt),
+						Amount: *quantity.NewFromUint64(amt),
 					}),
 				} {
 					vectors = append(vectors, testvectors.MakeTestVector("Transfer", tx))
@@ -51,7 +51,7 @@ func main() {
 			for _, amt := range []uint64{0, 1000, 10_000_000} {
 				for _, tx := range []*transaction.Transaction{
 					staking.NewBurnTx(nonce, fee, &staking.Burn{
-						Tokens: *quantity.NewFromUint64(amt),
+						Amount: *quantity.NewFromUint64(amt),
 					}),
 				} {
 					vectors = append(vectors, testvectors.MakeTestVector("Burn", tx))
@@ -65,7 +65,7 @@ func main() {
 				for _, tx := range []*transaction.Transaction{
 					staking.NewAddEscrowTx(nonce, fee, &staking.Escrow{
 						Account: escrowDstAddr,
-						Tokens:  *quantity.NewFromUint64(amt),
+						Amount:  *quantity.NewFromUint64(amt),
 					}),
 				} {
 					vectors = append(vectors, testvectors.MakeTestVector("Escrow", tx))

@@ -168,21 +168,21 @@ func (sc *gasFeesImpl) runTests(ctx context.Context) error {
 	}
 
 	// As of the last time this comment was updated:
-	// - total fees has 150 tokens from genesis common pool (different in dump-restore variant)
-	// - total fees has 50 tokens from genesis last block fees (different in dump-restore variant)
+	// - total fees has 150 base units from genesis common pool (different in dump-restore variant)
+	// - total fees has 50 base units from genesis last block fees (different in dump-restore variant)
 	// - for each of 12 transactions that pay for gas:
-	//   - 10 tokens paid for gas in a block on its own
-	//   - (2+2)/(1+2+2) = 80% => 8 tokens persisted for VQ share
-	//   - 10 - 8 = 2 tokens paid to P
-	//   - VQ share divided into 3 validator portions, for 2 tokens each
-	//   - (2)/(2+2) = 50% => 1 token per validator for Q
-	//   - 2 - 1 = 1 token per validator for V
-	//   - remaining 2 tokens moved to common pool
-	// - 150 + 50 + 12 * 10 = 320 tokens `total_fees` (different in dump-restore variant)
-	// - 12 * 2 = 24 tokens paid for P role
-	// - 12 * 1 * 3 = 36 tokens paid for V roles
-	// - 12 * 1 * 3 = 36 tokens paid for Q role
-	// - 24 + 36 + 36 = 96 tokens `disbursed_fees`
+	//   - 10 base units paid for gas in a block on its own
+	//   - (2+2)/(1+2+2) = 80% => 8 base units persisted for VQ share
+	//   - 10 - 8 = 2 base units paid to P
+	//   - VQ share divided into 3 validator portions, for 2 base units each
+	//   - (2)/(2+2) = 50% => 1 base unit per validator for Q
+	//   - 2 - 1 = 1 base unit per validator for V
+	//   - remaining 2 base units moved to common pool
+	// - 150 + 50 + 12 * 10 = 320 base units `total_fees` (different in dump-restore variant)
+	// - 12 * 2 = 24 base units paid for P role
+	// - 12 * 1 * 3 = 36 base units paid for V roles
+	// - 12 * 1 * 3 = 36 base units paid for Q role
+	// - 24 + 36 + 36 = 96 base units `disbursed_fees`
 	sc.Logger.Info("making sure that fees have been disbursed",
 		"total_fees", totalFees,
 		"disbursed_fees", newTotalEntityBalance,
@@ -264,7 +264,7 @@ func (sc *gasFeesImpl) testTransfer(ctx context.Context, signer signature.Signer
 		transfer := staking.Transfer{
 			To: dstAddr,
 		}
-		_ = transfer.Tokens.FromInt64(amount)
+		_ = transfer.Amount.FromInt64(amount)
 
 		tx := staking.NewTransferTx(acct.General.Nonce, &fee, &transfer)
 		sigTx, err := transaction.Sign(signer, tx)
@@ -278,7 +278,7 @@ func (sc *gasFeesImpl) testTransfer(ctx context.Context, signer signature.Signer
 func (sc *gasFeesImpl) testBurn(ctx context.Context, signer signature.Signer) (*quantity.Quantity, error) {
 	return sc.testStakingGas(ctx, signer, true, func(acct *staking.Account, fee transaction.Fee, amount int64) error {
 		var burn staking.Burn
-		_ = burn.Tokens.FromInt64(amount)
+		_ = burn.Amount.FromInt64(amount)
 
 		tx := staking.NewBurnTx(acct.General.Nonce, &fee, &burn)
 		sigTx, err := transaction.Sign(signer, tx)
@@ -294,7 +294,7 @@ func (sc *gasFeesImpl) testAddEscrow(ctx context.Context, signer signature.Signe
 		escrow := staking.Escrow{
 			Account: escrowAddr,
 		}
-		_ = escrow.Tokens.FromInt64(amount)
+		_ = escrow.Amount.FromInt64(amount)
 
 		tx := staking.NewAddEscrowTx(acct.General.Nonce, &fee, &escrow)
 		sigTx, err := transaction.Sign(signer, tx)

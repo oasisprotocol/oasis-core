@@ -46,16 +46,16 @@ func (t *transfer) doTransferTx(ctx context.Context, fromIdx, toIdx int) error {
 	to := &t.accounts[toIdx]
 
 	transfer := staking.Transfer{To: to.address}
-	if err := transfer.Tokens.FromInt64(transferAmount); err != nil {
-		return fmt.Errorf("transfer tokens FromInt64 %d: %w", transferAmount, err)
+	if err := transfer.Amount.FromInt64(transferAmount); err != nil {
+		return fmt.Errorf("transfer base units FromInt64 %d: %w", transferAmount, err)
 	}
 	tx := staking.NewTransferTx(from.reckonedNonce, &transaction.Fee{}, &transfer)
 	from.reckonedNonce++
 
-	t.logger.Debug("transfering tokens",
+	t.logger.Debug("transfering stake",
 		"from", from.address,
 		"to", to.address,
-		"amount", transferAmount,
+		"base_units", transferAmount,
 	)
 	if err := fundSignAndSubmitTx(ctx, t.logger, t.consensus, from.signer, tx, t.fundingAccount); err != nil {
 		t.logger.Error("failed to sign and submit transfer transaction",
@@ -66,11 +66,15 @@ func (t *transfer) doTransferTx(ctx context.Context, fromIdx, toIdx int) error {
 	}
 
 	// Update reckoned state.
-	if err := from.reckonedBalance.Sub(&transfer.Tokens); err != nil {
-		return fmt.Errorf("from reckoned balance %v Sub transfer tokens %v: %w", from.reckonedBalance, transfer.Tokens, err)
+	if err := from.reckonedBalance.Sub(&transfer.Amount); err != nil {
+		return fmt.Errorf("from reckoned balance %v Sub transfer amount %v: %w",
+			from.reckonedBalance, transfer.Amount, err,
+		)
 	}
-	if err := to.reckonedBalance.Add(&transfer.Tokens); err != nil {
-		return fmt.Errorf("to reckoned balance %v Add transfer tokens %v: %w", to.reckonedBalance, transfer.Tokens, err)
+	if err := to.reckonedBalance.Add(&transfer.Amount); err != nil {
+		return fmt.Errorf("to reckoned balance %v Add transfer amount %v: %w",
+			to.reckonedBalance, transfer.Amount, err,
+		)
 	}
 
 	return nil
@@ -79,21 +83,21 @@ func (t *transfer) doTransferTx(ctx context.Context, fromIdx, toIdx int) error {
 func (t *transfer) doBurnTx(ctx context.Context, idx int) error {
 	acc := &t.accounts[idx]
 
-	// Fund account with tokens that will be burned.
+	// Fund account with stake that will be burned.
 	if err := transferFunds(ctx, t.logger, t.consensus, t.fundingAccount, acc.address, int64(transferBurnAmount)); err != nil {
 		return fmt.Errorf("workload/transfer: account funding failure: %w", err)
 	}
 
 	burn := staking.Burn{}
-	if err := burn.Tokens.FromInt64(transferBurnAmount); err != nil {
-		return fmt.Errorf("burn tokens FromInt64 %d: %w", transferBurnAmount, err)
+	if err := burn.Amount.FromInt64(transferBurnAmount); err != nil {
+		return fmt.Errorf("burn base units FromInt64 %d: %w", transferBurnAmount, err)
 	}
 	tx := staking.NewBurnTx(acc.reckonedNonce, &transaction.Fee{}, &burn)
 	acc.reckonedNonce++
 
-	t.logger.Debug("Burning tokens",
+	t.logger.Debug("Burning stake",
 		"account", acc.address,
-		"amount", transferBurnAmount,
+		"base_units", transferBurnAmount,
 	)
 	if err := fundSignAndSubmitTx(ctx, t.logger, t.consensus, acc.signer, tx, t.fundingAccount); err != nil {
 		t.logger.Error("failed to sign and submit transfer transaction",

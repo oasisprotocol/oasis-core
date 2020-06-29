@@ -21,7 +21,7 @@ const (
 	// CfgAccountAddr configures the account address.
 	CfgAccountAddr = "stake.account.address"
 
-	// CfgAmount configures the amount of tokens.
+	// CfgAmount configures the amount of stake in base units.
 	CfgAmount = "stake.amount"
 
 	// CfgShares configures the amount of shares.
@@ -126,7 +126,7 @@ func doAccountTransfer(cmd *cobra.Command, args []string) {
 		)
 		os.Exit(1)
 	}
-	if err := xfer.Tokens.UnmarshalText([]byte(viper.GetString(CfgAmount))); err != nil {
+	if err := xfer.Amount.UnmarshalText([]byte(viper.GetString(CfgAmount))); err != nil {
 		logger.Error("failed to parse transfer amount",
 			"err", err,
 		)
@@ -148,7 +148,7 @@ func doAccountBurn(cmd *cobra.Command, args []string) {
 	cmdConsensus.AssertTxFileOK()
 
 	var burn staking.Burn
-	if err := burn.Tokens.UnmarshalText([]byte(viper.GetString(CfgAmount))); err != nil {
+	if err := burn.Amount.UnmarshalText([]byte(viper.GetString(CfgAmount))); err != nil {
 		logger.Error("failed to parse burn amount",
 			"err", err,
 		)
@@ -176,7 +176,7 @@ func doAccountEscrow(cmd *cobra.Command, args []string) {
 		)
 		os.Exit(1)
 	}
-	if err := escrow.Tokens.UnmarshalText([]byte(viper.GetString(CfgAmount))); err != nil {
+	if err := escrow.Amount.UnmarshalText([]byte(viper.GetString(CfgAmount))); err != nil {
 		logger.Error("failed to parse escrow amount",
 			"err", err,
 		)
@@ -224,7 +224,7 @@ func scanRateStep(dst *staking.CommissionRateStep, raw string) error {
 		return err
 	}
 	if n != 2 {
-		return fmt.Errorf("scanned %d tokens (need 2)", n)
+		return fmt.Errorf("scanned %d values (need 2)", n)
 	}
 	if err = dst.Rate.FromBigInt(&rateBI); err != nil {
 		return fmt.Errorf("rate: %w", err)
@@ -240,7 +240,7 @@ func scanBoundStep(dst *staking.CommissionRateBoundStep, raw string) error {
 		return err
 	}
 	if n != 3 {
-		return fmt.Errorf("scanned %d tokens (need 3)", n)
+		return fmt.Errorf("scanned %d values (need 3)", n)
 	}
 	if err = dst.RateMin.FromBigInt(&rateMinBI); err != nil {
 		return fmt.Errorf("rate min: %w", err)
@@ -324,7 +324,7 @@ func init() {
 	accountInfoFlags.AddFlagSet(cmdFlags.RetriesFlags)
 	accountInfoFlags.AddFlagSet(cmdGrpc.ClientFlags)
 
-	amountFlags.String(CfgAmount, "0", "amount of tokens for the transaction")
+	amountFlags.String(CfgAmount, "0", "amount of stake (in base units) for the transaction")
 	_ = viper.BindPFlags(amountFlags)
 
 	sharesFlags.String(CfgShares, "0", "amount of shares for the transaction")

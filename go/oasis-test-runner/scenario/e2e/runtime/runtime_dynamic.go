@@ -442,11 +442,11 @@ func (sc *runtimeDynamicImpl) Run(childEnv *env.Env) error { // nolint: gocyclo
 
 	// Now escrow the stake back.
 	sc.Logger.Info("escrowing stake back")
-	var enoughTokens quantity.Quantity
-	_ = enoughTokens.FromUint64(100_000)
+	var enoughStake quantity.Quantity
+	_ = enoughStake.FromUint64(100_000)
 	tx = staking.NewAddEscrowTx(nonce, &transaction.Fee{Gas: 10000}, &staking.Escrow{
 		Account: entAddr,
-		Tokens:  enoughTokens,
+		Amount:  enoughStake,
 	})
 	nonce++ // nolint: ineffassign
 	sigTx, err = transaction.Sign(entSigner, tx)

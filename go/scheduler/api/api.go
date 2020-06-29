@@ -145,26 +145,30 @@ func (c *Committee) EncodedMembersHash() hash.Hash {
 	return hash.NewFrom(c.Members)
 }
 
-// TokensPerVotingPower is the ratio of base units staked to validator power.
-var TokensPerVotingPower quantity.Quantity
+// BaseUnitsPerVotingPower is the ratio of base units staked to validator power.
+var BaseUnitsPerVotingPower quantity.Quantity
 
-// VotingPowerFromTokens computes that by dividing by TokensPerVotingPower. It's not that we're implementation-hiding
-// the conversion though. It's just that otherwise if we accidentally skip the `IsInt64`, it would still appear to
-// work, and that would be a bad thing to have in a routine that's written multiple times.
-func VotingPowerFromTokens(t *quantity.Quantity) (int64, error) {
+// VotingPowerFromStake computes that by dividing by BaseUnitsPerVotingPower.
+//
+// NOTE: It's not that we're implementation-hiding the conversion though.
+// It's just that otherwise if we accidentally skip the `IsInt64`, it would
+// still appear to work, and that would be a bad thing to have in a routine
+// that's written multiple times.
+func VotingPowerFromStake(t *quantity.Quantity) (int64, error) {
 	powerQ := t.Clone()
-	if err := powerQ.Quo(&TokensPerVotingPower); err != nil {
-		return 0, fmt.Errorf("quo %v / %v: %w", t, &TokensPerVotingPower, err)
+	if err := powerQ.Quo(&BaseUnitsPerVotingPower); err != nil {
+		return 0, fmt.Errorf("quo %v / %v: %w", t, &BaseUnitsPerVotingPower, err)
 	}
 	if powerQ.IsZero() {
-		// In some cases, especially in tests, staking is enabled but registration thresholds are zero.
-		// However, if they actually register with zero, give them one free vote power so that Tendermint doesn't
-		// treat it as a removal.
+		// In some cases, especially in tests, staking is enabled but
+		// registration thresholds are zero.
+		// However, if they actually register with zero, give them one free vote
+		// power so that Tendermint doesn't treat it as a removal.
 		return 1, nil
 	}
 	powerBI := powerQ.ToBigInt()
 	if !powerBI.IsInt64() {
-		return 0, fmt.Errorf("%v is too many tokens to convert to power", powerQ)
+		return 0, fmt.Errorf("%v is too many base units to convert to power", powerQ)
 	}
 	return powerBI.Int64(), nil
 }
@@ -253,7 +257,7 @@ func (g *Genesis) SanityCheck(stakingTotalSupply *quantity.Quantity) error {
 	}
 
 	if !g.Parameters.DebugBypassStake {
-		supplyPower, err := VotingPowerFromTokens(stakingTotalSupply)
+		supplyPower, err := VotingPowerFromStake(stakingTotalSupply)
 		if err != nil {
 			return fmt.Errorf("scheduler: sanity check failed: total supply would break voting power computation: %w", err)
 		}
@@ -270,7 +274,7 @@ func (g *Genesis) SanityCheck(stakingTotalSupply *quantity.Quantity) error {
 
 func init() {
 	// 16 allows for up to 1.8e19 base units to be staked.
-	if err := TokensPerVotingPower.FromUint64(16); err != nil {
+	if err := BaseUnitsPerVotingPower.FromUint64(16); err != nil {
 		panic(err)
 	}
 }

@@ -12,6 +12,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	"github.com/oasisprotocol/oasis-core/go/common/entity"
 	"github.com/oasisprotocol/oasis-core/go/common/quantity"
+	"github.com/oasisprotocol/oasis-core/go/consensus/api/transaction"
 	"github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common"
 	"github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/consensus"
 	"github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/flags"
@@ -74,10 +75,11 @@ var (
 	qZero = mustInitQuantity(0)
 
 	// We are the first who put stake into the escrow account, so the number of shares equals the
-	// number of tokens.
+	// amount of base units in the escrow account.
 	escrowShares int64 = escrowAmount
 	// Since we are the only ones who put stake into the escrow account and there was no slashing,
-	// we can expect the reclaimed escrow tokens to equal the number of reclaimed escrow shares.
+	// we can expect the amount of reclaimed base units to equal the number of reclaimed escrow
+	// shares.
 	reclaimEscrowAmount int64 = reclaimEscrowShares
 )
 
@@ -127,7 +129,7 @@ func (sc *stakeCLIImpl) Run(childEnv *env.Env) error {
 
 	cli := cli.New(childEnv, sc.Net, sc.Logger)
 
-	// General token info.
+	// Common staking info.
 	if err := sc.getInfo(childEnv); err != nil {
 		return err
 	}
@@ -241,7 +243,7 @@ func (sc *stakeCLIImpl) testPubkey2Address(childEnv *env.Env, publicKeyText, add
 	return nil
 }
 
-// testTransfer tests transfer of transferAmount tokens from src to dst.
+// testTransfer tests transfer of transferAmount base units from src to dst.
 func (sc *stakeCLIImpl) testTransfer(childEnv *env.Env, cli *cli.Helpers, src, dst api.Address) error {
 	var srcNonce, dstNonce uint64 = 0, 0
 
@@ -253,12 +255,14 @@ func (sc *stakeCLIImpl) testTransfer(childEnv *env.Env, cli *cli.Helpers, src, d
 	if err != nil {
 		return fmt.Errorf("obtain test entity: %w", err)
 	}
+
+	expectedGasEstimate := transaction.Gas(262)
 	gas, err := cli.Consensus.EstimateGas(unsignedTransferTxPath, teSigner.Public())
 	if err != nil {
 		return fmt.Errorf("estimate gas on unsigned transfer tx: %w", err)
 	}
-	if gas != 272 {
-		return fmt.Errorf("wrong gas estimate: expected %d, got %d", 272, gas)
+	if gas != expectedGasEstimate {
+		return fmt.Errorf("wrong gas estimate: expected %d, got %d", expectedGasEstimate, gas)
 	}
 
 	transferTxPath := filepath.Join(childEnv.Dir(), "stake_transfer.json")
@@ -311,7 +315,7 @@ func (sc *stakeCLIImpl) testTransfer(childEnv *env.Env, cli *cli.Helpers, src, d
 	return nil
 }
 
-// testBurn tests burning of burnAmount tokens owned by src.
+// testBurn tests burning of burnAmount base units owned by src.
 func (sc *stakeCLIImpl) testBurn(childEnv *env.Env, cli *cli.Helpers, src api.Address) error {
 	var srcNonce uint64 = 1
 
@@ -344,7 +348,7 @@ func (sc *stakeCLIImpl) testBurn(childEnv *env.Env, cli *cli.Helpers, src api.Ad
 	return nil
 }
 
-// testEscrow tests escrowing escrowAmount tokens from src to dst.
+// testEscrow tests escrowing escrowAmount base units from src to dst.
 func (sc *stakeCLIImpl) testEscrow(childEnv *env.Env, cli *cli.Helpers, src, escrow api.Address) error {
 	var srcNonce uint64 = 2
 
@@ -514,7 +518,7 @@ func (sc *stakeCLIImpl) testAmendCommissionSchedule(childEnv *env.Env, cli *cli.
 }
 
 func (sc *stakeCLIImpl) getInfo(childEnv *env.Env) error {
-	sc.Logger.Info("querying common token info")
+	sc.Logger.Info("querying common staking info")
 	args := []string{
 		"stake", "info",
 		"--" + grpc.CfgAddress, "unix:" + sc.Net.Validators()[0].SocketPath(),
@@ -522,7 +526,7 @@ func (sc *stakeCLIImpl) getInfo(childEnv *env.Env) error {
 
 	out, err := cli.RunSubCommandWithOutput(childEnv, sc.Logger, "info", sc.Net.Config().NodeBinary, args)
 	if err != nil {
-		return fmt.Errorf("failed to query common token info: error: %w output: %s", err, out.String())
+		return fmt.Errorf("failed to query common staking info: error: %w output: %s", err, out.String())
 	}
 	return nil
 }

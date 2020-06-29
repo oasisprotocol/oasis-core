@@ -133,8 +133,8 @@ func transferFunds(
 		transfer := staking.Transfer{
 			To: to,
 		}
-		if err = transfer.Tokens.FromInt64(transferAmount); err != nil {
-			return backoff.Permanent(fmt.Errorf("transfer tokens FromInt64 %d: %w", transferAmount, err))
+		if err = transfer.Amount.FromInt64(transferAmount); err != nil {
+			return backoff.Permanent(fmt.Errorf("transfer base units FromInt64 %d: %w", transferAmount, err))
 		}
 		logger.Debug("transfering funds", "from", from.Public(), "to", to, "amount", transferAmount, "nonce", nonce)
 

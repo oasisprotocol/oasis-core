@@ -1,4 +1,4 @@
-// Package staking implements the tendermint backed staking token backend.
+// Package staking implements the tendermint backed staking backend.
 package staking
 
 import (
