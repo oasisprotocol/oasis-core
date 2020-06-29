@@ -10,6 +10,7 @@ import (
 
 	"github.com/oasisprotocol/oasis-core/go/common/node"
 	"github.com/oasisprotocol/oasis-core/go/common/quantity"
+	"github.com/oasisprotocol/oasis-core/go/common/version"
 	"github.com/oasisprotocol/oasis-core/go/consensus/tendermint/crypto"
 	genesis "github.com/oasisprotocol/oasis-core/go/genesis/api"
 	cmdFlags "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/flags"
@@ -102,6 +103,9 @@ func genesisToTendermint(d *genesis.Document) (*tmtypes.GenesisDoc, error) {
 			Evidence: evCfg,
 			Validator: tmproto.ValidatorParams{
 				PubKeyTypes: []string{tmtypes.ABCIPubKeyTypeEd25519},
+			},
+			Version: tmproto.VersionParams{
+				AppVersion: version.ConsensusProtocol.ToU64(),
 			},
 		},
 		AppState: b,

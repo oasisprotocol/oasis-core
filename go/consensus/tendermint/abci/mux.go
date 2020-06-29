@@ -16,6 +16,7 @@ import (
 
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/tendermint/tendermint/abci/types"
+	tmproto "github.com/tendermint/tendermint/proto/tendermint/types"
 
 	"github.com/oasisprotocol/oasis-core/go/common/cbor"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
@@ -758,6 +759,13 @@ func (mux *abciMux) EndBlock(req types.RequestEndBlock) types.ResponseEndBlock {
 
 	// Update tags.
 	resp.Events = ctx.GetEvents()
+
+	// Update version to what we are actually running.
+	resp.ConsensusParamUpdates = &types.ConsensusParams{
+		Version: &tmproto.VersionParams{
+			AppVersion: version.ConsensusProtocol.ToU64(),
+		},
+	}
 
 	// Clear block context.
 	mux.state.blockCtx = nil
