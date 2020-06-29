@@ -137,30 +137,7 @@ func (t *tendermintMockBackend) worker(ctx context.Context) {
 	}
 	defer t.service.Unsubscribe("epochtime-worker", app.QueryApp) // nolint: errcheck
 
-	// Populate current epoch (if available).
-	q, err := t.querier.QueryAt(ctx, consensus.HeightLatest)
-	if err == nil {
-		var epoch api.EpochTime
-		var height int64
-		epoch, height, err = q.Epoch(ctx)
-		if err != nil {
-			t.logger.Error("failed to query epoch",
-				"err", err,
-			)
-			return
-		}
-
-		t.Lock()
-		t.epoch = epoch
-		t.currentBlock = height
-		t.notifier.Broadcast(t.epoch)
-		t.Unlock()
-	} else {
-		t.logger.Warn("unable to query initial epoch",
-			"err", err,
-		)
-	}
-
+	var initialNotify bool
 	for {
 		var event interface{}
 
@@ -174,12 +151,38 @@ func (t *tendermintMockBackend) worker(ctx context.Context) {
 			return
 		}
 
-		switch ev := event.(type) {
-		case tmtypes.EventDataNewBlock:
+		if ev, ok := event.(tmtypes.EventDataNewBlock); ok {
+			if !initialNotify {
+				if err = t.queryAndUpdate(ctx, ev.Block.Header.Height); err != nil {
+					t.logger.Warn("failed to query epoch",
+						"err", err,
+					)
+					continue
+				}
+				initialNotify = true
+			}
 			t.onEventDataNewBlock(ctx, ev)
-		default:
 		}
 	}
+}
+
+func (t *tendermintMockBackend) queryAndUpdate(ctx context.Context, height int64) error {
+	q, err := t.querier.QueryAt(ctx, height)
+	if err != nil {
+		return fmt.Errorf("failed to query epoch: %w", err)
+	}
+
+	var epoch api.EpochTime
+	epoch, height, err = q.Epoch(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to query epoch: %w", err)
+	}
+
+	if t.updateCached(height, epoch) {
+		t.notifier.Broadcast(epoch)
+	}
+
+	return nil
 }
 
 func (t *tendermintMockBackend) onEventDataNewBlock(ctx context.Context, ev tmtypes.EventDataNewBlock) {
