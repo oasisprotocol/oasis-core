@@ -16,3 +16,17 @@ the [consensus service API documentation].
 <!-- markdownlint-enable line-length -->
 
 ## Events
+
+## Validator Committee
+
+When the committee scheduler schedules the validator committee, it additionally
+assigns each member a _voting power_, which controls (i) the weight of its
+votes in the consensus protocol and (ii) how often it serves as the proposer in
+the consensus protocol.
+
+The committee scheduler assigns a validator's voting power proportional to its
+entity's [escrow account balance].
+
+<!-- markdownlint-disable line-length -->
+[escrow account balance]: staking.md#escrow
+<!-- markdownlint-enable line-length -->
