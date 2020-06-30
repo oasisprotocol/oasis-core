@@ -266,6 +266,7 @@ func (km *Keymanager) startNode() error {
 	args := newArgBuilder().
 		debugDontBlameOasis().
 		debugAllowTestKeys().
+		workerCertificateRotation(true).
 		tendermintCoreListenAddress(km.consensusPort).
 		tendermintSubmissionGasPrice(km.consensus.SubmissionGasPrice).
 		tendermintPrune(km.consensus.PruneNumKept).

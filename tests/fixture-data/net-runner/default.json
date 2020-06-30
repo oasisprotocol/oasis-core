@@ -172,6 +172,7 @@
             "entity": 1,
             "allow_early_termination": false,
             "allow_error_termination": false,
+            "disable_cert_rotation": false,
             "consensus": {
                 "min_gas_price": 0,
                 "submission_gas_price": 0,

@@ -23,6 +23,7 @@ type Storage struct { // nolint: maligned
 	backend string
 	entity  *Entity
 
+	disableCertRotation     bool
 	ignoreApplies           bool
 	checkpointCheckInterval time.Duration
 
@@ -41,6 +42,7 @@ type StorageCfg struct { // nolint: maligned
 	Backend       string
 	Entity        *Entity
 
+	DisableCertRotation     bool
 	IgnoreApplies           bool
 	CheckpointCheckInterval time.Duration
 }
@@ -48,6 +50,11 @@ type StorageCfg struct { // nolint: maligned
 // IdentityKeyPath returns the path to the node's identity key.
 func (worker *Storage) IdentityKeyPath() string {
 	return nodeIdentityKeyPath(worker.dir)
+}
+
+// GetClientAddress returns the storage node endpoint address.
+func (worker *Storage) GetClientAddress() string {
+	return fmt.Sprintf("127.0.0.1:%d", worker.clientPort)
 }
 
 // P2PKeyPath returns the path to the node's P2P key.
@@ -96,6 +103,7 @@ func (worker *Storage) startNode() error {
 	args := newArgBuilder().
 		debugDontBlameOasis().
 		debugAllowTestKeys().
+		workerCertificateRotation(!worker.disableCertRotation).
 		tendermintCoreListenAddress(worker.consensusPort).
 		tendermintSubmissionGasPrice(worker.consensus.SubmissionGasPrice).
 		tendermintPrune(worker.consensus.PruneNumKept).
@@ -144,7 +152,7 @@ func (net *Network) NewStorage(cfg *StorageCfg) (*Storage, error) {
 
 	// Pre-provision the node identity so that we can update the entity.
 	seed := fmt.Sprintf(storageIdentitySeedTemplate, len(net.storageWorkers))
-	publicKey, sentryClientCert, err := net.provisionNodeIdentity(storageDir, seed, false)
+	publicKey, sentryClientCert, err := net.provisionNodeIdentity(storageDir, seed, cfg.DisableCertRotation)
 	if err != nil {
 		return nil, fmt.Errorf("oasis/storage: failed to provision node identity: %w", err)
 	}
@@ -173,6 +181,7 @@ func (net *Network) NewStorage(cfg *StorageCfg) (*Storage, error) {
 		backend:                 cfg.Backend,
 		entity:                  cfg.Entity,
 		sentryIndices:           cfg.SentryIndices,
+		disableCertRotation:     cfg.DisableCertRotation,
 		ignoreApplies:           cfg.IgnoreApplies,
 		checkpointCheckInterval: cfg.CheckpointCheckInterval,
 		sentryPubKey:            sentryPubKey,

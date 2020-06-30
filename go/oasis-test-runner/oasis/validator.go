@@ -82,6 +82,7 @@ func (val *Validator) startNode() error {
 	args := newArgBuilder().
 		debugDontBlameOasis().
 		debugAllowTestKeys().
+		workerCertificateRotation(true).
 		consensusValidator().
 		tendermintCoreListenAddress(val.consensusPort).
 		tendermintMinGasPrice(val.consensus.MinGasPrice).

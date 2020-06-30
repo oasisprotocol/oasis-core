@@ -351,6 +351,20 @@ func (args *argBuilder) workerStorageCheckpointCheckInterval(interval time.Durat
 	return args
 }
 
+func (args *argBuilder) workerCertificateRotation(enabled bool) *argBuilder {
+	switch enabled {
+	case false:
+		args.vec = append(args.vec, []string{
+			"--" + registration.CfgRegistrationRotateCerts, "0",
+		}...)
+	case true:
+		args.vec = append(args.vec, []string{
+			"--" + registration.CfgRegistrationRotateCerts, "1",
+		}...)
+	}
+	return args
+}
+
 func (args *argBuilder) workerTxnschedulerCheckTxEnabled() *argBuilder {
 	args.vec = append(args.vec, "--"+txnscheduler.CfgCheckTxEnabled)
 	return args
