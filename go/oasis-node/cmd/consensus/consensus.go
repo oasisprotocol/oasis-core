@@ -4,6 +4,7 @@ package consensus
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"io/ioutil"
 	"os"
 
@@ -36,6 +37,12 @@ var (
 		Use:   "show_tx",
 		Short: "Show the content a pre-signed transaction",
 		Run:   doShowTx,
+	}
+
+	estimateGasCmd = &cobra.Command{
+		Use:   "estimate_gas",
+		Short: "Estimate how much gas a transactionw will use",
+		Run:   doEstimateGas,
 	}
 
 	logger = logging.GetLogger("cmd/consensus")
@@ -103,11 +110,43 @@ func doShowTx(cmd *cobra.Command, args []string) {
 	sigTx.PrettyPrint("", os.Stdout)
 }
 
+func doEstimateGas(cmd *cobra.Command, args []string) {
+	if err := cmdCommon.Init(); err != nil {
+		cmdCommon.EarlyLogAndExit(err)
+	}
+
+	conn, client := doConnect(cmd)
+	defer conn.Close()
+
+	signedTx := loadTx()
+	var tx transaction.Transaction
+	if err := signedTx.Open(&tx); err != nil {
+		logger.Error("failed to open signed transaction",
+			"err", err,
+		)
+		os.Exit(1)
+	}
+
+	req := consensus.EstimateGasRequest{
+		Signer:      signedTx.Signature.PublicKey,
+		Transaction: &tx,
+	}
+	gas, err := client.EstimateGas(context.Background(), &req)
+	if err != nil {
+		logger.Error("failed to estimate gas",
+			"err", err,
+		)
+		os.Exit(1)
+	}
+	fmt.Println(gas)
+}
+
 // Register registers the consensus sub-command and all of it's children.
 func Register(parentCmd *cobra.Command) {
 	for _, v := range []*cobra.Command{
 		submitTxCmd,
 		showTxCmd,
+		estimateGasCmd,
 	} {
 		consensusCmd.AddCommand(v)
 	}
@@ -117,6 +156,9 @@ func Register(parentCmd *cobra.Command) {
 
 	showTxCmd.Flags().AddFlagSet(cmdConsensus.TxFileFlags)
 	showTxCmd.Flags().AddFlagSet(cmdFlags.GenesisFileFlags)
+
+	estimateGasCmd.Flags().AddFlagSet(cmdConsensus.TxFileFlags)
+	estimateGasCmd.Flags().AddFlagSet(cmdGrpc.ClientFlags)
 
 	parentCmd.AddCommand(consensusCmd)
 }

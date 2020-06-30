@@ -2,7 +2,9 @@ package cli
 
 import (
 	"fmt"
+	"strconv"
 
+	"github.com/oasisprotocol/oasis-core/go/consensus/api/transaction"
 	"github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common"
 	"github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/consensus"
 	"github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/grpc"
@@ -27,4 +29,26 @@ func (c *ConsensusHelpers) SubmitTx(txPath string) error {
 		return fmt.Errorf("failed to submit tx: %w", err)
 	}
 	return nil
+}
+
+// EstimateGas is a wrapper for "consensus estimate_gas" subcommand.
+func (c *ConsensusHelpers) EstimateGas(txPath string) (transaction.Gas, error) {
+	c.logger.Info("estimating gas", consensus.CfgTxFile, txPath)
+
+	args := []string{
+		"consensus", "estimate_gas",
+		"--" + consensus.CfgTxFile, txPath,
+		"--" + grpc.CfgAddress, "unix:" + c.cfg.NodeSocketPath,
+		"--" + common.CfgDebugAllowTestKeys,
+	}
+	out, err := c.runSubCommandWithOutput("consensus-estimate_gas", args)
+	if err != nil {
+		return 0, fmt.Errorf("failed to estimate gas: %w stderr [%s]", err, out.String())
+	}
+	gasS := out.String()
+	gasU, err := strconv.ParseUint(gasS, 10, 64)
+	if err != nil {
+		return 0, fmt.Errorf("failed to parse output %s: %w", gasS, err)
+	}
+	return transaction.Gas(gasU), nil
 }

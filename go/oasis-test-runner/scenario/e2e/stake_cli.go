@@ -241,6 +241,13 @@ func (sc *stakeCLIImpl) testTransfer(childEnv *env.Env, cli *cli.Helpers, src ap
 		return err
 	}
 
+	gas, err := cli.Consensus.EstimateGas(transferTxPath)
+	if err != nil {
+		return err
+	}
+	// TODO: replace with comparison to expected value
+	fmt.Printf("gas %d, reference %d\n", gas, 10000)
+
 	if err := cli.Consensus.SubmitTx(transferTxPath); err != nil {
 		return err
 	}
