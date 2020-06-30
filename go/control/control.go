@@ -100,7 +100,7 @@ func (c *nodeController) GetStatus(ctx context.Context) (*control.Status, error)
 			Node:      ident.NodeSigner.Public(),
 			P2P:       ident.P2PSigner.Public(),
 			Consensus: ident.ConsensusSigner.Public(),
-			TLS:       ident.GetTLSSigner().Public(),
+			TLS:       ident.GetTLSPubKeys(),
 		},
 		Consensus:    *cs,
 		Registration: *rs,
