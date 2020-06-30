@@ -57,6 +57,12 @@ var (
 		Run:   doCancelUpgrade,
 	}
 
+	controlStatusCmd = &cobra.Command{
+		Use:   "status",
+		Short: "show node status",
+		Run:   doStatus,
+	}
+
 	logger = logging.GetLogger("cmd/control")
 )
 
@@ -177,6 +183,30 @@ func doCancelUpgrade(cmd *cobra.Command, args []string) {
 	}
 }
 
+func doStatus(cmd *cobra.Command, args []string) {
+	conn, client := DoConnect(cmd)
+	defer conn.Close()
+
+	logger.Debug("querying status")
+
+	// Use background context to block until the result comes in.
+	status, err := client.GetStatus(context.Background())
+	if err != nil {
+		logger.Error("failed to query status",
+			"err", err,
+		)
+		os.Exit(128)
+	}
+	formatted, err := json.MarshalIndent(status, "", "  ")
+	if err != nil {
+		logger.Error("failed to format status",
+			"err", err,
+		)
+		os.Exit(1)
+	}
+	fmt.Println(string(formatted))
+}
+
 // Register registers the client sub-command and all of it's children.
 func Register(parentCmd *cobra.Command) {
 	controlCmd.PersistentFlags().AddFlagSet(cmdGrpc.ClientFlags)
@@ -188,5 +218,6 @@ func Register(parentCmd *cobra.Command) {
 	controlCmd.AddCommand(controlShutdownCmd)
 	controlCmd.AddCommand(controlUpgradeBinaryCmd)
 	controlCmd.AddCommand(controlCancelUpgradeCmd)
+	controlCmd.AddCommand(controlStatusCmd)
 	parentCmd.AddCommand(controlCmd)
 }
