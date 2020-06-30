@@ -19,6 +19,22 @@ the [consensus service API documentation].
 
 ## Validator Committee
 
+To schedule the validator committee, the committee scheduler selects among
+nodes [registered] with the [`RoleValidator`] role.
+Each node's entity must have an [escrow account balance] meeting the total
+thresholds for the nodes and runtimes that it has registered.
+If an entity's escrow account balance is too low to meet the total threshold,
+the committee scheduler does not consider that entity's nodes.
+
+From these qualifying nodes, the committee scheduler selects at most one node
+from each entity, up to a maximum validator committee size.
+The maximum validator committee size is configured in the genesis document,
+under the path `.scheduler.params.max_validators` (consult the [operator docs]
+for a link to the current genesis document).
+Unlike how the committee scheduler schedules other committees, it schedules the
+validator committee by choosing nodes from the entities that have the highest
+escrow account balances.
+
 When the committee scheduler schedules the validator committee, it additionally
 assigns each member a _voting power_, which controls (i) the weight of its
 votes in the consensus protocol and (ii) how often it serves as the proposer in
@@ -28,5 +44,8 @@ The committee scheduler assigns a validator's voting power proportional to its
 entity's [escrow account balance].
 
 <!-- markdownlint-disable line-length -->
+[registered]: registry.md#register-node
+[`RoleValidator`]: https://pkg.go.dev/github.com/oasisprotocol/oasis-core/go/common/node?tab=doc#RoleValidator
 [escrow account balance]: staking.md#escrow
+[operator docs]: https://docs.oasis.dev/operators/current-testnet-parameters.html#current-testnet-parameters
 <!-- markdownlint-enable line-length -->
