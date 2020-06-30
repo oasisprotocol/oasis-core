@@ -13,6 +13,25 @@ the [consensus service API documentation].
 [consensus service API documentation]: https://pkg.go.dev/github.com/oasisprotocol/oasis-core/go/staking/api?tab=doc
 <!-- markdownlint-enable line-length -->
 
+## Tokens and Base Units
+
+Stake amounts can be denominated in tokens and base units.
+
+Tokens are used in user-facing scenarios (e.g. CLI commands) where the token
+amount is prefixed with the token's ticker symbol as defined by the [`Genesis`'
+`TokenSymbol` field][pkggodev-genesis].
+
+Another [`Genesis`' field, `TokenValueExponent`][pkggodev-genesis], defines the
+token's value base-10 exponent.
+For example, if `TokenValueExponent` is 6, then 1 token equals 10^6 (i.e. one
+million) base units.
+
+Internally, base units are used for all stake calculation and processing.
+
+<!-- markdownlint-disable line-length -->
+[pkggodev-genesis]: https://pkg.go.dev/github.com/oasisprotocol/oasis-core/go/staking/api?tab=doc#Genesis
+<!-- markdownlint-enable line-length -->
+
 ## Accounts
 
 A staking account is an entry in the staking ledger. It can hold both general

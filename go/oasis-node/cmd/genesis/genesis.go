@@ -10,6 +10,7 @@ import (
 	"math"
 	"math/big"
 	"os"
+	"strconv"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -77,6 +78,10 @@ const (
 	// Roothash config flags.
 	cfgRoothashDebugDoNotSuspendRuntimes = "roothash.debug.do_not_suspend_runtimes"
 	cfgRoothashDebugBypassStake          = "roothash.debug.bypass_stake" // nolint: gosec
+
+	// Staking config flags.
+	CfgStakingTokenSymbol        = "staking.token_symbol"
+	CfgStakingTokenValueExponent = "staking.token_value_exponent"
 
 	// Tendermint config flags.
 	cfgConsensusTimeoutCommit            = "consensus.tendermint.timeout_commit"
@@ -523,6 +528,32 @@ func AppendStakingState(doc *genesis.Document, state string, l *logging.Logger) 
 			return err
 		}
 	}
+
+	tokenSymbol := viper.GetString(CfgStakingTokenSymbol)
+	// NOTE: Token symbol set in CfgStakingTokenSymbol has preference over the
+	// one read from the staking state file.
+	if tokenSymbol != "" {
+		stakingSt.TokenSymbol = tokenSymbol
+	}
+	if stakingSt.TokenSymbol == "" {
+		return errors.New("token symbol not set")
+	}
+
+	// NOTE: The viper package doesn't have a GetUint8() method, so we defer to
+	// using strconv.ParseUint().
+	tokenValueExponentUint64, err := strconv.ParseUint(viper.Get(CfgStakingTokenValueExponent).(string), 10, 8)
+	if err != nil {
+		// NOTE: This shouldn't happen at all since CfgStakingTokenValueExponent
+		// flag is bound to an uint8.
+		panic(err)
+	}
+	tokenValueExponent := uint8(tokenValueExponentUint64)
+	// NOTE: Token value exponent set in CfgStakingTokenValueExponent has
+	// preference over the one read from the staking state file.
+	if tokenValueExponent != 0 {
+		stakingSt.TokenValueExponent = tokenValueExponent
+	}
+
 	if flags.DebugTestEntity() {
 		l.Warn("granting stake to the debug test entity")
 
@@ -738,6 +769,10 @@ func init() {
 	initGenesisFlags.Bool(cfgRoothashDebugBypassStake, false, "bypass all roothash stake checks and operations (UNSAFE)")
 	_ = initGenesisFlags.MarkHidden(cfgRoothashDebugDoNotSuspendRuntimes)
 	_ = initGenesisFlags.MarkHidden(cfgRoothashDebugBypassStake)
+
+	// Staking config flags.
+	initGenesisFlags.String(CfgStakingTokenSymbol, "", "token's ticker symbol")
+	initGenesisFlags.Uint8(CfgStakingTokenValueExponent, 0, "token value's base-10 exponent")
 
 	// Tendermint config flags.
 	initGenesisFlags.Duration(cfgConsensusTimeoutCommit, 1*time.Second, "tendermint commit timeout")

@@ -182,6 +182,9 @@ func doDumpDB(cmd *cobra.Command, args []string) {
 		)
 		return
 	}
+	// Add static values to the staking genesis state.
+	stakingSt.TokenSymbol = oldDoc.Staking.TokenSymbol
+	stakingSt.TokenValueExponent = oldDoc.Staking.TokenValueExponent
 	doc.Staking = *stakingSt
 
 	// KeyManager

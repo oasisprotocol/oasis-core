@@ -40,6 +40,7 @@ var (
 			RewardFactorEpochSigned: QtyFromInt(1),
 			// Zero RewardFactorBlockProposed is normal.
 		},
+		TokenSymbol: "TEST",
 		TotalSupply: DebugStateTotalSupply,
 		Ledger: map[api.Address]*api.Account{
 			DebugStateSrcAddress: {

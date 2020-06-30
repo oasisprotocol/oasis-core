@@ -2,6 +2,7 @@ package genesis
 
 import (
 	"encoding/hex"
+	"fmt"
 	"math"
 	"testing"
 	"time"
@@ -128,7 +129,7 @@ func TestGenesisChainContext(t *testing.T) {
 	//       on each run.
 	stableDoc.Staking = staking.Genesis{}
 
-	require.Equal(t, "935f38f4eba20a2391418c3c708f4a0359725e0c235821923edf5da43142e180", stableDoc.ChainContext())
+	require.Equal(t, "eb8815bbaf67dd9b08a3fe9810c5b71856d474d038188ca0adbaa4ef99b289e7", stableDoc.ChainContext())
 }
 
 func TestGenesisSanityCheck(t *testing.T) {
@@ -641,6 +642,39 @@ func TestGenesisSanityCheck(t *testing.T) {
 	require.NoError(d.SanityCheck(), "storage node with compute runtime should pass")
 
 	// Test staking genesis checks.
+
+	d = *testDoc
+	d.Staking.TokenSymbol = ""
+	require.EqualError(
+		d.SanityCheck(),
+		"staking: sanity check failed: token symbol is empty",
+		"empty token symbol should be rejected",
+	)
+
+	d = *testDoc
+	d.Staking.TokenSymbol = "foo"
+	require.EqualError(
+		d.SanityCheck(),
+		fmt.Sprintf("staking: sanity check failed: token symbol should match '%s'", staking.TokenSymbolRegexp),
+		"lower case token symbol should be rejected",
+	)
+
+	d = *testDoc
+	d.Staking.TokenSymbol = "LONGSYMBOL"
+	require.EqualError(
+		d.SanityCheck(),
+		"staking: sanity check failed: token symbol exceeds maximum length",
+		"too long token symbol should be rejected",
+	)
+
+	d = *testDoc
+	d.Staking.TokenValueExponent = 21
+	require.EqualError(
+		d.SanityCheck(),
+		"staking: sanity check failed: token value exponent is invalid",
+		"too large token value exponent should be rejected",
+	)
+
 	// NOTE: There doesn't seem to be a way to generate invalid Quantities, so
 	// we're just going to test the code that checks if things add up.
 	d = *testDoc

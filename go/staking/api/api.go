@@ -23,6 +23,13 @@ const (
 	// LogEventGeneralAdjustment is a log event value that signals adjustment
 	// of an account's general balance due to a roothash message.
 	LogEventGeneralAdjustment = "staking/general_adjustment"
+
+	// Maximum length of the token symbol.
+	TokenSymbolMaxLength = 8
+	// Regular expression defining valid token symbol characters.
+	TokenSymbolRegexp = "^[A-Z]+$" // nolint: gosec // Not that kind of token :).
+	// Maximum value of token's value base-10 exponent.
+	TokenValueExponentMaxValue = 20
 )
 
 var (
@@ -91,6 +98,13 @@ var (
 
 // Backend is a staking implementation.
 type Backend interface {
+	// TokenSymbol returns the token's ticker symbol.
+	TokenSymbol(ctx context.Context) (string, error)
+
+	// TokenValueExponent is the token's value base-10 exponent, i.e.
+	// 1 token = 10**TokenValueExponent base units.
+	TokenValueExponent(ctx context.Context) (uint8, error)
+
 	// TotalSupply returns the total number of base units.
 	TotalSupply(ctx context.Context, height int64) (*quantity.Quantity, error)
 
@@ -758,10 +772,16 @@ type DebondingDelegation struct {
 	DebondEndTime epochtime.EpochTime `json:"debond_end"`
 }
 
-// Genesis is the initial ledger balances at genesis for use in the genesis
-// block and test cases.
+// Genesis is the initial staking state for use in the genesis block.
 type Genesis struct {
 	Parameters ConsensusParameters `json:"params"`
+
+	// TokenSymbol is the token's ticker symbol.
+	// Only upper case A-Z characters are allowed.
+	TokenSymbol string `json:"token_symbol"`
+	// TokenValueExponent is the token's value base-10 exponent, i.e.
+	// 1 token = 10**TokenValueExponent base units.
+	TokenValueExponent uint8 `json:"token_value_exponent"`
 
 	TotalSupply   quantity.Quantity `json:"total_supply"`
 	CommonPool    quantity.Quantity `json:"common_pool"`

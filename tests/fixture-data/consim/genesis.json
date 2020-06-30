@@ -71,6 +71,7 @@
       "reward_factor_epoch_signed": "0",
       "reward_factor_block_proposed": "0"
     },
+    "token_symbol": "TEST",
     "total_supply": "290000000000",
     "common_pool": "0",
     "last_block_fees": "0",
