@@ -5,7 +5,7 @@
 [![CI reproducibility status][github-ci-repr-badge]][github-ci-repr-link]
 [![Docker status][github-docker-badge]][github-docker-link]
 [![Release status][github-release-badge]][github-release-link]
-[![GoDoc][godoc-badge]][godoc-link]
+[![GoDev][godev-badge]][godev-link]
 
 <!-- NOTE: Markdown doesn't support tables without headers, so we need to
 work around that and make the second (non-header) row also bold. -->
@@ -14,10 +14,10 @@ work around that and make the second (non-header) row also bold. -->
 | **Rust**      | [![Rust coverage][coveralls-badge]][coveralls-link] |
 
 <!-- markdownlint-disable line-length -->
-[buildkite-badge]: https://badge.buildkite.com/15a8faccee0d5b5ab1af7e75eb6f9daf2d493c543fbc67dce5.svg?branch=master
+[buildkite-badge]: https://badge.buildkite.com/16896a68bd8fba45d7b41fd608f26f87c726da10f7f24694a0.svg?branch=master
 [buildkite-link]: https://buildkite.com/oasisprotocol/oasis-core-ci
 [github-ci-lint-badge]: https://github.com/oasisprotocol/oasis-core/workflows/ci-lint/badge.svg
-[github-ci-lint-link]: https://github.com/oasisprotocol/oasis-core/actions?query=workflow:ci-lint
+[github-ci-lint-link]: https://github.com/oasisprotocol/oasis-core/actions?query=workflow:ci-lint+branch:master
 [github-ci-repr-badge]: https://github.com/oasisprotocol/oasis-core/workflows/ci-reproducibility/badge.svg
 [github-ci-repr-link]: https://github.com/oasisprotocol/oasis-core/actions?query=workflow:ci-reproducibility
 [github-docker-badge]: https://github.com/oasisprotocol/oasis-core/workflows/docker/badge.svg
@@ -28,8 +28,8 @@ work around that and make the second (non-header) row also bold. -->
 [codecov-link]: https://codecov.io/gh/oasisprotocol/oasis-core
 [coveralls-badge]: https://coveralls.io/repos/github/oasisprotocol/oasis-core/badge.svg
 [coveralls-link]: https://coveralls.io/github/oasisprotocol/oasis-core
-[godoc-badge]: https://godoc.org/github.com/oasisprotocol/oasis-core?status.svg
-[godoc-link]: https://godoc.org/github.com/oasisprotocol/oasis-core
+[godev-badge]: https://img.shields.io/badge/go.dev-reference-007d9c?logo=go&logoColor=white
+[godev-link]: https://pkg.go.dev/github.com/oasisprotocol/oasis-core/go?tab=subdirectories
 <!-- markdownlint-enable line-length -->
 
 ## Note
