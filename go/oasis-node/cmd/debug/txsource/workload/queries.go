@@ -17,6 +17,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/node"
 	"github.com/oasisprotocol/oasis-core/go/common/quantity"
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
+	tmcrypto "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/crypto"
 	control "github.com/oasisprotocol/oasis-core/go/control/api"
 	epochtime "github.com/oasisprotocol/oasis-core/go/epochtime/api"
 	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
@@ -212,6 +213,17 @@ func (q *queries) doRegistryQueries(ctx context.Context, rng *rand.Rand, height 
 		_, err = q.registry.GetNodeStatus(ctx, &registry.IDQuery{ID: nod.ID, Height: height})
 		if err != nil {
 			return fmt.Errorf("GetNodeStatus error at height %d: %w", height, err)
+		}
+		node, err = q.registry.GetNodeByConsensusAddress(
+			ctx,
+			&registry.ConsensusAddressQuery{
+				Address: []byte(tmcrypto.PublicKeyToTendermint(&nod.Consensus.ID).Address()), Height: height},
+		)
+		if err != nil {
+			return fmt.Errorf("GetNodeByConsensusAddress error at height %d: %w", height, err)
+		}
+		if !nod.ID.Equal(node.ID) {
+			return fmt.Errorf("GetNodeByConsensusAddress mismatch, expected: %s, got: %s", nod, node)
 		}
 	}
 

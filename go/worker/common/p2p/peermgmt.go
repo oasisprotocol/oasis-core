@@ -144,7 +144,7 @@ func (mgr *PeerManager) watchRegistryNodes(consensus consensus.Backend) {
 
 	nodeCh, nSub, err := consensus.Registry().WatchNodes(mgr.ctx)
 	if err != nil {
-		mgr.logger.Error("failed to watch registery for node changes",
+		mgr.logger.Error("failed to watch registry for node changes",
 			"err", err,
 		)
 		return

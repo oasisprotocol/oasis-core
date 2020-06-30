@@ -21,6 +21,8 @@ var (
 	methodGetEntities = serviceName.NewMethod("GetEntities", int64(0))
 	// methodGetNode is the GetNode method.
 	methodGetNode = serviceName.NewMethod("GetNode", IDQuery{})
+	// methodGetNodeByConsensusAddress is the GetNodeByConsensusAddress method.
+	methodGetNodeByConsensusAddress = serviceName.NewMethod("GetNodeByConsensusAddress", ConsensusAddressQuery{})
 	// methodGetNodeStatus is the GetNodeStatus method.
 	methodGetNodeStatus = serviceName.NewMethod("GetNodeStatus", IDQuery{})
 	// methodGetNodes is the GetNodes method.
@@ -59,6 +61,10 @@ var (
 			{
 				MethodName: methodGetNode.ShortName(),
 				Handler:    handlerGetNode,
+			},
+			{
+				MethodName: methodGetNodeByConsensusAddress.ShortName(),
+				Handler:    handlerGetNodeByConsensusAddress,
 			},
 			{
 				MethodName: methodGetNodeStatus.ShortName(),
@@ -175,6 +181,29 @@ func handlerGetNode( // nolint: golint
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(Backend).GetNode(ctx, req.(*IDQuery))
+	}
+	return interceptor(ctx, &query, info, handler)
+}
+
+func handlerGetNodeByConsensusAddress( // nolint: golint
+	srv interface{},
+	ctx context.Context,
+	dec func(interface{}) error,
+	interceptor grpc.UnaryServerInterceptor,
+) (interface{}, error) {
+	var query ConsensusAddressQuery
+	if err := dec(&query); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(Backend).GetNodeByConsensusAddress(ctx, &query)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: methodGetNodeByConsensusAddress.FullName(),
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(Backend).GetNodeByConsensusAddress(ctx, req.(*ConsensusAddressQuery))
 	}
 	return interceptor(ctx, &query, info, handler)
 }
@@ -492,6 +521,14 @@ func (c *registryClient) WatchEntities(ctx context.Context) (<-chan *EntityEvent
 func (c *registryClient) GetNode(ctx context.Context, query *IDQuery) (*node.Node, error) {
 	var rsp node.Node
 	if err := c.conn.Invoke(ctx, methodGetNode.FullName(), query, &rsp); err != nil {
+		return nil, err
+	}
+	return &rsp, nil
+}
+
+func (c *registryClient) GetNodeByConsensusAddress(ctx context.Context, query *ConsensusAddressQuery) (*node.Node, error) {
+	var rsp node.Node
+	if err := c.conn.Invoke(ctx, methodGetNodeByConsensusAddress.FullName(), query, &rsp); err != nil {
 		return nil, err
 	}
 	return &rsp, nil

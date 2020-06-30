@@ -21,6 +21,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/node"
 	"github.com/oasisprotocol/oasis-core/go/common/quantity"
 	consensusAPI "github.com/oasisprotocol/oasis-core/go/consensus/api"
+	tmcrypto "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/crypto"
 	epochtime "github.com/oasisprotocol/oasis-core/go/epochtime/api"
 	epochtimeTests "github.com/oasisprotocol/oasis-core/go/epochtime/tests"
 	"github.com/oasisprotocol/oasis-core/go/registry/api"
@@ -60,18 +61,20 @@ func testRegistryEntityNodes( // nolint: gocyclo
 	runtimeID common.Namespace,
 	runtimeEWID common.Namespace,
 ) {
+	ctx := context.Background()
+
 	// Generate the entities used for the test cases.
 	entities, err := NewTestEntities(entityNodeSeed, 3)
 	require.NoError(t, err, "NewTestEntities")
 
 	timeSource := consensus.EpochTime().(epochtime.SetableBackend)
-	epoch, err := timeSource.GetEpoch(context.Background(), consensusAPI.HeightLatest)
+	epoch, err := timeSource.GetEpoch(ctx, consensusAPI.HeightLatest)
 	require.NoError(t, err, "GetEpoch")
 
 	// All of these tests are combined because the Entity and Node structures
 	// are linked togehter.
 
-	entityCh, entitySub, err := backend.WatchEntities(context.Background())
+	entityCh, entitySub, err := backend.WatchEntities(ctx)
 	require.NoError(t, err, "WatchEntities")
 	defer entitySub.Close()
 
@@ -94,7 +97,7 @@ func testRegistryEntityNodes( // nolint: gocyclo
 				require.True(ev.IsRegistration, "event is registration")
 
 				// Make sure that GetEvents also returns the registration event.
-				evts, grr := backend.GetEvents(context.Background(), consensusAPI.HeightLatest)
+				evts, grr := backend.GetEvents(ctx, consensusAPI.HeightLatest)
 				require.NoError(grr, "GetEvents")
 				var gotIt bool
 				for _, evt := range evts {
@@ -113,13 +116,13 @@ func testRegistryEntityNodes( // nolint: gocyclo
 
 		for _, v := range entities {
 			var ent *entity.Entity
-			ent, err = backend.GetEntity(context.Background(), &api.IDQuery{ID: v.Entity.ID, Height: consensusAPI.HeightLatest})
+			ent, err = backend.GetEntity(ctx, &api.IDQuery{ID: v.Entity.ID, Height: consensusAPI.HeightLatest})
 			require.NoError(err, "GetEntity")
 			require.EqualValues(v.Entity, ent, "retrieved entity")
 		}
 
 		var registeredEntities []*entity.Entity
-		registeredEntities, err = backend.GetEntities(context.Background(), consensusAPI.HeightLatest)
+		registeredEntities, err = backend.GetEntities(ctx, consensusAPI.HeightLatest)
 		require.NoError(err, "GetEntities")
 		// NOTE: The test entity is alway present as it controls a runtime and cannot be removed.
 		testEntity, _, _ := entity.TestEntity()
@@ -166,7 +169,7 @@ func testRegistryEntityNodes( // nolint: gocyclo
 	nonWhitelistedNodes, err := entities[0].NewTestNodes(1, 1, []byte("nonWhitelistedNodes"), nodeRuntimesEW, epoch+2)
 	require.NoError(t, err, "NewTestNodes non-whitelisted")
 
-	nodeCh, nodeSub, err := backend.WatchNodes(context.Background())
+	nodeCh, nodeSub, err := backend.WatchNodes(ctx)
 	require.NoError(t, err, "WatchNodes")
 	defer nodeSub.Close()
 
@@ -190,7 +193,7 @@ func testRegistryEntityNodes( // nolint: gocyclo
 					require.True(ev.IsRegistration, "event is registration")
 
 					// Make sure that GetEvents also returns the registration event.
-					evts, grr := backend.GetEvents(context.Background(), consensusAPI.HeightLatest)
+					evts, grr := backend.GetEvents(ctx, consensusAPI.HeightLatest)
 					require.NoError(grr, "GetEvents")
 					var gotIt bool
 					for _, evt := range evts {
@@ -207,9 +210,19 @@ func testRegistryEntityNodes( // nolint: gocyclo
 				}
 
 				var nod *node.Node
-				nod, err = backend.GetNode(context.Background(), &api.IDQuery{ID: tn.Node.ID, Height: consensusAPI.HeightLatest})
+				nod, err = backend.GetNode(ctx, &api.IDQuery{ID: tn.Node.ID, Height: consensusAPI.HeightLatest})
 				require.NoError(err, "GetNode")
 				require.EqualValues(tn.Node, nod, "retrieved node")
+
+				var nodeByConsensus *node.Node
+				nodeByConsensus, err = backend.GetNodeByConsensusAddress(
+					ctx,
+					&api.ConsensusAddressQuery{
+						Address: []byte(tmcrypto.PublicKeyToTendermint(&tn.Node.Consensus.ID).Address()),
+						Height:  consensusAPI.HeightLatest},
+				)
+				require.NoError(err, "GetNodeByConsensusAddress")
+				require.EqualValues(tn.Node, nodeByConsensus, "retrieved node by Consensus Address")
 
 				for _, v := range tn.invalidAfter {
 					err = tn.Register(consensus, v.signed)
@@ -274,7 +287,7 @@ func testRegistryEntityNodes( // nolint: gocyclo
 		expectedNodeList := getExpectedNodeList()
 		epoch = epochtimeTests.MustAdvanceEpoch(t, timeSource, 1)
 
-		registeredNodes, nerr := backend.GetNodes(context.Background(), consensusAPI.HeightLatest)
+		registeredNodes, nerr := backend.GetNodes(ctx, consensusAPI.HeightLatest)
 		require.NoError(nerr, "GetNodes")
 		require.EqualValues(expectedNodeList, registeredNodes, "node list")
 	})
@@ -284,9 +297,6 @@ func testRegistryEntityNodes( // nolint: gocyclo
 
 		entity := entities[0]
 		node := nodes[0][0]
-
-		ctx, cancel := context.WithTimeout(context.Background(), recvTimeout)
-		defer cancel()
 
 		// Get node status.
 		var nodeStatus *api.NodeStatus
@@ -299,7 +309,7 @@ func testRegistryEntityNodes( // nolint: gocyclo
 		tx := api.NewUnfreezeNodeTx(0, nil, &api.UnfreezeNode{
 			NodeID: node.Node.ID,
 		})
-		err = consensusAPI.SignAndSubmitTx(context.Background(), consensus, entity.Signer, tx)
+		err = consensusAPI.SignAndSubmitTx(ctx, consensus, entity.Signer, tx)
 		require.NoError(err, "UnfreezeNode")
 
 		// Try to unfreeze an invalid node (should fail).
@@ -308,7 +318,7 @@ func testRegistryEntityNodes( // nolint: gocyclo
 		err = unfreeze.NodeID.UnmarshalHex("ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff")
 		require.NoError(err, "UnmarshalHex")
 		tx = api.NewUnfreezeNodeTx(0, nil, &unfreeze)
-		err = consensusAPI.SignAndSubmitTx(context.Background(), consensus, entity.Signer, tx)
+		err = consensusAPI.SignAndSubmitTx(ctx, consensus, entity.Signer, tx)
 		require.Error(err, "UnfreezeNode (with invalid node)")
 		require.Equal(err, api.ErrNoSuchNode)
 
@@ -317,7 +327,7 @@ func testRegistryEntityNodes( // nolint: gocyclo
 		tx = api.NewUnfreezeNodeTx(0, nil, &api.UnfreezeNode{
 			NodeID: node.Node.ID,
 		})
-		err = consensusAPI.SignAndSubmitTx(context.Background(), consensus, node.Signer, tx)
+		err = consensusAPI.SignAndSubmitTx(ctx, consensus, node.Signer, tx)
 		require.Error(err, "UnfreezeNode (with invalid signer)")
 		require.Equal(err, api.ErrBadEntityForNode)
 	})
@@ -339,7 +349,7 @@ func testRegistryEntityNodes( // nolint: gocyclo
 				deregisteredNodes[ev.Node.ID] = ev.Node
 
 				// Make sure that GetEvents also returns the deregistration event.
-				evts, grr := backend.GetEvents(context.Background(), consensusAPI.HeightLatest)
+				evts, grr := backend.GetEvents(ctx, consensusAPI.HeightLatest)
 				require.NoError(grr, "GetEvents")
 				var gotIt bool
 				for _, evt := range evts {
@@ -371,7 +381,7 @@ func testRegistryEntityNodes( // nolint: gocyclo
 
 		// Ensure the node list doesn't have the expired nodes.
 		expectedNodeList := getExpectedNodeList()
-		registeredNodes, nerr := backend.GetNodes(context.Background(), consensusAPI.HeightLatest)
+		registeredNodes, nerr := backend.GetNodes(ctx, consensusAPI.HeightLatest)
 		require.NoError(nerr, "GetNodes")
 		require.EqualValues(expectedNodeList, registeredNodes, "node list")
 
@@ -407,7 +417,7 @@ func testRegistryEntityNodes( // nolint: gocyclo
 			require.False(ev.IsRegistration, "event is deregistration")
 
 			// Make sure that GetEvents also returns the deregistration event.
-			evts, err := backend.GetEvents(context.Background(), consensusAPI.HeightLatest)
+			evts, err := backend.GetEvents(ctx, consensusAPI.HeightLatest)
 			require.NoError(err, "GetEvents")
 			var gotIt bool
 			for _, evt := range evts {
@@ -444,7 +454,7 @@ func testRegistryEntityNodes( // nolint: gocyclo
 				require.False(ev.IsRegistration, "event is deregistration")
 
 				// Make sure that GetEvents also returns the deregistration event.
-				evts, err := backend.GetEvents(context.Background(), consensusAPI.HeightLatest)
+				evts, err := backend.GetEvents(ctx, consensusAPI.HeightLatest)
 				require.NoError(err, "GetEvents")
 				var gotIt bool
 				for _, evt := range evts {
@@ -463,7 +473,7 @@ func testRegistryEntityNodes( // nolint: gocyclo
 
 		// There should be no more entities.
 		for _, v := range entities {
-			_, err := backend.GetEntity(context.Background(), &api.IDQuery{ID: v.Entity.ID, Height: consensusAPI.HeightLatest})
+			_, err := backend.GetEntity(ctx, &api.IDQuery{ID: v.Entity.ID, Height: consensusAPI.HeightLatest})
 			require.Equal(api.ErrNoSuchEntity, err, "GetEntity")
 		}
 	})

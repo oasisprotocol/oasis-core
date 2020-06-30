@@ -94,6 +94,15 @@ func (tb *tendermintBackend) GetNodes(ctx context.Context, height int64) ([]*nod
 	return q.Nodes(ctx)
 }
 
+func (tb *tendermintBackend) GetNodeByConsensusAddress(ctx context.Context, query *api.ConsensusAddressQuery) (*node.Node, error) {
+	q, err := tb.querier.QueryAt(ctx, query.Height)
+	if err != nil {
+		return nil, err
+	}
+
+	return q.NodeByConsensusAddress(ctx, query.Address)
+}
+
 func (tb *tendermintBackend) WatchNodes(ctx context.Context) (<-chan *api.NodeEvent, pubsub.ClosableSubscription, error) {
 	typedCh := make(chan *api.NodeEvent)
 	sub := tb.nodeNotifier.Subscribe()
