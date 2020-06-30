@@ -22,6 +22,9 @@ var (
 	// methodGetUpstreamTLSPubKeys is the GetUpstreamTLSPubKeys method.
 	methodGetUpstreamTLSPubKeys = serviceName.NewMethod("GetUpstreamTLSPubKeys", nil)
 
+	// methodUpdatePolicies is the UpdatePolicies method.
+	methodUpdatePolicies = serviceName.NewMethod("UpdatePolicies", ServicePolicies{})
+
 	// serviceDesc is the gRPC service descriptor.
 	serviceDesc = grpc.ServiceDesc{
 		ServiceName: string(serviceName),
@@ -38,6 +41,10 @@ var (
 			{
 				MethodName: methodGetUpstreamTLSPubKeys.ShortName(),
 				Handler:    handlerGetUpstreamTLSPubKeys,
+			},
+			{
+				MethodName: methodUpdatePolicies.ShortName(),
+				Handler:    handlerUpdatePolicies,
 			},
 		},
 		Streams: []grpc.StreamDesc{},
@@ -105,6 +112,29 @@ func handlerGetUpstreamTLSPubKeys( // nolint: golint
 	return interceptor(ctx, nil, info, handler)
 }
 
+func handlerUpdatePolicies( // nolint: golint
+	srv interface{},
+	ctx context.Context,
+	dec func(interface{}) error,
+	interceptor grpc.UnaryServerInterceptor,
+) (interface{}, error) {
+	var req ServicePolicies
+	if err := dec(&req); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return nil, srv.(Backend).UpdatePolicies(ctx, req)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: methodUpdatePolicies.FullName(),
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return nil, srv.(Backend).UpdatePolicies(ctx, *req.(*ServicePolicies))
+	}
+	return interceptor(ctx, &req, info, handler)
+}
+
 // RegisterService registers a new sentry service with the given gRPC server.
 func RegisterService(server *grpc.Server, service Backend) {
 	server.RegisterService(&serviceDesc, service)
@@ -135,6 +165,13 @@ func (c *sentryClient) GetUpstreamTLSPubKeys(ctx context.Context) ([]signature.P
 		return nil, err
 	}
 	return rsp, nil
+}
+
+func (c *sentryClient) UpdatePolicies(ctx context.Context, pols ServicePolicies) error {
+	if err := c.conn.Invoke(ctx, methodUpdatePolicies.FullName(), pols, nil); err != nil {
+		return err
+	}
+	return nil
 }
 
 // NewSentryClient creates a new gRPC sentry client service.

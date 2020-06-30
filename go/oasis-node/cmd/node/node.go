@@ -114,7 +114,7 @@ type Node struct {
 	Upgrader upgradeAPI.Backend
 	Genesis  genesisAPI.Provider
 	Identity *identity.Identity
-	Sentry   sentryAPI.Backend
+	Sentry   sentryAPI.LocalBackend
 	IAS      iasAPI.Endpoint
 
 	RuntimeRegistry runtimeRegistry.Registry

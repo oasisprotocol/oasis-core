@@ -6,7 +6,6 @@ import (
 	"crypto/x509"
 	"fmt"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
@@ -18,14 +17,11 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/accessctl"
 	cmnGrpc "github.com/oasisprotocol/oasis-core/go/common/grpc"
 	"github.com/oasisprotocol/oasis-core/go/common/grpc/policy"
-	"github.com/oasisprotocol/oasis-core/go/common/grpc/policy/api"
 	cmnTesting "github.com/oasisprotocol/oasis-core/go/common/grpc/testing"
 	"github.com/oasisprotocol/oasis-core/go/common/identity"
 )
 
 var testNs = common.NewTestNamespaceFromSeed([]byte("oasis common grpc policy test ns"), 0)
-
-const recvTimeout = 5 * time.Second
 
 func connectToGrpcServer(
 	ctx context.Context,
@@ -68,18 +64,12 @@ func TestAccessPolicy(t *testing.T) {
 	grpcServer, err := cmnGrpc.NewServer(serverConfig)
 	require.NoErrorf(err, "Failed to create a new gRPC server: %v", err)
 
-	// Create a new pingServer with a new RuntimePolicyChecker.
-	watcher := policy.NewPolicyWatcher()
-	// Register the PolicyWatcherService.
-	api.RegisterService(grpcServer.Server(), watcher)
+	serviceName := cmnGrpc.ServiceName(cmnTesting.ServiceDesc.ServiceName)
 
-	policyChecker := policy.NewDynamicRuntimePolicyChecker(cmnGrpc.ServiceName(cmnTesting.ServiceDesc.ServiceName), watcher)
+	policyChecker := policy.NewDynamicRuntimePolicyChecker(serviceName, nil)
 	server := cmnTesting.NewPingServer(policy.GRPCAuthenticationFunction(policyChecker))
 	policy := accessctl.NewPolicy()
 	policyChecker.SetAccessPolicy(policy, testNs)
-	expectedPolicy := map[common.Namespace]accessctl.Policy{
-		testNs: policy,
-	}
 
 	// Register the pingServer with the PingService.
 	cmnTesting.RegisterService(grpcServer.Server(), server)
@@ -117,19 +107,6 @@ func TestAccessPolicy(t *testing.T) {
 	defer conn.Close()
 	// Create a new ping client.
 	client = cmnTesting.NewPingClient(conn)
-	// Create a new watcher client.
-	watcherClient := api.NewPolicyWatcherClient(conn)
-	ch, sub, err := watcherClient.WatchPolicies(ctx)
-	require.NoError(err, "WatchPolicies() error")
-	defer sub.Close()
-
-	// Expect initial policy.
-	select {
-	case p := <-ch:
-		require.Equal(api.ServicePolicies{Service: cmnGrpc.ServiceName(cmnTesting.ServiceDesc.ServiceName), AccessPolicies: expectedPolicy}, p, "initial policy")
-	case <-time.After(recvTimeout):
-		t.Fatalf("Failed to receive value, initial policy")
-	}
 
 	expectedStr := fmt.Sprintf("rpc error: code = PermissionDenied desc = grpc: calling /oasis-core.PingService/Ping method for runtime %s not allowed for client %s", testNs, accessctl.SubjectFromX509Certificate(clientX509Cert))
 	_, err = client.Ping(ctx, pingQuery)
@@ -146,16 +123,7 @@ func TestAccessPolicy(t *testing.T) {
 	policy.Allow(subject, accessctl.Action(cmnTesting.MethodPing.FullName()))
 	policyChecker.SetAccessPolicy(policy, testNs)
 
-	expectedPolicy[testNs] = policy
-	select {
-	case p := <-ch:
-		require.Equal(api.ServicePolicies{Service: cmnGrpc.ServiceName(cmnTesting.ServiceDesc.ServiceName), AccessPolicies: expectedPolicy}, p, "updated policy")
-	case <-time.After(recvTimeout):
-		t.Fatalf("Failed to receive value, initial policy")
-	}
-
 	res, err := client.Ping(ctx, pingQuery)
 	require.NoError(err, "Calling Ping with proper access policy set should succeed")
 	require.IsType(&cmnTesting.PingResponse{}, res, "Calling Ping should return a response of the correct type")
-
 }
