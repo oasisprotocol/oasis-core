@@ -29,8 +29,6 @@ var (
 	methodGetRuntime = serviceName.NewMethod("GetRuntime", NamespaceQuery{})
 	// methodGetRuntimes is the GetRuntimes method.
 	methodGetRuntimes = serviceName.NewMethod("GetRuntimes", int64(0))
-	// methodGetNodeList is the GetNodeList method.
-	methodGetNodeList = serviceName.NewMethod("GetNodeList", int64(0))
 	// methodStateToGenesis is the StateToGenesis method.
 	methodStateToGenesis = serviceName.NewMethod("StateToGenesis", int64(0))
 	// methodGetEvents is the GetEvents method.
@@ -77,10 +75,6 @@ var (
 			{
 				MethodName: methodGetRuntimes.ShortName(),
 				Handler:    handlerGetRuntimes,
-			},
-			{
-				MethodName: methodGetNodeList.ShortName(),
-				Handler:    handlerGetNodeList,
 			},
 			{
 				MethodName: methodStateToGenesis.ShortName(),
@@ -273,29 +267,6 @@ func handlerGetRuntimes( // nolint: golint
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(Backend).GetRuntimes(ctx, req.(int64))
-	}
-	return interceptor(ctx, height, info, handler)
-}
-
-func handlerGetNodeList( // nolint: golint
-	srv interface{},
-	ctx context.Context,
-	dec func(interface{}) error,
-	interceptor grpc.UnaryServerInterceptor,
-) (interface{}, error) {
-	var height int64
-	if err := dec(&height); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(Backend).GetNodeList(ctx, height)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: methodGetNodeList.FullName(),
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(Backend).GetNodeList(ctx, req.(int64))
 	}
 	return interceptor(ctx, height, info, handler)
 }
@@ -626,14 +597,6 @@ func (c *registryClient) GetRuntimes(ctx context.Context, height int64) ([]*Runt
 		return nil, err
 	}
 	return rsp, nil
-}
-
-func (c *registryClient) GetNodeList(ctx context.Context, height int64) (*NodeList, error) {
-	var rsp NodeList
-	if err := c.conn.Invoke(ctx, methodGetNodeList.FullName(), height, &rsp); err != nil {
-		return nil, err
-	}
-	return &rsp, nil
 }
 
 func (c *registryClient) WatchRuntimes(ctx context.Context) (<-chan *Runtime, pubsub.ClosableSubscription, error) {

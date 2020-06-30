@@ -215,9 +215,6 @@ type Backend interface {
 	// block height.
 	GetRuntimes(context.Context, int64) ([]*Runtime, error)
 
-	// GetNodeList returns the NodeList at the specified block height.
-	GetNodeList(context.Context, int64) (*NodeList, error)
-
 	// WatchRuntimes returns a stream of Runtime.  Upon subscription,
 	// all runtimes will be sent immediately.
 	WatchRuntimes(context.Context) (<-chan *Runtime, pubsub.ClosableSubscription, error)

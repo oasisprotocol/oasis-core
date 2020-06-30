@@ -127,10 +127,6 @@ func (tb *tendermintBackend) WatchRuntimes(ctx context.Context) (<-chan *api.Run
 	return typedCh, sub, nil
 }
 
-func (tb *tendermintBackend) GetNodeList(ctx context.Context, height int64) (*api.NodeList, error) {
-	return tb.getNodeList(ctx, height)
-}
-
 func (tb *tendermintBackend) Cleanup() {
 }
 
