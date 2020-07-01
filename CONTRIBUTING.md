@@ -39,24 +39,20 @@ most effective at receiving input and making progress.
 If the feature is **small** - a change to a single piece of functionality, or an
 addition that can be expressed clearly and succinctly in a few sentences, then
 the most appropriate place to propose it is as a [new Feature request] in this
-repository. Such issues will typically receive `p:3` priority in their initial
-triage.
+repository.
 
 If the feature is **more complicated**, involves protocol changes, or has
-potential safety or performance implications, then first check with us whether
-it is something we are willing to consider and is in-scope for our project.
+potential safety or performance implications, then consider [proposing an ADR]
+and submit it as a pull request ot this repository. This will allow a structured
+review and commenting of the proposed changes. You should aim to get the ADR
+accepted and merged before starting on implementation.
 
-<!-- TODO: Change when moving to ADRs in this repository. -->
-If the feedback is positive, then please draft an RFC and submit it as a
-pull request to our [RFCs repository](https://github.com/oasislabs/rfcs).
-This will allow a structured review and commenting of the proposed changes.
-You should aim to reach consensus before starting on implementation.
-
-*Note that we as project's maintainers still have the final word on what we
-will accept into the project.*
+*Note that the project's committers still have the final word on what is
+accepted into the project.*
 
 <!-- markdownlint-disable line-length -->
 [new Feature request]: https://github.com/oasisprotocol/oasis-core/issues/new?template=feature_request.md
+[proposing an ADR]: docs/adr/index.md
 <!-- markdownlint-enable line-length -->
 
 ## Bug Reports
@@ -130,7 +126,8 @@ https://github.com/oasisprotocol/oasis-core/blob/master/README.md).
   that will be included in the next section of the [Change Log](CHANGELOG.md)
   once a new version is released.
 
-* **Documentation:** Please write documentation in the code as you go.
+* **Documentation:** Please write documentation in the code as you go. If
+  possible also consider updating/augmenting the [developer documentation].
 
 * **Check CI:** Don’t break the build!
   * Make sure all tests pass before submitting your pull request for review.
@@ -157,7 +154,9 @@ https://github.com/oasisprotocol/oasis-core/blob/master/README.md).
     "acknowledged" or "I don't think so because ...").
 
 * **Merge:** Once approved, the creator of the pull request should merge the
-  branch, close the pull request, and delete the branch.
+  branch, close the pull request, and delete the branch. If the creator does not
+  have write access to the repository, one of the committers should do so
+  instead.
 
 * **Signal to close issues:** Let the person who filed the issue close it. Ping
   them in a comment (e.g. @user) making sure you’ve commented how an issue was
@@ -165,16 +164,15 @@ https://github.com/oasisprotocol/oasis-core/blob/master/README.md).
   * Anyone else with write permissions should be able to close the issue if not
     addressed within a week.
 
+[developer documentation]: docs/index.md
+
 ### Contributing Documentation
 
 Documentation is always welcome! Documentation comes in several forms:
 
 * Code-level documentation, following language specifications.
-* Mechanism documentation, which live in `docs/` describes commonly used
-  systems, like adding a new protocol definition, or benchmarking the system.
-* Protocol documentation, living in the [RFCs repository](
-  https://github.com/oasislabs/rfcs), describes protocols and architectural
-  design.
+* Developer and system documentation, which lives in `docs/`, describes commonly
+  used components, protocols and testing procedures.
 
 ### Style Guides
 
