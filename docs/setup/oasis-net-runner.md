@@ -38,7 +38,7 @@ level=info module=net-runner caller=root.go:145 ts=2019-10-03T10:47:30.77662061Z
 The `simple-keyvalue` runtime implements a key-value hash map in the enclave
 and supports reading, writing, and fetching string values associated with the
 given key. To learn how to create your own runtime, see the sources of the
-example [here](tests/runtimes/simple-keyvalue).
+example [here](../../tests/runtimes/simple-keyvalue).
 
 Finally, to test Oasis node, we will run a test client written specifically
 for the `simple-keyvalue` runtime. The client sends a few keys with associated
@@ -55,7 +55,7 @@ different terminal:
 By default, Oasis node is configured with a 30-second epoch, so you may
 initially need to wait for the first epoch to pass before the test client will
 make any progress. For more information on writing your own client, see the
-`simple-keyvalue` client sources [here](tests/clients/simple-keyvalue).
+`simple-keyvalue` client sources [here](../../tests/clients/simple-keyvalue).
 
 [the default network fixture]: ../../go/oasis-net-runner/fixtures/default.go
 
