@@ -21,6 +21,8 @@ var (
 	methodGetEntities = serviceName.NewMethod("GetEntities", int64(0))
 	// methodGetNode is the GetNode method.
 	methodGetNode = serviceName.NewMethod("GetNode", IDQuery{})
+	// methodGetNodeByConsensusAddress is the GetNodeByConsensusAddress method.
+	methodGetNodeByConsensusAddress = serviceName.NewMethod("GetNodeByConsensusAddress", ConsensusAddressQuery{})
 	// methodGetNodeStatus is the GetNodeStatus method.
 	methodGetNodeStatus = serviceName.NewMethod("GetNodeStatus", IDQuery{})
 	// methodGetNodes is the GetNodes method.
@@ -29,8 +31,6 @@ var (
 	methodGetRuntime = serviceName.NewMethod("GetRuntime", NamespaceQuery{})
 	// methodGetRuntimes is the GetRuntimes method.
 	methodGetRuntimes = serviceName.NewMethod("GetRuntimes", int64(0))
-	// methodGetNodeList is the GetNodeList method.
-	methodGetNodeList = serviceName.NewMethod("GetNodeList", int64(0))
 	// methodStateToGenesis is the StateToGenesis method.
 	methodStateToGenesis = serviceName.NewMethod("StateToGenesis", int64(0))
 	// methodGetEvents is the GetEvents method.
@@ -63,6 +63,10 @@ var (
 				Handler:    handlerGetNode,
 			},
 			{
+				MethodName: methodGetNodeByConsensusAddress.ShortName(),
+				Handler:    handlerGetNodeByConsensusAddress,
+			},
+			{
 				MethodName: methodGetNodeStatus.ShortName(),
 				Handler:    handlerGetNodeStatus,
 			},
@@ -77,10 +81,6 @@ var (
 			{
 				MethodName: methodGetRuntimes.ShortName(),
 				Handler:    handlerGetRuntimes,
-			},
-			{
-				MethodName: methodGetNodeList.ShortName(),
-				Handler:    handlerGetNodeList,
 			},
 			{
 				MethodName: methodStateToGenesis.ShortName(),
@@ -185,6 +185,29 @@ func handlerGetNode( // nolint: golint
 	return interceptor(ctx, &query, info, handler)
 }
 
+func handlerGetNodeByConsensusAddress( // nolint: golint
+	srv interface{},
+	ctx context.Context,
+	dec func(interface{}) error,
+	interceptor grpc.UnaryServerInterceptor,
+) (interface{}, error) {
+	var query ConsensusAddressQuery
+	if err := dec(&query); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(Backend).GetNodeByConsensusAddress(ctx, &query)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: methodGetNodeByConsensusAddress.FullName(),
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(Backend).GetNodeByConsensusAddress(ctx, req.(*ConsensusAddressQuery))
+	}
+	return interceptor(ctx, &query, info, handler)
+}
+
 func handlerGetNodeStatus( // nolint: golint
 	srv interface{},
 	ctx context.Context,
@@ -273,29 +296,6 @@ func handlerGetRuntimes( // nolint: golint
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(Backend).GetRuntimes(ctx, req.(int64))
-	}
-	return interceptor(ctx, height, info, handler)
-}
-
-func handlerGetNodeList( // nolint: golint
-	srv interface{},
-	ctx context.Context,
-	dec func(interface{}) error,
-	interceptor grpc.UnaryServerInterceptor,
-) (interface{}, error) {
-	var height int64
-	if err := dec(&height); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(Backend).GetNodeList(ctx, height)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: methodGetNodeList.FullName(),
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(Backend).GetNodeList(ctx, req.(int64))
 	}
 	return interceptor(ctx, height, info, handler)
 }
@@ -526,6 +526,14 @@ func (c *registryClient) GetNode(ctx context.Context, query *IDQuery) (*node.Nod
 	return &rsp, nil
 }
 
+func (c *registryClient) GetNodeByConsensusAddress(ctx context.Context, query *ConsensusAddressQuery) (*node.Node, error) {
+	var rsp node.Node
+	if err := c.conn.Invoke(ctx, methodGetNodeByConsensusAddress.FullName(), query, &rsp); err != nil {
+		return nil, err
+	}
+	return &rsp, nil
+}
+
 func (c *registryClient) GetNodeStatus(ctx context.Context, query *IDQuery) (*NodeStatus, error) {
 	var rsp NodeStatus
 	if err := c.conn.Invoke(ctx, methodGetNodeStatus.FullName(), query, &rsp); err != nil {
@@ -626,14 +634,6 @@ func (c *registryClient) GetRuntimes(ctx context.Context, height int64) ([]*Runt
 		return nil, err
 	}
 	return rsp, nil
-}
-
-func (c *registryClient) GetNodeList(ctx context.Context, height int64) (*NodeList, error) {
-	var rsp NodeList
-	if err := c.conn.Invoke(ctx, methodGetNodeList.FullName(), height, &rsp); err != nil {
-		return nil, err
-	}
-	return &rsp, nil
 }
 
 func (c *registryClient) WatchRuntimes(ctx context.Context) (<-chan *Runtime, pubsub.ClosableSubscription, error) {

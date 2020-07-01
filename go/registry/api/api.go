@@ -196,6 +196,11 @@ type Backend interface {
 	// GetNodes gets a list of all registered nodes.
 	GetNodes(context.Context, int64) ([]*node.Node, error)
 
+	// GetNodeByConsensusAddress looks up a node by its consensus address at the
+	// specified block height. The nature and format of the consensus address depends
+	// on the specific consensus backend implementation used.
+	GetNodeByConsensusAddress(context.Context, *ConsensusAddressQuery) (*node.Node, error)
+
 	// WatchNodes returns a channel that produces a stream of
 	// NodeEvent on node registration changes.
 	WatchNodes(context.Context) (<-chan *NodeEvent, pubsub.ClosableSubscription, error)
@@ -204,7 +209,7 @@ type Backend interface {
 	// Upon subscription, the node list for the current epoch will be sent
 	// immediately if available.
 	//
-	// Each node list will be sorted by node ID in lexographically ascending
+	// Each node list will be sorted by node ID in lexicographically ascending
 	// order.
 	WatchNodeList(context.Context) (<-chan *NodeList, pubsub.ClosableSubscription, error)
 
@@ -214,9 +219,6 @@ type Backend interface {
 	// GetRuntimes returns the registered Runtimes at the specified
 	// block height.
 	GetRuntimes(context.Context, int64) ([]*Runtime, error)
-
-	// GetNodeList returns the NodeList at the specified block height.
-	GetNodeList(context.Context, int64) (*NodeList, error)
 
 	// WatchRuntimes returns a stream of Runtime.  Upon subscription,
 	// all runtimes will be sent immediately.
@@ -242,6 +244,14 @@ type IDQuery struct {
 type NamespaceQuery struct {
 	Height int64            `json:"height"`
 	ID     common.Namespace `json:"id"`
+}
+
+// ConsensusAddressQuery is a registry query by consensus address.
+// The nature and format of the consensus address depends on the specific
+// consensus backend implementation used.
+type ConsensusAddressQuery struct {
+	Height  int64  `json:"height"`
+	Address []byte `json:"address"`
 }
 
 // NewRegisterEntityTx creates a new register entity transaction.
