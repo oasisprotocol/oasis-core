@@ -263,9 +263,9 @@ func (a *ApplicationServer) EstimateGas(caller signature.PublicKey, tx *transact
 	return a.mux.EstimateGas(caller, tx)
 }
 
-// BlockHeight returns the last committed block height.
-func (a *ApplicationServer) BlockHeight() int64 {
-	return a.mux.state.BlockHeight()
+// State returns the application state.
+func (a *ApplicationServer) State() api.ApplicationQueryState {
+	return a.mux.state
 }
 
 // NewApplicationServer returns a new ApplicationServer, using the provided

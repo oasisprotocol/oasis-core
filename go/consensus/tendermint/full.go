@@ -9,6 +9,7 @@ import (
 	tmstate "github.com/tendermint/tendermint/state"
 
 	consensusAPI "github.com/oasisprotocol/oasis-core/go/consensus/api"
+	"github.com/oasisprotocol/oasis-core/go/storage/mkvs/syncer"
 )
 
 // We must use Tendermint's amino codec as some Tendermint's types are not easily unmarshallable.
@@ -72,4 +73,9 @@ func (t *tendermintService) GetParameters(ctx context.Context, height int64) (*c
 		Height: params.BlockHeight,
 		Meta:   aminoCodec.MustMarshalBinaryBare(params.ConsensusParams),
 	}, nil
+}
+
+// Implements LightClientBackend.
+func (t *tendermintService) State() syncer.ReadSyncer {
+	return t.mux.State().Storage()
 }

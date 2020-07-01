@@ -818,6 +818,7 @@ func (t *tendermintService) GetStatus(ctx context.Context) (*consensusAPI.Status
 		status.LatestHeight = latestBlk.Height
 		status.LatestHash = latestBlk.Hash
 		status.LatestTime = latestBlk.Time
+		status.LatestStateRoot = latestBlk.StateRoot
 	case consensusAPI.ErrNoCommittedBlocks:
 		// No committed blocks yet.
 	default:
@@ -976,7 +977,7 @@ func (t *tendermintService) GetTendermintBlock(ctx context.Context, height int64
 		// Do not let Tendermint determine the latest height (e.g., by passing nil here) as that
 		// completely ignores ABCI processing so it can return a block for which local state does
 		// not yet exist. Use our mux notion of latest height instead.
-		tmHeight = t.mux.BlockHeight()
+		tmHeight = t.mux.State().BlockHeight()
 		if tmHeight == 0 {
 			// No committed blocks yet.
 			return nil, nil
@@ -1011,7 +1012,7 @@ func (t *tendermintService) GetBlockResults(height int64) (*tmrpctypes.ResultBlo
 	// from our mux.
 	var tmHeight int64
 	if height == consensusAPI.HeightLatest {
-		tmHeight = t.mux.BlockHeight()
+		tmHeight = t.mux.State().BlockHeight()
 		if tmHeight == 0 {
 			// No committed blocks yet.
 			return nil, consensusAPI.ErrNoCommittedBlocks

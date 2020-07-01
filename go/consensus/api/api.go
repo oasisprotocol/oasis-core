@@ -21,6 +21,7 @@ import (
 	roothash "github.com/oasisprotocol/oasis-core/go/roothash/api"
 	scheduler "github.com/oasisprotocol/oasis-core/go/scheduler/api"
 	staking "github.com/oasisprotocol/oasis-core/go/staking/api"
+	mkvsNode "github.com/oasisprotocol/oasis-core/go/storage/mkvs/node"
 )
 
 const (
@@ -105,6 +106,8 @@ type Block struct {
 	Hash []byte `json:"hash"`
 	// Time is the second-granular consensus time.
 	Time time.Time `json:"time"`
+	// StateRoot is the Merkle root of the consensus state tree.
+	StateRoot mkvsNode.Root `json:"state_root"`
 	// Meta contains the consensus backend specific block metadata.
 	Meta cbor.RawMessage `json:"meta"`
 }
@@ -125,6 +128,8 @@ type Status struct {
 	LatestHash []byte `json:"latest_hash"`
 	// LatestTime is the timestamp of the latest block.
 	LatestTime time.Time `json:"latest_time"`
+	// LatestStateRoot is the Merkle root of the consensus state tree.
+	LatestStateRoot mkvsNode.Root `json:"latest_state_root"`
 
 	// GenesisHeight is the height of the genesis block.
 	GenesisHeight int64 `json:"genesis_height"`
