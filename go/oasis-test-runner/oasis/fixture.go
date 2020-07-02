@@ -374,6 +374,8 @@ type ComputeWorkerFixture struct {
 	AllowEarlyTermination bool `json:"allow_early_termination"`
 	AllowErrorTermination bool `json:"allow_error_termination"`
 
+	NoAutoStart bool `json:"no_auto_start,omitempty"`
+
 	// Consensus contains configuration for the consensus backend.
 	Consensus ConsensusFixture `json:"consensus"`
 
@@ -395,6 +397,7 @@ func (f *ComputeWorkerFixture) Create(net *Network) (*Compute, error) {
 		NodeCfg: NodeCfg{
 			AllowEarlyTermination:      f.AllowEarlyTermination,
 			AllowErrorTermination:      f.AllowErrorTermination,
+			NoAutoStart:                f.NoAutoStart,
 			LogWatcherHandlerFactories: f.LogWatcherHandlerFactories,
 			Consensus:                  f.Consensus,
 		},

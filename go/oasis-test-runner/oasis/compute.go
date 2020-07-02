@@ -156,6 +156,7 @@ func (net *Network) NewCompute(cfg *ComputeCfg) (*Compute, error) {
 			disableDefaultLogWatcherHandlerFactories: cfg.DisableDefaultLogWatcherHandlerFactories,
 			logWatcherHandlerFactories:               cfg.LogWatcherHandlerFactories,
 			consensus:                                cfg.Consensus,
+			noAutoStart:                              cfg.NoAutoStart,
 		},
 		entity:             cfg.Entity,
 		runtimeProvisioner: cfg.RuntimeProvisioner,
