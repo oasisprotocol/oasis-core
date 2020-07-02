@@ -9,7 +9,6 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common"
 	"github.com/oasisprotocol/oasis-core/go/common/cbor"
 	"github.com/oasisprotocol/oasis-core/go/common/sgx"
-	epochtime "github.com/oasisprotocol/oasis-core/go/epochtime/api"
 	keymanager "github.com/oasisprotocol/oasis-core/go/keymanager/api"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/env"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/oasis"
@@ -262,24 +261,8 @@ func (sc *kmUpgradeImpl) Run(childEnv *env.Env) error {
 	sc.Logger.Info("waiting for new keymanager node to register",
 		"num_nodes", sc.Net.NumRegisterNodes(),
 	)
-
-	if err = sc.Net.Controller().WaitNodesRegistered(ctx, sc.Net.NumRegisterNodes()); err != nil {
-		return fmt.Errorf("failed to wait for nodes: %w", err)
-	}
-
-	sc.Logger.Info("wait for few epochs to ensure replication finishes")
-	var waitEpoch epochtime.EpochTime
-	waitEpoch, err = sc.Net.Controller().Consensus.GetEpoch(ctx, 0)
-	if err != nil {
-		return err
-	}
-	waitEpoch += 3
-	sc.Logger.Info("waiting for epoch",
-		"wait_epoch", waitEpoch,
-	)
-	err = sc.Net.Controller().Consensus.WaitEpoch(ctx, waitEpoch)
-	if err != nil {
-		return err
+	if err = sc.Net.Keymanagers()[1].WaitReady(ctx); err != nil {
+		return fmt.Errorf("error waiting for new keymanager to be ready: %w", err)
 	}
 
 	// Ensure replication succeeded.
