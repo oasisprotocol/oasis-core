@@ -7,7 +7,7 @@ replace (
 	// https://github.com/spf13/cobra/issues/1091
 	github.com/gorilla/websocket => github.com/gorilla/websocket v1.4.2
 
-	github.com/tendermint/tendermint => github.com/oasisprotocol/tendermint v0.33.4-oasis2
+	github.com/tendermint/tendermint => github.com/oasisprotocol/tendermint v0.33.6-oasis1
 	golang.org/x/crypto/curve25519 => github.com/oasisprotocol/ed25519/extra/x25519 v0.0.0-20200528083105-55566edd6df0
 	golang.org/x/crypto/ed25519 => github.com/oasisprotocol/ed25519 v0.0.0-20200528083105-55566edd6df0
 )
@@ -45,7 +45,7 @@ require (
 	github.com/spf13/viper v1.7.0
 	github.com/stretchr/testify v1.5.1
 	github.com/tendermint/go-amino v0.15.0
-	github.com/tendermint/tendermint v0.33.4
+	github.com/tendermint/tendermint v0.33.6
 	github.com/tendermint/tm-db v0.5.1
 	github.com/thepudds/fzgo v0.2.2
 	github.com/uber-go/atomic v1.4.0 // indirect
