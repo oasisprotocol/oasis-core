@@ -29,12 +29,26 @@ var (
 	_ signature.SignerFactory     = (*Factory)(nil)
 	_ signature.Signer            = (*Signer)(nil)
 
-	// SignerDerivationRootPath is the derivation path prefix used for
-	// generating the signature key on the Ledger device.
-	SignerDerivationRootPath = []uint32{ledgerCommon.PathPurpose, SignerPathCoinType, SignerPathAccount, SignerPathChange}
+	// SignerEntityDerivationRootPath is the BIP-0032 path prefix used for generating
+	// an Entity signer.
+	SignerEntityDerivationRootPath = []uint32{
+		ledgerCommon.PathPurposeBIP44,
+		SignerPathCoinType,
+		SignerPathAccount,
+		SignerPathChange,
+	}
+	// SignerConsensusDerivationRootPath is the derivation path prefix used for
+	// generating a consensus signer.
+	SignerConsensusDerivationRootPath = []uint32{
+		ledgerCommon.PathPurposeOther,
+		SignerPathCoinType,
+		ledgerCommon.PathSubPurposeConsensus,
+		SignerPathAccount,
+	}
 
 	roleDerivationRootPaths = map[signature.SignerRole][]uint32{
-		signature.SignerEntity: SignerDerivationRootPath,
+		signature.SignerEntity:    SignerEntityDerivationRootPath,
+		signature.SignerConsensus: SignerConsensusDerivationRootPath,
 	}
 
 	// NOTE: The 0x6986 ISO 7816 error code is returned by the Oasis Ledger App
@@ -94,7 +108,7 @@ func (fac *Factory) Load(role signature.SignerRole) (signature.Signer, error) {
 	if !ok {
 		return nil, fmt.Errorf("role %d is not supported when using the Ledger backed signer", role)
 	}
-	device, err := ledgerCommon.ConnectToDevice(fac.address)
+	device, err := ledgerCommon.ConnectToDevice(fac.address, append(pathPrefix, fac.index))
 	if err != nil {
 		return nil, err
 	}
