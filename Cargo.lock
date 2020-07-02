@@ -1523,16 +1523,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "simple-keymanager-upgrade"
-version = "0.3.0-alpha"
-dependencies = [
- "oasis-core-keymanager-api-common 0.3.0-alpha",
- "oasis-core-keymanager-lib 0.3.0-alpha",
- "oasis-core-runtime 0.3.0-alpha",
- "oasis-core-tools 0.3.0-alpha",
-]
-
-[[package]]
 name = "simple-keyvalue"
 version = "0.3.0-alpha"
 dependencies = [

@@ -79,7 +79,6 @@ steps:
     command:
       - .buildkite/rust/build_runtime.sh tests/runtimes/simple-keymanager
       - .buildkite/rust/build_runtime.sh tests/runtimes/simple-keyvalue
-      - .buildkite/rust/build_runtime.sh tests/runtimes/simple-keymanager-upgrade
 
       # Upload the built artifacts.
       - cd /var/tmp/artifacts/sgx/x86_64-fortanix-unknown-sgx/debug
