@@ -12,6 +12,13 @@ The format is inspired by [Keep a Changelog].
 
 <!-- TOWNCRIER -->
 
+## 20.8.2 (2020-07-02)
+
+### Bug Fixes
+
+- go/consensus/tendermint: Bump Tendermint Core to 0.33.6
+  ([#3084](https://github.com/oasisprotocol/oasis-core/issues/3084))
+
 ## 20.8.1 (2020-06-18)
 
 ### Features
