@@ -2,13 +2,34 @@ package api
 
 import (
 	"fmt"
+	"io"
+	"math/big"
+	"strconv"
 
+	"github.com/oasisprotocol/oasis-core/go/common/prettyprint"
 	"github.com/oasisprotocol/oasis-core/go/common/quantity"
 	epochtime "github.com/oasisprotocol/oasis-core/go/epochtime/api"
 )
 
-// CommissionRateDenominator is the denominator for the commission rate.
-var CommissionRateDenominator *quantity.Quantity
+var (
+	// CommissionRateDenominator is the denominator for the commission rate.
+	CommissionRateDenominator *quantity.Quantity
+
+	_ prettyprint.PrettyPrinter = (*CommissionRateStep)(nil)
+	_ prettyprint.PrettyPrinter = (*CommissionRateBoundStep)(nil)
+	_ prettyprint.PrettyPrinter = (*CommissionSchedule)(nil)
+)
+
+// CommissionRatePercentage returns the string representing the commission rate
+// in percentage for the given commission rate numerator.
+func CommissionRatePercentage(rateNumerator quantity.Quantity) string {
+	rate := big.NewRat(rateNumerator.ToBigInt().Int64(), CommissionRateDenominator.ToBigInt().Int64())
+	// Multiply rate by 100 to convert it to percentage.
+	rate.Mul(rate, big.NewRat(100, 1))
+	// Return string representation of the rate that omits the trailing zeros.
+	rateFloat, _ := rate.Float64()
+	return strconv.FormatFloat(rateFloat, 'f', -1, 64)
+}
 
 // CommissionScheduleRules controls how commission schedule rates and rate
 // bounds are allowed to be changed.
@@ -32,6 +53,20 @@ type CommissionRateStep struct {
 	Rate quantity.Quantity `json:"rate,omitempty"`
 }
 
+// PrettyPrint writes a pretty-printed representation of CommissionRateStep to
+// the given writer.
+func (crs CommissionRateStep) PrettyPrint(prefix string, w io.Writer) {
+	fmt.Fprintf(w, "%s- Start: epoch %d\n", prefix, crs.Start)
+
+	fmt.Fprintf(w, "%s  Rate:  %s %%\n", prefix, CommissionRatePercentage(crs.Rate))
+}
+
+// PrettyType returns a representation of CommissionRateStep that can be used
+// for pretty printing.
+func (crs CommissionRateStep) PrettyType() (interface{}, error) {
+	return crs, nil
+}
+
 // CommissionRateBoundStep sets a commission rate bound (i.e. the minimum and
 // maximum commission rate) and its starting time.
 type CommissionRateBoundStep struct {
@@ -43,6 +78,21 @@ type CommissionRateBoundStep struct {
 	RateMax quantity.Quantity `json:"rate_max,omitempty"`
 }
 
+// PrettyPrint writes a pretty-printed representation of CommissionRateBoundStep
+// to the given writer.
+func (crbs CommissionRateBoundStep) PrettyPrint(prefix string, w io.Writer) {
+	fmt.Fprintf(w, "%s- Start:        epoch %d\n", prefix, crbs.Start)
+
+	fmt.Fprintf(w, "%s  Minimum Rate: %s %%\n", prefix, CommissionRatePercentage(crbs.RateMin))
+	fmt.Fprintf(w, "%s  Maximum Rate: %s %%\n", prefix, CommissionRatePercentage(crbs.RateMax))
+}
+
+// PrettyType returns a representation of CommissionRateBoundStep that can be
+// used for pretty printing.
+func (crbs CommissionRateBoundStep) PrettyType() (interface{}, error) {
+	return crbs, nil
+}
+
 // CommissionSchedule defines a list of commission rates and commission rate
 // bounds and their starting times.
 type CommissionSchedule struct {
@@ -50,6 +100,36 @@ type CommissionSchedule struct {
 	Rates []CommissionRateStep `json:"rates,omitempty"`
 	// List of commission rate bounds and their starting times.
 	Bounds []CommissionRateBoundStep `json:"bounds,omitempty"`
+}
+
+// PrettyPrint writes a pretty-printed representation of CommissionSchedule to
+// the given writer.
+func (cs CommissionSchedule) PrettyPrint(prefix string, w io.Writer) {
+	if cs.Rates == nil {
+		fmt.Fprintf(w, "%sRates: (none)\n", prefix)
+
+	} else {
+		fmt.Fprintf(w, "%sRates:\n", prefix)
+		for _, rate := range cs.Rates {
+			rate.PrettyPrint(prefix+"  ", w)
+		}
+	}
+
+	if cs.Bounds == nil {
+		fmt.Fprintf(w, "%sRate Bounds: (none)\n", prefix)
+
+	} else {
+		fmt.Fprintf(w, "%sRate Bounds:\n", prefix)
+		for _, rateBound := range cs.Bounds {
+			rateBound.PrettyPrint(prefix+"  ", w)
+		}
+	}
+}
+
+// PrettyType returns a representation of CommissionSchedule that can be used
+// for pretty printing.
+func (cs CommissionSchedule) PrettyType() (interface{}, error) {
+	return cs, nil
 }
 
 func (cs *CommissionSchedule) validateComplexity(rules *CommissionScheduleRules) error {
