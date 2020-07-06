@@ -774,6 +774,7 @@ type DebondingDelegation struct {
 
 // Genesis is the initial staking state for use in the genesis block.
 type Genesis struct {
+	// Parameters are the staking consensus parameters.
 	Parameters ConsensusParameters `json:"params"`
 
 	// TokenSymbol is the token's ticker symbol.
@@ -783,13 +784,21 @@ type Genesis struct {
 	// 1 token = 10**TokenValueExponent base units.
 	TokenValueExponent uint8 `json:"token_value_exponent"`
 
-	TotalSupply   quantity.Quantity `json:"total_supply"`
-	CommonPool    quantity.Quantity `json:"common_pool"`
+	// TokenSupply is the network's total amount of stake in base units.
+	TotalSupply quantity.Quantity `json:"total_supply"`
+	// CommonPool is the network's common stake pool.
+	CommonPool quantity.Quantity `json:"common_pool"`
+	// LastBlockFees are the collected fees for previous block.
 	LastBlockFees quantity.Quantity `json:"last_block_fees"`
 
+	// Ledger is a map of staking accounts.
 	Ledger map[Address]*Account `json:"ledger,omitempty"`
 
-	Delegations          map[Address]map[Address]*Delegation            `json:"delegations,omitempty"`
+	// Delegations is a nested map of staking delegations of the form:
+	// DELEGATEE-ACCOUNT-ADDRESS: DELEGATOR-ACCOUNT-ADDRESS: DELEGATION.
+	Delegations map[Address]map[Address]*Delegation `json:"delegations,omitempty"`
+	// DebondingDelegations is a nested map of staking delegations of the form:
+	// DEBONDING-DELEGATEE-ACCOUNT-ADDRESS: DEBONDING-DELEGATOR-ACCOUNT-ADDRESS: list of DEBONDING-DELEGATIONs.
 	DebondingDelegations map[Address]map[Address][]*DebondingDelegation `json:"debonding_delegations,omitempty"`
 }
 
