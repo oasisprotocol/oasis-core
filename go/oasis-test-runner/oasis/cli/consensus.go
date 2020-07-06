@@ -2,7 +2,6 @@ package cli
 
 import (
 	"fmt"
-	"strconv"
 
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	"github.com/oasisprotocol/oasis-core/go/consensus/api/transaction"
@@ -49,12 +48,12 @@ func (c *ConsensusHelpers) EstimateGas(txPath string, signerPub signature.Public
 	}
 	out, err := c.runSubCommandWithOutput("consensus-estimate_gas", args)
 	if err != nil {
-		return 0, fmt.Errorf("failed to estimate gas: %w stderr [%s]", err, out.String())
+		return 0, fmt.Errorf("failed to estimate gas: error: %w output: %s", err, out.String())
 	}
 	gasS := out.String()
-	gasU, err := strconv.ParseUint(gasS, 10, 64)
-	if err != nil {
-		return 0, fmt.Errorf("failed to parse output %s: %w", gasS, err)
+	var gas transaction.Gas
+	if _, err = fmt.Sscan(gasS, &gas); err != nil {
+		return 0, fmt.Errorf("failed to parse output: error: %w output: %s", err, gasS)
 	}
-	return transaction.Gas(gasU), nil
+	return gas, nil
 }
