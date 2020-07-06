@@ -12,6 +12,7 @@ import (
 	"github.com/spf13/viper"
 	"google.golang.org/grpc"
 
+	"github.com/oasisprotocol/oasis-core/go/common/cbor"
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
 	"github.com/oasisprotocol/oasis-core/go/consensus/api/transaction"
@@ -21,7 +22,14 @@ import (
 	cmdGrpc "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/grpc"
 )
 
+const (
+	// CfgSignerPub is the public key of the account that will sign an unsigned transaction in estimate gas.
+	CfgSignerPub = "consensus.signer_pub"
+)
+
 var (
+	signerPub string
+
 	consensusCmd = &cobra.Command{
 		Use:   "consensus",
 		Short: "consensus backend commands",
@@ -81,6 +89,26 @@ func loadTx() *transaction.SignedTransaction {
 	return &tx
 }
 
+func loadUnsignedTx() *transaction.Transaction {
+	rawUnsignedTx, err := ioutil.ReadFile(viper.GetString(cmdConsensus.CfgTxFile))
+	if err != nil {
+		logger.Error("failed to read raw serialized unsigned transaction",
+			"err", err,
+		)
+		os.Exit(1)
+	}
+
+	var tx transaction.Transaction
+	if err = cbor.Unmarshal(rawUnsignedTx, &tx); err != nil {
+		logger.Error("failed to parse serialized unsigned transaction",
+			"err", err,
+		)
+		os.Exit(1)
+	}
+
+	return &tx
+}
+
 func doSubmitTx(cmd *cobra.Command, args []string) {
 	if err := cmdCommon.Init(); err != nil {
 		cmdCommon.EarlyLogAndExit(err)
@@ -118,18 +146,15 @@ func doEstimateGas(cmd *cobra.Command, args []string) {
 	conn, client := doConnect(cmd)
 	defer conn.Close()
 
-	signedTx := loadTx()
-	var tx transaction.Transaction
-	if err := signedTx.Open(&tx); err != nil {
-		logger.Error("failed to open signed transaction",
+	req := consensus.EstimateGasRequest{
+		Transaction: loadUnsignedTx(),
+	}
+	if err := req.Signer.UnmarshalText([]byte(signerPub)); err != nil {
+		logger.Error("failed to unmarshal signer public key",
 			"err", err,
+			"signer_pub_str", signerPub,
 		)
 		os.Exit(1)
-	}
-
-	req := consensus.EstimateGasRequest{
-		Signer:      signedTx.Signature.PublicKey,
-		Transaction: &tx,
 	}
 	gas, err := client.EstimateGas(context.Background(), &req)
 	if err != nil {
@@ -157,6 +182,7 @@ func Register(parentCmd *cobra.Command) {
 	showTxCmd.Flags().AddFlagSet(cmdConsensus.TxFileFlags)
 	showTxCmd.Flags().AddFlagSet(cmdFlags.GenesisFileFlags)
 
+	estimateGasCmd.Flags().StringVar(&signerPub, CfgSignerPub, "", "public key of the signer, in base64")
 	estimateGasCmd.Flags().AddFlagSet(cmdConsensus.TxFileFlags)
 	estimateGasCmd.Flags().AddFlagSet(cmdGrpc.ClientFlags)
 
