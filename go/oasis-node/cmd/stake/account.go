@@ -2,7 +2,6 @@ package stake
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"math/big"
 	"os"
@@ -109,8 +108,7 @@ func doAccountInfo(cmd *cobra.Command, args []string) {
 
 	ctx := context.Background()
 	acct := getAccount(ctx, cmd, addr, client)
-	acctData, _ := json.Marshal(acct)
-	fmt.Printf("%v\n", string(acctData))
+	acct.PrettyPrint("", os.Stdout)
 }
 
 func doAccountTransfer(cmd *cobra.Command, args []string) {
