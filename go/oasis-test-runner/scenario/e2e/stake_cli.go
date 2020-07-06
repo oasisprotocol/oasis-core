@@ -240,8 +240,9 @@ func (sc *stakeCLIImpl) testTransfer(childEnv *env.Env, cli *cli.Helpers, src ap
 	if err != nil {
 		return fmt.Errorf("estimate gas on unsigned transfer tx: %w", err)
 	}
-	// TODO: replace with comparison to expected value
-	fmt.Printf("gas %d, reference %d\n", gas, 10000)
+	if gas != 272 {
+		return fmt.Errorf("wrong gas estimate: expected %d, got %d", 272, gas)
+	}
 
 	transferTxPath := filepath.Join(childEnv.Dir(), "stake_transfer.json")
 	if err = sc.genTransferTx(childEnv, transferAmount, 0, dst, transferTxPath); err != nil {
