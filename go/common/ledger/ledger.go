@@ -6,8 +6,17 @@ import (
 )
 
 const (
-	// PathPurpose is set to 44 to indicate use of the BIP-0044 specification.
-	PathPurpose uint32 = 44
+	// PathPurposeBIP44 is set to 44 to indicate the use of the BIP-0044's hierarchy:
+	// https://github.com/bitcoin/bips/blob/master/bip-0044.mediawiki.
+	PathPurposeBIP44 uint32 = 44
+	// PathPurposeOther is set to 43 to indicate the use of (proposed)
+	// BIP-0043's extension that specifies the purpose for non-Bitcoin uses:
+	// https://github.com/bitcoin/bips/pull/523/files
+	PathPurposeOther uint32 = 43
+
+	// PathSubPurposeConsensus is set to 0 to indicate it is to be used for
+	// consensus-related things.
+	PathSubPurposeConsensus uint32 = 0
 
 	// ListingPathCoinType is set to 474, the index registered to Oasis in the SLIP-0044 registry.
 	ListingPathCoinType uint32 = 474
@@ -21,7 +30,9 @@ const (
 
 var (
 	// ListingDerivationPath is the path used to list and connect to devices by address.
-	ListingDerivationPath = []uint32{PathPurpose, ListingPathCoinType, ListingPathAccount, ListingPathChange, ListingPathIndex}
+	ListingDerivationPath = []uint32{
+		PathPurposeBIP44, ListingPathCoinType, ListingPathAccount, ListingPathChange, ListingPathIndex,
+	}
 )
 
 // Device is a Ledger device.
@@ -33,6 +44,6 @@ func ListDevices() {
 }
 
 // ConnectToDevice attempts to connect to a Ledger device by address, which is derived by ListingDerivationPath.
-func ConnectToDevice(address string) (*Device, error) {
-	return ledger.ConnectLedgerOasisApp(address, ListingDerivationPath)
+func ConnectToDevice(address string, derivationPath []uint32) (*Device, error) {
+	return ledger.ConnectLedgerOasisApp(address, derivationPath)
 }
