@@ -8,8 +8,13 @@ import (
 	"sync"
 )
 
-// UnknownModule is the module name used when the module is unknown.
-const UnknownModule = "unknown"
+const (
+	// UnknownModule is the module name used when the module is unknown.
+	UnknownModule = "unknown"
+
+	// CodeNoError is the reserved "no error" code.
+	CodeNoError = 0
+)
 
 var errUnknownError = New(UnknownModule, 1, "unknown error")
 
@@ -37,11 +42,10 @@ func (e *codedError) Error() string {
 // Module and code pair must be unique. If they are not, this method
 // will panic.
 //
-// The error code must not be equal to zero as that value is reserved
-// to mean "no error".
+// The error code must not be equal to the reserved "no error" code.
 func New(module string, code uint32, msg string) error {
-	if code == 0 {
-		panic(fmt.Errorf("error: code cannot be zero"))
+	if code == CodeNoError {
+		panic(fmt.Errorf("error: code reserved 'no error' code: %d", CodeNoError))
 	}
 
 	e := &codedError{

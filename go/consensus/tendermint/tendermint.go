@@ -45,6 +45,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/version"
 	consensusAPI "github.com/oasisprotocol/oasis-core/go/consensus/api"
 	"github.com/oasisprotocol/oasis-core/go/consensus/api/transaction"
+	"github.com/oasisprotocol/oasis-core/go/consensus/api/transaction/results"
 	"github.com/oasisprotocol/oasis-core/go/consensus/metrics"
 	"github.com/oasisprotocol/oasis-core/go/consensus/tendermint/abci"
 	"github.com/oasisprotocol/oasis-core/go/consensus/tendermint/api"
@@ -717,6 +718,77 @@ func (t *tendermintService) GetTransactions(ctx context.Context, height int64) (
 		txs = append(txs, v[:])
 	}
 	return txs, nil
+}
+
+func (t *tendermintService) GetTransactionsWithResults(ctx context.Context, height int64) (*consensusAPI.TransactionsWithResults, error) {
+	var txsWithResults consensusAPI.TransactionsWithResults
+
+	blk, err := t.GetTendermintBlock(ctx, height)
+	if err != nil {
+		return nil, err
+	}
+	if blk == nil {
+		return nil, consensusAPI.ErrNoCommittedBlocks
+	}
+	for _, tx := range blk.Data.Txs {
+		txsWithResults.Transactions = append(txsWithResults.Transactions, tx[:])
+	}
+
+	res, err := t.GetBlockResults(blk.Height)
+	if err != nil {
+		return nil, err
+	}
+	for txIdx, rs := range res.TxsResults {
+		// Transaction result.
+		result := &results.Result{
+			Error: results.Error{
+				Module:  rs.GetCodespace(),
+				Code:    rs.GetCode(),
+				Message: rs.GetLog(),
+			},
+		}
+
+		// Transaction staking events.
+		stakingEvents, err := tmstaking.EventsFromTendermint(
+			txsWithResults.Transactions[txIdx],
+			blk.Height,
+			rs.Events,
+		)
+		if err != nil {
+			return nil, err
+		}
+		for _, ev := range stakingEvents {
+			result.Events = append(result.Events, &results.Event{Staking: &ev})
+		}
+
+		// Transaction registry events.
+		registryEvents, _, err := tmregistry.EventsFromTendermint(
+			txsWithResults.Transactions[txIdx],
+			blk.Height,
+			rs.Events,
+		)
+		if err != nil {
+			return nil, err
+		}
+		for _, ev := range registryEvents {
+			result.Events = append(result.Events, &results.Event{Registry: &ev})
+		}
+
+		// Transaction roothash events.
+		roothashEvents, err := tmroothash.EventsFromTendermint(
+			txsWithResults.Transactions[txIdx],
+			blk.Height,
+			rs.Events,
+		)
+		if err != nil {
+			return nil, err
+		}
+		for _, ev := range roothashEvents {
+			result.Events = append(result.Events, &results.Event{RootHash: &ev})
+		}
+		txsWithResults.Results = append(txsWithResults.Results, result)
+	}
+	return &txsWithResults, nil
 }
 
 func (t *tendermintService) GetStatus(ctx context.Context) (*consensusAPI.Status, error) {

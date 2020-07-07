@@ -22,6 +22,9 @@ var (
 	// roothash application.
 	QueryApp = api.QueryForApp(AppName)
 
+	// KeyRuntimeID is an ABCI event attribute key for specifying event
+	// runtime.
+	KeyRuntimeID = []byte("runtime-id")
 	// KeyExecutorCommitted is an ABCI event attribute key for executor
 	// commit events (value is CBOR-serialized ValueExecutorCommitted).
 	KeyExecutorCommitted = []byte("executor-commit")

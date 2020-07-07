@@ -11,6 +11,7 @@ import (
 
 	"github.com/oasisprotocol/oasis-core/go/common"
 	"github.com/oasisprotocol/oasis-core/go/common/cbor"
+	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	"github.com/oasisprotocol/oasis-core/go/common/entity"
 	"github.com/oasisprotocol/oasis-core/go/common/errors"
@@ -305,6 +306,9 @@ type NodeUnfrozenEvent struct {
 
 // Event is a registry event returned via GetEvents.
 type Event struct {
+	Height int64     `json:"height,omitempty"`
+	TxHash hash.Hash `json:"tx_hash,omitempty"`
+
 	RuntimeEvent      *RuntimeEvent      `json:"runtime,omitempty"`
 	EntityEvent       *EntityEvent       `json:"entity,omitempty"`
 	NodeEvent         *NodeEvent         `json:"node,omitempty"`

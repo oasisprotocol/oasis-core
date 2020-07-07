@@ -70,6 +70,11 @@ func (sc *earlyQueryImpl) Run(childEnv *env.Env) error {
 	if !errors.Is(err, consensus.ErrNoCommittedBlocks) {
 		return fmt.Errorf("GetTransactions query should fail with ErrNoCommittedBlocks (got: %s)", err)
 	}
+	// GetTransactionsWithResults.
+	_, err = cs.GetTransactionsWithResults(ctx, consensus.HeightLatest)
+	if !errors.Is(err, consensus.ErrNoCommittedBlocks) {
+		return fmt.Errorf("GetTransactionsWithResults query should fail with ErrNoCommittedBlocks (got: %s)", err)
+	}
 
 	// GetStatus.
 	status, err := sc.Net.Controller().GetStatus(ctx)

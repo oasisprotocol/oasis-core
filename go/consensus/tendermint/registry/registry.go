@@ -7,11 +7,13 @@ import (
 	"fmt"
 
 	"github.com/eapache/channels"
-	abcitypes "github.com/tendermint/tendermint/abci/types"
+	"github.com/hashicorp/go-multierror"
+	tmabcitypes "github.com/tendermint/tendermint/abci/types"
 	tmrpctypes "github.com/tendermint/tendermint/rpc/core/types"
 	tmtypes "github.com/tendermint/tendermint/types"
 
 	"github.com/oasisprotocol/oasis-core/go/common/cbor"
+	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	"github.com/oasisprotocol/oasis-core/go/common/entity"
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
@@ -35,6 +37,11 @@ type tendermintBackend struct {
 	nodeNotifier     *pubsub.Broker
 	nodeListNotifier *pubsub.Broker
 	runtimeNotifier  *pubsub.Broker
+}
+
+// NodeListEpochInternalEvent is the per-epoch node list event.
+type NodeListEpochInternalEvent struct {
+	Height int64 `json:"height"`
 }
 
 func (tb *tendermintBackend) Querier() *app.QueryFactory {
@@ -168,13 +175,43 @@ func (tb *tendermintBackend) GetEvents(ctx context.Context, height int64) ([]api
 		)
 		return nil, err
 	}
-
-	// Decode events from block results.
-	tmEvents := append(results.BeginBlockEvents, results.EndBlockEvents...)
-	for _, txResults := range results.TxsResults {
-		tmEvents = append(tmEvents, txResults.Events...)
+	// Get transactions at given height.
+	txns, err := tb.service.GetTransactions(ctx, height)
+	if err != nil {
+		tb.logger.Error("failed to get tendermint transactions",
+			"err", err,
+			"height", height,
+		)
+		return nil, err
 	}
-	return tb.onABCIEvents(ctx, tmEvents, height, false)
+
+	var events []api.Event
+	// Decode events from block results.
+	blockEvs, _, err := EventsFromTendermint(nil, results.Height, results.BeginBlockEvents)
+	if err != nil {
+		return nil, err
+	}
+	events = append(events, blockEvs...)
+
+	blockEvs, _, err = EventsFromTendermint(nil, results.Height, results.EndBlockEvents)
+	if err != nil {
+		return nil, err
+	}
+	events = append(events, blockEvs...)
+
+	// Decode events from transaction results.
+	for txIdx, txResult := range results.TxsResults {
+		// The order of transactions in txns and results.TxsResults is
+		// supposed to match, so the same index in both slices refers to the
+		// same transaction.
+		txEvs, _, txErr := EventsFromTendermint(txns[txIdx], results.Height, txResult.Events)
+		if txErr != nil {
+			return nil, txErr
+		}
+		events = append(events, txEvs...)
+	}
+
+	return events, nil
 }
 
 func (tb *tendermintBackend) worker(ctx context.Context) {
@@ -213,18 +250,70 @@ func (tb *tendermintBackend) worker(ctx context.Context) {
 }
 
 func (tb *tendermintBackend) onEventDataNewBlock(ctx context.Context, ev tmtypes.EventDataNewBlock) {
-	events := append([]abcitypes.Event{}, ev.ResultBeginBlock.GetEvents()...)
-	events = append(events, ev.ResultEndBlock.GetEvents()...)
-
-	_, _ = tb.onABCIEvents(ctx, events, ev.Block.Header.Height, true)
+	tmEvents := append([]tmabcitypes.Event{}, ev.ResultBeginBlock.GetEvents()...)
+	tmEvents = append(tmEvents, ev.ResultEndBlock.GetEvents()...)
+	events, nodeListEvents, err := EventsFromTendermint(nil, ev.Block.Header.Height, tmEvents)
+	if err != nil {
+		tb.logger.Error("error processing registry events", "err", err)
+	}
+	tb.processNodeListEvents(ctx, nodeListEvents)
+	tb.notifyEvents(ctx, events)
 }
 
-func (tb *tendermintBackend) onEventDataTx(ctx context.Context, tx tmtypes.EventDataTx) {
-	_, _ = tb.onABCIEvents(ctx, tx.Result.Events, tx.Height, true)
+func (tb *tendermintBackend) onEventDataTx(ctx context.Context, ev tmtypes.EventDataTx) {
+	events, nodeListEvents, err := EventsFromTendermint(ev.Tx, ev.Height, ev.Result.Events)
+	if err != nil {
+		tb.logger.Error("error processing registry events", "err", err)
+	}
+	tb.processNodeListEvents(ctx, nodeListEvents)
+	tb.notifyEvents(ctx, events)
 }
 
-func (tb *tendermintBackend) onABCIEvents(ctx context.Context, tmEvents []abcitypes.Event, height int64, doBroadcast bool) ([]api.Event, error) { // nolint: gocyclo
+func (tb *tendermintBackend) processNodeListEvents(ctx context.Context, events []NodeListEpochInternalEvent) {
+	for _, ev := range events {
+		nl, err := tb.getNodeList(ctx, ev.Height)
+		if err != nil {
+			tb.logger.Error("worker: failed to get node list",
+				"height", ev.Height,
+				"err", err,
+			)
+			continue
+		}
+		tb.nodeListNotifier.Broadcast(nl)
+	}
+}
+
+func (tb *tendermintBackend) notifyEvents(ctx context.Context, events []api.Event) {
+	for _, ev := range events {
+		if ev.EntityEvent != nil {
+			tb.entityNotifier.Broadcast(ev.EntityEvent)
+		}
+		if ev.NodeEvent != nil {
+			tb.nodeNotifier.Broadcast(ev.NodeEvent)
+		}
+		if ev.RuntimeEvent != nil {
+			tb.runtimeNotifier.Broadcast(ev.RuntimeEvent.Runtime)
+		}
+	}
+}
+
+// EventsFromTendermint extracts registry events from tendermint events.
+func EventsFromTendermint(
+	tx tmtypes.Tx,
+	height int64,
+	tmEvents []tmabcitypes.Event,
+) ([]api.Event, []NodeListEpochInternalEvent, error) {
+	var txHash hash.Hash
+	switch tx {
+	case nil:
+		txHash.Empty()
+	default:
+		txHash = hash.NewFromBytes(tx)
+	}
+
 	var events []api.Event
+	var nodeListEvents []NodeListEpochInternalEvent
+	var errs error
 	for _, tmEv := range tmEvents {
 		// Ignore events that don't relate to the registry app.
 		if tmEv.GetType() != app.EventType {
@@ -234,18 +323,17 @@ func (tb *tendermintBackend) onABCIEvents(ctx context.Context, tmEvents []abcity
 		for _, pair := range tmEv.GetAttributes() {
 			key := pair.GetKey()
 			val := pair.GetValue()
-			if bytes.Equal(key, app.KeyNodesExpired) {
+
+			switch {
+			case bytes.Equal(key, app.KeyRegistryNodeListEpoch):
+				// Node list epoch event.
+				nodeListEvents = append(nodeListEvents, NodeListEpochInternalEvent{Height: height})
+			case bytes.Equal(key, app.KeyNodesExpired):
 				// Nodes expired event.
 				var nodes []*node.Node
 				if err := cbor.Unmarshal(val, &nodes); err != nil {
-					tb.logger.Error("worker: failed to get nodes from tag",
-						"err", err,
-					)
-					if doBroadcast {
-						continue
-					} else {
-						return nil, fmt.Errorf("registry: corrupt NodesExpired event: %w", err)
-					}
+					errs = multierror.Append(errs, fmt.Errorf("registry: corrupt NodesExpired event: %w", err))
+					continue
 				}
 
 				// Generate node deregistration events.
@@ -254,125 +342,71 @@ func (tb *tendermintBackend) onABCIEvents(ctx context.Context, tmEvents []abcity
 						Node:           node,
 						IsRegistration: false,
 					}
-
-					if doBroadcast {
-						tb.nodeNotifier.Broadcast(ne)
-					} else {
-						events = append(events, api.Event{NodeEvent: ne})
-					}
+					events = append(events, api.Event{Height: height, TxHash: txHash, NodeEvent: ne})
 				}
-			} else if bytes.Equal(key, app.KeyRuntimeRegistered) {
+			case bytes.Equal(key, app.KeyRuntimeRegistered):
 				// Runtime registered event.
 				var rt api.Runtime
 				if err := cbor.Unmarshal(val, &rt); err != nil {
-					tb.logger.Error("worker: failed to get runtime from tag",
-						"err", err,
-					)
-					if doBroadcast {
-						continue
-					} else {
-						return nil, fmt.Errorf("registry: corrupt RuntimeRegistered event: %w", err)
-					}
+					errs = multierror.Append(errs, fmt.Errorf("registry: corrupt RuntimeRegistered event: %w", err))
+					continue
 				}
 
-				if doBroadcast {
-					tb.runtimeNotifier.Broadcast(&rt)
-				} else {
-					evt := api.Event{
-						RuntimeEvent: &api.RuntimeEvent{Runtime: &rt},
-					}
-					events = append(events, evt)
+				evt := api.Event{
+					Height:       height,
+					TxHash:       txHash,
+					RuntimeEvent: &api.RuntimeEvent{Runtime: &rt},
 				}
-			} else if bytes.Equal(key, app.KeyEntityRegistered) {
+				events = append(events, evt)
+			case bytes.Equal(key, app.KeyEntityRegistered):
 				// Entity registered event.
 				var ent entity.Entity
 				if err := cbor.Unmarshal(val, &ent); err != nil {
-					tb.logger.Error("worker: failed to get entity from tag",
-						"err", err,
-					)
-					if doBroadcast {
-						continue
-					} else {
-						return nil, fmt.Errorf("registry: corrupt EntityRegistered event: %w", err)
-					}
+					errs = multierror.Append(errs, fmt.Errorf("registry: corrupt EntityRegistered event: %w", err))
+					continue
 				}
 
 				eev := &api.EntityEvent{
 					Entity:         &ent,
 					IsRegistration: true,
 				}
-
-				if doBroadcast {
-					tb.entityNotifier.Broadcast(eev)
-				} else {
-					events = append(events, api.Event{EntityEvent: eev})
-				}
-			} else if bytes.Equal(key, app.KeyEntityDeregistered) {
+				events = append(events, api.Event{Height: height, TxHash: txHash, EntityEvent: eev})
+			case bytes.Equal(key, app.KeyEntityDeregistered):
 				// Entity deregistered event.
 				var dereg app.EntityDeregistration
 				if err := cbor.Unmarshal(val, &dereg); err != nil {
-					tb.logger.Error("worker: failed to get entity deregistration from tag",
-						"err", err,
-					)
-					if doBroadcast {
-						continue
-					} else {
-						return nil, fmt.Errorf("registry: corrupt EntityDeregistered event: %w", err)
-					}
+					errs = multierror.Append(errs, fmt.Errorf("registry: corrupt EntityDeregistered event: %w", err))
+					continue
 				}
 
 				eev := &api.EntityEvent{
 					Entity:         &dereg.Entity,
 					IsRegistration: false,
 				}
-
-				if doBroadcast {
-					tb.entityNotifier.Broadcast(eev)
-				} else {
-					events = append(events, api.Event{EntityEvent: eev})
-				}
-			} else if bytes.Equal(key, app.KeyRegistryNodeListEpoch) && doBroadcast {
-				// Node list epoch event.
-				nl, err := tb.getNodeList(ctx, height)
-				if err != nil {
-					tb.logger.Error("worker: failed to get node list",
-						"height", height,
-						"err", err,
-					)
-					continue
-				}
-				tb.nodeListNotifier.Broadcast(nl)
-			} else if bytes.Equal(key, app.KeyNodeRegistered) {
+				events = append(events, api.Event{Height: height, TxHash: txHash, EntityEvent: eev})
+			case bytes.Equal(key, app.KeyNodeRegistered):
 				// Node registered event.
 				var n node.Node
 				if err := cbor.Unmarshal(val, &n); err != nil {
-					tb.logger.Error("worker: failed to get node from tag",
-						"err", err,
-					)
-					if doBroadcast {
-						continue
-					} else {
-						return nil, fmt.Errorf("registry: corrupt NodeRegistered event: %w", err)
-					}
+					errs = multierror.Append(errs, fmt.Errorf("registry: corrupt NodeRegistered event: %w", err))
+					continue
 				}
 
 				nev := &api.NodeEvent{
 					Node:           &n,
 					IsRegistration: true,
 				}
-
-				if doBroadcast {
-					tb.nodeNotifier.Broadcast(nev)
-				} else {
-					events = append(events, api.Event{NodeEvent: nev})
-				}
-			} else if bytes.Equal(key, app.KeyNodeUnfrozen) && !doBroadcast {
+				events = append(events, api.Event{Height: height, TxHash: txHash, NodeEvent: nev})
+			case bytes.Equal(key, app.KeyNodeUnfrozen):
 				// Node unfrozen event.
 				var nid signature.PublicKey
 				if err := cbor.Unmarshal(val, &nid); err != nil {
-					return nil, fmt.Errorf("registry: corrupt NodeUnfrozen event: %w", err)
+					errs = multierror.Append(errs, fmt.Errorf("registry: corrupt NodeUnfrozen event: %w", err))
+					continue
 				}
 				evt := api.Event{
+					Height: height,
+					TxHash: txHash,
 					NodeUnfrozenEvent: &api.NodeUnfrozenEvent{
 						NodeID: nid,
 					},
@@ -381,7 +415,7 @@ func (tb *tendermintBackend) onABCIEvents(ctx context.Context, tmEvents []abcity
 			}
 		}
 	}
-	return events, nil
+	return events, nodeListEvents, errs
 }
 
 func (tb *tendermintBackend) getNodeList(ctx context.Context, height int64) (*api.NodeList, error) {

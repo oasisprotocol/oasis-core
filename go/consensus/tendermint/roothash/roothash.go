@@ -9,6 +9,8 @@ import (
 	"sync"
 
 	"github.com/eapache/channels"
+	"github.com/hashicorp/go-multierror"
+	tmabcitypes "github.com/tendermint/tendermint/abci/types"
 	tmrpctypes "github.com/tendermint/tendermint/rpc/core/types"
 	tmtypes "github.com/tendermint/tendermint/types"
 
@@ -19,7 +21,6 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
 	"github.com/oasisprotocol/oasis-core/go/common/pubsub"
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
-	tmapi "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/api"
 	app "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/apps/roothash"
 	"github.com/oasisprotocol/oasis-core/go/consensus/tendermint/service"
 	"github.com/oasisprotocol/oasis-core/go/roothash/api"
@@ -144,24 +145,6 @@ func (tb *tendermintBackend) WatchBlocks(id common.Namespace) (<-chan *api.Annot
 	return monotonicCh, sub, nil
 }
 
-func (tb *tendermintBackend) getBlockFromFinalizedTag(ctx context.Context, rawValue []byte, height int64) (*block.Block, *app.ValueFinalized, error) {
-	var value app.ValueFinalized
-	if err := cbor.Unmarshal(rawValue, &value); err != nil {
-		return nil, nil, fmt.Errorf("roothash: corrupt finalized tag: %w", err)
-	}
-
-	block, err := tb.getLatestBlockAt(ctx, value.ID, height)
-	if err != nil {
-		return nil, nil, fmt.Errorf("roothash: failed to fetch block: %w", err)
-	}
-
-	if block.Header.Round != value.Round {
-		return nil, nil, fmt.Errorf("roothash: tag/query round mismatch (tag: %d, query: %d)", value.Round, block.Header.Round)
-	}
-
-	return block, &value, nil
-}
-
 func (tb *tendermintBackend) WatchAllBlocks() (<-chan *block.Block, *pubsub.Subscription) {
 	sub := tb.allBlockNotifier.Subscribe()
 	ch := make(chan *block.Block)
@@ -219,25 +202,33 @@ func (tb *tendermintBackend) GetEvents(ctx context.Context, height int64) ([]api
 		return nil, err
 	}
 
+	var events []api.Event
 	// Decode events from block results.
-	tmEvents := tmapi.ConvertBlockEvents(results.BeginBlockEvents, results.EndBlockEvents)
-	for txIdx, txResults := range results.TxsResults {
+	blockEvs, err := EventsFromTendermint(nil, results.Height, results.BeginBlockEvents)
+	if err != nil {
+		return nil, err
+	}
+	events = append(events, blockEvs...)
+
+	blockEvs, err = EventsFromTendermint(nil, results.Height, results.EndBlockEvents)
+	if err != nil {
+		return nil, err
+	}
+	events = append(events, blockEvs...)
+
+	// Decode events from transaction results.
+	for txIdx, txResult := range results.TxsResults {
 		// The order of transactions in txns and results.TxsResults is
 		// supposed to match, so the same index in both slices refers to the
 		// same transaction.
-
-		// Generate hash of transaction.
-		evHash := hash.NewFromBytes(txns[txIdx])
-
-		// Append hash to each event.
-		for _, tmEv := range txResults.Events {
-			var ev tmapi.EventWithHash
-			ev.Event = tmEv
-			ev.TxHash = evHash
-			tmEvents = append(tmEvents, ev)
+		evs, txErr := EventsFromTendermint(txns[txIdx], results.Height, txResult.Events)
+		if txErr != nil {
+			return nil, txErr
 		}
+		events = append(events, evs...)
 	}
-	return tb.onABCIEvents(ctx, tmEvents, height, false, nil)
+
+	return events, nil
 }
 
 func (tb *tendermintBackend) Cleanup() {
@@ -317,12 +308,28 @@ func (tb *tendermintBackend) reindexBlocks(bh api.BlockHistory) error {
 
 			for _, pair := range tmEv.GetAttributes() {
 				if bytes.Equal(pair.GetKey(), app.KeyFinalized) {
-					var blk *block.Block
-					blk, _, err := tb.getBlockFromFinalizedTag(tb.ctx, pair.GetValue(), height)
-					if err != nil {
-						tb.logger.Error("failed to get block from tag",
+					var value app.ValueFinalized
+					if err := cbor.Unmarshal(pair.GetValue(), &value); err != nil {
+						tb.logger.Error("failed to unamrshal finalized event",
 							"err", err,
 							"height", height,
+						)
+						continue
+					}
+
+					blk, err := tb.getLatestBlockAt(tb.ctx, value.ID, height)
+					if err != nil {
+						tb.logger.Error("failed to fetch latest block",
+							"err", err,
+							"height", height,
+							"runtime_id", value.ID,
+						)
+						continue
+					}
+					if blk.Header.Round != value.Round {
+						tb.logger.Error("worker: finalized event/query round mismatch",
+							"block", blk,
+							"event", value,
 						)
 						continue
 					}
@@ -413,44 +420,113 @@ func (tb *tendermintBackend) onEventDataNewBlock(
 	ev tmtypes.EventDataNewBlock,
 	blockHistory map[common.Namespace]api.BlockHistory,
 ) {
-	events := tmapi.ConvertBlockEvents(ev.ResultBeginBlock.GetEvents(), ev.ResultEndBlock.GetEvents())
-
-	_, _ = tb.onABCIEvents(ctx, events, ev.Block.Header.Height, true, blockHistory)
+	tmEvents := append([]tmabcitypes.Event{}, ev.ResultBeginBlock.GetEvents()...)
+	tmEvents = append(tmEvents, ev.ResultEndBlock.GetEvents()...)
+	events, err := EventsFromTendermint(nil, ev.Block.Header.Height, tmEvents)
+	if err != nil {
+		tb.logger.Error("error processing tendermint roothash events", "err", err)
+	}
+	tb.processEvents(ctx, events, blockHistory)
 }
 
 func (tb *tendermintBackend) onEventDataTx(
 	ctx context.Context,
-	tx tmtypes.EventDataTx,
+	ev tmtypes.EventDataTx,
 	blockHistory map[common.Namespace]api.BlockHistory,
 ) {
-	evHash := hash.NewFromBytes(tx.Tx)
-
-	var events []tmapi.EventWithHash
-	for _, tmEv := range tx.Result.Events {
-		var ev tmapi.EventWithHash
-		ev.Event = tmEv
-		ev.TxHash = evHash
-		events = append(events, ev)
+	events, err := EventsFromTendermint(ev.Tx, ev.Height, ev.Result.Events)
+	if err != nil {
+		tb.logger.Error("error processing tendermint roothash events", "err", err)
 	}
-
-	_, _ = tb.onABCIEvents(ctx, events, tx.Height, true, blockHistory)
+	tb.processEvents(ctx, events, blockHistory)
 }
 
-func (tb *tendermintBackend) onABCIEvents(
-	ctx context.Context,
-	tmEvents []tmapi.EventWithHash,
+func (tb *tendermintBackend) processEvents(ctx context.Context, events []api.Event, blockHistory map[common.Namespace]api.BlockHistory) {
+	for _, evp := range events {
+		// Redeclare variable on every iteration since the pointer to it gets broadcasted.
+		ev := evp
+
+		// Notify non-finalized events.
+		if ev.FinalizedEvent == nil {
+			notifiers := tb.getRuntimeNotifiers(ev.RuntimeID)
+			notifiers.eventNotifier.Broadcast(&ev)
+			continue
+		}
+
+		// Process finalized event.
+		blk, err := tb.getLatestBlockAt(ctx, ev.RuntimeID, ev.Height)
+		if err != nil {
+			tb.logger.Error("worker: failed to fetch latest block",
+				"err", err,
+				"height", ev.Height,
+				"runtime_id", ev.RuntimeID,
+			)
+			continue
+		}
+		if blk.Header.Round != ev.FinalizedEvent.Round {
+			tb.logger.Error("worker: finalized event/query round mismatch",
+				"block", blk,
+				"event", ev,
+			)
+			continue
+		}
+
+		notifiers := tb.getRuntimeNotifiers(ev.RuntimeID)
+		// Ensure latest block is set.
+		notifiers.Lock()
+		notifiers.lastBlock = blk
+		notifiers.lastBlockHeight = ev.Height
+		notifiers.Unlock()
+
+		annBlk := &api.AnnotatedBlock{
+			Height: ev.Height,
+			Block:  blk,
+		}
+		// Commit the block to history if needed.
+		if bh, ok := blockHistory[ev.RuntimeID]; ok {
+			crash.Here(crashPointBlockBeforeIndex)
+
+			err = bh.Commit(annBlk)
+			if err != nil {
+				tb.logger.Error("failed to commit block to history keeper",
+					"err", err,
+					"runtime_id", ev.RuntimeID,
+					"height", ev.Height,
+					"round", blk.Header.Round,
+				)
+				// Panic as otherwise the history would become out of sync with
+				// what was emitted from the roothash backend. The only reason
+				// why something like this could happen is a problem with the
+				// history database.
+				panic("roothash: failed to index block")
+			}
+		}
+		tb.allBlockNotifier.Broadcast(blk)
+		notifiers.blockNotifier.Broadcast(annBlk)
+	}
+}
+
+// EventsFromTendermint extracts staking events from tendermint events.
+func EventsFromTendermint(
+	tx tmtypes.Tx,
 	height int64,
-	doBroadcast bool,
-	blockHistory map[common.Namespace]api.BlockHistory,
+	tmEvents []tmabcitypes.Event,
 ) ([]api.Event, error) {
+	var txHash hash.Hash
+	switch tx {
+	case nil:
+		txHash.Empty()
+	default:
+		txHash = hash.NewFromBytes(tx)
+	}
+
 	var events []api.Event
+	var errs error
 	for _, tmEv := range tmEvents {
 		// Ignore events that don't relate to the roothash app.
 		if tmEv.GetType() != app.EventType {
 			continue
 		}
-
-		eh := tmEv.TxHash
 
 		for _, pair := range tmEv.GetAttributes() {
 			key := pair.GetKey()
@@ -458,137 +534,67 @@ func (tb *tendermintBackend) onABCIEvents(
 
 			switch {
 			case bytes.Equal(key, app.KeyFinalized):
-				// A runtime block has been finalized.
-				if !doBroadcast {
-					// Ignore finalization event when querying events in GetEvents.
+				// Finalized event.
+				var value app.ValueFinalized
+				if err := cbor.Unmarshal(val, &value); err != nil {
+					errs = multierror.Append(errs, fmt.Errorf("roothash: corrupt Finalized event: %w", err))
 					continue
 				}
 
-				blk, value, err := tb.getBlockFromFinalizedTag(tb.ctx, val, height)
-				if err != nil {
-					tb.logger.Error("worker: failed to get block from tag",
-						"err", err,
-					)
-					continue
-				}
-
-				notifiers := tb.getRuntimeNotifiers(value.ID)
-
-				// Ensure latest block is set.
-				notifiers.Lock()
-				notifiers.lastBlock = blk
-				notifiers.lastBlockHeight = height
-				notifiers.Unlock()
-
-				annBlk := &api.AnnotatedBlock{
-					Height: height,
-					Block:  blk,
-				}
-
-				// Commit the block to history if needed.
-				if bh, ok := blockHistory[value.ID]; ok {
-					crash.Here(crashPointBlockBeforeIndex)
-
-					err = bh.Commit(annBlk)
-					if err != nil {
-						tb.logger.Error("failed to commit block to history keeper",
-							"err", err,
-							"runtime_id", value.ID,
-							"height", height,
-							"round", blk.Header.Round,
-						)
-						// Panic as otherwise the history would become out of sync with
-						// what was emitted from the roothash backend. The only reason
-						// why something like this could happen is a problem with the
-						// history database.
-						panic("roothash: failed to index block")
-					}
-				}
-
-				// Broadcast new block.
-				tb.allBlockNotifier.Broadcast(blk)
-				notifiers.blockNotifier.Broadcast(annBlk)
+				ev := api.Event{RuntimeID: value.ID, Height: height, TxHash: txHash, FinalizedEvent: &api.FinalizedEvent{Round: value.Round}}
+				events = append(events, ev)
 			case bytes.Equal(key, app.KeyMergeDiscrepancyDetected):
 				// A merge discrepancy has been detected.
 				var value app.ValueMergeDiscrepancyDetected
 				if err := cbor.Unmarshal(val, &value); err != nil {
-					tb.logger.Error("failed to unmarshal merge discrepancy from event",
-						"err", err,
-					)
+					errs = multierror.Append(errs, fmt.Errorf("roothash: corrupt MergeDiscrepancy event: %w", err))
 					continue
 				}
 
-				ev := api.Event{Height: height, TxHash: eh, MergeDiscrepancyDetected: &value.Event}
-
-				if doBroadcast {
-					notifiers := tb.getRuntimeNotifiers(value.ID)
-					notifiers.eventNotifier.Broadcast(&ev)
-				} else {
-					events = append(events, ev)
-				}
+				ev := api.Event{RuntimeID: value.ID, Height: height, TxHash: txHash, MergeDiscrepancyDetected: &value.Event}
+				events = append(events, ev)
 			case bytes.Equal(key, app.KeyExecutionDiscrepancyDetected):
 				// An execution discrepancy has been detected.
 				var value app.ValueExecutionDiscrepancyDetected
 				if err := cbor.Unmarshal(val, &value); err != nil {
-					tb.logger.Error("failed to unmarshal execution discrepancy from event",
-						"err", err,
-					)
+					errs = multierror.Append(errs, fmt.Errorf("roothash: corrupt ValueExectutionDiscrepancy event: %w", err))
 					continue
 				}
 
-				ev := api.Event{Height: height, TxHash: eh, ExecutionDiscrepancyDetected: &value.Event}
-
-				if doBroadcast {
-					notifiers := tb.getRuntimeNotifiers(value.ID)
-					notifiers.eventNotifier.Broadcast(&ev)
-				} else {
-					events = append(events, ev)
-				}
+				ev := api.Event{RuntimeID: value.ID, Height: height, TxHash: txHash, ExecutionDiscrepancyDetected: &value.Event}
+				events = append(events, ev)
 			case bytes.Equal(key, app.KeyExecutorCommitted):
 				// An executor commit has been processed.
 				var value app.ValueExecutorCommitted
 				if err := cbor.Unmarshal(val, &value); err != nil {
-					tb.logger.Error("failed to unmarshal executor committed event",
-						"err", err,
-					)
+					errs = multierror.Append(errs, fmt.Errorf("roothash: corrupt ValueExecutorCommitted event: %w", err))
 					continue
 				}
 
-				ev := api.Event{Height: height, TxHash: eh, ExecutorCommitted: &value.Event}
-
-				if doBroadcast {
-					notifiers := tb.getRuntimeNotifiers(value.ID)
-					notifiers.eventNotifier.Broadcast(&ev)
-				} else {
-					events = append(events, ev)
-				}
+				ev := api.Event{RuntimeID: value.ID, Height: height, TxHash: txHash, ExecutorCommitted: &value.Event}
+				events = append(events, ev)
 			case bytes.Equal(key, app.KeyMergeCommitted):
 				// A merge commit has been processed.
 				var value app.ValueMergeCommitted
 				if err := cbor.Unmarshal(val, &value); err != nil {
-					tb.logger.Error("failed to unmarshal executor committed event",
-						"err", err,
-					)
+					errs = multierror.Append(errs, fmt.Errorf("roothash: corrupt ValueMergeCommitted event: %w", err))
 					continue
 				}
 
-				ev := api.Event{Height: height, TxHash: eh, MergeCommitted: &value.Event}
-
-				if doBroadcast {
-					notifiers := tb.getRuntimeNotifiers(value.ID)
-					notifiers.eventNotifier.Broadcast(&ev)
-				} else {
-					events = append(events, ev)
-				}
+				ev := api.Event{RuntimeID: value.ID, Height: height, TxHash: txHash, MergeCommitted: &value.Event}
+				events = append(events, ev)
+			case bytes.Equal(key, app.KeyRuntimeID):
+				// Runtime ID attribute.
+				// TODO: Every event should contain this attribute, but not used atm
+				// TODO: maybe add a check? Could also remove RuntimeID field in the above
+				// tendermint attribute value types, and get it from this attrbiute?
+				continue
 			default:
-				tb.logger.Warn("unknown event type",
-					"key", key,
-					"value", val,
-				)
+				errs = multierror.Append(errs, fmt.Errorf("roothash: unknown event type: key: %s, val: %s", key, val))
 			}
 		}
 	}
-	return events, nil
+	return events, errs
 }
 
 // New constructs a new tendermint-based root hash backend.

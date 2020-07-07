@@ -13,7 +13,6 @@ import (
 	tmtypes "github.com/tendermint/tendermint/types"
 
 	"github.com/oasisprotocol/oasis-core/go/common/cbor"
-	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	"github.com/oasisprotocol/oasis-core/go/common/node"
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
@@ -129,33 +128,6 @@ func EventTypeForApp(eventApp string) string {
 // specified App.
 func QueryForApp(eventApp string) tmpubsub.Query {
 	return tmquery.MustParse(fmt.Sprintf("%s EXISTS", EventTypeForApp(eventApp)))
-}
-
-// Extend the abci.Event struct with the transaction hash if the event was the result of a
-// transaction.  Block events have Hash set to the empty hash.
-type EventWithHash struct {
-	types.Event
-
-	TxHash hash.Hash
-}
-
-// ConvertBlockEvents converts a list of abci.Events to a list of EventWithHashes by setting the
-// TxHash of all converted events to the empty hash.
-func ConvertBlockEvents(beginBlockEvents []types.Event, endBlockEvents []types.Event) []EventWithHash {
-	var tmEvents []EventWithHash
-	for _, bbe := range beginBlockEvents {
-		var ev EventWithHash
-		ev.Event = bbe
-		ev.TxHash.Empty()
-		tmEvents = append(tmEvents, ev)
-	}
-	for _, ebe := range endBlockEvents {
-		var ev EventWithHash
-		ev.Event = ebe
-		ev.TxHash.Empty()
-		tmEvents = append(tmEvents, ev)
-	}
-	return tmEvents
 }
 
 // BlockMeta is the Tendermint-specific per-block metadata that is

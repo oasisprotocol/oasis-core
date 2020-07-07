@@ -1,6 +1,7 @@
 package workload
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"math/rand"
@@ -11,12 +12,14 @@ import (
 	"google.golang.org/grpc"
 
 	"github.com/oasisprotocol/oasis-core/go/common"
+	"github.com/oasisprotocol/oasis-core/go/common/cbor"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	"github.com/oasisprotocol/oasis-core/go/common/entity"
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
 	"github.com/oasisprotocol/oasis-core/go/common/node"
 	"github.com/oasisprotocol/oasis-core/go/common/quantity"
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
+	"github.com/oasisprotocol/oasis-core/go/consensus/api/transaction/results"
 	tmcrypto "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/crypto"
 	control "github.com/oasisprotocol/oasis-core/go/control/api"
 	epochtime "github.com/oasisprotocol/oasis-core/go/epochtime/api"
@@ -69,6 +72,100 @@ type queries struct {
 	runtimeGenesisRound uint64
 }
 
+func (q *queries) sanityCheckTransactionEvents(ctx context.Context, height int64, txEvents []*results.Event) error {
+	// Ensure transaction events match querying backend GetEvents methods.
+	registryEvents, err := q.registry.GetEvents(ctx, height)
+	if err != nil {
+		return fmt.Errorf("registry.GetEvents error at height %d: %w", height, err)
+	}
+	var expectedRegistryEvents []registry.Event
+	for _, event := range registryEvents {
+		if event.TxHash.IsEmpty() {
+			continue
+		}
+		expectedRegistryEvents = append(expectedRegistryEvents, event)
+	}
+	stakingEvents, err := q.staking.GetEvents(ctx, height)
+	if err != nil {
+		return fmt.Errorf("staking.GetEven error at height %d: %w", height, err)
+	}
+	var expectedStakingEvents []staking.Event
+	for _, event := range stakingEvents {
+		if event.TxHash.IsEmpty() {
+			continue
+		}
+		expectedStakingEvents = append(expectedStakingEvents, event)
+	}
+
+	compareEvents := func(e1, e2 interface{}) int {
+		return bytes.Compare(cbor.Marshal(e1), cbor.Marshal(e2))
+	}
+	ensureEventExists := func(txEvent *results.Event) error {
+		var found bool
+		switch {
+		case txEvent.Registry != nil:
+			for _, registryEvent := range expectedRegistryEvents {
+				if compareEvents(registryEvent, *txEvent.Registry) == 0 {
+					found = true
+					break
+				}
+			}
+		case txEvent.Staking != nil:
+			for _, stakingEvent := range expectedStakingEvents {
+				if compareEvents(stakingEvent, *txEvent.Staking) == 0 {
+					found = true
+					break
+				}
+			}
+		case txEvent.RootHash != nil:
+			// XXX: we cannot get roothash events from a client.
+			found = true
+		}
+		if !found {
+			return fmt.Errorf("GetTransactionsWithResults transaction event not found")
+		}
+		return nil
+	}
+
+	var numStakingEvents, numRegistryEvents int
+	for _, txEvent := range txEvents {
+		if err := ensureEventExists(txEvent); err != nil {
+			q.logger.Error("GetTransactionsWithResults ensure event exists failed",
+				"transaction_event", txEvent,
+				"registry_events", expectedRegistryEvents,
+				"staking_events", expectedStakingEvents,
+				"height", height,
+			)
+			return err
+		}
+		if txEvent.Staking != nil {
+			numStakingEvents++
+		}
+		if txEvent.Registry != nil {
+			numRegistryEvents++
+		}
+	}
+	// If all events exist and lengths match, the results are equal.
+	if len(expectedStakingEvents) != numStakingEvents {
+		q.logger.Error("GetTransactionsWithResults staking events lengths missmatch",
+			"events", txEvents,
+			"staking_events", expectedStakingEvents,
+			"height", height,
+		)
+		return fmt.Errorf("GetTransactionWithResults staking events length missmatch")
+	}
+	if len(expectedRegistryEvents) != numRegistryEvents {
+		q.logger.Error("GetTransactionsWithResults registry events lengths missmatch",
+			"events", txEvents,
+			"registry_events", expectedRegistryEvents,
+			"height", height,
+		)
+		return fmt.Errorf("GetTransactionWithResults registry events length missmatch")
+	}
+
+	return nil
+}
+
 // doConsensusQueries does GetEpoch, GetBlock, GetTransaction queries for the
 // provided height.
 func (q *queries) doConsensusQueries(ctx context.Context, rng *rand.Rand, height int64) error {
@@ -100,9 +197,61 @@ func (q *queries) doConsensusQueries(ctx context.Context, rng *rand.Rand, height
 		}
 	}
 
-	_, err = q.consensus.GetTransactions(ctx, height)
+	txs, err := q.consensus.GetTransactions(ctx, height)
 	if err != nil {
 		return fmt.Errorf("GetTransactions at height %d: %w", height, err)
+	}
+
+	txsWithRes, err := q.consensus.GetTransactionsWithResults(ctx, height)
+	q.logger.Info("GetTransactionsWithResults ",
+		"txs", txs,
+		"txs_with_results", txsWithRes,
+		"height", height,
+	)
+	if err != nil {
+		return fmt.Errorf("GetTransactionsWithResults at height %d: %w", height, err)
+	}
+	if len(txs) != len(txsWithRes.Transactions) {
+		q.logger.Error("GetTransactionsWithResults transactions length missmatch",
+			"txs", txs,
+			"txs_with_results", txsWithRes,
+			"height", height,
+		)
+		return fmt.Errorf(
+			"GetTransactionsWithResults transactions length missmatch, expected: %d, got: %d",
+			len(txs), len(txsWithRes.Transactions),
+		)
+	}
+	if len(txsWithRes.Transactions) != len(txsWithRes.Results) {
+		q.logger.Error("GetTransactionsWithResults results length missmatch",
+			"txs", txs,
+			"txs_with_results", txsWithRes,
+			"height", height,
+		)
+		return fmt.Errorf(
+			"GetTransactionsWithResults results length missmatch, expected: %d, got: %d",
+			len(txsWithRes.Transactions), len(txsWithRes.Results),
+		)
+	}
+
+	var txEvents []*results.Event
+	for txIdx, res := range txsWithRes.Results {
+		if res.IsSuccess() {
+			// Successful transaction should always produce events.
+			if len(res.Events) == 0 {
+				q.logger.Error("GetTransactionsWithResults successful transaction without events",
+					"transaction", txsWithRes.Transactions[txIdx],
+					"result", res,
+					"height", height,
+				)
+				return fmt.Errorf("GetTransactionsWithResults successful transaction result without events")
+			}
+		}
+		txEvents = append(txEvents, res.Events...)
+	}
+
+	if err := q.sanityCheckTransactionEvents(ctx, height, txEvents); err != nil {
+		return fmt.Errorf("GetTransactionsWithResults events sanity check error: %w", err)
 	}
 
 	q.logger.Debug("Consensus queries done",

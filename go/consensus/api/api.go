@@ -13,6 +13,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/node"
 	"github.com/oasisprotocol/oasis-core/go/common/pubsub"
 	"github.com/oasisprotocol/oasis-core/go/consensus/api/transaction"
+	"github.com/oasisprotocol/oasis-core/go/consensus/api/transaction/results"
 	epochtime "github.com/oasisprotocol/oasis-core/go/epochtime/api"
 	genesis "github.com/oasisprotocol/oasis-core/go/genesis/api"
 	keymanager "github.com/oasisprotocol/oasis-core/go/keymanager/api"
@@ -76,6 +77,11 @@ type ClientBackend interface {
 	//
 	// NOTE: Any of these transactions could be invalid.
 	GetTransactions(ctx context.Context, height int64) ([][]byte, error)
+
+	// GetTransactionsWithResults returns a list of transactions and their
+	// execution results, contained within a consensus block at a specific
+	// height.
+	GetTransactionsWithResults(ctx context.Context, height int64) (*TransactionsWithResults, error)
 
 	// WatchBlocks returns a channel that produces a stream of consensus
 	// blocks as they are being finalized.
@@ -243,4 +249,12 @@ type EstimateGasRequest struct {
 type GetSignerNonceRequest struct {
 	AccountAddress staking.Address `json:"account_address"`
 	Height         int64           `json:"height"`
+}
+
+// TransactionsWithResults is GetTransactionsWithResults response.
+//
+// Results[i] are the results of executing Transactions[i].
+type TransactionsWithResults struct {
+	Transactions [][]byte          `json:"transactions"`
+	Results      []*results.Result `json:"results"`
 }

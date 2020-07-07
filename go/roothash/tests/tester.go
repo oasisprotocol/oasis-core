@@ -380,8 +380,11 @@ func (s *runtimeState) testSuccessfulRound(t *testing.T, backend api.Backend, co
 			// There should be merge commitment events for all commitments.
 			evts, err := backend.GetEvents(ctx, blk.Height)
 			require.NoError(err, "GetEvents")
-			require.Len(evts, len(mergeCommits), "should have all events")
-			for i, ev := range evts {
+			// Merge commit event + Finalized event.
+			require.Len(evts, len(mergeCommits)+1, "should have all events")
+			// First event is Finalized.
+			require.EqualValues(&api.FinalizedEvent{Round: header.Round}, evts[0].FinalizedEvent, "finalized event should have the right round")
+			for i, ev := range evts[1:] {
 				switch {
 				case ev.MergeCommitted != nil:
 					// Merge commitment event.
