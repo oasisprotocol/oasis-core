@@ -34,6 +34,8 @@ var (
 	methodGetBlock = serviceName.NewMethod("GetBlock", int64(0))
 	// methodGetTransactions is the GetTransactions method.
 	methodGetTransactions = serviceName.NewMethod("GetTransactions", int64(0))
+	// methodGetTransactionsWithResults is the GetTransactionsWithResults method.
+	methodGetTransactionsWithResults = serviceName.NewMethod("GetTransactionsWithResults", int64(0))
 	// methodGetGenesisDocument is the GetGenesisDocument method.
 	methodGetGenesisDocument = serviceName.NewMethod("GetGenesisDocument", nil)
 	// methodGetStatus is the GetStatus method.
@@ -85,6 +87,10 @@ var (
 			{
 				MethodName: methodGetTransactions.ShortName(),
 				Handler:    handlerGetTransactions,
+			},
+			{
+				MethodName: methodGetTransactionsWithResults.ShortName(),
+				Handler:    handlerGetTransactionsWithResults,
 			},
 			{
 				MethodName: methodGetGenesisDocument.ShortName(),
@@ -305,6 +311,29 @@ func handlerGetTransactions( // nolint: golint
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(ClientBackend).GetTransactions(ctx, req.(int64))
+	}
+	return interceptor(ctx, height, info, handler)
+}
+
+func handlerGetTransactionsWithResults( // nolint: golint
+	srv interface{},
+	ctx context.Context,
+	dec func(interface{}) error,
+	interceptor grpc.UnaryServerInterceptor,
+) (interface{}, error) {
+	var height int64
+	if err := dec(&height); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ClientBackend).GetTransactionsWithResults(ctx, height)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: methodGetTransactionsWithResults.FullName(),
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ClientBackend).GetTransactionsWithResults(ctx, req.(int64))
 	}
 	return interceptor(ctx, height, info, handler)
 }
@@ -546,6 +575,14 @@ func (c *consensusClient) GetTransactions(ctx context.Context, height int64) ([]
 		return nil, err
 	}
 	return rsp, nil
+}
+
+func (c *consensusClient) GetTransactionsWithResults(ctx context.Context, height int64) (*TransactionsWithResults, error) {
+	var rsp TransactionsWithResults
+	if err := c.conn.Invoke(ctx, methodGetTransactionsWithResults.FullName(), height, &rsp); err != nil {
+		return nil, err
+	}
+	return &rsp, nil
 }
 
 func (c *consensusClient) GetGenesisDocument(ctx context.Context) (*genesis.Document, error) {

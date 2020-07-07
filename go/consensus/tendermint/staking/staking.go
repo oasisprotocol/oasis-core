@@ -6,6 +6,8 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/hashicorp/go-multierror"
+	tmabcitypes "github.com/tendermint/tendermint/abci/types"
 	tmrpctypes "github.com/tendermint/tendermint/rpc/core/types"
 	tmtypes "github.com/tendermint/tendermint/types"
 
@@ -15,7 +17,6 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/pubsub"
 	"github.com/oasisprotocol/oasis-core/go/common/quantity"
 	"github.com/oasisprotocol/oasis-core/go/consensus/tendermint/abci"
-	tmapi "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/api"
 	app "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/apps/staking"
 	"github.com/oasisprotocol/oasis-core/go/consensus/tendermint/service"
 	"github.com/oasisprotocol/oasis-core/go/staking/api"
@@ -30,7 +31,6 @@ type tendermintBackend struct {
 	querier *app.QueryFactory
 
 	transferNotifier *pubsub.Broker
-	approvalNotifier *pubsub.Broker
 	burnNotifier     *pubsub.Broker
 	escrowNotifier   *pubsub.Broker
 	eventNotifier    *pubsub.Broker
@@ -165,25 +165,33 @@ func (tb *tendermintBackend) GetEvents(ctx context.Context, height int64) ([]api
 		return nil, err
 	}
 
+	var events []api.Event
 	// Decode events from block results.
-	tmEvents := tmapi.ConvertBlockEvents(results.BeginBlockEvents, results.EndBlockEvents)
-	for txIdx, txResults := range results.TxsResults {
+	blockEvs, err := EventsFromTendermint(nil, results.Height, results.BeginBlockEvents)
+	if err != nil {
+		return nil, err
+	}
+	events = append(events, blockEvs...)
+
+	blockEvs, err = EventsFromTendermint(nil, results.Height, results.EndBlockEvents)
+	if err != nil {
+		return nil, err
+	}
+	events = append(events, blockEvs...)
+
+	// Decode events from transaction results.
+	for txIdx, txResult := range results.TxsResults {
 		// The order of transactions in txns and results.TxsResults is
 		// supposed to match, so the same index in both slices refers to the
 		// same transaction.
-
-		// Generate hash of transaction.
-		evHash := hash.NewFromBytes(txns[txIdx])
-
-		// Append hash to each event.
-		for _, tmEv := range txResults.Events {
-			var ev tmapi.EventWithHash
-			ev.Event = tmEv
-			ev.TxHash = evHash
-			tmEvents = append(tmEvents, ev)
+		evs, txErr := EventsFromTendermint(txns[txIdx], results.Height, txResult.Events)
+		if txErr != nil {
+			return nil, txErr
 		}
+		events = append(events, evs...)
 	}
-	return tb.onABCIEvents(ctx, tmEvents, height, false)
+
+	return events, nil
 }
 
 func (tb *tendermintBackend) WatchEvents(ctx context.Context) (<-chan *api.Event, pubsub.ClosableSubscription, error) {
@@ -242,34 +250,59 @@ func (tb *tendermintBackend) worker(ctx context.Context) {
 }
 
 func (tb *tendermintBackend) onEventDataNewBlock(ctx context.Context, ev tmtypes.EventDataNewBlock) {
-	events := tmapi.ConvertBlockEvents(ev.ResultBeginBlock.GetEvents(), ev.ResultEndBlock.GetEvents())
-
-	_, _ = tb.onABCIEvents(ctx, events, ev.Block.Header.Height, true)
+	tmEvents := append([]tmabcitypes.Event{}, ev.ResultBeginBlock.GetEvents()...)
+	tmEvents = append(tmEvents, ev.ResultEndBlock.GetEvents()...)
+	events, err := EventsFromTendermint(nil, ev.Block.Header.Height, tmEvents)
+	if err != nil {
+		tb.logger.Error("error processing staking events", "err", err)
+	}
+	tb.notifyEvents(events)
 }
 
-func (tb *tendermintBackend) onEventDataTx(ctx context.Context, tx tmtypes.EventDataTx) {
-	evHash := hash.NewFromBytes(tx.Tx)
+func (tb *tendermintBackend) onEventDataTx(ctx context.Context, ev tmtypes.EventDataTx) {
+	events, err := EventsFromTendermint(ev.Tx, ev.Height, ev.Result.Events)
+	if err != nil {
+		tb.logger.Error("error processing staking events", "err", err)
+	}
+	tb.notifyEvents(events)
+}
 
-	var events []tmapi.EventWithHash
-	for _, tmEv := range tx.Result.Events {
-		var ev tmapi.EventWithHash
-		ev.Event = tmEv
-		ev.TxHash = evHash
-		events = append(events, ev)
+func (tb *tendermintBackend) notifyEvents(events []api.Event) {
+	for _, ev := range events {
+		if ev.Transfer != nil {
+			tb.transferNotifier.Broadcast(ev.Transfer)
+		}
+		if ev.Escrow != nil {
+			tb.escrowNotifier.Broadcast(ev.Escrow)
+		}
+		if ev.Burn != nil {
+			tb.burnNotifier.Broadcast(ev.Burn)
+		}
+		tb.eventNotifier.Broadcast(&ev)
+	}
+}
+
+// EventsFromTendermint extracts staking events from tendermint events.
+func EventsFromTendermint(
+	tx tmtypes.Tx,
+	height int64,
+	tmEvents []tmabcitypes.Event,
+) ([]api.Event, error) {
+	var txHash hash.Hash
+	switch tx {
+	case nil:
+		txHash.Empty()
+	default:
+		txHash = hash.NewFromBytes(tx)
 	}
 
-	_, _ = tb.onABCIEvents(ctx, events, tx.Height, true)
-}
-
-func (tb *tendermintBackend) onABCIEvents(ctx context.Context, tmEvents []tmapi.EventWithHash, height int64, doBroadcast bool) ([]api.Event, error) {
 	var events []api.Event
+	var errs error
 	for _, tmEv := range tmEvents {
 		// Ignore events that don't relate to the staking app.
 		if tmEv.GetType() != app.EventType {
 			continue
 		}
-
-		eh := tmEv.TxHash
 
 		for _, pair := range tmEv.GetAttributes() {
 			key := pair.GetKey()
@@ -280,124 +313,59 @@ func (tb *tendermintBackend) onABCIEvents(ctx context.Context, tmEvents []tmapi.
 				// Take escrow event.
 				var e api.TakeEscrowEvent
 				if err := cbor.Unmarshal(val, &e); err != nil {
-					tb.logger.Error("worker: failed to get take escrow event from tag",
-						"err", err,
-					)
-					if doBroadcast {
-						continue
-					} else {
-						return nil, fmt.Errorf("staking: corrupt TakeEscrow event: %w", err)
-					}
+					errs = multierror.Append(errs, fmt.Errorf("staking: corrupt TakeEscrow event: %w", err))
+					continue
 				}
 
-				ee := &api.EscrowEvent{Take: &e}
-				evt := &api.Event{Height: height, TxHash: eh, Escrow: ee}
-
-				if doBroadcast {
-					tb.escrowNotifier.Broadcast(ee)
-					tb.eventNotifier.Broadcast(evt)
-				} else {
-					events = append(events, *evt)
-				}
+				evt := api.Event{Height: height, TxHash: txHash, Escrow: &api.EscrowEvent{Take: &e}}
+				events = append(events, evt)
 			case bytes.Equal(key, app.KeyTransfer):
 				// Transfer event.
 				var e api.TransferEvent
 				if err := cbor.Unmarshal(val, &e); err != nil {
-					tb.logger.Error("worker: failed to get transfer event from tag",
-						"err", err,
-					)
-					if doBroadcast {
-						continue
-					} else {
-						return nil, fmt.Errorf("staking: corrupt Transfer event: %w", err)
-					}
+					errs = multierror.Append(errs, fmt.Errorf("staking: corrupt Transfer event: %w", err))
+					continue
 				}
 
-				evt := &api.Event{Height: height, TxHash: eh, Transfer: &e}
-
-				if doBroadcast {
-					tb.transferNotifier.Broadcast(&e)
-					tb.eventNotifier.Broadcast(evt)
-				} else {
-					events = append(events, *evt)
-				}
+				evt := api.Event{Height: height, TxHash: txHash, Transfer: &e}
+				events = append(events, evt)
 			case bytes.Equal(key, app.KeyReclaimEscrow):
 				// Reclaim escrow event.
 				var e api.ReclaimEscrowEvent
 				if err := cbor.Unmarshal(val, &e); err != nil {
-					tb.logger.Error("worker: failed to get reclaim escrow event from tag",
-						"err", err,
-					)
-					if doBroadcast {
-						continue
-					} else {
-						return nil, fmt.Errorf("staking: corrupt ReclaimEscrow event: %w", err)
-					}
+					errs = multierror.Append(errs, fmt.Errorf("staking: corrupt ReclaimEscrow event: %w", err))
+					continue
 				}
 
-				ee := &api.EscrowEvent{Reclaim: &e}
-				evt := &api.Event{Height: height, TxHash: eh, Escrow: ee}
-
-				if doBroadcast {
-					tb.escrowNotifier.Broadcast(ee)
-					tb.eventNotifier.Broadcast(evt)
-				} else {
-					events = append(events, *evt)
-				}
+				evt := api.Event{Height: height, TxHash: txHash, Escrow: &api.EscrowEvent{Reclaim: &e}}
+				events = append(events, evt)
 			case bytes.Equal(key, app.KeyAddEscrow):
 				// Add escrow event.
 				var e api.AddEscrowEvent
 				if err := cbor.Unmarshal(val, &e); err != nil {
-					tb.logger.Error("worker: failed to get escrow event from tag",
-						"err", err,
-					)
-					if doBroadcast {
-						continue
-					} else {
-						return nil, fmt.Errorf("staking: corrupt AddEscrow event: %w", err)
-					}
+					errs = multierror.Append(errs, fmt.Errorf("staking: corrupt AddEscrow event: %w", err))
+					continue
 				}
 
-				ee := &api.EscrowEvent{Add: &e}
-				evt := &api.Event{Height: height, TxHash: eh, Escrow: ee}
-
-				if doBroadcast {
-					tb.escrowNotifier.Broadcast(ee)
-					tb.eventNotifier.Broadcast(evt)
-				} else {
-					events = append(events, *evt)
-				}
+				evt := api.Event{Height: height, TxHash: txHash, Escrow: &api.EscrowEvent{Add: &e}}
+				events = append(events, evt)
 			case bytes.Equal(key, app.KeyBurn):
 				// Burn event.
 				var e api.BurnEvent
 				if err := cbor.Unmarshal(val, &e); err != nil {
-					tb.logger.Error("worker: failed to get burn event from tag",
-						"err", err,
-					)
-					if doBroadcast {
-						continue
-					} else {
-						return nil, fmt.Errorf("staking: corrupt Burn event: %w", err)
-					}
+					errs = multierror.Append(errs, fmt.Errorf("staking: corrupt Burn event: %w", err))
+					continue
 				}
 
-				evt := &api.Event{Height: height, TxHash: eh, Burn: &e}
-
-				if doBroadcast {
-					tb.burnNotifier.Broadcast(&e)
-					tb.eventNotifier.Broadcast(evt)
-				} else {
-					events = append(events, *evt)
-				}
+				evt := api.Event{Height: height, TxHash: txHash, Burn: &e}
+				events = append(events, evt)
 			default:
-				tb.logger.Warn("unknown event type",
-					"key", key,
-					"value", val,
-				)
+				errs = multierror.Append(errs, fmt.Errorf("staking: unknown event type: key: %s, val: %s", key, val))
 			}
 		}
 	}
-	return events, nil
+
+	return events, errs
 }
 
 // New constructs a new tendermint backed staking Backend instance.
@@ -418,7 +386,6 @@ func New(ctx context.Context, service service.TendermintService) (api.Backend, e
 		service:          service,
 		querier:          a.QueryFactory().(*app.QueryFactory),
 		transferNotifier: pubsub.NewBroker(false),
-		approvalNotifier: pubsub.NewBroker(false),
 		burnNotifier:     pubsub.NewBroker(false),
 		escrowNotifier:   pubsub.NewBroker(false),
 		eventNotifier:    pubsub.NewBroker(false),
