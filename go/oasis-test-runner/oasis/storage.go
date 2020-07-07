@@ -32,6 +32,8 @@ type Storage struct { // nolint: maligned
 	consensusPort uint16
 	clientPort    uint16
 	p2pPort       uint16
+
+	runtimes []int
 }
 
 // StorageCfg is the Oasis storage node configuration.
@@ -45,6 +47,8 @@ type StorageCfg struct { // nolint: maligned
 	DisableCertRotation     bool
 	IgnoreApplies           bool
 	CheckpointCheckInterval time.Duration
+
+	Runtimes []int
 }
 
 // IdentityKeyPath returns the path to the node's identity key.
@@ -115,7 +119,15 @@ func (worker *Storage) startNode() error {
 		workerStorageCheckpointCheckInterval(worker.checkpointCheckInterval).
 		appendNetwork(worker.net).
 		appendEntity(worker.entity)
-	for _, v := range worker.net.runtimes {
+	var runtimeArray []*Runtime
+	if len(worker.runtimes) > 0 {
+		for _, idx := range worker.runtimes {
+			runtimeArray = append(runtimeArray, worker.net.runtimes[idx])
+		}
+	} else {
+		runtimeArray = worker.net.runtimes
+	}
+	for _, v := range runtimeArray {
 		if v.kind != registry.KindCompute {
 			continue
 		}
@@ -189,6 +201,7 @@ func (net *Network) NewStorage(cfg *StorageCfg) (*Storage, error) {
 		consensusPort:           net.nextNodePort,
 		clientPort:              net.nextNodePort + 1,
 		p2pPort:                 net.nextNodePort + 2,
+		runtimes:                cfg.Runtimes,
 	}
 	worker.doStartNode = worker.startNode
 	copy(worker.NodeID[:], publicKey[:])

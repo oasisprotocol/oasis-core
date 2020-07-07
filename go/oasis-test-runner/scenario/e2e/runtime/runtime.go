@@ -530,6 +530,8 @@ func RegisterScenarios() error {
 		LateStart,
 		// KeymanagerUpgrade test.
 		KeymanagerUpgrade,
+		// RuntimeUpgrade test.
+		RuntimeUpgrade,
 	} {
 		if err := cmd.Register(s); err != nil {
 			return err

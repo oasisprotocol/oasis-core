@@ -236,7 +236,7 @@ impl EncryptionContext {
     }
 }
 
-fn main() {
+pub fn main() {
     // Initializer.
     let init = |protocol: &Arc<Protocol>,
                 rak: &Arc<RAK>,

@@ -32,6 +32,12 @@ pub struct Metadata {
     pub fortanix_sgx: FortanixSGX,
 }
 
+/// Cargo binary target.
+#[derive(Deserialize, Debug)]
+pub struct Binary {
+    pub name: String,
+}
+
 /// Cargo package.
 #[derive(Deserialize, Debug)]
 pub struct Package {
@@ -54,6 +60,7 @@ pub struct Workspace {
 pub struct Manifest {
     package: Option<Package>,
     workspace: Option<Workspace>,
+    bin: Option<Vec<Binary>>,
 }
 
 /// Cargo package root.
@@ -211,5 +218,20 @@ impl PackageRoot {
     /// Get workspace metadata.
     pub fn workspace(&self) -> Option<&Workspace> {
         self.manifest.workspace.as_ref()
+    }
+
+    /// Get the target names specified in the package metadata.
+    pub fn target_names(&self) -> Vec<String> {
+        let mut targets: Vec<String> = Vec::new();
+        if let Some(ref bin) = self.manifest.bin {
+            for bin in bin {
+                targets.push(String::from(&bin.name));
+            }
+        } else {
+            if let Some(package) = self.package() {
+                targets.push(String::from(&package.name));
+            }
+        }
+        targets
     }
 }

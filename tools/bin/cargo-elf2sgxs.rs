@@ -71,7 +71,7 @@ fn real_main() -> Result<()> {
     }
     let package = package_root.package().unwrap();
 
-    // Build target path.
+    // Build target directory.
     let mut target_path = package_root.target_path();
     target_path.push(TARGET_TRIPLE);
     if matches.is_present("release") {
@@ -79,64 +79,74 @@ fn real_main() -> Result<()> {
     } else {
         target_path.push("debug");
     }
-    // TODO: Discover binary name (what cargo does).
-    target_path.push(&package.name);
+    // Add a target name placeholder, to make the loop below a bit easier
+    // on the eyes (popped immediately).
+    target_path.push("<binary-name-placeholder>");
 
-    // Populate elf2sgxs arguments.
-    let config = &package.metadata.fortanix_sgx;
-    let heap_size = config.heap_size.unwrap_or(DEFAULT_HEAP_SIZE).to_string();
-    let ssaframesize = config
-        .ssaframesize
-        .unwrap_or(DEFAULT_SSAFRAMESIZE)
-        .to_string();
-    let stack_size = config.stack_size.unwrap_or(DEFAULT_STACK_SIZE).to_string();
-    let threads = config.threads.unwrap_or(DEFAULT_THREADS).to_string();
-    let debug = config.debug.unwrap_or(DEFAULT_DEBUG);
+    for target_name in package_root.target_names() {
+        target_path.pop();
+        target_path.push(&target_name);
 
-    // Invoke ftx-elf2sgxs binary to perform the actual conversion.
-    println!(
-        "{} {} {} ({})",
-        Green.bold().paint(format!("{:>12}", "elf2sgxs")),
-        package.name,
-        package.version,
-        package_root.package_path().to_str().unwrap(),
-    );
+        // Populate elf2sgxs arguments.
+        let config = &package.metadata.fortanix_sgx;
+        let heap_size = config.heap_size.unwrap_or(DEFAULT_HEAP_SIZE).to_string();
+        let ssaframesize = config
+            .ssaframesize
+            .unwrap_or(DEFAULT_SSAFRAMESIZE)
+            .to_string();
+        let stack_size = config.stack_size.unwrap_or(DEFAULT_STACK_SIZE).to_string();
+        let threads = config.threads.unwrap_or(DEFAULT_THREADS).to_string();
+        let debug = config.debug.unwrap_or(DEFAULT_DEBUG);
 
-    // Compare source and target modification times and do not do anything
-    // if the target is newer.
-    let src_meta = fs::metadata(&target_path).context(format!(
-        "source file ({}) not found",
-        target_path.to_str().unwrap()
-    ))?;
-    if let Ok(target_meta) = fs::metadata(target_path.with_extension("sgxs")) {
-        let src_modified = src_meta.modified()?;
-        let target_modified = target_meta.modified()?;
+        // Invoke ftx-elf2sgxs binary to perform the actual conversion.
+        println!(
+            "{} {}/{} {} ({})",
+            Green.bold().paint(format!("{:>12}", "elf2sgxs")),
+            package.name,
+            target_name,
+            package.version,
+            package_root.package_path().to_str().unwrap(),
+        );
 
-        if target_modified > src_modified {
-            println!(
-                "{} {}",
-                Green.bold().paint(format!("{:>12}", "elf2sgxs")),
-                White.dimmed().paint("(skipped due to newer target file)"),
-            );
-            return Ok(());
+        // Compare source and target modification times and do not do anything
+        // if the target is newer.
+        let src_meta = fs::metadata(&target_path).context(format!(
+            "source file ({}) not found",
+            target_path.to_str().unwrap()
+        ))?;
+        if let Ok(target_meta) = fs::metadata(target_path.with_extension("sgxs")) {
+            let src_modified = src_meta.modified()?;
+            let target_modified = target_meta.modified()?;
+
+            if target_modified > src_modified {
+                println!(
+                    "{} {}",
+                    Green.bold().paint(format!("{:>12}", "elf2sgxs")),
+                    White.dimmed().paint(format!(
+                        "(skipped {} due to newer target file)",
+                        target_name
+                    )),
+                );
+                continue;
+            }
         }
-    }
 
-    let mut ftxsgx_elf2sgxs_command = Command::new("ftxsgx-elf2sgxs");
-    ftxsgx_elf2sgxs_command
-        .arg(target_path.to_str().unwrap())
-        .arg("--heap-size")
-        .arg(heap_size)
-        .arg("--ssaframesize")
-        .arg(ssaframesize)
-        .arg("--stack-size")
-        .arg(stack_size)
-        .arg("--threads")
-        .arg(threads);
-    if debug {
-        ftxsgx_elf2sgxs_command.arg("--debug");
+        let mut ftxsgx_elf2sgxs_command = Command::new("ftxsgx-elf2sgxs");
+        ftxsgx_elf2sgxs_command
+            .arg(target_path.to_str().unwrap())
+            .arg("--heap-size")
+            .arg(heap_size)
+            .arg("--ssaframesize")
+            .arg(ssaframesize)
+            .arg("--stack-size")
+            .arg(stack_size)
+            .arg("--threads")
+            .arg(threads);
+        if debug {
+            ftxsgx_elf2sgxs_command.arg("--debug");
+        }
+        run_command(ftxsgx_elf2sgxs_command)?;
     }
-    run_command(ftxsgx_elf2sgxs_command)?;
 
     Ok(())
 }

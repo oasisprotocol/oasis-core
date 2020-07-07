@@ -335,6 +335,10 @@ type StorageWorkerFixture struct { // nolint: maligned
 
 	CheckpointCheckInterval time.Duration `json:"checkpoint_check_interval,omitempty"`
 	IgnoreApplies           bool          `json:"ignore_applies,omitempty"`
+
+	// Runtimes contains the indexes of the runtimes to enable. Leave
+	// empty or nil for the default behaviour (i.e. include all runtimes).
+	Runtimes []int `json:"runtimes,omitempty"`
 }
 
 // Create instantiates the storage worker described by the fixture.
@@ -357,6 +361,7 @@ func (f *StorageWorkerFixture) Create(net *Network) (*Storage, error) {
 		CheckpointCheckInterval: f.CheckpointCheckInterval,
 		IgnoreApplies:           f.IgnoreApplies,
 		DisableCertRotation:     f.DisableCertRotation,
+		Runtimes:                f.Runtimes,
 	})
 }
 
@@ -369,10 +374,16 @@ type ComputeWorkerFixture struct {
 	AllowEarlyTermination bool `json:"allow_early_termination"`
 	AllowErrorTermination bool `json:"allow_error_termination"`
 
+	NoAutoStart bool `json:"no_auto_start,omitempty"`
+
 	// Consensus contains configuration for the consensus backend.
 	Consensus ConsensusFixture `json:"consensus"`
 
 	LogWatcherHandlerFactories []log.WatcherHandlerFactory `json:"-"`
+
+	// Runtimes contains the indexes of the runtimes to enable. Leave
+	// empty or nil for the default behaviour (i.e. include all runtimes).
+	Runtimes []int `json:"runtimes,omitempty"`
 }
 
 // Create instantiates the compute worker described by the fixture.
@@ -386,11 +397,13 @@ func (f *ComputeWorkerFixture) Create(net *Network) (*Compute, error) {
 		NodeCfg: NodeCfg{
 			AllowEarlyTermination:      f.AllowEarlyTermination,
 			AllowErrorTermination:      f.AllowErrorTermination,
+			NoAutoStart:                f.NoAutoStart,
 			LogWatcherHandlerFactories: f.LogWatcherHandlerFactories,
 			Consensus:                  f.Consensus,
 		},
 		Entity:             entity,
 		RuntimeProvisioner: f.RuntimeProvisioner,
+		Runtimes:           f.Runtimes,
 	})
 }
 
