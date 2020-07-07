@@ -317,7 +317,11 @@ func (app *rootHashApplication) emitEmptyBlock(ctx *tmapi.Context, runtime *root
 		ID:    runtime.Runtime.ID,
 		Round: blk.Header.Round,
 	}
-	ctx.EmitEvent(tmapi.NewEventBuilder(app.Name()).Attribute(KeyFinalized, cbor.Marshal(tagV)))
+	ctx.EmitEvent(
+		tmapi.NewEventBuilder(app.Name()).
+			Attribute(KeyFinalized, cbor.Marshal(tagV)).
+			Attribute(KeyRuntimeID, cbor.Marshal(runtime.Runtime.ID)),
+	)
 }
 
 func (app *rootHashApplication) ExecuteTx(ctx *tmapi.Context, tx *transaction.Transaction) error {
@@ -434,7 +438,11 @@ func (app *rootHashApplication) onNewRuntime(ctx *tmapi.Context, runtime *regist
 		ID:    runtime.ID,
 		Round: genesisBlock.Header.Round,
 	}
-	ctx.EmitEvent(tmapi.NewEventBuilder(app.Name()).Attribute(KeyFinalized, cbor.Marshal(tagV)))
+	ctx.EmitEvent(
+		tmapi.NewEventBuilder(app.Name()).
+			Attribute(KeyFinalized, cbor.Marshal(tagV)).
+			Attribute(KeyRuntimeID, cbor.Marshal(runtime.ID)),
+	)
 	return nil
 }
 
@@ -587,7 +595,11 @@ func (app *rootHashApplication) tryFinalizeExecute(
 				Timeout:     forced,
 			},
 		}
-		ctx.EmitEvent(tmapi.NewEventBuilder(app.Name()).Attribute(KeyExecutionDiscrepancyDetected, cbor.Marshal(tagV)))
+		ctx.EmitEvent(
+			tmapi.NewEventBuilder(app.Name()).
+				Attribute(KeyExecutionDiscrepancyDetected, cbor.Marshal(tagV)).
+				Attribute(KeyRuntimeID, cbor.Marshal(runtime.ID)),
+		)
 		return
 	default:
 	}
@@ -659,7 +671,11 @@ func (app *rootHashApplication) tryFinalizeMerge(
 			ID:    runtime.ID,
 			Event: roothash.MergeDiscrepancyDetectedEvent{},
 		}
-		ctx.EmitEvent(tmapi.NewEventBuilder(app.Name()).Attribute(KeyMergeDiscrepancyDetected, cbor.Marshal(tagV)))
+		ctx.EmitEvent(
+			tmapi.NewEventBuilder(app.Name()).
+				Attribute(KeyMergeDiscrepancyDetected, cbor.Marshal(tagV)).
+				Attribute(KeyRuntimeID, cbor.Marshal(runtime.ID)),
+		)
 		return nil
 	default:
 	}
@@ -709,8 +725,11 @@ func (app *rootHashApplication) postProcessFinalizedBlock(ctx *tmapi.Context, rt
 		ID:    rtState.Runtime.ID,
 		Round: blk.Header.Round,
 	}
-	ctx.EmitEvent(tmapi.NewEventBuilder(app.Name()).Attribute(KeyFinalized, cbor.Marshal(tagV)))
-
+	ctx.EmitEvent(
+		tmapi.NewEventBuilder(app.Name()).
+			Attribute(KeyFinalized, cbor.Marshal(tagV)).
+			Attribute(KeyRuntimeID, cbor.Marshal(rtState.Runtime.ID)),
+	)
 	return nil
 }
 

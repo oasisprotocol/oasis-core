@@ -154,7 +154,11 @@ func (app *rootHashApplication) executorCommit(
 				Commit: commit,
 			},
 		}
-		ctx.EmitEvent(tmapi.NewEventBuilder(app.Name()).Attribute(KeyExecutorCommitted, cbor.Marshal(evV)))
+		ctx.EmitEvent(
+			tmapi.NewEventBuilder(app.Name()).
+				Attribute(KeyExecutorCommitted, cbor.Marshal(evV)).
+				Attribute(KeyRuntimeID, cbor.Marshal(cc.ID)),
+		)
 	}
 
 	return nil
@@ -218,7 +222,11 @@ func (app *rootHashApplication) mergeCommit(
 				Commit: commit,
 			},
 		}
-		ctx.EmitEvent(tmapi.NewEventBuilder(app.Name()).Attribute(KeyMergeCommitted, cbor.Marshal(evV)))
+		ctx.EmitEvent(
+			tmapi.NewEventBuilder(app.Name()).
+				Attribute(KeyMergeCommitted, cbor.Marshal(evV)).
+				Attribute(KeyRuntimeID, cbor.Marshal(mc.ID)),
+		)
 	}
 
 	return nil
