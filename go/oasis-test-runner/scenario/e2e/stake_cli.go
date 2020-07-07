@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
+	"github.com/oasisprotocol/oasis-core/go/common/entity"
 	"github.com/oasisprotocol/oasis-core/go/common/quantity"
 	"github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common"
 	"github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/consensus"
@@ -227,28 +228,44 @@ func (sc *stakeCLIImpl) testPubkey2Address(childEnv *env.Env, publicKeyText stri
 
 // testTransfer tests transfer of transferAmount tokens from src to dst.
 func (sc *stakeCLIImpl) testTransfer(childEnv *env.Env, cli *cli.Helpers, src api.Address, dst api.Address) error {
+	unsignedTransferTxPath := filepath.Join(childEnv.Dir(), "stake_transfer_unsigned.cbor")
+	if err := sc.genUnsignedTransferTx(childEnv, transferAmount, 0, dst, unsignedTransferTxPath); err != nil {
+		return fmt.Errorf("genUnsignedTransferTx: %w", err)
+	}
+	_, teSigner, err := entity.TestEntity()
+	if err != nil {
+		return fmt.Errorf("obtain test entity: %w", err)
+	}
+	gas, err := cli.Consensus.EstimateGas(unsignedTransferTxPath, teSigner.Public())
+	if err != nil {
+		return fmt.Errorf("estimate gas on unsigned transfer tx: %w", err)
+	}
+	if gas != 272 {
+		return fmt.Errorf("wrong gas estimate: expected %d, got %d", 272, gas)
+	}
+
 	transferTxPath := filepath.Join(childEnv.Dir(), "stake_transfer.json")
-	if err := sc.genTransferTx(childEnv, transferAmount, 0, dst, transferTxPath); err != nil {
+	if err = sc.genTransferTx(childEnv, transferAmount, 0, dst, transferTxPath); err != nil {
 		return err
 	}
-	if err := sc.showTx(childEnv, transferTxPath); err != nil {
+	if err = sc.showTx(childEnv, transferTxPath); err != nil {
 		return err
 	}
-	if err := sc.checkBalance(childEnv, src, initBalance); err != nil {
+	if err = sc.checkBalance(childEnv, src, initBalance); err != nil {
 		return err
 	}
-	if err := sc.checkBalance(childEnv, dst, 0); err != nil {
-		return err
-	}
-
-	if err := cli.Consensus.SubmitTx(transferTxPath); err != nil {
+	if err = sc.checkBalance(childEnv, dst, 0); err != nil {
 		return err
 	}
 
-	if err := sc.checkBalance(childEnv, src, initBalance-transferAmount-feeAmount); err != nil {
+	if err = cli.Consensus.SubmitTx(transferTxPath); err != nil {
 		return err
 	}
-	if err := sc.checkBalance(childEnv, dst, transferAmount); err != nil {
+
+	if err = sc.checkBalance(childEnv, src, initBalance-transferAmount-feeAmount); err != nil {
+		return err
+	}
+	if err = sc.checkBalance(childEnv, dst, transferAmount); err != nil {
 		return err
 	}
 	accounts, err := sc.listAccountAddresses(childEnv)
@@ -511,6 +528,28 @@ func (sc *stakeCLIImpl) showTx(childEnv *env.Env, txPath string) error {
 	}
 	if out, err := cli.RunSubCommandWithOutput(childEnv, sc.Logger, "show_tx", sc.Net.Config().NodeBinary, args); err != nil {
 		return fmt.Errorf("showTx: failed to show tx: error: %w, output: %s", err, out.String())
+	}
+	return nil
+}
+
+func (sc *stakeCLIImpl) genUnsignedTransferTx(childEnv *env.Env, amount int, nonce int, dst api.Address, txPath string) error {
+	sc.Logger.Info("generating unsigned stake transfer tx", stake.CfgTransferDestination, dst)
+
+	args := []string{
+		"stake", "account", "gen_transfer",
+		"--" + stake.CfgAmount, strconv.Itoa(amount),
+		"--" + consensus.CfgTxNonce, strconv.Itoa(nonce),
+		"--" + consensus.CfgTxFile, txPath,
+		"--" + stake.CfgTransferDestination, dst.String(),
+		"--" + consensus.CfgTxFeeAmount, strconv.Itoa(feeAmount),
+		"--" + consensus.CfgTxFeeGas, strconv.Itoa(feeGas),
+		"--" + consensus.CfgTxUnsigned,
+		"--" + flags.CfgDebugDontBlameOasis,
+		"--" + common.CfgDebugAllowTestKeys,
+		"--" + flags.CfgGenesisFile, sc.Net.GenesisPath(),
+	}
+	if out, err := cli.RunSubCommandWithOutput(childEnv, sc.Logger, "gen_transfer", sc.Net.Config().NodeBinary, args); err != nil {
+		return fmt.Errorf("genUnsignedTransferTx: failed to generate transfer tx: error: %w output: %s", err, out.String())
 	}
 	return nil
 }

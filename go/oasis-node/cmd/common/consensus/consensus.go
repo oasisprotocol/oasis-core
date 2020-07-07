@@ -9,6 +9,7 @@ import (
 	flag "github.com/spf13/pflag"
 	"github.com/spf13/viper"
 
+	"github.com/oasisprotocol/oasis-core/go/common/cbor"
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
 	"github.com/oasisprotocol/oasis-core/go/consensus/api/transaction"
 	genesisAPI "github.com/oasisprotocol/oasis-core/go/genesis/api"
@@ -30,6 +31,9 @@ const (
 
 	// CfgTxFile configures the filename for the transaction.
 	CfgTxFile = "transaction.file"
+
+	// CfgTxUnsigned makes SaveTx save an unsigned transaction.
+	CfgTxUnsigned = "transaction.unsigned"
 )
 
 var (
@@ -86,6 +90,17 @@ func GetTxNonceAndFee() (uint64, *transaction.Fee) {
 }
 
 func SignAndSaveTx(tx *transaction.Transaction) {
+	if viper.GetBool(CfgTxUnsigned) {
+		rawUnsignedTx := cbor.Marshal(tx)
+		if err := ioutil.WriteFile(viper.GetString(CfgTxFile), rawUnsignedTx, 0600); err != nil {
+			logger.Error("failed to save unsigned transaction",
+				"err", err,
+			)
+			os.Exit(1)
+		}
+		return
+	}
+
 	entityDir, err := cmdSigner.CLIDirOrPwd()
 	if err != nil {
 		logger.Error("failed to retrieve signer dir",
@@ -132,6 +147,7 @@ func init() {
 	TxFlags.Uint64(CfgTxNonce, 0, "nonce of the signing account")
 	TxFlags.Uint64(CfgTxFeeAmount, 0, "transaction fee in tokens")
 	TxFlags.String(CfgTxFeeGas, "0", "maximum transaction gas limit")
+	TxFlags.Bool(CfgTxUnsigned, false, "generate an unsigned transaction")
 	_ = viper.BindPFlags(TxFlags)
 	TxFlags.AddFlagSet(TxFileFlags)
 	TxFlags.AddFlagSet(cmdFlags.DebugTestEntityFlags)
