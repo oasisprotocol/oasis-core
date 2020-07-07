@@ -460,21 +460,37 @@ func (sc *stakeCLIImpl) testReclaimEscrow(childEnv *env.Env, cli *cli.Helpers, s
 }
 
 func (sc *stakeCLIImpl) testAmendCommissionSchedule(childEnv *env.Env, cli *cli.Helpers, src api.Address) error {
+	rates := []api.CommissionRateStep{
+		{
+			Start: 40,
+			Rate:  mustInitQuantity(50_000),
+		},
+		{
+			Start: 60,
+			Rate:  mustInitQuantity(40_000),
+		},
+		{
+			Start: 80,
+			Rate:  mustInitQuantity(30_000),
+		},
+	}
+	bounds := []api.CommissionRateBoundStep{
+		{
+			Start:   40,
+			RateMin: mustInitQuantity(0),
+			RateMax: mustInitQuantity(100_000),
+		},
+		{
+			Start:   80,
+			RateMin: mustInitQuantity(0),
+			RateMax: mustInitQuantity(50_000),
+		},
+	}
+
 	amendCommissionScheduleTxPath := filepath.Join(childEnv.Dir(), "amend_commission_schedule.json")
 	if err := sc.genAmendCommissionScheduleTx(childEnv, 4, &api.CommissionSchedule{
-		Rates: []api.CommissionRateStep{
-			{
-				Start: 40,
-				Rate:  mustInitQuantity(50_000),
-			},
-		},
-		Bounds: []api.CommissionRateBoundStep{
-			{
-				Start:   40,
-				RateMin: mustInitQuantity(0),
-				RateMax: mustInitQuantity(100_000),
-			},
-		},
+		Rates:  rates,
+		Bounds: bounds,
 	}, amendCommissionScheduleTxPath); err != nil {
 		return err
 	}
@@ -486,7 +502,12 @@ func (sc *stakeCLIImpl) testAmendCommissionSchedule(childEnv *env.Env, cli *cli.
 		return err
 	}
 
-	// todo: check that it was applied
+	if err := sc.checkCommissionScheduleRates(childEnv, src, rates); err != nil {
+		return err
+	}
+	if err := sc.checkCommissionScheduleRateBounds(childEnv, src, bounds); err != nil {
+		return err
+	}
 
 	return nil
 }
@@ -595,6 +616,56 @@ func (sc *stakeCLIImpl) checkEscrowAccountSharePool(
 			"checkEscrowAccountSharePool: couldn't find expected escrow %s share pool %+v in account info",
 			sharePoolName, expectedSharePool,
 		)
+	}
+
+	return nil
+}
+
+func (sc *stakeCLIImpl) checkCommissionScheduleRates(
+	childEnv *env.Env,
+	src api.Address,
+	expectedRates []api.CommissionRateStep,
+) error {
+	accountInfo, err := sc.getAccountInfo(childEnv, src)
+	if err != nil {
+		return err
+	}
+
+	for _, expectedRate := range expectedRates {
+		var b bytes.Buffer
+		expectedRate.PrettyPrint("      ", &b)
+		match := regexp.MustCompile(b.String()).FindStringSubmatch(accountInfo)
+		if match == nil {
+			return fmt.Errorf(
+				"checkCommissionScheduleRates: couldn't find an expected commission schedule rate %+v in account info",
+				expectedRate,
+			)
+		}
+	}
+
+	return nil
+}
+
+func (sc *stakeCLIImpl) checkCommissionScheduleRateBounds(
+	childEnv *env.Env,
+	src api.Address,
+	expectedRateBounds []api.CommissionRateBoundStep,
+) error {
+	accountInfo, err := sc.getAccountInfo(childEnv, src)
+	if err != nil {
+		return err
+	}
+
+	for _, expectedBound := range expectedRateBounds {
+		var b bytes.Buffer
+		expectedBound.PrettyPrint("      ", &b)
+		match := regexp.MustCompile(b.String()).FindStringSubmatch(accountInfo)
+		if match == nil {
+			return fmt.Errorf(
+				"checkCommissionScheduleRateBounds: couldn't find an expected commission schedule rate bound %+v in account info",
+				expectedBound,
+			)
+		}
 	}
 
 	return nil
