@@ -162,15 +162,23 @@ type ExecutionDiscrepancyDetectedEvent struct {
 type MergeDiscrepancyDetectedEvent struct {
 }
 
+// FinalizedEvent is a finalized event.
+type FinalizedEvent struct {
+	Round uint64 `json:"round"`
+}
+
 // Event is a roothash event.
 type Event struct {
 	Height int64     `json:"height,omitempty"`
 	TxHash hash.Hash `json:"tx_hash,omitempty"`
 
+	RuntimeID common.Namespace `json:"runtime_id"`
+
 	ExecutorCommitted            *ExecutorCommittedEvent            `json:"executor_committed,omitempty"`
 	MergeCommitted               *MergeCommittedEvent               `json:"merge_committed,omitempty"`
 	ExecutionDiscrepancyDetected *ExecutionDiscrepancyDetectedEvent `json:"execution_discrepancy,omitempty"`
 	MergeDiscrepancyDetected     *MergeDiscrepancyDetectedEvent     `json:"merge_discrepancy,omitempty"`
+	FinalizedEvent               *FinalizedEvent                    `json:"finalized,omitempty"`
 }
 
 // MetricsMonitorable is the interface exposed by backends capable of
