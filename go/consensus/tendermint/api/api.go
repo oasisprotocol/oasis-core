@@ -13,10 +13,12 @@ import (
 	tmtypes "github.com/tendermint/tendermint/types"
 
 	"github.com/oasisprotocol/oasis-core/go/common/cbor"
+	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	"github.com/oasisprotocol/oasis-core/go/common/node"
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
 	"github.com/oasisprotocol/oasis-core/go/consensus/tendermint/crypto"
+	mkvsNode "github.com/oasisprotocol/oasis-core/go/storage/mkvs/node"
 )
 
 // BackendName is the consensus backend name.
@@ -147,10 +149,25 @@ func NewBlock(blk *tmtypes.Block) *consensus.Block {
 	}
 	rawMeta := cbor.Marshal(meta)
 
+	var stateRoot hash.Hash
+	switch blk.Header.AppHash {
+	case nil:
+		stateRoot.Empty()
+	default:
+		if err := stateRoot.UnmarshalBinary(blk.Header.AppHash); err != nil {
+			// This should NEVER happen.
+			panic(err)
+		}
+	}
+
 	return &consensus.Block{
 		Height: blk.Header.Height,
 		Hash:   blk.Header.Hash(),
 		Time:   blk.Header.Time,
-		Meta:   rawMeta,
+		StateRoot: mkvsNode.Root{
+			Version: uint64(blk.Header.Height) - 1,
+			Hash:    stateRoot,
+		},
+		Meta: rawMeta,
 	}
 }

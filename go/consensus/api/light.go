@@ -1,6 +1,10 @@
 package api
 
-import "context"
+import (
+	"context"
+
+	"github.com/oasisprotocol/oasis-core/go/storage/mkvs/syncer"
+)
 
 // LightClientBackend is the limited consensus interface used by light clients.
 type LightClientBackend interface {
@@ -12,6 +16,10 @@ type LightClientBackend interface {
 
 	// GetParameters returns the consensus parameters for a specific height.
 	GetParameters(ctx context.Context, height int64) (*Parameters, error)
+
+	// State returns a MKVS read syncer that can be used to read consensus state from a remote node
+	// and verify it against the trusted local root.
+	State() syncer.ReadSyncer
 
 	// TODO: Move SubmitEvidence etc. from Backend.
 }

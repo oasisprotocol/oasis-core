@@ -10,6 +10,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/consensus/api/transaction"
 	epochtime "github.com/oasisprotocol/oasis-core/go/epochtime/api"
 	genesis "github.com/oasisprotocol/oasis-core/go/genesis/api"
+	"github.com/oasisprotocol/oasis-core/go/storage/mkvs/syncer"
 )
 
 var (
@@ -50,6 +51,12 @@ var (
 	methodGetValidatorSet = lightServiceName.NewMethod("GetValidatorSet", int64(0))
 	// methodGetParameters is the GetParameters method.
 	methodGetParameters = lightServiceName.NewMethod("GetParameters", int64(0))
+	// methodStateSyncGet is the StateSyncGet method.
+	methodStateSyncGet = lightServiceName.NewMethod("StateSyncGet", syncer.GetRequest{})
+	// methodStateSyncGetPrefixes is the StateSyncGetPrefixes method.
+	methodStateSyncGetPrefixes = lightServiceName.NewMethod("StateSyncGetPrefixes", syncer.GetPrefixesRequest{})
+	// methodStateSyncIterate is the StateSyncIterate method.
+	methodStateSyncIterate = lightServiceName.NewMethod("StateSyncIterate", syncer.IterateRequest{})
 
 	// serviceDesc is the gRPC service descriptor.
 	serviceDesc = grpc.ServiceDesc{
@@ -126,6 +133,18 @@ var (
 			{
 				MethodName: methodGetParameters.ShortName(),
 				Handler:    handlerGetParameters,
+			},
+			{
+				MethodName: methodStateSyncGet.ShortName(),
+				Handler:    handlerStateSyncGet,
+			},
+			{
+				MethodName: methodStateSyncGetPrefixes.ShortName(),
+				Handler:    handlerStateSyncGetPrefixes,
+			},
+			{
+				MethodName: methodStateSyncIterate.ShortName(),
+				Handler:    handlerStateSyncIterate,
 			},
 		},
 	}
@@ -473,6 +492,75 @@ func handlerGetParameters( // nolint: golint
 	return interceptor(ctx, height, info, handler)
 }
 
+func handlerStateSyncGet( // nolint: golint
+	srv interface{},
+	ctx context.Context,
+	dec func(interface{}) error,
+	interceptor grpc.UnaryServerInterceptor,
+) (interface{}, error) {
+	rq := new(syncer.GetRequest)
+	if err := dec(rq); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(LightClientBackend).State().SyncGet(ctx, rq)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: methodStateSyncGet.FullName(),
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(LightClientBackend).State().SyncGet(ctx, req.(*syncer.GetRequest))
+	}
+	return interceptor(ctx, rq, info, handler)
+}
+
+func handlerStateSyncGetPrefixes( // nolint: golint
+	srv interface{},
+	ctx context.Context,
+	dec func(interface{}) error,
+	interceptor grpc.UnaryServerInterceptor,
+) (interface{}, error) {
+	rq := new(syncer.GetPrefixesRequest)
+	if err := dec(rq); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(LightClientBackend).State().SyncGetPrefixes(ctx, rq)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: methodStateSyncGetPrefixes.FullName(),
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(LightClientBackend).State().SyncGetPrefixes(ctx, req.(*syncer.GetPrefixesRequest))
+	}
+	return interceptor(ctx, rq, info, handler)
+}
+
+func handlerStateSyncIterate( // nolint: golint
+	srv interface{},
+	ctx context.Context,
+	dec func(interface{}) error,
+	interceptor grpc.UnaryServerInterceptor,
+) (interface{}, error) {
+	rq := new(syncer.IterateRequest)
+	if err := dec(rq); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(LightClientBackend).State().SyncIterate(ctx, rq)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: methodStateSyncIterate.FullName(),
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(LightClientBackend).State().SyncIterate(ctx, req.(*syncer.IterateRequest))
+	}
+	return interceptor(ctx, rq, info, handler)
+}
+
 // RegisterService registers a new client backend service with the given gRPC server.
 func RegisterService(server *grpc.Server, service ClientBackend) {
 	server.RegisterService(&serviceDesc, service)
@@ -513,6 +601,42 @@ func (c *consensusLightClient) GetParameters(ctx context.Context, height int64) 
 		return nil, err
 	}
 	return &rsp, nil
+}
+
+type stateReadSync struct {
+	c *consensusLightClient
+}
+
+// Implements syncer.ReadSyncer.
+func (rs *stateReadSync) SyncGet(ctx context.Context, request *syncer.GetRequest) (*syncer.ProofResponse, error) {
+	var rsp syncer.ProofResponse
+	if err := rs.c.conn.Invoke(ctx, methodStateSyncGet.FullName(), request, &rsp); err != nil {
+		return nil, err
+	}
+	return &rsp, nil
+}
+
+// Implements syncer.ReadSyncer.
+func (rs *stateReadSync) SyncGetPrefixes(ctx context.Context, request *syncer.GetPrefixesRequest) (*syncer.ProofResponse, error) {
+	var rsp syncer.ProofResponse
+	if err := rs.c.conn.Invoke(ctx, methodStateSyncGetPrefixes.FullName(), request, &rsp); err != nil {
+		return nil, err
+	}
+	return &rsp, nil
+}
+
+// Implements syncer.ReadSyncer.
+func (rs *stateReadSync) SyncIterate(ctx context.Context, request *syncer.IterateRequest) (*syncer.ProofResponse, error) {
+	var rsp syncer.ProofResponse
+	if err := rs.c.conn.Invoke(ctx, methodStateSyncIterate.FullName(), request, &rsp); err != nil {
+		return nil, err
+	}
+	return &rsp, nil
+}
+
+// Implements LightClientBackend.
+func (c *consensusLightClient) State() syncer.ReadSyncer {
+	return &stateReadSync{c}
 }
 
 type consensusClient struct {

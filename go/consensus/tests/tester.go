@@ -14,6 +14,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/consensus/api/transaction"
 	"github.com/oasisprotocol/oasis-core/go/consensus/tendermint/apps/epochtime_mock"
 	staking "github.com/oasisprotocol/oasis-core/go/staking/api"
+	"github.com/oasisprotocol/oasis-core/go/storage/mkvs"
 )
 
 const (
@@ -43,8 +44,13 @@ func ConsensusImplementationTests(t *testing.T, backend consensus.ClientBackend)
 	require.NoError(err, "GetStatus")
 	require.NotNil(status, "returned status should not be nil")
 	require.EqualValues(1, status.GenesisHeight, "genesis height must be 1")
+
+	blk, err = backend.GetBlock(ctx, status.LatestHeight)
+	require.NoError(err, "GetBlock")
+
 	require.EqualValues(blk.Height, status.LatestHeight, "latest block heights should match")
 	require.EqualValues(blk.Hash, status.LatestHash, "latest block hashes should match")
+	require.EqualValues(blk.StateRoot, status.LatestStateRoot, "latest state roots should match")
 
 	txs, err := backend.GetTransactions(ctx, consensus.HeightLatest)
 	require.NoError(err, "GetTransactions")
@@ -112,4 +118,36 @@ func ConsensusImplementationTests(t *testing.T, backend consensus.ClientBackend)
 	require.NoError(err, "GetParameters")
 	require.Equal(params.Height, blk.Height, "returned parameters height should be correct")
 	require.NotNil(params.Meta, "returned parameters should contain metadata")
+
+	// We should be able to do remote state queries. Of course the state format is backend-specific
+	// so we simply perform some usual storage operations like fetching random keys and iterating
+	// through everything.
+	state := mkvs.NewWithRoot(backend.State(), nil, blk.StateRoot)
+	defer state.Close()
+
+	it := state.NewIterator(ctx)
+	defer it.Close()
+
+	var keys [][]byte
+	for it.Rewind(); it.Valid(); it.Next() {
+		keys = append(keys, it.Key())
+	}
+	require.NoError(it.Err(), "iterator should not return an error")
+	require.NotEmpty(keys, "there should be some keys in consensus state")
+
+	// Start with a clean tree to avoid hitting the cache.
+	state = mkvs.NewWithRoot(backend.State(), nil, blk.StateRoot)
+	defer state.Close()
+
+	for _, key := range keys {
+		_, err = state.Get(ctx, key)
+		require.NoError(err, "state.Get(%X)", key)
+	}
+
+	// Start with a clean tree to avoid hitting the cache.
+	state = mkvs.NewWithRoot(backend.State(), nil, blk.StateRoot)
+	defer state.Close()
+
+	err = state.PrefetchPrefixes(ctx, keys[:1], 10)
+	require.NoError(err, "state.PrefetchPrefixes")
 }
