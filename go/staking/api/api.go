@@ -4,10 +4,12 @@ package api
 import (
 	"context"
 	"fmt"
+	"io"
 
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	"github.com/oasisprotocol/oasis-core/go/common/errors"
+	"github.com/oasisprotocol/oasis-core/go/common/prettyprint"
 	"github.com/oasisprotocol/oasis-core/go/common/pubsub"
 	"github.com/oasisprotocol/oasis-core/go/common/quantity"
 	"github.com/oasisprotocol/oasis-core/go/consensus/api/transaction"
@@ -78,6 +80,13 @@ var (
 		MethodReclaimEscrow,
 		MethodAmendCommissionSchedule,
 	}
+
+	_ prettyprint.PrettyPrinter = (*SharePool)(nil)
+	_ prettyprint.PrettyPrinter = (*StakeThreshold)(nil)
+	_ prettyprint.PrettyPrinter = (*StakeAccumulator)(nil)
+	_ prettyprint.PrettyPrinter = (*GeneralAccount)(nil)
+	_ prettyprint.PrettyPrinter = (*EscrowAccount)(nil)
+	_ prettyprint.PrettyPrinter = (*Account)(nil)
 )
 
 // Backend is a staking token implementation.
@@ -262,6 +271,20 @@ func NewAmendCommissionScheduleTx(nonce uint64, fee *transaction.Fee, amend *Ame
 type SharePool struct {
 	Balance     quantity.Quantity `json:"balance,omitempty"`
 	TotalShares quantity.Quantity `json:"total_shares,omitempty"`
+}
+
+// PrettyPrint writes a pretty-printed representation of SharePool to the given
+// writer.
+func (p SharePool) PrettyPrint(prefix string, w io.Writer) {
+	fmt.Fprintf(w, "%sBalance:      %s\n", prefix, p.Balance)
+
+	fmt.Fprintf(w, "%sTotal Shares: %s\n", prefix, p.TotalShares)
+}
+
+// PrettyType returns a representation of SharePool that can be used for pretty
+// printing.
+func (p SharePool) PrettyType() (interface{}, error) {
+	return p, nil
 }
 
 // sharesForTokens computes the amount of shares for the given amount of tokens.
@@ -458,6 +481,25 @@ func (st StakeThreshold) String() string {
 	}
 }
 
+// PrettyPrint writes a pretty-printed representation of StakeThreshold to the
+// given writer.
+func (st StakeThreshold) PrettyPrint(prefix string, w io.Writer) {
+	switch {
+	case st.Global != nil:
+		fmt.Fprintf(w, "%s- Global: %s\n", prefix, *st.Global)
+	case st.Constant != nil:
+		fmt.Fprintf(w, "%s- Constant: %s\n", prefix, st.Constant)
+	default:
+		fmt.Fprintf(w, "%s- (malformed)\n", prefix)
+	}
+}
+
+// PrettyType returns a representation of StakeThreshold that can be used for
+// pretty printing.
+func (st StakeThreshold) PrettyType() (interface{}, error) {
+	return st, nil
+}
+
 // Equal compares vs another stake threshold for equality.
 func (st *StakeThreshold) Equal(cmp *StakeThreshold) bool {
 	if cmp == nil {
@@ -506,6 +548,29 @@ type StakeAccumulator struct {
 	// Claims are the stake claims that must be satisfied at any given point. Adding a new claim is
 	// only possible if all of the existing claims plus the new claim is satisfied.
 	Claims map[StakeClaim][]StakeThreshold `json:"claims,omitempty"`
+}
+
+// PrettyPrint writes a pretty-printed representation of StakeAccumulator to the
+// given writer.
+func (sa StakeAccumulator) PrettyPrint(prefix string, w io.Writer) {
+	if sa.Claims == nil {
+		fmt.Fprintf(w, "%sClaims: (none)\n", prefix)
+	} else {
+		fmt.Fprintf(w, "%sClaims:\n", prefix)
+		for claim, thresholds := range sa.Claims {
+			fmt.Fprintf(w, "%s  - Name: %s\n", prefix, claim)
+			for _, threshold := range thresholds {
+				fmt.Fprintf(w, "%s    Staking Thresholds:\n", prefix)
+				threshold.PrettyPrint(prefix+"      ", w)
+			}
+		}
+	}
+}
+
+// PrettyType returns a representation of StakeAccumulator that can be used for
+// pretty printing.
+func (sa StakeAccumulator) PrettyType() (interface{}, error) {
+	return sa, nil
 }
 
 // AddClaimUnchecked adds a new claim without checking its validity.
@@ -561,6 +626,20 @@ type GeneralAccount struct {
 	Nonce   uint64            `json:"nonce,omitempty"`
 }
 
+// PrettyPrint writes a pretty-printed representation of GeneralAccount to the
+// given writer.
+func (ga GeneralAccount) PrettyPrint(prefix string, w io.Writer) {
+	fmt.Fprintf(w, "%sBalance: %s\n", prefix, ga.Balance)
+
+	fmt.Fprintf(w, "%sNonce:   %d\n", prefix, ga.Nonce)
+}
+
+// PrettyType returns a representation of GeneralAccount that can be used for
+// pretty printing.
+func (ga GeneralAccount) PrettyType() (interface{}, error) {
+	return ga, nil
+}
+
 // EscrowAccount is an escrow account the balance of which is subject to
 // special delegation provisions and a debonding period.
 type EscrowAccount struct {
@@ -568,6 +647,28 @@ type EscrowAccount struct {
 	Debonding          SharePool          `json:"debonding,omitempty"`
 	CommissionSchedule CommissionSchedule `json:"commission_schedule,omitempty"`
 	StakeAccumulator   StakeAccumulator   `json:"stake_accumulator,omitempty"`
+}
+
+// PrettyPrint writes a pretty-printed representation of EscrowAccount to the
+// given writer.
+func (e EscrowAccount) PrettyPrint(prefix string, w io.Writer) {
+	fmt.Fprintf(w, "%sActive:\n", prefix)
+	e.Active.PrettyPrint(prefix+"  ", w)
+
+	fmt.Fprintf(w, "%sDebonding:\n", prefix)
+	e.Debonding.PrettyPrint(prefix+"  ", w)
+
+	fmt.Fprintf(w, "%sCommission Schedule:\n", prefix)
+	e.CommissionSchedule.PrettyPrint(prefix+"  ", w)
+
+	fmt.Fprintf(w, "%sStake Accumulator:\n", prefix)
+	e.StakeAccumulator.PrettyPrint(prefix+"  ", w)
+}
+
+// PrettyType returns a representation of EscrowAccount that can be used for
+// pretty printing.
+func (e EscrowAccount) PrettyType() (interface{}, error) {
+	return e, nil
 }
 
 // CheckStakeClaims checks whether the escrow account balance satisfies all the stake claims.
@@ -624,10 +725,25 @@ func (e *EscrowAccount) RemoveStakeClaim(claim StakeClaim) error {
 // Account is an entry in the staking ledger.
 //
 // The same ledger entry can hold both general and escrow accounts. Escrow
-// acounts are used to hold funds delegated for staking.
+// accounts are used to hold funds delegated for staking.
 type Account struct {
 	General GeneralAccount `json:"general,omitempty"`
 	Escrow  EscrowAccount  `json:"escrow,omitempty"`
+}
+
+// PrettyPrint writes a pretty-printed representation of Account to the given
+// writer.
+func (a Account) PrettyPrint(prefix string, w io.Writer) {
+	fmt.Fprintf(w, "%sGeneral Account:\n", prefix)
+	a.General.PrettyPrint(prefix+"  ", w)
+	fmt.Fprintf(w, "%sEscrow Account:\n", prefix)
+	a.Escrow.PrettyPrint(prefix+"  ", w)
+}
+
+// PrettyType returns a representation of Account that can be used for pretty
+// printing.
+func (a Account) PrettyType() (interface{}, error) {
+	return a, nil
 }
 
 // Delegation is a delegation descriptor.
