@@ -13,6 +13,8 @@ import (
 	"google.golang.org/grpc"
 
 	"github.com/oasisprotocol/oasis-core/go/common"
+	"github.com/oasisprotocol/oasis-core/go/common/cbor"
+	"github.com/oasisprotocol/oasis-core/go/common/crypto/multisig"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	memorySigner "github.com/oasisprotocol/oasis-core/go/common/crypto/signature/signers/memory"
 	"github.com/oasisprotocol/oasis-core/go/common/entity"
@@ -41,12 +43,14 @@ type registration struct {
 	ns common.Namespace
 }
 
-func getRuntime(entityID signature.PublicKey, id common.Namespace) *registry.Runtime {
+func getRuntime(entityAddress staking.Address, id common.Namespace) *registry.Runtime {
 	rt := &registry.Runtime{
-		DescriptorVersion: registry.LatestRuntimeDescriptorVersion,
-		ID:                id,
-		EntityID:          entityID,
-		Kind:              registry.KindCompute,
+		Versioned: cbor.Versioned{
+			V: registry.LatestRuntimeDescriptorVersion,
+		},
+		ID:            id,
+		EntityAddress: entityAddress,
+		Kind:          registry.KindCompute,
 		Executor: registry.ExecutorParameters{
 			GroupSize:    1,
 			RoundTimeout: 1 * time.Second,
@@ -78,7 +82,7 @@ func getRuntime(entityID signature.PublicKey, id common.Namespace) *registry.Run
 	return rt
 }
 
-func getNodeDesc(rng *rand.Rand, nodeIdentity *identity.Identity, entityID signature.PublicKey, runtimeID common.Namespace) *node.Node {
+func getNodeDesc(rng *rand.Rand, nodeIdentity *identity.Identity, entityAddress staking.Address, runtimeID common.Namespace) *node.Node {
 	nodeAddr := node.Address{
 		TCPAddr: net.TCPAddr{
 			IP:   net.IPv4(127, 0, 0, 1),
@@ -97,11 +101,13 @@ func getNodeDesc(rng *rand.Rand, nodeIdentity *identity.Identity, entityID signa
 	}
 
 	nodeDesc := node.Node{
-		DescriptorVersion: node.LatestNodeDescriptorVersion,
-		ID:                nodeIdentity.NodeSigner.Public(),
-		EntityID:          entityID,
-		Expiration:        0,
-		Roles:             availableRoles[rng.Intn(len(availableRoles))],
+		Versioned: cbor.Versioned{
+			V: node.LatestNodeDescriptorVersion,
+		},
+		ID:            nodeIdentity.NodeSigner.Public(),
+		EntityAddress: entityAddress,
+		Expiration:    0,
+		Roles:         availableRoles[rng.Intn(len(availableRoles))],
 		TLS: node.TLSInfo{
 			PubKey: nodeIdentity.GetTLSSigner().Public(),
 			Addresses: []node.TLSAddress{
@@ -159,7 +165,8 @@ func (r *registration) Run( // nolint: gocyclo
 	rng *rand.Rand,
 	conn *grpc.ClientConn,
 	cnsc consensus.ClientBackend,
-	fundingAccount signature.Signer,
+	fundingAccount *multisig.Account,
+	fundingSigner signature.Signer,
 ) error {
 	ctx := context.Background()
 	var err error
@@ -178,11 +185,13 @@ func (r *registration) Run( // nolint: gocyclo
 	// Load all accounts.
 	type nodeAcc struct {
 		id            *identity.Identity
+		nodeAccount   *multisig.Account
 		nodeDesc      *node.Node
 		reckonedNonce uint64
 	}
 	entityAccs := make([]struct {
 		signer         signature.Signer
+		account        *multisig.Account
 		address        staking.Address
 		reckonedNonce  uint64
 		nodeIdentities []*nodeAcc
@@ -195,7 +204,8 @@ func (r *registration) Run( // nolint: gocyclo
 			return fmt.Errorf("memory signer factory Generate account %d: %w", i, err2)
 		}
 		entityAccs[i].signer = signer
-		entityAccs[i].address = staking.NewAddress(signer.Public())
+		entityAccs[i].account = multisig.NewAccountFromPublicKey(signer.Public())
+		entityAccs[i].address = staking.NewAddress(entityAccs[i].account)
 	}
 
 	// Register entities.
@@ -211,8 +221,10 @@ func (r *registration) Run( // nolint: gocyclo
 		}
 
 		ent := &entity.Entity{
-			DescriptorVersion: entity.LatestEntityDescriptorVersion,
-			ID:                entityAccs[i].signer.Public(),
+			Versioned: cbor.Versioned{
+				V: entity.LatestEntityDescriptorVersion,
+			},
+			AccountAddress: entityAccs[i].address,
 		}
 
 		// Generate entity node identities.
@@ -225,10 +237,11 @@ func (r *registration) Run( // nolint: gocyclo
 			if err != nil {
 				return fmt.Errorf("failed generating account node identity: %w", err)
 			}
-			nodeDesc := getNodeDesc(rng, ident, entityAccs[i].signer.Public(), r.ns)
+			nodeDesc := getNodeDesc(rng, ident, entityAccs[i].address, r.ns)
 
 			var nodeAccNonce uint64
-			nodeAccAddress := staking.NewAddress(ident.NodeSigner.Public())
+			nodeAcco := multisig.NewAccountFromPublicKey(ident.NodeSigner.Public())
+			nodeAccAddress := staking.NewAddress(nodeAcco)
 			nodeAccNonce, err = cnsc.GetSignerNonce(ctx, &consensus.GetSignerNonceRequest{
 				AccountAddress: nodeAccAddress,
 				Height:         consensus.HeightLatest,
@@ -237,12 +250,20 @@ func (r *registration) Run( // nolint: gocyclo
 				return fmt.Errorf("GetSignerNonce error for accout %s: %w", nodeAccAddress, err)
 			}
 
-			entityAccs[i].nodeIdentities = append(entityAccs[i].nodeIdentities, &nodeAcc{ident, nodeDesc, nodeAccNonce})
+			entityAccs[i].nodeIdentities = append(
+				entityAccs[i].nodeIdentities,
+				&nodeAcc{
+					ident,
+					nodeAcco,
+					nodeDesc,
+					nodeAccNonce,
+				},
+			)
 			ent.Nodes = append(ent.Nodes, ident.NodeSigner.Public())
 		}
 
 		// Register entity.
-		sigEntity, err := entity.SignEntity(entityAccs[i].signer, registry.RegisterEntitySignatureContext, ent)
+		sigEntity, err := entity.SingleSignEntity(entityAccs[i].signer, entityAccs[i].account, registry.RegisterEntitySignatureContext, ent)
 		if err != nil {
 			return fmt.Errorf("failed to sign entity: %w", err)
 		}
@@ -250,7 +271,7 @@ func (r *registration) Run( // nolint: gocyclo
 		// Estimate gas and submit transaction.
 		tx := registry.NewRegisterEntityTx(entityAccs[i].reckonedNonce, &transaction.Fee{}, sigEntity)
 		entityAccs[i].reckonedNonce++
-		if err := fundSignAndSubmitTx(ctx, registrationLogger, cnsc, entityAccs[i].signer, tx, fundingAccount); err != nil {
+		if err := fundSignAndSubmitTx(ctx, registrationLogger, cnsc, entityAccs[i].account, entityAccs[i].signer, tx, fundingAccount, fundingSigner); err != nil {
 			registrationLogger.Error("failed to sign and submit regsiter entity transaction",
 				"tx", tx,
 				"signer", entityAccs[i].signer,
@@ -262,15 +283,15 @@ func (r *registration) Run( // nolint: gocyclo
 		// XXX: currently only a single runtime is registered at start. Could
 		// also periodically register new runtimes.
 		if i == 0 {
-			runtimeDesc := getRuntime(entityAccs[i].signer.Public(), r.ns)
-			sigRuntime, err := registry.SignRuntime(entityAccs[i].signer, registry.RegisterRuntimeSignatureContext, runtimeDesc)
+			runtimeDesc := getRuntime(entityAccs[i].address, r.ns)
+			sigRuntime, err := registry.SingleSignRuntime(entityAccs[i].signer, entityAccs[i].account, registry.RegisterRuntimeSignatureContext, runtimeDesc)
 			if err != nil {
 				return fmt.Errorf("failed to sign entity: %w", err)
 			}
 
 			tx := registry.NewRegisterRuntimeTx(entityAccs[i].reckonedNonce, &transaction.Fee{}, sigRuntime)
 			entityAccs[i].reckonedNonce++
-			if err := fundSignAndSubmitTx(ctx, registrationLogger, cnsc, entityAccs[i].signer, tx, fundingAccount); err != nil {
+			if err := fundSignAndSubmitTx(ctx, registrationLogger, cnsc, entityAccs[i].account, entityAccs[i].signer, tx, fundingAccount, fundingSigner); err != nil {
 				registrationLogger.Error("failed to sign and submit register runtime transaction",
 					"tx", tx,
 					"signer", entityAccs[i].signer,
@@ -303,7 +324,7 @@ func (r *registration) Run( // nolint: gocyclo
 		// Register node.
 		tx := registry.NewRegisterNodeTx(selectedNode.reckonedNonce, &transaction.Fee{}, sigNode)
 		selectedNode.reckonedNonce++
-		if err := fundSignAndSubmitTx(ctx, registrationLogger, cnsc, selectedNode.id.NodeSigner, tx, fundingAccount); err != nil {
+		if err := fundSignAndSubmitTx(ctx, registrationLogger, cnsc, selectedNode.nodeAccount, selectedNode.id.NodeSigner, tx, fundingAccount, fundingSigner); err != nil {
 			registrationLogger.Error("failed to sign and submit register node transaction",
 				"tx", tx,
 				"signer", selectedNode.id.NodeSigner,

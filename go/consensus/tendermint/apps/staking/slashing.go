@@ -51,7 +51,7 @@ func onEvidenceDoubleSign(
 	if nodeStatus.IsFrozen() {
 		ctx.Logger().Debug("not slashing frozen validator",
 			"node_id", node.ID,
-			"entity_id", node.EntityID,
+			"entity_address", node.EntityAddress,
 			"freeze_end_time", nodeStatus.FreezeEndTime,
 		)
 		return nil
@@ -86,13 +86,12 @@ func onEvidenceDoubleSign(
 	}
 
 	// Slash validator.
-	entityAddr := staking.NewAddress(node.EntityID)
-	_, err = stakeState.SlashEscrow(ctx, entityAddr, &penalty.Amount)
+	_, err = stakeState.SlashEscrow(ctx, node.EntityAddress, &penalty.Amount)
 	if err != nil {
 		ctx.Logger().Error("failed to slash validator entity",
 			"err", err,
 			"node_id", node.ID,
-			"entity_id", node.EntityID,
+			"entity_address", node.EntityAddress,
 		)
 		return err
 	}
@@ -101,14 +100,14 @@ func onEvidenceDoubleSign(
 		ctx.Logger().Error("failed to set validator node status",
 			"err", err,
 			"node_id", node.ID,
-			"entity_id", node.EntityID,
+			"entity_address", node.EntityAddress,
 		)
 		return err
 	}
 
 	ctx.Logger().Warn("slashed validator for double signing",
 		"node_id", node.ID,
-		"entity_id", node.EntityID,
+		"entity_address", node.EntityAddress,
 	)
 
 	return nil

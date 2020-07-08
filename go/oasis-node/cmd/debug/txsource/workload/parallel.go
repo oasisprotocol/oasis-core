@@ -9,6 +9,7 @@ import (
 
 	"google.golang.org/grpc"
 
+	"github.com/oasisprotocol/oasis-core/go/common/crypto/multisig"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	memorySigner "github.com/oasisprotocol/oasis-core/go/common/crypto/signature/signers/memory"
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
@@ -37,7 +38,8 @@ func (parallel) Run(
 	rng *rand.Rand,
 	conn *grpc.ClientConn,
 	cnsc consensus.ClientBackend,
-	fundingAccount signature.Signer,
+	fundingAccount *multisig.Account,
+	fundingSigner signature.Signer,
 ) error {
 	ctx := context.Background()
 	var err error
@@ -45,32 +47,36 @@ func (parallel) Run(
 	// Estimate gas needed for the used transfer transaction.
 	var txGasAmount transaction.Gas
 	xfer := &staking.Transfer{
-		To: staking.NewAddress(fundingAccount.Public()),
+		To: staking.NewAddress(fundingAccount),
 	}
 	if err = xfer.Amount.FromInt64(parallelTxTransferAmount); err != nil {
 		return fmt.Errorf("transfer base units FromInt64 %d: %w", parallelTxTransferAmount, err)
 	}
 	txGasAmount, err = cnsc.EstimateGas(ctx, &consensus.EstimateGasRequest{
-		Signer:      fundingAccount.Public(),
+		Account:     *fundingAccount,
 		Transaction: staking.NewTransferTx(0, nil, xfer),
 	})
 	if err != nil {
 		return fmt.Errorf("failed to estimate gas: %w", err)
 	}
 
-	accounts := make([]signature.Signer, parallelConcurency)
+	accounts := make([]struct {
+		account *multisig.Account
+		signer  signature.Signer
+	}, parallelConcurency)
 	fac := memorySigner.NewFactory()
 	for i := range accounts {
-		accounts[i], err = fac.Generate(signature.SignerEntity, rng)
+		accounts[i].signer, err = fac.Generate(signature.SignerEntity, rng)
 		if err != nil {
 			return fmt.Errorf("memory signer factory Generate account %d: %w", i, err)
 		}
+		accounts[i].account = multisig.NewAccountFromPublicKey(accounts[i].signer.Public())
 
 		// Initial funding of accounts.
 		fundAmount := parallelTxTransferAmount + // self transfer amount
 			parallelTxFundInterval*txGasAmount*gasPrice // gas for `parallelTxFundInterval` transfers.
-		addr := staking.NewAddress(accounts[i].Public())
-		if err = transferFunds(ctx, parallelLogger, cnsc, fundingAccount, addr, int64(fundAmount)); err != nil {
+		addr := staking.NewAddress(accounts[i].account)
+		if err = transferFunds(ctx, parallelLogger, cnsc, fundingAccount, fundingSigner, addr, int64(fundAmount)); err != nil {
 			return fmt.Errorf("account funding failure: %w", err)
 		}
 	}
@@ -91,10 +97,10 @@ func (parallel) Run(
 		var wg sync.WaitGroup
 		wg.Add(parallelConcurency)
 		for c := 0; c < parallelConcurency; c++ {
-			go func(txSigner signature.Signer, nonce uint64) {
+			go func(txAccount *multisig.Account, txSigner signature.Signer, nonce uint64) {
 				defer wg.Done()
 
-				addr := staking.NewAddress(txSigner.Public())
+				addr := staking.NewAddress(txAccount)
 
 				// Transfer tx.
 				transfer := staking.Transfer{
@@ -107,7 +113,7 @@ func (parallel) Run(
 
 				tx := staking.NewTransferTx(nonce, &fee, &transfer)
 				var signedTx *transaction.SignedTransaction
-				signedTx, err = transaction.Sign(txSigner, tx)
+				signedTx, err = transaction.SingleSign(txSigner, txAccount, tx)
 				if err != nil {
 					parallelLogger.Error("transaction.Sign error", "err", err)
 					errCh <- fmt.Errorf("transaction.Sign: %w", err)
@@ -122,7 +128,7 @@ func (parallel) Run(
 					errCh <- fmt.Errorf("cnsc.SubmitTx: %w", err)
 					return
 				}
-			}(accounts[c], nonce)
+			}(accounts[c].account, accounts[c].signer, nonce)
 		}
 
 		// Wait for transactions.
@@ -154,8 +160,8 @@ func (parallel) Run(
 			// Re-fund accounts for next `parallelTxFundInterval` transfers.
 			for i := range accounts {
 				fundAmount := parallelTxFundInterval * txGasAmount * gasPrice // gas for `parallelTxFundInterval` transfers.
-				addr := staking.NewAddress(accounts[i].Public())
-				if err = transferFunds(ctx, parallelLogger, cnsc, fundingAccount, addr, int64(fundAmount)); err != nil {
+				addr := staking.NewAddress(accounts[i].account)
+				if err = transferFunds(ctx, parallelLogger, cnsc, fundingAccount, fundingSigner, addr, int64(fundAmount)); err != nil {
 					return fmt.Errorf("account funding failure: %w", err)
 				}
 			}

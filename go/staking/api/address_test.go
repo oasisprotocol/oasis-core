@@ -5,6 +5,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/oasisprotocol/oasis-core/go/common/crypto/multisig"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 )
 
@@ -16,7 +17,7 @@ func TestReserved(t *testing.T) {
 
 	var addr, addr2 Address
 
-	addr = NewAddress(pk)
+	addr = NewAddress(multisig.NewAccountFromPublicKey(pk))
 	require.True(addr.IsValid(), "test address should initially be valid")
 	require.False(addr.IsReserved(), "test address should not initially be reserved")
 

@@ -8,6 +8,7 @@ import (
 
 	"google.golang.org/grpc"
 
+	"github.com/oasisprotocol/oasis-core/go/common/crypto/multisig"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	memorySigner "github.com/oasisprotocol/oasis-core/go/common/crypto/signature/signers/memory"
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
@@ -33,9 +34,11 @@ type commission struct {
 
 	rules          staking.CommissionScheduleRules
 	signer         signature.Signer
+	account        *multisig.Account
 	address        staking.Address
 	reckonedNonce  uint64
-	fundingAccount signature.Signer
+	fundingAccount *multisig.Account
+	fundingSigner  signature.Signer
 }
 
 // currentBound returns the rate bounds at the latest bound step that has
@@ -318,7 +321,7 @@ func (c *commission) doAmendCommissionSchedule(ctx context.Context, rng *rand.Ra
 
 	// Estimate gas.
 	gas, err := cnsc.EstimateGas(ctx, &consensus.EstimateGasRequest{
-		Signer:      c.signer.Public(),
+		Account:     *c.account,
 		Transaction: tx,
 	})
 	if err != nil {
@@ -332,12 +335,12 @@ func (c *commission) doAmendCommissionSchedule(ctx context.Context, rng *rand.Ra
 
 	// Fund account to cover AmendCommissionSchedule transaction fees.
 	fundAmount := int64(gas) * gasPrice // transaction costs
-	if err = transferFunds(ctx, c.logger, cnsc, c.fundingAccount, c.address, fundAmount); err != nil {
+	if err = transferFunds(ctx, c.logger, cnsc, c.fundingAccount, c.fundingSigner, c.address, fundAmount); err != nil {
 		return fmt.Errorf("account funding failure: %w", err)
 	}
 
 	// Sign transaction.
-	signedTx, err := transaction.Sign(c.signer, tx)
+	signedTx, err := transaction.SingleSign(c.signer, c.account, tx)
 	if err != nil {
 		return fmt.Errorf("transaction.Sign: %w", err)
 	}
@@ -357,19 +360,29 @@ func (c *commission) doAmendCommissionSchedule(ctx context.Context, rng *rand.Ra
 	return nil
 }
 
-func (c *commission) Run(gracefulExit context.Context, rng *rand.Rand, conn *grpc.ClientConn, cnsc consensus.ClientBackend, fundingAccount signature.Signer) error {
+func (c *commission) Run(
+	gracefulExit context.Context,
+	rng *rand.Rand,
+	conn *grpc.ClientConn,
+	cnsc consensus.ClientBackend,
+	fundingAccount *multisig.Account,
+	fundingSigner signature.Signer,
+) error {
 	var err error
+
 	ctx := context.Background()
 
 	c.logger = logging.GetLogger("cmd/txsource/workload/commission")
 	c.fundingAccount = fundingAccount
+	c.fundingSigner = fundingSigner
 
 	fac := memorySigner.NewFactory()
 	c.signer, err = fac.Generate(signature.SignerEntity, rng)
 	if err != nil {
 		return fmt.Errorf("memory signer factory Generate account: %w", err)
 	}
-	c.address = staking.NewAddress(c.signer.Public())
+	c.account = multisig.NewAccountFromPublicKey(c.signer.Public())
+	c.address = staking.NewAddress(c.account)
 
 	stakingClient := staking.NewStakingClient(conn)
 

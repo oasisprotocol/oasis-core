@@ -6,6 +6,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/oasisprotocol/oasis-core/go/common/cbor"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	memorySigner "github.com/oasisprotocol/oasis-core/go/common/crypto/signature/signers/memory"
 	"github.com/oasisprotocol/oasis-core/go/common/entity"
@@ -42,17 +43,20 @@ func TestOnEvidenceDoubleSign(t *testing.T) {
 	require.NoError(err, "should not fail when validator address is not known")
 
 	// Add entity.
-	ent, entitySigner, _ := entity.TestEntity()
-	sigEntity, err := entity.SignEntity(entitySigner, registry.RegisterEntitySignatureContext, ent)
+	ent, entitySigner, entityAccount, _ := entity.TestEntity()
+	sigEntity, err := entity.SingleSignEntity(entitySigner, entityAccount, registry.RegisterEntitySignatureContext, ent)
 	require.NoError(err, "SignEntity")
 	err = regState.SetEntity(ctx, ent, sigEntity)
 	require.NoError(err, "SetEntity")
+	entityAddress := staking.NewAddress(entityAccount)
 	// Add node.
 	nodeSigner := memorySigner.NewTestSigner("node test signer")
 	nod := &node.Node{
-		DescriptorVersion: node.LatestNodeDescriptorVersion,
-		ID:                nodeSigner.Public(),
-		EntityID:          ent.ID,
+		Versioned: cbor.Versioned{
+			V: node.LatestNodeDescriptorVersion,
+		},
+		ID:            nodeSigner.Public(),
+		EntityAddress: entityAddress,
 		Consensus: node.ConsensusInfo{
 			ID: consensusID,
 		},
@@ -92,15 +96,12 @@ func TestOnEvidenceDoubleSign(t *testing.T) {
 	err = onEvidenceDoubleSign(ctx, validatorAddress, 1, now, 1)
 	require.Error(err, "should fail when validator has no stake")
 
-	// Computes entity's staking address.
-	addr := staking.NewAddress(ent.ID)
-
 	// Get the validator some stake.
 	var balance quantity.Quantity
 	_ = balance.FromUint64(200)
 	var totalShares quantity.Quantity
 	_ = totalShares.FromUint64(200)
-	err = stakeState.SetAccount(ctx, addr, &staking.Account{
+	err = stakeState.SetAccount(ctx, entityAddress, &staking.Account{
 		Escrow: staking.EscrowAccount{
 			Active: staking.SharePool{
 				Balance:     balance,
@@ -115,7 +116,7 @@ func TestOnEvidenceDoubleSign(t *testing.T) {
 	require.NoError(err, "slashing should succeed")
 
 	// Entity stake should be slashed.
-	acct, err := stakeState.Account(ctx, addr)
+	acct, err := stakeState.Account(ctx, entityAddress)
 	require.NoError(err, "Account")
 	_ = balance.Sub(&slashAmount)
 	require.EqualValues(balance, acct.Escrow.Active.Balance, "entity stake should be slashed")

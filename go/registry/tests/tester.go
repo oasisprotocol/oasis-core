@@ -12,7 +12,9 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/oasisprotocol/oasis-core/go/common"
+	"github.com/oasisprotocol/oasis-core/go/common/cbor"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/drbg"
+	"github.com/oasisprotocol/oasis-core/go/common/crypto/multisig"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	memorySigner "github.com/oasisprotocol/oasis-core/go/common/crypto/signature/signers/memory"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/tls"
@@ -102,7 +104,7 @@ func testRegistryEntityNodes( // nolint: gocyclo
 				var gotIt bool
 				for _, evt := range evts {
 					if evt.EntityEvent != nil {
-						if evt.EntityEvent.Entity.ID.Equal(ev.Entity.ID) && evt.EntityEvent.IsRegistration {
+						if evt.EntityEvent.Entity.AccountAddress.Equal(ev.Entity.AccountAddress) && evt.EntityEvent.IsRegistration {
 							require.False(evt.TxHash.IsEmpty(), "Event transaction hash should not be empty")
 							require.Greater(evt.Height, int64(0), "Event height should be greater than zero")
 							gotIt = true
@@ -118,7 +120,7 @@ func testRegistryEntityNodes( // nolint: gocyclo
 
 		for _, v := range entities {
 			var ent *entity.Entity
-			ent, err = backend.GetEntity(ctx, &api.IDQuery{ID: v.Entity.ID, Height: consensusAPI.HeightLatest})
+			ent, err = backend.GetEntity(ctx, &api.AccountQuery{ID: v.Entity.AccountAddress, Height: consensusAPI.HeightLatest})
 			require.NoError(err, "GetEntity")
 			require.EqualValues(v.Entity, ent, "retrieved entity")
 		}
@@ -127,20 +129,20 @@ func testRegistryEntityNodes( // nolint: gocyclo
 		registeredEntities, err = backend.GetEntities(ctx, consensusAPI.HeightLatest)
 		require.NoError(err, "GetEntities")
 		// NOTE: The test entity is alway present as it controls a runtime and cannot be removed.
-		testEntity, _, _ := entity.TestEntity()
+		testEntity, _, _, _ := entity.TestEntity()
 		require.Len(registeredEntities, len(entities)+1, "entities after registration")
 
-		seen := make(map[signature.PublicKey]bool)
+		seen := make(map[staking.Address]bool)
 		for _, ent := range registeredEntities {
-			if ent.ID.Equal(testEntity.ID) {
+			if ent.AccountAddress.Equal(testEntity.AccountAddress) {
 				continue
 			}
 
 			var isValid bool
 			for _, v := range entities {
-				if v.Entity.ID.Equal(ent.ID) {
+				if v.Entity.AccountAddress.Equal(ent.AccountAddress) {
 					require.EqualValues(v.Entity, ent, "bulk retrieved entity")
-					seen[ent.ID] = true
+					seen[ent.AccountAddress] = true
 					isValid = true
 					break
 				}
@@ -429,7 +431,7 @@ func testRegistryEntityNodes( // nolint: gocyclo
 			var gotIt bool
 			for _, evt := range evts {
 				if evt.EntityEvent != nil {
-					if evt.EntityEvent.Entity.ID.Equal(ev.Entity.ID) && !evt.EntityEvent.IsRegistration {
+					if evt.EntityEvent.Entity.AccountAddress.Equal(ev.Entity.AccountAddress) && !evt.EntityEvent.IsRegistration {
 						require.False(evt.TxHash.IsEmpty(), "Event transaction hash should not be empty")
 						require.Greater(evt.Height, int64(0), "Event height should be greater than zero")
 						gotIt = true
@@ -468,7 +470,7 @@ func testRegistryEntityNodes( // nolint: gocyclo
 				var gotIt bool
 				for _, evt := range evts {
 					if evt.EntityEvent != nil {
-						if evt.EntityEvent.Entity.ID.Equal(ev.Entity.ID) && !evt.EntityEvent.IsRegistration {
+						if evt.EntityEvent.Entity.AccountAddress.Equal(ev.Entity.AccountAddress) && !evt.EntityEvent.IsRegistration {
 							require.False(evt.TxHash.IsEmpty(), "Event transaction hash should not be empty")
 							require.Greater(evt.Height, int64(0), "Event height should be greater than zero")
 							gotIt = true
@@ -484,7 +486,7 @@ func testRegistryEntityNodes( // nolint: gocyclo
 
 		// There should be no more entities.
 		for _, v := range entities {
-			_, err := backend.GetEntity(ctx, &api.IDQuery{ID: v.Entity.ID, Height: consensusAPI.HeightLatest})
+			_, err := backend.GetEntity(ctx, &api.AccountQuery{ID: v.Entity.AccountAddress, Height: consensusAPI.HeightLatest})
 			require.Equal(api.ErrNoSuchEntity, err, "GetEntity")
 		}
 	})
@@ -538,10 +540,11 @@ func testRegistryRuntime(t *testing.T, backend api.Backend, consensus consensusA
 	// We must use the test entity for runtime registrations as registering a runtime will prevent
 	// the entity from being deregistered and the other node tests already use the test entity for
 	// deregistration.
-	testEntity, testEntitySigner, _ := entity.TestEntity()
+	testEntity, testEntitySigner, testEntityAccount, _ := entity.TestEntity()
 	entity := &TestEntity{
-		Entity: testEntity,
-		Signer: testEntitySigner,
+		Entity:  testEntity,
+		Signer:  testEntitySigner,
+		Account: testEntityAccount,
 	}
 
 	// Runtime registration test cases.
@@ -563,8 +566,8 @@ func testRegistryRuntime(t *testing.T, backend api.Backend, consensus consensusA
 				require.NoError(err, "NewTestEntities with entity node seed")
 				rt.AdmissionPolicy = api.RuntimeAdmissionPolicy{
 					EntityWhitelist: &api.EntityWhitelistRuntimeAdmissionPolicy{
-						Entities: map[signature.PublicKey]bool{
-							nodeEntities[1].Entity.ID: true,
+						Entities: map[staking.Address]bool{
+							nodeEntities[1].Entity.AccountAddress: true,
 						},
 					},
 				}
@@ -731,9 +734,9 @@ func EnsureRegistryEmpty(t *testing.T, backend api.Backend) {
 	registeredEntities, err := backend.GetEntities(context.Background(), consensusAPI.HeightLatest)
 	require.NoError(t, err, "GetEntities")
 	// Allow one runtime-controlling entity (the test entity).
-	testEntity, _, _ := entity.TestEntity()
+	testEntity, _, _, _ := entity.TestEntity()
 	require.Len(t, registeredEntities, 1, "registered entities")
-	require.Equal(t, testEntity.ID, registeredEntities[0].ID, "only the test entity can remain registered")
+	require.Equal(t, testEntity.AccountAddress, registeredEntities[0].AccountAddress, "only the test entity can remain registered")
 
 	registeredNodes, err := backend.GetNodes(context.Background(), consensusAPI.HeightLatest)
 	require.NoError(t, err, "GetNodes")
@@ -743,8 +746,9 @@ func EnsureRegistryEmpty(t *testing.T, backend api.Backend) {
 // TestEntity is a testing Entity and some common pre-generated/signed
 // blobs useful for testing.
 type TestEntity struct {
-	Entity *entity.Entity
-	Signer signature.Signer
+	Entity  *entity.Entity
+	Signer  signature.Signer
+	Account *multisig.Account
 
 	SignedRegistration *entity.SignedEntity
 
@@ -826,7 +830,7 @@ func (ent *TestEntity) NewTestNodes(nCompute, nStorage int, idNonce []byte, runt
 	}
 	n := nCompute + nStorage
 
-	rng, err := drbg.New(crypto.SHA512, hashForDrbg(ent.Entity.ID[:]), idNonce, []byte("TestNodes"))
+	rng, err := drbg.New(crypto.SHA512, hashForDrbg(ent.Entity.AccountAddress[:]), idNonce, []byte("TestNodes"))
 	if err != nil {
 		return nil, err
 	}
@@ -855,12 +859,14 @@ func (ent *TestEntity) NewTestNodes(nCompute, nStorage int, idNonce []byte, runt
 		}
 
 		nod.Node = &node.Node{
-			DescriptorVersion: node.LatestNodeDescriptorVersion,
-			ID:                nod.Signer.Public(),
-			EntityID:          ent.Entity.ID,
-			Expiration:        uint64(expiration),
-			Runtimes:          runtimes,
-			Roles:             role,
+			Versioned: cbor.Versioned{
+				V: node.LatestNodeDescriptorVersion,
+			},
+			ID:            nod.Signer.Public(),
+			EntityAddress: ent.Entity.AccountAddress,
+			Expiration:    uint64(expiration),
+			Runtimes:      runtimes,
+			Roles:         role,
 		}
 		addr := node.Address{
 			TCPAddr: net.TCPAddr{
@@ -1139,12 +1145,14 @@ func (ent *TestEntity) NewTestNodes(nCompute, nStorage int, idNonce []byte, runt
 			panic("should find one additional compute runtime")
 		}
 		nod.UpdatedNode = &node.Node{
-			DescriptorVersion: node.LatestNodeDescriptorVersion,
-			ID:                nod.Signer.Public(),
-			EntityID:          ent.Entity.ID,
-			Expiration:        uint64(expiration),
-			Runtimes:          moreRuntimes,
-			Roles:             role,
+			Versioned: cbor.Versioned{
+				V: node.LatestNodeDescriptorVersion,
+			},
+			ID:            nod.Signer.Public(),
+			EntityAddress: ent.Entity.AccountAddress,
+			Expiration:    uint64(expiration),
+			Runtimes:      moreRuntimes,
+			Roles:         role,
 		}
 		addr = node.Address{
 			TCPAddr: net.TCPAddr{
@@ -1171,14 +1179,16 @@ func (ent *TestEntity) NewTestNodes(nCompute, nStorage int, idNonce []byte, runt
 			{ID: publicKeyToNamespace(testRuntimeSigner.Public(), false)},
 		}
 		newNode := &node.Node{
-			DescriptorVersion: node.LatestNodeDescriptorVersion,
-			ID:                nod.Signer.Public(),
-			EntityID:          ent.Entity.ID,
-			Expiration:        uint64(expiration),
-			Runtimes:          newRuntimes,
-			Roles:             role,
-			P2P:               nod.Node.P2P,
-			TLS:               nod.Node.TLS,
+			Versioned: cbor.Versioned{
+				V: node.LatestNodeDescriptorVersion,
+			},
+			ID:            nod.Signer.Public(),
+			EntityAddress: ent.Entity.AccountAddress,
+			Expiration:    uint64(expiration),
+			Runtimes:      newRuntimes,
+			Roles:         role,
+			P2P:           nod.Node.P2P,
+			TLS:           nod.Node.TLS,
 		}
 		newNode.P2P.ID = invalidIdentity.P2PSigner.Public()
 		newNode.Consensus.ID = invalidIdentity.ConsensusSigner.Public()
@@ -1204,7 +1214,7 @@ func (ent *TestEntity) NewTestNodes(nCompute, nStorage int, idNonce []byte, runt
 			descr: "Registering with an old descriptor should fail",
 		}
 		invNode15 := *nod.Node
-		invNode15.DescriptorVersion = 0
+		invNode15.Versioned.V = 0
 		invalid15.signed, err = node.MultiSignNode(
 			[]signature.Signer{
 				nodeIdentity.NodeSigner,
@@ -1241,13 +1251,16 @@ func NewTestEntities(seed []byte, n int) ([]*TestEntity, error) {
 		if ent.Signer, err = memorySigner.NewSigner(rng); err != nil {
 			return nil, err
 		}
+		ent.Account = multisig.NewAccountFromPublicKey(ent.Signer.Public())
 		ent.Entity = &entity.Entity{
-			DescriptorVersion:      entity.LatestEntityDescriptorVersion,
-			ID:                     ent.Signer.Public(),
+			Versioned: cbor.Versioned{
+				V: entity.LatestEntityDescriptorVersion,
+			},
+			AccountAddress:         staking.NewAddress(ent.Account),
 			AllowEntitySignedNodes: true,
 		}
 
-		ent.SignedRegistration, err = entity.SignEntity(ent.Signer, api.RegisterEntitySignatureContext, ent.Entity)
+		ent.SignedRegistration, err = entity.SingleSignEntity(ent.Signer, ent.Account, api.RegisterEntitySignatureContext, ent.Entity)
 		if err != nil {
 			return nil, err
 		}
@@ -1257,8 +1270,8 @@ func NewTestEntities(seed []byte, n int) ([]*TestEntity, error) {
 			descr: "Registering with an old descriptor should fail",
 		}
 		invEnt1 := *ent.Entity
-		invEnt1.DescriptorVersion = 0
-		invalid1.signed, err = entity.SignEntity(ent.Signer, api.RegisterEntitySignatureContext, &invEnt1)
+		invEnt1.Versioned.V = 0
+		invalid1.signed, err = entity.SingleSignEntity(ent.Signer, ent.Account, api.RegisterEntitySignatureContext, &invEnt1)
 		if err != nil {
 			return nil, err
 		}
@@ -1275,6 +1288,7 @@ func NewTestEntities(seed []byte, n int) ([]*TestEntity, error) {
 type TestRuntime struct {
 	Runtime *api.Runtime
 	Signer  signature.Signer
+	Account *multisig.Account
 
 	entity *TestEntity
 	nodes  []*TestNode
@@ -1290,10 +1304,10 @@ func (rt *TestRuntime) MustRegister(t *testing.T, backend api.Backend, consensus
 	require.NoError(err, "WatchRuntimes")
 	defer sub.Close()
 
-	signed, err := signature.SignSigned(rt.Signer, api.RegisterRuntimeSignatureContext, rt.Runtime)
+	signed, err := api.SingleSignRuntime(rt.Signer, rt.Account, api.RegisterRuntimeSignatureContext, rt.Runtime)
 	require.NoError(err, "signed runtime descriptor")
 
-	tx := api.NewRegisterRuntimeTx(0, nil, &api.SignedRuntime{Signed: *signed})
+	tx := api.NewRegisterRuntimeTx(0, nil, signed)
 	err = consensusAPI.SignAndSubmitTx(context.Background(), consensus, rt.Signer, tx)
 	require.NoError(err, "RegisterRuntime")
 
@@ -1341,10 +1355,10 @@ func (rt *TestRuntime) MustRegister(t *testing.T, backend api.Backend, consensus
 func (rt *TestRuntime) MustNotRegister(t *testing.T, backend api.Backend, consensus consensusAPI.Backend) {
 	require := require.New(t)
 
-	signed, err := signature.SignSigned(rt.Signer, api.RegisterRuntimeSignatureContext, rt.Runtime)
+	signed, err := api.SingleSignRuntime(rt.Signer, rt.Account, api.RegisterRuntimeSignatureContext, rt.Runtime)
 	require.NoError(err, "signed runtime descriptor")
 
-	tx := api.NewRegisterRuntimeTx(0, nil, &api.SignedRuntime{Signed: *signed})
+	tx := api.NewRegisterRuntimeTx(0, nil, signed)
 	err = consensusAPI.SignAndSubmitTx(context.Background(), consensus, rt.Signer, tx)
 	require.Error(err, "RegisterRuntime failure")
 }
@@ -1387,7 +1401,7 @@ func BulkPopulate(t *testing.T, backend api.Backend, consensus consensusAPI.Back
 		var gotIt bool
 		for _, evt := range evts {
 			if evt.EntityEvent != nil {
-				if evt.EntityEvent.Entity.ID.Equal(ev.Entity.ID) && evt.EntityEvent.IsRegistration {
+				if evt.EntityEvent.Entity.AccountAddress.Equal(ev.Entity.AccountAddress) && evt.EntityEvent.IsRegistration {
 					require.False(evt.TxHash.IsEmpty(), "Event transaction hash should not be empty")
 					require.Greater(evt.Height, int64(0), "Event height should be greater than zero")
 					gotIt = true
@@ -1517,7 +1531,7 @@ func (rt *TestRuntime) Cleanup(t *testing.T, backend api.Backend, consensus cons
 func NewTestRuntime(seed []byte, ent *TestEntity, isKeyManager bool) (*TestRuntime, error) {
 	if ent == nil {
 		ent = new(TestEntity)
-		ent.Entity, ent.Signer, _ = entity.TestEntity()
+		ent.Entity, ent.Signer, ent.Account, _ = entity.TestEntity()
 	}
 
 	flags := common.NamespaceTest
@@ -1528,11 +1542,14 @@ func NewTestRuntime(seed []byte, ent *TestEntity, isKeyManager bool) (*TestRunti
 
 	var rt TestRuntime
 	rt.Signer = ent.Signer
+	rt.Account = ent.Account
 	rt.Runtime = &api.Runtime{
-		DescriptorVersion: api.LatestRuntimeDescriptorVersion,
-		ID:                id,
-		EntityID:          ent.Entity.ID,
-		Kind:              api.KindCompute,
+		Versioned: cbor.Versioned{
+			V: api.LatestRuntimeDescriptorVersion,
+		},
+		ID:            id,
+		EntityAddress: ent.Entity.AccountAddress,
+		Kind:          api.KindCompute,
 		Executor: api.ExecutorParameters{
 			GroupSize:         3,
 			GroupBackupSize:   5,

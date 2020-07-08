@@ -14,6 +14,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common"
 	"github.com/oasisprotocol/oasis-core/go/common/cbor"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
+	"github.com/oasisprotocol/oasis-core/go/common/crypto/multisig"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	"github.com/oasisprotocol/oasis-core/go/common/entity"
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
@@ -345,11 +346,11 @@ func (q *queries) doRegistryQueries(ctx context.Context, rng *rand.Rand, height 
 	// Query each entity individually.
 	for _, ent := range ents {
 		var entity *entity.Entity
-		entity, err = q.registry.GetEntity(ctx, &registry.IDQuery{ID: ent.ID, Height: height})
+		entity, err = q.registry.GetEntity(ctx, &registry.AccountQuery{ID: ent.AccountAddress, Height: height})
 		if err != nil {
 			return fmt.Errorf("GetEntity error at height %d: %w", height, err)
 		}
-		if !ent.ID.Equal(entity.ID) {
+		if !ent.AccountAddress.Equal(entity.AccountAddress) {
 			return fmt.Errorf("GetEntity mismatch, expected: %s, got: %s", ent, entity)
 		}
 	}
@@ -693,7 +694,14 @@ func (q *queries) doQueries(ctx context.Context, rng *rand.Rand) error {
 	return nil
 }
 
-func (q *queries) Run(gracefulExit context.Context, rng *rand.Rand, conn *grpc.ClientConn, cnsc consensus.ClientBackend, fundingAccount signature.Signer) error {
+func (q *queries) Run(
+	gracefulExit context.Context,
+	rng *rand.Rand,
+	conn *grpc.ClientConn,
+	cnsc consensus.ClientBackend,
+	fundingAccount *multisig.Account,
+	fundingSigner signature.Signer,
+) error {
 	ctx := context.Background()
 
 	q.logger = logging.GetLogger("cmd/txsource/workload/queries")

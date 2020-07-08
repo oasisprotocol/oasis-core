@@ -5,10 +5,10 @@ import (
 	"context"
 	"fmt"
 	"math"
+	"math/bits"
 	"sort"
 
 	"github.com/oasisprotocol/oasis-core/go/common/cbor"
-	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	"github.com/oasisprotocol/oasis-core/go/common/keyformat"
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
 	"github.com/oasisprotocol/oasis-core/go/common/quantity"
@@ -377,11 +377,11 @@ func (s *ImmutableState) DebondingDelegation(
 }
 
 type DebondingQueueEntry struct {
-	Epoch         epochtime.EpochTime
-	DelegatorAddr staking.Address
-	EscrowAddr    staking.Address
-	Seq           uint64
-	Delegation    *staking.DebondingDelegation
+	Epoch         epochtime.EpochTime          `json:"epoch"`
+	DelegatorAddr staking.Address              `json:"delegator_addr"`
+	EscrowAddr    staking.Address              `json:"escrow_addr"`
+	Seq           uint64                       `json:"seq"`
+	Delegation    *staking.DebondingDelegation `json:"delegation,omitempty"`
 }
 
 func (s *ImmutableState) ExpiredDebondingQueue(ctx context.Context, epoch epochtime.EpochTime) ([]*DebondingQueueEntry, error) {
@@ -441,47 +441,49 @@ func (s *ImmutableState) LastBlockFees(ctx context.Context) (*quantity.Quantity,
 }
 
 type EpochSigning struct {
-	Total    uint64
-	ByEntity map[signature.PublicKey]uint64
+	Total     uint64                     `json:"total"`
+	ByAddress map[staking.Address]uint64 `json:"by_address"`
 }
 
-func (es *EpochSigning) Update(signingEntities []signature.PublicKey) error {
+func (es *EpochSigning) Update(signingAddresses []staking.Address) error {
+	var carry uint64
+
 	oldTotal := es.Total
-	es.Total = oldTotal + 1
-	if es.Total <= oldTotal {
+	es.Total, carry = bits.Add64(oldTotal, 1, 0)
+	if carry != 0 {
 		return fmt.Errorf("incrementing total blocks count: overflow, old_total=%d", oldTotal)
 	}
 
-	for _, entityID := range signingEntities {
-		oldCount := es.ByEntity[entityID]
-		es.ByEntity[entityID] = oldCount + 1
-		if es.ByEntity[entityID] <= oldCount {
-			return fmt.Errorf("incrementing count for entity %s: overflow, old_count=%d", entityID, oldCount)
+	for _, address := range signingAddresses {
+		oldCount := es.ByAddress[address]
+		es.ByAddress[address], carry = bits.Add64(oldCount, 1, 0)
+		if carry != 0 {
+			return fmt.Errorf("incrementing count for address %s: overflow, old_count=%d", address, oldCount)
 		}
 	}
 
 	return nil
 }
 
-func (es *EpochSigning) EligibleEntities(thresholdNumerator, thresholdDenominator uint64) ([]signature.PublicKey, error) {
-	var eligibleEntities []signature.PublicKey
+func (es *EpochSigning) EligibleAddresses(thresholdNumerator, thresholdDenominator uint64) ([]staking.Address, error) {
+	var eligibleAddresses []staking.Address
 	if es.Total > math.MaxUint64/thresholdNumerator {
 		return nil, fmt.Errorf("overflow in total blocks, total=%d", es.Total)
 	}
 	thresholdPremultiplied := es.Total * thresholdNumerator
-	for entityID, count := range es.ByEntity {
+	for address, count := range es.ByAddress {
 		if count > math.MaxUint64/thresholdDenominator {
-			return nil, fmt.Errorf("entity %s: overflow in threshold comparison, count=%d", entityID, count)
+			return nil, fmt.Errorf("address %s: overflow in threshold comparison, count=%d", address, count)
 		}
 		if count*thresholdDenominator < thresholdPremultiplied {
 			continue
 		}
-		eligibleEntities = append(eligibleEntities, entityID)
+		eligibleAddresses = append(eligibleAddresses, address)
 	}
-	sort.Slice(eligibleEntities, func(i, j int) bool {
-		return bytes.Compare(eligibleEntities[i][:], eligibleEntities[j][:]) < 0
+	sort.Slice(eligibleAddresses, func(i, j int) bool {
+		return bytes.Compare(eligibleAddresses[i][:], eligibleAddresses[j][:]) < 0
 	})
-	return eligibleEntities, nil
+	return eligibleAddresses, nil
 }
 
 func (s *ImmutableState) EpochSigning(ctx context.Context) (*EpochSigning, error) {
@@ -492,7 +494,7 @@ func (s *ImmutableState) EpochSigning(ctx context.Context) (*EpochSigning, error
 	if value == nil {
 		// Not present means zero everything.
 		return &EpochSigning{
-			ByEntity: make(map[signature.PublicKey]uint64),
+			ByAddress: make(map[staking.Address]uint64),
 		}, nil
 	}
 

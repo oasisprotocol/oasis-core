@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/oasisprotocol/oasis-core/go/common"
+	"github.com/oasisprotocol/oasis-core/go/common/cbor"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	fileSigner "github.com/oasisprotocol/oasis-core/go/common/crypto/signature/signers/file"
 	"github.com/oasisprotocol/oasis-core/go/common/entity"
@@ -219,7 +220,7 @@ func (sc *registryCLIImpl) testEntityAndNode(childEnv *env.Env, cli *cli.Helpers
 }
 
 // listEntities lists currently registered entities.
-func (sc *registryCLIImpl) listEntities(childEnv *env.Env) ([]signature.PublicKey, error) {
+func (sc *registryCLIImpl) listEntities(childEnv *env.Env) ([]staking.Address, error) {
 	sc.Logger.Info("listing all entities")
 	args := []string{
 		"registry", "entity", "list",
@@ -231,14 +232,14 @@ func (sc *registryCLIImpl) listEntities(childEnv *env.Env) ([]signature.PublicKe
 	}
 	entitiesStr := strings.Split(out.String(), "\n")
 
-	var entities []signature.PublicKey
+	var entities []staking.Address
 	for _, entStr := range entitiesStr {
 		// Ignore last newline.
 		if entStr == "" {
 			continue
 		}
 
-		var ent signature.PublicKey
+		var ent staking.Address
 		if err = ent.UnmarshalText([]byte(entStr)); err != nil {
 			return nil, fmt.Errorf("failed to parse entity ID (%s): error: %w output: %s", entStr, err, out.String())
 		}
@@ -254,7 +255,7 @@ func (sc *registryCLIImpl) loadEntity(entDir string) (*entity.Entity, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to create entity file signer: %w", err)
 	}
-	ent, _, err := entity.Load(entDir, entitySignerFactory)
+	ent, _, _, err := entity.Load(entDir, entitySignerFactory)
 	if err != nil {
 		return nil, fmt.Errorf("failed to load entity: %w", err)
 	}
@@ -349,7 +350,7 @@ func (sc *registryCLIImpl) isRegistered(childEnv *env.Env, nodeName, nodeDataDir
 }
 
 // newTestNode returns a test node instance given the entityID.
-func (sc *registryCLIImpl) newTestNode(entityID signature.PublicKey) (*node.Node, []string, []string, []string, error) {
+func (sc *registryCLIImpl) newTestNode(entityAddress staking.Address) (*node.Node, []string, []string, []string, error) {
 	// Addresses.
 	testAddresses := []node.Address{
 		{TCPAddr: net.TCPAddr{
@@ -403,10 +404,12 @@ func (sc *registryCLIImpl) newTestNode(entityID signature.PublicKey) (*node.Node
 	}
 
 	testNode := node.Node{
-		DescriptorVersion: node.LatestNodeDescriptorVersion,
-		ID:                signature.PublicKey{}, // ID is generated afterwards.
-		EntityID:          entityID,
-		Expiration:        42,
+		Versioned: cbor.Versioned{
+			V: node.LatestNodeDescriptorVersion,
+		},
+		ID:            signature.PublicKey{}, // ID is generated afterwards.
+		EntityAddress: entityAddress,
+		Expiration:    42,
 		TLS: node.TLSInfo{
 			PubKey:    signature.PublicKey{}, // Public key is generated afterwards.
 			Addresses: testTLSAddresses,
@@ -436,7 +439,7 @@ func (sc *registryCLIImpl) initNode(childEnv *env.Env, ent *entity.Entity, entDi
 	sc.Logger.Info("initializing new node")
 
 	// testNode will be our fixture for testing the CLI.
-	testNode, testAddressesStr, testConsensusAddressesStr, testTLSAddressesStr, err := sc.newTestNode(ent.ID)
+	testNode, testAddressesStr, testConsensusAddressesStr, testTLSAddressesStr, err := sc.newTestNode(ent.AccountAddress)
 	if err != nil {
 		return nil, err
 	}
@@ -447,7 +450,7 @@ func (sc *registryCLIImpl) initNode(childEnv *env.Env, ent *entity.Entity, entDi
 			"registry", "node", "init",
 			"--" + cmdRegNode.CfgTLSAddress, strings.Join(testTLSAddressesStr, ","),
 			"--" + cmdRegNode.CfgConsensusAddress, strings.Join(testConsensusAddressesStr, ","),
-			"--" + cmdRegNode.CfgEntityID, testNode.EntityID.String(),
+			"--" + cmdRegNode.CfgEntityAddress, testNode.EntityAddress.String(),
 			"--" + cmdRegNode.CfgExpiration, strconv.FormatUint(testNode.Expiration, 10),
 			"--" + cmdRegNode.CfgSelfSigned, "1",
 			"--" + cmdRegNode.CfgP2PAddress, strings.Join(testAddressesStr, ","),
@@ -602,16 +605,18 @@ func (sc *registryCLIImpl) testRuntime(ctx context.Context, childEnv *env.Env, c
 	}
 
 	// Create runtime descriptor instance.
-	testEntity, _, err := entity.TestEntity()
+	testEntity, _, _, err := entity.TestEntity()
 	if err != nil {
 		return fmt.Errorf("TestEntity: %w", err)
 	}
 	var q quantity.Quantity
 	_ = q.FromUint64(100)
 	testRuntime := registry.Runtime{
-		DescriptorVersion: registry.LatestRuntimeDescriptorVersion,
-		EntityID:          testEntity.ID,
-		Kind:              registry.KindCompute,
+		Versioned: cbor.Versioned{
+			V: registry.LatestRuntimeDescriptorVersion,
+		},
+		EntityAddress: testEntity.AccountAddress,
+		Kind:          registry.KindCompute,
 		Executor: registry.ExecutorParameters{
 			GroupSize:         1,
 			GroupBackupSize:   2,
@@ -641,8 +646,8 @@ func (sc *registryCLIImpl) testRuntime(ctx context.Context, childEnv *env.Env, c
 		},
 		AdmissionPolicy: registry.RuntimeAdmissionPolicy{
 			EntityWhitelist: &registry.EntityWhitelistRuntimeAdmissionPolicy{
-				Entities: map[signature.PublicKey]bool{
-					testEntity.ID: true,
+				Entities: map[staking.Address]bool{
+					testEntity.AccountAddress: true,
 				},
 			},
 		},

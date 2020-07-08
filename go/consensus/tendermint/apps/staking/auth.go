@@ -28,5 +28,5 @@ func (app *stakingApplication) GetSignerNonce(ctx context.Context, req *api.GetS
 
 // Implements abci.TransactionAuthHandler.
 func (app *stakingApplication) AuthenticateTx(ctx *abciAPI.Context, tx *transaction.Transaction) error {
-	return stakingState.AuthenticateAndPayFees(ctx, ctx.TxSigner(), tx.Nonce, tx.Fee)
+	return stakingState.AuthenticateAndPayFees(ctx, ctx.TxAccount(), tx.Nonce, tx.Fee)
 }

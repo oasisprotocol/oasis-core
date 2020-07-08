@@ -6,6 +6,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/oasisprotocol/oasis-core/go/common/crypto/multisig"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	"github.com/oasisprotocol/oasis-core/go/common/quantity"
 	abciAPI "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/api"
@@ -81,7 +82,7 @@ func TestReservedAddresses(t *testing.T) {
 
 	// Create a new test public key, set it as the tx signer and create a new reserved address from it.
 	testPK := signature.NewPublicKey("badfffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff")
-	ctx.SetTxSigner(testPK)
+	ctx.SetTxAccount(multisig.NewAccountFromPublicKey(testPK))
 	_ = staking.NewReservedAddress(testPK)
 
 	// Make sure all transaction types fail for the reserved address.

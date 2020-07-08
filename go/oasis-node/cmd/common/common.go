@@ -13,6 +13,7 @@ import (
 	"github.com/spf13/viper"
 
 	"github.com/oasisprotocol/oasis-core/go/common"
+	"github.com/oasisprotocol/oasis-core/go/common/crypto/multisig"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	"github.com/oasisprotocol/oasis-core/go/common/entity"
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
@@ -248,14 +249,14 @@ func GetInputReader(cmd *cobra.Command, cfg string) (io.ReadCloser, bool, error)
 }
 
 // LoadEntity loads the entity and it's signer.
-func LoadEntity(signerBackend, entityDir string) (*entity.Entity, signature.Signer, error) {
+func LoadEntity(signerBackend, entityDir string) (*entity.Entity, signature.Signer, *multisig.Account, error) {
 	if flags.DebugTestEntity() {
 		return entity.TestEntity()
 	}
 
 	factory, err := cmdSigner.NewFactory(signerBackend, entityDir, signature.SignerEntity)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 
 	return entity.Load(entityDir, factory)
@@ -273,6 +274,6 @@ func ExportEntity(signerBackend, entityDir string) error {
 		return err
 	}
 
-	_, err = entity.GenerateWithSigner(entityDir, signer, nil)
+	_, _, err = entity.GenerateWithSigner(entityDir, signer, nil)
 	return err
 }

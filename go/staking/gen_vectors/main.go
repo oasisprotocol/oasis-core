@@ -7,6 +7,7 @@ import (
 	"math"
 
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
+	"github.com/oasisprotocol/oasis-core/go/common/crypto/multisig"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	memorySigner "github.com/oasisprotocol/oasis-core/go/common/crypto/signature/signers/memory"
 	"github.com/oasisprotocol/oasis-core/go/common/quantity"
@@ -35,7 +36,8 @@ func main() {
 		for _, nonce := range []uint64{0, 1, 10, 42, 1000, 1_000_000, 10_000_000, math.MaxUint64} {
 			// Valid transfer transactions.
 			transferDst := memorySigner.NewTestSigner("oasis-core staking test vectors: Transfer dst")
-			transferDstAddr := staking.NewAddress(transferDst.Public())
+			transferDstAccount := multisig.NewAccountFromPublicKey(transferDst.Public())
+			transferDstAddr := staking.NewAddress(transferDstAccount)
 			for _, amt := range []uint64{0, 1000, 10_000_000} {
 				for _, tx := range []*transaction.Transaction{
 					staking.NewTransferTx(nonce, fee, &staking.Transfer{
@@ -60,7 +62,8 @@ func main() {
 
 			// Valid escrow transactions.
 			escrowDst := memorySigner.NewTestSigner("oasis-core staking test vectors: Escrow dst")
-			escrowDstAddr := staking.NewAddress(escrowDst.Public())
+			escrowDstAccount := multisig.NewAccountFromPublicKey(escrowDst.Public())
+			escrowDstAddr := staking.NewAddress(escrowDstAccount)
 			for _, amt := range []uint64{0, 1000, 10_000_000} {
 				for _, tx := range []*transaction.Transaction{
 					staking.NewAddEscrowTx(nonce, fee, &staking.Escrow{
@@ -74,7 +77,8 @@ func main() {
 
 			// Valid reclaim escrow transactions.
 			escrowSrc := memorySigner.NewTestSigner("oasis-core staking test vectors: ReclaimEscrow src")
-			escrowSrcAddr := staking.NewAddress(escrowSrc.Public())
+			escrowSrcAccount := multisig.NewAccountFromPublicKey(escrowSrc.Public())
+			escrowSrcAddr := staking.NewAddress(escrowSrcAccount)
 			for _, amt := range []uint64{0, 1000, 10_000_000} {
 				for _, tx := range []*transaction.Transaction{
 					staking.NewReclaimEscrowTx(nonce, fee, &staking.ReclaimEscrow{

@@ -429,16 +429,15 @@ func (app *schedulerApplication) electCommittee(
 
 	for _, n := range nodes {
 		// Check if an entity has enough stake.
-		entAddr := staking.NewAddress(n.EntityID)
 		if stakeAcc != nil {
-			if err = stakeAcc.CheckStakeClaims(entAddr); err != nil {
+			if err = stakeAcc.CheckStakeClaims(n.EntityAddress); err != nil {
 				continue
 			}
 		}
 		if isSuitableFn(ctx, n, rt) {
 			nodeList = append(nodeList, n)
 			if entitiesEligibleForReward != nil {
-				entitiesEligibleForReward[entAddr] = true
+				entitiesEligibleForReward[n.EntityAddress] = true
 			}
 		}
 	}
@@ -555,14 +554,13 @@ func (app *schedulerApplication) electValidators(
 		if !n.HasRoles(node.RoleValidator) {
 			continue
 		}
-		entAddr := staking.NewAddress(n.EntityID)
 		if stakeAcc != nil {
-			if err := stakeAcc.CheckStakeClaims(entAddr); err != nil {
+			if err := stakeAcc.CheckStakeClaims(n.EntityAddress); err != nil {
 				continue
 			}
 		}
 		nodeList = append(nodeList, n)
-		entities[entAddr] = true
+		entities[n.EntityAddress] = true
 	}
 
 	// Sort all of the entities that are actually running eligible validator
@@ -587,11 +585,10 @@ func (app *schedulerApplication) electValidators(
 	entityNodesMap := make(map[staking.Address][]*node.Node)
 	for i := 0; i < len(idxs); i++ {
 		n := nodeList[idxs[i]]
-		entAddr := staking.NewAddress(n.EntityID)
 
-		entNodes := entityNodesMap[entAddr]
+		entNodes := entityNodesMap[n.EntityAddress]
 		entNodes = append(entNodes, n)
-		entityNodesMap[entAddr] = entNodes
+		entityNodesMap[n.EntityAddress] = entNodes
 	}
 
 	// Go down the list of entities running nodes by stake, picking one node

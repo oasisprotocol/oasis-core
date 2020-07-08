@@ -6,6 +6,7 @@ import (
 	"sync"
 
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/address"
+	"github.com/oasisprotocol/oasis-core/go/common/crypto/multisig"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	"github.com/oasisprotocol/oasis-core/go/common/encoding/bech32"
 )
@@ -83,14 +84,16 @@ func (a Address) IsValid() bool {
 	return address.Address(a).IsValid() && !a.IsReserved()
 }
 
-// NewAddress creates a new address from the given public key, i.e. entity ID.
-func NewAddress(pk signature.PublicKey) (a Address) {
-	pkData, _ := pk.MarshalBinary()
-	return (Address)(address.NewAddress(AddressV0Context, pkData))
+// NewAddress creates a new address from the given multisig account
+// descriptor.
+func NewAddress(account *multisig.Account) (a Address) {
+	addrData := account.Hash()
+	return (Address)(address.NewAddress(AddressV0Context, addrData))
 }
 
-// NewReservedAddress creates a new reserved address from the given public key
-// or panics.
+// NewReservedAddress creates a new reserved address from the given
+// public key or panics.
+//
 // NOTE: The given public key is also blacklisted.
 func NewReservedAddress(pk signature.PublicKey) (a Address) {
 	// Blacklist the public key.
@@ -98,8 +101,9 @@ func NewReservedAddress(pk signature.PublicKey) (a Address) {
 		panic(err)
 	}
 
-	// Add the address to the reserved addresses list.
-	addr := NewAddress(pk)
+	// Add the account address to the reserved addresses list.
+	account := multisig.NewAccountFromPublicKey(pk)
+	addr := NewAddress(account)
 	if err := addr.Reserve(); err != nil {
 		panic(err)
 	}

@@ -14,6 +14,8 @@ import (
 	"github.com/spf13/viper"
 	"google.golang.org/grpc"
 
+	"github.com/oasisprotocol/oasis-core/go/common/cbor"
+	"github.com/oasisprotocol/oasis-core/go/common/crypto/multisig"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	"github.com/oasisprotocol/oasis-core/go/common/entity"
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
@@ -108,7 +110,7 @@ func doInit(cmd *cobra.Command, args []string) {
 
 	// Loosely check to see if there is an existing entity.  This isn't
 	// perfect, just "oopsie" avoidance.
-	if _, _, err = loadOrGenerateEntity(dataDir, false); err == nil {
+	if _, _, _, err = loadOrGenerateEntity(dataDir, false); err == nil {
 		switch cmdFlags.Force() {
 		case true:
 			logger.Warn("overwriting existing entity")
@@ -119,7 +121,7 @@ func doInit(cmd *cobra.Command, args []string) {
 	}
 
 	// Generate a new entity.
-	ent, signer, err := loadOrGenerateEntity(dataDir, true)
+	ent, signer, account, err := loadOrGenerateEntity(dataDir, true)
 	if err != nil {
 		logger.Error("failed to generate entity",
 			"err", err,
@@ -127,12 +129,12 @@ func doInit(cmd *cobra.Command, args []string) {
 		os.Exit(1)
 	}
 
-	if err = signAndWriteEntityGenesis(dataDir, signer, ent); err != nil {
+	if err = signAndWriteEntityGenesis(dataDir, signer, account, ent); err != nil {
 		os.Exit(1)
 	}
 
 	logger.Info("generated entity",
-		"entity", ent.ID,
+		"entity", ent.AccountAddress,
 	)
 }
 
@@ -150,7 +152,7 @@ func doUpdate(cmd *cobra.Command, args []string) {
 	}
 
 	// Load the existing entity.
-	ent, signer, err := loadOrGenerateEntity(dataDir, false)
+	ent, signer, account, err := loadOrGenerateEntity(dataDir, false)
 	if err != nil {
 		logger.Error("failed to load entity",
 			"err", err,
@@ -203,10 +205,10 @@ func doUpdate(cmd *cobra.Command, args []string) {
 			os.Exit(1)
 		}
 
-		if !ent.ID.Equal(n.EntityID) {
+		if !ent.AccountAddress.Equal(n.EntityAddress) {
 			logger.Error("entity ID mismatch, node does not belong to this entity",
-				"entity_id", ent.ID,
-				"node_entity_id", n.EntityID,
+				"entity_address", ent.AccountAddress,
+				"node_entity_address", n.EntityAddress,
 			)
 			os.Exit(1)
 		}
@@ -238,18 +240,18 @@ func doUpdate(cmd *cobra.Command, args []string) {
 	}
 
 	// Regenerate the genesis document entity registration.
-	if err = signAndWriteEntityGenesis(dataDir, signer, ent); err != nil {
+	if err = signAndWriteEntityGenesis(dataDir, signer, account, ent); err != nil {
 		os.Exit(1)
 	}
 
 	logger.Info("updated entity",
-		"entity", ent.ID,
+		"entity", ent.AccountAddress,
 	)
 }
 
-func signAndWriteEntityGenesis(dataDir string, signer signature.Signer, ent *entity.Entity) error {
+func signAndWriteEntityGenesis(dataDir string, signer signature.Signer, account *multisig.Account, ent *entity.Entity) error {
 	// Sign the entity registration for use in a genesis document.
-	signed, err := entity.SignEntity(signer, registry.RegisterGenesisEntitySignatureContext, ent)
+	signed, err := entity.SingleSignEntity(signer, account, registry.RegisterGenesisEntitySignatureContext, ent)
 	if err != nil {
 		logger.Error("failed to sign entity for genesis registration",
 			"err", err,
@@ -285,7 +287,7 @@ func doGenRegister(cmd *cobra.Command, args []string) {
 		os.Exit(1)
 	}
 
-	ent, signer, err := cmdCommon.LoadEntity(cmdSigner.Backend(), entityDir)
+	ent, signer, account, err := cmdCommon.LoadEntity(cmdSigner.Backend(), entityDir)
 	if err != nil {
 		logger.Error("failed to load entity",
 			"err", err,
@@ -294,7 +296,7 @@ func doGenRegister(cmd *cobra.Command, args []string) {
 	}
 	defer signer.Reset()
 
-	signed, err := entity.SignEntity(signer, registry.RegisterEntitySignatureContext, ent)
+	signed, err := entity.SingleSignEntity(signer, account, registry.RegisterEntitySignatureContext, ent)
 	if err != nil {
 		logger.Error("failed to sign entity descriptor",
 			"err", err,
@@ -345,20 +347,20 @@ func doList(cmd *cobra.Command, args []string) {
 			b, _ := json.Marshal(ent)
 			s = string(b)
 		default:
-			s = ent.ID.String()
+			s = ent.AccountAddress.String()
 		}
 
 		fmt.Printf("%v\n", s)
 	}
 }
 
-func loadOrGenerateEntity(dataDir string, generate bool) (*entity.Entity, signature.Signer, error) {
+func loadOrGenerateEntity(dataDir string, generate bool) (*entity.Entity, signature.Signer, *multisig.Account, error) {
 	if cmdFlags.DebugTestEntity() {
 		return entity.TestEntity()
 	}
 
 	if viper.GetBool(cfgAllowEntitySignedNodes) && !cmdFlags.DebugDontBlameOasis() {
-		return nil, nil, fmt.Errorf("loadOrGenerateEntity: sanity check failed: one or more unsafe debug flags set")
+		return nil, nil, nil, fmt.Errorf("loadOrGenerateEntity: sanity check failed: one or more unsafe debug flags set")
 	}
 
 	entityDir, err := cmdSigner.CLIDirOrPwd()
@@ -370,22 +372,24 @@ func loadOrGenerateEntity(dataDir string, generate bool) (*entity.Entity, signat
 	}
 	entitySignerFactory, err := cmdSigner.NewFactory(cmdSigner.Backend(), entityDir, signature.SignerEntity)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 
 	if generate {
 		template := &entity.Entity{
-			DescriptorVersion:      entity.LatestEntityDescriptorVersion,
+			Versioned: cbor.Versioned{
+				V: entity.LatestEntityDescriptorVersion,
+			},
 			AllowEntitySignedNodes: viper.GetBool(cfgAllowEntitySignedNodes),
 		}
 
 		if viper.GetBool(CfgReuseSigner) {
 			signer, err := entitySignerFactory.Load(signature.SignerEntity)
 			if err != nil {
-				return nil, nil, fmt.Errorf("loadOrGenerateEntity: failed to load existing signer: %w", err)
+				return nil, nil, nil, fmt.Errorf("loadOrGenerateEntity: failed to load existing signer: %w", err)
 			}
-			ent, err := entity.GenerateWithSigner(dataDir, signer, template)
-			return ent, signer, err
+			ent, account, err := entity.GenerateWithSigner(dataDir, signer, template)
+			return ent, signer, account, err
 		}
 		return entity.Generate(dataDir, entitySignerFactory, template)
 	}

@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/oasisprotocol/oasis-core/go/common"
+	"github.com/oasisprotocol/oasis-core/go/common/cbor"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	"github.com/oasisprotocol/oasis-core/go/common/identity"
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
@@ -42,10 +43,12 @@ func registryRegisterNode(svc service.TendermintService, id *identity.Identity, 
 	}
 
 	nodeDesc := &node.Node{
-		DescriptorVersion: node.LatestNodeDescriptorVersion,
-		ID:                id.NodeSigner.Public(),
-		EntityID:          entityID,
-		Expiration:        1000,
+		Versioned: cbor.Versioned{
+			V: node.LatestNodeDescriptorVersion,
+		},
+		ID:            id.NodeSigner.Public(),
+		EntityAddress: entityID,
+		Expiration:    1000,
 		TLS: node.TLSInfo{
 			PubKey:    id.GetTLSSigner().Public(),
 			Addresses: tlsAddresses,

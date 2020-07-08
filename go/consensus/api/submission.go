@@ -7,6 +7,7 @@ import (
 
 	"github.com/cenkalti/backoff/v4"
 
+	"github.com/oasisprotocol/oasis-core/go/common/crypto/multisig"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	"github.com/oasisprotocol/oasis-core/go/common/errors"
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
@@ -64,9 +65,10 @@ type submissionManager struct {
 func (m *submissionManager) signAndSubmitTx(ctx context.Context, signer signature.Signer, tx *transaction.Transaction) error {
 	// Update transaction nonce.
 	var err error
-	signerAddr := staking.NewAddress(signer.Public())
+	account := multisig.NewAccountFromPublicKey(signer.Public())
+	accountAddr := staking.NewAddress(account)
 
-	tx.Nonce, err = m.backend.GetSignerNonce(ctx, &GetSignerNonceRequest{AccountAddress: signerAddr, Height: HeightLatest})
+	tx.Nonce, err = m.backend.GetSignerNonce(ctx, &GetSignerNonceRequest{AccountAddress: accountAddr, Height: HeightLatest})
 	if err != nil {
 		if errors.Is(err, ErrNoCommittedBlocks) {
 			// No committed blocks available, retry submission.
@@ -80,7 +82,7 @@ func (m *submissionManager) signAndSubmitTx(ctx context.Context, signer signatur
 	if tx.Fee == nil {
 		// Estimate amount of gas needed to perform the update.
 		var gas transaction.Gas
-		gas, err = m.backend.EstimateGas(ctx, &EstimateGasRequest{Signer: signer.Public(), Transaction: tx})
+		gas, err = m.backend.EstimateGas(ctx, &EstimateGasRequest{Account: *account, Transaction: tx})
 		if err != nil {
 			return fmt.Errorf("failed to estimate gas: %w", err)
 		}
@@ -114,7 +116,7 @@ func (m *submissionManager) signAndSubmitTx(ctx context.Context, signer signatur
 	}
 
 	// Sign the transaction.
-	sigTx, err := transaction.Sign(signer, tx)
+	signedTx, err := transaction.SingleSign(signer, account, tx)
 	if err != nil {
 		m.logger.Error("failed to sign transaction",
 			"err", err,
@@ -122,11 +124,11 @@ func (m *submissionManager) signAndSubmitTx(ctx context.Context, signer signatur
 		return backoff.Permanent(err)
 	}
 
-	if err = m.backend.SubmitTx(ctx, sigTx); err != nil {
+	if err = m.backend.SubmitTx(ctx, signedTx); err != nil {
 		if errors.Is(err, transaction.ErrInvalidNonce) {
 			// Invalid nonce, retry submission.
 			m.logger.Debug("retrying transaction submission due to invalid nonce",
-				"account_address", signerAddr,
+				"account_address", accountAddr,
 				"nonce", tx.Nonce,
 			)
 			return err

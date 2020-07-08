@@ -4,6 +4,7 @@ import (
 	"reflect"
 
 	"github.com/oasisprotocol/oasis-core/go/common/cbor"
+	"github.com/oasisprotocol/oasis-core/go/common/crypto/multisig"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	memorySigner "github.com/oasisprotocol/oasis-core/go/common/crypto/signature/signers/memory"
 	"github.com/oasisprotocol/oasis-core/go/consensus/api/transaction"
@@ -32,7 +33,8 @@ func MakeTestVector(kind string, tx *transaction.Transaction) TestVector {
 
 // MakeTestVectorWithSigner generates a new test vector from a transction using a specific signer.
 func MakeTestVectorWithSigner(kind string, tx *transaction.Transaction, signer signature.Signer) TestVector {
-	sigTx, err := transaction.Sign(signer, tx)
+	account := multisig.NewAccountFromPublicKey(signer.Public())
+	sigTx, err := transaction.SingleSign(signer, account, tx)
 	if err != nil {
 		panic(err)
 	}

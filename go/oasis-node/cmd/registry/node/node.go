@@ -15,6 +15,7 @@ import (
 	"github.com/spf13/viper"
 	"google.golang.org/grpc"
 
+	"github.com/oasisprotocol/oasis-core/go/common/cbor"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	fileSigner "github.com/oasisprotocol/oasis-core/go/common/crypto/signature/signers/file"
 	"github.com/oasisprotocol/oasis-core/go/common/entity"
@@ -27,11 +28,12 @@ import (
 	cmdGrpc "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/grpc"
 	cmdSigner "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/signer"
 	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
+	staking "github.com/oasisprotocol/oasis-core/go/staking/api"
 	"github.com/oasisprotocol/oasis-core/go/worker/common/configparser"
 )
 
 const (
-	CfgEntityID         = "node.entity_id"
+	CfgEntityAddress    = "node.entity_address"
 	CfgExpiration       = "node.expiration"
 	CfgTLSAddress       = "node.tls_address"
 	CfgP2PAddress       = "node.p2p_address"
@@ -107,8 +109,8 @@ func doInit(cmd *cobra.Command, args []string) { // nolint: gocyclo
 
 	// Get the entity ID or entity.
 	var (
-		entityDir string
-		entityID  signature.PublicKey
+		entityDir  string
+		entityAddr staking.Address
 
 		entity       *entity.Entity
 		entitySigner signature.Signer
@@ -116,14 +118,14 @@ func doInit(cmd *cobra.Command, args []string) { // nolint: gocyclo
 		isSelfSigned bool
 	)
 
-	if idStr := viper.GetString(CfgEntityID); idStr != "" {
-		if err = entityID.UnmarshalText([]byte(idStr)); err != nil {
-			logger.Error("malformed entity ID",
+	if addrStr := viper.GetString(CfgEntityAddress); addrStr != "" {
+		if err = entityAddr.UnmarshalText([]byte(addrStr)); err != nil {
+			logger.Error("malformed entity address",
 				"err", err,
 			)
 			os.Exit(1)
 		}
-		logger.Info("entity ID provided, assuming self-signed node registrations")
+		logger.Info("entity address provided, assuming self-signed node registrations")
 
 		isSelfSigned = true
 	} else {
@@ -134,7 +136,7 @@ func doInit(cmd *cobra.Command, args []string) { // nolint: gocyclo
 			)
 			os.Exit(1)
 		}
-		entity, entitySigner, err = cmdCommon.LoadEntity(cmdSigner.Backend(), entityDir)
+		entity, entitySigner, _, err = cmdCommon.LoadEntity(cmdSigner.Backend(), entityDir)
 		if err != nil {
 			logger.Error("failed to load entity",
 				"err", err,
@@ -142,7 +144,7 @@ func doInit(cmd *cobra.Command, args []string) { // nolint: gocyclo
 			os.Exit(1)
 		}
 
-		entityID = entity.ID
+		entityAddr = entity.AccountAddress
 		isSelfSigned = !entity.AllowEntitySignedNodes
 		if viper.GetBool(CfgSelfSigned) {
 			isSelfSigned = true
@@ -182,10 +184,12 @@ func doInit(cmd *cobra.Command, args []string) { // nolint: gocyclo
 	}
 
 	n := &node.Node{
-		DescriptorVersion: node.LatestNodeDescriptorVersion,
-		ID:                nodeIdentity.NodeSigner.Public(),
-		EntityID:          entityID,
-		Expiration:        viper.GetUint64(CfgExpiration),
+		Versioned: cbor.Versioned{
+			V: node.LatestNodeDescriptorVersion,
+		},
+		ID:            nodeIdentity.NodeSigner.Public(),
+		EntityAddress: entityAddr,
+		Expiration:    viper.GetUint64(CfgExpiration),
 		TLS: node.TLSInfo{
 			PubKey:     nodeIdentity.GetTLSSigner().Public(),
 			NextPubKey: nextPubKey,
@@ -423,7 +427,7 @@ func Register(parentCmd *cobra.Command) {
 }
 
 func init() {
-	flags.String(CfgEntityID, "", "Entity ID that controls this node")
+	flags.String(CfgEntityAddress, "", "Entity address that controls this node")
 	flags.Uint64(CfgExpiration, 0, "Epoch that the node registration should expire")
 	flags.StringSlice(CfgTLSAddress, nil, "Address(es) the node can be reached over TLS of the form [PubKey@]ip:port (where PubKey@ part is optional and represents base64 encoded node TLS public key)")
 	flags.StringSlice(CfgP2PAddress, nil, "Address(es) the node can be reached over the P2P transport")

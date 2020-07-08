@@ -108,7 +108,7 @@ func SignAndSaveTx(tx *transaction.Transaction) {
 		)
 		os.Exit(1)
 	}
-	_, signer, err := cmdCommon.LoadEntity(cmdSigner.Backend(), entityDir)
+	_, signer, account, err := cmdCommon.LoadEntity(cmdSigner.Backend(), entityDir)
 	if err != nil {
 		logger.Error("failed to load account entity",
 			"err", err,
@@ -117,7 +117,7 @@ func SignAndSaveTx(tx *transaction.Transaction) {
 	}
 	defer signer.Reset()
 
-	sigTx, err := transaction.Sign(signer, tx)
+	sigTx, err := transaction.SingleSign(signer, account, tx)
 	if err != nil {
 		logger.Error("failed to sign transaction",
 			"err", err,

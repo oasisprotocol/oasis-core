@@ -13,6 +13,8 @@ import (
 	"google.golang.org/grpc"
 
 	"github.com/oasisprotocol/oasis-core/go/common/cbor"
+	"github.com/oasisprotocol/oasis-core/go/common/crypto/multisig"
+	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
 	"github.com/oasisprotocol/oasis-core/go/consensus/api/transaction"
@@ -149,13 +151,16 @@ func doEstimateGas(cmd *cobra.Command, args []string) {
 	req := consensus.EstimateGasRequest{
 		Transaction: loadUnsignedTx(),
 	}
-	if err := req.Signer.UnmarshalText([]byte(signerPub)); err != nil {
+
+	var pk signature.PublicKey
+	if err := pk.UnmarshalText([]byte(signerPub)); err != nil {
 		logger.Error("failed to unmarshal signer public key",
 			"err", err,
 			"signer_pub_str", signerPub,
 		)
 		os.Exit(1)
 	}
+	req.Account = *multisig.NewAccountFromPublicKey(pk)
 	gas, err := client.EstimateGas(context.Background(), &req)
 	if err != nil {
 		logger.Error("failed to estimate gas",

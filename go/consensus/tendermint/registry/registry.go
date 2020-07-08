@@ -56,7 +56,7 @@ func (sc *serviceClient) Querier() *app.QueryFactory {
 	return sc.querier
 }
 
-func (sc *serviceClient) GetEntity(ctx context.Context, query *api.IDQuery) (*entity.Entity, error) {
+func (sc *serviceClient) GetEntity(ctx context.Context, query *api.AccountQuery) (*entity.Entity, error) {
 	q, err := sc.querier.QueryAt(ctx, query.Height)
 	if err != nil {
 		return nil, err

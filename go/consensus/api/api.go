@@ -8,6 +8,7 @@ import (
 
 	beacon "github.com/oasisprotocol/oasis-core/go/beacon/api"
 	"github.com/oasisprotocol/oasis-core/go/common/cbor"
+	"github.com/oasisprotocol/oasis-core/go/common/crypto/multisig"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	"github.com/oasisprotocol/oasis-core/go/common/errors"
 	"github.com/oasisprotocol/oasis-core/go/common/node"
@@ -246,7 +247,7 @@ func NewConsensusEvidence(inner interface{}) ConsensusEvidence {
 
 // EstimateGasRequest is a EstimateGas request.
 type EstimateGasRequest struct {
-	Signer      signature.PublicKey      `json:"signer"`
+	Account     multisig.Account         `json:"account"`
 	Transaction *transaction.Transaction `json:"transaction"`
 }
 

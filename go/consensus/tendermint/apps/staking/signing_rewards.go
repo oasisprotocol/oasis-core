@@ -3,7 +3,6 @@ package staking
 import (
 	"fmt"
 
-	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	abciAPI "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/api"
 	stakingState "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/apps/staking/state"
 	epochtime "github.com/oasisprotocol/oasis-core/go/epochtime/api"
@@ -13,14 +12,14 @@ import (
 func (app *stakingApplication) updateEpochSigning(
 	ctx *abciAPI.Context,
 	stakeState *stakingState.MutableState,
-	signingEntities []signature.PublicKey,
+	signingAddresses []staking.Address,
 ) error {
 	epochSigning, err := stakeState.EpochSigning(ctx)
 	if err != nil {
 		return fmt.Errorf("loading epoch signing info: %w", err)
 	}
 
-	if err := epochSigning.Update(signingEntities); err != nil {
+	if err := epochSigning.Update(signingAddresses); err != nil {
 		return err
 	}
 
@@ -58,19 +57,15 @@ func (app *stakingApplication) rewardEpochSigning(ctx *abciAPI.Context, time epo
 		return nil
 	}
 
-	eligibleEntities, err := epochSigning.EligibleEntities(
+	eligibleAddresses, err := epochSigning.EligibleAddresses(
 		params.SigningRewardThresholdNumerator,
 		params.SigningRewardThresholdDenominator,
 	)
 	if err != nil {
 		return fmt.Errorf("determining eligibility: %w", err)
 	}
-	var eligibleEntitiesAddrs []staking.Address
-	for _, entity := range eligibleEntities {
-		eligibleEntitiesAddrs = append(eligibleEntitiesAddrs, staking.NewAddress(entity))
-	}
 
-	if err := stakeState.AddRewards(ctx, time, &params.RewardFactorEpochSigned, eligibleEntitiesAddrs); err != nil {
+	if err := stakeState.AddRewards(ctx, time, &params.RewardFactorEpochSigned, eligibleAddresses); err != nil {
 		return fmt.Errorf("adding rewards: %w", err)
 	}
 

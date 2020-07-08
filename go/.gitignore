@@ -11,3 +11,6 @@ storage/mkvs/interop/mkvs-test-helpers
 
 extra/extract-metrics/extract-metrics
 extra/stats/stats
+
+registry/gen_vectors/gen_vectors
+staking/gen_vectors/gen_vectors

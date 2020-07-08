@@ -4,7 +4,6 @@ import (
 	"fmt"
 
 	"github.com/oasisprotocol/oasis-core/go/common/cbor"
-	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	"github.com/oasisprotocol/oasis-core/go/common/quantity"
 	abciAPI "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/api"
 	stakingState "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/apps/staking/state"
@@ -17,7 +16,7 @@ import (
 func (app *stakingApplication) disburseFeesP(
 	ctx *abciAPI.Context,
 	stakeState *stakingState.MutableState,
-	proposerEntity *signature.PublicKey,
+	proposerEntity *staking.Address,
 	totalFees *quantity.Quantity,
 ) error {
 	ctx.Logger().Debug("disbursing proposer fees",
@@ -64,22 +63,21 @@ func (app *stakingApplication) disburseFeesP(
 	// Pay the proposer.
 	feeProposerAmt := totalFees.Clone()
 	if proposerEntity != nil && !feeProposerAmt.IsZero() {
-		proposerAddr := staking.NewAddress(*proposerEntity)
-		proposerAcct, err := stakeState.Account(ctx, proposerAddr)
+		proposerAcct, err := stakeState.Account(ctx, *proposerEntity)
 		if err != nil {
 			return fmt.Errorf("failed to fetch proposer account: %w", err)
 		}
 		if err = quantity.Move(&proposerAcct.General.Balance, totalFees, feeProposerAmt); err != nil {
 			return fmt.Errorf("move feeProposerAmt: %w", err)
 		}
-		if err = stakeState.SetAccount(ctx, proposerAddr, proposerAcct); err != nil {
+		if err = stakeState.SetAccount(ctx, *proposerEntity, proposerAcct); err != nil {
 			return fmt.Errorf("failed to set account: %w", err)
 		}
 
 		// Emit transfer event.
 		evt := &staking.TransferEvent{
 			From:   staking.FeeAccumulatorAddress,
-			To:     proposerAddr,
+			To:     *proposerEntity,
 			Amount: *feeProposerAmt,
 		}
 		ctx.EmitEvent(abciAPI.NewEventBuilder(app.Name()).Attribute(KeyTransfer, cbor.Marshal(evt)))
@@ -117,9 +115,9 @@ func (app *stakingApplication) disburseFeesP(
 func (app *stakingApplication) disburseFeesVQ(
 	ctx *abciAPI.Context,
 	stakeState *stakingState.MutableState,
-	proposerEntity *signature.PublicKey,
+	proposerEntity *staking.Address,
 	numEligibleValidators int,
-	votingEntities []signature.PublicKey,
+	votingAddresses []staking.Address,
 ) error {
 	lastBlockFees, err := stakeState.LastBlockFees(ctx)
 	if err != nil {
@@ -129,7 +127,7 @@ func (app *stakingApplication) disburseFeesVQ(
 	ctx.Logger().Debug("disbursing signer and next proposer fees",
 		"total_amount", lastBlockFees,
 		"num_eligible_validators", numEligibleValidators,
-		"num_voting_entities", len(votingEntities),
+		"num_voting_addresses", len(votingAddresses),
 	)
 	if lastBlockFees.IsZero() {
 		// Nothing to disburse.
@@ -168,10 +166,10 @@ func (app *stakingApplication) disburseFeesVQ(
 	}
 
 	// Multiply to get the next proposer's total payment.
-	numVotingEntities := len(votingEntities)
+	numVotingAddresses := len(votingAddresses)
 	var nVEQ quantity.Quantity
-	if err = nVEQ.FromInt64(int64(numVotingEntities)); err != nil {
-		return fmt.Errorf("import numVotingEntities %d: %w", numVotingEntities, err)
+	if err = nVEQ.FromInt64(int64(numVotingAddresses)); err != nil {
+		return fmt.Errorf("import numVotingAddresses %d: %w", numVotingAddresses, err)
 	}
 	nextProposerTotal := shareNextProposer.Clone()
 	if err = nextProposerTotal.Mul(&nVEQ); err != nil {
@@ -180,22 +178,21 @@ func (app *stakingApplication) disburseFeesVQ(
 
 	// Pay the next proposer.
 	if !nextProposerTotal.IsZero() && proposerEntity != nil {
-		proposerAddr := staking.NewAddress(*proposerEntity)
-		proposerAcct, err := stakeState.Account(ctx, proposerAddr)
+		proposerAcct, err := stakeState.Account(ctx, *proposerEntity)
 		if err != nil {
 			return fmt.Errorf("failed to fetch next proposer account: %w", err)
 		}
 		if err = quantity.Move(&proposerAcct.General.Balance, lastBlockFees, nextProposerTotal); err != nil {
 			return fmt.Errorf("move nextProposerTotal: %w", err)
 		}
-		if err = stakeState.SetAccount(ctx, proposerAddr, proposerAcct); err != nil {
+		if err = stakeState.SetAccount(ctx, *proposerEntity, proposerAcct); err != nil {
 			return fmt.Errorf("failed to set next proposer account: %w", err)
 		}
 
 		// Emit transfer event.
 		evt := &staking.TransferEvent{
 			From:   staking.FeeAccumulatorAddress,
-			To:     proposerAddr,
+			To:     *proposerEntity,
 			Amount: *nextProposerTotal,
 		}
 		ctx.EmitEvent(abciAPI.NewEventBuilder(app.Name()).Attribute(KeyTransfer, cbor.Marshal(evt)))
@@ -203,23 +200,22 @@ func (app *stakingApplication) disburseFeesVQ(
 
 	// Pay the voters.
 	if !shareVote.IsZero() {
-		for _, voterEntity := range votingEntities {
-			voterAddr := staking.NewAddress(voterEntity)
-			voterAcct, err := stakeState.Account(ctx, voterAddr)
+		for _, voterAddress := range votingAddresses {
+			voterAcct, err := stakeState.Account(ctx, voterAddress)
 			if err != nil {
-				return fmt.Errorf("failed to fetch voter account %s: %w", voterAddr, err)
+				return fmt.Errorf("failed to fetch voter account %s: %w", voterAddress, err)
 			}
 			if err = quantity.Move(&voterAcct.General.Balance, lastBlockFees, shareVote); err != nil {
 				return fmt.Errorf("move shareVote: %w", err)
 			}
-			if err = stakeState.SetAccount(ctx, voterAddr, voterAcct); err != nil {
-				return fmt.Errorf("failed to set voter account %s: %w", voterAddr, err)
+			if err = stakeState.SetAccount(ctx, voterAddress, voterAcct); err != nil {
+				return fmt.Errorf("failed to set voter account %s: %w", voterAddress, err)
 			}
 
 			// Emit transfer event.
 			evt := &staking.TransferEvent{
 				From:   staking.FeeAccumulatorAddress,
-				To:     voterAddr,
+				To:     voterAddress,
 				Amount: *shareVote,
 			}
 			ctx.EmitEvent(abciAPI.NewEventBuilder(app.Name()).Attribute(KeyTransfer, cbor.Marshal(evt)))

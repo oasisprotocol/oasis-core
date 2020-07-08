@@ -587,7 +587,7 @@ func (t *tendermintService) SubmitEvidence(ctx context.Context, evidence consens
 }
 
 func (t *tendermintService) EstimateGas(ctx context.Context, req *consensusAPI.EstimateGasRequest) (transaction.Gas, error) {
-	return t.mux.EstimateGas(req.Signer, req.Transaction)
+	return t.mux.EstimateGas(&req.Account, req.Transaction)
 }
 
 func (t *tendermintService) subscribe(subscriber string, query tmpubsub.Query) (tmtypes.Subscription, error) {
@@ -1359,8 +1359,7 @@ func genesisToTendermint(d *genesisAPI.Document) (*tmtypes.GenesisDoc, error) {
 			power = 1
 		} else {
 			var stake *quantity.Quantity
-			acctAddr := stakingAPI.NewAddress(openedNode.EntityID)
-			if account, ok := d.Staking.Ledger[acctAddr]; ok {
+			if account, ok := d.Staking.Ledger[openedNode.EntityAddress]; ok {
 				stake = account.Escrow.Active.Balance.Clone()
 			} else {
 				// If all balances and stuff are zero, it's permitted not to have an account in the ledger at all.
@@ -1368,9 +1367,8 @@ func genesisToTendermint(d *genesisAPI.Document) (*tmtypes.GenesisDoc, error) {
 			}
 			power, err = schedulerAPI.VotingPowerFromStake(stake)
 			if err != nil {
-				return nil, fmt.Errorf("tendermint: computing voting power for entity %s with account %s and stake %v: %w",
-					openedNode.EntityID,
-					acctAddr,
+				return nil, fmt.Errorf("tendermint: computing voting power for entity %s and stake %v: %w",
+					openedNode.EntityAddress,
 					stake,
 					err,
 				)

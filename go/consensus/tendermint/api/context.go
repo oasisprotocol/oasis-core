@@ -8,7 +8,7 @@ import (
 
 	"github.com/tendermint/tendermint/abci/types"
 
-	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
+	"github.com/oasisprotocol/oasis-core/go/common/crypto/multisig"
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
 	"github.com/oasisprotocol/oasis-core/go/storage/mkvs"
 )
@@ -66,7 +66,7 @@ type Context struct {
 	events        []types.Event
 	gasAccountant GasAccountant
 
-	txSigner signature.PublicKey
+	txAccount *multisig.Account
 
 	appState    ApplicationState
 	state       mkvs.Tree
@@ -146,29 +146,29 @@ func (c *Context) Data() interface{} {
 	return c.data
 }
 
-// TxSigner returns the authenticated transaction signer.
+// TxAccount returns the authenticated transaction account.
 //
 // In case the method is called on a non-transaction context, this method
 // will panic.
-func (c *Context) TxSigner() signature.PublicKey {
+func (c *Context) TxAccount() *multisig.Account {
 	switch c.mode {
 	case ContextCheckTx, ContextDeliverTx, ContextSimulateTx:
-		return c.txSigner
+		return c.txAccount
 	default:
 		panic("context: only available in transaction context")
 	}
 }
 
-// SetTxSigner sets the authenticated transaction signer.
+// SetTxAccount sets the authenticated transaction account.
 //
-// This must only be done after verifying the transaction signature.
+// This must only be done after verifying the transaction signature(s).
 //
 // In case the method is called on a non-transaction context, this method
 // will panic.
-func (c *Context) SetTxSigner(txSigner signature.PublicKey) {
+func (c *Context) SetTxAccount(txAccount *multisig.Account) {
 	switch c.mode {
 	case ContextCheckTx, ContextDeliverTx, ContextSimulateTx:
-		c.txSigner = txSigner
+		c.txAccount = txAccount
 	default:
 		panic("context: only available in transaction context")
 	}

@@ -9,6 +9,7 @@ import (
 	registryState "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/apps/registry/state"
 	"github.com/oasisprotocol/oasis-core/go/keymanager/api"
 	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
+	staking "github.com/oasisprotocol/oasis-core/go/staking/api"
 )
 
 func (app *keymanagerApplication) updatePolicy(
@@ -27,7 +28,7 @@ func (app *keymanagerApplication) updatePolicy(
 	}
 
 	// Ensure that the tx signer is the key manager owner.
-	if !rt.EntityID.Equal(ctx.TxSigner()) {
+	if !rt.EntityAddress.Equal(staking.NewAddress(ctx.TxAccount())) {
 		return fmt.Errorf("keymanager: invalid update signer: %s", sigPol.Policy.ID)
 	}
 

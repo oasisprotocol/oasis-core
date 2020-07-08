@@ -7,6 +7,7 @@ import (
 
 	"google.golang.org/grpc"
 
+	"github.com/oasisprotocol/oasis-core/go/common/crypto/multisig"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	memorySigner "github.com/oasisprotocol/oasis-core/go/common/crypto/signature/signers/memory"
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
@@ -34,11 +35,13 @@ type transfer struct {
 
 	accounts []struct {
 		signer          signature.Signer
+		account         *multisig.Account
 		address         staking.Address
 		reckonedNonce   uint64
 		reckonedBalance quantity.Quantity
 	}
-	fundingAccount signature.Signer
+	fundingAccount *multisig.Account
+	fundingSigner  signature.Signer
 }
 
 func (t *transfer) doTransferTx(ctx context.Context, fromIdx, toIdx int) error {
@@ -57,7 +60,7 @@ func (t *transfer) doTransferTx(ctx context.Context, fromIdx, toIdx int) error {
 		"to", to.address,
 		"base_units", transferAmount,
 	)
-	if err := fundSignAndSubmitTx(ctx, t.logger, t.consensus, from.signer, tx, t.fundingAccount); err != nil {
+	if err := fundSignAndSubmitTx(ctx, t.logger, t.consensus, from.account, from.signer, tx, t.fundingAccount, t.fundingSigner); err != nil {
 		t.logger.Error("failed to sign and submit transfer transaction",
 			"tx", tx,
 			"signer", from.signer.Public(),
@@ -84,7 +87,7 @@ func (t *transfer) doBurnTx(ctx context.Context, idx int) error {
 	acc := &t.accounts[idx]
 
 	// Fund account with stake that will be burned.
-	if err := transferFunds(ctx, t.logger, t.consensus, t.fundingAccount, acc.address, int64(transferBurnAmount)); err != nil {
+	if err := transferFunds(ctx, t.logger, t.consensus, t.fundingAccount, t.fundingSigner, acc.address, int64(transferBurnAmount)); err != nil {
 		return fmt.Errorf("workload/transfer: account funding failure: %w", err)
 	}
 
@@ -99,7 +102,7 @@ func (t *transfer) doBurnTx(ctx context.Context, idx int) error {
 		"account", acc.address,
 		"base_units", transferBurnAmount,
 	)
-	if err := fundSignAndSubmitTx(ctx, t.logger, t.consensus, acc.signer, tx, t.fundingAccount); err != nil {
+	if err := fundSignAndSubmitTx(ctx, t.logger, t.consensus, acc.account, acc.signer, tx, t.fundingAccount, t.fundingSigner); err != nil {
 		t.logger.Error("failed to sign and submit transfer transaction",
 			"tx", tx,
 			"signer", acc.signer.Public(),
@@ -115,7 +118,8 @@ func (t *transfer) Run(
 	rng *rand.Rand,
 	conn *grpc.ClientConn,
 	cnsc consensus.ClientBackend,
-	fundingAccount signature.Signer,
+	fundingAccount *multisig.Account,
+	fundingSigner signature.Signer,
 ) error {
 	ctx := context.Background()
 
@@ -123,11 +127,13 @@ func (t *transfer) Run(
 	t.consensus = cnsc
 	t.accounts = make([]struct {
 		signer          signature.Signer
+		account         *multisig.Account
 		address         staking.Address
 		reckonedNonce   uint64
 		reckonedBalance quantity.Quantity
 	}, transferNumAccounts)
 	t.fundingAccount = fundingAccount
+	t.fundingSigner = fundingSigner
 
 	fac := memorySigner.NewFactory()
 	// Load all the keys up front. Like, how annoyed would you be if down the line one of them turned out to be
@@ -138,14 +144,15 @@ func (t *transfer) Run(
 			return fmt.Errorf("memory signer factory Generate account %d: %w", i, err)
 		}
 		t.accounts[i].signer = signer
-		t.accounts[i].address = staking.NewAddress(signer.Public())
+		t.accounts[i].account = multisig.NewAccountFromPublicKey(signer.Public())
+		t.accounts[i].address = staking.NewAddress(t.accounts[i].account)
 	}
 
 	// Read all the account info up front.
 	stakingClient := staking.NewStakingClient(conn)
 	for i := range t.accounts {
 		fundAmount := transferAmount // funds for for a transfer
-		if err := transferFunds(ctx, t.logger, cnsc, t.fundingAccount, t.accounts[i].address, int64(fundAmount)); err != nil {
+		if err := transferFunds(ctx, t.logger, cnsc, t.fundingAccount, t.fundingSigner, t.accounts[i].address, int64(fundAmount)); err != nil {
 			return fmt.Errorf("workload/transfer: account funding failure: %w", err)
 		}
 		var account *staking.Account

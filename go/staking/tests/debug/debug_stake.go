@@ -5,6 +5,7 @@ import (
 	"math"
 	"math/big"
 
+	"github.com/oasisprotocol/oasis-core/go/common/crypto/multisig"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	memorySigner "github.com/oasisprotocol/oasis-core/go/common/crypto/signature/signers/memory"
 	"github.com/oasisprotocol/oasis-core/go/common/quantity"
@@ -65,9 +66,11 @@ var (
 	}
 
 	DebugStateSrcSigner   = mustGenerateSigner()
-	DebugStateSrcAddress  = api.NewAddress(DebugStateSrcSigner.Public())
+	DebugStateSrcAddress  = api.NewAddress(DebugStateSrcAccount)
+	DebugStateSrcAccount  = multisig.NewAccountFromPublicKey(DebugStateSrcSigner.Public())
 	destSigner            = mustGenerateSigner()
-	DebugStateDestAddress = api.NewAddress(destSigner.Public())
+	destAccount           = multisig.NewAccountFromPublicKey(destSigner.Public())
+	DebugStateDestAddress = api.NewAddress(destAccount)
 )
 
 func QtyFromInt(n int) quantity.Quantity {

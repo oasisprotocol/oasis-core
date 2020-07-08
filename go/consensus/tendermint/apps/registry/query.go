@@ -11,11 +11,12 @@ import (
 	abciAPI "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/api"
 	registryState "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/apps/registry/state"
 	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
+	staking "github.com/oasisprotocol/oasis-core/go/staking/api"
 )
 
 // Query is the registry query interface.
 type Query interface {
-	Entity(context.Context, signature.PublicKey) (*entity.Entity, error)
+	Entity(context.Context, staking.Address) (*entity.Entity, error)
 	Entities(context.Context) ([]*entity.Entity, error)
 	Node(context.Context, signature.PublicKey) (*node.Node, error)
 	NodeByConsensusAddress(context.Context, []byte) (*node.Node, error)
@@ -46,8 +47,8 @@ type registryQuerier struct {
 	height     int64
 }
 
-func (rq *registryQuerier) Entity(ctx context.Context, id signature.PublicKey) (*entity.Entity, error) {
-	return rq.state.Entity(ctx, id)
+func (rq *registryQuerier) Entity(ctx context.Context, address staking.Address) (*entity.Entity, error) {
+	return rq.state.Entity(ctx, address)
 }
 
 func (rq *registryQuerier) Entities(ctx context.Context) ([]*entity.Entity, error) {

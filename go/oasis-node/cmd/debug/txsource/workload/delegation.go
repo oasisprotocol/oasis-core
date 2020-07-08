@@ -8,6 +8,7 @@ import (
 
 	"google.golang.org/grpc"
 
+	"github.com/oasisprotocol/oasis-core/go/common/crypto/multisig"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	memorySigner "github.com/oasisprotocol/oasis-core/go/common/crypto/signature/signers/memory"
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
@@ -31,10 +32,12 @@ type delegation struct {
 		signer        signature.Signer
 		reckonedNonce uint64
 		debondEndTime uint64
+		account       *multisig.Account
 		address       staking.Address
 		delegatedTo   staking.Address
 	}
-	fundingAccount signature.Signer
+	fundingAccount *multisig.Account
+	fundingSigner  signature.Signer
 }
 
 func (d *delegation) doEscrowTx(ctx context.Context, rng *rand.Rand, cnsc consensus.ClientBackend) error {
@@ -82,7 +85,7 @@ func (d *delegation) doEscrowTx(ctx context.Context, rng *rand.Rand, cnsc consen
 	d.accounts[selectedIdx].reckonedNonce++
 	// We only do one escrow per account at a time, so `delegateAmount`
 	// funds (that are Escrowed) should already be in the balance.
-	if err := fundSignAndSubmitTx(ctx, d.logger, cnsc, d.accounts[selectedIdx].signer, tx, d.fundingAccount); err != nil {
+	if err := fundSignAndSubmitTx(ctx, d.logger, cnsc, d.accounts[selectedIdx].account, d.accounts[selectedIdx].signer, tx, d.fundingAccount, d.fundingSigner); err != nil {
 		d.logger.Error("failed to sign and submit escrow transaction",
 			"tx", tx,
 			"signer", d.accounts[selectedIdx].signer.Public(),
@@ -138,7 +141,7 @@ func (d *delegation) doReclaimEscrowTx(ctx context.Context, rng *rand.Rand, cnsc
 	}
 	tx := staking.NewReclaimEscrowTx(d.accounts[selectedIdx].reckonedNonce, &transaction.Fee{}, reclaim)
 	d.accounts[selectedIdx].reckonedNonce++
-	if err = fundSignAndSubmitTx(ctx, d.logger, cnsc, d.accounts[selectedIdx].signer, tx, d.fundingAccount); err != nil {
+	if err = fundSignAndSubmitTx(ctx, d.logger, cnsc, d.accounts[selectedIdx].account, d.accounts[selectedIdx].signer, tx, d.fundingAccount, d.fundingSigner); err != nil {
 		d.logger.Error("failed to sign and submit reclaim escrow transaction",
 			"tx", tx,
 			"signer", d.accounts[selectedIdx].signer.Public(),
@@ -178,18 +181,21 @@ func (d *delegation) Run(
 	rng *rand.Rand,
 	conn *grpc.ClientConn,
 	cnsc consensus.ClientBackend,
-	fundingAccount signature.Signer,
+	fundingAccount *multisig.Account,
+	fundingSigner signature.Signer,
 ) error {
 	ctx := context.Background()
 
 	d.logger = logging.GetLogger("cmd/txsource/workload/delegation")
 	d.fundingAccount = fundingAccount
+	d.fundingSigner = fundingSigner
 
 	fac := memorySigner.NewFactory()
 	d.accounts = make([]struct {
 		signer        signature.Signer
 		reckonedNonce uint64
 		debondEndTime uint64
+		account       *multisig.Account
 		address       staking.Address
 		delegatedTo   staking.Address
 	}, delegationNumAccounts)
@@ -200,11 +206,12 @@ func (d *delegation) Run(
 			return fmt.Errorf("memory signer factory Generate account %d: %w", i, err)
 		}
 		d.accounts[i].signer = signer
-		d.accounts[i].address = staking.NewAddress(signer.Public())
+		d.accounts[i].account = multisig.NewAccountFromPublicKey(signer.Public())
+		d.accounts[i].address = staking.NewAddress(d.accounts[i].account)
 
 		// Fund the account with delegation amount.
 		// Funds for fees will be transferred before making transactions.
-		if err = transferFunds(ctx, d.logger, cnsc, fundingAccount, d.accounts[i].address, delegateAmount); err != nil {
+		if err = transferFunds(ctx, d.logger, cnsc, d.fundingAccount, d.fundingSigner, d.accounts[i].address, delegateAmount); err != nil {
 			return fmt.Errorf("account funding failure: %w", err)
 		}
 	}

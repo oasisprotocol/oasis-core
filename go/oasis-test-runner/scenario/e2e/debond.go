@@ -58,7 +58,7 @@ func (s *debondImpl) Run(*env.Env) error {
 	lockupQuery := staking.OwnerQuery{
 		Height: consensus.HeightLatest,
 	}
-	if err := lockupQuery.Owner.UnmarshalText([]byte("oasis1qpt202cf6t0s5ugkk34p83yf0c30gpjkny92u7dh")); err != nil {
+	if err := lockupQuery.Owner.UnmarshalText([]byte("oasis1qz92ljfknlc2nqzwdwhk0lqqe4rxzuthfcvj49hs")); err != nil {
 		return fmt.Errorf("failed to unmarshal lockup account address: %w", err)
 	}
 	s.Logger.Info("checking balance at beginning")

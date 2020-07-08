@@ -14,6 +14,7 @@ import (
 	registryState "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/apps/registry/state"
 	genesis "github.com/oasisprotocol/oasis-core/go/genesis/api"
 	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
+	staking "github.com/oasisprotocol/oasis-core/go/staking/api"
 )
 
 func (app *registryApplication) InitChain(ctx *abciAPI.Context, request types.RequestInitChain, doc *genesis.Document) error {
@@ -34,7 +35,7 @@ func (app *registryApplication) InitChain(ctx *abciAPI.Context, request types.Re
 			return fmt.Errorf("registry: genesis entity index %d is nil", i)
 		}
 		ctx.Logger().Debug("InitChain: Registering genesis entity",
-			"entity", v.Signature.PublicKey,
+			"entity", staking.NewAddress(&v.Account),
 		)
 		if err := app.registerEntity(ctx, state, v); err != nil {
 			ctx.Logger().Error("InitChain: failed to register entity",
@@ -58,7 +59,7 @@ func (app *registryApplication) InitChain(ctx *abciAPI.Context, request types.Re
 				continue
 			}
 			ctx.Logger().Debug("InitChain: Registering genesis runtime",
-				"runtime_owner", v.Signature.PublicKey,
+				"runtime_owner", staking.NewAddress(&v.Account),
 			)
 			if err := app.registerRuntime(ctx, state, v); err != nil {
 				ctx.Logger().Error("InitChain: failed to register runtime",
@@ -74,7 +75,7 @@ func (app *registryApplication) InitChain(ctx *abciAPI.Context, request types.Re
 			return fmt.Errorf("registry: genesis suspended runtime index %d is nil", i)
 		}
 		ctx.Logger().Debug("InitChain: Registering genesis suspended runtime",
-			"runtime_owner", v.Signature.PublicKey,
+			"runtime_owner", staking.NewAddress(&v.Account),
 		)
 		if err := app.registerRuntime(ctx, state, v); err != nil {
 			ctx.Logger().Error("InitChain: failed to register runtime",
@@ -84,7 +85,7 @@ func (app *registryApplication) InitChain(ctx *abciAPI.Context, request types.Re
 			return fmt.Errorf("registry: genesis suspended runtime registration failure: %w", err)
 		}
 		var rt registry.Runtime
-		if err := cbor.Unmarshal(v.Blob, &rt); err != nil {
+		if err := cbor.Unmarshal(v.Payload, &rt); err != nil {
 			return fmt.Errorf("registry: malformed genesis suspended runtime: %w", err)
 		}
 		if err := state.SuspendRuntime(ctx, rt.ID); err != nil {

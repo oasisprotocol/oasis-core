@@ -8,6 +8,7 @@ import (
 	"github.com/spf13/viper"
 
 	"github.com/oasisprotocol/oasis-core/go/common/cbor"
+	"github.com/oasisprotocol/oasis-core/go/common/crypto/multisig"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature/signers/memory"
 	"github.com/oasisprotocol/oasis-core/go/common/entity"
@@ -42,6 +43,7 @@ type xferWorkload struct {
 
 type xferAccount struct {
 	signer  signature.Signer
+	account *multisig.Account
 	address staking.Address
 	nonce   uint64
 	balance quantity.Quantity
@@ -65,8 +67,8 @@ func (w *xferWorkload) Init(doc *genesis.Document) error {
 
 	// Ensure the genesis doc has the debug test entity to be used to
 	// fund the accounts.
-	testEntity, _, _ := entity.TestEntity()
-	testAccount := doc.Staking.Ledger[staking.NewAddress(testEntity.ID)]
+	testEntity, _, _, _ := entity.TestEntity()
+	testAccount := doc.Staking.Ledger[testEntity.AccountAddress]
 	if testAccount == nil {
 		return fmt.Errorf("consim/workload/xfer: test entity not present in genesis")
 	}
@@ -79,12 +81,12 @@ func (w *xferWorkload) Init(doc *genesis.Document) error {
 
 func (w *xferWorkload) Start(initialState *genesis.Document, cancelCh <-chan struct{}, errCh chan<- error) (<-chan []BlockTx, error) {
 	// Initialize the funding account.
-	testEntity, testSigner, _ := entity.TestEntity()
-	testAccountAddr := staking.NewAddress(testEntity.ID)
-	testAccount := initialState.Staking.Ledger[testAccountAddr]
+	testEntity, testSigner, testEntityAccount, _ := entity.TestEntity()
+	testAccount := initialState.Staking.Ledger[testEntity.AccountAddress]
 	w.fundingAccount = &xferAccount{
 		signer:  testSigner,
-		address: testAccountAddr,
+		account: testEntityAccount,
+		address: testEntity.AccountAddress,
 		nonce:   testAccount.General.Nonce,
 		balance: testAccount.General.Balance,
 	}
@@ -96,9 +98,11 @@ func (w *xferWorkload) Start(initialState *genesis.Document, cancelCh <-chan str
 			return nil, fmt.Errorf("consim/workload/xfer: failed to create signer: %w", err)
 		}
 
+		account := multisig.NewAccountFromPublicKey(accSigner.Public())
 		acc := &xferAccount{
 			signer:  accSigner,
-			address: staking.NewAddress(accSigner.Public()),
+			account: account,
+			address: staking.NewAddress(account),
 		}
 		if lacc := initialState.Staking.Ledger[acc.address]; lacc != nil {
 			acc.nonce = lacc.General.Nonce
@@ -205,7 +209,7 @@ func xferGenTx(from, to *xferAccount, amount uint64) ([]byte, error) {
 
 	var fee transaction.Fee
 	tx := staking.NewTransferTx(from.nonce, &fee, xfer)
-	signedTx, err := transaction.Sign(from.signer, tx)
+	signedTx, err := transaction.SingleSign(from.signer, from.account, tx)
 	if err != nil {
 		return nil, err
 	}

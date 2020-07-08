@@ -14,6 +14,7 @@ import (
 
 	"github.com/oasisprotocol/oasis-core/go/common"
 	"github.com/oasisprotocol/oasis-core/go/common/accessctl"
+	"github.com/oasisprotocol/oasis-core/go/common/cbor"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	fileSigner "github.com/oasisprotocol/oasis-core/go/common/crypto/signature/signers/file"
 	"github.com/oasisprotocol/oasis-core/go/common/entity"
@@ -28,6 +29,7 @@ import (
 	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
 	runtimeRegistry "github.com/oasisprotocol/oasis-core/go/runtime/registry"
 	sentryClient "github.com/oasisprotocol/oasis-core/go/sentry/client"
+	staking "github.com/oasisprotocol/oasis-core/go/staking/api"
 	workerCommon "github.com/oasisprotocol/oasis-core/go/worker/common"
 	"github.com/oasisprotocol/oasis-core/go/worker/common/p2p"
 )
@@ -146,7 +148,7 @@ type Worker struct { // nolint: maligned
 	deregRequested   uint32
 	delegate         Delegate
 
-	entityID           signature.PublicKey
+	entityAddress      staking.Address
 	registrationSigner signature.Signer
 
 	sentryAddresses []node.TLSAddress
@@ -630,10 +632,12 @@ func (w *Worker) registerNode(epoch epochtime.EpochTime, hook RegisterNodeHook) 
 	}
 
 	nodeDesc := node.Node{
-		DescriptorVersion: node.LatestNodeDescriptorVersion,
-		ID:                identityPublic,
-		EntityID:          w.entityID,
-		Expiration:        uint64(epoch) + 2,
+		Versioned: cbor.Versioned{
+			V: node.LatestNodeDescriptorVersion,
+		},
+		ID:            identityPublic,
+		EntityAddress: w.entityAddress,
+		Expiration:    uint64(epoch) + 2,
 		TLS: node.TLSInfo{
 			PubKey:     w.identity.GetTLSSigner().Public(),
 			NextPubKey: nextPubKey,
@@ -803,14 +807,15 @@ func (w *Worker) RequestDeregistration() error {
 }
 
 // GetRegistrationSigner loads the signing credentials as configured by this package's flags.
-func GetRegistrationSigner(logger *logging.Logger, dataDir string, identity *identity.Identity) (signature.PublicKey, signature.Signer, error) {
-	var defaultPk signature.PublicKey
+func GetRegistrationSigner(logger *logging.Logger, dataDir string, identity *identity.Identity) (staking.Address, signature.Signer, error) {
+	var defaultAddr staking.Address
 
 	// If the test entity is enabled, use the entity signing key for signing
 	// registrations.
 	if flags.DebugTestEntity() {
-		testEntity, testSigner, _ := entity.TestEntity()
-		return testEntity.ID, testSigner, nil
+		_, testSigner, testAccount, _ := entity.TestEntity()
+		testAccountAddr := staking.NewAddress(testAccount)
+		return testAccountAddr, testSigner, nil
 	}
 
 	// Load the registration entity descriptor.
@@ -820,29 +825,29 @@ func GetRegistrationSigner(logger *logging.Logger, dataDir string, identity *ide
 		// spin up workers, which require a registration worker, but don't
 		// need it, and do not have an owning entity.  The registration worker
 		// should not be initialized in this case.
-		return defaultPk, nil, nil
+		return defaultAddr, nil, nil
 	}
 
 	// Attempt to load the entity descriptor.
 	entity, err := entity.LoadDescriptor(f)
 	if err != nil {
-		return defaultPk, nil, fmt.Errorf("worker/registration: failed to load entity descriptor: %w", err)
+		return defaultAddr, nil, fmt.Errorf("worker/registration: failed to load entity descriptor: %w", err)
 	}
 	if !entity.AllowEntitySignedNodes {
 		// If the entity does not allow any entity-signed nodes, then
 		// registrations will always be node-signed.
-		return entity.ID, identity.NodeSigner, nil
+		return entity.AccountAddress, identity.NodeSigner, nil
 	}
 	for _, v := range entity.Nodes {
 		if v.Equal(identity.NodeSigner.Public()) {
 			// If the node is in the entity's list of allowed nodes
 			// then registrations MUST be node-signed.
-			return entity.ID, identity.NodeSigner, nil
+			return entity.AccountAddress, identity.NodeSigner, nil
 		}
 	}
 
 	if !flags.DebugDontBlameOasis() {
-		return defaultPk, nil, fmt.Errorf("worker/registration: entity signed nodes disallowed by node config")
+		return defaultAddr, nil, fmt.Errorf("worker/registration: entity signed nodes disallowed by node config")
 	}
 
 	// At this point, the entity allows entity-signed registrations,
@@ -862,22 +867,22 @@ func GetRegistrationSigner(logger *logging.Logger, dataDir string, identity *ide
 		// just be stale.
 		logger.Warn("no entity signing key provided, falling back to the node identity key")
 
-		return entity.ID, identity.NodeSigner, nil
+		return entity.AccountAddress, identity.NodeSigner, nil
 	}
 
 	logger.Warn("using the entity signing key for node registration")
 
 	factory, err := fileSigner.NewFactory(dataDir, signature.SignerEntity)
 	if err != nil {
-		return defaultPk, nil, fmt.Errorf("worker/registration: failed to create entity signer factory: %w", err)
+		return defaultAddr, nil, fmt.Errorf("worker/registration: failed to create entity signer factory: %w", err)
 	}
 	fileFactory := factory.(*fileSigner.Factory)
 	entitySigner, err := fileFactory.ForceLoad(f)
 	if err != nil {
-		return defaultPk, nil, fmt.Errorf("worker/registration: failed to load entity signing key: %w", err)
+		return defaultAddr, nil, fmt.Errorf("worker/registration: failed to load entity signing key: %w", err)
 	}
 
-	return entity.ID, entitySigner, nil
+	return entity.AccountAddress, entitySigner, nil
 }
 
 // New constructs a new worker node registration service.
@@ -903,7 +908,7 @@ func New(
 		return nil, err
 	}
 
-	entityID, registrationSigner, err := GetRegistrationSigner(logger, dataDir, identity)
+	entityAddr, registrationSigner, err := GetRegistrationSigner(logger, dataDir, identity)
 	if err != nil {
 		return nil, err
 	}
@@ -931,7 +936,7 @@ func New(
 		store:              serviceStore,
 		storedDeregister:   storedDeregister,
 		delegate:           delegate,
-		entityID:           entityID,
+		entityAddress:      entityAddr,
 		sentryAddresses:    workerCommonCfg.SentryAddresses,
 		registrationSigner: registrationSigner,
 		runtimeRegistry:    runtimeRegistry,
@@ -972,7 +977,7 @@ func (w *Worker) Start() error {
 	w.logger.Info("starting node registration service")
 
 	// HACK: This can be ok in certain configurations.
-	if !w.entityID.IsValid() || w.registrationSigner == nil {
+	if !w.entityAddress.IsValid() || w.registrationSigner == nil {
 		w.logger.Warn("no entity/signer for this node, registration will NEVER succeed")
 		// Make sure the node is stopped on quit.
 		go func() {

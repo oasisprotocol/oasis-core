@@ -18,6 +18,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/prettyprint"
 	"github.com/oasisprotocol/oasis-core/go/common/sgx/ias"
 	"github.com/oasisprotocol/oasis-core/go/common/version"
+	staking "github.com/oasisprotocol/oasis-core/go/staking/api"
 )
 
 var (
@@ -46,17 +47,14 @@ const (
 
 // Node represents public connectivity information about an Oasis node.
 type Node struct { // nolint: maligned
-	// DescriptorVersion is the node descriptor version.
-	//
-	// It should be bumped whenever breaking changes are made to the descriptor.
-	DescriptorVersion uint16 `json:"v,omitempty"`
+	cbor.Versioned
 
 	// ID is the public key identifying the node.
 	ID signature.PublicKey `json:"id"`
 
-	// EntityID is the public key identifying the Entity controlling
+	// EntityAddress is the account address of the entity controlling
 	// the node.
-	EntityID signature.PublicKey `json:"entity_id"`
+	EntityAddress staking.Address `json:"entity_address"`
 
 	// Expiration is the epoch in which this node's commitment expires.
 	Expiration uint64 `json:"expiration"`
@@ -134,15 +132,15 @@ func (n *Node) ValidateBasic(strictVersion bool) error {
 	switch strictVersion {
 	case true:
 		// Only the latest version is allowed.
-		if n.DescriptorVersion != LatestNodeDescriptorVersion {
+		if n.Versioned.V != LatestNodeDescriptorVersion {
 			return fmt.Errorf("invalid node descriptor version (expected: %d got: %d)",
 				LatestNodeDescriptorVersion,
-				n.DescriptorVersion,
+				n.Versioned.V,
 			)
 		}
 	case false:
 		// A range of versions is allowed.
-		if n.DescriptorVersion < minNodeDescriptorVersion || n.DescriptorVersion > maxNodeDescriptorVersion {
+		if n.Versioned.V < minNodeDescriptorVersion || n.Versioned.V > maxNodeDescriptorVersion {
 			return fmt.Errorf("invalid node descriptor version (min: %d max: %d)",
 				minNodeDescriptorVersion,
 				maxNodeDescriptorVersion,

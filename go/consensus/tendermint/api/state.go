@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/oasisprotocol/oasis-core/go/common/crypto/multisig"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
 	"github.com/oasisprotocol/oasis-core/go/common/quantity"
@@ -53,9 +54,6 @@ type ApplicationState interface {
 
 	// MinGasPrice returns the configured minimum gas price.
 	MinGasPrice() *quantity.Quantity
-
-	// OwnTxSigner returns the transaction signer identity of the local node.
-	OwnTxSigner() signature.PublicKey
 
 	// OwnTxSignerAddress returns the transaction signer's staking address of the local node.
 	OwnTxSignerAddress() staking.Address
@@ -177,11 +175,12 @@ func NewMockApplicationState(cfg *MockApplicationStateConfig) ApplicationState {
 		blockCtx.Set(GasAccountantKey{}, NewNopGasAccountant())
 	}
 
+	ownAccount := multisig.NewAccountFromPublicKey(cfg.OwnTxSigner)
 	return &mockApplicationState{
 		cfg:                cfg,
 		blockCtx:           blockCtx,
 		tree:               tree,
-		ownTxSignerAddress: staking.NewAddress(cfg.OwnTxSigner),
+		ownTxSignerAddress: staking.NewAddress(ownAccount),
 	}
 }
 

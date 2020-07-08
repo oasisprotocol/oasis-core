@@ -294,12 +294,12 @@ func AppendRegistryState(doc *genesis.Document, entities, runtimes, nodes []stri
 		Nodes:    make([]*node.MultiSignedNode, 0, len(nodes)),
 	}
 
-	entMap := make(map[signature.PublicKey]bool)
+	entMap := make(map[staking.Address]bool)
 	appendToEntities := func(signedEntity *entity.SignedEntity, ent *entity.Entity) error {
-		if entMap[ent.ID] {
+		if entMap[ent.AccountAddress] {
 			return errors.New("genesis: duplicate entity registration")
 		}
-		entMap[ent.ID] = true
+		entMap[ent.AccountAddress] = true
 
 		regSt.Entities = append(regSt.Entities, signedEntity)
 
@@ -345,15 +345,8 @@ func AppendRegistryState(doc *genesis.Document, entities, runtimes, nodes []stri
 	if flags.DebugTestEntity() {
 		l.Warn("registering debug test entity")
 
-		ent, signer, err := entity.TestEntity()
-		if err != nil {
-			l.Error("failed to retrive test entity",
-				"err", err,
-			)
-			return err
-		}
-
-		signedEntity, err := entity.SignEntity(signer, registry.RegisterGenesisEntitySignatureContext, ent)
+		ent, signer, account, _ := entity.TestEntity()
+		signedEntity, err := entity.SingleSignEntity(signer, account, registry.RegisterGenesisEntitySignatureContext, ent)
 		if err != nil {
 			l.Error("failed to sign test entity",
 				"err", err,
@@ -557,14 +550,7 @@ func AppendStakingState(doc *genesis.Document, state string, l *logging.Logger) 
 	if flags.DebugTestEntity() {
 		l.Warn("granting stake to the debug test entity")
 
-		ent, _, err := entity.TestEntity()
-		if err != nil {
-			l.Error("failed to retrieve test entity",
-				"err", err,
-			)
-			return err
-		}
-		entAddr := staking.NewAddress(ent.ID)
+		ent, _, _, _ := entity.TestEntity()
 
 		// Ok then, we hold the world ransom for One Hundred Billion Dollars.
 		var q quantity.Quantity
@@ -575,7 +561,7 @@ func AppendStakingState(doc *genesis.Document, state string, l *logging.Logger) 
 			return err
 		}
 
-		stakingSt.Ledger[entAddr] = &staking.Account{
+		stakingSt.Ledger[ent.AccountAddress] = &staking.Account{
 			General: staking.GeneralAccount{
 				Balance: q,
 				Nonce:   0,
@@ -588,8 +574,8 @@ func AppendStakingState(doc *genesis.Document, state string, l *logging.Logger) 
 			},
 		}
 		stakingSt.Delegations = map[staking.Address]map[staking.Address]*staking.Delegation{
-			entAddr: {
-				entAddr: {
+			ent.AccountAddress: {
+				ent.AccountAddress: {
 					Shares: stakingTests.QtyFromInt(1),
 				},
 			},

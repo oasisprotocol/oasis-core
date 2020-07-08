@@ -11,6 +11,7 @@ import (
 
 	"github.com/oasisprotocol/oasis-core/go/common/cbor"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
+	"github.com/oasisprotocol/oasis-core/go/common/crypto/multisig"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	"github.com/oasisprotocol/oasis-core/go/common/errors"
 	"github.com/oasisprotocol/oasis-core/go/common/prettyprint"
@@ -149,7 +150,7 @@ type PrettyTransaction struct {
 
 // SignedTransaction is a signed transaction.
 type SignedTransaction struct {
-	signature.Signed
+	multisig.Envelope
 }
 
 // Hash returns the cryptographic hash of the encoded transaction.
@@ -157,54 +158,65 @@ func (s *SignedTransaction) Hash() hash.Hash {
 	return hash.NewFrom(s)
 }
 
+// Open first verifies the blob signature and then unmarshals the blob.
+func (s *SignedTransaction) Open(tx *Transaction) error { // nolint: interfacer
+	return s.Envelope.Open(SignatureContext, tx)
+}
+
+// PrettyType returns a representation of the type that can be used for pretty printing.
+func (s SignedTransaction) PrettyType() (interface{}, error) {
+	var tx Transaction
+	if err := cbor.Unmarshal(s.Envelope.Payload, &tx); err != nil {
+		return nil, fmt.Errorf("malformed signed payload: %w", err)
+	}
+	return multisig.NewPrettyEnvelope(s.Envelope, tx)
+}
+
+// SingleSign serializes the Transaction and signs the result.
+//
+// Note: This is a convenience routine that does not support transactions
+// backed by accounts with more than 1 signer.
+func SingleSign(signer signature.Signer, account *multisig.Account, tx *Transaction) (*SignedTransaction, error) {
+	if len(account.Signers) != 1 {
+		return nil, fmt.Errorf("attemtped to single-sign multi-sig transaction")
+	}
+	rawTx := cbor.Marshal(tx)
+	txSig, err := multisig.Sign(signer, account, SignatureContext, rawTx)
+	if err != nil {
+		return nil, err
+	}
+	envelope, err := multisig.NewEnvelope(account, []*signature.Signature{txSig}, rawTx)
+	if err != nil {
+		return nil, err
+	}
+	return &SignedTransaction{*envelope}, nil
+}
+
 // PrettyPrint writes a pretty-printed representation of the type
 // to the given writer.
 func (s SignedTransaction) PrettyPrint(ctx context.Context, prefix string, w io.Writer) {
 	fmt.Fprintf(w, "%sHash: %s\n", prefix, s.Hash())
 
-	fmt.Fprintf(w, "%sSigner: %s\n", prefix, s.Signature.PublicKey)
-	fmt.Fprintf(w, "%s        (signature: %s)\n", prefix, s.Signature.Signature)
+	// TODO: Someone that cares probably can figure out a better way
+	// to display the account and signatures.
+	fmt.Fprintf(w, "%sAccount: %s\n", prefix, base64.StdEncoding.EncodeToString(s.Account.Hash()))
 
-	// Check if signature is valid.
-	if !s.Signature.Verify(SignatureContext, s.Blob) {
-		fmt.Fprintf(w, "%s        [INVALID SIGNATURE]\n", prefix)
+	// Check if the envelope is valid.
+	if err := s.Envelope.Verify(SignatureContext); err != nil {
+		fmt.Fprintf(w, "%s        [INVALID ENVELOPE: %s]\n", prefix, err)
 	}
 
 	// Display the blob even if signature verification failed as it may
 	// be useful to look into it regardless.
 	var tx Transaction
 	fmt.Fprintf(w, "%sContent:\n", prefix)
-	if err := cbor.Unmarshal(s.Blob, &tx); err != nil {
+	if err := cbor.Unmarshal(s.Envelope.Payload, &tx); err != nil {
 		fmt.Fprintf(w, "%s  <error: %s>\n", prefix, err)
-		fmt.Fprintf(w, "%s  <malformed: %s>\n", prefix, base64.StdEncoding.EncodeToString(s.Blob))
+		fmt.Fprintf(w, "%s  <malformed: %s>\n", prefix, base64.StdEncoding.EncodeToString(s.Envelope.Payload))
 		return
 	}
 
 	tx.PrettyPrint(ctx, prefix+"  ", w)
-}
-
-// PrettyType returns a representation of the type that can be used for pretty printing.
-func (s SignedTransaction) PrettyType() (interface{}, error) {
-	var tx Transaction
-	if err := cbor.Unmarshal(s.Blob, &tx); err != nil {
-		return nil, fmt.Errorf("malformed signed blob: %w", err)
-	}
-	return signature.NewPrettySigned(s.Signed, tx)
-}
-
-// Open first verifies the blob signature and then unmarshals the blob.
-func (s *SignedTransaction) Open(tx *Transaction) error { // nolint: interfacer
-	return s.Signed.Open(SignatureContext, tx)
-}
-
-// Sign signs a transaction.
-func Sign(signer signature.Signer, tx *Transaction) (*SignedTransaction, error) {
-	signed, err := signature.SignSigned(signer, SignatureContext, tx)
-	if err != nil {
-		return nil, err
-	}
-
-	return &SignedTransaction{Signed: *signed}, nil
 }
 
 // MethodSeparator is the separator used to separate backend name from method name.

@@ -12,6 +12,7 @@ import (
 
 	"github.com/oasisprotocol/oasis-core/go/common"
 	"github.com/oasisprotocol/oasis-core/go/common/cbor"
+	"github.com/oasisprotocol/oasis-core/go/common/crypto/multisig"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
@@ -261,7 +262,8 @@ func (r *runtime) Run(
 	rng *rand.Rand,
 	conn *grpc.ClientConn,
 	cnsc consensus.ClientBackend,
-	fundingAccount signature.Signer,
+	fundingAccount *multisig.Account,
+	fundingSigner signature.Signer,
 ) error {
 	ctx := context.Background()
 

@@ -12,6 +12,7 @@ import (
 
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/drbg"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/mathrand"
+	"github.com/oasisprotocol/oasis-core/go/common/crypto/multisig"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	memorySigner "github.com/oasisprotocol/oasis-core/go/common/crypto/signature/signers/memory"
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
@@ -22,6 +23,7 @@ import (
 	cmdFlags "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/flags"
 	cmdGrpc "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/grpc"
 	"github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/debug/txsource/workload"
+	staking "github.com/oasisprotocol/oasis-core/go/staking/api"
 )
 
 const (
@@ -107,16 +109,17 @@ func doRun(cmd *cobra.Command, args []string) error {
 	// NOTE: we don't use Test Entity account directly in the workloads
 	// as using the same account in all runs would lead to a lot of
 	// contention and nonce mismatches.
-	fundingAccount, err := memorySigner.NewFactory().Generate(signature.SignerEntity, rng)
+	fundingSigner, err := memorySigner.NewFactory().Generate(signature.SignerEntity, rng)
 	if err != nil {
 		return fmt.Errorf("memory signer factory generate funding account %w", err)
 	}
-	if err = workload.FundAccountFromTestEntity(ctx, logger, cnsc, fundingAccount); err != nil {
+	fundingAccount := multisig.NewAccountFromPublicKey(fundingSigner.Public())
+	if err = workload.FundAccountFromTestEntity(ctx, logger, cnsc, staking.NewAddress(fundingAccount)); err != nil {
 		return fmt.Errorf("test entity account funding failure: %w", err)
 	}
 
 	logger.Debug("entering workload", "name", name)
-	if err = w.Run(ctx, rng, conn, cnsc, fundingAccount); err != nil {
+	if err = w.Run(ctx, rng, conn, cnsc, fundingAccount, fundingSigner); err != nil {
 		logger.Error("workload error", "err", err)
 		return fmt.Errorf("workload %s: %w", name, err)
 	}

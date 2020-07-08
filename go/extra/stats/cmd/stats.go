@@ -24,6 +24,7 @@ import (
 	nodeCmdCommon "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common"
 	cmdGrpc "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/grpc"
 	registryAPI "github.com/oasisprotocol/oasis-core/go/registry/api"
+	stakingAPI "github.com/oasisprotocol/oasis-core/go/staking/api"
 )
 
 const (
@@ -56,20 +57,20 @@ type nodeStats struct {
 
 // entityStats are per entity stats.
 type entityStats struct {
-	id    signature.PublicKey
+	id    stakingAPI.Address
 	nodes map[signature.PublicKey]*nodeStats
 }
 
 // nodeIDs are node identifiers.
 type nodeIDs struct {
-	entityID signature.PublicKey
+	entityID stakingAPI.Address
 	nodeID   signature.PublicKey
 }
 
 // stats are gathered entity stats.
 type stats struct {
 	// Per entity stats.
-	entities map[signature.PublicKey]*entityStats
+	entities map[stakingAPI.Address]*entityStats
 
 	// Tendermint stores the validator addresses (which are the truncated SHA-256
 	// of the node consensus public keys) in Commit data instead of the actual
@@ -80,7 +81,7 @@ type stats struct {
 // printEntityAvailability prints topN entities by availability score.
 func (s stats) printEntityAvailability(topN int) {
 	type results struct {
-		entityID          signature.PublicKey
+		entityID          stakingAPI.Address
 		elections         int64
 		signatures        int64
 		selections        int64
@@ -150,7 +151,7 @@ func (s stats) getNodeStats(nodeAddr string) (*nodeStats, error) {
 // newStats initializes empty stats.
 func newStats() *stats {
 	b := &stats{
-		entities:       make(map[signature.PublicKey]*entityStats),
+		entities:       make(map[stakingAPI.Address]*entityStats),
 		nodeAddressMap: make(map[string]nodeIDs),
 	}
 	return b
@@ -168,12 +169,12 @@ func (s *stats) addRegistryData(ctx context.Context, registry registryAPI.Backen
 		var es *entityStats
 		var ok bool
 		// Get or create node entity.
-		if es, ok = s.entities[n.EntityID]; !ok {
+		if es, ok = s.entities[n.EntityAddress]; !ok {
 			es = &entityStats{
-				id:    n.EntityID,
+				id:    n.EntityAddress,
 				nodes: make(map[signature.PublicKey]*nodeStats),
 			}
-			s.entities[n.EntityID] = es
+			s.entities[n.EntityAddress] = es
 		}
 
 		// Initialize node stats if missing.
@@ -182,7 +183,7 @@ func (s *stats) addRegistryData(ctx context.Context, registry registryAPI.Backen
 			cID := n.Consensus.ID
 			tmAddr := tmcrypto.PublicKeyToTendermint(&cID).Address().String()
 			s.nodeAddressMap[tmAddr] = nodeIDs{
-				entityID: n.EntityID,
+				entityID: n.EntityAddress,
 				nodeID:   n.ID,
 			}
 		}

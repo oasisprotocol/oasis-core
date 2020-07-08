@@ -10,6 +10,7 @@ import (
 	flag "github.com/spf13/pflag"
 	"google.golang.org/grpc"
 
+	"github.com/oasisprotocol/oasis-core/go/common/crypto/multisig"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	"github.com/oasisprotocol/oasis-core/go/common/entity"
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
@@ -32,25 +33,26 @@ func FundAccountFromTestEntity(
 	ctx context.Context,
 	logger *logging.Logger,
 	cnsc consensus.ClientBackend,
-	to signature.Signer,
+	to staking.Address,
 ) error {
-	_, testEntitySigner, _ := entity.TestEntity()
-	toAddr := staking.NewAddress(to.Public())
-	return transferFunds(ctx, logger, cnsc, testEntitySigner, toAddr, fundAccountAmount)
+	_, testEntitySigner, testEntityAccount, _ := entity.TestEntity()
+	return transferFunds(ctx, logger, cnsc, testEntityAccount, testEntitySigner, to, fundAccountAmount)
 }
 
 func fundSignAndSubmitTx(
 	ctx context.Context,
 	logger *logging.Logger,
 	cnsc consensus.ClientBackend,
-	caller signature.Signer,
+	caller *multisig.Account,
+	callerSigner signature.Signer,
 	tx *transaction.Transaction,
-	fundingAccount signature.Signer,
+	fundingAccount *multisig.Account,
+	fundingSigner signature.Signer,
 ) error {
 	// Estimate gas needed if not set.
 	if tx.Fee.Gas == 0 {
 		gas, err := cnsc.EstimateGas(ctx, &consensus.EstimateGasRequest{
-			Signer:      caller.Public(),
+			Account:     *caller,
 			Transaction: tx,
 		})
 		if err != nil {
@@ -64,13 +66,13 @@ func fundSignAndSubmitTx(
 	if err := tx.Fee.Amount.FromInt64(feeAmount); err != nil {
 		return fmt.Errorf("fee amount from int64: %w", err)
 	}
-	callerAddr := staking.NewAddress(caller.Public())
-	if err := transferFunds(ctx, logger, cnsc, fundingAccount, callerAddr, feeAmount); err != nil {
+	callerAddr := staking.NewAddress(caller)
+	if err := transferFunds(ctx, logger, cnsc, fundingAccount, fundingSigner, callerAddr, feeAmount); err != nil {
 		return fmt.Errorf("account funding failure: %w", err)
 	}
 
 	// Sign tx.
-	signedTx, err := transaction.Sign(caller, tx)
+	signedTx, err := transaction.SingleSign(callerSigner, caller, tx)
 	if err != nil {
 		return fmt.Errorf("transaction.Sign: %w", err)
 	}
@@ -78,7 +80,7 @@ func fundSignAndSubmitTx(
 	logger.Debug("submitting transaction",
 		"tx", tx,
 		"signed_tx", signedTx,
-		"tx_caller", caller.Public(),
+		"tx_caller", caller,
 	)
 
 	// SubmitTx.
@@ -95,7 +97,7 @@ func fundSignAndSubmitTx(
 			"err", err,
 			"tx", tx,
 			"signed_tx", signedTx,
-			"tx_caller", caller.Public(),
+			"tx_caller", caller,
 		)
 		return fmt.Errorf("cnsc.SubmitTx: %w", err)
 	}
@@ -106,7 +108,8 @@ func transferFunds(
 	ctx context.Context,
 	logger *logging.Logger,
 	cnsc consensus.ClientBackend,
-	from signature.Signer,
+	from *multisig.Account,
+	fromSigner signature.Signer,
 	to staking.Address,
 	transferAmount int64,
 ) error {
@@ -120,7 +123,7 @@ func transferFunds(
 	// Maybe just expose the SignAndSubmit() method in the
 	// consensus.ClientBackend?
 	return backoff.Retry(func() error {
-		fromAddr := staking.NewAddress(from.Public())
+		fromAddr := staking.NewAddress(from)
 		// Get test entity nonce.
 		nonce, err := cnsc.GetSignerNonce(ctx, &consensus.GetSignerNonceRequest{
 			AccountAddress: fromAddr,
@@ -136,13 +139,13 @@ func transferFunds(
 		if err = transfer.Amount.FromInt64(transferAmount); err != nil {
 			return backoff.Permanent(fmt.Errorf("transfer base units FromInt64 %d: %w", transferAmount, err))
 		}
-		logger.Debug("transfering funds", "from", from.Public(), "to", to, "amount", transferAmount, "nonce", nonce)
+		logger.Debug("transfering funds", "from", fromAddr, "to", to, "amount", transferAmount, "nonce", nonce)
 
 		var fee transaction.Fee
 		tx := staking.NewTransferTx(nonce, &fee, &transfer)
 		// Estimate fee.
 		gas, err := cnsc.EstimateGas(ctx, &consensus.EstimateGasRequest{
-			Signer:      from.Public(),
+			Account:     *from,
 			Transaction: tx,
 		})
 		if err != nil {
@@ -154,7 +157,7 @@ func transferFunds(
 			return fmt.Errorf("fee amount from int64: %w", err)
 		}
 
-		signedTx, err := transaction.Sign(from, tx)
+		signedTx, err := transaction.SingleSign(fromSigner, from, tx)
 		if err != nil {
 			return backoff.Permanent(fmt.Errorf("transaction.Sign: %w", err))
 		}
@@ -170,7 +173,7 @@ func transferFunds(
 			// In any case no it doesn't hurt to retry on all submission errors.
 			logger.Debug("SubmitTX error, retrying...",
 				"err", err,
-				"from", from.Public(),
+				"from", fromAddr,
 				"to", to,
 				"nonce", tx.Nonce,
 			)
@@ -191,7 +194,8 @@ type Workload interface {
 		rng *rand.Rand,
 		conn *grpc.ClientConn,
 		cnsc consensus.ClientBackend,
-		fundingAccount signature.Signer,
+		fundingAccount *multisig.Account,
+		fundingSigner signature.Signer,
 	) error
 }
 

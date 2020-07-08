@@ -19,6 +19,7 @@ import (
 
 	"github.com/oasisprotocol/oasis-core/go/common/cbor"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
+	"github.com/oasisprotocol/oasis-core/go/common/crypto/multisig"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	"github.com/oasisprotocol/oasis-core/go/common/errors"
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
@@ -259,7 +260,7 @@ func (a *ApplicationServer) WatchInvalidatedTx(txHash hash.Hash) (<-chan error, 
 }
 
 // EstimateGas calculates the amount of gas required to execute the given transaction.
-func (a *ApplicationServer) EstimateGas(caller signature.PublicKey, tx *transaction.Transaction) (transaction.Gas, error) {
+func (a *ApplicationServer) EstimateGas(caller *multisig.Account, tx *transaction.Transaction) (transaction.Gas, error) {
 	return a.mux.EstimateGas(caller, tx)
 }
 
@@ -603,7 +604,7 @@ func (mux *abciMux) processTx(ctx *api.Context, tx *transaction.Transaction, txS
 		if err := txAuthHandler.AuthenticateTx(ctx, tx); err != nil {
 			ctx.Logger().Debug("failed to authenticate transaction",
 				"tx", tx,
-				"tx_signer", ctx.TxSigner(),
+				"tx_account_hash", base64.StdEncoding.EncodeToString(ctx.TxAccount().Hash()),
 				"method", tx.Method,
 				"err", err,
 			)
@@ -658,12 +659,12 @@ func (mux *abciMux) executeTx(ctx *api.Context, rawTx []byte) error {
 	}
 
 	// Set authenticated transaction signer.
-	ctx.SetTxSigner(sigTx.Signature.PublicKey)
+	ctx.SetTxAccount(&sigTx.Account)
 
 	return mux.processTx(ctx, tx, len(rawTx))
 }
 
-func (mux *abciMux) EstimateGas(caller signature.PublicKey, tx *transaction.Transaction) (transaction.Gas, error) {
+func (mux *abciMux) EstimateGas(caller *multisig.Account, tx *transaction.Transaction) (transaction.Gas, error) {
 	// As opposed to other transaction dispatch entry points (CheckTx/DeliverTx), this method can
 	// be called in parallel to the consensus layer and to other invocations.
 	//
@@ -679,11 +680,17 @@ func (mux *abciMux) EstimateGas(caller signature.PublicKey, tx *transaction.Tran
 	}
 	_ = tx.Fee.Amount.FromUint64(math.MaxUint64)
 
-	ctx.SetTxSigner(caller)
+	mockSigs := make([]*signature.RawSignature, 0, len(caller.Signers))
+	for i := 0; i < len(caller.Signers); i++ {
+		mockSigs = append(mockSigs, new(signature.RawSignature))
+	}
+
+	ctx.SetTxAccount(caller)
 	mockSignedTx := transaction.SignedTransaction{
-		Signed: signature.Signed{
-			Blob: cbor.Marshal(tx),
-			// Signature is fixed-size, so we can leave it as default.
+		Envelope: multisig.Envelope{
+			Account:    *caller,
+			Signatures: mockSigs,
+			Payload:    cbor.Marshal(tx),
 		},
 	}
 	txSize := len(cbor.Marshal(mockSignedTx))

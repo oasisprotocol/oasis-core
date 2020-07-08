@@ -14,7 +14,7 @@ import (
 
 	"github.com/oasisprotocol/oasis-core/go/common"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
-	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
+	"github.com/oasisprotocol/oasis-core/go/common/crypto/multisig"
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
 	"github.com/oasisprotocol/oasis-core/go/common/quantity"
 	consensusGenesis "github.com/oasisprotocol/oasis-core/go/consensus/genesis"
@@ -64,7 +64,6 @@ type applicationState struct { // nolint: maligned
 	haltEpochHeight epochtime.EpochTime
 
 	minGasPrice        quantity.Quantity
-	ownTxSigner        signature.PublicKey
 	ownTxSignerAddress staking.Address
 	disableCheckTx     bool
 
@@ -201,10 +200,6 @@ func (s *applicationState) EpochChanged(ctx *api.Context) (bool, epochtime.Epoch
 
 func (s *applicationState) MinGasPrice() *quantity.Quantity {
 	return &s.minGasPrice
-}
-
-func (s *applicationState) OwnTxSigner() signature.PublicKey {
-	return s.ownTxSigner
 }
 
 func (s *applicationState) OwnTxSignerAddress() staking.Address {
@@ -478,6 +473,7 @@ func newApplicationState(ctx context.Context, cfg *ApplicationConfig) (*applicat
 
 	ctx, cancelCtx := context.WithCancel(ctx)
 
+	ownAccount := multisig.NewAccountFromPublicKey(cfg.OwnTxSigner)
 	s := &applicationState{
 		logger:             logging.GetLogger("abci-mux/state"),
 		ctx:                ctx,
@@ -491,8 +487,7 @@ func newApplicationState(ctx context.Context, cfg *ApplicationConfig) (*applicat
 		prunerNotifyCh:     channels.NewRingChannel(1),
 		haltEpochHeight:    cfg.HaltEpochHeight,
 		minGasPrice:        minGasPrice,
-		ownTxSigner:        cfg.OwnTxSigner,
-		ownTxSignerAddress: staking.NewAddress(cfg.OwnTxSigner),
+		ownTxSignerAddress: staking.NewAddress(ownAccount),
 		disableCheckTx:     cfg.DisableCheckTx,
 		metricsClosedCh:    make(chan struct{}),
 	}

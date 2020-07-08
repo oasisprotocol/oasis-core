@@ -12,6 +12,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common"
 	"github.com/oasisprotocol/oasis-core/go/common/cbor"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
+	"github.com/oasisprotocol/oasis-core/go/common/crypto/multisig"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	"github.com/oasisprotocol/oasis-core/go/common/entity"
 	"github.com/oasisprotocol/oasis-core/go/common/errors"
@@ -101,9 +102,9 @@ var (
 	// ErrNoSuchRuntime is the error returned when an runtime does not exist.
 	ErrNoSuchRuntime = errors.New(ModuleName, 11, "registry: no such runtime")
 
-	// ErrIncorrectTxSigner is the error returned when the signer of the transaction
+	// ErrIncorrectTxAccount is the error returned when the account of the transaction
 	// is not the correct one.
-	ErrIncorrectTxSigner = errors.New(ModuleName, 12, "registry: incorrect tx signer")
+	ErrIncorrectTxAccount = errors.New(ModuleName, 12, "registry: incorrect tx account")
 
 	// ErrNodeExpired is the error returned when a node is expired.
 	ErrNodeExpired = errors.New(ModuleName, 13, "registry: node expired")
@@ -178,8 +179,8 @@ var (
 
 // Backend is a registry implementation.
 type Backend interface {
-	// GetEntity gets an entity by ID.
-	GetEntity(context.Context, *IDQuery) (*entity.Entity, error)
+	// GetEntity gets an entity by staking account address.
+	GetEntity(context.Context, *AccountQuery) (*entity.Entity, error)
 
 	// GetEntities gets a list of all registered entities.
 	GetEntities(context.Context, int64) ([]*entity.Entity, error)
@@ -233,6 +234,12 @@ type Backend interface {
 
 	// Cleanup cleans up the registry backend.
 	Cleanup()
+}
+
+// AccountQuery is a registry query by account address.
+type AccountQuery struct {
+	Height int64           `json:"height"`
+	ID     staking.Address `json:"id"`
 }
 
 // IDQuery is a registry query by ID.
@@ -376,11 +383,11 @@ func VerifyRegisterEntityArgs(logger *logging.Logger, sigEnt *entity.SignedEntit
 		)
 		return nil, ErrInvalidSignature
 	}
-	if err := sigEnt.Signed.Signature.SanityCheck(ent.ID); err != nil {
-		logger.Error("RegisterEntity: invalid argument(s)",
+	signerAccount := staking.NewAddress(&sigEnt.Envelope.Account)
+	if !signerAccount.Equal(ent.AccountAddress) {
+		logger.Error("RegisterEntity: entity signed by unexpected account",
 			"signed_entity", sigEnt,
 			"entity", ent,
-			"err", err,
 		)
 		return nil, ErrInvalidArgument
 	}
@@ -458,8 +465,8 @@ func VerifyRegisterNodeArgs( // nolint: gocyclo
 	}
 
 	// This should never happen, unless there's a bug in the caller.
-	if !entity.ID.Equal(n.EntityID) {
-		logger.Error("RegisterNode: node entity ID does not match expected entity",
+	if !entity.AccountAddress.Equal(n.EntityAddress) {
+		logger.Error("RegisterNode: node entity address does not match expected entity",
 			"node", n,
 			"entity", entity,
 		)
@@ -498,14 +505,32 @@ func VerifyRegisterNodeArgs( // nolint: gocyclo
 
 		// If we are using entity signing, descriptors will also be signed
 		// by the entity signing key.
-		if !sigNode.MultiSigned.IsSignedBy(entity.ID) {
+		//
+		// Naturally with the transition to multisig accounts, the notion
+		// of a singular entity signing key is somewhat nonsensical.
+		//
+		// Thankfully this is a debug-only feature, so abuse the fact that
+		// all uses of this will always be in tests, where the entity in
+		// question only has one signer internally.
+		findEntityPublicKey := func() (signature.PublicKey, error) {
+			for _, sig := range sigNode.MultiSigned.Signatures {
+				addr := staking.NewAddress(multisig.NewAccountFromPublicKey(sig.PublicKey))
+				if addr.Equal(n.EntityAddress) {
+					return sig.PublicKey, nil
+				}
+			}
+			return signature.PublicKey{}, fmt.Errorf("%w: failed to find entity signature in registration", ErrInvalidArgument)
+		}
+
+		entityPk, err := findEntityPublicKey()
+		if err != nil {
 			logger.Error("RegisterNode: registration not signed by entity",
 				"signed_node", sigNode,
 				"node", n,
 			)
 			return nil, nil, fmt.Errorf("%w: registration not signed by entity", ErrInvalidArgument)
 		}
-		expectedSigners = append(expectedSigners, entity.ID)
+		expectedSigners = append(expectedSigners, entityPk)
 	}
 
 	// Expired registrations are allowed here because this routine is abused
@@ -947,10 +972,10 @@ func VerifyNodeUpdate(logger *logging.Logger, currentNode, newNode *node.Node) e
 		)
 		return ErrNodeUpdateNotAllowed
 	}
-	if !currentNode.EntityID.Equal(newNode.EntityID) {
-		logger.Error("RegisterNode: trying to update node entity ID",
-			"current_id", currentNode.EntityID,
-			"new_id", newNode.EntityID,
+	if !currentNode.EntityAddress.Equal(newNode.EntityAddress) {
+		logger.Error("RegisterNode: trying to update node entity address",
+			"current_address", currentNode.EntityAddress,
+			"new_address", newNode.EntityAddress,
 		)
 		return ErrNodeUpdateNotAllowed
 	}
@@ -1022,11 +1047,11 @@ func VerifyRegisterRuntimeArgs(
 		)
 		return nil, ErrInvalidSignature
 	}
-	if err := sigRt.Signed.Signature.SanityCheck(rt.EntityID); err != nil {
-		logger.Error("RegisterRuntime: invalid argument(s)",
+	signerAccount := staking.NewAddress(&sigRt.Envelope.Account)
+	if !signerAccount.Equal(rt.EntityAddress) {
+		logger.Error("RegisterRuntime: runtime signed by unexpected account",
 			"signed_runtime", sigRt,
 			"runtime", rt,
-			"err", err,
 		)
 		return nil, ErrInvalidArgument
 	}
@@ -1228,10 +1253,10 @@ func VerifyRegisterComputeRuntimeArgs(ctx context.Context, logger *logging.Logge
 
 // VerifyRuntimeUpdate verifies changes while updating the runtime.
 func VerifyRuntimeUpdate(logger *logging.Logger, currentRt, newRt *Runtime) error {
-	if !currentRt.EntityID.Equal(newRt.EntityID) {
+	if !currentRt.EntityAddress.Equal(newRt.EntityAddress) {
 		logger.Error("RegisterRuntime: trying to change runtime owner",
-			"current_owner", currentRt.EntityID,
-			"new_owner", newRt.EntityID,
+			"current_owner", currentRt.EntityAddress,
+			"new_owner", newRt.EntityAddress,
 		)
 		return ErrRuntimeUpdateNotAllowed
 	}

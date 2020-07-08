@@ -8,6 +8,7 @@ import (
 
 	"github.com/oasisprotocol/oasis-core/go/common"
 	"github.com/oasisprotocol/oasis-core/go/common/cbor"
+	"github.com/oasisprotocol/oasis-core/go/common/crypto/multisig"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	"github.com/oasisprotocol/oasis-core/go/common/quantity"
 	"github.com/oasisprotocol/oasis-core/go/common/sgx"
@@ -346,7 +347,8 @@ func (sc *runtimeDynamicImpl) Run(childEnv *env.Env) error { // nolint: gocyclo
 	// Now reclaim all stake from the debug entity which owns the runtime.
 	sc.Logger.Info("reclaiming stake from entity which owns the runtime")
 	entSigner := sc.Net.Entities()[0].Signer()
-	entAddr := staking.NewAddress(entSigner.Public())
+	entAccount := multisig.NewAccountFromPublicKey(entSigner.Public())
+	entAddr := staking.NewAddress(entAccount)
 	var oneShare quantity.Quantity
 	_ = oneShare.FromUint64(1)
 	tx := staking.NewReclaimEscrowTx(nonce, &transaction.Fee{Gas: 10000}, &staking.ReclaimEscrow{
@@ -354,7 +356,7 @@ func (sc *runtimeDynamicImpl) Run(childEnv *env.Env) error { // nolint: gocyclo
 		Shares:  oneShare,
 	})
 	nonce++
-	sigTx, err := transaction.Sign(entSigner, tx)
+	sigTx, err := transaction.SingleSign(entSigner, entAccount, tx)
 	if err != nil {
 		return fmt.Errorf("failed to sign reclaim: %w", err)
 	}
@@ -449,7 +451,7 @@ func (sc *runtimeDynamicImpl) Run(childEnv *env.Env) error { // nolint: gocyclo
 		Amount:  enoughStake,
 	})
 	nonce++ // nolint: ineffassign
-	sigTx, err = transaction.Sign(entSigner, tx)
+	sigTx, err = transaction.SingleSign(entSigner, entAccount, tx)
 	if err != nil {
 		return fmt.Errorf("failed to sign escrow: %w", err)
 	}

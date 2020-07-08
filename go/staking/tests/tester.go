@@ -712,10 +712,8 @@ func testSlashDoubleSigning(
 	require.NoError(err, "WatchEscrows")
 	defer escrowSub.Close()
 
-	entAddr := api.NewAddress(ent.ID)
-
 	escrow := &api.Escrow{
-		Account: entAddr,
+		Account: ent.AccountAddress,
 		Amount:  debug.QtyFromInt(math.MaxUint32),
 	}
 	tx := api.NewAddEscrowTx(srcAcc.General.Nonce, nil, escrow)
@@ -727,7 +725,7 @@ func testSlashDoubleSigning(
 		ev := rawEv.Add
 		require.NotNil(ev)
 		require.Equal(SrcAddr, ev.Owner, "Event: owner")
-		require.Equal(entAddr, ev.Escrow, "Event: escrow")
+		require.Equal(ent.AccountAddress, ev.Escrow, "Event: escrow")
 		require.Equal(escrow.Amount, ev.Amount, "Event: amount")
 	case <-time.After(recvTimeout):
 		t.Fatalf("failed to receive escrow event")
@@ -754,7 +752,7 @@ WaitLoop:
 		select {
 		case ev := <-slashCh:
 			if e := ev.Take; e != nil {
-				require.Equal(entAddr, e.Owner, "TakeEscrowEvent - owner must be entity's address")
+				require.Equal(ent.AccountAddress, e.Owner, "TakeEscrowEvent - owner must be entity's address")
 				// All stake must be slashed as defined in debugGenesisState.
 				require.Equal(escrow.Amount, e.Amount, "TakeEscrowEvent - all stake slashed")
 				break WaitLoop

@@ -11,9 +11,11 @@ import (
 	"path/filepath"
 
 	"github.com/oasisprotocol/oasis-core/go/common/cbor"
+	"github.com/oasisprotocol/oasis-core/go/common/crypto/multisig"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	memorySigner "github.com/oasisprotocol/oasis-core/go/common/crypto/signature/signers/memory"
 	"github.com/oasisprotocol/oasis-core/go/common/prettyprint"
+	staking "github.com/oasisprotocol/oasis-core/go/staking/api"
 )
 
 const (
@@ -23,8 +25,9 @@ const (
 )
 
 var (
-	testEntity       Entity
-	testEntitySigner signature.Signer
+	testEntity        Entity
+	testEntitySigner  signature.Signer
+	testEntityAccount *multisig.Account
 
 	_ prettyprint.PrettyPrinter = (*SignedEntity)(nil)
 )
@@ -42,13 +45,10 @@ const (
 // Entity represents an entity that controls one or more Nodes and or
 // services.
 type Entity struct { // nolint: maligned
-	// DescriptorVersion is the entity descriptor version.
-	//
-	// It should be bumped whenever breaking changes are made to the descriptor.
-	DescriptorVersion uint16 `json:"v,omitempty"`
+	cbor.Versioned
 
-	// ID is the public key identifying the entity.
-	ID signature.PublicKey `json:"id"`
+	// AccountAddress is the account address identifying the entity.
+	AccountAddress staking.Address `json:"account_address"`
 
 	// Nodes is the vector of node identity keys owned by this entity, that
 	// will sign the descriptor with the node signing key rather than the
@@ -65,15 +65,15 @@ func (e *Entity) ValidateBasic(strictVersion bool) error {
 	switch strictVersion {
 	case true:
 		// Only the latest version is allowed.
-		if e.DescriptorVersion != LatestEntityDescriptorVersion {
+		if e.Versioned.V != LatestEntityDescriptorVersion {
 			return fmt.Errorf("invalid entity descriptor version (expected: %d got: %d)",
 				LatestEntityDescriptorVersion,
-				e.DescriptorVersion,
+				e.Versioned.V,
 			)
 		}
 	case false:
 		// A range of versions is allowed.
-		if e.DescriptorVersion < minEntityDescriptorVersion || e.DescriptorVersion > maxEntityDescriptorVersion {
+		if e.Versioned.V < minEntityDescriptorVersion || e.Versioned.V > maxEntityDescriptorVersion {
 			return fmt.Errorf("invalid entity descriptor version (min: %d max: %d)",
 				minEntityDescriptorVersion,
 				maxEntityDescriptorVersion,
@@ -85,7 +85,7 @@ func (e *Entity) ValidateBasic(strictVersion bool) error {
 
 // String returns a string representation of itself.
 func (e Entity) String() string {
-	return "<Entity id=" + e.ID.String() + ">"
+	return "<Entity address=" + e.AccountAddress.String() + ">"
 }
 
 // Save saves the JSON serialized entity descriptor.
@@ -101,27 +101,30 @@ func (e *Entity) Save(baseDir string) error {
 }
 
 // Load loads an existing entity from disk.
-func Load(baseDir string, signerFactory signature.SignerFactory) (*Entity, signature.Signer, error) {
+func Load(baseDir string, signerFactory signature.SignerFactory) (*Entity, signature.Signer, *multisig.Account, error) {
 	entityPath := filepath.Join(baseDir, entityFilename)
 
 	// Load the entity signer.
 	signer, err := signerFactory.Load(signature.SignerEntity)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 
 	ent, err := LoadDescriptor(entityPath)
 	if err != nil {
 		signer.Reset()
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 
-	if !ent.ID.Equal(signer.Public()) {
+	signerAccount := multisig.NewAccountFromPublicKey(signer.Public())
+	signerAccountAddr := staking.NewAddress(signerAccount)
+
+	if !ent.AccountAddress.Equal(signerAccountAddr) {
 		signer.Reset()
-		return nil, nil, fmt.Errorf("public key mismatch (signer: %s, entity: %s)", signer.Public(), ent.ID)
+		return nil, nil, nil, fmt.Errorf("account mismatch (signer: %s, entity: %s)", signerAccountAddr, ent.AccountAddress)
 	}
 
-	return ent, signer, nil
+	return ent, signer, signerAccount, nil
 }
 
 // LoadDescriptor loads an existing entity from disk, without loading the signer.
@@ -141,11 +144,14 @@ func LoadDescriptor(f string) (*Entity, error) {
 }
 
 // GenerateWithSigner generates a new entity using an existing signer and serializes it to disk.
-func GenerateWithSigner(baseDir string, signer signature.Signer, template *Entity) (*Entity, error) {
+func GenerateWithSigner(baseDir string, signer signature.Signer, template *Entity) (*Entity, *multisig.Account, error) {
 	// Generate a new entity.
+	account := multisig.NewAccountFromPublicKey(signer.Public())
 	ent := &Entity{
-		DescriptorVersion: LatestEntityDescriptorVersion,
-		ID:                signer.Public(),
+		Versioned: cbor.Versioned{
+			V: LatestEntityDescriptorVersion,
+		},
+		AccountAddress: staking.NewAddress(account),
 	}
 	if template != nil {
 		ent.Nodes = template.Nodes
@@ -153,38 +159,38 @@ func GenerateWithSigner(baseDir string, signer signature.Signer, template *Entit
 	}
 
 	if err := ent.Save(baseDir); err != nil {
-		return nil, err
+		return nil, nil, err
 	}
-	return ent, nil
+	return ent, account, nil
 }
 
 // Generate generates a new entity and serializes it to disk.
-func Generate(baseDir string, signerFactory signature.SignerFactory, template *Entity) (*Entity, signature.Signer, error) {
+func Generate(baseDir string, signerFactory signature.SignerFactory, template *Entity) (*Entity, signature.Signer, *multisig.Account, error) {
 	// Generate a new entity.
 	signer, err := signerFactory.Generate(signature.SignerEntity, rand.Reader)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
-	ent, err := GenerateWithSigner(baseDir, signer, template)
+	ent, account, err := GenerateWithSigner(baseDir, signer, template)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
-	return ent, signer, nil
+	return ent, signer, account, nil
 }
 
 // TestEntity returns the built-in test entity and signer.
-func TestEntity() (*Entity, signature.Signer, error) {
-	return &testEntity, testEntitySigner, nil
+func TestEntity() (*Entity, signature.Signer, *multisig.Account, error) {
+	return &testEntity, testEntitySigner, testEntityAccount, nil
 }
 
 // SignedEntity is a signed blob containing a CBOR-serialized Entity.
 type SignedEntity struct {
-	signature.Signed
+	multisig.Envelope
 }
 
 // Open first verifies the blob signature and then unmarshals the blob.
 func (s *SignedEntity) Open(context signature.Context, entity *Entity) error { // nolint: interfacer
-	return s.Signed.Open(context, entity)
+	return s.Envelope.Open(context, entity)
 }
 
 // PrettyPrint writes a pretty-printed representation of the type
@@ -202,28 +208,38 @@ func (s SignedEntity) PrettyPrint(ctx context.Context, prefix string, w io.Write
 // PrettyType returns a representation of the type that can be used for pretty printing.
 func (s SignedEntity) PrettyType() (interface{}, error) {
 	var e Entity
-	if err := cbor.Unmarshal(s.Signed.Blob, &e); err != nil {
-		return nil, fmt.Errorf("malformed signed blob: %w", err)
+	if err := cbor.Unmarshal(s.Envelope.Payload, &e); err != nil {
+		return nil, fmt.Errorf("malformed signed payload: %w", err)
 	}
-	return signature.NewPrettySigned(s.Signed, e)
+	return multisig.NewPrettyEnvelope(s.Envelope, e)
 }
 
-// SignEntity serializes the Entity and signs the result.
-func SignEntity(signer signature.Signer, context signature.Context, entity *Entity) (*SignedEntity, error) {
-	signed, err := signature.SignSigned(signer, context, entity)
+// SingleSignEntity serializes the Entity and signs the result.
+//
+// Note: This is a convenience routine that does not support entities
+// backed by accounts with more than 1 signer.
+func SingleSignEntity(signer signature.Signer, account *multisig.Account, context signature.Context, entity *Entity) (*SignedEntity, error) {
+	if len(account.Signers) != 1 {
+		return nil, fmt.Errorf("attemtped to single-sign multi-sig entity")
+	}
+	rawEntity := cbor.Marshal(entity)
+	entitySig, err := multisig.Sign(signer, account, context, rawEntity)
 	if err != nil {
 		return nil, err
 	}
-
-	return &SignedEntity{
-		Signed: *signed,
-	}, nil
+	envelope, err := multisig.NewEnvelope(account, []*signature.Signature{entitySig}, rawEntity)
+	if err != nil {
+		return nil, err
+	}
+	return &SignedEntity{*envelope}, nil
 }
 
 func init() {
 	testEntitySigner = memorySigner.NewTestSigner("ekiden test entity key seed")
 
-	testEntity.DescriptorVersion = LatestEntityDescriptorVersion
-	testEntity.ID = testEntitySigner.Public()
+	testEntityAccount = multisig.NewAccountFromPublicKey(testEntitySigner.Public())
+
+	testEntity.Versioned.V = LatestEntityDescriptorVersion
+	testEntity.AccountAddress = staking.NewAddress(testEntityAccount)
 	testEntity.AllowEntitySignedNodes = true
 }

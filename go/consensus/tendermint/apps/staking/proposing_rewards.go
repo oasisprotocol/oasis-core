@@ -6,7 +6,6 @@ import (
 
 	"github.com/tendermint/tendermint/abci/types"
 
-	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	abciAPI "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/api"
 	registryState "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/apps/registry/state"
 	stakingState "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/apps/staking/state"
@@ -14,12 +13,12 @@ import (
 	staking "github.com/oasisprotocol/oasis-core/go/staking/api"
 )
 
-func (app *stakingApplication) resolveEntityIDFromProposer(
+func (app *stakingApplication) resolveEntityAddressFromProposer(
 	ctx *abciAPI.Context,
 	regState *registryState.MutableState,
 	request types.RequestBeginBlock,
-) *signature.PublicKey {
-	var proposingEntity *signature.PublicKey
+) *staking.Address {
+	var proposingAddress *staking.Address
 	proposerNode, err := regState.NodeByConsensusAddress(ctx, request.Header.ProposerAddress)
 	if err != nil {
 		ctx.Logger().Warn("failed to get proposer node",
@@ -27,21 +26,20 @@ func (app *stakingApplication) resolveEntityIDFromProposer(
 			"address", hex.EncodeToString(request.Header.ProposerAddress),
 		)
 	} else {
-		proposingEntity = &proposerNode.EntityID
+		proposingAddress = &proposerNode.EntityAddress
 	}
-	return proposingEntity
+	return proposingAddress
 }
 
 func (app *stakingApplication) rewardBlockProposing(
 	ctx *abciAPI.Context,
 	stakeState *stakingState.MutableState,
-	proposingEntity *signature.PublicKey,
+	proposingAddress *staking.Address,
 	numEligibleValidators, numSigningEntities int,
 ) error {
-	if proposingEntity == nil {
+	if proposingAddress == nil {
 		return nil
 	}
-	proposerAddr := staking.NewAddress(*proposingEntity)
 
 	params, err := stakeState.ConsensusParameters(ctx)
 	if err != nil {
@@ -64,7 +62,7 @@ func (app *stakingApplication) rewardBlockProposing(
 		&params.RewardFactorBlockProposed,
 		numSigningEntities,
 		numEligibleValidators,
-		proposerAddr,
+		*proposingAddress,
 	); err != nil {
 		return fmt.Errorf("adding rewards: %w", err)
 	}

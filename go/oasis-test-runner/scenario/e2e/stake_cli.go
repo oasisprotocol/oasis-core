@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/oasisprotocol/oasis-core/go/common/crypto/multisig"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	"github.com/oasisprotocol/oasis-core/go/common/entity"
 	"github.com/oasisprotocol/oasis-core/go/common/quantity"
@@ -60,13 +61,25 @@ const (
 
 var (
 	// Testing source account address.
-	srcAddress = api.NewAddress(signature.NewPublicKey(srcPubkeyHex))
+	srcAddress = api.NewAddress(
+		multisig.NewAccountFromPublicKey(
+			signature.NewPublicKey(srcPubkeyHex),
+		),
+	)
 
 	// Testing destination account address.
-	dstAddress = api.NewAddress(signature.NewPublicKey(dstPubkeyHex))
+	dstAddress = api.NewAddress(
+		multisig.NewAccountFromPublicKey(
+			signature.NewPublicKey(dstPubkeyHex),
+		),
+	)
 
 	// Testing escrow account address.
-	escrowAddress = api.NewAddress(signature.NewPublicKey(escrowPubkeyHex))
+	escrowAddress = api.NewAddress(
+		multisig.NewAccountFromPublicKey(
+			signature.NewPublicKey(escrowPubkeyHex),
+		),
+	)
 
 	// StakeCLI is the staking scenario.
 	StakeCLI scenario.Scenario = &stakeCLIImpl{
@@ -269,12 +282,12 @@ func (sc *stakeCLIImpl) testTransfer(childEnv *env.Env, cli *cli.Helpers, src, d
 	if err := sc.genUnsignedTransferTx(childEnv, transferAmount, 0, dst, unsignedTransferTxPath); err != nil {
 		return fmt.Errorf("genUnsignedTransferTx: %w", err)
 	}
-	_, teSigner, err := entity.TestEntity()
+	_, teSigner, _, err := entity.TestEntity()
 	if err != nil {
 		return fmt.Errorf("obtain test entity: %w", err)
 	}
 
-	expectedGasEstimate := transaction.Gas(262)
+	expectedGasEstimate := transaction.Gas(282) // TODO: Derive or document this.
 	gas, err := cli.Consensus.EstimateGas(unsignedTransferTxPath, teSigner.Public())
 	if err != nil {
 		return fmt.Errorf("estimate gas on unsigned transfer tx: %w", err)

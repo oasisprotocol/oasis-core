@@ -40,8 +40,8 @@ func TestStakeAccumulatorCache(t *testing.T) {
 	//       escrow account instance which is tested separately. Here we just make sure that state
 	//       changes are propagated correctly.
 
-	ent, _, _ := entity.TestEntity()
-	addr := staking.NewAddress(ent.ID)
+	ent, _, _, _ := entity.TestEntity()
+	addr := ent.AccountAddress
 	var acct staking.Account
 	acct.Escrow.Active.Balance = *q.Clone()
 	err = stakeState.SetAccount(ctx, addr, &acct)

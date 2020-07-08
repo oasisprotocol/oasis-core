@@ -18,6 +18,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common"
 	"github.com/oasisprotocol/oasis-core/go/common/cbor"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
+	"github.com/oasisprotocol/oasis-core/go/common/crypto/multisig"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
 	"github.com/oasisprotocol/oasis-core/go/common/node"
@@ -150,12 +151,12 @@ func doInitGenesis(cmd *cobra.Command, args []string) {
 		os.Exit(1)
 	}
 
-	rt, signer, err := runtimeFromFlags()
+	rt, signer, account, err := runtimeFromFlags()
 	if err != nil {
 		os.Exit(1)
 	}
 
-	signed, err := signForRegistration(rt, signer, true)
+	signed, err := signForRegistration(rt, signer, account, true)
 	if err != nil {
 		os.Exit(1)
 	}
@@ -182,7 +183,7 @@ func doGenRegister(cmd *cobra.Command, args []string) {
 	cmdConsensus.InitGenesis()
 	cmdConsensus.AssertTxFileOK()
 
-	rt, signer, err := runtimeFromFlags()
+	rt, signer, account, err := runtimeFromFlags()
 	if err != nil {
 		logger.Info("failed to get runtime",
 			"err", err,
@@ -190,7 +191,7 @@ func doGenRegister(cmd *cobra.Command, args []string) {
 		os.Exit(1)
 	}
 
-	signed, err := signForRegistration(rt, signer, false)
+	signed, err := signForRegistration(rt, signer, account, false)
 	if err != nil {
 		logger.Info("failed to sign runtime descriptor",
 			"err", err,
@@ -238,13 +239,13 @@ func doList(cmd *cobra.Command, args []string) {
 	}
 }
 
-func runtimeFromFlags() (*registry.Runtime, signature.Signer, error) { // nolint: gocyclo
+func runtimeFromFlags() (*registry.Runtime, signature.Signer, *multisig.Account, error) { // nolint: gocyclo
 	var id common.Namespace
 	if err := id.UnmarshalHex(viper.GetString(CfgID)); err != nil {
 		logger.Error("failed to parse runtime ID",
 			"err", err,
 		)
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 
 	var teeHardware node.TEEHardware
@@ -253,7 +254,7 @@ func runtimeFromFlags() (*registry.Runtime, signature.Signer, error) { // nolint
 		logger.Error("invalid TEE hardware",
 			CfgTEEHardware, s,
 		)
-		return nil, nil, fmt.Errorf("invalid TEE hardware")
+		return nil, nil, nil, fmt.Errorf("invalid TEE hardware")
 	}
 
 	entityDir, err := cmdSigner.CLIDirOrPwd()
@@ -261,14 +262,14 @@ func runtimeFromFlags() (*registry.Runtime, signature.Signer, error) { // nolint
 		logger.Error("failed to retrieve signer dir",
 			"err", err,
 		)
-		return nil, nil, fmt.Errorf("failed to retrive signer dir")
+		return nil, nil, nil, fmt.Errorf("failed to retrive signer dir")
 	}
-	_, signer, err := cmdCommon.LoadEntity(cmdSigner.Backend(), entityDir)
+	_, signer, account, err := cmdCommon.LoadEntity(cmdSigner.Backend(), entityDir)
 	if err != nil {
 		logger.Error("failed to load owning entity",
 			"err", err,
 		)
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 
 	var (
@@ -280,7 +281,7 @@ func runtimeFromFlags() (*registry.Runtime, signature.Signer, error) { // nolint
 		logger.Error("invalid runtime kind",
 			CfgKind, s,
 		)
-		return nil, nil, fmt.Errorf("invalid runtime kind")
+		return nil, nil, nil, fmt.Errorf("invalid runtime kind")
 	}
 	switch kind {
 	case registry.KindCompute:
@@ -290,7 +291,7 @@ func runtimeFromFlags() (*registry.Runtime, signature.Signer, error) { // nolint
 				logger.Error("failed to parse key manager ID",
 					"err", err,
 				)
-				return nil, nil, err
+				return nil, nil, nil, err
 			}
 			kmID = &tmpKmID
 		}
@@ -298,7 +299,7 @@ func runtimeFromFlags() (*registry.Runtime, signature.Signer, error) { // nolint
 			logger.Error("runtime ID has the key manager flag set",
 				"id", id,
 			)
-			return nil, nil, fmt.Errorf("invalid runtime flags")
+			return nil, nil, nil, fmt.Errorf("invalid runtime flags")
 		}
 	case registry.KindKeyManager:
 		// Key managers don't have their own key manager.
@@ -306,10 +307,10 @@ func runtimeFromFlags() (*registry.Runtime, signature.Signer, error) { // nolint
 			logger.Error("runtime ID does not have the key manager flag set",
 				"id", id,
 			)
-			return nil, nil, fmt.Errorf("invalid runtime flags")
+			return nil, nil, nil, fmt.Errorf("invalid runtime flags")
 		}
 	case registry.KindInvalid:
-		return nil, nil, fmt.Errorf("cannot create runtime with invalid kind")
+		return nil, nil, nil, fmt.Errorf("cannot create runtime with invalid kind")
 	}
 
 	// TODO: Support root upload when registering.
@@ -326,7 +327,7 @@ func runtimeFromFlags() (*registry.Runtime, signature.Signer, error) { // nolint
 				"err", err,
 				"filename", state,
 			)
-			return nil, nil, err
+			return nil, nil, nil, err
 		}
 
 		var log storage.WriteLog
@@ -335,7 +336,7 @@ func runtimeFromFlags() (*registry.Runtime, signature.Signer, error) { // nolint
 				"err", err,
 				"filename", state,
 			)
-			return nil, nil, err
+			return nil, nil, nil, err
 		}
 
 		// Use in-memory MKVS tree to calculate the new root.
@@ -348,7 +349,7 @@ func runtimeFromFlags() (*registry.Runtime, signature.Signer, error) { // nolint
 					"err", err,
 					"filename", state,
 				)
-				return nil, nil, err
+				return nil, nil, nil, err
 			}
 		}
 
@@ -359,7 +360,7 @@ func runtimeFromFlags() (*registry.Runtime, signature.Signer, error) { // nolint
 				"err", err,
 				"filename", state,
 			)
-			return nil, nil, err
+			return nil, nil, nil, err
 		}
 
 		gen.StateRoot = newRoot
@@ -367,12 +368,14 @@ func runtimeFromFlags() (*registry.Runtime, signature.Signer, error) { // nolint
 	}
 
 	rt := &registry.Runtime{
-		DescriptorVersion: registry.LatestRuntimeDescriptorVersion,
-		ID:                id,
-		EntityID:          signer.Public(),
-		Genesis:           gen,
-		Kind:              kind,
-		TEEHardware:       teeHardware,
+		Versioned: cbor.Versioned{
+			V: registry.LatestRuntimeDescriptorVersion,
+		},
+		ID:            id,
+		EntityAddress: staking.NewAddress(account),
+		Genesis:       gen,
+		Kind:          kind,
+		TEEHardware:   teeHardware,
 		Version: registry.VersionInfo{
 			Version: version.FromU64(viper.GetUint64(CfgVersion)),
 		},
@@ -416,7 +419,7 @@ func runtimeFromFlags() (*registry.Runtime, signature.Signer, error) { // nolint
 				logger.Error("failed to parse SGX enclave identity",
 					"err", err,
 				)
-				return nil, nil, err
+				return nil, nil, nil, err
 			}
 			vi.Enclaves = append(vi.Enclaves, enclaveID)
 		}
@@ -426,15 +429,15 @@ func runtimeFromFlags() (*registry.Runtime, signature.Signer, error) { // nolint
 	case AdmissionPolicyNameAnyNode:
 		rt.AdmissionPolicy.AnyNode = &registry.AnyNodeRuntimeAdmissionPolicy{}
 	case AdmissionPolicyNameEntityWhitelist:
-		entities := make(map[signature.PublicKey]bool)
+		entities := make(map[staking.Address]bool)
 		for _, se := range viper.GetStringSlice(CfgAdmissionPolicyEntityWhitelist) {
-			var e signature.PublicKey
+			var e staking.Address
 			if err = e.UnmarshalText([]byte(se)); err != nil {
 				logger.Error("failed to parse entity ID",
 					"err", err,
 					CfgAdmissionPolicyEntityWhitelist, se,
 				)
-				return nil, nil, fmt.Errorf("entity whitelist runtime admission policy parse entity ID: %w", err)
+				return nil, nil, nil, fmt.Errorf("entity whitelist runtime admission policy parse entity ID: %w", err)
 			}
 			entities[e] = true
 		}
@@ -445,7 +448,7 @@ func runtimeFromFlags() (*registry.Runtime, signature.Signer, error) { // nolint
 		logger.Error("invalid runtime admission policy",
 			CfgAdmissionPolicy, sap,
 		)
-		return nil, nil, fmt.Errorf("invalid runtime admission policy")
+		return nil, nil, nil, fmt.Errorf("invalid runtime admission policy")
 	}
 
 	// Staking parameters.
@@ -458,14 +461,14 @@ func runtimeFromFlags() (*registry.Runtime, signature.Signer, error) { // nolint
 			)
 
 			if err = kind.UnmarshalText([]byte(kindRaw)); err != nil {
-				return nil, nil, fmt.Errorf("staking: bad threshold kind (%s): %w", kindRaw, err)
+				return nil, nil, nil, fmt.Errorf("staking: bad threshold kind (%s): %w", kindRaw, err)
 			}
 			if err = value.UnmarshalText([]byte(valueRaw)); err != nil {
-				return nil, nil, fmt.Errorf("staking: bad threshold value (%s): %w", valueRaw, err)
+				return nil, nil, nil, fmt.Errorf("staking: bad threshold value (%s): %w", valueRaw, err)
 			}
 
 			if _, ok := rt.Staking.Thresholds[kind]; ok {
-				return nil, nil, fmt.Errorf("staking: duplicate value for threshold '%s'", kind)
+				return nil, nil, nil, fmt.Errorf("staking: duplicate value for threshold '%s'", kind)
 			}
 			rt.Staking.Thresholds[kind] = value
 		}
@@ -473,17 +476,17 @@ func runtimeFromFlags() (*registry.Runtime, signature.Signer, error) { // nolint
 
 	// Validate descriptor.
 	if err = rt.ValidateBasic(true); err != nil {
-		return nil, nil, fmt.Errorf("invalid runtime descriptor: %w", err)
+		return nil, nil, nil, fmt.Errorf("invalid runtime descriptor: %w", err)
 	}
 	// Validate storage configuration.
 	if err = registry.VerifyRegisterRuntimeStorageArgs(rt, logger); err != nil {
-		return nil, nil, fmt.Errorf("invalid runtime storage configuration: %w", err)
+		return nil, nil, nil, fmt.Errorf("invalid runtime storage configuration: %w", err)
 	}
 
-	return rt, signer, nil
+	return rt, signer, account, nil
 }
 
-func signForRegistration(rt *registry.Runtime, signer signature.Signer, isGenesis bool) (*registry.SignedRuntime, error) {
+func signForRegistration(rt *registry.Runtime, signer signature.Signer, account *multisig.Account, isGenesis bool) (*registry.SignedRuntime, error) {
 	var ctx signature.Context
 	switch isGenesis {
 	case false:
@@ -492,7 +495,7 @@ func signForRegistration(rt *registry.Runtime, signer signature.Signer, isGenesi
 		ctx = registry.RegisterGenesisRuntimeSignatureContext
 	}
 
-	signed, err := registry.SignRuntime(signer, ctx, rt)
+	signed, err := registry.SingleSignRuntime(signer, account, ctx, rt)
 	if err != nil {
 		logger.Error("failed to sign runtime descriptor",
 			"err", err,
@@ -579,7 +582,7 @@ func init() {
 
 	// Init Admission policy flags.
 	runtimeFlags.String(CfgAdmissionPolicy, "", "What type of node admission policy to have")
-	runtimeFlags.StringSlice(CfgAdmissionPolicyEntityWhitelist, nil, "For entity whitelist node admission policies, the IDs (hex) of the entities in the whitelist")
+	runtimeFlags.StringSlice(CfgAdmissionPolicyEntityWhitelist, nil, "For entity whitelist node admission policies, the addresses (Bech32) of the entities in the whitelist")
 
 	// Init Staking flags.
 	runtimeFlags.StringToString(CfgStakingThreshold, nil, "Additional staking threshold for this runtime (<kind>=<value>)")

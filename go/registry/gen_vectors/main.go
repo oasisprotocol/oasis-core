@@ -6,7 +6,9 @@ import (
 	"fmt"
 	"math"
 
+	"github.com/oasisprotocol/oasis-core/go/common/cbor"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
+	"github.com/oasisprotocol/oasis-core/go/common/crypto/multisig"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	memorySigner "github.com/oasisprotocol/oasis-core/go/common/crypto/signature/signers/memory"
 	"github.com/oasisprotocol/oasis-core/go/common/entity"
@@ -14,6 +16,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/consensus/api/transaction"
 	"github.com/oasisprotocol/oasis-core/go/consensus/api/transaction/testvectors"
 	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
+	staking "github.com/oasisprotocol/oasis-core/go/staking/api"
 )
 
 func main() {
@@ -35,16 +38,19 @@ func main() {
 		for _, nonce := range []uint64{0, 1, 10, 42, 1000, 1_000_000, 10_000_000, math.MaxUint64} {
 			// Valid register entity transactions.
 			entitySigner := memorySigner.NewTestSigner("oasis-core registry test vectors: RegisterEntity signer")
+			entityAccount := multisig.NewAccountFromPublicKey(entitySigner.Public())
 			for _, numNodes := range []int{0, 1, 2, 5} {
 				ent := entity.Entity{
-					DescriptorVersion: entity.LatestEntityDescriptorVersion,
-					ID:                entitySigner.Public(),
+					Versioned: cbor.Versioned{
+						V: entity.LatestEntityDescriptorVersion,
+					},
+					AccountAddress: staking.NewAddress(entityAccount),
 				}
 				for i := 0; i < numNodes; i++ {
 					nodeSigner := memorySigner.NewTestSigner(fmt.Sprintf("oasis core registry test vectors: node signer %d", i))
 					ent.Nodes = append(ent.Nodes, nodeSigner.Public())
 				}
-				sigEnt, err := entity.SignEntity(entitySigner, registry.RegisterEntitySignatureContext, &ent)
+				sigEnt, err := entity.SingleSignEntity(entitySigner, entityAccount, registry.RegisterEntitySignatureContext, &ent)
 				if err != nil {
 					panic(err)
 				}

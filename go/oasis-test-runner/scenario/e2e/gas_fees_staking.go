@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/oasisprotocol/oasis-core/go/common/crypto/multisig"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	memorySigner "github.com/oasisprotocol/oasis-core/go/common/crypto/signature/signers/memory"
 	"github.com/oasisprotocol/oasis-core/go/common/quantity"
@@ -34,11 +35,15 @@ var (
 
 	// Testing destination account address.
 	dstAddr = staking.NewAddress(
-		signature.NewPublicKey("badfffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"),
+		multisig.NewAccountFromPublicKey(
+			signature.NewPublicKey("badfffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"),
+		),
 	)
 	// Testing escrow account address.
 	escrowAddr = staking.NewAddress(
-		signature.NewPublicKey("badbadffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"),
+		multisig.NewAccountFromPublicKey(
+			signature.NewPublicKey("badbadffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"),
+		),
 	)
 )
 
@@ -240,7 +245,7 @@ func (sc *gasFeesImpl) getTotalEntityBalance(ctx context.Context) (*quantity.Qua
 	var total quantity.Quantity
 	for _, e := range sc.Net.Entities()[1:] { // Only count entities with validators.
 		ent, _ := e.Inner()
-		addr := staking.NewAddress(ent.ID)
+		addr := ent.AccountAddress
 
 		acct, err := st.Account(ctx, &staking.OwnerQuery{Owner: addr, Height: consensus.HeightLatest})
 		if err != nil {
@@ -248,8 +253,7 @@ func (sc *gasFeesImpl) getTotalEntityBalance(ctx context.Context) (*quantity.Qua
 		}
 
 		sc.Logger.Debug("fetched balance",
-			"entity", ent.ID,
-			"address", addr,
+			"entity_address", addr,
 			"balance", acct.General.Balance,
 		)
 
@@ -267,7 +271,7 @@ func (sc *gasFeesImpl) testTransfer(ctx context.Context, signer signature.Signer
 		_ = transfer.Amount.FromInt64(amount)
 
 		tx := staking.NewTransferTx(acct.General.Nonce, &fee, &transfer)
-		sigTx, err := transaction.Sign(signer, tx)
+		sigTx, err := transaction.SingleSign(signer, multisig.NewAccountFromPublicKey(signer.Public()), tx)
 		if err != nil {
 			return fmt.Errorf("failed to sign transfer: %w", err)
 		}
@@ -281,7 +285,7 @@ func (sc *gasFeesImpl) testBurn(ctx context.Context, signer signature.Signer) (*
 		_ = burn.Amount.FromInt64(amount)
 
 		tx := staking.NewBurnTx(acct.General.Nonce, &fee, &burn)
-		sigTx, err := transaction.Sign(signer, tx)
+		sigTx, err := transaction.SingleSign(signer, multisig.NewAccountFromPublicKey(signer.Public()), tx)
 		if err != nil {
 			return fmt.Errorf("failed to sign burn: %w", err)
 		}
@@ -297,7 +301,7 @@ func (sc *gasFeesImpl) testAddEscrow(ctx context.Context, signer signature.Signe
 		_ = escrow.Amount.FromInt64(amount)
 
 		tx := staking.NewAddEscrowTx(acct.General.Nonce, &fee, &escrow)
-		sigTx, err := transaction.Sign(signer, tx)
+		sigTx, err := transaction.SingleSign(signer, multisig.NewAccountFromPublicKey(signer.Public()), tx)
 		if err != nil {
 			return fmt.Errorf("failed to sign escrow: %w", err)
 		}
@@ -313,7 +317,7 @@ func (sc *gasFeesImpl) testReclaimEscrow(ctx context.Context, signer signature.S
 		_ = escrow.Shares.FromInt64(shares)
 
 		tx := staking.NewReclaimEscrowTx(acct.General.Nonce, &fee, &escrow)
-		sigTx, err := transaction.Sign(signer, tx)
+		sigTx, err := transaction.SingleSign(signer, multisig.NewAccountFromPublicKey(signer.Public()), tx)
 		if err != nil {
 			return fmt.Errorf("failed to sign reclaim escrow: %w", err)
 		}
@@ -411,7 +415,7 @@ func (sc *gasFeesImpl) testStakingGasOp(
 	st := sc.Net.Controller().Staking
 
 	// Fetch initial account info.
-	addr := staking.NewAddress(signer.Public())
+	addr := staking.NewAddress(multisig.NewAccountFromPublicKey(signer.Public()))
 	acct, err := st.Account(ctx, &staking.OwnerQuery{Owner: addr, Height: consensus.HeightLatest})
 	if err != nil {
 		return fmt.Errorf("failed to get account info: %w", err)

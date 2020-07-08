@@ -5,13 +5,13 @@ import (
 
 	"github.com/tendermint/tendermint/abci/types"
 
-	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	abciAPI "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/api"
 	registryState "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/apps/registry/state"
+	staking "github.com/oasisprotocol/oasis-core/go/staking/api"
 )
 
-func (app *stakingApplication) resolveEntityIDsFromVotes(ctx *abciAPI.Context, regState *registryState.MutableState, lastCommitInfo types.LastCommitInfo) []signature.PublicKey {
-	var entityIDs []signature.PublicKey
+func (app *stakingApplication) resolveEntityAddressesFromVotes(ctx *abciAPI.Context, regState *registryState.MutableState, lastCommitInfo types.LastCommitInfo) []staking.Address {
+	var entityAddresses []staking.Address
 	for _, a := range lastCommitInfo.Votes {
 		if !a.SignedLastBlock {
 			continue
@@ -28,8 +28,8 @@ func (app *stakingApplication) resolveEntityIDsFromVotes(ctx *abciAPI.Context, r
 			continue
 		}
 
-		entityIDs = append(entityIDs, node.EntityID)
+		entityAddresses = append(entityAddresses, node.EntityAddress)
 	}
 
-	return entityIDs
+	return entityAddresses
 }

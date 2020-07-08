@@ -55,30 +55,30 @@ func (app *stakingApplication) BeginBlock(ctx *api.Context, request types.Reques
 	regState := registryState.NewMutableState(ctx.State())
 	stakeState := stakingState.NewMutableState(ctx.State())
 
-	// Look up the proposer's entity.
-	proposingEntity := app.resolveEntityIDFromProposer(ctx, regState, request)
+	// Look up the proposer's entity address.
+	proposingAddress := app.resolveEntityAddressFromProposer(ctx, regState, request)
 
 	// Go through all voters of the previous block and resolve entities.
 	// numEligibleValidators is how many total validators are in the validator set, while
 	// votingEntities is from the validators which actually voted.
 	numEligibleValidators := len(request.GetLastCommitInfo().Votes)
-	votingEntities := app.resolveEntityIDsFromVotes(ctx, regState, request.GetLastCommitInfo())
+	votingAddresses := app.resolveEntityAddressesFromVotes(ctx, regState, request.GetLastCommitInfo())
 
 	// Disburse fees from previous block.
-	if err := app.disburseFeesVQ(ctx, stakeState, proposingEntity, numEligibleValidators, votingEntities); err != nil {
+	if err := app.disburseFeesVQ(ctx, stakeState, proposingAddress, numEligibleValidators, votingAddresses); err != nil {
 		return fmt.Errorf("disburse fees voters and next proposer: %w", err)
 	}
 
 	// Save block proposer for fee disbursements.
-	stakingState.SetBlockProposer(ctx, proposingEntity)
+	stakingState.SetBlockProposer(ctx, proposingAddress)
 
 	// Add rewards for proposer.
-	if err := app.rewardBlockProposing(ctx, stakeState, proposingEntity, numEligibleValidators, len(votingEntities)); err != nil {
+	if err := app.rewardBlockProposing(ctx, stakeState, proposingAddress, numEligibleValidators, len(votingAddresses)); err != nil {
 		return fmt.Errorf("staking: block proposing reward: %w", err)
 	}
 
 	// Track signing for rewards.
-	if err := app.updateEpochSigning(ctx, stakeState, votingEntities); err != nil {
+	if err := app.updateEpochSigning(ctx, stakeState, votingAddresses); err != nil {
 		return fmt.Errorf("staking: failed to update epoch signing info: %w", err)
 	}
 

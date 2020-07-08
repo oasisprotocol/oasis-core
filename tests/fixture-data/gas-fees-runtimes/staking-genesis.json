@@ -6,17 +6,17 @@
   },
   "total_supply": "90000000",
   "ledger": {
-    "oasis1qpt202cf6t0s5ugkk34p83yf0c30gpjkny92u7dh": {"general": {"balance": "10000000"}},
-    "oasis1qryg8qf3ydzcphr328l8psz007fms9dxeuy8lgzq": {"general": {"balance": "10000000"}},
-    "oasis1qz74khszg55gfnmpxut3t3gdymn76hfchu9nhtd0": {"general": {"balance": "10000000"}},
+    "oasis1qz92ljfknlc2nqzwdwhk0lqqe4rxzuthfcvj49hs": {"general": {"balance": "10000000"}},
+    "oasis1qphhqrp0gafutys4uafmqpp30v9x4pqtwur5e4h9": {"general": {"balance": "10000000"}},
+    "oasis1qqae9l2pqawz3tqlqnvlhr0uj0e6x84lgylrxqhn": {"general": {"balance": "10000000"}},
 
-    "oasis1qp6tl30ljsrrqnw2awxxu2mtxk0qxyy2nymtsy90": {"general": {"balance": "10000000"}},
-    "oasis1qr77y0cqdzcqgz2wqkv59yz0j4vfvyryfv8vxllt": {"general": {"balance": "10000000"}},
-    "oasis1qzyw75ds6nw0af98xfmmpl3z8sgf3mdslvtzzcn6": {"general": {"balance": "10000000"}},
+    "oasis1qpqhgt3jfp782dtt7lt3hj3nf87vjlcnm5h055fd": {"general": {"balance": "10000000"}},
+    "oasis1qzm9nscealzaercv8xq6a9g5cn48g2xcavt8v2ax": {"general": {"balance": "10000000"}},
+    "oasis1qp4q7depyuke0exm0c847pun04v2d5hg45m73edz": {"general": {"balance": "10000000"}},
 
-    "oasis1qrhp36j49ncpaac0aufwyuvtk04nfxcj2yq7y4my": {"general": {"balance": "10000000"}},
-    "oasis1qzc2fexm30puzq2cmlm832fvpnyaxrq33cx4zukj": {"general": {"balance": "10000000"}},
+    "oasis1qz4ayq5q5hzrsphuaam0j4qat80w0eaq95ny8spu": {"general": {"balance": "10000000"}},
+    "oasis1qrfv2hle58n6yuarka99kpp0l6g6lms8fsewuvym": {"general": {"balance": "10000000"}},
 
-    "oasis1qpx0k28va6n0r25qd2j4jdh9f42n5vex6s9lp780": {"general": {"balance": "10000000"}}
+    "oasis1qpr2z463zr0fcnpn5lvyssg0k2hkl3f6yszvu9ju": {"general": {"balance": "10000000"}}
   }
 }

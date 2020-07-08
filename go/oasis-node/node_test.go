@@ -15,6 +15,8 @@ import (
 
 	beaconTests "github.com/oasisprotocol/oasis-core/go/beacon/tests"
 	"github.com/oasisprotocol/oasis-core/go/common"
+	"github.com/oasisprotocol/oasis-core/go/common/cbor"
+	"github.com/oasisprotocol/oasis-core/go/common/crypto/multisig"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	fileSigner "github.com/oasisprotocol/oasis-core/go/common/crypto/signature/signers/file"
 	"github.com/oasisprotocol/oasis-core/go/common/entity"
@@ -79,7 +81,9 @@ var (
 	}
 
 	testRuntime = &registry.Runtime{
-		DescriptorVersion: registry.LatestRuntimeDescriptorVersion,
+		Versioned: cbor.Versioned{
+			V: registry.LatestRuntimeDescriptorVersion,
+		},
 		// ID: default value,
 		// EntityID: test entity,
 		Kind: registry.KindCompute,
@@ -125,8 +129,9 @@ type testNode struct {
 	executorCommitteeNode     *executorCommittee.Node
 	txnschedulerCommitteeNode *txnschedulerCommittee.Node
 
-	entity       *entity.Entity
-	entitySigner signature.Signer
+	entity        *entity.Entity
+	entitySigner  signature.Signer
+	entityAccount *multisig.Account
 
 	dataDir string
 	start   time.Time
@@ -159,7 +164,7 @@ func newTestNode(t *testing.T) *testNode {
 
 	signerFactory, err := fileSigner.NewFactory(dataDir, signature.SignerEntity)
 	require.NoError(err, "create file signer")
-	entity, entitySigner, err := entity.Generate(dataDir, signerFactory, nil)
+	entity, entitySigner, entityAccount, err := entity.Generate(dataDir, signerFactory, nil)
 	require.NoError(err, "create test entity")
 
 	viper.Set("datadir", dataDir)
@@ -175,11 +180,12 @@ func newTestNode(t *testing.T) *testNode {
 	}
 
 	n := &testNode{
-		runtimeID:    testRuntime.ID,
-		dataDir:      dataDir,
-		entity:       entity,
-		entitySigner: entitySigner,
-		start:        time.Now(),
+		runtimeID:     testRuntime.ID,
+		dataDir:       dataDir,
+		entity:        entity,
+		entitySigner:  entitySigner,
+		entityAccount: entityAccount,
+		start:         time.Now(),
 	}
 	t.Logf("starting node, data directory: %v", dataDir)
 	n.Node, err = node.NewTestNode()
@@ -274,22 +280,22 @@ func testRegisterEntityRuntime(t *testing.T, node *testNode) {
 	require := require.New(t)
 
 	// Register node entity.
-	signedEnt, err := entity.SignEntity(node.entitySigner, registry.RegisterEntitySignatureContext, node.entity)
+	signedEnt, err := entity.SingleSignEntity(node.entitySigner, node.entityAccount, registry.RegisterEntitySignatureContext, node.entity)
 	require.NoError(err, "sign node entity")
 	tx := registry.NewRegisterEntityTx(0, nil, signedEnt)
 	err = consensusAPI.SignAndSubmitTx(context.Background(), node.Consensus, node.entitySigner, tx)
 	require.NoError(err, "register node entity")
 
 	// Register the test entity.
-	testEntity, testEntitySigner, _ := entity.TestEntity()
-	signedEnt, err = entity.SignEntity(testEntitySigner, registry.RegisterEntitySignatureContext, testEntity)
+	testEntity, testEntitySigner, testEntityAccount, _ := entity.TestEntity()
+	signedEnt, err = entity.SingleSignEntity(testEntitySigner, testEntityAccount, registry.RegisterEntitySignatureContext, testEntity)
 	require.NoError(err, "sign test entity")
 	tx = registry.NewRegisterEntityTx(0, nil, signedEnt)
 	err = consensusAPI.SignAndSubmitTx(context.Background(), node.Consensus, testEntitySigner, tx)
 	require.NoError(err, "register test entity")
 
 	// Register the test runtime.
-	signedRt, err := registry.SignRuntime(testEntitySigner, registry.RegisterRuntimeSignatureContext, testRuntime)
+	signedRt, err := registry.SingleSignRuntime(testEntitySigner, testEntityAccount, registry.RegisterRuntimeSignatureContext, testRuntime)
 	require.NoError(err, "sign runtime descriptor")
 	tx = registry.NewRegisterRuntimeTx(0, nil, signedRt)
 	err = consensusAPI.SignAndSubmitTx(context.Background(), node.Consensus, testEntitySigner, tx)
@@ -357,7 +363,7 @@ WaitLoop:
 	}
 
 	// Deregistering the test entity should fail as it has runtimes.
-	_, testEntitySigner, _ := entity.TestEntity()
+	_, testEntitySigner, _, _ := entity.TestEntity()
 	tx = registry.NewDeregisterEntityTx(0, nil)
 	err = consensusAPI.SignAndSubmitTx(context.Background(), node.Consensus, testEntitySigner, tx)
 	require.Error(t, err, "deregister should fail when an entity has runtimes")
@@ -508,11 +514,11 @@ func testStorageClientWithoutNode(t *testing.T, node *testNode) {
 }
 
 func init() {
-	testEntity, _, _ := entity.TestEntity()
+	testEntity, _, _, _ := entity.TestEntity()
 
 	testRuntimeID = common.NewTestNamespaceFromSeed([]byte("oasis node test namespace"), 0)
 	testRuntime.ID = testRuntimeID
-	testRuntime.EntityID = testEntity.ID
+	testRuntime.EntityAddress = testEntity.AccountAddress
 
 	testRuntime.Genesis.StateRoot.Empty()
 }

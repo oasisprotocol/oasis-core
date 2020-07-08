@@ -310,11 +310,11 @@ func (sc *nodeUpgradeImpl) Run(childEnv *env.Env) error {
 	}
 
 	// Check the entity set during consensus upgrade.
-	idQuery := &registry.IDQuery{
+	accountQuery := &registry.AccountQuery{
 		Height: consensus.HeightLatest,
-		ID:     migrations.TestEntity.ID,
+		ID:     migrations.TestEntity.AccountAddress,
 	}
-	_, err = sc.Net.Controller().Registry.GetEntity(sc.ctx, idQuery)
+	_, err = sc.Net.Controller().Registry.GetEntity(sc.ctx, accountQuery)
 	if err != nil {
 		return fmt.Errorf("can't get registered test entity: %w", err)
 	}

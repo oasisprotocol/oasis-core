@@ -11,7 +11,9 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/oasisprotocol/oasis-core/go/common"
+	"github.com/oasisprotocol/oasis-core/go/common/cbor"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
+	"github.com/oasisprotocol/oasis-core/go/common/crypto/multisig"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	memorySigner "github.com/oasisprotocol/oasis-core/go/common/crypto/signature/signers/memory"
 	"github.com/oasisprotocol/oasis-core/go/common/entity"
@@ -70,16 +72,16 @@ var testDoc = &genesis.Document{
 	Staking: stakingTests.DebugGenesisState,
 }
 
-func signEntityOrDie(signer signature.Signer, e *entity.Entity) *entity.SignedEntity {
-	signedEntity, err := entity.SignEntity(signer, registry.RegisterGenesisEntitySignatureContext, e)
+func signEntityOrDie(signer signature.Signer, account *multisig.Account, e *entity.Entity) *entity.SignedEntity {
+	signedEntity, err := entity.SingleSignEntity(signer, account, registry.RegisterGenesisEntitySignatureContext, e)
 	if err != nil {
 		panic(err)
 	}
 	return signedEntity
 }
 
-func signRuntimeOrDie(signer signature.Signer, rt *registry.Runtime) *registry.SignedRuntime {
-	signedRuntime, err := registry.SignRuntime(signer, registry.RegisterGenesisRuntimeSignatureContext, rt)
+func signRuntimeOrDie(signer signature.Signer, account *multisig.Account, rt *registry.Runtime) *registry.SignedRuntime {
+	signedRuntime, err := registry.SingleSignRuntime(signer, account, registry.RegisterGenesisRuntimeSignatureContext, rt)
 	if err != nil {
 		panic(err)
 	}
@@ -159,36 +161,43 @@ func TestGenesisSanityCheck(t *testing.T) {
 
 	// Note that this test entity has no nodes by design, those will be added
 	// later by various tests.
+	validAccount := multisig.NewAccountFromPublicKey(validPK)
 	testEntity := &entity.Entity{
-		DescriptorVersion:      entity.LatestEntityDescriptorVersion,
-		ID:                     validPK,
+		Versioned: cbor.Versioned{
+			V: entity.LatestEntityDescriptorVersion,
+		},
+		AccountAddress:         staking.NewAddress(validAccount),
 		AllowEntitySignedNodes: true,
 	}
-	signedTestEntity := signEntityOrDie(signer, testEntity)
+	signedTestEntity := signEntityOrDie(signer, validAccount, testEntity)
 
 	kmRuntimeID := hex2ns("4000000000000000ffffffffffffffffffffffffffffffffffffffffffffffff", false)
 	testKMRuntime := &registry.Runtime{
-		DescriptorVersion: registry.LatestRuntimeDescriptorVersion,
-		ID:                kmRuntimeID,
-		EntityID:          testEntity.ID,
-		Kind:              registry.KindKeyManager,
+		Versioned: cbor.Versioned{
+			V: registry.LatestRuntimeDescriptorVersion,
+		},
+		ID:            kmRuntimeID,
+		EntityAddress: testEntity.AccountAddress,
+		Kind:          registry.KindKeyManager,
 		AdmissionPolicy: registry.RuntimeAdmissionPolicy{
 			EntityWhitelist: &registry.EntityWhitelistRuntimeAdmissionPolicy{
-				Entities: map[signature.PublicKey]bool{
-					validPK: true,
+				Entities: map[staking.Address]bool{
+					testEntity.AccountAddress: true,
 				},
 			},
 		},
 	}
-	signedTestKMRuntime := signRuntimeOrDie(signer, testKMRuntime)
+	signedTestKMRuntime := signRuntimeOrDie(signer, validAccount, testKMRuntime)
 
 	testRuntimeID := hex2ns("0000000000000000000000000000000000000000000000000000000000000001", false)
 	testRuntime := &registry.Runtime{
-		DescriptorVersion: registry.LatestRuntimeDescriptorVersion,
-		ID:                testRuntimeID,
-		EntityID:          testEntity.ID,
-		Kind:              registry.KindCompute,
-		KeyManager:        &testKMRuntime.ID,
+		Versioned: cbor.Versioned{
+			V: registry.LatestRuntimeDescriptorVersion,
+		},
+		ID:            testRuntimeID,
+		EntityAddress: testEntity.AccountAddress,
+		Kind:          registry.KindCompute,
+		KeyManager:    &testKMRuntime.ID,
 		Executor: registry.ExecutorParameters{
 			GroupSize:    1,
 			RoundTimeout: 1 * time.Second,
@@ -216,18 +225,20 @@ func TestGenesisSanityCheck(t *testing.T) {
 			AnyNode: &registry.AnyNodeRuntimeAdmissionPolicy{},
 		},
 	}
-	signedTestRuntime := signRuntimeOrDie(signer, testRuntime)
+	signedTestRuntime := signRuntimeOrDie(signer, validAccount, testRuntime)
 
 	var testConsensusAddress node.ConsensusAddress
 	_ = testConsensusAddress.UnmarshalText([]byte("AAAAAAAAAAAAAAAAAAAABBBBBBBBBBBBBBBBBBBBBBA=@127.0.0.1:1234"))
 	var testAddress node.Address
 	_ = testAddress.UnmarshalText([]byte("127.0.0.1:1234"))
 	testNode := &node.Node{
-		DescriptorVersion: node.LatestNodeDescriptorVersion,
-		ID:                nodeSigner.Public(),
-		EntityID:          testEntity.ID,
-		Expiration:        10,
-		Roles:             node.RoleValidator,
+		Versioned: cbor.Versioned{
+			V: node.LatestNodeDescriptorVersion,
+		},
+		ID:            nodeSigner.Public(),
+		EntityAddress: testEntity.AccountAddress,
+		Expiration:    10,
+		Roles:         node.RoleValidator,
 		TLS: node.TLSInfo{
 			PubKey: nodeTLSSigner.Public(),
 			Addresses: []node.TLSAddress{
@@ -398,23 +409,24 @@ func TestGenesisSanityCheck(t *testing.T) {
 	d.Registry.Entities = []*entity.SignedEntity{signedTestEntity}
 	require.NoError(d.SanityCheck(), "test entity should pass")
 
+	invalidAccount := multisig.NewAccountFromPublicKey(invalidPK)
 	d = *testDoc
 	te := *testEntity
-	te.ID = invalidPK
-	signedBrokenEntity := signEntityOrDie(signer, &te)
+	te.AccountAddress = staking.NewAddress(invalidAccount)
+	signedBrokenEntity := signEntityOrDie(signer, validAccount, &te)
 	d.Registry.Entities = []*entity.SignedEntity{signedBrokenEntity}
 	require.Error(d.SanityCheck(), "invalid test entity ID should be rejected")
 
 	d = *testDoc
 	te = *testEntity
 	te.Nodes = []signature.PublicKey{invalidPK}
-	signedBrokenEntity = signEntityOrDie(signer, &te)
+	signedBrokenEntity = signEntityOrDie(signer, validAccount, &te)
 	d.Registry.Entities = []*entity.SignedEntity{signedBrokenEntity}
 	require.Error(d.SanityCheck(), "test entity's invalid node public key should be rejected")
 
 	d = *testDoc
 	te = *testEntity
-	signedBrokenEntity, err := entity.SignEntity(signer, signature.NewContext("genesis sanity check invalid ctx"), &te)
+	signedBrokenEntity, err := entity.SingleSignEntity(signer, validAccount, signature.NewContext("genesis sanity check invalid ctx"), &te)
 	if err != nil {
 		panic(err)
 	}
@@ -451,7 +463,7 @@ func TestGenesisSanityCheck(t *testing.T) {
 	d = *testDoc
 	te = *testEntity
 	te.Nodes = []signature.PublicKey{testNode.ID}
-	signedEntityWithTestNode := signEntityOrDie(signer, &te)
+	signedEntityWithTestNode := signEntityOrDie(signer, validAccount, &te)
 	d.Registry.Entities = []*entity.SignedEntity{signedEntityWithTestNode}
 	d.Registry.Runtimes = []*registry.SignedRuntime{}
 	d.Registry.Nodes = []*node.MultiSignedNode{signedTestNode}
@@ -461,7 +473,7 @@ func TestGenesisSanityCheck(t *testing.T) {
 	te = *testEntity
 	te.Nodes = []signature.PublicKey{unknownPK}
 	te.AllowEntitySignedNodes = false
-	signedEntityWithBrokenNode := signEntityOrDie(signer, &te)
+	signedEntityWithBrokenNode := signEntityOrDie(signer, validAccount, &te)
 	d.Registry.Entities = []*entity.SignedEntity{signedEntityWithBrokenNode}
 	d.Registry.Runtimes = []*registry.SignedRuntime{}
 	d.Registry.Nodes = []*node.MultiSignedNode{signedTestNode}
@@ -471,15 +483,16 @@ func TestGenesisSanityCheck(t *testing.T) {
 	te = *testEntity
 	te.Nodes = []signature.PublicKey{unknownPK}
 	te.AllowEntitySignedNodes = true
-	signedEntityWithBrokenNode = signEntityOrDie(signer, &te)
+	signedEntityWithBrokenNode = signEntityOrDie(signer, validAccount, &te)
 	d.Registry.Entities = []*entity.SignedEntity{signedEntityWithBrokenNode}
 	d.Registry.Runtimes = []*registry.SignedRuntime{}
 	d.Registry.Nodes = []*node.MultiSignedNode{entitySignedTestNode}
 	require.NoError(d.SanityCheck(), "node not listed among controlling entity's nodes should still be accepted if the entity allows entity-signed nodes")
 
+	unknownAccount := multisig.NewAccountFromPublicKey(unknownPK)
 	d = *testDoc
 	tn := *testNode
-	tn.EntityID = unknownPK
+	tn.EntityAddress = staking.NewAddress(unknownAccount)
 	signedBrokenTestNode := signNodeOrDie(nodeSigners, &tn)
 	d.Registry.Entities = []*entity.SignedEntity{signedEntityWithTestNode}
 	d.Registry.Runtimes = []*registry.SignedRuntime{signedTestKMRuntime}

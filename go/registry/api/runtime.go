@@ -11,6 +11,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common"
 	"github.com/oasisprotocol/oasis-core/go/common/cbor"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
+	"github.com/oasisprotocol/oasis-core/go/common/crypto/multisig"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	"github.com/oasisprotocol/oasis-core/go/common/node"
 	"github.com/oasisprotocol/oasis-core/go/common/prettyprint"
@@ -166,7 +167,7 @@ type AnyNodeRuntimeAdmissionPolicy struct{}
 
 // EntityWhitelistRuntimeAdmissionPolicy allows only whitelisted entities' nodes to register.
 type EntityWhitelistRuntimeAdmissionPolicy struct {
-	Entities map[signature.PublicKey]bool `json:"entities"`
+	Entities map[staking.Address]bool `json:"entities"`
 }
 
 // RuntimeAdmissionPolicy is a specification of which nodes are allowed to register for a runtime.
@@ -220,17 +221,14 @@ const (
 
 // Runtime represents a runtime.
 type Runtime struct { // nolint: maligned
-	// DescriptorVersion is the runtime descriptor version.
-	//
-	// It should be bumped whenever breaking changes are made to the descriptor.
-	DescriptorVersion uint16 `json:"v,omitempty"`
+	cbor.Versioned
 
 	// ID is a globally unique long term identifier of the runtime.
 	ID common.Namespace `json:"id"`
 
-	// EntityID is the public key identifying the Entity controlling
+	// EntityAddress is the account address of the entity controlling
 	// the runtime.
-	EntityID signature.PublicKey `json:"entity_id"`
+	EntityAddress staking.Address `json:"account_address"`
 
 	// Genesis is the runtime genesis information.
 	Genesis RuntimeGenesis `json:"genesis"`
@@ -272,15 +270,15 @@ func (r *Runtime) ValidateBasic(strictVersion bool) error {
 	switch strictVersion {
 	case true:
 		// Only the latest version is allowed.
-		if r.DescriptorVersion != LatestRuntimeDescriptorVersion {
+		if r.Versioned.V != LatestRuntimeDescriptorVersion {
 			return fmt.Errorf("invalid runtime descriptor version (expected: %d got: %d)",
 				LatestRuntimeDescriptorVersion,
-				r.DescriptorVersion,
+				r.Versioned.V,
 			)
 		}
 	case false:
 		// A range of versions is allowed.
-		if r.DescriptorVersion < minRuntimeDescriptorVersion || r.DescriptorVersion > maxRuntimeDescriptorVersion {
+		if r.Versioned.V < minRuntimeDescriptorVersion || r.Versioned.V > maxRuntimeDescriptorVersion {
 			return fmt.Errorf("invalid runtime descriptor version (min: %d max: %d)",
 				minRuntimeDescriptorVersion,
 				maxRuntimeDescriptorVersion,
@@ -306,12 +304,12 @@ func (r *Runtime) IsCompute() bool {
 
 // SignedRuntime is a signed blob containing a CBOR-serialized Runtime.
 type SignedRuntime struct {
-	signature.Signed
+	multisig.Envelope
 }
 
 // Open first verifies the blob signature and then unmarshals the blob.
 func (s *SignedRuntime) Open(context signature.Context, runtime *Runtime) error { // nolint: interfacer
-	return s.Signed.Open(context, runtime)
+	return s.Envelope.Open(context, runtime)
 }
 
 // PrettyPrint writes a pretty-printed representation of the type
@@ -329,22 +327,30 @@ func (s SignedRuntime) PrettyPrint(ctx context.Context, prefix string, w io.Writ
 // PrettyType returns a representation of the type that can be used for pretty printing.
 func (s SignedRuntime) PrettyType() (interface{}, error) {
 	var rt Runtime
-	if err := cbor.Unmarshal(s.Signed.Blob, &rt); err != nil {
-		return nil, fmt.Errorf("malformed signed blob: %w", err)
+	if err := cbor.Unmarshal(s.Envelope.Payload, &rt); err != nil {
+		return nil, fmt.Errorf("malformed signed payload: %w", err)
 	}
-	return signature.NewPrettySigned(s.Signed, rt)
+	return multisig.NewPrettyEnvelope(s.Envelope, rt)
 }
 
-// SignRuntime serializes the Runtime and signs the result.
-func SignRuntime(signer signature.Signer, context signature.Context, runtime *Runtime) (*SignedRuntime, error) {
-	signed, err := signature.SignSigned(signer, context, runtime)
+// SingleSignRuntime serializes the Runtime and signs the result.
+//
+// Note: This is a convenience routine that does not support runtimes
+// backed by accounts with more than 1 signer.
+func SingleSignRuntime(signer signature.Signer, account *multisig.Account, context signature.Context, runtime *Runtime) (*SignedRuntime, error) {
+	if len(account.Signers) != 1 {
+		return nil, fmt.Errorf("attemtped to single-sign multi-sig runtime")
+	}
+	rawRuntime := cbor.Marshal(runtime)
+	runtimeSig, err := multisig.Sign(signer, account, context, rawRuntime)
 	if err != nil {
 		return nil, err
 	}
-
-	return &SignedRuntime{
-		Signed: *signed,
-	}, nil
+	envelope, err := multisig.NewEnvelope(account, []*signature.Signature{runtimeSig}, rawRuntime)
+	if err != nil {
+		return nil, err
+	}
+	return &SignedRuntime{*envelope}, nil
 }
 
 // VersionInfo is the per-runtime version information.

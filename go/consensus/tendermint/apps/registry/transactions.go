@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/oasisprotocol/oasis-core/go/common/cbor"
+	"github.com/oasisprotocol/oasis-core/go/common/crypto/multisig"
 	"github.com/oasisprotocol/oasis-core/go/common/entity"
 	"github.com/oasisprotocol/oasis-core/go/common/node"
 	"github.com/oasisprotocol/oasis-core/go/consensus/tendermint/api"
@@ -45,12 +46,12 @@ func (app *registryApplication) registerEntity(
 	// Make sure the signer of the transaction matches the signer of the entity.
 	// NOTE: If this is invoked during InitChain then there is no actual transaction
 	//       and thus no transaction signer so we must skip this check.
-	if !ctx.IsInitChain() && !sigEnt.Signature.PublicKey.Equal(ctx.TxSigner()) {
-		return registry.ErrIncorrectTxSigner
+	acctAddr := staking.NewAddress(&sigEnt.Account)
+	if !ctx.IsInitChain() && !acctAddr.Equal(staking.NewAddress(ctx.TxAccount())) {
+		return registry.ErrIncorrectTxAccount
 	}
 
 	if !params.DebugBypassStake {
-		acctAddr := staking.NewAddress(ent.ID)
 		if err = stakingState.AddStakeClaim(
 			ctx,
 			acctAddr,
@@ -59,7 +60,6 @@ func (app *registryApplication) registerEntity(
 		); err != nil {
 			ctx.Logger().Error("RegisterEntity: Insufficent stake",
 				"err", err,
-				"entity", ent.ID,
 				"account", acctAddr,
 			)
 			return err
@@ -96,10 +96,10 @@ func (app *registryApplication) deregisterEntity(ctx *api.Context, state *regist
 		return err
 	}
 
-	id := ctx.TxSigner()
+	acctAddr := staking.NewAddress(ctx.TxAccount())
 
 	// Prevent entity deregistration if there are any registered nodes.
-	hasNodes, err := state.HasEntityNodes(ctx, id)
+	hasNodes, err := state.HasEntityNodes(ctx, acctAddr)
 	if err != nil {
 		ctx.Logger().Error("DeregisterEntity: failed to check for nodes",
 			"err", err,
@@ -108,12 +108,12 @@ func (app *registryApplication) deregisterEntity(ctx *api.Context, state *regist
 	}
 	if hasNodes {
 		ctx.Logger().Error("DeregisterEntity: entity still has nodes",
-			"entity_id", id,
+			"entity_address", acctAddr,
 		)
 		return registry.ErrEntityHasNodes
 	}
 	// Prevent entity deregistration if there are any registered runtimes.
-	hasRuntimes, err := state.HasEntityRuntimes(ctx, id)
+	hasRuntimes, err := state.HasEntityRuntimes(ctx, acctAddr)
 	if err != nil {
 		ctx.Logger().Error("DeregisterEntity: failed to check for runtimes",
 			"err", err,
@@ -122,12 +122,12 @@ func (app *registryApplication) deregisterEntity(ctx *api.Context, state *regist
 	}
 	if hasRuntimes {
 		ctx.Logger().Error("DeregisterEntity: entity still has runtimes",
-			"entity_id", id,
+			"entity_address", acctAddr,
 		)
 		return registry.ErrEntityHasRuntimes
 	}
 
-	removedEntity, err := state.RemoveEntity(ctx, id)
+	removedEntity, err := state.RemoveEntity(ctx, acctAddr)
 	switch err {
 	case nil:
 	case registry.ErrNoSuchEntity:
@@ -137,14 +137,13 @@ func (app *registryApplication) deregisterEntity(ctx *api.Context, state *regist
 	}
 
 	if !params.DebugBypassStake {
-		acctAddr := staking.NewAddress(id)
 		if err = stakingState.RemoveStakeClaim(ctx, acctAddr, registry.StakeClaimRegisterEntity); err != nil {
 			panic(fmt.Errorf("DeregisterEntity: failed to remove stake claim: %w", err))
 		}
 	}
 
 	ctx.Logger().Debug("DeregisterEntity: complete",
-		"entity_id", id,
+		"entity_addr", acctAddr,
 	)
 
 	tagV := &EntityDeregistration{
@@ -173,7 +172,7 @@ func (app *registryApplication) registerNode( // nolint: gocyclo
 		)
 		return err
 	}
-	untrustedEntity, err := state.Entity(ctx, untrustedNode.EntityID)
+	untrustedEntity, err := state.Entity(ctx, untrustedNode.EntityAddress)
 	if err != nil {
 		ctx.Logger().Error("RegisterNode: failed to query owning entity",
 			"err", err,
@@ -217,7 +216,18 @@ func (app *registryApplication) registerNode( // nolint: gocyclo
 
 	// Charge gas for node registration if signed by entity. For node-signed
 	// registrations, the gas charges are pre-paid by the entity.
-	isEntitySigned := sigNode.MultiSigned.IsSignedBy(newNode.EntityID)
+	var isEntitySigned bool
+	if params.DebugAllowEntitySignedNodeRegistration && untrustedEntity.AllowEntitySignedNodes {
+		// Yes, the detection logic is awful.  See VerifyRegisterNodeArgs,
+		// where the same thing is done for a justification.
+		for _, v := range sigNode.MultiSigned.Signatures {
+			addr := staking.NewAddress(multisig.NewAccountFromPublicKey(v.PublicKey))
+			if addr == newNode.EntityAddress {
+				isEntitySigned = true
+				break
+			}
+		}
+	}
 	if isEntitySigned {
 		if err = ctx.Gas().UseGas(1, registry.GasOpRegisterNode, params.GasCosts); err != nil {
 			return err
@@ -229,20 +239,20 @@ func (app *registryApplication) registerNode( // nolint: gocyclo
 	// NOTE: If this is invoked during InitChain then there is no actual transaction
 	//       and thus no transaction signer so we must skip this check.
 	if !ctx.IsInitChain() {
-		expectedTxSigner := newNode.ID
+		expectedTxAddress := staking.NewAddress(multisig.NewAccountFromPublicKey(newNode.ID))
 		if isEntitySigned {
-			expectedTxSigner = newNode.EntityID
+			expectedTxAddress = newNode.EntityAddress
 		}
-		if !ctx.TxSigner().Equal(expectedTxSigner) {
-			return registry.ErrIncorrectTxSigner
+		if !expectedTxAddress.Equal(staking.NewAddress(ctx.TxAccount())) {
+			return registry.ErrIncorrectTxAccount
 		}
 	}
 
 	// Check runtime's whitelist.
 	for _, rt := range paidRuntimes {
-		if rt.AdmissionPolicy.EntityWhitelist != nil && !rt.AdmissionPolicy.EntityWhitelist.Entities[newNode.EntityID] {
+		if rt.AdmissionPolicy.EntityWhitelist != nil && !rt.AdmissionPolicy.EntityWhitelist.Entities[newNode.EntityAddress] {
 			ctx.Logger().Error("RegisterNode: node's entity not in a runtime's whitelist",
-				"entity", newNode.EntityID,
+				"entity_address", newNode.EntityAddress,
 				"runtime", rt.ID,
 			)
 			return registry.ErrForbidden
@@ -278,7 +288,7 @@ func (app *registryApplication) registerNode( // nolint: gocyclo
 			"err", err,
 			"new_node", newNode,
 			"existing_node", existingNode,
-			"entity", newNode.EntityID,
+			"entity_address", newNode.EntityAddress,
 		)
 		return registry.ErrInvalidArgument
 	}
@@ -315,13 +325,11 @@ func (app *registryApplication) registerNode( // nolint: gocyclo
 
 		claim := registry.StakeClaimForNode(newNode.ID)
 		thresholds := registry.StakeThresholdsForNode(newNode, paidRuntimes)
-		acctAddr := staking.NewAddress(newNode.EntityID)
 
-		if err = stakeAcc.AddStakeClaim(acctAddr, claim, thresholds); err != nil {
+		if err = stakeAcc.AddStakeClaim(newNode.EntityAddress, claim, thresholds); err != nil {
 			ctx.Logger().Error("RegisterNode: insufficient stake for new node",
 				"err", err,
-				"entity", newNode.EntityID,
-				"account", acctAddr,
+				"entity_address", newNode.EntityAddress,
 			)
 			return err
 		}
@@ -337,7 +345,7 @@ func (app *registryApplication) registerNode( // nolint: gocyclo
 				"err", err,
 				"new_node", newNode,
 				"existing_node", existingNode,
-				"entity", newNode.EntityID,
+				"entity_address", newNode.EntityAddress,
 			)
 			return err
 		}
@@ -346,7 +354,7 @@ func (app *registryApplication) registerNode( // nolint: gocyclo
 		ctx.Logger().Error("RegisterNode: failed to create/update node",
 			"err", err,
 			"node", newNode,
-			"entity", newNode.EntityID,
+			"entity_address", newNode.EntityAddress,
 			"is_creation", existingNode == nil,
 		)
 		return fmt.Errorf("failed to set node: %w", err)
@@ -385,8 +393,7 @@ func (app *registryApplication) registerNode( // nolint: gocyclo
 		// Only resume a runtime if the entity has enough stake to avoid having the runtime be
 		// suspended again on the next epoch transition.
 		if !params.DebugBypassStake {
-			acctAddr := staking.NewAddress(rt.EntityID)
-			if err = stakeAcc.CheckStakeClaims(acctAddr); err != nil {
+			if err = stakeAcc.CheckStakeClaims(rt.EntityAddress); err != nil {
 				continue
 			}
 		}
@@ -453,7 +460,7 @@ func (app *registryApplication) unfreezeNode(
 		return err
 	}
 	// Make sure that the unfreeze request was signed by the owning entity.
-	if !ctx.TxSigner().Equal(node.EntityID) {
+	if !node.EntityAddress.Equal(staking.NewAddress(ctx.TxAccount())) {
 		return registry.ErrBadEntityForNode
 	}
 
@@ -463,7 +470,7 @@ func (app *registryApplication) unfreezeNode(
 		ctx.Logger().Error("UnfreezeNode: failed to fetch node status",
 			"err", err,
 			"node_id", unfreeze.NodeID,
-			"entity_id", node.EntityID,
+			"entity_address", node.EntityAddress,
 		)
 		return err
 	}
@@ -536,8 +543,9 @@ func (app *registryApplication) registerRuntime( // nolint: gocyclo
 	// Make sure the signer of the transaction matches the signer of the runtime.
 	// NOTE: If this is invoked during InitChain then there is no actual transaction
 	//       and thus no transaction signer so we must skip this check.
-	if !ctx.IsInitChain() && !sigRt.Signature.PublicKey.Equal(ctx.TxSigner()) {
-		return registry.ErrIncorrectTxSigner
+	acctAddr := staking.NewAddress(&sigRt.Account)
+	if !ctx.IsInitChain() && !acctAddr.Equal(staking.NewAddress(ctx.TxAccount())) {
+		return registry.ErrIncorrectTxAccount
 	}
 
 	// If TEE is required, check if runtime provided at least one enclave ID.
@@ -584,12 +592,11 @@ func (app *registryApplication) registerRuntime( // nolint: gocyclo
 	if !params.DebugBypassStake {
 		claim := registry.StakeClaimForRuntime(rt.ID)
 		thresholds := registry.StakeThresholdsForRuntime(rt)
-		acctAddr := staking.NewAddress(rt.EntityID)
 
 		if err = stakingState.AddStakeClaim(ctx, acctAddr, claim, thresholds); err != nil {
 			ctx.Logger().Error("RegisterRuntime: Insufficient stake",
 				"err", err,
-				"entity", rt.EntityID,
+				"entity_address", rt.EntityAddress,
 				"account", acctAddr,
 			)
 			return err
@@ -600,7 +607,7 @@ func (app *registryApplication) registerRuntime( // nolint: gocyclo
 		ctx.Logger().Error("RegisterRuntime: failed to create runtime",
 			"err", err,
 			"runtime", rt,
-			"entity", rt.EntityID,
+			"entity_address", rt.EntityAddress,
 		)
 		return fmt.Errorf("failed to set runtime: %w", err)
 	}

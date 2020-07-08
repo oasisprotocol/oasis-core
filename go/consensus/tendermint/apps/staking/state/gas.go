@@ -5,7 +5,7 @@ import (
 	"math"
 
 	"github.com/oasisprotocol/oasis-core/go/common/cbor"
-	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
+	"github.com/oasisprotocol/oasis-core/go/common/crypto/multisig"
 	"github.com/oasisprotocol/oasis-core/go/common/quantity"
 	"github.com/oasisprotocol/oasis-core/go/consensus/api/transaction"
 	abciAPI "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/api"
@@ -25,14 +25,14 @@ type feeAccumulator struct {
 	balance quantity.Quantity
 }
 
-// AuthenticateAndPayFees authenticates the message signer and makes sure that
+// AuthenticateAndPayFees authenticates the message signer(s) and makes sure that
 // any gas fees are paid.
 //
 // This method transfers the fees to the per-block fee accumulator which is
 // persisted at the end of the block.
 func AuthenticateAndPayFees(
 	ctx *abciAPI.Context,
-	signer signature.PublicKey,
+	signer *multisig.Account,
 	nonce uint64,
 	fee *transaction.Fee,
 ) error {
@@ -46,7 +46,7 @@ func AuthenticateAndPayFees(
 		return nil
 	}
 
-	// Convert signer's public key to account address.
+	// Convert the account descriptor to account address.
 	addr := staking.NewAddress(signer)
 	if addr.IsReserved() {
 		return fmt.Errorf("using reserved account address %s is prohibited", addr)
@@ -133,14 +133,14 @@ func BlockFees(ctx *abciAPI.Context) quantity.Quantity {
 type proposerKey struct{}
 
 func (pk proposerKey) NewDefault() interface{} {
-	var empty *signature.PublicKey
+	var empty *staking.Address
 	return empty
 }
 
-func SetBlockProposer(ctx *abciAPI.Context, p *signature.PublicKey) {
+func SetBlockProposer(ctx *abciAPI.Context, p *staking.Address) {
 	ctx.BlockContext().Set(proposerKey{}, p)
 }
 
-func BlockProposer(ctx *abciAPI.Context) *signature.PublicKey {
-	return ctx.BlockContext().Get(proposerKey{}).(*signature.PublicKey)
+func BlockProposer(ctx *abciAPI.Context) *staking.Address {
+	return ctx.BlockContext().Get(proposerKey{}).(*staking.Address)
 }

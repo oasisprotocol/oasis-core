@@ -8,6 +8,7 @@ import (
 
 	"google.golang.org/grpc"
 
+	"github.com/oasisprotocol/oasis-core/go/common/crypto/multisig"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	memorySigner "github.com/oasisprotocol/oasis-core/go/common/crypto/signature/signers/memory"
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
@@ -33,14 +34,16 @@ func (oversized) Run(
 	rng *rand.Rand,
 	conn *grpc.ClientConn,
 	cnsc consensus.ClientBackend,
-	fundingAccount signature.Signer,
+	fundingAccount *multisig.Account,
+	fundingSigner signature.Signer,
 ) error {
 	txSignerFactory := memorySigner.NewFactory()
 	txSigner, err := txSignerFactory.Generate(signature.SignerEntity, rng)
 	if err != nil {
 		return fmt.Errorf("failed to generate signer key: %w", err)
 	}
-	txSignerAddr := staking.NewAddress(txSigner.Public())
+	txSignerAccount := multisig.NewAccountFromPublicKey(txSigner.Public())
+	txSignerAddr := staking.NewAddress(txSignerAccount)
 
 	ctx := context.Background()
 
@@ -81,6 +84,7 @@ func (oversized) Run(
 			oversizedLogger,
 			cnsc,
 			fundingAccount,
+			fundingSigner,
 			txSignerAddr,
 			int64(oversizedTxGasAmount*gasPrice),
 		); err != nil {
@@ -88,7 +92,7 @@ func (oversized) Run(
 		}
 
 		tx := transaction.NewTransaction(nonce, &fee, staking.MethodTransfer, &xfer)
-		signedTx, err := transaction.Sign(txSigner, tx)
+		signedTx, err := transaction.SingleSign(txSigner, txSignerAccount, tx)
 		if err != nil {
 			return fmt.Errorf("transaction.Sign: %w", err)
 		}

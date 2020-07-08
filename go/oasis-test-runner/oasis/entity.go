@@ -130,7 +130,7 @@ func (net *Network) NewEntity(cfg *EntityCfg) (*Entity, error) {
 		ent = &Entity{
 			isDebugTestEntity: true,
 		}
-		ent.entity, ent.entitySigner, _ = entity.TestEntity()
+		ent.entity, ent.entitySigner, _, _ = entity.TestEntity()
 	} else {
 		entName := fmt.Sprintf("entity-%d", len(net.entities))
 		entityDir, err := net.baseDir.NewSubDir(entName)
@@ -196,7 +196,7 @@ func (net *Network) NewEntity(cfg *EntityCfg) (*Entity, error) {
 			)
 			return nil, fmt.Errorf("oasis/entity: failed to create entity file signer: %w", err)
 		}
-		ent.entity, ent.entitySigner, err = entity.Load(entityDir.String(), signerFactory)
+		ent.entity, ent.entitySigner, _, err = entity.Load(entityDir.String(), signerFactory)
 		if err != nil {
 			net.logger.Error("failed to load newly provisoned entity",
 				"err", err,

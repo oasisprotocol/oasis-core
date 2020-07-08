@@ -13,6 +13,7 @@ import (
 	abciAPI "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/api"
 	tmcrypto "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/crypto"
 	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
+	staking "github.com/oasisprotocol/oasis-core/go/staking/api"
 	"github.com/oasisprotocol/oasis-core/go/storage/mkvs"
 )
 
@@ -23,7 +24,7 @@ var (
 	// signedEntityKeyFmt is the key format used for signed entities.
 	//
 	// Value is CBOR-serialized signed entity.
-	signedEntityKeyFmt = keyformat.New(0x10, keyformat.H(&signature.PublicKey{}))
+	signedEntityKeyFmt = keyformat.New(0x10, &staking.Address{})
 	// signedNodeKeyFmt is the key format used for signed nodes.
 	//
 	// Value is CBOR-serialized signed node.
@@ -32,7 +33,7 @@ var (
 	// index.
 	//
 	// Value is empty.
-	signedNodeByEntityKeyFmt = keyformat.New(0x12, keyformat.H(&signature.PublicKey{}), keyformat.H(&signature.PublicKey{}))
+	signedNodeByEntityKeyFmt = keyformat.New(0x12, &staking.Address{}, keyformat.H(&signature.PublicKey{}))
 	// signedRuntimeKeyFmt is the key format used for signed runtimes.
 	//
 	// Value is CBOR-serialized signed runtime.
@@ -68,7 +69,7 @@ var (
 	// index.
 	//
 	// Value is empty.
-	signedRuntimeByEntityKeyFmt = keyformat.New(0x19, keyformat.H(&signature.PublicKey{}), keyformat.H(&common.Namespace{}))
+	signedRuntimeByEntityKeyFmt = keyformat.New(0x19, &staking.Address{}, keyformat.H(&common.Namespace{}))
 )
 
 // ImmutableState is the immutable registry state wrapper.
@@ -76,14 +77,14 @@ type ImmutableState struct {
 	is *abciAPI.ImmutableState
 }
 
-func (s *ImmutableState) getSignedEntityRaw(ctx context.Context, id signature.PublicKey) ([]byte, error) {
-	data, err := s.is.Get(ctx, signedEntityKeyFmt.Encode(&id))
+func (s *ImmutableState) getSignedEntityRaw(ctx context.Context, address staking.Address) ([]byte, error) {
+	data, err := s.is.Get(ctx, signedEntityKeyFmt.Encode(&address))
 	return data, abciAPI.UnavailableStateError(err)
 }
 
 // Entity looks up a registered entity by its identifier.
-func (s *ImmutableState) Entity(ctx context.Context, id signature.PublicKey) (*entity.Entity, error) {
-	signedEntityRaw, err := s.getSignedEntityRaw(ctx, id)
+func (s *ImmutableState) Entity(ctx context.Context, address staking.Address) (*entity.Entity, error) {
+	signedEntityRaw, err := s.getSignedEntityRaw(ctx, address)
 	if err != nil {
 		return nil, err
 	}
@@ -96,7 +97,7 @@ func (s *ImmutableState) Entity(ctx context.Context, id signature.PublicKey) (*e
 		return nil, abciAPI.UnavailableStateError(err)
 	}
 	var entity entity.Entity
-	if err = cbor.Unmarshal(signedEntity.Blob, &entity); err != nil {
+	if err = cbor.Unmarshal(signedEntity.Payload, &entity); err != nil {
 		return nil, abciAPI.UnavailableStateError(err)
 	}
 	return &entity, nil
@@ -118,7 +119,7 @@ func (s *ImmutableState) Entities(ctx context.Context) ([]*entity.Entity, error)
 			return nil, abciAPI.UnavailableStateError(err)
 		}
 		var entity entity.Entity
-		if err := cbor.Unmarshal(signedEntity.Blob, &entity); err != nil {
+		if err := cbor.Unmarshal(signedEntity.Payload, &entity); err != nil {
 			return nil, abciAPI.UnavailableStateError(err)
 		}
 
@@ -272,7 +273,7 @@ func (s *ImmutableState) getRuntime(ctx context.Context, keyFmt *keyformat.KeyFo
 		return nil, err
 	}
 	var runtime registry.Runtime
-	if err = cbor.Unmarshal(signedRuntime.Blob, &runtime); err != nil {
+	if err = cbor.Unmarshal(signedRuntime.Payload, &runtime); err != nil {
 		return nil, abciAPI.UnavailableStateError(err)
 	}
 	return &runtime, nil
@@ -394,7 +395,7 @@ func (s *ImmutableState) Runtimes(ctx context.Context) ([]*registry.Runtime, err
 	var runtimes []*registry.Runtime
 	err := s.iterateRuntimes(ctx, signedRuntimeKeyFmt, func(sigRt *registry.SignedRuntime) error {
 		var rt registry.Runtime
-		if err := cbor.Unmarshal(sigRt.Blob, &rt); err != nil {
+		if err := cbor.Unmarshal(sigRt.Payload, &rt); err != nil {
 			return abciAPI.UnavailableStateError(err)
 		}
 		runtimes = append(runtimes, &rt)
@@ -411,7 +412,7 @@ func (s *ImmutableState) AllRuntimes(ctx context.Context) ([]*registry.Runtime, 
 	var runtimes []*registry.Runtime
 	unpackFn := func(sigRt *registry.SignedRuntime) error {
 		var rt registry.Runtime
-		if err := cbor.Unmarshal(sigRt.Blob, &rt); err != nil {
+		if err := cbor.Unmarshal(sigRt.Payload, &rt); err != nil {
 			return abciAPI.UnavailableStateError(err)
 		}
 		runtimes = append(runtimes, &rt)
@@ -444,14 +445,13 @@ func (s *ImmutableState) NodeStatus(ctx context.Context, id signature.PublicKey)
 }
 
 // HasEntityNodes checks whether an entity has any registered nodes.
-func (s *ImmutableState) HasEntityNodes(ctx context.Context, id signature.PublicKey) (bool, error) {
+func (s *ImmutableState) HasEntityNodes(ctx context.Context, address staking.Address) (bool, error) {
 	it := s.is.NewIterator(ctx)
 	defer it.Close()
 
-	hID := keyformat.PreHashed(id.Hash())
-	if it.Seek(signedNodeByEntityKeyFmt.Encode(&id)); it.Valid() {
-		var hEntityID keyformat.PreHashed
-		if !signedNodeByEntityKeyFmt.Decode(it.Key(), &hEntityID) || !hEntityID.Equal(&hID) {
+	if it.Seek(signedNodeByEntityKeyFmt.Encode(&address)); it.Valid() {
+		var entityAddr staking.Address
+		if !signedNodeByEntityKeyFmt.Decode(it.Key(), &entityAddr) || !entityAddr.Equal(address) {
 			return false, nil
 		}
 		return true, nil
@@ -460,14 +460,13 @@ func (s *ImmutableState) HasEntityNodes(ctx context.Context, id signature.Public
 }
 
 // HasEntityRuntimes checks whether an entity has any registered runtimes.
-func (s *ImmutableState) HasEntityRuntimes(ctx context.Context, id signature.PublicKey) (bool, error) {
+func (s *ImmutableState) HasEntityRuntimes(ctx context.Context, address staking.Address) (bool, error) {
 	it := s.is.NewIterator(ctx)
 	defer it.Close()
 
-	hID := keyformat.PreHashed(id.Hash())
-	if it.Seek(signedRuntimeByEntityKeyFmt.Encode(&id)); it.Valid() {
-		var hEntityID keyformat.PreHashed
-		if !signedRuntimeByEntityKeyFmt.Decode(it.Key(), &hEntityID) || !hEntityID.Equal(&hID) {
+	if it.Seek(signedRuntimeByEntityKeyFmt.Encode(&address)); it.Valid() {
+		var entityAddr staking.Address
+		if !signedRuntimeByEntityKeyFmt.Decode(it.Key(), &entityAddr) || !entityAddr.Equal(address) {
 			return false, nil
 		}
 		return true, nil
@@ -527,13 +526,13 @@ type MutableState struct {
 
 // SetEntity sets a signed entity descriptor for a registered entity.
 func (s *MutableState) SetEntity(ctx context.Context, ent *entity.Entity, sigEnt *entity.SignedEntity) error {
-	err := s.ms.Insert(ctx, signedEntityKeyFmt.Encode(&ent.ID), cbor.Marshal(sigEnt))
+	err := s.ms.Insert(ctx, signedEntityKeyFmt.Encode(&ent.AccountAddress), cbor.Marshal(sigEnt))
 	return abciAPI.UnavailableStateError(err)
 }
 
 // RemoveEntity removes a previously registered entity.
-func (s *MutableState) RemoveEntity(ctx context.Context, id signature.PublicKey) (*entity.Entity, error) {
-	data, err := s.ms.RemoveExisting(ctx, signedEntityKeyFmt.Encode(&id))
+func (s *MutableState) RemoveEntity(ctx context.Context, address staking.Address) (*entity.Entity, error) {
+	data, err := s.ms.RemoveExisting(ctx, signedEntityKeyFmt.Encode(&address))
 	if err != nil {
 		return nil, abciAPI.UnavailableStateError(err)
 	}
@@ -543,7 +542,7 @@ func (s *MutableState) RemoveEntity(ctx context.Context, id signature.PublicKey)
 			return nil, abciAPI.UnavailableStateError(err)
 		}
 		var removedEntity entity.Entity
-		if err = cbor.Unmarshal(removedSignedEntity.Blob, &removedEntity); err != nil {
+		if err = cbor.Unmarshal(removedSignedEntity.Payload, &removedEntity); err != nil {
 			return nil, abciAPI.UnavailableStateError(err)
 		}
 		return &removedEntity, nil
@@ -561,7 +560,7 @@ func (s *MutableState) SetNode(ctx context.Context, existingNode, node *node.Nod
 	if err = s.ms.Insert(ctx, signedNodeKeyFmt.Encode(&node.ID), cbor.Marshal(signedNode)); err != nil {
 		return abciAPI.UnavailableStateError(err)
 	}
-	if err = s.ms.Insert(ctx, signedNodeByEntityKeyFmt.Encode(&node.EntityID, &node.ID), []byte("")); err != nil {
+	if err = s.ms.Insert(ctx, signedNodeByEntityKeyFmt.Encode(&node.EntityAddress, &node.ID), []byte("")); err != nil {
 		return abciAPI.UnavailableStateError(err)
 	}
 
@@ -616,7 +615,7 @@ func (s *MutableState) RemoveNode(ctx context.Context, node *node.Node) error {
 	if err := s.ms.Remove(ctx, signedNodeKeyFmt.Encode(&node.ID)); err != nil {
 		return abciAPI.UnavailableStateError(err)
 	}
-	if err := s.ms.Remove(ctx, signedNodeByEntityKeyFmt.Encode(&node.EntityID, &node.ID)); err != nil {
+	if err := s.ms.Remove(ctx, signedNodeByEntityKeyFmt.Encode(&node.EntityAddress, &node.ID)); err != nil {
 		return abciAPI.UnavailableStateError(err)
 	}
 	if err := s.ms.Remove(ctx, nodeStatusKeyFmt.Encode(&node.ID)); err != nil {
@@ -643,7 +642,7 @@ func (s *MutableState) RemoveNode(ctx context.Context, node *node.Node) error {
 
 // SetRuntime sets a signed runtime descriptor for a registered runtime.
 func (s *MutableState) SetRuntime(ctx context.Context, rt *registry.Runtime, sigRt *registry.SignedRuntime, suspended bool) error {
-	if err := s.ms.Insert(ctx, signedRuntimeByEntityKeyFmt.Encode(&rt.EntityID, &rt.ID), []byte("")); err != nil {
+	if err := s.ms.Insert(ctx, signedRuntimeByEntityKeyFmt.Encode(&rt.EntityAddress, &rt.ID), []byte("")); err != nil {
 		return abciAPI.UnavailableStateError(err)
 	}
 

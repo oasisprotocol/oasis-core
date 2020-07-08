@@ -54,9 +54,9 @@ func (g *Genesis) SanityCheck(
 
 	// Check for blacklisted public keys.
 	entities := []*entity.Entity{}
-	for k, ent := range seenEntities {
-		if publicKeyBlacklist[k] {
-			return fmt.Errorf("registry: sanity check failed: entity public key blacklisted: '%s'", k)
+	for addr, ent := range seenEntities {
+		if !addr.IsValid() {
+			return fmt.Errorf("registry: sanity check failed: entity address invalid: '%s'", addr)
 		}
 		entities = append(entities, ent)
 	}
@@ -65,8 +65,8 @@ func (g *Genesis) SanityCheck(
 		return fmt.Errorf("registry: sanity check failed: could not obtain all runtimes from runtimesLookup: %w", err)
 	}
 	for _, rt := range runtimes {
-		if publicKeyBlacklist[rt.EntityID] {
-			return fmt.Errorf("registry: sanity check failed: runtime '%s' owned by blacklisted entity: '%s'", rt.ID, rt.EntityID)
+		if !rt.EntityAddress.IsValid() {
+			return fmt.Errorf("registry: sanity check failed: runtime '%s' owned by invalid address: '%s'", rt.ID, rt.EntityAddress)
 		}
 	}
 	for k := range publicKeyBlacklist {
@@ -89,14 +89,14 @@ func (g *Genesis) SanityCheck(
 
 // SanityCheckEntities examines the entities table.
 // Returns lookup of entity ID to the entity record for use in other checks.
-func SanityCheckEntities(logger *logging.Logger, entities []*entity.SignedEntity) (map[signature.PublicKey]*entity.Entity, error) {
-	seenEntities := make(map[signature.PublicKey]*entity.Entity)
+func SanityCheckEntities(logger *logging.Logger, entities []*entity.SignedEntity) (map[staking.Address]*entity.Entity, error) {
+	seenEntities := make(map[staking.Address]*entity.Entity)
 	for _, signedEnt := range entities {
 		entity, err := VerifyRegisterEntityArgs(logger, signedEnt, true, true)
 		if err != nil {
 			return nil, fmt.Errorf("entity sanity check failed: %w", err)
 		}
-		seenEntities[entity.ID] = entity
+		seenEntities[entity.AccountAddress] = entity
 	}
 
 	return seenEntities, nil
@@ -155,7 +155,7 @@ func SanityCheckNodes(
 	logger *logging.Logger,
 	params *ConsensusParameters,
 	nodes []*node.MultiSignedNode,
-	seenEntities map[signature.PublicKey]*entity.Entity,
+	seenEntities map[staking.Address]*entity.Entity,
 	runtimesLookup RuntimeLookup,
 	isGenesis bool,
 	epoch epochtime.EpochTime,
@@ -175,7 +175,7 @@ func SanityCheckNodes(
 		if !n.ID.IsValid() {
 			return nil, fmt.Errorf("registry: node sanity check failed: ID %s is invalid", n.ID.String())
 		}
-		entity, ok := seenEntities[n.EntityID]
+		entity, ok := seenEntities[n.EntityAddress]
 		if !ok {
 			return nil, fmt.Errorf("registry: node sanity check failed node: %s references a missing entity", n.ID.String())
 		}
@@ -224,7 +224,7 @@ func SanityCheckStake(
 	// Generate escrow account for all entities.
 	for _, entity := range entities {
 		var escrow *staking.EscrowAccount
-		addr := staking.NewAddress(entity.ID)
+		addr := entity.AccountAddress
 		acct, ok := accounts[addr]
 		if ok {
 			// Generate an escrow account with the same active balance and shares number.
@@ -255,19 +255,19 @@ func SanityCheckStake(
 			nodeRts = append(nodeRts, runtimeMap[rt.ID])
 		}
 		// Add node stake claims.
-		addr := staking.NewAddress(node.EntityID)
+		addr := node.EntityAddress
 		generatedEscrows[addr].StakeAccumulator.AddClaimUnchecked(StakeClaimForNode(node.ID), StakeThresholdsForNode(node, nodeRts))
 	}
 	for _, rt := range runtimes {
 		// Add runtime stake claims.
-		addr := staking.NewAddress(rt.EntityID)
+		addr := rt.EntityAddress
 		generatedEscrows[addr].StakeAccumulator.AddClaimUnchecked(StakeClaimForRuntime(rt.ID), StakeThresholdsForRuntime(rt))
 	}
 
 	// Compare entities' generated escrow accounts with actual ones.
 	for _, entity := range entities {
 		var generatedEscrow, actualEscrow *staking.EscrowAccount
-		addr := staking.NewAddress(entity.ID)
+		addr := entity.AccountAddress
 		generatedEscrow = generatedEscrows[addr]
 		acct, ok := accounts[addr]
 		if ok {

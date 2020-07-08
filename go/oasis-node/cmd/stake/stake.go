@@ -12,6 +12,7 @@ import (
 	"github.com/spf13/viper"
 	"google.golang.org/grpc"
 
+	"github.com/oasisprotocol/oasis-core/go/common/crypto/multisig"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	"github.com/oasisprotocol/oasis-core/go/common/errors"
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
@@ -46,7 +47,7 @@ var (
 
 	pubkey2AddressCmd = &cobra.Command{
 		Use:   "pubkey2address",
-		Short: "convert a public key (e.g. entity's ID) to an account address",
+		Short: "convert a public key to a single-signature account address",
 		Run:   doPubkey2Address,
 	}
 
@@ -238,7 +239,7 @@ func doPubkey2Address(cmd *cobra.Command, args []string) {
 		os.Exit(1)
 	}
 
-	fmt.Printf("%v\n", staking.NewAddress(pk))
+	fmt.Printf("%v\n", staking.NewAddress(multisig.NewAccountFromPublicKey(pk)))
 }
 
 // Register registers the stake sub-command and all of it's children.

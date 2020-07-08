@@ -8,6 +8,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/oasisprotocol/oasis-core/go/common/crypto/multisig"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	memorySigner "github.com/oasisprotocol/oasis-core/go/common/crypto/signature/signers/memory"
 	"github.com/oasisprotocol/oasis-core/go/common/quantity"
@@ -44,7 +45,7 @@ func TestDelegationQueries(t *testing.T) {
 	// Generate escrow account.
 	escrowSigner, err := fac.Generate(signature.SignerEntity, rand.Reader)
 	require.NoError(err, "generating escrow signer")
-	escrowAddr := staking.NewAddress(escrowSigner.Public())
+	escrowAddr := staking.NewAddress(multisig.NewAccountFromPublicKey(escrowSigner.Public()))
 
 	var escrowAccount staking.Account
 	err = s.SetAccount(ctx, escrowAddr, &escrowAccount)
@@ -61,7 +62,7 @@ func TestDelegationQueries(t *testing.T) {
 	for i := int64(1); i <= int64(numDelegatorAccounts); i++ {
 		signer, serr := fac.Generate(signature.SignerEntity, rand.Reader)
 		require.NoError(serr, "memory signer factory Generate account")
-		addr := staking.NewAddress(signer.Public())
+		addr := staking.NewAddress(multisig.NewAccountFromPublicKey(signer.Public()))
 
 		delegatorAddrs = append(delegatorAddrs, addr)
 
@@ -125,7 +126,7 @@ func TestRewardAndSlash(t *testing.T) {
 
 	delegatorSigner, err := memorySigner.NewSigner(rand.Reader)
 	require.NoError(err, "generating delegator signer")
-	delegatorAddr := staking.NewAddress(delegatorSigner.Public())
+	delegatorAddr := staking.NewAddress(multisig.NewAccountFromPublicKey(delegatorSigner.Public()))
 	delegatorAccount := &staking.Account{}
 	delegatorAccount.General.Nonce = 10
 	err = delegatorAccount.General.Balance.FromBigInt(big.NewInt(300))
@@ -133,7 +134,7 @@ func TestRewardAndSlash(t *testing.T) {
 
 	escrowSigner, err := memorySigner.NewSigner(rand.Reader)
 	require.NoError(err, "generating escrow signer")
-	escrowAddr := staking.NewAddress(escrowSigner.Public())
+	escrowAddr := staking.NewAddress(multisig.NewAccountFromPublicKey(escrowSigner.Public()))
 	escrowAddrAsList := []staking.Address{escrowAddr}
 	escrowAccount := &staking.Account{}
 	escrowAccount.Escrow.CommissionSchedule = staking.CommissionSchedule{
@@ -292,26 +293,30 @@ func TestEpochSigning(t *testing.T) {
 	es, err := s.EpochSigning(ctx)
 	require.NoError(err, "load epoch signing info")
 	require.Zero(es.Total, "empty epoch signing info total")
-	require.Empty(es.ByEntity, "empty epoch signing info by entity")
+	require.Empty(es.ByAddress, "empty epoch signing info by address")
 
-	var truant, exact, perfect signature.PublicKey
-	err = truant.UnmarshalHex("1111111111111111111111111111111111111111111111111111111111111111")
-	require.NoError(err, "initializing 'truant' ID")
-	err = exact.UnmarshalHex("3333333333333333333333333333333333333333333333333333333333333333")
-	require.NoError(err, "initializing 'exact' ID")
-	err = perfect.UnmarshalHex("4444444444444444444444444444444444444444444444444444444444444444")
-	require.NoError(err, "initializing 'perfect' ID")
+	var truantPub, exactPub, perfectPub signature.PublicKey
+	err = truantPub.UnmarshalHex("1111111111111111111111111111111111111111111111111111111111111111")
+	require.NoError(err, "initializing 'truant' PublicKey")
+	err = exactPub.UnmarshalHex("3333333333333333333333333333333333333333333333333333333333333333")
+	require.NoError(err, "initializing 'exact' PublicKey")
+	err = perfectPub.UnmarshalHex("4444444444444444444444444444444444444444444444444444444444444444")
+	require.NoError(err, "initializing 'perfect' PublicKey")
 
-	err = es.Update([]signature.PublicKey{truant, exact, perfect})
+	truant := staking.NewAddress(multisig.NewAccountFromPublicKey(truantPub))
+	exact := staking.NewAddress(multisig.NewAccountFromPublicKey(exactPub))
+	perfect := staking.NewAddress(multisig.NewAccountFromPublicKey(perfectPub))
+
+	err = es.Update([]staking.Address{truant, exact, perfect})
 	require.NoError(err, "updating epoch signing info")
-	err = es.Update([]signature.PublicKey{exact, perfect})
+	err = es.Update([]staking.Address{exact, perfect})
 	require.NoError(err, "updating epoch signing info")
-	err = es.Update([]signature.PublicKey{exact, perfect})
+	err = es.Update([]staking.Address{exact, perfect})
 	require.NoError(err, "updating epoch signing info")
-	err = es.Update([]signature.PublicKey{perfect})
+	err = es.Update([]staking.Address{perfect})
 	require.NoError(err, "updating epoch signing info")
 	require.EqualValues(4, es.Total, "populated epoch signing info total")
-	require.Len(es.ByEntity, 3, "populated epoch signing info by entity")
+	require.Len(es.ByAddress, 3, "populated epoch signing info by address")
 
 	err = s.SetEpochSigning(ctx, es)
 	require.NoError(err, "SetEpochSigning")
@@ -319,17 +324,17 @@ func TestEpochSigning(t *testing.T) {
 	require.NoError(err, "load epoch signing info 2")
 	require.Equal(es, esRoundTrip, "epoch signing info round trip")
 
-	eligibleEntities, err := es.EligibleEntities(3, 4)
-	require.NoError(err, "determining eligible entities")
-	require.Len(eligibleEntities, 2, "eligible entities")
-	require.NotContains(eligibleEntities, truant, "'truant' not eligible")
-	require.Contains(eligibleEntities, exact, "'exact' eligible")
-	require.Contains(eligibleEntities, perfect, "'perfect' eligible")
+	eligibleAddresses, err := es.EligibleAddresses(3, 4)
+	require.NoError(err, "determining eligible addresses")
+	require.Len(eligibleAddresses, 2, "eligible addresses")
+	require.NotContains(eligibleAddresses, truant, "'truant' not eligible")
+	require.Contains(eligibleAddresses, exact, "'exact' eligible")
+	require.Contains(eligibleAddresses, perfect, "'perfect' eligible")
 
 	err = s.ClearEpochSigning(ctx)
 	require.NoError(err, "ClearEpochSigning")
 	esClear, err := s.EpochSigning(ctx)
 	require.NoError(err, "load cleared epoch signing info")
 	require.Zero(esClear.Total, "cleared epoch signing info total")
-	require.Empty(esClear.ByEntity, "cleared epoch signing info by entity")
+	require.Empty(esClear.ByAddress, "cleared epoch signing info by address")
 }

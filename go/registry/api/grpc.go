@@ -16,7 +16,7 @@ var (
 	serviceName = cmnGrpc.NewServiceName("Registry")
 
 	// methodGetEntity is the GetEntity method.
-	methodGetEntity = serviceName.NewMethod("GetEntity", IDQuery{})
+	methodGetEntity = serviceName.NewMethod("GetEntity", AccountQuery{})
 	// methodGetEntities is the GetEntities method.
 	methodGetEntities = serviceName.NewMethod("GetEntities", int64(0))
 	// methodGetNode is the GetNode method.
@@ -122,7 +122,7 @@ func handlerGetEntity( // nolint: golint
 	dec func(interface{}) error,
 	interceptor grpc.UnaryServerInterceptor,
 ) (interface{}, error) {
-	var query IDQuery
+	var query AccountQuery
 	if err := dec(&query); err != nil {
 		return nil, err
 	}
@@ -134,7 +134,7 @@ func handlerGetEntity( // nolint: golint
 		FullMethod: methodGetEntity.FullName(),
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(Backend).GetEntity(ctx, req.(*IDQuery))
+		return srv.(Backend).GetEntity(ctx, req.(*AccountQuery))
 	}
 	return interceptor(ctx, &query, info, handler)
 }
@@ -467,7 +467,7 @@ type registryClient struct {
 	conn *grpc.ClientConn
 }
 
-func (c *registryClient) GetEntity(ctx context.Context, query *IDQuery) (*entity.Entity, error) {
+func (c *registryClient) GetEntity(ctx context.Context, query *AccountQuery) (*entity.Entity, error) {
 	var rsp entity.Entity
 	if err := c.conn.Invoke(ctx, methodGetEntity.FullName(), query, &rsp); err != nil {
 		return nil, err
