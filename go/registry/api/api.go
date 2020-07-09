@@ -866,30 +866,28 @@ func verifyAddresses(params *ConsensusParameters, addressRequired bool, addresse
 	return nil
 }
 
-// sortRuntimeList sorts the given runtime list to ensure a canonical order.
-func sortRuntimeList(runtimes []*node.Runtime) {
-	sort.Slice(runtimes, func(i, j int) bool {
-		return bytes.Compare(runtimes[i].ID[:], runtimes[j].ID[:]) == -1
-	})
-}
-
 // verifyNodeRuntimeChanges verifies node runtime changes.
 func verifyNodeRuntimeChanges(logger *logging.Logger, currentRuntimes []*node.Runtime, newRuntimes []*node.Runtime) bool {
-	sortRuntimeList(currentRuntimes)
-	sortRuntimeList(newRuntimes)
-	if len(currentRuntimes) != len(newRuntimes) {
-		logger.Error("RegisterNode: trying to update runtimes, length mismatch",
+	if len(newRuntimes) < len(currentRuntimes) {
+		logger.Error("RegisterNode: trying to update runtimes, cannot remove existing runtimes",
 			"current_runtimes", currentRuntimes,
 			"new_runtimes", newRuntimes,
 		)
 		return false
 	}
-	for i, currentRuntime := range currentRuntimes {
-		newRuntime := newRuntimes[i]
-		if !currentRuntime.ID.Equal(&newRuntime.ID) {
-			logger.Error("RegisterNode: trying to update runtimes, runtime ID changed",
-				"current_runtime", currentRuntime,
-				"new_runtime", newRuntime,
+
+	// Make an index that maps runtime ID -> runtime, so we can do checks
+	// faster.
+	nrtMap := make(map[common.Namespace]*node.Runtime)
+	for _, nrt := range newRuntimes {
+		nrtMap[nrt.ID] = nrt
+	}
+
+	for _, currentRuntime := range currentRuntimes {
+		newRuntime, exists := nrtMap[currentRuntime.ID]
+		if !exists {
+			logger.Error("RegisterNode: trying to update runtimes, current runtime is missing in new set",
+				"runtime_id", currentRuntime.ID,
 			)
 			return false
 		}

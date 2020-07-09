@@ -159,16 +159,16 @@ func testRegistryEntityNodes( // nolint: gocyclo
 	for i, te := range entities {
 		// Stagger the expirations so that it's possible to test it.
 		var entityNodes []*TestNode
-		entityNodes, err = te.NewTestNodes(i+1, 1, nil, nodeRuntimes, epoch+epochtime.EpochTime(i)+1)
+		entityNodes, err = te.NewTestNodes(i+1, 1, nil, nodeRuntimes, epoch+epochtime.EpochTime(i)+1, consensus)
 		require.NoError(t, err, "NewTestNodes")
 
 		nodes = append(nodes, entityNodes)
 		numNodes += len(entityNodes)
 	}
 	nodeRuntimesEW := []*node.Runtime{&node.Runtime{ID: runtimeEWID}}
-	whitelistedNodes, err := entities[1].NewTestNodes(1, 1, []byte("whitelistedNodes"), nodeRuntimesEW, epoch+2)
+	whitelistedNodes, err := entities[1].NewTestNodes(1, 1, []byte("whitelistedNodes"), nodeRuntimesEW, epoch+2, consensus)
 	require.NoError(t, err, "NewTestNodes whitelisted")
-	nonWhitelistedNodes, err := entities[0].NewTestNodes(1, 1, []byte("nonWhitelistedNodes"), nodeRuntimesEW, epoch+2)
+	nonWhitelistedNodes, err := entities[0].NewTestNodes(1, 1, []byte("nonWhitelistedNodes"), nodeRuntimesEW, epoch+2, consensus)
 	require.NoError(t, err, "NewTestNodes non-whitelisted")
 
 	nodeCh, nodeSub, err := backend.WatchNodes(ctx)
@@ -235,7 +235,7 @@ func testRegistryEntityNodes( // nolint: gocyclo
 				}
 
 				err = tn.Register(consensus, tn.SignedValidReRegistration)
-				require.NoError(err, "Re-registering a node with different address should work")
+				require.NoError(err, "Re-registering a node with different address and more runtimes should work")
 
 				for _, v := range tn.invalidReReg {
 					err = tn.Register(consensus, v.signed)
@@ -814,7 +814,7 @@ func randomIdentity(rng *drbg.Drbg) *identity.Identity {
 
 // NewTestNodes returns the specified number of TestNodes, generated
 // deterministically using the entity's public key as the seed.
-func (ent *TestEntity) NewTestNodes(nCompute int, nStorage int, idNonce []byte, runtimes []*node.Runtime, expiration epochtime.EpochTime) ([]*TestNode, error) {
+func (ent *TestEntity) NewTestNodes(nCompute int, nStorage int, idNonce []byte, runtimes []*node.Runtime, expiration epochtime.EpochTime, consensus consensusAPI.Backend) ([]*TestNode, error) { // nolint: gocyclo
 	if nCompute <= 0 || nStorage <= 0 || nCompute > 254 || nStorage > 254 {
 		return nil, errors.New("registry/tests: test node count out of bounds")
 	}
@@ -1109,13 +1109,34 @@ func (ent *TestEntity) NewTestNodes(nCompute int, nStorage int, idNonce []byte, 
 		}
 		nod.invalidAfter = append(nod.invalidAfter, invalid13)
 
-		// Add another Re-Registration with different address field.
+		// Add another Re-Registration with different address field and more runtimes.
+		moreRuntimes := append([]*node.Runtime(nil), runtimes...)
+		registeredRuntimes, err := consensus.Registry().GetRuntimes(context.Background(), consensusAPI.HeightLatest)
+		if err != nil {
+			return nil, err
+		}
+		rtMap := make(map[common.Namespace]*node.Runtime)
+		for _, rt := range moreRuntimes {
+			rtMap[rt.ID] = rt
+		}
+		for _, rt := range registeredRuntimes {
+			if rt.Kind != api.KindCompute {
+				continue
+			}
+			if _, exists := rtMap[rt.ID]; !exists {
+				moreRuntimes = append(moreRuntimes, &node.Runtime{ID: rt.ID})
+				break
+			}
+		}
+		if len(moreRuntimes) <= len(runtimes) {
+			panic("should find one additional compute runtime")
+		}
 		nod.UpdatedNode = &node.Node{
 			DescriptorVersion: node.LatestNodeDescriptorVersion,
 			ID:                nod.Signer.Public(),
 			EntityID:          ent.Entity.ID,
 			Expiration:        uint64(expiration),
-			Runtimes:          runtimes,
+			Runtimes:          moreRuntimes,
 			Roles:             role,
 		}
 		addr = node.Address{
@@ -1134,13 +1155,14 @@ func (ent *TestEntity) NewTestNodes(nCompute int, nStorage int, idNonce []byte, 
 			return nil, err
 		}
 
-		// Add invalid Re-Registration with changed Runtimes field.
+		// Add invalid Re-Registration with different runtimes.
 		invalid14 := &invalidNodeRegistration{
 			descr: "Re-registering a node with different runtimes should fail",
 		}
 		testRuntimeSigner := memorySigner.NewTestSigner("invalid-registration-runtime-seed")
-		newRuntimes := append([]*node.Runtime(nil), runtimes...)
-		newRuntimes = append(newRuntimes, &node.Runtime{ID: publicKeyToNamespace(testRuntimeSigner.Public(), false)})
+		newRuntimes := []*node.Runtime{
+			&node.Runtime{ID: publicKeyToNamespace(testRuntimeSigner.Public(), false)},
+		}
 		newNode := &node.Node{
 			DescriptorVersion: node.LatestNodeDescriptorVersion,
 			ID:                nod.Signer.Public(),
@@ -1389,7 +1411,7 @@ func BulkPopulate(t *testing.T, backend api.Backend, consensus consensusAPI.Back
 
 	numCompute := int(runtimes[0].Runtime.Executor.GroupSize + runtimes[0].Runtime.Executor.GroupBackupSize)
 	numStorage := int(runtimes[0].Runtime.Storage.GroupSize)
-	nodes, err := entity.NewTestNodes(numCompute, numStorage, nil, rts, epoch+testRuntimeNodeExpiration)
+	nodes, err := entity.NewTestNodes(numCompute, numStorage, nil, rts, epoch+testRuntimeNodeExpiration, consensus)
 	require.NoError(err, "NewTestNodes")
 
 	ret := make([]*node.Node, 0, numCompute+numStorage)
