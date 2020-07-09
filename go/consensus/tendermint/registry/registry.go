@@ -164,7 +164,7 @@ func (tb *tendermintBackend) StateToGenesis(ctx context.Context, height int64) (
 	return q.Genesis(ctx)
 }
 
-func (tb *tendermintBackend) GetEvents(ctx context.Context, height int64) ([]api.Event, error) {
+func (tb *tendermintBackend) GetEvents(ctx context.Context, height int64) ([]*api.Event, error) {
 	// Get block results at given height.
 	var results *tmrpctypes.ResultBlockResults
 	results, err := tb.service.GetBlockResults(height)
@@ -185,7 +185,7 @@ func (tb *tendermintBackend) GetEvents(ctx context.Context, height int64) ([]api
 		return nil, err
 	}
 
-	var events []api.Event
+	var events []*api.Event
 	// Decode events from block results.
 	blockEvs, _, err := EventsFromTendermint(nil, results.Height, results.BeginBlockEvents)
 	if err != nil {
@@ -269,7 +269,7 @@ func (tb *tendermintBackend) onEventDataTx(ctx context.Context, ev tmtypes.Event
 	tb.notifyEvents(ctx, events)
 }
 
-func (tb *tendermintBackend) processNodeListEvents(ctx context.Context, events []NodeListEpochInternalEvent) {
+func (tb *tendermintBackend) processNodeListEvents(ctx context.Context, events []*NodeListEpochInternalEvent) {
 	for _, ev := range events {
 		nl, err := tb.getNodeList(ctx, ev.Height)
 		if err != nil {
@@ -283,7 +283,7 @@ func (tb *tendermintBackend) processNodeListEvents(ctx context.Context, events [
 	}
 }
 
-func (tb *tendermintBackend) notifyEvents(ctx context.Context, events []api.Event) {
+func (tb *tendermintBackend) notifyEvents(ctx context.Context, events []*api.Event) {
 	for _, ev := range events {
 		if ev.EntityEvent != nil {
 			tb.entityNotifier.Broadcast(ev.EntityEvent)
@@ -302,7 +302,7 @@ func EventsFromTendermint(
 	tx tmtypes.Tx,
 	height int64,
 	tmEvents []tmabcitypes.Event,
-) ([]api.Event, []NodeListEpochInternalEvent, error) {
+) ([]*api.Event, []*NodeListEpochInternalEvent, error) {
 	var txHash hash.Hash
 	switch tx {
 	case nil:
@@ -311,8 +311,8 @@ func EventsFromTendermint(
 		txHash = hash.NewFromBytes(tx)
 	}
 
-	var events []api.Event
-	var nodeListEvents []NodeListEpochInternalEvent
+	var events []*api.Event
+	var nodeListEvents []*NodeListEpochInternalEvent
 	var errs error
 	for _, tmEv := range tmEvents {
 		// Ignore events that don't relate to the registry app.
@@ -327,7 +327,7 @@ func EventsFromTendermint(
 			switch {
 			case bytes.Equal(key, app.KeyRegistryNodeListEpoch):
 				// Node list epoch event.
-				nodeListEvents = append(nodeListEvents, NodeListEpochInternalEvent{Height: height})
+				nodeListEvents = append(nodeListEvents, &NodeListEpochInternalEvent{Height: height})
 			case bytes.Equal(key, app.KeyNodesExpired):
 				// Nodes expired event.
 				var nodes []*node.Node
@@ -342,7 +342,7 @@ func EventsFromTendermint(
 						Node:           node,
 						IsRegistration: false,
 					}
-					events = append(events, api.Event{Height: height, TxHash: txHash, NodeEvent: ne})
+					events = append(events, &api.Event{Height: height, TxHash: txHash, NodeEvent: ne})
 				}
 			case bytes.Equal(key, app.KeyRuntimeRegistered):
 				// Runtime registered event.
@@ -352,7 +352,7 @@ func EventsFromTendermint(
 					continue
 				}
 
-				evt := api.Event{
+				evt := &api.Event{
 					Height:       height,
 					TxHash:       txHash,
 					RuntimeEvent: &api.RuntimeEvent{Runtime: &rt},
@@ -370,7 +370,7 @@ func EventsFromTendermint(
 					Entity:         &ent,
 					IsRegistration: true,
 				}
-				events = append(events, api.Event{Height: height, TxHash: txHash, EntityEvent: eev})
+				events = append(events, &api.Event{Height: height, TxHash: txHash, EntityEvent: eev})
 			case bytes.Equal(key, app.KeyEntityDeregistered):
 				// Entity deregistered event.
 				var dereg app.EntityDeregistration
@@ -383,7 +383,7 @@ func EventsFromTendermint(
 					Entity:         &dereg.Entity,
 					IsRegistration: false,
 				}
-				events = append(events, api.Event{Height: height, TxHash: txHash, EntityEvent: eev})
+				events = append(events, &api.Event{Height: height, TxHash: txHash, EntityEvent: eev})
 			case bytes.Equal(key, app.KeyNodeRegistered):
 				// Node registered event.
 				var n node.Node
@@ -396,7 +396,7 @@ func EventsFromTendermint(
 					Node:           &n,
 					IsRegistration: true,
 				}
-				events = append(events, api.Event{Height: height, TxHash: txHash, NodeEvent: nev})
+				events = append(events, &api.Event{Height: height, TxHash: txHash, NodeEvent: nev})
 			case bytes.Equal(key, app.KeyNodeUnfrozen):
 				// Node unfrozen event.
 				var nid signature.PublicKey
@@ -404,7 +404,7 @@ func EventsFromTendermint(
 					errs = multierror.Append(errs, fmt.Errorf("registry: corrupt NodeUnfrozen event: %w", err))
 					continue
 				}
-				evt := api.Event{
+				evt := &api.Event{
 					Height: height,
 					TxHash: txHash,
 					NodeUnfrozenEvent: &api.NodeUnfrozenEvent{

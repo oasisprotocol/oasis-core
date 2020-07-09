@@ -229,7 +229,7 @@ type Backend interface {
 	StateToGenesis(context.Context, int64) (*Genesis, error)
 
 	// GetEvents returns the events at specified block height.
-	GetEvents(ctx context.Context, height int64) ([]Event, error)
+	GetEvents(ctx context.Context, height int64) ([]*Event, error)
 
 	// Cleanup cleans up the registry backend.
 	Cleanup()

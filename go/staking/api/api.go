@@ -138,7 +138,7 @@ type Backend interface {
 	WatchEscrows(ctx context.Context) (<-chan *EscrowEvent, pubsub.ClosableSubscription, error)
 
 	// GetEvents returns the events at specified block height.
-	GetEvents(ctx context.Context, height int64) ([]Event, error)
+	GetEvents(ctx context.Context, height int64) ([]*Event, error)
 
 	// WatchEvents returns a channel that produces a stream of Events.
 	WatchEvents(ctx context.Context) (<-chan *Event, pubsub.ClosableSubscription, error)

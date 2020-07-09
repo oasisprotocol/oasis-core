@@ -679,8 +679,8 @@ func (c *registryClient) StateToGenesis(ctx context.Context, height int64) (*Gen
 	return &rsp, nil
 }
 
-func (c *registryClient) GetEvents(ctx context.Context, height int64) ([]Event, error) {
-	var rsp []Event
+func (c *registryClient) GetEvents(ctx context.Context, height int64) ([]*Event, error) {
+	var rsp []*Event
 	if err := c.conn.Invoke(ctx, methodGetEvents.FullName(), height, &rsp); err != nil {
 		return nil, err
 	}

@@ -143,7 +143,7 @@ func (tb *tendermintBackend) StateToGenesis(ctx context.Context, height int64) (
 	return q.Genesis(ctx)
 }
 
-func (tb *tendermintBackend) GetEvents(ctx context.Context, height int64) ([]api.Event, error) {
+func (tb *tendermintBackend) GetEvents(ctx context.Context, height int64) ([]*api.Event, error) {
 	// Get block results at given height.
 	var results *tmrpctypes.ResultBlockResults
 	results, err := tb.service.GetBlockResults(height)
@@ -165,7 +165,7 @@ func (tb *tendermintBackend) GetEvents(ctx context.Context, height int64) ([]api
 		return nil, err
 	}
 
-	var events []api.Event
+	var events []*api.Event
 	// Decode events from block results.
 	blockEvs, err := EventsFromTendermint(nil, results.Height, results.BeginBlockEvents)
 	if err != nil {
@@ -267,7 +267,7 @@ func (tb *tendermintBackend) onEventDataTx(ctx context.Context, ev tmtypes.Event
 	tb.notifyEvents(events)
 }
 
-func (tb *tendermintBackend) notifyEvents(events []api.Event) {
+func (tb *tendermintBackend) notifyEvents(events []*api.Event) {
 	for _, ev := range events {
 		if ev.Transfer != nil {
 			tb.transferNotifier.Broadcast(ev.Transfer)
@@ -278,7 +278,7 @@ func (tb *tendermintBackend) notifyEvents(events []api.Event) {
 		if ev.Burn != nil {
 			tb.burnNotifier.Broadcast(ev.Burn)
 		}
-		tb.eventNotifier.Broadcast(&ev)
+		tb.eventNotifier.Broadcast(ev)
 	}
 }
 
@@ -287,7 +287,7 @@ func EventsFromTendermint(
 	tx tmtypes.Tx,
 	height int64,
 	tmEvents []tmabcitypes.Event,
-) ([]api.Event, error) {
+) ([]*api.Event, error) {
 	var txHash hash.Hash
 	switch tx {
 	case nil:
@@ -296,7 +296,7 @@ func EventsFromTendermint(
 		txHash = hash.NewFromBytes(tx)
 	}
 
-	var events []api.Event
+	var events []*api.Event
 	var errs error
 	for _, tmEv := range tmEvents {
 		// Ignore events that don't relate to the staking app.
@@ -317,7 +317,7 @@ func EventsFromTendermint(
 					continue
 				}
 
-				evt := api.Event{Height: height, TxHash: txHash, Escrow: &api.EscrowEvent{Take: &e}}
+				evt := &api.Event{Height: height, TxHash: txHash, Escrow: &api.EscrowEvent{Take: &e}}
 				events = append(events, evt)
 			case bytes.Equal(key, app.KeyTransfer):
 				// Transfer event.
@@ -327,7 +327,7 @@ func EventsFromTendermint(
 					continue
 				}
 
-				evt := api.Event{Height: height, TxHash: txHash, Transfer: &e}
+				evt := &api.Event{Height: height, TxHash: txHash, Transfer: &e}
 				events = append(events, evt)
 			case bytes.Equal(key, app.KeyReclaimEscrow):
 				// Reclaim escrow event.
@@ -337,7 +337,7 @@ func EventsFromTendermint(
 					continue
 				}
 
-				evt := api.Event{Height: height, TxHash: txHash, Escrow: &api.EscrowEvent{Reclaim: &e}}
+				evt := &api.Event{Height: height, TxHash: txHash, Escrow: &api.EscrowEvent{Reclaim: &e}}
 				events = append(events, evt)
 			case bytes.Equal(key, app.KeyAddEscrow):
 				// Add escrow event.
@@ -347,7 +347,7 @@ func EventsFromTendermint(
 					continue
 				}
 
-				evt := api.Event{Height: height, TxHash: txHash, Escrow: &api.EscrowEvent{Add: &e}}
+				evt := &api.Event{Height: height, TxHash: txHash, Escrow: &api.EscrowEvent{Add: &e}}
 				events = append(events, evt)
 			case bytes.Equal(key, app.KeyBurn):
 				// Burn event.
@@ -357,7 +357,7 @@ func EventsFromTendermint(
 					continue
 				}
 
-				evt := api.Event{Height: height, TxHash: txHash, Burn: &e}
+				evt := &api.Event{Height: height, TxHash: txHash, Burn: &e}
 				events = append(events, evt)
 			default:
 				errs = multierror.Append(errs, fmt.Errorf("staking: unknown event type: key: %s, val: %s", key, val))
