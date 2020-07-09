@@ -757,8 +757,8 @@ func (t *tendermintService) GetTransactionsWithResults(ctx context.Context, heig
 		if err != nil {
 			return nil, err
 		}
-		for _, ev := range stakingEvents {
-			result.Events = append(result.Events, &results.Event{Staking: &ev})
+		for _, e := range stakingEvents {
+			result.Events = append(result.Events, &results.Event{Staking: e})
 		}
 
 		// Transaction registry events.
@@ -770,8 +770,8 @@ func (t *tendermintService) GetTransactionsWithResults(ctx context.Context, heig
 		if err != nil {
 			return nil, err
 		}
-		for _, ev := range registryEvents {
-			result.Events = append(result.Events, &results.Event{Registry: &ev})
+		for _, e := range registryEvents {
+			result.Events = append(result.Events, &results.Event{Registry: e})
 		}
 
 		// Transaction roothash events.
@@ -783,8 +783,8 @@ func (t *tendermintService) GetTransactionsWithResults(ctx context.Context, heig
 		if err != nil {
 			return nil, err
 		}
-		for _, ev := range roothashEvents {
-			result.Events = append(result.Events, &results.Event{RootHash: &ev})
+		for _, e := range roothashEvents {
+			result.Events = append(result.Events, &results.Event{RootHash: e})
 		}
 		txsWithResults.Results = append(txsWithResults.Results, result)
 	}

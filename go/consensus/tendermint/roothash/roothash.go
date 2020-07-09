@@ -180,7 +180,7 @@ func (tb *tendermintBackend) StateToGenesis(ctx context.Context, height int64) (
 	return q.Genesis(ctx)
 }
 
-func (tb *tendermintBackend) GetEvents(ctx context.Context, height int64) ([]api.Event, error) {
+func (tb *tendermintBackend) GetEvents(ctx context.Context, height int64) ([]*api.Event, error) {
 	// Get block results at given height.
 	var results *tmrpctypes.ResultBlockResults
 	results, err := tb.service.GetBlockResults(height)
@@ -202,7 +202,7 @@ func (tb *tendermintBackend) GetEvents(ctx context.Context, height int64) ([]api
 		return nil, err
 	}
 
-	var events []api.Event
+	var events []*api.Event
 	// Decode events from block results.
 	blockEvs, err := EventsFromTendermint(nil, results.Height, results.BeginBlockEvents)
 	if err != nil {
@@ -441,15 +441,12 @@ func (tb *tendermintBackend) onEventDataTx(
 	tb.processEvents(ctx, events, blockHistory)
 }
 
-func (tb *tendermintBackend) processEvents(ctx context.Context, events []api.Event, blockHistory map[common.Namespace]api.BlockHistory) {
-	for _, evp := range events {
-		// Redeclare variable on every iteration since the pointer to it gets broadcasted.
-		ev := evp
-
+func (tb *tendermintBackend) processEvents(ctx context.Context, events []*api.Event, blockHistory map[common.Namespace]api.BlockHistory) {
+	for _, ev := range events {
 		// Notify non-finalized events.
 		if ev.FinalizedEvent == nil {
 			notifiers := tb.getRuntimeNotifiers(ev.RuntimeID)
-			notifiers.eventNotifier.Broadcast(&ev)
+			notifiers.eventNotifier.Broadcast(ev)
 			continue
 		}
 
@@ -511,7 +508,7 @@ func EventsFromTendermint(
 	tx tmtypes.Tx,
 	height int64,
 	tmEvents []tmabcitypes.Event,
-) ([]api.Event, error) {
+) ([]*api.Event, error) {
 	var txHash hash.Hash
 	switch tx {
 	case nil:
@@ -520,7 +517,7 @@ func EventsFromTendermint(
 		txHash = hash.NewFromBytes(tx)
 	}
 
-	var events []api.Event
+	var events []*api.Event
 	var errs error
 	for _, tmEv := range tmEvents {
 		// Ignore events that don't relate to the roothash app.
@@ -541,7 +538,7 @@ func EventsFromTendermint(
 					continue
 				}
 
-				ev := api.Event{RuntimeID: value.ID, Height: height, TxHash: txHash, FinalizedEvent: &api.FinalizedEvent{Round: value.Round}}
+				ev := &api.Event{RuntimeID: value.ID, Height: height, TxHash: txHash, FinalizedEvent: &api.FinalizedEvent{Round: value.Round}}
 				events = append(events, ev)
 			case bytes.Equal(key, app.KeyMergeDiscrepancyDetected):
 				// A merge discrepancy has been detected.
@@ -551,7 +548,7 @@ func EventsFromTendermint(
 					continue
 				}
 
-				ev := api.Event{RuntimeID: value.ID, Height: height, TxHash: txHash, MergeDiscrepancyDetected: &value.Event}
+				ev := &api.Event{RuntimeID: value.ID, Height: height, TxHash: txHash, MergeDiscrepancyDetected: &value.Event}
 				events = append(events, ev)
 			case bytes.Equal(key, app.KeyExecutionDiscrepancyDetected):
 				// An execution discrepancy has been detected.
@@ -561,7 +558,7 @@ func EventsFromTendermint(
 					continue
 				}
 
-				ev := api.Event{RuntimeID: value.ID, Height: height, TxHash: txHash, ExecutionDiscrepancyDetected: &value.Event}
+				ev := &api.Event{RuntimeID: value.ID, Height: height, TxHash: txHash, ExecutionDiscrepancyDetected: &value.Event}
 				events = append(events, ev)
 			case bytes.Equal(key, app.KeyExecutorCommitted):
 				// An executor commit has been processed.
@@ -571,7 +568,7 @@ func EventsFromTendermint(
 					continue
 				}
 
-				ev := api.Event{RuntimeID: value.ID, Height: height, TxHash: txHash, ExecutorCommitted: &value.Event}
+				ev := &api.Event{RuntimeID: value.ID, Height: height, TxHash: txHash, ExecutorCommitted: &value.Event}
 				events = append(events, ev)
 			case bytes.Equal(key, app.KeyMergeCommitted):
 				// A merge commit has been processed.
@@ -581,14 +578,11 @@ func EventsFromTendermint(
 					continue
 				}
 
-				ev := api.Event{RuntimeID: value.ID, Height: height, TxHash: txHash, MergeCommitted: &value.Event}
+				ev := &api.Event{RuntimeID: value.ID, Height: height, TxHash: txHash, MergeCommitted: &value.Event}
 				events = append(events, ev)
 			case bytes.Equal(key, app.KeyRuntimeID):
 				// Runtime ID attribute.
-				// TODO: Every event should contain this attribute, but not used atm
-				// TODO: maybe add a check? Could also remove RuntimeID field in the above
-				// tendermint attribute value types, and get it from this attrbiute?
-				continue
+				// Not used currently.
 			default:
 				errs = multierror.Append(errs, fmt.Errorf("roothash: unknown event type: key: %s, val: %s", key, val))
 			}

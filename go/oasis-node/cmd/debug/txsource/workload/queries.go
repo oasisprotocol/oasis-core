@@ -13,6 +13,7 @@ import (
 
 	"github.com/oasisprotocol/oasis-core/go/common"
 	"github.com/oasisprotocol/oasis-core/go/common/cbor"
+	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	"github.com/oasisprotocol/oasis-core/go/common/entity"
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
@@ -78,7 +79,7 @@ func (q *queries) sanityCheckTransactionEvents(ctx context.Context, height int64
 	if err != nil {
 		return fmt.Errorf("registry.GetEvents error at height %d: %w", height, err)
 	}
-	var expectedRegistryEvents []registry.Event
+	var expectedRegistryEvents []*registry.Event
 	for _, event := range registryEvents {
 		if event.TxHash.IsEmpty() {
 			continue
@@ -89,7 +90,7 @@ func (q *queries) sanityCheckTransactionEvents(ctx context.Context, height int64
 	if err != nil {
 		return fmt.Errorf("staking.GetEven error at height %d: %w", height, err)
 	}
-	var expectedStakingEvents []staking.Event
+	var expectedStakingEvents []*staking.Event
 	for _, event := range stakingEvents {
 		if event.TxHash.IsEmpty() {
 			continue
@@ -105,14 +106,14 @@ func (q *queries) sanityCheckTransactionEvents(ctx context.Context, height int64
 		switch {
 		case txEvent.Registry != nil:
 			for _, registryEvent := range expectedRegistryEvents {
-				if compareEvents(registryEvent, *txEvent.Registry) == 0 {
+				if compareEvents(registryEvent, txEvent.Registry) == 0 {
 					found = true
 					break
 				}
 			}
 		case txEvent.Staking != nil:
 			for _, stakingEvent := range expectedStakingEvents {
-				if compareEvents(stakingEvent, *txEvent.Staking) == 0 {
+				if compareEvents(stakingEvent, txEvent.Staking) == 0 {
 					found = true
 					break
 				}
@@ -128,6 +129,7 @@ func (q *queries) sanityCheckTransactionEvents(ctx context.Context, height int64
 	}
 
 	var numStakingEvents, numRegistryEvents int
+	seenEvents := make(map[hash.Hash]struct{})
 	for _, txEvent := range txEvents {
 		if err := ensureEventExists(txEvent); err != nil {
 			q.logger.Error("GetTransactionsWithResults ensure event exists failed",
@@ -144,8 +146,19 @@ func (q *queries) sanityCheckTransactionEvents(ctx context.Context, height int64
 		if txEvent.Registry != nil {
 			numRegistryEvents++
 		}
+		h := hash.NewFromBytes(cbor.Marshal(txEvent)[:])
+		if _, ok := seenEvents[h]; ok {
+			q.logger.Error("GetTransactionsWithResults duplicate event",
+				"registry_events", expectedRegistryEvents,
+				"staking_events", expectedStakingEvents,
+				"transaction_events", txEvents,
+				"height", height,
+			)
+			return fmt.Errorf("GetTransactionsWithResults duplicate event")
+		}
+		seenEvents[h] = struct{}{}
 	}
-	// If all events exist and lengths match, the results are equal.
+	// If all events exist and lengths match (with no duplicates), the results are equal.
 	if len(expectedStakingEvents) != numStakingEvents {
 		q.logger.Error("GetTransactionsWithResults staking events lengths missmatch",
 			"events", txEvents,
@@ -203,12 +216,12 @@ func (q *queries) doConsensusQueries(ctx context.Context, rng *rand.Rand, height
 	}
 
 	txsWithRes, err := q.consensus.GetTransactionsWithResults(ctx, height)
-	q.logger.Info("GetTransactionsWithResults ",
-		"txs", txs,
-		"txs_with_results", txsWithRes,
-		"height", height,
-	)
 	if err != nil {
+		q.logger.Error("GetTransactionsWithResults",
+			"txs", txs,
+			"txs_with_results", txsWithRes,
+			"height", height,
+		)
 		return fmt.Errorf("GetTransactionsWithResults at height %d: %w", height, err)
 	}
 	if len(txs) != len(txsWithRes.Transactions) {
@@ -249,7 +262,6 @@ func (q *queries) doConsensusQueries(ctx context.Context, rng *rand.Rand, height
 		}
 		txEvents = append(txEvents, res.Events...)
 	}
-
 	if err := q.sanityCheckTransactionEvents(ctx, height, txEvents); err != nil {
 		return fmt.Errorf("GetTransactionsWithResults events sanity check error: %w", err)
 	}
