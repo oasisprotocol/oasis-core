@@ -9,6 +9,7 @@ import (
 	"github.com/eapache/channels"
 	"github.com/hashicorp/go-multierror"
 	tmabcitypes "github.com/tendermint/tendermint/abci/types"
+	tmpubsub "github.com/tendermint/tendermint/libs/pubsub"
 	tmrpctypes "github.com/tendermint/tendermint/rpc/core/types"
 	tmtypes "github.com/tendermint/tendermint/types"
 
@@ -20,14 +21,21 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/node"
 	"github.com/oasisprotocol/oasis-core/go/common/pubsub"
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
+	tmapi "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/api"
 	app "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/apps/registry"
 	"github.com/oasisprotocol/oasis-core/go/consensus/tendermint/service"
 	"github.com/oasisprotocol/oasis-core/go/registry/api"
 )
 
-var _ api.Backend = (*tendermintBackend)(nil)
+// ServiceClient is the registry service client interface.
+type ServiceClient interface {
+	api.Backend
+	tmapi.ServiceClient
+}
 
-type tendermintBackend struct {
+type serviceClient struct {
+	tmapi.BaseServiceClient
+
 	logger *logging.Logger
 
 	service service.TendermintService
@@ -44,12 +52,12 @@ type NodeListEpochInternalEvent struct {
 	Height int64 `json:"height"`
 }
 
-func (tb *tendermintBackend) Querier() *app.QueryFactory {
-	return tb.querier
+func (sc *serviceClient) Querier() *app.QueryFactory {
+	return sc.querier
 }
 
-func (tb *tendermintBackend) GetEntity(ctx context.Context, query *api.IDQuery) (*entity.Entity, error) {
-	q, err := tb.querier.QueryAt(ctx, query.Height)
+func (sc *serviceClient) GetEntity(ctx context.Context, query *api.IDQuery) (*entity.Entity, error) {
+	q, err := sc.querier.QueryAt(ctx, query.Height)
 	if err != nil {
 		return nil, err
 	}
@@ -57,8 +65,8 @@ func (tb *tendermintBackend) GetEntity(ctx context.Context, query *api.IDQuery) 
 	return q.Entity(ctx, query.ID)
 }
 
-func (tb *tendermintBackend) GetEntities(ctx context.Context, height int64) ([]*entity.Entity, error) {
-	q, err := tb.querier.QueryAt(ctx, height)
+func (sc *serviceClient) GetEntities(ctx context.Context, height int64) ([]*entity.Entity, error) {
+	q, err := sc.querier.QueryAt(ctx, height)
 	if err != nil {
 		return nil, err
 	}
@@ -66,16 +74,16 @@ func (tb *tendermintBackend) GetEntities(ctx context.Context, height int64) ([]*
 	return q.Entities(ctx)
 }
 
-func (tb *tendermintBackend) WatchEntities(ctx context.Context) (<-chan *api.EntityEvent, pubsub.ClosableSubscription, error) {
+func (sc *serviceClient) WatchEntities(ctx context.Context) (<-chan *api.EntityEvent, pubsub.ClosableSubscription, error) {
 	typedCh := make(chan *api.EntityEvent)
-	sub := tb.entityNotifier.Subscribe()
+	sub := sc.entityNotifier.Subscribe()
 	sub.Unwrap(typedCh)
 
 	return typedCh, sub, nil
 }
 
-func (tb *tendermintBackend) GetNode(ctx context.Context, query *api.IDQuery) (*node.Node, error) {
-	q, err := tb.querier.QueryAt(ctx, query.Height)
+func (sc *serviceClient) GetNode(ctx context.Context, query *api.IDQuery) (*node.Node, error) {
+	q, err := sc.querier.QueryAt(ctx, query.Height)
 	if err != nil {
 		return nil, err
 	}
@@ -83,8 +91,8 @@ func (tb *tendermintBackend) GetNode(ctx context.Context, query *api.IDQuery) (*
 	return q.Node(ctx, query.ID)
 }
 
-func (tb *tendermintBackend) GetNodeStatus(ctx context.Context, query *api.IDQuery) (*api.NodeStatus, error) {
-	q, err := tb.querier.QueryAt(ctx, query.Height)
+func (sc *serviceClient) GetNodeStatus(ctx context.Context, query *api.IDQuery) (*api.NodeStatus, error) {
+	q, err := sc.querier.QueryAt(ctx, query.Height)
 	if err != nil {
 		return nil, err
 	}
@@ -92,8 +100,8 @@ func (tb *tendermintBackend) GetNodeStatus(ctx context.Context, query *api.IDQue
 	return q.NodeStatus(ctx, query.ID)
 }
 
-func (tb *tendermintBackend) GetNodes(ctx context.Context, height int64) ([]*node.Node, error) {
-	q, err := tb.querier.QueryAt(ctx, height)
+func (sc *serviceClient) GetNodes(ctx context.Context, height int64) ([]*node.Node, error) {
+	q, err := sc.querier.QueryAt(ctx, height)
 	if err != nil {
 		return nil, err
 	}
@@ -101,8 +109,8 @@ func (tb *tendermintBackend) GetNodes(ctx context.Context, height int64) ([]*nod
 	return q.Nodes(ctx)
 }
 
-func (tb *tendermintBackend) GetNodeByConsensusAddress(ctx context.Context, query *api.ConsensusAddressQuery) (*node.Node, error) {
-	q, err := tb.querier.QueryAt(ctx, query.Height)
+func (sc *serviceClient) GetNodeByConsensusAddress(ctx context.Context, query *api.ConsensusAddressQuery) (*node.Node, error) {
+	q, err := sc.querier.QueryAt(ctx, query.Height)
 	if err != nil {
 		return nil, err
 	}
@@ -110,24 +118,24 @@ func (tb *tendermintBackend) GetNodeByConsensusAddress(ctx context.Context, quer
 	return q.NodeByConsensusAddress(ctx, query.Address)
 }
 
-func (tb *tendermintBackend) WatchNodes(ctx context.Context) (<-chan *api.NodeEvent, pubsub.ClosableSubscription, error) {
+func (sc *serviceClient) WatchNodes(ctx context.Context) (<-chan *api.NodeEvent, pubsub.ClosableSubscription, error) {
 	typedCh := make(chan *api.NodeEvent)
-	sub := tb.nodeNotifier.Subscribe()
+	sub := sc.nodeNotifier.Subscribe()
 	sub.Unwrap(typedCh)
 
 	return typedCh, sub, nil
 }
 
-func (tb *tendermintBackend) WatchNodeList(ctx context.Context) (<-chan *api.NodeList, pubsub.ClosableSubscription, error) {
+func (sc *serviceClient) WatchNodeList(ctx context.Context) (<-chan *api.NodeList, pubsub.ClosableSubscription, error) {
 	typedCh := make(chan *api.NodeList)
-	sub := tb.nodeListNotifier.Subscribe()
+	sub := sc.nodeListNotifier.Subscribe()
 	sub.Unwrap(typedCh)
 
 	return typedCh, sub, nil
 }
 
-func (tb *tendermintBackend) GetRuntime(ctx context.Context, query *api.NamespaceQuery) (*api.Runtime, error) {
-	q, err := tb.querier.QueryAt(ctx, query.Height)
+func (sc *serviceClient) GetRuntime(ctx context.Context, query *api.NamespaceQuery) (*api.Runtime, error) {
+	q, err := sc.querier.QueryAt(ctx, query.Height)
 	if err != nil {
 		return nil, err
 	}
@@ -135,27 +143,27 @@ func (tb *tendermintBackend) GetRuntime(ctx context.Context, query *api.Namespac
 	return q.Runtime(ctx, query.ID)
 }
 
-func (tb *tendermintBackend) WatchRuntimes(ctx context.Context) (<-chan *api.Runtime, pubsub.ClosableSubscription, error) {
+func (sc *serviceClient) WatchRuntimes(ctx context.Context) (<-chan *api.Runtime, pubsub.ClosableSubscription, error) {
 	typedCh := make(chan *api.Runtime)
-	sub := tb.runtimeNotifier.Subscribe()
+	sub := sc.runtimeNotifier.Subscribe()
 	sub.Unwrap(typedCh)
 
 	return typedCh, sub, nil
 }
 
-func (tb *tendermintBackend) Cleanup() {
+func (sc *serviceClient) Cleanup() {
 }
 
-func (tb *tendermintBackend) GetRuntimes(ctx context.Context, query *api.GetRuntimesQuery) ([]*api.Runtime, error) {
-	q, err := tb.querier.QueryAt(ctx, query.Height)
+func (sc *serviceClient) GetRuntimes(ctx context.Context, query *api.GetRuntimesQuery) ([]*api.Runtime, error) {
+	q, err := sc.querier.QueryAt(ctx, query.Height)
 	if err != nil {
 		return nil, err
 	}
 	return q.Runtimes(ctx, query.IncludeSuspended)
 }
 
-func (tb *tendermintBackend) StateToGenesis(ctx context.Context, height int64) (*api.Genesis, error) {
-	q, err := tb.querier.QueryAt(ctx, height)
+func (sc *serviceClient) StateToGenesis(ctx context.Context, height int64) (*api.Genesis, error) {
+	q, err := sc.querier.QueryAt(ctx, height)
 	if err != nil {
 		return nil, err
 	}
@@ -163,21 +171,21 @@ func (tb *tendermintBackend) StateToGenesis(ctx context.Context, height int64) (
 	return q.Genesis(ctx)
 }
 
-func (tb *tendermintBackend) GetEvents(ctx context.Context, height int64) ([]*api.Event, error) {
+func (sc *serviceClient) GetEvents(ctx context.Context, height int64) ([]*api.Event, error) {
 	// Get block results at given height.
 	var results *tmrpctypes.ResultBlockResults
-	results, err := tb.service.GetBlockResults(height)
+	results, err := sc.service.GetBlockResults(height)
 	if err != nil {
-		tb.logger.Error("failed to get tendermint block results",
+		sc.logger.Error("failed to get tendermint block results",
 			"err", err,
 			"height", height,
 		)
 		return nil, err
 	}
 	// Get transactions at given height.
-	txns, err := tb.service.GetTransactions(ctx, height)
+	txns, err := sc.service.GetTransactions(ctx, height)
 	if err != nil {
-		tb.logger.Error("failed to get tendermint transactions",
+		sc.logger.Error("failed to get tendermint transactions",
 			"err", err,
 			"height", height,
 		)
@@ -213,87 +221,45 @@ func (tb *tendermintBackend) GetEvents(ctx context.Context, height int64) ([]*ap
 	return events, nil
 }
 
-func (tb *tendermintBackend) worker(ctx context.Context) {
-	// Subscribe to transactions which modify state.
-	sub, err := tb.service.Subscribe("registry-worker", app.QueryApp)
-	if err != nil {
-		tb.logger.Error("failed to subscribe",
-			"err", err,
-		)
-		return
-	}
-	defer tb.service.Unsubscribe("registry-worker", app.QueryApp) // nolint: errcheck
-
-	// Process transactions and emit notifications for our subscribers.
-	for {
-		var event interface{}
-
-		select {
-		case msg := <-sub.Out():
-			event = msg.Data()
-		case <-sub.Cancelled():
-			tb.logger.Debug("worker: terminating, subscription closed")
-			return
-		case <-ctx.Done():
-			return
-		}
-
-		switch ev := event.(type) {
-		case tmtypes.EventDataNewBlock:
-			tb.onEventDataNewBlock(ctx, ev)
-		case tmtypes.EventDataTx:
-			tb.onEventDataTx(ctx, ev)
-		default:
-		}
-	}
+// Implements api.ServiceClient.
+func (sc *serviceClient) ServiceDescriptor() tmapi.ServiceDescriptor {
+	return tmapi.NewStaticServiceDescriptor(api.ModuleName, app.EventType, []tmpubsub.Query{app.QueryApp})
 }
 
-func (tb *tendermintBackend) onEventDataNewBlock(ctx context.Context, ev tmtypes.EventDataNewBlock) {
-	tmEvents := append([]tmabcitypes.Event{}, ev.ResultBeginBlock.GetEvents()...)
-	tmEvents = append(tmEvents, ev.ResultEndBlock.GetEvents()...)
-	events, nodeListEvents, err := EventsFromTendermint(nil, ev.Block.Header.Height, tmEvents)
+// Implements api.ServiceClient.
+func (sc *serviceClient) DeliverEvent(ctx context.Context, height int64, tx tmtypes.Tx, ev *tmabcitypes.Event) error {
+	events, nodeListEvents, err := EventsFromTendermint(tx, height, []tmabcitypes.Event{*ev})
 	if err != nil {
-		tb.logger.Error("error processing registry events", "err", err)
+		return fmt.Errorf("scheduler: failed to process tendermint events: %w", err)
 	}
-	tb.processNodeListEvents(ctx, nodeListEvents)
-	tb.notifyEvents(ctx, events)
-}
 
-func (tb *tendermintBackend) onEventDataTx(ctx context.Context, ev tmtypes.EventDataTx) {
-	events, nodeListEvents, err := EventsFromTendermint(ev.Tx, ev.Height, ev.Result.Events)
-	if err != nil {
-		tb.logger.Error("error processing registry events", "err", err)
-	}
-	tb.processNodeListEvents(ctx, nodeListEvents)
-	tb.notifyEvents(ctx, events)
-}
-
-func (tb *tendermintBackend) processNodeListEvents(ctx context.Context, events []*NodeListEpochInternalEvent) {
-	for _, ev := range events {
-		nl, err := tb.getNodeList(ctx, ev.Height)
+	// Process node list events.
+	for _, ev := range nodeListEvents {
+		nl, err := sc.getNodeList(ctx, height)
 		if err != nil {
-			tb.logger.Error("worker: failed to get node list",
+			sc.logger.Error("worker: failed to get node list",
 				"height", ev.Height,
 				"err", err,
 			)
 			continue
 		}
-		tb.nodeListNotifier.Broadcast(nl)
+		sc.nodeListNotifier.Broadcast(nl)
 	}
-}
 
-func (tb *tendermintBackend) notifyEvents(ctx context.Context, events []*api.Event) {
+	// Notify subscribers of events.
 	for _, ev := range events {
 		if ev.EntityEvent != nil {
-			tb.entityNotifier.Broadcast(ev.EntityEvent)
+			sc.entityNotifier.Broadcast(ev.EntityEvent)
 		}
 		if ev.NodeEvent != nil {
-			tb.nodeNotifier.Broadcast(ev.NodeEvent)
+			sc.nodeNotifier.Broadcast(ev.NodeEvent)
 		}
 		if ev.RuntimeEvent != nil {
-			tb.runtimeNotifier.Broadcast(ev.RuntimeEvent.Runtime)
+			sc.runtimeNotifier.Broadcast(ev.RuntimeEvent.Runtime)
 		}
 	}
+
+	return nil
 }
 
 // EventsFromTendermint extracts registry events from tendermint events.
@@ -417,9 +383,9 @@ func EventsFromTendermint(
 	return events, nodeListEvents, errs
 }
 
-func (tb *tendermintBackend) getNodeList(ctx context.Context, height int64) (*api.NodeList, error) {
+func (sc *serviceClient) getNodeList(ctx context.Context, height int64) (*api.NodeList, error) {
 	// Generate the nodelist.
-	q, err := tb.querier.QueryAt(ctx, height)
+	q, err := sc.querier.QueryAt(ctx, height)
 	if err != nil {
 		return nil, err
 	}
@@ -437,14 +403,14 @@ func (tb *tendermintBackend) getNodeList(ctx context.Context, height int64) (*ap
 }
 
 // New constructs a new tendermint backed registry Backend instance.
-func New(ctx context.Context, service service.TendermintService) (api.Backend, error) {
+func New(ctx context.Context, service service.TendermintService) (ServiceClient, error) {
 	// Initialize and register the tendermint service component.
 	a := app.New()
 	if err := service.RegisterApplication(a); err != nil {
 		return nil, err
 	}
 
-	tb := &tendermintBackend{
+	sc := &serviceClient{
 		logger:           logging.GetLogger("registry/tendermint"),
 		service:          service,
 		querier:          a.QueryFactory().(*app.QueryFactory),
@@ -452,11 +418,11 @@ func New(ctx context.Context, service service.TendermintService) (api.Backend, e
 		nodeNotifier:     pubsub.NewBroker(false),
 		nodeListNotifier: pubsub.NewBroker(true),
 	}
-	tb.runtimeNotifier = pubsub.NewBrokerEx(func(ch channels.Channel) {
+	sc.runtimeNotifier = pubsub.NewBrokerEx(func(ch channels.Channel) {
 		wr := ch.In()
-		runtimes, err := tb.GetRuntimes(ctx, &api.GetRuntimesQuery{Height: consensus.HeightLatest, IncludeSuspended: true})
+		runtimes, err := sc.GetRuntimes(ctx, &api.GetRuntimesQuery{Height: consensus.HeightLatest, IncludeSuspended: true})
 		if err != nil {
-			tb.logger.Error("runtime notifier: unable to get a list of runtimes",
+			sc.logger.Error("runtime notifier: unable to get a list of runtimes",
 				"err", err,
 			)
 			return
@@ -467,7 +433,5 @@ func New(ctx context.Context, service service.TendermintService) (api.Backend, e
 		}
 	})
 
-	go tb.worker(ctx)
-
-	return tb, nil
+	return sc, nil
 }

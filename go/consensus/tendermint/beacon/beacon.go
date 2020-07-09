@@ -4,23 +4,31 @@ package beacon
 import (
 	"context"
 
+	tmpubsub "github.com/tendermint/tendermint/libs/pubsub"
+
 	"github.com/oasisprotocol/oasis-core/go/beacon/api"
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
+	tmapi "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/api"
 	app "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/apps/beacon"
 	"github.com/oasisprotocol/oasis-core/go/consensus/tendermint/service"
 )
 
-var _ api.Backend = (*tendermintBackend)(nil)
+// ServiceClient is the beacon service client interface.
+type ServiceClient interface {
+	api.Backend
+	tmapi.ServiceClient
+}
 
-type tendermintBackend struct {
+type serviceClient struct {
+	tmapi.BaseServiceClient
+
 	logger *logging.Logger
 
-	service service.TendermintService
 	querier *app.QueryFactory
 }
 
-func (t *tendermintBackend) GetBeacon(ctx context.Context, height int64) ([]byte, error) {
-	q, err := t.querier.QueryAt(ctx, height)
+func (sc *serviceClient) GetBeacon(ctx context.Context, height int64) ([]byte, error) {
+	q, err := sc.querier.QueryAt(ctx, height)
 	if err != nil {
 		return nil, err
 	}
@@ -28,8 +36,8 @@ func (t *tendermintBackend) GetBeacon(ctx context.Context, height int64) ([]byte
 	return q.Beacon(ctx)
 }
 
-func (t *tendermintBackend) StateToGenesis(ctx context.Context, height int64) (*api.Genesis, error) {
-	q, err := t.querier.QueryAt(ctx, height)
+func (sc *serviceClient) StateToGenesis(ctx context.Context, height int64) (*api.Genesis, error) {
+	q, err := sc.querier.QueryAt(ctx, height)
 	if err != nil {
 		return nil, err
 	}
@@ -37,19 +45,23 @@ func (t *tendermintBackend) StateToGenesis(ctx context.Context, height int64) (*
 	return q.Genesis(ctx)
 }
 
+// Implements api.ServiceClient.
+func (sc *serviceClient) ServiceDescriptor() tmapi.ServiceDescriptor {
+	return tmapi.NewStaticServiceDescriptor(api.ModuleName, app.EventType, []tmpubsub.Query{app.QueryApp})
+}
+
 // New constructs a new tendermint backed beacon Backend instance.
-func New(ctx context.Context, service service.TendermintService) (api.Backend, error) {
+func New(ctx context.Context, service service.TendermintService) (ServiceClient, error) {
 	// Initialize and register the tendermint service component.
 	a := app.New()
 	if err := service.RegisterApplication(a); err != nil {
 		return nil, err
 	}
 
-	t := &tendermintBackend{
+	sc := &serviceClient{
 		logger:  logging.GetLogger("beacon/tendermint"),
-		service: service,
 		querier: a.QueryFactory().(*app.QueryFactory),
 	}
 
-	return t, nil
+	return sc, nil
 }

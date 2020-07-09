@@ -320,7 +320,7 @@ func (app *rootHashApplication) emitEmptyBlock(ctx *tmapi.Context, runtime *root
 	ctx.EmitEvent(
 		tmapi.NewEventBuilder(app.Name()).
 			Attribute(KeyFinalized, cbor.Marshal(tagV)).
-			Attribute(KeyRuntimeID, cbor.Marshal(runtime.Runtime.ID)),
+			Attribute(KeyRuntimeID, ValueRuntimeID(runtime.Runtime.ID)),
 	)
 }
 
@@ -441,7 +441,7 @@ func (app *rootHashApplication) onNewRuntime(ctx *tmapi.Context, runtime *regist
 	ctx.EmitEvent(
 		tmapi.NewEventBuilder(app.Name()).
 			Attribute(KeyFinalized, cbor.Marshal(tagV)).
-			Attribute(KeyRuntimeID, cbor.Marshal(runtime.ID)),
+			Attribute(KeyRuntimeID, ValueRuntimeID(runtime.ID)),
 	)
 	return nil
 }
@@ -598,7 +598,7 @@ func (app *rootHashApplication) tryFinalizeExecute(
 		ctx.EmitEvent(
 			tmapi.NewEventBuilder(app.Name()).
 				Attribute(KeyExecutionDiscrepancyDetected, cbor.Marshal(tagV)).
-				Attribute(KeyRuntimeID, cbor.Marshal(runtime.ID)),
+				Attribute(KeyRuntimeID, ValueRuntimeID(runtime.ID)),
 		)
 		return
 	default:
@@ -674,7 +674,7 @@ func (app *rootHashApplication) tryFinalizeMerge(
 		ctx.EmitEvent(
 			tmapi.NewEventBuilder(app.Name()).
 				Attribute(KeyMergeDiscrepancyDetected, cbor.Marshal(tagV)).
-				Attribute(KeyRuntimeID, cbor.Marshal(runtime.ID)),
+				Attribute(KeyRuntimeID, ValueRuntimeID(runtime.ID)),
 		)
 		return nil
 	default:
@@ -728,7 +728,7 @@ func (app *rootHashApplication) postProcessFinalizedBlock(ctx *tmapi.Context, rt
 	ctx.EmitEvent(
 		tmapi.NewEventBuilder(app.Name()).
 			Attribute(KeyFinalized, cbor.Marshal(tagV)).
-			Attribute(KeyRuntimeID, cbor.Marshal(rtState.Runtime.ID)),
+			Attribute(KeyRuntimeID, ValueRuntimeID(rtState.Runtime.ID)),
 	)
 	return nil
 }

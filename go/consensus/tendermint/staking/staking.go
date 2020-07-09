@@ -8,6 +8,7 @@ import (
 
 	"github.com/hashicorp/go-multierror"
 	tmabcitypes "github.com/tendermint/tendermint/abci/types"
+	tmpubsub "github.com/tendermint/tendermint/libs/pubsub"
 	tmrpctypes "github.com/tendermint/tendermint/rpc/core/types"
 	tmtypes "github.com/tendermint/tendermint/types"
 
@@ -17,14 +18,21 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/pubsub"
 	"github.com/oasisprotocol/oasis-core/go/common/quantity"
 	"github.com/oasisprotocol/oasis-core/go/consensus/tendermint/abci"
+	tmapi "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/api"
 	app "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/apps/staking"
 	"github.com/oasisprotocol/oasis-core/go/consensus/tendermint/service"
 	"github.com/oasisprotocol/oasis-core/go/staking/api"
 )
 
-var _ api.Backend = (*tendermintBackend)(nil)
+// ServiceClient is the scheduler service client interface.
+type ServiceClient interface {
+	api.Backend
+	tmapi.ServiceClient
+}
 
-type tendermintBackend struct {
+type serviceClient struct {
+	tmapi.BaseServiceClient
+
 	logger *logging.Logger
 
 	service service.TendermintService
@@ -34,12 +42,10 @@ type tendermintBackend struct {
 	burnNotifier     *pubsub.Broker
 	escrowNotifier   *pubsub.Broker
 	eventNotifier    *pubsub.Broker
-
-	closedCh chan struct{}
 }
 
-func (tb *tendermintBackend) TokenSymbol(ctx context.Context) (string, error) {
-	genesis, err := tb.service.GetGenesisDocument(ctx)
+func (sc *serviceClient) TokenSymbol(ctx context.Context) (string, error) {
+	genesis, err := sc.service.GetGenesisDocument(ctx)
 	if err != nil {
 		return "", err
 	}
@@ -47,8 +53,8 @@ func (tb *tendermintBackend) TokenSymbol(ctx context.Context) (string, error) {
 	return genesis.Staking.TokenSymbol, nil
 }
 
-func (tb *tendermintBackend) TokenValueExponent(ctx context.Context) (uint8, error) {
-	genesis, err := tb.service.GetGenesisDocument(ctx)
+func (sc *serviceClient) TokenValueExponent(ctx context.Context) (uint8, error) {
+	genesis, err := sc.service.GetGenesisDocument(ctx)
 	if err != nil {
 		return 0, err
 	}
@@ -56,8 +62,8 @@ func (tb *tendermintBackend) TokenValueExponent(ctx context.Context) (uint8, err
 	return genesis.Staking.TokenValueExponent, nil
 }
 
-func (tb *tendermintBackend) TotalSupply(ctx context.Context, height int64) (*quantity.Quantity, error) {
-	q, err := tb.querier.QueryAt(ctx, height)
+func (sc *serviceClient) TotalSupply(ctx context.Context, height int64) (*quantity.Quantity, error) {
+	q, err := sc.querier.QueryAt(ctx, height)
 	if err != nil {
 		return nil, err
 	}
@@ -65,8 +71,8 @@ func (tb *tendermintBackend) TotalSupply(ctx context.Context, height int64) (*qu
 	return q.TotalSupply(ctx)
 }
 
-func (tb *tendermintBackend) CommonPool(ctx context.Context, height int64) (*quantity.Quantity, error) {
-	q, err := tb.querier.QueryAt(ctx, height)
+func (sc *serviceClient) CommonPool(ctx context.Context, height int64) (*quantity.Quantity, error) {
+	q, err := sc.querier.QueryAt(ctx, height)
 	if err != nil {
 		return nil, err
 	}
@@ -74,8 +80,8 @@ func (tb *tendermintBackend) CommonPool(ctx context.Context, height int64) (*qua
 	return q.CommonPool(ctx)
 }
 
-func (tb *tendermintBackend) LastBlockFees(ctx context.Context, height int64) (*quantity.Quantity, error) {
-	q, err := tb.querier.QueryAt(ctx, height)
+func (sc *serviceClient) LastBlockFees(ctx context.Context, height int64) (*quantity.Quantity, error) {
+	q, err := sc.querier.QueryAt(ctx, height)
 	if err != nil {
 		return nil, err
 	}
@@ -83,8 +89,8 @@ func (tb *tendermintBackend) LastBlockFees(ctx context.Context, height int64) (*
 	return q.LastBlockFees(ctx)
 }
 
-func (tb *tendermintBackend) Threshold(ctx context.Context, query *api.ThresholdQuery) (*quantity.Quantity, error) {
-	q, err := tb.querier.QueryAt(ctx, query.Height)
+func (sc *serviceClient) Threshold(ctx context.Context, query *api.ThresholdQuery) (*quantity.Quantity, error) {
+	q, err := sc.querier.QueryAt(ctx, query.Height)
 	if err != nil {
 		return nil, err
 	}
@@ -92,8 +98,8 @@ func (tb *tendermintBackend) Threshold(ctx context.Context, query *api.Threshold
 	return q.Threshold(ctx, query.Kind)
 }
 
-func (tb *tendermintBackend) Addresses(ctx context.Context, height int64) ([]api.Address, error) {
-	q, err := tb.querier.QueryAt(ctx, height)
+func (sc *serviceClient) Addresses(ctx context.Context, height int64) ([]api.Address, error) {
+	q, err := sc.querier.QueryAt(ctx, height)
 	if err != nil {
 		return nil, err
 	}
@@ -101,8 +107,8 @@ func (tb *tendermintBackend) Addresses(ctx context.Context, height int64) ([]api
 	return q.Addresses(ctx)
 }
 
-func (tb *tendermintBackend) Account(ctx context.Context, query *api.OwnerQuery) (*api.Account, error) {
-	q, err := tb.querier.QueryAt(ctx, query.Height)
+func (sc *serviceClient) Account(ctx context.Context, query *api.OwnerQuery) (*api.Account, error) {
+	q, err := sc.querier.QueryAt(ctx, query.Height)
 	if err != nil {
 		return nil, err
 	}
@@ -110,8 +116,8 @@ func (tb *tendermintBackend) Account(ctx context.Context, query *api.OwnerQuery)
 	return q.Account(ctx, query.Owner)
 }
 
-func (tb *tendermintBackend) Delegations(ctx context.Context, query *api.OwnerQuery) (map[api.Address]*api.Delegation, error) {
-	q, err := tb.querier.QueryAt(ctx, query.Height)
+func (sc *serviceClient) Delegations(ctx context.Context, query *api.OwnerQuery) (map[api.Address]*api.Delegation, error) {
+	q, err := sc.querier.QueryAt(ctx, query.Height)
 	if err != nil {
 		return nil, err
 	}
@@ -119,8 +125,8 @@ func (tb *tendermintBackend) Delegations(ctx context.Context, query *api.OwnerQu
 	return q.Delegations(ctx, query.Owner)
 }
 
-func (tb *tendermintBackend) DebondingDelegations(ctx context.Context, query *api.OwnerQuery) (map[api.Address][]*api.DebondingDelegation, error) {
-	q, err := tb.querier.QueryAt(ctx, query.Height)
+func (sc *serviceClient) DebondingDelegations(ctx context.Context, query *api.OwnerQuery) (map[api.Address][]*api.DebondingDelegation, error) {
+	q, err := sc.querier.QueryAt(ctx, query.Height)
 	if err != nil {
 		return nil, err
 	}
@@ -128,33 +134,33 @@ func (tb *tendermintBackend) DebondingDelegations(ctx context.Context, query *ap
 	return q.DebondingDelegations(ctx, query.Owner)
 }
 
-func (tb *tendermintBackend) WatchTransfers(ctx context.Context) (<-chan *api.TransferEvent, pubsub.ClosableSubscription, error) {
+func (sc *serviceClient) WatchTransfers(ctx context.Context) (<-chan *api.TransferEvent, pubsub.ClosableSubscription, error) {
 	typedCh := make(chan *api.TransferEvent)
-	sub := tb.transferNotifier.Subscribe()
+	sub := sc.transferNotifier.Subscribe()
 	sub.Unwrap(typedCh)
 
 	return typedCh, sub, nil
 }
 
-func (tb *tendermintBackend) WatchBurns(ctx context.Context) (<-chan *api.BurnEvent, pubsub.ClosableSubscription, error) {
+func (sc *serviceClient) WatchBurns(ctx context.Context) (<-chan *api.BurnEvent, pubsub.ClosableSubscription, error) {
 	typedCh := make(chan *api.BurnEvent)
-	sub := tb.burnNotifier.Subscribe()
+	sub := sc.burnNotifier.Subscribe()
 	sub.Unwrap(typedCh)
 
 	return typedCh, sub, nil
 }
 
-func (tb *tendermintBackend) WatchEscrows(ctx context.Context) (<-chan *api.EscrowEvent, pubsub.ClosableSubscription, error) {
+func (sc *serviceClient) WatchEscrows(ctx context.Context) (<-chan *api.EscrowEvent, pubsub.ClosableSubscription, error) {
 	typedCh := make(chan *api.EscrowEvent)
-	sub := tb.escrowNotifier.Subscribe()
+	sub := sc.escrowNotifier.Subscribe()
 	sub.Unwrap(typedCh)
 
 	return typedCh, sub, nil
 }
 
-func (tb *tendermintBackend) StateToGenesis(ctx context.Context, height int64) (*api.Genesis, error) {
+func (sc *serviceClient) StateToGenesis(ctx context.Context, height int64) (*api.Genesis, error) {
 	// Query the staking genesis state.
-	q, err := tb.querier.QueryAt(ctx, height)
+	q, err := sc.querier.QueryAt(ctx, height)
 	if err != nil {
 		return nil, err
 	}
@@ -164,11 +170,11 @@ func (tb *tendermintBackend) StateToGenesis(ctx context.Context, height int64) (
 	}
 
 	// Add static values to the genesis document.
-	genesis.TokenSymbol, err = tb.TokenSymbol(ctx)
+	genesis.TokenSymbol, err = sc.TokenSymbol(ctx)
 	if err != nil {
 		return nil, err
 	}
-	genesis.TokenValueExponent, err = tb.TokenValueExponent(ctx)
+	genesis.TokenValueExponent, err = sc.TokenValueExponent(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -176,12 +182,12 @@ func (tb *tendermintBackend) StateToGenesis(ctx context.Context, height int64) (
 	return genesis, nil
 }
 
-func (tb *tendermintBackend) GetEvents(ctx context.Context, height int64) ([]*api.Event, error) {
+func (sc *serviceClient) GetEvents(ctx context.Context, height int64) ([]*api.Event, error) {
 	// Get block results at given height.
 	var results *tmrpctypes.ResultBlockResults
-	results, err := tb.service.GetBlockResults(height)
+	results, err := sc.service.GetBlockResults(height)
 	if err != nil {
-		tb.logger.Error("failed to get tendermint block results",
+		sc.logger.Error("failed to get tendermint block results",
 			"err", err,
 			"height", height,
 		)
@@ -189,9 +195,9 @@ func (tb *tendermintBackend) GetEvents(ctx context.Context, height int64) ([]*ap
 	}
 
 	// Get transactions at given height.
-	txns, err := tb.service.GetTransactions(ctx, height)
+	txns, err := sc.service.GetTransactions(ctx, height)
 	if err != nil {
-		tb.logger.Error("failed to get tendermint transactions",
+		sc.logger.Error("failed to get tendermint transactions",
 			"err", err,
 			"height", height,
 		)
@@ -227,16 +233,16 @@ func (tb *tendermintBackend) GetEvents(ctx context.Context, height int64) ([]*ap
 	return events, nil
 }
 
-func (tb *tendermintBackend) WatchEvents(ctx context.Context) (<-chan *api.Event, pubsub.ClosableSubscription, error) {
+func (sc *serviceClient) WatchEvents(ctx context.Context) (<-chan *api.Event, pubsub.ClosableSubscription, error) {
 	typedCh := make(chan *api.Event)
-	sub := tb.eventNotifier.Subscribe()
+	sub := sc.eventNotifier.Subscribe()
 	sub.Unwrap(typedCh)
 
 	return typedCh, sub, nil
 }
 
-func (tb *tendermintBackend) ConsensusParameters(ctx context.Context, height int64) (*api.ConsensusParameters, error) {
-	q, err := tb.querier.QueryAt(ctx, height)
+func (sc *serviceClient) ConsensusParameters(ctx context.Context, height int64) (*api.ConsensusParameters, error) {
+	q, err := sc.querier.QueryAt(ctx, height)
 	if err != nil {
 		return nil, err
 	}
@@ -244,76 +250,36 @@ func (tb *tendermintBackend) ConsensusParameters(ctx context.Context, height int
 	return q.ConsensusParameters(ctx)
 }
 
-func (tb *tendermintBackend) Cleanup() {
-	<-tb.closedCh
+func (sc *serviceClient) Cleanup() {
 }
 
-func (tb *tendermintBackend) worker(ctx context.Context) {
-	defer close(tb.closedCh)
+// Implements api.ServiceClient.
+func (sc *serviceClient) ServiceDescriptor() tmapi.ServiceDescriptor {
+	return tmapi.NewStaticServiceDescriptor(api.ModuleName, app.EventType, []tmpubsub.Query{app.QueryApp})
+}
 
-	sub, err := tb.service.Subscribe("staking-worker", app.QueryApp)
+// Implements api.ServiceClient.
+func (sc *serviceClient) DeliverEvent(ctx context.Context, height int64, tx tmtypes.Tx, ev *tmabcitypes.Event) error {
+	events, err := EventsFromTendermint(tx, height, []tmabcitypes.Event{*ev})
 	if err != nil {
-		tb.logger.Error("failed to subscribe",
-			"err", err,
-		)
-		return
+		return fmt.Errorf("staking: failed to process tendermint events: %w", err)
 	}
-	defer tb.service.Unsubscribe("staking-worker", app.QueryApp) // nolint: errcheck
 
-	for {
-		var event interface{}
-
-		select {
-		case msg := <-sub.Out():
-			event = msg.Data()
-		case <-sub.Cancelled():
-			tb.logger.Debug("worker: terminating, subscription closed")
-			return
-		case <-ctx.Done():
-			return
-		}
-
-		switch ev := event.(type) {
-		case tmtypes.EventDataNewBlock:
-			tb.onEventDataNewBlock(ctx, ev)
-		case tmtypes.EventDataTx:
-			tb.onEventDataTx(ctx, ev)
-		default:
-		}
-	}
-}
-
-func (tb *tendermintBackend) onEventDataNewBlock(ctx context.Context, ev tmtypes.EventDataNewBlock) {
-	tmEvents := append([]tmabcitypes.Event{}, ev.ResultBeginBlock.GetEvents()...)
-	tmEvents = append(tmEvents, ev.ResultEndBlock.GetEvents()...)
-	events, err := EventsFromTendermint(nil, ev.Block.Header.Height, tmEvents)
-	if err != nil {
-		tb.logger.Error("error processing staking events", "err", err)
-	}
-	tb.notifyEvents(events)
-}
-
-func (tb *tendermintBackend) onEventDataTx(ctx context.Context, ev tmtypes.EventDataTx) {
-	events, err := EventsFromTendermint(ev.Tx, ev.Height, ev.Result.Events)
-	if err != nil {
-		tb.logger.Error("error processing staking events", "err", err)
-	}
-	tb.notifyEvents(events)
-}
-
-func (tb *tendermintBackend) notifyEvents(events []*api.Event) {
+	// Notify subscribers of events.
 	for _, ev := range events {
 		if ev.Transfer != nil {
-			tb.transferNotifier.Broadcast(ev.Transfer)
+			sc.transferNotifier.Broadcast(ev.Transfer)
 		}
 		if ev.Escrow != nil {
-			tb.escrowNotifier.Broadcast(ev.Escrow)
+			sc.escrowNotifier.Broadcast(ev.Escrow)
 		}
 		if ev.Burn != nil {
-			tb.burnNotifier.Broadcast(ev.Burn)
+			sc.burnNotifier.Broadcast(ev.Burn)
 		}
-		tb.eventNotifier.Broadcast(ev)
+		sc.eventNotifier.Broadcast(ev)
 	}
+
+	return nil
 }
 
 // EventsFromTendermint extracts staking events from tendermint events.
@@ -403,7 +369,7 @@ func EventsFromTendermint(
 }
 
 // New constructs a new tendermint backed staking Backend instance.
-func New(ctx context.Context, service service.TendermintService) (api.Backend, error) {
+func New(ctx context.Context, service service.TendermintService) (ServiceClient, error) {
 	// Initialize and register the tendermint service component.
 	a := app.New()
 	if err := service.RegisterApplication(a); err != nil {
@@ -415,7 +381,7 @@ func New(ctx context.Context, service service.TendermintService) (api.Backend, e
 		return nil, err
 	}
 
-	tb := &tendermintBackend{
+	return &serviceClient{
 		logger:           logging.GetLogger("staking/tendermint"),
 		service:          service,
 		querier:          a.QueryFactory().(*app.QueryFactory),
@@ -423,10 +389,5 @@ func New(ctx context.Context, service service.TendermintService) (api.Backend, e
 		burnNotifier:     pubsub.NewBroker(false),
 		escrowNotifier:   pubsub.NewBroker(false),
 		eventNotifier:    pubsub.NewBroker(false),
-		closedCh:         make(chan struct{}),
-	}
-
-	go tb.worker(ctx)
-
-	return tb, nil
+	}, nil
 }

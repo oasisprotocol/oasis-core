@@ -9,6 +9,9 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/flags"
 )
 
+// ModuleName is a unique module name for the epochtime module.
+const ModuleName = "epochtime"
+
 // EpochTime is the number of intervals (epochs) since a fixed instant
 // in time (epoch date).
 type EpochTime uint64

@@ -4,7 +4,6 @@ package service
 import (
 	"context"
 
-	tmpubsub "github.com/tendermint/tendermint/libs/pubsub"
 	tmrpctypes "github.com/tendermint/tendermint/rpc/core/types"
 	tmtypes "github.com/tendermint/tendermint/types"
 
@@ -45,12 +44,6 @@ type TendermintService interface {
 	// WatchTendermintBlocks returns a stream of Tendermint blocks as they are
 	// returned via the `EventDataNewBlock` query.
 	WatchTendermintBlocks() (<-chan *tmtypes.Block, *pubsub.Subscription)
-
-	// Subscribe subscribes to tendermint events.
-	Subscribe(subscriber string, query tmpubsub.Query) (tmtypes.Subscription, error)
-
-	// Unsubscribe unsubscribes from tendermint events.
-	Unsubscribe(subscriber string, query tmpubsub.Query) error
 }
 
 // GenesisProvider is a tendermint specific genesis document provider.

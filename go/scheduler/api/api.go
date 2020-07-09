@@ -16,6 +16,9 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/flags"
 )
 
+// ModuleName is a unique module name for the scheduler module.
+const ModuleName = "scheduler"
+
 // Role is the role a given node plays in a committee.
 type Role uint8
 

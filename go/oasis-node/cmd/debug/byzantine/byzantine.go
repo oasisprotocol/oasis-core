@@ -111,7 +111,8 @@ func doExecutorHonest(cmd *cobra.Command, args []string) {
 		}
 	}()
 
-	if err = epochtimeWaitForEpoch(ht.service, epochtime.EpochTime(viper.GetUint64(CfgActivationEpoch))); err != nil {
+	activationEpoch := epochtime.EpochTime(viper.GetUint64(CfgActivationEpoch))
+	if err = epochtimeWaitForEpoch(ht.service, activationEpoch); err != nil {
 		panic(fmt.Sprintf("epochtimeWaitForEpoch: %+v", err))
 	}
 
@@ -126,13 +127,13 @@ func doExecutorHonest(cmd *cobra.Command, args []string) {
 		panic(fmt.Sprintf("registryRegisterNode: %+v", err))
 	}
 
-	electionHeight, err := schedulerNextElectionHeight(ht.service, scheduler.KindComputeExecutor)
+	electionHeight, err := schedulerNextElectionHeight(ht.service, activationEpoch+1)
 	if err != nil {
 		panic(fmt.Sprintf("scheduler next election height failed: %+v", err))
 	}
 	executorCommittee, err := schedulerGetCommittee(ht, electionHeight, scheduler.KindComputeExecutor, defaultRuntimeID)
 	if err != nil {
-		panic(fmt.Sprintf("scheduler get committee %s failed: %+v", scheduler.KindComputeExecutor, err))
+		panic(fmt.Sprintf("scheduler get committee %s at height %d failed: %+v", scheduler.KindComputeExecutor, electionHeight, err))
 	}
 	if err = schedulerCheckScheduled(executorCommittee, defaultIdentity.NodeSigner.Public(), scheduler.Worker); err != nil {
 		panic(fmt.Sprintf("scheduler check scheduled failed: %+v", err))
@@ -243,7 +244,8 @@ func doExecutorWrong(cmd *cobra.Command, args []string) {
 		}
 	}()
 
-	if err = epochtimeWaitForEpoch(ht.service, epochtime.EpochTime(viper.GetUint64(CfgActivationEpoch))); err != nil {
+	activationEpoch := epochtime.EpochTime(viper.GetUint64(CfgActivationEpoch))
+	if err = epochtimeWaitForEpoch(ht.service, activationEpoch); err != nil {
 		panic(fmt.Sprintf("epochtimeWaitForEpoch: %+v", err))
 	}
 
@@ -258,13 +260,13 @@ func doExecutorWrong(cmd *cobra.Command, args []string) {
 		panic(fmt.Sprintf("registryRegisterNode: %+v", err))
 	}
 
-	electionHeight, err := schedulerNextElectionHeight(ht.service, scheduler.KindComputeExecutor)
+	electionHeight, err := schedulerNextElectionHeight(ht.service, activationEpoch+1)
 	if err != nil {
 		panic(fmt.Sprintf("scheduler next election height failed: %+v", err))
 	}
 	executorCommittee, err := schedulerGetCommittee(ht, electionHeight, scheduler.KindComputeExecutor, defaultRuntimeID)
 	if err != nil {
-		panic(fmt.Sprintf("scheduler get committee %s failed: %+v", scheduler.KindComputeExecutor, err))
+		panic(fmt.Sprintf("scheduler get committee %s at height %d failed: %+v", scheduler.KindComputeExecutor, electionHeight, err))
 	}
 	if err = schedulerCheckScheduled(executorCommittee, defaultIdentity.NodeSigner.Public(), scheduler.Worker); err != nil {
 		panic(fmt.Sprintf("scheduler check scheduled failed: %+v", err))
@@ -375,7 +377,8 @@ func doExecutorStraggler(cmd *cobra.Command, args []string) {
 		}
 	}()
 
-	if err = epochtimeWaitForEpoch(ht.service, epochtime.EpochTime(viper.GetUint64(CfgActivationEpoch))); err != nil {
+	activationEpoch := epochtime.EpochTime(viper.GetUint64(CfgActivationEpoch))
+	if err = epochtimeWaitForEpoch(ht.service, activationEpoch); err != nil {
 		panic(fmt.Sprintf("epochtimeWaitForEpoch: %+v", err))
 	}
 
@@ -389,13 +392,13 @@ func doExecutorStraggler(cmd *cobra.Command, args []string) {
 		panic(fmt.Sprintf("registryRegisterNode: %+v", err))
 	}
 
-	electionHeight, err := schedulerNextElectionHeight(ht.service, scheduler.KindComputeExecutor)
+	electionHeight, err := schedulerNextElectionHeight(ht.service, activationEpoch+1)
 	if err != nil {
 		panic(fmt.Sprintf("scheduler next election height failed: %+v", err))
 	}
 	executorCommittee, err := schedulerGetCommittee(ht, electionHeight, scheduler.KindComputeExecutor, defaultRuntimeID)
 	if err != nil {
-		panic(fmt.Sprintf("scheduler get committee %s failed: %+v", scheduler.KindComputeExecutor, err))
+		panic(fmt.Sprintf("scheduler get committee %s at height %d failed: %+v", scheduler.KindComputeExecutor, electionHeight, err))
 	}
 	if err = schedulerCheckScheduled(executorCommittee, defaultIdentity.NodeSigner.Public(), scheduler.Worker); err != nil {
 		panic(fmt.Sprintf("scheduler check scheduled failed: %+v", err))
@@ -456,7 +459,8 @@ func doMergeHonest(cmd *cobra.Command, args []string) {
 		}
 	}()
 
-	if err = epochtimeWaitForEpoch(ht.service, epochtime.EpochTime(viper.GetUint64(CfgActivationEpoch))); err != nil {
+	activationEpoch := epochtime.EpochTime(viper.GetUint64(CfgActivationEpoch))
+	if err = epochtimeWaitForEpoch(ht.service, activationEpoch); err != nil {
 		panic(fmt.Sprintf("epochtimeWaitForEpoch: %+v", err))
 	}
 
@@ -464,13 +468,13 @@ func doMergeHonest(cmd *cobra.Command, args []string) {
 		panic(fmt.Sprintf("registryRegisterNode: %+v", err))
 	}
 
-	electionHeight, err := schedulerNextElectionHeight(ht.service, scheduler.KindComputeExecutor)
+	electionHeight, err := schedulerNextElectionHeight(ht.service, activationEpoch+1)
 	if err != nil {
 		panic(fmt.Sprintf("scheduler next election height failed: %+v", err))
 	}
 	mergeCommittee, err := schedulerGetCommittee(ht, electionHeight, scheduler.KindComputeMerge, defaultRuntimeID)
 	if err != nil {
-		panic(fmt.Sprintf("scheduler get committee %s failed: %+v", scheduler.KindComputeMerge, err))
+		panic(fmt.Sprintf("scheduler get committee %s at height %d failed: %+v", scheduler.KindComputeMerge, electionHeight, err))
 	}
 	if err = schedulerCheckScheduled(mergeCommittee, defaultIdentity.NodeSigner.Public(), scheduler.Worker); err != nil {
 		panic(fmt.Sprintf("scheduler check scheduled failed: %+v", err))
@@ -564,7 +568,8 @@ func doMergeWrong(cmd *cobra.Command, args []string) {
 		}
 	}()
 
-	if err = epochtimeWaitForEpoch(ht.service, epochtime.EpochTime(viper.GetUint64(CfgActivationEpoch))); err != nil {
+	activationEpoch := epochtime.EpochTime(viper.GetUint64(CfgActivationEpoch))
+	if err = epochtimeWaitForEpoch(ht.service, activationEpoch); err != nil {
 		panic(fmt.Sprintf("epochtimeWaitForEpoch: %+v", err))
 	}
 
@@ -572,13 +577,13 @@ func doMergeWrong(cmd *cobra.Command, args []string) {
 		panic(fmt.Sprintf("registryRegisterNode: %+v", err))
 	}
 
-	electionHeight, err := schedulerNextElectionHeight(ht.service, scheduler.KindComputeExecutor)
+	electionHeight, err := schedulerNextElectionHeight(ht.service, activationEpoch+1)
 	if err != nil {
 		panic(fmt.Sprintf("scheduler next election height failed: %+v", err))
 	}
 	mergeCommittee, err := schedulerGetCommittee(ht, electionHeight, scheduler.KindComputeMerge, defaultRuntimeID)
 	if err != nil {
-		panic(fmt.Sprintf("scheduler get committee %s failed: %+v", scheduler.KindComputeMerge, err))
+		panic(fmt.Sprintf("scheduler get committee %s at height %d failed: %+v", scheduler.KindComputeMerge, electionHeight, err))
 	}
 	if err = schedulerCheckScheduled(mergeCommittee, defaultIdentity.NodeSigner.Public(), scheduler.Worker); err != nil {
 		panic(fmt.Sprintf("scheduler check scheduled failed: %+v", err))
@@ -696,7 +701,8 @@ func doMergeStraggler(cmd *cobra.Command, args []string) {
 		}
 	}()
 
-	if err = epochtimeWaitForEpoch(ht.service, epochtime.EpochTime(viper.GetUint64(CfgActivationEpoch))); err != nil {
+	activationEpoch := epochtime.EpochTime(viper.GetUint64(CfgActivationEpoch))
+	if err = epochtimeWaitForEpoch(ht.service, activationEpoch); err != nil {
 		panic(fmt.Sprintf("epochtimeWaitForEpoch: %+v", err))
 	}
 
@@ -704,13 +710,13 @@ func doMergeStraggler(cmd *cobra.Command, args []string) {
 		panic(fmt.Sprintf("registryRegisterNode: %+v", err))
 	}
 
-	electionHeight, err := schedulerNextElectionHeight(ht.service, scheduler.KindComputeExecutor)
+	electionHeight, err := schedulerNextElectionHeight(ht.service, activationEpoch+1)
 	if err != nil {
 		panic(fmt.Sprintf("scheduler next election height failed: %+v", err))
 	}
 	mergeCommittee, err := schedulerGetCommittee(ht, electionHeight, scheduler.KindComputeMerge, defaultRuntimeID)
 	if err != nil {
-		panic(fmt.Sprintf("scheduler get committee %s failed: %+v", scheduler.KindComputeMerge, err))
+		panic(fmt.Sprintf("scheduler get committee %s at height %d failed: %+v", scheduler.KindComputeMerge, electionHeight, err))
 	}
 	if err = schedulerCheckScheduled(mergeCommittee, defaultIdentity.NodeSigner.Public(), scheduler.Worker); err != nil {
 		panic(fmt.Sprintf("scheduler check scheduled failed: %+v", err))

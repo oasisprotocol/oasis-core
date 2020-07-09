@@ -1,51 +1,33 @@
 package byzantine
 
 import (
-	"bytes"
 	"context"
 	"fmt"
 	"time"
 
-	tmtypes "github.com/tendermint/tendermint/types"
-
 	"github.com/oasisprotocol/oasis-core/go/common"
-	"github.com/oasisprotocol/oasis-core/go/common/cbor"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	"github.com/oasisprotocol/oasis-core/go/common/node"
-	schedulerapp "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/apps/scheduler"
 	"github.com/oasisprotocol/oasis-core/go/consensus/tendermint/service"
+	epochtime "github.com/oasisprotocol/oasis-core/go/epochtime/api"
 	scheduler "github.com/oasisprotocol/oasis-core/go/scheduler/api"
 	"github.com/oasisprotocol/oasis-core/go/worker/common/p2p"
 )
 
-func schedulerNextElectionHeight(svc service.TendermintService, kind scheduler.CommitteeKind) (int64, error) {
-	sub, err := svc.Subscribe("script", schedulerapp.QueryApp)
+func schedulerNextElectionHeight(svc service.TendermintService, epoch epochtime.EpochTime) (int64, error) {
+	ch, sub, err := svc.Scheduler().WatchCommittees(context.Background())
 	if err != nil {
-		return 0, fmt.Errorf("Tendermint Subscribe error: %w", err)
+		return -1, fmt.Errorf("failed to watch committees: %w", err)
 	}
-	defer svc.Unsubscribe("script", schedulerapp.QueryApp) // nolint: errcheck
+	defer sub.Close()
 
 	for {
-		ev := (<-sub.Out()).Data().(tmtypes.EventDataNewBlock)
-		for _, tmEv := range ev.ResultBeginBlock.GetEvents() {
-			if tmEv.GetType() != schedulerapp.EventType {
-				continue
+		if committee := <-ch; committee.ValidFor >= epoch {
+			height, err := svc.EpochTime().GetEpochBlock(context.Background(), committee.ValidFor)
+			if err != nil {
+				return -1, fmt.Errorf("failed to get epoch block: %w", err)
 			}
-
-			for _, pair := range tmEv.GetAttributes() {
-				if bytes.Equal(pair.GetKey(), schedulerapp.KeyElected) {
-					var kinds []scheduler.CommitteeKind
-					if err := cbor.Unmarshal(pair.GetValue(), &kinds); err != nil {
-						return 0, fmt.Errorf("CBOR Unmarshal kinds error: %w", err)
-					}
-
-					for _, k := range kinds {
-						if k == kind {
-							return ev.Block.Header.Height, nil
-						}
-					}
-				}
-			}
+			return height, nil
 		}
 	}
 }

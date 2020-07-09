@@ -52,8 +52,8 @@ import (
 	tmbeacon "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/beacon"
 	"github.com/oasisprotocol/oasis-core/go/consensus/tendermint/crypto"
 	"github.com/oasisprotocol/oasis-core/go/consensus/tendermint/db"
-	"github.com/oasisprotocol/oasis-core/go/consensus/tendermint/epochtime"
-	epochtimemock "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/epochtime_mock"
+	tmepochtime "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/epochtime"
+	tmepochtimemock "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/epochtime_mock"
 	tmkeymanager "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/keymanager"
 	tmregistry "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/registry"
 	tmroothash "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/roothash"
@@ -140,6 +140,10 @@ const (
 	// the node is considered not yet synced.
 	// NOTE: this is only used during the initial sync.
 	syncWorkerLastBlockTimeDiffThreshold = 1 * time.Minute
+
+	// tmSubscriberID is the subscriber identifier used for all internal Tendermint pubsub
+	// subscriptions. If any other subscriber IDs need to be derived they will be under this prefix.
+	tmSubscriberID = "oasis-core"
 )
 
 var (
@@ -194,7 +198,7 @@ func IsSeed() bool {
 	return viper.GetBool(CfgP2PSeedMode)
 }
 
-type tendermintService struct {
+type tendermintService struct { // nolint: maligned
 	sync.Mutex
 
 	cmservice.BaseBackgroundService
@@ -219,6 +223,9 @@ type tendermintService struct {
 	staking         stakingAPI.Backend
 	scheduler       schedulerAPI.Backend
 	submissionMgr   consensusAPI.SubmissionManager
+
+	serviceClients   []api.ServiceClient
+	serviceClientsWg sync.WaitGroup
 
 	genesis                  *genesisAPI.Document
 	genesisProvider          genesisAPI.Provider
@@ -264,8 +271,17 @@ func (t *tendermintService) Start() error {
 		if err := t.node.Start(); err != nil {
 			return fmt.Errorf("tendermint: failed to start service: %w", err)
 		}
+
+		// Start event dispatchers for all the service clients.
+		t.serviceClientsWg.Add(len(t.serviceClients))
+		for _, svc := range t.serviceClients {
+			go t.serviceClientWorker(t.ctx, svc)
+		}
+		// Start sync checker.
 		go t.syncWorker()
-		go t.worker()
+		// Start block notifier.
+		go t.blockNotifierWorker()
+		// Optionally start metrics updater.
 		if viper.GetString(cmmetrics.CfgMetricsMode) != cmmetrics.MetricsModeNone {
 			go t.metrics()
 		}
@@ -291,6 +307,7 @@ func (t *tendermintService) Quit() <-chan struct{} {
 }
 
 func (t *tendermintService) Cleanup() {
+	t.serviceClientsWg.Wait()
 	t.svcMgr.Cleanup()
 }
 
@@ -473,7 +490,7 @@ func (t *tendermintService) SubmitTx(ctx context.Context, tx *transaction.Signed
 	data := cbor.Marshal(tx)
 	query := tmtypes.EventQueryTxFor(data)
 	subID := t.newSubscriberID()
-	txSub, err := t.Subscribe(subID, query)
+	txSub, err := t.subscribe(subID, query)
 	if err != nil {
 		return err
 	}
@@ -483,7 +500,7 @@ func (t *tendermintService) SubmitTx(ctx context.Context, tx *transaction.Signed
 		return ctx.Err()
 	}
 
-	defer t.Unsubscribe(subID, query) // nolint: errcheck
+	defer t.unsubscribe(subID, query) // nolint: errcheck
 
 	// Subscribe to the transaction becoming invalid.
 	txHash := hash.NewFromBytes(data)
@@ -549,7 +566,7 @@ func (t *tendermintService) broadcastTxRaw(data []byte) error {
 }
 
 func (t *tendermintService) newSubscriberID() string {
-	return fmt.Sprintf("subscriber-%d", atomic.AddUint64(&t.nextSubscriberID, 1))
+	return fmt.Sprintf("%s/subscriber-%d", tmSubscriberID, atomic.AddUint64(&t.nextSubscriberID, 1))
 }
 
 func (t *tendermintService) SubmitEvidence(ctx context.Context, evidence consensusAPI.Evidence) error {
@@ -573,7 +590,7 @@ func (t *tendermintService) EstimateGas(ctx context.Context, req *consensusAPI.E
 	return t.mux.EstimateGas(req.Signer, req.Transaction)
 }
 
-func (t *tendermintService) Subscribe(subscriber string, query tmpubsub.Query) (tmtypes.Subscription, error) {
+func (t *tendermintService) subscribe(subscriber string, query tmpubsub.Query) (tmtypes.Subscription, error) {
 	// Note: The tendermint documentation claims using SubscribeUnbuffered can
 	// freeze the server, however, the buffered Subscribe can drop events, and
 	// force-unsubscribe the channel if processing takes too long.
@@ -613,7 +630,7 @@ func (t *tendermintService) Subscribe(subscriber string, query tmpubsub.Query) (
 	return subFn()
 }
 
-func (t *tendermintService) Unsubscribe(subscriber string, query tmpubsub.Query) error {
+func (t *tendermintService) unsubscribe(subscriber string, query tmpubsub.Query) error {
 	if t.started() {
 		return t.node.EventBus().Unsubscribe(t.ctx, subscriber, query)
 	}
@@ -915,53 +932,70 @@ func (t *tendermintService) initialize() error {
 
 	// Initialize the rest of backends.
 	var err error
-	if t.beacon, err = tmbeacon.New(t.ctx, t); err != nil {
+	var scBeacon tmbeacon.ServiceClient
+	if scBeacon, err = tmbeacon.New(t.ctx, t); err != nil {
 		t.Logger.Error("initialize: failed to initialize beacon backend",
 			"err", err,
 		)
 		return err
 	}
+	t.beacon = scBeacon
+	t.serviceClients = append(t.serviceClients, scBeacon)
 
-	if t.keymanager, err = tmkeymanager.New(t.ctx, t); err != nil {
+	var scKeyManager tmkeymanager.ServiceClient
+	if scKeyManager, err = tmkeymanager.New(t.ctx, t); err != nil {
 		t.Logger.Error("initialize: failed to initialize keymanager backend",
 			"err", err,
 		)
 		return err
 	}
+	t.keymanager = scKeyManager
+	t.serviceClients = append(t.serviceClients, scKeyManager)
 
-	if t.registry, err = tmregistry.New(t.ctx, t); err != nil {
+	var scRegistry tmregistry.ServiceClient
+	if scRegistry, err = tmregistry.New(t.ctx, t); err != nil {
 		t.Logger.Error("initialize: failed to initialize registry backend",
 			"err", err,
 		)
 		return err
 	}
+	t.registry = scRegistry
 	t.registryMetrics = registry.NewMetricsUpdater(t.ctx, t.registry)
+	t.serviceClients = append(t.serviceClients, scRegistry)
 	t.svcMgr.RegisterCleanupOnly(t.registry, "registry backend")
 	t.svcMgr.RegisterCleanupOnly(t.registryMetrics, "registry metrics updater")
 
-	if t.staking, err = tmstaking.New(t.ctx, t); err != nil {
+	var scStaking tmstaking.ServiceClient
+	if scStaking, err = tmstaking.New(t.ctx, t); err != nil {
 		t.Logger.Error("staking: failed to initialize staking backend",
 			"err", err,
 		)
 		return err
 	}
+	t.staking = scStaking
+	t.serviceClients = append(t.serviceClients, scStaking)
 	t.svcMgr.RegisterCleanupOnly(t.staking, "staking backend")
 
-	if t.scheduler, err = tmscheduler.New(t.ctx, t); err != nil {
+	var scScheduler tmscheduler.ServiceClient
+	if scScheduler, err = tmscheduler.New(t.ctx, t); err != nil {
 		t.Logger.Error("scheduler: failed to initialize scheduler backend",
 			"err", err,
 		)
 		return err
 	}
+	t.scheduler = scScheduler
+	t.serviceClients = append(t.serviceClients, scScheduler)
 	t.svcMgr.RegisterCleanupOnly(t.scheduler, "scheduler backend")
 
-	if t.roothash, err = tmroothash.New(t.ctx, t.dataDir, t); err != nil {
+	var scRootHash tmroothash.ServiceClient
+	if scRootHash, err = tmroothash.New(t.ctx, t.dataDir, t); err != nil {
 		t.Logger.Error("roothash: failed to initialize roothash backend",
 			"err", err,
 		)
 		return err
 	}
-	t.roothash = roothash.NewMetricsWrapper(t.roothash)
+	t.roothash = roothash.NewMetricsWrapper(scRootHash)
+	t.serviceClients = append(t.serviceClients, scRootHash)
 	t.svcMgr.RegisterCleanupOnly(t.roothash, "roothash backend")
 
 	return nil
@@ -1042,26 +1076,30 @@ func (t *tendermintService) ConsensusKey() signature.PublicKey {
 }
 
 func (t *tendermintService) initEpochtime() error {
-	var epochTime epochtimeAPI.Backend
 	var err error
 	if t.genesis.EpochTime.Parameters.DebugMockBackend {
-		epochTime, err = epochtimemock.New(t.ctx, t)
+		var scEpochTime tmepochtimemock.ServiceClient
+		scEpochTime, err = tmepochtimemock.New(t.ctx, t)
 		if err != nil {
 			t.Logger.Error("initEpochtime: failed to initialize mock epochtime backend",
 				"err", err,
 			)
 			return err
 		}
+		t.epochtime = scEpochTime
+		t.serviceClients = append(t.serviceClients, scEpochTime)
 	} else {
-		epochTime, err = epochtime.New(t.ctx, t, t.genesis.EpochTime.Parameters.Interval)
+		var scEpochTime tmepochtime.ServiceClient
+		scEpochTime, err = tmepochtime.New(t.ctx, t, t.genesis.EpochTime.Parameters.Interval)
 		if err != nil {
 			t.Logger.Error("initEpochtime: failed to initialize epochtime backend",
 				"err", err,
 			)
 			return err
 		}
+		t.epochtime = scEpochTime
+		t.serviceClients = append(t.serviceClients, scEpochTime)
 	}
-	t.epochtime = epochTime
 	return nil
 }
 
@@ -1431,22 +1469,24 @@ func (t *tendermintService) syncWorker() {
 	}
 }
 
-func (t *tendermintService) worker() {
-	// Subscribe to other events here as needed, no need to spawn additional
-	// workers.
-	sub, err := t.Subscribe("tendermint/worker", tmtypes.EventQueryNewBlock)
+func (t *tendermintService) blockNotifierWorker() {
+	sub, err := t.node.EventBus().SubscribeUnbuffered(t.ctx, tmSubscriberID, tmtypes.EventQueryNewBlock)
 	if err != nil {
-		t.Logger.Error("worker: failed to subscribe to new block events",
+		t.Logger.Error("failed to subscribe to new block events",
 			"err", err,
 		)
 		return
 	}
-	defer t.Unsubscribe("tendermint/worker", tmtypes.EventQueryNewBlock) // nolint:errcheck
+	// Oh yes, this can actually return a nil subscription even though the error was also
+	// nil if the node is just shutting down.
+	if sub == (*tmpubsub.Subscription)(nil) {
+		return
+	}
+	defer t.node.EventBus().Unsubscribe(t.ctx, tmSubscriberID, tmtypes.EventQueryNewBlock) // nolint: errcheck
 
 	for {
 		select {
-		case <-t.node.Quit():
-			return
+		// Should not return on t.ctx.Done()/t.node.Quit() as that could lead to a deadlock.
 		case <-sub.Cancelled():
 			return
 		case v := <-sub.Out():
@@ -1458,14 +1498,8 @@ func (t *tendermintService) worker() {
 
 // metrics updates oasis_consensus metrics by checking last accepted block info.
 func (t *tendermintService) metrics() {
-	sub, err := t.Subscribe("tendermint/metrics", tmtypes.EventQueryNewBlock)
-	if err != nil {
-		t.Logger.Error("worker: failed to subscribe to new block events",
-			"err", err,
-		)
-		return
-	}
-	defer t.Unsubscribe("tendermint/metrics", tmtypes.EventQueryNewBlock) // nolint:errcheck
+	ch, sub := t.WatchTendermintBlocks()
+	defer sub.Close()
 
 	// Tendermint uses specific public key encoding.
 	pubKey := t.consensusSigner.Public()
@@ -1475,11 +1509,7 @@ func (t *tendermintService) metrics() {
 		select {
 		case <-t.node.Quit():
 			return
-		case <-sub.Cancelled():
-			return
-		case v := <-sub.Out():
-			ev := v.Data().(tmtypes.EventDataNewBlock)
-			blk = ev.Block
+		case blk = <-ch:
 		}
 
 		// Was block proposed by our node.

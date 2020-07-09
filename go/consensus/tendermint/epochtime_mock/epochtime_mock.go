@@ -8,6 +8,8 @@ import (
 	"sync"
 
 	"github.com/eapache/channels"
+	tmabcitypes "github.com/tendermint/tendermint/abci/types"
+	tmpubsub "github.com/tendermint/tendermint/libs/pubsub"
 	tmtypes "github.com/tendermint/tendermint/types"
 
 	"github.com/oasisprotocol/oasis-core/go/common/cbor"
@@ -17,18 +19,22 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/pubsub"
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
 	"github.com/oasisprotocol/oasis-core/go/consensus/api/transaction"
+	tmapi "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/api"
 	app "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/apps/epochtime_mock"
 	"github.com/oasisprotocol/oasis-core/go/consensus/tendermint/service"
 	"github.com/oasisprotocol/oasis-core/go/epochtime/api"
 )
 
-var (
-	testSigner signature.Signer
+var testSigner signature.Signer
 
-	_ api.Backend = (*tendermintMockBackend)(nil)
-)
+// ServiceClient is the beacon service client interface.
+type ServiceClient interface {
+	api.Backend
+	tmapi.ServiceClient
+}
 
-type tendermintMockBackend struct {
+type serviceClient struct {
+	tmapi.BaseServiceClient
 	sync.RWMutex
 
 	logger *logging.Logger
@@ -37,17 +43,18 @@ type tendermintMockBackend struct {
 	querier  *app.QueryFactory
 	notifier *pubsub.Broker
 
-	lastNotified api.EpochTime
-	epoch        api.EpochTime
-	currentBlock int64
+	lastNotified  api.EpochTime
+	epoch         api.EpochTime
+	currentBlock  int64
+	initialNotify bool
 }
 
-func (t *tendermintMockBackend) GetBaseEpoch(context.Context) (api.EpochTime, error) {
+func (sc *serviceClient) GetBaseEpoch(context.Context) (api.EpochTime, error) {
 	return 0, nil
 }
 
-func (t *tendermintMockBackend) GetEpoch(ctx context.Context, height int64) (api.EpochTime, error) {
-	q, err := t.querier.QueryAt(ctx, height)
+func (sc *serviceClient) GetEpoch(ctx context.Context, height int64) (api.EpochTime, error) {
+	q, err := sc.querier.QueryAt(ctx, height)
 	if err != nil {
 		return api.EpochInvalid, err
 	}
@@ -56,40 +63,40 @@ func (t *tendermintMockBackend) GetEpoch(ctx context.Context, height int64) (api
 	return epoch, err
 }
 
-func (t *tendermintMockBackend) GetEpochBlock(ctx context.Context, epoch api.EpochTime) (int64, error) {
-	t.RLock()
-	defer t.RUnlock()
+func (sc *serviceClient) GetEpochBlock(ctx context.Context, epoch api.EpochTime) (int64, error) {
+	sc.RLock()
+	defer sc.RUnlock()
 
-	if epoch == t.epoch {
-		return t.currentBlock, nil
+	if epoch == sc.epoch {
+		return sc.currentBlock, nil
 	}
 
-	t.logger.Error("epochtime: attempted to get block for historic epoch",
+	sc.logger.Error("epochtime: attempted to get block for historic epoch",
 		"epoch", epoch,
-		"current_epoch", t.epoch,
+		"current_epoch", sc.epoch,
 	)
 
 	return 0, fmt.Errorf("epochtime: not implemented for historic epochs")
 }
 
-func (t *tendermintMockBackend) WatchEpochs() (<-chan api.EpochTime, *pubsub.Subscription) {
+func (sc *serviceClient) WatchEpochs() (<-chan api.EpochTime, *pubsub.Subscription) {
 	typedCh := make(chan api.EpochTime)
-	sub := t.notifier.Subscribe()
+	sub := sc.notifier.Subscribe()
 	sub.Unwrap(typedCh)
 
 	return typedCh, sub
 }
 
-func (t *tendermintMockBackend) WatchLatestEpoch() (<-chan api.EpochTime, *pubsub.Subscription) {
+func (sc *serviceClient) WatchLatestEpoch() (<-chan api.EpochTime, *pubsub.Subscription) {
 	typedCh := make(chan api.EpochTime)
-	sub := t.notifier.SubscribeBuffered(1)
+	sub := sc.notifier.SubscribeBuffered(1)
 	sub.Unwrap(typedCh)
 
 	return typedCh, sub
 }
 
-func (t *tendermintMockBackend) StateToGenesis(ctx context.Context, height int64) (*api.Genesis, error) {
-	now, err := t.GetEpoch(ctx, height)
+func (sc *serviceClient) StateToGenesis(ctx context.Context, height int64) (*api.Genesis, error) {
+	now, err := sc.GetEpoch(ctx, height)
 	if err != nil {
 		return nil, err
 	}
@@ -102,12 +109,12 @@ func (t *tendermintMockBackend) StateToGenesis(ctx context.Context, height int64
 	}, nil
 }
 
-func (t *tendermintMockBackend) SetEpoch(ctx context.Context, epoch api.EpochTime) error {
-	ch, sub := t.WatchEpochs()
+func (sc *serviceClient) SetEpoch(ctx context.Context, epoch api.EpochTime) error {
+	ch, sub := sc.WatchEpochs()
 	defer sub.Close()
 
 	tx := transaction.NewTransaction(0, nil, app.MethodSetEpoch, epoch)
-	if err := consensus.SignAndSubmitTx(ctx, t.service, testSigner, tx); err != nil {
+	if err := consensus.SignAndSubmitTx(ctx, sc.service, testSigner, tx); err != nil {
 		return fmt.Errorf("epochtime: set epoch failed: %w", err)
 	}
 
@@ -126,129 +133,91 @@ func (t *tendermintMockBackend) SetEpoch(ctx context.Context, epoch api.EpochTim
 	}
 }
 
-func (t *tendermintMockBackend) worker(ctx context.Context) {
-	// Subscribe to blocks which advance the epoch.
-	sub, err := t.service.Subscribe("epochtime-worker", app.QueryApp)
-	if err != nil {
-		t.logger.Error("failed to subscribe",
-			"err", err,
-		)
-		return
-	}
-	defer t.service.Unsubscribe("epochtime-worker", app.QueryApp) // nolint: errcheck
-
-	var initialNotify bool
-	for {
-		var event interface{}
-
-		select {
-		case msg := <-sub.Out():
-			event = msg.Data()
-		case <-sub.Cancelled():
-			t.logger.Debug("worker: terminating, subscription closed")
-			return
-		case <-ctx.Done():
-			return
-		}
-
-		if ev, ok := event.(tmtypes.EventDataNewBlock); ok {
-			if !initialNotify {
-				if err = t.queryAndUpdate(ctx, ev.Block.Header.Height); err != nil {
-					t.logger.Warn("failed to query epoch",
-						"err", err,
-					)
-					continue
-				}
-				initialNotify = true
-			}
-			t.onEventDataNewBlock(ctx, ev)
-		}
-	}
+// Implements api.ServiceClient.
+func (sc *serviceClient) ServiceDescriptor() tmapi.ServiceDescriptor {
+	return tmapi.NewStaticServiceDescriptor(api.ModuleName, app.EventType, []tmpubsub.Query{app.QueryApp})
 }
 
-func (t *tendermintMockBackend) queryAndUpdate(ctx context.Context, height int64) error {
-	q, err := t.querier.QueryAt(ctx, height)
-	if err != nil {
-		return fmt.Errorf("failed to query epoch: %w", err)
-	}
+// Implements api.ServiceClient.
+func (sc *serviceClient) DeliverBlock(ctx context.Context, height int64) error {
+	if !sc.initialNotify {
+		q, err := sc.querier.QueryAt(ctx, height)
+		if err != nil {
+			return fmt.Errorf("epochtime_mock: failed to query epoch: %w", err)
+		}
 
-	var epoch api.EpochTime
-	epoch, height, err = q.Epoch(ctx)
-	if err != nil {
-		return fmt.Errorf("failed to query epoch: %w", err)
-	}
+		var epoch api.EpochTime
+		epoch, height, err = q.Epoch(ctx)
+		if err != nil {
+			return fmt.Errorf("epochtime_mock: failed to query epoch: %w", err)
+		}
 
-	if t.updateCached(height, epoch) {
-		t.notifier.Broadcast(epoch)
+		if sc.updateCached(height, epoch) {
+			sc.notifier.Broadcast(epoch)
+		}
+		sc.initialNotify = true
 	}
-
 	return nil
 }
 
-func (t *tendermintMockBackend) onEventDataNewBlock(ctx context.Context, ev tmtypes.EventDataNewBlock) {
-	events := ev.ResultBeginBlock.GetEvents()
+// Implements api.ServiceClient.
+func (sc *serviceClient) DeliverEvent(ctx context.Context, height int64, tx tmtypes.Tx, ev *tmabcitypes.Event) error {
+	for _, pair := range ev.GetAttributes() {
+		if bytes.Equal(pair.GetKey(), app.KeyEpoch) {
+			var epoch api.EpochTime
+			if err := cbor.Unmarshal(pair.GetValue(), &epoch); err != nil {
+				sc.logger.Error("epochtime_mock: malformed mock epoch",
+					"err", err,
+				)
+				continue
+			}
 
-	for _, tmEv := range events {
-		if tmEv.GetType() != app.EventType {
-			continue
-		}
-
-		for _, pair := range tmEv.GetAttributes() {
-			if bytes.Equal(pair.GetKey(), app.KeyEpoch) {
-				var epoch api.EpochTime
-				if err := cbor.Unmarshal(pair.GetValue(), &epoch); err != nil {
-					t.logger.Error("worker: malformed mock epoch",
-						"err", err,
-					)
-					continue
-				}
-
-				if t.updateCached(ev.Block.Header.Height, epoch) {
-					t.notifier.Broadcast(t.epoch)
-				}
+			if sc.updateCached(height, epoch) {
+				sc.notifier.Broadcast(sc.epoch)
 			}
 		}
 	}
+	return nil
 }
 
-func (t *tendermintMockBackend) updateCached(height int64, epoch api.EpochTime) bool {
-	t.Lock()
-	defer t.Unlock()
+func (sc *serviceClient) updateCached(height int64, epoch api.EpochTime) bool {
+	sc.Lock()
+	defer sc.Unlock()
 
-	t.epoch = epoch
-	t.currentBlock = height
+	sc.epoch = epoch
+	sc.currentBlock = height
 
-	if t.lastNotified != epoch {
-		t.logger.Debug("epoch transition",
-			"prev_epoch", t.lastNotified,
+	if sc.lastNotified != epoch {
+		sc.logger.Debug("epoch transition",
+			"prev_epoch", sc.lastNotified,
 			"epoch", epoch,
 			"height", height,
 		)
-		t.lastNotified = t.epoch
+		sc.lastNotified = sc.epoch
 		return true
 	}
 	return false
 }
 
 // New constructs a new mock tendermint backed epochtime Backend instance.
-func New(ctx context.Context, service service.TendermintService) (api.SetableBackend, error) {
+func New(ctx context.Context, service service.TendermintService) (ServiceClient, error) {
 	// Initialize and register the tendermint service component.
 	a := app.New()
 	if err := service.RegisterApplication(a); err != nil {
 		return nil, err
 	}
 
-	r := &tendermintMockBackend{
+	sc := &serviceClient{
 		logger:  logging.GetLogger("epochtime/tendermint_mock"),
 		service: service,
 		querier: a.QueryFactory().(*app.QueryFactory),
 	}
-	r.notifier = pubsub.NewBrokerEx(func(ch channels.Channel) {
-		r.RLock()
-		defer r.RUnlock()
+	sc.notifier = pubsub.NewBrokerEx(func(ch channels.Channel) {
+		sc.RLock()
+		defer sc.RUnlock()
 
-		if r.lastNotified == r.epoch {
-			ch.In() <- r.epoch
+		if sc.lastNotified == sc.epoch {
+			ch.In() <- sc.epoch
 		}
 	})
 
@@ -258,14 +227,12 @@ func New(ctx context.Context, service service.TendermintService) (api.SetableBac
 	}
 
 	if base := genDoc.EpochTime.Base; base != 0 {
-		r.logger.Warn("ignoring non-zero base genesis epoch",
+		sc.logger.Warn("ignoring non-zero base genesis epoch",
 			"base", base,
 		)
 	}
 
-	go r.worker(ctx)
-
-	return r, nil
+	return sc, nil
 }
 
 func init() {

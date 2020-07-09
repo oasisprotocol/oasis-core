@@ -186,7 +186,7 @@ type Event struct {
 type MetricsMonitorable interface {
 	// WatchAllBlocks returns a channel that produces a stream of blocks.
 	//
-	// All blocks from all runtimes will be pushed into the stream
+	// All blocks from all tracked runtimes will be pushed into the stream
 	// immediately as they are finalized.
 	WatchAllBlocks() (<-chan *block.Block, *pubsub.Subscription)
 }
