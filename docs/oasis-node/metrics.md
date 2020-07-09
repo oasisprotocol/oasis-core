@@ -89,6 +89,9 @@ oasis_worker_processed_block_count | Counter | Number of processed roothash bloc
 oasis_worker_processed_event_count | Counter | Number of processed roothash events. | runtime | [worker/common/committee](../../go/worker/common/committee/node.go)
 oasis_worker_roothash_merge_commit_latency | Summary | Latency of roothash merge commit (seconds). | runtime | [worker/compute/merge/committee](../../go/worker/compute/merge/committee/node.go)
 oasis_worker_storage_commit_latency | Summary | Latency of storage commit calls (state + outputs) (seconds). | runtime | [worker/compute/executor/committee](../../go/worker/compute/executor/committee/node.go)
+oasis_worker_storage_full_round | Gauge | The last round that was fully synced and finalized. | runtime | [worker/storage/committee](../../go/worker/storage/committee/node.go)
+oasis_worker_storage_pending_round | Gauge | The last round that is in-flight for syncing. | runtime | [worker/storage/committee](../../go/worker/storage/committee/node.go)
+oasis_worker_storage_synced_round | Gauge | The last round that was synced but not yet finalized. | runtime | [worker/storage/committee](../../go/worker/storage/committee/node.go)
 oasis_worker_txnscheduler_incoming_queue_size | Gauge | Size of the incoming queue (number of entries). | runtime | [worker/compute/txnscheduler/committee](../../go/worker/compute/txnscheduler/committee/node.go)
 
 <!-- markdownlint-enable line-length -->

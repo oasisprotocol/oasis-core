@@ -10,6 +10,7 @@ import (
 	"sync"
 
 	"github.com/eapache/channels"
+	"github.com/prometheus/client_golang/prometheus"
 
 	"github.com/oasisprotocol/oasis-core/go/common"
 	"github.com/oasisprotocol/oasis-core/go/common/accessctl"
@@ -40,6 +41,38 @@ var (
 
 	// ErrNonLocalBackend is the error returned when the storage backend doesn't implement the LocalBackend interface.
 	ErrNonLocalBackend = errors.New("storage: storage backend doesn't support local storage")
+
+	storageWorkerLastFullRound = prometheus.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Name: "oasis_worker_storage_full_round",
+			Help: "The last round that was fully synced and finalized.",
+		},
+		[]string{"runtime"},
+	)
+
+	storageWorkerLastSyncedRound = prometheus.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Name: "oasis_worker_storage_synced_round",
+			Help: "The last round that was synced but not yet finalized.",
+		},
+		[]string{"runtime"},
+	)
+
+	storageWorkerLastPendingRound = prometheus.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Name: "oasis_worker_storage_pending_round",
+			Help: "The last round that is in-flight for syncing.",
+		},
+		[]string{"runtime"},
+	)
+
+	storageWorkerCollectors = []prometheus.Collector{
+		storageWorkerLastFullRound,
+		storageWorkerLastSyncedRound,
+		storageWorkerLastPendingRound,
+	}
+
+	prometheusOnce sync.Once
 )
 
 const (
@@ -282,6 +315,10 @@ func NewNode(
 		node:   node,
 	})
 
+	prometheusOnce.Do(func() {
+		prometheus.MustRegister(storageWorkerCollectors...)
+	})
+
 	return node, nil
 }
 
@@ -316,6 +353,12 @@ func (n *Node) Cleanup() {
 // Initialized returns a channel that will be closed once the worker finished starting up.
 func (n *Node) Initialized() <-chan struct{} {
 	return n.initCh
+}
+
+func (n *Node) getMetricLabels() prometheus.Labels {
+	return prometheus.Labels{
+		"runtime": n.commonNode.Runtime.ID().String(),
+	}
 }
 
 // NodeHooks implementation.
@@ -668,6 +711,8 @@ mainLoop:
 				summary := hashCache[lastDiff.round]
 				delete(hashCache, lastDiff.round-1)
 
+				storageWorkerLastSyncedRound.With(n.getMetricLabels()).Set(float64(lastDiff.round))
+
 				// Finalize storage for this round. This happens asynchronously
 				// with respect to Apply operations for subsequent rounds.
 				lastFullyAppliedRound = lastDiff.round
@@ -752,6 +797,10 @@ mainLoop:
 						awaitingRetry: maskAll,
 					}
 					syncingRounds[i] = syncing
+
+					if i == blk.Header.Round {
+						storageWorkerLastPendingRound.With(n.getMetricLabels()).Set(float64(i))
+					}
 				}
 				n.logger.Debug("preparing round sync",
 					"round", i,
@@ -816,6 +865,8 @@ mainLoop:
 			if err != nil {
 				n.logger.Error("can't store watcher state to database", "err", err)
 			}
+
+			storageWorkerLastFullRound.With(n.getMetricLabels()).Set(float64(finalized.Round))
 
 			// Notify the checkpointer that there is a new finalized round.
 			n.checkpointer.NotifyNewVersion(finalized.Round)
