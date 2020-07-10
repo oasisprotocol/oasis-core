@@ -153,6 +153,7 @@ changelog: fetch-git
 	@$(ECHO_STDERR) "Generating Change Log for version $(NEXT_VERSION)..."
 	towncrier build --version $(NEXT_VERSION)
 	@$(ECHO_STDERR) "Next, review the staged changes, commit them and make a pull request."
+	@$(WARN_BREAKING_CHANGES)
 
 # Tag the next release.
 tag-next-release: fetch-git
