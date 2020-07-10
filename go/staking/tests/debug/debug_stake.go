@@ -30,7 +30,7 @@ var (
 				api.KindRuntimeKeyManager: QtyFromInt(7),
 			},
 			Slashing: map[api.SlashReason]api.Slash{
-				api.SlashDoubleSigning: api.Slash{
+				api.SlashDoubleSigning: {
 					Amount:         QtyFromInt(math.MaxInt64), // Slash everything.
 					FreezeInterval: 1,
 				},
@@ -42,7 +42,7 @@ var (
 		},
 		TotalSupply: DebugStateTotalSupply,
 		Ledger: map[api.Address]*api.Account{
-			DebugStateSrcAddress: &api.Account{
+			DebugStateSrcAddress: {
 				General: api.GeneralAccount{
 					Balance: DebugStateSrcGeneralBalance,
 				},
@@ -55,8 +55,8 @@ var (
 			},
 		},
 		Delegations: map[api.Address]map[api.Address]*api.Delegation{
-			DebugStateSrcAddress: map[api.Address]*api.Delegation{
-				DebugStateSrcAddress: &api.Delegation{
+			DebugStateSrcAddress: {
+				DebugStateSrcAddress: {
 					Shares: DebugStateSrcEscrowActiveShares,
 				},
 			},

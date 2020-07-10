@@ -439,7 +439,6 @@ func (n *Node) startWorkers(logger *logging.Logger) error {
 		n.MergeWorker.Enabled() ||
 		n.KeymanagerWorker.Enabled() ||
 		n.ConsensusWorker.Enabled() {
-
 		if err := n.CommonWorker.Grpc.Start(); err != nil {
 			logger.Error("failed to start external gRPC server",
 				"err", err,

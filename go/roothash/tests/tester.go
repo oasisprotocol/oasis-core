@@ -287,9 +287,9 @@ func (s *runtimeState) testSuccessfulRound(t *testing.T, backend api.Backend, co
 		child.Header.Namespace,
 		child.Header.Round+1,
 		[]storageAPI.ApplyOp{
-			storageAPI.ApplyOp{SrcRound: child.Header.Round + 1, SrcRoot: emptyRoot, DstRoot: ioRootHash, WriteLog: ioWriteLog},
+			{SrcRound: child.Header.Round + 1, SrcRoot: emptyRoot, DstRoot: ioRootHash, WriteLog: ioWriteLog},
 			// NOTE: Twice to get a receipt over both roots which we set to the same value.
-			storageAPI.ApplyOp{SrcRound: child.Header.Round, SrcRoot: emptyRoot, DstRoot: ioRootHash, WriteLog: ioWriteLog},
+			{SrcRound: child.Header.Round, SrcRoot: emptyRoot, DstRoot: ioRootHash, WriteLog: ioWriteLog},
 		},
 	)
 

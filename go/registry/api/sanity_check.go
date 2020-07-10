@@ -347,7 +347,7 @@ type sanityCheckRuntimeLookup struct {
 	allRuntimes       []*Runtime
 }
 
-func newSanityCheckRuntimeLookup(runtimes []*Runtime, suspendedRuntimes []*Runtime) (RuntimeLookup, error) {
+func newSanityCheckRuntimeLookup(runtimes, suspendedRuntimes []*Runtime) (RuntimeLookup, error) {
 	rtsMap := make(map[common.Namespace]*Runtime)
 	sRtsMap := make(map[common.Namespace]*Runtime)
 	allRts := []*Runtime{}

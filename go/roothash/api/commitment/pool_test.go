@@ -128,7 +128,7 @@ func TestPoolSingleCommitment(t *testing.T) {
 	committee := &scheduler.Committee{
 		Kind: scheduler.KindComputeExecutor,
 		Members: []*scheduler.CommitteeNode{
-			&scheduler.CommitteeNode{
+			{
 				Role:      scheduler.Worker,
 				PublicKey: sk.Public(),
 			},
@@ -244,7 +244,7 @@ func TestPoolSingleCommitmentTEE(t *testing.T) {
 	committee := &scheduler.Committee{
 		Kind: scheduler.KindComputeExecutor,
 		Members: []*scheduler.CommitteeNode{
-			&scheduler.CommitteeNode{
+			{
 				Role:      scheduler.Worker,
 				PublicKey: sk.Public(),
 			},
@@ -472,7 +472,7 @@ func TestPoolSerialization(t *testing.T) {
 	committee := &scheduler.Committee{
 		Kind: scheduler.KindComputeExecutor,
 		Members: []*scheduler.CommitteeNode{
-			&scheduler.CommitteeNode{
+			{
 				Role:      scheduler.Worker,
 				PublicKey: sk.Public(),
 			},
@@ -529,11 +529,11 @@ func TestMultiPoolSerialization(t *testing.T) {
 	// Create a multi-pool.
 	pool := MultiPool{
 		Committees: map[hash.Hash]*Pool{
-			com1ID: &Pool{
+			com1ID: {
 				Runtime:   rt,
 				Committee: committee1,
 			},
-			com2ID: &Pool{
+			com2ID: {
 				Runtime:   rt,
 				Committee: committee2,
 			},
@@ -606,7 +606,7 @@ func TestPoolMergeCommitment(t *testing.T) {
 		// Create a executor commitment multi-pool.
 		executorPool := MultiPool{
 			Committees: map[hash.Hash]*Pool{
-				executorCommitteeID: &Pool{
+				executorCommitteeID: {
 					Runtime:   rt,
 					Committee: executorCommittee,
 				},
@@ -686,7 +686,7 @@ func TestPoolMergeCommitment(t *testing.T) {
 		// Create a executor commitment multi-pool.
 		executorPool := MultiPool{
 			Committees: map[hash.Hash]*Pool{
-				executorCommitteeID: &Pool{
+				executorCommitteeID: {
 					Runtime:   rt,
 					Committee: executorCommittee,
 				},
@@ -767,11 +767,11 @@ func TestMultiPool(t *testing.T) {
 		// Create a multi-pool.
 		pool := MultiPool{
 			Committees: map[hash.Hash]*Pool{
-				com1ID: &Pool{
+				com1ID: {
 					Runtime:   rt,
 					Committee: committee1,
 				},
-				com2ID: &Pool{
+				com2ID: {
 					Runtime:   rt,
 					Committee: committee2,
 				},
@@ -852,11 +852,11 @@ func TestMultiPool(t *testing.T) {
 		// Create a multi-pool.
 		pool := MultiPool{
 			Committees: map[hash.Hash]*Pool{
-				com1ID: &Pool{
+				com1ID: {
 					Runtime:   rt,
 					Committee: committee1,
 				},
-				com2ID: &Pool{
+				com2ID: {
 					Runtime:   rt,
 					Committee: committee2,
 				},
@@ -1137,15 +1137,15 @@ func generateMockCommittee(t *testing.T) (
 	committee = &scheduler.Committee{
 		Kind: scheduler.KindComputeExecutor,
 		Members: []*scheduler.CommitteeNode{
-			&scheduler.CommitteeNode{
+			{
 				Role:      scheduler.Worker,
 				PublicKey: sk1.Public(),
 			},
-			&scheduler.CommitteeNode{
+			{
 				Role:      scheduler.Worker,
 				PublicKey: sk2.Public(),
 			},
-			&scheduler.CommitteeNode{
+			{
 				Role:      scheduler.BackupWorker,
 				PublicKey: sk3.Public(),
 			},

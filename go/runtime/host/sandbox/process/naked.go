@@ -91,10 +91,10 @@ func NewNaked(cfg Config) (Process, error) {
 
 	// Write any bound data to respective files.
 	for path, reader := range cfg.BindData {
-		if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil {
+		if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
 			return nil, fmt.Errorf("failed to create directory for bound data: %w", err)
 		}
-		file, err := os.OpenFile(path, os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0600)
+		file, err := os.OpenFile(path, os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0o600)
 		if err != nil {
 			return nil, fmt.Errorf("failed to write bound data: %w", err)
 		}

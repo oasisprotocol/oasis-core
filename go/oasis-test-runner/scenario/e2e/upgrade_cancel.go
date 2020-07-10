@@ -69,14 +69,14 @@ func (sc *nodeUpgradeCancelImpl) Fixture() (*oasis.NetworkFixture, error) {
 			EpochtimeMock: true,
 		},
 		Entities: []oasis.EntityCfg{
-			oasis.EntityCfg{IsDebugTestEntity: true},
-			oasis.EntityCfg{},
+			{IsDebugTestEntity: true},
+			{},
 		},
 		Validators: []oasis.ValidatorFixture{
-			oasis.ValidatorFixture{Entity: 1},
-			oasis.ValidatorFixture{Entity: 1},
-			oasis.ValidatorFixture{Entity: 1},
-			oasis.ValidatorFixture{Entity: 1},
+			{Entity: 1},
+			{Entity: 1},
+			{Entity: 1},
+			{Entity: 1},
 		},
 	}, nil
 }
@@ -112,7 +112,7 @@ func (sc *nodeUpgradeCancelImpl) Run(childEnv *env.Env) error {
 	descriptor := fmt.Sprintf(descriptorTemplate, nodeHash.String())
 
 	filePath := path.Join(sc.Net.BasePath(), "upgrade-descriptor.json")
-	if err = ioutil.WriteFile(filePath, []byte(descriptor), 0644); err != nil { //nolint: gosec
+	if err = ioutil.WriteFile(filePath, []byte(descriptor), 0o644); err != nil { //nolint: gosec
 		return fmt.Errorf("can't write descriptor to network directory: %w", err)
 	}
 

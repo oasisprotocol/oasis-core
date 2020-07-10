@@ -41,7 +41,7 @@ type transfer struct {
 	fundingAccount signature.Signer
 }
 
-func (t *transfer) doTransferTx(ctx context.Context, fromIdx int, toIdx int) error {
+func (t *transfer) doTransferTx(ctx context.Context, fromIdx, toIdx int) error {
 	from := &t.accounts[fromIdx]
 	to := &t.accounts[toIdx]
 

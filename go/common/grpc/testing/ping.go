@@ -111,7 +111,6 @@ func (s *pingServer) WatchPings(ctx context.Context, query *PingQuery) (<-chan *
 			case <-ctx.Done():
 				return
 			}
-
 		}
 	}()
 	typedCh := make(chan *PingResponse)

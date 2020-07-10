@@ -31,16 +31,20 @@ func TestBIP173(t *testing.T) {
 		// HRP character out of range.
 		{"\x801eym55h", false, "decoding bech32 failed: invalid character in string: '\u0080'"},
 		// Overall max length exceeded.
-		{"an84characterslonghumanreadablepartthatcontainsthenumber1andtheexcludedcharactersbio1569pvx",
+		{
+			"an84characterslonghumanreadablepartthatcontainsthenumber1andtheexcludedcharactersbio1569pvx",
 			false,
-			"decoding bech32 failed: invalid bech32 string length 91"},
+			"decoding bech32 failed: invalid bech32 string length 91",
+		},
 		// No separator character.
 		{"pzry9x0s0muk", false, "decoding bech32 failed: invalid index of 1"},
 		// Empty HRP.
 		{"1pzry9x0s0muk", false, "decoding bech32 failed: invalid index of 1"},
 		// Invalid data character.
-		{"x1b4n0q5v", false,
-			"decoding bech32 failed: failed converting data to bytes: invalid character not part of charset: 98"},
+		{
+			"x1b4n0q5v", false,
+			"decoding bech32 failed: failed converting data to bytes: invalid character not part of charset: 98",
+		},
 		// Too short checksum.
 		{"li1dgmt3", false, "decoding bech32 failed: invalid index of 1"},
 		// Invalid character in checksum.

@@ -105,7 +105,6 @@ func (r *runtime) Start() error {
 		Started: &host.StartedEvent{},
 	})
 	return nil
-
 }
 
 // Implements host.Runtime.

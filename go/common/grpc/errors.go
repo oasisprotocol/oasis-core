@@ -38,7 +38,7 @@ func errorToGrpc(err error) error {
 		Code:    int32(status.Code(err)),
 		Message: err.Error(),
 		Details: []*any.Any{
-			&any.Any{
+			{
 				// Double serialization seems ugly, but there is no way around
 				// it as the format for errors is predefined.
 				Value: cbor.Marshal(&grpcError{Module: module, Code: code}),

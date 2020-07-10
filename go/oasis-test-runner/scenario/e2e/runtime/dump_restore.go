@@ -5,10 +5,8 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/scenario"
 )
 
-var (
-	// DumpRestore is the dump and restore scenario.
-	DumpRestore scenario.Scenario = newDumpRestoreImpl()
-)
+// DumpRestore is the dump and restore scenario.
+var DumpRestore scenario.Scenario = newDumpRestoreImpl()
 
 type dumpRestoreImpl struct {
 	runtimeImpl

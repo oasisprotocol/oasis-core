@@ -161,10 +161,10 @@ func (sc *txSourceImpl) Fixture() (*oasis.NetworkFixture, error) {
 	// Use at least 4 validators so that consensus can keep making progress
 	// when a node is being killed and restarted.
 	f.Validators = []oasis.ValidatorFixture{
-		oasis.ValidatorFixture{Entity: 1},
-		oasis.ValidatorFixture{Entity: 1},
-		oasis.ValidatorFixture{Entity: 1},
-		oasis.ValidatorFixture{Entity: 1},
+		{Entity: 1},
+		{Entity: 1},
+		{Entity: 1},
+		{Entity: 1},
 	}
 
 	// Update validators to require fee payments.

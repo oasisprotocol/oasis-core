@@ -33,11 +33,11 @@ type InterfaceFuzzer struct {
 
 	methodList []int
 
-	typeOverrides map[string]func()interface{}
+	typeOverrides map[string]func() interface{}
 }
 
 // OverrideType registers a custom callback for creating instances of a given type.
-func (i *InterfaceFuzzer) OverrideType(typeName string, factory func()interface{}) {
+func (i *InterfaceFuzzer) OverrideType(typeName string, factory func() interface{}) {
 	i.typeOverrides[typeName] = factory
 }
 
@@ -110,11 +110,11 @@ FilterLoop:
 func NewInterfaceFuzzer(instance interface{}) *InterfaceFuzzer {
 	val := reflect.ValueOf(instance)
 	ret := &InterfaceFuzzer{
-		instance:      instance,
-		typeObject:    val.Type(),
-		valObject:     val,
-		typeOverrides: map[string]func()interface{}{
-			"context.Context": func()interface{}{
+		instance:   instance,
+		typeObject: val.Type(),
+		valObject:  val,
+		typeOverrides: map[string]func() interface{}{
+			"context.Context": func() interface{} {
 				return context.Background()
 			},
 		},

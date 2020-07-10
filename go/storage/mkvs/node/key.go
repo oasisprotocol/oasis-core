@@ -88,7 +88,7 @@ func (k Key) GetBit(bit Depth) bool {
 //
 // This function is immutable and returns a new instance of Key
 func (k Key) SetBit(bit Depth, val bool) Key {
-	var kb = make(Key, len(k))
+	kb := make(Key, len(k))
 	copy(kb[:], k[:])
 	mask := byte(1 << (7 - (bit % 8)))
 	if val {
@@ -104,7 +104,7 @@ func (k Key) SetBit(bit Depth, val bool) Key {
 // keyLen is the length of the key in bits and splitPoint is the index of the
 // first suffix bit.
 // This function is immutable and returns two new instances of Key.
-func (k Key) Split(splitPoint Depth, keyLen Depth) (prefix Key, suffix Key) {
+func (k Key) Split(splitPoint, keyLen Depth) (prefix, suffix Key) {
 	if splitPoint > keyLen {
 		panic(fmt.Sprintf("mkvs: splitPoint %+v greater than keyLen %+v", splitPoint, keyLen))
 	}

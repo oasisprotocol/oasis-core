@@ -16,7 +16,7 @@ import (
 )
 
 const (
-	dataDir string = "/tmp/oasis-node-fuzz-storage"
+	dataDir     string = "/tmp/oasis-node-fuzz-storage"
 	identityDir string = dataDir + "/identity"
 )
 

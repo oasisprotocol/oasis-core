@@ -122,7 +122,6 @@ func (parallel) Run(
 					errCh <- fmt.Errorf("cnsc.SubmitTx: %w", err)
 					return
 				}
-
 			}(accounts[c], nonce)
 		}
 

@@ -157,7 +157,7 @@ func New() abci.Application {
 	return &beaconApplication{}
 }
 
-func GetBeacon(beaconEpoch epochtime.EpochTime, entropyCtx []byte, entropy []byte) []byte {
+func GetBeacon(beaconEpoch epochtime.EpochTime, entropyCtx, entropy []byte) []byte {
 	var tmp [8]byte
 	binary.LittleEndian.PutUint64(tmp[:], uint64(beaconEpoch))
 

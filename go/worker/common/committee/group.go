@@ -106,7 +106,7 @@ func NewMockEpochSnapshot() *EpochSnapshot {
 	return &EpochSnapshot{
 		executorCommitteeID: executorCommitteeID,
 		executorCommittees: map[hash.Hash]*CommitteeInfo{
-			executorCommitteeID: &CommitteeInfo{},
+			executorCommitteeID: {},
 		},
 	}
 }

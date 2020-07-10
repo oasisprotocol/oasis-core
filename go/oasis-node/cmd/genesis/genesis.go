@@ -261,7 +261,7 @@ func doInitGenesis(cmd *cobra.Command, args []string) {
 	}
 
 	b, _ := json.Marshal(doc)
-	if err := ioutil.WriteFile(f, b, 0600); err != nil {
+	if err := ioutil.WriteFile(f, b, 0o600); err != nil {
 		logger.Error("failed to save generated genesis document",
 			"err", err,
 		)
@@ -557,8 +557,8 @@ func AppendStakingState(doc *genesis.Document, state string, l *logging.Logger) 
 			},
 		}
 		stakingSt.Delegations = map[staking.Address]map[staking.Address]*staking.Delegation{
-			entAddr: map[staking.Address]*staking.Delegation{
-				entAddr: &staking.Delegation{
+			entAddr: {
+				entAddr: {
 					Shares: stakingTests.QtyFromInt(1),
 				},
 			},

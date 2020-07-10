@@ -83,7 +83,7 @@ func ValidateRuntimeIDStr(idStr string) error {
 	return ns.UnmarshalHex(idStr)
 }
 
-func checkDiff(ctx context.Context, storageClient storageAPI.Backend, root string, oldRoot node.Root, newRoot node.Root) {
+func checkDiff(ctx context.Context, storageClient storageAPI.Backend, root string, oldRoot, newRoot node.Root) {
 	it, err := storageClient.GetDiff(ctx, &storageAPI.GetDiffRequest{StartRoot: oldRoot, EndRoot: newRoot})
 	if err != nil {
 		logger.Error("error getting write log from the syncing node",

@@ -102,7 +102,7 @@ func doInitPolicy(cmd *cobra.Command, args []string) {
 	}
 
 	c := cbor.Marshal(p)
-	if err = ioutil.WriteFile(viper.GetString(CfgPolicyFile), c, 0666); err != nil {
+	if err = ioutil.WriteFile(viper.GetString(CfgPolicyFile), c, 0o666); err != nil {
 		logger.Error("failed to write key manager policy cbor file",
 			"err", err,
 			"CfgPolicyFile", viper.GetString(CfgPolicyFile),
@@ -200,7 +200,6 @@ func policyFromFlags() (*kmApi.PolicySGX, error) {
 				}
 			}
 		}
-
 	}
 
 	return &kmApi.PolicySGX{
@@ -231,7 +230,7 @@ func doSignPolicy(cmd *cobra.Command, args []string) {
 		os.Exit(1)
 	}
 
-	if err = ioutil.WriteFile(viper.GetStringSlice(CfgPolicySigFile)[0], sigBytes, 0600); err != nil {
+	if err = ioutil.WriteFile(viper.GetStringSlice(CfgPolicySigFile)[0], sigBytes, 0o600); err != nil {
 		logger.Error("failed to write policy file signature",
 			"err", err,
 			"CfgPolicySigFile", viper.GetStringSlice(CfgPolicySigFile),
@@ -373,7 +372,7 @@ func doInitStatus(cmd *cobra.Command, args []string) {
 	}
 
 	c, _ := json.Marshal(s)
-	if err = ioutil.WriteFile(viper.GetString(CfgStatusFile), c, 0666); err != nil {
+	if err = ioutil.WriteFile(viper.GetString(CfgStatusFile), c, 0o666); err != nil {
 		logger.Error("failed to write key manager status json file",
 			"err", err,
 			"CfgStatusFile", viper.GetString(CfgStatusFile),

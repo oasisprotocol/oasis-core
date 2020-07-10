@@ -14,7 +14,7 @@ func (t *tree) DumpLocal(ctx context.Context, w io.Writer, maxDepth node.Depth) 
 	t.doDumpLocal(ctx, w, t.cache.pendingRoot, 0, maxDepth)
 }
 
-func (t *tree) doDumpLocal(ctx context.Context, w io.Writer, ptr *node.Pointer, depth node.Depth, maxDepth node.Depth) {
+func (t *tree) doDumpLocal(ctx context.Context, w io.Writer, ptr *node.Pointer, depth, maxDepth node.Depth) {
 	prefix := strings.Repeat(" ", int(depth)*2)
 	if ptr == nil {
 		fmt.Fprint(w, prefix+"<nil>")

@@ -62,7 +62,7 @@ func (k *KeymanagerHelpers) InitPolicy(runtimeID common.Namespace, serial uint32
 }
 
 // SignPolicy signs the KM policy file using the given test key ("1", "2", or "3").
-func (k *KeymanagerHelpers) SignPolicy(testKey string, polPath string, polSigPath string) error {
+func (k *KeymanagerHelpers) SignPolicy(testKey, polPath, polSigPath string) error {
 	k.logger.Info("signing KM policy",
 		"policy_path", polPath,
 		"policy_signature_path", polSigPath,

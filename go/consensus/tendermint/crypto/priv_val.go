@@ -337,7 +337,7 @@ func (pv *privVal) save() error {
 	if err != nil {
 		return err
 	}
-	if err = tempfile.WriteFileAtomic(pv.filePath, b, 0600); err != nil {
+	if err = tempfile.WriteFileAtomic(pv.filePath, b, 0o600); err != nil {
 		return fmt.Errorf("tendermint/crypto: failed to save private validator file: %w", err)
 	}
 

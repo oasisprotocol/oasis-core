@@ -13,7 +13,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/fuzz"
 	"github.com/oasisprotocol/oasis-core/go/consensus/api/transaction"
 	"github.com/oasisprotocol/oasis-core/go/consensus/tendermint/abci"
-	"github.com/oasisprotocol/oasis-core/go/consensus/tendermint/apps/epochtime_mock"
+	epochtimemock "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/apps/epochtime_mock"
 	registryApp "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/apps/registry"
 	stakingApp "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/apps/staking"
 	"github.com/oasisprotocol/oasis-core/go/upgrade"
@@ -75,7 +75,7 @@ func Fuzz(data []byte) int {
 
 	tx := &transaction.Transaction{
 		Method: methodName,
-		Body: cbor.Marshal(blob),
+		Body:   cbor.Marshal(blob),
 	}
 
 	signedTx, err := transaction.Sign(txSigner, tx)
@@ -87,7 +87,7 @@ func Fuzz(data []byte) int {
 
 	// Check the transaction.
 	checkReq := types.RequestCheckTx{
-		Tx: txBlob,
+		Tx:   txBlob,
 		Type: types.CheckTxType_New,
 	}
 	muxer.CheckTx(checkReq)

@@ -14,10 +14,8 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/storage/mkvs/checkpoint"
 )
 
-var (
-	// StorageSync is the storage sync scenario.
-	StorageSync scenario.Scenario = newStorageSyncImpl()
-)
+// StorageSync is the storage sync scenario.
+var StorageSync scenario.Scenario = newStorageSyncImpl()
 
 type storageSyncImpl struct {
 	runtimeImpl

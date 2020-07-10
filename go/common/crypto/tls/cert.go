@@ -142,11 +142,11 @@ func Save(certPath, keyPath string, cert *tls.Certificate) error {
 		return err
 	}
 
-	if err = ioutil.WriteFile(keyPath, keyPEM, 0600); err != nil {
+	if err = ioutil.WriteFile(keyPath, keyPEM, 0o600); err != nil {
 		return fmt.Errorf("tls: failed to write private key: %w", err)
 	}
 
-	if err = ioutil.WriteFile(certPath, certPEM, 0644); err != nil {
+	if err = ioutil.WriteFile(certPath, certPEM, 0o644); err != nil {
 		return fmt.Errorf("tls: failed to write certificate: %w", err)
 	}
 

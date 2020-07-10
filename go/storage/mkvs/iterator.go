@@ -242,7 +242,7 @@ func (it *treeIterator) Next() {
 	it.value = nil
 }
 
-func (it *treeIterator) doNext(ptr *node.Pointer, bitDepth node.Depth, path node.Key, key node.Key, state visitState) error { // nolint: gocyclo
+func (it *treeIterator) doNext(ptr *node.Pointer, bitDepth node.Depth, path, key node.Key, state visitState) error { // nolint: gocyclo
 	// Dereference the node, possibly making a remote request.
 	nd, err := it.tree.cache.derefNodePtr(it.ctx, ptr, it.tree.newFetcherSyncIterate(key, it.prefetch))
 	if err != nil {

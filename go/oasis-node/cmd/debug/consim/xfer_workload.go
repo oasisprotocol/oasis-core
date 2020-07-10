@@ -149,7 +149,7 @@ func (w *xferWorkload) worker(cancelCh <-chan struct{}, errCh chan<- error) {
 			errCh <- err
 			return
 		}
-		w.ch <- []BlockTx{BlockTx{Tx: tx}}
+		w.ch <- []BlockTx{{Tx: tx}}
 	}
 
 	numAccounts, numIterations := len(w.accounts), viper.GetInt(cfgXferIterations)

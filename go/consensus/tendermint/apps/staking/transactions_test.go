@@ -39,7 +39,7 @@ func TestIsTransferPermitted(t *testing.T) {
 			&staking.ConsensusParameters{
 				DisableTransfers: true,
 				UndisableTransfersFrom: map[staking.Address]bool{
-					staking.Address{1}: true,
+					{1}: true,
 				},
 			},
 			staking.Address{},
@@ -50,7 +50,7 @@ func TestIsTransferPermitted(t *testing.T) {
 			&staking.ConsensusParameters{
 				DisableTransfers: true,
 				UndisableTransfersFrom: map[staking.Address]bool{
-					staking.Address{}: true,
+					{}: true,
 				},
 			},
 			staking.Address{},

@@ -13,12 +13,10 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/scenario"
 )
 
-var (
-	// IdentityCLI is the identity CLI scenario.
-	IdentityCLI scenario.Scenario = &identityCLIImpl{
-		E2E: *NewE2E("identity-cli"),
-	}
-)
+// IdentityCLI is the identity CLI scenario.
+var IdentityCLI scenario.Scenario = &identityCLIImpl{
+	E2E: *NewE2E("identity-cli"),
+}
 
 type identityCLIImpl struct {
 	E2E

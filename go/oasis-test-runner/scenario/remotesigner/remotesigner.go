@@ -16,11 +16,9 @@ const (
 	cfgServerBinary = "binary"
 )
 
-var (
-	// RemoteSignerParamsDummy is a dummy instance of remoteSignerImpl used to register global
-	// remote-signer flags.
-	RemoteSignerParamsDummy *remoteSignerImpl = newRemoteSignerImpl("")
-)
+// RemoteSignerParamsDummy is a dummy instance of remoteSignerImpl used to register global
+// remote-signer flags.
+var RemoteSignerParamsDummy *remoteSignerImpl = newRemoteSignerImpl("")
 
 type remoteSignerImpl struct {
 	name   string

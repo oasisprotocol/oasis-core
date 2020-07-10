@@ -350,7 +350,7 @@ type RuntimeLookup interface {
 }
 
 // VerifyRegisterEntityArgs verifies arguments for RegisterEntity.
-func VerifyRegisterEntityArgs(logger *logging.Logger, sigEnt *entity.SignedEntity, isGenesis bool, isSanityCheck bool) (*entity.Entity, error) {
+func VerifyRegisterEntityArgs(logger *logging.Logger, sigEnt *entity.SignedEntity, isGenesis, isSanityCheck bool) (*entity.Entity, error) {
 	var ent entity.Entity
 	if sigEnt == nil {
 		return nil, ErrInvalidArgument
@@ -867,7 +867,7 @@ func verifyAddresses(params *ConsensusParameters, addressRequired bool, addresse
 }
 
 // verifyNodeRuntimeChanges verifies node runtime changes.
-func verifyNodeRuntimeChanges(logger *logging.Logger, currentRuntimes []*node.Runtime, newRuntimes []*node.Runtime) bool {
+func verifyNodeRuntimeChanges(logger *logging.Logger, currentRuntimes, newRuntimes []*node.Runtime) bool {
 	if len(newRuntimes) < len(currentRuntimes) {
 		logger.Error("RegisterNode: trying to update runtimes, cannot remove existing runtimes",
 			"current_runtimes", currentRuntimes,
@@ -905,7 +905,7 @@ func verifyNodeRuntimeChanges(logger *logging.Logger, currentRuntimes []*node.Ru
 }
 
 // verifyRuntimeCapabilities verifies node runtime capabilities changes.
-func verifyRuntimeCapabilities(logger *logging.Logger, currentCaps *node.Capabilities, newCaps *node.Capabilities) bool {
+func verifyRuntimeCapabilities(logger *logging.Logger, currentCaps, newCaps *node.Capabilities) bool {
 	// TEE capability.
 	if (currentCaps.TEE == nil) != (newCaps.TEE == nil) {
 		logger.Error("RegisterNode: trying to change between TEE/non-TEE capability",

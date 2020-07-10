@@ -213,7 +213,7 @@ func (app *schedulerApplication) ForeignExecuteTx(ctx *api.Context, other abci.A
 	return nil
 }
 
-func diffValidators(logger *logging.Logger, current map[signature.PublicKey]int64, pending map[signature.PublicKey]int64) []types.ValidatorUpdate {
+func diffValidators(logger *logging.Logger, current, pending map[signature.PublicKey]int64) []types.ValidatorUpdate {
 	var updates []types.ValidatorUpdate
 	for v := range current {
 		if _, ok := pending[v]; !ok {

@@ -8,8 +8,8 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"sort"
 	"io/ioutil"
+	"sort"
 
 	"github.com/oasisprotocol/oasis-core/go/common"
 	commonFuzz "github.com/oasisprotocol/oasis-core/go/common/fuzz"
@@ -36,8 +36,8 @@ var treeFuzzer *commonFuzz.InterfaceFuzzer
 // fuzzer to generate histories where multiple mutation operations are performed against the remote
 // tree.
 type TreeFuzz struct {
-	inner     mkvs.Tree
-	remote    mkvs.Tree
+	inner  mkvs.Tree
+	remote mkvs.Tree
 
 	reference map[string][]byte
 	history   mkvsTests.TestVector
@@ -55,7 +55,7 @@ func (t *TreeFuzz) commitRemote(ctx context.Context) {
 	t.remote = mkvs.NewWithRoot(t.inner, nil, mkvsNode.Root{Hash: rootHash}, mkvs.Capacity(0, 0))
 }
 
-func (t *TreeFuzz) insert(ctx context.Context, tree mkvs.Tree, key []byte, value []byte) {
+func (t *TreeFuzz) insert(ctx context.Context, tree mkvs.Tree, key, value []byte) {
 	if tree == nil {
 		return
 	}
@@ -65,7 +65,7 @@ func (t *TreeFuzz) insert(ctx context.Context, tree mkvs.Tree, key []byte, value
 	}
 }
 
-func (t *TreeFuzz) Insert(ctx context.Context, key []byte, value []byte) int {
+func (t *TreeFuzz) Insert(ctx context.Context, key, value []byte) int {
 	if len(key) == 0 {
 		// Ignore zero-length keys as they are invalid.
 		return -1

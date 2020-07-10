@@ -210,6 +210,7 @@ func (tb *tendermintBackend) ConsensusParameters(ctx context.Context, height int
 
 	return q.ConsensusParameters(ctx)
 }
+
 func (tb *tendermintBackend) Cleanup() {
 	<-tb.closedCh
 }

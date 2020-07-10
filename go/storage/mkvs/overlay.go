@@ -33,7 +33,7 @@ func NewOverlay(inner Tree) OverlayTree {
 }
 
 // Implements KeyValueTree.
-func (o *treeOverlay) Insert(ctx context.Context, key []byte, value []byte) error {
+func (o *treeOverlay) Insert(ctx context.Context, key, value []byte) error {
 	err := o.overlay.Insert(ctx, key, value)
 	if err != nil {
 		return err

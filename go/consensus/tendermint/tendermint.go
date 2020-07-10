@@ -53,7 +53,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/consensus/tendermint/crypto"
 	"github.com/oasisprotocol/oasis-core/go/consensus/tendermint/db"
 	"github.com/oasisprotocol/oasis-core/go/consensus/tendermint/epochtime"
-	"github.com/oasisprotocol/oasis-core/go/consensus/tendermint/epochtime_mock"
+	epochtimemock "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/epochtime_mock"
 	tmkeymanager "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/keymanager"
 	tmregistry "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/registry"
 	tmroothash "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/roothash"

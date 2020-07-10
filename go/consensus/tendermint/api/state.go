@@ -19,10 +19,8 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/storage/mkvs"
 )
 
-var (
-	// ErrNoState is the error returned when state is nil.
-	ErrNoState = errors.New("tendermint: no state available (app not registered?)")
-)
+// ErrNoState is the error returned when state is nil.
+var ErrNoState = errors.New("tendermint: no state available (app not registered?)")
 
 // ApplicationState is the overall past, present and future state of all multiplexed applications.
 type ApplicationState interface {

@@ -65,7 +65,7 @@ type nodeUpgradeImpl struct {
 
 func (sc *nodeUpgradeImpl) writeDescriptor(name string, content []byte) (string, error) {
 	filePath := path.Join(sc.Net.BasePath(), "upgrade-"+name+".json")
-	if err := ioutil.WriteFile(filePath, content, 0644); err != nil { //nolint: gosec
+	if err := ioutil.WriteFile(filePath, content, 0o644); err != nil { //nolint: gosec
 		sc.Logger.Error("can't write descriptor to network directory",
 			"err", err,
 			"name", name,
@@ -138,14 +138,14 @@ func (sc *nodeUpgradeImpl) Fixture() (*oasis.NetworkFixture, error) {
 			},
 		},
 		Entities: []oasis.EntityCfg{
-			oasis.EntityCfg{IsDebugTestEntity: true},
-			oasis.EntityCfg{},
+			{IsDebugTestEntity: true},
+			{},
 		},
 		Validators: []oasis.ValidatorFixture{
-			oasis.ValidatorFixture{Entity: 1, AllowErrorTermination: true},
-			oasis.ValidatorFixture{Entity: 1, AllowErrorTermination: true},
-			oasis.ValidatorFixture{Entity: 1, AllowErrorTermination: true},
-			oasis.ValidatorFixture{Entity: 1, AllowErrorTermination: true},
+			{Entity: 1, AllowErrorTermination: true},
+			{Entity: 1, AllowErrorTermination: true},
+			{Entity: 1, AllowErrorTermination: true},
+			{Entity: 1, AllowErrorTermination: true},
 		},
 	}, nil
 }

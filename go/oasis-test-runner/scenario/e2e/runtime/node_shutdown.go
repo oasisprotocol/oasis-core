@@ -10,10 +10,8 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/scenario"
 )
 
-var (
-	// NodeShutdown is the keymanager restart scenario.
-	NodeShutdown scenario.Scenario = newNodeShutdownImpl()
-)
+// NodeShutdown is the keymanager restart scenario.
+var NodeShutdown scenario.Scenario = newNodeShutdownImpl()
 
 type nodeShutdownImpl struct {
 	runtimeImpl

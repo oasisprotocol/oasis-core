@@ -89,7 +89,7 @@ var (
 //
 // These are the artifacts that are stored CBOR-serialized in the Merkle tree.
 type inputArtifacts struct {
-	_ struct{} `cbor:",toarray"` //nolint
+	_ struct{} `cbor:",toarray"` // nolint
 
 	// Input is the transaction input.
 	Input []byte
@@ -105,7 +105,7 @@ type inputArtifacts struct {
 //
 // These are the artifacts that are stored CBOR-serialized in the Merkle tree.
 type outputArtifacts struct {
-	_ struct{} `cbor:",toarray"` //nolint
+	_ struct{} `cbor:",toarray"` // nolint
 
 	// Output is the transaction output (if available).
 	Output []byte

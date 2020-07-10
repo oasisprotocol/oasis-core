@@ -204,7 +204,7 @@ func (d *badgerNodeDB) GetNode(root node.Root, ptr *node.Pointer) (node.Node, er
 	return n, nil
 }
 
-func (d *badgerNodeDB) GetWriteLog(ctx context.Context, startRoot node.Root, endRoot node.Root) (writelog.Iterator, error) {
+func (d *badgerNodeDB) GetWriteLog(ctx context.Context, startRoot, endRoot node.Root) (writelog.Iterator, error) {
 	if d.discardWriteLogs {
 		return nil, api.ErrWriteLogNotFound
 	}
@@ -246,7 +246,7 @@ func (d *badgerNodeDB) GetWriteLog(ctx context.Context, startRoot node.Root, end
 	}
 	// NOTE: We could use a proper deque, but as long as we keep the number of hops and
 	//       forks low, this should not be a problem.
-	queue := []*wlItem{&wlItem{depth: 0, endRootHash: endRoot.Hash}}
+	queue := []*wlItem{{depth: 0, endRootHash: endRoot.Hash}}
 	for len(queue) > 0 {
 		if ctx.Err() != nil {
 			return nil, ctx.Err()

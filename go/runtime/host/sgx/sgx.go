@@ -142,7 +142,7 @@ func (s *sgxProvisioner) loadEnclaveBinaries(rtCfg host.Config) ([]byte, []byte,
 	return sgxs, sig, nil
 }
 
-func (s *sgxProvisioner) getSandboxConfig(rtCfg host.Config, socketPath string, runtimeDir string) (process.Config, error) {
+func (s *sgxProvisioner) getSandboxConfig(rtCfg host.Config, socketPath, runtimeDir string) (process.Config, error) {
 	// To try to avoid bad things from happening if the signature/enclave
 	// binaries change out from under us, and because the enclave binary
 	// needs to be loaded into memory anyway, this always injects

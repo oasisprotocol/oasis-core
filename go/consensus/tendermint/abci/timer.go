@@ -66,7 +66,7 @@ type Timer struct {
 }
 
 // NewTimer creates a new timer.
-func NewTimer(ctx *api.Context, app Application, kind uint8, id []byte, data []byte) *Timer {
+func NewTimer(ctx *api.Context, app Application, kind uint8, id, data []byte) *Timer {
 	if data == nil {
 		data = []byte{}
 	} else {

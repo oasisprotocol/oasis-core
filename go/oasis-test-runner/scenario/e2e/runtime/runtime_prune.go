@@ -12,10 +12,8 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/runtime/history"
 )
 
-var (
-	// RuntimePrune is the runtime prune scenario.
-	RuntimePrune scenario.Scenario = newRuntimePruneImpl()
-)
+// RuntimePrune is the runtime prune scenario.
+var RuntimePrune scenario.Scenario = newRuntimePruneImpl()
 
 const (
 	// pruneNumKept is the number of last blocks the pruner should keep.

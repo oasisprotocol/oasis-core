@@ -41,7 +41,7 @@ type Option func(t *tree)
 //
 // If a capacity of 0 is specified, the cache will have an unlimited size
 // (not recommended, as this will cause unbounded memory growth).
-func Capacity(nodeCapacity uint64, valueCapacityBytes uint64) Option {
+func Capacity(nodeCapacity, valueCapacityBytes uint64) Option {
 	return func(t *tree) {
 		t.cache.nodeCapacity = nodeCapacity
 		t.cache.valueCapacity = valueCapacityBytes

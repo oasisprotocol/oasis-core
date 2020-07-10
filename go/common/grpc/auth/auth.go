@@ -33,7 +33,6 @@ func UnaryServerInterceptor(authFunc AuthenticationFunction) grpc.UnaryServerInt
 		req interface{},
 		info *grpc.UnaryServerInfo,
 		handler grpc.UnaryHandler) (interface{}, error) {
-
 		overrideSrv, ok := info.Server.(ServerAuth)
 		if !ok {
 			// Server doesn't implement Authentication.
@@ -61,7 +60,6 @@ func StreamServerInterceptor(authFunc AuthenticationFunction) grpc.StreamServerI
 		stream grpc.ServerStream,
 		info *grpc.StreamServerInfo,
 		handler grpc.StreamHandler) error {
-
 		overrideSrv, ok := srv.(ServerAuth)
 		if !ok {
 			// Server doesn't implement Authentication.

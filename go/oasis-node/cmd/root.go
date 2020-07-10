@@ -21,14 +21,12 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/stake"
 )
 
-var (
-	rootCmd = &cobra.Command{
-		Use:     "oasis-node",
-		Short:   "Oasis Node",
-		Version: version.SoftwareVersion,
-		Run:     node.Run,
-	}
-)
+var rootCmd = &cobra.Command{
+	Use:     "oasis-node",
+	Short:   "Oasis Node",
+	Version: version.SoftwareVersion,
+	Run:     node.Run,
+}
 
 // RootCommand returns the root (top level) cobra.Command.
 func RootCommand() *cobra.Command {
@@ -40,7 +38,7 @@ func RootCommand() *cobra.Command {
 func Execute() {
 	// Only the owner should have read/write/execute permissions for
 	// anything created by the oasis-node binary.
-	syscall.Umask(0077)
+	syscall.Umask(0o077)
 
 	if err := rootCmd.Execute(); err != nil {
 		cmdCommon.EarlyLogAndExit(err)

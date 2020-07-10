@@ -15,10 +15,8 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/scenario"
 )
 
-var (
-	// Basic is the basic test case.
-	Basic scenario.Scenario = newBasicImpl()
-)
+// Basic is the basic test case.
+var Basic scenario.Scenario = newBasicImpl()
 
 func newBasicImpl() *basicImpl {
 	return &basicImpl{

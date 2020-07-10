@@ -102,7 +102,7 @@ func (sc *byzantineImpl) Fixture() (*oasis.NetworkFixture, error) {
 	}
 	// Provision a Byzantine node.
 	f.ByzantineNodes = []oasis.ByzantineFixture{
-		oasis.ByzantineFixture{
+		{
 			Script:          sc.script,
 			IdentitySeed:    sc.identitySeed,
 			Entity:          1,

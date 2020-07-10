@@ -70,7 +70,7 @@ func New(env *env.Env, factory Factory, logger *logging.Logger) *Helpers {
 // StartSubCommand launches an oasis-node subcommand.
 //
 // It does not wait for the subcommand to complete.
-func StartSubCommand(childEnv *env.Env, logger *logging.Logger, name, binary string, args []string, stdout io.Writer, stderr io.Writer) (*exec.Cmd, error) {
+func StartSubCommand(childEnv *env.Env, logger *logging.Logger, name, binary string, args []string, stdout, stderr io.Writer) (*exec.Cmd, error) {
 	cmd := exec.Command(binary, args...)
 	cmd.SysProcAttr = env.CmdAttrs
 	cmd.Stdout = stdout

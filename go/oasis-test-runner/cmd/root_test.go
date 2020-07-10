@@ -17,10 +17,10 @@ func TestComputeParamSets(t *testing.T) {
 
 	// Single element, multiple parameters.
 	zippedParams = map[string][]string{
-		"testParam1": []string{"1"},
-		"testParam2": []string{"a"},
-		"testParam3": []string{"one"},
-		"testParam4": []string{"ena"},
+		"testParam1": {"1"},
+		"testParam2": {"a"},
+		"testParam3": {"one"},
+		"testParam4": {"ena"},
 	}
 	expectedParamSets = []map[string]string{
 		{"testParam1": "1", "testParam2": "a", "testParam3": "one", "testParam4": "ena"},
@@ -29,8 +29,8 @@ func TestComputeParamSets(t *testing.T) {
 
 	// Single element, empty string slice hack test.
 	zippedParams = map[string][]string{
-		"testParam1": []string{"1"},
-		"testParam2": []string{},
+		"testParam1": {"1"},
+		"testParam2": {},
 	}
 	expectedParamSets = []map[string]string{
 		{"testParam1": "1", "testParam2": ""},
@@ -39,8 +39,8 @@ func TestComputeParamSets(t *testing.T) {
 
 	// Combinations of two elements.
 	zippedParams = map[string][]string{
-		"testParam1": []string{"1", "2", "3"},
-		"testParam2": []string{"a", "b"},
+		"testParam1": {"1", "2", "3"},
+		"testParam2": {"a", "b"},
 	}
 	expectedParamSets = []map[string]string{
 		{"testParam1": "1", "testParam2": "a"},
@@ -54,8 +54,8 @@ func TestComputeParamSets(t *testing.T) {
 
 	// Duplicated elements - should not affect the outcome.
 	zippedParams = map[string][]string{
-		"testParam1": []string{"1", "1", "1"},
-		"testParam2": []string{"a", "b"},
+		"testParam1": {"1", "1", "1"},
+		"testParam2": {"a", "b"},
 	}
 	expectedParamSets = []map[string]string{
 		{"testParam1": "1", "testParam2": "a"},

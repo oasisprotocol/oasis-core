@@ -35,12 +35,10 @@ import (
 	staking "github.com/oasisprotocol/oasis-core/go/staking/api"
 )
 
-var (
-	// RegistryCLI is the registry CLI test scenario.
-	RegistryCLI scenario.Scenario = &registryCLIImpl{
-		E2E: *NewE2E("registry-cli"),
-	}
-)
+// RegistryCLI is the registry CLI test scenario.
+var RegistryCLI scenario.Scenario = &registryCLIImpl{
+	E2E: *NewE2E("registry-cli"),
+}
 
 type registryCLIImpl struct {
 	E2E
@@ -433,7 +431,7 @@ func (sc *registryCLIImpl) newTestNode(entityID signature.PublicKey) (*node.Node
 }
 
 // initNode very "thoroughly" initializes new node and returns its instance.
-func (sc *registryCLIImpl) initNode(childEnv *env.Env, ent *entity.Entity, entDir string, dataDir string) (*node.Node, error) {
+func (sc *registryCLIImpl) initNode(childEnv *env.Env, ent *entity.Entity, entDir, dataDir string) (*node.Node, error) {
 	sc.Logger.Info("initializing new node")
 
 	// testNode will be our fixture for testing the CLI.
@@ -545,7 +543,7 @@ func (sc *registryCLIImpl) initNode(childEnv *env.Env, ent *entity.Entity, entDi
 }
 
 // genRegisterEntityTx calls registry entity gen_register.
-func (sc *registryCLIImpl) genRegisterEntityTx(childEnv *env.Env, nonce int, txPath string, entDir string) error {
+func (sc *registryCLIImpl) genRegisterEntityTx(childEnv *env.Env, nonce int, txPath, entDir string) error {
 	sc.Logger.Info("generating register entity tx")
 
 	args := []string{
@@ -568,7 +566,7 @@ func (sc *registryCLIImpl) genRegisterEntityTx(childEnv *env.Env, nonce int, txP
 }
 
 // genDeregisterEntityTx calls registry entity gen_deregister.
-func (sc *registryCLIImpl) genDeregisterEntityTx(childEnv *env.Env, nonce int, txPath string, entDir string) error {
+func (sc *registryCLIImpl) genDeregisterEntityTx(childEnv *env.Env, nonce int, txPath, entDir string) error {
 	sc.Logger.Info("generating deregister entity tx")
 
 	args := []string{
@@ -663,7 +661,7 @@ func (sc *registryCLIImpl) testRuntime(childEnv *env.Env, cli *cli.Helpers) erro
 	registerTxPath := filepath.Join(childEnv.Dir(), "registry_runtime_register.json")
 	genesisStatePath := filepath.Join(childEnv.Dir(), "registry_runtime_register_genesis_state.json")
 	genesisStateStr, _ := json.Marshal(testRuntime.Genesis.State)
-	if err = ioutil.WriteFile(genesisStatePath, genesisStateStr, 0600); err != nil {
+	if err = ioutil.WriteFile(genesisStatePath, genesisStateStr, 0o600); err != nil {
 		return err
 	}
 	if err = cli.Registry.GenerateRegisterRuntimeTx(0, testRuntime, registerTxPath, genesisStatePath); err != nil {

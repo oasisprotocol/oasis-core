@@ -378,7 +378,8 @@ func (q *queries) doRegistryQueries(ctx context.Context, rng *rand.Rand, height 
 		node, err = q.registry.GetNodeByConsensusAddress(
 			ctx,
 			&registry.ConsensusAddressQuery{
-				Address: []byte(tmcrypto.PublicKeyToTendermint(&nod.Consensus.ID).Address()), Height: height},
+				Address: []byte(tmcrypto.PublicKeyToTendermint(&nod.Consensus.ID).Address()), Height: height,
+			},
 		)
 		if err != nil {
 			return fmt.Errorf("GetNodeByConsensusAddress error at height %d: %w", height, err)

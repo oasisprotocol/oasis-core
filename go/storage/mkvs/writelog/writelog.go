@@ -27,7 +27,7 @@ func (wl WriteLog) Equal(cmp WriteLog) bool {
 
 // LogEntry is a write log entry.
 type LogEntry struct {
-	_ struct{} `cbor:",toarray"` //nolint
+	_ struct{} `cbor:",toarray"` // nolint
 
 	Key   []byte
 	Value []byte

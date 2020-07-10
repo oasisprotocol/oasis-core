@@ -76,7 +76,6 @@ func New(
 	genesis genesis.Provider,
 	commonStore *persistent.CommonStore,
 ) (*Worker, error) {
-
 	s := &Worker{
 		enabled:      viper.GetBool(CfgWorkerEnabled),
 		commonWorker: commonWorker,

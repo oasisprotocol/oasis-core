@@ -235,7 +235,7 @@ func initRootEnv(cmd *cobra.Command) (*env.Env, error) {
 
 	// Initialize logging.
 	logFile := filepath.Join(env.Dir(), "test-runner.log")
-	w, err := os.OpenFile(logFile, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0600)
+	w, err := os.OpenFile(logFile, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o600)
 	if err != nil {
 		return nil, fmt.Errorf("root: failed to open log file: %w", err)
 	}

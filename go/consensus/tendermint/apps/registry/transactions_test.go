@@ -130,7 +130,7 @@ func TestRegisterNode(t *testing.T) {
 
 				tcd.node.AddRoles(node.RoleComputeWorker)
 				tcd.node.Runtimes = []*node.Runtime{
-					&node.Runtime{ID: rt.ID},
+					{ID: rt.ID},
 				}
 			},
 			nil,
@@ -158,7 +158,7 @@ func TestRegisterNode(t *testing.T) {
 
 				tcd.node.AddRoles(node.RoleComputeWorker)
 				tcd.node.Runtimes = []*node.Runtime{
-					&node.Runtime{ID: rt.ID},
+					{ID: rt.ID},
 				}
 			},
 			nil,
@@ -195,7 +195,7 @@ func TestRegisterNode(t *testing.T) {
 
 				tcd.node.AddRoles(node.RoleComputeWorker)
 				tcd.node.Runtimes = []*node.Runtime{
-					&node.Runtime{ID: rt.ID},
+					{ID: rt.ID},
 				}
 			},
 			nil,
@@ -239,8 +239,8 @@ func TestRegisterNode(t *testing.T) {
 
 				tcd.node.AddRoles(node.RoleComputeWorker)
 				tcd.node.Runtimes = []*node.Runtime{
-					&node.Runtime{ID: rt1.ID},
-					&node.Runtime{ID: rt2.ID},
+					{ID: rt1.ID},
+					{ID: rt2.ID},
 				}
 			},
 			nil,
@@ -279,8 +279,8 @@ func TestRegisterNode(t *testing.T) {
 
 				tcd.node.AddRoles(node.RoleComputeWorker)
 				tcd.node.Runtimes = []*node.Runtime{
-					&node.Runtime{ID: rt1.ID},
-					&node.Runtime{ID: rt2.ID},
+					{ID: rt1.ID},
+					{ID: rt2.ID},
 				}
 			},
 			&staking.ConsensusParameters{

@@ -43,7 +43,7 @@ var (
 	tmFlags = flag.NewFlagSet("", flag.ContinueOnError)
 )
 
-func printTmAddress(desc string, keyFile string) {
+func printTmAddress(desc, keyFile string) {
 	if err := cmdCommon.Init(); err != nil {
 		cmdCommon.EarlyLogAndExit(err)
 	}

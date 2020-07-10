@@ -57,12 +57,12 @@ func newDefaultFixture() (*oasis.NetworkFixture, error) {
 			},
 		},
 		Entities: []oasis.EntityCfg{
-			oasis.EntityCfg{IsDebugTestEntity: true},
-			oasis.EntityCfg{},
+			{IsDebugTestEntity: true},
+			{},
 		},
 		Runtimes: []oasis.RuntimeFixture{
 			// Key manager runtime.
-			oasis.RuntimeFixture{
+			{
 				ID:         keymanagerID,
 				Kind:       registry.KindKeyManager,
 				Entity:     0,
@@ -73,7 +73,7 @@ func newDefaultFixture() (*oasis.NetworkFixture, error) {
 				},
 			},
 			// Compute runtime.
-			oasis.RuntimeFixture{
+			{
 				ID:         runtimeID,
 				Kind:       registry.KindCompute,
 				Entity:     0,
@@ -112,24 +112,24 @@ func newDefaultFixture() (*oasis.NetworkFixture, error) {
 			},
 		},
 		Validators: []oasis.ValidatorFixture{
-			oasis.ValidatorFixture{Entity: 1},
+			{Entity: 1},
 		},
 		KeymanagerPolicies: []oasis.KeymanagerPolicyFixture{
-			oasis.KeymanagerPolicyFixture{Runtime: 0, Serial: 1},
+			{Runtime: 0, Serial: 1},
 		},
 		Keymanagers: []oasis.KeymanagerFixture{
-			oasis.KeymanagerFixture{Runtime: 0, Entity: 1},
+			{Runtime: 0, Entity: 1},
 		},
 		StorageWorkers: []oasis.StorageWorkerFixture{
-			oasis.StorageWorkerFixture{Backend: "badger", Entity: 1},
+			{Backend: "badger", Entity: 1},
 		},
 		ComputeWorkers: []oasis.ComputeWorkerFixture{
-			oasis.ComputeWorkerFixture{Entity: 1},
-			oasis.ComputeWorkerFixture{Entity: 1},
-			oasis.ComputeWorkerFixture{Entity: 1},
+			{Entity: 1},
+			{Entity: 1},
+			{Entity: 1},
 		},
 		Clients: []oasis.ClientFixture{
-			oasis.ClientFixture{},
+			{},
 		},
 	}, nil
 }

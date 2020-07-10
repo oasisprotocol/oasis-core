@@ -24,20 +24,18 @@ const (
 	cfgExecutorGroupSize = "executor_group_size"
 )
 
-var (
-	// MultipleRuntimes is a scenario which tests running multiple runtimes on one node.
-	MultipleRuntimes = func() scenario.Scenario {
-		sc := &multipleRuntimesImpl{
-			runtimeImpl: *newRuntimeImpl("multiple-runtimes", "simple-keyvalue-client", nil),
-		}
-		sc.Flags.Int(cfgNumComputeRuntimes, 2, "number of compute runtimes per worker")
-		sc.Flags.Int(cfgNumComputeRuntimeTxns, 2, "number of transactions to perform")
-		sc.Flags.Int(cfgNumComputeWorkers, 2, "number of workers to initiate")
-		sc.Flags.Int(cfgExecutorGroupSize, 2, "number of executor workers in committee")
+// MultipleRuntimes is a scenario which tests running multiple runtimes on one node.
+var MultipleRuntimes = func() scenario.Scenario {
+	sc := &multipleRuntimesImpl{
+		runtimeImpl: *newRuntimeImpl("multiple-runtimes", "simple-keyvalue-client", nil),
+	}
+	sc.Flags.Int(cfgNumComputeRuntimes, 2, "number of compute runtimes per worker")
+	sc.Flags.Int(cfgNumComputeRuntimeTxns, 2, "number of transactions to perform")
+	sc.Flags.Int(cfgNumComputeWorkers, 2, "number of workers to initiate")
+	sc.Flags.Int(cfgExecutorGroupSize, 2, "number of executor workers in committee")
 
-		return sc
-	}()
-)
+	return sc
+}()
 
 type multipleRuntimesImpl struct {
 	runtimeImpl

@@ -216,7 +216,7 @@ func (sc *stakeCLIImpl) Run(childEnv *env.Env) error {
 	return nil
 }
 
-func (sc *stakeCLIImpl) testPubkey2Address(childEnv *env.Env, publicKeyText string, addressText string) error {
+func (sc *stakeCLIImpl) testPubkey2Address(childEnv *env.Env, publicKeyText, addressText string) error {
 	args := []string{
 		"stake", "pubkey2address",
 		"--" + stake.CfgPublicKey, publicKeyText,
@@ -242,7 +242,7 @@ func (sc *stakeCLIImpl) testPubkey2Address(childEnv *env.Env, publicKeyText stri
 }
 
 // testTransfer tests transfer of transferAmount tokens from src to dst.
-func (sc *stakeCLIImpl) testTransfer(childEnv *env.Env, cli *cli.Helpers, src api.Address, dst api.Address) error {
+func (sc *stakeCLIImpl) testTransfer(childEnv *env.Env, cli *cli.Helpers, src, dst api.Address) error {
 	var srcNonce, dstNonce uint64 = 0, 0
 
 	unsignedTransferTxPath := filepath.Join(childEnv.Dir(), "stake_transfer_unsigned.cbor")
@@ -287,13 +287,15 @@ func (sc *stakeCLIImpl) testTransfer(childEnv *env.Env, cli *cli.Helpers, src ap
 
 	expectedSrcBalance = mustInitQuantity(initBalance - transferAmount - feeAmount)
 	if err = sc.checkGeneralAccount(childEnv, src, &api.GeneralAccount{
-		Balance: expectedSrcBalance, Nonce: srcNonce + 1},
+		Balance: expectedSrcBalance, Nonce: srcNonce + 1,
+	},
 	); err != nil {
 		return err
 	}
 	expectedDstBalance := mustInitQuantity(transferAmount)
 	if err = sc.checkGeneralAccount(childEnv, dst, &api.GeneralAccount{
-		Balance: expectedDstBalance, Nonce: dstNonce},
+		Balance: expectedDstBalance, Nonce: dstNonce,
+	},
 	); err != nil {
 		return err
 	}
@@ -343,7 +345,7 @@ func (sc *stakeCLIImpl) testBurn(childEnv *env.Env, cli *cli.Helpers, src api.Ad
 }
 
 // testEscrow tests escrowing escrowAmount tokens from src to dst.
-func (sc *stakeCLIImpl) testEscrow(childEnv *env.Env, cli *cli.Helpers, src api.Address, escrow api.Address) error {
+func (sc *stakeCLIImpl) testEscrow(childEnv *env.Env, cli *cli.Helpers, src, escrow api.Address) error {
 	var srcNonce uint64 = 2
 
 	escrowTxPath := filepath.Join(childEnv.Dir(), "stake_escrow.json")
@@ -388,7 +390,7 @@ func (sc *stakeCLIImpl) testEscrow(childEnv *env.Env, cli *cli.Helpers, src api.
 }
 
 // testReclaimEscrow test reclaiming reclaimEscrowShares shares from an escrow account.
-func (sc *stakeCLIImpl) testReclaimEscrow(childEnv *env.Env, cli *cli.Helpers, src api.Address, escrow api.Address) error {
+func (sc *stakeCLIImpl) testReclaimEscrow(childEnv *env.Env, cli *cli.Helpers, src, escrow api.Address) error {
 	var srcNonce uint64 = 3
 
 	reclaimEscrowTxPath := filepath.Join(childEnv.Dir(), "stake_reclaim_escrow.json")
@@ -406,7 +408,6 @@ func (sc *stakeCLIImpl) testReclaimEscrow(childEnv *env.Env, cli *cli.Helpers, s
 
 	if err := cli.Consensus.SubmitTx(reclaimEscrowTxPath); err != nil {
 		return err
-
 	}
 
 	expectedEscrowDebondingBalance := mustInitQuantity(reclaimEscrowAmount)
@@ -687,7 +688,7 @@ func (sc *stakeCLIImpl) showTx(childEnv *env.Env, txPath string) error {
 	return nil
 }
 
-func (sc *stakeCLIImpl) genUnsignedTransferTx(childEnv *env.Env, amount int, nonce int, dst api.Address, txPath string) error {
+func (sc *stakeCLIImpl) genUnsignedTransferTx(childEnv *env.Env, amount, nonce int, dst api.Address, txPath string) error {
 	sc.Logger.Info("generating unsigned stake transfer tx", stake.CfgTransferDestination, dst)
 
 	args := []string{

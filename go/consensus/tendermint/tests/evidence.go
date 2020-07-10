@@ -28,12 +28,12 @@ func MakeDoubleSignEvidence(t *testing.T, ident *identity.Identity) consensus.Ev
 	// Create two private validators that share the same key as otherwise
 	// double signing will fail.
 	pv1Path := filepath.Join(tmpDir, "pv1")
-	err = os.Mkdir(pv1Path, 0700)
+	err = os.Mkdir(pv1Path, 0o700)
 	require.NoError(err, "Mkdir")
 	pv1, err := tmcrypto.LoadOrGeneratePrivVal(pv1Path, ident.ConsensusSigner)
 	require.NoError(err, "LoadOrGeneratePrivVal")
 	pv2Path := filepath.Join(tmpDir, "pv2")
-	err = os.Mkdir(pv2Path, 0700)
+	err = os.Mkdir(pv2Path, 0o700)
 	require.NoError(err, "Mkdir")
 	pv2, err := tmcrypto.LoadOrGeneratePrivVal(pv2Path, ident.ConsensusSigner)
 	require.NoError(err, "LoadOrGeneratePrivVal")

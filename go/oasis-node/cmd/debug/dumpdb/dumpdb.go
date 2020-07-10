@@ -3,6 +3,7 @@ package dumpdb
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -37,8 +38,6 @@ import (
 	staking "github.com/oasisprotocol/oasis-core/go/staking/api"
 	storage "github.com/oasisprotocol/oasis-core/go/storage/api"
 	storageDB "github.com/oasisprotocol/oasis-core/go/storage/database"
-
-	"encoding/json"
 )
 
 const (

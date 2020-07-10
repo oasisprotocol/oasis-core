@@ -137,8 +137,8 @@ func testBasic(t *testing.T, localBackend api.LocalBackend, backend api.Backend,
 	wl2 := prepareWriteLog(testValues[0:2])
 	expectedNewRoot2 := CalculateExpectedNewRoot(t, wl2, namespace, round)
 	applyOps := []api.ApplyOp{
-		api.ApplyOp{SrcRound: round, SrcRoot: rootHash, DstRoot: expectedNewRoot, WriteLog: wl},
-		api.ApplyOp{SrcRound: round, SrcRoot: rootHash, DstRoot: expectedNewRoot2, WriteLog: wl2},
+		{SrcRound: round, SrcRoot: rootHash, DstRoot: expectedNewRoot, WriteLog: wl},
+		{SrcRound: round, SrcRoot: rootHash, DstRoot: expectedNewRoot2, WriteLog: wl2},
 	}
 
 	// Apply a batch of operations against the MKVS.
@@ -269,19 +269,19 @@ func testMerge(t *testing.T, backend api.Backend, namespace common.Namespace, ro
 
 	writeLogs := []api.WriteLog{
 		// Base root.
-		api.WriteLog{
+		{
 			api.LogEntry{Key: []byte("foo"), Value: []byte("i am base")},
 		},
 		// First root.
-		api.WriteLog{
+		{
 			api.LogEntry{Key: []byte("first"), Value: []byte("i am first root")},
 		},
 		// Second root.
-		api.WriteLog{
+		{
 			api.LogEntry{Key: []byte("second"), Value: []byte("i am second root")},
 		},
 		// Third root.
-		api.WriteLog{
+		{
 			api.LogEntry{Key: []byte("third"), Value: []byte("i am third root")},
 		},
 	}

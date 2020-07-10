@@ -8,12 +8,10 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/scenario"
 )
 
-var (
-	// GasFeesRuntimes is the runtime gas fees scenario.
-	GasFeesRuntimes scenario.Scenario = &gasFeesRuntimesImpl{
-		runtimeImpl: *newRuntimeImpl("gas-fees/runtimes", "", nil),
-	}
-)
+// GasFeesRuntimes is the runtime gas fees scenario.
+var GasFeesRuntimes scenario.Scenario = &gasFeesRuntimesImpl{
+	runtimeImpl: *newRuntimeImpl("gas-fees/runtimes", "", nil),
+}
 
 // gasPrice is the gas price used during the test.
 const gasPrice = 1

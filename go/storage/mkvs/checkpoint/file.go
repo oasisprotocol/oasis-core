@@ -98,7 +98,7 @@ func (fc *fileCreator) CreateCheckpoint(ctx context.Context, root node.Root, chu
 		Chunks:  chunks,
 	}
 
-	if err = ioutil.WriteFile(filepath.Join(checkpointDir, checkpointMetadataFile), cbor.Marshal(meta), 0600); err != nil {
+	if err = ioutil.WriteFile(filepath.Join(checkpointDir, checkpointMetadataFile), cbor.Marshal(meta), 0o600); err != nil {
 		return nil, fmt.Errorf("checkpoint: failed to create checkpoint metadata: %w", err)
 	}
 	return meta, nil

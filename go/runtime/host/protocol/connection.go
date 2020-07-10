@@ -380,7 +380,7 @@ func (c *connection) handleMessage(ctx context.Context, message *Message) {
 		}
 
 		// Import runtime-provided span.
-		var span = opentracing.SpanFromContext(ctx)
+		span := opentracing.SpanFromContext(ctx)
 		if len(message.SpanContext) != 0 {
 			sc, err := tracing.SpanContextFromBinary(message.SpanContext)
 			if err != nil {
