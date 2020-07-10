@@ -27,6 +27,7 @@ import (
 	cmdSigner "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/signer"
 	cmdRegEnt "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/registry/entity"
 	cmdRegNode "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/registry/node"
+	cmdRegRuntime "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/registry/runtime"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/env"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/oasis"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/oasis/cli"
@@ -83,7 +84,7 @@ func (sc *registryCLIImpl) Run(childEnv *env.Env) error {
 	}
 
 	// registry runtime subcommands
-	if err := sc.testRuntime(childEnv, cli); err != nil {
+	if err := sc.testRuntime(ctx, childEnv, cli); err != nil {
 		return fmt.Errorf("error while running registry runtime test: %w", err)
 	}
 
@@ -589,9 +590,9 @@ func (sc *registryCLIImpl) genDeregisterEntityTx(childEnv *env.Env, nonce int, t
 }
 
 // testRuntime tests registry runtime subcommands.
-func (sc *registryCLIImpl) testRuntime(childEnv *env.Env, cli *cli.Helpers) error {
+func (sc *registryCLIImpl) testRuntime(ctx context.Context, childEnv *env.Env, cli *cli.Helpers) error {
 	// List runtimes.
-	runtimes, err := sc.listRuntimes(childEnv)
+	runtimes, err := sc.listRuntimes(childEnv, false)
 	if err != nil {
 		return err
 	}
@@ -674,7 +675,7 @@ func (sc *registryCLIImpl) testRuntime(childEnv *env.Env, cli *cli.Helpers) erro
 	}
 
 	// List runtimes.
-	runtimes, err = sc.listRuntimes(childEnv)
+	runtimes, err = sc.listRuntimes(childEnv, false)
 	if err != nil {
 		return err
 	}
@@ -691,16 +692,43 @@ func (sc *registryCLIImpl) testRuntime(childEnv *env.Env, cli *cli.Helpers) erro
 		return fmt.Errorf("runtime %s does not match the test one. registry one: %s, test one: %s", testRuntime.ID.String(), rtStr, testRuntimeStr)
 	}
 
+	// Wait for runtime to suspend.
+	if err = sc.Net.Controller().SetEpoch(ctx, 1); err != nil {
+		return fmt.Errorf("failed to set epoch to %d: %w", 1, err)
+	}
+
+	// List runtimes.
+	runtimes, err = sc.listRuntimes(childEnv, false)
+	if err != nil {
+		return err
+	}
+	// Make sure runtime is suspended.
+	if len(runtimes) != 0 {
+		return fmt.Errorf("wrong number of runtimes: %d, expected: %d. Runtimes: %v", len(runtimes), 1, runtimes)
+	}
+
+	allRuntimes, err := sc.listRuntimes(childEnv, true)
+	if err != nil {
+		return err
+	}
+	// Make sure suspended runtime is included.
+	if len(allRuntimes) != 1 {
+		return fmt.Errorf("wrong number of runtimes: %d, expected: %d. Runtimes: %v", len(runtimes), 1, runtimes)
+	}
+
 	return nil
 }
 
 // listRuntimes lists currently registered runtimes.
-func (sc *registryCLIImpl) listRuntimes(childEnv *env.Env) (map[common.Namespace]registry.Runtime, error) {
+func (sc *registryCLIImpl) listRuntimes(childEnv *env.Env, includeSuspended bool) (map[common.Namespace]registry.Runtime, error) {
 	sc.Logger.Info("listing all runtimes")
 	args := []string{
 		"registry", "runtime", "list",
 		"-v",
 		"--" + grpc.CfgAddress, "unix:" + sc.Net.Validators()[0].SocketPath(),
+	}
+	if includeSuspended {
+		args = append(args, "--"+cmdRegRuntime.CfgIncludeSuspended)
 	}
 	out, err := cli.RunSubCommandWithOutput(childEnv, sc.Logger, "list", sc.Net.Config().NodeBinary, args)
 	if err != nil {

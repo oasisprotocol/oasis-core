@@ -22,7 +22,7 @@ type Query interface {
 	NodeStatus(context.Context, signature.PublicKey) (*registry.NodeStatus, error)
 	Nodes(context.Context) ([]*node.Node, error)
 	Runtime(context.Context, common.Namespace) (*registry.Runtime, error)
-	Runtimes(context.Context) ([]*registry.Runtime, error)
+	Runtimes(ctx context.Context, includeSuspended bool) ([]*registry.Runtime, error)
 	Genesis(context.Context) (*registry.Genesis, error)
 }
 
@@ -106,7 +106,10 @@ func (rq *registryQuerier) Runtime(ctx context.Context, id common.Namespace) (*r
 	return rq.state.Runtime(ctx, id)
 }
 
-func (rq *registryQuerier) Runtimes(ctx context.Context) ([]*registry.Runtime, error) {
+func (rq *registryQuerier) Runtimes(ctx context.Context, includeSuspended bool) ([]*registry.Runtime, error) {
+	if includeSuspended {
+		return rq.state.AllRuntimes(ctx)
+	}
 	return rq.state.Runtimes(ctx)
 }
 

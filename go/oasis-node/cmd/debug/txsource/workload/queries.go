@@ -390,12 +390,12 @@ func (q *queries) doRegistryQueries(ctx context.Context, rng *rand.Rand, height 
 	}
 
 	// Runtimes.
-	runtimes, err := q.registry.GetRuntimes(ctx, height)
+	runtimes, err := q.registry.GetRuntimes(ctx, &registry.GetRuntimesQuery{Height: height, IncludeSuspended: false})
 	if err != nil {
-		return fmt.Errorf("GetRuntimes error at height %d: %w", height, err)
+		return fmt.Errorf("GetRuntimes(IncludeSuspended=false) error at height %d: %w", height, err)
 	}
 	if len(runtimes) == 0 {
-		return fmt.Errorf("GetRuntimes empty response at height %d", height)
+		return fmt.Errorf("GetRuntimes(IncludeSuspended=false) empty response at height %d", height)
 	}
 	for _, rt := range runtimes {
 		var runtime *registry.Runtime
@@ -406,6 +406,13 @@ func (q *queries) doRegistryQueries(ctx context.Context, rng *rand.Rand, height 
 		if !rt.ID.Equal(&runtime.ID) {
 			return fmt.Errorf("GetRuntime mismatch, expected: %s, got: %s", rt, runtime)
 		}
+	}
+	allRuntimes, err := q.registry.GetRuntimes(ctx, &registry.GetRuntimesQuery{Height: height, IncludeSuspended: true})
+	if err != nil {
+		return fmt.Errorf("GetRuntimes(IncludeSuspended=true) error at height %d: %w", height, err)
+	}
+	if len(allRuntimes) < len(runtimes) {
+		return fmt.Errorf("GetRuntimes(IncludeSuspended=true) returned less runtimes than IncludeSuspended=false, at height %d", height)
 	}
 
 	// Events.
