@@ -69,7 +69,15 @@ release process:
 [Change Log fragments]: ../.changelog/README.md
 [towncrier]: https://github.com/hawkowl/towncrier
 
-## Preparing a regular release
+## Preparing a Regular Release
+
+### Bump Protocol Versions
+
+Before a release, make sure that the proper protocol versions were bumped
+correctly (see [`go/common/version/version.go`]). If not, make a pull request
+that bumps the respective version(s) before proceeding with the release process.
+
+[`go/common/version/version.go`]: ../go/common/version/version.go
 
 ### Prepare the Change Log
 

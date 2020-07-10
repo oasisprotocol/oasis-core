@@ -171,3 +171,14 @@ endif
 
 # List of non-trivial Change Log fragments.
 CHANGELOG_FRAGMENTS_NON_TRIVIAL := $(filter-out $(wildcard .changelog/*trivial*.md),$(wildcard .changelog/[0-9]*.md))
+
+# List of breaking Change Log fragments.
+CHANGELOG_FRAGMENTS_BREAKING := $(wildcard .changelog/*breaking*.md)
+
+# Helper that prints a warning when breaking changes are indicated by changelog fragments.
+define WARN_BREAKING_CHANGES =
+	if [[ -n "$(CHANGELOG_FRAGMENTS_BREAKING)" ]]; then \
+		$(ECHO_STDERR) "$(RED)Warning: This release contains breaking changes.$(OFF)"; \
+		$(ECHO_STDERR) "$(RED)         Make sure that protocol versions were bumped.$(OFF)"; \
+	fi
+endef
