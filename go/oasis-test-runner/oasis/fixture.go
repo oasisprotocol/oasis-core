@@ -46,7 +46,7 @@ func (f *NetworkFixture) Create(env *env.Env) (*Network, error) {
 
 	// Provision entities.
 	for _, entCfg := range f.Entities {
-		if _, err = net.NewEntity(&entCfg); err != nil {
+		if _, err = net.NewEntity(&entCfg); err != nil { // nolint: gosec
 			return nil, fmt.Errorf("failed to provision entity: %w", err)
 		}
 	}

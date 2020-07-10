@@ -239,7 +239,7 @@ func (env *Env) WriteTestInfo() error {
 	if err != nil {
 		return err
 	}
-	if err = ioutil.WriteFile(filepath.Join(env.Dir(), "test_info.json"), b, 0o644); err != nil {
+	if err = ioutil.WriteFile(filepath.Join(env.Dir(), "test_info.json"), b, 0o644); err != nil { // nolint: gosec
 		return err
 	}
 

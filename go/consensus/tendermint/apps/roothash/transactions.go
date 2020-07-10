@@ -125,7 +125,7 @@ func (app *rootHashApplication) executorCommit(
 	pools := make(map[*commitment.Pool]bool)
 	for _, commit := range cc.Commits {
 		var pool *commitment.Pool
-		if pool, err = rtState.Round.AddExecutorCommitment(ctx, &commit, sv, nl); err != nil {
+		if pool, err = rtState.Round.AddExecutorCommitment(ctx, &commit, sv, nl); err != nil { // nolint: gosec
 			ctx.Logger().Error("failed to add compute commitment to round",
 				"err", err,
 				"round", rtState.CurrentBlock.Header.Round,
@@ -192,7 +192,7 @@ func (app *rootHashApplication) mergeCommit(
 
 	// Add commitments.
 	for _, commit := range mc.Commits {
-		if err = rtState.Round.AddMergeCommitment(ctx, &commit, sv, nl); err != nil {
+		if err = rtState.Round.AddMergeCommitment(ctx, &commit, sv, nl); err != nil { // nolint: gosec
 			ctx.Logger().Error("failed to add merge commitment to round",
 				"err", err,
 				"round", rtState.CurrentBlock.Header.Round,

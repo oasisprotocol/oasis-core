@@ -78,7 +78,7 @@ func TestTransaction(t *testing.T) {
 
 	for _, checkTx := range testTxns {
 		require.Contains(t, txnsByHash, checkTx.Hash(), "transaction should exist")
-		require.True(t, txnsByHash[checkTx.Hash()].Equal(&checkTx), "transaction should have the correct artifacts")
+		require.True(t, txnsByHash[checkTx.Hash()].Equal(&checkTx), "transaction should have the correct artifacts") // nolint: gosec
 	}
 
 	// Fetching a single transaction should work.
@@ -150,6 +150,6 @@ func TestTransaction(t *testing.T) {
 
 	for _, checkTx := range testTxns {
 		require.Contains(t, txnsByHash, checkTx.Hash(), "transaction should exist")
-		require.True(t, txnsByHash[checkTx.Hash()].Equal(&checkTx), "transaction should have the correct artifacts")
+		require.True(t, txnsByHash[checkTx.Hash()].Equal(&checkTx), "transaction should have the correct artifacts") // nolint: gosec
 	}
 }

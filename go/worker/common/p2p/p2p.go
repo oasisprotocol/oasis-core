@@ -96,6 +96,7 @@ func (p *P2P) Publish(ctx context.Context, runtimeID common.Namespace, msg *Mess
 		p.logger.Error("attempted to publish message for unknown runtime ID",
 			"runtime_id", runtimeID,
 		)
+		return
 	}
 
 	if err := h.topic.Publish(h.ctx, rawMsg); err != nil {

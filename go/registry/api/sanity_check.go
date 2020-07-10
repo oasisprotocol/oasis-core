@@ -323,7 +323,7 @@ func SanityCheckStake(
 				}
 				for i, expectedThreshold := range expectedThresholds {
 					threshold := thresholds[i]
-					if !threshold.Equal(&expectedThreshold) {
+					if !threshold.Equal(&expectedThreshold) { // nolint: gosec
 						return fmt.Errorf("incorrect threshold in position %d for claim %s for account %s (expected: %s got: %s)",
 							i,
 							claim,

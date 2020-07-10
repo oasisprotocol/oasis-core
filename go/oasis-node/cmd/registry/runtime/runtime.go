@@ -220,7 +220,7 @@ func doList(cmd *cobra.Command, args []string) {
 		var s string
 		switch cmdFlags.Verbose() {
 		case true:
-			b, _ := json.Marshal(&rt)
+			b, _ := json.Marshal(rt)
 			s = string(b)
 		default:
 			s = rt.ID.String()

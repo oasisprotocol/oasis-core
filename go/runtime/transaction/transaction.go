@@ -358,7 +358,7 @@ func (t *Tree) GetTransactionMultiple(ctx context.Context, txHashes []hash.Hash)
 	// don't need to do multiple round trips.
 	var keys [][]byte
 	for _, txHash := range txHashes {
-		keys = append(keys, txnKeyFmt.Encode(&txHash))
+		keys = append(keys, txnKeyFmt.Encode(&txHash)) // nolint: gosec
 	}
 	if err := t.tree.PrefetchPrefixes(ctx, keys, prefetchArtifactCount); err != nil {
 		return nil, fmt.Errorf("transaction: prefetch failed: %w", err)

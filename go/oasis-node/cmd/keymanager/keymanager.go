@@ -102,7 +102,7 @@ func doInitPolicy(cmd *cobra.Command, args []string) {
 	}
 
 	c := cbor.Marshal(p)
-	if err = ioutil.WriteFile(viper.GetString(CfgPolicyFile), c, 0o666); err != nil {
+	if err = ioutil.WriteFile(viper.GetString(CfgPolicyFile), c, 0o644); err != nil { // nolint: gosec
 		logger.Error("failed to write key manager policy cbor file",
 			"err", err,
 			"CfgPolicyFile", viper.GetString(CfgPolicyFile),
@@ -372,7 +372,7 @@ func doInitStatus(cmd *cobra.Command, args []string) {
 	}
 
 	c, _ := json.Marshal(s)
-	if err = ioutil.WriteFile(viper.GetString(CfgStatusFile), c, 0o666); err != nil {
+	if err = ioutil.WriteFile(viper.GetString(CfgStatusFile), c, 0o644); err != nil { // nolint: gosec
 		logger.Error("failed to write key manager status json file",
 			"err", err,
 			"CfgStatusFile", viper.GetString(CfgStatusFile),
