@@ -86,7 +86,7 @@ func (d *Dir) NewSubDir(subDirName string) (*Dir, error) {
 // NewLogWriter creates a log file under a Dir with the provided name.
 func (d *Dir) NewLogWriter(name string) (io.WriteCloser, error) {
 	fn := filepath.Join(d.String(), name)
-	w, err := os.OpenFile(fn, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0600)
+	w, err := os.OpenFile(fn, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o600)
 	if err != nil {
 		return nil, fmt.Errorf("env: failed to create file for append: %w", err)
 	}

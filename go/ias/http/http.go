@@ -51,7 +51,7 @@ type httpEndpoint struct {
 	spidInfo api.SPIDInfo
 }
 
-func (e *httpEndpoint) doIASRequest(ctx context.Context, method string, uPath string, bodyType string, body io.Reader) (*http.Response, error) {
+func (e *httpEndpoint) doIASRequest(ctx context.Context, method, uPath, bodyType string, body io.Reader) (*http.Response, error) {
 	u := *e.baseURL
 	u.Path = path.Join(u.Path, uPath)
 

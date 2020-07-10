@@ -31,10 +31,8 @@ var (
 	_ api.ClientBackend = (*storageClientBackend)(nil)
 )
 
-var (
-	// ErrStorageNotAvailable is the error returned when no storage node is available.
-	ErrStorageNotAvailable = errors.New("storage/client: storage not available")
-)
+// ErrStorageNotAvailable is the error returned when no storage node is available.
+var ErrStorageNotAvailable = errors.New("storage/client: storage not available")
 
 const (
 	retryInterval = 1 * time.Second

@@ -37,7 +37,7 @@ const (
 type Config struct {
 	// GetSandboxConfig is a function that generates the sandbox configuration. In case it is not
 	// specified a default function is used.
-	GetSandboxConfig func(cfg host.Config, socketPath string, runtimeDir string) (process.Config, error)
+	GetSandboxConfig func(cfg host.Config, socketPath, runtimeDir string) (process.Config, error)
 
 	// HostInitializer is a function that additionally initializes the runtime host. In case it is
 	// not specified a default function is used.
@@ -497,7 +497,7 @@ func (r *sandboxedRuntime) manager() {
 func New(cfg Config) (host.Provisioner, error) {
 	// Use a default GetSandboxConfig if none was provided.
 	if cfg.GetSandboxConfig == nil {
-		cfg.GetSandboxConfig = func(hostCfg host.Config, socketPath string, runtimeDir string) (process.Config, error) {
+		cfg.GetSandboxConfig = func(hostCfg host.Config, socketPath, runtimeDir string) (process.Config, error) {
 			return process.Config{
 				Path: hostCfg.Path,
 				Env: map[string]string{

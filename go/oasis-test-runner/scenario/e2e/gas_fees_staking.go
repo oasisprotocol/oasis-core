@@ -69,17 +69,17 @@ func (sc *gasFeesImpl) Fixture() (*oasis.NetworkFixture, error) {
 			ConsensusGasCostsTxByte: 0, // So we can control gas more easily.
 		},
 		Entities: []oasis.EntityCfg{
-			oasis.EntityCfg{IsDebugTestEntity: true},
-			oasis.EntityCfg{},
-			oasis.EntityCfg{},
-			oasis.EntityCfg{},
+			{IsDebugTestEntity: true},
+			{},
+			{},
+			{},
 		},
 		Validators: []oasis.ValidatorFixture{
 			// Create three validators, each with its own entity so we can test
 			// if gas disbursement works correctly.
-			oasis.ValidatorFixture{Entity: 1, Consensus: oasis.ConsensusFixture{MinGasPrice: 1}},
-			oasis.ValidatorFixture{Entity: 2, Consensus: oasis.ConsensusFixture{MinGasPrice: 1}},
-			oasis.ValidatorFixture{Entity: 3, Consensus: oasis.ConsensusFixture{MinGasPrice: 1}},
+			{Entity: 1, Consensus: oasis.ConsensusFixture{MinGasPrice: 1}},
+			{Entity: 2, Consensus: oasis.ConsensusFixture{MinGasPrice: 1}},
+			{Entity: 3, Consensus: oasis.ConsensusFixture{MinGasPrice: 1}},
 		},
 	}, nil
 }

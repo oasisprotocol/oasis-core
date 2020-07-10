@@ -12,13 +12,11 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/scenario"
 )
 
-var (
-	// EarlyQuery is the early query scenario where we query a validator node before the network
-	// has started and there are no committed blocks.
-	EarlyQuery scenario.Scenario = &earlyQueryImpl{
-		E2E: *NewE2E("early-query"),
-	}
-)
+// EarlyQuery is the early query scenario where we query a validator node before the network
+// has started and there are no committed blocks.
+var EarlyQuery scenario.Scenario = &earlyQueryImpl{
+	E2E: *NewE2E("early-query"),
+}
 
 type earlyQueryImpl struct {
 	E2E

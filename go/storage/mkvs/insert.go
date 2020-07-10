@@ -9,7 +9,7 @@ import (
 )
 
 // Implements Tree.
-func (t *tree) Insert(ctx context.Context, key []byte, value []byte) error {
+func (t *tree) Insert(ctx context.Context, key, value []byte) error {
 	if value == nil {
 		value = []byte{}
 	}

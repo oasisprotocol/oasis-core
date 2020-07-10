@@ -39,7 +39,7 @@ func SpanContextToBinary(sc opentracing.SpanContext) ([]byte, error) {
 // SpanContext in binary format.
 // Returns a new SpanContext instance using the global tracer.
 func SpanContextFromBinary(scBinary []byte) (opentracing.SpanContext, error) {
-	var scReader = bytes.NewReader(scBinary)
+	scReader := bytes.NewReader(scBinary)
 	sc, err := opentracing.GlobalTracer().Extract(opentracing.Binary, scReader)
 
 	return sc, err

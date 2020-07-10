@@ -380,7 +380,6 @@ func (c *connection) handleMessage(ctx context.Context, message *Message) {
 		}
 
 		// Import runtime-provided span.
-		var span = opentracing.SpanFromContext(ctx)
 		if len(message.SpanContext) != 0 {
 			sc, err := tracing.SpanContextFromBinary(message.SpanContext)
 			if err != nil {
@@ -388,7 +387,7 @@ func (c *connection) handleMessage(ctx context.Context, message *Message) {
 					"err", err,
 				)
 			} else {
-				span = opentracing.StartSpan("RHP", opentracingExt.RPCServerOption(sc))
+				span := opentracing.StartSpan("RHP", opentracingExt.RPCServerOption(sc))
 				defer span.Finish()
 
 				ctx = opentracing.ContextWithSpan(ctx, span)

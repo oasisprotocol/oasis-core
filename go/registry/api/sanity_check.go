@@ -323,7 +323,7 @@ func SanityCheckStake(
 				}
 				for i, expectedThreshold := range expectedThresholds {
 					threshold := thresholds[i]
-					if !threshold.Equal(&expectedThreshold) {
+					if !threshold.Equal(&expectedThreshold) { // nolint: gosec
 						return fmt.Errorf("incorrect threshold in position %d for claim %s for account %s (expected: %s got: %s)",
 							i,
 							claim,
@@ -347,7 +347,7 @@ type sanityCheckRuntimeLookup struct {
 	allRuntimes       []*Runtime
 }
 
-func newSanityCheckRuntimeLookup(runtimes []*Runtime, suspendedRuntimes []*Runtime) (RuntimeLookup, error) {
+func newSanityCheckRuntimeLookup(runtimes, suspendedRuntimes []*Runtime) (RuntimeLookup, error) {
 	rtsMap := make(map[common.Namespace]*Runtime)
 	sRtsMap := make(map[common.Namespace]*Runtime)
 	allRts := []*Runtime{}

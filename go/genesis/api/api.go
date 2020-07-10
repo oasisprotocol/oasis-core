@@ -19,7 +19,7 @@ import (
 	staking "github.com/oasisprotocol/oasis-core/go/staking/api"
 )
 
-const filePerm = 0600
+const filePerm = 0o600
 
 // Document is a genesis document.
 type Document struct {

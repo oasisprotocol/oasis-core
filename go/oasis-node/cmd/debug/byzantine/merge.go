@@ -91,11 +91,11 @@ func (mbc *mergeBatchContext) process(ctx context.Context, hnss []*honestNodeSto
 
 	var err error
 	mbc.storageReceipts, err = storageBroadcastMergeBatch(ctx, hnss, mbc.currentBlock.Header.Namespace, mbc.currentBlock.Header.Round, []storage.MergeOp{
-		storage.MergeOp{
+		{
 			Base:   emptyRoot,
 			Others: ioRoots,
 		},
-		storage.MergeOp{
+		{
 			Base:   mbc.currentBlock.Header.StateRoot,
 			Others: stateRoots,
 		},

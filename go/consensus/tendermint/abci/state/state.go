@@ -11,12 +11,10 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/storage/mkvs"
 )
 
-var (
-	// parametersKeyFmt is the key format used for consensus parameters.
-	//
-	// Value is CBOR-serialized consensusGenesis.Parameters.
-	parametersKeyFmt = keyformat.New(0xF1)
-)
+// parametersKeyFmt is the key format used for consensus parameters.
+//
+// Value is CBOR-serialized consensusGenesis.Parameters.
+var parametersKeyFmt = keyformat.New(0xF1)
 
 // ImmutableState is an immutable consensus backend state wrapper.
 type ImmutableState struct {

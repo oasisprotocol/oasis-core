@@ -7,13 +7,11 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/version"
 )
 
-var (
-	rootCmd = &cobra.Command{
-		Use:     "mkvs-test-helpers",
-		Short:   "MKVS interoperability test helpers",
-		Version: version.SoftwareVersion,
-	}
-)
+var rootCmd = &cobra.Command{
+	Use:     "mkvs-test-helpers",
+	Short:   "MKVS interoperability test helpers",
+	Version: version.SoftwareVersion,
+}
 
 // RootCommand returns the root (top level) cobra.Command.
 func RootCommand() *cobra.Command {

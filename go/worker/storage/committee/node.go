@@ -471,7 +471,7 @@ func (n *Node) ForceFinalize(ctx context.Context, round uint64) error {
 	})
 }
 
-func (n *Node) fetchDiff(round uint64, prevRoot *mkvsNode.Root, thisRoot *mkvsNode.Root, fetchMask outstandingMask) {
+func (n *Node) fetchDiff(round uint64, prevRoot, thisRoot *mkvsNode.Root, fetchMask outstandingMask) {
 	result := &fetchedDiff{
 		fetchMask: fetchMask,
 		fetched:   false,

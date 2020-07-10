@@ -624,14 +624,14 @@ func (n *Node) proposeBatchLocked(batch *protocol.ComputedBatch) {
 		// NOTE: Order is important for verifying the receipt.
 		applyOps := []storage.ApplyOp{
 			// I/O root.
-			storage.ApplyOp{
+			{
 				SrcRound: lastHeader.Round + 1,
 				SrcRoot:  state.batch.ioRoot.Hash,
 				DstRoot:  batch.Header.IORoot,
 				WriteLog: batch.IOWriteLog,
 			},
 			// State root.
-			storage.ApplyOp{
+			{
 				SrcRound: lastHeader.Round,
 				SrcRoot:  lastHeader.StateRoot,
 				DstRoot:  batch.Header.StateRoot,

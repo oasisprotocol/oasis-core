@@ -23,10 +23,8 @@ import (
 	staking "github.com/oasisprotocol/oasis-core/go/staking/api"
 )
 
-var (
-	// RuntimeDynamic is the dynamic runtime registration scenario.
-	RuntimeDynamic scenario.Scenario = newRuntimeDynamicImpl()
-)
+// RuntimeDynamic is the dynamic runtime registration scenario.
+var RuntimeDynamic scenario.Scenario = newRuntimeDynamicImpl()
 
 type runtimeDynamicImpl struct {
 	runtimeImpl

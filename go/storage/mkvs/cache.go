@@ -121,7 +121,7 @@ func (c *cache) newInternalNodePtr(n *node.InternalNode) *node.Pointer {
 	}
 }
 
-func (c *cache) newInternalNode(label node.Key, labelBitLength node.Depth, leafNode *node.Pointer, left *node.Pointer, right *node.Pointer) *node.Pointer {
+func (c *cache) newInternalNode(label node.Key, labelBitLength node.Depth, leafNode, left, right *node.Pointer) *node.Pointer {
 	return c.newInternalNodePtr(&node.InternalNode{
 		Label:          label,
 		LabelBitLength: labelBitLength,
@@ -155,7 +155,7 @@ func (c *cache) markPosition() {
 	c.lruLeafPos = c.lruLeaf.Front()
 }
 
-func (c *cache) tryCommitNode(ptr *node.Pointer, lockedPtr *node.Pointer) error {
+func (c *cache) tryCommitNode(ptr, lockedPtr *node.Pointer) error {
 	if !ptr.IsClean() {
 		panic("mkvs: commitNode called on dirty node")
 	}
@@ -232,7 +232,7 @@ func (c *cache) rollbackNode(ptr *node.Pointer) {
 	ptr.LRU = nil
 }
 
-func (c *cache) tryRemoveNode(ptr *node.Pointer, lockedPtr *node.Pointer) error {
+func (c *cache) tryRemoveNode(ptr, lockedPtr *node.Pointer) error {
 	if lockedPtr != nil && lockedPtr == ptr {
 		return errRemoveLocked
 	}

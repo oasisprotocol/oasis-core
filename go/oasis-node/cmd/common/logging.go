@@ -25,7 +25,7 @@ func initLogging() error {
 	logFile := viper.GetString(cfgLogFile)
 
 	var logLevel logging.Level
-	var moduleLevels = map[string]logging.Level{}
+	moduleLevels := map[string]logging.Level{}
 	if err := logLevel.Set(viper.GetString(cfgLogLevel)); err != nil {
 		if errDefault := logLevel.Set(viper.GetString(cfgLogLevel + ".default")); errDefault != nil {
 			return errDefault
@@ -54,7 +54,7 @@ func initLogging() error {
 		logFile = normalizePath(logFile)
 
 		var err error
-		if w, err = os.OpenFile(logFile, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0600); err != nil {
+		if w, err = os.OpenFile(logFile, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o600); err != nil {
 			return err
 		}
 	}

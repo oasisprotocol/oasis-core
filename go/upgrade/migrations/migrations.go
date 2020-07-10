@@ -11,11 +11,9 @@ const (
 	ModuleName = "upgrade-migrations"
 )
 
-var (
-	registeredHandlers = map[string]Handler{
-		DummyUpgradeName: &dummyMigrationHandler{},
-	}
-)
+var registeredHandlers = map[string]Handler{
+	DummyUpgradeName: &dummyMigrationHandler{},
+}
 
 // Handler is the interface used by migration handlers.
 type Handler interface {

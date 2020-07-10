@@ -124,7 +124,7 @@ func postProcessSignature(raw []byte, modulus *big.Int) (sigBytes, q1Bytes, q2By
 	return
 }
 
-func deriveQ1Q2(sig *big.Int, modulus *big.Int) (*big.Int, *big.Int) {
+func deriveQ1Q2(sig, modulus *big.Int) (*big.Int, *big.Int) {
 	// q1 = floor(Signature^2 / Modulus);
 	// q2 = floor((Signature^3 - q1 * Signature * Modulus) / Modulus);
 	var q1, q2, toSub big.Int

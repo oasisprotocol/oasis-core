@@ -103,7 +103,7 @@ func (k *libp2pPublicKey) Type() libp2pCryptoPb.KeyType {
 	return libp2pCryptoPb.KeyType_Ed25519
 }
 
-func (k *libp2pPublicKey) Verify(data []byte, sig []byte) (bool, error) {
+func (k *libp2pPublicKey) Verify(data, sig []byte) (bool, error) {
 	return k.inner.Verify(libp2pContext, data, sig), nil
 }
 

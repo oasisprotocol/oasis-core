@@ -81,7 +81,7 @@ func LedgerIndex() uint32 {
 }
 
 // NewFactory returns the appropriate SignerFactory based on flags.
-func NewFactory(signerBackend string, signerDir string, roles ...signature.SignerRole) (signature.SignerFactory, error) {
+func NewFactory(signerBackend, signerDir string, roles ...signature.SignerRole) (signature.SignerFactory, error) {
 	signerBackend = strings.ToLower(signerBackend)
 	if signerBackend != compositeSigner.SignerName {
 		return doNewFactory(signerBackend, signerDir, roles...)
@@ -93,7 +93,7 @@ func NewFactory(signerBackend string, signerDir string, roles ...signature.Signe
 	return doNewComposite(signerDir, roles...)
 }
 
-func doNewFactory(signerBackend string, signerDir string, roles ...signature.SignerRole) (signature.SignerFactory, error) {
+func doNewFactory(signerBackend, signerDir string, roles ...signature.SignerRole) (signature.SignerFactory, error) {
 	switch signerBackend {
 	case fileSigner.SignerName:
 		return fileSigner.NewFactory(signerDir, roles...)

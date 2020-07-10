@@ -9,12 +9,10 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/registry/runtime"
 )
 
-var (
-	registryCmd = &cobra.Command{
-		Use:   "registry",
-		Short: "registry backend utilities",
-	}
-)
+var registryCmd = &cobra.Command{
+	Use:   "registry",
+	Short: "registry backend utilities",
+}
 
 // Register registers the registry sub-command and all of it's children.
 func Register(parentCmd *cobra.Command) {

@@ -137,13 +137,13 @@ func (cbc *computeBatchContext) commitTrees(ctx context.Context) error {
 func (cbc *computeBatchContext) uploadBatch(ctx context.Context, hnss []*honestNodeStorage) error {
 	var err error
 	cbc.storageReceipts, err = storageBroadcastApplyBatch(ctx, hnss, cbc.bd.Header.Namespace, cbc.bd.Header.Round+1, []storage.ApplyOp{
-		storage.ApplyOp{
+		{
 			SrcRound: cbc.bd.Header.Round + 1,
 			SrcRoot:  cbc.bd.IORoot,
 			DstRoot:  cbc.newIORoot,
 			WriteLog: cbc.ioWriteLog,
 		},
-		storage.ApplyOp{
+		{
 			SrcRound: cbc.bd.Header.Round,
 			SrcRoot:  cbc.bd.Header.StateRoot,
 			DstRoot:  cbc.newStateRoot,

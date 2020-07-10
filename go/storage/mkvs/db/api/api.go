@@ -77,7 +77,7 @@ type NodeDB interface {
 	GetNode(root node.Root, ptr *node.Pointer) (node.Node, error)
 
 	// GetWriteLog retrieves a write log between two storage instances from the database.
-	GetWriteLog(ctx context.Context, startRoot node.Root, endRoot node.Root) (writelog.Iterator, error)
+	GetWriteLog(ctx context.Context, startRoot, endRoot node.Root) (writelog.Iterator, error)
 
 	// GetLatestVersion returns the most recent version in the node database.
 	GetLatestVersion(ctx context.Context) (uint64, error)
@@ -189,7 +189,7 @@ func (d *nopNodeDB) GetNode(root node.Root, ptr *node.Pointer) (node.Node, error
 	return nil, ErrNodeNotFound
 }
 
-func (d *nopNodeDB) GetWriteLog(ctx context.Context, startRoot node.Root, endRoot node.Root) (writelog.Iterator, error) {
+func (d *nopNodeDB) GetWriteLog(ctx context.Context, startRoot, endRoot node.Root) (writelog.Iterator, error) {
 	return nil, ErrWriteLogNotFound
 }
 

@@ -9,11 +9,9 @@ import (
 	"google.golang.org/grpc"
 )
 
-var (
-	// ErrServiceClosed is the error returned when the wrapper receives a message for a service whose
-	// interceptor has been removed.
-	ErrServiceClosed = errors.New("grpc/wrapper: received message for wrapped service with deregistered wrapper")
-)
+// ErrServiceClosed is the error returned when the wrapper receives a message for a service whose
+// interceptor has been removed.
+var ErrServiceClosed = errors.New("grpc/wrapper: received message for wrapped service with deregistered wrapper")
 
 type wrappedResponse struct {
 	resp interface{}

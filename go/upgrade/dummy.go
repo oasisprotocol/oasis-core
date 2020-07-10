@@ -7,9 +7,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/upgrade/api"
 )
 
-var (
-	_ api.Backend = (*dummyUpgradeManager)(nil)
-)
+var _ api.Backend = (*dummyUpgradeManager)(nil)
 
 type dummyUpgradeManager struct{}
 

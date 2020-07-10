@@ -7,9 +7,7 @@ import (
 	tmtypes "github.com/tendermint/tendermint/types"
 )
 
-var (
-	_ tmtypes.Subscription = (*tendermintPubsubBuffer)(nil)
-)
+var _ tmtypes.Subscription = (*tendermintPubsubBuffer)(nil)
 
 // tendermintPubsubBuffer is a wrapper around tendermint subscriptions.
 // Because unbuffered subscriptions are dangerous and can lead to deadlocks

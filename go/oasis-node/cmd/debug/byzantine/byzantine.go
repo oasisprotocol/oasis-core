@@ -629,7 +629,7 @@ func doMergeWrong(cmd *cobra.Command, args []string) {
 	var emptyRoot hash.Hash
 	emptyRoot.Empty()
 	mbc.commitments = []*commitment.OpenExecutorCommitment{
-		&commitment.OpenExecutorCommitment{
+		{
 			Body: &commitment.ComputeBody{
 				Header: commitment.ComputeResultsHeader{
 					IORoot:    emptyRoot,

@@ -6,7 +6,7 @@ import (
 	"os"
 	"syscall"
 
-	"github.com/seccomp/libseccomp-golang"
+	seccomp "github.com/seccomp/libseccomp-golang"
 )
 
 // A list of syscalls allowed with any arguments.
@@ -348,7 +348,7 @@ func generateSeccompPolicy(out *os.File) error {
 	}
 	// Disallow clone in a new namespace, otherwise allow.
 	err = filter.AddRuleConditional(cloneID, seccomp.ActAllow, []seccomp.ScmpCondition{
-		seccomp.ScmpCondition{Argument: 0, Op: seccomp.CompareMaskedEqual, Operand1: 0, Operand2: 0x7c020000},
+		{Argument: 0, Op: seccomp.CompareMaskedEqual, Operand1: 0, Operand2: 0x7c020000},
 	})
 	if err != nil {
 		return err

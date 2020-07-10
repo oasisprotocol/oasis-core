@@ -246,7 +246,7 @@ func getTmBlockMetaOrExit(ctx context.Context, consensus consensusAPI.ClientBack
 }
 
 // getStats queries node for entity stats between 'start' and 'end' block heights.
-func getStats(ctx context.Context, consensus consensusAPI.ClientBackend, registry registryAPI.Backend, start int64, end int64) *stats {
+func getStats(ctx context.Context, consensus consensusAPI.ClientBackend, registry registryAPI.Backend, start, end int64) *stats {
 	// Init stats.
 	stats := newStats()
 

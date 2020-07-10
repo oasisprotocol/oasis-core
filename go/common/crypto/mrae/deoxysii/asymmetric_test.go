@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/oasisprotocol/deoxysii"
+
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/mrae/api"
 )
 

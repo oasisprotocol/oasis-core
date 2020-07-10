@@ -99,7 +99,6 @@ func (p *proxy) handler(srv interface{}, stream grpc.ServerStream) error {
 		p.upstreamConn,
 		method,
 	)
-
 	if err != nil {
 		return err
 	}

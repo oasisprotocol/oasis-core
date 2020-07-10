@@ -248,7 +248,7 @@ func GetInputReader(cmd *cobra.Command, cfg string) (io.ReadCloser, bool, error)
 }
 
 // LoadEntity loads the entity and it's signer.
-func LoadEntity(signerBackend string, entityDir string) (*entity.Entity, signature.Signer, error) {
+func LoadEntity(signerBackend, entityDir string) (*entity.Entity, signature.Signer, error) {
 	if flags.DebugTestEntity() {
 		return entity.TestEntity()
 	}
@@ -263,7 +263,7 @@ func LoadEntity(signerBackend string, entityDir string) (*entity.Entity, signatu
 
 // ExportEntity creates an empty entity from the public key of the signer
 // generated with the specified backend, and writes it to a file in entityDir.
-func ExportEntity(signerBackend string, entityDir string) error {
+func ExportEntity(signerBackend, entityDir string) error {
 	factory, err := cmdSigner.NewFactory(signerBackend, entityDir, signature.SignerEntity)
 	if err != nil {
 		return err

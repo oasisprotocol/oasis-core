@@ -292,7 +292,7 @@ func doInit(cmd *cobra.Command, args []string) { // nolint: gocyclo
 		os.Exit(1)
 	}
 	b, _ := json.Marshal(signed)
-	if err = ioutil.WriteFile(filepath.Join(dataDir, NodeGenesisFilename), b, 0600); err != nil {
+	if err = ioutil.WriteFile(filepath.Join(dataDir, NodeGenesisFilename), b, 0o600); err != nil {
 		logger.Error("failed to write signed node genesis registration",
 			"err", err,
 		)

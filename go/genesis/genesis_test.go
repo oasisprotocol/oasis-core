@@ -341,7 +341,7 @@ func TestGenesisSanityCheck(t *testing.T) {
 	d.RootHash.RuntimeStates[validNS] = &registry.RuntimeGenesis{
 		StateRoot: nonEmptyHash,
 		// List with one empty (invalid) storage receipt.
-		StorageReceipts: []signature.Signature{signature.Signature{}},
+		StorageReceipts: []signature.Signature{{}},
 	}
 	require.Error(rtsSanityCheck(d.RootHash, false), "empty StorageReceipt for StateRoot should be rejected")
 	require.NoError(rtsSanityCheck(d.RootHash, true), "empty StorageReceipt for StateRoot should be ignored, if isGenesis=true")
@@ -560,7 +560,7 @@ func TestGenesisSanityCheck(t *testing.T) {
 	tn = *testNode
 	tn.Roles = node.RoleKeyManager
 	tn.Runtimes = []*node.Runtime{
-		&node.Runtime{
+		{
 			ID: testKMRuntime.ID,
 		},
 	}
@@ -574,7 +574,7 @@ func TestGenesisSanityCheck(t *testing.T) {
 	tn = *testNode
 	tn.Roles = node.RoleKeyManager
 	tn.Runtimes = []*node.Runtime{
-		&node.Runtime{
+		{
 			ID: testRuntime.ID,
 		},
 	}
@@ -588,7 +588,7 @@ func TestGenesisSanityCheck(t *testing.T) {
 	tn = *testNode
 	tn.Roles = node.RoleKeyManager
 	tn.Runtimes = []*node.Runtime{
-		&node.Runtime{
+		{
 			ID: testRuntime.ID,
 		},
 	}
@@ -602,7 +602,7 @@ func TestGenesisSanityCheck(t *testing.T) {
 	tn = *testNode
 	tn.Roles = node.RoleComputeWorker
 	tn.Runtimes = []*node.Runtime{
-		&node.Runtime{
+		{
 			ID: testKMRuntime.ID,
 		},
 	}
@@ -616,7 +616,7 @@ func TestGenesisSanityCheck(t *testing.T) {
 	tn = *testNode
 	tn.Roles = node.RoleComputeWorker
 	tn.Runtimes = []*node.Runtime{
-		&node.Runtime{
+		{
 			ID: testRuntime.ID,
 		},
 	}
@@ -630,7 +630,7 @@ func TestGenesisSanityCheck(t *testing.T) {
 	tn = *testNode
 	tn.Roles = node.RoleStorageWorker
 	tn.Runtimes = []*node.Runtime{
-		&node.Runtime{
+		{
 			ID: testRuntime.ID,
 		},
 	}
@@ -677,8 +677,8 @@ func TestGenesisSanityCheck(t *testing.T) {
 
 	d = *testDoc
 	d.Staking.Delegations = map[staking.Address]map[staking.Address]*staking.Delegation{
-		stakingTests.DebugStateSrcAddress: map[staking.Address]*staking.Delegation{
-			stakingTests.DebugStateDestAddress: &staking.Delegation{
+		stakingTests.DebugStateSrcAddress: {
+			stakingTests.DebugStateDestAddress: {
 				Shares: stakingTests.QtyFromInt(1),
 			},
 		},
@@ -687,9 +687,9 @@ func TestGenesisSanityCheck(t *testing.T) {
 
 	d = *testDoc
 	d.Staking.DebondingDelegations = map[staking.Address]map[staking.Address][]*staking.DebondingDelegation{
-		stakingTests.DebugStateSrcAddress: map[staking.Address][]*staking.DebondingDelegation{
-			stakingTests.DebugStateDestAddress: []*staking.DebondingDelegation{
-				&staking.DebondingDelegation{
+		stakingTests.DebugStateSrcAddress: {
+			stakingTests.DebugStateDestAddress: {
+				{
 					Shares:        stakingTests.QtyFromInt(1),
 					DebondEndTime: 10,
 				},

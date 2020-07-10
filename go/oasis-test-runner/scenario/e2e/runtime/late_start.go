@@ -8,10 +8,8 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/scenario"
 )
 
-var (
-	// LateStart is the LateStart node basic scenario.
-	LateStart scenario.Scenario = newLateStartImpl("late-start", "simple-keyvalue-client", nil)
-)
+// LateStart is the LateStart node basic scenario.
+var LateStart scenario.Scenario = newLateStartImpl("late-start", "simple-keyvalue-client", nil)
 
 const lateStartInitialWait = 2 * time.Minute
 

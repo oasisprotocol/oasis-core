@@ -35,8 +35,8 @@ func testOperations(t *testing.T, backend Backend) {
 		blockHash1,
 		// Transactions.
 		[]*transaction.Transaction{
-			&transaction.Transaction{Input: tx1, Output: tx1},
-			&transaction.Transaction{Input: tx2, Output: tx2},
+			{Input: tx1, Output: tx1},
+			{Input: tx2, Output: tx2},
 		},
 		// Tags.
 		transaction.Tags{
@@ -96,7 +96,7 @@ func testOperations(t *testing.T, backend Backend) {
 		blockHash2,
 		// Transactions.
 		[]*transaction.Transaction{
-			&transaction.Transaction{Input: tx3, Output: tx3},
+			{Input: tx3, Output: tx3},
 		},
 		// Tags.
 		transaction.Tags{
@@ -124,7 +124,7 @@ func testOperations(t *testing.T, backend Backend) {
 		RoundMin: 40,
 		RoundMax: 50,
 		Conditions: []api.QueryCondition{
-			api.QueryCondition{Key: []byte("hello"), Values: [][]byte{[]byte("world")}},
+			{Key: []byte("hello"), Values: [][]byte{[]byte("world")}},
 		},
 	}
 	results, err := backend.QueryTxns(ctx, query)
@@ -137,7 +137,7 @@ func testOperations(t *testing.T, backend Backend) {
 
 	query = api.Query{
 		Conditions: []api.QueryCondition{
-			api.QueryCondition{Key: []byte("hello"), Values: [][]byte{[]byte("worlx"), []byte("world")}},
+			{Key: []byte("hello"), Values: [][]byte{[]byte("worlx"), []byte("world")}},
 		},
 	}
 	results, err = backend.QueryTxns(ctx, query)

@@ -18,7 +18,7 @@ import (
 const (
 	privateKeyPemType = "ED25519 PRIVATE KEY"
 
-	filePerm = 0600
+	filePerm = 0o600
 
 	// SignerName is the name used to identify the file backed signer.
 	SignerName = "file"

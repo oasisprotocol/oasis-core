@@ -158,7 +158,7 @@ func doInitGenesis(cmd *cobra.Command, args []string) {
 
 	// Write out the signed runtime registration.
 	b, _ := json.Marshal(signed)
-	if err = ioutil.WriteFile(filepath.Join(dataDir, viper.GetString(cfgOutput)), b, 0600); err != nil {
+	if err = ioutil.WriteFile(filepath.Join(dataDir, viper.GetString(cfgOutput)), b, 0o600); err != nil {
 		logger.Error("failed to write signed runtime genesis registration",
 			"err", err,
 		)
@@ -220,7 +220,7 @@ func doList(cmd *cobra.Command, args []string) {
 		var s string
 		switch cmdFlags.Verbose() {
 		case true:
-			b, _ := json.Marshal(&rt)
+			b, _ := json.Marshal(rt)
 			s = string(b)
 		default:
 			s = rt.ID.String()

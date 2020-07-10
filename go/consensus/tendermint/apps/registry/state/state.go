@@ -552,7 +552,7 @@ func (s *MutableState) RemoveEntity(ctx context.Context, id signature.PublicKey)
 }
 
 // SetNode sets a signed node descriptor for a registered node.
-func (s *MutableState) SetNode(ctx context.Context, existingNode *node.Node, node *node.Node, signedNode *node.MultiSignedNode) error {
+func (s *MutableState) SetNode(ctx context.Context, existingNode, node *node.Node, signedNode *node.MultiSignedNode) error {
 	rawNodeID, err := node.ID.MarshalBinary()
 	if err != nil {
 		return err

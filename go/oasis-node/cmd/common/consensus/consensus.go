@@ -92,7 +92,7 @@ func GetTxNonceAndFee() (uint64, *transaction.Fee) {
 func SignAndSaveTx(tx *transaction.Transaction) {
 	if viper.GetBool(CfgTxUnsigned) {
 		rawUnsignedTx := cbor.Marshal(tx)
-		if err := ioutil.WriteFile(viper.GetString(CfgTxFile), rawUnsignedTx, 0600); err != nil {
+		if err := ioutil.WriteFile(viper.GetString(CfgTxFile), rawUnsignedTx, 0o600); err != nil {
 			logger.Error("failed to save unsigned transaction",
 				"err", err,
 			)
@@ -132,7 +132,7 @@ func SignAndSaveTx(tx *transaction.Transaction) {
 		)
 		os.Exit(1)
 	}
-	if err = ioutil.WriteFile(viper.GetString(CfgTxFile), rawTx, 0600); err != nil {
+	if err = ioutil.WriteFile(viper.GetString(CfgTxFile), rawTx, 0o600); err != nil {
 		logger.Error("failed to save transaction",
 			"err", err,
 		)

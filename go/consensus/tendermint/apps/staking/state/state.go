@@ -757,9 +757,9 @@ func (s *MutableState) AddRewards(
 		return err
 	}
 	var activeStep *staking.RewardStep
-	for _, step := range steps {
+	for i, step := range steps {
 		if time < step.Until {
-			activeStep = &step
+			activeStep = &steps[i]
 			break
 		}
 	}
@@ -873,9 +873,9 @@ func (s *MutableState) AddRewardSingleAttenuated(
 		return fmt.Errorf("failed to query reward schedule: %w", err)
 	}
 	var activeStep *staking.RewardStep
-	for _, step := range steps {
+	for i, step := range steps {
 		if time < step.Until {
-			activeStep = &step
+			activeStep = &steps[i]
 			break
 		}
 	}

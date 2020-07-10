@@ -132,6 +132,19 @@ Core:
   rustup target add x86_64-fortanix-unknown-sgx
   ```
 
+* (**OPTIONAL**) [gofumpt and gofumports].
+
+  Required if you plan to change any of the Go code in order for automated code
+  formatting (`make fmt`) to work.
+
+  Download and install it with:
+
+  ```
+  export GOFUMPT_VERSION=abc0db2c416aca0f60ea33c23c76665f6e7ba0b6
+  GO111MODULE=on ${OASIS_GO:-go} get mvdan.cc/gofumpt@${GOFUMPT_VERSION}
+  GO111MODULE=on ${OASIS_GO:-go} get mvdan.cc/gofumpt/gofumports@${GOFUMPT_VERSION}
+  ```
+
 * (**OPTIONAL**) [protoc-gen-go].
 
   Download and install it with:
@@ -173,6 +186,7 @@ where the code has been checked out.
 [rust-toolchain-precedence]:
   https://github.com/rust-lang/rustup/blob/master/README.md#override-precedence
 [Fortanix Rust EDP]: https://edp.fortanix.com
+[gofumpt and gofumports]: https://github.com/mvdan/gofumpt
 [protoc-gen-go]: https://github.com/golang/protobuf
 
 ## Using the development Docker image

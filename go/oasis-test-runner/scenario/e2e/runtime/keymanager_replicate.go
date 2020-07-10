@@ -44,8 +44,8 @@ func (sc *kmReplicateImpl) Fixture() (*oasis.NetworkFixture, error) {
 
 	// This requires multiple keymanagers.
 	f.Keymanagers = []oasis.KeymanagerFixture{
-		oasis.KeymanagerFixture{Runtime: 0, Entity: 1},
-		oasis.KeymanagerFixture{Runtime: 0, Entity: 1},
+		{Runtime: 0, Entity: 1},
+		{Runtime: 0, Entity: 1},
 	}
 
 	return f, nil

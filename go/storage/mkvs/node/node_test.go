@@ -33,7 +33,7 @@ func TestSerializationLeafNode(t *testing.T) {
 }
 
 func TestSerializationInternalNode(t *testing.T) {
-	var leafNode = &LeafNode{
+	leafNode := &LeafNode{
 		Key:   []byte("a golden key"),
 		Value: []byte("value"),
 	}
@@ -41,8 +41,8 @@ func TestSerializationInternalNode(t *testing.T) {
 
 	leftHash := hash.NewFromBytes([]byte("everyone move to the left"))
 	rightHash := hash.NewFromBytes([]byte("everyone move to the right"))
-	var label = Key("abc")
-	var labelBitLength = Depth(24)
+	label := Key("abc")
+	labelBitLength := Depth(24)
 
 	intNode := &InternalNode{
 		Version:        0xDEADBEEF,

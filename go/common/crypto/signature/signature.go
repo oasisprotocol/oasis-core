@@ -33,7 +33,7 @@ const (
 
 	pubPEMType = "ED25519 PUBLIC KEY"
 	sigPEMType = "ED25519 SIGNATURE"
-	filePerm   = 0600
+	filePerm   = 0o600
 )
 
 var (

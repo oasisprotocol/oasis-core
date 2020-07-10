@@ -259,7 +259,7 @@ func signAndWriteEntityGenesis(dataDir string, signer signature.Signer, ent *ent
 
 	// Write out the signed entity registration.
 	b, _ := json.Marshal(signed)
-	if err = ioutil.WriteFile(filepath.Join(dataDir, entityGenesisFilename), b, 0600); err != nil {
+	if err = ioutil.WriteFile(filepath.Join(dataDir, entityGenesisFilename), b, 0o600); err != nil {
 		logger.Error("failed to write signed entity genesis registration",
 			"err", err,
 		)

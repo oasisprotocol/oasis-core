@@ -489,12 +489,12 @@ func (n *Node) startMergeLocked(commitments []commitment.ExecutorCommitment, res
 		// NOTE: Order is important for verifying the receipt.
 		mergeOps := []storage.MergeOp{
 			// I/O root.
-			storage.MergeOp{
+			{
 				Base:   emptyRoot,
 				Others: ioRoots,
 			},
 			// State root.
-			storage.MergeOp{
+			{
 				Base:   prevBlk.Header.StateRoot,
 				Others: stateRoots,
 			},

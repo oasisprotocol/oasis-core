@@ -12,7 +12,7 @@ import (
 	memorySigner "github.com/oasisprotocol/oasis-core/go/common/crypto/signature/signers/memory"
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
 	"github.com/oasisprotocol/oasis-core/go/consensus/api/transaction"
-	"github.com/oasisprotocol/oasis-core/go/consensus/tendermint/apps/epochtime_mock"
+	epochtimemock "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/apps/epochtime_mock"
 	staking "github.com/oasisprotocol/oasis-core/go/staking/api"
 	"github.com/oasisprotocol/oasis-core/go/storage/mkvs"
 )

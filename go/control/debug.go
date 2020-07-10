@@ -2,6 +2,7 @@ package control
 
 import (
 	"context"
+
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
 
 	"github.com/oasisprotocol/oasis-core/go/control/api"

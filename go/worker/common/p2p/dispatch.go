@@ -6,8 +6,8 @@ import (
 	"sync/atomic"
 
 	"github.com/cenkalti/backoff/v4"
-	"github.com/libp2p/go-libp2p-core"
-	"github.com/libp2p/go-libp2p-pubsub"
+	core "github.com/libp2p/go-libp2p-core"
+	pubsub "github.com/libp2p/go-libp2p-pubsub"
 
 	"github.com/oasisprotocol/oasis-core/go/common"
 	"github.com/oasisprotocol/oasis-core/go/common/cbor"
@@ -190,7 +190,6 @@ func (h *topicHandler) retryWorker(m *queuedMsg) {
 		}
 		return derr
 	}, bctx)
-
 	if err != nil {
 		h.logger.Error("failed to re-dispatch message, not retrying",
 			"err", err,

@@ -25,10 +25,8 @@ const (
 	cfgNodeBinary = "node.binary"
 )
 
-var (
-	// E2eParamsDummy is a dummy instance of E2E used to register global e2e flags.
-	E2eParamsDummy *E2E = NewE2E("")
-)
+// E2eParamsDummy is a dummy instance of E2E used to register global e2e flags.
+var E2eParamsDummy *E2E = NewE2E("")
 
 // E2E is a base scenario for oasis-node end-to-end tests.
 type E2E struct {
@@ -92,13 +90,13 @@ func (sc *E2E) Fixture() (*oasis.NetworkFixture, error) {
 			ConsensusGasCostsTxByte: 1,
 		},
 		Entities: []oasis.EntityCfg{
-			oasis.EntityCfg{IsDebugTestEntity: true},
-			oasis.EntityCfg{},
+			{IsDebugTestEntity: true},
+			{},
 		},
 		Validators: []oasis.ValidatorFixture{
-			oasis.ValidatorFixture{Entity: 1, Consensus: oasis.ConsensusFixture{EnableConsensusRPCWorker: true}},
-			oasis.ValidatorFixture{Entity: 1, Consensus: oasis.ConsensusFixture{EnableConsensusRPCWorker: true}},
-			oasis.ValidatorFixture{Entity: 1, Consensus: oasis.ConsensusFixture{EnableConsensusRPCWorker: true}},
+			{Entity: 1, Consensus: oasis.ConsensusFixture{EnableConsensusRPCWorker: true}},
+			{Entity: 1, Consensus: oasis.ConsensusFixture{EnableConsensusRPCWorker: true}},
+			{Entity: 1, Consensus: oasis.ConsensusFixture{EnableConsensusRPCWorker: true}},
 		},
 	}, nil
 }

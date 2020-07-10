@@ -79,7 +79,7 @@ func TestOnEvidenceDoubleSign(t *testing.T) {
 	_ = slashAmount.FromUint64(100)
 	err = stakeState.SetConsensusParameters(ctx, &staking.ConsensusParameters{
 		Slashing: map[staking.SlashReason]staking.Slash{
-			staking.SlashDoubleSigning: staking.Slash{
+			staking.SlashDoubleSigning: {
 				Amount:         slashAmount,
 				FreezeInterval: registry.FreezeForever,
 			},

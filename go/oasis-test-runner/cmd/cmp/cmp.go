@@ -43,32 +43,32 @@ min_threshold.<metric>.{avg|max}_ratio, ba exits with error code 1.`,
 	}
 
 	allMetrics = map[string]*Metric{
-		"time": &Metric{
+		"time": {
 			getter:               getDuration,
 			maxThresholdAvgRatio: 1.1,
 			maxThresholdMaxRatio: 1.1,
 		},
-		"du": &Metric{
+		"du": {
 			getter:               getDiskUsage,
 			maxThresholdAvgRatio: 1.06,
 			maxThresholdMaxRatio: 1.15,
 		},
-		"io": &Metric{
+		"io": {
 			getter:               getIOWork,
 			maxThresholdAvgRatio: 1.2,
 			maxThresholdMaxRatio: 1.2,
 		},
-		"mem": &Metric{
+		"mem": {
 			getter:               getRssAnonMemory,
 			maxThresholdAvgRatio: 1.1,
 			maxThresholdMaxRatio: 1.1,
 		},
-		"cpu": &Metric{
+		"cpu": {
 			getter:               getCPUTime,
 			maxThresholdAvgRatio: 1.05,
 			maxThresholdMaxRatio: 1.05,
 		},
-		"net": &Metric{
+		"net": {
 			getter: getNetwork,
 			// Network stats suffer effects from other processes too and varies.
 			maxThresholdAvgRatio: 1.3,
@@ -186,7 +186,7 @@ func getCPUTime(ctx context.Context, test string, bi *model.SampleStream) (float
 
 // getSummableMetric returns average and maximum sum of metrics for all workers of the given coarse benchmark instance
 // ("oasis_up" metric).
-func getSummableMetric(ctx context.Context, metric string, test string, bi *model.SampleStream) (float64, float64, error) {
+func getSummableMetric(ctx context.Context, metric, test string, bi *model.SampleStream) (float64, float64, error) {
 	instance := string(bi.Metric[metrics.MetricsLabelInstance])
 
 	labels := bi.Metric.Clone()
@@ -343,7 +343,7 @@ func instanceName(s *model.SampleStream) string {
 // fetchAndCompare fetches the given metric from prometheus and compares the results.
 //
 // Returns false, if metric-specific ratios are exceeded or there is a problem obtaining time series. Otherwise true.
-func fetchAndCompare(ctx context.Context, m string, test string, sInstance *model.SampleStream, tInstance *model.SampleStream) (succ bool) {
+func fetchAndCompare(ctx context.Context, m, test string, sInstance, tInstance *model.SampleStream) (succ bool) {
 	getMetric := allMetrics[m].getter
 	succ = true
 

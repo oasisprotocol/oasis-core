@@ -8,10 +8,8 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/scenario"
 )
 
-var (
-	// KeymanagerRestart is the keymanager restart scenario.
-	KeymanagerRestart scenario.Scenario = newKmRestartImpl()
-)
+// KeymanagerRestart is the keymanager restart scenario.
+var KeymanagerRestart scenario.Scenario = newKmRestartImpl()
 
 type kmRestartImpl struct {
 	runtimeImpl

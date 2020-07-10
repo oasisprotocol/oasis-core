@@ -36,7 +36,7 @@ type KeyValueTree interface {
 	ImmutableKeyValueTree
 
 	// Insert inserts a key/value pair into the tree.
-	Insert(ctx context.Context, key []byte, value []byte) error
+	Insert(ctx context.Context, key, value []byte) error
 
 	// RemoveExisting removes a key from the tree and returns the previous value.
 	RemoveExisting(ctx context.Context, key []byte) ([]byte, error)

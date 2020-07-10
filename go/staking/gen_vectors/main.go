@@ -26,10 +26,10 @@ func main() {
 
 	// Generate different gas fees.
 	for _, fee := range []*transaction.Fee{
-		&transaction.Fee{},
-		&transaction.Fee{Amount: *quantity.NewFromUint64(100000000), Gas: 1000},
-		&transaction.Fee{Amount: *quantity.NewFromUint64(0), Gas: 1000},
-		&transaction.Fee{Amount: *quantity.NewFromUint64(4242), Gas: 1000},
+		{},
+		{Amount: *quantity.NewFromUint64(100000000), Gas: 1000},
+		{Amount: *quantity.NewFromUint64(0), Gas: 1000},
+		{Amount: *quantity.NewFromUint64(4242), Gas: 1000},
 	} {
 		// Generate different nonces.
 		for _, nonce := range []uint64{0, 1, 10, 42, 1000, 1_000_000, 10_000_000, math.MaxUint64} {

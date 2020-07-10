@@ -151,7 +151,7 @@ func testRegistryEntityNodes( // nolint: gocyclo
 	})
 
 	// We rely on the runtime tests running before this registering a runtime.
-	nodeRuntimes := []*node.Runtime{&node.Runtime{ID: runtimeID}}
+	nodeRuntimes := []*node.Runtime{{ID: runtimeID}}
 
 	// Node tests, because there needs to be entities.
 	var numNodes int
@@ -165,7 +165,7 @@ func testRegistryEntityNodes( // nolint: gocyclo
 		nodes = append(nodes, entityNodes)
 		numNodes += len(entityNodes)
 	}
-	nodeRuntimesEW := []*node.Runtime{&node.Runtime{ID: runtimeEWID}}
+	nodeRuntimesEW := []*node.Runtime{{ID: runtimeEWID}}
 	whitelistedNodes, err := entities[1].NewTestNodes(1, 1, []byte("whitelistedNodes"), nodeRuntimesEW, epoch+2, consensus)
 	require.NoError(t, err, "NewTestNodes whitelisted")
 	nonWhitelistedNodes, err := entities[0].NewTestNodes(1, 1, []byte("nonWhitelistedNodes"), nodeRuntimesEW, epoch+2, consensus)
@@ -223,7 +223,8 @@ func testRegistryEntityNodes( // nolint: gocyclo
 					ctx,
 					&api.ConsensusAddressQuery{
 						Address: []byte(tmcrypto.PublicKeyToTendermint(&tn.Node.Consensus.ID).Address()),
-						Height:  consensusAPI.HeightLatest},
+						Height:  consensusAPI.HeightLatest,
+					},
 				)
 				require.NoError(err, "GetNodeByConsensusAddress")
 				require.EqualValues(tn.Node, nodeByConsensus, "retrieved node by Consensus Address")
@@ -814,7 +815,7 @@ func randomIdentity(rng *drbg.Drbg) *identity.Identity {
 
 // NewTestNodes returns the specified number of TestNodes, generated
 // deterministically using the entity's public key as the seed.
-func (ent *TestEntity) NewTestNodes(nCompute int, nStorage int, idNonce []byte, runtimes []*node.Runtime, expiration epochtime.EpochTime, consensus consensusAPI.Backend) ([]*TestNode, error) { // nolint: gocyclo
+func (ent *TestEntity) NewTestNodes(nCompute, nStorage int, idNonce []byte, runtimes []*node.Runtime, expiration epochtime.EpochTime, consensus consensusAPI.Backend) ([]*TestNode, error) { // nolint: gocyclo
 	if nCompute <= 0 || nStorage <= 0 || nCompute > 254 || nStorage > 254 {
 		return nil, errors.New("registry/tests: test node count out of bounds")
 	}
@@ -868,7 +869,7 @@ func (ent *TestEntity) NewTestNodes(nCompute int, nStorage int, idNonce []byte, 
 		// Generate dummy TLS certificate.
 		nod.Node.TLS.PubKey = nodeIdentity.GetTLSSigner().Public()
 		nod.Node.TLS.Addresses = []node.TLSAddress{
-			node.TLSAddress{
+			{
 				PubKey:  nod.Node.TLS.PubKey,
 				Address: addr,
 			},
@@ -992,7 +993,7 @@ func (ent *TestEntity) NewTestNodes(nCompute int, nStorage int, idNonce []byte, 
 			descr: "register node with invalid runtimes",
 		}
 		invNode8 := *nod.Node
-		invNode8.Runtimes = []*node.Runtime{&node.Runtime{ID: publicKeyToNamespace(ent.Signer.Public(), false)}}
+		invNode8.Runtimes = []*node.Runtime{{ID: publicKeyToNamespace(ent.Signer.Public(), false)}}
 		invalid8.signed, err = node.MultiSignNode(nodeSigners, api.RegisterNodeSignatureContext, &invNode8)
 		if err != nil {
 			return nil, err
@@ -1005,7 +1006,7 @@ func (ent *TestEntity) NewTestNodes(nCompute int, nStorage int, idNonce []byte, 
 		}
 		invNode9 := *nod.Node
 		invNode9.Consensus.Addresses = []node.ConsensusAddress{
-			node.ConsensusAddress{
+			{
 				// ID: invalid
 				Address: addr,
 			},
@@ -1161,7 +1162,7 @@ func (ent *TestEntity) NewTestNodes(nCompute int, nStorage int, idNonce []byte, 
 		}
 		testRuntimeSigner := memorySigner.NewTestSigner("invalid-registration-runtime-seed")
 		newRuntimes := []*node.Runtime{
-			&node.Runtime{ID: publicKeyToNamespace(testRuntimeSigner.Public(), false)},
+			{ID: publicKeyToNamespace(testRuntimeSigner.Public(), false)},
 		}
 		newNode := &node.Node{
 			DescriptorVersion: node.LatestNodeDescriptorVersion,

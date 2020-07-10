@@ -25,7 +25,7 @@ func TestSigstruct(t *testing.T) {
 
 	// Generate a SIGSTRUCT.
 	builder := New(
-		WithBuildDate(time.Date(2016, 01, 9, 0, 0, 0, 0, time.UTC)),
+		WithBuildDate(time.Date(2016, 1, 9, 0, 0, 0, 0, time.UTC)),
 		WithAttributes(sgx.Attributes{
 			Flags: 0x04,
 			Xfrm:  0x03,

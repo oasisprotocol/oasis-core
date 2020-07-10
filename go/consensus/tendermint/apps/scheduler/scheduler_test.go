@@ -14,10 +14,10 @@ import (
 func TestDiffValidators(t *testing.T) {
 	logger := logging.GetLogger("TestDiffValidators")
 	powerOne := map[signature.PublicKey]int64{
-		signature.PublicKey{}: 1,
+		{}: 1,
 	}
 	powerTwo := map[signature.PublicKey]int64{
-		signature.PublicKey{}: 2,
+		{}: 2,
 	}
 	for _, tt := range []struct {
 		msg     string

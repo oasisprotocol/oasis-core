@@ -11,12 +11,10 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/storage/mkvs"
 )
 
-var (
-	// statusKeyFmt is the key manager status key format.
-	//
-	// Value is CBOR-serialized key manager status.
-	statusKeyFmt = keyformat.New(0x70, keyformat.H(&common.Namespace{}))
-)
+// statusKeyFmt is the key manager status key format.
+//
+// Value is CBOR-serialized key manager status.
+var statusKeyFmt = keyformat.New(0x70, keyformat.H(&common.Namespace{}))
 
 // ImmutableState is the immutable key manager state wrapper.
 type ImmutableState struct {

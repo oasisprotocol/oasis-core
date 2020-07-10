@@ -18,7 +18,7 @@ import (
 const (
 	entityFilename = "entity.json"
 
-	fileMode = 0600
+	fileMode = 0o600
 )
 
 var (

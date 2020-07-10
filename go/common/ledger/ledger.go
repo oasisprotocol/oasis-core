@@ -28,12 +28,10 @@ const (
 	ListingPathIndex uint32 = 0
 )
 
-var (
-	// ListingDerivationPath is the path used to list and connect to devices by address.
-	ListingDerivationPath = []uint32{
-		PathPurposeBIP44, ListingPathCoinType, ListingPathAccount, ListingPathChange, ListingPathIndex,
-	}
-)
+// ListingDerivationPath is the path used to list and connect to devices by address.
+var ListingDerivationPath = []uint32{
+	PathPurposeBIP44, ListingPathCoinType, ListingPathAccount, ListingPathChange, ListingPathIndex,
+}
 
 // Device is a Ledger device.
 type Device = ledger.LedgerOasis

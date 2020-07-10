@@ -56,7 +56,7 @@ func currentBound(cs *staking.CommissionSchedule, now epochtime.EpochTime) *stak
 // rules between start and end epoch. The function panics in case a rate step
 // cannot satisfy all bound rules so the caller should make sure that bounds
 // are not exclusive.
-func genValidRateStep(rng *rand.Rand, logger *logging.Logger, schedule staking.CommissionSchedule, startEpoch epochtime.EpochTime, endEpoch epochtime.EpochTime) staking.CommissionRateStep {
+func genValidRateStep(rng *rand.Rand, logger *logging.Logger, schedule staking.CommissionSchedule, startEpoch, endEpoch epochtime.EpochTime) staking.CommissionRateStep {
 	startBound := currentBound(&schedule, startEpoch)
 	minBound := startBound.RateMin.ToBigInt().Int64()
 	maxBound := startBound.RateMax.ToBigInt().Int64()

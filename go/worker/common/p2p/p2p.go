@@ -9,12 +9,12 @@ import (
 	"time"
 
 	"github.com/libp2p/go-libp2p"
-	"github.com/libp2p/go-libp2p-core"
+	core "github.com/libp2p/go-libp2p-core"
 	"github.com/libp2p/go-libp2p-core/network"
 	"github.com/libp2p/go-libp2p-core/transport"
-	"github.com/libp2p/go-libp2p-pubsub"
+	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	"github.com/multiformats/go-multiaddr"
-	"github.com/multiformats/go-multiaddr-net"
+	manet "github.com/multiformats/go-multiaddr-net"
 	"github.com/spf13/viper"
 
 	"github.com/oasisprotocol/oasis-core/go/common"
@@ -96,6 +96,7 @@ func (p *P2P) Publish(ctx context.Context, runtimeID common.Namespace, msg *Mess
 		p.logger.Error("attempted to publish message for unknown runtime ID",
 			"runtime_id", runtimeID,
 		)
+		return
 	}
 
 	if err := h.topic.Publish(h.ctx, rawMsg); err != nil {

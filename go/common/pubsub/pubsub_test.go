@@ -137,7 +137,6 @@ func testSubscribeEx(t *testing.T) {
 		require.NotNil(t, sub.ch, "Subscription, inner channel")
 		require.Equal(t, sub.ch, callbackCh, "Callback channel != Subscription, inner channel")
 	}
-
 }
 
 func testNewBrokerEx(t *testing.T) {

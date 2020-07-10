@@ -107,7 +107,6 @@ type CommissionSchedule struct {
 func (cs CommissionSchedule) PrettyPrint(prefix string, w io.Writer) {
 	if cs.Rates == nil {
 		fmt.Fprintf(w, "%sRates: (none)\n", prefix)
-
 	} else {
 		fmt.Fprintf(w, "%sRates:\n", prefix)
 		for _, rate := range cs.Rates {
@@ -117,7 +116,6 @@ func (cs CommissionSchedule) PrettyPrint(prefix string, w io.Writer) {
 
 	if cs.Bounds == nil {
 		fmt.Fprintf(w, "%sRate Bounds: (none)\n", prefix)
-
 	} else {
 		fmt.Fprintf(w, "%sRate Bounds:\n", prefix)
 		for _, rateBound := range cs.Bounds {

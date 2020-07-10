@@ -1,12 +1,11 @@
 package ias
 
 import (
+	"encoding/hex"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/require"
-
-	"encoding/hex"
 )
 
 func TestQuote(t *testing.T) {

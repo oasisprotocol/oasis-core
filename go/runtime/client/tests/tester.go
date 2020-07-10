@@ -158,7 +158,7 @@ func testQuery(
 		RoundMin: 0,
 		RoundMax: 4,
 		Conditions: []api.QueryCondition{
-			api.QueryCondition{Key: []byte("txn_foo"), Values: [][]byte{[]byte("txn_bar")}},
+			{Key: []byte("txn_foo"), Values: [][]byte{[]byte("txn_bar")}},
 		},
 	}
 	results, err := c.QueryTxs(ctx, &api.QueryTxsRequest{RuntimeID: runtimeID, Query: query})
@@ -178,5 +178,4 @@ func testQuery(
 	genBlk2, err := c.GetGenesisBlock(ctx, runtimeID)
 	require.NoError(t, err, "GetGenesisBlock2")
 	require.EqualValues(t, genBlk, genBlk2, "GetGenesisBlock should match previous GetGenesisBlock")
-
 }

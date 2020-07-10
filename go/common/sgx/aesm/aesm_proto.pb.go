@@ -37,11 +37,12 @@
 package aesm
 
 import (
+	reflect "reflect"
+	sync "sync"
+
 	proto "github.com/golang/protobuf/proto"
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
-	reflect "reflect"
-	sync "sync"
 )
 
 const (
@@ -633,7 +634,7 @@ func (x *Request_ReportAttestationErrorRequest) GetTimeout() uint32 {
 	return 0
 }
 
-//private API
+// private API
 type Request_CreateSessionRequest struct {
 	state         protoimpl.MessageState
 	sizeCache     protoimpl.SizeCache
@@ -1385,7 +1386,7 @@ func (x *Response_ReportAttestationErrorResponse) GetPlatformUpdateInfo() []byte
 	return nil
 }
 
-//private API
+// private API
 type Response_CreateSessionResponse struct {
 	state         protoimpl.MessageState
 	sizeCache     protoimpl.SizeCache
@@ -2237,37 +2238,40 @@ func file_aesm_proto_proto_rawDescGZIP() []byte {
 	return file_aesm_proto_proto_rawDescData
 }
 
-var file_aesm_proto_proto_msgTypes = make([]protoimpl.MessageInfo, 28)
-var file_aesm_proto_proto_goTypes = []interface{}{
-	(*Request)(nil),                                     // 0: aesm.Request
-	(*Response)(nil),                                    // 1: aesm.Response
-	(*Request_InitQuoteRequest)(nil),                    // 2: aesm.Request.InitQuoteRequest
-	(*Request_GetQuoteRequest)(nil),                     // 3: aesm.Request.GetQuoteRequest
-	(*Request_GetLaunchTokenRequest)(nil),               // 4: aesm.Request.GetLaunchTokenRequest
-	(*Request_ReportAttestationErrorRequest)(nil),       // 5: aesm.Request.ReportAttestationErrorRequest
-	(*Request_CreateSessionRequest)(nil),                // 6: aesm.Request.CreateSessionRequest
-	(*Request_InvokeServiceRequest)(nil),                // 7: aesm.Request.InvokeServiceRequest
-	(*Request_ExchangeReportRequest)(nil),               // 8: aesm.Request.ExchangeReportRequest
-	(*Request_CloseSessionRequest)(nil),                 // 9: aesm.Request.CloseSessionRequest
-	(*Request_GetPsCapRequest)(nil),                     // 10: aesm.Request.GetPsCapRequest
-	(*Request_GetWhiteListSizeRequest)(nil),             // 11: aesm.Request.GetWhiteListSizeRequest
-	(*Request_GetWhiteListRequest)(nil),                 // 12: aesm.Request.GetWhiteListRequest
-	(*Request_SGXGetExtendedEpidGroupIdRequest)(nil),    // 13: aesm.Request.SGXGetExtendedEpidGroupIdRequest
-	(*Request_SGXSwitchExtendedEpidGroupRequest)(nil),   // 14: aesm.Request.SGXSwitchExtendedEpidGroupRequest
-	(*Response_InitQuoteResponse)(nil),                  // 15: aesm.Response.InitQuoteResponse
-	(*Response_GetQuoteResponse)(nil),                   // 16: aesm.Response.GetQuoteResponse
-	(*Response_GetLaunchTokenResponse)(nil),             // 17: aesm.Response.GetLaunchTokenResponse
-	(*Response_ReportAttestationErrorResponse)(nil),     // 18: aesm.Response.ReportAttestationErrorResponse
-	(*Response_CreateSessionResponse)(nil),              // 19: aesm.Response.CreateSessionResponse
-	(*Response_InvokeServiceResponse)(nil),              // 20: aesm.Response.InvokeServiceResponse
-	(*Response_ExchangeReportResponse)(nil),             // 21: aesm.Response.ExchangeReportResponse
-	(*Response_CloseSessionResponse)(nil),               // 22: aesm.Response.CloseSessionResponse
-	(*Response_GetPsCapResponse)(nil),                   // 23: aesm.Response.GetPsCapResponse
-	(*Response_GetWhiteListSizeResponse)(nil),           // 24: aesm.Response.GetWhiteListSizeResponse
-	(*Response_GetWhiteListResponse)(nil),               // 25: aesm.Response.GetWhiteListResponse
-	(*Response_SGXGetExtendedEpidGroupIdResponse)(nil),  // 26: aesm.Response.SGXGetExtendedEpidGroupIdResponse
-	(*Response_SGXSwitchExtendedEpidGroupResponse)(nil), // 27: aesm.Response.SGXSwitchExtendedEpidGroupResponse
-}
+var (
+	file_aesm_proto_proto_msgTypes = make([]protoimpl.MessageInfo, 28)
+	file_aesm_proto_proto_goTypes  = []interface{}{
+		(*Request)(nil),                                     // 0: aesm.Request
+		(*Response)(nil),                                    // 1: aesm.Response
+		(*Request_InitQuoteRequest)(nil),                    // 2: aesm.Request.InitQuoteRequest
+		(*Request_GetQuoteRequest)(nil),                     // 3: aesm.Request.GetQuoteRequest
+		(*Request_GetLaunchTokenRequest)(nil),               // 4: aesm.Request.GetLaunchTokenRequest
+		(*Request_ReportAttestationErrorRequest)(nil),       // 5: aesm.Request.ReportAttestationErrorRequest
+		(*Request_CreateSessionRequest)(nil),                // 6: aesm.Request.CreateSessionRequest
+		(*Request_InvokeServiceRequest)(nil),                // 7: aesm.Request.InvokeServiceRequest
+		(*Request_ExchangeReportRequest)(nil),               // 8: aesm.Request.ExchangeReportRequest
+		(*Request_CloseSessionRequest)(nil),                 // 9: aesm.Request.CloseSessionRequest
+		(*Request_GetPsCapRequest)(nil),                     // 10: aesm.Request.GetPsCapRequest
+		(*Request_GetWhiteListSizeRequest)(nil),             // 11: aesm.Request.GetWhiteListSizeRequest
+		(*Request_GetWhiteListRequest)(nil),                 // 12: aesm.Request.GetWhiteListRequest
+		(*Request_SGXGetExtendedEpidGroupIdRequest)(nil),    // 13: aesm.Request.SGXGetExtendedEpidGroupIdRequest
+		(*Request_SGXSwitchExtendedEpidGroupRequest)(nil),   // 14: aesm.Request.SGXSwitchExtendedEpidGroupRequest
+		(*Response_InitQuoteResponse)(nil),                  // 15: aesm.Response.InitQuoteResponse
+		(*Response_GetQuoteResponse)(nil),                   // 16: aesm.Response.GetQuoteResponse
+		(*Response_GetLaunchTokenResponse)(nil),             // 17: aesm.Response.GetLaunchTokenResponse
+		(*Response_ReportAttestationErrorResponse)(nil),     // 18: aesm.Response.ReportAttestationErrorResponse
+		(*Response_CreateSessionResponse)(nil),              // 19: aesm.Response.CreateSessionResponse
+		(*Response_InvokeServiceResponse)(nil),              // 20: aesm.Response.InvokeServiceResponse
+		(*Response_ExchangeReportResponse)(nil),             // 21: aesm.Response.ExchangeReportResponse
+		(*Response_CloseSessionResponse)(nil),               // 22: aesm.Response.CloseSessionResponse
+		(*Response_GetPsCapResponse)(nil),                   // 23: aesm.Response.GetPsCapResponse
+		(*Response_GetWhiteListSizeResponse)(nil),           // 24: aesm.Response.GetWhiteListSizeResponse
+		(*Response_GetWhiteListResponse)(nil),               // 25: aesm.Response.GetWhiteListResponse
+		(*Response_SGXGetExtendedEpidGroupIdResponse)(nil),  // 26: aesm.Response.SGXGetExtendedEpidGroupIdResponse
+		(*Response_SGXSwitchExtendedEpidGroupResponse)(nil), // 27: aesm.Response.SGXSwitchExtendedEpidGroupResponse
+	}
+)
+
 var file_aesm_proto_proto_depIdxs = []int32{
 	2,  // 0: aesm.Request.initQuoteReq:type_name -> aesm.Request.InitQuoteRequest
 	3,  // 1: aesm.Request.getQuoteReq:type_name -> aesm.Request.GetQuoteRequest

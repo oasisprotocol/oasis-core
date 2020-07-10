@@ -27,7 +27,7 @@ const (
 var (
 	defaultRuntimeID common.Namespace
 	fakeAddresses    = []node.Address{
-		node.Address{
+		{
 			TCPAddr: net.TCPAddr{
 				IP:   net.IPv4(127, 0, 0, 1),
 				Port: 11004,

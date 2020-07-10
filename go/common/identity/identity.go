@@ -184,7 +184,7 @@ func LoadOrGenerate(dataDir string, signerFactory signature.SignerFactory, persi
 	return doLoadOrGenerate(dataDir, signerFactory, true, persistTLS)
 }
 
-func doLoadOrGenerate(dataDir string, signerFactory signature.SignerFactory, shouldGenerate bool, persistTLS bool) (*Identity, error) {
+func doLoadOrGenerate(dataDir string, signerFactory signature.SignerFactory, shouldGenerate, persistTLS bool) (*Identity, error) {
 	var signers []signature.Signer
 	for _, v := range []struct {
 		role  signature.SignerRole
