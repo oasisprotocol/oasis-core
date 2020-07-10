@@ -12,6 +12,7 @@ all: build
 generate:
 	@$(ECHO) "$(MAGENTA)*** Running go generate...$(OFF)"
 	@$(GO) generate ./...
+	@$(MAKE) fmt
 
 # Build.
 # List of Go binaries to build.
@@ -48,8 +49,9 @@ $(test-vectors-targets):
 
 # Format code.
 fmt:
-	@$(ECHO) "$(CYAN)*** Running go fmt...$(OFF)"
-	@$(GO) fmt ./...
+	@$(ECHO) "$(CYAN)*** Running Go formatters...$(OFF)"
+	@gofumpt -s -w .
+	@gofumports -w -local github.com/oasisprotocol/oasis-core .
 
 # Lint.
 lint:

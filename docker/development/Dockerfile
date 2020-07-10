@@ -4,8 +4,9 @@ FROM ubuntu:18.04
 ARG GO_VERSION=1.14.3
 ARG GO_PROTOC_VERSION=3.6.1
 ARG GO_PROTOC_GEN_GO_VERSION=1.21.0
-ARG GOLANGCILINT_VERSION=1.23.6
+ARG GOLANGCILINT_VERSION=1.28.2
 ARG GOCOVMERGE_VERSION=b5bfa59ec0adc420475f97f89b58045c721d761c
+ARG GOFUMPT_VERSION=abc0db2c416aca0f60ea33c23c76665f6e7ba0b6
 ARG RUST_NIGHTLY_VERSION=2020-06-09
 
 ARG DEBIAN_FRONTEND=noninteractive
@@ -64,7 +65,10 @@ RUN wget https://dl.google.com/go/go${GO_VERSION}.linux-amd64.tar.gz && \
     curl -sfL -o nancy https://github.com/sonatype-nexus-community/nancy/releases/download/v0.0.39/nancy-linux.amd64-v0.0.39 && \
     echo 'eb3a93d7db24d115e6e67a2b17dba402978f856c891fa6f0ff09ad17ac53ebb5 nancy' | sha256sum -c && \
     mv nancy /go/bin/nancy && \
-    chmod +x /go/bin/nancy
+    chmod +x /go/bin/nancy && \
+    # Install gofumpt for code formatting.
+    GO111MODULE=on go get mvdan.cc/gofumpt@${GOFUMPT_VERSION} && \
+    GO111MODULE=on go get mvdan.cc/gofumpt/gofumports@${GOFUMPT_VERSION}
 
 # Install bubblewrap (we need version 0.3.3 which is not available for 18.04).
 RUN wget http://archive.ubuntu.com/ubuntu/pool/main/b/bubblewrap/bubblewrap_0.3.3-2_amd64.deb && \
