@@ -164,11 +164,11 @@ func (net *Network) NewStorage(cfg *StorageCfg) (*Storage, error) {
 
 	// Pre-provision the node identity so that we can update the entity.
 	seed := fmt.Sprintf(storageIdentitySeedTemplate, len(net.storageWorkers))
-	publicKey, sentryClientCert, err := net.provisionNodeIdentity(storageDir, seed, cfg.DisableCertRotation)
+	nodeKey, p2pKey, sentryClientCert, err := net.provisionNodeIdentity(storageDir, seed, cfg.DisableCertRotation)
 	if err != nil {
 		return nil, fmt.Errorf("oasis/storage: failed to provision node identity: %w", err)
 	}
-	if err := cfg.Entity.addNode(publicKey); err != nil {
+	if err := cfg.Entity.addNode(nodeKey); err != nil {
 		return nil, err
 	}
 	// Sentry client cert.
@@ -197,14 +197,14 @@ func (net *Network) NewStorage(cfg *StorageCfg) (*Storage, error) {
 		ignoreApplies:           cfg.IgnoreApplies,
 		checkpointCheckInterval: cfg.CheckpointCheckInterval,
 		sentryPubKey:            sentryPubKey,
-		tmAddress:               crypto.PublicKeyToTendermint(&publicKey).Address().String(),
+		tmAddress:               crypto.PublicKeyToTendermint(&p2pKey).Address().String(),
 		consensusPort:           net.nextNodePort,
 		clientPort:              net.nextNodePort + 1,
 		p2pPort:                 net.nextNodePort + 2,
 		runtimes:                cfg.Runtimes,
 	}
 	worker.doStartNode = worker.startNode
-	copy(worker.NodeID[:], publicKey[:])
+	copy(worker.NodeID[:], nodeKey[:])
 
 	net.storageWorkers = append(net.storageWorkers, worker)
 	net.nextNodePort += 3

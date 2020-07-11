@@ -229,8 +229,7 @@ type tendermintService struct { // nolint: maligned
 
 	genesis                  *genesisAPI.Document
 	genesisProvider          genesisAPI.Provider
-	consensusSigner          signature.Signer
-	nodeSigner               signature.Signer
+	identity                 *identity.Identity
 	dataDir                  string
 	isInitialized, isStarted bool
 	startedCh                chan struct{}
@@ -372,7 +371,7 @@ func (t *tendermintService) GetAddresses() ([]node.ConsensusAddress, error) {
 	if err = addr.Address.UnmarshalText([]byte(u.Host)); err != nil {
 		return nil, fmt.Errorf("tendermint: failed to parse external address host: %w", err)
 	}
-	addr.ID = t.nodeSigner.Public()
+	addr.ID = t.identity.P2PSigner.Public()
 
 	return []node.ConsensusAddress{addr}, nil
 }
@@ -856,7 +855,7 @@ func (t *tendermintService) GetStatus(ctx context.Context) (*consensusAPI.Status
 	if err != nil {
 		return nil, fmt.Errorf("failed to load validator set: %w", err)
 	}
-	consensusPk := t.consensusSigner.Public()
+	consensusPk := t.identity.ConsensusSigner.Public()
 	consensusAddr := []byte(crypto.PublicKeyToTendermint(&consensusPk).Address())
 	status.IsValidator = vals.HasAddress(consensusAddr)
 
@@ -1072,7 +1071,7 @@ func (t *tendermintService) WatchTendermintBlocks() (<-chan *tmtypes.Block, *pub
 }
 
 func (t *tendermintService) ConsensusKey() signature.PublicKey {
-	return t.consensusSigner.Public()
+	return t.identity.ConsensusSigner.Public()
 }
 
 func (t *tendermintService) initEpochtime() error {
@@ -1124,7 +1123,7 @@ func (t *tendermintService) lazyInit() error {
 		Pruning:         pruneCfg,
 		HaltEpochHeight: t.genesis.HaltEpoch,
 		MinGasPrice:     viper.GetUint64(CfgConsensusMinGasPrice),
-		OwnTxSigner:     t.nodeSigner.Public(),
+		OwnTxSigner:     t.identity.NodeSigner.Public(),
 		DisableCheckTx:  viper.GetBool(CfgConsensusDebugDisableCheckTx) && cmflags.DebugDontBlameOasis(),
 	}
 	t.mux, err = abci.NewApplicationServer(t.ctx, t.upgrader, appConfig)
@@ -1212,7 +1211,7 @@ func (t *tendermintService) lazyInit() error {
 		)
 	}
 
-	tendermintPV, err := crypto.LoadOrGeneratePrivVal(tendermintDataDir, t.consensusSigner)
+	tendermintPV, err := crypto.LoadOrGeneratePrivVal(tendermintDataDir, t.identity.ConsensusSigner)
 	if err != nil {
 		return err
 	}
@@ -1278,7 +1277,7 @@ func (t *tendermintService) lazyInit() error {
 
 		t.node, err = tmnode.NewNode(tenderConfig,
 			tendermintPV,
-			&tmp2p.NodeKey{PrivKey: crypto.SignerToTendermint(t.nodeSigner)},
+			&tmp2p.NodeKey{PrivKey: crypto.SignerToTendermint(t.identity.P2PSigner)},
 			tmproxy.NewLocalClientCreator(t.mux.Mux()),
 			tendermintGenesisProvider,
 			wrapDbProvider,
@@ -1502,7 +1501,7 @@ func (t *tendermintService) metrics() {
 	defer sub.Close()
 
 	// Tendermint uses specific public key encoding.
-	pubKey := t.consensusSigner.Public()
+	pubKey := t.identity.ConsensusSigner.Public()
 	myAddr := []byte(crypto.PublicKeyToTendermint(&pubKey).Address())
 	for {
 		var blk *tmtypes.Block
@@ -1556,8 +1555,7 @@ func New(ctx context.Context, dataDir string, identity *identity.Identity, upgra
 		svcMgr:                cmbackground.NewServiceManager(logging.GetLogger("tendermint/servicemanager")),
 		upgrader:              upgrader,
 		blockNotifier:         pubsub.NewBroker(false),
-		consensusSigner:       identity.ConsensusSigner,
-		nodeSigner:            identity.NodeSigner,
+		identity:              identity,
 		genesis:               genesisDoc,
 		genesisProvider:       genesisProvider,
 		ctx:                   ctx,

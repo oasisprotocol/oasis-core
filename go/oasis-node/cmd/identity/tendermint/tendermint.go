@@ -70,7 +70,7 @@ func printTmAddress(desc, keyFile string) {
 
 func showNodeAddress(cmd *cobra.Command, args []string) {
 	desc := strings.TrimPrefix(cmd.Short, "outputs ")
-	printTmAddress(desc, identity.NodeKeyPubFilename)
+	printTmAddress(desc, identity.P2PKeyPubFilename)
 }
 
 func showConsensusAddress(cmd *cobra.Command, args []string) {

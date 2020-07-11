@@ -317,11 +317,11 @@ func (net *Network) NewKeymanager(cfg *KeymanagerCfg) (*Keymanager, error) {
 
 	// Pre-provision the node identity so that we can update the entity.
 	seed := fmt.Sprintf(keymanagerIdentitySeedTemplate, len(net.keymanagers))
-	publicKey, sentryClientCert, err := net.provisionNodeIdentity(kmDir, seed, false)
+	nodeKey, p2pKey, sentryClientCert, err := net.provisionNodeIdentity(kmDir, seed, false)
 	if err != nil {
 		return nil, fmt.Errorf("oasis/keymanager: failed to provision node identity: %w", err)
 	}
-	if err := cfg.Entity.addNode(publicKey); err != nil {
+	if err := cfg.Entity.addNode(nodeKey); err != nil {
 		return nil, err
 	}
 	// Sentry client cert.
@@ -350,14 +350,14 @@ func (net *Network) NewKeymanager(cfg *KeymanagerCfg) (*Keymanager, error) {
 		entity:           cfg.Entity,
 		policy:           cfg.Policy,
 		sentryIndices:    cfg.SentryIndices,
-		tmAddress:        crypto.PublicKeyToTendermint(&publicKey).Address().String(),
+		tmAddress:        crypto.PublicKeyToTendermint(&p2pKey).Address().String(),
 		sentryPubKey:     sentryPubKey,
 		consensusPort:    net.nextNodePort,
 		workerClientPort: net.nextNodePort + 1,
 		mayGenerate:      len(net.keymanagers) == 0,
 	}
 	km.doStartNode = km.startNode
-	copy(km.NodeID[:], publicKey[:])
+	copy(km.NodeID[:], nodeKey[:])
 
 	net.keymanagers = append(net.keymanagers, km)
 	net.nextNodePort += 2

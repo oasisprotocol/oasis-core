@@ -103,7 +103,7 @@ func NewSeed(dataDir string, identity *identity.Identity, genesisProvider genesi
 	cfg.AddrBookStrict = !viper.GetBool(CfgDebugP2PAddrBookLenient)
 	// MaxNumInboundPeers/MaxNumOutboundPeers
 
-	nodeKey := &p2p.NodeKey{PrivKey: crypto.SignerToTendermint(identity.NodeSigner)}
+	nodeKey := &p2p.NodeKey{PrivKey: crypto.SignerToTendermint(identity.P2PSigner)}
 
 	doc, err := genesisProvider.GetGenesisDocument()
 	if err != nil {
@@ -121,7 +121,7 @@ func NewSeed(dataDir string, identity *identity.Identity, genesisProvider genesi
 		Network:       doc.ChainContext()[:types.MaxChainIDLen],
 		Version:       "0.0.1",
 		Channels:      []byte{pex.PexChannel},
-		Moniker:       "oasis-seed-" + identity.NodeSigner.Public().String(),
+		Moniker:       "oasis-seed-" + identity.P2PSigner.Public().String(),
 	}
 
 	// Carve out all of the services.
