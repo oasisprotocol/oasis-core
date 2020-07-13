@@ -77,12 +77,12 @@ func doUnsafeReset(cmd *cobra.Command, args []string) {
 	if viper.GetBool(CfgPreserveLocalStorage) {
 		logger.Info("preserving untrusted local storage")
 	} else {
-		globs = append(globs, filepath.Join(runtimesGlob, runtimeLocalStorageGlob))
+		globs = append(globs, runtimeLocalStorageGlob)
 	}
 	if viper.GetBool(CfgPreserveMKVSDatabase) {
 		logger.Info("preserving MKVS database")
 	} else {
-		globs = append(globs, filepath.Join(runtimesGlob, runtimeMkvsDatabaseGlob))
+		globs = append(globs, runtimeMkvsDatabaseGlob)
 	}
 
 	// Enumerate the locations to purge.
