@@ -23,6 +23,12 @@ func newLateStartImpl(name, clientBinary string, clientArgs []string) scenario.S
 	}
 }
 
+func (sc *lateStartImpl) Clone() scenario.Scenario {
+	return &lateStartImpl{
+		runtimeImpl: *sc.runtimeImpl.Clone().(*runtimeImpl),
+	}
+}
+
 func (sc *lateStartImpl) Fixture() (*oasis.NetworkFixture, error) {
 	f, err := sc.runtimeImpl.Fixture()
 	if err != nil {
