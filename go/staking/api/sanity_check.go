@@ -3,6 +3,7 @@ package api
 
 import (
 	"fmt"
+	"regexp"
 
 	"github.com/oasisprotocol/oasis-core/go/common/quantity"
 	epochtime "github.com/oasisprotocol/oasis-core/go/epochtime/api"
@@ -226,6 +227,22 @@ func SanityCheckAccountShares(
 func (g *Genesis) SanityCheck(now epochtime.EpochTime) error { // nolint: gocyclo
 	if err := g.Parameters.SanityCheck(); err != nil {
 		return fmt.Errorf("staking: sanity check failed: %w", err)
+	}
+
+	tokenSymbolLength := len(g.TokenSymbol)
+	if tokenSymbolLength == 0 {
+		return fmt.Errorf("staking: sanity check failed: token symbol is empty")
+	}
+	if tokenSymbolLength > TokenSymbolMaxLength {
+		return fmt.Errorf("staking: sanity check failed: token symbol exceeds maximum length")
+	}
+	match := regexp.MustCompile(TokenSymbolRegexp).FindString(g.TokenSymbol)
+	if match == "" {
+		return fmt.Errorf("staking: sanity check failed: token symbol should match '%s'", TokenSymbolRegexp)
+	}
+
+	if g.TokenValueExponent > TokenValueExponentMaxValue {
+		return fmt.Errorf("staking: sanity check failed: token value exponent is invalid")
 	}
 
 	if !g.TotalSupply.IsValid() {

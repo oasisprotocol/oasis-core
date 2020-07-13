@@ -47,8 +47,8 @@ func (parallel) Run(
 	xfer := &staking.Transfer{
 		To: staking.NewAddress(fundingAccount.Public()),
 	}
-	if err = xfer.Tokens.FromInt64(parallelTxTransferAmount); err != nil {
-		return fmt.Errorf("transfer tokens FromInt64 %d: %w", parallelTxTransferAmount, err)
+	if err = xfer.Amount.FromInt64(parallelTxTransferAmount); err != nil {
+		return fmt.Errorf("transfer base units FromInt64 %d: %w", parallelTxTransferAmount, err)
 	}
 	txGasAmount, err = cnsc.EstimateGas(ctx, &consensus.EstimateGasRequest{
 		Signer:      fundingAccount.Public(),
@@ -100,8 +100,8 @@ func (parallel) Run(
 				transfer := staking.Transfer{
 					To: addr,
 				}
-				if err = transfer.Tokens.FromInt64(parallelTxTransferAmount); err != nil {
-					errCh <- fmt.Errorf("transfer tokens FromInt64 %d: %w", parallelTxTransferAmount, err)
+				if err = transfer.Amount.FromInt64(parallelTxTransferAmount); err != nil {
+					errCh <- fmt.Errorf("transfer base units FromInt64 %d: %w", parallelTxTransferAmount, err)
 					return
 				}
 

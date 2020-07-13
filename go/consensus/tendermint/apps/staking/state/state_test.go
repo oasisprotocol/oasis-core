@@ -219,8 +219,8 @@ func TestRewardAndSlash(t *testing.T) {
 	require.NoError(err, "Account")
 	require.Equal(mustInitQuantity(t, 200), escrowAccount.Escrow.Active.Balance, "reward first step - escrow active escrow")
 	require.Equal(mustInitQuantity(t, 100), escrowAccount.Escrow.Debonding.Balance, "reward first step - escrow debonding escrow")
-	// Reward is 100 tokens, with 80 added to the pool and 20 deposited as commission.
-	// We add to the pool first, so the delegation becomes 100 shares : 180 tokens.
+	// Reward is 100 base units, with 80 added to the pool and 20 deposited as commission.
+	// We add to the pool first, so the delegation becomes 100 shares : 180 base units.
 	// Then we deposit the 20 for commission, which comes out to 11 shares.
 	del, err = s.Delegation(ctx, delegatorAddr, escrowAddr)
 	require.NoError(err, "Delegation")
@@ -255,7 +255,7 @@ func TestRewardAndSlash(t *testing.T) {
 	require.NoError(err, "slash escrow")
 	require.True(slashedNonzero, "slashed nonzero")
 
-	// 40 token loss.
+	// Loss of 40 base units.
 	delegatorAccount, err = s.Account(ctx, delegatorAddr)
 	require.NoError(err, "Account")
 	require.Equal(mustInitQuantity(t, 100), delegatorAccount.General.Balance, "slash - delegator general")

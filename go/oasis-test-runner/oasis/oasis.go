@@ -802,6 +802,7 @@ func (net *Network) makeGenesis() error {
 		"--" + genesis.CfgRegistryDebugAllowTestRuntimes, "true",
 		"--scheduler.max_validators_per_entity", strconv.Itoa(len(net.Validators())),
 		"--" + genesis.CfgConsensusGasCostsTxByte, strconv.FormatUint(net.cfg.ConsensusGasCostsTxByte, 10),
+		"--" + genesis.CfgStakingTokenSymbol, "TEST",
 	}
 	if net.cfg.EpochtimeMock {
 		args = append(args, "--epochtime.debug.mock_backend")

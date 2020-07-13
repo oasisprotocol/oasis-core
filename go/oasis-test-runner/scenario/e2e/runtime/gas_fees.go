@@ -34,7 +34,7 @@ func (sc *gasFeesRuntimesImpl) Fixture() (*oasis.NetworkFixture, error) {
 
 	// Use deterministic identities as we need to allocate funds to nodes.
 	f.Network.DeterministicIdentities = true
-	// Give our nodes some tokens.
+	// Give our nodes some stake.
 	f.Network.StakingGenesis = "tests/fixture-data/gas-fees-runtimes/staking-genesis.json"
 	// Update validators to require fee payments.
 	for i := range f.Validators {

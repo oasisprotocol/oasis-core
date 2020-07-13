@@ -1,8 +1,8 @@
 # Staking
 
 The staking service is responsible for managing the staking ledger in the
-consensus layer. It enables operations like transferring tokens between accounts
-and escrowing tokens for specific needs (e.g., operating nodes).
+consensus layer. It enables operations like transferring stake between accounts
+and escrowing stake for specific needs (e.g., operating nodes).
 
 The service interface definition lives in [`go/staking/api`]. It defines the
 supported queries and transactions. For more information you can also check out
@@ -11,6 +11,25 @@ the [consensus service API documentation].
 <!-- markdownlint-disable line-length -->
 [`go/staking/api`]: ../../go/staking/api
 [consensus service API documentation]: https://pkg.go.dev/github.com/oasisprotocol/oasis-core/go/staking/api?tab=doc
+<!-- markdownlint-enable line-length -->
+
+## Tokens and Base Units
+
+Stake amounts can be denominated in tokens and base units.
+
+Tokens are used in user-facing scenarios (e.g. CLI commands) where the token
+amount is prefixed with the token's ticker symbol as defined by the [`Genesis`'
+`TokenSymbol` field][pkggodev-genesis].
+
+Another [`Genesis`' field, `TokenValueExponent`][pkggodev-genesis], defines the
+token's value base-10 exponent.
+For example, if `TokenValueExponent` is 6, then 1 token equals 10^6 (i.e. one
+million) base units.
+
+Internally, base units are used for all stake calculation and processing.
+
+<!-- markdownlint-disable line-length -->
+[pkggodev-genesis]: https://pkg.go.dev/github.com/oasisprotocol/oasis-core/go/staking/api?tab=doc#Genesis
 <!-- markdownlint-enable line-length -->
 
 ## Accounts
@@ -68,7 +87,7 @@ transaction.
 
 ### Escrow
 
-Escrow accounts are used to hold funds delegated for specific consensus-layer
+Escrow accounts are used to hold stake delegated for specific consensus-layer
 operations (e.g., registering and running nodes).
 Their balance is subject to special delegation provisions and a debonding
 period.
@@ -89,24 +108,23 @@ claim can be satisfied.
 
 #### Delegation
 
-When a delegator wants to delegate some of amount of tokens to a staking
-account, he needs to escrow tokens using [Add Escrow method].
+When a delegator wants to delegate some of amount of stake to a staking account,
+he needs to escrow stake using [Add Escrow method].
 
-Similarly, when a delegator wants to reclaim some amount of escrowed tokens back
-to his general account, he needs to reclaim tokens using [Reclaim Escrow
-method].
+Similarly, when a delegator wants to reclaim some amount of escrowed stake back
+to his general account, he needs to reclaim stake using [Reclaim Escrow method].
 
 To simplify accounting, each escrow results in the delegator account being
-issued shares which can be converted back into staking tokens during the reclaim
-escrow operation.
+issued shares which can be converted back to stake during the reclaim escrow
+operation.
 
-When a delegator delegates some amount of tokens to an escrow account, the
+When a delegator delegates some amount of stake to an escrow account, the
 delegator receives the number of shares proportional to the current
-_share price_ (in tokens) calculated from the total number of tokens
+_share price_ (in base units) calculated from the total number of stake
 delegated to an escrow account so far and the number of shares issued so far:
 
 ```
-shares_per_token = account_issued_shares / account_delegated_tokens
+shares_per_base_unit = account_issued_shares / account_delegated_base_units
 ```
 
 For example, if an escrow account has the following state:
@@ -121,9 +139,9 @@ For example, if an escrow account has the following state:
 }
 ```
 
-then the current share price (i.e. `shares_per_token`) is 1000 / 250 = 4.
+then the current share price (i.e. `shares_per_base_unit`) is 1000 / 250 = 4.
 
-Delegating 500 tokens to this escrow account would result in 500 * 4 = 2000
+Delegating 500 base units to this escrow account would result in 500 * 4 = 2000
 newly issued shares.
 
 Thus, the escrow account would have the following state afterwards:
@@ -138,18 +156,19 @@ Thus, the escrow account would have the following state afterwards:
 }
 ```
 
-When a delegator wants to reclaim a certain number of escrowed tokens, the
-_token price_ (in shares) must be calculated based on the escrow account's
+When a delegator wants to reclaim a certain number of escrowed stake, the
+_base unit price_ (in shares) must be calculated based on the escrow account's
 current active balance and the number of issued shares:
 
 ```text
-tokens_per_share = account_delegated_tokens / account_issued_shares
+base_units_per_share = account_delegated_base_units / account_issued_shares
 ```
 
-Returning to our example escrow account, the current token price (i.e.
-`tokens_per_share`) is 750 / 3000 = 0.25.
+Returning to our example escrow account, the current base unit price (i.e.
+`base_units_per_share`) is 750 / 3000 = 0.25.
 
-Reclaiming 1200 shares would result in 1200 * 0.25 = 300 tokens being reclaimed.
+Reclaiming 1200 shares would result in 1200 * 0.25 = 300 base units being
+reclaimed.
 
 The escrow account would have the following state afterwards:
 
@@ -164,7 +183,7 @@ The escrow account would have the following state afterwards:
 ```
 
 Reclaiming escrow does not complete immediately, but may be subject to a
-debonding period during in which the tokens still remain escrowed.
+debonding period during in which the stake still remains escrowed.
 
 [Add Escrow method]: #add-escrow
 [Reclaim Escrow method]: #reclaim-escrow
@@ -206,7 +225,7 @@ make -C go staking/gen_vectors
 
 ### Transfer
 
-Transfer enables token transfer between different accounts in the staking
+Transfer enables stake transfer between different accounts in the staking
 ledger. A new transfer transaction can be generated using
 [`NewTransferTx` function].
 
@@ -220,15 +239,15 @@ staking.Transfer
 
 ```golang
 type Transfer struct {
-    To     Address           `json:"xfer_to"`
-    Tokens quantity.Quantity `json:"xfer_tokens"`
+    To     Address           `json:"to"`
+    Amount quantity.Quantity `json:"amount"`
 }
 ```
 
 **Fields:**
 
-* `xfer_to` specifies the destination account's address.
-* `xfer_tokens` specifies the amount of tokens to transfer.
+* `to` specifies the destination account's address.
+* `amount` specifies the amount of base units to transfer.
 
 The transaction signer implicitly specifies the source account.
 
@@ -239,7 +258,7 @@ The transaction signer implicitly specifies the source account.
 
 ### Burn
 
-Burn destroys some tokens in the caller's account. A new burn transaction can be
+Burn destroys some stake in the caller's account. A new burn transaction can be
 generated using [`NewBurnTx` function].
 
 **Method name:**
@@ -252,13 +271,13 @@ staking.Burn
 
 ```golang
 type Burn struct {
-    Tokens quantity.Quantity `json:"burn_tokens"`
+    Amount quantity.Quantity `json:"amount"`
 }
 ```
 
 **Fields:**
 
-* `burn_tokens` specifies the amount of tokens to burn.
+* `amount` specifies the amount of base units to burn.
 
 The transaction signer implicitly specifies the caller's account.
 
@@ -269,7 +288,7 @@ The transaction signer implicitly specifies the caller's account.
 
 ### Add Escrow
 
-Escrow transfers tokens into an escrow account.
+Escrow transfers stake into an escrow account.
 For more details, see the [Delegation section] of this document.
 A new add escrow transaction can be generated using [`NewAddEscrowTx` function].
 
@@ -283,15 +302,15 @@ staking.AddEscrow
 
 ```golang
 type Escrow struct {
-    Account Address           `json:"escrow_account"`
-    Tokens  quantity.Quantity `json:"escrow_tokens"`
+    Account Address           `json:"account"`
+    Amount  quantity.Quantity `json:"amount"`
 }
 ```
 
 **Fields:**
 
-* `escrow_account` specifies the destination escrow account's address.
-* `escrow_tokens` specifies the amount of tokens to transfer.
+* `account` specifies the destination escrow account's address.
+* `amount` specifies the amount of base units to transfer.
 
 The transaction signer implicitly specifies the source account.
 
@@ -318,15 +337,15 @@ staking.ReclaimEscrow
 
 ```golang
 type ReclaimEscrow struct {
-    Account Address           `json:"escrow_account"`
-    Shares  quantity.Quantity `json:"reclaim_shares"`
+    Account Address           `json:"account"`
+    Shares  quantity.Quantity `json:"shares"`
 }
 ```
 
 **Fields:**
 
-* `escrow_account` specifies the source escrow account's address.
-* `reclaim_shares` specifies the amount of shares to reclaim.
+* `account` specifies the source escrow account's address.
+* `shares` specifies the number of shares to reclaim.
 
 The transaction signer implicitly specifies the destination account.
 

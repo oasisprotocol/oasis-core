@@ -80,7 +80,7 @@ func (app *stakingApplication) disburseFeesP(
 		evt := &staking.TransferEvent{
 			From:   staking.FeeAccumulatorAddress,
 			To:     proposerAddr,
-			Tokens: *feeProposerAmt,
+			Amount: *feeProposerAmt,
 		}
 		ctx.EmitEvent(abciAPI.NewEventBuilder(app.Name()).Attribute(KeyTransfer, cbor.Marshal(evt)))
 	}
@@ -103,7 +103,7 @@ func (app *stakingApplication) disburseFeesP(
 		evt := &staking.TransferEvent{
 			From:   staking.FeeAccumulatorAddress,
 			To:     staking.CommonPoolAddress,
-			Tokens: *remaining,
+			Amount: *remaining,
 		}
 		ctx.EmitEvent(abciAPI.NewEventBuilder(app.Name()).Attribute(KeyTransfer, cbor.Marshal(evt)))
 	}
@@ -196,7 +196,7 @@ func (app *stakingApplication) disburseFeesVQ(
 		evt := &staking.TransferEvent{
 			From:   staking.FeeAccumulatorAddress,
 			To:     proposerAddr,
-			Tokens: *nextProposerTotal,
+			Amount: *nextProposerTotal,
 		}
 		ctx.EmitEvent(abciAPI.NewEventBuilder(app.Name()).Attribute(KeyTransfer, cbor.Marshal(evt)))
 	}
@@ -220,7 +220,7 @@ func (app *stakingApplication) disburseFeesVQ(
 			evt := &staking.TransferEvent{
 				From:   staking.FeeAccumulatorAddress,
 				To:     voterAddr,
-				Tokens: *shareVote,
+				Amount: *shareVote,
 			}
 			ctx.EmitEvent(abciAPI.NewEventBuilder(app.Name()).Attribute(KeyTransfer, cbor.Marshal(evt)))
 		}
@@ -244,7 +244,7 @@ func (app *stakingApplication) disburseFeesVQ(
 		evt := &staking.TransferEvent{
 			From:   staking.FeeAccumulatorAddress,
 			To:     staking.CommonPoolAddress,
-			Tokens: *remaining,
+			Amount: *remaining,
 		}
 		ctx.EmitEvent(abciAPI.NewEventBuilder(app.Name()).Attribute(KeyTransfer, cbor.Marshal(evt)))
 	}

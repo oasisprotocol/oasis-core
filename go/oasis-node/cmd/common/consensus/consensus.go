@@ -23,7 +23,7 @@ const (
 	// CfgTxNonce configures the nonce.
 	CfgTxNonce = "transaction.nonce"
 
-	// CfgTxFeeAmount configures the fee amount in tokens.
+	// CfgTxFeeAmount configures the fee amount in base units.
 	CfgTxFeeAmount = "transaction.fee.amount"
 
 	// CfgTxFeeGas configures the maximum gas limit.
@@ -145,7 +145,7 @@ func init() {
 	_ = viper.BindPFlags(TxFileFlags)
 
 	TxFlags.Uint64(CfgTxNonce, 0, "nonce of the signing account")
-	TxFlags.Uint64(CfgTxFeeAmount, 0, "transaction fee in tokens")
+	TxFlags.Uint64(CfgTxFeeAmount, 0, "transaction fee in base units")
 	TxFlags.String(CfgTxFeeGas, "0", "maximum transaction gas limit")
 	TxFlags.Bool(CfgTxUnsigned, false, "generate an unsigned transaction")
 	_ = viper.BindPFlags(TxFlags)

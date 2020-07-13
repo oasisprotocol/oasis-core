@@ -47,13 +47,13 @@ func (app *stakingApplication) transfer(ctx *api.Context, state *stakingState.Mu
 
 	if fromAddr.Equal(xfer.To) {
 		// Handle transfer to self as just a balance check.
-		if from.General.Balance.Cmp(&xfer.Tokens) < 0 {
+		if from.General.Balance.Cmp(&xfer.Amount) < 0 {
 			err = staking.ErrInsufficientBalance
 			ctx.Logger().Error("Transfer: self-transfer greater than balance",
 				"err", err,
 				"from", fromAddr,
 				"to", xfer.To,
-				"amount", xfer.Tokens,
+				"amount", xfer.Amount,
 			)
 			return err
 		}
@@ -65,12 +65,12 @@ func (app *stakingApplication) transfer(ctx *api.Context, state *stakingState.Mu
 		if err != nil {
 			return fmt.Errorf("failed to fetch account: %w", err)
 		}
-		if err = quantity.Move(&to.General.Balance, &from.General.Balance, &xfer.Tokens); err != nil {
+		if err = quantity.Move(&to.General.Balance, &from.General.Balance, &xfer.Amount); err != nil {
 			ctx.Logger().Error("Transfer: failed to move balance",
 				"err", err,
 				"from", fromAddr,
 				"to", xfer.To,
-				"amount", xfer.Tokens,
+				"amount", xfer.Amount,
 			)
 			return err
 		}
@@ -87,13 +87,13 @@ func (app *stakingApplication) transfer(ctx *api.Context, state *stakingState.Mu
 	ctx.Logger().Debug("Transfer: executed transfer",
 		"from", fromAddr,
 		"to", xfer.To,
-		"amount", xfer.Tokens,
+		"amount", xfer.Amount,
 	)
 
 	evt := &staking.TransferEvent{
 		From:   fromAddr,
 		To:     xfer.To,
-		Tokens: xfer.Tokens,
+		Amount: xfer.Amount,
 	}
 	ctx.EmitEvent(api.NewEventBuilder(app.Name()).Attribute(KeyTransfer, cbor.Marshal(evt)))
 
@@ -124,11 +124,11 @@ func (app *stakingApplication) burn(ctx *api.Context, state *stakingState.Mutabl
 		return fmt.Errorf("failed to fetch account: %w", err)
 	}
 
-	if err = from.General.Balance.Sub(&burn.Tokens); err != nil {
-		ctx.Logger().Error("Burn: failed to burn tokens",
+	if err = from.General.Balance.Sub(&burn.Amount); err != nil {
+		ctx.Logger().Error("Burn: failed to burn stake",
 			"err", err,
 			"from", fromAddr,
-			"amount", burn.Tokens,
+			"amount", burn.Amount,
 		)
 		return err
 	}
@@ -138,7 +138,7 @@ func (app *stakingApplication) burn(ctx *api.Context, state *stakingState.Mutabl
 		return fmt.Errorf("failed to fetch total supply: %w", err)
 	}
 
-	_ = totalSupply.Sub(&burn.Tokens)
+	_ = totalSupply.Sub(&burn.Amount)
 
 	if err = state.SetAccount(ctx, fromAddr, from); err != nil {
 		return fmt.Errorf("failed to set account: %w", err)
@@ -147,14 +147,14 @@ func (app *stakingApplication) burn(ctx *api.Context, state *stakingState.Mutabl
 		return fmt.Errorf("failed to set total supply: %w", err)
 	}
 
-	ctx.Logger().Debug("Burn: burnt tokens",
+	ctx.Logger().Debug("Burn: burnt stake",
 		"from", fromAddr,
-		"amount", burn.Tokens,
+		"amount", burn.Amount,
 	)
 
 	evt := &staking.BurnEvent{
 		Owner:  fromAddr,
-		Tokens: burn.Tokens,
+		Amount: burn.Amount,
 	}
 	ctx.EmitEvent(api.NewEventBuilder(app.Name()).Attribute(KeyBurn, cbor.Marshal(evt)))
 
@@ -175,8 +175,8 @@ func (app *stakingApplication) addEscrow(ctx *api.Context, state *stakingState.M
 		return err
 	}
 
-	// Check if sender provided at least a minimum amount of tokens.
-	if escrow.Tokens.Cmp(&params.MinDelegationAmount) < 0 {
+	// Check if sender provided at least a minimum amount of stake.
+	if escrow.Amount.Cmp(&params.MinDelegationAmount) < 0 {
 		return staking.ErrInvalidArgument
 	}
 
@@ -213,12 +213,12 @@ func (app *stakingApplication) addEscrow(ctx *api.Context, state *stakingState.M
 		return fmt.Errorf("failed to fetch delegation: %w", err)
 	}
 
-	if err = to.Escrow.Active.Deposit(&delegation.Shares, &from.General.Balance, &escrow.Tokens); err != nil {
-		ctx.Logger().Error("AddEscrow: failed to escrow tokens",
+	if err = to.Escrow.Active.Deposit(&delegation.Shares, &from.General.Balance, &escrow.Amount); err != nil {
+		ctx.Logger().Error("AddEscrow: failed to escrow stake",
 			"err", err,
 			"from", fromAddr,
 			"to", escrow.Account,
-			"amount", escrow.Tokens,
+			"amount", escrow.Amount,
 		)
 		return err
 	}
@@ -237,16 +237,16 @@ func (app *stakingApplication) addEscrow(ctx *api.Context, state *stakingState.M
 		return fmt.Errorf("failed to set delegation: %w", err)
 	}
 
-	ctx.Logger().Debug("AddEscrow: escrowed tokens",
+	ctx.Logger().Debug("AddEscrow: escrowed stake",
 		"from", fromAddr,
 		"to", escrow.Account,
-		"amount", escrow.Tokens,
+		"amount", escrow.Amount,
 	)
 
 	evt := &staking.AddEscrowEvent{
 		Owner:  fromAddr,
 		Escrow: escrow.Account,
-		Tokens: escrow.Tokens,
+		Amount: escrow.Amount,
 	}
 	ctx.EmitEvent(api.NewEventBuilder(app.Name()).Attribute(KeyAddEscrow, cbor.Marshal(evt)))
 
@@ -322,9 +322,9 @@ func (app *stakingApplication) reclaimEscrow(ctx *api.Context, state *stakingSta
 		DebondEndTime: epoch + debondingInterval,
 	}
 
-	var tokens quantity.Quantity
+	var baseUnits quantity.Quantity
 
-	if err = from.Escrow.Active.Withdraw(&tokens, &delegation.Shares, &reclaim.Shares); err != nil {
+	if err = from.Escrow.Active.Withdraw(&baseUnits, &delegation.Shares, &reclaim.Shares); err != nil {
 		ctx.Logger().Error("ReclaimEscrow: failed to redeem escrow shares",
 			"err", err,
 			"to", toAddr,
@@ -333,21 +333,22 @@ func (app *stakingApplication) reclaimEscrow(ctx *api.Context, state *stakingSta
 		)
 		return err
 	}
-	tokenAmount := tokens.Clone()
+	stakeAmount := baseUnits.Clone()
 
-	if err = from.Escrow.Debonding.Deposit(&deb.Shares, &tokens, tokenAmount); err != nil {
+	if err = from.Escrow.Debonding.Deposit(&deb.Shares, &baseUnits, stakeAmount); err != nil {
 		ctx.Logger().Error("ReclaimEscrow: failed to debond shares",
 			"err", err,
 			"to", toAddr,
 			"from", reclaim.Account,
 			"shares", reclaim.Shares,
+			"base_units", stakeAmount,
 		)
 		return err
 	}
 
-	if !tokens.IsZero() {
-		ctx.Logger().Error("ReclaimEscrow: inconsistency in transferring tokens from active escrow to debonding",
-			"remaining", tokens,
+	if !baseUnits.IsZero() {
+		ctx.Logger().Error("ReclaimEscrow: inconsistency in transferring stake from active escrow to debonding",
+			"remaining_base_units", baseUnits,
 		)
 		return staking.ErrInvalidArgument
 	}

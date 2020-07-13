@@ -187,8 +187,8 @@ func (app *stakingApplication) onEpochChange(ctx *api.Context, epoch epochtime.E
 			}
 		}
 
-		var tokens quantity.Quantity
-		if err = escrow.Escrow.Debonding.Withdraw(&tokens, &deb.Shares, shareAmount); err != nil {
+		var baseUnits quantity.Quantity
+		if err = escrow.Escrow.Debonding.Withdraw(&baseUnits, &deb.Shares, shareAmount); err != nil {
 			ctx.Logger().Error("failed to redeem debonding shares",
 				"err", err,
 				"escrow_addr", e.EscrowAddr,
@@ -197,14 +197,15 @@ func (app *stakingApplication) onEpochChange(ctx *api.Context, epoch epochtime.E
 			)
 			return fmt.Errorf("staking/tendermint: failed to redeem debonding shares: %w", err)
 		}
-		tokenAmount := tokens.Clone()
+		stakeAmount := baseUnits.Clone()
 
-		if err = quantity.Move(&delegator.General.Balance, &tokens, tokenAmount); err != nil {
-			ctx.Logger().Error("failed to move debonded tokens",
+		if err = quantity.Move(&delegator.General.Balance, &baseUnits, stakeAmount); err != nil {
+			ctx.Logger().Error("failed to move debonded stake",
 				"err", err,
 				"escrow_addr", e.EscrowAddr,
 				"delegator_addr", e.DelegatorAddr,
 				"shares", deb.Shares,
+				"base_units", stakeAmount,
 			)
 			return fmt.Errorf("staking/tendermint: failed to redeem debonding shares: %w", err)
 		}
@@ -225,16 +226,16 @@ func (app *stakingApplication) onEpochChange(ctx *api.Context, epoch epochtime.E
 			}
 		}
 
-		ctx.Logger().Debug("released tokens",
+		ctx.Logger().Debug("released stake",
 			"escrow_addr", e.EscrowAddr,
 			"delegator_addr", e.DelegatorAddr,
-			"amount", tokenAmount,
+			"base_units", stakeAmount,
 		)
 
 		evt := staking.ReclaimEscrowEvent{
 			Owner:  e.DelegatorAddr,
 			Escrow: e.EscrowAddr,
-			Tokens: *tokenAmount,
+			Amount: *stakeAmount,
 		}
 		ctx.EmitEvent(api.NewEventBuilder(app.Name()).Attribute(KeyReclaimEscrow, cbor.Marshal(evt)))
 	}

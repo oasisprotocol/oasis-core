@@ -1328,7 +1328,7 @@ func genesisToTendermint(d *genesisAPI.Document) (*tmtypes.GenesisDoc, error) {
 				// If all balances and stuff are zero, it's permitted not to have an account in the ledger at all.
 				stake = &quantity.Quantity{}
 			}
-			power, err = schedulerAPI.VotingPowerFromTokens(stake)
+			power, err = schedulerAPI.VotingPowerFromStake(stake)
 			if err != nil {
 				return nil, fmt.Errorf("tendermint: computing voting power for entity %s with account %s and stake %v: %w",
 					openedNode.EntityID,

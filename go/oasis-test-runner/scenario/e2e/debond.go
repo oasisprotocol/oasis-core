@@ -71,7 +71,7 @@ func (s *debondImpl) Run(*env.Env) error {
 	}
 	s.Logger.Info("balance ok")
 
-	// First debonding: 500 tokens at epoch 1.
+	// First debonding: 500 base units at epoch 1.
 	s.Logger.Info("advancing to first debonding")
 	if err = s.Net.Controller().SetEpoch(ctx, 1); err != nil {
 		return fmt.Errorf("first SetEpoch: %w", err)
@@ -90,7 +90,7 @@ func (s *debondImpl) Run(*env.Env) error {
 	}
 	s.Logger.Info("balance ok")
 
-	// Second debonding: 500 more tokens at epoch 2.
+	// Second debonding: 500 more base units at epoch 2.
 	s.Logger.Info("advancing to second debonding")
 	if err = s.Net.Controller().SetEpoch(ctx, 2); err != nil {
 		return fmt.Errorf("second SetEpoch: %w", err)

@@ -95,7 +95,7 @@ func TestReservedAddresses(t *testing.T) {
 	_ = q.FromInt64(1_000)
 
 	// NOTE: We need to specify escrow amount since that is checked before the check for reserved address.
-	err = app.addEscrow(ctx, stakeState, &staking.Escrow{Tokens: *q.Clone()})
+	err = app.addEscrow(ctx, stakeState, &staking.Escrow{Amount: *q.Clone()})
 	require.EqualError(err, "staking: forbidden by policy", "adding escrow for reserved address should error")
 
 	// NOTE: We need to specify reclaim escrow shares since that is checked before the check for reserved address.

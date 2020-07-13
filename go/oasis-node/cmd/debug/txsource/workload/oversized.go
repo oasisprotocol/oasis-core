@@ -63,11 +63,11 @@ func (oversized) Run(
 	for {
 		// Generate a big transfer transaction which is valid, but oversized.
 		type customTransfer struct {
-			To   staking.Address `json:"xfer_to"`
-			Data []byte          `json:"xfer_data"`
+			To   staking.Address `json:"to"`
+			Data []byte          `json:"data"`
 		}
 		xfer := customTransfer{
-			// Send zero tokens to self, so the transaction will be valid.
+			// Send zero stake to self, so the transaction will be valid.
 			To: txSignerAddr,
 			// Include some extra random data so we are over the MaxTxSize limit.
 			Data: make([]byte, genesisDoc.Consensus.Parameters.MaxTxSize),

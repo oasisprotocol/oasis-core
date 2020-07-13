@@ -74,7 +74,7 @@ func (d *delegation) doEscrowTx(ctx context.Context, rng *rand.Rand, cnsc consen
 	escrow := &staking.Escrow{
 		Account: d.accounts[selectedIdx].delegatedTo,
 	}
-	if err = escrow.Tokens.FromInt64(delegateAmount); err != nil {
+	if err = escrow.Amount.FromInt64(delegateAmount); err != nil {
 		return fmt.Errorf("escrow amount error: %w", err)
 	}
 

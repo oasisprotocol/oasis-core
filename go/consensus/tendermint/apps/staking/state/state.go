@@ -623,7 +623,7 @@ func slashPool(dst *quantity.Quantity, p *staking.SharePool, amount, total *quan
 	}
 
 	if _, err := quantity.MoveUpTo(dst, &p.Balance, slashAmount); err != nil {
-		return fmt.Errorf("tendermint/staking: failed moving tokens: %w", err)
+		return fmt.Errorf("tendermint/staking: failed moving stake: %w", err)
 	}
 
 	return nil
@@ -672,7 +672,7 @@ func (s *MutableState) SlashEscrow(
 	totalSlashed := slashed.Clone()
 
 	if err = quantity.Move(commonPool, &slashed, totalSlashed); err != nil {
-		return false, fmt.Errorf("tendermint/staking: failed moving tokens to common pool: %w", err)
+		return false, fmt.Errorf("tendermint/staking: failed moving stake to common pool: %w", err)
 	}
 
 	if err = s.SetCommonPool(ctx, commonPool); err != nil {
@@ -685,7 +685,7 @@ func (s *MutableState) SlashEscrow(
 	if !ctx.IsCheckOnly() {
 		ev := cbor.Marshal(&staking.TakeEscrowEvent{
 			Owner:  fromAddr,
-			Tokens: *totalSlashed,
+			Amount: *totalSlashed,
 		})
 		ctx.EmitEvent(api.NewEventBuilder(AppName).Attribute(KeyTakeEscrow, ev))
 	}
@@ -713,12 +713,12 @@ func (s *MutableState) TransferFromCommon(
 	if err != nil {
 		return false, fmt.Errorf("tendermint/staking: failed to query account %s: %w", toAddr, err)
 	}
-	transfered, err := quantity.MoveUpTo(&to.General.Balance, commonPool, amount)
+	transferred, err := quantity.MoveUpTo(&to.General.Balance, commonPool, amount)
 	if err != nil {
 		return false, fmt.Errorf("tendermint/staking: failed to transfer from common pool: %w", err)
 	}
 
-	ret := !transfered.IsZero()
+	ret := !transferred.IsZero()
 	if ret {
 		if err = s.SetCommonPool(ctx, commonPool); err != nil {
 			return false, fmt.Errorf("tendermint/staking: failed to set common pool: %w", err)
@@ -731,7 +731,7 @@ func (s *MutableState) TransferFromCommon(
 			ev := cbor.Marshal(&staking.TransferEvent{
 				From:   staking.CommonPoolAddress,
 				To:     toAddr,
-				Tokens: *transfered,
+				Amount: *transferred,
 			})
 			ctx.EmitEvent(api.NewEventBuilder(AppName).Attribute(KeyTransfer, ev))
 		}
@@ -742,7 +742,7 @@ func (s *MutableState) TransferFromCommon(
 
 // AddRewards computes and transfers a staking reward to active escrow accounts.
 // If an error occurs, the pool and affected accounts are left in an invalid state.
-// This may fail due to the common pool running out of tokens. In this case, the
+// This may fail due to the common pool running out of stake. In this case, the
 // returned error's cause will be `staking.ErrInsufficientBalance`, and it should
 // be safe for the caller to roll back to an earlier state tree and continue from
 // there.
@@ -820,7 +820,7 @@ func (s *MutableState) AddRewards(
 			ev := cbor.Marshal(&staking.AddEscrowEvent{
 				Owner:  staking.CommonPoolAddress,
 				Escrow: addr,
-				Tokens: *q,
+				Amount: *q,
 			})
 			ctx.EmitEvent(api.NewEventBuilder(AppName).Attribute(KeyAddEscrow, ev))
 		}
@@ -843,7 +843,7 @@ func (s *MutableState) AddRewards(
 			ev := cbor.Marshal(&staking.AddEscrowEvent{
 				Owner:  staking.CommonPoolAddress,
 				Escrow: addr,
-				Tokens: *com,
+				Amount: *com,
 			})
 			ctx.EmitEvent(api.NewEventBuilder(AppName).Attribute(KeyAddEscrow, ev))
 		}
@@ -948,7 +948,7 @@ func (s *MutableState) AddRewardSingleAttenuated(
 		ev := cbor.Marshal(&staking.AddEscrowEvent{
 			Owner:  staking.CommonPoolAddress,
 			Escrow: address,
-			Tokens: *q,
+			Amount: *q,
 		})
 		ctx.EmitEvent(api.NewEventBuilder(AppName).Attribute(KeyAddEscrow, ev))
 	}
@@ -971,7 +971,7 @@ func (s *MutableState) AddRewardSingleAttenuated(
 		ev := cbor.Marshal(&staking.AddEscrowEvent{
 			Owner:  staking.CommonPoolAddress,
 			Escrow: address,
-			Tokens: *com,
+			Amount: *com,
 		})
 		ctx.EmitEvent(api.NewEventBuilder(AppName).Attribute(KeyAddEscrow, ev))
 	}

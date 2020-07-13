@@ -1,4 +1,4 @@
-// Package stake implements the stake token sub-commands.
+// Package stake implements the staking sub-commands.
 package stake
 
 import (
@@ -30,12 +30,12 @@ const CfgPublicKey = "public_key"
 var (
 	stakeCmd = &cobra.Command{
 		Use:   "stake",
-		Short: "stake token backend utilities",
+		Short: "staking backend utilities",
 	}
 
 	infoCmd = &cobra.Command{
 		Use:   "info",
-		Short: "query the common token info",
+		Short: "query the common staking info",
 		Run:   doInfo,
 	}
 
@@ -100,7 +100,7 @@ func doInfo(cmd *cobra.Command, args []string) {
 
 	ctx := context.Background()
 
-	doWithRetries(cmd, "query token total supply", func() error {
+	doWithRetries(cmd, "query total supply", func() error {
 		q, err := client.TotalSupply(ctx, consensus.HeightLatest)
 		if err != nil {
 			return err
@@ -110,7 +110,7 @@ func doInfo(cmd *cobra.Command, args []string) {
 		return nil
 	})
 
-	doWithRetries(cmd, "query token common pool", func() error {
+	doWithRetries(cmd, "query common pool", func() error {
 		q, err := client.CommonPool(ctx, consensus.HeightLatest)
 		if err != nil {
 			return err

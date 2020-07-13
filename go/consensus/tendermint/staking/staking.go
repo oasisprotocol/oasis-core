@@ -1,4 +1,4 @@
-// Package staking implements the tendermint backed staking token backend.
+// Package staking implements the tendermint backed staking backend.
 package staking
 
 import (
@@ -36,6 +36,24 @@ type tendermintBackend struct {
 	eventNotifier    *pubsub.Broker
 
 	closedCh chan struct{}
+}
+
+func (tb *tendermintBackend) TokenSymbol(ctx context.Context) (string, error) {
+	genesis, err := tb.service.GetGenesisDocument(ctx)
+	if err != nil {
+		return "", err
+	}
+
+	return genesis.Staking.TokenSymbol, nil
+}
+
+func (tb *tendermintBackend) TokenValueExponent(ctx context.Context) (uint8, error) {
+	genesis, err := tb.service.GetGenesisDocument(ctx)
+	if err != nil {
+		return 0, err
+	}
+
+	return genesis.Staking.TokenValueExponent, nil
 }
 
 func (tb *tendermintBackend) TotalSupply(ctx context.Context, height int64) (*quantity.Quantity, error) {
@@ -135,12 +153,27 @@ func (tb *tendermintBackend) WatchEscrows(ctx context.Context) (<-chan *api.Escr
 }
 
 func (tb *tendermintBackend) StateToGenesis(ctx context.Context, height int64) (*api.Genesis, error) {
+	// Query the staking genesis state.
 	q, err := tb.querier.QueryAt(ctx, height)
 	if err != nil {
 		return nil, err
 	}
+	genesis, err := q.Genesis(ctx)
+	if err != nil {
+		return nil, err
+	}
 
-	return q.Genesis(ctx)
+	// Add static values to the genesis document.
+	genesis.TokenSymbol, err = tb.TokenSymbol(ctx)
+	if err != nil {
+		return nil, err
+	}
+	genesis.TokenValueExponent, err = tb.TokenValueExponent(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	return genesis, nil
 }
 
 func (tb *tendermintBackend) GetEvents(ctx context.Context, height int64) ([]*api.Event, error) {

@@ -109,7 +109,7 @@ func AuthenticateAndPayFees(
 		ev := cbor.Marshal(&staking.TransferEvent{
 			From:   addr,
 			To:     staking.FeeAccumulatorAddress,
-			Tokens: fee.Amount,
+			Amount: fee.Amount,
 		})
 		ctx.EmitEvent(abciAPI.NewEventBuilder(AppName).Attribute(KeyTransfer, ev))
 	}

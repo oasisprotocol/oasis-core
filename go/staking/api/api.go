@@ -23,6 +23,13 @@ const (
 	// LogEventGeneralAdjustment is a log event value that signals adjustment
 	// of an account's general balance due to a roothash message.
 	LogEventGeneralAdjustment = "staking/general_adjustment"
+
+	// Maximum length of the token symbol.
+	TokenSymbolMaxLength = 8
+	// Regular expression defining valid token symbol characters.
+	TokenSymbolRegexp = "^[A-Z]+$" // nolint: gosec // Not that kind of token :).
+	// Maximum value of token's value base-10 exponent.
+	TokenValueExponentMaxValue = 20
 )
 
 var (
@@ -89,9 +96,16 @@ var (
 	_ prettyprint.PrettyPrinter = (*Account)(nil)
 )
 
-// Backend is a staking token implementation.
+// Backend is a staking implementation.
 type Backend interface {
-	// TotalSupply returns the total number of tokens.
+	// TokenSymbol returns the token's ticker symbol.
+	TokenSymbol(ctx context.Context) (string, error)
+
+	// TokenValueExponent is the token's value base-10 exponent, i.e.
+	// 1 token = 10**TokenValueExponent base units.
+	TokenValueExponent(ctx context.Context) (uint8, error)
+
+	// TotalSupply returns the total number of base units.
 	TotalSupply(ctx context.Context, height int64) (*quantity.Quantity, error)
 
 	// CommonPool returns the common pool balance.
@@ -128,11 +142,12 @@ type Backend interface {
 	// on all balance transfers.
 	WatchTransfers(ctx context.Context) (<-chan *TransferEvent, pubsub.ClosableSubscription, error)
 
-	// WatchBurns returns a channel of BurnEvent on token destruction.
+	// WatchBurns returns a channel that produces a stream of BurnEvent when
+	// base units destructed.
 	WatchBurns(ctx context.Context) (<-chan *BurnEvent, pubsub.ClosableSubscription, error)
 
 	// WatchEscrows returns a channel that produces a stream of EscrowEvent
-	// when entities add to their escrow balance, get tokens deducted from
+	// when entities add to their escrow balance, get base units deducted from
 	// their escrow balance, and have their escrow balance released into their
 	// general balance.
 	WatchEscrows(ctx context.Context) (<-chan *EscrowEvent, pubsub.ClosableSubscription, error)
@@ -159,18 +174,18 @@ type OwnerQuery struct {
 	Owner  Address `json:"owner"`
 }
 
-// TransferEvent is the event emitted when a balance is transfered, either by
-// a call to Transfer or Withdraw.
+// TransferEvent is the event emitted when stake is transferred, either by a
+// call to Transfer or Withdraw.
 type TransferEvent struct {
 	From   Address           `json:"from"`
 	To     Address           `json:"to"`
-	Tokens quantity.Quantity `json:"tokens"`
+	Amount quantity.Quantity `json:"amount"`
 }
 
-// BurnEvent is the event emitted when tokens are destroyed via a call to Burn.
+// BurnEvent is the event emitted when stake is destroyed via a call to Burn.
 type BurnEvent struct {
 	Owner  Address           `json:"owner"`
-	Tokens quantity.Quantity `json:"tokens"`
+	Amount quantity.Quantity `json:"amount"`
 }
 
 // EscrowEvent is an escrow event.
@@ -190,33 +205,33 @@ type Event struct {
 	Escrow   *EscrowEvent   `json:"escrow,omitempty"`
 }
 
-// AddEscrowEvent is the event emitted when a balance is transfered into
-// an escrow balance.
+// AddEscrowEvent is the event emitted when stake is transferred into an escrow
+// account.
 type AddEscrowEvent struct {
 	Owner  Address           `json:"owner"`
 	Escrow Address           `json:"escrow"`
-	Tokens quantity.Quantity `json:"tokens"`
+	Amount quantity.Quantity `json:"amount"`
 }
 
-// TakeEscrowEvent is the event emitted when balance is deducted from an
-// escrow balance (stake is slashed).
+// TakeEscrowEvent is the event emitted when stake is taken from an escrow
+// account (i.e. stake is slashed).
 type TakeEscrowEvent struct {
 	Owner  Address           `json:"owner"`
-	Tokens quantity.Quantity `json:"tokens"`
+	Amount quantity.Quantity `json:"amount"`
 }
 
-// ReclaimEscrowEvent is the event emitted when tokens are reclaimed from an
-// escrow balance back into the entity's general balance.
+// ReclaimEscrowEvent is the event emitted when stake is reclaimed from an
+// escrow account back into owner's general account.
 type ReclaimEscrowEvent struct {
 	Owner  Address           `json:"owner"`
 	Escrow Address           `json:"escrow"`
-	Tokens quantity.Quantity `json:"tokens"`
+	Amount quantity.Quantity `json:"amount"`
 }
 
-// Transfer is a token transfer.
+// Transfer is a stake transfer.
 type Transfer struct {
-	To     Address           `json:"xfer_to"`
-	Tokens quantity.Quantity `json:"xfer_tokens"`
+	To     Address           `json:"to"`
+	Amount quantity.Quantity `json:"amount"`
 }
 
 // NewTransferTx creates a new transfer transaction.
@@ -224,9 +239,9 @@ func NewTransferTx(nonce uint64, fee *transaction.Fee, xfer *Transfer) *transact
 	return transaction.NewTransaction(nonce, fee, MethodTransfer, xfer)
 }
 
-// Burn is a token burn (destruction).
+// Burn is a stake burn (destruction).
 type Burn struct {
-	Tokens quantity.Quantity `json:"burn_tokens"`
+	Amount quantity.Quantity `json:"amount"`
 }
 
 // NewBurnTx creates a new burn transaction.
@@ -234,10 +249,10 @@ func NewBurnTx(nonce uint64, fee *transaction.Fee, burn *Burn) *transaction.Tran
 	return transaction.NewTransaction(nonce, fee, MethodBurn, burn)
 }
 
-// Escrow is a token escrow.
+// Escrow is a stake escrow.
 type Escrow struct {
-	Account Address           `json:"escrow_account"`
-	Tokens  quantity.Quantity `json:"escrow_tokens"`
+	Account Address           `json:"account"`
+	Amount  quantity.Quantity `json:"amount"`
 }
 
 // NewAddEscrowTx creates a new add escrow transaction.
@@ -245,10 +260,10 @@ func NewAddEscrowTx(nonce uint64, fee *transaction.Fee, escrow *Escrow) *transac
 	return transaction.NewTransaction(nonce, fee, MethodAddEscrow, escrow)
 }
 
-// ReclaimEscrow is a token escrow reclamation.
+// ReclaimEscrow is a reclamation of stake from an escrow.
 type ReclaimEscrow struct {
-	Account Address           `json:"escrow_account"`
-	Shares  quantity.Quantity `json:"reclaim_shares"`
+	Account Address           `json:"account"`
+	Shares  quantity.Quantity `json:"shares"`
 }
 
 // NewReclaimEscrowTx creates a new reclaim escrow transaction.
@@ -287,8 +302,8 @@ func (p SharePool) PrettyType() (interface{}, error) {
 	return p, nil
 }
 
-// sharesForTokens computes the amount of shares for the given amount of tokens.
-func (p *SharePool) sharesForTokens(amount *quantity.Quantity) (*quantity.Quantity, error) {
+// sharesForStake computes the amount of shares for the given amount of base units.
+func (p *SharePool) sharesForStake(amount *quantity.Quantity) (*quantity.Quantity, error) {
 	if p.TotalShares.IsZero() {
 		// No existing shares, exchange rate is 1:1.
 		return amount.Clone(), nil
@@ -316,15 +331,15 @@ func (p *SharePool) sharesForTokens(amount *quantity.Quantity) (*quantity.Quanti
 	return q, nil
 }
 
-// Deposit moves tokens into the combined balance, raising the shares.
+// Deposit moves stake into the combined balance, raising the shares.
 // If an error occurs, the pool and affected accounts are left in an invalid state.
-func (p *SharePool) Deposit(shareDst, tokenSrc, tokenAmount *quantity.Quantity) error {
-	shares, err := p.sharesForTokens(tokenAmount)
+func (p *SharePool) Deposit(shareDst, stakeSrc, baseUnitsAmount *quantity.Quantity) error {
+	shares, err := p.sharesForStake(baseUnitsAmount)
 	if err != nil {
 		return err
 	}
 
-	if err = quantity.Move(&p.Balance, tokenSrc, tokenAmount); err != nil {
+	if err = quantity.Move(&p.Balance, stakeSrc, baseUnitsAmount); err != nil {
 		return err
 	}
 
@@ -339,16 +354,16 @@ func (p *SharePool) Deposit(shareDst, tokenSrc, tokenAmount *quantity.Quantity) 
 	return nil
 }
 
-// tokensForShares computes the amount of tokens for the given amount of shares.
-func (p *SharePool) tokensForShares(amount *quantity.Quantity) (*quantity.Quantity, error) {
+// stakeForShares computes the amount of base units for the given amount of shares.
+func (p *SharePool) stakeForShares(amount *quantity.Quantity) (*quantity.Quantity, error) {
 	if amount.IsZero() || p.Balance.IsZero() || p.TotalShares.IsZero() {
-		// No existing shares or no balance means no tokens.
+		// No existing shares or no balance means no base units.
 		return quantity.NewQuantity(), nil
 	}
 
 	// Exchange rate is based on issued shares and the total balance as:
 	//
-	//     tokens = shares * balance / total_shares
+	//     base_units = shares * balance / total_shares
 	//
 	q := amount.Clone()
 	// Multiply first.
@@ -362,10 +377,10 @@ func (p *SharePool) tokensForShares(amount *quantity.Quantity) (*quantity.Quanti
 	return q, nil
 }
 
-// Withdraw moves tokens out of the combined balance, reducing the shares.
+// Withdraw moves stake out of the combined balance, reducing the shares.
 // If an error occurs, the pool and affected accounts are left in an invalid state.
-func (p *SharePool) Withdraw(tokenDst, shareSrc, shareAmount *quantity.Quantity) error {
-	tokens, err := p.tokensForShares(shareAmount)
+func (p *SharePool) Withdraw(stakeDst, shareSrc, shareAmount *quantity.Quantity) error {
+	baseUnits, err := p.stakeForShares(shareAmount)
 	if err != nil {
 		return err
 	}
@@ -378,7 +393,7 @@ func (p *SharePool) Withdraw(tokenDst, shareSrc, shareAmount *quantity.Quantity)
 		return err
 	}
 
-	if err = quantity.Move(tokenDst, &p.Balance, tokens); err != nil {
+	if err = quantity.Move(stakeDst, &p.Balance, baseUnits); err != nil {
 		return err
 	}
 
@@ -757,18 +772,33 @@ type DebondingDelegation struct {
 	DebondEndTime epochtime.EpochTime `json:"debond_end"`
 }
 
-// Genesis is the initial ledger balances at genesis for use in the genesis
-// block and test cases.
+// Genesis is the initial staking state for use in the genesis block.
 type Genesis struct {
+	// Parameters are the staking consensus parameters.
 	Parameters ConsensusParameters `json:"params"`
 
-	TotalSupply   quantity.Quantity `json:"total_supply"`
-	CommonPool    quantity.Quantity `json:"common_pool"`
+	// TokenSymbol is the token's ticker symbol.
+	// Only upper case A-Z characters are allowed.
+	TokenSymbol string `json:"token_symbol"`
+	// TokenValueExponent is the token's value base-10 exponent, i.e.
+	// 1 token = 10**TokenValueExponent base units.
+	TokenValueExponent uint8 `json:"token_value_exponent"`
+
+	// TokenSupply is the network's total amount of stake in base units.
+	TotalSupply quantity.Quantity `json:"total_supply"`
+	// CommonPool is the network's common stake pool.
+	CommonPool quantity.Quantity `json:"common_pool"`
+	// LastBlockFees are the collected fees for previous block.
 	LastBlockFees quantity.Quantity `json:"last_block_fees"`
 
+	// Ledger is a map of staking accounts.
 	Ledger map[Address]*Account `json:"ledger,omitempty"`
 
-	Delegations          map[Address]map[Address]*Delegation            `json:"delegations,omitempty"`
+	// Delegations is a nested map of staking delegations of the form:
+	// DELEGATEE-ACCOUNT-ADDRESS: DELEGATOR-ACCOUNT-ADDRESS: DELEGATION.
+	Delegations map[Address]map[Address]*Delegation `json:"delegations,omitempty"`
+	// DebondingDelegations is a nested map of staking delegations of the form:
+	// DEBONDING-DELEGATEE-ACCOUNT-ADDRESS: DEBONDING-DELEGATOR-ACCOUNT-ADDRESS: list of DEBONDING-DELEGATIONs.
 	DebondingDelegations map[Address]map[Address][]*DebondingDelegation `json:"debonding_delegations,omitempty"`
 }
 

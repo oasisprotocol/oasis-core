@@ -1,4 +1,4 @@
-// Package tests is a collection of staking token backend implementation tests.
+// Package tests is a collection of staking backend implementation tests.
 package tests
 
 import (
@@ -78,8 +78,8 @@ var (
 	DestAddr  = debug.DebugStateDestAddress
 )
 
-// StakingImplementationTests exercises the basic functionality of a
-// staking token backend.
+// StakingImplementationTests exercises the basic functionality of a staking
+// backend.
 func StakingImplementationTests(
 	t *testing.T,
 	backend api.Backend,
@@ -114,7 +114,7 @@ func StakingImplementationTests(
 }
 
 // StakingClientImplementationTests exercises the basic functionality of a
-// staking token client backend.
+// staking client backend.
 func StakingClientImplementationTests(t *testing.T, backend api.Backend, consensus consensusAPI.Backend) {
 	for _, tc := range []struct {
 		n  string
@@ -175,7 +175,7 @@ func testTransfer(t *testing.T, state *stakingTestsState, backend api.Backend, c
 
 	xfer := &api.Transfer{
 		To:     DestAddr,
-		Tokens: debug.QtyFromInt(math.MaxUint8),
+		Amount: debug.QtyFromInt(math.MaxUint8),
 	}
 	tx := api.NewTransferTx(srcAcc.General.Nonce, nil, xfer)
 	err = consensusAPI.SignAndSubmitTx(context.Background(), consensus, srcSigner, tx)
@@ -188,25 +188,25 @@ TransferWaitLoop:
 		select {
 		case ev := <-ch:
 			if ev.From.Equal(api.CommonPoolAddress) || ev.To.Equal(api.CommonPoolAddress) {
-				require.False(ev.Tokens.IsZero(), "CommonPool xfer: amount should be non-zero")
+				require.False(ev.Amount.IsZero(), "CommonPool xfer: amount should be non-zero")
 				continue
 			}
 			if ev.From.Equal(api.FeeAccumulatorAddress) || ev.To.Equal(api.FeeAccumulatorAddress) {
-				require.False(ev.Tokens.IsZero(), "FeeAccumulator xfer: amount should be non-zero")
+				require.False(ev.Amount.IsZero(), "FeeAccumulator xfer: amount should be non-zero")
 				continue
 			}
 
 			if !gotTransfer {
 				require.Equal(SrcAddr, ev.From, "Event: from")
 				require.Equal(DestAddr, ev.To, "Event: to")
-				require.Equal(xfer.Tokens, ev.Tokens, "Event: tokens")
+				require.Equal(xfer.Amount, ev.Amount, "Event: amount")
 
 				// Make sure that GetEvents also returns the transfer event.
 				evts, grr := backend.GetEvents(context.Background(), consensusAPI.HeightLatest)
 				require.NoError(grr, "GetEvents")
 				for _, evt := range evts {
 					if evt.Transfer != nil {
-						if evt.Transfer.From.Equal(ev.From) && evt.Transfer.To.Equal(ev.To) && evt.Transfer.Tokens.Cmp(&ev.Tokens) == 0 {
+						if evt.Transfer.From.Equal(ev.From) && evt.Transfer.To.Equal(ev.To) && evt.Transfer.Amount.Cmp(&ev.Amount) == 0 {
 							gotTransfer = true
 							require.True(!evt.TxHash.IsEmpty(), "GetEvents should return valid txn hash")
 							break
@@ -224,13 +224,13 @@ TransferWaitLoop:
 		}
 	}
 
-	_ = srcAcc.General.Balance.Sub(&xfer.Tokens)
+	_ = srcAcc.General.Balance.Sub(&xfer.Amount)
 	newSrcAcc, err := backend.Account(context.Background(), &api.OwnerQuery{Owner: SrcAddr, Height: consensusAPI.HeightLatest})
 	require.NoError(err, "src: Account - after")
 	require.Equal(srcAcc.General.Balance, newSrcAcc.General.Balance, "src: general balance - after")
 	require.Equal(tx.Nonce+1, newSrcAcc.General.Nonce, "src: nonce - after")
 
-	_ = dstAcc.General.Balance.Add(&xfer.Tokens)
+	_ = dstAcc.General.Balance.Add(&xfer.Amount)
 	newDstAcc, err := backend.Account(context.Background(), &api.OwnerQuery{Owner: DestAddr, Height: consensusAPI.HeightLatest})
 	require.NoError(err, "dest: Account - after")
 	require.Equal(dstAcc.General.Balance, newDstAcc.General.Balance, "dest: general balance - after")
@@ -238,7 +238,7 @@ TransferWaitLoop:
 
 	// Transfers that exceed available balance should fail.
 	_ = newSrcAcc.General.Balance.Add(&qtyOne)
-	xfer.Tokens = newSrcAcc.General.Balance
+	xfer.Amount = newSrcAcc.General.Balance
 
 	tx = api.NewTransferTx(newSrcAcc.General.Nonce, nil, xfer)
 	err = consensusAPI.SignAndSubmitTx(context.Background(), consensus, srcSigner, tx)
@@ -257,7 +257,7 @@ func testTransferWatchEvents(t *testing.T, state *stakingTestsState, backend api
 
 	xfer := &api.Transfer{
 		To:     DestAddr,
-		Tokens: debug.QtyFromInt(math.MaxUint8),
+		Amount: debug.QtyFromInt(math.MaxUint8),
 	}
 	tx := api.NewTransferTx(srcAcc.General.Nonce, nil, xfer)
 	err = consensusAPI.SignAndSubmitTx(context.Background(), consensus, srcSigner, tx)
@@ -276,22 +276,22 @@ TransferWaitLoop:
 
 			from := ev.Transfer.From
 			to := ev.Transfer.To
-			tokens := ev.Transfer.Tokens
+			baseUnits := ev.Transfer.Amount
 
 			// We should also get some traffic to/from the common pool and fee accumulator.
 			if from.Equal(api.CommonPoolAddress) || to.Equal(api.CommonPoolAddress) {
-				require.False(tokens.IsZero(), "CommonPool xfer: amount should be non-zero")
+				require.False(baseUnits.IsZero(), "CommonPool xfer: amount should be non-zero")
 				continue
 			}
 			if from.Equal(api.FeeAccumulatorAddress) || to.Equal(api.FeeAccumulatorAddress) {
-				require.False(tokens.IsZero(), "FeeAccumulator xfer: amount should be non-zero")
+				require.False(baseUnits.IsZero(), "FeeAccumulator xfer: amount should be non-zero")
 				continue
 			}
 
 			if !gotTransfer {
 				require.Equal(SrcAddr, from, "Event: from")
 				require.Equal(DestAddr, to, "Event: to")
-				require.Equal(xfer.Tokens, ev.Transfer.Tokens, "Event: tokens")
+				require.Equal(xfer.Amount, ev.Transfer.Amount, "Event: amount")
 
 				// Height must be valid.
 				status, err := consensus.GetStatus(context.Background())
@@ -323,7 +323,7 @@ func testSelfTransfer(t *testing.T, state *stakingTestsState, backend api.Backen
 
 	xfer := &api.Transfer{
 		To:     SrcAddr,
-		Tokens: debug.QtyFromInt(math.MaxUint8),
+		Amount: debug.QtyFromInt(math.MaxUint8),
 	}
 	tx := api.NewTransferTx(srcAcc.General.Nonce, nil, xfer)
 	err = consensusAPI.SignAndSubmitTx(context.Background(), consensus, srcSigner, tx)
@@ -336,18 +336,18 @@ TransferWaitLoop:
 		select {
 		case ev := <-ch:
 			if ev.From.Equal(api.CommonPoolAddress) || ev.To.Equal(api.CommonPoolAddress) {
-				require.False(ev.Tokens.IsZero(), "CommonPool xfer: amount should be non-zero")
+				require.False(ev.Amount.IsZero(), "CommonPool xfer: amount should be non-zero")
 				continue
 			}
 			if ev.From.Equal(api.FeeAccumulatorAddress) || ev.To.Equal(api.FeeAccumulatorAddress) {
-				require.False(ev.Tokens.IsZero(), "FeeAccumulator xfer: amount should be non-zero")
+				require.False(ev.Amount.IsZero(), "FeeAccumulator xfer: amount should be non-zero")
 				continue
 			}
 
 			if !gotTransfer {
 				require.Equal(SrcAddr, ev.From, "Event: from")
 				require.Equal(SrcAddr, ev.To, "Event: to")
-				require.Equal(xfer.Tokens, ev.Tokens, "Event: tokens")
+				require.Equal(xfer.Amount, ev.Amount, "Event: amount")
 				gotTransfer = true
 			}
 
@@ -366,7 +366,7 @@ TransferWaitLoop:
 
 	// Self transfers that are more than the balance should fail.
 	_ = newSrcAcc.General.Balance.Add(&qtyOne)
-	xfer.Tokens = newSrcAcc.General.Balance
+	xfer.Amount = newSrcAcc.General.Balance
 
 	tx = api.NewTransferTx(newSrcAcc.General.Nonce, nil, xfer)
 	err = consensusAPI.SignAndSubmitTx(context.Background(), consensus, srcSigner, tx)
@@ -387,7 +387,7 @@ func testBurn(t *testing.T, state *stakingTestsState, backend api.Backend, conse
 	defer sub.Close()
 
 	burn := &api.Burn{
-		Tokens: debug.QtyFromInt(math.MaxUint32),
+		Amount: debug.QtyFromInt(math.MaxUint32),
 	}
 	tx := api.NewBurnTx(srcAcc.General.Nonce, nil, burn)
 	err = consensusAPI.SignAndSubmitTx(context.Background(), consensus, srcSigner, tx)
@@ -396,7 +396,7 @@ func testBurn(t *testing.T, state *stakingTestsState, backend api.Backend, conse
 	select {
 	case ev := <-ch:
 		require.Equal(SrcAddr, ev.Owner, "Event: owner")
-		require.Equal(burn.Tokens, ev.Tokens, "Event: tokens")
+		require.Equal(burn.Amount, ev.Amount, "Event: amount")
 
 		// Make sure that GetEvents also returns the burn event.
 		evts, grr := backend.GetEvents(context.Background(), consensusAPI.HeightLatest)
@@ -404,7 +404,7 @@ func testBurn(t *testing.T, state *stakingTestsState, backend api.Backend, conse
 		var gotIt bool
 		for _, evt := range evts {
 			if evt.Burn != nil {
-				if evt.Burn.Owner.Equal(ev.Owner) && evt.Burn.Tokens.Cmp(&ev.Tokens) == 0 {
+				if evt.Burn.Owner.Equal(ev.Owner) && evt.Burn.Amount.Cmp(&ev.Amount) == 0 {
 					gotIt = true
 					break
 				}
@@ -415,12 +415,12 @@ func testBurn(t *testing.T, state *stakingTestsState, backend api.Backend, conse
 		t.Fatalf("failed to receive burn event")
 	}
 
-	_ = totalSupply.Sub(&burn.Tokens)
+	_ = totalSupply.Sub(&burn.Amount)
 	newTotalSupply, err := backend.TotalSupply(context.Background(), consensusAPI.HeightLatest)
 	require.NoError(err, "TotalSupply - after")
 	require.Equal(totalSupply, newTotalSupply, "totalSupply is reduced by burn")
 
-	_ = srcAcc.General.Balance.Sub(&burn.Tokens)
+	_ = srcAcc.General.Balance.Sub(&burn.Amount)
 	newSrcAcc, err := backend.Account(context.Background(), &api.OwnerQuery{Owner: SrcAddr, Height: consensusAPI.HeightLatest})
 	require.NoError(err, "src: Account")
 	require.Equal(srcAcc.General.Balance, newSrcAcc.General.Balance, "src: general balance - after")
@@ -472,12 +472,12 @@ func testEscrowEx( // nolint: gocyclo
 	// Escrow.
 	escrow := &api.Escrow{
 		Account: dstAddr,
-		Tokens:  debug.QtyFromInt(math.MaxUint32),
+		Amount:  debug.QtyFromInt(math.MaxUint32),
 	}
 	tx := api.NewAddEscrowTx(srcAcc.General.Nonce, nil, escrow)
 	err = consensusAPI.SignAndSubmitTx(context.Background(), consensus, srcSigner, tx)
 	require.NoError(err, "AddEscrow")
-	require.NoError(totalEscrowed.Add(&escrow.Tokens))
+	require.NoError(totalEscrowed.Add(&escrow.Amount))
 
 	select {
 	case rawEv := <-ch:
@@ -485,7 +485,7 @@ func testEscrowEx( // nolint: gocyclo
 		require.NotNil(ev)
 		require.Equal(srcAddr, ev.Owner, "Event: owner")
 		require.Equal(dstAddr, ev.Escrow, "Event: escrow")
-		require.Equal(escrow.Tokens, ev.Tokens, "Event: tokens")
+		require.Equal(escrow.Amount, ev.Amount, "Event: amount")
 
 		// Make sure that GetEvents also returns the add escrow event.
 		evts, grr := backend.GetEvents(context.Background(), consensusAPI.HeightLatest)
@@ -493,7 +493,7 @@ func testEscrowEx( // nolint: gocyclo
 		var gotIt bool
 		for _, evt := range evts {
 			if evt.Escrow != nil && evt.Escrow.Add != nil {
-				if evt.Escrow.Add.Owner.Equal(ev.Owner) && evt.Escrow.Add.Escrow.Equal(ev.Escrow) && evt.Escrow.Add.Tokens.Cmp(&ev.Tokens) == 0 {
+				if evt.Escrow.Add.Owner.Equal(ev.Owner) && evt.Escrow.Add.Escrow.Equal(ev.Escrow) && evt.Escrow.Add.Amount.Cmp(&ev.Amount) == 0 {
 					gotIt = true
 					break
 				}
@@ -505,7 +505,7 @@ func testEscrowEx( // nolint: gocyclo
 	}
 
 	currentTotalShares := dstAcc.Escrow.Active.TotalShares.Clone()
-	_ = dstAcc.Escrow.Active.Deposit(currentTotalShares, &srcAcc.General.Balance, &escrow.Tokens)
+	_ = dstAcc.Escrow.Active.Deposit(currentTotalShares, &srcAcc.General.Balance, &escrow.Amount)
 
 	newSrcAcc, err := backend.Account(context.Background(), &api.OwnerQuery{Owner: srcAddr, Height: consensusAPI.HeightLatest})
 	require.NoError(err, "src: Account - after")
@@ -535,12 +535,12 @@ func testEscrowEx( // nolint: gocyclo
 	// Escrow some more.
 	escrow = &api.Escrow{
 		Account: dstAddr,
-		Tokens:  debug.QtyFromInt(math.MaxUint32),
+		Amount:  debug.QtyFromInt(math.MaxUint32),
 	}
 	tx = api.NewAddEscrowTx(srcAcc.General.Nonce, nil, escrow)
 	err = consensusAPI.SignAndSubmitTx(context.Background(), consensus, srcSigner, tx)
 	require.NoError(err, "AddEscrow")
-	require.NoError(totalEscrowed.Add(&escrow.Tokens))
+	require.NoError(totalEscrowed.Add(&escrow.Amount))
 
 	select {
 	case rawEv := <-ch:
@@ -548,7 +548,7 @@ func testEscrowEx( // nolint: gocyclo
 		require.NotNil(ev)
 		require.Equal(srcAddr, ev.Owner, "Event: owner")
 		require.Equal(dstAddr, ev.Escrow, "Event: escrow")
-		require.Equal(escrow.Tokens, ev.Tokens, "Event: tokens")
+		require.Equal(escrow.Amount, ev.Amount, "Event: amount")
 
 		// Make sure that GetEvents also returns the add escrow event.
 		evts, grr := backend.GetEvents(context.Background(), consensusAPI.HeightLatest)
@@ -556,7 +556,7 @@ func testEscrowEx( // nolint: gocyclo
 		var gotIt bool
 		for _, evt := range evts {
 			if evt.Escrow != nil && evt.Escrow.Add != nil {
-				if evt.Escrow.Add.Owner.Equal(ev.Owner) && evt.Escrow.Add.Escrow.Equal(ev.Escrow) && evt.Escrow.Add.Tokens.Cmp(&ev.Tokens) == 0 {
+				if evt.Escrow.Add.Owner.Equal(ev.Owner) && evt.Escrow.Add.Escrow.Equal(ev.Escrow) && evt.Escrow.Add.Amount.Cmp(&ev.Amount) == 0 {
 					gotIt = true
 					break
 				}
@@ -568,7 +568,7 @@ func testEscrowEx( // nolint: gocyclo
 	}
 
 	currentTotalShares = dstAcc.Escrow.Active.TotalShares.Clone()
-	_ = dstAcc.Escrow.Active.Deposit(currentTotalShares, &srcAcc.General.Balance, &escrow.Tokens)
+	_ = dstAcc.Escrow.Active.Deposit(currentTotalShares, &srcAcc.General.Balance, &escrow.Amount)
 
 	newSrcAcc, err = backend.Account(context.Background(), &api.OwnerQuery{Owner: srcAddr, Height: consensusAPI.HeightLatest})
 	require.NoError(err, "src: Account - after 2nd")
@@ -625,7 +625,7 @@ func testEscrowEx( // nolint: gocyclo
 		require.NotNil(ev)
 		require.Equal(srcAddr, ev.Owner, "Event: owner")
 		require.Equal(dstAddr, ev.Escrow, "Event: escrow")
-		require.Equal(totalEscrowed, &ev.Tokens, "Event: tokens")
+		require.Equal(totalEscrowed, &ev.Amount, "Event: amount")
 
 		// Make sure that GetEvents also returns the reclaim escrow event.
 		evts, grr := backend.GetEvents(context.Background(), consensusAPI.HeightLatest)
@@ -633,7 +633,7 @@ func testEscrowEx( // nolint: gocyclo
 		var gotIt bool
 		for _, evt := range evts {
 			if evt.Escrow != nil && evt.Escrow.Reclaim != nil {
-				if evt.Escrow.Reclaim.Owner.Equal(ev.Owner) && evt.Escrow.Reclaim.Escrow.Equal(ev.Escrow) && evt.Escrow.Reclaim.Tokens.Cmp(&ev.Tokens) == 0 {
+				if evt.Escrow.Reclaim.Owner.Equal(ev.Owner) && evt.Escrow.Reclaim.Escrow.Equal(ev.Escrow) && evt.Escrow.Reclaim.Amount.Cmp(&ev.Amount) == 0 {
 					gotIt = true
 					break
 				}
@@ -685,7 +685,7 @@ func testEscrowEx( // nolint: gocyclo
 	// Escrow less than the minimum amount.
 	escrow = &api.Escrow{
 		Account: dstAddr,
-		Tokens:  debug.QtyFromInt(1), // Minimum is 10.
+		Amount:  debug.QtyFromInt(1), // Minimum is 10.
 	}
 	tx = api.NewAddEscrowTx(srcAcc.General.Nonce, nil, escrow)
 	err = consensusAPI.SignAndSubmitTx(context.Background(), consensus, srcSigner, tx)
@@ -716,7 +716,7 @@ func testSlashDoubleSigning(
 
 	escrow := &api.Escrow{
 		Account: entAddr,
-		Tokens:  debug.QtyFromInt(math.MaxUint32),
+		Amount:  debug.QtyFromInt(math.MaxUint32),
 	}
 	tx := api.NewAddEscrowTx(srcAcc.General.Nonce, nil, escrow)
 	err = consensusAPI.SignAndSubmitTx(context.Background(), consensus, srcSigner, tx)
@@ -728,7 +728,7 @@ func testSlashDoubleSigning(
 		require.NotNil(ev)
 		require.Equal(SrcAddr, ev.Owner, "Event: owner")
 		require.Equal(entAddr, ev.Escrow, "Event: escrow")
-		require.Equal(escrow.Tokens, ev.Tokens, "Event: tokens")
+		require.Equal(escrow.Amount, ev.Amount, "Event: amount")
 	case <-time.After(recvTimeout):
 		t.Fatalf("failed to receive escrow event")
 	}
@@ -755,8 +755,8 @@ WaitLoop:
 		case ev := <-slashCh:
 			if e := ev.Take; e != nil {
 				require.Equal(entAddr, e.Owner, "TakeEscrowEvent - owner must be entity's address")
-				// All tokens must be slashed as defined in debugGenesisState.
-				require.Equal(escrow.Tokens, e.Tokens, "TakeEscrowEvent - all tokens slashed")
+				// All stake must be slashed as defined in debugGenesisState.
+				require.Equal(escrow.Amount, e.Amount, "TakeEscrowEvent - all stake slashed")
 				break WaitLoop
 			}
 		case <-time.After(recvTimeout):
