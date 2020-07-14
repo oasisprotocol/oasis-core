@@ -316,9 +316,15 @@ func runRoot(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	// Run the required test scenarios.
+	// Get parallel job execution parameters.
 	parallelJobCount := viper.GetInt(cfgParallelJobCount)
 	parallelJobIndex := viper.GetInt(cfgParallelJobIndex)
+	if parallelJobIndex < 0 || parallelJobIndex >= parallelJobCount {
+		return fmt.Errorf(
+			"root: invalid value of %s flag: %d (should be in range [0, %d))",
+			cfgParallelJobIndex, parallelJobIndex, parallelJobCount,
+		)
+	}
 
 	// Parse test parameters passed by CLI.
 	var toRunExploded map[string][]scenario.Scenario
