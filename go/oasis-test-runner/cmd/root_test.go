@@ -68,15 +68,15 @@ func TestComputeParamSets(t *testing.T) {
 	require.Equal(t, expectedParamSets, computeParamSets(zippedParams, map[string]string{}))
 }
 
-func TestRecurseScenarioName(t *testing.T) {
+func TestGeneralizedScenarioName(t *testing.T) {
 	var expectedNames []string
 
 	expectedNames = []string{"e2e/runtime/abc/def", "e2e/runtime/abc", "e2e/runtime", "e2e"}
-	require.Equal(t, expectedNames, recurseScenarioName("e2e/runtime/abc/def"))
+	require.Equal(t, expectedNames, generalizedScenarioName("e2e/runtime/abc/def"))
 
 	expectedNames = []string{"e2e"}
-	require.Equal(t, expectedNames, recurseScenarioName("e2e"))
+	require.Equal(t, expectedNames, generalizedScenarioName("e2e"))
 
 	expectedNames = []string{""}
-	require.Equal(t, expectedNames, recurseScenarioName(""))
+	require.Equal(t, expectedNames, generalizedScenarioName(""))
 }

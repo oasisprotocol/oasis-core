@@ -49,7 +49,7 @@ var (
 
 	listCmd = &cobra.Command{
 		Use:   "list",
-		Short: "List registered test cases",
+		Short: "List registered scenarios",
 		Run:   runList,
 	}
 
@@ -87,15 +87,17 @@ func RegisterNondefault(s scenario.Scenario) error {
 		return fmt.Errorf("RegisterNondefault: error registering nondefault scenario: %w", err)
 	}
 
-	RegisterTestParams(strings.ToLower(s.Name()), s.Parameters())
+	RegisterScenarioParams(strings.ToLower(s.Name()), s.Parameters())
 
 	return nil
 }
 
-// RegisterTestParams registers given scenario parameters as string slices regardless of actual type.
+// RegisterScenarioParams registers parameters for a given scenario as string
+// slices regardless of actual type.
 //
-// Later we combine specific parameter sets and execute tests with all parameter combinations.
-func RegisterTestParams(name string, p *env.ParameterFlagSet) {
+// Later we combine specific parameter sets and execute scenarios with all
+// parameter combinations.
+func RegisterScenarioParams(name string, p *env.ParameterFlagSet) {
 	fs := flag.NewFlagSet(name, flag.ContinueOnError)
 	p.VisitAll(func(f *flag.Flag) {
 		fs.StringSlice(name+"."+f.Name, []string{f.Value.String()}, f.Usage)
@@ -104,20 +106,28 @@ func RegisterTestParams(name string, p *env.ParameterFlagSet) {
 	_ = viper.BindPFlags(fs)
 }
 
-// parseTestParams parses --<test_name>.<key1>=<val1>,<val2>... flags combinations, clones provided proto-scenarios, and
-// populates them so that each scenario instance has unique parameter set. Returns mapping test name -> list of scenario
-// instances. NB: Golang maps are unordered so ordering of tests is *not preserved*.
-func parseTestParams(toRun []scenario.Scenario) (map[string][]scenario.Scenario, error) {
-	r := make(map[string][]scenario.Scenario)
-	for _, s := range toRun {
+// parseScenarioParams parses --<scenario_name>.<key1>=<val1>,<val2>... flags
+// combinations, clones provided proto-scenarios, and populates them so that
+// each scenario instance has a unique parameter set.
+// Returns a mapping: scenario name -> list of scenario instances.
+// NOTE: Golang maps are unordered so ordering of scenarios is not preserved.
+func parseScenarioParams(toRun []scenario.Scenario) (map[string][]scenario.Scenario, error) {
+	scListsToRun := make(map[string][]scenario.Scenario)
+	for _, sc := range toRun {
 		zippedParams := make(map[string][]string)
-		s.Parameters().VisitAll(func(f *flag.Flag) {
-			// If no parameter values for test provided via CLI, use default registered values as fallback.
-			zippedParams[f.Name] = viper.GetStringSlice(fmt.Sprintf(common.ScenarioParamsMask, s.Name(), f.Name))
+		sc.Parameters().VisitAll(func(f *flag.Flag) {
+			// Default to parameter values that were registered as defaults for
+			// this particular scenario and parameter combination.
+			zippedParams[f.Name] = viper.GetStringSlice(
+				fmt.Sprintf(common.ScenarioParamsMask, sc.Name(), f.Name),
+			)
 
-			// Otherwise, apply parameter values from most specific to most general.
-			for _, p := range recurseScenarioName(s.Name()) {
-				paramName := fmt.Sprintf(common.ScenarioParamsMask, p, f.Name)
+			// Use parameter values that very explicitly set for a given
+			// (generalized) scenario and parameter combination.
+			// NOTE: Parameter values for more specific (generalized) scenario
+			// have preference over more generalized ones.
+			for _, genName := range generalizedScenarioName(sc.Name()) {
+				paramName := fmt.Sprintf(common.ScenarioParamsMask, genName, f.Name)
 				if viper.IsSet(paramName) {
 					zippedParams[f.Name] = viper.GetStringSlice(paramName)
 					break
@@ -127,33 +137,36 @@ func parseTestParams(toRun []scenario.Scenario) (map[string][]scenario.Scenario,
 
 		parameterSets := computeParamSets(zippedParams, map[string]string{})
 
-		// For each parameter set combination, clone a scenario and apply user-provided parameter value.
-		for _, ps := range parameterSets {
-			sCloned := s.Clone()
-			for k, userVal := range ps {
-				if err := sCloned.Parameters().Set(k, userVal); err != nil {
-					return nil, fmt.Errorf("parseTestParams: error setting viper parameter: %w", err)
+		// For each parameter set combination, clone a scenario and apply the
+		// provided parameter values.
+		for _, paramSet := range parameterSets {
+			sCloned := sc.Clone()
+			for param, val := range paramSet {
+				if err := sCloned.Parameters().Set(param, val); err != nil {
+					return nil, fmt.Errorf("parseScenarioParams: error setting viper parameter: %w", err)
 				}
 			}
-			r[s.Name()] = append(r[s.Name()], sCloned)
+			scListsToRun[sc.Name()] = append(scListsToRun[sc.Name()], sCloned)
 		}
 
-		// Test has no parameters (incl. recursive ones) defined at all, keep original copy.
+		// Scenario has no parameters (incl. generalized ones) defined, keep
+		// original scenario.
 		if len(parameterSets) == 0 {
-			r[s.Name()] = []scenario.Scenario{s}
+			scListsToRun[sc.Name()] = []scenario.Scenario{sc}
 		}
 	}
 
-	return r, nil
+	return scListsToRun, nil
 }
 
-// recurseScenarioNames returns list of generalized scenario names from original name to most general.
-func recurseScenarioName(name string) []string {
+// generalizedScenarioNames returns list of generalized scenario names from the
+// original name to most general name.
+func generalizedScenarioName(name string) []string {
 	dirs := strings.Split(name, "/")
 	if len(dirs) == 1 {
 		return []string{name}
 	}
-	subNames := recurseScenarioName(strings.Join(dirs[0:len(dirs)-1], "/"))
+	subNames := generalizedScenarioName(strings.Join(dirs[0:len(dirs)-1], "/"))
 	return append([]string{name}, subNames...)
 }
 
@@ -203,7 +216,7 @@ func Register(s scenario.Scenario) error {
 		return fmt.Errorf("Register: error registering nondefault scenario: %w", err)
 	}
 
-	RegisterTestParams(strings.ToLower(s.Name()), s.Parameters())
+	RegisterScenarioParams(strings.ToLower(s.Name()), s.Parameters())
 
 	return nil
 }
@@ -271,7 +284,7 @@ func runRoot(cmd *cobra.Command, args []string) error {
 
 	// Enumerate requested scenarios.
 	toRun := common.GetDefaultScenarios() // Run all default scenarios if not set.
-	if scNameRegexes := viper.GetStringSlice(common.CfgTest); len(scNameRegexes) > 0 {
+	if scNameRegexes := viper.GetStringSlice(common.CfgScenarioRegex); len(scNameRegexes) > 0 {
 		matched := make(map[scenario.Scenario]bool)
 		for _, scNameRegex := range scNameRegexes {
 			// Make sure the given scenario name regex matches the whole scenario name, not just
@@ -326,23 +339,25 @@ func runRoot(cmd *cobra.Command, args []string) error {
 		)
 	}
 
-	// Parse test parameters passed by CLI.
+	// Expand the list of scenarios to run with the passed scenario parameters.
 	var toRunExploded map[string][]scenario.Scenario
-	toRunExploded, err = parseTestParams(toRun)
+	toRunExploded, err = parseScenarioParams(toRun)
 	if err != nil {
-		return fmt.Errorf("root: failed to parse test params: %w", err)
+		return fmt.Errorf("root: failed to parse scenario parameters: %w", err)
 	}
 
-	// Run all test instances.
+	// Run all requested scenarios.
 	index := 0
 	for run := 0; run < numRuns; run++ {
-		// Walk through toRun instead of toRunExploded to preserve tests ordering.
+		// Iterate through toRun instead of toRunExploded to preserve scenario
+		// ordering.
 		for _, sc := range toRun {
 			name := sc.Name()
 			scs := toRunExploded[name]
 			for i, v := range scs {
-				// If number of runs is greater than 1 or there are multiple parameter sets for test, maintain unique
-				// scenario datadir by appending unique run ID.
+				// If number of runs is greater than 1 or if there are multiple
+				// parameter sets for a scenario, maintain unique scenario
+				// datadir by appending unique run ID.
 				n := name
 				runID := run*len(scs) + i
 				if numRuns > 1 || len(scs) > 1 {
@@ -350,49 +365,47 @@ func runRoot(cmd *cobra.Command, args []string) error {
 				}
 
 				if index%parallelJobCount != parallelJobIndex {
-					logger.Info("skipping test case (assigned to different parallel job)",
-						"test", name, "run_id", runID,
+					logger.Info("skipping scenario (assigned to different parallel job)",
+						"scenario", name, "run_id", runID,
 					)
 					index++
 					continue
 				}
 
 				if excludeMap[strings.ToLower(v.Name())] {
-					logger.Info("skipping test case (excluded by environment)",
-						"test", name, "run_id", runID,
+					logger.Info("skipping scenario (excluded by environment)",
+						"scenario", name, "run_id", runID,
 					)
 					index++
 					continue
 				}
 
-				logger.Info("running test case",
-					"test", name, "run_id", runID,
+				logger.Info("running scenario",
+					"scenario", name, "run_id", runID,
 				)
 
-				childEnv, err := rootEnv.NewChild(n, &env.TestInstanceInfo{
-					Test:         v.Name(),
+				childEnv, err := rootEnv.NewChild(n, &env.ScenarioInstanceInfo{
+					Scenario:     v.Name(),
 					Instance:     filepath.Base(rootEnv.Dir()),
 					ParameterSet: v.Parameters(),
 					Run:          run,
 				})
 				if err != nil {
 					logger.Error("failed to setup child environment",
-						"err", err,
-						"test", name,
-						"run_id", runID,
+						"err", err, "scenario", name, "run_id", runID,
 					)
 					return fmt.Errorf("root: failed to setup child environment: %w", err)
 				}
 
 				// Dump current parameter set to file.
-				if err = childEnv.WriteTestInfo(); err != nil {
+				if err = childEnv.WriteScenarioInfo(); err != nil {
 					return err
 				}
 
 				// Init per-run prometheus pusher, if metrics are enabled.
 				if viper.IsSet(metrics.CfgMetricsAddr) {
 					pusher = push.New(viper.GetString(metrics.CfgMetricsAddr), metrics.MetricsJobTestRunner)
-					labels := metrics.GetDefaultPushLabels(childEnv.TestInfo())
+					labels := metrics.GetDefaultPushLabels(childEnv.ScenarioInfo())
 					for k, v := range labels {
 						pusher = pusher.Grouping(k, v)
 					}
@@ -400,22 +413,22 @@ func runRoot(cmd *cobra.Command, args []string) error {
 				}
 
 				if err = doScenario(childEnv, v); err != nil {
-					logger.Error("failed to run test case",
+					logger.Error("failed to run scenario",
 						"err", err,
-						"test", name,
+						"scenario", name,
 						"run_id", runID,
 					)
-					err = fmt.Errorf("root: failed to run test case: %w", err)
+					err = fmt.Errorf("root: failed to run scenario: %w", err)
 				}
 
 				if cleanErr := doCleanup(childEnv); cleanErr != nil {
-					logger.Error("failed to clean up child envionment",
+					logger.Error("failed to clean up child environment",
 						"err", cleanErr,
-						"test", name,
+						"scenario", name,
 						"run_id", runID,
 					)
 					if err == nil {
-						err = fmt.Errorf("root: failed to clean up child enviroment: %w", cleanErr)
+						err = fmt.Errorf("root: failed to clean up child environment: %w", cleanErr)
 					}
 				}
 
@@ -423,8 +436,8 @@ func runRoot(cmd *cobra.Command, args []string) error {
 					return err
 				}
 
-				logger.Info("passed test case",
-					"test", name, "run_id", runID,
+				logger.Info("passed scenario",
+					"scenario", name, "run_id", runID,
 				)
 
 				index++
@@ -438,12 +451,12 @@ func runRoot(cmd *cobra.Command, args []string) error {
 func doScenario(childEnv *env.Env, sc scenario.Scenario) (err error) {
 	defer func() {
 		if r := recover(); r != nil {
-			err = fmt.Errorf("root: panic caught running test case: %v: %s", r, debug.Stack())
+			err = fmt.Errorf("root: panic caught running scenario: %v: %s", r, debug.Stack())
 		}
 	}()
 
 	if err = sc.PreInit(childEnv); err != nil {
-		err = fmt.Errorf("root: failed to pre-initialize test case: %w", err)
+		err = fmt.Errorf("root: failed to pre-initialize scenario: %w", err)
 		return
 	}
 
@@ -463,14 +476,14 @@ func doScenario(childEnv *env.Env, sc scenario.Scenario) (err error) {
 		}
 	}
 
-	// If network is used, enable shorter per-node socket paths, because some e2e test datadir
-	// exceed maximum unix socket path length.
+	// If network is used, enable shorter per-node socket paths, because some
+	// datadir for some scenarios exceed the maximum unix socket path length.
 	if net != nil {
 		net.Config().UseShortGrpcSocketPaths = true
 	}
 
 	if err = sc.Init(childEnv, net); err != nil {
-		err = fmt.Errorf("root: failed to initialize test case: %w", err)
+		err = fmt.Errorf("root: failed to initialize scenario: %w", err)
 		return
 	}
 
@@ -483,7 +496,7 @@ func doScenario(childEnv *env.Env, sc scenario.Scenario) (err error) {
 	}
 
 	if err = sc.Run(childEnv); err != nil {
-		err = fmt.Errorf("root: failed to run test case: %w", err)
+		err = fmt.Errorf("root: failed to run scenario: %w", err)
 		return
 	}
 
@@ -501,7 +514,7 @@ func doScenario(childEnv *env.Env, sc scenario.Scenario) (err error) {
 func doCleanup(childEnv *env.Env) (err error) {
 	defer func() {
 		if r := recover(); r != nil {
-			err = fmt.Errorf("root: panic caught cleaning up test case: %v, %s", r, debug.Stack())
+			err = fmt.Errorf("root: panic caught cleaning up scenario: %v, %s", r, debug.Stack())
 		}
 	}()
 
@@ -511,23 +524,17 @@ func doCleanup(childEnv *env.Env) (err error) {
 }
 
 func runList(cmd *cobra.Command, args []string) {
-	switch len(common.GetScenarios()) {
+	scNames := common.GetScenarioNames()
+	switch len(scNames) {
 	case 0:
-		fmt.Printf("No supported test cases!\n")
+		fmt.Printf("No scenarios are available.\n")
 	default:
-		fmt.Printf("Supported test cases:\n")
+		fmt.Printf("Available scenarios:\n")
 
-		// Sort scenarios alphabetically before printing.
-		var scenarioNames []string
-		for name := range common.GetScenarios() {
-			scenarioNames = append(scenarioNames, name)
-		}
-		sort.Strings(scenarioNames)
-
-		for _, n := range scenarioNames {
-			fmt.Printf("  * %v", n)
+		for _, name := range scNames {
+			fmt.Printf("  * %v", name)
 			var intro bool
-			common.GetScenarios()[n].Parameters().VisitAll(func(f *flag.Flag) {
+			common.GetScenarios()[name].Parameters().VisitAll(func(f *flag.Flag) {
 				if !intro {
 					fmt.Printf(" (parameters:")
 					intro = true
@@ -550,18 +557,31 @@ func init() {
 	persistentFlags := flag.NewFlagSet("", flag.ContinueOnError)
 	persistentFlags.Var(&logFmt, common.CfgLogFmt, "log format")
 	persistentFlags.Var(&logLevel, common.CfgLogLevel, "log level")
-	persistentFlags.StringSliceP(common.CfgTest, common.CfgTestP, nil, "regexp patterns matching names of tests")
+	persistentFlags.StringSliceP(
+		common.CfgScenarioRegex,
+		common.CfgScenarioRegexShort,
+		nil,
+		"regexp patterns matching names of scenarios",
+	)
 	persistentFlags.String(metrics.CfgMetricsAddr, "", "Prometheus address")
-	persistentFlags.StringToString(metrics.CfgMetricsLabels, map[string]string{}, "override Prometheus labels")
+	persistentFlags.StringToString(
+		metrics.CfgMetricsLabels,
+		map[string]string{},
+		"override Prometheus labels",
+	)
 	_ = viper.BindPFlags(persistentFlags)
 	rootCmd.PersistentFlags().AddFlagSet(persistentFlags)
 
 	// Register flags.
 	rootFlags := flag.NewFlagSet("", flag.ContinueOnError)
 	rootFlags.StringVar(&cfgFile, cfgConfigFile, "", "config file")
-	rootFlags.Bool(cfgLogNoStdout, false, "do not mutiplex logs to stdout")
-	rootFlags.Duration(metrics.CfgMetricsInterval, 5*time.Second, "metrics push interval for test runner and oasis nodes")
-	rootFlags.IntVarP(&numRuns, cfgNumRuns, "n", 1, "number of runs for given test(s)")
+	rootFlags.Bool(cfgLogNoStdout, false, "do not multiplex logs to stdout")
+	rootFlags.Duration(
+		metrics.CfgMetricsInterval,
+		5*time.Second,
+		"metrics push interval for test runner and oasis nodes",
+	)
+	rootFlags.IntVarP(&numRuns, cfgNumRuns, "n", 1, "number of runs for given scenario(s)")
 	rootFlags.Int(cfgParallelJobCount, 1, "(for CI) number of overall parallel jobs")
 	rootFlags.Int(cfgParallelJobIndex, 0, "(for CI) index of this parallel job")
 	_ = viper.BindPFlags(rootFlags)

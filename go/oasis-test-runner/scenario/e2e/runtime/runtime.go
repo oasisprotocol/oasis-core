@@ -486,7 +486,7 @@ func (sc *runtimeImpl) initialEpochTransitions() error {
 // RegisterScenarios registers all end-to-end scenarios.
 func RegisterScenarios() error {
 	// Register non-scenario-specific parameters.
-	cmd.RegisterTestParams(RuntimeParamsDummy.Name(), RuntimeParamsDummy.Parameters())
+	cmd.RegisterScenarioParams(RuntimeParamsDummy.Name(), RuntimeParamsDummy.Parameters())
 
 	// Register default scenarios which are executed, if no test names provided.
 	for _, s := range []scenario.Scenario{

@@ -10,15 +10,15 @@ import (
 )
 
 const (
-	CfgLogFmt   = "log.format"
-	CfgLogLevel = "log.level"
-	CfgTest     = "test"
-	CfgTestP    = "t"
+	CfgLogFmt             = "log.format"
+	CfgLogLevel           = "log.level"
+	CfgScenarioRegex      = "scenario"
+	CfgScenarioRegexShort = "s"
 
 	// ScenarioParamsMask is the form of parameters passed to specific scenario.
 	//
-	// [1] parameter is test name, [2] parameter is parameter name. This is
-	// used when binding and parsing (recursive) parameters with viper.
+	// [1] parameter is scenario name, [2] parameter is a parameter name. This
+	// is used when binding and parsing (recursive) parameters with viper.
 	ScenarioParamsMask = "%[1]s.%[2]s"
 )
 
@@ -35,6 +35,7 @@ func GetScenarios() map[string]scenario.Scenario {
 }
 
 // GetScenarioNames returns the names of all scenarios.
+// NOTE: Scenarios are sorted alphabetically.
 func GetScenarioNames() (names []string) {
 	for name := range scenarios {
 		names = append(names, name)

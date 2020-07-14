@@ -300,7 +300,7 @@ func (sc *E2E) finishWithoutChild() error {
 // RegisterScenarios registers all end-to-end scenarios.
 func RegisterScenarios() error {
 	// Register non-scenario-specific parameters.
-	cmd.RegisterTestParams(E2eParamsDummy.Name(), E2eParamsDummy.Parameters())
+	cmd.RegisterScenarioParams(E2eParamsDummy.Name(), E2eParamsDummy.Parameters())
 
 	// Register default scenarios which are executed, if no test names provided.
 	for _, s := range []scenario.Scenario{
