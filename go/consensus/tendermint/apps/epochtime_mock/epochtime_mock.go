@@ -62,7 +62,7 @@ func (app *epochTimeMockApplication) BeginBlock(ctx *api.Context, request types.
 		return nil
 	}
 
-	height := ctx.BlockHeight()
+	height := ctx.BlockHeight() + 1
 	if future.Height != height {
 		ctx.Logger().Error("BeginBlock: height mismatch in defered set",
 			"height", height,
@@ -121,7 +121,7 @@ func (app *epochTimeMockApplication) setEpoch(
 	state *mutableState,
 	epoch epochtime.EpochTime,
 ) error {
-	height := ctx.BlockHeight()
+	height := ctx.BlockHeight() + 1
 
 	ctx.Logger().Info("scheduling epoch transition",
 		"epoch", epoch,

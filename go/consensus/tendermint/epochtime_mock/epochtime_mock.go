@@ -71,12 +71,31 @@ func (sc *serviceClient) GetEpochBlock(ctx context.Context, epoch api.EpochTime)
 		return sc.currentBlock, nil
 	}
 
-	sc.logger.Error("epochtime: attempted to get block for historic epoch",
-		"epoch", epoch,
-		"current_epoch", sc.epoch,
-	)
+	// Find historic epoch -- it is fine if this is not optimal as mock epochtime is only for tests
+	// where the number of epoch transitions shoud be low.
+	height := consensus.HeightLatest
+	for {
+		q, err := sc.querier.QueryAt(ctx, height)
+		if err != nil {
+			return -1, fmt.Errorf("failed to query epoch: %w", err)
+		}
 
-	return 0, fmt.Errorf("epochtime: not implemented for historic epochs")
+		var pastEpoch api.EpochTime
+		pastEpoch, height, err = q.Epoch(ctx)
+		if err != nil {
+			return -1, fmt.Errorf("failed to query epoch: %w", err)
+		}
+
+		if epoch == pastEpoch {
+			return height, nil
+		}
+
+		height--
+
+		if pastEpoch == 0 || height <= 1 {
+			return -1, fmt.Errorf("failed to find historic epoch (minimum: %d requested: %d)", pastEpoch, epoch)
+		}
+	}
 }
 
 func (sc *serviceClient) WatchEpochs() (<-chan api.EpochTime, *pubsub.Subscription) {
