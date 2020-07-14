@@ -29,7 +29,7 @@ docker_plugin_default_config: &docker_plugin_default_config
     - "BUILDKITE_PIPELINE_NAME"
     - "BUILDKITE_BUILD_NUMBER"
     - "BUILDKITE_BUILD_URL"
-    - "TESTS"
+    - "SCENARIOS"
     - "NUM_RUNS"
     - "SLACK_WEBHOOK_URL"
     - "METRICS_PUSH_ADDR"
@@ -123,7 +123,13 @@ steps:
     command:
       - .buildkite/scripts/download_e2e_test_artifacts.sh
       - rm -rf /var/tmp/benchmarks/*
-      - .buildkite/scripts/test_e2e.sh --metrics.address $METRICS_PUSH_ADDR --metrics.interval 5s --metrics.labels instance=\$BUILDKITE_PIPELINE_NAME-\$BUILDKITE_BUILD_NUMBER --num_runs $NUM_RUNS -t $TESTS
+      - >-
+          .buildkite/scripts/test_e2e.sh
+            --metrics.address $METRICS_PUSH_ADDR
+            --metrics.interval 5s
+            --metrics.labels instance=$BUILDKITE_PIPELINE_NAME-$BUILDKITE_BUILD_NUMBER
+            --num_runs $NUM_RUNS
+            --scenario $SCENARIOS
     env:
       TEST_BASE_DIR: /var/tmp/benchmarks
     agents:

@@ -459,7 +459,7 @@ func (args *argBuilder) appendNodeMetrics(node *Node) *argBuilder {
 
 	// Append labels.
 	args.vec = append(args.vec, "--"+metrics.CfgMetricsLabels)
-	ti := node.net.env.TestInfo()
+	ti := node.net.env.ScenarioInfo()
 	labels := metrics.GetDefaultPushLabels(ti)
 	var l []string
 	for k, v := range labels {

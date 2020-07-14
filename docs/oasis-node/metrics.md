@@ -71,7 +71,7 @@ oasis_storage_failures | Counter | Number of storage failures. | call | [storage
 oasis_storage_latency | Summary | Storage call latency (seconds). | call | [storage](../../go/storage/metrics.go)
 oasis_storage_successes | Counter | Number of storage successes. | call | [storage](../../go/storage/metrics.go)
 oasis_storage_value_size | Summary | Storage call value size (bytes). | call | [storage](../../go/storage/metrics.go)
-oasis_up | Gauge | Is oasis-test-runner active for specific test. |  | [oasis-node/cmd/common/metrics](../../go/oasis-node/cmd/common/metrics/metrics.go)
+oasis_up | Gauge | Is oasis-test-runner active for specific scenario. |  | [oasis-node/cmd/common/metrics](../../go/oasis-node/cmd/common/metrics/metrics.go)
 oasis_worker_aborted_batch_count | Counter | Number of aborted batches. | runtime | [worker/compute/executor/committee](../../go/worker/compute/executor/committee/node.go)
 oasis_worker_aborted_merge_count | Counter | Number of aborted merges. | runtime | [worker/compute/merge/committee](../../go/worker/compute/merge/committee/node.go)
 oasis_worker_batch_processing_time | Summary | Time it takes for a batch to finalize (seconds). | runtime | [worker/compute/executor/committee](../../go/worker/compute/executor/committee/node.go)

@@ -74,7 +74,7 @@ func (sc *remoteSignerImpl) Init(childEnv *env.Env, net *oasis.Network) error {
 // RegisterScenarios registers all scenarios for remote-signer.
 func RegisterScenarios() error {
 	// Register non-scenario-specific parameters.
-	cmd.RegisterTestParams(RemoteSignerParamsDummy.Name(), RemoteSignerParamsDummy.Parameters())
+	cmd.RegisterScenarioParams(RemoteSignerParamsDummy.Name(), RemoteSignerParamsDummy.Parameters())
 
 	// Register default scenarios which are executed, if no test names provided.
 	for _, s := range []scenario.Scenario{

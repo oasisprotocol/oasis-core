@@ -37,7 +37,7 @@ const (
 	MetricsLabelInstance        = "instance"
 	MetricsLabelRun             = "run"
 	MetricsLabelSoftwareVersion = "software_version"
-	MetricsLabelTest            = "test"
+	MetricsLabelScenario        = "scenario"
 
 	MetricsModeNone = "none"
 	MetricsModePull = "pull"
@@ -51,7 +51,7 @@ var (
 	UpGauge = prometheus.NewGauge(
 		prometheus.GaugeOpts{
 			Name: MetricUp,
-			Help: "Is oasis-test-runner active for specific test.",
+			Help: "Is oasis-test-runner active for specific scenario.",
 		},
 	)
 )
@@ -271,11 +271,11 @@ func EscapeLabelCharacters(l string) string {
 }
 
 // GetDefaultPushLabels generates standard Prometheus push labels based on test current test instance info.
-func GetDefaultPushLabels(ti *env.TestInstanceInfo) map[string]string {
+func GetDefaultPushLabels(ti *env.ScenarioInstanceInfo) map[string]string {
 	labels := map[string]string{
 		MetricsLabelInstance:        ti.Instance,
 		MetricsLabelRun:             strconv.Itoa(ti.Run),
-		MetricsLabelTest:            ti.Test,
+		MetricsLabelScenario:        ti.Scenario,
 		MetricsLabelSoftwareVersion: version.SoftwareVersion,
 	}
 	if version.GitBranch != "" {

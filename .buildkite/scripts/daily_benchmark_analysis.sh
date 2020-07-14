@@ -12,7 +12,7 @@
 # METRICS_SOURCE_GIT_BRANCH - name of feature branch on git (e.g. jsmith/feature/abc)
 # METRICS_TARGET_GIT_BRANCH - name of master branch on git (e.g. master)
 # METRICS_THRESHOLDS - max or min thresholds flags (e.g. --max_threshold.cpu.avg_ratio 1.05)
-# TESTS - names of test(s) to compare (e.g. e2e/runtime/runtime)
+# SCENARIOS - names of scenario(s) to compare (e.g. e2e/runtime/runtime)
 # SLACK_WEBHOOK_URL - slack webhook for reporting (e.g. https://hooks.slack.com/services/xxxxxx)
 
 set -ux
@@ -21,7 +21,7 @@ set -ux
   --metrics.address $METRICS_QUERY_ADDR \
   --metrics.source.git_branch $METRICS_SOURCE_GIT_BRANCH \
   --metrics.target.git_branch $METRICS_TARGET_GIT_BRANCH \
-  -t $TESTS \
+  --scenario $SCENARIOS \
   --log.level INFO \
   --log.format JSON \
   $METRICS_THRESHOLDS \

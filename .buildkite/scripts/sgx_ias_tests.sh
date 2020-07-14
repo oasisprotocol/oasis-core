@@ -21,4 +21,4 @@ export OASIS_UNSAFE_KM_POLICY_KEYS=1
 export OASIS_UNSAFE_ALLOW_DEBUG_ENCLAVES=1
 
 make all
-.buildkite/scripts/test_e2e.sh -t e2e/runtime/runtime-encryption
+.buildkite/scripts/test_e2e.sh --scenario e2e/runtime/runtime-encryption

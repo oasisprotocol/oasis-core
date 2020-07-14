@@ -82,33 +82,43 @@ min_threshold.<metric>.{avg|max}_ratio, ba exits with error code 1.`,
 	cmpLogger *logging.Logger
 )
 
-// Metric is a base class for getting a specific prometheus metric and required thresholds to test.
+// Metric is a base class for getting a specific prometheus metric and required
+// thresholds to test.
 //
-// There is one instance of this struct for each test for each metric.
+// There is one instance of this struct for each scenario for each metric.
 type Metric struct {
-	// getter fetches given coarse time series with finer granularity and returns average and maximum values of all runs
-	// in the same batch.
+	// getter fetches given coarse time series with finer granularity and
+	// returns average and maximum values of all runs in the same batch.
 	getter func(context.Context, string, *model.SampleStream) (float64, float64, error)
 
-	// maxThresholdAvgRatio is maximum allowed ratio between the average values of source and target batches.
+	// maxThresholdAvgRatio is maximum allowed ratio between the average values
+	// of source and target batches.
 	maxThresholdAvgRatio float64
 
-	// maxThresholdMaxRatio is maximum allowed ratio between the maximum values of source and target batches.
+	// maxThresholdMaxRatio is maximum allowed ratio between the maximum values
+	// of source and target batches.
 	maxThresholdMaxRatio float64
 
-	// minThresholdAvgRatio is minimum required ratio between the average values of source and target batches.
+	// minThresholdAvgRatio is minimum required ratio between the average values
+	// of source and target batches.
 	minThresholdAvgRatio float64
 
-	// minThresholdMaxRatio is minimum required ratio between the maximum values of source and target batches.
+	// minThresholdMaxRatio is minimum required ratio between the maximum values
+	// of source and target batches.
 	minThresholdMaxRatio float64
 }
 
-// getDuration returns average and maximum running times of the given coarse benchmark instance ("oasis_up" metric w/
-// minute resolution time series).
-func getDuration(ctx context.Context, test string, bi *model.SampleStream) (float64, float64, error) {
+// getDuration returns average and maximum running times of the given coarse
+// benchmark instance ("oasis_up" metric with minute resolution time series).
+func getDuration(
+	ctx context.Context,
+	scenario string,
+	bi *model.SampleStream,
+) (float64, float64, error) {
 	instance := string(bi.Metric[metrics.MetricsLabelInstance])
 
-	// Re-fetch the given benchmark instance with second resolution. Each obtained time series corresponds to one run.
+	// Re-fetch the given benchmark instance with second resolution. Each
+	// obtained time series corresponds to one run.
 	v1api := prometheusAPI.NewAPI(client)
 	r := prometheusAPI.Range{
 		Start: bi.Values[0].Timestamp.Time().Add(-1 * time.Minute),
@@ -125,9 +135,13 @@ func getDuration(ctx context.Context, test string, bi *model.SampleStream) (floa
 		cmpLogger.Warn("warnings while querying Prometheus", "warnings", warnings)
 	}
 	if len(result.(model.Matrix)) == 0 {
-		return 0, 0, fmt.Errorf("getDuration: no time series matched test: %s and instance: %s", test, instance)
+		return 0, 0, fmt.Errorf(
+			"getDuration: no time series matched scenario: %s and instance: %s",
+			scenario, instance,
+		)
 	}
-	// Compute average and max duration of runs. Since we have a second-resolution, each point denotes 1 second of run's
+	// Compute average and max duration of runs.
+	// Since we have a second-resolution, each point denotes 1 second of run's
 	// uptime. Just count all points and divide them by the number of runs.
 	avgDuration := 0.0
 	maxDuration := 0.0
@@ -142,14 +156,18 @@ func getDuration(ctx context.Context, test string, bi *model.SampleStream) (floa
 	return avgDuration, maxDuration, nil
 }
 
-// getIOWork returns average and maximum sum of read and written bytes by all workers of the given coarse benchmark
-// instance  ("oasis_up" metric).
-func getIOWork(ctx context.Context, test string, bi *model.SampleStream) (float64, float64, error) {
-	readAvg, readMax, err := getSummableMetric(ctx, metrics.MetricDiskReadBytes, test, bi)
+// getIOWork returns average and maximum sum of read and written bytes by all
+// workers of the given coarse benchmark instance  ("oasis_up" metric).
+func getIOWork(
+	ctx context.Context,
+	scenario string,
+	bi *model.SampleStream,
+) (float64, float64, error) {
+	readAvg, readMax, err := getSummableMetric(ctx, metrics.MetricDiskReadBytes, scenario, bi)
 	if err != nil {
 		return 0, 0, err
 	}
-	writtenAvg, writtenMax, err := getSummableMetric(ctx, metrics.MetricDiskWrittenBytes, test, bi)
+	writtenAvg, writtenMax, err := getSummableMetric(ctx, metrics.MetricDiskWrittenBytes, scenario, bi)
 	if err != nil {
 		return 0, 0, err
 	}
@@ -157,26 +175,38 @@ func getIOWork(ctx context.Context, test string, bi *model.SampleStream) (float6
 	return readAvg + writtenAvg, readMax + writtenMax, nil
 }
 
-// getDiskUsage returns average and maximum sum of disk usage for all workers of the given coarse benchmark instance
-// ("oasis_up" metric).
-func getDiskUsage(ctx context.Context, test string, bi *model.SampleStream) (float64, float64, error) {
-	return getSummableMetric(ctx, metrics.MetricDiskUsageBytes, test, bi)
+// getDiskUsage returns average and maximum sum of disk usage for all workers of
+// the given coarse benchmark instance ("oasis_up" metric).
+func getDiskUsage(
+	ctx context.Context,
+	scenario string,
+	bi *model.SampleStream,
+) (float64, float64, error) {
+	return getSummableMetric(ctx, metrics.MetricDiskUsageBytes, scenario, bi)
 }
 
-// getRssAnonMemory returns average and maximum sum of anonymous resident memory for all workers of the given coarse
-// benchmark instance ("oasis_up" metric).
-func getRssAnonMemory(ctx context.Context, test string, bi *model.SampleStream) (float64, float64, error) {
-	return getSummableMetric(ctx, metrics.MetricMemRssAnonBytes, test, bi)
+// getRssAnonMemory returns average and maximum sum of anonymous resident memory
+// for all workers of the given coarse benchmark instance ("oasis_up" metric).
+func getRssAnonMemory(
+	ctx context.Context,
+	scenario string,
+	bi *model.SampleStream,
+) (float64, float64, error) {
+	return getSummableMetric(ctx, metrics.MetricMemRssAnonBytes, scenario, bi)
 }
 
-// getCPUTime returns average and maximum sum of utime and stime for all workers of the given coarse benchmark instance
-// ("oasis_up" metric).
-func getCPUTime(ctx context.Context, test string, bi *model.SampleStream) (float64, float64, error) {
-	utimeAvg, utimeMax, err := getSummableMetric(ctx, metrics.MetricCPUUTimeSeconds, test, bi)
+// getCPUTime returns average and maximum sum of utime and stime for all workers
+// of the given coarse benchmark instance ("oasis_up" metric).
+func getCPUTime(
+	ctx context.Context,
+	scenario string,
+	bi *model.SampleStream,
+) (float64, float64, error) {
+	utimeAvg, utimeMax, err := getSummableMetric(ctx, metrics.MetricCPUUTimeSeconds, scenario, bi)
 	if err != nil {
 		return 0, 0, err
 	}
-	stimeAvg, stimeMax, err := getSummableMetric(ctx, metrics.MetricCPUSTimeSeconds, test, bi)
+	stimeAvg, stimeMax, err := getSummableMetric(ctx, metrics.MetricCPUSTimeSeconds, scenario, bi)
 	if err != nil {
 		return 0, 0, err
 	}
@@ -184,13 +214,18 @@ func getCPUTime(ctx context.Context, test string, bi *model.SampleStream) (float
 	return utimeAvg + stimeAvg, utimeMax + stimeMax, nil
 }
 
-// getSummableMetric returns average and maximum sum of metrics for all workers of the given coarse benchmark instance
-// ("oasis_up" metric).
-func getSummableMetric(ctx context.Context, metric, test string, bi *model.SampleStream) (float64, float64, error) {
+// getSummableMetric returns average and maximum sum of metrics for all workers
+// of the given coarse benchmark instance ("oasis_up" metric).
+func getSummableMetric(
+	ctx context.Context,
+	metric, scenario string,
+	bi *model.SampleStream,
+) (float64, float64, error) {
 	instance := string(bi.Metric[metrics.MetricsLabelInstance])
 
 	labels := bi.Metric.Clone()
-	// Existing job denotes the "oasis-test-runner" worker only. We want to sum disk space across all workers.
+	// Existing job denotes the "oasis-test-runner" worker only. We want to sum
+	// disk space across all workers.
 	delete(labels, "job")
 	// We will average metric over all runs.
 	delete(labels, "run")
@@ -199,8 +234,10 @@ func getSummableMetric(ctx context.Context, metric, test string, bi *model.Sampl
 
 	query := fmt.Sprintf("sum by (run) (%s %s)", metric, labels.String())
 
-	// Fetch value at last recorded time. Some metrics might not be available anymore, if prometheus was shut down.
-	// Add one additional minute to capture reported values within the last minute period.
+	// Fetch value at last recorded time.
+	// Some metrics might not be available anymore, if prometheus was shut down.
+	// Add one additional minute to capture reported values within the last
+	// minute period.
 	t := bi.Values[len(bi.Values)-1].Timestamp.Time().Add(time.Minute)
 
 	result, warnings, err := v1api.Query(ctx, query, t)
@@ -211,7 +248,10 @@ func getSummableMetric(ctx context.Context, metric, test string, bi *model.Sampl
 		cmpLogger.Warn("warnings while querying Prometheus", "warnings", warnings)
 	}
 	if len(result.(model.Vector)) == 0 {
-		return 0, 0, fmt.Errorf("getSummableMetric: no time series matched test: %s and instance: %s", test, instance)
+		return 0, 0, fmt.Errorf(
+			"getSummableMetric: no time series matched scenario: %s and instance: %s",
+			scenario, instance,
+		)
 	}
 
 	// Compute average and max values.
@@ -228,9 +268,13 @@ func getSummableMetric(ctx context.Context, metric, test string, bi *model.Sampl
 	return avg, max, nil
 }
 
-// getNetwork returns average and maximum amount of network activity for all workers of the given coarse benchmark
-// instance ("oasis_up" metric).
-func getNetwork(ctx context.Context, test string, bi *model.SampleStream) (float64, float64, error) {
+// getNetwork returns average and maximum amount of network activity for all
+// workers of the given coarse benchmark instance ("oasis_up" metric).
+func getNetwork(
+	ctx context.Context,
+	scenario string,
+	bi *model.SampleStream,
+) (float64, float64, error) {
 	instance := string(bi.Metric[metrics.MetricsLabelInstance])
 
 	labels := bi.Metric.Clone()
@@ -261,7 +305,10 @@ func getNetwork(ctx context.Context, test string, bi *model.SampleStream) (float
 			cmpLogger.Warn("warnings while querying Prometheus", "warnings", warnings)
 		}
 		if len(result.(model.Matrix)) == 0 {
-			return 0, 0, fmt.Errorf("getNetworkMetric: no time series matched test: %s and instance: %s", test, instance)
+			return 0, 0, fmt.Errorf(
+				"getNetworkMetric: no time series matched scenario: %s and instance: %s",
+				scenario, instance,
+			)
 		}
 
 		// Compute average and max values.
@@ -285,31 +332,41 @@ func getNetwork(ctx context.Context, test string, bi *model.SampleStream) (float
 		nil
 }
 
-// getCoarseBenchmarkInstances finds time series based on "oasis_up" metric w/ minute resolution for the given test and
-// labels ordered from the oldest to the most recent ones.
+// getCoarseBenchmarkInstances finds time series based on "oasis_up" metric with
+// minute resolution for the given scenario and labels ordered from the oldest
+// to the most recent ones.
 //
-// This function is called initially to determine benchmark instances to compare. Then, the metric-specific operation
-// fetches time series with finer (second) granularity.
+// This function is called initially to determine benchmark instances to
+// compare. Afterwards, the metric-specific operation fetches time series with
+// finer (second) granularity.
 //
-// NB: Due to Prometheus limit, this function fetches time series in the past 183 hours only.
-func getCoarseBenchmarkInstances(ctx context.Context, test string, labels map[string]string) (model.Matrix, error) {
+// NOTE: Due to Prometheus limit, this function fetches time series in the past
+// 183 hours only.
+func getCoarseBenchmarkInstances(
+	ctx context.Context,
+	scenario string,
+	labels map[string]string,
+) (model.Matrix, error) {
 	v1api := prometheusAPI.NewAPI(client)
 	r := prometheusAPI.Range{
-		// XXX: Hardcoded max resolution in Prometheus is 11,000 points or ~183 hours with minute resolution.
+		// XXX: Hardcoded max resolution in Prometheus is 11,000 points or ~183
+		// hours with minute resolution.
 		Start: time.Now().Add(-183 * time.Hour),
 		End:   time.Now(),
 		Step:  time.Minute,
 	}
 
 	ls := model.LabelSet{
-		"job":                    metrics.MetricsJobTestRunner,
-		metrics.MetricsLabelTest: model.LabelValue(test),
+		"job":                        metrics.MetricsJobTestRunner,
+		metrics.MetricsLabelScenario: model.LabelValue(scenario),
 	}
 	for k, v := range labels {
 		ls[model.LabelName(k)] = model.LabelValue(v)
 	}
 
-	query := fmt.Sprintf("max(%s %s) by (%s) == 1.0", metrics.MetricUp, ls.String(), metrics.MetricsLabelInstance)
+	query := fmt.Sprintf("max(%s %s) by (%s) == 1.0",
+		metrics.MetricUp, ls.String(), metrics.MetricsLabelInstance,
+	)
 	result, warnings, err := v1api.QueryRange(ctx, query, r)
 	if err != nil {
 		cmpLogger.Error("error querying Prometheus", "err", err)
@@ -340,46 +397,103 @@ func instanceName(s *model.SampleStream) string {
 	return string(s.Metric[metrics.MetricsLabelInstance])
 }
 
-// fetchAndCompare fetches the given metric from prometheus and compares the results.
+// fetchAndCompare fetches the given metric from prometheus and compares the
+// results.
 //
-// Returns false, if metric-specific ratios are exceeded or there is a problem obtaining time series. Otherwise true.
-func fetchAndCompare(ctx context.Context, m, test string, sInstance, tInstance *model.SampleStream) (succ bool) {
+// If metric-specific ratios are exceeded or if there is a problem obtaining
+// time series, returns false. Otherwise, returns true.
+func fetchAndCompare(
+	ctx context.Context,
+	m, scenario string,
+	sInstance, tInstance *model.SampleStream,
+) (succ bool) {
 	getMetric := allMetrics[m].getter
 	succ = true
 
-	sAvg, sMax, err := getMetric(ctx, test, sInstance)
+	sAvg, sMax, err := getMetric(ctx, scenario, sInstance)
 	if err != nil {
-		cmpLogger.Error("error fetching source benchmark instance", "metric", m, "test", test, "instance", instanceName(sInstance), "err", err)
+		cmpLogger.Error("error fetching source benchmark instance",
+			"metric", m,
+			"scenario", scenario,
+			"instance", instanceName(sInstance),
+			"err", err,
+		)
 		return false
 	}
 
-	tAvg, tMax, err := getMetric(ctx, test, tInstance)
+	tAvg, tMax, err := getMetric(ctx, scenario, tInstance)
 	if err != nil {
-		cmpLogger.Error("error fetching target test instance", "metric", m, "test", test, "instance", instanceName(sInstance), "err", err)
+		cmpLogger.Error("error fetching target scenario instance",
+			"metric", m,
+			"scenario", scenario,
+			"instance", instanceName(sInstance),
+			"err", err,
+		)
 		return false
 	}
 
-	// Compare average and max metric values and log error, if they exceed or don't reach required ratios.
+	// Compare average and max metric values and log error(s) if they exceed or
+	// don't reach required ratios.
 	maxAvgRatio := allMetrics[m].maxThresholdAvgRatio
 	maxMaxRatio := allMetrics[m].maxThresholdMaxRatio
 	minAvgRatio := allMetrics[m].minThresholdAvgRatio
 	minMaxRatio := allMetrics[m].minThresholdMaxRatio
-	cmpLogger.Info("obtained average ratio", "metric", m, "test", test, "source_avg", sAvg, "target_avg", tAvg, "ratio", sAvg/tAvg)
+	cmpLogger.Info("obtained average ratio",
+		"metric", m,
+		"scenario", scenario,
+		"source_avg", sAvg,
+		"target_avg", tAvg,
+		"ratio", sAvg/tAvg,
+	)
 	if maxAvgRatio != 0 && sAvg/tAvg > maxAvgRatio {
-		cmpLogger.Error("average metric value exceeds max allowed ratio", "metric", m, "test", test, "source_avg", sAvg, "target_avg", tAvg, "ratio", sAvg/tAvg, "max_allowed_avg_ratio", maxAvgRatio)
+		cmpLogger.Error("average metric value exceeds max allowed ratio",
+			"metric", m,
+			"scenario", scenario,
+			"source_avg", sAvg,
+			"target_avg", tAvg,
+			"ratio", sAvg/tAvg,
+			"max_allowed_avg_ratio", maxAvgRatio,
+		)
 		succ = false
 	}
 	if minAvgRatio != 0 && sAvg/tAvg < minAvgRatio {
-		cmpLogger.Error("average metric value doesn't reach min required ratio", "metric", m, "test", test, "source_avg", sAvg, "target_avg", tAvg, "ratio", sAvg/tAvg, "min_required_avg_ratio", minAvgRatio)
+		cmpLogger.Error("average metric value doesn't reach min required ratio",
+			"metric", m,
+			"scenario", scenario,
+			"source_avg", sAvg,
+			"target_avg", tAvg,
+			"ratio", sAvg/tAvg,
+			"min_required_avg_ratio", minAvgRatio,
+		)
 		succ = false
 	}
-	cmpLogger.Info("obtained max ratio", "metric", m, "test", test, "source_max", sMax, "target_max", tMax, "ratio", sMax/tMax)
+	cmpLogger.Info("obtained max ratio",
+		"metric", m,
+		"scenario", scenario,
+		"source_max", sMax,
+		"target_max", tMax,
+		"ratio", sMax/tMax,
+	)
 	if maxMaxRatio != 0 && sMax/tMax > maxMaxRatio {
-		cmpLogger.Error("maximum metric value exceeds max ratio", "metric", m, "test", test, "source_max", sMax, "target_max", tMax, "ratio", sMax/tMax, "max_allowed_max_ratio", maxMaxRatio)
+		cmpLogger.Error("maximum metric value exceeds max ratio",
+			"metric", m,
+			"scenario", scenario,
+			"source_max", sMax,
+			"target_max", tMax,
+			"ratio", sMax/tMax,
+			"max_allowed_max_ratio", maxMaxRatio,
+		)
 		succ = false
 	}
 	if minMaxRatio != 0 && sMax/tMax < maxMaxRatio {
-		cmpLogger.Error("maximum metric value doesn't reach min required ratio", "metric", m, "test", test, "source_max", sMax, "target_max", tMax, "ratio", sMax/tMax, "min_required_max_ratio", maxMaxRatio)
+		cmpLogger.Error("maximum metric value doesn't reach min required ratio",
+			"metric", m,
+			"scenario", scenario,
+			"source_max", sMax,
+			"target_max", tMax,
+			"ratio", sMax/tMax,
+			"min_required_max_ratio", maxMaxRatio,
+		)
 		succ = false
 	}
 
@@ -422,70 +536,87 @@ func runCmp(cmd *cobra.Command, args []string) {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 
-	tests := viper.GetStringSlice(common.CfgTest)
-	if len(tests) == 0 {
+	scenarios := viper.GetStringSlice(common.CfgScenarioRegex)
+	if len(scenarios) == 0 {
 		for _, s := range common.GetDefaultScenarios() {
-			tests = append(tests, s.Name())
+			scenarios = append(scenarios, s.Name())
 		}
 	}
 	succ := true
-	for _, test := range tests {
-		sLabels, tLabels := map[string]string{}, map[string]string{}
+	for _, sc := range scenarios {
+		srcLabels, tgtLabels := map[string]string{}, map[string]string{}
 		if viper.IsSet(cfgMetricsSourceGitBranch) {
-			sLabels[metrics.MetricsLabelGitBranch] = viper.GetString(cfgMetricsSourceGitBranch)
+			srcLabels[metrics.MetricsLabelGitBranch] = viper.GetString(cfgMetricsSourceGitBranch)
 		}
 		if viper.IsSet(cfgMetricsTargetGitBranch) {
-			tLabels[metrics.MetricsLabelGitBranch] = viper.GetString(cfgMetricsTargetGitBranch)
+			tgtLabels[metrics.MetricsLabelGitBranch] = viper.GetString(cfgMetricsTargetGitBranch)
 		}
 
 		// Set other required Prometheus labels, if passed.
-		// TODO: Integrate test parameters and parameter set combinations if multiple values provided like we do in oasis-test-runner.
+		// TODO: Integrate scenario parameters and parameter set combinations if
+		// multiple values are provided like we do in oasis-test-runner.
 		for k, v := range viper.GetStringMapString(metrics.CfgMetricsLabels) {
-			sLabels[k] = v
-			tLabels[k] = v
+			srcLabels[k] = v
+			tgtLabels[k] = v
 		}
 
-		sInstances, err := getCoarseBenchmarkInstances(ctx, test, sLabels)
+		srcScInstances, err := getCoarseBenchmarkInstances(ctx, sc, srcLabels)
 		if err != nil {
-			cmpLogger.Error("error querying for source test instances", "err", err)
+			cmpLogger.Error("error querying for source scenario instances", "err", err)
 			os.Exit(1)
 		}
-		sNames := instanceNames(sInstances)
-		tInstances, err := getCoarseBenchmarkInstances(ctx, test, tLabels)
+		srcScNames := instanceNames(srcScInstances)
+		tgtScInstances, err := getCoarseBenchmarkInstances(ctx, sc, tgtLabels)
 		if err != nil {
-			cmpLogger.Error("error querying for target test instances", "err", err)
+			cmpLogger.Error("error querying for target scenario instances", "err", err)
 			os.Exit(1)
 		}
-		tNames := instanceNames(tInstances)
+		tgtScNames := instanceNames(tgtScInstances)
 
-		if len(sNames) == 0 {
-			cmpLogger.Info("test does not have any source benchmark instances to compare, ignoring", "test", test)
+		if len(srcScNames) == 0 {
+			cmpLogger.Info(
+				"scenario does not have any source benchmark instances to compare, ignoring",
+				"scenario", sc,
+			)
 			continue
 		}
-		if len(tNames) == 0 {
-			cmpLogger.Info("test does not have any target benchmark instances to compare, ignoring", "test", test)
+		if len(tgtScNames) == 0 {
+			cmpLogger.Info(
+				"scenario does not have any target benchmark instances to compare, ignoring",
+				"scenario", sc,
+			)
 			continue
 		}
 
-		var sInstance, tInstance *model.SampleStream
-		if sNames[len(sNames)-1] != tNames[len(tNames)-1] {
+		var srcInstance, tgtInstance *model.SampleStream
+		if srcScNames[len(srcScNames)-1] != tgtScNames[len(tgtScNames)-1] {
 			// Benchmark instances differ e.g. because of different gitBranch.
-			sInstance = sInstances[len(sInstances)-1]
-			tInstance = tInstances[len(tInstances)-1]
+			srcInstance = srcScInstances[len(srcScInstances)-1]
+			tgtInstance = tgtScInstances[len(tgtScInstances)-1]
 		} else {
-			// Last benchmark instances are equal, pick the pre-last one from the target instances.
-			if len(tNames) < 2 {
-				cmpLogger.Info("test has only one benchmark instance, ignoring", "test", test, "source_instances", sNames, "target_instances", tNames)
+			// Last benchmark instances are equal, pick the pre-last one from
+			// the target instances.
+			if len(tgtScNames) < 2 {
+				cmpLogger.Info("scenario only has one benchmark instance, ignoring",
+					"scenario", sc,
+					"source_instances", srcScNames,
+					"target_instances", tgtScNames,
+				)
 				continue
 			}
-			sInstance = sInstances[len(sInstances)-1]
-			tInstance = tInstances[len(tInstances)-2]
+			srcInstance = srcScInstances[len(srcScInstances)-1]
+			tgtInstance = tgtScInstances[len(tgtScInstances)-2]
 		}
-		cmpLogger.Info("obtained source and target instance", "test", test, "source_instance", instanceName(sInstance), "target_instance", instanceName(tInstance))
+		cmpLogger.Info("obtained source and target instance",
+			"scenario", sc,
+			"source_instance", instanceName(srcInstance),
+			"target_instance", instanceName(tgtInstance),
+		)
 
 		for _, m := range userMetrics {
-			// Don't put succ = succ && f oneliner here, because f won't get executed once succ = false.
-			fSucc := fetchAndCompare(ctx, m, test, sInstance, tInstance)
+			// Don't put succ = succ && f oneliner here, because f won't get
+			// executed once succ = false.
+			fSucc := fetchAndCompare(ctx, m, sc, srcInstance, tgtInstance)
 			succ = succ && fSucc
 		}
 	}
@@ -504,15 +635,43 @@ func Register(parentCmd *cobra.Command) {
 	var metricNames []string
 	for k := range allMetrics {
 		metricNames = append(metricNames, k)
-		cmpFlags.Float64Var(&allMetrics[k].maxThresholdAvgRatio, fmt.Sprintf("max_threshold.%s.avg_ratio", k), allMetrics[k].maxThresholdAvgRatio, fmt.Sprintf("maximum allowed ratio between average %s metrics", k))
-		cmpFlags.Float64Var(&allMetrics[k].maxThresholdMaxRatio, fmt.Sprintf("max_threshold.%s.max_ratio", k), allMetrics[k].maxThresholdMaxRatio, fmt.Sprintf("maximum allowed ratio between maximum %s metrics", k))
-		cmpFlags.Float64Var(&allMetrics[k].minThresholdAvgRatio, fmt.Sprintf("min_threshold.%s.avg_ratio", k), allMetrics[k].minThresholdAvgRatio, fmt.Sprintf("minimum required ratio between average %s metrics", k))
-		cmpFlags.Float64Var(&allMetrics[k].minThresholdMaxRatio, fmt.Sprintf("min_threshold.%s.max_ratio", k), allMetrics[k].minThresholdMaxRatio, fmt.Sprintf("minimum required ratio between maximum %s metrics", k))
+		cmpFlags.Float64Var(
+			&allMetrics[k].maxThresholdAvgRatio,
+			fmt.Sprintf("max_threshold.%s.avg_ratio", k),
+			allMetrics[k].maxThresholdAvgRatio,
+			fmt.Sprintf("maximum allowed ratio between average %s metrics", k),
+		)
+		cmpFlags.Float64Var(
+			&allMetrics[k].maxThresholdMaxRatio,
+			fmt.Sprintf("max_threshold.%s.max_ratio", k),
+			allMetrics[k].maxThresholdMaxRatio,
+			fmt.Sprintf("maximum allowed ratio between maximum %s metrics", k),
+		)
+		cmpFlags.Float64Var(
+			&allMetrics[k].minThresholdAvgRatio,
+			fmt.Sprintf("min_threshold.%s.avg_ratio", k),
+			allMetrics[k].minThresholdAvgRatio,
+			fmt.Sprintf("minimum required ratio between average %s metrics", k),
+		)
+		cmpFlags.Float64Var(
+			&allMetrics[k].minThresholdMaxRatio,
+			fmt.Sprintf("min_threshold.%s.max_ratio", k),
+			allMetrics[k].minThresholdMaxRatio,
+			fmt.Sprintf("minimum required ratio between maximum %s metrics", k),
+		)
 	}
 	cmpFlags.StringSliceVarP(&userMetrics, cfgMetrics, cfgMetricsP, metricNames, "metrics to compare")
 
-	cmpFlags.String(cfgMetricsSourceGitBranch, "", "(optional) git_branch label for the source benchmark instance")
-	cmpFlags.String(cfgMetricsTargetGitBranch, "", "(optional) git_branch label for the target benchmark instance")
+	cmpFlags.String(
+		cfgMetricsSourceGitBranch,
+		"",
+		"(optional) git_branch label for the source benchmark instance",
+	)
+	cmpFlags.String(
+		cfgMetricsTargetGitBranch,
+		"",
+		"(optional) git_branch label for the target benchmark instance",
+	)
 	cmpFlags.String(cfgMetricsNetDevice, "lo", "network device traffic to compare")
 
 	_ = viper.BindPFlags(cmpFlags)

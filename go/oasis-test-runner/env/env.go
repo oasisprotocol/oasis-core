@@ -1,4 +1,4 @@
-// Package env defines a test environment.
+// Package env defines a scenario environment.
 package env
 
 import (
@@ -17,7 +17,7 @@ import (
 )
 
 // ErrEarlyTerm is the error passed over the error channel when a
-// sub-process termiantes prior to the Cleanup.
+// sub-process terminates prior to the Cleanup.
 var ErrEarlyTerm = errors.New("env: sub-process exited early")
 
 // CmdAttrs is the SysProcAttr that will ensure graceful cleanup.
@@ -36,18 +36,18 @@ type ParameterFlagSet struct {
 	errorHandling flag.ErrorHandling
 }
 
-// TestInstanceInfo contains information of the current test run.
-type TestInstanceInfo struct {
-	// Test is the name of the test.
-	Test string `json:"test"`
+// ScenarioInstanceInfo contains information of the current scenario run.
+type ScenarioInstanceInfo struct {
+	// Scenario is the name of the scenario.
+	Scenario string `json:"scenario"`
 
-	// Instance is the instance name of the test. e.g. oasis-test-runner123456
+	// Instance is the name of the scenario instance (e.g. oasis-test-runner123456).
 	Instance string `json:"instance"`
 
-	// ParameterSet is the parameter set the test was run with.
+	// ParameterSet is the parameter set the scenario was run with.
 	ParameterSet *ParameterFlagSet `json:"parameter_set"`
 
-	// Run is the number of run.
+	// Run is the number of the run.
 	Run int `json:"run"`
 }
 
@@ -97,11 +97,11 @@ type Env struct {
 	parentElem *list.Element
 	children   *list.List
 
-	dir         *Dir
-	testInfo    *TestInstanceInfo
-	cleanupFns  []CleanupFn
-	cleanupCmds []*cmdMonitor
-	cleanupLock sync.Mutex
+	dir          *Dir
+	scenarioInfo *ScenarioInstanceInfo
+	cleanupFns   []CleanupFn
+	cleanupCmds  []*cmdMonitor
+	cleanupLock  sync.Mutex
 
 	isInCleanup bool
 }
@@ -126,9 +126,9 @@ func (env *Env) NewSubDir(subDirName string) (*Dir, error) {
 	return env.dir.NewSubDir(subDirName)
 }
 
-// TestInfo returns the test instance information.
-func (env *Env) TestInfo() *TestInstanceInfo {
-	return env.testInfo
+// ScenarioInfo returns the scenario instance information.
+func (env *Env) ScenarioInfo() *ScenarioInstanceInfo {
+	return env.scenarioInfo
 }
 
 // AddOnCleanup adds a cleanup routine to be called durring the environment's
@@ -208,7 +208,7 @@ func (env *Env) Cleanup() {
 }
 
 // NewChild returns a new child test environment.
-func (env *Env) NewChild(childName string, testInfo *TestInstanceInfo) (*Env, error) {
+func (env *Env) NewChild(childName string, scInfo *ScenarioInstanceInfo) (*Env, error) {
 	var parentDir *Dir
 	if env.parent != nil {
 		parentDir = env.parent.dir
@@ -222,24 +222,25 @@ func (env *Env) NewChild(childName string, testInfo *TestInstanceInfo) (*Env, er
 	}
 
 	child := &Env{
-		name:     childName,
-		parent:   env,
-		children: list.New(),
-		dir:      subDir,
-		testInfo: testInfo,
+		name:         childName,
+		parent:       env,
+		children:     list.New(),
+		dir:          subDir,
+		scenarioInfo: scInfo,
 	}
 	child.parentElem = env.children.PushBack(child)
 
 	return child, nil
 }
 
-// WriteTestInfo dumps test instance parameter set to test_info.json file for debugging afterwards.
-func (env *Env) WriteTestInfo() error {
-	b, err := json.Marshal(env.testInfo)
+// WriteScenarioInfo dumps scenario instance parameter set to scenario_info.json
+// file for debugging afterwards.
+func (env *Env) WriteScenarioInfo() error {
+	b, err := json.Marshal(env.scenarioInfo)
 	if err != nil {
 		return err
 	}
-	if err = ioutil.WriteFile(filepath.Join(env.Dir(), "test_info.json"), b, 0o644); err != nil { // nolint: gosec
+	if err = ioutil.WriteFile(filepath.Join(env.Dir(), "scenario_info.json"), b, 0o644); err != nil { // nolint: gosec
 		return err
 	}
 
