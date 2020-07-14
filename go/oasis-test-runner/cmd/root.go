@@ -305,6 +305,10 @@ func runRoot(cmd *cobra.Command, args []string) error {
 		}
 	}
 
+	// Sort requested scenarios to enable consistent partitioning for parallel
+	// job execution.
+	sort.Slice(toRun, func(i, j int) bool { return toRun[i].Name() < toRun[j].Name() })
+
 	excludeMap := make(map[string]bool)
 	if excludeEnv := os.Getenv("OASIS_EXCLUDE_E2E"); excludeEnv != "" {
 		for _, v := range strings.Split(excludeEnv, ",") {
@@ -312,9 +316,15 @@ func runRoot(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	// Run the required test scenarios.
+	// Get parallel job execution parameters.
 	parallelJobCount := viper.GetInt(cfgParallelJobCount)
 	parallelJobIndex := viper.GetInt(cfgParallelJobIndex)
+	if parallelJobIndex < 0 || parallelJobIndex >= parallelJobCount {
+		return fmt.Errorf(
+			"root: invalid value of %s flag: %d (should be in range [0, %d))",
+			cfgParallelJobIndex, parallelJobIndex, parallelJobCount,
+		)
+	}
 
 	// Parse test parameters passed by CLI.
 	var toRunExploded map[string][]scenario.Scenario
