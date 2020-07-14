@@ -27,6 +27,9 @@ docker_plugin_default_config: &docker_plugin_default_config
     - "CARGO_INSTALL_ROOT=/root/.cargo"
     - "GOPROXY=https://proxy.golang.org/"
     - "SLACK_WEBHOOK_URL"
+    - "METRICS_PUSH_ADDR"
+    - "BUILDKITE_PIPELINE_NAME"
+    - "BUILDKITE_BUILD_NUMBER"
   propagate-environment: true
   unconfined: true
 
