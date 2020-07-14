@@ -271,15 +271,17 @@ func runRoot(cmd *cobra.Command, args []string) error {
 
 	// Enumerate requested scenarios.
 	toRun := common.GetDefaultScenarios() // Run all default scenarios if not set.
-	if vec := viper.GetStringSlice(common.CfgTest); len(vec) > 0 {
+	if scNameRegexes := viper.GetStringSlice(common.CfgTest); len(scNameRegexes) > 0 {
 		matched := make(map[scenario.Scenario]bool)
-		for _, v := range vec {
-			name := strings.ToLower(v)
+		for _, scNameRegex := range scNameRegexes {
+			// Make sure the given scenario name regex matches the whole scenario name, not just
+			// a substring.
+			regex := fmt.Sprintf("^%s$", scNameRegex)
 
 			var anyMatched bool
 			for scName, scenario := range common.GetScenarios() {
 				var match bool
-				match, err = regexp.MatchString(name, scName)
+				match, err = regexp.MatchString(regex, scName)
 				if err != nil {
 					return fmt.Errorf("root: bad scenario name regexp: %w", err)
 				}
@@ -289,11 +291,11 @@ func runRoot(cmd *cobra.Command, args []string) error {
 				}
 			}
 			if !anyMatched {
-				logger.Error("unknown scenario",
-					"scenario", name,
+				logger.Error("no scenario matches regex",
+					"scenario_regex", scNameRegex,
 				)
-				return fmt.Errorf("root: unknown scenario: %s\nAvailable scenarios:\n%s",
-					name, strings.Join(common.GetScenarioNames(), "\n"),
+				return fmt.Errorf("root: no scenario matches regex: %s\nAvailable scenarios:\n%s",
+					scNameRegex, strings.Join(common.GetScenarioNames(), "\n"),
 				)
 			}
 		}
