@@ -305,6 +305,10 @@ func runRoot(cmd *cobra.Command, args []string) error {
 		}
 	}
 
+	// Sort requested scenarios to enable consistent partitioning for parallel
+	// job execution.
+	sort.Slice(toRun, func(i, j int) bool { return toRun[i].Name() < toRun[j].Name() })
+
 	excludeMap := make(map[string]bool)
 	if excludeEnv := os.Getenv("OASIS_EXCLUDE_E2E"); excludeEnv != "" {
 		for _, v := range strings.Split(excludeEnv, ",") {
