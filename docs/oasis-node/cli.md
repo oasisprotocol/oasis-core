@@ -42,3 +42,58 @@ to get information like the following:
 ```
 
 (example taken from a non-validator node)
+
+## `stake`
+
+### `account`
+
+#### `info`
+
+Run
+
+```sh
+oasis-node stake account info \
+  --stake.account.address <account address> \
+  --address unix:/path/to/node/internal.sock
+```
+
+to get staking information for a specific account:
+
+```
+General Account:
+  Balance: TEST 0.0
+  Nonce: 0
+Escrow Account:
+  Active:
+    Balance: TEST 0.0
+    Total Shares: 0
+  Debonding:
+    Balance: TEST 0.0
+    Total Shares: 0
+  Commission Schedule:
+    Rates: (none)
+    Rate Bounds: (none)
+  Stake Accumulator:
+    Claims:
+      - Name: registry.RegisterEntity
+        Staking Thresholds:
+          - Global: entity
+      - Name: registry.RegisterNode.LQu4ZtFg8OJ0MC4M4QMeUR7Is6Xt4A/CW+PK/7TPiH0=
+        Staking Thresholds:
+          - Global: node-validator
+```
+
+### `pubkey2address`
+
+Run
+
+```sh
+oasis-node stake pubkey2address --public_key <public_key>
+```
+
+to get staking account address from an entity or node public key. Example
+response:
+
+```
+oasis1qqncl383h8458mr9cytatygctzwsx02n4c5f8ed7
+```
