@@ -146,13 +146,12 @@ func (tb *tendermintBackend) WatchRuntimes(ctx context.Context) (<-chan *api.Run
 func (tb *tendermintBackend) Cleanup() {
 }
 
-func (tb *tendermintBackend) GetRuntimes(ctx context.Context, height int64) ([]*api.Runtime, error) {
-	q, err := tb.querier.QueryAt(ctx, height)
+func (tb *tendermintBackend) GetRuntimes(ctx context.Context, query *api.GetRuntimesQuery) ([]*api.Runtime, error) {
+	q, err := tb.querier.QueryAt(ctx, query.Height)
 	if err != nil {
 		return nil, err
 	}
-
-	return q.Runtimes(ctx)
+	return q.Runtimes(ctx, query.IncludeSuspended)
 }
 
 func (tb *tendermintBackend) StateToGenesis(ctx context.Context, height int64) (*api.Genesis, error) {
@@ -455,7 +454,7 @@ func New(ctx context.Context, service service.TendermintService) (api.Backend, e
 	}
 	tb.runtimeNotifier = pubsub.NewBrokerEx(func(ch channels.Channel) {
 		wr := ch.In()
-		runtimes, err := tb.GetRuntimes(ctx, consensus.HeightLatest)
+		runtimes, err := tb.GetRuntimes(ctx, &api.GetRuntimesQuery{Height: consensus.HeightLatest, IncludeSuspended: true})
 		if err != nil {
 			tb.logger.Error("runtime notifier: unable to get a list of runtimes",
 				"err", err,

@@ -527,8 +527,13 @@ func testRegistryEntityNodes( // nolint: gocyclo
 func testRegistryRuntime(t *testing.T, backend api.Backend, consensus consensusAPI.Backend) (common.Namespace, common.Namespace) {
 	require := require.New(t)
 
-	existingRuntimes, err := backend.GetRuntimes(context.Background(), consensusAPI.HeightLatest)
-	require.NoError(err, "GetRuntimes")
+	query := &api.GetRuntimesQuery{Height: consensusAPI.HeightLatest, IncludeSuspended: false}
+	existingRuntimes, err := backend.GetRuntimes(context.Background(), query)
+	require.NoError(err, "GetRuntimes(includeSuspended=false)")
+	query.IncludeSuspended = true
+	existingAllRuntimes, err := backend.GetRuntimes(context.Background(), query)
+	require.NoError(err, "GetRuntimes(includeSuspended=true)")
+	require.ElementsMatch(existingRuntimes, existingAllRuntimes, "no suspended runtimes")
 
 	// We must use the test entity for runtime registrations as registering a runtime will prevent
 	// the entity from being deregistered and the other node tests already use the test entity for
@@ -702,7 +707,7 @@ func testRegistryRuntime(t *testing.T, backend api.Backend, consensus consensusA
 		rtMapByName[tc.name] = rt.Runtime
 	}
 
-	registeredRuntimes, err := backend.GetRuntimes(context.Background(), consensusAPI.HeightLatest)
+	registeredRuntimes, err := backend.GetRuntimes(context.Background(), query)
 	require.NoError(err, "GetRuntimes")
 	require.Len(registeredRuntimes, len(existingRuntimes)+len(rtMap), "registry has all the new runtimes")
 	for _, regRuntime := range registeredRuntimes {
@@ -1112,7 +1117,8 @@ func (ent *TestEntity) NewTestNodes(nCompute, nStorage int, idNonce []byte, runt
 
 		// Add another Re-Registration with different address field and more runtimes.
 		moreRuntimes := append([]*node.Runtime(nil), runtimes...)
-		registeredRuntimes, err := consensus.Registry().GetRuntimes(context.Background(), consensusAPI.HeightLatest)
+		q := &api.GetRuntimesQuery{Height: consensusAPI.HeightLatest, IncludeSuspended: false}
+		registeredRuntimes, err := consensus.Registry().GetRuntimes(context.Background(), q)
 		if err != nil {
 			return nil, err
 		}

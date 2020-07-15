@@ -86,13 +86,17 @@ const (
 	// Staking parameters flags.
 	CfgStakingThreshold = "runtime.staking.threshold"
 
+	// List runtimes flags.
+	CfgIncludeSuspended = "include_suspended"
+
 	runtimeGenesisFilename = "runtime_genesis.json"
 )
 
 var (
-	outputFlags   = flag.NewFlagSet("", flag.ContinueOnError)
-	runtimeFlags  = flag.NewFlagSet("", flag.ContinueOnError)
-	registerFlags = flag.NewFlagSet("", flag.ContinueOnError)
+	outputFlags      = flag.NewFlagSet("", flag.ContinueOnError)
+	runtimeFlags     = flag.NewFlagSet("", flag.ContinueOnError)
+	runtimeListFlags = flag.NewFlagSet("", flag.ContinueOnError)
+	registerFlags    = flag.NewFlagSet("", flag.ContinueOnError)
 
 	runtimeCmd = &cobra.Command{
 		Use:   "runtime",
@@ -208,7 +212,11 @@ func doList(cmd *cobra.Command, args []string) {
 	conn, client := doConnect(cmd)
 	defer conn.Close()
 
-	runtimes, err := client.GetRuntimes(context.Background(), consensus.HeightLatest)
+	query := &registry.GetRuntimesQuery{
+		Height:           consensus.HeightLatest,
+		IncludeSuspended: viper.GetBool(CfgIncludeSuspended),
+	}
+	runtimes, err := client.GetRuntimes(context.Background(), query)
 	if err != nil {
 		logger.Error("failed to query runtimes",
 			"err", err,
@@ -517,6 +525,7 @@ func Register(parentCmd *cobra.Command) {
 
 	listCmd.Flags().AddFlagSet(cmdGrpc.ClientFlags)
 	listCmd.Flags().AddFlagSet(cmdFlags.VerboseFlags)
+	listCmd.Flags().AddFlagSet(runtimeListFlags)
 
 	registerCmd.Flags().AddFlagSet(registerFlags)
 
@@ -581,4 +590,8 @@ func init() {
 
 	registerFlags.AddFlagSet(cmdFlags.DebugTestEntityFlags)
 	registerFlags.AddFlagSet(cmdConsensus.TxFlags)
+
+	// List Runtimes flags.
+	runtimeListFlags.Bool(CfgIncludeSuspended, false, "Use to include suspended runtimes")
+	_ = viper.BindPFlags(runtimeListFlags)
 }

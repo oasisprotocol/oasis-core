@@ -283,21 +283,21 @@ func handlerGetRuntimes( // nolint: golint
 	dec func(interface{}) error,
 	interceptor grpc.UnaryServerInterceptor,
 ) (interface{}, error) {
-	var height int64
-	if err := dec(&height); err != nil {
+	var query GetRuntimesQuery
+	if err := dec(&query); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(Backend).GetRuntimes(ctx, height)
+		return srv.(Backend).GetRuntimes(ctx, &query)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
 		FullMethod: methodGetRuntimes.FullName(),
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(Backend).GetRuntimes(ctx, req.(int64))
+		return srv.(Backend).GetRuntimes(ctx, req.(*GetRuntimesQuery))
 	}
-	return interceptor(ctx, height, info, handler)
+	return interceptor(ctx, &query, info, handler)
 }
 
 func handlerStateToGenesis( // nolint: golint
@@ -628,9 +628,9 @@ func (c *registryClient) GetRuntime(ctx context.Context, query *NamespaceQuery) 
 	return &rsp, nil
 }
 
-func (c *registryClient) GetRuntimes(ctx context.Context, height int64) ([]*Runtime, error) {
+func (c *registryClient) GetRuntimes(ctx context.Context, query *GetRuntimesQuery) ([]*Runtime, error) {
 	var rsp []*Runtime
-	if err := c.conn.Invoke(ctx, methodGetRuntimes.FullName(), height, &rsp); err != nil {
+	if err := c.conn.Invoke(ctx, methodGetRuntimes.FullName(), query, &rsp); err != nil {
 		return nil, err
 	}
 	return rsp, nil

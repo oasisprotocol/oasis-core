@@ -219,7 +219,7 @@ type Backend interface {
 
 	// GetRuntimes returns the registered Runtimes at the specified
 	// block height.
-	GetRuntimes(context.Context, int64) ([]*Runtime, error)
+	GetRuntimes(context.Context, *GetRuntimesQuery) ([]*Runtime, error)
 
 	// WatchRuntimes returns a stream of Runtime.  Upon subscription,
 	// all runtimes will be sent immediately.
@@ -245,6 +245,12 @@ type IDQuery struct {
 type NamespaceQuery struct {
 	Height int64            `json:"height"`
 	ID     common.Namespace `json:"id"`
+}
+
+// GetRuntimesQuery is a registry get runtimes query.
+type GetRuntimesQuery struct {
+	Height           int64 `json:"height"`
+	IncludeSuspended bool  `json:"include_suspended"`
 }
 
 // ConsensusAddressQuery is a registry query by consensus address.
