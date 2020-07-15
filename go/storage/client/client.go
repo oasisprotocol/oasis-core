@@ -230,16 +230,25 @@ func (b *storageClientBackend) writeWithClient(
 	}
 
 	successes := len(receipts)
-	if successes == 0 {
+	switch {
+	case successes == 0:
+		// All writes have failed.
 		return nil, errors.New("storage client: failed to write to any storage node")
-	} else if successes < minWriteReplication {
+	case successes < minWriteReplication:
+		// Replication was less than the minimum required factor.
 		b.logger.Warn("write operation only partially applied",
 			"min_write_replication", minWriteReplication,
 			"successful_writes", successes,
 		)
+		if b.runtime != nil {
+			// In case the minimum write replication factor is set by the runtime, it doesn't make
+			// sense to emit partial receipts as other nodes will not accept them.
+			return nil, fmt.Errorf("storage client: write operation only partially applied")
+		}
+		return receipts, nil
+	default:
+		return receipts, nil
 	}
-
-	return receipts, nil
 }
 
 func (b *storageClientBackend) Apply(ctx context.Context, request *api.ApplyRequest) ([]*api.Receipt, error) {
