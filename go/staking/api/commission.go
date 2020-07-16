@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"math/big"
@@ -55,7 +56,7 @@ type CommissionRateStep struct {
 
 // PrettyPrint writes a pretty-printed representation of CommissionRateStep to
 // the given writer.
-func (crs CommissionRateStep) PrettyPrint(prefix string, w io.Writer) {
+func (crs CommissionRateStep) PrettyPrint(ctx context.Context, prefix string, w io.Writer) {
 	fmt.Fprintf(w, "%s- Start: epoch %d\n", prefix, crs.Start)
 
 	fmt.Fprintf(w, "%s  Rate:  %s %%\n", prefix, CommissionRatePercentage(crs.Rate))
@@ -80,7 +81,7 @@ type CommissionRateBoundStep struct {
 
 // PrettyPrint writes a pretty-printed representation of CommissionRateBoundStep
 // to the given writer.
-func (crbs CommissionRateBoundStep) PrettyPrint(prefix string, w io.Writer) {
+func (crbs CommissionRateBoundStep) PrettyPrint(ctx context.Context, prefix string, w io.Writer) {
 	fmt.Fprintf(w, "%s- Start:        epoch %d\n", prefix, crbs.Start)
 
 	fmt.Fprintf(w, "%s  Minimum Rate: %s %%\n", prefix, CommissionRatePercentage(crbs.RateMin))
@@ -104,13 +105,13 @@ type CommissionSchedule struct {
 
 // PrettyPrint writes a pretty-printed representation of CommissionSchedule to
 // the given writer.
-func (cs CommissionSchedule) PrettyPrint(prefix string, w io.Writer) {
+func (cs CommissionSchedule) PrettyPrint(ctx context.Context, prefix string, w io.Writer) {
 	if cs.Rates == nil {
 		fmt.Fprintf(w, "%sRates: (none)\n", prefix)
 	} else {
 		fmt.Fprintf(w, "%sRates:\n", prefix)
 		for _, rate := range cs.Rates {
-			rate.PrettyPrint(prefix+"  ", w)
+			rate.PrettyPrint(ctx, prefix+"  ", w)
 		}
 	}
 
@@ -119,7 +120,7 @@ func (cs CommissionSchedule) PrettyPrint(prefix string, w io.Writer) {
 	} else {
 		fmt.Fprintf(w, "%sRate Bounds:\n", prefix)
 		for _, rateBound := range cs.Bounds {
-			rateBound.PrettyPrint(prefix+"  ", w)
+			rateBound.PrettyPrint(ctx, prefix+"  ", w)
 		}
 	}
 }

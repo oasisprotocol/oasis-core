@@ -589,7 +589,7 @@ func (sc *stakeCLIImpl) checkGeneralAccount(
 	}
 
 	var b bytes.Buffer
-	expectedAccount.PrettyPrint("  ", &b)
+	expectedAccount.PrettyPrint(context.Background(), "  ", &b)
 	match := regexp.MustCompile(b.String()).FindStringSubmatch(accountInfo)
 	if match == nil {
 		return fmt.Errorf(
@@ -614,7 +614,7 @@ func (sc *stakeCLIImpl) checkEscrowAccountSharePool(
 	prefix := "  "
 	var b bytes.Buffer
 	fmt.Fprintf(&b, "%s%s:\n", prefix, sharePoolName)
-	expectedSharePool.PrettyPrint(prefix+"  ", &b)
+	expectedSharePool.PrettyPrint(context.Background(), prefix+"  ", &b)
 	match := regexp.MustCompile(b.String()).FindStringSubmatch(accountInfo)
 	if match == nil {
 		return fmt.Errorf(
@@ -638,7 +638,7 @@ func (sc *stakeCLIImpl) checkCommissionScheduleRates(
 
 	for _, expectedRate := range expectedRates {
 		var b bytes.Buffer
-		expectedRate.PrettyPrint("      ", &b)
+		expectedRate.PrettyPrint(context.Background(), "      ", &b)
 		match := regexp.MustCompile(b.String()).FindStringSubmatch(accountInfo)
 		if match == nil {
 			return fmt.Errorf(
@@ -663,7 +663,7 @@ func (sc *stakeCLIImpl) checkCommissionScheduleRateBounds(
 
 	for _, expectedBound := range expectedRateBounds {
 		var b bytes.Buffer
-		expectedBound.PrettyPrint("      ", &b)
+		expectedBound.PrettyPrint(context.Background(), "      ", &b)
 		match := regexp.MustCompile(b.String()).FindStringSubmatch(accountInfo)
 		if match == nil {
 			return fmt.Errorf(

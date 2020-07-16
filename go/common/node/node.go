@@ -4,6 +4,7 @@
 package node
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -393,14 +394,14 @@ func (s *MultiSignedNode) Open(context signature.Context, node *Node) error {
 
 // PrettyPrint writes a pretty-printed representation of the type
 // to the given writer.
-func (s MultiSignedNode) PrettyPrint(prefix string, w io.Writer) {
+func (s MultiSignedNode) PrettyPrint(ctx context.Context, prefix string, w io.Writer) {
 	pt, err := s.PrettyType()
 	if err != nil {
 		fmt.Fprintf(w, "%s<error: %s>\n", prefix, err)
 		return
 	}
 
-	pt.(prettyprint.PrettyPrinter).PrettyPrint(prefix, w)
+	pt.(prettyprint.PrettyPrinter).PrettyPrint(ctx, prefix, w)
 }
 
 // PrettyType returns a representation of the type that can be used for pretty printing.

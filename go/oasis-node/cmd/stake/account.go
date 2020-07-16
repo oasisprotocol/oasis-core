@@ -107,7 +107,7 @@ func doAccountInfo(cmd *cobra.Command, args []string) {
 
 	ctx := context.Background()
 	acct := getAccount(ctx, cmd, addr, client)
-	acct.PrettyPrint("", os.Stdout)
+	acct.PrettyPrint(ctx, "", os.Stdout)
 }
 
 func doAccountTransfer(cmd *cobra.Command, args []string) {
