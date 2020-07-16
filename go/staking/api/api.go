@@ -68,6 +68,10 @@ var (
 	// is specified in a query.
 	ErrInvalidThreshold = errors.New(ModuleName, 6, "staking: invalid threshold")
 
+	// ErrInvalidTokenValueExponent is the error returned when an invalid
+	// token's value base-10 exponent is specified.
+	ErrInvalidTokenValueExponent = errors.New(ModuleName, 7, "staking: invalid token's value exponent")
+
 	// MethodTransfer is the method name for transfers.
 	MethodTransfer = transaction.NewMethodName(ModuleName, "Transfer", Transfer{})
 	// MethodBurn is the method name for burns.
@@ -291,7 +295,9 @@ type SharePool struct {
 // PrettyPrint writes a pretty-printed representation of SharePool to the given
 // writer.
 func (p SharePool) PrettyPrint(ctx context.Context, prefix string, w io.Writer) {
-	fmt.Fprintf(w, "%sBalance:      %s\n", prefix, p.Balance)
+	fmt.Fprintf(w, "%sBalance: ", prefix)
+	PrettyPrintAmount(ctx, p.Balance, w)
+	fmt.Fprintln(w)
 
 	fmt.Fprintf(w, "%sTotal Shares: %s\n", prefix, p.TotalShares)
 }
@@ -644,9 +650,11 @@ type GeneralAccount struct {
 // PrettyPrint writes a pretty-printed representation of GeneralAccount to the
 // given writer.
 func (ga GeneralAccount) PrettyPrint(ctx context.Context, prefix string, w io.Writer) {
-	fmt.Fprintf(w, "%sBalance: %s\n", prefix, ga.Balance)
+	fmt.Fprintf(w, "%sBalance: ", prefix)
+	PrettyPrintAmount(ctx, ga.Balance, w)
+	fmt.Fprintln(w)
 
-	fmt.Fprintf(w, "%sNonce:   %d\n", prefix, ga.Nonce)
+	fmt.Fprintf(w, "%sNonce: %d\n", prefix, ga.Nonce)
 }
 
 // PrettyType returns a representation of GeneralAccount that can be used for
