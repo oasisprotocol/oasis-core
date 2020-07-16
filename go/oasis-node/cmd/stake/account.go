@@ -13,6 +13,7 @@ import (
 	cmdCommon "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common"
 	cmdConsensus "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/consensus"
 	cmdGrpc "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/grpc"
+	"github.com/oasisprotocol/oasis-core/go/staking/api"
 	staking "github.com/oasisprotocol/oasis-core/go/staking/api"
 )
 
@@ -107,6 +108,10 @@ func doAccountInfo(cmd *cobra.Command, args []string) {
 
 	ctx := context.Background()
 	acct := getAccount(ctx, cmd, addr, client)
+	symbol := getTokenSymbol(ctx, cmd, client)
+	exp := getTokenValueExponent(ctx, cmd, client)
+	ctx = context.WithValue(ctx, api.PrettyPrinterContextKeyTokenSymbol, symbol)
+	ctx = context.WithValue(ctx, api.PrettyPrinterContextKeyTokenValueExponent, exp)
 	acct.PrettyPrint(ctx, "", os.Stdout)
 }
 

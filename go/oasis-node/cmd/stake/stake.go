@@ -70,6 +70,40 @@ func doConnect(cmd *cobra.Command) (*grpc.ClientConn, api.Backend) {
 	return conn, client
 }
 
+func getTokenSymbol(ctx context.Context, cmd *cobra.Command, client api.Backend) string {
+	symbol, err := client.TokenSymbol(ctx)
+	if err != nil {
+		logger.Error("failed to query token's symbol",
+			"err", err,
+		)
+		os.Exit(1)
+	}
+	return symbol
+}
+
+func getTokenValueExponent(ctx context.Context, cmd *cobra.Command, client api.Backend) uint8 {
+	exp, err := client.TokenValueExponent(ctx)
+	if err != nil {
+		logger.Error("failed to query token's value exponent",
+			"err", err,
+		)
+		os.Exit(1)
+	}
+	return exp
+}
+
+func getAccount(ctx context.Context, cmd *cobra.Command, addr api.Address, client api.Backend) *api.Account {
+	acct, err := client.Account(ctx, &api.OwnerQuery{Owner: addr, Height: consensus.HeightLatest})
+	if err != nil {
+		logger.Error("failed to query account",
+			"address", addr,
+			"err", err,
+		)
+		os.Exit(1)
+	}
+	return acct
+}
+
 func doInfo(cmd *cobra.Command, args []string) {
 	if err := cmdCommon.Init(); err != nil {
 		cmdCommon.EarlyLogAndExit(err)
@@ -80,6 +114,15 @@ func doInfo(cmd *cobra.Command, args []string) {
 
 	ctx := context.Background()
 
+	symbol := getTokenSymbol(ctx, cmd, client)
+	fmt.Printf("Token's ticker symbol: %s\n", symbol)
+
+	exp := getTokenValueExponent(ctx, cmd, client)
+	fmt.Printf("Token's value base-10 exponent: %d\n", exp)
+
+	ctx = context.WithValue(ctx, api.PrettyPrinterContextKeyTokenSymbol, symbol)
+	ctx = context.WithValue(ctx, api.PrettyPrinterContextKeyTokenValueExponent, exp)
+
 	totalSupply, err := client.TotalSupply(ctx, consensus.HeightLatest)
 	if err != nil {
 		logger.Error("failed to query total supply",
@@ -87,7 +130,9 @@ func doInfo(cmd *cobra.Command, args []string) {
 		)
 		os.Exit(1)
 	}
-	fmt.Printf("Total supply: %v\n", totalSupply)
+	fmt.Print("Total supply: ")
+	api.PrettyPrintAmount(ctx, *totalSupply, os.Stdout)
+	fmt.Println()
 
 	commonPool, err := client.CommonPool(ctx, consensus.HeightLatest)
 	if err != nil {
@@ -96,7 +141,9 @@ func doInfo(cmd *cobra.Command, args []string) {
 		)
 		os.Exit(1)
 	}
-	fmt.Printf("Common pool: %v\n", commonPool)
+	fmt.Print("Common pool: ")
+	api.PrettyPrintAmount(ctx, *commonPool, os.Stdout)
+	fmt.Println()
 
 	lastBlockFees, err := client.LastBlockFees(ctx, consensus.HeightLatest)
 	if err != nil {
@@ -105,7 +152,9 @@ func doInfo(cmd *cobra.Command, args []string) {
 		)
 		os.Exit(1)
 	}
-	fmt.Printf("Last block fees: %v\n", lastBlockFees)
+	fmt.Print("Last block fees: ")
+	api.PrettyPrintAmount(ctx, *lastBlockFees, os.Stdout)
+	fmt.Println()
 
 	thresholdsToQuery := []api.ThresholdKind{
 		api.KindEntity,
@@ -128,7 +177,9 @@ func doInfo(cmd *cobra.Command, args []string) {
 			)
 			os.Exit(1)
 		}
-		fmt.Printf("Staking threshold (%s): %v\n", kind, thres)
+		fmt.Printf("Staking threshold (%s): ", kind)
+		api.PrettyPrintAmount(ctx, *thres, os.Stdout)
+		fmt.Println()
 	}
 }
 
@@ -166,19 +217,6 @@ func doList(cmd *cobra.Command, args []string) {
 
 		fmt.Printf("%v\n", s)
 	}
-}
-
-func getAccount(ctx context.Context, cmd *cobra.Command, addr api.Address, client api.Backend) *api.Account {
-	acct, err := client.Account(ctx, &api.OwnerQuery{Owner: addr, Height: consensus.HeightLatest})
-	if err != nil {
-		logger.Error("failed to query account",
-			"address", addr,
-			"err", err,
-		)
-		os.Exit(1)
-	}
-
-	return acct
 }
 
 func doPubkey2Address(cmd *cobra.Command, args []string) {
