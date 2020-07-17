@@ -15,7 +15,6 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	"github.com/oasisprotocol/oasis-core/go/common/errors"
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
-	"github.com/oasisprotocol/oasis-core/go/common/quantity"
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
 	cmdCommon "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common"
 	cmdFlags "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/flags"
@@ -71,25 +70,6 @@ func doConnect(cmd *cobra.Command) (*grpc.ClientConn, api.Backend) {
 	return conn, client
 }
 
-func doWithRetries(cmd *cobra.Command, descr string, fn func() error) {
-	nrRetries := cmdFlags.Retries()
-	for i := 0; i <= nrRetries; i++ {
-		err := fn()
-		switch err {
-		case nil:
-			return
-		default:
-			logger.Warn("failed to "+descr,
-				"err", err,
-				"attempt", i+1,
-			)
-		}
-	}
-
-	// Retries exhausted, just bail.
-	os.Exit(1)
-}
-
 func doInfo(cmd *cobra.Command, args []string) {
 	if err := cmdCommon.Init(); err != nil {
 		cmdCommon.EarlyLogAndExit(err)
@@ -100,35 +80,32 @@ func doInfo(cmd *cobra.Command, args []string) {
 
 	ctx := context.Background()
 
-	doWithRetries(cmd, "query total supply", func() error {
-		q, err := client.TotalSupply(ctx, consensus.HeightLatest)
-		if err != nil {
-			return err
-		}
+	totalSupply, err := client.TotalSupply(ctx, consensus.HeightLatest)
+	if err != nil {
+		logger.Error("failed to query total supply",
+			"err", err,
+		)
+		os.Exit(1)
+	}
+	fmt.Printf("Total supply: %v\n", totalSupply)
 
-		fmt.Printf("Total supply: %v\n", q)
-		return nil
-	})
+	commonPool, err := client.CommonPool(ctx, consensus.HeightLatest)
+	if err != nil {
+		logger.Error("failed to query common pool",
+			"err", err,
+		)
+		os.Exit(1)
+	}
+	fmt.Printf("Common pool: %v\n", commonPool)
 
-	doWithRetries(cmd, "query common pool", func() error {
-		q, err := client.CommonPool(ctx, consensus.HeightLatest)
-		if err != nil {
-			return err
-		}
-
-		fmt.Printf("Common pool: %v\n", q)
-		return nil
-	})
-
-	doWithRetries(cmd, "query last block fees", func() error {
-		q, err := client.LastBlockFees(ctx, consensus.HeightLatest)
-		if err != nil {
-			return err
-		}
-
-		fmt.Printf("Last block fees: %v\n", q)
-		return nil
-	})
+	lastBlockFees, err := client.LastBlockFees(ctx, consensus.HeightLatest)
+	if err != nil {
+		logger.Error("failed to query last block fees",
+			"err", err,
+		)
+		os.Exit(1)
+	}
+	fmt.Printf("Last block fees: %v\n", lastBlockFees)
 
 	thresholdsToQuery := []api.ThresholdKind{
 		api.KindEntity,
@@ -139,38 +116,19 @@ func doInfo(cmd *cobra.Command, args []string) {
 		api.KindRuntimeCompute,
 		api.KindRuntimeKeyManager,
 	}
-	type threshold struct {
-		value *quantity.Quantity
-		valid bool
-	}
-	thresholds := make(map[api.ThresholdKind]*threshold)
-	doWithRetries(cmd, "query staking threshold(s)", func() error {
-		for _, k := range thresholdsToQuery {
-			if thresholds[k] != nil {
+	for _, kind := range thresholdsToQuery {
+		thres, err := client.Threshold(ctx, &api.ThresholdQuery{Kind: kind, Height: consensus.HeightLatest})
+		if err != nil {
+			if errors.Is(err, api.ErrInvalidThreshold) {
+				logger.Warn(fmt.Sprintf("invalid staking threshold kind: %s", kind))
 				continue
 			}
-
-			q, err := client.Threshold(ctx, &api.ThresholdQuery{Kind: k, Height: consensus.HeightLatest})
-			if err != nil {
-				if errors.Is(err, api.ErrInvalidThreshold) {
-					logger.Warn(fmt.Sprintf("invalid staking threshold kind: %s", k))
-					thresholds[k] = &threshold{}
-					continue
-				}
-				return err
-			}
-			thresholds[k] = &threshold{
-				value: q,
-				valid: true,
-			}
+			logger.Error("failed to query staking threshold",
+				"err", err,
+			)
+			os.Exit(1)
 		}
-		return nil
-	})
-	for _, k := range thresholdsToQuery {
-		thres := thresholds[k]
-		if thres.valid {
-			fmt.Printf("Staking threshold (%s): %v\n", k, thres.value)
-		}
+		fmt.Printf("Staking threshold (%s): %v\n", kind, thres)
 	}
 }
 
@@ -184,12 +142,13 @@ func doList(cmd *cobra.Command, args []string) {
 
 	ctx := context.Background()
 
-	var addresses []api.Address
-	doWithRetries(cmd, "query addresses", func() error {
-		var err error
-		addresses, err = client.Addresses(ctx, consensus.HeightLatest)
-		return err
-	})
+	addresses, err := client.Addresses(ctx, consensus.HeightLatest)
+	if err != nil {
+		logger.Error("failed to query addresses",
+			"err", err,
+		)
+		os.Exit(1)
+	}
 
 	for _, addr := range addresses {
 		var s string
@@ -210,12 +169,14 @@ func doList(cmd *cobra.Command, args []string) {
 }
 
 func getAccount(ctx context.Context, cmd *cobra.Command, addr api.Address, client api.Backend) *api.Account {
-	var acct *api.Account
-	doWithRetries(cmd, "query account "+addr.String(), func() error {
-		var err error
-		acct, err = client.Account(ctx, &api.OwnerQuery{Owner: addr, Height: consensus.HeightLatest})
-		return err
-	})
+	acct, err := client.Account(ctx, &api.OwnerQuery{Owner: addr, Height: consensus.HeightLatest})
+	if err != nil {
+		logger.Error("failed to query account",
+			"address", addr,
+			"err", err,
+		)
+		os.Exit(1)
+	}
 
 	return acct
 }
@@ -262,10 +223,8 @@ func Register(parentCmd *cobra.Command) {
 }
 
 func init() {
-	infoFlags.AddFlagSet(cmdFlags.RetriesFlags)
 	infoFlags.AddFlagSet(cmdGrpc.ClientFlags)
 
-	listFlags.AddFlagSet(cmdFlags.RetriesFlags)
 	listFlags.AddFlagSet(cmdFlags.VerboseFlags)
 	listFlags.AddFlagSet(cmdGrpc.ClientFlags)
 

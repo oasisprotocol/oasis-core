@@ -12,7 +12,6 @@ import (
 
 	cmdCommon "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common"
 	cmdConsensus "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/consensus"
-	cmdFlags "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/flags"
 	cmdGrpc "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/grpc"
 	staking "github.com/oasisprotocol/oasis-core/go/staking/api"
 )
@@ -321,7 +320,6 @@ func registerAccountCmd() {
 func init() {
 	accountInfoFlags.String(CfgAccountAddr, "", "account address")
 	_ = viper.BindPFlags(accountInfoFlags)
-	accountInfoFlags.AddFlagSet(cmdFlags.RetriesFlags)
 	accountInfoFlags.AddFlagSet(cmdGrpc.ClientFlags)
 
 	amountFlags.String(CfgAmount, "0", "amount of stake (in base units) for the transaction")
