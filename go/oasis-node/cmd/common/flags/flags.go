@@ -21,7 +21,6 @@ const (
 
 	cfgVerbose = "verbose"
 	cfgForce   = "force"
-	cfgRetries = "retries"
 
 	// CfgDryRun is the flag used to specify a dry-run of an operation.
 	CfgDryRun = "dry_run"
@@ -32,8 +31,6 @@ var (
 	VerboseFlags = flag.NewFlagSet("", flag.ContinueOnError)
 	// ForceFlags has the force flag.
 	ForceFlags = flag.NewFlagSet("", flag.ContinueOnError)
-	// RetriesFlags has the retries flag.
-	RetriesFlags = flag.NewFlagSet("", flag.ContinueOnError)
 	// DebugTestEntityFlags has the test entity enable flag.
 	DebugTestEntityFlags = flag.NewFlagSet("", flag.ContinueOnError)
 
@@ -57,11 +54,6 @@ func Verbose() bool {
 // Force returns true iff the force flag is set.
 func Force() bool {
 	return viper.GetBool(cfgForce)
-}
-
-// Retries returns the retries flag value.
-func Retries() int {
-	return viper.GetInt(cfgRetries)
 }
 
 // ConsensusValidator returns true iff the node is opting in to be a consensus
@@ -95,8 +87,6 @@ func init() {
 
 	ForceFlags.Bool(cfgForce, false, "force")
 
-	RetriesFlags.Int(cfgRetries, 0, "retries (-1 = forever)")
-
 	ConsensusValidatorFlag.Bool(CfgConsensusValidator, false, "node is a consensus validator")
 
 	DebugTestEntityFlags.Bool(CfgDebugTestEntity, false, "use the test entity (UNSAFE)")
@@ -112,7 +102,6 @@ func init() {
 	for _, v := range []*flag.FlagSet{
 		VerboseFlags,
 		ForceFlags,
-		RetriesFlags,
 		DebugTestEntityFlags,
 		GenesisFileFlags,
 		ConsensusValidatorFlag,
