@@ -157,7 +157,7 @@ func (app *rootHashApplication) executorCommit(
 		ctx.EmitEvent(
 			tmapi.NewEventBuilder(app.Name()).
 				Attribute(KeyExecutorCommitted, cbor.Marshal(evV)).
-				Attribute(KeyRuntimeID, cbor.Marshal(cc.ID)),
+				Attribute(KeyRuntimeID, ValueRuntimeID(cc.ID)),
 		)
 	}
 
@@ -225,7 +225,7 @@ func (app *rootHashApplication) mergeCommit(
 		ctx.EmitEvent(
 			tmapi.NewEventBuilder(app.Name()).
 				Attribute(KeyMergeCommitted, cbor.Marshal(evV)).
-				Attribute(KeyRuntimeID, cbor.Marshal(mc.ID)),
+				Attribute(KeyRuntimeID, ValueRuntimeID(mc.ID)),
 		)
 	}
 

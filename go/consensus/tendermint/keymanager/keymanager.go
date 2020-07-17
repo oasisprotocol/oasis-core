@@ -8,30 +8,38 @@ import (
 	"fmt"
 
 	"github.com/eapache/channels"
-	abcitypes "github.com/tendermint/tendermint/abci/types"
+	tmabcitypes "github.com/tendermint/tendermint/abci/types"
+	tmpubsub "github.com/tendermint/tendermint/libs/pubsub"
 	tmtypes "github.com/tendermint/tendermint/types"
 
 	"github.com/oasisprotocol/oasis-core/go/common/cbor"
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
 	"github.com/oasisprotocol/oasis-core/go/common/pubsub"
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
+	tmapi "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/api"
 	app "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/apps/keymanager"
 	"github.com/oasisprotocol/oasis-core/go/consensus/tendermint/service"
 	"github.com/oasisprotocol/oasis-core/go/keymanager/api"
 	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
 )
 
-type tendermintBackend struct {
+// ServiceClient is the registry service client interface.
+type ServiceClient interface {
+	api.Backend
+	tmapi.ServiceClient
+}
+
+type serviceClient struct {
+	tmapi.BaseServiceClient
+
 	logger *logging.Logger
 
-	service service.TendermintService
-	querier *app.QueryFactory
-
+	querier  *app.QueryFactory
 	notifier *pubsub.Broker
 }
 
-func (tb *tendermintBackend) GetStatus(ctx context.Context, query *registry.NamespaceQuery) (*api.Status, error) {
-	q, err := tb.querier.QueryAt(ctx, query.Height)
+func (sc *serviceClient) GetStatus(ctx context.Context, query *registry.NamespaceQuery) (*api.Status, error) {
+	q, err := sc.querier.QueryAt(ctx, query.Height)
 	if err != nil {
 		return nil, err
 	}
@@ -39,8 +47,8 @@ func (tb *tendermintBackend) GetStatus(ctx context.Context, query *registry.Name
 	return q.Status(ctx, query.ID)
 }
 
-func (tb *tendermintBackend) GetStatuses(ctx context.Context, height int64) ([]*api.Status, error) {
-	q, err := tb.querier.QueryAt(ctx, height)
+func (sc *serviceClient) GetStatuses(ctx context.Context, height int64) ([]*api.Status, error) {
+	q, err := sc.querier.QueryAt(ctx, height)
 	if err != nil {
 		return nil, err
 	}
@@ -48,16 +56,16 @@ func (tb *tendermintBackend) GetStatuses(ctx context.Context, height int64) ([]*
 	return q.Statuses(ctx)
 }
 
-func (tb *tendermintBackend) WatchStatuses() (<-chan *api.Status, *pubsub.Subscription) {
-	sub := tb.notifier.Subscribe()
+func (sc *serviceClient) WatchStatuses() (<-chan *api.Status, *pubsub.Subscription) {
+	sub := sc.notifier.Subscribe()
 	ch := make(chan *api.Status)
 	sub.Unwrap(ch)
 
 	return ch, sub
 }
 
-func (tb *tendermintBackend) StateToGenesis(ctx context.Context, height int64) (*api.Genesis, error) {
-	q, err := tb.querier.QueryAt(ctx, height)
+func (sc *serviceClient) StateToGenesis(ctx context.Context, height int64) (*api.Genesis, error) {
+	q, err := sc.querier.QueryAt(ctx, height)
 	if err != nil {
 		return nil, err
 	}
@@ -65,90 +73,47 @@ func (tb *tendermintBackend) StateToGenesis(ctx context.Context, height int64) (
 	return q.Genesis(ctx)
 }
 
-func (tb *tendermintBackend) worker(ctx context.Context) {
-	sub, err := tb.service.Subscribe("keymanager-worker", app.QueryApp)
-	if err != nil {
-		tb.logger.Error("failed to subscribe",
-			"err", err,
-		)
-		return
-	}
-	defer tb.service.Unsubscribe("keymanager-worker", app.QueryApp) // nolint: errcheck
-
-	for {
-		var event interface{}
-
-		select {
-		case msg := <-sub.Out():
-			event = msg.Data()
-		case <-sub.Cancelled():
-			return
-		case <-ctx.Done():
-			return
-		}
-
-		switch ev := event.(type) {
-		case tmtypes.EventDataNewBlock:
-			tb.onEventDataNewBlock(ctx, ev)
-		case tmtypes.EventDataTx:
-			tb.onEventDataTx(ctx, ev)
-		default:
-		}
-	}
+// Implements api.ServiceClient.
+func (sc *serviceClient) ServiceDescriptor() tmapi.ServiceDescriptor {
+	return tmapi.NewStaticServiceDescriptor(api.ModuleName, app.EventType, []tmpubsub.Query{app.QueryApp})
 }
 
-func (tb *tendermintBackend) onEventDataNewBlock(ctx context.Context, ev tmtypes.EventDataNewBlock) {
-	events := append([]abcitypes.Event{}, ev.ResultBeginBlock.GetEvents()...)
-	events = append(events, ev.ResultEndBlock.GetEvents()...)
+// Implements api.ServiceClient.
+func (sc *serviceClient) DeliverEvent(ctx context.Context, height int64, tx tmtypes.Tx, ev *tmabcitypes.Event) error {
+	for _, pair := range ev.GetAttributes() {
+		if bytes.Equal(pair.GetKey(), app.KeyStatusUpdate) {
+			var statuses []*api.Status
+			if err := cbor.Unmarshal(pair.GetValue(), &statuses); err != nil {
+				sc.logger.Error("worker: failed to get statuses from tag",
+					"err", err,
+				)
+				continue
+			}
 
-	tb.onABCIEvents(ctx, events)
-}
-
-func (tb *tendermintBackend) onEventDataTx(ctx context.Context, tx tmtypes.EventDataTx) {
-	tb.onABCIEvents(ctx, tx.Result.Events)
-}
-
-func (tb *tendermintBackend) onABCIEvents(ctx context.Context, tmEvents []abcitypes.Event) {
-	for _, tmEv := range tmEvents {
-		if tmEv.GetType() != app.EventType {
-			continue
-		}
-
-		for _, pair := range tmEv.GetAttributes() {
-			if bytes.Equal(pair.GetKey(), app.KeyStatusUpdate) {
-				var statuses []*api.Status
-				if err := cbor.Unmarshal(pair.GetValue(), &statuses); err != nil {
-					tb.logger.Error("worker: failed to get statuses from tag",
-						"err", err,
-					)
-					continue
-				}
-
-				for _, status := range statuses {
-					tb.notifier.Broadcast(status)
-				}
+			for _, status := range statuses {
+				sc.notifier.Broadcast(status)
 			}
 		}
 	}
+	return nil
 }
 
 // New constructs a new tendermint backed key manager management Backend
 // instance.
-func New(ctx context.Context, service service.TendermintService) (api.Backend, error) {
+func New(ctx context.Context, service service.TendermintService) (ServiceClient, error) {
 	a := app.New()
 	if err := service.RegisterApplication(a); err != nil {
 		return nil, fmt.Errorf("keymanager/tendermint: failed to register app: %w", err)
 	}
 
-	tb := &tendermintBackend{
+	sc := &serviceClient{
 		logger:  logging.GetLogger("keymanager/tendermint"),
-		service: service,
 		querier: a.QueryFactory().(*app.QueryFactory),
 	}
-	tb.notifier = pubsub.NewBrokerEx(func(ch channels.Channel) {
-		statuses, err := tb.GetStatuses(ctx, consensus.HeightLatest)
+	sc.notifier = pubsub.NewBrokerEx(func(ch channels.Channel) {
+		statuses, err := sc.GetStatuses(ctx, consensus.HeightLatest)
 		if err != nil {
-			tb.logger.Error("status notifier: unable to get a list of statuses",
+			sc.logger.Error("status notifier: unable to get a list of statuses",
 				"err", err,
 			)
 			return
@@ -159,7 +124,6 @@ func New(ctx context.Context, service service.TendermintService) (api.Backend, e
 			wr <- v
 		}
 	})
-	go tb.worker(ctx)
 
-	return tb, nil
+	return sc, nil
 }

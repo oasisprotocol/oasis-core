@@ -7,22 +7,26 @@ import (
 	"sync"
 
 	"github.com/eapache/channels"
-	tmtypes "github.com/tendermint/tendermint/types"
 
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
 	"github.com/oasisprotocol/oasis-core/go/common/pubsub"
+	tmapi "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/api"
 	"github.com/oasisprotocol/oasis-core/go/consensus/tendermint/service"
 	"github.com/oasisprotocol/oasis-core/go/epochtime/api"
 )
 
-var _ api.Backend = (*tendermintBackend)(nil)
+// ServiceClient is the beacon service client interface.
+type ServiceClient interface {
+	api.Backend
+	tmapi.ServiceClient
+}
 
-type tendermintBackend struct {
+type serviceClient struct {
+	tmapi.BaseServiceClient
 	sync.RWMutex
 
 	logger *logging.Logger
 
-	service  service.TendermintService
 	notifier *pubsub.Broker
 
 	interval     int64
@@ -31,48 +35,48 @@ type tendermintBackend struct {
 	base         api.EpochTime
 }
 
-func (t *tendermintBackend) GetBaseEpoch(context.Context) (api.EpochTime, error) {
-	return t.base, nil
+func (sc *serviceClient) GetBaseEpoch(context.Context) (api.EpochTime, error) {
+	return sc.base, nil
 }
 
-func (t *tendermintBackend) GetEpoch(ctx context.Context, height int64) (api.EpochTime, error) {
+func (sc *serviceClient) GetEpoch(ctx context.Context, height int64) (api.EpochTime, error) {
 	if height == 0 {
-		t.RLock()
-		defer t.RUnlock()
-		return t.epoch, nil
+		sc.RLock()
+		defer sc.RUnlock()
+		return sc.epoch, nil
 	}
-	epoch := t.base + api.EpochTime(height/t.interval)
+	epoch := sc.base + api.EpochTime(height/sc.interval)
 
 	return epoch, nil
 }
 
-func (t *tendermintBackend) GetEpochBlock(ctx context.Context, epoch api.EpochTime) (int64, error) {
-	if epoch < t.base {
+func (sc *serviceClient) GetEpochBlock(ctx context.Context, epoch api.EpochTime) (int64, error) {
+	if epoch < sc.base {
 		return 0, fmt.Errorf("epochtime/tendermint: epoch predates base")
 	}
-	height := int64(epoch-t.base) * t.interval
+	height := int64(epoch-sc.base) * sc.interval
 
 	return height, nil
 }
 
-func (t *tendermintBackend) WatchEpochs() (<-chan api.EpochTime, *pubsub.Subscription) {
+func (sc *serviceClient) WatchEpochs() (<-chan api.EpochTime, *pubsub.Subscription) {
 	typedCh := make(chan api.EpochTime)
-	sub := t.notifier.Subscribe()
+	sub := sc.notifier.Subscribe()
 	sub.Unwrap(typedCh)
 
 	return typedCh, sub
 }
 
-func (t *tendermintBackend) WatchLatestEpoch() (<-chan api.EpochTime, *pubsub.Subscription) {
+func (sc *serviceClient) WatchLatestEpoch() (<-chan api.EpochTime, *pubsub.Subscription) {
 	typedCh := make(chan api.EpochTime)
-	sub := t.notifier.SubscribeBuffered(1)
+	sub := sc.notifier.SubscribeBuffered(1)
 	sub.Unwrap(typedCh)
 
 	return typedCh, sub
 }
 
-func (t *tendermintBackend) StateToGenesis(ctx context.Context, height int64) (*api.Genesis, error) {
-	now, err := t.GetEpoch(ctx, height)
+func (sc *serviceClient) StateToGenesis(ctx context.Context, height int64) (*api.Genesis, error) {
+	now, err := sc.GetEpoch(ctx, height)
 	if err != nil {
 		return nil, err
 	}
@@ -80,74 +84,60 @@ func (t *tendermintBackend) StateToGenesis(ctx context.Context, height int64) (*
 	return &api.Genesis{
 		Parameters: api.ConsensusParameters{
 			DebugMockBackend: false,
-			Interval:         t.interval,
+			Interval:         sc.interval,
 		},
 		Base: now,
 	}, nil
 }
 
-func (t *tendermintBackend) worker(ctx context.Context) {
-	ch, sub := t.service.WatchTendermintBlocks()
-	defer sub.Close()
-
-	for {
-		block, ok := <-ch
-		if !ok {
-			return
-		}
-
-		if t.updateCached(ctx, block) {
-			// Safe to look at `t.epoch`, only mutator is the line above.
-			t.notifier.Broadcast(t.epoch)
-		}
-	}
+// Implements api.ServiceClient.
+func (sc *serviceClient) ServiceDescriptor() tmapi.ServiceDescriptor {
+	return tmapi.NewStaticServiceDescriptor(api.ModuleName, "", nil)
 }
 
-func (t *tendermintBackend) updateCached(ctx context.Context, block *tmtypes.Block) bool {
-	t.Lock()
-	defer t.Unlock()
+// Implements api.ServiceClient.
+func (sc *serviceClient) DeliverBlock(ctx context.Context, height int64) error {
+	epoch, _ := sc.GetEpoch(ctx, height)
 
-	epoch, _ := t.GetEpoch(ctx, block.Header.Height)
+	sc.Lock()
+	defer sc.Unlock()
 
-	t.epoch = epoch
+	sc.epoch = epoch
 
-	if t.lastNotified != epoch {
-		t.logger.Debug("epoch transition",
-			"prev_epoch", t.lastNotified,
+	if sc.lastNotified != epoch {
+		sc.logger.Debug("epoch transition",
+			"prev_epoch", sc.lastNotified,
 			"epoch", epoch,
 		)
-		t.lastNotified = t.epoch
-		return true
+		sc.lastNotified = epoch
+		sc.notifier.Broadcast(epoch)
 	}
-	return false
+	return nil
 }
 
 // New constructs a new tendermint backed epochtime Backend instance,
 // with the specified epoch interval.
-func New(ctx context.Context, service service.TendermintService, interval int64) (api.Backend, error) {
+func New(ctx context.Context, service service.TendermintService, interval int64) (ServiceClient, error) {
 	genDoc, err := service.GetGenesisDocument(ctx)
 	if err != nil {
 		return nil, err
 	}
 
 	base := genDoc.EpochTime.Base
-	r := &tendermintBackend{
+	sc := &serviceClient{
 		logger:   logging.GetLogger("epochtime/tendermint"),
-		service:  service,
 		interval: interval,
 		base:     base,
 		epoch:    base,
 	}
-	r.notifier = pubsub.NewBrokerEx(func(ch channels.Channel) {
-		r.RLock()
-		defer r.RUnlock()
+	sc.notifier = pubsub.NewBrokerEx(func(ch channels.Channel) {
+		sc.RLock()
+		defer sc.RUnlock()
 
-		if r.lastNotified == r.epoch {
-			ch.In() <- r.epoch
+		if sc.lastNotified == sc.epoch {
+			ch.In() <- sc.epoch
 		}
 	})
 
-	go r.worker(ctx)
-
-	return r, nil
+	return sc, nil
 }

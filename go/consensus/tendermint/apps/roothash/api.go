@@ -1,6 +1,11 @@
 package roothash
 
 import (
+	"fmt"
+
+	tmpubsub "github.com/tendermint/tendermint/libs/pubsub"
+	tmquery "github.com/tendermint/tendermint/libs/pubsub/query"
+
 	"github.com/oasisprotocol/oasis-core/go/common"
 	"github.com/oasisprotocol/oasis-core/go/consensus/tendermint/api"
 	roothash "github.com/oasisprotocol/oasis-core/go/roothash/api"
@@ -23,7 +28,7 @@ var (
 	QueryApp = api.QueryForApp(AppName)
 
 	// KeyRuntimeID is an ABCI event attribute key for specifying event
-	// runtime.
+	// runtime (value is Base64-encoded runtime ID).
 	KeyRuntimeID = []byte("runtime-id")
 	// KeyExecutorCommitted is an ABCI event attribute key for executor
 	// commit events (value is CBOR-serialized ValueExecutorCommitted).
@@ -43,6 +48,19 @@ var (
 	// (value is a CBOR serialized ValueFinalized).
 	KeyFinalized = []byte("finalized")
 )
+
+// QueryForRuntime returns a query for filtering transactions processed by the roothash application
+// limited to a specific runtime.
+func QueryForRuntime(runtimeID common.Namespace) tmpubsub.Query {
+	return tmquery.MustParse(fmt.Sprintf("%s AND %s.%s='%s'", QueryApp, EventType, KeyRuntimeID, ValueRuntimeID(runtimeID)))
+}
+
+// ValueRuntimeID returns the value that should be stored under KeyRuntimeID.
+func ValueRuntimeID(runtimeID common.Namespace) []byte {
+	// This needs to be a text field as Tendermint does not support non-text queries.
+	tagRuntimeID, _ := runtimeID.MarshalText()
+	return tagRuntimeID
+}
 
 // ValueExecutorCommitted is the value component of a KeyExecutorCommitted.
 type ValueExecutorCommitted struct {

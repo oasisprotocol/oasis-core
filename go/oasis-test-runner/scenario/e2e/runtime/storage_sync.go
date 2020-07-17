@@ -41,6 +41,9 @@ func (sc *storageSyncImpl) Fixture() (*oasis.NetworkFixture, error) {
 
 	// Make the first storage worker check for checkpoints more often.
 	f.StorageWorkers[0].CheckpointCheckInterval = 1 * time.Second
+	// Configure runtime to allow a smaller replication factor as otherwise execution may fail when
+	// the bad node is in the storage committee.
+	f.Runtimes[1].Storage.MinWriteReplication = 1
 	// Configure runtime for storage checkpointing.
 	f.Runtimes[1].Storage.CheckpointInterval = 10
 	f.Runtimes[1].Storage.CheckpointNumKept = 1

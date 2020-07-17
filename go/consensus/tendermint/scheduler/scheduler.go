@@ -7,41 +7,48 @@ import (
 	"fmt"
 
 	"github.com/eapache/channels"
+	tmabcitypes "github.com/tendermint/tendermint/abci/types"
+	tmpubsub "github.com/tendermint/tendermint/libs/pubsub"
 	tmtypes "github.com/tendermint/tendermint/types"
 
 	"github.com/oasisprotocol/oasis-core/go/common/cbor"
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
 	"github.com/oasisprotocol/oasis-core/go/common/pubsub"
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
+	tmapi "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/api"
 	app "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/apps/scheduler"
 	"github.com/oasisprotocol/oasis-core/go/consensus/tendermint/service"
 	"github.com/oasisprotocol/oasis-core/go/scheduler/api"
 )
 
-var _ api.Backend = (*tendermintBackend)(nil)
+// ServiceClient is the scheduler service client interface.
+type ServiceClient interface {
+	api.Backend
+	tmapi.ServiceClient
+}
 
-type tendermintBackend struct {
+type serviceClient struct {
+	tmapi.BaseServiceClient
+
 	logger *logging.Logger
 
-	service service.TendermintService
-	querier *app.QueryFactory
-
+	querier  *app.QueryFactory
 	notifier *pubsub.Broker
 }
 
-func (tb *tendermintBackend) StateToGenesis(ctx context.Context, height int64) (*api.Genesis, error) {
-	q, err := tb.querier.QueryAt(ctx, height)
+func (sc *serviceClient) StateToGenesis(ctx context.Context, height int64) (*api.Genesis, error) {
+	q, err := sc.querier.QueryAt(ctx, height)
 	if err != nil {
 		return nil, fmt.Errorf("scheduler: genesis query failed: %w", err)
 	}
 	return q.Genesis(ctx)
 }
 
-func (tb *tendermintBackend) Cleanup() {
+func (sc *serviceClient) Cleanup() {
 }
 
-func (tb *tendermintBackend) GetValidators(ctx context.Context, height int64) ([]*api.Validator, error) {
-	q, err := tb.querier.QueryAt(ctx, height)
+func (sc *serviceClient) GetValidators(ctx context.Context, height int64) ([]*api.Validator, error) {
+	q, err := sc.querier.QueryAt(ctx, height)
 	if err != nil {
 		return nil, err
 	}
@@ -49,8 +56,8 @@ func (tb *tendermintBackend) GetValidators(ctx context.Context, height int64) ([
 	return q.Validators(ctx)
 }
 
-func (tb *tendermintBackend) GetCommittees(ctx context.Context, request *api.GetCommitteesRequest) ([]*api.Committee, error) {
-	q, err := tb.querier.QueryAt(ctx, request.Height)
+func (sc *serviceClient) GetCommittees(ctx context.Context, request *api.GetCommitteesRequest) ([]*api.Committee, error) {
+	q, err := sc.querier.QueryAt(ctx, request.Height)
 	if err != nil {
 		return nil, err
 	}
@@ -70,16 +77,16 @@ func (tb *tendermintBackend) GetCommittees(ctx context.Context, request *api.Get
 	return runtimeCommittees, nil
 }
 
-func (tb *tendermintBackend) WatchCommittees(ctx context.Context) (<-chan *api.Committee, pubsub.ClosableSubscription, error) {
+func (sc *serviceClient) WatchCommittees(ctx context.Context) (<-chan *api.Committee, pubsub.ClosableSubscription, error) {
 	typedCh := make(chan *api.Committee)
-	sub := tb.notifier.Subscribe()
+	sub := sc.notifier.Subscribe()
 	sub.Unwrap(typedCh)
 
 	return typedCh, sub, nil
 }
 
-func (tb *tendermintBackend) getCurrentCommittees() ([]*api.Committee, error) {
-	q, err := tb.querier.QueryAt(context.TODO(), consensus.HeightLatest)
+func (sc *serviceClient) getCurrentCommittees() ([]*api.Committee, error) {
+	q, err := sc.querier.QueryAt(context.TODO(), consensus.HeightLatest)
 	if err != nil {
 		return nil, err
 	}
@@ -87,105 +94,63 @@ func (tb *tendermintBackend) getCurrentCommittees() ([]*api.Committee, error) {
 	return q.AllCommittees(context.TODO())
 }
 
-func (tb *tendermintBackend) worker(ctx context.Context) {
-	// Subscribe to blocks which elect committees.
-	sub, err := tb.service.Subscribe("scheduler-worker", app.QueryApp)
-	if err != nil {
-		tb.logger.Error("failed to subscribe",
-			"err", err,
-		)
-		return
-	}
-	defer func() {
-		err := tb.service.Unsubscribe("scheduler-worker", app.QueryApp)
-		if err != nil {
-			tb.logger.Error("failed to unsubscribe",
-				"err", err,
-			)
-		}
-	}()
-
-	for {
-		var event interface{}
-
-		select {
-		case msg := <-sub.Out():
-			event = msg.Data()
-		case <-sub.Cancelled():
-			tb.logger.Debug("worker: terminating, subscription closed")
-			return
-		case <-ctx.Done():
-			return
-		}
-
-		switch ev := event.(type) {
-		case tmtypes.EventDataNewBlock:
-			tb.onEventDataNewBlock(ctx, ev)
-		default:
-		}
-	}
+// Implements api.ServiceClient.
+func (sc *serviceClient) ServiceDescriptor() tmapi.ServiceDescriptor {
+	return tmapi.NewStaticServiceDescriptor(api.ModuleName, app.EventType, []tmpubsub.Query{app.QueryApp})
 }
 
-// Called from worker.
-func (tb *tendermintBackend) onEventDataNewBlock(ctx context.Context, ev tmtypes.EventDataNewBlock) {
-	events := ev.ResultBeginBlock.GetEvents()
+// Implements api.ServiceClient.
+func (sc *serviceClient) DeliverEvent(ctx context.Context, height int64, tx tmtypes.Tx, ev *tmabcitypes.Event) error {
+	for _, pair := range ev.GetAttributes() {
+		if bytes.Equal(pair.GetKey(), app.KeyElected) {
+			var kinds []api.CommitteeKind
+			if err := cbor.Unmarshal(pair.GetValue(), &kinds); err != nil {
+				sc.logger.Error("worker: malformed elected committee types list",
+					"err", err,
+				)
+				continue
+			}
 
-	for _, tmEv := range events {
-		if tmEv.GetType() != app.EventType {
-			continue
-		}
+			q, err := sc.querier.QueryAt(ctx, height)
+			if err != nil {
+				sc.logger.Error("worker: couldn't query elected committees",
+					"err", err,
+				)
+				continue
+			}
 
-		for _, pair := range tmEv.GetAttributes() {
-			if bytes.Equal(pair.GetKey(), app.KeyElected) {
-				var kinds []api.CommitteeKind
-				if err := cbor.Unmarshal(pair.GetValue(), &kinds); err != nil {
-					tb.logger.Error("worker: malformed elected committee types list",
-						"err", err,
-					)
-					continue
-				}
+			committees, err := q.KindsCommittees(ctx, kinds)
+			if err != nil {
+				sc.logger.Error("worker: couldn't query elected committees",
+					"err", err,
+				)
+				continue
+			}
 
-				q, err := tb.querier.QueryAt(ctx, ev.Block.Header.Height)
-				if err != nil {
-					tb.logger.Error("worker: couldn't query elected committees",
-						"err", err,
-					)
-					continue
-				}
-
-				committees, err := q.KindsCommittees(ctx, kinds)
-				if err != nil {
-					tb.logger.Error("worker: couldn't query elected committees",
-						"err", err,
-					)
-					continue
-				}
-
-				for _, c := range committees {
-					tb.notifier.Broadcast(c)
-				}
+			for _, c := range committees {
+				sc.notifier.Broadcast(c)
 			}
 		}
 	}
+	return nil
 }
 
 // New constracts a new tendermint-based scheduler Backend instance.
-func New(ctx context.Context, service service.TendermintService) (api.Backend, error) {
+func New(ctx context.Context, service service.TendermintService) (ServiceClient, error) {
 	// Initialze and register the tendermint service component.
 	a := app.New()
 	if err := service.RegisterApplication(a); err != nil {
 		return nil, err
 	}
 
-	tb := &tendermintBackend{
+	sc := &serviceClient{
 		logger:  logging.GetLogger("scheduler/tendermint"),
-		service: service,
 		querier: a.QueryFactory().(*app.QueryFactory),
 	}
-	tb.notifier = pubsub.NewBrokerEx(func(ch channels.Channel) {
-		currentCommittees, err := tb.getCurrentCommittees()
+	sc.notifier = pubsub.NewBrokerEx(func(ch channels.Channel) {
+		currentCommittees, err := sc.getCurrentCommittees()
 		if err != nil {
-			tb.logger.Error("couldn't get current committees. won't send them. good luck to the subscriber",
+			sc.logger.Error("couldn't get current committees. won't send them. good luck to the subscriber",
 				"err", err,
 			)
 			return
@@ -195,7 +160,5 @@ func New(ctx context.Context, service service.TendermintService) (api.Backend, e
 		}
 	})
 
-	go tb.worker(ctx)
-
-	return tb, nil
+	return sc, nil
 }
