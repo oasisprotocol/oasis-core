@@ -135,7 +135,7 @@ func doShowTx(cmd *cobra.Command, args []string) {
 	cmdConsensus.InitGenesis()
 
 	sigTx := loadTx()
-	sigTx.PrettyPrint("", os.Stdout)
+	sigTx.PrettyPrint(context.Background(), "", os.Stdout)
 }
 
 func doEstimateGas(cmd *cobra.Command, args []string) {

@@ -1,6 +1,7 @@
 package transaction
 
 import (
+	"context"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
@@ -47,7 +48,7 @@ type Transaction struct {
 
 // PrettyPrint writes a pretty-printed representation of the type
 // to the given writer.
-func (t Transaction) PrettyPrint(prefix string, w io.Writer) {
+func (t Transaction) PrettyPrint(ctx context.Context, prefix string, w io.Writer) {
 	fmt.Fprintf(w, "%sNonce:  %d\n", prefix, t.Nonce)
 	if t.Fee != nil {
 		fmt.Fprintf(w, "%sFee:    %s (gas limit: %d, gas price: %s)\n", prefix, t.Fee.Amount, t.Fee.Gas, t.Fee.GasPrice())
@@ -73,7 +74,7 @@ func (t Transaction) PrettyPrint(prefix string, w io.Writer) {
 
 	// If the body type supports pretty printing, use that.
 	if pp, ok := v.(prettyprint.PrettyPrinter); ok {
-		pp.PrettyPrint(prefix+"  ", w)
+		pp.PrettyPrint(ctx, prefix+"  ", w)
 		return
 	}
 
@@ -158,7 +159,7 @@ func (s *SignedTransaction) Hash() hash.Hash {
 
 // PrettyPrint writes a pretty-printed representation of the type
 // to the given writer.
-func (s SignedTransaction) PrettyPrint(prefix string, w io.Writer) {
+func (s SignedTransaction) PrettyPrint(ctx context.Context, prefix string, w io.Writer) {
 	fmt.Fprintf(w, "%sHash: %s\n", prefix, s.Hash())
 
 	fmt.Fprintf(w, "%sSigner: %s\n", prefix, s.Signature.PublicKey)
@@ -179,7 +180,7 @@ func (s SignedTransaction) PrettyPrint(prefix string, w io.Writer) {
 		return
 	}
 
-	tx.PrettyPrint(prefix+"  ", w)
+	tx.PrettyPrint(ctx, prefix+"  ", w)
 }
 
 // PrettyType returns a representation of the type that can be used for pretty printing.

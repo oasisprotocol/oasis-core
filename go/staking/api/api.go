@@ -68,6 +68,10 @@ var (
 	// is specified in a query.
 	ErrInvalidThreshold = errors.New(ModuleName, 6, "staking: invalid threshold")
 
+	// ErrInvalidTokenValueExponent is the error returned when an invalid
+	// token's value base-10 exponent is specified.
+	ErrInvalidTokenValueExponent = errors.New(ModuleName, 7, "staking: invalid token's value exponent")
+
 	// MethodTransfer is the method name for transfers.
 	MethodTransfer = transaction.NewMethodName(ModuleName, "Transfer", Transfer{})
 	// MethodBurn is the method name for burns.
@@ -290,8 +294,10 @@ type SharePool struct {
 
 // PrettyPrint writes a pretty-printed representation of SharePool to the given
 // writer.
-func (p SharePool) PrettyPrint(prefix string, w io.Writer) {
-	fmt.Fprintf(w, "%sBalance:      %s\n", prefix, p.Balance)
+func (p SharePool) PrettyPrint(ctx context.Context, prefix string, w io.Writer) {
+	fmt.Fprintf(w, "%sBalance: ", prefix)
+	PrettyPrintAmount(ctx, p.Balance, w)
+	fmt.Fprintln(w)
 
 	fmt.Fprintf(w, "%sTotal Shares: %s\n", prefix, p.TotalShares)
 }
@@ -498,7 +504,7 @@ func (st StakeThreshold) String() string {
 
 // PrettyPrint writes a pretty-printed representation of StakeThreshold to the
 // given writer.
-func (st StakeThreshold) PrettyPrint(prefix string, w io.Writer) {
+func (st StakeThreshold) PrettyPrint(ctx context.Context, prefix string, w io.Writer) {
 	switch {
 	case st.Global != nil:
 		fmt.Fprintf(w, "%s- Global: %s\n", prefix, *st.Global)
@@ -567,7 +573,7 @@ type StakeAccumulator struct {
 
 // PrettyPrint writes a pretty-printed representation of StakeAccumulator to the
 // given writer.
-func (sa StakeAccumulator) PrettyPrint(prefix string, w io.Writer) {
+func (sa StakeAccumulator) PrettyPrint(ctx context.Context, prefix string, w io.Writer) {
 	if sa.Claims == nil {
 		fmt.Fprintf(w, "%sClaims: (none)\n", prefix)
 	} else {
@@ -576,7 +582,7 @@ func (sa StakeAccumulator) PrettyPrint(prefix string, w io.Writer) {
 			fmt.Fprintf(w, "%s  - Name: %s\n", prefix, claim)
 			for _, threshold := range thresholds {
 				fmt.Fprintf(w, "%s    Staking Thresholds:\n", prefix)
-				threshold.PrettyPrint(prefix+"      ", w)
+				threshold.PrettyPrint(ctx, prefix+"      ", w)
 			}
 		}
 	}
@@ -643,10 +649,12 @@ type GeneralAccount struct {
 
 // PrettyPrint writes a pretty-printed representation of GeneralAccount to the
 // given writer.
-func (ga GeneralAccount) PrettyPrint(prefix string, w io.Writer) {
-	fmt.Fprintf(w, "%sBalance: %s\n", prefix, ga.Balance)
+func (ga GeneralAccount) PrettyPrint(ctx context.Context, prefix string, w io.Writer) {
+	fmt.Fprintf(w, "%sBalance: ", prefix)
+	PrettyPrintAmount(ctx, ga.Balance, w)
+	fmt.Fprintln(w)
 
-	fmt.Fprintf(w, "%sNonce:   %d\n", prefix, ga.Nonce)
+	fmt.Fprintf(w, "%sNonce: %d\n", prefix, ga.Nonce)
 }
 
 // PrettyType returns a representation of GeneralAccount that can be used for
@@ -666,18 +674,18 @@ type EscrowAccount struct {
 
 // PrettyPrint writes a pretty-printed representation of EscrowAccount to the
 // given writer.
-func (e EscrowAccount) PrettyPrint(prefix string, w io.Writer) {
+func (e EscrowAccount) PrettyPrint(ctx context.Context, prefix string, w io.Writer) {
 	fmt.Fprintf(w, "%sActive:\n", prefix)
-	e.Active.PrettyPrint(prefix+"  ", w)
+	e.Active.PrettyPrint(ctx, prefix+"  ", w)
 
 	fmt.Fprintf(w, "%sDebonding:\n", prefix)
-	e.Debonding.PrettyPrint(prefix+"  ", w)
+	e.Debonding.PrettyPrint(ctx, prefix+"  ", w)
 
 	fmt.Fprintf(w, "%sCommission Schedule:\n", prefix)
-	e.CommissionSchedule.PrettyPrint(prefix+"  ", w)
+	e.CommissionSchedule.PrettyPrint(ctx, prefix+"  ", w)
 
 	fmt.Fprintf(w, "%sStake Accumulator:\n", prefix)
-	e.StakeAccumulator.PrettyPrint(prefix+"  ", w)
+	e.StakeAccumulator.PrettyPrint(ctx, prefix+"  ", w)
 }
 
 // PrettyType returns a representation of EscrowAccount that can be used for
@@ -748,11 +756,11 @@ type Account struct {
 
 // PrettyPrint writes a pretty-printed representation of Account to the given
 // writer.
-func (a Account) PrettyPrint(prefix string, w io.Writer) {
+func (a Account) PrettyPrint(ctx context.Context, prefix string, w io.Writer) {
 	fmt.Fprintf(w, "%sGeneral Account:\n", prefix)
-	a.General.PrettyPrint(prefix+"  ", w)
+	a.General.PrettyPrint(ctx, prefix+"  ", w)
 	fmt.Fprintf(w, "%sEscrow Account:\n", prefix)
-	a.Escrow.PrettyPrint(prefix+"  ", w)
+	a.Escrow.PrettyPrint(ctx, prefix+"  ", w)
 }
 
 // PrettyType returns a representation of Account that can be used for pretty

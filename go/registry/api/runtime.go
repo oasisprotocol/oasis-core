@@ -316,14 +316,14 @@ func (s *SignedRuntime) Open(context signature.Context, runtime *Runtime) error 
 
 // PrettyPrint writes a pretty-printed representation of the type
 // to the given writer.
-func (s SignedRuntime) PrettyPrint(prefix string, w io.Writer) {
+func (s SignedRuntime) PrettyPrint(ctx context.Context, prefix string, w io.Writer) {
 	pt, err := s.PrettyType()
 	if err != nil {
 		fmt.Fprintf(w, "%s<error: %s>\n", prefix, err)
 		return
 	}
 
-	pt.(prettyprint.PrettyPrinter).PrettyPrint(prefix, w)
+	pt.(prettyprint.PrettyPrinter).PrettyPrint(ctx, prefix, w)
 }
 
 // PrettyType returns a representation of the type that can be used for pretty printing.
