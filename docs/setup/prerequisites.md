@@ -14,6 +14,7 @@ Core:
   * [Protobuf] compiler.
   * [GNU Make].
   * [CMake].
+  * [pkg-config].
   * [OpenSSL] development package.
   * [libseccomp] development package.
 
@@ -21,16 +22,18 @@ Core:
 
   <!-- markdownlint-disable line-length -->
   ```
-  sudo dnf install bubblewrap gcc gcc-c++ protobuf-compiler make cmake openssl-devel libseccomp-devel
+  sudo dnf install bubblewrap gcc gcc-c++ protobuf-compiler make cmake openssl-devel libseccomp-devel pkg-config
   ```
   <!-- markdownlint-enable line-length -->
 
   On Ubuntu 18.10+ (18.04 LTS provides overly-old `bubblewrap`), you can install
   all the above with:
 
+<!-- markdownlint-disable line-length -->
   ```
-  sudo apt install bubblewrap gcc g++ protobuf-compiler make cmake libssl-dev libseccomp-dev
+  sudo apt install bubblewrap gcc g++ protobuf-compiler make cmake libssl-dev libseccomp-dev pkg-config
   ```
+  <!-- markdownlint-enable line-length -->
 
 * [Go] (at least version 1.14.3).
 
@@ -174,6 +177,7 @@ where the code has been checked out.
 [Protobuf]: https://github.com/protocolbuffers/protobuf
 [GNU Make]: https://www.gnu.org/software/make/
 [CMake]: https://cmake.org/
+[pkg-config]: https://www.freedesktop.org/wiki/Software/pkg-config
 [OpenSSL]: https://www.openssl.org/
 [libseccomp]: https://github.com/seccomp/libseccomp
 [Go]: https://golang.org
