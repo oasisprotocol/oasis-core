@@ -272,7 +272,7 @@ func ExportEntity(signerBackend, entityDir string) error {
 	if err != nil {
 		return err
 	}
-	var entity entity.Entity
-	entity.ID = signer.Public()
-	return entity.Save(entityDir)
+
+	_, err = entity.GenerateWithSigner(entityDir, signer, nil)
+	return err
 }
