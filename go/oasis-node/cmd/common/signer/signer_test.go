@@ -21,28 +21,25 @@ func TestCompositeCtor(t *testing.T) {
 	require.NoError(err, "TempDir")
 	defer os.RemoveAll(dataDir)
 
-	viper.Set(cfgSignerCompositeBackends, "1:ledger,2:file,4:memory")
+	viper.Set(cfgSignerCompositeBackends, "2:file,4:memory")
 	defer viper.Set(cfgSignerCompositeBackends, "")
 
 	testingAllowMemory = true
 
-	sf, err := doNewComposite(dataDir, signature.SignerEntity, signature.SignerNode, signature.SignerConsensus)
+	sf, err := doNewComposite(dataDir, signature.SignerNode, signature.SignerConsensus)
 	require.NoError(err, "doNewComposite")
 
 	err = sf.EnsureRole(signature.SignerEntity)
-	require.NoError(err, "EnsureRole: ledger")
+	require.Equal(signature.ErrRoleMismatch, err, "EnsureRole: not configured (entity)")
 
 	err = sf.EnsureRole(signature.SignerNode)
 	require.NoError(err, "EnsureRole: file")
 
 	err = sf.EnsureRole(signature.SignerP2P)
-	require.Equal(signature.ErrRoleMismatch, err, "EnsureRole: not configured")
+	require.Equal(signature.ErrRoleMismatch, err, "EnsureRole: not configured (p2p)")
 
 	err = sf.EnsureRole(signature.SignerConsensus)
 	require.NoError(err, "EnsureRole: memory")
-
-	// Can't actually generate with the ledger backend, because most systems
-	// do not have that garbage.
 
 	signer, err := sf.Generate(signature.SignerNode, rand.Reader)
 	require.NoError(err, "Generate: file")

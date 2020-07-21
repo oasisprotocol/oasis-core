@@ -6,6 +6,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/cmd"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/scenario/e2e"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/scenario/e2e/runtime"
+	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/scenario/pluginsigner"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/scenario/remotesigner"
 )
 
@@ -22,6 +23,7 @@ func main() {
 	for _, register := range []func() error{
 		e2e.RegisterScenarios,
 		runtime.RegisterScenarios,
+		pluginsigner.RegisterScenarios,
 		remotesigner.RegisterScenarios,
 	} {
 		if err := register(); err != nil {

@@ -17,6 +17,7 @@ generate:
 # Build.
 # List of Go binaries to build.
 go-binaries := oasis-node oasis-test-runner oasis-net-runner oasis-remote-signer extra/stats extra/extract-metrics
+go-plugins := example-signer-plugin
 
 $(go-binaries):
 	@$(ECHO) "$(MAGENTA)*** Building $@...$(OFF)"
@@ -26,7 +27,12 @@ ifeq ($(GO_BUILD_E2E_COVERAGE),1)
 	@$(GO) test $(GOFLAGS) -c -tags e2ecoverage -covermode=atomic -coverpkg=./... -o ./$@/$(notdir $@).test ./$@
 endif
 
-build: $(go-binaries)
+# Example signer plugin.
+example-signer-plugin:
+	@$(ECHO) "$(MAGENTA)*** Building $@...$(OFF)"
+	@$(GO) build $(GOFLAGS) $(GO_EXTRA_FLAGS) -buildmode=plugin -o ./$(GO_EXAMPLE_PLUGIN_PATH) ./$(GO_EXAMPLE_PLUGIN_PATH)
+
+build: $(go-binaries) $(go-plugins)
 
 # Build test helpers.
 # List of test helpers to build.
@@ -134,7 +140,7 @@ clean:
 
 # List of targets that are not actual files.
 .PHONY: \
-	generate $(go-binaries) build \
+	generate $(go-binaries) $(go-plugins) build \
 	$(test-helpers) build-helpers \
 	$(test-vectors-targets) \
 	fmt lint \

@@ -30,6 +30,7 @@ fi
 
 node_binary="${WORKDIR}/go/oasis-node/oasis-node"
 test_runner_binary="${WORKDIR}/go/oasis-test-runner/oasis-test-runner"
+skip_options=""
 
 # Use e2e-coverage-wrapper.sh as node binary if we need to compute E2E
 # tests' coverage.
@@ -39,6 +40,11 @@ if [[ ${OASIS_E2E_COVERAGE:-""} != "" ]]; then
     # Use -env version of the wrapper as we can't pass additional arguments there.
     export E2E_COVERAGE_BINARY=${node_binary}.test
     node_binary="${WORKDIR}/scripts/e2e-coverage-wrapper-env.sh"
+
+    # The runtime library's "different version" detection also freaks out
+    # if build flags changes, and as far as I can tell --covermode doesn't
+    # work.
+    skip_options="--skip plugin-signer/basic"
 fi
 
 ias_mock="true"
@@ -60,7 +66,9 @@ ${test_runner_binary} \
     --e2e/runtime.tee_hardware ${OASIS_TEE_HARDWARE:-""} \
     --e2e/runtime.ias.mock=${ias_mock} \
     --remote-signer.binary ${WORKDIR}/go/oasis-remote-signer/oasis-remote-signer \
+    --plugin-signer.binary ${WORKDIR}/go/oasis-test-runner/scenario/pluginsigner/example_signer_plugin/example_signer_plugin.so \
     --log.level info \
+    ${skip_options} \
     ${BUILDKITE_PARALLEL_JOB_COUNT:+--parallel.job_count ${BUILDKITE_PARALLEL_JOB_COUNT}} \
     ${BUILDKITE_PARALLEL_JOB:+--parallel.job_index ${BUILDKITE_PARALLEL_JOB}} \
     "$@"
