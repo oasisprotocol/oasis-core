@@ -45,8 +45,3 @@ type TendermintService interface {
 	// returned via the `EventDataNewBlock` query.
 	WatchTendermintBlocks() (<-chan *tmtypes.Block, *pubsub.Subscription)
 }
-
-// GenesisProvider is a tendermint specific genesis document provider.
-type GenesisProvider interface {
-	GetTendermintGenesisDocument() (*tmtypes.GenesisDoc, error)
-}

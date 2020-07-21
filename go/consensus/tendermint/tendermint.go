@@ -3,7 +3,6 @@ package tendermint
 import (
 	"bytes"
 	"context"
-	"encoding/json"
 	"fmt"
 	"net"
 	"net/url"
@@ -40,7 +39,6 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
 	"github.com/oasisprotocol/oasis-core/go/common/node"
 	"github.com/oasisprotocol/oasis-core/go/common/pubsub"
-	"github.com/oasisprotocol/oasis-core/go/common/quantity"
 	cmservice "github.com/oasisprotocol/oasis-core/go/common/service"
 	"github.com/oasisprotocol/oasis-core/go/common/version"
 	consensusAPI "github.com/oasisprotocol/oasis-core/go/consensus/api"
@@ -1216,7 +1214,7 @@ func (t *tendermintService) lazyInit() error {
 		return err
 	}
 
-	tmGenDoc, err := t.getTendermintGenesis()
+	tmGenDoc, err := api.GetTendermintGenesisDocument(t.genesisProvider)
 	if err != nil {
 		t.Logger.Error("failed to obtain genesis document",
 			"err", err,
@@ -1300,119 +1298,6 @@ func (t *tendermintService) lazyInit() error {
 	t.isInitialized = true
 
 	return nil
-}
-
-// genesisToTendermint converts the Oasis genesis block to Tendermint's format.
-func genesisToTendermint(d *genesisAPI.Document) (*tmtypes.GenesisDoc, error) {
-	// WARNING: The AppState MUST be encoded as JSON since its type is
-	// json.RawMessage which requires it to be valid JSON. It may appear
-	// to work until you try to restore from an existing data directory.
-	//
-	// The runtime library sorts map keys, so the output of json.Marshal
-	// should be deterministic.
-	b, err := json.Marshal(d)
-	if err != nil {
-		return nil, fmt.Errorf("tendermint: failed to serialize genesis doc: %w", err)
-	}
-
-	// Translate special "disable block gas limit" value as Tendermint uses
-	// -1 for some reason (as if a zero limit makes sense) and we use 0.
-	maxBlockGas := int64(d.Consensus.Parameters.MaxBlockGas)
-	if maxBlockGas == 0 {
-		maxBlockGas = -1
-	}
-
-	doc := tmtypes.GenesisDoc{
-		ChainID:     d.ChainContext()[:tmtypes.MaxChainIDLen],
-		GenesisTime: d.Time,
-		ConsensusParams: &tmtypes.ConsensusParams{
-			Block: tmtypes.BlockParams{
-				MaxBytes:   int64(d.Consensus.Parameters.MaxBlockSize),
-				MaxGas:     maxBlockGas,
-				TimeIotaMs: 1000,
-			},
-			Evidence: tmtypes.EvidenceParams{
-				MaxAgeNumBlocks: int64(d.Consensus.Parameters.MaxEvidenceAgeBlocks),
-				MaxAgeDuration:  d.Consensus.Parameters.MaxEvidenceAgeTime,
-			},
-			Validator: tmtypes.ValidatorParams{
-				PubKeyTypes: []string{tmtypes.ABCIPubKeyTypeEd25519},
-			},
-		},
-		AppState: b,
-	}
-
-	var tmValidators []tmtypes.GenesisValidator
-	for _, v := range d.Registry.Nodes {
-		var openedNode node.Node
-		if err = v.Open(registryAPI.RegisterGenesisNodeSignatureContext, &openedNode); err != nil {
-			return nil, fmt.Errorf("tendermint: failed to verify validator: %w", err)
-		}
-		// TODO: This should cross check that the entity is valid.
-		if !openedNode.HasRoles(node.RoleValidator) {
-			continue
-		}
-
-		var power int64
-		if d.Scheduler.Parameters.DebugBypassStake {
-			power = 1
-		} else {
-			var stake *quantity.Quantity
-			acctAddr := stakingAPI.NewAddress(openedNode.EntityID)
-			if account, ok := d.Staking.Ledger[acctAddr]; ok {
-				stake = account.Escrow.Active.Balance.Clone()
-			} else {
-				// If all balances and stuff are zero, it's permitted not to have an account in the ledger at all.
-				stake = &quantity.Quantity{}
-			}
-			power, err = schedulerAPI.VotingPowerFromStake(stake)
-			if err != nil {
-				return nil, fmt.Errorf("tendermint: computing voting power for entity %s with account %s and stake %v: %w",
-					openedNode.EntityID,
-					acctAddr,
-					stake,
-					err,
-				)
-			}
-		}
-
-		pk := crypto.PublicKeyToTendermint(&openedNode.Consensus.ID)
-		validator := tmtypes.GenesisValidator{
-			Address: pk.Address(),
-			PubKey:  pk,
-			Power:   power,
-			Name:    "oasis-validator-" + openedNode.ID.String(),
-		}
-		tmValidators = append(tmValidators, validator)
-	}
-
-	doc.Validators = tmValidators
-
-	return &doc, nil
-}
-
-func (t *tendermintService) getTendermintGenesis() (*tmtypes.GenesisDoc, error) {
-	var (
-		tmGenDoc *tmtypes.GenesisDoc
-		err      error
-	)
-	if tmProvider, ok := t.genesisProvider.(service.GenesisProvider); ok {
-		// This is a single node config, because the genesis document was
-		// missing, probably in unit tests.
-		tmGenDoc, err = tmProvider.GetTendermintGenesisDocument()
-	} else {
-		tmGenDoc, err = genesisToTendermint(t.genesis)
-	}
-	if err != nil {
-		return nil, fmt.Errorf("tendermint: failed to create genesis doc: %w", err)
-	}
-
-	// HACK: Certain test cases use TimeoutCommit < 1 sec, and care about the
-	// BFT view of time pulling ahead.
-	timeoutCommit := t.genesis.Consensus.Parameters.TimeoutCommit
-	tmGenDoc.ConsensusParams.Block.TimeIotaMs = int64(timeoutCommit / time.Millisecond)
-
-	return tmGenDoc, nil
 }
 
 func (t *tendermintService) syncWorker() {
