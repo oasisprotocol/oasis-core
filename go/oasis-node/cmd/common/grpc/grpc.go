@@ -124,5 +124,6 @@ func init() {
 
 	ClientFlags.StringP(CfgAddress, "a", defaultAddress, "remote gRPC address")
 	ClientFlags.Bool(CfgWait, false, "wait for gRPC address to become available")
+	ClientFlags.AddFlagSet(cmnGrpc.Flags)
 	_ = viper.BindPFlags(ClientFlags)
 }
