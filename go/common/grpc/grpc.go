@@ -45,32 +45,56 @@ var (
 	grpcMetricsOnce      sync.Once
 	grpcGlobalLoggerOnce sync.Once
 
-	grpcCalls = prometheus.NewCounterVec(
+	grpcServerCalls = prometheus.NewCounterVec(
 		prometheus.CounterOpts{
-			Name: "oasis_grpc_calls",
+			Name: "oasis_grpc_server_calls",
 			Help: "Number of gRPC calls.",
 		},
 		[]string{"call"},
 	)
-	grpcLatency = prometheus.NewSummaryVec(
+	grpcServerLatency = prometheus.NewSummaryVec(
 		prometheus.SummaryOpts{
-			Name: "oasis_grpc_latency",
+			Name: "oasis_grpc_server_latency",
 			Help: "gRPC call latency (seconds).",
 		},
 		[]string{"call"},
 	)
-	grpcStreamWrites = prometheus.NewCounterVec(
+	grpcServerStreamWrites = prometheus.NewCounterVec(
 		prometheus.CounterOpts{
-			Name: "oasis_grpc_stream_writes",
+			Name: "oasis_grpc_server_stream_writes",
+			Help: "Number of gRPC stream writes.",
+		},
+		[]string{"call"},
+	)
+	grpcClientCalls = prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "oasis_grpc_client_calls",
+			Help: "Number of gRPC calls.",
+		},
+		[]string{"call"},
+	)
+	grpcClientLatency = prometheus.NewSummaryVec(
+		prometheus.SummaryOpts{
+			Name: "oasis_grpc_client_latency",
+			Help: "gRPC call latency (seconds).",
+		},
+		[]string{"call"},
+	)
+	grpcClientStreamWrites = prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "oasis_grpc_client_stream_writes",
 			Help: "Number of gRPC stream writes.",
 		},
 		[]string{"call"},
 	)
 
 	grpcCollectors = []prometheus.Collector{
-		grpcCalls,
-		grpcLatency,
-		grpcStreamWrites,
+		grpcClientCalls,
+		grpcClientLatency,
+		grpcClientStreamWrites,
+		grpcServerCalls,
+		grpcServerLatency,
+		grpcServerStreamWrites,
 	}
 
 	serverKeepAliveParams = keepalive.ServerParameters{
@@ -160,11 +184,11 @@ func (l *grpcLogAdapter) unaryLogger(ctx context.Context, req interface{}, info 
 		)
 	}
 
-	grpcCalls.With(prometheus.Labels{"call": info.FullMethod}).Inc()
+	grpcServerCalls.With(prometheus.Labels{"call": info.FullMethod}).Inc()
 
 	start := time.Now()
 	resp, err = handler(ctx, req)
-	grpcLatency.With(prometheus.Labels{"call": info.FullMethod}).Observe(time.Since(start).Seconds())
+	grpcServerLatency.With(prometheus.Labels{"call": info.FullMethod}).Observe(time.Since(start).Seconds())
 	switch err {
 	case nil:
 		if l.isDebug {
@@ -185,6 +209,77 @@ func (l *grpcLogAdapter) unaryLogger(ctx context.Context, req interface{}, info 
 	return
 }
 
+func (l *grpcLogAdapter) unaryClientLogger(ctx context.Context,
+	method string,
+	req, rsp interface{},
+	cc *grpc.ClientConn,
+	invoker grpc.UnaryInvoker,
+	opts ...grpc.CallOption,
+) error {
+	seq := atomic.AddUint64(&l.reqSeq, 1)
+	if l.isDebug {
+		l.reqLogger.Debug("request",
+			"method", method,
+			"req_seq", seq,
+			"req", req,
+		)
+	}
+
+	grpcClientCalls.With(prometheus.Labels{"call": method}).Inc()
+
+	start := time.Now()
+	err := invoker(ctx, method, req, rsp, cc, opts...)
+	grpcClientLatency.With(prometheus.Labels{"call": method}).Observe(time.Since(start).Seconds())
+	switch err {
+	case nil:
+		if l.isDebug {
+			l.reqLogger.Debug("request succeeded",
+				"method", method,
+				"req_seq", seq,
+			)
+		}
+	default:
+		l.reqLogger.Error("request failed",
+			"method", method,
+			"req_seq", seq,
+			"rsp", rsp,
+			"err", err,
+		)
+		return err
+	}
+
+	return nil
+}
+
+func (l *grpcLogAdapter) streamClientLogger(ctx context.Context,
+	desc *grpc.StreamDesc,
+	cc *grpc.ClientConn,
+	method string,
+	streamer grpc.Streamer,
+	opts ...grpc.CallOption,
+) (grpc.ClientStream, error) {
+	grpcClientCalls.With(prometheus.Labels{"call": method}).Inc()
+
+	seq := atomic.AddUint64(&l.streamSeq, 1)
+	cs, err := streamer(ctx, desc, cc, method, opts...)
+	if err != nil {
+		l.reqLogger.Error("stream closed (failure)",
+			"method", method,
+			"stream_seq", seq,
+			"err", err,
+		)
+	}
+
+	csLog := &grpcClientStreamLogger{
+		ClientStream: cs,
+		logAdapter:   l,
+		method:       method,
+		seq:          seq,
+	}
+
+	return csLog, err
+}
+
 func (l *grpcLogAdapter) streamLogger(srv interface{}, ss grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
 	seq := atomic.AddUint64(&l.streamSeq, 1)
 	if l.isDebug {
@@ -201,7 +296,7 @@ func (l *grpcLogAdapter) streamLogger(srv interface{}, ss grpc.ServerStream, inf
 		seq:          seq,
 	}
 
-	grpcCalls.With(prometheus.Labels{"call": info.FullMethod}).Inc()
+	grpcServerCalls.With(prometheus.Labels{"call": info.FullMethod}).Inc()
 
 	err := handler(srv, stream)
 
@@ -241,6 +336,40 @@ func newGrpcLogAdapter(baseLogger *logging.Logger) *grpcLogAdapter {
 	}
 }
 
+type grpcClientStreamLogger struct {
+	grpc.ClientStream
+
+	logAdapter *grpcLogAdapter
+
+	method string
+	seq    uint64
+}
+
+func (s *grpcClientStreamLogger) SendMsg(m interface{}) error {
+	grpcClientStreamWrites.With(prometheus.Labels{"call": s.method}).Inc()
+	err := s.ClientStream.SendMsg(m)
+
+	if s.logAdapter.isDebug {
+		switch err {
+		case nil:
+			s.logAdapter.reqLogger.Debug("SendMsg",
+				"method", s.method,
+				"stream_seq", s.seq,
+				"message", m,
+			)
+		default:
+			s.logAdapter.reqLogger.Debug("SendMsg failed",
+				"method", s.method,
+				"stream_seq", s.seq,
+				"message", m,
+				"err", err,
+			)
+		}
+	}
+
+	return err
+}
+
 type grpcStreamLogger struct {
 	grpc.ServerStream
 
@@ -251,7 +380,7 @@ type grpcStreamLogger struct {
 }
 
 func (s *grpcStreamLogger) SendMsg(m interface{}) error {
-	grpcStreamWrites.With(prometheus.Labels{"call": s.method}).Inc()
+	grpcServerStreamWrites.With(prometheus.Labels{"call": s.method}).Inc()
 	err := s.ServerStream.SendMsg(m)
 
 	if s.logAdapter.isDebug {
@@ -517,10 +646,28 @@ func NewServer(config *ServerConfig) (*Server, error) {
 
 // Dial creates a client connection to the given target.
 func Dial(target string, opts ...grpc.DialOption) (*grpc.ClientConn, error) {
+	// If debug gRPC logs are enabled, setup the global gRPC logger.
+	if viper.GetBool(CfgLogDebug) {
+		// NOTE: this will get setup on any code that starts a server
+		// regardless of the CfgLogDebug flag. However on code that only uses
+		// gRPC clients, only enable this if gRPC verbose logging is enabled.
+		grpcGlobalLoggerOnce.Do(func() {
+			logger := logging.GetLogger("grpc")
+			logAdapter := newGrpcLogAdapter(logger)
+			grpclog.SetLoggerV2(logAdapter)
+		})
+	}
+
+	grpcMetricsOnce.Do(func() {
+		prometheus.MustRegister(grpcCollectors...)
+	})
+
+	logger := logging.GetLogger("grpc/client")
+	logAdapter := newGrpcLogAdapter(logger)
 	dialOpts := []grpc.DialOption{
 		grpc.WithDefaultCallOptions(grpc.ForceCodec(&CBORCodec{})),
-		grpc.WithChainUnaryInterceptor(clientUnaryErrorMapper),
-		grpc.WithChainStreamInterceptor(clientStreamErrorMapper),
+		grpc.WithChainUnaryInterceptor(logAdapter.unaryClientLogger, clientUnaryErrorMapper),
+		grpc.WithChainStreamInterceptor(logAdapter.streamClientLogger, clientStreamErrorMapper),
 	}
 	dialOpts = append(dialOpts, opts...)
 	return grpc.Dial(target, dialOpts...)
