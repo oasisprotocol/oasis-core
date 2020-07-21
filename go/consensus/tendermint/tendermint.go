@@ -47,6 +47,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/consensus/metrics"
 	"github.com/oasisprotocol/oasis-core/go/consensus/tendermint/abci"
 	"github.com/oasisprotocol/oasis-core/go/consensus/tendermint/api"
+	"github.com/oasisprotocol/oasis-core/go/consensus/tendermint/apps/supplementarysanity"
 	tmbeacon "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/beacon"
 	"github.com/oasisprotocol/oasis-core/go/consensus/tendermint/crypto"
 	"github.com/oasisprotocol/oasis-core/go/consensus/tendermint/db"
@@ -128,6 +129,11 @@ const (
 	CfgConsensusSubmissionMaxFee = "consensus.tendermint.submission.max_fee"
 	// CfgConsensusDebugDisableCheckTx disables CheckTx.
 	CfgConsensusDebugDisableCheckTx = "consensus.tendermint.debug.disable_check_tx"
+
+	// CfgSupplementarySanityEnabled is the supplementary sanity enabled flag.
+	CfgSupplementarySanityEnabled = "consensus.tendermint.supplementarysanity.enabled"
+	// CfgSupplementarySanityInterval configures the supplementary sanity check interval.
+	CfgSupplementarySanityInterval = "consensus.tendermint.supplementarysanity.interval"
 
 	// StateDir is the name of the directory located inside the node's data
 	// directory which contains the tendermint state.
@@ -995,6 +1001,14 @@ func (t *tendermintService) initialize() error {
 	t.serviceClients = append(t.serviceClients, scRootHash)
 	t.svcMgr.RegisterCleanupOnly(t.roothash, "roothash backend")
 
+	// Enable supplementary sanity checks when enabled.
+	if viper.GetBool(CfgSupplementarySanityEnabled) {
+		ssa := supplementarysanity.New(viper.GetUint64(CfgSupplementarySanityInterval))
+		if err = t.RegisterApplication(ssa); err != nil {
+			return fmt.Errorf("failed to register supplementary sanity check app: %w", err)
+		}
+	}
+
 	return nil
 }
 
@@ -1021,17 +1035,6 @@ func (t *tendermintService) GetTendermintBlock(ctx context.Context, height int64
 		return nil, fmt.Errorf("tendermint: block query failed: %w", err)
 	}
 	return result.Block, nil
-}
-
-func (t *tendermintService) GetHeight(ctx context.Context) (int64, error) {
-	blk, err := t.GetTendermintBlock(ctx, consensusAPI.HeightLatest)
-	if err != nil {
-		return 0, err
-	}
-	if blk == nil {
-		return 0, consensusAPI.ErrNoCommittedBlocks
-	}
-	return blk.Header.Height, nil
 }
 
 func (t *tendermintService) GetBlockResults(height int64) (*tmrpctypes.ResultBlockResults, error) {
@@ -1419,7 +1422,7 @@ func (t *tendermintService) metrics() {
 }
 
 // New creates a new Tendermint service.
-func New(ctx context.Context, dataDir string, identity *identity.Identity, upgrader upgradeAPI.Backend, genesisProvider genesisAPI.Provider) (service.TendermintService, error) {
+func New(ctx context.Context, dataDir string, identity *identity.Identity, upgrader upgradeAPI.Backend, genesisProvider genesisAPI.Provider) (consensusAPI.Backend, error) {
 	// Retrive the genesis document early so that it is possible to
 	// use it while initializing other things.
 	genesisDoc, err := genesisProvider.GetGenesisDocument()
@@ -1609,11 +1612,17 @@ func init() {
 	Flags.Bool(CfgConsensusDebugDisableCheckTx, false, "do not perform CheckTx on incoming transactions (UNSAFE)")
 	Flags.Bool(CfgDebugUnsafeReplayRecoverCorruptedWAL, false, "Enable automatic recovery from corrupted WAL during replay (UNSAFE).")
 
+	Flags.Bool(CfgSupplementarySanityEnabled, false, "enable supplementary sanity checks (slows down consensus)")
+	Flags.Uint64(CfgSupplementarySanityInterval, 10, "supplementary sanity check interval (in blocks)")
+
 	_ = Flags.MarkHidden(cfgLogDebug)
 	_ = Flags.MarkHidden(CfgDebugP2PAddrBookLenient)
 	_ = Flags.MarkHidden(CfgDebugP2PAllowDuplicateIP)
 	_ = Flags.MarkHidden(CfgConsensusDebugDisableCheckTx)
 	_ = Flags.MarkHidden(CfgDebugUnsafeReplayRecoverCorruptedWAL)
+
+	_ = Flags.MarkHidden(CfgSupplementarySanityEnabled)
+	_ = Flags.MarkHidden(CfgSupplementarySanityInterval)
 
 	_ = viper.BindPFlags(Flags)
 	Flags.AddFlagSet(db.Flags)

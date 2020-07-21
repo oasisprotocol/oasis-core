@@ -138,8 +138,8 @@ func (app *supplementarySanityApplication) FireTimer(*abciAPI.Context, *abci.Tim
 	return fmt.Errorf("tendermint/supplementarysanity: unexpected timer")
 }
 
-func New(interval int64) abci.Application {
+func New(interval uint64) abci.Application {
 	return &supplementarySanityApplication{
-		interval: interval,
+		interval: int64(interval),
 	}
 }

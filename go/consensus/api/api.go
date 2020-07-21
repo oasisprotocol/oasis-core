@@ -12,6 +12,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/errors"
 	"github.com/oasisprotocol/oasis-core/go/common/node"
 	"github.com/oasisprotocol/oasis-core/go/common/pubsub"
+	"github.com/oasisprotocol/oasis-core/go/common/service"
 	"github.com/oasisprotocol/oasis-core/go/consensus/api/transaction"
 	"github.com/oasisprotocol/oasis-core/go/consensus/api/transaction/results"
 	epochtime "github.com/oasisprotocol/oasis-core/go/epochtime/api"
@@ -142,6 +143,7 @@ type Status struct {
 
 // Backend is an interface that a consensus backend must provide.
 type Backend interface {
+	service.BackgroundService
 	ClientBackend
 
 	// Synced returns a channel that is closed once synchronization is

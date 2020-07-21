@@ -23,7 +23,6 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/version"
 	consensusAPI "github.com/oasisprotocol/oasis-core/go/consensus/api"
 	"github.com/oasisprotocol/oasis-core/go/consensus/tendermint"
-	tmService "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/service"
 	tendermintTestsGenesis "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/tests/genesis"
 	"github.com/oasisprotocol/oasis-core/go/control"
 	controlAPI "github.com/oasisprotocol/oasis-core/go/control/api"
@@ -42,7 +41,6 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/pprof"
 	cmdSigner "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/signer"
 	"github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/tracing"
-	"github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/debug/supplementarysanity"
 	registryAPI "github.com/oasisprotocol/oasis-core/go/registry/api"
 	runtimeClient "github.com/oasisprotocol/oasis-core/go/runtime/client"
 	runtimeClientAPI "github.com/oasisprotocol/oasis-core/go/runtime/client/api"
@@ -99,7 +97,6 @@ func Run(cmd *cobra.Command, args []string) {
 type Node struct {
 	svcMgr       *background.ServiceManager
 	grpcInternal *grpc.Server
-	svcTmnt      tmService.TendermintService
 	svcTmntSeed  *tendermint.SeedService
 
 	stopOnce sync.Once
@@ -212,12 +209,6 @@ func (n *Node) initBackends() error {
 		return err
 	}
 
-	if supplementarysanity.Enabled() {
-		if err = supplementarysanity.New(n.svcTmnt); err != nil {
-			return err
-		}
-	}
-
 	// Initialize and register the internal gRPC services.
 	grpcSrv := n.grpcInternal.Server()
 	scheduler.RegisterService(grpcSrv, n.Consensus.Scheduler())
@@ -265,7 +256,7 @@ func (n *Node) initWorkers(logger *logging.Logger) error {
 		dataDir,
 		compute.Enabled() || workerStorage.Enabled() || workerKeymanager.Enabled(),
 		n.Identity,
-		n.svcTmnt,
+		n.Consensus,
 		n.P2P,
 		n.IAS,
 		n.Consensus.KeyManager(),
@@ -289,7 +280,7 @@ func (n *Node) initWorkers(logger *logging.Logger) error {
 		n.Consensus.EpochTime(),
 		n.Consensus.Registry(),
 		n.Identity,
-		n.svcTmnt,
+		n.Consensus,
 		n.P2P,
 		&workerCommonCfg,
 		n.commonStore,
@@ -483,7 +474,7 @@ func (n *Node) initGenesis(testNode bool) error {
 }
 
 func (n *Node) dumpGenesis(ctx context.Context, blockHeight int64, epoch epochtime.EpochTime) error {
-	doc, err := n.svcTmnt.StateToGenesis(ctx, blockHeight)
+	doc, err := n.Consensus.StateToGenesis(ctx, blockHeight)
 	if err != nil {
 		return fmt.Errorf("dumpGenesis: failed to get genesis: %w", err)
 	}
@@ -677,15 +668,14 @@ func newNode(testNode bool) (n *Node, err error) { // nolint: gocyclo
 		node.svcMgr.Register(node.svcTmntSeed)
 	} else {
 		// Initialize Tendermint service.
-		node.svcTmnt, err = tendermint.New(node.svcMgr.Ctx, dataDir, node.Identity, node.Upgrader, node.Genesis)
+		node.Consensus, err = tendermint.New(node.svcMgr.Ctx, dataDir, node.Identity, node.Upgrader, node.Genesis)
 		if err != nil {
 			logger.Error("failed to initialize tendermint service",
 				"err", err,
 			)
 			return nil, err
 		}
-		node.svcMgr.Register(node.svcTmnt)
-		node.Consensus = node.svcTmnt
+		node.svcMgr.Register(node.Consensus)
 
 		// Initialize node backends.
 		if err = node.initBackends(); err != nil {
@@ -760,7 +750,7 @@ func newNode(testNode bool) (n *Node, err error) { // nolint: gocyclo
 	node.RuntimeClient, err = runtimeClient.New(
 		node.svcMgr.Ctx,
 		cmdCommon.DataDir(),
-		node.svcTmnt,
+		node.Consensus,
 		node.RuntimeRegistry,
 	)
 	if err != nil {
@@ -807,7 +797,7 @@ func newNode(testNode bool) (n *Node, err error) { // nolint: gocyclo
 	//
 	// Note: This will only start the node if it is required by
 	// one of the backends.
-	if err = node.svcTmnt.Start(); err != nil {
+	if err = node.Consensus.Start(); err != nil {
 		logger.Error("failed to start tendermint service",
 			"err", err,
 		)
@@ -850,7 +840,6 @@ func init() {
 		cmdSigner.Flags,
 		pprof.Flags,
 		storage.Flags,
-		supplementarysanity.Flags,
 		tendermint.Flags,
 		ias.Flags,
 		workerKeymanager.Flags,

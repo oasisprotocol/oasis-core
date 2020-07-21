@@ -5,14 +5,14 @@ import (
 	"fmt"
 
 	"github.com/oasisprotocol/oasis-core/go/common/identity"
+	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
 	"github.com/oasisprotocol/oasis-core/go/consensus/tendermint"
-	"github.com/oasisprotocol/oasis-core/go/consensus/tendermint/service"
 	genesis "github.com/oasisprotocol/oasis-core/go/genesis/file"
 	"github.com/oasisprotocol/oasis-core/go/upgrade"
 )
 
 type honestTendermint struct {
-	service service.TendermintService
+	service consensus.Backend
 }
 
 func newHonestTendermint() *honestTendermint {
@@ -44,12 +44,15 @@ func (ht *honestTendermint) start(id *identity.Identity, dataDir string) error {
 
 	// Wait for height=1 to pass, during which mux apps perform deferred initialization.
 	blockOne := make(chan struct{})
-	blocksCh, blocksSub := ht.service.WatchTendermintBlocks()
+	blocksCh, blocksSub, err := ht.service.WatchBlocks(context.Background())
+	if err != nil {
+		return fmt.Errorf("failed to watch blocks: %w", err)
+	}
 	go func() {
 		defer blocksSub.Close()
 		for {
 			block := <-blocksCh
-			if block.Header.Height > 1 {
+			if block.Height > 1 {
 				break
 			}
 		}
@@ -59,8 +62,6 @@ func (ht *honestTendermint) start(id *identity.Identity, dataDir string) error {
 	if err = ht.service.Start(); err != nil {
 		return fmt.Errorf("honest Tendermint service Start: %w", err)
 	}
-	logger.Debug("honest Tendermint service waiting for Tendermint start")
-	<-ht.service.Started()
 	logger.Debug("honest Tendermint service waiting for Tendermint sync")
 	<-ht.service.Synced()
 	logger.Debug("honest Tendermint service sync done")

@@ -22,7 +22,6 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/grpc"
 	"github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/metrics"
 	"github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/debug/byzantine"
-	"github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/debug/supplementarysanity"
 	runtimeRegistry "github.com/oasisprotocol/oasis-core/go/runtime/registry"
 	"github.com/oasisprotocol/oasis-core/go/storage"
 	workerCommon "github.com/oasisprotocol/oasis-core/go/worker/common"
@@ -189,10 +188,10 @@ func (args *argBuilder) runtimeSupported(id common.Namespace) *argBuilder {
 	return args
 }
 
-func (args *argBuilder) supplementarysanityEnabled() *argBuilder {
-	args.vec = append(args.vec, "--"+supplementarysanity.CfgEnabled)
+func (args *argBuilder) tendermintSupplementarySanityEnabled() *argBuilder {
+	args.vec = append(args.vec, "--"+tendermint.CfgSupplementarySanityEnabled)
 	args.vec = append(args.vec, []string{
-		"--" + supplementarysanity.CfgInterval, "1",
+		"--" + tendermint.CfgSupplementarySanityInterval, "1",
 	}...)
 	return args
 }

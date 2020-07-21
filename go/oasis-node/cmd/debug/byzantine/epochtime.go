@@ -1,11 +1,11 @@
 package byzantine
 
 import (
-	"github.com/oasisprotocol/oasis-core/go/consensus/tendermint/service"
+	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
 	epochtime "github.com/oasisprotocol/oasis-core/go/epochtime/api"
 )
 
-func epochtimeWaitForEpoch(svc service.TendermintService, epoch epochtime.EpochTime) error {
+func epochtimeWaitForEpoch(svc consensus.Backend, epoch epochtime.EpochTime) error {
 	ch, sub := svc.EpochTime().WatchEpochs()
 	defer sub.Close()
 
