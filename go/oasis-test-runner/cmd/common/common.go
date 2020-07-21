@@ -14,6 +14,7 @@ const (
 	CfgLogLevel           = "log.level"
 	CfgScenarioRegex      = "scenario"
 	CfgScenarioRegexShort = "s"
+	CfgScenarioSkipRegex  = "skip"
 
 	// ScenarioParamsMask is the form of parameters passed to specific scenario.
 	//
