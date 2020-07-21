@@ -9,5 +9,8 @@ oasis-net-runner/oasis-net-runner
 oasis-remote-signer/oasis-remote-signer
 storage/mkvs/interop/mkvs-test-helpers
 
+registry/gen_vectors/gen_vectors
+staking/gen_vectors/gen_vectors
+
 extra/extract-metrics/extract-metrics
 extra/stats/stats
