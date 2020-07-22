@@ -367,12 +367,12 @@ func runtimeFromFlags() (*registry.Runtime, signature.Signer, error) { // nolint
 	}
 
 	rt := &registry.Runtime{
-		DescriptorVersion: registry.LatestRuntimeDescriptorVersion,
-		ID:                id,
-		EntityID:          signer.Public(),
-		Genesis:           gen,
-		Kind:              kind,
-		TEEHardware:       teeHardware,
+		Versioned:   cbor.NewVersioned(registry.LatestRuntimeDescriptorVersion),
+		ID:          id,
+		EntityID:    signer.Public(),
+		Genesis:     gen,
+		Kind:        kind,
+		TEEHardware: teeHardware,
 		Version: registry.VersionInfo{
 			Version: version.FromU64(viper.GetUint64(CfgVersion)),
 		},

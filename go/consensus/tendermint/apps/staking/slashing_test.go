@@ -6,6 +6,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/oasisprotocol/oasis-core/go/common/cbor"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	memorySigner "github.com/oasisprotocol/oasis-core/go/common/crypto/signature/signers/memory"
 	"github.com/oasisprotocol/oasis-core/go/common/entity"
@@ -50,9 +51,9 @@ func TestOnEvidenceDoubleSign(t *testing.T) {
 	// Add node.
 	nodeSigner := memorySigner.NewTestSigner("node test signer")
 	nod := &node.Node{
-		DescriptorVersion: node.LatestNodeDescriptorVersion,
-		ID:                nodeSigner.Public(),
-		EntityID:          ent.ID,
+		Versioned: cbor.NewVersioned(node.LatestNodeDescriptorVersion),
+		ID:        nodeSigner.Public(),
+		EntityID:  ent.ID,
 		Consensus: node.ConsensusInfo{
 			ID: consensusID,
 		},

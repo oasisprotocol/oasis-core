@@ -220,10 +220,7 @@ const (
 
 // Runtime represents a runtime.
 type Runtime struct { // nolint: maligned
-	// DescriptorVersion is the runtime descriptor version.
-	//
-	// It should be bumped whenever breaking changes are made to the descriptor.
-	DescriptorVersion uint16 `json:"v,omitempty"`
+	cbor.Versioned
 
 	// ID is a globally unique long term identifier of the runtime.
 	ID common.Namespace `json:"id"`
@@ -269,18 +266,19 @@ type Runtime struct { // nolint: maligned
 
 // ValidateBasic performs basic descriptor validity checks.
 func (r *Runtime) ValidateBasic(strictVersion bool) error {
+	v := r.Versioned.V
 	switch strictVersion {
 	case true:
 		// Only the latest version is allowed.
-		if r.DescriptorVersion != LatestRuntimeDescriptorVersion {
+		if v != LatestRuntimeDescriptorVersion {
 			return fmt.Errorf("invalid runtime descriptor version (expected: %d got: %d)",
 				LatestRuntimeDescriptorVersion,
-				r.DescriptorVersion,
+				v,
 			)
 		}
 	case false:
 		// A range of versions is allowed.
-		if r.DescriptorVersion < minRuntimeDescriptorVersion || r.DescriptorVersion > maxRuntimeDescriptorVersion {
+		if v < minRuntimeDescriptorVersion || v > maxRuntimeDescriptorVersion {
 			return fmt.Errorf("invalid runtime descriptor version (min: %d max: %d)",
 				minRuntimeDescriptorVersion,
 				maxRuntimeDescriptorVersion,

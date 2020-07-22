@@ -6,6 +6,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/oasisprotocol/oasis-core/go/common/cbor"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	memorySigner "github.com/oasisprotocol/oasis-core/go/common/crypto/signature/signers/memory"
 	"github.com/oasisprotocol/oasis-core/go/common/node"
@@ -42,8 +43,8 @@ func TestNodeUpdate(t *testing.T) {
 
 	// Create a new node.
 	n := node.Node{
-		DescriptorVersion: node.LatestNodeDescriptorVersion,
-		ID:                nodeSigner.Public(),
+		Versioned: cbor.NewVersioned(node.LatestNodeDescriptorVersion),
+		ID:        nodeSigner.Public(),
 		P2P: node.P2PInfo{
 			ID: p2pSigner1.Public(),
 		},

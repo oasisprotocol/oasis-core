@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/oasisprotocol/oasis-core/go/common"
+	"github.com/oasisprotocol/oasis-core/go/common/cbor"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	fileSigner "github.com/oasisprotocol/oasis-core/go/common/crypto/signature/signers/file"
 	"github.com/oasisprotocol/oasis-core/go/common/entity"
@@ -403,10 +404,10 @@ func (sc *registryCLIImpl) newTestNode(entityID signature.PublicKey) (*node.Node
 	}
 
 	testNode := node.Node{
-		DescriptorVersion: node.LatestNodeDescriptorVersion,
-		ID:                signature.PublicKey{}, // ID is generated afterwards.
-		EntityID:          entityID,
-		Expiration:        42,
+		Versioned:  cbor.NewVersioned(node.LatestNodeDescriptorVersion),
+		ID:         signature.PublicKey{}, // ID is generated afterwards.
+		EntityID:   entityID,
+		Expiration: 42,
 		TLS: node.TLSInfo{
 			PubKey:    signature.PublicKey{}, // Public key is generated afterwards.
 			Addresses: testTLSAddresses,
@@ -609,9 +610,9 @@ func (sc *registryCLIImpl) testRuntime(ctx context.Context, childEnv *env.Env, c
 	var q quantity.Quantity
 	_ = q.FromUint64(100)
 	testRuntime := registry.Runtime{
-		DescriptorVersion: registry.LatestRuntimeDescriptorVersion,
-		EntityID:          testEntity.ID,
-		Kind:              registry.KindCompute,
+		Versioned: cbor.NewVersioned(registry.LatestRuntimeDescriptorVersion),
+		EntityID:  testEntity.ID,
+		Kind:      registry.KindCompute,
 		Executor: registry.ExecutorParameters{
 			GroupSize:         1,
 			GroupBackupSize:   2,

@@ -15,6 +15,7 @@ import (
 
 	beaconTests "github.com/oasisprotocol/oasis-core/go/beacon/tests"
 	"github.com/oasisprotocol/oasis-core/go/common"
+	"github.com/oasisprotocol/oasis-core/go/common/cbor"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	fileSigner "github.com/oasisprotocol/oasis-core/go/common/crypto/signature/signers/file"
 	"github.com/oasisprotocol/oasis-core/go/common/entity"
@@ -79,7 +80,7 @@ var (
 	}
 
 	testRuntime = &registry.Runtime{
-		DescriptorVersion: registry.LatestRuntimeDescriptorVersion,
+		Versioned: cbor.NewVersioned(registry.LatestRuntimeDescriptorVersion),
 		// ID: default value,
 		// EntityID: test entity,
 		Kind: registry.KindCompute,

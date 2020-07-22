@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"math"
 
+	"github.com/oasisprotocol/oasis-core/go/common/cbor"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	memorySigner "github.com/oasisprotocol/oasis-core/go/common/crypto/signature/signers/memory"
@@ -37,8 +38,8 @@ func main() {
 			entitySigner := memorySigner.NewTestSigner("oasis-core registry test vectors: RegisterEntity signer")
 			for _, numNodes := range []int{0, 1, 2, 5} {
 				ent := entity.Entity{
-					DescriptorVersion: entity.LatestEntityDescriptorVersion,
-					ID:                entitySigner.Public(),
+					Versioned: cbor.NewVersioned(entity.LatestEntityDescriptorVersion),
+					ID:        entitySigner.Public(),
 				}
 				for i := 0; i < numNodes; i++ {
 					nodeSigner := memorySigner.NewTestSigner(fmt.Sprintf("oasis core registry test vectors: node signer %d", i))

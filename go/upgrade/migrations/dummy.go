@@ -3,6 +3,7 @@ package migrations
 import (
 	"fmt"
 
+	"github.com/oasisprotocol/oasis-core/go/common/cbor"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature/signers/memory"
 	"github.com/oasisprotocol/oasis-core/go/common/entity"
@@ -30,7 +31,7 @@ var (
 
 func init() {
 	entitySigner = memory.NewTestSigner(testSigningSeed)
-	TestEntity.DescriptorVersion = entity.LatestEntityDescriptorVersion
+	TestEntity.Versioned = cbor.NewVersioned(entity.LatestEntityDescriptorVersion)
 	TestEntity.ID = entitySigner.Public()
 }
 

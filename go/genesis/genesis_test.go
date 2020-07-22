@@ -11,6 +11,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/oasisprotocol/oasis-core/go/common"
+	"github.com/oasisprotocol/oasis-core/go/common/cbor"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	memorySigner "github.com/oasisprotocol/oasis-core/go/common/crypto/signature/signers/memory"
@@ -160,7 +161,7 @@ func TestGenesisSanityCheck(t *testing.T) {
 	// Note that this test entity has no nodes by design, those will be added
 	// later by various tests.
 	testEntity := &entity.Entity{
-		DescriptorVersion:      entity.LatestEntityDescriptorVersion,
+		Versioned:              cbor.NewVersioned(entity.LatestEntityDescriptorVersion),
 		ID:                     validPK,
 		AllowEntitySignedNodes: true,
 	}
@@ -168,10 +169,10 @@ func TestGenesisSanityCheck(t *testing.T) {
 
 	kmRuntimeID := hex2ns("4000000000000000ffffffffffffffffffffffffffffffffffffffffffffffff", false)
 	testKMRuntime := &registry.Runtime{
-		DescriptorVersion: registry.LatestRuntimeDescriptorVersion,
-		ID:                kmRuntimeID,
-		EntityID:          testEntity.ID,
-		Kind:              registry.KindKeyManager,
+		Versioned: cbor.NewVersioned(registry.LatestRuntimeDescriptorVersion),
+		ID:        kmRuntimeID,
+		EntityID:  testEntity.ID,
+		Kind:      registry.KindKeyManager,
 		AdmissionPolicy: registry.RuntimeAdmissionPolicy{
 			EntityWhitelist: &registry.EntityWhitelistRuntimeAdmissionPolicy{
 				Entities: map[signature.PublicKey]bool{
@@ -184,11 +185,11 @@ func TestGenesisSanityCheck(t *testing.T) {
 
 	testRuntimeID := hex2ns("0000000000000000000000000000000000000000000000000000000000000001", false)
 	testRuntime := &registry.Runtime{
-		DescriptorVersion: registry.LatestRuntimeDescriptorVersion,
-		ID:                testRuntimeID,
-		EntityID:          testEntity.ID,
-		Kind:              registry.KindCompute,
-		KeyManager:        &testKMRuntime.ID,
+		Versioned:  cbor.NewVersioned(registry.LatestRuntimeDescriptorVersion),
+		ID:         testRuntimeID,
+		EntityID:   testEntity.ID,
+		Kind:       registry.KindCompute,
+		KeyManager: &testKMRuntime.ID,
 		Executor: registry.ExecutorParameters{
 			GroupSize:    1,
 			RoundTimeout: 1 * time.Second,
@@ -223,11 +224,11 @@ func TestGenesisSanityCheck(t *testing.T) {
 	var testAddress node.Address
 	_ = testAddress.UnmarshalText([]byte("127.0.0.1:1234"))
 	testNode := &node.Node{
-		DescriptorVersion: node.LatestNodeDescriptorVersion,
-		ID:                nodeSigner.Public(),
-		EntityID:          testEntity.ID,
-		Expiration:        10,
-		Roles:             node.RoleValidator,
+		Versioned:  cbor.NewVersioned(node.LatestNodeDescriptorVersion),
+		ID:         nodeSigner.Public(),
+		EntityID:   testEntity.ID,
+		Expiration: 10,
+		Roles:      node.RoleValidator,
 		TLS: node.TLSInfo{
 			PubKey: nodeTLSSigner.Public(),
 			Addresses: []node.TLSAddress{
