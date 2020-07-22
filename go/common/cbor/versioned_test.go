@@ -26,9 +26,7 @@ func TestVersioned(t *testing.T) {
 
 	const testVersion uint16 = 451
 	raw = Marshal(&b{
-		Versioned: Versioned{
-			V: testVersion,
-		},
+		Versioned: NewVersioned(testVersion),
 		a: a{
 			A: "Empty are still many sites for lone ones and twain ones",
 		},

@@ -39,6 +39,14 @@ func GetVersion(data []byte) (uint16, error) {
 	return vblob.V, nil
 }
 
+// NewVersioned creates a new Versioned structure with the specified version.
+func NewVersioned(v uint16) Versioned {
+	if v == invalidVersion {
+		panic("cbor: invalid version specified")
+	}
+	return Versioned{V: v}
+}
+
 func init() {
 	// Use the untrusted decode options, but ignore unknown fields.
 	// FIXME: https://github.com/fxamacker/cbor/issues/240
