@@ -44,18 +44,7 @@ steps:
   - label: Build Go node
     command:
       - .buildkite/go/build.sh
-
-      # Upload the built artifacts.
-      - cd /workdir/go/oasis-node
-      - buildkite-agent artifact upload oasis-node
-      - buildkite-agent artifact upload oasis-node.test
-      - cd /workdir/go/oasis-test-runner
-      - buildkite-agent artifact upload oasis-test-runner
-      - buildkite-agent artifact upload oasis-test-runner.test
-      - cd /workdir/go/oasis-net-runner
-      - buildkite-agent artifact upload oasis-net-runner
-      - cd /workdir/go/oasis-remote-signer
-      - buildkite-agent artifact upload oasis-remote-signer
+      - .buildkite/go/upload_artifacts.sh
     plugins:
       <<: *docker_plugin
 
