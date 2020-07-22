@@ -148,11 +148,10 @@ func (sc *txSourceImpl) Fixture() (*oasis.NetworkFixture, error) {
 	f.Network.StakingGenesis = "tests/fixture-data/txsource/staking-genesis.json"
 
 	if sc.nodeRestartInterval > 0 {
-		// If node restarts enabled, do not enable round timeouts and merge
+		// If node restarts enabled, do not enable round timeouts and
 		// discrepancy log watchers.
 		f.Network.DefaultLogWatcherHandlerFactories = []log.WatcherHandlerFactory{
 			oasis.LogAssertNoRoundFailures(),
-			oasis.LogAssertNoExecutionDiscrepancyDetected(),
 		}
 	}
 
@@ -166,6 +165,16 @@ func (sc *txSourceImpl) Fixture() (*oasis.NetworkFixture, error) {
 		{Entity: 1},
 		{Entity: 1},
 		{Entity: 1},
+	}
+	f.ComputeWorkers = []oasis.ComputeWorkerFixture{
+		{Entity: 1},
+		{Entity: 1},
+		{Entity: 1},
+		{Entity: 1},
+	}
+	f.Keymanagers = []oasis.KeymanagerFixture{
+		{Runtime: 0, Entity: 1},
+		{Runtime: 0, Entity: 1},
 	}
 
 	// Update validators to require fee payments.
@@ -211,10 +220,19 @@ func (sc *txSourceImpl) manager(env *env.Env, errCh chan error) {
 
 	// Randomize node order.
 	var nodes []*oasis.Node
-	for _, v := range sc.Net.Validators() {
+	// Keep one of each types of nodes always running.
+	for _, v := range sc.Net.Validators()[1:] {
 		nodes = append(nodes, &v.Node)
 	}
-	// TODO: Consider including storage/compute workers.
+	for _, s := range sc.Net.StorageWorkers()[1:] {
+		nodes = append(nodes, &s.Node)
+	}
+	for _, c := range sc.Net.ComputeWorkers()[1:] {
+		nodes = append(nodes, &c.Node)
+	}
+	for _, k := range sc.Net.Keymanagers()[1:] {
+		nodes = append(nodes, &k.Node)
+	}
 
 	restartTicker := time.NewTicker(sc.nodeRestartInterval)
 	defer restartTicker.Stop()
