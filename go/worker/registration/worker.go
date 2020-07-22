@@ -14,6 +14,7 @@ import (
 
 	"github.com/oasisprotocol/oasis-core/go/common"
 	"github.com/oasisprotocol/oasis-core/go/common/accessctl"
+	"github.com/oasisprotocol/oasis-core/go/common/cbor"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	fileSigner "github.com/oasisprotocol/oasis-core/go/common/crypto/signature/signers/file"
 	"github.com/oasisprotocol/oasis-core/go/common/entity"
@@ -630,10 +631,10 @@ func (w *Worker) registerNode(epoch epochtime.EpochTime, hook RegisterNodeHook) 
 	}
 
 	nodeDesc := node.Node{
-		DescriptorVersion: node.LatestNodeDescriptorVersion,
-		ID:                identityPublic,
-		EntityID:          w.entityID,
-		Expiration:        uint64(epoch) + 2,
+		Versioned:  cbor.NewVersioned(node.LatestNodeDescriptorVersion),
+		ID:         identityPublic,
+		EntityID:   w.entityID,
+		Expiration: uint64(epoch) + 2,
 		TLS: node.TLSInfo{
 			PubKey:     w.identity.GetTLSSigner().Public(),
 			NextPubKey: nextPubKey,

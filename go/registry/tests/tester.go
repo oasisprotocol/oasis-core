@@ -12,6 +12,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/oasisprotocol/oasis-core/go/common"
+	"github.com/oasisprotocol/oasis-core/go/common/cbor"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/drbg"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	memorySigner "github.com/oasisprotocol/oasis-core/go/common/crypto/signature/signers/memory"
@@ -855,12 +856,12 @@ func (ent *TestEntity) NewTestNodes(nCompute, nStorage int, idNonce []byte, runt
 		}
 
 		nod.Node = &node.Node{
-			DescriptorVersion: node.LatestNodeDescriptorVersion,
-			ID:                nod.Signer.Public(),
-			EntityID:          ent.Entity.ID,
-			Expiration:        uint64(expiration),
-			Runtimes:          runtimes,
-			Roles:             role,
+			Versioned:  cbor.NewVersioned(node.LatestNodeDescriptorVersion),
+			ID:         nod.Signer.Public(),
+			EntityID:   ent.Entity.ID,
+			Expiration: uint64(expiration),
+			Runtimes:   runtimes,
+			Roles:      role,
 		}
 		addr := node.Address{
 			TCPAddr: net.TCPAddr{
@@ -1139,12 +1140,12 @@ func (ent *TestEntity) NewTestNodes(nCompute, nStorage int, idNonce []byte, runt
 			panic("should find one additional compute runtime")
 		}
 		nod.UpdatedNode = &node.Node{
-			DescriptorVersion: node.LatestNodeDescriptorVersion,
-			ID:                nod.Signer.Public(),
-			EntityID:          ent.Entity.ID,
-			Expiration:        uint64(expiration),
-			Runtimes:          moreRuntimes,
-			Roles:             role,
+			Versioned:  cbor.NewVersioned(node.LatestNodeDescriptorVersion),
+			ID:         nod.Signer.Public(),
+			EntityID:   ent.Entity.ID,
+			Expiration: uint64(expiration),
+			Runtimes:   moreRuntimes,
+			Roles:      role,
 		}
 		addr = node.Address{
 			TCPAddr: net.TCPAddr{
@@ -1171,14 +1172,14 @@ func (ent *TestEntity) NewTestNodes(nCompute, nStorage int, idNonce []byte, runt
 			{ID: publicKeyToNamespace(testRuntimeSigner.Public(), false)},
 		}
 		newNode := &node.Node{
-			DescriptorVersion: node.LatestNodeDescriptorVersion,
-			ID:                nod.Signer.Public(),
-			EntityID:          ent.Entity.ID,
-			Expiration:        uint64(expiration),
-			Runtimes:          newRuntimes,
-			Roles:             role,
-			P2P:               nod.Node.P2P,
-			TLS:               nod.Node.TLS,
+			Versioned:  cbor.NewVersioned(node.LatestNodeDescriptorVersion),
+			ID:         nod.Signer.Public(),
+			EntityID:   ent.Entity.ID,
+			Expiration: uint64(expiration),
+			Runtimes:   newRuntimes,
+			Roles:      role,
+			P2P:        nod.Node.P2P,
+			TLS:        nod.Node.TLS,
 		}
 		newNode.P2P.ID = invalidIdentity.P2PSigner.Public()
 		newNode.Consensus.ID = invalidIdentity.ConsensusSigner.Public()
@@ -1204,7 +1205,7 @@ func (ent *TestEntity) NewTestNodes(nCompute, nStorage int, idNonce []byte, runt
 			descr: "Registering with an old descriptor should fail",
 		}
 		invNode15 := *nod.Node
-		invNode15.DescriptorVersion = 0
+		invNode15.Versioned.V = 0
 		invalid15.signed, err = node.MultiSignNode(
 			[]signature.Signer{
 				nodeIdentity.NodeSigner,
@@ -1242,7 +1243,7 @@ func NewTestEntities(seed []byte, n int) ([]*TestEntity, error) {
 			return nil, err
 		}
 		ent.Entity = &entity.Entity{
-			DescriptorVersion:      entity.LatestEntityDescriptorVersion,
+			Versioned:              cbor.NewVersioned(entity.LatestEntityDescriptorVersion),
 			ID:                     ent.Signer.Public(),
 			AllowEntitySignedNodes: true,
 		}
@@ -1257,7 +1258,7 @@ func NewTestEntities(seed []byte, n int) ([]*TestEntity, error) {
 			descr: "Registering with an old descriptor should fail",
 		}
 		invEnt1 := *ent.Entity
-		invEnt1.DescriptorVersion = 0
+		invEnt1.Versioned.V = 0
 		invalid1.signed, err = entity.SignEntity(ent.Signer, api.RegisterEntitySignatureContext, &invEnt1)
 		if err != nil {
 			return nil, err
@@ -1529,10 +1530,10 @@ func NewTestRuntime(seed []byte, ent *TestEntity, isKeyManager bool) (*TestRunti
 	var rt TestRuntime
 	rt.Signer = ent.Signer
 	rt.Runtime = &api.Runtime{
-		DescriptorVersion: api.LatestRuntimeDescriptorVersion,
-		ID:                id,
-		EntityID:          ent.Entity.ID,
-		Kind:              api.KindCompute,
+		Versioned: cbor.NewVersioned(api.LatestRuntimeDescriptorVersion),
+		ID:        id,
+		EntityID:  ent.Entity.ID,
+		Kind:      api.KindCompute,
 		Executor: api.ExecutorParameters{
 			GroupSize:         3,
 			GroupBackupSize:   5,

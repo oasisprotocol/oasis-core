@@ -13,6 +13,7 @@ import (
 	"google.golang.org/grpc"
 
 	"github.com/oasisprotocol/oasis-core/go/common"
+	"github.com/oasisprotocol/oasis-core/go/common/cbor"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	memorySigner "github.com/oasisprotocol/oasis-core/go/common/crypto/signature/signers/memory"
 	"github.com/oasisprotocol/oasis-core/go/common/entity"
@@ -43,10 +44,10 @@ type registration struct {
 
 func getRuntime(entityID signature.PublicKey, id common.Namespace) *registry.Runtime {
 	rt := &registry.Runtime{
-		DescriptorVersion: registry.LatestRuntimeDescriptorVersion,
-		ID:                id,
-		EntityID:          entityID,
-		Kind:              registry.KindCompute,
+		Versioned: cbor.NewVersioned(registry.LatestRuntimeDescriptorVersion),
+		ID:        id,
+		EntityID:  entityID,
+		Kind:      registry.KindCompute,
 		Executor: registry.ExecutorParameters{
 			GroupSize:    1,
 			RoundTimeout: 1 * time.Second,
@@ -97,11 +98,11 @@ func getNodeDesc(rng *rand.Rand, nodeIdentity *identity.Identity, entityID signa
 	}
 
 	nodeDesc := node.Node{
-		DescriptorVersion: node.LatestNodeDescriptorVersion,
-		ID:                nodeIdentity.NodeSigner.Public(),
-		EntityID:          entityID,
-		Expiration:        0,
-		Roles:             availableRoles[rng.Intn(len(availableRoles))],
+		Versioned:  cbor.NewVersioned(node.LatestNodeDescriptorVersion),
+		ID:         nodeIdentity.NodeSigner.Public(),
+		EntityID:   entityID,
+		Expiration: 0,
+		Roles:      availableRoles[rng.Intn(len(availableRoles))],
 		TLS: node.TLSInfo{
 			PubKey: nodeIdentity.GetTLSSigner().Public(),
 			Addresses: []node.TLSAddress{
@@ -211,8 +212,8 @@ func (r *registration) Run( // nolint: gocyclo
 		}
 
 		ent := &entity.Entity{
-			DescriptorVersion: entity.LatestEntityDescriptorVersion,
-			ID:                entityAccs[i].signer.Public(),
+			Versioned: cbor.NewVersioned(entity.LatestEntityDescriptorVersion),
+			ID:        entityAccs[i].signer.Public(),
 		}
 
 		// Generate entity node identities.

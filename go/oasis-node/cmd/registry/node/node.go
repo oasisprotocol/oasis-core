@@ -15,6 +15,7 @@ import (
 	"github.com/spf13/viper"
 	"google.golang.org/grpc"
 
+	"github.com/oasisprotocol/oasis-core/go/common/cbor"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	fileSigner "github.com/oasisprotocol/oasis-core/go/common/crypto/signature/signers/file"
 	"github.com/oasisprotocol/oasis-core/go/common/entity"
@@ -182,10 +183,10 @@ func doInit(cmd *cobra.Command, args []string) { // nolint: gocyclo
 	}
 
 	n := &node.Node{
-		DescriptorVersion: node.LatestNodeDescriptorVersion,
-		ID:                nodeIdentity.NodeSigner.Public(),
-		EntityID:          entityID,
-		Expiration:        viper.GetUint64(CfgExpiration),
+		Versioned:  cbor.NewVersioned(node.LatestNodeDescriptorVersion),
+		ID:         nodeIdentity.NodeSigner.Public(),
+		EntityID:   entityID,
+		Expiration: viper.GetUint64(CfgExpiration),
 		TLS: node.TLSInfo{
 			PubKey:     nodeIdentity.GetTLSSigner().Public(),
 			NextPubKey: nextPubKey,

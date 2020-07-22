@@ -46,10 +46,7 @@ const (
 
 // Node represents public connectivity information about an Oasis node.
 type Node struct { // nolint: maligned
-	// DescriptorVersion is the node descriptor version.
-	//
-	// It should be bumped whenever breaking changes are made to the descriptor.
-	DescriptorVersion uint16 `json:"v,omitempty"`
+	cbor.Versioned
 
 	// ID is the public key identifying the node.
 	ID signature.PublicKey `json:"id"`
@@ -131,18 +128,19 @@ func (m RolesMask) String() string {
 
 // ValidateBasic performs basic descriptor validity checks.
 func (n *Node) ValidateBasic(strictVersion bool) error {
+	v := n.Versioned.V
 	switch strictVersion {
 	case true:
 		// Only the latest version is allowed.
-		if n.DescriptorVersion != LatestNodeDescriptorVersion {
+		if v != LatestNodeDescriptorVersion {
 			return fmt.Errorf("invalid node descriptor version (expected: %d got: %d)",
 				LatestNodeDescriptorVersion,
-				n.DescriptorVersion,
+				v,
 			)
 		}
 	case false:
 		// A range of versions is allowed.
-		if n.DescriptorVersion < minNodeDescriptorVersion || n.DescriptorVersion > maxNodeDescriptorVersion {
+		if v < minNodeDescriptorVersion || v > maxNodeDescriptorVersion {
 			return fmt.Errorf("invalid node descriptor version (min: %d max: %d)",
 				minNodeDescriptorVersion,
 				maxNodeDescriptorVersion,

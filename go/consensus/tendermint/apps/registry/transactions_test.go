@@ -7,6 +7,7 @@ import (
 	requirePkg "github.com/stretchr/testify/require"
 
 	"github.com/oasisprotocol/oasis-core/go/common"
+	"github.com/oasisprotocol/oasis-core/go/common/cbor"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	memorySigner "github.com/oasisprotocol/oasis-core/go/common/crypto/signature/signers/memory"
 	"github.com/oasisprotocol/oasis-core/go/common/entity"
@@ -121,9 +122,9 @@ func TestRegisterNode(t *testing.T) {
 				// Create a new runtime.
 				rtSigner := memorySigner.NewTestSigner("consensus/tendermint/apps/registry: runtime signer: ComputeNode")
 				rt := registry.Runtime{
-					DescriptorVersion: registry.LatestRuntimeDescriptorVersion,
-					ID:                common.NewTestNamespaceFromSeed([]byte("consensus/tendermint/apps/registry: runtime: ComputeNode"), 0),
-					Kind:              registry.KindCompute,
+					Versioned: cbor.NewVersioned(registry.LatestRuntimeDescriptorVersion),
+					ID:        common.NewTestNamespaceFromSeed([]byte("consensus/tendermint/apps/registry: runtime: ComputeNode"), 0),
+					Kind:      registry.KindCompute,
 				}
 				sigRt, _ := registry.SignRuntime(rtSigner, registry.RegisterRuntimeSignatureContext, &rt)
 				_ = state.SetRuntime(ctx, &rt, sigRt, false)
@@ -144,9 +145,9 @@ func TestRegisterNode(t *testing.T) {
 				// Create a new runtime.
 				rtSigner := memorySigner.NewTestSigner("consensus/tendermint/apps/registry: runtime signer: ComputeNodeWithoutPerRuntimeStake")
 				rt := registry.Runtime{
-					DescriptorVersion: registry.LatestRuntimeDescriptorVersion,
-					ID:                common.NewTestNamespaceFromSeed([]byte("consensus/tendermint/apps/registry: runtime: ComputeNodeWithoutPerRuntimeStake"), 0),
-					Kind:              registry.KindCompute,
+					Versioned: cbor.NewVersioned(registry.LatestRuntimeDescriptorVersion),
+					ID:        common.NewTestNamespaceFromSeed([]byte("consensus/tendermint/apps/registry: runtime: ComputeNodeWithoutPerRuntimeStake"), 0),
+					Kind:      registry.KindCompute,
 					Staking: registry.RuntimeStakingParameters{
 						Thresholds: map[staking.ThresholdKind]quantity.Quantity{
 							staking.KindNodeCompute: *quantity.NewFromUint64(1000),
@@ -172,9 +173,9 @@ func TestRegisterNode(t *testing.T) {
 				// Create a new runtime.
 				rtSigner := memorySigner.NewTestSigner("consensus/tendermint/apps/registry: runtime signer: ComputeNodeWithPerRuntimeStake")
 				rt := registry.Runtime{
-					DescriptorVersion: registry.LatestRuntimeDescriptorVersion,
-					ID:                common.NewTestNamespaceFromSeed([]byte("consensus/tendermint/apps/registry: runtime: ComputeNodeWithPerRuntimeStake"), 0),
-					Kind:              registry.KindCompute,
+					Versioned: cbor.NewVersioned(registry.LatestRuntimeDescriptorVersion),
+					ID:        common.NewTestNamespaceFromSeed([]byte("consensus/tendermint/apps/registry: runtime: ComputeNodeWithPerRuntimeStake"), 0),
+					Kind:      registry.KindCompute,
 					Staking: registry.RuntimeStakingParameters{
 						Thresholds: map[staking.ThresholdKind]quantity.Quantity{
 							staking.KindNodeCompute: *quantity.NewFromUint64(1000),
@@ -210,9 +211,9 @@ func TestRegisterNode(t *testing.T) {
 
 				// Create a new runtime.
 				rt1 := registry.Runtime{
-					DescriptorVersion: registry.LatestRuntimeDescriptorVersion,
-					ID:                common.NewTestNamespaceFromSeed([]byte("consensus/tendermint/apps/registry: runtime: ComputeNodeWithoutPerRuntimeStakeMulti 1"), 0),
-					Kind:              registry.KindCompute,
+					Versioned: cbor.NewVersioned(registry.LatestRuntimeDescriptorVersion),
+					ID:        common.NewTestNamespaceFromSeed([]byte("consensus/tendermint/apps/registry: runtime: ComputeNodeWithoutPerRuntimeStakeMulti 1"), 0),
+					Kind:      registry.KindCompute,
 					Staking: registry.RuntimeStakingParameters{
 						Thresholds: map[staking.ThresholdKind]quantity.Quantity{
 							staking.KindNodeCompute: *quantity.NewFromUint64(1000),
@@ -255,9 +256,9 @@ func TestRegisterNode(t *testing.T) {
 
 				// Create a new runtime.
 				rt1 := registry.Runtime{
-					DescriptorVersion: registry.LatestRuntimeDescriptorVersion,
-					ID:                common.NewTestNamespaceFromSeed([]byte("consensus/tendermint/apps/registry: runtime: ComputeNodeWithoutGlobalStakeMulti 1"), 0),
-					Kind:              registry.KindCompute,
+					Versioned: cbor.NewVersioned(registry.LatestRuntimeDescriptorVersion),
+					ID:        common.NewTestNamespaceFromSeed([]byte("consensus/tendermint/apps/registry: runtime: ComputeNodeWithoutGlobalStakeMulti 1"), 0),
+					Kind:      registry.KindCompute,
 				}
 				sigRt1, _ := registry.SignRuntime(rtSigner, registry.RegisterRuntimeSignatureContext, &rt1)
 				_ = state.SetRuntime(ctx, &rt1, sigRt1, false)
@@ -368,9 +369,9 @@ func TestRegisterNode(t *testing.T) {
 
 			// Prepare a test entity that owns the nodes.
 			ent := entity.Entity{
-				DescriptorVersion: entity.LatestEntityDescriptorVersion,
-				ID:                tcd.entitySigner.Public(),
-				Nodes:             []signature.PublicKey{tcd.nodeSigner.Public()},
+				Versioned: cbor.NewVersioned(entity.LatestEntityDescriptorVersion),
+				ID:        tcd.entitySigner.Public(),
+				Nodes:     []signature.PublicKey{tcd.nodeSigner.Public()},
 			}
 			sigEnt, err := entity.SignEntity(tcd.entitySigner, registry.RegisterEntitySignatureContext, &ent)
 			require.NoError(err, "SignEntity")
@@ -383,10 +384,10 @@ func TestRegisterNode(t *testing.T) {
 			require.NoError(err, "address.UnmarshalText")
 
 			tcd.node = node.Node{
-				DescriptorVersion: node.LatestNodeDescriptorVersion,
-				ID:                tcd.nodeSigner.Public(),
-				EntityID:          ent.ID,
-				Expiration:        3,
+				Versioned:  cbor.NewVersioned(node.LatestNodeDescriptorVersion),
+				ID:         tcd.nodeSigner.Public(),
+				EntityID:   ent.ID,
+				Expiration: 3,
 				P2P: node.P2PInfo{
 					ID:        tcd.p2pSigner.Public(),
 					Addresses: []node.Address{address},

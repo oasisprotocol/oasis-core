@@ -42,10 +42,7 @@ const (
 // Entity represents an entity that controls one or more Nodes and or
 // services.
 type Entity struct { // nolint: maligned
-	// DescriptorVersion is the entity descriptor version.
-	//
-	// It should be bumped whenever breaking changes are made to the descriptor.
-	DescriptorVersion uint16 `json:"v,omitempty"`
+	cbor.Versioned
 
 	// ID is the public key identifying the entity.
 	ID signature.PublicKey `json:"id"`
@@ -62,18 +59,19 @@ type Entity struct { // nolint: maligned
 
 // ValidateBasic performs basic descriptor validity checks.
 func (e *Entity) ValidateBasic(strictVersion bool) error {
+	v := e.Versioned.V
 	switch strictVersion {
 	case true:
 		// Only the latest version is allowed.
-		if e.DescriptorVersion != LatestEntityDescriptorVersion {
+		if v != LatestEntityDescriptorVersion {
 			return fmt.Errorf("invalid entity descriptor version (expected: %d got: %d)",
 				LatestEntityDescriptorVersion,
-				e.DescriptorVersion,
+				v,
 			)
 		}
 	case false:
 		// A range of versions is allowed.
-		if e.DescriptorVersion < minEntityDescriptorVersion || e.DescriptorVersion > maxEntityDescriptorVersion {
+		if v < minEntityDescriptorVersion || v > maxEntityDescriptorVersion {
 			return fmt.Errorf("invalid entity descriptor version (min: %d max: %d)",
 				minEntityDescriptorVersion,
 				maxEntityDescriptorVersion,
@@ -144,8 +142,8 @@ func LoadDescriptor(f string) (*Entity, error) {
 func GenerateWithSigner(baseDir string, signer signature.Signer, template *Entity) (*Entity, error) {
 	// Generate a new entity.
 	ent := &Entity{
-		DescriptorVersion: LatestEntityDescriptorVersion,
-		ID:                signer.Public(),
+		Versioned: cbor.NewVersioned(LatestEntityDescriptorVersion),
+		ID:        signer.Public(),
 	}
 	if template != nil {
 		ent.Nodes = template.Nodes
@@ -223,7 +221,7 @@ func SignEntity(signer signature.Signer, context signature.Context, entity *Enti
 func init() {
 	testEntitySigner = memorySigner.NewTestSigner("ekiden test entity key seed")
 
-	testEntity.DescriptorVersion = LatestEntityDescriptorVersion
+	testEntity.Versioned = cbor.NewVersioned(LatestEntityDescriptorVersion)
 	testEntity.ID = testEntitySigner.Public()
 	testEntity.AllowEntitySignedNodes = true
 }

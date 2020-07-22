@@ -61,9 +61,9 @@ type staticNodeLookup struct {
 
 func (n *staticNodeLookup) Node(ctx context.Context, id signature.PublicKey) (*node.Node, error) {
 	return &node.Node{
-		DescriptorVersion: node.LatestNodeDescriptorVersion,
-		ID:                id,
-		Runtimes:          []*node.Runtime{n.runtime},
+		Versioned: cbor.NewVersioned(node.LatestNodeDescriptorVersion),
+		ID:        id,
+		Runtimes:  []*node.Runtime{n.runtime},
 	}, nil
 }
 
@@ -110,10 +110,10 @@ func TestPoolSingleCommitment(t *testing.T) {
 	_ = rtID.UnmarshalHex("0000000000000000000000000000000000000000000000000000000000000000")
 
 	rt := &registry.Runtime{
-		DescriptorVersion: registry.LatestRuntimeDescriptorVersion,
-		ID:                rtID,
-		Kind:              registry.KindCompute,
-		TEEHardware:       node.TEEHardwareInvalid,
+		Versioned:   cbor.NewVersioned(registry.LatestRuntimeDescriptorVersion),
+		ID:          rtID,
+		Kind:        registry.KindCompute,
+		TEEHardware: node.TEEHardwareInvalid,
 		Storage: registry.StorageParameters{
 			GroupSize:           1,
 			MinWriteReplication: 1,
@@ -226,10 +226,10 @@ func TestPoolSingleCommitmentTEE(t *testing.T) {
 	_ = rtID.UnmarshalHex("0000000000000000000000000000000000000000000000000000000000000000")
 
 	rt := &registry.Runtime{
-		DescriptorVersion: registry.LatestRuntimeDescriptorVersion,
-		ID:                rtID,
-		Kind:              registry.KindCompute,
-		TEEHardware:       node.TEEHardwareIntelSGX,
+		Versioned:   cbor.NewVersioned(registry.LatestRuntimeDescriptorVersion),
+		ID:          rtID,
+		Kind:        registry.KindCompute,
+		TEEHardware: node.TEEHardwareIntelSGX,
 	}
 
 	// Generate a commitment signing key.
@@ -458,10 +458,10 @@ func TestPoolSerialization(t *testing.T) {
 	_ = rtID.UnmarshalHex("0000000000000000000000000000000000000000000000000000000000000000")
 
 	rt := &registry.Runtime{
-		DescriptorVersion: registry.LatestRuntimeDescriptorVersion,
-		ID:                rtID,
-		Kind:              registry.KindCompute,
-		TEEHardware:       node.TEEHardwareInvalid,
+		Versioned:   cbor.NewVersioned(registry.LatestRuntimeDescriptorVersion),
+		ID:          rtID,
+		Kind:        registry.KindCompute,
+		TEEHardware: node.TEEHardwareInvalid,
 	}
 
 	// Generate a commitment signing key.
@@ -1114,10 +1114,10 @@ func generateMockCommittee(t *testing.T) (
 	_ = rtID.UnmarshalHex("0000000000000000000000000000000000000000000000000000000000000000")
 
 	rt = &registry.Runtime{
-		DescriptorVersion: registry.LatestRuntimeDescriptorVersion,
-		ID:                rtID,
-		Kind:              registry.KindCompute,
-		TEEHardware:       node.TEEHardwareInvalid,
+		Versioned:   cbor.NewVersioned(registry.LatestRuntimeDescriptorVersion),
+		ID:          rtID,
+		Kind:        registry.KindCompute,
+		TEEHardware: node.TEEHardwareInvalid,
 		Storage: registry.StorageParameters{
 			GroupSize:           1,
 			MinWriteReplication: 1,

@@ -14,6 +14,7 @@ import (
 	"github.com/spf13/viper"
 	"google.golang.org/grpc"
 
+	"github.com/oasisprotocol/oasis-core/go/common/cbor"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	"github.com/oasisprotocol/oasis-core/go/common/entity"
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
@@ -375,7 +376,7 @@ func loadOrGenerateEntity(dataDir string, generate bool) (*entity.Entity, signat
 
 	if generate {
 		template := &entity.Entity{
-			DescriptorVersion:      entity.LatestEntityDescriptorVersion,
+			Versioned:              cbor.NewVersioned(entity.LatestEntityDescriptorVersion),
 			AllowEntitySignedNodes: viper.GetBool(cfgAllowEntitySignedNodes),
 		}
 

@@ -115,17 +115,17 @@ func (rt *Runtime) GetGenesisStatePath() string {
 // NewRuntime provisions a new runtime and adds it to the network.
 func (net *Network) NewRuntime(cfg *RuntimeCfg) (*Runtime, error) {
 	descriptor := registry.Runtime{
-		DescriptorVersion: registry.LatestRuntimeDescriptorVersion,
-		ID:                cfg.ID,
-		EntityID:          cfg.Entity.entity.ID,
-		Kind:              cfg.Kind,
-		TEEHardware:       cfg.TEEHardware,
-		Executor:          cfg.Executor,
-		Merge:             cfg.Merge,
-		TxnScheduler:      cfg.TxnScheduler,
-		Storage:           cfg.Storage,
-		AdmissionPolicy:   cfg.AdmissionPolicy,
-		Staking:           cfg.Staking,
+		Versioned:       cbor.NewVersioned(registry.LatestRuntimeDescriptorVersion),
+		ID:              cfg.ID,
+		EntityID:        cfg.Entity.entity.ID,
+		Kind:            cfg.Kind,
+		TEEHardware:     cfg.TEEHardware,
+		Executor:        cfg.Executor,
+		Merge:           cfg.Merge,
+		TxnScheduler:    cfg.TxnScheduler,
+		Storage:         cfg.Storage,
+		AdmissionPolicy: cfg.AdmissionPolicy,
+		Staking:         cfg.Staking,
 	}
 
 	rtDir, err := net.baseDir.NewSubDir("runtime-" + cfg.ID.String())
