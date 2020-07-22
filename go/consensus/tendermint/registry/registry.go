@@ -23,7 +23,6 @@ import (
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
 	tmapi "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/api"
 	app "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/apps/registry"
-	"github.com/oasisprotocol/oasis-core/go/consensus/tendermint/service"
 	"github.com/oasisprotocol/oasis-core/go/registry/api"
 )
 
@@ -38,7 +37,7 @@ type serviceClient struct {
 
 	logger *logging.Logger
 
-	service service.TendermintService
+	backend tmapi.Backend
 	querier *app.QueryFactory
 
 	entityNotifier   *pubsub.Broker
@@ -174,7 +173,7 @@ func (sc *serviceClient) StateToGenesis(ctx context.Context, height int64) (*api
 func (sc *serviceClient) GetEvents(ctx context.Context, height int64) ([]*api.Event, error) {
 	// Get block results at given height.
 	var results *tmrpctypes.ResultBlockResults
-	results, err := sc.service.GetBlockResults(height)
+	results, err := sc.backend.GetBlockResults(height)
 	if err != nil {
 		sc.logger.Error("failed to get tendermint block results",
 			"err", err,
@@ -183,7 +182,7 @@ func (sc *serviceClient) GetEvents(ctx context.Context, height int64) ([]*api.Ev
 		return nil, err
 	}
 	// Get transactions at given height.
-	txns, err := sc.service.GetTransactions(ctx, height)
+	txns, err := sc.backend.GetTransactions(ctx, height)
 	if err != nil {
 		sc.logger.Error("failed to get tendermint transactions",
 			"err", err,
@@ -403,16 +402,16 @@ func (sc *serviceClient) getNodeList(ctx context.Context, height int64) (*api.No
 }
 
 // New constructs a new tendermint backed registry Backend instance.
-func New(ctx context.Context, service service.TendermintService) (ServiceClient, error) {
+func New(ctx context.Context, backend tmapi.Backend) (ServiceClient, error) {
 	// Initialize and register the tendermint service component.
 	a := app.New()
-	if err := service.RegisterApplication(a); err != nil {
+	if err := backend.RegisterApplication(a); err != nil {
 		return nil, err
 	}
 
 	sc := &serviceClient{
 		logger:           logging.GetLogger("registry/tendermint"),
-		service:          service,
+		backend:          backend,
 		querier:          a.QueryFactory().(*app.QueryFactory),
 		entityNotifier:   pubsub.NewBroker(false),
 		nodeNotifier:     pubsub.NewBroker(false),

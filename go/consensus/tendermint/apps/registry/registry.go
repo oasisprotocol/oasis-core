@@ -11,7 +11,6 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/entity"
 	"github.com/oasisprotocol/oasis-core/go/common/node"
 	"github.com/oasisprotocol/oasis-core/go/consensus/api/transaction"
-	"github.com/oasisprotocol/oasis-core/go/consensus/tendermint/abci"
 	"github.com/oasisprotocol/oasis-core/go/consensus/tendermint/api"
 	registryState "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/apps/registry/state"
 	stakingapp "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/apps/staking"
@@ -21,7 +20,7 @@ import (
 	staking "github.com/oasisprotocol/oasis-core/go/staking/api"
 )
 
-var _ abci.Application = (*registryApplication)(nil)
+var _ api.Application = (*registryApplication)(nil)
 
 type registryApplication struct {
 	state api.ApplicationState
@@ -101,7 +100,7 @@ func (app *registryApplication) ExecuteTx(ctx *api.Context, tx *transaction.Tran
 	}
 }
 
-func (app *registryApplication) ForeignExecuteTx(ctx *api.Context, other abci.Application, tx *transaction.Transaction) error {
+func (app *registryApplication) ForeignExecuteTx(ctx *api.Context, other api.Application, tx *transaction.Transaction) error {
 	return nil
 }
 
@@ -109,7 +108,7 @@ func (app *registryApplication) EndBlock(ctx *api.Context, request types.Request
 	return types.ResponseEndBlock{}, nil
 }
 
-func (app *registryApplication) FireTimer(*api.Context, *abci.Timer) error {
+func (app *registryApplication) FireTimer(*api.Context, *api.Timer) error {
 	return fmt.Errorf("tendermint/registry: unexpected timer")
 }
 
@@ -222,6 +221,6 @@ func (app *registryApplication) onRegistryEpochChanged(ctx *api.Context, registr
 }
 
 // New constructs a new registry application instance.
-func New() abci.Application {
+func New() api.Application {
 	return &registryApplication{}
 }

@@ -30,7 +30,6 @@ import (
 	abciState "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/abci/state"
 	"github.com/oasisprotocol/oasis-core/go/consensus/tendermint/api"
 	epochtime "github.com/oasisprotocol/oasis-core/go/epochtime/api"
-	genesis "github.com/oasisprotocol/oasis-core/go/genesis/api"
 	upgrade "github.com/oasisprotocol/oasis-core/go/upgrade/api"
 )
 
@@ -75,97 +74,6 @@ type ApplicationConfig struct {
 
 	// ReadOnlyStorage forces read-only access for the state storage.
 	ReadOnlyStorage bool
-}
-
-// TransactionAuthHandler is the interface for ABCI applications that handle
-// authenticating transactions (checking nonces and fees).
-type TransactionAuthHandler interface {
-	consensus.TransactionAuthHandler
-
-	// AuthenticateTx authenticates the given transaction by making sure
-	// that the nonce is correct and deducts any fees as specified.
-	//
-	// It may reject the transaction in case of incorrect nonces, insufficient
-	// balance to pay fees or (only during CheckTx) if the gas price is too
-	// low.
-	//
-	// The context may be modified to configure a gas accountant.
-	AuthenticateTx(ctx *api.Context, tx *transaction.Transaction) error
-}
-
-// Application is the interface implemented by multiplexed Oasis-specific
-// ABCI applications.
-type Application interface {
-	// Name returns the name of the Application.
-	Name() string
-
-	// ID returns the unique identifier of the application.
-	ID() uint8
-
-	// Methods returns the list of supported methods.
-	Methods() []transaction.MethodName
-
-	// Blessed returns true iff the Application should be considered
-	// "blessed", and able to alter the validation set and handle the
-	// access control related standard ABCI queries.
-	//
-	// Only one Application instance may be Blessed per multiplexer
-	// instance.
-	Blessed() bool
-
-	// Dependencies returns the names of applications that the application
-	// depends on.
-	Dependencies() []string
-
-	// QueryFactory returns an application-specific query factory that
-	// can be used to construct new queries at specific block heights.
-	QueryFactory() interface{}
-
-	// OnRegister is the function that is called when the Application
-	// is registered with the multiplexer instance.
-	OnRegister(state api.ApplicationState)
-
-	// OnCleanup is the function that is called when the ApplicationServer
-	// has been halted.
-	OnCleanup()
-
-	// ExecuteTx executes a transaction.
-	ExecuteTx(*api.Context, *transaction.Transaction) error
-
-	// ForeignExecuteTx delivers a transaction of another application for
-	// processing.
-	//
-	// This can be used to run post-tx hooks when dependencies exist
-	// between applications.
-	ForeignExecuteTx(*api.Context, Application, *transaction.Transaction) error
-
-	// InitChain initializes the blockchain with validators and other
-	// info from TendermintCore.
-	//
-	// Note: Errors are irrecoverable and will result in a panic.
-	InitChain(*api.Context, types.RequestInitChain, *genesis.Document) error
-
-	// BeginBlock signals the beginning of a block.
-	//
-	// Returned tags will be added to the current block.
-	//
-	// Note: Errors are irrecoverable and will result in a panic.
-	BeginBlock(*api.Context, types.RequestBeginBlock) error
-
-	// EndBlock signals the end of a block, returning changes to the
-	// validator set.
-	//
-	// Note: Errors are irrecoverable and will result in a panic.
-	EndBlock(*api.Context, types.RequestEndBlock) (types.ResponseEndBlock, error)
-
-	// FireTimer is called within BeginBlock before any other processing
-	// takes place for each timer that should fire.
-	//
-	// Note: Errors are irrecoverable and will result in a panic.
-	FireTimer(*api.Context, *Timer) error
-
-	// Commit is omitted because Applications will work on a cache of
-	// the state bound to the multiplexer.
 }
 
 // ApplicationServer implements a tendermint ABCI application + socket server,
@@ -213,7 +121,7 @@ func (a *ApplicationServer) Mux() types.Application {
 // that act on every single app (InitChain, BeginBlock, EndBlock) will be
 // called in name lexicographic order. Checks that applications named in
 // deps are already registered.
-func (a *ApplicationServer) Register(app Application) error {
+func (a *ApplicationServer) Register(app api.Application) error {
 	return a.mux.doRegister(app)
 }
 
@@ -237,7 +145,7 @@ func (a *ApplicationServer) SetEpochtime(epochTime epochtime.Backend) error {
 
 // SetTransactionAuthHandler configures the transaction auth handler for the
 // ABCI multiplexer.
-func (a *ApplicationServer) SetTransactionAuthHandler(handler TransactionAuthHandler) error {
+func (a *ApplicationServer) SetTransactionAuthHandler(handler api.TransactionAuthHandler) error {
 	if a.mux.state.txAuthHandler != nil {
 		return fmt.Errorf("mux: transaction fee handler already configured")
 	}
@@ -248,7 +156,7 @@ func (a *ApplicationServer) SetTransactionAuthHandler(handler TransactionAuthHan
 
 // TransactionAuthHandler returns the configured handler for authenticating
 // transactions.
-func (a *ApplicationServer) TransactionAuthHandler() TransactionAuthHandler {
+func (a *ApplicationServer) TransactionAuthHandler() api.TransactionAuthHandler {
 	return a.mux.state.txAuthHandler
 }
 
@@ -294,10 +202,10 @@ type abciMux struct {
 	upgrader upgrade.Backend
 	state    *applicationState
 
-	appsByName     map[string]Application
-	appsByMethod   map[transaction.MethodName]Application
-	appsByLexOrder []Application
-	appBlessed     Application
+	appsByName     map[string]api.Application
+	appsByMethod   map[transaction.MethodName]api.Application
+	appsByLexOrder []api.Application
+	appBlessed     api.Application
 
 	lastBeginBlock int64
 	currentTime    time.Time
@@ -823,7 +731,7 @@ func (mux *abciMux) EndBlock(req types.RequestEndBlock) types.ResponseEndBlock {
 
 	// Fire all application timers first.
 	for _, app := range mux.appsByLexOrder {
-		if err := fireTimers(ctx, app); err != nil {
+		if err := api.FireTimers(ctx, app); err != nil {
 			mux.logger.Error("EndBlock: fatal error during timer fire",
 				"err", err,
 				"app", app.Name(),
@@ -889,7 +797,7 @@ func (mux *abciMux) doCleanup() {
 	}
 }
 
-func (mux *abciMux) doRegister(app Application) error {
+func (mux *abciMux) doRegister(app api.Application) error {
 	name := app.Name()
 	if mux.appsByName[name] != nil {
 		return fmt.Errorf("mux: application already registered: '%s'", name)
@@ -927,7 +835,7 @@ func (mux *abciMux) rebuildAppLexOrdering() {
 	}
 	sort.Strings(appOrder)
 
-	mux.appsByLexOrder = make([]Application, 0, numApps)
+	mux.appsByLexOrder = make([]api.Application, 0, numApps)
 	for _, name := range appOrder {
 		mux.appsByLexOrder = append(mux.appsByLexOrder, mux.appsByName[name])
 	}
@@ -958,8 +866,8 @@ func newABCIMux(ctx context.Context, upgrader upgrade.Backend, cfg *ApplicationC
 		logger:         logging.GetLogger("abci-mux"),
 		upgrader:       upgrader,
 		state:          state,
-		appsByName:     make(map[string]Application),
-		appsByMethod:   make(map[transaction.MethodName]Application),
+		appsByName:     make(map[string]api.Application),
+		appsByMethod:   make(map[transaction.MethodName]api.Application),
 		lastBeginBlock: -1,
 	}
 

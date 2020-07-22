@@ -11,13 +11,16 @@ import (
 	tmpubsub "github.com/tendermint/tendermint/libs/pubsub"
 	tmquery "github.com/tendermint/tendermint/libs/pubsub/query"
 	tmp2p "github.com/tendermint/tendermint/p2p"
+	tmrpctypes "github.com/tendermint/tendermint/rpc/core/types"
 	tmtypes "github.com/tendermint/tendermint/types"
 
 	"github.com/oasisprotocol/oasis-core/go/common/cbor"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	"github.com/oasisprotocol/oasis-core/go/common/node"
+	"github.com/oasisprotocol/oasis-core/go/common/pubsub"
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
+	"github.com/oasisprotocol/oasis-core/go/consensus/api/transaction"
 	"github.com/oasisprotocol/oasis-core/go/consensus/tendermint/crypto"
 	mkvsNode "github.com/oasisprotocol/oasis-core/go/storage/mkvs/node"
 )
@@ -171,6 +174,47 @@ func NewBlock(blk *tmtypes.Block) *consensus.Block {
 		},
 		Meta: rawMeta,
 	}
+}
+
+// Backend is a Tendermint consensus backend.
+type Backend interface {
+	consensus.Backend
+
+	// RegisterApplication registers an ABCI multiplexer application
+	// with this service instance and check that its dependencies are
+	// registered.
+	RegisterApplication(Application) error
+
+	// SetTransactionAuthHandler configures the transaction fee handler for the
+	// ABCI multiplexer.
+	SetTransactionAuthHandler(TransactionAuthHandler) error
+
+	// GetBlock returns the Tendermint block at the specified height.
+	GetTendermintBlock(ctx context.Context, height int64) (*tmtypes.Block, error)
+
+	// GetBlockResults returns the ABCI results from processing a block
+	// at a specific height.
+	GetBlockResults(height int64) (*tmrpctypes.ResultBlockResults, error)
+
+	// WatchTendermintBlocks returns a stream of Tendermint blocks as they are
+	// returned via the `EventDataNewBlock` query.
+	WatchTendermintBlocks() (<-chan *tmtypes.Block, *pubsub.Subscription)
+}
+
+// TransactionAuthHandler is the interface for ABCI applications that handle
+// authenticating transactions (checking nonces and fees).
+type TransactionAuthHandler interface {
+	consensus.TransactionAuthHandler
+
+	// AuthenticateTx authenticates the given transaction by making sure
+	// that the nonce is correct and deducts any fees as specified.
+	//
+	// It may reject the transaction in case of incorrect nonces, insufficient
+	// balance to pay fees or (only during CheckTx) if the gas price is too
+	// low.
+	//
+	// The context may be modified to configure a gas accountant.
+	AuthenticateTx(ctx *Context, tx *transaction.Transaction) error
 }
 
 // ServiceEvent is a Tendermint-specific consensus.ServiceEvent.

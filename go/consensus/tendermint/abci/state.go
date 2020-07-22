@@ -56,7 +56,7 @@ type applicationState struct { // nolint: maligned
 	blockCtx    *api.BlockContext
 	blockParams *consensusGenesis.Parameters
 
-	txAuthHandler TransactionAuthHandler
+	txAuthHandler api.TransactionAuthHandler
 
 	timeSource epochtime.Backend
 

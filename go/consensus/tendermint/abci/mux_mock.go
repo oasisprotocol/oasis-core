@@ -3,6 +3,7 @@ package abci
 import (
 	"context"
 
+	"github.com/oasisprotocol/oasis-core/go/consensus/tendermint/api"
 	epochtime "github.com/oasisprotocol/oasis-core/go/epochtime/api"
 	upgrade "github.com/oasisprotocol/oasis-core/go/upgrade/api"
 )
@@ -13,7 +14,7 @@ type MockABCIMux struct {
 }
 
 // MockRegisterApp is used to register apps with this muxer during testing.
-func (mux *MockABCIMux) MockRegisterApp(app Application) error {
+func (mux *MockABCIMux) MockRegisterApp(app api.Application) error {
 	return mux.doRegister(app)
 }
 
@@ -24,7 +25,7 @@ func (mux *MockABCIMux) MockSetEpochtime(epochTime epochtime.Backend) {
 
 // MockSetTransactionAuthHandler sets the transaction auth hander used by
 // this muxer when testing.
-func (mux *MockABCIMux) MockSetTransactionAuthHandler(handler TransactionAuthHandler) {
+func (mux *MockABCIMux) MockSetTransactionAuthHandler(handler api.TransactionAuthHandler) {
 	mux.state.txAuthHandler = handler
 }
 

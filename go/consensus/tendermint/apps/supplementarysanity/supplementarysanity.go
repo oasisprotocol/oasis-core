@@ -8,17 +8,16 @@ import (
 
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
 	"github.com/oasisprotocol/oasis-core/go/consensus/api/transaction"
-	"github.com/oasisprotocol/oasis-core/go/consensus/tendermint/abci"
-	abciAPI "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/api"
+	"github.com/oasisprotocol/oasis-core/go/consensus/tendermint/api"
 	stakingState "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/apps/staking/state"
 	epochtime "github.com/oasisprotocol/oasis-core/go/epochtime/api"
-	"github.com/oasisprotocol/oasis-core/go/genesis/api"
+	genesis "github.com/oasisprotocol/oasis-core/go/genesis/api"
 )
 
 var (
 	logger = logging.GetLogger("supplementarysanity")
 
-	_ abci.Application = (*supplementarySanityApplication)(nil)
+	_ api.Application = (*supplementarySanityApplication)(nil)
 )
 
 // supplementarySanityApplication is a non-normative mux app that performs additional checks on the consensus state.
@@ -26,7 +25,7 @@ var (
 // It's okay for it to have this additional local state, because it won't affect anything that needs to be agreed upon
 // in consensus.
 type supplementarySanityApplication struct {
-	state           abciAPI.ApplicationState
+	state           api.ApplicationState
 	interval        int64
 	currentInterval int64
 	checkHeight     int64
@@ -56,34 +55,34 @@ func (app *supplementarySanityApplication) QueryFactory() interface{} {
 	return nil
 }
 
-func (app *supplementarySanityApplication) OnRegister(state abciAPI.ApplicationState) {
+func (app *supplementarySanityApplication) OnRegister(state api.ApplicationState) {
 	app.state = state
 }
 
 func (app *supplementarySanityApplication) OnCleanup() {
 }
 
-func (app *supplementarySanityApplication) ExecuteTx(*abciAPI.Context, *transaction.Transaction) error {
+func (app *supplementarySanityApplication) ExecuteTx(*api.Context, *transaction.Transaction) error {
 	return fmt.Errorf("tendermint/supplementarysanity: unexpected transaction")
 }
 
-func (app *supplementarySanityApplication) ForeignExecuteTx(*abciAPI.Context, abci.Application, *transaction.Transaction) error {
+func (app *supplementarySanityApplication) ForeignExecuteTx(*api.Context, api.Application, *transaction.Transaction) error {
 	return nil
 }
 
-func (app *supplementarySanityApplication) InitChain(*abciAPI.Context, types.RequestInitChain, *api.Document) error {
+func (app *supplementarySanityApplication) InitChain(*api.Context, types.RequestInitChain, *genesis.Document) error {
 	return nil
 }
 
-func (app *supplementarySanityApplication) BeginBlock(*abciAPI.Context, types.RequestBeginBlock) error {
+func (app *supplementarySanityApplication) BeginBlock(*api.Context, types.RequestBeginBlock) error {
 	return nil
 }
 
-func (app *supplementarySanityApplication) EndBlock(ctx *abciAPI.Context, request types.RequestEndBlock) (types.ResponseEndBlock, error) {
+func (app *supplementarySanityApplication) EndBlock(ctx *api.Context, request types.RequestEndBlock) (types.ResponseEndBlock, error) {
 	return types.ResponseEndBlock{}, app.endBlockImpl(ctx, request)
 }
 
-func (app *supplementarySanityApplication) endBlockImpl(ctx *abciAPI.Context, request types.RequestEndBlock) error {
+func (app *supplementarySanityApplication) endBlockImpl(ctx *api.Context, request types.RequestEndBlock) error {
 	if request.Height == 1 {
 		logger.Debug("skipping checks before InitChain")
 		return nil
@@ -113,7 +112,7 @@ func (app *supplementarySanityApplication) endBlockImpl(ctx *abciAPI.Context, re
 	}
 	for _, tt := range []struct {
 		name    string
-		checker func(ctx *abciAPI.Context, now epochtime.EpochTime) error
+		checker func(ctx *api.Context, now epochtime.EpochTime) error
 	}{
 		{"checkEpochTime", checkEpochTime},
 		{"checkRegistry", checkRegistry},
@@ -134,11 +133,11 @@ func (app *supplementarySanityApplication) endBlockImpl(ctx *abciAPI.Context, re
 	return nil
 }
 
-func (app *supplementarySanityApplication) FireTimer(*abciAPI.Context, *abci.Timer) error {
+func (app *supplementarySanityApplication) FireTimer(*api.Context, *api.Timer) error {
 	return fmt.Errorf("tendermint/supplementarysanity: unexpected timer")
 }
 
-func New(interval uint64) abci.Application {
+func New(interval uint64) api.Application {
 	return &supplementarySanityApplication{
 		interval: int64(interval),
 	}

@@ -10,7 +10,6 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
 	tmapi "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/api"
 	app "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/apps/beacon"
-	"github.com/oasisprotocol/oasis-core/go/consensus/tendermint/service"
 )
 
 // ServiceClient is the beacon service client interface.
@@ -51,10 +50,10 @@ func (sc *serviceClient) ServiceDescriptor() tmapi.ServiceDescriptor {
 }
 
 // New constructs a new tendermint backed beacon Backend instance.
-func New(ctx context.Context, service service.TendermintService) (ServiceClient, error) {
+func New(ctx context.Context, backend tmapi.Backend) (ServiceClient, error) {
 	// Initialize and register the tendermint service component.
 	a := app.New()
-	if err := service.RegisterApplication(a); err != nil {
+	if err := backend.RegisterApplication(a); err != nil {
 		return nil, err
 	}
 

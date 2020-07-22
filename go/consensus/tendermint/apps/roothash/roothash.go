@@ -14,7 +14,6 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
 	"github.com/oasisprotocol/oasis-core/go/consensus/api/transaction"
-	"github.com/oasisprotocol/oasis-core/go/consensus/tendermint/abci"
 	tmapi "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/api"
 	registryapp "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/apps/registry"
 	registryState "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/apps/registry/state"
@@ -35,7 +34,7 @@ import (
 // timerKindRound is the round timer kind.
 const timerKindRound = 0x01
 
-var _ abci.Application = (*rootHashApplication)(nil)
+var _ tmapi.Application = (*rootHashApplication)(nil)
 
 type timerContext struct {
 	ID    common.Namespace `json:"id"`
@@ -347,7 +346,7 @@ func (app *rootHashApplication) ExecuteTx(ctx *tmapi.Context, tx *transaction.Tr
 	}
 }
 
-func (app *rootHashApplication) ForeignExecuteTx(ctx *tmapi.Context, other abci.Application, tx *transaction.Transaction) error {
+func (app *rootHashApplication) ForeignExecuteTx(ctx *tmapi.Context, other tmapi.Application, tx *transaction.Transaction) error {
 	switch other.Name() {
 	case registryapp.AppName:
 		for _, ev := range ctx.GetEvents() {
@@ -423,7 +422,7 @@ func (app *rootHashApplication) onNewRuntime(ctx *tmapi.Context, runtime *regist
 		Runtime:      runtime,
 		CurrentBlock: genesisBlock,
 		GenesisBlock: genesisBlock,
-		Timer:        *abci.NewTimer(ctx, app, timerKindRound, runtime.ID[:], cbor.Marshal(timerCtx)),
+		Timer:        *tmapi.NewTimer(ctx, app, timerKindRound, runtime.ID[:], cbor.Marshal(timerCtx)),
 	})
 	if err != nil {
 		return fmt.Errorf("failed to set runtime state: %w", err)
@@ -450,7 +449,7 @@ func (app *rootHashApplication) EndBlock(ctx *tmapi.Context, request types.Reque
 	return types.ResponseEndBlock{}, nil
 }
 
-func (app *rootHashApplication) FireTimer(ctx *tmapi.Context, timer *abci.Timer) (err error) {
+func (app *rootHashApplication) FireTimer(ctx *tmapi.Context, timer *tmapi.Timer) (err error) {
 	if timer.Kind() != timerKindRound {
 		return errors.New("tendermint/roothash: unexpected timer")
 	}
@@ -751,6 +750,6 @@ func (app *rootHashApplication) tryFinalizeBlock(
 }
 
 // New constructs a new roothash application instance.
-func New() abci.Application {
+func New() tmapi.Application {
 	return &rootHashApplication{}
 }

@@ -57,7 +57,6 @@ import (
 	tmregistry "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/registry"
 	tmroothash "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/roothash"
 	tmscheduler "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/scheduler"
-	"github.com/oasisprotocol/oasis-core/go/consensus/tendermint/service"
 	tmstaking "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/staking"
 	epochtimeAPI "github.com/oasisprotocol/oasis-core/go/epochtime/api"
 	genesisAPI "github.com/oasisprotocol/oasis-core/go/genesis/api"
@@ -151,7 +150,7 @@ const (
 )
 
 var (
-	_ service.TendermintService = (*tendermintService)(nil)
+	_ api.Backend = (*tendermintService)(nil)
 
 	labelTendermint = prometheus.Labels{"backend": "tendermint"}
 
@@ -641,11 +640,11 @@ func (t *tendermintService) unsubscribe(subscriber string, query tmpubsub.Query)
 	return fmt.Errorf("tendermint: unsubscribe called with no backing service")
 }
 
-func (t *tendermintService) RegisterApplication(app abci.Application) error {
+func (t *tendermintService) RegisterApplication(app api.Application) error {
 	return t.mux.Register(app)
 }
 
-func (t *tendermintService) SetTransactionAuthHandler(handler abci.TransactionAuthHandler) error {
+func (t *tendermintService) SetTransactionAuthHandler(handler api.TransactionAuthHandler) error {
 	return t.mux.SetTransactionAuthHandler(handler)
 }
 
@@ -1421,7 +1420,7 @@ func (t *tendermintService) metrics() {
 	}
 }
 
-// New creates a new Tendermint service.
+// New creates a new Tendermint consensus backend.
 func New(ctx context.Context, dataDir string, identity *identity.Identity, upgrader upgradeAPI.Backend, genesisProvider genesisAPI.Provider) (consensusAPI.Backend, error) {
 	// Retrive the genesis document early so that it is possible to
 	// use it while initializing other things.

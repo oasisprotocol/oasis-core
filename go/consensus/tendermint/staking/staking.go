@@ -17,10 +17,8 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
 	"github.com/oasisprotocol/oasis-core/go/common/pubsub"
 	"github.com/oasisprotocol/oasis-core/go/common/quantity"
-	"github.com/oasisprotocol/oasis-core/go/consensus/tendermint/abci"
 	tmapi "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/api"
 	app "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/apps/staking"
-	"github.com/oasisprotocol/oasis-core/go/consensus/tendermint/service"
 	"github.com/oasisprotocol/oasis-core/go/staking/api"
 )
 
@@ -35,7 +33,7 @@ type serviceClient struct {
 
 	logger *logging.Logger
 
-	service service.TendermintService
+	backend tmapi.Backend
 	querier *app.QueryFactory
 
 	transferNotifier *pubsub.Broker
@@ -45,7 +43,7 @@ type serviceClient struct {
 }
 
 func (sc *serviceClient) TokenSymbol(ctx context.Context) (string, error) {
-	genesis, err := sc.service.GetGenesisDocument(ctx)
+	genesis, err := sc.backend.GetGenesisDocument(ctx)
 	if err != nil {
 		return "", err
 	}
@@ -54,7 +52,7 @@ func (sc *serviceClient) TokenSymbol(ctx context.Context) (string, error) {
 }
 
 func (sc *serviceClient) TokenValueExponent(ctx context.Context) (uint8, error) {
-	genesis, err := sc.service.GetGenesisDocument(ctx)
+	genesis, err := sc.backend.GetGenesisDocument(ctx)
 	if err != nil {
 		return 0, err
 	}
@@ -185,7 +183,7 @@ func (sc *serviceClient) StateToGenesis(ctx context.Context, height int64) (*api
 func (sc *serviceClient) GetEvents(ctx context.Context, height int64) ([]*api.Event, error) {
 	// Get block results at given height.
 	var results *tmrpctypes.ResultBlockResults
-	results, err := sc.service.GetBlockResults(height)
+	results, err := sc.backend.GetBlockResults(height)
 	if err != nil {
 		sc.logger.Error("failed to get tendermint block results",
 			"err", err,
@@ -195,7 +193,7 @@ func (sc *serviceClient) GetEvents(ctx context.Context, height int64) ([]*api.Ev
 	}
 
 	// Get transactions at given height.
-	txns, err := sc.service.GetTransactions(ctx, height)
+	txns, err := sc.backend.GetTransactions(ctx, height)
 	if err != nil {
 		sc.logger.Error("failed to get tendermint transactions",
 			"err", err,
@@ -369,21 +367,21 @@ func EventsFromTendermint(
 }
 
 // New constructs a new tendermint backed staking Backend instance.
-func New(ctx context.Context, service service.TendermintService) (ServiceClient, error) {
+func New(ctx context.Context, backend tmapi.Backend) (ServiceClient, error) {
 	// Initialize and register the tendermint service component.
 	a := app.New()
-	if err := service.RegisterApplication(a); err != nil {
+	if err := backend.RegisterApplication(a); err != nil {
 		return nil, err
 	}
 
 	// Configure the staking application as a fee handler.
-	if err := service.SetTransactionAuthHandler(a.(abci.TransactionAuthHandler)); err != nil {
+	if err := backend.SetTransactionAuthHandler(a.(tmapi.TransactionAuthHandler)); err != nil {
 		return nil, err
 	}
 
 	return &serviceClient{
 		logger:           logging.GetLogger("staking/tendermint"),
-		service:          service,
+		backend:          backend,
 		querier:          a.QueryFactory().(*app.QueryFactory),
 		transferNotifier: pubsub.NewBroker(false),
 		burnNotifier:     pubsub.NewBroker(false),

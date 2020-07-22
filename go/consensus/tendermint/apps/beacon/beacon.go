@@ -10,7 +10,6 @@ import (
 	"golang.org/x/crypto/sha3"
 
 	"github.com/oasisprotocol/oasis-core/go/consensus/api/transaction"
-	"github.com/oasisprotocol/oasis-core/go/consensus/tendermint/abci"
 	"github.com/oasisprotocol/oasis-core/go/consensus/tendermint/api"
 	beaconState "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/apps/beacon/state"
 	epochtime "github.com/oasisprotocol/oasis-core/go/epochtime/api"
@@ -20,7 +19,7 @@ var (
 	prodEntropyCtx  = []byte("EkB-tmnt")
 	DebugEntropyCtx = []byte("Ekb-Dumm")
 
-	_ abci.Application = (*beaconApplication)(nil)
+	_ api.Application = (*beaconApplication)(nil)
 )
 
 type beaconApplication struct {
@@ -65,7 +64,7 @@ func (app *beaconApplication) ExecuteTx(ctx *api.Context, tx *transaction.Transa
 	return fmt.Errorf("beacon: unexpected transaction")
 }
 
-func (app *beaconApplication) ForeignExecuteTx(ctx *api.Context, other abci.Application, tx *transaction.Transaction) error {
+func (app *beaconApplication) ForeignExecuteTx(ctx *api.Context, other api.Application, tx *transaction.Transaction) error {
 	return nil
 }
 
@@ -73,7 +72,7 @@ func (app *beaconApplication) EndBlock(ctx *api.Context, req types.RequestEndBlo
 	return types.ResponseEndBlock{}, nil
 }
 
-func (app *beaconApplication) FireTimer(ctx *api.Context, t *abci.Timer) error {
+func (app *beaconApplication) FireTimer(ctx *api.Context, t *api.Timer) error {
 	return fmt.Errorf("beacon: unexpected timer")
 }
 
@@ -153,7 +152,7 @@ func (app *beaconApplication) onNewBeacon(ctx *api.Context, beacon []byte) error
 }
 
 // New constructs a new beacon application instance.
-func New() abci.Application {
+func New() api.Application {
 	return &beaconApplication{}
 }
 
