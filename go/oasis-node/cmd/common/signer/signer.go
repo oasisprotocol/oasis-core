@@ -14,6 +14,7 @@ import (
 	fileSigner "github.com/oasisprotocol/oasis-core/go/common/crypto/signature/signers/file"
 	ledgerSigner "github.com/oasisprotocol/oasis-core/go/common/crypto/signature/signers/ledger"
 	memorySigner "github.com/oasisprotocol/oasis-core/go/common/crypto/signature/signers/memory"
+	pluginSigner "github.com/oasisprotocol/oasis-core/go/common/crypto/signature/signers/plugin"
 	remoteSigner "github.com/oasisprotocol/oasis-core/go/common/crypto/signature/signers/remote"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/tls"
 )
@@ -38,6 +39,9 @@ const (
 	cfgSignerRemoteServerCert = "signer.remote.server.certificate"
 
 	cfgSignerCompositeBackends = "signer.composite.backends"
+
+	cfgSignerPluginPath   = "signer.plugin.path"
+	cfgSignerPluginConfig = "signer.plugin.config"
 )
 
 var (
@@ -128,6 +132,12 @@ func doNewFactory(signerBackend, signerDir string, roles ...signature.SignerRole
 		config.ServerCertificate = serverCert
 
 		return remoteSigner.NewFactory(config, roles...)
+	case pluginSigner.SignerName:
+		config := &pluginSigner.FactoryConfig{
+			Path:   viper.GetString(cfgSignerPluginPath),
+			Config: viper.GetString(cfgSignerPluginConfig),
+		}
+		return pluginSigner.NewFactory(config, roles...)
 	default:
 		return nil, fmt.Errorf("unsupported signer backend: %s", signerBackend)
 	}
@@ -176,7 +186,7 @@ func doNewComposite(signerDir string, roles ...signature.SignerRole) (signature.
 }
 
 func init() {
-	Flags.StringP(CfgSigner, "s", "file", "signer backend [file, ledger, remote, composite]")
+	Flags.StringP(CfgSigner, "s", "file", "signer backend [file, plugin, ledger, remote, composite]")
 	Flags.String(cfgSignerLedgerAddress, "", "Ledger signer: select Ledger device based on this specified address. If blank, any available Ledger device will be connected to.")
 	Flags.Uint32(cfgSignerLedgerIndex, 0, "Ledger signer: address index used to derive address on Ledger device")
 	Flags.String(cfgSignerRemoteAddress, "", "remote signer server address")
@@ -184,6 +194,8 @@ func init() {
 	Flags.String(cfgSignerRemoteClientKey, "", "remote signer client certificate key path")
 	Flags.String(cfgSignerRemoteServerCert, "", "remote signer server certificate path")
 	Flags.String(cfgSignerCompositeBackends, "", "composite signer backends")
+	Flags.String(cfgSignerPluginPath, "", "plugin signer DSO path")
+	Flags.String(cfgSignerPluginConfig, "", "plugin signer configuration")
 
 	_ = viper.BindPFlags(Flags)
 

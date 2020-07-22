@@ -101,6 +101,9 @@ GO_BUILD_CMD := env -u GOPATH $(OASIS_GO) build $(GOFLAGS)
 # Path to the MKVS interoperability test helpers binary in go/.
 GO_TEST_HELPER_MKVS_PATH := storage/mkvs/interop/mkvs-test-helpers
 
+# Path to the example signer plugin binary in go/.
+GO_EXAMPLE_PLUGIN_PATH := oasis-test-runner/scenario/pluginsigner/example_signer_plugin
+
 # Helper that ensures $(NEXT_VERSION) variable is not empty.
 define ENSURE_NEXT_VERSION =
 	if [[ -z "$(NEXT_VERSION)" ]]; then \

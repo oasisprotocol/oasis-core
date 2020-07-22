@@ -24,3 +24,10 @@ linters:
     - varcheck
     - govet
     - maligned
+
+run:
+  skip-dirs:
+    # golang-ci-lint requires that files compile for certain linters
+    # to run, and Go plugins do not compile unless `-buildmode=plugin`
+    # is set, which linters do not do.
+    - oasis-test-runner/scenario/pluginsigner/example_signer_plugin

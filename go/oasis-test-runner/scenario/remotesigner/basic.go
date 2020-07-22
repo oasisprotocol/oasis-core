@@ -13,6 +13,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/env"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/oasis/cli"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/scenario"
+	signerTests "github.com/oasisprotocol/oasis-core/go/oasis-test-runner/scenario/signer"
 )
 
 // Basic is the basic test case.
@@ -122,15 +123,12 @@ func (sc *basicImpl) Run(childEnv *env.Env) error {
 		return err
 	}
 
-	// EnsureRole()
-	sc.logger.Info("testing EnsureRole")
-	for _, v := range signature.SignerRoles {
-		if err := sf.EnsureRole(v); err != nil {
-			return fmt.Errorf("failed to EnsureRole(%v): %w", v, err)
-		}
+	// Run basic common signer tests.
+	if err = signerTests.BasicTests(sf, sc.logger); err != nil {
+		return err
 	}
 
-	// Test each sub-key.
+	// Remote specific verifcation.
 	for _, v := range signature.SignerRoles {
 		// Load()
 		si, err := sf.Load(v)
@@ -138,33 +136,14 @@ func (sc *basicImpl) Run(childEnv *env.Env) error {
 			return fmt.Errorf("failed to Load(%v): %w", v, err)
 		}
 
-		pk := si.Public()
-		sc.logger.Info("remote signer loaded",
-			"public_key", pk,
-			"descr", si.String(),
-		)
-
 		// Ensure that the remote signer is reporting a matching public key.
+		pk := si.Public()
 		fsi, err := fsf.Load(v)
 		if err != nil {
 			return fmt.Errorf("failed to Load(%v) from file: %w", v, err)
 		}
 		if !pk.Equal(fsi.Public()) {
 			return fmt.Errorf("public key mismatch: %v (expected: %v)", pk, fsi.Public())
-		}
-
-		msg := []byte("Alesia, alisanos, wake me when I'm gone")
-
-		ctx := signature.NewContext(fmt.Sprintf("test context: %v using datadir: %s", v, childEnv.Dir()))
-		sig, err := si.ContextSign(ctx, msg)
-		if err != nil {
-			return fmt.Errorf("failed to Sign(%v): %w", v, err)
-		}
-
-		// Verify that the signature is sensible, no need to re-sign with
-		// the file signer since the public key and context are sensible.
-		if !pk.Verify(ctx, msg, sig) {
-			return fmt.Errorf("failed to verify signature: %v", v)
 		}
 	}
 

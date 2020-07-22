@@ -1,5 +1,5 @@
-// Package remotesigner implements the Oasis remote-signer test scenarios.
-package remotesigner
+// Package pluginsigner implements the Oasis plugin-signer test scenario.
+package pluginsigner
 
 import (
 	flag "github.com/spf13/pflag"
@@ -12,73 +12,72 @@ import (
 )
 
 const (
-	// cfgServerBinary is path to remote-signer server executable.
-	cfgServerBinary = "binary"
+	cfgPluginBinary = "binary"
+	cfgPluginConfig = "config"
 )
 
-// RemoteSignerParamsDummy is a dummy instance of remoteSignerImpl used to register global
-// remote-signer flags.
-var RemoteSignerParamsDummy *remoteSignerImpl = newRemoteSignerImpl("")
+var pluginSignerParamsDummy *pluginSignerImpl = newPluginSignerImpl("")
 
-type remoteSignerImpl struct {
+type pluginSignerImpl struct {
 	name   string
 	logger *logging.Logger
 	flags  *env.ParameterFlagSet
 }
 
-func newRemoteSignerImpl(name string) *remoteSignerImpl {
+func newPluginSignerImpl(name string) *pluginSignerImpl {
 	// Empty scenario name is used for registering global parameters only.
-	fullName := "remote-signer"
+	fullName := "plugin-signer"
 	if name != "" {
 		fullName += "/" + name
 	}
 
-	sc := &remoteSignerImpl{
+	sc := &pluginSignerImpl{
 		name:   fullName,
 		logger: logging.GetLogger("scenario/" + fullName),
 		flags:  env.NewParameterFlagSet(fullName, flag.ContinueOnError),
 	}
-	sc.flags.String(cfgServerBinary, "oasis-remote-signer", "remote signer binary")
+	sc.flags.String(cfgPluginBinary, "signer-plugin.so", "plugin binary")
+	sc.flags.String(cfgPluginConfig, "", "plugin configuration")
 
 	return sc
 }
 
-func (sc *remoteSignerImpl) Clone() remoteSignerImpl {
-	return remoteSignerImpl{
+func (sc *pluginSignerImpl) Clone() pluginSignerImpl {
+	return pluginSignerImpl{
 		name:   sc.name,
 		logger: sc.logger,
 		flags:  sc.flags.Clone(),
 	}
 }
 
-func (sc *remoteSignerImpl) Name() string {
+func (sc *pluginSignerImpl) Name() string {
 	return sc.name
 }
 
-func (sc *remoteSignerImpl) Parameters() *env.ParameterFlagSet {
+func (sc *pluginSignerImpl) Parameters() *env.ParameterFlagSet {
 	return sc.flags
 }
 
-func (sc *remoteSignerImpl) PreInit(childEnv *env.Env) error {
+func (sc *pluginSignerImpl) PreInit(childEnv *env.Env) error {
 	return nil
 }
 
-func (sc *remoteSignerImpl) Fixture() (*oasis.NetworkFixture, error) {
+func (sc *pluginSignerImpl) Fixture() (*oasis.NetworkFixture, error) {
 	return nil, nil
 }
 
-func (sc *remoteSignerImpl) Init(childEnv *env.Env, net *oasis.Network) error {
+func (sc *pluginSignerImpl) Init(childEnv *env.Env, net *oasis.Network) error {
 	return nil
 }
 
 // RegisterScenarios registers all scenarios for remote-signer.
 func RegisterScenarios() error {
 	// Register non-scenario-specific parameters.
-	cmd.RegisterScenarioParams(RemoteSignerParamsDummy.Name(), RemoteSignerParamsDummy.Parameters())
+	cmd.RegisterScenarioParams(pluginSignerParamsDummy.Name(), pluginSignerParamsDummy.Parameters())
 
 	// Register default scenarios which are executed, if no test names provided.
 	for _, s := range []scenario.Scenario{
-		// Basic remote signer test case.
+		// Basic plugin signer test case.
 		Basic,
 	} {
 		if err := cmd.Register(s); err != nil {

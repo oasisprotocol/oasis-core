@@ -265,7 +265,7 @@ func initRootEnv(cmd *cobra.Command) (*env.Env, error) {
 	return env, nil
 }
 
-func runRoot(cmd *cobra.Command, args []string) error {
+func runRoot(cmd *cobra.Command, args []string) error { // nolint: gocyclo
 	cmd.SilenceUsage = true
 
 	if viper.IsSet(metrics.CfgMetricsAddr) {
@@ -316,6 +316,24 @@ func runRoot(cmd *cobra.Command, args []string) error {
 		for scenario := range matched {
 			toRun = append(toRun, scenario)
 		}
+	}
+	if skipNameRegexes := viper.GetStringSlice(common.CfgScenarioSkipRegex); len(skipNameRegexes) > 0 {
+		var newToRun []scenario.Scenario
+		for _, skipNameRegex := range skipNameRegexes {
+			regex := fmt.Sprintf("^%s$", skipNameRegex)
+
+			for _, v := range toRun {
+				var match bool
+				match, err = regexp.MatchString(regex, v.Name())
+				if err != nil {
+					return fmt.Errorf("root: bad skip scenario regexp: %w", err)
+				}
+				if !match {
+					newToRun = append(newToRun, v)
+				}
+			}
+		}
+		toRun = newToRun
 	}
 
 	// Sort requested scenarios to enable consistent partitioning for parallel
@@ -562,6 +580,11 @@ func init() {
 		common.CfgScenarioRegexShort,
 		nil,
 		"regexp patterns matching names of scenarios",
+	)
+	persistentFlags.StringSlice(
+		common.CfgScenarioSkipRegex,
+		nil,
+		"regexp patterns matching names of scenarios to skip",
 	)
 	persistentFlags.String(metrics.CfgMetricsAddr, "", "Prometheus address")
 	persistentFlags.StringToString(
