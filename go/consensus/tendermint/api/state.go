@@ -75,6 +75,10 @@ type ApplicationQueryState interface {
 
 	// GetEpoch returns epoch at block height.
 	GetEpoch(ctx context.Context, blockHeight int64) (epochtime.EpochTime, error)
+
+	// LastRetainedVersion returns the earliest retained version the ABCI
+	// state.
+	LastRetainedVersion() (int64, error)
 }
 
 // MockApplicationStateConfig is the configuration for the mock application state.
@@ -124,6 +128,10 @@ func (ms *mockApplicationState) GetBaseEpoch() (epochtime.EpochTime, error) {
 
 func (ms *mockApplicationState) GetEpoch(ctx context.Context, blockHeight int64) (epochtime.EpochTime, error) {
 	return ms.cfg.CurrentEpoch, nil
+}
+
+func (ms *mockApplicationState) LastRetainedVersion() (int64, error) {
+	return ms.cfg.Genesis.Height, nil
 }
 
 func (ms *mockApplicationState) GetCurrentEpoch(ctx context.Context) (epochtime.EpochTime, error) {

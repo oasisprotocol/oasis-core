@@ -374,6 +374,11 @@ func (qs *dumpQueryState) GetEpoch(ctx context.Context, blockHeight int64) (epoc
 	return epochtime.EpochTime(0), fmt.Errorf("dumpdb/dumpQueryState: GetEpoch not supported")
 }
 
+func (qs *dumpQueryState) LastRetainedVersion() (int64, error) {
+	// This is not required in the dump process.
+	return 0, fmt.Errorf("dumpdb/dumpQueryState: LastRetainedEpoch not supported")
+}
+
 // Register registers the dumpdb sub-commands.
 func Register(parentCmd *cobra.Command) {
 	dumpDBCmd.Flags().AddFlagSet(flags.GenesisFileFlags)

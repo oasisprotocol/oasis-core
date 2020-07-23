@@ -199,6 +199,10 @@ type Backend interface {
 	// WatchTendermintBlocks returns a stream of Tendermint blocks as they are
 	// returned via the `EventDataNewBlock` query.
 	WatchTendermintBlocks() (<-chan *tmtypes.Block, *pubsub.Subscription)
+
+	// GetLastRetainedVersion returns the earliest retained version the ABCI
+	// state.
+	GetLastRetainedVersion(ctx context.Context) (int64, error)
 }
 
 // TransactionAuthHandler is the interface for ABCI applications that handle

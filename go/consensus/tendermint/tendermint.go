@@ -1011,6 +1011,10 @@ func (t *tendermintService) initialize() error {
 	return nil
 }
 
+func (t *tendermintService) GetLastRetainedVersion(ctx context.Context) (int64, error) {
+	return t.mux.State().LastRetainedVersion()
+}
+
 func (t *tendermintService) GetTendermintBlock(ctx context.Context, height int64) (*tmtypes.Block, error) {
 	if err := t.ensureStarted(ctx); err != nil {
 		return nil, err

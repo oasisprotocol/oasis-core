@@ -302,18 +302,34 @@ func (sc *serviceClient) reindexBlocks(currentHeight int64, bh api.BlockHistory)
 		)
 		return fmt.Errorf("failed to get last indexed height: %w", err)
 	}
+	// +1 since we want the last non-seen height.
+	lastHeight++
 
+	// Take prune strategy into account.
+	lastRetainedHeight, err := sc.backend.GetLastRetainedVersion(sc.ctx)
+	if err != nil {
+		return fmt.Errorf("failed to get last retained height: %w", err)
+	}
+	if lastHeight < lastRetainedHeight {
+		logger.Debug("last height pruned, skipping until last retained",
+			"last_retained_height", lastRetainedHeight,
+			"last_height", lastHeight,
+		)
+		lastHeight = lastRetainedHeight
+	}
 	// Scan all blocks between last indexed height and current height.
 	logger.Debug("reindexing blocks",
 		"last_indexed_height", lastHeight,
 		"current_height", currentHeight,
+		logging.LogEvent, api.LogEventHistoryReindexing,
 	)
 
-	// TODO: Take prune strategy into account (e.g., skip heights).
-	for height := lastHeight + 1; height <= currentHeight; height++ {
+	for height := lastHeight; height <= currentHeight; height++ {
 		var results *tmrpctypes.ResultBlockResults
 		results, err = sc.backend.GetBlockResults(height)
 		if err != nil {
+			// XXX: could soft-fail first few heights in case more heights were
+			// pruned right after the GetLastRetainedVersion query.
 			logger.Error("failed to get tendermint block results",
 				"err", err,
 				"height", height,
