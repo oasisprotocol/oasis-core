@@ -152,7 +152,7 @@ func (net *Network) NewValidator(cfg *ValidatorCfg) (*Validator, error) {
 	if len(val.sentries) > 0 {
 		for _, sentry := range val.sentries {
 			var consensusAddr node.ConsensusAddress
-			consensusAddr.ID = sentry.publicKey
+			consensusAddr.ID = sentry.p2pPublicKey
 			if err = consensusAddr.Address.FromIP(localhost, sentry.consensusPort); err != nil {
 				return nil, fmt.Errorf("oasis/validator: failed to parse IP address: %w", err)
 			}
@@ -169,12 +169,12 @@ func (net *Network) NewValidator(cfg *ValidatorCfg) (*Validator, error) {
 	// Load node's identity, so that we can pass the validator's Tendermint
 	// address to sentry node(s) to configure it as a private peer.
 	seed := fmt.Sprintf(validatorIdentitySeedTemplate, len(net.validators))
-	valPublicKey, sentryClientCert, err := net.provisionNodeIdentity(valDir, seed, false)
+	valNodeKey, valP2PKey, sentryClientCert, err := net.provisionNodeIdentity(valDir, seed, false)
 	if err != nil {
 		return nil, fmt.Errorf("oasis/validator: failed to provision node identity: %w", err)
 	}
-	copy(val.NodeID[:], valPublicKey[:])
-	val.tmAddress = crypto.PublicKeyToTendermint(&val.NodeID).Address().String()
+	copy(val.NodeID[:], valNodeKey[:])
+	val.tmAddress = crypto.PublicKeyToTendermint(&valP2PKey).Address().String()
 	if err = cfg.Entity.addNode(val.NodeID); err != nil {
 		return nil, err
 	}

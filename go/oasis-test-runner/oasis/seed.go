@@ -60,7 +60,7 @@ func (net *Network) newSeedNode() (*seedNode, error) {
 	if err != nil {
 		return nil, fmt.Errorf("oasis/seed: failed to provision seed identity: %w", err)
 	}
-	seedPublicKey := seedIdentity.NodeSigner.Public()
+	seedP2PPublicKey := seedIdentity.P2PSigner.Public()
 
 	seedNode := &seedNode{
 		Node: Node{
@@ -68,7 +68,7 @@ func (net *Network) newSeedNode() (*seedNode, error) {
 			net:  net,
 			dir:  seedDir,
 		},
-		tmAddress:     crypto.PublicKeyToTendermint(&seedPublicKey).Address().String(),
+		tmAddress:     crypto.PublicKeyToTendermint(&seedP2PPublicKey).Address().String(),
 		consensusPort: net.nextNodePort,
 	}
 	seedNode.doStartNode = seedNode.startNode

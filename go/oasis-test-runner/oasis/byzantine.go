@@ -81,11 +81,11 @@ func (net *Network) NewByzantine(cfg *ByzantineCfg) (*Byzantine, error) {
 	}
 
 	// Pre-provision the node identity so that we can update the entity.
-	publicKey, _, err := net.provisionNodeIdentity(byzantineDir, cfg.IdentitySeed, false)
+	nodeKey, _, _, err := net.provisionNodeIdentity(byzantineDir, cfg.IdentitySeed, false)
 	if err != nil {
 		return nil, fmt.Errorf("oasis/byzantine: failed to provision node identity: %w", err)
 	}
-	if err := cfg.Entity.addNode(publicKey); err != nil {
+	if err := cfg.Entity.addNode(nodeKey); err != nil {
 		return nil, err
 	}
 
@@ -106,7 +106,7 @@ func (net *Network) NewByzantine(cfg *ByzantineCfg) (*Byzantine, error) {
 		activationEpoch: cfg.ActivationEpoch,
 	}
 	worker.doStartNode = worker.startNode
-	copy(worker.NodeID[:], publicKey[:])
+	copy(worker.NodeID[:], nodeKey[:])
 
 	net.byzantine = append(net.byzantine, worker)
 	net.nextNodePort += 2

@@ -888,26 +888,26 @@ func (net *Network) GetCLIConfig() cli.Config {
 	return cfg
 }
 
-func (net *Network) provisionNodeIdentity(dataDir *env.Dir, seed string, persistTLS bool) (signature.PublicKey, *x509.Certificate, error) {
+func (net *Network) provisionNodeIdentity(dataDir *env.Dir, seed string, persistTLS bool) (signature.PublicKey, signature.PublicKey, *x509.Certificate, error) {
 	if net.cfg.DeterministicIdentities {
 		if err := net.generateDeterministicNodeIdentity(dataDir, seed); err != nil {
-			return signature.PublicKey{}, nil, fmt.Errorf("oasis: failed to generate deterministic identity: %w", err)
+			return signature.PublicKey{}, signature.PublicKey{}, nil, fmt.Errorf("oasis: failed to generate deterministic identity: %w", err)
 		}
 	}
 
 	signerFactory, err := fileSigner.NewFactory(dataDir.String(), signature.SignerNode, signature.SignerP2P, signature.SignerConsensus)
 	if err != nil {
-		return signature.PublicKey{}, nil, fmt.Errorf("oasis: failed to create node file signer factory: %w", err)
+		return signature.PublicKey{}, signature.PublicKey{}, nil, fmt.Errorf("oasis: failed to create node file signer factory: %w", err)
 	}
 	nodeIdentity, err := identity.LoadOrGenerate(dataDir.String(), signerFactory, persistTLS)
 	if err != nil {
-		return signature.PublicKey{}, nil, fmt.Errorf("oasis: failed to provision node identity: %w", err)
+		return signature.PublicKey{}, signature.PublicKey{}, nil, fmt.Errorf("oasis: failed to provision node identity: %w", err)
 	}
 	sentryCert, err := x509.ParseCertificate(nodeIdentity.TLSSentryClientCertificate.Certificate[0])
 	if err != nil {
-		return signature.PublicKey{}, nil, fmt.Errorf("oasis: failed to parse sentry client certificate: %w", err)
+		return signature.PublicKey{}, signature.PublicKey{}, nil, fmt.Errorf("oasis: failed to parse sentry client certificate: %w", err)
 	}
-	return nodeIdentity.NodeSigner.Public(), sentryCert, nil
+	return nodeIdentity.NodeSigner.Public(), nodeIdentity.P2PSigner.Public(), sentryCert, nil
 }
 
 // New creates a new test Oasis network.

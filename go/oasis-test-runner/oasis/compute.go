@@ -134,11 +134,11 @@ func (net *Network) NewCompute(cfg *ComputeCfg) (*Compute, error) {
 
 	// Pre-provision the node identity so that we can update the entity.
 	seed := fmt.Sprintf(computeIdentitySeedTemplate, len(net.computeWorkers))
-	publicKey, _, err := net.provisionNodeIdentity(computeDir, seed, false)
+	nodeKey, _, _, err := net.provisionNodeIdentity(computeDir, seed, false)
 	if err != nil {
 		return nil, fmt.Errorf("oasis/compute: failed to provision node identity: %w", err)
 	}
-	if err := cfg.Entity.addNode(publicKey); err != nil {
+	if err := cfg.Entity.addNode(nodeKey); err != nil {
 		return nil, err
 	}
 
@@ -166,7 +166,7 @@ func (net *Network) NewCompute(cfg *ComputeCfg) (*Compute, error) {
 		runtimes:           cfg.Runtimes,
 	}
 	worker.doStartNode = worker.startNode
-	copy(worker.NodeID[:], publicKey[:])
+	copy(worker.NodeID[:], nodeKey[:])
 
 	net.computeWorkers = append(net.computeWorkers, worker)
 	net.nextNodePort += 3

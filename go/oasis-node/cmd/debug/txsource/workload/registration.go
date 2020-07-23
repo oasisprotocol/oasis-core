@@ -122,7 +122,7 @@ func getNodeDesc(rng *rand.Rand, nodeIdentity *identity.Identity, entityID signa
 			ID: nodeIdentity.ConsensusSigner.Public(),
 			Addresses: []node.ConsensusAddress{
 				{
-					ID:      nodeIdentity.ConsensusSigner.Public(),
+					ID:      nodeIdentity.P2PSigner.Public(),
 					Address: nodeAddr,
 				},
 			},

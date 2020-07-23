@@ -268,7 +268,7 @@ func doInit(cmd *cobra.Command, args []string) { // nolint: gocyclo
 					)
 					os.Exit(1)
 				}
-				consensusAddr.ID = n.ID
+				consensusAddr.ID = n.P2P.ID
 			}
 			n.Consensus.Addresses = append(n.Consensus.Addresses, consensusAddr)
 		}
