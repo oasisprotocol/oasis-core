@@ -2,8 +2,8 @@ package oasis
 
 import (
 	"fmt"
+	"sync"
 
-	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
 	storageClient "github.com/oasisprotocol/oasis-core/go/storage/client"
 	commonWorker "github.com/oasisprotocol/oasis-core/go/worker/common"
 )
@@ -19,6 +19,8 @@ const (
 
 // Compute is an Oasis compute node.
 type Compute struct { // nolint: maligned
+	sync.RWMutex
+
 	Node
 
 	entity *Entity
@@ -41,6 +43,13 @@ type ComputeCfg struct {
 	RuntimeProvisioner string
 
 	Runtimes []int
+}
+
+// UpdateRuntimes updates the worker node runtimes.
+func (worker *Compute) UpdateRuntimes(runtimes []int) {
+	worker.Lock()
+	defer worker.Unlock()
+	worker.runtimes = runtimes
 }
 
 // IdentityKeyPath returns the path to the node's identity key.
@@ -68,7 +77,7 @@ func (worker *Compute) TLSCertPath() string {
 	return nodeTLSCertPath(worker.dir)
 }
 
-// Exports path returns the path to the node's exports data dir.
+// ExportsPath returns the path to the node's exports data dir.
 func (worker *Compute) ExportsPath() string {
 	return nodeExportsPath(worker.dir)
 }
@@ -79,6 +88,9 @@ func (worker *Compute) Start() error {
 }
 
 func (worker *Compute) startNode() error {
+	worker.RLock()
+	defer worker.RUnlock()
+
 	args := newArgBuilder().
 		debugDontBlameOasis().
 		debugAllowTestKeys().
@@ -96,18 +108,9 @@ func (worker *Compute) startNode() error {
 		appendNetwork(worker.net).
 		appendSeedNodes(worker.net).
 		appendEntity(worker.entity)
-	var runtimeArray []*Runtime
-	if len(worker.runtimes) > 0 {
-		for _, idx := range worker.runtimes {
-			runtimeArray = append(runtimeArray, worker.net.runtimes[idx])
-		}
-	} else {
-		runtimeArray = worker.net.runtimes
-	}
-	for _, v := range runtimeArray {
-		if v.kind != registry.KindCompute {
-			continue
-		}
+
+	for _, idx := range worker.runtimes {
+		v := worker.net.runtimes[idx]
 		// XXX: could support configurable binary idx if ever needed.
 		args = args.appendComputeNodeRuntime(v, 0)
 	}

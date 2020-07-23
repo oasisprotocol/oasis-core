@@ -124,9 +124,9 @@ func newDefaultFixture() (*oasis.NetworkFixture, error) {
 			{Backend: "badger", Entity: 1},
 		},
 		ComputeWorkers: []oasis.ComputeWorkerFixture{
-			{Entity: 1},
-			{Entity: 1},
-			{Entity: 1},
+			{Entity: 1, Runtimes: []int{1}},
+			{Entity: 1, Runtimes: []int{1}},
+			{Entity: 1, Runtimes: []int{1}},
 		},
 		Clients: []oasis.ClientFixture{
 			{},

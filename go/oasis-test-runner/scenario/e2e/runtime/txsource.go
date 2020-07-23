@@ -167,10 +167,10 @@ func (sc *txSourceImpl) Fixture() (*oasis.NetworkFixture, error) {
 		{Entity: 1},
 	}
 	f.ComputeWorkers = []oasis.ComputeWorkerFixture{
-		{Entity: 1},
-		{Entity: 1},
-		{Entity: 1},
-		{Entity: 1},
+		{Entity: 1, Runtimes: []int{1}},
+		{Entity: 1, Runtimes: []int{1}},
+		{Entity: 1, Runtimes: []int{1}},
+		{Entity: 1, Runtimes: []int{1}},
 	}
 	f.Keymanagers = []oasis.KeymanagerFixture{
 		{Runtime: 0, Entity: 1},
