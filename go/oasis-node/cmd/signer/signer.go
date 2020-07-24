@@ -9,7 +9,6 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
 	cmdCommon "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common"
 	cmdSigner "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/signer"
-	"github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/signer/ledger"
 )
 
 var (
@@ -47,12 +46,6 @@ func doExport(cmd *cobra.Command, args []string) {
 }
 
 func Register(parentCmd *cobra.Command) {
-	for _, v := range []func(*cobra.Command){
-		ledger.Register,
-	} {
-		v(signerCmd)
-	}
-
 	exportCmd.Flags().AddFlagSet(cmdSigner.Flags)
 	exportCmd.Flags().AddFlagSet(cmdSigner.CLIFlags)
 

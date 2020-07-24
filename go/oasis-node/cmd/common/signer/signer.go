@@ -12,7 +12,6 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	compositeSigner "github.com/oasisprotocol/oasis-core/go/common/crypto/signature/signers/composite"
 	fileSigner "github.com/oasisprotocol/oasis-core/go/common/crypto/signature/signers/file"
-	ledgerSigner "github.com/oasisprotocol/oasis-core/go/common/crypto/signature/signers/ledger"
 	memorySigner "github.com/oasisprotocol/oasis-core/go/common/crypto/signature/signers/memory"
 	pluginSigner "github.com/oasisprotocol/oasis-core/go/common/crypto/signature/signers/plugin"
 	remoteSigner "github.com/oasisprotocol/oasis-core/go/common/crypto/signature/signers/remote"
@@ -29,9 +28,6 @@ const (
 	//
 	// It also contains the private keys of a signer if using a file backend.
 	CfgCLISignerDir = "signer.dir"
-
-	cfgSignerLedgerAddress = "signer.ledger.address"
-	cfgSignerLedgerIndex   = "signer.ledger.index"
 
 	cfgSignerRemoteAddress    = "signer.remote.address"
 	cfgSignerRemoteClientCert = "signer.remote.client.certificate"
@@ -74,16 +70,6 @@ func CLIDirOrPwd() (string, error) {
 	return signerDir, nil
 }
 
-// LedgerAddress returns the address to search for (for Ledger-based signer).
-func LedgerAddress() string {
-	return viper.GetString(cfgSignerLedgerAddress)
-}
-
-// LedgerIndex returns the address index to be used for address derivation.
-func LedgerIndex() uint32 {
-	return viper.GetUint32(cfgSignerLedgerIndex)
-}
-
 // NewFactory returns the appropriate SignerFactory based on flags.
 func NewFactory(signerBackend, signerDir string, roles ...signature.SignerRole) (signature.SignerFactory, error) {
 	signerBackend = strings.ToLower(signerBackend)
@@ -101,12 +87,6 @@ func doNewFactory(signerBackend, signerDir string, roles ...signature.SignerRole
 	switch signerBackend {
 	case fileSigner.SignerName:
 		return fileSigner.NewFactory(signerDir, roles...)
-	case ledgerSigner.SignerName:
-		config := &ledgerSigner.FactoryConfig{
-			Address: LedgerAddress(),
-			Index:   LedgerIndex(),
-		}
-		return ledgerSigner.NewFactory(config, roles...)
 	case memorySigner.SignerName:
 		if !testingAllowMemory {
 			return nil, fmt.Errorf("memory signer backend is only for testing")
@@ -187,8 +167,6 @@ func doNewComposite(signerDir string, roles ...signature.SignerRole) (signature.
 
 func init() {
 	Flags.StringP(CfgSigner, "s", "file", "signer backend [file, plugin, ledger, remote, composite]")
-	Flags.String(cfgSignerLedgerAddress, "", "Ledger signer: select Ledger device based on this specified address. If blank, any available Ledger device will be connected to.")
-	Flags.Uint32(cfgSignerLedgerIndex, 0, "Ledger signer: address index used to derive address on Ledger device")
 	Flags.String(cfgSignerRemoteAddress, "", "remote signer server address")
 	Flags.String(cfgSignerRemoteClientCert, "", "remote signer client certificate path")
 	Flags.String(cfgSignerRemoteClientKey, "", "remote signer client certificate key path")
