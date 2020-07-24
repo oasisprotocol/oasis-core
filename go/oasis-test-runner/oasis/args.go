@@ -94,14 +94,14 @@ func (args *argBuilder) consensusValidator() *argBuilder {
 
 func (args *argBuilder) tendermintMinGasPrice(price uint64) *argBuilder {
 	args.vec = append(args.vec, []string{
-		"--" + tendermint.CfgConsensusMinGasPrice, strconv.Itoa(int(price)),
+		"--" + tendermint.CfgMinGasPrice, strconv.Itoa(int(price)),
 	}...)
 	return args
 }
 
 func (args *argBuilder) tendermintSubmissionGasPrice(price uint64) *argBuilder {
 	args.vec = append(args.vec, []string{
-		"--" + tendermint.CfgConsensusSubmissionGasPrice, strconv.Itoa(int(price)),
+		"--" + tendermint.CfgSubmissionGasPrice, strconv.Itoa(int(price)),
 	}...)
 	return args
 }
@@ -122,7 +122,7 @@ func (args *argBuilder) tendermintPrune(numKept uint64) *argBuilder {
 
 func (args *argBuilder) tendermintDebugDisableCheckTx(disable bool) *argBuilder {
 	if disable {
-		args.vec = append(args.vec, "--"+tendermint.CfgConsensusDebugDisableCheckTx)
+		args.vec = append(args.vec, "--"+tendermint.CfgDebugDisableCheckTx)
 	}
 	return args
 }

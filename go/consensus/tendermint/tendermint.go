@@ -77,57 +77,57 @@ const (
 	configDir = "config"
 
 	// CfgCoreListenAddress configures the tendermint core network listen address.
-	CfgCoreListenAddress   = "tendermint.core.listen_address"
-	cfgCoreExternalAddress = "tendermint.core.external_address"
+	CfgCoreListenAddress   = "consensus.tendermint.core.listen_address"
+	cfgCoreExternalAddress = "consensus.tendermint.core.external_address"
 
 	// CfgABCIPruneStrategy configures the ABCI state pruning strategy.
-	CfgABCIPruneStrategy = "tendermint.abci.prune.strategy"
+	CfgABCIPruneStrategy = "consensus.tendermint.abci.prune.strategy"
 	// CfgABCIPruneNumKept configures the amount of kept heights if pruning is enabled.
-	CfgABCIPruneNumKept = "tendermint.abci.prune.num_kept"
+	CfgABCIPruneNumKept = "consensus.tendermint.abci.prune.num_kept"
 
 	// CfgSentryUpstreamAddress defines nodes for which we act as a sentry for.
-	CfgSentryUpstreamAddress = "tendermint.sentry.upstream_address"
+	CfgSentryUpstreamAddress = "consensus.tendermint.sentry.upstream_address"
 
 	// CfgP2PPersistentPeer configures tendermint's persistent peer(s).
-	CfgP2PPersistentPeer = "tendermint.p2p.persistent_peer"
+	CfgP2PPersistentPeer = "consensus.tendermint.p2p.persistent_peer"
 	// CfgP2PPersistenPeersMaxDialPeriod configures the tendermint's peristent peer max dial period.
-	CfgP2PPersistenPeersMaxDialPeriod = "tendermint.p2p.persistent_peers_max_dial_period"
+	CfgP2PPersistenPeersMaxDialPeriod = "consensus.tendermint.p2p.persistent_peers_max_dial_period"
 	// CfgP2PDisablePeerExchange disables tendermint's peer-exchange (Pex) reactor.
-	CfgP2PDisablePeerExchange = "tendermint.p2p.disable_peer_exchange"
+	CfgP2PDisablePeerExchange = "consensus.tendermint.p2p.disable_peer_exchange"
 	// CfgP2PSeeds configures tendermint's seed node(s).
-	CfgP2PSeed = "tendermint.p2p.seed"
+	CfgP2PSeed = "consensus.tendermint.p2p.seed"
 	// CfgP2PSeedMode enables the tendermint seed mode.
-	CfgP2PSeedMode = "tendermint.p2p.seed_mode"
+	CfgP2PSeedMode = "consensus.tendermint.p2p.seed_mode"
 	// CfgP2PMaxNumInboundPeers configures the max number of inbound peers.
-	CfgP2PMaxNumInboundPeers = "tendermint.p2p.max_num_inbound_peers"
+	CfgP2PMaxNumInboundPeers = "consensus.tendermint.p2p.max_num_inbound_peers"
 	// CfgP2PMaxNumOutboundPeers configures the max number of outbound peers, excluding persistent peers.
-	CfgP2PMaxNumOutboundPeers = "tendermint.p2p.max_num_outbound_peers"
+	CfgP2PMaxNumOutboundPeers = "consensus.tendermint.p2p.max_num_outbound_peers"
 	// CfgP2PSendRate is the rate at which packets can be sent, in bytes/second.
-	CfgP2PSendRate = "tendermint.p2p.send_rate"
+	CfgP2PSendRate = "consensus.tendermint.p2p.send_rate"
 	// CfgP2PRecvRate is the rate at which packets can be received, in bytes/second.
-	CfgP2PRecvRate = "tendermint.p2p.recv_rate"
+	CfgP2PRecvRate = "consensus.tendermint.p2p.recv_rate"
 	// CfgP2PUnconditionalPeerIDs configures tendermint's unconditional peer(s).
-	CfgP2PUnconditionalPeerIDs = "tendermint.p2p.unconditional_peer_ids"
+	CfgP2PUnconditionalPeerIDs = "consensus.tendermint.p2p.unconditional_peer_ids"
 
-	cfgLogDebug = "tendermint.log.debug"
+	cfgLogDebug = "consensus.tendermint.log.debug"
 
 	// CfgDebugP2PAddrBookLenient configures allowing non-routable addresses.
-	CfgDebugP2PAddrBookLenient = "tendermint.debug.addr_book_lenient"
+	CfgDebugP2PAddrBookLenient = "consensus.tendermint.debug.addr_book_lenient"
 	// CfgP2PDebugAllowDuplicateIP allows multiple connections from the same IP.
-	CfgDebugP2PAllowDuplicateIP = "tendermint.debug.allow_duplicate_ip"
+	CfgDebugP2PAllowDuplicateIP = "consensus.tendermint.debug.allow_duplicate_ip"
 
 	// CfgDebugUnsafeReplayRecoverCorruptedWAL enables the debug and unsafe
 	// automatic corrupted WAL recovery during replay.
-	CfgDebugUnsafeReplayRecoverCorruptedWAL = "tendermint.debug.unsafe_replay_recover_corrupted_wal"
+	CfgDebugUnsafeReplayRecoverCorruptedWAL = "consensus.tendermint.debug.unsafe_replay_recover_corrupted_wal"
 
-	// CfgConsensusMinGasPrice configures the minimum gas price for this validator.
-	CfgConsensusMinGasPrice = "consensus.tendermint.min_gas_price"
-	// CfgConsensusSubmissionGasPrice configures the gas price used when submitting transactions.
-	CfgConsensusSubmissionGasPrice = "consensus.tendermint.submission.gas_price"
-	// CfgConsensusSubmissionMaxFee configures the maximum fee that can be set.
-	CfgConsensusSubmissionMaxFee = "consensus.tendermint.submission.max_fee"
-	// CfgConsensusDebugDisableCheckTx disables CheckTx.
-	CfgConsensusDebugDisableCheckTx = "consensus.tendermint.debug.disable_check_tx"
+	// CfgMinGasPrice configures the minimum gas price for this validator.
+	CfgMinGasPrice = "consensus.tendermint.min_gas_price"
+	// CfgSubmissionGasPrice configures the gas price used when submitting transactions.
+	CfgSubmissionGasPrice = "consensus.tendermint.submission.gas_price"
+	// CfgSubmissionMaxFee configures the maximum fee that can be set.
+	CfgSubmissionMaxFee = "consensus.tendermint.submission.max_fee"
+	// CfgDebugDisableCheckTx disables CheckTx.
+	CfgDebugDisableCheckTx = "consensus.tendermint.debug.disable_check_tx"
 
 	// CfgSupplementarySanityEnabled is the supplementary sanity enabled flag.
 	CfgSupplementarySanityEnabled = "consensus.tendermint.supplementarysanity.enabled"
@@ -1122,9 +1122,9 @@ func (t *tendermintService) lazyInit() error {
 		StorageBackend:  db.GetBackendName(),
 		Pruning:         pruneCfg,
 		HaltEpochHeight: t.genesis.HaltEpoch,
-		MinGasPrice:     viper.GetUint64(CfgConsensusMinGasPrice),
+		MinGasPrice:     viper.GetUint64(CfgMinGasPrice),
 		OwnTxSigner:     t.identity.NodeSigner.Public(),
-		DisableCheckTx:  viper.GetBool(CfgConsensusDebugDisableCheckTx) && cmflags.DebugDontBlameOasis(),
+		DisableCheckTx:  viper.GetBool(CfgDebugDisableCheckTx) && cmflags.DebugDontBlameOasis(),
 	}
 	t.mux, err = abci.NewApplicationServer(t.ctx, t.upgrader, appConfig)
 	if err != nil {
@@ -1452,11 +1452,11 @@ func New(ctx context.Context, dataDir string, identity *identity.Identity, upgra
 	}
 
 	// Create the submission manager.
-	pd, err := consensusAPI.NewStaticPriceDiscovery(viper.GetUint64(CfgConsensusSubmissionGasPrice))
+	pd, err := consensusAPI.NewStaticPriceDiscovery(viper.GetUint64(CfgSubmissionGasPrice))
 	if err != nil {
 		return nil, fmt.Errorf("tendermint: failed to create submission manager: %w", err)
 	}
-	t.submissionMgr = consensusAPI.NewSubmissionManager(t, pd, viper.GetUint64(CfgConsensusSubmissionMaxFee))
+	t.submissionMgr = consensusAPI.NewSubmissionManager(t, pd, viper.GetUint64(CfgSubmissionMaxFee))
 
 	return t, t.initialize()
 }
@@ -1605,10 +1605,10 @@ func init() {
 	Flags.Bool(cfgLogDebug, false, "enable tendermint debug logs (very verbose)")
 	Flags.Bool(CfgDebugP2PAddrBookLenient, false, "allow non-routable addresses")
 	Flags.Bool(CfgDebugP2PAllowDuplicateIP, false, "Allow multiple connections from the same IP")
-	Flags.Uint64(CfgConsensusMinGasPrice, 0, "minimum gas price")
-	Flags.Uint64(CfgConsensusSubmissionGasPrice, 0, "gas price used when submitting consensus transactions")
-	Flags.Uint64(CfgConsensusSubmissionMaxFee, 0, "maximum transaction fee when submitting consensus transactions")
-	Flags.Bool(CfgConsensusDebugDisableCheckTx, false, "do not perform CheckTx on incoming transactions (UNSAFE)")
+	Flags.Uint64(CfgMinGasPrice, 0, "minimum gas price")
+	Flags.Uint64(CfgSubmissionGasPrice, 0, "gas price used when submitting consensus transactions")
+	Flags.Uint64(CfgSubmissionMaxFee, 0, "maximum transaction fee when submitting consensus transactions")
+	Flags.Bool(CfgDebugDisableCheckTx, false, "do not perform CheckTx on incoming transactions (UNSAFE)")
 	Flags.Bool(CfgDebugUnsafeReplayRecoverCorruptedWAL, false, "Enable automatic recovery from corrupted WAL during replay (UNSAFE).")
 
 	Flags.Bool(CfgSupplementarySanityEnabled, false, "enable supplementary sanity checks (slows down consensus)")
@@ -1617,7 +1617,7 @@ func init() {
 	_ = Flags.MarkHidden(cfgLogDebug)
 	_ = Flags.MarkHidden(CfgDebugP2PAddrBookLenient)
 	_ = Flags.MarkHidden(CfgDebugP2PAllowDuplicateIP)
-	_ = Flags.MarkHidden(CfgConsensusDebugDisableCheckTx)
+	_ = Flags.MarkHidden(CfgDebugDisableCheckTx)
 	_ = Flags.MarkHidden(CfgDebugUnsafeReplayRecoverCorruptedWAL)
 
 	_ = Flags.MarkHidden(CfgSupplementarySanityEnabled)
