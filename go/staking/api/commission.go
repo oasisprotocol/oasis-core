@@ -12,6 +12,13 @@ import (
 	epochtime "github.com/oasisprotocol/oasis-core/go/epochtime/api"
 )
 
+// commissionRateDenominatorExponent is the commission rate denominator's
+// base-10 exponent.
+//
+// NOTE: Setting it to 5 means commission rates are denominated in 1000ths of a
+// percent.
+const commissionRateDenominatorExponent uint8 = 5
+
 var (
 	// CommissionRateDenominator is the denominator for the commission rate.
 	CommissionRateDenominator *quantity.Quantity
@@ -388,9 +395,11 @@ func (cs *CommissionSchedule) CurrentRate(now epochtime.EpochTime) *quantity.Qua
 }
 
 func init() {
-	// Denominated in 1000th of a percent.
+	// Compute CommissionRateDenominator from its base-10 exponent.
 	CommissionRateDenominator = quantity.NewQuantity()
-	err := CommissionRateDenominator.FromInt64(100_000)
+	err := CommissionRateDenominator.FromBigInt(
+		new(big.Int).Exp(big.NewInt(10), big.NewInt(int64(commissionRateDenominatorExponent)), nil),
+	)
 	if err != nil {
 		panic(err)
 	}
