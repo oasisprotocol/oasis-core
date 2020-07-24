@@ -4,9 +4,8 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"math/big"
-	"strings"
 
+	"github.com/oasisprotocol/oasis-core/go/common/prettyprint"
 	"github.com/oasisprotocol/oasis-core/go/common/quantity"
 )
 
@@ -29,24 +28,7 @@ func ConvertToTokenAmount(amount quantity.Quantity, tokenValueExponent uint8) (s
 		return "", ErrInvalidTokenValueExponent
 	}
 
-	divisor := new(big.Int).Exp(big.NewInt(10), big.NewInt(int64(tokenValueExponent)), nil)
-
-	// NOTE: We use DivMod() and manual string construction to avoid conversion
-	// to other types and support arbitrarily large amounts.
-	var quotient, remainder *big.Int
-	quotient, remainder = new(big.Int).DivMod(amount.ToBigInt(), divisor, new(big.Int))
-
-	// Prefix the remainder with the appropriate number of zeros.
-	remainderStr := fmt.Sprintf("%0*s", tokenValueExponent, remainder)
-	// Trim trailing zeros from the remainder.
-	remainderStr = strings.TrimRight(remainderStr, "0")
-	// Ensure remainder is not empty.
-	if remainderStr == "" {
-		remainderStr = "0"
-	}
-
-	// Combine quotient and remainder to a string representing the token amount.
-	return fmt.Sprintf("%s.%s", quotient, remainderStr), nil
+	return prettyprint.FractionBase10(amount, tokenValueExponent), nil
 }
 
 // PrettyPrintAmount writes a pretty-printed representation of the given amount
@@ -81,4 +63,18 @@ func PrettyPrintAmount(ctx context.Context, amount quantity.Quantity, w io.Write
 	} else {
 		fmt.Fprintf(w, "%s %s", symbol, tokenAmount)
 	}
+}
+
+// PrettyPrintCommissionRatePercentage returns the string representing the
+// commission rate (bound) in percentage for the given commission rate (bound)
+// numerator.
+func PrettyPrintCommissionRatePercentage(rateNumerator quantity.Quantity) string {
+	// Handle invalid commission rate (bound) numerator.
+	if rateNumerator.Cmp(CommissionRateDenominator) > 0 {
+		return "(invalid)"
+	}
+	// Reduce commission rate denominator's base-10 exponent by 2 to obtain the
+	// value in percentage.
+	denominatorExp := commissionRateDenominatorExponent - 2
+	return fmt.Sprintf("%s%%", prettyprint.FractionBase10(rateNumerator, denominatorExp))
 }

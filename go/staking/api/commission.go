@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"io"
 	"math/big"
-	"strconv"
 
 	"github.com/oasisprotocol/oasis-core/go/common/prettyprint"
 	"github.com/oasisprotocol/oasis-core/go/common/quantity"
@@ -27,17 +26,6 @@ var (
 	_ prettyprint.PrettyPrinter = (*CommissionRateBoundStep)(nil)
 	_ prettyprint.PrettyPrinter = (*CommissionSchedule)(nil)
 )
-
-// CommissionRatePercentage returns the string representing the commission rate
-// in percentage for the given commission rate numerator.
-func CommissionRatePercentage(rateNumerator quantity.Quantity) string {
-	rate := big.NewRat(rateNumerator.ToBigInt().Int64(), CommissionRateDenominator.ToBigInt().Int64())
-	// Multiply rate by 100 to convert it to percentage.
-	rate.Mul(rate, big.NewRat(100, 1))
-	// Return string representation of the rate that omits the trailing zeros.
-	rateFloat, _ := rate.Float64()
-	return strconv.FormatFloat(rateFloat, 'f', -1, 64)
-}
 
 // CommissionScheduleRules controls how commission schedule rates and rate
 // bounds are allowed to be changed.
@@ -66,7 +54,7 @@ type CommissionRateStep struct {
 func (crs CommissionRateStep) PrettyPrint(ctx context.Context, prefix string, w io.Writer) {
 	fmt.Fprintf(w, "%s- Start: epoch %d\n", prefix, crs.Start)
 
-	fmt.Fprintf(w, "%s  Rate:  %s %%\n", prefix, CommissionRatePercentage(crs.Rate))
+	fmt.Fprintf(w, "%s  Rate:  %s\n", prefix, PrettyPrintCommissionRatePercentage(crs.Rate))
 }
 
 // PrettyType returns a representation of CommissionRateStep that can be used
@@ -91,8 +79,8 @@ type CommissionRateBoundStep struct {
 func (crbs CommissionRateBoundStep) PrettyPrint(ctx context.Context, prefix string, w io.Writer) {
 	fmt.Fprintf(w, "%s- Start:        epoch %d\n", prefix, crbs.Start)
 
-	fmt.Fprintf(w, "%s  Minimum Rate: %s %%\n", prefix, CommissionRatePercentage(crbs.RateMin))
-	fmt.Fprintf(w, "%s  Maximum Rate: %s %%\n", prefix, CommissionRatePercentage(crbs.RateMax))
+	fmt.Fprintf(w, "%s  Minimum Rate: %s\n", prefix, PrettyPrintCommissionRatePercentage(crbs.RateMin))
+	fmt.Fprintf(w, "%s  Maximum Rate: %s\n", prefix, PrettyPrintCommissionRatePercentage(crbs.RateMax))
 }
 
 // PrettyType returns a representation of CommissionRateBoundStep that can be
