@@ -92,6 +92,11 @@ var (
 		MethodAmendCommissionSchedule,
 	}
 
+	_ prettyprint.PrettyPrinter = (*Transfer)(nil)
+	_ prettyprint.PrettyPrinter = (*Burn)(nil)
+	_ prettyprint.PrettyPrinter = (*Escrow)(nil)
+	_ prettyprint.PrettyPrinter = (*ReclaimEscrow)(nil)
+	_ prettyprint.PrettyPrinter = (*AmendCommissionSchedule)(nil)
 	_ prettyprint.PrettyPrinter = (*SharePool)(nil)
 	_ prettyprint.PrettyPrinter = (*StakeThreshold)(nil)
 	_ prettyprint.PrettyPrinter = (*StakeAccumulator)(nil)
@@ -238,6 +243,22 @@ type Transfer struct {
 	Amount quantity.Quantity `json:"amount"`
 }
 
+// PrettyPrint writes a pretty-printed representation of Transfer to the given
+// writer.
+func (t Transfer) PrettyPrint(ctx context.Context, prefix string, w io.Writer) {
+	fmt.Fprintf(w, "%sTo:     %s\n", prefix, t.To)
+
+	fmt.Fprintf(w, "%sAmount: ", prefix)
+	PrettyPrintAmount(ctx, t.Amount, w)
+	fmt.Fprintln(w)
+}
+
+// PrettyType returns a representation of Transfer that can be used for pretty
+// printing.
+func (t Transfer) PrettyType() (interface{}, error) {
+	return t, nil
+}
+
 // NewTransferTx creates a new transfer transaction.
 func NewTransferTx(nonce uint64, fee *transaction.Fee, xfer *Transfer) *transaction.Transaction {
 	return transaction.NewTransaction(nonce, fee, MethodTransfer, xfer)
@@ -246,6 +267,20 @@ func NewTransferTx(nonce uint64, fee *transaction.Fee, xfer *Transfer) *transact
 // Burn is a stake burn (destruction).
 type Burn struct {
 	Amount quantity.Quantity `json:"amount"`
+}
+
+// PrettyPrint writes a pretty-printed representation of Burn to the given
+// writer.
+func (b Burn) PrettyPrint(ctx context.Context, prefix string, w io.Writer) {
+	fmt.Fprintf(w, "%sAmount: ", prefix)
+	PrettyPrintAmount(ctx, b.Amount, w)
+	fmt.Fprintln(w)
+}
+
+// PrettyType returns a representation of Burn that can be used for pretty
+// printing.
+func (b Burn) PrettyType() (interface{}, error) {
+	return b, nil
 }
 
 // NewBurnTx creates a new burn transaction.
@@ -259,6 +294,22 @@ type Escrow struct {
 	Amount  quantity.Quantity `json:"amount"`
 }
 
+// PrettyPrint writes a pretty-printed representation of Escrow to the given
+// writer.
+func (e Escrow) PrettyPrint(ctx context.Context, prefix string, w io.Writer) {
+	fmt.Fprintf(w, "%sAccount: %s\n", prefix, e.Account)
+
+	fmt.Fprintf(w, "%sAmount:  ", prefix)
+	PrettyPrintAmount(ctx, e.Amount, w)
+	fmt.Fprintln(w)
+}
+
+// PrettyType returns a representation of Escrow that can be used for pretty
+// printing.
+func (e Escrow) PrettyType() (interface{}, error) {
+	return e, nil
+}
+
 // NewAddEscrowTx creates a new add escrow transaction.
 func NewAddEscrowTx(nonce uint64, fee *transaction.Fee, escrow *Escrow) *transaction.Transaction {
 	return transaction.NewTransaction(nonce, fee, MethodAddEscrow, escrow)
@@ -270,6 +321,20 @@ type ReclaimEscrow struct {
 	Shares  quantity.Quantity `json:"shares"`
 }
 
+// PrettyPrint writes a pretty-printed representation of ReclaimEscrow to the
+// given writer.
+func (re ReclaimEscrow) PrettyPrint(ctx context.Context, prefix string, w io.Writer) {
+	fmt.Fprintf(w, "%sAccount: %s\n", prefix, re.Account)
+
+	fmt.Fprintf(w, "%sShares:  %s\n", prefix, re.Shares)
+}
+
+// PrettyType returns a representation of Transfer that can be used for pretty
+// printing.
+func (re ReclaimEscrow) PrettyType() (interface{}, error) {
+	return re, nil
+}
+
 // NewReclaimEscrowTx creates a new reclaim escrow transaction.
 func NewReclaimEscrowTx(nonce uint64, fee *transaction.Fee, reclaim *ReclaimEscrow) *transaction.Transaction {
 	return transaction.NewTransaction(nonce, fee, MethodReclaimEscrow, reclaim)
@@ -278,6 +343,19 @@ func NewReclaimEscrowTx(nonce uint64, fee *transaction.Fee, reclaim *ReclaimEscr
 // AmendCommissionSchedule is an amendment to a commission schedule.
 type AmendCommissionSchedule struct {
 	Amendment CommissionSchedule `json:"amendment"`
+}
+
+// PrettyPrint writes a pretty-printed representation of AmendCommissionSchedule
+// to the given writer.
+func (acs AmendCommissionSchedule) PrettyPrint(ctx context.Context, prefix string, w io.Writer) {
+	fmt.Fprintf(w, "%sAmendment:\n", prefix)
+	acs.Amendment.PrettyPrint(ctx, prefix+"  ", w)
+}
+
+// PrettyType returns a representation of AmendCommissionSchedule that can be
+// used for pretty printing.
+func (acs AmendCommissionSchedule) PrettyType() (interface{}, error) {
+	return acs, nil
 }
 
 // NewAmendCommissionScheduleTx creates a new amend commission schedule transaction.
@@ -295,7 +373,7 @@ type SharePool struct {
 // PrettyPrint writes a pretty-printed representation of SharePool to the given
 // writer.
 func (p SharePool) PrettyPrint(ctx context.Context, prefix string, w io.Writer) {
-	fmt.Fprintf(w, "%sBalance: ", prefix)
+	fmt.Fprintf(w, "%sBalance:      ", prefix)
 	PrettyPrintAmount(ctx, p.Balance, w)
 	fmt.Fprintln(w)
 
@@ -654,7 +732,7 @@ func (ga GeneralAccount) PrettyPrint(ctx context.Context, prefix string, w io.Wr
 	PrettyPrintAmount(ctx, ga.Balance, w)
 	fmt.Fprintln(w)
 
-	fmt.Fprintf(w, "%sNonce: %d\n", prefix, ga.Nonce)
+	fmt.Fprintf(w, "%sNonce:   %d\n", prefix, ga.Nonce)
 }
 
 // PrettyType returns a representation of GeneralAccount that can be used for
