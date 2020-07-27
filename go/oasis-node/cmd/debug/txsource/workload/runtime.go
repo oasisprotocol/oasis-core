@@ -37,6 +37,8 @@ const (
 	runtimeGetExistingRatio = 0.9
 	// Ratio of remove requests that should delete an existing key.
 	runtimeRemoveExistingRatio = 0.5
+
+	runtimeRequestTimeout = 120 * time.Second
 )
 
 // RuntimeFlags are the runtime workload flags.
@@ -112,15 +114,14 @@ func (r *runtime) submitRuntimeRquest(ctx context.Context, rtc runtimeClient.Run
 		"request", req,
 	)
 
-	// Wait for a maximum of 30 seconds as invalid submissions may block
+	// Wait for a maximum of 'runtimeRequestTimeout' as invalid submissions may block
 	// forever.
-	submitCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	submitCtx, cancel := context.WithTimeout(ctx, runtimeRequestTimeout)
 	out, err := rtc.SubmitTx(submitCtx, rtx)
+	cancel()
 	if err != nil {
-		cancel()
 		return nil, fmt.Errorf("failed to submit runtime transaction: %w", err)
 	}
-	cancel()
 
 	if err = cbor.Unmarshal(out, &rsp); err != nil {
 		return nil, fmt.Errorf("malformed tx output from runtime: %w", err)

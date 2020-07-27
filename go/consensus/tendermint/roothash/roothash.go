@@ -343,6 +343,10 @@ func (sc *serviceClient) reindexBlocks(currentHeight int64, bh api.BlockHistory)
 						return fmt.Errorf("failed to unmarshal finalized event: %w", err)
 					}
 
+					// Only process finalized events for tracked runtimes.
+					if sc.trackedRuntime[value.ID] == nil {
+						continue
+					}
 					if err = sc.processFinalizedEvent(sc.ctx, height, value.ID, &value.Round, false); err != nil {
 						return fmt.Errorf("failed to process finalized event: %w", err)
 					}
@@ -419,6 +423,10 @@ func (sc *serviceClient) DeliverEvent(ctx context.Context, height int64, tx tmty
 			continue
 		}
 
+		// Only process finalized events for tracked runtimes.
+		if sc.trackedRuntime[ev.RuntimeID] == nil {
+			continue
+		}
 		if err = sc.processFinalizedEvent(ctx, height, ev.RuntimeID, &ev.FinalizedEvent.Round, true); err != nil {
 			return fmt.Errorf("roothash: failed to process finalized event: %w", err)
 		}
@@ -435,6 +443,13 @@ func (sc *serviceClient) processFinalizedEvent(
 	reindex bool,
 ) (err error) {
 	tr := sc.trackedRuntime[runtimeID]
+	if tr == nil {
+		sc.logger.Error("runtime not tracked",
+			"runtime_id", runtimeID,
+			"tracked_runtimes", sc.trackedRuntime,
+		)
+		return fmt.Errorf("roothash: runtime not tracked: %s", runtimeID)
+	}
 	defer func() {
 		// If there was an error, flag the tracked runtime for reindex.
 		if err == nil {
