@@ -8,9 +8,9 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/quantity"
 )
 
-// FractionBase10 returns a decimal representation of a fraction from fraction's
-// numerator and denominator's base-10 exponent.
-func FractionBase10(numerator quantity.Quantity, denominatorExp uint8) string {
+// QuantityFrac returns a pretty-printed representation of a quantity fraction
+// for the given numerator and denominator's base-10 exponent.
+func QuantityFrac(numerator quantity.Quantity, denominatorExp uint8) string {
 	denominator := new(big.Int).Exp(big.NewInt(10), big.NewInt(int64(denominatorExp)), nil)
 
 	// NOTE: We use DivMod() and manual string construction to avoid conversion
