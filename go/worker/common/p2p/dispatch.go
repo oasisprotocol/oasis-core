@@ -28,7 +28,7 @@ type Handler interface {
 	//
 	// The message handler will be re-invoked on error with a periodic
 	// backoff unless errors are wrapped via `p2pError.Permanent`.
-	AuthenticatePeer(peerID signature.PublicKey) error
+	AuthenticatePeer(peerID signature.PublicKey, msg *Message) error
 
 	// HandlePeerMessage handles an incoming message from a peer.
 	//
@@ -153,7 +153,7 @@ func (h *topicHandler) dispatchMessage(peerID core.PeerID, m *queuedMsg, isIniti
 	// Perhaps this should reject the message, but it is possible that
 	// the local node is just behind.  This does result in stale messages
 	// getting retried though.
-	if err = h.handler.AuthenticatePeer(m.from); err != nil {
+	if err = h.handler.AuthenticatePeer(m.from, m.msg); err != nil {
 		return err
 	}
 
