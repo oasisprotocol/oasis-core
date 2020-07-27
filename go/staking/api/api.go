@@ -295,7 +295,7 @@ type SharePool struct {
 // PrettyPrint writes a pretty-printed representation of SharePool to the given
 // writer.
 func (p SharePool) PrettyPrint(ctx context.Context, prefix string, w io.Writer) {
-	fmt.Fprintf(w, "%sBalance: ", prefix)
+	fmt.Fprintf(w, "%sBalance:      ", prefix)
 	PrettyPrintAmount(ctx, p.Balance, w)
 	fmt.Fprintln(w)
 
@@ -654,7 +654,7 @@ func (ga GeneralAccount) PrettyPrint(ctx context.Context, prefix string, w io.Wr
 	PrettyPrintAmount(ctx, ga.Balance, w)
 	fmt.Fprintln(w)
 
-	fmt.Fprintf(w, "%sNonce: %d\n", prefix, ga.Nonce)
+	fmt.Fprintf(w, "%sNonce:   %d\n", prefix, ga.Nonce)
 }
 
 // PrettyType returns a representation of GeneralAccount that can be used for
