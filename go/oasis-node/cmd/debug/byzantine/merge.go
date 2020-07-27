@@ -8,7 +8,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	"github.com/oasisprotocol/oasis-core/go/common/identity"
-	"github.com/oasisprotocol/oasis-core/go/consensus/tendermint/service"
+	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
 	"github.com/oasisprotocol/oasis-core/go/roothash/api/block"
 	"github.com/oasisprotocol/oasis-core/go/roothash/api/commitment"
 	storage "github.com/oasisprotocol/oasis-core/go/storage/api"
@@ -139,7 +139,7 @@ func (mbc *mergeBatchContext) createCommitment(id *identity.Identity) error {
 	return nil
 }
 
-func (mbc *mergeBatchContext) publishToChain(svc service.TendermintService, id *identity.Identity, runtimeID common.Namespace) error {
+func (mbc *mergeBatchContext) publishToChain(svc consensus.Backend, id *identity.Identity, runtimeID common.Namespace) error {
 	if err := roothashMergeCommit(svc, id, runtimeID, []commitment.MergeCommitment{*mbc.commit}); err != nil {
 		return fmt.Errorf("roothash merge commentment: %w", err)
 	}

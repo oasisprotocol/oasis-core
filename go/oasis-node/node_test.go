@@ -21,12 +21,12 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/entity"
 	cmnGrpc "github.com/oasisprotocol/oasis-core/go/common/grpc"
 	consensusAPI "github.com/oasisprotocol/oasis-core/go/consensus/api"
+	"github.com/oasisprotocol/oasis-core/go/consensus/tendermint"
 	consensusTests "github.com/oasisprotocol/oasis-core/go/consensus/tests"
 	epochtime "github.com/oasisprotocol/oasis-core/go/epochtime/api"
 	epochtimeTests "github.com/oasisprotocol/oasis-core/go/epochtime/tests"
 	cmdCommon "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common"
 	cmdCommonFlags "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/flags"
-	"github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/debug/supplementarysanity"
 	"github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/node"
 	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
 	registryTests "github.com/oasisprotocol/oasis-core/go/registry/tests"
@@ -74,8 +74,8 @@ var (
 		{workerCommon.CfgClientPort, workerClientPort},
 		{storageWorker.CfgWorkerEnabled, true},
 		{txnscheduler.CfgCheckTxEnabled, false},
-		{supplementarysanity.CfgEnabled, true},
-		{supplementarysanity.CfgInterval, 1},
+		{tendermint.CfgSupplementarySanityEnabled, true},
+		{tendermint.CfgSupplementarySanityInterval, 1},
 		{cmdCommon.CfgDebugAllowTestKeys, true},
 	}
 

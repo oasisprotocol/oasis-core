@@ -10,7 +10,6 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/cbor"
 	"github.com/oasisprotocol/oasis-core/go/common/quantity"
 	"github.com/oasisprotocol/oasis-core/go/consensus/api/transaction"
-	"github.com/oasisprotocol/oasis-core/go/consensus/tendermint/abci"
 	"github.com/oasisprotocol/oasis-core/go/consensus/tendermint/api"
 	registryState "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/apps/registry/state"
 	stakingState "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/apps/staking/state"
@@ -18,7 +17,7 @@ import (
 	staking "github.com/oasisprotocol/oasis-core/go/staking/api"
 )
 
-var _ abci.Application = (*stakingApplication)(nil)
+var _ api.Application = (*stakingApplication)(nil)
 
 type stakingApplication struct {
 	state api.ApplicationState
@@ -144,7 +143,7 @@ func (app *stakingApplication) ExecuteTx(ctx *api.Context, tx *transaction.Trans
 	}
 }
 
-func (app *stakingApplication) ForeignExecuteTx(ctx *api.Context, other abci.Application, tx *transaction.Transaction) error {
+func (app *stakingApplication) ForeignExecuteTx(ctx *api.Context, other api.Application, tx *transaction.Transaction) error {
 	return nil
 }
 
@@ -251,11 +250,11 @@ func (app *stakingApplication) onEpochChange(ctx *api.Context, epoch epochtime.E
 	return nil
 }
 
-func (app *stakingApplication) FireTimer(ctx *api.Context, timer *abci.Timer) error {
+func (app *stakingApplication) FireTimer(ctx *api.Context, timer *api.Timer) error {
 	return fmt.Errorf("tendermint/staking: unexpected timer")
 }
 
 // New constructs a new staking application instance.
-func New() abci.Application {
+func New() api.Application {
 	return &stakingApplication{}
 }

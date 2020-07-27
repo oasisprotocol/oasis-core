@@ -18,7 +18,6 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/node"
 	"github.com/oasisprotocol/oasis-core/go/common/quantity"
 	"github.com/oasisprotocol/oasis-core/go/consensus/api/transaction"
-	"github.com/oasisprotocol/oasis-core/go/consensus/tendermint/abci"
 	"github.com/oasisprotocol/oasis-core/go/consensus/tendermint/api"
 	beaconapp "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/apps/beacon"
 	beaconState "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/apps/beacon/state"
@@ -34,7 +33,7 @@ import (
 )
 
 var (
-	_ abci.Application = (*schedulerApplication)(nil)
+	_ api.Application = (*schedulerApplication)(nil)
 
 	RNGContextExecutor             = []byte("EkS-ABCI-Compute")
 	RNGContextStorage              = []byte("EkS-ABCI-Storage")
@@ -209,7 +208,7 @@ func (app *schedulerApplication) ExecuteTx(ctx *api.Context, tx *transaction.Tra
 	return fmt.Errorf("tendermint/scheduler: unexpected transaction")
 }
 
-func (app *schedulerApplication) ForeignExecuteTx(ctx *api.Context, other abci.Application, tx *transaction.Transaction) error {
+func (app *schedulerApplication) ForeignExecuteTx(ctx *api.Context, other api.Application, tx *transaction.Transaction) error {
 	return nil
 }
 
@@ -281,7 +280,7 @@ func (app *schedulerApplication) EndBlock(ctx *api.Context, req types.RequestEnd
 	return resp, nil
 }
 
-func (app *schedulerApplication) FireTimer(ctx *api.Context, t *abci.Timer) error {
+func (app *schedulerApplication) FireTimer(ctx *api.Context, t *api.Timer) error {
 	return fmt.Errorf("tendermint/scheduler: unexpected timer")
 }
 
@@ -719,6 +718,6 @@ func stakingAddressMapToSortedSlice(m map[staking.Address]bool) []staking.Addres
 }
 
 // New constructs a new scheduler application instance.
-func New() abci.Application {
+func New() api.Application {
 	return &schedulerApplication{}
 }

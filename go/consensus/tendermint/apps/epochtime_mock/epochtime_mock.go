@@ -8,13 +8,12 @@ import (
 
 	"github.com/oasisprotocol/oasis-core/go/common/cbor"
 	"github.com/oasisprotocol/oasis-core/go/consensus/api/transaction"
-	"github.com/oasisprotocol/oasis-core/go/consensus/tendermint/abci"
 	"github.com/oasisprotocol/oasis-core/go/consensus/tendermint/api"
 	epochtime "github.com/oasisprotocol/oasis-core/go/epochtime/api"
 	genesis "github.com/oasisprotocol/oasis-core/go/genesis/api"
 )
 
-var _ abci.Application = (*epochTimeMockApplication)(nil)
+var _ api.Application = (*epochTimeMockApplication)(nil)
 
 type epochTimeMockApplication struct {
 	state api.ApplicationState
@@ -104,7 +103,7 @@ func (app *epochTimeMockApplication) ExecuteTx(ctx *api.Context, tx *transaction
 	}
 }
 
-func (app *epochTimeMockApplication) ForeignExecuteTx(ctx *api.Context, other abci.Application, tx *transaction.Transaction) error {
+func (app *epochTimeMockApplication) ForeignExecuteTx(ctx *api.Context, other api.Application, tx *transaction.Transaction) error {
 	return nil
 }
 
@@ -112,7 +111,7 @@ func (app *epochTimeMockApplication) EndBlock(ctx *api.Context, request types.Re
 	return types.ResponseEndBlock{}, nil
 }
 
-func (app *epochTimeMockApplication) FireTimer(ctx *api.Context, timer *abci.Timer) error {
+func (app *epochTimeMockApplication) FireTimer(ctx *api.Context, timer *api.Timer) error {
 	return fmt.Errorf("tendermint/epochtime_mock: unexpected timer")
 }
 
@@ -134,6 +133,6 @@ func (app *epochTimeMockApplication) setEpoch(
 }
 
 // New constructs a new mock epochtime application instance.
-func New() abci.Application {
+func New() api.Application {
 	return &epochTimeMockApplication{}
 }

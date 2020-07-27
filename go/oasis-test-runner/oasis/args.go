@@ -22,7 +22,6 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/grpc"
 	"github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/metrics"
 	"github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/debug/byzantine"
-	"github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/debug/supplementarysanity"
 	runtimeRegistry "github.com/oasisprotocol/oasis-core/go/runtime/registry"
 	"github.com/oasisprotocol/oasis-core/go/storage"
 	workerCommon "github.com/oasisprotocol/oasis-core/go/worker/common"
@@ -95,14 +94,14 @@ func (args *argBuilder) consensusValidator() *argBuilder {
 
 func (args *argBuilder) tendermintMinGasPrice(price uint64) *argBuilder {
 	args.vec = append(args.vec, []string{
-		"--" + tendermint.CfgConsensusMinGasPrice, strconv.Itoa(int(price)),
+		"--" + tendermint.CfgMinGasPrice, strconv.Itoa(int(price)),
 	}...)
 	return args
 }
 
 func (args *argBuilder) tendermintSubmissionGasPrice(price uint64) *argBuilder {
 	args.vec = append(args.vec, []string{
-		"--" + tendermint.CfgConsensusSubmissionGasPrice, strconv.Itoa(int(price)),
+		"--" + tendermint.CfgSubmissionGasPrice, strconv.Itoa(int(price)),
 	}...)
 	return args
 }
@@ -123,7 +122,7 @@ func (args *argBuilder) tendermintPrune(numKept uint64) *argBuilder {
 
 func (args *argBuilder) tendermintDebugDisableCheckTx(disable bool) *argBuilder {
 	if disable {
-		args.vec = append(args.vec, "--"+tendermint.CfgConsensusDebugDisableCheckTx)
+		args.vec = append(args.vec, "--"+tendermint.CfgDebugDisableCheckTx)
 	}
 	return args
 }
@@ -189,10 +188,10 @@ func (args *argBuilder) runtimeSupported(id common.Namespace) *argBuilder {
 	return args
 }
 
-func (args *argBuilder) supplementarysanityEnabled() *argBuilder {
-	args.vec = append(args.vec, "--"+supplementarysanity.CfgEnabled)
+func (args *argBuilder) tendermintSupplementarySanityEnabled() *argBuilder {
+	args.vec = append(args.vec, "--"+tendermint.CfgSupplementarySanityEnabled)
 	args.vec = append(args.vec, []string{
-		"--" + supplementarysanity.CfgInterval, "1",
+		"--" + tendermint.CfgSupplementarySanityInterval, "1",
 	}...)
 	return args
 }

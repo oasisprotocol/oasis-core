@@ -11,7 +11,6 @@ import (
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/genesis"
 	tendermint "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/api"
 	"github.com/oasisprotocol/oasis-core/go/consensus/tendermint/crypto"
-	"github.com/oasisprotocol/oasis-core/go/consensus/tendermint/service"
 	epochtime "github.com/oasisprotocol/oasis-core/go/epochtime/api"
 	genesis "github.com/oasisprotocol/oasis-core/go/genesis/api"
 	genesisTestHelpers "github.com/oasisprotocol/oasis-core/go/genesis/tests"
@@ -21,7 +20,7 @@ import (
 	stakingTests "github.com/oasisprotocol/oasis-core/go/staking/tests/debug"
 )
 
-var _ service.GenesisProvider = (*testNodeGenesisProvider)(nil)
+var _ tendermint.GenesisProvider = (*testNodeGenesisProvider)(nil)
 
 type testNodeGenesisProvider struct {
 	document   *genesis.Document

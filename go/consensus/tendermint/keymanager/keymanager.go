@@ -18,7 +18,6 @@ import (
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
 	tmapi "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/api"
 	app "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/apps/keymanager"
-	"github.com/oasisprotocol/oasis-core/go/consensus/tendermint/service"
 	"github.com/oasisprotocol/oasis-core/go/keymanager/api"
 	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
 )
@@ -100,9 +99,9 @@ func (sc *serviceClient) DeliverEvent(ctx context.Context, height int64, tx tmty
 
 // New constructs a new tendermint backed key manager management Backend
 // instance.
-func New(ctx context.Context, service service.TendermintService) (ServiceClient, error) {
+func New(ctx context.Context, backend tmapi.Backend) (ServiceClient, error) {
 	a := app.New()
-	if err := service.RegisterApplication(a); err != nil {
+	if err := backend.RegisterApplication(a); err != nil {
 		return nil, fmt.Errorf("keymanager/tendermint: failed to register app: %w", err)
 	}
 

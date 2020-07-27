@@ -19,7 +19,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/drbg"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/mathrand"
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
-	"github.com/oasisprotocol/oasis-core/go/consensus/tendermint/abci"
+	tendermint "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/api"
 	registryApp "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/apps/registry"
 	stakingApp "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/apps/staking"
 	genesisFile "github.com/oasisprotocol/oasis-core/go/genesis/file"
@@ -108,13 +108,13 @@ func doRun(cmd *cobra.Command, args []string) error {
 	txAuthApp := stakingApp.New()
 	cfg := &mockChainCfg{
 		dataDir: dataDir,
-		apps: []abci.Application{
+		apps: []tendermint.Application{
 			registryApp.New(),
 			txAuthApp, // This is the staking app.
 		},
 		genesisDoc:    genesisDoc,
 		tmChainID:     tmChainID,
-		txAuthHandler: txAuthApp.(abci.TransactionAuthHandler),
+		txAuthHandler: txAuthApp.(tendermint.TransactionAuthHandler),
 		numVersions:   viper.GetUint64(cfgNumKept),
 		memDB:         viper.GetBool(cfgMemDB),
 	}

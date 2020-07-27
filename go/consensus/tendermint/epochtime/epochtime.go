@@ -11,7 +11,6 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
 	"github.com/oasisprotocol/oasis-core/go/common/pubsub"
 	tmapi "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/api"
-	"github.com/oasisprotocol/oasis-core/go/consensus/tendermint/service"
 	"github.com/oasisprotocol/oasis-core/go/epochtime/api"
 )
 
@@ -117,8 +116,8 @@ func (sc *serviceClient) DeliverBlock(ctx context.Context, height int64) error {
 
 // New constructs a new tendermint backed epochtime Backend instance,
 // with the specified epoch interval.
-func New(ctx context.Context, service service.TendermintService, interval int64) (ServiceClient, error) {
-	genDoc, err := service.GetGenesisDocument(ctx)
+func New(ctx context.Context, backend tmapi.Backend, interval int64) (ServiceClient, error) {
+	genDoc, err := backend.GetGenesisDocument(ctx)
 	if err != nil {
 		return nil, err
 	}

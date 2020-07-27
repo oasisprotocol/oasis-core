@@ -13,6 +13,7 @@ import (
 
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature/signers/memory"
 	"github.com/oasisprotocol/oasis-core/go/consensus/tendermint/abci"
+	tendermint "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/api"
 	registryApp "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/apps/registry"
 	stakingApp "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/apps/staking"
 	genesis "github.com/oasisprotocol/oasis-core/go/genesis/api"
@@ -21,10 +22,10 @@ import (
 
 type mockChainCfg struct {
 	dataDir       string
-	apps          []abci.Application
+	apps          []tendermint.Application
 	genesisDoc    *genesis.Document
 	tmChainID     string
-	txAuthHandler abci.TransactionAuthHandler
+	txAuthHandler tendermint.TransactionAuthHandler
 	numVersions   uint64
 	memDB         bool
 }

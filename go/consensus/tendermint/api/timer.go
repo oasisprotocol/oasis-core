@@ -1,4 +1,4 @@
-package abci
+package api
 
 import (
 	"encoding/hex"
@@ -8,7 +8,6 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
 	"github.com/oasisprotocol/oasis-core/go/common/keyformat"
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
-	"github.com/oasisprotocol/oasis-core/go/consensus/tendermint/api"
 )
 
 // deadlineDisarmed is a special deadline value for disarmed timers.
@@ -66,7 +65,7 @@ type Timer struct {
 }
 
 // NewTimer creates a new timer.
-func NewTimer(ctx *api.Context, app Application, kind uint8, id, data []byte) *Timer {
+func NewTimer(ctx *Context, app Application, kind uint8, id, data []byte) *Timer {
 	if data == nil {
 		data = []byte{}
 	} else {
@@ -111,7 +110,7 @@ func (t *Timer) CustomID() []byte {
 }
 
 // Data returns custom data associated with the timer.
-func (t *Timer) Data(ctx *api.Context) []byte {
+func (t *Timer) Data(ctx *Context) []byte {
 	t.refreshState()
 
 	if t.state.data == nil {
@@ -135,7 +134,7 @@ func (t *Timer) Data(ctx *api.Context) []byte {
 //
 // The timer's custom data will be set to the new value iff it is non-nil,
 // otherwise it will be left unaltered.
-func (t *Timer) Reset(ctx *api.Context, duration time.Duration, data []byte) {
+func (t *Timer) Reset(ctx *Context, duration time.Duration, data []byte) {
 	if data == nil {
 		// Load previous data.
 		_ = t.Data(ctx)
@@ -163,7 +162,7 @@ func (t *Timer) Reset(ctx *api.Context, duration time.Duration, data []byte) {
 // Stop stops the timer.
 //
 // This removes any data associated with the timer.
-func (t *Timer) Stop(ctx *api.Context) {
+func (t *Timer) Stop(ctx *Context) {
 	// Remove previous timer entry (if any).
 	t.remove(ctx)
 
@@ -171,7 +170,7 @@ func (t *Timer) Stop(ctx *api.Context) {
 	t.ID = t.state.getKey()
 }
 
-func (t *Timer) remove(ctx *api.Context) {
+func (t *Timer) remove(ctx *Context) {
 	t.refreshState()
 
 	if t.state.deadline == deadlineDisarmed {
@@ -186,8 +185,8 @@ func (t *Timer) remove(ctx *api.Context) {
 	}
 }
 
-func fireTimers(ctx *api.Context, app Application) (err error) {
-	// Iterate through all timers which have already expired.
+// FireTimers fires all timers which have already expired.
+func FireTimers(ctx *Context, app Application) (err error) {
 	it := ctx.State().NewIterator(ctx)
 	defer it.Close()
 
@@ -211,7 +210,7 @@ func fireTimers(ctx *api.Context, app Application) (err error) {
 		}
 	}
 	if it.Err() != nil {
-		return api.UnavailableStateError(it.Err())
+		return UnavailableStateError(it.Err())
 	}
 	return
 }

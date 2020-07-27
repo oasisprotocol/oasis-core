@@ -11,7 +11,6 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/cbor"
 	"github.com/oasisprotocol/oasis-core/go/common/node"
 	"github.com/oasisprotocol/oasis-core/go/consensus/api/transaction"
-	"github.com/oasisprotocol/oasis-core/go/consensus/tendermint/abci"
 	tmapi "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/api"
 	keymanagerState "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/apps/keymanager/state"
 	registryapp "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/apps/registry"
@@ -78,7 +77,7 @@ func (app *keymanagerApplication) ExecuteTx(ctx *tmapi.Context, tx *transaction.
 	}
 }
 
-func (app *keymanagerApplication) ForeignExecuteTx(ctx *tmapi.Context, other abci.Application, tx *transaction.Transaction) error {
+func (app *keymanagerApplication) ForeignExecuteTx(ctx *tmapi.Context, other tmapi.Application, tx *transaction.Transaction) error {
 	return nil
 }
 
@@ -86,7 +85,7 @@ func (app *keymanagerApplication) EndBlock(ctx *tmapi.Context, request types.Req
 	return types.ResponseEndBlock{}, nil
 }
 
-func (app *keymanagerApplication) FireTimer(ctx *tmapi.Context, timer *abci.Timer) error {
+func (app *keymanagerApplication) FireTimer(ctx *tmapi.Context, timer *tmapi.Timer) error {
 	return fmt.Errorf("tendermint/keymanager: unexpected timer")
 }
 
@@ -308,6 +307,6 @@ func (app *keymanagerApplication) generateStatus(ctx *tmapi.Context, kmrt *regis
 }
 
 // New constructs a new keymanager application instance.
-func New() abci.Application {
+func New() tmapi.Application {
 	return &keymanagerApplication{}
 }

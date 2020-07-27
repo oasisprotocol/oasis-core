@@ -21,7 +21,6 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/consensus/api/transaction"
 	tmapi "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/api"
 	app "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/apps/epochtime_mock"
-	"github.com/oasisprotocol/oasis-core/go/consensus/tendermint/service"
 	"github.com/oasisprotocol/oasis-core/go/epochtime/api"
 )
 
@@ -39,7 +38,7 @@ type serviceClient struct {
 
 	logger *logging.Logger
 
-	service  service.TendermintService
+	backend  tmapi.Backend
 	querier  *app.QueryFactory
 	notifier *pubsub.Broker
 
@@ -133,7 +132,7 @@ func (sc *serviceClient) SetEpoch(ctx context.Context, epoch api.EpochTime) erro
 	defer sub.Close()
 
 	tx := transaction.NewTransaction(0, nil, app.MethodSetEpoch, epoch)
-	if err := consensus.SignAndSubmitTx(ctx, sc.service, testSigner, tx); err != nil {
+	if err := consensus.SignAndSubmitTx(ctx, sc.backend, testSigner, tx); err != nil {
 		return fmt.Errorf("epochtime: set epoch failed: %w", err)
 	}
 
@@ -219,16 +218,16 @@ func (sc *serviceClient) updateCached(height int64, epoch api.EpochTime) bool {
 }
 
 // New constructs a new mock tendermint backed epochtime Backend instance.
-func New(ctx context.Context, service service.TendermintService) (ServiceClient, error) {
+func New(ctx context.Context, backend tmapi.Backend) (ServiceClient, error) {
 	// Initialize and register the tendermint service component.
 	a := app.New()
-	if err := service.RegisterApplication(a); err != nil {
+	if err := backend.RegisterApplication(a); err != nil {
 		return nil, err
 	}
 
 	sc := &serviceClient{
 		logger:  logging.GetLogger("epochtime/tendermint_mock"),
-		service: service,
+		backend: backend,
 		querier: a.QueryFactory().(*app.QueryFactory),
 	}
 	sc.notifier = pubsub.NewBrokerEx(func(ch channels.Channel) {
@@ -240,7 +239,7 @@ func New(ctx context.Context, service service.TendermintService) (ServiceClient,
 		}
 	})
 
-	genDoc, err := service.GetGenesisDocument(ctx)
+	genDoc, err := backend.GetGenesisDocument(ctx)
 	if err != nil {
 		return nil, err
 	}

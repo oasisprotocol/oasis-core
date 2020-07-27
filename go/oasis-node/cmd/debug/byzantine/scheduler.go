@@ -8,13 +8,13 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	"github.com/oasisprotocol/oasis-core/go/common/node"
-	"github.com/oasisprotocol/oasis-core/go/consensus/tendermint/service"
+	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
 	epochtime "github.com/oasisprotocol/oasis-core/go/epochtime/api"
 	scheduler "github.com/oasisprotocol/oasis-core/go/scheduler/api"
 	"github.com/oasisprotocol/oasis-core/go/worker/common/p2p"
 )
 
-func schedulerNextElectionHeight(svc service.TendermintService, epoch epochtime.EpochTime) (int64, error) {
+func schedulerNextElectionHeight(svc consensus.Backend, epoch epochtime.EpochTime) (int64, error) {
 	ch, sub, err := svc.Scheduler().WatchCommittees(context.Background())
 	if err != nil {
 		return -1, fmt.Errorf("failed to watch committees: %w", err)

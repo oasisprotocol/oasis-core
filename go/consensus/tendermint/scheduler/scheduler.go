@@ -17,7 +17,6 @@ import (
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
 	tmapi "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/api"
 	app "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/apps/scheduler"
-	"github.com/oasisprotocol/oasis-core/go/consensus/tendermint/service"
 	"github.com/oasisprotocol/oasis-core/go/scheduler/api"
 )
 
@@ -136,10 +135,10 @@ func (sc *serviceClient) DeliverEvent(ctx context.Context, height int64, tx tmty
 }
 
 // New constracts a new tendermint-based scheduler Backend instance.
-func New(ctx context.Context, service service.TendermintService) (ServiceClient, error) {
+func New(ctx context.Context, backend tmapi.Backend) (ServiceClient, error) {
 	// Initialze and register the tendermint service component.
 	a := app.New()
-	if err := service.RegisterApplication(a); err != nil {
+	if err := backend.RegisterApplication(a); err != nil {
 		return nil, err
 	}
 
