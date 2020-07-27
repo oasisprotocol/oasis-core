@@ -8,7 +8,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/quantity"
 )
 
-func TestBase10Fraction(t *testing.T) {
+func TestQuantityFrac(t *testing.T) {
 	require := require.New(t)
 
 	for _, t := range []struct {
@@ -32,7 +32,7 @@ func TestBase10Fraction(t *testing.T) {
 		{"10000000000000000001.0", quantity.NewFromUint64(10000000000000000001), 0},
 		{"0.0", quantity.NewFromUint64(0), 0},
 	} {
-		output := FractionBase10(*t.numerator, t.denominatorExp)
+		output := QuantityFrac(*t.numerator, t.denominatorExp)
 		require.Equal(t.expectedOutput, output, "obtained pretty print didn't match expected value")
 	}
 }

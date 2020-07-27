@@ -28,7 +28,7 @@ func ConvertToTokenAmount(amount quantity.Quantity, tokenValueExponent uint8) (s
 		return "", ErrInvalidTokenValueExponent
 	}
 
-	return prettyprint.FractionBase10(amount, tokenValueExponent), nil
+	return prettyprint.QuantityFrac(amount, tokenValueExponent), nil
 }
 
 // PrettyPrintAmount writes a pretty-printed representation of the given amount
@@ -76,5 +76,5 @@ func PrettyPrintCommissionRatePercentage(rateNumerator quantity.Quantity) string
 	// Reduce commission rate denominator's base-10 exponent by 2 to obtain the
 	// value in percentage.
 	denominatorExp := commissionRateDenominatorExponent - 2
-	return fmt.Sprintf("%s%%", prettyprint.FractionBase10(rateNumerator, denominatorExp))
+	return fmt.Sprintf("%s%%", prettyprint.QuantityFrac(rateNumerator, denominatorExp))
 }
