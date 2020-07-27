@@ -204,9 +204,9 @@ func (sc *runtimeImpl) Fixture() (*oasis.NetworkFixture, error) {
 			{Backend: database.BackendNameBadgerDB, Entity: 1},
 		},
 		ComputeWorkers: []oasis.ComputeWorkerFixture{
-			{Entity: 1},
-			{Entity: 1},
-			{Entity: 1},
+			{Entity: 1, Runtimes: []int{1}},
+			{Entity: 1, Runtimes: []int{1}},
+			{Entity: 1, Runtimes: []int{1}},
 		},
 		Sentries: []oasis.SentryFixture{},
 		Clients: []oasis.ClientFixture{
@@ -532,6 +532,8 @@ func RegisterScenarios() error {
 		KeymanagerUpgrade,
 		// RuntimeUpgrade test.
 		RuntimeUpgrade,
+		// HistoryReindex test.
+		HistoryReindex,
 	} {
 		if err := cmd.Register(s); err != nil {
 			return err

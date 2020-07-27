@@ -106,6 +106,10 @@ func (s *applicationState) NewContext(mode api.ContextMode, now time.Time) *api.
 	)
 }
 
+func (s *applicationState) LastRetainedVersion() (int64, error) {
+	return int64(s.statePruner.GetLastRetainedVersion()), nil
+}
+
 func (s *applicationState) Storage() storage.LocalBackend {
 	return s.storage
 }

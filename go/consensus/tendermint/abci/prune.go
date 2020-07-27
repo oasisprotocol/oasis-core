@@ -16,10 +16,13 @@ const (
 
 	pruneNone  = "none"
 	pruneKeepN = "keep_n"
+
+	// LogEventABCIPruneDelete is a log event value that signals an ABCI pruning
+	// delete event.
+	LogEventABCIPruneDelete = "tendermint/abci/prune"
 )
 
-// PruneStrategy is the strategy to use when pruning the ABCI mux iAVL
-// state.
+// PruneStrategy is the strategy to use when pruning the ABCI mux state.
 type PruneStrategy int
 
 const (
@@ -151,6 +154,7 @@ func (p *genericPruner) doPrune(ctx context.Context, latestVersion uint64) error
 		p.logger.Debug("Prune: Delete",
 			"latest_version", latestVersion,
 			"pruned_version", i,
+			logging.LogEvent, LogEventABCIPruneDelete,
 		)
 
 		err := p.ndb.Prune(ctx, i)

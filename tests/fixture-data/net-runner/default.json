@@ -194,7 +194,10 @@
                 "disable_check_tx": false,
                 "prune_num_kept": 0,
                 "tendermint_recover_corrupted_wal": false
-            }
+            },
+            "runtimes": [
+                1
+            ]
         },
         {
             "entity": 1,
@@ -207,7 +210,10 @@
                 "disable_check_tx": false,
                 "prune_num_kept": 0,
                 "tendermint_recover_corrupted_wal": false
-            }
+            },
+            "runtimes": [
+                1
+            ]
         },
         {
             "entity": 1,
@@ -220,7 +226,10 @@
                 "disable_check_tx": false,
                 "prune_num_kept": 0,
                 "tendermint_recover_corrupted_wal": false
-            }
+            },
+            "runtimes": [
+                1
+            ]
         }
     ],
     "clients": [

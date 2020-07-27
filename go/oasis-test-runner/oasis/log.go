@@ -2,6 +2,7 @@ package oasis
 
 import (
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
+	"github.com/oasisprotocol/oasis-core/go/consensus/tendermint/abci"
 	tendermint "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/api"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/log"
 	roothash "github.com/oasisprotocol/oasis-core/go/roothash/api"
@@ -78,4 +79,16 @@ func LogAssertUpgradeStartup() log.WatcherHandlerFactory {
 // handler was run based on JSON log output.
 func LogAssertUpgradeConsensus() log.WatcherHandlerFactory {
 	return LogAssertEvent(upgrade.LogEventConsensusUpgrade, "expected consensus upgrade did not run")
+}
+
+// LogEventABCIPruneDelete returns a handler which checks whether a ABCI pruning delete
+// was detected based on JSON log output.
+func LogEventABCIPruneDelete() log.WatcherHandlerFactory {
+	return LogAssertEvent(abci.LogEventABCIPruneDelete, "expected ABCI pruning to be done")
+}
+
+// LogAssertRoothashRoothashReindexing returns a handler witch checks wether roothash reindexing was
+// run based on JSON log output.
+func LogAssertRoothashRoothashReindexing() log.WatcherHandlerFactory {
+	return LogAssertEvent(roothash.LogEventHistoryReindexing, "roothash runtime reindexing not detected")
 }

@@ -79,7 +79,6 @@ func (sc *multipleRuntimesImpl) Fixture() (*oasis.NetworkFixture, error) {
 	for i := 1; i <= numComputeRuntimes; i++ {
 		// Increase LSB by 1.
 		id[len(id)-1]++
-
 		newRtFixture := oasis.RuntimeFixture{
 			ID:         id,
 			Kind:       registry.KindCompute,
@@ -119,11 +118,22 @@ func (sc *multipleRuntimesImpl) Fixture() (*oasis.NetworkFixture, error) {
 		f.Runtimes = append(f.Runtimes, newRtFixture)
 	}
 
+	var computeRuntimes []int
+	for id, rt := range f.Runtimes {
+		if rt.Kind == registry.KindCompute {
+			computeRuntimes = append(computeRuntimes, id)
+		}
+	}
 	// Use numComputeWorkers compute worker fixtures.
 	numComputeWorkers, _ := sc.Flags.GetInt(cfgNumComputeWorkers)
 	f.ComputeWorkers = []oasis.ComputeWorkerFixture{}
 	for i := 0; i < numComputeWorkers; i++ {
-		f.ComputeWorkers = append(f.ComputeWorkers, oasis.ComputeWorkerFixture{Entity: 1})
+		f.ComputeWorkers = append(f.ComputeWorkers,
+			oasis.ComputeWorkerFixture{
+				Entity:   1,
+				Runtimes: computeRuntimes,
+			},
+		)
 	}
 
 	return f, nil

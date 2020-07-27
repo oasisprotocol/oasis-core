@@ -381,8 +381,7 @@ type ComputeWorkerFixture struct {
 
 	LogWatcherHandlerFactories []log.WatcherHandlerFactory `json:"-"`
 
-	// Runtimes contains the indexes of the runtimes to enable. Leave
-	// empty or nil for the default behaviour (i.e. include all runtimes).
+	// Runtimes contains the indexes of the runtimes to enable.
 	Runtimes []int `json:"runtimes,omitempty"`
 }
 
