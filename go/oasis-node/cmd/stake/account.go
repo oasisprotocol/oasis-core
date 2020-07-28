@@ -140,7 +140,7 @@ func doAccountTransfer(cmd *cobra.Command, args []string) {
 	nonce, fee := cmdConsensus.GetTxNonceAndFee()
 	tx := staking.NewTransferTx(nonce, fee, &xfer)
 
-	cmdConsensus.SignAndSaveTx(tx)
+	cmdConsensus.SignAndSaveTx(context.Background(), tx)
 }
 
 func doAccountBurn(cmd *cobra.Command, args []string) {
@@ -162,7 +162,7 @@ func doAccountBurn(cmd *cobra.Command, args []string) {
 	nonce, fee := cmdConsensus.GetTxNonceAndFee()
 	tx := staking.NewBurnTx(nonce, fee, &burn)
 
-	cmdConsensus.SignAndSaveTx(tx)
+	cmdConsensus.SignAndSaveTx(context.Background(), tx)
 }
 
 func doAccountEscrow(cmd *cobra.Command, args []string) {
@@ -190,7 +190,7 @@ func doAccountEscrow(cmd *cobra.Command, args []string) {
 	nonce, fee := cmdConsensus.GetTxNonceAndFee()
 	tx := staking.NewAddEscrowTx(nonce, fee, &escrow)
 
-	cmdConsensus.SignAndSaveTx(tx)
+	cmdConsensus.SignAndSaveTx(context.Background(), tx)
 }
 
 func doAccountReclaimEscrow(cmd *cobra.Command, args []string) {
@@ -218,7 +218,7 @@ func doAccountReclaimEscrow(cmd *cobra.Command, args []string) {
 	nonce, fee := cmdConsensus.GetTxNonceAndFee()
 	tx := staking.NewReclaimEscrowTx(nonce, fee, &reclaim)
 
-	cmdConsensus.SignAndSaveTx(tx)
+	cmdConsensus.SignAndSaveTx(context.Background() ,tx)
 }
 
 func scanRateStep(dst *staking.CommissionRateStep, raw string) error {
@@ -296,7 +296,7 @@ func doAccountAmendCommissionSchedule(cmd *cobra.Command, args []string) {
 	nonce, fee := cmdConsensus.GetTxNonceAndFee()
 	tx := staking.NewAmendCommissionScheduleTx(nonce, fee, &amendCommissionSchedule)
 
-	cmdConsensus.SignAndSaveTx(tx)
+	cmdConsensus.SignAndSaveTx(context.Background(), tx)
 }
 
 func registerAccountCmd() {

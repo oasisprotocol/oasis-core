@@ -306,7 +306,7 @@ func doGenRegister(cmd *cobra.Command, args []string) {
 	nonce, fee := cmdConsensus.GetTxNonceAndFee()
 	tx := registry.NewRegisterEntityTx(nonce, fee, signed)
 
-	cmdConsensus.SignAndSaveTx(tx)
+	cmdConsensus.SignAndSaveTx(context.Background(), tx)
 }
 
 func doGenDeregister(cmd *cobra.Command, args []string) {
@@ -320,7 +320,7 @@ func doGenDeregister(cmd *cobra.Command, args []string) {
 	nonce, fee := cmdConsensus.GetTxNonceAndFee()
 	tx := registry.NewDeregisterEntityTx(nonce, fee)
 
-	cmdConsensus.SignAndSaveTx(tx)
+	cmdConsensus.SignAndSaveTx(context.Background(), tx)
 }
 
 func doList(cmd *cobra.Command, args []string) {

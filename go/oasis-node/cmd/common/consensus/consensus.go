@@ -2,6 +2,7 @@
 package consensus
 
 import (
+	"context"
 	"encoding/json"
 	"io/ioutil"
 	"os"
@@ -89,7 +90,7 @@ func GetTxNonceAndFee() (uint64, *transaction.Fee) {
 	return nonce, &fee
 }
 
-func SignAndSaveTx(tx *transaction.Transaction) {
+func SignAndSaveTx(ctx context.Context, tx *transaction.Transaction) {
 	if viper.GetBool(CfgTxUnsigned) {
 		rawUnsignedTx := cbor.Marshal(tx)
 		if err := ioutil.WriteFile(viper.GetString(CfgTxFile), rawUnsignedTx, 0o600); err != nil {
