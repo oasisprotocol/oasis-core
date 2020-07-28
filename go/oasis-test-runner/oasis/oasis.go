@@ -5,6 +5,7 @@ import (
 	"context"
 	"crypto"
 	"crypto/x509"
+	"encoding/json"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -33,6 +34,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/env"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/log"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/oasis/cli"
+	staking "github.com/oasisprotocol/oasis-core/go/staking/api"
 )
 
 const (
@@ -45,9 +47,10 @@ const (
 	defaultEpochtimeTendermintInterval = 30
 	defaultHaltEpoch                   = math.MaxUint64
 
-	logNodeFile    = "node.log"
-	logConsoleFile = "console.log"
-	exportsDir     = "exports"
+	logNodeFile        = "node.log"
+	logConsoleFile     = "console.log"
+	exportsDir         = "exports"
+	stakingGenesisFile = "staking_genesis.json"
 
 	maxNodes = 32 // Arbitrary
 )
@@ -278,8 +281,9 @@ type NetworkCfg struct { // nolint: maligned
 	// IAS is the Network IAS configuration.
 	IAS IASCfg `json:"ias"`
 
-	// StakingGenesis is the name of a file with a staking genesis document to use if GenesisFile isn't set.
-	StakingGenesis string `json:"staking_genesis"`
+	// StakingGenesis is the staking genesis data to be included if
+	// GenesisFile is not set.
+	StakingGenesis *staking.Genesis `json:"StakingGenesis,omitempty"`
 
 	// A set of log watcher handler factories used by default on all nodes
 	// created in this test network.
@@ -832,8 +836,22 @@ func (net *Network) makeGenesis() error {
 		}
 		args = append(args, v.toGenesisArgs()...)
 	}
-	if net.cfg.StakingGenesis != "" {
-		args = append(args, "--staking", net.cfg.StakingGenesis)
+	if net.cfg.StakingGenesis != nil {
+		path := filepath.Join(net.baseDir.String(), stakingGenesisFile)
+		b, err := json.Marshal(net.cfg.StakingGenesis)
+		if err != nil {
+			net.logger.Error("failed to serialize staking genesis file",
+				"err", err,
+			)
+			return fmt.Errorf("oasis: failed to serialize staking genesis file: %w", err)
+		}
+		if err = ioutil.WriteFile(path, b, 0o600); err != nil {
+			net.logger.Error("failed to write staking genesis file",
+				"err", err,
+			)
+			return fmt.Errorf("oasis: failed to write staking genesis file: %w", err)
+		}
+		args = append(args, "--staking", path)
 	}
 	if len(net.byzantine) > 0 {
 		// If the byzantine node is in use, disable max node expiration

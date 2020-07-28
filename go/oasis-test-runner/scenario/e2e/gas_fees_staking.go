@@ -13,6 +13,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/oasis"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/scenario"
 	staking "github.com/oasisprotocol/oasis-core/go/staking/api"
+	stakingTests "github.com/oasisprotocol/oasis-core/go/staking/tests/debug"
 )
 
 var (
@@ -63,9 +64,32 @@ func (sc *gasFeesImpl) Fixture() (*oasis.NetworkFixture, error) {
 
 	return &oasis.NetworkFixture{
 		Network: oasis.NetworkCfg{
-			NodeBinary:              f.Network.NodeBinary,
-			EpochtimeMock:           true,
-			StakingGenesis:          "tests/fixture-data/gas-fees/staking-genesis.json",
+			NodeBinary:    f.Network.NodeBinary,
+			EpochtimeMock: true,
+			StakingGenesis: &staking.Genesis{
+				Parameters: staking.ConsensusParameters{
+					DebondingInterval: 1,
+					GasCosts: transaction.Costs{
+						staking.GasOpTransfer:      10,
+						staking.GasOpBurn:          10,
+						staking.GasOpAddEscrow:     10,
+						staking.GasOpReclaimEscrow: 10,
+					},
+					FeeSplitWeightPropose:     stakingTests.QtyFromInt(1),
+					FeeSplitWeightVote:        stakingTests.QtyFromInt(2),
+					FeeSplitWeightNextPropose: stakingTests.QtyFromInt(2),
+				},
+				TotalSupply:   stakingTests.QtyFromInt(1200),
+				CommonPool:    stakingTests.QtyFromInt(150),
+				LastBlockFees: stakingTests.QtyFromInt(50),
+				Ledger: map[staking.Address]*staking.Account{
+					EntityAccount: {
+						General: staking.GeneralAccount{
+							Balance: stakingTests.QtyFromInt(1000),
+						},
+					},
+				},
+			},
 			ConsensusGasCostsTxByte: 0, // So we can control gas more easily.
 		},
 		Entities: []oasis.EntityCfg{

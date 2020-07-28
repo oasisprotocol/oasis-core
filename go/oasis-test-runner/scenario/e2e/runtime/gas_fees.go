@@ -6,6 +6,9 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/env"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/oasis"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/scenario"
+	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/scenario/e2e"
+	staking "github.com/oasisprotocol/oasis-core/go/staking/api"
+	stakingTests "github.com/oasisprotocol/oasis-core/go/staking/tests/debug"
 )
 
 // GasFeesRuntimes is the runtime gas fees scenario.
@@ -35,7 +38,61 @@ func (sc *gasFeesRuntimesImpl) Fixture() (*oasis.NetworkFixture, error) {
 	// Use deterministic identities as we need to allocate funds to nodes.
 	f.Network.DeterministicIdentities = true
 	// Give our nodes some stake.
-	f.Network.StakingGenesis = "tests/fixture-data/gas-fees-runtimes/staking-genesis.json"
+	f.Network.StakingGenesis = &staking.Genesis{
+		Parameters: staking.ConsensusParameters{
+			FeeSplitWeightPropose:     stakingTests.QtyFromInt(2),
+			FeeSplitWeightVote:        stakingTests.QtyFromInt(1),
+			FeeSplitWeightNextPropose: stakingTests.QtyFromInt(1),
+		},
+		TotalSupply: stakingTests.QtyFromInt(90000000),
+		Ledger: map[staking.Address]*staking.Account{
+			e2e.LockupAccount: {
+				General: staking.GeneralAccount{
+					Balance: stakingTests.QtyFromInt(10000000),
+				},
+			},
+			e2e.MysteryAccount0: {
+				General: staking.GeneralAccount{
+					Balance: stakingTests.QtyFromInt(10000000),
+				},
+			},
+			e2e.MysteryAccount1: {
+				General: staking.GeneralAccount{
+					Balance: stakingTests.QtyFromInt(10000000),
+				},
+			},
+			e2e.MysteryAccount2: {
+				General: staking.GeneralAccount{
+					Balance: stakingTests.QtyFromInt(10000000),
+				},
+			},
+			e2e.MysteryAccount3: {
+				General: staking.GeneralAccount{
+					Balance: stakingTests.QtyFromInt(10000000),
+				},
+			},
+			e2e.MysteryAccount4: {
+				General: staking.GeneralAccount{
+					Balance: stakingTests.QtyFromInt(10000000),
+				},
+			},
+			e2e.MysteryAccount5: {
+				General: staking.GeneralAccount{
+					Balance: stakingTests.QtyFromInt(10000000),
+				},
+			},
+			e2e.MysteryAccount6: {
+				General: staking.GeneralAccount{
+					Balance: stakingTests.QtyFromInt(10000000),
+				},
+			},
+			e2e.MysteryAccount7: {
+				General: staking.GeneralAccount{
+					Balance: stakingTests.QtyFromInt(10000000),
+				},
+			},
+		},
+	}
 	// Update validators to require fee payments.
 	for i := range f.Validators {
 		f.Validators[i].Consensus.MinGasPrice = gasPrice

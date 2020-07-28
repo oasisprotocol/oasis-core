@@ -70,6 +70,14 @@ var (
 	DebugStateDestAddress = api.NewAddress(destSigner.Public())
 )
 
+func AddressFromString(s string) api.Address {
+	var addr api.Address
+	if err := addr.UnmarshalText([]byte(s)); err != nil {
+		panic(err)
+	}
+	return addr
+}
+
 func QtyFromInt(n int) quantity.Quantity {
 	q := quantity.NewQuantity()
 	if err := q.FromBigInt(big.NewInt(int64(n))); err != nil {

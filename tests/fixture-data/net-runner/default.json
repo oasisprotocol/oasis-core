@@ -15,8 +15,7 @@
         "deterministic_identities": false,
         "ias": {
             "mock": true
-        },
-        "staking_genesis": ""
+        }
     },
     "entities": [
         {

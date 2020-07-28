@@ -21,6 +21,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/scenario"
 	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
 	staking "github.com/oasisprotocol/oasis-core/go/staking/api"
+	stakingTests "github.com/oasisprotocol/oasis-core/go/staking/tests/debug"
 )
 
 // RuntimeDynamic is the dynamic runtime registration scenario.
@@ -52,7 +53,19 @@ func (sc *runtimeDynamicImpl) Fixture() (*oasis.NetworkFixture, error) {
 	}
 
 	// Allocate stake and set runtime thresholds.
-	f.Network.StakingGenesis = "tests/fixture-data/runtime-dynamic/staking-genesis.json"
+	f.Network.StakingGenesis = &staking.Genesis{
+		Parameters: staking.ConsensusParameters{
+			Thresholds: map[staking.ThresholdKind]quantity.Quantity{
+				staking.KindEntity:            stakingTests.QtyFromInt(0),
+				staking.KindNodeValidator:     stakingTests.QtyFromInt(0),
+				staking.KindNodeCompute:       stakingTests.QtyFromInt(0),
+				staking.KindNodeStorage:       stakingTests.QtyFromInt(0),
+				staking.KindNodeKeyManager:    stakingTests.QtyFromInt(0),
+				staking.KindRuntimeCompute:    stakingTests.QtyFromInt(1000),
+				staking.KindRuntimeKeyManager: stakingTests.QtyFromInt(1000),
+			},
+		},
+	}
 	// We need IAS proxy to use the registry as we are registering runtimes dynamically.
 	f.Network.IAS.UseRegistry = true
 	// Avoid unexpected blocks.
