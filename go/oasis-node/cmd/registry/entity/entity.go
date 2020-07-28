@@ -440,4 +440,5 @@ func init() {
 
 	registerOrDeregisterFlags.AddFlagSet(cmdFlags.DebugTestEntityFlags)
 	registerOrDeregisterFlags.AddFlagSet(cmdConsensus.TxFlags)
+	registerOrDeregisterFlags.AddFlagSet(cmdFlags.AssumeYesFlag)
 }

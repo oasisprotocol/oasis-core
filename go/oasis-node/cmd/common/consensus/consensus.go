@@ -12,6 +12,7 @@ import (
 	"github.com/spf13/viper"
 
 	"github.com/oasisprotocol/oasis-core/go/common/cbor"
+	signerFile "github.com/oasisprotocol/oasis-core/go/common/crypto/signature/signers/file"
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
 	"github.com/oasisprotocol/oasis-core/go/consensus/api/transaction"
 	genesisAPI "github.com/oasisprotocol/oasis-core/go/genesis/api"
@@ -121,6 +122,13 @@ func SignAndSaveTx(ctx context.Context, tx *transaction.Transaction) {
 
 	fmt.Printf("You are about to sign the following transaction:\n")
 	tx.PrettyPrint(ctx, "  ", os.Stdout)
+
+	if !cmdFlags.AssumeYes() && cmdSigner.Backend() == signerFile.SignerName {
+		fmt.Printf("\nAre you sure you want to continue? (y)es/(n)o ")
+		if !cmdCommon.GetUserConfirmation() {
+			os.Exit(1)
+		}
+	}
 
 	sigTx, err := transaction.Sign(signer, tx)
 	if err != nil {

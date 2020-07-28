@@ -636,6 +636,7 @@ func Register(parentCmd *cobra.Command) {
 	genUpdateCmd.Flags().AddFlagSet(policyFileFlag)
 	genUpdateCmd.Flags().AddFlagSet(policySigFileFlag)
 	genUpdateCmd.Flags().AddFlagSet(cmdConsensus.TxFlags)
+	genUpdateCmd.Flags().AddFlagSet(cmdFlags.AssumeYesFlag)
 
 	parentCmd.AddCommand(keyManagerCmd)
 }

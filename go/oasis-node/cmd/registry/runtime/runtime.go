@@ -590,6 +590,7 @@ func init() {
 
 	registerFlags.AddFlagSet(cmdFlags.DebugTestEntityFlags)
 	registerFlags.AddFlagSet(cmdConsensus.TxFlags)
+	registerFlags.AddFlagSet(cmdFlags.AssumeYesFlag)
 
 	// List Runtimes flags.
 	runtimeListFlags.Bool(CfgIncludeSuspended, false, "Use to include suspended runtimes")
