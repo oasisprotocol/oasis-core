@@ -22,10 +22,16 @@ import (
 	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
 	staking "github.com/oasisprotocol/oasis-core/go/staking/api"
 	stakingTests "github.com/oasisprotocol/oasis-core/go/staking/tests/debug"
+	storage "github.com/oasisprotocol/oasis-core/go/storage/api"
 )
 
 // RuntimeDynamic is the dynamic runtime registration scenario.
 var RuntimeDynamic scenario.Scenario = newRuntimeDynamicImpl()
+
+const (
+	runtimeDynamicTestKey   = "genesis state"
+	runtimeDynamicTestValue = "hello world"
+)
 
 type runtimeDynamicImpl struct {
 	runtimeImpl
@@ -76,7 +82,12 @@ func (sc *runtimeDynamicImpl) Fixture() (*oasis.NetworkFixture, error) {
 	}
 	// Test storage genesis state for compute runtimes. Also test with a non-zero round.
 	f.Runtimes[1].GenesisRound = 42
-	f.Runtimes[1].GenesisState = "tests/fixture-data/runtime-dynamic/runtime-genesis-state.json"
+	f.Runtimes[1].GenesisState = storage.WriteLog{
+		{
+			Key:   []byte(runtimeDynamicTestKey),
+			Value: []byte(runtimeDynamicTestValue),
+		},
+	}
 
 	return f, nil
 }
@@ -253,14 +264,14 @@ func (sc *runtimeDynamicImpl) Run(childEnv *env.Env) error { // nolint: gocyclo
 			sc.Logger.Info("checking if genesis state has been initialized")
 			var rawRsp cbor.RawMessage
 			var err error
-			if rawRsp, err = sc.submitRuntimeTx(ctx, runtimeID, "get", "genesis state"); err != nil {
+			if rawRsp, err = sc.submitRuntimeTx(ctx, runtimeID, "get", runtimeDynamicTestKey); err != nil {
 				return fmt.Errorf("failed to submit get tx to runtime: %w", err)
 			}
 			var rsp string
 			if err = cbor.Unmarshal(rawRsp, &rsp); err != nil {
 				return fmt.Errorf("failed to unmarshal response from runtime: %w", err)
 			}
-			if rsp != "hello world" {
+			if rsp != runtimeDynamicTestValue {
 				return fmt.Errorf("incorrect value returned by runtime: %s", rsp)
 			}
 		}

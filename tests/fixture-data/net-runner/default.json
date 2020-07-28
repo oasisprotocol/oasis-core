@@ -36,7 +36,7 @@
             "binaries": [
                 "simple-keymanager"
             ],
-            "genesis_state": "",
+            "genesis_state_path": "",
             "genesis_round": 0,
             "executor": {
                 "group_size": 0,
@@ -86,7 +86,6 @@
             "binaries": [
                 "simple-keyvalue"
             ],
-            "genesis_state": "",
             "genesis_round": 0,
             "executor": {
                 "group_size": 2,

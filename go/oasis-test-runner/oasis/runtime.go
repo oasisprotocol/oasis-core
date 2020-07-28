@@ -1,7 +1,9 @@
 package oasis
 
 import (
+	"encoding/json"
 	"fmt"
+	"io/ioutil"
 	"os"
 	"path/filepath"
 	"time"
@@ -14,9 +16,13 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/env"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/oasis/cli"
 	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
+	storage "github.com/oasisprotocol/oasis-core/go/storage/api"
 )
 
-const rtDescriptorFile = "runtime_genesis.json"
+const (
+	rtDescriptorFile = "runtime_genesis.json"
+	rtStateFile      = "runtime_genesis_state.json"
+)
 
 // Runtime is an Oasis runtime.
 type Runtime struct { // nolint: maligned
@@ -46,9 +52,10 @@ type RuntimeCfg struct { // nolint: maligned
 	TEEHardware node.TEEHardware
 	MrSigner    *sgx.MrSigner
 
-	Binaries     []string
-	GenesisState string
-	GenesisRound uint64
+	Binaries         []string
+	GenesisState     storage.WriteLog
+	GenesisStatePath string
+	GenesisRound     uint64
 
 	Executor     registry.ExecutorParameters
 	Merge        registry.MergeParameters
@@ -136,9 +143,22 @@ func (net *Network) NewRuntime(cfg *RuntimeCfg) (*Runtime, error) {
 		return nil, fmt.Errorf("oasis/runtime: failed to create runtime subdir: %w", err)
 	}
 
-	if cfg.GenesisState != "" {
+	genesisStatePath := cfg.GenesisStatePath
+	if cfg.GenesisState != nil && genesisStatePath != "" {
+		return nil, fmt.Errorf("oasis/runtime: inline genesis state and file genesis state set")
+	}
+	if cfg.GenesisState != nil || genesisStatePath != "" {
 		descriptor.Genesis.Round = cfg.GenesisRound
-		// TODO: Support inline genesis state.
+		if cfg.GenesisState != nil {
+			genesisStatePath = filepath.Join(rtDir.String(), rtStateFile)
+			var b []byte
+			if b, err = marshalWriteLog(cfg.GenesisState); err != nil {
+				return nil, fmt.Errorf("oasis/runtime: failed to serialize runtime genesis state: %w", err)
+			}
+			if err = ioutil.WriteFile(genesisStatePath, b, 0o600); err != nil {
+				return nil, fmt.Errorf("oasis/runtime: failed to write runtime genesis file: %w", err)
+			}
+		}
 	}
 	var mrEnclaves []*sgx.MrEnclave
 	if cfg.TEEHardware == node.TEEHardwareIntelSGX {
@@ -166,7 +186,7 @@ func (net *Network) NewRuntime(cfg *RuntimeCfg) (*Runtime, error) {
 		"--"+cmdCommon.CfgDataDir, rtDir.String(),
 	)
 	extraArgs = append(extraArgs, cfg.Entity.toGenesisArgs()...)
-	if err = cli.Registry.InitGenesis(descriptor, cfg.GenesisState, extraArgs...); err != nil {
+	if err = cli.Registry.InitGenesis(descriptor, genesisStatePath, extraArgs...); err != nil {
 		net.logger.Error("failed to provision runtime",
 			"err", err,
 		)
@@ -184,7 +204,7 @@ func (net *Network) NewRuntime(cfg *RuntimeCfg) (*Runtime, error) {
 		pruner:             cfg.Pruner,
 		excludeFromGenesis: cfg.ExcludeFromGenesis,
 		descriptor:         descriptor,
-		genesisState:       cfg.GenesisState,
+		genesisState:       genesisStatePath,
 	}
 	net.runtimes = append(net.runtimes, rt)
 
@@ -204,4 +224,20 @@ func deriveMrEnclave(f string) (*sgx.MrEnclave, error) {
 	}
 
 	return &m, nil
+}
+
+func marshalWriteLog(wl storage.WriteLog) ([]byte, error) {
+	// Arrrrrgh.  mkvs/writelog.LogEntry has a custom UnmarshalJSON
+	// but no MarshalJSON equivalent.
+	tmp := make([][2][]byte, 0, len(wl))
+	for _, v := range wl {
+		tmp = append(tmp, [2][]byte{v.Key, v.Value})
+	}
+
+	b, err := json.Marshal(tmp)
+	if err != nil {
+		return nil, fmt.Errorf("failed to serialize write log: %w", err)
+	}
+
+	return b, nil
 }
