@@ -21,13 +21,25 @@ WORKDIR=$PWD
 
 echo ${WORKDIR}
 
-# Run the consensusm simulator.
+CONSIM_GENESIS=/tmp/consim-genesis.json
+
+# Generate the consensus sim genesis document.
+${WORKDIR}/go/oasis-node/oasis-node \
+    genesis init \
+    --debug.test_entity \
+    --debug.dont_blame_oasis \
+    --chain.id test \
+    --debug.allow_test_keys \
+    --staking.token_symbol BUF \
+    -g ${CONSIM_GENESIS}
+
+# Run the consensus simulator.
 ${WORKDIR}/go/oasis-node/oasis-node \
     debug consim \
     --datadir /tmp/consim-datadir \
     --log.level DEBUG \
     --log.file /tmp/consim-datadir/consim.log \
-    -g ${WORKDIR}/tests/fixture-data/consim/genesis.json \
+    -g ${CONSIM_GENESIS} \
     --debug.dont_blame_oasis \
     --debug.allow_test_keys \
     --consim.workload xfer \
