@@ -4,6 +4,7 @@ package consensus
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"io/ioutil"
 	"os"
 
@@ -117,6 +118,9 @@ func SignAndSaveTx(ctx context.Context, tx *transaction.Transaction) {
 		os.Exit(1)
 	}
 	defer signer.Reset()
+
+	fmt.Printf("You are about to sign the following transaction:\n")
+	tx.PrettyPrint(ctx, "  ", os.Stdout)
 
 	sigTx, err := transaction.Sign(signer, tx)
 	if err != nil {

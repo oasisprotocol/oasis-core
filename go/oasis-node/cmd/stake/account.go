@@ -10,6 +10,7 @@ import (
 	flag "github.com/spf13/pflag"
 	"github.com/spf13/viper"
 
+	genesisAPI "github.com/oasisprotocol/oasis-core/go/genesis/api"
 	cmdCommon "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common"
 	cmdConsensus "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/consensus"
 	cmdGrpc "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/grpc"
@@ -90,6 +91,15 @@ var (
 	}
 )
 
+// getCtxWithTokenInfo returns a new context with values that contain token
+// information (ticker symbol, value base-10 exponent).
+func getCtxWithTokenInfo(genesis *genesisAPI.Document) context.Context {
+	ctx := context.Background()
+	ctx = context.WithValue(ctx, staking.PrettyPrinterContextKeyTokenSymbol, genesis.Staking.TokenSymbol)
+	ctx = context.WithValue(ctx, staking.PrettyPrinterContextKeyTokenValueExponent, genesis.Staking.TokenValueExponent)
+	return ctx
+}
+
 func doAccountInfo(cmd *cobra.Command, args []string) {
 	if err := cmdCommon.Init(); err != nil {
 		cmdCommon.EarlyLogAndExit(err)
@@ -120,7 +130,7 @@ func doAccountTransfer(cmd *cobra.Command, args []string) {
 		cmdCommon.EarlyLogAndExit(err)
 	}
 
-	cmdConsensus.InitGenesis()
+	genesis := cmdConsensus.InitGenesis()
 	cmdConsensus.AssertTxFileOK()
 
 	var xfer staking.Transfer
@@ -140,7 +150,7 @@ func doAccountTransfer(cmd *cobra.Command, args []string) {
 	nonce, fee := cmdConsensus.GetTxNonceAndFee()
 	tx := staking.NewTransferTx(nonce, fee, &xfer)
 
-	cmdConsensus.SignAndSaveTx(context.Background(), tx)
+	cmdConsensus.SignAndSaveTx(getCtxWithTokenInfo(genesis), tx)
 }
 
 func doAccountBurn(cmd *cobra.Command, args []string) {
@@ -148,7 +158,7 @@ func doAccountBurn(cmd *cobra.Command, args []string) {
 		cmdCommon.EarlyLogAndExit(err)
 	}
 
-	cmdConsensus.InitGenesis()
+	genesis := cmdConsensus.InitGenesis()
 	cmdConsensus.AssertTxFileOK()
 
 	var burn staking.Burn
@@ -162,7 +172,7 @@ func doAccountBurn(cmd *cobra.Command, args []string) {
 	nonce, fee := cmdConsensus.GetTxNonceAndFee()
 	tx := staking.NewBurnTx(nonce, fee, &burn)
 
-	cmdConsensus.SignAndSaveTx(context.Background(), tx)
+	cmdConsensus.SignAndSaveTx(getCtxWithTokenInfo(genesis), tx)
 }
 
 func doAccountEscrow(cmd *cobra.Command, args []string) {
@@ -170,7 +180,7 @@ func doAccountEscrow(cmd *cobra.Command, args []string) {
 		cmdCommon.EarlyLogAndExit(err)
 	}
 
-	cmdConsensus.InitGenesis()
+	genesis := cmdConsensus.InitGenesis()
 	cmdConsensus.AssertTxFileOK()
 
 	var escrow staking.Escrow
@@ -190,7 +200,7 @@ func doAccountEscrow(cmd *cobra.Command, args []string) {
 	nonce, fee := cmdConsensus.GetTxNonceAndFee()
 	tx := staking.NewAddEscrowTx(nonce, fee, &escrow)
 
-	cmdConsensus.SignAndSaveTx(context.Background(), tx)
+	cmdConsensus.SignAndSaveTx(getCtxWithTokenInfo(genesis), tx)
 }
 
 func doAccountReclaimEscrow(cmd *cobra.Command, args []string) {
@@ -198,7 +208,7 @@ func doAccountReclaimEscrow(cmd *cobra.Command, args []string) {
 		cmdCommon.EarlyLogAndExit(err)
 	}
 
-	cmdConsensus.InitGenesis()
+	genesis := cmdConsensus.InitGenesis()
 	cmdConsensus.AssertTxFileOK()
 
 	var reclaim staking.ReclaimEscrow
@@ -218,7 +228,7 @@ func doAccountReclaimEscrow(cmd *cobra.Command, args []string) {
 	nonce, fee := cmdConsensus.GetTxNonceAndFee()
 	tx := staking.NewReclaimEscrowTx(nonce, fee, &reclaim)
 
-	cmdConsensus.SignAndSaveTx(context.Background() ,tx)
+	cmdConsensus.SignAndSaveTx(getCtxWithTokenInfo(genesis), tx)
 }
 
 func scanRateStep(dst *staking.CommissionRateStep, raw string) error {
@@ -260,7 +270,7 @@ func doAccountAmendCommissionSchedule(cmd *cobra.Command, args []string) {
 		cmdCommon.EarlyLogAndExit(err)
 	}
 
-	cmdConsensus.InitGenesis()
+	genesis := cmdConsensus.InitGenesis()
 	cmdConsensus.AssertTxFileOK()
 
 	var amendCommissionSchedule staking.AmendCommissionSchedule
@@ -296,7 +306,7 @@ func doAccountAmendCommissionSchedule(cmd *cobra.Command, args []string) {
 	nonce, fee := cmdConsensus.GetTxNonceAndFee()
 	tx := staking.NewAmendCommissionScheduleTx(nonce, fee, &amendCommissionSchedule)
 
-	cmdConsensus.SignAndSaveTx(context.Background(), tx)
+	cmdConsensus.SignAndSaveTx(getCtxWithTokenInfo(genesis), tx)
 }
 
 func registerAccountCmd() {
