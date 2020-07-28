@@ -37,7 +37,7 @@ type p2pRecvHandler struct {
 }
 
 // AuthenticatePeer implements p2p Handler.
-func (h *p2pRecvHandler) AuthenticatePeer(peerID signature.PublicKey) error {
+func (h *p2pRecvHandler) AuthenticatePeer(peerID signature.PublicKey, msg *p2p.Message) error {
 	// The Byzantine node itself isn't especially robust. We assume that
 	// the other nodes are honest.
 	return nil
