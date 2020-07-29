@@ -5,10 +5,8 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"io/ioutil"
 	"math"
-	"math/big"
 	"os"
 	"strconv"
 	"time"
@@ -23,7 +21,6 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/entity"
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
 	"github.com/oasisprotocol/oasis-core/go/common/node"
-	"github.com/oasisprotocol/oasis-core/go/common/quantity"
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
 	"github.com/oasisprotocol/oasis-core/go/consensus/api/transaction"
 	consensusGenesis "github.com/oasisprotocol/oasis-core/go/consensus/genesis"
@@ -34,12 +31,11 @@ import (
 	keymanager "github.com/oasisprotocol/oasis-core/go/keymanager/api"
 	cmdCommon "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common"
 	"github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/flags"
+	cmdCmnGenesis "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/genesis"
 	cmdGrpc "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/grpc"
 	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
 	roothash "github.com/oasisprotocol/oasis-core/go/roothash/api"
 	scheduler "github.com/oasisprotocol/oasis-core/go/scheduler/api"
-	staking "github.com/oasisprotocol/oasis-core/go/staking/api"
-	stakingTests "github.com/oasisprotocol/oasis-core/go/staking/tests/debug"
 )
 
 const (
@@ -193,9 +189,9 @@ func doInitGenesis(cmd *cobra.Command, args []string) {
 		return
 	}
 
-	staking := viper.GetString(cfgStaking)
-	if err := AppendStakingState(doc, staking, logger); err != nil {
-		logger.Error("failed to parse staking genesis state",
+	stakingStatePath := viper.GetString(cfgStaking)
+	if err := appendStakingState(doc, stakingStatePath); err != nil {
+		logger.Error("failed to append staking genesis state",
 			"err", err,
 		)
 		return
@@ -501,44 +497,27 @@ func AppendKeyManagerState(doc *genesis.Document, statuses []string, l *logging.
 	return nil
 }
 
-// AppendStakingState appends the staking genesis state given a state file name.
-func AppendStakingState(doc *genesis.Document, state string, l *logging.Logger) error {
-	stakingSt := staking.Genesis{
-		Ledger: make(map[staking.Address]*staking.Account),
+func appendStakingState(doc *genesis.Document, statePath string) error {
+	var (
+		st  *cmdCmnGenesis.AppendableStakingState
+		err error
+	)
+
+	switch statePath {
+	case "":
+		st, err = cmdCmnGenesis.NewAppendableStakingState()
+	default:
+		st, err = cmdCmnGenesis.NewAppendableStakingStateFromFile(statePath)
 	}
-	if err := stakingSt.Parameters.FeeSplitWeightVote.FromInt64(1); err != nil {
-		return fmt.Errorf("couldn't set default fee split: %w", err)
+	if err != nil {
+		return err
 	}
 
-	if state != "" {
-		b, err := ioutil.ReadFile(state)
-		if err != nil {
-			l.Error("failed to load genesis staking status",
-				"err", err,
-				"filename", state,
-			)
-			return err
-		}
-
-		if err = json.Unmarshal(b, &stakingSt); err != nil {
-			l.Error("failed to parse genesis staking status",
-				"err", err,
-				"filename", state,
-			)
-			return err
-		}
+	// Apply config based overrides to the state.
+	st.DebugTestEntity = flags.DebugTestEntity()
+	if tokenSymbol := viper.GetString(CfgStakingTokenSymbol); tokenSymbol != "" {
+		st.State.TokenSymbol = tokenSymbol
 	}
-
-	tokenSymbol := viper.GetString(CfgStakingTokenSymbol)
-	// NOTE: Token symbol set in CfgStakingTokenSymbol has preference over the
-	// one read from the staking state file.
-	if tokenSymbol != "" {
-		stakingSt.TokenSymbol = tokenSymbol
-	}
-	if stakingSt.TokenSymbol == "" {
-		return errors.New("token symbol not set")
-	}
-
 	// NOTE: The viper package doesn't have a GetUint8() method, so we defer to
 	// using strconv.ParseUint().
 	tokenValueExponentUint64, err := strconv.ParseUint(viper.Get(CfgStakingTokenValueExponent).(string), 10, 8)
@@ -547,77 +526,13 @@ func AppendStakingState(doc *genesis.Document, state string, l *logging.Logger) 
 		// flag is bound to an uint8.
 		panic(err)
 	}
-	tokenValueExponent := uint8(tokenValueExponentUint64)
-	// NOTE: Token value exponent set in CfgStakingTokenValueExponent has
-	// preference over the one read from the staking state file.
-	if tokenValueExponent != 0 {
-		stakingSt.TokenValueExponent = tokenValueExponent
+	if tokenValueExponent := uint8(tokenValueExponentUint64); tokenValueExponent != 0 {
+		st.State.TokenValueExponent = tokenValueExponent
 	}
 
-	if flags.DebugTestEntity() {
-		l.Warn("granting stake to the debug test entity")
-
-		ent, _, err := entity.TestEntity()
-		if err != nil {
-			l.Error("failed to retrieve test entity",
-				"err", err,
-			)
-			return err
-		}
-		entAddr := staking.NewAddress(ent.ID)
-
-		// Ok then, we hold the world ransom for One Hundred Billion Dollars.
-		var q quantity.Quantity
-		if err = q.FromBigInt(big.NewInt(100000000000)); err != nil {
-			l.Error("failed to allocate test stake",
-				"err", err,
-			)
-			return err
-		}
-
-		stakingSt.Ledger[entAddr] = &staking.Account{
-			General: staking.GeneralAccount{
-				Balance: q,
-				Nonce:   0,
-			},
-			Escrow: staking.EscrowAccount{
-				Active: staking.SharePool{
-					Balance:     q,
-					TotalShares: stakingTests.QtyFromInt(1),
-				},
-			},
-		}
-		stakingSt.Delegations = map[staking.Address]map[staking.Address]*staking.Delegation{
-			entAddr: {
-				entAddr: {
-					Shares: stakingTests.QtyFromInt(1),
-				},
-			},
-		}
-
-		// Inflate the TotalSupply to account for the account's general and
-		// escrow balances.
-		_ = stakingSt.TotalSupply.Add(&q)
-		_ = stakingSt.TotalSupply.Add(&q)
-
-		// Set zero thresholds for all staking kinds, if none set.
-		if len(stakingSt.Parameters.Thresholds) == 0 {
-			var sq quantity.Quantity
-			_ = sq.FromBigInt(big.NewInt(0))
-			stakingSt.Parameters.Thresholds =
-				map[staking.ThresholdKind]quantity.Quantity{
-					staking.KindEntity:            sq,
-					staking.KindNodeValidator:     sq,
-					staking.KindNodeCompute:       sq,
-					staking.KindNodeStorage:       sq,
-					staking.KindNodeKeyManager:    sq,
-					staking.KindRuntimeCompute:    sq,
-					staking.KindRuntimeKeyManager: sq,
-				}
-		}
+	if err = st.AppendTo(doc); err != nil {
+		return err
 	}
-
-	doc.Staking = stakingSt
 
 	return nil
 }

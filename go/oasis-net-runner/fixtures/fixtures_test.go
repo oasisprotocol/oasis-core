@@ -7,10 +7,6 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-const (
-	defaultFixturePath = "../../../tests/fixture-data/net-runner/default.json"
-)
-
 func TestDefaultFixture(t *testing.T) {
 	f, err := newDefaultFixture()
 	require.Nil(t, err)
@@ -19,21 +15,6 @@ func TestDefaultFixture(t *testing.T) {
 	data, err := DumpFixture(f)
 	require.Nil(t, err)
 	require.NotNil(t, data)
-
-	// As cool as having tests cases is, having to regenerate test data
-	// every single time the default fixture changes is incredibly
-	// annoying.
-	//
-	// May this pearl of wisdom serve as a guiding light for the next
-	// unfortunate victim.
-	//
-	// $ ./oasis-net-runner dump-fixture > /tmp/fuckfuckfuckfuckfuck
-
-	storedData, err := ioutil.ReadFile(defaultFixturePath)
-	require.Nil(t, err)
-	require.NotNil(t, storedData)
-
-	require.EqualValues(t, storedData, data)
 }
 
 func TestCustomFixture(t *testing.T) {

@@ -11,6 +11,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/env"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/log"
 	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
+	storage "github.com/oasisprotocol/oasis-core/go/storage/api"
 )
 
 // NetworkFixture describes configuration for the test Oasis network and
@@ -191,9 +192,10 @@ type RuntimeFixture struct { // nolint: maligned
 	Entity     int                  `json:"entity"`
 	Keymanager int                  `json:"keymanager"`
 
-	Binaries     []string `json:"binaries"`
-	GenesisState string   `json:"genesis_state"`
-	GenesisRound uint64   `json:"genesis_round"`
+	Binaries         []string         `json:"binaries"`
+	GenesisState     storage.WriteLog `json:"genesis_state,omitempty"`
+	GenesisStatePath string           `json:"genesis_state_path,omitempty"`
+	GenesisRound     uint64           `json:"genesis_round,omitempty"`
 
 	Executor     registry.ExecutorParameters     `json:"executor"`
 	Merge        registry.MergeParameters        `json:"merge"`
@@ -242,6 +244,7 @@ func (f *RuntimeFixture) Create(netFixture *NetworkFixture, net *Network) (*Runt
 		Staking:            f.Staking,
 		Binaries:           f.Binaries,
 		GenesisState:       f.GenesisState,
+		GenesisStatePath:   f.GenesisStatePath,
 		GenesisRound:       f.GenesisRound,
 		Pruner:             f.Pruner,
 		ExcludeFromGenesis: f.ExcludeFromGenesis,

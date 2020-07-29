@@ -127,7 +127,16 @@ func (sc *stakeCLIImpl) Fixture() (*oasis.NetworkFixture, error) {
 	f.Network.EpochtimeMock = true
 
 	// Enable some features in the staking system that we'll test.
-	f.Network.StakingGenesis = "tests/fixture-data/stake-cli/staking-genesis.json"
+	f.Network.StakingGenesis = &api.Genesis{
+		Parameters: api.ConsensusParameters{
+			CommissionScheduleRules: api.CommissionScheduleRules{
+				RateChangeInterval: 10,
+				RateBoundLead:      30,
+				MaxRateSteps:       4,
+				MaxBoundSteps:      12,
+			},
+		},
+	}
 
 	return f, nil
 }

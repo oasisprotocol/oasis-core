@@ -3,7 +3,6 @@ package debug
 import (
 	"crypto/rand"
 	"math"
-	"math/big"
 
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	memorySigner "github.com/oasisprotocol/oasis-core/go/common/crypto/signature/signers/memory"
@@ -12,32 +11,32 @@ import (
 )
 
 var (
-	DebugStateTotalSupply            = QtyFromInt(math.MaxInt64)
-	DebugStateSrcGeneralBalance      = QtyFromInt(math.MaxInt64 - 100)
-	DebugStateSrcEscrowActiveBalance = QtyFromInt(100)
-	DebugStateSrcEscrowActiveShares  = QtyFromInt(1000)
+	DebugStateTotalSupply            = *quantity.NewFromUint64(math.MaxInt64)
+	DebugStateSrcGeneralBalance      = *quantity.NewFromUint64(math.MaxInt64 - 100)
+	DebugStateSrcEscrowActiveBalance = *quantity.NewFromUint64(100)
+	DebugStateSrcEscrowActiveShares  = *quantity.NewFromUint64(1000)
 
 	DebugGenesisState = api.Genesis{
 		Parameters: api.ConsensusParameters{
 			DebondingInterval: 1,
 			Thresholds: map[api.ThresholdKind]quantity.Quantity{
-				api.KindEntity:            QtyFromInt(1),
-				api.KindNodeValidator:     QtyFromInt(2),
-				api.KindNodeCompute:       QtyFromInt(3),
-				api.KindNodeStorage:       QtyFromInt(4),
-				api.KindNodeKeyManager:    QtyFromInt(5),
-				api.KindRuntimeCompute:    QtyFromInt(6),
-				api.KindRuntimeKeyManager: QtyFromInt(7),
+				api.KindEntity:            *quantity.NewFromUint64(1),
+				api.KindNodeValidator:     *quantity.NewFromUint64(2),
+				api.KindNodeCompute:       *quantity.NewFromUint64(3),
+				api.KindNodeStorage:       *quantity.NewFromUint64(4),
+				api.KindNodeKeyManager:    *quantity.NewFromUint64(5),
+				api.KindRuntimeCompute:    *quantity.NewFromUint64(6),
+				api.KindRuntimeKeyManager: *quantity.NewFromUint64(7),
 			},
 			Slashing: map[api.SlashReason]api.Slash{
 				api.SlashDoubleSigning: {
-					Amount:         QtyFromInt(math.MaxInt64), // Slash everything.
+					Amount:         *quantity.NewFromUint64(math.MaxInt64), // Slash everything.
 					FreezeInterval: 1,
 				},
 			},
-			MinDelegationAmount:     QtyFromInt(10),
-			FeeSplitWeightVote:      QtyFromInt(1),
-			RewardFactorEpochSigned: QtyFromInt(1),
+			MinDelegationAmount:     *quantity.NewFromUint64(10),
+			FeeSplitWeightVote:      *quantity.NewFromUint64(1),
+			RewardFactorEpochSigned: *quantity.NewFromUint64(1),
 			// Zero RewardFactorBlockProposed is normal.
 		},
 		TokenSymbol: "TEST",
@@ -70,12 +69,12 @@ var (
 	DebugStateDestAddress = api.NewAddress(destSigner.Public())
 )
 
-func QtyFromInt(n int) quantity.Quantity {
-	q := quantity.NewQuantity()
-	if err := q.FromBigInt(big.NewInt(int64(n))); err != nil {
+func AddressFromString(s string) api.Address {
+	var addr api.Address
+	if err := addr.UnmarshalText([]byte(s)); err != nil {
 		panic(err)
 	}
-	return *q
+	return addr
 }
 
 func mustGenerateSigner() signature.Signer {

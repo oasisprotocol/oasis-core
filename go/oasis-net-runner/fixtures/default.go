@@ -107,8 +107,8 @@ func newDefaultFixture() (*oasis.NetworkFixture, error) {
 				AdmissionPolicy: registry.RuntimeAdmissionPolicy{
 					AnyNode: &registry.AnyNodeRuntimeAdmissionPolicy{},
 				},
-				GenesisState: viper.GetString(cfgRuntimeGenesisState),
-				GenesisRound: 0,
+				GenesisStatePath: viper.GetString(cfgRuntimeGenesisState),
+				GenesisRound:     0,
 			},
 		},
 		Validators: []oasis.ValidatorFixture{

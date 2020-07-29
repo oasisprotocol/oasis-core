@@ -44,6 +44,10 @@ func (k *LogEntry) Equal(cmp *LogEntry) bool {
 	return true
 }
 
+func (k *LogEntry) MarshalJSON() ([]byte, error) {
+	return json.Marshal([2][]byte{k.Key, k.Value})
+}
+
 func (k *LogEntry) UnmarshalJSON(src []byte) error {
 	var kv [2][]byte
 	if err := json.Unmarshal(src, &kv); err != nil {

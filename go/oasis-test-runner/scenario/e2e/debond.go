@@ -37,7 +37,41 @@ func (s *debondImpl) Fixture() (*oasis.NetworkFixture, error) {
 	f.Network.EpochtimeMock = true
 
 	// Enable some features in the staking system that we'll test.
-	f.Network.StakingGenesis = "tests/fixture-data/debond/staking-genesis.json"
+	f.Network.StakingGenesis = &staking.Genesis{
+		Parameters: staking.ConsensusParameters{
+			CommissionScheduleRules: staking.CommissionScheduleRules{
+				RateChangeInterval: 10,
+				RateBoundLead:      30,
+				MaxRateSteps:       4,
+				MaxBoundSteps:      12,
+			},
+		},
+		TotalSupply: *quantity.NewFromUint64(1000),
+		Ledger: map[staking.Address]*staking.Account{
+			EntityAccount: {
+				Escrow: staking.EscrowAccount{
+					Debonding: staking.SharePool{
+						Balance:     *quantity.NewFromUint64(1000),
+						TotalShares: *quantity.NewFromUint64(1000),
+					},
+				},
+			},
+		},
+		DebondingDelegations: map[staking.Address]map[staking.Address][]*staking.DebondingDelegation{
+			EntityAccount: {
+				LockupAccount: {
+					{
+						Shares:        *quantity.NewFromUint64(500),
+						DebondEndTime: 1,
+					},
+					{
+						Shares:        *quantity.NewFromUint64(500),
+						DebondEndTime: 2,
+					},
+				},
+			},
+		},
+	}
 
 	return f, nil
 }
@@ -56,10 +90,8 @@ func (s *debondImpl) Run(*env.Env) error {
 
 	// Beginning: lockup account has no funds.
 	lockupQuery := staking.OwnerQuery{
+		Owner:  LockupAccount,
 		Height: consensus.HeightLatest,
-	}
-	if err := lockupQuery.Owner.UnmarshalText([]byte("oasis1qpt202cf6t0s5ugkk34p83yf0c30gpjkny92u7dh")); err != nil {
-		return fmt.Errorf("failed to unmarshal lockup account address: %w", err)
 	}
 	s.Logger.Info("checking balance at beginning")
 	acct, err := s.Net.Controller().Staking.Account(ctx, &lockupQuery)

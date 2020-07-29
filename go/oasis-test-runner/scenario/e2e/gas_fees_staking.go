@@ -63,9 +63,32 @@ func (sc *gasFeesImpl) Fixture() (*oasis.NetworkFixture, error) {
 
 	return &oasis.NetworkFixture{
 		Network: oasis.NetworkCfg{
-			NodeBinary:              f.Network.NodeBinary,
-			EpochtimeMock:           true,
-			StakingGenesis:          "tests/fixture-data/gas-fees/staking-genesis.json",
+			NodeBinary:    f.Network.NodeBinary,
+			EpochtimeMock: true,
+			StakingGenesis: &staking.Genesis{
+				Parameters: staking.ConsensusParameters{
+					DebondingInterval: 1,
+					GasCosts: transaction.Costs{
+						staking.GasOpTransfer:      10,
+						staking.GasOpBurn:          10,
+						staking.GasOpAddEscrow:     10,
+						staking.GasOpReclaimEscrow: 10,
+					},
+					FeeSplitWeightPropose:     *quantity.NewFromUint64(1),
+					FeeSplitWeightVote:        *quantity.NewFromUint64(2),
+					FeeSplitWeightNextPropose: *quantity.NewFromUint64(2),
+				},
+				TotalSupply:   *quantity.NewFromUint64(1200),
+				CommonPool:    *quantity.NewFromUint64(150),
+				LastBlockFees: *quantity.NewFromUint64(50),
+				Ledger: map[staking.Address]*staking.Account{
+					EntityAccount: {
+						General: staking.GeneralAccount{
+							Balance: *quantity.NewFromUint64(1000),
+						},
+					},
+				},
+			},
 			ConsensusGasCostsTxByte: 0, // So we can control gas more easily.
 		},
 		Entities: []oasis.EntityCfg{
