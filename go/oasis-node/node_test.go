@@ -21,7 +21,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/entity"
 	cmnGrpc "github.com/oasisprotocol/oasis-core/go/common/grpc"
 	consensusAPI "github.com/oasisprotocol/oasis-core/go/consensus/api"
-	"github.com/oasisprotocol/oasis-core/go/consensus/tendermint"
+	tendermintFull "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/full"
 	consensusTests "github.com/oasisprotocol/oasis-core/go/consensus/tests"
 	epochtime "github.com/oasisprotocol/oasis-core/go/epochtime/api"
 	epochtimeTests "github.com/oasisprotocol/oasis-core/go/epochtime/tests"
@@ -74,8 +74,8 @@ var (
 		{workerCommon.CfgClientPort, workerClientPort},
 		{storageWorker.CfgWorkerEnabled, true},
 		{txnscheduler.CfgCheckTxEnabled, false},
-		{tendermint.CfgSupplementarySanityEnabled, true},
-		{tendermint.CfgSupplementarySanityInterval, 1},
+		{tendermintFull.CfgSupplementarySanityEnabled, true},
+		{tendermintFull.CfgSupplementarySanityInterval, 1},
 		{cmdCommon.CfgDebugAllowTestKeys, true},
 	}
 

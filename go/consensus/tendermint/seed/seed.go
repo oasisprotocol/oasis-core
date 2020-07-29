@@ -1,4 +1,4 @@
-package tendermint
+package seed
 
 import (
 	"fmt"
@@ -15,6 +15,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/identity"
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
 	"github.com/oasisprotocol/oasis-core/go/common/node"
+	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
 	"github.com/oasisprotocol/oasis-core/go/consensus/tendermint/api"
 	"github.com/oasisprotocol/oasis-core/go/consensus/tendermint/common"
 	"github.com/oasisprotocol/oasis-core/go/consensus/tendermint/crypto"
@@ -22,9 +23,11 @@ import (
 	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
 )
 
-var seedLogger = logging.GetLogger("consensus/tendermint/seed")
+var logger = logging.GetLogger("consensus/tendermint/seed")
 
 type seedService struct {
+	consensus.BaseBackend
+
 	addr      *p2p.NetAddress
 	transport *p2p.MultiplexTransport
 	addrBook  pex.AddrBook
@@ -80,7 +83,8 @@ func (srv *seedService) Cleanup() {
 	// No cleanup in particular.
 }
 
-func newSeedService(dataDir string, identity *identity.Identity, genesisProvider genesis.Provider) (*seedService, error) {
+// New creates a new seed-only consensus service.
+func New(dataDir string, identity *identity.Identity, genesisProvider genesis.Provider) (consensus.Backend, error) {
 	var err error
 
 	// This is heavily inspired by https://gitlab.com/polychainlabs/tenderseed
@@ -92,14 +96,14 @@ func newSeedService(dataDir string, identity *identity.Identity, genesisProvider
 	}
 
 	seedDataDir := filepath.Join(dataDir, "tendermint-seed")
-	if err = initDataDir(seedDataDir); err != nil {
+	if err = common.InitDataDir(seedDataDir); err != nil {
 		return nil, fmt.Errorf("tendermint/seed: failed to initialize data dir: %w", err)
 	}
 
-	cfg := config.DefaultP2PConfig()
-	cfg.AllowDuplicateIP = true
-	cfg.SeedMode = true
-	cfg.AddrBookStrict = !viper.GetBool(CfgDebugP2PAddrBookLenient)
+	p2pCfg := config.DefaultP2PConfig()
+	p2pCfg.AllowDuplicateIP = true
+	p2pCfg.SeedMode = true
+	p2pCfg.AddrBookStrict = !viper.GetBool(common.CfgDebugP2PAddrBookLenient)
 	// MaxNumInboundPeers/MaxNumOutboundPeers
 
 	nodeKey := &p2p.NodeKey{PrivKey: crypto.SignerToTendermint(identity.P2PSigner)}
@@ -116,7 +120,7 @@ func newSeedService(dataDir string, identity *identity.Identity, genesisProvider
 			0,
 		),
 		DefaultNodeID: nodeKey.ID(),
-		ListenAddr:    viper.GetString(CfgCoreListenAddress),
+		ListenAddr:    viper.GetString(common.CfgCoreListenAddress),
 		Network:       doc.ChainContext()[:types.MaxChainIDLen],
 		Version:       "0.0.1",
 		Channels:      []byte{pex.PexChannel},
@@ -124,14 +128,14 @@ func newSeedService(dataDir string, identity *identity.Identity, genesisProvider
 	}
 
 	// Carve out all of the services.
-	logger := common.NewLogAdapter(!viper.GetBool(cfgLogDebug))
+	logger := common.NewLogAdapter(!viper.GetBool(common.CfgLogDebug))
 	if srv.addr, err = p2p.NewNetAddressString(p2p.IDAddressString(nodeInfo.DefaultNodeID, nodeInfo.ListenAddr)); err != nil {
 		return nil, fmt.Errorf("tendermint/seed: failed to create seed address: %w", err)
 	}
-	srv.transport = p2p.NewMultiplexTransport(nodeInfo, *nodeKey, p2p.MConnConfig(cfg))
+	srv.transport = p2p.NewMultiplexTransport(nodeInfo, *nodeKey, p2p.MConnConfig(p2pCfg))
 
-	addrBookPath := filepath.Join(seedDataDir, configDir, "addrbook.json")
-	srv.addrBook = pex.NewAddrBook(addrBookPath, cfg.AddrBookStrict)
+	addrBookPath := filepath.Join(seedDataDir, common.ConfigDir, "addrbook.json")
+	srv.addrBook = pex.NewAddrBook(addrBookPath, p2pCfg.AddrBookStrict)
 	srv.addrBook.SetLogger(logger.With("module", "book"))
 	if err = srv.addrBook.Start(); err != nil {
 		return nil, fmt.Errorf("tendermint/seed: failed to start address book: %w", err)
@@ -140,10 +144,10 @@ func newSeedService(dataDir string, identity *identity.Identity, genesisProvider
 		return nil, fmt.Errorf("tendermint/seed: failed to populate address book from genesis: %w", err)
 	}
 
-	pexReactor := pex.NewReactor(srv.addrBook, &pex.ReactorConfig{SeedMode: cfg.SeedMode})
+	pexReactor := pex.NewReactor(srv.addrBook, &pex.ReactorConfig{SeedMode: p2pCfg.SeedMode})
 	pexReactor.SetLogger(logger.With("module", "pex"))
 
-	srv.p2pSwitch = p2p.NewSwitch(cfg, srv.transport)
+	srv.p2pSwitch = p2p.NewSwitch(p2pCfg, srv.transport)
 	srv.p2pSwitch.SetLogger(logger.With("module", "switch"))
 	srv.p2pSwitch.SetNodeKey(nodeKey)
 	srv.p2pSwitch.SetAddrBook(srv.addrBook)
@@ -169,7 +173,7 @@ func populateAddrBookFromGenesis(addrBook p2p.AddrBook, doc *genesis.Document, o
 		var tmvAddr *p2p.NetAddress
 		tmvAddr, err := api.NodeToP2PAddr(&openedNode)
 		if err != nil {
-			seedLogger.Error("failed to reformat genesis validator address",
+			logger.Error("failed to reformat genesis validator address",
 				"err", err,
 			)
 			continue
@@ -186,7 +190,7 @@ func populateAddrBookFromGenesis(addrBook p2p.AddrBook, doc *genesis.Document, o
 		addrBook.RemoveAddress(v)
 
 		if err := addrBook.AddAddress(v, ourAddr); err != nil {
-			seedLogger.Error("failed to add genesis validator to address book",
+			logger.Error("failed to add genesis validator to address book",
 				"err", err,
 			)
 		}

@@ -743,11 +743,6 @@ func newNode(testNode bool) (n *Node, err error) { // nolint: gocyclo
 	// Initialize the node controller.
 	node.NodeController = control.New(node, node.Consensus, node.Upgrader)
 	controlAPI.RegisterService(node.grpcInternal.Server(), node.NodeController)
-	if flags.DebugDontBlameOasis() {
-		// Initialize and start the debug controller if we are in debug mode.
-		node.DebugController = control.NewDebug(node.Consensus)
-		controlAPI.RegisterDebugService(node.grpcInternal.Server(), node.DebugController)
-	}
 
 	// If the consensus backend supports communicating with consensus services, we can also start
 	// all services required for runtime operation.
@@ -757,6 +752,12 @@ func newNode(testNode bool) (n *Node, err error) { // nolint: gocyclo
 				"err", err,
 			)
 			return nil, err
+		}
+
+		if flags.DebugDontBlameOasis() {
+			// Initialize and start the debug controller if we are in debug mode.
+			node.DebugController = control.NewDebug(node.Consensus)
+			controlAPI.RegisterDebugService(node.grpcInternal.Server(), node.DebugController)
 		}
 	}
 
