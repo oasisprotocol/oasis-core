@@ -97,7 +97,6 @@ func Run(cmd *cobra.Command, args []string) {
 type Node struct {
 	svcMgr       *background.ServiceManager
 	grpcInternal *grpc.Server
-	svcTmntSeed  *tendermint.SeedService
 
 	stopOnce sync.Once
 
@@ -727,38 +726,6 @@ func newNode(testNode bool) (n *Node, err error) { // nolint: gocyclo
 			"err", err,
 		)
 		return nil, err
-	}
-
-	if tendermint.IsSeed() {
-		// Initialize seed node.
-		node.svcTmntSeed, err = tendermint.NewSeed(dataDir, node.Identity, node.Genesis)
-		if err != nil {
-			logger.Error("failed to initialize seed node",
-				"err", err,
-			)
-			return nil, err
-		}
-		node.svcMgr.Register(node.svcTmntSeed)
-
-		// Tendermint nodes in seed mode crawl the network for
-		// peers. In case of incoming connections seed node will
-		// share some of the peers and immediately disconnect.
-		// Because of that only start Tendermint service in case
-		// were operating as it would be useless running a full
-		// node.
-		logger.Info("starting tendermint seed node")
-
-		// Start the tendermint service.
-		if err = node.svcTmntSeed.Start(); err != nil {
-			logger.Error("failed to start tendermint seed service",
-				"err", err,
-			)
-			return nil, err
-		}
-
-		startOk = true
-
-		return node, nil
 	}
 
 	logger.Info("starting Oasis node")

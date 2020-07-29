@@ -76,6 +76,9 @@ import (
 const (
 	configDir = "config"
 
+	// CfgMode configures the consensus backend mode.
+	CfgMode = "consensus.tendermint.mode"
+
 	// CfgCoreListenAddress configures the tendermint core network listen address.
 	CfgCoreListenAddress   = "consensus.tendermint.core.listen_address"
 	cfgCoreExternalAddress = "consensus.tendermint.core.external_address"
@@ -96,8 +99,6 @@ const (
 	CfgP2PDisablePeerExchange = "consensus.tendermint.p2p.disable_peer_exchange"
 	// CfgP2PSeeds configures tendermint's seed node(s).
 	CfgP2PSeed = "consensus.tendermint.p2p.seed"
-	// CfgP2PSeedMode enables the tendermint seed mode.
-	CfgP2PSeedMode = "consensus.tendermint.p2p.seed_mode"
 	// CfgP2PMaxNumInboundPeers configures the max number of inbound peers.
 	CfgP2PMaxNumInboundPeers = "consensus.tendermint.p2p.max_num_inbound_peers"
 	// CfgP2PMaxNumOutboundPeers configures the max number of outbound peers, excluding persistent peers.
@@ -149,6 +150,14 @@ const (
 	tmSubscriberID = "oasis-core"
 )
 
+const (
+	// ModeFull is the name of the full node consensus mode.
+	ModeFull = "full"
+
+	// ModeSeed is the name of the seed-only node consensus mode.
+	ModeSeed = "seed"
+)
+
 var (
 	_ api.Backend = (*tendermintService)(nil)
 
@@ -196,11 +205,6 @@ func newFailMonitor(ctx context.Context, logger *logging.Logger, fn func()) *fai
 	return &m
 }
 
-// IsSeed returns true iff the node is configured as a seed node.
-func IsSeed() bool {
-	return viper.GetBool(CfgP2PSeedMode)
-}
-
 type tendermintService struct { // nolint: maligned
 	sync.Mutex
 
@@ -214,7 +218,9 @@ type tendermintService struct { // nolint: maligned
 	client        *tmcli.Local
 	blockNotifier *pubsub.Broker
 	failMonitor   *failMonitor
-	features      consensusAPI.FeatureMask
+
+	mode     string
+	features consensusAPI.FeatureMask
 
 	stateDb tmdb.DB
 
@@ -230,6 +236,8 @@ type tendermintService struct { // nolint: maligned
 
 	serviceClients   []api.ServiceClient
 	serviceClientsWg sync.WaitGroup
+
+	svcSeed *seedService
 
 	genesis                  *genesisAPI.Document
 	genesisProvider          genesisAPI.Provider
@@ -258,7 +266,24 @@ func (t *tendermintService) started() bool {
 	return t.isStarted
 }
 
+// Implements service.BackgroundService.
 func (t *tendermintService) Start() error {
+	switch t.mode {
+	case ModeFull:
+		return t.startFull()
+	case ModeSeed:
+		return t.startSeed()
+	default:
+		// Should NEVER happen as the constructor makes this check.
+		panic(fmt.Errorf("tendermint: unknown mode: %s", t.mode))
+	}
+}
+
+func (t *tendermintService) startSeed() error {
+	return t.svcSeed.Start()
+}
+
+func (t *tendermintService) startFull() error {
 	if t.started() {
 		return fmt.Errorf("tendermint: service already started")
 	}
@@ -301,32 +326,59 @@ func (t *tendermintService) Start() error {
 	return nil
 }
 
+// Implements service.BackgroundService.
 func (t *tendermintService) Quit() <-chan struct{} {
-	if !t.started() {
-		return make(chan struct{})
-	}
+	switch t.mode {
+	case ModeFull:
+		if !t.started() {
+			return make(chan struct{})
+		}
 
-	return t.node.Quit()
+		return t.node.Quit()
+	case ModeSeed:
+		return t.svcSeed.Quit()
+	default:
+		// Should NEVER happen as the constructor makes this check.
+		panic(fmt.Errorf("tendermint: unknown mode: %s", t.mode))
+	}
 }
 
+// Implements service.BackgroundService.
 func (t *tendermintService) Cleanup() {
-	t.serviceClientsWg.Wait()
-	t.svcMgr.Cleanup()
+	switch t.mode {
+	case ModeFull:
+		t.serviceClientsWg.Wait()
+		t.svcMgr.Cleanup()
+	case ModeSeed:
+		t.svcSeed.Cleanup()
+	default:
+		// Should NEVER happen as the constructor makes this check.
+		panic(fmt.Errorf("tendermint: unknown mode: %s", t.mode))
+	}
 }
 
+// Implements service.BackgroundService.
 func (t *tendermintService) Stop() {
-	if !t.initialized() || !t.started() {
-		return
-	}
+	switch t.mode {
+	case ModeFull:
+		if !t.initialized() || !t.started() {
+			return
+		}
 
-	t.failMonitor.markCleanShutdown()
-	if err := t.node.Stop(); err != nil {
-		t.Logger.Error("Error on stopping node", err)
-	}
+		t.failMonitor.markCleanShutdown()
+		if err := t.node.Stop(); err != nil {
+			t.Logger.Error("Error on stopping node", err)
+		}
 
-	t.svcMgr.Stop()
-	t.mux.Stop()
-	t.node.Wait()
+		t.svcMgr.Stop()
+		t.mux.Stop()
+		t.node.Wait()
+	case ModeSeed:
+		t.svcSeed.Stop()
+	default:
+		// Should NEVER happen as the constructor makes this check.
+		panic(fmt.Errorf("tendermint: unknown mode: %s", t.mode))
+	}
 }
 
 func (t *tendermintService) Started() <-chan struct{} {
@@ -1262,7 +1314,6 @@ func (t *tendermintService) lazyInit() error {
 	// Since persistent peers is expected to be in comma-delimited ID format,
 	// lowercasing the whole string is ok.
 	tenderConfig.P2P.UnconditionalPeerIDs = strings.ToLower(strings.Join(viper.GetStringSlice(CfgP2PUnconditionalPeerIDs), ","))
-	tenderConfig.P2P.SeedMode = viper.GetBool(CfgP2PSeedMode)
 	// Seed Ids need to be lowercase as p2p/transport.go:MultiplexTransport.upgrade()
 	// uses a case sensitive string comparision to validate public keys.
 	// Since Seeds is expected to be in comma-delimited ID@host:port format,
@@ -1537,20 +1588,39 @@ func New(ctx context.Context, dataDir string, identity *identity.Identity, upgra
 		genesis:               genesisDoc,
 		genesisProvider:       genesisProvider,
 		ctx:                   ctx,
-		features:              consensusAPI.FeatureServices | consensusAPI.FeatureFullNode,
+		mode:                  viper.GetString(CfgMode),
 		dataDir:               dataDir,
 		startedCh:             make(chan struct{}),
 		syncedCh:              make(chan struct{}),
 	}
 
-	// Create the submission manager.
-	pd, err := consensusAPI.NewStaticPriceDiscovery(viper.GetUint64(CfgSubmissionGasPrice))
-	if err != nil {
-		return nil, fmt.Errorf("tendermint: failed to create submission manager: %w", err)
-	}
-	t.submissionMgr = consensusAPI.NewSubmissionManager(t, pd, viper.GetUint64(CfgSubmissionMaxFee))
+	switch t.mode {
+	case ModeFull:
+		// Full node.
+		t.Logger.Info("starting in full node mode")
+		t.features = consensusAPI.FeatureServices | consensusAPI.FeatureFullNode
 
-	return t, t.initialize()
+		// Create the submission manager.
+		pd, err := consensusAPI.NewStaticPriceDiscovery(viper.GetUint64(CfgSubmissionGasPrice))
+		if err != nil {
+			return nil, fmt.Errorf("tendermint: failed to create submission manager: %w", err)
+		}
+		t.submissionMgr = consensusAPI.NewSubmissionManager(t, pd, viper.GetUint64(CfgSubmissionMaxFee))
+
+		return t, t.initialize()
+	case ModeSeed:
+		// Seed-only node.
+		t.Logger.Info("starting in seed-only node mode")
+
+		var err error
+		if t.svcSeed, err = newSeedService(dataDir, identity, genesisProvider); err != nil {
+			return nil, fmt.Errorf("tendermint: failed to create seed node service: %w", err)
+		}
+
+		return t, nil
+	default:
+		return nil, fmt.Errorf("tendermint: unsupported mode: %s", t.mode)
+	}
 }
 
 func initDataDir(dataDir string) error {
@@ -1679,6 +1749,7 @@ func newLogAdapter(suppressDebug bool) tmlog.Logger {
 }
 
 func init() {
+	Flags.String(CfgMode, ModeFull, "tendermint mode (full, seed)")
 	Flags.String(CfgCoreListenAddress, "tcp://0.0.0.0:26656", "tendermint core listen address")
 	Flags.String(cfgCoreExternalAddress, "", "tendermint address advertised to other nodes")
 	Flags.String(CfgABCIPruneStrategy, abci.PruneDefault, "ABCI state pruning strategy")
@@ -1687,7 +1758,6 @@ func init() {
 	Flags.StringSlice(CfgP2PPersistentPeer, []string{}, "Tendermint persistent peer(s) of the form ID@ip:port")
 	Flags.StringSlice(CfgP2PUnconditionalPeerIDs, []string{}, "Tendermint unconditional peer IDs")
 	Flags.Bool(CfgP2PDisablePeerExchange, false, "Disable Tendermint's peer-exchange reactor")
-	Flags.Bool(CfgP2PSeedMode, false, "run the tendermint node in seed mode")
 	Flags.Duration(CfgP2PPersistenPeersMaxDialPeriod, 0*time.Second, "Tendermint max timeout when redialing a persistent peer (default: unlimited)")
 	Flags.Int(CfgP2PMaxNumInboundPeers, 40, "Max number of inbound peers")
 	Flags.Int(CfgP2PMaxNumOutboundPeers, 20, "Max number of outbound peers (excluding persistent peers)")

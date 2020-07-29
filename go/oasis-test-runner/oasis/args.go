@@ -158,7 +158,7 @@ func (args *argBuilder) tendermintDisablePeerExchange() *argBuilder {
 }
 
 func (args *argBuilder) tendermintSeedMode() *argBuilder {
-	args.vec = append(args.vec, "--"+tendermint.CfgP2PSeedMode)
+	args.vec = append(args.vec, "--"+tendermint.CfgMode, tendermint.ModeSeed)
 	return args
 }
 

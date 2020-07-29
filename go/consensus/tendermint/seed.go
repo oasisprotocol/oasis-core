@@ -23,8 +23,7 @@ import (
 
 var seedLogger = logging.GetLogger("consensus/tendermint/seed")
 
-// SeedService is a Tendermint seed service.
-type SeedService struct {
+type seedService struct {
 	addr      *p2p.NetAddress
 	transport *p2p.MultiplexTransport
 	addrBook  pex.AddrBook
@@ -35,12 +34,12 @@ type SeedService struct {
 }
 
 // Name returns the service name.
-func (srv *SeedService) Name() string {
+func (srv *seedService) Name() string {
 	return "tendermint/seed"
 }
 
 // Start starts the service.
-func (srv *SeedService) Start() error {
+func (srv *seedService) Start() error {
 	if err := srv.transport.Listen(*srv.addr); err != nil {
 		return fmt.Errorf("tendermint/seed: failed to listen on transport: %w", err)
 	}
@@ -54,7 +53,7 @@ func (srv *SeedService) Start() error {
 }
 
 // Stop halts the service.
-func (srv *SeedService) Stop() {
+func (srv *seedService) Stop() {
 	srv.stopOnce.Do(func() {
 		close(srv.quitCh)
 		// Save the address book.
@@ -71,24 +70,23 @@ func (srv *SeedService) Stop() {
 }
 
 // Quit reuturns a channel that will be clsoed when the service terminates.
-func (srv *SeedService) Quit() <-chan struct{} {
+func (srv *seedService) Quit() <-chan struct{} {
 	return srv.quitCh
 }
 
 // Cleanup performs the service specific post-termination cleanup.
-func (srv *SeedService) Cleanup() {
+func (srv *seedService) Cleanup() {
 	// No cleanup in particular.
 }
 
-// NewSeed creates a new Tendermint seed service.
-func NewSeed(dataDir string, identity *identity.Identity, genesisProvider genesis.Provider) (*SeedService, error) {
+func newSeedService(dataDir string, identity *identity.Identity, genesisProvider genesis.Provider) (*seedService, error) {
 	var err error
 
 	// This is heavily inspired by https://gitlab.com/polychainlabs/tenderseed
 	// and reaches into tendermint to spin up the minimum components requried
 	// to get the PEX reactor to operate in seed mode.
 
-	srv := &SeedService{
+	srv := &seedService{
 		quitCh: make(chan struct{}),
 	}
 
