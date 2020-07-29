@@ -13,7 +13,6 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/oasis"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/scenario"
 	staking "github.com/oasisprotocol/oasis-core/go/staking/api"
-	stakingTests "github.com/oasisprotocol/oasis-core/go/staking/tests/debug"
 )
 
 var (
@@ -75,17 +74,17 @@ func (sc *gasFeesImpl) Fixture() (*oasis.NetworkFixture, error) {
 						staking.GasOpAddEscrow:     10,
 						staking.GasOpReclaimEscrow: 10,
 					},
-					FeeSplitWeightPropose:     stakingTests.QtyFromInt(1),
-					FeeSplitWeightVote:        stakingTests.QtyFromInt(2),
-					FeeSplitWeightNextPropose: stakingTests.QtyFromInt(2),
+					FeeSplitWeightPropose:     *quantity.NewFromUint64(1),
+					FeeSplitWeightVote:        *quantity.NewFromUint64(2),
+					FeeSplitWeightNextPropose: *quantity.NewFromUint64(2),
 				},
-				TotalSupply:   stakingTests.QtyFromInt(1200),
-				CommonPool:    stakingTests.QtyFromInt(150),
-				LastBlockFees: stakingTests.QtyFromInt(50),
+				TotalSupply:   *quantity.NewFromUint64(1200),
+				CommonPool:    *quantity.NewFromUint64(150),
+				LastBlockFees: *quantity.NewFromUint64(50),
 				Ledger: map[staking.Address]*staking.Account{
 					EntityAccount: {
 						General: staking.GeneralAccount{
-							Balance: stakingTests.QtyFromInt(1000),
+							Balance: *quantity.NewFromUint64(1000),
 						},
 					},
 				},

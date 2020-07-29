@@ -16,6 +16,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/mathrand"
 	commonGrpc "github.com/oasisprotocol/oasis-core/go/common/grpc"
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
+	"github.com/oasisprotocol/oasis-core/go/common/quantity"
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
 	"github.com/oasisprotocol/oasis-core/go/consensus/api/transaction"
 	"github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common"
@@ -28,7 +29,6 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/scenario"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/scenario/e2e"
 	staking "github.com/oasisprotocol/oasis-core/go/staking/api"
-	stakingTests "github.com/oasisprotocol/oasis-core/go/staking/tests/debug"
 )
 
 const (
@@ -164,70 +164,70 @@ func (sc *txSourceImpl) Fixture() (*oasis.NetworkFixture, error) {
 				staking.GasOpAddEscrow:     10,
 				staking.GasOpReclaimEscrow: 10,
 			},
-			FeeSplitWeightPropose:     stakingTests.QtyFromInt(2),
-			FeeSplitWeightVote:        stakingTests.QtyFromInt(1),
-			FeeSplitWeightNextPropose: stakingTests.QtyFromInt(1),
+			FeeSplitWeightPropose:     *quantity.NewFromUint64(2),
+			FeeSplitWeightVote:        *quantity.NewFromUint64(1),
+			FeeSplitWeightNextPropose: *quantity.NewFromUint64(1),
 		},
-		TotalSupply: stakingTests.QtyFromInt(120000000000),
+		TotalSupply: *quantity.NewFromUint64(120000000000),
 		Ledger: map[staking.Address]*staking.Account{
 			e2e.LockupAccount: {
 				General: staking.GeneralAccount{
-					Balance: stakingTests.QtyFromInt(10000000000),
+					Balance: *quantity.NewFromUint64(10000000000),
 				},
 			},
 			e2e.MysteryAccount0: {
 				General: staking.GeneralAccount{
-					Balance: stakingTests.QtyFromInt(10000000000),
+					Balance: *quantity.NewFromUint64(10000000000),
 				},
 			},
 			e2e.MysteryAccount1: {
 				General: staking.GeneralAccount{
-					Balance: stakingTests.QtyFromInt(10000000000),
+					Balance: *quantity.NewFromUint64(10000000000),
 				},
 			},
 			e2e.MysteryAccount2: {
 				General: staking.GeneralAccount{
-					Balance: stakingTests.QtyFromInt(10000000000),
+					Balance: *quantity.NewFromUint64(10000000000),
 				},
 			},
 			e2e.MysteryAccount3: {
 				General: staking.GeneralAccount{
-					Balance: stakingTests.QtyFromInt(10000000000),
+					Balance: *quantity.NewFromUint64(10000000000),
 				},
 			},
 			e2e.MysteryAccount4: {
 				General: staking.GeneralAccount{
-					Balance: stakingTests.QtyFromInt(10000000000),
+					Balance: *quantity.NewFromUint64(10000000000),
 				},
 			},
 			e2e.MysteryAccount5: {
 				General: staking.GeneralAccount{
-					Balance: stakingTests.QtyFromInt(10000000000),
+					Balance: *quantity.NewFromUint64(10000000000),
 				},
 			},
 			e2e.MysteryAccount6: {
 				General: staking.GeneralAccount{
-					Balance: stakingTests.QtyFromInt(10000000000),
+					Balance: *quantity.NewFromUint64(10000000000),
 				},
 			},
 			e2e.MysteryAccount7: {
 				General: staking.GeneralAccount{
-					Balance: stakingTests.QtyFromInt(10000000000),
+					Balance: *quantity.NewFromUint64(10000000000),
 				},
 			},
 			e2e.MysteryAccount8: {
 				General: staking.GeneralAccount{
-					Balance: stakingTests.QtyFromInt(10000000000),
+					Balance: *quantity.NewFromUint64(10000000000),
 				},
 			},
 			e2e.MysteryAccount9: {
 				General: staking.GeneralAccount{
-					Balance: stakingTests.QtyFromInt(10000000000),
+					Balance: *quantity.NewFromUint64(10000000000),
 				},
 			},
 			e2e.MysteryAccount10: {
 				General: staking.GeneralAccount{
-					Balance: stakingTests.QtyFromInt(10000000000),
+					Balance: *quantity.NewFromUint64(10000000000),
 				},
 			},
 		},

@@ -12,7 +12,6 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/quantity"
 	genesis "github.com/oasisprotocol/oasis-core/go/genesis/api"
 	staking "github.com/oasisprotocol/oasis-core/go/staking/api"
-	stakingTests "github.com/oasisprotocol/oasis-core/go/staking/tests/debug"
 )
 
 // AppendableStakingState is a staking genesis state that can be appended
@@ -54,7 +53,7 @@ func (st *AppendableStakingState) AppendTo(doc *genesis.Document) error {
 			Escrow: staking.EscrowAccount{
 				Active: staking.SharePool{
 					Balance:     q,
-					TotalShares: stakingTests.QtyFromInt(1),
+					TotalShares: *quantity.NewFromUint64(1),
 				},
 			},
 		}
@@ -70,7 +69,7 @@ func (st *AppendableStakingState) AppendTo(doc *genesis.Document) error {
 			return fmt.Errorf("gensis/staking: test entity already has a self-delegation")
 		}
 		st.State.Delegations[entAddr][entAddr] = &staking.Delegation{
-			Shares: stakingTests.QtyFromInt(1),
+			Shares: *quantity.NewFromUint64(1),
 		}
 
 		// Inflate the TotalSupply to account for the account's general and
@@ -81,7 +80,7 @@ func (st *AppendableStakingState) AppendTo(doc *genesis.Document) error {
 
 	// Set zero thresholds for all staking kinds, if none set.
 	if len(st.State.Parameters.Thresholds) == 0 {
-		sq := stakingTests.QtyFromInt(0)
+		sq := *quantity.NewFromUint64(0)
 		st.State.Parameters.Thresholds =
 			map[staking.ThresholdKind]quantity.Quantity{
 				staking.KindEntity:            sq,

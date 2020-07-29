@@ -10,7 +10,6 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/oasis"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/scenario"
 	staking "github.com/oasisprotocol/oasis-core/go/staking/api"
-	stakingTests "github.com/oasisprotocol/oasis-core/go/staking/tests/debug"
 )
 
 // Debond tests debonding records created in the genesis document.
@@ -47,13 +46,13 @@ func (s *debondImpl) Fixture() (*oasis.NetworkFixture, error) {
 				MaxBoundSteps:      12,
 			},
 		},
-		TotalSupply: stakingTests.QtyFromInt(1000),
+		TotalSupply: *quantity.NewFromUint64(1000),
 		Ledger: map[staking.Address]*staking.Account{
 			EntityAccount: {
 				Escrow: staking.EscrowAccount{
 					Debonding: staking.SharePool{
-						Balance:     stakingTests.QtyFromInt(1000),
-						TotalShares: stakingTests.QtyFromInt(1000),
+						Balance:     *quantity.NewFromUint64(1000),
+						TotalShares: *quantity.NewFromUint64(1000),
 					},
 				},
 			},
@@ -62,11 +61,11 @@ func (s *debondImpl) Fixture() (*oasis.NetworkFixture, error) {
 			EntityAccount: {
 				LockupAccount: {
 					{
-						Shares:        stakingTests.QtyFromInt(500),
+						Shares:        *quantity.NewFromUint64(500),
 						DebondEndTime: 1,
 					},
 					{
-						Shares:        stakingTests.QtyFromInt(500),
+						Shares:        *quantity.NewFromUint64(500),
 						DebondEndTime: 2,
 					},
 				},

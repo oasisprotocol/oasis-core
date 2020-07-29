@@ -21,7 +21,6 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/scenario"
 	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
 	staking "github.com/oasisprotocol/oasis-core/go/staking/api"
-	stakingTests "github.com/oasisprotocol/oasis-core/go/staking/tests/debug"
 	storage "github.com/oasisprotocol/oasis-core/go/storage/api"
 )
 
@@ -62,13 +61,13 @@ func (sc *runtimeDynamicImpl) Fixture() (*oasis.NetworkFixture, error) {
 	f.Network.StakingGenesis = &staking.Genesis{
 		Parameters: staking.ConsensusParameters{
 			Thresholds: map[staking.ThresholdKind]quantity.Quantity{
-				staking.KindEntity:            stakingTests.QtyFromInt(0),
-				staking.KindNodeValidator:     stakingTests.QtyFromInt(0),
-				staking.KindNodeCompute:       stakingTests.QtyFromInt(0),
-				staking.KindNodeStorage:       stakingTests.QtyFromInt(0),
-				staking.KindNodeKeyManager:    stakingTests.QtyFromInt(0),
-				staking.KindRuntimeCompute:    stakingTests.QtyFromInt(1000),
-				staking.KindRuntimeKeyManager: stakingTests.QtyFromInt(1000),
+				staking.KindEntity:            *quantity.NewFromUint64(0),
+				staking.KindNodeValidator:     *quantity.NewFromUint64(0),
+				staking.KindNodeCompute:       *quantity.NewFromUint64(0),
+				staking.KindNodeStorage:       *quantity.NewFromUint64(0),
+				staking.KindNodeKeyManager:    *quantity.NewFromUint64(0),
+				staking.KindRuntimeCompute:    *quantity.NewFromUint64(1000),
+				staking.KindRuntimeKeyManager: *quantity.NewFromUint64(1000),
 			},
 		},
 	}

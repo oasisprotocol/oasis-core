@@ -17,6 +17,7 @@ import (
 	memorySigner "github.com/oasisprotocol/oasis-core/go/common/crypto/signature/signers/memory"
 	"github.com/oasisprotocol/oasis-core/go/common/entity"
 	"github.com/oasisprotocol/oasis-core/go/common/node"
+	"github.com/oasisprotocol/oasis-core/go/common/quantity"
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/genesis"
 	tendermint "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/api"
 	epochtime "github.com/oasisprotocol/oasis-core/go/epochtime/api"
@@ -679,42 +680,42 @@ func TestGenesisSanityCheck(t *testing.T) {
 	// NOTE: There doesn't seem to be a way to generate invalid Quantities, so
 	// we're just going to test the code that checks if things add up.
 	d = *testDoc
-	d.Staking.TotalSupply = stakingTests.QtyFromInt(100)
+	d.Staking.TotalSupply = *quantity.NewFromUint64(100)
 	require.Error(d.SanityCheck(), "invalid total supply should be rejected")
 
 	d = *testDoc
-	d.Staking.CommonPool = stakingTests.QtyFromInt(100)
+	d.Staking.CommonPool = *quantity.NewFromUint64(100)
 	require.Error(d.SanityCheck(), "invalid common pool should be rejected")
 
 	d = *testDoc
-	d.Staking.LastBlockFees = stakingTests.QtyFromInt(100)
+	d.Staking.LastBlockFees = *quantity.NewFromUint64(100)
 	require.Error(d.SanityCheck(), "invalid last block fees should be rejected")
 
 	d = *testDoc
-	d.Staking.Ledger[stakingTests.DebugStateSrcAddress].General.Balance = stakingTests.QtyFromInt(100)
+	d.Staking.Ledger[stakingTests.DebugStateSrcAddress].General.Balance = *quantity.NewFromUint64(100)
 	require.Error(d.SanityCheck(), "invalid general balance should be rejected")
 
 	d = *testDoc
-	d.Staking.Ledger[stakingTests.DebugStateSrcAddress].Escrow.Active.Balance = stakingTests.QtyFromInt(100)
+	d.Staking.Ledger[stakingTests.DebugStateSrcAddress].Escrow.Active.Balance = *quantity.NewFromUint64(100)
 	require.Error(d.SanityCheck(), "invalid escrow active balance should be rejected")
 
 	d = *testDoc
-	d.Staking.Ledger[stakingTests.DebugStateSrcAddress].Escrow.Debonding.Balance = stakingTests.QtyFromInt(100)
+	d.Staking.Ledger[stakingTests.DebugStateSrcAddress].Escrow.Debonding.Balance = *quantity.NewFromUint64(100)
 	require.Error(d.SanityCheck(), "invalid escrow debonding balance should be rejected")
 
 	d = *testDoc
-	d.Staking.Ledger[stakingTests.DebugStateSrcAddress].Escrow.Active.TotalShares = stakingTests.QtyFromInt(1)
+	d.Staking.Ledger[stakingTests.DebugStateSrcAddress].Escrow.Active.TotalShares = *quantity.NewFromUint64(1)
 	require.Error(d.SanityCheck(), "invalid escrow active total shares should be rejected")
 
 	d = *testDoc
-	d.Staking.Ledger[stakingTests.DebugStateSrcAddress].Escrow.Debonding.TotalShares = stakingTests.QtyFromInt(1)
+	d.Staking.Ledger[stakingTests.DebugStateSrcAddress].Escrow.Debonding.TotalShares = *quantity.NewFromUint64(1)
 	require.Error(d.SanityCheck(), "invalid escrow debonding total shares should be rejected")
 
 	d = *testDoc
 	d.Staking.Delegations = map[staking.Address]map[staking.Address]*staking.Delegation{
 		stakingTests.DebugStateSrcAddress: {
 			stakingTests.DebugStateDestAddress: {
-				Shares: stakingTests.QtyFromInt(1),
+				Shares: *quantity.NewFromUint64(1),
 			},
 		},
 	}
@@ -725,7 +726,7 @@ func TestGenesisSanityCheck(t *testing.T) {
 		stakingTests.DebugStateSrcAddress: {
 			stakingTests.DebugStateDestAddress: {
 				{
-					Shares:        stakingTests.QtyFromInt(1),
+					Shares:        *quantity.NewFromUint64(1),
 					DebondEndTime: 10,
 				},
 			},
