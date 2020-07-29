@@ -10,7 +10,7 @@ import (
 )
 
 // Maximum message size.
-const maxMessageSize = 104857600 // 100 MiB
+const maxMessageSize = 16 * 1024 * 1024 // 16 MiB
 
 var (
 	errMessageTooLarge  = errors.New("codec: message too large")
