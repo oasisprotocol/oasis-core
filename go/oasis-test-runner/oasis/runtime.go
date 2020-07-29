@@ -152,7 +152,7 @@ func (net *Network) NewRuntime(cfg *RuntimeCfg) (*Runtime, error) {
 		if cfg.GenesisState != nil {
 			genesisStatePath = filepath.Join(rtDir.String(), rtStateFile)
 			var b []byte
-			if b, err = marshalWriteLog(cfg.GenesisState); err != nil {
+			if b, err = json.Marshal(cfg.GenesisState); err != nil {
 				return nil, fmt.Errorf("oasis/runtime: failed to serialize runtime genesis state: %w", err)
 			}
 			if err = ioutil.WriteFile(genesisStatePath, b, 0o600); err != nil {
@@ -224,20 +224,4 @@ func deriveMrEnclave(f string) (*sgx.MrEnclave, error) {
 	}
 
 	return &m, nil
-}
-
-func marshalWriteLog(wl storage.WriteLog) ([]byte, error) {
-	// Arrrrrgh.  mkvs/writelog.LogEntry has a custom UnmarshalJSON
-	// but no MarshalJSON equivalent.
-	tmp := make([][2][]byte, 0, len(wl))
-	for _, v := range wl {
-		tmp = append(tmp, [2][]byte{v.Key, v.Value})
-	}
-
-	b, err := json.Marshal(tmp)
-	if err != nil {
-		return nil, fmt.Errorf("failed to serialize write log: %w", err)
-	}
-
-	return b, nil
 }
