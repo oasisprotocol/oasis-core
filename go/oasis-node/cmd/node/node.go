@@ -198,13 +198,12 @@ func (n *Node) waitReady(logger *logging.Logger) {
 	close(n.readyCh)
 }
 
-func (n *Node) RegistrationStopped() {
-	n.Stop()
-}
+// startRuntimeServices initializes and starts all the services that are required for runtime
+// support to work.
+func (n *Node) startRuntimeServices() error {
+	logger := cmdCommon.Logger()
 
-func (n *Node) initBackends() error {
 	var err error
-
 	if n.Sentry, err = sentry.New(n.Consensus, n.Identity); err != nil {
 		return err
 	}
@@ -217,13 +216,70 @@ func (n *Node) initBackends() error {
 	keymanagerAPI.RegisterService(grpcSrv, n.Consensus.KeyManager())
 	consensusAPI.RegisterService(grpcSrv, n.Consensus)
 
-	cmdCommon.Logger().Debug("backends initialized")
+	// Register dump genesis halt hook.
+	n.Consensus.RegisterHaltHook(func(ctx context.Context, blockHeight int64, epoch epochtime.EpochTime) {
+		logger.Info("Consensus halt hook: dumping genesis",
+			"epoch", epoch,
+			"block_height", blockHeight,
+		)
+		if err = n.dumpGenesis(ctx, blockHeight, epoch); err != nil {
+			logger.Error("halt hook: failed to dump genesis",
+				"err", err,
+			)
+			return
+		}
+		logger.Info("Consensus halt hook: genesis dumped",
+			"epoch", epoch,
+			"block_height", blockHeight,
+		)
+	})
+
+	// Initialize the node's runtime registry.
+	n.RuntimeRegistry, err = runtimeRegistry.New(n.svcMgr.Ctx, cmdCommon.DataDir(), n.Consensus, n.Identity)
+	if err != nil {
+		return err
+	}
+	n.svcMgr.RegisterCleanupOnly(n.RuntimeRegistry, "runtime registry")
+	storageAPI.RegisterService(n.grpcInternal.Server(), n.RuntimeRegistry.StorageRouter())
+
+	// Initialize the runtime client.
+	n.RuntimeClient, err = runtimeClient.New(
+		n.svcMgr.Ctx,
+		cmdCommon.DataDir(),
+		n.Consensus,
+		n.RuntimeRegistry,
+	)
+	if err != nil {
+		return err
+	}
+	n.svcMgr.RegisterCleanupOnly(n.RuntimeClient, "client service")
+	runtimeClientAPI.RegisterService(n.grpcInternal.Server(), n.RuntimeClient)
+	enclaverpc.RegisterService(n.grpcInternal.Server(), n.RuntimeClient)
+
+	// Initialize runtime workers.
+	if err = n.initRuntimeWorkers(); err != nil {
+		logger.Error("failed to initialize workers",
+			"err", err,
+		)
+		return err
+	}
+
+	// Start workers (requires NodeController for checking, if nodes are synced).
+	if err = n.startRuntimeWorkers(logger); err != nil {
+		logger.Error("failed to start workers",
+			"err", err,
+		)
+		return err
+	}
+
+	logger.Debug("runtime services started")
 
 	return nil
 }
 
-func (n *Node) initWorkers(logger *logging.Logger) error {
+func (n *Node) initRuntimeWorkers() error {
 	dataDir := cmdCommon.DataDir()
+	logger := cmdCommon.Logger()
 
 	var err error
 
@@ -387,7 +443,7 @@ func (n *Node) initWorkers(logger *logging.Logger) error {
 	return nil
 }
 
-func (n *Node) startWorkers(logger *logging.Logger) error {
+func (n *Node) startRuntimeWorkers(logger *logging.Logger) error {
 	// Start the storage worker.
 	if err := n.StorageWorker.Start(); err != nil {
 		return err
@@ -639,6 +695,14 @@ func newNode(testNode bool) (n *Node, err error) { // nolint: gocyclo
 	}
 	node.svcMgr.Register(metrics)
 
+	// Start the metrics reporting server.
+	if err = metrics.Start(); err != nil {
+		logger.Error("failed to start metrics reporting server",
+			"err", err,
+		)
+		return nil, err
+	}
+
 	// Initialize the profiling server.
 	profiling, err := pprof.New(node.svcMgr.Ctx)
 	if err != nil {
@@ -695,85 +759,21 @@ func newNode(testNode bool) (n *Node, err error) { // nolint: gocyclo
 		startOk = true
 
 		return node, nil
-	} else {
-		// Initialize Tendermint service.
-		node.Consensus, err = tendermint.New(node.svcMgr.Ctx, dataDir, node.Identity, node.Upgrader, node.Genesis)
-		if err != nil {
-			logger.Error("failed to initialize tendermint service",
-				"err", err,
-			)
-			return nil, err
-		}
-		node.svcMgr.Register(node.Consensus)
-
-		// Initialize node backends.
-		if err = node.initBackends(); err != nil {
-			logger.Error("failed to initialize backends",
-				"err", err,
-			)
-			return nil, err
-		}
-
-		// Register dump genesis halt hook.
-		node.Consensus.RegisterHaltHook(func(ctx context.Context, blockHeight int64, epoch epochtime.EpochTime) {
-			logger.Info("Consensus halt hook: dumping genesis",
-				"epoch", epoch,
-				"block_height", blockHeight,
-			)
-			if err = node.dumpGenesis(ctx, blockHeight, epoch); err != nil {
-				logger.Error("halt hook: failed to dump genesis",
-					"err", err,
-				)
-				return
-			}
-			logger.Info("Consensus halt hook: genesis dumped",
-				"epoch", epoch,
-				"block_height", blockHeight,
-			)
-		})
 	}
 
 	logger.Info("starting Oasis node")
 
-	// Initialize the node's runtime registry.
-	node.RuntimeRegistry, err = runtimeRegistry.New(node.svcMgr.Ctx, cmdCommon.DataDir(), node.Consensus, node.Identity)
+	// Initialize Tendermint consensus backend.
+	node.Consensus, err = tendermint.New(node.svcMgr.Ctx, dataDir, node.Identity, node.Upgrader, node.Genesis)
 	if err != nil {
-		return nil, err
-	}
-	node.svcMgr.RegisterCleanupOnly(node.RuntimeRegistry, "runtime registry")
-	storageAPI.RegisterService(node.grpcInternal.Server(), node.RuntimeRegistry.StorageRouter())
-
-	// Initialize the runtime client.
-	node.RuntimeClient, err = runtimeClient.New(
-		node.svcMgr.Ctx,
-		cmdCommon.DataDir(),
-		node.Consensus,
-		node.RuntimeRegistry,
-	)
-	if err != nil {
-		return nil, err
-	}
-	node.svcMgr.RegisterCleanupOnly(node.RuntimeClient, "client service")
-	runtimeClientAPI.RegisterService(node.grpcInternal.Server(), node.RuntimeClient)
-	enclaverpc.RegisterService(node.grpcInternal.Server(), node.RuntimeClient)
-
-	// Start metric server.
-	if err = metrics.Start(); err != nil {
-		logger.Error("failed to start metric server",
+		logger.Error("failed to initialize tendermint service",
 			"err", err,
 		)
 		return nil, err
 	}
+	node.svcMgr.Register(node.Consensus)
 
-	// Initialize workers.
-	if err = node.initWorkers(logger); err != nil {
-		logger.Error("failed to initialize workers",
-			"err", err,
-		)
-		return nil, err
-	}
-
-	// Initialize and start the node controller.
+	// Initialize the node controller.
 	node.NodeController = control.New(node, node.Consensus, node.Upgrader)
 	controlAPI.RegisterService(node.grpcInternal.Server(), node.NodeController)
 	if flags.DebugDontBlameOasis() {
@@ -782,20 +782,20 @@ func newNode(testNode bool) (n *Node, err error) { // nolint: gocyclo
 		controlAPI.RegisterDebugService(node.grpcInternal.Server(), node.DebugController)
 	}
 
-	// Start workers (requires NodeController for checking, if nodes are synced).
-	if err = node.startWorkers(logger); err != nil {
-		logger.Error("failed to start workers",
-			"err", err,
-		)
-		return nil, err
+	// If the consensus backend supports communicating with consensus services, we can also start
+	// all services required for runtime operation.
+	if node.Consensus.SupportedFeatures().Has(consensusAPI.FeatureServices) {
+		if err = node.startRuntimeServices(); err != nil {
+			logger.Error("failed to initialize runtime services",
+				"err", err,
+			)
+			return nil, err
+		}
 	}
 
-	// Start the tendermint service.
-	//
-	// Note: This will only start the node if it is required by
-	// one of the backends.
+	// Start the consensus backend service.
 	if err = node.Consensus.Start(); err != nil {
-		logger.Error("failed to start tendermint service",
+		logger.Error("failed to start consensus backend service",
 			"err", err,
 		)
 		return nil, err

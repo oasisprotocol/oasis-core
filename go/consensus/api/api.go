@@ -4,6 +4,7 @@ package api
 
 import (
 	"context"
+	"strings"
 	"time"
 
 	beacon "github.com/oasisprotocol/oasis-core/go/beacon/api"
@@ -44,7 +45,41 @@ var (
 	// ErrVersionNotFound is the error returned when the given version (height) cannot be found,
 	// possibly because it was pruned.
 	ErrVersionNotFound = errors.New(moduleName, 3, "consensus: version not found")
+
+	// ErrUnsupported is the error returned when the given method is not supported by the consensus
+	// backend.
+	ErrUnsupported = errors.New(moduleName, 4, "consensus: method not supported")
 )
+
+// FeatureMask is the consensus backend feature bitmask.
+type FeatureMask uint8
+
+const (
+	// FeatureServices indicates support for communicating with consensus services.
+	FeatureServices FeatureMask = 1 << 0
+
+	// FeatureFullNode indicates that the consensus backend is independently fully verifying all
+	// consensus-layer blocks.
+	FeatureFullNode FeatureMask = 1 << 1
+)
+
+// String returns a string representation of the consensus backend feature bitmask.
+func (m FeatureMask) String() string {
+	var ret []string
+	if m&FeatureServices != 0 {
+		ret = append(ret, "consensus services")
+	}
+	if m&FeatureFullNode != 0 {
+		ret = append(ret, "full node")
+	}
+
+	return strings.Join(ret, ",")
+}
+
+// Has checks whether the feature bitmask includes specific features.
+func (m FeatureMask) Has(f FeatureMask) bool {
+	return m&f != 0
+}
 
 // ClientBackend is a limited consensus interface used by clients that connect to the local full
 // node. This is separate from light clients which use the LightClientBackend interface.
@@ -114,11 +149,13 @@ type Block struct {
 }
 
 // Status is the current status overview.
-type Status struct {
+type Status struct { // nolint: maligned
 	// ConsensusVersion is the version of the consensus protocol that the node is using.
 	ConsensusVersion string `json:"consensus_version"`
 	// Backend is the consensus backend identifier.
 	Backend string `json:"backend"`
+	// Features are the indicated consensus backend features.
+	Features FeatureMask `json:"features"`
 
 	// NodePeers is a list of node's peers.
 	NodePeers []string `json:"node_peers"`
@@ -144,7 +181,10 @@ type Status struct {
 // Backend is an interface that a consensus backend must provide.
 type Backend interface {
 	service.BackgroundService
-	ClientBackend
+	ServicesBackend
+
+	// SupportedFeatures returns the features supported by this consensus backend.
+	SupportedFeatures() FeatureMask
 
 	// Synced returns a channel that is closed once synchronization is
 	// complete.
@@ -155,6 +195,14 @@ type Backend interface {
 
 	// GetAddresses returns the consensus backend addresses.
 	GetAddresses() ([]node.ConsensusAddress, error)
+}
+
+// ServicesBackend is an interface for consensus backends which indicate support for
+// communicating with consensus services.
+//
+// In case the feature is absent, these methods may return nil or ErrUnsupported.
+type ServicesBackend interface {
+	ClientBackend
 
 	// RegisterHaltHook registers a function to be called when the
 	// consensus Halt epoch height is reached.

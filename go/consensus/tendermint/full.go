@@ -21,6 +21,10 @@ func init() {
 
 // Implements LightClientBackend.
 func (t *tendermintService) GetSignedHeader(ctx context.Context, height int64) (*consensusAPI.SignedHeader, error) {
+	if !t.features.Has(consensusAPI.FeatureServices) {
+		return nil, consensusAPI.ErrUnsupported
+	}
+
 	if err := t.ensureStarted(ctx); err != nil {
 		return nil, err
 	}
@@ -42,6 +46,10 @@ func (t *tendermintService) GetSignedHeader(ctx context.Context, height int64) (
 
 // Implements LightClientBackend.
 func (t *tendermintService) GetValidatorSet(ctx context.Context, height int64) (*consensusAPI.ValidatorSet, error) {
+	if !t.features.Has(consensusAPI.FeatureServices) {
+		return nil, consensusAPI.ErrUnsupported
+	}
+
 	if err := t.ensureStarted(ctx); err != nil {
 		return nil, err
 	}
@@ -60,6 +68,10 @@ func (t *tendermintService) GetValidatorSet(ctx context.Context, height int64) (
 
 // Implements LightClientBackend.
 func (t *tendermintService) GetParameters(ctx context.Context, height int64) (*consensusAPI.Parameters, error) {
+	if !t.features.Has(consensusAPI.FeatureServices) {
+		return nil, consensusAPI.ErrUnsupported
+	}
+
 	if err := t.ensureStarted(ctx); err != nil {
 		return nil, err
 	}
@@ -77,5 +89,8 @@ func (t *tendermintService) GetParameters(ctx context.Context, height int64) (*c
 
 // Implements LightClientBackend.
 func (t *tendermintService) State() syncer.ReadSyncer {
+	if t.mux == nil {
+		return nil
+	}
 	return t.mux.State().Storage()
 }

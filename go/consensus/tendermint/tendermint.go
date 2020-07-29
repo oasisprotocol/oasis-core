@@ -214,6 +214,7 @@ type tendermintService struct { // nolint: maligned
 	client        *tmcli.Local
 	blockNotifier *pubsub.Broker
 	failMonitor   *failMonitor
+	features      consensusAPI.FeatureMask
 
 	stateDb tmdb.DB
 
@@ -332,6 +333,10 @@ func (t *tendermintService) Started() <-chan struct{} {
 	return t.startedCh
 }
 
+func (t *tendermintService) SupportedFeatures() consensusAPI.FeatureMask {
+	return t.features
+}
+
 func (t *tendermintService) Synced() <-chan struct{} {
 	return t.syncedCh
 }
@@ -380,6 +385,10 @@ func (t *tendermintService) GetAddresses() ([]node.ConsensusAddress, error) {
 }
 
 func (t *tendermintService) StateToGenesis(ctx context.Context, blockHeight int64) (*genesisAPI.Document, error) {
+	if !t.features.Has(consensusAPI.FeatureServices) {
+		return nil, consensusAPI.ErrUnsupported
+	}
+
 	blk, err := t.GetTendermintBlock(ctx, blockHeight)
 	if err != nil {
 		t.Logger.Error("failed to get tendermint block",
@@ -480,6 +489,10 @@ func (t *tendermintService) GetGenesisDocument(ctx context.Context) (*genesisAPI
 }
 
 func (t *tendermintService) RegisterHaltHook(hook func(context.Context, int64, epochtimeAPI.EpochTime)) {
+	if !t.features.Has(consensusAPI.FeatureServices) {
+		panic(consensusAPI.ErrUnsupported)
+	}
+
 	if !t.initialized() {
 		return
 	}
@@ -488,6 +501,10 @@ func (t *tendermintService) RegisterHaltHook(hook func(context.Context, int64, e
 }
 
 func (t *tendermintService) SubmitTx(ctx context.Context, tx *transaction.SignedTransaction) error {
+	if !t.features.Has(consensusAPI.FeatureServices) {
+		return consensusAPI.ErrUnsupported
+	}
+
 	// Subscribe to the transaction being included in a block.
 	data := cbor.Marshal(tx)
 	query := tmtypes.EventQueryTxFor(data)
@@ -572,6 +589,10 @@ func (t *tendermintService) newSubscriberID() string {
 }
 
 func (t *tendermintService) SubmitEvidence(ctx context.Context, evidence consensusAPI.Evidence) error {
+	if !t.features.Has(consensusAPI.FeatureServices) {
+		return consensusAPI.ErrUnsupported
+	}
+
 	if evidence.Kind() != consensusAPI.EvidenceKindConsensus {
 		return fmt.Errorf("tendermint: unsupported evidence kind")
 	}
@@ -589,10 +610,18 @@ func (t *tendermintService) SubmitEvidence(ctx context.Context, evidence consens
 }
 
 func (t *tendermintService) EstimateGas(ctx context.Context, req *consensusAPI.EstimateGasRequest) (transaction.Gas, error) {
+	if !t.features.Has(consensusAPI.FeatureServices) {
+		return 0, consensusAPI.ErrUnsupported
+	}
+
 	return t.mux.EstimateGas(req.Signer, req.Transaction)
 }
 
 func (t *tendermintService) subscribe(subscriber string, query tmpubsub.Query) (tmtypes.Subscription, error) {
+	if !t.features.Has(consensusAPI.FeatureServices) {
+		return nil, consensusAPI.ErrUnsupported
+	}
+
 	// Note: The tendermint documentation claims using SubscribeUnbuffered can
 	// freeze the server, however, the buffered Subscribe can drop events, and
 	// force-unsubscribe the channel if processing takes too long.
@@ -641,10 +670,20 @@ func (t *tendermintService) unsubscribe(subscriber string, query tmpubsub.Query)
 }
 
 func (t *tendermintService) RegisterApplication(app api.Application) error {
+	// Return early in case we don't actually support communicating with consensus services.
+	if !t.features.Has(consensusAPI.FeatureServices) {
+		return consensusAPI.ErrUnsupported
+	}
+
 	return t.mux.Register(app)
 }
 
 func (t *tendermintService) SetTransactionAuthHandler(handler api.TransactionAuthHandler) error {
+	// Return early in case we don't actually support communicating with consensus services.
+	if !t.features.Has(consensusAPI.FeatureServices) {
+		return consensusAPI.ErrUnsupported
+	}
+
 	return t.mux.SetTransactionAuthHandler(handler)
 }
 
@@ -685,10 +724,17 @@ func (t *tendermintService) Scheduler() schedulerAPI.Backend {
 }
 
 func (t *tendermintService) GetEpoch(ctx context.Context, height int64) (epochtimeAPI.EpochTime, error) {
+	if t.epochtime == nil {
+		return epochtimeAPI.EpochInvalid, consensusAPI.ErrUnsupported
+	}
 	return t.epochtime.GetEpoch(ctx, height)
 }
 
 func (t *tendermintService) WaitEpoch(ctx context.Context, epoch epochtimeAPI.EpochTime) error {
+	if t.epochtime == nil {
+		return consensusAPI.ErrUnsupported
+	}
+
 	ch, sub := t.epochtime.WatchEpochs()
 	defer sub.Close()
 
@@ -708,6 +754,10 @@ func (t *tendermintService) WaitEpoch(ctx context.Context, epoch epochtimeAPI.Ep
 }
 
 func (t *tendermintService) GetBlock(ctx context.Context, height int64) (*consensusAPI.Block, error) {
+	if !t.features.Has(consensusAPI.FeatureServices) {
+		return nil, consensusAPI.ErrUnsupported
+	}
+
 	blk, err := t.GetTendermintBlock(ctx, height)
 	if err != nil {
 		return nil, err
@@ -720,10 +770,18 @@ func (t *tendermintService) GetBlock(ctx context.Context, height int64) (*consen
 }
 
 func (t *tendermintService) GetSignerNonce(ctx context.Context, req *consensusAPI.GetSignerNonceRequest) (uint64, error) {
+	if !t.features.Has(consensusAPI.FeatureServices) {
+		return 0, consensusAPI.ErrUnsupported
+	}
+
 	return t.mux.TransactionAuthHandler().GetSignerNonce(ctx, req)
 }
 
 func (t *tendermintService) GetTransactions(ctx context.Context, height int64) ([][]byte, error) {
+	if !t.features.Has(consensusAPI.FeatureServices) {
+		return nil, consensusAPI.ErrUnsupported
+	}
+
 	blk, err := t.GetTendermintBlock(ctx, height)
 	if err != nil {
 		return nil, err
@@ -740,6 +798,10 @@ func (t *tendermintService) GetTransactions(ctx context.Context, height int64) (
 }
 
 func (t *tendermintService) GetTransactionsWithResults(ctx context.Context, height int64) (*consensusAPI.TransactionsWithResults, error) {
+	if !t.features.Has(consensusAPI.FeatureServices) {
+		return nil, consensusAPI.ErrUnsupported
+	}
+
 	var txsWithResults consensusAPI.TransactionsWithResults
 
 	blk, err := t.GetTendermintBlock(ctx, height)
@@ -814,6 +876,12 @@ func (t *tendermintService) GetStatus(ctx context.Context) (*consensusAPI.Status
 	status := &consensusAPI.Status{
 		ConsensusVersion: version.ConsensusProtocol.String(),
 		Backend:          api.BackendName,
+		Features:         t.features,
+	}
+
+	// Return early if we don't actually support any services.
+	if !t.features.Has(consensusAPI.FeatureServices) {
+		return status, nil
 	}
 
 	// Genesis block is hardcoded as block 1, since tendermint doesn't have
@@ -866,6 +934,10 @@ func (t *tendermintService) GetStatus(ctx context.Context) (*consensusAPI.Status
 }
 
 func (t *tendermintService) WatchBlocks(ctx context.Context) (<-chan *consensusAPI.Block, pubsub.ClosableSubscription, error) {
+	if !t.features.Has(consensusAPI.FeatureServices) {
+		return nil, nil, consensusAPI.ErrUnsupported
+	}
+
 	ch, sub := t.WatchTendermintBlocks()
 	mapCh := make(chan *consensusAPI.Block)
 	go func() {
@@ -1012,10 +1084,17 @@ func (t *tendermintService) initialize() error {
 }
 
 func (t *tendermintService) GetLastRetainedVersion(ctx context.Context) (int64, error) {
+	if !t.features.Has(consensusAPI.FeatureServices) {
+		return -1, consensusAPI.ErrUnsupported
+	}
 	return t.mux.State().LastRetainedVersion()
 }
 
 func (t *tendermintService) GetTendermintBlock(ctx context.Context, height int64) (*tmtypes.Block, error) {
+	if !t.features.Has(consensusAPI.FeatureServices) {
+		return nil, consensusAPI.ErrUnsupported
+	}
+
 	if err := t.ensureStarted(ctx); err != nil {
 		return nil, err
 	}
@@ -1041,6 +1120,10 @@ func (t *tendermintService) GetTendermintBlock(ctx context.Context, height int64
 }
 
 func (t *tendermintService) GetBlockResults(height int64) (*tmrpctypes.ResultBlockResults, error) {
+	if !t.features.Has(consensusAPI.FeatureServices) {
+		return nil, consensusAPI.ErrUnsupported
+	}
+
 	if t.client == nil {
 		panic("client not available yet")
 	}
@@ -1067,6 +1150,10 @@ func (t *tendermintService) GetBlockResults(height int64) (*tmrpctypes.ResultBlo
 }
 
 func (t *tendermintService) WatchTendermintBlocks() (<-chan *tmtypes.Block, *pubsub.Subscription) {
+	if !t.features.Has(consensusAPI.FeatureServices) {
+		panic(consensusAPI.ErrUnsupported)
+	}
+
 	typedCh := make(chan *tmtypes.Block)
 	sub := t.blockNotifier.Subscribe()
 	sub.Unwrap(typedCh)
@@ -1450,6 +1537,7 @@ func New(ctx context.Context, dataDir string, identity *identity.Identity, upgra
 		genesis:               genesisDoc,
 		genesisProvider:       genesisProvider,
 		ctx:                   ctx,
+		features:              consensusAPI.FeatureServices | consensusAPI.FeatureFullNode,
 		dataDir:               dataDir,
 		startedCh:             make(chan struct{}),
 		syncedCh:              make(chan struct{}),
