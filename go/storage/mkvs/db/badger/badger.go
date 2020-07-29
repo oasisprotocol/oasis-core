@@ -66,6 +66,7 @@ func New(cfg *api.Config) (api.NodeDB, error) {
 	opts = opts.WithCompression(options.Snappy)
 	opts = opts.WithMaxCacheSize(cfg.MaxCacheSize)
 	opts = opts.WithReadOnly(cfg.ReadOnly)
+	opts = opts.WithDetectConflicts(false)
 
 	if cfg.MemoryOnly {
 		db.logger.Warn("using memory-only mode, data will not be persisted")
