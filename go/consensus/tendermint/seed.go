@@ -16,6 +16,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
 	"github.com/oasisprotocol/oasis-core/go/common/node"
 	"github.com/oasisprotocol/oasis-core/go/consensus/tendermint/api"
+	"github.com/oasisprotocol/oasis-core/go/consensus/tendermint/common"
 	"github.com/oasisprotocol/oasis-core/go/consensus/tendermint/crypto"
 	genesis "github.com/oasisprotocol/oasis-core/go/genesis/api"
 	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
@@ -123,7 +124,7 @@ func newSeedService(dataDir string, identity *identity.Identity, genesisProvider
 	}
 
 	// Carve out all of the services.
-	logger := newLogAdapter(!viper.GetBool(cfgLogDebug))
+	logger := common.NewLogAdapter(!viper.GetBool(cfgLogDebug))
 	if srv.addr, err = p2p.NewNetAddressString(p2p.IDAddressString(nodeInfo.DefaultNodeID, nodeInfo.ListenAddr)); err != nil {
 		return nil, fmt.Errorf("tendermint/seed: failed to create seed address: %w", err)
 	}
