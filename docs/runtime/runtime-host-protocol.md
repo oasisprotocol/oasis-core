@@ -24,7 +24,7 @@ using [canonical CBOR]. The frames are serialized on the wire as follows:
 [4-byte message length (big endian)] [CBOR-serialized message]
 ```
 
-Maximum allowed message size is 104857600 bytes.
+Maximum allowed message size is 16 MiB.
 
 [canonical CBOR]: ../encoding.md
 

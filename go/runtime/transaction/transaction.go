@@ -214,14 +214,17 @@ func (bo inBatchOrder) Swap(i, j int) {
 func (bo inBatchOrder) Less(i, j int) bool { return bo.order[i] < bo.order[j] }
 
 // GetInputBatch returns a batch of transaction input artifacts in batch order.
-func (t *Tree) GetInputBatch(ctx context.Context) (RawBatch, error) {
+func (t *Tree) GetInputBatch(ctx context.Context, maxBatchSize, maxBatchSizeBytes uint64) (RawBatch, error) {
 	it := t.tree.NewIterator(ctx, mkvs.IteratorPrefetch(prefetchArtifactCount))
 	defer it.Close()
 
 	var curTx hash.Hash
 	curTx.Empty()
 
-	var bo inBatchOrder
+	var (
+		bo             inBatchOrder
+		batchSizeBytes uint64
+	)
 	for it.Seek(txnKeyFmt.Encode()); it.Valid(); it.Next() {
 		var decHash hash.Hash
 		var decKind artifactKind
@@ -240,6 +243,14 @@ func (t *Tree) GetInputBatch(ctx context.Context) (RawBatch, error) {
 
 		bo.batch = append(bo.batch, ia.Input)
 		bo.order = append(bo.order, ia.BatchOrder)
+		batchSizeBytes += uint64(len(ia.Input))
+
+		if maxBatchSize > 0 && uint64(len(bo.batch)) > maxBatchSize {
+			return nil, fmt.Errorf("transaction: input batch too large (max: %d txes)", maxBatchSize)
+		}
+		if maxBatchSizeBytes > 0 && batchSizeBytes > maxBatchSizeBytes {
+			return nil, fmt.Errorf("transaction: input batch too large (max: %d bytes)", maxBatchSizeBytes)
+		}
 	}
 	if it.Err() != nil {
 		return nil, fmt.Errorf("transaction: get input batch failed: %w", it.Err())

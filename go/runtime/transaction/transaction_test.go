@@ -117,13 +117,19 @@ func TestTransaction(t *testing.T) {
 	}
 
 	// Get input batch.
-	batch, err := tree.GetInputBatch(ctx)
+	batch, err := tree.GetInputBatch(ctx, 0, 0)
 	require.NoError(t, err, "GetInputBatch")
 	require.Len(t, batch, len(testTxns)+1, "batch should have the same transactions")
 	require.EqualValues(t, tx.Input, batch[0], "input batch transactions must be in correct order")
 	for idx, checkTx := range testTxns {
 		require.EqualValues(t, checkTx.Input, batch[idx+1], "input batch transactions must be in correct order")
 	}
+
+	// Get input batch with size limits.
+	_, err = tree.GetInputBatch(ctx, 5, 0)
+	require.Error(t, err, "GetInputBatch should fail with too many transactions")
+	_, err = tree.GetInputBatch(ctx, 0, 64)
+	require.Error(t, err, "GetInputBatch should fail with too large transactions")
 
 	// Commit.
 	// NOTE: This root is synced with tests in runtime/src/transaction/tree.rs.

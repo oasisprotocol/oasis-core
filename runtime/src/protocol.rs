@@ -31,7 +31,7 @@ pub type Stream = ::std::os::unix::net::UnixStream;
 pub type Stream = ::std::net::TcpStream;
 
 /// Maximum message size.
-const MAX_MESSAGE_SIZE: usize = 104_857_600; // 100MB
+const MAX_MESSAGE_SIZE: usize = 16 * 1024 * 1024; // 16MiB
 
 #[derive(Error, Debug)]
 pub enum ProtocolError {
