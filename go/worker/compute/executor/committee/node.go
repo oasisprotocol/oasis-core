@@ -283,6 +283,8 @@ func (n *Node) queueBatchBlocking(
 		},
 		txnSchedSignature: txnSchedSig,
 		storageSignatures: storageSignatures,
+		maxBatchSize:      rt.TxnScheduler.MaxBatchSize,
+		maxBatchSizeBytes: rt.TxnScheduler.MaxBatchSizeBytes,
 	}
 	if batchSpan := opentracing.SpanFromContext(ctx); batchSpan != nil {
 		batch.spanCtx = batchSpan.Context()

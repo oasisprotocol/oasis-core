@@ -22,6 +22,9 @@ type unresolvedBatch struct {
 
 	batch   transaction.RawBatch
 	spanCtx opentracing.SpanContext
+
+	maxBatchSize      uint64
+	maxBatchSizeBytes uint64
 }
 
 func (ub *unresolvedBatch) String() string {
@@ -37,7 +40,7 @@ func (ub *unresolvedBatch) resolve(ctx context.Context, storage storage.Backend)
 	txs := transaction.NewTree(storage, ub.ioRoot)
 	defer txs.Close()
 
-	batch, err := txs.GetInputBatch(ctx)
+	batch, err := txs.GetInputBatch(ctx, ub.maxBatchSize, ub.maxBatchSizeBytes)
 	if err != nil || len(batch) == 0 {
 		return nil, fmt.Errorf("failed to fetch inputs from storage: %w", err)
 	}
