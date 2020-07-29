@@ -6,6 +6,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 	"syscall"
 
 	"github.com/spf13/cobra"
@@ -275,4 +276,26 @@ func ExportEntity(signerBackend, entityDir string) error {
 
 	_, err = entity.GenerateWithSigner(entityDir, signer, nil)
 	return err
+}
+
+// GetUserConfirmation scans the input for user's confirmation.
+//
+// If the user's response is not recognized, it prompts the user again.
+func GetUserConfirmation() bool {
+	var response string
+
+	_, err := fmt.Scanln(&response)
+	if err != nil && err.Error() != "unexpected newline" {
+		rootLog.Error("Error reading from line", "err", err)
+	}
+
+	switch strings.ToLower(response) {
+	case "y", "yes":
+		return true
+	case "n", "no":
+		return false
+	default:
+		fmt.Printf("Unrecognized response: '%s'. Please, type (y)es or (n)o: ", response)
+		return GetUserConfirmation()
+	}
 }

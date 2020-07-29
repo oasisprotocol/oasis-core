@@ -24,6 +24,11 @@ const (
 
 	// CfgDryRun is the flag used to specify a dry-run of an operation.
 	CfgDryRun = "dry_run"
+
+	// CfgAssumeYes is the flag used to denote to answer all user prompts with
+	// yes.
+	CfgAssumeYes      = "assume_yes"
+	cfgAssumeYesShort = "y"
 )
 
 var (
@@ -44,6 +49,9 @@ var (
 
 	// DryRunFlag has the dry-run flag.
 	DryRunFlag = flag.NewFlagSet("", flag.ContinueOnError)
+
+	// AssumeYesFlag has the assume yes flag.
+	AssumeYesFlag = flag.NewFlagSet("", flag.ContinueOnError)
 )
 
 // Verbose returns true iff the verbose flag is set.
@@ -82,6 +90,11 @@ func DryRun() bool {
 	return viper.GetBool(CfgDryRun)
 }
 
+// AssumeYes returns true iff the assume yes flag is set.
+func AssumeYes() bool {
+	return viper.GetBool(CfgAssumeYes)
+}
+
 func init() {
 	VerboseFlags.BoolP(cfgVerbose, "v", false, "verbose output")
 
@@ -99,6 +112,8 @@ func init() {
 
 	DryRunFlag.BoolP(CfgDryRun, "n", false, "don't actually do anything, just show what will be done")
 
+	AssumeYesFlag.BoolP(CfgAssumeYes, cfgAssumeYesShort, false, "automatically assume yes for all questions")
+
 	for _, v := range []*flag.FlagSet{
 		VerboseFlags,
 		ForceFlags,
@@ -107,6 +122,7 @@ func init() {
 		ConsensusValidatorFlag,
 		DebugDontBlameOasisFlag,
 		DryRunFlag,
+		AssumeYesFlag,
 	} {
 		_ = viper.BindPFlags(v)
 	}

@@ -2,7 +2,9 @@
 package consensus
 
 import (
+	"context"
 	"encoding/json"
+	"fmt"
 	"io/ioutil"
 	"os"
 
@@ -10,6 +12,7 @@ import (
 	"github.com/spf13/viper"
 
 	"github.com/oasisprotocol/oasis-core/go/common/cbor"
+	signerFile "github.com/oasisprotocol/oasis-core/go/common/crypto/signature/signers/file"
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
 	"github.com/oasisprotocol/oasis-core/go/consensus/api/transaction"
 	genesisAPI "github.com/oasisprotocol/oasis-core/go/genesis/api"
@@ -89,7 +92,7 @@ func GetTxNonceAndFee() (uint64, *transaction.Fee) {
 	return nonce, &fee
 }
 
-func SignAndSaveTx(tx *transaction.Transaction) {
+func SignAndSaveTx(ctx context.Context, tx *transaction.Transaction) {
 	if viper.GetBool(CfgTxUnsigned) {
 		rawUnsignedTx := cbor.Marshal(tx)
 		if err := ioutil.WriteFile(viper.GetString(CfgTxFile), rawUnsignedTx, 0o600); err != nil {
@@ -116,6 +119,16 @@ func SignAndSaveTx(tx *transaction.Transaction) {
 		os.Exit(1)
 	}
 	defer signer.Reset()
+
+	fmt.Printf("You are about to sign the following transaction:\n")
+	tx.PrettyPrint(ctx, "  ", os.Stdout)
+
+	if !cmdFlags.AssumeYes() && cmdSigner.Backend() == signerFile.SignerName {
+		fmt.Printf("\nAre you sure you want to continue? (y)es/(n)o ")
+		if !cmdCommon.GetUserConfirmation() {
+			os.Exit(1)
+		}
+	}
 
 	sigTx, err := transaction.Sign(signer, tx)
 	if err != nil {

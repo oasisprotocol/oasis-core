@@ -201,7 +201,7 @@ func doGenRegister(cmd *cobra.Command, args []string) {
 	nonce, fee := cmdConsensus.GetTxNonceAndFee()
 	tx := registry.NewRegisterRuntimeTx(nonce, fee, signed)
 
-	cmdConsensus.SignAndSaveTx(tx)
+	cmdConsensus.SignAndSaveTx(context.Background(), tx)
 }
 
 func doList(cmd *cobra.Command, args []string) {
@@ -590,6 +590,7 @@ func init() {
 
 	registerFlags.AddFlagSet(cmdFlags.DebugTestEntityFlags)
 	registerFlags.AddFlagSet(cmdConsensus.TxFlags)
+	registerFlags.AddFlagSet(cmdFlags.AssumeYesFlag)
 
 	// List Runtimes flags.
 	runtimeListFlags.Bool(CfgIncludeSuspended, false, "Use to include suspended runtimes")

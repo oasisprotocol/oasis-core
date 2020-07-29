@@ -3,6 +3,7 @@ package keymanager
 
 import (
 	"bytes"
+	"context"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -443,7 +444,7 @@ func doGenUpdate(cmd *cobra.Command, args []string) {
 	// Build, sign, and write the UpdatePolicy transaction.
 	nonce, fee := cmdConsensus.GetTxNonceAndFee()
 	tx := kmApi.NewUpdatePolicyTx(nonce, fee, &signedPolicy)
-	cmdConsensus.SignAndSaveTx(tx)
+	cmdConsensus.SignAndSaveTx(context.Background(), tx)
 }
 
 func statusFromFlags() (*kmApi.Status, error) {
@@ -635,6 +636,7 @@ func Register(parentCmd *cobra.Command) {
 	genUpdateCmd.Flags().AddFlagSet(policyFileFlag)
 	genUpdateCmd.Flags().AddFlagSet(policySigFileFlag)
 	genUpdateCmd.Flags().AddFlagSet(cmdConsensus.TxFlags)
+	genUpdateCmd.Flags().AddFlagSet(cmdFlags.AssumeYesFlag)
 
 	parentCmd.AddCommand(keyManagerCmd)
 }

@@ -10,8 +10,10 @@ import (
 	flag "github.com/spf13/pflag"
 	"github.com/spf13/viper"
 
+	genesisAPI "github.com/oasisprotocol/oasis-core/go/genesis/api"
 	cmdCommon "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common"
 	cmdConsensus "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/consensus"
+	cmdFlags "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/flags"
 	cmdGrpc "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/grpc"
 	"github.com/oasisprotocol/oasis-core/go/staking/api"
 	staking "github.com/oasisprotocol/oasis-core/go/staking/api"
@@ -47,6 +49,7 @@ var (
 	commonEscrowFlags       = flag.NewFlagSet("", flag.ContinueOnError)
 	commissionScheduleFlags = flag.NewFlagSet("", flag.ContinueOnError)
 	accountTransferFlags    = flag.NewFlagSet("", flag.ContinueOnError)
+	accountBurnFlags        = flag.NewFlagSet("", flag.ContinueOnError)
 
 	accountCmd = &cobra.Command{
 		Use:   "account",
@@ -90,6 +93,15 @@ var (
 	}
 )
 
+// getCtxWithTokenInfo returns a new context with values that contain token
+// information (ticker symbol, value base-10 exponent).
+func getCtxWithTokenInfo(genesis *genesisAPI.Document) context.Context {
+	ctx := context.Background()
+	ctx = context.WithValue(ctx, staking.PrettyPrinterContextKeyTokenSymbol, genesis.Staking.TokenSymbol)
+	ctx = context.WithValue(ctx, staking.PrettyPrinterContextKeyTokenValueExponent, genesis.Staking.TokenValueExponent)
+	return ctx
+}
+
 func doAccountInfo(cmd *cobra.Command, args []string) {
 	if err := cmdCommon.Init(); err != nil {
 		cmdCommon.EarlyLogAndExit(err)
@@ -120,7 +132,7 @@ func doAccountTransfer(cmd *cobra.Command, args []string) {
 		cmdCommon.EarlyLogAndExit(err)
 	}
 
-	cmdConsensus.InitGenesis()
+	genesis := cmdConsensus.InitGenesis()
 	cmdConsensus.AssertTxFileOK()
 
 	var xfer staking.Transfer
@@ -140,7 +152,7 @@ func doAccountTransfer(cmd *cobra.Command, args []string) {
 	nonce, fee := cmdConsensus.GetTxNonceAndFee()
 	tx := staking.NewTransferTx(nonce, fee, &xfer)
 
-	cmdConsensus.SignAndSaveTx(tx)
+	cmdConsensus.SignAndSaveTx(getCtxWithTokenInfo(genesis), tx)
 }
 
 func doAccountBurn(cmd *cobra.Command, args []string) {
@@ -148,7 +160,7 @@ func doAccountBurn(cmd *cobra.Command, args []string) {
 		cmdCommon.EarlyLogAndExit(err)
 	}
 
-	cmdConsensus.InitGenesis()
+	genesis := cmdConsensus.InitGenesis()
 	cmdConsensus.AssertTxFileOK()
 
 	var burn staking.Burn
@@ -162,7 +174,7 @@ func doAccountBurn(cmd *cobra.Command, args []string) {
 	nonce, fee := cmdConsensus.GetTxNonceAndFee()
 	tx := staking.NewBurnTx(nonce, fee, &burn)
 
-	cmdConsensus.SignAndSaveTx(tx)
+	cmdConsensus.SignAndSaveTx(getCtxWithTokenInfo(genesis), tx)
 }
 
 func doAccountEscrow(cmd *cobra.Command, args []string) {
@@ -170,7 +182,7 @@ func doAccountEscrow(cmd *cobra.Command, args []string) {
 		cmdCommon.EarlyLogAndExit(err)
 	}
 
-	cmdConsensus.InitGenesis()
+	genesis := cmdConsensus.InitGenesis()
 	cmdConsensus.AssertTxFileOK()
 
 	var escrow staking.Escrow
@@ -190,7 +202,7 @@ func doAccountEscrow(cmd *cobra.Command, args []string) {
 	nonce, fee := cmdConsensus.GetTxNonceAndFee()
 	tx := staking.NewAddEscrowTx(nonce, fee, &escrow)
 
-	cmdConsensus.SignAndSaveTx(tx)
+	cmdConsensus.SignAndSaveTx(getCtxWithTokenInfo(genesis), tx)
 }
 
 func doAccountReclaimEscrow(cmd *cobra.Command, args []string) {
@@ -198,7 +210,7 @@ func doAccountReclaimEscrow(cmd *cobra.Command, args []string) {
 		cmdCommon.EarlyLogAndExit(err)
 	}
 
-	cmdConsensus.InitGenesis()
+	genesis := cmdConsensus.InitGenesis()
 	cmdConsensus.AssertTxFileOK()
 
 	var reclaim staking.ReclaimEscrow
@@ -218,7 +230,7 @@ func doAccountReclaimEscrow(cmd *cobra.Command, args []string) {
 	nonce, fee := cmdConsensus.GetTxNonceAndFee()
 	tx := staking.NewReclaimEscrowTx(nonce, fee, &reclaim)
 
-	cmdConsensus.SignAndSaveTx(tx)
+	cmdConsensus.SignAndSaveTx(getCtxWithTokenInfo(genesis), tx)
 }
 
 func scanRateStep(dst *staking.CommissionRateStep, raw string) error {
@@ -260,7 +272,7 @@ func doAccountAmendCommissionSchedule(cmd *cobra.Command, args []string) {
 		cmdCommon.EarlyLogAndExit(err)
 	}
 
-	cmdConsensus.InitGenesis()
+	genesis := cmdConsensus.InitGenesis()
 	cmdConsensus.AssertTxFileOK()
 
 	var amendCommissionSchedule staking.AmendCommissionSchedule
@@ -296,7 +308,7 @@ func doAccountAmendCommissionSchedule(cmd *cobra.Command, args []string) {
 	nonce, fee := cmdConsensus.GetTxNonceAndFee()
 	tx := staking.NewAmendCommissionScheduleTx(nonce, fee, &amendCommissionSchedule)
 
-	cmdConsensus.SignAndSaveTx(tx)
+	cmdConsensus.SignAndSaveTx(getCtxWithTokenInfo(genesis), tx)
 }
 
 func registerAccountCmd() {
@@ -313,8 +325,7 @@ func registerAccountCmd() {
 
 	accountInfoCmd.Flags().AddFlagSet(accountInfoFlags)
 	accountTransferCmd.Flags().AddFlagSet(accountTransferFlags)
-	accountBurnCmd.Flags().AddFlagSet(cmdConsensus.TxFlags)
-	accountBurnCmd.Flags().AddFlagSet(amountFlags)
+	accountBurnCmd.Flags().AddFlagSet(accountBurnFlags)
 	accountEscrowCmd.Flags().AddFlagSet(commonEscrowFlags)
 	accountEscrowCmd.Flags().AddFlagSet(amountFlags)
 	accountReclaimEscrowCmd.Flags().AddFlagSet(commonEscrowFlags)
@@ -337,10 +348,16 @@ func init() {
 	_ = viper.BindPFlags(accountTransferFlags)
 	accountTransferFlags.AddFlagSet(cmdConsensus.TxFlags)
 	accountTransferFlags.AddFlagSet(amountFlags)
+	accountTransferFlags.AddFlagSet(cmdFlags.AssumeYesFlag)
+
+	accountBurnFlags.AddFlagSet(cmdConsensus.TxFlags)
+	accountBurnFlags.AddFlagSet(amountFlags)
+	accountBurnFlags.AddFlagSet(cmdFlags.AssumeYesFlag)
 
 	commonEscrowFlags.String(CfgEscrowAccount, "", "address of the escrow account")
 	_ = viper.BindPFlags(commonEscrowFlags)
 	commonEscrowFlags.AddFlagSet(cmdConsensus.TxFlags)
+	commonEscrowFlags.AddFlagSet(cmdFlags.AssumeYesFlag)
 
 	commissionScheduleFlags.StringSlice(CfgCommissionScheduleRates, nil, fmt.Sprintf(
 		"commission rate step. Multiple of this flag is allowed. "+
@@ -355,4 +372,5 @@ func init() {
 	))
 	_ = viper.BindPFlags(commissionScheduleFlags)
 	commissionScheduleFlags.AddFlagSet(cmdConsensus.TxFlags)
+	commissionScheduleFlags.AddFlagSet(cmdFlags.AssumeYesFlag)
 }

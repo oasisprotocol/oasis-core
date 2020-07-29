@@ -98,6 +98,7 @@ func (k *KeymanagerHelpers) GenUpdate(nonce uint64, polPath string, polSigPaths 
 		"--" + cmdConsensus.CfgTxFeeAmount, strconv.Itoa(0), // TODO: Make fee configurable.
 		"--" + cmdConsensus.CfgTxFeeGas, strconv.Itoa(10000), // TODO: Make fee configurable.
 		"--" + cmdKM.CfgPolicyFile, polPath,
+		"--" + flags.CfgAssumeYes,
 		"--" + flags.CfgDebugDontBlameOasis,
 		"--" + cmdCommon.CfgDebugAllowTestKeys,
 		"--" + flags.CfgDebugTestEntity,
