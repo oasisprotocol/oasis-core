@@ -1,4 +1,4 @@
-package tendermint
+package full
 
 import (
 	"context"
@@ -14,7 +14,7 @@ import (
 )
 
 // serviceClientWorker manages block and event notifications for all service clients.
-func (t *tendermintService) serviceClientWorker(ctx context.Context, svc api.ServiceClient) {
+func (t *fullService) serviceClientWorker(ctx context.Context, svc api.ServiceClient) {
 	defer t.serviceClientsWg.Done()
 
 	sd := svc.ServiceDescriptor()

@@ -5,12 +5,31 @@ import (
 
 	"github.com/oasisprotocol/oasis-core/go/common/identity"
 	control "github.com/oasisprotocol/oasis-core/go/control/api"
+	"github.com/oasisprotocol/oasis-core/go/worker/registration"
 )
 
-var _ control.ControlledNode = (*Node)(nil)
+var (
+	_ control.ControlledNode = (*Node)(nil)
+	_ registration.Delegate  = (*Node)(nil)
+)
+
+// Implements registration.Delegate.
+func (n *Node) RegistrationStopped() {
+	n.Stop()
+}
 
 // Implements control.ControlledNode.
 func (n *Node) RequestShutdown() (<-chan struct{}, error) {
+	if n.RegistrationWorker == nil {
+		// In case there is no registration worker, we can just trigger an immediate shutdown.
+		ch := make(chan struct{})
+		go func() {
+			close(ch)
+			n.RegistrationStopped()
+		}()
+		return ch, nil
+	}
+
 	if err := n.RegistrationWorker.RequestDeregistration(); err != nil {
 		return nil, err
 	}
@@ -33,5 +52,8 @@ func (n *Node) GetIdentity() *identity.Identity {
 
 // Implements control.ControlledNode.
 func (n *Node) GetRegistrationStatus(ctx context.Context) (*control.RegistrationStatus, error) {
+	if n.RegistrationWorker == nil {
+		return &control.RegistrationStatus{}, nil
+	}
 	return n.RegistrationWorker.GetRegistrationStatus(ctx)
 }

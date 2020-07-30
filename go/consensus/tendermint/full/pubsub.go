@@ -1,4 +1,4 @@
-package tendermint
+package full
 
 import (
 	"github.com/eapache/channels"

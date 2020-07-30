@@ -15,6 +15,8 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/sgx"
 	"github.com/oasisprotocol/oasis-core/go/consensus/tendermint"
 	"github.com/oasisprotocol/oasis-core/go/consensus/tendermint/abci"
+	tendermintCommon "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/common"
+	tendermintFull "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/full"
 	epochtime "github.com/oasisprotocol/oasis-core/go/epochtime/api"
 	"github.com/oasisprotocol/oasis-core/go/ias"
 	cmdCommon "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common"
@@ -94,14 +96,14 @@ func (args *argBuilder) consensusValidator() *argBuilder {
 
 func (args *argBuilder) tendermintMinGasPrice(price uint64) *argBuilder {
 	args.vec = append(args.vec, []string{
-		"--" + tendermint.CfgMinGasPrice, strconv.Itoa(int(price)),
+		"--" + tendermintFull.CfgMinGasPrice, strconv.Itoa(int(price)),
 	}...)
 	return args
 }
 
 func (args *argBuilder) tendermintSubmissionGasPrice(price uint64) *argBuilder {
 	args.vec = append(args.vec, []string{
-		"--" + tendermint.CfgSubmissionGasPrice, strconv.Itoa(int(price)),
+		"--" + tendermintCommon.CfgSubmissionGasPrice, strconv.Itoa(int(price)),
 	}...)
 	return args
 }
@@ -109,12 +111,12 @@ func (args *argBuilder) tendermintSubmissionGasPrice(price uint64) *argBuilder {
 func (args *argBuilder) tendermintPrune(numKept uint64) *argBuilder {
 	if numKept > 0 {
 		args.vec = append(args.vec,
-			"--"+tendermint.CfgABCIPruneStrategy, abci.PruneKeepN.String(),
-			"--"+tendermint.CfgABCIPruneNumKept, strconv.FormatUint(numKept, 10),
+			"--"+tendermintFull.CfgABCIPruneStrategy, abci.PruneKeepN.String(),
+			"--"+tendermintFull.CfgABCIPruneNumKept, strconv.FormatUint(numKept, 10),
 		)
 	} else {
 		args.vec = append(args.vec,
-			"--"+tendermint.CfgABCIPruneStrategy, abci.PruneNone.String(),
+			"--"+tendermintFull.CfgABCIPruneStrategy, abci.PruneNone.String(),
 		)
 	}
 	return args
@@ -122,21 +124,21 @@ func (args *argBuilder) tendermintPrune(numKept uint64) *argBuilder {
 
 func (args *argBuilder) tendermintDebugDisableCheckTx(disable bool) *argBuilder {
 	if disable {
-		args.vec = append(args.vec, "--"+tendermint.CfgDebugDisableCheckTx)
+		args.vec = append(args.vec, "--"+tendermintFull.CfgDebugDisableCheckTx)
 	}
 	return args
 }
 
 func (args *argBuilder) tendermintRecoverCorruptedWAL(enable bool) *argBuilder {
 	if enable {
-		args.vec = append(args.vec, "--"+tendermint.CfgDebugUnsafeReplayRecoverCorruptedWAL)
+		args.vec = append(args.vec, "--"+tendermintFull.CfgDebugUnsafeReplayRecoverCorruptedWAL)
 	}
 	return args
 }
 
 func (args *argBuilder) tendermintCoreListenAddress(port uint16) *argBuilder {
 	args.vec = append(args.vec, []string{
-		"--" + tendermint.CfgCoreListenAddress, "tcp://0.0.0.0:" + strconv.Itoa(int(port)),
+		"--" + tendermintCommon.CfgCoreListenAddress, "tcp://0.0.0.0:" + strconv.Itoa(int(port)),
 	}...)
 	return args
 }
@@ -144,7 +146,7 @@ func (args *argBuilder) tendermintCoreListenAddress(port uint16) *argBuilder {
 func (args *argBuilder) tendermintSentryUpstreamAddress(addrs []string) *argBuilder {
 	for _, addr := range addrs {
 		args.vec = append(args.vec, []string{
-			"--" + tendermint.CfgSentryUpstreamAddress, addr,
+			"--" + tendermintFull.CfgSentryUpstreamAddress, addr,
 		}...)
 	}
 	return args
@@ -152,24 +154,24 @@ func (args *argBuilder) tendermintSentryUpstreamAddress(addrs []string) *argBuil
 
 func (args *argBuilder) tendermintDisablePeerExchange() *argBuilder {
 	args.vec = append(args.vec, []string{
-		"--" + tendermint.CfgP2PDisablePeerExchange,
+		"--" + tendermintFull.CfgP2PDisablePeerExchange,
 	}...)
 	return args
 }
 
 func (args *argBuilder) tendermintSeedMode() *argBuilder {
-	args.vec = append(args.vec, "--"+tendermint.CfgP2PSeedMode)
+	args.vec = append(args.vec, "--"+tendermint.CfgMode, tendermint.ModeSeed)
 	return args
 }
 
 func (args *argBuilder) tendermintDebugAddrBookLenient() *argBuilder {
-	args.vec = append(args.vec, "--"+tendermint.CfgDebugP2PAddrBookLenient)
+	args.vec = append(args.vec, "--"+tendermintFull.CfgDebugP2PAddrBookLenient)
 	return args
 }
 
 func (args *argBuilder) tendermintDebugAllowDuplicateIP() *argBuilder {
 	args.vec = append(args.vec, []string{
-		"--" + tendermint.CfgDebugP2PAllowDuplicateIP,
+		"--" + tendermintFull.CfgDebugP2PAllowDuplicateIP,
 	}...)
 	return args
 }
@@ -189,9 +191,9 @@ func (args *argBuilder) runtimeSupported(id common.Namespace) *argBuilder {
 }
 
 func (args *argBuilder) tendermintSupplementarySanityEnabled() *argBuilder {
-	args.vec = append(args.vec, "--"+tendermint.CfgSupplementarySanityEnabled)
+	args.vec = append(args.vec, "--"+tendermintFull.CfgSupplementarySanityEnabled)
 	args.vec = append(args.vec, []string{
-		"--" + tendermint.CfgSupplementarySanityInterval, "1",
+		"--" + tendermintFull.CfgSupplementarySanityInterval, "1",
 	}...)
 	return args
 }
@@ -442,7 +444,7 @@ func (args *argBuilder) addSentryKeymanagerWorkers(keymanagerWorkers []*Keymanag
 func (args *argBuilder) appendSeedNodes(net *Network) *argBuilder {
 	if seed := net.seedNode; seed != nil {
 		args.vec = append(args.vec, []string{
-			"--" + tendermint.CfgP2PSeed, fmt.Sprintf("%s@127.0.0.1:%d", seed.tmAddress, seed.consensusPort),
+			"--" + tendermintFull.CfgP2PSeed, fmt.Sprintf("%s@127.0.0.1:%d", seed.tmAddress, seed.consensusPort),
 		}...)
 	}
 	return args

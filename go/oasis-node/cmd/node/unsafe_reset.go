@@ -9,7 +9,7 @@ import (
 	"github.com/spf13/viper"
 
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
-	"github.com/oasisprotocol/oasis-core/go/consensus/tendermint"
+	tendermintCommon "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/common"
 	cmdCommon "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common"
 	cmdFlags "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/flags"
 	"github.com/oasisprotocol/oasis-core/go/runtime/history"
@@ -40,7 +40,7 @@ var (
 	nodeStateGlobs = []string{
 		"abci-mux-state.*.db",
 		"persistent-store.*.db",
-		tendermint.StateDir,
+		tendermintCommon.StateDir,
 		filepath.Join(runtimesGlob, history.DbFilename),
 	}
 

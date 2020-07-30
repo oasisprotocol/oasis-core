@@ -54,7 +54,7 @@ type SubmissionManager interface {
 }
 
 type submissionManager struct {
-	backend        Backend
+	backend        ClientBackend
 	priceDiscovery PriceDiscovery
 	maxFee         quantity.Quantity
 
@@ -148,7 +148,7 @@ func (m *submissionManager) SignAndSubmitTx(ctx context.Context, signer signatur
 }
 
 // NewSubmissionManager creates a new transaction submission manager.
-func NewSubmissionManager(backend Backend, priceDiscovery PriceDiscovery, maxFee uint64) SubmissionManager {
+func NewSubmissionManager(backend ClientBackend, priceDiscovery PriceDiscovery, maxFee uint64) SubmissionManager {
 	sm := &submissionManager{
 		backend:        backend,
 		priceDiscovery: priceDiscovery,

@@ -1,4 +1,4 @@
-package tendermint
+package full
 
 import (
 	"context"
@@ -20,7 +20,7 @@ func init() {
 }
 
 // Implements LightClientBackend.
-func (t *tendermintService) GetSignedHeader(ctx context.Context, height int64) (*consensusAPI.SignedHeader, error) {
+func (t *fullService) GetSignedHeader(ctx context.Context, height int64) (*consensusAPI.SignedHeader, error) {
 	if err := t.ensureStarted(ctx); err != nil {
 		return nil, err
 	}
@@ -41,7 +41,7 @@ func (t *tendermintService) GetSignedHeader(ctx context.Context, height int64) (
 }
 
 // Implements LightClientBackend.
-func (t *tendermintService) GetValidatorSet(ctx context.Context, height int64) (*consensusAPI.ValidatorSet, error) {
+func (t *fullService) GetValidatorSet(ctx context.Context, height int64) (*consensusAPI.ValidatorSet, error) {
 	if err := t.ensureStarted(ctx); err != nil {
 		return nil, err
 	}
@@ -59,7 +59,7 @@ func (t *tendermintService) GetValidatorSet(ctx context.Context, height int64) (
 }
 
 // Implements LightClientBackend.
-func (t *tendermintService) GetParameters(ctx context.Context, height int64) (*consensusAPI.Parameters, error) {
+func (t *fullService) GetParameters(ctx context.Context, height int64) (*consensusAPI.Parameters, error) {
 	if err := t.ensureStarted(ctx); err != nil {
 		return nil, err
 	}
@@ -76,6 +76,6 @@ func (t *tendermintService) GetParameters(ctx context.Context, height int64) (*c
 }
 
 // Implements LightClientBackend.
-func (t *tendermintService) State() syncer.ReadSyncer {
+func (t *fullService) State() syncer.ReadSyncer {
 	return t.mux.State().Storage()
 }
