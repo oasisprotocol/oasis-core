@@ -36,6 +36,7 @@ const (
 
 	cfgSignerCompositeBackends = "signer.composite.backends"
 
+	cfgSignerPluginName   = "signer.plugin.name"
 	cfgSignerPluginPath   = "signer.plugin.path"
 	cfgSignerPluginConfig = "signer.plugin.config"
 )
@@ -114,6 +115,7 @@ func doNewFactory(signerBackend, signerDir string, roles ...signature.SignerRole
 		return remoteSigner.NewFactory(config, roles...)
 	case pluginSigner.SignerName:
 		config := &pluginSigner.FactoryConfig{
+			Name:   viper.GetString(cfgSignerPluginName),
 			Path:   viper.GetString(cfgSignerPluginPath),
 			Config: viper.GetString(cfgSignerPluginConfig),
 		}
@@ -172,7 +174,8 @@ func init() {
 	Flags.String(cfgSignerRemoteClientKey, "", "remote signer client certificate key path")
 	Flags.String(cfgSignerRemoteServerCert, "", "remote signer server certificate path")
 	Flags.String(cfgSignerCompositeBackends, "", "composite signer backends")
-	Flags.String(cfgSignerPluginPath, "", "plugin signer DSO path")
+	Flags.String(cfgSignerPluginName, "", "plugin signer backend name")
+	Flags.String(cfgSignerPluginPath, "", "plugin signer binary path")
 	Flags.String(cfgSignerPluginConfig, "", "plugin signer configuration")
 
 	_ = viper.BindPFlags(Flags)

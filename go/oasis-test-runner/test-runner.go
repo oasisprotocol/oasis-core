@@ -2,6 +2,8 @@
 package main
 
 import (
+	"github.com/hashicorp/go-plugin"
+
 	"github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/cmd"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/scenario/e2e"
@@ -11,6 +13,9 @@ import (
 )
 
 func main() {
+	// If we use go-plugin, we are supposed to clean clients up.
+	defer plugin.CleanupClients()
+
 	// The general idea is that it should be possible to reuse everything
 	// except for the main() function  and specialized test cases to write
 	// test drivers that need to exercise the Oasis network or things built

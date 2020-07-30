@@ -13,7 +13,7 @@ pushd /workdir/go/oasis-test-runner
 popd
 
 pushd /workdir/go/oasis-test-runner/scenario/pluginsigner/example_signer_plugin
-    buildkite-agent artifact upload example_signer_plugin.so
+    buildkite-agent artifact upload example_signer_plugin
 popd
 
 pushd /workdir/go/oasis-net-runner

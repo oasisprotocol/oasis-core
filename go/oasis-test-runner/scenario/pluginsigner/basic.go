@@ -32,10 +32,12 @@ func (sc *basicImpl) Clone() scenario.Scenario {
 
 func (sc *basicImpl) Run(childEnv *env.Env) error {
 	// Initialize the plugin signer.
+	pluginName, _ := sc.flags.GetString(cfgPluginName)
 	pluginBinary, _ := sc.flags.GetString(cfgPluginBinary)
 	pluginConfig, _ := sc.flags.GetString(cfgPluginConfig)
 	sf, err := pluginSigner.NewFactory(
 		&pluginSigner.FactoryConfig{
+			Name:   pluginName,
 			Path:   pluginBinary,
 			Config: pluginConfig,
 		},
