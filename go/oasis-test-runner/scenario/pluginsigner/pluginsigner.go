@@ -12,6 +12,7 @@ import (
 )
 
 const (
+	cfgPluginName   = "name"
 	cfgPluginBinary = "binary"
 	cfgPluginConfig = "config"
 )
@@ -36,7 +37,8 @@ func newPluginSignerImpl(name string) *pluginSignerImpl {
 		logger: logging.GetLogger("scenario/" + fullName),
 		flags:  env.NewParameterFlagSet(fullName, flag.ContinueOnError),
 	}
-	sc.flags.String(cfgPluginBinary, "signer-plugin.so", "plugin binary")
+	sc.flags.String(cfgPluginName, "test-signer-plugin", "plugin name")
+	sc.flags.String(cfgPluginBinary, "signer-plugin", "plugin binary")
 	sc.flags.String(cfgPluginConfig, "", "plugin configuration")
 
 	return sc
