@@ -83,7 +83,8 @@ func (t Transaction) PrettyPrintBody(ctx context.Context, prefix string, w io.Wr
 func (t Transaction) PrettyPrint(ctx context.Context, prefix string, w io.Writer) {
 	fmt.Fprintf(w, "%sNonce:  %d\n", prefix, t.Nonce)
 	if t.Fee != nil {
-		fmt.Fprintf(w, "%sFee:    %s (gas limit: %d, gas price: %s)\n", prefix, t.Fee.Amount, t.Fee.Gas, t.Fee.GasPrice())
+		fmt.Fprintf(w, "%sFee:\n", prefix)
+		t.Fee.PrettyPrint(ctx, prefix+"  ", w)
 	} else {
 		fmt.Fprintf(w, "%sFee:   none\n", prefix)
 	}
