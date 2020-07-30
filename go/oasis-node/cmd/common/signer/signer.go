@@ -168,7 +168,7 @@ func doNewComposite(signerDir string, roles ...signature.SignerRole) (signature.
 }
 
 func init() {
-	Flags.StringP(CfgSigner, "s", "file", "signer backend [file, plugin, ledger, remote, composite]")
+	Flags.StringP(CfgSigner, "s", "file", "signer backend [file, plugin, remote, composite]")
 	Flags.String(cfgSignerRemoteAddress, "", "remote signer server address")
 	Flags.String(cfgSignerRemoteClientCert, "", "remote signer client certificate path")
 	Flags.String(cfgSignerRemoteClientKey, "", "remote signer client certificate key path")
