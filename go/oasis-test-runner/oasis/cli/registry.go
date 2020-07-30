@@ -129,7 +129,6 @@ func (r *RegistryHelpers) GenerateRegisterRuntimeTx(
 		"--"+consensus.CfgTxFile, txPath,
 		"--"+consensus.CfgTxFeeAmount, strconv.Itoa(0), // TODO: Make fee configurable.
 		"--"+consensus.CfgTxFeeGas, strconv.Itoa(10000), // TODO: Make fee configurable.
-		"--"+flags.CfgAssumeYes,
 		"--"+flags.CfgDebugDontBlameOasis,
 		"--"+cmdCommon.CfgDebugAllowTestKeys,
 		"--"+flags.CfgDebugTestEntity,
