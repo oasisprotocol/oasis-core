@@ -30,16 +30,11 @@ require (
 	github.com/hashicorp/go-multierror v1.0.0
 	github.com/hashicorp/go-plugin v1.3.0
 	github.com/hpcloud/tail v1.0.0
-	github.com/ipfs/go-log/v2 v2.1.1 // indirect
-	github.com/libp2p/go-libp2p v0.9.6
-	github.com/libp2p/go-libp2p-core v0.6.0
-	github.com/libp2p/go-libp2p-pubsub v0.3.1
-	github.com/libp2p/go-libp2p-swarm v0.2.8 // indirect
-	github.com/libp2p/go-openssl v0.0.6 // indirect
-	github.com/mr-tron/base58 v1.2.0 // indirect
+	github.com/libp2p/go-libp2p v0.10.2
+	github.com/libp2p/go-libp2p-core v0.6.1
+	github.com/libp2p/go-libp2p-pubsub v0.3.3
 	github.com/multiformats/go-multiaddr v0.2.2
 	github.com/multiformats/go-multiaddr-net v0.1.5
-	github.com/multiformats/go-multihash v0.0.14 // indirect
 	github.com/oasisprotocol/deoxysii v0.0.0-20200527154044-851aec403956
 	github.com/oasisprotocol/ed25519 v0.0.0-20200528083105-55566edd6df0
 	github.com/opentracing/opentracing-go v1.2.0
@@ -60,7 +55,6 @@ require (
 	github.com/uber/jaeger-lib v2.2.0+incompatible // indirect
 	github.com/whyrusleeping/go-logging v0.0.1
 	gitlab.com/yawning/dynlib.git v0.0.0-20200603163025-35fe007b0761
-	go.opencensus.io v0.22.4 // indirect
 	golang.org/x/crypto v0.0.0-20200709230013-948cd5f35899
 	golang.org/x/net v0.0.0-20200602114024-627f9648deb9
 	golang.org/x/sys v0.0.0-20200722175500-76b94024e4b6 // indirect
