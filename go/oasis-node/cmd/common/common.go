@@ -278,24 +278,34 @@ func ExportEntity(signerBackend, entityDir string) error {
 	return err
 }
 
-// GetUserConfirmation scans the input for user's confirmation.
+// GetUserConfirmation displays the prompt, and scans the input for
+// the user's confirmation, until the user either explicitly confirms
+// or rejects the prompt.
 //
-// If the user's response is not recognized, it prompts the user again.
-func GetUserConfirmation() bool {
-	var response string
-
-	_, err := fmt.Scanln(&response)
-	if err != nil && err.Error() != "unexpected newline" {
-		rootLog.Error("Error reading from line", "err", err)
+// Note: If standard input is not a tty, this will omit displaying
+// the prompt, and assume the user entered yes.
+func GetUserConfirmation(prompt string) bool {
+	if !Isatty(os.Stdin.Fd()) {
+		return true
 	}
 
-	switch strings.ToLower(response) {
-	case "y", "yes":
-		return true
-	case "n", "no":
-		return false
-	default:
-		fmt.Printf("Unrecognized response: '%s'. Please, type (y)es or (n)o: ", response)
-		return GetUserConfirmation()
+	fmt.Printf("%s", prompt)
+
+	var response string
+	for {
+		_, err := fmt.Scanln(&response)
+		if err != nil && err.Error() != "unexpected newline" {
+			rootLog.Error("Error reading from line", "err", err)
+			continue
+		}
+
+		switch strings.ToLower(response) {
+		case "y", "yes":
+			return true
+		case "n", "no":
+			return false
+		default:
+			fmt.Printf("Unrecognized response: '%s'. Please, type (y)es or (n)o: ", response)
+		}
 	}
 }
