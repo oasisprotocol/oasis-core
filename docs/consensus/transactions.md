@@ -42,7 +42,7 @@ Fields:
 The actual transaction that is submitted to the consensus layer must be signed
 which means that it is wrapped into a [signed envelope].
 
-Domain separation context (+ [chain domain separation]):
+[Domain separation] context (+ [chain domain separation]):
 
 ```
 oasis-core/consensus: tx
@@ -50,6 +50,7 @@ oasis-core/consensus: tx
 
 [encoded]: ../encoding.md
 [signed envelope]: ../crypto.md#signed-envelope
+[Domain separation]: ../crypto.md#domain-separation
 [chain domain separation]: ../crypto.md#chain-domain-separation
 
 ## Fees
