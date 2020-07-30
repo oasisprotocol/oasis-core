@@ -124,8 +124,7 @@ func SignAndSaveTx(ctx context.Context, tx *transaction.Transaction) {
 	tx.PrettyPrint(ctx, "  ", os.Stdout)
 
 	if !cmdFlags.AssumeYes() && cmdSigner.Backend() == signerFile.SignerName {
-		fmt.Printf("\nAre you sure you want to continue? (y)es/(n)o ")
-		if !cmdCommon.GetUserConfirmation() {
+		if !cmdCommon.GetUserConfirmation("\nAre you sure you want to continue? (y)es/(n)o: ") {
 			os.Exit(1)
 		}
 	}
