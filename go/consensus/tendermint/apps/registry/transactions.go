@@ -540,20 +540,6 @@ func (app *registryApplication) registerRuntime( // nolint: gocyclo
 		return registry.ErrIncorrectTxSigner
 	}
 
-	// If TEE is required, check if runtime provided at least one enclave ID.
-	if rt.TEEHardware != node.TEEHardwareInvalid {
-		switch rt.TEEHardware {
-		case node.TEEHardwareIntelSGX:
-			var vi registry.VersionInfoIntelSGX
-			if err = cbor.Unmarshal(rt.Version.TEE, &vi); err != nil {
-				return err
-			}
-			if len(vi.Enclaves) == 0 {
-				return registry.ErrNoEnclaveForRuntime
-			}
-		}
-	}
-
 	// Make sure the runtime doesn't exist yet.
 	var suspended bool
 	existingRt, err := state.Runtime(ctx, rt.ID)

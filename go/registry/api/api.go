@@ -996,7 +996,7 @@ func exactlyOneTrue(conds ...bool) bool {
 }
 
 // VerifyRegisterRuntimeArgs verifies arguments for RegisterRuntime.
-func VerifyRegisterRuntimeArgs(
+func VerifyRegisterRuntimeArgs( // nolint: gocyclo
 	params *ConsensusParameters,
 	logger *logging.Logger,
 	sigRt *SignedRuntime,
@@ -1091,6 +1091,14 @@ func VerifyRegisterRuntimeArgs(
 			)
 			return nil, fmt.Errorf("%w: runtime ID flag mismatch", ErrInvalidArgument)
 		}
+		// Currently the keymanager implementation assumes SGX. Unless this is a
+		// test runtime, a keymanager without SGX is disallowed.
+		if !rt.ID.IsTest() && rt.TEEHardware != node.TEEHardwareIntelSGX {
+			logger.Error("RegisterRuntime: non-test key manager without SGX",
+				"id", rt.ID,
+			)
+			return nil, fmt.Errorf("%w: non SGX keymanager runtime", ErrInvalidArgument)
+		}
 	default:
 		return nil, ErrInvalidArgument
 	}
@@ -1111,6 +1119,24 @@ func VerifyRegisterRuntimeArgs(
 			"runtime", rt,
 		)
 		return nil, fmt.Errorf("%w: invalid TEE hardware", ErrInvalidArgument)
+	}
+
+	// If TEE is required, check if runtime provided at least one enclave ID.
+	if rt.TEEHardware != node.TEEHardwareInvalid {
+		switch rt.TEEHardware {
+		case node.TEEHardwareIntelSGX:
+			var vi VersionInfoIntelSGX
+			if err := cbor.Unmarshal(rt.Version.TEE, &vi); err != nil {
+				logger.Error("RegisterRuntime: invalid SGX TEE Version Info",
+					"version_info", vi,
+					"err", err,
+				)
+				return nil, fmt.Errorf("%w: invalid VersionInfo", ErrInvalidArgument)
+			}
+			if len(vi.Enclaves) == 0 {
+				return nil, fmt.Errorf("%w: invalid VersionInfo", ErrNoEnclaveForRuntime)
+			}
+		}
 	}
 
 	// Ensure there's a valid admission policy.
