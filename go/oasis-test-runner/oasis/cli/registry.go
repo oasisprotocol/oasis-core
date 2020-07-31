@@ -99,6 +99,12 @@ func (r *RegistryHelpers) runRegistryRuntimeSubcommand(
 		return fmt.Errorf("invalid admission policy")
 	}
 
+	for rtID := range runtime.KeyManagerParameters.AllowedComputeRuntimes {
+		args = append(args,
+			"--"+cmdRegRt.CfgKeyManagerAllowedComputeRuntimes, rtID.String(),
+		)
+	}
+
 	for kind, value := range runtime.Staking.Thresholds {
 		kindRaw, _ := kind.MarshalText()
 		valueRaw, _ := value.MarshalText()

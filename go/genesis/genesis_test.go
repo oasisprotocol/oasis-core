@@ -169,6 +169,8 @@ func TestGenesisSanityCheck(t *testing.T) {
 	}
 	signedTestEntity := signEntityOrDie(signer, testEntity)
 
+	testRuntimeID := hex2ns("0000000000000000000000000000000000000000000000000000000000000001", false)
+
 	kmRuntimeID := hex2ns("4000000000000000ffffffffffffffffffffffffffffffffffffffffffffffff", false)
 	testKMRuntime := &registry.Runtime{
 		Versioned:   cbor.NewVersioned(registry.LatestRuntimeDescriptorVersion),
@@ -188,10 +190,14 @@ func TestGenesisSanityCheck(t *testing.T) {
 				},
 			},
 		},
+		KeyManagerParameters: registry.KeyManagerParameters{
+			AllowedComputeRuntimes: map[common.Namespace]bool{
+				testRuntimeID: true,
+			},
+		},
 	}
 	signedTestKMRuntime := signRuntimeOrDie(signer, testKMRuntime)
 
-	testRuntimeID := hex2ns("0000000000000000000000000000000000000000000000000000000000000001", false)
 	testRuntime := &registry.Runtime{
 		Versioned:  cbor.NewVersioned(registry.LatestRuntimeDescriptorVersion),
 		ID:         testRuntimeID,

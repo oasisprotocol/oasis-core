@@ -208,6 +208,13 @@ func (s *RuntimeStakingParameters) ValidateBasic(runtimeKind RuntimeKind) error 
 	return nil
 }
 
+// KeyManagerParameters are the parameters specific to key manager runtimes.
+type KeyManagerParameters struct {
+	// AllowedComputeRuntimes sets which compute runtimes are allowed to
+	// register with this key manager runtime.
+	AllowedComputeRuntimes map[common.Namespace]bool `json:"allowed_compute_runtimes"`
+}
+
 const (
 	// LatestRuntimeDescriptorVersion is the latest entity descriptor version that should be used
 	// for all new descriptors. Using earlier versions may be rejected.
@@ -255,6 +262,9 @@ type Runtime struct { // nolint: maligned
 
 	// Storage stores parameters of the storage committee.
 	Storage StorageParameters `json:"storage,omitempty"`
+
+	// KeyManager parameters stores paratemers specific to keymanager runtime.
+	KeyManagerParameters KeyManagerParameters `json:"key_manager_parameters,omitempty"`
 
 	// AdmissionPolicy sets which nodes are allowed to register for this runtime.
 	// This policy applies to all roles.

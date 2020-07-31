@@ -57,10 +57,11 @@ type RuntimeCfg struct { // nolint: maligned
 	GenesisStatePath string
 	GenesisRound     uint64
 
-	Executor     registry.ExecutorParameters
-	Merge        registry.MergeParameters
-	TxnScheduler registry.TxnSchedulerParameters
-	Storage      registry.StorageParameters
+	Executor             registry.ExecutorParameters
+	Merge                registry.MergeParameters
+	TxnScheduler         registry.TxnSchedulerParameters
+	Storage              registry.StorageParameters
+	KeyManagerParameters registry.KeyManagerParameters
 
 	AdmissionPolicy registry.RuntimeAdmissionPolicy
 	Staking         registry.RuntimeStakingParameters
@@ -122,17 +123,18 @@ func (rt *Runtime) GetGenesisStatePath() string {
 // NewRuntime provisions a new runtime and adds it to the network.
 func (net *Network) NewRuntime(cfg *RuntimeCfg) (*Runtime, error) {
 	descriptor := registry.Runtime{
-		Versioned:       cbor.NewVersioned(registry.LatestRuntimeDescriptorVersion),
-		ID:              cfg.ID,
-		EntityID:        cfg.Entity.entity.ID,
-		Kind:            cfg.Kind,
-		TEEHardware:     cfg.TEEHardware,
-		Executor:        cfg.Executor,
-		Merge:           cfg.Merge,
-		TxnScheduler:    cfg.TxnScheduler,
-		Storage:         cfg.Storage,
-		AdmissionPolicy: cfg.AdmissionPolicy,
-		Staking:         cfg.Staking,
+		Versioned:            cbor.NewVersioned(registry.LatestRuntimeDescriptorVersion),
+		ID:                   cfg.ID,
+		EntityID:             cfg.Entity.entity.ID,
+		Kind:                 cfg.Kind,
+		TEEHardware:          cfg.TEEHardware,
+		Executor:             cfg.Executor,
+		Merge:                cfg.Merge,
+		TxnScheduler:         cfg.TxnScheduler,
+		Storage:              cfg.Storage,
+		KeyManagerParameters: cfg.KeyManagerParameters,
+		AdmissionPolicy:      cfg.AdmissionPolicy,
+		Staking:              cfg.Staking,
 	}
 
 	rtDir, err := net.baseDir.NewSubDir("runtime-" + cfg.ID.String())

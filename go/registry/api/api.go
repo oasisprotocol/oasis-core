@@ -1247,6 +1247,15 @@ func VerifyRegisterComputeRuntimeArgs(ctx context.Context, logger *logging.Logge
 			)
 			return ErrInvalidArgument
 		}
+
+		// Key manager runtime should allow this runtime.
+		if _, ok := km.KeyManagerParameters.AllowedComputeRuntimes[rt.ID]; !ok {
+			logger.Error("RegisterRuntime: runtime not in provided key manager allowlist",
+				"runtime", rt.ID,
+				"key_manager", km.ID,
+			)
+			return ErrInvalidArgument
+		}
 	}
 
 	return nil

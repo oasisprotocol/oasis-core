@@ -71,6 +71,11 @@ func newDefaultFixture() (*oasis.NetworkFixture, error) {
 				AdmissionPolicy: registry.RuntimeAdmissionPolicy{
 					AnyNode: &registry.AnyNodeRuntimeAdmissionPolicy{},
 				},
+				KeyManagerParameters: registry.KeyManagerParameters{
+					AllowedComputeRuntimes: map[common.Namespace]bool{
+						runtimeID: true,
+					},
+				},
 			},
 			// Compute runtime.
 			{

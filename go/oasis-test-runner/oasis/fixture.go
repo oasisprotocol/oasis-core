@@ -197,10 +197,11 @@ type RuntimeFixture struct { // nolint: maligned
 	GenesisStatePath string           `json:"genesis_state_path,omitempty"`
 	GenesisRound     uint64           `json:"genesis_round,omitempty"`
 
-	Executor     registry.ExecutorParameters     `json:"executor"`
-	Merge        registry.MergeParameters        `json:"merge"`
-	TxnScheduler registry.TxnSchedulerParameters `json:"txn_scheduler"`
-	Storage      registry.StorageParameters      `json:"storage"`
+	Executor             registry.ExecutorParameters     `json:"executor"`
+	Merge                registry.MergeParameters        `json:"merge"`
+	TxnScheduler         registry.TxnSchedulerParameters `json:"txn_scheduler"`
+	Storage              registry.StorageParameters      `json:"storage"`
+	KeyManagerParameters registry.KeyManagerParameters   `json:"key_manager_parameters"`
 
 	AdmissionPolicy registry.RuntimeAdmissionPolicy   `json:"admission_policy"`
 	Staking         registry.RuntimeStakingParameters `json:"staking,omitempty"`
@@ -230,24 +231,25 @@ func (f *RuntimeFixture) Create(netFixture *NetworkFixture, net *Network) (*Runt
 	}
 
 	return net.NewRuntime(&RuntimeCfg{
-		ID:                 f.ID,
-		Kind:               f.Kind,
-		Entity:             entity,
-		Keymanager:         km,
-		TEEHardware:        netFixture.TEE.Hardware,
-		MrSigner:           netFixture.TEE.MrSigner,
-		Executor:           f.Executor,
-		Merge:              f.Merge,
-		TxnScheduler:       f.TxnScheduler,
-		Storage:            f.Storage,
-		AdmissionPolicy:    f.AdmissionPolicy,
-		Staking:            f.Staking,
-		Binaries:           f.Binaries,
-		GenesisState:       f.GenesisState,
-		GenesisStatePath:   f.GenesisStatePath,
-		GenesisRound:       f.GenesisRound,
-		Pruner:             f.Pruner,
-		ExcludeFromGenesis: f.ExcludeFromGenesis,
+		ID:                   f.ID,
+		Kind:                 f.Kind,
+		Entity:               entity,
+		Keymanager:           km,
+		TEEHardware:          netFixture.TEE.Hardware,
+		MrSigner:             netFixture.TEE.MrSigner,
+		Executor:             f.Executor,
+		Merge:                f.Merge,
+		TxnScheduler:         f.TxnScheduler,
+		Storage:              f.Storage,
+		KeyManagerParameters: f.KeyManagerParameters,
+		AdmissionPolicy:      f.AdmissionPolicy,
+		Staking:              f.Staking,
+		Binaries:             f.Binaries,
+		GenesisState:         f.GenesisState,
+		GenesisStatePath:     f.GenesisStatePath,
+		GenesisRound:         f.GenesisRound,
+		Pruner:               f.Pruner,
+		ExcludeFromGenesis:   f.ExcludeFromGenesis,
 	})
 }
 

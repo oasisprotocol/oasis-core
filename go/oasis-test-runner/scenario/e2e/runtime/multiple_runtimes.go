@@ -118,12 +118,16 @@ func (sc *multipleRuntimesImpl) Fixture() (*oasis.NetworkFixture, error) {
 		f.Runtimes = append(f.Runtimes, newRtFixture)
 	}
 
+	kmRuntime := f.Runtimes[0]
 	var computeRuntimes []int
 	for id, rt := range f.Runtimes {
 		if rt.Kind == registry.KindCompute {
 			computeRuntimes = append(computeRuntimes, id)
+			kmRuntime.KeyManagerParameters.AllowedComputeRuntimes[rt.ID] = true
 		}
 	}
+	// Update keymanager runtime.
+	f.Runtimes[0] = kmRuntime
 	// Use numComputeWorkers compute worker fixtures.
 	numComputeWorkers, _ := sc.Flags.GetInt(cfgNumComputeWorkers)
 	f.ComputeWorkers = []oasis.ComputeWorkerFixture{}

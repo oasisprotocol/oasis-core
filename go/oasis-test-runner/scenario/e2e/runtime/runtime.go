@@ -150,6 +150,11 @@ func (sc *runtimeImpl) Fixture() (*oasis.NetworkFixture, error) {
 					AnyNode: &registry.AnyNodeRuntimeAdmissionPolicy{},
 				},
 				Binaries: []string{keyManagerBinary},
+				KeyManagerParameters: registry.KeyManagerParameters{
+					AllowedComputeRuntimes: map[common.Namespace]bool{
+						runtimeID: true,
+					},
+				},
 			},
 			// Compute runtime.
 			{

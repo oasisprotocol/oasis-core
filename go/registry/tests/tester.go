@@ -680,6 +680,12 @@ func testRegistryRuntime(t *testing.T, backend api.Backend, consensus consensusA
 			"KeyManager",
 			func(rt *api.Runtime) {
 				rt.Kind = api.KindKeyManager
+				// Allow compute runtime from the following test case.
+				compRt, rErr := NewTestRuntime([]byte("WithKM"), entity, false)
+				require.NoError(rErr, "NewTestRuntime (%s)", "WithKM")
+				rt.KeyManagerParameters.AllowedComputeRuntimes = map[common.Namespace]bool{
+					compRt.Runtime.ID: true,
+				}
 			},
 			true,
 			true,
@@ -692,6 +698,15 @@ func testRegistryRuntime(t *testing.T, backend api.Backend, consensus consensusA
 			},
 			false,
 			true,
+		},
+		// Runtime with not allowed key manager.
+		{
+			"WithNotAllowedKM",
+			func(rt *api.Runtime) {
+				rt.KeyManager = &rtMapByName["KeyManager"].ID
+			},
+			false,
+			false,
 		},
 		// Runtime with bad key manager.
 		{

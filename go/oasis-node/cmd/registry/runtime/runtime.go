@@ -86,6 +86,9 @@ const (
 	// Staking parameters flags.
 	CfgStakingThreshold = "runtime.staking.threshold"
 
+	// KeyManager runtime parameters flags.
+	CfgKeyManagerAllowedComputeRuntimes = "runtime.key_manager_parameters.allowed_compute_runtime"
+
 	// List runtimes flags.
 	CfgIncludeSuspended = "include_suspended"
 
@@ -366,6 +369,18 @@ func runtimeFromFlags() (*registry.Runtime, signature.Signer, error) { // nolint
 		gen.State = log
 	}
 
+	kmAllowedComputeRuntimes := make(map[common.Namespace]bool)
+	for _, rtID := range viper.GetStringSlice(CfgKeyManagerAllowedComputeRuntimes) {
+		var allowedRtID common.Namespace
+		if err = allowedRtID.UnmarshalHex(rtID); err != nil {
+			logger.Error("failed to parse allowed compute runtime ID",
+				"err", err,
+			)
+			return nil, nil, err
+		}
+		kmAllowedComputeRuntimes[allowedRtID] = true
+	}
+
 	rt := &registry.Runtime{
 		Versioned:   cbor.NewVersioned(registry.LatestRuntimeDescriptorVersion),
 		ID:          id,
@@ -406,6 +421,9 @@ func runtimeFromFlags() (*registry.Runtime, signature.Signer, error) { // nolint
 			CheckpointInterval:      viper.GetUint64(CfgStorageCheckpointInterval),
 			CheckpointNumKept:       viper.GetUint64(CfgStorageCheckpointNumKept),
 			CheckpointChunkSize:     viper.GetUint64(CfgStorageCheckpointChunkSize),
+		},
+		KeyManagerParameters: registry.KeyManagerParameters{
+			AllowedComputeRuntimes: kmAllowedComputeRuntimes,
 		},
 	}
 	if teeHardware == node.TEEHardwareIntelSGX {
@@ -583,6 +601,9 @@ func init() {
 
 	// Init Staking flags.
 	runtimeFlags.StringToString(CfgStakingThreshold, nil, "Additional staking threshold for this runtime (<kind>=<value>)")
+
+	// Init Key manager parameter flags.
+	runtimeFlags.StringSlice(CfgKeyManagerAllowedComputeRuntimes, nil, "For configuring allowed compute runtimes in a keymanager runtime, the runtime IDs to allow")
 
 	_ = viper.BindPFlags(runtimeFlags)
 	runtimeFlags.AddFlagSet(cmdSigner.Flags)
