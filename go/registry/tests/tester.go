@@ -14,6 +14,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common"
 	"github.com/oasisprotocol/oasis-core/go/common/cbor"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/drbg"
+	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	memorySigner "github.com/oasisprotocol/oasis-core/go/common/crypto/signature/signers/memory"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/tls"
@@ -21,6 +22,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/identity"
 	"github.com/oasisprotocol/oasis-core/go/common/node"
 	"github.com/oasisprotocol/oasis-core/go/common/quantity"
+	"github.com/oasisprotocol/oasis-core/go/common/sgx"
 	consensusAPI "github.com/oasisprotocol/oasis-core/go/consensus/api"
 	tmcrypto "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/crypto"
 	epochtime "github.com/oasisprotocol/oasis-core/go/epochtime/api"
@@ -632,7 +634,48 @@ func testRegistryRuntime(t *testing.T, backend api.Backend, consensus consensusA
 			false,
 			false,
 		},
-		// Key manager runtime.
+		// Hardware Invalid Key manager runtime.
+		{
+			"HardwareInvalidKeyManager",
+			func(rt *api.Runtime) {
+				rt.Kind = api.KindKeyManager
+				rt.TEEHardware = node.TEEHardwareInvalid
+				// Set non-test runtime.
+				rt.ID = newNamespaceFromSeed([]byte("HardwareInvalidKeyManager"), common.NamespaceKeyManager)
+			},
+			true,
+			false,
+		},
+		// Hardware Reserved Key manager runtime.
+		{
+			"HardwareReservedInvalidKeyManager",
+			func(rt *api.Runtime) {
+				rt.Kind = api.KindKeyManager
+				rt.TEEHardware = node.TEEHardwareReserved
+				// Set non-test runtime.
+				rt.ID = newNamespaceFromSeed([]byte("HardwareReservedInvalidKeyManager"), common.NamespaceKeyManager)
+			},
+			true,
+			false,
+		},
+		// SGX Key manager runtime.
+		{
+			"SGXKeyManager",
+			func(rt *api.Runtime) {
+				rt.Kind = api.KindKeyManager
+				rt.TEEHardware = node.TEEHardwareIntelSGX
+
+				vi := api.VersionInfoIntelSGX{
+					Enclaves: []sgx.EnclaveIdentity{{}},
+				}
+				rt.Version.TEE = cbor.Marshal(vi)
+				// Set non-test runtime.
+				rt.ID = newNamespaceFromSeed([]byte("SGXKeyManager"), common.NamespaceKeyManager)
+			},
+			true,
+			true,
+		},
+		// Test Key manager runtime.
 		{
 			"KeyManager",
 			func(rt *api.Runtime) {
@@ -1588,5 +1631,16 @@ func publicKeyToNamespace(pk signature.PublicKey, isKeyManager bool) common.Name
 	copy(rtID[:], pk[:])
 	ns, _ := common.NewNamespace(rtID, flags)
 
+	return ns
+}
+
+// Similar to common.NewTestNamespaceFromSeed but doesn't assume test flag.
+func newNamespaceFromSeed(seed []byte, flags common.NamespaceFlag) common.Namespace {
+	h := hash.NewFromBytes(seed)
+
+	var rtID [common.NamespaceIDSize]byte
+	copy(rtID[:], h[:])
+
+	ns, _ := common.NewNamespace(rtID, flags)
 	return ns
 }

@@ -18,6 +18,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/entity"
 	"github.com/oasisprotocol/oasis-core/go/common/node"
 	"github.com/oasisprotocol/oasis-core/go/common/quantity"
+	"github.com/oasisprotocol/oasis-core/go/common/sgx"
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/genesis"
 	tendermint "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/api"
 	epochtime "github.com/oasisprotocol/oasis-core/go/epochtime/api"
@@ -170,10 +171,16 @@ func TestGenesisSanityCheck(t *testing.T) {
 
 	kmRuntimeID := hex2ns("4000000000000000ffffffffffffffffffffffffffffffffffffffffffffffff", false)
 	testKMRuntime := &registry.Runtime{
-		Versioned: cbor.NewVersioned(registry.LatestRuntimeDescriptorVersion),
-		ID:        kmRuntimeID,
-		EntityID:  testEntity.ID,
-		Kind:      registry.KindKeyManager,
+		Versioned:   cbor.NewVersioned(registry.LatestRuntimeDescriptorVersion),
+		ID:          kmRuntimeID,
+		EntityID:    testEntity.ID,
+		Kind:        registry.KindKeyManager,
+		TEEHardware: node.TEEHardwareIntelSGX,
+		Version: registry.VersionInfo{
+			TEE: cbor.Marshal(registry.VersionInfoIntelSGX{
+				Enclaves: []sgx.EnclaveIdentity{{}},
+			}),
+		},
 		AdmissionPolicy: registry.RuntimeAdmissionPolicy{
 			EntityWhitelist: &registry.EntityWhitelistRuntimeAdmissionPolicy{
 				Entities: map[signature.PublicKey]bool{
