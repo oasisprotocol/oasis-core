@@ -8,7 +8,9 @@ import (
 	tmrpctypes "github.com/tendermint/tendermint/rpc/core/types"
 	tmstate "github.com/tendermint/tendermint/state"
 
+	"github.com/oasisprotocol/oasis-core/go/common/cbor"
 	consensusAPI "github.com/oasisprotocol/oasis-core/go/consensus/api"
+	"github.com/oasisprotocol/oasis-core/go/consensus/api/transaction"
 	"github.com/oasisprotocol/oasis-core/go/storage/mkvs/syncer"
 )
 
@@ -78,4 +80,9 @@ func (t *fullService) GetParameters(ctx context.Context, height int64) (*consens
 // Implements LightClientBackend.
 func (t *fullService) State() syncer.ReadSyncer {
 	return t.mux.State().Storage()
+}
+
+// Implements LightClientBackend.
+func (t *fullService) SubmitTxNoWait(ctx context.Context, tx *transaction.SignedTransaction) error {
+	return t.broadcastTxRaw(cbor.Marshal(tx))
 }
