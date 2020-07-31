@@ -198,3 +198,8 @@ func (b *BaseBackend) GetParameters(ctx context.Context, height int64) (*Paramet
 func (b *BaseBackend) State() syncer.ReadSyncer {
 	panic(ErrUnsupported)
 }
+
+// Implements Backend.
+func (b *BaseBackend) SubmitTxNoWait(ctx context.Context, tx *transaction.SignedTransaction) error {
+	panic(ErrUnsupported)
+}

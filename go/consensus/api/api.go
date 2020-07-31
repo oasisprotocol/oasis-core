@@ -87,7 +87,8 @@ type ClientBackend interface {
 	LightClientBackend
 	TransactionAuthHandler
 
-	// SubmitTx submits a signed consensus transaction.
+	// SubmitTx submits a signed consensus transaction and waits for the transaction to be included
+	// in a block. Use SubmitTxNoWait if you only need to broadcast the transaction.
 	SubmitTx(ctx context.Context, tx *transaction.SignedTransaction) error
 
 	// StateToGenesis returns the genesis state at the specified block height.

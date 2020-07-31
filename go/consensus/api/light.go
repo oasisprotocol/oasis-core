@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 
+	"github.com/oasisprotocol/oasis-core/go/consensus/api/transaction"
 	"github.com/oasisprotocol/oasis-core/go/storage/mkvs/syncer"
 )
 
@@ -20,6 +21,10 @@ type LightClientBackend interface {
 	// State returns a MKVS read syncer that can be used to read consensus state from a remote node
 	// and verify it against the trusted local root.
 	State() syncer.ReadSyncer
+
+	// SubmitTxNoWait submits a signed consensus transaction, but does not wait for the transaction
+	// to be included in a block. Use SubmitTx if you need to wait for execution.
+	SubmitTxNoWait(ctx context.Context, tx *transaction.SignedTransaction) error
 
 	// TODO: Move SubmitEvidence etc. from Backend.
 }
