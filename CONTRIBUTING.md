@@ -1,8 +1,5 @@
 # Contributing Guidelines
 
-Oasis Labs is building the next generation blockchain technology for scalable,
-privacy-preserving, and distributed applications/services.
-
 Thank you for your interest in contributing to Oasis Core! There are many ways
 to contribute, and this document should not be considered encompassing.
 
