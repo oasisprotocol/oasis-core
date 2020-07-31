@@ -90,6 +90,11 @@ func (t Transaction) PrettyPrint(ctx context.Context, prefix string, w io.Writer
 	fmt.Fprintf(w, "%sMethod: %s\n", prefix, t.Method)
 	fmt.Fprintf(w, "%sBody:\n", prefix)
 	t.PrettyPrintBody(ctx, prefix+"  ", w)
+
+	if genesisHash, ok := ctx.Value(prettyprint.ContextKeyGenesisHash).(hash.Hash); ok {
+		fmt.Println("Other info:")
+		fmt.Printf("  Genesis document's hash: %s\n", genesisHash)
+	}
 }
 
 // PrettyType returns a representation of the type that can be used for pretty printing.
