@@ -16,3 +16,6 @@ line-length:
 # Do not always require language specifiers with fenced code blocks since they
 # are not part of the Markdown spec.
 fenced-code-language: false
+
+# No real reason why we shouldn't have spaces in code.
+no-space-in-code: false
