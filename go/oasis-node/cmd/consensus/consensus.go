@@ -14,6 +14,7 @@ import (
 
 	"github.com/oasisprotocol/oasis-core/go/common/cbor"
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
+	"github.com/oasisprotocol/oasis-core/go/common/prettyprint"
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
 	"github.com/oasisprotocol/oasis-core/go/consensus/api/transaction"
 	cmdCommon "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common"
@@ -138,6 +139,7 @@ func doShowTx(cmd *cobra.Command, args []string) {
 	ctx := context.Background()
 	ctx = context.WithValue(ctx, staking.PrettyPrinterContextKeyTokenSymbol, genesis.Staking.TokenSymbol)
 	ctx = context.WithValue(ctx, staking.PrettyPrinterContextKeyTokenValueExponent, genesis.Staking.TokenValueExponent)
+	ctx = context.WithValue(ctx, prettyprint.ContextKeyGenesisHash, genesis.Hash())
 
 	sigTx := loadTx()
 	sigTx.PrettyPrint(ctx, "", os.Stdout)
