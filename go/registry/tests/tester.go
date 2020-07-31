@@ -684,7 +684,35 @@ func testRegistryRuntime(t *testing.T, backend api.Backend, consensus consensusA
 			true,
 			true,
 		},
-		// Runtime with key manager set.
+		// Runtime with key manager set, without SGX.
+		{
+			"NoSGXWithKM",
+			func(rt *api.Runtime) {
+				rt.KeyManager = &rtMapByName["KeyManager"].ID
+				// Set non-test runtime.
+				rt.ID = newNamespaceFromSeed([]byte("NoSGXWithKM"), 0)
+			},
+			false,
+			false,
+		},
+		// SGX Runtime with key manager set.
+		{
+			"SGXWithKM",
+			func(rt *api.Runtime) {
+				rt.KeyManager = &rtMapByName["KeyManager"].ID
+				rt.TEEHardware = node.TEEHardwareIntelSGX
+
+				vi := api.VersionInfoIntelSGX{
+					Enclaves: []sgx.EnclaveIdentity{{}},
+				}
+				rt.Version.TEE = cbor.Marshal(vi)
+				// Set non-test runtime.
+				rt.ID = newNamespaceFromSeed([]byte("SGXWithKM"), 0)
+			},
+			false,
+			true,
+		},
+		// Test Runtime with key manager set.
 		{
 			"WithKM",
 			func(rt *api.Runtime) {

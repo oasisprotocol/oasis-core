@@ -224,6 +224,12 @@ func TestGenesisSanityCheck(t *testing.T) {
 		AdmissionPolicy: registry.RuntimeAdmissionPolicy{
 			AnyNode: &registry.AnyNodeRuntimeAdmissionPolicy{},
 		},
+		TEEHardware: node.TEEHardwareIntelSGX,
+		Version: registry.VersionInfo{
+			TEE: cbor.Marshal(registry.VersionInfoIntelSGX{
+				Enclaves: []sgx.EnclaveIdentity{{}},
+			}),
+		},
 	}
 	signedTestRuntime := signRuntimeOrDie(signer, testRuntime)
 
