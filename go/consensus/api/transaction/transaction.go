@@ -46,8 +46,40 @@ type Transaction struct {
 	Body cbor.RawMessage `json:"body,omitempty"`
 }
 
-// PrettyPrint writes a pretty-printed representation of the type
+// PrettyPrintBody writes a pretty-printed representation of transaction's body
 // to the given writer.
+func (t Transaction) PrettyPrintBody(ctx context.Context, prefix string, w io.Writer) {
+	bodyType := t.Method.BodyType()
+	if bodyType == nil {
+		fmt.Fprintf(w, "%s<unknown method body: %s>\n", prefix, base64.StdEncoding.EncodeToString(t.Body))
+		return
+	}
+
+	// Deserialize into correct type.
+	v := reflect.New(reflect.TypeOf(bodyType)).Interface()
+	if err := cbor.Unmarshal(t.Body, v); err != nil {
+		fmt.Fprintf(w, "%s<error: %s>\n", prefix, err)
+		fmt.Fprintf(w, "%s<malformed: %s>\n", prefix, base64.StdEncoding.EncodeToString(t.Body))
+		return
+	}
+
+	// If the body type supports pretty printing, use that.
+	if pp, ok := v.(prettyprint.PrettyPrinter); ok {
+		pp.PrettyPrint(ctx, prefix, w)
+		return
+	}
+
+	// Otherwise, just serialize into JSON and display that.
+	data, err := json.MarshalIndent(v, prefix, "  ")
+	if err != nil {
+		fmt.Fprintf(w, "%s  <raw: %s>\n", prefix, base64.StdEncoding.EncodeToString(t.Body))
+		return
+	}
+	fmt.Fprintf(w, "%s%s\n", prefix, data)
+}
+
+// PrettyPrint writes a pretty-printed representation of the transaction to the
+// given writer.
 func (t Transaction) PrettyPrint(ctx context.Context, prefix string, w io.Writer) {
 	fmt.Fprintf(w, "%sNonce:  %d\n", prefix, t.Nonce)
 	if t.Fee != nil {
@@ -57,34 +89,7 @@ func (t Transaction) PrettyPrint(ctx context.Context, prefix string, w io.Writer
 	}
 	fmt.Fprintf(w, "%sMethod: %s\n", prefix, t.Method)
 	fmt.Fprintf(w, "%sBody:\n", prefix)
-
-	bodyType := t.Method.BodyType()
-	if bodyType == nil {
-		fmt.Fprintf(w, "%s  <unknown method body: %s>\n", prefix, base64.StdEncoding.EncodeToString(t.Body))
-		return
-	}
-
-	// Deserialize into correct type.
-	v := reflect.New(reflect.TypeOf(bodyType)).Interface()
-	if err := cbor.Unmarshal(t.Body, v); err != nil {
-		fmt.Fprintf(w, "%s  <error: %s>\n", prefix, err)
-		fmt.Fprintf(w, "%s  <malformed: %s>\n", prefix, base64.StdEncoding.EncodeToString(t.Body))
-		return
-	}
-
-	// If the body type supports pretty printing, use that.
-	if pp, ok := v.(prettyprint.PrettyPrinter); ok {
-		pp.PrettyPrint(ctx, prefix+"  ", w)
-		return
-	}
-
-	// Otherwise, just serialize into JSON and display that.
-	data, err := json.MarshalIndent(v, prefix+"  ", "  ")
-	if err != nil {
-		fmt.Fprintf(w, "%s  <raw: %s>\n", prefix, base64.StdEncoding.EncodeToString(t.Body))
-		return
-	}
-	fmt.Fprintf(w, "%s  %s\n", prefix, data)
+	t.PrettyPrintBody(ctx, prefix+"  ", w)
 }
 
 // PrettyType returns a representation of the type that can be used for pretty printing.
