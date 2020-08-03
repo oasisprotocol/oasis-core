@@ -66,6 +66,7 @@ type checkpointer struct {
 	ndb      db.NodeDB
 	creator  Creator
 	notifyCh *channels.RingChannel
+	statusCh chan struct{}
 
 	logger *logging.Logger
 }
@@ -252,6 +253,12 @@ func (c *checkpointer) worker(ctx context.Context) {
 				)
 				continue
 			}
+
+			// Emit status update if someone is listening. This is only used in tests.
+			select {
+			case c.statusCh <- struct{}{}:
+			default:
+			}
 		}
 	}
 }
@@ -269,6 +276,7 @@ func NewCheckpointer(
 		ndb:      ndb,
 		creator:  creator,
 		notifyCh: channels.NewRingChannel(1),
+		statusCh: make(chan struct{}),
 		logger:   logging.GetLogger("storage/mkvs/checkpoint/"+cfg.Name).With("namespace", cfg.Namespace),
 	}
 	go c.worker(ctx)
