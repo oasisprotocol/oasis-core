@@ -161,15 +161,14 @@ type fullService struct { // nolint: maligned
 
 	stateDb tmdb.DB
 
-	beacon          beaconAPI.Backend
-	epochtime       epochtimeAPI.Backend
-	keymanager      keymanagerAPI.Backend
-	registry        registryAPI.Backend
-	registryMetrics *registry.MetricsUpdater
-	roothash        roothashAPI.Backend
-	staking         stakingAPI.Backend
-	scheduler       schedulerAPI.Backend
-	submissionMgr   consensusAPI.SubmissionManager
+	beacon        beaconAPI.Backend
+	epochtime     epochtimeAPI.Backend
+	keymanager    keymanagerAPI.Backend
+	registry      registryAPI.Backend
+	roothash      roothashAPI.Backend
+	staking       stakingAPI.Backend
+	scheduler     schedulerAPI.Backend
+	submissionMgr consensusAPI.SubmissionManager
 
 	serviceClients   []api.ServiceClient
 	serviceClientsWg sync.WaitGroup
@@ -229,7 +228,7 @@ func (t *fullService) Start() error {
 		// Start block notifier.
 		go t.blockNotifierWorker()
 		// Optionally start metrics updater.
-		if viper.GetString(cmmetrics.CfgMetricsMode) != cmmetrics.MetricsModeNone {
+		if cmmetrics.Enabled() {
 			go t.metrics()
 		}
 	case false:
@@ -922,10 +921,11 @@ func (t *fullService) initialize() error {
 		return err
 	}
 	t.registry = scRegistry
-	t.registryMetrics = registry.NewMetricsUpdater(t.ctx, t.registry)
+	if cmmetrics.Enabled() {
+		t.svcMgr.RegisterCleanupOnly(registry.NewMetricsUpdater(t.ctx, t.registry), "registry metrics updater")
+	}
 	t.serviceClients = append(t.serviceClients, scRegistry)
 	t.svcMgr.RegisterCleanupOnly(t.registry, "registry backend")
-	t.svcMgr.RegisterCleanupOnly(t.registryMetrics, "registry metrics updater")
 
 	var scStaking tmstaking.ServiceClient
 	if scStaking, err = tmstaking.New(t.ctx, t); err != nil {

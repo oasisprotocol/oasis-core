@@ -265,6 +265,11 @@ func New(ctx context.Context) (service.BackgroundService, error) {
 	}
 }
 
+// Enabled returns if metrics are enabled.
+func Enabled() bool {
+	return viper.GetString(CfgMetricsMode) != MetricsModeNone
+}
+
 // EscapeLabelCharacters replaces invalid prometheus label name characters with "_".
 func EscapeLabelCharacters(l string) string {
 	return strings.Replace(l, ".", "_", -1)

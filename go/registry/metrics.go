@@ -12,7 +12,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/registry/api"
 )
 
-const metricsUpdateInterval = 10 * time.Second
+const metricsUpdateInterval = 60 * time.Second
 
 var (
 	registryNodes = prometheus.NewGauge(
@@ -67,22 +67,10 @@ func (m *MetricsUpdater) worker(ctx context.Context) {
 	t := time.NewTicker(metricsUpdateInterval)
 	defer t.Stop()
 
-	runtimeCh, sub, err := m.backend.WatchRuntimes(ctx)
-	if err != nil {
-		m.logger.Error("failed to watch runtimes, metrics will not be updated",
-			"err", err,
-		)
-		return
-	}
-	defer sub.Close()
-
 	for {
 		select {
 		case <-m.closeCh:
 			return
-		case <-runtimeCh:
-			registryRuntimes.Inc()
-			continue
 		case <-t.C:
 		}
 
@@ -99,6 +87,11 @@ func (m *MetricsUpdater) updatePeriodicMetrics(ctx context.Context) {
 	entities, err := m.backend.GetEntities(ctx, consensus.HeightLatest)
 	if err == nil {
 		registryEntities.Set(float64(len(entities)))
+	}
+
+	runtimes, err := m.backend.GetRuntimes(ctx, &api.GetRuntimesQuery{Height: consensus.HeightLatest, IncludeSuspended: false})
+	if err == nil {
+		registryRuntimes.Set(float64(len(runtimes)))
 	}
 }
 
