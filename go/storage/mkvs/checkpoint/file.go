@@ -170,7 +170,8 @@ func (fc *fileCreator) DeleteCheckpoint(ctx context.Context, version uint16, roo
 
 	versionDir := filepath.Join(fc.dataDir, strconv.FormatUint(root.Version, 10))
 	checkpointDir := filepath.Join(versionDir, root.Hash.String())
-	if _, err := os.Stat(checkpointDir); err != nil {
+	checkpointFilename := filepath.Join(checkpointDir, checkpointMetadataFile)
+	if err := os.Remove(checkpointFilename); err != nil {
 		return ErrCheckpointNotFound
 	}
 
