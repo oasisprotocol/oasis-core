@@ -235,6 +235,10 @@ func TestFileCheckpointCreator(t *testing.T) {
 	require.NoError(err, "GetCheckpoints")
 	require.Len(cps, 0, "there should be no checkpoints")
 
+	// Make sure there are no empty directories.
+	_, err = os.Stat(filepath.Join(dir, "checkpoints", strconv.FormatUint(root.Version, 10)))
+	require.True(os.IsNotExist(err), "there should be no empty directories after deletion")
+
 	_, err = fc.GetCheckpoint(ctx, &GetCheckpointRequest{Version: 1, Root: root})
 	require.Error(err, "GetCheckpoint should fail with non-existent checkpoint")
 

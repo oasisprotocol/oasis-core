@@ -168,16 +168,36 @@ func (fc *fileCreator) DeleteCheckpoint(ctx context.Context, request *DeleteChec
 		return ErrCheckpointNotFound
 	}
 
-	checkpointDir := filepath.Join(
-		fc.dataDir,
-		strconv.FormatUint(request.Root.Version, 10),
-		request.Root.Hash.String(),
-	)
+	versionDir := filepath.Join(fc.dataDir, strconv.FormatUint(request.Root.Version, 10))
+	checkpointDir := filepath.Join(versionDir, request.Root.Hash.String())
 	if _, err := os.Stat(checkpointDir); err != nil {
 		return ErrCheckpointNotFound
 	}
 
-	return os.RemoveAll(checkpointDir)
+	if err := os.RemoveAll(checkpointDir); err != nil {
+		return fmt.Errorf("checkpoint: failed to remove checkpoint directory: %w", err)
+	}
+
+	// If there are no more roots for the given version, remove the version directory as well.
+	f, err := os.Open(versionDir)
+	if err != nil {
+		return fmt.Errorf("checkpoint: failed to open directory: %w", err)
+	}
+	defer f.Close()
+
+	switch _, err = f.Readdir(1); err {
+	case nil:
+		// Non-empty directory.
+	case io.EOF:
+		// Directory is empty, we can remove it.
+		if err = os.RemoveAll(versionDir); err != nil {
+			return fmt.Errorf("checkpoint: failed to remove version %d directory: %w", request.Root.Version, err)
+		}
+	default:
+		return fmt.Errorf("checkpoint: failed to read directory: %w", err)
+	}
+
+	return nil
 }
 
 func (fc *fileCreator) GetCheckpointChunk(ctx context.Context, chunk *ChunkMetadata, w io.Writer) error {
