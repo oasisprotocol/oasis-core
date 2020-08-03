@@ -18,6 +18,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/node"
 	"github.com/oasisprotocol/oasis-core/go/common/pubsub"
 	"github.com/oasisprotocol/oasis-core/go/common/service"
+	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
 	"github.com/oasisprotocol/oasis-core/go/keymanager/api"
 	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
 	roothash "github.com/oasisprotocol/oasis-core/go/roothash/api"
@@ -64,6 +65,9 @@ type Worker struct { // nolint: maligned
 
 	runtime            runtimeRegistry.Runtime
 	runtimeHostHandler protocol.Handler
+
+	clientRuntimes       map[common.Namespace]*clientRuntimeWatcher
+	clientRuntimesQuitCh chan *clientRuntimeWatcher
 
 	commonWorker  *workerCommon.Worker
 	roleProvider  registration.RoleProvider
@@ -267,7 +271,7 @@ func (w *Worker) updateStatus(status *api.Status, startedEvent *host.StartedEven
 		}
 
 		if err = signedInitResp.Verify(signingKey); err != nil {
-			return fmt.Errorf("worker/keymanager: failed to validate initialziation response signature: %w", err)
+			return fmt.Errorf("worker/keymanager: failed to validate initialization response signature: %w", err)
 		}
 	}
 
@@ -345,6 +349,112 @@ func extractMessageResponsePayload(raw []byte) ([]byte, error) {
 	return cbor.Marshal(msg.Response.Body.Success), nil
 }
 
+func (w *Worker) startClientRuntimeWatcher(rt *registry.Runtime, status *api.Status) error {
+	runtimeID := w.runtime.ID()
+	if status == nil || !status.IsInitialized {
+		return nil
+	}
+	if rt.Kind != registry.KindCompute || rt.KeyManager == nil || !rt.KeyManager.Equal(&runtimeID) {
+		return nil
+	}
+	if w.clientRuntimes[rt.ID] != nil {
+		return nil
+	}
+	w.logger.Info("seen new runtime using us as a key manager",
+		"runtime_id", rt.ID,
+	)
+
+	// Check policy document if runtime is allowed to query any of the
+	// key manager enclaves.
+	var found bool
+	switch {
+	case !status.IsSecure && status.Policy == nil:
+		// Insecure test keymanagers can be without a policy.
+		found = true
+	case status.Policy != nil:
+		for _, enc := range status.Policy.Policy.Enclaves {
+			if _, ok := enc.MayQuery[rt.ID]; ok {
+				found = true
+				break
+			}
+		}
+	}
+	if !found {
+		w.logger.Warn("runtime not found in keymanager policy, skipping",
+			"runtime_id", rt.ID,
+			"status", status,
+		)
+		return nil
+	}
+
+	runtimeUnmg, err := w.commonWorker.RuntimeRegistry.NewUnmanagedRuntime(w.ctx, rt.ID)
+	if err != nil {
+		w.logger.Error("unable to create new unmanaged runtime",
+			"err", err,
+		)
+		return err
+	}
+	node, err := w.commonWorker.NewUnmanagedCommitteeNode(runtimeUnmg, false)
+	if err != nil {
+		w.logger.Error("unable to create new committee node",
+			"runtime_id", rt.ID,
+			"err", err,
+		)
+		return err
+	}
+
+	crw := &clientRuntimeWatcher{
+		w:    w,
+		node: node,
+	}
+	node.AddHooks(crw)
+
+	if err := node.Start(); err != nil {
+		w.logger.Error("unable to start new committee node",
+			"runtime_id", rt.ID,
+			"err", err,
+		)
+		return err
+	}
+
+	go func() {
+		select {
+		case <-node.Quit():
+			w.clientRuntimesQuitCh <- crw
+		case <-w.stopCh:
+		}
+	}()
+
+	w.clientRuntimes[rt.ID] = crw
+
+	return nil
+}
+
+func (w *Worker) recheckAllRuntimes(status *api.Status) error {
+	rts, err := w.commonWorker.Consensus.Registry().GetRuntimes(w.ctx,
+		&registry.GetRuntimesQuery{
+			Height:           consensus.HeightLatest,
+			IncludeSuspended: false,
+		},
+	)
+	if err != nil {
+		w.logger.Error("failed querying runtimes",
+			"err", err,
+		)
+		return fmt.Errorf("failed querying runtimes: %w", err)
+	}
+	for _, rt := range rts {
+		if err := w.startClientRuntimeWatcher(rt, status); err != nil {
+			w.logger.Error("failed to start runtime watcher",
+				"err", err,
+			)
+			continue
+		}
+	}
+
+	return nil
+}
+
 func (w *Worker) worker() { // nolint: gocyclo
 	defer close(w.quitCh)
 
@@ -367,8 +477,15 @@ func (w *Worker) worker() { // nolint: gocyclo
 
 	// Subscribe to runtime registrations in order to know which runtimes
 	// are using us as a key manager.
-	clientRuntimes := make(map[common.Namespace]*clientRuntimeWatcher)
-	clientRuntimesQuitCh := make(chan *clientRuntimeWatcher)
+	w.clientRuntimes = make(map[common.Namespace]*clientRuntimeWatcher)
+	w.clientRuntimesQuitCh = make(chan *clientRuntimeWatcher)
+	defer func() {
+		for _, crw := range w.clientRuntimes {
+			crw.node.Stop()
+			<-crw.node.Quit()
+		}
+	}()
+
 	rtCh, rtSub, err := w.commonWorker.Consensus.Registry().WatchRuntimes(w.ctx)
 	if err != nil {
 		w.logger.Error("failed to watch runtimes",
@@ -486,68 +603,36 @@ func (w *Worker) worker() { // nolint: gocyclo
 				)
 				continue
 			}
+			// New runtimes can be allowed with the policy update.
+			if err = w.recheckAllRuntimes(currentStatus); err != nil {
+				w.logger.Error("failed rechecking runtimes",
+					"err", err,
+				)
+				continue
+			}
 		case <-w.initTickerCh:
 			if currentStatus == nil || currentStartedEvent == nil {
 				continue
 			}
 			if err = w.updateStatus(currentStatus, currentStartedEvent); err != nil {
 				w.logger.Error("failed to handle status update", "err", err)
+				continue
+			}
+			// New runtimes can be allowed with the policy update.
+			if err = w.recheckAllRuntimes(currentStatus); err != nil {
+				w.logger.Error("failed rechecking runtimes",
+					"err", err,
+				)
+				continue
 			}
 		case rt := <-rtCh:
-			if rt.Kind != registry.KindCompute || rt.KeyManager == nil || !rt.KeyManager.Equal(&runtimeID) {
-				continue
-			}
-			if clientRuntimes[rt.ID] != nil {
-				continue
-			}
-
-			w.logger.Info("seen new runtime using us as a key manager",
-				"runtime_id", rt.ID,
-			)
-
-			runtimeUnmg, err := w.commonWorker.RuntimeRegistry.NewUnmanagedRuntime(w.ctx, rt.ID)
-			if err != nil {
-				w.logger.Error("unable to create new unmanaged runtime",
+			if err = w.startClientRuntimeWatcher(rt, currentStatus); err != nil {
+				w.logger.Error("failed to start runtime watcher",
 					"err", err,
 				)
 				continue
 			}
-			node, err := w.commonWorker.NewUnmanagedCommitteeNode(runtimeUnmg, false)
-			if err != nil {
-				w.logger.Error("unable to create new committee node",
-					"runtime_id", rt.ID,
-					"err", err,
-				)
-				continue
-			}
-
-			crw := &clientRuntimeWatcher{
-				w:    w,
-				node: node,
-			}
-			node.AddHooks(crw)
-
-			if err := node.Start(); err != nil {
-				w.logger.Error("unable to start new committee node",
-					"runtime_id", rt.ID,
-					"err", err,
-				)
-				continue
-			}
-			defer func() {
-				node.Stop()
-				<-node.Quit()
-			}()
-			go func() {
-				select {
-				case <-node.Quit():
-					clientRuntimesQuitCh <- crw
-				case <-w.stopCh:
-				}
-			}()
-
-			clientRuntimes[rt.ID] = crw
-		case crw := <-clientRuntimesQuitCh:
+		case crw := <-w.clientRuntimesQuitCh:
 			w.logger.Error("client runtime watcher quit unexpectedly, terminating",
 				"runtme_id", crw.node.Runtime.ID(),
 			)
