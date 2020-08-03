@@ -63,7 +63,7 @@ func TestFileCheckpointCreator(t *testing.T) {
 	require.NoError(err, "GetCheckpoints")
 	require.Len(cps, 0)
 
-	_, err = fc.GetCheckpoint(ctx, &GetCheckpointRequest{Root: root})
+	_, err = fc.GetCheckpoint(ctx, 1, root)
 	require.Error(err, "GetCheckpoint should fail with non-existent checkpoint")
 
 	// Create a checkpoint and check that it has been created correctly.
@@ -91,7 +91,7 @@ func TestFileCheckpointCreator(t *testing.T) {
 	require.Len(cps, 1, "there should be one checkpoint")
 	require.Equal(cp, cps[0], "checkpoint returned by GetCheckpoint should be correct")
 
-	gcp, err := fc.GetCheckpoint(ctx, &GetCheckpointRequest{Version: 1, Root: root})
+	gcp, err := fc.GetCheckpoint(ctx, 1, root)
 	require.NoError(err, "GetCheckpoint")
 	require.Equal(cp, gcp)
 
@@ -133,7 +133,7 @@ func TestFileCheckpointCreator(t *testing.T) {
 	require.True(errors.Is(err, ErrNoRestoreInProgress))
 
 	// Generate a bogus manifest which does not verify by corrupting chunk at index 1.
-	bogusCp, err := fc.GetCheckpoint(ctx, &GetCheckpointRequest{Version: 1, Root: root})
+	bogusCp, err := fc.GetCheckpoint(ctx, 1, root)
 	require.NoError(err, "GetCheckpoint")
 	require.Equal(cp, bogusCp)
 
@@ -227,7 +227,7 @@ func TestFileCheckpointCreator(t *testing.T) {
 	}
 
 	// Deleting a checkpoint should work.
-	err = fc.DeleteCheckpoint(ctx, &DeleteCheckpointRequest{Version: 1, Root: root})
+	err = fc.DeleteCheckpoint(ctx, 1, root)
 	require.NoError(err, "DeleteCheckpoint")
 
 	// There should now be no checkpoints.
@@ -235,11 +235,15 @@ func TestFileCheckpointCreator(t *testing.T) {
 	require.NoError(err, "GetCheckpoints")
 	require.Len(cps, 0, "there should be no checkpoints")
 
-	_, err = fc.GetCheckpoint(ctx, &GetCheckpointRequest{Version: 1, Root: root})
+	// Make sure there are no empty directories.
+	_, err = os.Stat(filepath.Join(dir, "checkpoints", strconv.FormatUint(root.Version, 10)))
+	require.True(os.IsNotExist(err), "there should be no empty directories after deletion")
+
+	_, err = fc.GetCheckpoint(ctx, 1, root)
 	require.Error(err, "GetCheckpoint should fail with non-existent checkpoint")
 
 	// Deleting a non-existent checkpoint should fail.
-	err = fc.DeleteCheckpoint(ctx, &DeleteCheckpointRequest{Version: 1, Root: root})
+	err = fc.DeleteCheckpoint(ctx, 1, root)
 	require.Error(err, "DeleteCheckpoint on a non-existent checkpoint should fail")
 
 	// Fetching a non-existent chunk should fail.

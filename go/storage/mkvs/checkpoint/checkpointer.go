@@ -66,6 +66,7 @@ type checkpointer struct {
 	ndb      db.NodeDB
 	creator  Creator
 	notifyCh *channels.RingChannel
+	statusCh chan struct{}
 
 	logger *logging.Logger
 }
@@ -108,7 +109,7 @@ func (c *checkpointer) checkpoint(ctx context.Context, version uint64, params *C
 
 		// If there is an error, make sure to remove any created checkpoints.
 		for _, root := range roots {
-			_ = c.creator.DeleteCheckpoint(ctx, &DeleteCheckpointRequest{Version: checkpointVersion, Root: root})
+			_ = c.creator.DeleteCheckpoint(ctx, checkpointVersion, root)
 		}
 	}()
 
@@ -180,10 +181,7 @@ func (c *checkpointer) maybeCheckpoint(ctx context.Context, version uint64, para
 
 		for _, version := range cpVersions[:len(cpVersions)-int(params.NumKept)] {
 			for _, root := range cpsByVersion[version] {
-				if err = c.creator.DeleteCheckpoint(ctx, &DeleteCheckpointRequest{
-					Version: checkpointVersion,
-					Root:    root,
-				}); err != nil {
+				if err = c.creator.DeleteCheckpoint(ctx, checkpointVersion, root); err != nil {
 					c.logger.Warn("failed to garbage collect checkpoint",
 						"root", root,
 						"err", err,
@@ -252,6 +250,12 @@ func (c *checkpointer) worker(ctx context.Context) {
 				)
 				continue
 			}
+
+			// Emit status update if someone is listening. This is only used in tests.
+			select {
+			case c.statusCh <- struct{}{}:
+			default:
+			}
 		}
 	}
 }
@@ -269,6 +273,7 @@ func NewCheckpointer(
 		ndb:      ndb,
 		creator:  creator,
 		notifyCh: channels.NewRingChannel(1),
+		statusCh: make(chan struct{}),
 		logger:   logging.GetLogger("storage/mkvs/checkpoint/"+cfg.Name).With("namespace", cfg.Namespace),
 	}
 	go c.worker(ctx)

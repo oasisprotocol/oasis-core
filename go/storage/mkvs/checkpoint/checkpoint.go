@@ -64,22 +64,10 @@ type Creator interface {
 	CreateCheckpoint(ctx context.Context, root node.Root, chunkSize uint64) (*Metadata, error)
 
 	// GetCheckpoint retrieves checkpoint metadata for a specific checkpoint.
-	GetCheckpoint(ctx context.Context, request *GetCheckpointRequest) (*Metadata, error)
+	GetCheckpoint(ctx context.Context, version uint16, root node.Root) (*Metadata, error)
 
 	// DeleteCheckpoint deletes a specific checkpoint.
-	DeleteCheckpoint(ctx context.Context, request *DeleteCheckpointRequest) error
-}
-
-// GetCheckpointRequest is a GetCheckpoint request.
-type GetCheckpointRequest struct {
-	Version uint16    `json:"version"`
-	Root    node.Root `json:"root"`
-}
-
-// DeleteCheckpointRequest is a DeleteCheckpoint request.
-type DeleteCheckpointRequest struct {
-	Version uint16    `json:"version"`
-	Root    node.Root `json:"root"`
+	DeleteCheckpoint(ctx context.Context, version uint16, root node.Root) error
 }
 
 // Restorer is a checkpoint restorer.
