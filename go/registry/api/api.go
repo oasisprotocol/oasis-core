@@ -1247,6 +1247,15 @@ func VerifyRegisterComputeRuntimeArgs(ctx context.Context, logger *logging.Logge
 			)
 			return ErrInvalidArgument
 		}
+
+		// Currently the keymanager implementation assumes SGX. Unless this is a
+		// test runtime, using a keymanager without using SGX is unsupported.
+		if !rt.ID.IsTest() && rt.TEEHardware != node.TEEHardwareIntelSGX {
+			logger.Error("RegisterRuntime: runtime without SGX using key manager",
+				"id", rt.ID,
+			)
+			return fmt.Errorf("%w: compute runtime without SGX using key manager", ErrInvalidArgument)
+		}
 	}
 
 	return nil
