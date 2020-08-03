@@ -11,7 +11,6 @@ import (
 	"github.com/opentracing/opentracing-go"
 	opentracingExt "github.com/opentracing/opentracing-go/ext"
 	"github.com/prometheus/client_golang/prometheus"
-	"github.com/spf13/viper"
 
 	"github.com/oasisprotocol/oasis-core/go/common"
 	"github.com/oasisprotocol/oasis-core/go/common/cbor"
@@ -232,7 +231,7 @@ func (c *connection) Call(ctx context.Context, body *Body) (*Body, error) {
 func (c *connection) call(ctx context.Context, body *Body) (result *Body, err error) {
 	start := time.Now()
 	defer func() {
-		if viper.GetString(metrics.CfgMetricsMode) != metrics.MetricsModeNone {
+		if metrics.Enabled() {
 			rhpLatency.With(prometheus.Labels{"call": body.Type()}).Observe(time.Since(start).Seconds())
 			if err != nil {
 				rhpCallFailures.With(prometheus.Labels{"call": body.Type()}).Inc()
