@@ -138,16 +138,16 @@ func (fc *fileCreator) GetCheckpoints(ctx context.Context, request *GetCheckpoin
 	return cps, nil
 }
 
-func (fc *fileCreator) GetCheckpoint(ctx context.Context, request *GetCheckpointRequest) (*Metadata, error) {
+func (fc *fileCreator) GetCheckpoint(ctx context.Context, version uint16, root node.Root) (*Metadata, error) {
 	// Currently we only support a single version.
-	if request.Version != checkpointVersion {
+	if version != checkpointVersion {
 		return nil, ErrCheckpointNotFound
 	}
 
 	checkpointFilename := filepath.Join(
 		fc.dataDir,
-		strconv.FormatUint(request.Root.Version, 10),
-		request.Root.Hash.String(),
+		strconv.FormatUint(root.Version, 10),
+		root.Hash.String(),
 		checkpointMetadataFile,
 	)
 	data, err := ioutil.ReadFile(checkpointFilename)
@@ -162,14 +162,14 @@ func (fc *fileCreator) GetCheckpoint(ctx context.Context, request *GetCheckpoint
 	return &cp, nil
 }
 
-func (fc *fileCreator) DeleteCheckpoint(ctx context.Context, request *DeleteCheckpointRequest) error {
+func (fc *fileCreator) DeleteCheckpoint(ctx context.Context, version uint16, root node.Root) error {
 	// Currently we only support a single version.
-	if request.Version != checkpointVersion {
+	if version != checkpointVersion {
 		return ErrCheckpointNotFound
 	}
 
-	versionDir := filepath.Join(fc.dataDir, strconv.FormatUint(request.Root.Version, 10))
-	checkpointDir := filepath.Join(versionDir, request.Root.Hash.String())
+	versionDir := filepath.Join(fc.dataDir, strconv.FormatUint(root.Version, 10))
+	checkpointDir := filepath.Join(versionDir, root.Hash.String())
 	if _, err := os.Stat(checkpointDir); err != nil {
 		return ErrCheckpointNotFound
 	}
@@ -191,7 +191,7 @@ func (fc *fileCreator) DeleteCheckpoint(ctx context.Context, request *DeleteChec
 	case io.EOF:
 		// Directory is empty, we can remove it.
 		if err = os.RemoveAll(versionDir); err != nil {
-			return fmt.Errorf("checkpoint: failed to remove version %d directory: %w", request.Root.Version, err)
+			return fmt.Errorf("checkpoint: failed to remove version %d directory: %w", root.Version, err)
 		}
 	default:
 		return fmt.Errorf("checkpoint: failed to read directory: %w", err)
