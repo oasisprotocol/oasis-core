@@ -58,7 +58,7 @@ func TestAccessPolicy(t *testing.T) {
 		Name:          host,
 		Port:          port,
 		Identity:      &identity.Identity{},
-		CustomOptions: []grpc.ServerOption{grpc.CustomCodec(&cmnGrpc.CBORCodec{})},
+		CustomOptions: []grpc.ServerOption{grpc.CustomCodec(&cmnGrpc.CBORCodec{})}, // nolint: staticcheck
 	}
 	serverConfig.Identity.SetTLSCertificate(serverTLSCert)
 	grpcServer, err := cmnGrpc.NewServer(serverConfig)

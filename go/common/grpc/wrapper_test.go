@@ -216,7 +216,7 @@ func TestGrpcWrapper(t *testing.T) {
 	serverConfig := &ServerConfig{
 		Name:           host,
 		Port:           port,
-		CustomOptions:  []grpc.ServerOption{grpc.CustomCodec(&CBORCodec{})},
+		CustomOptions:  []grpc.ServerOption{grpc.CustomCodec(&CBORCodec{})}, // nolint: staticcheck
 		InstallWrapper: true,
 	}
 	grpcServer, err := NewServer(serverConfig)
