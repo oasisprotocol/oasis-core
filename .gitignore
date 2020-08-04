@@ -9,6 +9,7 @@ target/
 /__pycache__/
 hfuzz_target
 hfuzz_workspace
+.gitlint-rules/__pycache__/
 
 # IDE.
 .idea/*
