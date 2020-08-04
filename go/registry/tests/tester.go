@@ -1612,8 +1612,7 @@ func NewTestRuntime(seed []byte, ent *TestEntity, isKeyManager bool) (*TestRunti
 			RoundTimeout:      20 * time.Second,
 		},
 		TxnScheduler: api.TxnSchedulerParameters{
-			GroupSize:         3,
-			Algorithm:         api.TxnSchedulerAlgorithmBatching,
+			Algorithm:         api.TxnSchedulerBatching,
 			BatchFlushTimeout: 20 * time.Second,
 			MaxBatchSize:      1,
 			MaxBatchSizeBytes: 1024,

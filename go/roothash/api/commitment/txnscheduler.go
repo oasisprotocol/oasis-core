@@ -6,16 +6,16 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/roothash/api/block"
 )
 
-// TxnSchedulerBatchSigCtx is the context used for signing
-// transaction scheduler batch dispatch messages.
-var TxnSchedulerBatchSigCtx = signature.NewContext("oasis-core/roothash: tx batch", signature.WithChainSeparation())
+// ProposedBatchSignatureContext is the context used for signing propose batch
+// dispatch messages.
+var ProposedBatchSignatureContext = signature.NewContext("oasis-core/roothash: proposed batch", signature.WithChainSeparation())
 
-// TxnSchedulerBatch is the message sent from the transaction scheduler
+// ProposedBatch is the message sent from the transaction scheduler
 // to executor workers after a batch is ready to be executed.
 //
 // Don't forget to bump CommitteeProtocol version in go/common/version
 // if you change anything in this struct.
-type TxnSchedulerBatch struct {
+type ProposedBatch struct {
 	// IORoot is the I/O root containing the inputs (transactions) that
 	// the executor node should use.
 	IORoot hash.Hash `json:"io_root"`
@@ -27,26 +27,26 @@ type TxnSchedulerBatch struct {
 	Header block.Header `json:"header"`
 }
 
-// SignedTxnSchedulerBatch is a TxnSchedulerBatch, signed by
+// SignedProposedBatch is a ProposedBatch, signed by
 // the transaction scheduler.
-type SignedTxnSchedulerBatch struct {
+type SignedProposedBatch struct {
 	signature.Signed
 }
 
 // Open first verifies the blob signature and then unmarshals the blob.
-func (s *SignedTxnSchedulerBatch) Open(tsbd *TxnSchedulerBatch) error {
-	return s.Signed.Open(TxnSchedulerBatchSigCtx, tsbd)
+func (s *SignedProposedBatch) Open(tsbd *ProposedBatch) error {
+	return s.Signed.Open(ProposedBatchSignatureContext, tsbd)
 }
 
-// SignTxnSchedulerBatch signs a TxnSchedulerBatch struct using the
+// SignProposedBatch signs a ProposedBatch struct using the
 // given signer.
-func SignTxnSchedulerBatch(signer signature.Signer, tsbd *TxnSchedulerBatch) (*SignedTxnSchedulerBatch, error) {
-	signed, err := signature.SignSigned(signer, TxnSchedulerBatchSigCtx, tsbd)
+func SignProposedBatch(signer signature.Signer, tsbd *ProposedBatch) (*SignedProposedBatch, error) {
+	signed, err := signature.SignSigned(signer, ProposedBatchSignatureContext, tsbd)
 	if err != nil {
 		return nil, err
 	}
 
-	return &SignedTxnSchedulerBatch{
+	return &SignedProposedBatch{
 		Signed: *signed,
 	}, nil
 }

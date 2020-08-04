@@ -3,6 +3,7 @@ package p2p
 import (
 	"context"
 	"fmt"
+	"sync"
 	"sync/atomic"
 
 	"github.com/cenkalti/backoff/v4"
@@ -34,17 +35,34 @@ type Handler interface {
 	//
 	// The message handler will be re-invoked on error with a periodic
 	// backoff unless errors are wrapped via `p2pError.Permanent`.
-	HandlePeerMessage(peerID signature.PublicKey, msg *Message) error
+	HandlePeerMessage(peerID signature.PublicKey, msg *Message, isOwn bool) error
+}
+
+// BaseHandler handler is a P2P handler that can be used in publishing-only
+// clients.
+type BaseHandler struct {
+}
+
+// AuthenticatePeer implements p2p Handler.
+func (h *BaseHandler) AuthenticatePeer(peerID signature.PublicKey, msg *Message) error {
+	return nil
+}
+
+// HandlePeerMessage implements p2p Handler.
+func (h *BaseHandler) HandlePeerMessage(peerID signature.PublicKey, msg *Message, isOwn bool) error {
+	return nil
 }
 
 type topicHandler struct {
+	handlersLock sync.RWMutex
+
 	ctx context.Context
 
 	p2p *P2P
 
 	topic       *pubsub.Topic
 	cancelRelay pubsub.RelayCancelFunc
-	handler     Handler
+	handlers    []Handler
 
 	numWorkers uint64
 
@@ -66,13 +84,6 @@ func (h *topicHandler) topicMessageValidator(ctx context.Context, unused core.Pe
 		"peer_id", peerID,
 		"received_from", envelope.ReceivedFrom,
 	)
-
-	if peerID == h.p2p.host.ID() {
-		// Don't invoke the handler for messages from ourself, but
-		// allow relaying, under the assumption that we are honest
-		// and correct.
-		return true
-	}
 
 	id, err := peerIDToPublicKey(peerID)
 	if err != nil {
@@ -150,16 +161,25 @@ func (h *topicHandler) dispatchMessage(peerID core.PeerID, m *queuedMsg, isIniti
 		}
 	}()
 
-	// Perhaps this should reject the message, but it is possible that
-	// the local node is just behind.  This does result in stale messages
-	// getting retried though.
-	if err = h.handler.AuthenticatePeer(m.from, m.msg); err != nil {
-		return err
+	h.handlersLock.RLock()
+	defer h.handlersLock.RUnlock()
+
+	for _, handler := range h.handlers {
+		// Perhaps this should reject the message, but it is possible that
+		// the local node is just behind.  This does result in stale messages
+		// getting retried though.
+		if err = handler.AuthenticatePeer(m.from, m.msg); err != nil {
+			return err
+		}
 	}
 
-	// Dispatch the message to the handler.
-	if err = h.handler.HandlePeerMessage(m.from, m.msg); err != nil {
-		return err
+	h.logger.Debug("handling message", "message", m.msg, "from", m.from)
+	for _, handler := range h.handlers {
+		// Dispatch the message to the handler.
+		// XXX: Could also dispatch the message to all handlers, and only fail after.
+		if err = handler.HandlePeerMessage(m.from, m.msg, m.peerID == h.p2p.host.ID()); err != nil {
+			return err
+		}
 	}
 
 	return nil
@@ -198,7 +218,7 @@ func (h *topicHandler) retryWorker(m *queuedMsg) {
 	}
 }
 
-func newTopicHandler(p *P2P, runtimeID common.Namespace, handler Handler) (string, *topicHandler, error) {
+func newTopicHandler(p *P2P, runtimeID common.Namespace, handlers []Handler) (string, *topicHandler, error) {
 	topicID := runtimeIDToTopicID(runtimeID)
 	topic, err := p.pubsub.Join(topicID) // Note: Disallows duplicates.
 	if err != nil {
@@ -206,11 +226,11 @@ func newTopicHandler(p *P2P, runtimeID common.Namespace, handler Handler) (strin
 	}
 
 	h := &topicHandler{
-		ctx:     p.ctx, // TODO: Should this support individual cancelation?
-		p2p:     p,
-		topic:   topic,
-		handler: handler,
-		logger:  logging.GetLogger("worker/common/p2p/" + topicID),
+		ctx:      p.ctx, // TODO: Should this support individual cancelation?
+		p2p:      p,
+		topic:    topic,
+		handlers: handlers,
+		logger:   logging.GetLogger("worker/common/p2p/" + topicID),
 	}
 	if h.cancelRelay, err = h.topic.Relay(); err != nil {
 		// Well, ok, fine.  This should NEVER happen, but try to back out

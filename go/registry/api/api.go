@@ -1205,13 +1205,6 @@ func VerifyRegisterRuntimeStorageArgs(rt *Runtime, logger *logging.Logger) error
 func VerifyTransactionSchedulerArgs(rt *Runtime, logger *logging.Logger) error {
 	params := rt.TxnScheduler
 
-	// Ensure there is at least one member of the transaction scheduler group.
-	if params.GroupSize == 0 {
-		logger.Error("RegisterRuntime: transaction scheduler group too small",
-			"runtime", rt,
-		)
-		return fmt.Errorf("%w: transaction scheduler group too small", ErrInvalidArgument)
-	}
 	// Ensure txnscheduler parameters have sensible values.
 	if params.Algorithm != TxnSchedulerBatching {
 		logger.Error("RegisterRuntime: invalid transaction scheduler algorithm",

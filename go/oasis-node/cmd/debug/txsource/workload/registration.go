@@ -53,7 +53,6 @@ func getRuntime(entityID signature.PublicKey, id common.Namespace) *registry.Run
 			RoundTimeout: 1 * time.Second,
 		},
 		TxnScheduler: registry.TxnSchedulerParameters{
-			GroupSize:         1,
 			Algorithm:         "batching",
 			BatchFlushTimeout: 1 * time.Second,
 			MaxBatchSize:      1,

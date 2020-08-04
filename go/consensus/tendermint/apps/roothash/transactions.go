@@ -22,6 +22,7 @@ type roothashSignatureVerifier struct {
 	ctx       *abciAPI.Context
 	runtimeID common.Namespace
 	scheduler *schedulerState.MutableState
+	registry  *registryState.MutableState
 }
 
 // VerifyCommitteeSignatures verifies that the given signatures come from
@@ -55,6 +56,28 @@ func (sv *roothashSignatureVerifier) VerifyCommitteeSignatures(kind scheduler.Co
 	return nil
 }
 
+// VerifyTxnSchedulerSignature verifies that the given signatures come from
+// the transaction scheduler at provided round.
+//
+// Implements commitment.SignatureVerifier.
+func (sv *roothashSignatureVerifier) VerifyTxnSchedulerSignature(sig signature.Signature, round uint64) error {
+	committee, err := sv.scheduler.Committee(sv.ctx, scheduler.KindComputeExecutor, sv.runtimeID)
+	if err != nil {
+		return err
+	}
+	if committee == nil {
+		return roothash.ErrInvalidRuntime
+	}
+	scheduler, err := roothash.GetTransactionScheduler(committee, round)
+	if err != nil {
+		return fmt.Errorf("roothash: error getting transaction scheduler: %w", err)
+	}
+	if !scheduler.PublicKey.Equal(sig.PublicKey) {
+		return fmt.Errorf("roothash: signature is not from a valid transaction scheduler")
+	}
+	return nil
+}
+
 // getRuntimeState fetches the current runtime state and performs common
 // processing and error handling.
 func (app *rootHashApplication) getRuntimeState(
@@ -70,8 +93,8 @@ func (app *rootHashApplication) getRuntimeState(
 	if rtState.Suspended {
 		return nil, nil, nil, roothash.ErrRuntimeSuspended
 	}
-	if rtState.Round == nil {
-		return nil, nil, nil, roothash.ErrNoRound
+	if rtState.ExecutorPool == nil {
+		return nil, nil, nil, roothash.ErrNoExecutorPool
 	}
 
 	// Create signature verifier.
@@ -79,19 +102,11 @@ func (app *rootHashApplication) getRuntimeState(
 		ctx:       ctx,
 		runtimeID: id,
 		scheduler: schedulerState.NewMutableState(ctx.State()),
+		registry:  registryState.NewMutableState(ctx.State()),
 	}
 
 	// Create node lookup.
 	nl := registryState.NewMutableState(ctx.State())
-
-	// If the round was finalized, transition.
-	if rtState.Round.CurrentBlock.Header.Round != rtState.CurrentBlock.Header.Round {
-		ctx.Logger().Debug("round was finalized, transitioning round",
-			"round", rtState.CurrentBlock.Header.Round,
-		)
-
-		rtState.Round.Transition(rtState.CurrentBlock)
-	}
 
 	return rtState, sv, nl, nil
 }
@@ -123,7 +138,7 @@ func (app *rootHashApplication) executorCommit(
 	}
 
 	for _, commit := range cc.Commits {
-		if err = rtState.Round.AddExecutorCommitment(ctx, &commit, sv, nl); err != nil { // nolint: gosec
+		if err = rtState.ExecutorPool.AddExecutorCommitment(ctx, rtState.CurrentBlock, sv, nl, &commit); err != nil { // nolint: gosec
 			ctx.Logger().Error("failed to add compute commitment to round",
 				"err", err,
 				"round", rtState.CurrentBlock.Header.Round,

@@ -44,6 +44,10 @@ type SignatureVerifier interface {
 	// VerifyCommitteeSignatures verifies that the given signatures come from
 	// the current committee members of the given kind.
 	VerifyCommitteeSignatures(kind scheduler.CommitteeKind, sigs []signature.Signature) error
+
+	// VerifyTxnSchedulerSignature verifies that the given signatures come from
+	// the transaction scheduler at provided round.
+	VerifyTxnSchedulerSignature(sig signature.Signature, round uint64) error
 }
 
 // NodeLookup is an interface for looking up registry node descriptors.
@@ -104,7 +108,7 @@ func (p *Pool) ResetCommitments() {
 
 func (p *Pool) getCommitment(id signature.PublicKey) (OpenCommitment, bool) {
 	if p.Committee == nil {
-		panic("roothash/commitment: query commitements: " + ErrNoCommittee.Error())
+		panic("roothash/commitment: query commitments: " + ErrNoCommittee.Error())
 	}
 
 	var (
@@ -204,10 +208,10 @@ func (p *Pool) addOpenExecutorCommitment(
 		return ErrNotBasedOnCorrectBlock
 	}
 
-	// Verify that the txn scheduler signature for current commitment is valid.
-	if err := sv.VerifyCommitteeSignatures(scheduler.KindComputeTxnScheduler, []signature.Signature{body.TxnSchedSig}); err != nil {
-		logger.Debug("executor commitment has bad transaction scheduler signers",
+	if err := sv.VerifyTxnSchedulerSignature(body.TxnSchedSig, blk.Header.Round); err != nil {
+		logger.Debug("executor commitment has bad transaction scheduler signer",
 			"node_id", id,
+			"round", blk.Header.Round,
 			"err", err,
 		)
 		return err

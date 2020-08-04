@@ -41,7 +41,6 @@ type runtimeState struct {
 
 	executorCommittee *testCommittee
 	storageCommittee  *testCommittee
-	txnSchedCommittee *testCommittee
 }
 
 // RootHashImplementationTests exercises the basic functionality of a
@@ -194,7 +193,7 @@ func (s *runtimeState) testEpochTransitionBlock(t *testing.T, scheduler schedule
 		nodes[node.Node.ID] = node
 	}
 
-	s.executorCommittee, s.storageCommittee, s.txnSchedCommittee = mustGetCommittee(t, s.rt, epoch+1, scheduler, nodes)
+	s.executorCommittee, s.storageCommittee = mustGetCommittee(t, s.rt, epoch+1, scheduler, nodes)
 
 	// Wait to receive an epoch transition block.
 	for {
@@ -265,7 +264,7 @@ func (s *runtimeState) testSuccessfulRound(t *testing.T, backend api.Backend, co
 	var emptyRoot hash.Hash
 	emptyRoot.Empty()
 
-	// Create the new block header that the leader and nodes will commit to.
+	// Create the new block header that the nodes will commit to.
 	parent := &block.Block{
 		Header: block.Header{
 			Version:      0,
@@ -310,20 +309,35 @@ func (s *runtimeState) testSuccessfulRound(t *testing.T, backend api.Backend, co
 		}
 
 		// Fake txn scheduler signature.
-		dispatch := &commitment.TxnSchedulerBatch{
+		dispatch := &commitment.ProposedBatch{
 			IORoot:            commitBody.InputRoot,
 			StorageSignatures: commitBody.InputStorageSigs,
 			Header:            child.Header,
 		}
-		signer := s.txnSchedCommittee.leader.Signer
-		var signedDispatch *signature.Signed
-		signedDispatch, err = signature.SignSigned(signer, commitment.TxnSchedulerBatchSigCtx, dispatch)
-		require.NoError(err, "SignSigned")
+
+		// Get scheduler at round.
+		var scheduler *scheduler.CommitteeNode
+		scheduler, err = api.GetTransactionScheduler(s.executorCommittee.committee, child.Header.Round)
+		require.NoError(err, "roothash.TransactionScheduler")
+		// Get scheduler test node.
+		var schedulerNode *registryTests.TestNode
+		for _, node := range s.executorCommittee.workers {
+			if node.Signer.Public().Equal(scheduler.PublicKey) {
+				nd := node
+				schedulerNode = nd
+				break
+			}
+		}
+		require.NotNil(schedulerNode, "TransactionScheduler missing in test nodes")
+
+		var signedDispatch *commitment.SignedProposedBatch
+		signedDispatch, err = commitment.SignProposedBatch(schedulerNode.Signer, dispatch)
+		require.NoError(err, "SignProposedBatch")
 		commitBody.TxnSchedSig = signedDispatch.Signature
 
 		// `err` shadows outside.
 		commit, err := commitment.SignExecutorCommitment(node.Signer, &commitBody) // nolint: vetshadow
-		require.NoError(err, "SignSigned")
+		require.NoError(err, "SignExecutorCommitment")
 
 		executorCommits = append(executorCommits, *commit)
 	}
@@ -387,7 +401,6 @@ func (s *runtimeState) testSuccessfulRound(t *testing.T, backend api.Backend, co
 
 type testCommittee struct {
 	committee     *scheduler.Committee
-	leader        *registryTests.TestNode
 	workers       []*registryTests.TestNode
 	backupWorkers []*registryTests.TestNode
 }
@@ -401,7 +414,6 @@ func mustGetCommittee(
 ) (
 	executorCommittee *testCommittee,
 	storageCommittee *testCommittee,
-	txnSchedCommittee *testCommittee,
 ) {
 	require := require.New(t)
 
@@ -429,16 +441,11 @@ func mustGetCommittee(
 					ret.workers = append(ret.workers, node)
 				case scheduler.BackupWorker:
 					ret.backupWorkers = append(ret.backupWorkers, node)
-				case scheduler.Leader:
-					ret.leader = node
 				}
 			}
 
 			var groupSize, groupBackupSize int
 			switch committee.Kind {
-			case scheduler.KindComputeTxnScheduler:
-				groupSize = int(rt.Runtime.TxnScheduler.GroupSize)
-				groupBackupSize = 0
 			case scheduler.KindComputeExecutor:
 				groupSize = int(rt.Runtime.Executor.GroupSize)
 				groupBackupSize = int(rt.Runtime.Executor.GroupBackupSize)
@@ -446,28 +453,17 @@ func mustGetCommittee(
 				groupSize = int(rt.Runtime.Storage.GroupSize)
 			}
 
-			var needsLeader bool
-			needsLeader, err = committee.Kind.NeedsLeader()
-			require.NoError(err, "needsLeader returns correctly")
-			if needsLeader {
-				require.Len(ret.workers, groupSize-1, "workers exist")
-				require.NotNil(ret.leader, "leader exist")
-			} else {
-				require.Len(ret.workers, groupSize, "workers exist")
-				require.Nil(ret.leader, "no leader")
-			}
+			require.Len(ret.workers, groupSize, "workers exist")
 			require.Len(ret.backupWorkers, groupBackupSize, "backup workers exist")
 
 			switch committee.Kind {
-			case scheduler.KindComputeTxnScheduler:
-				txnSchedCommittee = &ret
 			case scheduler.KindComputeExecutor:
 				executorCommittee = &ret
 			case scheduler.KindStorage:
 				storageCommittee = &ret
 			}
 
-			if executorCommittee == nil || storageCommittee == nil || txnSchedCommittee == nil {
+			if executorCommittee == nil || storageCommittee == nil {
 				continue
 			}
 

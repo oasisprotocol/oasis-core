@@ -478,6 +478,12 @@ func (sc *txSourceImpl) Run(childEnv *env.Env) error {
 		return fmt.Errorf("WaitNodesRegistered: %w", err)
 	}
 
+	// Wait for second epoch, so that runtimes are up and running.
+	sc.Logger.Info("waiting for 2nd epoch")
+	if err := sc.Net.Controller().Consensus.WaitEpoch(ctx, 2); err != nil {
+		return fmt.Errorf("failed waiting for 2nd epoch: %w", err)
+	}
+
 	// Start all configured workloads.
 	errCh := make(chan error, len(sc.workloads)+2)
 	for _, name := range sc.workloads {

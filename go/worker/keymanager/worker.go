@@ -649,7 +649,7 @@ type clientRuntimeWatcher struct {
 	node *committeeCommon.Node
 }
 
-func (crw *clientRuntimeWatcher) HandlePeerMessage(context.Context, *p2p.Message) (bool, error) {
+func (crw *clientRuntimeWatcher) HandlePeerMessage(context.Context, *p2p.Message, bool) (bool, error) {
 	// This should never be called as P2P is disabled.
 	panic("keymanager/worker: must never be called")
 }

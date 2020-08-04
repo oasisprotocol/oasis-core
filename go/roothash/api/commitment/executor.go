@@ -69,13 +69,13 @@ type ComputeBody struct {
 // in the ComputeBody struct and verifies if the txn scheduler signature
 // matches what we're seeing.
 func (m *ComputeBody) VerifyTxnSchedSignature(header block.Header) bool {
-	dispatch := &TxnSchedulerBatch{
+	dispatch := &ProposedBatch{
 		IORoot:            m.InputRoot,
 		StorageSignatures: m.InputStorageSigs,
 		Header:            header,
 	}
 
-	return m.TxnSchedSig.Verify(TxnSchedulerBatchSigCtx, cbor.Marshal(dispatch))
+	return m.TxnSchedSig.Verify(ProposedBatchSignatureContext, cbor.Marshal(dispatch))
 }
 
 // RootsForStorageReceipt gets the merkle roots that must be part of

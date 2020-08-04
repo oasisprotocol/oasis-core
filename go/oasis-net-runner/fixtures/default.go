@@ -90,8 +90,7 @@ func newDefaultFixture() (*oasis.NetworkFixture, error) {
 					RoundTimeout:    20 * time.Second,
 				},
 				TxnScheduler: registry.TxnSchedulerParameters{
-					Algorithm:         registry.TxnSchedulerAlgorithmBatching,
-					GroupSize:         2,
+					Algorithm:         registry.TxnSchedulerBatching,
 					MaxBatchSize:      1,
 					MaxBatchSizeBytes: 16 * 1024 * 1024, // 16 MiB
 					BatchFlushTimeout: 20 * time.Second,

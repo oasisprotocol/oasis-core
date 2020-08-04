@@ -72,7 +72,7 @@ var (
 // NodeHooks defines a worker's duties at common events.
 // These are called from the runtime's common node's worker.
 type NodeHooks interface {
-	HandlePeerMessage(context.Context, *p2p.Message) (bool, error)
+	HandlePeerMessage(context.Context, *p2p.Message, bool) (bool, error)
 	// Guarded by CrossNode.
 	HandleEpochTransitionLocked(*EpochSnapshot)
 	// Guarded by CrossNode.
@@ -158,9 +158,9 @@ func (n *Node) getMetricLabels() prometheus.Labels {
 }
 
 // HandlePeerMessage forwards a message from the group system to our hooks.
-func (n *Node) HandlePeerMessage(ctx context.Context, message *p2p.Message) error {
+func (n *Node) HandlePeerMessage(ctx context.Context, message *p2p.Message, isOwn bool) error {
 	for _, hooks := range n.hooks {
-		handled, err := hooks.HandlePeerMessage(ctx, message)
+		handled, err := hooks.HandlePeerMessage(ctx, message, isOwn)
 		if err != nil {
 			return err
 		}

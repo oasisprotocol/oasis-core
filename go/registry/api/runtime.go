@@ -46,8 +46,8 @@ const (
 	kindCompute    = "compute"
 	kindKeyManager = "keymanager"
 
-	// TxnSchedulerAlgorithmBatching is the name of the batching algorithm.
-	TxnSchedulerAlgorithmBatching = "batching"
+	// TxnSchedulerBatching is the name of the batching algorithm.
+	TxnSchedulerBatching = "batching"
 )
 
 // String returns a string representation of a runtime kind.
@@ -95,9 +95,6 @@ type ExecutorParameters struct {
 
 // TxnSchedulerParameters are parameters for the transaction scheduler committee.
 type TxnSchedulerParameters struct {
-	// GroupSize is the size of the committee.
-	GroupSize uint64 `json:"group_size"`
-
 	// Algorithm is the transaction scheduling algorithm.
 	Algorithm string `json:"algorithm"`
 
@@ -226,7 +223,8 @@ type Runtime struct { // nolint: maligned
 	// Executor stores parameters of the executor committee.
 	Executor ExecutorParameters `json:"executor,omitempty"`
 
-	// TxnScheduler stores parameters of the transactions scheduler committee.
+	// TxnScheduler stores transaction scheduling parameters of the executor
+	// committee.
 	TxnScheduler TxnSchedulerParameters `json:"txn_scheduler,omitempty"`
 
 	// Storage stores parameters of the storage committee.

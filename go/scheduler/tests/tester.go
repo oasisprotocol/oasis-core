@@ -42,10 +42,10 @@ func SchedulerImplementationTests(t *testing.T, name string, backend api.Backend
 	epochtime := consensus.EpochTime().(epochtime.SetableBackend)
 	epoch := epochtimeTests.MustAdvanceEpoch(t, epochtime, 1)
 
-	ensureValidCommittees := func(expectedExecutor, expectedTransactionScheduler, expectedStorage int) {
-		var executor, transactionScheduler, storage *api.Committee
+	ensureValidCommittees := func(expectedExecutor, expectedStorage int) {
+		var executor, storage *api.Committee
 		var seen int
-		for seen < 3 {
+		for seen < 2 {
 			select {
 			case committee := <-ch:
 				if committee.ValidFor < epoch {
@@ -60,10 +60,6 @@ func SchedulerImplementationTests(t *testing.T, name string, backend api.Backend
 					require.Nil(executor, "haven't seen an executor committee yet")
 					executor = committee
 					require.Len(committee.Members, expectedExecutor, "committee has all executor nodes")
-				case api.KindComputeTxnScheduler:
-					require.Nil(transactionScheduler, "haven't seen a transaction scheduler committee yet")
-					require.Len(committee.Members, expectedTransactionScheduler, "committee has all transaction scheduler nodes")
-					transactionScheduler = committee
 				case api.KindStorage:
 					require.Nil(storage, "haven't seen a storage committee yet")
 					require.Len(committee.Members, expectedStorage, "committee has all storage nodes")
@@ -91,9 +87,6 @@ func SchedulerImplementationTests(t *testing.T, name string, backend api.Backend
 			case api.KindComputeExecutor:
 				require.EqualValues(executor, committee, "fetched executor committee is identical")
 				executor = nil
-			case api.KindComputeTxnScheduler:
-				require.EqualValues(transactionScheduler, committee, "fetched transaction scheduler committee is identical")
-				transactionScheduler = nil
 			case api.KindStorage:
 				require.EqualValues(storage, committee, "fetched storage committee is identical")
 				storage = nil
@@ -101,7 +94,6 @@ func SchedulerImplementationTests(t *testing.T, name string, backend api.Backend
 		}
 
 		require.Nil(executor, "fetched an executor committee")
-		require.Nil(transactionScheduler, "fetched a transaction scheduler committee")
 		require.Nil(storage, "fetched a storage committee")
 	}
 
@@ -116,7 +108,6 @@ func SchedulerImplementationTests(t *testing.T, name string, backend api.Backend
 	}
 	ensureValidCommittees(
 		nExecutor,
-		int(rt.Runtime.TxnScheduler.GroupSize),
 		nStorage,
 	)
 
@@ -131,7 +122,6 @@ func SchedulerImplementationTests(t *testing.T, name string, backend api.Backend
 
 	ensureValidCommittees(
 		3,
-		int(rt.Runtime.TxnScheduler.GroupSize),
 		1,
 	)
 
@@ -157,7 +147,7 @@ func requireValidCommitteeMembers(t *testing.T, committee *api.Committee, runtim
 		nodeMap[node.ID] = node
 	}
 
-	var leaders, workers, backups int
+	var workers, backups int
 	seenMap := make(map[signature.PublicKey]bool)
 	for _, member := range committee.Members {
 		id := member.PublicKey
@@ -170,31 +160,16 @@ func requireValidCommitteeMembers(t *testing.T, committee *api.Committee, runtim
 			workers++
 		case api.BackupWorker:
 			backups++
-		case api.Leader:
-			leaders++
 		}
 	}
 
-	needsLeader, err := committee.Kind.NeedsLeader()
-	require.NoError(err, "needsLeader returns correctly")
-	if needsLeader {
-		require.Equal(1, leaders, fmt.Sprintf("%s committee should have a leader", committee.Kind))
-	} else {
-		require.Equal(0, leaders, fmt.Sprintf("%s committee shouldn't have a leader", committee.Kind))
-	}
 	switch committee.Kind {
 	case api.KindComputeExecutor:
 		require.EqualValues(runtime.Executor.GroupSize, workers, "executor committee should have the correct number of workers")
 		require.EqualValues(runtime.Executor.GroupBackupSize, backups, "executor committee should have the correct number of backup workers")
-	case api.KindStorage, api.KindComputeTxnScheduler:
-		numCommitteeMembersWithoutLeader := len(committee.Members)
-		needsLeader, err := committee.Kind.NeedsLeader()
-		require.NoError(err, "needsLeader returns correctly")
-		if needsLeader {
-			numCommitteeMembersWithoutLeader--
-		}
-		require.EqualValues(numCommitteeMembersWithoutLeader, workers, fmt.Sprintf("all %s committee members except for the leader (if present) should be workers", committee.Kind))
-		require.Equal(0, backups, fmt.Sprintf("%s committee shouldn't have a backup workers", committee.Kind))
+	case api.KindStorage:
+		require.EqualValues(runtime.Storage.GroupSize, workers, "storage committee should have the correct number of workers")
+		require.EqualValues(0, backups, "storage committee shouldn't have a backup workers")
 	default:
 		require.FailNow(fmt.Sprintf("unknown committee kind: %s", committee.Kind))
 	}

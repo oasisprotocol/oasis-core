@@ -18,19 +18,15 @@ func hasSuitablePermutations(t *testing.T, beacon []byte, runtimeID common.Names
 	numComputeNodes := 4
 	computeIdxs, err := schedulerapp.GetPerm(beacon, runtimeID, schedulerapp.RNGContextExecutor, numComputeNodes)
 	require.NoError(t, err, "schedulerapp.GetPerm compute")
-	transactionSchedulerIdxs, err := schedulerapp.GetPerm(beacon, runtimeID, schedulerapp.RNGContextTransactionScheduler, numComputeNodes)
-	require.NoError(t, err, "schedulerapp.GetPerm transaction scheduler")
 
 	fmt.Printf("%20s schedule %v\n", scheduler.KindComputeExecutor, computeIdxs)
-	fmt.Printf("%20s schedule %v\n", scheduler.KindComputeTxnScheduler, transactionSchedulerIdxs)
 
 	committees := map[scheduler.CommitteeKind]struct {
 		workers       int
 		backupWorkers int
 		perm          []int
 	}{
-		scheduler.KindComputeExecutor:     {workers: 2, backupWorkers: 1, perm: computeIdxs},
-		scheduler.KindComputeTxnScheduler: {workers: 1, backupWorkers: 0, perm: transactionSchedulerIdxs},
+		scheduler.KindComputeExecutor: {workers: 2, backupWorkers: 1, perm: computeIdxs},
 	}
 
 	for _, c1Kind := range []scheduler.CommitteeKind{

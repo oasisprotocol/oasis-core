@@ -122,16 +122,16 @@ func doExecutorHonest(cmd *cobra.Command, args []string) {
 		panic(fmt.Sprintf("scheduler check scheduled failed: %+v", err))
 	}
 	logger.Debug("executor honest: executor schedule ok")
+	// Ensure we are not the transaction scheduler in the round. Once byzantine
+	// node supports scheduling support that case as well.
+	if schedulerCheckTxScheduler(executorCommittee, defaultIdentity.NodeSigner.Public(), 0) {
+		panic("executor honest: tx scheduler (not supported)")
+	}
+	logger.Debug("executor honest: executor tx scheduler schedule ok")
+
 	storageCommittee, err := schedulerGetCommittee(ht, electionHeight, scheduler.KindStorage, defaultRuntimeID)
 	if err != nil {
 		panic(fmt.Sprintf("scheduler get committee %s failed: %+v", scheduler.KindStorage, err))
-	}
-	transactionSchedulerCommittee, err := schedulerGetCommittee(ht, electionHeight, scheduler.KindComputeTxnScheduler, defaultRuntimeID)
-	if err != nil {
-		panic(fmt.Sprintf("scheduler get committee %s failed: %+v", scheduler.KindComputeTxnScheduler, err))
-	}
-	if err = schedulerCheckNotScheduled(transactionSchedulerCommittee, defaultIdentity.NodeSigner.Public()); err != nil {
-		panic(fmt.Sprintf("scheduler check not scheduled txnscheduler failed: %+v", err))
 	}
 
 	logger.Debug("executor honest: connecting to storage committee")
@@ -252,15 +252,14 @@ func doExecutorWrong(cmd *cobra.Command, args []string) {
 	if err != nil {
 		panic(fmt.Sprintf("scheduler get committee %s failed: %+v", scheduler.KindStorage, err))
 	}
-	transactionSchedulerCommittee, err := schedulerGetCommittee(ht, electionHeight, scheduler.KindComputeTxnScheduler, defaultRuntimeID)
-	if err != nil {
-		panic(fmt.Sprintf("scheduler get committee %s failed: %+v", scheduler.KindComputeTxnScheduler, err))
+	// Ensure we are not the transaction scheduler in the round. Once byzantine
+	// node supports scheduling support that case as well.
+	if schedulerCheckTxScheduler(executorCommittee, defaultIdentity.NodeSigner.Public(), 0) {
+		panic("executor wrong: tx scheduler (not supported)")
 	}
-	if err = schedulerCheckNotScheduled(transactionSchedulerCommittee, defaultIdentity.NodeSigner.Public()); err != nil {
-		panic(fmt.Sprintf("scheduler check not scheduled txnscheduler failed: %+v", err))
-	}
+	logger.Debug("executor wrong: executor tx scheduler schedule ok")
 
-	logger.Debug("executor honest: connecting to storage committee")
+	logger.Debug("executor wrong: connecting to storage committee")
 	hnss, err := storageConnectToCommittee(ht, electionHeight, storageCommittee, scheduler.Worker, defaultIdentity)
 	if err != nil {
 		panic(fmt.Sprintf("storage connect to committee failed: %+v", err))
@@ -373,13 +372,15 @@ func doExecutorStraggler(cmd *cobra.Command, args []string) {
 		panic(fmt.Sprintf("scheduler check scheduled failed: %+v", err))
 	}
 	logger.Debug("executor straggler: executor schedule ok")
-	transactionSchedulerCommittee, err := schedulerGetCommittee(ht, electionHeight, scheduler.KindComputeTxnScheduler, defaultRuntimeID)
-	if err != nil {
-		panic(fmt.Sprintf("scheduler get committee %s failed: %+v", scheduler.KindComputeTxnScheduler, err))
+
+	// Ensure we are not the transaction scheduler in the round. Once straggling
+	// schedulers are handled (without waiting for epoch transition), support
+	// testing for that case as well.
+	// https://github.com/oasisprotocol/oasis-core/issues/3199
+	if schedulerCheckTxScheduler(executorCommittee, defaultIdentity.NodeSigner.Public(), 0) {
+		panic("executor straggler: tx scheduler (not supported)")
 	}
-	if err = schedulerCheckNotScheduled(transactionSchedulerCommittee, defaultIdentity.NodeSigner.Public()); err != nil {
-		panic(fmt.Sprintf("scheduler check not scheduled txnscheduler failed: %+v", err))
-	}
+	logger.Debug("executor straggler: executor tx scheduler schedule ok")
 
 	cbc := newComputeBatchContext()
 

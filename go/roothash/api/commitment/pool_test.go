@@ -31,6 +31,10 @@ func (n *nopSignatureVerifier) VerifyCommitteeSignatures(kind scheduler.Committe
 	return nil
 }
 
+func (n *nopSignatureVerifier) VerifyTxnSchedulerSignature(sig signature.Signature, round uint64) error {
+	return nil
+}
+
 type staticSignatureVerifier struct {
 	storagePublicKey      signature.PublicKey
 	txnSchedulerPublicKey signature.PublicKey
@@ -41,8 +45,6 @@ func (n *staticSignatureVerifier) VerifyCommitteeSignatures(kind scheduler.Commi
 	switch kind {
 	case scheduler.KindStorage:
 		pk = n.storagePublicKey
-	case scheduler.KindComputeTxnScheduler:
-		pk = n.txnSchedulerPublicKey
 	default:
 		return errors.New("unsupported committee kind")
 	}
@@ -52,6 +54,14 @@ func (n *staticSignatureVerifier) VerifyCommitteeSignatures(kind scheduler.Commi
 			return errors.New("unknown public key")
 		}
 	}
+	return nil
+}
+
+func (n *staticSignatureVerifier) VerifyTxnSchedulerSignature(sig signature.Signature, round uint64) error {
+	if !sig.PublicKey.Equal(n.txnSchedulerPublicKey) {
+		return errors.New("unknown public key")
+	}
+
 	return nil
 }
 
@@ -795,15 +805,15 @@ func generateStorageReceiptSignature(t *testing.T, blk *block.Block, body *Compu
 func generateTxnSchedulerSignature(t *testing.T, childBlk *block.Block, body *ComputeBody) signature.Signature {
 	body.InputRoot = hash.Hash{}
 	body.InputStorageSigs = []signature.Signature{}
-	dispatch := &TxnSchedulerBatch{
+	dispatch := &ProposedBatch{
 		IORoot:            body.InputRoot,
 		StorageSignatures: body.InputStorageSigs,
 		Header:            childBlk.Header,
 	}
 	sk, err := memorySigner.NewSigner(rand.Reader)
 	require.NoError(t, err, "NewSigner")
-	signedDispatch, err := signature.SignSigned(sk, TxnSchedulerBatchSigCtx, dispatch)
-	require.NoError(t, err, "SignSigned")
+	signedDispatch, err := SignProposedBatch(sk, dispatch)
+	require.NoError(t, err, "SignProposedBatch")
 
 	return signedDispatch.Signature
 }

@@ -63,7 +63,6 @@ const (
 	CfgStorageCheckpointChunkSize     = "runtime.storage.checkpoint_chunk_size"
 
 	// Transaction scheduler flags.
-	CfgTxnSchedulerGroupSize         = "runtime.txn_scheduler.group_size"
 	CfgTxnSchedulerAlgorithm         = "runtime.txn_scheduler.algorithm"
 	CfgTxnSchedulerBatchFlushTimeout = "runtime.txn_scheduler.flush_timeout"
 	CfgTxnSchedulerMaxBatchSize      = "runtime.txn_scheduler.batching.max_batch_size"
@@ -376,7 +375,6 @@ func runtimeFromFlags() (*registry.Runtime, signature.Signer, error) { // nolint
 			RoundTimeout:      viper.GetDuration(CfgExecutorRoundTimeout),
 		},
 		TxnScheduler: registry.TxnSchedulerParameters{
-			GroupSize:         viper.GetUint64(CfgTxnSchedulerGroupSize),
 			Algorithm:         viper.GetString(CfgTxnSchedulerAlgorithm),
 			BatchFlushTimeout: viper.GetDuration(CfgTxnSchedulerBatchFlushTimeout),
 			MaxBatchSize:      viper.GetUint64(CfgTxnSchedulerMaxBatchSize),
@@ -542,7 +540,6 @@ func init() {
 	runtimeFlags.Duration(CfgExecutorRoundTimeout, 10*time.Second, "Executor committee round timeout for this runtime")
 
 	// Init Transaction scheduler flags.
-	runtimeFlags.Uint64(CfgTxnSchedulerGroupSize, 1, "Number of transaction scheduler nodes for the runtime")
 	runtimeFlags.String(CfgTxnSchedulerAlgorithm, "batching", "Transaction scheduling algorithm")
 	runtimeFlags.Duration(CfgTxnSchedulerBatchFlushTimeout, 1*time.Second, "Maximum amount of time to wait for a scheduled batch")
 	runtimeFlags.Uint64(CfgTxnSchedulerMaxBatchSize, 1000, "Maximum size of a batch of runtime requests")

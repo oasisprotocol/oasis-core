@@ -2,12 +2,20 @@
 package tests
 
 import (
+	"context"
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/require"
+
 	"github.com/oasisprotocol/oasis-core/go/common"
+	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
 	epochtime "github.com/oasisprotocol/oasis-core/go/epochtime/api"
 	epochtimeTests "github.com/oasisprotocol/oasis-core/go/epochtime/tests"
+	roothash "github.com/oasisprotocol/oasis-core/go/roothash/api"
+	"github.com/oasisprotocol/oasis-core/go/roothash/api/block"
+	"github.com/oasisprotocol/oasis-core/go/runtime/transaction"
+	storage "github.com/oasisprotocol/oasis-core/go/storage/api"
 	"github.com/oasisprotocol/oasis-core/go/worker/compute/executor"
 	"github.com/oasisprotocol/oasis-core/go/worker/compute/executor/committee"
 )
@@ -25,6 +33,8 @@ func WorkerImplementationTests(
 	runtimeID common.Namespace,
 	rtNode *committee.Node,
 	epochtime epochtime.SetableBackend,
+	roothash roothash.Backend,
+	storage storage.Backend,
 ) {
 	// Wait for worker to start and register.
 	<-worker.Initialized()
@@ -36,6 +46,10 @@ func WorkerImplementationTests(
 	// Run the various test cases. (Ordering matters.)
 	t.Run("InitialEpochTransition", func(t *testing.T) {
 		testInitialEpochTransition(t, stateCh, epochtime)
+	})
+
+	t.Run("QueueTx", func(t *testing.T) {
+		testQueueTx(t, runtimeID, stateCh, rtNode, roothash, storage)
 	})
 
 	// TODO: Add more tests.
@@ -60,6 +74,75 @@ func waitForNodeTransition(t *testing.T, stateCh <-chan committee.NodeState, exp
 		case <-timeout:
 			t.Fatalf("failed to receive transition to %s state", expectedState)
 			return
+		}
+	}
+}
+
+func testQueueTx(
+	t *testing.T,
+	runtimeID common.Namespace,
+	stateCh <-chan committee.NodeState,
+	rtNode *committee.Node,
+	roothash roothash.Backend,
+	st storage.Backend,
+) {
+	// Subscribe to roothash blocks.
+	blocksCh, sub, err := roothash.WatchBlocks(runtimeID)
+	require.NoError(t, err, "WatchBlocks")
+	defer sub.Close()
+
+	select {
+	case <-blocksCh:
+	case <-time.After(recvTimeout):
+		t.Fatalf("failed to receive block")
+	}
+
+	// Queue a test call.
+	testCall := []byte("hello world")
+	err = rtNode.QueueTx(testCall)
+	require.NoError(t, err, "QueueCall")
+
+	// Node should transition to ProcessingBatch state.
+	waitForNodeTransition(t, stateCh, committee.ProcessingBatch)
+
+	// Node should transition to WaitingForFinalize state.
+	waitForNodeTransition(t, stateCh, committee.WaitingForFinalize)
+
+	// Node should transition to WaitingForBatch state and a block should be
+	// finalized containing our batch.
+	waitForNodeTransition(t, stateCh, committee.WaitingForBatch)
+
+blockLoop:
+	for {
+		select {
+		case annBlk := <-blocksCh:
+			blk := annBlk.Block
+
+			// Check that correct block was generated.
+			require.EqualValues(t, block.Normal, blk.Header.HeaderType)
+
+			ctx := context.Background()
+			tree := transaction.NewTree(st, storage.Root{
+				Namespace: blk.Header.Namespace,
+				Version:   blk.Header.Round,
+				Hash:      blk.Header.IORoot,
+			})
+			defer tree.Close()
+
+			txs, err := tree.GetTransactions(ctx)
+			require.NoError(t, err, "GetTransactions")
+			require.Len(t, txs, 1, "there should be one transaction")
+			require.EqualValues(t, testCall, txs[0].Input)
+			// NOTE: Mock host produces output equal to input.
+			require.EqualValues(t, testCall, txs[0].Output)
+
+			// NOTE: Mock host produces an empty state root.
+			var stateRoot hash.Hash
+			stateRoot.Empty()
+			require.EqualValues(t, stateRoot, blk.Header.StateRoot)
+			break blockLoop
+		case <-time.After(recvTimeout):
+			t.Fatalf("failed to receive block")
 		}
 	}
 }

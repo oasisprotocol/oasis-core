@@ -18,6 +18,7 @@ import (
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
 	"github.com/oasisprotocol/oasis-core/go/epochtime/api"
 	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
+	roothash "github.com/oasisprotocol/oasis-core/go/roothash/api"
 	"github.com/oasisprotocol/oasis-core/go/runtime/committee"
 	scheduler "github.com/oasisprotocol/oasis-core/go/scheduler/api"
 	"github.com/oasisprotocol/oasis-core/go/worker/common/p2p"
@@ -34,7 +35,7 @@ type MessageHandler interface {
 	//
 	// The provided context is short-lived so if the handler needs to perform additional work, that
 	// should be dispatched to a separate goroutine and not block delivery.
-	HandlePeerMessage(ctx context.Context, msg *p2p.Message) error
+	HandlePeerMessage(ctx context.Context, msg *p2p.Message, isOwn bool) error
 }
 
 // CommitteeInfo contains information about a committee of nodes.
@@ -60,11 +61,6 @@ type epoch struct {
 	// executorCommittee is the executor committee we are a member of.
 	executorCommittee *CommitteeInfo
 
-	// txnSchedulerCommitee is the txn scheduler committee we are a member of.
-	txnSchedulerCommittee *CommitteeInfo
-	// txnSchedulerLeader is the node public key of txn scheduler leader.
-	txnSchedulerLeader signature.PublicKey
-
 	// storageCommittee is the storage committee we are a member of.
 	storageCommittee *CommitteeInfo
 
@@ -73,18 +69,17 @@ type epoch struct {
 
 // EpochSnapshot is an immutable snapshot of epoch state.
 type EpochSnapshot struct {
+	identity     *identity.Identity
 	groupVersion int64
 
 	epochNumber api.EpochTime
 
-	executorRole     scheduler.Role
-	txnSchedulerRole scheduler.Role
+	executorRole scheduler.Role
 
 	runtime *registry.Runtime
 
-	executorCommittee     *CommitteeInfo
-	txnSchedulerCommittee *CommitteeInfo
-	storageCommittee      *CommitteeInfo
+	executorCommittee *CommitteeInfo
+	storageCommittee  *CommitteeInfo
 
 	nodes committee.NodeDescriptorLookup
 }
@@ -128,15 +123,17 @@ func (e *EpochSnapshot) IsExecutorBackupWorker() bool {
 	return e.executorRole == scheduler.BackupWorker
 }
 
-// GetTransactionSchedulerCommittee returns the current txn scheduler committee.
-func (e *EpochSnapshot) GetTransactionSchedulerCommittee() *CommitteeInfo {
-	return e.txnSchedulerCommittee
-}
-
-// IsTransactionSchedulerLeader checks if the current node is a leader of the transaction scheduler committee
-// in the current epoch.
-func (e *EpochSnapshot) IsTransactionSchedulerLeader() bool {
-	return e.txnSchedulerRole == scheduler.Leader
+// IsTransactionScheduler checks if the current node is a a transaction scheduler
+// at the specific runtime round.
+func (e *EpochSnapshot) IsTransactionScheduler(round uint64) bool {
+	if e.executorCommittee == nil || e.executorCommittee.Committee == nil {
+		return false
+	}
+	scheduler, err := roothash.GetTransactionScheduler(e.executorCommittee.Committee, round)
+	if err != nil {
+		return false
+	}
+	return scheduler.PublicKey.Equal(e.identity.NodeSigner.Public())
 }
 
 // GetStorageCommittee returns the current storage committee.
@@ -169,8 +166,6 @@ func (e *EpochSnapshot) VerifyCommitteeSignatures(kind scheduler.CommitteeKind, 
 	switch kind {
 	case scheduler.KindStorage:
 		committee = e.storageCommittee
-	case scheduler.KindComputeTxnScheduler:
-		committee = e.txnSchedulerCommittee
 	default:
 		return fmt.Errorf("epoch: unsupported committee kind: %s", kind)
 	}
@@ -179,6 +174,23 @@ func (e *EpochSnapshot) VerifyCommitteeSignatures(kind scheduler.CommitteeKind, 
 		if !committee.PublicKeys[sig.PublicKey] {
 			return fmt.Errorf("epoch: signature is not from a valid committee member")
 		}
+	}
+	return nil
+}
+
+// VerifyTxnSchedulerSignature verifies transaction scheduler signature.
+//
+// Implements commitment.SignatureVerifier.
+func (e *EpochSnapshot) VerifyTxnSchedulerSignature(sig signature.Signature, round uint64) error {
+	if e.executorCommittee == nil || e.executorCommittee.Committee == nil {
+		return fmt.Errorf("epoch: no active transaction scheduler")
+	}
+	scheduler, err := roothash.GetTransactionScheduler(e.executorCommittee.Committee, round)
+	if err != nil {
+		return fmt.Errorf("epoch: error getting transaction scheduler: %w", err)
+	}
+	if !scheduler.PublicKey.Equal(sig.PublicKey) {
+		return fmt.Errorf("epoch: signature is not from the transaction scheduler at round: %d", round)
 	}
 	return nil
 }
@@ -269,12 +281,10 @@ func (g *Group) EpochTransition(ctx context.Context, height int64) error {
 	}
 
 	// Find the current committees.
-	var executorCommittee, txnSchedulerCommittee, storageCommittee *CommitteeInfo
-	var txnSchedulerLeader signature.PublicKey
+	var executorCommittee, storageCommittee *CommitteeInfo
 	publicIdentity := g.identity.NodeSigner.Public()
 	for _, cm := range committees {
 		var role scheduler.Role
-		var leader signature.PublicKey
 		publicKeys := make(map[signature.PublicKey]bool)
 		for _, member := range cm.Members {
 			publicKeys[member.PublicKey] = true
@@ -285,10 +295,6 @@ func (g *Group) EpochTransition(ctx context.Context, height int64) error {
 			// Start watching the member's node descriptor.
 			if _, err = g.nodes.WatchNode(ctx, member.PublicKey); err != nil {
 				return fmt.Errorf("group: failed to fetch node info: %w", err)
-			}
-
-			if member.Role == scheduler.Leader {
-				leader = member.PublicKey
 			}
 		}
 
@@ -301,20 +307,12 @@ func (g *Group) EpochTransition(ctx context.Context, height int64) error {
 		switch cm.Kind {
 		case scheduler.KindComputeExecutor:
 			executorCommittee = ci
-		case scheduler.KindComputeTxnScheduler:
-			txnSchedulerCommittee = ci
-			if leader.IsValid() {
-				txnSchedulerLeader = leader
-			}
 		case scheduler.KindStorage:
 			storageCommittee = ci
 		}
 	}
 	if executorCommittee == nil {
 		return fmt.Errorf("no executor committee")
-	}
-	if txnSchedulerCommittee == nil {
-		return fmt.Errorf("no transaction scheduler committee")
 	}
 	if storageCommittee == nil {
 		return fmt.Errorf("no storage committee")
@@ -338,23 +336,20 @@ func (g *Group) EpochTransition(ctx context.Context, height int64) error {
 
 	// Update the current epoch.
 	g.activeEpoch = &epoch{
-		epochNumber:           epochNumber,
-		epochCtx:              epochCtx,
-		cancelEpochCtx:        cancelEpochCtx,
-		roundCtx:              roundCtx,
-		cancelRoundCtx:        cancelRoundCtx,
-		groupVersion:          height,
-		executorCommittee:     executorCommittee,
-		txnSchedulerCommittee: txnSchedulerCommittee,
-		txnSchedulerLeader:    txnSchedulerLeader,
-		storageCommittee:      storageCommittee,
-		runtime:               runtime,
+		epochNumber:       epochNumber,
+		epochCtx:          epochCtx,
+		cancelEpochCtx:    cancelEpochCtx,
+		roundCtx:          roundCtx,
+		cancelRoundCtx:    cancelRoundCtx,
+		groupVersion:      height,
+		executorCommittee: executorCommittee,
+		storageCommittee:  storageCommittee,
+		runtime:           runtime,
 	}
 
 	g.logger.Info("epoch transition complete",
 		"group_version", height,
 		"executor_role", executorCommittee.Role,
-		"txn_scheduler_role", txnSchedulerCommittee.Role,
 	)
 
 	return nil
@@ -375,15 +370,14 @@ func (g *Group) GetEpochSnapshot() *EpochSnapshot {
 	}
 
 	s := &EpochSnapshot{
-		epochNumber:           g.activeEpoch.epochNumber,
-		groupVersion:          g.activeEpoch.groupVersion,
-		executorRole:          g.activeEpoch.executorCommittee.Role,
-		txnSchedulerRole:      g.activeEpoch.txnSchedulerCommittee.Role,
-		runtime:               g.activeEpoch.runtime,
-		executorCommittee:     g.activeEpoch.executorCommittee,
-		txnSchedulerCommittee: g.activeEpoch.txnSchedulerCommittee,
-		storageCommittee:      g.activeEpoch.storageCommittee,
-		nodes:                 g.nodes,
+		identity:          g.identity,
+		epochNumber:       g.activeEpoch.epochNumber,
+		groupVersion:      g.activeEpoch.groupVersion,
+		executorRole:      g.activeEpoch.executorCommittee.Role,
+		runtime:           g.activeEpoch.runtime,
+		executorCommittee: g.activeEpoch.executorCommittee,
+		storageCommittee:  g.activeEpoch.storageCommittee,
+		nodes:             g.nodes,
 	}
 
 	return s
@@ -401,13 +395,9 @@ func (g *Group) AuthenticatePeer(peerID signature.PublicKey, msg *p2p.Message) e
 	// Assume the peer is not authorized.
 	var authorized bool
 
-	// If we are in the executor committee, we accept messages from the transaction
-	// scheduler committee leader.
-	if g.activeEpoch.executorCommittee.Role != scheduler.Invalid && g.activeEpoch.txnSchedulerLeader.IsValid() {
-		n := g.nodes.LookupByPeerID(peerID)
-		if n != nil {
-			authorized = authorized || g.activeEpoch.txnSchedulerLeader.Equal(n.ID)
-		}
+	// If we are in the executor committee, we accept messages from all nodes.
+	if g.activeEpoch.executorCommittee.Role != scheduler.Invalid {
+		authorized = true
 	}
 
 	if !authorized {
@@ -425,7 +415,7 @@ func (g *Group) AuthenticatePeer(peerID signature.PublicKey, msg *p2p.Message) e
 }
 
 // HandlePeerMessage handles an incoming message from a peer.
-func (g *Group) HandlePeerMessage(unusedPeerID signature.PublicKey, msg *p2p.Message) error {
+func (g *Group) HandlePeerMessage(unusedPeerID signature.PublicKey, msg *p2p.Message, isOwn bool) error {
 	// Perform some checks on the incoming message. We make sure to release the
 	// lock before running the handler.
 	err := func() error {
@@ -464,7 +454,7 @@ func (g *Group) HandlePeerMessage(unusedPeerID signature.PublicKey, msg *p2p.Mes
 		}
 	}
 
-	return g.handler.HandlePeerMessage(ctx, msg)
+	return g.handler.HandlePeerMessage(ctx, msg, isOwn)
 }
 
 // Publish publishes a message to the P2P network.

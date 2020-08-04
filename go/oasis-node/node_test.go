@@ -45,11 +45,9 @@ import (
 	storageTests "github.com/oasisprotocol/oasis-core/go/storage/tests"
 	workerCommon "github.com/oasisprotocol/oasis-core/go/worker/common"
 	"github.com/oasisprotocol/oasis-core/go/worker/compute"
+	"github.com/oasisprotocol/oasis-core/go/worker/compute/executor"
 	executorCommittee "github.com/oasisprotocol/oasis-core/go/worker/compute/executor/committee"
 	executorWorkerTests "github.com/oasisprotocol/oasis-core/go/worker/compute/executor/tests"
-	"github.com/oasisprotocol/oasis-core/go/worker/compute/txnscheduler"
-	txnschedulerCommittee "github.com/oasisprotocol/oasis-core/go/worker/compute/txnscheduler/committee"
-	txnschedulerWorkerTests "github.com/oasisprotocol/oasis-core/go/worker/compute/txnscheduler/tests"
 	storageWorker "github.com/oasisprotocol/oasis-core/go/worker/storage"
 	storageWorkerTests "github.com/oasisprotocol/oasis-core/go/worker/storage/tests"
 )
@@ -66,6 +64,7 @@ var (
 		value interface{}
 	}{
 		{"log.level.default", "DEBUG"},
+		{"log.format", "JSON"},
 		{cmdCommonFlags.CfgConsensusValidator, true},
 		{cmdCommonFlags.CfgDebugDontBlameOasis, true},
 		{storage.CfgBackend, "badger"},
@@ -73,7 +72,7 @@ var (
 		{workerCommon.CfgRuntimeProvisioner, workerCommon.RuntimeProvisionerMock},
 		{workerCommon.CfgClientPort, workerClientPort},
 		{storageWorker.CfgWorkerEnabled, true},
-		{txnscheduler.CfgCheckTxEnabled, false},
+		{executor.CfgScheduleCheckTxEnabled, false},
 		{tendermintFull.CfgSupplementarySanityEnabled, true},
 		{tendermintFull.CfgSupplementarySanityInterval, 1},
 		{cmdCommon.CfgDebugAllowTestKeys, true},
@@ -90,8 +89,7 @@ var (
 			RoundTimeout:    20 * time.Second,
 		},
 		TxnScheduler: registry.TxnSchedulerParameters{
-			Algorithm:         registry.TxnSchedulerAlgorithmBatching,
-			GroupSize:         1,
+			Algorithm:         registry.TxnSchedulerBatching,
 			MaxBatchSize:      1,
 			MaxBatchSizeBytes: 1024,
 			BatchFlushTimeout: 20 * time.Second,
@@ -115,9 +113,8 @@ var (
 type testNode struct {
 	*node.Node
 
-	runtimeID                 common.Namespace
-	executorCommitteeNode     *executorCommittee.Node
-	txnschedulerCommitteeNode *txnschedulerCommittee.Node
+	runtimeID             common.Namespace
+	executorCommitteeNode *executorCommittee.Node
 
 	entity       *entity.Entity
 	entitySigner signature.Signer
@@ -225,7 +222,6 @@ func TestNode(t *testing.T) {
 		{"RegisterTestEntityRuntime", testRegisterEntityRuntime},
 
 		{"ExecutorWorker", testExecutorWorker},
-		{"TransactionSchedulerWorker", testTransactionSchedulerWorker},
 
 		// StorageWorker test case
 		{"StorageWorker", testStorageWorker},
@@ -293,11 +289,6 @@ func testRegisterEntityRuntime(t *testing.T, node *testNode) {
 	executorRT := node.ExecutorWorker.GetRuntime(testRuntime.ID)
 	require.NotNil(t, executorRT)
 	node.executorCommitteeNode = executorRT
-
-	// Get the runtime and the corresponding transaction scheduler committee node instance.
-	txnschedulerRT := node.TransactionSchedulerWorker.GetRuntime(testRuntime.ID)
-	require.NotNil(t, txnschedulerRT)
-	node.txnschedulerCommitteeNode = txnschedulerRT
 }
 
 func testDeregisterEntityRuntime(t *testing.T, node *testNode) {
@@ -437,26 +428,19 @@ func testExecutorWorker(t *testing.T, node *testNode) {
 	timeSource := (node.Consensus.EpochTime()).(epochtime.SetableBackend)
 
 	require.NotNil(t, node.executorCommitteeNode)
-	executorWorkerTests.WorkerImplementationTests(t, node.ExecutorWorker, node.runtimeID, node.executorCommitteeNode, timeSource)
-}
-
-func testStorageWorker(t *testing.T, node *testNode) {
-	storageWorkerTests.WorkerImplementationTests(t, node.StorageWorker)
-}
-
-func testTransactionSchedulerWorker(t *testing.T, node *testNode) {
-	timeSource := (node.Consensus.EpochTime()).(epochtime.SetableBackend)
-
-	require.NotNil(t, node.txnschedulerCommitteeNode)
-	txnschedulerWorkerTests.WorkerImplementationTests(
+	executorWorkerTests.WorkerImplementationTests(
 		t,
-		node.TransactionSchedulerWorker,
+		node.ExecutorWorker,
 		node.runtimeID,
-		node.txnschedulerCommitteeNode,
+		node.executorCommitteeNode,
 		timeSource,
 		node.Consensus.RootHash(),
 		node.RuntimeRegistry.StorageRouter(),
 	)
+}
+
+func testStorageWorker(t *testing.T, node *testNode) {
+	storageWorkerTests.WorkerImplementationTests(t, node.StorageWorker)
 }
 
 func testRuntimeClient(t *testing.T, node *testNode) {

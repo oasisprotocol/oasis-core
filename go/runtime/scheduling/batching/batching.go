@@ -1,25 +1,17 @@
-// Package batching implements a batching transaction scheduling algorithm.
+// Package batching implements a batching transaction scheduler.
 package batching
 
 import (
-	flag "github.com/spf13/pflag"
-	"github.com/spf13/viper"
-
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
 	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
-	"github.com/oasisprotocol/oasis-core/go/worker/compute/txnscheduler/algorithm/api"
+	"github.com/oasisprotocol/oasis-core/go/runtime/scheduling/api"
 )
 
 const (
-	// Name of the scheduling algorithm.
-	Name = registry.TxnSchedulerAlgorithmBatching
-
-	cfgMaxQueueSize = "worker.txnscheduler.batching.max_queue_size"
+	// Name of the scheduler.
+	Name = registry.TxnSchedulerBatching
 )
-
-// Flags has the configuration flag for the batching algorithm.
-var Flags = flag.NewFlagSet("", flag.ContinueOnError)
 
 type batchingState struct {
 	cfg           config
@@ -50,7 +42,7 @@ func (s *batchingState) scheduleBatch(force bool) error {
 		if err := s.dispatcher.Dispatch(batch); err != nil {
 			// Put the batch back into the incoming queue in case this failed.
 			if errAB := s.incomingQueue.AddBatch(batch); errAB != nil {
-				s.logger.Error("failed to add batch back into the incoming queue",
+				s.logger.Warn("failed to add batch back into the incoming queue",
 					"err", errAB,
 				)
 			}
@@ -76,19 +68,41 @@ func (s *batchingState) ScheduleTx(tx []byte) error {
 
 	// Try scheduling a batch.
 	if err := s.scheduleBatch(false); err != nil {
-		s.logger.Error("failed scheduling a batch",
-			"error", err,
+		// XXX: Log a warning here as the exected common failures are
+		// whenever we try dispatching a batch and we are not the scheduler,
+		// or when another batch is being processed.
+		s.logger.Warn("failed scheduling a batch",
+			"err", err,
 		)
 	}
 
 	return nil
 }
 
+// AppendTxBatch appends a batch of transactions.
+//
+// Transactions that fail checks are skipped, not affecting the insertion of
+// other transactions. If any transaction fails a check a non-nil error is
+// returned.
+// Aditionally this method does not try to schedule the transactions after the
+// insert is finished, and is as such suited for reinserting transactions after
+// a failed batch scheduling/processing.
+func (s *batchingState) AppendTxBatch(batch [][]byte) error {
+	return s.incomingQueue.AddBatch(batch)
+}
+
+func (s *batchingState) RemoveTxBatch(tx [][]byte) error {
+	return s.incomingQueue.RemoveBatch(tx)
+}
+
 func (s *batchingState) Flush() error {
 	// Force schedule a batch.
 	if err := s.scheduleBatch(true); err != nil {
-		s.logger.Error("failed scheduling a batch",
-			"error", err,
+		// XXX: Log a warning here as the exected common failures are
+		// whenever we try dispatching a batch and we are not the scheduler,
+		// or when another batch is being processed.
+		s.logger.Warn("failed scheduling a batch",
+			"err", err,
 		)
 		return err
 	}
@@ -118,24 +132,18 @@ func (s *batchingState) IsInitialized() bool {
 	return s.dispatcher != nil
 }
 
-// New creates a new batching algorithm.
-func New(maxBatchSize, maxBatchSizeBytes uint64) (api.Algorithm, error) {
+// New creates a new batching scheduler.
+func New(maxQueueSize, maxBatchSize, maxBatchSizeBytes uint64) (api.Scheduler, error) {
 	cfg := config{
-		maxQueueSize:      uint64(viper.GetInt(cfgMaxQueueSize)),
+		maxQueueSize:      maxQueueSize,
 		maxBatchSize:      maxBatchSize,
 		maxBatchSizeBytes: maxBatchSizeBytes,
 	}
 	batching := batchingState{
 		cfg:           cfg,
 		incomingQueue: newIncomingQueue(cfg.maxQueueSize, cfg.maxBatchSize, cfg.maxBatchSizeBytes),
-		logger:        logging.GetLogger("txn_scheduler/algo/batching"),
+		logger:        logging.GetLogger("runtime/scheduling").With("scheduler", "batching"),
 	}
 
 	return &batching, nil
-}
-
-func init() {
-	Flags.Uint64(cfgMaxQueueSize, 10000, "Maximum size of the batching queue")
-
-	_ = viper.BindPFlags(Flags)
 }

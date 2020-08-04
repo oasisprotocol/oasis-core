@@ -58,7 +58,7 @@ func testQuery(
 	runtimeID common.Namespace,
 	c api.RuntimeClient,
 ) {
-	err := c.WaitBlockIndexed(ctx, &api.WaitBlockIndexedRequest{RuntimeID: runtimeID, Round: 4})
+	err := c.WaitBlockIndexed(ctx, &api.WaitBlockIndexedRequest{RuntimeID: runtimeID, Round: 3})
 	require.NoError(t, err, "WaitBlockIndexed")
 
 	// Fetch genesis block.
@@ -76,18 +76,13 @@ func testQuery(
 	require.NoError(t, err, "GetBlock")
 	require.EqualValues(t, 1, blk.Header.Round)
 
-	blk, err = c.GetBlock(ctx, &api.GetBlockRequest{RuntimeID: runtimeID, Round: 2})
-	// Epoch transition from TestNode/TransactionSchedulerWorker/InitialEpochTransition
-	require.NoError(t, err, "GetBlock")
-	require.EqualValues(t, 2, blk.Header.Round)
-
-	// Normal block from TestNode/TransactionSchedulerWorker/QueueCall
-
+	// Normal block from TestNode/ExecutorWorker/QueueTx
 	blk, err = c.GetBlock(ctx, &api.GetBlockRequest{RuntimeID: runtimeID, Round: 0xffffffffffffffff})
+
 	// Normal block from TestNode/Client/SubmitTx
 	// There can be multiple of these if ClientImplementationTests is run multiple times.
 	require.NoError(t, err, "GetBlock")
-	require.True(t, blk.Header.Round >= 4)
+	require.True(t, blk.Header.Round >= 3)
 	expectedLatestRound := blk.Header.Round
 
 	blkLatest, err := c.GetBlock(ctx, &api.GetBlockRequest{RuntimeID: runtimeID, Round: api.RoundLatest})
@@ -99,14 +94,14 @@ func testQuery(
 	require.Error(t, err, "GetBlock")
 
 	// Fetch transaction.
-	tx, err := c.GetTx(ctx, &api.GetTxRequest{RuntimeID: runtimeID, Round: 4, Index: 0})
+	tx, err := c.GetTx(ctx, &api.GetTxRequest{RuntimeID: runtimeID, Round: 3, Index: 0})
 	require.NoError(t, err, "GetTx(0)")
-	require.EqualValues(t, 4, tx.Block.Header.Round)
+	require.EqualValues(t, 3, tx.Block.Header.Round)
 	require.EqualValues(t, testInput, tx.Input)
 	require.EqualValues(t, testOutput, tx.Output)
 
 	// Out of bounds transaction index.
-	_, err = c.GetTx(ctx, &api.GetTxRequest{RuntimeID: runtimeID, Round: 4, Index: 1})
+	_, err = c.GetTx(ctx, &api.GetTxRequest{RuntimeID: runtimeID, Round: 3, Index: 1})
 	require.Error(t, err, "GetTx(1)")
 
 	err = c.WaitBlockIndexed(ctx, &api.WaitBlockIndexedRequest{RuntimeID: runtimeID, Round: expectedLatestRound})
@@ -140,9 +135,9 @@ func testQuery(
 	// Check that indexer has indexed txn keys (check the mock worker for key/values).
 	tx, err = c.QueryTx(ctx, &api.QueryTxRequest{RuntimeID: runtimeID, Key: []byte("txn_foo"), Value: []byte("txn_bar")})
 	require.NoError(t, err, "QueryTx")
-	require.EqualValues(t, 3, tx.Block.Header.Round)
+	require.EqualValues(t, 2, tx.Block.Header.Round)
 	require.EqualValues(t, 0, tx.Index)
-	// Check for values from TestNode/TransactionSchedulerWorker/QueueCall
+	// Check for values from TestNode/ExecutorWorker/QueueTx
 	require.EqualValues(t, []byte("hello world"), tx.Input)
 	require.EqualValues(t, []byte("hello world"), tx.Output)
 
@@ -156,21 +151,21 @@ func testQuery(
 	// Test advanced transaction queries.
 	query := api.Query{
 		RoundMin: 0,
-		RoundMax: 4,
+		RoundMax: 3,
 		Conditions: []api.QueryCondition{
 			{Key: []byte("txn_foo"), Values: [][]byte{[]byte("txn_bar")}},
 		},
 	}
 	results, err := c.QueryTxs(ctx, &api.QueryTxsRequest{RuntimeID: runtimeID, Query: query})
 	require.NoError(t, err, "QueryTxs")
-	// One from TestNode/TransactionSchedulerWorker/QueueCall, one from TestNode/Client/SubmitTx
+	// One from TestNode/ExecutorWorker/QueueTx, one from TestNode/Client/SubmitTx
 	require.Len(t, results, 2)
 	sort.Slice(results, func(i, j int) bool {
 		return bytes.Compare(results[i].Input, results[j].Input) < 0
 	})
-	require.EqualValues(t, 3, results[0].Block.Header.Round)
+	require.EqualValues(t, 2, results[0].Block.Header.Round)
 	require.EqualValues(t, 0, results[0].Index)
-	// Check for values from TestNode/TransactionSchedulerWorker/QueueCall
+	// Check for values from TestNode/ExecutorWorker/QueueTx
 	require.EqualValues(t, []byte("hello world"), results[0].Input)
 	require.EqualValues(t, []byte("hello world"), results[0].Output)
 

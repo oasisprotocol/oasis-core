@@ -20,7 +20,7 @@ import (
 )
 
 type computeBatchContext struct {
-	bd    commitment.TxnSchedulerBatch
+	bd    commitment.ProposedBatch
 	bdSig signature.Signature
 
 	ioTree    *transaction.Tree
@@ -46,18 +46,18 @@ func (cbc *computeBatchContext) receiveBatch(ph *p2pHandle) error {
 		req = <-ph.requests
 		req.responseCh <- nil
 
-		if req.msg.TxnSchedulerBatch == nil {
+		if req.msg.ProposedBatch == nil {
 			continue
 		}
 
 		break
 	}
 
-	if err := req.msg.TxnSchedulerBatch.Open(&cbc.bd); err != nil {
-		return fmt.Errorf("request message SignedTxnSchedulerBatchDispatch Open: %w", err)
+	if err := req.msg.ProposedBatch.Open(&cbc.bd); err != nil {
+		return fmt.Errorf("request message SignedProposedBatchDispatch Open: %w", err)
 	}
 
-	cbc.bdSig = req.msg.TxnSchedulerBatch.Signature
+	cbc.bdSig = req.msg.ProposedBatch.Signature
 	return nil
 }
 

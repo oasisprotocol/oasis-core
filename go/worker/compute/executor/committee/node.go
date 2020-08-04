@@ -26,6 +26,8 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/roothash/api/commitment"
 	runtimeCommittee "github.com/oasisprotocol/oasis-core/go/runtime/committee"
 	"github.com/oasisprotocol/oasis-core/go/runtime/host/protocol"
+	"github.com/oasisprotocol/oasis-core/go/runtime/scheduling"
+	schedulingAPI "github.com/oasisprotocol/oasis-core/go/runtime/scheduling/api"
 	"github.com/oasisprotocol/oasis-core/go/runtime/transaction"
 	scheduler "github.com/oasisprotocol/oasis-core/go/scheduler/api"
 	storage "github.com/oasisprotocol/oasis-core/go/storage/api"
@@ -44,6 +46,12 @@ var (
 	errIncorrectRole      = errors.New("executor: incorrect role")
 	errIncorrectState     = errors.New("executor: incorrect state")
 	errMsgFromNonTxnSched = errors.New("executor: received txn scheduler dispatch msg from non-txn scheduler")
+
+	// Transaction scheduling errors.
+	errNoBlocks        = fmt.Errorf("executor: no blocks")
+	errNotReady        = fmt.Errorf("executor: runtime not ready")
+	errCheckTxFailed   = fmt.Errorf("executor: CheckTx failed")
+	errNotTxnScheduler = fmt.Errorf("executor: not transaction scheduler in this round")
 )
 
 var (
@@ -96,6 +104,13 @@ var (
 		},
 		[]string{"runtime"},
 	)
+	incomingQueueSize = prometheus.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Name: "oasis_worker_incoming_queue_size",
+			Help: "Size of the incoming queue (number of entries).",
+		},
+		[]string{"runtime"},
+	)
 	nodeCollectors = []prometheus.Collector{
 		discrepancyDetectedCount,
 		abortedBatchCount,
@@ -104,14 +119,26 @@ var (
 		batchProcessingTime,
 		batchRuntimeProcessingTime,
 		batchSize,
+		incomingQueueSize,
 	}
 
 	metricsOnce sync.Once
 )
 
 // Node is a committee node.
-type Node struct {
+type Node struct { // nolint: maligned
 	*commonWorker.RuntimeHostNode
+
+	scheduleCheckTxEnabled bool
+	scheduleMaxQueueSize   uint64
+
+	// The scheduler mutex is here to protect the initialization
+	// of the scheduler variable. After initialization the variable
+	// will never change though -- so if the variable is non-nil
+	// (which must be checked while holding the read lock) it can
+	// safely be used without holding the lock.
+	schedulerMutex sync.RWMutex
+	scheduler      schedulingAPI.Scheduler
 
 	commonNode *committee.Node
 
@@ -187,24 +214,61 @@ func (n *Node) getMetricLabels() prometheus.Labels {
 }
 
 // HandlePeerMessage implements NodeHooks.
-func (n *Node) HandlePeerMessage(ctx context.Context, message *p2p.Message) (bool, error) {
-	if message.TxnSchedulerBatch != nil {
+func (n *Node) HandlePeerMessage(ctx context.Context, message *p2p.Message, isOwn bool) (bool, error) {
+	n.logger.Debug("received peer message", "message", message, "is_own", isOwn)
+
+	switch {
+	case message.Tx != nil:
+		call := message.Tx.Data
+
+		if !n.commonNode.Group.GetEpochSnapshot().IsExecutorWorker() {
+			n.logger.Error("unable to handle transaction message, not execution worker",
+				"current_epoch", n.commonNode.Group.GetEpochSnapshot().GetEpochNumber(),
+			)
+			return true, nil
+		}
+
+		if n.scheduleCheckTxEnabled {
+			// Check transaction before queuing it.
+			if err := n.checkTx(ctx, call); err != nil {
+				return true, p2pError.Permanent(err)
+			}
+			n.logger.Debug("worker CheckTx successful, queuing transaction")
+		}
+
+		err := n.QueueTx(call)
+		if err != nil {
+			n.logger.Error("unable to Queue transaction",
+				"err", err,
+			)
+			return true, p2pError.Permanent(err)
+		}
+		return true, nil
+
+	case message.ProposedBatch != nil:
+		// Ignore own messages as those are handled via handleInternalBatchLocked.
+		if isOwn {
+			return true, nil
+		}
 		crash.Here(crashPointBatchReceiveAfter)
 
-		sbd := message.TxnSchedulerBatch
+		sbd := message.ProposedBatch
+
+		epoch := n.commonNode.Group.GetEpochSnapshot()
+		n.commonNode.CrossNode.Lock()
+		round := n.commonNode.CurrentBlock.Header.Round
+		n.commonNode.CrossNode.Unlock()
 
 		// Before opening the signed dispatch message, verify that it was
 		// actually signed by the current transaction scheduler.
-		epoch := n.commonNode.Group.GetEpochSnapshot()
-		txsc := epoch.GetTransactionSchedulerCommittee()
-		if !txsc.PublicKeys[sbd.Signature.PublicKey] {
+		if err := epoch.VerifyTxnSchedulerSignature(sbd.Signature, round); err != nil {
 			// Not signed by a current txn scheduler!
 			return false, errMsgFromNonTxnSched
 		}
 
 		// Transaction scheduler checks out, open the signed dispatch message
-		// and add it to the queue.
-		var bd commitment.TxnSchedulerBatch
+		// and add it to the processing queue.
+		var bd commitment.ProposedBatch
 		if err := sbd.Open(&bd); err != nil {
 			return false, p2pError.Permanent(err)
 		}
@@ -215,6 +279,7 @@ func (n *Node) HandlePeerMessage(ctx context.Context, message *p2p.Message) (boo
 		}
 		return true, nil
 	}
+
 	return false, nil
 }
 
@@ -290,9 +355,9 @@ func (n *Node) queueBatchBlocking(
 	return n.handleExternalBatchLocked(batch, hdr)
 }
 
-// HandleBatchFromTransactionSchedulerLocked processes a batch from the transaction scheduler.
+// handleInternalBatchLocked processes a batch from the internal transaction scheduler.
 // Guarded by n.commonNode.CrossNode.
-func (n *Node) HandleBatchFromTransactionSchedulerLocked(
+func (n *Node) handleInternalBatchLocked(
 	batchSpanCtx opentracing.SpanContext,
 	ioRoot hash.Hash,
 	batch transaction.RawBatch,
@@ -351,9 +416,23 @@ func (n *Node) transitionLocked(state NodeState) {
 // HandleEpochTransitionLocked implements NodeHooks.
 // Guarded by n.commonNode.CrossNode.
 func (n *Node) HandleEpochTransitionLocked(epoch *committee.EpochSnapshot) {
-	if epoch.IsExecutorMember() {
+	n.schedulerMutex.RLock()
+	defer n.schedulerMutex.RUnlock()
+	if n.scheduler == nil || !n.scheduler.IsInitialized() {
+		n.logger.Error("scheduling algorithm not available yet")
+		return
+	}
+
+	if !epoch.IsExecutorWorker() {
+		// Clear incoming queue if we are not a worker anymore.
+		n.scheduler.Clear()
+		incomingQueueSize.With(n.getMetricLabels()).Set(0)
+	}
+
+	switch {
+	case epoch.IsExecutorMember():
 		n.transitionLocked(StateWaitingForBatch{})
-	} else {
+	default:
 		n.transitionLocked(StateNotReady{})
 	}
 }
@@ -417,11 +496,237 @@ func (n *Node) HandleNewBlockLocked(blk *block.Block) {
 			"round", blk.Header.Round,
 			"header_hash", blk.Header.EncodedHash(),
 		)
+		// Removed processed transactions from queue.
+		if err := n.removeTxBatch(state.raw); err != nil {
+			n.logger.Warn("failed removing processed batch from queue",
+				"err", err,
+				"batch", state.raw,
+			)
+		}
+
 		n.transitionLocked(StateWaitingForBatch{})
 
 		// Record time taken for successfully processing a batch.
 		batchProcessingTime.With(n.getMetricLabels()).Observe(time.Since(state.batchStartTime).Seconds())
 	}
+}
+
+// checkTx checks the given call in the node's runtime.
+func (n *Node) checkTx(ctx context.Context, call []byte) error {
+	n.commonNode.CrossNode.Lock()
+	currentBlock := n.commonNode.CurrentBlock
+	n.commonNode.CrossNode.Unlock()
+
+	if currentBlock == nil {
+		return errNotReady
+	}
+
+	checkRq := &protocol.Body{
+		RuntimeCheckTxBatchRequest: &protocol.RuntimeCheckTxBatchRequest{
+			Inputs: transaction.RawBatch{call},
+			Block:  *currentBlock,
+		},
+	}
+	rt := n.GetHostedRuntime()
+	if rt == nil {
+		n.logger.Error("CheckTx: hosted runtime not initialized")
+		return errNotReady
+	}
+	resp, err := rt.Call(ctx, checkRq)
+	switch {
+	case err != nil:
+		n.logger.Error("CheckTx: runtime call error",
+			"err", err,
+		)
+		return err
+	case resp.RuntimeCheckTxBatchResponse == nil:
+		n.logger.Error("CheckTx: runtime response is nil")
+		return errCheckTxFailed
+	case resp.RuntimeCheckTxBatchResponse.Results == nil:
+		n.logger.Error("CheckTx: response contains no results")
+		return errCheckTxFailed
+	case len(resp.RuntimeCheckTxBatchResponse.Results) != 1:
+		n.logger.Error("CheckTx: runtime response doesn't contain exactly one result",
+			"num_results", len(resp.RuntimeCheckTxBatchResponse.Results),
+		)
+		return errCheckTxFailed
+	}
+
+	// Interpret CheckTx result.
+	resultRaw := resp.RuntimeCheckTxBatchResponse.Results[0]
+	var result transaction.TxnOutput
+	if err = cbor.Unmarshal(resultRaw, &result); err != nil {
+		n.logger.Error("CheckTx: runtime response failed to deserialize",
+			"err", err,
+		)
+		return errCheckTxFailed
+	}
+	if result.Error != nil {
+		n.logger.Error("CheckTx: runtime failed with error",
+			"err", result.Error,
+		)
+		return fmt.Errorf("%w: %s", errCheckTxFailed, *result.Error)
+	}
+
+	return nil
+}
+
+// QueueTx queues a runtime transaction for scheduling.
+func (n *Node) QueueTx(call []byte) error {
+	n.schedulerMutex.RLock()
+	defer n.schedulerMutex.RUnlock()
+
+	if n.scheduler == nil || !n.scheduler.IsInitialized() {
+		return errNotReady
+	}
+	if err := n.scheduler.ScheduleTx(call); err != nil {
+		return err
+	}
+
+	incomingQueueSize.With(n.getMetricLabels()).Set(float64(n.scheduler.UnscheduledSize()))
+
+	return nil
+}
+
+// removeTxBatch removes a batch from scheduling queue.
+func (n *Node) removeTxBatch(batch [][]byte) error {
+	// XXX: remove batch can only happen after a batch was already scheduled, meaning
+	// the scheduler already exists and there is no need for the scheduler mutex.
+	if err := n.scheduler.RemoveTxBatch(batch); err != nil {
+		return err
+	}
+
+	incomingQueueSize.With(n.getMetricLabels()).Set(float64(n.scheduler.UnscheduledSize()))
+
+	return nil
+}
+
+// Dispatch dispatches a batch to the executor committee.
+func (n *Node) Dispatch(batch transaction.RawBatch) error {
+	n.commonNode.CrossNode.Lock()
+	defer n.commonNode.CrossNode.Unlock()
+
+	// If we are not waiting for a batch, don't do anything.
+	if _, ok := n.state.(StateWaitingForBatch); !ok {
+		return errIncorrectState
+	}
+	if n.commonNode.CurrentBlock == nil {
+		return errNoBlocks
+	}
+
+	epoch := n.commonNode.Group.GetEpochSnapshot()
+	round := n.commonNode.CurrentBlock.Header.Round
+	// If we are not a scheduler at this round don't do anything.
+	if !epoch.IsTransactionScheduler(round) {
+		return errNotTxnScheduler
+	}
+
+	// Scheduler node opens a new parent span for batch processing.
+	batchSpan := opentracing.StartSpan("TakeBatchFromQueue(batch)")
+	defer batchSpan.Finish()
+	batchSpanCtx := batchSpan.Context()
+
+	// Generate the initial I/O root containing only the inputs (outputs and
+	// tags will be added later by the executor nodes).
+	lastHeader := n.commonNode.CurrentBlock.Header
+	emptyRoot := storage.Root{
+		Namespace: lastHeader.Namespace,
+		Version:   lastHeader.Round + 1,
+	}
+	emptyRoot.Hash.Empty()
+
+	ioTree := transaction.NewTree(nil, emptyRoot)
+	defer ioTree.Close()
+
+	for idx, tx := range batch {
+		if err := ioTree.AddTransaction(n.ctx, transaction.Transaction{Input: tx, BatchOrder: uint32(idx)}, nil); err != nil {
+			n.logger.Error("failed to create I/O tree",
+				"err", err,
+			)
+			return err
+		}
+	}
+
+	ioWriteLog, ioRoot, err := ioTree.Commit(n.ctx)
+	if err != nil {
+		n.logger.Error("failed to create I/O tree",
+			"err", err,
+		)
+		return err
+	}
+
+	// Commit I/O tree to storage and obtain receipts.
+	spanInsert, ctx := tracing.StartSpanWithContext(n.ctx, "Apply(ioWriteLog)",
+		opentracing.ChildOf(batchSpanCtx),
+	)
+
+	ioReceipts, err := n.commonNode.Storage.Apply(ctx, &storage.ApplyRequest{
+		Namespace: lastHeader.Namespace,
+		SrcRound:  lastHeader.Round + 1,
+		SrcRoot:   emptyRoot.Hash,
+		DstRound:  lastHeader.Round + 1,
+		DstRoot:   ioRoot,
+		WriteLog:  ioWriteLog,
+	})
+	if err != nil {
+		spanInsert.Finish()
+		n.logger.Error("failed to commit I/O tree to storage",
+			"err", err,
+		)
+		return err
+	}
+	spanInsert.Finish()
+
+	// Dispatch batch to group.
+	spanPublish := opentracing.StartSpan("PublishScheduledBatch(batchHash, header)",
+		opentracing.Tag{Key: "ioRoot", Value: ioRoot},
+		opentracing.Tag{Key: "header", Value: n.commonNode.CurrentBlock.Header},
+		opentracing.ChildOf(batchSpanCtx),
+	)
+	ioReceiptSignatures := []signature.Signature{}
+	for _, receipt := range ioReceipts {
+		ioReceiptSignatures = append(ioReceiptSignatures, receipt.Signature)
+	}
+
+	dispatchMsg := &commitment.ProposedBatch{
+		IORoot:            ioRoot,
+		StorageSignatures: ioReceiptSignatures,
+		Header:            n.commonNode.CurrentBlock.Header,
+	}
+	signedDispatchMsg, err := commitment.SignProposedBatch(n.commonNode.Identity.NodeSigner, dispatchMsg)
+	if err != nil {
+		n.logger.Error("failed to sign txn scheduler batch",
+			"err", err,
+		)
+		return fmt.Errorf("failed to sign txn scheduler batch: %w", err)
+	}
+
+	err = n.commonNode.Group.Publish(
+		batchSpanCtx,
+		&p2p.Message{
+			ProposedBatch: signedDispatchMsg,
+		},
+	)
+	if err != nil {
+		spanPublish.Finish()
+		n.logger.Error("failed to publish batch to committee",
+			"err", err,
+		)
+		return err
+	}
+	crash.Here(crashPointBatchPublishAfter)
+	spanPublish.Finish()
+
+	// Also process the batch locally.
+	n.handleInternalBatchLocked(
+		batchSpanCtx,
+		ioRoot,
+		batch,
+		signedDispatchMsg.Signature,
+		ioReceiptSignatures,
+	)
+
+	return nil
 }
 
 // Guarded by n.commonNode.CrossNode.
@@ -461,7 +766,7 @@ func (n *Node) startProcessingBatchLocked(batch *unresolvedBatch) {
 
 	// Create batch processing context and channel for receiving the response.
 	ctx, cancel := context.WithCancel(n.ctx)
-	done := make(chan *protocol.ComputedBatch, 1)
+	done := make(chan *processedBatch, 1)
 
 	batchStartTime := time.Now()
 	n.transitionLocked(StateProcessingBatch{batch, batchStartTime, cancel, done})
@@ -543,7 +848,10 @@ func (n *Node) startProcessingBatchLocked(batch *unresolvedBatch) {
 		}
 
 		// Submit response to the executor worker.
-		done <- &rsp.RuntimeExecuteTxBatchResponse.Batch
+		done <- &processedBatch{
+			computed: &rsp.RuntimeExecuteTxBatchResponse.Batch,
+			raw:      resolvedBatch,
+		}
 	}()
 }
 
@@ -564,10 +872,16 @@ func (n *Node) abortBatchLocked(reason error) {
 
 	crash.Here(crashPointBatchAbortAfter)
 
-	// TODO: Return transactions to transaction scheduler.
+	// In case the batch is resolved, return transactions back in the queue.
+	if state.batch != nil && len(state.batch.batch) > 0 {
+		if err := n.scheduler.AppendTxBatch(state.batch.batch); err != nil {
+			n.logger.Warn("failed reinserting aborted transactions in queue",
+				"err", err,
+			)
+		}
+	}
 
 	abortedBatchCount.With(n.getMetricLabels()).Inc()
-
 	// After the batch has been aborted, we must wait for the round to be
 	// finalized.
 	n.transitionLocked(StateWaitingForFinalize{
@@ -576,7 +890,8 @@ func (n *Node) abortBatchLocked(reason error) {
 }
 
 // Guarded by n.commonNode.CrossNode.
-func (n *Node) proposeBatchLocked(batch *protocol.ComputedBatch) {
+func (n *Node) proposeBatchLocked(processedBatch *processedBatch) {
+	batch := processedBatch.computed
 	// We must be in ProcessingBatch state if we are here.
 	state := n.state.(StateProcessingBatch)
 
@@ -702,9 +1017,9 @@ func (n *Node) proposeBatchLocked(batch *protocol.ComputedBatch) {
 	}()
 
 	// TODO: Add crash point.
-
 	n.transitionLocked(StateWaitingForFinalize{
 		batchStartTime: state.batchStartTime,
+		raw:            processedBatch.raw,
 	})
 
 	crash.Here(crashPointBatchProposeAfter)
@@ -713,42 +1028,39 @@ func (n *Node) proposeBatchLocked(batch *protocol.ComputedBatch) {
 // HandleNewEventLocked implements NodeHooks.
 // Guarded by n.commonNode.CrossNode.
 func (n *Node) HandleNewEventLocked(ev *roothash.Event) {
-	dis := ev.ExecutionDiscrepancyDetected
-	if dis == nil {
-		// Ignore other events.
-		return
+	switch {
+	case ev.ExecutionDiscrepancyDetected != nil:
+		n.logger.Warn("execution discrepancy detected")
+
+		crash.Here(crashPointDiscrepancyDetectedAfter)
+
+		discrepancyDetectedCount.With(n.getMetricLabels()).Inc()
+
+		if !n.commonNode.Group.GetEpochSnapshot().IsExecutorBackupWorker() {
+			return
+		}
+
+		var state StateWaitingForEvent
+		switch s := n.state.(type) {
+		case StateWaitingForBatch:
+			// Discrepancy detected event received before the batch. We need to
+			// record the received event and keep waiting for the batch.
+			s.pendingEvent = ev.ExecutionDiscrepancyDetected
+			n.transitionLocked(s)
+			return
+		case StateWaitingForEvent:
+			state = s
+		default:
+			n.logger.Warn("ignoring received discrepancy event in incorrect state",
+				"state", s,
+			)
+			return
+		}
+
+		// Backup worker, start processing a batch.
+		n.logger.Info("backup worker activating and processing batch")
+		n.startProcessingBatchLocked(state.batch)
 	}
-
-	n.logger.Warn("execution discrepancy detected")
-
-	crash.Here(crashPointDiscrepancyDetectedAfter)
-
-	discrepancyDetectedCount.With(n.getMetricLabels()).Inc()
-
-	if !n.commonNode.Group.GetEpochSnapshot().IsExecutorBackupWorker() {
-		return
-	}
-
-	var state StateWaitingForEvent
-	switch s := n.state.(type) {
-	case StateWaitingForBatch:
-		// Discrepancy detected event received before the batch. We need to
-		// record the received event and keep waiting for the batch.
-		s.pendingEvent = dis
-		n.transitionLocked(s)
-		return
-	case StateWaitingForEvent:
-		state = s
-	default:
-		n.logger.Warn("ignoring received discrepancy event in incorrect state",
-			"state", s,
-		)
-		return
-	}
-
-	// Backup worker, start processing a batch.
-	n.logger.Info("backup worker activating and processing batch")
-	n.startProcessingBatchLocked(state.batch)
 }
 
 // HandleNodeUpdateLocked implements NodeHooks.
@@ -846,6 +1158,40 @@ func (n *Node) worker() {
 	}
 	defer hrtNotifier.Stop()
 
+	// Initialize transaction scheduling algorithm.
+	runtime, err := n.commonNode.Runtime.RegistryDescriptor(n.ctx)
+	if err != nil {
+		n.logger.Error("failed to fetch runtime registry descriptor",
+			"err", err,
+		)
+		return
+	}
+	scheduler, err := scheduling.New(
+		runtime.TxnScheduler.Algorithm,
+		n.scheduleMaxQueueSize,
+		runtime.TxnScheduler.MaxBatchSize,
+		runtime.TxnScheduler.MaxBatchSizeBytes,
+	)
+	if err != nil {
+		n.logger.Error("failed to create new transaction scheduler algorithm",
+			"err", err,
+		)
+		return
+	}
+	if err := scheduler.Initialize(n); err != nil {
+		n.logger.Error("failed initializing transaction scheduler algorithm",
+			"err", err,
+		)
+		return
+	}
+
+	n.schedulerMutex.Lock()
+	n.scheduler = scheduler
+	n.schedulerMutex.Unlock()
+	// Check incoming queue every FlushTimeout.
+	txnScheduleTicker := time.NewTicker(runtime.TxnScheduler.BatchFlushTimeout)
+	defer txnScheduleTicker.Stop()
+
 	// We are initialized.
 	close(n.initCh)
 
@@ -853,7 +1199,7 @@ func (n *Node) worker() {
 	for {
 		// Check if we are currently processing a batch. In this case, we also
 		// need to select over the result channel.
-		var processingDoneCh chan *protocol.ComputedBatch
+		var processingDoneCh chan *processedBatch
 
 		func() {
 			n.commonNode.CrossNode.Lock()
@@ -899,7 +1245,7 @@ func (n *Node) worker() {
 			}
 		case batch := <-processingDoneCh:
 			// Batch processing has finished.
-			if batch == nil {
+			if batch == nil || batch.computed == nil {
 				n.logger.Warn("worker has aborted batch processing")
 				func() {
 					n.commonNode.CrossNode.Lock()
@@ -926,6 +1272,9 @@ func (n *Node) worker() {
 				}
 				n.proposeBatchLocked(batch)
 			}()
+		case <-txnScheduleTicker.C:
+			// Flush a batch from algorithm.
+			n.scheduler.Flush()
 		case <-n.reselect:
 			// Recalculate select set.
 		}
@@ -936,6 +1285,8 @@ func NewNode(
 	commonNode *committee.Node,
 	commonCfg commonWorker.Config,
 	roleProvider registration.RoleProvider,
+	scheduleCheckTxEnabled bool,
+	scheduleMaxQueueSize uint64,
 ) (*Node, error) {
 	metricsOnce.Do(func() {
 		prometheus.MustRegister(nodeCollectors...)
@@ -950,19 +1301,21 @@ func NewNode(
 	ctx, cancel := context.WithCancel(context.Background())
 
 	n := &Node{
-		RuntimeHostNode:  rhn,
-		commonNode:       commonNode,
-		commonCfg:        commonCfg,
-		roleProvider:     roleProvider,
-		ctx:              ctx,
-		cancelCtx:        cancel,
-		stopCh:           make(chan struct{}),
-		quitCh:           make(chan struct{}),
-		initCh:           make(chan struct{}),
-		state:            StateNotReady{},
-		stateTransitions: pubsub.NewBroker(false),
-		reselect:         make(chan struct{}, 1),
-		logger:           logging.GetLogger("worker/executor/committee").With("runtime_id", commonNode.Runtime.ID()),
+		RuntimeHostNode:        rhn,
+		commonNode:             commonNode,
+		commonCfg:              commonCfg,
+		roleProvider:           roleProvider,
+		scheduleCheckTxEnabled: scheduleCheckTxEnabled,
+		scheduleMaxQueueSize:   scheduleMaxQueueSize,
+		ctx:                    ctx,
+		cancelCtx:              cancel,
+		stopCh:                 make(chan struct{}),
+		quitCh:                 make(chan struct{}),
+		initCh:                 make(chan struct{}),
+		state:                  StateNotReady{},
+		stateTransitions:       pubsub.NewBroker(false),
+		reselect:               make(chan struct{}, 1),
+		logger:                 logging.GetLogger("worker/executor/committee").With("runtime_id", commonNode.Runtime.ID()),
 	}
 
 	return n, nil

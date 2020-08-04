@@ -2,27 +2,33 @@ package client
 
 import (
 	"context"
-	"fmt"
 
 	"github.com/oasisprotocol/oasis-core/go/common"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
 	"github.com/oasisprotocol/oasis-core/go/common/service"
 	"github.com/oasisprotocol/oasis-core/go/epochtime/api"
 	"github.com/oasisprotocol/oasis-core/go/roothash/api/block"
-	"github.com/oasisprotocol/oasis-core/go/runtime/committee"
 	"github.com/oasisprotocol/oasis-core/go/runtime/transaction"
-	scheduler "github.com/oasisprotocol/oasis-core/go/scheduler/api"
 	storage "github.com/oasisprotocol/oasis-core/go/storage/api"
-	txnscheduler "github.com/oasisprotocol/oasis-core/go/worker/compute/txnscheduler/api"
+	"github.com/oasisprotocol/oasis-core/go/worker/common/p2p"
+)
+
+const (
+	// retryInterval in consensus blocks.
+	retryInterval = 60
 )
 
 type watchRequest struct {
 	id     *hash.Hash
 	ctx    context.Context
 	respCh chan *watchResult
+	height int64
 }
 
-func (w *watchRequest) send(res *watchResult) error {
+func (w *watchRequest) send(res *watchResult, height int64) error {
+	// Update last sent height.
+	w.height = height
+
 	select {
 	case <-w.ctx.Done():
 		return w.ctx.Err()
@@ -32,10 +38,8 @@ func (w *watchRequest) send(res *watchResult) error {
 }
 
 type watchResult struct {
-	result                []byte
-	err                   error
-	newTxnschedulerClient txnscheduler.TransactionScheduler
-	epochNumber           api.EpochTime
+	result       []byte
+	groupVersion int64
 }
 
 type blockWatcher struct {
@@ -46,9 +50,6 @@ type blockWatcher struct {
 
 	watched map[hash.Hash]*watchRequest
 	newCh   chan *watchRequest
-
-	committeeWatcher committee.Watcher
-	committeeClient  committee.Client
 
 	stopCh chan struct{}
 }
@@ -87,7 +88,7 @@ func (w *blockWatcher) checkBlock(blk *block.Block) {
 		}
 
 		// Ignore errors, the watch is getting deleted anyway.
-		_ = watch.send(res)
+		_ = watch.send(res, 0)
 		close(watch.respCh)
 		delete(w.watched, txHash)
 	}
@@ -102,9 +103,6 @@ func (w *blockWatcher) watch() {
 		w.BaseBackgroundService.Stop()
 	}()
 
-	// If we were just started, refresh the committee information from any
-	// block, otherwise just from epoch transition blocks.
-	gotFirstBlock := false
 	// Start watching roothash blocks.
 	blocks, blocksSub, err := w.common.consensus.RootHash().WatchBlocks(w.id)
 	if err != nil {
@@ -115,30 +113,95 @@ func (w *blockWatcher) watch() {
 	}
 	defer blocksSub.Close()
 
-	// currentEpochNumber will contain the last processed epoch number when epoch transition is made.
-	var currentEpochNumber api.EpochTime
+	consensusBlocks, consensusBlocksSub, err := w.common.consensus.WatchBlocks(w.common.ctx)
+	if err != nil {
+		w.Logger.Error("failed to subscribe to consensus blocks",
+			"err", err,
+		)
+		return
+	}
+	defer consensusBlocksSub.Close()
 
+	// If we were just started, refresh the committee information from any
+	// block, otherwise just from epoch transition blocks.
+	gotInitialCommittee := false
+	// latestGroupVersion contains the latest known committee group version.
+	var latestGroupVersion int64
+	// latestHeight contains the latest known consensus block height.
+	var latestHeight int64
 	for {
-		var current *block.Block
-		var height int64
-
 		// Wait for stuff to happen.
 		select {
 		case blk := <-blocks:
-			current = blk.Block
-			height = blk.Height
+			// Check block.
+			w.checkBlock(blk.Block)
+
+			// If this is the initial block or an epoch transition block,
+			// update latest known group version and resend all transactions.
+			if gotInitialCommittee && blk.Block.Header.HeaderType != block.EpochTransition {
+				continue
+			}
+
+			// Get group version.
+			var ce api.EpochTime
+			ce, err = w.common.consensus.EpochTime().GetEpoch(w.common.ctx, blk.Height)
+			if err != nil {
+				w.Logger.Error("error getting epoch block",
+					"err", err,
+					"height", blk.Height,
+				)
+				continue
+			}
+			var ch int64
+			ch, err = w.common.consensus.EpochTime().GetEpochBlock(w.common.ctx, ce)
+			if err != nil {
+				w.Logger.Error("error getting epoch number",
+					"err", err,
+					"height", blk.Height,
+				)
+				continue
+			}
+			latestGroupVersion = ch
+
+			// Tell every client to resubmit as messages with old groupVersion
+			// will be discarded.
+			for key, watch := range w.watched {
+				res := &watchResult{
+					groupVersion: latestGroupVersion,
+				}
+				if watch.send(res, latestHeight) != nil {
+					delete(w.watched, key)
+				}
+			}
+			gotInitialCommittee = true
+
+		case blk := <-consensusBlocks:
+			if blk == nil {
+				break
+			}
+			latestHeight = blk.Height
+
+			// Check if any transactions are due for a retry.
+			for key, watch := range w.watched {
+				if (latestHeight - retryInterval) < watch.height {
+					continue
+				}
+				res := &watchResult{
+					groupVersion: latestGroupVersion,
+				}
+				if watch.send(res, latestHeight) != nil {
+					delete(w.watched, key)
+				}
+			}
 
 		case newWatch := <-w.newCh:
 			w.watched[*newWatch.id] = newWatch
-			if conn := w.committeeClient.GetConnection(); conn != nil {
-				client := txnscheduler.NewTransactionSchedulerClient(conn)
-				res := &watchResult{
-					newTxnschedulerClient: client,
-					epochNumber:           currentEpochNumber,
-				}
-				if newWatch.send(res) != nil {
-					delete(w.watched, *newWatch.id)
-				}
+
+			res := &watchResult{
+				groupVersion: latestGroupVersion,
+			}
+			if newWatch.send(res, latestHeight) != nil {
+				delete(w.watched, *newWatch.id)
 			}
 
 		case <-w.stopCh:
@@ -147,60 +210,6 @@ func (w *blockWatcher) watch() {
 		case <-w.common.ctx.Done():
 			w.Logger.Info("context cancelled, aborting watcher")
 			return
-		}
-
-		if current == nil || current.Header.HeaderType == block.RoundFailed {
-			continue
-		}
-
-		// Find a new committee leader.
-		if current.Header.HeaderType == block.EpochTransition || !gotFirstBlock {
-			var ce api.EpochTime
-			ce, err = w.common.consensus.EpochTime().GetEpoch(w.common.ctx, height)
-			if err != nil {
-				w.Logger.Error("error getting epoch number",
-					"err", err,
-					"block_height", height,
-				)
-				continue
-			}
-
-			// Update current epoch number, if obtained successfully.
-			currentEpochNumber = ce
-
-			if err = w.committeeWatcher.EpochTransition(w.common.ctx, height); err != nil {
-				w.Logger.Error("error getting new committee data, waiting for next epoch",
-					"err", err,
-				)
-				continue
-			}
-
-			if err = w.committeeClient.EnsureVersion(w.common.ctx, height); err != nil {
-				w.Logger.Error("error waiting for committee update to complete",
-					"err", err)
-			}
-			conn := w.committeeClient.GetConnection()
-			if conn != nil {
-				client := txnscheduler.NewTransactionSchedulerClient(conn)
-
-				// Tell every client to resubmit as nothing further can be finalized by this committee.
-				for key, watch := range w.watched {
-					res := &watchResult{
-						newTxnschedulerClient: client,
-						epochNumber:           currentEpochNumber,
-					}
-					if watch.send(res) != nil {
-						delete(w.watched, key)
-					}
-				}
-			}
-
-		}
-		gotFirstBlock = true
-
-		// Check this new block.
-		if current.Header.HeaderType == block.Normal {
-			w.checkBlock(current)
 		}
 	}
 }
@@ -216,34 +225,15 @@ func (w *blockWatcher) Stop() {
 	close(w.stopCh)
 }
 
-func newWatcher(common *clientCommon, id common.Namespace) (*blockWatcher, error) {
-	committeeWatcher, err := committee.NewWatcher(
-		common.ctx,
-		common.consensus.Scheduler(),
-		common.consensus.Registry(),
-		id,
-		scheduler.KindComputeTxnScheduler,
-		committee.WithFilter(func(cn *scheduler.CommitteeNode) bool {
-			// We are only interested in the transaction scheduler leader.
-			return cn.Role == scheduler.Leader
-		}),
-	)
-	if err != nil {
-		return nil, fmt.Errorf("client/watcher: failed to create committee watcher: %w", err)
-	}
-
-	committeeClient, err := committee.NewClient(common.ctx, committeeWatcher.Nodes())
-	if err != nil {
-		return nil, fmt.Errorf("client/watcher: failed to create committee client: %w", err)
-	}
+func newWatcher(common *clientCommon, id common.Namespace, p2pSvc *p2p.P2P) (*blockWatcher, error) {
+	// Register handler.
+	p2pSvc.RegisterHandler(id, &p2p.BaseHandler{})
 
 	svc := service.NewBaseBackgroundService("client/watcher")
 	watcher := &blockWatcher{
 		BaseBackgroundService: *svc,
 		common:                common,
 		id:                    id,
-		committeeWatcher:      committeeWatcher,
-		committeeClient:       committeeClient,
 		watched:               make(map[hash.Hash]*watchRequest),
 		newCh:                 make(chan *watchRequest),
 		stopCh:                make(chan struct{}),
