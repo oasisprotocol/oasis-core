@@ -14,6 +14,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/quantity"
 	"github.com/oasisprotocol/oasis-core/go/consensus/api/transaction"
 	epochtime "github.com/oasisprotocol/oasis-core/go/epochtime/api"
+	"github.com/oasisprotocol/oasis-core/go/staking/api/token"
 )
 
 const (
@@ -23,13 +24,6 @@ const (
 	// LogEventGeneralAdjustment is a log event value that signals adjustment
 	// of an account's general balance due to a roothash message.
 	LogEventGeneralAdjustment = "staking/general_adjustment"
-
-	// Maximum length of the token symbol.
-	TokenSymbolMaxLength = 8
-	// Regular expression defining valid token symbol characters.
-	TokenSymbolRegexp = "^[A-Z]+$" // nolint: gosec // Not that kind of token :).
-	// Maximum value of token's value base-10 exponent.
-	TokenValueExponentMaxValue = 20
 )
 
 var (
@@ -67,10 +61,6 @@ var (
 	// ErrInvalidThreshold is the error returned when an invalid threshold kind
 	// is specified in a query.
 	ErrInvalidThreshold = errors.New(ModuleName, 6, "staking: invalid threshold")
-
-	// ErrInvalidTokenValueExponent is the error returned when an invalid
-	// token's value base-10 exponent is specified.
-	ErrInvalidTokenValueExponent = errors.New(ModuleName, 7, "staking: invalid token's value exponent")
 
 	// MethodTransfer is the method name for transfers.
 	MethodTransfer = transaction.NewMethodName(ModuleName, "Transfer", Transfer{})
@@ -249,7 +239,7 @@ func (t Transfer) PrettyPrint(ctx context.Context, prefix string, w io.Writer) {
 	fmt.Fprintf(w, "%sTo:     %s\n", prefix, t.To)
 
 	fmt.Fprintf(w, "%sAmount: ", prefix)
-	PrettyPrintAmount(ctx, t.Amount, w)
+	token.PrettyPrintAmount(ctx, t.Amount, w)
 	fmt.Fprintln(w)
 }
 
@@ -273,7 +263,7 @@ type Burn struct {
 // writer.
 func (b Burn) PrettyPrint(ctx context.Context, prefix string, w io.Writer) {
 	fmt.Fprintf(w, "%sAmount: ", prefix)
-	PrettyPrintAmount(ctx, b.Amount, w)
+	token.PrettyPrintAmount(ctx, b.Amount, w)
 	fmt.Fprintln(w)
 }
 
@@ -300,7 +290,7 @@ func (e Escrow) PrettyPrint(ctx context.Context, prefix string, w io.Writer) {
 	fmt.Fprintf(w, "%sAccount: %s\n", prefix, e.Account)
 
 	fmt.Fprintf(w, "%sAmount:  ", prefix)
-	PrettyPrintAmount(ctx, e.Amount, w)
+	token.PrettyPrintAmount(ctx, e.Amount, w)
 	fmt.Fprintln(w)
 }
 
@@ -374,7 +364,7 @@ type SharePool struct {
 // writer.
 func (p SharePool) PrettyPrint(ctx context.Context, prefix string, w io.Writer) {
 	fmt.Fprintf(w, "%sBalance:      ", prefix)
-	PrettyPrintAmount(ctx, p.Balance, w)
+	token.PrettyPrintAmount(ctx, p.Balance, w)
 	fmt.Fprintln(w)
 
 	fmt.Fprintf(w, "%sTotal Shares: %s\n", prefix, p.TotalShares)
@@ -729,7 +719,7 @@ type GeneralAccount struct {
 // given writer.
 func (ga GeneralAccount) PrettyPrint(ctx context.Context, prefix string, w io.Writer) {
 	fmt.Fprintf(w, "%sBalance: ", prefix)
-	PrettyPrintAmount(ctx, ga.Balance, w)
+	token.PrettyPrintAmount(ctx, ga.Balance, w)
 	fmt.Fprintln(w)
 
 	fmt.Fprintf(w, "%sNonce:   %d\n", prefix, ga.Nonce)

@@ -17,7 +17,6 @@ import (
 	cmdFlags "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/flags"
 	cmdGrpc "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/grpc"
 	"github.com/oasisprotocol/oasis-core/go/staking/api"
-	staking "github.com/oasisprotocol/oasis-core/go/staking/api"
 )
 
 const (
@@ -98,8 +97,8 @@ var (
 // information (ticker symbol, value base-10 exponent, genesis document's hash).
 func getCtxWithInfo(genesis *genesisAPI.Document) context.Context {
 	ctx := context.Background()
-	ctx = context.WithValue(ctx, staking.PrettyPrinterContextKeyTokenSymbol, genesis.Staking.TokenSymbol)
-	ctx = context.WithValue(ctx, staking.PrettyPrinterContextKeyTokenValueExponent, genesis.Staking.TokenValueExponent)
+	ctx = context.WithValue(ctx, prettyprint.ContextKeyTokenSymbol, genesis.Staking.TokenSymbol)
+	ctx = context.WithValue(ctx, prettyprint.ContextKeyTokenValueExponent, genesis.Staking.TokenValueExponent)
 	ctx = context.WithValue(ctx, prettyprint.ContextKeyGenesisHash, genesis.Hash())
 	return ctx
 }
@@ -109,7 +108,7 @@ func doAccountInfo(cmd *cobra.Command, args []string) {
 		cmdCommon.EarlyLogAndExit(err)
 	}
 
-	var addr staking.Address
+	var addr api.Address
 	if err := addr.UnmarshalText([]byte(viper.GetString(CfgAccountAddr))); err != nil {
 		logger.Error("failed to parse account address",
 			"err", err,
@@ -124,8 +123,8 @@ func doAccountInfo(cmd *cobra.Command, args []string) {
 	acct := getAccount(ctx, cmd, addr, client)
 	symbol := getTokenSymbol(ctx, cmd, client)
 	exp := getTokenValueExponent(ctx, cmd, client)
-	ctx = context.WithValue(ctx, api.PrettyPrinterContextKeyTokenSymbol, symbol)
-	ctx = context.WithValue(ctx, api.PrettyPrinterContextKeyTokenValueExponent, exp)
+	ctx = context.WithValue(ctx, prettyprint.ContextKeyTokenSymbol, symbol)
+	ctx = context.WithValue(ctx, prettyprint.ContextKeyTokenValueExponent, exp)
 	acct.PrettyPrint(ctx, "", os.Stdout)
 }
 
@@ -137,7 +136,7 @@ func doAccountTransfer(cmd *cobra.Command, args []string) {
 	genesis := cmdConsensus.InitGenesis()
 	cmdConsensus.AssertTxFileOK()
 
-	var xfer staking.Transfer
+	var xfer api.Transfer
 	if err := xfer.To.UnmarshalText([]byte(viper.GetString(CfgTransferDestination))); err != nil {
 		logger.Error("failed to parse transfer destination account address",
 			"err", err,
@@ -152,7 +151,7 @@ func doAccountTransfer(cmd *cobra.Command, args []string) {
 	}
 
 	nonce, fee := cmdConsensus.GetTxNonceAndFee()
-	tx := staking.NewTransferTx(nonce, fee, &xfer)
+	tx := api.NewTransferTx(nonce, fee, &xfer)
 
 	cmdConsensus.SignAndSaveTx(getCtxWithInfo(genesis), tx)
 }
@@ -165,7 +164,7 @@ func doAccountBurn(cmd *cobra.Command, args []string) {
 	genesis := cmdConsensus.InitGenesis()
 	cmdConsensus.AssertTxFileOK()
 
-	var burn staking.Burn
+	var burn api.Burn
 	if err := burn.Amount.UnmarshalText([]byte(viper.GetString(CfgAmount))); err != nil {
 		logger.Error("failed to parse burn amount",
 			"err", err,
@@ -174,7 +173,7 @@ func doAccountBurn(cmd *cobra.Command, args []string) {
 	}
 
 	nonce, fee := cmdConsensus.GetTxNonceAndFee()
-	tx := staking.NewBurnTx(nonce, fee, &burn)
+	tx := api.NewBurnTx(nonce, fee, &burn)
 
 	cmdConsensus.SignAndSaveTx(getCtxWithInfo(genesis), tx)
 }
@@ -187,7 +186,7 @@ func doAccountEscrow(cmd *cobra.Command, args []string) {
 	genesis := cmdConsensus.InitGenesis()
 	cmdConsensus.AssertTxFileOK()
 
-	var escrow staking.Escrow
+	var escrow api.Escrow
 	if err := escrow.Account.UnmarshalText([]byte(viper.GetString(CfgEscrowAccount))); err != nil {
 		logger.Error("failed to parse escrow account",
 			"err", err,
@@ -202,7 +201,7 @@ func doAccountEscrow(cmd *cobra.Command, args []string) {
 	}
 
 	nonce, fee := cmdConsensus.GetTxNonceAndFee()
-	tx := staking.NewAddEscrowTx(nonce, fee, &escrow)
+	tx := api.NewAddEscrowTx(nonce, fee, &escrow)
 
 	cmdConsensus.SignAndSaveTx(getCtxWithInfo(genesis), tx)
 }
@@ -215,7 +214,7 @@ func doAccountReclaimEscrow(cmd *cobra.Command, args []string) {
 	genesis := cmdConsensus.InitGenesis()
 	cmdConsensus.AssertTxFileOK()
 
-	var reclaim staking.ReclaimEscrow
+	var reclaim api.ReclaimEscrow
 	if err := reclaim.Account.UnmarshalText([]byte(viper.GetString(CfgEscrowAccount))); err != nil {
 		logger.Error("failed to parse escrow account",
 			"err", err,
@@ -230,12 +229,12 @@ func doAccountReclaimEscrow(cmd *cobra.Command, args []string) {
 	}
 
 	nonce, fee := cmdConsensus.GetTxNonceAndFee()
-	tx := staking.NewReclaimEscrowTx(nonce, fee, &reclaim)
+	tx := api.NewReclaimEscrowTx(nonce, fee, &reclaim)
 
 	cmdConsensus.SignAndSaveTx(getCtxWithInfo(genesis), tx)
 }
 
-func scanRateStep(dst *staking.CommissionRateStep, raw string) error {
+func scanRateStep(dst *api.CommissionRateStep, raw string) error {
 	var rateBI big.Int
 	n, err := fmt.Sscanf(raw, "%d/%d", &dst.Start, &rateBI)
 	if err != nil {
@@ -250,7 +249,7 @@ func scanRateStep(dst *staking.CommissionRateStep, raw string) error {
 	return nil
 }
 
-func scanBoundStep(dst *staking.CommissionRateBoundStep, raw string) error {
+func scanBoundStep(dst *api.CommissionRateBoundStep, raw string) error {
 	var rateMinBI big.Int
 	var rateMaxBI big.Int
 	n, err := fmt.Sscanf(raw, "%d/%d/%d", &dst.Start, &rateMinBI, &rateMaxBI)
@@ -277,10 +276,10 @@ func doAccountAmendCommissionSchedule(cmd *cobra.Command, args []string) {
 	genesis := cmdConsensus.InitGenesis()
 	cmdConsensus.AssertTxFileOK()
 
-	var amendCommissionSchedule staking.AmendCommissionSchedule
+	var amendCommissionSchedule api.AmendCommissionSchedule
 	rawRates := viper.GetStringSlice(CfgCommissionScheduleRates)
 	if rawRates != nil {
-		amendCommissionSchedule.Amendment.Rates = make([]staking.CommissionRateStep, len(rawRates))
+		amendCommissionSchedule.Amendment.Rates = make([]api.CommissionRateStep, len(rawRates))
 		for i, rawRate := range rawRates {
 			if err := scanRateStep(&amendCommissionSchedule.Amendment.Rates[i], rawRate); err != nil {
 				logger.Error("failed to parse commission schedule rate step",
@@ -294,7 +293,7 @@ func doAccountAmendCommissionSchedule(cmd *cobra.Command, args []string) {
 	}
 	rawBounds := viper.GetStringSlice(CfgCommissionScheduleBounds)
 	if rawBounds != nil {
-		amendCommissionSchedule.Amendment.Bounds = make([]staking.CommissionRateBoundStep, len(rawBounds))
+		amendCommissionSchedule.Amendment.Bounds = make([]api.CommissionRateBoundStep, len(rawBounds))
 		for i, rawBound := range rawBounds {
 			if err := scanBoundStep(&amendCommissionSchedule.Amendment.Bounds[i], rawBound); err != nil {
 				logger.Error("failed to parse commission schedule bound step",
@@ -308,7 +307,7 @@ func doAccountAmendCommissionSchedule(cmd *cobra.Command, args []string) {
 	}
 
 	nonce, fee := cmdConsensus.GetTxNonceAndFee()
-	tx := staking.NewAmendCommissionScheduleTx(nonce, fee, &amendCommissionSchedule)
+	tx := api.NewAmendCommissionScheduleTx(nonce, fee, &amendCommissionSchedule)
 
 	cmdConsensus.SignAndSaveTx(getCtxWithInfo(genesis), tx)
 }
@@ -364,13 +363,13 @@ func init() {
 	commissionScheduleFlags.StringSlice(CfgCommissionScheduleRates, nil, fmt.Sprintf(
 		"commission rate step. Multiple of this flag is allowed. "+
 			"Each step is in the format start_epoch/rate_numerator. "+
-			"The rate is rate_numerator divided by %v", staking.CommissionRateDenominator,
+			"The rate is rate_numerator divided by %v", api.CommissionRateDenominator,
 	))
 	commissionScheduleFlags.StringSlice(CfgCommissionScheduleBounds, nil, fmt.Sprintf(
 		"commission rate bound step. Multiple of this flag is allowed. "+
 			"Each step is in the format start_epoch/rate_min_numerator/rate_max_numerator. "+
 			"The minimum rate is rate_min_numerator divided by %v, and the maximum rate is "+
-			"rate_max_numerator divided by %v", staking.CommissionRateDenominator, staking.CommissionRateDenominator,
+			"rate_max_numerator divided by %v", api.CommissionRateDenominator, api.CommissionRateDenominator,
 	))
 	_ = viper.BindPFlags(commissionScheduleFlags)
 	commissionScheduleFlags.AddFlagSet(cmdConsensus.TxFlags)

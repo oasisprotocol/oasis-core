@@ -15,12 +15,13 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	"github.com/oasisprotocol/oasis-core/go/common/errors"
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
+	"github.com/oasisprotocol/oasis-core/go/common/prettyprint"
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
 	cmdCommon "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common"
 	cmdFlags "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/flags"
 	cmdGrpc "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/grpc"
 	"github.com/oasisprotocol/oasis-core/go/staking/api"
-	staking "github.com/oasisprotocol/oasis-core/go/staking/api"
+	"github.com/oasisprotocol/oasis-core/go/staking/api/token"
 )
 
 // CfgPublicKey configures the public key.
@@ -120,8 +121,8 @@ func doInfo(cmd *cobra.Command, args []string) {
 	exp := getTokenValueExponent(ctx, cmd, client)
 	fmt.Printf("Token's value base-10 exponent: %d\n", exp)
 
-	ctx = context.WithValue(ctx, api.PrettyPrinterContextKeyTokenSymbol, symbol)
-	ctx = context.WithValue(ctx, api.PrettyPrinterContextKeyTokenValueExponent, exp)
+	ctx = context.WithValue(ctx, prettyprint.ContextKeyTokenSymbol, symbol)
+	ctx = context.WithValue(ctx, prettyprint.ContextKeyTokenValueExponent, exp)
 
 	totalSupply, err := client.TotalSupply(ctx, consensus.HeightLatest)
 	if err != nil {
@@ -131,7 +132,7 @@ func doInfo(cmd *cobra.Command, args []string) {
 		os.Exit(1)
 	}
 	fmt.Print("Total supply: ")
-	api.PrettyPrintAmount(ctx, *totalSupply, os.Stdout)
+	token.PrettyPrintAmount(ctx, *totalSupply, os.Stdout)
 	fmt.Println()
 
 	commonPool, err := client.CommonPool(ctx, consensus.HeightLatest)
@@ -142,7 +143,7 @@ func doInfo(cmd *cobra.Command, args []string) {
 		os.Exit(1)
 	}
 	fmt.Print("Common pool: ")
-	api.PrettyPrintAmount(ctx, *commonPool, os.Stdout)
+	token.PrettyPrintAmount(ctx, *commonPool, os.Stdout)
 	fmt.Println()
 
 	lastBlockFees, err := client.LastBlockFees(ctx, consensus.HeightLatest)
@@ -153,7 +154,7 @@ func doInfo(cmd *cobra.Command, args []string) {
 		os.Exit(1)
 	}
 	fmt.Print("Last block fees: ")
-	api.PrettyPrintAmount(ctx, *lastBlockFees, os.Stdout)
+	token.PrettyPrintAmount(ctx, *lastBlockFees, os.Stdout)
 	fmt.Println()
 
 	thresholdsToQuery := []api.ThresholdKind{
@@ -178,7 +179,7 @@ func doInfo(cmd *cobra.Command, args []string) {
 			os.Exit(1)
 		}
 		fmt.Printf("Staking threshold (%s): ", kind)
-		api.PrettyPrintAmount(ctx, *thres, os.Stdout)
+		token.PrettyPrintAmount(ctx, *thres, os.Stdout)
 		fmt.Println()
 	}
 }
@@ -238,7 +239,7 @@ func doPubkey2Address(cmd *cobra.Command, args []string) {
 		os.Exit(1)
 	}
 
-	fmt.Printf("%v\n", staking.NewAddress(pk))
+	fmt.Printf("%v\n", api.NewAddress(pk))
 }
 
 // Register registers the stake sub-command and all of it's children.

@@ -7,6 +7,7 @@ import (
 
 	"github.com/oasisprotocol/oasis-core/go/common/quantity"
 	epochtime "github.com/oasisprotocol/oasis-core/go/epochtime/api"
+	"github.com/oasisprotocol/oasis-core/go/staking/api/token"
 )
 
 // SanityCheck performs a sanity check on the consensus parameters.
@@ -233,15 +234,15 @@ func (g *Genesis) SanityCheck(now epochtime.EpochTime) error { // nolint: gocycl
 	if tokenSymbolLength == 0 {
 		return fmt.Errorf("staking: sanity check failed: token symbol is empty")
 	}
-	if tokenSymbolLength > TokenSymbolMaxLength {
+	if tokenSymbolLength > token.TokenSymbolMaxLength {
 		return fmt.Errorf("staking: sanity check failed: token symbol exceeds maximum length")
 	}
-	match := regexp.MustCompile(TokenSymbolRegexp).FindString(g.TokenSymbol)
+	match := regexp.MustCompile(token.TokenSymbolRegexp).FindString(g.TokenSymbol)
 	if match == "" {
-		return fmt.Errorf("staking: sanity check failed: token symbol should match '%s'", TokenSymbolRegexp)
+		return fmt.Errorf("staking: sanity check failed: token symbol should match '%s'", token.TokenSymbolRegexp)
 	}
 
-	if g.TokenValueExponent > TokenValueExponentMaxValue {
+	if g.TokenValueExponent > token.TokenValueExponentMaxValue {
 		return fmt.Errorf("staking: sanity check failed: token value exponent is invalid")
 	}
 
