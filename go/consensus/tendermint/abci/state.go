@@ -252,6 +252,24 @@ func (s *applicationState) doInitChain(now time.Time) error {
 	return s.doCommitOrInitChainLocked(now)
 }
 
+func (s *applicationState) doApplyStateSync(root storage.Root) error {
+	s.blockLock.Lock()
+	defer s.blockLock.Unlock()
+
+	s.stateRoot = root
+
+	s.deliverTxTree.Close()
+	s.deliverTxTree = mkvs.NewWithRoot(nil, s.storage.NodeDB(), root, mkvs.WithoutWriteLog())
+	s.checkTxTree.Close()
+	s.checkTxTree = mkvs.NewWithRoot(nil, s.storage.NodeDB(), root, mkvs.WithoutWriteLog())
+
+	if err := s.doCommitOrInitChainLocked(time.Time{}); err != nil {
+		return err
+	}
+
+	return nil
+}
+
 func (s *applicationState) doCommit(now time.Time) (uint64, error) {
 	s.blockLock.Lock()
 	defer s.blockLock.Unlock()

@@ -9,6 +9,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common"
 	"github.com/oasisprotocol/oasis-core/go/common/node"
 	"github.com/oasisprotocol/oasis-core/go/common/sgx"
+	consensusGenesis "github.com/oasisprotocol/oasis-core/go/consensus/genesis"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/oasis"
 	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
 )
@@ -49,9 +50,13 @@ func newDefaultFixture() (*oasis.NetworkFixture, error) {
 		Network: oasis.NetworkCfg{
 			NodeBinary:             viper.GetString(cfgNodeBinary),
 			RuntimeSGXLoaderBinary: viper.GetString(cfgRuntimeLoader),
-			ConsensusTimeoutCommit: 1 * time.Second,
-			EpochtimeMock:          viper.GetBool(cfgEpochtimeMock),
-			HaltEpoch:              viper.GetUint64(cfgHaltEpoch),
+			Consensus: consensusGenesis.Genesis{
+				Parameters: consensusGenesis.Parameters{
+					TimeoutCommit: 1 * time.Second,
+				},
+			},
+			EpochtimeMock: viper.GetBool(cfgEpochtimeMock),
+			HaltEpoch:     viper.GetUint64(cfgHaltEpoch),
 			IAS: oasis.IASCfg{
 				Mock: true,
 			},

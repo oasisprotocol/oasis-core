@@ -5,6 +5,9 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
+
+	"github.com/oasisprotocol/oasis-core/go/consensus/api/transaction"
+	consensusGenesis "github.com/oasisprotocol/oasis-core/go/consensus/genesis"
 )
 
 func TestDefaultFixture(t *testing.T) {
@@ -20,8 +23,10 @@ func TestDefaultFixture(t *testing.T) {
 func TestCustomFixture(t *testing.T) {
 	f, _ := newDefaultFixture()
 	f.Network.NodeBinary = "myNodeBinary"
-	f.Network.ConsensusBackend = "myConsensusBackend"
-	f.Network.ConsensusGasCostsTxByte = 123456789
+	f.Network.Consensus.Backend = "myConsensusBackend"
+	f.Network.Consensus.Parameters.GasCosts = transaction.Costs{
+		consensusGenesis.GasOpTxByte: 123456789,
+	}
 
 	data, err := DumpFixture(f)
 	require.Nil(t, err)

@@ -93,9 +93,12 @@ func testBatchOps(t *testing.T, db dbm.DB) {
 	k1, k2 := []byte("key1"), []byte("key2")
 	v1, v2 := []byte("value1"), []byte("value2")
 	batch := db.NewBatch()
-	batch.Set(k1, v1)
-	batch.Set(k2, v2)
-	batch.Delete(toDeleteKey)
+	err = batch.Set(k1, v1)
+	require.NoError(err, "batch.Set(k1, v1)")
+	err = batch.Set(k2, v2)
+	require.NoError(err, "batch.Set(k2, v2)")
+	err = batch.Delete(toDeleteKey)
+	require.NoError(err, "batch.Delete(to-delete)")
 	err = batch.Write()
 	require.NoError(err, "batch.Write()")
 
@@ -111,8 +114,10 @@ func testBatchOps(t *testing.T, db dbm.DB) {
 
 	// Build and execute the clean-up batch.
 	batch = db.NewBatch()
-	batch.Delete(k1)
-	batch.Delete(k2)
+	err = batch.Delete(k1)
+	require.NoError(err, "batch.Delete(k1)")
+	err = batch.Delete(k2)
+	require.NoError(err, "batch.Delete(k2)")
 	err = batch.WriteSync()
 	require.NoError(err, "batch.WriteSync()")
 	exists, err = db.Has(k1)
@@ -148,7 +153,8 @@ func testIterator(t *testing.T, db dbm.DB) {
 	// Populate the database.
 	batch := db.NewBatch()
 	for _, ent := range entries {
-		batch.Set(ent.key, ent.value)
+		err := batch.Set(ent.key, ent.value)
+		require.NoError(err, "batch.Set(%s)", ent.key)
 	}
 	err := batch.Write()
 	require.NoError(err, "batch.Write()")

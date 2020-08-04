@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/require"
+	tmproto "github.com/tendermint/tendermint/proto/tendermint/types"
 	tmtypes "github.com/tendermint/tendermint/types"
 
 	"github.com/oasisprotocol/oasis-core/go/common/identity"
@@ -45,23 +46,20 @@ func MakeDoubleSignEvidence(t *testing.T, ident *identity.Identity) consensus.Ev
 	// different block IDs.
 	blockID1 := tmtypes.BlockID{
 		Hash: []byte("blockhashblockhashblockhashbloc1"),
-		PartsHeader: tmtypes.PartSetHeader{
+		PartSetHeader: tmtypes.PartSetHeader{
 			Total: 1000,
 			Hash:  []byte("partshashpartshashpartshashpart1"),
 		},
 	}
 	blockID2 := tmtypes.BlockID{
 		Hash: []byte("blockhashblockhashblockhashbloc1"),
-		PartsHeader: tmtypes.PartSetHeader{
+		PartSetHeader: tmtypes.PartSetHeader{
 			Total: 1000,
 			Hash:  []byte("partshashpartshashpartshashpart2"),
 		},
 	}
 	now := time.Now()
-	pk, err := pv1.GetPubKey()
-	require.NoError(err, "GetPubKey")
 	ev := &tmtypes.DuplicateVoteEvidence{
-		PubKey: pk,
 		// NOTE: ChainID must match the unit test genesis block.
 		VoteA: makeVote(pv1, genesisTestHelpers.TestChainID, 0, 1, 2, 1, blockID1, now),
 		VoteB: makeVote(pv2, genesisTestHelpers.TestChainID, 0, 1, 2, 1, blockID2, now),
@@ -70,7 +68,7 @@ func MakeDoubleSignEvidence(t *testing.T, ident *identity.Identity) consensus.Ev
 }
 
 // makeVote copied from Tendermint test suite.
-func makeVote(val tmtypes.PrivValidator, chainID string, valIndex int, height int64, round, step int, blockID tmtypes.BlockID, ts time.Time) *tmtypes.Vote {
+func makeVote(val tmtypes.PrivValidator, chainID string, valIndex int32, height int64, round int32, step int, blockID tmtypes.BlockID, ts time.Time) *tmtypes.Vote {
 	pk, err := val.GetPubKey()
 	if err != nil {
 		panic(err)
@@ -81,13 +79,15 @@ func makeVote(val tmtypes.PrivValidator, chainID string, valIndex int, height in
 		ValidatorIndex:   valIndex,
 		Height:           height,
 		Round:            round,
-		Type:             tmtypes.SignedMsgType(step),
+		Type:             tmproto.SignedMsgType(step),
 		BlockID:          blockID,
 		Timestamp:        ts,
 	}
-	err = val.SignVote(chainID, v)
+	vpb := v.ToProto()
+	err = val.SignVote(chainID, vpb)
 	if err != nil {
 		panic(err)
 	}
+	v.Signature = vpb.Signature
 	return v
 }

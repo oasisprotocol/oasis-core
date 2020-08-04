@@ -60,7 +60,7 @@ func TestGRPCProxy(t *testing.T) {
 		Name:          host,
 		Port:          port,
 		Identity:      &identity.Identity{},
-		CustomOptions: []grpc.ServerOption{grpc.CustomCodec(&commonGrpc.CBORCodec{})},
+		CustomOptions: []grpc.ServerOption{grpc.CustomCodec(&commonGrpc.CBORCodec{})}, // nolint: staticcheck
 	}
 	serverConfig.Identity.SetTLSCertificate(serverTLSCert)
 	grpcServer, err := commonGrpc.NewServer(serverConfig)

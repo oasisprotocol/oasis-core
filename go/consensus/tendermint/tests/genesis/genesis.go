@@ -5,9 +5,11 @@ import (
 	"math"
 	"time"
 
+	tmproto "github.com/tendermint/tendermint/proto/tendermint/types"
 	tmtypes "github.com/tendermint/tendermint/types"
 
 	"github.com/oasisprotocol/oasis-core/go/common/identity"
+	"github.com/oasisprotocol/oasis-core/go/common/version"
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/genesis"
 	tendermint "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/api"
 	"github.com/oasisprotocol/oasis-core/go/consensus/tendermint/crypto"
@@ -87,6 +89,9 @@ func NewTestNodeGenesisProvider(identity *identity.Identity) (genesis.Provider, 
 		GenesisTime:     doc.Time,
 		ConsensusParams: tmtypes.DefaultConsensusParams(),
 		AppState:        b,
+	}
+	tmDoc.ConsensusParams.Version = tmproto.VersionParams{
+		AppVersion: version.ConsensusProtocol.ToU64(),
 	}
 
 	nodeID := identity.ConsensusSigner.Public()

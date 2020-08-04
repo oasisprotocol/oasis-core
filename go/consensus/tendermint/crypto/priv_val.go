@@ -207,6 +207,7 @@ import (
 	tmcrypto "github.com/tendermint/tendermint/crypto"
 	"github.com/tendermint/tendermint/libs/tempfile"
 	"github.com/tendermint/tendermint/privval"
+	tmproto "github.com/tendermint/tendermint/proto/tendermint/types"
 	tmtypes "github.com/tendermint/tendermint/types"
 
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
@@ -234,11 +235,11 @@ const (
 	stepPrecommit int8 = 3
 )
 
-func voteToStep(vote *tmtypes.Vote) int8 {
+func voteToStep(vote *tmproto.Vote) int8 {
 	switch vote.Type {
-	case tmtypes.PrevoteType:
+	case tmproto.PrevoteType:
 		return stepPrevote
-	case tmtypes.PrecommitType:
+	case tmproto.PrecommitType:
 		return stepPrecommit
 	default:
 		panic("Unknown vote type")
@@ -257,7 +258,7 @@ func (pv *privVal) GetPubKey() (tmcrypto.PubKey, error) {
 	return PublicKeyToTendermint(&pv.PublicKey), nil
 }
 
-func (pv *privVal) SignVote(chainID string, vote *tmtypes.Vote) error {
+func (pv *privVal) SignVote(chainID string, vote *tmproto.Vote) error {
 	height, round, step := vote.Height, vote.Round, voteToStep(vote)
 
 	doubleSigned, err := pv.CheckHRS(height, round, step)
@@ -265,7 +266,7 @@ func (pv *privVal) SignVote(chainID string, vote *tmtypes.Vote) error {
 		return fmt.Errorf("tendermint/crypto: failed to check vote H/R/S: %w", err)
 	}
 
-	signBytes := vote.SignBytes(chainID)
+	signBytes := tmtypes.VoteSignBytes(chainID, vote)
 	if doubleSigned {
 		if bytes.Equal(signBytes, pv.SignBytes) {
 			vote.Signature = pv.Signature
@@ -290,7 +291,7 @@ func (pv *privVal) SignVote(chainID string, vote *tmtypes.Vote) error {
 	return nil
 }
 
-func (pv *privVal) SignProposal(chainID string, proposal *tmtypes.Proposal) error {
+func (pv *privVal) SignProposal(chainID string, proposal *tmproto.Proposal) error {
 	height, round, step := proposal.Height, proposal.Round, stepPropose
 
 	doubleSigned, err := pv.CheckHRS(height, round, step)
@@ -298,7 +299,7 @@ func (pv *privVal) SignProposal(chainID string, proposal *tmtypes.Proposal) erro
 		return fmt.Errorf("tendermint/crypto: failed to check proposal H/R/S: %w", err)
 	}
 
-	signBytes := proposal.SignBytes(chainID)
+	signBytes := tmtypes.ProposalSignBytes(chainID, proposal)
 	if doubleSigned {
 		if bytes.Equal(signBytes, pv.SignBytes) {
 			proposal.Signature = pv.Signature
@@ -323,7 +324,7 @@ func (pv *privVal) SignProposal(chainID string, proposal *tmtypes.Proposal) erro
 	return nil
 }
 
-func (pv *privVal) update(height int64, round int, step int8, signBytes, sig []byte) error {
+func (pv *privVal) update(height int64, round int32, step int8, signBytes, sig []byte) error {
 	pv.Height = height
 	pv.Round = round
 	pv.Step = step

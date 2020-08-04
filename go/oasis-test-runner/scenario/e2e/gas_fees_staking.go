@@ -9,6 +9,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/quantity"
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
 	"github.com/oasisprotocol/oasis-core/go/consensus/api/transaction"
+	consensusGenesis "github.com/oasisprotocol/oasis-core/go/consensus/genesis"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/env"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/oasis"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/scenario"
@@ -89,7 +90,13 @@ func (sc *gasFeesImpl) Fixture() (*oasis.NetworkFixture, error) {
 					},
 				},
 			},
-			ConsensusGasCostsTxByte: 0, // So we can control gas more easily.
+			Consensus: consensusGenesis.Genesis{
+				Parameters: consensusGenesis.Parameters{
+					GasCosts: transaction.Costs{
+						consensusGenesis.GasOpTxByte: 0, // So we can control gas more easily.
+					},
+				},
+			},
 		},
 		Entities: []oasis.EntityCfg{
 			{IsDebugTestEntity: true},

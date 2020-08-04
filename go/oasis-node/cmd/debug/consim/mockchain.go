@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/tendermint/tendermint/abci/types"
+	tmproto "github.com/tendermint/tendermint/proto/tendermint/types"
 
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature/signers/memory"
 	"github.com/oasisprotocol/oasis-core/go/consensus/tendermint/abci"
@@ -49,7 +50,7 @@ func (m *mockChain) beginBlock() {
 
 	m.mux.BeginBlock(types.RequestBeginBlock{
 		Hash: m.hash,
-		Header: types.Header{
+		Header: tmproto.Header{
 			ChainID: m.tmChainID,
 			Height:  m.height,
 			Time:    m.now,

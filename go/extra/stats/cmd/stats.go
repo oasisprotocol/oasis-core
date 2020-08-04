@@ -11,8 +11,7 @@ import (
 	"github.com/spf13/cobra"
 	flag "github.com/spf13/pflag"
 	"github.com/spf13/viper"
-	tmamino "github.com/tendermint/go-amino"
-	tmrpctypes "github.com/tendermint/tendermint/rpc/core/types"
+	tmproto "github.com/tendermint/tendermint/proto/tendermint/types"
 	tmtypes "github.com/tendermint/tendermint/types"
 
 	"github.com/oasisprotocol/oasis-core/go/common/cbor"
@@ -42,9 +41,6 @@ var (
 	}
 
 	logger = logging.GetLogger("cmd/stats")
-
-	// We must use Tendermint's amino codec as some Tendermint's types are not easily unmarshallable.
-	aminoCodec = tmamino.NewCodec()
 )
 
 type nodeStats struct {
@@ -306,8 +302,17 @@ func getStats(ctx context.Context, consensus consensusAPI.ClientBackend, registr
 				)
 				os.Exit(1)
 			}
-			var vals tmtypes.ValidatorSet
-			if err := aminoCodec.UnmarshalBinaryBare(vs.Meta, &vals); err != nil {
+			var protoVals tmproto.ValidatorSet
+			if err = protoVals.Unmarshal(vs.Meta); err != nil {
+				logger.Error("unmarshal validator set error",
+					"meta", vs.Meta,
+					"err", err,
+					"height", lastCommitHeight,
+				)
+				os.Exit(1)
+			}
+			vals, err := tmtypes.ValidatorSetFromProto(&protoVals)
+			if err != nil {
 				logger.Error("unmarshal validator set error",
 					"meta", vs.Meta,
 					"err", err,
@@ -355,7 +360,7 @@ func getStats(ctx context.Context, consensus consensusAPI.ClientBackend, registr
 				stats.nodeStatsOrExit(ctx, registry, lastCommitHeight, sig.ValidatorAddress.String()).signatures++
 			}
 
-			for i := 0; i < tmBlockMeta.LastCommit.Round; i++ {
+			for i := int32(0); i < tmBlockMeta.LastCommit.Round; i++ {
 				// This round selected a validator to propose, but it didn't go through.
 				logger.Debug("failed round",
 					"height", lastCommitHeight,
@@ -436,8 +441,4 @@ func RegisterStatsCmd(parentCmd *cobra.Command) {
 	printStatsCmd.PersistentFlags().AddFlagSet(cmdGrpc.ClientFlags)
 
 	parentCmd.AddCommand(printStatsCmd)
-}
-
-func init() {
-	tmrpctypes.RegisterAmino(aminoCodec)
 }

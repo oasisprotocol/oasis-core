@@ -381,7 +381,7 @@ func (it *badgerDBIterator) Error() error {
 	return nil
 }
 
-func (it *badgerDBIterator) Close() {
+func (it *badgerDBIterator) Close() error {
 	if it.iter != nil {
 		it.iter.Close()
 		it.tx.Discard()
@@ -389,6 +389,7 @@ func (it *badgerDBIterator) Close() {
 		it.tx = nil
 		it.iter = nil
 	}
+	return nil
 }
 
 type setDeleter interface {
@@ -430,17 +431,19 @@ type badgerDBBatch struct {
 	cmds []batchCmd
 }
 
-func (ba *badgerDBBatch) Set(key, value []byte) {
+func (ba *badgerDBBatch) Set(key, value []byte) error {
 	ba.cmds = append(ba.cmds, &setCmd{
 		key:   toDBKey(key),
 		value: append([]byte{}, value...),
 	})
+	return nil
 }
 
-func (ba *badgerDBBatch) Delete(key []byte) {
+func (ba *badgerDBBatch) Delete(key []byte) error {
 	ba.cmds = append(ba.cmds, &deleteCmd{
 		key: toDBKey(key),
 	})
+	return nil
 }
 
 func (ba *badgerDBBatch) Write() error {
@@ -497,9 +500,10 @@ func (ba *badgerDBBatch) WriteSync() error {
 	return err
 }
 
-func (ba *badgerDBBatch) Close() {
+func (ba *badgerDBBatch) Close() error {
 	ba.db = nil
 	ba.cmds = nil
+	return nil
 }
 
 func toDBKey(key []byte) []byte {

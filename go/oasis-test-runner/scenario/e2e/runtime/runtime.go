@@ -130,7 +130,7 @@ func (sc *runtimeImpl) Fixture() (*oasis.NetworkFixture, error) {
 			NodeBinary:                        f.Network.NodeBinary,
 			RuntimeSGXLoaderBinary:            runtimeLoader,
 			DefaultLogWatcherHandlerFactories: DefaultRuntimeLogWatcherHandlerFactories,
-			ConsensusGasCostsTxByte:           1,
+			Consensus:                         f.Network.Consensus,
 			IAS: oasis.IASCfg{
 				Mock: iasMock,
 			},

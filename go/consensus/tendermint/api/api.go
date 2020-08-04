@@ -7,10 +7,10 @@ import (
 	"strings"
 
 	"github.com/tendermint/tendermint/abci/types"
-	"github.com/tendermint/tendermint/libs/kv"
 	tmpubsub "github.com/tendermint/tendermint/libs/pubsub"
 	tmquery "github.com/tendermint/tendermint/libs/pubsub/query"
 	tmp2p "github.com/tendermint/tendermint/p2p"
+	tmcrypto "github.com/tendermint/tendermint/proto/tendermint/crypto"
 	tmrpctypes "github.com/tendermint/tendermint/rpc/core/types"
 	tmtypes "github.com/tendermint/tendermint/types"
 
@@ -40,9 +40,10 @@ func PublicKeyToValidatorUpdate(id signature.PublicKey, power int64) types.Valid
 	pk, _ := id.MarshalBinary()
 
 	return types.ValidatorUpdate{
-		PubKey: types.PubKey{
-			Type: types.PubKeyEd25519,
-			Data: pk,
+		PubKey: tmcrypto.PublicKey{
+			Sum: &tmcrypto.PublicKey_Ed25519{
+				Ed25519: pk,
+			},
 		},
 		Power: power,
 	}
@@ -90,7 +91,7 @@ type EventBuilder struct {
 
 // Attribute appends a key/value pair to the event.
 func (bld *EventBuilder) Attribute(key, value []byte) *EventBuilder {
-	bld.ev.Attributes = append(bld.ev.Attributes, kv.Pair{
+	bld.ev.Attributes = append(bld.ev.Attributes, types.EventAttribute{
 		Key:   key,
 		Value: value,
 	})

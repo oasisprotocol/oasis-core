@@ -17,11 +17,11 @@ func TestSignatureConversions(t *testing.T) {
 	tmSk := SignerToTendermint(signer)
 
 	pk := signer.Public()
-	tmPk := tmSk.PubKey().(tmed.PubKeyEd25519)
-	require.Equal(t, pk[:], tmPk[:], "Private key: Public keys")
+	tmPk := tmSk.PubKey().(tmed.PubKey)
+	require.Equal(t, pk[:], tmPk.Bytes(), "Private key: Public keys")
 
 	tmPk = PublicKeyToTendermint(&pk)
-	require.Equal(t, pk[:], tmPk[:], "Public key: ToTendermint")
+	require.Equal(t, pk[:], tmPk.Bytes(), "Public key: ToTendermint")
 
 	pk2 := PublicKeyFromTendermint(&tmPk)
 	require.Equal(t, pk[:], pk2[:], "Public key: FromTendermint")
