@@ -12,6 +12,673 @@ The format is inspired by [Keep a Changelog].
 
 <!-- TOWNCRIER -->
 
+## 20.9 (2020-08-05)
+
+### Process
+
+- Introduce [Architectural Decision Records]
+  ([#2924](https://github.com/oasisprotocol/oasis-core/issues/2924))
+
+  [Architectural Decision Records]: docs/adr/index.md
+
+- Remind to bump protocol versions before release
+  ([#3097](https://github.com/oasisprotocol/oasis-core/issues/3097))
+
+### Removals and Breaking Changes
+
+- go/registry: Add MinWriteReplication to runtime storage parameters
+  ([#1821](https://github.com/oasisprotocol/oasis-core/issues/1821))
+
+  The MinWriteReplication specifies the minimum number of nodes to which any
+  writes must be replicated before being assumed to be committed.
+
+- go/common/cbor: Reject CBOR blobs with unknown fields
+  ([#2020](https://github.com/oasisprotocol/oasis-core/issues/2020))
+
+- go/consensus: Enable periodic state checkpoints
+  ([#2880](https://github.com/oasisprotocol/oasis-core/issues/2880))
+
+  This adds the following consensus parameters which control how state
+  checkpointing is to be performed (currently not enforced):
+
+  - `state_checkpoint_interval` is the interval (in blocks) on which state
+    checkpoints should be taken.
+
+  - `state_checkpoint_num_kept` is the number of past state checkpoints to
+    keep.
+
+  - `state_checkpoint_chunk_size` is the chunk size that should be used when
+    creating state checkpoints.
+
+- go/consensus/tendermint: Bump Tendermint Core to 0.34
+  ([#2882](https://github.com/oasisprotocol/oasis-core/issues/2882))
+
+- go/worker/common/p2p: Use libp2p's gossipsub
+  ([#3010](https://github.com/oasisprotocol/oasis-core/issues/3010))
+
+- go/registry: Add up node thresholds for each runtime
+  ([#3027](https://github.com/oasisprotocol/oasis-core/issues/3027))
+
+- go/registry: Make TLS address required for RoleConsensusRPC
+  ([#3038](https://github.com/oasisprotocol/oasis-core/issues/3038))
+
+- go/consensus/tendermint: Fix node update verification
+  ([#3040](https://github.com/oasisprotocol/oasis-core/issues/3040))
+
+- runtime: Cleanup some runtime host protocol messages
+  ([#3055](https://github.com/oasisprotocol/oasis-core/issues/3055))
+
+- go: Rename existing staking token to base unit
+  ([#3061](https://github.com/oasisprotocol/oasis-core/issues/3061))
+
+  This allows introducing the concept of staking token which is defined as a
+  given number of base units.
+
+  Additionally, rename fields of the following `go/staking/api` types:
+  `TransferEvent`, `BurnEvent`, `AddEscrowEvent`, `TakeEscrowEvent`,
+  `ReclaimEscrowEvent`, `Transfer`, `Burn`, `Escrow`, `ReclaimEscrow`.
+
+- go/staking: Increase reward amount denominator
+  ([#3065](https://github.com/oasisprotocol/oasis-core/issues/3065))
+
+  This allows the genesis block writer to specify finer reward rates.
+
+  Associated genesis controls analysis:
+
+  ```
+  RewardAmountDenominator
+  |- AddRewards
+  |  |- RewardFactorEpochElectionAny
+  |  '- RewardFactorEpochSigned
+  '- AddRewardSingleAttenuated
+     '- RewardFactorBlockProposed
+  ```
+
+  Note to the genesis block writer: scale rewards factors **up** by a
+  factor of **1,000**.
+
+- go/registry/api: Remove `GetNodeList` method
+  ([#3067](https://github.com/oasisprotocol/oasis-core/issues/3067))
+
+  The `GetNodeList` method was unused and is therefore removed. Any code using
+  this method can be migrated to use `GetNodes` instead.
+
+- go/roothash/api: Include RuntimeID field in roothash events
+  ([#3073](https://github.com/oasisprotocol/oasis-core/issues/3073))
+
+- go/tendermint/roothash: Include RuntimeID attribute in events
+  ([#3073](https://github.com/oasisprotocol/oasis-core/issues/3073))
+
+  All tendermint roothash events now include "runtime-id" attribute.
+
+- go/roothash/api: Add FinalizedEvent type to roothash events
+  ([#3073](https://github.com/oasisprotocol/oasis-core/issues/3073))
+
+- go/registry/api: Include transaction hash and height in all registry events
+  ([#3073](https://github.com/oasisprotocol/oasis-core/issues/3073))
+
+- go/backends: Return pointers in GetEvents methods
+  ([#3092](https://github.com/oasisprotocol/oasis-core/issues/3092))
+
+  To avoid unnecessary copying and to make the methods more unified with rest of
+  the APIs, return pointers to events in backend GetEvents methods.
+
+- go/consensus/tendermint: Use P2P key for Tendermint P2P
+  ([#3101](https://github.com/oasisprotocol/oasis-core/issues/3101))
+
+  Previously the Tendermint consensus backend used the node's identity key for
+  Tendermint P2P connections. This has now been changed to use the node's P2P
+  key instead as that can be made ephemeral in the future.
+
+- go/oasis-test-runner/env: Rename types, fields, functions to refer to scenario
+  ([#3108](https://github.com/oasisprotocol/oasis-core/issues/3108))
+
+  Rename `TestInstanceInfo` type to `ScenarioInstanceInfo` and its `Test` field
+  to `Scenario`.
+
+  Rename `Env`'s `TestInfo()` and `WriteTestInfo()` methods to `ScenarioInfo()`
+  and `WriteScenarioInfo()` for consistency.
+
+- go/oasis-test-runner/cmd: Rename `--test` flag to `--scenario` flag
+  ([#3108](https://github.com/oasisprotocol/oasis-core/issues/3108))
+
+  Rename the short version from `-t` to `-s`.
+
+- go/oasis-node/cmd/common/metrics: Rename "scenario" metrics label to "test"
+  ([#3108](https://github.com/oasisprotocol/oasis-core/issues/3108))
+
+- go/common/prettyprint: Augment `PrettyPrinter.PrettyPrint()` with `Context`
+  ([#3111](https://github.com/oasisprotocol/oasis-core/issues/3111))
+
+- go/oasis-node/cmd: Remove `--retry` flag from staking CLI commands
+  ([#3113](https://github.com/oasisprotocol/oasis-core/issues/3113))
+
+  Remove obsolete `--retry` flag from `oasis-node stake info`,
+  `oasis-node stake list` and `oasis-node stake account info` CLI commands.
+
+- go: Remove the integrated ledger support
+  ([#3128](https://github.com/oasisprotocol/oasis-core/issues/3128))
+
+  The signer and associated enumeration tool have been moved to
+  oasisprotocol/oasis-core-ledger.
+
+- go/oasis-node/cmd/common/consensus: Add `context.Context` to `SignAndSaveTx()`
+  ([#3137](https://github.com/oasisprotocol/oasis-core/issues/3137))
+
+- go/registry: Require SGX for non-test keymanager runtimes
+  ([#3146](https://github.com/oasisprotocol/oasis-core/issues/3146))
+
+  Note: Existing deployments might need to alter the state dump to fix any
+  existing keymanager runtimes that registered without SGX hardware.
+
+- go/registry: Require SGX for non-test compute runtimes using a key manager
+  ([#3159](https://github.com/oasisprotocol/oasis-core/issues/3159))
+
+  Note: Existing deployments might need to alter the state dump to fix any
+  existing compute runtimes that registered without SGX hardware and have
+  keymanager runtime configured.
+
+### Configuration Changes
+
+- Remove explicit evidence-related consensus parameters
+  ([#2882](https://github.com/oasisprotocol/oasis-core/issues/2882))
+
+  The following evidence-related consensus parameters have been removed as they
+  are now derived based on the debonding period and other parameters:
+
+  - `max_evidence_age_blocks`
+  - `max_evidence_age_time`
+
+  Make sure to update the genesis file.
+
+- go/consensus/tendermint: Make configuration options consistent
+  ([#3082](https://github.com/oasisprotocol/oasis-core/issues/3082))
+
+  All Tendermint configuration option names have been changed to be
+  consistently placed under `consensus.tendermint.`. This requires any previous
+  options that started with `tendermint.` to be changed to start with
+  `consensus.tendermint.`.
+
+- Change the way seed-only nodes are configured
+  ([#3116](https://github.com/oasisprotocol/oasis-core/issues/3116))
+
+  The previous `--consensus.tendermint.p2p.seed_mode` configuration flag has
+  been removed. In its place there is now a more general
+  `--consensus.tendermint.mode` flag which should be set to `seed` in order to
+  make the node a seed-only node.
+
+### Features
+
+- go/storage/client: Use MinWriteReplication when waiting for writes
+  ([#1821](https://github.com/oasisprotocol/oasis-core/issues/1821))
+
+- registry: Allow nodes to opt-in to more runtimes
+  ([#2179](https://github.com/oasisprotocol/oasis-core/issues/2179))
+
+  Previously, when a node updated its registration, the list of runtimes
+  had to be identical.  It is now possible to add new runtimes.
+
+- e2e/tests: Added runtime upgrade test
+  ([#2520](https://github.com/oasisprotocol/oasis-core/issues/2520))
+
+- go oasis-node: Add CLI command for estimating gas cost of a transaction
+  ([#2723](https://github.com/oasisprotocol/oasis-core/issues/2723))
+
+  This adds `oasis-node consensus estimate_gas`.
+
+  This adds `--transaction.unsigned`.
+
+- go/oasis-node/cmd: Show Genesis document's hash when displaying transactions
+  ([#2871](https://github.com/oasisprotocol/oasis-core/issues/2871))
+
+  Show Genesis document's hash when generating staking transactions with
+  `oasis-node stake account gen_*` CLI commands and when showing transactions'
+  pretty prints with the `oasis-node consensus show_tx` CLI command.
+
+- go/consensus/tendermint: Add support for state sync
+  ([#2880](https://github.com/oasisprotocol/oasis-core/issues/2880))
+
+- go/registry/api: Add `GetNodeByConsensusAddress` method
+  ([#2961](https://github.com/oasisprotocol/oasis-core/issues/2961))
+
+  `GetNodeByConsensusAddress` can be used to query nodes by their Consensus
+  address.
+
+- go/identity/cli: Add show TLS pubkey commands
+  ([#3015](https://github.com/oasisprotocol/oasis-core/issues/3015))
+
+  Adds following CLI helpers for displaying TLS public keys:
+
+  - `oasis-node identity show-tls-pubkey --datadir <datadir>` for displaying
+  the public key used in the external node gRPC endpoints.
+  - `oasis-node identity show-sentry-client-pubkey --datadir <datadir>` for
+  displaying the public key used by the upstream nodes when connecting to the
+  sentry control endpoint.
+
+- go/oasis-node/cmd/stake: Support showing stake amounts in tokens
+  ([#3037](https://github.com/oasisprotocol/oasis-core/issues/3037))
+
+  The `oasis-node stake info` and `oasis-node stake account info` CLI commands
+  show stake amounts (e.g. account balances, staking thresholds) in tokens.
+
+- go/staking/api: Pretty-print account balances in tokens
+  ([#3037](https://github.com/oasisprotocol/oasis-core/issues/3037))
+
+  If a `PrettyPrinter`'s context carries appropriate values for the token's
+  ticker symbol and token's value base-10 exponent, print the balance in
+  tokens instead of base units.
+
+- go/control: Add registration status to node status
+  ([#3038](https://github.com/oasisprotocol/oasis-core/issues/3038))
+
+  This updates the response returned by the `GetStatus` method exposed by the
+  node controller service to include a `Registration` field that contains
+  information about the node's current registration.
+
+- go/control: Add identity status to node status
+  ([#3038](https://github.com/oasisprotocol/oasis-core/issues/3038))
+
+  This updates the response returned by the `GetStatus` method exposed by the
+  node controller service to include an `Identity` field that contains
+  information about the public keys used to identify a node in different
+  contexts.
+
+- go/consensus: Add IsValidator to reported node status
+  ([#3038](https://github.com/oasisprotocol/oasis-core/issues/3038))
+
+- go/consensus/api: Add `GetTransactionsWithResults` method
+  ([#3047](https://github.com/oasisprotocol/oasis-core/issues/3047))
+
+  `GetTransactionsWithResults` returns a list of transactions and their
+  execution results, contained within a consensus block at a specific height.
+
+- go/common/crypto/signature/signers/ledger: Descriptive error on user reject
+  ([#3050](https://github.com/oasisprotocol/oasis-core/issues/3050))
+
+  Make Ledger signer return a more descriptive error message when a user rejects
+  a transaction on the Ledger device.
+
+- go/common/crypto/signature/signers/ledger: Add support for consensus signer
+  ([#3056](https://github.com/oasisprotocol/oasis-core/issues/3056))
+
+  Add support for consensus signer that can be used with the Oasis Validator
+  Ledger app.
+
+- go/oasis-node/cmd/genesis: Allow setting staking token symbol and value exp
+  ([#3061](https://github.com/oasisprotocol/oasis-core/issues/3061))
+
+  Allow setting staking token's ticker symbol and token value's base-10 exponent
+  in `oasis-node genesis init` CLI command via `--staking.token_symbol` and
+  `--staking.token_value_exponent` flags.
+
+- go/staking: Add `TokenSymbol` and `TokenValueExponent` fields to `Genesis`
+  ([#3061](https://github.com/oasisprotocol/oasis-core/issues/3061))
+
+  They allow denominating stake amounts in tokens (besides base units used
+  internally).
+  For more details, see [Staking Developer Docs].
+
+  [Staking Developer Docs]:
+    docs/consensus/staking.md#tokens-and-base-units
+
+- go/control: List all valid TLS public keys in identity status
+  ([#3062](https://github.com/oasisprotocol/oasis-core/issues/3062))
+
+  This changes the `Identity` field in the reposnse of the `GetStatus` method
+  exposed by the node controller service to include all valid TLS public keys
+  for the node. This change affects nodes using automatic certificate rotation,
+  which at any point use 2 valid TLS public keys.
+
+- go/oasis-node: CLI support for the GetStatus endpoint
+  ([#3064](https://github.com/oasisprotocol/oasis-core/issues/3064))
+
+  See [docs/oasis-node/cli.md#status](/docs/oasis-node/cli.md#status).
+
+- go/consensus: Expose read-only state via light client interface
+  ([#3077](https://github.com/oasisprotocol/oasis-core/issues/3077))
+
+  Nodes configured as consensus RPC services workers now expose read-only
+  access to consensus state via the usual MKVS ReadSyncer interface, allowing
+  light clients to remotely query state while transparently verifying proofs.
+
+- go/oasis-node/cmd/stake: Show pretty-printed account info
+  ([#3087](https://github.com/oasisprotocol/oasis-core/issues/3087))
+
+  Change `oasis-node stake account info` CLI command to output pretty-printed
+  account info instead of raw JSON data.
+
+- go/staking/api: Implement `PrettyPrinter` interface for various types
+  ([#3087](https://github.com/oasisprotocol/oasis-core/issues/3087),
+   [#3132](https://github.com/oasisprotocol/oasis-core/issues/3132))
+
+  Implement `PrettyPrinter` for `Transfer`, `Burn`, `Escrow`, `ReclaimEscrow`,
+  `AmendCommissionSchedule`, `SharePool`, `StakeThreshold`, `StakeAccumulator`,
+  `GeneralAccount`, `EscrowAccount`, `Account`, `CommissionRateStep`,
+  `CommissionRateBoundStep` and `CommissionSchedule` types.
+
+- go/worker/storage: Added round sync metrics
+  ([#3088](https://github.com/oasisprotocol/oasis-core/issues/3088))
+
+- go/registry: Add support for querying suspended runtimes
+  ([#3093](https://github.com/oasisprotocol/oasis-core/issues/3093))
+
+  Registry `GetRuntimes` method now accepts a parameter to enable querying for
+  suspended runtimes.
+  `WatchRuntimes` will now always include suspended runtimes in the initial
+  response.
+
+- go/consensus/tendermint: Support consensus backend modes
+  ([#3116](https://github.com/oasisprotocol/oasis-core/issues/3116))
+
+- go/common/crypto/signature: Add a plugin backed signer implementation
+  ([#3120](https://github.com/oasisprotocol/oasis-core/issues/3120))
+
+  Bloating the repository with a ton of different HSM (etc) signing
+  backends doesn't make sense, and is a maintenance burden.  Use the
+  go-plugin package to allow for externally distributed signer plugins.
+
+- go/common/grpc: Client verbose logging and metrics
+  ([#3121](https://github.com/oasisprotocol/oasis-core/issues/3121))
+
+  Adds option to enable verbose logging for gRPC client and adds basic gRPC
+  client instrumentation.
+
+  Verbose gRPC client logging can be enabled with the existing `grpc.log.debug`
+  flag.
+
+  Metric changes:
+
+  Existing gRPC server metrics were renamed:
+
+  - `oasis_grpc_calls` -> `oasis_grpc_server_calls`
+  - `oasis_grpc_latency` -> `oasis_grpc_server_latency`
+  - `oasis_grpc_stream_writes` -> `oasis_grpc_server_stream_writes`
+
+  Added corresponding metrics:
+
+  - `oasis_grpc_client_calls` gRPC client calls metric.
+  - `oasis_grpc_client_latency` gRPC client call latencies.
+  - `oasis_grpc_client_stream_writes` gRPC client stream writes.
+
+- go/common/prettyprint: Add `QuantityFrac()`
+  ([#3129](https://github.com/oasisprotocol/oasis-core/issues/3129),
+   [#3131](https://github.com/oasisprotocol/oasis-core/issues/3131))
+
+- go/oasis-node/cmd/common/consensus: Ask for confirmation before signing
+  ([#3134](https://github.com/oasisprotocol/oasis-core/issues/3134))
+
+  If file signer is used, ask for confirmation before signing a transaction,
+  unless `--assume_yes` flag is set.
+
+- go/oasis-node/cmd/common/consensus: Pretty print transaction before signing it
+  ([#3134](https://github.com/oasisprotocol/oasis-core/issues/3134))
+
+  Adapt `oasis-node stake account gen_*` CLI commands to display stake amount in
+  pretty printed transactions in token values.
+
+- go/oasis-node/cmd/common/flags: Add `--assume_yes` flag
+  ([#3137](https://github.com/oasisprotocol/oasis-core/issues/3137))
+
+- go/oasis-node/cmd/common: Add `GetUserConfirmation()`
+  ([#3137](https://github.com/oasisprotocol/oasis-core/issues/3137))
+
+- go/oasis-node/cmd/common/consensus: Print helper text about transaction review
+  ([#3149](https://github.com/oasisprotocol/oasis-core/issues/3149))
+
+  If one uses the signer plugin and a TTY, print a helper text to notify him
+  that he may need to review the transaction on the device if a hardware-based
+  signer plugin is used.
+
+- go/consensus: Add SubmitTxNoWait method
+  ([#3152](https://github.com/oasisprotocol/oasis-core/issues/3152))
+
+  The new method allows submitting a transaction without waiting for it to be
+  included in a block.
+
+- go/consensus/api/transaction: Add `PrettyPrintBody()` to `Transaction` type
+  ([#3157](https://github.com/oasisprotocol/oasis-core/issues/3157))
+
+- go/worker/keymanager: Ignore runtimes not in policy document
+  ([#3162](https://github.com/oasisprotocol/oasis-core/issues/3162))
+
+- go/consensus: Move SubmitEvidence to LightClientBackend
+  ([#3169](https://github.com/oasisprotocol/oasis-core/issues/3169))
+
+  This allows light clients to submit evidence of Byzantine behavior.
+
+### Bug Fixes
+
+- runtime: Reduce maximum RHP message size to 16 MiB
+  ([#2213](https://github.com/oasisprotocol/oasis-core/issues/2213))
+
+- go/worker/storage: Fix storage node policy
+  ([#3021](https://github.com/oasisprotocol/oasis-core/issues/3021))
+
+- runtime/dispatcher: Break recv loop on abort request
+  ([#3023](https://github.com/oasisprotocol/oasis-core/issues/3023))
+
+- go/runtime/host/sandbox: Fix possible data race
+  ([#3024](https://github.com/oasisprotocol/oasis-core/issues/3024))
+
+  The data race existed because the cancel function that is referenced inside a
+  goroutine waiting for initialization to complete was unintentionally
+  overwritten.
+
+- go/consensus/tendermint: Properly handle no committed blocks
+  ([#3032](https://github.com/oasisprotocol/oasis-core/issues/3032))
+
+- runtime/committee/client: Reduce gRPC max backoff timeout
+  ([#3035](https://github.com/oasisprotocol/oasis-core/issues/3035))
+
+  Committee nodes are expected to be available and this timeout is more in line
+  with timeouts used in the clients using these connections.
+
+- go/worker/common/p2p: Don't treat context cancellation as permanent
+  ([#3075](https://github.com/oasisprotocol/oasis-core/issues/3075))
+
+  Context cancellation errors should not count as permanent for P2P dispatch as
+  the cancelled context may be due to the round advancing in which case
+  dispatch should actually be retried.
+
+- go/oasis-test-runner/cmd: Sort scenarios for correct parallel execution
+  ([#3104](https://github.com/oasisprotocol/oasis-core/issues/3104))
+
+- oasis-node/cmd/unsafe-reset: Fix globs for runtime files
+  ([#3105](https://github.com/oasisprotocol/oasis-core/issues/3105))
+
+- go/oasis-node/cmd/common: ExportEntity should use the entity ctor
+  ([#3117](https://github.com/oasisprotocol/oasis-core/issues/3117))
+
+  Instead of using an entity populated with the zero values and a manually
+  filled in public key, use the entity constructor that can fill in
+  sensible values for things like the version.
+
+- go/consensus/tendermint/roothash: Ignore non-tracked runtimes when reindexing
+  ([#3124](https://github.com/oasisprotocol/oasis-core/issues/3124))
+
+- go/tendermint/roothash: Skip pruned heights when reindexing
+  ([#3127](https://github.com/oasisprotocol/oasis-core/issues/3127))
+
+- go/worker/common: Treat stale unauthorized peer error as permanent
+  ([#3133](https://github.com/oasisprotocol/oasis-core/issues/3133))
+
+  If the message's group version indicates that the message is stale and an
+  authorization check fails, treat the error as permanent as a stale message
+  will never become valid.
+
+- go/worker/compute: Enforce maximum batch sizes from txn scheduler
+  ([#3139](https://github.com/oasisprotocol/oasis-core/issues/3139))
+
+- Bump libp2p to 0.10.2
+  ([#3150](https://github.com/oasisprotocol/oasis-core/issues/3150))
+
+- go/storage/mkvs/checkpoint: Remove empty version directories
+  ([#3160](https://github.com/oasisprotocol/oasis-core/issues/3160))
+
+  When all root checkpoints are removed for a specific version, the version dir
+  itself should also be removed.
+
+- go/registry/metrics: Fix `oasis_registry_runtimes` metric
+  ([#3161](https://github.com/oasisprotocol/oasis-core/issues/3161))
+
+  Metric was counting runtime events, which does not correctly take into account
+  the case where runtime is suspended and resumed.
+  The metric is now computed by querying the registry.
+
+### Documentation Improvements
+
+- ADR 0000: Architectural Decision Records
+  ([#2924](https://github.com/oasisprotocol/oasis-core/issues/2924))
+
+  Introduce architectural decision records (ADRs) for keeping track of
+  architecture decisions in a transparent way.
+
+- docs/runtime: Update the Runtime Host Protocol section
+  ([#2978](https://github.com/oasisprotocol/oasis-core/issues/2978))
+
+- docs: Add the [Accounts section] of the Staking docs
+  ([#3005](https://github.com/oasisprotocol/oasis-core/issues/3005))
+
+  [Accounts section]: docs/consensus/staking.md#accounts
+
+- go/staking/api: Document commission-related public types
+  ([#3042](https://github.com/oasisprotocol/oasis-core/issues/3042))
+
+- Add [Governance Model](GOVERNANCE.md)
+  ([#3130](https://github.com/oasisprotocol/oasis-core/issues/3130))
+
+- ADR 0001: Multiple Roots Under the Tendermint Application Hash
+  ([#3136](https://github.com/oasisprotocol/oasis-core/issues/3136))
+
+  Currently the Tendermint ABCI application hash is equal to the consensus
+  state root for a specific height. In order to allow additional uses, like
+  proving to light clients that specific events have been emitted in a block,
+  we should make the application hash be derivable from potentially different
+  kinds of roots.
+
+- docs: Add cryptography section
+  ([#3147](https://github.com/oasisprotocol/oasis-core/issues/3147))
+
+### Internal Changes
+
+- worker/sentry: Replace policy watcher with UpdatePolicies API method
+  ([#2820](https://github.com/oasisprotocol/oasis-core/issues/2820))
+
+  Previously, the sentry gRPC worker watched for policy changes, but
+  now all policy changes are pushed to the sentry node via a new
+  sentry API method, `UpdatePolicies`.
+
+- go/oasis-test-runner: Use common cli package for provisioning runtimes
+  ([#3021](https://github.com/oasisprotocol/oasis-core/issues/3021))
+
+- go/common/encoding/bech32: Replace to-be-removed dependency
+  ([#3030](https://github.com/oasisprotocol/oasis-core/issues/3030))
+
+- ci: Don't automatically retry timed out jobs
+  ([#3036](https://github.com/oasisprotocol/oasis-core/issues/3036))
+
+- go/oasis-test-runner: Refactor E2E scenarios
+  ([#3043](https://github.com/oasisprotocol/oasis-core/issues/3043))
+
+  Previously there were some scenarios which incorrectly used the e2e/runtime
+  base even though they do not need any runtimes to work. These have now been
+  changed to use the e2e base instead.
+
+- go/oasis-test-runner/cmd/common: Give verbose error when scenario is not found
+  ([#3044](https://github.com/oasisprotocol/oasis-core/issues/3044))
+
+  List all available scenarios if `oasis-test-runner` command is invoked with an
+  unknown scenario.
+
+- go/worker/compute/executor: Defer fetching the batch from storage
+  ([#3049](https://github.com/oasisprotocol/oasis-core/issues/3049))
+
+  There is no need to attempt to fetch the batch immediately, we can defer it to
+  when we actually need to start processing the batch. This makes fetching not
+  block P2P dispatch.
+
+- go/worker/compute/merge: Defer finalization attempt
+  ([#3049](https://github.com/oasisprotocol/oasis-core/issues/3049))
+
+  There is no need for the finalization attempt to block handling of an incoming
+  commitment as any errors from that are not propagated. This avoids blocking
+  P2P relaying as well.
+
+- go/oasis-test-runner: Support regexps for matching scenario names
+  ([#3051](https://github.com/oasisprotocol/oasis-core/issues/3051))
+
+- go/common/cbor: Add support for generic versioned blobs
+  ([#3052](https://github.com/oasisprotocol/oasis-core/issues/3052))
+
+- go/registry: Add transaction test vector generator
+  ([#3059](https://github.com/oasisprotocol/oasis-core/issues/3059))
+
+- go/common/prettyprint: Add PrettyType for use in test vectors
+  ([#3059](https://github.com/oasisprotocol/oasis-core/issues/3059))
+
+- go/consensus/tendermint/epochtime_mock: Fix initial notify
+  ([#3060](https://github.com/oasisprotocol/oasis-core/issues/3060))
+
+- go/tests/sentry: Add access control sanity checks
+  ([#3062](https://github.com/oasisprotocol/oasis-core/issues/3062))
+
+- ci/longtests: Setup prometheus monitoring
+  ([#3090](https://github.com/oasisprotocol/oasis-core/issues/3090))
+
+- go/consensus/tendermint: Refactor internal event handling
+  ([#3091](https://github.com/oasisprotocol/oasis-core/issues/3091))
+
+  Previously each consensus service client implemented its own event processing
+  loop. All service clients now have a unified event loop implementation (each
+  still runs in its own goroutine) that takes care of query subscriptions and
+  event dispatch.
+
+- go: Use gofumpt instead of gofmt to format Go
+  ([#3095](https://github.com/oasisprotocol/oasis-core/issues/3095))
+
+- go/oasis-test-runner/cmd: Limit scenario name regex matching
+  ([#3103](https://github.com/oasisprotocol/oasis-core/issues/3103))
+
+  Prevent oasis-test-runner to match too many scenarios for a given
+  scenario name regex by ensuring the given scenario name regex matches
+  the whole scenario name.
+
+- go/tests/e2e: Add missing Clone() override to late-start
+  ([#3106](https://github.com/oasisprotocol/oasis-core/issues/3106))
+
+- go/oasis-test-runner: Refactor code to refer to scenario(s) consistently
+  ([#3108](https://github.com/oasisprotocol/oasis-core/issues/3108))
+
+- go/oasis-test-runner/oasis: Purge most of tests/fixture-data
+  ([#3110](https://github.com/oasisprotocol/oasis-core/issues/3110))
+
+- go/consensus/tendermint: Make New return consensus.Backend
+  ([#3115](https://github.com/oasisprotocol/oasis-core/issues/3115))
+
+- go/consensus/tendermint: Move GenesisProvider to api package
+  ([#3115](https://github.com/oasisprotocol/oasis-core/issues/3115))
+
+- go/consensus/tendermint: Move service.TendermintService to api.Backend
+  ([#3115](https://github.com/oasisprotocol/oasis-core/issues/3115))
+
+- go: Use `cbor.Versioned` for descriptor versioning
+  ([#3119](https://github.com/oasisprotocol/oasis-core/issues/3119))
+
+- go/e2e/txsource: Periodically restart runtime nodes
+  ([#3124](https://github.com/oasisprotocol/oasis-core/issues/3124))
+
+- ci: Extract go artifacts upload code into a script
+  ([#3125](https://github.com/oasisprotocol/oasis-core/issues/3125))
+
+- go/tests/e2e/history_reindex: Scenario that triggers roothash reindexing
+  ([#3127](https://github.com/oasisprotocol/oasis-core/issues/3127))
+
+- go/badger: bump badger version
+  ([#3142](https://github.com/oasisprotocol/oasis-core/issues/3142))
+
+- go/oasis-node: Fix the interactive prompt to be correct
+  ([#3143](https://github.com/oasisprotocol/oasis-core/issues/3143))
+
 ## 20.8 (2020-06-16)
 
 ### Process
