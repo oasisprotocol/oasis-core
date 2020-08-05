@@ -75,7 +75,7 @@ func (b *BaseBackend) RegisterHaltHook(func(ctx context.Context, blockHeight int
 }
 
 // Implements Backend.
-func (b *BaseBackend) SubmitEvidence(ctx context.Context, evidence Evidence) error {
+func (b *BaseBackend) SubmitEvidence(ctx context.Context, evidence *Evidence) error {
 	panic(ErrUnsupported)
 }
 

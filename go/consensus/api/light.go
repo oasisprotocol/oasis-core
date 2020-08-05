@@ -26,7 +26,8 @@ type LightClientBackend interface {
 	// to be included in a block. Use SubmitTx if you need to wait for execution.
 	SubmitTxNoWait(ctx context.Context, tx *transaction.SignedTransaction) error
 
-	// TODO: Move SubmitEvidence etc. from Backend.
+	// SubmitEvidence submits evidence of misbehavior.
+	SubmitEvidence(ctx context.Context, evidence *Evidence) error
 }
 
 // SignedHeader is a signed consensus block header.
@@ -53,4 +54,10 @@ type Parameters struct {
 	Meta []byte `json:"meta"`
 
 	// TODO: Consider also including consensus/genesis.Parameters which are backend-agnostic.
+}
+
+// Evidence is evidence of a node's Byzantine behavior.
+type Evidence struct {
+	// Meta contains the consensus backend specific evidence.
+	Meta []byte `json:"meta"`
 }

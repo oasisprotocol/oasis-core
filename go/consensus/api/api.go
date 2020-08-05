@@ -209,9 +209,6 @@ type ServicesBackend interface {
 	// consensus Halt epoch height is reached.
 	RegisterHaltHook(func(ctx context.Context, blockHeight int64, epoch epochtime.EpochTime))
 
-	// SubmitEvidence submits evidence of misbehavior.
-	SubmitEvidence(ctx context.Context, evidence Evidence) error
-
 	// SubmissionManager returns the transaction submission manager.
 	SubmissionManager() SubmissionManager
 
@@ -243,56 +240,6 @@ type TransactionAuthHandler interface {
 	// GetSignerNonce returns the nonce that should be used by the given
 	// signer for transmitting the next transaction.
 	GetSignerNonce(ctx context.Context, req *GetSignerNonceRequest) (uint64, error)
-}
-
-// EvidenceKind is kind of evindence of a node misbehaving.
-type EvidenceKind int
-
-const (
-	// EvidenceKindConsensus is consensus-layer specific evidence.
-	EvidenceKindConsensus EvidenceKind = 0
-
-	EvidenceKindMax = EvidenceKindConsensus
-)
-
-// String returns a string representation of an EvidenceKind.
-func (k EvidenceKind) String() string {
-	switch k {
-	case EvidenceKindConsensus:
-		return "consensus"
-	default:
-		return "[unknown evidence kind]"
-	}
-}
-
-// Evidence is evidence of a node misbehaving.
-type Evidence interface {
-	// Kind returns the evidence kind.
-	Kind() EvidenceKind
-	// Unwrap returns the unwrapped evidence (if any).
-	Unwrap() interface{}
-}
-
-// ConsensusEvidence is consensus backend-specific evidence.
-type ConsensusEvidence struct {
-	inner interface{}
-}
-
-var _ Evidence = (*ConsensusEvidence)(nil)
-
-// Kind returns the evidence kind.
-func (ce ConsensusEvidence) Kind() EvidenceKind {
-	return EvidenceKindConsensus
-}
-
-// Unwrap returns the unwrapped evidence (if any).
-func (ce ConsensusEvidence) Unwrap() interface{} {
-	return ce.inner
-}
-
-// NewConsensusEvidence creates new consensus backend-specific evidence.
-func NewConsensusEvidence(inner interface{}) ConsensusEvidence {
-	return ConsensusEvidence{inner: inner}
 }
 
 // EstimateGasRequest is a EstimateGas request.

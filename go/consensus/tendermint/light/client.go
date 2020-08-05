@@ -112,8 +112,16 @@ func (lp *lightClientProvider) ValidatorSet(height int64) (*tmtypes.ValidatorSet
 
 // Implements tmlightprovider.Provider.
 func (lp *lightClientProvider) ReportEvidence(ev tmtypes.Evidence) error {
-	// TODO: Implement SubmitEvidence.
-	return fmt.Errorf("not yet implemented")
+	proto, err := tmtypes.EvidenceToProto(ev)
+	if err != nil {
+		return fmt.Errorf("failed to convert evidence: %w", err)
+	}
+	meta, err := proto.Marshal()
+	if err != nil {
+		return fmt.Errorf("failed to marshal evidence: %w", err)
+	}
+
+	return lp.client.SubmitEvidence(lp.ctx, &consensus.Evidence{Meta: meta})
 }
 
 // newLightClientProvider creates a new provider for the Tendermint's light client.
@@ -176,6 +184,11 @@ func (lc *lightClient) State() syncer.ReadSyncer {
 // Implements consensus.LightClientBackend.
 func (lc *lightClient) SubmitTxNoWait(ctx context.Context, tx *transaction.SignedTransaction) error {
 	return lc.getPrimary().SubmitTxNoWait(ctx, tx)
+}
+
+// Implements consensus.LightClientBackend.
+func (lc *lightClient) SubmitEvidence(ctx context.Context, evidence *consensus.Evidence) error {
+	return lc.getPrimary().SubmitEvidence(ctx, evidence)
 }
 
 // Implements Client.

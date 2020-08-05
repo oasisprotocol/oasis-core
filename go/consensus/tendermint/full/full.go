@@ -23,6 +23,7 @@ import (
 	tmmempool "github.com/tendermint/tendermint/mempool"
 	tmnode "github.com/tendermint/tendermint/node"
 	tmp2p "github.com/tendermint/tendermint/p2p"
+	tmproto "github.com/tendermint/tendermint/proto/tendermint/types"
 	tmproxy "github.com/tendermint/tendermint/proxy"
 	tmcli "github.com/tendermint/tendermint/rpc/client/local"
 	tmrpctypes "github.com/tendermint/tendermint/rpc/core/types"
@@ -537,17 +538,18 @@ func (t *fullService) newSubscriberID() string {
 	return fmt.Sprintf("%s/subscriber-%d", tmSubscriberID, atomic.AddUint64(&t.nextSubscriberID, 1))
 }
 
-func (t *fullService) SubmitEvidence(ctx context.Context, evidence consensusAPI.Evidence) error {
-	if evidence.Kind() != consensusAPI.EvidenceKindConsensus {
-		return fmt.Errorf("tendermint: unsupported evidence kind")
+func (t *fullService) SubmitEvidence(ctx context.Context, evidence *consensusAPI.Evidence) error {
+	var protoEv tmproto.Evidence
+	if err := protoEv.Unmarshal(evidence.Meta); err != nil {
+		return fmt.Errorf("tendermint: malformed evidence while unmarshalling: %w", err)
 	}
 
-	tmEvidence, ok := evidence.Unwrap().(tmtypes.Evidence)
-	if !ok {
-		return fmt.Errorf("tendermint: expected tendermint evidence, got something else")
+	ev, err := tmtypes.EvidenceFromProto(&protoEv)
+	if err != nil {
+		return fmt.Errorf("tendermint: malformed evidence while converting: %w", err)
 	}
 
-	if _, err := t.client.BroadcastEvidence(tmEvidence); err != nil {
+	if _, err := t.client.BroadcastEvidence(ev); err != nil {
 		return fmt.Errorf("tendermint: broadcast evidence failed: %w", err)
 	}
 

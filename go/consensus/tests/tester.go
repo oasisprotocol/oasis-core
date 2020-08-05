@@ -130,6 +130,9 @@ func ConsensusImplementationTests(t *testing.T, backend consensus.ClientBackend)
 	err = backend.SubmitTxNoWait(ctx, testSigTx)
 	require.NoError(err, "SubmitTxNoWait")
 
+	err = backend.SubmitEvidence(ctx, &consensus.Evidence{})
+	require.Error(err, "SubmitEvidence should fail with invalid evidence")
+
 	// We should be able to do remote state queries. Of course the state format is backend-specific
 	// so we simply perform some usual storage operations like fetching random keys and iterating
 	// through everything.

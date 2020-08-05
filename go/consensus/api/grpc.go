@@ -59,6 +59,8 @@ var (
 	methodStateSyncIterate = lightServiceName.NewMethod("StateSyncIterate", syncer.IterateRequest{})
 	// methodSubmitTxNoWait is the SubmitTxNoWait method.
 	methodSubmitTxNoWait = lightServiceName.NewMethod("SubmitTxNoWait", transaction.SignedTransaction{})
+	// methodSubmitEvidence is the SubmitEvidence method.
+	methodSubmitEvidence = lightServiceName.NewMethod("SubmitEvidence", &Evidence{})
 
 	// serviceDesc is the gRPC service descriptor.
 	serviceDesc = grpc.ServiceDesc{
@@ -151,6 +153,10 @@ var (
 			{
 				MethodName: methodSubmitTxNoWait.ShortName(),
 				Handler:    handlerSubmitTxNoWait,
+			},
+			{
+				MethodName: methodSubmitEvidence.ShortName(),
+				Handler:    handlerSubmitEvidence,
 			},
 		},
 	}
@@ -590,6 +596,29 @@ func handlerSubmitTxNoWait( // nolint: golint
 	return interceptor(ctx, rq, info, handler)
 }
 
+func handlerSubmitEvidence( // nolint: golint
+	srv interface{},
+	ctx context.Context,
+	dec func(interface{}) error,
+	interceptor grpc.UnaryServerInterceptor,
+) (interface{}, error) {
+	rq := new(Evidence)
+	if err := dec(rq); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return nil, srv.(LightClientBackend).SubmitEvidence(ctx, rq)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: methodSubmitEvidence.FullName(),
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return nil, srv.(LightClientBackend).SubmitEvidence(ctx, req.(*Evidence))
+	}
+	return interceptor(ctx, rq, info, handler)
+}
+
 // RegisterService registers a new client backend service with the given gRPC server.
 func RegisterService(server *grpc.Server, service ClientBackend) {
 	server.RegisterService(&serviceDesc, service)
@@ -671,6 +700,11 @@ func (c *consensusLightClient) State() syncer.ReadSyncer {
 // Implements LightClientBackend.
 func (c *consensusLightClient) SubmitTxNoWait(ctx context.Context, tx *transaction.SignedTransaction) error {
 	return c.conn.Invoke(ctx, methodSubmitTxNoWait.FullName(), tx, nil)
+}
+
+// Implements LightClientBackend.
+func (c *consensusLightClient) SubmitEvidence(ctx context.Context, evidence *Evidence) error {
+	return c.conn.Invoke(ctx, methodSubmitEvidence.FullName(), evidence, nil)
 }
 
 type consensusClient struct {
