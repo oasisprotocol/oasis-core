@@ -50,11 +50,13 @@ func initVersions() {
 
 	rootCmd.SetVersionTemplate(`Software version: {{.Version}}
 {{- with nodeVersion }}
-Runtime protocol version: {{ .RuntimeProtocol }}
-Consensus protocol version: {{ .ConsensusProtocol }}
-Committee protocol version: {{ .CommitteeProtocol }}
-Tendermint core version: {{ .Tendermint }}
-ABCI library version: {{ .ABCI }}
+Consensus:
+  Consensus protocol version: {{ .ConsensusProtocol }}
+  Tendermint Core version:    {{ .Tendermint }}
+  ABCI library version:       {{ .ABCI }}
+Runtime:
+  Host protocol version:      {{ .RuntimeHostProtocol }}
+  Committee protocol version: {{ .RuntimeCommitteeProtocol }}
 Go toolchain version: {{ .Toolchain }}
 {{ end -}}
 `)

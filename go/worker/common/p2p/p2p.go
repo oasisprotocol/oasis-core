@@ -217,7 +217,7 @@ func New(ctx context.Context, identity *identity.Identity, consensus consensus.B
 }
 
 func runtimeIDToTopicID(runtimeID common.Namespace) string {
-	return version.CommitteeProtocol.String() + "/" + runtimeID.String()
+	return version.RuntimeCommitteeProtocol.String() + "/" + runtimeID.String()
 }
 
 func init() {
