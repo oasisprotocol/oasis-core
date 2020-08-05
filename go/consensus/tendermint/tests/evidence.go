@@ -18,7 +18,7 @@ import (
 )
 
 // MakeDoubleSignEvidence creates consensus evidence of double signing.
-func MakeDoubleSignEvidence(t *testing.T, ident *identity.Identity) consensus.Evidence {
+func MakeDoubleSignEvidence(t *testing.T, ident *identity.Identity) *consensus.Evidence {
 	require := require.New(t)
 
 	// Create empty directory for private validator metadata.
@@ -64,7 +64,13 @@ func MakeDoubleSignEvidence(t *testing.T, ident *identity.Identity) consensus.Ev
 		VoteA: makeVote(pv1, genesisTestHelpers.TestChainID, 0, 1, 2, 1, blockID1, now),
 		VoteB: makeVote(pv2, genesisTestHelpers.TestChainID, 0, 1, 2, 1, blockID2, now),
 	}
-	return consensus.NewConsensusEvidence(ev)
+
+	proto, err := tmtypes.EvidenceToProto(ev)
+	require.NoError(err, "EvidenceToProto")
+	meta, err := proto.Marshal()
+	require.NoError(err, "proto.Marshal")
+
+	return &consensus.Evidence{Meta: meta}
 }
 
 // makeVote copied from Tendermint test suite.
