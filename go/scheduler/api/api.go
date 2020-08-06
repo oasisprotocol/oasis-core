@@ -240,11 +240,11 @@ type ConsensusParameters struct {
 
 	// DebugBypassStake is true iff the scheduler should bypass all of
 	// the staking related checks and operations.
-	DebugBypassStake bool `json:"debug_bypass_stake"`
+	DebugBypassStake bool `json:"debug_bypass_stake,omitempty"`
 
 	// DebugStaticValidators is true iff the scheduler should use
 	// a static validator set instead of electing anything.
-	DebugStaticValidators bool `json:"debug_static_validators"`
+	DebugStaticValidators bool `json:"debug_static_validators,omitempty"`
 
 	// RewardFactorEpochElectionAny is the factor for a reward
 	// distributed per epoch to entities that have any node considered
