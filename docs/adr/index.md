@@ -72,4 +72,5 @@ The following records currently exist:
 
 <!-- markdownlint-disable line-length -->
 * [ADR-0000](0000-architectural-decision-records.md) - Architectural Decision Records
+* [ADR-0001](0001-tm-multi-root-apphash.md) - Multiple Roots Under the Tendermint Application Hash
 <!-- markdownlint-enable line-length -->
