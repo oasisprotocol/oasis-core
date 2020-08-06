@@ -112,6 +112,10 @@ type NodeDB interface {
 	// Size returns the size of the database in bytes.
 	Size() (int64, error)
 
+	// Sync syncs the database to disk. This is useful if the NoFsync option is used to explicitly
+	// perform a sync.
+	Sync() error
+
 	// Close closes the database.
 	Close()
 }
@@ -219,6 +223,10 @@ func (d *nopNodeDB) Prune(ctx context.Context, version uint64) error {
 
 func (d *nopNodeDB) Size() (int64, error) {
 	return 0, nil
+}
+
+func (d *nopNodeDB) Sync() error {
+	return nil
 }
 
 func (d *nopNodeDB) Close() {
