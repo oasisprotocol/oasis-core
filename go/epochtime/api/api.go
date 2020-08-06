@@ -73,7 +73,7 @@ type ConsensusParameters struct {
 	Interval int64 `json:"interval"`
 
 	// DebugMockBackend is flag for enabling mock epochtime backend.
-	DebugMockBackend bool `json:"debug_mock_backend"`
+	DebugMockBackend bool `json:"debug_mock_backend,omitempty"`
 }
 
 // SanityCheck does basic sanity checking on the genesis state.

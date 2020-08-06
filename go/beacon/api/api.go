@@ -41,7 +41,7 @@ type Genesis struct {
 // ConsensusParameters are the beacon consensus parameters.
 type ConsensusParameters struct {
 	// DebugDeterministic is true iff the output should be deterministic.
-	DebugDeterministic bool `json:"debug_deterministic"`
+	DebugDeterministic bool `json:"debug_deterministic,omitempty"`
 }
 
 // SanityCheck does basic sanity checking on the genesis state.
