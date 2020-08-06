@@ -693,6 +693,10 @@ func (d *badgerNodeDB) Size() (int64, error) {
 	return lsm + vlog, nil
 }
 
+func (d *badgerNodeDB) Sync() error {
+	return d.db.Sync()
+}
+
 func (d *badgerNodeDB) Close() {
 	d.closeOnce.Do(func() {
 		d.gc.Close()
