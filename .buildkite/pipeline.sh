@@ -35,7 +35,8 @@ pr_and_no_code_related_changes() {
       ':(exclude).markdownlint.yml' \
       ':(exclude).punch_config.py' \
       ':(exclude)docs/' \
-      ':(exclude)towncrier.toml'
+      ':(exclude)towncrier.toml' \
+      ':(exclude).gitbook.yaml'
 }
 
 # Helper that checks if anything under docker/ has been modified in a pull request.
