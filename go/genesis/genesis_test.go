@@ -30,6 +30,7 @@ import (
 	roothashAPI "github.com/oasisprotocol/oasis-core/go/roothash/api"
 	scheduler "github.com/oasisprotocol/oasis-core/go/scheduler/api"
 	staking "github.com/oasisprotocol/oasis-core/go/staking/api"
+	"github.com/oasisprotocol/oasis-core/go/staking/api/token"
 	stakingTests "github.com/oasisprotocol/oasis-core/go/staking/tests/debug"
 	storage "github.com/oasisprotocol/oasis-core/go/storage/api"
 )
@@ -670,7 +671,7 @@ func TestGenesisSanityCheck(t *testing.T) {
 	d.Staking.TokenSymbol = "foo"
 	require.EqualError(
 		d.SanityCheck(),
-		fmt.Sprintf("staking: sanity check failed: token symbol should match '%s'", staking.TokenSymbolRegexp),
+		fmt.Sprintf("staking: sanity check failed: token symbol should match '%s'", token.TokenSymbolRegexp),
 		"lower case token symbol should be rejected",
 	)
 

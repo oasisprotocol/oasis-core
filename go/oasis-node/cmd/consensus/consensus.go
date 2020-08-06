@@ -21,7 +21,6 @@ import (
 	cmdConsensus "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/consensus"
 	cmdFlags "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/flags"
 	cmdGrpc "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/grpc"
-	staking "github.com/oasisprotocol/oasis-core/go/staking/api"
 )
 
 const (
@@ -137,8 +136,8 @@ func doShowTx(cmd *cobra.Command, args []string) {
 	genesis := cmdConsensus.InitGenesis()
 
 	ctx := context.Background()
-	ctx = context.WithValue(ctx, staking.PrettyPrinterContextKeyTokenSymbol, genesis.Staking.TokenSymbol)
-	ctx = context.WithValue(ctx, staking.PrettyPrinterContextKeyTokenValueExponent, genesis.Staking.TokenValueExponent)
+	ctx = context.WithValue(ctx, prettyprint.ContextKeyTokenSymbol, genesis.Staking.TokenSymbol)
+	ctx = context.WithValue(ctx, prettyprint.ContextKeyTokenValueExponent, genesis.Staking.TokenValueExponent)
 	ctx = context.WithValue(ctx, prettyprint.ContextKeyGenesisHash, genesis.Hash())
 
 	sigTx := loadTx()

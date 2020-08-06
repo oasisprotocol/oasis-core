@@ -11,6 +11,7 @@ import (
 
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	"github.com/oasisprotocol/oasis-core/go/common/entity"
+	"github.com/oasisprotocol/oasis-core/go/common/prettyprint"
 	"github.com/oasisprotocol/oasis-core/go/common/quantity"
 	"github.com/oasisprotocol/oasis-core/go/consensus/api/transaction"
 	genesisTestHelpers "github.com/oasisprotocol/oasis-core/go/genesis/tests"
@@ -96,12 +97,12 @@ func contextWithTokenInfo() context.Context {
 	ctx := context.Background()
 	ctx = context.WithValue(
 		ctx,
-		api.PrettyPrinterContextKeyTokenSymbol,
+		prettyprint.ContextKeyTokenSymbol,
 		genesisTestHelpers.TestStakingTokenSymbol,
 	)
 	ctx = context.WithValue(
 		ctx,
-		api.PrettyPrinterContextKeyTokenValueExponent,
+		prettyprint.ContextKeyTokenValueExponent,
 		genesisTestHelpers.TestStakingTokenValueExponent,
 	)
 	return ctx

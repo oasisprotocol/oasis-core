@@ -1,8 +1,14 @@
 package transaction
 
 import (
+	"context"
+	"fmt"
+	"io"
+
 	"github.com/oasisprotocol/oasis-core/go/common/errors"
+	"github.com/oasisprotocol/oasis-core/go/common/prettyprint"
 	"github.com/oasisprotocol/oasis-core/go/common/quantity"
+	"github.com/oasisprotocol/oasis-core/go/staking/api/token"
 )
 
 var (
@@ -12,6 +18,8 @@ var (
 
 	// ErrGasPriceTooLow is the error returned when the gas price is too low.
 	ErrGasPriceTooLow = errors.New(moduleName, 3, "transaction: gas price too low")
+
+	_ prettyprint.PrettyPrinter = (*Fee)(nil)
 )
 
 // Gas is the consensus gas representation.
@@ -24,6 +32,25 @@ type Fee struct {
 	Amount quantity.Quantity `json:"amount"`
 	// Gas is the maximum gas that a transaction can use.
 	Gas Gas `json:"gas"`
+}
+
+// PrettyPrint writes a pretty-printed representation of the fee to the given
+// writer.
+func (f Fee) PrettyPrint(ctx context.Context, prefix string, w io.Writer) {
+	fmt.Fprintf(w, "%sAmount: ", prefix)
+	token.PrettyPrintAmount(ctx, f.Amount, w)
+	fmt.Fprintln(w)
+
+	fmt.Fprintf(w, "%sGas limit: %d\n", prefix, f.Gas)
+	fmt.Fprintf(w, "%s(gas price: ", prefix)
+	token.PrettyPrintAmount(ctx, *f.GasPrice(), w)
+	fmt.Fprintln(w, " per gas unit)")
+}
+
+// PrettyType returns a representation of Fee that can be used for pretty
+// printing.
+func (f Fee) PrettyType() (interface{}, error) {
+	return f, nil
 }
 
 // GasPrice returns the gas price implied by the amount and gas.
