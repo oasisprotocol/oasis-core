@@ -170,6 +170,12 @@ func (p *genericPruner) doPrune(ctx context.Context, latestVersion uint64) error
 		}
 	}
 
+	// Make sure to sync the underlying database before updating what can be discarded. Otherwise
+	// things can be pruned and in case of a crash replay will not be possible.
+	if err := p.ndb.Sync(); err != nil {
+		return fmt.Errorf("failed to sync state database: %w", err)
+	}
+
 	// We can discard everything below the earliest version.
 	p.Lock()
 	p.lastRetainedVersion = p.earliestVersion
