@@ -106,14 +106,6 @@ func (hns *honestNodeStorage) ApplyBatch(ctx context.Context, request *storage.A
 	return hns.client.ApplyBatch(ctx, request)
 }
 
-func (hns *honestNodeStorage) Merge(ctx context.Context, request *storage.MergeRequest) ([]*storage.Receipt, error) {
-	return hns.client.Merge(ctx, request)
-}
-
-func (hns *honestNodeStorage) MergeBatch(ctx context.Context, request *storage.MergeBatchRequest) ([]*storage.Receipt, error) {
-	return hns.client.MergeBatch(ctx, request)
-}
-
 func (hns *honestNodeStorage) GetDiff(ctx context.Context, request *storage.GetDiffRequest) (storage.WriteLogIterator, error) {
 	return hns.client.GetDiff(ctx, request)
 }
@@ -169,26 +161,6 @@ func storageBroadcastApplyBatch(
 		r, err := hns.ApplyBatch(ctx, &storage.ApplyBatchRequest{Namespace: ns, DstRound: dstRound, Ops: ops})
 		if err != nil {
 			return receipts, fmt.Errorf("honest node storage ApplyBatch %s: %w", hns.nodeID, err)
-		}
-
-		receipts = append(receipts, r...)
-	}
-
-	return receipts, nil
-}
-
-func storageBroadcastMergeBatch(
-	ctx context.Context,
-	hnss []*honestNodeStorage,
-	ns common.Namespace,
-	round uint64,
-	ops []storage.MergeOp,
-) ([]*storage.Receipt, error) {
-	var receipts []*storage.Receipt
-	for _, hns := range hnss {
-		r, err := hns.MergeBatch(ctx, &storage.MergeBatchRequest{Namespace: ns, Round: round, Ops: ops})
-		if err != nil {
-			return receipts, fmt.Errorf("honest node storage MergeBatch %s: %w", hns.nodeID, err)
 		}
 
 		receipts = append(receipts, r...)

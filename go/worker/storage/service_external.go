@@ -122,52 +122,6 @@ func (s *storageService) ApplyBatch(ctx context.Context, request *api.ApplyBatch
 	return s.storage.ApplyBatch(ctx, request)
 }
 
-func (s *storageService) Merge(ctx context.Context, request *api.MergeRequest) ([]*api.Receipt, error) {
-	if err := s.ensureInitialized(ctx); err != nil {
-		return nil, err
-	}
-	if s.debugRejectUpdates {
-		return nil, errDebugRejectUpdates
-	}
-
-	// Limit maximum number of roots to merge.
-	cfg, err := s.getConfig(ctx, request.Namespace)
-	if err != nil {
-		return nil, err
-	}
-	if uint64(len(request.Others)) > cfg.MaxMergeRoots {
-		return nil, api.ErrLimitReached
-	}
-
-	return s.storage.Merge(ctx, request)
-}
-
-func (s *storageService) MergeBatch(ctx context.Context, request *api.MergeBatchRequest) ([]*api.Receipt, error) {
-	if err := s.ensureInitialized(ctx); err != nil {
-		return nil, err
-	}
-	if s.debugRejectUpdates {
-		return nil, errDebugRejectUpdates
-	}
-
-	// Limit maximum number of operations in a batch.
-	cfg, err := s.getConfig(ctx, request.Namespace)
-	if err != nil {
-		return nil, err
-	}
-	if uint64(len(request.Ops)) > cfg.MaxMergeOps {
-		return nil, api.ErrLimitReached
-	}
-	// Limit maximum number of roots to merge.
-	for _, op := range request.Ops {
-		if uint64(len(op.Others)) > cfg.MaxMergeRoots {
-			return nil, api.ErrLimitReached
-		}
-	}
-
-	return s.storage.MergeBatch(ctx, request)
-}
-
 func (s *storageService) GetDiff(ctx context.Context, request *api.GetDiffRequest) (api.WriteLogIterator, error) {
 	if err := s.ensureInitialized(ctx); err != nil {
 		return nil, err

@@ -1629,7 +1629,7 @@ func NewTestRuntime(seed []byte, ent *TestEntity, isKeyManager bool) (*TestRunti
 			MinWriteReplication:     3,
 			MaxApplyWriteLogEntries: 100_000,
 			MaxApplyOps:             2,
-			MaxMergeRoots:           8,
+			MaxMergeRoots:           1,
 			MaxMergeOps:             2,
 		},
 		AdmissionPolicy: api.RuntimeAdmissionPolicy{

@@ -6,21 +6,18 @@ import (
 
 	"github.com/oasisprotocol/oasis-core/go/common"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
-	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	"github.com/oasisprotocol/oasis-core/go/common/identity"
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
 	"github.com/oasisprotocol/oasis-core/go/roothash/api/block"
 	"github.com/oasisprotocol/oasis-core/go/roothash/api/commitment"
-	storage "github.com/oasisprotocol/oasis-core/go/storage/api"
 )
 
 type mergeBatchContext struct {
 	currentBlock *block.Block
 	commitments  []*commitment.OpenExecutorCommitment
 
-	storageReceipts []*storage.Receipt
-	newBlock        *block.Block
-	commit          *commitment.MergeCommitment
+	newBlock *block.Block
+	commit   *commitment.MergeCommitment
 }
 
 func newMergeBatchContext() *mergeBatchContext {
@@ -73,7 +70,6 @@ func (mbc *mergeBatchContext) receiveCommitments(ph *p2pHandle, count int) error
 func (mbc *mergeBatchContext) process(ctx context.Context, hnss []*honestNodeStorage) error {
 	collectedCommittees := make(map[hash.Hash]bool)
 	var ioRoots, stateRoots []hash.Hash
-	var messages []*block.Message
 	for _, commitment := range mbc.commitments {
 		if collectedCommittees[commitment.Body.CommitteeID] {
 			continue
@@ -81,41 +77,17 @@ func (mbc *mergeBatchContext) process(ctx context.Context, hnss []*honestNodeSto
 		collectedCommittees[commitment.Body.CommitteeID] = true
 		ioRoots = append(ioRoots, commitment.Body.Header.IORoot)
 		stateRoots = append(stateRoots, commitment.Body.Header.StateRoot)
-		if len(commitment.Body.Header.Messages) > 0 {
-			messages = append(messages, commitment.Body.Header.Messages...)
-		}
 	}
 
-	var emptyRoot hash.Hash
-	emptyRoot.Empty()
-
-	var err error
-	mbc.storageReceipts, err = storageBroadcastMergeBatch(ctx, hnss, mbc.currentBlock.Header.Namespace, mbc.currentBlock.Header.Round, []storage.MergeOp{
-		{
-			Base:   emptyRoot,
-			Others: ioRoots,
-		},
-		{
-			Base:   mbc.currentBlock.Header.StateRoot,
-			Others: stateRoots,
-		},
-	})
-	if err != nil {
-		return fmt.Errorf("storage broadcast merge batch: %w", err)
+	if len(collectedCommittees) != 1 {
+		return fmt.Errorf("multiple committees not supported: %d", len(collectedCommittees))
 	}
-
-	var firstReceiptBody storage.ReceiptBody
-	if err := mbc.storageReceipts[0].Open(&firstReceiptBody); err != nil {
-		return fmt.Errorf("storage receipt Open: %w", err)
-	}
-	var signatures []signature.Signature
-	for _, receipt := range mbc.storageReceipts {
-		signatures = append(signatures, receipt.Signature)
-	}
+	signatures := mbc.commitments[0].Body.StorageSignatures
+	messages := mbc.commitments[0].Body.Header.Messages
 
 	mbc.newBlock = block.NewEmptyBlock(mbc.currentBlock, 0, block.Normal)
-	mbc.newBlock.Header.IORoot = firstReceiptBody.Roots[0]
-	mbc.newBlock.Header.StateRoot = firstReceiptBody.Roots[1]
+	mbc.newBlock.Header.IORoot = ioRoots[0]
+	mbc.newBlock.Header.StateRoot = stateRoots[0]
 	mbc.newBlock.Header.Messages = messages
 	mbc.newBlock.Header.StorageSignatures = signatures
 

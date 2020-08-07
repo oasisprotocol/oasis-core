@@ -33,62 +33,6 @@ func (rc *RootCache) GetTree(ctx context.Context, root Root) (mkvs.Tree, error) 
 	return mkvs.NewWithRoot(rc.remoteSyncer, rc.localDB, root, rc.persistEverything), nil
 }
 
-// Merge performs a 3-way merge operation between the specified roots and returns
-// a receipt for the merged root.
-func (rc *RootCache) Merge(
-	ctx context.Context,
-	ns common.Namespace,
-	version uint64,
-	base hash.Hash,
-	others []hash.Hash,
-) (*hash.Hash, error) {
-	if len(others) == 0 {
-		// No other roots passed, no reason to call the operation.
-		return nil, ErrNoMergeRoots
-	}
-
-	// Make sure that all roots exist in storage before doing any work.
-	if !rc.localDB.HasRoot(Root{Namespace: ns, Version: version, Hash: base}) {
-		return nil, ErrRootNotFound
-	}
-	for _, rootHash := range others {
-		if !rc.localDB.HasRoot(Root{Namespace: ns, Version: version + 1, Hash: rootHash}) {
-			return nil, ErrRootNotFound
-		}
-	}
-
-	if len(others) == 1 {
-		// Fast path: nothing to merge, just return the only root.
-		return &others[0], nil
-	}
-
-	// Start with the first root.
-	// TODO: WithStorageProof.
-	tree := mkvs.NewWithRoot(nil, rc.localDB, Root{Namespace: ns, Version: version + 1, Hash: others[0]})
-	defer tree.Close()
-
-	// Apply operations from all roots.
-	baseRoot := Root{Namespace: ns, Version: version, Hash: base}
-	for _, rootHash := range others[1:] {
-		it, err := rc.localDB.GetWriteLog(ctx, baseRoot, Root{Namespace: ns, Version: version + 1, Hash: rootHash})
-		if err != nil {
-			return nil, fmt.Errorf("storage/rootcache: failed to read write log: %w", err)
-		}
-
-		if err = tree.ApplyWriteLog(ctx, it); err != nil {
-			return nil, fmt.Errorf("storage/rootcache: failed to apply write log: %w", err)
-		}
-	}
-
-	var mergedRoot hash.Hash
-	var err error
-	if _, mergedRoot, err = tree.Commit(ctx, ns, version+1); err != nil {
-		return nil, fmt.Errorf("storage/rootcache: failed to commit write log: %w", err)
-	}
-
-	return &mergedRoot, nil
-}
-
 // Apply applies the write log, bypassing the apply operation iff the new root
 // already is in the node database.
 func (rc *RootCache) Apply(

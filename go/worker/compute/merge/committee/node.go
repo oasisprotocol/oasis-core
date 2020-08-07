@@ -22,8 +22,6 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/roothash/api/block"
 	"github.com/oasisprotocol/oasis-core/go/roothash/api/commitment"
 	runtimeCommittee "github.com/oasisprotocol/oasis-core/go/runtime/committee"
-	scheduler "github.com/oasisprotocol/oasis-core/go/scheduler/api"
-	storage "github.com/oasisprotocol/oasis-core/go/storage/api"
 	workerCommon "github.com/oasisprotocol/oasis-core/go/worker/common"
 	"github.com/oasisprotocol/oasis-core/go/worker/common/committee"
 	"github.com/oasisprotocol/oasis-core/go/worker/common/p2p"
@@ -432,7 +430,7 @@ func (n *Node) tryFinalizeResultsLocked(pool *commitment.Pool, didTimeout bool) 
 
 	n.logger.Info("have valid commitments from all committees, merging")
 
-	commitments := state.pool.GetExecutorCommitments()
+	commitments := state.pool.GetOpenExecutorCommitments()
 
 	if epoch.IsMergeBackupWorker() && state.pendingEvent == nil {
 		// Backup workers only perform merge after receiving a discrepancy event.
@@ -445,11 +443,9 @@ func (n *Node) tryFinalizeResultsLocked(pool *commitment.Pool, didTimeout bool) 
 }
 
 // Guarded by n.commonNode.CrossNode.
-func (n *Node) startMergeLocked(commitments []commitment.ExecutorCommitment, results []*commitment.ComputeResultsHeader) {
+func (n *Node) startMergeLocked(commitments []commitment.OpenExecutorCommitment, results []*commitment.ComputeResultsHeader) {
 	doneCh := make(chan *commitment.MergeBody, 1)
 	ctx, cancel := context.WithCancel(n.roundCtx)
-
-	epoch := n.commonNode.Group.GetEpochSnapshot()
 
 	// Create empty block based on previous block while we hold the lock.
 	prevBlk := n.commonNode.CurrentBlock
@@ -466,102 +462,38 @@ func (n *Node) startMergeLocked(commitments []commitment.ExecutorCommitment, res
 		ctx, cancel = context.WithTimeout(ctx, n.commonCfg.StorageCommitTimeout)
 		defer cancel()
 
-		var ioRoots, stateRoots []hash.Hash
-		var messages []*block.Message
-		for _, result := range results {
-			ioRoots = append(ioRoots, result.IORoot)
-			stateRoots = append(stateRoots, result.StateRoot)
+		var mergeBody commitment.MergeBody
+		switch len(results) {
+		case 1:
+			// Optimize the case where there is only a single committee -- there is nothing to merge
+			// so we can avoid a round trip to the storage nodes which already have the roots.
+			blk.Header.Messages = results[0].Messages
+			blk.Header.IORoot = results[0].IORoot
+			blk.Header.StateRoot = results[0].StateRoot
 
-			// Merge roothash messages.
-			// The rule is that at most one result can have sent roothash messages.
-			if len(result.Messages) > 0 {
-				if messages != nil {
-					n.logger.Error("multiple committees sent roothash messages")
-					return
+			// Collect all distinct storage signatures.
+			storageSigSet := make(map[signature.PublicKey]bool)
+			for _, ec := range commitments {
+				mergeBody.ExecutorCommits = append(mergeBody.ExecutorCommits, ec.ExecutorCommitment)
+
+				for _, s := range ec.Body.StorageSignatures {
+					if storageSigSet[s.PublicKey] {
+						continue
+					}
+					storageSigSet[s.PublicKey] = true
+					blk.Header.StorageSignatures = append(blk.Header.StorageSignatures, s)
 				}
-				messages = result.Messages
 			}
-		}
 
-		var emptyRoot hash.Hash
-		emptyRoot.Empty()
-
-		// NOTE: Order is important for verifying the receipt.
-		mergeOps := []storage.MergeOp{
-			// I/O root.
-			{
-				Base:   emptyRoot,
-				Others: ioRoots,
-			},
-			// State root.
-			{
-				Base:   prevBlk.Header.StateRoot,
-				Others: stateRoots,
-			},
-		}
-
-		receipts, err := n.commonNode.Storage.MergeBatch(ctx, &storage.MergeBatchRequest{
-			Namespace: prevBlk.Header.Namespace,
-			Round:     prevBlk.Header.Round,
-			Ops:       mergeOps,
-		})
-		if err != nil {
-			n.logger.Error("failed to merge",
-				"err", err,
-			)
+			mergeBody.Header = blk.Header
+		default:
+			// Multiple committees, we need to perform a storage merge operation.
+			n.logger.Error("merge from multiple committees not supported")
 			return
 		}
 
-		signatures := []signature.Signature{}
-		for idx, receipt := range receipts {
-			var receiptBody storage.ReceiptBody
-			if err = receipt.Open(&receiptBody); err != nil {
-				n.logger.Error("failed to open receipt",
-					"receipt", receipt,
-					"err", err,
-				)
-				return
-			}
-
-			// Make sure that all merged roots from all storage nodes are the same.
-			ioRoot := receiptBody.Roots[0]
-			stateRoot := receiptBody.Roots[1]
-			if idx == 0 {
-				blk.Header.IORoot = ioRoot
-				blk.Header.StateRoot = stateRoot
-			} else if !blk.Header.IORoot.Equal(&ioRoot) || !blk.Header.StateRoot.Equal(&stateRoot) {
-				n.logger.Error("storage nodes returned different merge roots",
-					"first_io_root", blk.Header.IORoot,
-					"io_root", ioRoot,
-					"first_state_root", blk.Header.StateRoot,
-					"state_root", stateRoot,
-				)
-				inconsistentMergeRootCount.With(n.getMetricLabels()).Inc()
-				return
-			}
-
-			if err = blk.Header.VerifyStorageReceipt(&receiptBody); err != nil {
-				n.logger.Error("failed to validate receipt body",
-					"receipt body", receiptBody,
-					"err", err,
-				)
-				return
-			}
-			signatures = append(signatures, receipt.Signature)
-		}
-		if err := epoch.VerifyCommitteeSignatures(scheduler.KindStorage, signatures); err != nil {
-			n.logger.Error("failed to validate receipt signer",
-				"err", err,
-			)
-			return
-		}
-		blk.Header.Messages = messages
-		blk.Header.StorageSignatures = signatures
-
-		doneCh <- &commitment.MergeBody{
-			ExecutorCommits: commitments,
-			Header:          blk.Header,
-		}
+		// Submit the merge result.
+		doneCh <- &mergeBody
 	}()
 }
 

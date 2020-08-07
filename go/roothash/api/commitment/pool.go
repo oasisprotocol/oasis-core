@@ -764,10 +764,10 @@ func (m *MultiPool) CheckEnoughCommitments() error {
 }
 
 // GetExecutorCommitments returns a list of executor commitments in the pool.
-func (m *MultiPool) GetExecutorCommitments() (result []ExecutorCommitment) {
+func (m *MultiPool) GetOpenExecutorCommitments() (result []OpenExecutorCommitment) {
 	for _, p := range m.Committees {
 		for _, c := range p.ExecuteCommitments {
-			result = append(result, c.ExecutorCommitment)
+			result = append(result, c)
 		}
 	}
 	return

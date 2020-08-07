@@ -68,7 +68,7 @@ func getRuntime(entityID signature.PublicKey, id common.Namespace) *registry.Run
 			MinWriteReplication:     1,
 			MaxApplyWriteLogEntries: 100_000,
 			MaxApplyOps:             2,
-			MaxMergeRoots:           8,
+			MaxMergeRoots:           1,
 			MaxMergeOps:             2,
 		},
 		AdmissionPolicy: registry.RuntimeAdmissionPolicy{
