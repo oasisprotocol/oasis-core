@@ -2,6 +2,7 @@
 
 ## Changelog
 
+- 2020-08-06: Added consequence for state checkpoints
 - 2020-07-28: Initial version
 
 ## Status
@@ -67,6 +68,10 @@ common use cases.
 
 - Since we are simply hashing all the roots together, all of them need to be
   included in the signed headers returned to light clients.
+
+### Neutral
+
+- Consensus state checkpoints will need to contain data for multiple roots.
 
 ## References
 
