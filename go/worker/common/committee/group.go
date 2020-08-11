@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"sync"
+	"time"
 
 	"github.com/opentracing/opentracing-go"
 	opentracingExt "github.com/opentracing/opentracing-go/ext"
@@ -23,11 +24,16 @@ import (
 	p2pError "github.com/oasisprotocol/oasis-core/go/worker/common/p2p/error"
 )
 
+// peerMessageProcessTimeout is the maximum time that peer message processing can take.
+const peerMessageProcessTimeout = 10 * time.Second
+
 // MessageHandler handles messages from other nodes.
 type MessageHandler interface {
-	// HandlePeerMessage handles a message.
+	// HandlePeerMessage handles a message that has already been authenticated to come from a
+	// registered node.
 	//
-	// The message has already been authenticated to come from a registered node.
+	// The provided context is short-lived so if the handler needs to perform additional work, that
+	// should be dispatched to a separate goroutine and not block delivery.
 	HandlePeerMessage(ctx context.Context, msg *p2p.Message) error
 }
 
@@ -422,7 +428,7 @@ func (g *Group) AuthenticatePeer(peerID signature.PublicKey, msg *p2p.Message) e
 func (g *Group) HandlePeerMessage(unusedPeerID signature.PublicKey, msg *p2p.Message) error {
 	// Perform some checks on the incoming message. We make sure to release the
 	// lock before running the handler.
-	ctx, err := func() (context.Context, error) {
+	err := func() error {
 		g.RLock()
 		defer g.RUnlock()
 
@@ -432,17 +438,20 @@ func (g *Group) HandlePeerMessage(unusedPeerID signature.PublicKey, msg *p2p.Mes
 		switch {
 		case msg.GroupVersion < g.activeEpoch.groupVersion:
 			// Stale messages will never become valid.
-			return nil, p2pError.Permanent(fmt.Errorf("group version in the past"))
+			return p2pError.Permanent(fmt.Errorf("group version in the past"))
 		case msg.GroupVersion > g.activeEpoch.groupVersion:
 			// Messages from the future may eventually become valid.
-			return nil, fmt.Errorf("group version from the future")
+			return fmt.Errorf("group version from the future")
 		}
 
-		return g.activeEpoch.roundCtx, nil
+		return nil
 	}()
 	if err != nil {
 		return err
 	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), peerMessageProcessTimeout)
+	defer cancel()
 
 	// Import SpanContext from the message and store it in the current Context.
 	if msg.SpanContext != nil {
