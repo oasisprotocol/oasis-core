@@ -87,7 +87,7 @@ func (r *Drbg) generate(requestedNumberOfBytes int, additionalInput []byte) ([]b
 
 	// 2. If additional_input != Null, then (Key, V) = HMAC_DRBG_Update
 	// (additional_input, Key, V).
-	if additionalInput != nil {
+	if len(additionalInput) != 0 {
 		r.update(additionalInput)
 	}
 
@@ -130,7 +130,7 @@ func (r *Drbg) update(providedData []byte) {
 	v := updateV(r.hash, k, r.v)
 
 	// 3. If (provided_data = Null), then return K and V.
-	if providedData == nil {
+	if len(providedData) == 0 {
 		r.v, r.k = v, k
 		return
 	}
