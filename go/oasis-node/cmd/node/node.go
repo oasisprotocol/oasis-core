@@ -58,7 +58,6 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/worker/common/p2p"
 	"github.com/oasisprotocol/oasis-core/go/worker/compute"
 	"github.com/oasisprotocol/oasis-core/go/worker/compute/executor"
-	"github.com/oasisprotocol/oasis-core/go/worker/compute/merge"
 	"github.com/oasisprotocol/oasis-core/go/worker/compute/txnscheduler"
 	workerConsensusRPC "github.com/oasisprotocol/oasis-core/go/worker/consensusrpc"
 	workerKeymanager "github.com/oasisprotocol/oasis-core/go/worker/keymanager"
@@ -120,7 +119,6 @@ type Node struct {
 	ExecutorWorker             *executor.Worker
 	StorageWorker              *workerStorage.Worker
 	TransactionSchedulerWorker *txnscheduler.Worker
-	MergeWorker                *merge.Worker
 	SentryWorker               *workerSentry.Worker
 	P2P                        *p2p.P2P
 	RegistrationWorker         *registration.Worker
@@ -182,11 +180,6 @@ func (n *Node) waitReady(logger *logging.Logger) {
 	// Wait for transaction scheduler.
 	if n.TransactionSchedulerWorker.Enabled() {
 		<-n.TransactionSchedulerWorker.Initialized()
-	}
-
-	// Wait for the merge worker.
-	if n.MergeWorker.Enabled() {
-		<-n.MergeWorker.Initialized()
 	}
 
 	// Wait for the common worker.
@@ -292,8 +285,7 @@ func (n *Node) initRuntimeWorkers() error {
 	// immediately when created, make sure that we don't start it if it is not
 	// needed.
 	//
-	// Currently, only executor, txn scheduler and merge workers need P2P
-	// transport.
+	// Currently, only executor and txn scheduler workers need P2P transport.
 	if compute.Enabled() {
 		p2pCtx, p2pSvc := service.NewContextCleanup(context.Background())
 		if genesisDoc.Registry.Parameters.DebugAllowUnroutableAddresses {
@@ -389,21 +381,10 @@ func (n *Node) initRuntimeWorkers() error {
 	}
 	n.svcMgr.Register(n.StorageWorker)
 
-	// Initialize the merge worker.
-	n.MergeWorker, err = merge.New(
-		n.CommonWorker,
-		n.RegistrationWorker,
-	)
-	if err != nil {
-		return err
-	}
-	n.svcMgr.Register(n.MergeWorker)
-
 	// Initialize the executor worker.
 	n.ExecutorWorker, err = executor.New(
 		dataDir,
 		n.CommonWorker,
-		n.MergeWorker,
 		n.RegistrationWorker,
 	)
 	if err != nil {
@@ -458,11 +439,6 @@ func (n *Node) startRuntimeWorkers(logger *logging.Logger) error {
 		return err
 	}
 
-	// Start the merge worker.
-	if err := n.MergeWorker.Start(); err != nil {
-		return err
-	}
-
 	// Start the common worker.
 	if err := n.CommonWorker.Start(); err != nil {
 		return err
@@ -491,7 +467,6 @@ func (n *Node) startRuntimeWorkers(logger *logging.Logger) error {
 	// Only start the external gRPC server if any workers are enabled.
 	if n.StorageWorker.Enabled() ||
 		n.TransactionSchedulerWorker.Enabled() ||
-		n.MergeWorker.Enabled() ||
 		n.KeymanagerWorker.Enabled() ||
 		n.ConsensusWorker.Enabled() {
 		if err := n.CommonWorker.Grpc.Start(); err != nil {

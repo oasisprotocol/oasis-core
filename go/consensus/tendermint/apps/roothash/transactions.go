@@ -122,78 +122,9 @@ func (app *rootHashApplication) executorCommit(
 		return err
 	}
 
-	pools := make(map[*commitment.Pool]bool)
 	for _, commit := range cc.Commits {
-		var pool *commitment.Pool
-		if pool, err = rtState.Round.AddExecutorCommitment(ctx, &commit, sv, nl); err != nil { // nolint: gosec
+		if err = rtState.Round.AddExecutorCommitment(ctx, &commit, sv, nl); err != nil { // nolint: gosec
 			ctx.Logger().Error("failed to add compute commitment to round",
-				"err", err,
-				"round", rtState.CurrentBlock.Header.Round,
-			)
-			return err
-		}
-
-		pools[pool] = true
-	}
-
-	// Try to finalize compute rounds.
-	for pool := range pools {
-		app.tryFinalizeExecute(ctx, rtState, pool, false)
-	}
-
-	// Update runtime state.
-	if err = state.SetRuntimeState(ctx, rtState); err != nil {
-		return fmt.Errorf("failed to set runtime state: %w", err)
-	}
-
-	// Emit events for all accepted commits.
-	for _, commit := range cc.Commits {
-		evV := ValueExecutorCommitted{
-			ID: cc.ID,
-			Event: roothash.ExecutorCommittedEvent{
-				Commit: commit,
-			},
-		}
-		ctx.EmitEvent(
-			tmapi.NewEventBuilder(app.Name()).
-				Attribute(KeyExecutorCommitted, cbor.Marshal(evV)).
-				Attribute(KeyRuntimeID, ValueRuntimeID(cc.ID)),
-		)
-	}
-
-	return nil
-}
-
-func (app *rootHashApplication) mergeCommit(
-	ctx *abciAPI.Context,
-	state *roothashState.MutableState,
-	mc *roothash.MergeCommit,
-) (err error) {
-	if ctx.IsCheckOnly() {
-		return nil
-	}
-
-	// Charge gas for this transaction.
-	params, err := state.ConsensusParameters(ctx)
-	if err != nil {
-		ctx.Logger().Error("MergeCommit: failed to fetch consensus parameters",
-			"err", err,
-		)
-		return err
-	}
-	if err = ctx.Gas().UseGas(1, roothash.GasOpMergeCommit, params.GasCosts); err != nil {
-		return err
-	}
-
-	rtState, sv, nl, err := app.getRuntimeState(ctx, state, mc.ID)
-	if err != nil {
-		return err
-	}
-
-	// Add commitments.
-	for _, commit := range mc.Commits {
-		if err = rtState.Round.AddMergeCommitment(ctx, &commit, sv, nl); err != nil { // nolint: gosec
-			ctx.Logger().Error("failed to add merge commitment to round",
 				"err", err,
 				"round", rtState.CurrentBlock.Header.Round,
 			)
@@ -215,17 +146,17 @@ func (app *rootHashApplication) mergeCommit(
 	}
 
 	// Emit events for all accepted commits.
-	for _, commit := range mc.Commits {
-		evV := ValueMergeCommitted{
-			ID: mc.ID,
-			Event: roothash.MergeCommittedEvent{
+	for _, commit := range cc.Commits {
+		evV := ValueExecutorCommitted{
+			ID: cc.ID,
+			Event: roothash.ExecutorCommittedEvent{
 				Commit: commit,
 			},
 		}
 		ctx.EmitEvent(
 			tmapi.NewEventBuilder(app.Name()).
-				Attribute(KeyMergeCommitted, cbor.Marshal(evV)).
-				Attribute(KeyRuntimeID, ValueRuntimeID(mc.ID)),
+				Attribute(KeyExecutorCommitted, cbor.Marshal(evV)).
+				Attribute(KeyRuntimeID, ValueRuntimeID(cc.ID)),
 		)
 	}
 

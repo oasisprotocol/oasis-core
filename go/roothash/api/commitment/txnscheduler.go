@@ -16,9 +16,6 @@ var TxnSchedulerBatchSigCtx = signature.NewContext("oasis-core/roothash: tx batc
 // Don't forget to bump CommitteeProtocol version in go/common/version
 // if you change anything in this struct.
 type TxnSchedulerBatch struct {
-	// CommitteeID is the committee ID of the target executor committee.
-	CommitteeID hash.Hash `json:"cid"`
-
 	// IORoot is the I/O root containing the inputs (transactions) that
 	// the executor node should use.
 	IORoot hash.Hash `json:"io_root"`

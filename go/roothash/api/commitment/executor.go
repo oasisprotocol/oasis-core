@@ -32,6 +32,7 @@ var (
 //
 // Keep the roothash RAK validation in sync with changes to this structure.
 type ComputeResultsHeader struct {
+	Round        uint64           `json:"round"`
 	PreviousHash hash.Hash        `json:"previous_hash"`
 	IORoot       hash.Hash        `json:"io_root"`
 	StateRoot    hash.Hash        `json:"state_root"`
@@ -40,6 +41,10 @@ type ComputeResultsHeader struct {
 
 // IsParentOf returns true iff the header is the parent of a child header.
 func (h *ComputeResultsHeader) IsParentOf(child *block.Header) bool {
+	if h.Round != child.Round+1 {
+		return false
+	}
+
 	childHash := child.EncodedHash()
 	return h.PreviousHash.Equal(&childHash)
 }
@@ -51,7 +56,6 @@ func (h *ComputeResultsHeader) EncodedHash() hash.Hash {
 
 // ComputeBody holds the data signed in a compute worker commitment.
 type ComputeBody struct {
-	CommitteeID       hash.Hash              `json:"cid"`
 	Header            ComputeResultsHeader   `json:"header"`
 	StorageSignatures []signature.Signature  `json:"storage_signatures"`
 	RakSig            signature.RawSignature `json:"rak_sig"`
@@ -66,7 +70,6 @@ type ComputeBody struct {
 // matches what we're seeing.
 func (m *ComputeBody) VerifyTxnSchedSignature(header block.Header) bool {
 	dispatch := &TxnSchedulerBatch{
-		CommitteeID:       m.CommitteeID,
 		IORoot:            m.InputRoot,
 		StorageSignatures: m.InputStorageSigs,
 		Header:            header,
@@ -89,11 +92,11 @@ func (m *ComputeBody) RootsForStorageReceipt() []hash.Hash {
 //
 // Note: Ensuring that the signature is signed by the keypair(s) that are
 // expected is the responsibility of the caller.
-func (m *ComputeBody) VerifyStorageReceiptSignatures(ns common.Namespace, round uint64) error {
+func (m *ComputeBody) VerifyStorageReceiptSignatures(ns common.Namespace) error {
 	receiptBody := storage.ReceiptBody{
 		Version:   1,
 		Namespace: ns,
-		Round:     round,
+		Round:     m.Header.Round,
 		Roots:     m.RootsForStorageReceipt(),
 	}
 
@@ -106,12 +109,12 @@ func (m *ComputeBody) VerifyStorageReceiptSignatures(ns common.Namespace, round 
 
 // VerifyStorageReceipt validates that the provided storage receipt
 // matches the header.
-func (m *ComputeBody) VerifyStorageReceipt(ns common.Namespace, round uint64, receipt *storage.ReceiptBody) error {
+func (m *ComputeBody) VerifyStorageReceipt(ns common.Namespace, receipt *storage.ReceiptBody) error {
 	if !receipt.Namespace.Equal(&ns) {
 		return errors.New("roothash: receipt has unexpected namespace")
 	}
 
-	if receipt.Round != round {
+	if receipt.Round != m.Header.Round {
 		return errors.New("roothash: receipt has unexpected round")
 	}
 

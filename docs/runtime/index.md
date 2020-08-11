@@ -128,7 +128,6 @@ roles (it can have multiple roles at once):
 
 * Transaction scheduler.
 * Executor node (primary or backup).
-* Merge node (primary or backup).
 
 Subject to runtime configuration, each committee can contain multiple nodes of
 the same kind (e.g., multiple executor nodes). Some are considered _primary_

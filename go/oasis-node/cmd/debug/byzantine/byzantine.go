@@ -8,7 +8,6 @@ import (
 	flag "github.com/spf13/pflag"
 	"github.com/spf13/viper"
 
-	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
 	"github.com/oasisprotocol/oasis-core/go/common/node"
@@ -19,7 +18,6 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/flags"
 	"github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/grpc"
 	"github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/metrics"
-	"github.com/oasisprotocol/oasis-core/go/roothash/api/commitment"
 	"github.com/oasisprotocol/oasis-core/go/runtime/transaction"
 	scheduler "github.com/oasisprotocol/oasis-core/go/scheduler/api"
 	"github.com/oasisprotocol/oasis-core/go/worker/common/p2p"
@@ -56,21 +54,6 @@ var (
 		Use:   "executor-straggler",
 		Short: "act as an executor worker that registers and doesn't do any work",
 		Run:   doExecutorStraggler,
-	}
-	mergeHonestCmd = &cobra.Command{
-		Use:   "merge-honest",
-		Short: "act as an honest merge worker",
-		Run:   doMergeHonest,
-	}
-	mergeWrongCmd = &cobra.Command{
-		Use:   "merge-wrong",
-		Short: "act as a merge worker that commits wrong result",
-		Run:   doMergeWrong,
-	}
-	mergeStragglerCmd = &cobra.Command{
-		Use:   "merge-straggler",
-		Short: "act as a merge worker that registers and doesn't do any work",
-		Run:   doMergeStraggler,
 	}
 )
 
@@ -150,13 +133,6 @@ func doExecutorHonest(cmd *cobra.Command, args []string) {
 	if err = schedulerCheckNotScheduled(transactionSchedulerCommittee, defaultIdentity.NodeSigner.Public()); err != nil {
 		panic(fmt.Sprintf("scheduler check not scheduled txnscheduler failed: %+v", err))
 	}
-	mergeCommittee, err := schedulerGetCommittee(ht, electionHeight, scheduler.KindComputeMerge, defaultRuntimeID)
-	if err != nil {
-		panic(fmt.Sprintf("scheduler get committee %s failed: %+v", scheduler.KindComputeMerge, err))
-	}
-	if err = schedulerCheckNotScheduled(mergeCommittee, defaultIdentity.NodeSigner.Public()); err != nil {
-		panic(fmt.Sprintf("scheduler check not scheduled merge failed: %+v", err))
-	}
 
 	logger.Debug("executor honest: connecting to storage committee")
 	hnss, err := storageConnectToCommittee(ht, electionHeight, storageCommittee, scheduler.Worker, defaultIdentity)
@@ -208,8 +184,8 @@ func doExecutorHonest(cmd *cobra.Command, args []string) {
 		panic(fmt.Sprintf("compute create commitment failed: %+v", err))
 	}
 
-	if err = cbc.publishToCommittee(ht, electionHeight, mergeCommittee, scheduler.Worker, ph, defaultRuntimeID, electionHeight); err != nil {
-		panic(fmt.Sprintf("compute publish to committee merge worker failed: %+v", err))
+	if err = cbc.publishToChain(ht.service, defaultIdentity, defaultRuntimeID); err != nil {
+		panic(fmt.Sprintf("compute publish to chain failed: %+v", err))
 	}
 	logger.Debug("executor honest: commitment sent")
 }
@@ -283,13 +259,6 @@ func doExecutorWrong(cmd *cobra.Command, args []string) {
 	if err = schedulerCheckNotScheduled(transactionSchedulerCommittee, defaultIdentity.NodeSigner.Public()); err != nil {
 		panic(fmt.Sprintf("scheduler check not scheduled txnscheduler failed: %+v", err))
 	}
-	mergeCommittee, err := schedulerGetCommittee(ht, electionHeight, scheduler.KindComputeMerge, defaultRuntimeID)
-	if err != nil {
-		panic(fmt.Sprintf("scheduler get committee %s failed: %+v", scheduler.KindComputeMerge, err))
-	}
-	if err = schedulerCheckNotScheduled(mergeCommittee, defaultIdentity.NodeSigner.Public()); err != nil {
-		panic(fmt.Sprintf("scheduler check not scheduled merge failed: %+v", err))
-	}
 
 	logger.Debug("executor honest: connecting to storage committee")
 	hnss, err := storageConnectToCommittee(ht, electionHeight, storageCommittee, scheduler.Worker, defaultIdentity)
@@ -341,8 +310,8 @@ func doExecutorWrong(cmd *cobra.Command, args []string) {
 		panic(fmt.Sprintf("compute create commitment failed: %+v", err))
 	}
 
-	if err = cbc.publishToCommittee(ht, electionHeight, mergeCommittee, scheduler.Worker, ph, defaultRuntimeID, electionHeight); err != nil {
-		panic(fmt.Sprintf("compute publish to committee merge worker failed: %+v", err))
+	if err = cbc.publishToChain(ht.service, defaultIdentity, defaultRuntimeID); err != nil {
+		panic(fmt.Sprintf("compute publish to chain failed: %+v", err))
 	}
 	logger.Debug("executor wrong: commitment sent")
 }
@@ -411,13 +380,6 @@ func doExecutorStraggler(cmd *cobra.Command, args []string) {
 	if err = schedulerCheckNotScheduled(transactionSchedulerCommittee, defaultIdentity.NodeSigner.Public()); err != nil {
 		panic(fmt.Sprintf("scheduler check not scheduled txnscheduler failed: %+v", err))
 	}
-	mergeCommittee, err := schedulerGetCommittee(ht, electionHeight, scheduler.KindComputeMerge, defaultRuntimeID)
-	if err != nil {
-		panic(fmt.Sprintf("scheduler get committee %s failed: %+v", scheduler.KindComputeMerge, err))
-	}
-	if err = schedulerCheckNotScheduled(mergeCommittee, defaultIdentity.NodeSigner.Public()); err != nil {
-		panic(fmt.Sprintf("scheduler check not scheduled merge failed: %+v", err))
-	}
 
 	cbc := newComputeBatchContext()
 
@@ -429,333 +391,11 @@ func doExecutorStraggler(cmd *cobra.Command, args []string) {
 	logger.Debug("executor straggler: bailing")
 }
 
-func doMergeHonest(cmd *cobra.Command, args []string) {
-	if err := common.Init(); err != nil {
-		common.EarlyLogAndExit(err)
-	}
-
-	defaultIdentity, err := initDefaultIdentity(common.DataDir())
-	if err != nil {
-		panic(fmt.Sprintf("init default identity failed: %+v", err))
-	}
-
-	ht := newHonestTendermint()
-	if err = ht.start(defaultIdentity, common.DataDir()); err != nil {
-		panic(fmt.Sprintf("honest Tendermint start failed: %+v", err))
-	}
-	defer func() {
-		if err1 := ht.stop(); err1 != nil {
-			panic(fmt.Sprintf("honest Tendermint stop failed: %+v", err1))
-		}
-	}()
-
-	ph := newP2PHandle()
-	if err = ph.start(ht, defaultIdentity, defaultRuntimeID); err != nil {
-		panic(fmt.Sprintf("P2P start failed: %+v", err))
-	}
-	defer func() {
-		if err1 := ph.stop(); err1 != nil {
-			panic(fmt.Sprintf("P2P stop failed: %+v", err1))
-		}
-	}()
-
-	activationEpoch := epochtime.EpochTime(viper.GetUint64(CfgActivationEpoch))
-	if err = epochtimeWaitForEpoch(ht.service, activationEpoch); err != nil {
-		panic(fmt.Sprintf("epochtimeWaitForEpoch: %+v", err))
-	}
-
-	if err = registryRegisterNode(ht.service, defaultIdentity, common.DataDir(), fakeAddresses, ph.service.Addresses(), defaultRuntimeID, nil, node.RoleComputeWorker); err != nil {
-		panic(fmt.Sprintf("registryRegisterNode: %+v", err))
-	}
-
-	electionHeight, err := schedulerNextElectionHeight(ht.service, activationEpoch+1)
-	if err != nil {
-		panic(fmt.Sprintf("scheduler next election height failed: %+v", err))
-	}
-	mergeCommittee, err := schedulerGetCommittee(ht, electionHeight, scheduler.KindComputeMerge, defaultRuntimeID)
-	if err != nil {
-		panic(fmt.Sprintf("scheduler get committee %s at height %d failed: %+v", scheduler.KindComputeMerge, electionHeight, err))
-	}
-	if err = schedulerCheckScheduled(mergeCommittee, defaultIdentity.NodeSigner.Public(), scheduler.Worker); err != nil {
-		panic(fmt.Sprintf("scheduler check scheduled failed: %+v", err))
-	}
-	logger.Debug("merge honest: merge schedule ok")
-	executorCommittee, err := schedulerGetCommittee(ht, electionHeight, scheduler.KindComputeExecutor, defaultRuntimeID)
-	if err != nil {
-		panic(fmt.Sprintf("scheduler get committee %s failed: %+v", scheduler.KindComputeExecutor, err))
-	}
-	if err = schedulerCheckNotScheduled(executorCommittee, defaultIdentity.NodeSigner.Public()); err != nil {
-		panic(fmt.Sprintf("scheduler check not scheduled executor failed: %+v", err))
-	}
-	storageCommittee, err := schedulerGetCommittee(ht, electionHeight, scheduler.KindStorage, defaultRuntimeID)
-	if err != nil {
-		panic(fmt.Sprintf("scheduler get committee %s failed: %+v", scheduler.KindStorage, err))
-	}
-	transactionSchedulerCommittee, err := schedulerGetCommittee(ht, electionHeight, scheduler.KindComputeTxnScheduler, defaultRuntimeID)
-	if err != nil {
-		panic(fmt.Sprintf("scheduler get committee %s failed: %+v", scheduler.KindComputeTxnScheduler, err))
-	}
-	if err = schedulerCheckNotScheduled(transactionSchedulerCommittee, defaultIdentity.NodeSigner.Public()); err != nil {
-		panic(fmt.Sprintf("scheduler check not scheduled txnscheduler failed: %+v", err))
-	}
-
-	logger.Debug("merge honest: connecting to storage committee")
-	hnss, err := storageConnectToCommittee(ht, electionHeight, storageCommittee, scheduler.Worker, defaultIdentity)
-	if err != nil {
-		panic(fmt.Sprintf("storage connect to committee failed: %+v", err))
-	}
-	defer storageBroadcastCleanup(hnss)
-
-	mbc := newMergeBatchContext()
-
-	if err = mbc.loadCurrentBlock(ht, defaultRuntimeID); err != nil {
-		panic(fmt.Sprintf("merge load current block failed: %+v", err))
-	}
-
-	// Receive 1 committee * 2 commitments per committee.
-	if err = mbc.receiveCommitments(ph, 2); err != nil {
-		panic(fmt.Sprintf("merge receive commitments failed: %+v", err))
-	}
-	logger.Debug("merge honest: received commitments", "commitments", mbc.commitments)
-
-	ctx := context.Background()
-
-	// Process merge honestly.
-	if err = mbc.process(ctx, hnss); err != nil {
-		panic(fmt.Sprintf("merge process failed: %+v", err))
-	}
-	logger.Debug("merge honest: processed",
-		"new_block", mbc.newBlock,
-	)
-
-	if err = mbc.createCommitment(defaultIdentity); err != nil {
-		panic(fmt.Sprintf("merge create commitment failed: %+v", err))
-	}
-
-	if err = mbc.publishToChain(ht.service, defaultIdentity, defaultRuntimeID); err != nil {
-		panic(fmt.Sprintf("merge publish to chain failed: %+v", err))
-	}
-	logger.Debug("merge honest: commitment sent")
-}
-
-func doMergeWrong(cmd *cobra.Command, args []string) {
-	if err := common.Init(); err != nil {
-		common.EarlyLogAndExit(err)
-	}
-
-	defaultIdentity, err := initDefaultIdentity(common.DataDir())
-	if err != nil {
-		panic(fmt.Sprintf("init default identity failed: %+v", err))
-	}
-
-	ht := newHonestTendermint()
-	if err = ht.start(defaultIdentity, common.DataDir()); err != nil {
-		panic(fmt.Sprintf("honest Tendermint start failed: %+v", err))
-	}
-	defer func() {
-		if err1 := ht.stop(); err1 != nil {
-			panic(fmt.Sprintf("honest Tendermint stop failed: %+v", err1))
-		}
-	}()
-
-	ph := newP2PHandle()
-	if err = ph.start(ht, defaultIdentity, defaultRuntimeID); err != nil {
-		panic(fmt.Sprintf("P2P start failed: %+v", err))
-	}
-	defer func() {
-		if err1 := ph.stop(); err1 != nil {
-			panic(fmt.Sprintf("P2P stop failed: %+v", err1))
-		}
-	}()
-
-	activationEpoch := epochtime.EpochTime(viper.GetUint64(CfgActivationEpoch))
-	if err = epochtimeWaitForEpoch(ht.service, activationEpoch); err != nil {
-		panic(fmt.Sprintf("epochtimeWaitForEpoch: %+v", err))
-	}
-
-	if err = registryRegisterNode(ht.service, defaultIdentity, common.DataDir(), fakeAddresses, ph.service.Addresses(), defaultRuntimeID, nil, node.RoleComputeWorker); err != nil {
-		panic(fmt.Sprintf("registryRegisterNode: %+v", err))
-	}
-
-	electionHeight, err := schedulerNextElectionHeight(ht.service, activationEpoch+1)
-	if err != nil {
-		panic(fmt.Sprintf("scheduler next election height failed: %+v", err))
-	}
-	mergeCommittee, err := schedulerGetCommittee(ht, electionHeight, scheduler.KindComputeMerge, defaultRuntimeID)
-	if err != nil {
-		panic(fmt.Sprintf("scheduler get committee %s at height %d failed: %+v", scheduler.KindComputeMerge, electionHeight, err))
-	}
-	if err = schedulerCheckScheduled(mergeCommittee, defaultIdentity.NodeSigner.Public(), scheduler.Worker); err != nil {
-		panic(fmt.Sprintf("scheduler check scheduled failed: %+v", err))
-	}
-	logger.Debug("merge wrong: merge schedule ok")
-	executorCommittee, err := schedulerGetCommittee(ht, electionHeight, scheduler.KindComputeExecutor, defaultRuntimeID)
-	if err != nil {
-		panic(fmt.Sprintf("scheduler get committee %s failed: %+v", scheduler.KindComputeExecutor, err))
-	}
-	if err = schedulerCheckNotScheduled(executorCommittee, defaultIdentity.NodeSigner.Public()); err != nil {
-		panic(fmt.Sprintf("scheduler check not scheduled executor failed: %+v", err))
-	}
-	storageCommittee, err := schedulerGetCommittee(ht, electionHeight, scheduler.KindStorage, defaultRuntimeID)
-	if err != nil {
-		panic(fmt.Sprintf("scheduler get committee %s failed: %+v", scheduler.KindStorage, err))
-	}
-	transactionSchedulerCommittee, err := schedulerGetCommittee(ht, electionHeight, scheduler.KindComputeTxnScheduler, defaultRuntimeID)
-	if err != nil {
-		panic(fmt.Sprintf("scheduler get committee %s failed: %+v", scheduler.KindComputeTxnScheduler, err))
-	}
-	if err = schedulerCheckNotScheduled(transactionSchedulerCommittee, defaultIdentity.NodeSigner.Public()); err != nil {
-		panic(fmt.Sprintf("scheduler check not scheduled txnscheduler failed: %+v", err))
-	}
-
-	logger.Debug("merge wrong: connecting to storage committee")
-	hnss, err := storageConnectToCommittee(ht, electionHeight, storageCommittee, scheduler.Worker, defaultIdentity)
-	if err != nil {
-		panic(fmt.Sprintf("storage connect to committee failed: %+v", err))
-	}
-	defer storageBroadcastCleanup(hnss)
-
-	mbc := newMergeBatchContext()
-
-	if err = mbc.loadCurrentBlock(ht, defaultRuntimeID); err != nil {
-		panic(fmt.Sprintf("merge load current block failed: %+v", err))
-	}
-
-	// Receive 1 committee * 2 commitments per committee.
-	if err = mbc.receiveCommitments(ph, 2); err != nil {
-		panic(fmt.Sprintf("merge receive commitments failed: %+v", err))
-	}
-	logger.Debug("merge wrong: received commitments", "commitments", mbc.commitments)
-
-	ctx := context.Background()
-
-	// Process the merge wrong.
-	origCommitments := mbc.commitments
-	var emptyRoot hash.Hash
-	emptyRoot.Empty()
-	mbc.commitments = []*commitment.OpenExecutorCommitment{
-		{
-			Body: &commitment.ComputeBody{
-				Header: commitment.ComputeResultsHeader{
-					IORoot:    emptyRoot,
-					StateRoot: mbc.currentBlock.Header.StateRoot,
-				},
-			},
-		},
-	}
-
-	if err = mbc.process(ctx, hnss); err != nil {
-		panic(fmt.Sprintf("merge process failed: %+v", err))
-	}
-	logger.Debug("merge wrong: processed",
-		"new_block", mbc.newBlock,
-	)
-
-	mbc.commitments = origCommitments
-
-	// Sanity check the merge results.
-	if mbc.newBlock.Header.IORoot != emptyRoot {
-		panic(fmt.Sprintf("merge of empty IO trees should be empty. got %s, expected %s", mbc.newBlock.Header.IORoot, emptyRoot))
-	}
-	if mbc.newBlock.Header.StateRoot != mbc.currentBlock.Header.StateRoot {
-		panic(fmt.Sprintf("merge of identical state trees should be the same. got %s, expected %s", mbc.newBlock.Header.StateRoot, mbc.currentBlock.Header.StateRoot))
-	}
-
-	if err = mbc.createCommitment(defaultIdentity); err != nil {
-		panic(fmt.Sprintf("merge create commitment failed: %+v", err))
-	}
-
-	if err = mbc.publishToChain(ht.service, defaultIdentity, defaultRuntimeID); err != nil {
-		panic(fmt.Sprintf("merge publish to chain failed: %+v", err))
-	}
-	logger.Debug("merge wrong: commitment sent")
-}
-
-func doMergeStraggler(cmd *cobra.Command, args []string) {
-	if err := common.Init(); err != nil {
-		common.EarlyLogAndExit(err)
-	}
-
-	defaultIdentity, err := initDefaultIdentity(common.DataDir())
-	if err != nil {
-		panic(fmt.Sprintf("init default identity failed: %+v", err))
-	}
-
-	ht := newHonestTendermint()
-	if err = ht.start(defaultIdentity, common.DataDir()); err != nil {
-		panic(fmt.Sprintf("honest Tendermint start failed: %+v", err))
-	}
-	defer func() {
-		if err1 := ht.stop(); err1 != nil {
-			panic(fmt.Sprintf("honest Tendermint stop failed: %+v", err1))
-		}
-	}()
-
-	ph := newP2PHandle()
-	if err = ph.start(ht, defaultIdentity, defaultRuntimeID); err != nil {
-		panic(fmt.Sprintf("P2P start failed: %+v", err))
-	}
-	defer func() {
-		if err1 := ph.stop(); err1 != nil {
-			panic(fmt.Sprintf("P2P stop failed: %+v", err1))
-		}
-	}()
-
-	activationEpoch := epochtime.EpochTime(viper.GetUint64(CfgActivationEpoch))
-	if err = epochtimeWaitForEpoch(ht.service, activationEpoch); err != nil {
-		panic(fmt.Sprintf("epochtimeWaitForEpoch: %+v", err))
-	}
-
-	if err = registryRegisterNode(ht.service, defaultIdentity, common.DataDir(), fakeAddresses, ph.service.Addresses(), defaultRuntimeID, nil, node.RoleComputeWorker); err != nil {
-		panic(fmt.Sprintf("registryRegisterNode: %+v", err))
-	}
-
-	electionHeight, err := schedulerNextElectionHeight(ht.service, activationEpoch+1)
-	if err != nil {
-		panic(fmt.Sprintf("scheduler next election height failed: %+v", err))
-	}
-	mergeCommittee, err := schedulerGetCommittee(ht, electionHeight, scheduler.KindComputeMerge, defaultRuntimeID)
-	if err != nil {
-		panic(fmt.Sprintf("scheduler get committee %s at height %d failed: %+v", scheduler.KindComputeMerge, electionHeight, err))
-	}
-	if err = schedulerCheckScheduled(mergeCommittee, defaultIdentity.NodeSigner.Public(), scheduler.Worker); err != nil {
-		panic(fmt.Sprintf("scheduler check scheduled failed: %+v", err))
-	}
-	logger.Debug("merge straggler: merge schedule ok")
-	executorCommittee, err := schedulerGetCommittee(ht, electionHeight, scheduler.KindComputeExecutor, defaultRuntimeID)
-	if err != nil {
-		panic(fmt.Sprintf("scheduler get committee %s failed: %+v", scheduler.KindComputeExecutor, err))
-	}
-	if err = schedulerCheckNotScheduled(executorCommittee, defaultIdentity.NodeSigner.Public()); err != nil {
-		panic(fmt.Sprintf("scheduler check not scheduled executor failed: %+v", err))
-	}
-	transactionSchedulerCommittee, err := schedulerGetCommittee(ht, electionHeight, scheduler.KindComputeTxnScheduler, defaultRuntimeID)
-	if err != nil {
-		panic(fmt.Sprintf("scheduler get committee %s failed: %+v", scheduler.KindComputeTxnScheduler, err))
-	}
-	if err = schedulerCheckNotScheduled(transactionSchedulerCommittee, defaultIdentity.NodeSigner.Public()); err != nil {
-		panic(fmt.Sprintf("scheduler check not scheduled txnscheduler failed: %+v", err))
-	}
-
-	mbc := newMergeBatchContext()
-
-	// Receive 1 committee * 2 commitments per committee.
-	if err = mbc.receiveCommitments(ph, 2); err != nil {
-		panic(fmt.Sprintf("merge receive commitments failed: %+v", err))
-	}
-	logger.Debug("merge straggler: received commitments", "commitments", mbc.commitments)
-
-	logger.Debug("merge straggler: bailing")
-}
-
 // Register registers the byzantine sub-command and all of its children.
 func Register(parentCmd *cobra.Command) {
 	byzantineCmd.AddCommand(executorHonestCmd)
 	byzantineCmd.AddCommand(executorWrongCmd)
 	byzantineCmd.AddCommand(executorStragglerCmd)
-	byzantineCmd.AddCommand(mergeHonestCmd)
-	byzantineCmd.AddCommand(mergeWrongCmd)
-	byzantineCmd.AddCommand(mergeStragglerCmd)
 	parentCmd.AddCommand(byzantineCmd)
 }
 

@@ -21,9 +21,6 @@ var (
 			accessctl.Action(api.MethodApplyBatch.FullName()),
 		},
 	}
-	mergeCommitteePolicy = &committee.AccessPolicy{
-		Actions: []accessctl.Action{},
-	}
 	// NOTE: GetDiff/GetCheckpoint* need to be accessible to all storage nodes,
 	// not just the ones in the current storage committee so that new nodes can
 	// sync-up.

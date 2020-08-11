@@ -21,6 +21,7 @@ import (
 	epochtime "github.com/oasisprotocol/oasis-core/go/epochtime/api"
 	roothash "github.com/oasisprotocol/oasis-core/go/roothash/api"
 	"github.com/oasisprotocol/oasis-core/go/roothash/api/block"
+	"github.com/oasisprotocol/oasis-core/go/roothash/api/commitment"
 	runtimeCommittee "github.com/oasisprotocol/oasis-core/go/runtime/committee"
 	"github.com/oasisprotocol/oasis-core/go/runtime/host"
 	"github.com/oasisprotocol/oasis-core/go/runtime/host/protocol"
@@ -302,14 +303,6 @@ func (n *Node) HandleEpochTransitionLocked(epoch *committee.EpochSnapshot) {
 	n.algorithmMutex.RUnlock()
 
 	if epoch.IsTransactionSchedulerLeader() {
-		if err := n.algorithm.EpochTransition(epoch); err != nil {
-			n.logger.Error("scheduling algorithm failed to process epoch transition",
-				"err", err,
-			)
-			n.transitionLocked(StateNotReady{})
-			return
-		}
-
 		n.transitionLocked(StateWaitingForBatch{})
 	} else {
 		n.algorithm.Clear()
@@ -351,7 +344,7 @@ func (n *Node) HandleNodeUpdateLocked(update *runtimeCommittee.NodeUpdate, snaps
 }
 
 // Dispatch dispatches a batch to the executor committee.
-func (n *Node) Dispatch(committeeID hash.Hash, batch transaction.RawBatch) error {
+func (n *Node) Dispatch(batch transaction.RawBatch) error {
 	n.commonNode.CrossNode.Lock()
 	defer n.commonNode.CrossNode.Unlock()
 
@@ -436,12 +429,25 @@ func (n *Node) Dispatch(committeeID hash.Hash, batch transaction.RawBatch) error
 	for _, receipt := range ioReceipts {
 		ioReceiptSignatures = append(ioReceiptSignatures, receipt.Signature)
 	}
-	txnSchedSig, err := n.commonNode.Group.PublishScheduledBatch(
+
+	dispatchMsg := &commitment.TxnSchedulerBatch{
+		IORoot:            ioRoot,
+		StorageSignatures: ioReceiptSignatures,
+		Header:            n.commonNode.CurrentBlock.Header,
+	}
+	signedDispatchMsg, err := commitment.SignTxnSchedulerBatch(n.commonNode.Identity.NodeSigner, dispatchMsg)
+	if err != nil {
+		n.logger.Error("failed to sign txn scheduler batch",
+			"err", err,
+		)
+		return fmt.Errorf("failed to sign txn scheduler batch: %w", err)
+	}
+
+	err = n.commonNode.Group.Publish(
 		batchSpanCtx,
-		committeeID,
-		ioRoot,
-		ioReceiptSignatures,
-		n.commonNode.CurrentBlock.Header,
+		&p2p.Message{
+			TxnSchedulerBatch: signedDispatchMsg,
+		},
 	)
 	if err != nil {
 		spanPublish.Finish()
@@ -461,10 +467,9 @@ func (n *Node) Dispatch(committeeID hash.Hash, batch transaction.RawBatch) error
 		} else {
 			n.executorNode.HandleBatchFromTransactionSchedulerLocked(
 				batchSpanCtx,
-				committeeID,
 				ioRoot,
 				batch,
-				*txnSchedSig,
+				signedDispatchMsg.Signature,
 				ioReceiptSignatures,
 			)
 		}

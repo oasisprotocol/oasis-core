@@ -77,6 +77,7 @@ func (r *runtime) Call(ctx context.Context, body *protocol.Body) (*protocol.Body
 		return &protocol.Body{RuntimeExecuteTxBatchResponse: &protocol.RuntimeExecuteTxBatchResponse{
 			Batch: protocol.ComputedBatch{
 				Header: commitment.ComputeResultsHeader{
+					Round:        rq.Block.Header.Round + 1,
 					PreviousHash: rq.Block.Header.EncodedHash(),
 					IORoot:       ioRoot,
 					StateRoot:    stateRoot,

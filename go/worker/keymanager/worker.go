@@ -659,10 +659,8 @@ func (crw *clientRuntimeWatcher) updateExternalServicePolicyLocked(snapshot *com
 	policy := accessctl.NewPolicy()
 
 	// Apply rules to current executor committee members.
-	for _, xc := range snapshot.GetExecutorCommittees() {
-		if xc != nil {
-			executorCommitteePolicy.AddRulesForCommittee(&policy, xc, snapshot.Nodes())
-		}
+	if xc := snapshot.GetExecutorCommittee(); xc != nil {
+		executorCommitteePolicy.AddRulesForCommittee(&policy, xc, snapshot.Nodes())
 	}
 
 	// Apply rules for configured sentry nodes.

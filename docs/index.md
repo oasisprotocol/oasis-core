@@ -60,7 +60,6 @@ implementations.
   * Transaction Processing Pipeline
     * Transaction Scheduler Nodes
     * Executor Nodes
-    * Merge Nodes
     * Storage Nodes
     * Key Manager Nodes
 * Oasis Node (`oasis-node`)

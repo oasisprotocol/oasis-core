@@ -27,32 +27,13 @@ var (
 		oasis.LogAssertNoTimeouts(),
 		oasis.LogAssertNoRoundFailures(),
 		oasis.LogAssertExecutionDiscrepancyDetected(),
-		oasis.LogAssertNoMergeDiscrepancyDetected(),
 	}, oasis.ByzantineSlot3IdentitySeed)
 	// ByzantineExecutorStraggler is the byzantine executor straggler scenario.
 	ByzantineExecutorStraggler scenario.Scenario = newByzantineImpl("executor-straggler", []log.WatcherHandlerFactory{
 		oasis.LogAssertTimeouts(),
 		oasis.LogAssertNoRoundFailures(),
 		oasis.LogAssertExecutionDiscrepancyDetected(),
-		oasis.LogAssertNoMergeDiscrepancyDetected(),
 	}, oasis.ByzantineSlot3IdentitySeed)
-
-	// ByzantineMergeHonest is the byzantine merge honest scenario.
-	ByzantineMergeHonest scenario.Scenario = newByzantineImpl("merge-honest", nil, oasis.ByzantineSlot1IdentitySeed)
-	// ByzantineMergeWrong is the byzantine merge wrong scenario.
-	ByzantineMergeWrong scenario.Scenario = newByzantineImpl("merge-wrong", []log.WatcherHandlerFactory{
-		oasis.LogAssertNoTimeouts(),
-		oasis.LogAssertNoRoundFailures(),
-		oasis.LogAssertNoExecutionDiscrepancyDetected(),
-		oasis.LogAssertMergeDiscrepancyDetected(),
-	}, oasis.ByzantineSlot1IdentitySeed)
-	// ByzantineMergeStraggler is the byzantine merge straggler scenario.
-	ByzantineMergeStraggler scenario.Scenario = newByzantineImpl("merge-straggler", []log.WatcherHandlerFactory{
-		oasis.LogAssertTimeouts(),
-		oasis.LogAssertNoRoundFailures(),
-		oasis.LogAssertNoExecutionDiscrepancyDetected(),
-		oasis.LogAssertMergeDiscrepancyDetected(),
-	}, oasis.ByzantineSlot1IdentitySeed)
 )
 
 type byzantineImpl struct {

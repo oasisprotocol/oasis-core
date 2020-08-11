@@ -90,11 +90,6 @@ func (sc *multipleRuntimesImpl) Fixture() (*oasis.NetworkFixture, error) {
 				GroupBackupSize: 0,
 				RoundTimeout:    10 * time.Second,
 			},
-			Merge: registry.MergeParameters{
-				GroupSize:       1,
-				GroupBackupSize: 0,
-				RoundTimeout:    10 * time.Second,
-			},
 			TxnScheduler: registry.TxnSchedulerParameters{
 				Algorithm:         registry.TxnSchedulerAlgorithmBatching,
 				GroupSize:         1,
@@ -107,8 +102,6 @@ func (sc *multipleRuntimesImpl) Fixture() (*oasis.NetworkFixture, error) {
 				MinWriteReplication:     1,
 				MaxApplyWriteLogEntries: 100_000,
 				MaxApplyOps:             2,
-				MaxMergeRoots:           1,
-				MaxMergeOps:             2,
 			},
 			AdmissionPolicy: registry.RuntimeAdmissionPolicy{
 				AnyNode: &registry.AnyNodeRuntimeAdmissionPolicy{},

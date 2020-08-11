@@ -619,12 +619,6 @@ func (sc *registryCLIImpl) testRuntime(ctx context.Context, childEnv *env.Env, c
 			AllowedStragglers: 3,
 			RoundTimeout:      4 * time.Second,
 		},
-		Merge: registry.MergeParameters{
-			GroupSize:         5,
-			GroupBackupSize:   6,
-			AllowedStragglers: 7,
-			RoundTimeout:      8 * time.Second,
-		},
 		TxnScheduler: registry.TxnSchedulerParameters{
 			GroupSize:         10,
 			Algorithm:         "batching",
@@ -637,8 +631,6 @@ func (sc *registryCLIImpl) testRuntime(ctx context.Context, childEnv *env.Env, c
 			MinWriteReplication:     9,
 			MaxApplyWriteLogEntries: 10,
 			MaxApplyOps:             11,
-			MaxMergeRoots:           12,
-			MaxMergeOps:             13,
 		},
 		AdmissionPolicy: registry.RuntimeAdmissionPolicy{
 			EntityWhitelist: &registry.EntityWhitelistRuntimeAdmissionPolicy{

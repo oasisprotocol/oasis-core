@@ -5,16 +5,13 @@ import (
 	"errors"
 	"time"
 
-	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
 	"github.com/oasisprotocol/oasis-core/go/roothash/api/block"
 	"github.com/oasisprotocol/oasis-core/go/roothash/api/commitment"
 )
 
 // Round is a roothash round.
 type Round struct {
-	CommitteeID  hash.Hash             `json:"committee_id"`
-	ExecutorPool *commitment.MultiPool `json:"executor_pool"`
-	MergePool    *commitment.Pool      `json:"merge_pool"`
+	ExecutorPool *commitment.Pool `json:"executor_pool"`
 
 	CurrentBlock *block.Block `json:"current_block"`
 	Finalized    bool         `json:"finalized"`
@@ -22,16 +19,11 @@ type Round struct {
 
 func (r *Round) Reset() {
 	r.ExecutorPool.ResetCommitments()
-	r.MergePool.ResetCommitments()
 	r.Finalized = false
 }
 
-func (r *Round) GetNextTimeout() (timeout time.Time) {
-	timeout = r.ExecutorPool.GetNextTimeout()
-	if timeout.IsZero() || (!r.MergePool.NextTimeout.IsZero() && r.MergePool.NextTimeout.Before(timeout)) {
-		timeout = r.MergePool.NextTimeout
-	}
-	return
+func (r *Round) GetNextTimeout() time.Time {
+	return r.ExecutorPool.NextTimeout
 }
 
 func (r *Round) AddExecutorCommitment(
@@ -39,23 +31,11 @@ func (r *Round) AddExecutorCommitment(
 	commitment *commitment.ExecutorCommitment,
 	sv commitment.SignatureVerifier,
 	nl commitment.NodeLookup,
-) (*commitment.Pool, error) {
-	if r.Finalized {
-		return nil, errors.New("tendermint/roothash: round is already finalized, can't commit")
-	}
-	return r.ExecutorPool.AddExecutorCommitment(ctx, r.CurrentBlock, sv, nl, commitment)
-}
-
-func (r *Round) AddMergeCommitment(
-	ctx context.Context,
-	commitment *commitment.MergeCommitment,
-	sv commitment.SignatureVerifier,
-	nl commitment.NodeLookup,
 ) error {
 	if r.Finalized {
 		return errors.New("tendermint/roothash: round is already finalized, can't commit")
 	}
-	return r.MergePool.AddMergeCommitment(ctx, r.CurrentBlock, sv, nl, commitment, r.ExecutorPool)
+	return r.ExecutorPool.AddExecutorCommitment(ctx, r.CurrentBlock, sv, nl, commitment)
 }
 
 func (r *Round) Transition(blk *block.Block) {
@@ -63,17 +43,10 @@ func (r *Round) Transition(blk *block.Block) {
 	r.Reset()
 }
 
-func NewRound(
-	committeeID hash.Hash,
-	executorPool *commitment.MultiPool,
-	mergePool *commitment.Pool,
-	blk *block.Block,
-) *Round {
+func NewRound(executorPool *commitment.Pool, blk *block.Block) *Round {
 	r := &Round{
-		CommitteeID:  committeeID,
 		CurrentBlock: blk,
 		ExecutorPool: executorPool,
-		MergePool:    mergePool,
 	}
 	r.Reset()
 

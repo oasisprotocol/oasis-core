@@ -6,7 +6,7 @@ import (
 )
 
 const (
-	// CfgWorkerEnabled enables the compute worker, tx scheduler worker, and merge worker.
+	// CfgWorkerEnabled enables the compute worker and the tx scheduler worker.
 	CfgWorkerEnabled = "worker.compute.enabled"
 )
 

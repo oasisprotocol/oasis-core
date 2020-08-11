@@ -372,16 +372,11 @@ func (n *Node) updateExternalServicePolicyLocked(snapshot *committee.EpochSnapsh
 		sentryNodesPolicy.AddPublicKeyPolicy(&policy, addr.PubKey)
 	}
 
-	for _, xc := range snapshot.GetExecutorCommittees() {
-		if xc != nil {
-			executorCommitteePolicy.AddRulesForCommittee(&policy, xc, snapshot.Nodes())
-		}
+	if xc := snapshot.GetExecutorCommittee(); xc != nil {
+		executorCommitteePolicy.AddRulesForCommittee(&policy, xc, snapshot.Nodes())
 	}
 	if tsc := snapshot.GetTransactionSchedulerCommittee(); tsc != nil {
 		txnSchedulerCommitteePolicy.AddRulesForCommittee(&policy, tsc, snapshot.Nodes())
-	}
-	if mc := snapshot.GetMergeCommittee(); mc != nil {
-		mergeCommitteePolicy.AddRulesForCommittee(&policy, mc, snapshot.Nodes())
 	}
 	// TODO: Query registry only for storage nodes after
 	// https://github.com/oasisprotocol/oasis-core/issues/1923 is implemented.

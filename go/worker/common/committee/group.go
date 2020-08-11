@@ -9,7 +9,6 @@ import (
 	opentracingExt "github.com/opentracing/opentracing-go/ext"
 
 	"github.com/oasisprotocol/oasis-core/go/common"
-	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	"github.com/oasisprotocol/oasis-core/go/common/identity"
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
@@ -18,8 +17,6 @@ import (
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
 	"github.com/oasisprotocol/oasis-core/go/epochtime/api"
 	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
-	"github.com/oasisprotocol/oasis-core/go/roothash/api/block"
-	"github.com/oasisprotocol/oasis-core/go/roothash/api/commitment"
 	"github.com/oasisprotocol/oasis-core/go/runtime/committee"
 	scheduler "github.com/oasisprotocol/oasis-core/go/scheduler/api"
 	"github.com/oasisprotocol/oasis-core/go/worker/common/p2p"
@@ -56,20 +53,11 @@ type epoch struct {
 
 	// executorCommittee is the executor committee we are a member of.
 	executorCommittee *CommitteeInfo
-	// executorCommitteeID is the identifier of our executor committee.
-	executorCommitteeID hash.Hash
-	// executorCommittees are all executor committees.
-	executorCommittees map[hash.Hash]*CommitteeInfo
-	// executorCommitteeMemberSet is a set of node public keys of executor committee members.
-	executorCommitteeMemberSet map[signature.PublicKey]bool
 
 	// txnSchedulerCommitee is the txn scheduler committee we are a member of.
 	txnSchedulerCommittee *CommitteeInfo
 	// txnSchedulerLeader is the node public key of txn scheduler leader.
 	txnSchedulerLeader signature.PublicKey
-
-	// mergeCommittee is the merge committee we are a member of.
-	mergeCommittee *CommitteeInfo
 
 	// storageCommittee is the storage committee we are a member of.
 	storageCommittee *CommitteeInfo
@@ -81,34 +69,18 @@ type epoch struct {
 type EpochSnapshot struct {
 	groupVersion int64
 
-	executorCommitteeID hash.Hash
-
 	epochNumber api.EpochTime
 
 	executorRole     scheduler.Role
 	txnSchedulerRole scheduler.Role
-	mergeRole        scheduler.Role
 
 	runtime *registry.Runtime
 
-	executorCommittees    map[hash.Hash]*CommitteeInfo
+	executorCommittee     *CommitteeInfo
 	txnSchedulerCommittee *CommitteeInfo
-	mergeCommittee        *CommitteeInfo
 	storageCommittee      *CommitteeInfo
 
 	nodes committee.NodeDescriptorLookup
-}
-
-// NewMockEpochSnapshot returns a mock epoch snapshot to be used in tests.
-func NewMockEpochSnapshot() *EpochSnapshot {
-	executorCommitteeID := hash.NewFromBytes([]byte("mock committee id"))
-
-	return &EpochSnapshot{
-		executorCommitteeID: executorCommitteeID,
-		executorCommittees: map[hash.Hash]*CommitteeInfo{
-			executorCommitteeID: {},
-		},
-	}
 }
 
 // GetGroupVersion returns the consensus backend block height of the last
@@ -122,17 +94,9 @@ func (e *EpochSnapshot) GetRuntime() *registry.Runtime {
 	return e.runtime
 }
 
-// GetExecutorCommittees returns the current executor committees.
-func (e *EpochSnapshot) GetExecutorCommittees() map[hash.Hash]*CommitteeInfo {
-	return e.executorCommittees
-}
-
-// GetExecutorCommitteeID returns ID of the executor committee the current node is
-// a member of.
-//
-// NOTE: Will return an invalid all-zero ID if not a member.
-func (e *EpochSnapshot) GetExecutorCommitteeID() hash.Hash {
-	return e.executorCommitteeID
+// GetExecutorCommittee returns the current executor committee.
+func (e *EpochSnapshot) GetExecutorCommittee() *CommitteeInfo {
+	return e.executorCommittee
 }
 
 // GetEpochNumber returns the sequential number of the epoch.
@@ -167,29 +131,6 @@ func (e *EpochSnapshot) GetTransactionSchedulerCommittee() *CommitteeInfo {
 // in the current epoch.
 func (e *EpochSnapshot) IsTransactionSchedulerLeader() bool {
 	return e.txnSchedulerRole == scheduler.Leader
-}
-
-// GetMergeCommittee returns the current merge committee.
-func (e *EpochSnapshot) GetMergeCommittee() *CommitteeInfo {
-	return e.mergeCommittee
-}
-
-// IsMergeMember checks if the current node is a member of the merge committee
-// in the current epoch.
-func (e *EpochSnapshot) IsMergeMember() bool {
-	return e.mergeRole != scheduler.Invalid
-}
-
-// IsMergeWorker checks if the current node is a worker of the merge committee in
-// the current epoch.
-func (e *EpochSnapshot) IsMergeWorker() bool {
-	return e.mergeRole == scheduler.Worker
-}
-
-// IsMergeBackupWorker checks if the current node is a backup worker of the merge committee in
-// the current epoch.
-func (e *EpochSnapshot) IsMergeBackupWorker() bool {
-	return e.mergeRole == scheduler.BackupWorker
 }
 
 // GetStorageCommittee returns the current storage committee.
@@ -322,10 +263,7 @@ func (g *Group) EpochTransition(ctx context.Context, height int64) error {
 	}
 
 	// Find the current committees.
-	executorCommittees := make(map[hash.Hash]*CommitteeInfo)
-	executorCommitteeMemberSet := make(map[signature.PublicKey]bool)
-	var executorCommittee, txnSchedulerCommittee, mergeCommittee, storageCommittee *CommitteeInfo
-	var executorCommitteeID hash.Hash
+	var executorCommittee, txnSchedulerCommittee, storageCommittee *CommitteeInfo
 	var txnSchedulerLeader signature.PublicKey
 	publicIdentity := g.identity.NodeSigner.Public()
 	for _, cm := range committees {
@@ -356,40 +294,21 @@ func (g *Group) EpochTransition(ctx context.Context, height int64) error {
 
 		switch cm.Kind {
 		case scheduler.KindComputeExecutor:
-			// There can be multiple executor committees per runtime.
-			cID := cm.EncodedMembersHash()
-			executorCommittees[cID] = ci
-			if role != scheduler.Invalid {
-				if executorCommittee != nil {
-					return fmt.Errorf("member of multiple executor committees")
-				}
-
-				executorCommittee = ci
-				executorCommitteeID = cID
-			}
-
-			for _, m := range cm.Members {
-				executorCommitteeMemberSet[m.PublicKey] = true
-			}
+			executorCommittee = ci
 		case scheduler.KindComputeTxnScheduler:
 			txnSchedulerCommittee = ci
 			if leader.IsValid() {
 				txnSchedulerLeader = leader
 			}
-		case scheduler.KindComputeMerge:
-			mergeCommittee = ci
 		case scheduler.KindStorage:
 			storageCommittee = ci
 		}
 	}
-	if len(executorCommittees) == 0 {
-		return fmt.Errorf("no executor committees")
+	if executorCommittee == nil {
+		return fmt.Errorf("no executor committee")
 	}
 	if txnSchedulerCommittee == nil {
 		return fmt.Errorf("no transaction scheduler committee")
-	}
-	if mergeCommittee == nil {
-		return fmt.Errorf("no merge committee")
 	}
 	if storageCommittee == nil {
 		return fmt.Errorf("no storage committee")
@@ -413,34 +332,23 @@ func (g *Group) EpochTransition(ctx context.Context, height int64) error {
 
 	// Update the current epoch.
 	g.activeEpoch = &epoch{
-		epochNumber:                epochNumber,
-		epochCtx:                   epochCtx,
-		cancelEpochCtx:             cancelEpochCtx,
-		roundCtx:                   roundCtx,
-		cancelRoundCtx:             cancelRoundCtx,
-		groupVersion:               height,
-		executorCommittee:          executorCommittee,
-		executorCommitteeID:        executorCommitteeID,
-		executorCommittees:         executorCommittees,
-		executorCommitteeMemberSet: executorCommitteeMemberSet,
-		txnSchedulerCommittee:      txnSchedulerCommittee,
-		txnSchedulerLeader:         txnSchedulerLeader,
-		mergeCommittee:             mergeCommittee,
-		storageCommittee:           storageCommittee,
-		runtime:                    runtime,
-	}
-
-	// Executor committee may be nil in case we are not a member of any committee.
-	var executorRole scheduler.Role
-	if executorCommittee != nil {
-		executorRole = executorCommittee.Role
+		epochNumber:           epochNumber,
+		epochCtx:              epochCtx,
+		cancelEpochCtx:        cancelEpochCtx,
+		roundCtx:              roundCtx,
+		cancelRoundCtx:        cancelRoundCtx,
+		groupVersion:          height,
+		executorCommittee:     executorCommittee,
+		txnSchedulerCommittee: txnSchedulerCommittee,
+		txnSchedulerLeader:    txnSchedulerLeader,
+		storageCommittee:      storageCommittee,
+		runtime:               runtime,
 	}
 
 	g.logger.Info("epoch transition complete",
 		"group_version", height,
-		"executor_role", executorRole,
+		"executor_role", executorCommittee.Role,
 		"txn_scheduler_role", txnSchedulerCommittee.Role,
-		"merge_role", mergeCommittee.Role,
 	)
 
 	return nil
@@ -461,24 +369,15 @@ func (g *Group) GetEpochSnapshot() *EpochSnapshot {
 	}
 
 	s := &EpochSnapshot{
-		epochNumber:  g.activeEpoch.epochNumber,
-		groupVersion: g.activeEpoch.groupVersion,
-		// NOTE: Transaction scheduler and merge committees are always set.
+		epochNumber:           g.activeEpoch.epochNumber,
+		groupVersion:          g.activeEpoch.groupVersion,
+		executorRole:          g.activeEpoch.executorCommittee.Role,
 		txnSchedulerRole:      g.activeEpoch.txnSchedulerCommittee.Role,
-		mergeRole:             g.activeEpoch.mergeCommittee.Role,
 		runtime:               g.activeEpoch.runtime,
-		executorCommittees:    g.activeEpoch.executorCommittees,
+		executorCommittee:     g.activeEpoch.executorCommittee,
 		txnSchedulerCommittee: g.activeEpoch.txnSchedulerCommittee,
-		mergeCommittee:        g.activeEpoch.mergeCommittee,
 		storageCommittee:      g.activeEpoch.storageCommittee,
 		nodes:                 g.nodes,
-	}
-
-	// Executor committee may be nil in case we are not a member of any committee.
-	xc := g.activeEpoch.executorCommittee
-	if xc != nil {
-		s.executorRole = xc.Role
-		s.executorCommitteeID = g.activeEpoch.executorCommitteeID
 	}
 
 	return s
@@ -498,18 +397,10 @@ func (g *Group) AuthenticatePeer(peerID signature.PublicKey, msg *p2p.Message) e
 
 	// If we are in the executor committee, we accept messages from the transaction
 	// scheduler committee leader.
-	if g.activeEpoch.executorCommittee != nil && g.activeEpoch.txnSchedulerLeader.IsValid() {
+	if g.activeEpoch.executorCommittee.Role != scheduler.Invalid && g.activeEpoch.txnSchedulerLeader.IsValid() {
 		n := g.nodes.LookupByPeerID(peerID)
 		if n != nil {
 			authorized = authorized || g.activeEpoch.txnSchedulerLeader.Equal(n.ID)
-		}
-	}
-
-	// If we are in the merge committee, we accept messages from any executor committee member.
-	if g.activeEpoch.mergeCommittee.Role != scheduler.Invalid {
-		n := g.nodes.LookupByPeerID(peerID)
-		if n != nil {
-			authorized = authorized || g.activeEpoch.executorCommitteeMemberSet[n.ID]
 		}
 	}
 
@@ -567,13 +458,16 @@ func (g *Group) HandlePeerMessage(unusedPeerID signature.PublicKey, msg *p2p.Mes
 	return g.handler.HandlePeerMessage(ctx, msg)
 }
 
-func (g *Group) publishLocked(
-	spanCtx opentracing.SpanContext,
-	ci *CommitteeInfo,
-	msg *p2p.Message,
-) error {
+// Publish publishes a message to the P2P network.
+func (g *Group) Publish(spanCtx opentracing.SpanContext, msg *p2p.Message) error {
+	g.RLock()
+	defer g.RUnlock()
+
 	if g.p2p == nil {
 		return fmt.Errorf("group: p2p transport is not enabled")
+	}
+	if g.activeEpoch == nil {
+		return fmt.Errorf("group: no active epoch")
 	}
 
 	pubCtx := g.activeEpoch.roundCtx
@@ -587,71 +481,10 @@ func (g *Group) publishLocked(
 	msg.GroupVersion = g.activeEpoch.groupVersion
 	msg.SpanContext = scBinary
 
-	// Publish batch to given committee.
+	// Publish message to the P2P network.
 	g.p2p.Publish(pubCtx, g.runtimeID, msg)
 
 	return nil
-}
-
-// PublishScheduledBatch publishes a batch to all members in the executor committee.
-// Returns the transaction scheduler's signature for this batch.
-func (g *Group) PublishScheduledBatch(
-	spanCtx opentracing.SpanContext,
-	committeeID hash.Hash,
-	ioRoot hash.Hash,
-	storageSignatures []signature.Signature,
-	hdr block.Header,
-) (*signature.Signature, error) {
-	g.RLock()
-	defer g.RUnlock()
-
-	if g.activeEpoch == nil || g.activeEpoch.txnSchedulerCommittee.Role != scheduler.Leader {
-		return nil, fmt.Errorf("group: not leader of txn scheduler committee")
-	}
-
-	xc := g.activeEpoch.executorCommittees[committeeID]
-	if xc == nil {
-		return nil, fmt.Errorf("group: invalid executor committee")
-	}
-
-	dispatchMsg := &commitment.TxnSchedulerBatch{
-		CommitteeID:       committeeID,
-		IORoot:            ioRoot,
-		StorageSignatures: storageSignatures,
-		Header:            hdr,
-	}
-
-	signedDispatchMsg, err := commitment.SignTxnSchedulerBatch(g.identity.NodeSigner, dispatchMsg)
-	if err != nil {
-		return nil, fmt.Errorf("group: unable to sign txn scheduler batch dispatch msg: %w", err)
-	}
-
-	return &signedDispatchMsg.Signature, g.publishLocked(
-		spanCtx,
-		xc,
-		&p2p.Message{
-			TxnSchedulerBatch: signedDispatchMsg,
-		},
-	)
-}
-
-// PublishExecuteFinished publishes an execute commitment to all members in the merge
-// committee.
-func (g *Group) PublishExecuteFinished(spanCtx opentracing.SpanContext, c *commitment.ExecutorCommitment) error {
-	g.RLock()
-	defer g.RUnlock()
-
-	if g.activeEpoch == nil || g.activeEpoch.executorCommittee == nil {
-		return fmt.Errorf("group: not member of executor committee")
-	}
-
-	return g.publishLocked(
-		spanCtx,
-		g.activeEpoch.mergeCommittee,
-		&p2p.Message{
-			ExecutorCommit: c,
-		},
-	)
 }
 
 // NewGroup creates a new group.

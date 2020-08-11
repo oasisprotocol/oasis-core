@@ -9,15 +9,14 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	"github.com/oasisprotocol/oasis-core/go/common/identity"
+	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
 	"github.com/oasisprotocol/oasis-core/go/roothash/api/block"
 	"github.com/oasisprotocol/oasis-core/go/roothash/api/commitment"
 	"github.com/oasisprotocol/oasis-core/go/runtime/transaction"
-	scheduler "github.com/oasisprotocol/oasis-core/go/scheduler/api"
 	storage "github.com/oasisprotocol/oasis-core/go/storage/api"
 	"github.com/oasisprotocol/oasis-core/go/storage/mkvs"
 	"github.com/oasisprotocol/oasis-core/go/storage/mkvs/syncer"
 	"github.com/oasisprotocol/oasis-core/go/storage/mkvs/writelog"
-	"github.com/oasisprotocol/oasis-core/go/worker/common/p2p"
 )
 
 type computeBatchContext struct {
@@ -163,6 +162,7 @@ func (cbc *computeBatchContext) createCommitment(id *identity.Identity, rak sign
 		storageSigs = append(storageSigs, receipt.Signature)
 	}
 	header := commitment.ComputeResultsHeader{
+		Round:        cbc.bd.Header.Round + 1,
 		PreviousHash: cbc.bd.Header.EncodedHash(),
 		IORoot:       cbc.newIORoot,
 		StateRoot:    cbc.newStateRoot,
@@ -170,7 +170,6 @@ func (cbc *computeBatchContext) createCommitment(id *identity.Identity, rak sign
 		Messages: []*block.Message{},
 	}
 	computeBody := &commitment.ComputeBody{
-		CommitteeID:       committeeID,
 		Header:            header,
 		StorageSignatures: storageSigs,
 		TxnSchedSig:       cbc.bdSig,
@@ -194,13 +193,9 @@ func (cbc *computeBatchContext) createCommitment(id *identity.Identity, rak sign
 	return nil
 }
 
-func (cbc *computeBatchContext) publishToCommittee(ht *honestTendermint, height int64, committee *scheduler.Committee, role scheduler.Role, ph *p2pHandle, runtimeID common.Namespace, groupVersion int64) error {
-	if err := schedulerPublishToCommittee(ph, runtimeID, &p2p.Message{
-		GroupVersion:   groupVersion,
-		SpanContext:    nil,
-		ExecutorCommit: cbc.commit,
-	}); err != nil {
-		return fmt.Errorf("scheduler publish to committee: %w", err)
+func (cbc *computeBatchContext) publishToChain(svc consensus.Backend, id *identity.Identity, runtimeID common.Namespace) error {
+	if err := roothashExecutorCommit(svc, id, runtimeID, []commitment.ExecutorCommitment{*cbc.commit}); err != nil {
+		return fmt.Errorf("roothash merge commentment: %w", err)
 	}
 
 	return nil

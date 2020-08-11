@@ -593,16 +593,6 @@ func EventsFromTendermint(
 
 				ev := &api.Event{RuntimeID: value.ID, Height: height, TxHash: txHash, FinalizedEvent: &api.FinalizedEvent{Round: value.Round}}
 				events = append(events, ev)
-			case bytes.Equal(key, app.KeyMergeDiscrepancyDetected):
-				// A merge discrepancy has been detected.
-				var value app.ValueMergeDiscrepancyDetected
-				if err := cbor.Unmarshal(val, &value); err != nil {
-					errs = multierror.Append(errs, fmt.Errorf("roothash: corrupt MergeDiscrepancy event: %w", err))
-					continue
-				}
-
-				ev := &api.Event{RuntimeID: value.ID, Height: height, TxHash: txHash, MergeDiscrepancyDetected: &value.Event}
-				events = append(events, ev)
 			case bytes.Equal(key, app.KeyExecutionDiscrepancyDetected):
 				// An execution discrepancy has been detected.
 				var value app.ValueExecutionDiscrepancyDetected
@@ -622,16 +612,6 @@ func EventsFromTendermint(
 				}
 
 				ev := &api.Event{RuntimeID: value.ID, Height: height, TxHash: txHash, ExecutorCommitted: &value.Event}
-				events = append(events, ev)
-			case bytes.Equal(key, app.KeyMergeCommitted):
-				// A merge commit has been processed.
-				var value app.ValueMergeCommitted
-				if err := cbor.Unmarshal(val, &value); err != nil {
-					errs = multierror.Append(errs, fmt.Errorf("roothash: corrupt ValueMergeCommitted event: %w", err))
-					continue
-				}
-
-				ev := &api.Event{RuntimeID: value.ID, Height: height, TxHash: txHash, MergeCommitted: &value.Event}
 				events = append(events, ev)
 			case bytes.Equal(key, app.KeyRuntimeID):
 				// Runtime ID attribute (Base64-encoded to allow queries).

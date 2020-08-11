@@ -47,7 +47,6 @@ var (
 		oasis.LogAssertNoTimeouts(),
 		oasis.LogAssertNoRoundFailures(),
 		oasis.LogAssertNoExecutionDiscrepancyDetected(),
-		oasis.LogAssertNoMergeDiscrepancyDetected(),
 	}
 
 	runtimeID    common.Namespace
@@ -163,11 +162,6 @@ func (sc *runtimeImpl) Fixture() (*oasis.NetworkFixture, error) {
 					GroupBackupSize: 1,
 					RoundTimeout:    10 * time.Second,
 				},
-				Merge: registry.MergeParameters{
-					GroupSize:       2,
-					GroupBackupSize: 1,
-					RoundTimeout:    10 * time.Second,
-				},
 				TxnScheduler: registry.TxnSchedulerParameters{
 					Algorithm:         registry.TxnSchedulerAlgorithmBatching,
 					GroupSize:         1,
@@ -180,8 +174,6 @@ func (sc *runtimeImpl) Fixture() (*oasis.NetworkFixture, error) {
 					MinWriteReplication:     2,
 					MaxApplyWriteLogEntries: 100_000,
 					MaxApplyOps:             2,
-					MaxMergeRoots:           1,
-					MaxMergeOps:             2,
 				},
 				AdmissionPolicy: registry.RuntimeAdmissionPolicy{
 					AnyNode: &registry.AnyNodeRuntimeAdmissionPolicy{},
@@ -497,10 +489,6 @@ func RegisterScenarios() error {
 		ByzantineExecutorHonest,
 		ByzantineExecutorWrong,
 		ByzantineExecutorStraggler,
-		// Byzantine merge node.
-		ByzantineMergeHonest,
-		ByzantineMergeWrong,
-		ByzantineMergeStraggler,
 		// Storage sync test.
 		StorageSync,
 		// Sentry test.

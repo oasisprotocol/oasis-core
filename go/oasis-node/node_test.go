@@ -89,11 +89,6 @@ var (
 			GroupBackupSize: 0,
 			RoundTimeout:    20 * time.Second,
 		},
-		Merge: registry.MergeParameters{
-			GroupSize:       1,
-			GroupBackupSize: 0,
-			RoundTimeout:    20 * time.Second,
-		},
 		TxnScheduler: registry.TxnSchedulerParameters{
 			Algorithm:         registry.TxnSchedulerAlgorithmBatching,
 			GroupSize:         1,
@@ -106,8 +101,6 @@ var (
 			MinWriteReplication:     1,
 			MaxApplyWriteLogEntries: 100_000,
 			MaxApplyOps:             2,
-			MaxMergeRoots:           1,
-			MaxMergeOps:             2,
 		},
 		AdmissionPolicy: registry.RuntimeAdmissionPolicy{
 			AnyNode: &registry.AnyNodeRuntimeAdmissionPolicy{},

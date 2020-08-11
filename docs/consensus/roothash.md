@@ -46,35 +46,4 @@ type ExecutorCommit struct {
 [executor commitments]: https://pkg.go.dev/github.com/oasisprotocol/oasis-core/go/roothash/api/commitment?tab=doc#ExecutorCommitment
 <!-- markdownlint-enable line-length -->
 
-### Merge Commit
-
-The merge commit method allows a merge node to submit commitments of an executed
-state merge. A new merge commit transaction can be generated using
-[`NewMergeCommitTx`].
-
-**Method name:**
-
-```
-roothash.MergeCommit
-```
-
-**Body:**
-
-```golang
-type ExecutorCommit struct {
-    ID      common.Namespace             `json:"id"`
-    Commits []commitment.MergeCommitment `json:"commits"`
-}
-```
-
-**Fields:**
-
-* `id` specifies the [runtime identifier] of a runtime this commit is for.
-* `commits` are the [merge commitments].
-
-<!-- markdownlint-disable line-length -->
-[`NewMergeCommitTx`]: https://pkg.go.dev/github.com/oasisprotocol/oasis-core/go/roothash/api?tab=doc#NewMergeCommitTx
-[merge commitments]: https://pkg.go.dev/github.com/oasisprotocol/oasis-core/go/roothash/api/commitment?tab=doc#MergeCommitment
-<!-- markdownlint-enable line-length -->
-
 ## Events

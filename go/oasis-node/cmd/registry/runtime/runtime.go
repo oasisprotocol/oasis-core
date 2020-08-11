@@ -53,19 +53,11 @@ const (
 	CfgExecutorAllowedStragglers = "runtime.executor.allowed_stragglers"
 	CfgExecutorRoundTimeout      = "runtime.executor.round_timeout"
 
-	// Merge committee flags.
-	CfgMergeGroupSize         = "runtime.merge.group_size"
-	CfgMergeGroupBackupSize   = "runtime.merge.group_backup_size"
-	CfgMergeAllowedStragglers = "runtime.merge.allowed_stragglers"
-	CfgMergeRoundTimeout      = "runtime.merge.round_timeout"
-
 	// Storage committee flags.
 	CfgStorageGroupSize               = "runtime.storage.group_size"
 	CfgStorageMinWriteReplication     = "runtime.storage.min_write_replication"
 	CfgStorageMaxApplyWriteLogEntries = "runtime.storage.max_apply_write_log_entries"
 	CfgStorageMaxApplyOps             = "runtime.storage.max_apply_ops"
-	CfgStorageMaxMergeRoots           = "runtime.storage.max_merge_roots"
-	CfgStorageMaxMergeOps             = "runtime.storage.max_merge_ops"
 	CfgStorageCheckpointInterval      = "runtime.storage.checkpoint_interval"
 	CfgStorageCheckpointNumKept       = "runtime.storage.checkpoint_num_kept"
 	CfgStorageCheckpointChunkSize     = "runtime.storage.checkpoint_chunk_size"
@@ -383,12 +375,6 @@ func runtimeFromFlags() (*registry.Runtime, signature.Signer, error) { // nolint
 			AllowedStragglers: viper.GetUint64(CfgExecutorAllowedStragglers),
 			RoundTimeout:      viper.GetDuration(CfgExecutorRoundTimeout),
 		},
-		Merge: registry.MergeParameters{
-			GroupSize:         viper.GetUint64(CfgMergeGroupSize),
-			GroupBackupSize:   viper.GetUint64(CfgMergeGroupBackupSize),
-			AllowedStragglers: viper.GetUint64(CfgMergeAllowedStragglers),
-			RoundTimeout:      viper.GetDuration(CfgMergeRoundTimeout),
-		},
 		TxnScheduler: registry.TxnSchedulerParameters{
 			GroupSize:         viper.GetUint64(CfgTxnSchedulerGroupSize),
 			Algorithm:         viper.GetString(CfgTxnSchedulerAlgorithm),
@@ -401,8 +387,6 @@ func runtimeFromFlags() (*registry.Runtime, signature.Signer, error) { // nolint
 			MinWriteReplication:     viper.GetUint64(CfgStorageMinWriteReplication),
 			MaxApplyWriteLogEntries: viper.GetUint64(CfgStorageMaxApplyWriteLogEntries),
 			MaxApplyOps:             viper.GetUint64(CfgStorageMaxApplyOps),
-			MaxMergeRoots:           viper.GetUint64(CfgStorageMaxMergeRoots),
-			MaxMergeOps:             viper.GetUint64(CfgStorageMaxMergeOps),
 			CheckpointInterval:      viper.GetUint64(CfgStorageCheckpointInterval),
 			CheckpointNumKept:       viper.GetUint64(CfgStorageCheckpointNumKept),
 			CheckpointChunkSize:     viper.GetUint64(CfgStorageCheckpointChunkSize),
@@ -553,12 +537,6 @@ func init() {
 	runtimeFlags.Uint64(CfgExecutorAllowedStragglers, 0, "Number of stragglers allowed per round in the runtime executor group")
 	runtimeFlags.Duration(CfgExecutorRoundTimeout, 10*time.Second, "Executor committee round timeout for this runtime")
 
-	// Init Merge committee flags.
-	runtimeFlags.Uint64(CfgMergeGroupSize, 1, "Number of workers in the runtime merge group/committee")
-	runtimeFlags.Uint64(CfgMergeGroupBackupSize, 0, "Number of backup workers in the runtime merge group/committee")
-	runtimeFlags.Uint64(CfgMergeAllowedStragglers, 0, "Number of stragglers allowed per round in the runtime merge group")
-	runtimeFlags.Duration(CfgMergeRoundTimeout, 10*time.Second, "Merge committee round timeout for this runtime")
-
 	// Init Transaction scheduler flags.
 	runtimeFlags.Uint64(CfgTxnSchedulerGroupSize, 1, "Number of transaction scheduler nodes for the runtime")
 	runtimeFlags.String(CfgTxnSchedulerAlgorithm, "batching", "Transaction scheduling algorithm")
@@ -571,8 +549,6 @@ func init() {
 	runtimeFlags.Uint64(CfgStorageMinWriteReplication, 1, "Minimum required storage write replication")
 	runtimeFlags.Uint64(CfgStorageMaxApplyWriteLogEntries, 100_000, "Maximum number of write log entries")
 	runtimeFlags.Uint64(CfgStorageMaxApplyOps, 2, "Maximum number of apply operations in a batch")
-	runtimeFlags.Uint64(CfgStorageMaxMergeRoots, 1, "Maximum number of merge roots")
-	runtimeFlags.Uint64(CfgStorageMaxMergeOps, 2, "Maximum number of merge operations in a batch")
 	runtimeFlags.Uint64(CfgStorageCheckpointInterval, 0, "Storage checkpoint interval (in rounds)")
 	runtimeFlags.Uint64(CfgStorageCheckpointNumKept, 0, "Number of storage checkpoints to keep")
 	runtimeFlags.Uint64(CfgStorageCheckpointChunkSize, 0, "Storage checkpoint chunk size")

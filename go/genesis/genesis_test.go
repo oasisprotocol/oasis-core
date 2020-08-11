@@ -203,10 +203,6 @@ func TestGenesisSanityCheck(t *testing.T) {
 			GroupSize:    1,
 			RoundTimeout: 1 * time.Second,
 		},
-		Merge: registry.MergeParameters{
-			GroupSize:    1,
-			RoundTimeout: 1 * time.Second,
-		},
 		TxnScheduler: registry.TxnSchedulerParameters{
 			GroupSize:         1,
 			Algorithm:         "batching",
@@ -219,8 +215,6 @@ func TestGenesisSanityCheck(t *testing.T) {
 			MinWriteReplication:     1,
 			MaxApplyWriteLogEntries: 100_000,
 			MaxApplyOps:             2,
-			MaxMergeRoots:           1,
-			MaxMergeOps:             2,
 		},
 		AdmissionPolicy: registry.RuntimeAdmissionPolicy{
 			AnyNode: &registry.AnyNodeRuntimeAdmissionPolicy{},
