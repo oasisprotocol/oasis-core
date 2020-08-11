@@ -7,7 +7,7 @@ from gitlint.rules import CommitRule, ConfigurationRule
 gitlint.rule_finder.assert_valid_rule_class = lambda *_: True
 
 # URL regular expression.
-URL_RE_RAW = r'http[s]?://(?:[a-zA-Z]|[0-9]|[$-_@.&+]|[!*\(\),]|(?:%[0-9a-fA-F][0-9a-fA-F]))+'
+URL_RE_RAW = r'http[s]?://(?:[a-zA-Z]|[0-9]|[#-_@.&+]|[!*\(\),]|(?:%[0-9a-fA-F][0-9a-fA-F]))+'
 URL_RE = re.compile(URL_RE_RAW, re.IGNORECASE)
 LINE_MATCH_RE = re.compile(r'.*' + URL_RE_RAW + r'$')
 
