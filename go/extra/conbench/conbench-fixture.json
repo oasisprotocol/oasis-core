@@ -1,0 +1,67 @@
+{
+    "tee": {
+        "hardware": 0,
+        "mr_signer": null
+    },
+    "network": {
+        "node_binary": "oasis-node",
+        "runtime_loader_binary": "oasis-core-runtime-loader",
+        "consensus": {
+            "backend": "",
+            "params": {
+                "timeout_commit": 1000000,
+                "skip_timeout_commit": true,
+                "empty_block_interval": 0,
+                "max_tx_size": 0,
+                "max_block_size": 0,
+                "max_block_gas": 0,
+                "max_evidence_num": 0,
+                "state_checkpoint_interval": 0
+            }
+        },
+        "halt_epoch": 18446744073709551615,
+        "epochtime_mock": false,
+        "epochtime_tendermint_interval": 0,
+        "deterministic_identities": false,
+        "ias": {
+            "mock": true
+        }
+    },
+    "entities": [
+        {
+            "is_debug_test_entity": true,
+            "restore": false
+        },
+        {
+            "is_debug_test_entity": false,
+            "restore": false
+        }
+    ],
+    "runtimes": [
+    ],
+    "validators": [
+        {
+            "allow_early_termination": false,
+            "allow_error_termination": false,
+            "entity": 1,
+            "consensus": {
+                "min_gas_price": 0,
+                "submission_gas_price": 0,
+                "disable_check_tx": false,
+                "prune_num_kept": 0,
+                "tendermint_recover_corrupted_wal": false,
+                "disable_supplementary_sanity_checks": true
+            }
+        }
+    ],
+    "keymanagers": [
+    ],
+    "keymanager_policies": [
+    ],
+    "storage_workers": [
+    ],
+    "compute_workers": [
+    ],
+    "clients": [
+    ]
+}
