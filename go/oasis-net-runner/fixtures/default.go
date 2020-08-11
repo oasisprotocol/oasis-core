@@ -28,6 +28,8 @@ const (
 	cfgRuntimeLoader           = "fixture.default.runtime.loader"
 	cfgSetupRuntimes           = "fixture.default.setup_runtimes"
 	cfgTEEHardware             = "fixture.default.tee_hardware"
+	cfgDisableSupSanityChecks  = "fixture.default.disable_supplementary_sanity_checks"
+	cfgTimeoutCommit           = "fixture.default.timeout_commit"
 )
 
 var (
@@ -57,7 +59,7 @@ func newDefaultFixture() (*oasis.NetworkFixture, error) {
 			RuntimeSGXLoaderBinary: viper.GetString(cfgRuntimeLoader),
 			Consensus: consensusGenesis.Genesis{
 				Parameters: consensusGenesis.Parameters{
-					TimeoutCommit: 1 * time.Second,
+					TimeoutCommit: viper.GetDuration(cfgTimeoutCommit),
 				},
 			},
 			EpochtimeMock: viper.GetBool(cfgEpochtimeMock),
@@ -73,7 +75,7 @@ func newDefaultFixture() (*oasis.NetworkFixture, error) {
 			{IsDebugTestEntity: true},
 		},
 		Validators: []oasis.ValidatorFixture{
-			{Entity: 1},
+			{Entity: 1, Consensus: oasis.ConsensusFixture{DisableSupplementarySanityChecks: viper.GetBool(cfgDisableSupSanityChecks)}},
 		},
 		Seeds: []oasis.SeedFixture{{}},
 	}
@@ -152,6 +154,7 @@ func init() {
 	DefaultFixtureFlags.Bool(cfgFundEntities, false, "fund all entities in genesis")
 	DefaultFixtureFlags.Bool(cfgEpochtimeMock, false, "use mock epochtime")
 	DefaultFixtureFlags.Bool(cfgSetupRuntimes, true, "initialize the network with runtimes and runtime nodes")
+	DefaultFixtureFlags.Bool(cfgDisableSupSanityChecks, false, "disable supplementary sanity checks")
 	DefaultFixtureFlags.Int(cfgNumEntities, 1, "number of (non debug) entities in genesis")
 	DefaultFixtureFlags.String(cfgKeymanagerBinary, "simple-keymanager", "path to the keymanager runtime")
 	DefaultFixtureFlags.String(cfgNodeBinary, "oasis-node", "path to the oasis-node binary")
@@ -160,6 +163,7 @@ func init() {
 	DefaultFixtureFlags.String(cfgRuntimeLoader, "oasis-core-runtime-loader", "path to the runtime loader")
 	DefaultFixtureFlags.String(cfgTEEHardware, "", "TEE hardware to use")
 	DefaultFixtureFlags.Uint64(cfgHaltEpoch, math.MaxUint64, "halt epoch height")
+	DefaultFixtureFlags.Duration(cfgTimeoutCommit, 1*time.Second, "consensus timeout commit parameter")
 
 	_ = viper.BindPFlags(DefaultFixtureFlags)
 
