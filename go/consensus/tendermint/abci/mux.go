@@ -352,6 +352,9 @@ func (mux *abciMux) InitChain(req types.RequestInitChain) types.ResponseInitChai
 		panic(fmt.Errorf("mux: failed to init chain state: %w", err))
 	}
 
+	// Set application state hash.
+	resp.AppHash = mux.state.BlockHash()
+
 	return resp
 }
 
