@@ -30,7 +30,7 @@ const (
 	LogEventRoundFailed = "roothash/round_failed"
 	// LogEventMessageUnsat is a log event value that signals a roothash message was not satisfactory.
 	LogEventMessageUnsat = "roothash/message_unsat"
-	// LogEventHistoryReindexing is a log event value that singals a roothash runtime reindexing
+	// LogEventHistoryReindexing is a log event value that signals a roothash runtime reindexing
 	// was run.
 	LogEventHistoryReindexing = "roothash/history_reindexing"
 )

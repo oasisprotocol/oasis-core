@@ -1,4 +1,4 @@
-// Package api implementes the key manager management API and common data types.
+// Package api implements the key manager management API and common data types.
 package api
 
 import (

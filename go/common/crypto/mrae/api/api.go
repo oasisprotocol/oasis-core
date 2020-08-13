@@ -39,7 +39,7 @@ type Box interface {
 	// plaintext's storage for encrypted output, use plaintext[:0] as dst.
 	Seal(dst, nonce, plaintext, additionalData []byte, peersPublicKey, privateKey *[32]byte) []byte
 
-	// Open opens ("unboxes") the provided additonal data and ciphertext
+	// Open opens ("unboxes") the provided additional data and ciphertext
 	// via the MRAE AEAD primitive using a symmetric key dervied from the
 	// provided X25519 public and private keys and, if successful, appends
 	// the resulting plaintext to dst, returning the updated slice. The

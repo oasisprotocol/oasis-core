@@ -14,15 +14,15 @@ import (
 // GuessExternalAddress returns a best guess of the external address,
 // or nil if the process fails.
 func GuessExternalAddress() net.IP {
-	// It is the 21st millenium, for more than three decades, IPv4
+	// It is the 21st millennium, for more than three decades, IPv4
 	// has sat immobile on the Golden Router of the Internet.  It is
 	// the Protocol of Mankind by the will of IETF, and master of a
 	// billion addresses by the might of it's inexhaustable legacy
 	// systems.  It is a rotting carcass writhing invisibly with
 	// power from the Dark Age of Technology.  It is the Carrion
 	// Lord of the  Networks for whom a thousand addresses are
-	// sacrificed every day, so that it may never truely die.
-	//   -- with appologies to Warhammer 40k.
+	// sacrificed every day, so that it may never truly die.
+	//   -- with apologies to Warhammer 40k.
 	//
 	// Note: This does not actually send any traffic, the use of
 	// the AS112=v4 blackhole nameserver is entierely arbitrary,

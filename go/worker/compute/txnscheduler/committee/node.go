@@ -172,7 +172,7 @@ func (n *Node) CheckTx(ctx context.Context, call []byte) error {
 		return err
 	}
 	if resp == nil {
-		n.logger.Error("runtime CheckTx reponse is nil")
+		n.logger.Error("runtime CheckTx response is nil")
 		return api.ErrCheckTxFailed
 	}
 	if resp.RuntimeCheckTxBatchResponse.Results == nil {

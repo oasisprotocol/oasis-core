@@ -57,7 +57,7 @@ func (app *registryApplication) registerEntity(
 			registry.StakeClaimRegisterEntity,
 			staking.GlobalStakeThresholds(staking.KindEntity),
 		); err != nil {
-			ctx.Logger().Error("RegisterEntity: Insufficent stake",
+			ctx.Logger().Error("RegisterEntity: Insufficient stake",
 				"err", err,
 				"entity", ent.ID,
 				"account", acctAddr,

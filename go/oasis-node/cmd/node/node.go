@@ -571,7 +571,7 @@ func newNode(testNode bool) (n *Node, err error) { // nolint: gocyclo
 	}()
 
 	if err = cmdCommon.Init(); err != nil {
-		// Common stuff like logger not correcty initialized. Print to stderr
+		// Common stuff like logger not correctly initialized. Print to stderr
 		_, _ = fmt.Fprintln(os.Stderr, err)
 		return nil, err
 	}

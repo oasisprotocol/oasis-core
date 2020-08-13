@@ -136,7 +136,7 @@ func transferFunds(
 		if err = transfer.Amount.FromInt64(transferAmount); err != nil {
 			return backoff.Permanent(fmt.Errorf("transfer base units FromInt64 %d: %w", transferAmount, err))
 		}
-		logger.Debug("transfering funds", "from", from.Public(), "to", to, "amount", transferAmount, "nonce", nonce)
+		logger.Debug("transferring funds", "from", from.Public(), "to", to, "amount", transferAmount, "nonce", nonce)
 
 		var fee transaction.Fee
 		tx := staking.NewTransferTx(nonce, &fee, &transfer)

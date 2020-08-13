@@ -450,7 +450,7 @@ func (q *queries) doStakingQueries(ctx context.Context, rng *rand.Rand, height i
 	}
 
 	thKind := staking.ThresholdKind(rng.Intn(int(staking.KindMax)))
-	threshhold, err := q.staking.Threshold(ctx, &staking.ThresholdQuery{
+	threshold, err := q.staking.Threshold(ctx, &staking.ThresholdQuery{
 		Height: height,
 		Kind:   thKind,
 	})
@@ -458,10 +458,10 @@ func (q *queries) doStakingQueries(ctx context.Context, rng *rand.Rand, height i
 		return fmt.Errorf("staking.Treshold: %w", err)
 	}
 	expected := q.stakingParams.Thresholds[thKind]
-	if threshhold.Cmp(&expected) != 0 {
+	if threshold.Cmp(&expected) != 0 {
 		q.logger.Error("Invalid treshold",
 			"expected", expected,
-			"threshold", threshhold,
+			"threshold", threshold,
 			"height", height,
 		)
 		return fmt.Errorf("Invalid treshold")
@@ -516,7 +516,7 @@ func (q *queries) doStakingQueries(ctx context.Context, rng *rand.Rand, height i
 		"total", total,
 		"common_pool", commonPool,
 		"last_block_fees", lastBlockFees,
-		"threshold", threshhold,
+		"threshold", threshold,
 	)
 
 	return nil

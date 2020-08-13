@@ -531,7 +531,7 @@ func (net *Network) Start() error { // nolint: gocyclo
 		//
 		// If you don't attempt to start the Tendermint Prometheus HTTP server
 		// (even if it is doomed to fail due to node already listening on the
-		// port), and you launch all the validators near simultaniously, there
+		// port), and you launch all the validators near simultaneously, there
 		// is a high chance that at least one of the validators will get upset
 		// and start refusing connections.
 		time.Sleep(validatorStartDelay)

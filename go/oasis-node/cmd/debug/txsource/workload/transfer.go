@@ -19,7 +19,7 @@ import (
 const (
 	// NameTransfer is the name of the transfer workload.
 	//
-	// Transfer workload continiously submits transfer and burn transactions.
+	// Transfer workload continuously submits transfer and burn transactions.
 	NameTransfer = "transfer"
 
 	transferNumAccounts = 10
@@ -52,7 +52,7 @@ func (t *transfer) doTransferTx(ctx context.Context, fromIdx, toIdx int) error {
 	tx := staking.NewTransferTx(from.reckonedNonce, &transaction.Fee{}, &transfer)
 	from.reckonedNonce++
 
-	t.logger.Debug("transfering stake",
+	t.logger.Debug("transferring stake",
 		"from", from.address,
 		"to", to.address,
 		"base_units", transferAmount,

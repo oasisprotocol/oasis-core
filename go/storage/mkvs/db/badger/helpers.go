@@ -4,7 +4,7 @@ package badger
 // invalid/removed cruft while still keeping everything else even if pruning is not enabled.
 const tsMetadata = 1
 
-// versionToTs convers a MKVS version to a badger timestamp.
+// versionToTs converts a MKVS version to a badger timestamp.
 func versionToTs(version uint64) uint64 {
 	// Version 0 starts at timestamp after metadata.
 	return tsMetadata + 1 + version

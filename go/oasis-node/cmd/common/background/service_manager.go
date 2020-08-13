@@ -75,7 +75,7 @@ func (m *ServiceManager) Stop() {
 
 // Cleanup cleans up after all registered services.
 func (m *ServiceManager) Cleanup() {
-	m.logger.Debug("begining cleanup")
+	m.logger.Debug("beginning cleanup")
 
 	for _, svc := range m.services {
 		m.logger.Debug("cleaning up",

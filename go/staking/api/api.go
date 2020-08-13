@@ -54,7 +54,7 @@ var (
 	// due to insufficient stake.
 	ErrInsufficientStake = errors.New(ModuleName, 4, "staking: insufficient stake")
 
-	// ErrForbidden is the error returned when an operation is forbiden by
+	// ErrForbidden is the error returned when an operation is forbidden by
 	// policy.
 	ErrForbidden = errors.New(ModuleName, 5, "staking: forbidden by policy")
 

@@ -253,7 +253,7 @@ func runtimeFromFlags() (*registry.Runtime, signature.Signer, error) { // nolint
 		logger.Error("failed to retrieve signer dir",
 			"err", err,
 		)
-		return nil, nil, fmt.Errorf("failed to retrive signer dir")
+		return nil, nil, fmt.Errorf("failed to retrieve signer dir")
 	}
 	_, signer, err := cmdCommon.LoadEntity(cmdSigner.Backend(), entityDir)
 	if err != nil {
