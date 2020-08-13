@@ -51,18 +51,6 @@ func LogAssertNoExecutionDiscrepancyDetected() log.WatcherHandlerFactory {
 	return LogAssertNotEvent(roothash.LogEventExecutionDiscrepancyDetected, "execution discrepancy detected")
 }
 
-// LogAssertMergeDiscrepancyDetected returns a handler which checks whether a
-// merge discrepancy was detected based on JSON log output.
-func LogAssertMergeDiscrepancyDetected() log.WatcherHandlerFactory {
-	return LogAssertEvent(roothash.LogEventMergeDiscrepancyDetected, "merge discrepancy not detected")
-}
-
-// LogAssertNoMergeDiscrepancyDetected returns a handler which checks whether a
-// merge discrepancy was not detected based on JSON log output.
-func LogAssertNoMergeDiscrepancyDetected() log.WatcherHandlerFactory {
-	return LogAssertNotEvent(roothash.LogEventMergeDiscrepancyDetected, "merge discrepancy detected")
-}
-
 // LogAssertPeerExchangeDisabled returns a handler which checks whether a peer
 // exchange disabled event was detected based on JSON log output.
 func LogAssertPeerExchangeDisabled() log.WatcherHandlerFactory {

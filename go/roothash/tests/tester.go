@@ -40,7 +40,6 @@ type runtimeState struct {
 	genesisBlock *block.Block
 
 	executorCommittee *testCommittee
-	mergeCommittee    *testCommittee
 	storageCommittee  *testCommittee
 	txnSchedCommittee *testCommittee
 }
@@ -195,7 +194,7 @@ func (s *runtimeState) testEpochTransitionBlock(t *testing.T, scheduler schedule
 		nodes[node.Node.ID] = node
 	}
 
-	s.executorCommittee, s.mergeCommittee, s.storageCommittee, s.txnSchedCommittee = mustGetCommittee(t, s.rt, epoch+1, scheduler, nodes)
+	s.executorCommittee, s.storageCommittee, s.txnSchedCommittee = mustGetCommittee(t, s.rt, epoch+1, scheduler, nodes)
 
 	// Wait to receive an epoch transition block.
 	for {
@@ -228,7 +227,7 @@ func testSuccessfulRound(t *testing.T, backend api.Backend, consensus consensusA
 func (s *runtimeState) testSuccessfulRound(t *testing.T, backend api.Backend, consensus consensusAPI.Backend, identity *identity.Identity) {
 	require := require.New(t)
 
-	rt, executorCommittee, mergeCommittee := s.rt, s.executorCommittee, s.mergeCommittee
+	rt, executorCommittee := s.rt, s.executorCommittee
 
 	dataDir, err := ioutil.TempDir("", "oasis-storage-test_")
 	require.NoError(err, "TempDir")
@@ -299,8 +298,8 @@ func (s *runtimeState) testSuccessfulRound(t *testing.T, backend api.Backend, co
 	toCommit = append(toCommit, executorCommittee.workers...)
 	for _, node := range toCommit {
 		commitBody := commitment.ComputeBody{
-			CommitteeID: executorCommittee.committee.EncodedMembersHash(),
 			Header: commitment.ComputeResultsHeader{
+				Round:        parent.Header.Round,
 				PreviousHash: parent.Header.PreviousHash,
 				IORoot:       parent.Header.IORoot,
 				StateRoot:    parent.Header.StateRoot,
@@ -312,7 +311,6 @@ func (s *runtimeState) testSuccessfulRound(t *testing.T, backend api.Backend, co
 
 		// Fake txn scheduler signature.
 		dispatch := &commitment.TxnSchedulerBatch{
-			CommitteeID:       commitBody.CommitteeID,
 			IORoot:            commitBody.InputRoot,
 			StorageSignatures: commitBody.InputStorageSigs,
 			Header:            child.Header,
@@ -330,28 +328,12 @@ func (s *runtimeState) testSuccessfulRound(t *testing.T, backend api.Backend, co
 		executorCommits = append(executorCommits, *commit)
 	}
 
-	// Generate all the merge commitments.
-	var mergeCommits []commitment.MergeCommitment
-	toCommit = []*registryTests.TestNode{}
-	toCommit = append(toCommit, mergeCommittee.workers...)
-	for _, node := range toCommit {
-		commitBody := commitment.MergeBody{
-			ExecutorCommits: executorCommits,
-			Header:          parent.Header,
-		}
-		// `err` shadows outside.
-		commit, err := commitment.SignMergeCommitment(node.Signer, &commitBody) // nolint: vetshadow
-		require.NoError(err, "SignSigned")
-
-		mergeCommits = append(mergeCommits, *commit)
-	}
-
 	ctx, cancel := context.WithTimeout(context.Background(), recvTimeout)
 	defer cancel()
 
-	tx := api.NewMergeCommitTx(0, nil, rt.Runtime.ID, mergeCommits)
+	tx := api.NewExecutorCommitTx(0, nil, rt.Runtime.ID, executorCommits)
 	err = consensusAPI.SignAndSubmitTx(ctx, consensus, toCommit[0].Signer, tx)
-	require.NoError(err, "MergeCommit")
+	require.NoError(err, "ExecutorCommit")
 
 	// Ensure that the round was finalized.
 	for {
@@ -380,15 +362,15 @@ func (s *runtimeState) testSuccessfulRound(t *testing.T, backend api.Backend, co
 			// There should be merge commitment events for all commitments.
 			evts, err := backend.GetEvents(ctx, blk.Height)
 			require.NoError(err, "GetEvents")
-			// Merge commit event + Finalized event.
-			require.Len(evts, len(mergeCommits)+1, "should have all events")
+			// Executor commit event + Finalized event.
+			require.Len(evts, len(executorCommits)+1, "should have all events")
 			// First event is Finalized.
 			require.EqualValues(&api.FinalizedEvent{Round: header.Round}, evts[0].FinalizedEvent, "finalized event should have the right round")
 			for i, ev := range evts[1:] {
 				switch {
-				case ev.MergeCommitted != nil:
-					// Merge commitment event.
-					require.EqualValues(mergeCommits[i], ev.MergeCommitted.Commit, "merge commitment event should have the right commitment")
+				case ev.ExecutorCommitted != nil:
+					// Executor commitment event.
+					require.EqualValues(executorCommits[i], ev.ExecutorCommitted.Commit, "executor commitment event should have the right commitment")
 				default:
 					// There should be no other event types.
 					t.Fatalf("unexpected event: %+v", ev)
@@ -418,7 +400,6 @@ func mustGetCommittee(
 	nodes map[signature.PublicKey]*registryTests.TestNode,
 ) (
 	executorCommittee *testCommittee,
-	mergeCommittee *testCommittee,
 	storageCommittee *testCommittee,
 	txnSchedCommittee *testCommittee,
 ) {
@@ -459,10 +440,8 @@ func mustGetCommittee(
 				groupSize = int(rt.Runtime.TxnScheduler.GroupSize)
 				groupBackupSize = 0
 			case scheduler.KindComputeExecutor:
-				fallthrough
-			case scheduler.KindComputeMerge:
-				groupSize = int(rt.Runtime.Merge.GroupSize)
-				groupBackupSize = int(rt.Runtime.Merge.GroupBackupSize)
+				groupSize = int(rt.Runtime.Executor.GroupSize)
+				groupBackupSize = int(rt.Runtime.Executor.GroupBackupSize)
 			case scheduler.KindStorage:
 				groupSize = int(rt.Runtime.Storage.GroupSize)
 			}
@@ -484,13 +463,11 @@ func mustGetCommittee(
 				txnSchedCommittee = &ret
 			case scheduler.KindComputeExecutor:
 				executorCommittee = &ret
-			case scheduler.KindComputeMerge:
-				mergeCommittee = &ret
 			case scheduler.KindStorage:
 				storageCommittee = &ret
 			}
 
-			if executorCommittee == nil || mergeCommittee == nil || storageCommittee == nil || txnSchedCommittee == nil {
+			if executorCommittee == nil || storageCommittee == nil || txnSchedCommittee == nil {
 				continue
 			}
 

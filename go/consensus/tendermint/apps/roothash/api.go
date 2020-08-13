@@ -68,22 +68,10 @@ type ValueExecutorCommitted struct {
 	Event roothash.ExecutorCommittedEvent `json:"event"`
 }
 
-// ValueMergeCommitted is the value component of a KeyMergeCommitted.
-type ValueMergeCommitted struct {
-	ID    common.Namespace             `json:"id"`
-	Event roothash.MergeCommittedEvent `json:"event"`
-}
-
 // ValueFinalized is the value component of a TagFinalized.
 type ValueFinalized struct {
 	ID    common.Namespace `json:"id"`
 	Round uint64           `json:"round"`
-}
-
-// ValueMergeDiscrepancyDetected is the value component of a KeyMergeDiscrepancyDetected.
-type ValueMergeDiscrepancyDetected struct {
-	Event roothash.MergeDiscrepancyDetectedEvent `json:"event"`
-	ID    common.Namespace                       `json:"id"`
 }
 
 // ValueExecutionDiscrepancyDetected is the value component of a KeyMergeDiscrepancyDetected.

@@ -24,9 +24,6 @@ const (
 	// LogEventExecutionDiscrepancyDetected is a log event value that signals
 	// an execution discrepancy has been detected.
 	LogEventExecutionDiscrepancyDetected = "roothash/execution_discrepancy_detected"
-	// LogEventMergeDiscrepancyDetected is a log event value that signals
-	// a merge discrepancy has been detected.
-	LogEventMergeDiscrepancyDetected = "roothash/merge_discrepancy_detected"
 	// LogEventTimerFired is a log event value that signals a timer has fired.
 	LogEventTimerFired = "roothash/timer_fired"
 	// LogEventRoundFailed is a log event value that signals a round has failed.
@@ -56,13 +53,10 @@ var (
 
 	// MethodExecutorCommit is the method name for executor commit submission.
 	MethodExecutorCommit = transaction.NewMethodName(ModuleName, "ExecutorCommit", ExecutorCommit{})
-	// MethodMergeCommit is the method name for merge commit submission.
-	MethodMergeCommit = transaction.NewMethodName(ModuleName, "MergeCommit", MergeCommit{})
 
 	// Methods is a list of all methods supported by the roothash backend.
 	Methods = []transaction.MethodName{
 		MethodExecutorCommit,
-		MethodMergeCommit,
 	}
 )
 
@@ -115,20 +109,6 @@ func NewExecutorCommitTx(nonce uint64, fee *transaction.Fee, runtimeID common.Na
 	})
 }
 
-// MergeCommit is the argument set for the MergeCommit method.
-type MergeCommit struct {
-	ID      common.Namespace             `json:"id"`
-	Commits []commitment.MergeCommitment `json:"commits"`
-}
-
-// NewMergeCommitTx creates a new executor commit transaction.
-func NewMergeCommitTx(nonce uint64, fee *transaction.Fee, runtimeID common.Namespace, commits []commitment.MergeCommitment) *transaction.Transaction {
-	return transaction.NewTransaction(nonce, fee, MethodMergeCommit, &MergeCommit{
-		ID:      runtimeID,
-		Commits: commits,
-	})
-}
-
 // AnnotatedBlock is an annotated roothash block.
 type AnnotatedBlock struct {
 	// Height is the underlying roothash backend's block height that
@@ -145,24 +125,10 @@ type ExecutorCommittedEvent struct {
 	Commit commitment.ExecutorCommitment `json:"commit"`
 }
 
-// MergeCommittedEvent is an event emitted each time a merge node commits.
-type MergeCommittedEvent struct {
-	// Commit is the merge commitment.
-	Commit commitment.MergeCommitment `json:"commit"`
-}
-
 // ExecutionDiscrepancyDetectedEvent is an execute discrepancy detected event.
 type ExecutionDiscrepancyDetectedEvent struct {
-	// CommitteeID is the identifier of the executor committee where a
-	// discrepancy has been detected.
-	CommitteeID hash.Hash `json:"cid"`
-
 	// Timeout signals whether the discrepancy was due to a timeout.
 	Timeout bool `json:"timeout"`
-}
-
-// MergeDiscrepancyDetectedEvent is a merge discrepancy detected event.
-type MergeDiscrepancyDetectedEvent struct {
 }
 
 // FinalizedEvent is a finalized event.
@@ -178,9 +144,7 @@ type Event struct {
 	RuntimeID common.Namespace `json:"runtime_id"`
 
 	ExecutorCommitted            *ExecutorCommittedEvent            `json:"executor_committed,omitempty"`
-	MergeCommitted               *MergeCommittedEvent               `json:"merge_committed,omitempty"`
 	ExecutionDiscrepancyDetected *ExecutionDiscrepancyDetectedEvent `json:"execution_discrepancy,omitempty"`
-	MergeDiscrepancyDetected     *MergeDiscrepancyDetectedEvent     `json:"merge_discrepancy,omitempty"`
 	FinalizedEvent               *FinalizedEvent                    `json:"finalized,omitempty"`
 }
 
@@ -220,8 +184,6 @@ type ConsensusParameters struct {
 const (
 	// GasOpComputeCommit is the gas operation identifier for compute commits.
 	GasOpComputeCommit transaction.Op = "compute_commit"
-	// GasOpMergeCommit is the gas operation identifier for merge commits.
-	GasOpMergeCommit transaction.Op = "merge_commit"
 )
 
 // XXX: Define reasonable default gas costs.
@@ -229,7 +191,6 @@ const (
 // DefaultGasCosts are the "default" gas costs for operations.
 var DefaultGasCosts = transaction.Costs{
 	GasOpComputeCommit: 1000,
-	GasOpMergeCommit:   1000,
 }
 
 // SanityCheckBlocks examines the blocks table.

@@ -42,10 +42,10 @@ func SchedulerImplementationTests(t *testing.T, name string, backend api.Backend
 	epochtime := consensus.EpochTime().(epochtime.SetableBackend)
 	epoch := epochtimeTests.MustAdvanceEpoch(t, epochtime, 1)
 
-	ensureValidCommittees := func(expectedExecutor, expectedTransactionScheduler, expectedMerge, expectedStorage int) {
-		var executor, transactionScheduler, merge, storage *api.Committee
+	ensureValidCommittees := func(expectedExecutor, expectedTransactionScheduler, expectedStorage int) {
+		var executor, transactionScheduler, storage *api.Committee
 		var seen int
-		for seen < 4 {
+		for seen < 3 {
 			select {
 			case committee := <-ch:
 				if committee.ValidFor < epoch {
@@ -64,10 +64,6 @@ func SchedulerImplementationTests(t *testing.T, name string, backend api.Backend
 					require.Nil(transactionScheduler, "haven't seen a transaction scheduler committee yet")
 					require.Len(committee.Members, expectedTransactionScheduler, "committee has all transaction scheduler nodes")
 					transactionScheduler = committee
-				case api.KindComputeMerge:
-					require.Nil(merge, "haven't seen a merge committee yet")
-					require.Len(committee.Members, expectedMerge, "committee has all merge nodes")
-					merge = committee
 				case api.KindStorage:
 					require.Nil(storage, "haven't seen a storage committee yet")
 					require.Len(committee.Members, expectedStorage, "committee has all storage nodes")
@@ -98,9 +94,6 @@ func SchedulerImplementationTests(t *testing.T, name string, backend api.Backend
 			case api.KindComputeTxnScheduler:
 				require.EqualValues(transactionScheduler, committee, "fetched transaction scheduler committee is identical")
 				transactionScheduler = nil
-			case api.KindComputeMerge:
-				require.EqualValues(merge, committee, "fetched merge committee is identical")
-				merge = nil
 			case api.KindStorage:
 				require.EqualValues(storage, committee, "fetched storage committee is identical")
 				storage = nil
@@ -109,7 +102,6 @@ func SchedulerImplementationTests(t *testing.T, name string, backend api.Backend
 
 		require.Nil(executor, "fetched an executor committee")
 		require.Nil(transactionScheduler, "fetched a transaction scheduler committee")
-		require.Nil(merge, "fetched a merge committee")
 		require.Nil(storage, "fetched a storage committee")
 	}
 
@@ -125,7 +117,6 @@ func SchedulerImplementationTests(t *testing.T, name string, backend api.Backend
 	ensureValidCommittees(
 		nExecutor,
 		int(rt.Runtime.TxnScheduler.GroupSize),
-		int(rt.Runtime.Merge.GroupSize)+int(rt.Runtime.Merge.GroupBackupSize),
 		nStorage,
 	)
 
@@ -141,7 +132,6 @@ func SchedulerImplementationTests(t *testing.T, name string, backend api.Backend
 	ensureValidCommittees(
 		3,
 		int(rt.Runtime.TxnScheduler.GroupSize),
-		int(rt.Runtime.Merge.GroupSize)+int(rt.Runtime.Merge.GroupBackupSize),
 		1,
 	)
 
@@ -196,9 +186,6 @@ func requireValidCommitteeMembers(t *testing.T, committee *api.Committee, runtim
 	case api.KindComputeExecutor:
 		require.EqualValues(runtime.Executor.GroupSize, workers, "executor committee should have the correct number of workers")
 		require.EqualValues(runtime.Executor.GroupBackupSize, backups, "executor committee should have the correct number of backup workers")
-	case api.KindComputeMerge:
-		require.EqualValues(runtime.Merge.GroupSize, workers, "merge committee should have the correct number of workers")
-		require.EqualValues(runtime.Merge.GroupBackupSize, backups, "merge committee should have the correct number of backup workers")
 	case api.KindStorage, api.KindComputeTxnScheduler:
 		numCommitteeMembersWithoutLeader := len(committee.Members)
 		needsLeader, err := committee.Kind.NeedsLeader()

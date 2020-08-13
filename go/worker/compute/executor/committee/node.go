@@ -20,6 +20,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/pubsub"
 	"github.com/oasisprotocol/oasis-core/go/common/tracing"
 	"github.com/oasisprotocol/oasis-core/go/common/version"
+	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
 	roothash "github.com/oasisprotocol/oasis-core/go/roothash/api"
 	"github.com/oasisprotocol/oasis-core/go/roothash/api/block"
 	"github.com/oasisprotocol/oasis-core/go/roothash/api/commitment"
@@ -32,7 +33,6 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/worker/common/committee"
 	"github.com/oasisprotocol/oasis-core/go/worker/common/p2p"
 	p2pError "github.com/oasisprotocol/oasis-core/go/worker/common/p2p/error"
-	mergeCommittee "github.com/oasisprotocol/oasis-core/go/worker/compute/merge/committee"
 	"github.com/oasisprotocol/oasis-core/go/worker/registration"
 )
 
@@ -114,7 +114,6 @@ type Node struct {
 	*commonWorker.RuntimeHostNode
 
 	commonNode *committee.Node
-	mergeNode  *mergeCommittee.Node
 
 	commonCfg    commonWorker.Config
 	roleProvider registration.RoleProvider
@@ -137,9 +136,6 @@ type Node struct {
 	stateTransitions *pubsub.Broker
 	// Bump this when we need to change what the worker selects over.
 	reselect chan struct{}
-
-	// Guarded by .commonNode.CrossNode.
-	faultDetector *faultDetector
 
 	logger *logging.Logger
 }
@@ -213,7 +209,7 @@ func (n *Node) HandlePeerMessage(ctx context.Context, message *p2p.Message) (boo
 			return false, p2pError.Permanent(err)
 		}
 
-		err := n.queueBatchBlocking(ctx, bd.CommitteeID, bd.IORoot, bd.StorageSignatures, bd.Header, sbd.Signature)
+		err := n.queueBatchBlocking(ctx, bd.IORoot, bd.StorageSignatures, bd.Header, sbd.Signature)
 		if err != nil {
 			return false, err
 		}
@@ -224,7 +220,6 @@ func (n *Node) HandlePeerMessage(ctx context.Context, message *p2p.Message) (boo
 
 func (n *Node) queueBatchBlocking(
 	ctx context.Context,
-	committeeID hash.Hash,
 	ioRootHash hash.Hash,
 	storageSignatures []signature.Signature,
 	hdr block.Header,
@@ -292,25 +287,18 @@ func (n *Node) queueBatchBlocking(
 
 	n.commonNode.CrossNode.Lock()
 	defer n.commonNode.CrossNode.Unlock()
-	return n.handleExternalBatchLocked(committeeID, batch, hdr)
+	return n.handleExternalBatchLocked(batch, hdr)
 }
 
 // HandleBatchFromTransactionSchedulerLocked processes a batch from the transaction scheduler.
 // Guarded by n.commonNode.CrossNode.
 func (n *Node) HandleBatchFromTransactionSchedulerLocked(
 	batchSpanCtx opentracing.SpanContext,
-	committeeID hash.Hash,
 	ioRoot hash.Hash,
 	batch transaction.RawBatch,
 	txnSchedSig signature.Signature,
 	inputStorageSigs []signature.Signature,
 ) {
-	epoch := n.commonNode.Group.GetEpochSnapshot()
-	expectedID := epoch.GetExecutorCommitteeID()
-	if !expectedID.Equal(&committeeID) {
-		return
-	}
-
 	n.maybeStartProcessingBatchLocked(&unresolvedBatch{
 		ioRoot: storage.Root{
 			Namespace: n.commonNode.CurrentBlock.Header.Namespace,
@@ -602,7 +590,6 @@ func (n *Node) proposeBatchLocked(batch *protocol.ComputedBatch) {
 
 	// Generate proposed compute results.
 	proposedResults := &commitment.ComputeBody{
-		CommitteeID:      epoch.GetExecutorCommitteeID(),
 		Header:           batch.Header,
 		RakSig:           batch.RakSig,
 		TxnSchedSig:      state.batch.txnSchedSignature,
@@ -664,7 +651,7 @@ func (n *Node) proposeBatchLocked(batch *protocol.ComputedBatch) {
 				)
 				return err
 			}
-			if err = proposedResults.VerifyStorageReceipt(lastHeader.Namespace, lastHeader.Round+1, &receiptBody); err != nil {
+			if err = proposedResults.VerifyStorageReceipt(lastHeader.Namespace, &receiptBody); err != nil {
 				n.logger.Error("failed to validate receipt body",
 					"receipt body", receiptBody,
 					"err", err,
@@ -690,7 +677,7 @@ func (n *Node) proposeBatchLocked(batch *protocol.ComputedBatch) {
 		return
 	}
 
-	// Commit.
+	// Sign the commitment and submit.
 	commit, err := commitment.SignExecutorCommitment(n.commonNode.Identity.NodeSigner, proposedResults)
 	if err != nil {
 		n.logger.Error("failed to sign commitment",
@@ -700,39 +687,25 @@ func (n *Node) proposeBatchLocked(batch *protocol.ComputedBatch) {
 		return
 	}
 
-	// Publish commitment to merge committee.
-	spanPublish := opentracing.StartSpan("PublishExecuteFinished(commitment)",
-		opentracing.ChildOf(state.batch.spanCtx),
-	)
-	err = n.commonNode.Group.PublishExecuteFinished(state.batch.spanCtx, commit)
-	if err != nil {
-		spanPublish.Finish()
-		n.logger.Error("failed to publish results to committee",
-			"err", err,
-		)
-		n.abortBatchLocked(err)
-		return
-	}
-	spanPublish.Finish()
+	// Publish commitment to the consensus layer.
+	tx := roothash.NewExecutorCommitTx(0, nil, n.commonNode.Runtime.ID(), []commitment.ExecutorCommitment{*commit})
+	go func() {
+		commitErr := consensus.SignAndSubmitTx(n.roundCtx, n.commonNode.Consensus, n.commonNode.Identity.NodeSigner, tx)
+		switch commitErr {
+		case nil:
+			n.logger.Info("executor commit finalized")
+		default:
+			n.logger.Error("failed to submit executor commit",
+				"err", commitErr,
+			)
+		}
+	}()
 
 	// TODO: Add crash point.
-
-	// Set up the fault detector so that we can submit the commitment independently from any other
-	// merge nodes in case a fault is detected (which would indicate that the entire merge committee
-	// is faulty).
-	n.faultDetector = newFaultDetector(n.roundCtx, n.commonNode.Runtime, commit, newNodeFaultSubmitter(n))
 
 	n.transitionLocked(StateWaitingForFinalize{
 		batchStartTime: state.batchStartTime,
 	})
-
-	if epoch.IsMergeMember() {
-		if n.mergeNode == nil {
-			n.logger.Error("scheduler says we are a merge worker, but we are not")
-		} else {
-			n.mergeNode.HandleResultsFromExecutorWorkerLocked(state.batch.spanCtx, commit)
-		}
-	}
 
 	crash.Here(crashPointBatchProposeAfter)
 }
@@ -740,31 +713,13 @@ func (n *Node) proposeBatchLocked(batch *protocol.ComputedBatch) {
 // HandleNewEventLocked implements NodeHooks.
 // Guarded by n.commonNode.CrossNode.
 func (n *Node) HandleNewEventLocked(ev *roothash.Event) {
-	// In case a fault detector exists, notify it of events.
-	if n.faultDetector != nil {
-		n.faultDetector.notify(ev)
-	}
-
 	dis := ev.ExecutionDiscrepancyDetected
 	if dis == nil {
 		// Ignore other events.
 		return
 	}
 
-	// Check if the discrepancy occurred in our committee.
-	epoch := n.commonNode.Group.GetEpochSnapshot()
-	expectedID := epoch.GetExecutorCommitteeID()
-	if !expectedID.Equal(&dis.CommitteeID) {
-		n.logger.Debug("ignoring discrepancy event for a different committee",
-			"expected_committee", expectedID,
-			"committee", dis.CommitteeID,
-		)
-		return
-	}
-
-	n.logger.Warn("execution discrepancy detected",
-		"committee_id", dis.CommitteeID,
-	)
+	n.logger.Warn("execution discrepancy detected")
 
 	crash.Here(crashPointDiscrepancyDetectedAfter)
 
@@ -803,7 +758,7 @@ func (n *Node) HandleNodeUpdateLocked(update *runtimeCommittee.NodeUpdate, snaps
 }
 
 // Guarded by n.commonNode.CrossNode.
-func (n *Node) handleExternalBatchLocked(committeeID hash.Hash, batch *unresolvedBatch, hdr block.Header) error {
+func (n *Node) handleExternalBatchLocked(batch *unresolvedBatch, hdr block.Header) error {
 	// If we are not waiting for a batch, don't do anything.
 	if _, ok := n.state.(StateWaitingForBatch); !ok {
 		return errIncorrectState
@@ -815,16 +770,6 @@ func (n *Node) handleExternalBatchLocked(committeeID hash.Hash, batch *unresolve
 	if !epoch.IsExecutorMember() {
 		n.logger.Error("got external batch while in incorrect role")
 		return errIncorrectRole
-	}
-
-	// We only accept batches for our own committee.
-	expectedID := epoch.GetExecutorCommitteeID()
-	if !expectedID.Equal(&committeeID) {
-		n.logger.Error("got external batch for a different executor committee",
-			"expected_committee", expectedID,
-			"committee", committeeID,
-		)
-		return nil
 	}
 
 	// Check if we have the correct block -- in this case, start processing the batch.
@@ -989,7 +934,6 @@ func (n *Node) worker() {
 
 func NewNode(
 	commonNode *committee.Node,
-	mergeNode *mergeCommittee.Node,
 	commonCfg commonWorker.Config,
 	roleProvider registration.RoleProvider,
 ) (*Node, error) {
@@ -1008,7 +952,6 @@ func NewNode(
 	n := &Node{
 		RuntimeHostNode:  rhn,
 		commonNode:       commonNode,
-		mergeNode:        mergeNode,
 		commonCfg:        commonCfg,
 		roleProvider:     roleProvider,
 		ctx:              ctx,

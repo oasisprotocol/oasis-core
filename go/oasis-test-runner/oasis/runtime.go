@@ -58,7 +58,6 @@ type RuntimeCfg struct { // nolint: maligned
 	GenesisRound     uint64
 
 	Executor     registry.ExecutorParameters
-	Merge        registry.MergeParameters
 	TxnScheduler registry.TxnSchedulerParameters
 	Storage      registry.StorageParameters
 
@@ -128,7 +127,6 @@ func (net *Network) NewRuntime(cfg *RuntimeCfg) (*Runtime, error) {
 		Kind:            cfg.Kind,
 		TEEHardware:     cfg.TEEHardware,
 		Executor:        cfg.Executor,
-		Merge:           cfg.Merge,
 		TxnScheduler:    cfg.TxnScheduler,
 		Storage:         cfg.Storage,
 		AdmissionPolicy: cfg.AdmissionPolicy,

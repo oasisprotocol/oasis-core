@@ -10,7 +10,6 @@ import (
 	workerCommon "github.com/oasisprotocol/oasis-core/go/worker/common"
 	committeeCommon "github.com/oasisprotocol/oasis-core/go/worker/common/committee"
 	"github.com/oasisprotocol/oasis-core/go/worker/compute/executor/committee"
-	"github.com/oasisprotocol/oasis-core/go/worker/compute/merge"
 	"github.com/oasisprotocol/oasis-core/go/worker/registration"
 )
 
@@ -19,7 +18,6 @@ type Worker struct {
 	enabled bool
 
 	commonWorker *workerCommon.Worker
-	merge        *merge.Worker
 	registration *registration.Worker
 
 	runtimes map[common.Namespace]*committee.Node
@@ -141,16 +139,13 @@ func (w *Worker) registerRuntime(commonNode *committeeCommon.Node) error {
 		"runtime_id", id,
 	)
 
-	// Get other nodes from this runtime.
-	mergeNode := w.merge.GetRuntime(id)
-
 	rp, err := w.registration.NewRuntimeRoleProvider(node.RoleComputeWorker, id)
 	if err != nil {
 		return fmt.Errorf("failed to create role provider: %w", err)
 	}
 
 	// Create committee node for the given runtime.
-	node, err := committee.NewNode(commonNode, mergeNode, w.commonWorker.GetConfig(), rp)
+	node, err := committee.NewNode(commonNode, w.commonWorker.GetConfig(), rp)
 	if err != nil {
 		return err
 	}
@@ -169,7 +164,6 @@ func newWorker(
 	dataDir string,
 	enabled bool,
 	commonWorker *workerCommon.Worker,
-	merge *merge.Worker,
 	registration *registration.Worker,
 ) (*Worker, error) {
 	ctx, cancelCtx := context.WithCancel(context.Background())
@@ -177,7 +171,6 @@ func newWorker(
 	w := &Worker{
 		enabled:      enabled,
 		commonWorker: commonWorker,
-		merge:        merge,
 		registration: registration,
 		runtimes:     make(map[common.Namespace]*committee.Node),
 		ctx:          ctx,

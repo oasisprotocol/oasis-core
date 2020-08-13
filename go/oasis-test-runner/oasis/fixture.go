@@ -198,7 +198,6 @@ type RuntimeFixture struct { // nolint: maligned
 	GenesisRound     uint64           `json:"genesis_round,omitempty"`
 
 	Executor     registry.ExecutorParameters     `json:"executor"`
-	Merge        registry.MergeParameters        `json:"merge"`
 	TxnScheduler registry.TxnSchedulerParameters `json:"txn_scheduler"`
 	Storage      registry.StorageParameters      `json:"storage"`
 
@@ -237,7 +236,6 @@ func (f *RuntimeFixture) Create(netFixture *NetworkFixture, net *Network) (*Runt
 		TEEHardware:        netFixture.TEE.Hardware,
 		MrSigner:           netFixture.TEE.MrSigner,
 		Executor:           f.Executor,
-		Merge:              f.Merge,
 		TxnScheduler:       f.TxnScheduler,
 		Storage:            f.Storage,
 		AdmissionPolicy:    f.AdmissionPolicy,

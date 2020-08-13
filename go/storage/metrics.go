@@ -51,8 +51,6 @@ var (
 
 	labelApply           = prometheus.Labels{"call": "apply"}
 	labelApplyBatch      = prometheus.Labels{"call": "apply_batch"}
-	labelMerge           = prometheus.Labels{"call": "merge"}
-	labelMergeBatch      = prometheus.Labels{"call": "merge_batch"}
 	labelSyncGet         = prometheus.Labels{"call": "sync_get"}
 	labelSyncGetPrefixes = prometheus.Labels{"call": "sync_get_prefixes"}
 	labelSyncIterate     = prometheus.Labels{"call": "sync_iterate"}
@@ -111,32 +109,6 @@ func (w *metricsWrapper) ApplyBatch(ctx context.Context, request *api.ApplyBatch
 	}
 
 	storageCalls.With(labelApplyBatch).Inc()
-	return receipts, err
-}
-
-func (w *metricsWrapper) Merge(ctx context.Context, request *api.MergeRequest) ([]*api.Receipt, error) {
-	start := time.Now()
-	receipts, err := w.Backend.Merge(ctx, request)
-	storageLatency.With(labelMerge).Observe(time.Since(start).Seconds())
-	if err != nil {
-		storageFailures.With(labelMerge).Inc()
-		return nil, err
-	}
-
-	storageCalls.With(labelMerge).Inc()
-	return receipts, err
-}
-
-func (w *metricsWrapper) MergeBatch(ctx context.Context, request *api.MergeBatchRequest) ([]*api.Receipt, error) {
-	start := time.Now()
-	receipts, err := w.Backend.MergeBatch(ctx, request)
-	storageLatency.With(labelMergeBatch).Observe(time.Since(start).Seconds())
-	if err != nil {
-		storageFailures.With(labelMergeBatch).Inc()
-		return nil, err
-	}
-
-	storageCalls.With(labelMergeBatch).Inc()
 	return receipts, err
 }
 

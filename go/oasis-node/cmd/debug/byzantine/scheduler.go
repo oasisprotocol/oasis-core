@@ -3,7 +3,6 @@ package byzantine
 import (
 	"context"
 	"fmt"
-	"time"
 
 	"github.com/oasisprotocol/oasis-core/go/common"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
@@ -11,7 +10,6 @@ import (
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
 	epochtime "github.com/oasisprotocol/oasis-core/go/epochtime/api"
 	scheduler "github.com/oasisprotocol/oasis-core/go/scheduler/api"
-	"github.com/oasisprotocol/oasis-core/go/worker/common/p2p"
 )
 
 func schedulerNextElectionHeight(svc consensus.Backend, epoch epochtime.EpochTime) (int64, error) {
@@ -100,21 +98,6 @@ func schedulerForRoleInCommittee(ht *honestTendermint, height int64, committee *
 			return err
 		}
 	}
-
-	return nil
-}
-
-func schedulerPublishToCommittee(ph *p2pHandle, runtimeID common.Namespace, message *p2p.Message) error {
-	// HACK: So, the ever-byzantine debug code is written under the
-	// assumption that it's possible to do p2p message delivery in
-	// a synchronous manner.
-	//
-	// This is no longer possible.  Just publish and strategically
-	// sleep.  Eventually someone could/should rewrite all of this
-	// debug code.   The only thing that uses it is CI anyway.
-
-	ph.service.Publish(ph.context, runtimeID, message)
-	time.Sleep(3 * time.Second) // Sigh
 
 	return nil
 }

@@ -59,22 +59,6 @@ func (sr *storageRouter) ApplyBatch(ctx context.Context, request *api.ApplyBatch
 	return rt.Storage().ApplyBatch(ctx, request)
 }
 
-func (sr *storageRouter) Merge(ctx context.Context, request *api.MergeRequest) ([]*api.Receipt, error) {
-	rt, err := sr.getRuntime(request.Namespace)
-	if err != nil {
-		return nil, err
-	}
-	return rt.Storage().Merge(ctx, request)
-}
-
-func (sr *storageRouter) MergeBatch(ctx context.Context, request *api.MergeBatchRequest) ([]*api.Receipt, error) {
-	rt, err := sr.getRuntime(request.Namespace)
-	if err != nil {
-		return nil, err
-	}
-	return rt.Storage().MergeBatch(ctx, request)
-}
-
 func (sr *storageRouter) GetDiff(ctx context.Context, request *api.GetDiffRequest) (api.WriteLogIterator, error) {
 	rt, err := sr.getRuntime(request.StartRoot.Namespace)
 	if err != nil {

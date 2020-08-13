@@ -4,7 +4,6 @@ package api
 import (
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
 	"github.com/oasisprotocol/oasis-core/go/runtime/transaction"
-	"github.com/oasisprotocol/oasis-core/go/worker/common/committee"
 )
 
 // Algorithm defines an algorithm for scheduling incoming transaction.
@@ -16,10 +15,6 @@ type Algorithm interface {
 
 	// IsInitialized returns true, if an algorithm has been initialized.
 	IsInitialized() bool
-
-	// EpochTransition notifies the transaction scheduler about a new
-	// epoch transition, passing in an epoch snapshot.
-	EpochTransition(epoch *committee.EpochSnapshot) error
 
 	// ScheduleTx attempts to schedule a transaction.
 	//
@@ -44,5 +39,5 @@ type Algorithm interface {
 // TransactionDispatcher dispatches transactions to a scheduled executor committee.
 type TransactionDispatcher interface {
 	// Dispatch attempts to dispatch a batch to a executor committee.
-	Dispatch(committeeID hash.Hash, batch transaction.RawBatch) error
+	Dispatch(batch transaction.RawBatch) error
 }

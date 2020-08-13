@@ -17,7 +17,6 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/storage/api"
 	"github.com/oasisprotocol/oasis-core/go/storage/mkvs"
 	"github.com/oasisprotocol/oasis-core/go/storage/mkvs/checkpoint"
-	"github.com/oasisprotocol/oasis-core/go/storage/mkvs/writelog"
 )
 
 var testValues = [][]byte{
@@ -91,9 +90,6 @@ func StorageImplementationTests(t *testing.T, localBackend api.LocalBackend, bac
 
 	t.Run("Basic", func(t *testing.T) {
 		testBasic(t, localBackend, backend, namespace, round)
-	})
-	t.Run("Merge", func(t *testing.T) {
-		testMerge(t, backend, namespace, round)
 	})
 }
 
@@ -262,108 +258,4 @@ func testBasic(t *testing.T, localBackend api.LocalBackend, backend api.Backend,
 		require.NoError(t, err, "Copy")
 		require.Equal(t, cp.Chunks[0], hb.Build(), "GetCheckpointChunk must return correct chunk")
 	})
-}
-
-func testMerge(t *testing.T, backend api.Backend, namespace common.Namespace, round uint64) {
-	ctx := context.Background()
-
-	writeLogs := []api.WriteLog{
-		// Base root.
-		{
-			api.LogEntry{Key: []byte("foo"), Value: []byte("i am base")},
-		},
-		// First root.
-		{
-			api.LogEntry{Key: []byte("first"), Value: []byte("i am first root")},
-		},
-		// Second root.
-		{
-			api.LogEntry{Key: []byte("second"), Value: []byte("i am second root")},
-		},
-		// Third root.
-		{
-			api.LogEntry{Key: []byte("third"), Value: []byte("i am third root")},
-		},
-	}
-
-	// Create all roots.
-	var roots []hash.Hash
-	for idx, writeLog := range writeLogs {
-		var dstRound uint64
-		var baseRoot hash.Hash
-		if idx == 0 {
-			baseRoot.Empty()
-			dstRound = round
-		} else {
-			baseRoot = roots[0]
-			dstRound = round + 1
-		}
-
-		// Generate expected root hash.
-		tree := mkvs.NewWithRoot(backend, nil, api.Root{Namespace: namespace, Version: dstRound, Hash: baseRoot})
-		defer tree.Close()
-		err := tree.ApplyWriteLog(ctx, writelog.NewStaticIterator(writeLog))
-		require.NoError(t, err, "ApplyWriteLog")
-		var root hash.Hash
-		_, root, err = tree.Commit(ctx, namespace, dstRound)
-		require.NoError(t, err, "Commit")
-
-		// Apply to storage backend.
-		_, err = backend.Apply(ctx, &api.ApplyRequest{
-			Namespace: namespace,
-			SrcRound:  round,
-			SrcRoot:   baseRoot,
-			DstRound:  dstRound,
-			DstRoot:   root,
-			WriteLog:  writeLog,
-		})
-		require.NoError(t, err, "Apply")
-
-		roots = append(roots, root)
-	}
-
-	// Try to merge with only specifying the base.
-	_, err := backend.Merge(ctx, &api.MergeRequest{Namespace: namespace, Round: round, Base: roots[0]})
-	require.Error(t, err, "Merge without other roots should return an error")
-
-	// Try to merge with only specifying the base and first root.
-	receipts, err := backend.Merge(ctx, &api.MergeRequest{Namespace: namespace, Round: round, Base: roots[0], Others: roots[1:2]})
-	require.NoError(t, err, "Merge")
-	require.NotNil(t, receipts, "Merge should return receipts")
-
-	for _, receipt := range receipts {
-		var receiptBody api.ReceiptBody
-		err = receipt.Open(&receiptBody)
-		require.NoError(t, err, "receipt.Open")
-		require.Len(t, receiptBody.Roots, 1, "receipt should contain 1 root")
-		require.EqualValues(t, roots[1], receiptBody.Roots[0], "merged root should be equal to the only other root")
-	}
-
-	// Try to merge with specifying the base and all three roots.
-	receipts, err = backend.Merge(ctx, &api.MergeRequest{Namespace: namespace, Round: round, Base: roots[0], Others: roots[1:]})
-	require.NoError(t, err, "Merge")
-	require.NotNil(t, receipts, "Merge should return receipts")
-
-	var mergedRoot hash.Hash
-	for _, receipt := range receipts {
-		var receiptBody api.ReceiptBody
-		err = receipt.Open(&receiptBody)
-		require.NoError(t, err, "receipt.Open")
-		require.Len(t, receiptBody.Roots, 1, "receipt should contain 1 root")
-
-		mergedRoot = receiptBody.Roots[0]
-	}
-
-	// Make sure that the merged root is the same as applying all write logs against
-	// the base root.
-	tree := mkvs.NewWithRoot(backend, nil, api.Root{Namespace: namespace, Version: round, Hash: roots[0]})
-	defer tree.Close()
-	for _, writeLog := range writeLogs[1:] {
-		err = tree.ApplyWriteLog(ctx, writelog.NewStaticIterator(writeLog))
-		require.NoError(t, err, "ApplyWriteLog")
-	}
-	_, expectedRoot, err := tree.Commit(ctx, namespace, round+1)
-	require.NoError(t, err, "Commit")
-
-	require.Equal(t, expectedRoot, mergedRoot, "merged root should match expected root")
 }

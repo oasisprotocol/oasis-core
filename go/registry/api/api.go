@@ -1052,14 +1052,6 @@ func VerifyRegisterRuntimeArgs( // nolint: gocyclo
 			return nil, fmt.Errorf("%w: executor group too small", ErrInvalidArgument)
 		}
 
-		// Ensure there is at least one member of the merge group.
-		if rt.Merge.GroupSize == 0 {
-			logger.Error("RegisterRuntime: merge group size too small",
-				"runtime", rt,
-			)
-			return nil, fmt.Errorf("%w: merge group too small", ErrInvalidArgument)
-		}
-
 		// Ensure there is at least one member of the transaction scheduler group.
 		if rt.TxnScheduler.GroupSize == 0 {
 			logger.Error("RegisterRuntime: transaction scheduler group too small",
@@ -1186,18 +1178,6 @@ func VerifyRegisterRuntimeStorageArgs(rt *Runtime, logger *logging.Logger) error
 			"runtime", rt,
 		)
 		return fmt.Errorf("%w: storage MaxApplyOps parameter too small", ErrInvalidArgument)
-	}
-	if params.MaxMergeRoots == 0 {
-		logger.Error("RegisterRuntime: storage MaxMergeRoots parameter too small",
-			"runtime", rt,
-		)
-		return fmt.Errorf("%w: storage MaxMergeRoots parameter too small", ErrInvalidArgument)
-	}
-	if params.MaxMergeOps < 2 {
-		logger.Error("RegisterRuntime: storage MaxMergeOps parameter too small",
-			"runtime", rt,
-		)
-		return fmt.Errorf("%w: storage MaxMergeOps parameter too small", ErrInvalidArgument)
 	}
 
 	// Verify storage checkpointing configuration if enabled.

@@ -38,7 +38,6 @@ var (
 	RNGContextExecutor             = []byte("EkS-ABCI-Compute")
 	RNGContextStorage              = []byte("EkS-ABCI-Storage")
 	RNGContextTransactionScheduler = []byte("EkS-ABCI-TransactionScheduler")
-	RNGContextMerge                = []byte("EkS-ABCI-Merge")
 	RNGContextValidators           = []byte("EkS-ABCI-Validators")
 	RNGContextEntities             = []byte("EkS-ABCI-Entities")
 )
@@ -169,7 +168,6 @@ func (app *schedulerApplication) BeginBlock(ctx *api.Context, request types.Requ
 		kinds := []scheduler.CommitteeKind{
 			scheduler.KindComputeExecutor,
 			scheduler.KindComputeTxnScheduler,
-			scheduler.KindComputeMerge,
 			scheduler.KindStorage,
 		}
 		for _, kind := range kinds {
@@ -346,19 +344,6 @@ func (app *schedulerApplication) isSuitableTransactionScheduler(ctx *api.Context
 	return false
 }
 
-func (app *schedulerApplication) isSuitableMergeWorker(ctx *api.Context, n *node.Node, rt *registry.Runtime) bool {
-	if !n.HasRoles(node.RoleComputeWorker) {
-		return false
-	}
-	for _, nrt := range n.Runtimes {
-		if !nrt.ID.Equal(&rt.ID) {
-			continue
-		}
-		return true
-	}
-	return false
-}
-
 // GetPerm generates a permutation that we use to choose nodes from a list of eligible nodes to elect.
 func GetPerm(beacon []byte, runtimeID common.Namespace, rngCtx []byte, nrNodes int) ([]int, error) {
 	drbg, err := drbg.New(crypto.SHA512, beacon, runtimeID[:], rngCtx)
@@ -404,11 +389,6 @@ func (app *schedulerApplication) electCommittee(
 		isSuitableFn = app.isSuitableExecutorWorker
 		workerSize = int(rt.Executor.GroupSize)
 		backupSize = int(rt.Executor.GroupBackupSize)
-	case scheduler.KindComputeMerge:
-		rngCtx = RNGContextMerge
-		isSuitableFn = app.isSuitableMergeWorker
-		workerSize = int(rt.Merge.GroupSize)
-		backupSize = int(rt.Merge.GroupBackupSize)
 	case scheduler.KindComputeTxnScheduler:
 		rngCtx = RNGContextTransactionScheduler
 		isSuitableFn = app.isSuitableTransactionScheduler

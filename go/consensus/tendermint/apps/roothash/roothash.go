@@ -3,7 +3,6 @@ package roothash
 
 import (
 	"bytes"
-	"encoding/binary"
 	"errors"
 	"fmt"
 
@@ -11,7 +10,6 @@ import (
 
 	"github.com/oasisprotocol/oasis-core/go/common"
 	"github.com/oasisprotocol/oasis-core/go/common/cbor"
-	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
 	"github.com/oasisprotocol/oasis-core/go/consensus/api/transaction"
 	tmapi "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/api"
@@ -122,7 +120,7 @@ func (app *rootHashApplication) onCommitteeChanged(ctx *tmapi.Context, epoch epo
 		rtState.Suspended = false
 
 		// Prepare new runtime committees based on what the scheduler did.
-		committeeID, executorPool, mergePool, empty, err := app.prepareNewCommittees(ctx, epoch, rtState, schedState, regState)
+		executorPool, empty, err := app.prepareNewCommittees(ctx, epoch, rtState, schedState, regState)
 		if err != nil {
 			return err
 		}
@@ -152,7 +150,7 @@ func (app *rootHashApplication) onCommitteeChanged(ctx *tmapi.Context, epoch epo
 		}
 
 		// If the committee has actually changed, force a new round.
-		if !rtState.Suspended && (rtState.Round == nil || !rtState.Round.CommitteeID.Equal(&committeeID)) {
+		if !rtState.Suspended {
 			ctx.Logger().Debug("updating committee for runtime",
 				"runtime_id", rt.ID,
 			)
@@ -163,7 +161,6 @@ func (app *rootHashApplication) onCommitteeChanged(ctx *tmapi.Context, epoch epo
 
 			ctx.Logger().Debug("new committee, transitioning round",
 				"runtime_id", rt.ID,
-				"committee_id", committeeID,
 				"round", blockNr,
 			)
 
@@ -172,7 +169,7 @@ func (app *rootHashApplication) onCommitteeChanged(ctx *tmapi.Context, epoch epo
 			app.emitEmptyBlock(ctx, rtState, block.EpochTransition)
 
 			// Create a new round.
-			rtState.Round = roothashState.NewRound(committeeID, executorPool, mergePool, rtState.CurrentBlock)
+			rtState.Round = roothashState.NewRound(executorPool, rtState.CurrentBlock)
 		}
 
 		// Update the runtime descriptor to the latest per-epoch value.
@@ -215,39 +212,14 @@ func (app *rootHashApplication) prepareNewCommittees(
 	schedState *schedulerState.MutableState,
 	regState *registryState.MutableState,
 ) (
-	committeeID hash.Hash,
-	executorPool *commitment.MultiPool,
-	mergePool *commitment.Pool,
+	executorPool *commitment.Pool,
 	empty bool,
 	err error,
 ) {
 	rtID := rtState.Runtime.ID
 
-	// Derive a deterministic committee identifier that depends on memberships
-	// of all committees. We need this to be able to quickly see if any
-	// committee members have changed.
-	//
-	// We first include the current epoch, then all executor committee member
-	// hashes and then the merge committee member hash:
-	//
-	//   [little-endian epoch]
-	//   "executor committees follow"
-	//   [executor committe 1 members hash]
-	//   [executor committe 2 members hash]
-	//   ...
-	//   [executor committe n members hash]
-	//   "merge committee follows"
-	//   [merge committee members hash]
-	//
-	var committeeIDParts [][]byte
-	var rawEpoch [8]byte
-	binary.LittleEndian.PutUint64(rawEpoch[:], uint64(epoch))
-	committeeIDParts = append(committeeIDParts, rawEpoch[:])
-	committeeIDParts = append(committeeIDParts, []byte("executor committees follow"))
-
-	// NOTE: There will later be multiple executor committees.
-	var executorCommittees []*scheduler.Committee
-	xc1, err := schedState.Committee(ctx, scheduler.KindComputeExecutor, rtID)
+	executorPool = new(commitment.Pool)
+	executorCommittee, err := schedState.Committee(ctx, scheduler.KindComputeExecutor, rtID)
 	if err != nil {
 		ctx.Logger().Error("checkCommittees: failed to get executor committee from scheduler",
 			"err", err,
@@ -255,54 +227,17 @@ func (app *rootHashApplication) prepareNewCommittees(
 		)
 		return
 	}
-	if xc1 != nil {
-		executorCommittees = append(executorCommittees, xc1)
-	}
-
-	executorPool = &commitment.MultiPool{
-		Committees: make(map[hash.Hash]*commitment.Pool),
-	}
-	if len(executorCommittees) == 0 {
-		ctx.Logger().Warn("checkCommittees: no executor committees",
-			"runtime", rtID,
-		)
-		empty = true
-	}
-	for _, executorCommittee := range executorCommittees {
-		executorCommitteeID := executorCommittee.EncodedMembersHash()
-		committeeIDParts = append(committeeIDParts, executorCommitteeID[:])
-
-		executorPool.Committees[executorCommitteeID] = &commitment.Pool{
-			Runtime:   rtState.Runtime,
-			Committee: executorCommittee,
-		}
-	}
-
-	mergePool = new(commitment.Pool)
-	committeeIDParts = append(committeeIDParts, []byte("merge committee follows"))
-	mergeCommittee, err := schedState.Committee(ctx, scheduler.KindComputeMerge, rtID)
-	if err != nil {
-		ctx.Logger().Error("checkCommittees: failed to get merge committee from scheduler",
-			"err", err,
-			"runtime", rtID,
-		)
-		return
-	}
-	if mergeCommittee == nil {
-		ctx.Logger().Warn("checkCommittees: no merge committee",
+	if executorCommittee == nil {
+		ctx.Logger().Warn("checkCommittees: no executor committee",
 			"runtime", rtID,
 		)
 		empty = true
 	} else {
-		mergePool = &commitment.Pool{
+		executorPool = &commitment.Pool{
 			Runtime:   rtState.Runtime,
-			Committee: mergeCommittee,
+			Committee: executorCommittee,
 		}
-		mergeCommitteeID := mergeCommittee.EncodedMembersHash()
-		committeeIDParts = append(committeeIDParts, mergeCommitteeID[:])
 	}
-
-	committeeID.FromBytes(committeeIDParts...)
 	return
 }
 
@@ -334,13 +269,6 @@ func (app *rootHashApplication) ExecuteTx(ctx *tmapi.Context, tx *transaction.Tr
 		}
 
 		return app.executorCommit(ctx, state, &xc)
-	case roothash.MethodMergeCommit:
-		var mc roothash.MergeCommit
-		if err := cbor.Unmarshal(tx.Body, &mc); err != nil {
-			return err
-		}
-
-		return app.mergeCommit(ctx, state, &mc)
 	default:
 		return roothash.ErrInvalidArgument
 	}
@@ -491,16 +419,13 @@ func (app *rootHashApplication) FireTimer(ctx *tmapi.Context, timer *tmapi.Timer
 		"timer_round", tCtx.Round,
 	)
 
-	if rtState.Round.MergePool.IsTimeout(ctx.Now()) {
+	if rtState.Round.ExecutorPool.IsTimeout(ctx.Now()) {
 		if err = app.tryFinalizeBlock(ctx, rtState, true); err != nil {
 			ctx.Logger().Error("failed to finalize block",
 				"err", err,
 			)
 			return fmt.Errorf("failed to finalize block: %w", err)
 		}
-	}
-	for _, pool := range rtState.Round.ExecutorPool.GetTimeoutCommittees(ctx.Now()) {
-		app.tryFinalizeExecute(ctx, rtState, pool, true)
 	}
 
 	if err = state.SetRuntimeState(ctx, rtState); err != nil {
@@ -537,86 +462,7 @@ func (app *rootHashApplication) updateTimer(
 	}
 }
 
-func (app *rootHashApplication) tryFinalizeExecute(
-	ctx *tmapi.Context,
-	rtState *roothashState.RuntimeState,
-	pool *commitment.Pool,
-	forced bool,
-) {
-	runtime := rtState.Runtime
-	latestBlock := rtState.CurrentBlock
-	blockNr := latestBlock.Header.Round
-	committeeID := pool.GetCommitteeID()
-
-	defer app.updateTimer(ctx, rtState, blockNr)
-
-	if rtState.Round.Finalized {
-		ctx.Logger().Error("attempted to finalize execute when block already finalized",
-			"round", blockNr,
-			"committee_id", committeeID,
-		)
-		return
-	}
-
-	_, err := pool.TryFinalize(ctx.Now(), runtime.Executor.RoundTimeout, forced, true)
-	switch err {
-	case nil:
-		// No error -- there is no discrepancy. But only the merge committee
-		// can make progress even if we have all executor commitments.
-
-		// TODO: Check if we need to punish the merge committee.
-
-		ctx.Logger().Warn("no execution discrepancy, but only merge committee can make progress",
-			"round", blockNr,
-			"committee_id", committeeID,
-		)
-
-		if !forced {
-			// If this was not a timeout, we give the merge committee some
-			// more time to merge, otherwise we fail the round.
-			return
-		}
-	case commitment.ErrStillWaiting:
-		// Need more commits.
-		return
-	case commitment.ErrDiscrepancyDetected:
-		// Discrepancy has been detected.
-		ctx.Logger().Warn("execution discrepancy detected",
-			"round", blockNr,
-			"committee_id", committeeID,
-			logging.LogEvent, roothash.LogEventExecutionDiscrepancyDetected,
-		)
-
-		tagV := ValueExecutionDiscrepancyDetected{
-			ID: runtime.ID,
-			Event: roothash.ExecutionDiscrepancyDetectedEvent{
-				CommitteeID: pool.GetCommitteeID(),
-				Timeout:     forced,
-			},
-		}
-		ctx.EmitEvent(
-			tmapi.NewEventBuilder(app.Name()).
-				Attribute(KeyExecutionDiscrepancyDetected, cbor.Marshal(tagV)).
-				Attribute(KeyRuntimeID, ValueRuntimeID(runtime.ID)),
-		)
-		return
-	default:
-	}
-
-	// Something else went wrong, emit empty error block. Note that we need
-	// to abort everything even if only one committee failed to finalize as
-	// there is otherwise no way to make progress as merge committees will
-	// refuse to merge if there are discrepancies.
-	ctx.Logger().Error("round failed",
-		"round", blockNr,
-		"err", err,
-		logging.LogEvent, roothash.LogEventRoundFailed,
-	)
-
-	app.emitEmptyBlock(ctx, rtState, block.RoundFailed)
-}
-
-func (app *rootHashApplication) tryFinalizeMerge(
+func (app *rootHashApplication) tryFinalizeExecutor(
 	ctx *tmapi.Context,
 	rtState *roothashState.RuntimeState,
 	forced bool,
@@ -634,7 +480,7 @@ func (app *rootHashApplication) tryFinalizeMerge(
 		return nil
 	}
 
-	commit, err := rtState.Round.MergePool.TryFinalize(ctx.Now(), runtime.Merge.RoundTimeout, forced, true)
+	commit, err := rtState.Round.ExecutorPool.TryFinalize(ctx.Now(), runtime.Executor.RoundTimeout, forced, true)
 	switch err {
 	case nil:
 		// Round has been finalized.
@@ -643,11 +489,13 @@ func (app *rootHashApplication) tryFinalizeMerge(
 		)
 
 		// Generate the final block.
-		blk := new(block.Block)
-		blk.Header = commit.ToDDResult().(block.Header)
-		blk.Header.Timestamp = uint64(ctx.Now().Unix())
+		hdr := commit.ToDDResult().(commitment.ComputeResultsHeader)
 
-		rtState.Round.MergePool.ResetCommitments()
+		blk := block.NewEmptyBlock(rtState.CurrentBlock, uint64(ctx.Now().Unix()), block.Normal)
+		blk.Header.IORoot = hdr.IORoot
+		blk.Header.StateRoot = hdr.StateRoot
+		// Messages omitted on purpose.
+
 		rtState.Round.ExecutorPool.ResetCommitments()
 		rtState.Round.Finalized = true
 
@@ -661,18 +509,20 @@ func (app *rootHashApplication) tryFinalizeMerge(
 		return nil
 	case commitment.ErrDiscrepancyDetected:
 		// Discrepancy has been detected.
-		ctx.Logger().Warn("merge discrepancy detected",
+		ctx.Logger().Warn("executor discrepancy detected",
 			"round", blockNr,
-			logging.LogEvent, roothash.LogEventMergeDiscrepancyDetected,
+			logging.LogEvent, roothash.LogEventExecutionDiscrepancyDetected,
 		)
 
-		tagV := ValueMergeDiscrepancyDetected{
-			ID:    runtime.ID,
-			Event: roothash.MergeDiscrepancyDetectedEvent{},
+		tagV := ValueExecutionDiscrepancyDetected{
+			ID: runtime.ID,
+			Event: roothash.ExecutionDiscrepancyDetectedEvent{
+				Timeout: forced,
+			},
 		}
 		ctx.EmitEvent(
 			tmapi.NewEventBuilder(app.Name()).
-				Attribute(KeyMergeDiscrepancyDetected, cbor.Marshal(tagV)).
+				Attribute(KeyExecutionDiscrepancyDetected, cbor.Marshal(tagV)).
 				Attribute(KeyRuntimeID, ValueRuntimeID(runtime.ID)),
 		)
 		return nil
@@ -735,9 +585,9 @@ func (app *rootHashApplication) postProcessFinalizedBlock(ctx *tmapi.Context, rt
 func (app *rootHashApplication) tryFinalizeBlock(
 	ctx *tmapi.Context,
 	rtState *roothashState.RuntimeState,
-	mergeForced bool,
+	forced bool,
 ) error {
-	finalizedBlock := app.tryFinalizeMerge(ctx, rtState, mergeForced)
+	finalizedBlock := app.tryFinalizeExecutor(ctx, rtState, forced)
 	if finalizedBlock == nil {
 		return nil
 	}

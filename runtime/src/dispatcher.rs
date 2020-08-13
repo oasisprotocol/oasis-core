@@ -405,6 +405,7 @@ impl Dispatcher {
                         .expect("io commit must succeed");
 
                     let header = ComputeResultsHeader {
+                        round: block.header.round + 1,
                         previous_hash: block.header.encoded_hash(),
                         io_root,
                         state_root: new_state_root,

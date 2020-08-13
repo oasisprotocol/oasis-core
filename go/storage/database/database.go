@@ -138,38 +138,6 @@ func (ba *databaseBackend) ApplyBatch(ctx context.Context, request *api.ApplyBat
 	return []*api.Receipt{receipt}, err
 }
 
-func (ba *databaseBackend) Merge(ctx context.Context, request *api.MergeRequest) ([]*api.Receipt, error) {
-	if ba.readOnly {
-		return nil, fmt.Errorf("storage/database: failed to Merge: %w", api.ErrReadOnly)
-	}
-
-	newRoot, err := ba.rootCache.Merge(ctx, request.Namespace, request.Round, request.Base, request.Others)
-	if err != nil {
-		return nil, fmt.Errorf("storage/database: failed to Merge: %w", err)
-	}
-
-	receipt, err := api.SignReceipt(ba.signer, request.Namespace, request.Round+1, []hash.Hash{*newRoot})
-	return []*api.Receipt{receipt}, err
-}
-
-func (ba *databaseBackend) MergeBatch(ctx context.Context, request *api.MergeBatchRequest) ([]*api.Receipt, error) {
-	if ba.readOnly {
-		return nil, fmt.Errorf("storage/database: failed to MergeBatch: %w", api.ErrReadOnly)
-	}
-
-	newRoots := make([]hash.Hash, 0, len(request.Ops))
-	for _, op := range request.Ops {
-		newRoot, err := ba.rootCache.Merge(ctx, request.Namespace, request.Round, op.Base, op.Others)
-		if err != nil {
-			return nil, fmt.Errorf("storage/database: failed to Merge, op: %w", err)
-		}
-		newRoots = append(newRoots, *newRoot)
-	}
-
-	receipt, err := api.SignReceipt(ba.signer, request.Namespace, request.Round+1, newRoots)
-	return []*api.Receipt{receipt}, err
-}
-
 func (ba *databaseBackend) Cleanup() {
 	ba.nodedb.Close()
 }

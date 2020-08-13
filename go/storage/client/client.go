@@ -280,30 +280,6 @@ func (b *storageClientBackend) ApplyBatch(ctx context.Context, request *api.Appl
 	)
 }
 
-func (b *storageClientBackend) Merge(ctx context.Context, request *api.MergeRequest) ([]*api.Receipt, error) {
-	return b.writeWithClient(
-		ctx,
-		request.Namespace,
-		request.Round+1,
-		func(ctx context.Context, c api.Backend, node *node.Node) (interface{}, error) {
-			return c.Merge(ctx, request)
-		},
-		nil,
-	)
-}
-
-func (b *storageClientBackend) MergeBatch(ctx context.Context, request *api.MergeBatchRequest) ([]*api.Receipt, error) {
-	return b.writeWithClient(
-		ctx,
-		request.Namespace,
-		request.Round+1,
-		func(ctx context.Context, c api.Backend, node *node.Node) (interface{}, error) {
-			return c.MergeBatch(ctx, request)
-		},
-		nil,
-	)
-}
-
 func (b *storageClientBackend) readWithClient(
 	ctx context.Context,
 	ns common.Namespace,

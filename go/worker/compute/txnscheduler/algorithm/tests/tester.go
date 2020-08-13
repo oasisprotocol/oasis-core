@@ -9,7 +9,6 @@ import (
 
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
 	"github.com/oasisprotocol/oasis-core/go/runtime/transaction"
-	"github.com/oasisprotocol/oasis-core/go/worker/common/committee"
 	"github.com/oasisprotocol/oasis-core/go/worker/compute/txnscheduler/algorithm/api"
 )
 
@@ -22,7 +21,7 @@ func (t *testDispatcher) Clear() {
 	t.DispatchedBatches = []transaction.RawBatch{}
 }
 
-func (t *testDispatcher) Dispatch(committeeID hash.Hash, batch transaction.RawBatch) error {
+func (t *testDispatcher) Dispatch(batch transaction.RawBatch) error {
 	if t.ShouldFail {
 		return errors.New("dispatch failed")
 	}
@@ -40,11 +39,6 @@ func AlgorithmImplementationTests(
 	// Initialize Algorithm.
 	err := algorithm.Initialize(&td)
 	require.NoError(t, err, "Initialize(td)")
-
-	// Simulate an epoch transition.
-	epoch := committee.NewMockEpochSnapshot()
-	err = algorithm.EpochTransition(epoch)
-	require.NoError(t, err, "EpochTransition")
 
 	// Run the test cases.
 	t.Run("ScheduleTxs", func(t *testing.T) {

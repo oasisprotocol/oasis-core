@@ -1611,12 +1611,6 @@ func NewTestRuntime(seed []byte, ent *TestEntity, isKeyManager bool) (*TestRunti
 			AllowedStragglers: 1,
 			RoundTimeout:      20 * time.Second,
 		},
-		Merge: api.MergeParameters{
-			GroupSize:         3,
-			GroupBackupSize:   5,
-			AllowedStragglers: 1,
-			RoundTimeout:      20 * time.Second,
-		},
 		TxnScheduler: api.TxnSchedulerParameters{
 			GroupSize:         3,
 			Algorithm:         api.TxnSchedulerAlgorithmBatching,
@@ -1629,8 +1623,6 @@ func NewTestRuntime(seed []byte, ent *TestEntity, isKeyManager bool) (*TestRunti
 			MinWriteReplication:     3,
 			MaxApplyWriteLogEntries: 100_000,
 			MaxApplyOps:             2,
-			MaxMergeRoots:           8,
-			MaxMergeOps:             2,
 		},
 		AdmissionPolicy: api.RuntimeAdmissionPolicy{
 			AnyNode: &api.AnyNodeRuntimeAdmissionPolicy{},

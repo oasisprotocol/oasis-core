@@ -97,6 +97,8 @@ pub const COMPUTE_RESULTS_HEADER_CONTEXT: &'static [u8] =
 /// the actual results.
 #[derive(Clone, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct ComputeResultsHeader {
+    /// Round number.
+    pub round: u64,
     /// Hash of the previous block header this batch was computed against.
     pub previous_hash: Hash,
     /// The I/O merkle root.

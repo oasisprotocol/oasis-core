@@ -38,11 +38,8 @@ var (
 	// ErrUnsupported is the error returned when the called method is not
 	// supported by the given backend.
 	ErrUnsupported = errors.New(ModuleName, 4, "storage: method not supported by backend")
-	// ErrNoMergeRoots is the error returned when no other roots are passed
-	// to the Merge operation.
-	ErrNoMergeRoots = errors.New(ModuleName, 5, "storage: no roots to merge")
 	// ErrLimitReached means that a configured limit has been reached.
-	ErrLimitReached = errors.New(ModuleName, 6, "storage: limit reached")
+	ErrLimitReached = errors.New(ModuleName, 5, "storage: limit reached")
 
 	// The following errors are reimports from NodeDB.
 
@@ -240,14 +237,6 @@ type ApplyOp struct {
 	WriteLog WriteLog `json:"writelog"`
 }
 
-// MergeOps is a merge operation within a batch of merge operations.
-type MergeOp struct {
-	// Base is the base root for the merge.
-	Base hash.Hash `json:"base"`
-	// Others is a list of roots derived from base that should be merged.
-	Others []hash.Hash `json:"others"`
-}
-
 // ApplyRequest is an Apply request.
 type ApplyRequest struct {
 	Namespace common.Namespace `json:"namespace"`
@@ -263,21 +252,6 @@ type ApplyBatchRequest struct {
 	Namespace common.Namespace `json:"namespace"`
 	DstRound  uint64           `json:"dst_round"`
 	Ops       []ApplyOp        `json:"ops"`
-}
-
-// MergeRequest is a Merge request.
-type MergeRequest struct {
-	Namespace common.Namespace `json:"namespace"`
-	Round     uint64           `json:"round"`
-	Base      hash.Hash        `json:"base"`
-	Others    []hash.Hash      `json:"others"`
-}
-
-// MergeBatchRequest is a MergeBatch request.
-type MergeBatchRequest struct {
-	Namespace common.Namespace `json:"namespace"`
-	Round     uint64           `json:"round"`
-	Ops       []MergeOp        `json:"ops"`
 }
 
 // SyncOptions are the sync options.
@@ -316,21 +290,6 @@ type Backend interface {
 	//
 	// See Apply for more details.
 	ApplyBatch(ctx context.Context, request *ApplyBatchRequest) ([]*Receipt, error)
-
-	// TODO: Add proof.
-	// Merge performs a 3-way merge operation between the specified
-	// roots and returns a receipt for the merged root.
-	//
-	// Round is the round of the base root while all other roots are
-	// expected to be in the next round.
-	Merge(ctx context.Context, request *MergeRequest) ([]*Receipt, error)
-
-	// TODO: Add proof.
-	// MergeBatch performs multiple sets of merge operations and returns
-	// a single receipt covering all merged roots.
-	//
-	// See Merge for more details.
-	MergeBatch(ctx context.Context, request *MergeBatchRequest) ([]*Receipt, error)
 
 	// GetDiff returns an iterator of write log entries that must be applied
 	// to get from the first given root to the second one.

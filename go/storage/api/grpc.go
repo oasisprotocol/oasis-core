@@ -52,32 +52,6 @@ var (
 			return true, nil
 		})
 
-	// MethodMerge is the Merge method.
-	MethodMerge = ServiceName.NewMethod("Merge", MergeRequest{}).
-			WithNamespaceExtractor(func(ctx context.Context, req interface{}) (common.Namespace, error) {
-			r, ok := req.(*MergeRequest)
-			if !ok {
-				return common.Namespace{}, errInvalidRequestType
-			}
-			return r.Namespace, nil
-		}).
-		WithAccessControl(func(ctx context.Context, req interface{}) (bool, error) {
-			return true, nil
-		})
-
-	// MethodMergeBatch is the MergeBatch method.
-	MethodMergeBatch = ServiceName.NewMethod("MergeBatch", MergeBatchRequest{}).
-				WithNamespaceExtractor(func(ctx context.Context, req interface{}) (common.Namespace, error) {
-			r, ok := req.(*MergeBatchRequest)
-			if !ok {
-				return common.Namespace{}, errInvalidRequestType
-			}
-			return r.Namespace, nil
-		}).
-		WithAccessControl(func(ctx context.Context, req interface{}) (bool, error) {
-			return true, nil
-		})
-
 	// MethodGetDiff is the GetDiff method.
 	MethodGetDiff = ServiceName.NewMethod("GetDiff", GetDiffRequest{}).
 			WithNamespaceExtractor(func(ctx context.Context, req interface{}) (common.Namespace, error) {
@@ -141,14 +115,6 @@ var (
 			{
 				MethodName: MethodApplyBatch.ShortName(),
 				Handler:    handlerApplyBatch,
-			},
-			{
-				MethodName: MethodMerge.ShortName(),
-				Handler:    handlerMerge,
-			},
-			{
-				MethodName: MethodMergeBatch.ShortName(),
-				Handler:    handlerMergeBatch,
 			},
 			{
 				MethodName: MethodGetCheckpoints.ShortName(),
@@ -281,52 +247,6 @@ func handlerApplyBatch( // nolint: golint
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(Backend).ApplyBatch(ctx, req.(*ApplyBatchRequest))
-	}
-	return interceptor(ctx, &req, info, handler)
-}
-
-func handlerMerge( // nolint: golint
-	srv interface{},
-	ctx context.Context,
-	dec func(interface{}) error,
-	interceptor grpc.UnaryServerInterceptor,
-) (interface{}, error) {
-	var req MergeRequest
-	if err := dec(&req); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(Backend).Merge(ctx, &req)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: MethodMerge.FullName(),
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(Backend).Merge(ctx, req.(*MergeRequest))
-	}
-	return interceptor(ctx, &req, info, handler)
-}
-
-func handlerMergeBatch( // nolint: golint
-	srv interface{},
-	ctx context.Context,
-	dec func(interface{}) error,
-	interceptor grpc.UnaryServerInterceptor,
-) (interface{}, error) {
-	var req MergeBatchRequest
-	if err := dec(&req); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(Backend).MergeBatch(ctx, &req)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: MethodMergeBatch.FullName(),
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(Backend).MergeBatch(ctx, req.(*MergeBatchRequest))
 	}
 	return interceptor(ctx, &req, info, handler)
 }
@@ -484,22 +404,6 @@ func (c *storageClient) Apply(ctx context.Context, request *ApplyRequest) ([]*Re
 func (c *storageClient) ApplyBatch(ctx context.Context, request *ApplyBatchRequest) ([]*Receipt, error) {
 	var rsp []*Receipt
 	if err := c.conn.Invoke(ctx, MethodApplyBatch.FullName(), request, &rsp); err != nil {
-		return nil, err
-	}
-	return rsp, nil
-}
-
-func (c *storageClient) Merge(ctx context.Context, request *MergeRequest) ([]*Receipt, error) {
-	var rsp []*Receipt
-	if err := c.conn.Invoke(ctx, MethodMerge.FullName(), request, &rsp); err != nil {
-		return nil, err
-	}
-	return rsp, nil
-}
-
-func (c *storageClient) MergeBatch(ctx context.Context, request *MergeBatchRequest) ([]*Receipt, error) {
-	var rsp []*Receipt
-	if err := c.conn.Invoke(ctx, MethodMergeBatch.FullName(), request, &rsp); err != nil {
 		return nil, err
 	}
 	return rsp, nil

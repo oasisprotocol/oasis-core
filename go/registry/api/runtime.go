@@ -93,21 +93,6 @@ type ExecutorParameters struct {
 	RoundTimeout time.Duration `json:"round_timeout"`
 }
 
-// MergeParameters are parameters for the merge committee.
-type MergeParameters struct {
-	// GroupSize is the size of the committee.
-	GroupSize uint64 `json:"group_size"`
-
-	// GroupBackupSize is the size of the discrepancy resolution group.
-	GroupBackupSize uint64 `json:"group_backup_size"`
-
-	// AllowedStragglers is the number of allowed stragglers.
-	AllowedStragglers uint64 `json:"allowed_stragglers"`
-
-	// RoundTimeout is the round timeout of the nodes in the group.
-	RoundTimeout time.Duration `json:"round_timeout"`
-}
-
 // TxnSchedulerParameters are parameters for the transaction scheduler committee.
 type TxnSchedulerParameters struct {
 	// GroupSize is the size of the committee.
@@ -144,12 +129,6 @@ type StorageParameters struct {
 
 	// MaxApplyOps is the maximum number of apply operations in a batch.
 	MaxApplyOps uint64 `json:"max_apply_ops"`
-
-	// MaxMergeRoots is the maximum number of merge roots.
-	MaxMergeRoots uint64 `json:"max_merge_roots"`
-
-	// MaxApplyOps configures the maximum number of merge operations in a batch.
-	MaxMergeOps uint64 `json:"max_merge_ops"`
 
 	// CheckpointInterval is the expected runtime state checkpoint interval (in rounds).
 	CheckpointInterval uint64 `json:"checkpoint_interval"`
@@ -246,9 +225,6 @@ type Runtime struct { // nolint: maligned
 
 	// Executor stores parameters of the executor committee.
 	Executor ExecutorParameters `json:"executor,omitempty"`
-
-	// Merge stores parameters of the merge committee.
-	Merge MergeParameters `json:"merge,omitempty"`
 
 	// TxnScheduler stores parameters of the transactions scheduler committee.
 	TxnScheduler TxnSchedulerParameters `json:"txn_scheduler,omitempty"`

@@ -75,14 +75,11 @@ const (
 	// KindComputeTxnScheduler is a transaction scheduler committee.
 	KindComputeTxnScheduler CommitteeKind = 2
 
-	// KindComputeMerge is a merge committee.
-	KindComputeMerge CommitteeKind = 3
-
 	// KindStorage is a storage committee.
-	KindStorage CommitteeKind = 4
+	KindStorage CommitteeKind = 3
 
 	// MaxCommitteeKind is a dummy value used for iterating all committee kinds.
-	MaxCommitteeKind = 5
+	MaxCommitteeKind = 4
 )
 
 // NeedsLeader returns if committee kind needs leader role.
@@ -92,8 +89,6 @@ func (k CommitteeKind) NeedsLeader() (bool, error) {
 		return false, nil
 	case KindComputeTxnScheduler:
 		return true, nil
-	case KindComputeMerge:
-		return false, nil
 	case KindStorage:
 		return false, nil
 	default:
@@ -110,8 +105,6 @@ func (k CommitteeKind) String() string {
 		return "executor"
 	case KindComputeTxnScheduler:
 		return "txn_scheduler"
-	case KindComputeMerge:
-		return "merge"
 	case KindStorage:
 		return "storage"
 	default:
