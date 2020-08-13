@@ -966,6 +966,48 @@ func testOnCommitHooks(t *testing.T, ndb db.NodeDB, factory NodeDBFactory) {
 	require.EqualValues(t, calls, []int{1, 2, 3}, "OnCommit hooks should fire in order")
 }
 
+func testCommitNoPersist(t *testing.T, ndb db.NodeDB, factory NodeDBFactory) {
+	ctx := context.Background()
+	tree := New(nil, ndb)
+
+	err := tree.Insert(ctx, []byte("this key"), []byte("should not be persisted"))
+	require.NoError(t, err, "Insert")
+
+	log, root, err := tree.Commit(ctx, testNs, 0, NoPersist())
+	require.NoError(t, err, "Commit")
+	require.Equal(t, "456d55ad04387c43086b53df4988ebcb5fce6f52d9cd37e3fa79c69aed106b7e", root.String(), "computed root should be correct")
+	require.Len(t, log, 1, "write log should contain one item")
+
+	// Make sure we can still commit and finalize something at an arbitrary higher round.
+
+	err = tree.Insert(ctx, []byte("but now"), []byte("we will persist everything"))
+	require.NoError(t, err, "Insert")
+
+	log, root, err = tree.Commit(ctx, testNs, 42)
+	require.NoError(t, err, "Commit")
+	require.Equal(t, "b27dda2f4f86f9dfa6168696a35ad03c3fddfe721d80d102e5b3c82abfa6a638", root.String(), "computed root should be correct")
+	require.Len(t, log, 2, "write log should contain two items")
+
+	err = ndb.Finalize(ctx, 42, []hash.Hash{root})
+	require.NoError(t, err, "Finalize")
+
+	roots, err := ndb.GetRootsForVersion(ctx, 42)
+	require.NoError(t, err, "GetRootsForVersion")
+	require.Len(t, roots, 1, "there should only be one root")
+	require.Equal(t, root, roots[0], "the root hash should be correct")
+
+	// Make sure everything has been persisted now.
+	tree = NewWithRoot(nil, ndb, node.Root{Namespace: testNs, Version: 42, Hash: root})
+
+	value, err := tree.Get(ctx, []byte("this key"))
+	require.NoError(t, err, "Get")
+	require.EqualValues(t, []byte("should not be persisted"), value)
+
+	value, err = tree.Get(ctx, []byte("but now"))
+	require.NoError(t, err, "Get")
+	require.EqualValues(t, []byte("we will persist everything"), value)
+}
+
 func testHasRoot(t *testing.T, ndb db.NodeDB, factory NodeDBFactory) {
 	// Test that an empty root is always implicitly present.
 	root := node.Root{
@@ -2011,6 +2053,7 @@ func testBackend(
 		{"DoubleInsertWithEviction", testDoubleInsertWithEviction},
 		{"DebugDump", testDebugDumpLocal},
 		{"OnCommitHooks", testOnCommitHooks},
+		{"CommitNoPersist", testCommitNoPersist},
 		{"MergeWriteLog", testMergeWriteLog},
 		{"HasRoot", testHasRoot},
 		{"GetRootsForVersion", testGetRootsForVersion},

@@ -90,7 +90,7 @@ type Tree interface {
 
 	// Commit commits tree updates to the underlying database and returns
 	// the write log and new merkle root.
-	Commit(ctx context.Context, namespace common.Namespace, version uint64) (writelog.WriteLog, hash.Hash, error)
+	Commit(ctx context.Context, namespace common.Namespace, version uint64, options ...CommitOption) (writelog.WriteLog, hash.Hash, error)
 
 	// DumpLocal dumps the tree in the local memory into the given writer.
 	DumpLocal(ctx context.Context, w io.Writer, maxDepth node.Depth)
