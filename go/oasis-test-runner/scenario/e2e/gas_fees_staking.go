@@ -252,7 +252,7 @@ func (sc *gasFeesImpl) runTests(ctx context.Context) error {
 func (sc *gasFeesImpl) getInitialCommonPoolBalance(ctx context.Context) (*quantity.Quantity, error) {
 	st := sc.Net.Controller().Staking
 
-	cmnPool, err := st.CommonPool(ctx, 1)
+	cmnPool, err := st.CommonPool(ctx, consensus.HeightLatest)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get initial common pool info: %w", err)
 	}

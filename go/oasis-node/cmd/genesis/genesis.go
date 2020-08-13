@@ -158,6 +158,7 @@ func doInitGenesis(cmd *cobra.Command, args []string) {
 
 	// Build the genesis state, if any.
 	doc := &genesis.Document{
+		Height:    1,
 		ChainID:   chainID,
 		Time:      time.Now(),
 		HaltEpoch: epochtime.EpochTime(viper.GetUint64(cfgHaltEpoch)),

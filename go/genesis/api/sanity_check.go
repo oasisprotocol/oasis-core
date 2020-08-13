@@ -9,8 +9,8 @@ import (
 
 // SanityCheck does basic sanity checking on the contents of the genesis document.
 func (d *Document) SanityCheck() error {
-	if d.Height < 0 {
-		return fmt.Errorf("genesis: sanity check failed: height must be >= 0")
+	if d.Height < 1 {
+		return fmt.Errorf("genesis: sanity check failed: height must be >= 1")
 	}
 
 	if strings.TrimSpace(d.ChainID) == "" {

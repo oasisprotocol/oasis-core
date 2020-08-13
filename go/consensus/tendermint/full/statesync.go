@@ -55,8 +55,9 @@ func (sp *stateProvider) State(height uint64) (tmstate.State, error) {
 	defer sp.Unlock()
 
 	state := tmstate.State{
-		ChainID: sp.genesisDocument.ChainID,
-		Version: tmstate.InitStateVersion,
+		ChainID:       sp.genesisDocument.ChainID,
+		Version:       tmstate.InitStateVersion,
+		InitialHeight: sp.genesisDocument.InitialHeight,
 	}
 	// XXX: This will fail in case an upgrade happened in-between.
 	state.Version.Consensus.App = version.ConsensusProtocol.ToU64()
