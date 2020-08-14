@@ -271,10 +271,6 @@ func TestGenesisSanityCheck(t *testing.T) {
 	require.Error(d.SanityCheck(), "height < 0 should be invalid")
 
 	d = *testDoc
-	d.Time = time.Now().Add(time.Minute * 2)
-	require.Error(d.SanityCheck(), "future time of genesis doc should be invalid")
-
-	d = *testDoc
 	d.ChainID = "   \t"
 	require.Error(d.SanityCheck(), "empty chain ID should be invalid")
 
