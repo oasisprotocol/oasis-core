@@ -473,7 +473,7 @@ func (app *schedulerApplication) electCommittee(
 	}
 
 	if len(members) != wantedNodes {
-		ctx.Logger().Error("insufficent nodes with adequate stake to elect",
+		ctx.Logger().Error("insufficient nodes with adequate stake to elect",
 			"kind", kind,
 			"runtime_id", rt.ID,
 			"worker_size", workerSize,

@@ -100,7 +100,7 @@ func (b *Broker) Subscribe() *Subscription {
 // SubscribeBuffered subscribes to the Broker's broadcasts, and returns a
 // subscription handle that can be used to receive broadcasts.
 //
-// Buffer controlls the capacity of a ring buffer - when buffer is full the
+// Buffer controls the capacity of a ring buffer - when buffer is full the
 // oldest value will be discarded. In case buffer is negative (or zero) an
 // unbounded channel is used.
 func (b *Broker) SubscribeBuffered(buffer int64) *Subscription {

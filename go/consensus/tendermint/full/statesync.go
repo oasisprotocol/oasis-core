@@ -58,7 +58,7 @@ func (sp *stateProvider) State(height uint64) (tmstate.State, error) {
 		ChainID: sp.genesisDocument.ChainID,
 		Version: tmstate.InitStateVersion,
 	}
-	// XXX: This will fail in case an upgrade happened inbetween.
+	// XXX: This will fail in case an upgrade happened in-between.
 	state.Version.Consensus.App = version.ConsensusProtocol.ToU64()
 
 	// We need to verify up until h+2, to get the validator set. This also prefetches the headers

@@ -50,7 +50,7 @@ var (
 	isNodeCmd bool
 )
 
-// DataDir retuns the data directory iff one is set.
+// DataDir returns the data directory iff one is set.
 func DataDir() string {
 	return viper.GetString(CfgDataDir)
 }

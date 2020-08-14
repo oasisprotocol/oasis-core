@@ -114,7 +114,7 @@ func doInit(cmd *cobra.Command, args []string) {
 		case true:
 			logger.Warn("overwriting existing entity")
 		default:
-			logger.Error("existing entity exists, specifiy --force to overwrite")
+			logger.Error("existing entity exists, specify --force to overwrite")
 			os.Exit(1)
 		}
 	}

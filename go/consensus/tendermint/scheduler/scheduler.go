@@ -134,7 +134,7 @@ func (sc *serviceClient) DeliverEvent(ctx context.Context, height int64, tx tmty
 	return nil
 }
 
-// New constracts a new tendermint-based scheduler Backend instance.
+// New constructs a new tendermint-based scheduler Backend instance.
 func New(ctx context.Context, backend tmapi.Backend) (ServiceClient, error) {
 	// Initialze and register the tendermint service component.
 	a := app.New()

@@ -91,7 +91,7 @@ const (
 
 	// CfgP2PPersistentPeer configures tendermint's persistent peer(s).
 	CfgP2PPersistentPeer = "consensus.tendermint.p2p.persistent_peer"
-	// CfgP2PPersistenPeersMaxDialPeriod configures the tendermint's peristent peer max dial period.
+	// CfgP2PPersistenPeersMaxDialPeriod configures the tendermint's persistent peer max dial period.
 	CfgP2PPersistenPeersMaxDialPeriod = "consensus.tendermint.p2p.persistent_peers_max_dial_period"
 	// CfgP2PDisablePeerExchange disables tendermint's peer-exchange (Pex) reactor.
 	CfgP2PDisablePeerExchange = "consensus.tendermint.p2p.disable_peer_exchange"
@@ -1142,18 +1142,18 @@ func (t *fullService) lazyInit() error {
 	tenderConfig.P2P.SendRate = viper.GetInt64(CfgP2PSendRate)
 	tenderConfig.P2P.RecvRate = viper.GetInt64(CfgP2PRecvRate)
 	// Persistent peers need to be lowercase as p2p/transport.go:MultiplexTransport.upgrade()
-	// uses a case sensitive string comparision to validate public keys.
+	// uses a case sensitive string comparison to validate public keys.
 	// Since persistent peers is expected to be in comma-delimited ID@host:port format,
 	// lowercasing the whole string is ok.
 	tenderConfig.P2P.PersistentPeers = strings.ToLower(strings.Join(viper.GetStringSlice(CfgP2PPersistentPeer), ","))
 	tenderConfig.P2P.PersistentPeersMaxDialPeriod = viper.GetDuration(CfgP2PPersistenPeersMaxDialPeriod)
 	// Unconditional peer IDs need to be lowercase as p2p/transport.go:MultiplexTransport.upgrade()
-	// uses a case sensitive string comparision to validate public keys.
+	// uses a case sensitive string comparison to validate public keys.
 	// Since persistent peers is expected to be in comma-delimited ID format,
 	// lowercasing the whole string is ok.
 	tenderConfig.P2P.UnconditionalPeerIDs = strings.ToLower(strings.Join(viper.GetStringSlice(CfgP2PUnconditionalPeerIDs), ","))
 	// Seed Ids need to be lowercase as p2p/transport.go:MultiplexTransport.upgrade()
-	// uses a case sensitive string comparision to validate public keys.
+	// uses a case sensitive string comparison to validate public keys.
 	// Since Seeds is expected to be in comma-delimited ID@host:port format,
 	// lowercasing the whole string is ok.
 	tenderConfig.P2P.Seeds = strings.ToLower(strings.Join(viper.GetStringSlice(CfgP2PSeed), ","))
@@ -1443,7 +1443,7 @@ func New(
 	upgrader upgradeAPI.Backend,
 	genesisProvider genesisAPI.Provider,
 ) (consensusAPI.Backend, error) {
-	// Retrive the genesis document early so that it is possible to
+	// Retrieve the genesis document early so that it is possible to
 	// use it while initializing other things.
 	genesisDoc, err := genesisProvider.GetGenesisDocument()
 	if err != nil {

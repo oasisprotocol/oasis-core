@@ -1,4 +1,4 @@
-// Package errors implements errors that can be easily sent accross the
+// Package errors implements errors that can be easily sent across the
 // wire and reconstructed at the other end.
 package errors
 

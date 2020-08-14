@@ -131,7 +131,7 @@ func (env *Env) ScenarioInfo() *ScenarioInstanceInfo {
 	return env.scenarioInfo
 }
 
-// AddOnCleanup adds a cleanup routine to be called durring the environment's
+// AddOnCleanup adds a cleanup routine to be called during the environment's
 // cleanup.  Routines will be called in reverse order that they were
 // registered.
 func (env *Env) AddOnCleanup(fn CleanupFn) {

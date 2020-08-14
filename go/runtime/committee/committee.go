@@ -165,7 +165,7 @@ func (cw *committeeWatcher) watchCommittees(ctx context.Context, ch <-chan *sche
 // WatcherOption is an option for NewWatcher.
 type WatcherOption func(cw *committeeWatcher)
 
-// AutomaticEpochTransitions is an option for enabling automatic epoch transitions in the commitee
+// AutomaticEpochTransitions is an option for enabling automatic epoch transitions in the committee
 // watcher. Committees will be updated whenever the scheduler elects new committees.
 func WithAutomaticEpochTransitions() WatcherOption {
 	return func(cw *committeeWatcher) {

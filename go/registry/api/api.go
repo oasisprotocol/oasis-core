@@ -116,7 +116,7 @@ var (
 	// as it still has nodes.
 	ErrEntityHasNodes = errors.New(ModuleName, 15, "registry: entity still has nodes")
 
-	// ErrForbidden is the error returned when an operation is forbiden by
+	// ErrForbidden is the error returned when an operation is forbidden by
 	// policy.
 	ErrForbidden = errors.New(ModuleName, 16, "registry: forbidden by policy")
 

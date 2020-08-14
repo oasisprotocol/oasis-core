@@ -1,4 +1,4 @@
-// Package keymanager implementes the key manager management applicaiton.
+// Package keymanager implements the key manager management application.
 package keymanager
 
 import api "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/api"

@@ -88,7 +88,7 @@ func New(dataDir string, identity *identity.Identity, genesisProvider genesis.Pr
 	var err error
 
 	// This is heavily inspired by https://gitlab.com/polychainlabs/tenderseed
-	// and reaches into tendermint to spin up the minimum components requried
+	// and reaches into tendermint to spin up the minimum components required
 	// to get the PEX reactor to operate in seed mode.
 
 	srv := &seedService{

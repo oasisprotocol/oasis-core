@@ -75,7 +75,7 @@ func testRegistryEntityNodes( // nolint: gocyclo
 	require.NoError(t, err, "GetEpoch")
 
 	// All of these tests are combined because the Entity and Node structures
-	// are linked togehter.
+	// are linked together.
 
 	entityCh, entitySub, err := backend.WatchEntities(ctx)
 	require.NoError(t, err, "WatchEntities")
@@ -148,9 +148,9 @@ func testRegistryEntityNodes( // nolint: gocyclo
 					break
 				}
 			}
-			require.True(isValid, "bulk retrived entity was one registered")
+			require.True(isValid, "bulk retrieved entity was one registered")
 		}
-		require.Len(seen, len(entities), "unique bulk retrived entities")
+		require.Len(seen, len(entities), "unique bulk retrieved entities")
 	})
 
 	// We rely on the runtime tests running before this registering a runtime.
@@ -960,7 +960,7 @@ func (ent *TestEntity) NewTestNodes(nCompute, nStorage int, idNonce []byte, runt
 		// Add a registration with no P2P addresses.
 		if nod.Node.Roles&node.RoleComputeWorker != 0 {
 			invalid1 := &invalidNodeRegistration{
-				descr: "register commitee node without P2P addresses",
+				descr: "register committee node without P2P addresses",
 			}
 			invNode1 := *nod.Node
 			invNode1.P2P.Addresses = nil

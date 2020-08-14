@@ -1,4 +1,4 @@
-// Package crypto implementes tendermint specific cryptography.
+// Package crypto implements tendermint specific cryptography.
 package crypto
 
 import (

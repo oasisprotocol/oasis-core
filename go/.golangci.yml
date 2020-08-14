@@ -24,6 +24,7 @@ linters:
     - varcheck
     - govet
     - maligned
+    - misspell
 
 run:
   skip-dirs:

@@ -341,7 +341,7 @@ func AppendRegistryState(doc *genesis.Document, entities, runtimes, nodes []stri
 
 		ent, signer, err := entity.TestEntity()
 		if err != nil {
-			l.Error("failed to retrive test entity",
+			l.Error("failed to retrieve test entity",
 				"err", err,
 			)
 			return err
@@ -660,7 +660,7 @@ func init() {
 	_ = initGenesisFlags.MarkHidden(cfgRegistryDebugBypassStake)
 
 	// Scheduler config flags.
-	initGenesisFlags.Int(cfgSchedulerMinValidators, 1, "minumum number of validators")
+	initGenesisFlags.Int(cfgSchedulerMinValidators, 1, "minimum number of validators")
 	initGenesisFlags.Int(cfgSchedulerMaxValidators, 100, "maximum number of validators")
 	initGenesisFlags.Int(cfgSchedulerMaxValidatorsPerEntity, 1, "maximum number of validators per entity")
 	initGenesisFlags.Bool(cfgSchedulerDebugBypassStake, false, "bypass all stake checks and operations (UNSAFE)")

@@ -84,7 +84,7 @@ func (r *runtime) Call(ctx context.Context, body *protocol.Body) (*protocol.Body
 				},
 				IOWriteLog: ioWriteLog,
 			},
-			// No RakSig in mock reponse.
+			// No RakSig in mock response.
 		}}, nil
 	default:
 		return nil, fmt.Errorf("(mock) method not supported")

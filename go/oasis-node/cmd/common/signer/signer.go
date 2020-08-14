@@ -78,7 +78,7 @@ func NewFactory(signerBackend, signerDir string, roles ...signature.SignerRole) 
 		return doNewFactory(signerBackend, signerDir, roles...)
 	}
 
-	// The composite signer needs to instantiate multiple signer factorys
+	// The composite signer needs to instantiate multiple signer factories
 	// and aggregate them together.
 
 	return doNewComposite(signerDir, roles...)

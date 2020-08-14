@@ -8,7 +8,7 @@ import (
 )
 
 // AuthenticationFunction defines the gRPC server default authentication function. This
-// can be overriden per service by implementing AuthFunc on the gRPC service.
+// can be overridden per service by implementing AuthFunc on the gRPC service.
 type AuthenticationFunction func(ctx context.Context, fullMethodName string, req interface{}) error
 
 // NoAuth is a function that does no authentication.

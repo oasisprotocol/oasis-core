@@ -53,7 +53,7 @@ func (f *Format) String() string {
 	}
 }
 
-// Set sets the Format to the value specifed by the provided string.
+// Set sets the Format to the value specified by the provided string.
 func (f *Format) Set(s string) error {
 	switch strings.ToUpper(s) {
 	case "LOGFMT":
@@ -192,7 +192,7 @@ func (l *Logger) With(keyvals ...interface{}) *Logger {
 	}
 }
 
-// GetLevel returns the curent global log level.
+// GetLevel returns the current global log level.
 func GetLevel() Level {
 	return backend.defaultLevel
 }
