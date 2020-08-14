@@ -37,6 +37,8 @@ var (
 	methodGetTransactions = serviceName.NewMethod("GetTransactions", int64(0))
 	// methodGetTransactionsWithResults is the GetTransactionsWithResults method.
 	methodGetTransactionsWithResults = serviceName.NewMethod("GetTransactionsWithResults", int64(0))
+	// methodGetUnconfirmedTransactions is the GetUnconfirmedTransactions method.
+	methodGetUnconfirmedTransactions = serviceName.NewMethod("GetUnconfirmedTransactions", nil)
 	// methodGetGenesisDocument is the GetGenesisDocument method.
 	methodGetGenesisDocument = serviceName.NewMethod("GetGenesisDocument", nil)
 	// methodGetStatus is the GetStatus method.
@@ -102,6 +104,10 @@ var (
 			{
 				MethodName: methodGetTransactionsWithResults.ShortName(),
 				Handler:    handlerGetTransactionsWithResults,
+			},
+			{
+				MethodName: methodGetUnconfirmedTransactions.ShortName(),
+				Handler:    handlerGetUnconfirmedTransactions,
 			},
 			{
 				MethodName: methodGetGenesisDocument.ShortName(),
@@ -367,6 +373,25 @@ func handlerGetTransactionsWithResults( // nolint: golint
 		return srv.(ClientBackend).GetTransactionsWithResults(ctx, req.(int64))
 	}
 	return interceptor(ctx, height, info, handler)
+}
+
+func handlerGetUnconfirmedTransactions( // nolint: golint
+	srv interface{},
+	ctx context.Context,
+	dec func(interface{}) error,
+	interceptor grpc.UnaryServerInterceptor,
+) (interface{}, error) {
+	if interceptor == nil {
+		return srv.(ClientBackend).GetUnconfirmedTransactions(ctx)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: methodGetUnconfirmedTransactions.FullName(),
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ClientBackend).GetUnconfirmedTransactions(ctx)
+	}
+	return interceptor(ctx, nil, info, handler)
 }
 
 func handlerGetGenesisDocument( // nolint: golint
@@ -775,6 +800,14 @@ func (c *consensusClient) GetTransactionsWithResults(ctx context.Context, height
 		return nil, err
 	}
 	return &rsp, nil
+}
+
+func (c *consensusClient) GetUnconfirmedTransactions(ctx context.Context) ([][]byte, error) {
+	var rsp [][]byte
+	if err := c.conn.Invoke(ctx, methodGetUnconfirmedTransactions.FullName(), nil, &rsp); err != nil {
+		return nil, err
+	}
+	return rsp, nil
 }
 
 func (c *consensusClient) GetGenesisDocument(ctx context.Context) (*genesis.Document, error) {

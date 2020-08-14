@@ -785,6 +785,15 @@ func (t *fullService) GetTransactionsWithResults(ctx context.Context, height int
 	return &txsWithResults, nil
 }
 
+func (t *fullService) GetUnconfirmedTransactions(ctx context.Context) ([][]byte, error) {
+	mempoolTxs := t.node.Mempool().ReapMaxTxs(-1)
+	txs := make([][]byte, 0, len(mempoolTxs))
+	for _, v := range mempoolTxs {
+		txs = append(txs, v[:])
+	}
+	return txs, nil
+}
+
 func (t *fullService) GetStatus(ctx context.Context) (*consensusAPI.Status, error) {
 	status := &consensusAPI.Status{
 		ConsensusVersion: version.ConsensusProtocol.String(),
