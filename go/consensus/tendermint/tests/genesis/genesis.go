@@ -41,6 +41,7 @@ func (p *testNodeGenesisProvider) GetTendermintGenesisDocument() (*tmtypes.Genes
 // running a single node "network", only for testing.
 func NewTestNodeGenesisProvider(identity *identity.Identity) (genesis.Provider, error) {
 	doc := &genesis.Document{
+		Height:    1,
 		ChainID:   genesisTestHelpers.TestChainID,
 		Time:      time.Now(),
 		HaltEpoch: epochtime.EpochTime(math.MaxUint64),
@@ -85,6 +86,7 @@ func NewTestNodeGenesisProvider(identity *identity.Identity) (genesis.Provider, 
 		return nil, err
 	}
 	tmDoc := &tmtypes.GenesisDoc{
+		InitialHeight:   doc.Height,
 		ChainID:         doc.ChainID,
 		GenesisTime:     doc.Time,
 		ConsensusParams: tmtypes.DefaultConsensusParams(),

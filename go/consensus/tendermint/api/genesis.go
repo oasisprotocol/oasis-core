@@ -65,6 +65,12 @@ func genesisToTendermint(d *genesis.Document) (*tmtypes.GenesisDoc, error) {
 		return nil, fmt.Errorf("tendermint: failed to serialize genesis doc: %w", err)
 	}
 
+	// Make sure that the initial height is at least 1 as required by Tendermint. This is ensured
+	// early by the genesis document sanity checks, but let's be safe.
+	if d.Height < 1 {
+		return nil, fmt.Errorf("tendermint: invalid initial height (must be >=1): %d", d.Height)
+	}
+
 	// Translate special "disable block gas limit" value as Tendermint uses
 	// -1 for some reason (as if a zero limit makes sense) and we use 0.
 	maxBlockGas := int64(d.Consensus.Parameters.MaxBlockGas)
@@ -92,8 +98,9 @@ func genesisToTendermint(d *genesis.Document) (*tmtypes.GenesisDoc, error) {
 	evCfg.ProofTrialPeriod = evCfg.MaxAgeNumBlocks / 2
 
 	doc := tmtypes.GenesisDoc{
-		ChainID:     d.ChainContext()[:tmtypes.MaxChainIDLen],
-		GenesisTime: d.Time,
+		ChainID:       d.ChainContext()[:tmtypes.MaxChainIDLen],
+		GenesisTime:   d.Time,
+		InitialHeight: d.Height,
 		ConsensusParams: &tmproto.ConsensusParams{
 			Block: tmproto.BlockParams{
 				MaxBytes:   int64(d.Consensus.Parameters.MaxBlockSize),

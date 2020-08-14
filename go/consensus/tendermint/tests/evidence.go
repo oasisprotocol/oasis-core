@@ -18,7 +18,7 @@ import (
 )
 
 // MakeDoubleSignEvidence creates consensus evidence of double signing.
-func MakeDoubleSignEvidence(t *testing.T, ident *identity.Identity) *consensus.Evidence {
+func MakeDoubleSignEvidence(t *testing.T, ident *identity.Identity, blk *consensus.Block) *consensus.Evidence {
 	require := require.New(t)
 
 	// Create empty directory for private validator metadata.
@@ -58,11 +58,11 @@ func MakeDoubleSignEvidence(t *testing.T, ident *identity.Identity) *consensus.E
 			Hash:  []byte("partshashpartshashpartshashpart2"),
 		},
 	}
-	now := time.Now()
 	ev := &tmtypes.DuplicateVoteEvidence{
+		Timestamp: blk.Time,
 		// NOTE: ChainID must match the unit test genesis block.
-		VoteA: makeVote(pv1, genesisTestHelpers.TestChainID, 0, 1, 2, 1, blockID1, now),
-		VoteB: makeVote(pv2, genesisTestHelpers.TestChainID, 0, 1, 2, 1, blockID2, now),
+		VoteA: makeVote(pv1, genesisTestHelpers.TestChainID, 0, blk.Height, 2, 1, blockID1, blk.Time),
+		VoteB: makeVote(pv2, genesisTestHelpers.TestChainID, 0, blk.Height, 2, 1, blockID2, blk.Time),
 	}
 
 	proto, err := tmtypes.EvidenceToProto(ev)

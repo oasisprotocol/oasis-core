@@ -425,8 +425,6 @@ func (t *fullService) StateToGenesis(ctx context.Context, blockHeight int64) (*g
 	}
 
 	return &genesisAPI.Document{
-		// XXX: Tendermint doesn't support restoring from non-0 height.
-		// https://github.com/tendermint/tendermint/issues/2543
 		Height:     blockHeight,
 		ChainID:    genesisDoc.ChainID,
 		HaltEpoch:  genesisDoc.HaltEpoch,
@@ -801,13 +799,8 @@ func (t *fullService) GetStatus(ctx context.Context) (*consensusAPI.Status, erro
 		Features:         t.SupportedFeatures(),
 	}
 
-	// Genesis block is hardcoded as block 1, since tendermint doesn't have
-	// a genesis block as such, but some external tooling expects there to be
-	// one, so here we are.
-	// This may soon change if the following tendermint issue gets fixed:
-	// https://github.com/tendermint/tendermint/issues/2543
-	status.GenesisHeight = 1
-	genBlk, err := t.GetBlock(ctx, 1)
+	status.GenesisHeight = t.genesis.Height
+	genBlk, err := t.GetBlock(ctx, t.genesis.Height)
 	switch err {
 	case nil:
 		status.GenesisHash = genBlk.Hash
@@ -1115,6 +1108,7 @@ func (t *fullService) lazyInit() error {
 		MinGasPrice:     viper.GetUint64(CfgMinGasPrice),
 		OwnTxSigner:     t.identity.NodeSigner.Public(),
 		DisableCheckTx:  viper.GetBool(CfgDebugDisableCheckTx) && cmflags.DebugDontBlameOasis(),
+		InitialHeight:   uint64(t.genesis.Height),
 	}
 	t.mux, err = abci.NewApplicationServer(t.ctx, t.upgrader, appConfig)
 	if err != nil {

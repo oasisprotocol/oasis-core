@@ -75,17 +75,13 @@ func (sc *serviceClient) WatchLatestEpoch() (<-chan api.EpochTime, *pubsub.Subsc
 }
 
 func (sc *serviceClient) StateToGenesis(ctx context.Context, height int64) (*api.Genesis, error) {
-	now, err := sc.GetEpoch(ctx, height)
-	if err != nil {
-		return nil, err
-	}
-
 	return &api.Genesis{
 		Parameters: api.ConsensusParameters{
 			DebugMockBackend: false,
 			Interval:         sc.interval,
 		},
-		Base: now,
+		// No need to set base epoch as we support restoring from a non-zero height.
+		Base: 0,
 	}, nil
 }
 

@@ -194,7 +194,7 @@ func (sc *haltRestoreImpl) Run(childEnv *env.Env) error {
 		)
 		return err
 	}
-	genesisDoc.HaltEpoch = genesisDoc.EpochTime.Base + haltEpoch
+	genesisDoc.HaltEpoch = 2 * haltEpoch
 	if err = genesisDoc.WriteFileJSON(files[0]); err != nil {
 		sc.Logger.Error("failed to update genesis",
 			"err", err,

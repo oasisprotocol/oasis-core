@@ -10,6 +10,21 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/storage/mkvs/writelog"
 )
 
+// CommitOption is an option that can be specified during Commit.
+type CommitOption func(o *commitOptions)
+
+// NoPersist returns a commit option that makes the Commit only compute all the hashes but does not
+// actually persist any roots in the database. All dirty data remains in memory.
+func NoPersist() CommitOption {
+	return func(o *commitOptions) {
+		o.noPersist = true
+	}
+}
+
+type commitOptions struct {
+	noPersist bool
+}
+
 // Implements Tree.
 func (t *tree) CommitKnown(ctx context.Context, root node.Root) (writelog.WriteLog, error) {
 	writeLog, _, err := t.commitWithHooks(ctx, root.Namespace, root.Version, func(rootHash hash.Hash) error {
@@ -23,8 +38,8 @@ func (t *tree) CommitKnown(ctx context.Context, root node.Root) (writelog.WriteL
 }
 
 // Implements Tree.
-func (t *tree) Commit(ctx context.Context, namespace common.Namespace, version uint64) (writelog.WriteLog, hash.Hash, error) {
-	return t.commitWithHooks(ctx, namespace, version, nil)
+func (t *tree) Commit(ctx context.Context, namespace common.Namespace, version uint64, options ...CommitOption) (writelog.WriteLog, hash.Hash, error) {
+	return t.commitWithHooks(ctx, namespace, version, nil, options...)
 }
 
 func (t *tree) commitWithHooks(
@@ -32,6 +47,7 @@ func (t *tree) commitWithHooks(
 	namespace common.Namespace,
 	version uint64,
 	beforeDbCommit func(hash.Hash) error,
+	options ...CommitOption,
 ) (writelog.WriteLog, hash.Hash, error) {
 	t.cache.Lock()
 	defer t.cache.Unlock()
@@ -40,13 +56,26 @@ func (t *tree) commitWithHooks(
 		return nil, hash.Hash{}, ErrClosed
 	}
 
+	var opts commitOptions
+	for _, o := range options {
+		o(&opts)
+	}
+
 	oldRoot := t.cache.getSyncRoot()
 	if oldRoot.IsEmpty() {
 		oldRoot.Namespace = namespace
 		oldRoot.Version = version
 	}
 
-	batch := t.cache.db.NewBatch(oldRoot, version, false)
+	var batch db.Batch
+	switch opts.noPersist {
+	case false:
+		batch = t.cache.db.NewBatch(oldRoot, version, false)
+	case true:
+		// Do not persist anything -- use a dummy batch.
+		nopDb, _ := db.NewNopNodeDB()
+		batch = nopDb.NewBatch(oldRoot, version, false)
+	}
 	defer batch.Reset()
 
 	subtree := batch.MaybeStartSubtree(nil, 0, t.cache.pendingRoot)
@@ -82,6 +111,10 @@ func (t *tree) commitWithHooks(
 		} else {
 			logAnns = append(logAnns, writelog.LogEntryAnnotation{InsertedNode: entry.insertedLeaf})
 		}
+	}
+
+	if opts.noPersist {
+		return log, rootHash, nil
 	}
 
 	root := node.Root{

@@ -745,7 +745,9 @@ func testSlashDoubleSigning(
 
 	// Broadcast evidence. This is Tendermint-specific, if we ever have more than one
 	// consensus backend, we need to change this part.
-	err = consensus.SubmitEvidence(context.Background(), tendermintTests.MakeDoubleSignEvidence(t, ident))
+	blk, err := consensus.GetBlock(context.Background(), 1)
+	require.NoError(err, "GetBlock")
+	err = consensus.SubmitEvidence(context.Background(), tendermintTests.MakeDoubleSignEvidence(t, ident, blk))
 	require.NoError(err, "SubmitEvidence")
 
 	// Wait for the node to get slashed.

@@ -163,6 +163,7 @@ func initMockChain(ctx context.Context, cfg *mockChainCfg) (*mockChain, error) {
 		MinGasPrice:       0, // XXX: Should this be configurable?
 		OwnTxSigner:       localSigner.Public(),
 		MemoryOnlyStorage: cfg.memDB,
+		InitialHeight:     uint64(cfg.genesisDoc.Height),
 	}
 	if cfg.numVersions > 0 {
 		muxCfg.Pruning.Strategy = abci.PruneKeepN
@@ -200,6 +201,7 @@ func initMockChain(ctx context.Context, cfg *mockChainCfg) (*mockChain, error) {
 			ChainId:         m.tmChainID,
 			AppStateBytes:   rawGenesisDoc,
 			ConsensusParams: nil,
+			InitialHeight:   cfg.genesisDoc.Height,
 		})
 		respCommit := m.mux.Commit()
 		m.hash = respCommit.Data

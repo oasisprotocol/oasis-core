@@ -39,6 +39,7 @@ import (
 // the node that is spun up as part of the tests, you really want
 // consensus/tendermint/tests/genesis/genesis.go.
 var testDoc = &genesis.Document{
+	Height:    1,
 	ChainID:   genesisTestHelpers.TestChainID,
 	Time:      time.Unix(1574858284, 0),
 	HaltEpoch: epochtime.EpochTime(math.MaxUint64),
@@ -133,7 +134,7 @@ func TestGenesisChainContext(t *testing.T) {
 	//       on each run.
 	stableDoc.Staking = staking.Genesis{}
 
-	require.Equal(t, "2f771379e09ac0b0dbe2b7f2f18c9170a0f18c2ae5e52ad180423eb3218a8e32", stableDoc.ChainContext())
+	require.Equal(t, "df6289d7d46e98ec8facbd3a9efebee2ad81136200217819b5aeabf08b3431bc", stableDoc.ChainContext())
 }
 
 func TestGenesisSanityCheck(t *testing.T) {
@@ -269,6 +270,10 @@ func TestGenesisSanityCheck(t *testing.T) {
 	d := *testDoc
 	d.Height = -123
 	require.Error(d.SanityCheck(), "height < 0 should be invalid")
+
+	d = *testDoc
+	d.Height = 0
+	require.Error(d.SanityCheck(), "height < 1 should be invalid")
 
 	d = *testDoc
 	d.ChainID = "   \t"

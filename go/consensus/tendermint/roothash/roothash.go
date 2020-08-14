@@ -317,6 +317,16 @@ func (sc *serviceClient) reindexBlocks(currentHeight int64, bh api.BlockHistory)
 		)
 		lastHeight = lastRetainedHeight
 	}
+
+	// Take initial genesis height into account.
+	genesisDoc, err := sc.backend.GetGenesisDocument(sc.ctx)
+	if err != nil {
+		return fmt.Errorf("failed to get genesis document: %w", err)
+	}
+	if lastHeight < genesisDoc.Height {
+		lastHeight = genesisDoc.Height
+	}
+
 	// Scan all blocks between last indexed height and current height.
 	logger.Debug("reindexing blocks",
 		"last_indexed_height", lastHeight,

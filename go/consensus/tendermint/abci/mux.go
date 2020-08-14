@@ -76,6 +76,9 @@ type ApplicationConfig struct {
 
 	// ReadOnlyStorage forces read-only access for the state storage.
 	ReadOnlyStorage bool
+
+	// InitialHeight is the height of the initial block.
+	InitialHeight uint64
 }
 
 // ApplicationServer implements a tendermint ABCI application + socket server,
@@ -287,6 +290,10 @@ func (mux *abciMux) InitChain(req types.RequestInitChain) types.ResponseInitChai
 
 	mux.currentTime = st.Time
 
+	if st.Height != req.InitialHeight || uint64(st.Height) != mux.state.initialHeight {
+		panic(fmt.Errorf("mux: inconsistent initial height (genesis: %d abci: %d state: %d)", st.Height, req.InitialHeight, mux.state.initialHeight))
+	}
+
 	// Stick the digest of the genesis block (the RequestInitChain) into
 	// the state.
 	//
@@ -351,6 +358,9 @@ func (mux *abciMux) InitChain(req types.RequestInitChain) types.ResponseInitChai
 	if err = mux.state.doInitChain(st.Time); err != nil {
 		panic(fmt.Errorf("mux: failed to init chain state: %w", err))
 	}
+
+	// Set application state hash. We cannot use BlockHash as we are below initial height.
+	resp.AppHash = mux.state.stateRoot.Hash[:]
 
 	return resp
 }

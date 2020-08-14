@@ -40,6 +40,8 @@ type applicationState struct { // nolint: maligned
 	ctx       context.Context
 	cancelCtx context.CancelFunc
 
+	initialHeight uint64
+
 	stateRoot     storage.Root
 	storage       storage.LocalBackend
 	deliverTxTree mkvs.Tree
@@ -118,14 +120,18 @@ func (s *applicationState) BlockHeight() int64 {
 	s.blockLock.RLock()
 	defer s.blockLock.RUnlock()
 
-	return int64(s.stateRoot.Version)
+	height := s.stateRoot.Version
+	if height < s.initialHeight {
+		height = 0
+	}
+	return int64(height)
 }
 
 func (s *applicationState) BlockHash() []byte {
 	s.blockLock.RLock()
 	defer s.blockLock.RUnlock()
 
-	if s.stateRoot.Version == 0 {
+	if s.stateRoot.Version < s.initialHeight {
 		// Tendermint expects a nil hash when there is no state otherwise it will panic.
 		return nil
 	}
@@ -177,7 +183,7 @@ func (s *applicationState) EpochChanged(ctx *api.Context) (bool, epochtime.Epoch
 		return false, epochtime.EpochInvalid
 	}
 
-	if blockHeight == 1 {
+	if uint64(blockHeight) == s.initialHeight {
 		// There is no block before the first block. For historic reasons, this is defined as not
 		// having had a transition.
 		return false, currentEpoch
@@ -249,6 +255,16 @@ func (s *applicationState) doInitChain(now time.Time) error {
 	s.blockLock.Lock()
 	defer s.blockLock.Unlock()
 
+	// We use the height before the initial height for the state before the first block. Note that
+	// this tree is not persisted, we only need it to compute the root hash.
+	_, stateRootHash, err := s.deliverTxTree.Commit(s.ctx, s.stateRoot.Namespace, s.initialHeight-1, mkvs.NoPersist())
+	if err != nil {
+		return fmt.Errorf("failed to commit: %w", err)
+	}
+
+	s.stateRoot.Hash = stateRootHash
+	s.stateRoot.Version = s.initialHeight - 1
+
 	return s.doCommitOrInitChainLocked(now)
 }
 
@@ -279,7 +295,7 @@ func (s *applicationState) doCommit(now time.Time) (uint64, error) {
 		return 0, fmt.Errorf("failed to commit: %w", err)
 	}
 	if err = s.storage.NodeDB().Finalize(s.ctx, s.stateRoot.Version+1, []hash.Hash{stateRootHash}); err != nil {
-		return 0, fmt.Errorf("failed to finalize round %d: %w", s.stateRoot.Version+1, err)
+		return 0, fmt.Errorf("failed to finalize height %d: %w", s.stateRoot.Version+1, err)
 	}
 
 	s.stateRoot.Hash = stateRootHash
@@ -476,6 +492,10 @@ func InitStateStorage(ctx context.Context, cfg *ApplicationConfig) (storage.Loca
 }
 
 func newApplicationState(ctx context.Context, cfg *ApplicationConfig) (*applicationState, error) {
+	if cfg.InitialHeight < 1 {
+		return nil, fmt.Errorf("state: initial height must be >= 1 (got: %d)", cfg.InitialHeight)
+	}
+
 	// Initialize the state storage.
 	ldb, ndb, stateRoot, err := InitStateStorage(ctx, cfg)
 	if err != nil {
@@ -504,6 +524,7 @@ func newApplicationState(ctx context.Context, cfg *ApplicationConfig) (*applicat
 		logger:             logging.GetLogger("abci-mux/state"),
 		ctx:                ctx,
 		cancelCtx:          cancelCtx,
+		initialHeight:      cfg.InitialHeight,
 		deliverTxTree:      deliverTxTree,
 		checkTxTree:        checkTxTree,
 		stateRoot:          *stateRoot,
@@ -520,7 +541,7 @@ func newApplicationState(ctx context.Context, cfg *ApplicationConfig) (*applicat
 	}
 
 	// Refresh consensus parameters when loading state if we are past genesis.
-	if latestVersion > 0 {
+	if latestVersion >= s.initialHeight {
 		if err = s.doCommitOrInitChainLocked(time.Time{}); err != nil {
 			return nil, fmt.Errorf("state: failed to run initial state commit hook: %w", err)
 		}
