@@ -160,6 +160,11 @@ func (b *BaseBackend) GetTransactionsWithResults(ctx context.Context, height int
 }
 
 // Implements Backend.
+func (b *BaseBackend) GetUnconfirmedTransactions(ctx context.Context) ([][]byte, error) {
+	panic(ErrUnsupported)
+}
+
+// Implements Backend.
 func (b *BaseBackend) WatchBlocks(ctx context.Context) (<-chan *Block, pubsub.ClosableSubscription, error) {
 	panic(ErrUnsupported)
 }

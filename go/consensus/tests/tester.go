@@ -69,6 +69,9 @@ func ConsensusImplementationTests(t *testing.T, backend consensus.ClientBackend)
 		"GetTransactionsWithResults.Results length missmatch",
 	)
 
+	_, err = backend.GetUnconfirmedTransactions(ctx)
+	require.NoError(err, "GetUnconfirmedTransactions")
+
 	blockCh, blockSub, err := backend.WatchBlocks(ctx)
 	require.NoError(err, "WatchBlocks")
 	defer blockSub.Close()

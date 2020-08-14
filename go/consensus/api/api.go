@@ -121,6 +121,10 @@ type ClientBackend interface {
 	// height.
 	GetTransactionsWithResults(ctx context.Context, height int64) (*TransactionsWithResults, error)
 
+	// GetUnconfirmedTransactions returns a list of transactions currently in the local node's
+	// mempool. These have not yet been included in a block.
+	GetUnconfirmedTransactions(ctx context.Context) ([][]byte, error)
+
 	// WatchBlocks returns a channel that produces a stream of consensus
 	// blocks as they are being finalized.
 	WatchBlocks(ctx context.Context) (<-chan *Block, pubsub.ClosableSubscription, error)
