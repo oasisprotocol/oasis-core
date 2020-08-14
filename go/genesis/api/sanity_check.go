@@ -3,7 +3,6 @@ package api
 import (
 	"fmt"
 	"strings"
-	"time"
 
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 )
@@ -12,10 +11,6 @@ import (
 func (d *Document) SanityCheck() error {
 	if d.Height < 0 {
 		return fmt.Errorf("genesis: sanity check failed: height must be >= 0")
-	}
-
-	if d.Time.After(time.Now()) {
-		return fmt.Errorf("genesis: sanity check failed: time of genesis document is in the future")
 	}
 
 	if strings.TrimSpace(d.ChainID) == "" {
