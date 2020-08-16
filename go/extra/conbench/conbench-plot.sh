@@ -167,11 +167,6 @@ fi
 
 NUM_RUNS=$(( NUM_ACCT_RUNS + NUM_PROF_RUNS ))
 
-printf "${GRN}*** Funding ${MAX_ACCTS} accounts for ${NUM_RUNS} runs...${OFF}\n"
-# The gas price is artificially inflated to provide enough tokens to pay fees
-# for all the runs.
-conbench --num_accounts ${MAX_ACCTS} --gas_price ${NUM_RUNS} --fund_and_exit
-
 for a in ${ACCTN}
 do
 	run_bench $a plot
@@ -305,8 +300,5 @@ splot '${BTS_DATA_FILE}' with impulses lw 2 lc palette notitle
 EOF
 
 rm "${TPS_DATA_FILE}" "${ST_DATA_FILE}" "${BS_DATA_FILE}" "${BSS_DATA_FILE}" "${BSSB_DATA_FILE}" "${BTS_DATA_FILE}"
-
-printf "${GRN}*** Refunding original funding account...${OFF}\n"
-conbench --num_accounts ${MAX_ACCTS} --refund_and_exit
 
 printf "${GRN}*** Benchmarks completed.${OFF}\n"

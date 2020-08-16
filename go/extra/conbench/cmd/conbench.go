@@ -412,7 +412,7 @@ func doRun(cmd *cobra.Command, args []string) error { // nolint: gocyclo
 				toAddr := account[toIdx].addr
 
 				startT := time.Now()
-				if err = transfer(ctx, cc, &account[fromIdx], toAddr, 1, noCache); err != nil {
+				if err = transfer(ctx, cc, &account[fromIdx], toAddr, 0, noCache); err != nil {
 					atomic.AddUint64(&numSubmitErrors, 1)
 					// Disable cache for the next sample, just in case
 					// we messed up the nonce or if the gas cost changed.
