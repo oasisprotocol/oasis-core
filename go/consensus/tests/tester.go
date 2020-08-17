@@ -3,6 +3,7 @@ package tests
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"testing"
 	"time"
@@ -13,7 +14,6 @@ import (
 	memorySigner "github.com/oasisprotocol/oasis-core/go/common/crypto/signature/signers/memory"
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
 	"github.com/oasisprotocol/oasis-core/go/consensus/api/transaction"
-	epochtimemock "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/apps/epochtime_mock"
 	staking "github.com/oasisprotocol/oasis-core/go/staking/api"
 	"github.com/oasisprotocol/oasis-core/go/storage/mkvs"
 )
@@ -94,7 +94,7 @@ func ConsensusImplementationTests(t *testing.T, backend consensus.ClientBackend)
 
 	_, err = backend.EstimateGas(ctx, &consensus.EstimateGasRequest{
 		Signer:      memorySigner.NewTestSigner("estimate gas signer").Public(),
-		Transaction: transaction.NewTransaction(0, nil, epochtimemock.MethodSetEpoch, 0),
+		Transaction: transaction.NewTransaction(0, nil, staking.MethodTransfer, &staking.Transfer{}),
 	})
 	require.NoError(err, "EstimateGas")
 
@@ -126,7 +126,7 @@ func ConsensusImplementationTests(t *testing.T, backend consensus.ClientBackend)
 	err = backend.SubmitTxNoWait(ctx, &transaction.SignedTransaction{})
 	require.Error(err, "SubmitTxNoWait should fail with invalid transaction")
 
-	testTx := transaction.NewTransaction(0, nil, epochtimemock.MethodSetEpoch, epoch)
+	testTx := transaction.NewTransaction(0, nil, staking.MethodTransfer, &staking.Transfer{})
 	testSigner := memorySigner.NewTestSigner(fmt.Sprintf("consensus tests tx signer: %T", backend))
 	testSigTx, err := transaction.Sign(testSigner, testTx)
 	require.NoError(err, "transaction.Sign")
@@ -135,6 +135,11 @@ func ConsensusImplementationTests(t *testing.T, backend consensus.ClientBackend)
 
 	err = backend.SubmitEvidence(ctx, &consensus.Evidence{})
 	require.Error(err, "SubmitEvidence should fail with invalid evidence")
+
+	// Trigger some duplicate transaction errors.
+	err = backend.SubmitTxNoWait(ctx, testSigTx)
+	require.Error(err, "SubmitTxNoWait(duplicate)")
+	require.True(errors.Is(err, consensus.ErrDuplicateTx), "SubmitTxNoWait should return ErrDuplicateTx on duplicate tx")
 
 	// We should be able to do remote state queries. Of course the state format is backend-specific
 	// so we simply perform some usual storage operations like fetching random keys and iterating
