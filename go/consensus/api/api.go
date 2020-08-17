@@ -49,6 +49,9 @@ var (
 	// ErrUnsupported is the error returned when the given method is not supported by the consensus
 	// backend.
 	ErrUnsupported = errors.New(moduleName, 4, "consensus: method not supported")
+
+	// ErrDuplicateTx is the error returned when the transaction already exists in the mempool.
+	ErrDuplicateTx = errors.New(moduleName, 5, "consensus: duplicate transaction")
 )
 
 // FeatureMask is the consensus backend feature bitmask.
