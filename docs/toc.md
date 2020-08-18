@@ -26,10 +26,8 @@
     * [Root Hash](consensus/roothash.md)
     * [Key Manager](consensus/keymanager.md)
 * [Runtime Layer](runtime/index.md)
-  * [Runtimes](runtime/index.md#runtimes)
-    * [Operation Model](runtime/index.md#operation-model)
-    * [Runtime Host Protocol](runtime/runtime-host-protocol.md)
-    * [Identifiers](runtime/identifiers.md)
+  * [Runtime Host Protocol](runtime/runtime-host-protocol.md)
+  * [Identifiers](runtime/identifiers.md)
 * Oasis Node
   * [RPC](oasis-node/rpc.md)
   * [Metrics](oasis-node/metrics.md)
