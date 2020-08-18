@@ -68,10 +68,11 @@ type Context struct {
 
 	txSigner signature.PublicKey
 
-	appState    ApplicationState
-	state       mkvs.Tree
-	blockHeight int64
-	blockCtx    *BlockContext
+	appState      ApplicationState
+	state         mkvs.Tree
+	blockHeight   int64
+	blockCtx      *BlockContext
+	initialHeight int64
 
 	stateCheckpoint *StateCheckpoint
 
@@ -95,6 +96,7 @@ func NewContext(
 	state mkvs.Tree,
 	blockHeight int64,
 	blockCtx *BlockContext,
+	initialHeight int64,
 ) *Context {
 	c := &Context{
 		mode:          mode,
@@ -104,6 +106,7 @@ func NewContext(
 		state:         state,
 		blockHeight:   blockHeight,
 		blockCtx:      blockCtx,
+		initialHeight: initialHeight,
 		logger:        logging.GetLogger("consensus/tendermint/abci").With("mode", mode),
 	}
 	c.Context = context.WithValue(ctx, contextKey{}, c)
@@ -259,6 +262,11 @@ func (c *Context) AppState() ApplicationState {
 		panic("context: application state is not available in simulation mode")
 	}
 	return c.appState
+}
+
+// InitialHeight returns the initial height.
+func (c *Context) InitialHeight() int64 {
+	return c.initialHeight
 }
 
 // BlockHeight returns the current block height.

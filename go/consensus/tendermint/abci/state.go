@@ -105,6 +105,7 @@ func (s *applicationState) NewContext(mode api.ContextMode, now time.Time) *api.
 		state,
 		int64(s.stateRoot.Version),
 		blockCtx,
+		int64(s.initialHeight),
 	)
 }
 
@@ -114,6 +115,10 @@ func (s *applicationState) LastRetainedVersion() (int64, error) {
 
 func (s *applicationState) Storage() storage.LocalBackend {
 	return s.storage
+}
+
+func (s *applicationState) InitialHeight() int64 {
+	return int64(s.initialHeight)
 }
 
 func (s *applicationState) BlockHeight() int64 {
