@@ -40,7 +40,7 @@ func (sc *consensusStateSyncImpl) Fixture() (*oasis.NetworkFixture, error) {
 	f.Network.Consensus.Parameters.StateCheckpointChunkSize = 1024 * 1024
 	// Add an extra validator.
 	f.Validators = append(f.Validators,
-		oasis.ValidatorFixture{Entity: 1, Consensus: oasis.ConsensusFixture{EnableConsensusRPCWorker: true}},
+		oasis.ValidatorFixture{NoAutoStart: true, Entity: 1, Consensus: oasis.ConsensusFixture{EnableConsensusRPCWorker: true}},
 	)
 
 	return f, nil
@@ -53,14 +53,8 @@ func (sc *consensusStateSyncImpl) Run(childEnv *env.Env) error {
 
 	sc.Logger.Info("waiting for network to come up")
 	ctx := context.Background()
-	if err := sc.Net.Controller().WaitNodesRegistered(ctx, len(sc.Net.Validators())); err != nil {
+	if err := sc.Net.Controller().WaitNodesRegistered(ctx, len(sc.Net.Validators())-1); err != nil {
 		return err
-	}
-
-	// Stop one of the validators.
-	val := sc.Net.Validators()[2]
-	if err := val.Stop(); err != nil {
-		return fmt.Errorf("failed to stop validator: %w", err)
 	}
 
 	// Let the network run for 50 blocks. This should generate some checkpoints.
@@ -85,7 +79,7 @@ func (sc *consensusStateSyncImpl) Run(childEnv *env.Env) error {
 		break
 	}
 
-	sc.Logger.Info("got some blocks, starting the validator back",
+	sc.Logger.Info("got some blocks, starting the validator that needs to sync",
 		"trust_height", blk.Height,
 		"trust_hash", hex.EncodeToString(blk.Hash),
 	)
@@ -122,6 +116,7 @@ func (sc *consensusStateSyncImpl) Run(childEnv *env.Env) error {
 	}
 
 	// Configure state sync for the consensus validator.
+	val := sc.Net.Validators()[2]
 	val.SetConsensusStateSync(&oasis.ConsensusStateSyncCfg{
 		ConsensusNodes: consensusNodes,
 		TrustHeight:    uint64(blk.Height),
@@ -129,7 +124,7 @@ func (sc *consensusStateSyncImpl) Run(childEnv *env.Env) error {
 	})
 
 	if err = val.Start(); err != nil {
-		return fmt.Errorf("failed to start validator back: %w", err)
+		return fmt.Errorf("failed to start validator: %w", err)
 	}
 
 	// Wait for the validator to finish syncing.
