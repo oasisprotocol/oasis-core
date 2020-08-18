@@ -93,7 +93,7 @@ func (app *beaconApplication) onBeaconEpochChange(ctx *api.Context, epoch epocht
 		entropyCtx = prodEntropyCtx
 
 		height := ctx.BlockHeight()
-		if height <= 1 {
+		if height <= ctx.InitialHeight() {
 			// No meaningful previous commit, use the block hash.  This isn't
 			// fantastic, but it's only for one epoch.
 			ctx.Logger().Debug("onBeaconEpochChange: using block hash as entropy")

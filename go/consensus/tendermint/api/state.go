@@ -26,6 +26,9 @@ var ErrNoState = errors.New("tendermint: no state available (app not registered?
 type ApplicationState interface {
 	ApplicationQueryState
 
+	// InitialHeight returns the initial height.
+	InitialHeight() int64
+
 	// BlockHash returns the last committed block hash.
 	BlockHash() []byte
 
@@ -110,6 +113,10 @@ func (ms *mockApplicationState) Storage() storage.LocalBackend {
 	panic("not implemented")
 }
 
+func (ms *mockApplicationState) InitialHeight() int64 {
+	return ms.cfg.Genesis.Height
+}
+
 func (ms *mockApplicationState) BlockHeight() int64 {
 	return ms.cfg.BlockHeight
 }
@@ -167,6 +174,7 @@ func (ms *mockApplicationState) NewContext(mode ContextMode, now time.Time) *Con
 		appState:      ms,
 		blockHeight:   ms.cfg.BlockHeight,
 		blockCtx:      ms.blockCtx,
+		initialHeight: ms.InitialHeight(),
 		logger:        logging.GetLogger("consensus/tendermint/abci").With("mode", mode),
 	}
 	c.Context = context.WithValue(context.Background(), contextKey{}, c)
@@ -183,6 +191,13 @@ func NewMockApplicationState(cfg *MockApplicationStateConfig) ApplicationState {
 		blockCtx.Set(GasAccountantKey{}, NewGasAccountant(cfg.MaxBlockGas))
 	} else {
 		blockCtx.Set(GasAccountantKey{}, NewNopGasAccountant())
+	}
+
+	if cfg.Genesis == nil {
+		cfg.Genesis = new(genesis.Document)
+	}
+	if cfg.Genesis.Height == 0 {
+		cfg.Genesis.Height = 1
 	}
 
 	return &mockApplicationState{
