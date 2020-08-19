@@ -66,9 +66,9 @@ transactions from clients (also see the figure above for an overview).
    Elections are randomized based on entropy provided by the [random beacon].
 
 1. A client may submit transactions by querying the consensus layer to get the
-   current transaction scheduler committee for a given runtime, connect to it,
-   send it transactions and wait for finalization by the consensus layer. In
-   order to make it easier to write clients, the Oasis Node exposes a runtime
+   current executor committee for a given runtime, connect to it, publish
+   transactions and wait for finalization by the consensus layer. In order to
+   make it easier to write clients, the Oasis Node exposes a runtime
    [client RPC API] that encapsulates all this functionality in a [`SubmitTx`]
    call.
 
@@ -122,18 +122,21 @@ derive different results when replicating computation.
 
 ### Compute Committee Roles and Commitments
 
-As one of the steps above we mentioned that a compute node can be elected into
-different committees based on role. A compute node may have any of the following
-roles (it can have multiple roles at once):
+A compute node can be elected into an executor committee and may have one of the
+following roles:
 
-* Transaction scheduler.
-* Executor node (primary or backup).
+* Primary executor node. At any given round a single node is selected among all
+the primary executor nodes to be a _transaction scheduler node_ (roughly equal
+to the role of a _block proposer_).
+* Backup executor node. Backup nodes can be activated by the consensus layer in
+case it determines that there is a discrepancy.
 
-Subject to runtime configuration, each committee can contain multiple nodes of
-the same kind (e.g., multiple executor nodes). Some are considered _primary_
-which means that when some input transaction arrives they will all proceed to
-execute it in a replicated fashion (e.g., they will all execute the same inputs
-on the same initial state).
+The size of the primary and backup executor committees, together with other
+related parameters, can be configured on a per-runtime basis. The _primary_
+nodes are the ones that will batch incoming transactions into blocks and execute
+the state transitions to derive the new state root. They perform this in a
+replicated fashion where all the primary executor nodes execute the same inputs
+(transactions) on the same initial state.
 
 After execution they will sign [cryptographic commitments] specifying the
 inputs, the initial state, the outputs and the resulting state. In case
