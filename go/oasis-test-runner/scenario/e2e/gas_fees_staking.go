@@ -351,7 +351,7 @@ func (sc *gasFeesImpl) testReclaimEscrow(ctx context.Context, signer signature.S
 			return fmt.Errorf("failed to reclaim escrow: %w", err)
 		}
 
-		ch, sub, err := sc.Net.Controller().Staking.WatchEscrows(ctx)
+		ch, sub, err := sc.Net.Controller().Staking.WatchEvents(ctx)
 		if err != nil {
 			return fmt.Errorf("failed to watch escrows: %w", err)
 		}
@@ -365,7 +365,7 @@ func (sc *gasFeesImpl) testReclaimEscrow(ctx context.Context, signer signature.S
 		for {
 			select {
 			case ev := <-ch:
-				if ev.Reclaim != nil {
+				if ev.Escrow != nil && ev.Escrow.Reclaim != nil {
 					return nil
 				}
 			case <-ctx.Done():

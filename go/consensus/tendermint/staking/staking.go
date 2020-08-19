@@ -36,10 +36,7 @@ type serviceClient struct {
 	backend tmapi.Backend
 	querier *app.QueryFactory
 
-	transferNotifier *pubsub.Broker
-	burnNotifier     *pubsub.Broker
-	escrowNotifier   *pubsub.Broker
-	eventNotifier    *pubsub.Broker
+	eventNotifier *pubsub.Broker
 }
 
 func (sc *serviceClient) TokenSymbol(ctx context.Context) (string, error) {
@@ -130,30 +127,6 @@ func (sc *serviceClient) DebondingDelegations(ctx context.Context, query *api.Ow
 	}
 
 	return q.DebondingDelegations(ctx, query.Owner)
-}
-
-func (sc *serviceClient) WatchTransfers(ctx context.Context) (<-chan *api.TransferEvent, pubsub.ClosableSubscription, error) {
-	typedCh := make(chan *api.TransferEvent)
-	sub := sc.transferNotifier.Subscribe()
-	sub.Unwrap(typedCh)
-
-	return typedCh, sub, nil
-}
-
-func (sc *serviceClient) WatchBurns(ctx context.Context) (<-chan *api.BurnEvent, pubsub.ClosableSubscription, error) {
-	typedCh := make(chan *api.BurnEvent)
-	sub := sc.burnNotifier.Subscribe()
-	sub.Unwrap(typedCh)
-
-	return typedCh, sub, nil
-}
-
-func (sc *serviceClient) WatchEscrows(ctx context.Context) (<-chan *api.EscrowEvent, pubsub.ClosableSubscription, error) {
-	typedCh := make(chan *api.EscrowEvent)
-	sub := sc.escrowNotifier.Subscribe()
-	sub.Unwrap(typedCh)
-
-	return typedCh, sub, nil
 }
 
 func (sc *serviceClient) StateToGenesis(ctx context.Context, height int64) (*api.Genesis, error) {
@@ -265,15 +238,6 @@ func (sc *serviceClient) DeliverEvent(ctx context.Context, height int64, tx tmty
 
 	// Notify subscribers of events.
 	for _, ev := range events {
-		if ev.Transfer != nil {
-			sc.transferNotifier.Broadcast(ev.Transfer)
-		}
-		if ev.Escrow != nil {
-			sc.escrowNotifier.Broadcast(ev.Escrow)
-		}
-		if ev.Burn != nil {
-			sc.burnNotifier.Broadcast(ev.Burn)
-		}
 		sc.eventNotifier.Broadcast(ev)
 	}
 
@@ -380,12 +344,9 @@ func New(ctx context.Context, backend tmapi.Backend) (ServiceClient, error) {
 	}
 
 	return &serviceClient{
-		logger:           logging.GetLogger("staking/tendermint"),
-		backend:          backend,
-		querier:          a.QueryFactory().(*app.QueryFactory),
-		transferNotifier: pubsub.NewBroker(false),
-		burnNotifier:     pubsub.NewBroker(false),
-		escrowNotifier:   pubsub.NewBroker(false),
-		eventNotifier:    pubsub.NewBroker(false),
+		logger:        logging.GetLogger("staking/tendermint"),
+		backend:       backend,
+		querier:       a.QueryFactory().(*app.QueryFactory),
+		eventNotifier: pubsub.NewBroker(false),
 	}, nil
 }

@@ -41,12 +41,6 @@ var (
 	// methodGetEvents is the GetEvents method.
 	methodGetEvents = serviceName.NewMethod("GetEvents", int64(0))
 
-	// methodWatchTransfers is the WatchTransfers method.
-	methodWatchTransfers = serviceName.NewMethod("WatchTransfers", nil)
-	// methodWatchBurns is the WatchBurns method.
-	methodWatchBurns = serviceName.NewMethod("WatchBurns", nil)
-	// methodWatchEscrows is the WatchEscrows method.
-	methodWatchEscrows = serviceName.NewMethod("WatchEscrows", nil)
 	// methodWatchEvents is the WatchEvents method.
 	methodWatchEvents = serviceName.NewMethod("WatchEvents", nil)
 
@@ -109,21 +103,6 @@ var (
 			},
 		},
 		Streams: []grpc.StreamDesc{
-			{
-				StreamName:    methodWatchTransfers.ShortName(),
-				Handler:       handlerWatchTransfers,
-				ServerStreams: true,
-			},
-			{
-				StreamName:    methodWatchBurns.ShortName(),
-				Handler:       handlerWatchBurns,
-				ServerStreams: true,
-			},
-			{
-				StreamName:    methodWatchEscrows.ShortName(),
-				Handler:       handlerWatchEscrows,
-				ServerStreams: true,
-			},
 			{
 				StreamName:    methodWatchEvents.ShortName(),
 				Handler:       handlerWatchEvents,
@@ -424,90 +403,6 @@ func handlerGetEvents( // nolint: golint
 	return interceptor(ctx, height, info, handler)
 }
 
-func handlerWatchTransfers(srv interface{}, stream grpc.ServerStream) error {
-	if err := stream.RecvMsg(nil); err != nil {
-		return err
-	}
-
-	ctx := stream.Context()
-	ch, sub, err := srv.(Backend).WatchTransfers(ctx)
-	if err != nil {
-		return err
-	}
-	defer sub.Close()
-
-	for {
-		select {
-		case ev, ok := <-ch:
-			if !ok {
-				return nil
-			}
-
-			if err := stream.SendMsg(ev); err != nil {
-				return err
-			}
-		case <-ctx.Done():
-			return ctx.Err()
-		}
-	}
-}
-
-func handlerWatchBurns(srv interface{}, stream grpc.ServerStream) error {
-	if err := stream.RecvMsg(nil); err != nil {
-		return err
-	}
-
-	ctx := stream.Context()
-	ch, sub, err := srv.(Backend).WatchBurns(ctx)
-	if err != nil {
-		return err
-	}
-	defer sub.Close()
-
-	for {
-		select {
-		case ev, ok := <-ch:
-			if !ok {
-				return nil
-			}
-
-			if err := stream.SendMsg(ev); err != nil {
-				return err
-			}
-		case <-ctx.Done():
-			return ctx.Err()
-		}
-	}
-}
-
-func handlerWatchEscrows(srv interface{}, stream grpc.ServerStream) error {
-	if err := stream.RecvMsg(nil); err != nil {
-		return err
-	}
-
-	ctx := stream.Context()
-	ch, sub, err := srv.(Backend).WatchEscrows(ctx)
-	if err != nil {
-		return err
-	}
-	defer sub.Close()
-
-	for {
-		select {
-		case ev, ok := <-ch:
-			if !ok {
-				return nil
-			}
-
-			if err := stream.SendMsg(ev); err != nil {
-				return err
-			}
-		case <-ctx.Done():
-			return ctx.Err()
-		}
-	}
-}
-
 func handlerWatchEvents(srv interface{}, stream grpc.ServerStream) error {
 	if err := stream.RecvMsg(nil); err != nil {
 		return err
@@ -649,115 +544,10 @@ func (c *stakingClient) GetEvents(ctx context.Context, height int64) ([]*Event, 
 	return rsp, nil
 }
 
-func (c *stakingClient) WatchTransfers(ctx context.Context) (<-chan *TransferEvent, pubsub.ClosableSubscription, error) {
-	ctx, sub := pubsub.NewContextSubscription(ctx)
-
-	stream, err := c.conn.NewStream(ctx, &serviceDesc.Streams[0], methodWatchTransfers.FullName())
-	if err != nil {
-		return nil, nil, err
-	}
-	if err = stream.SendMsg(nil); err != nil {
-		return nil, nil, err
-	}
-	if err = stream.CloseSend(); err != nil {
-		return nil, nil, err
-	}
-
-	ch := make(chan *TransferEvent)
-	go func() {
-		defer close(ch)
-
-		for {
-			var ev TransferEvent
-			if serr := stream.RecvMsg(&ev); serr != nil {
-				return
-			}
-
-			select {
-			case ch <- &ev:
-			case <-ctx.Done():
-				return
-			}
-		}
-	}()
-
-	return ch, sub, nil
-}
-
-func (c *stakingClient) WatchBurns(ctx context.Context) (<-chan *BurnEvent, pubsub.ClosableSubscription, error) {
-	ctx, sub := pubsub.NewContextSubscription(ctx)
-
-	stream, err := c.conn.NewStream(ctx, &serviceDesc.Streams[1], methodWatchBurns.FullName())
-	if err != nil {
-		return nil, nil, err
-	}
-	if err = stream.SendMsg(nil); err != nil {
-		return nil, nil, err
-	}
-	if err = stream.CloseSend(); err != nil {
-		return nil, nil, err
-	}
-
-	ch := make(chan *BurnEvent)
-	go func() {
-		defer close(ch)
-
-		for {
-			var ev BurnEvent
-			if serr := stream.RecvMsg(&ev); serr != nil {
-				return
-			}
-
-			select {
-			case ch <- &ev:
-			case <-ctx.Done():
-				return
-			}
-		}
-	}()
-
-	return ch, sub, nil
-}
-
-func (c *stakingClient) WatchEscrows(ctx context.Context) (<-chan *EscrowEvent, pubsub.ClosableSubscription, error) {
-	ctx, sub := pubsub.NewContextSubscription(ctx)
-
-	stream, err := c.conn.NewStream(ctx, &serviceDesc.Streams[2], methodWatchEscrows.FullName())
-	if err != nil {
-		return nil, nil, err
-	}
-	if err = stream.SendMsg(nil); err != nil {
-		return nil, nil, err
-	}
-	if err = stream.CloseSend(); err != nil {
-		return nil, nil, err
-	}
-
-	ch := make(chan *EscrowEvent)
-	go func() {
-		defer close(ch)
-
-		for {
-			var ev EscrowEvent
-			if serr := stream.RecvMsg(&ev); serr != nil {
-				return
-			}
-
-			select {
-			case ch <- &ev:
-			case <-ctx.Done():
-				return
-			}
-		}
-	}()
-
-	return ch, sub, nil
-}
-
 func (c *stakingClient) WatchEvents(ctx context.Context) (<-chan *Event, pubsub.ClosableSubscription, error) {
 	ctx, sub := pubsub.NewContextSubscription(ctx)
 
-	stream, err := c.conn.NewStream(ctx, &serviceDesc.Streams[3], methodWatchEvents.FullName())
+	stream, err := c.conn.NewStream(ctx, &serviceDesc.Streams[0], methodWatchEvents.FullName())
 	if err != nil {
 		return nil, nil, err
 	}

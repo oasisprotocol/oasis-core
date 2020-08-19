@@ -96,7 +96,6 @@ func StakingImplementationTests(
 		{"Thresholds", testThresholds},
 		{"LastBlockFees", testLastBlockFees},
 		{"Transfer", testTransfer},
-		{"TransferWatchEvents", testTransferWatchEvents},
 		{"TransferSelf", testSelfTransfer},
 		{"Burn", testBurn},
 		{"Escrow", testEscrow},
@@ -123,7 +122,6 @@ func StakingClientImplementationTests(t *testing.T, backend api.Backend, consens
 		{"Thresholds", testThresholds},
 		{"LastBlockFees", testLastBlockFees},
 		{"Transfer", testTransfer},
-		{"TransferWatchEvents", testTransferWatchEvents},
 		{"TransferSelf", testSelfTransfer},
 		{"Burn", testBurn},
 		{"Escrow", testEscrow},
@@ -169,8 +167,8 @@ func testTransfer(t *testing.T, state *stakingTestsState, backend api.Backend, c
 	srcAcc, err := backend.Account(context.Background(), &api.OwnerQuery{Owner: SrcAddr, Height: consensusAPI.HeightLatest})
 	require.NoError(err, "src: Account - before")
 
-	ch, sub, err := backend.WatchTransfers(context.Background())
-	require.NoError(err, "WatchTransfers")
+	ch, sub, err := backend.WatchEvents(context.Background())
+	require.NoError(err, "WatchEvents")
 	defer sub.Close()
 
 	xfer := &api.Transfer{
@@ -187,26 +185,31 @@ TransferWaitLoop:
 	for {
 		select {
 		case ev := <-ch:
-			if ev.From.Equal(api.CommonPoolAddress) || ev.To.Equal(api.CommonPoolAddress) {
-				require.False(ev.Amount.IsZero(), "CommonPool xfer: amount should be non-zero")
+			if ev.Transfer == nil {
 				continue
 			}
-			if ev.From.Equal(api.FeeAccumulatorAddress) || ev.To.Equal(api.FeeAccumulatorAddress) {
-				require.False(ev.Amount.IsZero(), "FeeAccumulator xfer: amount should be non-zero")
+			te := ev.Transfer
+
+			if te.From.Equal(api.CommonPoolAddress) || te.To.Equal(api.CommonPoolAddress) {
+				require.False(te.Amount.IsZero(), "CommonPool xfer: amount should be non-zero")
+				continue
+			}
+			if te.From.Equal(api.FeeAccumulatorAddress) || te.To.Equal(api.FeeAccumulatorAddress) {
+				require.False(te.Amount.IsZero(), "FeeAccumulator xfer: amount should be non-zero")
 				continue
 			}
 
 			if !gotTransfer {
-				require.Equal(SrcAddr, ev.From, "Event: from")
-				require.Equal(DestAddr, ev.To, "Event: to")
-				require.Equal(xfer.Amount, ev.Amount, "Event: amount")
+				require.Equal(SrcAddr, te.From, "Event: from")
+				require.Equal(DestAddr, te.To, "Event: to")
+				require.Equal(xfer.Amount, te.Amount, "Event: amount")
 
 				// Make sure that GetEvents also returns the transfer event.
 				evts, grr := backend.GetEvents(context.Background(), consensusAPI.HeightLatest)
 				require.NoError(grr, "GetEvents")
 				for _, evt := range evts {
 					if evt.Transfer != nil {
-						if evt.Transfer.From.Equal(ev.From) && evt.Transfer.To.Equal(ev.To) && evt.Transfer.Amount.Cmp(&ev.Amount) == 0 {
+						if evt.Transfer.From.Equal(te.From) && evt.Transfer.To.Equal(te.To) && evt.Transfer.Amount.Cmp(&te.Amount) == 0 {
 							gotTransfer = true
 							require.True(!evt.TxHash.IsEmpty(), "GetEvents should return valid txn hash")
 							break
@@ -245,80 +248,14 @@ TransferWaitLoop:
 	require.Error(err, "Transfer - more than available balance")
 }
 
-func testTransferWatchEvents(t *testing.T, state *stakingTestsState, backend api.Backend, consensus consensusAPI.Backend) {
-	require := require.New(t)
-
-	srcAcc, err := backend.Account(context.Background(), &api.OwnerQuery{Owner: SrcAddr, Height: consensusAPI.HeightLatest})
-	require.NoError(err, "Account")
-
-	ch, sub, err := backend.WatchEvents(context.Background())
-	require.NoError(err, "WatchEvents")
-	defer sub.Close()
-
-	xfer := &api.Transfer{
-		To:     DestAddr,
-		Amount: *quantity.NewFromUint64(math.MaxUint8),
-	}
-	tx := api.NewTransferTx(srcAcc.General.Nonce, nil, xfer)
-	err = consensusAPI.SignAndSubmitTx(context.Background(), consensus, srcSigner, tx)
-	require.NoError(err, "SignAndSubmitTx")
-
-	var gotTransfer bool
-
-TransferWaitLoop:
-	for {
-		select {
-		case ev := <-ch:
-			// We're only interested in transfer events.
-			if ev.Transfer == nil {
-				continue
-			}
-
-			from := ev.Transfer.From
-			to := ev.Transfer.To
-			baseUnits := ev.Transfer.Amount
-
-			// We should also get some traffic to/from the common pool and fee accumulator.
-			if from.Equal(api.CommonPoolAddress) || to.Equal(api.CommonPoolAddress) {
-				require.False(baseUnits.IsZero(), "CommonPool xfer: amount should be non-zero")
-				continue
-			}
-			if from.Equal(api.FeeAccumulatorAddress) || to.Equal(api.FeeAccumulatorAddress) {
-				require.False(baseUnits.IsZero(), "FeeAccumulator xfer: amount should be non-zero")
-				continue
-			}
-
-			if !gotTransfer {
-				require.Equal(SrcAddr, from, "Event: from")
-				require.Equal(DestAddr, to, "Event: to")
-				require.Equal(xfer.Amount, ev.Transfer.Amount, "Event: amount")
-
-				// Height must be valid.
-				status, err := consensus.GetStatus(context.Background())
-				require.NoError(err, "GetStatus")
-				require.NotNil(status, "GetStatus")
-				require.EqualValues(status.LatestHeight, ev.Height, "Event: height")
-
-				gotTransfer = true
-			}
-
-			if gotTransfer {
-				break TransferWaitLoop
-			}
-		case <-time.After(recvTimeout):
-			t.Fatalf("failed to receive transfer event")
-		}
-	}
-}
-
 func testSelfTransfer(t *testing.T, state *stakingTestsState, backend api.Backend, consensus consensusAPI.Backend) {
 	require := require.New(t)
 
 	srcAcc, err := backend.Account(context.Background(), &api.OwnerQuery{Owner: SrcAddr, Height: consensusAPI.HeightLatest})
 	require.NoError(err, "src: Account - before")
 
-	ch, sub, err := backend.WatchTransfers(context.Background())
-	require.NoError(err, "WatchTransfers")
+	ch, sub, err := backend.WatchEvents(context.Background())
+	require.NoError(err, "WatchEvents")
 	defer sub.Close()
 
 	xfer := &api.Transfer{
@@ -335,19 +272,24 @@ TransferWaitLoop:
 	for {
 		select {
 		case ev := <-ch:
-			if ev.From.Equal(api.CommonPoolAddress) || ev.To.Equal(api.CommonPoolAddress) {
-				require.False(ev.Amount.IsZero(), "CommonPool xfer: amount should be non-zero")
+			if ev.Transfer == nil {
 				continue
 			}
-			if ev.From.Equal(api.FeeAccumulatorAddress) || ev.To.Equal(api.FeeAccumulatorAddress) {
-				require.False(ev.Amount.IsZero(), "FeeAccumulator xfer: amount should be non-zero")
+			te := ev.Transfer
+
+			if te.From.Equal(api.CommonPoolAddress) || te.To.Equal(api.CommonPoolAddress) {
+				require.False(te.Amount.IsZero(), "CommonPool xfer: amount should be non-zero")
+				continue
+			}
+			if te.From.Equal(api.FeeAccumulatorAddress) || te.To.Equal(api.FeeAccumulatorAddress) {
+				require.False(te.Amount.IsZero(), "FeeAccumulator xfer: amount should be non-zero")
 				continue
 			}
 
 			if !gotTransfer {
-				require.Equal(SrcAddr, ev.From, "Event: from")
-				require.Equal(SrcAddr, ev.To, "Event: to")
-				require.Equal(xfer.Amount, ev.Amount, "Event: amount")
+				require.Equal(SrcAddr, te.From, "Event: from")
+				require.Equal(SrcAddr, te.To, "Event: to")
+				require.Equal(xfer.Amount, te.Amount, "Event: amount")
 				gotTransfer = true
 			}
 
@@ -382,8 +324,8 @@ func testBurn(t *testing.T, state *stakingTestsState, backend api.Backend, conse
 	srcAcc, err := backend.Account(context.Background(), &api.OwnerQuery{Owner: SrcAddr, Height: consensusAPI.HeightLatest})
 	require.NoError(err, "src: Account")
 
-	ch, sub, err := backend.WatchBurns(context.Background())
-	require.NoError(err, "WatchBurns")
+	ch, sub, err := backend.WatchEvents(context.Background())
+	require.NoError(err, "WatchEvents")
 	defer sub.Close()
 
 	burn := &api.Burn{
@@ -395,8 +337,13 @@ func testBurn(t *testing.T, state *stakingTestsState, backend api.Backend, conse
 
 	select {
 	case ev := <-ch:
-		require.Equal(SrcAddr, ev.Owner, "Event: owner")
-		require.Equal(burn.Amount, ev.Amount, "Event: amount")
+		if ev.Burn == nil {
+			t.Fatalf("expected burn event, got: %+v", ev)
+		}
+		be := ev.Burn
+
+		require.Equal(SrcAddr, be.Owner, "Event: owner")
+		require.Equal(burn.Amount, be.Amount, "Event: amount")
 
 		// Make sure that GetEvents also returns the burn event.
 		evts, grr := backend.GetEvents(context.Background(), consensusAPI.HeightLatest)
@@ -404,7 +351,7 @@ func testBurn(t *testing.T, state *stakingTestsState, backend api.Backend, conse
 		var gotIt bool
 		for _, evt := range evts {
 			if evt.Burn != nil {
-				if evt.Burn.Owner.Equal(ev.Owner) && evt.Burn.Amount.Cmp(&ev.Amount) == 0 {
+				if evt.Burn.Owner.Equal(be.Owner) && evt.Burn.Amount.Cmp(&be.Amount) == 0 {
 					gotIt = true
 					break
 				}
@@ -463,8 +410,8 @@ func testEscrowEx( // nolint: gocyclo
 	require.True(dstAcc.Escrow.Debonding.Balance.IsZero(), "dst: debonding escrow balance == 0")
 	require.True(dstAcc.Escrow.Debonding.TotalShares.IsZero(), "dst: debonding escrow total shares == 0")
 
-	ch, sub, err := backend.WatchEscrows(context.Background())
-	require.NoError(err, "WatchEscrows")
+	ch, sub, err := backend.WatchEvents(context.Background())
+	require.NoError(err, "WatchEvents")
 	defer sub.Close()
 
 	totalEscrowed := dstAcc.Escrow.Active.Balance.Clone()
@@ -481,7 +428,11 @@ func testEscrowEx( // nolint: gocyclo
 
 	select {
 	case rawEv := <-ch:
-		ev := rawEv.Add
+		if rawEv.Escrow == nil || rawEv.Escrow.Add == nil {
+			t.Fatalf("expected add escrow event, got: %+v", rawEv)
+		}
+
+		ev := rawEv.Escrow.Add
 		require.NotNil(ev)
 		require.Equal(srcAddr, ev.Owner, "Event: owner")
 		require.Equal(dstAddr, ev.Escrow, "Event: escrow")
@@ -544,7 +495,11 @@ func testEscrowEx( // nolint: gocyclo
 
 	select {
 	case rawEv := <-ch:
-		ev := rawEv.Add
+		if rawEv.Escrow == nil || rawEv.Escrow.Add == nil {
+			t.Fatalf("expected add escrow event, got: %+v", rawEv)
+		}
+
+		ev := rawEv.Escrow.Add
 		require.NotNil(ev)
 		require.Equal(srcAddr, ev.Owner, "Event: owner")
 		require.Equal(dstAddr, ev.Escrow, "Event: escrow")
@@ -621,7 +576,11 @@ func testEscrowEx( // nolint: gocyclo
 	// Wait for debonding period to pass.
 	select {
 	case rawEv := <-ch:
-		ev := rawEv.Reclaim
+		if rawEv.Escrow == nil || rawEv.Escrow.Reclaim == nil {
+			t.Fatalf("expected reclaim escrow event, got: %+v", rawEv)
+		}
+
+		ev := rawEv.Escrow.Reclaim
 		require.NotNil(ev)
 		require.Equal(srcAddr, ev.Owner, "Event: owner")
 		require.Equal(dstAddr, ev.Escrow, "Event: escrow")
@@ -708,9 +667,9 @@ func testSlashDoubleSigning(
 	srcAcc, err := backend.Account(context.Background(), &api.OwnerQuery{Owner: SrcAddr, Height: consensusAPI.HeightLatest})
 	require.NoError(err, "Account")
 
-	escrowCh, escrowSub, err := backend.WatchEscrows(context.Background())
-	require.NoError(err, "WatchEscrows")
-	defer escrowSub.Close()
+	ch, sub, err := backend.WatchEvents(context.Background())
+	require.NoError(err, "WatchEvents")
+	defer sub.Close()
 
 	entAddr := api.NewAddress(ent.ID)
 
@@ -723,8 +682,12 @@ func testSlashDoubleSigning(
 	require.NoError(err, "AddEscrow")
 
 	select {
-	case rawEv := <-escrowCh:
-		ev := rawEv.Add
+	case rawEv := <-ch:
+		if rawEv.Escrow == nil || rawEv.Escrow.Add == nil {
+			t.Fatalf("expected add escrow event, got: %+v", rawEv)
+		}
+
+		ev := rawEv.Escrow.Add
 		require.NotNil(ev)
 		require.Equal(SrcAddr, ev.Owner, "Event: owner")
 		require.Equal(entAddr, ev.Escrow, "Event: escrow")
@@ -738,11 +701,6 @@ func testSlashDoubleSigning(
 	require.NoError(err, "WatchBlocks")
 	defer blocksSub.Close()
 
-	// Subscribe to slash events.
-	slashCh, slashSub, err := backend.WatchEscrows(context.Background())
-	require.NoError(err, "WatchEscrows")
-	defer slashSub.Close()
-
 	// Broadcast evidence. This is Tendermint-specific, if we ever have more than one
 	// consensus backend, we need to change this part.
 	blk, err := consensus.GetBlock(context.Background(), 1)
@@ -754,8 +712,12 @@ func testSlashDoubleSigning(
 WaitLoop:
 	for {
 		select {
-		case ev := <-slashCh:
-			if e := ev.Take; e != nil {
+		case ev := <-ch:
+			if ev.Escrow == nil {
+				continue
+			}
+
+			if e := ev.Escrow.Take; e != nil {
 				require.Equal(entAddr, e.Owner, "TakeEscrowEvent - owner must be entity's address")
 				// All stake must be slashed as defined in debugGenesisState.
 				require.Equal(escrow.Amount, e.Amount, "TakeEscrowEvent - all stake slashed")
