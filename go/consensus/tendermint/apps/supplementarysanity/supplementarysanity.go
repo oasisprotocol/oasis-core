@@ -6,11 +6,11 @@ import (
 
 	"github.com/tendermint/tendermint/abci/types"
 
+	beacon "github.com/oasisprotocol/oasis-core/go/beacon/api"
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
 	"github.com/oasisprotocol/oasis-core/go/consensus/api/transaction"
 	"github.com/oasisprotocol/oasis-core/go/consensus/tendermint/api"
 	stakingState "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/apps/staking/state"
-	epochtime "github.com/oasisprotocol/oasis-core/go/epochtime/api"
 	genesis "github.com/oasisprotocol/oasis-core/go/genesis/api"
 )
 
@@ -112,7 +112,7 @@ func (app *supplementarySanityApplication) endBlockImpl(ctx *api.Context, reques
 	}
 	for _, tt := range []struct {
 		name    string
-		checker func(ctx *api.Context, now epochtime.EpochTime) error
+		checker func(ctx *api.Context, now beacon.EpochTime) error
 	}{
 		{"checkEpochTime", checkEpochTime},
 		{"checkRegistry", checkRegistry},

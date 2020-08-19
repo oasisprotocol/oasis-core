@@ -7,7 +7,7 @@ import (
 	"io/ioutil"
 	"path"
 
-	epoch "github.com/oasisprotocol/oasis-core/go/epochtime/api"
+	beacon "github.com/oasisprotocol/oasis-core/go/beacon/api"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/env"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/oasis"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/oasis/cli"
@@ -23,7 +23,7 @@ type nodeUpgradeCancelImpl struct {
 	E2E
 
 	ctx          context.Context
-	currentEpoch epoch.EpochTime
+	currentEpoch beacon.EpochTime
 }
 
 func (sc *nodeUpgradeCancelImpl) nextEpoch() error {
@@ -55,10 +55,9 @@ func (sc *nodeUpgradeCancelImpl) Fixture() (*oasis.NetworkFixture, error) {
 		return nil, err
 	}
 
-	return &oasis.NetworkFixture{
+	ff := &oasis.NetworkFixture{
 		Network: oasis.NetworkCfg{
-			NodeBinary:    f.Network.NodeBinary,
-			EpochtimeMock: true,
+			NodeBinary: f.Network.NodeBinary,
 		},
 		Entities: []oasis.EntityCfg{
 			{IsDebugTestEntity: true},
@@ -71,7 +70,11 @@ func (sc *nodeUpgradeCancelImpl) Fixture() (*oasis.NetworkFixture, error) {
 			{Entity: 1},
 		},
 		Seeds: []oasis.SeedFixture{{}},
-	}, nil
+	}
+
+	ff.Network.SetMockEpoch()
+
+	return ff, nil
 }
 
 func (sc *nodeUpgradeCancelImpl) Run(childEnv *env.Env) error {

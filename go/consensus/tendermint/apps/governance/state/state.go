@@ -4,10 +4,10 @@ import (
 	"context"
 	"fmt"
 
+	beacon "github.com/oasisprotocol/oasis-core/go/beacon/api"
 	"github.com/oasisprotocol/oasis-core/go/common/cbor"
 	"github.com/oasisprotocol/oasis-core/go/common/keyformat"
 	"github.com/oasisprotocol/oasis-core/go/consensus/tendermint/api"
-	epochtime "github.com/oasisprotocol/oasis-core/go/epochtime/api"
 	governance "github.com/oasisprotocol/oasis-core/go/governance/api"
 	staking "github.com/oasisprotocol/oasis-core/go/staking/api"
 	"github.com/oasisprotocol/oasis-core/go/storage/mkvs"
@@ -305,14 +305,14 @@ func (s *MutableState) SetPendingUpgrade(ctx context.Context, proposalID uint64,
 }
 
 // RemovePendingUpgrade removes a pending upgrade.
-func (s *MutableState) RemovePendingUpgrade(ctx context.Context, epoch epochtime.EpochTime, proposalID uint64) error {
+func (s *MutableState) RemovePendingUpgrade(ctx context.Context, epoch beacon.EpochTime, proposalID uint64) error {
 	// Remove proposal from the active proposals list.
 	err := s.ms.Remove(ctx, pendingUpgradesKeyFmt.Encode(uint64(epoch), proposalID))
 	return api.UnavailableStateError(err)
 }
 
 // RemovePendingUpgradesForEpoch removes pending upgrades for epoch.
-func (s *MutableState) RemovePendingUpgradesForEpoch(ctx context.Context, epoch epochtime.EpochTime) error {
+func (s *MutableState) RemovePendingUpgradesForEpoch(ctx context.Context, epoch beacon.EpochTime) error {
 	it := s.is.NewIterator(ctx)
 	defer it.Close()
 

@@ -101,11 +101,11 @@ func (w *blockWatcher) checkBlock(blk *block.Block) error {
 }
 
 func (w *blockWatcher) getGroupVersion(height int64) (int64, error) {
-	epoch, err := w.common.consensus.EpochTime().GetEpoch(w.common.ctx, height)
+	epoch, err := w.common.consensus.Beacon().GetEpoch(w.common.ctx, height)
 	if err != nil {
 		return 0, fmt.Errorf("failed querying for epoch: %w", err)
 	}
-	return w.common.consensus.EpochTime().GetEpochBlock(w.common.ctx, epoch)
+	return w.common.consensus.Beacon().GetEpochBlock(w.common.ctx, epoch)
 }
 
 func (w *blockWatcher) watch() {

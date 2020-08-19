@@ -8,10 +8,10 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	beacon "github.com/oasisprotocol/oasis-core/go/beacon/api"
+	beaconTests "github.com/oasisprotocol/oasis-core/go/beacon/tests"
 	"github.com/oasisprotocol/oasis-core/go/common"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
-	epochtime "github.com/oasisprotocol/oasis-core/go/epochtime/api"
-	epochtimeTests "github.com/oasisprotocol/oasis-core/go/epochtime/tests"
 	roothash "github.com/oasisprotocol/oasis-core/go/roothash/api"
 	"github.com/oasisprotocol/oasis-core/go/roothash/api/block"
 	"github.com/oasisprotocol/oasis-core/go/runtime/transaction"
@@ -32,7 +32,7 @@ func WorkerImplementationTests(
 	worker *executor.Worker,
 	runtimeID common.Namespace,
 	rtNode *committee.Node,
-	epochtime epochtime.SetableBackend,
+	beacon beacon.SetableBackend,
 	roothash roothash.Backend,
 	storage storage.Backend,
 ) {
@@ -45,7 +45,7 @@ func WorkerImplementationTests(
 
 	// Run the various test cases. (Ordering matters.)
 	t.Run("InitialEpochTransition", func(t *testing.T) {
-		testInitialEpochTransition(t, stateCh, epochtime)
+		testInitialEpochTransition(t, stateCh, beacon)
 	})
 
 	t.Run("QueueTx", func(t *testing.T) {
@@ -55,9 +55,9 @@ func WorkerImplementationTests(
 	// TODO: Add more tests.
 }
 
-func testInitialEpochTransition(t *testing.T, stateCh <-chan committee.NodeState, epochtime epochtime.SetableBackend) {
+func testInitialEpochTransition(t *testing.T, stateCh <-chan committee.NodeState, beacon beacon.SetableBackend) {
 	// Perform an epoch transition, so that the node gets elected leader.
-	epochtimeTests.MustAdvanceEpoch(t, epochtime, 1)
+	beaconTests.MustAdvanceEpoch(t, beacon, 1)
 
 	// Node should transition to WaitingForBatch state.
 	waitForNodeTransition(t, stateCh, committee.WaitingForBatch)

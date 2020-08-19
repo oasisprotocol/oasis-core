@@ -1,13 +1,13 @@
 package api
 
 import (
+	beacon "github.com/oasisprotocol/oasis-core/go/beacon/api"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
-	epochtime "github.com/oasisprotocol/oasis-core/go/epochtime/api"
 )
 
 // FreezeForever is an epoch that can be used to freeze a node for
 // all (practical) time.
-const FreezeForever epochtime.EpochTime = 0xffffffffffffffff
+const FreezeForever beacon.EpochTime = 0xffffffffffffffff
 
 // NodeStatus is live status of a node.
 type NodeStatus struct {
@@ -21,7 +21,12 @@ type NodeStatus struct {
 	//
 	// After the specified epoch passes, this flag needs to be explicitly
 	// cleared (set to zero) in order for the node to become unfrozen.
-	FreezeEndTime epochtime.EpochTime `json:"freeze_end_time"`
+	FreezeEndTime beacon.EpochTime `json:"freeze_end_time"`
+	// ElectionEligibleAfter specifies the epoch after which a node is
+	// eligible to be included in non-validator committee elections.
+	//
+	// Note: A value of 0 is treated unconditionally as "ineligible".
+	ElectionEligibleAfter beacon.EpochTime `json:"election_eligible_after"`
 }
 
 // IsFrozen returns true if the node is currently frozen (prevented

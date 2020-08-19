@@ -9,9 +9,11 @@ import (
 	"sort"
 	"time"
 
+	beacon "github.com/oasisprotocol/oasis-core/go/beacon/api"
 	"github.com/oasisprotocol/oasis-core/go/common"
 	"github.com/oasisprotocol/oasis-core/go/common/cbor"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
+	"github.com/oasisprotocol/oasis-core/go/common/crypto/pvss"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	"github.com/oasisprotocol/oasis-core/go/common/entity"
 	"github.com/oasisprotocol/oasis-core/go/common/errors"
@@ -20,7 +22,6 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/pubsub"
 	"github.com/oasisprotocol/oasis-core/go/common/sgx/ias"
 	"github.com/oasisprotocol/oasis-core/go/consensus/api/transaction"
-	epochtime "github.com/oasisprotocol/oasis-core/go/epochtime/api"
 	staking "github.com/oasisprotocol/oasis-core/go/staking/api"
 )
 
@@ -321,6 +322,9 @@ type NodeLookup interface {
 	// NodeBySubKey looks up a specific node by its consensus, P2P or TLS key.
 	NodeBySubKey(ctx context.Context, key signature.PublicKey) (*node.Node, error)
 
+	// NodeByBeaconPoint looks up a specific node by its beacon point.
+	NodeByBeaconPoint(ctx context.Context, point pvss.Point) (*node.Node, error)
+
 	// Returns a list of all nodes.
 	Nodes(ctx context.Context) ([]*node.Node, error)
 }
@@ -415,7 +419,7 @@ func VerifyRegisterNodeArgs( // nolint: gocyclo
 	now time.Time,
 	isGenesis bool,
 	isSanityCheck bool,
-	epoch epochtime.EpochTime,
+	epoch beacon.EpochTime,
 	runtimeLookup RuntimeLookup,
 	nodeLookup NodeLookup,
 ) (*node.Node, []*Runtime, error) {
@@ -718,6 +722,24 @@ func VerifyRegisterNodeArgs( // nolint: gocyclo
 			"existing_node_id", existingNode.ID,
 		)
 		return nil, nil, fmt.Errorf("%w: duplicate node TLS public key", ErrInvalidArgument)
+	}
+
+	if n.Beacon != nil {
+		existingNode, err = nodeLookup.NodeByBeaconPoint(ctx, n.Beacon.Point)
+		if err != nil && err != ErrNoSuchNode {
+			logger.Error("RegisterNode: failed to lookup node by beacon point",
+				"err", err,
+				"beacon_point", n.Beacon.Point,
+			)
+			return nil, nil, fmt.Errorf("failed to lookup node by point: %w", err)
+		}
+		if existingNode != nil && existingNode.ID != n.ID {
+			logger.Error("RegisterNode: duplicate node beacon point",
+				"node_id", n.ID,
+				"existing_node_id", existingNode.ID,
+			)
+			return nil, nil, fmt.Errorf("%w: duplicate node beacon point", ErrInvalidArgument)
+		}
 	}
 
 	// Ensure that only the expected signatures are present, and nothing more.

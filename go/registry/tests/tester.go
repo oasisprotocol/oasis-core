@@ -12,10 +12,13 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	beacon "github.com/oasisprotocol/oasis-core/go/beacon/api"
+	beaconTests "github.com/oasisprotocol/oasis-core/go/beacon/tests"
 	"github.com/oasisprotocol/oasis-core/go/common"
 	"github.com/oasisprotocol/oasis-core/go/common/cbor"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/drbg"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
+	"github.com/oasisprotocol/oasis-core/go/common/crypto/pvss"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	memorySigner "github.com/oasisprotocol/oasis-core/go/common/crypto/signature/signers/memory"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/tls"
@@ -26,8 +29,6 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/sgx"
 	consensusAPI "github.com/oasisprotocol/oasis-core/go/consensus/api"
 	tmcrypto "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/crypto"
-	epochtime "github.com/oasisprotocol/oasis-core/go/epochtime/api"
-	epochtimeTests "github.com/oasisprotocol/oasis-core/go/epochtime/tests"
 	"github.com/oasisprotocol/oasis-core/go/registry/api"
 	staking "github.com/oasisprotocol/oasis-core/go/staking/api"
 )
@@ -35,7 +36,7 @@ import (
 const (
 	recvTimeout = 5 * time.Second
 
-	testRuntimeNodeExpiration epochtime.EpochTime = 15
+	testRuntimeNodeExpiration beacon.EpochTime = 15
 )
 
 var (
@@ -75,7 +76,7 @@ func testRegistryEntityNodes( // nolint: gocyclo
 	entities, err := NewTestEntities(entityNodeSeed, 4)
 	require.NoError(t, err, "NewTestEntities")
 
-	timeSource := consensus.EpochTime().(epochtime.SetableBackend)
+	timeSource := consensus.Beacon().(beacon.SetableBackend)
 	epoch, err := timeSource.GetEpoch(ctx, consensusAPI.HeightLatest)
 	require.NoError(t, err, "GetEpoch")
 
@@ -167,7 +168,7 @@ func testRegistryEntityNodes( // nolint: gocyclo
 	for i, te := range entities {
 		// Stagger the expirations so that it's possible to test it.
 		var entityNodes []*TestNode
-		entityNodes, err = te.NewTestNodes(i+1, 1, nil, nodeRuntimes, epoch+epochtime.EpochTime(i)+1, consensus)
+		entityNodes, err = te.NewTestNodes(i+1, 1, nil, nodeRuntimes, epoch+beacon.EpochTime(i)+1, consensus)
 		require.NoError(t, err, "NewTestNodes")
 
 		nodes = append(nodes, entityNodes)
@@ -304,7 +305,7 @@ func testRegistryEntityNodes( // nolint: gocyclo
 		require := require.New(t)
 
 		expectedNodeList := getExpectedNodeList()
-		epoch = epochtimeTests.MustAdvanceEpoch(t, timeSource, 1)
+		epoch = beaconTests.MustAdvanceEpoch(t, timeSource, 1)
 
 		registeredNodes, nerr := backend.GetNodes(ctx, consensusAPI.HeightLatest)
 		require.NoError(nerr, "GetNodes")
@@ -359,7 +360,7 @@ func testRegistryEntityNodes( // nolint: gocyclo
 		expectedDeregEvents := len(nodes[0])
 		deregisteredNodes := make(map[signature.PublicKey]*node.Node)
 
-		epoch = epochtimeTests.MustAdvanceEpoch(t, timeSource, 1)
+		epoch = beaconTests.MustAdvanceEpoch(t, timeSource, 1)
 
 		for i := 0; i < expectedDeregEvents; i++ {
 			select {
@@ -426,7 +427,7 @@ func testRegistryEntityNodes( // nolint: gocyclo
 		}
 
 		// Advance the epoch to trigger 0th entity nodes to be removed.
-		_ = epochtimeTests.MustAdvanceEpoch(t, timeSource, 1)
+		_ = beaconTests.MustAdvanceEpoch(t, timeSource, 1)
 
 		// At this point it should only be possible to deregister 0th entity nodes.
 		err := entities[0].Deregister(consensus)
@@ -464,7 +465,7 @@ func testRegistryEntityNodes( // nolint: gocyclo
 		}
 
 		// Advance the epoch to trigger all nodes to expire and be removed.
-		_ = epochtimeTests.MustAdvanceEpoch(t, timeSource, uint64(len(entities)+2))
+		_ = beaconTests.MustAdvanceEpoch(t, timeSource, uint64(len(entities)+2))
 
 		// Now it should be possible to deregister all remaining entities.
 		for _, v := range entities[1:] {
@@ -968,11 +969,20 @@ func randomIdentity(rng *drbg.Drbg) *identity.Identity {
 		}
 		return signer
 	}
+	mustGenerateScalar := func() pvss.Scalar {
+		// Note: This is non-deterministic, but that's ok for now.
+		scalar, _, err := pvss.NewKeyPair()
+		if err != nil {
+			panic(err)
+		}
+		return *scalar
+	}
 
 	ident := &identity.Identity{
 		NodeSigner:      mustGenerateSigner(),
 		P2PSigner:       mustGenerateSigner(),
 		ConsensusSigner: mustGenerateSigner(),
+		BeaconScalar:    mustGenerateScalar(),
 	}
 
 	cert, err := tls.Generate(identity.CommonName)
@@ -986,7 +996,7 @@ func randomIdentity(rng *drbg.Drbg) *identity.Identity {
 
 // NewTestNodes returns the specified number of TestNodes, generated
 // deterministically using the entity's public key as the seed.
-func (ent *TestEntity) NewTestNodes(nCompute, nStorage int, idNonce []byte, runtimes []*node.Runtime, expiration epochtime.EpochTime, consensus consensusAPI.Backend) ([]*TestNode, error) { // nolint: gocyclo
+func (ent *TestEntity) NewTestNodes(nCompute, nStorage int, idNonce []byte, runtimes []*node.Runtime, expiration beacon.EpochTime, consensus consensusAPI.Backend) ([]*TestNode, error) { // nolint: gocyclo
 	if nCompute <= 0 || nStorage <= 0 || nCompute > 254 || nStorage > 254 {
 		return nil, errors.New("registry/tests: test node count out of bounds")
 	}
@@ -1025,8 +1035,11 @@ func (ent *TestEntity) NewTestNodes(nCompute, nStorage int, idNonce []byte, runt
 			ID:         nod.Signer.Public(),
 			EntityID:   ent.Entity.ID,
 			Expiration: uint64(expiration),
-			Runtimes:   runtimes,
-			Roles:      role,
+			Beacon: &node.BeaconInfo{
+				Point: nodeIdentity.BeaconScalar.Point(),
+			},
+			Runtimes: runtimes,
+			Roles:    role,
 		}
 		addr := node.Address{
 			TCPAddr: net.TCPAddr{
@@ -1573,7 +1586,7 @@ func BulkPopulate(t *testing.T, backend api.Backend, consensus consensusAPI.Back
 	require.NoError(err, "WatchNodes")
 	defer nodeSub.Close()
 
-	epoch, err := consensus.EpochTime().GetEpoch(context.Background(), consensusAPI.HeightLatest)
+	epoch, err := consensus.Beacon().GetEpoch(context.Background(), consensusAPI.HeightLatest)
 	require.NoError(err, "GetEpoch")
 
 	numCompute := int(runtimes[0].Runtime.Executor.GroupSize + runtimes[0].Runtime.Executor.GroupBackupSize)
@@ -1642,8 +1655,8 @@ func (rt *TestRuntime) Cleanup(t *testing.T, backend api.Backend, consensus cons
 	defer nodeSub.Close()
 
 	// Make sure all nodes expire so we can remove the entity.
-	timeSource := consensus.EpochTime().(epochtime.SetableBackend)
-	_ = epochtimeTests.MustAdvanceEpoch(t, timeSource, uint64(testRuntimeNodeExpiration+2))
+	timeSource := consensus.Beacon().(beacon.SetableBackend)
+	_ = beaconTests.MustAdvanceEpoch(t, timeSource, uint64(testRuntimeNodeExpiration+2))
 
 	err = rt.entity.Deregister(consensus)
 	require.NoError(err, "DeregisterEntity")

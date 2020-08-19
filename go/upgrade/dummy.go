@@ -3,7 +3,7 @@ package upgrade
 import (
 	"context"
 
-	epochtime "github.com/oasisprotocol/oasis-core/go/epochtime/api"
+	beacon "github.com/oasisprotocol/oasis-core/go/beacon/api"
 	"github.com/oasisprotocol/oasis-core/go/upgrade/api"
 )
 
@@ -27,7 +27,7 @@ func (u *dummyUpgradeManager) StartupUpgrade() error {
 	return nil
 }
 
-func (u *dummyUpgradeManager) ConsensusUpgrade(privateCtx interface{}, currentEpoch epochtime.EpochTime, currentHeight int64) error {
+func (u *dummyUpgradeManager) ConsensusUpgrade(privateCtx interface{}, currentEpoch beacon.EpochTime, currentHeight int64) error {
 	return nil
 }
 

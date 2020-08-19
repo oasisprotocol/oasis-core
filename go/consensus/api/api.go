@@ -17,7 +17,6 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/version"
 	"github.com/oasisprotocol/oasis-core/go/consensus/api/transaction"
 	"github.com/oasisprotocol/oasis-core/go/consensus/api/transaction/results"
-	epochtime "github.com/oasisprotocol/oasis-core/go/epochtime/api"
 	genesis "github.com/oasisprotocol/oasis-core/go/genesis/api"
 	governance "github.com/oasisprotocol/oasis-core/go/governance/api"
 	keymanager "github.com/oasisprotocol/oasis-core/go/keymanager/api"
@@ -110,13 +109,13 @@ type ClientBackend interface {
 	// Note that an epoch is considered reached even if any epoch greater than
 	// the one specified is reached (e.g., that the current epoch is already
 	// in the future).
-	WaitEpoch(ctx context.Context, epoch epochtime.EpochTime) error
+	WaitEpoch(ctx context.Context, epoch beacon.EpochTime) error
 
 	// GetEpoch returns the current epoch.
-	GetEpoch(ctx context.Context, height int64) (epochtime.EpochTime, error)
+	GetEpoch(ctx context.Context, height int64) (beacon.EpochTime, error)
 
-	// EpochtimeConsensusParameters returns the epochtime consensus parameters.
-	EpochtimeConsensusParameters(ctx context.Context, height int64) (*epochtime.ConsensusParameters, error)
+	// BeaconConsensusParameters returns the beacon consensus parameters.
+	BeaconConsensusParameters(ctx context.Context, height int64) (*beacon.ConsensusParameters, error)
 
 	// GetBlock returns a consensus block at a specific height.
 	GetBlock(ctx context.Context, height int64) (*Block, error)
@@ -239,13 +238,10 @@ type ServicesBackend interface {
 
 	// RegisterHaltHook registers a function to be called when the
 	// consensus Halt epoch height is reached.
-	RegisterHaltHook(func(ctx context.Context, blockHeight int64, epoch epochtime.EpochTime))
+	RegisterHaltHook(func(ctx context.Context, blockHeight int64, epoch beacon.EpochTime))
 
 	// SubmissionManager returns the transaction submission manager.
 	SubmissionManager() SubmissionManager
-
-	// EpochTime returns the epochtime backend.
-	EpochTime() epochtime.Backend
 
 	// Beacon returns the beacon backend.
 	Beacon() beacon.Backend

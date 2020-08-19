@@ -3,8 +3,8 @@ package api
 import (
 	"fmt"
 
+	beacon "github.com/oasisprotocol/oasis-core/go/beacon/api"
 	"github.com/oasisprotocol/oasis-core/go/common/quantity"
-	epochtime "github.com/oasisprotocol/oasis-core/go/epochtime/api"
 	staking "github.com/oasisprotocol/oasis-core/go/staking/api"
 	upgrade "github.com/oasisprotocol/oasis-core/go/upgrade/api"
 )
@@ -91,10 +91,10 @@ type Proposal struct {
 	Content ProposalContent `json:"content"`
 
 	// CreatedAt is the epoch at which the proposal was created.
-	CreatedAt epochtime.EpochTime `json:"created_at"`
+	CreatedAt beacon.EpochTime `json:"created_at"`
 	// ClosesAt is the epoch at which the proposal will close and votes will
 	// be tallied.
-	ClosesAt epochtime.EpochTime `json:"closes_at"`
+	ClosesAt beacon.EpochTime `json:"closes_at"`
 	// Results are the final tallied results after the voting period has
 	// ended.
 	Results map[Vote]quantity.Quantity `json:"results,omitempty"`
@@ -248,7 +248,7 @@ func (v *Vote) UnmarshalText(text []byte) error {
 // Returns pending upgrades and corresponding proposal IDs.
 // This is useful for initialzing genesis state which doesn't include pending upgrades,
 // as these can always be computed from accepted proposals.
-func PendingUpgradesFromProposals(proposals []*Proposal, epoch epochtime.EpochTime) ([]*upgrade.Descriptor, []uint64) {
+func PendingUpgradesFromProposals(proposals []*Proposal, epoch beacon.EpochTime) ([]*upgrade.Descriptor, []uint64) {
 	var acceptedProposals []*Proposal
 
 	// Go over all proposals and find accepted proposals.

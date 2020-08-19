@@ -3,9 +3,9 @@ package upgrade
 import (
 	"context"
 
+	beacon "github.com/oasisprotocol/oasis-core/go/beacon/api"
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
-	epochtime "github.com/oasisprotocol/oasis-core/go/epochtime/api"
 	governance "github.com/oasisprotocol/oasis-core/go/governance/api"
 	upgrade "github.com/oasisprotocol/oasis-core/go/upgrade/api"
 )
@@ -18,7 +18,7 @@ type Worker struct { // nolint: maligned
 
 	consensus  consensus.Backend
 	governance governance.Backend
-	epochtime  epochtime.Backend
+	beacon     beacon.Backend
 
 	stopCh chan struct{}
 	quitCh chan struct{}
@@ -31,7 +31,7 @@ func (w *Worker) doWatchGovernanceUpgrades() {
 
 	w.logger.Info("staring governance update worker")
 
-	epochCh, sub := w.epochtime.WatchEpochs()
+	epochCh, sub := w.beacon.WatchEpochs()
 	defer sub.Close()
 
 	// Wait for first block to be synced so that initial queries won't fail.
@@ -156,7 +156,7 @@ func New(
 		ctx:        context.Background(),
 		consensus:  consensus,
 		governance: consensus.Governance(),
-		epochtime:  consensus.EpochTime(),
+		beacon:     consensus.Beacon(),
 		upgrader:   upgrader,
 		stopCh:     make(chan struct{}),
 		quitCh:     make(chan struct{}),

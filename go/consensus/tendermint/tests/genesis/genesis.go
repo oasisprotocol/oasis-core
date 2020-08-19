@@ -8,13 +8,13 @@ import (
 	tmproto "github.com/tendermint/tendermint/proto/tendermint/types"
 	tmtypes "github.com/tendermint/tendermint/types"
 
+	beacon "github.com/oasisprotocol/oasis-core/go/beacon/api"
 	"github.com/oasisprotocol/oasis-core/go/common/identity"
 	"github.com/oasisprotocol/oasis-core/go/common/quantity"
 	"github.com/oasisprotocol/oasis-core/go/common/version"
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/genesis"
 	tendermint "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/api"
 	"github.com/oasisprotocol/oasis-core/go/consensus/tendermint/crypto"
-	epochtime "github.com/oasisprotocol/oasis-core/go/epochtime/api"
 	genesis "github.com/oasisprotocol/oasis-core/go/genesis/api"
 	genesisTestHelpers "github.com/oasisprotocol/oasis-core/go/genesis/tests"
 	governance "github.com/oasisprotocol/oasis-core/go/governance/api"
@@ -46,10 +46,12 @@ func NewTestNodeGenesisProvider(identity *identity.Identity) (genesis.Provider, 
 		Height:    1,
 		ChainID:   genesisTestHelpers.TestChainID,
 		Time:      time.Now(),
-		HaltEpoch: epochtime.EpochTime(math.MaxUint64),
-		EpochTime: epochtime.Genesis{
-			Parameters: epochtime.ConsensusParameters{
-				DebugMockBackend: true,
+		HaltEpoch: beacon.EpochTime(math.MaxUint64),
+		Beacon: beacon.Genesis{
+			Parameters: beacon.ConsensusParameters{
+				Backend:            beacon.BackendInsecure,
+				DebugMockBackend:   true,
+				InsecureParameters: &beacon.InsecureParameters{},
 			},
 		},
 		Registry: registry.Genesis{

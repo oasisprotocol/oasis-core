@@ -6,11 +6,13 @@ import (
 
 	"github.com/tendermint/tendermint/abci/types"
 
+	beacon "github.com/oasisprotocol/oasis-core/go/beacon/api"
 	"github.com/oasisprotocol/oasis-core/go/common"
 	"github.com/oasisprotocol/oasis-core/go/common/cbor"
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
 	"github.com/oasisprotocol/oasis-core/go/consensus/api/transaction"
 	tmapi "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/api"
+	beaconapp "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/apps/beacon"
 	registryApi "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/apps/registry/api"
 	registryState "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/apps/registry/state"
 	roothashApi "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/apps/roothash/api"
@@ -19,7 +21,6 @@ import (
 	schedulerState "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/apps/scheduler/state"
 	stakingapp "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/apps/staking"
 	stakingState "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/apps/staking/state"
-	epochtime "github.com/oasisprotocol/oasis-core/go/epochtime/api"
 	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
 	roothash "github.com/oasisprotocol/oasis-core/go/roothash/api"
 	"github.com/oasisprotocol/oasis-core/go/roothash/api/block"
@@ -70,19 +71,36 @@ func (app *rootHashApplication) OnCleanup() {
 }
 
 func (app *rootHashApplication) BeginBlock(ctx *tmapi.Context, request types.RequestBeginBlock) error {
+	// Check if the beacon has failed in a way that runtimes should be
+	// disabled.
+	beaconFailed := ctx.HasEvent(beaconapp.AppName, beaconapp.KeyDisableRuntimes)
 	// Check if rescheduling has taken place.
 	rescheduled := ctx.HasEvent(schedulerapp.AppName, schedulerapp.KeyElected)
 	// Check if there was an epoch transition.
 	epochChanged, epoch := app.state.EpochChanged(ctx)
 
-	if epochChanged || rescheduled {
-		return app.onCommitteeChanged(ctx, epoch)
+	state := roothashState.NewMutableState(ctx.State())
+
+	switch {
+	case beaconFailed:
+		ctx.Logger().Warn("disabling all transactions, beacon failed")
+
+		if err := state.SetRejectTransactions(ctx); err != nil {
+			return fmt.Errorf("failed to set tx disable: %w", err)
+		}
+	case epochChanged:
+		if err := state.ClearRejectTransactions(ctx); err != nil {
+			return fmt.Errorf("failed to clear tx disable: %w", err)
+		}
+		fallthrough
+	case rescheduled:
+		return app.onCommitteeChanged(ctx, state, epoch)
 	}
+
 	return nil
 }
 
-func (app *rootHashApplication) onCommitteeChanged(ctx *tmapi.Context, epoch epochtime.EpochTime) error {
-	state := roothashState.NewMutableState(ctx.State())
+func (app *rootHashApplication) onCommitteeChanged(ctx *tmapi.Context, state *roothashState.MutableState, epoch beacon.EpochTime) error {
 	schedState := schedulerState.NewMutableState(ctx.State())
 	regState := registryState.NewMutableState(ctx.State())
 	runtimes, _ := regState.Runtimes(ctx)
@@ -208,7 +226,7 @@ func (app *rootHashApplication) suspendUnpaidRuntime(
 
 func (app *rootHashApplication) prepareNewCommittees(
 	ctx *tmapi.Context,
-	epoch epochtime.EpochTime,
+	epoch beacon.EpochTime,
 	rtState *roothash.RuntimeState,
 	schedState *schedulerState.MutableState,
 	regState *registryState.MutableState,
@@ -318,17 +336,25 @@ func (app *rootHashApplication) verifyRuntimeUpdate(ctx *tmapi.Context, rt *regi
 func (app *rootHashApplication) ExecuteTx(ctx *tmapi.Context, tx *transaction.Transaction) error {
 	state := roothashState.NewMutableState(ctx.State())
 
+	rejectTransactions, err := state.RejectTransactions(ctx)
+	if err != nil {
+		return err
+	}
+	if rejectTransactions {
+		return fmt.Errorf("roothash: refusing to process transactions, beacon failed")
+	}
+
 	switch tx.Method {
 	case roothash.MethodExecutorCommit:
 		var xc roothash.ExecutorCommit
-		if err := cbor.Unmarshal(tx.Body, &xc); err != nil {
+		if err = cbor.Unmarshal(tx.Body, &xc); err != nil {
 			return err
 		}
 
 		return app.executorCommit(ctx, state, &xc)
 	case roothash.MethodExecutorProposerTimeout:
 		var xc roothash.ExecutorProposerTimeoutRequest
-		if err := cbor.Unmarshal(tx.Body, &xc); err != nil {
+		if err = cbor.Unmarshal(tx.Body, &xc); err != nil {
 			return err
 		}
 

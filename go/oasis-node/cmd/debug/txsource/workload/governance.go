@@ -10,12 +10,12 @@ import (
 
 	"google.golang.org/grpc"
 
+	beacon "github.com/oasisprotocol/oasis-core/go/beacon/api"
 	"github.com/oasisprotocol/oasis-core/go/common/cbor"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	memorySigner "github.com/oasisprotocol/oasis-core/go/common/crypto/signature/signers/memory"
 	"github.com/oasisprotocol/oasis-core/go/common/version"
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
-	epochtime "github.com/oasisprotocol/oasis-core/go/epochtime/api"
 	governance "github.com/oasisprotocol/oasis-core/go/governance/api"
 	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
 	staking "github.com/oasisprotocol/oasis-core/go/staking/api"
@@ -54,7 +54,7 @@ type governanceWorkload struct {
 	ctx context.Context
 	rng *rand.Rand
 
-	currentEpoch epochtime.EpochTime
+	currentEpoch beacon.EpochTime
 	parameters   *governance.ConsensusParameters
 
 	consensus  consensus.ClientBackend
@@ -139,7 +139,7 @@ func (g *governanceWorkload) doUpgradeProposal() error {
 	minUpgradeEpoch := int64(g.currentEpoch + g.parameters.UpgradeMinEpochDiff)
 	maxUpgradeEpoch := minUpgradeEpoch + int64(3*g.parameters.UpgradeMinEpochDiff)
 	// [minUpgradeEpoch, maxUpgradeEpoch]
-	upgradeEpoch := epochtime.EpochTime(g.rng.Int63n(maxUpgradeEpoch-minUpgradeEpoch+1) + minUpgradeEpoch)
+	upgradeEpoch := beacon.EpochTime(g.rng.Int63n(maxUpgradeEpoch-minUpgradeEpoch+1) + minUpgradeEpoch)
 	nameSuffix := make([]byte, 20)
 	if _, err := g.rng.Read(nameSuffix); err != nil {
 		return err
@@ -417,7 +417,7 @@ func (g *governanceWorkload) Run(
 			return nil
 		}
 
-		var epoch epochtime.EpochTime
+		var epoch beacon.EpochTime
 		epoch, err = cnsc.GetEpoch(g.ctx, consensus.HeightLatest)
 		if err != nil {
 			return fmt.Errorf("querying epoch: %w", err)

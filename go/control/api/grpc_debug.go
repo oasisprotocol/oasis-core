@@ -5,8 +5,8 @@ import (
 
 	"google.golang.org/grpc"
 
+	beacon "github.com/oasisprotocol/oasis-core/go/beacon/api"
 	cmnGrpc "github.com/oasisprotocol/oasis-core/go/common/grpc"
-	epochtime "github.com/oasisprotocol/oasis-core/go/epochtime/api"
 )
 
 var (
@@ -14,7 +14,7 @@ var (
 	debugServiceName = cmnGrpc.NewServiceName("DebugController")
 
 	// methodSetEpoch is the SetEpoch method.
-	methodSetEpoch = debugServiceName.NewMethod("SetEpoch", epochtime.EpochTime(0))
+	methodSetEpoch = debugServiceName.NewMethod("SetEpoch", beacon.EpochTime(0))
 	// methodWaitNodesRegistered is the WaitNodesRegistered method.
 	methodWaitNodesRegistered = debugServiceName.NewMethod("WaitNodesRegistered", int(0))
 
@@ -42,7 +42,7 @@ func handlerSetEpoch( // nolint: golint
 	dec func(interface{}) error,
 	interceptor grpc.UnaryServerInterceptor,
 ) (interface{}, error) {
-	var epoch epochtime.EpochTime
+	var epoch beacon.EpochTime
 	if err := dec(&epoch); err != nil {
 		return nil, err
 	}
@@ -54,7 +54,7 @@ func handlerSetEpoch( // nolint: golint
 		FullMethod: methodSetEpoch.FullName(),
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return nil, srv.(DebugController).SetEpoch(ctx, req.(epochtime.EpochTime))
+		return nil, srv.(DebugController).SetEpoch(ctx, req.(beacon.EpochTime))
 	}
 	return interceptor(ctx, epoch, info, handler)
 }
@@ -91,7 +91,7 @@ type debugControllerClient struct {
 	conn *grpc.ClientConn
 }
 
-func (c *debugControllerClient) SetEpoch(ctx context.Context, epoch epochtime.EpochTime) error {
+func (c *debugControllerClient) SetEpoch(ctx context.Context, epoch beacon.EpochTime) error {
 	return c.conn.Invoke(ctx, methodSetEpoch.FullName(), epoch, nil)
 }
 

@@ -3,20 +3,19 @@ package control
 import (
 	"context"
 
+	beacon "github.com/oasisprotocol/oasis-core/go/beacon/api"
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
-
 	"github.com/oasisprotocol/oasis-core/go/control/api"
-	epochtime "github.com/oasisprotocol/oasis-core/go/epochtime/api"
 	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
 )
 
 type debugController struct {
-	timeSource epochtime.Backend
+	timeSource beacon.Backend
 	registry   registry.Backend
 }
 
-func (c *debugController) SetEpoch(ctx context.Context, epoch epochtime.EpochTime) error {
-	mockTS, ok := c.timeSource.(epochtime.SetableBackend)
+func (c *debugController) SetEpoch(ctx context.Context, epoch beacon.EpochTime) error {
+	mockTS, ok := c.timeSource.(beacon.SetableBackend)
 	if !ok {
 		return api.ErrIncompatibleBackend
 	}
@@ -66,7 +65,7 @@ Loop:
 // New creates a new oasis-node debug controller.
 func NewDebug(consensus consensus.Backend) api.DebugController {
 	return &debugController{
-		timeSource: consensus.EpochTime(),
+		timeSource: consensus.Beacon(),
 		registry:   consensus.Registry(),
 	}
 }

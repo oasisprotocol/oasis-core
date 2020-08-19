@@ -136,7 +136,7 @@ func (m *mockChain) stateToGenesis(ctx context.Context) (*genesis.Document, erro
 
 	// The timesource is "special".
 	tGen, _ := m.timeSource.StateToGenesis(ctx, qHeight)
-	doc.EpochTime = *tGen
+	doc.Beacon = *tGen
 
 	return doc, nil
 }
@@ -181,7 +181,7 @@ func initMockChain(ctx context.Context, cfg *mockChainCfg) (*mockChain, error) {
 	m := &mockChain{
 		cfg:        cfg,
 		mux:        mux,
-		timeSource: newSimTimeSource(&cfg.genesisDoc.EpochTime),
+		timeSource: newSimTimeSource(&cfg.genesisDoc.Beacon),
 		tmChainID:  cfg.tmChainID,
 		now:        cfg.genesisDoc.Time,
 	}

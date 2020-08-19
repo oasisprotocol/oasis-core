@@ -11,13 +11,13 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	beacon "github.com/oasisprotocol/oasis-core/go/beacon/api"
+	beaconTests "github.com/oasisprotocol/oasis-core/go/beacon/tests"
 	"github.com/oasisprotocol/oasis-core/go/common"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	"github.com/oasisprotocol/oasis-core/go/common/identity"
 	consensusAPI "github.com/oasisprotocol/oasis-core/go/consensus/api"
-	epochtime "github.com/oasisprotocol/oasis-core/go/epochtime/api"
-	epochtimeTests "github.com/oasisprotocol/oasis-core/go/epochtime/tests"
 	registryTests "github.com/oasisprotocol/oasis-core/go/registry/tests"
 	"github.com/oasisprotocol/oasis-core/go/roothash/api"
 	"github.com/oasisprotocol/oasis-core/go/roothash/api/block"
@@ -172,8 +172,8 @@ func testEpochTransitionBlock(t *testing.T, backend api.Backend, consensus conse
 	}
 
 	// Advance the epoch.
-	timeSource := consensus.EpochTime().(epochtime.SetableBackend)
-	epochtimeTests.MustAdvanceEpoch(t, timeSource, 1)
+	timeSource := consensus.Beacon().(beacon.SetableBackend)
+	beaconTests.MustAdvanceEpoch(t, timeSource, 1)
 
 	// Check for the expected post-epoch transition events.
 	for i, state := range states {
@@ -195,7 +195,7 @@ func (s *runtimeState) refreshCommittees(t *testing.T, consensus consensusAPI.Ba
 		nodes[node.Node.ID] = node
 	}
 
-	epoch, err := consensus.EpochTime().GetEpoch(context.Background(), consensusAPI.HeightLatest)
+	epoch, err := consensus.Beacon().GetEpoch(context.Background(), consensusAPI.HeightLatest)
 	require.NoError(t, err, "GetEpoch")
 
 	s.executorCommittee, s.storageCommittee = mustGetCommittee(t, s.rt, epoch, consensus.Scheduler(), nodes)
@@ -547,8 +547,8 @@ WaitForRoundTimeoutBlocks:
 	}
 
 	// Trigger an epoch transition while the timeout is armed.
-	timeSource := consensus.EpochTime().(epochtime.SetableBackend)
-	epochtimeTests.MustAdvanceEpoch(t, timeSource, 1)
+	timeSource := consensus.Beacon().(beacon.SetableBackend)
+	beaconTests.MustAdvanceEpoch(t, timeSource, 1)
 
 	// Ensure that the epoch transition was processed correctly.
 	for {
@@ -675,7 +675,7 @@ type testCommittee struct {
 func mustGetCommittee(
 	t *testing.T,
 	rt *registryTests.TestRuntime,
-	epoch epochtime.EpochTime,
+	epoch beacon.EpochTime,
 	sched scheduler.Backend,
 	nodes map[signature.PublicKey]*registryTests.TestNode,
 ) (
@@ -783,8 +783,8 @@ func MustTransitionEpoch(
 	t *testing.T,
 	runtimeID common.Namespace,
 	roothash api.Backend,
-	epochtime epochtime.Backend,
-	epoch epochtime.EpochTime,
+	backend beacon.Backend,
+	epoch beacon.EpochTime,
 ) {
 	require := require.New(t)
 
@@ -802,7 +802,7 @@ func MustTransitionEpoch(
 	for {
 		select {
 		case annBlk := <-blocksCh:
-			blkEpoch, err := epochtime.GetEpoch(ctx, annBlk.Height)
+			blkEpoch, err := backend.GetEpoch(ctx, annBlk.Height)
 			require.NoError(err, "GetEpoch")
 			if blkEpoch < epoch {
 				continue

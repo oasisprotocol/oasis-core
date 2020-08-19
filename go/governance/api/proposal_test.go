@@ -7,8 +7,8 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	beacon "github.com/oasisprotocol/oasis-core/go/beacon/api"
 	"github.com/oasisprotocol/oasis-core/go/common/quantity"
-	epochtime "github.com/oasisprotocol/oasis-core/go/epochtime/api"
 	"github.com/oasisprotocol/oasis-core/go/upgrade/api"
 	upgrade "github.com/oasisprotocol/oasis-core/go/upgrade/api"
 )
@@ -249,7 +249,7 @@ func testPerms(a []*Proposal, test func([]*Proposal), i int) {
 }
 
 func TestPendingUpgradesFromProposals(t *testing.T) {
-	epoch := epochtime.EpochTime(20)
+	epoch := beacon.EpochTime(20)
 	proposals := []*Proposal{
 		// Passed but in past, so should not be present among proposals.
 		{
@@ -259,7 +259,7 @@ func TestPendingUpgradesFromProposals(t *testing.T) {
 				Upgrade: &UpgradeProposal{
 					Descriptor: api.Descriptor{
 						Name:  "in past",
-						Epoch: epochtime.EpochTime(10),
+						Epoch: beacon.EpochTime(10),
 					},
 				},
 			},
@@ -272,7 +272,7 @@ func TestPendingUpgradesFromProposals(t *testing.T) {
 				Upgrade: &UpgradeProposal{
 					Descriptor: api.Descriptor{
 						Name:  "canceled",
-						Epoch: epochtime.EpochTime(30),
+						Epoch: beacon.EpochTime(30),
 					},
 				},
 			},
@@ -285,7 +285,7 @@ func TestPendingUpgradesFromProposals(t *testing.T) {
 				Upgrade: &UpgradeProposal{
 					Descriptor: api.Descriptor{
 						Name:  "not passed",
-						Epoch: epochtime.EpochTime(30),
+						Epoch: beacon.EpochTime(30),
 					},
 				},
 			},
@@ -298,7 +298,7 @@ func TestPendingUpgradesFromProposals(t *testing.T) {
 				Upgrade: &UpgradeProposal{
 					Descriptor: api.Descriptor{
 						Name:  "passed",
-						Epoch: epochtime.EpochTime(40),
+						Epoch: beacon.EpochTime(40),
 					},
 				},
 			},
@@ -311,7 +311,7 @@ func TestPendingUpgradesFromProposals(t *testing.T) {
 				Upgrade: &UpgradeProposal{
 					Descriptor: api.Descriptor{
 						Name:  "passed2",
-						Epoch: epochtime.EpochTime(50),
+						Epoch: beacon.EpochTime(50),
 					},
 				},
 			},

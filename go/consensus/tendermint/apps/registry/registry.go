@@ -7,6 +7,7 @@ import (
 
 	"github.com/tendermint/tendermint/abci/types"
 
+	beacon "github.com/oasisprotocol/oasis-core/go/beacon/api"
 	"github.com/oasisprotocol/oasis-core/go/common/cbor"
 	"github.com/oasisprotocol/oasis-core/go/common/entity"
 	"github.com/oasisprotocol/oasis-core/go/common/node"
@@ -15,7 +16,6 @@ import (
 	registryState "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/apps/registry/state"
 	stakingapp "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/apps/staking"
 	stakingState "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/apps/staking/state"
-	epochtime "github.com/oasisprotocol/oasis-core/go/epochtime/api"
 	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
 	staking "github.com/oasisprotocol/oasis-core/go/staking/api"
 )
@@ -109,7 +109,7 @@ func (app *registryApplication) EndBlock(ctx *api.Context, request types.Request
 	return types.ResponseEndBlock{}, nil
 }
 
-func (app *registryApplication) onRegistryEpochChanged(ctx *api.Context, registryEpoch epochtime.EpochTime) (err error) {
+func (app *registryApplication) onRegistryEpochChanged(ctx *api.Context, registryEpoch beacon.EpochTime) (err error) {
 	state := registryState.NewMutableState(ctx.State())
 	stakeState := stakingState.NewMutableState(ctx.State())
 
@@ -177,7 +177,7 @@ func (app *registryApplication) onRegistryEpochChanged(ctx *api.Context, registr
 			// Overflow, the node will never be removed.
 			continue
 		}
-		if epochtime.EpochTime(node.Expiration)+debondingInterval < registryEpoch {
+		if beacon.EpochTime(node.Expiration)+debondingInterval < registryEpoch {
 			ctx.Logger().Debug("removing expired node",
 				"node_id", node.ID,
 			)

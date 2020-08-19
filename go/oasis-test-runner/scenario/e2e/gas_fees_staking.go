@@ -62,10 +62,9 @@ func (sc *gasFeesImpl) Fixture() (*oasis.NetworkFixture, error) {
 		return nil, err
 	}
 
-	return &oasis.NetworkFixture{
+	ff := &oasis.NetworkFixture{
 		Network: oasis.NetworkCfg{
-			NodeBinary:    f.Network.NodeBinary,
-			EpochtimeMock: true,
+			NodeBinary: f.Network.NodeBinary,
 			StakingGenesis: &staking.Genesis{
 				Parameters: staking.ConsensusParameters{
 					DebondingInterval: 1,
@@ -112,7 +111,11 @@ func (sc *gasFeesImpl) Fixture() (*oasis.NetworkFixture, error) {
 			{Entity: 3, Consensus: oasis.ConsensusFixture{MinGasPrice: 1}},
 		},
 		Seeds: []oasis.SeedFixture{{}},
-	}, nil
+	}
+
+	ff.Network.SetMockEpoch()
+
+	return ff, nil
 }
 
 func (sc *gasFeesImpl) Run(childEnv *env.Env) error {

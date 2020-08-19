@@ -48,7 +48,7 @@ func (sc *runtimePruneImpl) Fixture() (*oasis.NetworkFixture, error) {
 	}
 
 	// Avoid unexpected blocks.
-	f.Network.EpochtimeMock = true
+	f.Network.SetMockEpoch()
 	// Configure pruning.
 	f.Runtimes[1].Pruner = oasis.RuntimePrunerCfg{
 		Strategy: history.PrunerStrategyKeepLast,

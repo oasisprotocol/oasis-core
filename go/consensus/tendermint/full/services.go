@@ -18,6 +18,10 @@ func (t *fullService) serviceClientWorker(ctx context.Context, svc api.ServiceCl
 	defer t.serviceClientsWg.Done()
 
 	sd := svc.ServiceDescriptor()
+	if sd == nil {
+		// Some services don't actually need a worker.
+		return
+	}
 
 	logger := t.Logger.With("service", sd.Name())
 	logger.Info("starting event dispatcher")

@@ -4,10 +4,10 @@ import (
 	"fmt"
 	"time"
 
+	beacon "github.com/oasisprotocol/oasis-core/go/beacon/api"
 	"github.com/oasisprotocol/oasis-core/go/common"
 	"github.com/oasisprotocol/oasis-core/go/common/node"
 	"github.com/oasisprotocol/oasis-core/go/common/sgx"
-	epochtime "github.com/oasisprotocol/oasis-core/go/epochtime/api"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/env"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/log"
 	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
@@ -498,7 +498,7 @@ type ByzantineFixture struct { // nolint: maligned
 	IdentitySeed string `json:"identity_seed"`
 	Entity       int    `json:"entity"`
 
-	ActivationEpoch epochtime.EpochTime `json:"activation_epoch"`
+	ActivationEpoch beacon.EpochTime `json:"activation_epoch"`
 
 	// Consensus contains configuration for the consensus backend.
 	Consensus ConsensusFixture `json:"consensus"`

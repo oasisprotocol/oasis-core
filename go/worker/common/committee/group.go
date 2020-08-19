@@ -9,6 +9,7 @@ import (
 	"github.com/opentracing/opentracing-go"
 	opentracingExt "github.com/opentracing/opentracing-go/ext"
 
+	beacon "github.com/oasisprotocol/oasis-core/go/beacon/api"
 	"github.com/oasisprotocol/oasis-core/go/common"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	"github.com/oasisprotocol/oasis-core/go/common/identity"
@@ -16,7 +17,6 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/node"
 	"github.com/oasisprotocol/oasis-core/go/common/tracing"
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
-	"github.com/oasisprotocol/oasis-core/go/epochtime/api"
 	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
 	"github.com/oasisprotocol/oasis-core/go/roothash/api/commitment"
 	"github.com/oasisprotocol/oasis-core/go/runtime/nodes"
@@ -78,7 +78,7 @@ type epoch struct {
 	groupVersion int64
 
 	// epochNumber is the sequential number of the epoch.
-	epochNumber api.EpochTime
+	epochNumber beacon.EpochTime
 
 	// executorCommittee is the executor committee we are a member of.
 	executorCommittee *CommitteeInfo
@@ -94,7 +94,7 @@ type EpochSnapshot struct {
 	identity     *identity.Identity
 	groupVersion int64
 
-	epochNumber api.EpochTime
+	epochNumber beacon.EpochTime
 
 	runtime *registry.Runtime
 
@@ -121,7 +121,7 @@ func (e *EpochSnapshot) GetExecutorCommittee() *CommitteeInfo {
 }
 
 // GetEpochNumber returns the sequential number of the epoch.
-func (e *EpochSnapshot) GetEpochNumber() api.EpochTime {
+func (e *EpochSnapshot) GetEpochNumber() beacon.EpochTime {
 	return e.epochNumber
 }
 
@@ -350,7 +350,7 @@ func (g *Group) EpochTransition(ctx context.Context, height int64) error {
 	}
 
 	// Fetch the new epoch.
-	epochNumber, err := g.consensus.EpochTime().GetEpoch(ctx, height)
+	epochNumber, err := g.consensus.Beacon().GetEpoch(ctx, height)
 	if err != nil {
 		return err
 	}
@@ -359,7 +359,7 @@ func (g *Group) EpochTransition(ctx context.Context, height int64) error {
 	// Note: when node is restarted, `EpochTransition` is called on the first
 	// received block, which is not necessary the actual epoch transition block.
 	// Therefore we cannot use current height as the group version.
-	groupVersion, err := g.consensus.EpochTime().GetEpochBlock(ctx, epochNumber)
+	groupVersion, err := g.consensus.Beacon().GetEpochBlock(ctx, epochNumber)
 	if err != nil {
 		return err
 	}

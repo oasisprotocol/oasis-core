@@ -208,7 +208,7 @@ steps:
   ###############
   - label: E2E tests
     parallelism: 7
-    timeout_in_minutes: 15
+    timeout_in_minutes: 25
     command:
       - .buildkite/scripts/download_e2e_test_artifacts.sh
       - .buildkite/scripts/test_e2e.sh
@@ -230,7 +230,7 @@ steps:
   ###########################
   - label: E2E tests - intel-sgx
     parallelism: 5
-    timeout_in_minutes: 21
+    timeout_in_minutes: 35
     command:
       - .buildkite/scripts/download_e2e_test_artifacts.sh
       # Only run runtime scenarios as others do not use SGX.

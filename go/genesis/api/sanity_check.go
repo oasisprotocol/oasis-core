@@ -25,10 +25,10 @@ func (d *Document) SanityCheck() error {
 		pkBlacklist[v] = true
 	}
 
-	if err := d.EpochTime.SanityCheck(); err != nil {
+	if err := d.Beacon.SanityCheck(); err != nil {
 		return err
 	}
-	epoch := d.EpochTime.GetInitialEpoch(d.Height)
+	epoch := d.Beacon.Base // Note: d.Height has no easy connection to the epoch.
 
 	if err := d.Registry.SanityCheck(d.Time, epoch, d.Staking.Ledger, d.Staking.Parameters.Thresholds, pkBlacklist); err != nil {
 		return err
@@ -43,9 +43,6 @@ func (d *Document) SanityCheck() error {
 		return err
 	}
 	if err := d.Scheduler.SanityCheck(&d.Staking.TotalSupply); err != nil {
-		return err
-	}
-	if err := d.Beacon.SanityCheck(); err != nil {
 		return err
 	}
 	if err := d.Governance.SanityCheck(epoch, &d.Staking.GovernanceDeposits); err != nil {

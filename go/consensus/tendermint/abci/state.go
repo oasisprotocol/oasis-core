@@ -12,6 +12,7 @@ import (
 	"github.com/eapache/channels"
 	"github.com/tendermint/tendermint/abci/types"
 
+	beacon "github.com/oasisprotocol/oasis-core/go/beacon/api"
 	"github.com/oasisprotocol/oasis-core/go/common"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
@@ -20,7 +21,6 @@ import (
 	consensusGenesis "github.com/oasisprotocol/oasis-core/go/consensus/genesis"
 	abciState "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/abci/state"
 	"github.com/oasisprotocol/oasis-core/go/consensus/tendermint/api"
-	epochtime "github.com/oasisprotocol/oasis-core/go/epochtime/api"
 	genesis "github.com/oasisprotocol/oasis-core/go/genesis/api"
 	staking "github.com/oasisprotocol/oasis-core/go/staking/api"
 	storage "github.com/oasisprotocol/oasis-core/go/storage/api"
@@ -60,10 +60,10 @@ type applicationState struct { // nolint: maligned
 
 	txAuthHandler api.TransactionAuthHandler
 
-	timeSource epochtime.Backend
+	timeSource beacon.Backend
 
 	haltMode        bool
-	haltEpochHeight epochtime.EpochTime
+	haltEpochHeight beacon.EpochTime
 
 	minGasPrice        quantity.Quantity
 	ownTxSigner        signature.PublicKey
@@ -156,30 +156,30 @@ func (s *applicationState) BlockContext() *api.BlockContext {
 	return s.blockCtx
 }
 
-func (s *applicationState) GetBaseEpoch() (epochtime.EpochTime, error) {
+func (s *applicationState) GetBaseEpoch() (beacon.EpochTime, error) {
 	return s.timeSource.GetBaseEpoch(s.ctx)
 }
 
-func (s *applicationState) GetEpoch(ctx context.Context, blockHeight int64) (epochtime.EpochTime, error) {
+func (s *applicationState) GetEpoch(ctx context.Context, blockHeight int64) (beacon.EpochTime, error) {
 	return s.timeSource.GetEpoch(ctx, blockHeight)
 }
 
-func (s *applicationState) GetCurrentEpoch(ctx context.Context) (epochtime.EpochTime, error) {
+func (s *applicationState) GetCurrentEpoch(ctx context.Context) (beacon.EpochTime, error) {
 	blockHeight := s.BlockHeight()
 	if blockHeight == 0 {
-		return epochtime.EpochInvalid, nil
+		return beacon.EpochInvalid, nil
 	}
 	currentEpoch, err := s.timeSource.GetEpoch(ctx, blockHeight+1)
 	if err != nil {
-		return epochtime.EpochInvalid, fmt.Errorf("application state time source get epoch for height %d: %w", blockHeight+1, err)
+		return beacon.EpochInvalid, fmt.Errorf("application state time source get epoch for height %d: %w", blockHeight+1, err)
 	}
 	return currentEpoch, nil
 }
 
-func (s *applicationState) EpochChanged(ctx *api.Context) (bool, epochtime.EpochTime) {
+func (s *applicationState) EpochChanged(ctx *api.Context) (bool, beacon.EpochTime) {
 	blockHeight := s.BlockHeight()
 	if blockHeight == 0 {
-		return false, epochtime.EpochInvalid
+		return false, beacon.EpochInvalid
 	}
 
 	currentEpoch, err := s.timeSource.GetEpoch(ctx, blockHeight+1)
@@ -187,7 +187,7 @@ func (s *applicationState) EpochChanged(ctx *api.Context) (bool, epochtime.Epoch
 		s.logger.Error("EpochChanged: failed to get current epoch",
 			"err", err,
 		)
-		return false, epochtime.EpochInvalid
+		return false, beacon.EpochInvalid
 	}
 
 	if uint64(blockHeight) == s.initialHeight {
@@ -201,7 +201,7 @@ func (s *applicationState) EpochChanged(ctx *api.Context) (bool, epochtime.Epoch
 		s.logger.Error("EpochChanged: failed to get previous epoch",
 			"err", err,
 		)
-		return false, epochtime.EpochInvalid
+		return false, beacon.EpochInvalid
 	}
 
 	if previousEpoch == currentEpoch {

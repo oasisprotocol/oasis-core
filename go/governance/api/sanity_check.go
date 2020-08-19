@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"sort"
 
+	beacon "github.com/oasisprotocol/oasis-core/go/beacon/api"
 	"github.com/oasisprotocol/oasis-core/go/common/quantity"
-	epochtime "github.com/oasisprotocol/oasis-core/go/epochtime/api"
 	upgrade "github.com/oasisprotocol/oasis-core/go/upgrade/api"
 )
 
@@ -38,7 +38,7 @@ func (p *ConsensusParameters) SanityCheck() error {
 }
 
 // SanityCheckProposals sanity checks proposals.
-func SanityCheckProposals(proposals []*Proposal, epoch epochtime.EpochTime, governanceDeposit *quantity.Quantity) error {
+func SanityCheckProposals(proposals []*Proposal, epoch beacon.EpochTime, governanceDeposit *quantity.Quantity) error {
 	activeProposalDeposits := quantity.NewFromUint64(0)
 	for _, p := range proposals {
 		if p.CreatedAt > epoch {
@@ -100,8 +100,8 @@ func SanityCheckVotes(proposal *Proposal, votes []*VoteEntry) error {
 }
 
 // SanityCheckPendingUpgrades sanity checks pending upgrades.
-func SanityCheckPendingUpgrades(upgrades []*upgrade.Descriptor, epoch epochtime.EpochTime, params *ConsensusParameters) error {
-	var upgradeEpochs []epochtime.EpochTime
+func SanityCheckPendingUpgrades(upgrades []*upgrade.Descriptor, epoch beacon.EpochTime, params *ConsensusParameters) error {
+	var upgradeEpochs []beacon.EpochTime
 	for _, up := range upgrades {
 		if err := up.ValidateBasic(); err != nil {
 			return fmt.Errorf("pending upgrade %v: descriptor validation failure: %w", up.Name, err)
@@ -132,7 +132,7 @@ func SanityCheckPendingUpgrades(upgrades []*upgrade.Descriptor, epoch epochtime.
 }
 
 // SanityCheck does basic sanity checking on the genesis state.
-func (g *Genesis) SanityCheck(now epochtime.EpochTime, governanceDeposits *quantity.Quantity) error {
+func (g *Genesis) SanityCheck(now beacon.EpochTime, governanceDeposits *quantity.Quantity) error {
 	if err := g.Parameters.SanityCheck(); err != nil {
 		return fmt.Errorf("governance: parameters sanity check failed: %w", err)
 	}

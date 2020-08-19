@@ -5,13 +5,14 @@ import (
 	"fmt"
 	"time"
 
+	beacon "github.com/oasisprotocol/oasis-core/go/beacon/api"
 	"github.com/oasisprotocol/oasis-core/go/common"
+	"github.com/oasisprotocol/oasis-core/go/common/crypto/pvss"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	"github.com/oasisprotocol/oasis-core/go/common/entity"
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
 	"github.com/oasisprotocol/oasis-core/go/common/node"
 	"github.com/oasisprotocol/oasis-core/go/common/quantity"
-	epochtime "github.com/oasisprotocol/oasis-core/go/epochtime/api"
 	"github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/flags"
 	staking "github.com/oasisprotocol/oasis-core/go/staking/api"
 )
@@ -19,7 +20,7 @@ import (
 // SanityCheck does basic sanity checking on the genesis state.
 func (g *Genesis) SanityCheck(
 	now time.Time,
-	baseEpoch epochtime.EpochTime,
+	baseEpoch beacon.EpochTime,
 	stakeLedger map[staking.Address]*staking.Account,
 	stakeThresholds map[staking.ThresholdKind]quantity.Quantity,
 	publicKeyBlacklist map[signature.PublicKey]bool,
@@ -157,12 +158,13 @@ func SanityCheckNodes(
 	seenEntities map[signature.PublicKey]*entity.Entity,
 	runtimesLookup RuntimeLookup,
 	isGenesis bool,
-	epoch epochtime.EpochTime,
+	epoch beacon.EpochTime,
 	now time.Time,
 ) (NodeLookup, error) { // nolint: gocyclo
 
 	nodeLookup := &sanityCheckNodeLookup{
-		nodes: make(map[signature.PublicKey]*node.Node),
+		nodes:        make(map[signature.PublicKey]*node.Node),
+		nodesByPoint: make(map[string]*node.Node),
 	}
 
 	for _, signedNode := range nodes {
@@ -201,6 +203,13 @@ func SanityCheckNodes(
 		nodeLookup.nodes[node.Consensus.ID] = node
 		nodeLookup.nodes[node.P2P.ID] = node
 		nodeLookup.nodes[node.TLS.PubKey] = node
+		if node.Beacon != nil {
+			raw, err := node.Beacon.Point.MarshalBinary()
+			if err != nil {
+				return nil, fmt.Errorf("registry: node sanity check failed: ID: %s, can't serialize beacon point : %w", n.ID.String(), err)
+			}
+			nodeLookup.nodesByPoint[string(raw)] = node
+		}
 		nodeLookup.nodesList = append(nodeLookup.nodesList, node)
 	}
 
@@ -406,13 +415,27 @@ func (r *sanityCheckRuntimeLookup) AllRuntimes(ctx context.Context) ([]*Runtime,
 
 // Node lookup used in sanity checks.
 type sanityCheckNodeLookup struct {
-	nodes map[signature.PublicKey]*node.Node
+	nodes        map[signature.PublicKey]*node.Node
+	nodesByPoint map[string]*node.Node
 
 	nodesList []*node.Node
 }
 
 func (n *sanityCheckNodeLookup) NodeBySubKey(ctx context.Context, key signature.PublicKey) (*node.Node, error) {
 	node, ok := n.nodes[key]
+	if !ok {
+		return nil, ErrNoSuchNode
+	}
+	return node, nil
+}
+
+func (n *sanityCheckNodeLookup) NodeByBeaconPoint(ctx context.Context, point pvss.Point) (*node.Node, error) {
+	raw, err := point.MarshalBinary()
+	if err != nil {
+		return nil, err
+	}
+
+	node, ok := n.nodesByPoint[string(raw)]
 	if !ok {
 		return nil, ErrNoSuchNode
 	}

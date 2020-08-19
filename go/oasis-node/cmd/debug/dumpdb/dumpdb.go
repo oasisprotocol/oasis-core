@@ -27,7 +27,6 @@ import (
 	schedulerApp "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/apps/scheduler"
 	stakingApp "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/apps/staking"
 	tendermintCommon "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/common"
-	epochtime "github.com/oasisprotocol/oasis-core/go/epochtime/api"
 	genesis "github.com/oasisprotocol/oasis-core/go/genesis/api"
 	genesisFile "github.com/oasisprotocol/oasis-core/go/genesis/file"
 	governance "github.com/oasisprotocol/oasis-core/go/governance/api"
@@ -149,7 +148,6 @@ func doDumpDB(cmd *cobra.Command, args []string) {
 		Height:    qs.BlockHeight(),
 		Time:      time.Now(), // XXX: Make this deterministic?
 		ChainID:   oldDoc.ChainID,
-		EpochTime: oldDoc.EpochTime,
 		HaltEpoch: oldDoc.HaltEpoch,
 		ExtraData: oldDoc.ExtraData,
 	}
@@ -372,7 +370,6 @@ func dumpConsensus(ctx context.Context, qs *dumpQueryState) (*consensus.Genesis,
 	if err != nil {
 		return nil, fmt.Errorf("dumpdb: failed to get consensus params: %w", err)
 	}
-	_ = params
 	return &consensus.Genesis{
 		Backend:    tendermintAPI.BackendName,
 		Parameters: *params,
@@ -392,12 +389,12 @@ func (qs *dumpQueryState) BlockHeight() int64 {
 	return qs.height
 }
 
-func (qs *dumpQueryState) GetEpoch(ctx context.Context, blockHeight int64) (epochtime.EpochTime, error) {
+func (qs *dumpQueryState) GetEpoch(ctx context.Context, blockHeight int64) (beacon.EpochTime, error) {
 	// This is only required because certain registry backend queries
 	// need the epoch to filter out expired nodes.  It is not
 	// implemented because acquiring a full state dump does not
 	// involve any of the relevant queries.
-	return epochtime.EpochTime(0), fmt.Errorf("dumpdb/dumpQueryState: GetEpoch not supported")
+	return beacon.EpochTime(0), fmt.Errorf("dumpdb/dumpQueryState: GetEpoch not supported")
 }
 
 func (qs *dumpQueryState) LastRetainedVersion() (int64, error) {

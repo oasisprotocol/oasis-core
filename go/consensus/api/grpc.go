@@ -5,10 +5,10 @@ import (
 
 	"google.golang.org/grpc"
 
+	beacon "github.com/oasisprotocol/oasis-core/go/beacon/api"
 	cmnGrpc "github.com/oasisprotocol/oasis-core/go/common/grpc"
 	"github.com/oasisprotocol/oasis-core/go/common/pubsub"
 	"github.com/oasisprotocol/oasis-core/go/consensus/api/transaction"
-	epochtime "github.com/oasisprotocol/oasis-core/go/epochtime/api"
 	genesis "github.com/oasisprotocol/oasis-core/go/genesis/api"
 	governance "github.com/oasisprotocol/oasis-core/go/governance/api"
 	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
@@ -34,9 +34,9 @@ var (
 	// methodGetEpoch is the GetEpoch method.
 	methodGetEpoch = serviceName.NewMethod("GetEpoch", int64(0))
 	// methodWaitEpoch is the WaitEpoch method.
-	methodWaitEpoch = serviceName.NewMethod("WaitEpoch", epochtime.EpochTime(0))
-	// methodEpochtimeConsensusParameters is the EpochtimeConsensusParameters method.
-	methodEpochtimeConsensusParameters = serviceName.NewMethod("ConsensusParameters", int64(0))
+	methodWaitEpoch = serviceName.NewMethod("WaitEpoch", beacon.EpochTime(0))
+	// methodBeaconConsensusParameters is the BeaconConsensusParameters method.
+	methodBeaconConsensusParameters = serviceName.NewMethod("BeaconConsensusParameters", int64(0))
 	// methodGetBlock is the GetBlock method.
 	methodGetBlock = serviceName.NewMethod("GetBlock", int64(0))
 	// methodGetTransactions is the GetTransactions method.
@@ -98,8 +98,8 @@ var (
 				Handler:    handlerWaitEpoch,
 			},
 			{
-				MethodName: methodEpochtimeConsensusParameters.ShortName(),
-				Handler:    handlerEpochtimeConsensusParameters,
+				MethodName: methodBeaconConsensusParameters.ShortName(),
+				Handler:    handlerBeaconConsensusParameters,
 			},
 			{
 				MethodName: methodGetBlock.ShortName(),
@@ -293,7 +293,7 @@ func handlerWaitEpoch( // nolint: golint
 	dec func(interface{}) error,
 	interceptor grpc.UnaryServerInterceptor,
 ) (interface{}, error) {
-	var epoch epochtime.EpochTime
+	var epoch beacon.EpochTime
 	if err := dec(&epoch); err != nil {
 		return nil, err
 	}
@@ -305,12 +305,12 @@ func handlerWaitEpoch( // nolint: golint
 		FullMethod: methodWaitEpoch.FullName(),
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return nil, srv.(ClientBackend).WaitEpoch(ctx, req.(epochtime.EpochTime))
+		return nil, srv.(ClientBackend).WaitEpoch(ctx, req.(beacon.EpochTime))
 	}
 	return interceptor(ctx, epoch, info, handler)
 }
 
-func handlerEpochtimeConsensusParameters( // nolint: golint
+func handlerBeaconConsensusParameters( // nolint: golint
 	srv interface{},
 	ctx context.Context,
 	dec func(interface{}) error,
@@ -321,14 +321,14 @@ func handlerEpochtimeConsensusParameters( // nolint: golint
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(ClientBackend).EpochtimeConsensusParameters(ctx, height)
+		return srv.(ClientBackend).BeaconConsensusParameters(ctx, height)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: methodEpochtimeConsensusParameters.FullName(),
+		FullMethod: methodBeaconConsensusParameters.FullName(),
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ClientBackend).EpochtimeConsensusParameters(ctx, req.(int64))
+		return srv.(ClientBackend).BeaconConsensusParameters(ctx, req.(int64))
 	}
 	return interceptor(ctx, height, info, handler)
 }
@@ -761,21 +761,21 @@ func (c *consensusClient) GetSignerNonce(ctx context.Context, req *GetSignerNonc
 	return nonce, nil
 }
 
-func (c *consensusClient) WaitEpoch(ctx context.Context, epoch epochtime.EpochTime) error {
+func (c *consensusClient) WaitEpoch(ctx context.Context, epoch beacon.EpochTime) error {
 	return c.conn.Invoke(ctx, methodWaitEpoch.FullName(), epoch, nil)
 }
 
-func (c *consensusClient) GetEpoch(ctx context.Context, height int64) (epochtime.EpochTime, error) {
-	var epoch epochtime.EpochTime
+func (c *consensusClient) GetEpoch(ctx context.Context, height int64) (beacon.EpochTime, error) {
+	var epoch beacon.EpochTime
 	if err := c.conn.Invoke(ctx, methodGetEpoch.FullName(), height, &epoch); err != nil {
-		return epochtime.EpochTime(0), err
+		return beacon.EpochTime(0), err
 	}
 	return epoch, nil
 }
 
-func (c *consensusClient) EpochtimeConsensusParameters(ctx context.Context, height int64) (*epochtime.ConsensusParameters, error) {
-	var parameters epochtime.ConsensusParameters
-	if err := c.conn.Invoke(ctx, methodEpochtimeConsensusParameters.FullName(), height, &parameters); err != nil {
+func (c *consensusClient) BeaconConsensusParameters(ctx context.Context, height int64) (*beacon.ConsensusParameters, error) {
+	var parameters beacon.ConsensusParameters
+	if err := c.conn.Invoke(ctx, methodBeaconConsensusParameters.FullName(), height, &parameters); err != nil {
 		return nil, err
 	}
 	return &parameters, nil

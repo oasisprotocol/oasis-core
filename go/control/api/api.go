@@ -5,6 +5,7 @@ import (
 	"context"
 	"time"
 
+	beacon "github.com/oasisprotocol/oasis-core/go/beacon/api"
 	"github.com/oasisprotocol/oasis-core/go/common"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
@@ -12,7 +13,6 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/identity"
 	"github.com/oasisprotocol/oasis-core/go/common/node"
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
-	epochtime "github.com/oasisprotocol/oasis-core/go/epochtime/api"
 	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
 	storage "github.com/oasisprotocol/oasis-core/go/storage/api"
 	upgrade "github.com/oasisprotocol/oasis-core/go/upgrade/api"
@@ -150,7 +150,7 @@ type ControlledNode interface {
 // DebugModuleName is the module name for the debug controller service.
 const DebugModuleName = "control/debug"
 
-// ErrIncompatibleBackend is the error raised when the current epochtime
+// ErrIncompatibleBackend is the error raised when the current beacon
 // backend does not support manually setting the current epoch.
 var ErrIncompatibleBackend = errors.New(DebugModuleName, 1, "debug: incompatible backend")
 
@@ -158,9 +158,9 @@ var ErrIncompatibleBackend = errors.New(DebugModuleName, 1, "debug: incompatible
 type DebugController interface {
 	// SetEpoch manually sets the current epoch to the given epoch.
 	//
-	// NOTE: This only works with a mock epochtime backend and will otherwise
+	// NOTE: This only works with a mock beacon backend and will otherwise
 	//       return an error.
-	SetEpoch(ctx context.Context, epoch epochtime.EpochTime) error
+	SetEpoch(ctx context.Context, epoch beacon.EpochTime) error
 
 	// WaitNodesRegistered waits for the given number of nodes to register.
 	WaitNodesRegistered(ctx context.Context, count int) error

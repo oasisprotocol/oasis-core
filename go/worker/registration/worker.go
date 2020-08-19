@@ -12,6 +12,7 @@ import (
 	flag "github.com/spf13/pflag"
 	"github.com/spf13/viper"
 
+	beacon "github.com/oasisprotocol/oasis-core/go/beacon/api"
 	"github.com/oasisprotocol/oasis-core/go/common"
 	"github.com/oasisprotocol/oasis-core/go/common/accessctl"
 	"github.com/oasisprotocol/oasis-core/go/common/cbor"
@@ -24,7 +25,6 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/persistent"
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
 	control "github.com/oasisprotocol/oasis-core/go/control/api"
-	epochtime "github.com/oasisprotocol/oasis-core/go/epochtime/api"
 	"github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/flags"
 	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
 	runtimeRegistry "github.com/oasisprotocol/oasis-core/go/runtime/registry"
@@ -153,7 +153,7 @@ type Worker struct { // nolint: maligned
 	sentryAddresses []node.TLSAddress
 
 	runtimeRegistry runtimeRegistry.Registry
-	epochtime       epochtime.Backend
+	beacon          beacon.Backend
 	registry        registry.Backend
 	identity        *identity.Identity
 	p2p             *p2p.P2P
@@ -223,10 +223,10 @@ func (w *Worker) registrationLoop() { // nolint: gocyclo
 	// (re-)register the node on each epoch transition. This doesn't
 	// need to be strict block-epoch time, since it just serves to
 	// extend the node's expiration.
-	ch, sub := w.epochtime.WatchLatestEpoch()
+	ch, sub := w.beacon.WatchLatestEpoch()
 	defer sub.Close()
 
-	regFn := func(epoch epochtime.EpochTime, hook RegisterNodeHook, retry bool) error {
+	regFn := func(epoch beacon.EpochTime, hook RegisterNodeHook, retry bool) error {
 		var off backoff.BackOff
 
 		switch retry {
@@ -273,10 +273,13 @@ func (w *Worker) registrationLoop() { // nolint: gocyclo
 	entityCh, entitySub, _ := w.registry.WatchEntities(w.ctx)
 	defer entitySub.Close()
 
-	var epoch epochtime.EpochTime
-	var lastTLSRotationEpoch epochtime.EpochTime
-	tlsRotationPending := true
-	first := true
+	var (
+		epoch                beacon.EpochTime
+		lastTLSRotationEpoch beacon.EpochTime
+
+		tlsRotationPending = true
+		first              = true
+	)
 Loop:
 	for {
 		select {
@@ -292,7 +295,7 @@ Loop:
 			if !w.identity.DoNotRotateTLS && !tlsRotationPending {
 				// Per how many epochs should we do rotations?
 				// TODO: Make this time-based instead.
-				rotateTLSCertsPer := epochtime.EpochTime(viper.GetUint64(CfgRegistrationRotateCerts))
+				rotateTLSCertsPer := beacon.EpochTime(viper.GetUint64(CfgRegistrationRotateCerts))
 				if rotateTLSCertsPer != 0 && (epoch-lastTLSRotationEpoch) >= rotateTLSCertsPer {
 					// Rotate node TLS certificates.
 					err := w.identity.RotateCertificates()
@@ -649,7 +652,7 @@ func (w *Worker) gatherTLSAddresses(sentryTLSAddrs []node.TLSAddress) ([]node.TL
 	return validatedAddrs, nil
 }
 
-func (w *Worker) registerNode(epoch epochtime.EpochTime, hook RegisterNodeHook) error {
+func (w *Worker) registerNode(epoch beacon.EpochTime, hook RegisterNodeHook) error {
 	identityPublic := w.identity.NodeSigner.Public()
 	w.logger.Info("performing node (re-)registration",
 		"epoch", epoch,
@@ -675,6 +678,9 @@ func (w *Worker) registerNode(epoch epochtime.EpochTime, hook RegisterNodeHook) 
 		},
 		Consensus: node.ConsensusInfo{
 			ID: w.identity.ConsensusSigner.Public(),
+		},
+		Beacon: &node.BeaconInfo{
+			Point: w.identity.BeaconScalar.Point(),
 		},
 	}
 
@@ -915,7 +921,7 @@ func GetRegistrationSigner(logger *logging.Logger, dataDir string, identity *ide
 // New constructs a new worker node registration service.
 func New(
 	dataDir string,
-	epochtime epochtime.Backend,
+	beacon beacon.Backend,
 	registry registry.Backend,
 	identity *identity.Identity,
 	consensus consensus.Backend,
@@ -967,7 +973,7 @@ func New(
 		sentryAddresses:    workerCommonCfg.SentryAddresses,
 		registrationSigner: registrationSigner,
 		runtimeRegistry:    runtimeRegistry,
-		epochtime:          epochtime,
+		beacon:             beacon,
 		registry:           registry,
 		identity:           identity,
 		stopCh:             make(chan struct{}),

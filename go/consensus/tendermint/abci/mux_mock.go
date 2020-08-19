@@ -3,8 +3,8 @@ package abci
 import (
 	"context"
 
+	beacon "github.com/oasisprotocol/oasis-core/go/beacon/api"
 	"github.com/oasisprotocol/oasis-core/go/consensus/tendermint/api"
-	epochtime "github.com/oasisprotocol/oasis-core/go/epochtime/api"
 	upgrade "github.com/oasisprotocol/oasis-core/go/upgrade/api"
 )
 
@@ -19,7 +19,7 @@ func (mux *MockABCIMux) MockRegisterApp(app api.Application) error {
 }
 
 // MockSetEpochtime sets the timesource used by this muxer when testing.
-func (mux *MockABCIMux) MockSetEpochtime(epochTime epochtime.Backend) {
+func (mux *MockABCIMux) MockSetEpochtime(epochTime beacon.Backend) {
 	mux.state.timeSource = epochTime
 }
 

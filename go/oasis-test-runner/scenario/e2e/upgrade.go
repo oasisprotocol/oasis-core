@@ -11,12 +11,12 @@ import (
 	"sync"
 	"time"
 
+	beacon "github.com/oasisprotocol/oasis-core/go/beacon/api"
 	"github.com/oasisprotocol/oasis-core/go/common/cbor"
 	"github.com/oasisprotocol/oasis-core/go/common/persistent"
 	"github.com/oasisprotocol/oasis-core/go/common/pubsub"
 	"github.com/oasisprotocol/oasis-core/go/common/version"
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
-	epoch "github.com/oasisprotocol/oasis-core/go/epochtime/api"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/env"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/log"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/oasis"
@@ -40,7 +40,7 @@ var (
 
 	baseDescriptor = upgrade.Descriptor{
 		Name:       "base",
-		Epoch:      epoch.EpochTime(1),
+		Epoch:      beacon.EpochTime(1),
 		Method:     upgrade.UpgradeMethodInternal,
 		Identifier: cbor.Marshal(version.Versions),
 	}
@@ -55,7 +55,7 @@ type nodeUpgradeImpl struct {
 	nodeCh <-chan *registry.NodeEvent
 
 	ctx          context.Context
-	currentEpoch epoch.EpochTime
+	currentEpoch beacon.EpochTime
 }
 
 func (sc *nodeUpgradeImpl) writeDescriptor(name string, content []byte) (string, error) {
@@ -123,10 +123,9 @@ func (sc *nodeUpgradeImpl) Fixture() (*oasis.NetworkFixture, error) {
 		return nil, err
 	}
 
-	return &oasis.NetworkFixture{
+	ff := &oasis.NetworkFixture{
 		Network: oasis.NetworkCfg{
-			NodeBinary:    f.Network.NodeBinary,
-			EpochtimeMock: true,
+			NodeBinary: f.Network.NodeBinary,
 			DefaultLogWatcherHandlerFactories: []log.WatcherHandlerFactory{
 				oasis.LogAssertUpgradeStartup(),
 				oasis.LogAssertUpgradeConsensus(),
@@ -143,7 +142,11 @@ func (sc *nodeUpgradeImpl) Fixture() (*oasis.NetworkFixture, error) {
 			{Entity: 1, AllowErrorTermination: true},
 		},
 		Seeds: []oasis.SeedFixture{{}},
-	}, nil
+	}
+
+	ff.Network.SetMockEpoch()
+
+	return ff, nil
 }
 
 func (sc *nodeUpgradeImpl) Run(childEnv *env.Env) error { // nolint: gocyclo

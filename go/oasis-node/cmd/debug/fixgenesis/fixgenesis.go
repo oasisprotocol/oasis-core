@@ -20,7 +20,6 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
 	"github.com/oasisprotocol/oasis-core/go/common/node"
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/genesis"
-	epochtime "github.com/oasisprotocol/oasis-core/go/epochtime/api"
 	genesis "github.com/oasisprotocol/oasis-core/go/genesis/api"
 	keymanager "github.com/oasisprotocol/oasis-core/go/keymanager/api"
 	cmdCommon "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common"
@@ -52,8 +51,6 @@ type oldDocument struct {
 	Time time.Time `json:"genesis_time"`
 	// ChainID is the ID of the chain.
 	ChainID string `json:"chain_id"`
-	// EpochTime is the timekeeping genesis state.
-	EpochTime epochtime.Genesis `json:"epochtime"`
 	// Registry is the registry genesis state.
 	Registry oldRegistryGenesis `json:"registry"`
 	// RootHash is the roothash genesis state.
@@ -70,7 +67,7 @@ type oldDocument struct {
 	Consensus consensus.Genesis `json:"consensus"`
 	// HaltEpoch is the epoch height at which the network will stop processing
 	// any transactions and will halt.
-	HaltEpoch epochtime.EpochTime `json:"halt_epoch"`
+	HaltEpoch beacon.EpochTime `json:"halt_epoch"`
 	// Extra data is arbitrary extra data that is part of the
 	// genesis block but is otherwise ignored by the protocol.
 	ExtraData map[string][]byte `json:"extra_data"`
@@ -279,7 +276,6 @@ func updateGenesisDoc(oldDoc *oldDocument) (*genesis.Document, error) {
 		Height:     oldDoc.Height,
 		Time:       oldDoc.Time,
 		ChainID:    oldDoc.ChainID,
-		EpochTime:  oldDoc.EpochTime,
 		RootHash:   oldDoc.RootHash,
 		Staking:    oldDoc.Staking,
 		KeyManager: oldDoc.KeyManager,

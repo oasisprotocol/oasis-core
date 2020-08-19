@@ -11,7 +11,6 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/genesis"
-	epochtime "github.com/oasisprotocol/oasis-core/go/epochtime/api"
 	governance "github.com/oasisprotocol/oasis-core/go/governance/api"
 	keymanager "github.com/oasisprotocol/oasis-core/go/keymanager/api"
 	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
@@ -30,8 +29,6 @@ type Document struct {
 	Time time.Time `json:"genesis_time"`
 	// ChainID is the ID of the chain.
 	ChainID string `json:"chain_id"`
-	// EpochTime is the timekeeping genesis state.
-	EpochTime epochtime.Genesis `json:"epochtime"`
 	// Registry is the registry genesis state.
 	Registry registry.Genesis `json:"registry"`
 	// RootHash is the roothash genesis state.
@@ -50,7 +47,7 @@ type Document struct {
 	Consensus consensus.Genesis `json:"consensus"`
 	// HaltEpoch is the epoch height at which the network will stop processing
 	// any transactions and will halt.
-	HaltEpoch epochtime.EpochTime `json:"halt_epoch"`
+	HaltEpoch beacon.EpochTime `json:"halt_epoch"`
 	// Extra data is arbitrary extra data that is part of the
 	// genesis block but is otherwise ignored by the protocol.
 	ExtraData map[string][]byte `json:"extra_data"`

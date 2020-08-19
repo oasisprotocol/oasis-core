@@ -43,7 +43,7 @@ func (sc *storageSyncImpl) Fixture() (*oasis.NetworkFixture, error) {
 
 	// Use mock epochtime to ensure syncing starts in the same epoch in which
 	// new node registers.
-	f.Network.EpochtimeMock = true
+	f.Network.SetMockEpoch()
 
 	// Make the first storage worker check for checkpoints more often.
 	f.StorageWorkers[0].CheckpointCheckInterval = 1 * time.Second

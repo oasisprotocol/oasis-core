@@ -16,6 +16,7 @@ import (
 	"github.com/tendermint/tendermint/abci/types"
 	tmproto "github.com/tendermint/tendermint/proto/tendermint/types"
 
+	beacon "github.com/oasisprotocol/oasis-core/go/beacon/api"
 	"github.com/oasisprotocol/oasis-core/go/common/cbor"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
@@ -28,7 +29,6 @@ import (
 	consensusGenesis "github.com/oasisprotocol/oasis-core/go/consensus/genesis"
 	abciState "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/abci/state"
 	"github.com/oasisprotocol/oasis-core/go/consensus/tendermint/api"
-	epochtime "github.com/oasisprotocol/oasis-core/go/epochtime/api"
 	"github.com/oasisprotocol/oasis-core/go/storage/mkvs/checkpoint"
 	upgrade "github.com/oasisprotocol/oasis-core/go/upgrade/api"
 )
@@ -63,7 +63,7 @@ type ApplicationConfig struct { // nolint: maligned
 	DataDir         string
 	StorageBackend  string
 	Pruning         PruneConfig
-	HaltEpochHeight epochtime.EpochTime
+	HaltEpochHeight beacon.EpochTime
 	MinGasPrice     uint64
 
 	DisableCheckpointer       bool
@@ -133,14 +133,14 @@ func (a *ApplicationServer) Register(app api.Application) error {
 
 // RegisterHaltHook registers a function to be called when the
 // consensus Halt epoch height is reached.
-func (a *ApplicationServer) RegisterHaltHook(hook func(ctx context.Context, blockHeight int64, epoch epochtime.EpochTime)) {
+func (a *ApplicationServer) RegisterHaltHook(hook func(ctx context.Context, blockHeight int64, epoch beacon.EpochTime)) {
 	a.mux.registerHaltHook(hook)
 }
 
 // SetEpochtime sets the mux epochtime.
 //
 // Epochtime must be set before the multiplexer can be used.
-func (a *ApplicationServer) SetEpochtime(epochTime epochtime.Backend) error {
+func (a *ApplicationServer) SetEpochtime(epochTime beacon.Backend) error {
 	if a.mux.state.timeSource != nil {
 		return fmt.Errorf("mux: epochtime already configured")
 	}
@@ -216,7 +216,7 @@ type abciMux struct {
 	lastBeginBlock int64
 	currentTime    time.Time
 
-	haltHooks []func(context.Context, int64, epochtime.EpochTime)
+	haltHooks []func(context.Context, int64, beacon.EpochTime)
 
 	// invalidatedTxs maps transaction hashes (hash.Hash) to a subscriber
 	// waiting for that transaction to become invalid.
@@ -254,7 +254,7 @@ func (mux *abciMux) watchInvalidatedTx(txHash hash.Hash) (<-chan error, pubsub.C
 	return resultCh, sub, nil
 }
 
-func (mux *abciMux) registerHaltHook(hook func(context.Context, int64, epochtime.EpochTime)) {
+func (mux *abciMux) registerHaltHook(hook func(context.Context, int64, beacon.EpochTime)) {
 	mux.Lock()
 	defer mux.Unlock()
 
@@ -357,7 +357,7 @@ func (mux *abciMux) InitChain(req types.RequestInitChain) types.ResponseInitChai
 	return resp
 }
 
-func (mux *abciMux) dispatchHaltHooks(blockHeight int64, currentEpoch epochtime.EpochTime) {
+func (mux *abciMux) dispatchHaltHooks(blockHeight int64, currentEpoch beacon.EpochTime) {
 	for _, hook := range mux.haltHooks {
 		hook(mux.state.ctx, blockHeight, currentEpoch)
 	}

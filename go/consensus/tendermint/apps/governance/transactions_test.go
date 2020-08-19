@@ -7,6 +7,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	beacon "github.com/oasisprotocol/oasis-core/go/beacon/api"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	"github.com/oasisprotocol/oasis-core/go/common/quantity"
 	abciAPI "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/api"
@@ -14,7 +15,6 @@ import (
 	registryState "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/apps/registry/state"
 	schedulerState "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/apps/scheduler/state"
 	stakingState "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/apps/staking/state"
-	epochtime "github.com/oasisprotocol/oasis-core/go/epochtime/api"
 	governance "github.com/oasisprotocol/oasis-core/go/governance/api"
 	staking "github.com/oasisprotocol/oasis-core/go/staking/api"
 	upgrade "github.com/oasisprotocol/oasis-core/go/upgrade/api"
@@ -57,9 +57,9 @@ func TestSubmitProposal(t *testing.T) {
 		MinProposalDeposit:        *minProposalDeposit,
 		Quorum:                    90,
 		Threshold:                 90,
-		UpgradeCancelMinEpochDiff: epochtime.EpochTime(100),
-		UpgradeMinEpochDiff:       epochtime.EpochTime(100),
-		VotingPeriod:              epochtime.EpochTime(50),
+		UpgradeCancelMinEpochDiff: beacon.EpochTime(100),
+		UpgradeMinEpochDiff:       beacon.EpochTime(100),
+		VotingPeriod:              beacon.EpochTime(50),
 	}
 
 	for _, tc := range []struct {
@@ -310,9 +310,9 @@ func TestCastVote(t *testing.T) {
 		MinProposalDeposit:        *quantity.NewFromUint64(100),
 		Quorum:                    90,
 		Threshold:                 90,
-		UpgradeCancelMinEpochDiff: epochtime.EpochTime(100),
-		UpgradeMinEpochDiff:       epochtime.EpochTime(100),
-		VotingPeriod:              epochtime.EpochTime(50),
+		UpgradeCancelMinEpochDiff: beacon.EpochTime(100),
+		UpgradeMinEpochDiff:       beacon.EpochTime(100),
+		VotingPeriod:              beacon.EpochTime(50),
 	}
 	err = state.SetConsensusParameters(ctx, params)
 	require.NoError(err, "setting governance consensus parameters should not error")

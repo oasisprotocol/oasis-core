@@ -6,13 +6,13 @@ import (
 	"fmt"
 	"math"
 
+	beacon "github.com/oasisprotocol/oasis-core/go/beacon/api"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	memorySigner "github.com/oasisprotocol/oasis-core/go/common/crypto/signature/signers/memory"
 	"github.com/oasisprotocol/oasis-core/go/common/quantity"
 	"github.com/oasisprotocol/oasis-core/go/consensus/api/transaction"
 	"github.com/oasisprotocol/oasis-core/go/consensus/api/transaction/testvectors"
-	epochtime "github.com/oasisprotocol/oasis-core/go/epochtime/api"
 	staking "github.com/oasisprotocol/oasis-core/go/staking/api"
 )
 
@@ -93,11 +93,11 @@ func main() {
 						var cs staking.CommissionSchedule
 						for i := 0; i < steps; i++ {
 							cs.Rates = append(cs.Rates, staking.CommissionRateStep{
-								Start: epochtime.EpochTime(startEpoch),
+								Start: beacon.EpochTime(startEpoch),
 								Rate:  *quantity.NewFromUint64(rate),
 							})
 							cs.Bounds = append(cs.Bounds, staking.CommissionRateBoundStep{
-								Start:   epochtime.EpochTime(startEpoch),
+								Start:   beacon.EpochTime(startEpoch),
 								RateMin: *quantity.NewFromUint64(rate),
 								RateMax: *quantity.NewFromUint64(rate),
 							})

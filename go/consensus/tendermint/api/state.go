@@ -6,13 +6,13 @@ import (
 	"fmt"
 	"time"
 
+	beacon "github.com/oasisprotocol/oasis-core/go/beacon/api"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
 	"github.com/oasisprotocol/oasis-core/go/common/quantity"
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
 	"github.com/oasisprotocol/oasis-core/go/consensus/api/transaction"
 	consensusGenesis "github.com/oasisprotocol/oasis-core/go/consensus/genesis"
-	epochtime "github.com/oasisprotocol/oasis-core/go/epochtime/api"
 	genesis "github.com/oasisprotocol/oasis-core/go/genesis/api"
 	staking "github.com/oasisprotocol/oasis-core/go/staking/api"
 	storage "github.com/oasisprotocol/oasis-core/go/storage/api"
@@ -45,14 +45,14 @@ type ApplicationState interface {
 	BlockContext() *BlockContext
 
 	// GetBaseEpoch returns the base epoch.
-	GetBaseEpoch() (epochtime.EpochTime, error)
+	GetBaseEpoch() (beacon.EpochTime, error)
 
 	// GetCurrentEpoch returns the epoch at the current block height.
-	GetCurrentEpoch(ctx context.Context) (epochtime.EpochTime, error)
+	GetCurrentEpoch(ctx context.Context) (beacon.EpochTime, error)
 
 	// EpochChanged returns true iff the current epoch has changed since the
 	// last block.  As a matter of convenience, the current epoch is returned.
-	EpochChanged(ctx *Context) (bool, epochtime.EpochTime)
+	EpochChanged(ctx *Context) (bool, beacon.EpochTime)
 
 	// MinGasPrice returns the configured minimum gas price.
 	MinGasPrice() *quantity.Quantity
@@ -77,7 +77,7 @@ type ApplicationQueryState interface {
 	BlockHeight() int64
 
 	// GetEpoch returns epoch at block height.
-	GetEpoch(ctx context.Context, blockHeight int64) (epochtime.EpochTime, error)
+	GetEpoch(ctx context.Context, blockHeight int64) (beacon.EpochTime, error)
 
 	// LastRetainedVersion returns the earliest retained version the ABCI
 	// state.
@@ -97,8 +97,8 @@ type MockApplicationStateConfig struct {
 	BlockHeight int64
 	BlockHash   []byte
 
-	BaseEpoch    epochtime.EpochTime
-	CurrentEpoch epochtime.EpochTime
+	BaseEpoch    beacon.EpochTime
+	CurrentEpoch beacon.EpochTime
 	EpochChanged bool
 
 	MaxBlockGas transaction.Gas
@@ -137,11 +137,11 @@ func (ms *mockApplicationState) BlockContext() *BlockContext {
 	return ms.blockCtx
 }
 
-func (ms *mockApplicationState) GetBaseEpoch() (epochtime.EpochTime, error) {
+func (ms *mockApplicationState) GetBaseEpoch() (beacon.EpochTime, error) {
 	return ms.cfg.BaseEpoch, nil
 }
 
-func (ms *mockApplicationState) GetEpoch(ctx context.Context, blockHeight int64) (epochtime.EpochTime, error) {
+func (ms *mockApplicationState) GetEpoch(ctx context.Context, blockHeight int64) (beacon.EpochTime, error) {
 	return ms.cfg.CurrentEpoch, nil
 }
 
@@ -149,11 +149,11 @@ func (ms *mockApplicationState) LastRetainedVersion() (int64, error) {
 	return ms.cfg.Genesis.Height, nil
 }
 
-func (ms *mockApplicationState) GetCurrentEpoch(ctx context.Context) (epochtime.EpochTime, error) {
+func (ms *mockApplicationState) GetCurrentEpoch(ctx context.Context) (beacon.EpochTime, error) {
 	return ms.cfg.CurrentEpoch, nil
 }
 
-func (ms *mockApplicationState) EpochChanged(ctx *Context) (bool, epochtime.EpochTime) {
+func (ms *mockApplicationState) EpochChanged(ctx *Context) (bool, beacon.EpochTime) {
 	return ms.cfg.EpochChanged, ms.cfg.CurrentEpoch
 }
 

@@ -7,6 +7,7 @@ import (
 	"math"
 	"sort"
 
+	beacon "github.com/oasisprotocol/oasis-core/go/beacon/api"
 	"github.com/oasisprotocol/oasis-core/go/common/cbor"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	"github.com/oasisprotocol/oasis-core/go/common/keyformat"
@@ -14,7 +15,6 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/quantity"
 	"github.com/oasisprotocol/oasis-core/go/consensus/tendermint/api"
 	abciAPI "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/api"
-	epochtime "github.com/oasisprotocol/oasis-core/go/epochtime/api"
 	staking "github.com/oasisprotocol/oasis-core/go/staking/api"
 	"github.com/oasisprotocol/oasis-core/go/storage/mkvs"
 )
@@ -125,10 +125,10 @@ func (s *ImmutableState) ConsensusParameters(ctx context.Context) (*staking.Cons
 	return &params, nil
 }
 
-func (s *ImmutableState) DebondingInterval(ctx context.Context) (epochtime.EpochTime, error) {
+func (s *ImmutableState) DebondingInterval(ctx context.Context) (beacon.EpochTime, error) {
 	params, err := s.ConsensusParameters(ctx)
 	if err != nil {
-		return epochtime.EpochInvalid, err
+		return beacon.EpochInvalid, err
 	}
 
 	return params.DebondingInterval, nil
@@ -373,14 +373,14 @@ func (s *ImmutableState) DebondingDelegation(
 }
 
 type DebondingQueueEntry struct {
-	Epoch         epochtime.EpochTime
+	Epoch         beacon.EpochTime
 	DelegatorAddr staking.Address
 	EscrowAddr    staking.Address
 	Seq           uint64
 	Delegation    *staking.DebondingDelegation
 }
 
-func (s *ImmutableState) ExpiredDebondingQueue(ctx context.Context, epoch epochtime.EpochTime) ([]*DebondingQueueEntry, error) {
+func (s *ImmutableState) ExpiredDebondingQueue(ctx context.Context, epoch beacon.EpochTime) ([]*DebondingQueueEntry, error) {
 	it := s.is.NewIterator(ctx)
 	defer it.Close()
 
@@ -398,7 +398,7 @@ func (s *ImmutableState) ExpiredDebondingQueue(ctx context.Context, epoch epocht
 			return nil, err
 		}
 		entries = append(entries, &DebondingQueueEntry{
-			Epoch:         epochtime.EpochTime(decEpoch),
+			Epoch:         beacon.EpochTime(decEpoch),
 			DelegatorAddr: delegatorAddr,
 			EscrowAddr:    escrowAddr,
 			Seq:           seq,
@@ -577,7 +577,7 @@ func (s *MutableState) SetDebondingDelegation(
 
 func (s *MutableState) RemoveFromDebondingQueue(
 	ctx context.Context,
-	epoch epochtime.EpochTime,
+	epoch beacon.EpochTime,
 	delegatorAddr, escrowAddr staking.Address,
 	seq uint64,
 ) error {
@@ -864,7 +864,7 @@ func (s *MutableState) DiscardGovernanceDeposit(
 // there.
 func (s *MutableState) AddRewards(
 	ctx *abciAPI.Context,
-	time epochtime.EpochTime,
+	time beacon.EpochTime,
 	factor *quantity.Quantity,
 	addresses []staking.Address,
 ) error {
@@ -979,7 +979,7 @@ func (s *MutableState) AddRewards(
 // AddRewardSingleAttenuated computes, scales, and transfers a staking reward to an active escrow account.
 func (s *MutableState) AddRewardSingleAttenuated(
 	ctx *abciAPI.Context,
-	time epochtime.EpochTime,
+	time beacon.EpochTime,
 	factor *quantity.Quantity,
 	attenuationNumerator, attenuationDenominator int,
 	address staking.Address,

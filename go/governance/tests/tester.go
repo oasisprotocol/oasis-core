@@ -9,14 +9,14 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	beacon "github.com/oasisprotocol/oasis-core/go/beacon/api"
+	beaconTests "github.com/oasisprotocol/oasis-core/go/beacon/tests"
 	"github.com/oasisprotocol/oasis-core/go/common/cbor"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	"github.com/oasisprotocol/oasis-core/go/common/entity"
 	"github.com/oasisprotocol/oasis-core/go/common/quantity"
 	"github.com/oasisprotocol/oasis-core/go/common/version"
 	consensusAPI "github.com/oasisprotocol/oasis-core/go/consensus/api"
-	epochtime "github.com/oasisprotocol/oasis-core/go/epochtime/api"
-	epochtimeTests "github.com/oasisprotocol/oasis-core/go/epochtime/tests"
 	"github.com/oasisprotocol/oasis-core/go/governance/api"
 	staking "github.com/oasisprotocol/oasis-core/go/staking/api"
 	"github.com/oasisprotocol/oasis-core/go/staking/tests/debug"
@@ -33,7 +33,7 @@ var (
 // governanceTestsState holds the current state of governance tests.
 type governanceTestsState struct {
 	submittedProposalID uint64
-	proposalCloseEpoch  epochtime.EpochTime
+	proposalCloseEpoch  beacon.EpochTime
 
 	submitterBalance *quantity.Quantity
 
@@ -125,8 +125,8 @@ func testProposals(t *testing.T, backend api.Backend, consensus consensusAPI.Bac
 	assertAccountBalance(t, consensus, staking.GovernanceDepositsAddress, consensusAPI.HeightLatest, quantity.NewQuantity())
 
 	// Query current epoch.
-	epochtime := consensus.EpochTime()
-	currentEpoch, err := epochtime.GetEpoch(ctx, consensusAPI.HeightLatest)
+	beacon := consensus.Beacon()
+	currentEpoch, err := beacon.GetEpoch(ctx, consensusAPI.HeightLatest)
 	require.NoError(err, "GetEpoch")
 
 	// Start watching governance events.
@@ -277,10 +277,10 @@ func testProposalClose(t *testing.T, backend api.Backend, consensus consensusAPI
 	defer sub.Close()
 
 	// Transition to the voting close epoch.
-	timeSource := consensus.EpochTime().(epochtime.SetableBackend)
+	timeSource := consensus.Beacon().(beacon.SetableBackend)
 	currentEpoch, err := timeSource.GetEpoch(ctx, consensusAPI.HeightLatest)
 	require.NoError(err, "GetEpoch")
-	epochtimeTests.MustAdvanceEpoch(t, timeSource, uint64(testState.proposalCloseEpoch.AbsDiff(currentEpoch)))
+	beaconTests.MustAdvanceEpoch(t, timeSource, uint64(testState.proposalCloseEpoch.AbsDiff(currentEpoch)))
 
 	for {
 		select {
@@ -390,10 +390,10 @@ WaitForSubmittedVote:
 	}
 
 	// Transition to the voting close epoch.
-	timeSource := consensus.EpochTime().(epochtime.SetableBackend)
+	timeSource := consensus.Beacon().(beacon.SetableBackend)
 	currentEpoch, err := timeSource.GetEpoch(ctx, consensusAPI.HeightLatest)
 	require.NoError(err, "GetEpoch")
-	epochtimeTests.MustAdvanceEpoch(t, timeSource, uint64(cancelProposal.ClosesAt.AbsDiff(currentEpoch)))
+	beaconTests.MustAdvanceEpoch(t, timeSource, uint64(cancelProposal.ClosesAt.AbsDiff(currentEpoch)))
 
 	// Ensure pending upgrade was removed.
 	for {

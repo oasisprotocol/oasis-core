@@ -189,6 +189,9 @@ func doInit(cmd *cobra.Command, args []string) { // nolint: gocyclo
 		Consensus: node.ConsensusInfo{
 			ID: nodeIdentity.ConsensusSigner.Public(),
 		},
+		Beacon: &node.BeaconInfo{
+			Point: nodeIdentity.BeaconScalar.Point(),
+		},
 	}
 	if n.Roles, err = argsToRolesMask(); err != nil {
 		logger.Error("failed to parse node roles mask",

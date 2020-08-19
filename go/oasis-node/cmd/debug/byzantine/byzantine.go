@@ -35,6 +35,8 @@ const (
 	CfgSchedulerRoleExpected = "scheduler_role_expected"
 	// CfgExecutorMode configures the byzantine executor mode.
 	CfgExecutorMode = "executor_mode"
+	// CfgBeaconMode configures the byzantine beacon mode.
+	CfgBeaconMode = "beacon_mode"
 )
 
 // ExecutorMode represents the byzantine executor mode.
@@ -104,6 +106,11 @@ var (
 		Short: "act as a storage worker",
 		Run:   doStorageScenario,
 	}
+	beaconCmd = &cobra.Command{
+		Use:   "beacon",
+		Short: "act as a validator (for beacon testing)",
+		Run:   doBeaconScenario,
+	}
 )
 
 func activateCommonConfig(cmd *cobra.Command, args []string) {
@@ -114,7 +121,7 @@ func activateCommonConfig(cmd *cobra.Command, args []string) {
 }
 
 func doStorageScenario(cmd *cobra.Command, args []string) {
-	b, err := initializeAndRegisterByzantineNode(node.RoleStorageWorker, scheduler.RoleWorker, scheduler.RoleInvalid, false)
+	b, err := initializeAndRegisterByzantineNode(node.RoleStorageWorker, scheduler.RoleWorker, scheduler.RoleInvalid, false, false)
 	if err != nil {
 		panic(fmt.Sprintf("error initializing node: %+v", err))
 	}
@@ -136,7 +143,7 @@ func doExecutorScenario(cmd *cobra.Command, args []string) {
 	}
 
 	isTxScheduler := viper.GetBool(CfgSchedulerRoleExpected)
-	b, err := initializeAndRegisterByzantineNode(node.RoleComputeWorker, scheduler.RoleInvalid, scheduler.RoleWorker, isTxScheduler)
+	b, err := initializeAndRegisterByzantineNode(node.RoleComputeWorker, scheduler.RoleInvalid, scheduler.RoleWorker, isTxScheduler, false)
 	if err != nil {
 		panic(fmt.Sprintf("error initializing node: %+v", err))
 	}
@@ -239,6 +246,7 @@ func doExecutorScenario(cmd *cobra.Command, args []string) {
 func Register(parentCmd *cobra.Command) {
 	byzantineCmd.AddCommand(executorHonestCmd)
 	byzantineCmd.AddCommand(storageCmd)
+	byzantineCmd.AddCommand(beaconCmd)
 	parentCmd.AddCommand(byzantineCmd)
 }
 
@@ -249,6 +257,7 @@ func init() {
 	fs.Uint64(CfgActivationEpoch, 0, "epoch at which the Byzantine node should activate")
 	fs.Bool(CfgSchedulerRoleExpected, false, "is executor node expected to be scheduler or not")
 	fs.String(CfgExecutorMode, ModeExecutorHonest.String(), "configures executor mode")
+	fs.String(CfgBeaconMode, ModeBeaconHonest.String(), "configures beacon mode")
 	_ = viper.BindPFlags(fs)
 	byzantineCmd.PersistentFlags().AddFlagSet(fs)
 

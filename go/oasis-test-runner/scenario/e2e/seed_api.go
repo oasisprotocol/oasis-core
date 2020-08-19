@@ -4,10 +4,10 @@ import (
 	"context"
 	"fmt"
 
+	beacon "github.com/oasisprotocol/oasis-core/go/beacon/api"
 	consensusAPI "github.com/oasisprotocol/oasis-core/go/consensus/api"
 	"github.com/oasisprotocol/oasis-core/go/consensus/api/transaction"
 	"github.com/oasisprotocol/oasis-core/go/control/api"
-	epochtime "github.com/oasisprotocol/oasis-core/go/epochtime/api"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/env"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/oasis"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/scenario"
@@ -104,7 +104,7 @@ func (sc *seedAPI) Run(childEnv *env.Env) error { // nolint: gocyclo
 	}
 
 	sc.Logger.Info("testing SetEpoch")
-	if err = seedCtrl.SetEpoch(ctx, epochtime.EpochTime(0)); err == nil {
+	if err = seedCtrl.SetEpoch(ctx, beacon.EpochTime(0)); err == nil {
 		return fmt.Errorf("seed node SetEpoch should fail")
 	}
 

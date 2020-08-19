@@ -9,6 +9,8 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	beacon "github.com/oasisprotocol/oasis-core/go/beacon/api"
+	beaconTests "github.com/oasisprotocol/oasis-core/go/beacon/tests"
 	"github.com/oasisprotocol/oasis-core/go/common"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	"github.com/oasisprotocol/oasis-core/go/common/entity"
@@ -16,8 +18,6 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/quantity"
 	consensusAPI "github.com/oasisprotocol/oasis-core/go/consensus/api"
 	tendermintTests "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/tests"
-	epochtime "github.com/oasisprotocol/oasis-core/go/epochtime/api"
-	epochtimeTests "github.com/oasisprotocol/oasis-core/go/epochtime/tests"
 	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
 	"github.com/oasisprotocol/oasis-core/go/roothash/api/block"
 	"github.com/oasisprotocol/oasis-core/go/staking/api"
@@ -602,8 +602,8 @@ func testEscrowEx( // nolint: gocyclo
 	require.Len(debs[dstAddr], 1, "one debonding delegation after reclaiming escrow")
 
 	// Advance epoch to trigger debonding.
-	timeSource := consensus.EpochTime().(epochtime.SetableBackend)
-	epochtimeTests.MustAdvanceEpoch(t, timeSource, 1)
+	timeSource := consensus.Beacon().(beacon.SetableBackend)
+	beaconTests.MustAdvanceEpoch(t, timeSource, 1)
 
 	// Wait for debonding period to pass.
 	select {
@@ -922,8 +922,8 @@ WaitLoop:
 	}
 
 	// Advance epoch to make the freeze period expire.
-	timeSource := consensus.EpochTime().(epochtime.SetableBackend)
-	epochtimeTests.MustAdvanceEpoch(t, timeSource, 1)
+	timeSource := consensus.Beacon().(beacon.SetableBackend)
+	beaconTests.MustAdvanceEpoch(t, timeSource, 1)
 
 	// Unfreeze node (now it should work).
 	tx = registry.NewUnfreezeNodeTx(0, nil, &registry.UnfreezeNode{
@@ -933,7 +933,7 @@ WaitLoop:
 	require.NoError(err, "UnfreezeNode")
 
 	// Advance epoch to restore committees.
-	epochtimeTests.MustAdvanceEpoch(t, timeSource, 1)
+	beaconTests.MustAdvanceEpoch(t, timeSource, 1)
 
 	// Make sure the node is no longer frozen.
 	nodeStatus, err = consensus.Registry().GetNodeStatus(context.Background(), &registry.IDQuery{ID: ident.NodeSigner.Public(), Height: consensusAPI.HeightLatest})
