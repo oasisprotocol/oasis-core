@@ -137,20 +137,6 @@ type Backend interface {
 	// Paremeters returns the staking consensus parameters.
 	ConsensusParameters(ctx context.Context, height int64) (*ConsensusParameters, error)
 
-	// WatchTransfers returns a channel that produces a stream of TranserEvent
-	// on all balance transfers.
-	WatchTransfers(ctx context.Context) (<-chan *TransferEvent, pubsub.ClosableSubscription, error)
-
-	// WatchBurns returns a channel that produces a stream of BurnEvent when
-	// base units destructed.
-	WatchBurns(ctx context.Context) (<-chan *BurnEvent, pubsub.ClosableSubscription, error)
-
-	// WatchEscrows returns a channel that produces a stream of EscrowEvent
-	// when entities add to their escrow balance, get base units deducted from
-	// their escrow balance, and have their escrow balance released into their
-	// general balance.
-	WatchEscrows(ctx context.Context) (<-chan *EscrowEvent, pubsub.ClosableSubscription, error)
-
 	// GetEvents returns the events at specified block height.
 	GetEvents(ctx context.Context, height int64) ([]*Event, error)
 
