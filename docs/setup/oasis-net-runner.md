@@ -74,3 +74,43 @@ To run an Oasis node under SGX follow the same steps as for non-SGX, except the
   --fixture.default.keymanager.binary target/sgx/x86_64-fortanix-unknown-sgx/debug/simple-keymanager.sgxs
 ```
 <!-- markdownlint-enable line-length -->
+
+## Common Issues
+
+If the above does not appear to work (e.g., when you run the client, it appears
+to hang and not make any progress) usually the best place to start debugging is
+looking at the various node logs which are stored under a directory starting
+with `/tmp/oasis-net-runner` (unless overriden via `--basedir` options).
+
+Specifically look at `node.log` and `console.log` files located in directories
+for each of the nodes comprising the local network.
+
+### User Namespace Permission Issues
+
+The Oasis Core compute nodes use [sandboxing] to execute runtime binaries and
+the sandbox implementation requires that the process is able to create
+non-privileged user namespaces.
+
+In case this is not available, the following error message may appear in
+`console.log` of any compute or key manager nodes:
+
+```
+bwrap: No permissions to creating new namespace, likely because the kernel does
+not allow non-privileged user namespaces. On e.g. debian this can be enabled
+with 'sysctl kernel.unprivileged_userns_clone=1'
+```
+
+In this case do as indicated in the message and run:
+
+```
+sysctl kernel.unprivileged_userns_clone=1
+```
+
+This could also happen if you are running in a Docker container without
+specifying additional options at startup. See the [Using the Development Docker
+Image] section for details.
+
+<!-- markdownlint-disable line-length -->
+[sandboxing]: ../runtime/index.md#runtimes
+[Using the Development Docker Image]: prerequisites.md#using-the-development-docker-image
+<!-- markdownlint-enable line-length -->
