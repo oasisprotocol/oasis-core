@@ -209,7 +209,7 @@ func TestGenesisSanityCheck(t *testing.T) {
 			Algorithm:         "batching",
 			BatchFlushTimeout: 1 * time.Second,
 			MaxBatchSize:      1,
-			MaxBatchSizeBytes: 1,
+			MaxBatchSizeBytes: 1024,
 		},
 		Storage: registry.StorageParameters{
 			GroupSize:               1,

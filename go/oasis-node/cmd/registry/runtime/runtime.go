@@ -459,6 +459,10 @@ func runtimeFromFlags() (*registry.Runtime, signature.Signer, error) { // nolint
 	if err = rt.ValidateBasic(true); err != nil {
 		return nil, nil, fmt.Errorf("invalid runtime descriptor: %w", err)
 	}
+	// Validate transaction scheduler configuration.
+	if err = registry.VerifyTransactionSchedulerArgs(rt, logger); err != nil {
+		return nil, nil, fmt.Errorf("invalid runtime transaction scheduler configuration: %w", err)
+	}
 	// Validate storage configuration.
 	if err = registry.VerifyRegisterRuntimeStorageArgs(rt, logger); err != nil {
 		return nil, nil, fmt.Errorf("invalid runtime storage configuration: %w", err)

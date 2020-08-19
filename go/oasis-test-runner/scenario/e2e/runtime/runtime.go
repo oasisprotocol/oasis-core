@@ -166,7 +166,7 @@ func (sc *runtimeImpl) Fixture() (*oasis.NetworkFixture, error) {
 					Algorithm:         registry.TxnSchedulerAlgorithmBatching,
 					GroupSize:         1,
 					MaxBatchSize:      1,
-					MaxBatchSizeBytes: 1000,
+					MaxBatchSizeBytes: 1024,
 					BatchFlushTimeout: 1 * time.Second,
 				},
 				Storage: registry.StorageParameters{

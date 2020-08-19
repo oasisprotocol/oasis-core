@@ -1052,12 +1052,9 @@ func VerifyRegisterRuntimeArgs( // nolint: gocyclo
 			return nil, fmt.Errorf("%w: executor group too small", ErrInvalidArgument)
 		}
 
-		// Ensure there is at least one member of the transaction scheduler group.
-		if rt.TxnScheduler.GroupSize == 0 {
-			logger.Error("RegisterRuntime: transaction scheduler group too small",
-				"runtime", rt,
-			)
-			return nil, fmt.Errorf("%w: transaction scheduler group to small", ErrInvalidArgument)
+		// Ensure transaction scheduler parameters have sensible values.
+		if err := VerifyTransactionSchedulerArgs(&rt, logger); err != nil {
+			return nil, err
 		}
 
 		// Ensure storage parameters have sensible values.
@@ -1142,7 +1139,7 @@ func VerifyRegisterRuntimeArgs( // nolint: gocyclo
 	return &rt, nil
 }
 
-// VerifyRegisterRuntimeStorageArgs verifies the runtime's storage parameters
+// VerifyRegisterRuntimeStorageArgs verifies the runtime's storage parameters.
 func VerifyRegisterRuntimeStorageArgs(rt *Runtime, logger *logging.Logger) error {
 	params := rt.Storage
 
@@ -1200,6 +1197,45 @@ func VerifyRegisterRuntimeStorageArgs(rt *Runtime, logger *logging.Logger) error
 			)
 			return fmt.Errorf("%w: storage CheckpointChunkSize parameter too small", ErrInvalidArgument)
 		}
+	}
+	return nil
+}
+
+// VerifyTransactionSchedulerArgs verifies the runtime's transaction scheduler parameters.
+func VerifyTransactionSchedulerArgs(rt *Runtime, logger *logging.Logger) error {
+	params := rt.TxnScheduler
+
+	// Ensure there is at least one member of the transaction scheduler group.
+	if params.GroupSize == 0 {
+		logger.Error("RegisterRuntime: transaction scheduler group too small",
+			"runtime", rt,
+		)
+		return fmt.Errorf("%w: transaction scheduler group too small", ErrInvalidArgument)
+	}
+	// Ensure txnscheduler parameters have sensible values.
+	if params.Algorithm != TxnSchedulerBatching {
+		logger.Error("RegisterRuntime: invalid transaction scheduler algorithm",
+			"runtime", rt,
+		)
+		return fmt.Errorf("%w: invalid transaction scheduler algorithm", ErrInvalidArgument)
+	}
+	if params.BatchFlushTimeout < 50*time.Millisecond {
+		logger.Error("RegisterRuntime: transaction scheduler batch flush timeout parameter too small",
+			"runtime", rt,
+		)
+		return fmt.Errorf("%w: transaction scheduler batch flush timeout parameter too small", ErrInvalidArgument)
+	}
+	if params.MaxBatchSize < 1 {
+		logger.Error("RegisterRuntime: transaction scheduler max batch size parameter too small",
+			"runtime", rt,
+		)
+		return fmt.Errorf("%w: transaction scheduler max batch size parameter too small", ErrInvalidArgument)
+	}
+	if params.MaxBatchSizeBytes < 1024 {
+		logger.Error("RegisterRuntime: transaction scheduler max batch bytes size parameter too small",
+			"runtime", rt,
+		)
+		return fmt.Errorf("%w: transaction scheduler max batch bytes size parameter too small", ErrInvalidArgument)
 	}
 	return nil
 }

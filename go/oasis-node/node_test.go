@@ -93,7 +93,7 @@ var (
 			Algorithm:         registry.TxnSchedulerAlgorithmBatching,
 			GroupSize:         1,
 			MaxBatchSize:      1,
-			MaxBatchSizeBytes: 1000,
+			MaxBatchSizeBytes: 1024,
 			BatchFlushTimeout: 20 * time.Second,
 		},
 		Storage: registry.StorageParameters{
