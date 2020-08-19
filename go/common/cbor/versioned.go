@@ -49,8 +49,7 @@ func NewVersioned(v uint16) Versioned {
 
 func init() {
 	// Use the untrusted decode options, but ignore unknown fields.
-	// FIXME: https://github.com/fxamacker/cbor/issues/240
-	decOptionsVersioned.ExtraReturnErrors = int(cbor.ExtraDecErrorNone)
+	decOptionsVersioned.ExtraReturnErrors = cbor.ExtraDecErrorNone
 
 	var err error
 	if decModeVersioned, err = decOptionsVersioned.DecMode(); err != nil {

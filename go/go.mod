@@ -21,7 +21,7 @@ require (
 	github.com/cznic/strutil v0.0.0-20181122101858-275e90344537 // indirect
 	github.com/dgraph-io/badger/v2 v2.2007.1
 	github.com/eapache/channels v1.1.0
-	github.com/fxamacker/cbor/v2 v2.2.1-0.20200526031912-58b82b5bfc05
+	github.com/fxamacker/cbor/v2 v2.2.1-0.20200820021930-bafca87fa6db
 	github.com/go-kit/kit v0.10.0
 	github.com/golang/protobuf v1.4.2
 	github.com/golang/snappy v0.0.1
