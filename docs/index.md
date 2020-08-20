@@ -52,6 +52,7 @@ implementations.
     * [Committee Scheduler](consensus/scheduler.md)
     * [Root Hash](consensus/roothash.md)
     * [Key Manager](consensus/keymanager.md)
+  * [Transaction Test Vectors](consensus/test-vectors.md)
 * [Runtime Layer](runtime/index.md)
   * [Runtimes](runtime/index.md#runtimes)
     * [Operation Model](runtime/index.md#operation-model)
