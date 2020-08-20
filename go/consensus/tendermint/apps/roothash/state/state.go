@@ -11,6 +11,7 @@ import (
 	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
 	roothash "github.com/oasisprotocol/oasis-core/go/roothash/api"
 	"github.com/oasisprotocol/oasis-core/go/roothash/api/block"
+	"github.com/oasisprotocol/oasis-core/go/roothash/api/commitment"
 	"github.com/oasisprotocol/oasis-core/go/storage/mkvs"
 )
 
@@ -30,11 +31,13 @@ type RuntimeState struct {
 	Runtime   *registry.Runtime `json:"runtime"`
 	Suspended bool              `json:"suspended,omitempty"`
 
-	CurrentBlock *block.Block `json:"current_block"`
 	GenesisBlock *block.Block `json:"genesis_block"`
 
-	Round *Round    `json:"round"`
-	Timer api.Timer `json:"timer"`
+	CurrentBlock       *block.Block `json:"current_block"`
+	CurrentBlockHeight int64        `json:"current_block_height"`
+
+	ExecutorPool *commitment.Pool `json:"executor_pool"`
+	Timer        api.Timer        `json:"timer"`
 }
 
 // ImmutableState is the immutable roothash state wrapper.

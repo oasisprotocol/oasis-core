@@ -15,12 +15,6 @@ var (
 			accessctl.Action(api.MethodApplyBatch.FullName()),
 		},
 	}
-	txnSchedulerCommitteePolicy = &committee.AccessPolicy{
-		Actions: []accessctl.Action{
-			accessctl.Action(api.MethodApply.FullName()),
-			accessctl.Action(api.MethodApplyBatch.FullName()),
-		},
-	}
 	// NOTE: GetDiff/GetCheckpoint* need to be accessible to all storage nodes,
 	// not just the ones in the current storage committee so that new nodes can
 	// sync-up.

@@ -375,9 +375,6 @@ func (n *Node) updateExternalServicePolicyLocked(snapshot *committee.EpochSnapsh
 	if xc := snapshot.GetExecutorCommittee(); xc != nil {
 		executorCommitteePolicy.AddRulesForCommittee(&policy, xc, snapshot.Nodes())
 	}
-	if tsc := snapshot.GetTransactionSchedulerCommittee(); tsc != nil {
-		txnSchedulerCommitteePolicy.AddRulesForCommittee(&policy, tsc, snapshot.Nodes())
-	}
 	// TODO: Query registry only for storage nodes after
 	// https://github.com/oasisprotocol/oasis-core/issues/1923 is implemented.
 	nodes, err := n.commonNode.Consensus.Registry().GetNodes(context.Background(), snapshot.GetGroupVersion())
@@ -401,7 +398,7 @@ func (n *Node) updateExternalServicePolicyLocked(snapshot *committee.EpochSnapsh
 	n.logger.Debug("set new storage gRPC access policy", "policy", policy)
 }
 
-func (n *Node) HandlePeerMessage(context.Context, *p2p.Message) (bool, error) {
+func (n *Node) HandlePeerMessage(context.Context, *p2p.Message, bool) (bool, error) {
 	// Nothing to do here.
 	return false, nil
 }

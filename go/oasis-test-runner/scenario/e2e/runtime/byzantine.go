@@ -11,29 +11,35 @@ import (
 
 var (
 	// Permutations generated in the epoch 2 election are
-	// executor:              3 (w), 0 (w), 2 (b), 1 (i)
-	// transaction scheduler: 0 (w), 3 (i), 1 (i), 2 (i)
-	// merge:                 1 (w), 2 (w), 0 (b), 3 (i)
-	// w = worker; b = backup; i = invalid
-	// For executor scripts, it suffices to be index 3.
-	// For merge scripts, it suffices to be index 1.
-	// No index is transaction scheduler only.
+	// executor:              3 (w+s), 0 (w), 2 (b), 1 (i)
+	// w = worker and not scheduler in first round
+	// w+s = worker and scheduler in first round
+	// b = backup
+	// i = invalid
+	//
+	// For executor scripts, it suffices to be index 0.
+	// For executor and scheduler scripts, it suffices to be index 3.
 	// Indices are by order of node ID.
 
+	// XXX: currently ByzantineDefaultIdentitySeed is used in all cases, to
+	// ensure we are not the transaction scheduler of the round. Once straggling
+	// schedulers are handled (without waiting for epoch transition), test that
+	// case as well.
+
 	// ByzantineExecutorHonest is the byzantine executor honest scenario.
-	ByzantineExecutorHonest scenario.Scenario = newByzantineImpl("executor-honest", nil, oasis.ByzantineSlot3IdentitySeed)
+	ByzantineExecutorHonest scenario.Scenario = newByzantineImpl("executor-honest", nil, oasis.ByzantineDefaultIdentitySeed)
 	// ByzantineExecutorWrong is the byzantine executor wrong scenario.
 	ByzantineExecutorWrong scenario.Scenario = newByzantineImpl("executor-wrong", []log.WatcherHandlerFactory{
 		oasis.LogAssertNoTimeouts(),
 		oasis.LogAssertNoRoundFailures(),
 		oasis.LogAssertExecutionDiscrepancyDetected(),
-	}, oasis.ByzantineSlot3IdentitySeed)
+	}, oasis.ByzantineDefaultIdentitySeed)
 	// ByzantineExecutorStraggler is the byzantine executor straggler scenario.
 	ByzantineExecutorStraggler scenario.Scenario = newByzantineImpl("executor-straggler", []log.WatcherHandlerFactory{
 		oasis.LogAssertTimeouts(),
 		oasis.LogAssertNoRoundFailures(),
 		oasis.LogAssertExecutionDiscrepancyDetected(),
-	}, oasis.ByzantineSlot3IdentitySeed)
+	}, oasis.ByzantineDefaultIdentitySeed)
 )
 
 type byzantineImpl struct {

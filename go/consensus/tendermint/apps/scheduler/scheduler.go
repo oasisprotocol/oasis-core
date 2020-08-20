@@ -35,11 +35,10 @@ import (
 var (
 	_ api.Application = (*schedulerApplication)(nil)
 
-	RNGContextExecutor             = []byte("EkS-ABCI-Compute")
-	RNGContextStorage              = []byte("EkS-ABCI-Storage")
-	RNGContextTransactionScheduler = []byte("EkS-ABCI-TransactionScheduler")
-	RNGContextValidators           = []byte("EkS-ABCI-Validators")
-	RNGContextEntities             = []byte("EkS-ABCI-Entities")
+	RNGContextExecutor   = []byte("EkS-ABCI-Compute")
+	RNGContextStorage    = []byte("EkS-ABCI-Storage")
+	RNGContextValidators = []byte("EkS-ABCI-Validators")
+	RNGContextEntities   = []byte("EkS-ABCI-Entities")
 )
 
 type schedulerApplication struct {
@@ -167,7 +166,6 @@ func (app *schedulerApplication) BeginBlock(ctx *api.Context, request types.Requ
 
 		kinds := []scheduler.CommitteeKind{
 			scheduler.KindComputeExecutor,
-			scheduler.KindComputeTxnScheduler,
 			scheduler.KindStorage,
 		}
 		for _, kind := range kinds {
@@ -331,19 +329,6 @@ func (app *schedulerApplication) isSuitableStorageWorker(ctx *api.Context, n *no
 	return false
 }
 
-func (app *schedulerApplication) isSuitableTransactionScheduler(ctx *api.Context, n *node.Node, rt *registry.Runtime) bool {
-	if !n.HasRoles(node.RoleComputeWorker) {
-		return false
-	}
-	for _, nrt := range n.Runtimes {
-		if !nrt.ID.Equal(&rt.ID) {
-			continue
-		}
-		return true
-	}
-	return false
-}
-
 // GetPerm generates a permutation that we use to choose nodes from a list of eligible nodes to elect.
 func GetPerm(beacon []byte, runtimeID common.Namespace, rngCtx []byte, nrNodes int) ([]int, error) {
 	drbg, err := drbg.New(crypto.SHA512, beacon, runtimeID[:], rngCtx)
@@ -375,6 +360,7 @@ func (app *schedulerApplication) electCommittee(
 	// Determine the context, committee size, and pre-filter the node-list
 	// based on eligibility and entity stake.
 	var (
+		err      error
 		nodeList []*node.Node
 
 		rngCtx       []byte
@@ -389,21 +375,12 @@ func (app *schedulerApplication) electCommittee(
 		isSuitableFn = app.isSuitableExecutorWorker
 		workerSize = int(rt.Executor.GroupSize)
 		backupSize = int(rt.Executor.GroupBackupSize)
-	case scheduler.KindComputeTxnScheduler:
-		rngCtx = RNGContextTransactionScheduler
-		isSuitableFn = app.isSuitableTransactionScheduler
-		workerSize = int(rt.TxnScheduler.GroupSize)
 	case scheduler.KindStorage:
 		rngCtx = RNGContextStorage
 		isSuitableFn = app.isSuitableStorageWorker
 		workerSize = int(rt.Storage.GroupSize)
 	default:
 		return fmt.Errorf("tendermint/scheduler: invalid committee type: %v", kind)
-	}
-
-	needsLeader, err := kind.NeedsLeader()
-	if err != nil {
-		return fmt.Errorf("tendermint/scheduler: error while calling needsLeader() on kind %v: %w", kind, err)
 	}
 
 	for _, n := range nodes {
@@ -458,9 +435,7 @@ func (app *schedulerApplication) electCommittee(
 	var members []*scheduler.CommitteeNode
 	for i := 0; i < len(idxs); i++ {
 		role := scheduler.Worker
-		if i == 0 && needsLeader {
-			role = scheduler.Leader
-		} else if i >= workerSize {
+		if i >= workerSize {
 			role = scheduler.BackupWorker
 		}
 		members = append(members, &scheduler.CommitteeNode{

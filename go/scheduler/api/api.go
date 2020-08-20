@@ -32,9 +32,6 @@ const (
 
 	// BackupWorker indicates the node is a backup worker.
 	BackupWorker Role = 2
-
-	// Leader indicates the node is a group leader.
-	Leader Role = 3
 )
 
 // String returns a string representation of a Role.
@@ -46,8 +43,6 @@ func (r Role) String() string {
 		return "worker"
 	case BackupWorker:
 		return "backup worker"
-	case Leader:
-		return "leader"
 	default:
 		return fmt.Sprintf("[unknown role: %d]", r)
 	}
@@ -72,29 +67,12 @@ const (
 	// KindComputeExecutor is an executor committee.
 	KindComputeExecutor CommitteeKind = 1
 
-	// KindComputeTxnScheduler is a transaction scheduler committee.
-	KindComputeTxnScheduler CommitteeKind = 2
-
 	// KindStorage is a storage committee.
-	KindStorage CommitteeKind = 3
+	KindStorage CommitteeKind = 2
 
 	// MaxCommitteeKind is a dummy value used for iterating all committee kinds.
-	MaxCommitteeKind = 4
+	MaxCommitteeKind = 3
 )
-
-// NeedsLeader returns if committee kind needs leader role.
-func (k CommitteeKind) NeedsLeader() (bool, error) {
-	switch k {
-	case KindComputeExecutor:
-		return false, nil
-	case KindComputeTxnScheduler:
-		return true, nil
-	case KindStorage:
-		return false, nil
-	default:
-		return false, fmt.Errorf("scheduler/NeedsLeader: unsupported committee kind %s", k)
-	}
-}
 
 // String returns a string representation of a CommitteeKind.
 func (k CommitteeKind) String() string {
@@ -103,8 +81,6 @@ func (k CommitteeKind) String() string {
 		return "invalid"
 	case KindComputeExecutor:
 		return "executor"
-	case KindComputeTxnScheduler:
-		return "txn_scheduler"
 	case KindStorage:
 		return "storage"
 	default:
@@ -125,6 +101,18 @@ type Committee struct {
 
 	// ValidFor is the epoch for which the committee is valid.
 	ValidFor epochtime.EpochTime `json:"valid_for"`
+}
+
+// Workers returns committee nodes with Worker role.
+func (c Committee) Workers() []*CommitteeNode {
+	var workers []*CommitteeNode
+	for _, member := range c.Members {
+		if member.Role != Worker {
+			continue
+		}
+		workers = append(workers, member)
+	}
+	return workers
 }
 
 // String returns a string representation of a Committee.

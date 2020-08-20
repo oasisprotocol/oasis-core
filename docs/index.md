@@ -58,7 +58,6 @@ implementations.
     * [Runtime Host Protocol](runtime/runtime-host-protocol.md)
     * [Identifiers](runtime/identifiers.md)
   * Transaction Processing Pipeline
-    * Transaction Scheduler Nodes
     * Executor Nodes
     * Storage Nodes
     * Key Manager Nodes

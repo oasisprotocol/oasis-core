@@ -29,7 +29,7 @@ import (
 	workerCommon "github.com/oasisprotocol/oasis-core/go/worker/common"
 	"github.com/oasisprotocol/oasis-core/go/worker/common/p2p"
 	"github.com/oasisprotocol/oasis-core/go/worker/compute"
-	"github.com/oasisprotocol/oasis-core/go/worker/compute/txnscheduler"
+	"github.com/oasisprotocol/oasis-core/go/worker/compute/executor"
 	workerConsensusRPC "github.com/oasisprotocol/oasis-core/go/worker/consensusrpc"
 	"github.com/oasisprotocol/oasis-core/go/worker/keymanager"
 	"github.com/oasisprotocol/oasis-core/go/worker/registration"
@@ -260,6 +260,13 @@ func (args *argBuilder) workerP2pPort(port uint16) *argBuilder {
 	return args
 }
 
+func (args *argBuilder) workerP2pEnabled() *argBuilder {
+	args.vec = append(args.vec, []string{
+		"--" + p2p.CfgP2PEnabled,
+	}...)
+	return args
+}
+
 func (args *argBuilder) workerRuntimeProvisioner(provisioner string) *argBuilder {
 	args.vec = append(args.vec, []string{
 		"--" + workerCommon.CfgRuntimeProvisioner, provisioner,
@@ -382,8 +389,8 @@ func (args *argBuilder) workerCertificateRotation(enabled bool) *argBuilder {
 	return args
 }
 
-func (args *argBuilder) workerTxnschedulerCheckTxEnabled() *argBuilder {
-	args.vec = append(args.vec, "--"+txnscheduler.CfgCheckTxEnabled)
+func (args *argBuilder) workerExecutorScheduleCheckTxEnabled() *argBuilder {
+	args.vec = append(args.vec, "--"+executor.CfgScheduleCheckTxEnabled)
 	return args
 }
 

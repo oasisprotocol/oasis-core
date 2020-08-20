@@ -6,14 +6,14 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/runtime/transaction"
 )
 
-// Algorithm defines an algorithm for scheduling incoming transaction.
-type Algorithm interface {
-	// Initialize initializes the internal transaction scheduler state.
-	// Algorithm should use the provided transaction dispatcher to dispatch
-	// scheduled transactions.
+// Scheduler defines an algorithm for scheduling incoming transactions.
+type Scheduler interface {
+	// Initialize initializes the internal scheduler state.
+	// Scheduler should use the provided transaction dispatcher to dispatch
+	// transactions.
 	Initialize(td TransactionDispatcher) error
 
-	// IsInitialized returns true, if an algorithm has been initialized.
+	// IsInitialized returns true, if the scheduler has been initialized.
 	IsInitialized() bool
 
 	// ScheduleTx attempts to schedule a transaction.
@@ -22,6 +22,15 @@ type Algorithm interface {
 	// metadata needed for scheduling. In this case, the transaction bytes
 	// must correspond to a transaction.TxnCall structure.
 	ScheduleTx(tx []byte) error
+
+	// AppendTxBatch appends a transaction batch for scheduling.
+	//
+	// Note: the AppendTxBatch is not required to be atomic. Semantics depend
+	// on the specific scheduler implementation.
+	AppendTxBatch(batch [][]byte) error
+
+	// RemoveTxBatch removes a transaction batch.
+	RemoveTxBatch(tx [][]byte) error
 
 	// Flush flushes queued transactions.
 	Flush() error

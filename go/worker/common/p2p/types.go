@@ -1,6 +1,9 @@
 package p2p
 
-import "github.com/oasisprotocol/oasis-core/go/roothash/api/commitment"
+import (
+	"github.com/oasisprotocol/oasis-core/go/roothash/api/commitment"
+	executor "github.com/oasisprotocol/oasis-core/go/worker/compute/executor/api"
+)
 
 // NOTE: Bump CommitteeProtocol version in go/common/version if you
 //       change any of the structures below.
@@ -15,6 +18,7 @@ type Message struct {
 	// Jaeger's span context in binary format.
 	SpanContext []byte `json:"span,omitempty"`
 
-	TxnSchedulerBatch *commitment.SignedTxnSchedulerBatch `json:",omitempty"`
-	ExecutorCommit    *commitment.ExecutorCommitment      `json:",omitempty"`
+	ProposedBatch  *commitment.SignedProposedBatch `json:",omitempty"`
+	ExecutorCommit *commitment.ExecutorCommitment  `json:",omitempty"`
+	Tx             *executor.Tx                    `json:",omitempty"`
 }

@@ -3,14 +3,8 @@ package client
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"sync"
-	"time"
-
-	"github.com/cenkalti/backoff/v4"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
 
 	"github.com/oasisprotocol/oasis-core/go/common"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
@@ -27,7 +21,8 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/runtime/tagindexer"
 	"github.com/oasisprotocol/oasis-core/go/runtime/transaction"
 	storage "github.com/oasisprotocol/oasis-core/go/storage/api"
-	txnscheduler "github.com/oasisprotocol/oasis-core/go/worker/compute/txnscheduler/api"
+	"github.com/oasisprotocol/oasis-core/go/worker/common/p2p"
+	executor "github.com/oasisprotocol/oasis-core/go/worker/compute/executor/api"
 )
 
 var (
@@ -35,28 +30,14 @@ var (
 	_ enclaverpc.Transport = (*runtimeClient)(nil)
 )
 
-const (
-	maxRetryElapsedTime = 60 * time.Second
-	maxRetryInterval    = 10 * time.Second
-)
-
 type clientCommon struct {
 	storage         storage.Backend
 	consensus       consensus.Backend
 	runtimeRegistry runtimeRegistry.Registry
+	// p2p may be nil.
+	p2p *p2p.P2P
 
 	ctx context.Context
-}
-
-type submitContext struct {
-	ctx        context.Context
-	cancelFunc func()
-	closeCh    chan struct{}
-}
-
-func (c *submitContext) cancel() {
-	c.cancelFunc()
-	<-c.closeCh
 }
 
 type runtimeClient struct {
@@ -79,46 +60,18 @@ func (c *runtimeClient) tagIndexer(runtimeID common.Namespace) (tagindexer.Query
 	return rt.TagIndexer(), nil
 }
 
-func (c *runtimeClient) doSubmitTxToLeader(
-	submitCtx *submitContext,
-	req *txnscheduler.SubmitTxRequest,
-	client txnscheduler.TransactionScheduler,
-	resultCh chan error,
-) {
-	defer close(submitCtx.closeCh)
-
-	op := func() error {
-		_, err := client.SubmitTx(submitCtx.ctx, req)
-		if submitCtx.ctx.Err() != nil {
-			return backoff.Permanent(submitCtx.ctx.Err())
-		}
-		if errors.Is(err, txnscheduler.ErrNotLeader) || status.Code(err) == codes.Unavailable {
-			return err
-		}
-		if errors.Is(err, txnscheduler.ErrEpochNumberMismatch) {
-			return err
-		}
-		if err != nil {
-			return backoff.Permanent(err)
-		}
-		return nil
-	}
-
-	sched := backoff.NewExponentialBackOff()
-	sched.MaxInterval = maxRetryInterval
-	sched.MaxElapsedTime = maxRetryElapsedTime
-	bctx := backoff.WithContext(sched, submitCtx.ctx)
-	resultCh <- backoff.Retry(op, bctx)
-}
-
 // Implements api.RuntimeClient.
 func (c *runtimeClient) SubmitTx(ctx context.Context, request *api.SubmitTxRequest) ([]byte, error) {
+	if c.common.p2p == nil {
+		return nil, fmt.Errorf("client: cannot submit transaction, p2p disabled")
+	}
+
 	var watcher *blockWatcher
 	var ok bool
 	var err error
 	c.Lock()
 	if watcher, ok = c.watchers[request.RuntimeID]; !ok {
-		watcher, err = newWatcher(c.common, request.RuntimeID)
+		watcher, err = newWatcher(c.common, request.RuntimeID, c.common.p2p)
 		if err != nil {
 			c.Unlock()
 			return nil, err
@@ -140,15 +93,6 @@ func (c *runtimeClient) SubmitTx(ctx context.Context, request *api.SubmitTxReque
 		respCh: respCh,
 	}
 
-	var submitCtx *submitContext
-	submitResultCh := make(chan error, 1)
-	defer close(submitResultCh)
-	defer func() {
-		if submitCtx != nil {
-			submitCtx.cancel()
-		}
-	}()
-
 	for {
 		var resp *watchResult
 		var ok bool
@@ -158,54 +102,25 @@ func (c *runtimeClient) SubmitTx(ctx context.Context, request *api.SubmitTxReque
 			// The context we're working in was canceled, abort.
 			return nil, context.Canceled
 
-		case submitResult := <-submitResultCh:
-			// The last call to doSubmitTxToLeader produced a result;
-			// handle it and make sure the subcontext is cleaned up.
-			if submitResult != nil {
-				if submitResult == context.Canceled {
-					return nil, submitResult
-				}
-				c.logger.Error("can't send transaction to leader, waiting for next epoch", "err", submitResult)
-			}
-			submitCtx.cancel()
-			submitCtx = nil
-			continue
-
 		case resp, ok = <-respCh:
 			// The main event is getting a response from the watcher, handled below.
+			if resp.result == nil {
+				break
+			}
+
+			return resp.result, nil
 		}
 
 		if !ok {
-			return nil, errors.New("client: block watch channel closed unexpectedly (unknown error)")
+			return nil, fmt.Errorf("client: block watch channel closed unexpectedly (unknown error)")
 		}
 
-		if resp.newTxnschedulerClient != nil {
-			if submitCtx != nil {
-				submitCtx.cancel()
-				select {
-				case <-submitResultCh:
-				default:
-				}
-			}
-			childCtx, cancelFunc := context.WithCancel(ctx)
-			submitCtx = &submitContext{
-				ctx:        childCtx,
-				cancelFunc: cancelFunc,
-				closeCh:    make(chan struct{}),
-			}
-
-			req := &txnscheduler.SubmitTxRequest{
-				RuntimeID:           request.RuntimeID,
-				Data:                request.Data,
-				ExpectedEpochNumber: resp.epochNumber,
-			}
-			go c.doSubmitTxToLeader(submitCtx, req, resp.newTxnschedulerClient, submitResultCh)
-			continue
-		} else if resp.err != nil {
-			return nil, resp.err
-		}
-
-		return resp.result, nil
+		c.common.p2p.Publish(context.Background(), request.RuntimeID, &p2p.Message{
+			Tx: &executor.Tx{
+				Data: request.Data,
+			},
+			GroupVersion: resp.groupVersion,
+		})
 	}
 }
 
@@ -499,6 +414,7 @@ func New(
 	dataDir string,
 	consensus consensus.Backend,
 	runtimeRegistry runtimeRegistry.Registry,
+	p2p *p2p.P2P,
 ) (api.RuntimeClient, error) {
 	c := &runtimeClient{
 		common: &clientCommon{
@@ -506,6 +422,7 @@ func New(
 			consensus:       consensus,
 			runtimeRegistry: runtimeRegistry,
 			ctx:             ctx,
+			p2p:             p2p,
 		},
 		watchers:  make(map[common.Namespace]*blockWatcher),
 		kmClients: make(map[common.Namespace]*keymanager.Client),

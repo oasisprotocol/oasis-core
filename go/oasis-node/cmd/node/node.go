@@ -58,7 +58,6 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/worker/common/p2p"
 	"github.com/oasisprotocol/oasis-core/go/worker/compute"
 	"github.com/oasisprotocol/oasis-core/go/worker/compute/executor"
-	"github.com/oasisprotocol/oasis-core/go/worker/compute/txnscheduler"
 	workerConsensusRPC "github.com/oasisprotocol/oasis-core/go/worker/consensusrpc"
 	workerKeymanager "github.com/oasisprotocol/oasis-core/go/worker/keymanager"
 	"github.com/oasisprotocol/oasis-core/go/worker/registration"
@@ -115,16 +114,15 @@ type Node struct {
 	RuntimeRegistry runtimeRegistry.Registry
 	RuntimeClient   runtimeClientAPI.RuntimeClient
 
-	CommonWorker               *workerCommon.Worker
-	ExecutorWorker             *executor.Worker
-	StorageWorker              *workerStorage.Worker
-	TransactionSchedulerWorker *txnscheduler.Worker
-	SentryWorker               *workerSentry.Worker
-	P2P                        *p2p.P2P
-	RegistrationWorker         *registration.Worker
-	KeymanagerWorker           *workerKeymanager.Worker
-	ConsensusWorker            *workerConsensusRPC.Worker
-	readyCh                    chan struct{}
+	CommonWorker       *workerCommon.Worker
+	ExecutorWorker     *executor.Worker
+	StorageWorker      *workerStorage.Worker
+	SentryWorker       *workerSentry.Worker
+	P2P                *p2p.P2P
+	RegistrationWorker *registration.Worker
+	KeymanagerWorker   *workerKeymanager.Worker
+	ConsensusWorker    *workerConsensusRPC.Worker
+	readyCh            chan struct{}
 }
 
 // Cleanup cleans up after the node has terminated.
@@ -175,11 +173,6 @@ func (n *Node) waitReady(logger *logging.Logger) {
 	// Wait for key manager worker.
 	if n.KeymanagerWorker.Enabled() {
 		<-n.KeymanagerWorker.Initialized()
-	}
-
-	// Wait for transaction scheduler.
-	if n.TransactionSchedulerWorker.Enabled() {
-		<-n.TransactionSchedulerWorker.Initialized()
 	}
 
 	// Wait for the common worker.
@@ -234,20 +227,6 @@ func (n *Node) startRuntimeServices() error {
 	n.svcMgr.RegisterCleanupOnly(n.RuntimeRegistry, "runtime registry")
 	storageAPI.RegisterService(n.grpcInternal.Server(), n.RuntimeRegistry.StorageRouter())
 
-	// Initialize the runtime client.
-	n.RuntimeClient, err = runtimeClient.New(
-		n.svcMgr.Ctx,
-		cmdCommon.DataDir(),
-		n.Consensus,
-		n.RuntimeRegistry,
-	)
-	if err != nil {
-		return err
-	}
-	n.svcMgr.RegisterCleanupOnly(n.RuntimeClient, "client service")
-	runtimeClientAPI.RegisterService(n.grpcInternal.Server(), n.RuntimeClient)
-	enclaverpc.RegisterService(n.grpcInternal.Server(), n.RuntimeClient)
-
 	// Initialize runtime workers.
 	if err = n.initRuntimeWorkers(); err != nil {
 		logger.Error("failed to initialize workers",
@@ -255,6 +234,21 @@ func (n *Node) startRuntimeServices() error {
 		)
 		return err
 	}
+
+	// Initialize the runtime client.
+	n.RuntimeClient, err = runtimeClient.New(
+		n.svcMgr.Ctx,
+		cmdCommon.DataDir(),
+		n.Consensus,
+		n.RuntimeRegistry,
+		n.P2P,
+	)
+	if err != nil {
+		return err
+	}
+	n.svcMgr.RegisterCleanupOnly(n.RuntimeClient, "client service")
+	runtimeClientAPI.RegisterService(n.grpcInternal.Server(), n.RuntimeClient)
+	enclaverpc.RegisterService(n.grpcInternal.Server(), n.RuntimeClient)
 
 	// Start workers (requires NodeController for checking, if nodes are synced).
 	if err = n.startRuntimeWorkers(logger); err != nil {
@@ -280,13 +274,13 @@ func (n *Node) initRuntimeWorkers() error {
 		return err
 	}
 
-	// Initialize the P2P worker if the compute workers are enabled. Since the P2P
-	// layer does not have a separate Start method and starts listening
-	// immediately when created, make sure that we don't start it if it is not
-	// needed.
+	// Initialize the P2P worker if it's enabled or if compute worker is enabled.
+	// Since the P2P layer does not have a separate Start method and starts
+	// listening immediately when created, make sure that we don't start it if
+	// it is not needed.
 	//
-	// Currently, only executor and txn scheduler workers need P2P transport.
-	if compute.Enabled() {
+	// Currently, only executor and runtime client need P2P transport.
+	if p2p.Enabled() || compute.Enabled() {
 		p2pCtx, p2pSvc := service.NewContextCleanup(context.Background())
 		if genesisDoc.Registry.Parameters.DebugAllowUnroutableAddresses {
 			p2p.DebugForceAllowUnroutableAddresses()
@@ -402,17 +396,6 @@ func (n *Node) initRuntimeWorkers() error {
 	}
 	n.svcMgr.Register(n.SentryWorker)
 
-	// Initialize the transaction scheduler.
-	n.TransactionSchedulerWorker, err = txnscheduler.New(
-		n.CommonWorker,
-		n.ExecutorWorker,
-		n.RegistrationWorker,
-	)
-	if err != nil {
-		return err
-	}
-	n.svcMgr.Register(n.TransactionSchedulerWorker)
-
 	// Initialize the public consensus services worker.
 	n.ConsensusWorker, err = workerConsensusRPC.New(n.CommonWorker, n.RegistrationWorker)
 	if err != nil {
@@ -431,11 +414,6 @@ func (n *Node) startRuntimeWorkers(logger *logging.Logger) error {
 
 	// Start the executor worker.
 	if err := n.ExecutorWorker.Start(); err != nil {
-		return err
-	}
-
-	// Start the transaction scheduler.
-	if err := n.TransactionSchedulerWorker.Start(); err != nil {
 		return err
 	}
 
@@ -466,7 +444,6 @@ func (n *Node) startRuntimeWorkers(logger *logging.Logger) error {
 
 	// Only start the external gRPC server if any workers are enabled.
 	if n.StorageWorker.Enabled() ||
-		n.TransactionSchedulerWorker.Enabled() ||
 		n.KeymanagerWorker.Enabled() ||
 		n.ConsensusWorker.Enabled() {
 		if err := n.CommonWorker.Grpc.Start(); err != nil {
@@ -787,7 +764,7 @@ func init() {
 		compute.Flags,
 		p2p.Flags,
 		registration.Flags,
-		txnscheduler.Flags,
+		executor.Flags,
 		workerCommon.Flags,
 		workerStorage.Flags,
 		workerSentry.Flags,

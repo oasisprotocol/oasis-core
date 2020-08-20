@@ -44,7 +44,10 @@ func (h *p2pRecvHandler) AuthenticatePeer(peerID signature.PublicKey, msg *p2p.M
 }
 
 // HandlePeerMessage implements p2p Handler.
-func (h *p2pRecvHandler) HandlePeerMessage(peerID signature.PublicKey, msg *p2p.Message) error {
+func (h *p2pRecvHandler) HandlePeerMessage(peerID signature.PublicKey, msg *p2p.Message, isOwn bool) error {
+	if isOwn {
+		return nil
+	}
 	responseCh := make(chan error)
 	h.target.requests <- p2pReqRes{
 		peerID:     peerID,

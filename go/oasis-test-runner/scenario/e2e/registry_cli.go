@@ -620,11 +620,10 @@ func (sc *registryCLIImpl) testRuntime(ctx context.Context, childEnv *env.Env, c
 			RoundTimeout:      4 * time.Second,
 		},
 		TxnScheduler: registry.TxnSchedulerParameters{
-			GroupSize:         10,
-			Algorithm:         "batching",
+			Algorithm:         registry.TxnSchedulerSimple,
 			BatchFlushTimeout: 11 * time.Second,
 			MaxBatchSize:      12,
-			MaxBatchSizeBytes: 13,
+			MaxBatchSizeBytes: 1024,
 		},
 		Storage: registry.StorageParameters{
 			GroupSize:               9,

@@ -12,6 +12,7 @@ type Client struct {
 	Node
 
 	consensusPort uint16
+	p2pPort       uint16
 }
 
 // ClientCfg is the Oasis client node provisioning configuration.
@@ -29,6 +30,8 @@ func (client *Client) startNode() error {
 		storageBackend(storageClient.BackendName).
 		appendNetwork(client.net).
 		appendSeedNodes(client.net).
+		workerP2pPort(client.p2pPort).
+		workerP2pEnabled().
 		runtimeTagIndexerBackend("bleve")
 	for _, v := range client.net.runtimes {
 		if v.kind != registry.KindCompute {
@@ -71,11 +74,12 @@ func (net *Network) NewClient(cfg *ClientCfg) (*Client, error) {
 			consensus: cfg.Consensus,
 		},
 		consensusPort: net.nextNodePort,
+		p2pPort:       net.nextNodePort + 1,
 	}
 	client.doStartNode = client.startNode
 
 	net.clients = append(net.clients, client)
-	net.nextNodePort++
+	net.nextNodePort += 2
 
 	return client, nil
 }

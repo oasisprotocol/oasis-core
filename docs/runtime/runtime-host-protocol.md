@@ -188,14 +188,14 @@ initial remote attestation if running in a TEE).
 
 #### Transaction Batch Dispatch
 
-When a transaction scheduler node needs to verify whether individual
-transactions are valid it can optionally request the runtime to perform a
-simplified transaction check. It can do this by sending a
-[`RuntimeCheckTxBatchRequest`] message. The runtime should perform the required
-non-expensive checks, but should not fully execute the transactions.
+When a compute node needs to verify whether individual transactions are valid
+it can optionally request the runtime to perform a simplified transaction check.
+It can do this by sending a [`RuntimeCheckTxBatchRequest`] message. The runtime
+should perform the required non-expensive checks, but should not fully execute
+the transactions.
 
 When a compute node receives a batch of transactions to process from the
-transaction scheduler, it passes the batch to the runtime via the
+transaction scheduler executor, it passes the batch to the runtime via the
 [`RuntimeExecuteTxBatchRequest`] message. The runtime must execute the
 transactions in the given batch and produce a set of state changes (storage
 updates for the output and state roots). In case the runtime is running in a TEE

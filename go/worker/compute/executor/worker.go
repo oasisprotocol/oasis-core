@@ -17,6 +17,9 @@ import (
 type Worker struct {
 	enabled bool
 
+	scheduleCheckTxEnabled bool
+	scheduleMaxQueueSize   uint64
+
 	commonWorker *workerCommon.Worker
 	registration *registration.Worker
 
@@ -145,7 +148,7 @@ func (w *Worker) registerRuntime(commonNode *committeeCommon.Node) error {
 	}
 
 	// Create committee node for the given runtime.
-	node, err := committee.NewNode(commonNode, w.commonWorker.GetConfig(), rp)
+	node, err := committee.NewNode(commonNode, w.commonWorker.GetConfig(), rp, w.scheduleCheckTxEnabled, w.scheduleMaxQueueSize)
 	if err != nil {
 		return err
 	}
@@ -165,19 +168,23 @@ func newWorker(
 	enabled bool,
 	commonWorker *workerCommon.Worker,
 	registration *registration.Worker,
+	scheduleCheckTxEnabled bool,
+	scheduleMaxQueueSize uint64,
 ) (*Worker, error) {
 	ctx, cancelCtx := context.WithCancel(context.Background())
 
 	w := &Worker{
-		enabled:      enabled,
-		commonWorker: commonWorker,
-		registration: registration,
-		runtimes:     make(map[common.Namespace]*committee.Node),
-		ctx:          ctx,
-		cancelCtx:    cancelCtx,
-		quitCh:       make(chan struct{}),
-		initCh:       make(chan struct{}),
-		logger:       logging.GetLogger("worker/executor"),
+		enabled:                enabled,
+		commonWorker:           commonWorker,
+		scheduleCheckTxEnabled: scheduleCheckTxEnabled,
+		scheduleMaxQueueSize:   scheduleMaxQueueSize,
+		registration:           registration,
+		runtimes:               make(map[common.Namespace]*committee.Node),
+		ctx:                    ctx,
+		cancelCtx:              cancelCtx,
+		quitCh:                 make(chan struct{}),
+		initCh:                 make(chan struct{}),
+		logger:                 logging.GetLogger("worker/executor"),
 	}
 
 	if enabled {

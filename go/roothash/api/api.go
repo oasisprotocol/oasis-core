@@ -15,6 +15,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/registry/api"
 	"github.com/oasisprotocol/oasis-core/go/roothash/api/block"
 	"github.com/oasisprotocol/oasis-core/go/roothash/api/commitment"
+	scheduler "github.com/oasisprotocol/oasis-core/go/scheduler/api"
 )
 
 const (
@@ -45,8 +46,8 @@ var (
 	// ErrInvalidRuntime is the error returned when the passed runtime is invalid.
 	ErrInvalidRuntime = errors.New(ModuleName, 3, "roothash: invalid runtime")
 
-	// ErrNoRound is the error returned when no round is in progress.
-	ErrNoRound = errors.New(ModuleName, 4, "roothash: no round is in progress")
+	// ErrNoExecutorPool is the error returned when there is no executor pool.
+	ErrNoExecutorPool = errors.New(ModuleName, 4, "roothash: no executor pool")
 
 	// ErrRuntimeSuspended is the error returned when the passed runtime is suspended.
 	ErrRuntimeSuspended = errors.New(ModuleName, 5, "roothash: runtime is suspended")
@@ -219,4 +220,16 @@ func (g *Genesis) SanityCheck() error {
 		}
 	}
 	return nil
+}
+
+// GetTransactionScheduler returns the transaction scheduler of the provided
+// committee based on the provided round.
+func GetTransactionScheduler(committee *scheduler.Committee, round uint64) (*scheduler.CommitteeNode, error) {
+	workers := committee.Workers()
+	numNodes := uint64(len(workers))
+	if numNodes == 0 {
+		return nil, fmt.Errorf("GetTransactionScheduler: no workers in commmittee")
+	}
+	schedulerIdx := round % numNodes
+	return workers[schedulerIdx], nil
 }

@@ -9,6 +9,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/node"
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
 	epochtime "github.com/oasisprotocol/oasis-core/go/epochtime/api"
+	roothash "github.com/oasisprotocol/oasis-core/go/roothash/api"
 	scheduler "github.com/oasisprotocol/oasis-core/go/scheduler/api"
 )
 
@@ -69,17 +70,12 @@ func schedulerCheckScheduled(committee *scheduler.Committee, nodeID signature.Pu
 	return fmt.Errorf("we're not scheduled")
 }
 
-func schedulerCheckNotScheduled(committee *scheduler.Committee, nodeID signature.PublicKey) error {
-	for _, member := range committee.Members {
-		if !member.PublicKey.Equal(nodeID) {
-			continue
-		}
-
-		return fmt.Errorf("we're scheduled as %s", member.Role)
+func schedulerCheckTxScheduler(committee *scheduler.Committee, nodeID signature.PublicKey, round uint64) bool {
+	scheduler, err := roothash.GetTransactionScheduler(committee, round)
+	if err != nil {
+		panic(err)
 	}
-
-	// All good.
-	return nil
+	return scheduler.PublicKey.Equal(nodeID)
 }
 
 func schedulerForRoleInCommittee(ht *honestTendermint, height int64, committee *scheduler.Committee, role scheduler.Role, fn func(*node.Node) error) error {

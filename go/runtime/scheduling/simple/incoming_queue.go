@@ -1,8 +1,11 @@
-package batching
+package simple
 
 import (
 	"errors"
+	"fmt"
 	"sync"
+
+	"github.com/hashicorp/go-multierror"
 
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
 	"github.com/oasisprotocol/oasis-core/go/runtime/transaction"
@@ -86,6 +89,33 @@ func (q *incomingQueue) addCallLocked(call []byte, callHash hash.Hash) {
 	q.queueSizeBytes += uint64(len(call))
 }
 
+func (q *incomingQueue) RemoveBatch(batch [][]byte) error {
+	q.Lock()
+	defer q.Unlock()
+
+	for _, call := range batch {
+		callHash := hash.NewFromBytes(call)
+		if _, ok := q.callHashes[callHash]; !ok {
+			continue
+		}
+		delete(q.callHashes, callHash)
+	}
+
+	var newQueue [][]byte
+	var newSizeBytes uint64
+	for _, call := range q.queue {
+		callHash := hash.NewFromBytes(call)
+		if _, ok := q.callHashes[callHash]; ok {
+			newQueue = append(newQueue, call)
+			newSizeBytes += uint64(len(call))
+		}
+	}
+	q.queue = newQueue
+	q.queueSizeBytes = newSizeBytes
+
+	return nil
+}
+
 // Add adds a call to the incoming queue.
 func (q *incomingQueue) Add(call []byte) error {
 	callHash := hash.NewFromBytes(call)
@@ -119,24 +149,24 @@ func (q *incomingQueue) AddBatch(batch transaction.RawBatch) error {
 	q.Lock()
 	defer q.Unlock()
 
-	// Check if there is room in the queue.
-	if uint64(len(q.queue)+len(batch)) >= q.maxQueueSize {
-		return errQueueFull
-	}
-
-	// First check all calls.
+	var errs error
 	for i, call := range batch {
 		if err := q.checkCallLocked(call, callHashes[i]); err != nil {
-			return err
+			errs = multierror.Append(errs, fmt.Errorf("failed inserting call: %d, error: %w", i, err))
+			continue
 		}
-	}
 
-	// Then add all calls if checks passed.
-	for i, call := range batch {
+		// Check if there is room in the queue.
+		if uint64(len(q.queue)) >= q.maxQueueSize {
+			errs = multierror.Append(errs, fmt.Errorf("failed inserting call: %d, error: %w", i, errQueueFull))
+			return errs
+		}
+
+		// Then add a call if checks passed.
 		q.addCallLocked(call, callHashes[i])
 	}
 
-	return nil
+	return errs
 }
 
 // Take attempts to take a batch from the incoming queue.

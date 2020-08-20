@@ -1,4 +1,4 @@
-package batching
+package simple
 
 import (
 	"fmt"
@@ -81,7 +81,9 @@ func TestAddBatch(t *testing.T) {
 		[]byte("two"),
 		[]byte("three"),
 	})
-	require.NoError(t, err, "AddBatch")
+	// AddBatch should notify error about duplicate transaction.
+	require.Error(t, err, "AddBatch")
+	// Inserting transactions should still succeed.
 	require.EqualValues(t, 4, queue.Size(), "Size")
 
 	for i := 0; i < 10; i++ {
@@ -94,4 +96,37 @@ func TestAddBatch(t *testing.T) {
 		})
 	}
 	require.True(t, queue.Size() <= 51, "queue must not overflow")
+}
+
+func TestRemoveBatch(t *testing.T) {
+	queue := newIncomingQueue(51, 10, 100)
+
+	err := queue.RemoveBatch([][]byte{})
+	require.NoError(t, err, "RemoveBatch empty queue")
+
+	err = queue.AddBatch([][]byte{
+		[]byte("hello world"),
+		[]byte("one"),
+		[]byte("two"),
+		[]byte("three"),
+	})
+	require.NoError(t, err, "AddBatch")
+	require.EqualValues(t, 4, queue.Size(), "Size")
+
+	err = queue.RemoveBatch([][]byte{})
+	require.NoError(t, err, "RemoveBatch empty batch")
+	require.EqualValues(t, 4, queue.Size(), "Size")
+
+	err = queue.RemoveBatch([][]byte{
+		[]byte("hello world"),
+		[]byte("two"),
+	})
+	require.NoError(t, err, "RemoveBatch")
+	require.EqualValues(t, 2, queue.Size(), "Size")
+
+	err = queue.RemoveBatch([][]byte{
+		[]byte("hello world"),
+	})
+	require.NoError(t, err, "RemoveBatch not existing batch")
+	require.EqualValues(t, 2, queue.Size(), "Size")
 }

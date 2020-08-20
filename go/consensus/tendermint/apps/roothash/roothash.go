@@ -156,20 +156,17 @@ func (app *rootHashApplication) onCommitteeChanged(ctx *tmapi.Context, epoch epo
 			)
 
 			// Transition the round.
-			blk := rtState.CurrentBlock
-			blockNr := blk.Header.Round
-
 			ctx.Logger().Debug("new committee, transitioning round",
 				"runtime_id", rt.ID,
-				"round", blockNr,
+				"round", rtState.CurrentBlock.Header.Round,
 			)
 
 			// Emit an empty epoch transition block in the new round. This is required so that
 			// the clients can be sure what state is final when an epoch transition occurs.
 			app.emitEmptyBlock(ctx, rtState, block.EpochTransition)
 
-			// Create a new round.
-			rtState.Round = roothashState.NewRound(executorPool, rtState.CurrentBlock)
+			// Set the executor pool.
+			rtState.ExecutorPool = executorPool
 		}
 
 		// Update the runtime descriptor to the latest per-epoch value.
@@ -197,7 +194,7 @@ func (app *rootHashApplication) suspendUnpaidRuntime(
 	}
 
 	rtState.Suspended = true
-	rtState.Round = nil
+	rtState.ExecutorPool = nil
 
 	// Emity an empty block signalling that the runtime was suspended.
 	app.emitEmptyBlock(ctx, rtState, block.Suspended)
@@ -246,6 +243,10 @@ func (app *rootHashApplication) emitEmptyBlock(ctx *tmapi.Context, runtime *root
 
 	runtime.Timer.Stop(ctx)
 	runtime.CurrentBlock = blk
+	runtime.CurrentBlockHeight = ctx.BlockHeight()
+	if runtime.ExecutorPool != nil {
+		runtime.ExecutorPool.ResetCommitments()
+	}
 
 	tagV := ValueFinalized{
 		ID:    runtime.Runtime.ID,
@@ -419,7 +420,7 @@ func (app *rootHashApplication) FireTimer(ctx *tmapi.Context, timer *tmapi.Timer
 		"timer_round", tCtx.Round,
 	)
 
-	if rtState.Round.ExecutorPool.IsTimeout(ctx.Now()) {
+	if rtState.ExecutorPool.IsTimeout(ctx.Now()) {
 		if err = app.tryFinalizeBlock(ctx, rtState, true); err != nil {
 			ctx.Logger().Error("failed to finalize block",
 				"err", err,
@@ -445,7 +446,7 @@ func (app *rootHashApplication) updateTimer(
 		return
 	}
 
-	nextTimeout := rtState.Round.GetNextTimeout()
+	nextTimeout := rtState.ExecutorPool.NextTimeout
 	if nextTimeout.IsZero() {
 		// Disarm timer.
 		ctx.Logger().Debug("disarming round timeout")
@@ -473,14 +474,7 @@ func (app *rootHashApplication) tryFinalizeExecutor(
 
 	defer app.updateTimer(ctx, rtState, blockNr)
 
-	if rtState.Round.Finalized {
-		ctx.Logger().Error("attempted to finalize merge when block already finalized",
-			"round", blockNr,
-		)
-		return nil
-	}
-
-	commit, err := rtState.Round.ExecutorPool.TryFinalize(ctx.Now(), runtime.Executor.RoundTimeout, forced, true)
+	commit, err := rtState.ExecutorPool.TryFinalize(ctx.Now(), runtime.Executor.RoundTimeout, forced, true)
 	switch err {
 	case nil:
 		// Round has been finalized.
@@ -496,8 +490,7 @@ func (app *rootHashApplication) tryFinalizeExecutor(
 		blk.Header.StateRoot = hdr.StateRoot
 		// Messages omitted on purpose.
 
-		rtState.Round.ExecutorPool.ResetCommitments()
-		rtState.Round.Finalized = true
+		rtState.ExecutorPool.ResetCommitments()
 
 		return blk
 	case commitment.ErrStillWaiting:
@@ -569,6 +562,7 @@ func (app *rootHashApplication) postProcessFinalizedBlock(ctx *tmapi.Context, rt
 	// All good. Hook up the new block.
 	rtState.Timer.Stop(ctx)
 	rtState.CurrentBlock = blk
+	rtState.CurrentBlockHeight = ctx.BlockHeight()
 
 	tagV := ValueFinalized{
 		ID:    rtState.Runtime.ID,

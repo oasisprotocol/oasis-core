@@ -30,7 +30,7 @@ import (
 
 var allowUnroutableAddresses bool
 
-// DebugForceallowUnroutableAddresses allows unroutable addresses.
+// DebugForceAllowUnroutableAddresses allows unroutable addresses.
 func DebugForceAllowUnroutableAddresses() {
 	allowUnroutableAddresses = true
 }
@@ -107,17 +107,29 @@ func (p *P2P) Publish(ctx context.Context, runtimeID common.Namespace, msg *Mess
 }
 
 // RegisterHandler registers a message handler for the specified runtime.
+// If multiple handlers are registered for the same runtime, each of the
+// handlers will get invoked.
 func (p *P2P) RegisterHandler(runtimeID common.Namespace, handler Handler) {
 	p.Lock()
 	defer p.Unlock()
 
-	topicID, h, err := newTopicHandler(p, runtimeID, handler)
-	if err != nil {
-		panic(fmt.Sprintf("worker/common/p2p: failed to initialize topic handler: %s", err))
-	}
+	topic := p.topics[runtimeID]
 
-	p.topics[runtimeID] = h
-	_ = p.pubsub.RegisterTopicValidator(topicID, h.topicMessageValidator)
+	switch topic {
+	case nil:
+		// New topic.
+		topicID, h, err := newTopicHandler(p, runtimeID, []Handler{handler})
+		if err != nil {
+			panic(fmt.Sprintf("worker/common/p2p: failed to initialize topic handler: %s", err))
+		}
+		p.topics[runtimeID] = h
+		_ = p.pubsub.RegisterTopicValidator(topicID, h.topicMessageValidator)
+	default:
+		topic.handlersLock.Lock()
+		defer topic.handlersLock.Unlock()
+		// Existing topic, add handler.
+		topic.handlers = append(topic.handlers, handler)
+	}
 }
 
 func (p *P2P) handleConnection(conn core.Conn) {
@@ -125,29 +137,9 @@ func (p *P2P) handleConnection(conn core.Conn) {
 		return
 	}
 
-	var allowed bool
-	defer func() {
-		if !allowed {
-			// Close connection if not allowed.
-			p.logger.Error("closing connection from unauthorized peer",
-				"peer_id", conn.RemotePeer(),
-			)
-
-			_ = conn.Close()
-		}
-	}()
-
 	p.logger.Debug("new connection from peer",
 		"peer_id", conn.RemotePeer(),
 	)
-
-	// Only allow nodes that should be part of the gossipsub network
-	// to connect to us, regardless of handlers, on the hopes that
-	// this increases responsiveness.
-	//
-	// Messages that we aren't interested in will be dropped without
-	// much processing.
-	allowed = p.isPeerAuthorized(conn.RemotePeer())
 }
 
 // New creates a new P2P node.

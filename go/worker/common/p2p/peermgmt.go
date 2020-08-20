@@ -18,6 +18,11 @@ import (
 )
 
 // PeerManager handles managing peers in the gossipsub network.
+//
+// XXX: we accept connections from all peers, however known peers
+// from registry are considered trustworthier and we maintain persistent
+// connections with them. Once libp2p layer supports "peer reputation" configure
+// better reputation for registry peers.
 type PeerManager struct {
 	sync.RWMutex
 
@@ -88,13 +93,6 @@ func (mgr *PeerManager) UpdateNode(node *node.Node) error {
 	return nil
 }
 
-func (mgr *PeerManager) isPeerAuthorized(id core.PeerID) bool {
-	mgr.RLock()
-	defer mgr.RUnlock()
-
-	return mgr.peers[id] != nil
-}
-
 func (mgr *PeerManager) removePeerLocked(peerID core.PeerID) {
 	if existing := mgr.peers[peerID]; existing != nil {
 		existing.cancelFn()
@@ -116,7 +114,7 @@ func (mgr *PeerManager) updateNodeLocked(node *node.Node, peerID core.PeerID) {
 		}
 	}
 
-	// Cancel any exisiting connection attempts to the peer.
+	// Cancel any existing connection attempts to the peer.
 	mgr.removePeerLocked(peerID)
 
 	peer := &p2pPeer{
