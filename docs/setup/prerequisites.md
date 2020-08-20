@@ -193,7 +193,7 @@ where the code has been checked out.
 [gofumpt and gofumports]: https://github.com/mvdan/gofumpt
 [protoc-gen-go]: https://github.com/golang/protobuf
 
-## Using the development Docker image
+## Using the Development Docker Image
 
 If for some reason you don't want or can't install the specified prerequisites
 on the host system, you can use our development Docker image. This requires that
