@@ -215,13 +215,7 @@ be specified a number of epochs in the future, controlled by the
 ## Methods
 
 The following sections describe the methods supported by the consensus staking
-service. To generate test vectors for various staking [transactions], run:
-
-```bash
-make -C go staking/gen_vectors
-```
-
-[transactions]: transactions.md
+service.
 
 ### Transfer
 
@@ -389,3 +383,17 @@ The transaction signer implicitly specifies the escrow account.
 <!-- markdownlint-enable line-length -->
 
 ## Events
+
+## Test Vectors
+
+To generate test vectors for various staking [transactions], run:
+
+```bash
+make -C go staking/gen_vectors
+```
+
+For more information about the structure of the test vectors see the section
+on [Transaction Test Vectors].
+
+[transactions]: transactions.md
+[Transaction Test Vectors]: test-vectors.md

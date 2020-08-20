@@ -25,6 +25,7 @@
     * [Committee Scheduler](consensus/scheduler.md)
     * [Root Hash](consensus/roothash.md)
     * [Key Manager](consensus/keymanager.md)
+  * [Transaction Test Vectors](consensus/test-vectors.md)
 * [Runtime Layer](runtime/index.md)
   * [Runtime Host Protocol](runtime/runtime-host-protocol.md)
   * [Identifiers](runtime/identifiers.md)

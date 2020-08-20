@@ -66,13 +66,7 @@ the future to enable runtimes to be self-governing.
 ## Methods
 
 The following sections describe the methods supported by the consensus registry
-service. To generate test vectors for various registry [transactions], run:
-
-```bash
-make -C go registry/gen_vectors
-```
-
-[transactions]: transactions.md
+service.
 
 ### Register Entity
 
@@ -229,3 +223,17 @@ Registering a runtime may require sufficient stake in the owning entity's
 <!-- markdownlint-enable line-length -->
 
 ## Events
+
+## Test Vectors
+
+To generate test vectors for various registry [transactions], run:
+
+```bash
+make -C go registry/gen_vectors
+```
+
+For more information about the structure of the test vectors see the section
+on [Transaction Test Vectors].
+
+[transactions]: transactions.md
+[Transaction Test Vectors]: test-vectors.md

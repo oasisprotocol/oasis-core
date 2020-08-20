@@ -73,3 +73,24 @@ we use the following additional convention:
   [encoded] genesis document.
 
 [encoded]: encoding.md
+
+### Envelopes
+
+There are currently two kinds of envelopes that are used when signing CBOR
+messages:
+
+* [Single signature envelope (`Signed`)] contains the CBOR-serialized blob in
+  the `untrusted_raw_value` field and a single `signature`.
+
+* [Multiple signature envelope (`MultiSigned`)] contains the CBOR-serialized
+  blob in the `untrusted_raw_value` field and multiple signatures in the
+  `signatures` field.
+
+The envelopes are themselves CBOR-encoded. While no separate test vectors are
+provided, [those used for transactions] can be used as a reference.
+
+<!-- markdownlint-disable line-length -->
+[Single signature envelope (`Signed`)]: https://pkg.go.dev/github.com/oasisprotocol/oasis-core/go/common/crypto/signature?tab=doc#Signed
+[Multiple signature envelope (`MultiSigned`)]: https://pkg.go.dev/github.com/oasisprotocol/oasis-core/go/common/crypto/signature?tab=doc#MultiSigned
+[those used for transactions]: consensus/test-vectors.md
+<!-- markdownlint-enable line-length -->
