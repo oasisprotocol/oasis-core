@@ -1,5 +1,5 @@
-// Package batching implements a batching transaction scheduler.
-package batching
+// Package simple implements a simple batching transaction scheduler.
+package simple
 
 import (
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
@@ -10,10 +10,10 @@ import (
 
 const (
 	// Name of the scheduler.
-	Name = registry.TxnSchedulerBatching
+	Name = registry.TxnSchedulerSimple
 )
 
-type batchingState struct {
+type scheduler struct {
 	cfg           config
 	incomingQueue *incomingQueue
 
@@ -28,7 +28,7 @@ type config struct {
 	maxBatchSizeBytes uint64
 }
 
-func (s *batchingState) scheduleBatch(force bool) error {
+func (s *scheduler) scheduleBatch(force bool) error {
 	batch, err := s.incomingQueue.Take(force)
 	if err != nil && err != errNoBatchAvailable {
 		s.logger.Error("failed to get batch from the queue",
@@ -53,7 +53,7 @@ func (s *batchingState) scheduleBatch(force bool) error {
 	return nil
 }
 
-func (s *batchingState) ScheduleTx(tx []byte) error {
+func (s *scheduler) ScheduleTx(tx []byte) error {
 	if err := s.incomingQueue.Add(tx); err != nil {
 		// Return success in case of duplicate calls to avoid the client
 		// mistaking this for an actual error.
@@ -87,15 +87,15 @@ func (s *batchingState) ScheduleTx(tx []byte) error {
 // Aditionally this method does not try to schedule the transactions after the
 // insert is finished, and is as such suited for reinserting transactions after
 // a failed batch scheduling/processing.
-func (s *batchingState) AppendTxBatch(batch [][]byte) error {
+func (s *scheduler) AppendTxBatch(batch [][]byte) error {
 	return s.incomingQueue.AddBatch(batch)
 }
 
-func (s *batchingState) RemoveTxBatch(tx [][]byte) error {
+func (s *scheduler) RemoveTxBatch(tx [][]byte) error {
 	return s.incomingQueue.RemoveBatch(tx)
 }
 
-func (s *batchingState) Flush() error {
+func (s *scheduler) Flush() error {
 	// Force schedule a batch.
 	if err := s.scheduleBatch(true); err != nil {
 		// XXX: Log a warning here as the exected common failures are
@@ -110,40 +110,40 @@ func (s *batchingState) Flush() error {
 	return nil
 }
 
-func (s *batchingState) UnscheduledSize() int {
+func (s *scheduler) UnscheduledSize() int {
 	return s.incomingQueue.Size()
 }
 
-func (s *batchingState) IsQueued(id hash.Hash) bool {
+func (s *scheduler) IsQueued(id hash.Hash) bool {
 	return s.incomingQueue.IsQueued(id)
 }
 
-func (s *batchingState) Clear() {
+func (s *scheduler) Clear() {
 	s.incomingQueue.Clear()
 }
 
-func (s *batchingState) Initialize(td api.TransactionDispatcher) error {
+func (s *scheduler) Initialize(td api.TransactionDispatcher) error {
 	s.dispatcher = td
 
 	return nil
 }
 
-func (s *batchingState) IsInitialized() bool {
+func (s *scheduler) IsInitialized() bool {
 	return s.dispatcher != nil
 }
 
-// New creates a new batching scheduler.
+// New creates a new simple scheduler.
 func New(maxQueueSize, maxBatchSize, maxBatchSizeBytes uint64) (api.Scheduler, error) {
 	cfg := config{
 		maxQueueSize:      maxQueueSize,
 		maxBatchSize:      maxBatchSize,
 		maxBatchSizeBytes: maxBatchSizeBytes,
 	}
-	batching := batchingState{
+	scheduler := &scheduler{
 		cfg:           cfg,
 		incomingQueue: newIncomingQueue(cfg.maxQueueSize, cfg.maxBatchSize, cfg.maxBatchSizeBytes),
-		logger:        logging.GetLogger("runtime/scheduling").With("scheduler", "batching"),
+		logger:        logging.GetLogger("runtime/scheduling").With("scheduler", "simple"),
 	}
 
-	return &batching, nil
+	return scheduler, nil
 }

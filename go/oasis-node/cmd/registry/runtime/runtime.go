@@ -65,8 +65,8 @@ const (
 	// Transaction scheduler flags.
 	CfgTxnSchedulerAlgorithm         = "runtime.txn_scheduler.algorithm"
 	CfgTxnSchedulerBatchFlushTimeout = "runtime.txn_scheduler.flush_timeout"
-	CfgTxnSchedulerMaxBatchSize      = "runtime.txn_scheduler.batching.max_batch_size"
-	CfgTxnSchedulerMaxBatchSizeBytes = "runtime.txn_scheduler.batching.max_batch_size_bytes"
+	CfgTxnSchedulerMaxBatchSize      = "runtime.txn_scheduler.max_batch_size"
+	CfgTxnSchedulerMaxBatchSizeBytes = "runtime.txn_scheduler.max_batch_size_bytes"
 
 	// Admission policy flags.
 	CfgAdmissionPolicy                 = "runtime.admission_policy"
@@ -540,7 +540,7 @@ func init() {
 	runtimeFlags.Duration(CfgExecutorRoundTimeout, 10*time.Second, "Executor committee round timeout for this runtime")
 
 	// Init Transaction scheduler flags.
-	runtimeFlags.String(CfgTxnSchedulerAlgorithm, "batching", "Transaction scheduling algorithm")
+	runtimeFlags.String(CfgTxnSchedulerAlgorithm, registry.TxnSchedulerSimple, "Transaction scheduling algorithm")
 	runtimeFlags.Duration(CfgTxnSchedulerBatchFlushTimeout, 1*time.Second, "Maximum amount of time to wait for a scheduled batch")
 	runtimeFlags.Uint64(CfgTxnSchedulerMaxBatchSize, 1000, "Maximum size of a batch of runtime requests")
 	runtimeFlags.String(CfgTxnSchedulerMaxBatchSizeBytes, "16mb", "Maximum size (in bytes) of a batch of runtime requests")

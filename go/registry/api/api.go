@@ -1206,7 +1206,7 @@ func VerifyTransactionSchedulerArgs(rt *Runtime, logger *logging.Logger) error {
 	params := rt.TxnScheduler
 
 	// Ensure txnscheduler parameters have sensible values.
-	if params.Algorithm != TxnSchedulerBatching {
+	if params.Algorithm != TxnSchedulerSimple {
 		logger.Error("RegisterRuntime: invalid transaction scheduler algorithm",
 			"runtime", rt,
 		)

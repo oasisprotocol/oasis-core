@@ -1,4 +1,4 @@
-package batching
+package simple
 
 import (
 	"fmt"

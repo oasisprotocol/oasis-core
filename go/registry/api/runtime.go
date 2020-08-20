@@ -46,8 +46,8 @@ const (
 	kindCompute    = "compute"
 	kindKeyManager = "keymanager"
 
-	// TxnSchedulerBatching is the name of the batching algorithm.
-	TxnSchedulerBatching = "batching"
+	// TxnSchedulerSimple is the name of the simple batching algorithm.
+	TxnSchedulerSimple = "simple"
 )
 
 // String returns a string representation of a runtime kind.
@@ -98,16 +98,14 @@ type TxnSchedulerParameters struct {
 	// Algorithm is the transaction scheduling algorithm.
 	Algorithm string `json:"algorithm"`
 
-	// BatchFlushTimeout denotes, if using the "batching" algorithm, how long to
+	// BatchFlushTimeout denotes, if using the "simple" algorithm, how long to
 	// wait for a scheduled batch.
 	BatchFlushTimeout time.Duration `json:"batch_flush_timeout"`
 
-	// MaxBatchSize denotes, if using the "batching" algorithm, what is the max
-	// size of a batch.
+	// MaxBatchSize denotes what is the max size of a scheduled batch.
 	MaxBatchSize uint64 `json:"max_batch_size"`
 
-	// MaxBatchSizeBytes denotes, if using the "batching" algorithm, what is the
-	// max size of a batch in bytes.
+	// MaxBatchSizeBytes denote what is the max size of a scheduled batch in bytes.
 	MaxBatchSizeBytes uint64 `json:"max_batch_size_bytes"`
 }
 
