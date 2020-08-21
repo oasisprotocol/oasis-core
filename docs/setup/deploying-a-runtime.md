@@ -132,10 +132,14 @@ After confirmation, this command outputs a signed transaction in the
 `/tmp/runtime-example/register_runtime.tx` file. In the next step we will submit
 the transaction to complete the runtime registration.
 
-NOTE: when registering a runtime on a non-development network you will likely
+{% hint style="warning" %}
+**WARNING**
+
+When registering a runtime on a _non-development_ network you will likely
 want to modify default parameters. Additionally, since we are running this on
-a test network, we had to enable the `debug.dont_blame_oasis` and
+a debug network, we had to enable the `debug.dont_blame_oasis` and
 `debug.allow_test_keys` flags.
+{% endhint %}
 
 <!-- markdownlint-disable line-length -->
 [code reference]: https://pkg.go.dev/github.com/oasisprotocol/oasis-core/go/registry/api?tab=doc#Runtime
@@ -153,8 +157,7 @@ oasis-node consensus submit_tx \
 
 ## Confirm Runtime is Registered
 
-To confirm the runtime is registered use the
-`registry runtime list` command.
+To confirm the runtime is registered use the `registry runtime list` command.
 
 ```
 oasis-node registry runtime list \
@@ -171,8 +174,10 @@ Should give output similar to
 ```
 <!-- markdownlint-enable line-length -->
 
-Note: since we did not setup any runtime nodes, the runtime will get
-[suspended] until nodes for the runtime register.
+{% hint style="info" %}
+Since we did not setup any runtime nodes, the runtime will get [suspended] until
+nodes for the runtime register.
+{% endhint %}
 
 In the next step we will setup and run a runtime node.
 
@@ -183,8 +188,10 @@ In the next step we will setup and run a runtime node.
 We will now run a node that will act as a compute, storage and client node for
 the runtime.
 
-NOTE: in a real word scenario there would be multiple nodes running the runtime,
+{% hint style="info" %}
+In a real word scenario there would be multiple nodes running the runtime,
 each likely serving as a single type only.
+{% endhint %}
 
 Before running the node, gather the following data parameters and set up
 environment variables to simplify instructions.
@@ -230,8 +237,12 @@ oasis-node \
 ```
 <!-- markdownlint-enable line-length -->
 
-**NOTE: This also enables unsafe debug-only flags which must never be used in a
-production setting as they may result in node compromise.**
+{% hint style="danger" %}
+**WARNING**
+
+This also enables unsafe debug-only flags which must never be used in a
+production setting as they may result in node compromise.
+{% endhint %}
 
 Following steps should be run in a new terminal window.
 
@@ -301,8 +312,10 @@ oasis-node registry node list -a $ADDR -v | grep "$NODE_ID"
 oasis-node registry runtime list -a $ADDR -v
 ```
 
-NOTE: might need to wait few seconds for an epoch transition so that the node
+{% hint style="info" %}
+You might need to wait few seconds for an epoch transition so that the node
 is registered and runtime gets resumed.
+{% endhint %}
 
 [node control status command]: ../oasis-node/cli.md#status
 
