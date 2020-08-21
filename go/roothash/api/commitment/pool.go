@@ -149,8 +149,6 @@ func (p *Pool) addOpenExecutorCommitment(
 		return ErrNotInCommittee
 	}
 
-	// TODO: Check for signs of double signing (#1804).
-
 	// Ensure the node did not already submit a commitment.
 	if _, ok := p.ExecuteCommitments[id]; ok {
 		return ErrAlreadyCommitted
@@ -167,6 +165,16 @@ func (p *Pool) addOpenExecutorCommitment(
 	// not supported and should be rejected.
 	if len(header.Messages) > 0 {
 		return ErrInvalidMessages
+	}
+
+	// Check if the block is based on the previous block.
+	if !header.IsParentOf(&blk.Header) {
+		logger.Debug("executor commitment is not based on correct block",
+			"node_id", id,
+			"expected_previous_hash", blk.Header.EncodedHash(),
+			"previous_hash", header.PreviousHash,
+		)
+		return ErrNotBasedOnCorrectBlock
 	}
 
 	// Verify RAK-attestation.
@@ -196,16 +204,6 @@ func (p *Pool) addOpenExecutorCommitment(
 		if !rak.Verify(ComputeResultsHeaderSignatureContext, cbor.Marshal(header), body.RakSig[:]) {
 			return ErrRakSigInvalid
 		}
-	}
-
-	// Check if the block is based on the previous block.
-	if !header.IsParentOf(&blk.Header) {
-		logger.Debug("executor commitment is not based on correct block",
-			"node_id", id,
-			"expected_previous_hash", blk.Header.EncodedHash(),
-			"previous_hash", header.PreviousHash,
-		)
-		return ErrNotBasedOnCorrectBlock
 	}
 
 	if err := sv.VerifyTxnSchedulerSignature(body.TxnSchedSig, blk.Header.Round); err != nil {
