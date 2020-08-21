@@ -15,6 +15,7 @@ Oasis Core components.
   * [Running Tests](setup/running-tests.md)
   * [Local Network Runner With a Simple Runtime](setup/oasis-net-runner.md)
   * [Single Validator Node Network](setup/single-validator-node-network.md)
+  * [Deploying a Runtime](setup/deploying-a-runtime.md)
 
 ## High-Level Components
 
