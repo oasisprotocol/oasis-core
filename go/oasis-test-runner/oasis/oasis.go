@@ -25,6 +25,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/identity"
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
 	"github.com/oasisprotocol/oasis-core/go/common/node"
+	"github.com/oasisprotocol/oasis-core/go/common/quantity"
 	"github.com/oasisprotocol/oasis-core/go/consensus/api/transaction"
 	consensusGenesis "github.com/oasisprotocol/oasis-core/go/consensus/genesis"
 	genesisFile "github.com/oasisprotocol/oasis-core/go/genesis/file"
@@ -289,6 +290,9 @@ type NetworkCfg struct { // nolint: maligned
 
 	// DeterministicIdentities is the deterministic identities flag.
 	DeterministicIdentities bool `json:"deterministic_identities"`
+
+	// FundEntities is the fund entities flag.
+	FundEntities bool `json:"fund_entities"`
 
 	// IAS is the Network IAS configuration.
 	IAS IASCfg `json:"ias"`
@@ -857,7 +861,27 @@ func (net *Network) makeGenesis() error {
 		}
 		args = append(args, v.toGenesisArgs()...)
 	}
+
 	if net.cfg.StakingGenesis != nil {
+		if net.cfg.FundEntities {
+			toFund := quantity.NewFromUint64(1000000000000)
+			if net.cfg.StakingGenesis.Ledger == nil {
+				net.cfg.StakingGenesis.Ledger = make(map[staking.Address]*staking.Account)
+			}
+			for _, ent := range net.Entities() {
+				if ent.isDebugTestEntity {
+					// Debug test entities already get funded.
+					continue
+				}
+				net.cfg.StakingGenesis.Ledger[staking.NewAddress(ent.Signer().Public())] = &staking.Account{
+					General: staking.GeneralAccount{
+						Balance: *toFund,
+					},
+				}
+				_ = net.cfg.StakingGenesis.TotalSupply.Add(toFund)
+			}
+		}
+
 		path := filepath.Join(net.baseDir.String(), stakingGenesisFile)
 		b, err := json.Marshal(net.cfg.StakingGenesis)
 		if err != nil {
