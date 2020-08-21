@@ -161,3 +161,15 @@ specific root. These receipts are verified by the [roothash service] before
 accepting a commitment from a compute node.
 
 [Merklized Key-Value Store (MKVS)]: ../mkvs.md
+
+### Suspending Runtimes
+
+Since periodic maintenance work must be performed on each epoch transition
+(e.g., electing runtime committees), fees for that maintenance are paid by any
+nodes that register to perform work for a specific runtime. Fees are pre-paid
+for the number of epochs a node registers for. If there are no committees for a
+runtime on epoch transition, the runtime is suspended for the epoch.
+The runtime is also suspended in case the registering entity no longer has
+enough stake to cover the entity and runtime deposits. The runtime will be
+resumed on the epoch transition if runtime nodes will register and the
+registering entity will have enough stake.
