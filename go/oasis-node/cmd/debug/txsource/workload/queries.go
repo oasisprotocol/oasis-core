@@ -30,6 +30,7 @@ import (
 	runtimeClient "github.com/oasisprotocol/oasis-core/go/runtime/client/api"
 	scheduler "github.com/oasisprotocol/oasis-core/go/scheduler/api"
 	staking "github.com/oasisprotocol/oasis-core/go/staking/api"
+	"github.com/oasisprotocol/oasis-core/go/storage/mkvs"
 )
 
 const (
@@ -49,6 +50,8 @@ const (
 	queriesEarliestHeightRatio = 0.1
 	// Ratio of queries that should query latest available height.
 	queriesLatestHeightRatio = 0.1
+	// Ratio of consensus state integrity queries.
+	queriesConsensusStateIntegrityRatio = 0.05
 
 	// queriesIterationTimeout is the combined timeout for running all the queries that are executed
 	// in a single iteration. The purpose of this timeout is to prevent the client being stuck and
@@ -272,6 +275,25 @@ func (q *queries) doConsensusQueries(ctx context.Context, rng *rand.Rand, height
 	}
 	if err := q.sanityCheckTransactionEvents(ctx, height, txEvents); err != nil {
 		return fmt.Errorf("GetTransactionsWithResults events sanity check error: %w", err)
+	}
+
+	// Verify state integrity by iterating over all keys.
+	if height > 1 && rng.Float32() < queriesConsensusStateIntegrityRatio {
+		q.logger.Debug("verifying state integrity",
+			"state_root", block.StateRoot,
+		)
+		state := mkvs.NewWithRoot(q.consensus.State(), nil, block.StateRoot)
+		defer state.Close()
+
+		it := state.NewIterator(ctx, mkvs.IteratorPrefetch(100))
+		defer it.Close()
+
+		for it.Rewind(); it.Valid(); it.Next() {
+		}
+		if err := it.Err(); err != nil {
+			return fmt.Errorf("consensus state iteration failed: %w", err)
+		}
+		q.logger.Debug("state integrity verified")
 	}
 
 	q.logger.Debug("Consensus queries done",
