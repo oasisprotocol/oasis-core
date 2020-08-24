@@ -36,22 +36,27 @@ func TestKeyFormat(t *testing.T) {
 	require.EqualValues(t, ns, decNs, "namespace encode/decode round trip")
 	require.EqualValues(t, h, decH, "hash encode/decode round trip")
 
-	fmt2 := New('L', &common.Namespace{}, uint64(0), &hash.Hash{}, &hash.Hash{})
-	require.Equal(t, 1+32+8+32+32, fmt2.Size())
+	fmt2 := New('L', &common.Namespace{}, uint64(0), int64(0), &hash.Hash{}, &hash.Hash{})
+	require.Equal(t, 1+32+8+8+32+32, fmt2.Size())
 
 	h.FromBytes([]byte("hash one"))
 	var h2 hash.Hash
 	h2.FromBytes([]byte("hash two"))
 	intVal := uint64(42)
-	enc = fmt2.Encode(&ns, intVal, &h, &h2)
+	intVal2 := int64(-17)
+	enc = fmt2.Encode(&ns, intVal, intVal2, &h, &h2)
 
-	var decNs2 common.Namespace
-	var decIntVal uint64
-	var decH2 hash.Hash
-	ok = fmt2.Decode(enc, &decNs, &decIntVal, &decH, &decH2)
+	var (
+		decNs2     common.Namespace
+		decIntVal  uint64
+		decIntVal2 int64
+		decH2      hash.Hash
+	)
+	ok = fmt2.Decode(enc, &decNs, &decIntVal, &decIntVal2, &decH, &decH2)
 	require.True(t, ok, "Decode")
 	require.EqualValues(t, ns, decNs2, "namespace encode/decode round trip")
 	require.EqualValues(t, intVal, decIntVal, "uint64 encode/decode round trip")
+	require.EqualValues(t, intVal2, decIntVal2, "int64 encode/decode round trip")
 	require.EqualValues(t, h, decH, "hash encode/decode round trip")
 	require.EqualValues(t, h2, decH2, "hash encode/decode round trip")
 
