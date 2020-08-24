@@ -1,9 +1,12 @@
 package commitment
 
 import (
+	"fmt"
+
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	"github.com/oasisprotocol/oasis-core/go/roothash/api/block"
+	scheduler "github.com/oasisprotocol/oasis-core/go/scheduler/api"
 )
 
 // ProposedBatchSignatureContext is the context used for signing propose batch
@@ -49,4 +52,16 @@ func SignProposedBatch(signer signature.Signer, tsbd *ProposedBatch) (*SignedPro
 	return &SignedProposedBatch{
 		Signed: *signed,
 	}, nil
+}
+
+// GetTransactionScheduler returns the transaction scheduler of the provided
+// committee based on the provided round.
+func GetTransactionScheduler(committee *scheduler.Committee, round uint64) (*scheduler.CommitteeNode, error) {
+	workers := committee.Workers()
+	numNodes := uint64(len(workers))
+	if numNodes == 0 {
+		return nil, fmt.Errorf("GetTransactionScheduler: no workers in commmittee")
+	}
+	schedulerIdx := round % numNodes
+	return workers[schedulerIdx], nil
 }

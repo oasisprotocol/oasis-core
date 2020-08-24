@@ -3,6 +3,7 @@ package byzantine
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/spf13/cobra"
 	flag "github.com/spf13/pflag"
@@ -18,6 +19,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/flags"
 	"github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/grpc"
 	"github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/metrics"
+	"github.com/oasisprotocol/oasis-core/go/roothash/api/block"
 	"github.com/oasisprotocol/oasis-core/go/runtime/transaction"
 	scheduler "github.com/oasisprotocol/oasis-core/go/scheduler/api"
 	"github.com/oasisprotocol/oasis-core/go/worker/common/p2p"
@@ -31,6 +33,8 @@ const (
 	CfgVersionFakeEnclaveID = "runtime.version.fake_enclave_id"
 	// CfgActivationEpoch configures the epoch at which the Byzantine node activates.
 	CfgActivationEpoch = "activation_epoch"
+	// CfgSchedulerRoleExpected configures if the executor scheduler role is expected.
+	CfgSchedulerRoleExpected = "scheduler_role_expected"
 )
 
 var (
@@ -65,6 +69,8 @@ func activateCommonConfig(cmd *cobra.Command, args []string) {
 }
 
 func doExecutorHonest(cmd *cobra.Command, args []string) {
+	ctx := context.Background()
+
 	if err := common.Init(); err != nil {
 		common.EarlyLogAndExit(err)
 	}
@@ -122,18 +128,17 @@ func doExecutorHonest(cmd *cobra.Command, args []string) {
 		panic(fmt.Sprintf("scheduler check scheduled failed: %+v", err))
 	}
 	logger.Debug("executor honest: executor schedule ok")
-	// Ensure we are not the transaction scheduler in the round. Once byzantine
-	// node supports scheduling support that case as well.
-	if schedulerCheckTxScheduler(executorCommittee, defaultIdentity.NodeSigner.Public(), 0) {
-		panic("executor honest: tx scheduler (not supported)")
+	// Ensure we have the expected transaction scheduler role.
+	isTxScheduler := schedulerCheckTxScheduler(executorCommittee, defaultIdentity.NodeSigner.Public(), 0)
+	if viper.GetBool(CfgSchedulerRoleExpected) != isTxScheduler {
+		panic(fmt.Sprintf("not expected executor scheduler role. expected: 'is_scheduler=%v'", viper.GetBool(CfgSchedulerRoleExpected)))
 	}
-	logger.Debug("executor honest: executor tx scheduler schedule ok")
+	logger.Debug("executor honest: executor tx scheduler role ok")
 
 	storageCommittee, err := schedulerGetCommittee(ht, electionHeight, scheduler.KindStorage, defaultRuntimeID)
 	if err != nil {
 		panic(fmt.Sprintf("scheduler get committee %s failed: %+v", scheduler.KindStorage, err))
 	}
-
 	logger.Debug("executor honest: connecting to storage committee")
 	hnss, err := storageConnectToCommittee(ht, electionHeight, storageCommittee, scheduler.Worker, defaultIdentity)
 	if err != nil {
@@ -142,13 +147,30 @@ func doExecutorHonest(cmd *cobra.Command, args []string) {
 	defer storageBroadcastCleanup(hnss)
 
 	cbc := newComputeBatchContext()
-
-	if err = cbc.receiveBatch(ph); err != nil {
-		panic(fmt.Sprintf("compute receive batch failed: %+v", err))
+	switch isTxScheduler {
+	case true:
+		// If we are the scheduler we need to propose a batch.
+		// Receive transactions.
+		txs := cbc.receiveTransactions(ph, time.Second)
+		logger.Debug("executor honest: received transactions", "transactions", txs)
+		// Get latest roothash block.
+		var block *block.Block
+		block, err = getRoothashLatestBlock(ctx, ht.service, defaultRuntimeID)
+		if err != nil {
+			panic(fmt.Sprintf("failed getting latest roothash block: %+v", err))
+		}
+		// Dispatch transaction batch.
+		if err = cbc.proposeTransactionBatch(ctx, electionHeight, hnss, block, txs, defaultIdentity, ph); err != nil {
+			panic(fmt.Sprintf("executor proposing batch: %+v", err))
+		}
+		logger.Debug("executor honest: dispatched transactions", "transactions", txs)
+	case false:
+		// If we are not the scheduler, receive the proposed batch.
+		if err = cbc.receiveBatch(ph); err != nil {
+			panic(fmt.Sprintf("compute receive batch failed: %+v", err))
+		}
+		logger.Debug("executor honest: received batch", "bd", cbc.bd)
 	}
-	logger.Debug("executor honest: received batch", "bd", cbc.bd)
-
-	ctx := context.Background()
 
 	if err = cbc.openTrees(ctx, hnss[0]); err != nil {
 		panic(fmt.Sprintf("compute open trees failed: %+v", err))
@@ -252,12 +274,12 @@ func doExecutorWrong(cmd *cobra.Command, args []string) {
 	if err != nil {
 		panic(fmt.Sprintf("scheduler get committee %s failed: %+v", scheduler.KindStorage, err))
 	}
-	// Ensure we are not the transaction scheduler in the round. Once byzantine
-	// node supports scheduling support that case as well.
-	if schedulerCheckTxScheduler(executorCommittee, defaultIdentity.NodeSigner.Public(), 0) {
-		panic("executor wrong: tx scheduler (not supported)")
+	// Ensure we have the expected transaction scheduler role.
+	isTxScheduler := schedulerCheckTxScheduler(executorCommittee, defaultIdentity.NodeSigner.Public(), 0)
+	if viper.GetBool(CfgSchedulerRoleExpected) != isTxScheduler {
+		panic(fmt.Sprintf("not expected executor scheduler role. expected: 'is_scheduler=%v'", viper.GetBool(CfgSchedulerRoleExpected)))
 	}
-	logger.Debug("executor wrong: executor tx scheduler schedule ok")
+	logger.Debug("executor wong: executor tx scheduler role ok")
 
 	logger.Debug("executor wrong: connecting to storage committee")
 	hnss, err := storageConnectToCommittee(ht, electionHeight, storageCommittee, scheduler.Worker, defaultIdentity)
@@ -373,17 +395,14 @@ func doExecutorStraggler(cmd *cobra.Command, args []string) {
 	}
 	logger.Debug("executor straggler: executor schedule ok")
 
-	// Ensure we are not the transaction scheduler in the round. Once straggling
-	// schedulers are handled (without waiting for epoch transition), support
-	// testing for that case as well.
-	// https://github.com/oasisprotocol/oasis-core/issues/3199
-	if schedulerCheckTxScheduler(executorCommittee, defaultIdentity.NodeSigner.Public(), 0) {
-		panic("executor straggler: tx scheduler (not supported)")
+	// Ensure we have the expected transaction scheduler role.
+	isTxScheduler := schedulerCheckTxScheduler(executorCommittee, defaultIdentity.NodeSigner.Public(), 0)
+	if viper.GetBool(CfgSchedulerRoleExpected) != isTxScheduler {
+		panic(fmt.Sprintf("not expected executor scheduler role. expected: 'is_scheduler=%v'", viper.GetBool(CfgSchedulerRoleExpected)))
 	}
-	logger.Debug("executor straggler: executor tx scheduler schedule ok")
+	logger.Debug("executor straggler: executor tx scheduler role ok")
 
 	cbc := newComputeBatchContext()
-
 	if err = cbc.receiveBatch(ph); err != nil {
 		panic(fmt.Sprintf("compute receive batch failed: %+v", err))
 	}
@@ -405,6 +424,7 @@ func init() {
 	fs.Bool(CfgFakeSGX, false, "register with SGX capability")
 	fs.String(CfgVersionFakeEnclaveID, "", "fake runtime enclave identity")
 	fs.Uint64(CfgActivationEpoch, 0, "epoch at which the Byzantine node should activate")
+	fs.Bool(CfgSchedulerRoleExpected, false, "is executor node expected to be scheduler or not")
 	_ = viper.BindPFlags(fs)
 	byzantineCmd.PersistentFlags().AddFlagSet(fs)
 

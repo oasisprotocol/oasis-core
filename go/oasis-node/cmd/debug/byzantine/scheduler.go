@@ -9,7 +9,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/node"
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
 	epochtime "github.com/oasisprotocol/oasis-core/go/epochtime/api"
-	roothash "github.com/oasisprotocol/oasis-core/go/roothash/api"
+	"github.com/oasisprotocol/oasis-core/go/roothash/api/commitment"
 	scheduler "github.com/oasisprotocol/oasis-core/go/scheduler/api"
 )
 
@@ -71,7 +71,7 @@ func schedulerCheckScheduled(committee *scheduler.Committee, nodeID signature.Pu
 }
 
 func schedulerCheckTxScheduler(committee *scheduler.Committee, nodeID signature.PublicKey, round uint64) bool {
-	scheduler, err := roothash.GetTransactionScheduler(committee, round)
+	scheduler, err := commitment.GetTransactionScheduler(committee, round)
 	if err != nil {
 		panic(err)
 	}

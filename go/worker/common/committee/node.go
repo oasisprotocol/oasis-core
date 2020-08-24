@@ -108,8 +108,10 @@ type Node struct {
 
 	// Mutable and shared between nodes' workers.
 	// Guarded by .CrossNode.
-	CrossNode    sync.Mutex
-	CurrentBlock *block.Block
+	CrossNode          sync.Mutex
+	CurrentBlock       *block.Block
+	CurrentBlockHeight int64
+	Height             int64
 
 	logger *logging.Logger
 }
@@ -218,6 +220,7 @@ func (n *Node) handleNewBlockLocked(blk *block.Block, height int64) {
 
 	// Update the current block.
 	n.CurrentBlock = blk
+	n.CurrentBlockHeight = height
 
 	for _, hooks := range n.hooks {
 		hooks.HandleNewBlockEarlyLocked(blk)
@@ -322,6 +325,16 @@ func (n *Node) worker() {
 		n.logger.Info("runtime has a key manager available")
 	}
 
+	// Start watching consensus blocks.
+	consensusBlocks, consensusBlocksSub, err := n.Consensus.WatchBlocks(n.ctx)
+	if err != nil {
+		n.logger.Error("failed to subscribe to consensus blocks",
+			"err", err,
+		)
+		return
+	}
+	defer consensusBlocksSub.Close()
+
 	// Start watching roothash blocks.
 	blocks, blocksSub, err := n.Consensus.RootHash().WatchBlocks(n.Runtime.ID())
 	if err != nil {
@@ -360,6 +373,15 @@ func (n *Node) worker() {
 		case <-n.stopCh:
 			n.logger.Info("termination requested")
 			return
+		case blk := <-consensusBlocks:
+			if blk == nil {
+				return
+			}
+			func() {
+				n.CrossNode.Lock()
+				defer n.CrossNode.Unlock()
+				n.Height = blk.Height
+			}()
 		case blk := <-blocks:
 			// Received a block (annotated).
 			func() {

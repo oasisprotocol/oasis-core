@@ -52,6 +52,9 @@ var (
 	errNotReady        = fmt.Errorf("executor: runtime not ready")
 	errCheckTxFailed   = fmt.Errorf("executor: CheckTx failed")
 	errNotTxnScheduler = fmt.Errorf("executor: not transaction scheduler in this round")
+
+	// Duration to wait before submitting the propose timeout request.
+	proposeTimeoutDelay = 2 * time.Second
 )
 
 var (
@@ -139,6 +142,9 @@ type Node struct { // nolint: maligned
 	// safely be used without holding the lock.
 	schedulerMutex sync.RWMutex
 	scheduler      schedulingAPI.Scheduler
+
+	// Guarded by .commonNode.CrossNode.
+	proposingTimeout bool
 
 	commonNode *committee.Node
 
@@ -496,6 +502,9 @@ func (n *Node) HandleNewBlockLocked(blk *block.Block) {
 			"round", blk.Header.Round,
 			"header_hash", blk.Header.EncodedHash(),
 		)
+		// Record time taken for successfully processing a batch.
+		batchProcessingTime.With(n.getMetricLabels()).Observe(time.Since(state.batchStartTime).Seconds())
+
 		// Removed processed transactions from queue.
 		if err := n.removeTxBatch(state.raw); err != nil {
 			n.logger.Warn("failed removing processed batch from queue",
@@ -505,9 +514,14 @@ func (n *Node) HandleNewBlockLocked(blk *block.Block) {
 		}
 
 		n.transitionLocked(StateWaitingForBatch{})
+	}
 
-		// Record time taken for successfully processing a batch.
-		batchProcessingTime.With(n.getMetricLabels()).Observe(time.Since(state.batchStartTime).Seconds())
+	// Clear the potentially set "is proposing timeout" flag from the previous round.
+	n.proposingTimeout = false
+
+	// Check if we are a proposer and if so try to immediately schedule a new batch.
+	if n.commonNode.Group.GetEpochSnapshot().IsTransactionScheduler(blk.Header.Round) {
+		go n.scheduler.Flush(false)
 	}
 }
 
@@ -601,6 +615,76 @@ func (n *Node) removeTxBatch(batch [][]byte) error {
 	return nil
 }
 
+func (n *Node) proposeTimeoutLocked() error {
+	// Do not propose a timeout if we are already proposing it.
+	// The flag will get cleared on the next round or if the propose timeout
+	// tx fails.
+	if n.proposingTimeout {
+		return nil
+	}
+
+	if n.commonNode.CurrentBlock == nil {
+		return fmt.Errorf("executor: propose timeout error, nil block")
+	}
+	rt, err := n.commonNode.Runtime.RegistryDescriptor(n.ctx)
+	if err != nil {
+		return err
+	}
+	proposerTimeout := rt.TxnScheduler.ProposerTimeout
+	currentBlockHeight := n.commonNode.CurrentBlockHeight
+	if n.commonNode.Height < currentBlockHeight+proposerTimeout {
+		n.logger.Debug("executor: proposer timeout not reached yet",
+			"height", n.commonNode.Height,
+			"current_block_height", currentBlockHeight,
+			"proposer_timeout", proposerTimeout,
+		)
+		return nil
+	}
+
+	n.logger.Debug("executor requesting proposer timeout",
+		"height", n.commonNode.Height,
+		"current_block_height", currentBlockHeight,
+		"proposer_timeout", proposerTimeout,
+	)
+	n.proposingTimeout = true
+	tx := roothash.NewRequestProposerTimeoutTx(0, nil, n.commonNode.Runtime.ID(), n.commonNode.CurrentBlock.Header.Round)
+	go func() {
+		// Wait a bit before actually proposing a timeout, to give the current
+		// scheduler some time to propose a batch in case it just received it.
+		//
+		// This prevents triggering a timeout when there is a long period
+		// of no transactions, as without this artificial delay, the non
+		// scheduler nodes would be faster in proposing a timeout than the
+		// scheduler node proposing a batch.
+		select {
+		case <-time.After(proposeTimeoutDelay):
+		case <-n.roundCtx.Done():
+			return
+		}
+
+		err := consensus.SignAndSubmitTx(n.roundCtx, n.commonNode.Consensus, n.commonNode.Identity.NodeSigner, tx)
+		switch err {
+		case nil:
+			n.logger.Info("executor timeout request finalized",
+				"height", n.commonNode.Height,
+				"current_block_height", currentBlockHeight,
+				"proposer_timeout", proposerTimeout,
+			)
+		default:
+			n.logger.Error("failed to submit executor timeout request",
+				"height", n.commonNode.Height,
+				"current_block_height", currentBlockHeight,
+				"err", err,
+			)
+			n.commonNode.CrossNode.Lock()
+			n.proposingTimeout = false
+			n.commonNode.CrossNode.Unlock()
+		}
+	}()
+
+	return nil
+}
+
 // Dispatch dispatches a batch to the executor committee.
 func (n *Node) Dispatch(batch transaction.RawBatch) error {
 	n.commonNode.CrossNode.Lock()
@@ -616,8 +700,23 @@ func (n *Node) Dispatch(batch transaction.RawBatch) error {
 
 	epoch := n.commonNode.Group.GetEpochSnapshot()
 	round := n.commonNode.CurrentBlock.Header.Round
-	// If we are not a scheduler at this round don't do anything.
-	if !epoch.IsTransactionScheduler(round) {
+
+	switch {
+	case epoch.IsTransactionScheduler(round):
+		// Continues bellow.
+	case epoch.IsExecutorMember():
+		// If we are an executor and not a scheduler try proposing a timeout.
+		err := n.proposeTimeoutLocked()
+		if err != nil {
+			n.logger.Error("error proposing a timeout",
+				"err", err,
+			)
+		}
+
+		fallthrough
+	default:
+		// XXX: Always return an error here in case we are not a txn scheduler,
+		// so that the batch is reinserted back into the queue.
 		return errNotTxnScheduler
 	}
 
@@ -1159,6 +1258,8 @@ func (n *Node) worker() {
 	defer hrtNotifier.Stop()
 
 	// Initialize transaction scheduling algorithm.
+	// TODO: watch for updates.
+	// https://github.com/oasisprotocol/oasis-core/issues/3203
 	runtime, err := n.commonNode.Runtime.RegistryDescriptor(n.ctx)
 	if err != nil {
 		n.logger.Error("failed to fetch runtime registry descriptor",
@@ -1274,7 +1375,7 @@ func (n *Node) worker() {
 			}()
 		case <-txnScheduleTicker.C:
 			// Flush a batch from algorithm.
-			n.scheduler.Flush()
+			n.scheduler.Flush(true)
 		case <-n.reselect:
 			// Recalculate select set.
 		}

@@ -87,7 +87,7 @@ func (m *ComputeBody) RootsForStorageReceipt() []hash.Hash {
 	}
 }
 
-// VerifyStorageReceiptSignature validates that the storage receipt signatures
+// VerifyStorageReceiptSignatures validates that the storage receipt signatures
 // match the signatures for the current merkle roots.
 //
 // Note: Ensuring that the signature is signed by the keypair(s) that are

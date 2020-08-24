@@ -95,6 +95,7 @@ func (sc *multipleRuntimesImpl) Fixture() (*oasis.NetworkFixture, error) {
 				MaxBatchSize:      1,
 				MaxBatchSizeBytes: 1024,
 				BatchFlushTimeout: 1 * time.Second,
+				ProposerTimeout:   10,
 			},
 			Storage: registry.StorageParameters{
 				GroupSize:               1,

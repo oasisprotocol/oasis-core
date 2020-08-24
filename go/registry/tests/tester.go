@@ -1616,6 +1616,7 @@ func NewTestRuntime(seed []byte, ent *TestEntity, isKeyManager bool) (*TestRunti
 			BatchFlushTimeout: 20 * time.Second,
 			MaxBatchSize:      1,
 			MaxBatchSizeBytes: 1024,
+			ProposerTimeout:   5,
 		},
 		Storage: api.StorageParameters{
 			GroupSize:               3,

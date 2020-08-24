@@ -68,7 +68,7 @@ func (s *scheduler) ScheduleTx(tx []byte) error {
 
 	// Try scheduling a batch.
 	if err := s.scheduleBatch(false); err != nil {
-		// XXX: Log a warning here as the exected common failures are
+		// XXX: Log a warning here as the expected common failures are
 		// whenever we try dispatching a batch and we are not the scheduler,
 		// or when another batch is being processed.
 		s.logger.Warn("failed scheduling a batch",
@@ -95,10 +95,10 @@ func (s *scheduler) RemoveTxBatch(tx [][]byte) error {
 	return s.incomingQueue.RemoveBatch(tx)
 }
 
-func (s *scheduler) Flush() error {
-	// Force schedule a batch.
-	if err := s.scheduleBatch(true); err != nil {
-		// XXX: Log a warning here as the exected common failures are
+func (s *scheduler) Flush(force bool) error {
+	// Schedule a batch.
+	if err := s.scheduleBatch(force); err != nil {
+		// XXX: Log a warning here as the expected common failures are
 		// whenever we try dispatching a batch and we are not the scheduler,
 		// or when another batch is being processed.
 		s.logger.Warn("failed scheduling a batch",

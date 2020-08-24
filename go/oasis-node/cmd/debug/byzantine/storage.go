@@ -168,3 +168,21 @@ func storageBroadcastApplyBatch(
 
 	return receipts, nil
 }
+
+func storageBroadcastApply(
+	ctx context.Context,
+	hnss []*honestNodeStorage,
+	req *storage.ApplyRequest,
+) ([]*storage.Receipt, error) {
+	var receipts []*storage.Receipt
+	for _, hns := range hnss {
+		r, err := hns.Apply(ctx, req)
+		if err != nil {
+			return receipts, fmt.Errorf("honest node storage Apply %s: %w", hns.nodeID, err)
+		}
+
+		receipts = append(receipts, r...)
+	}
+
+	return receipts, nil
+}

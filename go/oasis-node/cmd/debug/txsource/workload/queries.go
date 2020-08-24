@@ -729,6 +729,12 @@ func (q *queries) Run(gracefulExit context.Context, rng *rand.Rand, conn *grpc.C
 	}
 	q.runtimeGenesisRound = resp.Header.Round
 
+	// Wait for 2nd epoch, so that runtimes are up and running.
+	q.logger.Info("waiting for 2nd epoch")
+	if err := cnsc.WaitEpoch(ctx, 2); err != nil {
+		return fmt.Errorf("failed waiting for 2nd epoch: %w", err)
+	}
+
 	for {
 		loopCtx, cancel := context.WithTimeout(ctx, queriesIterationTimeout)
 

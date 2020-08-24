@@ -15,7 +15,6 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/registry/api"
 	"github.com/oasisprotocol/oasis-core/go/roothash/api/block"
 	"github.com/oasisprotocol/oasis-core/go/roothash/api/commitment"
-	scheduler "github.com/oasisprotocol/oasis-core/go/scheduler/api"
 )
 
 const (
@@ -52,12 +51,19 @@ var (
 	// ErrRuntimeSuspended is the error returned when the passed runtime is suspended.
 	ErrRuntimeSuspended = errors.New(ModuleName, 5, "roothash: runtime is suspended")
 
+	// ErrProposerTimeoutNotAllowed is the error returned when proposer timeout is not allowed.
+	ErrProposerTimeoutNotAllowed = errors.New(ModuleName, 6, "roothash: proposer timeout not allowed")
+
 	// MethodExecutorCommit is the method name for executor commit submission.
 	MethodExecutorCommit = transaction.NewMethodName(ModuleName, "ExecutorCommit", ExecutorCommit{})
+
+	// MethodExecutorProposerTimeout is the method name for executor.
+	MethodExecutorProposerTimeout = transaction.NewMethodName(ModuleName, "ExecutorProposerTimeout", ExecutorProposerTimeoutRequest{})
 
 	// Methods is a list of all methods supported by the roothash backend.
 	Methods = []transaction.MethodName{
 		MethodExecutorCommit,
+		MethodExecutorProposerTimeout,
 	}
 )
 
@@ -107,6 +113,20 @@ func NewExecutorCommitTx(nonce uint64, fee *transaction.Fee, runtimeID common.Na
 	return transaction.NewTransaction(nonce, fee, MethodExecutorCommit, &ExecutorCommit{
 		ID:      runtimeID,
 		Commits: commits,
+	})
+}
+
+// ExecutorProposerTimeoutRequest is an executor proposer timeout request.
+type ExecutorProposerTimeoutRequest struct {
+	ID    common.Namespace `json:"id"`
+	Round uint64           `json:"round"`
+}
+
+// NewRequestProposerTimeoutTx creates a new request proposer timeout transaction.
+func NewRequestProposerTimeoutTx(nonce uint64, fee *transaction.Fee, runtimeID common.Namespace, round uint64) *transaction.Transaction {
+	return transaction.NewTransaction(nonce, fee, MethodExecutorProposerTimeout, &ExecutorProposerTimeoutRequest{
+		ID:    runtimeID,
+		Round: round,
 	})
 }
 
@@ -185,13 +205,17 @@ type ConsensusParameters struct {
 const (
 	// GasOpComputeCommit is the gas operation identifier for compute commits.
 	GasOpComputeCommit transaction.Op = "compute_commit"
+
+	// GasOpProposerTimeout is the gas operation identifier for executor propose timeout cost.
+	GasOpProposerTimeout transaction.Op = "proposer_timeout"
 )
 
 // XXX: Define reasonable default gas costs.
 
 // DefaultGasCosts are the "default" gas costs for operations.
 var DefaultGasCosts = transaction.Costs{
-	GasOpComputeCommit: 1000,
+	GasOpComputeCommit:   1000,
+	GasOpProposerTimeout: 1000,
 }
 
 // SanityCheckBlocks examines the blocks table.
@@ -220,16 +244,4 @@ func (g *Genesis) SanityCheck() error {
 		}
 	}
 	return nil
-}
-
-// GetTransactionScheduler returns the transaction scheduler of the provided
-// committee based on the provided round.
-func GetTransactionScheduler(committee *scheduler.Committee, round uint64) (*scheduler.CommitteeNode, error) {
-	workers := committee.Workers()
-	numNodes := uint64(len(workers))
-	if numNodes == 0 {
-		return nil, fmt.Errorf("GetTransactionScheduler: no workers in commmittee")
-	}
-	schedulerIdx := round % numNodes
-	return workers[schedulerIdx], nil
 }

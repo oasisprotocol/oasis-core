@@ -88,22 +88,28 @@ func RootHashImplementationTests(t *testing.T, backend api.Backend, consensus co
 	success := t.Run("EpochTransitionBlock", func(t *testing.T) {
 		testEpochTransitionBlock(t, backend, consensus, rtStates)
 	})
-	if success {
-		// It only makes sense to run the SuccessfulRound test in case the
-		// EpochTransitionBlock was successful. Otherwise this may leave the
-		// committees set to nil and cause a crash.
-		t.Run("SuccessfulRound", func(t *testing.T) {
-			testSuccessfulRound(t, backend, consensus, identity, rtStates)
-		})
-
-		t.Run("RoundTimeout", func(t *testing.T) {
-			testRoundTimeout(t, backend, consensus, identity, rtStates)
-		})
-
-		t.Run("RoundTimeoutWithEpochTransition", func(t *testing.T) {
-			testRoundTimeoutWithEpochTransition(t, backend, consensus, identity, rtStates)
-		})
+	if !success {
+		return
 	}
+
+	// It only makes sense to run the following tests in case the
+	// EpochTransitionBlock was successful. Otherwise this may leave the
+	// committees set to nil and cause a crash.
+	t.Run("SuccessfulRound", func(t *testing.T) {
+		testSuccessfulRound(t, backend, consensus, identity, rtStates)
+	})
+
+	t.Run("RoundTimeout", func(t *testing.T) {
+		testRoundTimeout(t, backend, consensus, identity, rtStates)
+	})
+
+	t.Run("ProposerTimeout", func(t *testing.T) {
+		testProposerTimeout(t, backend, consensus, rtStates)
+	})
+
+	t.Run("RoundTimeoutWithEpochTransition", func(t *testing.T) {
+		testRoundTimeoutWithEpochTransition(t, backend, consensus, identity, rtStates)
+	})
 }
 
 func testGenesisBlock(t *testing.T, backend api.Backend, state *runtimeState) {
@@ -318,7 +324,7 @@ func (s *runtimeState) generateExecutorCommitments(t *testing.T, consensus conse
 
 		// Get scheduler at round.
 		var scheduler *scheduler.CommitteeNode
-		scheduler, err = api.GetTransactionScheduler(s.executorCommittee.committee, child.Header.Round)
+		scheduler, err = commitment.GetTransactionScheduler(s.executorCommittee.committee, child.Header.Round)
 		require.NoError(err, "roothash.TransactionScheduler")
 		// Get scheduler test node.
 		var schedulerNode *registryTests.TestNode
@@ -559,6 +565,99 @@ WaitForRoundTimeoutBlocks:
 			return
 		case <-time.After(recvTimeout):
 			t.Fatalf("failed to receive runtime block")
+		}
+	}
+}
+
+func testProposerTimeout(t *testing.T, backend api.Backend, consensus consensusAPI.Backend, states []*runtimeState) {
+	for _, state := range states {
+		state.testProposerTimeout(t, backend, consensus)
+	}
+}
+
+func (s *runtimeState) testProposerTimeout(t *testing.T, backend api.Backend, consensus consensusAPI.Backend) {
+	require := require.New(t)
+	ctx := context.Background()
+
+	child, err := backend.GetLatestBlock(ctx, s.rt.Runtime.ID, consensusAPI.HeightLatest)
+	require.NoError(err, "GetLatestBlock")
+
+	ch, sub, err := backend.WatchBlocks(s.rt.Runtime.ID)
+	require.NoError(err, "WatchBlocks")
+	defer sub.Close()
+
+	// Wait for enough blocks so we can force trigger a timeout.
+	consBlkCh, blocksSub, err := consensus.WatchBlocks(ctx)
+	require.NoError(err, "consensus.WatchBlocks")
+	defer blocksSub.Close()
+
+	var startBlock int64
+WaitForProposerTimeoutBlocks:
+	for {
+		select {
+		case blk := <-consBlkCh:
+			if blk == nil {
+				t.Fatalf("block channel closed before reaching round timeout")
+			}
+			if startBlock == 0 {
+				// XXX: Would be better to get the height of the latest roothash block,
+				// and wait based on that. But we don't get that height unless we
+				// Watch roothash blocks.
+				startBlock = blk.Height
+			}
+
+			// Wait for enough blocks so that proposer timeout is allowed.
+			if blk.Height >= startBlock+s.rt.Runtime.TxnScheduler.ProposerTimeout {
+				break WaitForProposerTimeoutBlocks
+			}
+		case <-time.After(recvTimeout):
+			t.Fatalf("failed to receive consensus block")
+		}
+	}
+
+	// Get scheduler at round.
+	var scheduler *scheduler.CommitteeNode
+	scheduler, err = commitment.GetTransactionScheduler(s.executorCommittee.committee, child.Header.Round)
+	require.NoError(err, "roothash.TransactionScheduler")
+
+	// Select node to trigger timeout.
+	var timeoutNode *registryTests.TestNode
+	for _, node := range s.executorCommittee.workers {
+		// Take first node that isn't the scheduler.
+		if !node.Signer.Public().Equal(scheduler.PublicKey) {
+			nd := node
+			timeoutNode = nd
+			break
+		}
+	}
+	require.NotNil(timeoutNode, "No nodes that aren't transaction scheduler among test nodes")
+
+	ctx, cancel := context.WithTimeout(ctx, recvTimeout)
+	defer cancel()
+
+	tx := api.NewRequestProposerTimeoutTx(0, nil, s.rt.Runtime.ID, child.Header.Round)
+	err = consensusAPI.SignAndSubmitTx(ctx, consensus, timeoutNode.Signer, tx)
+	require.NoError(err, "ExectutorTimeout")
+
+	// Ensure that the round was finalized.
+	for {
+		select {
+		case blk := <-ch:
+			header := blk.Block.Header
+
+			// Skip initial round.
+			if header.Round == child.Header.Round {
+				continue
+			}
+
+			// Next round must be a failure.
+			require.EqualValues(child.Header.Round+1, header.Round, "block round")
+			require.EqualValues(block.RoundFailed, header.HeaderType, "block header type must be RoundFailed")
+
+			// Nothing more to do after the failed block was received.
+			return
+		case <-time.After(recvTimeout):
+			t.Fatalf("failed to receive block")
 		}
 	}
 }

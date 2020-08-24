@@ -33,7 +33,7 @@ type Scheduler interface {
 	RemoveTxBatch(tx [][]byte) error
 
 	// Flush flushes queued transactions.
-	Flush() error
+	Flush(force bool) error
 
 	// UnscheduledSize returns number of unscheduled items.
 	UnscheduledSize() int

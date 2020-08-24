@@ -93,6 +93,7 @@ var (
 			MaxBatchSize:      1,
 			MaxBatchSizeBytes: 1024,
 			BatchFlushTimeout: 20 * time.Second,
+			ProposerTimeout:   20,
 		},
 		Storage: registry.StorageParameters{
 			GroupSize:               1,

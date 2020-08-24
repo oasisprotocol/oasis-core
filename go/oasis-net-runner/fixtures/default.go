@@ -111,6 +111,7 @@ func newDefaultFixture() (*oasis.NetworkFixture, error) {
 					MaxBatchSize:      1,
 					MaxBatchSizeBytes: 16 * 1024 * 1024, // 16 MiB
 					BatchFlushTimeout: 20 * time.Second,
+					ProposerTimeout:   20,
 				},
 				Storage: registry.StorageParameters{
 					GroupSize:               1,

@@ -57,8 +57,12 @@ func testScheduleTransactions(t *testing.T, td *testDispatcher, scheduler api.Sc
 	require.True(t, scheduler.IsQueued(txBytes), "IsQueued(tx)")
 
 	// Test FlushTx.
-	err = scheduler.Flush()
-	require.NoError(t, err, "Flush()")
+	err = scheduler.Flush(false)
+	require.NoError(t, err, "Flush(force=false)")
+	require.Equal(t, 1, scheduler.UnscheduledSize(), "transaction should remain scheduled after a non-forced flush")
+	require.True(t, scheduler.IsQueued(txBytes), "IsQueued(tx)")
+	err = scheduler.Flush(true)
+	require.NoError(t, err, "Flush(force=true)")
 	require.Equal(t, 0, scheduler.UnscheduledSize(), "no transactions should be scheduled after flushing a single tx")
 	require.Equal(t, 1, len(td.DispatchedBatches), "one batch should be dispatched")
 	require.EqualValues(t, transaction.RawBatch{testTx}, td.DispatchedBatches[0], "transaction should be dispatched")
@@ -75,14 +79,14 @@ func testScheduleTransactions(t *testing.T, td *testDispatcher, scheduler api.Sc
 	require.True(t, scheduler.IsQueued(tx2Bytes), "IsQueued(tx)")
 	require.False(t, scheduler.IsQueued(txBytes), "IsQueued(tx)")
 
-	err = scheduler.Flush()
-	require.Error(t, err, "dispatch failed", "Flush()")
+	err = scheduler.Flush(true)
+	require.Error(t, err, "dispatch failed", "Flush(force=true)")
 	require.Equal(t, 1, scheduler.UnscheduledSize(), "failed dispatch should return tx in the queue")
 
 	// Retry failed transaction with a Working Dispatcher.
 	td.ShouldFail = false
-	err = scheduler.Flush()
-	require.NoError(t, err, "Flush()")
+	err = scheduler.Flush(true)
+	require.NoError(t, err, "Flush(force=true)")
 	require.Equal(t, 0, scheduler.UnscheduledSize(), "no transactions after flushing a single tx")
 	require.False(t, scheduler.IsQueued(tx2Bytes), "IsQueued(tx)")
 	require.Equal(t, 1, len(td.DispatchedBatches), "one batch should be dispatched")

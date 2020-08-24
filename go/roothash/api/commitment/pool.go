@@ -33,6 +33,8 @@ var (
 	ErrTxnSchedSigInvalid     = p2pError.Permanent(errors.New(moduleName, 12, "roothash/commitment: txn scheduler signature invalid"))
 	ErrInvalidMessages        = p2pError.Permanent(errors.New(moduleName, 13, "roothash/commitment: invalid messages"))
 	ErrBadStorageReceipts     = errors.New(moduleName, 14, "roothash/commitment: bad storage receipts")
+	ErrTimeoutNotCorrectRound = errors.New(moduleName, 15, "roothash/commitment: timeout not for correct round")
+	ErrNodeIsScheduler        = errors.New(moduleName, 16, "roothash/commitment: node is scheduler")
 )
 
 const (
@@ -83,9 +85,28 @@ type Pool struct {
 	// be scheduled to be executed. Zero means that no timeout is to be scheduled.
 	NextTimeout int64 `json:"next_timeout"`
 
-	// MemberSet is a cached committee member set. If not provided it will be automatically
+	// memberSet is a cached committee member set. It will be automatically
 	// constructed based on the passed Committee.
-	MemberSet map[signature.PublicKey]bool `json:"member_set,omitempty"`
+	memberSet map[signature.PublicKey]bool
+
+	// workerSet is a cached committee worker set. It will be automatically
+	// constructed based on the passed Committee.
+	workerSet map[signature.PublicKey]bool
+}
+
+func (p *Pool) computeMemberSets() {
+	if p.Committee == nil {
+		return
+	}
+
+	p.memberSet = make(map[signature.PublicKey]bool, len(p.Committee.Members))
+	p.workerSet = make(map[signature.PublicKey]bool)
+	for _, m := range p.Committee.Members {
+		p.memberSet[m.PublicKey] = true
+		if m.Role == scheduler.Worker {
+			p.workerSet[m.PublicKey] = true
+		}
+	}
 }
 
 func (p *Pool) isMember(id signature.PublicKey) bool {
@@ -93,14 +114,35 @@ func (p *Pool) isMember(id signature.PublicKey) bool {
 		return false
 	}
 
-	if len(p.MemberSet) != len(p.Committee.Members) {
-		p.MemberSet = make(map[signature.PublicKey]bool, len(p.Committee.Members))
-		for _, m := range p.Committee.Members {
-			p.MemberSet[m.PublicKey] = true
-		}
+	if len(p.memberSet) == 0 {
+		p.computeMemberSets()
 	}
 
-	return p.MemberSet[id]
+	return p.memberSet[id]
+}
+
+func (p *Pool) isWorker(id signature.PublicKey) bool {
+	if p.Committee == nil {
+		return false
+	}
+
+	if len(p.workerSet) == 0 {
+		p.computeMemberSets()
+	}
+
+	return p.workerSet[id]
+}
+
+func (p *Pool) isScheduler(id signature.PublicKey, round uint64) bool {
+	if p.Committee == nil {
+		return false
+	}
+	scheduler, err := GetTransactionScheduler(p.Committee, round)
+	if err != nil {
+		return false
+	}
+
+	return scheduler.PublicKey.Equal(id)
 }
 
 // ResetCommitments resets the commitments in the pool, clears the discrepancy flag and the next
@@ -314,6 +356,47 @@ func (p *Pool) CheckEnoughCommitments(didTimeout bool) error {
 
 	if commits < required {
 		return ErrStillWaiting
+	}
+
+	return nil
+}
+
+// CheckProposerTimeout verifies executor timeout request conditions.
+func (p *Pool) CheckProposerTimeout(
+	ctx context.Context,
+	block *block.Block,
+	sv SignatureVerifier,
+	nl NodeLookup,
+	id signature.PublicKey,
+	round uint64,
+) error {
+	if p.Committee == nil {
+		return ErrNoCommittee
+	}
+	if p.Committee.Kind != scheduler.KindComputeExecutor {
+		return ErrInvalidCommitteeKind
+	}
+
+	// Ensure timeout is for correct round.
+	if round != block.Header.Round {
+		return ErrTimeoutNotCorrectRound
+	}
+
+	// Ensure there is no commitments yet.
+	if len(p.ExecuteCommitments) != 0 {
+		return ErrAlreadyCommitted
+	}
+
+	// Ensure that the node that is requesting a timeout is actually a committee
+	// worker.
+	if !p.isWorker(id) {
+		return ErrNotInCommittee
+	}
+
+	// Ensure that the node requesting a timeout is not the scheduler for
+	// current round.
+	if p.isScheduler(id, block.Header.Round) {
+		return ErrNodeIsScheduler
 	}
 
 	return nil
