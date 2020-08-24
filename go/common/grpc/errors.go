@@ -6,11 +6,25 @@ import (
 	any "github.com/golang/protobuf/ptypes/any"
 	spb "google.golang.org/genproto/googleapis/rpc/status"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
 	"github.com/oasisprotocol/oasis-core/go/common/cbor"
 	"github.com/oasisprotocol/oasis-core/go/common/errors"
 )
+
+// IsErrorCode returns true if the given error represents a specific gRPC error code.
+func IsErrorCode(err error, code codes.Code) bool {
+	var grpcError interface {
+		error
+		GRPCStatus() *status.Status
+	}
+	if !errors.As(err, &grpcError) {
+		return false
+	}
+
+	return grpcError.GRPCStatus().Code() == code
+}
 
 // grpcError is a serializable error.
 type grpcError struct {
