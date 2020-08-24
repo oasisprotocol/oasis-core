@@ -104,7 +104,7 @@ func newDefaultFixture() (*oasis.NetworkFixture, error) {
 				Executor: registry.ExecutorParameters{
 					GroupSize:       2,
 					GroupBackupSize: 1,
-					RoundTimeout:    20 * time.Second,
+					RoundTimeout:    20,
 				},
 				TxnScheduler: registry.TxnSchedulerParameters{
 					Algorithm:         registry.TxnSchedulerSimple,

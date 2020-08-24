@@ -1609,7 +1609,7 @@ func NewTestRuntime(seed []byte, ent *TestEntity, isKeyManager bool) (*TestRunti
 			GroupSize:         3,
 			GroupBackupSize:   5,
 			AllowedStragglers: 1,
-			RoundTimeout:      20 * time.Second,
+			RoundTimeout:      10,
 		},
 		TxnScheduler: api.TxnSchedulerParameters{
 			Algorithm:         api.TxnSchedulerSimple,

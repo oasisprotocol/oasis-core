@@ -96,6 +96,10 @@ func RootHashImplementationTests(t *testing.T, backend api.Backend, consensus co
 		t.Run("SuccessfulRound", func(t *testing.T) {
 			testSuccessfulRound(t, backend, consensus, identity, rtStates)
 		})
+
+		t.Run("RoundTimeout", func(t *testing.T) {
+			testRoundTimeout(t, backend, consensus, identity, rtStates)
+		})
 	}
 
 	// TODO: Test the various failures.
@@ -223,7 +227,11 @@ func testSuccessfulRound(t *testing.T, backend api.Backend, consensus consensusA
 	}
 }
 
-func (s *runtimeState) testSuccessfulRound(t *testing.T, backend api.Backend, consensus consensusAPI.Backend, identity *identity.Identity) {
+func (s *runtimeState) generateExecutorCommitments(t *testing.T, identity *identity.Identity, child *block.Block) (
+	parent *block.Block,
+	executorCommits []commitment.ExecutorCommitment,
+	executorNodes []*registryTests.TestNode,
+) {
 	require := require.New(t)
 
 	rt, executorCommittee := s.rt, s.executorCommittee
@@ -238,13 +246,6 @@ func (s *runtimeState) testSuccessfulRound(t *testing.T, backend api.Backend, co
 	storageBackend, err := storage.New(context.Background(), dataDir, ns, identity)
 	require.NoError(err, "storage.New")
 	defer storageBackend.Cleanup()
-
-	child, err := backend.GetLatestBlock(context.Background(), rt.Runtime.ID, consensusAPI.HeightLatest)
-	require.NoError(err, "GetLatestBlock")
-
-	ch, sub, err := backend.WatchBlocks(rt.Runtime.ID)
-	require.NoError(err, "WatchBlocks")
-	defer sub.Close()
 
 	// Generate a dummy I/O root.
 	ioRoot := storageAPI.Root{
@@ -265,7 +266,7 @@ func (s *runtimeState) testSuccessfulRound(t *testing.T, backend api.Backend, co
 	emptyRoot.Empty()
 
 	// Create the new block header that the nodes will commit to.
-	parent := &block.Block{
+	parent = &block.Block{
 		Header: block.Header{
 			Version:      0,
 			Namespace:    child.Header.Namespace,
@@ -292,10 +293,8 @@ func (s *runtimeState) testSuccessfulRound(t *testing.T, backend api.Backend, co
 	)
 
 	// Generate all the executor commitments.
-	var toCommit []*registryTests.TestNode
-	var executorCommits []commitment.ExecutorCommitment
-	toCommit = append(toCommit, executorCommittee.workers...)
-	for _, node := range toCommit {
+	executorNodes = append([]*registryTests.TestNode{}, executorCommittee.workers...)
+	for _, node := range executorNodes {
 		commitBody := commitment.ComputeBody{
 			Header: commitment.ComputeResultsHeader{
 				Round:        parent.Header.Round,
@@ -341,12 +340,26 @@ func (s *runtimeState) testSuccessfulRound(t *testing.T, backend api.Backend, co
 
 		executorCommits = append(executorCommits, *commit)
 	}
+	return
+}
+
+func (s *runtimeState) testSuccessfulRound(t *testing.T, backend api.Backend, consensus consensusAPI.Backend, identity *identity.Identity) {
+	require := require.New(t)
+
+	child, err := backend.GetLatestBlock(context.Background(), s.rt.Runtime.ID, consensusAPI.HeightLatest)
+	require.NoError(err, "GetLatestBlock")
+
+	ch, sub, err := backend.WatchBlocks(s.rt.Runtime.ID)
+	require.NoError(err, "WatchBlocks")
+	defer sub.Close()
 
 	ctx, cancel := context.WithTimeout(context.Background(), recvTimeout)
 	defer cancel()
 
-	tx := api.NewExecutorCommitTx(0, nil, rt.Runtime.ID, executorCommits)
-	err = consensusAPI.SignAndSubmitTx(ctx, consensus, toCommit[0].Signer, tx)
+	// Generate and submit all executor commitments.
+	parent, executorCommits, executorNodes := s.generateExecutorCommitments(t, identity, child)
+	tx := api.NewExecutorCommitTx(0, nil, s.rt.Runtime.ID, executorCommits)
+	err = consensusAPI.SignAndSubmitTx(ctx, consensus, executorNodes[0].Signer, tx)
 	require.NoError(err, "ExecutorCommit")
 
 	// Ensure that the round was finalized.
@@ -395,6 +408,80 @@ func (s *runtimeState) testSuccessfulRound(t *testing.T, backend api.Backend, co
 			return
 		case <-time.After(recvTimeout):
 			t.Fatalf("failed to receive block")
+		}
+	}
+}
+
+func testRoundTimeout(t *testing.T, backend api.Backend, consensus consensusAPI.Backend, identity *identity.Identity, states []*runtimeState) {
+	for _, state := range states {
+		state.testRoundTimeout(t, backend, consensus, identity)
+	}
+}
+
+func (s *runtimeState) testRoundTimeout(t *testing.T, backend api.Backend, consensus consensusAPI.Backend, identity *identity.Identity) {
+	require := require.New(t)
+
+	child, err := backend.GetLatestBlock(context.Background(), s.rt.Runtime.ID, consensusAPI.HeightLatest)
+	require.NoError(err, "GetLatestBlock")
+
+	ch, sub, err := backend.WatchBlocks(s.rt.Runtime.ID)
+	require.NoError(err, "WatchBlocks")
+	defer sub.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), recvTimeout)
+	defer cancel()
+
+	// Only submit a single commitment to cause a timeout.
+	_, executorCommits, executorNodes := s.generateExecutorCommitments(t, identity, child)
+	tx := api.NewExecutorCommitTx(0, nil, s.rt.Runtime.ID, executorCommits[:1])
+	err = consensusAPI.SignAndSubmitTx(ctx, consensus, executorNodes[0].Signer, tx)
+	require.NoError(err, "ExecutorCommit")
+
+	// Wait for RoundTimeout consensus blocks to pass.
+	consBlkCh, consBlkSub, err := consensus.WatchBlocks(context.Background())
+	require.NoError(err, "WatchBlocks")
+	defer consBlkSub.Close()
+
+	var startBlock int64
+WaitForRoundTimeoutBlocks:
+	for {
+		select {
+		case blk := <-consBlkCh:
+			if blk == nil {
+				t.Fatalf("block channel closed before reaching round timeout")
+			}
+			if startBlock == 0 {
+				startBlock = blk.Height
+			}
+			// We wait for 2.5*RoundTimeout blocks as the first timeout will trigger discrepancy
+			// resolution and the second timeout (slightly longer) will trigger a round failure.
+			if blk.Height-startBlock > (25*s.rt.Runtime.Executor.RoundTimeout)/10 {
+				break WaitForRoundTimeoutBlocks
+			}
+		case <-time.After(recvTimeout):
+			t.Fatalf("failed to receive consensus block")
+		}
+	}
+
+	// Ensure that the round failed due to a timeout.
+	for {
+		select {
+		case blk := <-ch:
+			header := blk.Block.Header
+
+			// Skip initial round.
+			if header.Round == child.Header.Round {
+				continue
+			}
+
+			// Next round must be a failure.
+			require.EqualValues(child.Header.Round+1, header.Round, "block round")
+			require.EqualValues(block.RoundFailed, header.HeaderType, "block header type must be RoundFailed")
+
+			// Nothing more to do after the block was received.
+			return
+		case <-time.After(recvTimeout):
+			t.Fatalf("failed to receive runtime block")
 		}
 	}
 }

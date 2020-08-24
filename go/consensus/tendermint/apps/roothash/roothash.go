@@ -29,15 +29,7 @@ import (
 	staking "github.com/oasisprotocol/oasis-core/go/staking/api"
 )
 
-// timerKindRound is the round timer kind.
-const timerKindRound = 0x01
-
 var _ tmapi.Application = (*rootHashApplication)(nil)
-
-type timerContext struct {
-	ID    common.Namespace `json:"id"`
-	Round uint64           `json:"round"`
-}
 
 type rootHashApplication struct {
 	state tmapi.ApplicationState
@@ -241,7 +233,6 @@ func (app *rootHashApplication) prepareNewCommittees(
 func (app *rootHashApplication) emitEmptyBlock(ctx *tmapi.Context, runtime *roothashState.RuntimeState, hdrType block.HeaderType) {
 	blk := block.NewEmptyBlock(runtime.CurrentBlock, uint64(ctx.Now().Unix()), hdrType)
 
-	runtime.Timer.Stop(ctx)
 	runtime.CurrentBlock = blk
 	runtime.CurrentBlockHeight = ctx.BlockHeight()
 	if runtime.ExecutorPool != nil {
@@ -346,12 +337,10 @@ func (app *rootHashApplication) onNewRuntime(ctx *tmapi.Context, runtime *regist
 	}
 
 	// Create new state containing the genesis block.
-	timerCtx := &timerContext{ID: runtime.ID}
 	err = state.SetRuntimeState(ctx, &roothashState.RuntimeState{
 		Runtime:      runtime,
 		CurrentBlock: genesisBlock,
 		GenesisBlock: genesisBlock,
-		Timer:        *tmapi.NewTimer(ctx, app, timerKindRound, runtime.ID[:], cbor.Marshal(timerCtx)),
 	})
 	if err != nil {
 		return fmt.Errorf("failed to set runtime state: %w", err)
@@ -375,92 +364,53 @@ func (app *rootHashApplication) onNewRuntime(ctx *tmapi.Context, runtime *regist
 }
 
 func (app *rootHashApplication) EndBlock(ctx *tmapi.Context, request types.RequestEndBlock) (types.ResponseEndBlock, error) {
+	state := roothashState.NewMutableState(ctx.State())
+
+	// Check if any runtimes require round timeouts to expire.
+	roundTimeouts, err := state.RuntimesWithRoundTimeouts(ctx, ctx.BlockHeight())
+	if err != nil {
+		return types.ResponseEndBlock{}, fmt.Errorf("failed to fetch runtimes with round timeouts: %w", err)
+	}
+	for _, runtimeID := range roundTimeouts {
+		if err = app.processRoundTimeout(ctx, state, runtimeID); err != nil {
+			return types.ResponseEndBlock{}, fmt.Errorf("failed to process round timeout: %w", err)
+		}
+	}
+
 	return types.ResponseEndBlock{}, nil
 }
 
-func (app *rootHashApplication) FireTimer(ctx *tmapi.Context, timer *tmapi.Timer) (err error) {
-	if timer.Kind() != timerKindRound {
-		return errors.New("tendermint/roothash: unexpected timer")
-	}
-
-	var tCtx timerContext
-	if err = cbor.Unmarshal(timer.Data(ctx), &tCtx); err != nil {
-		return fmt.Errorf("failed to unmarshal timer data: %w", err)
-	}
-
-	ctx.Logger().Warn("FireTimer: timer fired",
+func (app *rootHashApplication) processRoundTimeout(ctx *tmapi.Context, state *roothashState.MutableState, runtimeID common.Namespace) error {
+	ctx.Logger().Warn("round timeout expired, forcing finalization",
 		logging.LogEvent, roothash.LogEventTimerFired,
 	)
 
-	state := roothashState.NewMutableState(ctx.State())
-	rtState, err := state.RuntimeState(ctx, tCtx.ID)
+	rtState, err := state.RuntimeState(ctx, runtimeID)
 	if err != nil {
-		ctx.Logger().Error("FireTimer: failed to get state associated with timer",
-			"err", err,
-		)
 		return fmt.Errorf("failed to get runtime state: %w", err)
 	}
 
-	latestBlock := rtState.CurrentBlock
-	if latestBlock.Header.Round != tCtx.Round {
-		// Note: This should NEVER happen.
-		ctx.Logger().Error("FireTimer: spurious timeout detected",
-			"runtime", tCtx.ID,
-			"timer_round", tCtx.Round,
-			"current_round", latestBlock.Header.Round,
+	if !rtState.ExecutorPool.IsTimeout(ctx.BlockHeight()) {
+		// This should NEVER happen.
+		ctx.Logger().Error("no scheduled timeout",
+			"runtime_id", runtimeID,
+			"height", ctx.BlockHeight(),
+			"next_timeout", rtState.ExecutorPool.NextTimeout,
 		)
-
-		timer.Stop(ctx)
-
-		return errors.New("tendermint/roothash: spurious timeout")
+		return fmt.Errorf("no scheduled timeout")
 	}
 
-	ctx.Logger().Warn("FireTimer: round timeout expired, forcing finalization",
-		"runtime", tCtx.ID,
-		"timer_round", tCtx.Round,
-	)
-
-	if rtState.ExecutorPool.IsTimeout(ctx.Now()) {
-		if err = app.tryFinalizeBlock(ctx, rtState, true); err != nil {
-			ctx.Logger().Error("failed to finalize block",
-				"err", err,
-			)
-			return fmt.Errorf("failed to finalize block: %w", err)
-		}
+	if err = app.tryFinalizeBlock(ctx, rtState, true); err != nil {
+		ctx.Logger().Error("failed to finalize block",
+			"err", err,
+		)
+		return fmt.Errorf("failed to finalize block: %w", err)
 	}
 
 	if err = state.SetRuntimeState(ctx, rtState); err != nil {
 		return fmt.Errorf("failed to set runtime state: %w", err)
 	}
-
 	return nil
-}
-
-func (app *rootHashApplication) updateTimer(
-	ctx *tmapi.Context,
-	rtState *roothashState.RuntimeState,
-	blockNr uint64,
-) {
-	// Do not re-arm the timer if the round has already changed.
-	if blockNr != rtState.CurrentBlock.Header.Round {
-		return
-	}
-
-	nextTimeout := rtState.ExecutorPool.NextTimeout
-	if nextTimeout.IsZero() {
-		// Disarm timer.
-		ctx.Logger().Debug("disarming round timeout")
-		rtState.Timer.Stop(ctx)
-	} else {
-		// (Re-)arm timer.
-		ctx.Logger().Debug("(re-)arming round timeout")
-
-		timerCtx := &timerContext{
-			ID:    rtState.Runtime.ID,
-			Round: blockNr,
-		}
-		rtState.Timer.Reset(ctx, nextTimeout.Sub(ctx.Now()), cbor.Marshal(timerCtx))
-	}
 }
 
 func (app *rootHashApplication) tryFinalizeExecutor(
@@ -469,12 +419,9 @@ func (app *rootHashApplication) tryFinalizeExecutor(
 	forced bool,
 ) *block.Block {
 	runtime := rtState.Runtime
-	latestBlock := rtState.CurrentBlock
-	blockNr := latestBlock.Header.Round
+	blockNr := rtState.CurrentBlock.Header.Round
 
-	defer app.updateTimer(ctx, rtState, blockNr)
-
-	commit, err := rtState.ExecutorPool.TryFinalize(ctx.Now(), runtime.Executor.RoundTimeout, forced, true)
+	commit, err := rtState.ExecutorPool.TryFinalize(ctx.BlockHeight(), runtime.Executor.RoundTimeout, forced, true)
 	switch err {
 	case nil:
 		// Round has been finalized.
@@ -533,7 +480,7 @@ func (app *rootHashApplication) tryFinalizeExecutor(
 	return nil
 }
 
-func (app *rootHashApplication) postProcessFinalizedBlock(ctx *tmapi.Context, rtState *roothashState.RuntimeState, blk *block.Block) error {
+func (app *rootHashApplication) postProcessFinalizedBlock(ctx *tmapi.Context, rtState *roothashState.RuntimeState, blk *block.Block) {
 	sc := ctx.StartCheckpoint()
 	defer sc.Close()
 
@@ -553,14 +500,13 @@ func (app *rootHashApplication) postProcessFinalizedBlock(ctx *tmapi.Context, rt
 			// Substitute empty block.
 			app.emitEmptyBlock(ctx, rtState, block.RoundFailed)
 
-			return nil
+			return
 		}
 	}
 
 	sc.Commit()
 
 	// All good. Hook up the new block.
-	rtState.Timer.Stop(ctx)
 	rtState.CurrentBlock = blk
 	rtState.CurrentBlockHeight = ctx.BlockHeight()
 
@@ -573,23 +519,51 @@ func (app *rootHashApplication) postProcessFinalizedBlock(ctx *tmapi.Context, rt
 			Attribute(KeyFinalized, cbor.Marshal(tagV)).
 			Attribute(KeyRuntimeID, ValueRuntimeID(rtState.Runtime.ID)),
 	)
-	return nil
 }
 
 func (app *rootHashApplication) tryFinalizeBlock(
 	ctx *tmapi.Context,
 	rtState *roothashState.RuntimeState,
 	forced bool,
-) error {
+) (err error) {
+	defer func(previousTimeout int64) {
+		// Do not re-arm the round timeout if the timeout has not changed.
+		nextTimeout := rtState.ExecutorPool.NextTimeout
+		if previousTimeout == nextTimeout {
+			return
+		}
+
+		state := roothashState.NewMutableState(ctx.State())
+		if previousTimeout != commitment.TimeoutNever {
+			if err = state.ClearRoundTimeout(ctx, rtState.Runtime.ID, previousTimeout); err != nil {
+				err = fmt.Errorf("failed to clear round timeout: %w", err)
+				return
+			}
+		}
+
+		switch nextTimeout {
+		case commitment.TimeoutNever:
+			// Only clear round timeout (already done).
+			ctx.Logger().Debug("disarming round timeout")
+		default:
+			// Set a different round timeout.
+			ctx.Logger().Debug("(re-)arming round timeout",
+				"height", ctx.BlockHeight(),
+				"next_timeout", nextTimeout,
+			)
+			if err = state.ScheduleRoundTimeout(ctx, rtState.Runtime.ID, nextTimeout); err != nil {
+				err = fmt.Errorf("failed to schedule round timeout: %w", err)
+				return
+			}
+		}
+	}(rtState.ExecutorPool.NextTimeout)
+
 	finalizedBlock := app.tryFinalizeExecutor(ctx, rtState, forced)
 	if finalizedBlock == nil {
 		return nil
 	}
 
-	if err := app.postProcessFinalizedBlock(ctx, rtState, finalizedBlock); err != nil {
-		return err
-	}
-
+	app.postProcessFinalizedBlock(ctx, rtState, finalizedBlock)
 	return nil
 }
 

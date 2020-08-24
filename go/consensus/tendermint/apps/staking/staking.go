@@ -250,10 +250,6 @@ func (app *stakingApplication) onEpochChange(ctx *api.Context, epoch epochtime.E
 	return nil
 }
 
-func (app *stakingApplication) FireTimer(ctx *api.Context, timer *api.Timer) error {
-	return fmt.Errorf("tendermint/staking: unexpected timer")
-}
-
 // New constructs a new staking application instance.
 func New() api.Application {
 	return &stakingApplication{}

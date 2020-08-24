@@ -1051,6 +1051,12 @@ func VerifyRegisterRuntimeArgs( // nolint: gocyclo
 			)
 			return nil, fmt.Errorf("%w: executor group too small", ErrInvalidArgument)
 		}
+		if rt.Executor.RoundTimeout < 5 {
+			logger.Error("RegisterRuntime: round timeout too small",
+				"runtime", rt,
+			)
+			return nil, fmt.Errorf("%w: round timeout too small", ErrInvalidArgument)
+		}
 
 		// Ensure transaction scheduler parameters have sensible values.
 		if err := VerifyTransactionSchedulerArgs(&rt, logger); err != nil {

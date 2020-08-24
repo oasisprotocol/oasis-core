@@ -88,7 +88,7 @@ func (sc *multipleRuntimesImpl) Fixture() (*oasis.NetworkFixture, error) {
 			Executor: registry.ExecutorParameters{
 				GroupSize:       uint64(executorGroupSize),
 				GroupBackupSize: 0,
-				RoundTimeout:    10 * time.Second,
+				RoundTimeout:    20,
 			},
 			TxnScheduler: registry.TxnSchedulerParameters{
 				Algorithm:         registry.TxnSchedulerSimple,

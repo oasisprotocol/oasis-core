@@ -111,10 +111,6 @@ func (app *epochTimeMockApplication) EndBlock(ctx *api.Context, request types.Re
 	return types.ResponseEndBlock{}, nil
 }
 
-func (app *epochTimeMockApplication) FireTimer(ctx *api.Context, timer *api.Timer) error {
-	return fmt.Errorf("tendermint/epochtime_mock: unexpected timer")
-}
-
 func (app *epochTimeMockApplication) setEpoch(
 	ctx *api.Context,
 	state *mutableState,

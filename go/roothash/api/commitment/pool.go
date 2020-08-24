@@ -2,7 +2,6 @@ package commitment
 
 import (
 	"context"
-	"time"
 
 	"github.com/oasisprotocol/oasis-core/go/common/cbor"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
@@ -34,6 +33,15 @@ var (
 	ErrTxnSchedSigInvalid     = p2pError.Permanent(errors.New(moduleName, 12, "roothash/commitment: txn scheduler signature invalid"))
 	ErrInvalidMessages        = p2pError.Permanent(errors.New(moduleName, 13, "roothash/commitment: invalid messages"))
 	ErrBadStorageReceipts     = errors.New(moduleName, 14, "roothash/commitment: bad storage receipts")
+)
+
+const (
+	// TimeoutNever is the timeout value that never expires.
+	TimeoutNever = 0
+
+	// Backup worker round timeout stretch factor (15/10 = 1.5).
+	backupWorkerTimeoutFactorNumerator   = 15
+	backupWorkerTimeoutFactorDenominator = 10
 )
 
 var logger *logging.Logger = logging.GetLogger("roothash/commitment/pool")
@@ -72,9 +80,8 @@ type Pool struct {
 	// Discrepancy is a flag signalling that a discrepancy has been detected.
 	Discrepancy bool `json:"discrepancy"`
 	// NextTimeout is the time when the next call to TryFinalize(true) should
-	// be scheduled to be executed. Zero timestamp means that no timeout is
-	// to be scheduled.
-	NextTimeout time.Time `json:"next_timeout"`
+	// be scheduled to be executed. Zero means that no timeout is to be scheduled.
+	NextTimeout int64 `json:"next_timeout"`
 
 	// MemberSet is a cached committee member set. If not provided it will be automatically
 	// constructed based on the passed Committee.
@@ -96,14 +103,14 @@ func (p *Pool) isMember(id signature.PublicKey) bool {
 	return p.MemberSet[id]
 }
 
-// ResetCommitments resets the commitments in the pool and clears the discrepancy
-// flag.
+// ResetCommitments resets the commitments in the pool, clears the discrepancy flag and the next
+// timeout height.
 func (p *Pool) ResetCommitments() {
 	if p.ExecuteCommitments == nil || len(p.ExecuteCommitments) > 0 {
 		p.ExecuteCommitments = make(map[signature.PublicKey]OpenExecutorCommitment)
 	}
 	p.Discrepancy = false
-	p.NextTimeout = time.Time{}
+	p.NextTimeout = TimeoutNever
 }
 
 func (p *Pool) getCommitment(id signature.PublicKey) (OpenCommitment, bool) {
@@ -410,8 +417,8 @@ func (p *Pool) ResolveDiscrepancy() (OpenCommitment, error) {
 // discrepancy flag will not be changed but the method will still return the
 // ErrDiscrepancyDetected error.
 func (p *Pool) TryFinalize(
-	now time.Time,
-	roundTimeout time.Duration,
+	height int64,
+	roundTimeout int64,
 	didTimeout bool,
 	isTimeoutAuthoritative bool,
 ) (OpenCommitment, error) {
@@ -419,10 +426,9 @@ func (p *Pool) TryFinalize(
 	var rearmTimer bool
 	defer func() {
 		if rearmTimer {
-			// All timeouts are rounded to nearest second to ensure stable serialization.
-			p.NextTimeout = now.Add(roundTimeout).Round(time.Second)
+			p.NextTimeout = height + roundTimeout
 		} else {
-			p.NextTimeout = time.Time{}
+			p.NextTimeout = TimeoutNever
 		}
 	}()
 
@@ -445,6 +451,10 @@ func (p *Pool) TryFinalize(
 			// process the round, assuming that it is possible to do so.
 			if isTimeoutAuthoritative {
 				p.Discrepancy = true
+				// Arm the timer, but increase the roundTimeout as the backup workers should be
+				// given some more time to do the computation.
+				rearmTimer = true
+				roundTimeout = (backupWorkerTimeoutFactorNumerator * roundTimeout) / backupWorkerTimeoutFactorDenominator
 			}
 			return nil, ErrDiscrepancyDetected
 		}
@@ -483,6 +493,6 @@ func (p *Pool) GetExecutorCommitments() (result []ExecutorCommitment) {
 }
 
 // IsTimeout returns true if the time is up for pool's TryFinalize to be called.
-func (p *Pool) IsTimeout(now time.Time) bool {
-	return !p.NextTimeout.IsZero() && !p.NextTimeout.After(now)
+func (p *Pool) IsTimeout(height int64) bool {
+	return p.NextTimeout != TimeoutNever && height >= p.NextTimeout
 }

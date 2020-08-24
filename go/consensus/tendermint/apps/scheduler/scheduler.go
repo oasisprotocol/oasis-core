@@ -276,10 +276,6 @@ func (app *schedulerApplication) EndBlock(ctx *api.Context, req types.RequestEnd
 	return resp, nil
 }
 
-func (app *schedulerApplication) FireTimer(ctx *api.Context, t *api.Timer) error {
-	return fmt.Errorf("tendermint/scheduler: unexpected timer")
-}
-
 func (app *schedulerApplication) isSuitableExecutorWorker(ctx *api.Context, n *node.Node, rt *registry.Runtime) bool {
 	if !n.HasRoles(node.RoleComputeWorker) {
 		return false

@@ -72,12 +72,6 @@ type Application interface {
 	// Note: Errors are irrecoverable and will result in a panic.
 	EndBlock(*Context, tmabcitypes.RequestEndBlock) (tmabcitypes.ResponseEndBlock, error)
 
-	// FireTimer is called within BeginBlock before any other processing
-	// takes place for each timer that should fire.
-	//
-	// Note: Errors are irrecoverable and will result in a panic.
-	FireTimer(*Context, *Timer) error
-
 	// Commit is omitted because Applications will work on a cache of
 	// the state bound to the multiplexer.
 }

@@ -89,8 +89,8 @@ type ExecutorParameters struct {
 	// AllowedStragglers is the number of allowed stragglers.
 	AllowedStragglers uint64 `json:"allowed_stragglers"`
 
-	// RoundTimeout is the round timeout of the nodes in the group.
-	RoundTimeout time.Duration `json:"round_timeout"`
+	// RoundTimeout is the round timeout in consensus blocks.
+	RoundTimeout int64 `json:"round_timeout"`
 }
 
 // TxnSchedulerParameters are parameters for the transaction scheduler committee.
