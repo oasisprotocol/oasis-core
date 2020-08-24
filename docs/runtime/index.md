@@ -149,7 +149,9 @@ verify that all nodes have indeed computed the same result. As mentioned in case
 of discrepancies it will instruct nodes elected as _backups_ to repeat the
 computation.
 
-[cryptographic commitments]: ../../go/roothash/api/commitment
+<!-- markdownlint-disable line-length -->
+[cryptographic commitments]: https://pkg.go.dev/github.com/oasisprotocol/oasis-core/go/roothash/api/commitment?tab=doc
+<!-- markdownlint-enable line-length -->
 
 ### Storage Receipts
 

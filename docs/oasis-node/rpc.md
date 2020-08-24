@@ -10,11 +10,20 @@ including shutdown, of a node.**
 
 In order to support remote clients and different protocols (e.g. REST), a
 gateway that handles things like authentication and rate limiting should be
-used. We may provide implementations of such gateways in the future.
+used.
 
+{% hint style="info" %}
+An example of such a gateway is the [Oasis Core Rosetta Gateway] which exposes
+a subset of the consensus layer via the [Rosetta API].
+{% endhint %}
+
+<!-- markdownlint-disable line-length -->
 [consensus]: ../consensus/index.md
 [runtime]: ../runtime/index.md
 [submit transactions]: ../consensus/transactions.md#submission
+[Oasis Core Rosetta Gateway]: https://github.com/oasisprotocol/oasis-core-rosetta-gateway
+[Rosetta API]: https://www.rosetta-api.org
+<!-- markdownlint-enable line-length -->
 
 ## Protocol
 
@@ -29,6 +38,7 @@ by your local node at `/path/to/datadir/internal.sock` you can do:
 
 ```golang
 import (
+    // ...
     oasisGrpc "github.com/oasisprotocol/oasis-core/go/common/grpc"
 )
 
@@ -65,18 +75,37 @@ as the separator in method names, e.g., `/oasis-core.NodeControl/IsSynced`.
 
 The following gRPC services are exposed (with links to API documentation):
 
-* [Control] (`oasis-core.NodeController`)
-* [Consensus (client subset)] (`oasis-core.Consensus`)
-* [Consensus (light client subset)] (`oasis-core.ConsensusLight`)
-* [Staking] (`oasis-core.Staking`)
-* [Registry] (`oasis-core.Registry`)
-* [Scheduler] (`oasis-core.Scheduler`)
-* [Storage] (`oasis-core.Storage`)
-* [Runtime Client] (`oasis-core.RuntimeClient`)
-* [EnclaveRPC] (`oasis-core.EnclaveRPC`)
+* **General**
+  * [Node Control] (`oasis-core.NodeController`)
+* **Consensus Layer**
+  * [Consensus (client subset)] (`oasis-core.Consensus`)
+  * [Consensus (light client subset)] (`oasis-core.ConsensusLight`)
+  * [Staking] (`oasis-core.Staking`)
+  * [Registry] (`oasis-core.Registry`)
+  * [Scheduler] (`oasis-core.Scheduler`)
+* **Runtime Layer**
+  * [Storage] (`oasis-core.Storage`)
+  * [Runtime Client] (`oasis-core.RuntimeClient`)
+  * [EnclaveRPC] (`oasis-core.EnclaveRPC`)
 
 For more details about what the exposed services do see the respective
-documentation sections.
+documentation sections. The Go API also provides gRPC client implementations for
+all of the services which can be used after establishing a gRPC connection via
+the internal socket (multiple clients can share the same gRPC connection). For
+example in case of the consensus service using the connection we established in
+the previous example:
+
+```golang
+import (
+    // ...
+    consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
+)
+
+// ...
+
+cc := consensus.NewConsensusClient(conn)
+err := cc.SubmitTx(ctx, &tx)
+```
 
 <!-- markdownlint-disable line-length -->
 [Control]: https://pkg.go.dev/github.com/oasisprotocol/oasis-core/go/control/api?tab=doc#NodeController

@@ -8,9 +8,13 @@ an Oasis Core environment followed by [build instructions] for the respective
 environment (non-SGX or SGX). The following sections assume that you have
 successfully completed the required build steps.
 
-**NOTE: These instructions are for a development-only instance, do not use them
+{% hint style="danger" %}
+**WARNING**
+
+These instructions are for a development-only instance, do not use them
 for setting up any kind of production instances as they are unsafe and will
-result in insecure configurations leading to node compromise.**
+result in insecure configurations leading to node compromise.
+{% endhint %}
 
 [prerequisites]: prerequisites.md
 [build instructions]: building.md
@@ -75,8 +79,12 @@ oasis-node genesis init \
   --registry.debug.allow_unroutable_addresses
 ```
 
-**NOTE: This enables unsafe debug-only flags which must never be used in a
-production setting as they may result in node compromise.**
+{% hint style="danger" %}
+**WARNING**
+
+This enables unsafe debug-only flags which must never be used in a
+production setting as they may result in node compromise.
+{% endhint %}
 
 ## Running the Node
 
@@ -93,8 +101,12 @@ oasis-node \
   --log.level debug
 ```
 
-**NOTE: This enables unsafe debug-only flags which must never be used in a
-production setting as they may result in node compromise.**
+{% hint style="danger" %}
+**WARNING**
+
+This enables unsafe debug-only flags which must never be used in a
+production setting as they may result in node compromise.
+{% endhint %}
 
 ## Using the Node CLI
 
