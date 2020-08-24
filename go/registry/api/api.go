@@ -568,7 +568,7 @@ func VerifyRegisterNodeArgs( // nolint: gocyclo
 					"err", err,
 					"runtime_id", rt.ID,
 				)
-				return nil, nil, fmt.Errorf("%w: invalid runtime", ErrInvalidArgument)
+				return nil, nil, fmt.Errorf("failed to lookup runtime: %w", err)
 			}
 
 			// If the node indicates TEE support for any of it's runtimes,
@@ -684,7 +684,7 @@ func VerifyRegisterNodeArgs( // nolint: gocyclo
 			"err", err,
 			"consensus_id", n.Consensus.ID.String(),
 		)
-		return nil, nil, ErrInvalidArgument
+		return nil, nil, fmt.Errorf("failed to lookup node by subkey: %w", err)
 	}
 	if existingNode != nil && existingNode.ID != n.ID {
 		logger.Error("RegisterNode: duplicate node consensus ID",
@@ -700,7 +700,7 @@ func VerifyRegisterNodeArgs( // nolint: gocyclo
 			"err", err,
 			"p2p_id", n.P2P.ID.String(),
 		)
-		return nil, nil, ErrInvalidArgument
+		return nil, nil, fmt.Errorf("failed to lookup node by subkey: %w", err)
 	}
 	if existingNode != nil && existingNode.ID != n.ID {
 		logger.Error("RegisterNode: duplicate node P2P ID",
@@ -716,7 +716,7 @@ func VerifyRegisterNodeArgs( // nolint: gocyclo
 			"err", err,
 			"tls_pub_key", n.TLS.PubKey.String(),
 		)
-		return nil, nil, ErrInvalidArgument
+		return nil, nil, fmt.Errorf("failed to lookup node by subkey: %w", err)
 	}
 	if existingNode != nil && existingNode.ID != n.ID {
 		logger.Error("RegisterNode: duplicate node TLS public key",
