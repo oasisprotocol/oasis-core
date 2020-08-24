@@ -9,6 +9,7 @@ import (
 	"math"
 	"math/rand"
 	"os/exec"
+	"strconv"
 	"strings"
 	"time"
 
@@ -43,15 +44,17 @@ const (
 // TxSourceMultiShort uses multiple workloads for a short time.
 var TxSourceMultiShort scenario.Scenario = &txSourceImpl{
 	runtimeImpl: *newRuntimeImpl("txsource-multi-short", "", nil),
-	workloads: []string{
+	clientWorkloads: []string{
 		workload.NameCommission,
 		workload.NameDelegation,
 		workload.NameOversized,
 		workload.NameParallel,
-		workload.NameQueries,
 		workload.NameRegistration,
 		workload.NameRuntime,
 		workload.NameTransfer,
+	},
+	allNodeWorkloads: []string{
+		workload.NameQueries,
 	},
 	timeLimit:                         timeLimitShort,
 	livenessCheckInterval:             livenessCheckInterval,
@@ -63,15 +66,17 @@ var TxSourceMultiShort scenario.Scenario = &txSourceImpl{
 // TxSourceMulti uses multiple workloads.
 var TxSourceMulti scenario.Scenario = &txSourceImpl{
 	runtimeImpl: *newRuntimeImpl("txsource-multi", "", nil),
-	workloads: []string{
+	clientWorkloads: []string{
 		workload.NameCommission,
 		workload.NameDelegation,
 		workload.NameOversized,
 		workload.NameParallel,
-		workload.NameQueries,
 		workload.NameRegistration,
 		workload.NameRuntime,
 		workload.NameTransfer,
+	},
+	allNodeWorkloads: []string{
+		workload.NameQueries,
 	},
 	timeLimit:                         timeLimitLong,
 	nodeRestartInterval:               nodeRestartIntervalLong,
@@ -88,7 +93,9 @@ var TxSourceMulti scenario.Scenario = &txSourceImpl{
 type txSourceImpl struct { // nolint: maligned
 	runtimeImpl
 
-	workloads             []string
+	clientWorkloads  []string
+	allNodeWorkloads []string
+
 	timeLimit             time.Duration
 	nodeRestartInterval   time.Duration
 	livenessCheckInterval time.Duration
@@ -383,12 +390,17 @@ func (sc *txSourceImpl) manager(env *env.Env, errCh chan error) {
 	}
 }
 
-func (sc *txSourceImpl) startWorkload(childEnv *env.Env, errCh chan error, name string) error {
+func (sc *txSourceImpl) startWorkload(childEnv *env.Env, errCh chan error, name string, node *oasis.Node) error {
 	sc.Logger.Info("starting workload",
 		"name", name,
+		"node", node.Name,
 	)
 
 	d, err := childEnv.NewSubDir(fmt.Sprintf("workload-%s", name))
+	if err != nil {
+		return err
+	}
+	d, err = d.NewSubDir(node.Name)
 	if err != nil {
 		return err
 	}
@@ -403,7 +415,7 @@ func (sc *txSourceImpl) startWorkload(childEnv *env.Env, errCh chan error, name 
 
 	args := []string{
 		"debug", "txsource",
-		"--address", "unix:" + sc.Net.Clients()[0].SocketPath(),
+		"--address", "unix:" + node.SocketPath(),
 		"--" + common.CfgDebugAllowTestKeys,
 		"--" + common.CfgDataDir, d.String(),
 		"--" + flags.CfgDebugDontBlameOasis,
@@ -416,6 +428,12 @@ func (sc *txSourceImpl) startWorkload(childEnv *env.Env, errCh chan error, name 
 		"--" + txsource.CfgWorkload, name,
 		"--" + txsource.CfgTimeLimit, sc.timeLimit.String(),
 		"--" + txsource.CfgSeed, sc.seed,
+		// Use half the configured interval due to fast blocks.
+		"--" + workload.CfgConsensusNumKeptVersions, strconv.FormatUint(node.Consensus().PruneNumKept/2, 10),
+	}
+	// Disable runtime queries on non-client node.
+	if node.Name != sc.Net.Clients()[0].Name {
+		args = append(args, "--"+workload.CfgQueriesRuntimeEnabled+"=false")
 	}
 	nodeBinary := sc.Net.Config().NodeBinary
 
@@ -437,6 +455,7 @@ func (sc *txSourceImpl) startWorkload(childEnv *env.Env, errCh chan error, name 
 
 		sc.Logger.Info("workload finished",
 			"name", name,
+			"node", node.Name,
 		)
 	}()
 
@@ -446,7 +465,8 @@ func (sc *txSourceImpl) startWorkload(childEnv *env.Env, errCh chan error, name 
 func (sc *txSourceImpl) Clone() scenario.Scenario {
 	return &txSourceImpl{
 		runtimeImpl:                       *sc.runtimeImpl.Clone().(*runtimeImpl),
-		workloads:                         sc.workloads,
+		clientWorkloads:                   sc.clientWorkloads,
+		allNodeWorkloads:                  sc.allNodeWorkloads,
 		timeLimit:                         sc.timeLimit,
 		nodeRestartInterval:               sc.nodeRestartInterval,
 		livenessCheckInterval:             sc.livenessCheckInterval,
@@ -477,10 +497,18 @@ func (sc *txSourceImpl) Run(childEnv *env.Env) error {
 	}
 
 	// Start all configured workloads.
-	errCh := make(chan error, len(sc.workloads)+2)
-	for _, name := range sc.workloads {
-		if err := sc.startWorkload(childEnv, errCh, name); err != nil {
-			return fmt.Errorf("failed to start workload %s: %w", name, err)
+	errCh := make(chan error, len(sc.clientWorkloads)+len(sc.allNodeWorkloads)+2)
+	for _, name := range sc.clientWorkloads {
+		if err := sc.startWorkload(childEnv, errCh, name, &sc.Net.Clients()[0].Node); err != nil {
+			return fmt.Errorf("failed to start client workload %s: %w", name, err)
+		}
+	}
+	nodes := sc.Net.Nodes()
+	for _, name := range sc.allNodeWorkloads {
+		for _, node := range nodes {
+			if err := sc.startWorkload(childEnv, errCh, name, node); err != nil {
+				return fmt.Errorf("failed to start workload %s on node %s: %w", name, node.Name, err)
+			}
 		}
 	}
 	// Start background scenario manager.

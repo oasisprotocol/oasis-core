@@ -182,6 +182,9 @@ func transferFunds(
 
 // Workload is a DRBG-backed schedule of transactions.
 type Workload interface {
+	// NeedsFunds should return true if the workload requires funding.
+	NeedsFunds() bool
+
 	// Run executes the workload.
 	// If `gracefulExit`'s deadline passes, it is not an error.
 	// Return `nil` after any short-ish amount of time in that case.

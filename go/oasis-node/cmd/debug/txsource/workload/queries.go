@@ -10,12 +10,14 @@ import (
 	flag "github.com/spf13/pflag"
 	"github.com/spf13/viper"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
 
 	"github.com/oasisprotocol/oasis-core/go/common"
 	"github.com/oasisprotocol/oasis-core/go/common/cbor"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	"github.com/oasisprotocol/oasis-core/go/common/entity"
+	cmnGrpc "github.com/oasisprotocol/oasis-core/go/common/grpc"
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
 	"github.com/oasisprotocol/oasis-core/go/common/node"
 	"github.com/oasisprotocol/oasis-core/go/common/quantity"
@@ -40,6 +42,8 @@ const (
 	//
 	// Note that this is only for consensus state versions, not runtime versions.
 	CfgConsensusNumKeptVersions = "queries.consensus.num_kept_versions"
+	// CfgQueriesRuntimeEnabled configures whether runtime queries are enabled.
+	CfgQueriesRuntimeEnabled = "queries.runtime.enabled"
 
 	// Ratio of queries that should query height 1.
 	queriesEarliestHeightRatio = 0.1
@@ -50,6 +54,10 @@ const (
 	// in a single iteration. The purpose of this timeout is to prevent the client being stuck and
 	// treating that as an error instead.
 	queriesIterationTimeout = 60 * time.Second
+
+	// queriesMaxConsecutiveRetries is the maximum number of consecutive retries for unavailable
+	// nodes.
+	queriesMaxConsecutiveRetries = 30
 )
 
 // QueriesFlags are the queries workload flags.
@@ -681,8 +689,10 @@ func (q *queries) doQueries(ctx context.Context, rng *rand.Rand) error {
 	if err := q.doStakingQueries(ctx, rng, height); err != nil {
 		return fmt.Errorf("staking queries error: %w", err)
 	}
-	if err := q.doRuntimeQueries(ctx, rng); err != nil {
-		return fmt.Errorf("runtime queries error: %w", err)
+	if viper.GetBool(CfgQueriesRuntimeEnabled) {
+		if err := q.doRuntimeQueries(ctx, rng); err != nil {
+			return fmt.Errorf("runtime queries error: %w", err)
+		}
 	}
 
 	q.logger.Debug("Queries done",
@@ -693,6 +703,12 @@ func (q *queries) doQueries(ctx context.Context, rng *rand.Rand) error {
 	return nil
 }
 
+// Implements Workload.
+func (q *queries) NeedsFunds() bool {
+	return false
+}
+
+// Implements Workload.
 func (q *queries) Run(gracefulExit context.Context, rng *rand.Rand, conn *grpc.ClientConn, cnsc consensus.ClientBackend, fundingAccount signature.Signer) error {
 	ctx := context.Background()
 
@@ -729,18 +745,34 @@ func (q *queries) Run(gracefulExit context.Context, rng *rand.Rand, conn *grpc.C
 	}
 	q.runtimeGenesisRound = resp.Header.Round
 
-	// Wait for 2nd epoch, so that runtimes are up and running.
-	q.logger.Info("waiting for 2nd epoch")
-	if err := cnsc.WaitEpoch(ctx, 2); err != nil {
-		return fmt.Errorf("failed waiting for 2nd epoch: %w", err)
+	if viper.GetBool(CfgQueriesRuntimeEnabled) {
+		// Wait for 2nd epoch, so that runtimes are up and running.
+		q.logger.Info("waiting for 2nd epoch")
+		if err := cnsc.WaitEpoch(ctx, 2); err != nil {
+			return fmt.Errorf("failed waiting for 2nd epoch: %w", err)
+		}
 	}
 
+	var retries int
 	for {
+		if retries > queriesMaxConsecutiveRetries {
+			return fmt.Errorf("too many consecutive retries")
+		}
+
 		loopCtx, cancel := context.WithTimeout(ctx, queriesIterationTimeout)
 
 		err := q.doQueries(loopCtx, rng)
 		cancel()
-		if err != nil {
+		switch {
+		case err == nil:
+			retries = 0
+		case cmnGrpc.IsErrorCode(err, codes.Unavailable):
+			// Don't immediately fail when the node is unavailable as it may be restarting.
+			q.logger.Warn("node unavailable, retrying",
+				"err", err,
+			)
+			retries++
+		default:
 			return err
 		}
 
@@ -755,5 +787,6 @@ func (q *queries) Run(gracefulExit context.Context, rng *rand.Rand, conn *grpc.C
 
 func init() {
 	QueriesFlags.Int64(CfgConsensusNumKeptVersions, 0, "Number of last versions kept by nodes")
+	QueriesFlags.Bool(CfgQueriesRuntimeEnabled, true, "Whether runtime queries should be enabled")
 	_ = viper.BindPFlags(QueriesFlags)
 }

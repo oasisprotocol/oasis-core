@@ -32,6 +32,12 @@ var parallelLogger = logging.GetLogger("cmd/txsource/workload/parallel")
 
 type parallel struct{}
 
+// Implements Workload.
+func (parallel) NeedsFunds() bool {
+	return true
+}
+
+// Implements workload.
 func (parallel) Run(
 	gracefulExit context.Context,
 	rng *rand.Rand,

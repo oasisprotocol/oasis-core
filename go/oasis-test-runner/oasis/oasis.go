@@ -200,6 +200,11 @@ func (n *Node) handleExit(cmdErr error) error {
 	}
 }
 
+// Consensus returns the node's consensus configuration.
+func (n *Node) Consensus() ConsensusFixture {
+	return n.consensus
+}
+
 // SetConsensusStateSync configures wheteher a node should perform
 func (n *Node) SetConsensusStateSync(cfg *ConsensusStateSyncCfg) {
 	n.Lock()
@@ -358,6 +363,30 @@ func (net *Network) Clients() []*Client {
 // Byzantine returns the byzantine nodes associated with the network.
 func (net *Network) Byzantine() []*Byzantine {
 	return net.byzantine
+}
+
+// Nodes returns all the validator, compute, storage, keymanager and client nodes associated with
+// the network.
+//
+// Seed, sentry, byzantine and IAS proxy nodes are omitted.
+func (net *Network) Nodes() []*Node {
+	var nodes []*Node
+	for _, v := range net.Validators() {
+		nodes = append(nodes, &v.Node)
+	}
+	for _, s := range net.StorageWorkers() {
+		nodes = append(nodes, &s.Node)
+	}
+	for _, c := range net.ComputeWorkers() {
+		nodes = append(nodes, &c.Node)
+	}
+	for _, k := range net.Keymanagers() {
+		nodes = append(nodes, &k.Node)
+	}
+	for _, v := range net.Clients() {
+		nodes = append(nodes, &v.Node)
+	}
+	return nodes
 }
 
 // Errors returns the channel by which node failures will be conveyed.

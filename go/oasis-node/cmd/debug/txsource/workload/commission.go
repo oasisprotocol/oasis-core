@@ -357,6 +357,12 @@ func (c *commission) doAmendCommissionSchedule(ctx context.Context, rng *rand.Ra
 	return nil
 }
 
+// Implements Workload.
+func (c *commission) NeedsFunds() bool {
+	return true
+}
+
+// Implements Workload.
 func (c *commission) Run(gracefulExit context.Context, rng *rand.Rand, conn *grpc.ClientConn, cnsc consensus.ClientBackend, fundingAccount signature.Signer) error {
 	var err error
 	ctx := context.Background()
