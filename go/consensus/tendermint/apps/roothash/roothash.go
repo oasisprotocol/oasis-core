@@ -155,7 +155,9 @@ func (app *rootHashApplication) onCommitteeChanged(ctx *tmapi.Context, epoch epo
 
 			// Emit an empty epoch transition block in the new round. This is required so that
 			// the clients can be sure what state is final when an epoch transition occurs.
-			app.emitEmptyBlock(ctx, rtState, block.EpochTransition)
+			if err = app.emitEmptyBlock(ctx, rtState, block.EpochTransition); err != nil {
+				return fmt.Errorf("failed to emit empty block: %w", err)
+			}
 
 			// Set the executor pool.
 			rtState.ExecutorPool = executorPool
@@ -189,7 +191,9 @@ func (app *rootHashApplication) suspendUnpaidRuntime(
 	rtState.ExecutorPool = nil
 
 	// Emity an empty block signalling that the runtime was suspended.
-	app.emitEmptyBlock(ctx, rtState, block.Suspended)
+	if err := app.emitEmptyBlock(ctx, rtState, block.Suspended); err != nil {
+		return fmt.Errorf("failed to emit empty block: %w", err)
+	}
 
 	return nil
 }
@@ -230,12 +234,19 @@ func (app *rootHashApplication) prepareNewCommittees(
 	return
 }
 
-func (app *rootHashApplication) emitEmptyBlock(ctx *tmapi.Context, runtime *roothashState.RuntimeState, hdrType block.HeaderType) {
+func (app *rootHashApplication) emitEmptyBlock(ctx *tmapi.Context, runtime *roothashState.RuntimeState, hdrType block.HeaderType) error {
 	blk := block.NewEmptyBlock(runtime.CurrentBlock, uint64(ctx.Now().Unix()), hdrType)
 
 	runtime.CurrentBlock = blk
 	runtime.CurrentBlockHeight = ctx.BlockHeight()
 	if runtime.ExecutorPool != nil {
+		// Clear timeout if there was one scheduled.
+		if runtime.ExecutorPool.NextTimeout != commitment.TimeoutNever {
+			state := roothashState.NewMutableState(ctx.State())
+			if err := state.ClearRoundTimeout(ctx, runtime.Runtime.ID, runtime.ExecutorPool.NextTimeout); err != nil {
+				return fmt.Errorf("failed to clear round timeout: %w", err)
+			}
+		}
 		runtime.ExecutorPool.ResetCommitments()
 	}
 
@@ -248,6 +259,7 @@ func (app *rootHashApplication) emitEmptyBlock(ctx *tmapi.Context, runtime *root
 			Attribute(KeyFinalized, cbor.Marshal(tagV)).
 			Attribute(KeyRuntimeID, ValueRuntimeID(runtime.Runtime.ID)),
 	)
+	return nil
 }
 
 func (app *rootHashApplication) ExecuteTx(ctx *tmapi.Context, tx *transaction.Transaction) error {
@@ -413,11 +425,13 @@ func (app *rootHashApplication) processRoundTimeout(ctx *tmapi.Context, state *r
 	return nil
 }
 
-func (app *rootHashApplication) tryFinalizeExecutor(
+// tryFinalizeExecutorCommits tries to finalize the executor commitments into a new runtime block.
+// The caller must take care of clearing and scheduling the round timeouts.
+func (app *rootHashApplication) tryFinalizeExecutorCommits(
 	ctx *tmapi.Context,
 	rtState *roothashState.RuntimeState,
 	forced bool,
-) *block.Block {
+) (*block.Block, error) {
 	runtime := rtState.Runtime
 	blockNr := rtState.CurrentBlock.Header.Round
 
@@ -437,16 +451,17 @@ func (app *rootHashApplication) tryFinalizeExecutor(
 		blk.Header.StateRoot = hdr.StateRoot
 		// Messages omitted on purpose.
 
+		// Timeout will be cleared by caller.
 		rtState.ExecutorPool.ResetCommitments()
 
-		return blk
+		return blk, nil
 	case commitment.ErrStillWaiting:
 		// Need more commits.
 		ctx.Logger().Debug("insufficient commitments for finality, waiting",
 			"round", blockNr,
 		)
 
-		return nil
+		return nil, nil
 	case commitment.ErrDiscrepancyDetected:
 		// Discrepancy has been detected.
 		ctx.Logger().Warn("executor discrepancy detected",
@@ -465,7 +480,7 @@ func (app *rootHashApplication) tryFinalizeExecutor(
 				Attribute(KeyExecutionDiscrepancyDetected, cbor.Marshal(tagV)).
 				Attribute(KeyRuntimeID, ValueRuntimeID(runtime.ID)),
 		)
-		return nil
+		return nil, nil
 	default:
 	}
 
@@ -476,11 +491,14 @@ func (app *rootHashApplication) tryFinalizeExecutor(
 		logging.LogEvent, roothash.LogEventRoundFailed,
 	)
 
-	app.emitEmptyBlock(ctx, rtState, block.RoundFailed)
-	return nil
+	if err := app.emitEmptyBlock(ctx, rtState, block.RoundFailed); err != nil {
+		return nil, fmt.Errorf("failed to emit empty block: %w", err)
+	}
+
+	return nil, nil
 }
 
-func (app *rootHashApplication) postProcessFinalizedBlock(ctx *tmapi.Context, rtState *roothashState.RuntimeState, blk *block.Block) {
+func (app *rootHashApplication) postProcessFinalizedBlock(ctx *tmapi.Context, rtState *roothashState.RuntimeState, blk *block.Block) error {
 	sc := ctx.StartCheckpoint()
 	defer sc.Close()
 
@@ -498,9 +516,11 @@ func (app *rootHashApplication) postProcessFinalizedBlock(ctx *tmapi.Context, rt
 			)
 
 			// Substitute empty block.
-			app.emitEmptyBlock(ctx, rtState, block.RoundFailed)
+			if err := app.emitEmptyBlock(ctx, rtState, block.RoundFailed); err != nil {
+				return fmt.Errorf("failed to emit empty block: %w", err)
+			}
 
-			return
+			return nil
 		}
 	}
 
@@ -519,6 +539,7 @@ func (app *rootHashApplication) postProcessFinalizedBlock(ctx *tmapi.Context, rt
 			Attribute(KeyFinalized, cbor.Marshal(tagV)).
 			Attribute(KeyRuntimeID, ValueRuntimeID(rtState.Runtime.ID)),
 	)
+	return nil
 }
 
 func (app *rootHashApplication) tryFinalizeBlock(
@@ -527,6 +548,10 @@ func (app *rootHashApplication) tryFinalizeBlock(
 	forced bool,
 ) (err error) {
 	defer func(previousTimeout int64) {
+		if err != nil {
+			return
+		}
+
 		// Do not re-arm the round timeout if the timeout has not changed.
 		nextTimeout := rtState.ExecutorPool.NextTimeout
 		if previousTimeout == nextTimeout {
@@ -558,12 +583,17 @@ func (app *rootHashApplication) tryFinalizeBlock(
 		}
 	}(rtState.ExecutorPool.NextTimeout)
 
-	finalizedBlock := app.tryFinalizeExecutor(ctx, rtState, forced)
+	finalizedBlock, err := app.tryFinalizeExecutorCommits(ctx, rtState, forced)
+	if err != nil {
+		return fmt.Errorf("failed to finalize executor commits: %w", err)
+	}
 	if finalizedBlock == nil {
 		return nil
 	}
 
-	app.postProcessFinalizedBlock(ctx, rtState, finalizedBlock)
+	if err = app.postProcessFinalizedBlock(ctx, rtState, finalizedBlock); err != nil {
+		return fmt.Errorf("failed to post process finalized block: %w", err)
+	}
 	return nil
 }
 
