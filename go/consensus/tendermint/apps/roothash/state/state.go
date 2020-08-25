@@ -57,27 +57,49 @@ func NewImmutableState(ctx context.Context, state api.ApplicationQueryState, ver
 	return &ImmutableState{is}, nil
 }
 
-// RuntimesWithRoundTimeouts returns the runtimes that have round timeouts scheduled at the given
-// height.
-func (s *ImmutableState) RuntimesWithRoundTimeouts(ctx context.Context, height int64) ([]common.Namespace, error) {
+func (s *ImmutableState) runtimesWithRoundTimeouts(ctx context.Context, height *int64) ([]common.Namespace, []int64, error) {
 	it := s.is.NewIterator(ctx)
 	defer it.Close()
 
+	var startKey []byte
+	if height == nil {
+		startKey = roundTimeoutQueueKeyFmt.Encode()
+	} else {
+		startKey = roundTimeoutQueueKeyFmt.Encode(height)
+	}
+
 	var runtimeIDs []common.Namespace
-	for it.Seek(roundTimeoutQueueKeyFmt.Encode(height)); it.Valid(); it.Next() {
+	var heights []int64
+	for it.Seek(startKey); it.Valid(); it.Next() {
 		var decHeight int64
-		if !roundTimeoutQueueKeyFmt.Decode(it.Key(), &decHeight) || decHeight != height {
+		if !roundTimeoutQueueKeyFmt.Decode(it.Key(), &decHeight) || (height != nil && decHeight != *height) {
 			break
 		}
 
 		var runtimeID common.Namespace
 		if err := runtimeID.UnmarshalBinary(it.Value()); err != nil {
-			return nil, api.UnavailableStateError(err)
+			return nil, nil, api.UnavailableStateError(err)
 		}
 
 		runtimeIDs = append(runtimeIDs, runtimeID)
+		if height == nil {
+			heights = append(heights, decHeight)
+		}
 	}
-	return runtimeIDs, nil
+	return runtimeIDs, heights, nil
+}
+
+// RuntimesWithRoundTimeouts returns the runtimes that have round timeouts scheduled at the given
+// height.
+func (s *ImmutableState) RuntimesWithRoundTimeouts(ctx context.Context, height int64) ([]common.Namespace, error) {
+	runtimeIDs, _, err := s.runtimesWithRoundTimeouts(ctx, &height)
+	return runtimeIDs, err
+}
+
+// RuntimesWithRoundTimeoutsAny returns the runtimes that have round timeouts scheduled at any
+// height.
+func (s *ImmutableState) RuntimesWithRoundTimeoutsAny(ctx context.Context) ([]common.Namespace, []int64, error) {
+	return s.runtimesWithRoundTimeouts(ctx, nil)
 }
 
 // RuntimeState returns the roothash runtime state for a specific runtime.
