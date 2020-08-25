@@ -741,17 +741,6 @@ func (mux *abciMux) EndBlock(req types.RequestEndBlock) types.ResponseEndBlock {
 	ctx := mux.state.NewContext(api.ContextEndBlock, mux.currentTime)
 	defer ctx.Close()
 
-	// Fire all application timers first.
-	for _, app := range mux.appsByLexOrder {
-		if err := api.FireTimers(ctx, app); err != nil {
-			mux.logger.Error("EndBlock: fatal error during timer fire",
-				"err", err,
-				"app", app.Name(),
-			)
-			panic("mux: EndBlock: fatal error in application: '" + app.Name() + "': " + err.Error())
-		}
-	}
-
 	// Dispatch EndBlock to all applications.
 	resp := mux.BaseApplication.EndBlock(req)
 	for _, app := range mux.appsByLexOrder {

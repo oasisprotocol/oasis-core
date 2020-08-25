@@ -372,7 +372,7 @@ func runtimeFromFlags() (*registry.Runtime, signature.Signer, error) { // nolint
 			GroupSize:         viper.GetUint64(CfgExecutorGroupSize),
 			GroupBackupSize:   viper.GetUint64(CfgExecutorGroupBackupSize),
 			AllowedStragglers: viper.GetUint64(CfgExecutorAllowedStragglers),
-			RoundTimeout:      viper.GetDuration(CfgExecutorRoundTimeout),
+			RoundTimeout:      viper.GetInt64(CfgExecutorRoundTimeout),
 		},
 		TxnScheduler: registry.TxnSchedulerParameters{
 			Algorithm:         viper.GetString(CfgTxnSchedulerAlgorithm),
@@ -457,14 +457,6 @@ func runtimeFromFlags() (*registry.Runtime, signature.Signer, error) { // nolint
 	if err = rt.ValidateBasic(true); err != nil {
 		return nil, nil, fmt.Errorf("invalid runtime descriptor: %w", err)
 	}
-	// Validate transaction scheduler configuration.
-	if err = registry.VerifyTransactionSchedulerArgs(rt, logger); err != nil {
-		return nil, nil, fmt.Errorf("invalid runtime transaction scheduler configuration: %w", err)
-	}
-	// Validate storage configuration.
-	if err = registry.VerifyRegisterRuntimeStorageArgs(rt, logger); err != nil {
-		return nil, nil, fmt.Errorf("invalid runtime storage configuration: %w", err)
-	}
 
 	return rt, signer, nil
 }
@@ -537,7 +529,7 @@ func init() {
 	runtimeFlags.Uint64(CfgExecutorGroupSize, 1, "Number of workers in the runtime executor group/committee")
 	runtimeFlags.Uint64(CfgExecutorGroupBackupSize, 0, "Number of backup workers in the runtime executor group/committee")
 	runtimeFlags.Uint64(CfgExecutorAllowedStragglers, 0, "Number of stragglers allowed per round in the runtime executor group")
-	runtimeFlags.Duration(CfgExecutorRoundTimeout, 10*time.Second, "Executor committee round timeout for this runtime")
+	runtimeFlags.Int64(CfgExecutorRoundTimeout, 5, "Executor committee round timeout for this runtime (in consensus blocks)")
 
 	// Init Transaction scheduler flags.
 	runtimeFlags.String(CfgTxnSchedulerAlgorithm, registry.TxnSchedulerSimple, "Transaction scheduling algorithm")

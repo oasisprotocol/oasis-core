@@ -89,11 +89,26 @@ type ExecutorParameters struct {
 	// AllowedStragglers is the number of allowed stragglers.
 	AllowedStragglers uint64 `json:"allowed_stragglers"`
 
-	// RoundTimeout is the round timeout of the nodes in the group.
-	RoundTimeout time.Duration `json:"round_timeout"`
+	// RoundTimeout is the round timeout in consensus blocks.
+	RoundTimeout int64 `json:"round_timeout"`
 }
 
-// TxnSchedulerParameters are parameters for the transaction scheduler committee.
+// ValidateBasic performs basic executor parameter validity checks.
+func (e *ExecutorParameters) ValidateBasic() error {
+	if e.GroupSize == 0 {
+		return fmt.Errorf("executor primary group too small")
+	}
+	if e.AllowedStragglers > e.GroupSize || (e.GroupBackupSize > 0 && e.AllowedStragglers > e.GroupBackupSize) {
+		return fmt.Errorf("number of allowed stragglers too large")
+	}
+
+	if e.RoundTimeout < 5 {
+		return fmt.Errorf("round timeout too small")
+	}
+	return nil
+}
+
+// TxnSchedulerParameters are parameters for the runtime transaction scheduler.
 type TxnSchedulerParameters struct {
 	// Algorithm is the transaction scheduling algorithm.
 	Algorithm string `json:"algorithm"`
@@ -107,6 +122,24 @@ type TxnSchedulerParameters struct {
 
 	// MaxBatchSizeBytes denote what is the max size of a scheduled batch in bytes.
 	MaxBatchSizeBytes uint64 `json:"max_batch_size_bytes"`
+}
+
+// ValidateBasic performs basic transaction scheduler parameter validity checks.
+func (t *TxnSchedulerParameters) ValidateBasic() error {
+	// Ensure txnscheduler parameters have sensible values.
+	if t.Algorithm != TxnSchedulerSimple {
+		return fmt.Errorf("invalid transaction scheduler algorithm")
+	}
+	if t.BatchFlushTimeout < 50*time.Millisecond {
+		return fmt.Errorf("transaction scheduler batch flush timeout parameter too small")
+	}
+	if t.MaxBatchSize < 1 {
+		return fmt.Errorf("transaction scheduler max batch size parameter too small")
+	}
+	if t.MaxBatchSizeBytes < 1024 {
+		return fmt.Errorf("transaction scheduler max batch bytes size parameter too small")
+	}
+	return nil
 }
 
 // StorageParameters are parameters for the storage committee.
@@ -133,6 +166,42 @@ type StorageParameters struct {
 
 	// CheckpointChunkSize is the chunk size parameter for checkpoint creation.
 	CheckpointChunkSize uint64 `json:"checkpoint_chunk_size"`
+}
+
+// ValidateBasic performs basic storage parameter validity checks.
+func (s *StorageParameters) ValidateBasic() error {
+	// Ensure there is at least one member of the storage group.
+	if s.GroupSize == 0 {
+		return fmt.Errorf("storage group too small")
+	}
+	if s.MinWriteReplication == 0 {
+		return fmt.Errorf("storage write replication factor must be non-zero")
+	}
+	if s.MinWriteReplication > s.GroupSize {
+		return fmt.Errorf("storage write replication factor must be less than or equal to group size")
+	}
+
+	// Ensure limit parameters have sensible values.
+	if s.MaxApplyWriteLogEntries < 10 {
+		return fmt.Errorf("storage MaxApplyWriteLogEntries parameter too small")
+	}
+	if s.MaxApplyOps < 2 {
+		return fmt.Errorf("storage MaxApplyOps parameter too small")
+	}
+
+	// Verify storage checkpointing configuration if enabled.
+	if s.CheckpointInterval > 0 {
+		if s.CheckpointInterval < 10 {
+			return fmt.Errorf("storage CheckpointInterval parameter too small")
+		}
+		if s.CheckpointNumKept == 0 {
+			return fmt.Errorf("storage CheckpointNumKept parameter too small")
+		}
+		if s.CheckpointChunkSize < 1024*1024 {
+			return fmt.Errorf("storage CheckpointChunkSize parameter too small")
+		}
+	}
+	return nil
 }
 
 // AnyNodeRuntimeAdmissionPolicy allows any node to register.
@@ -256,6 +325,43 @@ func (r *Runtime) ValidateBasic(strictVersion bool) error {
 				maxRuntimeDescriptorVersion,
 			)
 		}
+	}
+
+	switch r.Kind {
+	case KindCompute:
+		// Compute runtime
+		if r.ID.IsKeyManager() {
+			return fmt.Errorf("compute runtime ID has the key manager flag set")
+		}
+		if r.KeyManager != nil && r.ID.Equal(r.KeyManager) {
+			return fmt.Errorf("compute runtime has self as key manager")
+		}
+
+		if err := r.Executor.ValidateBasic(); err != nil {
+			return fmt.Errorf("bad executor parameters: %w", err)
+		}
+		if err := r.TxnScheduler.ValidateBasic(); err != nil {
+			return fmt.Errorf("bad txn scheduler parameters: %w", err)
+		}
+		if err := r.Storage.ValidateBasic(); err != nil {
+			return fmt.Errorf("bad storage parameters: %w", err)
+		}
+	case KindKeyManager:
+		// Key manager runtime.
+		if !r.ID.IsKeyManager() {
+			return fmt.Errorf("key manager runtime ID does not have the key manager flag set")
+		}
+		if r.KeyManager != nil {
+			return fmt.Errorf("key manager runtime cannot itself have a key manager")
+		}
+
+		// Currently the keymanager implementation assumes SGX. Unless this is a
+		// test runtime, a keymanager without SGX is disallowed.
+		if !r.ID.IsTest() && r.TEEHardware != node.TEEHardwareIntelSGX {
+			return fmt.Errorf("non-SGX keymanager runtime")
+		}
+	default:
+		return fmt.Errorf("bad runtime kind: %s", r.Kind)
 	}
 
 	if err := r.Staking.ValidateBasic(r.Kind); err != nil {

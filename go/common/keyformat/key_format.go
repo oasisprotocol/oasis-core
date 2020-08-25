@@ -132,6 +132,12 @@ func (k *KeyFormat) Encode(values ...interface{}) []byte {
 		case *uint64:
 			meta.checkSize(i, 8)
 			binary.BigEndian.PutUint64(buf, *t)
+		case int64:
+			meta.checkSize(i, 8)
+			binary.BigEndian.PutUint64(buf, uint64(t))
+		case *int64:
+			meta.checkSize(i, 8)
+			binary.BigEndian.PutUint64(buf, uint64(*t))
 		case encoding.BinaryMarshaler:
 			var (
 				data []byte
@@ -203,6 +209,9 @@ func (k *KeyFormat) Decode(data []byte, values ...interface{}) bool {
 		case *uint64:
 			meta.checkSize(i, 8)
 			*t = binary.BigEndian.Uint64(buf)
+		case *int64:
+			meta.checkSize(i, 8)
+			*t = int64(binary.BigEndian.Uint64(buf))
 		case encoding.BinaryUnmarshaler:
 			var err error
 			if meta.custom != nil {
@@ -244,6 +253,10 @@ func (k *KeyFormat) getElementMeta(l interface{}) *elementMeta {
 	case uint64:
 		return &elementMeta{size: 8}
 	case *uint64:
+		return &elementMeta{size: 8}
+	case int64:
+		return &elementMeta{size: 8}
+	case *int64:
 		return &elementMeta{size: 8}
 	case CustomFormat:
 		return &elementMeta{size: t.Size(), custom: t}

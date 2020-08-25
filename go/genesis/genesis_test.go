@@ -202,7 +202,7 @@ func TestGenesisSanityCheck(t *testing.T) {
 		KeyManager: &testKMRuntime.ID,
 		Executor: registry.ExecutorParameters{
 			GroupSize:    1,
-			RoundTimeout: 1 * time.Second,
+			RoundTimeout: 20,
 		},
 		TxnScheduler: registry.TxnSchedulerParameters{
 			Algorithm:         "simple",

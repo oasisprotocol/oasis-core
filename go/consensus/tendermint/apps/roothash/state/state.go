@@ -24,6 +24,10 @@ var (
 	//
 	// Value is CBOR-serialized roothash.ConsensusParameters.
 	parametersKeyFmt = keyformat.New(0x21)
+	// roundTimeoutQueueKeyFmt is the key format used for the round timeout queue.
+	//
+	// The format is (height, runtimeID). Value is runtimeID.
+	roundTimeoutQueueKeyFmt = keyformat.New(0x22, int64(0), keyformat.H(&common.Namespace{}))
 )
 
 // RuntimeState is the per-runtime roothash state.
@@ -37,7 +41,6 @@ type RuntimeState struct {
 	CurrentBlockHeight int64        `json:"current_block_height"`
 
 	ExecutorPool *commitment.Pool `json:"executor_pool"`
-	Timer        api.Timer        `json:"timer"`
 }
 
 // ImmutableState is the immutable roothash state wrapper.
@@ -52,6 +55,29 @@ func NewImmutableState(ctx context.Context, state api.ApplicationQueryState, ver
 	}
 
 	return &ImmutableState{is}, nil
+}
+
+// RuntimesWithRoundTimeouts returns the runtimes that have round timeouts scheduled at the given
+// height.
+func (s *ImmutableState) RuntimesWithRoundTimeouts(ctx context.Context, height int64) ([]common.Namespace, error) {
+	it := s.is.NewIterator(ctx)
+	defer it.Close()
+
+	var runtimeIDs []common.Namespace
+	for it.Seek(roundTimeoutQueueKeyFmt.Encode(height)); it.Valid(); it.Next() {
+		var decHeight int64
+		if !roundTimeoutQueueKeyFmt.Decode(it.Key(), &decHeight) || decHeight != height {
+			break
+		}
+
+		var runtimeID common.Namespace
+		if err := runtimeID.UnmarshalBinary(it.Value()); err != nil {
+			return nil, api.UnavailableStateError(err)
+		}
+
+		runtimeIDs = append(runtimeIDs, runtimeID)
+	}
+	return runtimeIDs, nil
 }
 
 // RuntimeState returns the roothash runtime state for a specific runtime.
@@ -137,5 +163,18 @@ func (s *MutableState) SetRuntimeState(ctx context.Context, state *RuntimeState)
 // SetConsensusParameters sets roothash consensus parameters.
 func (s *MutableState) SetConsensusParameters(ctx context.Context, params *roothash.ConsensusParameters) error {
 	err := s.ms.Insert(ctx, parametersKeyFmt.Encode(), cbor.Marshal(params))
+	return api.UnavailableStateError(err)
+}
+
+// ScheduleRoundTimeout schedules a new runtime round timeout at a given height.
+func (s *MutableState) ScheduleRoundTimeout(ctx context.Context, runtimeID common.Namespace, height int64) error {
+	encodedID, _ := runtimeID.MarshalBinary()
+	err := s.ms.Insert(ctx, roundTimeoutQueueKeyFmt.Encode(height, &runtimeID), encodedID)
+	return api.UnavailableStateError(err)
+}
+
+// ClearRoundTimeout clears a previously scheduled round timeout at a given height.
+func (s *MutableState) ClearRoundTimeout(ctx context.Context, runtimeID common.Namespace, height int64) error {
+	err := s.ms.Remove(ctx, roundTimeoutQueueKeyFmt.Encode(height, &runtimeID))
 	return api.UnavailableStateError(err)
 }

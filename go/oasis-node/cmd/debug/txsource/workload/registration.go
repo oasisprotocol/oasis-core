@@ -50,7 +50,7 @@ func getRuntime(entityID signature.PublicKey, id common.Namespace) *registry.Run
 		Kind:      registry.KindCompute,
 		Executor: registry.ExecutorParameters{
 			GroupSize:    1,
-			RoundTimeout: 1 * time.Second,
+			RoundTimeout: 5,
 		},
 		TxnScheduler: registry.TxnSchedulerParameters{
 			Algorithm:         "simple",

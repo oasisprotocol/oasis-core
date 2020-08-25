@@ -72,10 +72,6 @@ func (app *beaconApplication) EndBlock(ctx *api.Context, req types.RequestEndBlo
 	return types.ResponseEndBlock{}, nil
 }
 
-func (app *beaconApplication) FireTimer(ctx *api.Context, t *api.Timer) error {
-	return fmt.Errorf("beacon: unexpected timer")
-}
-
 func (app *beaconApplication) onBeaconEpochChange(ctx *api.Context, epoch epochtime.EpochTime, req types.RequestBeginBlock) error {
 	var entropyCtx, entropy []byte
 

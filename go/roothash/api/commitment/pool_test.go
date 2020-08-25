@@ -5,7 +5,6 @@ import (
 	"crypto/rand"
 	"errors"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/require"
 
@@ -543,8 +542,8 @@ func TestTryFinalize(t *testing.T) {
 	sk2 := sks[1]
 	sk3 := sks[2]
 
-	now := time.Now()
-	roundTimeout := 10 * time.Second
+	now := int64(1)
+	roundTimeout := int64(10)
 
 	t.Run("NoDiscrepancy", func(t *testing.T) {
 		// Create a pool.
@@ -569,7 +568,7 @@ func TestTryFinalize(t *testing.T) {
 		_, err = pool.TryFinalize(now, roundTimeout, false, true)
 		require.Error(t, err, "TryFinalize")
 		require.Equal(t, ErrStillWaiting, err, "TryFinalize")
-		require.EqualValues(t, now.Add(roundTimeout).Round(time.Second), pool.NextTimeout, "NextTimeout should be set")
+		require.EqualValues(t, now+roundTimeout, pool.NextTimeout, "NextTimeout should be set")
 
 		// Adding commitment 2 should succeed.
 		err = pool.AddExecutorCommitment(context.Background(), childBlk, nopSV, nl, commit2)
@@ -579,7 +578,7 @@ func TestTryFinalize(t *testing.T) {
 		require.NoError(t, err, "TryFinalize")
 		header := dc.ToDDResult().(ComputeResultsHeader)
 		require.EqualValues(t, &body.Header, &header, "DD should return the same header")
-		require.True(t, pool.NextTimeout.IsZero(), "NextTimeout should be zero")
+		require.EqualValues(t, TimeoutNever, pool.NextTimeout, "NextTimeout should be TimeoutNever")
 	})
 
 	t.Run("Discrepancy", func(t *testing.T) {
@@ -614,7 +613,7 @@ func TestTryFinalize(t *testing.T) {
 		_, err = pool.TryFinalize(now, roundTimeout, false, true)
 		require.Error(t, err, "TryFinalize")
 		require.Equal(t, ErrStillWaiting, err, "TryFinalize")
-		require.EqualValues(t, now.Add(roundTimeout).Round(time.Second), pool.NextTimeout, "NextTimeout should be set")
+		require.EqualValues(t, now+roundTimeout, pool.NextTimeout, "NextTimeout should be set")
 
 		// Adding commitment 2 should succeed.
 		err = pool.AddExecutorCommitment(context.Background(), childBlk, nopSV, nl, commit2)
@@ -639,7 +638,7 @@ func TestTryFinalize(t *testing.T) {
 		require.NoError(t, err, "TryFinalize")
 		header := dc.ToDDResult().(ComputeResultsHeader)
 		require.EqualValues(t, &correctHeader, &header, "DR should return the same header")
-		require.True(t, pool.NextTimeout.IsZero(), "NextTimeout should be zero")
+		require.EqualValues(t, TimeoutNever, pool.NextTimeout, "NextTimeout should be TimeoutNever")
 	})
 
 	t.Run("Timeout", func(t *testing.T) {
@@ -667,30 +666,30 @@ func TestTryFinalize(t *testing.T) {
 		_, err = pool.TryFinalize(now, roundTimeout, false, true)
 		require.Error(t, err, "TryFinalize")
 		require.Equal(t, ErrStillWaiting, err, "TryFinalize")
-		require.EqualValues(t, now.Add(roundTimeout).Round(time.Second), pool.NextTimeout, "NextTimeout should be set")
+		require.EqualValues(t, now+roundTimeout, pool.NextTimeout, "NextTimeout should be set")
 
 		// Simulate a non-authoritative timeout -- this should return
 		// a discrepancy detected error, but not change the internal
 		// discrepancy flag.
-		nowAfterTimeout := now.Add(roundTimeout)
+		nowAfterTimeout := now + roundTimeout
 		_, err = pool.TryFinalize(nowAfterTimeout, roundTimeout, true, false)
 		require.Error(t, err, "TryFinalize")
 		require.Equal(t, ErrDiscrepancyDetected, err)
 		require.Equal(t, false, pool.Discrepancy)
-		require.True(t, pool.NextTimeout.IsZero(), "NextTimeout should be zero")
+		require.EqualValues(t, TimeoutNever, pool.NextTimeout, "NextTimeout should be TimeoutNever")
 
 		// Simulate a timeout -- this should cause a discrepancy.
 		_, err = pool.TryFinalize(nowAfterTimeout, roundTimeout, true, true)
 		require.Error(t, err, "TryFinalize")
 		require.Equal(t, ErrDiscrepancyDetected, err)
 		require.Equal(t, true, pool.Discrepancy)
-		require.True(t, pool.NextTimeout.IsZero(), "NextTimeout should be zero")
+		require.EqualValues(t, nowAfterTimeout+(15*roundTimeout)/10, pool.NextTimeout, "NextTimeout should be set to 1.5*RoundTimeout")
 
 		// There should not be enough executor commitments from backup workers.
 		_, err = pool.TryFinalize(nowAfterTimeout, roundTimeout, false, true)
 		require.Error(t, err, "TryFinalize")
 		require.Equal(t, ErrStillWaiting, err)
-		require.EqualValues(t, nowAfterTimeout.Add(roundTimeout).Round(time.Second), pool.NextTimeout, "NextTimeout should be set")
+		require.EqualValues(t, nowAfterTimeout+roundTimeout, pool.NextTimeout, "NextTimeout should be set")
 
 		// Resolve discrepancy with commit from backup worker.
 		err = pool.AddExecutorCommitment(context.Background(), childBlk, nopSV, nl, commit3)
@@ -700,7 +699,7 @@ func TestTryFinalize(t *testing.T) {
 		require.NoError(t, err, "TryFinalize")
 		header := dc.ToDDResult().(ComputeResultsHeader)
 		require.EqualValues(t, &correctHeader, &header, "DR should return the same header")
-		require.True(t, pool.NextTimeout.IsZero(), "NextTimeout should be zero")
+		require.EqualValues(t, TimeoutNever, pool.NextTimeout, "NextTimeout should be TimeoutNever")
 	})
 }
 

@@ -616,8 +616,8 @@ func (sc *registryCLIImpl) testRuntime(ctx context.Context, childEnv *env.Env, c
 		Executor: registry.ExecutorParameters{
 			GroupSize:         1,
 			GroupBackupSize:   2,
-			AllowedStragglers: 3,
-			RoundTimeout:      4 * time.Second,
+			AllowedStragglers: 1,
+			RoundTimeout:      5,
 		},
 		TxnScheduler: registry.TxnSchedulerParameters{
 			Algorithm:         registry.TxnSchedulerSimple,

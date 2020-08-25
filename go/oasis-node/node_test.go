@@ -86,7 +86,7 @@ var (
 		Executor: registry.ExecutorParameters{
 			GroupSize:       1,
 			GroupBackupSize: 0,
-			RoundTimeout:    20 * time.Second,
+			RoundTimeout:    20,
 		},
 		TxnScheduler: registry.TxnSchedulerParameters{
 			Algorithm:         registry.TxnSchedulerSimple,

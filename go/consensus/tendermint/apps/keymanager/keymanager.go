@@ -85,10 +85,6 @@ func (app *keymanagerApplication) EndBlock(ctx *tmapi.Context, request types.Req
 	return types.ResponseEndBlock{}, nil
 }
 
-func (app *keymanagerApplication) FireTimer(ctx *tmapi.Context, timer *tmapi.Timer) error {
-	return fmt.Errorf("tendermint/keymanager: unexpected timer")
-}
-
 func (app *keymanagerApplication) onEpochChange(ctx *tmapi.Context, epoch epochtime.EpochTime) error {
 	// Query the runtime and node lists.
 	regState := registryState.NewMutableState(ctx.State())

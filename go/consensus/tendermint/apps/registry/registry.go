@@ -108,10 +108,6 @@ func (app *registryApplication) EndBlock(ctx *api.Context, request types.Request
 	return types.ResponseEndBlock{}, nil
 }
 
-func (app *registryApplication) FireTimer(*api.Context, *api.Timer) error {
-	return fmt.Errorf("tendermint/registry: unexpected timer")
-}
-
 func (app *registryApplication) onRegistryEpochChanged(ctx *api.Context, registryEpoch epochtime.EpochTime) (err error) {
 	state := registryState.NewMutableState(ctx.State())
 	stakeState := stakingState.NewMutableState(ctx.State())

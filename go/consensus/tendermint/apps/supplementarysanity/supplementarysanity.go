@@ -133,10 +133,6 @@ func (app *supplementarySanityApplication) endBlockImpl(ctx *api.Context, reques
 	return nil
 }
 
-func (app *supplementarySanityApplication) FireTimer(*api.Context, *api.Timer) error {
-	return fmt.Errorf("tendermint/supplementarysanity: unexpected timer")
-}
-
 func New(interval uint64) api.Application {
 	return &supplementarySanityApplication{
 		interval: int64(interval),
