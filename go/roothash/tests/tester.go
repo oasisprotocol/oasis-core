@@ -15,7 +15,6 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	"github.com/oasisprotocol/oasis-core/go/common/identity"
-	"github.com/oasisprotocol/oasis-core/go/common/pubsub"
 	consensusAPI "github.com/oasisprotocol/oasis-core/go/consensus/api"
 	epochtime "github.com/oasisprotocol/oasis-core/go/epochtime/api"
 	epochtimeTests "github.com/oasisprotocol/oasis-core/go/epochtime/tests"
@@ -100,9 +99,11 @@ func RootHashImplementationTests(t *testing.T, backend api.Backend, consensus co
 		t.Run("RoundTimeout", func(t *testing.T) {
 			testRoundTimeout(t, backend, consensus, identity, rtStates)
 		})
-	}
 
-	// TODO: Test the various failures.
+		t.Run("RoundTimeoutWithEpochTransition", func(t *testing.T) {
+			testRoundTimeoutWithEpochTransition(t, backend, consensus, identity, rtStates)
+		})
+	}
 }
 
 func testGenesisBlock(t *testing.T, backend api.Backend, state *runtimeState) {
@@ -153,17 +154,11 @@ func testEpochTransitionBlock(t *testing.T, backend api.Backend, consensus conse
 		v.genesisBlock = genesisBlock
 	}
 
-	// Advance the epoch, get the committee.
-	epoch, err := consensus.EpochTime().GetEpoch(context.Background(), consensusAPI.HeightLatest)
-	require.NoError(err, "GetEpoch")
-
 	// Subscribe to blocks for all of the runtimes.
 	var blkChannels []<-chan *api.AnnotatedBlock
 	for i := range states {
 		v := states[i]
-		var ch <-chan *api.AnnotatedBlock
-		var sub *pubsub.Subscription
-		ch, sub, err = backend.WatchBlocks(v.rt.Runtime.ID)
+		ch, sub, err := backend.WatchBlocks(v.rt.Runtime.ID)
 		require.NoError(err, "WatchBlocks")
 		defer sub.Close()
 
@@ -177,27 +172,33 @@ func testEpochTransitionBlock(t *testing.T, backend api.Backend, consensus conse
 	// Check for the expected post-epoch transition events.
 	for i, state := range states {
 		blkCh := blkChannels[i]
-		state.testEpochTransitionBlock(t, consensus.Scheduler(), epoch, blkCh)
+		state.testEpochTransitionBlock(t, consensus, blkCh)
 	}
 
 	// Check if GetGenesisBlock still returns the correct genesis block.
 	for i := range states {
-		var blk *block.Block
-		blk, err = backend.GetGenesisBlock(context.Background(), states[i].rt.Runtime.ID, consensusAPI.HeightLatest)
+		blk, err := backend.GetGenesisBlock(context.Background(), states[i].rt.Runtime.ID, consensusAPI.HeightLatest)
 		require.NoError(err, "GetGenesisBlock")
 		require.EqualValues(0, blk.Header.Round, "retrieved block is genesis block")
 	}
 }
 
-func (s *runtimeState) testEpochTransitionBlock(t *testing.T, scheduler scheduler.Backend, epoch epochtime.EpochTime, ch <-chan *api.AnnotatedBlock) {
-	require := require.New(t)
-
+func (s *runtimeState) refreshCommittees(t *testing.T, consensus consensusAPI.Backend) {
 	nodes := make(map[signature.PublicKey]*registryTests.TestNode)
 	for _, node := range s.rt.TestNodes() {
 		nodes[node.Node.ID] = node
 	}
 
-	s.executorCommittee, s.storageCommittee = mustGetCommittee(t, s.rt, epoch+1, scheduler, nodes)
+	epoch, err := consensus.EpochTime().GetEpoch(context.Background(), consensusAPI.HeightLatest)
+	require.NoError(t, err, "GetEpoch")
+
+	s.executorCommittee, s.storageCommittee = mustGetCommittee(t, s.rt, epoch, consensus.Scheduler(), nodes)
+}
+
+func (s *runtimeState) testEpochTransitionBlock(t *testing.T, consensus consensusAPI.Backend, ch <-chan *api.AnnotatedBlock) {
+	require := require.New(t)
+
+	s.refreshCommittees(t, consensus)
 
 	// Wait to receive an epoch transition block.
 	for {
@@ -227,13 +228,14 @@ func testSuccessfulRound(t *testing.T, backend api.Backend, consensus consensusA
 	}
 }
 
-func (s *runtimeState) generateExecutorCommitments(t *testing.T, identity *identity.Identity, child *block.Block) (
+func (s *runtimeState) generateExecutorCommitments(t *testing.T, consensus consensusAPI.Backend, identity *identity.Identity, child *block.Block) (
 	parent *block.Block,
 	executorCommits []commitment.ExecutorCommitment,
 	executorNodes []*registryTests.TestNode,
 ) {
 	require := require.New(t)
 
+	s.refreshCommittees(t, consensus)
 	rt, executorCommittee := s.rt, s.executorCommittee
 
 	dataDir, err := ioutil.TempDir("", "oasis-storage-test_")
@@ -357,7 +359,7 @@ func (s *runtimeState) testSuccessfulRound(t *testing.T, backend api.Backend, co
 	defer cancel()
 
 	// Generate and submit all executor commitments.
-	parent, executorCommits, executorNodes := s.generateExecutorCommitments(t, identity, child)
+	parent, executorCommits, executorNodes := s.generateExecutorCommitments(t, consensus, identity, child)
 	tx := api.NewExecutorCommitTx(0, nil, s.rt.Runtime.ID, executorCommits)
 	err = consensusAPI.SignAndSubmitTx(ctx, consensus, executorNodes[0].Signer, tx)
 	require.NoError(err, "ExecutorCommit")
@@ -432,7 +434,7 @@ func (s *runtimeState) testRoundTimeout(t *testing.T, backend api.Backend, conse
 	defer cancel()
 
 	// Only submit a single commitment to cause a timeout.
-	_, executorCommits, executorNodes := s.generateExecutorCommitments(t, identity, child)
+	_, executorCommits, executorNodes := s.generateExecutorCommitments(t, consensus, identity, child)
 	tx := api.NewExecutorCommitTx(0, nil, s.rt.Runtime.ID, executorCommits[:1])
 	err = consensusAPI.SignAndSubmitTx(ctx, consensus, executorNodes[0].Signer, tx)
 	require.NoError(err, "ExecutorCommit")
@@ -477,6 +479,81 @@ WaitForRoundTimeoutBlocks:
 			// Next round must be a failure.
 			require.EqualValues(child.Header.Round+1, header.Round, "block round")
 			require.EqualValues(block.RoundFailed, header.HeaderType, "block header type must be RoundFailed")
+
+			// Nothing more to do after the block was received.
+			return
+		case <-time.After(recvTimeout):
+			t.Fatalf("failed to receive runtime block")
+		}
+	}
+}
+
+func testRoundTimeoutWithEpochTransition(t *testing.T, backend api.Backend, consensus consensusAPI.Backend, identity *identity.Identity, states []*runtimeState) {
+	for _, state := range states {
+		state.testRoundTimeoutWithEpochTransition(t, backend, consensus, identity)
+	}
+}
+
+func (s *runtimeState) testRoundTimeoutWithEpochTransition(t *testing.T, backend api.Backend, consensus consensusAPI.Backend, identity *identity.Identity) {
+	require := require.New(t)
+
+	child, err := backend.GetLatestBlock(context.Background(), s.rt.Runtime.ID, consensusAPI.HeightLatest)
+	require.NoError(err, "GetLatestBlock")
+
+	ch, sub, err := backend.WatchBlocks(s.rt.Runtime.ID)
+	require.NoError(err, "WatchBlocks")
+	defer sub.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), recvTimeout)
+	defer cancel()
+
+	// Only submit a single commitment to cause a timeout.
+	_, executorCommits, executorNodes := s.generateExecutorCommitments(t, consensus, identity, child)
+	tx := api.NewExecutorCommitTx(0, nil, s.rt.Runtime.ID, executorCommits[:1])
+	err = consensusAPI.SignAndSubmitTx(ctx, consensus, executorNodes[0].Signer, tx)
+	require.NoError(err, "ExecutorCommit")
+
+	consBlkCh, consBlkSub, err := consensus.WatchBlocks(context.Background())
+	require.NoError(err, "WatchBlocks")
+	defer consBlkSub.Close()
+
+	var startBlock int64
+WaitForRoundTimeoutBlocks:
+	for {
+		select {
+		case blk := <-consBlkCh:
+			if blk == nil {
+				t.Fatalf("block channel closed before reaching round timeout")
+			}
+			if startBlock == 0 {
+				startBlock = blk.Height
+			}
+			if blk.Height-startBlock > s.rt.Runtime.Executor.RoundTimeout/2 {
+				break WaitForRoundTimeoutBlocks
+			}
+		case <-time.After(recvTimeout):
+			t.Fatalf("failed to receive consensus block")
+		}
+	}
+
+	// Trigger an epoch transition while the timeout is armed.
+	timeSource := consensus.EpochTime().(epochtime.SetableBackend)
+	epochtimeTests.MustAdvanceEpoch(t, timeSource, 1)
+
+	// Ensure that the epoch transition was processed correctly.
+	for {
+		select {
+		case blk := <-ch:
+			header := blk.Block.Header
+
+			// Skip initial round.
+			if header.Round == child.Header.Round {
+				continue
+			}
+
+			// Next round must be an epoch transition.
+			require.EqualValues(child.Header.Round+1, header.Round, "block round")
+			require.EqualValues(block.EpochTransition, header.HeaderType, "block header type must be EpochTransition")
 
 			// Nothing more to do after the block was received.
 			return

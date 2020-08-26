@@ -83,12 +83,29 @@ func checkRootHash(ctx *abciAPI.Context, now epochtime.EpochTime) error {
 	}
 
 	blocks := make(map[common.Namespace]*block.Block)
+	runtimesByID := make(map[common.Namespace]*roothashState.RuntimeState)
 	for _, rt := range runtimes {
 		blocks[rt.Runtime.ID] = rt.CurrentBlock
+		runtimesByID[rt.Runtime.ID] = rt
 	}
 	err = roothash.SanityCheckBlocks(blocks)
 	if err != nil {
 		return fmt.Errorf("SanityCheckBlocks: %w", err)
+	}
+
+	// Make sure that runtime timeout state is consistent with actual timeouts.
+	runtimeIDs, heights, err := st.RuntimesWithRoundTimeoutsAny(ctx)
+	if err != nil {
+		return fmt.Errorf("RuntimesWithRoundTimeoutsAny: %w", err)
+	}
+	for i, id := range runtimeIDs {
+		height := heights[i]
+		if height < ctx.BlockHeight() {
+			return fmt.Errorf("round timeout for runtime %s was scheduled at %d but did not trigger", id, height)
+		}
+		if !runtimesByID[id].ExecutorPool.IsTimeout(height) {
+			return fmt.Errorf("runtime %s scheduled for timeout at %d but would not actually trigger", id, height)
+		}
 	}
 
 	// nothing to check yet
