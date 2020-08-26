@@ -546,8 +546,8 @@ WaitForRoundTimeoutBlocks:
 		case blk := <-ch:
 			header := blk.Block.Header
 
-			// Skip initial round.
-			if header.Round == child.Header.Round {
+			// Skip initial rounds.
+			if header.Round <= child.Header.Round {
 				continue
 			}
 
