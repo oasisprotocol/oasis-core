@@ -12,6 +12,21 @@ The format is inspired by [Keep a Changelog].
 
 <!-- TOWNCRIER -->
 
+## 20.9.1 (2020-08-27)
+
+### Bug Fixes
+
+- go/oasis-node: Omit existing entity check for non-file signers
+  ([#3215](https://github.com/oasisprotocol/oasis-core/issues/3215))
+
+  The "registry entity init" subcommand previously always performed a check
+  whether an entity already exists. It did that by creating an additional
+  signer factory to perform this check.
+
+  Some signers assign exclusive access to an underlying resource (e.g., HSM) to
+  the given factory. In that case, all operations on the second signer factory
+  would fail. Thus we now omit the existing entity check for non-file signers.
+
 ## 20.9 (2020-08-05)
 
 ### Process
