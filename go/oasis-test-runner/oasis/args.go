@@ -564,6 +564,11 @@ func (args *argBuilder) byzantineActivationEpoch(epoch epochtime.EpochTime) *arg
 	return args
 }
 
+func (args *argBuilder) byzantineExecutorSchedulerRole(isScheduler bool) *argBuilder {
+	args.vec = append(args.vec, "--"+byzantine.CfgSchedulerRoleExpected+"="+strconv.FormatBool(isScheduler))
+	return args
+}
+
 func newArgBuilder() *argBuilder {
 	return &argBuilder{}
 }

@@ -67,6 +67,7 @@ const (
 	CfgTxnSchedulerBatchFlushTimeout = "runtime.txn_scheduler.flush_timeout"
 	CfgTxnSchedulerMaxBatchSize      = "runtime.txn_scheduler.max_batch_size"
 	CfgTxnSchedulerMaxBatchSizeBytes = "runtime.txn_scheduler.max_batch_size_bytes"
+	CfgTxnSchedulerProposerTimeout   = "runtime.txn_scheduler.proposer_timeout"
 
 	// Admission policy flags.
 	CfgAdmissionPolicy                 = "runtime.admission_policy"
@@ -379,6 +380,7 @@ func runtimeFromFlags() (*registry.Runtime, signature.Signer, error) { // nolint
 			BatchFlushTimeout: viper.GetDuration(CfgTxnSchedulerBatchFlushTimeout),
 			MaxBatchSize:      viper.GetUint64(CfgTxnSchedulerMaxBatchSize),
 			MaxBatchSizeBytes: uint64(viper.GetSizeInBytes(CfgTxnSchedulerMaxBatchSizeBytes)),
+			ProposerTimeout:   viper.GetInt64(CfgTxnSchedulerProposerTimeout),
 		},
 		Storage: registry.StorageParameters{
 			GroupSize:               viper.GetUint64(CfgStorageGroupSize),
@@ -536,6 +538,7 @@ func init() {
 	runtimeFlags.Duration(CfgTxnSchedulerBatchFlushTimeout, 1*time.Second, "Maximum amount of time to wait for a scheduled batch")
 	runtimeFlags.Uint64(CfgTxnSchedulerMaxBatchSize, 1000, "Maximum size of a batch of runtime requests")
 	runtimeFlags.String(CfgTxnSchedulerMaxBatchSizeBytes, "16mb", "Maximum size (in bytes) of a batch of runtime requests")
+	runtimeFlags.Int64(CfgTxnSchedulerProposerTimeout, 5, "Timeout (in consensus blocks) before a round can be timeouted due to proposer not proposing")
 
 	// Init Storage committee flags.
 	runtimeFlags.Uint64(CfgStorageGroupSize, 1, "Number of storage nodes for the runtime")

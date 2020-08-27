@@ -39,6 +39,12 @@ func LogAssertNoRoundFailures() log.WatcherHandlerFactory {
 	return LogAssertNotEvent(roothash.LogEventRoundFailed, "round failure detected")
 }
 
+// LogAssertRoundFailures returns a handler which ensures that a round failure
+// was detected based on JSON log output.
+func LogAssertRoundFailures() log.WatcherHandlerFactory {
+	return LogAssertEvent(roothash.LogEventRoundFailed, "round failure not detected")
+}
+
 // LogAssertExecutionDiscrepancyDetected returns a handler which checks whether an
 // execution discrepancy was detected based on JSON log output.
 func LogAssertExecutionDiscrepancyDetected() log.WatcherHandlerFactory {

@@ -167,6 +167,7 @@ func (sc *runtimeImpl) Fixture() (*oasis.NetworkFixture, error) {
 					MaxBatchSize:      1,
 					MaxBatchSizeBytes: 1024,
 					BatchFlushTimeout: 1 * time.Second,
+					ProposerTimeout:   20,
 				},
 				Storage: registry.StorageParameters{
 					GroupSize:               2,
@@ -486,8 +487,10 @@ func RegisterScenarios() error {
 		RuntimeEncryption,
 		// Byzantine executor node.
 		ByzantineExecutorHonest,
+		ByzantineExecutorSchedulerHonest,
 		ByzantineExecutorWrong,
 		ByzantineExecutorStraggler,
+		ByzantineExecutorSchedulerStraggler,
 		// Storage sync test.
 		StorageSync,
 		// Sentry test.

@@ -281,6 +281,12 @@ func (r *runtime) Run(
 	// Set up the runtime client.
 	rtc := runtimeClient.NewRuntimeClient(conn)
 
+	// Wait for 2nd epoch, so that runtimes are up and running.
+	r.logger.Info("waiting for 2nd epoch")
+	if err := cnsc.WaitEpoch(ctx, 2); err != nil {
+		return fmt.Errorf("failed waiting for 2nd epoch: %w", err)
+	}
+
 	for {
 		p := rng.Intn(runtimeDoInsertRequestWeight + runtimeDoGetRequestTypeWeight + runtimeDoRemoveRequestTypeWeight)
 		switch {

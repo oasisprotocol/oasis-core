@@ -69,6 +69,7 @@ func (r *RegistryHelpers) runRegistryRuntimeSubcommand(
 			"--"+cmdRegRt.CfgTxnSchedulerBatchFlushTimeout, runtime.TxnScheduler.BatchFlushTimeout.String(),
 			"--"+cmdRegRt.CfgTxnSchedulerMaxBatchSize, strconv.FormatUint(runtime.TxnScheduler.MaxBatchSize, 10),
 			"--"+cmdRegRt.CfgTxnSchedulerMaxBatchSizeBytes, strconv.FormatUint(runtime.TxnScheduler.MaxBatchSizeBytes, 10),
+			"--"+cmdRegRt.CfgTxnSchedulerProposerTimeout, strconv.FormatInt(runtime.TxnScheduler.ProposerTimeout, 10),
 		)
 	}
 	if runtime.KeyManager != nil {

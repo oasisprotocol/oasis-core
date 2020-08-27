@@ -234,11 +234,9 @@ func (sc *txSourceImpl) Fixture() (*oasis.NetworkFixture, error) {
 	}
 
 	if sc.nodeRestartInterval > 0 {
-		// If node restarts enabled, do not enable round timeouts and
+		// If node restarts enabled, do not enable round timeouts, failures or
 		// discrepancy log watchers.
-		f.Network.DefaultLogWatcherHandlerFactories = []log.WatcherHandlerFactory{
-			oasis.LogAssertNoRoundFailures(),
-		}
+		f.Network.DefaultLogWatcherHandlerFactories = []log.WatcherHandlerFactory{}
 	}
 
 	// Disable CheckTx on the client node so we can submit invalid transactions.
@@ -476,12 +474,6 @@ func (sc *txSourceImpl) Run(childEnv *env.Env) error {
 	sc.Logger.Info("waiting for network to come up")
 	if err := sc.Net.Controller().WaitNodesRegistered(ctx, sc.Net.NumRegisterNodes()); err != nil {
 		return fmt.Errorf("WaitNodesRegistered: %w", err)
-	}
-
-	// Wait for second epoch, so that runtimes are up and running.
-	sc.Logger.Info("waiting for 2nd epoch")
-	if err := sc.Net.Controller().Consensus.WaitEpoch(ctx, 2); err != nil {
-		return fmt.Errorf("failed waiting for 2nd epoch: %w", err)
 	}
 
 	// Start all configured workloads.

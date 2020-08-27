@@ -122,6 +122,10 @@ type TxnSchedulerParameters struct {
 
 	// MaxBatchSizeBytes denote what is the max size of a scheduled batch in bytes.
 	MaxBatchSizeBytes uint64 `json:"max_batch_size_bytes"`
+
+	// ProposerTimeout denotes the timeout (in consensus blocks) for scheduler
+	// to propose a batch.
+	ProposerTimeout int64 `json:"propose_batch_timeout"`
 }
 
 // ValidateBasic performs basic transaction scheduler parameter validity checks.
@@ -139,6 +143,10 @@ func (t *TxnSchedulerParameters) ValidateBasic() error {
 	if t.MaxBatchSizeBytes < 1024 {
 		return fmt.Errorf("transaction scheduler max batch bytes size parameter too small")
 	}
+	if t.ProposerTimeout < 5 {
+		return fmt.Errorf("transaction scheduler proposer timeout parameter too small")
+	}
+
 	return nil
 }
 

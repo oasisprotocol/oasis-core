@@ -57,6 +57,7 @@ func getRuntime(entityID signature.PublicKey, id common.Namespace) *registry.Run
 			BatchFlushTimeout: 1 * time.Second,
 			MaxBatchSize:      1,
 			MaxBatchSizeBytes: 1024,
+			ProposerTimeout:   5,
 		},
 		Storage: registry.StorageParameters{
 			GroupSize:               1,

@@ -273,6 +273,13 @@ func (app *rootHashApplication) ExecuteTx(ctx *tmapi.Context, tx *transaction.Tr
 		}
 
 		return app.executorCommit(ctx, state, &xc)
+	case roothash.MethodExecutorProposerTimeout:
+		var xc roothash.ExecutorProposerTimeoutRequest
+		if err := cbor.Unmarshal(tx.Body, &xc); err != nil {
+			return err
+		}
+
+		return app.executorProposerTimeout(ctx, state, &xc)
 	default:
 		return roothash.ErrInvalidArgument
 	}

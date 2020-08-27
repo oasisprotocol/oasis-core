@@ -110,6 +110,9 @@ func TestPoolDefault(t *testing.T) {
 	_, err = pool.ResolveDiscrepancy()
 	require.Error(t, err, "ResolveDiscrepancy")
 	require.Equal(t, ErrNoCommittee, err)
+	err = pool.CheckProposerTimeout(context.Background(), blk, nopSV, &staticNodeLookup{}, sk.Public(), 0)
+	require.Error(t, err, "CheckProposerTimeout")
+	require.Equal(t, ErrNoCommittee, err)
 }
 
 func TestPoolSingleCommitment(t *testing.T) {
@@ -700,6 +703,74 @@ func TestTryFinalize(t *testing.T) {
 		header := dc.ToDDResult().(ComputeResultsHeader)
 		require.EqualValues(t, &correctHeader, &header, "DR should return the same header")
 		require.EqualValues(t, TimeoutNever, pool.NextTimeout, "NextTimeout should be TimeoutNever")
+	})
+}
+
+func TestExecutorTimeoutRequest(t *testing.T) {
+	genesisTestHelpers.SetTestChainContext()
+
+	rt, sks, committee, nl := generateMockCommittee(t)
+	sk1 := sks[0]
+	sk2 := sks[1]
+
+	t.Run("ExecutorProposerTimeoutRequest", func(t *testing.T) {
+		require := require.New(t)
+		ctx := context.Background()
+
+		// Create a pool.
+		pool := Pool{
+			Runtime:   rt,
+			Committee: committee,
+		}
+
+		var id common.Namespace
+		childBlk := block.NewGenesisBlock(id, 0)
+
+		type testCase struct {
+			signer        signature.Signer
+			round         uint64
+			expectedError error
+		}
+		for _, tc := range []*testCase{
+			// Scheduler (sk1 at round 0), is not allowed to request a timeout.
+			{
+				signer:        sk1,
+				round:         0,
+				expectedError: ErrNodeIsScheduler,
+			},
+			// Timeout round needs to match current round.
+			{
+				signer:        sk2,
+				round:         100,
+				expectedError: ErrTimeoutNotCorrectRound,
+			},
+			// Ok timeout request.
+			{
+				signer:        sk2,
+				round:         0,
+				expectedError: nil,
+			},
+		} {
+			err := pool.CheckProposerTimeout(ctx, childBlk, nopSV, nl, tc.signer.Public(), tc.round)
+			switch tc.expectedError {
+			case nil:
+				require.NoError(err, "CheckProposerTimeout unexpected error")
+			default:
+				require.Equal(tc.expectedError, err, "CheckProposerTimeout expected error")
+			}
+		}
+
+		// Timeout after commitment.
+		// Generate a commitment.
+		childBlk, _, body := generateComputeBody(t)
+		commit1, err := SignExecutorCommitment(sk1, &body)
+		require.NoError(err, "SignExecutorCommitment")
+		// Adding commitment 1 should succeed.
+		err = pool.AddExecutorCommitment(ctx, childBlk, nopSV, nl, commit1)
+		require.NoError(err, "AddExecutorCommitment")
+		err = pool.CheckProposerTimeout(ctx, childBlk, nopSV, nl, sk2.Public(), 0)
+		require.Error(err, "CheckProposerTimeout commitment exists")
+		require.Equal(ErrAlreadyCommitted, err, "CheckProposerTimeout commitment exists")
 	})
 }
 

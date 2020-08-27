@@ -19,27 +19,54 @@ var (
 	//
 	// For executor scripts, it suffices to be index 0.
 	// For executor and scheduler scripts, it suffices to be index 3.
-	// Indices are by order of node ID.
-
-	// XXX: currently ByzantineDefaultIdentitySeed is used in all cases, to
-	// ensure we are not the transaction scheduler of the round. Once straggling
-	// schedulers are handled (without waiting for epoch transition), test that
-	// case as well.
 
 	// ByzantineExecutorHonest is the byzantine executor honest scenario.
-	ByzantineExecutorHonest scenario.Scenario = newByzantineImpl("executor-honest", nil, oasis.ByzantineDefaultIdentitySeed)
+	ByzantineExecutorHonest scenario.Scenario = newByzantineImpl(
+		"executor-honest",
+		nil,
+		oasis.ByzantineDefaultIdentitySeed,
+		false,
+	)
+	// ByzantineExecutorSchedulerHonest is the byzantine executor scheduler honest scenario.
+	ByzantineExecutorSchedulerHonest scenario.Scenario = newByzantineImpl(
+		"executor-honest",
+		nil,
+		oasis.ByzantineSlot3IdentitySeed,
+		true,
+	)
 	// ByzantineExecutorWrong is the byzantine executor wrong scenario.
-	ByzantineExecutorWrong scenario.Scenario = newByzantineImpl("executor-wrong", []log.WatcherHandlerFactory{
-		oasis.LogAssertNoTimeouts(),
-		oasis.LogAssertNoRoundFailures(),
-		oasis.LogAssertExecutionDiscrepancyDetected(),
-	}, oasis.ByzantineDefaultIdentitySeed)
+	ByzantineExecutorWrong scenario.Scenario = newByzantineImpl(
+		"executor-wrong",
+		[]log.WatcherHandlerFactory{
+			oasis.LogAssertNoTimeouts(),
+			oasis.LogAssertNoRoundFailures(),
+			oasis.LogAssertExecutionDiscrepancyDetected(),
+		},
+		oasis.ByzantineDefaultIdentitySeed,
+		false,
+	)
 	// ByzantineExecutorStraggler is the byzantine executor straggler scenario.
-	ByzantineExecutorStraggler scenario.Scenario = newByzantineImpl("executor-straggler", []log.WatcherHandlerFactory{
-		oasis.LogAssertTimeouts(),
-		oasis.LogAssertNoRoundFailures(),
-		oasis.LogAssertExecutionDiscrepancyDetected(),
-	}, oasis.ByzantineDefaultIdentitySeed)
+	ByzantineExecutorStraggler scenario.Scenario = newByzantineImpl(
+		"executor-straggler",
+		[]log.WatcherHandlerFactory{
+			oasis.LogAssertTimeouts(),
+			oasis.LogAssertNoRoundFailures(),
+			oasis.LogAssertExecutionDiscrepancyDetected(),
+		},
+		oasis.ByzantineDefaultIdentitySeed,
+		false,
+	)
+	// ByzantineExecutorSchedulerStraggler is the byzantine executor scheduler straggler scenario.
+	ByzantineExecutorSchedulerStraggler scenario.Scenario = newByzantineImpl(
+		"executor-straggler",
+		[]log.WatcherHandlerFactory{
+			oasis.LogAssertRoundFailures(), // Round 1 should fail (proposer timeout).
+			oasis.LogAssertTimeouts(),      // Round 2 a timeout should be triggered and discrepancy detected.
+			oasis.LogAssertExecutionDiscrepancyDetected(),
+		},
+		oasis.ByzantineSlot3IdentitySeed,
+		true,
+	)
 )
 
 type byzantineImpl struct {
@@ -47,18 +74,24 @@ type byzantineImpl struct {
 
 	script                     string
 	identitySeed               string
+	executorIsScheduler        bool
 	logWatcherHandlerFactories []log.WatcherHandlerFactory
 }
 
-func newByzantineImpl(script string, logWatcherHandlerFactories []log.WatcherHandlerFactory, identitySeed string) scenario.Scenario {
+func newByzantineImpl(script string, logWatcherHandlerFactories []log.WatcherHandlerFactory, identitySeed string, executorIsScheduler bool) scenario.Scenario {
+	name := script
+	if executorIsScheduler {
+		name += "-scheduler"
+	}
 	return &byzantineImpl{
 		runtimeImpl: *newRuntimeImpl(
-			"byzantine/"+script,
+			"byzantine/"+name,
 			"simple-keyvalue-ops-client",
 			[]string{"set", "hello_key", "hello_value"},
 		),
 		script:                     script,
 		identitySeed:               identitySeed,
+		executorIsScheduler:        executorIsScheduler,
 		logWatcherHandlerFactories: logWatcherHandlerFactories,
 	}
 }
@@ -68,6 +101,7 @@ func (sc *byzantineImpl) Clone() scenario.Scenario {
 		runtimeImpl:                *sc.runtimeImpl.Clone().(*runtimeImpl),
 		script:                     sc.script,
 		identitySeed:               sc.identitySeed,
+		executorIsScheduler:        sc.executorIsScheduler,
 		logWatcherHandlerFactories: sc.logWatcherHandlerFactories,
 	}
 }
@@ -90,10 +124,11 @@ func (sc *byzantineImpl) Fixture() (*oasis.NetworkFixture, error) {
 	// Provision a Byzantine node.
 	f.ByzantineNodes = []oasis.ByzantineFixture{
 		{
-			Script:          sc.script,
-			IdentitySeed:    sc.identitySeed,
-			Entity:          1,
-			ActivationEpoch: 1,
+			Script:              sc.script,
+			IdentitySeed:        sc.identitySeed,
+			Entity:              1,
+			ExecutorIsScheduler: sc.executorIsScheduler,
+			ActivationEpoch:     1,
 		},
 	}
 	return f, nil

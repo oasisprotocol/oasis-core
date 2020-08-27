@@ -178,6 +178,7 @@ func (h *topicHandler) dispatchMessage(peerID core.PeerID, m *queuedMsg, isIniti
 		// Dispatch the message to the handler.
 		// XXX: Could also dispatch the message to all handlers, and only fail after.
 		if err = handler.HandlePeerMessage(m.from, m.msg, m.peerID == h.p2p.host.ID()); err != nil {
+			h.logger.Error("failed to handle message", "message", m.msg, "from", m.from, "err", err)
 			return err
 		}
 	}

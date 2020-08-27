@@ -45,7 +45,7 @@ var validStateTransitions = map[StateName][]StateName{
 		WaitingForBlock,
 		// Received batch, current block is up to date.
 		ProcessingBatch,
-		// Received batch, waiting for disrepancy event.
+		// Received batch, waiting for discrepancy event.
 		WaitingForEvent,
 		// Epoch transition occurred and we are no longer in the committee.
 		NotReady,

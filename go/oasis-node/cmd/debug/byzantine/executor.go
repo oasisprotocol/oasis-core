@@ -3,6 +3,7 @@ package byzantine
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/oasisprotocol/oasis-core/go/common"
 	"github.com/oasisprotocol/oasis-core/go/common/cbor"
@@ -17,6 +18,8 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/storage/mkvs"
 	"github.com/oasisprotocol/oasis-core/go/storage/mkvs/syncer"
 	"github.com/oasisprotocol/oasis-core/go/storage/mkvs/writelog"
+	"github.com/oasisprotocol/oasis-core/go/worker/common/p2p"
+	"github.com/oasisprotocol/oasis-core/go/worker/compute/executor/api"
 )
 
 type computeBatchContext struct {
@@ -38,6 +41,92 @@ type computeBatchContext struct {
 
 func newComputeBatchContext() *computeBatchContext {
 	return &computeBatchContext{}
+}
+
+func (cbc *computeBatchContext) receiveTransactions(ph *p2pHandle, timeout time.Duration) []*api.Tx {
+	var req p2pReqRes
+	txs := []*api.Tx{}
+
+ReceiveTransactions:
+	for {
+		select {
+		case req = <-ph.requests:
+			req.responseCh <- nil
+			if req.msg.Tx == nil {
+				continue
+			}
+			txs = append(txs, req.msg.Tx)
+		case <-time.After(timeout):
+			break ReceiveTransactions
+		}
+	}
+
+	return txs
+}
+
+func (cbc *computeBatchContext) proposeTransactionBatch(ctx context.Context, groupVersion int64, hnss []*honestNodeStorage, currentBlock *block.Block, batch []*api.Tx, identity *identity.Identity, p2pH *p2pHandle) error {
+	// Generate the initial I/O root containing only the inputs (outputs and
+	// tags will be added later by the executor nodes).
+	lastHeader := currentBlock.Header
+	emptyRoot := storage.Root{
+		Namespace: lastHeader.Namespace,
+		Version:   lastHeader.Round + 1,
+	}
+	emptyRoot.Hash.Empty()
+
+	ioTree := transaction.NewTree(nil, emptyRoot)
+	defer ioTree.Close()
+
+	for idx, tx := range batch {
+		if err := ioTree.AddTransaction(ctx, transaction.Transaction{Input: tx.Data, BatchOrder: uint32(idx)}, nil); err != nil {
+			return err
+		}
+	}
+
+	ioWriteLog, ioRoot, err := ioTree.Commit(ctx)
+	if err != nil {
+		return err
+	}
+	ioReceipts, err := storageBroadcastApply(ctx, hnss, &storage.ApplyRequest{
+		Namespace: lastHeader.Namespace,
+		SrcRound:  lastHeader.Round + 1,
+		SrcRoot:   emptyRoot.Hash,
+		DstRound:  lastHeader.Round + 1,
+		DstRoot:   ioRoot,
+		WriteLog:  ioWriteLog,
+	})
+	if err != nil {
+		return err
+	}
+
+	ioReceiptSignatures := []signature.Signature{}
+	for _, receipt := range ioReceipts {
+		ioReceiptSignatures = append(ioReceiptSignatures, receipt.Signature)
+	}
+
+	dispatchMsg := &commitment.ProposedBatch{
+		IORoot:            ioRoot,
+		StorageSignatures: ioReceiptSignatures,
+		Header:            currentBlock.Header,
+	}
+	signedDispatchMsg, err := commitment.SignProposedBatch(identity.NodeSigner, dispatchMsg)
+	if err != nil {
+		return fmt.Errorf("failed to sign txn scheduler batch: %w", err)
+	}
+
+	p2pH.service.Publish(
+		ctx,
+		defaultRuntimeID,
+		&p2p.Message{
+			GroupVersion:  groupVersion,
+			ProposedBatch: signedDispatchMsg,
+		},
+	)
+
+	cbc.bd = *dispatchMsg
+	cbc.bdSig = signedDispatchMsg.Signature
+
+	return nil
 }
 
 func (cbc *computeBatchContext) receiveBatch(ph *p2pHandle) error {

@@ -15,6 +15,8 @@ type Byzantine struct {
 	script string
 	entity *Entity
 
+	executorIsScheduler bool
+
 	consensusPort   uint16
 	p2pPort         uint16
 	activationEpoch epochtime.EpochTime
@@ -27,6 +29,8 @@ type ByzantineCfg struct {
 	Script       string
 	IdentitySeed string
 	Entity       *Entity
+
+	ExecutorIsScheduler bool
 
 	ActivationEpoch epochtime.EpochTime
 }
@@ -41,7 +45,8 @@ func (worker *Byzantine) startNode() error {
 		workerP2pPort(worker.p2pPort).
 		appendSeedNodes(worker.net).
 		appendEntity(worker.entity).
-		byzantineActivationEpoch(worker.activationEpoch)
+		byzantineActivationEpoch(worker.activationEpoch).
+		byzantineExecutorSchedulerRole(worker.executorIsScheduler)
 
 	for _, v := range worker.net.Runtimes() {
 		if v.kind == registry.KindCompute && v.teeHardware == node.TEEHardwareIntelSGX {
@@ -99,11 +104,12 @@ func (net *Network) NewByzantine(cfg *ByzantineCfg) (*Byzantine, error) {
 			logWatcherHandlerFactories:               cfg.LogWatcherHandlerFactories,
 			consensus:                                cfg.Consensus,
 		},
-		script:          cfg.Script,
-		entity:          cfg.Entity,
-		consensusPort:   net.nextNodePort,
-		p2pPort:         net.nextNodePort + 1,
-		activationEpoch: cfg.ActivationEpoch,
+		script:              cfg.Script,
+		entity:              cfg.Entity,
+		executorIsScheduler: cfg.ExecutorIsScheduler,
+		consensusPort:       net.nextNodePort,
+		p2pPort:             net.nextNodePort + 1,
+		activationEpoch:     cfg.ActivationEpoch,
 	}
 	worker.doStartNode = worker.startNode
 	copy(worker.NodeID[:], nodeKey[:])
