@@ -16,6 +16,7 @@ import (
 
 	"github.com/oasisprotocol/oasis-core/go/common/cbor"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
+	signerFile "github.com/oasisprotocol/oasis-core/go/common/crypto/signature/signers/file"
 	"github.com/oasisprotocol/oasis-core/go/common/entity"
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
 	"github.com/oasisprotocol/oasis-core/go/common/node"
@@ -107,16 +108,22 @@ func doInit(cmd *cobra.Command, args []string) {
 		os.Exit(1)
 	}
 
-	// Loosely check to see if there is an existing entity.  This isn't
-	// perfect, just "oopsie" avoidance.
-	if _, _, err = loadOrGenerateEntity(dataDir, false); err == nil {
-		switch cmdFlags.Force() {
-		case true:
-			logger.Warn("overwriting existing entity")
-		default:
-			logger.Error("existing entity exists, specify --force to overwrite")
-			os.Exit(1)
+	switch cmdSigner.Backend() {
+	case signerFile.SignerName:
+		// Loosely check to see if there is an existing entity.  This isn't perfect, just "oopsie"
+		// avoidance.
+		if _, _, err = loadOrGenerateEntity(dataDir, false); err == nil {
+			switch cmdFlags.Force() {
+			case true:
+				logger.Warn("overwriting existing entity")
+			default:
+				logger.Error("existing entity exists, specify --force to overwrite")
+				os.Exit(1)
+			}
 		}
+	default:
+		// For any other signers, skip the check as creating the factory twice may be a bad idea in
+		// case where the first instance gets exclusive access to a resource (e.g., an HSM).
 	}
 
 	// Generate a new entity.
@@ -371,7 +378,7 @@ func loadOrGenerateEntity(dataDir string, generate bool) (*entity.Entity, signat
 	}
 	entitySignerFactory, err := cmdSigner.NewFactory(cmdSigner.Backend(), entityDir, signature.SignerEntity)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, fmt.Errorf("loadOrGenerateEntity: failed to create signer factory: %w", err)
 	}
 
 	if generate {
