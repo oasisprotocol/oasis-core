@@ -226,6 +226,13 @@ func (q *incomingQueue) Take(force bool) (transaction.RawBatch, error) {
 	return batch, nil
 }
 
+func (q *incomingQueue) updateConfig(maxBatchSize, maxBatchSizeBytes uint64) {
+	q.Lock()
+	defer q.Unlock()
+	q.maxBatchSize = maxBatchSize
+	q.maxBatchSizeBytes = maxBatchSizeBytes
+}
+
 func newIncomingQueue(maxQueueSize, maxBatchSize, maxBatchSizeBytes uint64) *incomingQueue {
 	return &incomingQueue{
 		callHashes:        make(map[hash.Hash]bool),

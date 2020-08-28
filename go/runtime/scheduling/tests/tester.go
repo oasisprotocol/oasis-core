@@ -9,6 +9,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
+	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
 	"github.com/oasisprotocol/oasis-core/go/runtime/scheduling/api"
 	"github.com/oasisprotocol/oasis-core/go/runtime/transaction"
 )
@@ -59,7 +60,7 @@ func testScheduleTransactions(t *testing.T, td *testDispatcher, scheduler api.Sc
 	// Test FlushTx.
 	err = scheduler.Flush(false)
 	require.NoError(t, err, "Flush(force=false)")
-	require.Equal(t, 1, scheduler.UnscheduledSize(), "transaction should remain scheduled after a non-forced flush")
+	require.Equal(t, 1, scheduler.UnscheduledSize(), "transaction should remain unscheduled after a non-forced flush")
 	require.True(t, scheduler.IsQueued(txBytes), "IsQueued(tx)")
 	err = scheduler.Flush(true)
 	require.NoError(t, err, "Flush(force=true)")
@@ -91,6 +92,7 @@ func testScheduleTransactions(t *testing.T, td *testDispatcher, scheduler api.Sc
 	require.False(t, scheduler.IsQueued(tx2Bytes), "IsQueued(tx)")
 	require.Equal(t, 1, len(td.DispatchedBatches), "one batch should be dispatched")
 	require.EqualValues(t, transaction.RawBatch{testTx2}, td.DispatchedBatches[0], "transaction should be dispatched")
+	td.Clear()
 
 	// Test schedule batch.
 	testBatch := [][]byte{
@@ -104,6 +106,38 @@ func testScheduleTransactions(t *testing.T, td *testDispatcher, scheduler api.Sc
 	for _, tx := range testBatch {
 		require.True(t, scheduler.IsQueued(hash.NewFromBytes(tx)), fmt.Sprintf("IsQueued(%s)", tx))
 	}
+	// Clear the queue.
+	err = scheduler.Flush(true)
+	require.NoError(t, err, "Flush(force=true)")
+	require.Equal(t, 0, scheduler.UnscheduledSize(), "no transactions after flushing")
 
-	td.Clear()
+	// Test Update configuration.
+	// First insert a transaction.
+	err = scheduler.ScheduleTx(testTx)
+	require.NoError(t, err, "ScheduleTx(testTx)")
+	// Make sure transaction doesn't get scheduled.
+	err = scheduler.Flush(false)
+	require.NoError(t, err, "Flush(force=false)")
+	require.Equal(t, 1, scheduler.UnscheduledSize(), "transaction should remain unscheduled after a non-forced flush")
+	// Update configuration to BatchSize=1.
+	err = scheduler.UpdateParameters(
+		registry.TxnSchedulerParameters{
+			Algorithm:         scheduler.Name(),
+			MaxBatchSize:      1,
+			MaxBatchSizeBytes: 10000,
+		},
+	)
+	require.NoError(t, err, "UpdateParameters")
+	// Make sure transaction gets scheduled now.
+	err = scheduler.Flush(false)
+	require.NoError(t, err, "Flush(force=false)")
+	require.Equal(t, 0, scheduler.UnscheduledSize(), "transaction should get scheduled after a non-forced flush")
+
+	// Test invalid udpate.
+	err = scheduler.UpdateParameters(
+		registry.TxnSchedulerParameters{
+			Algorithm: "invalid",
+		},
+	)
+	require.Error(t, err, "UpdateParameters invalid udpate")
 }
