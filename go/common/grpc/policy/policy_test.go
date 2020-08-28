@@ -3,7 +3,6 @@ package policy_test
 import (
 	"context"
 	"crypto/tls"
-	"crypto/x509"
 	"fmt"
 	"testing"
 
@@ -50,9 +49,6 @@ func TestAccessPolicy(t *testing.T) {
 	serverTLSCert, serverX509Cert := cmnTesting.CreateCertificate(t)
 	clientTLSCert, clientX509Cert := cmnTesting.CreateCertificate(t)
 
-	serverCertPool := x509.NewCertPool()
-	serverCertPool.AddCert(serverX509Cert)
-
 	// Create a new gRPC server.
 	serverConfig := &cmnGrpc.ServerConfig{
 		Name:          host,
@@ -78,15 +74,17 @@ func TestAccessPolicy(t *testing.T) {
 	err = grpcServer.Start()
 	require.NoErrorf(err, "Failed to start the gRPC server: %v", err)
 
-	clientTLSCredsWithoutCert := credentials.NewTLS(&tls.Config{
-		RootCAs:    serverCertPool,
-		ServerName: "oasis-node",
+	clientTLSCredsWithoutCert, err := cmnGrpc.NewClientCreds(&cmnGrpc.ClientOptions{
+		GetServerPubKeys: cmnGrpc.ServerPubKeysGetterFromCertificate(serverX509Cert),
+		CommonName:       "oasis-node",
 	})
-	clientTLSCreds := credentials.NewTLS(&tls.Config{
-		Certificates: []tls.Certificate{*clientTLSCert},
-		RootCAs:      serverCertPool,
-		ServerName:   "oasis-node",
+	require.NoError(err, "NewClientCreds")
+	clientTLSCreds, err := cmnGrpc.NewClientCreds(&cmnGrpc.ClientOptions{
+		Certificates:     []tls.Certificate{*clientTLSCert},
+		GetServerPubKeys: cmnGrpc.ServerPubKeysGetterFromCertificate(serverX509Cert),
+		CommonName:       "oasis-node",
 	})
+	require.NoError(err, "NewClientCreds")
 	address := fmt.Sprintf("%s:%d", host, port)
 
 	// Connect to the gRPC server without a client certificate.

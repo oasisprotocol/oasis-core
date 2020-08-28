@@ -1,7 +1,10 @@
 package grpc
 
 import (
+	"crypto/ed25519"
 	"crypto/tls"
+	"crypto/x509"
+	"fmt"
 
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/security/advancedtls"
@@ -9,6 +12,9 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	cmnTLS "github.com/oasisprotocol/oasis-core/go/common/crypto/tls"
 )
+
+// ServerPubKeysGetter is a function that when called will produce a set of public keys.
+type ServerPubKeysGetter func() (map[signature.PublicKey]bool, error)
 
 // ClientOptions contains all the fields needed to configure a TLS client.
 type ClientOptions struct {
@@ -21,7 +27,7 @@ type ClientOptions struct {
 
 	// If GetServerPubKeys is set and ServerPubKeys is nil, GetServerPubKeys will be invoked every
 	// time when verifying the server certificates.
-	GetServerPubKeys func() (map[signature.PublicKey]bool, error)
+	GetServerPubKeys ServerPubKeysGetter
 
 	// If field Certificates is set, field GetClientCertificate will be ignored. The server will use
 	// Certificates every time when asked for a certificate, without performing certificate
@@ -60,4 +66,23 @@ func NewClientCreds(opts *ClientOptions) (credentials.TransportCredentials, erro
 			return &advancedtls.VerificationResults{}, nil
 		},
 	})
+}
+
+// ServerPubKeysGetterFromCertificate returns a ServerPubKeysGetter that returns the public key
+// that signed the given X509 certificate.
+func ServerPubKeysGetterFromCertificate(cert *x509.Certificate) ServerPubKeysGetter {
+	return func() (map[signature.PublicKey]bool, error) {
+		pk, ok := cert.PublicKey.(ed25519.PublicKey)
+		if !ok {
+			return nil, fmt.Errorf("tls: bad public key type (expected: Ed25519 got: %T)", cert.PublicKey)
+		}
+		var spk signature.PublicKey
+		if err := spk.UnmarshalBinary(pk[:]); err != nil {
+			// This should NEVER happen.
+			return nil, fmt.Errorf("tls: bad public key: %w", err)
+		}
+		return map[signature.PublicKey]bool{
+			spk: true,
+		}, nil
+	}
 }
