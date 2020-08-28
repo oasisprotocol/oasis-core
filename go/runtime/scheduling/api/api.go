@@ -3,11 +3,15 @@ package api
 
 import (
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
+	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
 	"github.com/oasisprotocol/oasis-core/go/runtime/transaction"
 )
 
 // Scheduler defines an algorithm for scheduling incoming transactions.
 type Scheduler interface {
+	// Name is the scheduler algorithm name.
+	Name() string
+
 	// Initialize initializes the internal scheduler state.
 	// Scheduler should use the provided transaction dispatcher to dispatch
 	// transactions.
@@ -40,6 +44,9 @@ type Scheduler interface {
 
 	// IsQueued returns if a transaction is queued.
 	IsQueued(hash.Hash) bool
+
+	// UpdateParameters updates the scheduling parameters.
+	UpdateParameters(registry.TxnSchedulerParameters) error
 
 	// Clear clears the transaction queue.
 	Clear()

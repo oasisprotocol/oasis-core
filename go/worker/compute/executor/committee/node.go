@@ -1258,8 +1258,6 @@ func (n *Node) worker() {
 	defer hrtNotifier.Stop()
 
 	// Initialize transaction scheduling algorithm.
-	// TODO: watch for updates.
-	// https://github.com/oasisprotocol/oasis-core/issues/3203
 	runtime, err := n.commonNode.Runtime.RegistryDescriptor(n.ctx)
 	if err != nil {
 		n.logger.Error("failed to fetch runtime registry descriptor",
@@ -1268,10 +1266,8 @@ func (n *Node) worker() {
 		return
 	}
 	scheduler, err := scheduling.New(
-		runtime.TxnScheduler.Algorithm,
 		n.scheduleMaxQueueSize,
-		runtime.TxnScheduler.MaxBatchSize,
-		runtime.TxnScheduler.MaxBatchSizeBytes,
+		runtime.TxnScheduler,
 	)
 	if err != nil {
 		n.logger.Error("failed to create new transaction scheduler algorithm",
@@ -1279,7 +1275,7 @@ func (n *Node) worker() {
 		)
 		return
 	}
-	if err := scheduler.Initialize(n); err != nil {
+	if err = scheduler.Initialize(n); err != nil {
 		n.logger.Error("failed initializing transaction scheduler algorithm",
 			"err", err,
 		)
@@ -1292,6 +1288,16 @@ func (n *Node) worker() {
 	// Check incoming queue every FlushTimeout.
 	txnScheduleTicker := time.NewTicker(runtime.TxnScheduler.BatchFlushTimeout)
 	defer txnScheduleTicker.Stop()
+
+	// Watch runtime descriptor updates.
+	rtCh, rtSub, err := n.commonNode.Runtime.WatchRegistryDescriptor()
+	if err != nil {
+		n.logger.Error("failed to watch runtimes",
+			"err", err,
+		)
+		return
+	}
+	defer rtSub.Close()
 
 	// We are initialized.
 	close(n.initCh)
@@ -1373,6 +1379,19 @@ func (n *Node) worker() {
 				}
 				n.proposeBatchLocked(batch)
 			}()
+		case runtime := <-rtCh:
+			// XXX: Once there is more than one scheduling algorithm available
+			// this might need to recreate the scheduler and reinsert
+			// the transactions.
+			// At that point also update the schedulerMutex usage across the
+			// code, as it will be no longer be true that the scheduler
+			// variable never gets updated.
+			if err = n.scheduler.UpdateParameters(runtime.TxnScheduler); err != nil {
+				n.logger.Error("error updating scheduler parameters",
+					"err", err,
+				)
+				return
+			}
 		case <-txnScheduleTicker.C:
 			// Flush a batch from algorithm.
 			n.scheduler.Flush(true)

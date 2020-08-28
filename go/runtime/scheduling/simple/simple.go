@@ -2,6 +2,8 @@
 package simple
 
 import (
+	"fmt"
+
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
 	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
@@ -14,18 +16,11 @@ const (
 )
 
 type scheduler struct {
-	cfg           config
 	incomingQueue *incomingQueue
 
 	dispatcher api.TransactionDispatcher
 
 	logger *logging.Logger
-}
-
-type config struct {
-	maxQueueSize      uint64
-	maxBatchSize      uint64
-	maxBatchSizeBytes uint64
 }
 
 func (s *scheduler) scheduleBatch(force bool) error {
@@ -132,16 +127,25 @@ func (s *scheduler) IsInitialized() bool {
 	return s.dispatcher != nil
 }
 
+func (s *scheduler) UpdateParameters(params registry.TxnSchedulerParameters) error {
+	if params.Algorithm != Name {
+		return fmt.Errorf("unexpected transaction scheduling algorithm: %s", params.Algorithm)
+	}
+	s.incomingQueue.updateConfig(params.MaxBatchSize, params.MaxBatchSizeBytes)
+	return nil
+}
+
+func (s *scheduler) Name() string {
+	return Name
+}
+
 // New creates a new simple scheduler.
-func New(maxQueueSize, maxBatchSize, maxBatchSizeBytes uint64) (api.Scheduler, error) {
-	cfg := config{
-		maxQueueSize:      maxQueueSize,
-		maxBatchSize:      maxBatchSize,
-		maxBatchSizeBytes: maxBatchSizeBytes,
+func New(maxQueueSize uint64, params registry.TxnSchedulerParameters) (api.Scheduler, error) {
+	if params.Algorithm != Name {
+		return nil, fmt.Errorf("unexpected transaction scheduling algorithm: %s", params.Algorithm)
 	}
 	scheduler := &scheduler{
-		cfg:           cfg,
-		incomingQueue: newIncomingQueue(cfg.maxQueueSize, cfg.maxBatchSize, cfg.maxBatchSizeBytes),
+		incomingQueue: newIncomingQueue(maxQueueSize, params.MaxBatchSize, params.MaxBatchSizeBytes),
 		logger:        logging.GetLogger("runtime/scheduling").With("scheduler", "simple"),
 	}
 
