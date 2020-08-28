@@ -3,7 +3,6 @@ package proxy
 import (
 	"context"
 	"crypto/tls"
-	"crypto/x509"
 	"fmt"
 	"testing"
 	"time"
@@ -52,9 +51,6 @@ func TestGRPCProxy(t *testing.T) {
 	serverTLSCert, serverX509Cert := cmnTesting.CreateCertificate(t)
 	clientTLSCert, _ := cmnTesting.CreateCertificate(t)
 
-	serverCertPool := x509.NewCertPool()
-	serverCertPool.AddCert(serverX509Cert)
-
 	// Create a new gRPC server.
 	serverConfig := &commonGrpc.ServerConfig{
 		Name:          host,
@@ -74,11 +70,12 @@ func TestGRPCProxy(t *testing.T) {
 	err = grpcServer.Start()
 	require.NoErrorf(err, "Failed to start the gRPC server: %v", err)
 
-	clientTLSCreds := credentials.NewTLS(&tls.Config{
-		Certificates: []tls.Certificate{*clientTLSCert},
-		RootCAs:      serverCertPool,
-		ServerName:   "oasis-node",
+	clientTLSCreds, err := commonGrpc.NewClientCreds(&commonGrpc.ClientOptions{
+		Certificates:     []tls.Certificate{*clientTLSCert},
+		GetServerPubKeys: commonGrpc.ServerPubKeysGetterFromCertificate(serverX509Cert),
+		CommonName:       "oasis-node",
 	})
+	require.NoError(err, "NewClientCreds")
 
 	// Create upstream dialer.
 	upstreamDialer := func(ctx context.Context) (*grpc.ClientConn, error) {

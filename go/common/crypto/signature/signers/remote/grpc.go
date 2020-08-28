@@ -9,7 +9,6 @@ import (
 	"io"
 
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials"
 
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	cmnGrpc "github.com/oasisprotocol/oasis-core/go/common/grpc"
@@ -234,20 +233,21 @@ func NewFactory(config interface{}, roles ...signature.SignerRole) (signature.Si
 		return nil, fmt.Errorf("signature/signer/remote: server certificate is required")
 	}
 
-	certPool := x509.NewCertPool()
 	serverCert, err := x509.ParseCertificate(cfg.ServerCertificate.Certificate[0])
 	if err != nil {
 		return nil, fmt.Errorf("signature/signer/remote: failed to parse server certificate: %w", err)
 	}
-	certPool.AddCert(serverCert)
 
-	creds := credentials.NewTLS(&tls.Config{
+	creds, err := cmnGrpc.NewClientCreds(&cmnGrpc.ClientOptions{
 		Certificates: []tls.Certificate{
 			*cfg.ClientCertificate,
 		},
-		RootCAs:    certPool,
-		ServerName: "remote-signer-server",
+		GetServerPubKeys: cmnGrpc.ServerPubKeysGetterFromCertificate(serverCert),
+		CommonName:       "remote-signer-server",
 	})
+	if err != nil {
+		return nil, err
+	}
 
 	conn, err := cmnGrpc.Dial(cfg.Address, grpc.WithTransportCredentials(creds))
 	if err != nil {

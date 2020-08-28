@@ -8,7 +8,6 @@ import (
 	"errors"
 
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials"
 
 	tlsCert "github.com/oasisprotocol/oasis-core/go/common/crypto/tls"
 	cmnGrpc "github.com/oasisprotocol/oasis-core/go/common/grpc"
@@ -116,15 +115,16 @@ func New(identity *identity.Identity, proxyAddr, tlsCertFile string) (api.Endpoi
 			return nil, err
 		}
 
-		certPool := x509.NewCertPool()
-		certPool.AddCert(parsedCert)
-		creds := credentials.NewTLS(&tls.Config{
-			RootCAs:    certPool,
-			ServerName: proxy.CommonName,
+		creds, err := cmnGrpc.NewClientCreds(&cmnGrpc.ClientOptions{
+			GetServerPubKeys: cmnGrpc.ServerPubKeysGetterFromCertificate(parsedCert),
+			CommonName:       proxy.CommonName,
 			GetClientCertificate: func(cri *tls.CertificateRequestInfo) (*tls.Certificate, error) {
 				return identity.GetTLSCertificate(), nil
 			},
 		})
+		if err != nil {
+			return nil, err
+		}
 
 		conn, err := cmnGrpc.Dial(
 			proxyAddr,
