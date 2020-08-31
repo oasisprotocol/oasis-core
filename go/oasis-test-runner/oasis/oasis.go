@@ -152,9 +152,19 @@ func (n *Node) Stop() error {
 }
 
 // Restart kills the node, waits for it to stop, and starts it again.
-func (n *Node) Restart() error {
+func (n *Node) Restart(ctx context.Context) error {
+	return n.RestartAfter(ctx, 0)
+}
+
+// RestartAfter kills the node, waits for it to stop, and starts it again after delay.
+func (n *Node) RestartAfter(ctx context.Context, startDelay time.Duration) error {
 	if err := n.stopNode(); err != nil {
 		return err
+	}
+	select {
+	case <-time.After(startDelay):
+	case <-ctx.Done():
+		return ctx.Err()
 	}
 	return n.doStartNode()
 }

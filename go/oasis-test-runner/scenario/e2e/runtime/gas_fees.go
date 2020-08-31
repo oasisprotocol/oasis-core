@@ -46,47 +46,47 @@ func (sc *gasFeesRuntimesImpl) Fixture() (*oasis.NetworkFixture, error) {
 		},
 		TotalSupply: *quantity.NewFromUint64(90000000),
 		Ledger: map[staking.Address]*staking.Account{
-			e2e.LockupAccount: {
+			e2e.DeterministicValidator0: {
 				General: staking.GeneralAccount{
 					Balance: *quantity.NewFromUint64(10000000),
 				},
 			},
-			e2e.MysteryAccount0: {
+			e2e.DeterministicValidator1: {
 				General: staking.GeneralAccount{
 					Balance: *quantity.NewFromUint64(10000000),
 				},
 			},
-			e2e.MysteryAccount1: {
+			e2e.DeterministicValidator2: {
 				General: staking.GeneralAccount{
 					Balance: *quantity.NewFromUint64(10000000),
 				},
 			},
-			e2e.MysteryAccount2: {
+			e2e.DeterministicCompute0: {
 				General: staking.GeneralAccount{
 					Balance: *quantity.NewFromUint64(10000000),
 				},
 			},
-			e2e.MysteryAccount3: {
+			e2e.DeterministicCompute1: {
 				General: staking.GeneralAccount{
 					Balance: *quantity.NewFromUint64(10000000),
 				},
 			},
-			e2e.MysteryAccount4: {
+			e2e.DeterministicCompute2: {
 				General: staking.GeneralAccount{
 					Balance: *quantity.NewFromUint64(10000000),
 				},
 			},
-			e2e.MysteryAccount5: {
+			e2e.DeterministicStorage0: {
 				General: staking.GeneralAccount{
 					Balance: *quantity.NewFromUint64(10000000),
 				},
 			},
-			e2e.MysteryAccount6: {
+			e2e.DeterministicStorage1: {
 				General: staking.GeneralAccount{
 					Balance: *quantity.NewFromUint64(10000000),
 				},
 			},
-			e2e.MysteryAccount7: {
+			e2e.DeterministicKeyManager0: {
 				General: staking.GeneralAccount{
 					Balance: *quantity.NewFromUint64(10000000),
 				},

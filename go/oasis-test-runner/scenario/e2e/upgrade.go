@@ -85,7 +85,7 @@ func (sc *nodeUpgradeImpl) nextEpoch() error {
 
 func (sc *nodeUpgradeImpl) restart(wait bool) error {
 	sc.Logger.Debug("restarting validator")
-	if err := sc.validator.Restart(); err != nil {
+	if err := sc.validator.Restart(sc.ctx); err != nil {
 		return fmt.Errorf("can't restart validator: %w", err)
 	}
 
@@ -287,7 +287,7 @@ func (sc *nodeUpgradeImpl) Run(childEnv *env.Env) error {
 			sc.Logger.Debug("waiting for validator to exit", "num", i)
 			<-val.Exit()
 			sc.Logger.Debug("restarting validator", "num", i)
-			if restartError := val.Restart(); err != nil {
+			if restartError := val.Restart(sc.ctx); err != nil {
 				errCh <- restartError
 			}
 		}(i, val)

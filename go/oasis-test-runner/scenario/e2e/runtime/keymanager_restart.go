@@ -35,6 +35,7 @@ func (sc *kmRestartImpl) Clone() scenario.Scenario {
 }
 
 func (sc *kmRestartImpl) Run(childEnv *env.Env) error {
+	ctx := context.Background()
 	clientErrCh, cmd, err := sc.runtimeImpl.start(childEnv)
 	if err != nil {
 		return err
@@ -55,7 +56,7 @@ func (sc *kmRestartImpl) Run(childEnv *env.Env) error {
 
 	// Restart the key manager.
 	sc.Logger.Info("restarting the key manager")
-	if err = km.Restart(); err != nil {
+	if err = km.Restart(ctx); err != nil {
 		return err
 	}
 
@@ -65,7 +66,7 @@ func (sc *kmRestartImpl) Run(childEnv *env.Env) error {
 	if err != nil {
 		return err
 	}
-	if err = kmCtrl.WaitReady(context.Background()); err != nil {
+	if err = kmCtrl.WaitReady(ctx); err != nil {
 		return err
 	}
 
