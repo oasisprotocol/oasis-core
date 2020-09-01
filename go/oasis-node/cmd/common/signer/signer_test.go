@@ -21,7 +21,7 @@ func TestCompositeCtor(t *testing.T) {
 	require.NoError(err, "TempDir")
 	defer os.RemoveAll(dataDir)
 
-	viper.Set(cfgSignerCompositeBackends, "2:file,4:memory")
+	viper.Set(cfgSignerCompositeBackends, "node:file,consensus:memory")
 	defer viper.Set(cfgSignerCompositeBackends, "")
 
 	testingAllowMemory = true

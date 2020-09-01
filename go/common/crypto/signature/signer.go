@@ -2,11 +2,11 @@ package signature
 
 import (
 	"crypto/sha512"
+	"encoding"
 	"errors"
 	"fmt"
 	"io"
 	"os"
-	"strconv"
 	"strings"
 	"sync"
 
@@ -34,6 +34,9 @@ var (
 	// the signing operations allowed by the role.
 	ErrRoleAction = errors.New("signature: signer role action mismatch")
 
+	// ErrInvalidRole is the error returned when the signer role is invalid.
+	ErrInvalidRole = errors.New("signature: invalid signer role")
+
 	errMalformedContext    = errors.New("signature: malformed context")
 	errUnregisteredContext = errors.New("signature: unregistered context")
 	errNoChainContext      = errors.New("signature: chain domain separation context not set")
@@ -51,6 +54,9 @@ var (
 		SignerP2P,
 		SignerConsensus,
 	}
+
+	_ encoding.TextMarshaler   = (*SignerRole)(nil)
+	_ encoding.TextUnmarshaler = (*SignerRole)(nil)
 )
 
 type contextOptions struct {
@@ -156,27 +162,53 @@ func SetChainContext(rawContext string) {
 type SignerRole int
 
 const (
-	SignerUnknown SignerRole = iota
-	SignerEntity
-	SignerNode
-	SignerP2P
-	SignerConsensus
+	SignerUnknown   SignerRole = 0
+	SignerEntity    SignerRole = 1
+	SignerNode      SignerRole = 2
+	SignerP2P       SignerRole = 3
+	SignerConsensus SignerRole = 4
 
-	// If you add to this, also add the new roles to SignerRoles.
-	maxSignerRole = SignerConsensus
+	SignerEntityName    = "entity"
+	SignerNodeName      = "node"
+	SignerP2PName       = "p2p"
+	SignerConsensusName = "consensus"
 )
 
-func (role *SignerRole) FromString(str string) error {
-	i, err := strconv.Atoi(str)
-	if err != nil {
-		return fmt.Errorf("signature: unknown signer role: '%v'", str)
+// String returns the string representation of a SignerRole.
+func (role SignerRole) String() string {
+	switch role {
+	case SignerEntity:
+		return SignerEntityName
+	case SignerNode:
+		return SignerNodeName
+	case SignerP2P:
+		return SignerP2PName
+	case SignerConsensus:
+		return SignerConsensusName
+	default:
+		return "[unknown signer role]"
 	}
+}
 
-	sRole := SignerRole(i)
-	if sRole == SignerUnknown || sRole > maxSignerRole {
-		return fmt.Errorf("signature: invalid signer role: '%v'", str)
+// MarshalText encodes a SignerRole into text form.
+func (role SignerRole) MarshalText() ([]byte, error) {
+	return []byte(role.String()), nil
+}
+
+// UnmarshalText decodes a text slice into a SignerRole.
+func (role *SignerRole) UnmarshalText(text []byte) error {
+	switch string(text) {
+	case SignerEntityName:
+		*role = SignerEntity
+	case SignerNodeName:
+		*role = SignerNode
+	case SignerP2PName:
+		*role = SignerP2P
+	case SignerConsensusName:
+		*role = SignerConsensus
+	default:
+		return fmt.Errorf("%w: %s", ErrInvalidRole, string(text))
 	}
-	*role = sRole
 	return nil
 }
 

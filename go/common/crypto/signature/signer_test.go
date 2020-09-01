@@ -111,3 +111,39 @@ func TestBlacklist(t *testing.T) {
 	require.True(pk2.IsBlacklisted(), "test key 2 should be blacklisted")
 	require.False(pk2.IsValid(), "test key 2 should be invalid")
 }
+
+func TestSignerRoles(t *testing.T) {
+	require := require.New(t)
+
+	// Make sure marshaling and unmarshaling works.
+	var unmarshaled SignerRole
+	for _, role := range SignerRoles {
+		text, err := role.MarshalText()
+		require.NoError(err, "marshal SignerRole")
+		err = unmarshaled.UnmarshalText(text)
+		require.NoError(err, "unmarshal previously marshaled SignerRole")
+		require.Equal(role, unmarshaled, "marshal and unmarshal should result in identity")
+	}
+
+	// Make sure invalid roles return appropriate string representation.
+	invalidRoles := []SignerRole{
+		SignerUnknown,
+		SignerRole(5),
+		SignerRole(-1),
+	}
+	for _, role := range invalidRoles {
+		require.Equal("[unknown signer role]", role.String())
+	}
+
+	// Make sure invalid role string representations can't be unmarshaled.
+	invalidRolesStr := []string{
+		SignerUnknown.String(),
+		"foo",
+		"bar",
+	}
+	for _, roleStr := range invalidRolesStr {
+		var role SignerRole
+		err := role.UnmarshalText([]byte(roleStr))
+		require.EqualError(err, "signature: invalid signer role: "+roleStr, "unmarshal invalid SignerRole should error")
+	}
+}

@@ -137,7 +137,7 @@ func doNewComposite(signerDir string, roles ...signature.SignerRole) (signature.
 		}
 
 		var role signature.SignerRole
-		if err := role.FromString(roleSigner[0]); err != nil {
+		if err := role.UnmarshalText([]byte(roleSigner[0])); err != nil {
 			return nil, err
 		}
 
