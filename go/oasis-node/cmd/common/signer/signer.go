@@ -2,6 +2,7 @@
 package signer
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"strings"
@@ -138,6 +139,13 @@ func doNewComposite(signerDir string, roles ...signature.SignerRole) (signature.
 
 		var role signature.SignerRole
 		if err := role.UnmarshalText([]byte(roleSigner[0])); err != nil {
+			if errors.Is(err, signature.ErrInvalidRole) {
+				var validRoles []string
+				for _, role := range signature.SignerRoles {
+					validRoles = append(validRoles, role.String())
+				}
+				return nil, fmt.Errorf("%w (valid roles are: %s)", err, strings.Join(validRoles, ", "))
+			}
 			return nil, err
 		}
 
