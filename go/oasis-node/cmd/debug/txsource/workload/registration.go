@@ -149,6 +149,12 @@ func signNode(identity *identity.Identity, nodeDesc *node.Node) (*node.MultiSign
 	return sigNode, nil
 }
 
+// Implements Workload.
+func (r *registration) NeedsFunds() bool {
+	return true
+}
+
+// Implements Workload.
 func (r *registration) Run( // nolint: gocyclo
 	gracefulExit context.Context,
 	rng *rand.Rand,

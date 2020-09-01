@@ -110,6 +110,12 @@ func (t *transfer) doBurnTx(ctx context.Context, idx int) error {
 	return nil
 }
 
+// Implements Workload.
+func (t *transfer) NeedsFunds() bool {
+	return true
+}
+
+// Implements Workload.
 func (t *transfer) Run(
 	gracefulExit context.Context,
 	rng *rand.Rand,

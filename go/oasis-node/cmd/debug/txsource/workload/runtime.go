@@ -257,6 +257,12 @@ func (r *runtime) doRemoveRequest(ctx context.Context, rng *rand.Rand, rtc runti
 	return nil
 }
 
+// Implements Workload.
+func (r *runtime) NeedsFunds() bool {
+	return false
+}
+
+// Implements Workload.
 func (r *runtime) Run(
 	gracefulExit context.Context,
 	rng *rand.Rand,

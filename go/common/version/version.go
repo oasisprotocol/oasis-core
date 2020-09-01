@@ -14,9 +14,9 @@ import (
 
 // Version is a protocol or a runtime version.
 type Version struct {
-	Major uint16
-	Minor uint16
-	Patch uint16
+	Major uint16 `json:"major,omitempty"`
+	Minor uint16 `json:"minor,omitempty"`
+	Patch uint16 `json:"patch,omitempty"`
 }
 
 // ToU64 returns the version as platform-dependent uint64.

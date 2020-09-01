@@ -173,6 +173,12 @@ func (d *delegation) doReclaimEscrowTx(ctx context.Context, rng *rand.Rand, cnsc
 	return nil
 }
 
+// Implements Workload.
+func (d *delegation) NeedsFunds() bool {
+	return true
+}
+
+// Implements Workload.
 func (d *delegation) Run(
 	gracefulExit context.Context,
 	rng *rand.Rand,

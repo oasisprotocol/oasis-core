@@ -186,7 +186,6 @@ func testRegistryEntityNodes( // nolint: gocyclo
 				for _, v := range tn.invalidBefore {
 					err = tn.Register(consensus, v.signed)
 					require.Error(err, v.descr)
-					require.Equal(err, api.ErrInvalidArgument)
 				}
 
 				err = tn.Register(consensus, tn.SignedRegistration)
@@ -244,7 +243,6 @@ func testRegistryEntityNodes( // nolint: gocyclo
 				for _, v := range tn.invalidReReg {
 					err = tn.Register(consensus, v.signed)
 					require.Error(err, v.descr)
-					require.Equal(err, api.ErrInvalidArgument)
 				}
 
 				select {

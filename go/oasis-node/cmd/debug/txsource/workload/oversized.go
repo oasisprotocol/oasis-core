@@ -28,6 +28,12 @@ var oversizedLogger = logging.GetLogger("cmd/txsource/workload/oversized")
 
 type oversized struct{}
 
+// Implements Workload.
+func (oversized) NeedsFunds() bool {
+	return true
+}
+
+// Implements Workload.
 func (oversized) Run(
 	gracefulExit context.Context,
 	rng *rand.Rand,
