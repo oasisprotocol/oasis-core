@@ -98,6 +98,7 @@ steps:
     env:
       TEST_BASE_DIR: /var/tmp/longtests
     agents:
+      queue: default-daily
       buildkite_agent_class: stable
     # NOTE: we actually don't want to retry, but this is the only way that we
     # can execute the notify step only if tests failed.
