@@ -5,7 +5,6 @@ import (
 	"fmt"
 
 	"github.com/tendermint/tendermint/abci/types"
-	tmtypes "github.com/tendermint/tendermint/types"
 
 	"github.com/oasisprotocol/oasis-core/go/common/cbor"
 	"github.com/oasisprotocol/oasis-core/go/common/quantity"
@@ -85,7 +84,7 @@ func (app *stakingApplication) BeginBlock(ctx *api.Context, request types.Reques
 	// the actual evidence has already been verified by Tendermint to be valid.
 	for _, evidence := range request.ByzantineValidators {
 		switch evidence.Type {
-		case tmtypes.ABCIEvidenceTypeDuplicateVote:
+		case types.EvidenceType_DUPLICATE_VOTE:
 			if err := onEvidenceDoubleSign(ctx, evidence.Validator.Address, evidence.Height, evidence.Time, evidence.Validator.Power); err != nil {
 				return err
 			}

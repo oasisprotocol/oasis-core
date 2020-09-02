@@ -56,58 +56,30 @@ func (lp *lightClientProvider) ChainID() string {
 }
 
 // Implements tmlightprovider.Provider.
-func (lp *lightClientProvider) SignedHeader(height int64) (*tmtypes.SignedHeader, error) {
-	shdr, err := lp.client.GetSignedHeader(lp.ctx, height)
+func (lp *lightClientProvider) LightBlock(height int64) (*tmtypes.LightBlock, error) {
+	lb, err := lp.client.GetLightBlock(lp.ctx, height)
 	switch {
 	case err == nil:
 	case errors.Is(err, consensus.ErrVersionNotFound):
-		return nil, tmlightprovider.ErrSignedHeaderNotFound
+		return nil, tmlightprovider.ErrLightBlockNotFound
 	default:
-		return nil, fmt.Errorf("failed to fetch signed header: %w", err)
+		return nil, tmlightprovider.ErrNoResponse
 	}
 
-	// Decode Tendermint-specific signed header.
-	var protoSigHdr tmproto.SignedHeader
-	if err = protoSigHdr.Unmarshal(shdr.Meta); err != nil {
-		return nil, fmt.Errorf("received malformed header: %w", err)
+	// Decode Tendermint-specific light block.
+	var protoLb tmproto.LightBlock
+	if err = protoLb.Unmarshal(lb.Meta); err != nil {
+		return nil, tmlightprovider.ErrBadLightBlock{Reason: err}
 	}
-	sh, err := tmtypes.SignedHeaderFromProto(&protoSigHdr)
+	tlb, err := tmtypes.LightBlockFromProto(&protoLb)
 	if err != nil {
-		return nil, fmt.Errorf("received malformed header: %w", err)
+		return nil, tmlightprovider.ErrBadLightBlock{Reason: err}
+	}
+	if err = tlb.ValidateBasic(lp.chainID); err != nil {
+		return nil, tmlightprovider.ErrBadLightBlock{Reason: err}
 	}
 
-	if lp.chainID != sh.ChainID {
-		return nil, fmt.Errorf("incorrect chain ID (expected: %s got: %s)",
-			lp.chainID,
-			sh.ChainID,
-		)
-	}
-
-	return sh, nil
-}
-
-// Implements tmlightprovider.Provider.
-func (lp *lightClientProvider) ValidatorSet(height int64) (*tmtypes.ValidatorSet, error) {
-	vs, err := lp.client.GetValidatorSet(lp.ctx, height)
-	switch {
-	case err == nil:
-	case errors.Is(err, consensus.ErrVersionNotFound):
-		return nil, tmlightprovider.ErrValidatorSetNotFound
-	default:
-		return nil, fmt.Errorf("failed to fetch validator set: %w", err)
-	}
-
-	// Decode Tendermint-specific validator set.
-	var protoVals tmproto.ValidatorSet
-	if err = protoVals.Unmarshal(vs.Meta); err != nil {
-		return nil, fmt.Errorf("received malformed validator set: %w", err)
-	}
-	vals, err := tmtypes.ValidatorSetFromProto(&protoVals)
-	if err != nil {
-		return nil, fmt.Errorf("received malformed validator set: %w", err)
-	}
-
-	return vals, nil
+	return tlb, nil
 }
 
 // Implements tmlightprovider.Provider.
@@ -162,13 +134,8 @@ type lightClient struct {
 }
 
 // Implements consensus.LightClientBackend.
-func (lc *lightClient) GetSignedHeader(ctx context.Context, height int64) (*consensus.SignedHeader, error) {
-	return lc.getPrimary().GetSignedHeader(ctx, height)
-}
-
-// Implements consensus.LightClientBackend.
-func (lc *lightClient) GetValidatorSet(ctx context.Context, height int64) (*consensus.ValidatorSet, error) {
-	return lc.getPrimary().GetValidatorSet(ctx, height)
+func (lc *lightClient) GetLightBlock(ctx context.Context, height int64) (*consensus.LightBlock, error) {
+	return lc.getPrimary().GetLightBlock(ctx, height)
 }
 
 // Implements consensus.LightClientBackend.
@@ -192,12 +159,8 @@ func (lc *lightClient) SubmitEvidence(ctx context.Context, evidence *consensus.E
 }
 
 // Implements Client.
-func (lc *lightClient) GetVerifiedSignedHeader(ctx context.Context, height int64) (*tmtypes.SignedHeader, error) {
-	return lc.tmc.VerifyHeaderAtHeight(height, time.Now())
-}
-
-func (lc *lightClient) GetVerifiedValidatorSet(ctx context.Context, height int64) (*tmtypes.ValidatorSet, int64, error) {
-	return lc.tmc.TrustedValidatorSet(height)
+func (lc *lightClient) GetVerifiedLightBlock(ctx context.Context, height int64) (*tmtypes.LightBlock, error) {
+	return lc.tmc.VerifyLightBlockAtHeight(height, time.Now())
 }
 
 // Implements Client.
@@ -220,15 +183,15 @@ func (lc *lightClient) GetVerifiedParameters(ctx context.Context, height int64) 
 	}
 
 	// Fetch the header from the light client.
-	h, err := lc.tmc.VerifyHeaderAtHeight(p.Height, time.Now())
+	l, err := lc.tmc.VerifyLightBlockAtHeight(p.Height, time.Now())
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch header %d from light client: %w", p.Height, err)
 	}
 
 	// Verify hash.
-	if localHash := tmtypes.HashConsensusParams(params); !bytes.Equal(localHash, h.ConsensusHash) {
+	if localHash := tmtypes.HashConsensusParams(params); !bytes.Equal(localHash, l.ConsensusHash) {
 		return nil, fmt.Errorf("mismatched parameters hash (expected: %X got: %X)",
-			h.ConsensusHash,
+			l.ConsensusHash,
 			localHash,
 		)
 	}

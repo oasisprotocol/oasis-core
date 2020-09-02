@@ -185,12 +185,7 @@ func (b *BaseBackend) GetSignerNonce(ctx context.Context, req *GetSignerNonceReq
 }
 
 // Implements Backend.
-func (b *BaseBackend) GetSignedHeader(ctx context.Context, height int64) (*SignedHeader, error) {
-	panic(ErrUnsupported)
-}
-
-// Implements Backend.
-func (b *BaseBackend) GetValidatorSet(ctx context.Context, height int64) (*ValidatorSet, error) {
+func (b *BaseBackend) GetLightBlock(ctx context.Context, height int64) (*LightBlock, error) {
 	panic(ErrUnsupported)
 }
 

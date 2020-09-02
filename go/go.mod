@@ -7,7 +7,7 @@ replace (
 	// https://github.com/spf13/cobra/issues/1091
 	github.com/gorilla/websocket => github.com/gorilla/websocket v1.4.2
 
-	github.com/tendermint/tendermint => github.com/oasisprotocol/tendermint v0.34.0-rc4-oasis1
+	github.com/tendermint/tendermint => github.com/oasisprotocol/tendermint v0.34.0-rc4-oasis2
 	golang.org/x/crypto/curve25519 => github.com/oasisprotocol/ed25519/extra/x25519 v0.0.0-20200819094954-65138ca6ec7c
 	golang.org/x/crypto/ed25519 => github.com/oasisprotocol/ed25519 v0.0.0-20200819094954-65138ca6ec7c
 )
@@ -47,15 +47,14 @@ require (
 	github.com/spf13/viper v1.7.1
 	github.com/stretchr/testify v1.6.1
 	github.com/tendermint/tendermint v0.33.6
-	github.com/tendermint/tm-db v0.6.0
+	github.com/tendermint/tm-db v0.6.2
 	github.com/thepudds/fzgo v0.2.2
 	github.com/uber/jaeger-client-go v2.25.0+incompatible
 	github.com/uber/jaeger-lib v2.2.0+incompatible // indirect
 	github.com/whyrusleeping/go-logging v0.0.1
 	gitlab.com/yawning/dynlib.git v0.0.0-20200603163025-35fe007b0761
 	golang.org/x/crypto v0.0.0-20200622213623-75b288015ac9
-	golang.org/x/net v0.0.0-20200625001655-4c5254603344
-	golang.org/x/sys v0.0.0-20200722175500-76b94024e4b6 // indirect
+	golang.org/x/net v0.0.0-20200813134508-3edf25e44fcc
 	google.golang.org/genproto v0.0.0-20200624020401-64a14ca9d1ad
 	google.golang.org/grpc v1.31.1
 	google.golang.org/grpc/security/advancedtls v0.0.0-20200902210233-8630cac324bf

@@ -47,10 +47,8 @@ var (
 	// methodWatchBlocks is the WatchBlocks method.
 	methodWatchBlocks = serviceName.NewMethod("WatchBlocks", nil)
 
-	// methodGetSignedHeader is the GetSignedHeader method.
-	methodGetSignedHeader = lightServiceName.NewMethod("GetSignedHeader", int64(0))
-	// methodGetValidatorSet is the GetValidatorSet method.
-	methodGetValidatorSet = lightServiceName.NewMethod("GetValidatorSet", int64(0))
+	// methodGetLightBlock is the GetLightBlock method.
+	methodGetLightBlock = lightServiceName.NewMethod("GetLightBlock", int64(0))
 	// methodGetParameters is the GetParameters method.
 	methodGetParameters = lightServiceName.NewMethod("GetParameters", int64(0))
 	// methodStateSyncGet is the StateSyncGet method.
@@ -133,12 +131,8 @@ var (
 		HandlerType: (*LightClientBackend)(nil),
 		Methods: []grpc.MethodDesc{
 			{
-				MethodName: methodGetSignedHeader.ShortName(),
-				Handler:    handlerGetSignedHeader,
-			},
-			{
-				MethodName: methodGetValidatorSet.ShortName(),
-				Handler:    handlerGetValidatorSet,
+				MethodName: methodGetLightBlock.ShortName(),
+				Handler:    handlerGetLightBlock,
 			},
 			{
 				MethodName: methodGetParameters.ShortName(),
@@ -460,7 +454,7 @@ func handlerWatchBlocks(srv interface{}, stream grpc.ServerStream) error {
 	}
 }
 
-func handlerGetSignedHeader( // nolint: golint
+func handlerGetLightBlock( // nolint: golint
 	srv interface{},
 	ctx context.Context,
 	dec func(interface{}) error,
@@ -471,37 +465,14 @@ func handlerGetSignedHeader( // nolint: golint
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(LightClientBackend).GetSignedHeader(ctx, height)
+		return srv.(LightClientBackend).GetLightBlock(ctx, height)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: methodGetSignedHeader.FullName(),
+		FullMethod: methodGetLightBlock.FullName(),
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(LightClientBackend).GetSignedHeader(ctx, req.(int64))
-	}
-	return interceptor(ctx, height, info, handler)
-}
-
-func handlerGetValidatorSet( // nolint: golint
-	srv interface{},
-	ctx context.Context,
-	dec func(interface{}) error,
-	interceptor grpc.UnaryServerInterceptor,
-) (interface{}, error) {
-	var height int64
-	if err := dec(&height); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(LightClientBackend).GetValidatorSet(ctx, height)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: methodGetValidatorSet.FullName(),
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(LightClientBackend).GetValidatorSet(ctx, req.(int64))
+		return srv.(LightClientBackend).GetLightBlock(ctx, req.(int64))
 	}
 	return interceptor(ctx, height, info, handler)
 }
@@ -660,18 +631,9 @@ type consensusLightClient struct {
 }
 
 // Implements LightClientBackend.
-func (c *consensusLightClient) GetSignedHeader(ctx context.Context, height int64) (*SignedHeader, error) {
-	var rsp SignedHeader
-	if err := c.conn.Invoke(ctx, methodGetSignedHeader.FullName(), height, &rsp); err != nil {
-		return nil, err
-	}
-	return &rsp, nil
-}
-
-// Implements LightClientBackend.
-func (c *consensusLightClient) GetValidatorSet(ctx context.Context, height int64) (*ValidatorSet, error) {
-	var rsp ValidatorSet
-	if err := c.conn.Invoke(ctx, methodGetValidatorSet.FullName(), height, &rsp); err != nil {
+func (c *consensusLightClient) GetLightBlock(ctx context.Context, height int64) (*LightBlock, error) {
+	var rsp LightBlock
+	if err := c.conn.Invoke(ctx, methodGetLightBlock.FullName(), height, &rsp); err != nil {
 		return nil, err
 	}
 	return &rsp, nil

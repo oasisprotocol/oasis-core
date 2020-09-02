@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	tmstate "github.com/tendermint/tendermint/state"
+	tmtypes "github.com/tendermint/tendermint/types"
 
 	"github.com/oasisprotocol/oasis-core/go/common/cbor"
 	consensusAPI "github.com/oasisprotocol/oasis-core/go/consensus/api"
@@ -13,7 +14,7 @@ import (
 )
 
 // Implements LightClientBackend.
-func (t *fullService) GetSignedHeader(ctx context.Context, height int64) (*consensusAPI.SignedHeader, error) {
+func (t *fullService) GetLightBlock(ctx context.Context, height int64) (*consensusAPI.LightBlock, error) {
 	if err := t.ensureStarted(ctx); err != nil {
 		return nil, err
 	}
@@ -27,40 +28,27 @@ func (t *fullService) GetSignedHeader(ctx context.Context, height int64) (*conse
 		return nil, fmt.Errorf("tendermint: header is nil")
 	}
 
-	meta, err := commit.SignedHeader.ToProto().Marshal()
-	if err != nil {
-		return nil, fmt.Errorf("tendermint: failed to marshal signed header: %w", err)
-	}
-
-	return &consensusAPI.SignedHeader{
-		Height: commit.Header.Height,
-		Meta:   meta,
-	}, nil
-}
-
-// Implements LightClientBackend.
-func (t *fullService) GetValidatorSet(ctx context.Context, height int64) (*consensusAPI.ValidatorSet, error) {
-	if err := t.ensureStarted(ctx); err != nil {
-		return nil, err
-	}
-
 	// Don't use the client as that imposes stupid pagination. Access the state database directly.
 	vals, err := tmstate.LoadValidators(t.stateDb, height)
 	if err != nil {
 		return nil, consensusAPI.ErrVersionNotFound
 	}
 
-	protoVals, err := vals.ToProto()
-	if err != nil {
-		return nil, fmt.Errorf("tendermint: failed to convert validators: %w", err)
+	lb := tmtypes.LightBlock{
+		SignedHeader: &commit.SignedHeader,
+		ValidatorSet: vals,
 	}
-	meta, err := protoVals.Marshal()
+	protoLb, err := lb.ToProto()
 	if err != nil {
-		return nil, fmt.Errorf("tendermint: failed to marshal validators: %w", err)
+		return nil, fmt.Errorf("tendermint: failed to convert light block: %w", err)
+	}
+	meta, err := protoLb.Marshal()
+	if err != nil {
+		return nil, fmt.Errorf("tendermint: failed to marshal light block: %w", err)
 	}
 
-	return &consensusAPI.ValidatorSet{
-		Height: height,
+	return &consensusAPI.LightBlock{
+		Height: commit.Header.Height,
 		Meta:   meta,
 	}, nil
 }

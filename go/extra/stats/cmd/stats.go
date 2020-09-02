@@ -294,27 +294,27 @@ func getStats(ctx context.Context, consensus consensusAPI.ClientBackend, registr
 			// Get validators.
 			// Hypothesis: this gets the validator set with priorities after they're incremented to get the round 0
 			// proposer.
-			vs, err := consensus.GetValidatorSet(ctx, lastCommitHeight)
+			lb, err := consensus.GetLightBlock(ctx, lastCommitHeight)
 			if err != nil {
-				logger.Error("failed to query validators",
+				logger.Error("failed to query light block",
 					"err", err,
 					"height", lastCommitHeight,
 				)
 				os.Exit(1)
 			}
-			var protoVals tmproto.ValidatorSet
-			if err = protoVals.Unmarshal(vs.Meta); err != nil {
-				logger.Error("unmarshal validator set error",
-					"meta", vs.Meta,
+			var protoLb tmproto.LightBlock
+			if err = protoLb.Unmarshal(lb.Meta); err != nil {
+				logger.Error("unmarshal light block error",
+					"meta", lb.Meta,
 					"err", err,
 					"height", lastCommitHeight,
 				)
 				os.Exit(1)
 			}
-			vals, err := tmtypes.ValidatorSetFromProto(&protoVals)
+			tlb, err := tmtypes.LightBlockFromProto(&protoLb)
 			if err != nil {
-				logger.Error("unmarshal validator set error",
-					"meta", vs.Meta,
+				logger.Error("unmarshal light block error",
+					"meta", lb.Meta,
 					"err", err,
 					"height", lastCommitHeight,
 				)
@@ -322,6 +322,7 @@ func getStats(ctx context.Context, consensus consensusAPI.ClientBackend, registr
 			}
 
 			// Go over all validators.
+			vals := tlb.ValidatorSet
 			for _, val := range vals.Validators {
 				stats.nodeStatsOrExit(ctx, registry, lastCommitHeight, val.Address.String()).elections++
 			}

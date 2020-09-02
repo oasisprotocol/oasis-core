@@ -30,11 +30,11 @@ func (sp *stateProvider) AppHash(height uint64) ([]byte, error) {
 	defer sp.Unlock()
 
 	// We have to fetch the next height, which contains the app hash for the previous height.
-	header, err := sp.lc.GetVerifiedSignedHeader(sp.ctx, int64(height+1))
+	lb, err := sp.lc.GetVerifiedLightBlock(sp.ctx, int64(height+1))
 	if err != nil {
 		return nil, err
 	}
-	return header.AppHash, nil
+	return lb.AppHash, nil
 }
 
 // Implements tmstatesync.StateProvider.
@@ -42,11 +42,11 @@ func (sp *stateProvider) Commit(height uint64) (*tmtypes.Commit, error) {
 	sp.Lock()
 	defer sp.Unlock()
 
-	header, err := sp.lc.GetVerifiedSignedHeader(sp.ctx, int64(height))
+	lb, err := sp.lc.GetVerifiedLightBlock(sp.ctx, int64(height))
 	if err != nil {
 		return nil, err
 	}
-	return header.Commit, nil
+	return lb.Commit, nil
 }
 
 // Implements tmstatesync.StateProvider.
@@ -62,45 +62,41 @@ func (sp *stateProvider) State(height uint64) (tmstate.State, error) {
 	// XXX: This will fail in case an upgrade happened in-between.
 	state.Version.Consensus.App = version.ConsensusProtocol.ToU64()
 
-	// We need to verify up until h+2, to get the validator set. This also prefetches the headers
-	// for h and h+1 in the typical case where the trusted header is after the snapshot height.
-	_, err := sp.lc.GetVerifiedSignedHeader(sp.ctx, int64(height+2))
+	// The snapshot height maps onto the state heights as follows:
+	//
+	// height: last block, i.e. the snapshotted height
+	// height+1: current block, i.e. the first block we'll process after the snapshot
+	// height+2: next block, i.e. the second block after the snapshot
+	//
+	// We need to fetch the NextValidators from height+2 because if the application changed
+	// the validator set at the snapshot height then this only takes effect at height+2.
+	lastLightBlock, err := sp.lc.GetVerifiedLightBlock(sp.ctx, int64(height))
 	if err != nil {
 		return tmstate.State{}, err
 	}
-	header, err := sp.lc.GetVerifiedSignedHeader(sp.ctx, int64(height))
+	curLightBlock, err := sp.lc.GetVerifiedLightBlock(sp.ctx, int64(height)+1)
 	if err != nil {
 		return tmstate.State{}, err
 	}
-	nextHeader, err := sp.lc.GetVerifiedSignedHeader(sp.ctx, int64(height+1))
+	nextLightBlock, err := sp.lc.GetVerifiedLightBlock(sp.ctx, int64(height)+2)
 	if err != nil {
 		return tmstate.State{}, err
 	}
-	state.LastBlockHeight = header.Height
-	state.LastBlockTime = header.Time
-	state.LastBlockID = header.Commit.BlockID
-	state.AppHash = nextHeader.AppHash
-	state.LastResultsHash = nextHeader.LastResultsHash
-
-	state.LastValidators, _, err = sp.lc.GetVerifiedValidatorSet(sp.ctx, int64(height))
-	if err != nil {
-		return tmstate.State{}, err
-	}
-	state.Validators, _, err = sp.lc.GetVerifiedValidatorSet(sp.ctx, int64(height+1))
-	if err != nil {
-		return tmstate.State{}, err
-	}
-	state.NextValidators, _, err = sp.lc.GetVerifiedValidatorSet(sp.ctx, int64(height+2))
-	if err != nil {
-		return tmstate.State{}, err
-	}
-	state.LastHeightValidatorsChanged = int64(height)
+	state.LastBlockHeight = lastLightBlock.Height
+	state.LastBlockTime = lastLightBlock.Time
+	state.LastBlockID = lastLightBlock.Commit.BlockID
+	state.AppHash = curLightBlock.AppHash
+	state.LastResultsHash = curLightBlock.LastResultsHash
+	state.LastValidators = lastLightBlock.ValidatorSet
+	state.Validators = curLightBlock.ValidatorSet
+	state.NextValidators = nextLightBlock.ValidatorSet
+	state.LastHeightValidatorsChanged = nextLightBlock.Height
 
 	// Fetch consensus parameters with light client verification.
-	params, err := sp.lc.GetVerifiedParameters(sp.ctx, nextHeader.Height)
+	params, err := sp.lc.GetVerifiedParameters(sp.ctx, nextLightBlock.Height)
 	if err != nil {
 		return tmstate.State{}, fmt.Errorf("failed to fetch consensus parameters for height %d: %w",
-			nextHeader.Height,
+			nextLightBlock.Height,
 			err,
 		)
 	}
