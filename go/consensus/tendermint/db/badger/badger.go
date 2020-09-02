@@ -70,8 +70,7 @@ func New(fn string, noSuffix bool) (dbm.DB, error) {
 	// value log file which can get corrupted in crashes).
 	opts = opts.WithTruncate(true)
 	opts = opts.WithCompression(options.Snappy)
-	// Reduce cache size to 64 MiB as the default is 1 GiB.
-	opts = opts.WithMaxCacheSize(64 * 1024 * 1024)
+	opts = opts.WithBlockCacheSize(64 * 1024 * 1024)
 
 	db, err := badger.Open(opts)
 	if err != nil {

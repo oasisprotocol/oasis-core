@@ -53,8 +53,6 @@ func NewCommonStore(dataDir string) (*CommonStore, error) {
 	// value log file which can get corrupted in crashes).
 	opts = opts.WithTruncate(true)
 	opts = opts.WithCompression(options.None)
-	// Reduce cache size to 128 KiB as the default is 1 GiB.
-	opts = opts.WithMaxCacheSize(128 * 1024)
 
 	db, err := badger.Open(opts)
 	if err != nil {
