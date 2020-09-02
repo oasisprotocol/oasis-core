@@ -115,8 +115,6 @@ func New(dataDir, fn string, runtimeID common.Namespace) (LocalStorage, error) {
 	// value log file which can get corrupted in crashes).
 	opts = opts.WithTruncate(true)
 	opts = opts.WithCompression(options.None)
-	// Reduce cache size to 128 KiB as the default is 1 GiB.
-	opts = opts.WithMaxCacheSize(128 * 1024)
 
 	var err error
 	if s.db, err = badger.Open(opts); err != nil {

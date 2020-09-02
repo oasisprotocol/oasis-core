@@ -19,7 +19,7 @@ require (
 	github.com/cznic/b v0.0.0-20181122101859-a26611c4d92d // indirect
 	github.com/cznic/mathutil v0.0.0-20181122101859-297441e03548 // indirect
 	github.com/cznic/strutil v0.0.0-20181122101858-275e90344537 // indirect
-	github.com/dgraph-io/badger/v2 v2.2007.1
+	github.com/dgraph-io/badger/v2 v2.2007.2
 	github.com/eapache/channels v1.1.0
 	github.com/fxamacker/cbor/v2 v2.2.1-0.20200820021930-bafca87fa6db
 	github.com/go-kit/kit v0.10.0

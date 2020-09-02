@@ -64,7 +64,7 @@ func New(cfg *api.Config) (api.NodeDB, error) {
 	// value log file which can get corrupted in crashes).
 	opts = opts.WithTruncate(true)
 	opts = opts.WithCompression(options.Snappy)
-	opts = opts.WithMaxCacheSize(cfg.MaxCacheSize)
+	opts = opts.WithBlockCacheSize(cfg.MaxCacheSize)
 	opts = opts.WithReadOnly(cfg.ReadOnly)
 	opts = opts.WithDetectConflicts(false)
 

@@ -57,8 +57,6 @@ func newDB(fn string, runtimeID common.Namespace) (*DB, error) {
 	// value log file which can get corrupted in crashes).
 	opts = opts.WithTruncate(true)
 	opts = opts.WithCompression(options.None)
-	// Reduce cache size to 10 MiB as the default is 1 GiB.
-	opts = opts.WithMaxCacheSize(10 * 1024 * 1024)
 
 	db, err := badger.Open(opts)
 	if err != nil {
