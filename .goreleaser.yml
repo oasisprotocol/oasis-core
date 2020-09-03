@@ -48,8 +48,27 @@ builds:
     goarch:
       - amd64
 
+  - id: oasis-remote-signer
+    main: ./oasis-remote-signer/main.go
+    binary: oasis-remote-signer
+    dir: go/
+    flags:
+      - -trimpath
+    ldflags:
+      # NOTE: At the moment, GoReleaser produces different binaries when
+      # releases are built from different git paths, unless -buildid= is added
+      # to ldflags.
+      # For more details, see: https://github.com/oasislabs/goreleaser/issues/1.
+      - -buildid=
+      - -X github.com/oasisprotocol/oasis-core/go/common/version.SoftwareVersion={{.Env.VERSION}}
+    goos:
+      - linux
+    goarch:
+      - amd64
+
 archives:
   - name_template: "{{replace .ProjectName \" \" \"_\" | tolower}}_{{.Version}}_{{.Os}}_{{.Arch}}"
+    wrap_in_directory: true
     files:
       - CHANGELOG.md
       - README.md
@@ -58,7 +77,7 @@ archives:
       - oasis-core-runtime-loader
 
 checksum:
-  name_template: SHA256SUMS
+  name_template: SHA256SUMS-{{.Version}}.txt
   algorithm: sha256
 
 snapshot:
