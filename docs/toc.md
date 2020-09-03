@@ -33,6 +33,7 @@
 * Oasis Node
   * [RPC](oasis-node/rpc.md)
   * [Metrics](oasis-node/metrics.md)
+  * [CLI](oasis-node/cli.md)
 
 ## Common Functionality
 

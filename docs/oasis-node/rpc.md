@@ -108,7 +108,7 @@ err := cc.SubmitTx(ctx, &tx)
 ```
 
 <!-- markdownlint-disable line-length -->
-[Control]: https://pkg.go.dev/github.com/oasisprotocol/oasis-core/go/control/api?tab=doc#NodeController
+[Node Control]: https://pkg.go.dev/github.com/oasisprotocol/oasis-core/go/control/api?tab=doc#NodeController
 [Consensus (client subset)]: https://pkg.go.dev/github.com/oasisprotocol/oasis-core/go/consensus/api?tab=doc#ClientBackend
 [Consensus (light client subset)]: https://pkg.go.dev/github.com/oasisprotocol/oasis-core/go/consensus/api?tab=doc#LightClientBackend
 [Staking]: https://pkg.go.dev/github.com/oasisprotocol/oasis-core/go/staking/api?tab=doc#Backend
