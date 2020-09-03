@@ -568,6 +568,8 @@ func runList(cmd *cobra.Command, args []string) {
 }
 
 func init() {
+	nodeCommon.SetBasicVersionTemplate(rootCmd)
+
 	logFmt := logging.FmtLogfmt
 	logLevel := logging.LevelWarn
 
