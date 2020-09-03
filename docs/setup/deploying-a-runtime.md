@@ -93,6 +93,8 @@ network. (defaults to: `/tmp/runtime-example/net-runner/network/genesis.json`).
 identifier. In this example we use
  `8000000000000000000000000000000000000000000000000000000001234567`, which is a
 test identifier and will not work outside local tests.
+- `RUNTIME_GENESIS_JSON` - Path to the runtime genesis state file. The runtime
+used in this example does not use a genesis file.
 - `NONCE` - Entity account nonce. If you followed the guide, nonce `0`
 would be the initial nonce to use for the entity. Note: make sure to keep
 updating the nonce when generating new transactions. To query for current
@@ -103,6 +105,7 @@ export ENTITY_DIR=/tmp/runtime-example/net-runner/network/entity-2/
 export ENTITY_ID=+MJpnSTzc11dNI5emMa+asCJH5cxBiBCcpbYE4XBdso=
 export GENESIS_JSON=/tmp/runtime-example/net-runner/network/genesis.json
 export RUNTIME_ID=8000000000000000000000000000000000000000000000000000000001234567
+export RUNTIME_GENESIS_JSON=""
 export NONCE=0
 ```
 
@@ -120,6 +123,7 @@ oasis-node registry runtime gen_register \
   --signer.dir $ENTITY_DIR \
   --runtime.id $RUNTIME_ID \
   --runtime.kind compute \
+  --runtime.genesis.state $RUNTIME_GENESIS_JSON \
   --runtime.executor.group_size 1 \
   --runtime.storage.group_size 1 \
   --runtime.admission_policy entity-whitelist \
@@ -242,6 +246,11 @@ oasis-node \
 
 This also enables unsafe debug-only flags which must never be used in a
 production setting as they may result in node compromise.
+{% endhint %}
+
+{% hint style="info" %}
+When running a runtime node in a production setting, the `worker.p2p.addresses`
+and `worker.client.addresses` flags need to be configured as well.
 {% endhint %}
 
 Following steps should be run in a new terminal window.
