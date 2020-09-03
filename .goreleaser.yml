@@ -77,7 +77,7 @@ archives:
       - oasis-core-runtime-loader
 
 checksum:
-  name_template: SHA256SUMS
+  name_template: SHA256SUMS-{{.Version}}.txt
   algorithm: sha256
 
 snapshot:
