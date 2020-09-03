@@ -8,12 +8,12 @@ replace (
 	github.com/gorilla/websocket => github.com/gorilla/websocket v1.4.2
 
 	github.com/tendermint/tendermint => github.com/oasisprotocol/tendermint v0.34.0-rc4-oasis1
-	golang.org/x/crypto/curve25519 => github.com/oasisprotocol/ed25519/extra/x25519 v0.0.0-20200528083105-55566edd6df0
-	golang.org/x/crypto/ed25519 => github.com/oasisprotocol/ed25519 v0.0.0-20200528083105-55566edd6df0
+	golang.org/x/crypto/curve25519 => github.com/oasisprotocol/ed25519/extra/x25519 v0.0.0-20200819094954-65138ca6ec7c
+	golang.org/x/crypto/ed25519 => github.com/oasisprotocol/ed25519 v0.0.0-20200819094954-65138ca6ec7c
 )
 
 require (
-	github.com/blevesearch/bleve v1.0.9
+	github.com/blevesearch/bleve v1.0.10
 	github.com/btcsuite/btcutil v1.0.2
 	github.com/cenkalti/backoff/v4 v4.0.0
 	github.com/cznic/b v0.0.0-20181122101859-a26611c4d92d // indirect
