@@ -62,7 +62,7 @@ var (
 // Execute spawns the main entry point after handling the config file.
 func Execute() {
 	if err := rootCmd.Execute(); err != nil {
-		cmdCommon.EarlyLogAndExit(err)
+		os.Exit(1)
 	}
 }
 
