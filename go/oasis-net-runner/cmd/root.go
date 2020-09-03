@@ -57,7 +57,7 @@ func RootCmd() *cobra.Command {
 // Execute spawns the main entry point after handing the config file.
 func Execute() {
 	if err := rootCmd.Execute(); err != nil {
-		common.EarlyLogAndExit(err)
+		os.Exit(1)
 	}
 }
 

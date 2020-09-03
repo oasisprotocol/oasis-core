@@ -2,6 +2,7 @@
 package cmd
 
 import (
+	"os"
 	"syscall"
 
 	"github.com/spf13/cobra"
@@ -41,7 +42,7 @@ func Execute() {
 	syscall.Umask(0o077)
 
 	if err := rootCmd.Execute(); err != nil {
-		cmdCommon.EarlyLogAndExit(err)
+		os.Exit(1)
 	}
 }
 

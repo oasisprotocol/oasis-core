@@ -3,6 +3,7 @@ package cmd
 
 import (
 	"fmt"
+	"os"
 
 	"github.com/spf13/cobra"
 	flag "github.com/spf13/pflag"
@@ -38,7 +39,7 @@ func Execute() {
 	}
 
 	if err := rootCmd.Execute(); err != nil {
-		common.EarlyLogAndExit(err)
+		os.Exit(1)
 	}
 }
 
