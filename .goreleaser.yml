@@ -68,6 +68,7 @@ builds:
 
 archives:
   - name_template: "{{replace .ProjectName \" \" \"_\" | tolower}}_{{.Version}}_{{.Os}}_{{.Arch}}"
+    wrap_in_directory: true
     files:
       - CHANGELOG.md
       - README.md
