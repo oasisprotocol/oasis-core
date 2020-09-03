@@ -35,7 +35,7 @@ Core:
   ```
   <!-- markdownlint-enable line-length -->
 
-* [Go] (at least version 1.14.3).
+* [Go] (at least version 1.15.1).
 
   If your distribution provides a new-enough version of Go, just use that.
 
@@ -44,18 +44,18 @@ Core:
   * [ensure `$GOPATH/bin` is in your `PATH`](
     https://tip.golang.org/doc/code.html#GOPATH),
   * [install the desired version of Go](
-    https://golang.org/doc/install#extra_versions), e.g. 1.14.3, with:
+    https://golang.org/doc/install#extra_versions), e.g. 1.15.1, with:
 
     ```
-    go get golang.org/dl/go1.14.3
-    go1.14.3 download
+    go get golang.org/dl/go1.15.1
+    go1.15.1 download
     ```
 
   * instruct the build system to use this particular version of Go by setting
     the `OASIS_GO` environment variable in your `~/.bashrc`:
 
     ```
-    export OASIS_GO=go1.14.3
+    export OASIS_GO=go1.15.1
     ```
 
 * [Rust].
