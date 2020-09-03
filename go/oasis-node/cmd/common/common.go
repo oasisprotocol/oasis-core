@@ -18,6 +18,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/entity"
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
 	"github.com/oasisprotocol/oasis-core/go/common/sgx/ias"
+	"github.com/oasisprotocol/oasis-core/go/common/version"
 	"github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/flags"
 	cmdSigner "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/signer"
 )
@@ -308,4 +309,16 @@ func GetUserConfirmation(prompt string) bool {
 			fmt.Printf("Unrecognized response: '%s'. Please, type (y)es or (n)o: ", response)
 		}
 	}
+}
+
+// SetBasicVersionTemplate sets a basic custom version template for the given
+// cobra command that shows the version of Oasis Core and the Go toolchain.
+func SetBasicVersionTemplate(cmd *cobra.Command) {
+	cobra.AddTemplateFunc("additionalVersions", func() interface{} { return version.Versions })
+
+	cmd.SetVersionTemplate(`Software version: {{.Version}}
+{{- with additionalVersions }}
+Go toolchain version: {{ .Toolchain }}
+{{ end -}}
+`)
 }
