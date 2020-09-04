@@ -12,6 +12,13 @@ The format is inspired by [Keep a Changelog].
 
 <!-- TOWNCRIER -->
 
+## 20.9.2 (2020-09-04)
+
+### Features
+
+- go/consensus: Add ErrDuplicateTx error for duplicate transactions
+  ([#3192](https://github.com/oasisprotocol/oasis-core/issues/3192))
+
 ## 20.9.1 (2020-08-27)
 
 ### Bug Fixes
