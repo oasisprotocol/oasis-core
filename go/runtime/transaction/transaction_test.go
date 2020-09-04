@@ -159,3 +159,24 @@ func TestTransaction(t *testing.T) {
 		require.True(t, txnsByHash[checkTx.Hash()].Equal(&checkTx), "transaction should have the correct artifacts") // nolint: gosec
 	}
 }
+
+func TestTransactionInvalidBatchOrder(t *testing.T) {
+	ctx := context.Background()
+	store := mkvs.New(nil, nil)
+
+	var emptyRoot node.Root
+	emptyRoot.Empty()
+
+	tree := NewTree(store, emptyRoot)
+
+	tx := Transaction{
+		Input:      []byte("this goes in"),
+		Output:     []byte("and this comes out"),
+		BatchOrder: 1, // Invalid batch order as the first transaction should be at index zero.
+	}
+	err := tree.AddTransaction(ctx, tx, nil)
+	require.NoError(t, err, "AddTransaction")
+
+	_, err = tree.GetInputBatch(ctx, 0, 0)
+	require.Error(t, err, "GetInputBatch should fail with inconsistent order")
+}
