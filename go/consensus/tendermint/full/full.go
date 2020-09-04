@@ -517,7 +517,12 @@ func (t *fullService) broadcastTxRaw(data []byte) error {
 		ch <- rsp
 		close(ch)
 	}, tmmempool.TxInfo{})
-	if err != nil {
+	switch err {
+	case nil:
+	case tmmempool.ErrTxInCache:
+		// Transaction already in the mempool or was recently there.
+		return consensusAPI.ErrDuplicateTx
+	default:
 		return fmt.Errorf("tendermint: failed to submit to local mempool: %w", err)
 	}
 
