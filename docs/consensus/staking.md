@@ -40,9 +40,11 @@ and escrow accounts.
 Each staking account has an address which is derived from the corresponding
 public key as follows:
 
+<!-- markdownlint-disable line-length -->
 ```
-[ 1 byte <ctx-version> ][ first 20 bytes of SHA512-256(<ctx-identifier> || <pubkey>) ]
+[ 1 byte <ctx-version> ][ first 20 bytes of SHA512-256(<ctx-identifier> || <ctx-version> || <pubkey>) ]
 ```
+<!-- markdownlint-disable line-length -->
 
 where `<ctx-version>` and `<ctx-identifier>` represent the staking account
 address' context version and identifier as defined by the
