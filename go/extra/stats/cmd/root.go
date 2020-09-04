@@ -44,6 +44,8 @@ func Execute() {
 }
 
 func init() {
+	common.SetBasicVersionTemplate(rootCmd)
+
 	logLevel := logging.LevelInfo
 	rootFlags.Var(&logLevel, cfgLogLevel, "log level")
 	_ = viper.BindPFlags(rootFlags)

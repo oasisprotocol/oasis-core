@@ -212,6 +212,8 @@ func runRoot(cmd *cobra.Command, args []string) error {
 }
 
 func init() {
+	cmdCommon.SetBasicVersionTemplate(rootCmd)
+
 	_ = viper.BindPFlags(cmdCommon.RootFlags)
 
 	rootFlags.String(cfgClientCertificate, "client_cert.pem", "client TLS certificate (REQUIRED)")

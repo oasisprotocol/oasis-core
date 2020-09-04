@@ -181,6 +181,8 @@ func doDumpFixture(cmd *cobra.Command, args []string) {
 }
 
 func init() {
+	common.SetBasicVersionTemplate(rootCmd)
+
 	logFmt := logging.FmtLogfmt
 	logLevel := logging.LevelInfo
 
