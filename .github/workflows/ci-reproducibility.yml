@@ -34,7 +34,7 @@ jobs:
           # supported by actions-rs/toolchain.
           cp build${{ matrix.build_number }}/rust-toolchain .
       - name: Set up Go 1.15
-        uses: actions/setup-go@v1.1.2
+        uses: actions/setup-go@v2.1.2
         with:
           go-version: "1.15.x"
       - name: Set up Rust
@@ -74,7 +74,7 @@ jobs:
           OASIS_NODE_MAKE_PATH: go/oasis-node/oasis-node
           OASIS_NODE_GORELEASER_PATH: dist/oasis-node_linux_amd64/oasis-node
       - name: Upload checksums
-        uses: actions/upload-artifact@v1
+        uses: actions/upload-artifact@v2.1.4
         with:
           name: oasis-node-SHA256SUMs-build${{ matrix.build_number }}
           path: oasis-node-SHA256SUMs
@@ -87,11 +87,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Download checksums for build 1
-        uses: actions/download-artifact@v1
+        uses: actions/download-artifact@v2.0.5
         with:
           name: oasis-node-SHA256SUMs-build1
       - name: Download checksum for build 2
-        uses: actions/download-artifact@v1
+        uses: actions/download-artifact@v2.0.5
         with:
           name: oasis-node-SHA256SUMs-build2
       - name: Check if checksums are the same

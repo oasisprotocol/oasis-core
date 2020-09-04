@@ -1,0 +1,69 @@
+version: 2
+updates:
+
+  # Manage Github Actions versions.
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: daily
+      # Check for updates at 7am UTC.
+      time: "07:00"
+    commit-message:
+      prefix: "ci:"
+    labels:
+      - c:deps
+      - c:testing
+
+  # Manage Go pacakge versions.
+  - package-ecosystem: gomod
+    directory: go/
+    schedule:
+      interval: daily
+      # Check for updates at 7am UTC.
+      time: "07:00"
+    commit-message:
+      prefix: "go:"
+    labels:
+      - c:deps
+      - golang
+    ignore:
+      # Tendermint is manualy kept up to date.
+      - dependency-name: github.com/tendermint/tendermint
+      - dependency-name: github.com/tendermint/tm-db
+      # libp2p/go-libp2p-core@0.7.0 has build errors.
+      - dependency-name: github.com/libp2p/go-libp2p-core
+        versions: ["0.7.0"]
+
+  # Manage Rust pacakge versions.
+  - package-ecosystem: cargo
+    directory: /
+    schedule:
+      interval: daily
+      # Check for updates at 7am UTC.
+      time: "07:00"
+    commit-message:
+      prefix: "rust:"
+    labels:
+      - c:deps
+      - rust
+    ignore:
+      # We are using a ring-sgx patch, so ring is manually updated.
+      # https://github.com/oasislabs/ring-sgx
+      - dependency-name: ring
+      # Webpki update forces ring update.
+      - dependency-name: webpki
+      # XXX: Following dependencies are outdated and require some manual work to
+      # be updated. Once any of the below dependencies is updated to the latest
+      # version, remove it from the ignore list.
+      - dependency-name: futures
+      - dependency-name: grpcio
+      - dependency-name: hmac
+      - dependency-name: intrusive-collections
+      - dependency-name: rustracing
+      - dependency-name: rustracing_jaeger
+      - dependency-name: serde
+      - dependency-name: serde_bytes
+      - dependency-name: serde_cbor
+      - dependency-name: sha2
+      - dependency-name: snow
+      - dependency-name: tiny-keccak

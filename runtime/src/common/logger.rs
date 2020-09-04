@@ -2,7 +2,7 @@
 use std::sync::{Mutex, Once};
 
 use lazy_static::lazy_static;
-use log::LogLevel;
+use log::Level;
 use slog::{self, Drain};
 use slog_scope;
 use slog_stdlog;
@@ -26,7 +26,7 @@ pub fn get_logger(module: &'static str) -> slog::Logger {
 }
 
 /// Initialize the global slog_stdlog adapter to allow logging with the log crate (instead of slog).
-pub fn init_logger(level: LogLevel) {
+pub fn init_logger(level: Level) {
     INIT_GLOBAL_LOGGER.call_once(|| {
         let global_logger = LOGGER.new(o!("module" => "global"));
         GLOBAL_LOGGER_SCOPE_GUARD

@@ -58,7 +58,7 @@ require (
 	google.golang.org/genproto v0.0.0-20200624020401-64a14ca9d1ad
 	google.golang.org/grpc v1.31.1
 	google.golang.org/grpc/security/advancedtls v0.0.0-20200902210233-8630cac324bf
-	google.golang.org/protobuf v1.24.0
+	google.golang.org/protobuf v1.25.0
 )
 
 go 1.15

@@ -18,7 +18,7 @@ pub fn start_runtime(initializer: Box<dyn Initializer>, version: Version) {
     env::set_var("RUST_BACKTRACE", "1");
 
     // Initialize logging.
-    init_logger(log::LogLevel::Info);
+    init_logger(log::Level::Info);
     let logger = get_logger("runtime");
     info!(logger, "Runtime is starting");
 
