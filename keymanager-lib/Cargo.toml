@@ -17,5 +17,5 @@ rand = "0.7.3"
 sgx-isa = { version = "0.3.2", features = ["sgxstd"] }
 sp800-185 = "0.2.0"
 tiny-keccak = "1.4.2"
-x25519-dalek = "0.6.0"
-zeroize = "0.6"
+x25519-dalek = "1.1.0"
+zeroize = "1.1"

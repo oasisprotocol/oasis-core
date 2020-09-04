@@ -52,5 +52,18 @@ updates:
       - dependency-name: ring
       # Webpki update forces ring update.
       - dependency-name: webpki
-
-
+      # XXX: Following dependencies are outdated and require some manual work to
+      # be updated. Once any of the below dependencies is updated to the latest
+      # version, remove it from the ignore list.
+      - dependency-name: futures
+      - dependency-name: grpcio
+      - dependency-name: hmac
+      - dependency-name: intrusive-collections
+      - dependency-name: rustracing
+      - dependency-name: rustracing_jaeger
+      - dependency-name: serde
+      - dependency-name: serde_bytes
+      - dependency-name: serde_cbor
+      - dependency-name: sha2
+      - dependency-name: snow
+      - dependency-name: tiny-keccak
