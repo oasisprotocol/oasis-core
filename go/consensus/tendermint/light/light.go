@@ -15,11 +15,8 @@ import (
 type Client interface {
 	consensus.LightClientBackend
 
-	// GetVerifiedSignedHeader returns a verified signed header.
-	GetVerifiedSignedHeader(ctx context.Context, height int64) (*tmtypes.SignedHeader, error)
-
-	// GetVerifiedValidatorSet returns a verified validator set.
-	GetVerifiedValidatorSet(ctx context.Context, height int64) (*tmtypes.ValidatorSet, int64, error)
+	// GetVerifiedLightBlock returns a verified light block.
+	GetVerifiedLightBlock(ctx context.Context, height int64) (*tmtypes.LightBlock, error)
 
 	// GetVerifiedParameters returns verified consensus parameters.
 	GetVerifiedParameters(ctx context.Context, height int64) (*tmproto.ConsensusParams, error)

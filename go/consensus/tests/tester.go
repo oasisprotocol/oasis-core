@@ -108,15 +108,10 @@ func ConsensusImplementationTests(t *testing.T, backend consensus.ClientBackend)
 	require.Equal(uint64(0), nonce, "Nonce should be zero")
 
 	// Light client API.
-	shdr, err := backend.GetSignedHeader(ctx, blk.Height)
-	require.NoError(err, "GetSignedHeader")
-	require.Equal(shdr.Height, blk.Height, "returned header height should be correct")
-	require.NotNil(shdr.Meta, "returned header should contain metadata")
-
-	vals, err := backend.GetValidatorSet(ctx, blk.Height)
-	require.NoError(err, "GetValidatorSet")
-	require.Equal(vals.Height, blk.Height, "returned validator set height should be correct")
-	require.NotNil(vals.Meta, "returned validator set should contain metadata")
+	shdr, err := backend.GetLightBlock(ctx, blk.Height)
+	require.NoError(err, "GetLightBlock")
+	require.Equal(shdr.Height, blk.Height, "returned light block height should be correct")
+	require.NotNil(shdr.Meta, "returned light block should contain metadata")
 
 	params, err := backend.GetParameters(ctx, blk.Height)
 	require.NoError(err, "GetParameters")

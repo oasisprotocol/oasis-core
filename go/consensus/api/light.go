@@ -9,11 +9,9 @@ import (
 
 // LightClientBackend is the limited consensus interface used by light clients.
 type LightClientBackend interface {
-	// GetSignedHeader returns the signed header for a specific height.
-	GetSignedHeader(ctx context.Context, height int64) (*SignedHeader, error)
-
-	// GetValidatorSet returns the validator set for a specific height.
-	GetValidatorSet(ctx context.Context, height int64) (*ValidatorSet, error)
+	// GetLightBlock returns a light version of the consensus layer block that can be used for light
+	// client verification.
+	GetLightBlock(ctx context.Context, height int64) (*LightBlock, error)
 
 	// GetParameters returns the consensus parameters for a specific height.
 	GetParameters(ctx context.Context, height int64) (*Parameters, error)
@@ -30,19 +28,11 @@ type LightClientBackend interface {
 	SubmitEvidence(ctx context.Context, evidence *Evidence) error
 }
 
-// SignedHeader is a signed consensus block header.
-type SignedHeader struct {
-	// Height contains the block height this header is for.
+// LightBlock is a light consensus block suitable for syncing light clients.
+type LightBlock struct {
+	// Height contains the block height.
 	Height int64 `json:"height"`
-	// Meta contains the consensus backend specific signed header.
-	Meta []byte `json:"meta"`
-}
-
-// ValidatorSet contains the validator set information.
-type ValidatorSet struct {
-	// Height contains the block height this validator set is for.
-	Height int64 `json:"height"`
-	// Meta contains the consensus backend specific validator set.
+	// Meta contains the consensus backend specific light block.
 	Meta []byte `json:"meta"`
 }
 
