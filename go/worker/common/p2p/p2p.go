@@ -14,7 +14,7 @@ import (
 	"github.com/libp2p/go-libp2p-core/transport"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	"github.com/multiformats/go-multiaddr"
-	manet "github.com/multiformats/go-multiaddr-net"
+	manet "github.com/multiformats/go-multiaddr/net"
 	"github.com/spf13/viper"
 
 	"github.com/oasisprotocol/oasis-core/go/common"
