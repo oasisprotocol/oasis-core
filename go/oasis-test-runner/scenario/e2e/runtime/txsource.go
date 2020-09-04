@@ -249,6 +249,11 @@ func (sc *txSourceImpl) Fixture() (*oasis.NetworkFixture, error) {
 	// Disable CheckTx on the client node so we can submit invalid transactions.
 	f.Clients[0].Consensus.DisableCheckTx = true
 
+	// Set up checkpointing.
+	f.Runtimes[1].Storage.CheckpointInterval = 1000
+	f.Runtimes[1].Storage.CheckpointNumKept = 2
+	f.Runtimes[1].Storage.CheckpointChunkSize = 1024 * 1024
+
 	// Use at least 4 validators so that consensus can keep making progress
 	// when a node is being killed and restarted.
 	f.Validators = []oasis.ValidatorFixture{
@@ -283,6 +288,9 @@ func (sc *txSourceImpl) Fixture() (*oasis.NetworkFixture, error) {
 	for i := range f.StorageWorkers {
 		f.StorageWorkers[i].Consensus.SubmissionGasPrice = txSourceGasPrice
 		sc.generateConsensusFixture(&f.StorageWorkers[i].Consensus)
+		if i > 0 {
+			f.StorageWorkers[i].CheckpointSyncEnabled = true
+		}
 	}
 	for i := range f.ComputeWorkers {
 		f.ComputeWorkers[i].Consensus.SubmissionGasPrice = txSourceGasPrice
