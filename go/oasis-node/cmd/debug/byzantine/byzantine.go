@@ -124,7 +124,7 @@ func doExecutorHonest(cmd *cobra.Command, args []string) {
 	if err != nil {
 		panic(fmt.Sprintf("scheduler get committee %s at height %d failed: %+v", scheduler.KindComputeExecutor, electionHeight, err))
 	}
-	if err = schedulerCheckScheduled(executorCommittee, defaultIdentity.NodeSigner.Public(), scheduler.Worker); err != nil {
+	if err = schedulerCheckScheduled(executorCommittee, defaultIdentity.NodeSigner.Public(), scheduler.RoleWorker); err != nil {
 		panic(fmt.Sprintf("scheduler check scheduled failed: %+v", err))
 	}
 	logger.Debug("executor honest: executor schedule ok")
@@ -140,7 +140,7 @@ func doExecutorHonest(cmd *cobra.Command, args []string) {
 		panic(fmt.Sprintf("scheduler get committee %s failed: %+v", scheduler.KindStorage, err))
 	}
 	logger.Debug("executor honest: connecting to storage committee")
-	hnss, err := storageConnectToCommittee(ht, electionHeight, storageCommittee, scheduler.Worker, defaultIdentity)
+	hnss, err := storageConnectToCommittee(ht, electionHeight, storageCommittee, scheduler.RoleWorker, defaultIdentity)
 	if err != nil {
 		panic(fmt.Sprintf("storage connect to committee failed: %+v", err))
 	}
@@ -266,7 +266,7 @@ func doExecutorWrong(cmd *cobra.Command, args []string) {
 	if err != nil {
 		panic(fmt.Sprintf("scheduler get committee %s at height %d failed: %+v", scheduler.KindComputeExecutor, electionHeight, err))
 	}
-	if err = schedulerCheckScheduled(executorCommittee, defaultIdentity.NodeSigner.Public(), scheduler.Worker); err != nil {
+	if err = schedulerCheckScheduled(executorCommittee, defaultIdentity.NodeSigner.Public(), scheduler.RoleWorker); err != nil {
 		panic(fmt.Sprintf("scheduler check scheduled failed: %+v", err))
 	}
 	logger.Debug("executor wrong: executor schedule ok")
@@ -282,7 +282,7 @@ func doExecutorWrong(cmd *cobra.Command, args []string) {
 	logger.Debug("executor wong: executor tx scheduler role ok")
 
 	logger.Debug("executor wrong: connecting to storage committee")
-	hnss, err := storageConnectToCommittee(ht, electionHeight, storageCommittee, scheduler.Worker, defaultIdentity)
+	hnss, err := storageConnectToCommittee(ht, electionHeight, storageCommittee, scheduler.RoleWorker, defaultIdentity)
 	if err != nil {
 		panic(fmt.Sprintf("storage connect to committee failed: %+v", err))
 	}
@@ -390,7 +390,7 @@ func doExecutorStraggler(cmd *cobra.Command, args []string) {
 	if err != nil {
 		panic(fmt.Sprintf("scheduler get committee %s at height %d failed: %+v", scheduler.KindComputeExecutor, electionHeight, err))
 	}
-	if err = schedulerCheckScheduled(executorCommittee, defaultIdentity.NodeSigner.Public(), scheduler.Worker); err != nil {
+	if err = schedulerCheckScheduled(executorCommittee, defaultIdentity.NodeSigner.Public(), scheduler.RoleWorker); err != nil {
 		panic(fmt.Sprintf("scheduler check scheduled failed: %+v", err))
 	}
 	logger.Debug("executor straggler: executor schedule ok")

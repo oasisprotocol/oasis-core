@@ -103,7 +103,7 @@ func (p *Pool) computeMemberSets() {
 	p.workerSet = make(map[signature.PublicKey]bool)
 	for _, m := range p.Committee.Members {
 		p.memberSet[m.PublicKey] = true
-		if m.Role == scheduler.Worker {
+		if m.Role == scheduler.RoleWorker {
 			p.workerSet[m.PublicKey] = true
 		}
 	}
@@ -327,9 +327,9 @@ func (p *Pool) CheckEnoughCommitments(didTimeout bool) error {
 	for _, n := range p.Committee.Members {
 		var check bool
 		if !p.Discrepancy {
-			check = n.Role == scheduler.Worker
+			check = n.Role == scheduler.RoleWorker
 		} else {
-			check = n.Role == scheduler.BackupWorker
+			check = n.Role == scheduler.RoleBackupWorker
 		}
 		if !check {
 			continue
@@ -419,7 +419,7 @@ func (p *Pool) DetectDiscrepancy() (OpenCommitment, error) {
 	//       because some fields in the commit may not be subject to discrepancy
 	//       detection (e.g., storage receipts).
 	for _, n := range p.Committee.Members {
-		if n.Role != scheduler.Worker {
+		if n.Role != scheduler.RoleWorker {
 			continue
 		}
 
@@ -461,7 +461,7 @@ func (p *Pool) ResolveDiscrepancy() (OpenCommitment, error) {
 	votes := make(map[hash.Hash]*voteEnt)
 	var backupNodes int
 	for _, n := range p.Committee.Members {
-		if n.Role != scheduler.BackupWorker {
+		if n.Role != scheduler.RoleBackupWorker {
 			continue
 		}
 		backupNodes++

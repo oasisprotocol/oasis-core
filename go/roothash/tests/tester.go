@@ -700,9 +700,9 @@ func mustGetCommittee(
 				node := nodes[member.PublicKey]
 				require.NotNil(node, "member is one of the nodes")
 				switch member.Role {
-				case scheduler.Worker:
+				case scheduler.RoleWorker:
 					ret.workers = append(ret.workers, node)
-				case scheduler.BackupWorker:
+				case scheduler.RoleBackupWorker:
 					ret.backupWorkers = append(ret.backupWorkers, node)
 				}
 			}

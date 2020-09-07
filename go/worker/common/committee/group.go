@@ -74,8 +74,6 @@ type EpochSnapshot struct {
 
 	epochNumber api.EpochTime
 
-	executorRole scheduler.Role
-
 	runtime *registry.Runtime
 
 	executorCommittee *CommitteeInfo
@@ -108,19 +106,28 @@ func (e *EpochSnapshot) GetEpochNumber() api.EpochTime {
 // IsExecutorMember checks if the current node is a member of the executor committee
 // in the current epoch.
 func (e *EpochSnapshot) IsExecutorMember() bool {
-	return e.executorRole != scheduler.Invalid
+	if e.executorCommittee == nil {
+		return false
+	}
+	return e.executorCommittee.Role != scheduler.RoleInvalid
 }
 
 // IsExecutorWorker checks if the current node is a worker of the executor committee
 // in the current epoch.
 func (e *EpochSnapshot) IsExecutorWorker() bool {
-	return e.executorRole == scheduler.Worker
+	if e.executorCommittee == nil {
+		return false
+	}
+	return e.executorCommittee.Role == scheduler.RoleWorker
 }
 
 // IsExecutorBackupWorker checks if the current node is a backup worker of the executor
 // committee in the current epoch.
 func (e *EpochSnapshot) IsExecutorBackupWorker() bool {
-	return e.executorRole == scheduler.BackupWorker
+	if e.executorCommittee == nil {
+		return false
+	}
+	return e.executorCommittee.Role == scheduler.RoleBackupWorker
 }
 
 // IsTransactionScheduler checks if the current node is a a transaction scheduler
@@ -373,7 +380,6 @@ func (g *Group) GetEpochSnapshot() *EpochSnapshot {
 		identity:          g.identity,
 		epochNumber:       g.activeEpoch.epochNumber,
 		groupVersion:      g.activeEpoch.groupVersion,
-		executorRole:      g.activeEpoch.executorCommittee.Role,
 		runtime:           g.activeEpoch.runtime,
 		executorCommittee: g.activeEpoch.executorCommittee,
 		storageCommittee:  g.activeEpoch.storageCommittee,
@@ -396,7 +402,7 @@ func (g *Group) AuthenticatePeer(peerID signature.PublicKey, msg *p2p.Message) e
 	var authorized bool
 
 	// If we are in the executor committee, we accept messages from all nodes.
-	if g.activeEpoch.executorCommittee.Role != scheduler.Invalid {
+	if g.activeEpoch.executorCommittee.Role != scheduler.RoleInvalid {
 		authorized = true
 	}
 

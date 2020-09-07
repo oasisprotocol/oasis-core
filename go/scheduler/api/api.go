@@ -22,30 +22,58 @@ const ModuleName = "scheduler"
 // Role is the role a given node plays in a committee.
 type Role uint8
 
-// TODO: Rename these to include the Role prefix.
 const (
-	// Invalid is an invalid role (should never appear on the wire).
-	Invalid Role = 0
+	// RoleInvalid is an invalid role (should never appear on the wire).
+	RoleInvalid Role = 0
+	// RoleWorker indicates the node is a worker.
+	RoleWorker Role = 1
+	// RoleBackupWorker indicates the node is a backup worker.
+	RoleBackupWorker Role = 2
 
-	// Worker indicates the node is a worker.
-	Worker Role = 1
-
-	// BackupWorker indicates the node is a backup worker.
-	BackupWorker Role = 2
+	RoleInvalidName      = "invalid"
+	RoleWorkerName       = "worker"
+	RoleBackupWorkerName = "backup-worker"
 )
 
 // String returns a string representation of a Role.
 func (r Role) String() string {
 	switch r {
-	case Invalid:
-		return "invalid"
-	case Worker:
-		return "worker"
-	case BackupWorker:
-		return "backup worker"
+	case RoleInvalid:
+		return RoleInvalidName
+	case RoleWorker:
+		return RoleWorkerName
+	case RoleBackupWorker:
+		return RoleBackupWorkerName
 	default:
 		return fmt.Sprintf("[unknown role: %d]", r)
 	}
+}
+
+// MarshalText encodes a Role into text form.
+func (r Role) MarshalText() ([]byte, error) {
+	switch r {
+	case RoleInvalid:
+		return []byte(RoleInvalidName), nil
+	case RoleWorker:
+		return []byte(RoleWorkerName), nil
+	case RoleBackupWorker:
+		return []byte(RoleBackupWorkerName), nil
+	default:
+		return nil, fmt.Errorf("invalid role: %d", r)
+	}
+}
+
+// UnmarshalText decodes a text slice into a Role.
+func (r *Role) UnmarshalText(text []byte) error {
+	switch string(text) {
+	case RoleWorkerName:
+		*r = RoleWorker
+	case RoleBackupWorkerName:
+		*r = RoleBackupWorker
+	default:
+		return fmt.Errorf("invalid role: %s", string(text))
+	}
+	return nil
 }
 
 // CommitteeNode is a node participating in a committee.
@@ -107,7 +135,7 @@ type Committee struct {
 func (c Committee) Workers() []*CommitteeNode {
 	var workers []*CommitteeNode
 	for _, member := range c.Members {
-		if member.Role != Worker {
+		if member.Role != RoleWorker {
 			continue
 		}
 		workers = append(workers, member)

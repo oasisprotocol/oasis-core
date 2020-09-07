@@ -156,9 +156,9 @@ func requireValidCommitteeMembers(t *testing.T, committee *api.Committee, runtim
 		seenMap[id] = true
 
 		switch member.Role {
-		case api.Worker:
+		case api.RoleWorker:
 			workers++
-		case api.BackupWorker:
+		case api.RoleBackupWorker:
 			backups++
 		}
 	}
