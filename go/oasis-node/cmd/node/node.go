@@ -123,6 +123,8 @@ type Node struct {
 	KeymanagerWorker   *workerKeymanager.Worker
 	ConsensusWorker    *workerConsensusRPC.Worker
 	readyCh            chan struct{}
+
+	logger *logging.Logger
 }
 
 // Cleanup cleans up after the node has terminated.
@@ -149,14 +151,14 @@ func (n *Node) Wait() {
 	n.svcMgr.Wait()
 }
 
-func (n *Node) waitReady(logger *logging.Logger) {
+func (n *Node) waitReady() {
 	if n.NodeController == nil {
-		logger.Error("failed while waiting for node: node controller not initialized")
+		n.logger.Error("failed while waiting for node: node controller not initialized")
 		return
 	}
 
 	if err := n.NodeController.WaitSync(context.Background()); err != nil {
-		logger.Error("failed while waiting for node consensus sync", "err", err)
+		n.logger.Error("failed while waiting for node consensus sync", "err", err)
 		return
 	}
 
@@ -186,8 +188,6 @@ func (n *Node) waitReady(logger *logging.Logger) {
 // startRuntimeServices initializes and starts all the services that are required for runtime
 // support to work.
 func (n *Node) startRuntimeServices() error {
-	logger := cmdCommon.Logger()
-
 	var err error
 	if n.Sentry, err = sentry.New(n.Consensus, n.Identity); err != nil {
 		return err
@@ -203,17 +203,17 @@ func (n *Node) startRuntimeServices() error {
 
 	// Register dump genesis halt hook.
 	n.Consensus.RegisterHaltHook(func(ctx context.Context, blockHeight int64, epoch epochtime.EpochTime) {
-		logger.Info("Consensus halt hook: dumping genesis",
+		n.logger.Info("Consensus halt hook: dumping genesis",
 			"epoch", epoch,
 			"block_height", blockHeight,
 		)
 		if err = n.dumpGenesis(ctx, blockHeight, epoch); err != nil {
-			logger.Error("halt hook: failed to dump genesis",
+			n.logger.Error("halt hook: failed to dump genesis",
 				"err", err,
 			)
 			return
 		}
-		logger.Info("Consensus halt hook: genesis dumped",
+		n.logger.Info("Consensus halt hook: genesis dumped",
 			"epoch", epoch,
 			"block_height", blockHeight,
 		)
@@ -229,7 +229,7 @@ func (n *Node) startRuntimeServices() error {
 
 	// Initialize runtime workers.
 	if err = n.initRuntimeWorkers(); err != nil {
-		logger.Error("failed to initialize workers",
+		n.logger.Error("failed to initialize workers",
 			"err", err,
 		)
 		return err
@@ -251,21 +251,20 @@ func (n *Node) startRuntimeServices() error {
 	enclaverpc.RegisterService(n.grpcInternal.Server(), n.RuntimeClient)
 
 	// Start workers (requires NodeController for checking, if nodes are synced).
-	if err = n.startRuntimeWorkers(logger); err != nil {
-		logger.Error("failed to start workers",
+	if err = n.startRuntimeWorkers(); err != nil {
+		n.logger.Error("failed to start workers",
 			"err", err,
 		)
 		return err
 	}
 
-	logger.Debug("runtime services started")
+	n.logger.Debug("runtime services started")
 
 	return nil
 }
 
 func (n *Node) initRuntimeWorkers() error {
 	dataDir := cmdCommon.DataDir()
-	logger := cmdCommon.Logger()
 
 	var err error
 
@@ -295,7 +294,7 @@ func (n *Node) initRuntimeWorkers() error {
 	// Initialize the IAS proxy client.
 	n.IAS, err = ias.New(n.Identity)
 	if err != nil {
-		logger.Error("failed to initialize IAS proxy client",
+		n.logger.Error("failed to initialize IAS proxy client",
 			"err", err,
 		)
 		return err
@@ -314,7 +313,7 @@ func (n *Node) initRuntimeWorkers() error {
 		genesisDoc,
 	)
 	if err != nil {
-		logger.Error("failed to start common worker",
+		n.logger.Error("failed to start common worker",
 			"err", err,
 		)
 		return err
@@ -342,7 +341,7 @@ func (n *Node) initRuntimeWorkers() error {
 	}
 
 	if err != nil {
-		logger.Error("failed to initialize worker registration",
+		n.logger.Error("failed to initialize worker registration",
 			"err", err,
 		)
 		return err
@@ -406,7 +405,7 @@ func (n *Node) initRuntimeWorkers() error {
 	return nil
 }
 
-func (n *Node) startRuntimeWorkers(logger *logging.Logger) error {
+func (n *Node) startRuntimeWorkers() error {
 	// Start the storage worker.
 	if err := n.StorageWorker.Start(); err != nil {
 		return err
@@ -447,7 +446,7 @@ func (n *Node) startRuntimeWorkers(logger *logging.Logger) error {
 		n.KeymanagerWorker.Enabled() ||
 		n.ConsensusWorker.Enabled() {
 		if err := n.CommonWorker.Grpc.Start(); err != nil {
-			logger.Error("failed to start external gRPC server",
+			n.logger.Error("failed to start external gRPC server",
 				"err", err,
 			)
 			return err
@@ -455,7 +454,7 @@ func (n *Node) startRuntimeWorkers(logger *logging.Logger) error {
 	}
 
 	// Close readyCh once all workers and runtimes are initialized.
-	go n.waitReady(logger)
+	go n.waitReady()
 
 	return nil
 }
@@ -533,6 +532,7 @@ func newNode(testNode bool) (n *Node, err error) { // nolint: gocyclo
 	node := &Node{
 		svcMgr:  background.NewServiceManager(logger),
 		readyCh: make(chan struct{}),
+		logger:  logger,
 	}
 
 	var startOk bool
