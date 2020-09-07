@@ -43,7 +43,7 @@ where:
 The `+dirty` part is optional and is only present if there are uncommitted
 changes in the working directory.
 
-## Protocols (Runtime, Consensus, Committee)
+## Protocols (Consensus, Runtime Host, Runtime Committee)
 
 Oasis Core’s protocol versions use [SemVer] (semantic versioning) 2.0.0 with the
 following format:

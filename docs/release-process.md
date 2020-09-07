@@ -95,10 +95,33 @@ make changelog
 Review the staged changes and make appropriate adjustment to the Change Log
 (e.g. re-order entries, make formatting/spelling fixes, ...).
 
-After you are content with the changes, commit them, push them to the origin
-and make a pull request.
+Add a table with protocol versions just below the next version's heading:
+
+```
+| Protocol          | Version   |
+|:------------------|:---------:|
+| Consensus         | <VERSION> |
+| Runtime Host      | <VERSION> |
+| Runtime Committee | <VERSION> |
+```
+
+where `<VERSION>` strings are replaced with appropriate protocol versions as
+defined in [go/common/version/version.go][version-file] file.
+
+For example:
+
+| Protocol          | Version   |
+|:------------------|:---------:|
+| Consensus         | 1.0.0     |
+| Runtime Host      | 1.0.0     |
+| Runtime Committee | 1.0.0     |
+
+After you've made the changes, commit them, push them to the origin and make a
+pull request.
 
 Once the pull request had been reviewed and merged, proceed to the next step.
+
+[version-file]: ../go/common/version/version.go
 
 ### Tag the next release
 
