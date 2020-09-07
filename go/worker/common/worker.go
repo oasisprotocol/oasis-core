@@ -147,15 +147,14 @@ func (w *Worker) GetConfig() Config {
 	return w.cfg
 }
 
-// GetRuntimes returns a map of registered runtimes.
+// GetRuntimes returns a map of configured runtimes.
 func (w *Worker) GetRuntimes() map[common.Namespace]*committee.Node {
 	return w.runtimes
 }
 
-// GetRuntime returns a registered runtime.
+// GetRuntime returns a common committee node for the given runtime (if available).
 //
-// In case the runtime with the specified id was not registered it
-// returns nil.
+// In case the runtime with the specified id was not configured for this node it returns nil.
 func (w *Worker) GetRuntime(id common.Namespace) *committee.Node {
 	return w.runtimes[id]
 }

@@ -17,6 +17,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/runtime/committee"
 	runtimeRegistry "github.com/oasisprotocol/oasis-core/go/runtime/registry"
 	storage "github.com/oasisprotocol/oasis-core/go/storage/api"
+	"github.com/oasisprotocol/oasis-core/go/worker/common/api"
 	"github.com/oasisprotocol/oasis-core/go/worker/common/p2p"
 	p2pError "github.com/oasisprotocol/oasis-core/go/worker/common/p2p/error"
 )
@@ -151,6 +152,32 @@ func (n *Node) Initialized() <-chan struct{} {
 // There is no going back.
 func (n *Node) AddHooks(hooks NodeHooks) {
 	n.hooks = append(n.hooks, hooks)
+}
+
+// GetStatus returns the common committee node status.
+func (n *Node) GetStatus(ctx context.Context) (*api.Status, error) {
+	n.CrossNode.Lock()
+	defer n.CrossNode.Unlock()
+
+	var status api.Status
+	if n.CurrentBlock != nil {
+		status.LatestRound = n.CurrentBlock.Header.Round
+		status.LatestHeight = n.CurrentBlockHeight
+	}
+
+	epoch := n.Group.GetEpochSnapshot()
+	status.LastCommitteeUpdateHeight = epoch.GetGroupVersion()
+	if cmte := epoch.GetExecutorCommittee(); cmte != nil {
+		status.ExecutorRole = cmte.Role
+	}
+	if cmte := epoch.GetStorageCommittee(); cmte != nil {
+		status.StorageRole = cmte.Role
+	}
+	status.IsTransactionScheduler = epoch.IsTransactionScheduler(status.LatestRound)
+
+	status.Peers = n.Group.Peers()
+
+	return &status, nil
 }
 
 func (n *Node) getMetricLabels() prometheus.Labels {

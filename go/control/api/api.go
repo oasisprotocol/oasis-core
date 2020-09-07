@@ -5,13 +5,19 @@ import (
 	"context"
 	"time"
 
+	"github.com/oasisprotocol/oasis-core/go/common"
+	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	"github.com/oasisprotocol/oasis-core/go/common/errors"
 	"github.com/oasisprotocol/oasis-core/go/common/identity"
 	"github.com/oasisprotocol/oasis-core/go/common/node"
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
 	epochtime "github.com/oasisprotocol/oasis-core/go/epochtime/api"
+	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
+	storage "github.com/oasisprotocol/oasis-core/go/storage/api"
 	upgrade "github.com/oasisprotocol/oasis-core/go/upgrade/api"
+	commonWorker "github.com/oasisprotocol/oasis-core/go/worker/common/api"
+	storageWorker "github.com/oasisprotocol/oasis-core/go/worker/storage/api"
 )
 
 // NodeController is a node controller interface.
@@ -57,6 +63,9 @@ type Status struct {
 	// Consensus is the status overview of the consensus layer.
 	Consensus consensus.Status `json:"consensus"`
 
+	// Runtimes is the status overview for each runtime supported by the node.
+	Runtimes map[common.Namespace]RuntimeStatus `json:"runtimes"`
+
 	// Registration is the node's registration status.
 	Registration RegistrationStatus `json:"registration"`
 }
@@ -88,6 +97,32 @@ type RegistrationStatus struct {
 	Descriptor *node.Node `json:"descriptor,omitempty"`
 }
 
+// RuntimeStatus is the per-runtime status overview.
+type RuntimeStatus struct {
+	// Descriptor is the runtime registration descriptor.
+	Descriptor *registry.Runtime `json:"descriptor"`
+
+	// LatestRound is the round of the latest runtime block.
+	LatestRound uint64 `json:"latest_round"`
+	// LatestHash is the hash of the latest runtime block.
+	LatestHash hash.Hash `json:"latest_hash"`
+	// LatestTime is the timestamp of the latest runtime block.
+	LatestTime uint64 `json:"latest_time"`
+	// LatestStateRoot is the Merkle root of the runtime state tree.
+	LatestStateRoot storage.Root `json:"latest_state_root"`
+
+	// GenesisRound is the round of the genesis runtime block.
+	GenesisRound uint64 `json:"genesis_round"`
+	// GenesisHash is the hash of the genesis runtime block.
+	GenesisHash hash.Hash `json:"genesis_hash"`
+
+	// Committee contains the runtime worker status in case this node is a (candidate) member of a
+	// runtime committee (e.g., compute or storage).
+	Committee *commonWorker.Status `json:"committee"`
+	// Storage contains the storage worker status in case this node is a storage node.
+	Storage *storageWorker.Status `json:"storage"`
+}
+
 // ControlledNode is an internal interface that the controlled oasis-node must provide.
 type ControlledNode interface {
 	// RequestShutdown is the method called by the control server to trigger node shutdown.
@@ -101,6 +136,9 @@ type ControlledNode interface {
 
 	// GetRegistrationStatus returns the node's current registration status.
 	GetRegistrationStatus(ctx context.Context) (*RegistrationStatus, error)
+
+	// GetRuntimeStatus returns the node's current per-runtime status.
+	GetRuntimeStatus(ctx context.Context) (map[common.Namespace]RuntimeStatus, error)
 }
 
 // DebugModuleName is the module name for the debug controller service.

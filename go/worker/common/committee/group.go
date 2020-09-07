@@ -492,6 +492,14 @@ func (g *Group) Publish(spanCtx opentracing.SpanContext, msg *p2p.Message) error
 	return nil
 }
 
+// Peers returns a list of connected P2P peers.
+func (g *Group) Peers() []string {
+	if g.p2p == nil {
+		return nil
+	}
+	return g.p2p.Peers(g.runtimeID)
+}
+
 // NewGroup creates a new group.
 func NewGroup(
 	ctx context.Context,

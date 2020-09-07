@@ -2,9 +2,13 @@ package node
 
 import (
 	"context"
+	"time"
 
+	"github.com/oasisprotocol/oasis-core/go/common"
 	"github.com/oasisprotocol/oasis-core/go/common/identity"
+	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
 	control "github.com/oasisprotocol/oasis-core/go/control/api"
+	storage "github.com/oasisprotocol/oasis-core/go/storage/api"
 	"github.com/oasisprotocol/oasis-core/go/worker/registration"
 )
 
@@ -56,4 +60,85 @@ func (n *Node) GetRegistrationStatus(ctx context.Context) (*control.Registration
 		return &control.RegistrationStatus{}, nil
 	}
 	return n.RegistrationWorker.GetRegistrationStatus(ctx)
+}
+
+// Implements control.ControlledNode.
+func (n *Node) GetRuntimeStatus(ctx context.Context) (map[common.Namespace]control.RuntimeStatus, error) {
+	runtimes := make(map[common.Namespace]control.RuntimeStatus)
+	for _, rt := range n.RuntimeRegistry.Runtimes() {
+		var status control.RuntimeStatus
+
+		// Fetch runtime registry descriptor. Do not wait too long for the descriptor to become
+		// available as otherwise we may be blocked until the node is synced.
+		dscCtx, cancel := context.WithTimeout(ctx, 10*time.Millisecond)
+		dsc, err := rt.RegistryDescriptor(dscCtx)
+		cancel()
+		switch err {
+		case nil:
+			status.Descriptor = dsc
+		case context.DeadlineExceeded:
+			// The descriptor may not yet be available. It is fine if we use nil in this case.
+		default:
+			n.logger.Error("failed to fetch registry descriptor",
+				"err", err,
+				"runtime_id", rt.ID(),
+			)
+		}
+
+		// Fetch latest block as seen by this node.
+		blk, err := n.Consensus.RootHash().GetLatestBlock(ctx, rt.ID(), consensus.HeightLatest)
+		switch err {
+		case nil:
+			status.LatestRound = blk.Header.Round
+			status.LatestHash = blk.Header.EncodedHash()
+			status.LatestTime = blk.Header.Timestamp
+			status.LatestStateRoot = storage.Root{
+				Version: blk.Header.Round,
+				Hash:    blk.Header.StateRoot,
+			}
+		default:
+			n.logger.Error("failed to fetch latest runtime block",
+				"err", err,
+				"runtime_id", rt.ID(),
+			)
+		}
+
+		// Fetch latest genesis block as seen by this node.
+		blk, err = n.Consensus.RootHash().GetGenesisBlock(ctx, rt.ID(), consensus.HeightLatest)
+		switch err {
+		case nil:
+			status.GenesisRound = blk.Header.Round
+			status.GenesisHash = blk.Header.EncodedHash()
+		default:
+			n.logger.Error("failed to fetch genesis runtime block",
+				"err", err,
+				"runtime_id", rt.ID(),
+			)
+		}
+
+		// Fetch common committee worker status.
+		if rtNode := n.CommonWorker.GetRuntime(rt.ID()); rtNode != nil {
+			status.Committee, err = rtNode.GetStatus(ctx)
+			if err != nil {
+				n.logger.Error("failed to fetch common committee worker status",
+					"err", err,
+					"runtime_id", rt.ID(),
+				)
+			}
+		}
+
+		// Fetch storage worker status.
+		if storageNode := n.StorageWorker.GetRuntime(rt.ID()); storageNode != nil {
+			status.Storage, err = storageNode.GetStatus(ctx)
+			if err != nil {
+				n.logger.Error("failed to fetch storage worker status",
+					"err", err,
+					"runtime_id", rt.ID(),
+				)
+			}
+		}
+
+		runtimes[rt.ID()] = status
+	}
+	return runtimes, nil
 }

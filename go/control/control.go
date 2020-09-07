@@ -92,6 +92,11 @@ func (c *nodeController) GetStatus(ctx context.Context) (*control.Status, error)
 		return nil, fmt.Errorf("failed to get registration status: %w", err)
 	}
 
+	runtimes, err := c.node.GetRuntimeStatus(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get runtime status: %w", err)
+	}
+
 	ident := c.node.GetIdentity()
 
 	return &control.Status{
@@ -103,6 +108,7 @@ func (c *nodeController) GetStatus(ctx context.Context) (*control.Status, error)
 			TLS:       ident.GetTLSPubKeys(),
 		},
 		Consensus:    *cs,
+		Runtimes:     runtimes,
 		Registration: *rs,
 	}, nil
 }

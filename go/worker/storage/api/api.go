@@ -40,3 +40,9 @@ type ForceFinalizeRequest struct {
 	RuntimeID common.Namespace `json:"runtime_id"`
 	Round     uint64           `json:"round"`
 }
+
+// Status is the storage worker status.
+type Status struct {
+	// LastFinalizedRound is the last synced and finalized round.
+	LastFinalizedRound uint64 `json:"last_finalized_round"`
+}
