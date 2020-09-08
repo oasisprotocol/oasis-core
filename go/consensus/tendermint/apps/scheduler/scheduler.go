@@ -430,9 +430,9 @@ func (app *schedulerApplication) electCommittee(
 
 	var members []*scheduler.CommitteeNode
 	for i := 0; i < len(idxs); i++ {
-		role := scheduler.Worker
+		role := scheduler.RoleWorker
 		if i >= workerSize {
-			role = scheduler.BackupWorker
+			role = scheduler.RoleBackupWorker
 		}
 		members = append(members, &scheduler.CommitteeNode{
 			Role:      role,

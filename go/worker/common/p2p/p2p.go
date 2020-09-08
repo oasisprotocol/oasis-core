@@ -84,6 +84,20 @@ func (p *P2P) Addresses() []node.Address {
 	return addresses
 }
 
+// Peers returns a list of connected P2P peers for the given runtime.
+func (p *P2P) Peers(runtimeID common.Namespace) []string {
+	var peers []string
+	for _, peerID := range p.pubsub.ListPeers(runtimeIDToTopicID(runtimeID)) {
+		addrs := p.host.Peerstore().Addrs(peerID)
+		if len(addrs) == 0 {
+			continue
+		}
+
+		peers = append(peers, fmt.Sprintf("%s/p2p/%s", addrs[0].String(), peerID.Pretty()))
+	}
+	return peers
+}
+
 // Publish publishes a message to the gossip network.
 func (p *P2P) Publish(ctx context.Context, runtimeID common.Namespace, msg *Message) {
 	rawMsg := cbor.Marshal(msg)

@@ -237,6 +237,13 @@ func (s *Worker) Quit() <-chan struct{} {
 func (s *Worker) Cleanup() {
 }
 
+// GetRuntime returns a storage committee node for the given runtime (if available).
+//
+// In case the runtime with the specified id was not configured for this node it returns nil.
+func (s *Worker) GetRuntime(id common.Namespace) *committee.Node {
+	return s.runtimes[id]
+}
+
 func init() {
 	Flags.Bool(CfgWorkerEnabled, false, "Enable storage worker")
 	Flags.Uint(cfgWorkerFetcherCount, 4, "Number of concurrent storage diff fetchers")

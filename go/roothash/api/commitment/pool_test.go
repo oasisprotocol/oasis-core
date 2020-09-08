@@ -142,7 +142,7 @@ func TestPoolSingleCommitment(t *testing.T) {
 		Kind: scheduler.KindComputeExecutor,
 		Members: []*scheduler.CommitteeNode{
 			{
-				Role:      scheduler.Worker,
+				Role:      scheduler.RoleWorker,
 				PublicKey: sk.Public(),
 			},
 		},
@@ -280,7 +280,7 @@ func TestPoolSingleCommitmentTEE(t *testing.T) {
 		Kind: scheduler.KindComputeExecutor,
 		Members: []*scheduler.CommitteeNode{
 			{
-				Role:      scheduler.Worker,
+				Role:      scheduler.RoleWorker,
 				PublicKey: sk.Public(),
 			},
 		},
@@ -492,7 +492,7 @@ func TestPoolSerialization(t *testing.T) {
 		Kind: scheduler.KindComputeExecutor,
 		Members: []*scheduler.CommitteeNode{
 			{
-				Role:      scheduler.Worker,
+				Role:      scheduler.RoleWorker,
 				PublicKey: sk.Public(),
 			},
 		},
@@ -809,15 +809,15 @@ func generateMockCommittee(t *testing.T) (
 		Kind: scheduler.KindComputeExecutor,
 		Members: []*scheduler.CommitteeNode{
 			{
-				Role:      scheduler.Worker,
+				Role:      scheduler.RoleWorker,
 				PublicKey: sk1.Public(),
 			},
 			{
-				Role:      scheduler.Worker,
+				Role:      scheduler.RoleWorker,
 				PublicKey: sk2.Public(),
 			},
 			{
-				Role:      scheduler.BackupWorker,
+				Role:      scheduler.RoleBackupWorker,
 				PublicKey: sk3.Public(),
 			},
 		},

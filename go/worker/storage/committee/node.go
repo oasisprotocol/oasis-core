@@ -34,6 +34,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/worker/common/committee"
 	"github.com/oasisprotocol/oasis-core/go/worker/common/p2p"
 	"github.com/oasisprotocol/oasis-core/go/worker/registration"
+	"github.com/oasisprotocol/oasis-core/go/worker/storage/api"
 )
 
 var (
@@ -353,6 +354,16 @@ func (n *Node) Cleanup() {
 // Initialized returns a channel that will be closed once the worker finished starting up.
 func (n *Node) Initialized() <-chan struct{} {
 	return n.initCh
+}
+
+// GetStatus returns the storage committee node status.
+func (n *Node) GetStatus(ctx context.Context) (*api.Status, error) {
+	n.syncedLock.RLock()
+	defer n.syncedLock.RUnlock()
+
+	return &api.Status{
+		LastFinalizedRound: n.syncedState.LastBlock.Round,
+	}, nil
 }
 
 func (n *Node) getMetricLabels() prometheus.Labels {
