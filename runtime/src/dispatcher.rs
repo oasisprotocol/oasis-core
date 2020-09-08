@@ -304,6 +304,7 @@ impl Dispatcher {
     ) {
         debug!(self.logger, "Received transaction batch request";
             "state_root" => ?block.header.state_root,
+            "round" => block.header.round + 1,
             "check_only" => check_only,
         );
 

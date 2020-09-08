@@ -46,6 +46,7 @@ func newComputeBatchContext() *computeBatchContext {
 func (cbc *computeBatchContext) receiveTransactions(ph *p2pHandle, timeout time.Duration) []*api.Tx {
 	var req p2pReqRes
 	txs := []*api.Tx{}
+	existing := make(map[hash.Hash]bool)
 
 ReceiveTransactions:
 	for {
@@ -55,7 +56,13 @@ ReceiveTransactions:
 			if req.msg.Tx == nil {
 				continue
 			}
+			txHash := hash.NewFromBytes(req.msg.Tx.Data)
+			if existing[txHash] {
+				continue
+			}
+
 			txs = append(txs, req.msg.Tx)
+			existing[txHash] = true
 		case <-time.After(timeout):
 			break ReceiveTransactions
 		}

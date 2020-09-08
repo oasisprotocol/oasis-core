@@ -45,7 +45,7 @@ const (
 
 // MarshalBinary encodes an artifact kind into binary form.
 func (ak artifactKind) MarshalBinary() (data []byte, err error) {
-	// kindInvalid should not be marshaleld.
+	// kindInvalid should not be marshaled.
 	if ak == kindInvalid {
 		return nil, errMalformedArtifactKind
 	}
@@ -258,6 +258,13 @@ func (t *Tree) GetInputBatch(ctx context.Context, maxBatchSize, maxBatchSizeByte
 
 	// Sort transactions to be in batch order.
 	sort.Stable(bo)
+
+	// Make sure that item orders are consistent.
+	for i, v := range bo.order {
+		if uint32(i) != v {
+			return nil, fmt.Errorf("transaction: inconsistent order: item %d has batch order %d", i, v)
+		}
+	}
 	bo.order = nil
 
 	return bo.batch, nil
