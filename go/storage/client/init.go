@@ -17,7 +17,8 @@ import (
 // BackendName is the name of this implementation.
 const BackendName = "client"
 
-func newClient(
+// NewForCommittee creates a new storage client that tracks the specified committee.
+func NewForCommittee(
 	ctx context.Context,
 	namespace common.Namespace,
 	ident *identity.Identity,
@@ -59,7 +60,7 @@ func New(
 		return nil, fmt.Errorf("storage/client: failed to create committee watcher: %w", err)
 	}
 
-	return newClient(ctx, namespace, ident, committeeWatcher.Nodes(), runtime)
+	return NewForCommittee(ctx, namespace, ident, committeeWatcher.Nodes(), runtime)
 }
 
 // NewStatic creates a new storage client that only follows a specific storage node. This is mostly
@@ -76,7 +77,7 @@ func NewStatic(
 		return nil, fmt.Errorf("storage/client: failed to create node descriptor watcher: %w", err)
 	}
 
-	client, err := newClient(ctx, namespace, ident, nw, nil)
+	client, err := NewForCommittee(ctx, namespace, ident, nw, nil)
 	if err != nil {
 		return nil, err
 	}

@@ -20,13 +20,34 @@ import (
 	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
 	"github.com/oasisprotocol/oasis-core/go/roothash/api/commitment"
 	"github.com/oasisprotocol/oasis-core/go/runtime/committee"
+	runtimeRegistry "github.com/oasisprotocol/oasis-core/go/runtime/registry"
 	scheduler "github.com/oasisprotocol/oasis-core/go/scheduler/api"
+	storage "github.com/oasisprotocol/oasis-core/go/storage/api"
+	storageClient "github.com/oasisprotocol/oasis-core/go/storage/client"
 	"github.com/oasisprotocol/oasis-core/go/worker/common/p2p"
 	p2pError "github.com/oasisprotocol/oasis-core/go/worker/common/p2p/error"
 )
 
-// peerMessageProcessTimeout is the maximum time that peer message processing can take.
-const peerMessageProcessTimeout = 10 * time.Second
+const (
+	// peerMessageProcessTimeout is the maximum time that peer message processing can take.
+	peerMessageProcessTimeout = 10 * time.Second
+
+	// tagStorage is the committee node descriptor tag to use for storage nodes.
+	tagStorage = "storage"
+	// tagExecutor is the committee node descriptor tag to use for executor nodes.
+	tagExecutor = "executor"
+)
+
+func tagForCommittee(kind scheduler.CommitteeKind) string {
+	switch kind {
+	case scheduler.KindComputeExecutor:
+		return tagExecutor
+	case scheduler.KindStorage:
+		return tagStorage
+	default:
+		return ""
+	}
+}
 
 // MessageHandler handles messages from other nodes.
 type MessageHandler interface {
@@ -202,7 +223,7 @@ func (e *EpochSnapshot) VerifyTxnSchedulerSignature(sig signature.Signature, rou
 	return nil
 }
 
-// Group encapsulates communication with a group of nodes in the compute committees.
+// Group encapsulates communication with a group of nodes in the runtime committees.
 type Group struct {
 	sync.RWMutex
 
@@ -218,6 +239,8 @@ type Group struct {
 	p2p *p2p.P2P
 	// nodes is a node descriptor watcher for all nodes that are part of any of our committees.
 	nodes committee.NodeDescriptorWatcher
+	// storage is the storage backend that tracks the current committee.
+	storage storage.ClientBackend
 
 	logger *logging.Logger
 }
@@ -300,7 +323,7 @@ func (g *Group) EpochTransition(ctx context.Context, height int64) error {
 			}
 
 			// Start watching the member's node descriptor.
-			if _, err = g.nodes.WatchNode(ctx, member.PublicKey); err != nil {
+			if _, err = g.nodes.WatchNodeWithTag(ctx, member.PublicKey, tagForCommittee(cm.Kind)); err != nil {
 				return fmt.Errorf("group: failed to fetch node info: %w", err)
 			}
 		}
@@ -319,10 +342,10 @@ func (g *Group) EpochTransition(ctx context.Context, height int64) error {
 		}
 	}
 	if executorCommittee == nil {
-		return fmt.Errorf("no executor committee")
+		return fmt.Errorf("group: no executor committee")
 	}
 	if storageCommittee == nil {
-		return fmt.Errorf("no storage committee")
+		return fmt.Errorf("group: no storage committee")
 	}
 
 	// Fetch the new epoch.
@@ -335,6 +358,12 @@ func (g *Group) EpochTransition(ctx context.Context, height int64) error {
 	runtime, err := g.consensus.Registry().GetRuntime(ctx, &registry.NamespaceQuery{ID: g.runtimeID, Height: height})
 	if err != nil {
 		return err
+	}
+
+	// Freeze the committee and make sure the storage client has been updated.
+	g.nodes.Freeze(height)
+	if err = g.storage.EnsureCommitteeVersion(ctx, height); err != nil {
+		return fmt.Errorf("group: failed to ensure committee version: %w", err)
 	}
 
 	// Create a new epoch and round contexts.
@@ -500,11 +529,16 @@ func (g *Group) Peers() []string {
 	return g.p2p.Peers(g.runtimeID)
 }
 
+// Storage returns the storage client backend that talks to the runtime group.
+func (g *Group) Storage() storage.Backend {
+	return g.storage
+}
+
 // NewGroup creates a new group.
 func NewGroup(
 	ctx context.Context,
 	identity *identity.Identity,
-	runtimeID common.Namespace,
+	runtime runtimeRegistry.Runtime,
 	handler MessageHandler,
 	consensus consensus.Backend,
 	p2p *p2p.P2P,
@@ -514,18 +548,31 @@ func NewGroup(
 		return nil, fmt.Errorf("group: failed to create node watcher: %w", err)
 	}
 
+	// TODO: If the current node is a storage node, always include self (oasis-core#3251).
+	sc, err := storageClient.NewForCommittee(
+		ctx,
+		runtime.ID(),
+		identity,
+		committee.NewFilteredNodeLookup(nodes, committee.TagFilter(tagForCommittee(scheduler.KindStorage))),
+		runtime,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("group: failed to create storage client: %w", err)
+	}
+
 	g := &Group{
 		identity:  identity,
-		runtimeID: runtimeID,
+		runtimeID: runtime.ID(),
 		consensus: consensus,
 		handler:   handler,
 		p2p:       p2p,
 		nodes:     nodes,
-		logger:    logging.GetLogger("worker/common/committee/group").With("runtime_id", runtimeID),
+		storage:   sc.(storage.ClientBackend),
+		logger:    logging.GetLogger("worker/common/committee/group").With("runtime_id", runtime.ID()),
 	}
 
 	if p2p != nil {
-		p2p.RegisterHandler(runtimeID, g)
+		p2p.RegisterHandler(runtime.ID(), g)
 	}
 
 	return g, nil

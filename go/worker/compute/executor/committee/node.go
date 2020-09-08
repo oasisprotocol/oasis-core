@@ -228,7 +228,7 @@ func (n *Node) HandlePeerMessage(ctx context.Context, message *p2p.Message, isOw
 		call := message.Tx.Data
 
 		if !n.commonNode.Group.GetEpochSnapshot().IsExecutorWorker() {
-			n.logger.Error("unable to handle transaction message, not execution worker",
+			n.logger.Debug("unable to handle transaction message, not execution worker",
 				"current_epoch", n.commonNode.Group.GetEpochSnapshot().GetEpochNumber(),
 			)
 			return true, nil
@@ -244,7 +244,7 @@ func (n *Node) HandlePeerMessage(ctx context.Context, message *p2p.Message, isOw
 
 		err := n.QueueTx(call)
 		if err != nil {
-			n.logger.Error("unable to Queue transaction",
+			n.logger.Error("unable to queue transaction",
 				"err", err,
 			)
 			return true, p2pError.Permanent(err)
@@ -759,7 +759,7 @@ func (n *Node) Dispatch(batch transaction.RawBatch) error {
 		opentracing.ChildOf(batchSpanCtx),
 	)
 
-	ioReceipts, err := n.commonNode.Storage.Apply(ctx, &storage.ApplyRequest{
+	ioReceipts, err := n.commonNode.Group.Storage().Apply(ctx, &storage.ApplyRequest{
 		Namespace: lastHeader.Namespace,
 		SrcRound:  lastHeader.Round + 1,
 		SrcRoot:   emptyRoot.Hash,
@@ -799,6 +799,11 @@ func (n *Node) Dispatch(batch transaction.RawBatch) error {
 		)
 		return fmt.Errorf("failed to sign txn scheduler batch: %w", err)
 	}
+
+	n.logger.Debug("dispatching a new batch proposal",
+		"io_root", ioRoot,
+		"num_txs", len(batch),
+	)
 
 	err = n.commonNode.Group.Publish(
 		batchSpanCtx,
@@ -887,7 +892,7 @@ func (n *Node) startProcessingBatchLocked(batch *unresolvedBatch) {
 
 		// Resolve the batch and dispatch it to the runtime.
 		readStartTime := time.Now()
-		resolvedBatch, err := batch.resolve(ctx, n.commonNode.Storage)
+		resolvedBatch, err := batch.resolve(ctx, n.commonNode.Group.Storage())
 		if err != nil {
 			n.logger.Error("failed to resolve batch",
 				"err", err,
@@ -1042,7 +1047,7 @@ func (n *Node) proposeBatchLocked(processedBatch *processedBatch) {
 			},
 		}
 
-		receipts, err := n.commonNode.Storage.ApplyBatch(ctx, &storage.ApplyBatchRequest{
+		receipts, err := n.commonNode.Group.Storage().ApplyBatch(ctx, &storage.ApplyBatchRequest{
 			Namespace: lastHeader.Namespace,
 			DstRound:  lastHeader.Round + 1,
 			Ops:       applyOps,
