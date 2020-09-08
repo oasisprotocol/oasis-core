@@ -40,6 +40,22 @@ func (rs *restorer) StartRestore(ctx context.Context, checkpoint *Metadata) erro
 	return nil
 }
 
+func (rs *restorer) AbortRestore(ctx context.Context) error {
+	rs.Lock()
+	defer rs.Unlock()
+
+	if rs.currentCheckpoint == nil {
+		return ErrNoRestoreInProgress
+	}
+
+	rs.pendingChunks = nil
+	rs.currentCheckpoint = nil
+
+	// TODO: also properly remove leftover nodes from the database (#3241).
+
+	return nil
+}
+
 func (rs *restorer) GetCurrentCheckpoint() *Metadata {
 	rs.Lock()
 	defer rs.Unlock()

@@ -368,6 +368,13 @@ func (args *argBuilder) workerStorageDebugIgnoreApplies(ignore bool) *argBuilder
 	return args
 }
 
+func (args *argBuilder) workerStorageDebugDisableCheckpointSync(disable bool) *argBuilder {
+	if disable {
+		args.vec = append(args.vec, "--"+workerStorage.CfgWorkerCheckpointSyncDisabled)
+	}
+	return args
+}
+
 func (args *argBuilder) workerStorageCheckpointCheckInterval(interval time.Duration) *argBuilder {
 	if interval > 0 {
 		args.vec = append(args.vec, "--"+workerStorage.CfgWorkerCheckpointCheckInterval, interval.String())

@@ -3,9 +3,11 @@ package runtime
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/env"
+	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/log"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/oasis"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/oasis/cli"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/scenario"
@@ -47,13 +49,23 @@ func (sc *storageSyncImpl) Fixture() (*oasis.NetworkFixture, error) {
 	// Configure runtime for storage checkpointing.
 	f.Runtimes[1].Storage.CheckpointInterval = 10
 	f.Runtimes[1].Storage.CheckpointNumKept = 1
-	f.Runtimes[1].Storage.CheckpointChunkSize = 1024 * 1024
+	f.Runtimes[1].Storage.CheckpointChunkSize = 1 * 1024
 	// Provision another storage node and make it ignore all applies.
 	f.StorageWorkers = append(f.StorageWorkers, oasis.StorageWorkerFixture{
 		Backend:       database.BackendNameBadgerDB,
 		Entity:        1,
 		IgnoreApplies: true,
 	})
+
+	// One more storage worker for later, so it can do an initial sync with the snapshots.
+	f.StorageWorkers = append(f.StorageWorkers, oasis.StorageWorkerFixture{
+		Backend:                    database.BackendNameBadgerDB,
+		Entity:                     1,
+		NoAutoStart:                true,
+		CheckpointSyncEnabled:      true,
+		LogWatcherHandlerFactories: []log.WatcherHandlerFactory{oasis.LogAssertCheckpointSync()},
+	})
+
 	return f, nil
 }
 
@@ -64,7 +76,7 @@ func (sc *storageSyncImpl) Run(childEnv *env.Env) error {
 	}
 
 	// Wait for the client to exit.
-	if err = sc.wait(childEnv, cmd, clientErrCh); err != nil {
+	if err = sc.waitClient(childEnv, cmd, clientErrCh); err != nil {
 		return err
 	}
 
@@ -161,5 +173,28 @@ func (sc *storageSyncImpl) Run(childEnv *env.Env) error {
 		return fmt.Errorf("incorrect number of valid checkpoints (expected: >=2 got: %d)", validCps)
 	}
 
-	return nil
+	largeVal := strings.Repeat("has he his auto ", 7) // 16 bytes base string
+	for i := 0; i < 32; i++ {
+		sc.Logger.Info("submitting large transaction to runtime",
+			"seq", i,
+		)
+		if err = sc.submitKeyValueRuntimeInsertTx(ctx, runtimeID, fmt.Sprintf("%d key %d", i, i), fmt.Sprintf("my cp %d: ", i)+largeVal); err != nil {
+			return err
+		}
+	}
+
+	// Now spin up the last storage worker and check if it syncs with a checkpoint.
+	lateWorker := sc.Net.StorageWorkers()[3]
+	err = lateWorker.Start()
+	if err != nil {
+		return fmt.Errorf("can't start last storage worker: %w", err)
+	}
+	if err := lateWorker.WaitReady(ctx); err != nil {
+		return fmt.Errorf("erorr waiting for late storage worker to become ready: %w", err)
+	}
+	// Wait a bit to give the logger in the node time to sync; the message has already been
+	// logged by this point, it just might not be on disk yet.
+	<-time.After(1 * time.Second)
+
+	return sc.Net.CheckLogWatchers()
 }

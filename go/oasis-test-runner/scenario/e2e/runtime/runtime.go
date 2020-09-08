@@ -302,7 +302,7 @@ func (sc *runtimeImpl) startClient(childEnv *env.Env) (*exec.Cmd, error) {
 	return cmd, nil
 }
 
-func (sc *runtimeImpl) wait(childEnv *env.Env, cmd *exec.Cmd, clientErrCh <-chan error) error {
+func (sc *runtimeImpl) waitClient(childEnv *env.Env, cmd *exec.Cmd, clientErrCh <-chan error) error {
 	var err error
 	select {
 	case err = <-sc.Net.Errors():
@@ -313,11 +313,14 @@ func (sc *runtimeImpl) wait(childEnv *env.Env, cmd *exec.Cmd, clientErrCh <-chan
 		return err
 	}
 
-	if err = sc.Net.CheckLogWatchers(); err != nil {
+	return nil
+}
+
+func (sc *runtimeImpl) wait(childEnv *env.Env, cmd *exec.Cmd, clientErrCh <-chan error) error {
+	if err := sc.waitClient(childEnv, cmd, clientErrCh); err != nil {
 		return err
 	}
-
-	return nil
+	return sc.Net.CheckLogWatchers()
 }
 
 func (sc *runtimeImpl) Run(childEnv *env.Env) error {

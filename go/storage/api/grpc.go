@@ -478,7 +478,7 @@ func (c *storageClient) GetCheckpointChunk(ctx context.Context, chunk *checkpoin
 
 	for {
 		var part []byte
-		switch stream.RecvMsg(&part) {
+		switch err = stream.RecvMsg(&part); err {
 		case nil:
 		case io.EOF:
 			return nil
