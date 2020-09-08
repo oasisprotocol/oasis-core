@@ -388,7 +388,7 @@ func (n *Node) updateExternalServicePolicyLocked(snapshot *committee.EpochSnapsh
 	}
 	// TODO: Query registry only for storage nodes after
 	// https://github.com/oasisprotocol/oasis-core/issues/1923 is implemented.
-	nodes, err := n.commonNode.Consensus.Registry().GetNodes(context.Background(), snapshot.GetGroupVersion())
+	nodes, err := n.commonNode.Consensus.Registry().GetNodes(context.Background(), consensus.HeightLatest)
 	if err != nil {
 		n.logger.Error("couldn't get nodes from registry", "err", err)
 	}
