@@ -269,6 +269,7 @@ func NewNode(
 		node.commonNode.Consensus.Scheduler(),
 		node.commonNode.Consensus.Registry(),
 		nil,
+		runtimeCommittee.WithFilter(runtimeCommittee.IgnoreNodeFilter(commonNode.Identity.NodeSigner.Public())),
 	)
 	if err != nil {
 		return nil, fmt.Errorf("storage worker: failed to create client: %w", err)
