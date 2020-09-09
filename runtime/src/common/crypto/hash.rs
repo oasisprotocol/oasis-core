@@ -16,11 +16,11 @@ impl Hash {
     pub fn digest_bytes_list(data: &[&[u8]]) -> Hash {
         let mut ctx = Sha512Trunc256::new();
         for datum in data {
-            ctx.input(datum);
+            ctx.update(datum);
         }
 
         let mut result = [0u8; 32];
-        result[..].copy_from_slice(ctx.result().as_ref());
+        result[..].copy_from_slice(ctx.finalize().as_ref());
 
         Hash(result)
     }

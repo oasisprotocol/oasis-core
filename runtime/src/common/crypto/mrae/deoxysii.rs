@@ -3,7 +3,7 @@
 pub use super::deoxysii_rust::{DeoxysII, KEY_SIZE, NONCE_SIZE, TAG_SIZE};
 
 use super::{
-    hmac::{Hmac, Mac},
+    hmac::{Hmac, Mac, NewMac},
     sha2::Sha512Trunc256,
     x25519_dalek,
 };
@@ -22,12 +22,12 @@ fn derive_symmetric_key(public: &[u8; 32], private: &[u8; 32]) -> [u8; KEY_SIZE]
     let pmk = private.diffie_hellman(&public);
 
     let mut kdf = Kdf::new_varkey(b"MRAE_Box_Deoxys-II-256-128").expect("Hmac::new_varkey");
-    kdf.input(pmk.as_bytes());
+    kdf.update(pmk.as_bytes());
     drop(pmk);
 
     let mut derived_key = [0u8; KEY_SIZE];
-    let digest = kdf.result();
-    derived_key.copy_from_slice(&digest.code().as_ref()[..KEY_SIZE]);
+    let digest = kdf.finalize();
+    derived_key.copy_from_slice(&digest.into_bytes()[..KEY_SIZE]);
 
     derived_key
 }
