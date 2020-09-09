@@ -12,6 +12,444 @@ The format is inspired by [Keep a Changelog].
 
 <!-- TOWNCRIER -->
 
+## 20.10 (2020-09-09)
+
+| Protocol          | Version   |
+|:------------------|:---------:|
+| Consensus         | 1.0.0     |
+| Runtime Host      | 1.0.0     |
+| Runtime Committee | 1.0.0     |
+
+### Removals and Breaking Changes
+
+- go/staking: Remove WatchTransfers/Burns/Escrows in favor of WatchEvents
+  ([#3080](https://github.com/oasisprotocol/oasis-core/issues/3080))
+
+  The separate WatchTransfers/Burns/Escrows methods provided less information
+  than the more general WatchEvents, namely they were missing the height and tx
+  hash. There is no good reason to maintain both as the individual methods can
+  be easily replaced with WatchEvents.
+
+- go/roothash: Drop support for multiple committees
+  ([#3179](https://github.com/oasisprotocol/oasis-core/issues/3179))
+
+  Since there is currently no transaction scheduler implementation which would
+  support multiple committees, there is no sense in having the merge node as it
+  could be a source of bugs.
+
+  The merge node is also the only client for the Merge* storage operations, so
+  they can just be removed in order to reduce the exposed API surface.
+
+- go/worker/executor: Support multiple transaction schedulers
+  ([#3184](https://github.com/oasisprotocol/oasis-core/issues/3184))
+
+  Transaction scheduling committee is removed and the transaction scheduler
+  worker is merged into the executor worker. Transaction scheduling gRPC service
+  is removed and runtime transaction submission is now done via libp2p's
+  gossipsub.
+
+  Each active executor worker now also acts as a transaction scheduler.
+  Each round one of the executors acts as the scheduler and is expected to
+  propose a batch for scheduling. Nodes switch between schedulers in round-robin
+  fashion.
+
+  Metric changes:
+
+  Existing transaction scheduler incoming queue size metrics was renamed:
+
+  - `oasis_worker_txnscheduler_incoming_queue_size` ->
+  `oasis_worker_incoming_queue_size`
+
+- go/runtime/scheduling: Rename "batching" algorithm to "simple"
+  ([#3184](https://github.com/oasisprotocol/oasis-core/issues/3184))
+
+  Note: Existing deployments will need to alter the state dump and fix the
+  scheduling algorithm in all registered compute runtimes.
+
+- go/consensus/tendermint: Bump Tendermint Core to v0.34-rc4-oasis2
+  ([#3186](https://github.com/oasisprotocol/oasis-core/issues/3186),
+   [#3229](https://github.com/oasisprotocol/oasis-core/issues/3229))
+
+- go/roothash: Add support for executor triggered timeouts
+  ([#3199](https://github.com/oasisprotocol/oasis-core/issues/3199))
+
+  Executors can now trigger a roothash timeout in case there are new
+  transactions waiting to be proposed, but the current transaction scheduler is
+  not proposing a batch. The timeout can only happen once sufficient
+  (configurable via a new `ProposerTimeout` runtime parameter) consensus blocks
+  pass since the round started. The proposer timeout causes the current round to
+  fail.
+
+  Note: Existing deployments will need to alter the state dump to fix existing
+  runtimes that do not have `ProposerTimeout` configured.
+
+- go/common/cbor: Bump fxamacker/cbor to bafca87fa6db
+  ([#3204](https://github.com/oasisprotocol/oasis-core/issues/3204))
+
+  This should result in some smaller payloads as omitempty should work better
+  for our use cases now.
+
+- go/roothash: Change runtime round timeout to be in blocks
+  ([#3210](https://github.com/oasisprotocol/oasis-core/issues/3210))
+
+  Note: Existing deployments will need to alter the state dump and update the
+  executor round timeout in all registered compute runtimes.
+
+- go/common/crypto/signature: Remove `SignerRole.FromString()` method
+  ([#3225](https://github.com/oasisprotocol/oasis-core/issues/3225))
+
+  Use the newly added `SignerRole.UnmarshalText()` method instead.
+
+- go/consensus: Simplify light client API
+  ([#3229](https://github.com/oasisprotocol/oasis-core/issues/3229))
+
+  Methods `GetSignedHeader` and `GetValidatorSet` have been replaced with
+  `GetLightBlock` which provides both the signed header and the validator set.
+  This makes sense as the two are commonly used together so this saves a
+  round-trip.
+
+- release: Wrap files in the release tarball in a single directory
+  ([#3232](https://github.com/oasisprotocol/oasis-core/issues/3232))
+
+- release: Use `SHA256SUMS-<VERSION>.txt` name template for checksum files
+  ([#3232](https://github.com/oasisprotocol/oasis-core/issues/3232))
+
+- Bump protocol versions to 1.0.0 in preparation for the Mainnet
+  ([#3249](https://github.com/oasisprotocol/oasis-core/issues/3249))
+
+  As described in our [Versioning scheme], we will bump the protocol versions
+  (Consensus, Runtime Host, Runtime Committee) to version 1.0.0 when preparing
+  an Oasis Core release for the Mainnet, which signifies they are ready for
+  production use.
+
+  [Versioning scheme]:
+    docs/versioning.md#mainnet-and-version-100
+
+### Configuration Changes
+
+- Added `worker.p2p.enabled` flag to explicitly enable P2P worker
+  ([#3184](https://github.com/oasisprotocol/oasis-core/issues/3184))
+
+  Note: compute workers will automatically enable the P2P worker. The P2P worker
+  needs to be manually enabled on runtime-client nodes that want to submit
+  runtime transactions.
+
+- go/worker/compute/executor: Remove transaction scheduler worker
+  ([#3184](https://github.com/oasisprotocol/oasis-core/issues/3184))
+
+  The `worker.txn_scheduler.check_tx.enabled` flag has been renamed to
+  `worker.executor.schedule_check_tx.enabled`.
+  The `worker.txnscheduler.batching.max_queue_size` flag has been renamed to
+  `worker.executor.schedule_max_queue_size`.
+
+- go/runtime/scheduling: Rename "batching" algorithm to "simple"
+  ([#3184](https://github.com/oasisprotocol/oasis-core/issues/3184))
+
+  The following `oasis-node registry runtime` command line flags have been
+  renamed:
+
+  - `runtime.txn_scheduler.batching.max_batch_size` to
+  `runtime.txn_scheduler.max_batch_size`.
+  - `runtime.txn_scheduler.batching.max_batch_size_bytes` to
+  `runtime.txn_scheduler.max_batch_size_bytes`.
+
+- go/common/crypto/signature: Use descriptive names for Signer roles
+  ([#3225](https://github.com/oasisprotocol/oasis-core/issues/3225))
+
+  The `--signer.composite.backends` CLI flag previously accepted integer-indexed
+  Signer roles, e.g:
+
+  ```
+  --signer.composite.backends 1:file,2:file,3:file,4:plugin
+  ```
+
+  Now, it only accepts descriptive string names for Signer roles, e.g.:
+
+  ```
+  --signer.composite.backends entity:file,node:file,p2p:file,consensus:plugin
+  ```
+
+### Features
+
+- go/consensus/api/transaction: Pretty-print transaction's fee amount in tokens
+  ([#3151](https://github.com/oasisprotocol/oasis-core/issues/3151))
+
+- go/consensus/api/transaction: Implement `PrettyPrinter` interface for `Fee`
+  ([#3167](https://github.com/oasisprotocol/oasis-core/issues/3167))
+
+- go/staking/api/token: Initial implementation
+  ([#3167](https://github.com/oasisprotocol/oasis-core/issues/3167))
+
+- go/consensus/tendermint: Support configurable initial height
+  ([#3186](https://github.com/oasisprotocol/oasis-core/issues/3186))
+
+- go/consensus: Add the `GetUnconfirmedTransactions` method
+  ([#3187](https://github.com/oasisprotocol/oasis-core/issues/3187))
+
+  The new method allows the caller to query the current set of transactions in
+  the mempool (e.g., known transactions which have not yet been included in a
+  block).
+
+- go/consensus: Add `ErrDuplicateTx` error for duplicate transactions
+  ([#3192](https://github.com/oasisprotocol/oasis-core/issues/3192))
+
+- go/common/crypto/signature: Add new methods to `SignerRole` type
+  ([#3225](https://github.com/oasisprotocol/oasis-core/issues/3225))
+
+  Add `String()`, `MarshalText()` and `UnmarshalText()` methods to `SignerRole`
+  type.
+
+  Add `SignerEntityNode`, `SignerNodeName`, `SignerP2PName`,
+  `SignerConsensusName` constants that represent the names of the corresponding
+  Signer roles.
+
+- release: Add `oasis-remote-signer` binary to the release tarball
+  ([#3226](https://github.com/oasisprotocol/oasis-core/issues/3226))
+
+- go: Unify CLI tools' version display and also display the Go toolchain version
+  ([#3233](https://github.com/oasisprotocol/oasis-core/issues/3233))
+
+- go/oasis-node/cmd/common: Add `SetBasicVersionTemplate()` function
+  ([#3233](https://github.com/oasisprotocol/oasis-core/issues/3233))
+
+  It can be used to set a basic custom version template for the given cobra
+  command that shows the version of Oasis Core and the Go toolchain.
+
+- go/control: Add per-runtime status report
+  ([#3234](https://github.com/oasisprotocol/oasis-core/issues/3234))
+
+  An additional `runtimes` field has been added to the output of the
+  `control.GetStatus` method (e.g., as reported by `control status`
+  subcommand). The field contains a map of supported runtime IDs to their
+  runtime-specific status reports.
+
+### Bug Fixes
+
+- go/common/crypto/drbg: Also consider empty slices as Null values
+  ([#3165](https://github.com/oasisprotocol/oasis-core/issues/3165))
+
+  The wrong handling of an edge case in the HMAC_DRBG implementation has been
+  corrected. An update with empty `additional_data` now behaves the same as an
+  update with nil additional data. While the spec is not 100% clear around how
+  this is to be treated, supplemental documentation suggests that this is the
+  correct way to handle it.
+
+  Oasis code never uses HMAC_DRNG with a non-nil empty `additional_data`
+  parameter, so nothing changes for Oasis users.
+
+- go/consensus/tendermint: Sync state database before discarding versions
+  ([#3173](https://github.com/oasisprotocol/oasis-core/issues/3173))
+
+  Otherwise a crash can cause the state database to be rolled back to a version
+  that has already been discarded from Tendermint's state stores which would
+  prevent replay on restart.
+
+  Discovered during long-term tests.
+
+- go/genesis: Remove time sanity check
+  ([#3178](https://github.com/oasisprotocol/oasis-core/issues/3178))
+
+  Previously the genesis document sanity check rejected genesis documents with
+  future timestamps which made it awkward to prepare the node in advance. Since
+  the only supported consensus backend (Tendermint) can handle future
+  timestamps by delaying the consensus process, allow such genesis documents.
+
+- go/registry/runtime: Validate runtime transaction scheduler parameters
+  ([#3184](https://github.com/oasisprotocol/oasis-core/issues/3184))
+
+  Note: Existing deployments might need to alter the runtime state dump in case
+  existing registered runtimes have invalid parameters configured.
+
+- runtime: Use separate cache for checking transactions
+  ([#3191](https://github.com/oasisprotocol/oasis-core/issues/3191))
+
+  This allows calling both check and execute methods against the same runtime
+  instance.
+
+- Executor should refresh runtime scheduling parameters
+  ([#3203](https://github.com/oasisprotocol/oasis-core/issues/3203))
+
+  Fixes the executor node to watch for runtime scheduling parameter changes and
+  if needed update its scheduling configuration.
+
+- go/roothash: Make the parent block check earlier
+  ([#3206](https://github.com/oasisprotocol/oasis-core/issues/3206))
+
+- go/registry: Correctly propagate lookup errors
+  ([#3209](https://github.com/oasisprotocol/oasis-core/issues/3209))
+
+- go/oasis-node: Omit existing entity check for non-file signers
+  ([#3215](https://github.com/oasisprotocol/oasis-core/issues/3215))
+
+  The "registry entity init" subcommand previously always performed a check
+  whether an entity already exists. It did that by creating an additional
+  signer factory to perform this check.
+
+  Some signers assign exclusive access to an underlying resource (e.g., HSM) to
+  the given factory. In that case, all operations on the second signer factory
+  would fail. Thus we now omit the existing entity check for non-file signers.
+
+- go: Fix CLI tools to not print error messages twice
+  ([#3230](https://github.com/oasisprotocol/oasis-core/issues/3230))
+
+- go/runtime/transaction: Ensure consistent batch order indices
+  ([#3248](https://github.com/oasisprotocol/oasis-core/issues/3248))
+
+- go/worker/storage: Always use fresh nodes for policy updates
+  ([#3252](https://github.com/oasisprotocol/oasis-core/issues/3252))
+
+- go/worker/common: Use group-synced storage client
+  ([#3253](https://github.com/oasisprotocol/oasis-core/issues/3253))
+
+  Previously the runtime worker(s) used the common storage client which was not
+  synced with any particular committee version. This could cause an executor
+  node to use a stale storage node for storing updates.
+
+### Documentation Improvements
+
+- Add documentation example on the process of registering and running a runtime
+  ([#3081](https://github.com/oasisprotocol/oasis-core/issues/3081),
+   [#3207](https://github.com/oasisprotocol/oasis-core/issues/3207),
+   [#3228](https://github.com/oasisprotocol/oasis-core/issues/3228))
+
+- Expand documentation on test vectors
+  ([#3205](https://github.com/oasisprotocol/oasis-core/issues/3205))
+
+- Fix staking account address derivation description to match what the code does
+  ([#3240](https://github.com/oasisprotocol/oasis-core/issues/3240))
+
+- ADR 0002: Go Modules Compatible Git Tags
+  ([#3242](https://github.com/oasisprotocol/oasis-core/issues/3242))
+
+  Go Modules only allow [Semantic Versioning 2.0.0] for
+  [versioning of the modules][go-mod-ver] which makes it hard to work
+  with [Oasis Core's CalVer (calendar versioning) scheme].
+
+  Design a scheme for tagging Oasis Core releases with Go Modules compatible Git
+  tags (in addition to the ordinary Git tags).
+
+  [Semantic Versioning 2.0.0]:
+    https://semver.org/spec/v2.0.0.html
+  [go-mod-ver]:
+    https://golang.org/ref/mod#versions
+  [Oasis Core's CalVer (calendar versioning) scheme]:
+    docs/versioning.md
+
+### Internal Changes
+
+- go/storage/mkvs: Add NoPersist commit option
+  ([#2186](https://github.com/oasisprotocol/oasis-core/issues/2186))
+
+  Using the NoPersist commit option makes the Commit only compute all the
+  hashes but does not persist any roots in the database.
+
+- go/oasis-test-runner: Add support for funding entities in genesis
+  ([#3081](https://github.com/oasisprotocol/oasis-core/issues/3081))
+
+  Additionally, make the default fixture command a bit more configurable.
+
+- go/worker/storage: Add initial sync from checkpoints
+  ([#3181](https://github.com/oasisprotocol/oasis-core/issues/3181))
+
+  Instead of relying on the slow per-block root sync, the worker now tries
+  syncing from checkpoints, if any suitable are found.
+
+- Update Badger version to v2.2007.2
+  ([#3182](https://github.com/oasisprotocol/oasis-core/issues/3182),
+   [#3227](https://github.com/oasisprotocol/oasis-core/issues/3227))
+
+- go/oasis-test-runner: Fix e2e/consensus-state-sync scenario
+  ([#3194](https://github.com/oasisprotocol/oasis-core/issues/3194))
+
+  Instead of terminating the validator-to-be-synced immediately and restarting
+  it later, do not even start it. Early stopping could result in state that
+  prevents proper state sync later.
+
+- Bump Go to 1.15.1
+  ([#3197](https://github.com/oasisprotocol/oasis-core/issues/3197))
+
+- go: Explicitly use public key pinning for certificate verification
+  ([#3197](https://github.com/oasisprotocol/oasis-core/issues/3197))
+
+  While we only ever use public key pinning for authenticating TLS connections,
+  some places still used the regular TLS config with a single certificate in
+  the certificate pool. This causes failures on Go 1.15+ due to CommonName
+  checks being deprecated, even if we never used hostnames for authentication.
+
+  This changes all cases to use our explicit public key pinning credentials for
+  gRPC connections.
+
+- tests/txsource: Run queries workload against all nodes
+  ([#3209](https://github.com/oasisprotocol/oasis-core/issues/3209))
+
+- tests/txsource/queries: Verify consensus state integrity
+  ([#3209](https://github.com/oasisprotocol/oasis-core/issues/3209))
+
+- go/common/grpc: Add `IsErrorCode` helper method
+  ([#3209](https://github.com/oasisprotocol/oasis-core/issues/3209))
+
+- go/registry: Refactor runtime descriptor validity checks
+  ([#3210](https://github.com/oasisprotocol/oasis-core/issues/3210))
+
+- go/common/keyformat: Add support for int64
+  ([#3210](https://github.com/oasisprotocol/oasis-core/issues/3210))
+
+- go/roothash/tester: Fix flaky `RoundTimeoutWithEpochTransition`
+  ([#3214](https://github.com/oasisprotocol/oasis-core/issues/3214))
+
+- ci: run the daily test for 12 hours
+  ([#3219](https://github.com/oasisprotocol/oasis-core/issues/3219))
+
+- Bump Rust toolchain to nightly-2020-08-29 for LVI mitigation speedups
+  ([#3231](https://github.com/oasisprotocol/oasis-core/issues/3231))
+
+- go: Bump bleve to 1.0.10
+  ([#3231](https://github.com/oasisprotocol/oasis-core/issues/3231))
+
+- Update Go dependencies
+  ([#3238](https://github.com/oasisprotocol/oasis-core/issues/3238),
+   [#3255](https://github.com/oasisprotocol/oasis-core/issues/3255))
+
+  - `cenkalti/backoff/v4`: v4.0.0 -> v4.0.2
+
+  - `grpc-ecosystem/go-grpc-middleware`: f849b5445de4 -> v1.2.1
+
+  - `hashicorp/go-multierror`: v1.0.0 -> v1.1.0
+
+  - `libp2p/go-libp2p`: v0.10.2 -> v0.11.0
+
+  - `libp2p/go-libp2p-pubsub`: v0.3.3 -> v0.3.5
+
+  - `multiformats/go-multiaddr`: v0.2.2 -> v0.3.1
+
+  - `prometheus/common`: v0.10.0 -> v0.13.0
+
+  - `google.golang.org/grpc`: v1.31.0 -> v1.32.0
+
+  - `google.golang.org/protobuf`: v1.23.0 -> v1.24.0
+
+  Also updates the Go version in go.mod to 1.15.
+
+- Configure [dependabot](https://dependabot.com/)
+  ([#3239](https://github.com/oasisprotocol/oasis-core/issues/3239))
+
+  Configures dependabot for Go, Rust and Github Actions.
+
+- internal: Document how to include protocol versions in the Change Log
+  ([#3249](https://github.com/oasisprotocol/oasis-core/issues/3249))
+
+- go/runtime/committee: Support filtering nodes by tags
+  ([#3253](https://github.com/oasisprotocol/oasis-core/issues/3253))
+
+- Make: Augment `tag-next-release` to create a Go Modules compatible Git tag
+  ([#3258](https://github.com/oasisprotocol/oasis-core/issues/3258))
+
+  This implements the tagging scheme described in
+  [ADR 0002: Go Modules Compatible Git Tags].
+
+  [ADR 0002: Go Modules Compatible Git Tags]:
+    docs/adr/0002-go-modules-compatible-git-tags.md
+
 ## 20.9 (2020-08-05)
 
 ### Process
