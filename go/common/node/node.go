@@ -68,6 +68,12 @@ type Node struct { // nolint: maligned
 	// consensus member.
 	Consensus ConsensusInfo `json:"consensus"`
 
+	// Beacon contains information for this node's participation
+	// in the random beacon protocol.
+	//
+	// NOTE: This is reserved for future use.
+	Beacon cbor.RawMessage `json:"beacon,omitempty"`
+
 	// Runtimes are the node's runtimes.
 	Runtimes []*Runtime `json:"runtimes"`
 
