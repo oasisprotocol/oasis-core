@@ -112,6 +112,15 @@ define ENSURE_NEXT_VERSION =
 	fi
 endef
 
+# Git tag of the next release.
+RELEASE_TAG := v$(NEXT_VERSION)
+# Go Modules compatible Git tag of the next release.
+RELEASE_TAG_GO = $(eval RELEASE_TAG_GO := $$(shell \
+	python3 -c "ver_parts = '$(NEXT_VERSION)'.split('.'); \
+		ver_parts.append(0) if len(ver_parts) == 2 else ''; \
+		print('go/v0.{}{:0>2}.{}'.format(*ver_parts))" \
+	))$(RELEASE_TAG_GO)
+
 # Helper that ensures $(RELEASE_BRANCH) variable contains a valid release branch name.
 define ENSURE_VALID_RELEASE_BRANCH_NAME =
 	if [[ ! $(RELEASE_BRANCH) =~ ^(master|(stable/[0-9]+\.[0-9]+\.x$$)) ]]; then \
