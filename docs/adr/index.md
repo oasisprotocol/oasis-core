@@ -71,7 +71,7 @@ After the ADR is merged an implementation may be undertaken by following the
 The following records currently exist:
 
 <!-- markdownlint-disable line-length -->
-* [ADR-0000](0000-architectural-decision-records.md) - Architectural Decision Records
-* [ADR-0001](0001-tm-multi-root-apphash.md) - Multiple Roots Under the Tendermint Application Hash
-* [ADR-0002](0002-go-modules-compatible-git-tags.md) - Go Modules Compatible Git Tags
+* [ADR 0000](0000-architectural-decision-records.md) - Architectural Decision Records
+* [ADR 0001](0001-tm-multi-root-apphash.md) - Multiple Roots Under the Tendermint Application Hash
+* [ADR 0002](0002-go-modules-compatible-git-tags.md) - Go Modules Compatible Git Tags
 <!-- markdownlint-enable line-length -->
