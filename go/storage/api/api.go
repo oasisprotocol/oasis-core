@@ -320,4 +320,8 @@ type ClientBackend interface {
 
 	// GetConnectedNodes returns currently connected storage nodes.
 	GetConnectedNodes() []*node.Node
+
+	// EnsureCommitteeVersion waits for the storage committee client to be fully synced to the
+	// given version.
+	EnsureCommitteeVersion(ctx context.Context, version int64) error
 }

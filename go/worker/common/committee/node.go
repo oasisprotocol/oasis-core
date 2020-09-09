@@ -16,7 +16,6 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/roothash/api/block"
 	"github.com/oasisprotocol/oasis-core/go/runtime/committee"
 	runtimeRegistry "github.com/oasisprotocol/oasis-core/go/runtime/registry"
-	storage "github.com/oasisprotocol/oasis-core/go/storage/api"
 	"github.com/oasisprotocol/oasis-core/go/worker/common/api"
 	"github.com/oasisprotocol/oasis-core/go/worker/common/p2p"
 	p2pError "github.com/oasisprotocol/oasis-core/go/worker/common/p2p/error"
@@ -93,8 +92,8 @@ type Node struct {
 	Identity         *identity.Identity
 	KeyManager       keymanagerApi.Backend
 	KeyManagerClient *keymanagerClient.Client
-	Storage          storage.Backend
 	Consensus        consensus.Backend
+	Group            *Group
 
 	ctx       context.Context
 	cancelCtx context.CancelFunc
@@ -102,8 +101,6 @@ type Node struct {
 	stopOnce  sync.Once
 	quitCh    chan struct{}
 	initCh    chan struct{}
-
-	Group *Group
 
 	hooks []NodeHooks
 
@@ -452,7 +449,6 @@ func NewNode(
 		Runtime:    runtime,
 		Identity:   identity,
 		KeyManager: keymanager,
-		Storage:    runtime.Storage(),
 		Consensus:  consensus,
 		ctx:        ctx,
 		cancelCtx:  cancel,
@@ -462,7 +458,7 @@ func NewNode(
 		logger:     logging.GetLogger("worker/common/committee").With("runtime_id", runtime.ID()),
 	}
 
-	group, err := NewGroup(ctx, identity, runtime.ID(), n, consensus, p2p)
+	group, err := NewGroup(ctx, identity, runtime, n, consensus, p2p)
 	if err != nil {
 		return nil, err
 	}

@@ -51,14 +51,18 @@ type storageClientBackend struct {
 	runtime         registry.RuntimeDescriptorProvider
 }
 
-// GetConnectedNodes returns registry node information about all connected
-// storage nodes.
+// Implements api.StorageClient.
 func (b *storageClientBackend) GetConnectedNodes() []*node.Node {
 	var nodes []*node.Node
 	for _, conn := range b.committeeClient.GetConnectionsWithMeta() {
 		nodes = append(nodes, conn.Node)
 	}
 	return nodes
+}
+
+// Implements api.StorageClient.
+func (b *storageClientBackend) EnsureCommitteeVersion(ctx context.Context, version int64) error {
+	return b.committeeClient.EnsureVersion(ctx, version)
 }
 
 type grpcResponse struct {

@@ -72,6 +72,13 @@ func (w *metricsWrapper) GetConnectedNodes() []*node.Node {
 	return []*node.Node{}
 }
 
+func (w *metricsWrapper) EnsureCommitteeVersion(ctx context.Context, version int64) error {
+	if clientBackend, ok := w.Backend.(api.ClientBackend); ok {
+		return clientBackend.EnsureCommitteeVersion(ctx, version)
+	}
+	return api.ErrUnsupported
+}
+
 func (w *metricsWrapper) Apply(ctx context.Context, request *api.ApplyRequest) ([]*api.Receipt, error) {
 	start := time.Now()
 	receipts, err := w.Backend.Apply(ctx, request)

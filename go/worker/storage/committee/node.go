@@ -223,7 +223,7 @@ func NewNode(
 	workerCommonCfg workerCommon.Config,
 	checkpointerCfg checkpoint.CheckpointerConfig,
 ) (*Node, error) {
-	localStorage, ok := commonNode.Storage.(storageApi.LocalBackend)
+	localStorage, ok := commonNode.Runtime.Storage().(storageApi.LocalBackend)
 	if !ok {
 		return nil, ErrNonLocalBackend
 	}
