@@ -6,16 +6,7 @@ use sp800_185::KMac;
 #[cfg(target_env = "sgx")]
 use sgx_isa::{Keyname, Keyrequest};
 #[cfg(target_env = "sgx")]
-use tiny_keccak::sha3_256;
-
-// This crate is not portable due to dependencies, even when using the mock
-// key derivation:
-//
-//  * sp800_185 relies on tiny_keccak, which as of 1.4.2, will produce
-//    incorrect results on big endian targets, and will crash on any
-//    architecture that requires aligned 64 bit loads and stores.
-#[cfg(not(target_arch = "x86_64"))]
-error!("Only x86_64 is supported");
+use tiny_keccak::{Hasher, Sha3};
 
 #[cfg(not(target_env = "sgx"))]
 const MOCK_MRENCLAVE_KEY: &[u8] = b"Ekiden Test MRENCLAVE KEY";
@@ -32,7 +23,13 @@ fn egetkey_impl(key_policy: Keypolicy, context: &[u8]) -> [u8; 16] {
 
     req.keyname = Keyname::Seal as u16;
     req.keypolicy = key_policy;
-    req.keyid = sha3_256(context);
+
+    let mut sha3 = Sha3::v256();
+    sha3.update(context);
+    let mut k = [0; 32];
+    sha3.finalize(&mut k);
+    req.keyid = k;
+
     // Fucking sgx_isa::Attributes doesn't have a -> [u64;2].
     req.attributemask[0] = 1 | 2 | 4; // SGX_FLAGS_INITTED | SGX_FLAGS_DEBUG | SGX_FLAGS_MODE64BIT
     req.attributemask[1] = 3; // SGX_XFRM_LEGACY

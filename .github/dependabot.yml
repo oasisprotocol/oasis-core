@@ -66,4 +66,3 @@ updates:
       - dependency-name: serde_cbor
       - dependency-name: sha2
       - dependency-name: snow
-      - dependency-name: tiny-keccak

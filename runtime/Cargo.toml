@@ -39,7 +39,7 @@ io-context = "0.2.0"
 x25519-dalek = "1.1.0"
 ed25519-dalek = "1.0.0-pre.3"
 deoxysii = { git = "https://github.com/oasisprotocol/deoxysii-rust" }
-tiny-keccak = "1.4.2"
+tiny-keccak = { version = "2.0.2", features = ["sha3"] }
 sp800-185 = "0.2.0"
 zeroize = "1.1"
 intrusive-collections = "0.8"
