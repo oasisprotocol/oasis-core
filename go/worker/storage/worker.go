@@ -33,6 +33,9 @@ const (
 	// CfgWorkerCheckpointCheckInterval configures the checkpointer check interval.
 	CfgWorkerCheckpointCheckInterval = "worker.storage.checkpointer.check_interval"
 
+	// CfgCheckpointSyncDisabled disables syncing from checkpoints on worker startup.
+	CfgWorkerCheckpointSyncDisabled = "worker.storage.checkpoint_sync.disabled"
+
 	// CfgWorkerDebugIgnoreApply is a debug option that makes the worker ignore
 	// all apply operations.
 	CfgWorkerDebugIgnoreApply = "worker.debug.storage.ignore_apply"
@@ -134,7 +137,16 @@ func (s *Worker) registerRuntime(commonNode *committeeCommon.Node, checkpointerC
 		return fmt.Errorf("failed to create role provider: %w", err)
 	}
 
-	node, err := committee.NewNode(commonNode, s.grpcPolicy, s.fetchPool, s.watchState, rp, s.commonWorker.GetConfig(), checkpointerCfg)
+	node, err := committee.NewNode(
+		commonNode,
+		s.grpcPolicy,
+		s.fetchPool,
+		s.watchState,
+		rp,
+		s.commonWorker.GetConfig(),
+		checkpointerCfg,
+		viper.GetBool(CfgWorkerCheckpointSyncDisabled),
+	)
 	if err != nil {
 		return err
 	}
@@ -248,6 +260,7 @@ func init() {
 	Flags.Bool(CfgWorkerEnabled, false, "Enable storage worker")
 	Flags.Uint(cfgWorkerFetcherCount, 4, "Number of concurrent storage diff fetchers")
 	Flags.Duration(CfgWorkerCheckpointCheckInterval, 1*time.Minute, "Storage checkpointer check interval")
+	Flags.Bool(CfgWorkerCheckpointSyncDisabled, false, "Disable initial storage sync from checkpoints")
 
 	Flags.Bool(CfgWorkerDebugIgnoreApply, false, "Ignore Apply operations (for debugging purposes)")
 	_ = Flags.MarkHidden(CfgWorkerDebugIgnoreApply)

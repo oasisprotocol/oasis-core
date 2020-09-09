@@ -325,6 +325,8 @@ type StorageWorkerFixture struct { // nolint: maligned
 	AllowEarlyTermination bool `json:"allow_early_termination"`
 	AllowErrorTermination bool `json:"allow_error_termination"`
 
+	NoAutoStart bool `json:"no_auto_start,omitempty"`
+
 	DisableCertRotation bool `json:"disable_cert_rotation"`
 
 	LogWatcherHandlerFactories []log.WatcherHandlerFactory `json:"-"`
@@ -336,6 +338,7 @@ type StorageWorkerFixture struct { // nolint: maligned
 
 	CheckpointCheckInterval time.Duration `json:"checkpoint_check_interval,omitempty"`
 	IgnoreApplies           bool          `json:"ignore_applies,omitempty"`
+	CheckpointSyncEnabled   bool          `json:"checkpoint_sync_enabled,omitempty"`
 
 	// Runtimes contains the indexes of the runtimes to enable. Leave
 	// empty or nil for the default behaviour (i.e. include all runtimes).
@@ -353,6 +356,7 @@ func (f *StorageWorkerFixture) Create(net *Network) (*Storage, error) {
 		NodeCfg: NodeCfg{
 			AllowEarlyTermination:      f.AllowEarlyTermination,
 			AllowErrorTermination:      f.AllowErrorTermination,
+			NoAutoStart:                f.NoAutoStart,
 			LogWatcherHandlerFactories: f.LogWatcherHandlerFactories,
 			Consensus:                  f.Consensus,
 		},
@@ -361,8 +365,11 @@ func (f *StorageWorkerFixture) Create(net *Network) (*Storage, error) {
 		SentryIndices:           f.Sentries,
 		CheckpointCheckInterval: f.CheckpointCheckInterval,
 		IgnoreApplies:           f.IgnoreApplies,
-		DisableCertRotation:     f.DisableCertRotation,
-		Runtimes:                f.Runtimes,
+		// The checkpoint syncing flas is intentionally flipped here.
+		// Syncing should normally be enabled, but normally disabled in tests.
+		CheckpointSyncDisabled: !f.CheckpointSyncEnabled,
+		DisableCertRotation:    f.DisableCertRotation,
+		Runtimes:               f.Runtimes,
 	})
 }
 

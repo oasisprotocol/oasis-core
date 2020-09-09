@@ -47,14 +47,16 @@ func New(
 	schedulerBackend scheduler.Backend,
 	registryBackend registry.Backend,
 	runtime registry.RuntimeDescriptorProvider,
+	extraWatcherOpts ...committee.WatcherOption,
 ) (api.Backend, error) {
+	watcherOpts := append(extraWatcherOpts, committee.WithAutomaticEpochTransitions())
 	committeeWatcher, err := committee.NewWatcher(
 		ctx,
 		schedulerBackend,
 		registryBackend,
 		namespace,
 		scheduler.KindStorage,
-		committee.WithAutomaticEpochTransitions(),
+		watcherOpts...,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("storage/client: failed to create committee watcher: %w", err)

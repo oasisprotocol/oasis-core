@@ -198,7 +198,8 @@ type Node struct {
 
 	workerCommonCfg workerCommon.Config
 
-	checkpointer checkpoint.Checkpointer
+	checkpointer           checkpoint.Checkpointer
+	checkpointSyncDisabled bool
 
 	syncedLock  sync.RWMutex
 	syncedState watcherState
@@ -222,6 +223,7 @@ func NewNode(
 	roleProvider registration.RoleProvider,
 	workerCommonCfg workerCommon.Config,
 	checkpointerCfg checkpoint.CheckpointerConfig,
+	checkpointSyncDisabled bool,
 ) (*Node, error) {
 	localStorage, ok := commonNode.Runtime.Storage().(storageApi.LocalBackend)
 	if !ok {
@@ -243,6 +245,8 @@ func NewNode(
 		fetchPool: fetchPool,
 
 		stateStore: store,
+
+		checkpointSyncDisabled: checkpointSyncDisabled,
 
 		blockCh:    channels.NewInfiniteChannel(),
 		diffCh:     make(chan *fetchedDiff),
@@ -269,6 +273,7 @@ func NewNode(
 		node.commonNode.Consensus.Scheduler(),
 		node.commonNode.Consensus.Registry(),
 		nil,
+		runtimeCommittee.WithFilter(runtimeCommittee.IgnoreNodeFilter(commonNode.Identity.NodeSigner.Public())),
 	)
 	if err != nil {
 		return nil, fmt.Errorf("storage worker: failed to create client: %w", err)
@@ -660,13 +665,44 @@ func (n *Node) worker() { // nolint: gocyclo
 
 	heap.Init(outOfOrderDiffs)
 
-	close(n.initCh)
-
 	// We are now ready to service requests.
-	n.roleProvider.SetAvailable(func(nd *node.Node) error {
+	registeredCh := make(chan interface{})
+	n.roleProvider.SetAvailableWithCallback(func(nd *node.Node) error {
 		nd.AddOrUpdateRuntime(n.commonNode.Runtime.ID())
 		return nil
+	}, func(ctx context.Context) error {
+		close(registeredCh)
+		return nil
 	})
+
+	// Wait for the registration to finish, because we'll need to ask
+	// questions immediately.
+	n.logger.Debug("waiting for node registration to finish")
+	select {
+	case <-registeredCh:
+	case <-n.ctx.Done():
+		return
+	}
+
+	// Try to perform initial sync from state and io checkpoints.
+	if !n.checkpointSyncDisabled {
+		err = n.syncCheckpoints()
+		if err != nil {
+			// Try syncing again. The main reason for this is the sync failing due to a
+			// checkpoint pruning race condition (where nodes list a checkpoint which is
+			// then deleted just before we request its chunks). One retry is enough.
+			n.logger.Info("first checkpoint sync failed, trying once more", "err", err)
+			err = n.syncCheckpoints()
+		}
+		if err != nil {
+			n.logger.Info("checkpoint sync failed", "err", err)
+		} else {
+			n.logger.Info("checkpoint sync succeeded",
+				logging.LogEvent, LogEventCheckpointSyncSuccess,
+			)
+		}
+	}
+	close(n.initCh)
 
 	// Main processing loop. When a new block comes in, its state and io roots are inspected and their
 	// writelogs fetched from remote storage nodes in case we don't have them locally yet. Fetches are

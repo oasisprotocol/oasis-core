@@ -7,6 +7,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/log"
 	roothash "github.com/oasisprotocol/oasis-core/go/roothash/api"
 	upgrade "github.com/oasisprotocol/oasis-core/go/upgrade/api"
+	workerStorage "github.com/oasisprotocol/oasis-core/go/worker/storage/committee"
 )
 
 // LogAssertEvent returns a handler which checks whether a specific log event was
@@ -81,8 +82,14 @@ func LogEventABCIPruneDelete() log.WatcherHandlerFactory {
 	return LogAssertEvent(abci.LogEventABCIPruneDelete, "expected ABCI pruning to be done")
 }
 
-// LogAssertRoothashRoothashReindexing returns a handler witch checks wether roothash reindexing was
+// LogAssertRoothashRoothashReindexing returns a handler which checks whether roothash reindexing was
 // run based on JSON log output.
 func LogAssertRoothashRoothashReindexing() log.WatcherHandlerFactory {
 	return LogAssertEvent(roothash.LogEventHistoryReindexing, "roothash runtime reindexing not detected")
+}
+
+// LogAssertCheckpointSync returns a handler which checks whether initial storage sync from
+// a checkpoint was successful or not.
+func LogAssertCheckpointSync() log.WatcherHandlerFactory {
+	return LogAssertEvent(workerStorage.LogEventCheckpointSyncSuccess, "checkpoint sync did not succeed")
 }

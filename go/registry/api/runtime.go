@@ -17,6 +17,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/quantity"
 	"github.com/oasisprotocol/oasis-core/go/common/sgx"
 	"github.com/oasisprotocol/oasis-core/go/common/version"
+	"github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/flags"
 	staking "github.com/oasisprotocol/oasis-core/go/staking/api"
 	storage "github.com/oasisprotocol/oasis-core/go/storage/api"
 )
@@ -198,7 +199,7 @@ func (s *StorageParameters) ValidateBasic() error {
 	}
 
 	// Verify storage checkpointing configuration if enabled.
-	if s.CheckpointInterval > 0 {
+	if s.CheckpointInterval > 0 && !flags.DebugDontBlameOasis() {
 		if s.CheckpointInterval < 10 {
 			return fmt.Errorf("storage CheckpointInterval parameter too small")
 		}

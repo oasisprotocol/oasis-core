@@ -8,6 +8,7 @@ import (
 
 	"github.com/oasisprotocol/oasis-core/go/common"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
+	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
 	"github.com/oasisprotocol/oasis-core/go/common/pubsub"
 	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
@@ -176,6 +177,13 @@ func WithAutomaticEpochTransitions() WatcherOption {
 // Filter is filter function for the committee watcher. It should return false for any members which
 // should be excluded.
 type Filter func(*scheduler.CommitteeNode) bool
+
+// IgnoreNodeFilter is a committee watcher filter that filters out nodes based on their public key.
+func IgnoreNodeFilter(pk signature.PublicKey) Filter {
+	return func(cn *scheduler.CommitteeNode) bool {
+		return !cn.PublicKey.Equal(pk)
+	}
+}
 
 // WithFilter is an option that adds a given filter to the committee watcher.
 func WithFilter(f Filter) WatcherOption {
