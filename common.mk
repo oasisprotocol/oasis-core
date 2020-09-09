@@ -112,6 +112,9 @@ define ENSURE_NEXT_VERSION =
 	fi
 endef
 
+# Git tag of the next release.
+RELEASE_TAG := v$(NEXT_VERSION)
+
 # Helper that ensures $(RELEASE_BRANCH) variable contains a valid release branch name.
 define ENSURE_VALID_RELEASE_BRANCH_NAME =
 	if [[ ! $(RELEASE_BRANCH) =~ ^(master|(stable/[0-9]+\.[0-9]+\.x$$)) ]]; then \

@@ -162,12 +162,12 @@ tag-next-release: fetch-git
 	@$(ENSURE_VALID_RELEASE_BRANCH_NAME)
 	@$(ENSURE_NO_CHANGELOG_FRAGMENTS)
 	@$(ENSURE_NEXT_VERSION_IN_CHANGELOG)
-	@$(ECHO_STDERR) "All checks have passed. Proceeding with tagging the $(OASIS_CORE_GIT_ORIGIN_REMOTE)/$(RELEASE_BRANCH)'s HEAD with tag 'v$(NEXT_VERSION)'."
+	@$(ECHO_STDERR) "All checks have passed. Proceeding with tagging the $(OASIS_CORE_GIT_ORIGIN_REMOTE)/$(RELEASE_BRANCH)'s HEAD with tag '$(RELEASE_TAG)'."
 	@$(CONFIRM_ACTION)
 	@$(ECHO_STDERR) "If this appears to be stuck, you might need to touch your security key for GPG sign operation."
-	@git tag --sign --message="Version $(NEXT_VERSION)" v$(NEXT_VERSION) $(OASIS_CORE_GIT_ORIGIN_REMOTE)/$(RELEASE_BRANCH)
-	@git push $(OASIS_CORE_GIT_ORIGIN_REMOTE) v$(NEXT_VERSION)
-	@$(ECHO_STDERR) "$(CYAN)Tag 'v$(NEXT_VERSION)' has been successfully pushed to $(OASIS_CORE_GIT_ORIGIN_REMOTE) remote.$(OFF)"
+	@git tag --sign --message="Version $(NEXT_VERSION)" $(RELEASE_TAG) $(OASIS_CORE_GIT_ORIGIN_REMOTE)/$(RELEASE_BRANCH)
+	@git push $(OASIS_CORE_GIT_ORIGIN_REMOTE) $(RELEASE_TAG)
+	@$(ECHO_STDERR) "$(CYAN)Tag '$(RELEASE_TAG)' has been successfully pushed to $(OASIS_CORE_GIT_ORIGIN_REMOTE) remote.$(OFF)"
 
 # Prepare release.
 release:
