@@ -97,6 +97,8 @@ steps:
       - .buildkite/scripts/daily_txsource.sh
     env:
       TEST_BASE_DIR: /var/tmp/longtests
+      # libp2p logging.
+      IPFS_LOGGING: info
     agents:
       queue: default-daily
       buildkite_agent_class: stable
