@@ -68,13 +68,17 @@ func (t *tree) commitWithHooks(
 	}
 
 	var batch db.Batch
+	var err error
 	switch opts.noPersist {
 	case false:
-		batch = t.cache.db.NewBatch(oldRoot, version, false)
+		batch, err = t.cache.db.NewBatch(oldRoot, version, false)
 	case true:
 		// Do not persist anything -- use a dummy batch.
 		nopDb, _ := db.NewNopNodeDB()
-		batch = nopDb.NewBatch(oldRoot, version, false)
+		batch, err = nopDb.NewBatch(oldRoot, version, false)
+	}
+	if err != nil {
+		return nil, hash.Hash{}, err
 	}
 	defer batch.Reset()
 
