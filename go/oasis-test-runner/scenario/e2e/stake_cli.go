@@ -671,8 +671,9 @@ func (sc *stakeCLIImpl) checkCommissionScheduleRates(
 		return err
 	}
 
-	for _, expectedRate := range expectedRates {
+	for i, expectedRate := range expectedRates {
 		var b bytes.Buffer
+		ctx = context.WithValue(ctx, prettyprint.ContextKeyCommissionScheduleIndex, i)
 		expectedRate.PrettyPrint(ctx, "      ", &b)
 		match := regexp.MustCompile(b.String()).FindStringSubmatch(accountInfo)
 		if match == nil {
@@ -697,8 +698,9 @@ func (sc *stakeCLIImpl) checkCommissionScheduleRateBounds(
 		return err
 	}
 
-	for _, expectedBound := range expectedRateBounds {
+	for i, expectedBound := range expectedRateBounds {
 		var b bytes.Buffer
+		ctx = context.WithValue(ctx, prettyprint.ContextKeyCommissionScheduleIndex, i)
 		expectedBound.PrettyPrint(ctx, "      ", &b)
 		match := regexp.MustCompile(b.String()).FindStringSubmatch(accountInfo)
 		if match == nil {
