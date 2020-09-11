@@ -124,7 +124,7 @@ func (w *blockWatcher) watch() {
 
 	// If we were just started, refresh the committee information from any
 	// block, otherwise just from epoch transition blocks.
-	gotInitialCommittee := false
+	var gotInitialCommittee bool
 	// latestGroupVersion contains the latest known committee group version.
 	var latestGroupVersion int64
 	// latestHeight contains the latest known consensus block height.
@@ -183,12 +183,21 @@ func (w *blockWatcher) watch() {
 
 			// Check if any transactions are due for a retry.
 			for key, watch := range w.watched {
+				if watch.height == 0 {
+					continue
+				}
 				if (latestHeight - retryInterval) < watch.height {
 					continue
 				}
 				res := &watchResult{
 					groupVersion: latestGroupVersion,
 				}
+				w.Logger.Debug("resending message",
+					"key", key,
+					"latest_height", latestHeight,
+					"retry_interval", retryInterval,
+					"watch_height", watch.height,
+				)
 				if watch.send(res, latestHeight) != nil {
 					delete(w.watched, key)
 				}

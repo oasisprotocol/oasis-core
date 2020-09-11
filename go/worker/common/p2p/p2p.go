@@ -199,6 +199,8 @@ func New(ctx context.Context, identity *identity.Identity, consensus consensus.B
 		pubsub.WithMessageSigning(true),
 		pubsub.WithStrictSignatureVerification(true),
 		pubsub.WithFloodPublish(true),
+		pubsub.WithPeerOutboundQueueSize(viper.GetInt(CfgP2PPeerOutboundQueueSize)),
+		pubsub.WithValidateQueueSize(viper.GetInt(CfgP2PValidateQueueSize)),
 	)
 	if err != nil {
 		return nil, fmt.Errorf("worker/common/p2p: failed to initialize libp2p gossipsub: %w", err)
