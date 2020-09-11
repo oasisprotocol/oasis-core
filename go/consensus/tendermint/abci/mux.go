@@ -248,7 +248,7 @@ func (mux *abciMux) watchInvalidatedTx(txHash hash.Hash) (<-chan error, pubsub.C
 	}
 
 	if _, exists := mux.invalidatedTxs.LoadOrStore(txHash, sub); exists {
-		return nil, nil, fmt.Errorf("mux: transaction already exists")
+		return nil, nil, consensus.ErrDuplicateTx
 	}
 
 	return resultCh, sub, nil
