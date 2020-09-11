@@ -29,7 +29,7 @@ Core:
   On Ubuntu 18.10+ (18.04 LTS provides overly-old `bubblewrap`), you can install
   all the above with:
 
-<!-- markdownlint-disable line-length -->
+  <!-- markdownlint-disable line-length -->
   ```
   sudo apt install bubblewrap gcc g++ protobuf-compiler make cmake libssl-dev libseccomp-dev pkg-config
   ```
