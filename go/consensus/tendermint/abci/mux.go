@@ -240,7 +240,7 @@ func (s *invalidatedTxSubscription) Close() {
 }
 
 func (mux *abciMux) watchInvalidatedTx(txHash hash.Hash) (<-chan error, pubsub.ClosableSubscription, error) {
-	resultCh := make(chan error)
+	resultCh := make(chan error, 1)
 	sub := &invalidatedTxSubscription{
 		mux:      mux,
 		txHash:   txHash,
@@ -248,7 +248,7 @@ func (mux *abciMux) watchInvalidatedTx(txHash hash.Hash) (<-chan error, pubsub.C
 	}
 
 	if _, exists := mux.invalidatedTxs.LoadOrStore(txHash, sub); exists {
-		return nil, nil, fmt.Errorf("mux: transaction already exists")
+		return nil, nil, consensus.ErrDuplicateTx
 	}
 
 	return resultCh, sub, nil
@@ -619,10 +619,7 @@ func (mux *abciMux) notifyInvalidatedCheckTx(txHash hash.Hash, err error) {
 	if item, exists := mux.invalidatedTxs.Load(txHash); exists {
 		// Notify subscriber.
 		sub := item.(*invalidatedTxSubscription)
-		select {
-		case sub.resultCh <- err:
-		default:
-		}
+		sub.resultCh <- err
 		close(sub.resultCh)
 
 		mux.invalidatedTxs.Delete(txHash)
