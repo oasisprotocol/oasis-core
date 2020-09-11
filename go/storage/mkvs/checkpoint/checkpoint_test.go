@@ -50,7 +50,7 @@ func TestFileCheckpointCreator(t *testing.T) {
 	require.NoError(err, "Commit")
 	root := node.Root{
 		Namespace: testNs,
-		Version:   0,
+		Version:   1,
 		Hash:      rootHash,
 	}
 

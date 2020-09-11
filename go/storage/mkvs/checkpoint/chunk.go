@@ -136,7 +136,10 @@ func restoreChunk(ctx context.Context, ndb db.NodeDB, chunk *ChunkMetadata, r io
 	}
 	emptyRoot.Hash.Empty()
 
-	batch := ndb.NewBatch(emptyRoot, chunk.Root.Version, true)
+	batch, err := ndb.NewBatch(emptyRoot, chunk.Root.Version, true)
+	if err != nil {
+		return fmt.Errorf("chunk: failed to create batch: %w", err)
+	}
 	defer batch.Reset()
 
 	subtree := batch.MaybeStartSubtree(nil, 0, ptr)

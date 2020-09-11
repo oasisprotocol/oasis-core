@@ -45,6 +45,12 @@ var (
 	ErrNotEarliest = errors.New(ModuleName, 11, "mkvs: version is not the earliest version")
 	// ErrReadOnly indicates that a write operation failed due to a read-only database.
 	ErrReadOnly = errors.New(ModuleName, 12, "mkvs: read-only database")
+	// ErrMultipartInProgress indicates that a multipart restore operation is already
+	// in progress.
+	ErrMultipartInProgress = errors.New(ModuleName, 13, "mkvs: multipart already in progress")
+	// ErrInvalidMultipartVersion indicates that a Finalize, NewBatch or Commit was called with a version
+	// that doesn't match the current multipart restore as set with StartMultipartRestore.
+	ErrInvalidMultipartVersion = errors.New(ModuleName, 14, "mkvs: operation called with different version than current multipart version")
 )
 
 // Config is the node database backend configuration.
@@ -73,7 +79,7 @@ type Config struct { // nolint: maligned
 
 // NodeDB is the persistence layer used for persisting the in-memory tree.
 type NodeDB interface {
-	// GetNode lookups up a node in the database.
+	// GetNode looks up a node in the database.
 	GetNode(root node.Root, ptr *node.Pointer) (node.Node, error)
 
 	// GetWriteLog retrieves a write log between two storage instances from the database.
@@ -88,13 +94,25 @@ type NodeDB interface {
 	// GetRootsForVersion returns a list of roots stored under the given version.
 	GetRootsForVersion(ctx context.Context, version uint64) ([]hash.Hash, error)
 
+	// StartMultipartInsert prepares the database for a batch insert job from multiple chunks.
+	// Batches from this call onwards will keep track of inserted nodes so that they can be
+	// deleted if the job fails for any reason.
+	StartMultipartInsert(version uint64) error
+
+	// AbortMultipartInsert cleans up the node insertion log that was kept since the last
+	// StartMultipartInsert operation. The log will be cleared and the associated nodes can
+	// be either removed (if the insertion failed) or left intact (if it was successful).
+	//
+	// It is not an error to call this method more than once.
+	AbortMultipartInsert() error
+
 	// NewBatch starts a new batch.
 	//
 	// The chunk argument specifies whether the given batch is being used to import a chunk of an
 	// existing root. Chunks may contain unresolved pointers (e.g., pointers that point to hashes
 	// which are not present in the database). Committing a chunk batch will prevent the version
 	// from being finalized.
-	NewBatch(oldRoot node.Root, version uint64, chunk bool) Batch
+	NewBatch(oldRoot node.Root, version uint64, chunk bool) (Batch, error)
 
 	// HasRoot checks whether the given root exists.
 	HasRoot(root node.Root) bool
@@ -213,6 +231,14 @@ func (d *nopNodeDB) HasRoot(root node.Root) bool {
 	return false
 }
 
+func (d *nopNodeDB) StartMultipartInsert(version uint64) error {
+	return nil
+}
+
+func (d *nopNodeDB) AbortMultipartInsert() error {
+	return nil
+}
+
 func (d *nopNodeDB) Finalize(ctx context.Context, version uint64, roots []hash.Hash) error {
 	return nil
 }
@@ -237,8 +263,8 @@ type nopBatch struct {
 	BaseBatch
 }
 
-func (d *nopNodeDB) NewBatch(oldRoot node.Root, version uint64, chunk bool) Batch {
-	return &nopBatch{}
+func (d *nopNodeDB) NewBatch(oldRoot node.Root, version uint64, chunk bool) (Batch, error) {
+	return &nopBatch{}, nil
 }
 
 func (b *nopBatch) MaybeStartSubtree(subtree Subtree, depth node.Depth, subtreeRoot *node.Pointer) Subtree {
