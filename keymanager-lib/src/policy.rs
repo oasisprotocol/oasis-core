@@ -7,7 +7,7 @@ use std::{
 use anyhow::Result;
 use lazy_static::lazy_static;
 use sgx_isa::Keypolicy;
-use tiny_keccak::sha3_256;
+use tiny_keccak::{Hasher, Sha3};
 
 use oasis_core_keymanager_api_common::*;
 use oasis_core_runtime::{
@@ -209,9 +209,14 @@ impl CachedPolicy {
         let policy = untrusted_policy.verify()?;
 
         let mut cached_policy = Self::default();
-        cached_policy.checksum = sha3_256(&raw).to_vec();
         cached_policy.serial = policy.serial;
         cached_policy.runtime_id = policy.id;
+
+        let mut sha3 = Sha3::v256();
+        sha3.update(&raw);
+        let mut k = [0; 32];
+        sha3.finalize(&mut k);
+        cached_policy.checksum = k.to_vec();
 
         // Convert the policy into a cached one.
         //
