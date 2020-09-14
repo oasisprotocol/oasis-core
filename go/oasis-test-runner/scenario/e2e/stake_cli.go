@@ -623,7 +623,8 @@ func (sc *stakeCLIImpl) checkGeneralAccount(
 
 	var b bytes.Buffer
 	expectedAccount.PrettyPrint(ctx, "  ", &b)
-	match := regexp.MustCompile(b.String()).FindStringSubmatch(accountInfo)
+	regexPattern := regexp.QuoteMeta(b.String())
+	match := regexp.MustCompile(regexPattern).FindStringSubmatch(accountInfo)
 	if match == nil {
 		return fmt.Errorf(
 			"checkGeneralAccount: couldn't find expected general account %+v in account info", expectedAccount,
@@ -649,7 +650,8 @@ func (sc *stakeCLIImpl) checkEscrowAccountSharePool(
 	var b bytes.Buffer
 	fmt.Fprintf(&b, "%s%s:\n", prefix, sharePoolName)
 	expectedSharePool.PrettyPrint(ctx, prefix+"  ", &b)
-	match := regexp.MustCompile(b.String()).FindStringSubmatch(accountInfo)
+	regexPattern := regexp.QuoteMeta(b.String())
+	match := regexp.MustCompile(regexPattern).FindStringSubmatch(accountInfo)
 	if match == nil {
 		return fmt.Errorf(
 			"checkEscrowAccountSharePool: couldn't find expected escrow %s share pool %+v in account info",
@@ -671,10 +673,12 @@ func (sc *stakeCLIImpl) checkCommissionScheduleRates(
 		return err
 	}
 
-	for _, expectedRate := range expectedRates {
+	for i, expectedRate := range expectedRates {
 		var b bytes.Buffer
+		ctx = context.WithValue(ctx, prettyprint.ContextKeyCommissionScheduleIndex, i)
 		expectedRate.PrettyPrint(ctx, "      ", &b)
-		match := regexp.MustCompile(b.String()).FindStringSubmatch(accountInfo)
+		regexPattern := regexp.QuoteMeta(b.String())
+		match := regexp.MustCompile(regexPattern).FindStringSubmatch(accountInfo)
 		if match == nil {
 			return fmt.Errorf(
 				"checkCommissionScheduleRates: couldn't find an expected commission schedule rate %+v in account info",
@@ -697,10 +701,12 @@ func (sc *stakeCLIImpl) checkCommissionScheduleRateBounds(
 		return err
 	}
 
-	for _, expectedBound := range expectedRateBounds {
+	for i, expectedBound := range expectedRateBounds {
 		var b bytes.Buffer
+		ctx = context.WithValue(ctx, prettyprint.ContextKeyCommissionScheduleIndex, i)
 		expectedBound.PrettyPrint(ctx, "      ", &b)
-		match := regexp.MustCompile(b.String()).FindStringSubmatch(accountInfo)
+		regexPattern := regexp.QuoteMeta(b.String())
+		match := regexp.MustCompile(regexPattern).FindStringSubmatch(accountInfo)
 		if match == nil {
 			return fmt.Errorf(
 				"checkCommissionScheduleRateBounds: couldn't find an expected commission schedule rate bound %+v in account info",
