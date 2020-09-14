@@ -14,4 +14,3 @@ registry/gen_vectors/gen_vectors
 staking/gen_vectors/gen_vectors
 
 extra/extract-metrics/extract-metrics
-extra/stats/stats
