@@ -10,3 +10,4 @@ ignore:
   - "go/storage/fuzz" # Fuzz tests.
   - "go/storage/mkvs/fuzz" # Fuzz tests.
   - "go/consensus/tendermint/fuzz" # Fuzz tests.
+  - "go/extra" # Extra packages.
