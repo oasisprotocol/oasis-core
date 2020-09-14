@@ -19,7 +19,7 @@ const (
 )
 
 type watchRequest struct {
-	id     *hash.Hash
+	id     hash.Hash
 	ctx    context.Context
 	respCh chan *watchResult
 	height int64
@@ -96,7 +96,6 @@ func (w *blockWatcher) checkBlock(blk *block.Block) {
 
 func (w *blockWatcher) watch() {
 	defer func() {
-		close(w.newCh)
 		for _, watch := range w.watched {
 			close(watch.respCh)
 		}
@@ -204,13 +203,13 @@ func (w *blockWatcher) watch() {
 			}
 
 		case newWatch := <-w.newCh:
-			w.watched[*newWatch.id] = newWatch
+			w.watched[newWatch.id] = newWatch
 
 			res := &watchResult{
 				groupVersion: latestGroupVersion,
 			}
 			if newWatch.send(res, latestHeight) != nil {
-				delete(w.watched, *newWatch.id)
+				delete(w.watched, newWatch.id)
 			}
 
 		case <-w.stopCh:

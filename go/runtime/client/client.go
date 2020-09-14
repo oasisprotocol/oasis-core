@@ -84,15 +84,24 @@ func (c *runtimeClient) SubmitTx(ctx context.Context, request *api.SubmitTxReque
 	}
 	c.Unlock()
 
+	// Send a request for watching a new runtime transaction.
 	respCh := make(chan *watchResult)
-	var requestID hash.Hash
-	requestID.FromBytes(request.Data)
-	watcher.newCh <- &watchRequest{
-		id:     &requestID,
+	req := &watchRequest{
 		ctx:    ctx,
 		respCh: respCh,
 	}
+	req.id.FromBytes(request.Data)
+	select {
+	case <-ctx.Done():
+		// The context we're working in was canceled, abort.
+		return nil, ctx.Err()
+	case <-c.common.ctx.Done():
+		// Client is shutting down.
+		return nil, fmt.Errorf("client: shutting down")
+	case watcher.newCh <- req:
+	}
 
+	// Wait for response, handling retries if/when needed.
 	for {
 		var resp *watchResult
 		var ok bool
@@ -100,19 +109,22 @@ func (c *runtimeClient) SubmitTx(ctx context.Context, request *api.SubmitTxReque
 		select {
 		case <-ctx.Done():
 			// The context we're working in was canceled, abort.
-			return nil, context.Canceled
-
+			return nil, ctx.Err()
+		case <-c.common.ctx.Done():
+			// Client is shutting down.
+			return nil, fmt.Errorf("client: shutting down")
 		case resp, ok = <-respCh:
-			// The main event is getting a response from the watcher, handled below.
+			if !ok {
+				return nil, fmt.Errorf("client: block watch channel closed unexpectedly (unknown error)")
+			}
+
+			// The main event is getting a response from the watcher, handled below. If there is
+			// no result yet, this means that we need to retry publish.
 			if resp.result == nil {
 				break
 			}
 
 			return resp.result, nil
-		}
-
-		if !ok {
-			return nil, fmt.Errorf("client: block watch channel closed unexpectedly (unknown error)")
 		}
 
 		c.common.p2p.Publish(context.Background(), request.RuntimeID, &p2p.Message{
