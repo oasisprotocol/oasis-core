@@ -220,6 +220,8 @@ steps:
     env:
       OASIS_E2E_COVERAGE: enable
       TEST_BASE_DIR: /tmp
+      # libp2p logging.
+      IPFS_LOGGING: info
     retry:
       <<: *retry_agent_failure
     plugins:
@@ -242,6 +244,8 @@ steps:
       OASIS_E2E_COVERAGE: enable
       OASIS_EXCLUDE_E2E: e2e/runtime/txsource-multi
       TEST_BASE_DIR: /tmp
+      # libp2p logging.
+      IPFS_LOGGING: info
     agents:
       queue: intel-sgx
     retry:
@@ -266,6 +270,8 @@ steps:
     env:
       OASIS_E2E_COVERAGE: enable
       TEST_BASE_DIR: /tmp
+      # libp2p logging.
+      IPFS_LOGGING: info
     agents:
       queue: intel-sgx
     retry:
