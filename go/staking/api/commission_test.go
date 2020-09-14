@@ -1,10 +1,13 @@
 package api
 
 import (
+	"bytes"
+	"context"
 	"testing"
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/oasisprotocol/oasis-core/go/common/prettyprint"
 	"github.com/oasisprotocol/oasis-core/go/common/quantity"
 	epochtime "github.com/oasisprotocol/oasis-core/go/epochtime/api"
 )
@@ -769,4 +772,89 @@ func TestCommissionSchedule(t *testing.T) {
 	require.NoError(t, cs.PruneAndValidateForGenesis(&rules, 10), "prune rate step")
 	require.Equal(t, epochtime.EpochTime(10), cs.Rates[0].Start, "prune 10 rates start")
 	require.Equal(t, epochtime.EpochTime(10), cs.Bounds[0].Start, "prune 10 bounds start")
+}
+
+func TestPrettyPrintCommissionRateStep(t *testing.T) {
+	require := require.New(t)
+
+	for _, t := range []struct {
+		expectedPPrint string
+		rateStart      epochtime.EpochTime
+		rateNumerator  *quantity.Quantity
+		index          int
+	}{
+		{
+			"" +
+				"(1) start: epoch 10\n" +
+				"    rate:  0.0%\n",
+			epochtime.EpochTime(10), quantity.NewFromUint64(0), 0,
+		},
+		{
+			"" +
+				"(11) start: epoch 20\n" +
+				"     rate:  50.0%\n",
+			epochtime.EpochTime(20), quantity.NewFromUint64(50_000), 10,
+		},
+		{
+			"" +
+				"(101) start: epoch 100\n" +
+				"      rate:  100.0%\n",
+			epochtime.EpochTime(100), quantity.NewFromUint64(100_000), 100,
+		},
+	} {
+		rateStep := CommissionRateStep{
+			Start: t.rateStart,
+			Rate:  *t.rateNumerator,
+		}
+		var b bytes.Buffer
+		ctx := context.WithValue(context.Background(), prettyprint.ContextKeyCommissionScheduleIndex, t.index)
+		rateStep.PrettyPrint(ctx, "", &b)
+		pPrint := b.String()
+		require.Equal(t.expectedPPrint, pPrint, "obtained pretty print didn't match expected value")
+	}
+}
+
+func TestPrettyPrintCommissionRateBoundStep(t *testing.T) {
+	require := require.New(t)
+
+	for _, t := range []struct {
+		expectedPPrint   string
+		rateStart        epochtime.EpochTime
+		rateMinNumerator *quantity.Quantity
+		rateMaxNumerator *quantity.Quantity
+		index            int
+	}{
+		{
+			"" +
+				"(1) start:        epoch 10\n" +
+				"    minimum rate: 0.0%\n" +
+				"    maximum rate: 20.0%\n",
+			epochtime.EpochTime(10), quantity.NewFromUint64(0), quantity.NewFromUint64(20_000), 0,
+		},
+		{
+			"" +
+				"(11) start:        epoch 20\n" +
+				"     minimum rate: 40.0%\n" +
+				"     maximum rate: 60.0%\n",
+			epochtime.EpochTime(20), quantity.NewFromUint64(40_000), quantity.NewFromUint64(60_000), 10,
+		},
+		{
+			"" +
+				"(101) start:        epoch 100\n" +
+				"      minimum rate: 0.0%\n" +
+				"      maximum rate: 100.0%\n",
+			epochtime.EpochTime(100), quantity.NewFromUint64(0), quantity.NewFromUint64(100_000), 100,
+		},
+	} {
+		rateStep := CommissionRateBoundStep{
+			Start:   t.rateStart,
+			RateMin: *t.rateMinNumerator,
+			RateMax: *t.rateMaxNumerator,
+		}
+		var b bytes.Buffer
+		ctx := context.WithValue(context.Background(), prettyprint.ContextKeyCommissionScheduleIndex, t.index)
+		rateStep.PrettyPrint(ctx, "", &b)
+		pPrint := b.String()
+		require.Equal(t.expectedPPrint, pPrint, "obtained pretty print didn't match expected value")
+	}
 }

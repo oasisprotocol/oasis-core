@@ -52,9 +52,10 @@ type CommissionRateStep struct {
 // PrettyPrint writes a pretty-printed representation of CommissionRateStep to
 // the given writer.
 func (crs CommissionRateStep) PrettyPrint(ctx context.Context, prefix string, w io.Writer) {
-	fmt.Fprintf(w, "%s- Start: epoch %d\n", prefix, crs.Start)
+	indexInfix, emptyInfix := PrettyPrintCommissionScheduleIndexInfixes(ctx)
 
-	fmt.Fprintf(w, "%s  Rate:  %s\n", prefix, PrettyPrintCommissionRatePercentage(crs.Rate))
+	fmt.Fprintf(w, "%s%sstart: epoch %d\n", prefix, indexInfix, crs.Start)
+	fmt.Fprintf(w, "%s%srate:  %s\n", prefix, emptyInfix, PrettyPrintCommissionRatePercentage(crs.Rate))
 }
 
 // PrettyType returns a representation of CommissionRateStep that can be used
@@ -77,10 +78,11 @@ type CommissionRateBoundStep struct {
 // PrettyPrint writes a pretty-printed representation of CommissionRateBoundStep
 // to the given writer.
 func (crbs CommissionRateBoundStep) PrettyPrint(ctx context.Context, prefix string, w io.Writer) {
-	fmt.Fprintf(w, "%s- Start:        epoch %d\n", prefix, crbs.Start)
+	indexInfix, emptyInfix := PrettyPrintCommissionScheduleIndexInfixes(ctx)
 
-	fmt.Fprintf(w, "%s  Minimum Rate: %s\n", prefix, PrettyPrintCommissionRatePercentage(crbs.RateMin))
-	fmt.Fprintf(w, "%s  Maximum Rate: %s\n", prefix, PrettyPrintCommissionRatePercentage(crbs.RateMax))
+	fmt.Fprintf(w, "%s%sstart:        epoch %d\n", prefix, indexInfix, crbs.Start)
+	fmt.Fprintf(w, "%s%sminimum rate: %s\n", prefix, emptyInfix, PrettyPrintCommissionRatePercentage(crbs.RateMin))
+	fmt.Fprintf(w, "%s%smaximum rate: %s\n", prefix, emptyInfix, PrettyPrintCommissionRatePercentage(crbs.RateMax))
 }
 
 // PrettyType returns a representation of CommissionRateBoundStep that can be
@@ -105,7 +107,8 @@ func (cs CommissionSchedule) PrettyPrint(ctx context.Context, prefix string, w i
 		fmt.Fprintf(w, "%sRates: (none)\n", prefix)
 	} else {
 		fmt.Fprintf(w, "%sRates:\n", prefix)
-		for _, rate := range cs.Rates {
+		for i, rate := range cs.Rates {
+			ctx = context.WithValue(ctx, prettyprint.ContextKeyCommissionScheduleIndex, i)
 			rate.PrettyPrint(ctx, prefix+"  ", w)
 		}
 	}
@@ -114,7 +117,8 @@ func (cs CommissionSchedule) PrettyPrint(ctx context.Context, prefix string, w i
 		fmt.Fprintf(w, "%sRate Bounds: (none)\n", prefix)
 	} else {
 		fmt.Fprintf(w, "%sRate Bounds:\n", prefix)
-		for _, rateBound := range cs.Bounds {
+		for i, rateBound := range cs.Bounds {
+			ctx = context.WithValue(ctx, prettyprint.ContextKeyCommissionScheduleIndex, i)
 			rateBound.PrettyPrint(ctx, prefix+"  ", w)
 		}
 	}

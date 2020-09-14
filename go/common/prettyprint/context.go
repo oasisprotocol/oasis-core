@@ -10,6 +10,9 @@ var (
 	// ContextKeyTokenValueExponent is the key to retrieve the token's value
 	// base-10 exponent from a context.
 	ContextKeyTokenValueExponent = contextKey("staking/token-value-exponent")
+	// ContextKeyCommissionScheduleIndex is the key to retrieve the rate (bound)
+	// index in a commission schedule (amendment).
+	ContextKeyCommissionScheduleIndex = contextKey("staking/commission-schedule-index")
 )
 
 type contextKey string
