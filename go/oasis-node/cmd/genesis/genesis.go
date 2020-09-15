@@ -260,7 +260,7 @@ func doInitGenesis(cmd *cobra.Command, args []string) {
 		return
 	}
 
-	b, _ := json.Marshal(doc)
+	b, _ := json.MarshalIndent(doc, "", "  ")
 	if err := ioutil.WriteFile(f, b, 0o600); err != nil {
 		logger.Error("failed to save generated genesis document",
 			"err", err,
@@ -573,7 +573,7 @@ func doDumpGenesis(cmd *cobra.Command, args []string) {
 		defer w.Close()
 	}
 
-	data, err := json.Marshal(doc)
+	data, err := json.MarshalIndent(doc, "", "  ")
 	if err != nil {
 		logger.Error("failed to marshal genesis document into JSON",
 			"err", err,
