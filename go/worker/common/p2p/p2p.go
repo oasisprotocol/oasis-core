@@ -13,12 +13,14 @@ import (
 	"github.com/libp2p/go-libp2p-core/network"
 	"github.com/libp2p/go-libp2p-core/transport"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
+	pb "github.com/libp2p/go-libp2p-pubsub/pb"
 	"github.com/multiformats/go-multiaddr"
 	manet "github.com/multiformats/go-multiaddr/net"
 	"github.com/spf13/viper"
 
 	"github.com/oasisprotocol/oasis-core/go/common"
 	"github.com/oasisprotocol/oasis-core/go/common/cbor"
+	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
 	"github.com/oasisprotocol/oasis-core/go/common/identity"
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
 	"github.com/oasisprotocol/oasis-core/go/common/node"
@@ -201,6 +203,10 @@ func New(ctx context.Context, identity *identity.Identity, consensus consensus.B
 		pubsub.WithFloodPublish(true),
 		pubsub.WithPeerOutboundQueueSize(viper.GetInt(CfgP2PPeerOutboundQueueSize)),
 		pubsub.WithValidateQueueSize(viper.GetInt(CfgP2PValidateQueueSize)),
+		pubsub.WithMessageIdFn(func(pmsg *pb.Message) string {
+			h := hash.NewFromBytes(pmsg.Data)
+			return string(h[:])
+		}),
 	)
 	if err != nil {
 		return nil, fmt.Errorf("worker/common/p2p: failed to initialize libp2p gossipsub: %w", err)
