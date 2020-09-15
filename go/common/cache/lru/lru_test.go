@@ -81,6 +81,13 @@ func TestLRUCapacityEntries(t *testing.T) {
 	require.Equal(updateVal, v, "Get - update")
 
 	require.Equal(uint64(cacheSize), cache.Size(), "Size")
+
+	// Clear cache.
+	cache.Clear()
+	_, ok = cache.Peek(entries[0].key)
+	require.False(ok, "Peek - expected entry to not exist after removal")
+	require.Empty(cache.Keys(), "Empty keys")
+	require.EqualValues(0, cache.Size(), "Empty size")
 }
 
 func TestLRUCapacityBytes(t *testing.T) {

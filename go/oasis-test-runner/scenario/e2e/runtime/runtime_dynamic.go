@@ -263,7 +263,13 @@ func (sc *runtimeDynamicImpl) Run(childEnv *env.Env) error { // nolint: gocyclo
 			sc.Logger.Info("checking if genesis state has been initialized")
 			var rawRsp cbor.RawMessage
 			var err error
-			if rawRsp, err = sc.submitRuntimeTx(ctx, runtimeID, "get", runtimeDynamicTestKey); err != nil {
+			if rawRsp, err = sc.submitRuntimeTx(ctx, runtimeID, "get", struct {
+				Key   string `json:"key"`
+				Nonce uint64 `json:"nonce"`
+			}{
+				Key:   runtimeDynamicTestKey,
+				Nonce: 1234567890,
+			}); err != nil {
 				return fmt.Errorf("failed to submit get tx to runtime: %w", err)
 			}
 			var rsp string

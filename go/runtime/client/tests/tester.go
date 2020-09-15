@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"context"
 	"sort"
+	"strings"
 	"testing"
 	"time"
 
@@ -135,8 +136,8 @@ func testQuery(
 	require.EqualValues(t, 2, tx.Block.Header.Round)
 	require.EqualValues(t, 0, tx.Index)
 	// Check for values from TestNode/ExecutorWorker/QueueTx
-	require.EqualValues(t, []byte("hello world"), tx.Input)
-	require.EqualValues(t, []byte("hello world"), tx.Output)
+	require.True(t, strings.HasPrefix(string(tx.Input), "hello world"))
+	require.True(t, strings.HasPrefix(string(tx.Output), "hello world"))
 
 	// Transactions (check the mock worker for content).
 	txns, err := c.GetTxs(ctx, &api.GetTxsRequest{RuntimeID: runtimeID, Round: blk.Header.Round, IORoot: blk.Header.IORoot})
@@ -163,8 +164,8 @@ func testQuery(
 	require.EqualValues(t, 2, results[0].Block.Header.Round)
 	require.EqualValues(t, 0, results[0].Index)
 	// Check for values from TestNode/ExecutorWorker/QueueTx
-	require.EqualValues(t, []byte("hello world"), results[0].Input)
-	require.EqualValues(t, []byte("hello world"), results[0].Output)
+	require.True(t, strings.HasPrefix(string(results[0].Input), "hello world"))
+	require.True(t, strings.HasPrefix(string(results[0].Output), "hello world"))
 
 	// Query genesis block again.
 	genBlk2, err := c.GetGenesisBlock(ctx, runtimeID)

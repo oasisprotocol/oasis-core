@@ -258,7 +258,10 @@ func (sc *runtimeUpgradeImpl) Run(childEnv *env.Env) error {
 
 	// Run client again.
 	sc.Logger.Info("starting a second client to check if runtime works")
-	sc.runtimeImpl.clientArgs = []string{"--key", "key2"}
+	sc.runtimeImpl.clientArgs = []string{
+		"--key", "key2",
+		"--seed", "second_seed",
+	}
 	cmd, err = sc.startClient(childEnv)
 	if err != nil {
 		return err

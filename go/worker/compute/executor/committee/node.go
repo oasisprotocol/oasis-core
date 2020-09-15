@@ -11,6 +11,7 @@ import (
 	"github.com/opentracing/opentracing-go"
 	"github.com/prometheus/client_golang/prometheus"
 
+	"github.com/oasisprotocol/oasis-core/go/common/cache/lru"
 	"github.com/oasisprotocol/oasis-core/go/common/cbor"
 	"github.com/oasisprotocol/oasis-core/go/common/crash"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
@@ -52,6 +53,7 @@ var (
 	errNotReady        = fmt.Errorf("executor: runtime not ready")
 	errCheckTxFailed   = fmt.Errorf("executor: CheckTx failed")
 	errNotTxnScheduler = fmt.Errorf("executor: not transaction scheduler in this round")
+	errDuplicateTx     = fmt.Errorf("executor: duplicate transaction")
 
 	// Duration to wait before submitting the propose timeout request.
 	proposeTimeoutDelay = 2 * time.Second
@@ -131,6 +133,8 @@ var (
 // Node is a committee node.
 type Node struct { // nolint: maligned
 	*commonWorker.RuntimeHostNode
+
+	lastScheduledCache *lru.Cache
 
 	scheduleCheckTxEnabled bool
 	scheduleMaxQueueSize   uint64
@@ -432,11 +436,25 @@ func (n *Node) HandleEpochTransitionLocked(epoch *committee.EpochSnapshot) {
 	if !epoch.IsExecutorWorker() {
 		// Clear incoming queue if we are not a worker anymore.
 		n.scheduler.Clear()
+		if n.lastScheduledCache != nil {
+			n.lastScheduledCache.Clear()
+		}
 		incomingQueueSize.With(n.getMetricLabels()).Set(0)
 	}
 
 	switch {
-	case epoch.IsExecutorMember():
+	case epoch.IsExecutorWorker():
+		if state, ok := n.state.(StateWaitingForFinalize); ok {
+			// In case we are finalizing a batch and epoch transition occurred,
+			// reinsert the failed transactions back into queue.
+			if err := n.scheduler.AppendTxBatch(state.raw); err != nil {
+				n.logger.Warn("failed reinserting aborted transactions in queue",
+					"err", err,
+				)
+			}
+		}
+		fallthrough
+	case epoch.IsExecutorBackupWorker():
 		n.transitionLocked(StateWaitingForBatch{})
 	default:
 		n.transitionLocked(StateNotReady{})
@@ -492,28 +510,47 @@ func (n *Node) HandleNewBlockLocked(blk *block.Block) {
 	case StateWaitingForEvent:
 		// Block finalized without the need for a backup worker.
 		n.logger.Info("considering the round finalized",
-			"round", blk.Header.Round,
-			"header_hash", blk.Header.EncodedHash(),
+			"round", header.Round,
+			"header_hash", header.EncodedHash(),
 		)
 		n.transitionLocked(StateWaitingForBatch{})
 	case StateWaitingForFinalize:
-		// A new block means the round has been finalized.
-		n.logger.Info("considering the round finalized",
-			"round", blk.Header.Round,
-			"header_hash", blk.Header.EncodedHash(),
-		)
-		// Record time taken for successfully processing a batch.
-		batchProcessingTime.With(n.getMetricLabels()).Observe(time.Since(state.batchStartTime).Seconds())
+		func() {
+			defer n.transitionLocked(StateWaitingForBatch{})
 
-		// Removed processed transactions from queue.
-		if err := n.removeTxBatch(state.raw); err != nil {
-			n.logger.Warn("failed removing processed batch from queue",
-				"err", err,
-				"batch", state.raw,
+			// A new block means the round has been finalized.
+			n.logger.Info("considering the round finalized",
+				"round", header.Round,
+				"header_hash", header.EncodedHash(),
+				"header_type", header.HeaderType,
 			)
-		}
+			if header.HeaderType != block.Normal {
+				return
+			}
+			if !header.IORoot.Equal(&state.proposedIORoot) {
+				n.logger.Error("proposed batch was not finalized",
+					"header_io_root", header.IORoot,
+					"proposed_io_root", state.proposedIORoot,
+					"batch", state.raw,
+				)
+				return
+			}
 
-		n.transitionLocked(StateWaitingForBatch{})
+			// Record time taken for successfully processing a batch.
+			batchProcessingTime.With(n.getMetricLabels()).Observe(time.Since(state.batchStartTime).Seconds())
+
+			n.logger.Debug("removing processed batch from queue",
+				"batch", state.raw,
+				"io_root", header.IORoot,
+			)
+			// Removed processed transactions from queue.
+			if err := n.removeTxBatch(state.raw); err != nil {
+				n.logger.Warn("failed removing processed batch from queue",
+					"err", err,
+					"batch", state.raw,
+				)
+			}
+		}()
 	}
 
 	// Clear the potentially set "is proposing timeout" flag from the previous round.
@@ -593,10 +630,28 @@ func (n *Node) QueueTx(call []byte) error {
 	if n.scheduler == nil || !n.scheduler.IsInitialized() {
 		return errNotReady
 	}
+
+	callHash := hash.NewFromBytes(call)
+	// Check if transaction was recently scheduled.
+	if n.lastScheduledCache != nil {
+		if _, b := n.lastScheduledCache.Get(callHash); b {
+			return errDuplicateTx
+		}
+	}
+
 	if err := n.scheduler.ScheduleTx(call); err != nil {
 		return err
 	}
 
+	if n.lastScheduledCache != nil {
+		if err := n.lastScheduledCache.Put(callHash, true); err != nil {
+			// cache.Put can only error if capacity in bytes is used and the
+			// inserted value is too large. This should never happen in here.
+			n.logger.Error("cache put error",
+				"err", err,
+			)
+		}
+	}
 	incomingQueueSize.With(n.getMetricLabels()).Set(float64(n.scheduler.UnscheduledSize()))
 
 	return nil
@@ -704,7 +759,7 @@ func (n *Node) Dispatch(batch transaction.RawBatch) error {
 	switch {
 	case epoch.IsTransactionScheduler(round):
 		// Continues bellow.
-	case epoch.IsExecutorMember():
+	case epoch.IsExecutorWorker():
 		// If we are an executor and not a scheduler try proposing a timeout.
 		err := n.proposeTimeoutLocked()
 		if err != nil {
@@ -1124,6 +1179,7 @@ func (n *Node) proposeBatchLocked(processedBatch *processedBatch) {
 	n.transitionLocked(StateWaitingForFinalize{
 		batchStartTime: state.batchStartTime,
 		raw:            processedBatch.raw,
+		proposedIORoot: proposedResults.Header.IORoot,
 	})
 
 	crash.Here(crashPointBatchProposeAfter)
@@ -1412,6 +1468,7 @@ func NewNode(
 	roleProvider registration.RoleProvider,
 	scheduleCheckTxEnabled bool,
 	scheduleMaxQueueSize uint64,
+	lastScheduledCacheSize uint64,
 ) (*Node, error) {
 	metricsOnce.Do(func() {
 		prometheus.MustRegister(nodeCollectors...)
@@ -1423,6 +1480,14 @@ func NewNode(
 		return nil, err
 	}
 
+	var cache *lru.Cache
+	if lastScheduledCacheSize > 0 {
+		cache, err = lru.New(lru.Capacity(lastScheduledCacheSize, false))
+		if err != nil {
+			return nil, fmt.Errorf("error creating cache: %w", err)
+		}
+	}
+
 	ctx, cancel := context.WithCancel(context.Background())
 
 	n := &Node{
@@ -1432,6 +1497,7 @@ func NewNode(
 		roleProvider:           roleProvider,
 		scheduleCheckTxEnabled: scheduleCheckTxEnabled,
 		scheduleMaxQueueSize:   scheduleMaxQueueSize,
+		lastScheduledCache:     cache,
 		ctx:                    ctx,
 		cancelCtx:              cancel,
 		stopCh:                 make(chan struct{}),

@@ -121,6 +121,16 @@ func (c *Cache) Keys() []interface{} {
 	return vec
 }
 
+// Clear empties the cache.
+func (c *Cache) Clear() {
+	c.Lock()
+	defer c.Unlock()
+
+	c.size = 0
+	c.lru = list.New()
+	c.entries = make(map[interface{}]*list.Element)
+}
+
 // Size returns the current cache size in the units specified by a `Capacity`
 // option at creation time.
 func (c *Cache) Size() uint64 {

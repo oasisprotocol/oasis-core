@@ -20,7 +20,10 @@ func newKmRestartImpl() scenario.Scenario {
 		runtimeImpl: *newRuntimeImpl(
 			"keymanager-restart",
 			"simple-keyvalue-enc-client",
-			[]string{"--key", "key1"},
+			[]string{
+				"--key", "key1",
+				"--seed", "first_seed",
+			},
 		),
 	}
 }
@@ -69,7 +72,10 @@ func (sc *kmRestartImpl) Run(childEnv *env.Env) error {
 	// Run the second client on a different key so that it will require
 	// a second trip to the keymanager.
 	sc.Logger.Info("starting a second client to check if key manager works")
-	sc.runtimeImpl.clientArgs = []string{"--key", "key2"}
+	sc.runtimeImpl.clientArgs = []string{
+		"--key", "key2",
+		"--seed", "second_seed",
+	}
 	cmd, err = sc.startClient(childEnv)
 	if err != nil {
 		return err
