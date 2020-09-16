@@ -7,10 +7,12 @@ edition = "2018"
 
 [dependencies]
 oasis-core-client = { path = "../../../client" }
-oasis-core-runtime = { path = "../../../runtime" }
 oasis-core-keymanager-client = { path = "../../../keymanager-client" }
+oasis-core-runtime = { path = "../../../runtime" }
 simple-keyvalue-api = { path = "../../runtimes/simple-keyvalue/api" }
+
 clap = "2.29.1"
-tokio = "0.1.17"
 grpcio = "0.4.6"
 io-context = "0.2.0"
+rand = "0.7.3"
+tokio = "0.1.17"

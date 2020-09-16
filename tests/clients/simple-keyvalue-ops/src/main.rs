@@ -2,11 +2,12 @@ use std::sync::Arc;
 
 use clap::{value_t_or_exit, App, Arg, SubCommand};
 use grpcio::EnvBuilder;
+use rand::{rngs::StdRng, Rng, SeedableRng};
 use tokio::runtime::Runtime;
 
 use oasis_core_client::{create_txn_api_client, Node, TxnClient};
-use oasis_core_runtime::common::runtime::RuntimeId;
-use simple_keyvalue_api::{with_api, KeyValue};
+use oasis_core_runtime::common::{crypto::hash::Hash, runtime::RuntimeId};
+use simple_keyvalue_api::{with_api, Key, KeyValue};
 
 with_api! {
     create_txn_api_client!(KeyValueOpsClient, api);
@@ -26,6 +27,7 @@ fn main() {
                 .takes_value(true)
                 .required(true),
         )
+        .arg(Arg::with_name("seed").long("seed").takes_value(true))
         .subcommand(
             SubCommand::with_name("set")
                 .about("Store a key/value pair")
@@ -41,6 +43,13 @@ fn main() {
 
     let node_address = matches.value_of("node-address").unwrap();
     let runtime_id = value_t_or_exit!(matches, "runtime-id", RuntimeId);
+    let nonce_seed = matches
+        .value_of("seed")
+        .unwrap_or("seeeeeeeeeeeeeeeeeeeeeeeeeeeeeed")
+        .as_bytes();
+
+    let h = Hash::digest_bytes(&nonce_seed);
+    let mut rng: StdRng = SeedableRng::from_seed(h.into());
 
     eprintln!("Initializing simple key/value operation client!");
     let mut rt = Runtime::new().unwrap();
@@ -53,6 +62,7 @@ fn main() {
         let kv = KeyValue {
             key: matches.value_of("KEY").unwrap().into(),
             value: matches.value_of("VALUE").unwrap().into(),
+            nonce: Some(rng.gen()),
         };
         eprintln!(
             "Storing \"{}\" as key and \"{}\" as value to database...",
@@ -60,8 +70,11 @@ fn main() {
         );
         rt.block_on(kv_client.insert(kv)).unwrap();
     } else if let Some(matches) = matches.subcommand_matches("get") {
-        let key = String::from(matches.value_of("KEY").unwrap());
-        eprintln!("Getting value for key \"{}\"...", key);
+        let key = Key {
+            key: matches.value_of("KEY").unwrap().into(),
+            nonce: Some(rng.gen()),
+        };
+        eprintln!("Getting value for key \"{}\"...", key.key);
         println!("{}", rt.block_on(kv_client.get(key)).unwrap().unwrap());
     }
 

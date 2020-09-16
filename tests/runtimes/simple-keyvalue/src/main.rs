@@ -21,7 +21,7 @@ use oasis_core_runtime::{
     version_from_cargo, Protocol, RpcDemux, RpcDispatcher, TxnDispatcher, TxnMethDispatcher,
 };
 use simple_keymanager::trusted_policy_signers;
-use simple_keyvalue_api::{with_api, KeyValue};
+use simple_keyvalue_api::{with_api, Key, KeyValue};
 
 struct Context {
     test_runtime_id: RuntimeId,
@@ -57,29 +57,29 @@ fn insert(args: &KeyValue, ctx: &mut TxnContext) -> Result<Option<String>> {
 }
 
 /// Retrieve a key/value pair.
-fn get(args: &String, ctx: &mut TxnContext) -> Result<Option<String>> {
+fn get(args: &Key, ctx: &mut TxnContext) -> Result<Option<String>> {
     if ctx.check_only {
         return Err(CheckOnlySuccess::default().into());
     }
     ctx.emit_txn_tag(b"kv_op", b"get");
-    ctx.emit_txn_tag(b"kv_key", args.as_bytes());
+    ctx.emit_txn_tag(b"kv_key", args.key.as_bytes());
 
     let existing = StorageContext::with_current(|mkvs, _untrusted_local| {
-        mkvs.get(IoContext::create_child(&ctx.io_ctx), args.as_bytes())
+        mkvs.get(IoContext::create_child(&ctx.io_ctx), args.key.as_bytes())
     });
     Ok(existing.map(|v| String::from_utf8(v)).transpose()?)
 }
 
 /// Remove a key/value pair.
-fn remove(args: &String, ctx: &mut TxnContext) -> Result<Option<String>> {
+fn remove(args: &Key, ctx: &mut TxnContext) -> Result<Option<String>> {
     if ctx.check_only {
         return Err(CheckOnlySuccess::default().into());
     }
     ctx.emit_txn_tag(b"kv_op", b"remove");
-    ctx.emit_txn_tag(b"kv_key", args.as_bytes());
+    ctx.emit_txn_tag(b"kv_key", args.key.as_bytes());
 
     let existing = StorageContext::with_current(|mkvs, _untrusted_local| {
-        mkvs.remove(IoContext::create_child(&ctx.io_ctx), args.as_bytes())
+        mkvs.remove(IoContext::create_child(&ctx.io_ctx), args.key.as_bytes())
     });
     Ok(existing.map(|v| String::from_utf8(v)).transpose()?)
 }
@@ -119,19 +119,27 @@ fn enc_insert(args: &KeyValue, ctx: &mut TxnContext) -> Result<Option<String>> {
 }
 
 /// (encrypted) Retrieve a key/value pair.
-fn enc_get(args: &String, ctx: &mut TxnContext) -> Result<Option<String>> {
-    let enc_ctx = get_encryption_context(ctx, args.as_bytes())?;
+fn enc_get(args: &Key, ctx: &mut TxnContext) -> Result<Option<String>> {
+    let enc_ctx = get_encryption_context(ctx, args.key.as_bytes())?;
     let existing = StorageContext::with_current(|mkvs, _untrusted_local| {
-        enc_ctx.get(mkvs, IoContext::create_child(&ctx.io_ctx), args.as_bytes())
+        enc_ctx.get(
+            mkvs,
+            IoContext::create_child(&ctx.io_ctx),
+            args.key.as_bytes(),
+        )
     });
     Ok(existing.map(|v| String::from_utf8(v)).transpose()?)
 }
 
 /// (encrypted) Remove a key/value pair.
-fn enc_remove(args: &String, ctx: &mut TxnContext) -> Result<Option<String>> {
-    let enc_ctx = get_encryption_context(ctx, args.as_bytes())?;
+fn enc_remove(args: &Key, ctx: &mut TxnContext) -> Result<Option<String>> {
+    let enc_ctx = get_encryption_context(ctx, args.key.as_bytes())?;
     let existing = StorageContext::with_current(|mkvs, _untrusted_local| {
-        enc_ctx.remove(mkvs, IoContext::create_child(&ctx.io_ctx), args.as_bytes())
+        enc_ctx.remove(
+            mkvs,
+            IoContext::create_child(&ctx.io_ctx),
+            args.key.as_bytes(),
+        )
     });
     Ok(existing.map(|v| String::from_utf8(v)).transpose()?)
 }
