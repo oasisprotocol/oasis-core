@@ -486,7 +486,7 @@ func (net *Network) Start() error { // nolint: gocyclo
 
 	if net.cfg.GenesisFile == "" {
 		net.logger.Debug("provisioning genesis doc")
-		if err := net.makeGenesis(); err != nil {
+		if err := net.MakeGenesis(); err != nil {
 			net.logger.Error("failed to create genesis document",
 				"err", err,
 			)
@@ -845,7 +845,8 @@ func (net *Network) startOasisNode(
 	return nil
 }
 
-func (net *Network) makeGenesis() error {
+// MakeGenesis generates a new Genesis file.
+func (net *Network) MakeGenesis() error {
 	args := []string{
 		"genesis", "init",
 		"--genesis.file", net.GenesisPath(),
