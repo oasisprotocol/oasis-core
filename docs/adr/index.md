@@ -75,4 +75,5 @@ The following records currently exist:
 * [ADR 0001](0001-tm-multi-root-apphash.md) - Multiple Roots Under the Tendermint Application Hash
 * [ADR 0002](0002-go-modules-compatible-git-tags.md) - Go Modules Compatible Git Tags
 * [ADR 0003](0003-consensus-runtime-token-transfer.md) - Consensus/Runtime Token Transfer
+* [ADR 0004](0004-runtime-governance.md) - Runtime Governance
 <!-- markdownlint-enable line-length -->
