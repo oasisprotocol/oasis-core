@@ -15,4 +15,6 @@ set -euxo pipefail
 ########################################
 # Check dependencies for vulnerabilities
 ########################################
-nancy ./go/go.sum
+pushd go
+    go list -json -m all | nancy sleuth
+popd
