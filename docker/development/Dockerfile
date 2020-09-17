@@ -2,6 +2,8 @@ FROM ubuntu:18.04
 
 # Package versions.
 ARG GO_VERSION=1.15.1
+ARG GO_NANCY_VERSION=1.0.0
+ARG GO_NANCY_CHECKSUM=13804837a34c07e7a933b0d6f52c5e580b03ccb209e38fc3d6394b791b414c33
 ARG GO_PROTOC_VERSION=3.6.1
 ARG GO_PROTOC_GEN_GO_VERSION=1.21.0
 ARG GOLANGCILINT_VERSION=1.28.2
@@ -62,8 +64,8 @@ RUN wget https://dl.google.com/go/go${GO_VERSION}.linux-amd64.tar.gz && \
     # Install gocovmerge for e2e coverage.
     GO111MODULE=on go get github.com/wadey/gocovmerge@${GOCOVMERGE_VERSION} && \
     # Install nancy for auditing dependencies.
-    curl -sfL -o nancy https://github.com/sonatype-nexus-community/nancy/releases/download/v0.0.39/nancy-linux.amd64-v0.0.39 && \
-    echo 'eb3a93d7db24d115e6e67a2b17dba402978f856c891fa6f0ff09ad17ac53ebb5 nancy' | sha256sum -c && \
+    curl -sfL -o nancy https://github.com/sonatype-nexus-community/nancy/releases/download/v${GO_NANCY_VERSION}/nancy-linux.amd64-v${GO_NANCY_VERSION} && \
+    echo "${GO_NANCY_CHECKSUM} nancy" | sha256sum -c && \
     mv nancy /go/bin/nancy && \
     chmod +x /go/bin/nancy && \
     # Install gofumpt for code formatting.

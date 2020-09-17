@@ -1,0 +1,15 @@
+# For some reason these are false positives in the golang/golang.org/x/net, we
+# use the latest version of this package which is not vulnerable.
+# See: https://github.com/sonatype-nexus-community/nancy/issues/189
+CVE-2018-17847
+CVE-2018-17142
+CVE-2018-17846
+CVE-2018-17075
+CVE-2018-17143
+CVE-2018-17848
+
+# Beats me how and why etcd is even imported in viper.
+# https://github.com/spf13/viper/issues/956
+CVE-2020-15114
+CVE-2020-15136
+CVE-2020-15115
