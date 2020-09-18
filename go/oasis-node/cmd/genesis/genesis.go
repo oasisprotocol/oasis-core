@@ -42,6 +42,9 @@ import (
 )
 
 const (
+	cfgGenesisCanonicalFile      = "genesis.canonical_file"
+	cfgGenesisCanonicalFileShort = "C"
+
 	cfgEntity      = "entity"
 	cfgRuntime     = "runtime"
 	cfgNode        = "node"
@@ -109,9 +112,10 @@ const (
 )
 
 var (
-	checkGenesisFlags = flag.NewFlagSet("", flag.ContinueOnError)
-	dumpGenesisFlags  = flag.NewFlagSet("", flag.ContinueOnError)
-	initGenesisFlags  = flag.NewFlagSet("", flag.ContinueOnError)
+	checkGenesisFlags   = flag.NewFlagSet("", flag.ContinueOnError)
+	convertGenesisFlags = flag.NewFlagSet("", flag.ContinueOnError)
+	dumpGenesisFlags    = flag.NewFlagSet("", flag.ContinueOnError)
+	initGenesisFlags    = flag.NewFlagSet("", flag.ContinueOnError)
 
 	genesisCmd = &cobra.Command{
 		Use:   "genesis",
@@ -134,6 +138,12 @@ var (
 		Use:   "check",
 		Short: "sanity check the genesis file",
 		Run:   doCheckGenesis,
+	}
+
+	convertGenesisCmd = &cobra.Command{
+		Use:   "convert",
+		Short: "convert genesis file to canonical form",
+		Run:   doConvertGenesis,
 	}
 
 	logger = logging.GetLogger("cmd/genesis")
@@ -651,17 +661,64 @@ func doCheckGenesis(cmd *cobra.Command, args []string) {
 	}
 }
 
+func doConvertGenesis(cmd *cobra.Command, args []string) {
+	if err := cmdCommon.Init(); err != nil {
+		cmdCommon.EarlyLogAndExit(err)
+	}
+
+	filename := flags.GenesisFile()
+	provider, err := genesisFile.NewFileProvider(filename)
+	if err != nil {
+		logger.Error("failed to open genesis file", "err", err)
+		os.Exit(1)
+	}
+	doc, err := provider.GetGenesisDocument()
+	if err != nil {
+		logger.Error("failed to get genesis document", "err", err)
+		os.Exit(1)
+	}
+
+	// Create a marshalled genesis document in the canonical form with 2 space indents.
+	data, err := json.MarshalIndent(doc, "", "  ")
+	if err != nil {
+		logger.Error("failed to marshal genesis document into JSON",
+			"err", err,
+		)
+		os.Exit(1)
+	}
+
+	w, shouldClose, err := cmdCommon.GetOutputWriter(cmd, cfgGenesisCanonicalFile)
+	if err != nil {
+		logger.Error("failed to get writer for canonical genesis file",
+			"err", err,
+		)
+		os.Exit(1)
+	}
+	if shouldClose {
+		defer w.Close()
+	}
+
+	if _, err = w.Write(data); err != nil {
+		logger.Error("failed to write marshalled document to the canonical genesis file",
+			"err", err,
+		)
+		os.Exit(1)
+	}
+}
+
 // Register registers the genesis sub-command and all of it's children.
 func Register(parentCmd *cobra.Command) {
 	initGenesisCmd.Flags().AddFlagSet(initGenesisFlags)
 	dumpGenesisCmd.Flags().AddFlagSet(dumpGenesisFlags)
 	dumpGenesisCmd.PersistentFlags().AddFlagSet(cmdGrpc.ClientFlags)
 	checkGenesisCmd.Flags().AddFlagSet(checkGenesisFlags)
+	convertGenesisCmd.Flags().AddFlagSet(convertGenesisFlags)
 
 	for _, v := range []*cobra.Command{
 		initGenesisCmd,
 		dumpGenesisCmd,
 		checkGenesisCmd,
+		convertGenesisCmd,
 	} {
 		genesisCmd.AddCommand(v)
 	}
@@ -672,6 +729,13 @@ func Register(parentCmd *cobra.Command) {
 func init() {
 	_ = viper.BindPFlags(checkGenesisFlags)
 	checkGenesisFlags.AddFlagSet(flags.GenesisFileFlags)
+
+	_ = viper.BindPFlags(convertGenesisFlags)
+	convertGenesisFlags.AddFlagSet(flags.GenesisFileFlags)
+	convertGenesisFlags.StringP(
+		cfgGenesisCanonicalFile, cfgGenesisCanonicalFileShort,
+		"", "path to where to output the canonical genesis file (default: stdout)",
+	)
 
 	dumpGenesisFlags.Int64(cfgBlockHeight, consensus.HeightLatest, "block height at which to dump state")
 	_ = viper.BindPFlags(dumpGenesisFlags)
