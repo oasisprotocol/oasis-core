@@ -98,7 +98,8 @@ func testQueueTx(
 	}
 
 	// Queue a test call.
-	testCall := []byte("hello world")
+	// Include a timestamp so each test invocation uses an unique key.
+	testCall := []byte("hello world at: " + time.Now().String())
 	err = rtNode.QueueTx(testCall)
 	require.NoError(t, err, "QueueCall")
 
@@ -129,7 +130,8 @@ blockLoop:
 			})
 			defer tree.Close()
 
-			txs, err := tree.GetTransactions(ctx)
+			var txs []*transaction.Transaction
+			txs, err = tree.GetTransactions(ctx)
 			require.NoError(t, err, "GetTransactions")
 			require.Len(t, txs, 1, "there should be one transaction")
 			require.EqualValues(t, testCall, txs[0].Input)
@@ -145,4 +147,8 @@ blockLoop:
 			t.Fatalf("failed to receive block")
 		}
 	}
+
+	// Requeuing same call should fail.
+	err = rtNode.QueueTx(testCall)
+	require.Error(t, err, "QueueCall duplicate transaction")
 }

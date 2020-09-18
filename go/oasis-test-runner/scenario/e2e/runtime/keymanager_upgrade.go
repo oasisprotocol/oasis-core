@@ -31,7 +31,10 @@ func newKmUpgradeImpl() scenario.Scenario {
 		runtimeImpl: *newRuntimeImpl(
 			"keymanager-upgrade",
 			"simple-keyvalue-enc-client",
-			nil,
+			[]string{
+				"--key", "key1",
+				"--seed", "first_seed",
+			},
 		),
 	}
 }
@@ -279,7 +282,10 @@ func (sc *kmUpgradeImpl) Run(childEnv *env.Env) error {
 
 	// Run client again.
 	sc.Logger.Info("starting a second client to check if key manager works")
-	sc.runtimeImpl.clientArgs = []string{"--key", "key2"}
+	sc.runtimeImpl.clientArgs = []string{
+		"--key", "key2",
+		"--seed", "second_seed",
+	}
 	cmd, err = sc.startClient(childEnv)
 	if err != nil {
 		return err

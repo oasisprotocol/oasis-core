@@ -14,7 +14,8 @@ const (
 	// scheduling it.
 	CfgScheduleCheckTxEnabled = "worker.executor.schedule_check_tx.enabled"
 
-	cfgMaxQueueSize = "worker.executor.schedule_max_queue_size"
+	cfgMaxQueueSize        = "worker.executor.schedule_max_queue_size"
+	cfgScheduleTxCacheSize = "worker.executor.schedule_tx_cache_size"
 )
 
 // Flags has the configuration flags.
@@ -33,12 +34,14 @@ func New(
 		registration,
 		viper.GetBool(CfgScheduleCheckTxEnabled),
 		viper.GetUint64(cfgMaxQueueSize),
+		viper.GetUint64(cfgScheduleTxCacheSize),
 	)
 }
 
 func init() {
 	Flags.Bool(CfgScheduleCheckTxEnabled, false, "Enable checking transactions before scheduling them")
 	Flags.Uint64(cfgMaxQueueSize, 10000, "Maximum size of the scheduling queue")
+	Flags.Uint64(cfgScheduleTxCacheSize, 1000, "Cache size of recently scheduled transactions to prevent re-scheduling")
 
 	_ = viper.BindPFlags(Flags)
 }

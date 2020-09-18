@@ -143,9 +143,11 @@ func (r *runtime) doInsertRequest(ctx context.Context, rng *rand.Rand, rtc runti
 		Args: struct {
 			Key   string `json:"key"`
 			Value string `json:"value"`
+			Nonce uint64 `json:"nonce"`
 		}{
 			Key:   key,
 			Value: value,
+			Nonce: rng.Uint64(),
 		},
 	}
 	rsp, err := r.submitRuntimeRquest(ctx, rtc, req)
@@ -186,7 +188,13 @@ func (r *runtime) doGetRequest(ctx context.Context, rng *rand.Rand, rtc runtimeC
 	// Submit request.
 	req := &runtimeTransaction.TxnCall{
 		Method: "get",
-		Args:   key,
+		Args: struct {
+			Key   string `json:"key"`
+			Nonce uint64 `json:"nonce"`
+		}{
+			Key:   key,
+			Nonce: rng.Uint64(),
+		},
 	}
 	rsp, err := r.submitRuntimeRquest(ctx, rtc, req)
 	if err != nil {
@@ -223,7 +231,13 @@ func (r *runtime) doRemoveRequest(ctx context.Context, rng *rand.Rand, rtc runti
 	// Submit request.
 	req := &runtimeTransaction.TxnCall{
 		Method: "remove",
-		Args:   key,
+		Args: struct {
+			Key   string `json:"key"`
+			Nonce uint64 `json:"nonce"`
+		}{
+			Key:   key,
+			Nonce: rng.Uint64(),
+		},
 	}
 	rsp, err := r.submitRuntimeRquest(ctx, rtc, req)
 	if err != nil {

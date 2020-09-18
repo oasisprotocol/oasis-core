@@ -1835,6 +1835,7 @@ dependencies = [
  "io-context",
  "oasis-core-client",
  "oasis-core-runtime",
+ "rand",
  "simple-keyvalue-api",
  "tokio 0.1.22",
 ]
@@ -1849,6 +1850,7 @@ dependencies = [
  "oasis-core-client",
  "oasis-core-keymanager-client",
  "oasis-core-runtime",
+ "rand",
  "simple-keyvalue-api",
  "tokio 0.1.22",
 ]
@@ -1862,6 +1864,7 @@ dependencies = [
  "io-context",
  "oasis-core-client",
  "oasis-core-runtime",
+ "rand",
  "simple-keyvalue-api",
  "tokio 0.1.22",
 ]
@@ -2036,6 +2039,7 @@ dependencies = [
  "grpcio",
  "oasis-core-client",
  "oasis-core-runtime",
+ "rand",
  "simple-keyvalue-api",
  "tokio 0.1.22",
 ]

@@ -4,6 +4,7 @@ import (
 	"context"
 	"time"
 
+	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
 	roothash "github.com/oasisprotocol/oasis-core/go/roothash/api"
 	"github.com/oasisprotocol/oasis-core/go/roothash/api/block"
 	"github.com/oasisprotocol/oasis-core/go/runtime/host/protocol"
@@ -197,6 +198,7 @@ func (s *StateProcessingBatch) cancel() {
 type StateWaitingForFinalize struct {
 	batchStartTime time.Time
 	raw            transaction.RawBatch
+	proposedIORoot hash.Hash
 }
 
 // Name returns the name of the state.
