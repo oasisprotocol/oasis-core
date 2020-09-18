@@ -321,6 +321,8 @@ func RegisterScenarios() error {
 		GasFeesStakingDumpRestore,
 		// Identity CLI test.
 		IdentityCLI,
+		// Genesis file test.
+		GenesisFile,
 		// Node upgrade tests.
 		NodeUpgrade,
 		NodeUpgradeCancel,
