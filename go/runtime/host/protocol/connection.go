@@ -21,7 +21,11 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/metrics"
 )
 
-const moduleName = "rhp/internal"
+const (
+	moduleName = "rhp/internal"
+
+	connWriteTimeout = 5 * time.Second
+)
 
 // ErrNotReady is the error reported when the Runtime Host Protocol is not initialized.
 var (
@@ -321,9 +325,19 @@ func (c *connection) workerOutgoing() {
 	for {
 		select {
 		case msg := <-c.outCh:
+			if err := c.conn.SetWriteDeadline(time.Now().Add(connWriteTimeout)); err != nil {
+				c.logger.Error("error setting connection deadline",
+					"err", err,
+				)
+			}
 			// Outgoing message, send it.
 			if err := c.codec.Write(msg); err != nil {
 				c.logger.Error("error while sending message",
+					"err", err,
+				)
+			}
+			if err := c.conn.SetWriteDeadline(time.Time{}); err != nil {
+				c.logger.Error("error setting connection deadline",
 					"err", err,
 				)
 			}
