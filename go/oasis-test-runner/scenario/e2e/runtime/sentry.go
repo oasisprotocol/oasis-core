@@ -5,6 +5,7 @@ import (
 	"crypto/tls"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"google.golang.org/grpc"
@@ -14,6 +15,8 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	cmnGrpc "github.com/oasisprotocol/oasis-core/go/common/grpc"
 	"github.com/oasisprotocol/oasis-core/go/common/identity"
+	"github.com/oasisprotocol/oasis-core/go/consensus/tendermint/crypto"
+	control "github.com/oasisprotocol/oasis-core/go/control/api"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/env"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/log"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/oasis"
@@ -168,7 +171,7 @@ func (s *sentryImpl) dial(address string, clientOpts *cmnGrpc.ClientOptions) (*g
 	return conn, nil
 }
 
-func (s *sentryImpl) Run(childEnv *env.Env) error {
+func (s *sentryImpl) Run(childEnv *env.Env) error { // nolint: gocyclo
 	// Run the basic runtime test.
 	if err := s.runtimeImpl.Run(childEnv); err != nil {
 		return err
@@ -178,11 +181,10 @@ func (s *sentryImpl) Run(childEnv *env.Env) error {
 	defer cancel()
 
 	// Load identities and addresses used in the sanity checks.
-	sentry0 := s.Net.Sentries()[0]
-	sentry0Address := sentry0.GetSentryControlAddress()
-
-	sentry4 := s.Net.Sentries()[4]
-	sentry4Address := sentry4.GetSentryAddress()
+	sentry0, _, sentry0CtrlAddress, sentry0P2PPubkey := loadSentryNodeInfo(s.Net.Sentries()[0])
+	_, _, _, sentry1P2PPubkey := loadSentryNodeInfo(s.Net.Sentries()[1])
+	_, _, _, sentry2P2PPubkey := loadSentryNodeInfo(s.Net.Sentries()[2])
+	sentry4, sentry4Address, _, _ := loadSentryNodeInfo(s.Net.Sentries()[4])
 
 	storage0 := s.Net.StorageWorkers()[0]
 	storage0Identity, err := storage0.LoadIdentity()
@@ -215,11 +217,28 @@ func (s *sentryImpl) Run(childEnv *env.Env) error {
 	if err != nil {
 		return fmt.Errorf("sentry: error loading validator node identity: %w", err)
 	}
+	validator0Ctrl, err := oasis.NewController(validator0.SocketPath())
+	if err != nil {
+		return err
+	}
 
 	validator1 := s.Net.Validators()[1]
 	validator1Identity, err := validator1.LoadIdentity()
 	if err != nil {
 		return fmt.Errorf("sentry: error loading validator node identity: %w", err)
+	}
+	validator1Ctrl, err := oasis.NewController(validator1.SocketPath())
+	if err != nil {
+		return err
+	}
+
+	validator2 := s.Net.Validators()[2]
+	if err != nil {
+		return fmt.Errorf("sentry: error loading validator node identity: %w", err)
+	}
+	validator2Ctrl, err := oasis.NewController(validator2.SocketPath())
+	if err != nil {
+		return err
 	}
 
 	// Sanity check sentry control endpoints. Only configured upstream nodes are
@@ -233,7 +252,7 @@ func (s *sentryImpl) Run(childEnv *env.Env) error {
 		},
 		Certificates: []tls.Certificate{},
 	}
-	conn, err := s.dial(sentry0Address, opts)
+	conn, err := s.dial(sentry0CtrlAddress, opts)
 	if err != nil {
 		return fmt.Errorf("sentry: dial error: %w", err)
 	}
@@ -253,7 +272,7 @@ func (s *sentryImpl) Run(childEnv *env.Env) error {
 		},
 		Certificates: []tls.Certificate{*validator1Identity.TLSSentryClientCertificate},
 	}
-	conn, err = s.dial(sentry0Address, opts)
+	conn, err = s.dial(sentry0CtrlAddress, opts)
 	if err != nil {
 		return fmt.Errorf("sentry: dial error: %w", err)
 	}
@@ -273,7 +292,7 @@ func (s *sentryImpl) Run(childEnv *env.Env) error {
 		},
 		Certificates: []tls.Certificate{*validator0Identity.TLSSentryClientCertificate},
 	}
-	conn, err = s.dial(sentry0Address, opts)
+	conn, err = s.dial(sentry0CtrlAddress, opts)
 	if err != nil {
 		return fmt.Errorf("sentry: dial error: %w", err)
 	}
@@ -380,6 +399,93 @@ func (s *sentryImpl) Run(childEnv *env.Env) error {
 	s.Logger.Debug("sentry4.GetCheckpoints with storage0 cert", "err", err)
 	if err != nil {
 		return errors.New("sentry4 storage checkpoints endpoint should allow connection with storage0 certificate")
+	}
+
+	// Sanity check validator peers - only sentry nodes should be present.
+	// Expected consensus peers.
+	validator0ExpectedPeerKeys := []string{
+		strings.ToLower(crypto.PublicKeyToTendermint(&sentry0P2PPubkey).Address().String()),
+		strings.ToLower(crypto.PublicKeyToTendermint(&sentry1P2PPubkey).Address().String()),
+	}
+	validator12ExpectedPeerKeys := []string{
+		strings.ToLower(crypto.PublicKeyToTendermint(&sentry2P2PPubkey).Address().String()),
+	}
+
+	// Sanity check validator0.
+	validator0Status, err := validator0Ctrl.GetStatus(ctx)
+	if err != nil {
+		return fmt.Errorf("validator0.GetStatus: %w", err)
+	}
+	validator0ConsensusPeers := consensusTendermintAddrs(validator0Status)
+	if err = sanityCheckValidatorPeers(validator0ExpectedPeerKeys, validator0ConsensusPeers); err != nil {
+		s.Logger.Error("validator0 invalid consensus peers",
+			"expected", validator0ExpectedPeerKeys,
+			"actual", validator0ConsensusPeers,
+		)
+		return err
+	}
+
+	// Sanity check validator1.
+	validator1Status, err := validator1Ctrl.GetStatus(ctx)
+	if err != nil {
+		return fmt.Errorf("validator1.GetStatus: %w", err)
+	}
+	validator1ConsensusPeers := consensusTendermintAddrs(validator1Status)
+	if err = sanityCheckValidatorPeers(validator12ExpectedPeerKeys, validator1ConsensusPeers); err != nil {
+		s.Logger.Error("validator1 invalid consensus peers",
+			"expected", validator12ExpectedPeerKeys,
+			"actual", validator1ConsensusPeers,
+		)
+		return err
+	}
+
+	// Sanity check validator2.
+	validator2Status, err := validator2Ctrl.GetStatus(ctx)
+	if err != nil {
+		return fmt.Errorf("validator2.GetStatus: %w", err)
+	}
+	validator2ConsensusPeers := consensusTendermintAddrs(validator2Status)
+	if err = sanityCheckValidatorPeers(validator12ExpectedPeerKeys, validator2ConsensusPeers); err != nil {
+		s.Logger.Error("validator2 invalid consensus peers",
+			"expected", validator12ExpectedPeerKeys,
+			"actual", validator2ConsensusPeers,
+		)
+		return err
+	}
+	return nil
+}
+
+func loadSentryNodeInfo(s *oasis.Sentry) (*oasis.Sentry, string, string, signature.PublicKey) {
+	sentryCtrlAddress := s.GetSentryControlAddress()
+	sentryAddress := s.GetSentryAddress()
+	sentryIdentity, _ := s.LoadIdentity()
+	sentryP2PPubkey := sentryIdentity.P2PSigner.Public()
+	return s, sentryAddress, sentryCtrlAddress, sentryP2PPubkey
+}
+
+func consensusTendermintAddrs(status *control.Status) (consensusPeers []string) {
+	for _, np := range status.Consensus.NodePeers {
+		consensusPeers = append(consensusPeers, strings.Split(np, "@")[0])
+	}
+	return
+}
+
+func sanityCheckValidatorPeers(expected, actual []string) error {
+	if len(expected) != len(actual) {
+		return fmt.Errorf("consensus peers length mismatch, expected: %d, actual: %d",
+			len(expected), len(actual))
+	}
+	for _, expect := range expected {
+		var found bool
+		for _, key := range actual {
+			if key == expect {
+				found = true
+				break
+			}
+		}
+		if !found {
+			return fmt.Errorf("expected consensus peer missing: %s", expect)
+		}
 	}
 
 	return nil
