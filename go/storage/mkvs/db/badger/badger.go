@@ -518,9 +518,9 @@ func (d *badgerNodeDB) Finalize(ctx context.Context, version uint64, roots []has
 	tx := d.db.NewTransactionAt(versionToTs(version), true)
 	defer tx.Discard()
 
-	// Make sure that the previous version has been finalized.
+	// Make sure that the previous version has been finalized (if we are not restoring).
 	lastFinalizedVersion, exists := d.meta.getLastFinalizedVersion()
-	if version > 0 && exists && lastFinalizedVersion < (version-1) {
+	if d.multipartVersion == multipartVersionNone && version > 0 && exists && lastFinalizedVersion < (version-1) {
 		return api.ErrNotFinalized
 	}
 	// Make sure that this version has not yet been finalized.
