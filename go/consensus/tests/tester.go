@@ -53,10 +53,10 @@ func ConsensusImplementationTests(t *testing.T, backend consensus.ClientBackend)
 	require.EqualValues(blk.Hash, status.LatestHash, "latest block hashes should match")
 	require.EqualValues(blk.StateRoot, status.LatestStateRoot, "latest state roots should match")
 
-	txs, err := backend.GetTransactions(ctx, consensus.HeightLatest)
+	txs, err := backend.GetTransactions(ctx, status.LatestHeight)
 	require.NoError(err, "GetTransactions")
 
-	txsWithResults, err := backend.GetTransactionsWithResults(ctx, consensus.HeightLatest)
+	txsWithResults, err := backend.GetTransactionsWithResults(ctx, status.LatestHeight)
 	require.NoError(err, "GetTransactionsWithResults")
 	require.Len(
 		txsWithResults.Transactions,
