@@ -155,6 +155,74 @@ node):
 }
 ```
 
+## `genesis`
+
+### `check`
+
+To check if a given [genesis file] is valid, run:
+
+```sh
+oasis-node genesis check --genesis.file /path/to/genesis.json
+```
+
+### `convert`
+
+To convert a given [genesis file] to the [canonical form], run:
+
+```sh
+oasis-node genesis convert --genesis.file /path/to/genesis.json \
+  --genesis.canonical_file /path/to/canonical-genesis.json
+```
+
+{% hint style="info" %}
+You can omit the `--genesis.canonical_file` flag and the canonical form will
+be outputted to *stdout*.
+{% endhint %}
+
+### `dump`
+
+To dump the state of the network at a specific block height, e.g. 717600, to a
+[genesis file], run:
+
+```sh
+oasis-node genesis dump \
+  --address unix:/path/to/node/internal.sock \
+  --genesis.file /path/to/genesis_dump.json \
+  --height 717600
+```
+
+{% hint style="warning" %}
+You must only run the following command after the given block height has been
+reached on the network.
+{% endhint %}
+
+### `init`
+
+To initialize a new [genesis file] with the given chain id and [staking token
+symbol], run:
+
+```sh
+oasis-node genesis init --genesis.file /path/to/genesis.json \
+  --chain.id "name-of-my-network" \
+  --staking.token_symbol GOLD
+```
+
+{% hint style="info" %}
+You can set a lot of parameters for the various [consensus layer services].
+
+To see the full list, run:
+
+```sh
+oasis-node genesis init --help
+```
+
+{% endhint %}
+
+[genesis file]: ../consensus/genesis.md#genesis-file
+[canonical form]: ../consensus/genesis.md#canonical-form
+[consensus layer services]: ../consensus/index.md
+[staking token symbol]: ../consensus/staking.md#tokens-and-base-units
+
 ## `stake`
 
 ### `account`
