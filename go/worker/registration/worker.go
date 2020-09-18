@@ -269,6 +269,10 @@ func (w *Worker) registrationLoop() { // nolint: gocyclo
 		}, off)
 	}
 
+	// (re-)register the node on entity registration update.
+	entityCh, entitySub, _ := w.registry.WatchEntities(w.ctx)
+	defer entitySub.Close()
+
 	var epoch epochtime.EpochTime
 	var lastTLSRotationEpoch epochtime.EpochTime
 	tlsRotationPending := true
@@ -310,6 +314,11 @@ Loop:
 					}
 				}
 			}
+		case ev := <-entityCh:
+			// Entity registration update.
+			if !ev.IsRegistration || !ev.Entity.ID.Equal(w.entityID) {
+				continue
+			}
 		case <-w.registerCh:
 			// Notification that a role provider has been updated.
 		}
@@ -345,10 +354,32 @@ Loop:
 			continue Loop
 		}
 
+		// Check if the entity under which we are registering actually exists.
+		_, err := w.registry.GetEntity(w.ctx, &registry.IDQuery{
+			Height: consensus.HeightLatest,
+			ID:     w.entityID,
+		})
+		switch err {
+		case nil:
+		case registry.ErrNoSuchEntity:
+			// Entity does not yet exist.
+			w.logger.Warn("defering registration as the owning entity does not exist",
+				"entity_id", w.entityID,
+			)
+			continue
+		default:
+			// Unknown error while trying to look up entity.
+			w.logger.Error("failed to query owning entity",
+				"err", err,
+				"entity_id", w.entityID,
+			)
+			continue
+		}
+
 		// Package all per-role/runtime hooks into a metahook.
 		hook := func(n *node.Node) error {
 			for _, hook := range hooks {
-				if err := hook(n); err != nil {
+				if err = hook(n); err != nil {
 					return fmt.Errorf("hook failed: %w", err)
 				}
 			}
@@ -356,7 +387,7 @@ Loop:
 		}
 
 		// Attempt a registration.
-		if err := regFn(epoch, hook, first); err != nil {
+		if err = regFn(epoch, hook, first); err != nil {
 			if first {
 				w.logger.Error("failed to register node",
 					"err", err,
