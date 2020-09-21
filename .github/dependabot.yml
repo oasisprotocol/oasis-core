@@ -58,8 +58,6 @@ updates:
       - dependency-name: futures
       - dependency-name: grpcio
       - dependency-name: intrusive-collections
-      - dependency-name: rustracing
-      - dependency-name: rustracing_jaeger
       - dependency-name: serde
       - dependency-name: serde_bytes
       - dependency-name: serde_cbor
