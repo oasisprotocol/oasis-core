@@ -96,7 +96,7 @@ impl Demux {
         let id = frame.session.clone();
         let untrusted_plaintext = frame.untrusted_plaintext.clone();
 
-        if let Some(enriched_session) = self.sessions.get_mut(&id) {
+        if let Some(enriched_session) = self.sessions.get_mut(&id.into()) {
             match enriched_session
                 .session
                 .process_data(frame.payload, writer)

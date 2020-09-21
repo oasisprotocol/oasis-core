@@ -1696,9 +1696,9 @@ dependencies = [
 
 [[package]]
 name = "serde_bytes"
-version = "0.10.5"
+version = "0.11.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "defbb8a83d7f34cc8380751eeb892b825944222888aff18996ea7901f24aec88"
+checksum = "16ae07dd2f88a366f15bd0632ba725227018c69a1c8550a927324f8eb8368bb9"
 dependencies = [
  "serde",
 ]
@@ -1860,6 +1860,7 @@ dependencies = [
  "oasis-core-client",
  "oasis-core-runtime",
  "rand",
+ "serde_bytes",
  "simple-keyvalue-api",
  "tokio 0.1.22",
 ]

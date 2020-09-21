@@ -58,7 +58,8 @@ mod batch_serialize {
     where
         D: Deserializer<'de>,
     {
-        Vec::<ByteBuf>::deserialize(deserializer).map(|v| v.into_iter().map(|e| e.into()).collect())
+        Vec::<ByteBuf>::deserialize(deserializer)
+            .map(|v| v.into_iter().map(ByteBuf::into_vec).collect())
     }
 }
 
