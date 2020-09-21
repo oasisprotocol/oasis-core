@@ -1,7 +1,7 @@
 //! Client for service defined in go/storage/api.
 use grpcio::{CallOption, Channel, Client, Result};
+use serde::{Deserialize, Serialize};
 use serde_cbor::value::Value;
-use serde_derive::{Deserialize, Serialize};
 
 use oasis_core_runtime::{
     common::{crypto::hash::Hash, roothash::Namespace},

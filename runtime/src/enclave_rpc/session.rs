@@ -2,7 +2,7 @@
 use std::{collections::HashSet, io::Write, mem, sync::Arc};
 
 use anyhow::Result;
-use serde_derive::{Deserialize, Serialize};
+use serde::{Deserialize, Serialize};
 use snow;
 use thiserror::Error;
 

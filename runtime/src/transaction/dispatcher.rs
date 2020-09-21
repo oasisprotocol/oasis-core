@@ -357,7 +357,7 @@ impl Dispatcher for MethodDispatcher {
 #[cfg(test)]
 mod tests {
     use io_context::Context as IoContext;
-    use serde_derive::{Deserialize, Serialize};
+    use serde::{Deserialize, Serialize};
 
     use crate::common::{cbor, roothash::Header};
 

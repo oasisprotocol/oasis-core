@@ -2,8 +2,8 @@ use std::any::Any;
 
 use anyhow::Result;
 use io_context::Context;
+use serde::{Deserialize, Serialize};
 use serde_bytes;
-use serde_derive::{Deserialize, Serialize};
 
 use crate::{
     common::crypto::hash::Hash,

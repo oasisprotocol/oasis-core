@@ -4,7 +4,7 @@
 //!
 //! This **MUST** be kept in sync with go/roothash/api/block.
 //!
-use serde_derive::{Deserialize, Serialize};
+use serde::{Deserialize, Serialize};
 use serde_repr::*;
 
 use super::{

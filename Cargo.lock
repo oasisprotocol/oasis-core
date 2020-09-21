@@ -1151,7 +1151,6 @@ dependencies = [
  "serde",
  "serde_bytes",
  "serde_cbor",
- "serde_derive",
  "thiserror",
  "tokio 0.1.22",
  "tokio-current-thread",
@@ -1170,7 +1169,6 @@ dependencies = [
  "rustc-hex",
  "serde",
  "serde_bytes",
- "serde_derive",
  "thiserror",
  "x25519-dalek 1.1.0",
 ]
@@ -1236,7 +1234,6 @@ dependencies = [
  "serde",
  "serde_bytes",
  "serde_cbor",
- "serde_derive",
  "serde_json",
  "serde_repr",
  "sgx-isa",
@@ -1279,7 +1276,6 @@ dependencies = [
  "anyhow",
  "clap",
  "serde",
- "serde_derive",
  "thiserror",
  "toml",
 ]
@@ -1691,9 +1687,12 @@ checksum = "388a1df253eca08550bef6c72392cfe7c30914bf41df5269b68cbd6ff8f570a3"
 
 [[package]]
 name = "serde"
-version = "1.0.115"
+version = "1.0.116"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e54c9a88f2da7238af84b5101443f0c0d0a3bbdc455e34a5c9497b1903ed55d5"
+checksum = "96fe57af81d28386a513cbc6858332abc6117cfdb5999647c6444b8f43a370a5"
+dependencies = [
+ "serde_derive",
+]
 
 [[package]]
 name = "serde_bytes"
@@ -1849,7 +1848,6 @@ version = "0.3.0-alpha"
 dependencies = [
  "oasis-core-runtime",
  "serde",
- "serde_derive",
 ]
 
 [[package]]

@@ -3,8 +3,8 @@ use std::ops::{Deref, DerefMut};
 use anyhow::{anyhow, Result};
 use arbitrary::Arbitrary;
 use io_context::Context;
+use serde::{Deserialize, Serialize};
 use serde_bytes;
-use serde_derive::{Deserialize, Serialize};
 
 use crate::{
     common::crypto::hash::Hash,

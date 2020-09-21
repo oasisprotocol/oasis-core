@@ -1,7 +1,7 @@
 //! Client for service defined in go/runtime/client/api.
 use grpcio::{CallOption, Channel, Client, ClientSStreamReceiver, ClientUnaryReceiver, Result};
+use serde::{Deserialize, Serialize};
 use serde_bytes::ByteBuf;
-use serde_derive::{Deserialize, Serialize};
 
 use oasis_core_runtime::{
     common::{

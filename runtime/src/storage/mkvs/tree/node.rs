@@ -1,6 +1,6 @@
 use std::{cell::RefCell, rc::Rc};
 
-use serde_derive::{Deserialize, Serialize};
+use serde::{Deserialize, Serialize};
 
 use crate::{
     common::{crypto::hash::Hash, roothash::Namespace},

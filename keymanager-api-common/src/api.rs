@@ -5,7 +5,7 @@ use std::{
 
 use base64;
 use rand::{rngs::OsRng, Rng};
-use serde_derive::{Deserialize, Serialize};
+use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use x25519_dalek;
 

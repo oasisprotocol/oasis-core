@@ -1,7 +1,6 @@
 use grpcio::{CallOption, Channel, Client, Error, Marshaller, Method, MethodType, Result};
-use serde::{de::DeserializeOwned, Serialize};
+use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use serde_cbor::Value;
-use serde_derive::{Deserialize, Serialize};
 
 use crate::{
     common::{cbor, crypto::hash::Hash, roothash::Namespace},

@@ -58,5 +58,4 @@ updates:
       - dependency-name: futures
       - dependency-name: grpcio
       - dependency-name: intrusive-collections
-      - dependency-name: serde
       - dependency-name: serde_bytes

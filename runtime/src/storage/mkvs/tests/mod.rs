@@ -2,8 +2,7 @@
 use std::fmt;
 
 use base64;
-use serde;
-use serde_derive::Deserialize;
+use serde::{self, Deserialize};
 
 /// Tree operation kind.
 #[derive(Clone, Debug, Deserialize)]

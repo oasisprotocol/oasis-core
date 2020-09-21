@@ -1,6 +1,6 @@
 //! RPC protocol types.
 use rand::{rngs::OsRng, Rng};
-use serde_derive::{Deserialize, Serialize};
+use serde::{Deserialize, Serialize};
 
 use crate::common::cbor::Value;
 

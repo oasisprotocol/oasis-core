@@ -3,7 +3,6 @@ extern crate ansi_term;
 extern crate anyhow;
 extern crate clap;
 extern crate serde;
-extern crate serde_derive;
 
 use std::{
     fs, io,

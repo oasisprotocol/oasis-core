@@ -1,7 +1,6 @@
 //! Types used by the worker-host protocol.
-use serde::{self, Deserializer, Serializer};
+use serde::{self, Deserialize, Deserializer, Serialize, Serializer};
 use serde_bytes;
-use serde_derive::{Deserialize, Serialize};
 
 use crate::{
     common::{
