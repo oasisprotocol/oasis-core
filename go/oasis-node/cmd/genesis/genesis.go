@@ -2,13 +2,16 @@
 package genesis
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io/ioutil"
 	"math"
 	"os"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -99,6 +102,10 @@ const (
 	// Our 'entity' flag overlaps with the common flag 'entity'.
 	// We bind it to a separate Viper key to disambiguate at runtime.
 	viperEntity = "provision_entity"
+
+	// Check command.
+	// Number of lines to print if document not in canonical form.
+	checkNotCanonicalLines = 10
 )
 
 var (
@@ -611,7 +618,37 @@ func doCheckGenesis(cmd *cobra.Command, args []string) {
 		os.Exit(1)
 	}
 
-	// TODO: Pretty-print contents of genesis document.
+	// Load raw genesis file.
+	rawFile, err := ioutil.ReadFile(filename)
+	if err != nil {
+		logger.Error("failed to read genesis file:", "err", err)
+		os.Exit(1)
+	}
+	// Create a marshalled genesis document in the canonical form with 2 space indents.
+	rawCanonical, err := json.MarshalIndent(doc, "", "  ")
+	if err != nil {
+		logger.Error("failed to marshal genesis document", "err", err)
+		os.Exit(1)
+	}
+	// Genesis file should equal the canonical form.
+	if !bytes.Equal(rawFile, rawCanonical) {
+		fileLines := strings.Split(string(rawFile), "\n")
+		if len(fileLines) > checkNotCanonicalLines {
+			fileLines = fileLines[:checkNotCanonicalLines]
+		}
+		canonicalLines := strings.Split(string(rawCanonical), "\n")
+		if len(canonicalLines) > checkNotCanonicalLines {
+			canonicalLines = canonicalLines[:checkNotCanonicalLines]
+		}
+		logger.Error("genesis document is not marshalled in the canonical form")
+		fmt.Fprintf(os.Stderr,
+			"Error: genesis document is not marshalled in the canonical form:\n"+
+				"\nActual marshalled genesis document (trimmed):\n%s\n\n... trimmed ...\n"+
+				"\nExpected marshalled genesis document (trimmed):\n%s\n\n... trimmed ...\n",
+			strings.Join(fileLines, "\n"), strings.Join(canonicalLines, "\n"),
+		)
+		os.Exit(1)
+	}
 }
 
 // Register registers the genesis sub-command and all of it's children.
