@@ -1,7 +1,6 @@
 package e2e
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -56,10 +55,10 @@ func (s *genesisFileImpl) Run(childEnv *env.Env) error {
 	cfg := s.Net.Config()
 	cfg.GenesisFile = s.Net.GenesisPath()
 
-	if err := checkGenesisFile(s.Net.GenesisPath()); err != nil {
-		return fmt.Errorf("e2e/genesis-file: %w", err)
+	if err := s.runGenesisCheckCmd(childEnv, s.Net.GenesisPath()); err != nil {
+		return fmt.Errorf("e2e/genesis-file: running genesis check failed: %w", err)
 	}
-	s.Logger.Info("manually provisioned genesis file equals canonical form")
+	s.Logger.Info("manually provisioned genesis file passed genesis check command")
 
 	if err := s.Net.Start(); err != nil {
 		return fmt.Errorf("e2e/genesis-file: failed to start network: %w", err)
@@ -72,7 +71,6 @@ func (s *genesisFileImpl) Run(childEnv *env.Env) error {
 
 	// Dump network state to a genesis file.
 	s.Logger.Info("dumping network state to genesis file")
-
 	dumpPath := filepath.Join(childEnv.Dir(), "genesis_dump.json")
 	args := []string{
 		"genesis", "dump",
@@ -80,21 +78,54 @@ func (s *genesisFileImpl) Run(childEnv *env.Env) error {
 		"--genesis.file", dumpPath,
 		"--address", "unix:" + s.Net.Validators()[0].SocketPath(),
 	}
-	if err := cli.RunSubCommand(childEnv, s.Logger, "genesis-file", s.Net.Config().NodeBinary, args); err != nil {
-		return fmt.Errorf("e2e/genesis-file: failed to dump state: %w", err)
+	out, err := cli.RunSubCommandWithOutput(childEnv, s.Logger, "genesis-file", s.Net.Config().NodeBinary, args)
+	if err != nil {
+		return fmt.Errorf("e2e/genesis-file: failed to dump state: error: %w output: %s", err, out.String())
 	}
-	if err := checkGenesisFile(dumpPath); err != nil {
-		return fmt.Errorf("e2e/genesis-file: %w", err)
+
+	if err = s.runGenesisCheckCmd(childEnv, dumpPath); err != nil {
+		return fmt.Errorf("e2e/genesis-file: running genesis check failed: %w", err)
 	}
-	s.Logger.Info("genesis file from dumped network state equals canonical form")
+	s.Logger.Info("genesis file from dumped network state passed genesis check command")
+
+	uncanonicalPath := filepath.Join(childEnv.Dir(), "genesis_uncanonical.json")
+	if err = s.createUncanonicalGenesisFile(childEnv, uncanonicalPath); err != nil {
+		return fmt.Errorf("e2e/genesis-file: creating uncanonical genesis file failed: %w", err)
+	}
+	err = s.runGenesisCheckCmd(childEnv, uncanonicalPath)
+	expectedError := "genesis document is not marshalled in the canonical form"
+	switch {
+	case err == nil:
+		return fmt.Errorf("e2e/genesis-file: running genesis check for an uncanonical genesis file should fail")
+	case !strings.Contains(err.Error(), expectedError):
+		return fmt.Errorf(
+			"e2e/genesis-file: running genesis check for an uncanonical genesis file "+
+				"should fail with an error containing: '%s' (actual error: %s)",
+			expectedError, err,
+		)
+	default:
+		s.Logger.Info("uncanonical genesis file didn't pass genesis check command")
+	}
 
 	return nil
 }
 
-// checkGenesisFile checks if the given genesis file equals the canonical form.
-func checkGenesisFile(filePath string) error {
-	// Load genesis document from the genesis file.
-	provider, err := genesisFile.NewFileProvider(filePath)
+func (s *genesisFileImpl) runGenesisCheckCmd(childEnv *env.Env, genesisFilePath string) error {
+	args := []string{
+		"genesis", "check",
+		"--genesis.file", genesisFilePath,
+		"--debug.dont_blame_oasis",
+		"--debug.allow_test_keys",
+	}
+	out, err := cli.RunSubCommandWithOutput(childEnv, s.Logger, "genesis-file", s.Net.Config().NodeBinary, args)
+	if err != nil {
+		return fmt.Errorf("genesis check failed: error: %w output: %s", err, out.String())
+	}
+	return nil
+}
+
+func (s *genesisFileImpl) createUncanonicalGenesisFile(childEnv *env.Env, uncanonicalGenesisFilePath string) error {
+	provider, err := genesisFile.NewFileProvider(s.Net.GenesisPath())
 	if err != nil {
 		return fmt.Errorf("failed to open genesis file: %w", err)
 	}
@@ -102,32 +133,15 @@ func checkGenesisFile(filePath string) error {
 	if err != nil {
 		return fmt.Errorf("failed to get genesis document: %w", err)
 	}
-	// Perform sanity checks on the loaded genesis document.
-	err = doc.SanityCheck()
-	if err != nil {
-		return fmt.Errorf("genesis document sanity check failed: %w", err)
-	}
 
-	// Load raw genesis file.
-	rawFile, err := ioutil.ReadFile(filePath)
-	if err != nil {
-		return fmt.Errorf("failed to read genesis file: %w", err)
-	}
-	// Create a marshalled genesis document in the canonical form with 2 space indents.
-	rawCanonical, err := json.MarshalIndent(doc, "", "  ")
+	// Create a marshalled genesis document in an uncanonical form (e.g with 4 space indents).
+	rawUncanonical, err := json.MarshalIndent(doc, "", "    ")
 	if err != nil {
 		return fmt.Errorf("failed to marshal genesis document: %w", err)
 	}
-	// Genesis file should equal the canonical form.
-	if !bytes.Equal(rawFile, rawCanonical) {
-		fileLines := strings.Split(string(rawFile), "\n")
-		canonicalLines := strings.Split(string(rawCanonical), "\n")
-		return fmt.Errorf(
-			"genesis document is not marshalled to the canonical form:\n"+
-				"\nActual marshalled genesis document (trimmed):\n%s\n"+
-				"\nExpected marshalled genesis document (trimmed):\n%s\n",
-			strings.Join(fileLines[:10], "\n"), strings.Join(canonicalLines[:10], "\n"),
-		)
+	if err := ioutil.WriteFile(uncanonicalGenesisFilePath, rawUncanonical, 0o600); err != nil {
+		return fmt.Errorf("failed to write mashalled genesis document to file: %w", err)
 	}
+
 	return nil
 }
