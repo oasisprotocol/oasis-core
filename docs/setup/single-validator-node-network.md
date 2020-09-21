@@ -76,7 +76,8 @@ oasis-node genesis init \
   --debug.dont_blame_oasis \
   --debug.test_entity \
   --debug.allow_test_keys \
-  --registry.debug.allow_unroutable_addresses
+  --registry.debug.allow_unroutable_addresses \
+  --staking.token_symbol TEST
 ```
 
 {% hint style="danger" %}
