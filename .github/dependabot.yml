@@ -61,4 +61,3 @@ updates:
       - dependency-name: serde
       - dependency-name: serde_bytes
       - dependency-name: serde_cbor
-      - dependency-name: snow
