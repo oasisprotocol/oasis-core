@@ -1,9 +1,8 @@
 //! Transaction I/O tree.
 use anyhow::{anyhow, Result};
 use io_context::Context;
-use serde::{self, ser::SerializeSeq, Serializer};
+use serde::{self, ser::SerializeSeq, Deserialize, Serializer};
 use serde_bytes::{self, Bytes};
-use serde_derive::Deserialize;
 
 use super::tags::Tags;
 use crate::{

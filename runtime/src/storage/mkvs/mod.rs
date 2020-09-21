@@ -4,9 +4,8 @@ use std::ops::{Deref, DerefMut};
 use anyhow::Result;
 use base64;
 use io_context::Context;
-use serde::{self, ser::SerializeSeq, Serializer};
+use serde::{self, ser::SerializeSeq, Deserialize, Serialize, Serializer};
 use serde_bytes::Bytes;
-use serde_derive::{Deserialize, Serialize};
 
 use crate::common::{crypto::hash::Hash, roothash::Namespace};
 

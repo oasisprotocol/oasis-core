@@ -1,6 +1,6 @@
 //! RPC protocol types.
 use rand::{rngs::OsRng, Rng};
-use serde_derive::{Deserialize, Serialize};
+use serde::{Deserialize, Serialize};
 
 use crate::common::cbor::Value;
 
@@ -25,7 +25,6 @@ impl SessionID {
 /// Frame.
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Frame {
-    #[serde(with = "serde_bytes")]
     pub session: SessionID,
     // The `untrusted_plaintext` field is only a temporary workaround until
     // the snow library supports encrypting the payload with authenticated

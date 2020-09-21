@@ -13,6 +13,7 @@ use clap::{App, Arg};
 use grpcio::EnvBuilder;
 use io_context::Context;
 use rand::{rngs::StdRng, Rng, SeedableRng};
+use serde_bytes::ByteBuf;
 use tokio::runtime::Runtime;
 
 use oasis_core_client::{
@@ -229,7 +230,7 @@ fn main() {
         round_max: latest_round,
         conditions: vec![QueryCondition {
             key: b"kv_op".to_vec(),
-            values: vec![b"insert".to_vec().into()],
+            values: vec![ByteBuf::from(b"insert".to_vec())],
         }],
         limit: 0,
     };

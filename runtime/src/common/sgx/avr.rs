@@ -7,7 +7,7 @@ use byteorder::{LittleEndian, ReadBytesExt};
 use chrono::prelude::*;
 use pem::parse_many;
 use percent_encoding;
-use serde_derive::{Deserialize, Serialize};
+use serde::{Deserialize, Serialize};
 use serde_json;
 use sgx_isa::{AttributesFlags, Report};
 use thiserror::Error;

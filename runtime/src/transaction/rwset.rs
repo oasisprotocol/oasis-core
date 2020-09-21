@@ -1,6 +1,6 @@
 //! Read/write set.
+use serde::{Deserialize, Serialize};
 use serde_bytes;
-use serde_derive::{Deserialize, Serialize};
 
 /// A coarsened key prefix that represents any key that starts with
 /// this prefix.

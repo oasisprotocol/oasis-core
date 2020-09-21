@@ -8,7 +8,7 @@ use super::{
     super::storage::mkvs::WriteLog,
     crypto::{hash, signature::SignatureBundle},
 };
-use serde_derive::{Deserialize, Serialize};
+use serde::{Deserialize, Serialize};
 
 /// Runtime genesis information that is used to initialize runtime state in the first block.
 #[derive(Clone, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]

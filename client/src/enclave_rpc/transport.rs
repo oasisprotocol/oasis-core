@@ -85,7 +85,7 @@ impl Transport for GrpcTransport {
         };
 
         match self.grpc_client.call_enclave(&req, Default::default()) {
-            Ok(rsp) => Box::new(rsp.map(|r| r.into()).map_err(|error| error.into())),
+            Ok(rsp) => Box::new(rsp.map(|r| r.into_vec()).map_err(|error| error.into())),
             Err(error) => Box::new(future::err(error.into())),
         }
     }

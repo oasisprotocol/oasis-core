@@ -93,7 +93,7 @@ impl TxnClient {
             Ok(resp) => Box::new(
                 resp.map(|r| {
                     drop(span);
-                    r.into()
+                    r.into_vec()
                 })
                 .map_err(|error| TxnClientError::CallFailed(format!("{}", error)).into()),
             ),

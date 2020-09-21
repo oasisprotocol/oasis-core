@@ -5,7 +5,7 @@ use anyhow::Result;
 use byteorder::{LittleEndian, ReadBytesExt};
 use ed25519_dalek::{self, ed25519::signature::Signature as _, Signer as _, Verifier};
 use rand::rngs::OsRng;
-use serde_derive::{Deserialize, Serialize};
+use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use zeroize::Zeroize;
 

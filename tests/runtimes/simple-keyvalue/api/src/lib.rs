@@ -1,5 +1,4 @@
 extern crate serde;
-extern crate serde_derive;
 
 extern crate oasis_core_runtime;
 
