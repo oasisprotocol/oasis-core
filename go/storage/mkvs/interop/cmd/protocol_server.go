@@ -1,6 +1,11 @@
 package cmd
 
 import (
+	"fmt"
+	"io"
+	"os"
+	"path/filepath"
+
 	"github.com/spf13/cobra"
 	flag "github.com/spf13/pflag"
 	"github.com/spf13/viper"
@@ -38,7 +43,20 @@ func doProtoServer(cmd *cobra.Command, args []string) {
 
 	dataDir := viper.GetString(cfgServerDataDir)
 	if dataDir == "" {
-		logger.Error("no data directory specified")
+		fmt.Println("no data directory specified")
+		return
+	}
+
+	// Initialize logging.
+	logFile := filepath.Join(dataDir, "protocol_server.log")
+	w, err := os.OpenFile(logFile, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o600)
+	if err != nil {
+		fmt.Printf("failed to open log file: %v\n", err)
+		return
+	}
+	logWriter := io.MultiWriter(os.Stdout, w)
+	if err = logging.Initialize(logWriter, logging.FmtJSON, logging.LevelWarn, nil); err != nil {
+		fmt.Printf("failed to initialize logging: %v\n", err)
 		return
 	}
 

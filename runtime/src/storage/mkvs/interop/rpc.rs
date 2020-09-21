@@ -1,3 +1,5 @@
+use std::time::Duration;
+
 use grpcio::{CallOption, Channel, Client, Error, Marshaller, Method, MethodType, Result};
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use serde_cbor::Value;
@@ -61,6 +63,9 @@ const METHOD_SYNC_ITERATE: Method<sync::IterateRequest, sync::ProofResponse> = M
     },
 };
 
+// Calls should still have a timeout to handle the case where the interop server exits prematurely.
+const CALL_TIMEOUT: Duration = Duration::from_secs(30);
+
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct ApplyRequest {
     pub namespace: Namespace,
@@ -94,7 +99,9 @@ impl StorageClient {
             .unary_call(
                 &METHOD_APPLY,
                 &request,
-                CallOption::default().wait_for_ready(true),
+                CallOption::default()
+                    .wait_for_ready(true)
+                    .timeout(CALL_TIMEOUT),
             )
             .map(|_| ())
     }
@@ -103,7 +110,9 @@ impl StorageClient {
         self.client.unary_call(
             &METHOD_SYNC_GET,
             &request,
-            CallOption::default().wait_for_ready(true),
+            CallOption::default()
+                .wait_for_ready(true)
+                .timeout(CALL_TIMEOUT),
         )
     }
 
@@ -114,7 +123,9 @@ impl StorageClient {
         self.client.unary_call(
             &METHOD_SYNC_GET_PREFIXES,
             &request,
-            CallOption::default().wait_for_ready(true),
+            CallOption::default()
+                .wait_for_ready(true)
+                .timeout(CALL_TIMEOUT),
         )
     }
 
@@ -122,7 +133,9 @@ impl StorageClient {
         self.client.unary_call(
             &METHOD_SYNC_ITERATE,
             &request,
-            CallOption::default().wait_for_ready(true),
+            CallOption::default()
+                .wait_for_ready(true)
+                .timeout(CALL_TIMEOUT),
         )
     }
 }
