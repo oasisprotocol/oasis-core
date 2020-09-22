@@ -148,8 +148,8 @@ type Node struct { // nolint: maligned
 	scheduler      schedulingAPI.Scheduler
 
 	// Guarded by .commonNode.CrossNode.
-	proposingTimeout     bool
-	prevEpochInCommittee bool
+	proposingTimeout bool
+	prevEpochWorker  bool
 
 	commonNode   *committee.Node
 	commonCfg    commonWorker.Config
@@ -457,20 +457,18 @@ func (n *Node) HandleEpochTransitionLocked(epoch *committee.EpochSnapshot) {
 			}
 			incomingQueueSize.With(n.getMetricLabels()).Set(float64(n.scheduler.UnscheduledSize()))
 		}
-		fallthrough
-	case epoch.IsExecutorBackupWorker():
-		if !n.prevEpochInCommittee {
+		if !n.prevEpochWorker {
 			// Clear incoming queue and cache of any stale transactions in case
-			// we were not part of the committee in previous epoch.
+			// we were not part of the compute committee in previous epoch.
 			n.clearQueuedTxs()
 		}
-
-		n.prevEpochInCommittee = true
+		fallthrough
+	case epoch.IsExecutorBackupWorker():
 		n.transitionLocked(StateWaitingForBatch{})
 	default:
-		n.prevEpochInCommittee = false
 		n.transitionLocked(StateNotReady{})
 	}
+	n.prevEpochWorker = epoch.IsExecutorWorker()
 }
 
 // HandleNewBlockEarlyLocked implements NodeHooks.
