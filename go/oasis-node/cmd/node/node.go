@@ -713,17 +713,17 @@ func newNode(testNode bool) (n *Node, err error) { // nolint: gocyclo
 		}
 	}
 
-	// Start the consensus backend service.
-	if err = node.Consensus.Start(); err != nil {
-		logger.Error("failed to start consensus backend service",
+	// Start the internal gRPC server.
+	if err = node.grpcInternal.Start(); err != nil {
+		logger.Error("failed to start internal gRPC server",
 			"err", err,
 		)
 		return nil, err
 	}
 
-	// Start the internal gRPC server.
-	if err = node.grpcInternal.Start(); err != nil {
-		logger.Error("failed to start internal gRPC server",
+	// Start the consensus backend service.
+	if err = node.Consensus.Start(); err != nil {
+		logger.Error("failed to start consensus backend service",
 			"err", err,
 		)
 		return nil, err

@@ -805,26 +805,30 @@ func (t *fullService) GetStatus(ctx context.Context) (*consensusAPI.Status, erro
 	}
 
 	status.GenesisHeight = t.genesis.Height
-	genBlk, err := t.GetBlock(ctx, t.genesis.Height)
-	switch err {
-	case nil:
-		status.GenesisHash = genBlk.Hash
-	default:
-		// We may not be able to fetch the genesis block in case it has been pruned.
-	}
+	if t.started() {
+		// Only attempt to fetch blocks in case the consensus service has started as otherwise
+		// requests will block.
+		genBlk, err := t.GetBlock(ctx, t.genesis.Height)
+		switch err {
+		case nil:
+			status.GenesisHash = genBlk.Hash
+		default:
+			// We may not be able to fetch the genesis block in case it has been pruned.
+		}
 
-	// Latest block.
-	latestBlk, err := t.GetBlock(ctx, consensusAPI.HeightLatest)
-	switch err {
-	case nil:
-		status.LatestHeight = latestBlk.Height
-		status.LatestHash = latestBlk.Hash
-		status.LatestTime = latestBlk.Time
-		status.LatestStateRoot = latestBlk.StateRoot
-	case consensusAPI.ErrNoCommittedBlocks:
-		// No committed blocks yet.
-	default:
-		return nil, fmt.Errorf("failed to fetch current block: %w", err)
+		// Latest block.
+		latestBlk, err := t.GetBlock(ctx, consensusAPI.HeightLatest)
+		switch err {
+		case nil:
+			status.LatestHeight = latestBlk.Height
+			status.LatestHash = latestBlk.Hash
+			status.LatestTime = latestBlk.Time
+			status.LatestStateRoot = latestBlk.StateRoot
+		case consensusAPI.ErrNoCommittedBlocks:
+			// No committed blocks yet.
+		default:
+			return nil, fmt.Errorf("failed to fetch current block: %w", err)
+		}
 	}
 
 	// List of consensus peers.
