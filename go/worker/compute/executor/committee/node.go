@@ -148,10 +148,10 @@ type Node struct { // nolint: maligned
 	scheduler      schedulingAPI.Scheduler
 
 	// Guarded by .commonNode.CrossNode.
-	proposingTimeout bool
+	proposingTimeout     bool
+	prevEpochInCommittee bool
 
-	commonNode *committee.Node
-
+	commonNode   *committee.Node
 	commonCfg    commonWorker.Config
 	roleProvider registration.RoleProvider
 
@@ -223,6 +223,15 @@ func (n *Node) getMetricLabels() prometheus.Labels {
 	}
 }
 
+// Assumes scheduler is initialized.
+func (n *Node) clearQueuedTxs() {
+	n.scheduler.Clear()
+	if n.lastScheduledCache != nil {
+		n.lastScheduledCache.Clear()
+	}
+	incomingQueueSize.With(n.getMetricLabels()).Set(0)
+}
+
 // HandlePeerMessage implements NodeHooks.
 func (n *Node) HandlePeerMessage(ctx context.Context, message *p2p.Message, isOwn bool) (bool, error) {
 	n.logger.Debug("received peer message", "message", message, "is_own", isOwn)
@@ -231,6 +240,9 @@ func (n *Node) HandlePeerMessage(ctx context.Context, message *p2p.Message, isOw
 	case message.Tx != nil:
 		call := message.Tx.Data
 
+		// Note: if an epoch transition is just about to happen we can be out of
+		// the committee by the time we queue the transaction, but this is fine
+		// as scheduling is aware of this.
 		if !n.commonNode.Group.GetEpochSnapshot().IsExecutorWorker() {
 			n.logger.Debug("unable to handle transaction message, not execution worker",
 				"current_epoch", n.commonNode.Group.GetEpochSnapshot().GetEpochNumber(),
@@ -433,15 +445,6 @@ func (n *Node) HandleEpochTransitionLocked(epoch *committee.EpochSnapshot) {
 		return
 	}
 
-	if !epoch.IsExecutorWorker() {
-		// Clear incoming queue if we are not a worker anymore.
-		n.scheduler.Clear()
-		if n.lastScheduledCache != nil {
-			n.lastScheduledCache.Clear()
-		}
-		incomingQueueSize.With(n.getMetricLabels()).Set(0)
-	}
-
 	switch {
 	case epoch.IsExecutorWorker():
 		if state, ok := n.state.(StateWaitingForFinalize); ok {
@@ -452,11 +455,20 @@ func (n *Node) HandleEpochTransitionLocked(epoch *committee.EpochSnapshot) {
 					"err", err,
 				)
 			}
+			incomingQueueSize.With(n.getMetricLabels()).Set(float64(n.scheduler.UnscheduledSize()))
 		}
 		fallthrough
 	case epoch.IsExecutorBackupWorker():
+		if !n.prevEpochInCommittee {
+			// Clear incoming queue and cache of any stale transactions in case
+			// we were not part of the committee in previous epoch.
+			n.clearQueuedTxs()
+		}
+
+		n.prevEpochInCommittee = true
 		n.transitionLocked(StateWaitingForBatch{})
 	default:
+		n.prevEpochInCommittee = false
 		n.transitionLocked(StateNotReady{})
 	}
 }
@@ -1038,6 +1050,7 @@ func (n *Node) abortBatchLocked(reason error) {
 				"err", err,
 			)
 		}
+		incomingQueueSize.With(n.getMetricLabels()).Set(float64(n.scheduler.UnscheduledSize()))
 	}
 
 	abortedBatchCount.With(n.getMetricLabels()).Inc()
