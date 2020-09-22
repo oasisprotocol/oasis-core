@@ -15,15 +15,25 @@ import (
 
 // IsErrorCode returns true if the given error represents a specific gRPC error code.
 func IsErrorCode(err error, code codes.Code) bool {
+	status := GetErrorStatus(err)
+	if status == nil {
+		return false
+	}
+
+	return status.Code() == code
+}
+
+// GetErrorStatus returns gRPC status from error.
+func GetErrorStatus(err error) *status.Status {
 	var grpcError interface {
 		error
 		GRPCStatus() *status.Status
 	}
 	if !errors.As(err, &grpcError) {
-		return false
+		return nil
 	}
 
-	return grpcError.GRPCStatus().Code() == code
+	return grpcError.GRPCStatus()
 }
 
 // grpcError is a serializable error.

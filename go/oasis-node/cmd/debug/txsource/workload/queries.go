@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"io"
 	"math/rand"
 	"time"
 
@@ -172,7 +173,7 @@ func (q *queries) sanityCheckTransactionEvents(ctx context.Context, height int64
 			"staking_events", expectedStakingEvents,
 			"height", height,
 		)
-		return fmt.Errorf("GetTransactionWithResults staking events length missmatch")
+		return fmt.Errorf("GetTransactionsWithResults staking events length missmatch")
 	}
 	if len(expectedRegistryEvents) != numRegistryEvents {
 		q.logger.Error("GetTransactionsWithResults registry events lengths missmatch",
@@ -180,7 +181,7 @@ func (q *queries) sanityCheckTransactionEvents(ctx context.Context, height int64
 			"registry_events", expectedRegistryEvents,
 			"height", height,
 		)
-		return fmt.Errorf("GetTransactionWithResults registry events length missmatch")
+		return fmt.Errorf("GetTransactionsWithResults registry events length missmatch")
 	}
 
 	return nil
@@ -228,7 +229,18 @@ func (q *queries) doConsensusQueries(ctx context.Context, rng *rand.Rand, height
 			"txs", txs,
 			"txs_with_results", txsWithRes,
 			"height", height,
+			"err", err,
 		)
+		if status := cmnGrpc.GetErrorStatus(err); status != nil {
+			if status.Err() == io.ErrUnexpectedEOF {
+				// XXX: Connection seems to get occasionally reset with
+				// FLOW_CONTROL_ERROR in GetTransactionsWithResult during
+				// long-term tests, don't fail on this error until we
+				// investigate this further.
+				// https://github.com/oasisprotocol/oasis-core/issues/3334
+				return nil
+			}
+		}
 		return fmt.Errorf("GetTransactionsWithResults at height %d: %w", height, err)
 	}
 	if len(txs) != len(txsWithRes.Transactions) {
