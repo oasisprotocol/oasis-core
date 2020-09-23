@@ -69,10 +69,9 @@ we use the following additional convention:
 
 * The context is as specified by the convention in the section above,
 * followed by the string ` for chain `,
-* followed by the base-16 (hex) encoding of the SHA-512/256 hash of the
-  [encoded] genesis document.
+* followed by the [genesis document's hash].
 
-[encoded]: encoding.md
+[genesis document's hash]: consensus/genesis.md#genesis-documents-hash
 
 ### Envelopes
 
