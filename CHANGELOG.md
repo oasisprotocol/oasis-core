@@ -12,6 +12,154 @@ The format is inspired by [Keep a Changelog].
 
 <!-- TOWNCRIER -->
 
+## 20.11 (2020-09-23)
+
+| Protocol          | Version   |
+|:------------------|:---------:|
+| Consensus         | 1.0.0     |
+| Runtime Host      | 1.0.0     |
+| Runtime Committee | 1.0.0     |
+
+### Configuration Changes
+
+- go/worker/p2p: Configurable libp2p buffer sizes
+  ([#3264](https://github.com/oasisprotocol/oasis-core/issues/3264))
+
+  Added `worker.p2p.peer_outbound_queue_size` and
+  `worker.p2p.validate_queue_size` flags for configuring libp2p buffer sizes.
+
+### Features
+
+- Introduce the *canonical* form of a Genesis file
+  ([#2757](https://github.com/oasisprotocol/oasis-core/issues/2757))
+
+  This form is the pretty-printed JSON file with 2-space indents, where:
+
+  - Struct fields are encoded in the order in which they are defined in the
+    corresponding struct definitions.
+  - Maps have their keys converted to strings which are then encoded in
+    lexicographical order.
+
+  For more details, see the [Genesis Document] documentation.
+
+  The `oasis-node genesis init` and `oasis-node genesis dump` CLI commands are
+  updated to output Genesis file in this canonical form.
+
+  [Genesis Document]: docs/consensus/genesis.md
+
+- go/staking/api: Add `PrettyPrintCommissionScheduleIndexInfixes()` helper
+  ([#3265](https://github.com/oasisprotocol/oasis-core/issues/3265))
+
+- go/staking/api: Update commission schedule rate and rate bound pretty prints
+  ([#3265](https://github.com/oasisprotocol/oasis-core/issues/3265))
+
+  Pretty print rates and rate bounds as enumerated lists to enable easier
+  inspection of commission schedule (amendments) in combination with a
+  hardware-based signer plugin.
+
+- go/worker/executor: Cache last seen runtime transactions
+  ([#3274](https://github.com/oasisprotocol/oasis-core/issues/3274))
+
+  To enable a basic form of runtime transaction replay prevention, the
+  transaction scheduler maintains a LRU cache of last seen runtime transactions
+  keyed by transaction hash.
+
+- go/worker/p2p: Use hash of the message payload as message ID
+  ([#3275](https://github.com/oasisprotocol/oasis-core/issues/3275))
+
+- go/oasis-node: Make `oasis-node genesis check` command check if form canonical
+  ([#3298](https://github.com/oasisprotocol/oasis-core/issues/3298))
+
+### Bug Fixes
+
+- runtime/client: Skip not yet published requests in retry check
+  ([#3264](https://github.com/oasisprotocol/oasis-core/issues/3264))
+
+- go/consensus/tendermint: Don't swallow recheck result errors
+  ([#3267](https://github.com/oasisprotocol/oasis-core/issues/3267))
+
+- go/runtime/client: Fix possible panic on shutdown
+  ([#3271](https://github.com/oasisprotocol/oasis-core/issues/3271))
+
+- go/worker/registration: Verify entity exists before node registration
+  ([#3286](https://github.com/oasisprotocol/oasis-core/issues/3286))
+
+  This avoids some cases of failed node registration transactions when the
+  entity under which the node is being registered does not actually exist.
+
+- go/runtime/host/protocol: Set connection write deadline
+  ([#3289](https://github.com/oasisprotocol/oasis-core/issues/3289))
+
+  The RHP connection should have a write deadline to make sure that the
+  connection is closed in case the runtime is not working.
+
+- go/worker/executor: Clear tx queue before returning to committee
+  ([#3300](https://github.com/oasisprotocol/oasis-core/issues/3300))
+
+  Fixes a bug where an executor returning to committee would propose stale
+  transactions that it received right before exiting committee in previous
+  epoch, due to a race condition between adding transaction to the queue and
+  clearing the queue.
+  Clearing the incoming queue is now done before node starts being a compute
+  worker instead of after it stops being.
+
+- go/oasis-node: Start internal gRPC server before consensus backend
+  ([#3303](https://github.com/oasisprotocol/oasis-core/issues/3303))
+
+### Documentation Improvements
+
+- Document [`oasis-node genesis` CLI commands]
+  ([#3298](https://github.com/oasisprotocol/oasis-core/issues/3298))
+
+  [`oasis-node genesis` CLI commands]: docs/oasis-node/cli.md#genesis
+
+### Internal Changes
+
+- ci/txsource: Shut down nodes for longer period of time
+  ([#3223](https://github.com/oasisprotocol/oasis-core/issues/3223))
+
+- rust: Update tiny-keccak, hmac, sha2 dependencies
+  ([#3260](https://github.com/oasisprotocol/oasis-core/issues/3260))
+
+- go/extra/stats: Remove the unmaintained `extra/stats` tool
+  ([#3270](https://github.com/oasisprotocol/oasis-core/issues/3270))
+
+- go/oasis-test-runner: Add `e2e/genesis-file` scenario
+  ([#3278](https://github.com/oasisprotocol/oasis-core/issues/3278))
+
+- go/ci: Update nancy to 1.0.0
+  ([#3283](https://github.com/oasisprotocol/oasis-core/issues/3283))
+
+- go/consensus/tests: Use explicit latest height when comparing query results
+  ([#3287](https://github.com/oasisprotocol/oasis-core/issues/3287))
+
+  Fixes flakiness in the test that occurred when a different height was used
+  for the `GetTransactions` and `GetTransactionsWithResults` queries.
+
+- go/e2e/sentry: Sanity check consensus peers
+  ([#3291](https://github.com/oasisprotocol/oasis-core/issues/3291))
+
+  Sentry E2E test now ensures that validators running behind sentries only
+  connect to their sentry nodes.
+
+- rust: Bump serde crates
+  ([#3294](https://github.com/oasisprotocol/oasis-core/issues/3294))
+
+  - `serde_cbor@0.10.2` -> `serde_cbor@0.11.1`
+
+  - `serde@1.0.71` -> `serde@1.0.116`
+
+  - `serde_bytes@0.10.5` -> `serde@0.11.5`
+
+- rust: Bump snow version from 0.6.2 to 0.7.1
+  ([#3296](https://github.com/oasisprotocol/oasis-core/issues/3296))
+
+- go: Bump github.com/golang/snappy from 0.0.1 to 0.0.2
+  ([#3297](https://github.com/oasisprotocol/oasis-core/issues/3297))
+
+- rust: bump ed25519-dalek from 1.0.0 to 1.0.1
+  ([#3299](https://github.com/oasisprotocol/oasis-core/issues/3299))
+
 ## 20.10 (2020-09-09)
 
 | Protocol          | Version   |
