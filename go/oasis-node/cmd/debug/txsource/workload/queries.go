@@ -57,10 +57,6 @@ const (
 	// in a single iteration. The purpose of this timeout is to prevent the client being stuck and
 	// treating that as an error instead.
 	queriesIterationTimeout = 60 * time.Second
-
-	// queriesMaxConsecutiveRetries is the maximum number of consecutive retries for unavailable
-	// nodes.
-	queriesMaxConsecutiveRetries = 30
 )
 
 // QueriesFlags are the queries workload flags.
@@ -775,25 +771,20 @@ func (q *queries) Run(gracefulExit context.Context, rng *rand.Rand, conn *grpc.C
 		}
 	}
 
-	var retries int
 	for {
-		if retries > queriesMaxConsecutiveRetries {
-			return fmt.Errorf("too many consecutive retries")
-		}
-
 		loopCtx, cancel := context.WithTimeout(ctx, queriesIterationTimeout)
 
 		err := q.doQueries(loopCtx, rng)
 		cancel()
 		switch {
 		case err == nil:
-			retries = 0
 		case cmnGrpc.IsErrorCode(err, codes.Unavailable):
-			// Don't immediately fail when the node is unavailable as it may be restarting.
+			// Don't fail when the node is unavailable as it may be restarting.
+			// If the node was shutdown unexpectedly the test runner will fail
+			// the test.
 			q.logger.Warn("node unavailable, retrying",
 				"err", err,
 			)
-			retries++
 		default:
 			return err
 		}
@@ -801,7 +792,7 @@ func (q *queries) Run(gracefulExit context.Context, rng *rand.Rand, conn *grpc.C
 		select {
 		case <-time.After(1 * time.Second):
 		case <-gracefulExit.Done():
-			oversizedLogger.Debug("time's up")
+			q.logger.Debug("time's up")
 			return nil
 		}
 	}

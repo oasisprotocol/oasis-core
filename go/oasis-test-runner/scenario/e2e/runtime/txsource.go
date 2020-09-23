@@ -8,9 +8,11 @@ import (
 	"fmt"
 	"math"
 	"math/rand"
+	"os"
 	"os/exec"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/drbg"
@@ -30,6 +32,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/scenario"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/scenario/e2e"
 	staking "github.com/oasisprotocol/oasis-core/go/staking/api"
+	"github.com/oasisprotocol/oasis-core/go/storage/database"
 )
 
 const (
@@ -37,6 +40,8 @@ const (
 	timeLimitLong  = 12 * time.Hour
 
 	nodeRestartIntervalLong = 2 * time.Minute
+	nodeLongRestartInterval = 15 * time.Minute
+	nodeLongRestartDuration = 10 * time.Minute
 	livenessCheckInterval   = 1 * time.Minute
 	txSourceGasPrice        = 1
 )
@@ -61,6 +66,9 @@ var TxSourceMultiShort scenario.Scenario = &txSourceImpl{
 	consensusPruneDisabledProbability: 0.1,
 	consensusPruneMinKept:             100,
 	consensusPruneMaxKept:             200,
+	// XXX: use 2 storage nodes as SGX E2E test instances cannot handle any
+	// more nodes that are currently configured, and runtime requires 2 nodes.
+	numStorageNodes: 2,
 }
 
 // TxSourceMulti uses multiple workloads.
@@ -80,6 +88,8 @@ var TxSourceMulti scenario.Scenario = &txSourceImpl{
 	},
 	timeLimit:                         timeLimitLong,
 	nodeRestartInterval:               nodeRestartIntervalLong,
+	nodeLongRestartInterval:           nodeLongRestartInterval,
+	nodeLongRestartDuration:           nodeLongRestartDuration,
 	livenessCheckInterval:             livenessCheckInterval,
 	consensusPruneDisabledProbability: 0.1,
 	consensusPruneMinKept:             100,
@@ -88,6 +98,9 @@ var TxSourceMulti scenario.Scenario = &txSourceImpl{
 	// node is restarted. Enable automatic corrupted WAL recovery for validator
 	// nodes.
 	tendermintRecoverCorruptedWAL: true,
+	// Use 3 storage nodes so runtime continues to work when one of the nodes
+	// is shut down.
+	numStorageNodes: 3,
 }
 
 type txSourceImpl struct { // nolint: maligned
@@ -96,15 +109,26 @@ type txSourceImpl struct { // nolint: maligned
 	clientWorkloads  []string
 	allNodeWorkloads []string
 
-	timeLimit             time.Duration
-	nodeRestartInterval   time.Duration
-	livenessCheckInterval time.Duration
+	timeLimit               time.Duration
+	nodeRestartInterval     time.Duration
+	nodeLongRestartInterval time.Duration
+	nodeLongRestartDuration time.Duration
+	livenessCheckInterval   time.Duration
 
 	consensusPruneDisabledProbability float32
 	consensusPruneMinKept             int64
 	consensusPruneMaxKept             int64
 
 	tendermintRecoverCorruptedWAL bool
+
+	// Configurable number of storage nodes. If running tests with long node
+	// shutdowns enabled, make sure this is at least `MinWriteReplication+1`,
+	// so that the runtime continues to work, even if one of the nodes is shut
+	// down.
+	// XXX: this is configurable because SGX E2E test instances cannot handle
+	// more test nodes that we already use, and we don't need additional storage
+	// nodes in the short test variant.
+	numStorageNodes int
 
 	rng  *rand.Rand
 	seed string
@@ -137,11 +161,11 @@ func (sc *txSourceImpl) PreInit(childEnv *env.Env) error {
 	return nil
 }
 
-func (sc *txSourceImpl) generateConsensusFixture(f *oasis.ConsensusFixture) {
+func (sc *txSourceImpl) generateConsensusFixture(f *oasis.ConsensusFixture, forceDisableConsensusPrune bool) {
 	// Randomize pruning configuration.
 	p := sc.rng.Float32()
 	switch {
-	case p < sc.consensusPruneDisabledProbability:
+	case forceDisableConsensusPrune || p < sc.consensusPruneDisabledProbability:
 		f.PruneNumKept = 0
 	default:
 		// [sc.consensusPruneMinKept, sc.consensusPruneMaxKept]
@@ -175,64 +199,69 @@ func (sc *txSourceImpl) Fixture() (*oasis.NetworkFixture, error) {
 			FeeSplitWeightVote:        *quantity.NewFromUint64(1),
 			FeeSplitWeightNextPropose: *quantity.NewFromUint64(1),
 		},
-		TotalSupply: *quantity.NewFromUint64(120000000000),
+		TotalSupply: *quantity.NewFromUint64(130000000000),
 		Ledger: map[staking.Address]*staking.Account{
-			e2e.LockupAccount: {
+			e2e.DeterministicValidator0: {
 				General: staking.GeneralAccount{
 					Balance: *quantity.NewFromUint64(10000000000),
 				},
 			},
-			e2e.MysteryAccount0: {
+			e2e.DeterministicValidator1: {
 				General: staking.GeneralAccount{
 					Balance: *quantity.NewFromUint64(10000000000),
 				},
 			},
-			e2e.MysteryAccount1: {
+			e2e.DeterministicValidator2: {
 				General: staking.GeneralAccount{
 					Balance: *quantity.NewFromUint64(10000000000),
 				},
 			},
-			e2e.MysteryAccount2: {
+			e2e.DeterministicValidator3: {
 				General: staking.GeneralAccount{
 					Balance: *quantity.NewFromUint64(10000000000),
 				},
 			},
-			e2e.MysteryAccount3: {
+			e2e.DeterministicCompute0: {
 				General: staking.GeneralAccount{
 					Balance: *quantity.NewFromUint64(10000000000),
 				},
 			},
-			e2e.MysteryAccount4: {
+			e2e.DeterministicCompute1: {
 				General: staking.GeneralAccount{
 					Balance: *quantity.NewFromUint64(10000000000),
 				},
 			},
-			e2e.MysteryAccount5: {
+			e2e.DeterministicCompute2: {
 				General: staking.GeneralAccount{
 					Balance: *quantity.NewFromUint64(10000000000),
 				},
 			},
-			e2e.MysteryAccount6: {
+			e2e.DeterministicCompute3: {
 				General: staking.GeneralAccount{
 					Balance: *quantity.NewFromUint64(10000000000),
 				},
 			},
-			e2e.MysteryAccount7: {
+			e2e.DeterministicStorage0: {
 				General: staking.GeneralAccount{
 					Balance: *quantity.NewFromUint64(10000000000),
 				},
 			},
-			e2e.MysteryAccount8: {
+			e2e.DeterministicStorage1: {
 				General: staking.GeneralAccount{
 					Balance: *quantity.NewFromUint64(10000000000),
 				},
 			},
-			e2e.MysteryAccount9: {
+			e2e.DeterministicStorage2: {
 				General: staking.GeneralAccount{
 					Balance: *quantity.NewFromUint64(10000000000),
 				},
 			},
-			e2e.MysteryAccount10: {
+			e2e.DeterministicKeyManager0: {
+				General: staking.GeneralAccount{
+					Balance: *quantity.NewFromUint64(10000000000),
+				},
+			},
+			e2e.DeterministicKeyManager1: {
 				General: staking.GeneralAccount{
 					Balance: *quantity.NewFromUint64(10000000000),
 				},
@@ -272,42 +301,57 @@ func (sc *txSourceImpl) Fixture() (*oasis.NetworkFixture, error) {
 		{Runtime: 0, Entity: 1},
 		{Runtime: 0, Entity: 1},
 	}
+	var storageWorkers []oasis.StorageWorkerFixture
+	for i := 0; i < sc.numStorageNodes; i++ {
+		storageWorkers = append(storageWorkers, oasis.StorageWorkerFixture{
+			Backend: database.BackendNameBadgerDB,
+			Entity:  1,
+		})
+	}
+	f.StorageWorkers = storageWorkers
 
 	// Update validators to require fee payments.
 	for i := range f.Validators {
 		f.Validators[i].Consensus.MinGasPrice = txSourceGasPrice
 		f.Validators[i].Consensus.SubmissionGasPrice = txSourceGasPrice
 		f.Validators[i].Consensus.TendermintRecoverCorruptedWAL = sc.tendermintRecoverCorruptedWAL
-		sc.generateConsensusFixture(&f.Validators[i].Consensus)
+		// Ensure validator-0 does not have pruning enabled, so nodes taken down
+		// for long period can sync from it.
+		// Note: validator-0 is also never restarted.
+		sc.generateConsensusFixture(&f.Validators[i].Consensus, i == 0)
 	}
 	// Update all other nodes to use a specific gas price.
 	for i := range f.Keymanagers {
 		f.Keymanagers[i].Consensus.SubmissionGasPrice = txSourceGasPrice
-		sc.generateConsensusFixture(&f.Keymanagers[i].Consensus)
+		sc.generateConsensusFixture(&f.Keymanagers[i].Consensus, false)
 	}
 	for i := range f.StorageWorkers {
 		f.StorageWorkers[i].Consensus.SubmissionGasPrice = txSourceGasPrice
-		sc.generateConsensusFixture(&f.StorageWorkers[i].Consensus)
+		sc.generateConsensusFixture(&f.StorageWorkers[i].Consensus, false)
 		if i > 0 {
 			f.StorageWorkers[i].CheckpointSyncEnabled = true
 		}
 	}
 	for i := range f.ComputeWorkers {
 		f.ComputeWorkers[i].Consensus.SubmissionGasPrice = txSourceGasPrice
-		sc.generateConsensusFixture(&f.ComputeWorkers[i].Consensus)
+		sc.generateConsensusFixture(&f.ComputeWorkers[i].Consensus, false)
 	}
 	for i := range f.ByzantineNodes {
 		f.ByzantineNodes[i].Consensus.SubmissionGasPrice = txSourceGasPrice
-		sc.generateConsensusFixture(&f.ByzantineNodes[i].Consensus)
+		sc.generateConsensusFixture(&f.ByzantineNodes[i].Consensus, false)
 	}
 
 	return f, nil
 }
 
 func (sc *txSourceImpl) manager(env *env.Env, errCh chan error) {
+	ctx, cancel := context.WithCancel(context.Background())
 	// Make sure we exit when the environment gets torn down.
 	stopCh := make(chan struct{})
-	env.AddOnCleanup(func() { close(stopCh) })
+	env.AddOnCleanup(func() {
+		cancel()
+		close(stopCh)
+	})
 
 	if sc.nodeRestartInterval > 0 {
 		sc.Logger.Info("random node restarts enabled",
@@ -316,21 +360,31 @@ func (sc *txSourceImpl) manager(env *env.Env, errCh chan error) {
 	} else {
 		sc.nodeRestartInterval = math.MaxInt64
 	}
+	if sc.nodeLongRestartInterval > 0 {
+		sc.Logger.Info("random long node restarts enabled",
+			"interval", sc.nodeLongRestartInterval,
+			"start_delay", sc.nodeLongRestartDuration,
+		)
+	} else {
+		sc.nodeLongRestartInterval = math.MaxInt64
+	}
 
-	// Randomize node order.
-	var nodes []*oasis.Node
+	// Setup restarable nodes.
+	var restartableLock sync.Mutex
+	var longRestartNode *oasis.Node
+	var restartableNodes []*oasis.Node
 	// Keep one of each types of nodes always running.
 	for _, v := range sc.Net.Validators()[1:] {
-		nodes = append(nodes, &v.Node)
+		restartableNodes = append(restartableNodes, &v.Node)
 	}
 	for _, s := range sc.Net.StorageWorkers()[1:] {
-		nodes = append(nodes, &s.Node)
+		restartableNodes = append(restartableNodes, &s.Node)
 	}
 	for _, c := range sc.Net.ComputeWorkers()[1:] {
-		nodes = append(nodes, &c.Node)
+		restartableNodes = append(restartableNodes, &c.Node)
 	}
 	for _, k := range sc.Net.Keymanagers()[1:] {
-		nodes = append(nodes, &k.Node)
+		restartableNodes = append(restartableNodes, &k.Node)
 	}
 
 	restartTicker := time.NewTicker(sc.nodeRestartInterval)
@@ -339,6 +393,9 @@ func (sc *txSourceImpl) manager(env *env.Env, errCh chan error) {
 	livenessTicker := time.NewTicker(sc.livenessCheckInterval)
 	defer livenessTicker.Stop()
 
+	longRestartTicker := time.NewTicker(sc.nodeLongRestartInterval)
+	defer longRestartTicker.Stop()
+
 	var nodeIndex int
 	var lastHeight int64
 	for {
@@ -346,33 +403,80 @@ func (sc *txSourceImpl) manager(env *env.Env, errCh chan error) {
 		case <-stopCh:
 			return
 		case <-restartTicker.C:
-			// Reshuffle nodes each time the counter wraps around.
-			if nodeIndex == 0 {
-				sc.rng.Shuffle(len(nodes), func(i, j int) {
-					nodes[i], nodes[j] = nodes[j], nodes[i]
-				})
-			}
+			func() {
+				restartableLock.Lock()
+				defer restartableLock.Unlock()
 
-			// Choose a random node and restart it.
-			node := nodes[nodeIndex]
-			sc.Logger.Info("restarting node",
-				"node", node.Name,
-			)
+				// Reshuffle nodes each time the counter wraps around.
+				if nodeIndex == 0 {
+					sc.rng.Shuffle(len(restartableNodes), func(i, j int) {
+						restartableNodes[i], restartableNodes[j] = restartableNodes[j], restartableNodes[i]
+					})
+				}
+				// Ensure the current node is not being restarted already.
+				if longRestartNode != nil && restartableNodes[nodeIndex].NodeID.Equal(longRestartNode.NodeID) {
+					nodeIndex = (nodeIndex + 1) % len(restartableNodes)
+				}
 
-			if err := node.Restart(); err != nil {
-				sc.Logger.Error("failed to restart node",
+				// Choose a random node and restart it.
+				node := restartableNodes[nodeIndex]
+				sc.Logger.Info("restarting node",
 					"node", node.Name,
-					"err", err,
 				)
-				errCh <- err
-				return
+				if err := node.Restart(ctx); err != nil {
+					sc.Logger.Error("failed to restart node",
+						"node", node.Name,
+						"err", err,
+					)
+					errCh <- err
+					return
+				}
+				sc.Logger.Info("node restarted",
+					"node", node.Name,
+				)
+				nodeIndex = (nodeIndex + 1) % len(restartableNodes)
+			}()
+		case <-longRestartTicker.C:
+			// Choose a random node and restart it.
+			restartableLock.Lock()
+			if longRestartNode != nil {
+				sc.Logger.Info("node already stopped, skipping",
+					"node", longRestartNode,
+				)
+				restartableLock.Unlock()
+				continue
 			}
 
-			nodeIndex = (nodeIndex + 1) % len(nodes)
+			longRestartNode = restartableNodes[sc.rng.Intn(len(restartableNodes))]
+			selectedNode := longRestartNode
+			restartableLock.Unlock()
+			go func() {
+				sc.Logger.Info("stopping node",
+					"node", selectedNode.Name,
+					"start_delay", sc.nodeLongRestartDuration,
+				)
+				if err := selectedNode.RestartAfter(ctx, sc.nodeLongRestartDuration); err != nil {
+					sc.Logger.Error("failed to restart node",
+						"node", selectedNode.Name,
+						"err", err,
+					)
+					errCh <- err
+					return
+				}
+				sc.Logger.Info("starting node",
+					"node", selectedNode.Name,
+					"start_delay", sc.nodeLongRestartDuration,
+				)
+
+				restartableLock.Lock()
+				longRestartNode = nil
+				restartableLock.Unlock()
+			}()
+
 		case <-livenessTicker.C:
 			// Check if consensus has made any progress.
-			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-			blk, err := sc.Net.Controller().Consensus.GetBlock(ctx, consensus.HeightLatest)
+			livenessCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+			blk, err := sc.Net.Controller().Consensus.GetBlock(livenessCtx, consensus.HeightLatest)
 			cancel()
 			if err != nil {
 				sc.Logger.Warn("failed to query latest consensus block",
@@ -450,6 +554,14 @@ func (sc *txSourceImpl) startWorkload(childEnv *env.Env, errCh chan error, name 
 	cmd.Stdout = w
 	cmd.Stderr = w
 
+	// Setup verbose http2 requests logging for nodes. Investigating EOF gRPC
+	// failures.
+	if name == workload.NameQueries {
+		cmd.Env = append(os.Environ(),
+			"GODEBUG=http2debug=1",
+		)
+	}
+
 	sc.Logger.Info("launching workload binary",
 		"args", strings.Join(args, " "),
 	)
@@ -477,11 +589,14 @@ func (sc *txSourceImpl) Clone() scenario.Scenario {
 		allNodeWorkloads:                  sc.allNodeWorkloads,
 		timeLimit:                         sc.timeLimit,
 		nodeRestartInterval:               sc.nodeRestartInterval,
+		nodeLongRestartDuration:           sc.nodeLongRestartDuration,
+		nodeLongRestartInterval:           sc.nodeLongRestartInterval,
 		livenessCheckInterval:             sc.livenessCheckInterval,
 		consensusPruneDisabledProbability: sc.consensusPruneDisabledProbability,
 		consensusPruneMinKept:             sc.consensusPruneMinKept,
 		consensusPruneMaxKept:             sc.consensusPruneMaxKept,
 		tendermintRecoverCorruptedWAL:     sc.tendermintRecoverCorruptedWAL,
+		numStorageNodes:                   sc.numStorageNodes,
 		seed:                              sc.seed,
 		// rng must always be reinitialized from seed by calling PreInit().
 	}

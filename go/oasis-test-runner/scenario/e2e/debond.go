@@ -59,7 +59,7 @@ func (s *debondImpl) Fixture() (*oasis.NetworkFixture, error) {
 		},
 		DebondingDelegations: map[staking.Address]map[staking.Address][]*staking.DebondingDelegation{
 			EntityAccount: {
-				LockupAccount: {
+				DeterministicValidator0: {
 					{
 						Shares:        *quantity.NewFromUint64(500),
 						DebondEndTime: 1,
@@ -90,7 +90,7 @@ func (s *debondImpl) Run(*env.Env) error {
 
 	// Beginning: lockup account has no funds.
 	lockupQuery := staking.OwnerQuery{
-		Owner:  LockupAccount,
+		Owner:  DeterministicValidator0,
 		Height: consensus.HeightLatest,
 	}
 	s.Logger.Info("checking balance at beginning")

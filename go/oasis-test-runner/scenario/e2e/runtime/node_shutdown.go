@@ -42,6 +42,7 @@ func (sc *nodeShutdownImpl) Fixture() (*oasis.NetworkFixture, error) {
 }
 
 func (sc *nodeShutdownImpl) Run(childEnv *env.Env) error {
+	ctx := context.Background()
 	var err error
 
 	if err = sc.Net.Start(); err != nil {
@@ -56,12 +57,12 @@ func (sc *nodeShutdownImpl) Run(childEnv *env.Env) error {
 	if err != nil {
 		return err
 	}
-	if err = nodeCtrl.WaitReady(context.Background()); err != nil {
+	if err = nodeCtrl.WaitReady(ctx); err != nil {
 		return err
 	}
 
 	// Make sure that the GetStatus endpoint returns sensible values.
-	status, err := nodeCtrl.GetStatus(context.Background())
+	status, err := nodeCtrl.GetStatus(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to get status for node: %w", err)
 	}
@@ -89,7 +90,7 @@ func (sc *nodeShutdownImpl) Run(childEnv *env.Env) error {
 	}
 
 	// Try restarting it; it should shutdown by itself soon after.
-	if err = computeWorker.Restart(); err != nil {
+	if err = computeWorker.Restart(ctx); err != nil {
 		return err
 	}
 	err = <-computeWorker.Exit()
