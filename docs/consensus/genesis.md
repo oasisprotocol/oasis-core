@@ -10,11 +10,9 @@ For more details about the actual genesis document's API, see
 [genesis API documentation]:
   https://pkg.go.dev/github.com/oasisprotocol/oasis-core/go/genesis/api
 
-## Chain Domain Separation
+## Genesis Document's Hash
 
-The genesis document is also used for [chain domain separation][crypto-chain].
-
-The last part of [domain separation] context is computed as:
+The genesis document's hash is computed as:
 
 ```
 Base16(SHA512-256(CBOR(<genesis-document>)))
@@ -29,10 +27,19 @@ where:
   [Serialization] documentation, and
 - `<genesis-document>` represents a given genesis document.
 
+{% hint style="info" %}
+This should not be confused with a SHA-1 or a SHA-256 checksum of a
+[genesis file] that is used to check if the downloaded genesis file is correct.
+{% endhint %}
+
+This hash is also used for [chain domain separation][crypto-chain] as the last
+part of the [domain separation] context.
+
 [crypto-chain]: ../crypto.md#chain-domain-separation
 [domain separation]: ../crypto.md#domain-separation
 [crypto-hash]: ../crypto.md#hash-functions
 [Serialization]: ../encoding.md
+[genesis file]: #genesis-file
 
 ## Genesis File
 
@@ -69,7 +76,7 @@ The *canonical* form of a genesis file is the pretty-printed JSON file with
 {% hint style="info" %}
 This should not be confused with the *canonical* CBOR encoding of the genesis
 document that is used to derive the domain separation context as described
-in the [Chain Domain Separation] section.
+in the [Genesis Document's Hash] section.
 {% endhint %}
 
 This form is used to enable simple diffing/patching with the standard Unix tools
@@ -80,4 +87,4 @@ This form is used to enable simple diffing/patching with the standard Unix tools
 
 [`encoding/json.Marshal()`]: https://golang.org/pkg/encoding/json/#Marshal
 
-[Chain Domain Separation]: #chain-domain-separation
+[Genesis Document's Hash]: #genesis-documents-hash
