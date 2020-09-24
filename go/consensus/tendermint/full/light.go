@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 
-	tmstate "github.com/tendermint/tendermint/state"
 	tmtypes "github.com/tendermint/tendermint/types"
 
 	"github.com/oasisprotocol/oasis-core/go/common/cbor"
@@ -19,7 +18,7 @@ func (t *fullService) GetLightBlock(ctx context.Context, height int64) (*consens
 		return nil, err
 	}
 
-	commit, err := t.client.Commit(&height)
+	commit, err := t.client.Commit(ctx, &height)
 	if err != nil {
 		return nil, fmt.Errorf("%w: tendermint: header query failed: %s", consensusAPI.ErrVersionNotFound, err.Error())
 	}
@@ -29,7 +28,7 @@ func (t *fullService) GetLightBlock(ctx context.Context, height int64) (*consens
 	}
 
 	// Don't use the client as that imposes stupid pagination. Access the state database directly.
-	vals, err := tmstate.LoadValidators(t.stateDb, height)
+	vals, err := t.stateStore.LoadValidators(height)
 	if err != nil {
 		return nil, consensusAPI.ErrVersionNotFound
 	}
@@ -59,7 +58,7 @@ func (t *fullService) GetParameters(ctx context.Context, height int64) (*consens
 		return nil, err
 	}
 
-	params, err := t.client.ConsensusParams(&height)
+	params, err := t.client.ConsensusParams(ctx, &height)
 	if err != nil {
 		return nil, fmt.Errorf("%w: tendermint: consensus params query failed: %s", consensusAPI.ErrVersionNotFound, err.Error())
 	}
