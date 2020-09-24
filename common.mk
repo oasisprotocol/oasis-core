@@ -164,9 +164,6 @@ For a list of changes in this release, see the [Change Log].
 *NOTE: If you are upgrading from an earlier release, please **carefully review**
 the [Change Log] for **Removals and Breaking changes**.*
 
-If you would like to become a node operator for the Oasis Network, see the
-[Operator Docs](https://docs.oasis.dev/operators/overview.html).
-
 [Change Log]: https://github.com/oasisprotocol/oasis-core/blob/v$(VERSION)/CHANGELOG.md
 
 endef
