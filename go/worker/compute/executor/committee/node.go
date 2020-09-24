@@ -752,37 +752,43 @@ func (n *Node) proposeTimeoutLocked() error {
 
 // Dispatch dispatches a batch to the executor committee.
 func (n *Node) Dispatch(batch transaction.RawBatch) error {
-	n.commonNode.CrossNode.Lock()
-	defer n.commonNode.CrossNode.Unlock()
+	lastHeader, err := func() (*block.Header, error) {
+		n.commonNode.CrossNode.Lock()
+		defer n.commonNode.CrossNode.Unlock()
 
-	// If we are not waiting for a batch, don't do anything.
-	if _, ok := n.state.(StateWaitingForBatch); !ok {
-		return errIncorrectState
-	}
-	if n.commonNode.CurrentBlock == nil {
-		return errNoBlocks
-	}
-
-	epoch := n.commonNode.Group.GetEpochSnapshot()
-	round := n.commonNode.CurrentBlock.Header.Round
-
-	switch {
-	case epoch.IsTransactionScheduler(round):
-		// Continues bellow.
-	case epoch.IsExecutorWorker():
-		// If we are an executor and not a scheduler try proposing a timeout.
-		err := n.proposeTimeoutLocked()
-		if err != nil {
-			n.logger.Error("error proposing a timeout",
-				"err", err,
-			)
+		// If we are not waiting for a batch, don't do anything.
+		if _, ok := n.state.(StateWaitingForBatch); !ok {
+			return nil, errIncorrectState
 		}
+		if n.commonNode.CurrentBlock == nil {
+			return nil, errNoBlocks
+		}
+		header := n.commonNode.CurrentBlock.Header
+		round := header.Round
+		epoch := n.commonNode.Group.GetEpochSnapshot()
 
-		fallthrough
-	default:
-		// XXX: Always return an error here in case we are not a txn scheduler,
-		// so that the batch is reinserted back into the queue.
-		return errNotTxnScheduler
+		switch {
+		case epoch.IsTransactionScheduler(round):
+			// Continues bellow.
+		case epoch.IsExecutorWorker():
+			// If we are an executor and not a scheduler try proposing a timeout.
+			err := n.proposeTimeoutLocked()
+			if err != nil {
+				n.logger.Error("error proposing a timeout",
+					"err", err,
+				)
+			}
+
+			fallthrough
+		default:
+			// XXX: Always return an error here in case we are not a txn scheduler,
+			// so that the batch is reinserted back into the queue.
+			return nil, errNotTxnScheduler
+		}
+		return &header, nil
+	}()
+	if err != nil {
+		return err
 	}
 
 	// Scheduler node opens a new parent span for batch processing.
@@ -792,7 +798,6 @@ func (n *Node) Dispatch(batch transaction.RawBatch) error {
 
 	// Generate the initial I/O root containing only the inputs (outputs and
 	// tags will be added later by the executor nodes).
-	lastHeader := n.commonNode.CurrentBlock.Header
 	emptyRoot := storage.Root{
 		Namespace: lastHeader.Namespace,
 		Version:   lastHeader.Round + 1,
@@ -803,7 +808,7 @@ func (n *Node) Dispatch(batch transaction.RawBatch) error {
 	defer ioTree.Close()
 
 	for idx, tx := range batch {
-		if err := ioTree.AddTransaction(n.ctx, transaction.Transaction{Input: tx, BatchOrder: uint32(idx)}, nil); err != nil {
+		if err = ioTree.AddTransaction(n.ctx, transaction.Transaction{Input: tx, BatchOrder: uint32(idx)}, nil); err != nil {
 			n.logger.Error("failed to create I/O tree",
 				"err", err,
 			)
@@ -844,7 +849,7 @@ func (n *Node) Dispatch(batch transaction.RawBatch) error {
 	// Dispatch batch to group.
 	spanPublish := opentracing.StartSpan("PublishScheduledBatch(batchHash, header)",
 		opentracing.Tag{Key: "ioRoot", Value: ioRoot},
-		opentracing.Tag{Key: "header", Value: n.commonNode.CurrentBlock.Header},
+		opentracing.Tag{Key: "header", Value: lastHeader},
 		opentracing.ChildOf(batchSpanCtx),
 	)
 	ioReceiptSignatures := []signature.Signature{}
@@ -855,7 +860,7 @@ func (n *Node) Dispatch(batch transaction.RawBatch) error {
 	dispatchMsg := &commitment.ProposedBatch{
 		IORoot:            ioRoot,
 		StorageSignatures: ioReceiptSignatures,
-		Header:            n.commonNode.CurrentBlock.Header,
+		Header:            *lastHeader,
 	}
 	signedDispatchMsg, err := commitment.SignProposedBatch(n.commonNode.Identity.NodeSigner, dispatchMsg)
 	if err != nil {
@@ -885,6 +890,26 @@ func (n *Node) Dispatch(batch transaction.RawBatch) error {
 	}
 	crash.Here(crashPointBatchPublishAfter)
 	spanPublish.Finish()
+
+	n.commonNode.CrossNode.Lock()
+	defer n.commonNode.CrossNode.Unlock()
+
+	// If we are not waiting for a batch, don't do anything.
+	if _, ok := n.state.(StateWaitingForBatch); !ok {
+		n.logger.Error("new state since started the dispatch",
+			"state", n.state,
+		)
+		return errIncorrectState
+	}
+
+	// Ensure we are still in the same round as when we started the dispatch.
+	if lastHeader.Round != n.commonNode.CurrentBlock.Header.Round {
+		n.logger.Error("new round since started the dispatch",
+			"expected_round", lastHeader.Round,
+			"round", n.commonNode.CurrentBlock.Header.Round,
+		)
+		return errSeenNewerBlock
+	}
 
 	// Also process the batch locally.
 	n.handleInternalBatchLocked(
