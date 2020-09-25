@@ -22,6 +22,8 @@ type serializedMetadata struct {
 	EarliestVersion uint64 `json:"earliest_version"`
 	// LastFinalizedVersion is the last finalized version.
 	LastFinalizedVersion *uint64 `json:"last_finalized_version"`
+	// MultipartVersion is the version for the in-progress multipart restore, or 0 if none was in progress.
+	MultipartVersion uint64 `json:"multipart_version"`
 }
 
 // metadata is the database metadata.
@@ -74,6 +76,21 @@ func (m *metadata) setLastFinalizedVersion(tx *badger.Txn, version uint64) error
 	}
 
 	m.value.LastFinalizedVersion = &version
+	return m.save(tx)
+}
+
+func (m *metadata) getMultipartVersion() uint64 {
+	m.Lock()
+	defer m.Unlock()
+
+	return m.value.MultipartVersion
+}
+
+func (m *metadata) setMultipartVersion(tx *badger.Txn, version uint64) error {
+	m.Lock()
+	defer m.Unlock()
+
+	m.value.MultipartVersion = version
 	return m.save(tx)
 }
 

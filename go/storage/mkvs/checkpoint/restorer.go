@@ -31,6 +31,10 @@ func (rs *restorer) StartRestore(ctx context.Context, checkpoint *Metadata) erro
 		return ErrRestoreAlreadyInProgress
 	}
 
+	if err := rs.ndb.StartMultipartInsert(checkpoint.Root.Version); err != nil {
+		return err
+	}
+
 	rs.currentCheckpoint = checkpoint
 	rs.pendingChunks = make(map[uint64]bool)
 	for idx := range checkpoint.Chunks {
@@ -44,16 +48,10 @@ func (rs *restorer) AbortRestore(ctx context.Context) error {
 	rs.Lock()
 	defer rs.Unlock()
 
-	if rs.currentCheckpoint == nil {
-		return ErrNoRestoreInProgress
-	}
-
 	rs.pendingChunks = nil
 	rs.currentCheckpoint = nil
 
-	// TODO: also properly remove leftover nodes from the database (#3241).
-
-	return nil
+	return rs.ndb.AbortMultipartInsert()
 }
 
 func (rs *restorer) GetCurrentCheckpoint() *Metadata {
@@ -95,12 +93,7 @@ func (rs *restorer) RestoreChunk(ctx context.Context, idx uint64, r io.Reader) (
 	case errors.Is(err, ErrChunkProofVerificationFailed):
 		// Chunk was as specified in the manifest but did not match the reported root. In this case
 		// we need to abort processing the given checkpoint.
-		rs.Lock()
-		defer rs.Unlock()
-
-		rs.pendingChunks = nil
-		rs.currentCheckpoint = nil
-
+		_ = rs.AbortRestore(ctx)
 		return false, err
 	default:
 		return false, err
@@ -116,7 +109,6 @@ func (rs *restorer) RestoreChunk(ctx context.Context, idx uint64, r io.Reader) (
 	if len(rs.pendingChunks) == 0 {
 		rs.pendingChunks = nil
 		rs.currentCheckpoint = nil
-
 		return true, nil
 	}
 

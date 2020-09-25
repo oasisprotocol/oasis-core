@@ -604,6 +604,19 @@ func (n *Node) initGenesis(rt *registryApi.Runtime) error {
 	return nil
 }
 
+func (n *Node) flushSyncedState(summary *blockSummary) uint64 {
+	n.syncedLock.Lock()
+	defer n.syncedLock.Unlock()
+
+	n.syncedState.LastBlock = *summary
+	rtID := n.commonNode.Runtime.ID()
+	if err := n.stateStore.PutCBOR(rtID[:], &n.syncedState); err != nil {
+		n.logger.Error("can't store watcher state to database", "err", err)
+	}
+
+	return n.syncedState.LastBlock.Round
+}
+
 func (n *Node) worker() { // nolint: gocyclo
 	defer close(n.quitCh)
 	defer close(n.diffCh)
@@ -686,17 +699,20 @@ func (n *Node) worker() { // nolint: gocyclo
 
 	// Try to perform initial sync from state and io checkpoints.
 	if !n.checkpointSyncDisabled {
-		err = n.syncCheckpoints()
+		var summary *blockSummary
+		summary, err = n.syncCheckpoints()
 		if err != nil {
 			// Try syncing again. The main reason for this is the sync failing due to a
 			// checkpoint pruning race condition (where nodes list a checkpoint which is
 			// then deleted just before we request its chunks). One retry is enough.
 			n.logger.Info("first checkpoint sync failed, trying once more", "err", err)
-			err = n.syncCheckpoints()
+			summary, err = n.syncCheckpoints()
 		}
 		if err != nil {
 			n.logger.Info("checkpoint sync failed", "err", err)
 		} else {
+			cachedLastRound = n.flushSyncedState(summary)
+			lastFullyAppliedRound = cachedLastRound
 			n.logger.Info("checkpoint sync succeeded",
 				logging.LogEvent, LogEventCheckpointSyncSuccess,
 			)
@@ -893,18 +909,7 @@ mainLoop:
 		case finalized := <-n.finalizeCh:
 			// No further sync or out of order handling needed here, since
 			// only one finalize at a time is triggered (for round cachedLastRound+1)
-			n.syncedLock.Lock()
-			n.syncedState.LastBlock.Round = finalized.Round
-			n.syncedState.LastBlock.IORoot = finalized.IORoot
-			n.syncedState.LastBlock.StateRoot = finalized.StateRoot
-			rtID := n.commonNode.Runtime.ID()
-			err = n.stateStore.PutCBOR(rtID[:], &n.syncedState)
-			n.syncedLock.Unlock()
-			cachedLastRound = finalized.Round
-			if err != nil {
-				n.logger.Error("can't store watcher state to database", "err", err)
-			}
-
+			cachedLastRound = n.flushSyncedState(finalized)
 			storageWorkerLastFullRound.With(n.getMetricLabels()).Set(float64(finalized.Round))
 
 			// Notify the checkpointer that there is a new finalized round.
