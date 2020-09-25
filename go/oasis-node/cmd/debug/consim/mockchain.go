@@ -157,13 +157,14 @@ func initMockChain(ctx context.Context, cfg *mockChainCfg) (*mockChain, error) {
 
 	// Initialize the mock ABCI backend.
 	muxCfg := &abci.ApplicationConfig{
-		DataDir:           cfg.dataDir,
-		StorageBackend:    "badger",
-		HaltEpochHeight:   math.MaxUint64,
-		MinGasPrice:       0, // XXX: Should this be configurable?
-		OwnTxSigner:       localSigner.Public(),
-		MemoryOnlyStorage: cfg.memDB,
-		InitialHeight:     uint64(cfg.genesisDoc.Height),
+		DataDir:                   cfg.dataDir,
+		StorageBackend:            "badger",
+		HaltEpochHeight:           math.MaxUint64,
+		MinGasPrice:               0, // XXX: Should this be configurable?
+		OwnTxSigner:               localSigner.Public(),
+		MemoryOnlyStorage:         cfg.memDB,
+		InitialHeight:             uint64(cfg.genesisDoc.Height),
+		CheckpointerCheckInterval: 1 * time.Minute,
 	}
 	if cfg.numVersions > 0 {
 		muxCfg.Pruning.Strategy = abci.PruneKeepN

@@ -30,6 +30,8 @@ const (
 	CfgWorkerEnabled      = "worker.storage.enabled"
 	cfgWorkerFetcherCount = "worker.storage.fetcher_count"
 
+	// CfgWorkerCheckpointerDisabled disables the storage checkpointer.
+	CfgWorkerCheckpointerDisabled = "worker.storage.checkpointer.disabled"
 	// CfgWorkerCheckpointCheckInterval configures the checkpointer check interval.
 	CfgWorkerCheckpointCheckInterval = "worker.storage.checkpointer.check_interval"
 
@@ -108,8 +110,11 @@ func New(
 			debugRejectUpdates: viper.GetBool(CfgWorkerDebugIgnoreApply) && flags.DebugDontBlameOasis(),
 		})
 
-		checkpointerCfg := checkpoint.CheckpointerConfig{
-			CheckInterval: viper.GetDuration(CfgWorkerCheckpointCheckInterval),
+		var checkpointerCfg *checkpoint.CheckpointerConfig
+		if !viper.GetBool(CfgWorkerCheckpointerDisabled) {
+			checkpointerCfg = &checkpoint.CheckpointerConfig{
+				CheckInterval: viper.GetDuration(CfgWorkerCheckpointCheckInterval),
+			}
 		}
 
 		// Start storage node for every runtime.
@@ -126,7 +131,7 @@ func New(
 	return s, nil
 }
 
-func (s *Worker) registerRuntime(commonNode *committeeCommon.Node, checkpointerCfg checkpoint.CheckpointerConfig) error {
+func (s *Worker) registerRuntime(commonNode *committeeCommon.Node, checkpointerCfg *checkpoint.CheckpointerConfig) error {
 	id := commonNode.Runtime.ID()
 	s.logger.Info("registering new runtime",
 		"runtime_id", id,
@@ -259,6 +264,7 @@ func (s *Worker) GetRuntime(id common.Namespace) *committee.Node {
 func init() {
 	Flags.Bool(CfgWorkerEnabled, false, "Enable storage worker")
 	Flags.Uint(cfgWorkerFetcherCount, 4, "Number of concurrent storage diff fetchers")
+	Flags.Bool(CfgWorkerCheckpointerDisabled, false, "Disable the storage checkpointer")
 	Flags.Duration(CfgWorkerCheckpointCheckInterval, 1*time.Minute, "Storage checkpointer check interval")
 	Flags.Bool(CfgWorkerCheckpointSyncDisabled, false, "Disable initial storage sync from checkpoints")
 

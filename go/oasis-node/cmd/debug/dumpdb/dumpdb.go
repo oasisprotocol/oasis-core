@@ -104,10 +104,11 @@ func doDumpDB(cmd *cobra.Command, args []string) {
 	ldb, _, stateRoot, err := abci.InitStateStorage(
 		ctx,
 		&abci.ApplicationConfig{
-			DataDir:           filepath.Join(dataDir, tendermintCommon.StateDir),
-			StorageBackend:    storageDB.BackendNameBadgerDB, // No other backend for now.
-			MemoryOnlyStorage: false,
-			ReadOnlyStorage:   viper.GetBool(cfgDumpReadOnlyDB),
+			DataDir:             filepath.Join(dataDir, tendermintCommon.StateDir),
+			StorageBackend:      storageDB.BackendNameBadgerDB, // No other backend for now.
+			MemoryOnlyStorage:   false,
+			ReadOnlyStorage:     viper.GetBool(cfgDumpReadOnlyDB),
+			DisableCheckpointer: true,
 		},
 	)
 	if err != nil {

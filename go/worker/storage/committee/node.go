@@ -222,7 +222,7 @@ func NewNode(
 	store *persistent.ServiceStore,
 	roleProvider registration.RoleProvider,
 	workerCommonCfg workerCommon.Config,
-	checkpointerCfg checkpoint.CheckpointerConfig,
+	checkpointerCfg *checkpoint.CheckpointerConfig,
 	checkpointSyncDisabled bool,
 ) (*Node, error) {
 	localStorage, ok := commonNode.Runtime.Storage().(storageApi.LocalBackend)
@@ -280,39 +280,41 @@ func NewNode(
 	}
 	node.storageClient = scl.(storageApi.ClientBackend)
 
-	// Create a new checkpointer.
-	checkpointerCfg = checkpoint.CheckpointerConfig{
-		Name:            "runtime",
-		Namespace:       commonNode.Runtime.ID(),
-		CheckInterval:   checkpointerCfg.CheckInterval,
-		RootsPerVersion: 2, // State root and I/O root.
-		GetParameters: func(ctx context.Context) (*checkpoint.CreationParameters, error) {
-			rt, rerr := commonNode.Runtime.RegistryDescriptor(ctx)
-			if rerr != nil {
-				return nil, rerr
-			}
+	// Create a new checkpointer if enabled.
+	if checkpointerCfg != nil {
+		checkpointerCfg = &checkpoint.CheckpointerConfig{
+			Name:            "runtime",
+			Namespace:       commonNode.Runtime.ID(),
+			CheckInterval:   checkpointerCfg.CheckInterval,
+			RootsPerVersion: 2, // State root and I/O root.
+			GetParameters: func(ctx context.Context) (*checkpoint.CreationParameters, error) {
+				rt, rerr := commonNode.Runtime.RegistryDescriptor(ctx)
+				if rerr != nil {
+					return nil, rerr
+				}
 
-			return &checkpoint.CreationParameters{
-				Interval:  rt.Storage.CheckpointInterval,
-				NumKept:   rt.Storage.CheckpointNumKept,
-				ChunkSize: rt.Storage.CheckpointChunkSize,
-			}, nil
-		},
-		GetRoots: func(ctx context.Context, version uint64) ([]hash.Hash, error) {
-			blk, berr := commonNode.Runtime.History().GetBlock(ctx, version)
-			if berr != nil {
-				return nil, berr
-			}
+				return &checkpoint.CreationParameters{
+					Interval:  rt.Storage.CheckpointInterval,
+					NumKept:   rt.Storage.CheckpointNumKept,
+					ChunkSize: rt.Storage.CheckpointChunkSize,
+				}, nil
+			},
+			GetRoots: func(ctx context.Context, version uint64) ([]hash.Hash, error) {
+				blk, berr := commonNode.Runtime.History().GetBlock(ctx, version)
+				if berr != nil {
+					return nil, berr
+				}
 
-			return []hash.Hash{
-				blk.Header.IORoot,
-				blk.Header.StateRoot,
-			}, nil
-		},
-	}
-	node.checkpointer, err = checkpoint.NewCheckpointer(node.ctx, localStorage.NodeDB(), localStorage.Checkpointer(), checkpointerCfg)
-	if err != nil {
-		return nil, fmt.Errorf("storage worker: failed to create checkpointer: %w", err)
+				return []hash.Hash{
+					blk.Header.IORoot,
+					blk.Header.StateRoot,
+				}, nil
+			},
+		}
+		node.checkpointer, err = checkpoint.NewCheckpointer(node.ctx, localStorage.NodeDB(), localStorage.Checkpointer(), *checkpointerCfg)
+		if err != nil {
+			return nil, fmt.Errorf("storage worker: failed to create checkpointer: %w", err)
+		}
 	}
 
 	// Register prune handler.
@@ -913,7 +915,9 @@ mainLoop:
 			storageWorkerLastFullRound.With(n.getMetricLabels()).Set(float64(finalized.Round))
 
 			// Notify the checkpointer that there is a new finalized round.
-			n.checkpointer.NotifyNewVersion(finalized.Round)
+			if n.checkpointer != nil {
+				n.checkpointer.NotifyNewVersion(finalized.Round)
+			}
 
 		case <-n.ctx.Done():
 			break mainLoop

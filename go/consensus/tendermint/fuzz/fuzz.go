@@ -4,6 +4,7 @@ package fuzz
 
 import (
 	"context"
+	"time"
 
 	"github.com/tendermint/tendermint/abci/types"
 
@@ -47,10 +48,11 @@ func Fuzz(data []byte) int {
 	var pruneCfg abci.PruneConfig
 
 	appConfig := &abci.ApplicationConfig{
-		DataDir:         "/tmp/oasis-node-fuzz-consensus",
-		Pruning:         pruneCfg,
-		HaltEpochHeight: 1000000,
-		MinGasPrice:     1,
+		DataDir:            "/tmp/oasis-node-fuzz-consensus",
+		Pruning:            pruneCfg,
+		HaltEpochHeight:    1000000,
+		MinGasPrice:        1,
+		CheckpointInterval: 1 * time.Minute,
 	}
 
 	// The muxer will start with the previous state, if it exists (the state database isn't cleared).
