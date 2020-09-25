@@ -232,6 +232,16 @@ func (n *Node) clearQueuedTxs() {
 	incomingQueueSize.With(n.getMetricLabels()).Set(0)
 }
 
+// Assumes scheduler is initialized.
+func (n *Node) reinsertTxs(txs transaction.RawBatch) {
+	if err := n.scheduler.AppendTxBatch(txs); err != nil {
+		n.logger.Warn("error while reinserting transactions",
+			"err", err,
+		)
+	}
+	incomingQueueSize.With(n.getMetricLabels()).Set(float64(n.scheduler.UnscheduledSize()))
+}
+
 // HandlePeerMessage implements NodeHooks.
 func (n *Node) HandlePeerMessage(ctx context.Context, message *p2p.Message, isOwn bool) (bool, error) {
 	n.logger.Debug("received peer message", "message", message, "is_own", isOwn)
@@ -450,12 +460,7 @@ func (n *Node) HandleEpochTransitionLocked(epoch *committee.EpochSnapshot) {
 		if state, ok := n.state.(StateWaitingForFinalize); ok {
 			// In case we are finalizing a batch and epoch transition occurred,
 			// reinsert the failed transactions back into queue.
-			if err := n.scheduler.AppendTxBatch(state.raw); err != nil {
-				n.logger.Warn("failed reinserting aborted transactions in queue",
-					"err", err,
-				)
-			}
-			incomingQueueSize.With(n.getMetricLabels()).Set(float64(n.scheduler.UnscheduledSize()))
+			n.reinsertTxs(state.raw)
 		}
 		if !n.prevEpochWorker {
 			// Clear incoming queue and cache of any stale transactions in case
@@ -534,15 +539,17 @@ func (n *Node) HandleNewBlockLocked(blk *block.Block) {
 				"header_hash", header.EncodedHash(),
 				"header_type", header.HeaderType,
 			)
-			if header.HeaderType != block.Normal {
-				return
-			}
-			if !header.IORoot.Equal(&state.proposedIORoot) {
+
+			if header.HeaderType != block.Normal ||
+				!header.IORoot.Equal(&state.proposedIORoot) {
 				n.logger.Error("proposed batch was not finalized",
 					"header_io_root", header.IORoot,
 					"proposed_io_root", state.proposedIORoot,
+					"header_type", header.HeaderType,
 					"batch", state.raw,
 				)
+				// Reinsert the failed batch.
+				n.reinsertTxs(state.raw)
 				return
 			}
 
@@ -1068,12 +1075,7 @@ func (n *Node) abortBatchLocked(reason error) {
 
 	// In case the batch is resolved, return transactions back in the queue.
 	if state.batch != nil && len(state.batch.batch) > 0 {
-		if err := n.scheduler.AppendTxBatch(state.batch.batch); err != nil {
-			n.logger.Warn("failed reinserting aborted transactions in queue",
-				"err", err,
-			)
-		}
-		incomingQueueSize.With(n.getMetricLabels()).Set(float64(n.scheduler.UnscheduledSize()))
+		n.reinsertTxs(state.batch.batch)
 	}
 
 	abortedBatchCount.With(n.getMetricLabels()).Inc()
