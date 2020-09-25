@@ -17,6 +17,7 @@ import (
 type testDispatcher struct {
 	ShouldFail        bool
 	DispatchedBatches []transaction.RawBatch
+	scheduler         api.Scheduler
 }
 
 func (t *testDispatcher) Clear() {
@@ -28,6 +29,7 @@ func (t *testDispatcher) Dispatch(batch transaction.RawBatch) error {
 		return errors.New("dispatch failed")
 	}
 	t.DispatchedBatches = append(t.DispatchedBatches, batch)
+	_ = t.scheduler.RemoveTxBatch(batch)
 	return nil
 }
 
@@ -36,7 +38,7 @@ func SchedulerImplementationTests(
 	t *testing.T,
 	scheduler api.Scheduler,
 ) {
-	td := testDispatcher{ShouldFail: false}
+	td := testDispatcher{ShouldFail: false, scheduler: scheduler}
 
 	err := scheduler.Initialize(&td)
 	require.NoError(t, err, "Initialize(td)")
@@ -131,6 +133,33 @@ func testScheduleTransactions(t *testing.T, td *testDispatcher, scheduler api.Sc
 	// Make sure transaction gets scheduled now.
 	err = scheduler.Flush(false)
 	require.NoError(t, err, "Flush(force=false)")
+	require.Equal(t, 0, scheduler.UnscheduledSize(), "transaction should get scheduled after a non-forced flush")
+
+	// Test update clear transactions.
+	// Update configuration back to BatchSize=10.
+	err = scheduler.UpdateParameters(
+		registry.TxnSchedulerParameters{
+			Algorithm:         scheduler.Name(),
+			MaxBatchSize:      10,
+			MaxBatchSizeBytes: 10000,
+		},
+	)
+	require.NoError(t, err, "UpdateParameters")
+	// Insert a transaction.
+	err = scheduler.ScheduleTx(testTx)
+	require.NoError(t, err, "ScheduleTx(testTx)")
+	// Make sure transaction is scheduled.
+	require.Equal(t, 1, scheduler.UnscheduledSize(), "one transaction scheduled")
+	// Update configuration to MaxBatchSizeBytes=1.
+	err = scheduler.UpdateParameters(
+		registry.TxnSchedulerParameters{
+			Algorithm:         scheduler.Name(),
+			MaxBatchSize:      10,
+			MaxBatchSizeBytes: 1,
+		},
+	)
+	require.NoError(t, err, "UpdateParameters")
+	// Make sure the transaction was removed.
 	require.Equal(t, 0, scheduler.UnscheduledSize(), "transaction should get scheduled after a non-forced flush")
 
 	// Test invalid udpate.
