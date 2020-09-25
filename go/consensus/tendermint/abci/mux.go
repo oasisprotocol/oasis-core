@@ -60,13 +60,16 @@ var (
 )
 
 // ApplicationConfig is the configuration for the consensus application.
-type ApplicationConfig struct {
+type ApplicationConfig struct { // nolint: maligned
 	DataDir         string
 	StorageBackend  string
 	Pruning         PruneConfig
 	HaltEpochHeight epochtime.EpochTime
 	MinGasPrice     uint64
 	DisableCheckTx  bool
+
+	DisableCheckpointer       bool
+	CheckpointerCheckInterval time.Duration
 
 	// OwnTxSigner is the transaction signer identity of the local node.
 	OwnTxSigner signature.PublicKey

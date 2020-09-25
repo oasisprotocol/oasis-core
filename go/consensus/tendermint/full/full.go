@@ -86,6 +86,11 @@ const (
 	// CfgABCIPruneNumKept configures the amount of kept heights if pruning is enabled.
 	CfgABCIPruneNumKept = "consensus.tendermint.abci.prune.num_kept"
 
+	// CfgCheckpointerDisabled disables the ABCI state checkpointer.
+	CfgCheckpointerDisabled = "consensus.tendermint.checkpointer.disabled"
+	// CfgCheckpointerCheckInterval configures the ABCI state checkpointing check interval.
+	CfgCheckpointerCheckInterval = "consensus.tendermint.checkpointer.check_interval"
+
 	// CfgSentryUpstreamAddress defines nodes for which we act as a sentry for.
 	CfgSentryUpstreamAddress = "consensus.tendermint.sentry.upstream_address"
 
@@ -1110,14 +1115,16 @@ func (t *fullService) lazyInit() error {
 	pruneCfg.NumKept = viper.GetUint64(CfgABCIPruneNumKept)
 
 	appConfig := &abci.ApplicationConfig{
-		DataDir:         filepath.Join(t.dataDir, tmcommon.StateDir),
-		StorageBackend:  db.GetBackendName(),
-		Pruning:         pruneCfg,
-		HaltEpochHeight: t.genesis.HaltEpoch,
-		MinGasPrice:     viper.GetUint64(CfgMinGasPrice),
-		OwnTxSigner:     t.identity.NodeSigner.Public(),
-		DisableCheckTx:  viper.GetBool(CfgDebugDisableCheckTx) && cmflags.DebugDontBlameOasis(),
-		InitialHeight:   uint64(t.genesis.Height),
+		DataDir:                   filepath.Join(t.dataDir, tmcommon.StateDir),
+		StorageBackend:            db.GetBackendName(),
+		Pruning:                   pruneCfg,
+		HaltEpochHeight:           t.genesis.HaltEpoch,
+		MinGasPrice:               viper.GetUint64(CfgMinGasPrice),
+		OwnTxSigner:               t.identity.NodeSigner.Public(),
+		DisableCheckTx:            viper.GetBool(CfgDebugDisableCheckTx) && cmflags.DebugDontBlameOasis(),
+		DisableCheckpointer:       viper.GetBool(CfgCheckpointerDisabled),
+		CheckpointerCheckInterval: viper.GetDuration(CfgCheckpointerCheckInterval),
+		InitialHeight:             uint64(t.genesis.Height),
 	}
 	t.mux, err = abci.NewApplicationServer(t.ctx, t.upgrader, appConfig)
 	if err != nil {
@@ -1500,6 +1507,8 @@ func init() {
 	Flags.String(cfgCoreExternalAddress, "", "tendermint address advertised to other nodes")
 	Flags.String(CfgABCIPruneStrategy, abci.PruneDefault, "ABCI state pruning strategy")
 	Flags.Uint64(CfgABCIPruneNumKept, 3600, "ABCI state versions kept (when applicable)")
+	Flags.Bool(CfgCheckpointerDisabled, false, "Disable the ABCI state checkpointer")
+	Flags.Duration(CfgCheckpointerCheckInterval, 1*time.Minute, "ABCI state checkpointer check interval")
 	Flags.StringSlice(CfgSentryUpstreamAddress, []string{}, "Tendermint nodes for which we act as sentry of the form ID@ip:port")
 	Flags.StringSlice(CfgP2PPersistentPeer, []string{}, "Tendermint persistent peer(s) of the form ID@ip:port")
 	Flags.StringSlice(CfgP2PUnconditionalPeerIDs, []string{}, "Tendermint unconditional peer IDs")
