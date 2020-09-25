@@ -447,16 +447,6 @@ func (n *Node) HandleEpochTransitionLocked(epoch *committee.EpochSnapshot) {
 
 	switch {
 	case epoch.IsExecutorWorker():
-		if state, ok := n.state.(StateWaitingForFinalize); ok {
-			// In case we are finalizing a batch and epoch transition occurred,
-			// reinsert the failed transactions back into queue.
-			if err := n.scheduler.AppendTxBatch(state.raw); err != nil {
-				n.logger.Warn("failed reinserting aborted transactions in queue",
-					"err", err,
-				)
-			}
-			incomingQueueSize.With(n.getMetricLabels()).Set(float64(n.scheduler.UnscheduledSize()))
-		}
 		if !n.prevEpochWorker {
 			// Clear incoming queue and cache of any stale transactions in case
 			// we were not part of the compute committee in previous epoch.
@@ -541,6 +531,7 @@ func (n *Node) HandleNewBlockLocked(blk *block.Block) {
 				n.logger.Error("proposed batch was not finalized",
 					"header_io_root", header.IORoot,
 					"proposed_io_root", state.proposedIORoot,
+					"header_type", header.HeaderType,
 					"batch", state.raw,
 				)
 				return
@@ -752,6 +743,10 @@ func (n *Node) proposeTimeoutLocked() error {
 
 // Dispatch dispatches a batch to the executor committee.
 func (n *Node) Dispatch(batch transaction.RawBatch) error {
+	n.logger.Debug("dispatching a batch",
+		"batch", batch,
+		"size", len(batch),
+	)
 	lastHeader, err := func() (*block.Header, error) {
 		n.commonNode.CrossNode.Lock()
 		defer n.commonNode.CrossNode.Unlock()
@@ -1065,16 +1060,6 @@ func (n *Node) abortBatchLocked(reason error) {
 	state.cancel()
 
 	crash.Here(crashPointBatchAbortAfter)
-
-	// In case the batch is resolved, return transactions back in the queue.
-	if state.batch != nil && len(state.batch.batch) > 0 {
-		if err := n.scheduler.AppendTxBatch(state.batch.batch); err != nil {
-			n.logger.Warn("failed reinserting aborted transactions in queue",
-				"err", err,
-			)
-		}
-		incomingQueueSize.With(n.getMetricLabels()).Set(float64(n.scheduler.UnscheduledSize()))
-	}
 
 	abortedBatchCount.With(n.getMetricLabels()).Inc()
 	// After the batch has been aborted, we must wait for the round to be
