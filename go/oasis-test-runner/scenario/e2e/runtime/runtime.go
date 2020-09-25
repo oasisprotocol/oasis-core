@@ -30,6 +30,7 @@ const (
 	cfgRuntimeLoader    = "runtime.loader"
 	cfgTEEHardware      = "tee_hardware"
 	cfgIasMock          = "ias.mock"
+	cfgEpochInterval    = "epoch.interval"
 )
 
 var (
@@ -80,6 +81,7 @@ func newRuntimeImpl(name, clientBinary string, clientArgs []string) *runtimeImpl
 	sc.Flags.String(cfgRuntimeLoader, "oasis-core-runtime-loader", "path to the runtime loader")
 	sc.Flags.String(cfgTEEHardware, "", "TEE hardware to use")
 	sc.Flags.Bool(cfgIasMock, true, "if mock IAS service should be used")
+	sc.Flags.Int64(cfgEpochInterval, 0, "epoch interval")
 
 	return sc
 }
@@ -120,6 +122,7 @@ func (sc *runtimeImpl) Fixture() (*oasis.NetworkFixture, error) {
 	}
 	runtimeLoader, _ := sc.Flags.GetString(cfgRuntimeLoader)
 	iasMock, _ := sc.Flags.GetBool(cfgIasMock)
+	epochInterval, _ := sc.Flags.GetInt64(cfgEpochInterval)
 	return &oasis.NetworkFixture{
 		TEE: oasis.TEEFixture{
 			Hardware: tee,
@@ -133,6 +136,7 @@ func (sc *runtimeImpl) Fixture() (*oasis.NetworkFixture, error) {
 			IAS: oasis.IASCfg{
 				Mock: iasMock,
 			},
+			EpochtimeTendermintInterval: epochInterval,
 		},
 		Entities: []oasis.EntityCfg{
 			{IsDebugTestEntity: true},
