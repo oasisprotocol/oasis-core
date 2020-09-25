@@ -175,7 +175,7 @@ type fullService struct { // nolint: maligned
 	blockNotifier *pubsub.Broker
 	failMonitor   *failMonitor
 
-	stateDb tmdb.DB
+	stateStore tmstate.Store
 
 	beacon        beaconAPI.Backend
 	epochtime     epochtimeAPI.Backend
@@ -552,7 +552,7 @@ func (t *fullService) SubmitEvidence(ctx context.Context, evidence *consensusAPI
 		return fmt.Errorf("tendermint: malformed evidence while converting: %w", err)
 	}
 
-	if _, err := t.client.BroadcastEvidence(ev); err != nil {
+	if _, err := t.client.BroadcastEvidence(ctx, ev); err != nil {
 		return fmt.Errorf("tendermint: broadcast evidence failed: %w", err)
 	}
 
@@ -731,7 +731,7 @@ func (t *fullService) GetTransactionsWithResults(ctx context.Context, height int
 		txsWithResults.Transactions = append(txsWithResults.Transactions, tx[:])
 	}
 
-	res, err := t.GetBlockResults(blk.Height)
+	res, err := t.GetBlockResults(ctx, blk.Height)
 	if err != nil {
 		return nil, err
 	}
@@ -841,7 +841,7 @@ func (t *fullService) GetStatus(ctx context.Context) (*consensusAPI.Status, erro
 	status.NodePeers = peers
 
 	// Check if the local node is in the validator set for the latest (uncommitted) block.
-	vals, err := tmstate.LoadValidators(t.stateDb, status.LatestHeight+1)
+	vals, err := t.stateStore.LoadValidators(status.LatestHeight + 1)
 	if err != nil {
 		return nil, fmt.Errorf("failed to load validator set: %w", err)
 	}
@@ -1021,14 +1021,14 @@ func (t *fullService) GetTendermintBlock(ctx context.Context, height int64) (*tm
 	} else {
 		tmHeight = height
 	}
-	result, err := t.client.Block(&tmHeight)
+	result, err := t.client.Block(ctx, &tmHeight)
 	if err != nil {
 		return nil, fmt.Errorf("tendermint: block query failed: %w", err)
 	}
 	return result.Block, nil
 }
 
-func (t *fullService) GetBlockResults(height int64) (*tmrpctypes.ResultBlockResults, error) {
+func (t *fullService) GetBlockResults(ctx context.Context, height int64) (*tmrpctypes.ResultBlockResults, error) {
 	if t.client == nil {
 		panic("client not available yet")
 	}
@@ -1046,7 +1046,7 @@ func (t *fullService) GetBlockResults(height int64) (*tmrpctypes.ResultBlockResu
 		tmHeight = height
 	}
 
-	result, err := t.client.BlockResults(&tmHeight)
+	result, err := t.client.BlockResults(ctx, &tmHeight)
 	if err != nil {
 		return nil, fmt.Errorf("tendermint: block results query failed: %w", err)
 	}
@@ -1239,7 +1239,7 @@ func (t *fullService) lazyInit() error {
 		switch dbCtx.ID {
 		case "state":
 			// Tendermint state database.
-			t.stateDb = db
+			t.stateStore = tmstate.NewStore(db)
 		default:
 		}
 
@@ -1314,7 +1314,7 @@ func (t *fullService) lazyInit() error {
 		if err != nil {
 			return fmt.Errorf("tendermint: failed to create node: %w", err)
 		}
-		if t.stateDb == nil {
+		if t.stateStore == nil {
 			// Sanity check for the above wrapDbProvider hack in case the DB provider changes.
 			return fmt.Errorf("tendermint: internal error: state database not set")
 		}

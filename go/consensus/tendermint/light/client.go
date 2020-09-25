@@ -44,8 +44,6 @@ type ClientConfig struct {
 // lightClientProvider implements Tendermint's light client provider interface using the Oasis Core
 // light client API.
 type lightClientProvider struct {
-	ctx context.Context // XXX: Hack needed because tmlightprovider.Provider doesn't pass contexts.
-
 	chainID string
 	client  consensus.LightClientBackend
 }
@@ -56,8 +54,8 @@ func (lp *lightClientProvider) ChainID() string {
 }
 
 // Implements tmlightprovider.Provider.
-func (lp *lightClientProvider) LightBlock(height int64) (*tmtypes.LightBlock, error) {
-	lb, err := lp.client.GetLightBlock(lp.ctx, height)
+func (lp *lightClientProvider) LightBlock(ctx context.Context, height int64) (*tmtypes.LightBlock, error) {
+	lb, err := lp.client.GetLightBlock(ctx, height)
 	switch {
 	case err == nil:
 	case errors.Is(err, consensus.ErrVersionNotFound):
@@ -83,7 +81,7 @@ func (lp *lightClientProvider) LightBlock(height int64) (*tmtypes.LightBlock, er
 }
 
 // Implements tmlightprovider.Provider.
-func (lp *lightClientProvider) ReportEvidence(ev tmtypes.Evidence) error {
+func (lp *lightClientProvider) ReportEvidence(ctx context.Context, ev tmtypes.Evidence) error {
 	proto, err := tmtypes.EvidenceToProto(ev)
 	if err != nil {
 		return fmt.Errorf("failed to convert evidence: %w", err)
@@ -93,14 +91,13 @@ func (lp *lightClientProvider) ReportEvidence(ev tmtypes.Evidence) error {
 		return fmt.Errorf("failed to marshal evidence: %w", err)
 	}
 
-	return lp.client.SubmitEvidence(lp.ctx, &consensus.Evidence{Meta: meta})
+	return lp.client.SubmitEvidence(ctx, &consensus.Evidence{Meta: meta})
 }
 
 // newLightClientProvider creates a new provider for the Tendermint's light client.
 //
 // The provided chain ID must be the Tendermint chain ID.
 func newLightClientProvider(
-	ctx context.Context,
 	chainID string,
 	address node.TLSAddress,
 ) (tmlightprovider.Provider, error) {
@@ -122,7 +119,6 @@ func newLightClientProvider(
 	}
 
 	return &lightClientProvider{
-		ctx:     ctx,
 		chainID: chainID,
 		client:  consensus.NewConsensusLightClient(conn),
 	}, nil
@@ -160,7 +156,7 @@ func (lc *lightClient) SubmitEvidence(ctx context.Context, evidence *consensus.E
 
 // Implements Client.
 func (lc *lightClient) GetVerifiedLightBlock(ctx context.Context, height int64) (*tmtypes.LightBlock, error) {
-	return lc.tmc.VerifyLightBlockAtHeight(height, time.Now())
+	return lc.tmc.VerifyLightBlockAtHeight(ctx, height, time.Now())
 }
 
 // Implements Client.
@@ -183,7 +179,7 @@ func (lc *lightClient) GetVerifiedParameters(ctx context.Context, height int64) 
 	}
 
 	// Fetch the header from the light client.
-	l, err := lc.tmc.VerifyLightBlockAtHeight(p.Height, time.Now())
+	l, err := lc.tmc.VerifyLightBlockAtHeight(ctx, p.Height, time.Now())
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch header %d from light client: %w", p.Height, err)
 	}
@@ -211,7 +207,7 @@ func NewClient(ctx context.Context, cfg ClientConfig) (Client, error) {
 
 	var providers []tmlightprovider.Provider
 	for _, address := range cfg.ConsensusNodes {
-		p, err := newLightClientProvider(ctx, cfg.GenesisDocument.ChainID, address)
+		p, err := newLightClientProvider(cfg.GenesisDocument.ChainID, address)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create light client provider: %w", err)
 		}
@@ -219,6 +215,7 @@ func NewClient(ctx context.Context, cfg ClientConfig) (Client, error) {
 	}
 
 	tmc, err := tmlight.NewClient(
+		ctx,
 		cfg.GenesisDocument.ChainID,
 		cfg.TrustOptions,
 		providers[0],                       // Primary provider.

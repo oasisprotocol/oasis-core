@@ -195,7 +195,7 @@ type Backend interface {
 
 	// GetBlockResults returns the ABCI results from processing a block
 	// at a specific height.
-	GetBlockResults(height int64) (*tmrpctypes.ResultBlockResults, error)
+	GetBlockResults(ctx context.Context, height int64) (*tmrpctypes.ResultBlockResults, error)
 
 	// WatchTendermintBlocks returns a stream of Tendermint blocks as they are
 	// returned via the `EventDataNewBlock` query.
