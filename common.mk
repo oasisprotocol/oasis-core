@@ -3,32 +3,28 @@ SHELL := /bin/bash
 # Check if we're running in an interactive terminal.
 ISATTY := $(shell [ -t 0 ] && echo 1)
 
+# If running interactively, use terminal colors.
 ifdef ISATTY
-	# Running in interactive terminal, OK to use colors!
 	MAGENTA := \e[35;1m
 	CYAN := \e[36;1m
 	RED := \e[0;31m
 	OFF := \e[0m
-
-	# Built-in echo doesn't support '-e'.
-	ECHO = /bin/echo -e
+	# Use external echo command since the built-in echo doesn't support '-e'.
+	ECHO_CMD := /bin/echo -e
 else
-	# Don't use colors if not running interactively.
 	MAGENTA := ""
 	CYAN := ""
 	RED := ""
 	OFF := ""
-
-	# OK to use built-in echo.
-	ECHO := echo
+	ECHO_CMD := echo
 endif
 
-# A version of echo that outputs to stderr instead of stdout.
-ECHO_STDERR := $(ECHO) 1>&2
+# Output messages to stderr instead stdout.
+ECHO := $(ECHO_CMD) 1>&2
 
 # Helper that asks the user to confirm the action.
 define CONFIRM_ACTION =
-	$(ECHO_STDERR) -n "Are you sure? [y/N] " && read ans && [ $${ans:-N} = y ]
+	$(ECHO) -n "Are you sure? [y/N] " && read ans && [ $${ans:-N} = y ]
 endef
 
 # Name of git remote pointing to the canonical upstream git repository, i.e.
@@ -107,7 +103,7 @@ GO_EXAMPLE_PLUGIN_PATH := oasis-test-runner/scenario/pluginsigner/example_signer
 # Helper that ensures $(NEXT_VERSION) variable is not empty.
 define ENSURE_NEXT_VERSION =
 	if [[ -z "$(NEXT_VERSION)" ]]; then \
-		$(ECHO_STDERR) "$(RED)Error: Could not compute project's next version.$(OFF)"; \
+		$(ECHO) "$(RED)Error: Could not compute project's next version.$(OFF)"; \
 		exit 1; \
 	fi
 endef
@@ -124,7 +120,7 @@ RELEASE_TAG_GO = $(eval RELEASE_TAG_GO := $$(shell \
 # Helper that ensures $(RELEASE_BRANCH) variable contains a valid release branch name.
 define ENSURE_VALID_RELEASE_BRANCH_NAME =
 	if [[ ! $(RELEASE_BRANCH) =~ ^(master|(stable/[0-9]+\.[0-9]+\.x$$)) ]]; then \
-		$(ECHO_STDERR) "$(RED)Error: Invalid release branch name: $(RELEASE_BRANCH)."; \
+		$(ECHO) "$(RED)Error: Invalid release branch name: $(RELEASE_BRANCH)."; \
 		exit 1; \
 	fi
 endef
@@ -132,12 +128,12 @@ endef
 # Helper that ensures the origin's release branch's HEAD doesn't contain any Change Log fragments.
 define ENSURE_NO_CHANGELOG_FRAGMENTS =
 	if ! CHANGELOG_FILES=`git ls-tree -r --name-only $(OASIS_CORE_GIT_ORIGIN_REMOTE)/$(RELEASE_BRANCH) .changelog`; then \
-		$(ECHO_STDERR) "$(RED)Error: Could not obtain Change Log fragments for $(OASIS_CORE_GIT_ORIGIN_REMOTE)/$(RELEASE_BRANCH) branch.$(OFF)"; \
+		$(ECHO) "$(RED)Error: Could not obtain Change Log fragments for $(OASIS_CORE_GIT_ORIGIN_REMOTE)/$(RELEASE_BRANCH) branch.$(OFF)"; \
 		exit 1; \
 	fi; \
 	if CHANGELOG_FRAGMENTS=`echo "$$CHANGELOG_FILES" | grep --invert-match --extended-regexp '(README.md|template.md.j2|.markdownlint.yml)'`; then \
-		$(ECHO_STDERR) "$(RED)Error: Found the following Change Log fragments on $(OASIS_CORE_GIT_ORIGIN_REMOTE)/$(RELEASE_BRANCH) branch:"; \
-		$(ECHO_STDERR) "$${CHANGELOG_FRAGMENTS}$(OFF)"; \
+		$(ECHO) "$(RED)Error: Found the following Change Log fragments on $(OASIS_CORE_GIT_ORIGIN_REMOTE)/$(RELEASE_BRANCH) branch:"; \
+		$(ECHO) "$${CHANGELOG_FRAGMENTS}$(OFF)"; \
 		exit 1; \
 	fi
 endef
@@ -146,7 +142,7 @@ endef
 define ENSURE_NEXT_VERSION_IN_CHANGELOG =
 	if ! ( git show $(OASIS_CORE_GIT_ORIGIN_REMOTE)/$(RELEASE_BRANCH):CHANGELOG.md | \
 			grep --quiet '^## $(NEXT_VERSION) (.*)' ); then \
-		$(ECHO_STDERR) "$(RED)Error: Could not locate Change Log section for release $(NEXT_VERSION) on $(OASIS_CORE_GIT_ORIGIN_REMOTE)/$(RELEASE_BRANCH) branch.$(OFF)"; \
+		$(ECHO) "$(RED)Error: Could not locate Change Log section for release $(NEXT_VERSION) on $(OASIS_CORE_GIT_ORIGIN_REMOTE)/$(RELEASE_BRANCH) branch.$(OFF)"; \
 		exit 1; \
 	fi
 endef
@@ -187,7 +183,7 @@ CHANGELOG_FRAGMENTS_BREAKING := $(wildcard .changelog/*breaking*.md)
 # Helper that prints a warning when breaking changes are indicated by changelog fragments.
 define WARN_BREAKING_CHANGES =
 	if [[ -n "$(CHANGELOG_FRAGMENTS_BREAKING)" ]]; then \
-		$(ECHO_STDERR) "$(RED)Warning: This release contains breaking changes.$(OFF)"; \
-		$(ECHO_STDERR) "$(RED)         Make sure that protocol versions were bumped.$(OFF)"; \
+		$(ECHO) "$(RED)Warning: This release contains breaking changes.$(OFF)"; \
+		$(ECHO) "$(RED)         Make sure that protocol versions were bumped.$(OFF)"; \
 	fi
 endef
