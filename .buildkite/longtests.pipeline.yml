@@ -89,12 +89,11 @@ steps:
   - wait
 
   - label: Transaction source tests
-    parallelism: 1
     # Tests are set to run 12 hours + some buffer time.
-    timeout_in_minutes: 760
+    timeout_in_minutes: 800
     command:
       - .buildkite/scripts/download_e2e_test_artifacts.sh
-      - .buildkite/scripts/daily_txsource.sh
+      - .buildkite/scripts/daily_txsource.sh --e2e/runtime.epoch.interval=${epochtime_inverval}
     env:
       TEST_BASE_DIR: /var/tmp/longtests
       # libp2p logging.
