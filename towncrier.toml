@@ -1,6 +1,11 @@
 [tool.towncrier]
 filename = "CHANGELOG.md"
 directory = ".changelog"
+# Ignore certain files when running towncrier check.
+check_ignore_files = [
+  # Punch's version file.
+  ".punch_version.py",
+]
 issue_format = "[#{issue}](https://github.com/oasisprotocol/oasis-core/issues/{issue})"
 start_string = "<!-- TOWNCRIER -->\n"
 # Custom Jinja2 template for preparing a new section of the Change Log.

@@ -24,7 +24,7 @@ builds:
       # to ldflags.
       # For more details, see: https://github.com/oasislabs/goreleaser/issues/1.
       - -buildid=
-      - -X github.com/oasisprotocol/oasis-core/go/common/version.SoftwareVersion={{.Env.VERSION}}
+      - "{{.Env.GOLDFLAGS_VERSION}}"
     goos:
       - linux
     goarch:
@@ -42,7 +42,7 @@ builds:
       # to ldflags.
       # For more details, see: https://github.com/oasislabs/goreleaser/issues/1.
       - -buildid=
-      - -X github.com/oasisprotocol/oasis-core/go/common/version.SoftwareVersion={{.Env.VERSION}}
+      - "{{.Env.GOLDFLAGS_VERSION}}"
     goos:
       - linux
     goarch:
@@ -60,7 +60,7 @@ builds:
       # to ldflags.
       # For more details, see: https://github.com/oasislabs/goreleaser/issues/1.
       - -buildid=
-      - -X github.com/oasisprotocol/oasis-core/go/common/version.SoftwareVersion={{.Env.VERSION}}
+      - "{{.Env.GOLDFLAGS_VERSION}}"
     goos:
       - linux
     goarch:

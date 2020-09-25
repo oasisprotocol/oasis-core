@@ -118,7 +118,7 @@ test-e2e:
 test: $(test-targets)
 
 # Clean.
-clean-targets := clean-runtimes clean-rust clean-go clean-version-files
+clean-targets := clean-runtimes clean-rust clean-go
 
 clean-runtimes:
 	@$(ECHO) "$(CYAN)*** Cleaning up runtimes...$(OFF)"
@@ -135,10 +135,6 @@ clean-rust:
 clean-go:
 	@$(MAKE) -C go clean
 
-clean-version-files:
-	@$(ECHO) "$(CYAN)*** Cleaning Punch version files...$(OFF)"
-	@rm --force $(_PUNCH_VERSION_FILE_PATH_PREFIX)*.py
-
 clean: $(clean-targets)
 
 # Fetch all the latest changes (including tags) from the canonical upstream git
@@ -147,36 +143,65 @@ fetch-git:
 	@$(ECHO) "Fetching the latest changes (including tags) from $(OASIS_CORE_GIT_ORIGIN_REMOTE) remote..."
 	@git fetch $(OASIS_CORE_GIT_ORIGIN_REMOTE) --tags
 
-# Assemble Change log.
-changelog: fetch-git
-	@$(ENSURE_NEXT_VERSION)
-	@$(ECHO) "Generating Change Log for version $(NEXT_VERSION)..."
-	towncrier build --version $(NEXT_VERSION)
+# Private target for bumping project's version using the Punch tool.
+# NOTE: It should not be invoked directly.
+_version-bump: fetch-git
+	@$(ENSURE_VALID_RELEASE_BRANCH_NAME)
+	@$(ENSURE_GIT_VERSION_FROM_TAG_EQUALS_PUNCH_VERSION)
+	@$(PUNCH_BUMP_VERSION)
+	@git add $(PUNCH_VERSION_FILE)
+
+# Private target for assembling the Change Log.
+# NOTE: It should not be invoked directly.
+_changelog:
+	@$(ECHO) "$(CYAN)*** Generating Change Log for version $(PUNCH_VERSION)...$(OFF)"
+	@$(BUILD_CHANGELOG)
 	@$(ECHO) "Next, review the staged changes, commit them and make a pull request."
 	@$(WARN_BREAKING_CHANGES)
 
+# Assemble Change Log.
+# NOTE: We need to call Make recursively since _version-bump target updates
+# Punch's version and hence we need Make to re-evaluate the PUNCH_VERSION
+# variable.
+changelog: _version-bump
+	@$(MAKE) --no-print-directory _changelog
+
 # Tag the next release.
-tag-next-release: fetch-git
-	@$(ENSURE_NEXT_VERSION)
-	@$(ECHO) "Checking if we can tag version $(NEXT_VERSION) as the next release..."
+release-tag: fetch-git
+	@$(ECHO) "Checking if we can tag version $(PUNCH_VERSION) as the next release..."
 	@$(ENSURE_VALID_RELEASE_BRANCH_NAME)
+	@$(ENSURE_RELEASE_TAG_DOES_NOT_EXIST)
 	@$(ENSURE_NO_CHANGELOG_FRAGMENTS)
-	@$(ENSURE_NEXT_VERSION_IN_CHANGELOG)
+	@$(ENSURE_NEXT_RELEASE_IN_CHANGELOG)
 	@$(ECHO) "All checks have passed. Proceeding with tagging the $(OASIS_CORE_GIT_ORIGIN_REMOTE)/$(RELEASE_BRANCH)'s HEAD with tags:\n- $(RELEASE_TAG)\n- $(RELEASE_TAG_GO)"
 	@$(CONFIRM_ACTION)
 	@$(ECHO) "If this appears to be stuck, you might need to touch your security key for GPG sign operation."
-	@git tag --sign --message="Version $(NEXT_VERSION)" $(RELEASE_TAG) $(OASIS_CORE_GIT_ORIGIN_REMOTE)/$(RELEASE_BRANCH)
+	@git tag --sign --message="Version $(PUNCH_VERSION)" $(RELEASE_TAG) $(OASIS_CORE_GIT_ORIGIN_REMOTE)/$(RELEASE_BRANCH)
 	@$(ECHO) "If this appears to be stuck, you might need to touch your security key for GPG sign operation."
-	@git tag --sign --message="Version $(NEXT_VERSION)" $(RELEASE_TAG_GO) $(OASIS_CORE_GIT_ORIGIN_REMOTE)/$(RELEASE_BRANCH)
+	@git tag --sign --message="Version $(PUNCH_VERSION)" $(RELEASE_TAG_GO) $(OASIS_CORE_GIT_ORIGIN_REMOTE)/$(RELEASE_BRANCH)
 	@git push $(OASIS_CORE_GIT_ORIGIN_REMOTE) $(RELEASE_TAG) $(RELEASE_TAG_GO)
-	@$(ECHO) "$(CYAN)The following tags have been successfully pushed to $(OASIS_CORE_GIT_ORIGIN_REMOTE) remote:\n- $(RELEASE_TAG)\n- $(RELEASE_TAG_GO)$(OFF)"
+	@$(ECHO) "$(CYAN)*** The following tags have been successfully pushed to $(OASIS_CORE_GIT_ORIGIN_REMOTE) remote:\n- $(RELEASE_TAG)\n- $(RELEASE_TAG_GO)$(OFF)"
 
-# Prepare release.
-release:
+# Create and push a stable branch for the current release.
+release-stable-branch: fetch-git
+	@$(ECHO) "Checking if we can create a stable release branch for version $(PUNCH_VERSION)...$(OFF)"
+	@$(ENSURE_VALID_STABLE_BRANCH)
+	@$(ENSURE_RELEASE_TAG_EXISTS)
+	@$(ENSURE_STABLE_BRANCH_DOES_NOT_EXIST)
+	@$(ECHO) "All checks have passed. Proceeding with creating the '$(STABLE_BRANCH)' branch on $(OASIS_CORE_GIT_ORIGIN_REMOTE) remote."
+	@$(CONFIRM_ACTION)
+	@git branch $(STABLE_BRANCH) $(RELEASE_TAG)
+	@git push $(OASIS_CORE_GIT_ORIGIN_REMOTE) $(STABLE_BRANCH)
+	@$(ECHO) "$(CYAN)*** Branch '$(STABLE_BRANCH)' has been sucessfully pushed to $(OASIS_CORE_GIT_ORIGIN_REMOTE) remote.$(OFF)"
+
+# Build and publish the next release.
+release-build:
+	@$(ENSURE_VALID_RELEASE_BRANCH_NAME)
+	@$(ENSURE_GIT_VERSION_EQUALS_PUNCH_VERSION)
 	@$(ECHO) "$(CYAN)*** Building release version of oasis-core-runtime-loader...$(OFF)"
 	@CARGO_TARGET_DIR=target/default cargo build -p oasis-core-runtime-loader --release
 	@cp target/default/release/oasis-core-runtime-loader .
-	@$(ECHO) "$(CYAN)*** Preparing release archive...$(OFF)"
+	@$(ECHO) "$(CYAN)*** Creating release for version $(PUNCH_VERSION)...$(OFF)"
 	@goreleaser $(GORELEASER_ARGS)
 	@rm oasis-core-runtime-loader
 
@@ -200,5 +225,8 @@ docker-shell:
 	$(lint-targets) lint \
 	$(test-unit-targets) $(test-targets) test \
 	$(clean-targets) clean \
-	fetch-git changelog tag-next-release release docker-shell \
+	fetch-git \
+	_version_bump _changelog changelog \
+	release-tag release-stable-branch release-build \
+	docker-shell \
 	all
