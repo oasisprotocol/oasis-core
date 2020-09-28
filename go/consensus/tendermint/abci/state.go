@@ -319,8 +319,10 @@ func (s *applicationState) doCommit(now time.Time) (uint64, error) {
 	s.prunerNotifyCh.In() <- s.stateRoot.Version
 	// Discover the version below which all versions can be discarded from block history.
 	lastRetainedVersion := s.statePruner.GetLastRetainedVersion()
-	// Notify the checkpointer of the new version.
-	s.checkpointer.NotifyNewVersion(s.stateRoot.Version)
+	// Notify the checkpointer of the new version, if checkpointing is enabled.
+	if s.checkpointer != nil {
+		s.checkpointer.NotifyNewVersion(s.stateRoot.Version)
+	}
 
 	return lastRetainedVersion, nil
 }
@@ -553,22 +555,24 @@ func newApplicationState(ctx context.Context, cfg *ApplicationConfig) (*applicat
 	}
 
 	// Initialize the checkpointer.
-	checkpointerCfg := checkpoint.CheckpointerConfig{
-		Name:            "consensus",
-		CheckInterval:   1 * time.Minute, // XXX: Make this configurable.
-		RootsPerVersion: 1,
-		GetParameters: func(ctx context.Context) (*checkpoint.CreationParameters, error) {
-			params := s.ConsensusParameters()
-			return &checkpoint.CreationParameters{
-				Interval:  params.StateCheckpointInterval,
-				NumKept:   params.StateCheckpointNumKept,
-				ChunkSize: params.StateCheckpointChunkSize,
-			}, nil
-		},
-	}
-	s.checkpointer, err = checkpoint.NewCheckpointer(s.ctx, ndb, ldb.Checkpointer(), checkpointerCfg)
-	if err != nil {
-		return nil, fmt.Errorf("state: failed to create checkpointer: %w", err)
+	if !cfg.DisableCheckpointer {
+		checkpointerCfg := checkpoint.CheckpointerConfig{
+			Name:            "consensus",
+			CheckInterval:   cfg.CheckpointerCheckInterval,
+			RootsPerVersion: 1,
+			GetParameters: func(ctx context.Context) (*checkpoint.CreationParameters, error) {
+				params := s.ConsensusParameters()
+				return &checkpoint.CreationParameters{
+					Interval:  params.StateCheckpointInterval,
+					NumKept:   params.StateCheckpointNumKept,
+					ChunkSize: params.StateCheckpointChunkSize,
+				}, nil
+			},
+		}
+		s.checkpointer, err = checkpoint.NewCheckpointer(s.ctx, ndb, ldb.Checkpointer(), checkpointerCfg)
+		if err != nil {
+			return nil, fmt.Errorf("state: failed to create checkpointer: %w", err)
+		}
 	}
 
 	go s.metricsWorker()
