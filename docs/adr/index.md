@@ -76,5 +76,6 @@ The following records currently exist:
 * [ADR 0002](0002-go-modules-compatible-git-tags.md) - Go Modules Compatible Git Tags
 * [ADR 0003](0003-consensus-runtime-token-transfer.md) - Consensus/Runtime Token Transfer
 * [ADR 0004](0004-runtime-governance.md) - Runtime Governance
+* [ADR 0005](0005-runtime-compute-slashing.md) - Runtime Compute Node Slashing
 * [ADR 0007](0007-improved-random-beacon.md) - Improved Random Beacon
 <!-- markdownlint-enable line-length -->
