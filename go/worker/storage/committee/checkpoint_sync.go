@@ -455,6 +455,13 @@ func (n *Node) syncCheckpoints() (*blockSummary, error) {
 						"version", prevVersion,
 						"roots", doneRoots,
 					)
+					// Since finalize failed, we need to make sure to abort multipart insert
+					// otherwise all normal batch operations will continue to fail.
+					if abortErr := n.localStorage.NodeDB().AbortMultipartInsert(); abortErr != nil {
+						n.logger.Error("can't abort multipart insert after finalization failure",
+							"err", err,
+						)
+					}
 					// Likely a local problem, so just bail.
 					return nil, fmt.Errorf("can't finalize version after checkpoints restored: %w", err)
 				}
