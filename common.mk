@@ -22,9 +22,14 @@ endif
 # Output messages to stderr instead stdout.
 ECHO := $(ECHO_CMD) 1>&2
 
+# Boolean indicating whether to assume the 'yes' answer when confirming actions.
+ASSUME_YES ?= 0
+
 # Helper that asks the user to confirm the action.
 define CONFIRM_ACTION =
-	$(ECHO) -n "Are you sure? [y/N] " && read ans && [ $${ans:-N} = y ]
+	if [[ $(ASSUME_YES) != 1 ]]; then \
+		$(ECHO) -n "Are you sure? [y/N] " && read ans && [ $${ans:-N} = y ]; \
+	fi
 endef
 
 # Name of git remote pointing to the canonical upstream git repository, i.e.
@@ -128,6 +133,59 @@ GOLDFLAGS_BRANCH := -X github.com/oasisprotocol/oasis-core/go/common/version.Git
 # Go's linker flags.
 export GOLDFLAGS ?= "$(GOLDFLAGS_VERSION) $(GOLDFLAGS_BRANCH)"
 
+# List of non-trivial Change Log fragments.
+CHANGELOG_FRAGMENTS_NON_TRIVIAL := $(filter-out $(wildcard .changelog/*trivial*.md),$(wildcard .changelog/[0-9]*.md))
+
+# List of breaking Change Log fragments.
+CHANGELOG_FRAGMENTS_BREAKING := $(wildcard .changelog/*breaking*.md)
+
+# Helper that checks Change Log fragments with markdownlint-cli and gitlint.
+# NOTE: Non-zero exit status is recorded but only set at the end so that all
+# markdownlint or gitlint errors can be seen at once.
+define CHECK_CHANGELOG_FRAGMENTS =
+	exit_status=0; \
+	$(ECHO) "$(CYAN)*** Running markdownlint-cli for Change Log fragments... $(OFF)"; \
+	npx markdownlint-cli --config .changelog/.markdownlint.yml .changelog/ || exit_status=$$?; \
+	$(ECHO) "$(CYAN)*** Running gitlint for Change Log fragments: $(OFF)"; \
+	for fragment in $(CHANGELOG_FRAGMENTS_NON_TRIVIAL); do \
+		$(ECHO) "- $$fragment"; \
+		gitlint --msg-filename $$fragment -c title-max-length.line-length=78 || exit_status=$$?; \
+	done; \
+	exit $$exit_status
+endef
+
+# Helper that builds the Change Log.
+define BUILD_CHANGELOG =
+	if [[ $(ASSUME_YES) != 1 ]]; then \
+		towncrier build --version $(PUNCH_VERSION); \
+	else \
+		towncrier build --version $(PUNCH_VERSION) --yes; \
+	fi
+endef
+
+# Helper that prints a warning when breaking changes are indicated by Change Log
+# fragments.
+define WARN_BREAKING_CHANGES =
+	if [[ -n "$(CHANGELOG_FRAGMENTS_BREAKING)" ]]; then \
+		$(ECHO) "$(RED)Warning: This release contains breaking changes.$(OFF)"; \
+		$(ECHO) "$(RED)         Make sure the protocol versions were bumped appropriately.$(OFF)"; \
+	fi
+endef
+
+# Helper that ensures the origin's release branch's HEAD doesn't contain any
+# Change Log fragments.
+define ENSURE_NO_CHANGELOG_FRAGMENTS =
+	if ! CHANGELOG_FILES=`git ls-tree -r --name-only $(OASIS_CORE_GIT_ORIGIN_REMOTE)/$(RELEASE_BRANCH) .changelog`; then \
+		$(ECHO) "$(RED)Error: Could not obtain Change Log fragments for $(OASIS_CORE_GIT_ORIGIN_REMOTE)/$(RELEASE_BRANCH) branch.$(OFF)"; \
+		exit 1; \
+	fi; \
+	if CHANGELOG_FRAGMENTS=`echo "$$CHANGELOG_FILES" | grep --invert-match --extended-regexp '(README.md|template.md.j2|.markdownlint.yml)'`; then \
+		$(ECHO) "$(RED)Error: Found the following Change Log fragments on $(OASIS_CORE_GIT_ORIGIN_REMOTE)/$(RELEASE_BRANCH) branch:"; \
+		$(ECHO) "$${CHANGELOG_FRAGMENTS}$(OFF)"; \
+		exit 1; \
+	fi
+endef
+
 # Helper that ensures the origin's release branch's HEAD contains a Change Log
 # section for the next release.
 define ENSURE_NEXT_RELEASE_IN_CHANGELOG =
@@ -202,19 +260,6 @@ define ENSURE_VALID_RELEASE_BRANCH_NAME =
 	fi
 endef
 
-# Helper that ensures the origin's release branch's HEAD doesn't contain any Change Log fragments.
-define ENSURE_NO_CHANGELOG_FRAGMENTS =
-	if ! CHANGELOG_FILES=`git ls-tree -r --name-only $(OASIS_CORE_GIT_ORIGIN_REMOTE)/$(RELEASE_BRANCH) .changelog`; then \
-		$(ECHO) "$(RED)Error: Could not obtain Change Log fragments for $(OASIS_CORE_GIT_ORIGIN_REMOTE)/$(RELEASE_BRANCH) branch.$(OFF)"; \
-		exit 1; \
-	fi; \
-	if CHANGELOG_FRAGMENTS=`echo "$$CHANGELOG_FILES" | grep --invert-match --extended-regexp '(README.md|template.md.j2|.markdownlint.yml)'`; then \
-		$(ECHO) "$(RED)Error: Found the following Change Log fragments on $(OASIS_CORE_GIT_ORIGIN_REMOTE)/$(RELEASE_BRANCH) branch:"; \
-		$(ECHO) "$${CHANGELOG_FRAGMENTS}$(OFF)"; \
-		exit 1; \
-	fi
-endef
-
 # Auxiliary variable that defines a new line for later substitution.
 define newline
 
@@ -251,17 +296,3 @@ endif
 # For more details, see:
 # https://goreleaser.com/customization/build/#define-build-tag
 export GORELEASER_CURRENT_TAG := $(RELEASE_TAG)
-
-# List of non-trivial Change Log fragments.
-CHANGELOG_FRAGMENTS_NON_TRIVIAL := $(filter-out $(wildcard .changelog/*trivial*.md),$(wildcard .changelog/[0-9]*.md))
-
-# List of breaking Change Log fragments.
-CHANGELOG_FRAGMENTS_BREAKING := $(wildcard .changelog/*breaking*.md)
-
-# Helper that prints a warning when breaking changes are indicated by changelog fragments.
-define WARN_BREAKING_CHANGES =
-	if [[ -n "$(CHANGELOG_FRAGMENTS_BREAKING)" ]]; then \
-		$(ECHO) "$(RED)Warning: This release contains breaking changes.$(OFF)"; \
-		$(ECHO) "$(RED)         Make sure that protocol versions were bumped.$(OFF)"; \
-	fi
-endef

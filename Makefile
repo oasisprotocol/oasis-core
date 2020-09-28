@@ -80,16 +80,8 @@ lint-git: fetch-git
 lint-md:
 	@npx markdownlint-cli '**/*.md' --ignore .changelog/
 
-# NOTE: Non-zero exit status is recorded but only set at the end so that all
-# markdownlint or gitlint errors can be seen at once.
 lint-changelog:
-	@exit_status=0; \
-	npx markdownlint-cli --config .changelog/.markdownlint.yml .changelog/ || exit_status=$$?; \
-	for fragment in $(CHANGELOG_FRAGMENTS_NON_TRIVIAL); do \
-		echo "Running gitlint on $$fragment..."; \
-		gitlint --msg-filename $$fragment -c title-max-length.line-length=78 || exit_status=$$?; \
-	done; \
-	exit $$exit_status
+	@$(CHECK_CHANGELOG_FRAGMENTS)
 
 # Check whether docs are synced with source code.
 lint-docs:
