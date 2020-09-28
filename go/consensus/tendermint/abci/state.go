@@ -243,21 +243,6 @@ func (s *applicationState) inHaltEpoch(ctx *api.Context) bool {
 	return s.haltMode
 }
 
-func (s *applicationState) afterHaltEpoch(ctx *api.Context) bool {
-	blockHeight := s.BlockHeight()
-
-	currentEpoch, err := s.GetEpoch(ctx, blockHeight+1)
-	if err != nil {
-		s.logger.Error("afterHaltEpoch: failed to get epoch",
-			"err", err,
-			"block_height", blockHeight,
-		)
-		return false
-	}
-
-	return currentEpoch > s.haltEpochHeight
-}
-
 func (s *applicationState) doInitChain(now time.Time) error {
 	s.blockLock.Lock()
 	defer s.blockLock.Unlock()

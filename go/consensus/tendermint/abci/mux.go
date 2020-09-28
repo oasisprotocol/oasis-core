@@ -416,7 +416,7 @@ func (mux *abciMux) BeginBlock(req types.RequestBeginBlock) types.ResponseBeginB
 			break
 		}
 		// On transition, trigger halt hooks.
-		mux.logger.Info("BeginBlock: halt mode transition, emitting empty blocks.",
+		mux.logger.Info("BeginBlock: halt mode transition, emitting empty block",
 			"block_height", blockHeight,
 			"epoch", mux.state.haltEpochHeight,
 		)
@@ -424,10 +424,7 @@ func (mux *abciMux) BeginBlock(req types.RequestBeginBlock) types.ResponseBeginB
 		mux.dispatchHaltHooks(blockHeight, currentEpoch)
 		return types.ResponseBeginBlock{}
 	case true:
-		if !mux.state.afterHaltEpoch(ctx) {
-			return types.ResponseBeginBlock{}
-		}
-
+		// After one block into the halt epoch, terminate.
 		mux.logger.Info("BeginBlock: after halt epoch, halting",
 			"block_height", blockHeight,
 		)
