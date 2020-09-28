@@ -15,10 +15,12 @@ var (
 	DeterministicCompute1 = stakingTests.AddressFromString("oasis1qr77y0cqdzcqgz2wqkv59yz0j4vfvyryfv8vxllt")
 	DeterministicCompute2 = stakingTests.AddressFromString("oasis1qzyw75ds6nw0af98xfmmpl3z8sgf3mdslvtzzcn6")
 	DeterministicCompute3 = stakingTests.AddressFromString("oasis1qrp7l53vn6h2z7p242ldtkqtttz2jf9dwsgu05aa")
+	DeterministicCompute4 = stakingTests.AddressFromString("oasis1qzpgrrd7435s2vaxr6s7xhqxusu4muq3y5qyph7u")
 
 	DeterministicStorage0 = stakingTests.AddressFromString("oasis1qrhp36j49ncpaac0aufwyuvtk04nfxcj2yq7y4my")
 	DeterministicStorage1 = stakingTests.AddressFromString("oasis1qzc2fexm30puzq2cmlm832fvpnyaxrq33cx4zukj")
 	DeterministicStorage2 = stakingTests.AddressFromString("oasis1qq2t9c27y6kylqz4n6qmh3vn9zessh8guglsg8qc")
+	DeterministicStorage3 = stakingTests.AddressFromString("oasis1qz359ng7waf2lp7j8c6vzd6qw4g4xtelysr0hl6x")
 
 	DeterministicKeyManager0 = stakingTests.AddressFromString("oasis1qpx0k28va6n0r25qd2j4jdh9f42n5vex6s9lp780")
 	DeterministicKeyManager1 = stakingTests.AddressFromString("oasis1qz30d8mqzrsrsu7fr0e6nxk0ze7ffdkj8ur7sqp0")
