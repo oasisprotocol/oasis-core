@@ -14,16 +14,16 @@ import (
 	"time"
 
 	flag "github.com/spf13/pflag"
+
+	cmnSyscall "github.com/oasisprotocol/oasis-core/go/common/syscall"
 )
 
 // ErrEarlyTerm is the error passed over the error channel when a
 // sub-process terminates prior to the Cleanup.
 var ErrEarlyTerm = errors.New("env: sub-process exited early")
 
-// CmdAttrs is the SysProcAttr that will ensure graceful cleanup.
-var CmdAttrs = &syscall.SysProcAttr{
-	Pdeathsig: syscall.SIGKILL,
-}
+// CmdAttrs is the SysProcAttr that will ensure graceful cleanup (on Linux).
+var CmdAttrs = cmnSyscall.CmdAttrs
 
 // CleanupFn is the cleanup hook function prototype.
 type CleanupFn func()

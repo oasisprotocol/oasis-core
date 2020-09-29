@@ -3,6 +3,8 @@ package common
 import (
 	"syscall"
 	"unsafe"
+
+	cmnSyscall "github.com/oasisprotocol/oasis-core/go/common/syscall"
 )
 
 // Isatty returns true iff the provided file descriptor is a terminal.
@@ -20,7 +22,7 @@ func Isatty(fd uintptr) bool {
 	_, _, errno := syscall.Syscall6(
 		syscall.SYS_IOCTL,
 		fd,
-		syscall.TCGETS,
+		cmnSyscall.IoctlTermiosGetAttr,
 		uintptr(unsafe.Pointer(&attrs)),
 		0,
 		0,
