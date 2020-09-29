@@ -58,6 +58,12 @@ const (
 	// in a single iteration. The purpose of this timeout is to prevent the client being stuck and
 	// treating that as an error instead.
 	queriesIterationTimeout = 60 * time.Second
+
+	// queriesNumAllowedQueryTxsHistoricalFailures is the number of allowed failures of histortical
+	// `QueryTxs` requests. A historical `QueryTxs` request can fail in case available storage
+	// nodes have gap in history for the queried height, due to restoring from checkpoint. See also:
+	// https://github.com/oasisprotocol/oasis-core/issues/3337
+	queriesNumAllowedQueryTxsHistoricalFailures = 5
 )
 
 // QueriesFlags are the queries workload flags.
@@ -77,6 +83,9 @@ type queries struct {
 	registry  registry.Backend
 	scheduler scheduler.Backend
 	runtime   runtimeClient.RuntimeClient
+
+	// queryTxsHistoricalFailures is a counter of historical QueryTxs queries that failed.
+	queryTxsHistoricalFailures uint64
 
 	runtimeGenesisRound uint64
 }
@@ -648,7 +657,19 @@ func (q *queries) doRuntimeQueries(ctx context.Context, rng *rand.Rand) error {
 			"latest_round", latestRound,
 			"err", err,
 		)
-		return fmt.Errorf("runtimeClient.QueryTxs: %w", err)
+
+		switch round == latestRound {
+		case false:
+			q.queryTxsHistoricalFailures++
+			// Historical queries are allowed to fail few times.
+			if q.queryTxsHistoricalFailures <= queriesNumAllowedQueryTxsHistoricalFailures {
+				break
+			}
+			fallthrough
+		case true:
+			// Query for latest round should never fail.
+			return fmt.Errorf("runtimeClient.QueryTxs: %w", err)
+		}
 	}
 
 	q.logger.Debug("Done runtime queries",
