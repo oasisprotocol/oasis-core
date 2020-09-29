@@ -7,12 +7,12 @@ import (
 	"net/rpc"
 	"os/exec"
 	"sync"
-	"syscall"
 
 	hclog "github.com/hashicorp/go-hclog"
 	"github.com/hashicorp/go-plugin"
 
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
+	"github.com/oasisprotocol/oasis-core/go/common/syscall"
 )
 
 const (
@@ -94,9 +94,7 @@ func NewFactory(config interface{}, roles ...signature.SignerRole) (signature.Si
 	// We do use managed plugins so that in the graceful exit case,
 	// the cleanup will be done at least.
 	cmd := exec.Command(cfg.Path) // nolint: gosec
-	cmd.SysProcAttr = &syscall.SysProcAttr{
-		Pdeathsig: syscall.SIGKILL,
-	}
+	cmd.SysProcAttr = syscall.CmdAttrs
 
 	client := plugin.NewClient(&plugin.ClientConfig{
 		HandshakeConfig: handshakeConfigForName(cfg.Name),
