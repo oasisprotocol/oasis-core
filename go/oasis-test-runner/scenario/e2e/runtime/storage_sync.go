@@ -190,7 +190,7 @@ func (sc *storageSyncImpl) Run(childEnv *env.Env) error {
 		return fmt.Errorf("can't start last storage worker: %w", err)
 	}
 	if err := lateWorker.WaitReady(ctx); err != nil {
-		return fmt.Errorf("erorr waiting for late storage worker to become ready: %w", err)
+		return fmt.Errorf("error waiting for late storage worker to become ready: %w", err)
 	}
 	// Wait a bit to give the logger in the node time to sync; the message has already been
 	// logged by this point, it just might not be on disk yet.

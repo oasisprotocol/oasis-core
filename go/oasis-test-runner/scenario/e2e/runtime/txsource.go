@@ -314,6 +314,7 @@ func (sc *txSourceImpl) Fixture() (*oasis.NetworkFixture, error) {
 	for i := range f.Validators {
 		f.Validators[i].Consensus.MinGasPrice = txSourceGasPrice
 		f.Validators[i].Consensus.SubmissionGasPrice = txSourceGasPrice
+		// Enable recovery from corrupted WAL.
 		f.Validators[i].Consensus.TendermintRecoverCorruptedWAL = sc.tendermintRecoverCorruptedWAL
 		// Ensure validator-0 does not have pruning enabled, so nodes taken down
 		// for long period can sync from it.
@@ -323,10 +324,14 @@ func (sc *txSourceImpl) Fixture() (*oasis.NetworkFixture, error) {
 	// Update all other nodes to use a specific gas price.
 	for i := range f.Keymanagers {
 		f.Keymanagers[i].Consensus.SubmissionGasPrice = txSourceGasPrice
+		// Enable recovery from corrupted WAL.
+		f.Keymanagers[i].Consensus.TendermintRecoverCorruptedWAL = sc.tendermintRecoverCorruptedWAL
 		sc.generateConsensusFixture(&f.Keymanagers[i].Consensus, false)
 	}
 	for i := range f.StorageWorkers {
 		f.StorageWorkers[i].Consensus.SubmissionGasPrice = txSourceGasPrice
+		// Enable recovery from corrupted WAL.
+		f.StorageWorkers[i].Consensus.TendermintRecoverCorruptedWAL = sc.tendermintRecoverCorruptedWAL
 		sc.generateConsensusFixture(&f.StorageWorkers[i].Consensus, false)
 		if i > 0 {
 			f.StorageWorkers[i].CheckpointSyncEnabled = true
@@ -334,6 +339,8 @@ func (sc *txSourceImpl) Fixture() (*oasis.NetworkFixture, error) {
 	}
 	for i := range f.ComputeWorkers {
 		f.ComputeWorkers[i].Consensus.SubmissionGasPrice = txSourceGasPrice
+		// Enable recovery from corrupted WAL.
+		f.ComputeWorkers[i].Consensus.TendermintRecoverCorruptedWAL = sc.tendermintRecoverCorruptedWAL
 		sc.generateConsensusFixture(&f.ComputeWorkers[i].Consensus, false)
 	}
 	for i := range f.ByzantineNodes {
