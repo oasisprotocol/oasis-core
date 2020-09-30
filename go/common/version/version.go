@@ -106,6 +106,8 @@ var Versions = struct {
 }
 
 func parseSemVerStr(s string) Version {
+	// Trim potential pre-release suffix.
+	s = strings.Split(s, "-")[0]
 	split := strings.SplitN(s, ".", 4)
 
 	var semVers []uint16 = []uint16{0, 0, 0}
