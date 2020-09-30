@@ -1,5 +1,11 @@
 SHELL := /bin/bash
 
+# Path to the directory of this Makefile.
+# NOTE: Prepend all relative paths in this Makefile with this variable to ensure
+# they are properly resolved when this Makefile is included from Makefiles in
+# other directories.
+SELF_DIR := $(dir $(lastword $(MAKEFILE_LIST)))
+
 # Check if we're running in an interactive terminal.
 ISATTY := $(shell [ -t 0 ] && echo 1)
 
@@ -54,13 +60,17 @@ endif
 # Determine project's git branch.
 GIT_BRANCH ?= $(shell git rev-parse --abbrev-ref HEAD 2>/dev/null)
 
-PUNCH_CONFIG_FILE := .punch_config.py
-PUNCH_VERSION_FILE := .punch_version.py
+PUNCH_CONFIG_FILE := $(SELF_DIR)/.punch_config.py
+PUNCH_VERSION_FILE := $(SELF_DIR)/.punch_version.py
 # Obtain project's version as tracked by the Punch tool.
 # NOTE: The Punch tool doesn't have the ability fo print project's version to
 # stdout yet.
 # For more details, see: https://github.com/lgiordani/punch/issues/42.
-PUNCH_VERSION := $(shell python3 -c "exec(open('$(PUNCH_VERSION_FILE)').read()); version = f'{year}.{minor}.{micro}' if micro > 0 else f'{year}.{minor}'; print(version)")
+PUNCH_VERSION := $(shell \
+	python3 -c "exec(open('$(PUNCH_VERSION_FILE)').read()); \
+		version = f'{year}.{minor}.{micro}' if micro > 0 else f'{year}.{minor}'; \
+		print(version)" \
+	)
 
 # Helper that bumps project's version with the Punch tool.
 define PUNCH_BUMP_VERSION =
