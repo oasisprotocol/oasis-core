@@ -1,6 +1,10 @@
 module github.com/oasisprotocol/oasis-core/go
 
 replace (
+	// Fixes vulnerabilities in etcd v3.3.{10,13} (dependencies via viper).
+	// Can be removed once there is a spf13/viper release with updated etcd.
+	// https://github.com/spf13/viper/issues/956
+	github.com/coreos/etcd => github.com/coreos/etcd v3.3.25+incompatible
 	// Updates the version used in spf13/cobra (dependency via tendermint) as
 	// there is no release yet with the fix. Remove once an updated release of
 	// spf13/cobra exists and tendermint is updated to include it.
