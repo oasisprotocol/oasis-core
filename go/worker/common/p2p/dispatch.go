@@ -223,7 +223,7 @@ func (h *topicHandler) retryWorker(m *queuedMsg) {
 }
 
 func newTopicHandler(p *P2P, runtimeID common.Namespace, handlers []Handler) (string, *topicHandler, error) {
-	topicID := runtimeIDToTopicID(runtimeID)
+	topicID := p.topicIDForRuntime(runtimeID)
 	topic, err := p.pubsub.Join(topicID) // Note: Disallows duplicates.
 	if err != nil {
 		return "", nil, fmt.Errorf("worker/common/p2p: failed to join topic '%s': %w", topicID, err)
