@@ -1,7 +1,11 @@
+# Punch configuration file.
+
+# For more information, see: https://punch.readthedocs.io/.
+
 __config_version__ = 1
 
 GLOBALS = {
-    'serializer': '{{year}}.{{minor}}',
+    'serializer': '{{year}}.{{minor}}.{{micro}}',
 }
 
 # NOTE: The FILES list is not allowed to be empty, so we need to pass it at
@@ -18,7 +22,12 @@ VERSION = [
         'name': 'minor',
         'type': 'integer',
     },
+    {
+        'name': 'micro',
+        'type': 'integer',
+    },
 ]
+
 ACTIONS = {
     'custom_bump': {
         'type': 'conditional_reset',

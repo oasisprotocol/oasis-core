@@ -18,13 +18,21 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v2
+        with:
+          # Fetch all history as the recommended way to fetch all tags and
+          # branches of the project.
+          # This allows the release helpers in common.mk to determine the
+          # project's version from git correctly.
+          # For more info, see:
+          # https://github.com/actions/checkout#fetch-all-history-for-all-tags-and-branches
+          fetch-depth: 0
       - name: Set up Go 1.15
         uses: actions/setup-go@v2.1.2
         with:
           go-version: "1.15.x"
       - name: Set up Rust
         uses: actions-rs/toolchain@v1
-      - name: Install oasis-node prerequisites
+      - name: Install Oasis Node prerequisites
         run: |
           sudo apt-get update
           sudo apt-get install make libseccomp-dev protobuf-compiler
@@ -40,12 +48,18 @@ jobs:
           sudo mv goreleaser /usr/local/bin
         env:
           GORELEASER_URL_PREFIX: https://github.com/goreleaser/goreleaser/releases/download/
-          GORELEASER_VERSION: 0.127.0
+          GORELEASER_VERSION: 0.143.0
           GORELEASER_TARBALL: goreleaser_Linux_x86_64.tar.gz
           CURL_CMD: curl --proto =https --tlsv1.2 -sSL
-      - name: Create release
+      - name: Set RELEASE_BRANCH name for stable/bugfix releases
         run: |
-          make release
+          GIT_VERSION=${GITHUB_REF#refs/tags/v}
+          if [[ ! ${GIT_VERSION} =~ ^[0-9]+\.[0-9]+$ ]]; then
+            echo ::set-env name=RELEASE_BRANCH::stable/${GIT_VERSION%.*}.x
+          fi
+      - name: Build and publish the next release
+        run: |
+          make release-build
         env:
           # Instruct Make to create a real release.
           OASIS_CORE_REAL_RELEASE: "true"
