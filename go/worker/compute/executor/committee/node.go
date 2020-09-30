@@ -865,6 +865,26 @@ func (n *Node) Dispatch(batch transaction.RawBatch) error {
 		return fmt.Errorf("failed to sign txn scheduler batch: %w", err)
 	}
 
+	n.commonNode.CrossNode.Lock()
+	defer n.commonNode.CrossNode.Unlock()
+
+	// If we are not waiting for a batch, don't do anything.
+	if _, ok := n.state.(StateWaitingForBatch); !ok {
+		n.logger.Error("new state since started the dispatch",
+			"state", n.state,
+		)
+		return errIncorrectState
+	}
+
+	// Ensure we are still in the same round as when we started the dispatch.
+	if lastHeader.Round != n.commonNode.CurrentBlock.Header.Round {
+		n.logger.Error("new round since started the dispatch",
+			"expected_round", lastHeader.Round,
+			"round", n.commonNode.CurrentBlock.Header.Round,
+		)
+		return errSeenNewerBlock
+	}
+
 	n.logger.Debug("dispatching a new batch proposal",
 		"io_root", ioRoot,
 		"num_txs", len(batch),
@@ -885,26 +905,6 @@ func (n *Node) Dispatch(batch transaction.RawBatch) error {
 	}
 	crash.Here(crashPointBatchPublishAfter)
 	spanPublish.Finish()
-
-	n.commonNode.CrossNode.Lock()
-	defer n.commonNode.CrossNode.Unlock()
-
-	// If we are not waiting for a batch, don't do anything.
-	if _, ok := n.state.(StateWaitingForBatch); !ok {
-		n.logger.Error("new state since started the dispatch",
-			"state", n.state,
-		)
-		return errIncorrectState
-	}
-
-	// Ensure we are still in the same round as when we started the dispatch.
-	if lastHeader.Round != n.commonNode.CurrentBlock.Header.Round {
-		n.logger.Error("new round since started the dispatch",
-			"expected_round", lastHeader.Round,
-			"round", n.commonNode.CurrentBlock.Header.Round,
-		)
-		return errSeenNewerBlock
-	}
 
 	// Also process the batch locally.
 	n.handleInternalBatchLocked(
