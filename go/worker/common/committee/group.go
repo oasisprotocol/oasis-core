@@ -354,6 +354,15 @@ func (g *Group) EpochTransition(ctx context.Context, height int64) error {
 		return err
 	}
 
+	// Fetch the epoch block, which is also the group version.
+	// Note: when node is restarted, `EpochTransition` is called on the first
+	// received block, which is not necessary the actual epoch transition block.
+	// Therefore we cannot use current height as the group version.
+	groupVersion, err := g.consensus.EpochTime().GetEpochBlock(ctx, epochNumber)
+	if err != nil {
+		return err
+	}
+
 	// Fetch current runtime descriptor.
 	runtime, err := g.consensus.Registry().GetRuntime(ctx, &registry.NamespaceQuery{ID: g.runtimeID, Height: height})
 	if err != nil {
@@ -377,14 +386,14 @@ func (g *Group) EpochTransition(ctx context.Context, height int64) error {
 		cancelEpochCtx:    cancelEpochCtx,
 		roundCtx:          roundCtx,
 		cancelRoundCtx:    cancelRoundCtx,
-		groupVersion:      height,
+		groupVersion:      groupVersion,
 		executorCommittee: executorCommittee,
 		storageCommittee:  storageCommittee,
 		runtime:           runtime,
 	}
 
 	g.logger.Info("epoch transition complete",
-		"group_version", height,
+		"group_version", groupVersion,
 		"executor_role", executorCommittee.Role,
 	)
 
