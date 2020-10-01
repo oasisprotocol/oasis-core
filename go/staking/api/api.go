@@ -147,7 +147,7 @@ type Backend interface {
 	Cleanup()
 }
 
-// ThresholdQuery is a treshold query.
+// ThresholdQuery is a threshold query.
 type ThresholdQuery struct {
 	Height int64         `json:"height"`
 	Kind   ThresholdKind `json:"kind"`
@@ -605,12 +605,12 @@ func (st *StakeThreshold) Value(tm map[ThresholdKind]quantity.Quantity) (*quanti
 	}
 }
 
-// GlobalStakeTreshold creates a new global StakeThreshold.
+// GlobalStakeThreshold creates a new global StakeThreshold.
 func GlobalStakeThreshold(kind ThresholdKind) StakeThreshold {
 	return StakeThreshold{Global: &kind}
 }
 
-// GlobalStakeTresholds creates a new list of global StakeThresholds.
+// GlobalStakeThresholds creates a new list of global StakeThresholds.
 func GlobalStakeThresholds(kinds ...ThresholdKind) (sts []StakeThreshold) {
 	for _, k := range kinds {
 		sts = append(sts, GlobalStakeThreshold(k))
