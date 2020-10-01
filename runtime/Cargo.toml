@@ -28,7 +28,7 @@ snow = { version = "0.7.2", default-features = false, features = ["ring-accelera
 percent-encoding = "2.1.0"
 pem = "0.8.1"
 chrono = "0.4.19"
-base64 = "0.12.3"
+base64 = "0.13.0"
 rustc-hex = "2.0.1"
 rand = "0.7.3"
 futures = "0.1.25"
