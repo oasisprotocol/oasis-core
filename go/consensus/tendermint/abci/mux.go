@@ -270,7 +270,7 @@ func (mux *abciMux) registerHaltHook(hook func(context.Context, int64, epochtime
 
 func (mux *abciMux) Info(req types.RequestInfo) types.ResponseInfo {
 	return types.ResponseInfo{
-		AppVersion:       version.ConsensusProtocol.ToU64(),
+		AppVersion:       version.TendermintAppVersion,
 		LastBlockHeight:  mux.state.BlockHeight(),
 		LastBlockAppHash: mux.state.BlockHash(),
 	}
@@ -767,7 +767,7 @@ func (mux *abciMux) EndBlock(req types.RequestEndBlock) types.ResponseEndBlock {
 	// Update version to what we are actually running.
 	resp.ConsensusParamUpdates = &types.ConsensusParams{
 		Version: &tmproto.VersionParams{
-			AppVersion: version.ConsensusProtocol.ToU64(),
+			AppVersion: version.TendermintAppVersion,
 		},
 	}
 

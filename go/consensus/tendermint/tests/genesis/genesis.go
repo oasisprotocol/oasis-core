@@ -93,7 +93,7 @@ func NewTestNodeGenesisProvider(identity *identity.Identity) (genesis.Provider, 
 		AppState:        b,
 	}
 	tmDoc.ConsensusParams.Version = tmproto.VersionParams{
-		AppVersion: version.ConsensusProtocol.ToU64(),
+		AppVersion: version.TendermintAppVersion,
 	}
 
 	nodeID := identity.ConsensusSigner.Public()

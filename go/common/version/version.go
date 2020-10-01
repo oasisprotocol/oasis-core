@@ -1,4 +1,7 @@
 // Package version implements Oasis protocol and runtime versioning.
+//
+// For a more detailed explanation of Oasis Core's versioning, see:
+// https://docs.oasis.dev/oasis-core/processes/versioning.
 package version
 
 import (
@@ -87,9 +90,20 @@ var (
 	// the epochtime, beacon, registry, roothash, etc. modules that are
 	// backend by consensus.
 	//
-	// NOTE: Any change in the major or minor versions are considered
-	//       breaking changes for the protocol.
+	// NOTE: Consensus protocol version compatibility is currently not directly
+	// checked in Oasis Core.
+	// It is converted to TendermintAppVersion whose compatibility is checked
+	// via Tendermint's version checks.
 	ConsensusProtocol = Version{Major: 1, Minor: 0, Patch: 0}
+
+	// TendermintAppVersion is Tendermint ABCI application's version computed by
+	// masking non-major consensus protocol version segments to 0 to be
+	// compatible with Tendermint's version checks.
+	//
+	// NOTE: Tendermint's version checks compare the whole version uint64
+	// directly. For example:
+	// https://github.com/tendermint/tendermint/blob/1635d1339c73ae6a82e062cd2dc7191b029efa14/state/validation.go#L21-L22.
+	TendermintAppVersion = ConsensusProtocol.MaskNonMajor().ToU64()
 
 	// Tendermint exposes the tendermint core version.
 	Tendermint = parseSemVerStr(version.TMCoreSemVer)

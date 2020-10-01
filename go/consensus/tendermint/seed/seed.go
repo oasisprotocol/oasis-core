@@ -341,7 +341,7 @@ func New(dataDir string, identity *identity.Identity, genesisProvider genesis.Pr
 		ProtocolVersion: p2p.NewProtocolVersion(
 			tmversion.P2PProtocol,
 			tmversion.BlockProtocol,
-			version.ConsensusProtocol.ToU64(),
+			version.TendermintAppVersion,
 		),
 		DefaultNodeID: nodeKey.ID(),
 		ListenAddr:    viper.GetString(tmcommon.CfgCoreListenAddress),
