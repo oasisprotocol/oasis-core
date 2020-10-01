@@ -813,6 +813,23 @@ func (t *fullService) GetStatus(ctx context.Context) (*consensusAPI.Status, erro
 		// We may not be able to fetch the genesis block in case it has been pruned.
 	}
 
+	lastRetainedHeight, err := t.GetLastRetainedVersion(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get last retained height: %w", err)
+	}
+	// Some pruning configurations return 0 instead of a valid block height. Clamp those to the genesis height.
+	if lastRetainedHeight < t.genesis.Height {
+		lastRetainedHeight = t.genesis.Height
+	}
+	status.LastRetainedHeight = lastRetainedHeight
+	lastRetainedBlock, err := t.GetBlock(ctx, lastRetainedHeight)
+	switch err {
+	case nil:
+		status.LastRetainedHash = lastRetainedBlock.Hash
+	default:
+		// Before we commit the first block, we can't load it from GetBlock. Don't give its hash in this case.
+	}
+
 	// Latest block.
 	latestBlk, err := t.GetBlock(ctx, consensusAPI.HeightLatest)
 	switch err {

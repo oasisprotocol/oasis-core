@@ -45,6 +45,8 @@ func ConsensusImplementationTests(t *testing.T, backend consensus.ClientBackend)
 	require.NoError(err, "GetStatus")
 	require.NotNil(status, "returned status should not be nil")
 	require.EqualValues(1, status.GenesisHeight, "genesis height must be 1")
+	// We run this test without pruning. All we check is that we retain everything as configured.
+	require.EqualValues(1, status.LastRetainedHeight, "last retained height must be 1")
 
 	blk, err = backend.GetBlock(ctx, status.LatestHeight)
 	require.NoError(err, "GetBlock")
