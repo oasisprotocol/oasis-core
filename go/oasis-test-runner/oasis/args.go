@@ -136,9 +136,10 @@ func (args *argBuilder) tendermintRecoverCorruptedWAL(enable bool) *argBuilder {
 	return args
 }
 
-func (args *argBuilder) tendermintCoreListenAddress(port uint16) *argBuilder {
+func (args *argBuilder) tendermintCoreAddress(port uint16) *argBuilder {
 	args.vec = append(args.vec, []string{
 		"--" + tendermintCommon.CfgCoreListenAddress, "tcp://0.0.0.0:" + strconv.Itoa(int(port)),
+		"--" + tendermintCommon.CfgCoreExternalAddress, "tcp://127.0.0.1:" + strconv.Itoa(int(port)),
 	}...)
 	return args
 }
@@ -165,13 +166,13 @@ func (args *argBuilder) tendermintSeedMode() *argBuilder {
 }
 
 func (args *argBuilder) tendermintDebugAddrBookLenient() *argBuilder {
-	args.vec = append(args.vec, "--"+tendermintFull.CfgDebugP2PAddrBookLenient)
+	args.vec = append(args.vec, "--"+tendermintCommon.CfgDebugP2PAddrBookLenient)
 	return args
 }
 
 func (args *argBuilder) tendermintDebugAllowDuplicateIP() *argBuilder {
 	args.vec = append(args.vec, []string{
-		"--" + tendermintFull.CfgDebugP2PAllowDuplicateIP,
+		"--" + tendermintCommon.CfgDebugP2PAllowDuplicateIP,
 	}...)
 	return args
 }
@@ -474,7 +475,7 @@ func (args *argBuilder) addSentryKeymanagerWorkers(keymanagerWorkers []*Keymanag
 func (args *argBuilder) appendSeedNodes(net *Network) *argBuilder {
 	if seed := net.seedNode; seed != nil {
 		args.vec = append(args.vec, []string{
-			"--" + tendermintFull.CfgP2PSeed, fmt.Sprintf("%s@127.0.0.1:%d", seed.tmAddress, seed.consensusPort),
+			"--" + tendermintCommon.CfgP2PSeed, fmt.Sprintf("%s@127.0.0.1:%d", seed.tmAddress, seed.consensusPort),
 		}...)
 	}
 	return args

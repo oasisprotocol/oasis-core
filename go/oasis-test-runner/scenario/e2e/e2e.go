@@ -332,6 +332,8 @@ func RegisterScenarios() error {
 		EarlyQuery,
 		// Consensus state sync.
 		ConsensusStateSync,
+		// Seed API test.
+		SeedAPI,
 	} {
 		if err := cmd.Register(s); err != nil {
 			return err

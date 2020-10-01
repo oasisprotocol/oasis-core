@@ -256,7 +256,7 @@ type Network struct {
 
 	keymanagerPolicies []*KeymanagerPolicy
 
-	seedNode *seedNode
+	seedNode *Seed
 	iasProxy *iasProxy
 
 	cfg          *NetworkCfg
@@ -343,6 +343,11 @@ func (net *Network) Validators() []*Validator {
 // Runtimes returns the runtimes associated with the network.
 func (net *Network) Runtimes() []*Runtime {
 	return net.runtimes
+}
+
+// Seed returns the seed node associated with the network.
+func (net *Network) Seed() *Seed {
+	return net.seedNode
 }
 
 // Keymanagers returns the keymanagers associated with the network.
