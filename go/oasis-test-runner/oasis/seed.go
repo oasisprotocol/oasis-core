@@ -9,19 +9,20 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/consensus/tendermint/crypto"
 )
 
-type seedNode struct {
+// Seed is an Oasis seed node.
+type Seed struct {
 	Node
 
 	tmAddress     string
 	consensusPort uint16
 }
 
-func (seed *seedNode) startNode() error {
+func (seed *Seed) startNode() error {
 	args := newArgBuilder().
 		debugDontBlameOasis().
 		debugAllowTestKeys().
 		workerCertificateRotation(true).
-		tendermintCoreListenAddress(seed.consensusPort).
+		tendermintCoreAddress(seed.consensusPort).
 		tendermintSeedMode()
 
 	if err := seed.net.startOasisNode(&seed.Node, nil, args); err != nil {
@@ -31,7 +32,7 @@ func (seed *seedNode) startNode() error {
 	return nil
 }
 
-func (net *Network) newSeedNode() (*seedNode, error) {
+func (net *Network) newSeedNode() (*Seed, error) {
 	if net.seedNode != nil {
 		return nil, fmt.Errorf("oasis/seed: already provisioned")
 	}
@@ -62,7 +63,7 @@ func (net *Network) newSeedNode() (*seedNode, error) {
 	}
 	seedP2PPublicKey := seedIdentity.P2PSigner.Public()
 
-	seedNode := &seedNode{
+	seedNode := &Seed{
 		Node: Node{
 			Name: seedName,
 			net:  net,

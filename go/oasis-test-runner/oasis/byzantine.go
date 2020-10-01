@@ -39,7 +39,7 @@ func (worker *Byzantine) startNode() error {
 	args := newArgBuilder().
 		debugDontBlameOasis().
 		debugAllowTestKeys().
-		tendermintCoreListenAddress(worker.consensusPort).
+		tendermintCoreAddress(worker.consensusPort).
 		tendermintDebugAddrBookLenient().
 		tendermintSubmissionGasPrice(worker.consensus.SubmissionGasPrice).
 		workerP2pPort(worker.p2pPort).

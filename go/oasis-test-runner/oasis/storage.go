@@ -110,7 +110,7 @@ func (worker *Storage) startNode() error {
 		debugDontBlameOasis().
 		debugAllowTestKeys().
 		workerCertificateRotation(!worker.disableCertRotation).
-		tendermintCoreListenAddress(worker.consensusPort).
+		tendermintCoreAddress(worker.consensusPort).
 		tendermintSubmissionGasPrice(worker.consensus.SubmissionGasPrice).
 		tendermintPrune(worker.consensus.PruneNumKept).
 		storageBackend(worker.backend).

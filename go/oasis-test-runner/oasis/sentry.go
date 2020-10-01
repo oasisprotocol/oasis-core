@@ -76,7 +76,7 @@ func (sentry *Sentry) startNode() error {
 		workerCertificateRotation(false).
 		workerSentryEnabled().
 		workerSentryControlPort(sentry.controlPort).
-		tendermintCoreListenAddress(sentry.consensusPort).
+		tendermintCoreAddress(sentry.consensusPort).
 		tendermintPrune(sentry.consensus.PruneNumKept).
 		appendNetwork(sentry.net).
 		appendSeedNodes(sentry.net).

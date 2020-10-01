@@ -199,7 +199,6 @@ func (n *Node) startRuntimeServices() error {
 	registryAPI.RegisterService(grpcSrv, n.Consensus.Registry())
 	stakingAPI.RegisterService(grpcSrv, n.Consensus.Staking())
 	keymanagerAPI.RegisterService(grpcSrv, n.Consensus.KeyManager())
-	consensusAPI.RegisterService(grpcSrv, n.Consensus)
 
 	// Register dump genesis halt hook.
 	n.Consensus.RegisterHaltHook(func(ctx context.Context, blockHeight int64, epoch epochtime.EpochTime) {
@@ -526,7 +525,8 @@ func NewTestNode() (*Node, error) {
 	return newNode(true)
 }
 
-func newNode(testNode bool) (n *Node, err error) { // nolint: gocyclo
+func newNode(testNode bool) (*Node, error) { // nolint: gocyclo
+	var err error
 	logger := cmdCommon.Logger()
 
 	node := &Node{
@@ -691,6 +691,7 @@ func newNode(testNode bool) (n *Node, err error) { // nolint: gocyclo
 		return nil, err
 	}
 	node.svcMgr.Register(node.Consensus)
+	consensusAPI.RegisterService(node.grpcInternal.Server(), node.Consensus)
 
 	// Initialize the node controller.
 	node.NodeController = control.New(node, node.Consensus, node.Upgrader)

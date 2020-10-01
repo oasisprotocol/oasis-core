@@ -84,7 +84,7 @@ func (val *Validator) startNode() error {
 		debugAllowTestKeys().
 		workerCertificateRotation(true).
 		consensusValidator().
-		tendermintCoreListenAddress(val.consensusPort).
+		tendermintCoreAddress(val.consensusPort).
 		tendermintMinGasPrice(val.consensus.MinGasPrice).
 		tendermintSubmissionGasPrice(val.consensus.SubmissionGasPrice).
 		tendermintPrune(val.consensus.PruneNumKept).
