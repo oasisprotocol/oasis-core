@@ -31,13 +31,16 @@ func (ub *unresolvedBatch) String() string {
 	return fmt.Sprintf("UnresolvedBatch{ioRoot: %s}", ub.ioRoot)
 }
 
-func (ub *unresolvedBatch) resolve(ctx context.Context, storage storage.Backend) (transaction.RawBatch, error) {
+func (ub *unresolvedBatch) resolve(ctx context.Context, sb storage.Backend) (transaction.RawBatch, error) {
 	if ub.batch != nil {
 		// In case we already have a resolved batch, just return it.
 		return ub.batch, nil
 	}
 
-	txs := transaction.NewTree(storage, ub.ioRoot)
+	// Prioritize nodes that signed the storage receipt.
+	ctx = storage.WithNodePriorityHintFromSignatures(ctx, ub.storageSignatures)
+
+	txs := transaction.NewTree(sb, ub.ioRoot)
 	defer txs.Close()
 
 	batch, err := txs.GetInputBatch(ctx, ub.maxBatchSize, ub.maxBatchSizeBytes)
