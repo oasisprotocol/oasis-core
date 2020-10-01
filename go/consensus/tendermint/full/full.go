@@ -831,10 +831,12 @@ func (t *fullService) GetStatus(ctx context.Context) (*consensusAPI.Status, erro
 		}
 		status.LastRetainedHeight = lastRetainedHeight
 		lastRetainedBlock, err := t.GetBlock(ctx, lastRetainedHeight)
-		if err != nil {
-			return nil, fmt.Errorf("failed to fetch last reatianed block: %w", err)
+		switch err {
+		case nil:
+			status.LastRetainedHash = lastRetainedBlock.Hash
+		default:
+			// Before we commit the first block, we can't load it from GetBlock. Don't give its hash in this case.
 		}
-		status.LastRetainedHash = lastRetainedBlock.Hash
 
 		// Latest block.
 		latestBlk, err := t.GetBlock(ctx, consensusAPI.HeightLatest)
