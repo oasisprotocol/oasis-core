@@ -825,6 +825,10 @@ func (t *fullService) GetStatus(ctx context.Context) (*consensusAPI.Status, erro
 		if err != nil {
 			return nil, fmt.Errorf("failed to get last retained height: %w", err)
 		}
+		// Some pruning configurations return 0 instead of a valid block height. Clamp those to the genesis height.
+		if lastRetainedHeight < t.genesis.Height {
+			lastRetainedHeight = t.genesis.Height
+		}
 		status.LastRetainedHeight = lastRetainedHeight
 		lastRetainedBlock, err := t.GetBlock(ctx, lastRetainedHeight)
 		if err != nil {
