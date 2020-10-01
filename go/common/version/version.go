@@ -68,7 +68,7 @@ var (
 
 	// RuntimeCommitteeProtocol versions the P2P protocol used by the runtime
 	// committee members.
-	RuntimeCommitteeProtocol = Version{Major: 1, Minor: 0, Patch: 0}
+	RuntimeCommitteeProtocol = Version{Major: 2, Minor: 0, Patch: 0}
 
 	// ConsensusProtocol versions all data structures and processing used by
 	// the epochtime, beacon, registry, roothash, etc. modules that are
@@ -106,6 +106,8 @@ var Versions = struct {
 }
 
 func parseSemVerStr(s string) Version {
+	// Trim potential pre-release suffix.
+	s = strings.Split(s, "-")[0]
 	split := strings.SplitN(s, ".", 4)
 
 	var semVers []uint16 = []uint16{0, 0, 0}

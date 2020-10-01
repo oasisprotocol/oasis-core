@@ -44,6 +44,8 @@ type P2P struct {
 
 	ctx context.Context
 
+	chainContext string
+
 	host   core.Host
 	pubsub *pubsub.PubSub
 
@@ -89,7 +91,7 @@ func (p *P2P) Addresses() []node.Address {
 // Peers returns a list of connected P2P peers for the given runtime.
 func (p *P2P) Peers(runtimeID common.Namespace) []string {
 	var peers []string
-	for _, peerID := range p.pubsub.ListPeers(runtimeIDToTopicID(runtimeID)) {
+	for _, peerID := range p.pubsub.ListPeers(p.topicIDForRuntime(runtimeID)) {
 		addrs := p.host.Peerstore().Addrs(peerID)
 		if len(addrs) == 0 {
 			continue
@@ -158,6 +160,14 @@ func (p *P2P) handleConnection(conn core.Conn) {
 	)
 }
 
+func (p *P2P) topicIDForRuntime(runtimeID common.Namespace) string {
+	return fmt.Sprintf("%s/%s/%s",
+		p.chainContext,
+		version.RuntimeCommitteeProtocol.MajorMinor().String(),
+		runtimeID.String(),
+	)
+}
+
 // New creates a new P2P node.
 func New(ctx context.Context, identity *identity.Identity, consensus consensus.Backend) (*P2P, error) {
 	// Instantiate the libp2p host.
@@ -212,9 +222,15 @@ func New(ctx context.Context, identity *identity.Identity, consensus consensus.B
 		return nil, fmt.Errorf("worker/common/p2p: failed to initialize libp2p gossipsub: %w", err)
 	}
 
+	doc, err := consensus.GetGenesisDocument(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("worker/common/p2p: failed to get consensus genesis document: %w", err)
+	}
+
 	p := &P2P{
 		PeerManager:       newPeerManager(ctx, host, consensus),
 		ctx:               ctx,
+		chainContext:      doc.ChainContext(),
 		host:              host,
 		pubsub:            pubsub,
 		registerAddresses: registerAddresses,
@@ -228,10 +244,6 @@ func New(ctx context.Context, identity *identity.Identity, consensus consensus.B
 	)
 
 	return p, nil
-}
-
-func runtimeIDToTopicID(runtimeID common.Namespace) string {
-	return version.RuntimeCommitteeProtocol.String() + "/" + runtimeID.String()
 }
 
 func init() {
