@@ -1,4 +1,4 @@
-# Versioning scheme
+# Versioning
 
 ## Oasis Core
 
