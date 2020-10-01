@@ -182,6 +182,11 @@ type Status struct { // nolint: maligned
 	// GenesisHash is the hash of the genesis block.
 	GenesisHash []byte `json:"genesis_hash"`
 
+	// LastRetainedHeight is the height of the oldest retained block.
+	LastRetainedHeight int64 `json:"last_retained_height"`
+	// LastRetainedHash is the hash of the oldest retained block.
+	LastRetainedHash []byte `json:"last_retained_hash"`
+
 	// IsValidator returns whether the current node is part of the validator set.
 	IsValidator bool `json:"is_validator"`
 }
