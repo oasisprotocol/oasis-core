@@ -25,6 +25,7 @@ var (
 
 // computeRuntimeHostHandler is a runtime host handler suitable for compute runtimes.
 type computeRuntimeHostHandler struct {
+	node    *Node
 	runtime runtimeRegistry.Runtime
 
 	storage          storage.Backend
@@ -58,6 +59,14 @@ func (h *computeRuntimeHostHandler) Handle(ctx context.Context, body *protocol.B
 		rq := body.HostStorageSyncRequest
 		span, sctx := opentracing.StartSpanFromContext(ctx, "storage.Sync")
 		defer span.Finish()
+
+		// Prioritize nodes that signed the last storage receipts.
+		h.node.CrossNode.Lock()
+		blk := h.node.CurrentBlock
+		h.node.CrossNode.Unlock()
+		if blk != nil {
+			sctx = storage.WithNodePriorityHintFromSignatures(sctx, blk.Header.StorageSignatures)
+		}
 
 		var rsp *storage.ProofResponse
 		var err error
@@ -204,10 +213,11 @@ func (n *Node) NewNotifier(ctx context.Context, host host.Runtime) protocol.Noti
 // Implements RuntimeHostHandlerFactory.
 func (n *Node) NewRuntimeHostHandler() protocol.Handler {
 	return &computeRuntimeHostHandler{
-		n.Runtime,
-		n.Runtime.Storage(),
-		n.KeyManager,
-		n.KeyManagerClient,
-		n.Runtime.LocalStorage(),
+		node:             n,
+		runtime:          n.Runtime,
+		storage:          n.Runtime.Storage(),
+		keyManager:       n.KeyManager,
+		keyManagerClient: n.KeyManagerClient,
+		localStorage:     n.Runtime.LocalStorage(),
 	}
 }
