@@ -39,7 +39,7 @@ jobs:
           go-version: "1.15.x"
       - name: Set up Rust
         uses: actions-rs/toolchain@v1
-      - name: Install oasis-node build prerequisites
+      - name: Install Oasis Node prerequisites
         run: |
           sudo apt-get update
           sudo apt-get install make libseccomp-dev protobuf-compiler
@@ -54,19 +54,19 @@ jobs:
           tar -xf ${GORELEASER_TARBALL}
           sudo mv goreleaser /usr/local/bin
         env:
-          GORELEASER_URL_PREFIX: https://github.com/oasislabs/goreleaser/releases/download/
-          GORELEASER_VERSION: 0.123.3-oasis1
+          GORELEASER_URL_PREFIX: https://github.com/goreleaser/goreleaser/releases/download/
+          GORELEASER_VERSION: 0.143.0
           GORELEASER_TARBALL: goreleaser_Linux_x86_64.tar.gz
           CURL_CMD: curl --proto =https --tlsv1.2 -sSL
-      - name: Build oasis-node with Make
+      - name: Build Oasis Node with Make
         run: |
           cd build${{ matrix.build_number }}/go
           make oasis-node
-      - name: Build oasis-node with GoReleaser
+      - name: Build Oasis Node with GoReleaser
         run: |
           cd build${{ matrix.build_number }}
-          make release
-      - name: Get checksums of oasis-node builds
+          make release-build
+      - name: Get checksums of Oasis Node builds
         run: |
           cd build${{ matrix.build_number }}
           sha256sum ${OASIS_NODE_MAKE_PATH} ${OASIS_NODE_GORELEASER_PATH} > ../oasis-node-SHA256SUMs
@@ -109,4 +109,3 @@ jobs:
             echo -e "$DIFF"
             exit 1
           fi
-
