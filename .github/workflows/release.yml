@@ -27,7 +27,7 @@ jobs:
           # https://github.com/actions/checkout#fetch-all-history-for-all-tags-and-branches
           fetch-depth: 0
       - name: Set up Go 1.15
-        uses: actions/setup-go@v2.1.2
+        uses: actions/setup-go@v2.1.3
         with:
           go-version: "1.15.x"
       - name: Set up Rust
