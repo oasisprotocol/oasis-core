@@ -6,6 +6,18 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+func TestMaskNonMajor(t *testing.T) {
+	require := require.New(t)
+
+	v1 := Version{1, 1, 0}
+	v2 := Version{1, 1, 5}
+	v3 := Version{1, 4, 10}
+	require.Equal(v1.MaskNonMajor(), v2.MaskNonMajor(), "version.MaskNonMajor() should match")
+	require.Equal(v2.MaskNonMajor(), v3.MaskNonMajor(), "version.MaskNonMajor() should match")
+	v4 := Version{2, 1, 0}
+	require.NotEqual(v1.MaskNonMajor(), v4.MaskNonMajor(), "version.MaskNonMajor() should not match")
+}
+
 func TestMajorMinor(t *testing.T) {
 	require := require.New(t)
 

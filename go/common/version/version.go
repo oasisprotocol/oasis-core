@@ -12,7 +12,7 @@ import (
 
 // NOTE: This should be kept in sync with runtime/src/common/version.rs.
 
-// Version is a protocol or a runtime version.
+// Version is a protocol version.
 type Version struct {
 	Major uint16 `json:"major,omitempty"`
 	Minor uint16 `json:"minor,omitempty"`
@@ -36,6 +36,19 @@ func FromU64(v uint64) Version {
 // String returns the protocol version as a string.
 func (v Version) String() string {
 	return fmt.Sprintf("%d.%d.%d", v.Major, v.Minor, v.Patch)
+}
+
+// MaskNonMajor masks all non-major version segments to 0 and returns a new
+// protocol version.
+//
+// This is useful for comparing protocol versions for backward-incompatible
+// changes.
+func (v Version) MaskNonMajor() Version {
+	return Version{
+		Major: v.Major,
+		Minor: 0,
+		Patch: 0,
+	}
 }
 
 // MajorMinor extracts major and minor segments of the Version only.
