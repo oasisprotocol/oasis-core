@@ -12,6 +12,40 @@ The format is inspired by [Keep a Changelog].
 
 <!-- TOWNCRIER -->
 
+## 20.10.1 (2020-10-02)
+
+### Configuration Changes
+
+- go/worker/p2p: Configurable libp2p buffer sizes
+  ([#3264](https://github.com/oasisprotocol/oasis-core/issues/3264))
+
+  Added `worker.p2p.peer_outbound_queue_size` and
+  `worker.p2p.validate_queue_size` flags for configuring libp2p buffer sizes.
+
+### Features
+
+- go/staking/api: Update commission schedule rate and rate bound pretty prints
+  ([#3265](https://github.com/oasisprotocol/oasis-core/issues/3265))
+
+  Pretty print rates and rate bounds as enumerated lists to enable easier
+  inspection of commission schedule (amendments) in combination with a
+  hardware-based signer plugin.
+
+- go/staking/api: Add `PrettyPrintCommissionScheduleIndexInfixes()` helper
+  ([#3265](https://github.com/oasisprotocol/oasis-core/issues/3265))
+
+- go/consensus: add last retained block information
+  ([#3348](https://github.com/oasisprotocol/oasis-core/issues/3348))
+
+  New in the consensus API, the status struct now has information about
+  the earliest block available on this node. This differs from the
+  genesis block when pruning is enabled.
+
+### Bug Fixes
+
+- runtime/client: Skip not yet published requests in retry check
+  ([#3264](https://github.com/oasisprotocol/oasis-core/issues/3264))
+
 ## 20.10 (2020-09-09)
 
 | Protocol          | Version   |
