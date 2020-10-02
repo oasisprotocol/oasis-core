@@ -54,18 +54,6 @@ func (v Version) MaskNonMajor() Version {
 	}
 }
 
-// MajorMinor extracts major and minor segments of the Version only.
-//
-// This is useful for comparing protocol version since the patch segment can be
-// ignored.
-func (v Version) MajorMinor() Version {
-	return Version{
-		Major: v.Major,
-		Minor: v.Minor,
-		Patch: 0,
-	}
-}
-
 var (
 	// SoftwareVersion represents the Oasis Core's version and should be set
 	// by the linker.
