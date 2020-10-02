@@ -24,6 +24,7 @@ type Worker struct {
 	enabled bool
 	cfg     Config
 
+	DataDir           string
 	Identity          *identity.Identity
 	Consensus         consensus.Backend
 	Grpc              *grpc.Server
@@ -226,6 +227,7 @@ func newWorker(
 	w := &Worker{
 		enabled:           enabled,
 		cfg:               cfg,
+		DataDir:           dataDir,
 		Identity:          identity,
 		Consensus:         consensus,
 		Grpc:              grpc,

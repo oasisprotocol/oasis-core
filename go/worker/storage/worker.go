@@ -2,9 +2,7 @@ package storage
 
 import (
 	"fmt"
-	"time"
 
-	flag "github.com/spf13/pflag"
 	"github.com/spf13/viper"
 
 	"github.com/oasisprotocol/oasis-core/go/common"
@@ -16,6 +14,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/workerpool"
 	genesis "github.com/oasisprotocol/oasis-core/go/genesis/api"
 	"github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/flags"
+	"github.com/oasisprotocol/oasis-core/go/runtime/registry"
 	"github.com/oasisprotocol/oasis-core/go/storage/api"
 	"github.com/oasisprotocol/oasis-core/go/storage/mkvs/checkpoint"
 	workerCommon "github.com/oasisprotocol/oasis-core/go/worker/common"
@@ -25,30 +24,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/worker/storage/committee"
 )
 
-const (
-	// CfgWorkerEnabled enables the storage worker.
-	CfgWorkerEnabled      = "worker.storage.enabled"
-	cfgWorkerFetcherCount = "worker.storage.fetcher_count"
-
-	// CfgWorkerCheckpointerDisabled disables the storage checkpointer.
-	CfgWorkerCheckpointerDisabled = "worker.storage.checkpointer.disabled"
-	// CfgWorkerCheckpointCheckInterval configures the checkpointer check interval.
-	CfgWorkerCheckpointCheckInterval = "worker.storage.checkpointer.check_interval"
-
-	// CfgCheckpointSyncDisabled disables syncing from checkpoints on worker startup.
-	CfgWorkerCheckpointSyncDisabled = "worker.storage.checkpoint_sync.disabled"
-
-	// CfgWorkerDebugIgnoreApply is a debug option that makes the worker ignore
-	// all apply operations.
-	CfgWorkerDebugIgnoreApply = "worker.debug.storage.ignore_apply"
-)
-
-var (
-	workerStorageDBBucketName = "worker/storage/watchers"
-
-	// Flags has the configuration flags.
-	Flags = flag.NewFlagSet("", flag.ContinueOnError)
-)
+var workerStorageDBBucketName = "worker/storage/watchers"
 
 // Enabled reads our enabled flag from viper.
 func Enabled() bool {
@@ -119,7 +95,7 @@ func New(
 
 		// Start storage node for every runtime.
 		for _, rt := range s.commonWorker.GetRuntimes() {
-			if err := s.registerRuntime(rt, checkpointerCfg); err != nil {
+			if err := s.registerRuntime(commonWorker.DataDir, rt, checkpointerCfg); err != nil {
 				return nil, err
 			}
 		}
@@ -131,7 +107,7 @@ func New(
 	return s, nil
 }
 
-func (s *Worker) registerRuntime(commonNode *committeeCommon.Node, checkpointerCfg *checkpoint.CheckpointerConfig) error {
+func (s *Worker) registerRuntime(dataDir string, commonNode *committeeCommon.Node, checkpointerCfg *checkpoint.CheckpointerConfig) error {
 	id := commonNode.Runtime.ID()
 	s.logger.Info("registering new runtime",
 		"runtime_id", id,
@@ -142,6 +118,17 @@ func (s *Worker) registerRuntime(commonNode *committeeCommon.Node, checkpointerC
 		return fmt.Errorf("failed to create role provider: %w", err)
 	}
 
+	path, err := registry.EnsureRuntimeStateDir(dataDir, id)
+	if err != nil {
+		return err
+	}
+
+	localStorage, err := NewLocalBackend(path, id, commonNode.Identity)
+	if err != nil {
+		return fmt.Errorf("can't create local storage backend: %w", err)
+	}
+	commonNode.Runtime.RegisterStorage(localStorage)
+
 	node, err := committee.NewNode(
 		commonNode,
 		s.grpcPolicy,
@@ -149,6 +136,7 @@ func (s *Worker) registerRuntime(commonNode *committeeCommon.Node, checkpointerC
 		s.watchState,
 		rp,
 		s.commonWorker.GetConfig(),
+		localStorage,
 		checkpointerCfg,
 		viper.GetBool(CfgWorkerCheckpointSyncDisabled),
 	)
@@ -259,17 +247,4 @@ func (s *Worker) Cleanup() {
 // In case the runtime with the specified id was not configured for this node it returns nil.
 func (s *Worker) GetRuntime(id common.Namespace) *committee.Node {
 	return s.runtimes[id]
-}
-
-func init() {
-	Flags.Bool(CfgWorkerEnabled, false, "Enable storage worker")
-	Flags.Uint(cfgWorkerFetcherCount, 4, "Number of concurrent storage diff fetchers")
-	Flags.Bool(CfgWorkerCheckpointerDisabled, false, "Disable the storage checkpointer")
-	Flags.Duration(CfgWorkerCheckpointCheckInterval, 1*time.Minute, "Storage checkpointer check interval")
-	Flags.Bool(CfgWorkerCheckpointSyncDisabled, false, "Disable initial storage sync from checkpoints")
-
-	Flags.Bool(CfgWorkerDebugIgnoreApply, false, "Ignore Apply operations (for debugging purposes)")
-	_ = Flags.MarkHidden(CfgWorkerDebugIgnoreApply)
-
-	_ = viper.BindPFlags(Flags)
 }

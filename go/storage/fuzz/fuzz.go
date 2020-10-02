@@ -3,7 +3,6 @@
 package fuzz
 
 import (
-	"context"
 	"io/ioutil"
 
 	"github.com/oasisprotocol/oasis-core/go/common"
@@ -11,8 +10,8 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature/signers/file"
 	commonFuzz "github.com/oasisprotocol/oasis-core/go/common/fuzz"
 	"github.com/oasisprotocol/oasis-core/go/common/identity"
-	"github.com/oasisprotocol/oasis-core/go/storage"
 	"github.com/oasisprotocol/oasis-core/go/storage/api"
+	"github.com/oasisprotocol/oasis-core/go/worker/storage"
 )
 
 const (
@@ -44,7 +43,7 @@ func init() {
 	}
 
 	// Create the storage backend service.
-	storageBackend, err = storage.New(context.Background(), localDB, common.Namespace{}, identity)
+	storageBackend, err = storage.NewLocalBackend(localDB, common.Namespace{}, identity)
 	if err != nil {
 		panic(err)
 	}

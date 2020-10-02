@@ -1,4 +1,4 @@
-package storage
+package api
 
 import (
 	"context"
@@ -8,7 +8,6 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 
 	"github.com/oasisprotocol/oasis-core/go/common/node"
-	"github.com/oasisprotocol/oasis-core/go/storage/api"
 	"github.com/oasisprotocol/oasis-core/go/storage/mkvs/checkpoint"
 )
 
@@ -55,31 +54,31 @@ var (
 	labelSyncGetPrefixes = prometheus.Labels{"call": "sync_get_prefixes"}
 	labelSyncIterate     = prometheus.Labels{"call": "sync_iterate"}
 
-	_ api.LocalBackend  = (*metricsWrapper)(nil)
-	_ api.ClientBackend = (*metricsWrapper)(nil)
+	_ LocalBackend  = (*metricsWrapper)(nil)
+	_ ClientBackend = (*metricsWrapper)(nil)
 
 	metricsOnce sync.Once
 )
 
 type metricsWrapper struct {
-	api.Backend
+	Backend
 }
 
 func (w *metricsWrapper) GetConnectedNodes() []*node.Node {
-	if clientBackend, ok := w.Backend.(api.ClientBackend); ok {
+	if clientBackend, ok := w.Backend.(ClientBackend); ok {
 		return clientBackend.GetConnectedNodes()
 	}
 	return []*node.Node{}
 }
 
 func (w *metricsWrapper) EnsureCommitteeVersion(ctx context.Context, version int64) error {
-	if clientBackend, ok := w.Backend.(api.ClientBackend); ok {
+	if clientBackend, ok := w.Backend.(ClientBackend); ok {
 		return clientBackend.EnsureCommitteeVersion(ctx, version)
 	}
-	return api.ErrUnsupported
+	return ErrUnsupported
 }
 
-func (w *metricsWrapper) Apply(ctx context.Context, request *api.ApplyRequest) ([]*api.Receipt, error) {
+func (w *metricsWrapper) Apply(ctx context.Context, request *ApplyRequest) ([]*Receipt, error) {
 	start := time.Now()
 	receipts, err := w.Backend.Apply(ctx, request)
 	storageLatency.With(labelApply).Observe(time.Since(start).Seconds())
@@ -98,7 +97,7 @@ func (w *metricsWrapper) Apply(ctx context.Context, request *api.ApplyRequest) (
 	return receipts, err
 }
 
-func (w *metricsWrapper) ApplyBatch(ctx context.Context, request *api.ApplyBatchRequest) ([]*api.Receipt, error) {
+func (w *metricsWrapper) ApplyBatch(ctx context.Context, request *ApplyBatchRequest) ([]*Receipt, error) {
 	start := time.Now()
 	receipts, err := w.Backend.ApplyBatch(ctx, request)
 	storageLatency.With(labelApplyBatch).Observe(time.Since(start).Seconds())
@@ -119,7 +118,7 @@ func (w *metricsWrapper) ApplyBatch(ctx context.Context, request *api.ApplyBatch
 	return receipts, err
 }
 
-func (w *metricsWrapper) SyncGet(ctx context.Context, request *api.GetRequest) (*api.ProofResponse, error) {
+func (w *metricsWrapper) SyncGet(ctx context.Context, request *GetRequest) (*ProofResponse, error) {
 	start := time.Now()
 	res, err := w.Backend.SyncGet(ctx, request)
 	storageLatency.With(labelSyncGet).Observe(time.Since(start).Seconds())
@@ -132,7 +131,7 @@ func (w *metricsWrapper) SyncGet(ctx context.Context, request *api.GetRequest) (
 	return res, err
 }
 
-func (w *metricsWrapper) SyncGetPrefixes(ctx context.Context, request *api.GetPrefixesRequest) (*api.ProofResponse, error) {
+func (w *metricsWrapper) SyncGetPrefixes(ctx context.Context, request *GetPrefixesRequest) (*ProofResponse, error) {
 	start := time.Now()
 	res, err := w.Backend.SyncGetPrefixes(ctx, request)
 	storageLatency.With(labelSyncGetPrefixes).Observe(time.Since(start).Seconds())
@@ -145,7 +144,7 @@ func (w *metricsWrapper) SyncGetPrefixes(ctx context.Context, request *api.GetPr
 	return res, err
 }
 
-func (w *metricsWrapper) SyncIterate(ctx context.Context, request *api.IterateRequest) (*api.ProofResponse, error) {
+func (w *metricsWrapper) SyncIterate(ctx context.Context, request *IterateRequest) (*ProofResponse, error) {
 	start := time.Now()
 	res, err := w.Backend.SyncIterate(ctx, request)
 	storageLatency.With(labelSyncIterate).Observe(time.Since(start).Seconds())
@@ -159,22 +158,22 @@ func (w *metricsWrapper) SyncIterate(ctx context.Context, request *api.IterateRe
 }
 
 func (w *metricsWrapper) Checkpointer() checkpoint.CreateRestorer {
-	localBackend, ok := w.Backend.(api.LocalBackend)
+	localBackend, ok := w.Backend.(LocalBackend)
 	if !ok {
 		return nil
 	}
 	return localBackend.Checkpointer()
 }
 
-func (w *metricsWrapper) NodeDB() api.NodeDB {
-	localBackend, ok := w.Backend.(api.LocalBackend)
+func (w *metricsWrapper) NodeDB() NodeDB {
+	localBackend, ok := w.Backend.(LocalBackend)
 	if !ok {
 		return nil
 	}
 	return localBackend.NodeDB()
 }
 
-func newMetricsWrapper(base api.Backend) api.Backend {
+func NewMetricsWrapper(base Backend) LocalBackend {
 	metricsOnce.Do(func() {
 		prometheus.MustRegister(storageCollectors...)
 	})

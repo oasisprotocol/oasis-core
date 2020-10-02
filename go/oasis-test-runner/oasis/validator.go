@@ -88,7 +88,6 @@ func (val *Validator) startNode() error {
 		tendermintMinGasPrice(val.consensus.MinGasPrice).
 		tendermintSubmissionGasPrice(val.consensus.SubmissionGasPrice).
 		tendermintPrune(val.consensus.PruneNumKept).
-		storageBackend("client").
 		appendNetwork(val.net).
 		appendEntity(val.entity).
 		tendermintRecoverCorruptedWAL(val.consensus.TendermintRecoverCorruptedWAL)
