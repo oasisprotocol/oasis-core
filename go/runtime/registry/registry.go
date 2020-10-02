@@ -19,8 +19,8 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/runtime/history"
 	"github.com/oasisprotocol/oasis-core/go/runtime/localstorage"
 	"github.com/oasisprotocol/oasis-core/go/runtime/tagindexer"
-	"github.com/oasisprotocol/oasis-core/go/storage"
 	storageAPI "github.com/oasisprotocol/oasis-core/go/storage/api"
+	"github.com/oasisprotocol/oasis-core/go/storage/client"
 )
 
 const (
@@ -51,6 +51,10 @@ type Registry interface {
 
 	// Cleanup performs post-termination cleanup.
 	Cleanup()
+
+	// FinishInitialization finalizes setup for all runtimes and starts their
+	// tag indexers.
+	FinishInitialization(ctx context.Context) error
 }
 
 // Runtime is the running node's supported runtime interface.
@@ -64,6 +68,9 @@ type Runtime interface {
 
 	// WatchRegistryDescriptor subscribes to registry descriptor updates.
 	WatchRegistryDescriptor() (<-chan *registry.Runtime, pubsub.ClosableSubscription, error)
+
+	// RegisterStorage sets the given local storage backend for the runtime.
+	RegisterStorage(storage storageAPI.Backend)
 
 	// History returns the history for this runtime.
 	History() history.History
@@ -88,8 +95,9 @@ type runtime struct {
 	storage      storageAPI.Backend
 	localStorage localstorage.LocalStorage
 
-	history    history.History
-	tagIndexer *tagindexer.Service
+	history        history.History
+	tagIndexer     *tagindexer.Service
+	indexerStarted bool
 
 	cancelCtx          context.CancelFunc
 	descriptorCh       chan struct{}
@@ -124,6 +132,16 @@ func (r *runtime) WatchRegistryDescriptor() (<-chan *registry.Runtime, pubsub.Cl
 	return ch, sub, nil
 }
 
+func (r *runtime) RegisterStorage(storage storageAPI.Backend) {
+	r.Lock()
+	defer r.Unlock()
+
+	if r.storage != nil {
+		panic("runtime storage backend already assigned")
+	}
+	r.storage = storage
+}
+
 func (r *runtime) History() history.History {
 	return r.history
 }
@@ -133,6 +151,12 @@ func (r *runtime) TagIndexer() tagindexer.QueryableBackend {
 }
 
 func (r *runtime) Storage() storageAPI.Backend {
+	r.RLock()
+	defer r.RUnlock()
+
+	if r.storage == nil {
+		panic("runtime storage accessed before initialization")
+	}
 	return r.storage
 }
 
@@ -146,10 +170,14 @@ func (r *runtime) stop() {
 	// Close local storage backend.
 	r.localStorage.Stop()
 	// Close storage backend.
-	r.storage.Cleanup()
+	if r.storage != nil {
+		r.storage.Cleanup()
+	}
 	// Close tag indexer service.
-	r.tagIndexer.Stop()
-	<-r.tagIndexer.Quit()
+	if r.tagIndexer != nil && r.indexerStarted {
+		r.tagIndexer.Stop()
+		<-r.tagIndexer.Quit()
+	}
 	// Close history keeper.
 	r.history.Close()
 }
@@ -183,6 +211,26 @@ func (r *runtime) watchUpdates(ctx context.Context, ch <-chan *registry.Runtime,
 			r.descriptorNotifier.Broadcast(rt)
 		}
 	}
+}
+
+func (r *runtime) finishInitialization(ctx context.Context, ident *identity.Identity) error {
+	r.Lock()
+	defer r.Unlock()
+
+	if r.storage == nil {
+		storageBackend, err := client.New(ctx, r.id, ident, r.consensus.Scheduler(), r.consensus.Registry(), r)
+		if err != nil {
+			return fmt.Errorf("runtime/registry: cannot create storage for runtime %s: %w", r.id, err)
+		}
+		r.storage = storageBackend
+	}
+
+	if err := r.tagIndexer.Start(r.storage); err != nil {
+		return fmt.Errorf("runtime/registry: cannot start tag indexer for runtime %s: %w", r.id, err)
+	}
+	r.indexerStarted = true
+
+	return nil
 }
 
 type runtimeRegistry struct {
@@ -236,6 +284,18 @@ func (r *runtimeRegistry) Cleanup() {
 	}
 }
 
+func (r *runtimeRegistry) FinishInitialization(ctx context.Context) error {
+	r.RLock()
+	defer r.RUnlock()
+
+	for _, rt := range r.runtimes {
+		if err := rt.finishInitialization(ctx, r.identity); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func (r *runtimeRegistry) addSupportedRuntime(ctx context.Context, id common.Namespace, cfg *RuntimeConfig) (rerr error) {
 	r.Lock()
 	defer r.Unlock()
@@ -284,39 +344,17 @@ func (r *runtimeRegistry) addSupportedRuntime(ctx context.Context, id common.Nam
 	var ns common.Namespace
 	copy(ns[:], id[:])
 
-	storageBackend, err := storage.New(ctx, path, ns, r.identity,
-		storage.WithConsensus(r.consensus),
-		storage.WithRuntime(rt),
-	)
-	if err != nil {
-		return fmt.Errorf("runtime/registry: cannot create storage for runtime %s: %w", id, err)
-	}
-	defer func() {
-		if rerr != nil {
-			storageBackend.Cleanup()
-		}
-	}()
-
-	// Create runtime tag indexer.
-	tagIndexer, err := tagindexer.New(path, cfg.TagIndexer, history, r.consensus.RootHash(), storageBackend)
+	// Create runtime tag indexer (to be started later).
+	tagIndexer, err := tagindexer.New(path, cfg.TagIndexer, history, r.consensus.RootHash())
 	if err != nil {
 		return fmt.Errorf("runtime/registry: cannot create tag indexer for runtime %s: %w", id, err)
 	}
-	if err = tagIndexer.Start(); err != nil {
-		return fmt.Errorf("runtime/registry: failed to start tag indexer for runtime %s: %w", id, err)
-	}
-	defer func() {
-		if rerr != nil {
-			tagIndexer.Stop()
-		}
-	}()
 
 	// Start tracking this runtime.
 	if err = r.consensus.RootHash().TrackRuntime(ctx, history); err != nil {
 		return fmt.Errorf("runtime/registry: cannot track runtime %s: %w", id, err)
 	}
 
-	rt.storage = storageBackend
 	rt.localStorage = localStorage
 	rt.history = history
 	rt.tagIndexer = tagIndexer

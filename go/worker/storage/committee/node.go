@@ -222,14 +222,10 @@ func NewNode(
 	store *persistent.ServiceStore,
 	roleProvider registration.RoleProvider,
 	workerCommonCfg workerCommon.Config,
+	localStorage storageApi.LocalBackend,
 	checkpointerCfg *checkpoint.CheckpointerConfig,
 	checkpointSyncDisabled bool,
 ) (*Node, error) {
-	localStorage, ok := commonNode.Runtime.Storage().(storageApi.LocalBackend)
-	if !ok {
-		return nil, ErrNonLocalBackend
-	}
-
 	node := &Node{
 		commonNode: commonNode,
 

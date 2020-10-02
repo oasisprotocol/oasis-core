@@ -4,7 +4,6 @@ import (
 	"fmt"
 
 	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
-	storageClient "github.com/oasisprotocol/oasis-core/go/storage/client"
 )
 
 // Client is an Oasis client node.
@@ -28,7 +27,6 @@ func (client *Client) startNode() error {
 		tendermintPrune(client.consensus.PruneNumKept).
 		tendermintRecoverCorruptedWAL(client.consensus.TendermintRecoverCorruptedWAL).
 		tendermintCoreAddress(client.consensusPort).
-		storageBackend(storageClient.BackendName).
 		appendNetwork(client.net).
 		appendSeedNodes(client.net.seeds).
 		workerP2pPort(client.p2pPort).
