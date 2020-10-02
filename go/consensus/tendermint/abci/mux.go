@@ -43,6 +43,10 @@ const (
 
 	// debugTxLifetime is the transaction mempool lifetime when CheckTx is disabled (debug only).
 	debugTxLifetime = 1 * time.Minute
+
+	// LogEventABCIStateSyncComplete is a log event value that signals an ABCI state syncing
+	// completed event.
+	LogEventABCIStateSyncComplete = "tendermint/abci/state_sync_complete"
 )
 
 var (
@@ -1008,6 +1012,7 @@ func (mux *abciMux) ApplySnapshotChunk(req types.RequestApplySnapshotChunk) type
 
 		mux.logger.Info("successfully synced state",
 			"root", cp.Root,
+			logging.LogEvent, LogEventABCIStateSyncComplete,
 		)
 	}
 

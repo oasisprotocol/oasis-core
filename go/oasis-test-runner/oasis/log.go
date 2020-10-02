@@ -82,6 +82,12 @@ func LogEventABCIPruneDelete() log.WatcherHandlerFactory {
 	return LogAssertEvent(abci.LogEventABCIPruneDelete, "expected ABCI pruning to be done")
 }
 
+// LogEventABCIStateSyncComplete returns a handler which checks whether an ABCI state sync
+// completion was detected based on JSON log output.
+func LogEventABCIStateSyncComplete() log.WatcherHandlerFactory {
+	return LogAssertEvent(abci.LogEventABCIStateSyncComplete, "expected ABCI state sync to complete")
+}
+
 // LogAssertRoothashRoothashReindexing returns a handler which checks whether roothash reindexing was
 // run based on JSON log output.
 func LogAssertRoothashRoothashReindexing() log.WatcherHandlerFactory {

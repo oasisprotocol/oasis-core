@@ -9,6 +9,7 @@ import (
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
 	control "github.com/oasisprotocol/oasis-core/go/control/api"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/env"
+	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/log"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/oasis"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/scenario"
 )
@@ -40,7 +41,14 @@ func (sc *consensusStateSyncImpl) Fixture() (*oasis.NetworkFixture, error) {
 	f.Network.Consensus.Parameters.StateCheckpointChunkSize = 1024 * 1024
 	// Add an extra validator.
 	f.Validators = append(f.Validators,
-		oasis.ValidatorFixture{NoAutoStart: true, Entity: 1, Consensus: oasis.ConsensusFixture{EnableConsensusRPCWorker: true}},
+		oasis.ValidatorFixture{
+			NoAutoStart: true,
+			Entity:      1,
+			Consensus:   oasis.ConsensusFixture{EnableConsensusRPCWorker: true},
+			LogWatcherHandlerFactories: []log.WatcherHandlerFactory{
+				oasis.LogEventABCIStateSyncComplete(),
+			},
+		},
 	)
 
 	return f, nil
@@ -84,9 +92,12 @@ func (sc *consensusStateSyncImpl) Run(childEnv *env.Env) error {
 		"trust_hash", hex.EncodeToString(blk.Hash),
 	)
 
-	// Get the TLS public key from the validators.
+	// The last validator configured by the fixture is the one that is stopped and will sync.
+	lastValidator := len(sc.Net.Validators()) - 1
+
+	// Get the TLS public key from the validators (all except the last one).
 	var consensusNodes []string
-	for _, v := range sc.Net.Validators()[:2] {
+	for _, v := range sc.Net.Validators()[:lastValidator] {
 		var ctrl *oasis.Controller
 		ctrl, err = oasis.NewController(v.SocketPath())
 		if err != nil {
@@ -116,7 +127,7 @@ func (sc *consensusStateSyncImpl) Run(childEnv *env.Env) error {
 	}
 
 	// Configure state sync for the consensus validator.
-	val := sc.Net.Validators()[2]
+	val := sc.Net.Validators()[lastValidator]
 	val.SetConsensusStateSync(&oasis.ConsensusStateSyncCfg{
 		ConsensusNodes: consensusNodes,
 		TrustHeight:    uint64(blk.Height),
