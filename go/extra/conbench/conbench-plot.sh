@@ -50,6 +50,7 @@ BS_PLOT="conbench-block-size.${NOW}.png"
 BSS_PLOT="conbench-block-sizes.${NOW}.png"
 BSSB_PLOT="conbench-block-sizes-bytes.${NOW}.png"
 BTS_PLOT="conbench-block-times.${NOW}.png"
+MATPS_PLOT="conbench-max-avg-tps.${NOW}.png"
 
 # Get the root directory of the repository.
 ROOT="$(cd $(dirname $0)/../../../; pwd -P)"
@@ -77,6 +78,7 @@ BS_DATA_FILE="$(mktemp -t oasis-conbench-bs-plot-XXXXXXXXXX)"
 BSS_DATA_FILE="$(mktemp -t oasis-conbench-bss-plot-XXXXXXXXXX)"
 BSSB_DATA_FILE="$(mktemp -t oasis-conbench-bssb-plot-XXXXXXXXXX)"
 BTS_DATA_FILE="$(mktemp -t oasis-conbench-bts-plot-XXXXXXXXXX)"
+MATPS_DATA_FILE="$(mktemp -t oasis-conbench-max-avg-tps-plot-XXXXXXXXXX)"
 
 ARGS="$@"
 
@@ -99,7 +101,7 @@ run_bench() {
 
 	# Run benchmark.
 	printf "${GRN}*** Running benchmark for ${num_accounts} accounts...${OFF}\n"
-	conbench --skip_funding --num_accounts ${num_accounts} > "${output}"
+	conbench --skip_funding --no_wait=60s --num_accounts ${num_accounts} > "${output}"
 
 	local results=$(fgrep 'msg="benchmark finished"' "${output}")
 	echo "${results}" | tee -a "${RAW_DATA}"
@@ -117,6 +119,8 @@ run_bench() {
 	local bssb=$(echo "${results}" | sed -r 's/[[:alnum:]_]+=/\n&/g' | awk -F= '$1=="block_sizes_bytes"{print $2}' | tr -d '"')
 
 	local bts=$(echo "${results}" | sed -r 's/[[:alnum:]_]+=/\n&/g' | awk -F= '$1=="block_delta_t_s"{print $2}' | tr -d '"')
+
+	local matps=$(echo "${results}" | sed -r 's/[[:alnum:]_]+=/\n&/g' | awk -F= '$1=="max_avg_tps"{print $2}')
 
 	rm "${output}"
 
@@ -148,6 +152,8 @@ run_bench() {
 		echo "${num_accounts} ${blk} ${bt}" >> "${BTS_DATA_FILE}"
 		blk=$((blk+1))
 	done
+
+	echo "${num_accounts} ${matps}" >> "${MATPS_DATA_FILE}"
 }
 
 ACCT="10, 50, 100, 175, 250, 325, 425, 500, 650, 800, 900"
@@ -304,7 +310,21 @@ set palette defined (0 "dark-violet", 1 "blue", 2 "cyan", 3 "yellow", 4 "red")
 splot '${BTS_DATA_FILE}' with impulses lw 2 lc palette notitle
 EOF
 
-rm "${TPS_DATA_FILE}" "${ST_DATA_FILE}" "${BS_DATA_FILE}" "${BSS_DATA_FILE}" "${BSSB_DATA_FILE}" "${BTS_DATA_FILE}"
+# Plot max avg TPS graph.
+gnuplot <<- EOF
+set title "Maximum average transactions per second"
+set xlabel "Number of parallel accounts"
+set xtics (${ACCT})
+set ylabel "transactions/s" textcolor lt 1
+set autoscale y
+set grid
+set term png
+set output "${MATPS_PLOT}"
+plot '${MATPS_DATA_FILE}' using 1:2 with linespoint notitle
+EOF
+
+
+rm "${TPS_DATA_FILE}" "${ST_DATA_FILE}" "${BS_DATA_FILE}" "${BSS_DATA_FILE}" "${BSSB_DATA_FILE}" "${BTS_DATA_FILE}" "${MATPS_DATA_FILE}"
 
 printf "${GRN}*** Refunding original funding account...${OFF}\n"
 conbench --num_accounts ${MAX_ACCTS} --refund_and_exit

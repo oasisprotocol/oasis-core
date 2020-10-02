@@ -46,6 +46,10 @@ const (
 	// Use test entity for funding?
 	CfgUseTestEntity = "use_test_entity"
 
+	// CfgNoWait uses SubmitTxNoWait instead of SubmitTx, submits txns for the
+	// given amount of time, then stops.
+	CfgNoWait = "no_wait"
+
 	// Gas price (should be set to the minimum gas price of validators).
 	CfgGasPrice = "gas_price"
 
@@ -84,7 +88,7 @@ type localAccount struct {
 	cachedGas   uint64
 }
 
-func transfer(ctx context.Context, cc consensus.ClientBackend, from *localAccount, toAddr staking.Address, amount uint64, noCache bool) error {
+func transfer(ctx context.Context, cc consensus.ClientBackend, from *localAccount, toAddr staking.Address, amount uint64, noCache, noWait bool) error {
 	var err error
 
 	// Get sender's nonce if not yet cached (or if we're ignoring cache).
@@ -138,6 +142,12 @@ func transfer(ctx context.Context, cc consensus.ClientBackend, from *localAccoun
 	// Increment cached nonce.
 	atomic.AddUint64(&from.cachedNonce, 1)
 
+	if noWait {
+		// Submit transaction, but don't wait for it to be included in a block.
+		return cc.SubmitTxNoWait(ctx, signedTx)
+	}
+
+	// Otherwise, submit and wait for the txn to be included in a block.
 	// Submit with timeout to avoid blocking forever if the client node
 	// is skipping CheckTx checks.  The timeout should be set large enough
 	// for the network to handle the submission.
@@ -169,7 +179,7 @@ func refund(ctx context.Context, cc consensus.ClientBackend, sc staking.Backend,
 	}
 
 	// We don't want refunds to fail, so disable caching.
-	if err = transfer(ctx, cc, from, toAddr, amount, true); err != nil {
+	if err = transfer(ctx, cc, from, toAddr, amount, true, false); err != nil {
 		return fmt.Errorf("unable to refund from account: %w", err)
 	}
 
@@ -367,7 +377,7 @@ func doRun(cmd *cobra.Command, args []string) error { // nolint: gocyclo
 			account[a].cachedGas = uint64(estGas)
 
 			// Each account gets perAccountFunds tokens.
-			if errr := transfer(ctx, cc, &fundingAcct, account[a].addr, perAccountFunds, true); errr != nil {
+			if errr := transfer(ctx, cc, &fundingAcct, account[a].addr, perAccountFunds, true, false); errr != nil {
 				// An error has happened while funding, make sure to refund the
 				// funding account from the accounts funded until this point.
 				logger.Error("error while funding, attempting to refund account")
@@ -379,6 +389,9 @@ func doRun(cmd *cobra.Command, args []string) error { // nolint: gocyclo
 			return nil
 		}
 	}
+
+	noWait := viper.IsSet(CfgNoWait)
+	noWaitDuration := viper.GetDuration(CfgNoWait)
 
 	logger.Info("starting benchmark", "num_accounts", numAccounts)
 	startStatus, err := cc.GetStatus(ctx)
@@ -399,6 +412,7 @@ func doRun(cmd *cobra.Command, args []string) error { // nolint: gocyclo
 		totalSubmitTimeNs uint64
 		numSubmitSamples  uint64
 		numSubmitErrors   uint64
+		gottaStopFast     uint32
 	)
 
 	// Perform benchmark in parallel, one goroutine per account.
@@ -407,30 +421,48 @@ func doRun(cmd *cobra.Command, args []string) error { // nolint: gocyclo
 		go func(idx uint64) {
 			var noCache bool
 			for s := uint64(0); s < numSamples; s++ {
+				if atomic.LoadUint32(&gottaStopFast) > 0 {
+					// Terminate.
+					return
+				}
+				if noWait {
+					// Send transactions until terminated.
+					s = 0
+				}
+
 				fromIdx := idx
 				toIdx := idx
 				toAddr := account[toIdx].addr
 
 				startT := time.Now()
-				if err = transfer(ctx, cc, &account[fromIdx], toAddr, 1, noCache); err != nil {
+				if err = transfer(ctx, cc, &account[fromIdx], toAddr, 1, noCache, noWait); err != nil {
 					atomic.AddUint64(&numSubmitErrors, 1)
 					// Disable cache for the next sample, just in case
 					// we messed up the nonce or if the gas cost changed.
 					noCache = true
-					doneCh <- true
+					if !noWait {
+						doneCh <- true
+					}
 					continue
 				}
 				atomic.AddUint64(&totalSubmitTimeNs, uint64(time.Since(startT).Nanoseconds()))
 				atomic.AddUint64(&numSubmitSamples, 1)
-				doneCh <- true
 				noCache = false
+				if !noWait {
+					doneCh <- true
+				}
 			}
 		}(uint64(a))
 	}
 
-	// Wait for all goroutines to finish.
-	for i := uint64(0); i < numAccounts*numSamples; i++ {
-		<-doneCh
+	if !noWait {
+		// Wait for all goroutines to finish.
+		for i := uint64(0); i < numAccounts*numSamples; i++ {
+			<-doneCh
+		}
+	} else {
+		time.Sleep(noWaitDuration)
+		atomic.StoreUint32(&gottaStopFast, 1)
 	}
 
 	benchmarkDuration := time.Since(benchmarkStartT)
@@ -450,13 +482,17 @@ func doRun(cmd *cobra.Command, args []string) error { // nolint: gocyclo
 	// transactions per second and other stats.
 	// Note that we count all transactions, not just the ones made
 	// by this benchmark.
+	//
+	// In addition, do a sliding window for the max avg tps.
 	var totalTxs uint64
 	var maxTxs uint64
 	minTxs := uint64(18446744073709551615)
 	txsPerBlock := make([]uint64, 0)
 	txBytesPerBlock := make([]uint64, 0)
 	blockDeltaT := make([]float64, 0)
+	blockT := make([]time.Time, 0)
 	var prevBlockT time.Time
+
 	for height := benchmarkStartHeight; height <= benchmarkStopHeight; height++ {
 		// Count number of transactions.
 		txs, grr := cc.GetTransactions(ctx, height)
@@ -492,6 +528,7 @@ func doRun(cmd *cobra.Command, args []string) error { // nolint: gocyclo
 		}
 		blockDeltaT = append(blockDeltaT, blk.Time.Sub(prevBlockT).Seconds())
 		prevBlockT = blk.Time
+		blockT = append(blockT, blk.Time)
 	}
 
 	tps := float64(totalTxs) / benchmarkDuration.Seconds()
@@ -501,6 +538,32 @@ func doRun(cmd *cobra.Command, args []string) error { // nolint: gocyclo
 	medianTxs := txsPerBlock[len(txsPerBlock)/2]
 
 	avgSubmitTimeNs := float64(totalSubmitTimeNs) / float64(numSubmitSamples)
+
+	// Do a sliding window over the block size array to get the max avg tps.
+	var bestAvgTps float64
+	for slidingWindowSize := 1; slidingWindowSize <= 32; slidingWindowSize++ {
+		for i := range txsPerBlock {
+			var curAvgTps float64
+			j := i
+			// Gather transactions from up to slidingWindowSize blocks or
+			// up to as many blocks as needed for the block timestamp to change.
+			// The block timestamp has a granularity of only 1s, so this can be
+			// an issue with fast CommitTimeouts (e.g. less than 1s), as it
+			// can cause a divide by zero in the average tps calculation below
+			// (since the blocks are too close together).
+			// Increasing the window size to encompass blocks with different
+			// times fixes this.
+			for ; j < len(txsPerBlock) && (blockT[j] == blockT[i] || j < i+slidingWindowSize); j++ {
+				curAvgTps += float64(txsPerBlock[j])
+			}
+			curAvgTps /= blockT[j-1].Sub(blockT[i]).Seconds()
+			// Despite the workaround above, the above can still divide by zero
+			// at the very end of the run, so make sure we don't count that.
+			if curAvgTps > bestAvgTps && !math.IsInf(curAvgTps, 0) {
+				bestAvgTps = curAvgTps
+			}
+		}
+	}
 
 	logger.Info("benchmark finished",
 		// Number of accounts involved in benchmark (level of parallelism).
@@ -535,6 +598,8 @@ func doRun(cmd *cobra.Command, args []string) error { // nolint: gocyclo
 		"block_sizes_bytes", strings.Trim(fmt.Sprint(txBytesPerBlock), "[]"),
 		// Time delta between blocks (in seconds).
 		"block_delta_t_s", strings.Trim(fmt.Sprint(blockDeltaT), "[]"),
+		// Maximum average tps over a sliding window.
+		"max_avg_tps", bestAvgTps,
 	)
 
 	// Refund money into original funding account.
@@ -557,6 +622,7 @@ func init() {
 	fs.Uint64(CfgNumAccounts, 10, "Number of accounts to create for benchmarking (also level of parallelism)")
 	fs.Uint64(CfgNumSamples, 30, "Number of samples (transfers) per account")
 	fs.Duration(CfgSubmitTxTimeout, 10*time.Second, "Timeout for SubmitTx (set this based on network parameters)")
+	fs.Duration(CfgNoWait, 10*time.Second, "Use SubmitTxNoWait instead of SubmitTx (spam transactions) for given amount of time")
 	fs.Bool(CfgUseTestEntity, false, "Use test entity for funding (only for testing)")
 	fs.Uint64(CfgGasPrice, 1, "Gas price (should be set to the minimum gas price of validators)")
 	fs.Bool(CfgFundAndExit, false, "Only fund accounts and exit")
