@@ -189,7 +189,9 @@ release-stable-branch: fetch-git
 # Build and publish the next release.
 release-build:
 	@$(ENSURE_VALID_RELEASE_BRANCH_NAME)
+ifeq ($(OASIS_CORE_REAL_RELEASE), true)
 	@$(ENSURE_GIT_VERSION_EQUALS_PUNCH_VERSION)
+endif
 	@$(ECHO) "$(CYAN)*** Building release version of oasis-core-runtime-loader...$(OFF)"
 	@CARGO_TARGET_DIR=target/default cargo build -p oasis-core-runtime-loader --release
 	@cp target/default/release/oasis-core-runtime-loader .
