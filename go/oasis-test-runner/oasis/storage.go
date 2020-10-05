@@ -142,7 +142,7 @@ func (worker *Storage) startNode() error {
 		args = args.addSentries(sentries).
 			tendermintDisablePeerExchange()
 	} else {
-		args = args.appendSeedNodes(worker.net)
+		args = args.appendSeedNodes(worker.net.seeds)
 	}
 
 	if err = worker.net.startOasisNode(&worker.Node, nil, args); err != nil {

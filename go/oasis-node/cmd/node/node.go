@@ -23,6 +23,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/version"
 	consensusAPI "github.com/oasisprotocol/oasis-core/go/consensus/api"
 	"github.com/oasisprotocol/oasis-core/go/consensus/tendermint"
+	"github.com/oasisprotocol/oasis-core/go/consensus/tendermint/seed"
 	tendermintTestsGenesis "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/tests/genesis"
 	"github.com/oasisprotocol/oasis-core/go/control"
 	controlAPI "github.com/oasisprotocol/oasis-core/go/control/api"
@@ -525,18 +526,19 @@ func NewTestNode() (*Node, error) {
 	return newNode(true)
 }
 
-func newNode(testNode bool) (*Node, error) { // nolint: gocyclo
-	var err error
+// Note: the reason for having the named err return value here is for the
+// deferred func below to propagate the error.
+func newNode(testNode bool) (node *Node, err error) { // nolint: gocyclo
 	logger := cmdCommon.Logger()
 
-	node := &Node{
+	node = &Node{
 		svcMgr:  background.NewServiceManager(logger),
 		readyCh: make(chan struct{}),
 		logger:  logger,
 	}
 
 	var startOk bool
-	defer func() {
+	defer func(node *Node) {
 		if !startOk {
 			if cErr := node.svcMgr.Ctx.Err(); cErr != nil {
 				err = cErr
@@ -545,7 +547,7 @@ func newNode(testNode bool) (*Node, error) { // nolint: gocyclo
 			node.Stop()
 			node.Cleanup()
 		}
-	}()
+	}(node)
 
 	if err = cmdCommon.Init(); err != nil {
 		// Common stuff like logger not correctly initialized. Print to stderr
@@ -759,6 +761,7 @@ func init() {
 		pprof.Flags,
 		storage.Flags,
 		tendermint.Flags,
+		seed.Flags,
 		ias.Flags,
 		workerKeymanager.Flags,
 		runtimeRegistry.Flags,

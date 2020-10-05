@@ -106,7 +106,7 @@ func (worker *Compute) startNode() error {
 		workerRuntimeSGXLoader(worker.net.cfg.RuntimeSGXLoaderBinary).
 		workerExecutorScheduleCheckTxEnabled().
 		appendNetwork(worker.net).
-		appendSeedNodes(worker.net).
+		appendSeedNodes(worker.net.seeds).
 		appendEntity(worker.entity)
 
 	for _, idx := range worker.runtimes {

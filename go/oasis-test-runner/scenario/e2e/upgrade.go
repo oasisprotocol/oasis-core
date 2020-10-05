@@ -147,6 +147,7 @@ func (sc *nodeUpgradeImpl) Fixture() (*oasis.NetworkFixture, error) {
 			{Entity: 1, AllowErrorTermination: true},
 			{Entity: 1, AllowErrorTermination: true},
 		},
+		Seeds: []oasis.SeedFixture{{}},
 	}, nil
 }
 

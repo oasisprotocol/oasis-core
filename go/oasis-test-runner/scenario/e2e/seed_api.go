@@ -52,7 +52,7 @@ func (sc *seedAPI) Run(childEnv *env.Env) error { // nolint: gocyclo
 		return fmt.Errorf("WaitNodesRegistered: %w", err)
 	}
 
-	seedCtrl, err := oasis.NewController(sc.Net.Seed().SocketPath())
+	seedCtrl, err := oasis.NewController(sc.Net.Seeds()[0].SocketPath())
 	if err != nil {
 		return err
 	}

@@ -75,6 +75,7 @@ func newDefaultFixture() (*oasis.NetworkFixture, error) {
 		Validators: []oasis.ValidatorFixture{
 			{Entity: 1},
 		},
+		Seeds: []oasis.SeedFixture{{}},
 	}
 
 	for i := 0; i < viper.GetInt(cfgNumEntities); i++ {
