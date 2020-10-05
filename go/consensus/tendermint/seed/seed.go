@@ -8,6 +8,7 @@ import (
 	"sync"
 	"time"
 
+	flag "github.com/spf13/pflag"
 	"github.com/spf13/viper"
 	"github.com/tendermint/tendermint/config"
 	"github.com/tendermint/tendermint/p2p"
@@ -41,9 +42,17 @@ import (
 const (
 	// This should ideally be dynamically configured internally by tendermint:
 	// https://github.com/tendermint/tendermint/issues/3523
-	// This is the same value tendermint uses.
+	// This is set to the same value as in tendermint.
 	tendermintSeedDisconnectWaitPeriod = 28 * time.Hour
+
+	// CfgDebugDisableAddrBookFromGenesis disables populating seed node address book from genesis.
+	// This flag is used to disable initial addr book population from genesis in some E2E tests to
+	// test the seed node functionality.
+	CfgDebugDisableAddrBookFromGenesis = "consensus.tendermint.seed.debug.disable_addr_book_from_genesis"
 )
+
+// Flags has the configuration flags.
+var Flags = flag.NewFlagSet("", flag.ContinueOnError)
 
 type seedService struct {
 	identity *identity.Identity
@@ -105,7 +114,7 @@ func (srv *seedService) Cleanup() {
 	// No cleanup in particular.
 }
 
-// Synced returns a channel that is closed once synchronization is complete.
+// Implements Backend.
 func (srv *seedService) Synced() <-chan struct{} {
 	// Seed is always considered synced.
 	ch := make(chan struct{})
@@ -113,7 +122,7 @@ func (srv *seedService) Synced() <-chan struct{} {
 	return ch
 }
 
-// SupportedFeatures returns the features supported by this consensus backend.
+// Implements Backend.
 func (srv *seedService) SupportedFeatures() consensus.FeatureMask {
 	return consensus.FeatureMask(0)
 }
@@ -145,7 +154,7 @@ func (srv *seedService) GetGenesisDocument(ctx context.Context) (*genesis.Docume
 
 // Implements Backend.
 func (srv *seedService) GetAddresses() ([]node.ConsensusAddress, error) {
-	u, err := tmcommon.GetAddress()
+	u, err := tmcommon.GetExternalAddress()
 	if err != nil {
 		return nil, err
 	}
@@ -355,8 +364,11 @@ func New(dataDir string, identity *identity.Identity, genesisProvider genesis.Pr
 	if err = srv.addrBook.Start(); err != nil {
 		return nil, fmt.Errorf("tendermint/seed: failed to start address book: %w", err)
 	}
-	if err = populateAddrBookFromGenesis(srv.addrBook, doc, srv.addr); err != nil {
-		return nil, fmt.Errorf("tendermint/seed: failed to populate address book from genesis: %w", err)
+
+	if !(viper.GetBool(CfgDebugDisableAddrBookFromGenesis) && cmflags.DebugDontBlameOasis()) {
+		if err = populateAddrBookFromGenesis(srv.addrBook, doc, srv.addr); err != nil {
+			return nil, fmt.Errorf("tendermint/seed: failed to populate address book from genesis: %w", err)
+		}
 	}
 
 	// Use p2pCfg.Seeds since there the IDs are already lowercased.
@@ -426,4 +438,12 @@ func populateAddrBookFromGenesis(addrBook p2p.AddrBook, doc *genesis.Document, o
 	}
 
 	return nil
+}
+
+func init() {
+	Flags.Bool(CfgDebugDisableAddrBookFromGenesis, false, "disable populating address book with genesis validators")
+
+	_ = Flags.MarkHidden(CfgDebugDisableAddrBookFromGenesis)
+
+	_ = viper.BindPFlags(Flags)
 }

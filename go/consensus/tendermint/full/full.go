@@ -284,7 +284,7 @@ func (t *fullService) Synced() <-chan struct{} {
 }
 
 func (t *fullService) GetAddresses() ([]node.ConsensusAddress, error) {
-	u, err := tmcommon.GetAddress()
+	u, err := tmcommon.GetExternalAddress()
 	if err != nil {
 		return nil, err
 	}

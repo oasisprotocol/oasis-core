@@ -9,21 +9,41 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/consensus/tendermint/crypto"
 )
 
+// SeedCfg is the Oasis seed node configuration.
+type SeedCfg struct {
+	DisableAddrBookFromGenesis bool
+}
+
 // Seed is an Oasis seed node.
-type Seed struct {
+type Seed struct { // nolint: maligned
 	Node
+
+	disableAddrBookFromGenesis bool
 
 	tmAddress     string
 	consensusPort uint16
 }
 
 func (seed *Seed) startNode() error {
+	otherSeeds := []*Seed{}
+	for _, s := range seed.net.seeds {
+		if s.Name == seed.Name {
+			continue
+		}
+		otherSeeds = append(otherSeeds, s)
+	}
+
 	args := newArgBuilder().
 		debugDontBlameOasis().
 		debugAllowTestKeys().
 		workerCertificateRotation(true).
 		tendermintCoreAddress(seed.consensusPort).
+		appendSeedNodes(otherSeeds).
 		tendermintSeedMode()
+
+	if seed.disableAddrBookFromGenesis {
+		args = args.tendermintSeedDisableAddrBookFromGenesis()
+	}
 
 	if err := seed.net.startOasisNode(&seed.Node, nil, args); err != nil {
 		return fmt.Errorf("oasis/seed: failed to launch node %s: %w", seed.Name, err)
@@ -32,15 +52,9 @@ func (seed *Seed) startNode() error {
 	return nil
 }
 
-func (net *Network) newSeedNode() (*Seed, error) {
-	if net.seedNode != nil {
-		return nil, fmt.Errorf("oasis/seed: already provisioned")
-	}
-
-	// Why, yes, this *could* probably just use Oasis node's integrated seed
-	// node as a library, but this is more "realistic" for tests.
-
-	seedName := "seed"
+// NewSeed provisions a new seed node and adds it to the network.
+func (net *Network) NewSeed(cfg *SeedCfg) (*Seed, error) {
+	seedName := fmt.Sprintf("seed-%d", len(net.seeds))
 
 	seedDir, err := net.baseDir.NewSubDir(seedName)
 	if err != nil {
@@ -69,11 +83,12 @@ func (net *Network) newSeedNode() (*Seed, error) {
 			net:  net,
 			dir:  seedDir,
 		},
-		tmAddress:     crypto.PublicKeyToTendermint(&seedP2PPublicKey).Address().String(),
-		consensusPort: net.nextNodePort,
+		disableAddrBookFromGenesis: cfg.DisableAddrBookFromGenesis,
+		tmAddress:                  crypto.PublicKeyToTendermint(&seedP2PPublicKey).Address().String(),
+		consensusPort:              net.nextNodePort,
 	}
 	seedNode.doStartNode = seedNode.startNode
-	net.seedNode = seedNode
+	net.seeds = append(net.seeds, seedNode)
 	net.nextNodePort++
 
 	return seedNode, nil

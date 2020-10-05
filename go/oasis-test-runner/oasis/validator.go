@@ -97,7 +97,7 @@ func (val *Validator) startNode() error {
 		args = args.addSentries(val.sentries).
 			tendermintDisablePeerExchange()
 	} else {
-		args = args.appendSeedNodes(val.net)
+		args = args.appendSeedNodes(val.net.seeds)
 	}
 	if val.consensus.EnableConsensusRPCWorker {
 		args = args.workerClientPort(val.clientPort).

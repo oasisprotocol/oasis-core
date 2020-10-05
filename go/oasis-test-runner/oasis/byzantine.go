@@ -39,11 +39,12 @@ func (worker *Byzantine) startNode() error {
 	args := newArgBuilder().
 		debugDontBlameOasis().
 		debugAllowTestKeys().
+		tendermintDebugAllowDuplicateIP().
 		tendermintCoreAddress(worker.consensusPort).
 		tendermintDebugAddrBookLenient().
 		tendermintSubmissionGasPrice(worker.consensus.SubmissionGasPrice).
 		workerP2pPort(worker.p2pPort).
-		appendSeedNodes(worker.net).
+		appendSeedNodes(worker.net.seeds).
 		appendEntity(worker.entity).
 		byzantineActivationEpoch(worker.activationEpoch).
 		byzantineExecutorSchedulerRole(worker.executorIsScheduler)

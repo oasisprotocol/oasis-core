@@ -289,7 +289,7 @@ func (km *Keymanager) startNode() error {
 		args = args.addSentries(sentries).
 			tendermintDisablePeerExchange()
 	} else {
-		args = args.appendSeedNodes(km.net)
+		args = args.appendSeedNodes(km.net.seeds)
 	}
 
 	if err = km.net.startOasisNode(&km.Node, nil, args); err != nil {

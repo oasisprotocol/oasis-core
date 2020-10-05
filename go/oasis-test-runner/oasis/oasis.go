@@ -253,10 +253,10 @@ type Network struct {
 	sentries       []*Sentry
 	clients        []*Client
 	byzantine      []*Byzantine
+	seeds          []*Seed
 
 	keymanagerPolicies []*KeymanagerPolicy
 
-	seedNode *Seed
 	iasProxy *iasProxy
 
 	cfg          *NetworkCfg
@@ -345,9 +345,9 @@ func (net *Network) Runtimes() []*Runtime {
 	return net.runtimes
 }
 
-// Seed returns the seed node associated with the network.
-func (net *Network) Seed() *Seed {
-	return net.seedNode
+// Seeds returns the seed node associated with the network.
+func (net *Network) Seeds() []*Seed {
+	return net.seeds
 }
 
 // Keymanagers returns the keymanagers associated with the network.
@@ -534,14 +534,6 @@ func (net *Network) Start() error { // nolint: gocyclo
 	signature.UnsafeResetChainContext()
 	genesisDoc.SetChainContext()
 
-	net.logger.Debug("provisioning seed node")
-	if _, err = net.newSeedNode(); err != nil {
-		net.logger.Error("failed to provision seed node",
-			"err", err,
-		)
-		return err
-	}
-
 	net.logger.Debug("starting IAS proxy node")
 	if net.iasProxy != nil {
 		if err = net.iasProxy.startNode(); err != nil {
@@ -552,9 +544,13 @@ func (net *Network) Start() error { // nolint: gocyclo
 		}
 	}
 
-	if !net.seedNode.noAutoStart {
-		net.logger.Debug("starting seed node")
-		if err = net.seedNode.startNode(); err != nil {
+	net.logger.Debug("starting seed node(s)")
+	for _, s := range net.seeds {
+		if s.noAutoStart {
+			continue
+		}
+
+		if err = s.startNode(); err != nil {
 			net.logger.Error("failed to start seed node",
 				"err", err,
 			)

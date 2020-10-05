@@ -56,8 +56,8 @@ const (
 // Flags has the configuration flags.
 var Flags = flag.NewFlagSet("", flag.ContinueOnError)
 
-// GetAddress returns the configured tendermint address.
-func GetAddress() (*url.URL, error) {
+// GetExternalAddress returns the configured tendermint external address.
+func GetExternalAddress() (*url.URL, error) {
 	addrURI := viper.GetString(CfgCoreExternalAddress)
 	if addrURI == "" {
 		addrURI = viper.GetString(CfgCoreListenAddress)
