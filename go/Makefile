@@ -92,7 +92,7 @@ if [ "$(FUZZ_NO_BUILD)" != "1" ]; then \
 	mkdir -p "$$WORKDIR"; \
 	pushd $$TARGETDIR >/dev/null; \
 		$(ECHO) "$(CYAN)*** Building fuzzer for $@...$(OFF)"; \
-		go-fuzz-build -o $$WORKDIR/fuzz.zip; \
+		go-fuzz-build -o $$WORKDIR/fuzz.zip || exit 1; \
 	popd >/dev/null; \
 fi; \
 if [ "$(FUZZ_BUILD_ONLY)" != "1" ]; then \
@@ -100,9 +100,9 @@ if [ "$(FUZZ_BUILD_ONLY)" != "1" ]; then \
 	cd "$$WORKDIR"; \
 	$(ECHO) "$(CYAN)*** Running fuzzer for $@...$(OFF)"; \
 	if [ "$(@D)" == "." ]; then \
-		go-fuzz -bin=$$WORKDIR/fuzz.zip -workdir=$$WORKDIR; \
+		go-fuzz -bin=$$WORKDIR/fuzz.zip -workdir=$$WORKDIR || exit 1; \
 	else \
-		go-fuzz -bin=$$WORKDIR/fuzz.zip -workdir=$$WORKDIR -func Fuzz$(@F); \
+		go-fuzz -bin=$$WORKDIR/fuzz.zip -workdir=$$WORKDIR -func Fuzz$(@F) || exit 1; \
 	fi; \
 fi;
 endef
