@@ -2,12 +2,15 @@ package grpc
 
 import (
 	"context"
+	"io"
 	"io/ioutil"
 	"os"
 	"testing"
 
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 
 	"github.com/oasisprotocol/oasis-core/go/common/errors"
 )
@@ -22,6 +25,7 @@ type ErrorTestResponse struct {
 
 type ErrorTestService interface {
 	ErrorTest(context.Context, *ErrorTestRequest) (*ErrorTestResponse, error)
+	ErrorStatusTest(context.Context, *ErrorTestRequest) (*ErrorTestResponse, error)
 }
 
 type errorTestServer struct {
@@ -29,6 +33,10 @@ type errorTestServer struct {
 
 func (s *errorTestServer) ErrorTest(ctx context.Context, req *ErrorTestRequest) (*ErrorTestResponse, error) {
 	return &ErrorTestResponse{}, errTest
+}
+
+func (s *errorTestServer) ErrorStatusTest(ctx context.Context, req *ErrorTestRequest) (*ErrorTestResponse, error) {
+	return nil, io.ErrUnexpectedEOF
 }
 
 type errorTestClient struct {
@@ -44,6 +52,15 @@ func (c *errorTestClient) ErrorTest(ctx context.Context, req *ErrorTestRequest) 
 	return rsp, nil
 }
 
+func (c *errorTestClient) ErrorStatusTest(ctx context.Context, req *ErrorTestRequest) (*ErrorTestResponse, error) {
+	rsp := new(ErrorTestResponse)
+	err := c.cc.Invoke(ctx, "/ErrorTestService/ErrorStatusTest", req, rsp)
+	if err != nil {
+		return nil, err
+	}
+	return rsp, nil
+}
+
 var errorTestServiceDesc = grpc.ServiceDesc{
 	ServiceName: "ErrorTestService",
 	HandlerType: (*ErrorTestService)(nil),
@@ -51,6 +68,10 @@ var errorTestServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ErrorTest",
 			Handler:    handlerErrorTest,
+		},
+		{
+			MethodName: "ErrorStatusTest",
+			Handler:    handlerErrorStatusTest,
 		},
 	},
 	Streams: []grpc.StreamDesc{},
@@ -75,6 +96,29 @@ func handlerErrorTest( // nolint: golint
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(ErrorTestService).ErrorTest(ctx, req.(*ErrorTestRequest))
+	}
+	return interceptor(ctx, req, info, handler)
+}
+
+func handlerErrorStatusTest( // nolint: golint
+	srv interface{},
+	ctx context.Context,
+	dec func(interface{}) error,
+	interceptor grpc.UnaryServerInterceptor,
+) (interface{}, error) {
+	req := new(ErrorTestRequest)
+	if err := dec(req); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ErrorTestService).ErrorStatusTest(ctx, req)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/ErrorTestService/ErrorStatusTest",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ErrorTestService).ErrorStatusTest(ctx, req.(*ErrorTestRequest))
 	}
 	return interceptor(ctx, req, info, handler)
 }
@@ -109,4 +153,12 @@ func TestErrorMapping(t *testing.T) {
 	_, err = client.ErrorTest(context.Background(), &ErrorTestRequest{})
 	require.Error(err, "ErrorTest should return an error")
 	require.Equal(err, errTest, "errors should be properly mapped")
+
+	_, err = client.ErrorStatusTest(context.Background(), &ErrorTestRequest{})
+	require.Error(err, "ErrorStatusTest should return an error")
+	require.True(IsErrorCode(err, codes.Unknown), "ErrorStatusTest should have code unknown")
+	st := GetErrorStatus(err)
+	require.NotNil(st, "GetErrorStatus should not be nil")
+	s, _ := status.FromError(io.ErrUnexpectedEOF)
+	require.EqualValues(s, st, "GetErrorStatus.Status should be io.ErrUnexpectedEOF")
 }
