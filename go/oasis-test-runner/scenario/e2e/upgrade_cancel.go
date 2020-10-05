@@ -78,6 +78,7 @@ func (sc *nodeUpgradeCancelImpl) Fixture() (*oasis.NetworkFixture, error) {
 			{Entity: 1},
 			{Entity: 1},
 		},
+		Seeds: []oasis.SeedFixture{{}},
 	}, nil
 }
 

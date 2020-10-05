@@ -65,6 +65,12 @@ func (n *Node) GetRegistrationStatus(ctx context.Context) (*control.Registration
 // Implements control.ControlledNode.
 func (n *Node) GetRuntimeStatus(ctx context.Context) (map[common.Namespace]control.RuntimeStatus, error) {
 	runtimes := make(map[common.Namespace]control.RuntimeStatus)
+
+	// Seed node doesn't have a runtime registry.
+	if n.RuntimeRegistry == nil {
+		return runtimes, nil
+	}
+
 	for _, rt := range n.RuntimeRegistry.Runtimes() {
 		var status control.RuntimeStatus
 

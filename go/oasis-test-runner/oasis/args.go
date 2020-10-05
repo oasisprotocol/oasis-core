@@ -17,6 +17,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/consensus/tendermint/abci"
 	tendermintCommon "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/common"
 	tendermintFull "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/full"
+	tendermintSeed "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/seed"
 	epochtime "github.com/oasisprotocol/oasis-core/go/epochtime/api"
 	"github.com/oasisprotocol/oasis-core/go/ias"
 	cmdCommon "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common"
@@ -136,9 +137,10 @@ func (args *argBuilder) tendermintRecoverCorruptedWAL(enable bool) *argBuilder {
 	return args
 }
 
-func (args *argBuilder) tendermintCoreListenAddress(port uint16) *argBuilder {
+func (args *argBuilder) tendermintCoreAddress(port uint16) *argBuilder {
 	args.vec = append(args.vec, []string{
 		"--" + tendermintCommon.CfgCoreListenAddress, "tcp://0.0.0.0:" + strconv.Itoa(int(port)),
+		"--" + tendermintCommon.CfgCoreExternalAddress, "tcp://127.0.0.1:" + strconv.Itoa(int(port)),
 	}...)
 	return args
 }
@@ -164,14 +166,19 @@ func (args *argBuilder) tendermintSeedMode() *argBuilder {
 	return args
 }
 
+func (args *argBuilder) tendermintSeedDisableAddrBookFromGenesis() *argBuilder {
+	args.vec = append(args.vec, "--"+tendermintSeed.CfgDebugDisableAddrBookFromGenesis)
+	return args
+}
+
 func (args *argBuilder) tendermintDebugAddrBookLenient() *argBuilder {
-	args.vec = append(args.vec, "--"+tendermintFull.CfgDebugP2PAddrBookLenient)
+	args.vec = append(args.vec, "--"+tendermintCommon.CfgDebugP2PAddrBookLenient)
 	return args
 }
 
 func (args *argBuilder) tendermintDebugAllowDuplicateIP() *argBuilder {
 	args.vec = append(args.vec, []string{
-		"--" + tendermintFull.CfgDebugP2PAllowDuplicateIP,
+		"--" + tendermintCommon.CfgDebugP2PAllowDuplicateIP,
 	}...)
 	return args
 }
@@ -471,10 +478,10 @@ func (args *argBuilder) addSentryKeymanagerWorkers(keymanagerWorkers []*Keymanag
 		workerSentryUpstreamTLSKeys(sentryPubKeys)
 }
 
-func (args *argBuilder) appendSeedNodes(net *Network) *argBuilder {
-	if seed := net.seedNode; seed != nil {
+func (args *argBuilder) appendSeedNodes(seeds []*Seed) *argBuilder {
+	for _, seed := range seeds {
 		args.vec = append(args.vec, []string{
-			"--" + tendermintFull.CfgP2PSeed, fmt.Sprintf("%s@127.0.0.1:%d", seed.tmAddress, seed.consensusPort),
+			"--" + tendermintCommon.CfgP2PSeed, fmt.Sprintf("%s@127.0.0.1:%d", seed.tmAddress, seed.consensusPort),
 		}...)
 	}
 	return args

@@ -110,7 +110,7 @@ func (worker *Storage) startNode() error {
 		debugDontBlameOasis().
 		debugAllowTestKeys().
 		workerCertificateRotation(!worker.disableCertRotation).
-		tendermintCoreListenAddress(worker.consensusPort).
+		tendermintCoreAddress(worker.consensusPort).
 		tendermintSubmissionGasPrice(worker.consensus.SubmissionGasPrice).
 		tendermintPrune(worker.consensus.PruneNumKept).
 		storageBackend(worker.backend).
@@ -142,7 +142,7 @@ func (worker *Storage) startNode() error {
 		args = args.addSentries(sentries).
 			tendermintDisablePeerExchange()
 	} else {
-		args = args.appendSeedNodes(worker.net)
+		args = args.appendSeedNodes(worker.net.seeds)
 	}
 
 	if err = worker.net.startOasisNode(&worker.Node, nil, args); err != nil {

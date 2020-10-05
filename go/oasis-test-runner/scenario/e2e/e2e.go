@@ -106,6 +106,7 @@ func (sc *E2E) Fixture() (*oasis.NetworkFixture, error) {
 			{Entity: 1, Consensus: oasis.ConsensusFixture{EnableConsensusRPCWorker: true}},
 			{Entity: 1, Consensus: oasis.ConsensusFixture{EnableConsensusRPCWorker: true}},
 		},
+		Seeds: []oasis.SeedFixture{{}},
 	}, nil
 }
 
@@ -332,6 +333,10 @@ func RegisterScenarios() error {
 		EarlyQuery,
 		// Consensus state sync.
 		ConsensusStateSync,
+		// Multiple seeds test.
+		MultipleSeeds,
+		// Seed API test.
+		SeedAPI,
 	} {
 		if err := cmd.Register(s); err != nil {
 			return err

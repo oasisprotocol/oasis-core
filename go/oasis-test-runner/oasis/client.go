@@ -26,10 +26,10 @@ func (client *Client) startNode() error {
 		debugAllowTestKeys().
 		tendermintDebugDisableCheckTx(client.consensus.DisableCheckTx).
 		tendermintPrune(client.consensus.PruneNumKept).
-		tendermintCoreListenAddress(client.consensusPort).
+		tendermintCoreAddress(client.consensusPort).
 		storageBackend(storageClient.BackendName).
 		appendNetwork(client.net).
-		appendSeedNodes(client.net).
+		appendSeedNodes(client.net.seeds).
 		workerP2pPort(client.p2pPort).
 		workerP2pEnabled().
 		runtimeTagIndexerBackend("bleve")

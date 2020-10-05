@@ -5,8 +5,6 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"net"
-	"net/url"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -33,7 +31,6 @@ import (
 	tmdb "github.com/tendermint/tm-db"
 
 	beaconAPI "github.com/oasisprotocol/oasis-core/go/beacon/api"
-	"github.com/oasisprotocol/oasis-core/go/common"
 	"github.com/oasisprotocol/oasis-core/go/common/cbor"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
@@ -79,8 +76,6 @@ import (
 )
 
 const (
-	cfgCoreExternalAddress = "consensus.tendermint.core.external_address"
-
 	// CfgABCIPruneStrategy configures the ABCI state pruning strategy.
 	CfgABCIPruneStrategy = "consensus.tendermint.abci.prune.strategy"
 	// CfgABCIPruneNumKept configures the amount of kept heights if pruning is enabled.
@@ -100,23 +95,8 @@ const (
 	CfgP2PPersistenPeersMaxDialPeriod = "consensus.tendermint.p2p.persistent_peers_max_dial_period"
 	// CfgP2PDisablePeerExchange disables tendermint's peer-exchange (Pex) reactor.
 	CfgP2PDisablePeerExchange = "consensus.tendermint.p2p.disable_peer_exchange"
-	// CfgP2PSeeds configures tendermint's seed node(s).
-	CfgP2PSeed = "consensus.tendermint.p2p.seed"
-	// CfgP2PMaxNumInboundPeers configures the max number of inbound peers.
-	CfgP2PMaxNumInboundPeers = "consensus.tendermint.p2p.max_num_inbound_peers"
-	// CfgP2PMaxNumOutboundPeers configures the max number of outbound peers, excluding persistent peers.
-	CfgP2PMaxNumOutboundPeers = "consensus.tendermint.p2p.max_num_outbound_peers"
-	// CfgP2PSendRate is the rate at which packets can be sent, in bytes/second.
-	CfgP2PSendRate = "consensus.tendermint.p2p.send_rate"
-	// CfgP2PRecvRate is the rate at which packets can be received, in bytes/second.
-	CfgP2PRecvRate = "consensus.tendermint.p2p.recv_rate"
 	// CfgP2PUnconditionalPeerIDs configures tendermint's unconditional peer(s).
 	CfgP2PUnconditionalPeerIDs = "consensus.tendermint.p2p.unconditional_peer_ids"
-
-	// CfgDebugP2PAddrBookLenient configures allowing non-routable addresses.
-	CfgDebugP2PAddrBookLenient = "consensus.tendermint.debug.addr_book_lenient"
-	// CfgP2PDebugAllowDuplicateIP allows multiple connections from the same IP.
-	CfgDebugP2PAllowDuplicateIP = "consensus.tendermint.debug.allow_duplicate_ip"
 
 	// CfgDebugUnsafeReplayRecoverCorruptedWAL enables the debug and unsafe
 	// automatic corrupted WAL recovery during replay.
@@ -309,37 +289,9 @@ func (t *fullService) Synced() <-chan struct{} {
 }
 
 func (t *fullService) GetAddresses() ([]node.ConsensusAddress, error) {
-	addrURI := viper.GetString(cfgCoreExternalAddress)
-	if addrURI == "" {
-		addrURI = viper.GetString(tmcommon.CfgCoreListenAddress)
-	}
-	if addrURI == "" {
-		return nil, fmt.Errorf("tendermint: no external address configured")
-	}
-
-	u, err := url.Parse(addrURI)
+	u, err := tmcommon.GetExternalAddress()
 	if err != nil {
-		return nil, fmt.Errorf("tendermint: failed to parse external address URL: %w", err)
-	}
-
-	if u.Scheme != "tcp" {
-		return nil, fmt.Errorf("tendermint: external address has invalid scheme: '%v'", u.Scheme)
-	}
-
-	// Handle the case when no IP is explicitly configured, and the
-	// default value is used.
-	if u.Hostname() == "0.0.0.0" {
-		var port string
-		if _, port, err = net.SplitHostPort(u.Host); err != nil {
-			return nil, fmt.Errorf("tendermint: malformed external address host/port: %w", err)
-		}
-
-		ip := common.GuessExternalAddress()
-		if ip == nil {
-			return nil, fmt.Errorf("tendermint: failed to guess external address")
-		}
-
-		u.Host = ip.String() + ":" + port
+		return nil, err
 	}
 
 	var addr node.ConsensusAddress
@@ -1171,12 +1123,12 @@ func (t *fullService) lazyInit() error {
 	tenderConfig.Instrumentation.PrometheusListenAddr = ""
 	tenderConfig.TxIndex.Indexer = "null"
 	tenderConfig.P2P.ListenAddress = viper.GetString(tmcommon.CfgCoreListenAddress)
-	tenderConfig.P2P.ExternalAddress = viper.GetString(cfgCoreExternalAddress)
+	tenderConfig.P2P.ExternalAddress = viper.GetString(tmcommon.CfgCoreExternalAddress)
 	tenderConfig.P2P.PexReactor = !viper.GetBool(CfgP2PDisablePeerExchange)
-	tenderConfig.P2P.MaxNumInboundPeers = viper.GetInt(CfgP2PMaxNumInboundPeers)
-	tenderConfig.P2P.MaxNumOutboundPeers = viper.GetInt(CfgP2PMaxNumOutboundPeers)
-	tenderConfig.P2P.SendRate = viper.GetInt64(CfgP2PSendRate)
-	tenderConfig.P2P.RecvRate = viper.GetInt64(CfgP2PRecvRate)
+	tenderConfig.P2P.MaxNumInboundPeers = viper.GetInt(tmcommon.CfgP2PMaxNumInboundPeers)
+	tenderConfig.P2P.MaxNumOutboundPeers = viper.GetInt(tmcommon.CfgP2PMaxNumOutboundPeers)
+	tenderConfig.P2P.SendRate = viper.GetInt64(tmcommon.CfgP2PSendRate)
+	tenderConfig.P2P.RecvRate = viper.GetInt64(tmcommon.CfgP2PRecvRate)
 	// Persistent peers need to be lowercase as p2p/transport.go:MultiplexTransport.upgrade()
 	// uses a case sensitive string comparison to validate public keys.
 	// Since persistent peers is expected to be in comma-delimited ID@host:port format,
@@ -1192,9 +1144,9 @@ func (t *fullService) lazyInit() error {
 	// uses a case sensitive string comparison to validate public keys.
 	// Since Seeds is expected to be in comma-delimited ID@host:port format,
 	// lowercasing the whole string is ok.
-	tenderConfig.P2P.Seeds = strings.ToLower(strings.Join(viper.GetStringSlice(CfgP2PSeed), ","))
-	tenderConfig.P2P.AddrBookStrict = !(viper.GetBool(CfgDebugP2PAddrBookLenient) && cmflags.DebugDontBlameOasis())
-	tenderConfig.P2P.AllowDuplicateIP = viper.GetBool(CfgDebugP2PAllowDuplicateIP) && cmflags.DebugDontBlameOasis()
+	tenderConfig.P2P.Seeds = strings.ToLower(strings.Join(viper.GetStringSlice(tmcommon.CfgP2PSeed), ","))
+	tenderConfig.P2P.AddrBookStrict = !(viper.GetBool(tmcommon.CfgDebugP2PAddrBookLenient) && cmflags.DebugDontBlameOasis())
+	tenderConfig.P2P.AllowDuplicateIP = viper.GetBool(tmcommon.CfgDebugP2PAllowDuplicateIP) && cmflags.DebugDontBlameOasis()
 	tenderConfig.RPC.ListenAddress = ""
 
 	sentryUpstreamAddrs := viper.GetStringSlice(CfgSentryUpstreamAddress)
@@ -1521,7 +1473,6 @@ func New(
 }
 
 func init() {
-	Flags.String(cfgCoreExternalAddress, "", "tendermint address advertised to other nodes")
 	Flags.String(CfgABCIPruneStrategy, abci.PruneDefault, "ABCI state pruning strategy")
 	Flags.Uint64(CfgABCIPruneNumKept, 3600, "ABCI state versions kept (when applicable)")
 	Flags.Bool(CfgCheckpointerDisabled, false, "Disable the ABCI state checkpointer")
@@ -1531,12 +1482,6 @@ func init() {
 	Flags.StringSlice(CfgP2PUnconditionalPeerIDs, []string{}, "Tendermint unconditional peer IDs")
 	Flags.Bool(CfgP2PDisablePeerExchange, false, "Disable Tendermint's peer-exchange reactor")
 	Flags.Duration(CfgP2PPersistenPeersMaxDialPeriod, 0*time.Second, "Tendermint max timeout when redialing a persistent peer (default: unlimited)")
-	Flags.Int(CfgP2PMaxNumInboundPeers, 40, "Max number of inbound peers")
-	Flags.Int(CfgP2PMaxNumOutboundPeers, 20, "Max number of outbound peers (excluding persistent peers)")
-	Flags.Int64(CfgP2PSendRate, 5120000, "Rate at which packets can be sent (bytes/sec)")
-	Flags.Int64(CfgP2PRecvRate, 5120000, "Rate at which packets can be received (bytes/sec)")
-	Flags.StringSlice(CfgP2PSeed, []string{}, "Tendermint seed node(s) of the form ID@host:port")
-	Flags.Bool(CfgDebugP2PAllowDuplicateIP, false, "Allow multiple connections from the same IP")
 	Flags.Uint64(CfgMinGasPrice, 0, "minimum gas price")
 	Flags.Bool(CfgDebugDisableCheckTx, false, "do not perform CheckTx on incoming transactions (UNSAFE)")
 	Flags.Bool(CfgDebugUnsafeReplayRecoverCorruptedWAL, false, "Enable automatic recovery from corrupted WAL during replay (UNSAFE).")
@@ -1551,7 +1496,6 @@ func init() {
 	Flags.Uint64(CfgConsensusStateSyncTrustHeight, 0, "state sync: light client trusted height")
 	Flags.String(CfgConsensusStateSyncTrustHash, "", "state sync: light client trusted consensus header hash")
 
-	_ = Flags.MarkHidden(CfgDebugP2PAllowDuplicateIP)
 	_ = Flags.MarkHidden(CfgDebugDisableCheckTx)
 	_ = Flags.MarkHidden(CfgDebugUnsafeReplayRecoverCorruptedWAL)
 
