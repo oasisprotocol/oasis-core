@@ -12,6 +12,7 @@ import (
 	"github.com/spf13/viper"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 
 	"github.com/oasisprotocol/oasis-core/go/common"
 	"github.com/oasisprotocol/oasis-core/go/common/cbor"
@@ -239,9 +240,11 @@ func (q *queries) doConsensusQueries(ctx context.Context, rng *rand.Rand, height
 			"txs_with_results", txsWithRes,
 			"height", height,
 			"err", err,
+			"status", cmnGrpc.GetErrorStatus(err),
 		)
-		if status := cmnGrpc.GetErrorStatus(err); status != nil {
-			if status.Err() == io.ErrUnexpectedEOF {
+		if st := cmnGrpc.GetErrorStatus(err); st != nil {
+			s, _ := status.FromError(io.ErrUnexpectedEOF)
+			if st.Err().Error() == s.Err().Error() {
 				// XXX: Connection seems to get occasionally reset with
 				// FLOW_CONTROL_ERROR in GetTransactionsWithResult during
 				// long-term tests, don't fail on this error until we
