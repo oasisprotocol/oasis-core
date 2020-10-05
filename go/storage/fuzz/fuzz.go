@@ -26,7 +26,10 @@ var (
 )
 
 func init() {
-	signerFactory := file.NewFactory(identityDir, signature.SignerNode, signature.SignerP2P, signature.SignerConsensus)
+	signerFactory, err := file.NewFactory(identityDir, signature.SignerNode, signature.SignerP2P, signature.SignerConsensus)
+	if err != nil {
+		panic(err)
+	}
 	identity, err := identity.Load(identityDir, signerFactory)
 	if err != nil {
 		panic(err)

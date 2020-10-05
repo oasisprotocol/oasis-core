@@ -14,6 +14,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/fuzz"
 	"github.com/oasisprotocol/oasis-core/go/consensus/api/transaction"
 	"github.com/oasisprotocol/oasis-core/go/consensus/tendermint/abci"
+	"github.com/oasisprotocol/oasis-core/go/consensus/tendermint/api"
 	epochtimemock "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/apps/epochtime_mock"
 	registryApp "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/apps/registry"
 	stakingApp "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/apps/staking"
@@ -24,7 +25,7 @@ var (
 	txSigner signature.Signer = memory.NewTestSigner("consensus-fuzz")
 
 	// FuzzableApps is a list of ABCI apps the fuzzer can fuzz.
-	FuzzableApps []abci.Application = []abci.Application{
+	FuzzableApps []api.Application = []api.Application{
 		epochtimemock.New(),
 		registryApp.New(),
 		stakingApp.New(),
@@ -48,11 +49,11 @@ func Fuzz(data []byte) int {
 	var pruneCfg abci.PruneConfig
 
 	appConfig := &abci.ApplicationConfig{
-		DataDir:            "/tmp/oasis-node-fuzz-consensus",
-		Pruning:            pruneCfg,
-		HaltEpochHeight:    1000000,
-		MinGasPrice:        1,
-		CheckpointInterval: 1 * time.Minute,
+		DataDir:                   "/tmp/oasis-node-fuzz-consensus",
+		Pruning:                   pruneCfg,
+		HaltEpochHeight:           1000000,
+		MinGasPrice:               1,
+		CheckpointerCheckInterval: 1 * time.Minute,
 	}
 
 	// The muxer will start with the previous state, if it exists (the state database isn't cleared).
