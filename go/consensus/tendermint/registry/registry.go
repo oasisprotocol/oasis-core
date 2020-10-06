@@ -410,13 +410,24 @@ func New(ctx context.Context, backend tmapi.Backend) (ServiceClient, error) {
 	}
 
 	sc := &serviceClient{
-		logger:           logging.GetLogger("registry/tendermint"),
-		backend:          backend,
-		querier:          a.QueryFactory().(*app.QueryFactory),
-		entityNotifier:   pubsub.NewBroker(false),
-		nodeNotifier:     pubsub.NewBroker(false),
-		nodeListNotifier: pubsub.NewBroker(true),
+		logger:         logging.GetLogger("registry/tendermint"),
+		backend:        backend,
+		querier:        a.QueryFactory().(*app.QueryFactory),
+		entityNotifier: pubsub.NewBroker(false),
+		nodeNotifier:   pubsub.NewBroker(false),
 	}
+	sc.nodeListNotifier = pubsub.NewBrokerEx(func(ch channels.Channel) {
+		wr := ch.In()
+		nodeList, err := sc.getNodeList(ctx, consensus.HeightLatest)
+		if err != nil {
+			sc.logger.Error("node list notifier: unable to get a list of nodes",
+				"err", err,
+			)
+			return
+		}
+
+		wr <- nodeList
+	})
 	sc.runtimeNotifier = pubsub.NewBrokerEx(func(ch channels.Channel) {
 		wr := ch.In()
 		runtimes, err := sc.GetRuntimes(ctx, &api.GetRuntimesQuery{Height: consensus.HeightLatest, IncludeSuspended: true})
