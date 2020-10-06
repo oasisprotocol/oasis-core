@@ -62,14 +62,17 @@ func (mgr *PeerManager) SetNodes(nodes []*node.Node) {
 		newNodes[peerID] = node
 	}
 
+	// Remove existing peers that are not in the new node list.
 	for peerID := range mgr.peers {
 		node := newNodes[peerID]
 		if node == nil {
-			// Remove existing peers that are not in the new node list.
 			mgr.removePeerLocked(peerID)
 			continue
 		}
+	}
 
+	// Update peers from the new node list.
+	for peerID, node := range newNodes {
 		mgr.updateNodeLocked(node, peerID)
 	}
 
