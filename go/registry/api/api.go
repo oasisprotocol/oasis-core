@@ -208,7 +208,7 @@ type Backend interface {
 
 	// WatchNodeList returns a channel that produces a stream of NodeList.
 	// Upon subscription, the node list for the current epoch will be sent
-	// immediately if available.
+	// immediately.
 	//
 	// Each node list will be sorted by node ID in lexicographically ascending
 	// order.
