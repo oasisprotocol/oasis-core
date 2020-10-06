@@ -705,7 +705,10 @@ func (q *queries) doQueries(ctx context.Context, rng *rand.Rand) error {
 
 	// Determine the earliest height that we can query.
 	earliestHeight := int64(1)
-	if numKept := viper.GetInt64(CfgConsensusNumKeptVersions); numKept < block.Height {
+	// When pruning is enabled add some buffer blocks to the earliest height,
+	// to ensure the queried block won't get pruned.
+	numKept := viper.GetInt64(CfgConsensusNumKeptVersions) - 10
+	if numKept < block.Height {
 		earliestHeight = block.Height - numKept
 	}
 
