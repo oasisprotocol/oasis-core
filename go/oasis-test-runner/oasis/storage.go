@@ -113,6 +113,7 @@ func (worker *Storage) startNode() error {
 		tendermintCoreAddress(worker.consensusPort).
 		tendermintSubmissionGasPrice(worker.consensus.SubmissionGasPrice).
 		tendermintPrune(worker.consensus.PruneNumKept).
+		tendermintRecoverCorruptedWAL(worker.consensus.TendermintRecoverCorruptedWAL).
 		storageBackend(worker.backend).
 		workerClientPort(worker.clientPort).
 		workerP2pPort(worker.p2pPort).
@@ -122,6 +123,7 @@ func (worker *Storage) startNode() error {
 		workerStorageCheckpointCheckInterval(worker.checkpointCheckInterval).
 		appendNetwork(worker.net).
 		appendEntity(worker.entity)
+
 	var runtimeArray []*Runtime
 	if len(worker.runtimes) > 0 {
 		for _, idx := range worker.runtimes {

@@ -78,6 +78,7 @@ func (sentry *Sentry) startNode() error {
 		workerSentryControlPort(sentry.controlPort).
 		tendermintCoreAddress(sentry.consensusPort).
 		tendermintPrune(sentry.consensus.PruneNumKept).
+		tendermintRecoverCorruptedWAL(sentry.consensus.TendermintRecoverCorruptedWAL).
 		appendNetwork(sentry.net).
 		appendSeedNodes(sentry.net.seeds).
 		internalSocketAddress(sentry.net.validators[0].SocketPath())

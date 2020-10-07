@@ -270,6 +270,7 @@ func (km *Keymanager) startNode() error {
 		tendermintCoreAddress(km.consensusPort).
 		tendermintSubmissionGasPrice(km.consensus.SubmissionGasPrice).
 		tendermintPrune(km.consensus.PruneNumKept).
+		tendermintRecoverCorruptedWAL(km.consensus.TendermintRecoverCorruptedWAL).
 		workerClientPort(km.workerClientPort).
 		workerRuntimeProvisioner(workerCommon.RuntimeProvisionerSandboxed).
 		workerRuntimeSGXLoader(km.net.cfg.RuntimeSGXLoaderBinary).
