@@ -26,6 +26,7 @@ func (client *Client) startNode() error {
 		debugAllowTestKeys().
 		tendermintDebugDisableCheckTx(client.consensus.DisableCheckTx).
 		tendermintPrune(client.consensus.PruneNumKept).
+		tendermintRecoverCorruptedWAL(client.consensus.TendermintRecoverCorruptedWAL).
 		tendermintCoreAddress(client.consensusPort).
 		storageBackend(storageClient.BackendName).
 		appendNetwork(client.net).
@@ -33,6 +34,7 @@ func (client *Client) startNode() error {
 		workerP2pPort(client.p2pPort).
 		workerP2pEnabled().
 		runtimeTagIndexerBackend("bleve")
+
 	for _, v := range client.net.runtimes {
 		if v.kind != registry.KindCompute {
 			continue

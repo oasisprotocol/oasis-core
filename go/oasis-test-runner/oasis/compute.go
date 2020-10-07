@@ -98,6 +98,7 @@ func (worker *Compute) startNode() error {
 		tendermintCoreAddress(worker.consensusPort).
 		tendermintSubmissionGasPrice(worker.consensus.SubmissionGasPrice).
 		tendermintPrune(worker.consensus.PruneNumKept).
+		tendermintRecoverCorruptedWAL(worker.consensus.TendermintRecoverCorruptedWAL).
 		storageBackend(storageClient.BackendName).
 		workerClientPort(worker.clientPort).
 		workerP2pPort(worker.p2pPort).
