@@ -243,8 +243,8 @@ func (q *queries) doConsensusQueries(ctx context.Context, rng *rand.Rand, height
 			"status", cmnGrpc.GetErrorStatus(err),
 		)
 		if st := cmnGrpc.GetErrorStatus(err); st != nil {
-			s, _ := status.FromError(io.ErrUnexpectedEOF)
-			if st.Err().Error() == s.Err().Error() {
+			s := status.Error(codes.Internal, io.ErrUnexpectedEOF.Error())
+			if st.Err().Error() == s.Error() {
 				// XXX: Connection seems to get occasionally reset with
 				// FLOW_CONTROL_ERROR in GetTransactionsWithResult during
 				// long-term tests, don't fail on this error until we
