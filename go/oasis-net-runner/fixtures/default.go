@@ -23,6 +23,7 @@ const (
 	cfgKeymanagerBinary        = "fixture.default.keymanager.binary"
 	cfgNodeBinary              = "fixture.default.node.binary"
 	cfgNumEntities             = "fixture.default.num_entities"
+	cfgNumValidators           = "fixture.default.num_validators"
 	cfgRuntimeBinary           = "fixture.default.runtime.binary"
 	cfgRuntimeGenesisState     = "fixture.default.runtime.genesis_state"
 	cfgRuntimeLoader           = "fixture.default.runtime.loader"
@@ -82,6 +83,12 @@ func newDefaultFixture() (*oasis.NetworkFixture, error) {
 
 	for i := 0; i < viper.GetInt(cfgNumEntities); i++ {
 		fixture.Entities = append(fixture.Entities, oasis.EntityCfg{})
+	}
+
+	for i := 0; i < viper.GetInt(cfgNumValidators); i++ {
+		fixture.Validators = append(fixture.Validators, oasis.ValidatorFixture{
+			Entity: 1, Consensus: oasis.ConsensusFixture{DisableSupplementarySanityChecks: viper.GetBool(cfgDisableSupSanityChecks)},
+		})
 	}
 
 	if viper.GetBool(cfgSetupRuntimes) {
@@ -156,6 +163,7 @@ func init() {
 	DefaultFixtureFlags.Bool(cfgSetupRuntimes, true, "initialize the network with runtimes and runtime nodes")
 	DefaultFixtureFlags.Bool(cfgDisableSupSanityChecks, false, "disable supplementary sanity checks")
 	DefaultFixtureFlags.Int(cfgNumEntities, 1, "number of (non debug) entities in genesis")
+	DefaultFixtureFlags.Int(cfgNumValidators, 1, "number of validator nodes")
 	DefaultFixtureFlags.String(cfgKeymanagerBinary, "simple-keymanager", "path to the keymanager runtime")
 	DefaultFixtureFlags.String(cfgNodeBinary, "oasis-node", "path to the oasis-node binary")
 	DefaultFixtureFlags.String(cfgRuntimeBinary, "simple-keyvalue", "path to the runtime binary")

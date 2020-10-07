@@ -48,8 +48,9 @@ printf "${GRN}### Starting the test network...${OFF}\n"
 ${OASIS_NET_RUNNER} \
 	--fixture.default.setup_runtimes=false \
 	--fixture.default.num_entities=1 \
+	--fixture.default.num_validators=4 \
 	--fixture.default.disable_supplementary_sanity_checks=true \
-	--fixture.default.timeout_commit=1ms \
+	--fixture.default.timeout_commit=100ms \
 	--basedir.no_temp_dir \
 	--basedir "${TEST_BASE_DIR}" &
 

@@ -86,6 +86,7 @@ type localAccount struct {
 	addr        staking.Address
 	cachedNonce uint64
 	cachedGas   uint64
+	errorCount  map[error]uint64
 }
 
 func transfer(ctx context.Context, cc consensus.ClientBackend, from *localAccount, toAddr staking.Address, amount uint64, noCache, noWait bool) error {
@@ -99,6 +100,7 @@ func transfer(ctx context.Context, cc consensus.ClientBackend, from *localAccoun
 			Height:         consensus.HeightLatest,
 		})
 		if err != nil {
+			from.errorCount[err]++
 			return fmt.Errorf("unable to get sender's nonce: %w", err)
 		}
 		atomic.StoreUint64(&from.cachedNonce, nonce)
@@ -109,6 +111,7 @@ func transfer(ctx context.Context, cc consensus.ClientBackend, from *localAccoun
 		To: toAddr,
 	}
 	if err = transfer.Amount.FromUint64(amount); err != nil {
+		from.errorCount[err]++
 		return fmt.Errorf("unable to convert given amount from uint64: %w", err)
 	}
 
@@ -123,6 +126,7 @@ func transfer(ctx context.Context, cc consensus.ClientBackend, from *localAccoun
 			Transaction: tx,
 		})
 		if grr != nil {
+			from.errorCount[grr]++
 			return fmt.Errorf("unable to estimate gas: %w", grr)
 		}
 		gas = uint64(estGas)
@@ -131,11 +135,13 @@ func transfer(ctx context.Context, cc consensus.ClientBackend, from *localAccoun
 
 	tx.Fee.Gas = transaction.Gas(gas)
 	if err = tx.Fee.Amount.FromUint64(gas * viper.GetUint64(CfgGasPrice)); err != nil {
+		from.errorCount[err]++
 		return fmt.Errorf("unable to convert fee amount from uint64: %w", err)
 	}
 
 	signedTx, err := transaction.Sign(from.signer, tx)
 	if err != nil {
+		from.errorCount[err]++
 		return fmt.Errorf("unable to sign transfer transaction: %w", err)
 	}
 
@@ -144,7 +150,11 @@ func transfer(ctx context.Context, cc consensus.ClientBackend, from *localAccoun
 
 	if noWait {
 		// Submit transaction, but don't wait for it to be included in a block.
-		return cc.SubmitTxNoWait(ctx, signedTx)
+		grr := cc.SubmitTxNoWait(ctx, signedTx)
+		if grr != nil {
+			from.errorCount[grr]++
+		}
+		return grr
 	}
 
 	// Otherwise, submit and wait for the txn to be included in a block.
@@ -155,6 +165,7 @@ func transfer(ctx context.Context, cc consensus.ClientBackend, from *localAccoun
 	submissionCtx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 	if err = cc.SubmitTx(submissionCtx, signedTx); err != nil {
+		from.errorCount[err]++
 		return err
 	}
 	return nil
@@ -286,6 +297,7 @@ func doRun(cmd *cobra.Command, args []string) error { // nolint: gocyclo
 		account[a].addr = staking.NewAddress(signer.Public())
 		account[a].cachedNonce = notYetCached
 		account[a].cachedGas = notYetCached
+		account[a].errorCount = make(map[error]uint64)
 	}
 
 	var fundingSigner signature.Signer
@@ -427,7 +439,9 @@ func doRun(cmd *cobra.Command, args []string) error { // nolint: gocyclo
 				}
 				if noWait {
 					// Send transactions until terminated.
+					// Ignore cache because it results in too many errors.
 					s = 0
+					noCache = true
 				}
 
 				fromIdx := idx
@@ -439,16 +453,16 @@ func doRun(cmd *cobra.Command, args []string) error { // nolint: gocyclo
 					atomic.AddUint64(&numSubmitErrors, 1)
 					// Disable cache for the next sample, just in case
 					// we messed up the nonce or if the gas cost changed.
-					noCache = true
 					if !noWait {
+						noCache = true
 						doneCh <- true
 					}
 					continue
 				}
 				atomic.AddUint64(&totalSubmitTimeNs, uint64(time.Since(startT).Nanoseconds()))
 				atomic.AddUint64(&numSubmitSamples, 1)
-				noCache = false
 				if !noWait {
+					noCache = false
 					doneCh <- true
 				}
 			}
@@ -565,6 +579,29 @@ func doRun(cmd *cobra.Command, args []string) error { // nolint: gocyclo
 		}
 	}
 
+	// Collect number of transfer errors from all accounts.
+	errCounts := make(map[string]uint64)
+	for a := range account {
+		for e, c := range account[a].errorCount {
+			er := strings.ReplaceAll(e.Error(), " ", "_")
+			er = strings.ReplaceAll(er, "\"", "'")
+			errCounts[er] += c
+		}
+	}
+	// Output the results sorted by key.
+	keys := make([]string, 0, len(errCounts))
+	for k := range errCounts {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	errCountsString := ""
+	for _, k := range keys {
+		if errCountsString != "" {
+			errCountsString += " "
+		}
+		errCountsString += k + "#" + fmt.Sprintf("%v", errCounts[k])
+	}
+
 	logger.Info("benchmark finished",
 		// Number of accounts involved in benchmark (level of parallelism).
 		"num_accounts", numAccounts,
@@ -600,6 +637,9 @@ func doRun(cmd *cobra.Command, args []string) error { // nolint: gocyclo
 		"block_delta_t_s", strings.Trim(fmt.Sprint(blockDeltaT), "[]"),
 		// Maximum average tps over a sliding window.
 		"max_avg_tps", bestAvgTps,
+		// Map of errors that occurred during benchmarking (if any).
+		// These are sorted by key.
+		"error_counts", errCountsString,
 	)
 
 	// Refund money into original funding account.
