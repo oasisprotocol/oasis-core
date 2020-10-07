@@ -436,22 +436,23 @@ func (g *Group) AuthenticatePeer(peerID signature.PublicKey, msg *p2p.Message) e
 		return fmt.Errorf("group: no active epoch")
 	}
 
-	// Assume the peer is not authorized.
-	var authorized bool
-
-	// If we are in the executor committee, we accept messages from all nodes.
-	if g.activeEpoch.executorCommittee.Role != scheduler.RoleInvalid {
-		authorized = true
+	if msg.GroupVersion < g.activeEpoch.groupVersion {
+		return p2pError.Permanent(fmt.Errorf("group version in the past"))
 	}
 
+	// If we are in the executor committee, we accept messages from all nodes.
+	// Otherwise reject and relay the message.
+	authorized := g.activeEpoch.executorCommittee.Role != scheduler.RoleInvalid
 	if !authorized {
 		err := fmt.Errorf("group: peer is not authorized")
 
-		// If the group version is in the past, make the error permanent to avoid retrying on stale
-		// messages.
-		if msg.GroupVersion < g.activeEpoch.groupVersion {
-			err = p2pError.Permanent(err)
+		// In case the message is for current epoch and not authorized,
+		// make the error permanent to avoid retrying. The message should
+		// still be relayed.
+		if msg.GroupVersion == g.activeEpoch.groupVersion {
+			err = p2pError.Permanent(p2pError.Relayable(err))
 		}
+
 		return err
 	}
 

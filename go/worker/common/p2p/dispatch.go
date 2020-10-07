@@ -114,7 +114,7 @@ func (h *topicHandler) topicMessageValidator(ctx context.Context, unused core.Pe
 	}
 
 	// If the message will never become valid, do not relay.
-	if err = h.dispatchMessage(peerID, m, true); p2pError.IsPermanent(err) {
+	if err = h.dispatchMessage(peerID, m, true); !p2pError.ShouldRelay(err) {
 		return false
 	}
 
@@ -205,6 +205,7 @@ func (h *topicHandler) retryWorker(m *queuedMsg) {
 				"peer_id", m.peerID,
 			)
 		default:
+			derr = p2pError.EnsurePermanent(derr)
 			if !p2pError.IsPermanent(derr) {
 				h.logger.Warn("failed to-redispatch message, will retry",
 					"err", derr,
