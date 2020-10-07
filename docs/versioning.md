@@ -1,4 +1,4 @@
-# Versioning scheme
+# Versioning
 
 ## Oasis Core
 
@@ -67,21 +67,13 @@ the `MINOR` version must be bumped.
 When only backwards compatible bug fixes are made to a protocol, the `PATCH`
 version should be bumped.
 
-### Pre-Mainnet protocol versioning
+### Version 1.0.0
 
-Until Oasis Network has reached the Mainnet phase, the `MAJOR` version of all
-protocols version is set to 0. This indicates that this is not yet a production
-version of the protocols and backwards incompatible changes may happen
-frequently.
-
-For this reason, Oasis Core currently considers a change in protocol’s minor
-version, a breaking change.
-
-### Mainnet and version 1.0.0
-
-When we will prepare an Oasis Core release for the Mainnet, we will bump the
-protocol versions to version 1.0.0 which will [signify that they are ready for
-production use](https://semver.org/#how-do-i-know-when-to-release-100).
+With the release of [Oasis Core 20.10], we bumped the protocol versions to
+version 1.0.0 which [signified that they are ready for production use](
+https://semver.org/#how-do-i-know-when-to-release-100).
 
 [CalVer]: http://calver.org
 [SemVer]: https://semver.org/
+[Oasis Core 20.10]:
+  https://github.com/oasisprotocol/oasis-core/blob/v20.10/CHANGELOG.md

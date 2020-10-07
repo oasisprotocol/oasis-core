@@ -30,17 +30,6 @@ impl Version {
             patch: patch,
         }
     }
-
-    /// Extract major and minor segments of the Version only.
-    ///
-    /// This is useful for comparing protocol version since the patch segment can be ignored.
-    pub fn major_minor(&self) -> Version {
-        Version {
-            major: self.major,
-            minor: self.minor,
-            patch: 0,
-        }
-    }
 }
 
 // Returns the version as a platform-dependent u64.

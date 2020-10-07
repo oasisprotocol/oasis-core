@@ -111,7 +111,7 @@ func genesisToTendermint(d *genesis.Document) (*tmtypes.GenesisDoc, error) {
 				PubKeyTypes: []string{tmtypes.ABCIPubKeyTypeEd25519},
 			},
 			Version: tmproto.VersionParams{
-				AppVersion: version.ConsensusProtocol.ToU64(),
+				AppVersion: version.TendermintAppVersion,
 			},
 		},
 		AppState: b,

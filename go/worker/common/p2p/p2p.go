@@ -161,9 +161,9 @@ func (p *P2P) handleConnection(conn core.Conn) {
 }
 
 func (p *P2P) topicIDForRuntime(runtimeID common.Namespace) string {
-	return fmt.Sprintf("%s/%s/%s",
+	return fmt.Sprintf("%s/%d/%s",
 		p.chainContext,
-		version.RuntimeCommitteeProtocol.MajorMinor().String(),
+		version.RuntimeCommitteeProtocol.Major,
 		runtimeID.String(),
 	)
 }

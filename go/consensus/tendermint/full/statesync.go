@@ -59,7 +59,7 @@ func (sp *stateProvider) State(ctx context.Context, height uint64) (tmstate.Stat
 		InitialHeight: sp.genesisDocument.InitialHeight,
 	}
 	// XXX: This will fail in case an upgrade happened in-between.
-	state.Version.Consensus.App = version.ConsensusProtocol.ToU64()
+	state.Version.Consensus.App = version.TendermintAppVersion
 
 	// The snapshot height maps onto the state heights as follows:
 	//

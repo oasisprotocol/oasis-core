@@ -530,7 +530,7 @@ func (c *connection) InitHost(ctx context.Context, conn net.Conn) (*version.Vers
 	}
 
 	info := rsp.RuntimeInfoResponse
-	if ver := version.FromU64(info.ProtocolVersion); ver.MajorMinor() != version.RuntimeHostProtocol.MajorMinor() {
+	if ver := version.FromU64(info.ProtocolVersion); ver.Major != version.RuntimeHostProtocol.Major {
 		c.logger.Error("runtime has incompatible protocol version",
 			"version", ver,
 			"expected_version", version.RuntimeHostProtocol,

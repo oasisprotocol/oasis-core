@@ -6,16 +6,16 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestMajorMinor(t *testing.T) {
+func TestMaskNonMajor(t *testing.T) {
 	require := require.New(t)
 
 	v1 := Version{1, 1, 0}
 	v2 := Version{1, 1, 5}
-	v3 := Version{1, 1, 10}
-	require.Equal(v1.MajorMinor(), v2.MajorMinor(), "version.MajorMinor() should match")
-	require.Equal(v2.MajorMinor(), v3.MajorMinor(), "version.MajorMinor() should match")
-	v4 := Version{1, 2, 0}
-	require.NotEqual(v1.MajorMinor(), v4.MajorMinor(), "version.MajorMinor() should not match")
+	v3 := Version{1, 4, 10}
+	require.Equal(v1.MaskNonMajor(), v2.MaskNonMajor(), "version.MaskNonMajor() should match")
+	require.Equal(v2.MaskNonMajor(), v3.MaskNonMajor(), "version.MaskNonMajor() should match")
+	v4 := Version{2, 1, 0}
+	require.NotEqual(v1.MaskNonMajor(), v4.MaskNonMajor(), "version.MaskNonMajor() should not match")
 }
 
 func TestParseSemVer(t *testing.T) {
