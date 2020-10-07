@@ -12,6 +12,28 @@ The format is inspired by [Keep a Changelog].
 
 <!-- TOWNCRIER -->
 
+## 20.11.1 (2020-10-07)
+
+| Protocol          | Version   |
+|:------------------|:---------:|
+| Consensus         | 1.0.0     |
+| Runtime Host      | 1.0.0     |
+| Runtime Committee | 1.0.0     |
+
+### Features
+
+- go/consensus: add last retained block information
+  ([#3348](https://github.com/oasisprotocol/oasis-core/issues/3348))
+
+  New in the consensus API, the status struct now has information about
+  the earliest block available on this node. This differs from the
+  genesis block when pruning is enabled.
+
+### Internal Changes
+
+- go: Update to build on macOS
+  ([#3333](https://github.com/oasisprotocol/oasis-core/issues/3333))
+
 ## 20.11 (2020-09-23)
 
 | Protocol          | Version   |
