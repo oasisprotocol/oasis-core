@@ -91,6 +91,13 @@ func TestEnsurePermanent(t *testing.T) {
 			true,
 		},
 		{
+			"Relayable(Permanent(io.EOF))",
+			func() error {
+				return Relayable(Permanent(io.EOF))
+			},
+			false,
+		},
+		{
 			// This case is treated as permanent by backoff, but we treat it as
 			// a non-permanent error.
 			"Permanent(context.Canceled)",
@@ -106,23 +113,6 @@ func TestEnsurePermanent(t *testing.T) {
 				return EnsurePermanent(Permanent(context.Canceled))
 			},
 			true,
-		},
-		{
-			// This case is retried by backoff, since their permanent check
-			// doesn't unwrap the error.
-			"Relayable(Permanent(io.EOF))",
-			func() error {
-				return Relayable(Permanent(io.EOF))
-			},
-			true,
-		},
-		{
-			// This case tests EnsurePermanent on the previous test case.
-			"EnsurePermanent(Relayable(Permanent(io.EOF)))",
-			func() error {
-				return EnsurePermanent(Relayable(Permanent(io.EOF)))
-			},
-			false,
 		},
 	} {
 		ensureRetries(testCase.name, testCase.shouldRetry, testCase.testF)

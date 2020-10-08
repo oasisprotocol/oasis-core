@@ -4,7 +4,6 @@ package error
 import (
 	"context"
 	"errors"
-	"fmt"
 
 	"github.com/cenkalti/backoff/v4"
 )
@@ -64,32 +63,12 @@ func IsPermanent(err error) bool {
 // EnsurePermanent ensures an error will be correctly treated as (non-)permanent
 // by `cenkalti/backoff/v4`.
 //
-// Note: `IsPermanent` notion of a permanent error differs from the `cenkalti/backoff/v4`:
-// - it special cases `context.Canceled`
-// - it correctly handles wrapped permanent errors
+// Note: `IsPermanent` special cases `conext.Canceled` and doesn't ever handle
+// it as a permanent error.
 func EnsurePermanent(err error) error {
-	// XXX: once https://github.com/cenkalti/backoff/issues/107 is addressed
-	// we only need to handle the `context.Canceled` case.
-	upstreamCheck := func(err error) bool {
-		// https://github.com/cenkalti/backoff/blob/31cc31bb63269a3c813d1f26e0ab058452b7d803/retry.go#L56-L58
-		if _, ok := err.(*backoff.PermanentError); ok {
-			return true
-		}
-		return false
+	if errors.Is(err, context.Canceled) {
+		return context.Canceled
 	}
 
-	if IsPermanent(err) == upstreamCheck(err) {
-		return err
-	}
-
-	switch {
-	case IsPermanent(err):
-		// In case we consider error as permanent, re-wrap it to ensure
-		// `cenkalti/backoff/v4` will also treat it as such.
-		e := backoff.Permanent(err)
-		return e
-	default:
-		// In case we don't consider the error permanent, but upstream does, wrap it.
-		return fmt.Errorf("non-permanent: %w", err)
-	}
+	return err
 }
