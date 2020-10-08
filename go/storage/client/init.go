@@ -36,7 +36,7 @@ func NewForCommittee(
 		committeeClient: committeeClient,
 		runtime:         runtime,
 	}
-	return b, nil
+	return api.NewMetricsWrapper(b), nil
 }
 
 // New creates a new storage client that automatically follows a given runtime's storage committee.

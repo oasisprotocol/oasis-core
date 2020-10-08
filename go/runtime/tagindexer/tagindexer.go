@@ -31,7 +31,6 @@ type Service struct {
 	runtimeID common.Namespace
 	backend   Backend
 	roothash  roothash.Backend
-	storage   storage.Backend
 
 	ctx       context.Context
 	cancelCtx context.CancelFunc
@@ -39,7 +38,7 @@ type Service struct {
 	stopCh chan struct{}
 }
 
-func (s *Service) worker() {
+func (s *Service) worker(storageBackend storage.Backend) {
 	defer s.BaseBackgroundService.Stop()
 
 	s.Logger.Info("started indexer for runtime")
@@ -88,7 +87,7 @@ func (s *Service) worker() {
 						Hash:      blk.Header.IORoot,
 					}
 
-					tree := transaction.NewTree(s.storage, ioRoot)
+					tree := transaction.NewTree(storageBackend, ioRoot)
 					defer tree.Close()
 
 					txs, err = tree.GetTransactions(bctx)
@@ -124,7 +123,7 @@ func (s *Service) worker() {
 	}
 }
 
-func (s *Service) Start() error {
+func (s *Service) Start(storage storage.Backend) error {
 	if _, ok := s.backend.(*nopBackend); ok {
 		// In case this is a nopBackend (which doesn't index anything) avoid the overhead of having
 		// a tag indexer service follow blocks and index them.
@@ -132,7 +131,7 @@ func (s *Service) Start() error {
 		return nil
 	}
 
-	go s.worker()
+	go s.worker(storage)
 	return nil
 }
 
@@ -152,7 +151,6 @@ func New(
 	backendFactory BackendFactory,
 	history history.History,
 	roothash roothash.Backend,
-	storage storage.Backend,
 ) (*Service, error) {
 	runtimeID := history.RuntimeID()
 	backend, err := backendFactory(dataDir, runtimeID)
@@ -168,7 +166,6 @@ func New(
 		runtimeID:             runtimeID,
 		backend:               backend,
 		roothash:              roothash,
-		storage:               storage,
 		ctx:                   ctx,
 		cancelCtx:             cancelCtx,
 		stopCh:                make(chan struct{}),

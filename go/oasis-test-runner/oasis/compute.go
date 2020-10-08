@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"sync"
 
-	storageClient "github.com/oasisprotocol/oasis-core/go/storage/client"
 	commonWorker "github.com/oasisprotocol/oasis-core/go/worker/common"
 )
 
@@ -99,7 +98,6 @@ func (worker *Compute) startNode() error {
 		tendermintSubmissionGasPrice(worker.consensus.SubmissionGasPrice).
 		tendermintPrune(worker.consensus.PruneNumKept).
 		tendermintRecoverCorruptedWAL(worker.consensus.TendermintRecoverCorruptedWAL).
-		storageBackend(storageClient.BackendName).
 		workerClientPort(worker.clientPort).
 		workerP2pPort(worker.p2pPort).
 		workerComputeEnabled().
