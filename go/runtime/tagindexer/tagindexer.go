@@ -79,6 +79,9 @@ func (s *Service) worker() {
 					bctx, cancel := context.WithTimeout(s.ctx, storageRequestTimeout)
 					defer cancel()
 
+					// Prioritize nodes that signed the storage receipt.
+					bctx = storage.WithNodePriorityHintFromSignatures(bctx, blk.Header.StorageSignatures)
+
 					ioRoot := storage.Root{
 						Namespace: blk.Header.Namespace,
 						Version:   blk.Header.Round,

@@ -134,9 +134,13 @@ type Client interface {
 	// GetConnections returns the set of connections to active committee nodes.
 	GetConnections() []*grpc.ClientConn
 
-	// GetConnectionsWith returns the set of connections to active committee nodes including node
-	// metadata for each connection.
+	// GetConnectionsWithMeta returns the set of connections to active committee nodes including
+	// node metadata for each connection.
 	GetConnectionsWithMeta() []*ClientConnWithMeta
+
+	// GetConnectionsMap returns the set of connections to active committee nodes including node
+	// metadata for each connection.
+	GetConnectionsMap() map[signature.PublicKey]*ClientConnWithMeta
 
 	// GetConnection returns a connection based on the configured node selection policy.
 	//
@@ -240,6 +244,20 @@ func (cc *committeeClient) GetConnectionsWithMeta() []*ClientConnWithMeta {
 			ClientConn: c.conn,
 			Node:       c.node,
 		})
+	}
+	return conns
+}
+
+func (cc *committeeClient) GetConnectionsMap() map[signature.PublicKey]*ClientConnWithMeta {
+	cc.RLock()
+	defer cc.RUnlock()
+
+	conns := make(map[signature.PublicKey]*ClientConnWithMeta, len(cc.conns))
+	for nodeID, c := range cc.conns {
+		conns[nodeID] = &ClientConnWithMeta{
+			ClientConn: c.conn,
+			Node:       c.node,
+		}
 	}
 	return conns
 }

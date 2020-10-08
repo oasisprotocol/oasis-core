@@ -291,24 +291,40 @@ func (b *storageClientBackend) readWithClient(
 ) (interface{}, error) {
 	var resp interface{}
 	op := func() error {
-		conns := b.committeeClient.GetConnectionsWithMeta()
-		n := len(conns)
-		if n == 0 {
+		conns := b.committeeClient.GetConnectionsMap()
+		if len(conns) == 0 {
 			b.logger.Error("readWithClient: no connected nodes for runtime",
 				"runtime_id", ns,
 			)
 			return ErrStorageNotAvailable
 		}
 
+		var nodes []*committee.ClientConnWithMeta
+		// If a storage node priority hint is set, prioritize overlapping nodes.
+		for _, nodeID := range api.NodePriorityHintFromContext(ctx) {
+			c, ok := conns[nodeID]
+			if !ok {
+				continue
+			}
+			nodes = append(nodes, c)
+			delete(conns, nodeID)
+		}
+		prioritySlots := len(nodes)
+		// Then add the rest of the nodes in random order.
+		for _, c := range conns {
+			nodes = append(nodes, c)
+		}
 		// TODO: Use a more clever approach to choose the order in which to read
 		// from the connected nodes:
 		// https://github.com/oasisprotocol/oasis-core/issues/1815.
 		rng := rand.New(mathrand.New(cryptorand.Reader))
+		ordinaryNodes := nodes[prioritySlots:]
+		rng.Shuffle(len(ordinaryNodes), func(i, j int) {
+			ordinaryNodes[i], ordinaryNodes[j] = ordinaryNodes[j], ordinaryNodes[i]
+		})
 
 		var err error
-		for _, randIndex := range rng.Perm(n) {
-			conn := conns[randIndex]
-
+		for _, conn := range nodes {
 			resp, err = fn(ctx, api.NewStorageClient(conn.ClientConn))
 			if ctx.Err() != nil {
 				return backoff.Permanent(ctx.Err())
