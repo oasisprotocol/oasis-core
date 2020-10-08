@@ -1084,9 +1084,10 @@ func (n *Node) proposeBatchLocked(processedBatch *processedBatch) {
 	epoch := n.commonNode.Group.GetEpochSnapshot()
 
 	// Generate proposed compute results.
+	rakSig := batch.RakSig
 	proposedResults := &commitment.ComputeBody{
 		Header:           batch.Header,
-		RakSig:           batch.RakSig,
+		RakSig:           &rakSig,
 		TxnSchedSig:      state.batch.txnSchedSignature,
 		InputRoot:        state.batch.ioRoot.Hash,
 		InputStorageSigs: state.batch.storageSignatures,
@@ -1094,7 +1095,7 @@ func (n *Node) proposeBatchLocked(processedBatch *processedBatch) {
 
 	// Commit I/O and state write logs to storage.
 	start := time.Now()
-	err := func() error {
+	storageErr := func() error {
 		span, ctx := tracing.StartSpanWithContext(n.ctx, "Apply(io, state)",
 			opentracing.ChildOf(state.batch.spanCtx),
 		)
@@ -1111,14 +1112,14 @@ func (n *Node) proposeBatchLocked(processedBatch *processedBatch) {
 			{
 				SrcRound: lastHeader.Round + 1,
 				SrcRoot:  state.batch.ioRoot.Hash,
-				DstRoot:  batch.Header.IORoot,
+				DstRoot:  *batch.Header.IORoot,
 				WriteLog: batch.IOWriteLog,
 			},
 			// State root.
 			{
 				SrcRound: lastHeader.Round,
 				SrcRoot:  lastHeader.StateRoot,
-				DstRoot:  batch.Header.StateRoot,
+				DstRoot:  *batch.Header.StateRoot,
 				WriteLog: batch.StateWriteLog,
 			},
 		}
@@ -1167,9 +1168,11 @@ func (n *Node) proposeBatchLocked(processedBatch *processedBatch) {
 	}()
 	storageCommitLatency.With(n.getMetricLabels()).Observe(time.Since(start).Seconds())
 
-	if err != nil {
-		n.abortBatchLocked(err)
-		return
+	if storageErr != nil {
+		n.logger.Error("storage failure, submitting failure indicating commitment",
+			"err", storageErr,
+		)
+		proposedResults.SetFailure(commitment.FailureStorageUnavailable)
 	}
 
 	// Sign the commitment and submit.
@@ -1197,11 +1200,17 @@ func (n *Node) proposeBatchLocked(processedBatch *processedBatch) {
 	}()
 
 	// TODO: Add crash point.
-	n.transitionLocked(StateWaitingForFinalize{
-		batchStartTime: state.batchStartTime,
-		raw:            processedBatch.raw,
-		proposedIORoot: proposedResults.Header.IORoot,
-	})
+
+	switch storageErr {
+	case nil:
+		n.transitionLocked(StateWaitingForFinalize{
+			batchStartTime: state.batchStartTime,
+			raw:            processedBatch.raw,
+			proposedIORoot: *proposedResults.Header.IORoot,
+		})
+	default:
+		n.abortBatchLocked(err)
+	}
 
 	crash.Here(crashPointBatchProposeAfter)
 }

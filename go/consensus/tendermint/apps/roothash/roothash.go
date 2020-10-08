@@ -454,8 +454,8 @@ func (app *rootHashApplication) tryFinalizeExecutorCommits(
 		hdr := commit.ToDDResult().(commitment.ComputeResultsHeader)
 
 		blk := block.NewEmptyBlock(rtState.CurrentBlock, uint64(ctx.Now().Unix()), block.Normal)
-		blk.Header.IORoot = hdr.IORoot
-		blk.Header.StateRoot = hdr.StateRoot
+		blk.Header.IORoot = *hdr.IORoot
+		blk.Header.StateRoot = *hdr.StateRoot
 		// Messages omitted on purpose.
 
 		// Timeout will be cleared by caller.

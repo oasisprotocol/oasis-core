@@ -4,6 +4,7 @@ package commitment
 import (
 	"bytes"
 	"errors"
+	"fmt"
 
 	"github.com/oasisprotocol/oasis-core/go/common"
 	"github.com/oasisprotocol/oasis-core/go/common/cbor"
@@ -32,11 +33,14 @@ var (
 //
 // Keep the roothash RAK validation in sync with changes to this structure.
 type ComputeResultsHeader struct {
-	Round        uint64           `json:"round"`
-	PreviousHash hash.Hash        `json:"previous_hash"`
-	IORoot       hash.Hash        `json:"io_root"`
-	StateRoot    hash.Hash        `json:"state_root"`
-	Messages     []*block.Message `json:"messages"`
+	Round        uint64    `json:"round"`
+	PreviousHash hash.Hash `json:"previous_hash"`
+
+	// Optional fields (may be absent for failure indication).
+
+	IORoot    *hash.Hash       `json:"io_root,omitempty"`
+	StateRoot *hash.Hash       `json:"state_root,omitempty"`
+	Messages  []*block.Message `json:"messages,omitempty"`
 }
 
 // IsParentOf returns true iff the header is the parent of a child header.
@@ -54,15 +58,42 @@ func (h *ComputeResultsHeader) EncodedHash() hash.Hash {
 	return hash.NewFrom(h)
 }
 
+// ExecutorCommitmentFailure is the executor commitment failure reason.
+type ExecutorCommitmentFailure uint8
+
+const (
+	// FailureNone indicates that no failure has occurred.
+	FailureNone ExecutorCommitmentFailure = 0
+	// FailureUnknown indicates a generic failure.
+	FailureUnknown ExecutorCommitmentFailure = 1
+	// FailureStorageUnavailable indicates that batch processing failed due to
+	// storage being unavailable.
+	FailureStorageUnavailable ExecutorCommitmentFailure = 2
+)
+
 // ComputeBody holds the data signed in a compute worker commitment.
 type ComputeBody struct {
-	Header            ComputeResultsHeader   `json:"header"`
-	StorageSignatures []signature.Signature  `json:"storage_signatures"`
-	RakSig            signature.RawSignature `json:"rak_sig"`
+	Header  ComputeResultsHeader      `json:"header"`
+	Failure ExecutorCommitmentFailure `json:"failure,omitempty"`
 
 	TxnSchedSig      signature.Signature   `json:"txn_sched_sig"`
 	InputRoot        hash.Hash             `json:"input_root"`
 	InputStorageSigs []signature.Signature `json:"input_storage_sigs"`
+
+	// Optional fields (may be absent for failure indication).
+
+	StorageSignatures []signature.Signature   `json:"storage_signatures,omitempty"`
+	RakSig            *signature.RawSignature `json:"rak_sig,omitempty"`
+}
+
+// SetFailure sets failure reason and clears any fields that should be clear
+// in a failure indicating commitment.
+func (m *ComputeBody) SetFailure(failure ExecutorCommitmentFailure) {
+	m.Header.IORoot = nil
+	m.Header.StateRoot = nil
+	m.StorageSignatures = nil
+	m.RakSig = nil
+	m.Failure = failure
 }
 
 // VerifyTxnSchedSignature rebuilds the batch dispatch message from the data
@@ -81,10 +112,54 @@ func (m *ComputeBody) VerifyTxnSchedSignature(header block.Header) bool {
 // RootsForStorageReceipt gets the merkle roots that must be part of
 // a storage receipt.
 func (m *ComputeBody) RootsForStorageReceipt() []hash.Hash {
-	return []hash.Hash{
-		m.Header.IORoot,
-		m.Header.StateRoot,
+	var ioRoot hash.Hash
+	var stateRoot hash.Hash
+	if m.Header.IORoot != nil {
+		ioRoot = *m.Header.IORoot
 	}
+	if m.Header.StateRoot != nil {
+		stateRoot = *m.Header.StateRoot
+	}
+	return []hash.Hash{
+		ioRoot,
+		stateRoot,
+	}
+}
+
+// ValidateBasic performs basic compute body commitment parameters checks.
+func (m *ComputeBody) ValidateBasic() error {
+	header := &m.Header
+	switch m.Failure {
+	case FailureNone:
+		// Ensure header fields are present.
+		if header.IORoot == nil {
+			return fmt.Errorf("missing IORoot")
+		}
+		if header.StateRoot == nil {
+			return fmt.Errorf("missing StateRoot")
+		}
+	case FailureStorageUnavailable, FailureUnknown:
+		// In case of failure indicating commitment make sure storage signatures are empty.
+		if len(m.StorageSignatures) > 0 {
+			return fmt.Errorf("failure indicating commitment includes storage receipts")
+		}
+
+		// Ensure header fields are empty.
+		if header.IORoot != nil {
+			return fmt.Errorf("failure indicating body includes IORoot")
+		}
+		if header.StateRoot != nil {
+			return fmt.Errorf("failure indicating commitment includes StateRoot")
+		}
+		// In case of failure indicating commitment make sure RAK signature is empty.
+		if m.RakSig != nil {
+			return fmt.Errorf("failure indicating body includes RAK signature")
+		}
+	default:
+		return fmt.Errorf("invalid failure: %d", m.Failure)
+	}
+
+	return nil
 }
 
 // VerifyStorageReceiptSignatures validates that the storage receipt signatures
@@ -170,6 +245,11 @@ func (c OpenExecutorCommitment) MostlyEqual(other OpenCommitment) bool {
 	h := c.Body.Header.EncodedHash()
 	otherHash := other.(OpenExecutorCommitment).Body.Header.EncodedHash()
 	return h.Equal(&otherHash)
+}
+
+// IsIndicatingFailure returns true if this commitment indicates a failure.
+func (c OpenExecutorCommitment) IsIndicatingFailure() bool {
+	return c.Body.Failure != FailureNone
 }
 
 // ToVote returns a hash that represents a vote for this commitment as

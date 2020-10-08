@@ -82,7 +82,7 @@ var (
 	// checked in Oasis Core.
 	// It is converted to TendermintAppVersion whose compatibility is checked
 	// via Tendermint's version checks.
-	ConsensusProtocol = Version{Major: 1, Minor: 0, Patch: 0}
+	ConsensusProtocol = Version{Major: 2, Minor: 0, Patch: 0}
 
 	// TendermintAppVersion is Tendermint ABCI application's version computed by
 	// masking non-major consensus protocol version segments to 0 to be

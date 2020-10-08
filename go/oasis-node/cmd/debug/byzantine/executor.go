@@ -260,8 +260,8 @@ func (cbc *computeBatchContext) createCommitment(id *identity.Identity, rak sign
 	header := commitment.ComputeResultsHeader{
 		Round:        cbc.bd.Header.Round + 1,
 		PreviousHash: cbc.bd.Header.EncodedHash(),
-		IORoot:       cbc.newIORoot,
-		StateRoot:    cbc.newStateRoot,
+		IORoot:       &cbc.newIORoot,
+		StateRoot:    &cbc.newStateRoot,
 		// TODO: allow script to set roothash messages?
 		Messages: []*block.Message{},
 	}
@@ -278,7 +278,7 @@ func (cbc *computeBatchContext) createCommitment(id *identity.Identity, rak sign
 			return fmt.Errorf("signature Sign RAK: %w", err)
 		}
 
-		computeBody.RakSig = rakSig.Signature
+		computeBody.RakSig = &rakSig.Signature
 	}
 	var err error
 	cbc.commit, err = commitment.SignExecutorCommitment(id.NodeSigner, computeBody)
@@ -291,7 +291,7 @@ func (cbc *computeBatchContext) createCommitment(id *identity.Identity, rak sign
 
 func (cbc *computeBatchContext) publishToChain(svc consensus.Backend, id *identity.Identity, runtimeID common.Namespace) error {
 	if err := roothashExecutorCommit(svc, id, runtimeID, []commitment.ExecutorCommitment{*cbc.commit}); err != nil {
-		return fmt.Errorf("roothash merge commentment: %w", err)
+		return fmt.Errorf("roothash merge commitment: %w", err)
 	}
 
 	return nil

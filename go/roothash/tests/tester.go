@@ -307,8 +307,8 @@ func (s *runtimeState) generateExecutorCommitments(t *testing.T, consensus conse
 			Header: commitment.ComputeResultsHeader{
 				Round:        parent.Header.Round,
 				PreviousHash: parent.Header.PreviousHash,
-				IORoot:       parent.Header.IORoot,
-				StateRoot:    parent.Header.StateRoot,
+				IORoot:       &parent.Header.IORoot,
+				StateRoot:    &parent.Header.StateRoot,
 			},
 			StorageSignatures: parent.Header.StorageSignatures,
 			InputRoot:         hash.Hash{},

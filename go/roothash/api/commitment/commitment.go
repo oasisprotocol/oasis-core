@@ -13,6 +13,9 @@ type OpenCommitment interface {
 	// type.
 	MostlyEqual(OpenCommitment) bool
 
+	// IsIndicatingFailure returns true if this commitment indicates a failure.
+	IsIndicatingFailure() bool
+
 	// ToVote returns a hash that represents a vote for this commitment as
 	// per discrepancy resolution criteria.
 	ToVote() hash.Hash
