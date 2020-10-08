@@ -10,7 +10,7 @@ you can also check out the [consensus backend API documentation].
 
 <!-- markdownlint-disable line-length -->
 [consensus backend]: index.md
-[`go/consensus/api/transaction`]: ../../go/consensus/api/transaction
+[`go/consensus/api/transaction`]: ../../go/consensus/api/transaction/transaction.go
 [consensus backend API documentation]: https://pkg.go.dev/github.com/oasisprotocol/oasis-core/go/consensus/api/transaction?tab=doc
 <!-- markdownlint-enable line-length -->
 

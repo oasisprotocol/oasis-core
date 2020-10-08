@@ -8,7 +8,7 @@ supported queries and transactions. For more information you can also check out
 the [consensus service API documentation].
 
 <!-- markdownlint-disable line-length -->
-[`go/roothash/api`]: ../../go/roothash/api
+[`go/roothash/api`]: ../../go/roothash/api/api.go
 [consensus service API documentation]: https://pkg.go.dev/github.com/oasisprotocol/oasis-core/go/roothash/api?tab=doc
 <!-- markdownlint-enable line-length -->
 

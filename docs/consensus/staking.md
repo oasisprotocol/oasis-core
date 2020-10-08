@@ -9,7 +9,7 @@ supported queries and transactions. For more information you can also check out
 the [consensus service API documentation].
 
 <!-- markdownlint-disable line-length -->
-[`go/staking/api`]: ../../go/staking/api
+[`go/staking/api`]: ../../go/staking/api/api.go
 [consensus service API documentation]: https://pkg.go.dev/github.com/oasisprotocol/oasis-core/go/staking/api?tab=doc
 <!-- markdownlint-enable line-length -->
 
