@@ -1,7 +1,6 @@
 package simple
 
 import (
-	"errors"
 	"fmt"
 	"sync"
 
@@ -9,12 +8,13 @@ import (
 
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
 	"github.com/oasisprotocol/oasis-core/go/runtime/transaction"
+	p2pError "github.com/oasisprotocol/oasis-core/go/worker/common/p2p/error"
 )
 
 var (
-	errQueueFull         = errors.New("queue is full")
-	errCallTooLarge      = errors.New("call too large")
-	errCallAlreadyExists = errors.New("call already exists in queue")
+	errQueueFull         = fmt.Errorf("queue is full")
+	errCallTooLarge      = p2pError.Permanent(fmt.Errorf("call too large"))
+	errCallAlreadyExists = fmt.Errorf("call already exists in queue")
 )
 
 type incomingQueue struct {
