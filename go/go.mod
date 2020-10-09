@@ -36,7 +36,7 @@ require (
 	github.com/hpcloud/tail v1.0.0
 	github.com/libp2p/go-libp2p v0.11.0
 	github.com/libp2p/go-libp2p-core v0.6.1
-	github.com/libp2p/go-libp2p-pubsub v0.3.5
+	github.com/libp2p/go-libp2p-pubsub v0.3.6
 	github.com/multiformats/go-multiaddr v0.3.1
 	github.com/oasisprotocol/deoxysii v0.0.0-20200527154044-851aec403956
 	github.com/oasisprotocol/ed25519 v0.0.0-20200819094954-65138ca6ec7c
