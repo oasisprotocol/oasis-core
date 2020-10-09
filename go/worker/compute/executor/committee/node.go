@@ -40,20 +40,20 @@ import (
 )
 
 var (
-	errSeenNewerBlock     = errors.New("executor: seen newer block")
-	errRuntimeAborted     = errors.New("executor: runtime aborted batch processing")
-	errIncompatibleHeader = p2pError.Permanent(errors.New("executor: incompatible header"))
-	errInvalidReceipt     = p2pError.Permanent(errors.New("executor: invalid storage receipt"))
-	errIncorrectRole      = errors.New("executor: incorrect role")
-	errIncorrectState     = errors.New("executor: incorrect state")
-	errMsgFromNonTxnSched = errors.New("executor: received txn scheduler dispatch msg from non-txn scheduler")
+	errSeenNewerBlock     = fmt.Errorf("executor: seen newer block")
+	errRuntimeAborted     = fmt.Errorf("executor: runtime aborted batch processing")
+	errIncompatibleHeader = p2pError.Permanent(fmt.Errorf("executor: incompatible header"))
+	errInvalidReceipt     = p2pError.Permanent(fmt.Errorf("executor: invalid storage receipt"))
+	errIncorrectRole      = fmt.Errorf("executor: incorrect role")
+	errIncorrectState     = fmt.Errorf("executor: incorrect state")
+	errMsgFromNonTxnSched = fmt.Errorf("executor: received txn scheduler dispatch msg from non-txn scheduler")
 
 	// Transaction scheduling errors.
 	errNoBlocks        = fmt.Errorf("executor: no blocks")
 	errNotReady        = fmt.Errorf("executor: runtime not ready")
-	errCheckTxFailed   = fmt.Errorf("executor: CheckTx failed")
+	errCheckTxFailed   = p2pError.Permanent(fmt.Errorf("executor: CheckTx failed"))
 	errNotTxnScheduler = fmt.Errorf("executor: not transaction scheduler in this round")
-	errDuplicateTx     = fmt.Errorf("executor: duplicate transaction")
+	errDuplicateTx     = p2pError.Permanent(p2pError.Relayable(fmt.Errorf("executor: duplicate transaction")))
 
 	// Duration to wait before submitting the propose timeout request.
 	proposeTimeoutDelay = 2 * time.Second
@@ -253,7 +253,7 @@ func (n *Node) HandlePeerMessage(ctx context.Context, message *p2p.Message, isOw
 		if n.scheduleCheckTxEnabled {
 			// Check transaction before queuing it.
 			if err := n.checkTx(ctx, call); err != nil {
-				return true, p2pError.Permanent(err)
+				return true, err
 			}
 			n.logger.Debug("worker CheckTx successful, queuing transaction")
 		}
@@ -263,7 +263,7 @@ func (n *Node) HandlePeerMessage(ctx context.Context, message *p2p.Message, isOw
 			n.logger.Error("unable to queue transaction",
 				"err", err,
 			)
-			return true, p2pError.Permanent(err)
+			return true, err
 		}
 		return true, nil
 
@@ -590,7 +590,7 @@ func (n *Node) checkTx(ctx context.Context, call []byte) error {
 		n.logger.Error("CheckTx: runtime call error",
 			"err", err,
 		)
-		return err
+		return p2pError.Permanent(err)
 	case resp.RuntimeCheckTxBatchResponse == nil:
 		n.logger.Error("CheckTx: runtime response is nil")
 		return errCheckTxFailed
