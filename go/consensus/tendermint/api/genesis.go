@@ -92,7 +92,7 @@ func genesisToTendermint(d *genesis.Document) (*tmtypes.GenesisDoc, error) {
 	}
 
 	var evCfg tmproto.EvidenceParams
-	evCfg.MaxNum = d.Consensus.Parameters.MaxEvidenceNum
+	evCfg.MaxBytes = int64(d.Consensus.Parameters.MaxEvidenceSize)
 	evCfg.MaxAgeNumBlocks = debondingInterval * epochInterval
 	evCfg.MaxAgeDuration = time.Duration(evCfg.MaxAgeNumBlocks) * (d.Consensus.Parameters.TimeoutCommit + 1*time.Second)
 

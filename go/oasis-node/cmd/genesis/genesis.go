@@ -90,7 +90,7 @@ const (
 	cfgConsensusMaxTxSizeBytes           = "consensus.tendermint.max_tx_size"
 	cfgConsensusMaxBlockSizeBytes        = "consensus.tendermint.max_block_size"
 	cfgConsensusMaxBlockGas              = "consensus.tendermint.max_block_gas"
-	cfgConsensusMaxEvidenceNum           = "consensus.tendermint.max_evidence_num"
+	cfgConsensusMaxEvidenceSizeBytes     = "consensus.tendermint.max_evidence_size"
 	CfgConsensusStateCheckpointInterval  = "consensus.state_checkpoint.interval"
 	CfgConsensusStateCheckpointNumKept   = "consensus.state_checkpoint.num_kept"
 	CfgConsensusStateCheckpointChunkSize = "consensus.state_checkpoint.chunk_size"
@@ -249,7 +249,7 @@ func doInitGenesis(cmd *cobra.Command, args []string) {
 			MaxTxSize:                uint64(viper.GetSizeInBytes(cfgConsensusMaxTxSizeBytes)),
 			MaxBlockSize:             uint64(viper.GetSizeInBytes(cfgConsensusMaxBlockSizeBytes)),
 			MaxBlockGas:              transaction.Gas(viper.GetUint64(cfgConsensusMaxBlockGas)),
-			MaxEvidenceNum:           viper.GetUint32(cfgConsensusMaxEvidenceNum),
+			MaxEvidenceSize:          uint64(viper.GetSizeInBytes(cfgConsensusMaxEvidenceSizeBytes)),
 			StateCheckpointInterval:  viper.GetUint64(CfgConsensusStateCheckpointInterval),
 			StateCheckpointNumKept:   viper.GetUint64(CfgConsensusStateCheckpointNumKept),
 			StateCheckpointChunkSize: uint64(viper.GetSizeInBytes(CfgConsensusStateCheckpointChunkSize)),
@@ -734,7 +734,7 @@ func init() {
 	initGenesisFlags.String(cfgConsensusMaxTxSizeBytes, "32kb", "tendermint maximum transaction size (in bytes)")
 	initGenesisFlags.String(cfgConsensusMaxBlockSizeBytes, "21mb", "tendermint maximum block size (in bytes)")
 	initGenesisFlags.Uint64(cfgConsensusMaxBlockGas, 0, "tendermint max gas used per block")
-	initGenesisFlags.Uint32(cfgConsensusMaxEvidenceNum, 50, "tendermint max evidence num")
+	initGenesisFlags.String(cfgConsensusMaxEvidenceSizeBytes, "1mb", "tendermint max evidence size (in bytes)")
 	initGenesisFlags.Uint64(CfgConsensusStateCheckpointInterval, 10000, "consensus state checkpoint interval (in blocks)")
 	initGenesisFlags.Uint64(CfgConsensusStateCheckpointNumKept, 2, "number of kept consensus state checkpoints")
 	initGenesisFlags.String(CfgConsensusStateCheckpointChunkSize, "8mb", "consensus state checkpoint chunk size (in bytes)")
