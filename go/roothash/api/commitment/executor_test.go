@@ -9,6 +9,30 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 )
 
+func TestConsistentHash(t *testing.T) {
+	// NOTE: These hashes MUST be synced with runtime/src/common/roothash.rs.
+	var emptyHeaderHash hash.Hash
+	_ = emptyHeaderHash.UnmarshalHex("57d73e02609a00fcf4ca43cbf8c9f12867c46942d246fb2b0bce42cbdb8db844")
+
+	var empty ComputeResultsHeader
+	require.EqualValues(t, emptyHeaderHash, empty.EncodedHash())
+
+	var emptyRoot hash.Hash
+	emptyRoot.Empty()
+
+	var populatedHeaderHash hash.Hash
+	_ = populatedHeaderHash.UnmarshalHex("374021bcba44f1014d0d9919e876a1ecd7fe5ec1a92ecf9c8b313cd4976fbc01")
+
+	populated := ComputeResultsHeader{
+		Round:        42,
+		PreviousHash: emptyHeaderHash,
+		IORoot:       &emptyRoot,
+		StateRoot:    &emptyRoot,
+		Messages:     nil,
+	}
+	require.EqualValues(t, populatedHeaderHash, populated.EncodedHash())
+}
+
 func TestValidateBasic(t *testing.T) {
 	var emptyRoot hash.Hash
 	emptyRoot.Empty()

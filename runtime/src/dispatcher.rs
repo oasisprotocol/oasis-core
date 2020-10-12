@@ -406,8 +406,8 @@ impl Dispatcher {
                     let header = ComputeResultsHeader {
                         round: block.header.round + 1,
                         previous_hash: block.header.encoded_hash(),
-                        io_root,
-                        state_root: new_state_root,
+                        io_root: Some(io_root),
+                        state_root: Some(new_state_root),
                         messages,
                     };
 

@@ -102,11 +102,21 @@ pub struct ComputeResultsHeader {
     /// Hash of the previous block header this batch was computed against.
     pub previous_hash: Hash,
     /// The I/O merkle root.
-    pub io_root: Hash,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub io_root: Option<Hash>,
     /// The root hash of the state after computing this batch.
-    pub state_root: Hash,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub state_root: Option<Hash>,
     /// Messages sent from this batch.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
     pub messages: Vec<Message>,
+}
+
+impl ComputeResultsHeader {
+    /// Returns a hash of an encoded header.
+    pub fn encoded_hash(&self) -> Hash {
+        Hash::digest_bytes(&cbor::to_vec(&self))
+    }
 }
 
 #[cfg(test)]
@@ -114,7 +124,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_consistent_hash() {
+    fn test_consistent_hash_header() {
         // NOTE: These hashes MUST be synced with go/roothash/api/block/header_test.go.
         let empty = Header::default();
         assert_eq!(
@@ -131,12 +141,33 @@ mod tests {
             previous_hash: empty.encoded_hash(),
             io_root: Hash::empty_hash(),
             state_root: Hash::empty_hash(),
-            messages: None,
             ..Default::default()
         };
         assert_eq!(
             populated.encoded_hash(),
             Hash::from("c39e8aefea5a1f794fb57f294a4ea8599381cd8739e67a8a9acb7763b54a630a")
+        );
+    }
+
+    #[test]
+    fn test_consistent_hash_compute_results_header() {
+        // NOTE: These hashes MUST be synced with go/roothash/api/commitment/executor_test.go.
+        let empty = ComputeResultsHeader::default();
+        assert_eq!(
+            empty.encoded_hash(),
+            Hash::from("57d73e02609a00fcf4ca43cbf8c9f12867c46942d246fb2b0bce42cbdb8db844")
+        );
+
+        let populated = ComputeResultsHeader {
+            round: 42,
+            previous_hash: empty.encoded_hash(),
+            io_root: Some(Hash::empty_hash()),
+            state_root: Some(Hash::empty_hash()),
+            messages: Vec::new(),
+        };
+        assert_eq!(
+            populated.encoded_hash(),
+            Hash::from("374021bcba44f1014d0d9919e876a1ecd7fe5ec1a92ecf9c8b313cd4976fbc01")
         );
     }
 }
