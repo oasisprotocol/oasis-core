@@ -111,6 +111,7 @@ func (sc *gasFeesImpl) Fixture() (*oasis.NetworkFixture, error) {
 			{Entity: 2, Consensus: oasis.ConsensusFixture{MinGasPrice: 1}},
 			{Entity: 3, Consensus: oasis.ConsensusFixture{MinGasPrice: 1}},
 		},
+		Seeds: []oasis.SeedFixture{{}},
 	}, nil
 }
 

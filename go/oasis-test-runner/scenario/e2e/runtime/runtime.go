@@ -201,6 +201,7 @@ func (sc *runtimeImpl) Fixture() (*oasis.NetworkFixture, error) {
 			{Entity: 1, Runtimes: []int{1}},
 		},
 		Sentries: []oasis.SentryFixture{},
+		Seeds:    []oasis.SeedFixture{{}},
 		Clients: []oasis.ClientFixture{
 			{},
 		},

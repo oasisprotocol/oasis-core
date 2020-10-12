@@ -76,10 +76,10 @@ func (sentry *Sentry) startNode() error {
 		workerCertificateRotation(false).
 		workerSentryEnabled().
 		workerSentryControlPort(sentry.controlPort).
-		tendermintCoreListenAddress(sentry.consensusPort).
+		tendermintCoreAddress(sentry.consensusPort).
 		tendermintPrune(sentry.consensus.PruneNumKept).
 		appendNetwork(sentry.net).
-		appendSeedNodes(sentry.net).
+		appendSeedNodes(sentry.net.seeds).
 		internalSocketAddress(sentry.net.validators[0].SocketPath())
 
 	if len(validators) > 0 {

@@ -95,7 +95,7 @@ func (worker *Compute) startNode() error {
 		debugDontBlameOasis().
 		debugAllowTestKeys().
 		workerCertificateRotation(true).
-		tendermintCoreListenAddress(worker.consensusPort).
+		tendermintCoreAddress(worker.consensusPort).
 		tendermintSubmissionGasPrice(worker.consensus.SubmissionGasPrice).
 		tendermintPrune(worker.consensus.PruneNumKept).
 		storageBackend(storageClient.BackendName).
@@ -106,7 +106,7 @@ func (worker *Compute) startNode() error {
 		workerRuntimeSGXLoader(worker.net.cfg.RuntimeSGXLoaderBinary).
 		workerExecutorScheduleCheckTxEnabled().
 		appendNetwork(worker.net).
-		appendSeedNodes(worker.net).
+		appendSeedNodes(worker.net.seeds).
 		appendEntity(worker.entity)
 
 	for _, idx := range worker.runtimes {

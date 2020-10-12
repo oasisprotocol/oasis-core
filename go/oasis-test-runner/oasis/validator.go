@@ -84,7 +84,7 @@ func (val *Validator) startNode() error {
 		debugAllowTestKeys().
 		workerCertificateRotation(true).
 		consensusValidator().
-		tendermintCoreListenAddress(val.consensusPort).
+		tendermintCoreAddress(val.consensusPort).
 		tendermintMinGasPrice(val.consensus.MinGasPrice).
 		tendermintSubmissionGasPrice(val.consensus.SubmissionGasPrice).
 		tendermintPrune(val.consensus.PruneNumKept).
@@ -97,7 +97,7 @@ func (val *Validator) startNode() error {
 		args = args.addSentries(val.sentries).
 			tendermintDisablePeerExchange()
 	} else {
-		args = args.appendSeedNodes(val.net)
+		args = args.appendSeedNodes(val.net.seeds)
 	}
 	if val.consensus.EnableConsensusRPCWorker {
 		args = args.workerClientPort(val.clientPort).

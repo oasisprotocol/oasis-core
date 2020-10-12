@@ -28,6 +28,7 @@ type NetworkFixture struct {
 	ComputeWorkers     []ComputeWorkerFixture    `json:"compute_workers,omitempty"`
 	Sentries           []SentryFixture           `json:"sentries,omitempty"`
 	Clients            []ClientFixture           `json:"clients,omitempty"`
+	Seeds              []SeedFixture             `json:"seeds,omitempty"`
 	ByzantineNodes     []ByzantineFixture        `json:"byzantine_nodes,omitempty"`
 }
 
@@ -61,6 +62,12 @@ func (f *NetworkFixture) Create(env *env.Env) (*Network, error) {
 
 	// Provision the sentry nodes.
 	for _, fx := range f.Sentries {
+		if _, err = fx.Create(net); err != nil {
+			return nil, err
+		}
+	}
+
+	for _, fx := range f.Seeds {
 		if _, err = fx.Create(net); err != nil {
 			return nil, err
 		}
@@ -414,6 +421,18 @@ func (f *ComputeWorkerFixture) Create(net *Network) (*Compute, error) {
 	})
 }
 
+// SeedFixture is a seed node fixture.
+type SeedFixture struct {
+	DisableAddrBookFromGenesis bool `json:"disable_addr_book_from_genesis"`
+}
+
+// Create instantiates the seed node described by the fixture.
+func (f *SeedFixture) Create(net *Network) (*Seed, error) {
+	return net.NewSeed(&SeedCfg{
+		DisableAddrBookFromGenesis: f.DisableAddrBookFromGenesis,
+	})
+}
+
 // SentryFixture is a sentry node fixture.
 type SentryFixture struct {
 	LogWatcherHandlerFactories []log.WatcherHandlerFactory `json:"-"`
@@ -423,7 +442,7 @@ type SentryFixture struct {
 	KeymanagerWorkers []int `json:"keymanager_workers"`
 }
 
-// Create instantiates the client node described by the fixture.
+// Create instantiates the sentry node described by the fixture.
 func (f *SentryFixture) Create(net *Network) (*Sentry, error) {
 	return net.NewSentry(&SentryCfg{
 		NodeCfg: NodeCfg{
