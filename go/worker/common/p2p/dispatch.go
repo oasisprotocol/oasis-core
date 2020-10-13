@@ -114,7 +114,7 @@ func (h *topicHandler) topicMessageValidator(ctx context.Context, unused core.Pe
 	}
 
 	// If the message will never become valid, do not relay.
-	if err = h.dispatchMessage(peerID, m, true); p2pError.IsPermanent(err) {
+	if err = h.dispatchMessage(peerID, m, true); !p2pError.ShouldRelay(err) {
 		return false
 	}
 
@@ -164,12 +164,15 @@ func (h *topicHandler) dispatchMessage(peerID core.PeerID, m *queuedMsg, isIniti
 	h.handlersLock.RLock()
 	defer h.handlersLock.RUnlock()
 
-	for _, handler := range h.handlers {
-		// Perhaps this should reject the message, but it is possible that
-		// the local node is just behind.  This does result in stale messages
-		// getting retried though.
-		if err = handler.AuthenticatePeer(m.from, m.msg); err != nil {
-			return err
+	// Authenticate the peer if it's not us.
+	if m.peerID != h.p2p.host.ID() {
+		for _, handler := range h.handlers {
+			// Perhaps this should reject the message, but it is possible that
+			// the local node is just behind.  This does result in stale messages
+			// getting retried though.
+			if err = handler.AuthenticatePeer(m.from, m.msg); err != nil {
+				return err
+			}
 		}
 	}
 
@@ -202,6 +205,7 @@ func (h *topicHandler) retryWorker(m *queuedMsg) {
 				"peer_id", m.peerID,
 			)
 		default:
+			derr = p2pError.EnsurePermanent(derr)
 			if !p2pError.IsPermanent(derr) {
 				h.logger.Warn("failed to-redispatch message, will retry",
 					"err", derr,

@@ -1,7 +1,6 @@
 package simple
 
 import (
-	"errors"
 	"fmt"
 	"sync"
 
@@ -9,13 +8,13 @@ import (
 
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
 	"github.com/oasisprotocol/oasis-core/go/runtime/transaction"
+	p2pError "github.com/oasisprotocol/oasis-core/go/worker/common/p2p/error"
 )
 
 var (
-	errQueueFull         = errors.New("queue is full")
-	errCallTooLarge      = errors.New("call too large")
-	errCallAlreadyExists = errors.New("call already exists in queue")
-	errNoBatchAvailable  = errors.New("no batch available in incoming queue")
+	errQueueFull         = fmt.Errorf("queue is full")
+	errCallTooLarge      = p2pError.Permanent(fmt.Errorf("call too large"))
+	errCallAlreadyExists = fmt.Errorf("call already exists in queue")
 )
 
 type incomingQueue struct {
@@ -169,61 +168,38 @@ func (q *incomingQueue) AddBatch(batch transaction.RawBatch) error {
 	return errs
 }
 
-// Take attempts to take a batch from the incoming queue.
-func (q *incomingQueue) Take(force bool) (transaction.RawBatch, error) {
+// GetBatch attempts to get a batch from the incoming queue.
+func (q *incomingQueue) GetBatch(force bool) transaction.RawBatch {
 	q.Lock()
 	defer q.Unlock()
 
-	// Check if we have a batch ready.
+	// Check if a batch is ready.
 	queueSize := uint64(len(q.queue))
-	if queueSize == 0 {
-		return nil, errNoBatchAvailable
-	}
 	if queueSize < q.maxBatchSize && q.queueSizeBytes < q.maxBatchSizeBytes && !force {
-		return nil, errNoBatchAvailable
+		return nil
 	}
-
-	// NOTE: These "returned" variables signify what will be returned back
-	//       to the queue, not what will be returned from the function.
-	var returned transaction.RawBatch
-	var returnedSizeBytes uint64
-	returnedCallHashes := make(map[hash.Hash]bool)
 
 	var batch transaction.RawBatch
 	var batchSizeBytes uint64
-
 	for _, call := range q.queue[:] {
-		shouldReturn := false
 		callSize := uint64(len(call))
 
 		// Check if the batch already has enough calls.
 		if uint64(len(batch)) >= q.maxBatchSize {
-			shouldReturn = true
+			break
 		}
-		// Check if the call does not fit into a batch.
+		// Check if the call does fit into the batch.
+		// XXX: potentially there could still be smaller calls that would
+		// fit, which this will miss.
 		if batchSizeBytes+callSize > q.maxBatchSizeBytes {
-			shouldReturn = true
+			break
 		}
 
-		if shouldReturn {
-			returned = append(returned, call)
-			returnedSizeBytes += callSize
-
-			callHash := hash.NewFromBytes(call)
-			returnedCallHashes[callHash] = true
-			continue
-		}
-
-		// Take call.
 		batch = append(batch, call)
 		batchSizeBytes += callSize
 	}
 
-	q.queue = returned
-	q.queueSizeBytes = returnedSizeBytes
-	q.callHashes = returnedCallHashes
-
-	return batch, nil
+	return batch
 }
 
 func (q *incomingQueue) updateConfig(maxBatchSize, maxBatchSizeBytes uint64) {
@@ -231,6 +207,27 @@ func (q *incomingQueue) updateConfig(maxBatchSize, maxBatchSizeBytes uint64) {
 	defer q.Unlock()
 	q.maxBatchSize = maxBatchSize
 	q.maxBatchSizeBytes = maxBatchSizeBytes
+
+	// Recheck the queue for any calls that are bigger than the updated
+	// `maxBatchSizeBytes`.
+	var newQueue transaction.RawBatch
+	var newQueueSize uint64
+	newCallHashes := make(map[hash.Hash]bool)
+	for _, call := range q.queue[:] {
+		callSize := uint64(len(call))
+		if callSize > maxBatchSizeBytes {
+			continue
+		}
+
+		newQueue = append(newQueue, call)
+		newQueueSize += callSize
+		callHash := hash.NewFromBytes(call)
+		newCallHashes[callHash] = true
+	}
+	// Update queue.
+	q.queue = newQueue
+	q.callHashes = newCallHashes
+	q.queueSizeBytes = newQueueSize
 }
 
 func newIncomingQueue(maxQueueSize, maxBatchSize, maxBatchSizeBytes uint64) *incomingQueue {

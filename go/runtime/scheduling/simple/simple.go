@@ -24,23 +24,10 @@ type scheduler struct {
 }
 
 func (s *scheduler) scheduleBatch(force bool) error {
-	batch, err := s.incomingQueue.Take(force)
-	if err != nil && err != errNoBatchAvailable {
-		s.logger.Error("failed to get batch from the queue",
-			"err", err,
-		)
-		return err
-	}
-
+	batch := s.incomingQueue.GetBatch(force)
 	if len(batch) > 0 {
 		// Try to dispatch batch.
 		if err := s.dispatcher.Dispatch(batch); err != nil {
-			// Put the batch back into the incoming queue in case this failed.
-			if errAB := s.incomingQueue.AddBatch(batch); errAB != nil {
-				s.logger.Warn("failed to add batch back into the incoming queue",
-					"err", errAB,
-				)
-			}
 			return err
 		}
 	}

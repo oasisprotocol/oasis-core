@@ -30,9 +30,12 @@ func TestBasic(t *testing.T) {
 
 	require.EqualValues(t, 51, queue.Size(), "Size")
 
-	batch, err := queue.Take(false)
-	require.NoError(t, err, "Take")
+	batch := queue.GetBatch(false)
 	require.EqualValues(t, 10, len(batch), "Batch size")
+	require.EqualValues(t, 51, queue.Size(), "Size")
+
+	err = queue.RemoveBatch(batch)
+	require.NoError(t, err, "RemoveBatch")
 	require.EqualValues(t, 41, queue.Size(), "Size")
 
 	require.EqualValues(t, batch[0], []byte("hello world"))
@@ -55,8 +58,8 @@ func TestNoBatchReady(t *testing.T) {
 	err := queue.Add([]byte("hello world"))
 	require.NoError(t, err, "Add")
 
-	_, err = queue.Take(false)
-	require.Error(t, err, "Take error when no batch available and not forced")
+	batch := queue.GetBatch(false)
+	require.Empty(t, batch, "GetBatch empty if no batch available")
 }
 
 func TestForceBatch(t *testing.T) {
@@ -65,9 +68,12 @@ func TestForceBatch(t *testing.T) {
 	err := queue.Add([]byte("hello world"))
 	require.NoError(t, err, "Add")
 
-	batch, err := queue.Take(true)
-	require.NoError(t, err, "Take no error when no batch available and forced")
+	batch := queue.GetBatch(true)
 	require.EqualValues(t, 1, len(batch), "Batch size")
+	require.EqualValues(t, 1, queue.Size(), "Size")
+
+	err = queue.RemoveBatch(batch)
+	require.NoError(t, err, "RemoveBatch")
 	require.EqualValues(t, 0, queue.Size(), "Size")
 }
 

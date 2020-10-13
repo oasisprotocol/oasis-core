@@ -354,6 +354,15 @@ func (g *Group) EpochTransition(ctx context.Context, height int64) error {
 		return err
 	}
 
+	// Fetch the epoch block, which is also the group version.
+	// Note: when node is restarted, `EpochTransition` is called on the first
+	// received block, which is not necessary the actual epoch transition block.
+	// Therefore we cannot use current height as the group version.
+	groupVersion, err := g.consensus.EpochTime().GetEpochBlock(ctx, epochNumber)
+	if err != nil {
+		return err
+	}
+
 	// Fetch current runtime descriptor.
 	runtime, err := g.consensus.Registry().GetRuntime(ctx, &registry.NamespaceQuery{ID: g.runtimeID, Height: height})
 	if err != nil {
@@ -377,14 +386,14 @@ func (g *Group) EpochTransition(ctx context.Context, height int64) error {
 		cancelEpochCtx:    cancelEpochCtx,
 		roundCtx:          roundCtx,
 		cancelRoundCtx:    cancelRoundCtx,
-		groupVersion:      height,
+		groupVersion:      groupVersion,
 		executorCommittee: executorCommittee,
 		storageCommittee:  storageCommittee,
 		runtime:           runtime,
 	}
 
 	g.logger.Info("epoch transition complete",
-		"group_version", height,
+		"group_version", groupVersion,
 		"executor_role", executorCommittee.Role,
 	)
 
@@ -427,22 +436,23 @@ func (g *Group) AuthenticatePeer(peerID signature.PublicKey, msg *p2p.Message) e
 		return fmt.Errorf("group: no active epoch")
 	}
 
-	// Assume the peer is not authorized.
-	var authorized bool
-
-	// If we are in the executor committee, we accept messages from all nodes.
-	if g.activeEpoch.executorCommittee.Role != scheduler.RoleInvalid {
-		authorized = true
+	if msg.GroupVersion < g.activeEpoch.groupVersion {
+		return p2pError.Permanent(fmt.Errorf("group version in the past"))
 	}
 
+	// If we are in the executor committee, we accept messages from all nodes.
+	// Otherwise reject and relay the message.
+	authorized := g.activeEpoch.executorCommittee.Role != scheduler.RoleInvalid
 	if !authorized {
 		err := fmt.Errorf("group: peer is not authorized")
 
-		// If the group version is in the past, make the error permanent to avoid retrying on stale
-		// messages.
-		if msg.GroupVersion < g.activeEpoch.groupVersion {
-			err = p2pError.Permanent(err)
+		// In case the message is for current epoch and not authorized,
+		// make the error permanent to avoid retrying. The message should
+		// still be relayed.
+		if msg.GroupVersion == g.activeEpoch.groupVersion {
+			err = p2pError.Permanent(p2pError.Relayable(err))
 		}
+
 		return err
 	}
 

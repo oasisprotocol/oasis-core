@@ -13,22 +13,13 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/worker/common/p2p"
 )
 
-const (
-	// retryInterval in consensus blocks.
-	retryInterval = 60
-)
-
 type watchRequest struct {
 	id     hash.Hash
 	ctx    context.Context
 	respCh chan *watchResult
-	height int64
 }
 
-func (w *watchRequest) send(res *watchResult, height int64) error {
-	// Update last sent height.
-	w.height = height
-
+func (w *watchRequest) send(res *watchResult) error {
 	select {
 	case <-w.ctx.Done():
 		return w.ctx.Err()
@@ -88,7 +79,7 @@ func (w *blockWatcher) checkBlock(blk *block.Block) {
 		}
 
 		// Ignore errors, the watch is getting deleted anyway.
-		_ = watch.send(res, 0)
+		_ = watch.send(res)
 		close(watch.respCh)
 		delete(w.watched, txHash)
 	}
@@ -112,22 +103,11 @@ func (w *blockWatcher) watch() {
 	}
 	defer blocksSub.Close()
 
-	consensusBlocks, consensusBlocksSub, err := w.common.consensus.WatchBlocks(w.common.ctx)
-	if err != nil {
-		w.Logger.Error("failed to subscribe to consensus blocks",
-			"err", err,
-		)
-		return
-	}
-	defer consensusBlocksSub.Close()
-
 	// If we were just started, refresh the committee information from any
 	// block, otherwise just from epoch transition blocks.
 	var gotInitialCommittee bool
 	// latestGroupVersion contains the latest known committee group version.
 	var latestGroupVersion int64
-	// latestHeight contains the latest known consensus block height.
-	var latestHeight int64
 	for {
 		// Wait for stuff to happen.
 		select {
@@ -168,39 +148,11 @@ func (w *blockWatcher) watch() {
 				res := &watchResult{
 					groupVersion: latestGroupVersion,
 				}
-				if watch.send(res, latestHeight) != nil {
+				if watch.send(res) != nil {
 					delete(w.watched, key)
 				}
 			}
 			gotInitialCommittee = true
-
-		case blk := <-consensusBlocks:
-			if blk == nil {
-				break
-			}
-			latestHeight = blk.Height
-
-			// Check if any transactions are due for a retry.
-			for key, watch := range w.watched {
-				if watch.height == 0 {
-					continue
-				}
-				if (latestHeight - retryInterval) < watch.height {
-					continue
-				}
-				res := &watchResult{
-					groupVersion: latestGroupVersion,
-				}
-				w.Logger.Debug("resending message",
-					"key", key,
-					"latest_height", latestHeight,
-					"retry_interval", retryInterval,
-					"watch_height", watch.height,
-				)
-				if watch.send(res, latestHeight) != nil {
-					delete(w.watched, key)
-				}
-			}
 
 		case newWatch := <-w.newCh:
 			w.watched[newWatch.id] = newWatch
@@ -208,7 +160,7 @@ func (w *blockWatcher) watch() {
 			res := &watchResult{
 				groupVersion: latestGroupVersion,
 			}
-			if newWatch.send(res, latestHeight) != nil {
+			if newWatch.send(res) != nil {
 				delete(w.watched, newWatch.id)
 			}
 

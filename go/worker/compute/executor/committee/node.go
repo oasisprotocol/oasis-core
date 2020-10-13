@@ -40,20 +40,20 @@ import (
 )
 
 var (
-	errSeenNewerBlock     = errors.New("executor: seen newer block")
-	errRuntimeAborted     = errors.New("executor: runtime aborted batch processing")
-	errIncompatibleHeader = p2pError.Permanent(errors.New("executor: incompatible header"))
-	errInvalidReceipt     = p2pError.Permanent(errors.New("executor: invalid storage receipt"))
-	errIncorrectRole      = errors.New("executor: incorrect role")
-	errIncorrectState     = errors.New("executor: incorrect state")
-	errMsgFromNonTxnSched = errors.New("executor: received txn scheduler dispatch msg from non-txn scheduler")
+	errSeenNewerBlock     = fmt.Errorf("executor: seen newer block")
+	errRuntimeAborted     = fmt.Errorf("executor: runtime aborted batch processing")
+	errIncompatibleHeader = p2pError.Permanent(fmt.Errorf("executor: incompatible header"))
+	errInvalidReceipt     = p2pError.Permanent(fmt.Errorf("executor: invalid storage receipt"))
+	errIncorrectRole      = fmt.Errorf("executor: incorrect role")
+	errIncorrectState     = fmt.Errorf("executor: incorrect state")
+	errMsgFromNonTxnSched = fmt.Errorf("executor: received txn scheduler dispatch msg from non-txn scheduler")
 
 	// Transaction scheduling errors.
 	errNoBlocks        = fmt.Errorf("executor: no blocks")
 	errNotReady        = fmt.Errorf("executor: runtime not ready")
-	errCheckTxFailed   = fmt.Errorf("executor: CheckTx failed")
+	errCheckTxFailed   = p2pError.Permanent(fmt.Errorf("executor: CheckTx failed"))
 	errNotTxnScheduler = fmt.Errorf("executor: not transaction scheduler in this round")
-	errDuplicateTx     = fmt.Errorf("executor: duplicate transaction")
+	errDuplicateTx     = p2pError.Permanent(p2pError.Relayable(fmt.Errorf("executor: duplicate transaction")))
 
 	// Duration to wait before submitting the propose timeout request.
 	proposeTimeoutDelay = 2 * time.Second
@@ -253,7 +253,7 @@ func (n *Node) HandlePeerMessage(ctx context.Context, message *p2p.Message, isOw
 		if n.scheduleCheckTxEnabled {
 			// Check transaction before queuing it.
 			if err := n.checkTx(ctx, call); err != nil {
-				return true, p2pError.Permanent(err)
+				return true, err
 			}
 			n.logger.Debug("worker CheckTx successful, queuing transaction")
 		}
@@ -263,7 +263,7 @@ func (n *Node) HandlePeerMessage(ctx context.Context, message *p2p.Message, isOw
 			n.logger.Error("unable to queue transaction",
 				"err", err,
 			)
-			return true, p2pError.Permanent(err)
+			return true, err
 		}
 		return true, nil
 
@@ -447,16 +447,6 @@ func (n *Node) HandleEpochTransitionLocked(epoch *committee.EpochSnapshot) {
 
 	switch {
 	case epoch.IsExecutorWorker():
-		if state, ok := n.state.(StateWaitingForFinalize); ok {
-			// In case we are finalizing a batch and epoch transition occurred,
-			// reinsert the failed transactions back into queue.
-			if err := n.scheduler.AppendTxBatch(state.raw); err != nil {
-				n.logger.Warn("failed reinserting aborted transactions in queue",
-					"err", err,
-				)
-			}
-			incomingQueueSize.With(n.getMetricLabels()).Set(float64(n.scheduler.UnscheduledSize()))
-		}
 		if !n.prevEpochWorker {
 			// Clear incoming queue and cache of any stale transactions in case
 			// we were not part of the compute committee in previous epoch.
@@ -541,6 +531,7 @@ func (n *Node) HandleNewBlockLocked(blk *block.Block) {
 				n.logger.Error("proposed batch was not finalized",
 					"header_io_root", header.IORoot,
 					"proposed_io_root", state.proposedIORoot,
+					"header_type", header.HeaderType,
 					"batch", state.raw,
 				)
 				return
@@ -599,7 +590,7 @@ func (n *Node) checkTx(ctx context.Context, call []byte) error {
 		n.logger.Error("CheckTx: runtime call error",
 			"err", err,
 		)
-		return err
+		return p2pError.Permanent(err)
 	case resp.RuntimeCheckTxBatchResponse == nil:
 		n.logger.Error("CheckTx: runtime response is nil")
 		return errCheckTxFailed
@@ -752,37 +743,47 @@ func (n *Node) proposeTimeoutLocked() error {
 
 // Dispatch dispatches a batch to the executor committee.
 func (n *Node) Dispatch(batch transaction.RawBatch) error {
-	n.commonNode.CrossNode.Lock()
-	defer n.commonNode.CrossNode.Unlock()
+	n.logger.Debug("dispatching a batch",
+		"batch", batch,
+		"size", len(batch),
+	)
+	lastHeader, err := func() (*block.Header, error) {
+		n.commonNode.CrossNode.Lock()
+		defer n.commonNode.CrossNode.Unlock()
 
-	// If we are not waiting for a batch, don't do anything.
-	if _, ok := n.state.(StateWaitingForBatch); !ok {
-		return errIncorrectState
-	}
-	if n.commonNode.CurrentBlock == nil {
-		return errNoBlocks
-	}
-
-	epoch := n.commonNode.Group.GetEpochSnapshot()
-	round := n.commonNode.CurrentBlock.Header.Round
-
-	switch {
-	case epoch.IsTransactionScheduler(round):
-		// Continues bellow.
-	case epoch.IsExecutorWorker():
-		// If we are an executor and not a scheduler try proposing a timeout.
-		err := n.proposeTimeoutLocked()
-		if err != nil {
-			n.logger.Error("error proposing a timeout",
-				"err", err,
-			)
+		// If we are not waiting for a batch, don't do anything.
+		if _, ok := n.state.(StateWaitingForBatch); !ok {
+			return nil, errIncorrectState
 		}
+		if n.commonNode.CurrentBlock == nil {
+			return nil, errNoBlocks
+		}
+		header := n.commonNode.CurrentBlock.Header
+		round := header.Round
+		epoch := n.commonNode.Group.GetEpochSnapshot()
 
-		fallthrough
-	default:
-		// XXX: Always return an error here in case we are not a txn scheduler,
-		// so that the batch is reinserted back into the queue.
-		return errNotTxnScheduler
+		switch {
+		case epoch.IsTransactionScheduler(round):
+			// Continues bellow.
+		case epoch.IsExecutorWorker():
+			// If we are an executor and not a scheduler try proposing a timeout.
+			err := n.proposeTimeoutLocked()
+			if err != nil {
+				n.logger.Error("error proposing a timeout",
+					"err", err,
+				)
+			}
+
+			fallthrough
+		default:
+			// XXX: Always return an error here in case we are not a txn scheduler,
+			// so that the batch is reinserted back into the queue.
+			return nil, errNotTxnScheduler
+		}
+		return &header, nil
+	}()
+	if err != nil {
+		return err
 	}
 
 	// Scheduler node opens a new parent span for batch processing.
@@ -792,7 +793,6 @@ func (n *Node) Dispatch(batch transaction.RawBatch) error {
 
 	// Generate the initial I/O root containing only the inputs (outputs and
 	// tags will be added later by the executor nodes).
-	lastHeader := n.commonNode.CurrentBlock.Header
 	emptyRoot := storage.Root{
 		Namespace: lastHeader.Namespace,
 		Version:   lastHeader.Round + 1,
@@ -803,7 +803,7 @@ func (n *Node) Dispatch(batch transaction.RawBatch) error {
 	defer ioTree.Close()
 
 	for idx, tx := range batch {
-		if err := ioTree.AddTransaction(n.ctx, transaction.Transaction{Input: tx, BatchOrder: uint32(idx)}, nil); err != nil {
+		if err = ioTree.AddTransaction(n.ctx, transaction.Transaction{Input: tx, BatchOrder: uint32(idx)}, nil); err != nil {
 			n.logger.Error("failed to create I/O tree",
 				"err", err,
 			)
@@ -844,7 +844,7 @@ func (n *Node) Dispatch(batch transaction.RawBatch) error {
 	// Dispatch batch to group.
 	spanPublish := opentracing.StartSpan("PublishScheduledBatch(batchHash, header)",
 		opentracing.Tag{Key: "ioRoot", Value: ioRoot},
-		opentracing.Tag{Key: "header", Value: n.commonNode.CurrentBlock.Header},
+		opentracing.Tag{Key: "header", Value: lastHeader},
 		opentracing.ChildOf(batchSpanCtx),
 	)
 	ioReceiptSignatures := []signature.Signature{}
@@ -855,7 +855,7 @@ func (n *Node) Dispatch(batch transaction.RawBatch) error {
 	dispatchMsg := &commitment.ProposedBatch{
 		IORoot:            ioRoot,
 		StorageSignatures: ioReceiptSignatures,
-		Header:            n.commonNode.CurrentBlock.Header,
+		Header:            *lastHeader,
 	}
 	signedDispatchMsg, err := commitment.SignProposedBatch(n.commonNode.Identity.NodeSigner, dispatchMsg)
 	if err != nil {
@@ -863,6 +863,26 @@ func (n *Node) Dispatch(batch transaction.RawBatch) error {
 			"err", err,
 		)
 		return fmt.Errorf("failed to sign txn scheduler batch: %w", err)
+	}
+
+	n.commonNode.CrossNode.Lock()
+	defer n.commonNode.CrossNode.Unlock()
+
+	// If we are not waiting for a batch, don't do anything.
+	if _, ok := n.state.(StateWaitingForBatch); !ok {
+		n.logger.Error("new state since started the dispatch",
+			"state", n.state,
+		)
+		return errIncorrectState
+	}
+
+	// Ensure we are still in the same round as when we started the dispatch.
+	if lastHeader.Round != n.commonNode.CurrentBlock.Header.Round {
+		n.logger.Error("new round since started the dispatch",
+			"expected_round", lastHeader.Round,
+			"round", n.commonNode.CurrentBlock.Header.Round,
+		)
+		return errSeenNewerBlock
 	}
 
 	n.logger.Debug("dispatching a new batch proposal",
@@ -1040,16 +1060,6 @@ func (n *Node) abortBatchLocked(reason error) {
 	state.cancel()
 
 	crash.Here(crashPointBatchAbortAfter)
-
-	// In case the batch is resolved, return transactions back in the queue.
-	if state.batch != nil && len(state.batch.batch) > 0 {
-		if err := n.scheduler.AppendTxBatch(state.batch.batch); err != nil {
-			n.logger.Warn("failed reinserting aborted transactions in queue",
-				"err", err,
-			)
-		}
-		incomingQueueSize.With(n.getMetricLabels()).Set(float64(n.scheduler.UnscheduledSize()))
-	}
 
 	abortedBatchCount.With(n.getMetricLabels()).Inc()
 	// After the batch has been aborted, we must wait for the round to be
