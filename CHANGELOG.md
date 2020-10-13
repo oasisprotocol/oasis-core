@@ -12,6 +12,94 @@ The format is inspired by [Keep a Changelog].
 
 <!-- TOWNCRIER -->
 
+## 20.11.2 (2020-10-13)
+
+| Protocol          | Version   |
+|:------------------|:---------:|
+| Consensus         | 1.0.0     |
+| Runtime Host      | 1.0.0     |
+| Runtime Committee | 1.0.0     |
+
+### Features
+
+- go/runtime/client: remove unneeded P2P message republishing
+  ([#3325](https://github.com/oasisprotocol/oasis-core/issues/3325))
+
+### Bug Fixes
+
+- go/worker/p2p: Skip peer authentication for our own messages
+  ([#3319](https://github.com/oasisprotocol/oasis-core/issues/3319))
+
+  In practice this fixes a bug in a setup where executor nodes are used to
+  submit runtime transactions. The executor nodes that are not part of the
+  active committee, would end up self-rejecting transaction messages.
+
+- go/worker/executor: don't unnecessarily hold the lock during storage requests
+  ([#3320](https://github.com/oasisprotocol/oasis-core/issues/3320))
+
+- go/worker/executor: only remove incoming transactions on finalized round
+  ([#3332](https://github.com/oasisprotocol/oasis-core/issues/3332))
+
+  Simplifies the executor to only remove transactions from the incoming queue
+  once a round is successfully finalized. Before, the proposing executor also
+  removed transactions when proposing a batch, which was an unneeded leftover
+  from before the transaction scheduler committee was merged with into executor.
+
+  Also fixes an edge case where batch was not reinserted on failed rounds.
+
+- go/worker/common/committee: group version should be the epoch block
+  ([#3347](https://github.com/oasisprotocol/oasis-core/issues/3347))
+
+  When node is restarted, `EpochTransition` is called on the first received
+  block, which is not necessary the actual epoch transition block. Therefore the
+  epoch block needs to be queried to obtain the correct group version.
+
+- go: Seed node support configuring tendermint P2P settings
+  ([#3356](https://github.com/oasisprotocol/oasis-core/issues/3356))
+
+  Seed node now supports configuring relevant tendermint P2P settings via
+  existing tendermint configuration flags.
+
+- go: Seed node panics on `oasis-node control` CLI
+  ([#3356](https://github.com/oasisprotocol/oasis-core/issues/3356))
+
+  Seed node now implements the missing consensus backend methods and supports
+  `oasis-node control` CLI.
+
+- go/worker/p2p: Correctly update peers on `WatchNodeList` events
+  ([#3378](https://github.com/oasisprotocol/oasis-core/issues/3378))
+
+- go/registry.WatchNodeList: return current node list upon subscription
+  ([#3379](https://github.com/oasisprotocol/oasis-core/issues/3379))
+
+- go/worker/p2p: Relay some permanent errors
+  ([#3386](https://github.com/oasisprotocol/oasis-core/issues/3386))
+
+  Before the P2P worker would not relay any messages failing with a permanent
+  error. However there are cases where the client should permanently fail the
+  dispatch, but still relay the message to peers.
+
+  Adds `Relayable` error wrapper which can be used in handlers to notify that a
+  message should be relayed regardless if the error is permanent or not.
+
+- go/worker/p2p: Retry messages we consider permanent
+  ([#3386](https://github.com/oasisprotocol/oasis-core/issues/3386))
+
+  `p2pError.IsPermanent` notion of a permanent error differs from the upstream
+  `cenkalti/backoff/v4` notion. Correctly retry on `context.Canceled` errors as
+  we don't consider them permanent.
+
+- go/consensus/tendermint: Backport bug fixes
+  ([#3398](https://github.com/oasisprotocol/oasis-core/issues/3398))
+
+### Internal Changes
+
+- go/backoff: Update `cenkalti/backoff` to 4.1.0
+  ([#3390](https://github.com/oasisprotocol/oasis-core/issues/3390))
+
+- rust: bump crossbeam from 0.7.3 to 0.8.0
+  ([#3394](https://github.com/oasisprotocol/oasis-core/issues/3394))
+
 ## 20.11.1 (2020-10-07)
 
 | Protocol          | Version   |
