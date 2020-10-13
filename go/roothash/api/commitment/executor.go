@@ -126,7 +126,7 @@ func (m *ComputeBody) RootsForStorageReceipt() []hash.Hash {
 	}
 }
 
-// ValidateBasic performs basic compute body commitment parameters checks.
+// ValidateBasic performs basic executor commitment validity checks.
 func (m *ComputeBody) ValidateBasic() error {
 	header := &m.Header
 	switch m.Failure {

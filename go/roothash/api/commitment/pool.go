@@ -227,6 +227,14 @@ func (p *Pool) addOpenExecutorCommitment(
 		return ErrNotBasedOnCorrectBlock
 	}
 
+	if err := body.ValidateBasic(); err != nil {
+		logger.Debug("executor commitment validate basic error",
+			"body", body,
+			"err", err,
+		)
+		return ErrBadExecutorCommitment
+	}
+
 	if err := sv.VerifyTxnSchedulerSignature(body.TxnSchedSig, blk.Header.Round); err != nil {
 		logger.Debug("executor commitment has bad transaction scheduler signer",
 			"node_id", id,
@@ -237,15 +245,6 @@ func (p *Pool) addOpenExecutorCommitment(
 	}
 	if ok := body.VerifyTxnSchedSignature(blk.Header); !ok {
 		return ErrTxnSchedSigInvalid
-	}
-
-	// Validate basic.
-	if err := body.ValidateBasic(); err != nil {
-		logger.Debug("executor commitment validate basic error",
-			"body", body,
-			"err", err,
-		)
-		return ErrBadExecutorCommitment
 	}
 
 	switch openCom.IsIndicatingFailure() {
