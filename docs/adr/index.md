@@ -74,4 +74,5 @@ The following records currently exist:
 * [ADR 0000](0000-architectural-decision-records.md) - Architectural Decision Records
 * [ADR 0001](0001-tm-multi-root-apphash.md) - Multiple Roots Under the Tendermint Application Hash
 * [ADR 0002](0002-go-modules-compatible-git-tags.md) - Go Modules Compatible Git Tags
+* [ADR 0003](0003-consensus-runtime-token-transfer.md) - Consensus/Runtime Token Transfer
 <!-- markdownlint-enable line-length -->
