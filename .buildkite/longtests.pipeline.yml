@@ -97,7 +97,7 @@ steps:
     env:
       TEST_BASE_DIR: /var/tmp/longtests
       # libp2p logging.
-      IPFS_LOGGING: info
+      IPFS_LOGGING: debug
     agents:
       queue: default-daily
       buildkite_agent_class: stable
