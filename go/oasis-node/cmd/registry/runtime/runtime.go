@@ -320,7 +320,7 @@ func runtimeFromFlags() (*registry.Runtime, error) { // nolint: gocyclo
 		}
 
 		// Use in-memory MKVS tree to calculate the new root.
-		tree := mkvs.New(nil, nil)
+		tree := mkvs.New(nil, nil, storage.RootTypeState)
 		ctx := context.Background()
 		for _, logEntry := range log {
 			err = tree.Insert(ctx, logEntry.Key, logEntry.Value)

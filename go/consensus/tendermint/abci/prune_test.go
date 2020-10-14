@@ -14,6 +14,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/storage/mkvs"
 	mkvsDB "github.com/oasisprotocol/oasis-core/go/storage/mkvs/db/api"
 	mkvsBadgerDB "github.com/oasisprotocol/oasis-core/go/storage/mkvs/db/badger"
+	mkvsNode "github.com/oasisprotocol/oasis-core/go/storage/mkvs/node"
 )
 
 func TestPruneKeepN(t *testing.T) {
@@ -31,7 +32,7 @@ func TestPruneKeepN(t *testing.T) {
 		MaxCacheSize: 16 * 1024 * 1024,
 	})
 	require.NoError(err, "New")
-	tree := mkvs.New(nil, ndb)
+	tree := mkvs.New(nil, ndb, mkvsNode.RootTypeState)
 
 	ctx := context.Background()
 	for i := uint64(1); i <= 11; i++ {
@@ -41,7 +42,7 @@ func TestPruneKeepN(t *testing.T) {
 		var rootHash hash.Hash
 		_, rootHash, err = tree.Commit(ctx, common.Namespace{}, i)
 		require.NoError(err, "Commit")
-		err = ndb.Finalize(ctx, i, []hash.Hash{rootHash})
+		err = ndb.Finalize(ctx, []mkvsNode.Root{{Namespace: common.Namespace{}, Version: i, Type: mkvsNode.RootTypeState, Hash: rootHash}})
 		require.NoError(err, "Finalize")
 	}
 

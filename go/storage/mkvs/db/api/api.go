@@ -5,7 +5,6 @@ import (
 	"context"
 
 	"github.com/oasisprotocol/oasis-core/go/common"
-	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
 	"github.com/oasisprotocol/oasis-core/go/common/errors"
 	"github.com/oasisprotocol/oasis-core/go/storage/mkvs/node"
 	"github.com/oasisprotocol/oasis-core/go/storage/mkvs/writelog"
@@ -92,7 +91,7 @@ type NodeDB interface {
 	GetEarliestVersion(ctx context.Context) (uint64, error)
 
 	// GetRootsForVersion returns a list of roots stored under the given version.
-	GetRootsForVersion(ctx context.Context, version uint64) ([]hash.Hash, error)
+	GetRootsForVersion(ctx context.Context, version uint64) ([]node.Root, error)
 
 	// StartMultipartInsert prepares the database for a batch insert job from multiple chunks.
 	// Batches from this call onwards will keep track of inserted nodes so that they can be
@@ -117,10 +116,9 @@ type NodeDB interface {
 	// HasRoot checks whether the given root exists.
 	HasRoot(root node.Root) bool
 
-	// Finalize finalizes the specified version. The passed list of roots are the
-	// roots within the version that have been finalized. All non-finalized roots
-	// can be discarded.
-	Finalize(ctx context.Context, version uint64, roots []hash.Hash) error
+	// Finalize finalizes the version comprising the passed list of finalized roots.
+	// All non-finalized roots can be discarded.
+	Finalize(ctx context.Context, roots []node.Root) error
 
 	// Prune removes all roots recorded under the given version.
 	//
@@ -223,7 +221,7 @@ func (d *nopNodeDB) GetEarliestVersion(ctx context.Context) (uint64, error) {
 	return 0, nil
 }
 
-func (d *nopNodeDB) GetRootsForVersion(ctx context.Context, version uint64) ([]hash.Hash, error) {
+func (d *nopNodeDB) GetRootsForVersion(ctx context.Context, version uint64) ([]node.Root, error) {
 	return nil, nil
 }
 
@@ -239,7 +237,7 @@ func (d *nopNodeDB) AbortMultipartInsert() error {
 	return nil
 }
 
-func (d *nopNodeDB) Finalize(ctx context.Context, version uint64, roots []hash.Hash) error {
+func (d *nopNodeDB) Finalize(ctx context.Context, roots []node.Root) error {
 	return nil
 }
 

@@ -307,7 +307,9 @@ mod test {
 
     #[test]
     fn test_overlay() {
-        let mut tree = Tree::make().new(Box::new(NoopReadSyncer));
+        let mut tree = Tree::make()
+            .with_root_type(RootType::State)
+            .new(Box::new(NoopReadSyncer));
 
         // Generate some items.
         let items = vec![

@@ -102,6 +102,7 @@ func exportRuntime(dataDir, destDir string, id common.Namespace, rtg *roothash.G
 	root := storageAPI.Root{
 		Namespace: id,
 		Version:   rtg.Round,
+		Type:      storageAPI.RootTypeState,
 		Hash:      rtg.StateRoot,
 	}
 	tree := mkvs.NewWithRoot(storageBackend, nil, root)

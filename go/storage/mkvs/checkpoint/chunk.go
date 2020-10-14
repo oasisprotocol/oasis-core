@@ -133,6 +133,7 @@ func restoreChunk(ctx context.Context, ndb db.NodeDB, chunk *ChunkMetadata, r io
 	emptyRoot := node.Root{
 		Namespace: chunk.Root.Namespace,
 		Version:   chunk.Root.Version,
+		Type:      chunk.Root.Type,
 	}
 	emptyRoot.Hash.Empty()
 

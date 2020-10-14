@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/oasisprotocol/oasis-core/go/common"
 	"github.com/oasisprotocol/oasis-core/go/common/cache/lru"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
 	"github.com/oasisprotocol/oasis-core/go/storage/mkvs"
@@ -37,24 +36,10 @@ func (rc *RootCache) GetTree(ctx context.Context, root Root) (mkvs.Tree, error) 
 // already is in the node database.
 func (rc *RootCache) Apply(
 	ctx context.Context,
-	ns common.Namespace,
-	srcVersion uint64,
-	srcRoot hash.Hash,
-	dstVersion uint64,
-	dstRoot hash.Hash,
+	root Root,
+	expectedNewRoot Root,
 	writeLog WriteLog,
 ) (*hash.Hash, error) {
-	root := Root{
-		Namespace: ns,
-		Version:   srcVersion,
-		Hash:      srcRoot,
-	}
-	expectedNewRoot := Root{
-		Namespace: ns,
-		Version:   dstVersion,
-		Hash:      dstRoot,
-	}
-
 	// Sanity check the expected new root.
 	if !expectedNewRoot.Follows(&root) {
 		return nil, ErrRootMustFollowOld
@@ -64,13 +49,10 @@ func (rc *RootCache) Apply(
 	mu.Lock()
 	defer mu.Unlock()
 
-	var r hash.Hash
+	r := expectedNewRoot.Hash
 
 	// Check if we already have the expected new root in our local DB.
-	if rc.localDB.HasRoot(expectedNewRoot) {
-		// We do, don't apply anything.
-		r = dstRoot
-	} else {
+	if !rc.localDB.HasRoot(expectedNewRoot) {
 		// We don't, apply operations.
 		tree := mkvs.NewWithRoot(rc.remoteSyncer, rc.localDB, root, rc.persistEverything)
 		defer tree.Close()
@@ -84,13 +66,10 @@ func (rc *RootCache) Apply(
 			_, err = tree.CommitKnown(ctx, expectedNewRoot)
 		} else {
 			// Skip known root checks -- only for use in benchmarks.
-			_, r, err = tree.Commit(ctx, ns, dstVersion)
-			dstRoot = r
-			expectedNewRoot.Hash = r
+			_, r, err = tree.Commit(ctx, root.Namespace, expectedNewRoot.Version)
 		}
 		switch err {
 		case nil:
-			r = dstRoot
 		case mkvs.ErrKnownRootMismatch:
 			return nil, ErrExpectedRootMismatch
 		default:

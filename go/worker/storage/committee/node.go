@@ -169,11 +169,13 @@ func summaryFromBlock(blk *block.Block) *blockSummary {
 		IORoot: mkvsNode.Root{
 			Namespace: blk.Header.Namespace,
 			Version:   blk.Header.Round,
+			Type:      mkvsNode.RootTypeIO,
 			Hash:      blk.Header.IORoot,
 		},
 		StateRoot: mkvsNode.Root{
 			Namespace: blk.Header.Namespace,
 			Version:   blk.Header.Round,
+			Type:      mkvsNode.RootTypeState,
 			Hash:      blk.Header.StateRoot,
 		},
 	}
@@ -340,16 +342,13 @@ func NewNode(
 					InitialVersion: blk.Header.Round,
 				}, nil
 			},
-			GetRoots: func(ctx context.Context, version uint64) ([]hash.Hash, error) {
+			GetRoots: func(ctx context.Context, version uint64) ([]storageApi.Root, error) {
 				blk, berr := commonNode.Runtime.History().GetBlock(ctx, version)
 				if berr != nil {
 					return nil, berr
 				}
 
-				return []hash.Hash{
-					blk.Header.IORoot,
-					blk.Header.StateRoot,
-				}, nil
+				return blk.Header.StorageRoots(), nil
 			},
 		}
 		n.checkpointer, err = checkpoint.NewCheckpointer(
@@ -488,10 +487,7 @@ func (n *Node) ForceFinalize(ctx context.Context, round uint64) error {
 	if err != nil {
 		return err
 	}
-	return n.localStorage.NodeDB().Finalize(ctx, round, []hash.Hash{
-		block.Header.IORoot,
-		block.Header.StateRoot,
-	})
+	return n.localStorage.NodeDB().Finalize(ctx, block.Header.StorageRoots())
 }
 
 func (n *Node) fetchDiff(round uint64, prevRoot, thisRoot *mkvsNode.Root, fetchMask outstandingMask) {
@@ -555,9 +551,9 @@ func (n *Node) fetchDiff(round uint64, prevRoot, thisRoot *mkvsNode.Root, fetchM
 }
 
 func (n *Node) finalize(summary *blockSummary) {
-	err := n.localStorage.NodeDB().Finalize(n.ctx, summary.Round, []hash.Hash{
-		summary.IORoot.Hash,
-		summary.StateRoot.Hash,
+	err := n.localStorage.NodeDB().Finalize(n.ctx, []mkvsNode.Root{
+		summary.IORoot,
+		summary.StateRoot,
 	})
 	switch err {
 	case nil:
@@ -598,6 +594,7 @@ func (n *Node) initGenesis(rt *registryApi.Runtime, genesisBlock *block.Block) e
 	stateRoot := storageApi.Root{
 		Namespace: rt.ID,
 		Version:   genesisBlock.Header.Round,
+		Type:      storageApi.RootTypeState,
 		Hash:      genesisBlock.Header.StateRoot,
 	}
 
@@ -618,6 +615,7 @@ func (n *Node) initGenesis(rt *registryApi.Runtime, genesisBlock *block.Block) e
 			for v := latestVersion; v < stateRoot.Version; v++ {
 				_, err = n.localStorage.Apply(n.ctx, &storageApi.ApplyRequest{
 					Namespace: rt.ID,
+					RootType:  storageApi.RootTypeState,
 					SrcRound:  v,
 					SrcRoot:   stateRoot.Hash,
 					DstRound:  v + 1,
@@ -628,9 +626,13 @@ func (n *Node) initGenesis(rt *registryApi.Runtime, genesisBlock *block.Block) e
 					return fmt.Errorf("failed to fill in version %d: %w", v, err)
 				}
 
-				err = n.localStorage.NodeDB().Finalize(n.ctx, v+1, []hash.Hash{
-					stateRoot.Hash, // We can ignore I/O roots.
-				})
+				err = n.localStorage.NodeDB().Finalize(n.ctx, []storageApi.Root{{
+					Namespace: rt.ID,
+					Version:   v + 1,
+					Type:      storageApi.RootTypeState,
+					Hash:      stateRoot.Hash,
+					// We can ignore I/O roots.
+				}})
 				if err != nil {
 					return fmt.Errorf("failed to finalize version %d: %w", v, err)
 				}
@@ -667,6 +669,7 @@ func (n *Node) initGenesis(rt *registryApi.Runtime, genesisBlock *block.Block) e
 
 		_, err := n.localStorage.Apply(n.ctx, &storageApi.ApplyRequest{
 			Namespace: rt.ID,
+			RootType:  storageApi.RootTypeState,
 			SrcRound:  rt.Genesis.Round,
 			SrcRoot:   emptyRoot,
 			DstRound:  rt.Genesis.Round,
@@ -960,6 +963,7 @@ mainLoop:
 			if lastDiff.fetched {
 				_, err = n.localStorage.Apply(n.ctx, &storageApi.ApplyRequest{
 					Namespace: lastDiff.thisRoot.Namespace,
+					RootType:  lastDiff.thisRoot.Type,
 					SrcRound:  lastDiff.prevRoot.Version,
 					SrcRoot:   lastDiff.prevRoot.Hash,
 					DstRound:  lastDiff.thisRoot.Version,
@@ -1087,6 +1091,7 @@ mainLoop:
 				prevIORoot := mkvsNode.Root{ // IO roots aren't chained, so clear it (but leave cache intact).
 					Namespace: this.IORoot.Namespace,
 					Version:   this.IORoot.Version,
+					Type:      mkvsNode.RootTypeIO,
 				}
 				prevIORoot.Hash.Empty()
 

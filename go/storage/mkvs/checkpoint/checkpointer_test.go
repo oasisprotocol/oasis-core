@@ -42,6 +42,7 @@ func testCheckpointer(t *testing.T, earliestVersion uint64, preExistingData bool
 	var root node.Root
 	root.Empty()
 	root.Namespace = testNs
+	root.Type = node.RootTypeState
 
 	if preExistingData && earliestVersion > 0 {
 		// Create some pre-existing roots in the database.
@@ -57,7 +58,7 @@ func testCheckpointer(t *testing.T, earliestVersion uint64, preExistingData bool
 			root.Version = round
 			root.Hash = rootHash
 
-			err = ndb.Finalize(ctx, root.Version, []hash.Hash{root.Hash})
+			err = ndb.Finalize(ctx, []node.Root{root})
 			require.NoError(err, "Finalize")
 		}
 	} else {
@@ -80,7 +81,7 @@ func testCheckpointer(t *testing.T, earliestVersion uint64, preExistingData bool
 			ChunkSize:      16 * 1024,
 			InitialVersion: earliestVersion,
 		},
-		GetRoots: func(ctx context.Context, version uint64) ([]hash.Hash, error) {
+		GetRoots: func(ctx context.Context, version uint64) ([]node.Root, error) {
 			if version < earliestVersion {
 				// Simulate early block fetch failing.
 				return nil, fmt.Errorf("version not found")
@@ -102,7 +103,7 @@ func testCheckpointer(t *testing.T, earliestVersion uint64, preExistingData bool
 		root.Version = round
 		root.Hash = rootHash
 
-		err = ndb.Finalize(ctx, root.Version, []hash.Hash{root.Hash})
+		err = ndb.Finalize(ctx, []node.Root{root})
 		require.NoError(err, "Finalize")
 		cp.NotifyNewVersion(round)
 

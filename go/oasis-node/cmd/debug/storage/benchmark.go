@@ -159,6 +159,7 @@ func doBenchmark(cmd *cobra.Command, args []string) { // nolint: gocyclo
 					b.Fatalf("failed to Open(): %v", err)
 				}
 				newRoot.Hash = receiptBody.Roots[0]
+				newRoot.Type = receiptBody.RootTypes[0]
 				b.StartTimer()
 			}
 		})

@@ -53,6 +53,7 @@ func (r *runtime) Call(ctx context.Context, body *protocol.Body) (*protocol.Body
 		emptyRoot := mkvsNode.Root{
 			Namespace: rq.Block.Header.Namespace,
 			Version:   rq.Block.Header.Round + 1,
+			Type:      mkvsNode.RootTypeIO,
 		}
 		emptyRoot.Hash.Empty()
 

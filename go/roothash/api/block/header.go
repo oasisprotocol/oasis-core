@@ -102,18 +102,21 @@ func (h *Header) EncodedHash() hash.Hash {
 }
 
 // StorageRoots returns the storage roots contained in this header.
-func (h *Header) StorageRoots() (roots []storage.Root) {
-	for _, rootHash := range []hash.Hash{
-		h.IORoot,
-		h.StateRoot,
-	} {
-		roots = append(roots, storage.Root{
+func (h *Header) StorageRoots() []storage.Root {
+	return []storage.Root{
+		{
 			Namespace: h.Namespace,
 			Version:   h.Round,
-			Hash:      rootHash,
-		})
+			Type:      storage.RootTypeIO,
+			Hash:      h.IORoot,
+		},
+		{
+			Namespace: h.Namespace,
+			Version:   h.Round,
+			Type:      storage.RootTypeState,
+			Hash:      h.StateRoot,
+		},
 	}
-	return
 }
 
 // RootsForStorageReceipt gets the merkle roots that must be part of
@@ -122,6 +125,16 @@ func (h *Header) RootsForStorageReceipt() []hash.Hash {
 	return []hash.Hash{
 		h.IORoot,
 		h.StateRoot,
+	}
+}
+
+// RootTypesForStorageReceipt gets the storage root type sequence for the roots
+// returned by RootsForStorageReceipt.
+func (h *Header) RootTypesForStorageReceipt() []storage.RootType {
+	// NOTE: Keep these in the same order as in RootsForStorageReceipt above!
+	return []storage.RootType{
+		storage.RootTypeIO,
+		storage.RootTypeState,
 	}
 }
 
@@ -135,6 +148,7 @@ func (h *Header) VerifyStorageReceiptSignatures() error {
 		Version:   1,
 		Namespace: h.Namespace,
 		Round:     h.Round,
+		RootTypes: h.RootTypesForStorageReceipt(),
 		Roots:     h.RootsForStorageReceipt(),
 	}
 
@@ -157,11 +171,18 @@ func (h *Header) VerifyStorageReceipt(receipt *storage.ReceiptBody) error {
 	}
 
 	roots := h.RootsForStorageReceipt()
+	types := h.RootTypesForStorageReceipt()
 	if len(receipt.Roots) != len(roots) {
 		return errors.New("roothash: receipt has unexpected number of roots")
 	}
+	if len(receipt.RootTypes) != len(types) {
+		return errors.New("roothash: receipt has unexpected number of root types")
+	}
 
 	for idx, v := range roots {
+		if types[idx] != receipt.RootTypes[idx] {
+			return errors.New("roothash: receipt has unexpected root types")
+		}
 		if !bytes.Equal(v[:], receipt.Roots[idx][:]) {
 			return errors.New("roothash: receipt has unexpected roots")
 		}

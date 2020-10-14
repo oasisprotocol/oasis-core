@@ -37,7 +37,7 @@ func TestOverlay(t *testing.T) {
 		{seek: node.Key("key A"), pos: -1},
 	}
 
-	tree := New(nil, nil)
+	tree := New(nil, nil, node.RootTypeState)
 	defer tree.Close()
 
 	// Create an overlay over an empty tree and insert some items into the overlay.

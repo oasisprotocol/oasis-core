@@ -141,6 +141,8 @@ type ReceiptBody struct {
 	Namespace common.Namespace `json:"ns"`
 	// Round is the chain round in which the root(s) are stored.
 	Round uint64 `json:"round"`
+	// RootTypes are the storage types of the merkle roots in Roots.
+	RootTypes []RootType `json:"root_types"`
 	// Roots are the merkle roots of the merklized data structure that the
 	// storage node is certifying to store.
 	Roots []hash.Hash `json:"roots"`
@@ -157,17 +159,21 @@ func (s *Receipt) Open(receipt *ReceiptBody) error {
 }
 
 // SignReceipt signs a storage receipt for the given roots.
-func SignReceipt(signer signature.Signer, ns common.Namespace, round uint64, roots []hash.Hash) (*Receipt, error) {
+func SignReceipt(signer signature.Signer, ns common.Namespace, round uint64, rootTypes []RootType, roots []hash.Hash) (*Receipt, error) {
 	if signer == nil {
 		return nil, ErrCantProve
 	}
 	if len(roots) == 0 {
 		return nil, ErrNoRoots
 	}
+	if len(roots) != len(rootTypes) {
+		return nil, ErrCantProve
+	}
 	receipt := ReceiptBody{
 		Version:   1,
 		Namespace: ns,
 		Round:     round,
+		RootTypes: rootTypes,
 		Roots:     roots,
 	}
 	signed, err := signature.SignSigned(signer, ReceiptSignatureContext, &receipt)
@@ -179,6 +185,18 @@ func SignReceipt(signer signature.Signer, ns common.Namespace, round uint64, roo
 		Signed: *signed,
 	}, nil
 }
+
+// RootType is a storage root type.
+type RootType = mkvsNode.RootType
+
+const (
+	// RootTypeInvalid is an invalid/uninitialized root type.
+	RootTypeInvalid = mkvsNode.RootTypeInvalid
+	// RootTypeState is the type for state storage roots.
+	RootTypeState = mkvsNode.RootTypeState
+	// RootTypeIO is the type for IO storage roots.
+	RootTypeIO = mkvsNode.RootTypeIO
+)
 
 // Root is a storage root.
 type Root = mkvsNode.Root
@@ -225,6 +243,8 @@ type NodeDB = nodedb.NodeDB
 
 // ApplyOp is an apply operation within a batch of apply operations.
 type ApplyOp struct {
+	// RootType is the type of root this operation is for.
+	RootType RootType `json:"root_type"`
 	// SrcRound is the source root round.
 	SrcRound uint64 `json:"src_round"`
 	// SrcRoot is the merkle root to apply the operations against. It may
@@ -240,6 +260,7 @@ type ApplyOp struct {
 // ApplyRequest is an Apply request.
 type ApplyRequest struct {
 	Namespace common.Namespace `json:"namespace"`
+	RootType  RootType         `json:"root_type"`
 	SrcRound  uint64           `json:"src_round"`
 	SrcRoot   hash.Hash        `json:"src_root"`
 	DstRound  uint64           `json:"dst_round"`

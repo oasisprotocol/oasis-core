@@ -68,6 +68,7 @@ func (w *blockWatcher) checkBlock(blk *block.Block) error {
 	ioRoot := storage.Root{
 		Namespace: blk.Header.Namespace,
 		Version:   blk.Header.Round,
+		Type:      storage.RootTypeIO,
 		Hash:      blk.Header.IORoot,
 	}
 

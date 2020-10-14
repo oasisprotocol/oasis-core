@@ -16,7 +16,7 @@ use tempfile::{self, TempDir};
 use super::{rpc, Driver};
 use crate::{
     common::{crypto::hash::Hash, namespace::Namespace},
-    storage::mkvs::{sync::*, WriteLog},
+    storage::mkvs::{sync::*, tree::RootType, WriteLog},
 };
 
 /// Location of the protocol server binary.
@@ -100,6 +100,7 @@ impl Driver for ProtocolServer {
         self.client
             .apply(&rpc::ApplyRequest {
                 namespace,
+                root_type: RootType::State, // Doesn't matter for tests.
                 src_round: version,
                 src_root: existing_root,
                 dst_round: version,

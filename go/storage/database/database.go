@@ -103,20 +103,29 @@ func (ba *databaseBackend) Apply(ctx context.Context, request *api.ApplyRequest)
 		return nil, fmt.Errorf("storage/database: failed to Apply: %w", api.ErrReadOnly)
 	}
 
+	oldRoot := api.Root{
+		Namespace: request.Namespace,
+		Version:   request.SrcRound,
+		Type:      request.RootType,
+		Hash:      request.SrcRoot,
+	}
+	expectedNewRoot := api.Root{
+		Namespace: request.Namespace,
+		Version:   request.DstRound,
+		Type:      request.RootType,
+		Hash:      request.DstRoot,
+	}
 	newRoot, err := ba.rootCache.Apply(
 		ctx,
-		request.Namespace,
-		request.SrcRound,
-		request.SrcRoot,
-		request.DstRound,
-		request.DstRoot,
+		oldRoot,
+		expectedNewRoot,
 		request.WriteLog,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("storage/database: failed to Apply: %w", err)
 	}
 
-	receipt, err := api.SignReceipt(ba.signer, request.Namespace, request.DstRound, []hash.Hash{*newRoot})
+	receipt, err := api.SignReceipt(ba.signer, request.Namespace, request.DstRound, []api.RootType{request.RootType}, []hash.Hash{*newRoot})
 	return []*api.Receipt{receipt}, err
 }
 
@@ -126,15 +135,34 @@ func (ba *databaseBackend) ApplyBatch(ctx context.Context, request *api.ApplyBat
 	}
 
 	newRoots := make([]hash.Hash, 0, len(request.Ops))
+	newTypes := make([]api.RootType, 0, len(request.Ops))
 	for _, op := range request.Ops {
-		newRoot, err := ba.rootCache.Apply(ctx, request.Namespace, op.SrcRound, op.SrcRoot, request.DstRound, op.DstRoot, op.WriteLog)
+		oldRoot := api.Root{
+			Namespace: request.Namespace,
+			Version:   op.SrcRound,
+			Type:      op.RootType,
+			Hash:      op.SrcRoot,
+		}
+		expectedNewRoot := api.Root{
+			Namespace: request.Namespace,
+			Version:   request.DstRound,
+			Type:      op.RootType,
+			Hash:      op.DstRoot,
+		}
+		newRoot, err := ba.rootCache.Apply(
+			ctx,
+			oldRoot,
+			expectedNewRoot,
+			op.WriteLog,
+		)
 		if err != nil {
 			return nil, fmt.Errorf("storage/database: failed to Apply, op: %w", err)
 		}
 		newRoots = append(newRoots, *newRoot)
+		newTypes = append(newTypes, op.RootType)
 	}
 
-	receipt, err := api.SignReceipt(ba.signer, request.Namespace, request.DstRound, newRoots)
+	receipt, err := api.SignReceipt(ba.signer, request.Namespace, request.DstRound, newTypes, newRoots)
 	return []*api.Receipt{receipt}, err
 }
 

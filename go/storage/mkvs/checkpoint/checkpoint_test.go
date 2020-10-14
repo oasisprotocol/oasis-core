@@ -40,7 +40,7 @@ func TestFileCheckpointCreator(t *testing.T) {
 	require.NoError(err, "New")
 
 	ctx := context.Background()
-	tree := mkvs.New(nil, ndb)
+	tree := mkvs.New(nil, ndb, node.RootTypeState)
 	for i := 0; i < 1000; i++ {
 		err = tree.Insert(ctx, []byte(strconv.Itoa(i)), []byte(strconv.Itoa(i)))
 		require.NoError(err, "Insert")
@@ -51,6 +51,7 @@ func TestFileCheckpointCreator(t *testing.T) {
 	root := node.Root{
 		Namespace: testNs,
 		Version:   1,
+		Type:      node.RootTypeState,
 		Hash:      rootHash,
 	}
 
@@ -214,7 +215,7 @@ func TestFileCheckpointCreator(t *testing.T) {
 			require.True(errors.Is(err, ErrChunkAlreadyRestored))
 		}
 	}
-	err = ndb2.Finalize(ctx, root.Version, []hash.Hash{root.Hash})
+	err = ndb2.Finalize(ctx, []node.Root{root})
 	require.NoError(err, "Finalize")
 
 	// Verify that everything has been restored.
@@ -283,6 +284,7 @@ func TestPruneGapAfterCheckpointRestore(t *testing.T) {
 	root := node.Root{
 		Namespace: testNs,
 		Version:   0,
+		Type:      node.RootTypeState,
 	}
 	root.Hash.Empty()
 
@@ -313,7 +315,13 @@ func TestPruneGapAfterCheckpointRestore(t *testing.T) {
 		var rootHash1 hash.Hash
 		_, rootHash1, err = tree1.Commit(ctx, testNs, v)
 		require.NoError(err, "Commit")
-		err = ndb1.Finalize(ctx, v, []hash.Hash{rootHash1})
+		root1 := node.Root{
+			Namespace: testNs,
+			Version:   v,
+			Type:      node.RootTypeState,
+			Hash:      rootHash1,
+		}
+		err = ndb1.Finalize(ctx, []node.Root{root1})
 		require.NoError(err, "Finalize")
 		tree1.Close()
 
@@ -322,7 +330,13 @@ func TestPruneGapAfterCheckpointRestore(t *testing.T) {
 			_, rootHash2, err = tree2.Commit(ctx, testNs, v)
 			require.NoError(err, "Commit")
 			require.EqualValues(rootHash1, rootHash2, "root hashes should be equal")
-			err = ndb2.Finalize(ctx, v, []hash.Hash{rootHash2})
+			root2 := node.Root{
+				Namespace: testNs,
+				Version:   v,
+				Type:      node.RootTypeState,
+				Hash:      rootHash2,
+			}
+			err = ndb2.Finalize(ctx, []node.Root{root2})
 			require.NoError(err, "Finalize")
 			tree2.Close()
 		}
@@ -357,7 +371,7 @@ func TestPruneGapAfterCheckpointRestore(t *testing.T) {
 		_, err = rs.RestoreChunk(ctx, uint64(i), &buf)
 		require.NoError(err, "RestoreChunk")
 	}
-	err = ndb2.Finalize(ctx, root.Version, []hash.Hash{root.Hash})
+	err = ndb2.Finalize(ctx, []node.Root{root})
 	require.NoError(err, "Finalize")
 
 	// Now attempt to prune everything up to (but excluding) the current root.
@@ -383,7 +397,13 @@ func TestPruneGapAfterCheckpointRestore(t *testing.T) {
 		var rootHash1 hash.Hash
 		_, rootHash1, err = tree1.Commit(ctx, testNs, v)
 		require.NoError(err, "Commit")
-		err = ndb1.Finalize(ctx, v, []hash.Hash{rootHash1})
+		root1 := node.Root{
+			Namespace: testNs,
+			Version:   v,
+			Type:      node.RootTypeState,
+			Hash:      rootHash1,
+		}
+		err = ndb1.Finalize(ctx, []node.Root{root1})
 		require.NoError(err, "Finalize")
 		tree1.Close()
 
@@ -391,7 +411,13 @@ func TestPruneGapAfterCheckpointRestore(t *testing.T) {
 		_, rootHash2, err = tree2.Commit(ctx, testNs, v)
 		require.NoError(err, "Commit")
 		require.EqualValues(rootHash1, rootHash2, "root hashes should be equal")
-		err = ndb2.Finalize(ctx, v, []hash.Hash{rootHash2})
+		root2 := node.Root{
+			Namespace: testNs,
+			Version:   v,
+			Type:      node.RootTypeState,
+			Hash:      rootHash2,
+		}
+		err = ndb2.Finalize(ctx, []node.Root{root2})
 		require.NoError(err, "Finalize")
 		tree2.Close()
 

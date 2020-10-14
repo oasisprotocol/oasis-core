@@ -51,19 +51,47 @@ var (
 	_ encoding.BinaryUnmarshaler = (*LeafNode)(nil)
 )
 
+// RootType is a storage root type.
+type RootType uint8
+
+const (
+	// RootTypeInvalid is an invalid/uninitialized root type.
+	RootTypeInvalid RootType = 0
+	// RootTypeState is the type for state storage roots.
+	RootTypeState RootType = 1
+	// RootTypeIO is the type for IO storage roots.
+	RootTypeIO RootType = 2
+)
+
+// String returns the string representation of the storage root type.
+func (r RootType) String() string {
+	switch r {
+	case RootTypeInvalid:
+		return "invalid"
+	case RootTypeState:
+		return "state-root"
+	case RootTypeIO:
+		return "io-root"
+	default:
+		return fmt.Sprintf("[unknown root type: %d]", r)
+	}
+}
+
 // Root is a storage root.
 type Root struct {
 	// Namespace is the namespace under which the root is stored.
 	Namespace common.Namespace `json:"ns"`
 	// Version is the monotonically increasing version number in which the root is stored.
 	Version uint64 `json:"version"`
+	// Type is the type of storage this root is used for.
+	Type RootType `json:"root_type"`
 	// Hash is the merkle root hash.
 	Hash hash.Hash `json:"hash"`
 }
 
 // String returns the string representation of a storage root.
 func (r Root) String() string {
-	return fmt.Sprintf("<Root ns=%s version=%d hash=%s>", r.Namespace, r.Version, r.Hash)
+	return fmt.Sprintf("<Root ns=%s version=%d type=%v hash=%s>", r.Namespace, r.Version, r.Type, r.Hash)
 }
 
 // Empty sets the storage root to an empty root.
@@ -90,6 +118,9 @@ func (r *Root) IsEmpty() bool {
 
 // Equal compares against another root for equality.
 func (r *Root) Equal(other *Root) bool {
+	if r.Type != other.Type {
+		return false
+	}
 	if !r.Namespace.Equal(&other.Namespace) {
 		return false
 	}
@@ -108,6 +139,9 @@ func (r *Root) Equal(other *Root) bool {
 // It is the responsibility of the caller to check if the merkle roots
 // follow each other.
 func (r *Root) Follows(other *Root) bool {
+	if r.Type != other.Type {
+		return false
+	}
 	if !r.Namespace.Equal(&other.Namespace) {
 		return false
 	}

@@ -52,7 +52,7 @@ type cache struct {
 // MaxPrefetchDepth is the maximum depth of the prefeteched tree.
 const MaxPrefetchDepth = 255
 
-func newCache(ndb db.NodeDB, rs syncer.ReadSyncer) *cache {
+func newCache(ndb db.NodeDB, rs syncer.ReadSyncer, rootType node.RootType) *cache {
 	c := &cache{
 		db:                          ndb,
 		rs:                          rs,
@@ -64,6 +64,7 @@ func newCache(ndb db.NodeDB, rs syncer.ReadSyncer) *cache {
 	}
 	// By default the sync root is an empty root.
 	c.syncRoot.Empty()
+	c.syncRoot.Type = rootType
 
 	return c
 }

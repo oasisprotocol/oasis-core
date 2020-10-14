@@ -14,7 +14,7 @@ import (
 
 func TestIterator(t *testing.T) {
 	ctx := context.Background()
-	tree := New(nil, nil)
+	tree := New(nil, nil, 0)
 	defer tree.Close()
 
 	// Test with an empty tree.
@@ -139,7 +139,7 @@ func TestIterator(t *testing.T) {
 
 func TestIteratorCase1(t *testing.T) {
 	ctx := context.Background()
-	tree := New(nil, nil)
+	tree := New(nil, nil, 0)
 	defer tree.Close()
 
 	items := writelog.WriteLog{
@@ -162,7 +162,7 @@ func TestIteratorCase1(t *testing.T) {
 
 func TestIteratorCase2(t *testing.T) {
 	ctx := context.Background()
-	tree := New(nil, nil)
+	tree := New(nil, nil, 0)
 	defer tree.Close()
 
 	for _, key := range []string{
@@ -187,7 +187,7 @@ func TestIteratorCase2(t *testing.T) {
 
 func TestIteratorEviction(t *testing.T) {
 	ctx := context.Background()
-	tree := New(nil, nil, Capacity(0, 0))
+	tree := New(nil, nil, 0, Capacity(0, 0))
 	defer tree.Close()
 
 	keys, values := generateKeyValuePairsEx("T", 100)

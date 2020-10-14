@@ -54,7 +54,8 @@ func prepareWriteLog(values [][]byte) api.WriteLog {
 
 func CalculateExpectedNewRoot(t *testing.T, wl api.WriteLog, namespace common.Namespace, round uint64) hash.Hash {
 	// Use in-memory MKVS tree to calculate the expected new root.
-	tree := mkvs.New(nil, nil)
+	// Root type doesn't matter, we only need the hash.
+	tree := mkvs.New(nil, nil, api.RootTypeState)
 	for _, logEntry := range wl {
 		err := tree.Insert(context.Background(), logEntry.Key, logEntry.Value)
 		require.NoError(t, err, "error inserting writeLog entry into MKVS tree")
@@ -101,6 +102,7 @@ func testBasic(t *testing.T, localBackend api.LocalBackend, backend api.Backend,
 
 	wl := prepareWriteLog(testValues)
 	expectedNewRoot := CalculateExpectedNewRoot(t, wl, namespace, round)
+	expectedNewRootType := api.RootTypeState
 	var receipts []*api.Receipt
 	var receiptBody api.ReceiptBody
 	var err error
@@ -108,6 +110,7 @@ func testBasic(t *testing.T, localBackend api.LocalBackend, backend api.Backend,
 	// Apply write log to an empty root.
 	receipts, err = backend.Apply(ctx, &api.ApplyRequest{
 		Namespace: namespace,
+		RootType:  api.RootTypeState,
 		SrcRound:  round,
 		SrcRoot:   rootHash,
 		DstRound:  round,
@@ -126,6 +129,7 @@ func testBasic(t *testing.T, localBackend api.LocalBackend, backend api.Backend,
 		require.Equal(t, namespace, receiptBody.Namespace, "receiptBody should contain correct namespace")
 		require.EqualValues(t, round, receiptBody.Round, "receiptBody should contain correct round")
 		require.Equal(t, 1, len(receiptBody.Roots), "receiptBody should contain 1 root")
+		require.EqualValues(t, expectedNewRootType, receiptBody.RootTypes[0], "receiptBody root type should equal the expected new root type")
 		require.EqualValues(t, expectedNewRoot, receiptBody.Roots[0], "receiptBody root should equal the expected new root")
 	}
 
@@ -133,8 +137,8 @@ func testBasic(t *testing.T, localBackend api.LocalBackend, backend api.Backend,
 	wl2 := prepareWriteLog(testValues[0:2])
 	expectedNewRoot2 := CalculateExpectedNewRoot(t, wl2, namespace, round)
 	applyOps := []api.ApplyOp{
-		{SrcRound: round, SrcRoot: rootHash, DstRoot: expectedNewRoot, WriteLog: wl},
-		{SrcRound: round, SrcRoot: rootHash, DstRoot: expectedNewRoot2, WriteLog: wl2},
+		{RootType: api.RootTypeState, SrcRound: round, SrcRoot: rootHash, DstRoot: expectedNewRoot, WriteLog: wl},
+		{RootType: api.RootTypeState, SrcRound: round, SrcRoot: rootHash, DstRoot: expectedNewRoot2, WriteLog: wl2},
 	}
 
 	// Apply a batch of operations against the MKVS.
@@ -153,12 +157,14 @@ func testBasic(t *testing.T, localBackend api.LocalBackend, backend api.Backend,
 		require.Equal(t, len(applyOps), len(receiptBody.Roots), "receiptBody should contain as many roots as there were applyOps")
 		for i, applyOp := range applyOps {
 			require.EqualValues(t, applyOp.DstRoot, receiptBody.Roots[i], "receiptBody root for an applyOp should equal the expected new root")
+			require.EqualValues(t, applyOp.RootType, receiptBody.RootTypes[i], "receiptBody root type for an applyOp should equal the expected new root type")
 		}
 	}
 
 	newRoot := api.Root{
 		Namespace: namespace,
 		Version:   round,
+		Type:      api.RootTypeState,
 		Hash:      receiptBody.Roots[0],
 	}
 
@@ -200,6 +206,7 @@ func testBasic(t *testing.T, localBackend api.LocalBackend, backend api.Backend,
 	root := api.Root{
 		Namespace: namespace,
 		Version:   round,
+		Type:      api.RootTypeState,
 		Hash:      rootHash,
 	}
 	it, err := backend.GetDiff(ctx, &api.GetDiffRequest{StartRoot: root, EndRoot: newRoot})
@@ -214,6 +221,7 @@ func testBasic(t *testing.T, localBackend api.LocalBackend, backend api.Backend,
 	// Now try applying the same operations again, we should get the same root.
 	receipts, err = backend.Apply(ctx, &api.ApplyRequest{
 		Namespace: namespace,
+		RootType:  api.RootTypeState,
 		SrcRound:  round,
 		SrcRoot:   rootHash,
 		DstRound:  round,
@@ -233,6 +241,7 @@ func testBasic(t *testing.T, localBackend api.LocalBackend, backend api.Backend,
 		require.EqualValues(t, round, receiptBody.Round, "receiptBody should contain correct round")
 		require.Equal(t, 1, len(receiptBody.Roots), "receiptBody should contain 1 root")
 		require.EqualValues(t, expectedNewRoot, receiptBody.Roots[0], "receiptBody root should equal the expected new root")
+		require.EqualValues(t, expectedNewRootType, receiptBody.RootTypes[0], "receiptBody root should equal the expected new root")
 	}
 
 	// Test checkpoints.

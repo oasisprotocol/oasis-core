@@ -8,7 +8,7 @@ use oasis_core_runtime::{
     common::{cbor, crypto::hash::Hash, namespace::Namespace},
     consensus::roothash::Block,
     storage::{
-        mkvs::{sync::*, Iterator, Prefix, Root, Tree, WriteLog},
+        mkvs::{sync::*, Iterator, Prefix, Root, RootType, Tree, WriteLog},
         MKVS,
     },
     transaction::types::{TxnCall, TxnOutput},
@@ -66,6 +66,7 @@ impl Clone for BlockSnapshot {
             .with_root(Root {
                 namespace: self.block.header.namespace,
                 version: self.block.header.round,
+                root_type: RootType::State,
                 hash: self.block.header.state_root,
             })
             .new(Box::new(read_syncer.clone()));
@@ -86,6 +87,7 @@ impl BlockSnapshot {
             .with_root(Root {
                 namespace: block.header.namespace,
                 version: block.header.round,
+                root_type: RootType::State,
                 hash: block.header.state_root,
             })
             .new(Box::new(read_syncer.clone()));
