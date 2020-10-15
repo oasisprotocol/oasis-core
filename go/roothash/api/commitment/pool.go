@@ -29,12 +29,13 @@ var (
 	ErrDiscrepancyDetected    = errors.New(moduleName, 8, "roothash/commitment: discrepancy detected")
 	ErrStillWaiting           = errors.New(moduleName, 9, "roothash/commitment: still waiting for commits")
 	ErrInsufficientVotes      = errors.New(moduleName, 10, "roothash/commitment: insufficient votes to finalize discrepancy resolution round")
-	ErrBadExecutorCommits     = errors.New(moduleName, 11, "roothash/commitment: bad executor commitments")
+	ErrBadExecutorCommitment  = errors.New(moduleName, 11, "roothash/commitment: bad executor commitment")
 	ErrTxnSchedSigInvalid     = p2pError.Permanent(errors.New(moduleName, 12, "roothash/commitment: txn scheduler signature invalid"))
 	ErrInvalidMessages        = p2pError.Permanent(errors.New(moduleName, 13, "roothash/commitment: invalid messages"))
 	ErrBadStorageReceipts     = errors.New(moduleName, 14, "roothash/commitment: bad storage receipts")
 	ErrTimeoutNotCorrectRound = errors.New(moduleName, 15, "roothash/commitment: timeout not for correct round")
 	ErrNodeIsScheduler        = errors.New(moduleName, 16, "roothash/commitment: node is scheduler")
+	ErrMajorityFailure        = errors.New(moduleName, 17, "roothash/commitment: majority commitments indicated failure")
 )
 
 const (
@@ -226,33 +227,12 @@ func (p *Pool) addOpenExecutorCommitment(
 		return ErrNotBasedOnCorrectBlock
 	}
 
-	// Verify RAK-attestation.
-	if p.Runtime.TEEHardware != node.TEEHardwareInvalid {
-		n, err := nl.Node(ctx, id)
-		if err != nil {
-			// This should never happen as nodes cannot disappear mid-epoch.
-			logger.Warn("unable to fetch node descriptor to verify RAK-attestation",
-				"err", err,
-				"node_id", id,
-			)
-			return ErrNotInCommittee
-		}
-
-		rt := n.GetRuntime(p.Runtime.ID)
-		if rt == nil {
-			// We currently prevent this case throughout the rest of the system.
-			// Still, it's prudent to check.
-			logger.Warn("committee member not registered with this runtime",
-				"runtime_id", p.Runtime.ID,
-				"node_id", id,
-			)
-			return ErrNotInCommittee
-		}
-
-		rak := rt.Capabilities.TEE.RAK
-		if !rak.Verify(ComputeResultsHeaderSignatureContext, cbor.Marshal(header), body.RakSig[:]) {
-			return ErrRakSigInvalid
-		}
+	if err := body.ValidateBasic(); err != nil {
+		logger.Debug("executor commitment validate basic error",
+			"body", body,
+			"err", err,
+		)
+		return ErrBadExecutorCommitment
 	}
 
 	if err := sv.VerifyTxnSchedulerSignature(body.TxnSchedSig, blk.Header.Round); err != nil {
@@ -267,28 +247,65 @@ func (p *Pool) addOpenExecutorCommitment(
 		return ErrTxnSchedSigInvalid
 	}
 
-	// Check if the header refers to merkle roots in storage.
-	if uint64(len(body.StorageSignatures)) < p.Runtime.Storage.MinWriteReplication {
-		logger.Debug("executor commitment doesn't have enough storage receipts",
-			"node_id", id,
-			"min_write_replication", p.Runtime.Storage.MinWriteReplication,
-			"num_receipts", len(body.StorageSignatures),
-		)
-		return ErrBadStorageReceipts
-	}
-	if err := sv.VerifyCommitteeSignatures(scheduler.KindStorage, body.StorageSignatures); err != nil {
-		logger.Debug("executor commitment has bad storage receipt signers",
-			"node_id", id,
-			"err", err,
-		)
-		return err
-	}
-	if err := body.VerifyStorageReceiptSignatures(blk.Header.Namespace); err != nil {
-		logger.Debug("executor commitment has bad storage receipt signatures",
-			"node_id", id,
-			"err", err,
-		)
-		return p2pError.Permanent(err)
+	switch openCom.IsIndicatingFailure() {
+	case true:
+	default:
+		// Verify RAK-attestation.
+		if p.Runtime.TEEHardware != node.TEEHardwareInvalid {
+			n, err := nl.Node(ctx, id)
+			if err != nil {
+				// This should never happen as nodes cannot disappear mid-epoch.
+				logger.Warn("unable to fetch node descriptor to verify RAK-attestation",
+					"err", err,
+					"node_id", id,
+				)
+				return ErrNotInCommittee
+			}
+
+			rt := n.GetRuntime(p.Runtime.ID)
+			if rt == nil {
+				// We currently prevent this case throughout the rest of the system.
+				// Still, it's prudent to check.
+				logger.Warn("committee member not registered with this runtime",
+					"runtime_id", p.Runtime.ID,
+					"node_id", id,
+				)
+				return ErrNotInCommittee
+			}
+
+			rak := rt.Capabilities.TEE.RAK
+			var rakSig signature.RawSignature
+			if body.RakSig != nil {
+				rakSig = *body.RakSig
+			}
+			if !rak.Verify(ComputeResultsHeaderSignatureContext, cbor.Marshal(header), rakSig[:]) {
+				return ErrRakSigInvalid
+			}
+		}
+
+		// Check if the header refers to merkle roots in storage.
+		if uint64(len(body.StorageSignatures)) < p.Runtime.Storage.MinWriteReplication {
+			logger.Debug("executor commitment doesn't have enough storage receipts",
+				"node_id", id,
+				"min_write_replication", p.Runtime.Storage.MinWriteReplication,
+				"num_receipts", len(body.StorageSignatures),
+			)
+			return ErrBadStorageReceipts
+		}
+		if err := sv.VerifyCommitteeSignatures(scheduler.KindStorage, body.StorageSignatures); err != nil {
+			logger.Debug("executor commitment has bad storage receipt signers",
+				"node_id", id,
+				"err", err,
+			)
+			return err
+		}
+		if err := body.VerifyStorageReceiptSignatures(blk.Header.Namespace); err != nil {
+			logger.Debug("executor commitment has bad storage receipt signatures",
+				"node_id", id,
+				"err", err,
+			)
+			return p2pError.Permanent(err)
+		}
 	}
 
 	if p.ExecuteCommitments == nil {
@@ -431,8 +448,15 @@ func (p *Pool) DetectDiscrepancy() (OpenCommitment, error) {
 		if commit == nil {
 			commit = c
 		}
+
+		if c.IsIndicatingFailure() {
+			discrepancyDetected = true
+			continue
+		}
+
 		if !commit.MostlyEqual(c) {
 			discrepancyDetected = true
+			continue
 		}
 	}
 
@@ -455,11 +479,12 @@ func (p *Pool) ResolveDiscrepancy() (OpenCommitment, error) {
 
 	type voteEnt struct {
 		commit OpenCommitment
-		tally  int
+		tally  uint64
 	}
 
 	votes := make(map[hash.Hash]*voteEnt)
-	var backupNodes int
+	var failuresTally uint64
+	var backupNodes uint64
 	for _, n := range p.Committee.Members {
 		if n.Role != scheduler.RoleBackupWorker {
 			continue
@@ -468,6 +493,11 @@ func (p *Pool) ResolveDiscrepancy() (OpenCommitment, error) {
 
 		c, ok := p.getCommitment(n.PublicKey)
 		if !ok {
+			continue
+		}
+
+		if c.IsIndicatingFailure() {
+			failuresTally++
 			continue
 		}
 
@@ -483,6 +513,9 @@ func (p *Pool) ResolveDiscrepancy() (OpenCommitment, error) {
 	}
 
 	minVotes := (backupNodes / 2) + 1
+	if failuresTally >= minVotes {
+		return nil, ErrMajorityFailure
+	}
 	for _, ent := range votes {
 		if ent.tally >= minVotes {
 			return ent.commit, nil

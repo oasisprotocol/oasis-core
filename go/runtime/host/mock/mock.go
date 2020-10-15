@@ -79,8 +79,8 @@ func (r *runtime) Call(ctx context.Context, body *protocol.Body) (*protocol.Body
 				Header: commitment.ComputeResultsHeader{
 					Round:        rq.Block.Header.Round + 1,
 					PreviousHash: rq.Block.Header.EncodedHash(),
-					IORoot:       ioRoot,
-					StateRoot:    stateRoot,
+					IORoot:       &ioRoot,
+					StateRoot:    &stateRoot,
 				},
 				IOWriteLog: ioWriteLog,
 			},
