@@ -45,7 +45,7 @@ intrusive-collections = "0.8"
 sha2 = "0.9.1"
 hmac = "0.9.0"
 honggfuzz = "0.5.51"
-arbitrary = { version = "0.4.1", features = ["derive"] }
+arbitrary = { version = "0.4.7", features = ["derive"] }
 
 [dev-dependencies]
 # For storage interoperability tests only.
