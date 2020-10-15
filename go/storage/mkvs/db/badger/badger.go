@@ -3,6 +3,7 @@ package badger
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sync"
 
@@ -20,7 +21,13 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/storage/mkvs/writelog"
 )
 
-const dbVersion = 3
+const (
+	dbVersion = 3
+
+	// multipartVersionNone is the value used for the multipart version in metadata
+	// when no multipart restore is in progress.
+	multipartVersionNone uint64 = 0
+)
 
 var (
 	// nodeKeyFmt is the key format for nodes (node hash).
@@ -46,6 +53,13 @@ var (
 	//
 	// Value is CBOR-serialized metadata.
 	metadataKeyFmt = keyformat.New(0x04)
+	// multipartRestoreNodeLogKeyFmt is the key format for the nodes inserted during a chunk restore.
+	// Once a set of chunks is fully restored, these entries should be removed. If chunk restoration
+	// is interrupted for any reason, the nodes associated with these keys should be removed, along
+	// with these entries.
+	//
+	// Value is empty.
+	multipartRestoreNodeLogKeyFmt = keyformat.New(0x05, &hash.Hash{})
 )
 
 // New creates a new BadgerDB-backed node database.
@@ -87,6 +101,12 @@ func New(cfg *api.Config) (api.NodeDB, error) {
 		return nil, fmt.Errorf("mkvs/badger: failed to load metadata: %w", err)
 	}
 
+	// Cleanup any multipart restore remnants, since they can't be used anymore.
+	if err = db.cleanMultipartLocked(true); err != nil {
+		_ = db.db.Close()
+		return nil, fmt.Errorf("mkvs/badger: failed to clean leftovers from multipart restore: %w", err)
+	}
+
 	db.gc = cmnBadger.NewGCWorker(db.logger, db.db)
 
 	return db, nil
@@ -99,6 +119,8 @@ type badgerNodeDB struct { // nolint: maligned
 
 	readOnly         bool
 	discardWriteLogs bool
+
+	multipartVersion uint64
 
 	db *badger.DB
 	gc *cmnBadger.GCWorker
@@ -141,6 +163,7 @@ func (d *badgerNodeDB) load() error {
 				d.meta.value.Namespace,
 			)
 		}
+		return nil
 	case badger.ErrKeyNotFound:
 	default:
 		return err
@@ -160,6 +183,76 @@ func (d *badgerNodeDB) sanityCheckNamespace(ns common.Namespace) error {
 	if !ns.Equal(&d.namespace) {
 		return api.ErrBadNamespace
 	}
+	return nil
+}
+
+// Assumes metaUpdateLock is held when called.
+func (d *badgerNodeDB) cleanMultipartLocked(removeNodes bool) error {
+	var version uint64
+
+	if d.multipartVersion != multipartVersionNone {
+		version = d.multipartVersion
+	} else {
+		version = d.meta.getMultipartVersion()
+	}
+	if version == multipartVersionNone {
+		// No multipart in progress, but it's not an error to call in a situation like this.
+		return nil
+	}
+
+	txn := d.db.NewTransactionAt(tsMetadata, false)
+	defer txn.Discard()
+
+	opts := badger.DefaultIteratorOptions
+	opts.Prefix = multipartRestoreNodeLogKeyFmt.Encode()
+	it := txn.NewIterator(opts)
+	defer it.Close()
+
+	metaBatch := d.db.NewWriteBatchAt(tsMetadata)
+	defer metaBatch.Cancel()
+	nodeBatch := d.db.NewWriteBatchAt(versionToTs(version))
+	defer nodeBatch.Cancel()
+
+	var logged bool
+	for it.Rewind(); it.Valid(); it.Next() {
+		key := it.Item().Key()
+		if removeNodes {
+			if !logged {
+				d.logger.Info("removing some nodes from a multipart restore")
+				logged = true
+			}
+			var hash hash.Hash
+			if !multipartRestoreNodeLogKeyFmt.Decode(key, &hash) {
+				panic("mkvs/badger: bad iterator")
+			}
+			if err := nodeBatch.Delete(nodeKeyFmt.Encode(&hash)); err != nil {
+				return err
+			}
+		}
+		if err := metaBatch.Delete(key); err != nil {
+			return err
+		}
+	}
+
+	// Flush both batches first. If anything fails, having corrupt
+	// multipart info in d.meta shouldn't hurt us next run.
+	if err := nodeBatch.Flush(); err != nil {
+		return err
+	}
+	if err := metaBatch.Flush(); err != nil {
+		return err
+	}
+
+	metaTx := d.db.NewTransactionAt(tsMetadata, true)
+	defer metaTx.Discard()
+	if err := d.meta.setMultipartVersion(metaTx, 0); err != nil {
+		return err
+	}
+	if err := metaTx.CommitAt(tsMetadata, nil); err != nil {
+		return err
+	}
+
+	d.multipartVersion = multipartVersionNone
 	return nil
 }
 
@@ -414,6 +507,10 @@ func (d *badgerNodeDB) Finalize(ctx context.Context, version uint64, roots []has
 	d.metaUpdateLock.Lock()
 	defer d.metaUpdateLock.Unlock()
 
+	if d.multipartVersion != multipartVersionNone && d.multipartVersion != version {
+		return api.ErrInvalidMultipartVersion
+	}
+
 	// Version batch collects removals at the version timestamp.
 	versionBatch := d.db.NewWriteBatchAt(versionToTs(version))
 	defer versionBatch.Cancel()
@@ -421,9 +518,9 @@ func (d *badgerNodeDB) Finalize(ctx context.Context, version uint64, roots []has
 	tx := d.db.NewTransactionAt(versionToTs(version), true)
 	defer tx.Discard()
 
-	// Make sure that the previous version has been finalized.
+	// Make sure that the previous version has been finalized (if we are not restoring).
 	lastFinalizedVersion, exists := d.meta.getLastFinalizedVersion()
-	if version > 0 && exists && lastFinalizedVersion < (version-1) {
+	if d.multipartVersion == multipartVersionNone && version > 0 && exists && lastFinalizedVersion < (version-1) {
 		return api.ErrNotFinalized
 	}
 	// Make sure that this version has not yet been finalized.
@@ -563,6 +660,13 @@ func (d *badgerNodeDB) Finalize(ctx context.Context, version uint64, roots []has
 	if err := tx.CommitAt(tsMetadata, nil); err != nil {
 		return fmt.Errorf("mkvs/badger: failed to commit metadata: %w", err)
 	}
+
+	// Clean multipart metadata if there is any.
+	if d.multipartVersion != multipartVersionNone {
+		if err := d.cleanMultipartLocked(false); err != nil {
+			return err
+		}
+	}
 	return nil
 }
 
@@ -573,6 +677,10 @@ func (d *badgerNodeDB) Prune(ctx context.Context, version uint64) error {
 
 	d.metaUpdateLock.Lock()
 	defer d.metaUpdateLock.Unlock()
+
+	if d.multipartVersion != multipartVersionNone {
+		return api.ErrMultipartInProgress
+	}
 
 	// Make sure that the version that we try to prune has been finalized.
 	lastFinalizedVersion, exists := d.meta.getLastFinalizedVersion()
@@ -672,7 +780,45 @@ func (d *badgerNodeDB) Prune(ctx context.Context, version uint64) error {
 	return nil
 }
 
-func (d *badgerNodeDB) NewBatch(oldRoot node.Root, version uint64, chunk bool) api.Batch {
+func (d *badgerNodeDB) StartMultipartInsert(version uint64) error {
+	d.metaUpdateLock.Lock()
+	defer d.metaUpdateLock.Unlock()
+
+	if version == multipartVersionNone {
+		return api.ErrInvalidMultipartVersion
+	}
+
+	if d.multipartVersion != multipartVersionNone {
+		if d.multipartVersion != version {
+			return api.ErrMultipartInProgress
+		}
+		// Multipart already initialized at the same version, so this was
+		// probably called e.g. as part of a further checkpoint restore.
+		return nil
+	}
+
+	tx := d.db.NewTransactionAt(tsMetadata, true)
+	defer tx.Discard()
+	if err := d.meta.setMultipartVersion(tx, version); err != nil {
+		return err
+	}
+	if err := tx.CommitAt(tsMetadata, nil); err != nil {
+		return err
+	}
+
+	d.multipartVersion = version
+
+	return nil
+}
+
+func (d *badgerNodeDB) AbortMultipartInsert() error {
+	d.metaUpdateLock.Lock()
+	defer d.metaUpdateLock.Unlock()
+
+	return d.cleanMultipartLocked(true)
+}
+
+func (d *badgerNodeDB) NewBatch(oldRoot node.Root, version uint64, chunk bool) (api.Batch, error) {
 	// WARNING: There is a maximum batch size and maximum batch entry count.
 	// Both of these things are derived from the MaxTableSize option.
 	//
@@ -680,12 +826,37 @@ func (d *badgerNodeDB) NewBatch(oldRoot node.Root, version uint64, chunk bool) a
 	// thing to do would be to either crank up MaxTableSize or maybe split
 	// the transaction out.
 
-	return &badgerBatch{
-		db:      d,
-		bat:     d.db.NewWriteBatchAt(versionToTs(version)),
-		oldRoot: oldRoot,
-		chunk:   chunk,
+	if d.readOnly {
+		return nil, api.ErrReadOnly
 	}
+
+	d.metaUpdateLock.Lock()
+	defer d.metaUpdateLock.Unlock()
+
+	if d.multipartVersion != multipartVersionNone && d.multipartVersion != version {
+		return nil, api.ErrInvalidMultipartVersion
+	}
+	if chunk != (d.multipartVersion != multipartVersionNone) {
+		return nil, api.ErrMultipartInProgress
+	}
+
+	var logBatch *badger.WriteBatch
+	var readTxn *badger.Txn
+	if d.multipartVersion != multipartVersionNone {
+		// The node log is at a different version than the nodes themselves,
+		// which is awkward.
+		logBatch = d.db.NewWriteBatchAt(tsMetadata)
+		readTxn = d.db.NewTransactionAt(versionToTs(version), false)
+	}
+
+	return &badgerBatch{
+		db:             d,
+		bat:            d.db.NewWriteBatchAt(versionToTs(version)),
+		multipartNodes: logBatch,
+		readTxn:        readTxn,
+		oldRoot:        oldRoot,
+		chunk:          chunk,
+	}, nil
 }
 
 func (d *badgerNodeDB) Size() (int64, error) {
@@ -712,8 +883,13 @@ func (d *badgerNodeDB) Close() {
 type badgerBatch struct {
 	api.BaseBatch
 
-	db  *badgerNodeDB
-	bat *badger.WriteBatch
+	db             *badgerNodeDB
+	bat            *badger.WriteBatch
+	multipartNodes *badger.WriteBatch
+
+	// readTx is the read transaction used to check for node existence during
+	// a multipart restore.
+	readTxn *badger.Txn
 
 	oldRoot node.Root
 	chunk   bool
@@ -758,13 +934,12 @@ func (ba *badgerBatch) RemoveNodes(nodes []node.Node) error {
 }
 
 func (ba *badgerBatch) Commit(root node.Root) error {
-	// XXX: Ideally this would fail at batch creation.
-	if ba.db.readOnly {
-		return api.ErrReadOnly
-	}
-
 	ba.db.metaUpdateLock.Lock()
 	defer ba.db.metaUpdateLock.Unlock()
+
+	if ba.db.multipartVersion != multipartVersionNone && ba.db.multipartVersion != root.Version {
+		return api.ErrInvalidMultipartVersion
+	}
 
 	if err := ba.db.sanityCheckNamespace(root.Namespace); err != nil {
 		return err
@@ -853,6 +1028,11 @@ func (ba *badgerBatch) Commit(root node.Root) error {
 	}
 
 	// Flush node updates.
+	if ba.multipartNodes != nil {
+		if err = ba.multipartNodes.Flush(); err != nil {
+			return fmt.Errorf("mkvs/badger: failed to flush node log batch: %w", err)
+		}
+	}
 	if err = ba.bat.Flush(); err != nil {
 		return fmt.Errorf("mkvs/badger: failed to flush batch: %w", err)
 	}
@@ -871,6 +1051,10 @@ func (ba *badgerBatch) Commit(root node.Root) error {
 
 func (ba *badgerBatch) Reset() {
 	ba.bat.Cancel()
+	if ba.multipartNodes != nil {
+		ba.multipartNodes.Cancel()
+		ba.readTxn.Discard()
+	}
 	ba.writeLog = nil
 	ba.annotations = nil
 	ba.updatedNodes = nil
@@ -888,7 +1072,15 @@ func (s *badgerSubtree) PutNode(depth node.Depth, ptr *node.Pointer) error {
 
 	h := ptr.Node.GetHash()
 	s.batch.updatedNodes = append(s.batch.updatedNodes, updatedNode{Hash: h})
-	if err = s.batch.bat.Set(nodeKeyFmt.Encode(&h), data); err != nil {
+	nodeKey := nodeKeyFmt.Encode(&h)
+	if s.batch.multipartNodes != nil {
+		if _, err = s.batch.readTxn.Get(nodeKey); err != nil && errors.Is(err, badger.ErrKeyNotFound) {
+			if err = s.batch.multipartNodes.Set(multipartRestoreNodeLogKeyFmt.Encode(&h), []byte{}); err != nil {
+				return err
+			}
+		}
+	}
+	if err = s.batch.bat.Set(nodeKey, data); err != nil {
 		return err
 	}
 	return nil

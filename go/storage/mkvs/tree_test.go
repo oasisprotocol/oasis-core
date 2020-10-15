@@ -944,7 +944,8 @@ func testOnCommitHooks(t *testing.T, ndb db.NodeDB, factory NodeDBFactory) {
 		Hash:      emptyRoot,
 	}
 
-	batch := ndb.NewBatch(root, root.Version, false)
+	batch, err := ndb.NewBatch(root, root.Version, false)
+	require.NoError(t, err, "NewBatch")
 	defer batch.Reset()
 
 	var calls []int
@@ -961,7 +962,7 @@ func testOnCommitHooks(t *testing.T, ndb db.NodeDB, factory NodeDBFactory) {
 
 	require.True(t, len(calls) == 0, "OnCommit hooks should not fire before commit")
 
-	err := batch.Commit(root)
+	err = batch.Commit(root)
 	require.NoError(t, err, "Commit")
 	require.EqualValues(t, calls, []int{1, 2, 3}, "OnCommit hooks should fire in order")
 }

@@ -13,6 +13,7 @@ import (
 
 	"github.com/cenkalti/backoff/v4"
 
+	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
 	"github.com/oasisprotocol/oasis-core/go/runtime/committee"
 	schedulerApi "github.com/oasisprotocol/oasis-core/go/scheduler/api"
 	storageApi "github.com/oasisprotocol/oasis-core/go/storage/api"
@@ -207,20 +208,9 @@ func (n *Node) handleCheckpoint(check *checkpoint.Metadata, committeeClient comm
 	defer cancel()
 
 	err = n.localStorage.Checkpointer().StartRestore(n.ctx, check)
-	switch {
-	case err == nil:
-		break
-	case errors.Is(err, checkpoint.ErrRestoreAlreadyInProgress):
-		n.logger.Info("a restore is already in progress, trying to abort")
-		err = n.localStorage.Checkpointer().AbortRestore(n.ctx)
-		if err != nil {
-			return checkpointStatusBail, fmt.Errorf("can't abort previous checkpoint restore: %w", err)
-		}
-		err = n.localStorage.Checkpointer().StartRestore(n.ctx, check)
-		if err != nil {
-			return checkpointStatusBail, fmt.Errorf("can't start checkpoint restore after abort: %w", err)
-		}
-	default:
+	if err != nil {
+		// Any previous restores were already aborted by the driver up the call stack, so
+		// things should have been going smoothly here; bail.
 		return checkpointStatusBail, fmt.Errorf("can't start checkpoint restore: %w", err)
 	}
 
@@ -385,20 +375,12 @@ func (n *Node) checkCheckpointUsable(cp *checkpoint.Metadata, remainingMask outs
 	return maskNone
 }
 
-func (n *Node) updateLastSynced(check *checkpoint.Metadata, mask outstandingMask) {
-	n.syncedLock.Lock()
-	defer n.syncedLock.Unlock()
+func (n *Node) syncCheckpoints() (*blockSummary, error) {
+	// Store roots and round info for checkpoints that finished syncing.
+	// Round and namespace info will get overwritten as rounds are skipped
+	// for errors, driven by remainingRoots.
+	var syncState blockSummary
 
-	n.syncedState.LastBlock.Round = check.Root.Version
-	n.syncedState.LastBlock.Namespace = check.Root.Namespace
-	if mask == maskIO {
-		n.syncedState.LastBlock.IORoot = check.Root
-	} else if mask == maskState {
-		n.syncedState.LastBlock.StateRoot = check.Root
-	}
-}
-
-func (n *Node) syncCheckpoints() error {
 	// Start following the storage committee.
 	committeeWatcher, err := committee.NewWatcher(
 		n.ctx,
@@ -410,41 +392,80 @@ func (n *Node) syncCheckpoints() error {
 		committee.WithFilter(committee.IgnoreNodeFilter(n.commonNode.Identity.NodeSigner.Public())),
 	)
 	if err != nil {
-		return fmt.Errorf("can't establish storage committee watcher: %w", err)
+		return nil, fmt.Errorf("can't establish storage committee watcher: %w", err)
 	}
 	committeeClient, err := committee.NewClient(n.ctx, committeeWatcher.Nodes(), committee.WithClientAuthentication(n.commonNode.Identity))
 	if err != nil {
-		return fmt.Errorf("can't create committee client: %w", err)
+		return nil, fmt.Errorf("can't create committee client: %w", err)
 	}
 
 	descriptor, err := n.commonNode.Runtime.RegistryDescriptor(n.ctx)
 	if err != nil {
-		return fmt.Errorf("can't get runtime descriptor: %w", err)
+		return nil, fmt.Errorf("can't get runtime descriptor: %w", err)
 	}
 
 	// Fetch metadata from the current committee.
 	metadata, err := n.getCheckpointList(committeeClient)
 	if err != nil {
-		return fmt.Errorf("can't get checkpoint list from storage committee: %w", err)
+		return nil, fmt.Errorf("can't get checkpoint list from storage committee: %w", err)
 	}
 
 	// Try all the checkpoints now, from most recent backwards.
-	remainingRoots := maskAll
+	var prevVersion uint64
 	var mask outstandingMask
+	var doneRoots []hash.Hash
+	remainingRoots := maskAll
 	for _, check := range metadata {
 		mask = n.checkCheckpointUsable(check, remainingRoots)
 		if mask == maskNone {
 			continue
 		}
 
+		if check.Root.Version != prevVersion {
+			// Kill any previous restores that might be active. This should kill
+			// the restorer's state as well as the underlying DB multipart bookkeeping.
+			if err := n.localStorage.Checkpointer().AbortRestore(n.ctx); err != nil {
+				return nil, fmt.Errorf("error aborting previous restore for checkpoint sync: %w", err)
+			}
+			remainingRoots = maskAll
+			prevVersion = check.Root.Version
+			doneRoots = []hash.Hash{}
+		}
+
 		status, err := n.handleCheckpoint(check, committeeClient, descriptor.Storage.GroupSize)
 		switch status {
 		case checkpointStatusDone:
 			n.logger.Info("successfully restored from checkpoint", "root", check.Root, "mask", mask)
-			n.updateLastSynced(check, mask)
+
+			syncState.Namespace = check.Root.Namespace
+			syncState.Round = check.Root.Version
+			switch mask {
+			case maskIO:
+				syncState.IORoot = check.Root
+			case maskState:
+				syncState.StateRoot = check.Root
+			}
+
+			doneRoots = append(doneRoots, check.Root.Hash)
 			remainingRoots &= ^mask
 			if remainingRoots == maskNone {
-				return nil
+				if err = n.localStorage.NodeDB().Finalize(n.ctx, prevVersion, doneRoots); err != nil {
+					n.logger.Error("can't finalize version after all checkpoints restored",
+						"err", err,
+						"version", prevVersion,
+						"roots", doneRoots,
+					)
+					// Since finalize failed, we need to make sure to abort multipart insert
+					// otherwise all normal batch operations will continue to fail.
+					if abortErr := n.localStorage.NodeDB().AbortMultipartInsert(); abortErr != nil {
+						n.logger.Error("can't abort multipart insert after finalization failure",
+							"err", err,
+						)
+					}
+					// Likely a local problem, so just bail.
+					return nil, fmt.Errorf("can't finalize version after checkpoints restored: %w", err)
+				}
+				return &syncState, nil
 			}
 			continue
 		case checkpointStatusNext:
@@ -452,9 +473,9 @@ func (n *Node) syncCheckpoints() error {
 			continue
 		case checkpointStatusBail:
 			n.logger.Error("error trying to restore from checkpoint, unrecoverable", "root", check.Root, "err", err)
-			return fmt.Errorf("error restoring from checkpoints: %w", err)
+			return nil, fmt.Errorf("error restoring from checkpoints: %w", err)
 		}
 	}
 
-	return ErrNoUsableCheckpoints
+	return nil, ErrNoUsableCheckpoints
 }
