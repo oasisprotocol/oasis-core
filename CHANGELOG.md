@@ -12,6 +12,27 @@ The format is inspired by [Keep a Changelog].
 
 <!-- TOWNCRIER -->
 
+## 20.11.3 (2020-10-16)
+
+| Protocol          | Version   |
+|:------------------|:---------:|
+| Consensus         | 1.0.0     |
+| Runtime Host      | 1.0.0     |
+| Runtime Committee | 1.0.0     |
+
+### Bug Fixes
+
+- go/storage/mkvs: Fix Finalize after checkpoint restore
+  ([#3330](https://github.com/oasisprotocol/oasis-core/issues/3330))
+
+### Internal Changes
+
+- go/storage/mkvs: Add node tracking to chunk restore
+  ([#3241](https://github.com/oasisprotocol/oasis-core/issues/3241))
+
+- go: Add ability to set initial block height at genesis
+  ([#3416](https://github.com/oasisprotocol/oasis-core/issues/3416))
+
 ## 20.11.2 (2020-10-13)
 
 | Protocol          | Version   |
