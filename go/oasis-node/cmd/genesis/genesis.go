@@ -42,15 +42,16 @@ import (
 )
 
 const (
-	cfgEntity      = "entity"
-	cfgRuntime     = "runtime"
-	cfgNode        = "node"
-	cfgRootHash    = "roothash"
-	cfgKeyManager  = "keymanager"
-	cfgStaking     = "staking"
-	cfgBlockHeight = "height"
-	cfgChainID     = "chain.id"
-	cfgHaltEpoch   = "halt.epoch"
+	cfgEntity        = "entity"
+	cfgRuntime       = "runtime"
+	cfgNode          = "node"
+	cfgRootHash      = "roothash"
+	cfgKeyManager    = "keymanager"
+	cfgStaking       = "staking"
+	cfgBlockHeight   = "height"
+	cfgChainID       = "chain.id"
+	cfgHaltEpoch     = "halt.epoch"
+	cfgInitialHeight = "initial_height"
 
 	// Registry config flags.
 	CfgRegistryMaxNodeExpiration                      = "registry.max_node_expiration"
@@ -165,7 +166,7 @@ func doInitGenesis(cmd *cobra.Command, args []string) {
 
 	// Build the genesis state, if any.
 	doc := &genesis.Document{
-		Height:    1,
+		Height:    viper.GetInt64(cfgInitialHeight),
 		ChainID:   chainID,
 		Time:      time.Now(),
 		HaltEpoch: epochtime.EpochTime(viper.GetUint64(cfgHaltEpoch)),
@@ -684,6 +685,7 @@ func init() {
 	initGenesisFlags.StringSlice(cfgKeyManager, nil, "path to key manager genesis status file")
 	initGenesisFlags.String(cfgChainID, "", "genesis chain id")
 	initGenesisFlags.Uint64(cfgHaltEpoch, math.MaxUint64, "genesis halt epoch height")
+	initGenesisFlags.Int64(cfgInitialHeight, 1, "initial block height")
 
 	// Registry config flags.
 	initGenesisFlags.Uint64(CfgRegistryMaxNodeExpiration, 5, "maximum node registration lifespan in epochs")
