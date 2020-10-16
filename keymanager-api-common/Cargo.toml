@@ -8,7 +8,7 @@ edition = "2018"
 oasis-core-runtime = { path = "../runtime" }
 
 base64 = "0.13.0"
-serde = { version = "1.0.116", features = ["derive"] }
+serde = { version = "1.0.117", features = ["derive"] }
 serde_bytes = "0.11.5"
 rustc-hex = "2.0.1"
 anyhow = "1.0"

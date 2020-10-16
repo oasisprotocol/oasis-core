@@ -10,7 +10,7 @@ slog = "2.4.1"
 slog-json = "2.3.0"
 slog-scope = "4.1.1"
 slog-stdlog = "4.0.0"
-serde = { version = "1.0.116", features = ["derive"] }
+serde = { version = "1.0.117", features = ["derive"] }
 serde_cbor = "0.11.1"
 serde_json = "1.0.59"
 serde_bytes = "0.11.5"
