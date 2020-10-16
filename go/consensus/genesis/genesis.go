@@ -22,10 +22,10 @@ type Parameters struct { // nolint: maligned
 	SkipTimeoutCommit  bool          `json:"skip_timeout_commit"`
 	EmptyBlockInterval time.Duration `json:"empty_block_interval"`
 
-	MaxTxSize      uint64          `json:"max_tx_size"`
-	MaxBlockSize   uint64          `json:"max_block_size"`
-	MaxBlockGas    transaction.Gas `json:"max_block_gas"`
-	MaxEvidenceNum uint32          `json:"max_evidence_num"`
+	MaxTxSize       uint64          `json:"max_tx_size"`
+	MaxBlockSize    uint64          `json:"max_block_size"`
+	MaxBlockGas     transaction.Gas `json:"max_block_gas"`
+	MaxEvidenceSize uint64          `json:"max_evidence_size"`
 
 	// StateCheckpointInterval is the expected state checkpoint interval (in blocks).
 	StateCheckpointInterval uint64 `json:"state_checkpoint_interval"`
