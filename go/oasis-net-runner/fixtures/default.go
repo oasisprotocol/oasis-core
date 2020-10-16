@@ -28,6 +28,7 @@ const (
 	cfgRuntimeLoader           = "fixture.default.runtime.loader"
 	cfgSetupRuntimes           = "fixture.default.setup_runtimes"
 	cfgTEEHardware             = "fixture.default.tee_hardware"
+	cfgInitialHeight           = "fixture.default.initial_height"
 )
 
 var (
@@ -61,6 +62,7 @@ func newDefaultFixture() (*oasis.NetworkFixture, error) {
 				},
 			},
 			EpochtimeMock: viper.GetBool(cfgEpochtimeMock),
+			InitialHeight: viper.GetInt64(cfgInitialHeight),
 			HaltEpoch:     viper.GetUint64(cfgHaltEpoch),
 			IAS: oasis.IASCfg{
 				Mock: true,
@@ -160,6 +162,7 @@ func init() {
 	DefaultFixtureFlags.String(cfgRuntimeLoader, "oasis-core-runtime-loader", "path to the runtime loader")
 	DefaultFixtureFlags.String(cfgTEEHardware, "", "TEE hardware to use")
 	DefaultFixtureFlags.Uint64(cfgHaltEpoch, math.MaxUint64, "halt epoch height")
+	DefaultFixtureFlags.Int64(cfgInitialHeight, 1, "initial block height")
 
 	_ = viper.BindPFlags(DefaultFixtureFlags)
 

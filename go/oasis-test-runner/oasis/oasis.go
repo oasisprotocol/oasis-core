@@ -48,6 +48,7 @@ const (
 	defaultConsensusBackend            = "tendermint"
 	defaultConsensusTimeoutCommit      = 250 * time.Millisecond
 	defaultEpochtimeTendermintInterval = 30
+	defaultInitialHeight               = 1
 	defaultHaltEpoch                   = math.MaxUint64
 
 	logNodeFile        = "node.log"
@@ -293,6 +294,9 @@ type NetworkCfg struct { // nolint: maligned
 
 	// Consensus are the network-wide consensus parameters.
 	Consensus consensusGenesis.Genesis `json:"consensus"`
+
+	// InitialHeight is the initial block height.
+	InitialHeight int64 `json:"initial_height,omitempty"`
 
 	// HaltEpoch is the halt epoch height flag.
 	HaltEpoch uint64 `json:"halt_epoch"`
@@ -862,6 +866,7 @@ func (net *Network) MakeGenesis() error {
 		"genesis", "init",
 		"--genesis.file", net.GenesisPath(),
 		"--chain.id", genesisTestHelpers.TestChainID,
+		"--initial_height", strconv.FormatInt(net.cfg.InitialHeight, 10),
 		"--halt.epoch", strconv.FormatUint(net.cfg.HaltEpoch, 10),
 		"--consensus.backend", net.cfg.Consensus.Backend,
 		"--epochtime.tendermint.interval", strconv.FormatInt(net.cfg.EpochtimeTendermintInterval, 10),
@@ -1034,6 +1039,9 @@ func New(env *env.Env, cfg *NetworkCfg) (*Network, error) {
 	}
 	if cfgCopy.EpochtimeTendermintInterval == 0 {
 		cfgCopy.EpochtimeTendermintInterval = defaultEpochtimeTendermintInterval
+	}
+	if cfgCopy.InitialHeight == 0 {
+		cfgCopy.InitialHeight = defaultInitialHeight
 	}
 	if cfgCopy.HaltEpoch == 0 {
 		cfgCopy.HaltEpoch = defaultHaltEpoch
