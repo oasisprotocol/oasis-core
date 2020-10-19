@@ -18,7 +18,7 @@ func TestSimpleScheduler(t *testing.T) {
 		MaxBatchSize:      10,
 		MaxBatchSizeBytes: 16 * 1024 * 1024,
 	}
-	algo, err := New(100, params)
+	algo, err := New(queue.Name, 100, params)
 	require.NoError(t, err, "New()")
 
 	tests.SchedulerImplementationTests(t, algo)
