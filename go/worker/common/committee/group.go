@@ -467,6 +467,10 @@ func (g *Group) HandlePeerMessage(unusedPeerID signature.PublicKey, msg *p2p.Mes
 		g.RLock()
 		defer g.RUnlock()
 
+		if g.activeEpoch == nil {
+			return fmt.Errorf("group: no active epoch")
+		}
+
 		// Ensure that both peers have the same view of the current group. If this
 		// is not the case, this means that one of the nodes processed an epoch
 		// transition and the other one didn't.
