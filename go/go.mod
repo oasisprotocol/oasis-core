@@ -41,7 +41,7 @@ require (
 	github.com/oasisprotocol/deoxysii v0.0.0-20200527154044-851aec403956
 	github.com/oasisprotocol/ed25519 v0.0.0-20200819094954-65138ca6ec7c
 	github.com/opentracing/opentracing-go v1.2.0
-	github.com/prometheus/client_golang v1.7.1
+	github.com/prometheus/client_golang v1.8.0
 	github.com/prometheus/common v0.14.0
 	github.com/prometheus/procfs v0.2.0
 	github.com/remyoudompheng/bigfft v0.0.0-20200410134404-eec4a21b6bb0 // indirect
