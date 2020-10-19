@@ -137,7 +137,7 @@ type Node struct { // nolint: maligned
 	lastScheduledCache *lru.Cache
 
 	scheduleCheckTxEnabled bool
-	scheduleMaxQueueSize   uint64
+	scheduleMaxTxPoolSize  uint64
 
 	// The scheduler mutex is here to protect the initialization
 	// of the scheduler variable. After initialization the variable
@@ -238,7 +238,7 @@ func (n *Node) HandlePeerMessage(ctx context.Context, message *p2p.Message, isOw
 
 	switch {
 	case message.Tx != nil:
-		call := message.Tx.Data
+		tx := message.Tx.Data
 
 		// Note: if an epoch transition is just about to happen we can be out of
 		// the committee by the time we queue the transaction, but this is fine
@@ -252,13 +252,13 @@ func (n *Node) HandlePeerMessage(ctx context.Context, message *p2p.Message, isOw
 
 		if n.scheduleCheckTxEnabled {
 			// Check transaction before queuing it.
-			if err := n.checkTx(ctx, call); err != nil {
+			if err := n.checkTx(ctx, tx); err != nil {
 				return true, err
 			}
 			n.logger.Debug("worker CheckTx successful, queuing transaction")
 		}
 
-		err := n.QueueTx(call)
+		err := n.QueueTx(tx)
 		if err != nil {
 			n.logger.Error("unable to queue transaction",
 				"err", err,
@@ -563,8 +563,8 @@ func (n *Node) HandleNewBlockLocked(blk *block.Block) {
 	}
 }
 
-// checkTx checks the given call in the node's runtime.
-func (n *Node) checkTx(ctx context.Context, call []byte) error {
+// checkTx requests the runtime to check the validity of the given transaction.
+func (n *Node) checkTx(ctx context.Context, tx []byte) error {
 	n.commonNode.CrossNode.Lock()
 	currentBlock := n.commonNode.CurrentBlock
 	n.commonNode.CrossNode.Unlock()
@@ -575,7 +575,7 @@ func (n *Node) checkTx(ctx context.Context, call []byte) error {
 
 	checkRq := &protocol.Body{
 		RuntimeCheckTxBatchRequest: &protocol.RuntimeCheckTxBatchRequest{
-			Inputs: transaction.RawBatch{call},
+			Inputs: transaction.RawBatch{tx},
 			Block:  *currentBlock,
 		},
 	}
@@ -624,7 +624,7 @@ func (n *Node) checkTx(ctx context.Context, call []byte) error {
 }
 
 // QueueTx queues a runtime transaction for scheduling.
-func (n *Node) QueueTx(call []byte) error {
+func (n *Node) QueueTx(tx []byte) error {
 	n.schedulerMutex.RLock()
 	defer n.schedulerMutex.RUnlock()
 
@@ -632,20 +632,20 @@ func (n *Node) QueueTx(call []byte) error {
 		return errNotReady
 	}
 
-	callHash := hash.NewFromBytes(call)
+	txHash := hash.NewFromBytes(tx)
 	// Check if transaction was recently scheduled.
 	if n.lastScheduledCache != nil {
-		if _, b := n.lastScheduledCache.Get(callHash); b {
+		if _, b := n.lastScheduledCache.Get(txHash); b {
 			return errDuplicateTx
 		}
 	}
 
-	if err := n.scheduler.ScheduleTx(call); err != nil {
+	if err := n.scheduler.ScheduleTx(tx); err != nil {
 		return err
 	}
 
 	if n.lastScheduledCache != nil {
-		if err := n.lastScheduledCache.Put(callHash, true); err != nil {
+		if err := n.lastScheduledCache.Put(txHash, true); err != nil {
 			// cache.Put can only error if capacity in bytes is used and the
 			// inserted value is too large. This should never happen in here.
 			n.logger.Error("cache put error",
@@ -1348,7 +1348,7 @@ func (n *Node) worker() {
 		return
 	}
 	scheduler, err := scheduling.New(
-		n.scheduleMaxQueueSize,
+		n.scheduleMaxTxPoolSize,
 		runtime.TxnScheduler,
 	)
 	if err != nil {
@@ -1483,12 +1483,13 @@ func (n *Node) worker() {
 	}
 }
 
+// NewNode initializes a new executor node.
 func NewNode(
 	commonNode *committee.Node,
 	commonCfg commonWorker.Config,
 	roleProvider registration.RoleProvider,
 	scheduleCheckTxEnabled bool,
-	scheduleMaxQueueSize uint64,
+	scheduleMaxTxPoolSize uint64,
 	lastScheduledCacheSize uint64,
 ) (*Node, error) {
 	metricsOnce.Do(func() {
@@ -1517,7 +1518,7 @@ func NewNode(
 		commonCfg:              commonCfg,
 		roleProvider:           roleProvider,
 		scheduleCheckTxEnabled: scheduleCheckTxEnabled,
-		scheduleMaxQueueSize:   scheduleMaxQueueSize,
+		scheduleMaxTxPoolSize:  scheduleMaxTxPoolSize,
 		lastScheduledCache:     cache,
 		ctx:                    ctx,
 		cancelCtx:              cancel,
