@@ -34,6 +34,8 @@ var (
 	methodDelegations = serviceName.NewMethod("Delegations", OwnerQuery{})
 	// methodDebondingDelegations is the DebondingDelegations method.
 	methodDebondingDelegations = serviceName.NewMethod("DebondingDelegations", OwnerQuery{})
+	// methodAllowance is the Allowance method.
+	methodAllowance = serviceName.NewMethod("Allowance", AllowanceQuery{})
 	// methodStateToGenesis is the StateToGenesis method.
 	methodStateToGenesis = serviceName.NewMethod("StateToGenesis", int64(0))
 	// methodConsensusParameters is the ConsensusParameters method.
@@ -88,6 +90,10 @@ var (
 			{
 				MethodName: methodDebondingDelegations.ShortName(),
 				Handler:    handlerDebondingDelegations,
+			},
+			{
+				MethodName: methodAllowance.ShortName(),
+				Handler:    handlerAllowance,
 			},
 			{
 				MethodName: methodStateToGenesis.ShortName(),
@@ -334,6 +340,29 @@ func handlerDebondingDelegations( // nolint: golint
 	return interceptor(ctx, &query, info, handler)
 }
 
+func handlerAllowance( // nolint: golint
+	srv interface{},
+	ctx context.Context,
+	dec func(interface{}) error,
+	interceptor grpc.UnaryServerInterceptor,
+) (interface{}, error) {
+	var query AllowanceQuery
+	if err := dec(&query); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(Backend).Allowance(ctx, &query)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: methodAllowance.FullName(),
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(Backend).Allowance(ctx, req.(*AllowanceQuery))
+	}
+	return interceptor(ctx, &query, info, handler)
+}
+
 func handlerStateToGenesis( // nolint: golint
 	srv interface{},
 	ctx context.Context,
@@ -518,6 +547,14 @@ func (c *stakingClient) DebondingDelegations(ctx context.Context, query *OwnerQu
 		return nil, err
 	}
 	return rsp, nil
+}
+
+func (c *stakingClient) Allowance(ctx context.Context, query *AllowanceQuery) (*quantity.Quantity, error) {
+	var rsp quantity.Quantity
+	if err := c.conn.Invoke(ctx, methodAllowance.FullName(), query, &rsp); err != nil {
+		return nil, err
+	}
+	return &rsp, nil
 }
 
 func (c *stakingClient) StateToGenesis(ctx context.Context, height int64) (*Genesis, error) {

@@ -21,6 +21,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/entity"
 	cmnGrpc "github.com/oasisprotocol/oasis-core/go/common/grpc"
 	consensusAPI "github.com/oasisprotocol/oasis-core/go/consensus/api"
+	tendermintCommon "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/common"
 	tendermintFull "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/full"
 	consensusTests "github.com/oasisprotocol/oasis-core/go/consensus/tests"
 	epochtime "github.com/oasisprotocol/oasis-core/go/epochtime/api"

@@ -73,9 +73,10 @@ var (
 
 	qtyOne = *quantity.NewFromUint64(1)
 
-	srcSigner = debug.DebugStateSrcSigner
-	SrcAddr   = debug.DebugStateSrcAddress
-	DestAddr  = debug.DebugStateDestAddress
+	srcSigner  = debug.DebugStateSrcSigner
+	SrcAddr    = debug.DebugStateSrcAddress
+	destSigner = debug.DebugStateDestSigner
+	DestAddr   = debug.DebugStateDestAddress
 )
 
 // StakingImplementationTests exercises the basic functionality of a staking
@@ -100,6 +101,7 @@ func StakingImplementationTests(
 		{"Burn", testBurn},
 		{"Escrow", testEscrow},
 		{"EscrowSelf", testSelfEscrow},
+		{"Allowance", testAllowance},
 	} {
 		state := newStakingTestsState(t, backend, consensus)
 		t.Run(tc.n, func(t *testing.T) { tc.fn(t, state, backend, consensus) })
@@ -126,6 +128,7 @@ func StakingClientImplementationTests(t *testing.T, backend api.Backend, consens
 		{"Burn", testBurn},
 		{"Escrow", testEscrow},
 		{"EscrowSelf", testSelfEscrow},
+		{"Allowance", testAllowance},
 	} {
 		state := newStakingTestsState(t, backend, consensus)
 		t.Run(tc.n, func(t *testing.T) { tc.fn(t, state, backend, consensus) })
@@ -649,6 +652,142 @@ func testEscrowEx( // nolint: gocyclo
 	tx = api.NewAddEscrowTx(srcAcc.General.Nonce, nil, escrow)
 	err = consensusAPI.SignAndSubmitTx(context.Background(), consensus, srcSigner, tx)
 	require.Error(err, "AddEscrow")
+}
+
+func testAllowance(t *testing.T, state *stakingTestsState, backend api.Backend, consensus consensusAPI.Backend) {
+	require := require.New(t)
+
+	dstAcc, err := backend.Account(context.Background(), &api.OwnerQuery{Owner: DestAddr, Height: consensusAPI.HeightLatest})
+	require.NoError(err, "dest: Account")
+
+	srcAcc, err := backend.Account(context.Background(), &api.OwnerQuery{Owner: SrcAddr, Height: consensusAPI.HeightLatest})
+	require.NoError(err, "src: Account - before")
+
+	ch, sub, err := backend.WatchEvents(context.Background())
+	require.NoError(err, "WatchEvents")
+	defer sub.Close()
+
+	allow := &api.Allow{
+		Beneficiary:  DestAddr,
+		AmountChange: *quantity.NewFromUint64(math.MaxUint8),
+	}
+	tx := api.NewAllowTx(srcAcc.General.Nonce, nil, allow)
+	err = consensusAPI.SignAndSubmitTx(context.Background(), consensus, srcSigner, tx)
+	require.NoError(err, "Allow")
+
+	// Compute what new the total expected allowance should be.
+	expectedNewAllowance := allow.AmountChange
+	if srcAcc.General.Allowances != nil {
+		allowance := srcAcc.General.Allowances[allow.Beneficiary]
+		_ = expectedNewAllowance.Add(&allowance)
+	}
+
+AllowWaitLoop:
+	for {
+		select {
+		case ev := <-ch:
+			if ev.AllowanceChange == nil {
+				continue
+			}
+			ac := ev.AllowanceChange
+
+			require.Equal(SrcAddr, ac.Owner, "Event: owner")
+			require.Equal(DestAddr, ac.Beneficiary, "Event: beneficiary")
+			require.Equal(expectedNewAllowance, ac.Allowance, "Event: allowance")
+			require.Equal(allow.Negative, ac.Negative, "Event: negative")
+			require.Equal(allow.AmountChange, ac.AmountChange, "Event: amount change")
+
+			// Make sure that GetEvents also returns the allowance change event.
+			evts, grr := backend.GetEvents(context.Background(), consensusAPI.HeightLatest)
+			require.NoError(grr, "GetEvents")
+			for _, ev2 := range evts {
+				if ev2.AllowanceChange == nil {
+					continue
+				}
+				ac2 := ev2.AllowanceChange
+				if ac2.Owner.Equal(ac.Owner) && ac2.Beneficiary.Equal(ac.Beneficiary) {
+					require.EqualValues(ac, ac2, "GetEvents should return the same event")
+					require.True(!ev2.TxHash.IsEmpty(), "GetEvents should return valid txn hash")
+					break AllowWaitLoop
+				}
+			}
+			t.Fatalf("GetEvents should return allowance change event")
+		case <-time.After(recvTimeout):
+			t.Fatalf("failed to receive allowance change event")
+		}
+	}
+
+	// Verify that the new allowance is correct.
+	newAllowance, err := backend.Allowance(context.Background(), &api.AllowanceQuery{
+		Owner:       SrcAddr,
+		Beneficiary: DestAddr,
+		Height:      consensusAPI.HeightLatest,
+	})
+	require.NoError(err, "Allowance")
+	require.Equal(expectedNewAllowance, *newAllowance, "Allowance should return the correct value")
+
+	// Withdraw half the amount.
+	withdraw := &api.Withdraw{
+		From:   SrcAddr,
+		Amount: *quantity.NewFromUint64(math.MaxUint8 / 2),
+	}
+	tx = api.NewWithdrawTx(dstAcc.General.Nonce, nil, withdraw)
+	err = consensusAPI.SignAndSubmitTx(context.Background(), consensus, destSigner, tx)
+	require.NoError(err, "Withdraw")
+
+	_ = expectedNewAllowance.Sub(&withdraw.Amount)
+
+	var (
+		gotAllowanceChange bool
+		gotTransfer        bool
+	)
+	for {
+		if gotAllowanceChange && gotTransfer {
+			break
+		}
+
+		select {
+		case ev := <-ch:
+			switch {
+			case ev.AllowanceChange != nil:
+				ac := ev.AllowanceChange
+
+				require.Equal(SrcAddr, ac.Owner, "Event: owner")
+				require.Equal(DestAddr, ac.Beneficiary, "Event: beneficiary")
+				require.Equal(expectedNewAllowance, ac.Allowance, "Event: allowance")
+				require.Equal(true, ac.Negative, "Event: negative")
+				require.Equal(withdraw.Amount, ac.AmountChange, "Event: amount change")
+				gotAllowanceChange = true
+			case ev.Transfer != nil:
+				te := ev.Transfer
+
+				if te.From.Equal(api.CommonPoolAddress) || te.To.Equal(api.CommonPoolAddress) {
+					continue
+				}
+				if te.From.Equal(api.FeeAccumulatorAddress) || te.To.Equal(api.FeeAccumulatorAddress) {
+					continue
+				}
+
+				require.Equal(SrcAddr, te.From, "Event: from")
+				require.Equal(DestAddr, te.To, "Event: to")
+				require.Equal(withdraw.Amount, te.Amount, "Event: amount")
+				gotTransfer = true
+			default:
+				continue
+			}
+		case <-time.After(recvTimeout):
+			t.Fatalf("failed to receive allowance change and transfer events")
+		}
+	}
+
+	// Verify that the new allowance is correct.
+	newAllowance, err = backend.Allowance(context.Background(), &api.AllowanceQuery{
+		Owner:       SrcAddr,
+		Beneficiary: DestAddr,
+		Height:      consensusAPI.HeightLatest,
+	})
+	require.NoError(err, "Allowance")
+	require.Equal(expectedNewAllowance, *newAllowance, "Allowance should return the correct value")
 }
 
 func testSlashDoubleSigning(

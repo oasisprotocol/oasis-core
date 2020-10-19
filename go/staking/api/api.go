@@ -62,6 +62,10 @@ var (
 	// is specified in a query.
 	ErrInvalidThreshold = errors.New(ModuleName, 6, "staking: invalid threshold")
 
+	// ErrTooManyAllowances is the error returned when the number of allowances per account would
+	// exceed the maximum allowed number.
+	ErrTooManyAllowances = errors.New(ModuleName, 7, "staking: too many allowances")
+
 	// MethodTransfer is the method name for transfers.
 	MethodTransfer = transaction.NewMethodName(ModuleName, "Transfer", Transfer{})
 	// MethodBurn is the method name for burns.
@@ -72,6 +76,10 @@ var (
 	MethodReclaimEscrow = transaction.NewMethodName(ModuleName, "ReclaimEscrow", ReclaimEscrow{})
 	// MethodAmendCommissionSchedule is the method name for amending commission schedules.
 	MethodAmendCommissionSchedule = transaction.NewMethodName(ModuleName, "AmendCommissionSchedule", AmendCommissionSchedule{})
+	// MethodAllow is the method name for setting a beneficiary allowance.
+	MethodAllow = transaction.NewMethodName(ModuleName, "Allow", Allow{})
+	// MethodWithdraw is the method name for
+	MethodWithdraw = transaction.NewMethodName(ModuleName, "Withdraw", Withdraw{})
 
 	// Methods is the list of all methods supported by the staking backend.
 	Methods = []transaction.MethodName{
@@ -80,6 +88,8 @@ var (
 		MethodAddEscrow,
 		MethodReclaimEscrow,
 		MethodAmendCommissionSchedule,
+		MethodAllow,
+		MethodWithdraw,
 	}
 
 	_ prettyprint.PrettyPrinter = (*Transfer)(nil)
@@ -87,6 +97,8 @@ var (
 	_ prettyprint.PrettyPrinter = (*Escrow)(nil)
 	_ prettyprint.PrettyPrinter = (*ReclaimEscrow)(nil)
 	_ prettyprint.PrettyPrinter = (*AmendCommissionSchedule)(nil)
+	_ prettyprint.PrettyPrinter = (*Allow)(nil)
+	_ prettyprint.PrettyPrinter = (*Withdraw)(nil)
 	_ prettyprint.PrettyPrinter = (*SharePool)(nil)
 	_ prettyprint.PrettyPrinter = (*StakeThreshold)(nil)
 	_ prettyprint.PrettyPrinter = (*StakeAccumulator)(nil)
@@ -131,6 +143,9 @@ type Backend interface {
 	// the given owner (delegator).
 	DebondingDelegations(ctx context.Context, query *OwnerQuery) (map[Address][]*DebondingDelegation, error)
 
+	// Allowance looks up the allowance for the given owner/beneficiary combination.
+	Allowance(ctx context.Context, query *AllowanceQuery) (*quantity.Quantity, error)
+
 	// StateToGenesis returns the genesis state at specified block height.
 	StateToGenesis(ctx context.Context, height int64) (*Genesis, error)
 
@@ -159,6 +174,13 @@ type OwnerQuery struct {
 	Owner  Address `json:"owner"`
 }
 
+// AllowanceQuery is an allowance query.
+type AllowanceQuery struct {
+	Height      int64   `json:"height"`
+	Owner       Address `json:"owner"`
+	Beneficiary Address `json:"beneficiary"`
+}
+
 // TransferEvent is the event emitted when stake is transferred, either by a
 // call to Transfer or Withdraw.
 type TransferEvent struct {
@@ -185,9 +207,10 @@ type Event struct {
 	Height int64     `json:"height,omitempty"`
 	TxHash hash.Hash `json:"tx_hash,omitempty"`
 
-	Transfer *TransferEvent `json:"transfer,omitempty"`
-	Burn     *BurnEvent     `json:"burn,omitempty"`
-	Escrow   *EscrowEvent   `json:"escrow,omitempty"`
+	Transfer        *TransferEvent        `json:"transfer,omitempty"`
+	Burn            *BurnEvent            `json:"burn,omitempty"`
+	Escrow          *EscrowEvent          `json:"escrow,omitempty"`
+	AllowanceChange *AllowanceChangeEvent `json:"allowance_change,omitempty"`
 }
 
 // AddEscrowEvent is the event emitted when stake is transferred into an escrow
@@ -211,6 +234,15 @@ type ReclaimEscrowEvent struct {
 	Owner  Address           `json:"owner"`
 	Escrow Address           `json:"escrow"`
 	Amount quantity.Quantity `json:"amount"`
+}
+
+// AllowanceChangeEvent is the event emitted when allowance is changed for a beneficiary.
+type AllowanceChangeEvent struct { // nolint: maligned
+	Owner        Address           `json:"owner"`
+	Beneficiary  Address           `json:"beneficiary"`
+	Allowance    quantity.Quantity `json:"allowance"`
+	Negative     bool              `json:"negative,omitempty"`
+	AmountChange quantity.Quantity `json:"amount_change"`
 }
 
 // Transfer is a stake transfer.
@@ -337,6 +369,56 @@ func (acs AmendCommissionSchedule) PrettyType() (interface{}, error) {
 // NewAmendCommissionScheduleTx creates a new amend commission schedule transaction.
 func NewAmendCommissionScheduleTx(nonce uint64, fee *transaction.Fee, amend *AmendCommissionSchedule) *transaction.Transaction {
 	return transaction.NewTransaction(nonce, fee, MethodAmendCommissionSchedule, amend)
+}
+
+// Allow is a beneficiary allowance configuration.
+type Allow struct {
+	Beneficiary  Address           `json:"beneficiary"`
+	Negative     bool              `json:"negative,omitempty"`
+	AmountChange quantity.Quantity `json:"amount_change"`
+}
+
+// PrettyPrint writes a pretty-printed representation of Allow to the given writer.
+func (aw Allow) PrettyPrint(ctx context.Context, prefix string, w io.Writer) {
+	fmt.Fprintf(w, "%sBeneficiary:   %s\n", prefix, aw.Beneficiary)
+
+	var sign string
+	if aw.Negative {
+		sign = "-"
+	}
+	fmt.Fprintf(w, "%sAmount Change: %s%s\n", prefix, sign, aw.AmountChange)
+}
+
+// PrettyType returns a representation of Allow that can be used for pretty printing.
+func (aw Allow) PrettyType() (interface{}, error) {
+	return aw, nil
+}
+
+// NewAllowTx creates a new beneficiary allowance configuration transaction.
+func NewAllowTx(nonce uint64, fee *transaction.Fee, allow *Allow) *transaction.Transaction {
+	return transaction.NewTransaction(nonce, fee, MethodAllow, allow)
+}
+
+// Withdraw is a withdrawal from an account.
+type Withdraw struct {
+	From   Address           `json:"from"`
+	Amount quantity.Quantity `json:"amount"`
+}
+
+// PrettyPrint writes a pretty-printed representation of Withdraw to the given writer.
+func (wt Withdraw) PrettyPrint(ctx context.Context, prefix string, w io.Writer) {
+	fmt.Fprintf(w, "%sFrom:   %s\n", prefix, wt.From)
+	fmt.Fprintf(w, "%sAmount: %s\n", prefix, wt.Amount)
+}
+
+// PrettyType returns a representation of Withdraw that can be used for pretty printing.
+func (wt Withdraw) PrettyType() (interface{}, error) {
+	return wt, nil
+}
+
+// NewWithdrawTx creates a new beneficiary allowance configuration transaction.
+func NewWithdrawTx(nonce uint64, fee *transaction.Fee, withdraw *Withdraw) *transaction.Transaction {
+	return transaction.NewTransaction(nonce, fee, MethodWithdraw, withdraw)
 }
 
 // SharePool is a combined balance of several entries, the relative sizes
@@ -699,6 +781,8 @@ func (sa *StakeAccumulator) TotalClaims(thresholds map[ThresholdKind]quantity.Qu
 type GeneralAccount struct {
 	Balance quantity.Quantity `json:"balance,omitempty"`
 	Nonce   uint64            `json:"nonce,omitempty"`
+
+	Allowances map[Address]quantity.Quantity `json:"allowances,omitempty"`
 }
 
 // PrettyPrint writes a pretty-printed representation of GeneralAccount to the
@@ -709,6 +793,17 @@ func (ga GeneralAccount) PrettyPrint(ctx context.Context, prefix string, w io.Wr
 	fmt.Fprintln(w)
 
 	fmt.Fprintf(w, "%sNonce:   %d\n", prefix, ga.Nonce)
+
+	fmt.Fprintf(w, "%sAllowances:\n", prefix)
+	if len(ga.Allowances) == 0 {
+		fmt.Fprintf(w, "%s%snone\n", prefix, prefix)
+	} else {
+		for beneficiary, allowance := range ga.Allowances {
+			fmt.Fprintf(w, "%s%s%s: ", prefix, prefix, beneficiary)
+			token.PrettyPrintAmount(ctx, allowance, w)
+			fmt.Fprintln(w)
+		}
+	}
 }
 
 // PrettyType returns a representation of GeneralAccount that can be used for
@@ -865,7 +960,7 @@ type Genesis struct {
 }
 
 // ConsensusParameters are the staking consensus parameters.
-type ConsensusParameters struct {
+type ConsensusParameters struct { // nolint: maligned
 	Thresholds                        map[ThresholdKind]quantity.Quantity `json:"thresholds,omitempty"`
 	DebondingInterval                 epochtime.EpochTime                 `json:"debonding_interval,omitempty"`
 	RewardSchedule                    []RewardStep                        `json:"reward_schedule,omitempty"`
@@ -879,6 +974,9 @@ type ConsensusParameters struct {
 	DisableTransfers       bool             `json:"disable_transfers,omitempty"`
 	DisableDelegation      bool             `json:"disable_delegation,omitempty"`
 	UndisableTransfersFrom map[Address]bool `json:"undisable_transfers_from,omitempty"`
+
+	// MaxAllowances is the maximum number of allowances an account can have. Zero means disabled.
+	MaxAllowances uint32 `json:"max_allowances,omitempty"`
 
 	// FeeSplitWeightPropose is the proportion of block fee portions that go to the proposer.
 	FeeSplitWeightPropose quantity.Quantity `json:"fee_split_weight_propose"`
@@ -906,4 +1004,8 @@ const (
 	GasOpReclaimEscrow transaction.Op = "reclaim_escrow"
 	// GasOpAmendCommissionSchedule is the gas operation identifier for amend commission schedule.
 	GasOpAmendCommissionSchedule transaction.Op = "amend_commission_schedule"
+	// GasOpAllow is the gas operation identifier for allow.
+	GasOpAllow transaction.Op = "allow"
+	// GasOpWithdraw is the gas operation identifier for withdraw.
+	GasOpWithdraw transaction.Op = "withdraw"
 )
