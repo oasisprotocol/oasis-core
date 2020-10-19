@@ -3,11 +3,16 @@ package simple
 
 import (
 	"fmt"
+	"sync/atomic"
 
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
 	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
 	"github.com/oasisprotocol/oasis-core/go/runtime/scheduling/api"
+	txpool "github.com/oasisprotocol/oasis-core/go/runtime/scheduling/simple/txpool/api"
+	mapp "github.com/oasisprotocol/oasis-core/go/runtime/scheduling/simple/txpool/map"
+	"github.com/oasisprotocol/oasis-core/go/runtime/scheduling/simple/txpool/orderedmap"
+	"github.com/oasisprotocol/oasis-core/go/runtime/scheduling/simple/txpool/queue"
 )
 
 const (
@@ -16,15 +21,23 @@ const (
 )
 
 type scheduler struct {
-	incomingQueue *incomingQueue
-
-	dispatcher api.TransactionDispatcher
-
 	logger *logging.Logger
+
+	txPool        txpool.TxPool
+	maxTxPoolSize uint64
+
+	dispatcher         api.TransactionDispatcher
+	dispatchInProgress uint32
 }
 
 func (s *scheduler) scheduleBatch(force bool) error {
-	batch := s.incomingQueue.GetBatch(force)
+	if !atomic.CompareAndSwapUint32(&s.dispatchInProgress, 0, 1) {
+		// Dispatch already in progress.
+		return nil
+	}
+	defer atomic.StoreUint32(&s.dispatchInProgress, 0)
+
+	batch := s.txPool.GetBatch(force)
 	if len(batch) > 0 {
 		// Try to dispatch batch.
 		if err := s.dispatcher.Dispatch(batch); err != nil {
@@ -36,10 +49,10 @@ func (s *scheduler) scheduleBatch(force bool) error {
 }
 
 func (s *scheduler) ScheduleTx(tx []byte) error {
-	if err := s.incomingQueue.Add(tx); err != nil {
+	if err := s.txPool.Add(tx); err != nil {
 		// Return success in case of duplicate calls to avoid the client
 		// mistaking this for an actual error.
-		if err == errCallAlreadyExists {
+		if err == txpool.ErrCallAlreadyExists {
 			s.logger.Warn("ignoring duplicate call",
 				"batch", tx,
 			)
@@ -70,11 +83,11 @@ func (s *scheduler) ScheduleTx(tx []byte) error {
 // insert is finished, and is as such suited for reinserting transactions after
 // a failed batch scheduling/processing.
 func (s *scheduler) AppendTxBatch(batch [][]byte) error {
-	return s.incomingQueue.AddBatch(batch)
+	return s.txPool.AddBatch(batch)
 }
 
 func (s *scheduler) RemoveTxBatch(tx [][]byte) error {
-	return s.incomingQueue.RemoveBatch(tx)
+	return s.txPool.RemoveBatch(tx)
 }
 
 func (s *scheduler) Flush(force bool) error {
@@ -92,16 +105,16 @@ func (s *scheduler) Flush(force bool) error {
 	return nil
 }
 
-func (s *scheduler) UnscheduledSize() int {
-	return s.incomingQueue.Size()
+func (s *scheduler) UnscheduledSize() uint64 {
+	return s.txPool.Size()
 }
 
 func (s *scheduler) IsQueued(id hash.Hash) bool {
-	return s.incomingQueue.IsQueued(id)
+	return s.txPool.IsQueued(id)
 }
 
 func (s *scheduler) Clear() {
-	s.incomingQueue.Clear()
+	s.txPool.Clear()
 }
 
 func (s *scheduler) Initialize(td api.TransactionDispatcher) error {
@@ -118,7 +131,13 @@ func (s *scheduler) UpdateParameters(params registry.TxnSchedulerParameters) err
 	if params.Algorithm != Name {
 		return fmt.Errorf("unexpected transaction scheduling algorithm: %s", params.Algorithm)
 	}
-	s.incomingQueue.updateConfig(params.MaxBatchSize, params.MaxBatchSizeBytes)
+	if err := s.txPool.UpdateConfig(txpool.Config{
+		MaxBatchSize:      params.MaxBatchSize,
+		MaxBatchSizeBytes: params.MaxBatchSizeBytes,
+		MaxPoolSize:       s.maxTxPoolSize,
+	}); err != nil {
+		return fmt.Errorf("error updating parameters: %w", err)
+	}
 	return nil
 }
 
@@ -127,12 +146,31 @@ func (s *scheduler) Name() string {
 }
 
 // New creates a new simple scheduler.
-func New(maxQueueSize uint64, params registry.TxnSchedulerParameters) (api.Scheduler, error) {
+func New(txPoolImpl string, maxTxPoolSize uint64, params registry.TxnSchedulerParameters) (api.Scheduler, error) {
 	if params.Algorithm != Name {
 		return nil, fmt.Errorf("unexpected transaction scheduling algorithm: %s", params.Algorithm)
 	}
+
+	poolCfg := txpool.Config{
+		MaxBatchSize:      params.MaxBatchSize,
+		MaxBatchSizeBytes: params.MaxBatchSizeBytes,
+		MaxPoolSize:       maxTxPoolSize,
+	}
+	var pool txpool.TxPool
+	switch txPoolImpl {
+	case queue.Name:
+		pool = queue.New(poolCfg)
+	case mapp.Name:
+		pool = mapp.New(poolCfg)
+	case orderedmap.Name:
+		pool = orderedmap.New(poolCfg)
+	default:
+		return nil, fmt.Errorf("invalid transaction pool: %s", txPoolImpl)
+	}
+
 	scheduler := &scheduler{
-		incomingQueue: newIncomingQueue(maxQueueSize, params.MaxBatchSize, params.MaxBatchSizeBytes),
+		maxTxPoolSize: maxTxPoolSize,
+		txPool:        pool,
 		logger:        logging.GetLogger("runtime/scheduling").With("scheduler", "simple"),
 	}
 
