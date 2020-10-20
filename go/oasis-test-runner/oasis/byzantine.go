@@ -12,10 +12,10 @@ import (
 type Byzantine struct {
 	Node
 
-	script string
-	entity *Entity
+	script    string
+	extraArgs []string
 
-	executorIsScheduler bool
+	entity *Entity
 
 	consensusPort   uint16
 	p2pPort         uint16
@@ -26,11 +26,11 @@ type Byzantine struct {
 type ByzantineCfg struct {
 	NodeCfg
 
-	Script       string
+	Script    string
+	ExtraArgs []string
+
 	IdentitySeed string
 	Entity       *Entity
-
-	ExecutorIsScheduler bool
 
 	ActivationEpoch epochtime.EpochTime
 }
@@ -46,8 +46,7 @@ func (worker *Byzantine) startNode() error {
 		workerP2pPort(worker.p2pPort).
 		appendSeedNodes(worker.net.seeds).
 		appendEntity(worker.entity).
-		byzantineActivationEpoch(worker.activationEpoch).
-		byzantineExecutorSchedulerRole(worker.executorIsScheduler)
+		byzantineActivationEpoch(worker.activationEpoch)
 
 	for _, v := range worker.net.Runtimes() {
 		if v.kind == registry.KindCompute && v.teeHardware == node.TEEHardwareIntelSGX {
@@ -55,6 +54,7 @@ func (worker *Byzantine) startNode() error {
 			args = args.byzantineVersionFakeEnclaveID(v)
 		}
 	}
+	args.vec = append(args.vec, worker.extraArgs...)
 
 	if err := worker.net.startOasisNode(&worker.Node, []string{"debug", "byzantine", worker.script}, args); err != nil {
 		return fmt.Errorf("oasis/byzantine: failed to launch node %s: %w", worker.Name, err)
@@ -105,12 +105,12 @@ func (net *Network) NewByzantine(cfg *ByzantineCfg) (*Byzantine, error) {
 			logWatcherHandlerFactories:               cfg.LogWatcherHandlerFactories,
 			consensus:                                cfg.Consensus,
 		},
-		script:              cfg.Script,
-		entity:              cfg.Entity,
-		executorIsScheduler: cfg.ExecutorIsScheduler,
-		consensusPort:       net.nextNodePort,
-		p2pPort:             net.nextNodePort + 1,
-		activationEpoch:     cfg.ActivationEpoch,
+		script:          cfg.Script,
+		extraArgs:       cfg.ExtraArgs,
+		entity:          cfg.Entity,
+		consensusPort:   net.nextNodePort,
+		p2pPort:         net.nextNodePort + 1,
+		activationEpoch: cfg.ActivationEpoch,
 	}
 	worker.doStartNode = worker.startNode
 	copy(worker.NodeID[:], nodeKey[:])

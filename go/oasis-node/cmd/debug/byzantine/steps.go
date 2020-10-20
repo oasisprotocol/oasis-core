@@ -4,7 +4,6 @@ import (
 	"crypto/rand"
 	"encoding/json"
 	"fmt"
-	"net"
 	"time"
 
 	"github.com/spf13/viper"
@@ -24,17 +23,7 @@ const (
 	defaultRuntimeIDHex = "8000000000000000000000000000000000000000000000000000000000000000"
 )
 
-var (
-	defaultRuntimeID common.Namespace
-	fakeAddresses    = []node.Address{
-		{
-			TCPAddr: net.TCPAddr{
-				IP:   net.IPv4(127, 0, 0, 1),
-				Port: 11004,
-			},
-		},
-	}
-)
+var defaultRuntimeID common.Namespace
 
 func initDefaultIdentity(dataDir string) (*identity.Identity, error) {
 	signerFactory, err := fileSigner.NewFactory(dataDir, signature.SignerNode, signature.SignerP2P, signature.SignerEntity, signature.SignerConsensus)

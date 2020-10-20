@@ -6,6 +6,7 @@ import (
 	tendermint "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/api"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/log"
 	roothash "github.com/oasisprotocol/oasis-core/go/roothash/api"
+	"github.com/oasisprotocol/oasis-core/go/roothash/api/commitment"
 	upgrade "github.com/oasisprotocol/oasis-core/go/upgrade/api"
 	workerStorage "github.com/oasisprotocol/oasis-core/go/worker/storage/committee"
 )
@@ -98,4 +99,11 @@ func LogAssertRoothashRoothashReindexing() log.WatcherHandlerFactory {
 // a checkpoint was successful or not.
 func LogAssertCheckpointSync() log.WatcherHandlerFactory {
 	return LogAssertEvent(workerStorage.LogEventCheckpointSyncSuccess, "checkpoint sync did not succeed")
+}
+
+// LogAssertDiscrepancyMajorityFailure returns a handler which checks whether a discrepancy resolution
+// resulted in MajorityFailure.
+func LogAssertDiscrepancyMajorityFailure() log.WatcherHandlerFactory {
+	return LogAssertEvent(commitment.LogEventDiscrepancyMajorityFailure,
+		"discrepancy resolution majority failure not detected")
 }

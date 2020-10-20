@@ -471,11 +471,11 @@ func (f *ClientFixture) Create(net *Network) (*Client, error) {
 
 // ByzantineFixture is a byzantine node fixture.
 type ByzantineFixture struct { // nolint: maligned
-	Script       string `json:"script"`
+	Script    string   `json:"script"`
+	ExtraArgs []string `json:"extra_args"`
+
 	IdentitySeed string `json:"identity_seed"`
 	Entity       int    `json:"entity"`
-
-	ExecutorIsScheduler bool `json:"executor_is_scheduler"`
 
 	ActivationEpoch epochtime.EpochTime `json:"activation_epoch"`
 
@@ -499,11 +499,11 @@ func (f *ByzantineFixture) Create(net *Network) (*Byzantine, error) {
 			LogWatcherHandlerFactories:               f.LogWatcherHandlerFactories,
 			Consensus:                                f.Consensus,
 		},
-		Script:              f.Script,
-		IdentitySeed:        f.IdentitySeed,
-		Entity:              entity,
-		ExecutorIsScheduler: f.ExecutorIsScheduler,
-		ActivationEpoch:     f.ActivationEpoch,
+		Script:          f.Script,
+		ExtraArgs:       f.ExtraArgs,
+		IdentitySeed:    f.IdentitySeed,
+		Entity:          entity,
+		ActivationEpoch: f.ActivationEpoch,
 	})
 }
 
