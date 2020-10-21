@@ -10,9 +10,7 @@ import (
 	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
 	"github.com/oasisprotocol/oasis-core/go/runtime/scheduling/api"
 	txpool "github.com/oasisprotocol/oasis-core/go/runtime/scheduling/simple/txpool/api"
-	mapp "github.com/oasisprotocol/oasis-core/go/runtime/scheduling/simple/txpool/map"
 	"github.com/oasisprotocol/oasis-core/go/runtime/scheduling/simple/txpool/orderedmap"
-	"github.com/oasisprotocol/oasis-core/go/runtime/scheduling/simple/txpool/queue"
 )
 
 const (
@@ -158,10 +156,6 @@ func New(txPoolImpl string, maxTxPoolSize uint64, params registry.TxnSchedulerPa
 	}
 	var pool txpool.TxPool
 	switch txPoolImpl {
-	case queue.Name:
-		pool = queue.New(poolCfg)
-	case mapp.Name:
-		pool = mapp.New(poolCfg)
 	case orderedmap.Name:
 		pool = orderedmap.New(poolCfg)
 	default:
