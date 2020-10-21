@@ -66,9 +66,10 @@ var TxSourceMultiShort scenario.Scenario = &txSourceImpl{
 	consensusPruneDisabledProbability: 0.1,
 	consensusPruneMinKept:             100,
 	consensusPruneMaxKept:             200,
-	// XXX: use 2 storage nodes as SGX E2E test instances cannot handle any
-	// more nodes that are currently configured, and runtime requires 2 nodes.
+	// XXX: use no more than 2 storage, 4 compute nodes as SGX E2E test
+	// instances cannot handle any more nodes that are currently configured.
 	numStorageNodes: 2,
+	numComputeNodes: 4,
 }
 
 // TxSourceMulti uses multiple workloads.
@@ -98,9 +99,15 @@ var TxSourceMulti scenario.Scenario = &txSourceImpl{
 	// node is restarted. Enable automatic corrupted WAL recovery for validator
 	// nodes.
 	tendermintRecoverCorruptedWAL: true,
-	// Use 3 storage nodes so runtime continues to work when one of the nodes
+	// Use 4 storage nodes so runtime continues to work when one of the nodes
 	// is shut down.
-	numStorageNodes: 3,
+	numStorageNodes: 4,
+	// In tests with long restarts we want to have 3 worker nodes nodes in the
+	// runtime executor worker committee. That is so that each published runtime
+	// transaction will be received by at least one active executor worker.
+	// In worst case, 2 nodes can be offline at the same time. Aditionally we
+	// need one backup node and one extra node.
+	numComputeNodes: 5,
 }
 
 type txSourceImpl struct { // nolint: maligned
@@ -129,6 +136,9 @@ type txSourceImpl struct { // nolint: maligned
 	// more test nodes that we already use, and we don't need additional storage
 	// nodes in the short test variant.
 	numStorageNodes int
+
+	// Configurable number of compute nodes.
+	numComputeNodes int
 
 	rng  *rand.Rand
 	seed string
@@ -199,7 +209,7 @@ func (sc *txSourceImpl) Fixture() (*oasis.NetworkFixture, error) {
 			FeeSplitWeightVote:        *quantity.NewFromUint64(1),
 			FeeSplitWeightNextPropose: *quantity.NewFromUint64(1),
 		},
-		TotalSupply: *quantity.NewFromUint64(130000000000),
+		TotalSupply: *quantity.NewFromUint64(150000000000),
 		Ledger: map[staking.Address]*staking.Account{
 			e2e.DeterministicValidator0: {
 				General: staking.GeneralAccount{
@@ -241,6 +251,11 @@ func (sc *txSourceImpl) Fixture() (*oasis.NetworkFixture, error) {
 					Balance: *quantity.NewFromUint64(10000000000),
 				},
 			},
+			e2e.DeterministicCompute4: {
+				General: staking.GeneralAccount{
+					Balance: *quantity.NewFromUint64(10000000000),
+				},
+			},
 			e2e.DeterministicStorage0: {
 				General: staking.GeneralAccount{
 					Balance: *quantity.NewFromUint64(10000000000),
@@ -252,6 +267,11 @@ func (sc *txSourceImpl) Fixture() (*oasis.NetworkFixture, error) {
 				},
 			},
 			e2e.DeterministicStorage2: {
+				General: staking.GeneralAccount{
+					Balance: *quantity.NewFromUint64(10000000000),
+				},
+			},
+			e2e.DeterministicStorage3: {
 				General: staking.GeneralAccount{
 					Balance: *quantity.NewFromUint64(10000000000),
 				},
@@ -269,19 +289,47 @@ func (sc *txSourceImpl) Fixture() (*oasis.NetworkFixture, error) {
 		},
 	}
 
-	if sc.nodeRestartInterval > 0 {
+	// Disable CheckTx on the client node so we can submit invalid transactions.
+	f.Clients[0].Consensus.DisableCheckTx = true
+
+	// Runtime configuration.
+	// Transaction scheduling.
+	f.Runtimes[1].TxnScheduler.MaxBatchSize = 100
+	f.Runtimes[1].TxnScheduler.MaxBatchSizeBytes = 1024 * 1024
+
+	// Set up storage checkpointing.
+	f.Runtimes[1].Storage.CheckpointInterval = 1000
+	f.Runtimes[1].Storage.CheckpointNumKept = 2
+	f.Runtimes[1].Storage.CheckpointChunkSize = 1024 * 1024
+
+	// Storage committee.
+	f.Runtimes[1].Storage.GroupSize = uint64(sc.numStorageNodes)
+	f.Runtimes[1].Storage.MinWriteReplication = f.Runtimes[1].Storage.GroupSize
+
+	// Executor committee.
+	f.Runtimes[1].Executor.GroupBackupSize = 1
+	f.Runtimes[1].Executor.GroupSize = uint64(sc.numComputeNodes) -
+		f.Runtimes[1].Executor.GroupBackupSize
+
+	if sc.nodeLongRestartInterval > 0 {
+		// One storage node could be offline.
+		f.Runtimes[1].Storage.GroupSize--
+		// Storage node that is part of the committee could be offline.
+		f.Runtimes[1].Storage.MinWriteReplication = f.Runtimes[1].Storage.GroupSize - 1
+
+		// One executor can be offline.
+		f.Runtimes[1].Executor.GroupSize--
+
+		// Lower proposer and round timeouts as nodes are expected to go offline for longer time.
+		f.Runtimes[1].TxnScheduler.ProposerTimeout = 5
+		f.Runtimes[1].Executor.RoundTimeout = 15
+	}
+
+	if sc.nodeRestartInterval > 0 || sc.nodeLongRestartInterval > 0 {
 		// If node restarts enabled, do not enable round timeouts, failures or
 		// discrepancy log watchers.
 		f.Network.DefaultLogWatcherHandlerFactories = []log.WatcherHandlerFactory{}
 	}
-
-	// Disable CheckTx on the client node so we can submit invalid transactions.
-	f.Clients[0].Consensus.DisableCheckTx = true
-
-	// Set up checkpointing.
-	f.Runtimes[1].Storage.CheckpointInterval = 1000
-	f.Runtimes[1].Storage.CheckpointNumKept = 2
-	f.Runtimes[1].Storage.CheckpointChunkSize = 1024 * 1024
 
 	// Use at least 4 validators so that consensus can keep making progress
 	// when a node is being killed and restarted.
@@ -291,12 +339,14 @@ func (sc *txSourceImpl) Fixture() (*oasis.NetworkFixture, error) {
 		{Entity: 1},
 		{Entity: 1},
 	}
-	f.ComputeWorkers = []oasis.ComputeWorkerFixture{
-		{Entity: 1, Runtimes: []int{1}},
-		{Entity: 1, Runtimes: []int{1}},
-		{Entity: 1, Runtimes: []int{1}},
-		{Entity: 1, Runtimes: []int{1}},
+	var computeWorkers []oasis.ComputeWorkerFixture
+	for i := 0; i < sc.numComputeNodes; i++ {
+		computeWorkers = append(computeWorkers, oasis.ComputeWorkerFixture{
+			Entity:   1,
+			Runtimes: []int{1},
+		})
 	}
+	f.ComputeWorkers = computeWorkers
 	f.Keymanagers = []oasis.KeymanagerFixture{
 		{Runtime: 0, Entity: 1},
 		{Runtime: 0, Entity: 1},
@@ -604,6 +654,7 @@ func (sc *txSourceImpl) Clone() scenario.Scenario {
 		consensusPruneMaxKept:             sc.consensusPruneMaxKept,
 		tendermintRecoverCorruptedWAL:     sc.tendermintRecoverCorruptedWAL,
 		numStorageNodes:                   sc.numStorageNodes,
+		numComputeNodes:                   sc.numComputeNodes,
 		seed:                              sc.seed,
 		// rng must always be reinitialized from seed by calling PreInit().
 	}

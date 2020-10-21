@@ -9,7 +9,8 @@ if [[ $BUILDKITE_RETRY_COUNT == 0 ]]; then
     ./.buildkite/scripts/test_e2e.sh \
         --metrics.address $METRICS_PUSH_ADDR \
         --metrics.labels instance=$BUILDKITE_PIPELINE_NAME-$BUILDKITE_BUILD_NUMBER \
-        --scenario e2e/runtime/txsource-multi
+        --scenario e2e/runtime/txsource-multi \
+        "$@"
 else
     curl -H "Content-Type: application/json" \
         -X POST \
