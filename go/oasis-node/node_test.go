@@ -73,6 +73,7 @@ var (
 		{workerCommon.CfgClientPort, workerClientPort},
 		{storageWorker.CfgWorkerEnabled, true},
 		{executor.CfgScheduleCheckTxEnabled, false},
+		{tendermintCommon.CfgCoreListenAddress, "tcp://0.0.0.0:27565"},
 		{tendermintFull.CfgSupplementarySanityEnabled, true},
 		{tendermintFull.CfgSupplementarySanityInterval, 1},
 		{cmdCommon.CfgDebugAllowTestKeys, true},
