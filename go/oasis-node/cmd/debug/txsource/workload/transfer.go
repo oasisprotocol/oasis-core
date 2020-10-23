@@ -22,29 +22,31 @@ const (
 	// Transfer workload continuously submits transfer and burn transactions.
 	NameTransfer = "transfer"
 
-	transferNumAccounts = 10
-	transferAmount      = 1
-	transferBurnAmount  = 10
+	transferNumAccounts    = 10
+	transferAmount         = 1
+	transferBurnAmount     = 10
+	transferAllowMaxAmount = 20
 )
+
+type transferAccount struct {
+	signer          signature.Signer
+	address         staking.Address
+	reckonedNonce   uint64
+	reckonedBalance quantity.Quantity
+}
 
 type transfer struct {
 	logger *logging.Logger
 
 	consensus consensus.ClientBackend
 
-	accounts []struct {
-		signer          signature.Signer
-		address         staking.Address
-		reckonedNonce   uint64
-		reckonedBalance quantity.Quantity
-	}
+	accounts       []transferAccount
 	fundingAccount signature.Signer
+
+	allowances map[staking.Address]map[staking.Address]quantity.Quantity
 }
 
-func (t *transfer) doTransferTx(ctx context.Context, fromIdx, toIdx int) error {
-	from := &t.accounts[fromIdx]
-	to := &t.accounts[toIdx]
-
+func (t *transfer) doTransferTx(ctx context.Context, from, to *transferAccount) error {
 	transfer := staking.Transfer{To: to.address}
 	if err := transfer.Amount.FromInt64(transferAmount); err != nil {
 		return fmt.Errorf("transfer base units FromInt64 %d: %w", transferAmount, err)
@@ -80,9 +82,7 @@ func (t *transfer) doTransferTx(ctx context.Context, fromIdx, toIdx int) error {
 	return nil
 }
 
-func (t *transfer) doBurnTx(ctx context.Context, idx int) error {
-	acc := &t.accounts[idx]
-
+func (t *transfer) doBurnTx(ctx context.Context, acc *transferAccount) error {
 	// Fund account with stake that will be burned.
 	if err := transferFunds(ctx, t.logger, t.consensus, t.fundingAccount, acc.address, int64(transferBurnAmount)); err != nil {
 		return fmt.Errorf("workload/transfer: account funding failure: %w", err)
@@ -110,6 +110,131 @@ func (t *transfer) doBurnTx(ctx context.Context, idx int) error {
 	return nil
 }
 
+func (t *transfer) doAllowTx(ctx context.Context, rng *rand.Rand, acct, beneficiary *transferAccount) error {
+	allow := staking.Allow{
+		Beneficiary: beneficiary.address,
+	}
+	// Generate random amount change.
+	if err := allow.AmountChange.FromInt64(rng.Int63n(transferAllowMaxAmount)); err != nil {
+		return fmt.Errorf("failed to set allow.AmountChange: %w", err)
+	}
+	// Generate random sign.
+	switch rng.Intn(2) {
+	case 0:
+		allow.Negative = false
+	case 1:
+		allow.Negative = true
+	}
+	tx := staking.NewAllowTx(acct.reckonedNonce, &transaction.Fee{}, &allow)
+	acct.reckonedNonce++
+
+	t.logger.Debug("updating allowance",
+		"acct", acct.address,
+		"beneficiary", beneficiary.address,
+		"amount_change", allow.AmountChange,
+	)
+	if err := fundSignAndSubmitTx(ctx, t.logger, t.consensus, acct.signer, tx, t.fundingAccount); err != nil {
+		t.logger.Error("failed to sign and submit allow transaction",
+			"tx", tx,
+			"signer", acct.signer.Public(),
+		)
+		return fmt.Errorf("failed to sign and submit allow tx: %w", err)
+	}
+
+	if t.allowances[acct.address] == nil {
+		t.allowances[acct.address] = make(map[staking.Address]quantity.Quantity)
+	}
+	allowance := t.allowances[acct.address][beneficiary.address]
+	var err error
+	switch allow.Negative {
+	case false:
+		err = allowance.Add(&allow.AmountChange)
+	case true:
+		_, err = allowance.SubUpTo(&allow.AmountChange)
+	}
+	if err != nil {
+		return fmt.Errorf("failed to update internal allowances map: %w", err)
+	}
+	t.allowances[acct.address][beneficiary.address] = allowance
+
+	return nil
+}
+
+func (t *transfer) doWithdrawTx(ctx context.Context, rng *rand.Rand, from, to *transferAccount) error {
+	withdraw := staking.Withdraw{
+		From: from.address,
+	}
+	// Generate random amount up to the minimum of available balance and allowance.
+	maxAmount := from.reckonedBalance
+	if t.allowances[from.address] == nil {
+		return nil
+	}
+	allowance := t.allowances[from.address][to.address]
+	if allowance.IsZero() {
+		return nil
+	}
+	if allowance.Cmp(&maxAmount) < 0 {
+		maxAmount = allowance
+	}
+	if err := withdraw.Amount.FromInt64(rng.Int63n(maxAmount.ToBigInt().Int64())); err != nil {
+		return fmt.Errorf("failed to set withdraw.Amount: %w", err)
+	}
+	tx := staking.NewWithdrawTx(to.reckonedNonce, &transaction.Fee{}, &withdraw)
+	to.reckonedNonce++
+
+	t.logger.Debug("withdrawing stake",
+		"from", from.address,
+		"to", to.address,
+		"amount", withdraw.Amount,
+	)
+	if err := fundSignAndSubmitTx(ctx, t.logger, t.consensus, to.signer, tx, t.fundingAccount); err != nil {
+		t.logger.Error("failed to sign and submit withdraw transaction",
+			"tx", tx,
+			"signer", to.signer.Public(),
+		)
+		return fmt.Errorf("failed to sign and submit withdraw tx: %w", err)
+	}
+
+	// Update reckoned state.
+	if err := from.reckonedBalance.Sub(&withdraw.Amount); err != nil {
+		return fmt.Errorf("from reckoned balance %v Sub withdraw amount %v: %w",
+			from.reckonedBalance, withdraw.Amount, err,
+		)
+	}
+	if err := to.reckonedBalance.Add(&withdraw.Amount); err != nil {
+		return fmt.Errorf("to reckoned balance %v Add withdraw amount %v: %w",
+			to.reckonedBalance, withdraw.Amount, err,
+		)
+	}
+	// Update allowance.
+	if err := allowance.Sub(&withdraw.Amount); err != nil {
+		return fmt.Errorf("allowance %v Sub amount %v: %w",
+			t.allowances[from.address][to.address], withdraw.Amount, err,
+		)
+	}
+	t.allowances[from.address][to.address] = allowance
+
+	return nil
+}
+
+func (t *transfer) getRandomAccountPairWithBalance(rng *rand.Rand, minBalance *quantity.Quantity) (from, to *transferAccount, err error) {
+	perm := rng.Perm(transferNumAccounts)
+	fromPermIdx := 0
+	for ; fromPermIdx < transferNumAccounts; fromPermIdx++ {
+		if t.accounts[perm[fromPermIdx]].reckonedBalance.Cmp(minBalance) >= 0 {
+			break
+		}
+	}
+	if fromPermIdx >= transferNumAccounts {
+		return nil, nil, fmt.Errorf("all accounts %#v have gone broke", t.accounts)
+	}
+	toPermIdx := (fromPermIdx + 1) % transferNumAccounts
+
+	from = &t.accounts[perm[fromPermIdx]]
+	to = &t.accounts[perm[toPermIdx]]
+	return
+}
+
 // Implements Workload.
 func (t *transfer) NeedsFunds() bool {
 	return true
@@ -127,12 +252,8 @@ func (t *transfer) Run(
 
 	t.logger = logging.GetLogger("cmd/txsource/workload/transfer")
 	t.consensus = cnsc
-	t.accounts = make([]struct {
-		signer          signature.Signer
-		address         staking.Address
-		reckonedNonce   uint64
-		reckonedBalance quantity.Quantity
-	}, transferNumAccounts)
+	t.accounts = make([]transferAccount, transferNumAccounts)
+	t.allowances = make(map[staking.Address]map[staking.Address]quantity.Quantity)
 	t.fundingAccount = fundingAccount
 
 	fac := memorySigner.NewFactory()
@@ -176,35 +297,48 @@ func (t *transfer) Run(
 		return fmt.Errorf("min balance FromInt64 %d: %w", transferAmount, err)
 	}
 	for {
-
-		// Decide between doing a transfer or burn tx.
-		switch rng.Intn(2) {
+		// Determine which transaction type to issue.
+		switch rng.Intn(4) {
 		case 0:
 			// Transfer tx.
-			perm := rng.Perm(transferNumAccounts)
-			fromPermIdx := 0
-			for ; fromPermIdx < transferNumAccounts; fromPermIdx++ {
-				if t.accounts[perm[fromPermIdx]].reckonedBalance.Cmp(&minBalance) >= 0 {
-					break
-				}
+			from, to, err := t.getRandomAccountPairWithBalance(rng, &minBalance)
+			if err != nil {
+				return err
 			}
-			if fromPermIdx >= transferNumAccounts {
-				return fmt.Errorf("all accounts %#v have gone broke", t.accounts)
-			}
-			toPermIdx := (fromPermIdx + 1) % transferNumAccounts
 
-			if err := t.doTransferTx(ctx, perm[fromPermIdx], perm[toPermIdx]); err != nil {
+			if err = t.doTransferTx(ctx, from, to); err != nil {
 				return fmt.Errorf("transfer tx failure: %w", err)
 			}
 		case 1:
 			// Burn tx.
-			if err := t.doBurnTx(ctx, rng.Intn(transferNumAccounts)); err != nil {
+			if err := t.doBurnTx(ctx, &t.accounts[rng.Intn(transferNumAccounts)]); err != nil {
 				return fmt.Errorf("burn tx failure: %w", err)
 			}
+		case 2:
+			// Allow tx.
+			acct, beneficiary, err := t.getRandomAccountPairWithBalance(rng, quantity.NewQuantity())
+			if err != nil {
+				return err
+			}
 
+			if err = t.doAllowTx(ctx, rng, acct, beneficiary); err != nil {
+				return fmt.Errorf("allow tx failure: %w", err)
+			}
+		case 3:
+			// Withdraw tx.
+			from, to, err := t.getRandomAccountPairWithBalance(rng, &minBalance)
+			if err != nil {
+				return err
+			}
+
+			if err = t.doWithdrawTx(ctx, rng, from, to); err != nil {
+				return fmt.Errorf("withdraw tx failure: %w", err)
+			}
 		default:
 			return fmt.Errorf("unimplemented")
 		}
+
+		// Finish once the time is up.
 		select {
 		case <-gracefulExit.Done():
 			t.logger.Debug("time's up")

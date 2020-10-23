@@ -81,6 +81,15 @@ func SanityCheckAccount(
 		)
 	}
 
+	for beneficiary, allowance := range acct.General.Allowances {
+		if !beneficiary.IsValid() {
+			return fmt.Errorf("staking: sanity check failed: account %s allowance has invalid beneficiary address %s", addr, beneficiary)
+		}
+		if !allowance.IsValid() {
+			return fmt.Errorf("staking: sanity check failed: account %s allowance is invalid for beneficiary %s", addr, beneficiary)
+		}
+	}
+
 	return nil
 }
 

@@ -527,7 +527,7 @@ func (q *queries) doStakingQueries(ctx context.Context, rng *rand.Rand, height i
 	for _, addr := range addresses {
 		acc, err := q.staking.Account(ctx, &staking.OwnerQuery{Owner: addr, Height: height})
 		if err != nil {
-			q.logger.Error("Error querying AcccountInfo",
+			q.logger.Error("error querying account",
 				"height", height,
 				"address", addr,
 				"err", err,
@@ -537,6 +537,34 @@ func (q *queries) doStakingQueries(ctx context.Context, rng *rand.Rand, height i
 		_ = accSum.Add(&acc.General.Balance)
 		_ = accSum.Add(&acc.Escrow.Active.Balance)
 		_ = accSum.Add(&acc.Escrow.Debonding.Balance)
+
+		for beneficiary, allowance := range acc.General.Allowances {
+			aw, err := q.staking.Allowance(ctx, &staking.AllowanceQuery{
+				Height:      height,
+				Owner:       addr,
+				Beneficiary: beneficiary,
+			})
+			if err != nil {
+				q.logger.Error("error querying allowance",
+					"height", height,
+					"owner", addr,
+					"beneficiary", beneficiary,
+					"err", err,
+				)
+				return fmt.Errorf("staking.Allowance: %w", err)
+			}
+
+			if allowance.Cmp(aw) != 0 {
+				q.logger.Error("allowance mismatch",
+					"height", height,
+					"owner", addr,
+					"beneficiary", beneficiary,
+					"expected", allowance,
+					"actual", aw,
+				)
+				return fmt.Errorf("inconsistent allowance")
+			}
+		}
 	}
 	_ = totalSum.Add(commonPool)
 	_ = totalSum.Add(lastBlockFees)

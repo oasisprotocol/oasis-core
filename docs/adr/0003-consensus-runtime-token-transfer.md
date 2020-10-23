@@ -72,7 +72,7 @@ storing the allowances as follows:
 type GeneralAccount struct {
     // ... existing fields omitted ...
 
-    Allowances map[Address]*quantity.Quantity `json:"allowances,omitempty"`
+    Allowances map[Address]quantity.Quantity `json:"allowances,omitempty"`
 }
 ```
 
@@ -111,8 +111,13 @@ type Allow struct {
 The transaction signer implicitly specifies the general account. Upon executing
 the allow the following actions are performed:
 
-- If either the `disable_transfers` or `disable_allowances` staking consensus
-  parameters are set to `true`, the method fails with `ErrForbidden`.
+- If either the `disable_transfers` staking consensus parameter is set to `true`
+  or the `max_allowances` staking consensus parameter is set to zero, the method
+  fails with `ErrForbidden`.
+
+- It is checked whether either the transaction signer address or the
+  `beneficiary` address are reserved. If any are reserved, the method fails with
+  `ErrForbidden`.
 
 - Address specified by `beneficiary` is compared with the transaction signer
   address. If the addresses are the same, the method fails with
@@ -121,7 +126,7 @@ the allow the following actions are performed:
 - The account indicated by the signer is loaded.
 
 - If the allow would create a new allowance and the maximum number of allowances
-  for an account has been reached, the method fails with `ErrInvalidArgument`.
+  for an account has been reached, the method fails with `ErrTooManyAllowances`.
 
 - The set of allowances is updated so that the allowance is updated as specified
   by `amount_change`/`negative`. In case the change would cause the allowance to
@@ -174,8 +179,13 @@ type Withdraw struct {
 The transaction signer implicitly specifies the destination general account.
 Upon executing the withdrawal the following actions are performed:
 
-- If either the `disable_transfers` or `disable_allowances` staking consensus
-  parameters are set to `true`, the method fails with `ErrForbidden`.
+- If either the `disable_transfers` staking consensus parameter is set to `true`
+  or the `max_allowances` staking consensus parameter is set to zero, the method
+  fails with `ErrForbidden`.
+
+- It is checked whether either the transaction signer address or the
+  `from` address are reserved. If any are reserved, the method fails with
+  `ErrForbidden`.
 
 - Address specified by `from` is compared with the transaction signer address.
   If the addresses are the same, the method fails with `ErrInvalidArgument`.
@@ -331,10 +341,7 @@ This proposal introduces the following new consensus parameters in the staking
 module:
 
 - `max_allowances` (uint32) specifies the maximum number of allowances an
-  account can store.
-
-- `disable_allowances` (bool) specifies whether the beneficiary allowance
-  functionality (both transaction methods and runtime messages) are disabled.
+  account can store. Zero means that allowance functionality is disabled.
 
 #### Roothash
 

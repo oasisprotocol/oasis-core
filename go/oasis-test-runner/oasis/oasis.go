@@ -323,7 +323,7 @@ type NetworkCfg struct { // nolint: maligned
 
 	// StakingGenesis is the staking genesis data to be included if
 	// GenesisFile is not set.
-	StakingGenesis *staking.Genesis `json:"StakingGenesis,omitempty"`
+	StakingGenesis *staking.Genesis `json:"staking_genesis,omitempty"`
 
 	// A set of log watcher handler factories used by default on all nodes
 	// created in this test network.

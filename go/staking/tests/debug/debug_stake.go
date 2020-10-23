@@ -35,6 +35,7 @@ var (
 				},
 			},
 			MinDelegationAmount:     *quantity.NewFromUint64(10),
+			MaxAllowances:           32,
 			FeeSplitWeightVote:      *quantity.NewFromUint64(1),
 			RewardFactorEpochSigned: *quantity.NewFromUint64(1),
 			// Zero RewardFactorBlockProposed is normal.
@@ -65,8 +66,8 @@ var (
 
 	DebugStateSrcSigner   = mustGenerateSigner()
 	DebugStateSrcAddress  = api.NewAddress(DebugStateSrcSigner.Public())
-	destSigner            = mustGenerateSigner()
-	DebugStateDestAddress = api.NewAddress(destSigner.Public())
+	DebugStateDestSigner  = mustGenerateSigner()
+	DebugStateDestAddress = api.NewAddress(DebugStateDestSigner.Public())
 )
 
 func AddressFromString(s string) api.Address {

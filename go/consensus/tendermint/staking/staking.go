@@ -129,6 +129,19 @@ func (sc *serviceClient) DebondingDelegations(ctx context.Context, query *api.Ow
 	return q.DebondingDelegations(ctx, query.Owner)
 }
 
+func (sc *serviceClient) Allowance(ctx context.Context, query *api.AllowanceQuery) (*quantity.Quantity, error) {
+	acct, err := sc.Account(ctx, &api.OwnerQuery{
+		Height: query.Height,
+		Owner:  query.Owner,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	allowance := acct.General.Allowances[query.Beneficiary]
+	return &allowance, nil
+}
+
 func (sc *serviceClient) StateToGenesis(ctx context.Context, height int64) (*api.Genesis, error) {
 	// Query the staking genesis state.
 	q, err := sc.querier.QueryAt(ctx, height)
@@ -320,6 +333,16 @@ func EventsFromTendermint(
 				}
 
 				evt := &api.Event{Height: height, TxHash: txHash, Burn: &e}
+				events = append(events, evt)
+			case bytes.Equal(key, app.KeyAllowanceChange):
+				// Allowance change event.
+				var e api.AllowanceChangeEvent
+				if err := cbor.Unmarshal(val, &e); err != nil {
+					errs = multierror.Append(errs, fmt.Errorf("staking: corrupt AllowanceChange event: %w", err))
+					continue
+				}
+
+				evt := &api.Event{Height: height, TxHash: txHash, AllowanceChange: &e}
 				events = append(events, evt)
 			default:
 				errs = multierror.Append(errs, fmt.Errorf("staking: unknown event type: key: %s, val: %s", key, val))

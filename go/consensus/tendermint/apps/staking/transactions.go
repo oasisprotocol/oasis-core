@@ -420,3 +420,178 @@ func (app *stakingApplication) amendCommissionSchedule(
 
 	return nil
 }
+
+func (app *stakingApplication) allow(
+	ctx *api.Context,
+	state *stakingState.MutableState,
+	allow *staking.Allow,
+) error {
+	if ctx.IsCheckOnly() {
+		return nil
+	}
+
+	// Charge gas for this transaction.
+	params, err := state.ConsensusParameters(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to fetch consensus parameters: %w", err)
+	}
+	if err = ctx.Gas().UseGas(1, staking.GasOpAllow, params.GasCosts); err != nil {
+		return err
+	}
+
+	// Allowances are disabled in case either max allowances is zero or if transfers are disabled.
+	if params.DisableTransfers || params.MaxAllowances == 0 {
+		return staking.ErrForbidden
+	}
+
+	// Validate addresses -- if either is reserved or both are equal, the method should fail.
+	addr := staking.NewAddress(ctx.TxSigner())
+	if addr.IsReserved() || allow.Beneficiary.IsReserved() {
+		return staking.ErrForbidden
+	}
+	if addr.Equal(allow.Beneficiary) {
+		return staking.ErrInvalidArgument
+	}
+
+	acct, err := state.Account(ctx, addr)
+	if err != nil {
+		return fmt.Errorf("failed to fetch account: %w", err)
+	}
+
+	if acct.General.Allowances == nil {
+		acct.General.Allowances = make(map[staking.Address]quantity.Quantity)
+	}
+	allowance := acct.General.Allowances[allow.Beneficiary]
+	var amountChange *quantity.Quantity
+	switch allow.Negative {
+	case false:
+		// Add.
+		if err = allowance.Add(&allow.AmountChange); err != nil {
+			return fmt.Errorf("failed to add allowance: %w", err)
+		}
+		amountChange = allow.AmountChange.Clone()
+	case true:
+		// Subtract.
+		if amountChange, err = allowance.SubUpTo(&allow.AmountChange); err != nil {
+			return fmt.Errorf("failed to subtract allowance: %w", err)
+		}
+	}
+	if allowance.IsZero() {
+		// In case the new allowance is equal to zero, remove it.
+		delete(acct.General.Allowances, allow.Beneficiary)
+	} else {
+		// Otherwise update the allowance.
+		acct.General.Allowances[allow.Beneficiary] = allowance
+	}
+
+	// If updating allowances would go past the maximum number of allowances, fail.
+	if uint32(len(acct.General.Allowances)) > params.MaxAllowances {
+		return staking.ErrTooManyAllowances
+	}
+
+	if err = state.SetAccount(ctx, addr, acct); err != nil {
+		return fmt.Errorf("failed to set account: %w", err)
+	}
+
+	evt := &staking.AllowanceChangeEvent{
+		Owner:        addr,
+		Beneficiary:  allow.Beneficiary,
+		Allowance:    allowance,
+		Negative:     allow.Negative,
+		AmountChange: *amountChange,
+	}
+	ctx.EmitEvent(api.NewEventBuilder(app.Name()).Attribute(KeyAllowanceChange, cbor.Marshal(evt)))
+
+	return nil
+}
+
+func (app *stakingApplication) withdraw(
+	ctx *api.Context,
+	state *stakingState.MutableState,
+	withdraw *staking.Withdraw,
+) error {
+	if ctx.IsCheckOnly() {
+		return nil
+	}
+
+	// Charge gas for this transaction.
+	params, err := state.ConsensusParameters(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to fetch consensus parameters: %w", err)
+	}
+	if err = ctx.Gas().UseGas(1, staking.GasOpWithdraw, params.GasCosts); err != nil {
+		return err
+	}
+
+	// Allowances are disabled in case either max allowances is zero or if transfers are disabled.
+	if params.DisableTransfers || params.MaxAllowances == 0 {
+		return staking.ErrForbidden
+	}
+
+	// Validate addresses -- if either is reserved or both are equal, the method should fail.
+	toAddr := staking.NewAddress(ctx.TxSigner())
+	if toAddr.IsReserved() || withdraw.From.IsReserved() {
+		return staking.ErrForbidden
+	}
+	if toAddr.Equal(withdraw.From) {
+		return staking.ErrInvalidArgument
+	}
+
+	from, err := state.Account(ctx, withdraw.From)
+	if err != nil {
+		return fmt.Errorf("failed to fetch account: %w", err)
+	}
+	var (
+		allowance quantity.Quantity
+		ok        bool
+	)
+	if allowance, ok = from.General.Allowances[toAddr]; !ok {
+		// Fail early in case there is no allowance configured.
+		return staking.ErrForbidden
+	}
+	if err = allowance.Sub(&withdraw.Amount); err != nil {
+		return staking.ErrForbidden
+	}
+	if allowance.IsZero() {
+		// In case the new allowance is equal to zero, remove it.
+		delete(from.General.Allowances, toAddr)
+	} else {
+		// Otherwise update the allowance.
+		from.General.Allowances[toAddr] = allowance
+	}
+
+	// NOTE: Accounts cannot be the same as we fail above if this were the case.
+	to, err := state.Account(ctx, toAddr)
+	if err != nil {
+		return fmt.Errorf("failed to fetch account: %w", err)
+	}
+
+	if err = quantity.Move(&to.General.Balance, &from.General.Balance, &withdraw.Amount); err != nil {
+		return staking.ErrInsufficientBalance
+	}
+
+	if err = state.SetAccount(ctx, toAddr, to); err != nil {
+		return fmt.Errorf("failed to set account: %w", err)
+	}
+	if err = state.SetAccount(ctx, withdraw.From, from); err != nil {
+		return fmt.Errorf("failed to set account: %w", err)
+	}
+
+	xferEvt := &staking.TransferEvent{
+		From:   withdraw.From,
+		To:     toAddr,
+		Amount: withdraw.Amount,
+	}
+	ctx.EmitEvent(api.NewEventBuilder(app.Name()).Attribute(KeyTransfer, cbor.Marshal(xferEvt)))
+
+	awEvt := &staking.AllowanceChangeEvent{
+		Owner:        withdraw.From,
+		Beneficiary:  toAddr,
+		Allowance:    allowance,
+		Negative:     true,
+		AmountChange: withdraw.Amount,
+	}
+	ctx.EmitEvent(api.NewEventBuilder(app.Name()).Attribute(KeyAllowanceChange, cbor.Marshal(awEvt)))
+
+	return nil
+}

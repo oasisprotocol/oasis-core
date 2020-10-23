@@ -137,6 +137,20 @@ func (app *stakingApplication) ExecuteTx(ctx *api.Context, tx *transaction.Trans
 		}
 
 		return app.amendCommissionSchedule(ctx, state, &amend)
+	case staking.MethodAllow:
+		var allow staking.Allow
+		if err := cbor.Unmarshal(tx.Body, &allow); err != nil {
+			return err
+		}
+
+		return app.allow(ctx, state, &allow)
+	case staking.MethodWithdraw:
+		var withdraw staking.Withdraw
+		if err := cbor.Unmarshal(tx.Body, &withdraw); err != nil {
+			return err
+		}
+
+		return app.withdraw(ctx, state, &withdraw)
 	default:
 		return staking.ErrInvalidArgument
 	}
