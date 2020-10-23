@@ -458,6 +458,9 @@ func (f *SentryFixture) Create(net *Network) (*Sentry, error) {
 type ClientFixture struct {
 	// Consensus contains configuration for the consensus backend.
 	Consensus ConsensusFixture `json:"consensus"`
+
+	// MaxTransactionAge configures the MaxTransactionAge configuration of the client.
+	MaxTransactionAge int64 `json:"max_transaction_age"`
 }
 
 // Create instantiates the client node described by the fixture.
@@ -466,6 +469,7 @@ func (f *ClientFixture) Create(net *Network) (*Client, error) {
 		NodeCfg: NodeCfg{
 			Consensus: f.Consensus,
 		},
+		MaxTransactionAge: f.MaxTransactionAge,
 	})
 }
 
