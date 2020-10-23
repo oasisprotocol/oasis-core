@@ -520,6 +520,8 @@ func RegisterScenarios() error {
 		RuntimeDynamic,
 		// Transaction source test.
 		TxSourceMultiShort,
+		// ClientExpire test.
+		ClientExpire,
 		// Late start test.
 		LateStart,
 		// KeymanagerUpgrade test.

@@ -11,6 +11,8 @@ import (
 type Client struct {
 	Node
 
+	maxTransactionAge int64
+
 	consensusPort uint16
 	p2pPort       uint16
 }
@@ -18,6 +20,8 @@ type Client struct {
 // ClientCfg is the Oasis client node provisioning configuration.
 type ClientCfg struct {
 	NodeCfg
+
+	MaxTransactionAge int64
 }
 
 func (client *Client) startNode() error {
@@ -33,6 +37,11 @@ func (client *Client) startNode() error {
 		workerP2pPort(client.p2pPort).
 		workerP2pEnabled().
 		runtimeTagIndexerBackend("bleve")
+
+	if client.maxTransactionAge != 0 {
+		args = args.runtimeClientMaxTransactionAge(client.maxTransactionAge)
+	}
+
 	for _, v := range client.net.runtimes {
 		if v.kind != registry.KindCompute {
 			continue
@@ -73,8 +82,9 @@ func (net *Network) NewClient(cfg *ClientCfg) (*Client, error) {
 			dir:       clientDir,
 			consensus: cfg.Consensus,
 		},
-		consensusPort: net.nextNodePort,
-		p2pPort:       net.nextNodePort + 1,
+		maxTransactionAge: cfg.MaxTransactionAge,
+		consensusPort:     net.nextNodePort,
+		p2pPort:           net.nextNodePort + 1,
 	}
 	client.doStartNode = client.startNode
 
