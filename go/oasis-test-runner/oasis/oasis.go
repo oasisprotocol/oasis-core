@@ -6,6 +6,7 @@ import (
 	"crypto"
 	"crypto/x509"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -19,6 +20,7 @@ import (
 
 	"github.com/spf13/viper"
 
+	"github.com/oasisprotocol/oasis-core/go/common/crash"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/drbg"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	fileSigner "github.com/oasisprotocol/oasis-core/go/common/crypto/signature/signers/file"
@@ -84,6 +86,8 @@ type Node struct { // nolint: maligned
 	doStartNode func() error
 	isStopping  bool
 	noAutoStart bool
+
+	crashPointsProbability float64
 
 	disableDefaultLogWatcherHandlerFactories bool
 	logWatcherHandlerFactories               []log.WatcherHandlerFactory
@@ -231,8 +235,9 @@ func (n *Node) SetConsensusStateSync(cfg *ConsensusStateSyncCfg) {
 
 // NodeCfg defines the common node configuration options.
 type NodeCfg struct { // nolint: maligned
-	AllowEarlyTermination bool
-	AllowErrorTermination bool
+	AllowEarlyTermination  bool
+	AllowErrorTermination  bool
+	CrashPointsProbability float64
 
 	NoAutoStart bool
 
@@ -855,6 +860,16 @@ func (net *Network) startOasisNode(
 		}
 
 		if err := node.handleExit(cmdErr); err != nil {
+			var exitErr *exec.ExitError
+			if errors.As(err, &exitErr) && exitErr.ExitCode() == crash.CrashDefaultExitCode {
+				// Termination due to crasher. Restart node.
+				net.logger.Info("Node debug crash point triggered. Restarting...", "node", node.Name)
+				if err = net.startOasisNode(node, subCmd, extraArgs); err != nil {
+					net.errCh <- fmt.Errorf("oasis: %s failed restarting node after crash point: %w", node.Name, err)
+				}
+				return
+			}
+
 			net.errCh <- fmt.Errorf("oasis: %s node terminated: %w", node.Name, err)
 		}
 	}()

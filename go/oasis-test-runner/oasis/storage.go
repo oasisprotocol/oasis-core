@@ -121,6 +121,7 @@ func (worker *Storage) startNode() error {
 		workerStorageDebugIgnoreApplies(worker.ignoreApplies).
 		workerStorageDebugDisableCheckpointSync(worker.checkpointSyncDisabled).
 		workerStorageCheckpointCheckInterval(worker.checkpointCheckInterval).
+		configureDebugCrashPoints(worker.crashPointsProbability).
 		appendNetwork(worker.net).
 		appendEntity(worker.entity)
 
@@ -192,6 +193,9 @@ func (net *Network) NewStorage(cfg *StorageCfg) (*Storage, error) {
 			net:                                      net,
 			dir:                                      storageDir,
 			noAutoStart:                              cfg.NoAutoStart,
+			termEarlyOk:                              cfg.AllowEarlyTermination,
+			termErrorOk:                              cfg.AllowErrorTermination,
+			crashPointsProbability:                   cfg.CrashPointsProbability,
 			disableDefaultLogWatcherHandlerFactories: cfg.DisableDefaultLogWatcherHandlerFactories,
 			logWatcherHandlerFactories:               cfg.LogWatcherHandlerFactories,
 			consensus:                                cfg.Consensus,

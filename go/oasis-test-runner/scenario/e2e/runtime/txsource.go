@@ -44,6 +44,8 @@ const (
 	nodeLongRestartDuration = 10 * time.Minute
 	livenessCheckInterval   = 1 * time.Minute
 	txSourceGasPrice        = 1
+
+	crashPointProbability = 0.0005
 )
 
 // TxSourceMultiShort uses multiple workloads for a short time.
@@ -95,6 +97,7 @@ var TxSourceMulti scenario.Scenario = &txSourceImpl{
 	consensusPruneDisabledProbability: 0.1,
 	consensusPruneMinKept:             100,
 	consensusPruneMaxKept:             1000,
+	enableCrashPoints:                 true,
 	// Nodes getting killed commonly result in corrupted tendermint WAL when the
 	// node is restarted. Enable automatic corrupted WAL recovery for validator
 	// nodes.
@@ -102,8 +105,8 @@ var TxSourceMulti scenario.Scenario = &txSourceImpl{
 	// Use 4 storage nodes so runtime continues to work when one of the nodes
 	// is shut down.
 	numStorageNodes: 4,
-	// In tests with long restarts we want to have 3 worker nodes nodes in the
-	// runtime executor worker committee. That is so that each published runtime
+	// In tests with long restarts we want to have 3 worker nodes in the runtime
+	// executor worker committee. That is so that each published runtime
 	// transaction will be received by at least one active executor worker.
 	// In worst case, 2 nodes can be offline at the same time. Aditionally we
 	// need one backup node and one extra node.
@@ -127,6 +130,8 @@ type txSourceImpl struct { // nolint: maligned
 	consensusPruneMaxKept             int64
 
 	tendermintRecoverCorruptedWAL bool
+
+	enableCrashPoints bool
 
 	// Configurable number of storage nodes. If running tests with long node
 	// shutdowns enabled, make sure this is at least `MinWriteReplication+1`,
@@ -373,6 +378,9 @@ func (sc *txSourceImpl) Fixture() (*oasis.NetworkFixture, error) {
 		// for long period can sync from it.
 		// Note: validator-0 is also never restarted.
 		sc.generateConsensusFixture(&f.Validators[i].Consensus, i == 0)
+		if i > 0 && sc.enableCrashPoints {
+			f.Validators[i].CrashPointsProbability = crashPointProbability
+		}
 	}
 	// Update all other nodes to use a specific gas price.
 	for i := range f.Keymanagers {
@@ -380,6 +388,9 @@ func (sc *txSourceImpl) Fixture() (*oasis.NetworkFixture, error) {
 		// Enable recovery from corrupted WAL.
 		f.Keymanagers[i].Consensus.TendermintRecoverCorruptedWAL = sc.tendermintRecoverCorruptedWAL
 		sc.generateConsensusFixture(&f.Keymanagers[i].Consensus, false)
+		if i > 0 && sc.enableCrashPoints {
+			f.Keymanagers[i].CrashPointsProbability = crashPointProbability
+		}
 	}
 	for i := range f.StorageWorkers {
 		f.StorageWorkers[i].Consensus.SubmissionGasPrice = txSourceGasPrice
@@ -388,6 +399,9 @@ func (sc *txSourceImpl) Fixture() (*oasis.NetworkFixture, error) {
 		sc.generateConsensusFixture(&f.StorageWorkers[i].Consensus, false)
 		if i > 0 {
 			f.StorageWorkers[i].CheckpointSyncEnabled = true
+			if sc.enableCrashPoints {
+				f.StorageWorkers[i].CrashPointsProbability = crashPointProbability
+			}
 		}
 	}
 	for i := range f.ComputeWorkers {
@@ -395,6 +409,9 @@ func (sc *txSourceImpl) Fixture() (*oasis.NetworkFixture, error) {
 		// Enable recovery from corrupted WAL.
 		f.ComputeWorkers[i].Consensus.TendermintRecoverCorruptedWAL = sc.tendermintRecoverCorruptedWAL
 		sc.generateConsensusFixture(&f.ComputeWorkers[i].Consensus, false)
+		if i > 0 && sc.enableCrashPoints {
+			f.ComputeWorkers[i].CrashPointsProbability = crashPointProbability
+		}
 	}
 	for i := range f.ByzantineNodes {
 		f.ByzantineNodes[i].Consensus.SubmissionGasPrice = txSourceGasPrice
@@ -656,6 +673,7 @@ func (sc *txSourceImpl) Clone() scenario.Scenario {
 		consensusPruneMinKept:             sc.consensusPruneMinKept,
 		consensusPruneMaxKept:             sc.consensusPruneMaxKept,
 		tendermintRecoverCorruptedWAL:     sc.tendermintRecoverCorruptedWAL,
+		enableCrashPoints:                 sc.enableCrashPoints,
 		numStorageNodes:                   sc.numStorageNodes,
 		numComputeNodes:                   sc.numComputeNodes,
 		seed:                              sc.seed,
