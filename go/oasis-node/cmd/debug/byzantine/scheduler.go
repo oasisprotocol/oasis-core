@@ -67,6 +67,10 @@ func schedulerCheckScheduled(committee *scheduler.Committee, nodeID signature.Pu
 		// All good.
 		return nil
 	}
+	if role == scheduler.RoleInvalid {
+		// It's expected that we're not scheduled.
+		return nil
+	}
 	return fmt.Errorf("we're not scheduled")
 }
 

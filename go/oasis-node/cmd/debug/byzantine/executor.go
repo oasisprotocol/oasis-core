@@ -71,7 +71,30 @@ ReceiveTransactions:
 	return txs
 }
 
-func (cbc *computeBatchContext) proposeTransactionBatch(ctx context.Context, groupVersion int64, hnss []*honestNodeStorage, currentBlock *block.Block, batch []*api.Tx, identity *identity.Identity, p2pH *p2pHandle) error {
+func (cbc *computeBatchContext) publishTransactionBatch(
+	ctx context.Context,
+	p2pH *p2pHandle,
+	groupVersion int64,
+	batch *commitment.SignedProposedBatch,
+) {
+	p2pH.service.Publish(
+		ctx,
+		defaultRuntimeID,
+		&p2p.Message{
+			GroupVersion:  groupVersion,
+			ProposedBatch: batch,
+		},
+	)
+}
+
+func (cbc *computeBatchContext) prepareTransactionBatch(
+	ctx context.Context,
+	clients []*storageClient,
+	currentBlock *block.Block,
+	batch []*api.Tx,
+	identity *identity.Identity,
+	corrupt bool,
+) (*commitment.SignedProposedBatch, error) {
 	// Generate the initial I/O root containing only the inputs (outputs and
 	// tags will be added later by the executor nodes).
 	lastHeader := currentBlock.Header
@@ -86,15 +109,15 @@ func (cbc *computeBatchContext) proposeTransactionBatch(ctx context.Context, gro
 
 	for idx, tx := range batch {
 		if err := ioTree.AddTransaction(ctx, transaction.Transaction{Input: tx.Data, BatchOrder: uint32(idx)}, nil); err != nil {
-			return err
+			return nil, err
 		}
 	}
 
 	ioWriteLog, ioRoot, err := ioTree.Commit(ctx)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	ioReceipts, err := storageBroadcastApply(ctx, hnss, &storage.ApplyRequest{
+	ioReceipts, err := storageBroadcastApply(ctx, clients, &storage.ApplyRequest{
 		Namespace: lastHeader.Namespace,
 		SrcRound:  lastHeader.Round + 1,
 		SrcRoot:   emptyRoot.Hash,
@@ -103,7 +126,7 @@ func (cbc *computeBatchContext) proposeTransactionBatch(ctx context.Context, gro
 		WriteLog:  ioWriteLog,
 	})
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	ioReceiptSignatures := []signature.Signature{}
@@ -116,24 +139,21 @@ func (cbc *computeBatchContext) proposeTransactionBatch(ctx context.Context, gro
 		StorageSignatures: ioReceiptSignatures,
 		Header:            currentBlock.Header,
 	}
-	signedDispatchMsg, err := commitment.SignProposedBatch(identity.NodeSigner, dispatchMsg)
-	if err != nil {
-		return fmt.Errorf("failed to sign txn scheduler batch: %w", err)
+	// Corrupt the proposed batch it in a way that receipts are also invalidated
+	// and as such the signature verification will fail.
+	if corrupt {
+		dispatchMsg.IORoot = emptyRoot.Hash
 	}
 
-	p2pH.service.Publish(
-		ctx,
-		defaultRuntimeID,
-		&p2p.Message{
-			GroupVersion:  groupVersion,
-			ProposedBatch: signedDispatchMsg,
-		},
-	)
+	signedDispatchMsg, err := commitment.SignProposedBatch(identity.NodeSigner, dispatchMsg)
+	if err != nil {
+		return nil, fmt.Errorf("failed to sign txn scheduler batch: %w", err)
+	}
 
 	cbc.bd = *dispatchMsg
 	cbc.bdSig = signedDispatchMsg.Signature
 
-	return nil
+	return signedDispatchMsg, nil
 }
 
 func (cbc *computeBatchContext) receiveBatch(ph *p2pHandle) error {
@@ -229,9 +249,9 @@ func (cbc *computeBatchContext) commitTrees(ctx context.Context) error {
 	return nil
 }
 
-func (cbc *computeBatchContext) uploadBatch(ctx context.Context, hnss []*honestNodeStorage) error {
+func (cbc *computeBatchContext) uploadBatch(ctx context.Context, clients []*storageClient) error {
 	var err error
-	cbc.storageReceipts, err = storageBroadcastApplyBatch(ctx, hnss, cbc.bd.Header.Namespace, cbc.bd.Header.Round+1, []storage.ApplyOp{
+	cbc.storageReceipts, err = storageBroadcastApplyBatch(ctx, clients, cbc.bd.Header.Namespace, cbc.bd.Header.Round+1, []storage.ApplyOp{
 		{
 			SrcRound: cbc.bd.Header.Round + 1,
 			SrcRoot:  cbc.bd.IORoot,
@@ -252,7 +272,7 @@ func (cbc *computeBatchContext) uploadBatch(ctx context.Context, hnss []*honestN
 	return nil
 }
 
-func (cbc *computeBatchContext) createCommitment(id *identity.Identity, rak signature.Signer, committeeID hash.Hash) error {
+func (cbc *computeBatchContext) createCommitment(id *identity.Identity, rak signature.Signer, committeeID hash.Hash, failure commitment.ExecutorCommitmentFailure) error {
 	var storageSigs []signature.Signature
 	for _, receipt := range cbc.storageReceipts {
 		storageSigs = append(storageSigs, receipt.Signature)
@@ -280,6 +300,11 @@ func (cbc *computeBatchContext) createCommitment(id *identity.Identity, rak sign
 
 		computeBody.RakSig = &rakSig.Signature
 	}
+
+	if failure != commitment.FailureNone {
+		computeBody.SetFailure(failure)
+	}
+
 	var err error
 	cbc.commit, err = commitment.SignExecutorCommitment(id.NodeSigner, computeBody)
 	if err != nil {

@@ -497,8 +497,16 @@ func RegisterScenarios() error {
 		ByzantineExecutorHonest,
 		ByzantineExecutorSchedulerHonest,
 		ByzantineExecutorWrong,
+		ByzantineExecutorSchedulerWrong,
 		ByzantineExecutorStraggler,
 		ByzantineExecutorSchedulerStraggler,
+		ByzantineExecutorFailureIndicating,
+		ByzantineExecutorSchedulerFailureIndicating,
+		// Byzantine storage node.
+		ByzantineStorageHonest,
+		ByzantineStorageFailApply,
+		ByzantineStorageFailApplyBatch,
+		ByzantineStorageFailRead,
 		// Storage sync test.
 		StorageSync,
 		// Sentry test.

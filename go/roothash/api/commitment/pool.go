@@ -45,6 +45,9 @@ const (
 	// Backup worker round timeout stretch factor (15/10 = 1.5).
 	backupWorkerTimeoutFactorNumerator   = 15
 	backupWorkerTimeoutFactorDenominator = 10
+
+	// LogEventDiscrepancyMajorityFailure is a log event value that dependency resoluton with majority failure.
+	LogEventDiscrepancyMajorityFailure = "pool/discrepancy_majority_failure"
 )
 
 var logger *logging.Logger = logging.GetLogger("roothash/commitment/pool")
@@ -514,6 +517,10 @@ func (p *Pool) ResolveDiscrepancy() (OpenCommitment, error) {
 
 	minVotes := (backupNodes / 2) + 1
 	if failuresTally >= minVotes {
+		logger.Warn("discrepancy resolution majority failed",
+			logging.LogEvent, LogEventDiscrepancyMajorityFailure,
+		)
+
 		return nil, ErrMajorityFailure
 	}
 	for _, ent := range votes {

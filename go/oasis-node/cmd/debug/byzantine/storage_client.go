@@ -4,7 +4,6 @@ import (
 	"context"
 	"crypto/tls"
 	"fmt"
-	"io"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/balancer/roundrobin"
@@ -18,15 +17,14 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/node"
 	scheduler "github.com/oasisprotocol/oasis-core/go/scheduler/api"
 	storage "github.com/oasisprotocol/oasis-core/go/storage/api"
-	"github.com/oasisprotocol/oasis-core/go/storage/mkvs/checkpoint"
-	"github.com/oasisprotocol/oasis-core/go/storage/mkvs/syncer"
 )
 
-var _ storage.Backend = (*honestNodeStorage)(nil)
+var _ storage.Backend = (*storageClient)(nil)
 
-type honestNodeStorage struct {
+type storageClient struct {
+	storage.Backend
+
 	nodeID signature.PublicKey
-	client storage.Backend
 	initCh chan struct{}
 }
 
@@ -66,7 +64,7 @@ func dialNode(node *node.Node, opts grpc.DialOption) (*grpc.ClientConn, error) {
 	return conn, nil
 }
 
-func newHonestNodeStorage(id *identity.Identity, node *node.Node) (*honestNodeStorage, error) {
+func newHonestNodeStorage(id *identity.Identity, node *node.Node) (*storageClient, error) {
 	opts, err := dialOptionForNode([]tls.Certificate{*id.GetTLSCertificate()}, node)
 	if err != nil {
 		return nil, fmt.Errorf("storage client DialOptionForNode: %w", err)
@@ -79,88 +77,53 @@ func newHonestNodeStorage(id *identity.Identity, node *node.Node) (*honestNodeSt
 	initCh := make(chan struct{})
 	close(initCh)
 
-	return &honestNodeStorage{
-		nodeID: node.ID,
-		client: storage.NewStorageClient(conn),
-		initCh: initCh,
+	return &storageClient{
+		Backend: storage.NewStorageClient(conn),
+		nodeID:  node.ID,
+		initCh:  initCh,
 	}, nil
 }
 
-func (hns *honestNodeStorage) SyncGet(ctx context.Context, request *syncer.GetRequest) (*syncer.ProofResponse, error) {
-	return hns.client.SyncGet(ctx, request)
+func (sc *storageClient) Initialized() <-chan struct{} {
+	return sc.initCh
 }
 
-func (hns *honestNodeStorage) SyncGetPrefixes(ctx context.Context, request *syncer.GetPrefixesRequest) (*syncer.ProofResponse, error) {
-	return hns.client.SyncGetPrefixes(ctx, request)
-}
-
-func (hns *honestNodeStorage) SyncIterate(ctx context.Context, request *syncer.IterateRequest) (*syncer.ProofResponse, error) {
-	return hns.client.SyncIterate(ctx, request)
-}
-
-func (hns *honestNodeStorage) Apply(ctx context.Context, request *storage.ApplyRequest) ([]*storage.Receipt, error) {
-	return hns.client.Apply(ctx, request)
-}
-
-func (hns *honestNodeStorage) ApplyBatch(ctx context.Context, request *storage.ApplyBatchRequest) ([]*storage.Receipt, error) {
-	return hns.client.ApplyBatch(ctx, request)
-}
-
-func (hns *honestNodeStorage) GetDiff(ctx context.Context, request *storage.GetDiffRequest) (storage.WriteLogIterator, error) {
-	return hns.client.GetDiff(ctx, request)
-}
-
-func (hns *honestNodeStorage) GetCheckpoints(ctx context.Context, request *checkpoint.GetCheckpointsRequest) ([]*checkpoint.Metadata, error) {
-	return hns.client.GetCheckpoints(ctx, request)
-}
-
-func (hns *honestNodeStorage) GetCheckpointChunk(ctx context.Context, chunk *checkpoint.ChunkMetadata, w io.Writer) error {
-	return hns.client.GetCheckpointChunk(ctx, chunk, w)
-}
-
-func (hns *honestNodeStorage) Cleanup() {
-}
-
-func (hns *honestNodeStorage) Initialized() <-chan struct{} {
-	return hns.initCh
-}
-
-func storageConnectToCommittee(ht *honestTendermint, height int64, committee *scheduler.Committee, role scheduler.Role, id *identity.Identity) ([]*honestNodeStorage, error) {
-	var hnss []*honestNodeStorage
+func storageConnectToCommittee(ht *honestTendermint, height int64, committee *scheduler.Committee, role scheduler.Role, id *identity.Identity) ([]*storageClient, error) {
+	var clients []*storageClient
 	if err := schedulerForRoleInCommittee(ht, height, committee, role, func(n *node.Node) error {
-		hns, err := newHonestNodeStorage(id, n)
+		client, err := newHonestNodeStorage(id, n)
 		if err != nil {
 			return fmt.Errorf("new honest node storage %s: %w", n.ID, err)
 		}
 
-		hnss = append(hnss, hns)
+		clients = append(clients, client)
 
 		return nil
 	}); err != nil {
 		return nil, err
 	}
 
-	return hnss, nil
+	return clients, nil
 }
 
-func storageBroadcastCleanup(hnss []*honestNodeStorage) {
-	for _, hns := range hnss {
-		hns.Cleanup()
+func storageBroadcastCleanup(clients []*storageClient) {
+	for _, sc := range clients {
+		sc.Cleanup()
 	}
 }
 
 func storageBroadcastApplyBatch(
 	ctx context.Context,
-	hnss []*honestNodeStorage,
+	clients []*storageClient,
 	ns common.Namespace,
 	dstRound uint64,
 	ops []storage.ApplyOp,
 ) ([]*storage.Receipt, error) {
 	var receipts []*storage.Receipt
-	for _, hns := range hnss {
-		r, err := hns.ApplyBatch(ctx, &storage.ApplyBatchRequest{Namespace: ns, DstRound: dstRound, Ops: ops})
+	for _, sc := range clients {
+		r, err := sc.ApplyBatch(ctx, &storage.ApplyBatchRequest{Namespace: ns, DstRound: dstRound, Ops: ops})
 		if err != nil {
-			return receipts, fmt.Errorf("honest node storage ApplyBatch %s: %w", hns.nodeID, err)
+			return receipts, fmt.Errorf("honest node storage ApplyBatch %s: %w", sc.nodeID, err)
 		}
 
 		receipts = append(receipts, r...)
@@ -171,14 +134,14 @@ func storageBroadcastApplyBatch(
 
 func storageBroadcastApply(
 	ctx context.Context,
-	hnss []*honestNodeStorage,
+	clients []*storageClient,
 	req *storage.ApplyRequest,
 ) ([]*storage.Receipt, error) {
 	var receipts []*storage.Receipt
-	for _, hns := range hnss {
-		r, err := hns.Apply(ctx, req)
+	for _, sc := range clients {
+		r, err := sc.Apply(ctx, req)
 		if err != nil {
-			return receipts, fmt.Errorf("honest node storage Apply %s: %w", hns.nodeID, err)
+			return receipts, fmt.Errorf("honest node storage Apply %s: %w", sc.nodeID, err)
 		}
 
 		receipts = append(receipts, r...)
