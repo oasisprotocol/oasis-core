@@ -300,6 +300,9 @@ func (s *runtimeState) generateExecutorCommitments(t *testing.T, consensus conse
 		},
 	)
 
+	var msgsHash hash.Hash
+	msgsHash.Empty()
+
 	// Generate all the executor commitments.
 	executorNodes = append([]*registryTests.TestNode{}, executorCommittee.workers...)
 	for _, node := range executorNodes {
@@ -309,6 +312,7 @@ func (s *runtimeState) generateExecutorCommitments(t *testing.T, consensus conse
 				PreviousHash: parent.Header.PreviousHash,
 				IORoot:       &parent.Header.IORoot,
 				StateRoot:    &parent.Header.StateRoot,
+				MessagesHash: &msgsHash,
 			},
 			StorageSignatures: parent.Header.StorageSignatures,
 			InputRoot:         hash.Hash{},
@@ -400,7 +404,7 @@ func (s *runtimeState) testSuccessfulRound(t *testing.T, backend api.Backend, co
 			// Executor commit event + Finalized event.
 			require.Len(evts, len(executorCommits)+1, "should have all events")
 			// First event is Finalized.
-			require.EqualValues(&api.FinalizedEvent{Round: header.Round}, evts[0].FinalizedEvent, "finalized event should have the right round")
+			require.EqualValues(&api.FinalizedEvent{Round: header.Round}, evts[0].Finalized, "finalized event should have the right round")
 			for i, ev := range evts[1:] {
 				switch {
 				case ev.ExecutorCommitted != nil:

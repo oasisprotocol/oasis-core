@@ -16,7 +16,7 @@ use super::{
     tags::Tags,
     types::{TxnBatch, TxnCall, TxnCheckResult, TxnOutput},
 };
-use crate::common::{cbor, crypto::hash::Hash, roothash::Message as RoothashMessage};
+use crate::common::{cbor, crypto::hash::Hash, roothash};
 
 /// Dispatch error.
 #[derive(Error, Debug)]
@@ -178,7 +178,7 @@ pub trait Dispatcher {
         &self,
         batch: &TxnBatch,
         ctx: Context,
-    ) -> Result<(TxnBatch, Vec<Tags>, Vec<RoothashMessage>)>;
+    ) -> Result<(TxnBatch, Vec<Tags>, Vec<roothash::Message>)>;
     /// Invoke the finalizer (if any).
     fn finalize(&self, new_storage_root: Hash);
     /// Configure abort batch flag.
@@ -202,7 +202,7 @@ impl Dispatcher for NoopDispatcher {
         &self,
         _batch: &TxnBatch,
         ctx: Context,
-    ) -> Result<(TxnBatch, Vec<Tags>, Vec<RoothashMessage>)> {
+    ) -> Result<(TxnBatch, Vec<Tags>, Vec<roothash::Message>)> {
         let outputs = TxnBatch::new(Vec::new());
         let (tags, roothash_messages) = ctx.close();
         Ok((outputs, tags, roothash_messages))
@@ -307,7 +307,7 @@ impl Dispatcher for MethodDispatcher {
         &self,
         batch: &TxnBatch,
         mut ctx: Context,
-    ) -> Result<(TxnBatch, Vec<Tags>, Vec<RoothashMessage>)> {
+    ) -> Result<(TxnBatch, Vec<Tags>, Vec<roothash::Message>)> {
         if let Some(ref ctx_init) = self.ctx_initializer {
             ctx_init.init(&mut ctx);
         }
@@ -408,7 +408,7 @@ mod tests {
             timestamp: TEST_TIMESTAMP,
             ..Default::default()
         };
-        let mut ctx = Context::new(IoContext::background().freeze(), &header, false);
+        let mut ctx = Context::new(IoContext::background().freeze(), &header, &[], false);
 
         // Call runtime.
         let result = dispatcher.dispatch(&call_encoded, &mut ctx);

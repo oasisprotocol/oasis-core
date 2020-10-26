@@ -25,6 +25,10 @@ var (
 	//
 	// Value is CBOR-serialized roothash.AnnotatedBlock.
 	blockKeyFmt = keyformat.New(0x02, uint64(0))
+	// messageResultsKeyFmt is the message result index key format.
+	//
+	// Value is CBOR-serialized []*roothash.MessageEvent.
+	messageResultsKeyFmt = keyformat.New(0x03, uint64(0))
 )
 
 type dbMetadata struct {
@@ -161,7 +165,7 @@ func (d *DB) consensusCheckpoint(height int64) error {
 	})
 }
 
-func (d *DB) commit(blk *roothash.AnnotatedBlock) error {
+func (d *DB) commit(blk *roothash.AnnotatedBlock, msgResults []*roothash.MessageEvent) error {
 	return d.db.Update(func(tx *badger.Txn) error {
 		meta, err := d.queryGetMetadata(tx)
 		if err != nil {
@@ -194,6 +198,12 @@ func (d *DB) commit(blk *roothash.AnnotatedBlock) error {
 			return err
 		}
 
+		if len(msgResults) > 0 {
+			if err = tx.Set(messageResultsKeyFmt.Encode(blk.Block.Header.Round), cbor.Marshal(msgResults)); err != nil {
+				return err
+			}
+		}
+
 		meta.LastRound = blk.Block.Header.Round
 		if blk.Height > meta.LastConsensusHeight {
 			meta.LastConsensusHeight = blk.Height
@@ -216,13 +226,35 @@ func (d *DB) getBlock(round uint64) (*roothash.AnnotatedBlock, error) {
 		}
 
 		return item.Value(func(val []byte) error {
-			return cbor.Unmarshal(val, &blk)
+			return cbor.UnmarshalTrusted(val, &blk)
 		})
 	})
 	if txErr != nil {
 		return nil, txErr
 	}
 	return &blk, nil
+}
+
+func (d *DB) getMessageResults(round uint64) ([]*roothash.MessageEvent, error) {
+	var msgResults []*roothash.MessageEvent
+	txErr := d.db.View(func(tx *badger.Txn) error {
+		item, err := tx.Get(messageResultsKeyFmt.Encode(round))
+		switch err {
+		case nil:
+		case badger.ErrKeyNotFound:
+			return nil
+		default:
+			return err
+		}
+
+		return item.Value(func(val []byte) error {
+			return cbor.UnmarshalTrusted(val, &msgResults)
+		})
+	})
+	if txErr != nil {
+		return nil, txErr
+	}
+	return msgResults, nil
 }
 
 func (d *DB) close() {

@@ -4,7 +4,7 @@ use std::{any::Any, sync::Arc};
 use io_context::Context as IoContext;
 
 use super::tags::{Tag, Tags};
-use crate::common::roothash::{Header, Message};
+use crate::common::roothash::{Header, Message, MessageEvent};
 
 struct NoRuntimeContext;
 
@@ -14,6 +14,8 @@ pub struct Context<'a> {
     pub io_ctx: Arc<IoContext>,
     /// The block header accompanying this transaction.
     pub header: &'a Header,
+    /// Results of message processing emitted in the previous round.
+    pub message_results: &'a [MessageEvent],
     /// Runtime-specific context.
     pub runtime: Box<dyn Any>,
 
@@ -24,16 +26,22 @@ pub struct Context<'a> {
     /// List of emitted tags for each transaction.
     tags: Vec<Tags>,
 
-    /// List of messages emitted.
+    /// List of emitted messages.
     messages: Vec<Message>,
 }
 
 impl<'a> Context<'a> {
     /// Construct new transaction context.
-    pub fn new(io_ctx: Arc<IoContext>, header: &'a Header, check_only: bool) -> Self {
+    pub fn new(
+        io_ctx: Arc<IoContext>,
+        header: &'a Header,
+        message_results: &'a [MessageEvent],
+        check_only: bool,
+    ) -> Self {
         Self {
             io_ctx,
             header,
+            message_results,
             runtime: Box::new(NoRuntimeContext),
             check_only,
             tags: Vec::new(),
@@ -77,9 +85,12 @@ impl<'a> Context<'a> {
             .push(Tag::new(key.as_ref().to_vec(), value.as_ref().to_vec()))
     }
 
-    /// Send a roothash message as part of the block that contains this transaction.
-    /// See RFC 0065 for information on roothash messages.
-    pub fn send_roothash_message(&mut self, message: Message) {
+    /// Emit a message as part of the current round.
+    ///
+    /// Returns the index of the emitted message which is needed to check for the result of the
+    /// emitted message in the next round.
+    pub fn emit_message(&mut self, message: Message) -> u32 {
         self.messages.push(message);
+        self.messages.len() as u32 - 1
     }
 }

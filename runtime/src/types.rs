@@ -8,7 +8,7 @@ use crate::{
             hash::Hash,
             signature::{PublicKey, Signature},
         },
-        roothash::{Block, ComputeResultsHeader},
+        roothash::{self, Block, ComputeResultsHeader},
         runtime::RuntimeId,
         sgx::avr::AVR,
     },
@@ -28,6 +28,8 @@ pub struct ComputedBatch {
     /// If this runtime uses a TEE, then this is the signature of the batch's
     /// BatchSigMessage with the node's RAK for this runtime.
     pub rak_sig: Signature,
+    /// Messages emitted by the runtime.
+    pub messages: Vec<roothash::Message>,
 }
 
 /// Storage sync request.
@@ -112,6 +114,8 @@ pub enum Body {
         results: TxnBatch,
     },
     RuntimeExecuteTxBatchRequest {
+        #[serde(default)]
+        message_results: Vec<roothash::MessageEvent>,
         io_root: Hash,
         inputs: TxnBatch,
         block: Block,

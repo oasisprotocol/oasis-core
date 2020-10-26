@@ -52,6 +52,7 @@ const (
 	CfgExecutorGroupBackupSize   = "runtime.executor.group_backup_size"
 	CfgExecutorAllowedStragglers = "runtime.executor.allowed_stragglers"
 	CfgExecutorRoundTimeout      = "runtime.executor.round_timeout"
+	CfgExecutorMaxMessages       = "runtime.executor.max_messages"
 
 	// Storage committee flags.
 	CfgStorageGroupSize               = "runtime.storage.group_size"
@@ -374,6 +375,7 @@ func runtimeFromFlags() (*registry.Runtime, signature.Signer, error) { // nolint
 			GroupBackupSize:   viper.GetUint64(CfgExecutorGroupBackupSize),
 			AllowedStragglers: viper.GetUint64(CfgExecutorAllowedStragglers),
 			RoundTimeout:      viper.GetInt64(CfgExecutorRoundTimeout),
+			MaxMessages:       viper.GetUint32(CfgExecutorMaxMessages),
 		},
 		TxnScheduler: registry.TxnSchedulerParameters{
 			Algorithm:         viper.GetString(CfgTxnSchedulerAlgorithm),
@@ -532,6 +534,7 @@ func init() {
 	runtimeFlags.Uint64(CfgExecutorGroupBackupSize, 0, "Number of backup workers in the runtime executor group/committee")
 	runtimeFlags.Uint64(CfgExecutorAllowedStragglers, 0, "Number of stragglers allowed per round in the runtime executor group")
 	runtimeFlags.Int64(CfgExecutorRoundTimeout, 5, "Executor committee round timeout for this runtime (in consensus blocks)")
+	runtimeFlags.Uint32(CfgExecutorMaxMessages, 32, "Maximum number of runtime messages that can be emitted in a round")
 
 	// Init Transaction scheduler flags.
 	runtimeFlags.String(CfgTxnSchedulerAlgorithm, registry.TxnSchedulerSimple, "Transaction scheduling algorithm")

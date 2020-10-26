@@ -425,7 +425,7 @@ func AppendRegistryState(doc *genesis.Document, entities, runtimes, nodes []stri
 // exported runtime states.
 func AppendRootHashState(doc *genesis.Document, exports []string, l *logging.Logger) error {
 	rootSt := roothash.Genesis{
-		RuntimeStates: make(map[common.Namespace]*registry.RuntimeGenesis),
+		RuntimeStates: make(map[common.Namespace]*roothash.GenesisRuntimeState),
 
 		Parameters: roothash.ConsensusParameters{
 			DebugDoNotSuspendRuntimes: viper.GetBool(cfgRoothashDebugDoNotSuspendRuntimes),
@@ -445,7 +445,7 @@ func AppendRootHashState(doc *genesis.Document, exports []string, l *logging.Log
 			return err
 		}
 
-		var rtStates map[common.Namespace]*registry.RuntimeGenesis
+		var rtStates map[common.Namespace]*roothash.GenesisRuntimeState
 		if err = json.Unmarshal(b, &rtStates); err != nil {
 			l.Error("failed to parse genesis roothash runtime states",
 				"err", err,

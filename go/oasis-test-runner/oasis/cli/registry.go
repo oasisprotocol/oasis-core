@@ -58,6 +58,7 @@ func (r *RegistryHelpers) runRegistryRuntimeSubcommand(
 			"--"+cmdRegRt.CfgExecutorGroupBackupSize, strconv.FormatUint(runtime.Executor.GroupBackupSize, 10),
 			"--"+cmdRegRt.CfgExecutorAllowedStragglers, strconv.FormatUint(runtime.Executor.AllowedStragglers, 10),
 			"--"+cmdRegRt.CfgExecutorRoundTimeout, strconv.FormatInt(runtime.Executor.RoundTimeout, 10),
+			"--"+cmdRegRt.CfgExecutorMaxMessages, strconv.FormatUint(uint64(runtime.Executor.MaxMessages), 10),
 			"--"+cmdRegRt.CfgStorageGroupSize, strconv.FormatUint(runtime.Storage.GroupSize, 10),
 			"--"+cmdRegRt.CfgStorageMinWriteReplication, strconv.FormatUint(runtime.Storage.MinWriteReplication, 10),
 			"--"+cmdRegRt.CfgStorageMaxApplyWriteLogEntries, strconv.FormatUint(runtime.Storage.MaxApplyWriteLogEntries, 10),

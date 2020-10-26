@@ -38,9 +38,9 @@ type ComputeResultsHeader struct {
 
 	// Optional fields (may be absent for failure indication).
 
-	IORoot    *hash.Hash       `json:"io_root,omitempty"`
-	StateRoot *hash.Hash       `json:"state_root,omitempty"`
-	Messages  []*block.Message `json:"messages,omitempty"`
+	IORoot       *hash.Hash `json:"io_root,omitempty"`
+	StateRoot    *hash.Hash `json:"state_root,omitempty"`
+	MessagesHash *hash.Hash `json:"messages_hash,omitempty"`
 }
 
 // IsParentOf returns true iff the header is the parent of a child header.
@@ -84,6 +84,7 @@ type ComputeBody struct {
 
 	StorageSignatures []signature.Signature   `json:"storage_signatures,omitempty"`
 	RakSig            *signature.RawSignature `json:"rak_sig,omitempty"`
+	Messages          []block.Message         `json:"messages,omitempty"`
 }
 
 // SetFailure sets failure reason and clears any fields that should be clear
@@ -91,8 +92,10 @@ type ComputeBody struct {
 func (m *ComputeBody) SetFailure(failure ExecutorCommitmentFailure) {
 	m.Header.IORoot = nil
 	m.Header.StateRoot = nil
+	m.Header.MessagesHash = nil
 	m.StorageSignatures = nil
 	m.RakSig = nil
+	m.Messages = nil
 	m.Failure = failure
 }
 
@@ -138,6 +141,16 @@ func (m *ComputeBody) ValidateBasic() error {
 		if header.StateRoot == nil {
 			return fmt.Errorf("missing StateRoot")
 		}
+		if header.MessagesHash == nil {
+			return fmt.Errorf("missing messages hash")
+		}
+
+		// Validate any included runtime messages.
+		for i, msg := range m.Messages {
+			if err := msg.ValidateBasic(); err != nil {
+				return fmt.Errorf("bad runtime message %d: %w", i, err)
+			}
+		}
 	case FailureStorageUnavailable, FailureUnknown:
 		// In case of failure indicating commitment make sure storage signatures are empty.
 		if len(m.StorageSignatures) > 0 {
@@ -151,9 +164,16 @@ func (m *ComputeBody) ValidateBasic() error {
 		if header.StateRoot != nil {
 			return fmt.Errorf("failure indicating commitment includes StateRoot")
 		}
+		if header.MessagesHash != nil {
+			return fmt.Errorf("failure indicating commitment includes MessagesHash")
+		}
 		// In case of failure indicating commitment make sure RAK signature is empty.
 		if m.RakSig != nil {
 			return fmt.Errorf("failure indicating body includes RAK signature")
+		}
+		// In case of failure indicating commitment make sure messages are empty.
+		if len(m.Messages) > 0 {
+			return fmt.Errorf("failure indicating body includes messages")
 		}
 	default:
 		return fmt.Errorf("invalid failure: %d", m.Failure)
@@ -261,7 +281,7 @@ func (c OpenExecutorCommitment) ToVote() hash.Hash {
 // ToDDResult returns a commitment-specific result after discrepancy
 // detection.
 func (c OpenExecutorCommitment) ToDDResult() interface{} {
-	return c.Body.Header
+	return c.Body
 }
 
 // Open validates the executor commitment signature, and de-serializes the message.

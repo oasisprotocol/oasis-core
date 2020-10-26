@@ -54,7 +54,7 @@ impl From<u64> for Version {
 // and the runtime. This version MUST be compatible with the one supported by
 // the worker host.
 pub const PROTOCOL_VERSION: Version = Version {
-    major: 1,
+    major: 2,
     minor: 0,
     patch: 0,
 };

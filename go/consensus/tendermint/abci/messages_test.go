@@ -16,7 +16,6 @@ type testMessageKind uint8
 var (
 	testMessageA = testMessageKind(0)
 	testMessageB = testMessageKind(1)
-	testMessageC = testMessageKind(2)
 )
 
 type testMessage struct {

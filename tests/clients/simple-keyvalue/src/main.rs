@@ -116,6 +116,9 @@ fn main() {
     assert_eq!(r, None); // key should not exist in db before
     long_kv.nonce = Some(rng.gen());
 
+    println!("Testing runtime message emission...");
+    rt.block_on(kv_client.message(rng.gen())).unwrap();
+
     println!("Getting long key...");
     let r = rt.block_on(kv_client.get(long_k.clone())).unwrap();
     match r {

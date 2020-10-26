@@ -223,25 +223,51 @@ func (sc *serviceClient) StateToGenesis(ctx context.Context, height int64) (*api
 		return nil, err
 	}
 
-	return q.Genesis(ctx)
+	g, err := q.Genesis(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	// Add any last emitted events for the given runtime.
+	//
+	// NOTE: This requires historic lookups.
+	for runtimeID, rt := range g.RuntimeStates {
+		state, err := sc.GetRuntimeState(ctx, runtimeID, height)
+		if err != nil {
+			return nil, err
+		}
+
+		rt.MessageResults, err = sc.getMessageResults(ctx, runtimeID, state.LastNormalHeight)
+		if err != nil {
+			return nil, fmt.Errorf("roothash: failed to get last message results for runtime %s: %w", runtimeID, err)
+		}
+	}
+
+	return g, nil
 }
 
-func (sc *serviceClient) GetEvents(ctx context.Context, height int64) ([]*api.Event, error) {
+func (sc *serviceClient) getMessageResults(ctx context.Context, runtimeID common.Namespace, height int64) ([]*api.MessageEvent, error) {
+	evs, err := sc.getEvents(ctx, height, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	var mevs []*api.MessageEvent
+	for _, ev := range evs {
+		if ev.Message == nil || !ev.RuntimeID.Equal(&runtimeID) {
+			continue
+		}
+		mevs = append(mevs, ev.Message)
+	}
+	return mevs, nil
+}
+
+func (sc *serviceClient) getEvents(ctx context.Context, height int64, txns [][]byte) ([]*api.Event, error) {
 	// Get block results at given height.
 	var results *tmrpctypes.ResultBlockResults
 	results, err := sc.backend.GetBlockResults(ctx, height)
 	if err != nil {
 		sc.logger.Error("failed to get tendermint block results",
-			"err", err,
-			"height", height,
-		)
-		return nil, err
-	}
-
-	// Get transactions at given height.
-	txns, err := sc.backend.GetTransactions(ctx, height)
-	if err != nil {
-		sc.logger.Error("failed to get tendermint transactions",
 			"err", err,
 			"height", height,
 		)
@@ -267,7 +293,11 @@ func (sc *serviceClient) GetEvents(ctx context.Context, height int64) ([]*api.Ev
 		// The order of transactions in txns and results.TxsResults is
 		// supposed to match, so the same index in both slices refers to the
 		// same transaction.
-		evs, txErr := EventsFromTendermint(txns[txIdx], results.Height, txResult.Events)
+		var tx tmtypes.Tx
+		if txns != nil {
+			tx = txns[txIdx]
+		}
+		evs, txErr := EventsFromTendermint(tx, results.Height, txResult.Events)
 		if txErr != nil {
 			return nil, txErr
 		}
@@ -275,6 +305,20 @@ func (sc *serviceClient) GetEvents(ctx context.Context, height int64) ([]*api.Ev
 	}
 
 	return events, nil
+}
+
+func (sc *serviceClient) GetEvents(ctx context.Context, height int64) ([]*api.Event, error) {
+	// Get transactions at given height.
+	txns, err := sc.backend.GetTransactions(ctx, height)
+	if err != nil {
+		sc.logger.Error("failed to get tendermint transactions",
+			"err", err,
+			"height", height,
+		)
+		return nil, err
+	}
+
+	return sc.getEvents(ctx, height, txns)
 }
 
 func (sc *serviceClient) Cleanup() {
@@ -451,7 +495,7 @@ func (sc *serviceClient) DeliverEvent(ctx context.Context, height int64, tx tmty
 
 	for _, ev := range events {
 		// Notify non-finalized events.
-		if ev.FinalizedEvent == nil {
+		if ev.Finalized == nil {
 			notifiers := sc.getRuntimeNotifiers(ev.RuntimeID)
 			notifiers.eventNotifier.Broadcast(ev)
 			continue
@@ -461,7 +505,7 @@ func (sc *serviceClient) DeliverEvent(ctx context.Context, height int64, tx tmty
 		if sc.trackedRuntime[ev.RuntimeID] == nil {
 			continue
 		}
-		if err = sc.processFinalizedEvent(ctx, height, ev.RuntimeID, &ev.FinalizedEvent.Round, true); err != nil {
+		if err = sc.processFinalizedEvent(ctx, height, ev.RuntimeID, &ev.Finalized.Round, true); err != nil {
 			return fmt.Errorf("roothash: failed to process finalized event: %w", err)
 		}
 	}
@@ -515,6 +559,16 @@ func (sc *serviceClient) processFinalizedEvent(
 		return fmt.Errorf("roothash: finalized event/query round mismatch")
 	}
 
+	msgResults, err := sc.getMessageResults(ctx, runtimeID, height)
+	if err != nil {
+		sc.logger.Error("failed to fetch message results",
+			"err", err,
+			"height", height,
+			"runtime_id", runtimeID,
+		)
+		return fmt.Errorf("roothash: failed to fetch message results: %w", err)
+	}
+
 	annBlk := &api.AnnotatedBlock{
 		Height: height,
 		Block:  blk,
@@ -544,7 +598,7 @@ func (sc *serviceClient) processFinalizedEvent(
 			"round", blk.Header.Round,
 		)
 
-		err = tr.blockHistory.Commit(annBlk)
+		err = tr.blockHistory.Commit(annBlk, msgResults)
 		if err != nil {
 			sc.logger.Error("failed to commit block to history keeper",
 				"err", err,
@@ -610,7 +664,7 @@ func EventsFromTendermint(
 					continue
 				}
 
-				ev := &api.Event{RuntimeID: value.ID, Height: height, TxHash: txHash, FinalizedEvent: &api.FinalizedEvent{Round: value.Round}}
+				ev := &api.Event{RuntimeID: value.ID, Height: height, TxHash: txHash, Finalized: &api.FinalizedEvent{Round: value.Round}}
 				events = append(events, ev)
 			case bytes.Equal(key, app.KeyExecutionDiscrepancyDetected):
 				// An execution discrepancy has been detected.
@@ -631,6 +685,16 @@ func EventsFromTendermint(
 				}
 
 				ev := &api.Event{RuntimeID: value.ID, Height: height, TxHash: txHash, ExecutorCommitted: &value.Event}
+				events = append(events, ev)
+			case bytes.Equal(key, app.KeyMessage):
+				// Runtime message has been processed.
+				var value app.ValueMessage
+				if err := cbor.Unmarshal(val, &value); err != nil {
+					errs = multierror.Append(errs, fmt.Errorf("roothash: corrupt message event: %w", err))
+					continue
+				}
+
+				ev := &api.Event{RuntimeID: value.ID, Height: height, TxHash: txHash, Message: &value.Event}
 				events = append(events, ev)
 			case bytes.Equal(key, app.KeyRuntimeID):
 				// Runtime ID attribute (Base64-encoded to allow queries).

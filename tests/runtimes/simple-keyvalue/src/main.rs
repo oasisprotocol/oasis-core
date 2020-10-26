@@ -1,6 +1,7 @@
-use std::sync::Arc;
+use std::{io::Cursor, sync::Arc};
 
 use anyhow::{anyhow, Result};
+use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 use io_context::Context as IoContext;
 
 use oasis_core_keymanager_client::{KeyManagerClient, KeyPairId};
@@ -10,6 +11,8 @@ use oasis_core_runtime::{
             hash::Hash,
             mrae::deoxysii::{DeoxysII, KEY_SIZE, NONCE_SIZE, TAG_SIZE},
         },
+        key_format::KeyFormat,
+        roothash::Message,
         runtime::RuntimeId,
         version::Version,
     },
@@ -17,11 +20,43 @@ use oasis_core_runtime::{
     rak::RAK,
     register_runtime_txn_methods, runtime_context,
     storage::{StorageContext, MKVS},
-    transaction::{dispatcher::CheckOnlySuccess, Context as TxnContext},
+    transaction::{
+        dispatcher::{BatchHandler, CheckOnlySuccess},
+        Context as TxnContext,
+    },
     version_from_cargo, Protocol, RpcDemux, RpcDispatcher, TxnDispatcher, TxnMethDispatcher,
 };
 use simple_keymanager::trusted_policy_signers;
 use simple_keyvalue_api::{with_api, Key, KeyValue};
+
+/// Key format used for transaction artifacts.
+#[derive(Debug)]
+struct PendingMessagesKeyFormat {
+    index: u32,
+}
+
+impl KeyFormat for PendingMessagesKeyFormat {
+    fn prefix() -> u8 {
+        0x00
+    }
+
+    fn size() -> usize {
+        4
+    }
+
+    fn encode_atoms(self, atoms: &mut Vec<Vec<u8>>) {
+        let mut index: Vec<u8> = Vec::with_capacity(4);
+        index.write_u32::<BigEndian>(self.index).unwrap();
+        atoms.push(index);
+    }
+
+    fn decode_atoms(data: &[u8]) -> Self {
+        let mut reader = Cursor::new(data);
+        Self {
+            index: reader.read_u32::<BigEndian>().unwrap(),
+        }
+    }
+}
 
 struct Context {
     test_runtime_id: RuntimeId,
@@ -33,6 +68,29 @@ fn get_runtime_id(_args: &(), ctx: &mut TxnContext) -> Result<Option<String>> {
     let rctx = runtime_context!(ctx, Context);
 
     Ok(Some(rctx.test_runtime_id.to_string()))
+}
+
+// Emit a message and schedule to check its result in the next round.
+fn message(_args: &u64, ctx: &mut TxnContext) -> Result<()> {
+    if ctx.check_only {
+        return Err(CheckOnlySuccess::default().into());
+    }
+
+    StorageContext::with_current(|mkvs, _untrusted_local| {
+        // Emit a message.
+        let index = ctx.emit_message(Message::Noop {});
+
+        let existing = mkvs.insert(
+            IoContext::create_child(&ctx.io_ctx),
+            &PendingMessagesKeyFormat { index }.encode(),
+            b"noop", // Value is ignored.
+        );
+        assert!(
+            existing.is_none(),
+            "all messages should have been processed"
+        );
+    });
+    Ok(())
 }
 
 /// Insert a key/value pair.
@@ -253,6 +311,63 @@ impl EncryptionContext {
     }
 }
 
+struct BlockHandler;
+
+impl BlockHandler {
+    fn process_message_results(&self, ctx: &mut TxnContext) {
+        for ev in ctx.message_results {
+            // Fetch and remove message metadata.
+            let meta = StorageContext::with_current(|mkvs, _| {
+                mkvs.remove(
+                    IoContext::create_child(&ctx.io_ctx),
+                    &PendingMessagesKeyFormat { index: ev.index }.encode(),
+                )
+            });
+
+            // Make sure metadata is as expected.
+            assert_eq!(
+                meta,
+                Some(b"noop".to_vec()),
+                "message metadata must be correct"
+            );
+
+            // Make sure the message was successfully processed.
+            assert!(
+                ev.is_success(),
+                "messages should have been successfully processed"
+            );
+        }
+
+        // Check if there are any leftover pending messages metadata.
+        StorageContext::with_current(|mkvs, _| {
+            let mut it = mkvs.iter(IoContext::create_child(&ctx.io_ctx));
+            it.seek(&PendingMessagesKeyFormat { index: 0 }.encode_partial(0));
+            // Either there should be no next key...
+            it.next().and_then(|(key, _value)| {
+                assert!(
+                    // ...or the next key should be something else.
+                    PendingMessagesKeyFormat::decode(&key).is_none(),
+                    "leftover message metadata (some messages not processed?): key={:?}",
+                    key
+                );
+                Some(())
+            });
+        })
+    }
+}
+
+impl BatchHandler for BlockHandler {
+    fn start_batch(&self, ctx: &mut TxnContext) {
+        if ctx.check_only {
+            return;
+        }
+
+        self.process_message_results(ctx);
+    }
+
+    fn end_batch(&self, _ctx: &mut TxnContext) {}
+}
+
 pub fn main() {
     // Initializer.
     let init = |protocol: &Arc<Protocol>,
@@ -283,6 +398,7 @@ pub fn main() {
                 .expect("failed to update km client policy");
         })));
 
+        txn.set_batch_handler(BlockHandler);
         txn.set_context_initializer(move |ctx: &mut TxnContext| {
             ctx.runtime = Box::new(Context {
                 test_runtime_id: rt_id.clone(),

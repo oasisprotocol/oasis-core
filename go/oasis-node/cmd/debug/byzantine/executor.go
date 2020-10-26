@@ -277,13 +277,14 @@ func (cbc *computeBatchContext) createCommitment(id *identity.Identity, rak sign
 	for _, receipt := range cbc.storageReceipts {
 		storageSigs = append(storageSigs, receipt.Signature)
 	}
+	// TODO: allow script to set roothash messages?
+	msgsHash := block.MessagesHash(nil)
 	header := commitment.ComputeResultsHeader{
 		Round:        cbc.bd.Header.Round + 1,
 		PreviousHash: cbc.bd.Header.EncodedHash(),
 		IORoot:       &cbc.newIORoot,
 		StateRoot:    &cbc.newStateRoot,
-		// TODO: allow script to set roothash messages?
-		Messages: []*block.Message{},
+		MessagesHash: &msgsHash,
 	}
 	computeBody := &commitment.ComputeBody{
 		Header:            header,

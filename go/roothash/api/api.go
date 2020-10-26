@@ -143,6 +143,12 @@ type RuntimeState struct {
 	CurrentBlock       *block.Block `json:"current_block"`
 	CurrentBlockHeight int64        `json:"current_block_height"`
 
+	// LastNormalRound is the runtime round which was normally processed by the runtime. This is
+	// also the round that contains the message results for the last processed runtime messages.
+	LastNormalRound uint64 `json:"last_normal_round"`
+	// LastNormalHeight is the consensus block height corresponding to LastNormalRound.
+	LastNormalHeight int64 `json:"last_normal_height"`
+
 	ExecutorPool *commitment.Pool `json:"executor_pool"`
 }
 
@@ -173,6 +179,18 @@ type FinalizedEvent struct {
 	Round uint64 `json:"round"`
 }
 
+// MessageEvent is a runtime message processed event.
+type MessageEvent struct {
+	Module string `json:"module,omitempty"`
+	Code   uint32 `json:"code,omitempty"`
+	Index  uint32 `json:"index,omitempty"`
+}
+
+// IsSuccess returns true if the event indicates that the message was successfully processed.
+func (me *MessageEvent) IsSuccess() bool {
+	return me.Code == errors.CodeNoError
+}
+
 // Event is a roothash event.
 type Event struct {
 	Height int64     `json:"height,omitempty"`
@@ -182,7 +200,8 @@ type Event struct {
 
 	ExecutorCommitted            *ExecutorCommittedEvent            `json:"executor_committed,omitempty"`
 	ExecutionDiscrepancyDetected *ExecutionDiscrepancyDetectedEvent `json:"execution_discrepancy,omitempty"`
-	FinalizedEvent               *FinalizedEvent                    `json:"finalized,omitempty"`
+	Finalized                    *FinalizedEvent                    `json:"finalized,omitempty"`
+	Message                      *MessageEvent                      `json:"message,omitempty"`
 }
 
 // MetricsMonitorable is the interface exposed by backends capable of
@@ -195,13 +214,21 @@ type MetricsMonitorable interface {
 	WatchAllBlocks() (<-chan *block.Block, *pubsub.Subscription)
 }
 
+// GenesisRuntimeState contains state for runtimes that are restored in a genesis block.
+type GenesisRuntimeState struct {
+	registry.RuntimeGenesis
+
+	// MessageResults are the message results emitted at the last processed round.
+	MessageResults []*MessageEvent `json:"message_results,omitempty"`
+}
+
 // Genesis is the roothash genesis state.
 type Genesis struct {
 	// Parameters are the roothash consensus parameters.
 	Parameters ConsensusParameters `json:"params"`
 
-	// RuntimeStates is the per-runtime map of genesis blocks.
-	RuntimeStates map[common.Namespace]*registry.RuntimeGenesis `json:"runtime_states,omitempty"`
+	// RuntimeStates are the runtime states at genesis.
+	RuntimeStates map[common.Namespace]*GenesisRuntimeState `json:"runtime_states,omitempty"`
 }
 
 // ConsensusParameters are the roothash consensus parameters.
@@ -216,6 +243,10 @@ type ConsensusParameters struct {
 	// DebugBypassStake is true iff the roothash should bypass all of the staking
 	// related checks and operations.
 	DebugBypassStake bool `json:"debug_bypass_stake,omitempty"`
+
+	// MaxRuntimeMessages is the maximum number of allowed messages that can be emitted by a runtime
+	// in a single round.
+	MaxRuntimeMessages uint32 `json:"max_runtime_messages"`
 }
 
 const (

@@ -36,6 +36,8 @@ var (
 	ErrTimeoutNotCorrectRound = errors.New(moduleName, 15, "roothash/commitment: timeout not for correct round")
 	ErrNodeIsScheduler        = errors.New(moduleName, 16, "roothash/commitment: node is scheduler")
 	ErrMajorityFailure        = errors.New(moduleName, 17, "roothash/commitment: majority commitments indicated failure")
+	ErrInvalidRound           = errors.New(moduleName, 18, "roothash/commitment: invalid round")
+	ErrNoProposerCommitment   = errors.New(moduleName, 19, "roothash/commitment: no proposer commitment")
 )
 
 const (
@@ -80,6 +82,8 @@ type Pool struct {
 	Runtime *registry.Runtime `json:"runtime"`
 	// Committee is the committee this pool is collecting the commitments for.
 	Committee *scheduler.Committee `json:"committee"`
+	// Round is the current protocol round.
+	Round uint64 `json:"round"`
 	// ExecuteCommitments are the commitments in the pool iff Committee.Kind
 	// is scheduler.KindComputeExecutor.
 	ExecuteCommitments map[signature.PublicKey]OpenExecutorCommitment `json:"execute_commitments,omitempty"`
@@ -137,11 +141,11 @@ func (p *Pool) isWorker(id signature.PublicKey) bool {
 	return p.workerSet[id]
 }
 
-func (p *Pool) isScheduler(id signature.PublicKey, round uint64) bool {
+func (p *Pool) isScheduler(id signature.PublicKey) bool {
 	if p.Committee == nil {
 		return false
 	}
-	scheduler, err := GetTransactionScheduler(p.Committee, round)
+	scheduler, err := GetTransactionScheduler(p.Committee, p.Round)
 	if err != nil {
 		return false
 	}
@@ -151,7 +155,8 @@ func (p *Pool) isScheduler(id signature.PublicKey, round uint64) bool {
 
 // ResetCommitments resets the commitments in the pool, clears the discrepancy flag and the next
 // timeout height.
-func (p *Pool) ResetCommitments() {
+func (p *Pool) ResetCommitments(round uint64) {
+	p.Round = round
 	if p.ExecuteCommitments == nil || len(p.ExecuteCommitments) > 0 {
 		p.ExecuteCommitments = make(map[signature.PublicKey]OpenExecutorCommitment)
 	}
@@ -213,11 +218,12 @@ func (p *Pool) addOpenExecutorCommitment(
 	if p.Runtime == nil {
 		return ErrNoRuntime
 	}
-
-	// Make sure the commitment does not contain any messages as these are currently
-	// not supported and should be rejected.
-	if len(header.Messages) > 0 {
-		return ErrInvalidMessages
+	if p.Round != blk.Header.Round {
+		logger.Error("incorrectly configured pool",
+			"round", p.Round,
+			"blk_round", blk.Header.Round,
+		)
+		return ErrInvalidRound
 	}
 
 	// Check if the block is based on the previous block.
@@ -309,6 +315,37 @@ func (p *Pool) addOpenExecutorCommitment(
 			)
 			return p2pError.Permanent(err)
 		}
+
+		// Check emitted runtime messages.
+		switch p.isScheduler(id) {
+		case true:
+			// The transaction scheduler can include messages.
+			if uint32(len(body.Messages)) > p.Runtime.Executor.MaxMessages {
+				logger.Debug("executor commitment from scheduler has too many messages",
+					"node_id", id,
+					"num_messages", len(body.Messages),
+					"max_messages", p.Runtime.Executor.MaxMessages,
+				)
+				return ErrInvalidMessages
+			}
+			if h := block.MessagesHash(body.Messages); !h.Equal(header.MessagesHash) {
+				logger.Debug("executor commitment from scheduler has invalid messages hash",
+					"node_id", id,
+					"expected_hash", h,
+					"messages_hash", header.MessagesHash,
+				)
+				return ErrInvalidMessages
+			}
+		case false:
+			// Other workers cannot include any messages.
+			if len(body.Messages) > 0 {
+				logger.Debug("executor commitment from non-scheduler contains messages",
+					"node_id", id,
+					"num_messages", len(body.Messages),
+				)
+				return ErrInvalidMessages
+			}
+		}
 	}
 
 	if p.ExecuteCommitments == nil {
@@ -343,6 +380,22 @@ func (p *Pool) CheckEnoughCommitments(didTimeout bool) error {
 		return ErrNoCommittee
 	}
 
+	// Determine whether the proposer has submitted a commitment.
+	var hasProposer bool
+	switch p.Committee.Kind {
+	case scheduler.KindComputeExecutor:
+		// We can only allow stragglers in case the transaction scheduler has submitted
+		// their commitment as that commitment may contain roothash messages.
+		proposer, err := GetTransactionScheduler(p.Committee, p.Round)
+		if err != nil {
+			return ErrNoCommittee
+		}
+
+		_, hasProposer = p.ExecuteCommitments[proposer.PublicKey]
+	default:
+		panic("roothash/commitment: unknown committee kind while checking commitments: " + p.Committee.Kind.String())
+	}
+
 	var commits, required int
 	for _, n := range p.Committee.Members {
 		var check bool
@@ -370,7 +423,13 @@ func (p *Pool) CheckEnoughCommitments(didTimeout bool) error {
 		case scheduler.KindComputeExecutor:
 			required -= int(p.Runtime.Executor.AllowedStragglers)
 		default:
-			panic("roothash/commitment: unknown committee kind while checking commitments: " + p.Committee.Kind.String())
+			// Would panic above.
+		}
+
+		if !hasProposer {
+			// If we timed out but the proposer did not submit a commitment, fail the round.
+			// TODO: Consider slashing for this offense.
+			return ErrNoProposerCommitment
 		}
 	}
 
@@ -415,7 +474,7 @@ func (p *Pool) CheckProposerTimeout(
 
 	// Ensure that the node requesting a timeout is not the scheduler for
 	// current round.
-	if p.isScheduler(id, block.Header.Round) {
+	if p.isScheduler(id) {
 		return ErrNodeIsScheduler
 	}
 
@@ -431,13 +490,26 @@ func (p *Pool) DetectDiscrepancy() (OpenCommitment, error) {
 		return nil, ErrNoCommittee
 	}
 
-	var commit OpenCommitment
-	var discrepancyDetected bool
+	// Determine the proposer commitment.
+	var proposerCommit OpenCommitment
+	switch p.Committee.Kind {
+	case scheduler.KindComputeExecutor:
+		proposer, err := GetTransactionScheduler(p.Committee, p.Round)
+		if err != nil {
+			return nil, ErrNoCommittee
+		}
 
-	// NOTE: It is very important that the iteration order is deterministic
-	//       to ensure that the same commit is chosen on all nodes. This is
-	//       because some fields in the commit may not be subject to discrepancy
-	//       detection (e.g., storage receipts).
+		var ok bool
+		if proposerCommit, ok = p.ExecuteCommitments[proposer.PublicKey]; !ok {
+			// No proposer commitment, we cannot proceed.
+			return nil, ErrNoProposerCommitment
+		}
+	default:
+		panic("roothash/commitment: unknown committee kind while checking commitments: " + p.Committee.Kind.String())
+	}
+
+	// Check for discrepancy among all the commitments.
+	var discrepancyDetected bool
 	for _, n := range p.Committee.Members {
 		if n.Role != scheduler.RoleWorker {
 			continue
@@ -448,27 +520,23 @@ func (p *Pool) DetectDiscrepancy() (OpenCommitment, error) {
 			continue
 		}
 
-		if commit == nil {
-			commit = c
-		}
-
 		if c.IsIndicatingFailure() {
 			discrepancyDetected = true
 			continue
 		}
 
-		if !commit.MostlyEqual(c) {
+		if !proposerCommit.MostlyEqual(c) {
 			discrepancyDetected = true
 			continue
 		}
 	}
 
-	if commit == nil || discrepancyDetected {
+	if discrepancyDetected {
 		p.Discrepancy = true
 		return nil, ErrDiscrepancyDetected
 	}
 
-	return commit, nil
+	return proposerCommit, nil
 }
 
 // ResolveDiscrepancy performs discrepancy resolution on the current commitments
