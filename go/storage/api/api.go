@@ -196,6 +196,8 @@ const (
 	RootTypeState = mkvsNode.RootTypeState
 	// RootTypeIO is the type for IO storage roots.
 	RootTypeIO = mkvsNode.RootTypeIO
+	// RootTypeMax is the number of different root types.
+	RootTypeMax = mkvsNode.RootTypeMax
 )
 
 // Root is a storage root.

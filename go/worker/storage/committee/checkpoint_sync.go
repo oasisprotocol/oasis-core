@@ -341,36 +341,35 @@ resultLoop:
 	return retList[:cursor], nil
 }
 
-func (n *Node) checkCheckpointUsable(cp *checkpoint.Metadata, remainingMask outstandingMask) outstandingMask {
+func (n *Node) checkCheckpointUsable(cp *checkpoint.Metadata, remainingMask outstandingMask) bool {
 	namespace := n.commonNode.Runtime.ID()
 	if !namespace.Equal(&cp.Root.Namespace) {
 		// Not for the right runtime.
-		return maskNone
+		return false
 	}
 	blk, err := n.commonNode.Runtime.History().GetBlock(n.ctx, cp.Root.Version)
 	if err != nil {
 		n.logger.Error("can't get block information for checkpoint, skipping", "err", err, "root", cp.Root)
-		return maskNone
+		return false
 	}
 	_, lastIORoot, lastStateRoot := n.GetLastSynced()
+	lastVersions := map[storageApi.RootType]uint64{
+		storageApi.RootTypeIO:    lastIORoot.Version,
+		storageApi.RootTypeState: lastStateRoot.Version,
+	}
 	if namespace.Equal(&blk.Header.Namespace) {
-		if cp.Root.Type == storageApi.RootTypeIO && blk.Header.IORoot.Equal(&cp.Root.Hash) {
-			// Do we already have this root?
-			if lastIORoot.Version < cp.Root.Version && remainingMask&maskIO != maskNone {
-				return maskIO
+		for _, root := range blk.Header.StorageRoots() {
+			if cp.Root.Type == root.Type && root.Hash.Equal(&cp.Root.Hash) {
+				// Do we already have this root?
+				if lastVersions[cp.Root.Type] < cp.Root.Version && remainingMask.contains(cp.Root.Type) {
+					return true
+				}
+				return false
 			}
-			return maskNone
-		}
-		if cp.Root.Type == storageApi.RootTypeState && blk.Header.StateRoot.Equal(&cp.Root.Hash) {
-			// Do we already have this root?
-			if lastStateRoot.Version < cp.Root.Version && remainingMask&maskState != maskNone {
-				return maskState
-			}
-			return maskNone
 		}
 	}
 	n.logger.Info("checkpoint for unknown root skipped", "root", cp.Root)
-	return maskNone
+	return false
 }
 
 func (n *Node) syncCheckpoints() (*blockSummary, error) {
@@ -393,11 +392,9 @@ func (n *Node) syncCheckpoints() (*blockSummary, error) {
 	// Try all the checkpoints now, from most recent backwards.
 	var prevVersion uint64
 	var mask outstandingMask
-	var doneRoots []storageApi.Root
-	remainingRoots := maskAll
+	remainingRoots := outstandingMaskFull
 	for _, check := range metadata {
-		mask = n.checkCheckpointUsable(check, remainingRoots)
-		if mask == maskNone {
+		if !n.checkCheckpointUsable(check, remainingRoots) {
 			continue
 		}
 
@@ -407,9 +404,9 @@ func (n *Node) syncCheckpoints() (*blockSummary, error) {
 			if err := n.localStorage.Checkpointer().AbortRestore(n.ctx); err != nil {
 				return nil, fmt.Errorf("error aborting previous restore for checkpoint sync: %w", err)
 			}
-			remainingRoots = maskAll
+			remainingRoots = outstandingMaskFull
 			prevVersion = check.Root.Version
-			doneRoots = []storageApi.Root{}
+			syncState.Roots = nil
 		}
 
 		status, err := n.handleCheckpoint(check, n.storageNodesGrpc, descriptor.Storage.GroupSize)
@@ -419,21 +416,14 @@ func (n *Node) syncCheckpoints() (*blockSummary, error) {
 
 			syncState.Namespace = check.Root.Namespace
 			syncState.Round = check.Root.Version
-			switch mask {
-			case maskIO:
-				syncState.IORoot = check.Root
-			case maskState:
-				syncState.StateRoot = check.Root
-			}
-
-			doneRoots = append(doneRoots, check.Root)
-			remainingRoots &= ^mask
-			if remainingRoots == maskNone {
-				if err = n.localStorage.NodeDB().Finalize(n.ctx, doneRoots); err != nil {
+			syncState.Roots = append(syncState.Roots, check.Root)
+			remainingRoots.remove(check.Root.Type)
+			if remainingRoots.isEmpty() {
+				if err = n.localStorage.NodeDB().Finalize(n.ctx, syncState.Roots); err != nil {
 					n.logger.Error("can't finalize version after all checkpoints restored",
 						"err", err,
 						"version", prevVersion,
-						"roots", doneRoots,
+						"roots", syncState.Roots,
 					)
 					// Since finalize failed, we need to make sure to abort multipart insert
 					// otherwise all normal batch operations will continue to fail.

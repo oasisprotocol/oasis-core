@@ -61,6 +61,9 @@ const (
 	RootTypeState RootType = 1
 	// RootTypeIO is the type for IO storage roots.
 	RootTypeIO RootType = 2
+
+	// RootTypeMax is the number of different root types and should be kept at the last one.
+	RootTypeMax RootType = 2
 )
 
 // String returns the string representation of the storage root type.

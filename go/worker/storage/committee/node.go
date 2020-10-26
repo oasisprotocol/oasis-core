@@ -6,14 +6,12 @@ import (
 	"errors"
 	"fmt"
 	"math"
-	"strings"
 	"sync"
 	"time"
 
 	"github.com/eapache/channels"
 	"github.com/prometheus/client_golang/prometheus"
 
-	"github.com/oasisprotocol/oasis-core/go/common"
 	"github.com/oasisprotocol/oasis-core/go/common/accessctl"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
 	"github.com/oasisprotocol/oasis-core/go/common/grpc/policy"
@@ -32,7 +30,6 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/storage/client"
 	"github.com/oasisprotocol/oasis-core/go/storage/mkvs/checkpoint"
 	mkvsDB "github.com/oasisprotocol/oasis-core/go/storage/mkvs/db/api"
-	mkvsNode "github.com/oasisprotocol/oasis-core/go/storage/mkvs/node"
 	workerCommon "github.com/oasisprotocol/oasis-core/go/worker/common"
 	"github.com/oasisprotocol/oasis-core/go/worker/common/committee"
 	"github.com/oasisprotocol/oasis-core/go/worker/common/p2p"
@@ -88,27 +85,6 @@ const (
 	checkpointSyncRetryDelay = 10 * time.Second
 )
 
-// outstandingMask records which storage roots still need to be synced or need to be retried.
-type outstandingMask uint
-
-const (
-	maskNone  = outstandingMask(0x0)
-	maskIO    = outstandingMask(0x1)
-	maskState = outstandingMask(0x2)
-	maskAll   = maskIO | maskState
-)
-
-func (o outstandingMask) String() string {
-	var represented []string
-	if o&maskIO != 0 {
-		represented = append(represented, "io")
-	}
-	if o&maskState != 0 {
-		represented = append(represented, "state")
-	}
-	return fmt.Sprintf("outstanding_mask{%s}", strings.Join(represented, ", "))
-}
-
 type roundItem interface {
 	GetRound() uint64
 }
@@ -137,48 +113,16 @@ func (q *outOfOrderRoundQueue) Pop() interface{} {
 
 // fetchedDiff has all the context needed for a single GetDiff operation.
 type fetchedDiff struct {
-	fetchMask outstandingMask
-	fetched   bool
-	err       error
-	round     uint64
-	prevRoot  mkvsNode.Root
-	thisRoot  mkvsNode.Root
-	writeLog  storageApi.WriteLog
+	fetched  bool
+	err      error
+	round    uint64
+	prevRoot storageApi.Root
+	thisRoot storageApi.Root
+	writeLog storageApi.WriteLog
 }
 
 func (d *fetchedDiff) GetRound() uint64 {
 	return d.round
-}
-
-// blockSummary is a short summary of a single block.Block.
-type blockSummary struct {
-	Namespace common.Namespace `json:"namespace"`
-	Round     uint64           `json:"round"`
-	IORoot    mkvsNode.Root    `json:"io_root"`
-	StateRoot mkvsNode.Root    `json:"state_root"`
-}
-
-func (s *blockSummary) GetRound() uint64 {
-	return s.Round
-}
-
-func summaryFromBlock(blk *block.Block) *blockSummary {
-	return &blockSummary{
-		Namespace: blk.Header.Namespace,
-		Round:     blk.Header.Round,
-		IORoot: mkvsNode.Root{
-			Namespace: blk.Header.Namespace,
-			Version:   blk.Header.Round,
-			Type:      mkvsNode.RootTypeIO,
-			Hash:      blk.Header.IORoot,
-		},
-		StateRoot: mkvsNode.Root{
-			Namespace: blk.Header.Namespace,
-			Version:   blk.Header.Round,
-			Type:      mkvsNode.RootTypeState,
-			Hash:      blk.Header.StateRoot,
-		},
-	}
 }
 
 // watcherState is the (persistent) watcher state.
@@ -462,11 +406,21 @@ func (n *Node) HandleNodeUpdateLocked(update *nodes.NodeUpdate, snapshot *commit
 // Watcher implementation.
 
 // GetLastSynced returns the height, IORoot hash and StateRoot hash of the last block that was fully synced to.
-func (n *Node) GetLastSynced() (uint64, mkvsNode.Root, mkvsNode.Root) {
+func (n *Node) GetLastSynced() (uint64, storageApi.Root, storageApi.Root) {
 	n.syncedLock.RLock()
 	defer n.syncedLock.RUnlock()
 
-	return n.syncedState.LastBlock.Round, n.syncedState.LastBlock.IORoot, n.syncedState.LastBlock.StateRoot
+	var io, state storageApi.Root
+	for _, root := range n.syncedState.LastBlock.Roots {
+		switch root.Type {
+		case storageApi.RootTypeIO:
+			io = root
+		case storageApi.RootTypeState:
+			state = root
+		}
+	}
+
+	return n.syncedState.LastBlock.Round, io, state
 }
 
 // ForceFinalize forces a storage finalization for the given round.
@@ -490,19 +444,18 @@ func (n *Node) ForceFinalize(ctx context.Context, round uint64) error {
 	return n.localStorage.NodeDB().Finalize(ctx, block.Header.StorageRoots())
 }
 
-func (n *Node) fetchDiff(round uint64, prevRoot, thisRoot *mkvsNode.Root, fetchMask outstandingMask) {
+func (n *Node) fetchDiff(round uint64, prevRoot, thisRoot storageApi.Root) {
 	result := &fetchedDiff{
-		fetchMask: fetchMask,
-		fetched:   false,
-		round:     round,
-		prevRoot:  *prevRoot,
-		thisRoot:  *thisRoot,
+		fetched:  false,
+		round:    round,
+		prevRoot: prevRoot,
+		thisRoot: thisRoot,
 	}
 	defer func() {
 		n.diffCh <- result
 	}()
 	// Check if the new root doesn't already exist.
-	if !n.localStorage.NodeDB().HasRoot(*thisRoot) {
+	if !n.localStorage.NodeDB().HasRoot(thisRoot) {
 		result.fetched = true
 		if thisRoot.Hash.Equal(&prevRoot.Hash) {
 			// Even if HasRoot returns false the root can still exist if it is equal
@@ -516,7 +469,6 @@ func (n *Node) fetchDiff(round uint64, prevRoot, thisRoot *mkvsNode.Root, fetchM
 			n.logger.Debug("calling GetDiff",
 				"old_root", prevRoot,
 				"new_root", thisRoot,
-				"fetch_mask", fetchMask,
 			)
 
 			// Prioritize committee nodes.
@@ -524,7 +476,7 @@ func (n *Node) fetchDiff(round uint64, prevRoot, thisRoot *mkvsNode.Root, fetchM
 			if committee := n.commonNode.Group.GetEpochSnapshot().GetStorageCommittee(); committee != nil {
 				ctx = storageApi.WithNodePriorityHintFromMap(ctx, committee.PublicKeys)
 			}
-			it, err := n.storageClient.GetDiff(ctx, &storageApi.GetDiffRequest{StartRoot: *prevRoot, EndRoot: *thisRoot})
+			it, err := n.storageClient.GetDiff(ctx, &storageApi.GetDiffRequest{StartRoot: prevRoot, EndRoot: thisRoot})
 			if err != nil {
 				result.err = err
 				return
@@ -551,10 +503,7 @@ func (n *Node) fetchDiff(round uint64, prevRoot, thisRoot *mkvsNode.Root, fetchM
 }
 
 func (n *Node) finalize(summary *blockSummary) {
-	err := n.localStorage.NodeDB().Finalize(n.ctx, []mkvsNode.Root{
-		summary.IORoot,
-		summary.StateRoot,
-	})
+	err := n.localStorage.NodeDB().Finalize(n.ctx, summary.Roots)
 	switch err {
 	case nil:
 		n.logger.Debug("storage round finalized",
@@ -982,8 +931,8 @@ mainLoop:
 			// Check if we have fully synced the given round. If we have, we can proceed
 			// with the Finalize operation.
 			syncing := syncingRounds[lastDiff.round]
-			syncing.outstanding &= ^lastDiff.fetchMask
-			if syncing.outstanding == maskNone && syncing.awaitingRetry == maskNone {
+			syncing.outstanding.remove(lastDiff.thisRoot.Type)
+			if syncing.outstanding.isEmpty() && syncing.awaitingRetry.isEmpty() {
 				n.logger.Debug("finished syncing round", "round", lastDiff.round)
 				delete(syncingRounds, lastDiff.round)
 				summary := hashCache[lastDiff.round]
@@ -1008,10 +957,10 @@ mainLoop:
 		if len(*outOfOrderApplieds) > 0 && cachedLastRound+1 == (*outOfOrderApplieds)[0].GetRound() {
 			lastSummary := heap.Pop(outOfOrderApplieds).(*blockSummary)
 			fetcherGroup.Add(1)
-			go func() {
+			go func(lastSummary *blockSummary) {
 				defer fetcherGroup.Done()
 				n.finalize(lastSummary)
-			}()
+			}(lastSummary)
 			continue
 		}
 
@@ -1028,11 +977,19 @@ mainLoop:
 				dummy := blockSummary{
 					Namespace: blk.Header.Namespace,
 					Round:     lastFullyAppliedRound + 1,
+					Roots: []storageApi.Root{
+						{
+							Version: lastFullyAppliedRound + 1,
+							Type:    storageApi.RootTypeIO,
+						},
+						{
+							Version: lastFullyAppliedRound + 1,
+							Type:    storageApi.RootTypeState,
+						},
+					},
 				}
-				dummy.IORoot.Empty()
-				dummy.IORoot.Version = lastFullyAppliedRound + 1
-				dummy.StateRoot.Empty()
-				dummy.StateRoot.Version = lastFullyAppliedRound + 1
+				dummy.Roots[0].Empty()
+				dummy.Roots[1].Empty()
 				hashCache[lastFullyAppliedRound] = &dummy
 			}
 			// Determine if we need to fetch any old block summaries. In case the first
@@ -1065,14 +1022,13 @@ mainLoop:
 
 			for i := lastFullyAppliedRound + 1; i <= blk.Header.Round; i++ {
 				syncing, ok := syncingRounds[i]
-				if ok && syncing.outstanding == maskAll {
+				if ok && syncing.outstanding.hasAll() {
 					continue
 				}
 
 				if !ok {
 					syncing = &inFlight{
-						outstanding:   maskNone,
-						awaitingRetry: maskAll,
+						awaitingRetry: outstandingMaskFull,
 					}
 					syncingRounds[i] = syncing
 
@@ -1088,30 +1044,34 @@ mainLoop:
 
 				prev := hashCache[i-1] // Closures take refs, so they need new variables here.
 				this := hashCache[i]
-				prevIORoot := mkvsNode.Root{ // IO roots aren't chained, so clear it (but leave cache intact).
-					Namespace: this.IORoot.Namespace,
-					Version:   this.IORoot.Version,
-					Type:      mkvsNode.RootTypeIO,
+				prevRoots := make([]storageApi.Root, len(prev.Roots))
+				copy(prevRoots, prev.Roots)
+				for i := range prevRoots {
+					if prevRoots[i].Type == storageApi.RootTypeIO {
+						// IO roots aren't chained, so clear it (but leave cache intact).
+						prevRoots[i] = storageApi.Root{
+							Namespace: this.Namespace,
+							Version:   this.Round,
+							Type:      storageApi.RootTypeIO,
+						}
+						prevRoots[i].Hash.Empty()
+						break
+					}
 				}
-				prevIORoot.Hash.Empty()
 
-				if (syncing.outstanding&maskIO) == 0 && (syncing.awaitingRetry&maskIO) != 0 {
-					syncing.outstanding |= maskIO
-					syncing.awaitingRetry &= ^maskIO
-					fetcherGroup.Add(1)
-					n.fetchPool.Submit(func() {
-						defer fetcherGroup.Done()
-						n.fetchDiff(this.Round, &prevIORoot, &this.IORoot, maskIO)
-					})
-				}
-				if (syncing.outstanding&maskState) == 0 && (syncing.awaitingRetry&maskState) != 0 {
-					syncing.outstanding |= maskState
-					syncing.awaitingRetry &= ^maskState
-					fetcherGroup.Add(1)
-					n.fetchPool.Submit(func() {
-						defer fetcherGroup.Done()
-						n.fetchDiff(this.Round, &prev.StateRoot, &this.StateRoot, maskState)
-					})
+				for i := range prevRoots {
+					rootType := prevRoots[i].Type
+					if !syncing.outstanding.contains(rootType) && syncing.awaitingRetry.contains(rootType) {
+						syncing.outstanding.add(rootType)
+						syncing.awaitingRetry.remove(rootType)
+						fetcherGroup.Add(1)
+						n.fetchPool.Submit(func(round uint64, prevRoot, thisRoot storageApi.Root) func() {
+							return func() {
+								defer fetcherGroup.Done()
+								n.fetchDiff(round, prevRoot, thisRoot)
+							}
+						}(this.Round, prevRoots[i], this.Roots[i]))
+					}
 				}
 			}
 
@@ -1122,11 +1082,10 @@ mainLoop:
 					"round", item.round,
 					"old_root", item.prevRoot,
 					"new_root", item.thisRoot,
-					"fetch_mask", item.fetchMask,
 					"fetched", item.fetched,
 				)
-				syncingRounds[item.round].outstanding &= ^item.fetchMask
-				syncingRounds[item.round].awaitingRetry |= item.fetchMask
+				syncingRounds[item.round].outstanding.remove(item.thisRoot.Type)
+				syncingRounds[item.round].awaitingRetry.add(item.thisRoot.Type)
 			} else {
 				heap.Push(outOfOrderDiffs, item)
 			}
