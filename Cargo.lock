@@ -1206,7 +1206,7 @@ dependencies = [
  "grpcio",
  "io-context",
  "oasis-core-runtime",
- "rustracing",
+ "rustracing 0.4.0",
  "rustracing_jaeger",
  "serde",
  "serde_bytes",
@@ -1704,16 +1704,28 @@ dependencies = [
 ]
 
 [[package]]
-name = "rustracing_jaeger"
+name = "rustracing"
 version = "0.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "49ab93761090efbf579379a9c035976de57df824fb21ae8fe48c912231a3ad28"
+checksum = "27b95bc9f4c062eac8d29d7852571015a34ba888d192536c19bb3759e6fc6e26"
 dependencies = [
- "crossbeam-channel 0.4.4",
+ "backtrace",
+ "crossbeam-channel 0.5.0",
+ "rand",
+ "trackable",
+]
+
+[[package]]
+name = "rustracing_jaeger"
+version = "0.6.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a46cb46858e63a2630feb2afba25a36a6326042f6ca4fa20bd6ea910fc610aea"
+dependencies = [
+ "crossbeam-channel 0.5.0",
  "hostname",
  "percent-encoding",
  "rand",
- "rustracing",
+ "rustracing 0.5.0",
  "thrift_codec",
  "trackable",
 ]

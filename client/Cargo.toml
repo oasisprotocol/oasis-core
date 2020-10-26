@@ -19,5 +19,5 @@ io-context = "0.2.0"
 [target.'cfg(not(target_env = "sgx"))'.dependencies]
 grpcio = "0.4.6"
 rustracing = "0.4.0"
-rustracing_jaeger = "0.5.0"
+rustracing_jaeger = "0.6.0"
 tokio = "0.1.18"
