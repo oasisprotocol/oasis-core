@@ -6,6 +6,7 @@ package crash
 import (
 	"fmt"
 	"runtime"
+	"sync"
 	"time"
 
 	flag "github.com/spf13/pflag"
@@ -18,9 +19,14 @@ import (
 
 var testForceEnable bool
 
-// defaultCLIPrefix is the default CLI prefix used to configure crash points in
-// viper and cobra.
-const defaultCLIPrefix = "debug.crash"
+const (
+	// defaultCLIPrefix is the default CLI prefix used to configure crash points in
+	// viper and cobra.
+	defaultCLIPrefix = "debug.crash"
+
+	// CfgDefaultCrashPointProbability is the default crash point probability.
+	CfgDefaultCrashPointProbability = "debug.crash.default"
+)
 
 // RandomProvider interface that provides a Float64 random.
 type RandomProvider interface {
@@ -29,7 +35,7 @@ type RandomProvider interface {
 
 // Crasher is a crash controller.
 type Crasher struct {
-	CrashPointConfig map[string]float64
+	CrashPointConfig *sync.Map
 	CrashMethod      func()
 	CLIPrefix        string
 	Rand             RandomProvider
@@ -75,7 +81,7 @@ func New(options CrasherOptions) *Crasher {
 		options.Rand = newDefaultRandomProvider()
 	}
 	crasher := &Crasher{
-		CrashPointConfig: make(map[string]float64),
+		CrashPointConfig: &sync.Map{},
 		CrashMethod:      options.CrashMethod,
 		Rand:             options.Rand,
 		CLIPrefix:        options.CLIPrefix,
@@ -106,7 +112,9 @@ func RegisterCrashPoints(crashPointIDs ...string) {
 // RegisterCrashPoints registers crash points for a Crasher instance.
 func (c *Crasher) RegisterCrashPoints(crashPointIDs ...string) {
 	for _, crashPointID := range crashPointIDs {
-		c.CrashPointConfig[crashPointID] = 0.0
+		if _, loaded := c.CrashPointConfig.LoadOrStore(crashPointID, 0.0); loaded {
+			panic(fmt.Sprintf("crash: Crash point '%s' is already registered", crashPointID))
+		}
 	}
 }
 
@@ -119,9 +127,10 @@ func ListRegisteredCrashPoints() []string {
 // ListRegisteredCrashPoints lists the registered crash points for a Crasher instance.
 func (c *Crasher) ListRegisteredCrashPoints() []string {
 	var crashPointIDs []string
-	for crashPointID := range c.CrashPointConfig {
-		crashPointIDs = append(crashPointIDs, crashPointID)
-	}
+	c.CrashPointConfig.Range(func(k, v interface{}) bool {
+		crashPointIDs = append(crashPointIDs, k.(string))
+		return true
+	})
 	return crashPointIDs
 }
 
@@ -138,7 +147,7 @@ func (c *Crasher) Here(crashPointID string) {
 	}
 
 	_, callerFilename, callerLine, callerInformationIsCorrect := runtime.Caller(c.callerSkip)
-	crashPointProbability, ok := c.CrashPointConfig[crashPointID]
+	cfg, ok := c.CrashPointConfig.Load(crashPointID)
 	if !ok {
 		c.logger.Error("Unknown crash point",
 			"crash_point_id", crashPointID,
@@ -147,6 +156,10 @@ func (c *Crasher) Here(crashPointID string) {
 			"caller_line", callerLine,
 		)
 		panic(fmt.Errorf(`Unknown crash point "%s"`, crashPointID))
+	}
+	crashPointProbability, ok := cfg.(float64)
+	if !ok {
+		panic(fmt.Errorf("Invalid crash point config: %d", cfg))
 	}
 	// Do nothing if the probability of crashing is set to a value 0 or less.
 	if crashPointProbability <= 0 {
@@ -172,10 +185,10 @@ func Config(crashPointConfig map[string]float64) {
 // Config configures the crash point probabilities.
 func (c *Crasher) Config(crashPointConfig map[string]float64) {
 	for crashPointID, crashProbability := range crashPointConfig {
-		if _, ok := c.CrashPointConfig[crashPointID]; !ok {
+		if _, loaded := c.CrashPointConfig.Load(crashPointID); !loaded {
 			panic(fmt.Errorf(`Attempted to configure unregistered crash point "%s"`, crashPointID))
 		}
-		c.CrashPointConfig[crashPointID] = crashProbability
+		c.CrashPointConfig.Store(crashPointID, crashProbability)
 	}
 }
 
@@ -187,6 +200,9 @@ func InitFlags() *flag.FlagSet {
 // InitFlags creates flags from the registered crash points and registers those flags with Viper.
 func (c *Crasher) InitFlags() *flag.FlagSet {
 	flags := flag.NewFlagSet("", flag.ContinueOnError)
+	flags.Float64(CfgDefaultCrashPointProbability, 0.0, "Default crash point probability")
+	_ = flags.MarkHidden(CfgDefaultCrashPointProbability)
+
 	for _, crashPointID := range c.ListRegisteredCrashPoints() {
 		argFlag := fmt.Sprintf("%s.%s", c.CLIPrefix, crashPointID)
 		helpMessage := fmt.Sprintf(`Crash probability of "%s" crash point`, crashPointID)
@@ -208,8 +224,12 @@ func LoadViperArgValues() {
 
 // LoadViperArgValues loads viper arg values into the crash point config.
 func (c *Crasher) LoadViperArgValues() {
+	defaultProb := viper.GetFloat64(CfgDefaultCrashPointProbability)
 	for _, crashPointID := range ListRegisteredCrashPoints() {
 		argFlag := fmt.Sprintf("%s.%s", c.CLIPrefix, crashPointID)
-		c.CrashPointConfig[crashPointID] = viper.GetFloat64(argFlag)
+		c.CrashPointConfig.Store(crashPointID, defaultProb)
+		if viper.IsSet(argFlag) {
+			c.CrashPointConfig.Store(crashPointID, viper.GetFloat64(argFlag))
+		}
 	}
 }
