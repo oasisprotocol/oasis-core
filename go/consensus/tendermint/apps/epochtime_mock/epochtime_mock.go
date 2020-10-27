@@ -39,7 +39,7 @@ func (app *epochTimeMockApplication) Dependencies() []string {
 	return nil
 }
 
-func (app *epochTimeMockApplication) OnRegister(state api.ApplicationState) {
+func (app *epochTimeMockApplication) OnRegister(state api.ApplicationState, md api.MessageDispatcher) {
 	app.state = state
 }
 
@@ -85,6 +85,10 @@ func (app *epochTimeMockApplication) BeginBlock(ctx *api.Context, request types.
 	ctx.EmitEvent(api.NewEventBuilder(app.Name()).Attribute(KeyEpoch, cbor.Marshal(future.Epoch)))
 
 	return nil
+}
+
+func (app *epochTimeMockApplication) ExecuteMessage(ctx *api.Context, kind, msg interface{}) error {
+	return fmt.Errorf("epochtime_mock: unexpected message")
 }
 
 func (app *epochTimeMockApplication) ExecuteTx(ctx *api.Context, tx *transaction.Transaction) error {

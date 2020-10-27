@@ -55,7 +55,7 @@ func (app *rootHashApplication) Dependencies() []string {
 	return []string{schedulerapp.AppName, stakingapp.AppName}
 }
 
-func (app *rootHashApplication) OnRegister(state tmapi.ApplicationState) {
+func (app *rootHashApplication) OnRegister(state tmapi.ApplicationState, md tmapi.MessageDispatcher) {
 	app.state = state
 }
 
@@ -260,6 +260,10 @@ func (app *rootHashApplication) emitEmptyBlock(ctx *tmapi.Context, runtime *root
 			Attribute(KeyRuntimeID, ValueRuntimeID(runtime.Runtime.ID)),
 	)
 	return nil
+}
+
+func (app *rootHashApplication) ExecuteMessage(ctx *tmapi.Context, kind, msg interface{}) error {
+	return roothash.ErrInvalidArgument
 }
 
 func (app *rootHashApplication) ExecuteTx(ctx *tmapi.Context, tx *transaction.Transaction) error {

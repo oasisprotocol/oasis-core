@@ -46,7 +46,7 @@ func (app *registryApplication) Dependencies() []string {
 	return []string{stakingapp.AppName}
 }
 
-func (app *registryApplication) OnRegister(state api.ApplicationState) {
+func (app *registryApplication) OnRegister(state api.ApplicationState, md api.MessageDispatcher) {
 	app.state = state
 }
 
@@ -59,6 +59,10 @@ func (app *registryApplication) BeginBlock(ctx *api.Context, request types.Reque
 		return app.onRegistryEpochChanged(ctx, registryEpoch)
 	}
 	return nil
+}
+
+func (app *registryApplication) ExecuteMessage(ctx *api.Context, kind, msg interface{}) error {
+	return registry.ErrInvalidArgument
 }
 
 func (app *registryApplication) ExecuteTx(ctx *api.Context, tx *transaction.Transaction) error {

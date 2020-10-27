@@ -228,6 +228,8 @@ type abciMux struct {
 	// debugExpiringTxs maps transaction hashes to the time at which they were created. This is only
 	// used in case CheckTx is disabled (for debug purposes only).
 	debugExpiringTxs map[hash.Hash]time.Time
+
+	md messageDispatcher
 }
 
 type invalidatedTxSubscription struct {
@@ -1046,7 +1048,7 @@ func (mux *abciMux) doRegister(app api.Application) error {
 	}
 	mux.rebuildAppLexOrdering() // Inefficient but not a lot of apps.
 
-	app.OnRegister(mux.state)
+	app.OnRegister(mux.state, &mux.md)
 	mux.logger.Debug("Registered new application",
 		"app", app.Name(),
 	)

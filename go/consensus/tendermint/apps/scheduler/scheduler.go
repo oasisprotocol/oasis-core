@@ -67,7 +67,7 @@ func (app *schedulerApplication) Dependencies() []string {
 	return []string{beaconapp.AppName, registryapp.AppName, stakingapp.AppName}
 }
 
-func (app *schedulerApplication) OnRegister(state api.ApplicationState) {
+func (app *schedulerApplication) OnRegister(state api.ApplicationState, md api.MessageDispatcher) {
 	app.state = state
 }
 
@@ -198,6 +198,10 @@ func (app *schedulerApplication) BeginBlock(ctx *api.Context, request types.Requ
 		}
 	}
 	return nil
+}
+
+func (app *schedulerApplication) ExecuteMessage(ctx *api.Context, kind, msg interface{}) error {
+	return fmt.Errorf("scheduler: unexpected message")
 }
 
 func (app *schedulerApplication) ExecuteTx(ctx *api.Context, tx *transaction.Transaction) error {

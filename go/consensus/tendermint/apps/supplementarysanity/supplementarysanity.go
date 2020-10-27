@@ -55,15 +55,19 @@ func (app *supplementarySanityApplication) QueryFactory() interface{} {
 	return nil
 }
 
-func (app *supplementarySanityApplication) OnRegister(state api.ApplicationState) {
+func (app *supplementarySanityApplication) OnRegister(state api.ApplicationState, md api.MessageDispatcher) {
 	app.state = state
 }
 
 func (app *supplementarySanityApplication) OnCleanup() {
 }
 
+func (app *supplementarySanityApplication) ExecuteMessage(ctx *api.Context, kind, msg interface{}) error {
+	return fmt.Errorf("supplementarysanity: unexpected message")
+}
+
 func (app *supplementarySanityApplication) ExecuteTx(*api.Context, *transaction.Transaction) error {
-	return fmt.Errorf("tendermint/supplementarysanity: unexpected transaction")
+	return fmt.Errorf("supplementarysanity: unexpected transaction")
 }
 
 func (app *supplementarySanityApplication) ForeignExecuteTx(*api.Context, api.Application, *transaction.Transaction) error {

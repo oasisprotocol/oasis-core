@@ -49,7 +49,7 @@ func (app *keymanagerApplication) Dependencies() []string {
 	return []string{registryapp.AppName}
 }
 
-func (app *keymanagerApplication) OnRegister(state tmapi.ApplicationState) {
+func (app *keymanagerApplication) OnRegister(state tmapi.ApplicationState, md tmapi.MessageDispatcher) {
 	app.state = state
 }
 
@@ -60,6 +60,10 @@ func (app *keymanagerApplication) BeginBlock(ctx *tmapi.Context, request types.R
 		return app.onEpochChange(ctx, epoch)
 	}
 	return nil
+}
+
+func (app *keymanagerApplication) ExecuteMessage(ctx *tmapi.Context, kind, msg interface{}) error {
+	return fmt.Errorf("keymanager: unexpected message")
 }
 
 func (app *keymanagerApplication) ExecuteTx(ctx *tmapi.Context, tx *transaction.Transaction) error {
