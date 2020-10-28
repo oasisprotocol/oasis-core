@@ -140,7 +140,12 @@ func (sc *byzantineImpl) Run(childEnv *env.Env) error {
 		return err
 	}
 
-	if err = sc.initialEpochTransitions(); err != nil {
+	fixture, err := sc.Fixture()
+	if err != nil {
+		return err
+	}
+
+	if err = sc.initialEpochTransitions(fixture); err != nil {
 		return err
 	}
 
