@@ -4,7 +4,7 @@ use std::{collections::VecDeque, fmt, iter::Iterator, mem::replace, sync::Arc};
 use anyhow::{Error, Result};
 use io_context::Context;
 
-use crate::storage::mkvs::{cache::*, sync::*, tree::*};
+use crate::storage::mkvs::{self, cache::*, sync::*, tree::*};
 
 pub(super) struct FetcherSyncIterate<'a> {
     key: &'a Key,
@@ -93,51 +93,10 @@ impl<'tree> TreeIterator<'tree> {
         }
     }
 
-    /// Sets the number of next elements to prefetch.
-    pub fn set_prefetch(&mut self, prefetch: usize) {
-        self.prefetch = prefetch;
-    }
-
     fn reset(&mut self) {
         self.pos.clear();
         self.key = None;
         self.value = None;
-    }
-
-    /// Return whether the iterator is valid.
-    pub fn is_valid(&self) -> bool {
-        self.key.is_some()
-    }
-
-    /// Return the error that occurred during iteration if any.
-    pub fn error(&self) -> &Option<Error> {
-        &self.error
-    }
-
-    /// Move the iterator to the first key in the tree.
-    pub fn rewind(&mut self) {
-        self.seek(&[])
-    }
-
-    /// Moves the iterator either at the given key or at the next larger
-    /// key.
-    pub fn seek(&mut self, key: &[u8]) {
-        if self.error.is_some() {
-            return;
-        }
-
-        self.reset();
-        let pending_root = self.tree.cache.borrow().get_pending_root();
-        if let Err(error) = self._next(
-            pending_root,
-            0,
-            Key::new(),
-            key.to_vec(),
-            VisitState::Before,
-        ) {
-            self.error = Some(error);
-            self.reset();
-        }
     }
 
     fn next(&mut self) {
@@ -329,6 +288,8 @@ impl<'tree> Iterator for TreeIterator<'tree> {
     type Item = (Vec<u8>, Vec<u8>);
 
     fn next(&mut self) -> Option<Self::Item> {
+        use mkvs::Iterator;
+
         if !self.is_valid() {
             return None;
         }
@@ -338,6 +299,43 @@ impl<'tree> Iterator for TreeIterator<'tree> {
         self.next();
 
         Some((key, value))
+    }
+}
+
+impl<'tree> mkvs::Iterator for TreeIterator<'tree> {
+    fn set_prefetch(&mut self, prefetch: usize) {
+        self.prefetch = prefetch;
+    }
+
+    fn is_valid(&self) -> bool {
+        self.key.is_some()
+    }
+
+    fn error(&self) -> &Option<Error> {
+        &self.error
+    }
+
+    fn rewind(&mut self) {
+        self.seek(&[])
+    }
+
+    fn seek(&mut self, key: &[u8]) {
+        if self.error.is_some() {
+            return;
+        }
+
+        self.reset();
+        let pending_root = self.tree.cache.borrow().get_pending_root();
+        if let Err(error) = self._next(
+            pending_root,
+            0,
+            Key::new(),
+            key.to_vec(),
+            VisitState::Before,
+        ) {
+            self.error = Some(error);
+            self.reset();
+        }
     }
 }
 
@@ -354,7 +352,10 @@ mod test {
     use rustc_hex::FromHex;
 
     use super::{tree_test::generate_key_value_pairs_ex, *};
-    use crate::storage::mkvs::interop::{Driver, ProtocolServer};
+    use crate::storage::mkvs::{
+        interop::{Driver, ProtocolServer},
+        Iterator,
+    };
 
     #[test]
     fn test_iterator() {

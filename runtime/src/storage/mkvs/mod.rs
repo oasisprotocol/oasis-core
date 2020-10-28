@@ -1,7 +1,10 @@
 //! Merklized key-value store.
-use std::ops::{Deref, DerefMut};
+use std::{
+    iter,
+    ops::{Deref, DerefMut},
+};
 
-use anyhow::Result;
+use anyhow::{Error, Result};
 use base64;
 use io_context::Context;
 use serde::{self, ser::SerializeSeq, Deserialize, Serialize, Serializer};
@@ -143,6 +146,9 @@ pub trait MKVS: Send + Sync {
     /// Populate the in-memory tree with nodes for keys starting with given prefixes.
     fn prefetch_prefixes(&self, ctx: Context, prefixes: &Vec<Prefix>, limit: u16);
 
+    /// Returns an iterator over the tree.
+    fn iter(&self, ctx: Context) -> Box<dyn Iterator + '_>;
+
     /// Commit all database changes to the underlying store.
     fn commit(
         &mut self,
@@ -153,6 +159,24 @@ pub trait MKVS: Send + Sync {
 
     /// Rollback any pending changes.
     fn rollback(&mut self);
+}
+
+/// An MKVS iterator.
+pub trait Iterator: iter::Iterator<Item = (Vec<u8>, Vec<u8>)> {
+    /// Sets the number of next elements to prefetch.
+    fn set_prefetch(&mut self, prefetch: usize);
+
+    /// Return whether the iterator is valid.
+    fn is_valid(&self) -> bool;
+
+    /// Return the error that occurred during iteration if any.
+    fn error(&self) -> &Option<Error>;
+
+    /// Moves the iterator to the first key in the tree.
+    fn rewind(&mut self);
+
+    /// Moves the iterator either at the given key or at the next larger key.
+    fn seek(&mut self, key: &[u8]);
 }
 
 #[cfg(test)]

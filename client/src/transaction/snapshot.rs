@@ -11,7 +11,7 @@ use oasis_core_runtime::{
         roothash::{Block, Namespace},
     },
     storage::{
-        mkvs::{sync::*, Prefix, Root, Tree, WriteLog},
+        mkvs::{sync::*, Iterator, Prefix, Root, Tree, WriteLog},
         MKVS,
     },
     transaction::types::{TxnCall, TxnOutput},
@@ -121,6 +121,10 @@ impl MKVS for BlockSnapshot {
 
     fn prefetch_prefixes(&self, ctx: Context, prefixes: &Vec<Prefix>, limit: u16) {
         MKVS::prefetch_prefixes(&self.mkvs, ctx, prefixes, limit)
+    }
+
+    fn iter(&self, ctx: Context) -> Box<dyn Iterator + '_> {
+        MKVS::iter(&self.mkvs, ctx)
     }
 
     fn commit(

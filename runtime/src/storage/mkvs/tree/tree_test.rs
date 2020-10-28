@@ -10,7 +10,7 @@ use crate::{
         sync::*,
         tests,
         tree::*,
-        LogEntry, LogEntryKind, WriteLog,
+        Iterator, LogEntry, LogEntryKind, WriteLog,
     },
 };
 

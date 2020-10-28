@@ -3,7 +3,7 @@ use io_context::Context;
 
 use crate::{
     common::{crypto::hash::Hash, roothash::Namespace},
-    storage::mkvs::{tree::*, Prefix, WriteLog, MKVS},
+    storage::mkvs::{tree::*, Iterator, Prefix, WriteLog, MKVS},
 };
 
 unsafe impl Send for Tree {}
@@ -38,6 +38,12 @@ impl MKVS for Tree {
         let lock = self.lock.clone();
         let _guard = lock.lock().unwrap();
         self.prefetch_prefixes(ctx, prefixes, limit).unwrap()
+    }
+
+    fn iter(&self, ctx: Context) -> Box<dyn Iterator + '_> {
+        let lock = self.lock.clone();
+        let _guard = lock.lock().unwrap();
+        Box::new(self.iter(ctx))
     }
 
     fn commit(
