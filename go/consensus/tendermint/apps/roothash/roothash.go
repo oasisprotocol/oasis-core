@@ -176,7 +176,7 @@ func (app *rootHashApplication) onCommitteeChanged(ctx *tmapi.Context, epoch epo
 
 func (app *rootHashApplication) suspendUnpaidRuntime(
 	ctx *tmapi.Context,
-	rtState *roothashState.RuntimeState,
+	rtState *roothash.RuntimeState,
 	regState *registryState.MutableState,
 ) error {
 	ctx.Logger().Warn("maintenance fees not paid for runtime or owner debonded, suspending",
@@ -201,7 +201,7 @@ func (app *rootHashApplication) suspendUnpaidRuntime(
 func (app *rootHashApplication) prepareNewCommittees(
 	ctx *tmapi.Context,
 	epoch epochtime.EpochTime,
-	rtState *roothashState.RuntimeState,
+	rtState *roothash.RuntimeState,
 	schedState *schedulerState.MutableState,
 	regState *registryState.MutableState,
 ) (
@@ -234,7 +234,7 @@ func (app *rootHashApplication) prepareNewCommittees(
 	return
 }
 
-func (app *rootHashApplication) emitEmptyBlock(ctx *tmapi.Context, runtime *roothashState.RuntimeState, hdrType block.HeaderType) error {
+func (app *rootHashApplication) emitEmptyBlock(ctx *tmapi.Context, runtime *roothash.RuntimeState, hdrType block.HeaderType) error {
 	blk := block.NewEmptyBlock(runtime.CurrentBlock, uint64(ctx.Now().Unix()), hdrType)
 
 	runtime.CurrentBlock = blk
@@ -360,7 +360,7 @@ func (app *rootHashApplication) onNewRuntime(ctx *tmapi.Context, runtime *regist
 	}
 
 	// Create new state containing the genesis block.
-	err = state.SetRuntimeState(ctx, &roothashState.RuntimeState{
+	err = state.SetRuntimeState(ctx, &roothash.RuntimeState{
 		Runtime:      runtime,
 		CurrentBlock: genesisBlock,
 		GenesisBlock: genesisBlock,
@@ -440,7 +440,7 @@ func (app *rootHashApplication) processRoundTimeout(ctx *tmapi.Context, state *r
 // The caller must take care of clearing and scheduling the round timeouts.
 func (app *rootHashApplication) tryFinalizeExecutorCommits(
 	ctx *tmapi.Context,
-	rtState *roothashState.RuntimeState,
+	rtState *roothash.RuntimeState,
 	forced bool,
 ) (*block.Block, error) {
 	runtime := rtState.Runtime
@@ -555,7 +555,7 @@ func (app *rootHashApplication) postProcessFinalizedBlock(ctx *tmapi.Context, rt
 
 func (app *rootHashApplication) tryFinalizeBlock(
 	ctx *tmapi.Context,
-	rtState *roothashState.RuntimeState,
+	rtState *roothash.RuntimeState,
 	forced bool,
 ) (err error) {
 	defer func(previousTimeout int64) {

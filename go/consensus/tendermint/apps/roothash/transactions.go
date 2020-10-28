@@ -86,7 +86,7 @@ func (app *rootHashApplication) getRuntimeState(
 	ctx *abciAPI.Context,
 	state *roothashState.MutableState,
 	id common.Namespace,
-) (*roothashState.RuntimeState, commitment.SignatureVerifier, commitment.NodeLookup, error) {
+) (*roothash.RuntimeState, commitment.SignatureVerifier, commitment.NodeLookup, error) {
 	// Fetch current runtime state.
 	rtState, err := state.RuntimeState(ctx, id)
 	if err != nil {

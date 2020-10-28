@@ -12,7 +12,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/pubsub"
 	"github.com/oasisprotocol/oasis-core/go/consensus/api/transaction"
 	"github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/flags"
-	"github.com/oasisprotocol/oasis-core/go/registry/api"
+	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
 	"github.com/oasisprotocol/oasis-core/go/roothash/api/block"
 	"github.com/oasisprotocol/oasis-core/go/roothash/api/commitment"
 )
@@ -130,6 +130,19 @@ func NewRequestProposerTimeoutTx(nonce uint64, fee *transaction.Fee, runtimeID c
 	})
 }
 
+// RuntimeState is the per-runtime state.
+type RuntimeState struct {
+	Runtime   *registry.Runtime `json:"runtime"`
+	Suspended bool              `json:"suspended,omitempty"`
+
+	GenesisBlock *block.Block `json:"genesis_block"`
+
+	CurrentBlock       *block.Block `json:"current_block"`
+	CurrentBlockHeight int64        `json:"current_block_height"`
+
+	ExecutorPool *commitment.Pool `json:"executor_pool"`
+}
+
 // AnnotatedBlock is an annotated roothash block.
 type AnnotatedBlock struct {
 	// Height is the underlying roothash backend's block height that
@@ -185,7 +198,7 @@ type Genesis struct {
 	Parameters ConsensusParameters `json:"params"`
 
 	// RuntimeStates is the per-runtime map of genesis blocks.
-	RuntimeStates map[common.Namespace]*api.RuntimeGenesis `json:"runtime_states,omitempty"`
+	RuntimeStates map[common.Namespace]*registry.RuntimeGenesis `json:"runtime_states,omitempty"`
 }
 
 // ConsensusParameters are the roothash consensus parameters.

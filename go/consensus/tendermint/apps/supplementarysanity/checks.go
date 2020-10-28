@@ -83,7 +83,7 @@ func checkRootHash(ctx *abciAPI.Context, now epochtime.EpochTime) error {
 	}
 
 	blocks := make(map[common.Namespace]*block.Block)
-	runtimesByID := make(map[common.Namespace]*roothashState.RuntimeState)
+	runtimesByID := make(map[common.Namespace]*roothash.RuntimeState)
 	for _, rt := range runtimes {
 		blocks[rt.Runtime.ID] = rt.CurrentBlock
 		runtimesByID[rt.Runtime.ID] = rt
