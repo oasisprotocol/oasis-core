@@ -41,6 +41,10 @@ func (sc *storageSyncImpl) Fixture() (*oasis.NetworkFixture, error) {
 		return nil, err
 	}
 
+	// Use mock epochtime to ensure syncing starts in the same epoch in which
+	// new node registers.
+	f.Network.EpochtimeMock = true
+
 	// Make the first storage worker check for checkpoints more often.
 	f.StorageWorkers[0].CheckpointCheckInterval = 1 * time.Second
 	// Configure runtime to allow a smaller replication factor as otherwise execution may fail when
@@ -72,6 +76,15 @@ func (sc *storageSyncImpl) Fixture() (*oasis.NetworkFixture, error) {
 func (sc *storageSyncImpl) Run(childEnv *env.Env) error {
 	clientErrCh, cmd, err := sc.runtimeImpl.start(childEnv)
 	if err != nil {
+		return err
+	}
+
+	fixture, err := sc.Fixture()
+	if err != nil {
+		return err
+	}
+
+	if err = sc.initialEpochTransitions(fixture); err != nil {
 		return err
 	}
 
