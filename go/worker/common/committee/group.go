@@ -38,7 +38,8 @@ const (
 	tagExecutor = "executor"
 )
 
-func tagForCommittee(kind scheduler.CommitteeKind) string {
+// TagForCommittee returns node lookup tag for scheduler committee kind.
+func TagForCommittee(kind scheduler.CommitteeKind) string {
 	switch kind {
 	case scheduler.KindComputeExecutor:
 		return tagExecutor
@@ -323,7 +324,7 @@ func (g *Group) EpochTransition(ctx context.Context, height int64) error {
 			}
 
 			// Start watching the member's node descriptor.
-			if _, err = g.nodes.WatchNodeWithTag(ctx, member.PublicKey, tagForCommittee(cm.Kind)); err != nil {
+			if _, err = g.nodes.WatchNodeWithTag(ctx, member.PublicKey, TagForCommittee(cm.Kind)); err != nil {
 				return fmt.Errorf("group: failed to fetch node info: %w", err)
 			}
 		}
@@ -567,7 +568,7 @@ func NewGroup(
 		ctx,
 		runtime.ID(),
 		identity,
-		committee.NewFilteredNodeLookup(nodes, committee.TagFilter(tagForCommittee(scheduler.KindStorage))),
+		committee.NewFilteredNodeLookup(nodes, committee.TagFilter(TagForCommittee(scheduler.KindStorage))),
 		runtime,
 	)
 	if err != nil {
