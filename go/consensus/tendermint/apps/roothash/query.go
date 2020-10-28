@@ -14,6 +14,7 @@ import (
 type Query interface {
 	LatestBlock(context.Context, common.Namespace) (*block.Block, error)
 	GenesisBlock(context.Context, common.Namespace) (*block.Block, error)
+	RuntimeState(context.Context, common.Namespace) (*roothash.RuntimeState, error)
 	Genesis(context.Context) (*roothash.Genesis, error)
 }
 
@@ -49,6 +50,10 @@ func (rq *rootHashQuerier) GenesisBlock(ctx context.Context, id common.Namespace
 		return nil, err
 	}
 	return runtime.GenesisBlock, nil
+}
+
+func (rq *rootHashQuerier) RuntimeState(ctx context.Context, id common.Namespace) (*roothash.RuntimeState, error) {
+	return rq.state.RuntimeState(ctx, id)
 }
 
 func (app *rootHashApplication) QueryFactory() interface{} {

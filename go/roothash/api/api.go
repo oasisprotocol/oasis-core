@@ -78,6 +78,9 @@ type Backend interface {
 	// the latest state from the storage backend.
 	GetLatestBlock(ctx context.Context, runtimeID common.Namespace, height int64) (*block.Block, error)
 
+	// GetRuntimeState returns the given runtime's state.
+	GetRuntimeState(ctx context.Context, runtimeID common.Namespace, height int64) (*RuntimeState, error)
+
 	// WatchBlocks returns a channel that produces a stream of
 	// annotated blocks.
 	//

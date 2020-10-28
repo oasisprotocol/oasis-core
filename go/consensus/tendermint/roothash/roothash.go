@@ -78,11 +78,11 @@ type serviceClient struct {
 	trackedRuntime map[common.Namespace]*trackedRuntime
 }
 
-func (sc *serviceClient) GetGenesisBlock(ctx context.Context, id common.Namespace, height int64) (*block.Block, error) {
+func (sc *serviceClient) GetGenesisBlock(ctx context.Context, runtimeID common.Namespace, height int64) (*block.Block, error) {
 	// First check if we have the genesis blocks cached. They are immutable so easy
 	// to cache to avoid repeated requests to the Tendermint app.
 	sc.RLock()
-	if blk := sc.genesisBlocks[id]; blk != nil {
+	if blk := sc.genesisBlocks[runtimeID]; blk != nil {
 		sc.RUnlock()
 		return blk, nil
 	}
@@ -93,30 +93,39 @@ func (sc *serviceClient) GetGenesisBlock(ctx context.Context, id common.Namespac
 		return nil, err
 	}
 
-	blk, err := q.GenesisBlock(ctx, id)
+	blk, err := q.GenesisBlock(ctx, runtimeID)
 	if err != nil {
 		return nil, err
 	}
 
 	// Update the genesis block cache.
 	sc.Lock()
-	sc.genesisBlocks[id] = blk
+	sc.genesisBlocks[runtimeID] = blk
 	sc.Unlock()
 
 	return blk, nil
 }
 
-func (sc *serviceClient) GetLatestBlock(ctx context.Context, id common.Namespace, height int64) (*block.Block, error) {
-	return sc.getLatestBlockAt(ctx, id, height)
+func (sc *serviceClient) GetLatestBlock(ctx context.Context, runtimeID common.Namespace, height int64) (*block.Block, error) {
+	return sc.getLatestBlockAt(ctx, runtimeID, height)
 }
 
-func (sc *serviceClient) getLatestBlockAt(ctx context.Context, id common.Namespace, height int64) (*block.Block, error) {
+func (sc *serviceClient) getLatestBlockAt(ctx context.Context, runtimeID common.Namespace, height int64) (*block.Block, error) {
 	q, err := sc.querier.QueryAt(ctx, height)
 	if err != nil {
 		return nil, err
 	}
 
-	return q.LatestBlock(ctx, id)
+	return q.LatestBlock(ctx, runtimeID)
+}
+
+func (sc *serviceClient) GetRuntimeState(ctx context.Context, runtimeID common.Namespace, height int64) (*api.RuntimeState, error) {
+	q, err := sc.querier.QueryAt(ctx, height)
+	if err != nil {
+		return nil, err
+	}
+
+	return q.RuntimeState(ctx, runtimeID)
 }
 
 func (sc *serviceClient) WatchBlocks(id common.Namespace) (<-chan *api.AnnotatedBlock, *pubsub.Subscription, error) {
