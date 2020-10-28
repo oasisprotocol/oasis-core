@@ -25,6 +25,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/grpc"
 	"github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/metrics"
 	"github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/debug/byzantine"
+	runtimeClient "github.com/oasisprotocol/oasis-core/go/runtime/client"
 	runtimeRegistry "github.com/oasisprotocol/oasis-core/go/runtime/registry"
 	workerCommon "github.com/oasisprotocol/oasis-core/go/worker/common"
 	"github.com/oasisprotocol/oasis-core/go/worker/common/p2p"
@@ -223,6 +224,13 @@ func (args *argBuilder) tendermintSupplementarySanityEnabled() *argBuilder {
 func (args *argBuilder) runtimeTagIndexerBackend(backend string) *argBuilder {
 	args.vec = append(args.vec, []string{
 		"--" + runtimeRegistry.CfgTagIndexerBackend, backend,
+	}...)
+	return args
+}
+
+func (args *argBuilder) runtimeClientMaxTransactionAge(maxTxAge int64) *argBuilder {
+	args.vec = append(args.vec, []string{
+		"--" + runtimeClient.CfgMaxTransactionAge, strconv.Itoa(int(maxTxAge)),
 	}...)
 	return args
 }

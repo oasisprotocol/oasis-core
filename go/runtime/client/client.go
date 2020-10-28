@@ -6,6 +6,9 @@ import (
 	"fmt"
 	"sync"
 
+	flag "github.com/spf13/pflag"
+	"github.com/spf13/viper"
+
 	"github.com/oasisprotocol/oasis-core/go/common"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
@@ -13,6 +16,7 @@ import (
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
 	keymanagerAPI "github.com/oasisprotocol/oasis-core/go/keymanager/api"
 	keymanager "github.com/oasisprotocol/oasis-core/go/keymanager/client"
+	cmdFlags "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/flags"
 	roothash "github.com/oasisprotocol/oasis-core/go/roothash/api"
 	"github.com/oasisprotocol/oasis-core/go/roothash/api/block"
 	"github.com/oasisprotocol/oasis-core/go/runtime/client/api"
@@ -25,9 +29,20 @@ import (
 	executor "github.com/oasisprotocol/oasis-core/go/worker/compute/executor/api"
 )
 
+const (
+	// CfgMaxTransactionAge is the number of consensus blocks after which
+	// submitted transactions will be considered expired.
+	CfgMaxTransactionAge = "runtime.client.max_transaction_age"
+
+	minMaxTransactionAge = 30
+)
+
 var (
 	_ api.RuntimeClient    = (*runtimeClient)(nil)
 	_ enclaverpc.Transport = (*runtimeClient)(nil)
+
+	// Flags has the flags used by the runtime client.
+	Flags = flag.NewFlagSet("", flag.ContinueOnError)
 )
 
 type clientCommon struct {
@@ -47,6 +62,8 @@ type runtimeClient struct {
 
 	watchers  map[common.Namespace]*blockWatcher
 	kmClients map[common.Namespace]*keymanager.Client
+
+	maxTransactionAge int64
 
 	logger *logging.Logger
 }
@@ -71,7 +88,7 @@ func (c *runtimeClient) SubmitTx(ctx context.Context, request *api.SubmitTxReque
 	var err error
 	c.Lock()
 	if watcher, ok = c.watchers[request.RuntimeID]; !ok {
-		watcher, err = newWatcher(c.common, request.RuntimeID, c.common.p2p)
+		watcher, err = newWatcher(c.common, request.RuntimeID, c.common.p2p, c.maxTransactionAge)
 		if err != nil {
 			c.Unlock()
 			return nil, err
@@ -116,6 +133,10 @@ func (c *runtimeClient) SubmitTx(ctx context.Context, request *api.SubmitTxReque
 		case resp, ok = <-respCh:
 			if !ok {
 				return nil, fmt.Errorf("client: block watch channel closed unexpectedly (unknown error)")
+			}
+
+			if resp.err != nil {
+				return nil, resp.err
 			}
 
 			// The main event is getting a response from the watcher, handled below. If there is
@@ -428,6 +449,11 @@ func New(
 	runtimeRegistry runtimeRegistry.Registry,
 	p2p *p2p.P2P,
 ) (api.RuntimeClient, error) {
+	maxTransactionAge := viper.GetInt64(CfgMaxTransactionAge)
+	if maxTransactionAge < minMaxTransactionAge && !cmdFlags.DebugDontBlameOasis() {
+		return nil, fmt.Errorf("max transaction age too low: %d, minimum: %d", maxTransactionAge, minMaxTransactionAge)
+	}
+
 	c := &runtimeClient{
 		common: &clientCommon{
 			storage:         runtimeRegistry.StorageRouter(),
@@ -436,9 +462,16 @@ func New(
 			ctx:             ctx,
 			p2p:             p2p,
 		},
-		watchers:  make(map[common.Namespace]*blockWatcher),
-		kmClients: make(map[common.Namespace]*keymanager.Client),
-		logger:    logging.GetLogger("runtime/client"),
+		watchers:          make(map[common.Namespace]*blockWatcher),
+		kmClients:         make(map[common.Namespace]*keymanager.Client),
+		maxTransactionAge: maxTransactionAge,
+		logger:            logging.GetLogger("runtime/client"),
 	}
 	return c, nil
+}
+
+func init() {
+	Flags.Int64(CfgMaxTransactionAge, 1500, "number of consensus blocks after which submitted transactions will be considered expired")
+
+	_ = viper.BindPFlags(Flags)
 }
