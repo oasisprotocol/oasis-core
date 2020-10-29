@@ -25,6 +25,7 @@ import (
 	roothashApi "github.com/oasisprotocol/oasis-core/go/roothash/api"
 	"github.com/oasisprotocol/oasis-core/go/roothash/api/block"
 	runtimeCommittee "github.com/oasisprotocol/oasis-core/go/runtime/committee"
+	scheduler "github.com/oasisprotocol/oasis-core/go/scheduler/api"
 	storageApi "github.com/oasisprotocol/oasis-core/go/storage/api"
 	"github.com/oasisprotocol/oasis-core/go/storage/client"
 	"github.com/oasisprotocol/oasis-core/go/storage/mkvs/checkpoint"
@@ -211,7 +212,10 @@ type Node struct {
 	ctx       context.Context
 	ctxCancel context.CancelFunc
 
-	quitCh chan struct{}
+	quitCh          chan struct{}
+	rtWatcherQuitCh chan struct{}
+	workerQuitCh    chan struct{}
+
 	initCh chan struct{}
 }
 
@@ -248,8 +252,10 @@ func NewNode(
 		diffCh:     make(chan *fetchedDiff),
 		finalizeCh: make(chan *blockSummary),
 
-		quitCh: make(chan struct{}),
-		initCh: make(chan struct{}),
+		quitCh:          make(chan struct{}),
+		rtWatcherQuitCh: make(chan struct{}),
+		workerQuitCh:    make(chan struct{}),
+		initCh:          make(chan struct{}),
 	}
 
 	node.syncedState.LastBlock.Round = defaultUndefinedRound
@@ -335,6 +341,7 @@ func (n *Node) Name() string {
 
 // Start causes the worker to start responding to tendermint new block events.
 func (n *Node) Start() error {
+	go n.watchQuit()
 	go n.worker()
 	return nil
 }
@@ -377,41 +384,6 @@ func (n *Node) getMetricLabels() prometheus.Labels {
 
 // NodeHooks implementation.
 
-func (n *Node) updateExternalServicePolicyLocked(snapshot *committee.EpochSnapshot) {
-	// Create new storage gRPC access policy for the current runtime.
-	policy := accessctl.NewPolicy()
-
-	// Add policy for configured sentry nodes.
-	for _, addr := range n.workerCommonCfg.SentryAddresses {
-		sentryNodesPolicy.AddPublicKeyPolicy(&policy, addr.PubKey)
-	}
-
-	if xc := snapshot.GetExecutorCommittee(); xc != nil {
-		executorCommitteePolicy.AddRulesForCommittee(&policy, xc, snapshot.Nodes())
-	}
-	// TODO: Query registry only for storage nodes after
-	// https://github.com/oasisprotocol/oasis-core/issues/1923 is implemented.
-	nodes, err := n.commonNode.Consensus.Registry().GetNodes(context.Background(), consensus.HeightLatest)
-	if err != nil {
-		n.logger.Error("couldn't get nodes from registry", "err", err)
-	}
-	if len(nodes) > 0 {
-		// Only include nodes for our runtime, do not include all storage nodes.
-		var rtNodes []*node.Node
-		for _, storageNode := range nodes {
-			if storageNode.GetRuntime(n.commonNode.Runtime.ID()) != nil {
-				rtNodes = append(rtNodes, storageNode)
-			}
-		}
-
-		storageNodesPolicy.AddRulesForNodeRoles(&policy, rtNodes, node.RoleStorageWorker)
-	}
-
-	// Update storage gRPC access policy for the current runtime.
-	n.grpcPolicy.SetAccessPolicy(policy, n.commonNode.Runtime.ID())
-	n.logger.Debug("set new storage gRPC access policy", "policy", policy)
-}
-
 func (n *Node) HandlePeerMessage(context.Context, *p2p.Message, bool) (bool, error) {
 	// Nothing to do here.
 	return false, nil
@@ -419,7 +391,7 @@ func (n *Node) HandlePeerMessage(context.Context, *p2p.Message, bool) (bool, err
 
 // Guarded by CrossNode.
 func (n *Node) HandleEpochTransitionLocked(snapshot *committee.EpochSnapshot) {
-	n.updateExternalServicePolicyLocked(snapshot)
+	// Nothing to do here.
 }
 
 // Guarded by CrossNode.
@@ -440,7 +412,8 @@ func (n *Node) HandleNewEventLocked(*roothashApi.Event) {
 
 // Guarded by CrossNode.
 func (n *Node) HandleNodeUpdateLocked(update *runtimeCommittee.NodeUpdate, snapshot *committee.EpochSnapshot) {
-	n.updateExternalServicePolicyLocked(snapshot)
+	// Nothing to do here.
+	// Storage worker uses a separate watcher.
 }
 
 // Watcher implementation.
@@ -615,8 +588,110 @@ func (n *Node) flushSyncedState(summary *blockSummary) uint64 {
 	return n.syncedState.LastBlock.Round
 }
 
+func (n *Node) updateExternalServicePolicy(rtComputeNodes runtimeCommittee.NodeDescriptorLookup) {
+	// Create new storage gRPC access policy for the current runtime.
+	policy := accessctl.NewPolicy()
+
+	// Add policy for configured sentry nodes.
+	for _, addr := range n.workerCommonCfg.SentryAddresses {
+		sentryNodesPolicy.AddPublicKeyPolicy(&policy, addr.PubKey)
+	}
+
+	executorCommitteePolicy.AddRulesForNodeRoles(&policy, rtComputeNodes.GetNodes(), node.RoleComputeWorker)
+
+	// TODO: Query registry only for storage nodes after
+	// https://github.com/oasisprotocol/oasis-core/issues/1923 is implemented.
+	nodes, err := n.commonNode.Consensus.Registry().GetNodes(n.ctx, consensus.HeightLatest)
+	if err != nil {
+		n.logger.Error("couldn't get nodes from registry", "err", err)
+	}
+	if len(nodes) > 0 {
+		// Only include storage nodes for our runtime.
+		var storageNodes []*node.Node
+		for _, nd := range nodes {
+			if nd.GetRuntime(n.commonNode.Runtime.ID()) != nil && nd.HasRoles(node.RoleStorageWorker) {
+				storageNodes = append(storageNodes, nd)
+			}
+		}
+		storageNodesPolicy.AddRulesForNodeRoles(&policy, storageNodes, node.RoleStorageWorker)
+	}
+
+	// Update storage gRPC access policy for the current runtime.
+	n.grpcPolicy.SetAccessPolicy(policy, n.commonNode.Runtime.ID())
+	n.logger.Debug("set new storage gRPC access policy", "policy", policy)
+}
+
+func (n *Node) runtimeNodesWatcher() {
+	defer close(n.rtWatcherQuitCh)
+
+	// Watch registry for runtime node updates and update external gRPC policies.
+	// Policy updates are made on:
+	// * any updates to the runtime executor committee nodes
+	// * any updates to the registered storage nodes for the runtime
+	//   (this includes nodes not in committee)
+
+	n.logger.Info("starting runtime nodes watcher")
+
+	committeeNodes := runtimeCommittee.NewFilteredNodeLookup(
+		n.commonNode.Group.Nodes(),
+		runtimeCommittee.TagFilter(committee.TagForCommittee(scheduler.KindComputeExecutor)),
+	)
+	// Start watching node updates for the current committee.
+	committeeNodeUps, committeeNodeUpsSub, err := committeeNodes.WatchNodeUpdates()
+	if err != nil {
+		n.logger.Error("failed to subscribe to node updates",
+			"err", err,
+		)
+		return
+	}
+	defer committeeNodeUpsSub.Close()
+
+	nodeCh, nodeSub, err := n.commonNode.Consensus.Registry().WatchNodes(n.ctx)
+	if err != nil {
+		n.logger.Error("worker/storage: failed to watch registry nodes",
+			"err", err,
+		)
+		return
+	}
+	defer nodeSub.Close()
+
+	for {
+		select {
+		case <-n.ctx.Done():
+			return
+		case u := <-committeeNodeUps:
+			if u.Update == nil {
+				continue
+			}
+			// Update policy (handled bellow).
+		case ev := <-nodeCh:
+			if !ev.IsRegistration {
+				continue
+			}
+			if ev.Node.GetRuntime(n.commonNode.Runtime.ID()) == nil {
+				continue
+			}
+			// Compute committee workers are handled by the committee watcher.
+			if !ev.Node.HasRoles(node.RoleStorageWorker) {
+				continue
+			}
+			// Update policy (handled bellow).
+		}
+		n.updateExternalServicePolicy(committeeNodes)
+	}
+}
+
+func (n *Node) watchQuit() {
+	// Close quit channel on any worker quitting.
+	select {
+	case <-n.workerQuitCh:
+	case <-n.rtWatcherQuitCh:
+	}
+	close(n.quitCh)
+}
+
 func (n *Node) worker() { // nolint: gocyclo
-	defer close(n.quitCh)
+	defer close(n.workerQuitCh)
 	defer close(n.diffCh)
 
 	// Wait for the common node to be initialized.
@@ -626,6 +701,9 @@ func (n *Node) worker() { // nolint: gocyclo
 		close(n.initCh)
 		return
 	}
+
+	// Start runtime node watcher.
+	go n.runtimeNodesWatcher()
 
 	n.logger.Info("starting committee node")
 

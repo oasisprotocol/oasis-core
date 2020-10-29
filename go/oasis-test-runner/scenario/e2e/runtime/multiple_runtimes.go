@@ -137,8 +137,13 @@ func (sc *multipleRuntimesImpl) Run(childEnv *env.Env) error {
 		return err
 	}
 
+	fixture, err := sc.Fixture()
+	if err != nil {
+		return err
+	}
+
 	// Wait for the nodes.
-	if err := sc.initialEpochTransitions(); err != nil {
+	if err = sc.initialEpochTransitions(fixture); err != nil {
 		return err
 	}
 

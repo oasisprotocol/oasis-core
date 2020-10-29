@@ -64,7 +64,12 @@ func (sc *runtimePruneImpl) Run(childEnv *env.Env) error {
 		return err
 	}
 
-	if err := sc.initialEpochTransitions(); err != nil {
+	fixture, err := sc.Fixture()
+	if err != nil {
+		return err
+	}
+
+	if err = sc.initialEpochTransitions(fixture); err != nil {
 		return err
 	}
 
@@ -77,7 +82,7 @@ func (sc *runtimePruneImpl) Run(childEnv *env.Env) error {
 			"seq", i,
 		)
 
-		if err := sc.submitKeyValueRuntimeInsertTx(ctx, runtimeID, "hello", fmt.Sprintf("world %d", i)); err != nil {
+		if err = sc.submitKeyValueRuntimeInsertTx(ctx, runtimeID, "hello", fmt.Sprintf("world %d", i)); err != nil {
 			return err
 		}
 	}

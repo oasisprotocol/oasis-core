@@ -415,7 +415,7 @@ func (sc *runtimeImpl) waitNodesSynced() error {
 	return nil
 }
 
-func (sc *runtimeImpl) initialEpochTransitions() error {
+func (sc *runtimeImpl) initialEpochTransitions(fixture *oasis.NetworkFixture) error {
 	ctx := context.Background()
 
 	if len(sc.Net.Keymanagers()) > 0 {
@@ -424,7 +424,11 @@ func (sc *runtimeImpl) initialEpochTransitions() error {
 		sc.Logger.Info("waiting for validators to initialize",
 			"num_validators", len(sc.Net.Validators()),
 		)
-		for _, n := range sc.Net.Validators() {
+		for i, n := range sc.Net.Validators() {
+			if fixture.Validators[i].NoAutoStart {
+				// Skip nodes that don't auto start.
+				continue
+			}
 			if err := n.WaitReady(ctx); err != nil {
 				return fmt.Errorf("failed to wait for a validator: %w", err)
 			}
@@ -432,7 +436,11 @@ func (sc *runtimeImpl) initialEpochTransitions() error {
 		sc.Logger.Info("waiting for key managers to initialize",
 			"num_keymanagers", len(sc.Net.Keymanagers()),
 		)
-		for _, n := range sc.Net.Keymanagers() {
+		for i, n := range sc.Net.Keymanagers() {
+			if fixture.Keymanagers[i].NoAutoStart {
+				// Skip nodes that don't auto start.
+				continue
+			}
 			if err := n.WaitReady(ctx); err != nil {
 				return fmt.Errorf("failed to wait for a key manager: %w", err)
 			}
@@ -448,7 +456,11 @@ func (sc *runtimeImpl) initialEpochTransitions() error {
 	sc.Logger.Info("waiting for storage workers to initialize",
 		"num_storage_workers", len(sc.Net.StorageWorkers()),
 	)
-	for _, n := range sc.Net.StorageWorkers() {
+	for i, n := range sc.Net.StorageWorkers() {
+		if fixture.StorageWorkers[i].NoAutoStart {
+			// Skip nodes that don't auto start.
+			continue
+		}
 		if err := n.WaitReady(ctx); err != nil {
 			return fmt.Errorf("failed to wait for a storage worker: %w", err)
 		}
@@ -456,7 +468,11 @@ func (sc *runtimeImpl) initialEpochTransitions() error {
 	sc.Logger.Info("waiting for compute workers to initialize",
 		"num_compute_workers", len(sc.Net.ComputeWorkers()),
 	)
-	for _, n := range sc.Net.ComputeWorkers() {
+	for i, n := range sc.Net.ComputeWorkers() {
+		if fixture.ComputeWorkers[i].NoAutoStart {
+			// Skip nodes that don't auto start.
+			continue
+		}
 		if err := n.WaitReady(ctx); err != nil {
 			return fmt.Errorf("failed to wait for a compute worker: %w", err)
 		}
