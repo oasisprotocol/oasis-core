@@ -1,4 +1,4 @@
-package committee
+package nodes
 
 import (
 	"context"
@@ -15,41 +15,8 @@ import (
 	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
 )
 
-// NodeUpdate is a node update.
-type NodeUpdate struct {
-	Update      *node.Node
-	Reset       bool
-	Freeze      *VersionEvent
-	BumpVersion *VersionEvent
-}
-
-// VersionEvent is a committee version event.
-type VersionEvent struct {
-	Version int64
-}
-
-// NodeDescriptorLookup is the node descriptor lookup interface.
-type NodeDescriptorLookup interface {
-	// Lookup looks up a node descriptor given its identifier.
-	Lookup(id signature.PublicKey) *node.Node
-
-	// LookupByPeerID looks up a node descriptor given its P2P peer ID.
-	LookupByPeerID(id signature.PublicKey) *node.Node
-
-	// LookupTags looks up tags for a given node.
-	LookupTags(id signature.PublicKey) []string
-
-	// GetNodes returns current list of nodes.
-	GetNodes() []*node.Node
-
-	// WatchNodeUpdates subscribes to notifications about node descriptor updates.
-	//
-	// On subscription the current nodes will be sent immediately.
-	WatchNodeUpdates() (<-chan *NodeUpdate, pubsub.ClosableSubscription, error)
-}
-
-// NodeDescriptorWatcher is the node descriptor watcher interface.
-type NodeDescriptorWatcher interface {
+// VersionedNodeDescriptorWatcher is the versioned node descriptor watcher interface.
+type VersionedNodeDescriptorWatcher interface {
 	NodeDescriptorLookup
 
 	// Reset clears the watcher so it doesn't watch any nodes.
@@ -83,7 +50,7 @@ type NodeDescriptorWatcher interface {
 	WatchNodeWithTag(ctx context.Context, id signature.PublicKey, tag string) (*node.Node, error)
 }
 
-type nodeDescriptorWatcher struct {
+type versionedNodeDescriptorWatcher struct {
 	sync.RWMutex
 
 	registry registry.Backend
@@ -101,7 +68,7 @@ type nodeDescriptorWatcher struct {
 	logger *logging.Logger
 }
 
-func (nw *nodeDescriptorWatcher) Reset() {
+func (nw *versionedNodeDescriptorWatcher) Reset() {
 	nw.Lock()
 	defer nw.Unlock()
 
@@ -115,7 +82,7 @@ func (nw *nodeDescriptorWatcher) Reset() {
 	})
 }
 
-func (nw *nodeDescriptorWatcher) BumpVersion(version int64) {
+func (nw *versionedNodeDescriptorWatcher) BumpVersion(version int64) {
 	nw.Lock()
 	defer nw.Unlock()
 
@@ -129,7 +96,7 @@ func (nw *nodeDescriptorWatcher) BumpVersion(version int64) {
 	})
 }
 
-func (nw *nodeDescriptorWatcher) Freeze(version int64) {
+func (nw *versionedNodeDescriptorWatcher) Freeze(version int64) {
 	nw.Lock()
 	defer nw.Unlock()
 
@@ -144,11 +111,11 @@ func (nw *nodeDescriptorWatcher) Freeze(version int64) {
 	})
 }
 
-func (nw *nodeDescriptorWatcher) WatchNode(ctx context.Context, id signature.PublicKey) (*node.Node, error) {
+func (nw *versionedNodeDescriptorWatcher) WatchNode(ctx context.Context, id signature.PublicKey) (*node.Node, error) {
 	return nw.WatchNodeWithTag(ctx, id, "")
 }
 
-func (nw *nodeDescriptorWatcher) WatchNodeWithTag(ctx context.Context, id signature.PublicKey, tag string) (*node.Node, error) {
+func (nw *versionedNodeDescriptorWatcher) WatchNodeWithTag(ctx context.Context, id signature.PublicKey, tag string) (*node.Node, error) {
 	nw.Lock()
 	defer nw.Unlock()
 
@@ -175,7 +142,7 @@ func (nw *nodeDescriptorWatcher) WatchNodeWithTag(ctx context.Context, id signat
 	return n, nil
 }
 
-func (nw *nodeDescriptorWatcher) Lookup(id signature.PublicKey) *node.Node {
+func (nw *versionedNodeDescriptorWatcher) Lookup(id signature.PublicKey) *node.Node {
 	nw.RLock()
 	defer nw.RUnlock()
 
@@ -185,7 +152,7 @@ func (nw *nodeDescriptorWatcher) Lookup(id signature.PublicKey) *node.Node {
 	return nw.nodes[id]
 }
 
-func (nw *nodeDescriptorWatcher) LookupByPeerID(id signature.PublicKey) *node.Node {
+func (nw *versionedNodeDescriptorWatcher) LookupByPeerID(id signature.PublicKey) *node.Node {
 	nw.RLock()
 	defer nw.RUnlock()
 
@@ -195,7 +162,7 @@ func (nw *nodeDescriptorWatcher) LookupByPeerID(id signature.PublicKey) *node.No
 	return nw.nodesByPeerID[id]
 }
 
-func (nw *nodeDescriptorWatcher) GetNodes() []*node.Node {
+func (nw *versionedNodeDescriptorWatcher) GetNodes() []*node.Node {
 	nw.RLock()
 	defer nw.RUnlock()
 
@@ -206,7 +173,7 @@ func (nw *nodeDescriptorWatcher) GetNodes() []*node.Node {
 	return nodes
 }
 
-func (nw *nodeDescriptorWatcher) LookupTags(id signature.PublicKey) []string {
+func (nw *versionedNodeDescriptorWatcher) LookupTags(id signature.PublicKey) []string {
 	nw.RLock()
 	defer nw.RUnlock()
 
@@ -216,7 +183,7 @@ func (nw *nodeDescriptorWatcher) LookupTags(id signature.PublicKey) []string {
 	return nw.tags[id]
 }
 
-func (nw *nodeDescriptorWatcher) updateLocked(n *node.Node, tag string) {
+func (nw *versionedNodeDescriptorWatcher) updateLocked(n *node.Node, tag string) {
 	if nw.nodes == nil || nw.nodesByPeerID == nil {
 		return
 	}
@@ -245,7 +212,7 @@ func (nw *nodeDescriptorWatcher) updateLocked(n *node.Node, tag string) {
 	})
 }
 
-func (nw *nodeDescriptorWatcher) WatchNodeUpdates() (<-chan *NodeUpdate, pubsub.ClosableSubscription, error) {
+func (nw *versionedNodeDescriptorWatcher) WatchNodeUpdates() (<-chan *NodeUpdate, pubsub.ClosableSubscription, error) {
 	sub := nw.notifier.Subscribe()
 	ch := make(chan *NodeUpdate)
 	sub.Unwrap(ch)
@@ -253,7 +220,7 @@ func (nw *nodeDescriptorWatcher) WatchNodeUpdates() (<-chan *NodeUpdate, pubsub.
 	return ch, sub, nil
 }
 
-func (nw *nodeDescriptorWatcher) worker(ch <-chan *registry.NodeEvent, sub pubsub.ClosableSubscription) {
+func (nw *versionedNodeDescriptorWatcher) worker(ch <-chan *registry.NodeEvent, sub pubsub.ClosableSubscription) {
 	defer sub.Close()
 
 	for {
@@ -280,15 +247,24 @@ func (nw *nodeDescriptorWatcher) worker(ch <-chan *registry.NodeEvent, sub pubsu
 	}
 }
 
-// NewNodeDescriptorWatcher creates a new node descriptor watcher.
-func NewNodeDescriptorWatcher(ctx context.Context, registry registry.Backend) (NodeDescriptorWatcher, error) {
+func (nw *versionedNodeDescriptorWatcher) Versioned() bool {
+	// This watcher supports versions.
+	return true
+}
+
+// NewBaseVersionedNodeDescriptorWatcher creates a new base versioned node descriptor watcher.
+//
+// The base watcher will only track nodes that will be explicitly marked to watch
+// via WatchNode/WatchNodeWithTags methods.
+// TODO: better name?
+func NewBaseVersionedNodeDescriptorWatcher(ctx context.Context, registry registry.Backend) (VersionedNodeDescriptorWatcher, error) {
 	// Subscribe to node updates.
 	ch, sub, err := registry.WatchNodes(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("committee: failed to watch nodes: %w", err)
 	}
 
-	nw := &nodeDescriptorWatcher{
+	nw := &versionedNodeDescriptorWatcher{
 		registry: registry,
 		ctx:      ctx,
 		logger:   logging.GetLogger("runtime/committee/nodedescriptorwatcher"),
@@ -310,97 +286,4 @@ func NewNodeDescriptorWatcher(ctx context.Context, registry registry.Backend) (N
 	go nw.worker(ch, sub)
 
 	return nw, nil
-}
-
-// NodeFilterFunc is a function that performs node filtering.
-type NodeFilterFunc func(*node.Node, []string) bool
-
-type filteredNodeDescriptorLookup struct {
-	filter NodeFilterFunc
-	base   NodeDescriptorLookup
-}
-
-// Implements NodeDescriptorLookup.
-func (f *filteredNodeDescriptorLookup) Lookup(id signature.PublicKey) *node.Node {
-	tags := f.base.LookupTags(id)
-	n := f.base.Lookup(id)
-	if !f.filter(n, tags) {
-		return nil
-	}
-	return n
-}
-
-// Implements NodeDescriptorLookup.
-func (f *filteredNodeDescriptorLookup) LookupByPeerID(id signature.PublicKey) *node.Node {
-	tags := f.base.LookupTags(id)
-	n := f.base.LookupByPeerID(id)
-	if !f.filter(n, tags) {
-		return nil
-	}
-	return n
-}
-
-// Implements NodeDescriptorLookup.
-func (f *filteredNodeDescriptorLookup) LookupTags(id signature.PublicKey) []string {
-	return f.base.LookupTags(id)
-}
-
-// Implements NodeDescriptorLookup.
-func (f *filteredNodeDescriptorLookup) GetNodes() (filtered []*node.Node) {
-	for _, v := range f.base.GetNodes() {
-		tags := f.base.LookupTags(v.ID)
-		if f.filter(v, tags) {
-			filtered = append(filtered, v)
-		}
-	}
-	return
-}
-
-// Implements NodeDescriptorLookup.
-func (f *filteredNodeDescriptorLookup) WatchNodeUpdates() (<-chan *NodeUpdate, pubsub.ClosableSubscription, error) {
-	filteredCh := make(chan *NodeUpdate)
-	ch, sub, err := f.base.WatchNodeUpdates()
-	if err != nil {
-		return nil, nil, err
-	}
-
-	go func() {
-		defer close(filteredCh)
-
-		for {
-			nu, ok := <-ch
-			if !ok {
-				return
-			}
-			if nu.Update != nil {
-				tags := f.base.LookupTags(nu.Update.ID)
-				if !f.filter(nu.Update, tags) {
-					continue
-				}
-			}
-			filteredCh <- nu
-		}
-	}()
-
-	return filteredCh, sub, nil
-}
-
-// NewFilteredNodeLookup creates a NodeDescriptorLookup with a node filter function applied.
-func NewFilteredNodeLookup(nl NodeDescriptorLookup, f NodeFilterFunc) NodeDescriptorLookup {
-	return &filteredNodeDescriptorLookup{
-		filter: f,
-		base:   nl,
-	}
-}
-
-// TagFilter returns a node filter function that only includes nodes with the given tag.
-func TagFilter(tag string) NodeFilterFunc {
-	return func(_ *node.Node, tags []string) bool {
-		for _, t := range tags {
-			if t == tag {
-				return true
-			}
-		}
-		return false
-	}
 }

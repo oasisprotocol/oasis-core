@@ -1,5 +1,5 @@
 // Package client implements a client for Oasis storage nodes.
-// The client obtains storage info by following scheduler committees.
+// The client connects to nodes as directed by the node watcher.
 package client
 
 import (
@@ -21,7 +21,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
 	"github.com/oasisprotocol/oasis-core/go/common/node"
 	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
-	"github.com/oasisprotocol/oasis-core/go/runtime/committee"
+	"github.com/oasisprotocol/oasis-core/go/runtime/nodes/grpc"
 	"github.com/oasisprotocol/oasis-core/go/storage/api"
 	"github.com/oasisprotocol/oasis-core/go/storage/mkvs/checkpoint"
 )
@@ -40,21 +40,20 @@ const (
 )
 
 // storageClientBackend contains all information about the client storage API
-// backend, including the backend state and the connected storage committee
-// nodes' state.
+// backend, including the backend state and the connected storage nodes' state.
 type storageClientBackend struct {
 	ctx context.Context
 
 	logger *logging.Logger
 
-	committeeClient committee.Client
-	runtime         registry.RuntimeDescriptorProvider
+	nodesClient grpc.NodesClient
+	runtime     registry.RuntimeDescriptorProvider
 }
 
 // Implements api.StorageClient.
 func (b *storageClientBackend) GetConnectedNodes() []*node.Node {
 	var nodes []*node.Node
-	for _, conn := range b.committeeClient.GetConnectionsWithMeta() {
+	for _, conn := range b.nodesClient.GetConnectionsWithMeta() {
 		nodes = append(nodes, conn.Node)
 	}
 	return nodes
@@ -62,7 +61,7 @@ func (b *storageClientBackend) GetConnectedNodes() []*node.Node {
 
 // Implements api.StorageClient.
 func (b *storageClientBackend) EnsureCommitteeVersion(ctx context.Context, version int64) error {
-	return b.committeeClient.EnsureVersion(ctx, version)
+	return b.nodesClient.EnsureVersion(ctx, version)
 }
 
 type grpcResponse struct {
@@ -79,7 +78,7 @@ func (b *storageClientBackend) writeWithClient(
 	fn func(context.Context, api.Backend, *node.Node) (interface{}, error),
 	expectedNewRoots []hash.Hash,
 ) ([]*api.Receipt, error) {
-	conns := b.committeeClient.GetConnectionsWithMeta()
+	conns := b.nodesClient.GetConnectionsWithMeta()
 	n := len(conns)
 	if n == 0 {
 		b.logger.Error("writeWithClient: no connected nodes for runtime",
@@ -89,8 +88,8 @@ func (b *storageClientBackend) writeWithClient(
 	}
 
 	// Determine the minimum replication factor. In case we don't have a runtime descriptor provider
-	// we make the safe choice of assuming that the replication factor is the same as the size of
-	// the storage committee.
+	// we make the safe choice of assuming that the replication factor is the same as the number of
+	// conencted nodes.
 	minWriteReplication := n
 	if b.runtime != nil {
 		rt, err := b.runtime.RegistryDescriptor(ctx)
@@ -105,7 +104,7 @@ func (b *storageClientBackend) writeWithClient(
 	// as they are finished.
 	ch := make(chan *grpcResponse, n)
 	for _, conn := range conns {
-		go func(conn *committee.ClientConnWithMeta) {
+		go func(conn *grpc.ConnWithNodeMeta) {
 			var resp interface{}
 			op := func() error {
 				var rerr error
@@ -290,7 +289,7 @@ func (b *storageClientBackend) readWithClient(
 ) (interface{}, error) {
 	var resp interface{}
 	op := func() error {
-		conns := b.committeeClient.GetConnectionsMap()
+		conns := b.nodesClient.GetConnectionsMap()
 		if len(conns) == 0 {
 			b.logger.Error("readWithClient: no connected nodes for runtime",
 				"runtime_id", ns,
@@ -298,7 +297,7 @@ func (b *storageClientBackend) readWithClient(
 			return ErrStorageNotAvailable
 		}
 
-		var nodes []*committee.ClientConnWithMeta
+		var nodes []*grpc.ConnWithNodeMeta
 		// If a storage node priority hint is set, prioritize overlapping nodes.
 		for _, nodeID := range api.NodePriorityHintFromContext(ctx) {
 			c, ok := conns[nodeID]
@@ -431,5 +430,5 @@ func (b *storageClientBackend) Cleanup() {
 }
 
 func (b *storageClientBackend) Initialized() <-chan struct{} {
-	return b.committeeClient.Initialized()
+	return b.nodesClient.Initialized()
 }

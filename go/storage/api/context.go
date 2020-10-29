@@ -16,6 +16,19 @@ func WithNodePriorityHint(ctx context.Context, nodes []signature.PublicKey) cont
 	return context.WithValue(ctx, contextKeyNodePriorityHint, nodes)
 }
 
+// WithNodePriorityHintFromMap sets a storage node priority hint for any storage read requests using this
+// context. Only storage nodes that overlap with the configured committee will be used.
+func WithNodePriorityHintFromMap(ctx context.Context, nodes map[signature.PublicKey]bool) context.Context {
+	priority := make([]signature.PublicKey, 0, len(nodes))
+	for k, b := range nodes {
+		if b {
+			priority = append(priority, k)
+		}
+	}
+
+	return WithNodePriorityHint(ctx, priority)
+}
+
 // WithNodePriorityHintFromSignatures sets a storage node priority hint for any storage read
 // requests using this context. Only storage nodes that overlap with the configured committee will
 // be used.

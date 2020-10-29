@@ -23,9 +23,9 @@ import (
 	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
 	roothash "github.com/oasisprotocol/oasis-core/go/roothash/api"
 	"github.com/oasisprotocol/oasis-core/go/roothash/api/block"
-	runtimeCommittee "github.com/oasisprotocol/oasis-core/go/runtime/committee"
 	"github.com/oasisprotocol/oasis-core/go/runtime/host"
 	"github.com/oasisprotocol/oasis-core/go/runtime/host/protocol"
+	"github.com/oasisprotocol/oasis-core/go/runtime/nodes"
 	runtimeRegistry "github.com/oasisprotocol/oasis-core/go/runtime/registry"
 	workerCommon "github.com/oasisprotocol/oasis-core/go/worker/common"
 	committeeCommon "github.com/oasisprotocol/oasis-core/go/worker/common/committee"
@@ -693,6 +693,6 @@ func (crw *clientRuntimeWatcher) HandleNewEventLocked(*roothash.Event) {
 }
 
 // Guarded by CrossNode.
-func (crw *clientRuntimeWatcher) HandleNodeUpdateLocked(update *runtimeCommittee.NodeUpdate, snapshot *committeeCommon.EpochSnapshot) {
+func (crw *clientRuntimeWatcher) HandleNodeUpdateLocked(update *nodes.NodeUpdate, snapshot *committeeCommon.EpochSnapshot) {
 	crw.updateExternalServicePolicyLocked(snapshot)
 }

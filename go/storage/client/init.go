@@ -10,6 +10,8 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
 	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
 	"github.com/oasisprotocol/oasis-core/go/runtime/committee"
+	"github.com/oasisprotocol/oasis-core/go/runtime/nodes"
+	"github.com/oasisprotocol/oasis-core/go/runtime/nodes/grpc"
 	scheduler "github.com/oasisprotocol/oasis-core/go/scheduler/api"
 	"github.com/oasisprotocol/oasis-core/go/storage/api"
 )
@@ -17,26 +19,35 @@ import (
 // BackendName is the name of this implementation.
 const BackendName = "client"
 
-// NewForCommittee creates a new storage client that tracks the specified committee.
-func NewForCommittee(
+// NewForNodesClient creates a new storage client that connects to nodes watched
+// by the provided nodes gRPC client.
+func NewForNodesClient(
 	ctx context.Context,
-	namespace common.Namespace,
-	ident *identity.Identity,
-	nodes committee.NodeDescriptorLookup,
+	client grpc.NodesClient,
 	runtime registry.RuntimeDescriptorProvider,
 ) (api.Backend, error) {
-	committeeClient, err := committee.NewClient(ctx, nodes, committee.WithClientAuthentication(ident))
+	b := &storageClientBackend{
+		ctx:         ctx,
+		logger:      logging.GetLogger("storage/client"),
+		nodesClient: client,
+		runtime:     runtime,
+	}
+	return api.NewMetricsWrapper(b), nil
+}
+
+// NewForNodes creates a new storage client that connects to nodes watched by
+// the provided nodes lookup.
+func NewForNodes(
+	ctx context.Context,
+	ident *identity.Identity,
+	nodes nodes.NodeDescriptorLookup,
+	runtime registry.RuntimeDescriptorProvider,
+) (api.Backend, error) {
+	client, err := grpc.NewNodesClient(ctx, nodes, grpc.WithClientAuthentication(ident))
 	if err != nil {
 		return nil, fmt.Errorf("storage/client: failed to create committee client: %w", err)
 	}
-
-	b := &storageClientBackend{
-		ctx:             ctx,
-		logger:          logging.GetLogger("storage/client"),
-		committeeClient: committeeClient,
-		runtime:         runtime,
-	}
-	return api.NewMetricsWrapper(b), nil
+	return NewForNodesClient(ctx, client, runtime)
 }
 
 // New creates a new storage client that automatically follows a given runtime's storage committee.
@@ -62,24 +73,24 @@ func New(
 		return nil, fmt.Errorf("storage/client: failed to create committee watcher: %w", err)
 	}
 
-	return NewForCommittee(ctx, namespace, ident, committeeWatcher.Nodes(), runtime)
+	return NewForNodes(ctx, ident, committeeWatcher.Nodes(), runtime)
 }
 
-// NewStatic creates a new storage client that only follows a specific storage node. This is mostly
-// useful for tests.
+// NewStatic creates a new storage client that only follows a specific storage node.
+//
+// This is mostly useful for tests.
 func NewStatic(
 	ctx context.Context,
-	namespace common.Namespace,
 	ident *identity.Identity,
 	registryBackend registry.Backend,
 	nodeID signature.PublicKey,
 ) (api.Backend, error) {
-	nw, err := committee.NewNodeDescriptorWatcher(ctx, registryBackend)
+	nw, err := nodes.NewBaseVersionedNodeDescriptorWatcher(ctx, registryBackend)
 	if err != nil {
 		return nil, fmt.Errorf("storage/client: failed to create node descriptor watcher: %w", err)
 	}
 
-	client, err := NewForCommittee(ctx, namespace, ident, nw, nil)
+	client, err := NewForNodes(ctx, ident, nw, nil)
 	if err != nil {
 		return nil, err
 	}
