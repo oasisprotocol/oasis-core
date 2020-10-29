@@ -39,6 +39,9 @@ type NodeDescriptorLookup interface {
 	// LookupTags looks up tags for a given node.
 	LookupTags(id signature.PublicKey) []string
 
+	// GetNodes returns current list of nodes.
+	GetNodes() []*node.Node
+
 	// WatchNodeUpdates subscribes to notifications about node descriptor updates.
 	//
 	// On subscription the current nodes will be sent immediately.
@@ -192,6 +195,17 @@ func (nw *nodeDescriptorWatcher) LookupByPeerID(id signature.PublicKey) *node.No
 	return nw.nodesByPeerID[id]
 }
 
+func (nw *nodeDescriptorWatcher) GetNodes() []*node.Node {
+	nw.RLock()
+	defer nw.RUnlock()
+
+	nodes := make([]*node.Node, 0, len(nw.nodes))
+	for _, v := range nw.nodes {
+		nodes = append(nodes, v)
+	}
+	return nodes
+}
+
 func (nw *nodeDescriptorWatcher) LookupTags(id signature.PublicKey) []string {
 	nw.RLock()
 	defer nw.RUnlock()
@@ -329,6 +343,17 @@ func (f *filteredNodeDescriptorLookup) LookupByPeerID(id signature.PublicKey) *n
 // Implements NodeDescriptorLookup.
 func (f *filteredNodeDescriptorLookup) LookupTags(id signature.PublicKey) []string {
 	return f.base.LookupTags(id)
+}
+
+// Implements NodeDescriptorLookup.
+func (f *filteredNodeDescriptorLookup) GetNodes() (filtered []*node.Node) {
+	for _, v := range f.base.GetNodes() {
+		tags := f.base.LookupTags(v.ID)
+		if f.filter(v, tags) {
+			filtered = append(filtered, v)
+		}
+	}
+	return
 }
 
 // Implements NodeDescriptorLookup.
