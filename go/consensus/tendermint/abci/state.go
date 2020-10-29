@@ -79,9 +79,12 @@ func (s *applicationState) NewContext(mode api.ContextMode, now time.Time) *api.
 
 	var blockCtx *api.BlockContext
 	var state mkvs.Tree
+	blockHeight := int64(s.stateRoot.Version)
 	switch mode {
 	case api.ContextInitChain:
 		state = s.deliverTxTree
+		// Configure block height so that current height will be correctly computed.
+		blockHeight = int64(s.initialHeight) - 1
 	case api.ContextCheckTx:
 		state = s.checkTxTree
 	case api.ContextDeliverTx, api.ContextBeginBlock, api.ContextEndBlock:
@@ -103,7 +106,7 @@ func (s *applicationState) NewContext(mode api.ContextMode, now time.Time) *api.
 		api.NewNopGasAccountant(),
 		s,
 		state,
-		int64(s.stateRoot.Version),
+		blockHeight,
 		blockCtx,
 		int64(s.initialHeight),
 	)
