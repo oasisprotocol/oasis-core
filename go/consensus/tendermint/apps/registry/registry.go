@@ -24,6 +24,7 @@ var _ api.Application = (*registryApplication)(nil)
 
 type registryApplication struct {
 	state api.ApplicationState
+	md    api.MessageDispatcher
 }
 
 func (app *registryApplication) Name() string {
@@ -48,6 +49,7 @@ func (app *registryApplication) Dependencies() []string {
 
 func (app *registryApplication) OnRegister(state api.ApplicationState, md api.MessageDispatcher) {
 	app.state = state
+	app.md = md
 }
 
 func (app *registryApplication) OnCleanup() {
@@ -102,10 +104,6 @@ func (app *registryApplication) ExecuteTx(ctx *api.Context, tx *transaction.Tran
 	default:
 		return registry.ErrInvalidArgument
 	}
-}
-
-func (app *registryApplication) ForeignExecuteTx(ctx *api.Context, other api.Application, tx *transaction.Transaction) error {
-	return nil
 }
 
 func (app *registryApplication) EndBlock(ctx *api.Context, request types.RequestEndBlock) (types.ResponseEndBlock, error) {

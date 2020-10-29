@@ -81,10 +81,6 @@ func (app *keymanagerApplication) ExecuteTx(ctx *tmapi.Context, tx *transaction.
 	}
 }
 
-func (app *keymanagerApplication) ForeignExecuteTx(ctx *tmapi.Context, other tmapi.Application, tx *transaction.Transaction) error {
-	return nil
-}
-
 func (app *keymanagerApplication) EndBlock(ctx *tmapi.Context, request types.RequestEndBlock) (types.ResponseEndBlock, error) {
 	return types.ResponseEndBlock{}, nil
 }

@@ -208,10 +208,6 @@ func (app *schedulerApplication) ExecuteTx(ctx *api.Context, tx *transaction.Tra
 	return fmt.Errorf("tendermint/scheduler: unexpected transaction")
 }
 
-func (app *schedulerApplication) ForeignExecuteTx(ctx *api.Context, other api.Application, tx *transaction.Transaction) error {
-	return nil
-}
-
 func diffValidators(logger *logging.Logger, current, pending map[signature.PublicKey]int64) []types.ValidatorUpdate {
 	var updates []types.ValidatorUpdate
 	for v := range current {

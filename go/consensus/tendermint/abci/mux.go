@@ -562,18 +562,6 @@ func (mux *abciMux) processTx(ctx *api.Context, tx *transaction.Transaction, txS
 		return err
 	}
 
-	// Run ForeignDeliverTx on all other applications so they can
-	// run their post-tx hooks.
-	for _, foreignApp := range mux.appsByLexOrder {
-		if foreignApp == app {
-			continue
-		}
-
-		if err := foreignApp.ForeignExecuteTx(ctx, app, tx); err != nil {
-			return err
-		}
-	}
-
 	return nil
 }
 

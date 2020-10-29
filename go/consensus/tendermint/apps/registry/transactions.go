@@ -7,6 +7,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/entity"
 	"github.com/oasisprotocol/oasis-core/go/common/node"
 	"github.com/oasisprotocol/oasis-core/go/consensus/tendermint/api"
+	registryApi "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/apps/registry/api"
 	registryState "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/apps/registry/state"
 	stakingState "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/apps/staking/state"
 	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
@@ -398,6 +399,14 @@ func (app *registryApplication) registerNode( // nolint: gocyclo
 				"runtime_id", rt.ID,
 			)
 
+			// Notify other interested applications about the new runtime.
+			if err = app.md.Publish(ctx, registryApi.MessageNewRuntimeRegistered, rt); err != nil {
+				ctx.Logger().Error("RegisterNode: failed to dispatch runtime registration message",
+					"err", err,
+				)
+				return err
+			}
+
 			ctx.EmitEvent(api.NewEventBuilder(app.Name()).Attribute(KeyRuntimeRegistered, cbor.Marshal(rt)))
 		case registry.ErrNoSuchRuntime:
 			// Runtime was not suspended.
@@ -577,6 +586,16 @@ func (app *registryApplication) registerRuntime( // nolint: gocyclo
 				"err", err,
 				"entity", rt.EntityID,
 				"account", acctAddr,
+			)
+			return err
+		}
+	}
+
+	// Notify other interested applications about the new runtime.
+	if existingRt == nil && !suspended {
+		if err = app.md.Publish(ctx, registryApi.MessageNewRuntimeRegistered, rt); err != nil {
+			ctx.Logger().Error("RegisterRuntime: failed to dispatch message",
+				"err", err,
 			)
 			return err
 		}

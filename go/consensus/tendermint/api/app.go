@@ -70,13 +70,6 @@ type Application interface {
 	// ExecuteTx executes a transaction.
 	ExecuteTx(*Context, *transaction.Transaction) error
 
-	// ForeignExecuteTx delivers a transaction of another application for
-	// processing.
-	//
-	// This can be used to run post-tx hooks when dependencies exist
-	// between applications.
-	ForeignExecuteTx(*Context, Application, *transaction.Transaction) error
-
 	// InitChain initializes the blockchain with validators and other
 	// info from TendermintCore.
 	//

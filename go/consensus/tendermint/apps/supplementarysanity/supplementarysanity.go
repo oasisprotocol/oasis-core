@@ -70,10 +70,6 @@ func (app *supplementarySanityApplication) ExecuteTx(*api.Context, *transaction.
 	return fmt.Errorf("supplementarysanity: unexpected transaction")
 }
 
-func (app *supplementarySanityApplication) ForeignExecuteTx(*api.Context, api.Application, *transaction.Transaction) error {
-	return nil
-}
-
 func (app *supplementarySanityApplication) InitChain(*api.Context, types.RequestInitChain, *genesis.Document) error {
 	return nil
 }

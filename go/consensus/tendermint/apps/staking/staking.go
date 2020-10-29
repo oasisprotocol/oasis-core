@@ -160,10 +160,6 @@ func (app *stakingApplication) ExecuteTx(ctx *api.Context, tx *transaction.Trans
 	}
 }
 
-func (app *stakingApplication) ForeignExecuteTx(ctx *api.Context, other api.Application, tx *transaction.Transaction) error {
-	return nil
-}
-
 func (app *stakingApplication) EndBlock(ctx *api.Context, request types.RequestEndBlock) (types.ResponseEndBlock, error) {
 	fees := stakingState.BlockFees(ctx)
 	if err := app.disburseFeesP(ctx, stakingState.NewMutableState(ctx.State()), stakingState.BlockProposer(ctx), &fees); err != nil {

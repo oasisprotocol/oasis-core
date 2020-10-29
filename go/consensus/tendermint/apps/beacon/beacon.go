@@ -68,10 +68,6 @@ func (app *beaconApplication) ExecuteTx(ctx *api.Context, tx *transaction.Transa
 	return fmt.Errorf("beacon: unexpected transaction")
 }
 
-func (app *beaconApplication) ForeignExecuteTx(ctx *api.Context, other api.Application, tx *transaction.Transaction) error {
-	return nil
-}
-
 func (app *beaconApplication) EndBlock(ctx *api.Context, req types.RequestEndBlock) (types.ResponseEndBlock, error) {
 	return types.ResponseEndBlock{}, nil
 }

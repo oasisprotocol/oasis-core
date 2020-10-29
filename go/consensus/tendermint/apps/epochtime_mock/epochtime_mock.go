@@ -107,10 +107,6 @@ func (app *epochTimeMockApplication) ExecuteTx(ctx *api.Context, tx *transaction
 	}
 }
 
-func (app *epochTimeMockApplication) ForeignExecuteTx(ctx *api.Context, other api.Application, tx *transaction.Transaction) error {
-	return nil
-}
-
 func (app *epochTimeMockApplication) EndBlock(ctx *api.Context, request types.RequestEndBlock) (types.ResponseEndBlock, error) {
 	return types.ResponseEndBlock{}, nil
 }

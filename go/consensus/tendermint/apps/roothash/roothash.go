@@ -2,7 +2,6 @@
 package roothash
 
 import (
-	"bytes"
 	"fmt"
 
 	"github.com/tendermint/tendermint/abci/types"
@@ -12,7 +11,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
 	"github.com/oasisprotocol/oasis-core/go/consensus/api/transaction"
 	tmapi "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/api"
-	registryapp "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/apps/registry"
+	registryApi "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/apps/registry/api"
 	registryState "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/apps/registry/state"
 	roothashApi "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/apps/roothash/api"
 	roothashState "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/apps/roothash/state"
@@ -61,6 +60,7 @@ func (app *rootHashApplication) OnRegister(state tmapi.ApplicationState, md tmap
 	app.md = md
 
 	// Subscribe to messages emitted by other apps.
+	md.Subscribe(registryApi.MessageNewRuntimeRegistered, app)
 	md.Subscribe(roothashApi.RuntimeMessageNoop, app)
 }
 
@@ -271,6 +271,19 @@ func (app *rootHashApplication) emitEmptyBlock(ctx *tmapi.Context, runtime *root
 
 func (app *rootHashApplication) ExecuteMessage(ctx *tmapi.Context, kind, msg interface{}) error {
 	switch kind {
+	case registryApi.MessageNewRuntimeRegistered:
+		// A new runtime has been registered.
+		if ctx.IsInitChain() {
+			// Ignore messages emitted during InitChain as we handle these separately.
+			return nil
+		}
+		rt := msg.(*registry.Runtime)
+
+		ctx.Logger().Debug("ExecuteMessage: new runtime",
+			"runtime", rt.ID,
+		)
+
+		return app.onNewRuntime(ctx, rt, nil)
 	case roothashApi.RuntimeMessageNoop:
 		// Noop message always succeeds.
 		return nil
@@ -300,36 +313,6 @@ func (app *rootHashApplication) ExecuteTx(ctx *tmapi.Context, tx *transaction.Tr
 	default:
 		return roothash.ErrInvalidArgument
 	}
-}
-
-func (app *rootHashApplication) ForeignExecuteTx(ctx *tmapi.Context, other tmapi.Application, tx *transaction.Transaction) error {
-	switch other.Name() {
-	case registryapp.AppName:
-		for _, ev := range ctx.GetEvents() {
-			if ev.Type != registryapp.EventType {
-				continue
-			}
-
-			for _, pair := range ev.Attributes {
-				if bytes.Equal(pair.GetKey(), registryapp.KeyRuntimeRegistered) {
-					var rt registry.Runtime
-					if err := cbor.Unmarshal(pair.GetValue(), &rt); err != nil {
-						return fmt.Errorf("roothash: failed to deserialize new runtime: %w", err)
-					}
-
-					ctx.Logger().Debug("ForeignDeliverTx: new runtime",
-						"runtime", rt.ID,
-					)
-
-					if err := app.onNewRuntime(ctx, &rt, nil); err != nil {
-						return err
-					}
-				}
-			}
-		}
-	}
-
-	return nil
 }
 
 func (app *rootHashApplication) onNewRuntime(ctx *tmapi.Context, runtime *registry.Runtime, genesis *roothash.Genesis) error {
