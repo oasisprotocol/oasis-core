@@ -5,7 +5,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
 	"github.com/oasisprotocol/oasis-core/go/common/node"
-	"github.com/oasisprotocol/oasis-core/go/runtime/committee"
+	"github.com/oasisprotocol/oasis-core/go/runtime/nodes"
 )
 
 var logger = logging.GetLogger("worker/common/committee/accessctl")
@@ -17,7 +17,7 @@ type AccessPolicy struct {
 
 // AddRulesForCommittee augments the given policy by allowing actions in the current AccessPolicy
 // for the nodes in the given committee.
-func (ap AccessPolicy) AddRulesForCommittee(policy *accessctl.Policy, committee *CommitteeInfo, nodes committee.NodeDescriptorLookup) {
+func (ap AccessPolicy) AddRulesForCommittee(policy *accessctl.Policy, committee *CommitteeInfo, nodes nodes.NodeDescriptorLookup) {
 	for id := range committee.PublicKeys {
 		node := nodes.Lookup(id)
 		if node == nil {

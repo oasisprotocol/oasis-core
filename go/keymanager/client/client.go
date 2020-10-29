@@ -19,8 +19,9 @@ import (
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
 	"github.com/oasisprotocol/oasis-core/go/keymanager/api"
 	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
-	"github.com/oasisprotocol/oasis-core/go/runtime/committee"
 	enclaverpc "github.com/oasisprotocol/oasis-core/go/runtime/enclaverpc/api"
+	"github.com/oasisprotocol/oasis-core/go/runtime/nodes"
+	"github.com/oasisprotocol/oasis-core/go/runtime/nodes/grpc"
 	runtimeRegistry "github.com/oasisprotocol/oasis-core/go/runtime/registry"
 )
 
@@ -43,8 +44,8 @@ type Client struct {
 	initCh      chan struct{}
 	initialized bool
 
-	committeeNodes  committee.NodeDescriptorWatcher
-	committeeClient committee.Client
+	committeeWatcher nodes.VersionedNodeDescriptorWatcher
+	committeeClient  grpc.NodesClient
 
 	logger *logging.Logger
 }
@@ -73,10 +74,10 @@ func (c *Client) CallRemote(ctx context.Context, data []byte) ([]byte, error) {
 			c.logger.Warn("no key manager connection for runtime")
 			return ErrKeyManagerNotAvailable
 		}
-		client := enclaverpc.NewTransportClient(conn)
+		enclaveClient := enclaverpc.NewTransportClient(conn)
 
 		var err error
-		resp, err = client.CallEnclave(ctx, &enclaverpc.CallEnclaveRequest{
+		resp, err = enclaveClient.CallEnclave(ctx, &enclaverpc.CallEnclaveRequest{
 			RuntimeID: c.runtime.ID(),
 			Endpoint:  api.EnclaveRPCEndpoint,
 			Payload:   data,
@@ -102,7 +103,7 @@ func (c *Client) CallRemote(ctx context.Context, data []byte) ([]byte, error) {
 			fallthrough
 		default:
 			// Request failed, communicate that to the node selection policy.
-			c.committeeClient.UpdateNodeSelectionPolicy(committee.NodeSelectionFeedback{Bad: err})
+			c.committeeClient.UpdateNodeSelectionPolicy(grpc.NodeSelectionFeedback{Bad: err})
 			return backoff.Permanent(err)
 		}
 		return nil
@@ -175,8 +176,8 @@ func (c *Client) updateState(status *api.Status) {
 		"id", status.ID,
 	)
 
-	c.committeeNodes.Reset()
-	defer c.committeeNodes.Freeze(0)
+	c.committeeWatcher.Reset()
+	defer c.committeeWatcher.Freeze(0)
 
 	// It's not possible to service requests for this key manager.
 	if !status.IsInitialized || len(status.Nodes) == 0 {
@@ -188,7 +189,7 @@ func (c *Client) updateState(status *api.Status) {
 	}
 
 	for _, nodeID := range status.Nodes {
-		_, err := c.committeeNodes.WatchNode(c.ctx, nodeID)
+		_, err := c.committeeWatcher.WatchNode(c.ctx, nodeID)
 		if err != nil {
 			c.logger.Warn("failed to watch node",
 				"err", err,
@@ -211,29 +212,30 @@ func New(
 	registry registry.Backend,
 	identity *identity.Identity,
 ) (*Client, error) {
-	committeeNodes, err := committee.NewNodeDescriptorWatcher(ctx, registry)
+	committeeNodes, err := nodes.NewBaseVersionedNodeDescriptorWatcher(ctx, registry)
 	if err != nil {
 		return nil, fmt.Errorf("keymanager/client: failed to create node descriptor watcher: %w", err)
 	}
 
-	var opts []committee.ClientOption
+	var opts []grpc.Option
 	if identity != nil {
-		opts = append(opts, committee.WithClientAuthentication(identity))
+		opts = append(opts, grpc.WithClientAuthentication(identity))
 	}
-	committeeClient, err := committee.NewClient(ctx, committeeNodes, opts...)
+	committeeClient, err := grpc.NewNodesClient(ctx, committeeNodes, opts...)
 	if err != nil {
 		return nil, fmt.Errorf("keymanager/client: failed to create committee client: %w", err)
 	}
 
 	c := &Client{
-		runtime:         runtime,
-		backend:         backend,
-		registry:        registry,
-		ctx:             ctx,
-		initCh:          make(chan struct{}),
-		committeeNodes:  committeeNodes,
-		committeeClient: committeeClient,
-		logger:          logging.GetLogger("keymanager/client").With("runtime_id", runtime.ID()),
+		runtime:          runtime,
+		backend:          backend,
+		registry:         registry,
+		ctx:              ctx,
+		initCh:           make(chan struct{}),
+		committeeWatcher: committeeNodes,
+		committeeClient:  committeeClient,
+		logger: logging.GetLogger("keymanager/client").
+			With("runtime_id", runtime.ID()),
 	}
 	go c.worker()
 

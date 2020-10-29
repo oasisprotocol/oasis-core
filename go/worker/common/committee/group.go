@@ -19,7 +19,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/epochtime/api"
 	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
 	"github.com/oasisprotocol/oasis-core/go/roothash/api/commitment"
-	"github.com/oasisprotocol/oasis-core/go/runtime/committee"
+	"github.com/oasisprotocol/oasis-core/go/runtime/nodes"
 	runtimeRegistry "github.com/oasisprotocol/oasis-core/go/runtime/registry"
 	scheduler "github.com/oasisprotocol/oasis-core/go/scheduler/api"
 	storage "github.com/oasisprotocol/oasis-core/go/storage/api"
@@ -101,7 +101,7 @@ type EpochSnapshot struct {
 	executorCommittee *CommitteeInfo
 	storageCommittee  *CommitteeInfo
 
-	nodes committee.NodeDescriptorLookup
+	nodes nodes.VersionedNodeDescriptorWatcher
 }
 
 // GetGroupVersion returns the consensus backend block height of the last
@@ -171,7 +171,7 @@ func (e *EpochSnapshot) GetStorageCommittee() *CommitteeInfo {
 }
 
 // Nodes returns a node descriptor lookup interface.
-func (e *EpochSnapshot) Nodes() committee.NodeDescriptorLookup {
+func (e *EpochSnapshot) Nodes() nodes.NodeDescriptorLookup {
 	return e.nodes
 }
 
@@ -239,7 +239,7 @@ type Group struct {
 	// p2p may be nil.
 	p2p *p2p.P2P
 	// nodes is a node descriptor watcher for all nodes that are part of any of our committees.
-	nodes committee.NodeDescriptorWatcher
+	nodes nodes.VersionedNodeDescriptorWatcher
 	// storage is the storage backend that tracks the current committee.
 	storage storage.ClientBackend
 
@@ -402,7 +402,7 @@ func (g *Group) EpochTransition(ctx context.Context, height int64) error {
 }
 
 // Nodes returns a node descriptor lookup interface that watches all nodes in our committees.
-func (g *Group) Nodes() committee.NodeDescriptorLookup {
+func (g *Group) Nodes() nodes.NodeDescriptorLookup {
 	return g.nodes
 }
 
@@ -558,17 +558,16 @@ func NewGroup(
 	consensus consensus.Backend,
 	p2p *p2p.P2P,
 ) (*Group, error) {
-	nodes, err := committee.NewNodeDescriptorWatcher(ctx, consensus.Registry())
+	nw, err := nodes.NewBaseVersionedNodeDescriptorWatcher(ctx, consensus.Registry())
 	if err != nil {
 		return nil, fmt.Errorf("group: failed to create node watcher: %w", err)
 	}
 
 	// TODO: If the current node is a storage node, always include self (oasis-core#3251).
-	sc, err := storageClient.NewForCommittee(
+	sc, err := storageClient.NewForNodes(
 		ctx,
-		runtime.ID(),
 		identity,
-		committee.NewFilteredNodeLookup(nodes, committee.TagFilter(TagForCommittee(scheduler.KindStorage))),
+		nodes.NewFilteredNodeLookup(nw, nodes.TagFilter(TagForCommittee(scheduler.KindStorage))),
 		runtime,
 	)
 	if err != nil {
@@ -581,7 +580,7 @@ func NewGroup(
 		consensus: consensus,
 		handler:   handler,
 		p2p:       p2p,
-		nodes:     nodes,
+		nodes:     nw,
 		storage:   sc.(storage.ClientBackend),
 		logger:    logging.GetLogger("worker/common/committee/group").With("runtime_id", runtime.ID()),
 	}

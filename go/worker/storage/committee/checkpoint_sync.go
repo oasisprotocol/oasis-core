@@ -14,8 +14,7 @@ import (
 	"github.com/cenkalti/backoff/v4"
 
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
-	"github.com/oasisprotocol/oasis-core/go/runtime/committee"
-	schedulerApi "github.com/oasisprotocol/oasis-core/go/scheduler/api"
+	"github.com/oasisprotocol/oasis-core/go/runtime/nodes/grpc"
 	storageApi "github.com/oasisprotocol/oasis-core/go/storage/api"
 	storageClient "github.com/oasisprotocol/oasis-core/go/storage/client"
 	"github.com/oasisprotocol/oasis-core/go/storage/mkvs/checkpoint"
@@ -62,18 +61,18 @@ func (h *chunkHeap) Pop() interface{} {
 	return ret
 }
 
-// goWithCommittee runs the given operation with all the connections to the storage committee.
-func (n *Node) goWithCommittee(
-	committeeClient committee.Client,
-	fn func(context.Context, *committee.ClientConnWithMeta) error,
+// goWithNodes runs the given operation with all the connections in the provided nodesClient.
+func (n *Node) goWithNodes(
+	nodesClient grpc.NodesClient,
+	fn func(context.Context, *grpc.ConnWithNodeMeta) error,
 ) (
 	context.CancelFunc,
 	chan interface{},
 	error,
 ) {
-	connCh := make(chan []*committee.ClientConnWithMeta)
+	connCh := make(chan []*grpc.ConnWithNodeMeta)
 	connGetter := func() error {
-		conns := committeeClient.GetConnectionsWithMeta()
+		conns := nodesClient.GetConnectionsWithMeta()
 		if len(conns) == 0 {
 			return storageClient.ErrStorageNotAvailable
 		}
@@ -96,7 +95,7 @@ func (n *Node) goWithCommittee(
 
 	for _, conn := range conns {
 		workerGroup.Add(1)
-		go func(conn *committee.ClientConnWithMeta) {
+		go func(conn *grpc.ConnWithNodeMeta) {
 			defer workerGroup.Done()
 			op := func() error {
 				return fn(workerCtx, conn)
@@ -115,7 +114,7 @@ func (n *Node) goWithCommittee(
 
 func (n *Node) nodeWorker(
 	ctx context.Context,
-	conn *committee.ClientConnWithMeta,
+	conn *grpc.ConnWithNodeMeta,
 	chunkDispatchCh chan *checkpoint.ChunkMetadata,
 	chunkReturnCh chan *checkpoint.ChunkMetadata,
 	errorCh chan int,
@@ -190,18 +189,18 @@ func (n *Node) nodeWorker(
 	}
 }
 
-func (n *Node) handleCheckpoint(check *checkpoint.Metadata, committeeClient committee.Client, groupSize uint64) (int, error) {
+func (n *Node) handleCheckpoint(check *checkpoint.Metadata, nodesClient grpc.NodesClient, groupSize uint64) (int, error) {
 	chunkDispatchCh := make(chan *checkpoint.ChunkMetadata)
 	defer close(chunkDispatchCh)
 
 	chunkReturnCh := make(chan *checkpoint.ChunkMetadata, groupSize)
 	errorCh := make(chan int, groupSize)
 
-	worker := func(ctx context.Context, conn *committee.ClientConnWithMeta) error {
+	worker := func(ctx context.Context, conn *grpc.ConnWithNodeMeta) error {
 		return n.nodeWorker(ctx, conn, chunkDispatchCh, chunkReturnCh, errorCh)
 	}
 
-	cancel, doneCh, err := n.goWithCommittee(committeeClient, worker)
+	cancel, doneCh, err := n.goWithNodes(nodesClient, worker)
 	if err != nil {
 		return checkpointStatusBail, fmt.Errorf("can't fetch chunks from committee nodes: %w", err)
 	}
@@ -277,14 +276,14 @@ func (n *Node) handleCheckpoint(check *checkpoint.Metadata, committeeClient comm
 	}
 }
 
-func (n *Node) getCheckpointList(committeeClient committee.Client) ([]*checkpoint.Metadata, error) {
+func (n *Node) getCheckpointList(nodesClient grpc.NodesClient) ([]*checkpoint.Metadata, error) {
 	// Get checkpoint list from all current committee members.
 	listCh := make(chan []*checkpoint.Metadata)
 	req := &checkpoint.GetCheckpointsRequest{
 		Version:   1,
 		Namespace: n.commonNode.Runtime.ID(),
 	}
-	getter := func(ctx context.Context, conn *committee.ClientConnWithMeta) error {
+	getter := func(ctx context.Context, conn *grpc.ConnWithNodeMeta) error {
 		api := storageApi.NewStorageClient(conn.ClientConn)
 		meta, err := api.GetCheckpoints(ctx, req)
 		if err != nil {
@@ -303,7 +302,7 @@ func (n *Node) getCheckpointList(committeeClient committee.Client) ([]*checkpoin
 		return nil
 	}
 
-	cancel, doneCh, err := n.goWithCommittee(committeeClient, getter)
+	cancel, doneCh, err := n.goWithNodes(nodesClient, getter)
 	if err != nil {
 		return nil, err
 	}
@@ -381,31 +380,13 @@ func (n *Node) syncCheckpoints() (*blockSummary, error) {
 	// for errors, driven by remainingRoots.
 	var syncState blockSummary
 
-	// Start following the storage committee.
-	committeeWatcher, err := committee.NewWatcher(
-		n.ctx,
-		n.commonNode.Consensus.Scheduler(),
-		n.commonNode.Consensus.Registry(),
-		n.commonNode.Runtime.ID(),
-		schedulerApi.KindStorage,
-		committee.WithAutomaticEpochTransitions(),
-		committee.WithFilter(committee.IgnoreNodeFilter(n.commonNode.Identity.NodeSigner.Public())),
-	)
-	if err != nil {
-		return nil, fmt.Errorf("can't establish storage committee watcher: %w", err)
-	}
-	committeeClient, err := committee.NewClient(n.ctx, committeeWatcher.Nodes(), committee.WithClientAuthentication(n.commonNode.Identity))
-	if err != nil {
-		return nil, fmt.Errorf("can't create committee client: %w", err)
-	}
-
 	descriptor, err := n.commonNode.Runtime.RegistryDescriptor(n.ctx)
 	if err != nil {
 		return nil, fmt.Errorf("can't get runtime descriptor: %w", err)
 	}
 
 	// Fetch metadata from the current committee.
-	metadata, err := n.getCheckpointList(committeeClient)
+	metadata, err := n.getCheckpointList(n.storageNodesGrpc)
 	if err != nil {
 		return nil, fmt.Errorf("can't get checkpoint list from storage committee: %w", err)
 	}
@@ -432,7 +413,7 @@ func (n *Node) syncCheckpoints() (*blockSummary, error) {
 			doneRoots = []hash.Hash{}
 		}
 
-		status, err := n.handleCheckpoint(check, committeeClient, descriptor.Storage.GroupSize)
+		status, err := n.handleCheckpoint(check, n.storageNodesGrpc, descriptor.Storage.GroupSize)
 		switch status {
 		case checkpointStatusDone:
 			n.logger.Info("successfully restored from checkpoint", "root", check.Root, "mask", mask)

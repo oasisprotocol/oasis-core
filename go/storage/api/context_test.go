@@ -33,4 +33,13 @@ func TestNodePriorityHint(t *testing.T) {
 	nodes = NodePriorityHintFromContext(ctx2)
 	require.Len(nodes, 3, "all node ids must be there")
 	require.EqualValues([]signature.PublicKey{pk1, pk2, pk3}, nodes, "all node ids must be the same")
+
+	ctx3 := WithNodePriorityHintFromMap(ctx, map[signature.PublicKey]bool{
+		pk1: true,
+		pk2: false,
+		pk3: true,
+	})
+	nodes = NodePriorityHintFromContext(ctx3)
+	require.Len(nodes, 2, "node ids must be there")
+	require.ElementsMatch([]signature.PublicKey{pk1, pk3}, nodes, "node ids must be correct")
 }
