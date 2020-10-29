@@ -70,6 +70,7 @@ func NewTestNodeGenesisProvider(identity *identity.Identity) (genesis.Provider, 
 		RootHash: roothash.Genesis{
 			Parameters: roothash.ConsensusParameters{
 				DebugDoNotSuspendRuntimes: true,
+				MaxRuntimeMessages:        32,
 			},
 		},
 		Consensus: consensus.Genesis{

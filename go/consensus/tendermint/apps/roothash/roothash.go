@@ -61,6 +61,7 @@ func (app *rootHashApplication) OnRegister(state tmapi.ApplicationState, md tmap
 
 	// Subscribe to messages emitted by other apps.
 	md.Subscribe(registryApi.MessageNewRuntimeRegistered, app)
+	md.Subscribe(registryApi.MessageRuntimeUpdated, app)
 	md.Subscribe(roothashApi.RuntimeMessageNoop, app)
 }
 
@@ -284,12 +285,30 @@ func (app *rootHashApplication) ExecuteMessage(ctx *tmapi.Context, kind, msg int
 		)
 
 		return app.onNewRuntime(ctx, rt, nil)
+	case registryApi.MessageRuntimeUpdated:
+		// A runtime registration has been updated or a new runtime has been registered.
+		if ctx.IsInitChain() {
+			// Ignore messages emitted during InitChain as we handle these separately.
+			return nil
+		}
+		return app.verifyRuntimeUpdate(ctx, msg.(*registry.Runtime))
 	case roothashApi.RuntimeMessageNoop:
 		// Noop message always succeeds.
 		return nil
 	default:
 		return roothash.ErrInvalidArgument
 	}
+}
+
+func (app *rootHashApplication) verifyRuntimeUpdate(ctx *tmapi.Context, rt *registry.Runtime) error {
+	state := roothashState.NewMutableState(ctx.State())
+
+	params, err := state.ConsensusParameters(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to get consensus parameters: %w", err)
+	}
+
+	return roothash.VerifyRuntimeParameters(ctx.Logger(), rt, params)
 }
 
 func (app *rootHashApplication) ExecuteTx(ctx *tmapi.Context, tx *transaction.Transaction) error {

@@ -51,6 +51,7 @@ func getRuntime(entityID signature.PublicKey, id common.Namespace) *registry.Run
 		Executor: registry.ExecutorParameters{
 			GroupSize:    1,
 			RoundTimeout: 5,
+			MaxMessages:  32,
 		},
 		TxnScheduler: registry.TxnSchedulerParameters{
 			Algorithm:         "simple",

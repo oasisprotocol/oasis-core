@@ -592,13 +592,20 @@ func (app *registryApplication) registerRuntime( // nolint: gocyclo
 	}
 
 	// Notify other interested applications about the new runtime.
-	if existingRt == nil && !suspended {
+	if existingRt == nil {
 		if err = app.md.Publish(ctx, registryApi.MessageNewRuntimeRegistered, rt); err != nil {
 			ctx.Logger().Error("RegisterRuntime: failed to dispatch message",
 				"err", err,
 			)
 			return err
 		}
+	}
+
+	if err = app.md.Publish(ctx, registryApi.MessageRuntimeUpdated, rt); err != nil {
+		ctx.Logger().Error("RegisterRuntime: failed to dispatch message",
+			"err", err,
+		)
+		return err
 	}
 
 	if err = state.SetRuntime(ctx, rt, sigRt, suspended); err != nil {

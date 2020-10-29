@@ -9,6 +9,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
 	"github.com/oasisprotocol/oasis-core/go/common/errors"
+	"github.com/oasisprotocol/oasis-core/go/common/logging"
 	"github.com/oasisprotocol/oasis-core/go/common/pubsub"
 	"github.com/oasisprotocol/oasis-core/go/consensus/api/transaction"
 	"github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/flags"
@@ -53,6 +54,10 @@ var (
 
 	// ErrProposerTimeoutNotAllowed is the error returned when proposer timeout is not allowed.
 	ErrProposerTimeoutNotAllowed = errors.New(ModuleName, 6, "roothash: proposer timeout not allowed")
+
+	// ErrMaxMessagesTooBig is the error returned when the MaxMessages parameter is set to a value
+	// larger than the MaxRuntimeMessages specified in consensus parameters.
+	ErrMaxMessagesTooBig = errors.New(ModuleName, 7, "roothash: max runtime messages is too big")
 
 	// MethodExecutorCommit is the method name for executor commit submission.
 	MethodExecutorCommit = transaction.NewMethodName(ModuleName, "ExecutorCommit", ExecutorCommit{})
@@ -289,6 +294,15 @@ func (g *Genesis) SanityCheck() error {
 		if err := rtg.SanityCheck(true); err != nil {
 			return err
 		}
+	}
+	return nil
+}
+
+// VerifyRuntimeParameters verifies whether the runtime parameters are valid in the context of the
+// roothash service.
+func VerifyRuntimeParameters(logger *logging.Logger, rt *registry.Runtime, params *ConsensusParameters) error {
+	if rt.Executor.MaxMessages > params.MaxRuntimeMessages {
+		return ErrMaxMessagesTooBig
 	}
 	return nil
 }
