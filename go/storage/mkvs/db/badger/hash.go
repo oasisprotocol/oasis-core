@@ -30,6 +30,7 @@ func (h *typedHash) MarshalBinary() (data []byte, err error) {
 // UnmarshalBinary decodes a binary marshaled hash.
 func (h *typedHash) UnmarshalBinary(data []byte) error {
 	if len(data) != typedHashSize {
+		fmt.Printf("\nunexpected typedhash size: got %v, expected %v\n", len(data), typedHashSize)
 		return hash.ErrMalformed
 	}
 

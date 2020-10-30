@@ -50,6 +50,9 @@ var (
 	// ErrInvalidMultipartVersion indicates that a Finalize, NewBatch or Commit was called with a version
 	// that doesn't match the current multipart restore as set with StartMultipartRestore.
 	ErrInvalidMultipartVersion = errors.New(ModuleName, 14, "mkvs: operation called with different version than current multipart version")
+	// ErrUpgradeInProgress indicates that a database upgrade was started by the upgrader tool and the
+	// database is therefore unusable. Run the upgrade tool to finish upgrading.
+	ErrUpgradeInProgress = errors.New(ModuleName, 15, "mkvs: database upgrade in progress")
 )
 
 // Config is the node database backend configuration.

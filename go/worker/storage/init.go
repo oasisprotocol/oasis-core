@@ -51,6 +51,11 @@ const (
 // Flags has the configuration flags.
 var Flags = flag.NewFlagSet("", flag.ContinueOnError)
 
+// GetLocalBackendDBDir returns the database name for local backends.
+func GetLocalBackendDBDir(dataDir, backend string) string {
+	return filepath.Join(dataDir, database.DefaultFileName(backend))
+}
+
 // NewLocalBackend constructs a new Backend based on the configuration flags.
 func NewLocalBackend(
 	dataDir string,
@@ -73,7 +78,7 @@ func NewLocalBackend(
 	)
 	switch cfg.Backend {
 	case database.BackendNameBadgerDB:
-		cfg.DB = filepath.Join(cfg.DB, database.DefaultFileName(cfg.Backend))
+		cfg.DB = GetLocalBackendDBDir(dataDir, cfg.Backend)
 		impl, err = database.New(cfg)
 	default:
 		err = fmt.Errorf("storage: unsupported backend: '%v'", cfg.Backend)

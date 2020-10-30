@@ -74,6 +74,11 @@ func (k *KeyFormat) Size() int {
 	return 1 + k.size
 }
 
+// Prefix returns the key format's prefix byte.
+func (k *KeyFormat) Prefix() byte {
+	return k.prefix
+}
+
 // Encode encodes values into a key.
 //
 // You can pass either the same amount of values as specified in the layout
