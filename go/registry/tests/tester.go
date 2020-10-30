@@ -37,7 +37,11 @@ const (
 	testRuntimeNodeExpiration epochtime.EpochTime = 100
 )
 
-var entityNodeSeed = []byte("testRegistryEntityNodes")
+var (
+	entityNodeSeed = []byte("testRegistryEntityNodes")
+
+	invalidPK = signature.NewBlacklistedPublicKey("0000000000000000000000000000000000000000000000000000000000000000")
+)
 
 // RegistryImplementationTests exercises the basic functionality of a
 // registry backend.
@@ -1082,7 +1086,7 @@ func (ent *TestEntity) NewTestNodes(nCompute, nStorage int, idNonce []byte, runt
 		invNode9 := *nod.Node
 		invNode9.Consensus.Addresses = []node.ConsensusAddress{
 			{
-				// ID: invalid
+				ID:      invalidPK,
 				Address: addr,
 			},
 		}
@@ -1161,9 +1165,9 @@ func (ent *TestEntity) NewTestNodes(nCompute, nStorage int, idNonce []byte, runt
 		}
 		nod.invalidAfter = append(nod.invalidAfter, invalid12)
 
-		// Add a registration with duplicate certificate.
+		// Add a registration with duplicate public keys.
 		invalid13 := &invalidNodeRegistration{
-			descr: "register node with duplicate certificate",
+			descr: "register node with duplicate public keys",
 		}
 		invNode13 := *nod.Node
 		invNode13.ID = invalidIdentity.NodeSigner.Public()
