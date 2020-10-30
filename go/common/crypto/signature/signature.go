@@ -703,18 +703,25 @@ func BuildPublicKeyBlacklist(allowTestKeys bool) {
 	for _, v := range []string{
 		// 0 (order 4).
 		"0000000000000000000000000000000000000000000000000000000000000000",
+		"0000000000000000000000000000000000000000000000000000000000000080",
 		// 1 (order 1).
 		"0100000000000000000000000000000000000000000000000000000000000000",
+		"0100000000000000000000000000000000000000000000000000000000000080",
 		// 2707385501144840649318225287225658788936804267575313519463743609750303402022 (order 8).
 		"26e8958fc2b227b045c3f489f2ef98f0d5dfac05d3c63339b13802886d53fc05",
+		"26e8958fc2b227b045c3f489f2ef98f0d5dfac05d3c63339b13802886d53fc85",
 		// 55188659117513257062467267217118295137698188065244968500265048394206261417927 (order 8).
 		"c7176a703d4dd84fba3c0b760d10670f2a2053fa2c39ccc64ec7fd7792ac037a",
+		"c7176a703d4dd84fba3c0b760d10670f2a2053fa2c39ccc64ec7fd7792ac03fa",
 		// p-1 (order 2).
 		"ecffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7f",
+		"ecffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
 		// p (=0, order 4).
 		"edffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7f",
+		"edffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
 		// p+1 (=1, order 1).
 		"eeffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7f",
+		"eeffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
 	} {
 		NewBlacklistedPublicKey(v)
 	}
