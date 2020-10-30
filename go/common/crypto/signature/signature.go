@@ -171,9 +171,6 @@ func (k PublicKey) IsValid() bool {
 	if k.IsBlacklisted() {
 		return false
 	}
-	if innerPk := ed25519.PublicKey(k[:]); innerPk.IsSmallOrder() {
-		return false
-	}
 	return true
 }
 

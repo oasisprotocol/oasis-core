@@ -103,14 +103,6 @@ func signNodeOrDie(signers []signature.Signer, n *node.Node) *node.MultiSignedNo
 	return signedNode
 }
 
-func hex2pk(str string) signature.PublicKey {
-	var pk signature.PublicKey
-	if err := pk.UnmarshalHex(str); err != nil {
-		panic(err)
-	}
-	return pk
-}
-
 func hex2ns(str string, force bool) common.Namespace {
 	var ns common.Namespace
 	if force {
@@ -152,7 +144,8 @@ func TestGenesisSanityCheck(t *testing.T) {
 	var validNS common.Namespace
 	_ = validNS.UnmarshalBinary(validPK[:])
 
-	invalidPK := hex2pk("c7176a703d4dd84fba3c0b760d10670f2a2053fa2c39ccc64ec7fd7792ac037a")
+	invalidPK := memorySigner.NewTestSigner("invalid genesis sanity checks signer").Public()
+	require.NoError(invalidPK.Blacklist(), "blacklist invalid signer")
 	unknownPK := memorySigner.NewTestSigner("unknown genesis sanity checks signer").Public()
 
 	signature.BuildPublicKeyBlacklist(true)
