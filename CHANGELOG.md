@@ -12,6 +12,76 @@ The format is inspired by [Keep a Changelog].
 
 <!-- TOWNCRIER -->
 
+## 20.12 (2020-11-03)
+
+| Protocol          | Version   |
+|:------------------|:---------:|
+| Consensus         | 2.0.0     |
+| Runtime Host      | 1.0.0     |
+| Runtime Committee | 1.0.0     |
+
+### Removals and Breaking Changes
+
+- go/common/crypto: Bump ed25519 version
+  ([#3458](https://github.com/oasisprotocol/oasis-core/issues/3458),
+   [#3470](https://github.com/oasisprotocol/oasis-core/issues/3470),
+   [#3471](https://github.com/oasisprotocol/oasis-core/issues/3471))
+
+### Configuration Changes
+
+- go/runtime/scheduling: Max queue size flag rename
+  ([#3434](https://github.com/oasisprotocol/oasis-core/issues/3434))
+
+  - `worker.executor.schedule_max_queue_size` ->
+  `worker.executor.schedule_max_tx_pool_size`
+
+- go/runtime/client: Add max transaction age
+  ([#3443](https://github.com/oasisprotocol/oasis-core/issues/3443))
+
+  Added `runtime.client.max_transaction_age` flag to configure number of
+  consensus blocks after which a submitted runtime transaction is considered
+  expired. Expired transactions are dropped by the client.
+
+### Features
+
+- go/runtime/scheduler: Switch to an ordered queue tx pool implementation
+  ([#3434](https://github.com/oasisprotocol/oasis-core/issues/3434))
+
+### Bug Fixes
+
+- go/runtime/client: Runtime client should retry processing any failed blocks
+  ([#3412](https://github.com/oasisprotocol/oasis-core/issues/3412))
+
+- go/storage/client: Retry `ErrNodeNotFound` errors on write requests
+  ([#3424](https://github.com/oasisprotocol/oasis-core/issues/3424))
+
+- go/worker/common: check if active epoch exists in HandlePeerMsg
+  ([#3432](https://github.com/oasisprotocol/oasis-core/issues/3432))
+
+  Fixes nil pointer dereference that can happen if the executor node tries to
+  publish a message before it is synced
+
+- go/runtime/client: Wait for initial consensus block and group version
+  ([#3443](https://github.com/oasisprotocol/oasis-core/issues/3443))
+
+  Before, the runtime client would publish invalid messages before obtaining the
+  initial group version. The messages were correctly retired upon receiving the
+  group version, but this resulted in needless messages.
+
+- Storage node should update access control policy on new node registrations
+  ([#3453](https://github.com/oasisprotocol/oasis-core/issues/3453))
+
+  Before, the storage node only updated policy when existing nodes updated
+  registrations or committee changed. This missed the case when new storage
+  node registered mid-epoch.
+
+- rust: Bump futures to 0.3.7
+  ([#3460](https://github.com/oasisprotocol/oasis-core/issues/3460))
+
+  Fixes [RUSTSEC-2020-0059].
+
+  [RUSTSEC-2020-0059]: https://rustsec.org/advisories/RUSTSEC-2020-0059
+
 ## 20.11.3 (2020-10-16)
 
 | Protocol          | Version   |
