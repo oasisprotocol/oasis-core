@@ -273,7 +273,7 @@ func NewNode(
 	n.ctx, n.ctxCancel = context.WithCancel(context.Background())
 
 	// Create a new storage client that will be used for remote sync.
-	// This storage client connects to all registered nodes for the committee.
+	// This storage client connects to all registered storage nodes for the runtime.
 	nl, err := nodes.NewRuntimeNodeLookup(
 		n.ctx,
 		n.commonNode.Consensus.Registry(),

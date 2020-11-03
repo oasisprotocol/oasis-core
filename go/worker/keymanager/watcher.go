@@ -30,7 +30,7 @@ func (knw *kmNodeWatcher) watchNodes() {
 	}
 	defer nodesSub.Close()
 
-	watcher, err := nodes.NewBaseVersionedNodeDescriptorWatcher(knw.w.ctx, knw.registry)
+	watcher, err := nodes.NewVersionedNodeDescriptorWatcher(knw.w.ctx, knw.registry)
 	if err != nil {
 		knw.w.logger.Error("worker/keymanager: failed to create node desc watcher",
 			"err", err,

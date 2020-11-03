@@ -429,6 +429,17 @@ func (nc *nodesClient) refreshConnectionLocked(id signature.PublicKey) {
 	}
 }
 
+func (nc *nodesClient) updateNodeSelectionPolicyLocked() {
+	nodes := make([]signature.PublicKey, 0, len(nc.conns))
+	for id := range nc.conns {
+		nodes = append(nodes, id)
+	}
+	nc.logger.Debug("updating node selection policy",
+		"nodes", len(nodes),
+	)
+	nc.nodeSelectionPolicy.UpdateNodes(nodes)
+}
+
 func (nc *nodesClient) worker(ctx context.Context, ch <-chan *nodes.NodeUpdate, sub pubsub.ClosableSubscription) {
 	defer sub.Close()
 
@@ -520,14 +531,7 @@ func (nc *nodesClient) worker(ctx context.Context, ch <-chan *nodes.NodeUpdate, 
 
 					// Update node selection policy.
 					// XXX: could check if this is a new node, and only update in that case.
-					nodes := make([]signature.PublicKey, 0, len(nc.conns))
-					for id := range nc.conns {
-						nodes = append(nodes, id)
-					}
-					nc.logger.Debug("updating node selection policy",
-						"nodes", len(nodes),
-					)
-					nc.nodeSelectionPolicy.UpdateNodes(nodes)
+					nc.updateNodeSelectionPolicyLocked()
 
 				case u.Delete != nil:
 					nc.logger.Debug("removing node connection",
@@ -545,14 +549,7 @@ func (nc *nodesClient) worker(ctx context.Context, ch <-chan *nodes.NodeUpdate, 
 					nc.deleteConnectionLocked(*u.Delete)
 
 					// Update node selection policy.
-					nodes := make([]signature.PublicKey, 0, len(nc.conns))
-					for id := range nc.conns {
-						nodes = append(nodes, id)
-					}
-					nc.logger.Debug("updating node selection policy",
-						"nodes", len(nodes),
-					)
-					nc.nodeSelectionPolicy.UpdateNodes(nodes)
+					nc.updateNodeSelectionPolicyLocked()
 
 				default:
 					nc.logger.Warn("ignoring unknown node update",

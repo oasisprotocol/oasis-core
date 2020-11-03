@@ -202,7 +202,7 @@ func NewWatcher(
 	kind scheduler.CommitteeKind,
 	options ...WatcherOption,
 ) (Watcher, error) {
-	nw, err := nodes.NewBaseVersionedNodeDescriptorWatcher(ctx, registry)
+	nw, err := nodes.NewVersionedNodeDescriptorWatcher(ctx, registry)
 	if err != nil {
 		return nil, fmt.Errorf("committee: failed to create node descriptor watcher: %w", err)
 	}
