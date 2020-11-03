@@ -11,9 +11,9 @@ replace (
 	// https://github.com/spf13/cobra/issues/1091
 	github.com/gorilla/websocket => github.com/gorilla/websocket v1.4.2
 
-	github.com/tendermint/tendermint => github.com/oasisprotocol/tendermint v0.34.0-rc5-oasis3
-	golang.org/x/crypto/curve25519 => github.com/oasisprotocol/ed25519/extra/x25519 v0.0.0-20201030211050-cbed0688bd01
-	golang.org/x/crypto/ed25519 => github.com/oasisprotocol/ed25519 v0.0.0-20201030211050-cbed0688bd01
+	github.com/tendermint/tendermint => github.com/oasisprotocol/tendermint v0.34.0-rc5-oasis4
+	golang.org/x/crypto/curve25519 => github.com/oasisprotocol/ed25519/extra/x25519 v0.0.0-20201103162138-a1dadbe24dd5
+	golang.org/x/crypto/ed25519 => github.com/oasisprotocol/ed25519 v0.0.0-20201103162138-a1dadbe24dd5
 )
 
 require (
@@ -39,7 +39,7 @@ require (
 	github.com/libp2p/go-libp2p-pubsub v0.3.6
 	github.com/multiformats/go-multiaddr v0.3.1
 	github.com/oasisprotocol/deoxysii v0.0.0-20200527154044-851aec403956
-	github.com/oasisprotocol/ed25519 v0.0.0-20201030211050-cbed0688bd01
+	github.com/oasisprotocol/ed25519 v0.0.0-20201103162138-a1dadbe24dd5
 	github.com/opentracing/opentracing-go v1.2.0
 	github.com/prometheus/client_golang v1.8.0
 	github.com/prometheus/common v0.14.0
