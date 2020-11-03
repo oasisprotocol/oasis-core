@@ -513,6 +513,7 @@ func RegisterScenarios() error {
 		ByzantineExecutorSchedulerStraggler,
 		// Storage sync test.
 		StorageSync,
+		StorageSyncFromRegistered,
 		// Sentry test.
 		Sentry,
 		SentryEncryption,

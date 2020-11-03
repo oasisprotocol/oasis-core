@@ -85,7 +85,7 @@ func NewStatic(
 	registryBackend registry.Backend,
 	nodeID signature.PublicKey,
 ) (api.Backend, error) {
-	nw, err := nodes.NewBaseVersionedNodeDescriptorWatcher(ctx, registryBackend)
+	nw, err := nodes.NewVersionedNodeDescriptorWatcher(ctx, registryBackend)
 	if err != nil {
 		return nil, fmt.Errorf("storage/client: failed to create node descriptor watcher: %w", err)
 	}

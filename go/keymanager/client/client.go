@@ -212,7 +212,7 @@ func New(
 	registry registry.Backend,
 	identity *identity.Identity,
 ) (*Client, error) {
-	committeeNodes, err := nodes.NewBaseVersionedNodeDescriptorWatcher(ctx, registry)
+	committeeNodes, err := nodes.NewVersionedNodeDescriptorWatcher(ctx, registry)
 	if err != nil {
 		return nil, fmt.Errorf("keymanager/client: failed to create node descriptor watcher: %w", err)
 	}

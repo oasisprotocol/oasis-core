@@ -252,12 +252,11 @@ func (nw *versionedNodeDescriptorWatcher) Versioned() bool {
 	return true
 }
 
-// NewBaseVersionedNodeDescriptorWatcher creates a new base versioned node descriptor watcher.
+// NewVersionedNodeDescriptorWatcher creates a new base versioned node descriptor watcher.
 //
-// The base watcher will only track nodes that will be explicitly marked to watch
+// This watcher will only track nodes that will be explicitly marked to watch
 // via WatchNode/WatchNodeWithTags methods.
-// TODO: better name?
-func NewBaseVersionedNodeDescriptorWatcher(ctx context.Context, registry registry.Backend) (VersionedNodeDescriptorWatcher, error) {
+func NewVersionedNodeDescriptorWatcher(ctx context.Context, registry registry.Backend) (VersionedNodeDescriptorWatcher, error) {
 	// Subscribe to node updates.
 	ch, sub, err := registry.WatchNodes(ctx)
 	if err != nil {
