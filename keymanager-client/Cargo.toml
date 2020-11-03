@@ -11,7 +11,7 @@ oasis-core-keymanager-api-common = { path = "../keymanager-api-common" }
 anyhow = "1.0"
 futures = "0.1.25"
 io-context = "0.2.0"
-lru = "0.6.0"
+lru = "0.6.1"
 
 [target.'cfg(not(target_env = "sgx"))'.dependencies]
 grpcio = "0.4.6"
