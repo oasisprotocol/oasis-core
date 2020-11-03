@@ -130,7 +130,10 @@ func (t *tree) ApplyWriteLog(ctx context.Context, wl writelog.Iterator) error {
 		if entry.Value == nil {
 			err = t.Remove(ctx, entry.Key)
 		} else {
-			err = t.Insert(ctx, entry.Key, entry.Value)
+			// Set the force flag -- if the value is present in the write log, even if it existed
+			// before, we should treat it as if it was created in this version since the write log
+			// producer certainly treated it as such (otherwise it wouldn't be included).
+			err = t.insert(ctx, entry.Key, entry.Value, true)
 		}
 		if err != nil {
 			return err

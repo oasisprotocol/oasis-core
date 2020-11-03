@@ -86,21 +86,29 @@ impl Drop for ProtocolServer {
 
 impl Driver for ProtocolServer {
     fn apply(&self, write_log: &WriteLog, root_hash: Hash, namespace: Namespace, version: u64) {
-        self.apply_existing(write_log, Hash::empty_hash(), root_hash, namespace, version)
+        self.apply_existing(
+            write_log,
+            Hash::empty_hash(),
+            version,
+            root_hash,
+            version,
+            namespace,
+        )
     }
 
     fn apply_existing(
         &self,
         write_log: &WriteLog,
         existing_root: Hash,
+        existing_version: u64,
         root_hash: Hash,
-        namespace: Namespace,
         version: u64,
+        namespace: Namespace,
     ) {
         self.client
             .apply(&rpc::ApplyRequest {
                 namespace,
-                src_round: version,
+                src_round: existing_version,
                 src_root: existing_root,
                 dst_round: version,
                 dst_root: root_hash,

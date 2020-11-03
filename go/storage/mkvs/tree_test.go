@@ -2027,6 +2027,56 @@ func testLargeUpdates(t *testing.T, ndb db.NodeDB, factory NodeDBFactory) {
 	require.NoError(t, err, "Finalize")
 }
 
+func testWriteLogInsertRemoveDifferentRound(t *testing.T, ndb db.NodeDB, factory NodeDBFactory) {
+	require := require.New(t)
+	ctx := context.Background()
+	tree := New(nil, ndb)
+
+	// Version 0.
+
+	// Insert some keys.
+	keys, values := generateKeyValuePairs()
+	for i := range keys {
+		err := tree.Insert(ctx, keys[i], values[i])
+		require.NoError(err, "Insert")
+	}
+
+	_, rootHash1, err := tree.Commit(ctx, testNs, 0)
+	require.NoError(err, "Commit")
+
+	// Version 1.
+
+	// Now delete all the keys.
+	for _, key := range keys {
+		err = tree.Remove(ctx, key)
+		require.NoError(err, "Remove")
+	}
+
+	// And then add them back.
+	for i := range keys {
+		err = tree.Insert(ctx, keys[i], values[i])
+		require.NoError(err, "Insert")
+	}
+
+	writeLog, rootHash2, err := tree.Commit(ctx, testNs, 1)
+	require.NoError(err, "Commit")
+
+	// If we apply the resulting write log to the root in version 0 we must get the same root.
+	tree = NewWithRoot(nil, ndb, node.Root{
+		Namespace: testNs,
+		Version:   0,
+		Hash:      rootHash1,
+	})
+	err = tree.ApplyWriteLog(ctx, writelog.NewStaticIterator(writeLog))
+	require.NoError(err, "ApplyWriteLog")
+	_, err = tree.CommitKnown(ctx, node.Root{
+		Namespace: testNs,
+		Version:   1,
+		Hash:      rootHash2,
+	})
+	require.NoError(err, "CommitKnown")
+}
+
 func testBackend(
 	t *testing.T,
 	initBackend func(t *testing.T) (NodeDBFactory, func()),
@@ -2073,6 +2123,7 @@ func testBackend(
 		{"LargeUpdates", testLargeUpdates},
 		{"Errors", testErrors},
 		{"IncompatibleDB", testIncompatibleDB},
+		{"WriteLogInsertRemoveDifferentRound", testWriteLogInsertRemoveDifferentRound},
 	}
 
 	skipMap := make(map[string]bool, len(skipTests))

@@ -17,9 +17,10 @@ pub trait Driver {
         &self,
         write_log: &WriteLog,
         existing_root: Hash,
+        existing_version: u64,
         root_hash: Hash,
-        namespace: Namespace,
         version: u64,
+        namespace: Namespace,
     );
 }
 

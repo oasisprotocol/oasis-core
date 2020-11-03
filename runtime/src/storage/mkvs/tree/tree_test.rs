@@ -853,7 +853,7 @@ fn test_syncer_writelog_remove() {
         Tree::commit(&mut tree, Context::background(), Default::default(), 0).expect("commit");
     // Submit the write log to the protocol server. This will fail in case the server interprets the
     // write log differently.
-    server.apply_existing(&write_log, previous_hash, hash, Default::default(), 0);
+    server.apply_existing(&write_log, previous_hash, 0, hash, 0, Default::default());
 }
 
 #[test]
@@ -1003,7 +1003,7 @@ fn test_special_case_from_json(fixture: &'static str) {
     let mut commit_remote = |tree: &mut Tree, remote_tree: &mut Option<Tree>| {
         let (write_log, hash) =
             Tree::commit(tree, Context::background(), Default::default(), 0).expect("commit");
-        server.apply_existing(&write_log, root, hash, Default::default(), 0);
+        server.apply_existing(&write_log, root, 0, hash, 0, Default::default());
 
         remote_tree.replace(
             Tree::make()
@@ -1127,4 +1127,40 @@ fn test_special_case_4() {
 #[test]
 fn test_special_case_5() {
     test_special_case_from_json("case-5.json")
+}
+
+#[test]
+fn test_writelog_insert_remove_different_round() {
+    let server = ProtocolServer::new();
+
+    let mut tree = Tree::make()
+        .with_capacity(0, 0)
+        .new(Box::new(NoopReadSyncer));
+
+    // Insert some keys.
+    let (keys, values) = generate_key_value_pairs();
+    for i in 0..keys.len() {
+        tree.insert(Context::background(), &keys[i], &values[i])
+            .expect("insert");
+    }
+
+    let (write_log, hash1) =
+        Tree::commit(&mut tree, Context::background(), Default::default(), 0).expect("commit");
+    server.apply(&write_log, hash1, Default::default(), 0);
+
+    // Now delete all the keys.
+    for i in 0..keys.len() {
+        tree.remove(Context::background(), &keys[i])
+            .expect("remove");
+    }
+
+    // And then add them back.
+    for i in 0..keys.len() {
+        tree.insert(Context::background(), &keys[i], &values[i])
+            .expect("insert");
+    }
+
+    let (write_log, hash2) =
+        Tree::commit(&mut tree, Context::background(), Default::default(), 1).expect("commit");
+    server.apply_existing(&write_log, hash1, 0, hash2, 1, Default::default());
 }
