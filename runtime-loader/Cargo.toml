@@ -10,7 +10,7 @@ enclave-runner = "0.4.0"
 sgxs-loaders = "0.2.2"
 clap = "2.29.1"
 failure = "0.1.5"
-futures = { version = "0.3", features = ["compat", "io-compat"] }
+futures = { version = "0.3.7", features = ["compat", "io-compat"] }
 tokio = { version = "0.2", features = ["full"] }
 
 [[bin]]

@@ -86,32 +86,6 @@ func TestContext(t *testing.T) {
 	require.NoError(err, "PrepareSignerMessage should work with unregisered context (bypassed)")
 }
 
-func TestBlacklist(t *testing.T) {
-	require := require.New(t)
-
-	pkHex := "badfffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
-	pk2Hex := "badbadffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
-
-	var pk, pk2 PublicKey
-
-	pk = NewPublicKey(pkHex)
-	require.True(pk.IsValid(), "test key should initially be valid")
-	require.False(pk.IsBlacklisted(), "test key should not initially be blacklisted")
-
-	err := pk.Blacklist()
-	require.NoError(err, "adding test key to blacklist should not fail")
-	require.True(pk.IsBlacklisted(), "test key should now be blacklisted")
-	require.False(pk.IsValid(), "test key should now be invalid")
-
-	require.Panics(func() { NewBlacklistedPublicKey(pkHex) },
-		"trying to blacklist the same public key twice should panic",
-	)
-
-	require.NotPanics(func() { pk2 = NewBlacklistedPublicKey(pk2Hex) })
-	require.True(pk2.IsBlacklisted(), "test key 2 should be blacklisted")
-	require.False(pk2.IsValid(), "test key 2 should be invalid")
-}
-
 func TestSignerRoles(t *testing.T) {
 	require := require.New(t)
 
