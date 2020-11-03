@@ -1,10 +1,4 @@
-use std::{
-    cell::RefCell,
-    collections::BTreeMap,
-    fmt,
-    rc::Rc,
-    sync::{Arc, Mutex},
-};
+use std::{cell::RefCell, collections::BTreeMap, fmt, rc::Rc};
 
 use crate::storage::mkvs::{cache::*, sync::*, tree::*};
 
@@ -53,8 +47,10 @@ impl Options {
 pub struct Tree {
     pub(crate) cache: RefCell<Box<LRUCache>>,
     pub(crate) pending_write_log: BTreeMap<Key, PendingLogEntry>,
-    pub(crate) lock: Arc<Mutex<isize>>,
 }
+
+// Tree is Send as long as ownership of internal Rcs cannot leak out via any of its methods.
+unsafe impl Send for Tree {}
 
 impl Tree {
     /// Construct a new tree instance using the given read syncer and options struct.
@@ -66,7 +62,6 @@ impl Tree {
                 read_syncer,
             )),
             pending_write_log: BTreeMap::new(),
-            lock: Arc::new(Mutex::new(0)),
         };
 
         if let Some(root) = opts.root {

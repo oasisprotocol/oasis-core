@@ -118,7 +118,7 @@ impl From<Vec<u8>> for Prefix {
 }
 
 /// Merklized key-value store.
-pub trait MKVS: Send + Sync {
+pub trait MKVS {
     /// Fetch entry with given key.
     fn get(&self, ctx: Context, key: &[u8]) -> Option<Vec<u8>>;
 
