@@ -18,7 +18,7 @@ type Worker struct {
 	enabled bool
 
 	scheduleCheckTxEnabled bool
-	scheduleMaxQueueSize   uint64
+	scheduleMaxTxPoolSize  uint64
 	scheduleTxCacheSize    uint64
 
 	commonWorker *workerCommon.Worker
@@ -149,7 +149,7 @@ func (w *Worker) registerRuntime(commonNode *committeeCommon.Node) error {
 	}
 
 	// Create committee node for the given runtime.
-	node, err := committee.NewNode(commonNode, w.commonWorker.GetConfig(), rp, w.scheduleCheckTxEnabled, w.scheduleMaxQueueSize, w.scheduleTxCacheSize)
+	node, err := committee.NewNode(commonNode, w.commonWorker.GetConfig(), rp, w.scheduleCheckTxEnabled, w.scheduleMaxTxPoolSize, w.scheduleTxCacheSize)
 	if err != nil {
 		return err
 	}
@@ -170,7 +170,7 @@ func newWorker(
 	commonWorker *workerCommon.Worker,
 	registration *registration.Worker,
 	scheduleCheckTxEnabled bool,
-	scheduleMaxQueueSize uint64,
+	scheduleMaxTxPoolSize uint64,
 	scheduleTxCacheSize uint64,
 ) (*Worker, error) {
 	ctx, cancelCtx := context.WithCancel(context.Background())
@@ -179,7 +179,7 @@ func newWorker(
 		enabled:                enabled,
 		commonWorker:           commonWorker,
 		scheduleCheckTxEnabled: scheduleCheckTxEnabled,
-		scheduleMaxQueueSize:   scheduleMaxQueueSize,
+		scheduleMaxTxPoolSize:  scheduleMaxTxPoolSize,
 		scheduleTxCacheSize:    scheduleTxCacheSize,
 		registration:           registration,
 		runtimes:               make(map[common.Namespace]*committee.Node),

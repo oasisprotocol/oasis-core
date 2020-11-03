@@ -26,6 +26,8 @@ var (
 	ErrNotFound = errors.New(ModuleName, 1, "client: not found")
 	// ErrInternal is an error returned when an unspecified internal error occurs.
 	ErrInternal = errors.New(ModuleName, 2, "client: internal error")
+	// ErrTransactionExpired is an error returned when transaction expired.
+	ErrTransactionExpired = errors.New(ModuleName, 3, "client: transaction expired")
 )
 
 // RuntimeClient is the runtime client interface.

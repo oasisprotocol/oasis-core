@@ -40,7 +40,7 @@ type Scheduler interface {
 	Flush(force bool) error
 
 	// UnscheduledSize returns number of unscheduled items.
-	UnscheduledSize() int
+	UnscheduledSize() uint64
 
 	// IsQueued returns if a transaction is queued.
 	IsQueued(hash.Hash) bool

@@ -768,6 +768,7 @@ func init() {
 		compute.Flags,
 		p2p.Flags,
 		registration.Flags,
+		runtimeClient.Flags,
 		executor.Flags,
 		workerCommon.Flags,
 		workerStorage.Flags,
