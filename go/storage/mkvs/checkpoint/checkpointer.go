@@ -156,6 +156,15 @@ func (c *checkpointer) maybeCheckpoint(ctx context.Context, version uint64, para
 	}
 	sort.Slice(cpVersions, func(i, j int) bool { return cpVersions[i] < cpVersions[j] })
 
+	// Make sure to not start earlier than the earliest version.
+	earlyVersion, err := c.ndb.GetEarliestVersion(ctx)
+	if err != nil {
+		return fmt.Errorf("checkpointer: failed to get earliest version: %w", err)
+	}
+	if lastCheckpointVersion < earlyVersion {
+		lastCheckpointVersion = earlyVersion
+	}
+
 	// Checkpoint any missing versions.
 	cpInterval := params.Interval
 	for cpVersion := lastCheckpointVersion + cpInterval; cpVersion < version; cpVersion = cpVersion + cpInterval {
