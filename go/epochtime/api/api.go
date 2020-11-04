@@ -76,6 +76,15 @@ type ConsensusParameters struct {
 	DebugMockBackend bool `json:"debug_mock_backend,omitempty"`
 }
 
+// GetInitialEpoch returns the initial epoch based on the given genesis document.
+func (g *Genesis) GetInitialEpoch(height int64) EpochTime {
+	if g.Parameters.DebugMockBackend {
+		// Mock backend always starts with zero.
+		return 0
+	}
+	return g.Base + EpochTime(height/g.Parameters.Interval)
+}
+
 // SanityCheck does basic sanity checking on the genesis state.
 func (g *Genesis) SanityCheck() error {
 	unsafeFlags := g.Parameters.DebugMockBackend
