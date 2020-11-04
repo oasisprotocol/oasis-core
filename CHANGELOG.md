@@ -12,6 +12,19 @@ The format is inspired by [Keep a Changelog].
 
 <!-- TOWNCRIER -->
 
+## 20.12.1 (2020-11-04)
+
+| Protocol          | Version   |
+|:------------------|:---------:|
+| Consensus         | 2.0.0     |
+| Runtime Host      | 1.0.0     |
+| Runtime Committee | 1.0.0     |
+
+### Bug Fixes
+
+- go/genesis: Fix epoch-based sanity checks
+  ([#3477](https://github.com/oasisprotocol/oasis-core/issues/3477))
+
 ## 20.12 (2020-11-03)
 
 | Protocol          | Version   |
