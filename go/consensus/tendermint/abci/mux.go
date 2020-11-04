@@ -4,10 +4,8 @@ package abci
 import (
 	"bytes"
 	"context"
-	"crypto/sha512"
 	"encoding/base64"
 	"encoding/hex"
-	"encoding/json"
 	"fmt"
 	"math"
 	"sort"
@@ -290,28 +288,20 @@ func (mux *abciMux) InitChain(req types.RequestInitChain) types.ResponseInitChai
 		panic("mux: invalid genesis application state")
 	}
 
-	b, _ := json.Marshal(st)
-	mux.logger.Debug("Genesis ABCI application state",
-		"state", string(b),
-	)
-
 	mux.currentTime = st.Time
 
 	if st.Height != req.InitialHeight || uint64(st.Height) != mux.state.initialHeight {
 		panic(fmt.Errorf("mux: inconsistent initial height (genesis: %d abci: %d state: %d)", st.Height, req.InitialHeight, mux.state.initialHeight))
 	}
 
-	// Stick the digest of the genesis block (the RequestInitChain) into
-	// the state.
+	// Stick the digest of the genesis document into the state.
 	//
 	// This serves to keep bad things from happening if absolutely
 	// nothing writes to the state till the Commit() call, along with
 	// clearly separating chain instances based on the initialization
 	// state, forever.
-	tmp := bytes.NewBuffer(nil)
-	_ = types.WriteMessage(&req, tmp)
-	genesisDigest := sha512.Sum512_256(tmp.Bytes())
-	err = mux.state.deliverTxTree.Insert(mux.state.ctx, []byte(stateKeyGenesisDigest), genesisDigest[:])
+	chainContext := st.ChainContext()
+	err = mux.state.deliverTxTree.Insert(mux.state.ctx, []byte(stateKeyGenesisDigest), []byte(chainContext))
 	if err != nil {
 		panic(err)
 	}
