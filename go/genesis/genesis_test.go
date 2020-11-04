@@ -273,6 +273,8 @@ func TestGenesisSanityCheck(t *testing.T) {
 	require.Error(d.SanityCheck(), "empty chain ID should be invalid")
 
 	d = *testDoc
+	d.EpochTime.Parameters.DebugMockBackend = false
+	d.EpochTime.Parameters.Interval = 600
 	d.EpochTime.Base = 10
 	d.HaltEpoch = 5
 	require.Error(d.SanityCheck(), "halt epoch in the past should be invalid")
