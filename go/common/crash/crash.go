@@ -67,7 +67,10 @@ var crashGlobal *Crasher
 
 func init() {
 	crashGlobal = New(CrasherOptions{
-		CallerSkip: 1,
+		// Skip 2 stack frames to get the correct caller information.
+		// 2 since the global crasher is never invoked directly, but via the
+		// Here() function.
+		CallerSkip: 2,
 		CLIPrefix:  defaultCLIPrefix,
 	})
 }
