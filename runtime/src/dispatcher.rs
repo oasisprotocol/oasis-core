@@ -35,7 +35,7 @@ use crate::{
     storage::{
         mkvs::{
             sync::{HostReadSyncer, NoopReadSyncer},
-            Root, Tree,
+            OverlayTree, Root, Tree,
         },
         StorageContext,
     },
@@ -321,7 +321,8 @@ impl Dispatcher {
             protocol.clone(),
         ));
         let txn_ctx = TxnContext::new(ctx.clone(), &block.header, check_only);
-        match StorageContext::enter(&mut cache.mkvs, untrusted_local.clone(), || {
+        let mut overlay = OverlayTree::new(&mut cache.mkvs);
+        match StorageContext::enter(&mut overlay, untrusted_local.clone(), || {
             txn_dispatcher.dispatch_batch(&inputs, txn_ctx)
         }) {
             Err(error) => {
@@ -347,14 +348,14 @@ impl Dispatcher {
                         .unwrap();
                 } else {
                     // Finalize state.
-                    let (state_write_log, new_state_root) = cache
-                        .mkvs
-                        .commit(
+                    let (state_write_log, new_state_root) = overlay
+                        .commit_both(
                             Context::create_child(&ctx),
                             block.header.namespace,
                             block.header.round + 1,
                         )
                         .expect("state commit must succeed");
+
                     txn_dispatcher.finalize(new_state_root);
                     cache.commit(block.header.round + 1, new_state_root);
 
@@ -503,13 +504,14 @@ impl Dispatcher {
                     // Request, dispatch.
                     let ctx = ctx.freeze();
                     let mut mkvs = Tree::make().new(Box::new(NoopReadSyncer));
+                    let mut overlay = OverlayTree::new(&mut mkvs);
                     let untrusted_local = Arc::new(ProtocolUntrustedLocalStorage::new(
                         Context::create_child(&ctx),
                         protocol.clone(),
                     ));
                     let rpc_ctx = RpcContext::new(ctx.clone(), self.rak.clone(), session_info);
                     let response =
-                        StorageContext::enter(&mut mkvs, untrusted_local.clone(), || {
+                        StorageContext::enter(&mut overlay, untrusted_local.clone(), || {
                             rpc_dispatcher.dispatch(req, rpc_ctx)
                         });
                     let response = RpcMessage::Response(response);
@@ -584,12 +586,13 @@ impl Dispatcher {
         // Request, dispatch.
         let ctx = ctx.freeze();
         let mut mkvs = Tree::make().new(Box::new(NoopReadSyncer));
+        let mut overlay = OverlayTree::new(&mut mkvs);
         let untrusted_local = Arc::new(ProtocolUntrustedLocalStorage::new(
             Context::create_child(&ctx),
             protocol.clone(),
         ));
         let rpc_ctx = RpcContext::new(ctx.clone(), self.rak.clone(), None);
-        let response = StorageContext::enter(&mut mkvs, untrusted_local.clone(), || {
+        let response = StorageContext::enter(&mut overlay, untrusted_local.clone(), || {
             rpc_dispatcher.dispatch_local(req, rpc_ctx)
         });
         let response = RpcMessage::Response(response);

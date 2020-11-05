@@ -22,7 +22,7 @@ pub mod sync;
 #[cfg(test)]
 mod tests;
 
-pub use tree::{Depth, Key, NodeBox, Root, Tree};
+pub use tree::{Depth, Key, NodeBox, OverlayTree, Root, Tree};
 
 /// The type of entry in the log.
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
@@ -156,9 +156,42 @@ pub trait MKVS {
         namespace: Namespace,
         version: u64,
     ) -> Result<(WriteLog, Hash)>;
+}
 
-    /// Rollback any pending changes.
-    fn rollback(&mut self);
+/// Merklized key-value store where methods return errors instead of panicking.
+pub trait FallibleMKVS {
+    /// Fetch entry with given key.
+    fn get(&self, ctx: Context, key: &[u8]) -> Result<Option<Vec<u8>>>;
+
+    /// Check if the local MKVS cache contains the given key.
+    ///
+    /// While get can be used to check if the MKVS as a whole contains
+    /// a given key, this function specifically guarantees that no remote
+    /// syncing will be invoked, only checking the local cache.
+    fn cache_contains_key(&self, ctx: Context, key: &[u8]) -> bool;
+
+    /// Update entry with given key.
+    ///
+    /// If the database did not have this key present, [`None`] is returned.
+    ///
+    /// If the database did have this key present, the value is updated, and the old value is
+    /// returned.
+    ///
+    /// [`None`]: std::option::Option
+    fn insert(&mut self, ctx: Context, key: &[u8], value: &[u8]) -> Result<Option<Vec<u8>>>;
+
+    /// Remove entry with given key, returning the value at the key if the key was previously
+    /// in the database.
+    fn remove(&mut self, ctx: Context, key: &[u8]) -> Result<Option<Vec<u8>>>;
+
+    /// Populate the in-memory tree with nodes for keys starting with given prefixes.
+    fn prefetch_prefixes(&self, ctx: Context, prefixes: &Vec<Prefix>, limit: u16) -> Result<()>;
+
+    /// Returns an iterator over the tree.
+    fn iter(&self, ctx: Context) -> Box<dyn Iterator + '_>;
+
+    /// Commit all database changes to the underlying store.
+    fn commit(&mut self, ctx: Context, namespace: Namespace, version: u64) -> Result<Hash>;
 }
 
 /// An MKVS iterator.
@@ -177,6 +210,45 @@ pub trait Iterator: iter::Iterator<Item = (Vec<u8>, Vec<u8>)> {
 
     /// Moves the iterator either at the given key or at the next larger key.
     fn seek(&mut self, key: &[u8]);
+
+    /// The key under the iterator.
+    fn get_key(&self) -> &Option<Key>;
+
+    /// The value under the iterator.
+    fn get_value(&self) -> &Option<Vec<u8>>;
+
+    /// Advance the iterator to the next key.
+    fn next(&mut self);
+}
+
+impl<T: FallibleMKVS> FallibleMKVS for &mut T {
+    fn get(&self, ctx: Context, key: &[u8]) -> Result<Option<Vec<u8>>> {
+        T::get(self, ctx, key)
+    }
+
+    fn cache_contains_key(&self, ctx: Context, key: &[u8]) -> bool {
+        T::cache_contains_key(self, ctx, key)
+    }
+
+    fn insert(&mut self, ctx: Context, key: &[u8], value: &[u8]) -> Result<Option<Vec<u8>>> {
+        T::insert(self, ctx, key, value)
+    }
+
+    fn remove(&mut self, ctx: Context, key: &[u8]) -> Result<Option<Vec<u8>>> {
+        T::remove(self, ctx, key)
+    }
+
+    fn prefetch_prefixes(&self, ctx: Context, prefixes: &Vec<Prefix>, limit: u16) -> Result<()> {
+        T::prefetch_prefixes(self, ctx, prefixes, limit)
+    }
+
+    fn iter(&self, ctx: Context) -> Box<dyn Iterator + '_> {
+        T::iter(self, ctx)
+    }
+
+    fn commit(&mut self, ctx: Context, namespace: Namespace, version: u64) -> Result<Hash> {
+        T::commit(self, ctx, namespace, version)
+    }
 }
 
 #[cfg(test)]

@@ -62,11 +62,6 @@ impl Tree {
         let boxed_key = key.to_vec();
         let pending_root = self.cache.borrow().get_pending_root();
 
-        // If the key has been modified locally, no need to perform any lookups.
-        if let Some(PendingLogEntry { ref value, .. }) = self.pending_write_log.get(&boxed_key) {
-            return Ok(value.clone());
-        }
-
         // Remember where the path from root to target node ends (will end).
         self.cache.borrow_mut().mark_position();
 

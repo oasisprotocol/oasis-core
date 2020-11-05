@@ -296,7 +296,7 @@ impl<'tree> Iterator for TreeIterator<'tree> {
 
         let key = self.key.as_ref().expect("iterator is valid").clone();
         let value = self.value.as_ref().expect("iterator is valid").clone();
-        self.next();
+        TreeIterator::next(self);
 
         Some((key, value))
     }
@@ -337,22 +337,37 @@ impl<'tree> mkvs::Iterator for TreeIterator<'tree> {
             self.reset();
         }
     }
+
+    fn get_key(&self) -> &Option<Key> {
+        &self.key
+    }
+
+    fn get_value(&self) -> &Option<Vec<u8>> {
+        &self.value
+    }
+
+    fn next(&mut self) {
+        TreeIterator::next(self)
+    }
 }
 
 impl Tree {
-    /// Returns an iterator over the tree.
+    /// Return an iterator over the tree.
     pub fn iter(&self, ctx: Context) -> TreeIterator {
         TreeIterator::new(ctx, self)
     }
 }
 
 #[cfg(test)]
-mod test {
+pub(super) mod test {
+    use std::iter;
+
     use io_context::Context;
     use rustc_hex::FromHex;
 
     use super::{tree_test::generate_key_value_pairs_ex, *};
     use crate::storage::mkvs::{
+        self,
         interop::{Driver, ProtocolServer},
         Iterator,
     };
@@ -412,8 +427,17 @@ mod test {
         test_iterator_with(&items, it, &tests);
 
         // Remote.
-        let (write_log, hash) =
-            Tree::commit(&mut tree, Context::background(), Default::default(), 0).expect("commit");
+        let hash = tree
+            .commit(Context::background(), Default::default(), 0)
+            .expect("commit");
+        let write_log = items
+            .iter()
+            .cloned()
+            .map(|(key, value)| mkvs::LogEntry {
+                key,
+                value: Some(value),
+            })
+            .collect();
         server.apply(&write_log, hash, Default::default(), 0);
 
         let remote_tree = Tree::make()
@@ -523,7 +547,7 @@ mod test {
                 .unwrap();
         it.seek(&missing_key);
         assert!(it.is_valid(), "iterator should be valid");
-        let item = Iterator::next(&mut it);
+        let item = iter::Iterator::next(&mut it);
         assert_eq!(
             Some((items[0].0.clone(), b"value".to_vec())),
             item,
@@ -535,9 +559,11 @@ mod test {
     fn test_iterator_eviction() {
         let server = ProtocolServer::new();
 
-        let mut tree = Tree::make()
-            .with_capacity(0, 0)
-            .new(Box::new(NoopReadSyncer));
+        let mut tree = OverlayTree::new(
+            Tree::make()
+                .with_capacity(0, 0)
+                .new(Box::new(NoopReadSyncer)),
+        );
 
         let (keys, values) = generate_key_value_pairs_ex("T".to_owned(), 100);
         let items: Vec<(Vec<u8>, Vec<u8>)> = keys.into_iter().zip(values.into_iter()).collect();
@@ -545,8 +571,9 @@ mod test {
             tree.insert(Context::background(), &key, &value).unwrap();
         }
 
-        let (write_log, hash) =
-            Tree::commit(&mut tree, Context::background(), Default::default(), 0).expect("commit");
+        let (write_log, hash) = tree
+            .commit_both(Context::background(), Default::default(), 0)
+            .expect("commit");
         server.apply(&write_log, hash, Default::default(), 0);
 
         // Create a remote tree with limited cache capacity so that nodes will
@@ -577,9 +604,9 @@ mod test {
         assert_eq!(2, stats.sync_iterate_count, "sync_iterate_count");
     }
 
-    fn test_iterator_with(
+    pub(in super::super) fn test_iterator_with<I: mkvs::Iterator>(
         items: &Vec<(Vec<u8>, Vec<u8>)>,
-        mut it: TreeIterator,
+        mut it: I,
         tests: &Vec<(Vec<u8>, isize)>,
     ) {
         // Iterate through the whole tree.
@@ -606,7 +633,7 @@ mod test {
             }
 
             for expected in &items[*pos as usize..] {
-                let item = Iterator::next(&mut it);
+                let item = iter::Iterator::next(&mut it);
                 assert_eq!(
                     Some(expected.clone()),
                     item,

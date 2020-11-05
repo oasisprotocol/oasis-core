@@ -138,10 +138,6 @@ impl MKVS for BlockSnapshot {
     ) -> Result<(WriteLog, Hash)> {
         unimplemented!("block snapshot is read-only");
     }
-
-    fn rollback(&mut self) {
-        unimplemented!("block snapshot is read-only");
-    }
 }
 
 #[derive(Clone)]

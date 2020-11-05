@@ -111,6 +111,7 @@ func (o *treeOverlay) Commit(ctx context.Context) error {
 			return err
 		}
 	}
+	o.dirty = make(map[string]bool)
 
 	return nil
 }

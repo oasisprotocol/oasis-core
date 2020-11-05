@@ -36,7 +36,7 @@ fn test_nil_pointers() {
     // Verify at least one null pointer somewhere.
     //println!("full tree: {:#?}", tree);
 
-    let (_, root) =
+    let root =
         Tree::commit(&mut tree, Context::background(), Default::default(), 0).expect("commit");
 
     server.apply(&write_log, root, Default::default(), 0);
