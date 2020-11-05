@@ -1,11 +1,18 @@
 package runtime
 
 import (
+	"context"
+	"errors"
+	"fmt"
 	"time"
 
+	"github.com/oasisprotocol/oasis-core/go/common/cbor"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/env"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/oasis"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/scenario"
+	"github.com/oasisprotocol/oasis-core/go/runtime/client/api"
+	runtimeClient "github.com/oasisprotocol/oasis-core/go/runtime/client/api"
+	runtimeTransaction "github.com/oasisprotocol/oasis-core/go/runtime/transaction"
 )
 
 // LateStart is the LateStart node basic scenario.
@@ -42,6 +49,8 @@ func (sc *lateStartImpl) Fixture() (*oasis.NetworkFixture, error) {
 }
 
 func (sc *lateStartImpl) Run(childEnv *env.Env) error {
+	ctx := context.Background()
+
 	// Start the network.
 	var err error
 	if err = sc.Net.Start(); err != nil {
@@ -63,7 +72,28 @@ func (sc *lateStartImpl) Run(childEnv *env.Env) error {
 		return err
 	}
 
-	sc.Logger.Info("Starting the basic client")
+	ctrl, err := oasis.NewController(client.SocketPath())
+	if err != nil {
+		return fmt.Errorf("failed to create controller for client: %w", err)
+	}
+	_, err = ctrl.RuntimeClient.SubmitTx(ctx, &runtimeClient.SubmitTxRequest{
+		RuntimeID: runtimeID,
+		Data: cbor.Marshal(&runtimeTransaction.TxnCall{
+			Method: "insert",
+			Args: struct {
+				Key   string `json:"key"`
+				Value string `json:"value"`
+			}{
+				Key:   "hello",
+				Value: "test",
+			},
+		}),
+	})
+	if !errors.Is(err, api.ErrNotSynced) {
+		return fmt.Errorf("expected error: %v, got: %v", api.ErrNotSynced, err)
+	}
+
+	sc.Logger.Info("Starting the basic test client")
 	cmd, err := sc.startClient(childEnv)
 	if err != nil {
 		return err
