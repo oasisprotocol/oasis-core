@@ -525,6 +525,7 @@ func RegisterScenarios() error {
 		ByzantineStorageFailRead,
 		// Storage sync test.
 		StorageSync,
+		StorageSyncFromRegistered,
 		// Sentry test.
 		Sentry,
 		SentryEncryption,

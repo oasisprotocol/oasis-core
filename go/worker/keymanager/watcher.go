@@ -5,7 +5,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	"github.com/oasisprotocol/oasis-core/go/common/node"
 	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
-	"github.com/oasisprotocol/oasis-core/go/runtime/committee"
+	"github.com/oasisprotocol/oasis-core/go/runtime/nodes"
 )
 
 type kmNodeWatcher struct {
@@ -30,7 +30,7 @@ func (knw *kmNodeWatcher) watchNodes() {
 	}
 	defer nodesSub.Close()
 
-	watcher, err := committee.NewNodeDescriptorWatcher(knw.w.ctx, knw.registry)
+	watcher, err := nodes.NewVersionedNodeDescriptorWatcher(knw.w.ctx, knw.registry)
 	if err != nil {
 		knw.w.logger.Error("worker/keymanager: failed to create node desc watcher",
 			"err", err,
