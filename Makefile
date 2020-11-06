@@ -139,7 +139,6 @@ fetch-git:
 # NOTE: It should not be invoked directly.
 _version-bump: fetch-git
 	@$(ENSURE_VALID_RELEASE_BRANCH_NAME)
-	@$(ENSURE_GIT_VERSION_FROM_TAG_EQUALS_PUNCH_VERSION)
 	@$(PUNCH_BUMP_VERSION)
 	@git add $(PUNCH_VERSION_FILE)
 

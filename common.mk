@@ -6,6 +6,10 @@ SHELL := /bin/bash
 # other directories.
 SELF_DIR := $(dir $(lastword $(MAKEFILE_LIST)))
 
+# Function for comparing two strings for equality.
+# NOTE: This will also return false if both strings are empty.
+eq = $(and $(findstring $(1),$(2)), $(findstring $(2),$(1)))
+
 # Check if we're running in an interactive terminal.
 ISATTY := $(shell [ -t 0 ] && echo 1)
 
@@ -46,16 +50,13 @@ OASIS_CORE_GIT_ORIGIN_REMOTE ?= origin
 RELEASE_BRANCH ?= master
 
 # Determine project's version from git.
-GIT_VERSION_LATEST_TAG := $(shell git describe --tags --match 'v*' --abbrev=0 2>/dev/null $(OASIS_CORE_GIT_ORIGIN_REMOTE)/$(RELEASE_BRANCH) || echo undefined)
-GIT_VERSION_FROM_TAG := $(subst v,,$(GIT_VERSION_LATEST_TAG))
-GIT_VERSION_IS_TAG := $(shell git describe --tags --match 'v*' --exact-match &>/dev/null $(OASIS_CORE_GIT_ORIGIN_REMOTE)/$(RELEASE_BRANCH) && echo YES || echo NO)
-ifeq ($(GIT_VERSION_IS_TAG),YES)
-	GIT_VERSION := $(GIT_VERSION_FROM_TAG)
-else
-    # The current commit is not exactly a tag, append commit and dirty info to
-    # the version.
-    GIT_VERSION := $(GIT_VERSION_FROM_TAG)-git$(shell git describe --always --match '' --dirty=+dirty 2>/dev/null)
-endif
+# NOTE: This computes the project's version from the latest version tag
+# reachable from the given $(RELEASE_BRANCH) and does not search for version
+# tags across the whole $(OASIS_CORE_GIT_ORIGIN_REMOTE) repository.
+GIT_VERSION := $(subst v,,$(shell \
+	git describe --tags --match 'v*' --abbrev=0 2>/dev/null $(OASIS_CORE_GIT_ORIGIN_REMOTE)/$(RELEASE_BRANCH) || \
+	echo undefined \
+))
 
 # Determine project's git branch.
 GIT_BRANCH ?= $(shell git rev-parse --abbrev-ref HEAD 2>/dev/null)
@@ -71,6 +72,19 @@ PUNCH_VERSION := $(shell \
 		version = f'{year}.{minor}.{micro}' if micro > 0 else f'{year}.{minor}'; \
 		print(version)" \
 	)
+
+# Determine project's version.
+# If the current git commit is exactly a tag and it equals the Punch version,
+# then the project's version is that.
+# Else, the project version is the Punch version appended with git commit and
+# dirty state info.
+GIT_COMMIT_EXACT_TAG := $(shell \
+	git describe --tags --match 'v*' --exact-match &>/dev/null $(OASIS_CORE_GIT_ORIGIN_REMOTE)/$(RELEASE_BRANCH) && echo YES || echo NO \
+)
+VERSION := $(or \
+	$(and $(call eq,$(GIT_COMMIT_EXACT_TAG),YES), $(call eq,$(GIT_VERSION),$(PUNCH_VERSION))), \
+	$(PUNCH_VERSION)-git$(shell git describe --always --match '' --dirty=+dirty 2>/dev/null) \
+)
 
 # Helper that bumps project's version with the Punch tool.
 define PUNCH_BUMP_VERSION =
@@ -92,17 +106,6 @@ define PUNCH_BUMP_VERSION =
 		exit 1; \
 	fi; \
 	punch --config-file $(PUNCH_CONFIG_FILE) --version-file $(PUNCH_VERSION_FILE) $$FLAG --quiet
-endef
-
-# Helper that ensures project's version according to the latest Git tag equals
-# project's version as tracked by the Punch tool.
-define ENSURE_GIT_VERSION_FROM_TAG_EQUALS_PUNCH_VERSION =
-	if [[ "$(GIT_VERSION_FROM_TAG)" != "$(PUNCH_VERSION)" ]]; then \
-		$(ECHO) "$(RED)Error: Project version according to the latest Git tag from \
-		    $(OASIS_CORE_GIT_ORIGIN_REMOTE)/$(RELEASE_BRANCH) ($(GIT_VERSION)) \
-			doesn't equal project's version in $(PUNCH_VERSION_FILE) ($(PUNCH_VERSION)).$(OFF)"; \
-		exit 1; \
-	fi
 endef
 
 # Helper that ensures project's version determined from git equals project's
@@ -136,7 +139,7 @@ GO_EXAMPLE_PLUGIN_PATH := oasis-test-runner/scenario/pluginsigner/example_signer
 GOFLAGS ?= -trimpath -v
 
 # Project's version as the linker's string value definition.
-export GOLDFLAGS_VERSION := -X github.com/oasisprotocol/oasis-core/go/common/version.SoftwareVersion=$(GIT_VERSION)
+export GOLDFLAGS_VERSION := -X github.com/oasisprotocol/oasis-core/go/common/version.SoftwareVersion=$(VERSION)
 # Project's git branch as the linker's string value definition.
 GOLDFLAGS_BRANCH := -X github.com/oasisprotocol/oasis-core/go/common/version.GitBranch=$(GIT_BRANCH)
 
@@ -283,7 +286,7 @@ For a list of changes in this release, see the [Change Log].
 *NOTE: If you are upgrading from an earlier release, please **carefully review**
 the [Change Log] for **Removals and Breaking changes**.*
 
-[Change Log]: https://github.com/oasisprotocol/oasis-core/blob/v$(GIT_VERSION)/CHANGELOG.md
+[Change Log]: https://github.com/oasisprotocol/oasis-core/blob/v$(VERSION)/CHANGELOG.md
 
 endef
 
