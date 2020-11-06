@@ -1,4 +1,7 @@
-SHELL := /bin/bash
+# Use Bash shell.
+# NOTE: You can control which Bash version is used by setting the PATH
+# appropriately.
+SHELL := bash
 
 # Path to the directory of this Makefile.
 # NOTE: Prepend all relative paths in this Makefile with this variable to ensure
@@ -19,8 +22,7 @@ ifdef ISATTY
 	CYAN := \e[36;1m
 	RED := \e[0;31m
 	OFF := \e[0m
-	# Use external echo command since the built-in echo doesn't support '-e'.
-	ECHO_CMD := /bin/echo -e
+	ECHO_CMD := echo -e
 else
 	MAGENTA := ""
 	CYAN := ""
@@ -44,7 +46,7 @@ endef
 
 # Name of git remote pointing to the canonical upstream git repository, i.e.
 # git@github.com:oasisprotocol/oasis-core.git.
-OASIS_CORE_GIT_ORIGIN_REMOTE ?= origin
+GIT_ORIGIN_REMOTE ?= origin
 
 # Name of the branch where to tag the next release.
 RELEASE_BRANCH ?= master
@@ -52,17 +54,17 @@ RELEASE_BRANCH ?= master
 # Determine project's version from git.
 # NOTE: This computes the project's version from the latest version tag
 # reachable from the given $(RELEASE_BRANCH) and does not search for version
-# tags across the whole $(OASIS_CORE_GIT_ORIGIN_REMOTE) repository.
+# tags across the whole $(GIT_ORIGIN_REMOTE) repository.
 GIT_VERSION := $(subst v,,$(shell \
-	git describe --tags --match 'v*' --abbrev=0 2>/dev/null $(OASIS_CORE_GIT_ORIGIN_REMOTE)/$(RELEASE_BRANCH) || \
+	git describe --tags --match 'v*' --abbrev=0 2>/dev/null $(GIT_ORIGIN_REMOTE)/$(RELEASE_BRANCH) || \
 	echo undefined \
 ))
 
 # Determine project's git branch.
 GIT_BRANCH ?= $(shell git rev-parse --abbrev-ref HEAD 2>/dev/null)
 
-PUNCH_CONFIG_FILE := $(SELF_DIR)/.punch_config.py
-PUNCH_VERSION_FILE := $(SELF_DIR)/.punch_version.py
+PUNCH_CONFIG_FILE := $(abspath $(SELF_DIR)/.punch_config.py)
+PUNCH_VERSION_FILE := $(abspath $(SELF_DIR)/.punch_version.py)
 # Obtain project's version as tracked by the Punch tool.
 # NOTE: The Punch tool doesn't have the ability fo print project's version to
 # stdout yet.
@@ -71,7 +73,7 @@ PUNCH_VERSION := $(shell \
 	python3 -c "exec(open('$(PUNCH_VERSION_FILE)').read()); \
 		version = f'{year}.{minor}.{micro}' if micro > 0 else f'{year}.{minor}'; \
 		print(version)" \
-	)
+)
 
 # Determine project's version.
 # If the current git commit is exactly a tag and it equals the Punch version,
@@ -79,7 +81,7 @@ PUNCH_VERSION := $(shell \
 # Else, the project version is the Punch version appended with git commit and
 # dirty state info.
 GIT_COMMIT_EXACT_TAG := $(shell \
-	git describe --tags --match 'v*' --exact-match &>/dev/null $(OASIS_CORE_GIT_ORIGIN_REMOTE)/$(RELEASE_BRANCH) && echo YES || echo NO \
+	git describe --tags --match 'v*' --exact-match &>/dev/null $(GIT_ORIGIN_REMOTE)/$(RELEASE_BRANCH) && echo YES || echo NO \
 )
 VERSION := $(or \
 	$(and $(call eq,$(GIT_COMMIT_EXACT_TAG),YES), $(call eq,$(GIT_VERSION),$(PUNCH_VERSION))), \
@@ -112,7 +114,7 @@ endef
 # version as tracked by the Punch tool.
 define ENSURE_GIT_VERSION_EQUALS_PUNCH_VERSION =
 	if [[ "$(GIT_VERSION)" != "$(PUNCH_VERSION)" ]]; then \
-		$(ECHO) "$(RED)Error: Project's version for $(OASIS_CORE_GIT_ORIGIN_REMOTE)/$(RELEASE_BRANCH) \
+		$(ECHO) "$(RED)Error: Project's version for $(GIT_ORIGIN_REMOTE)/$(RELEASE_BRANCH) \
 			determined from git ($(GIT_VERSION)) doesn't equal project's version in \
 			$(PUNCH_VERSION_FILE) ($(PUNCH_VERSION)).$(OFF)"; \
 		exit 1; \
@@ -188,12 +190,12 @@ endef
 # Helper that ensures the origin's release branch's HEAD doesn't contain any
 # Change Log fragments.
 define ENSURE_NO_CHANGELOG_FRAGMENTS =
-	if ! CHANGELOG_FILES=`git ls-tree -r --name-only $(OASIS_CORE_GIT_ORIGIN_REMOTE)/$(RELEASE_BRANCH) .changelog`; then \
-		$(ECHO) "$(RED)Error: Could not obtain Change Log fragments for $(OASIS_CORE_GIT_ORIGIN_REMOTE)/$(RELEASE_BRANCH) branch.$(OFF)"; \
+	if ! CHANGELOG_FILES=`git ls-tree -r --name-only $(GIT_ORIGIN_REMOTE)/$(RELEASE_BRANCH) .changelog`; then \
+		$(ECHO) "$(RED)Error: Could not obtain Change Log fragments for $(GIT_ORIGIN_REMOTE)/$(RELEASE_BRANCH) branch.$(OFF)"; \
 		exit 1; \
 	fi; \
 	if CHANGELOG_FRAGMENTS=`echo "$$CHANGELOG_FILES" | grep --invert-match --extended-regexp '(README.md|template.md.j2|.markdownlint.yml)'`; then \
-		$(ECHO) "$(RED)Error: Found the following Change Log fragments on $(OASIS_CORE_GIT_ORIGIN_REMOTE)/$(RELEASE_BRANCH) branch:"; \
+		$(ECHO) "$(RED)Error: Found the following Change Log fragments on $(GIT_ORIGIN_REMOTE)/$(RELEASE_BRANCH) branch:"; \
 		$(ECHO) "$${CHANGELOG_FRAGMENTS}$(OFF)"; \
 		exit 1; \
 	fi
@@ -202,9 +204,9 @@ endef
 # Helper that ensures the origin's release branch's HEAD contains a Change Log
 # section for the next release.
 define ENSURE_NEXT_RELEASE_IN_CHANGELOG =
-	if ! ( git show $(OASIS_CORE_GIT_ORIGIN_REMOTE)/$(RELEASE_BRANCH):CHANGELOG.md | \
+	if ! ( git show $(GIT_ORIGIN_REMOTE)/$(RELEASE_BRANCH):CHANGELOG.md | \
 			grep --quiet '^## $(PUNCH_VERSION) (.*)' ); then \
-		$(ECHO) "$(RED)Error: Could not locate Change Log section for release $(PUNCH_VERSION) on $(OASIS_CORE_GIT_ORIGIN_REMOTE)/$(RELEASE_BRANCH) branch.$(OFF)"; \
+		$(ECHO) "$(RED)Error: Could not locate Change Log section for release $(PUNCH_VERSION) on $(GIT_ORIGIN_REMOTE)/$(RELEASE_BRANCH) branch.$(OFF)"; \
 		exit 1; \
 	fi
 endef
@@ -221,8 +223,8 @@ RELEASE_TAG_GO := $(shell \
 # Helper that ensures the new release's tag doesn't already exist on the origin
 # remote.
 define ENSURE_RELEASE_TAG_EXISTS =
-	if ! git ls-remote --exit-code --tags $(OASIS_CORE_GIT_ORIGIN_REMOTE) $(RELEASE_TAG) 1>/dev/null; then \
-		$(ECHO) "$(RED)Error: Tag '$(RELEASE_TAG)' doesn't exist on $(OASIS_CORE_GIT_ORIGIN_REMOTE) remote.$(OFF)"; \
+	if ! git ls-remote --exit-code --tags $(GIT_ORIGIN_REMOTE) $(RELEASE_TAG) 1>/dev/null; then \
+		$(ECHO) "$(RED)Error: Tag '$(RELEASE_TAG)' doesn't exist on $(GIT_ORIGIN_REMOTE) remote.$(OFF)"; \
 		exit 1; \
 	fi
 endef
@@ -230,8 +232,8 @@ endef
 # Helper that ensures the new release's tag doesn't already exist on the origin
 # remote.
 define ENSURE_RELEASE_TAG_DOES_NOT_EXIST =
-	if git ls-remote --exit-code --tags $(OASIS_CORE_GIT_ORIGIN_REMOTE) $(RELEASE_TAG) 1>/dev/null; then \
-		$(ECHO) "$(RED)Error: Tag '$(RELEASE_TAG)' already exists on $(OASIS_CORE_GIT_ORIGIN_REMOTE) remote.$(OFF)"; \
+	if git ls-remote --exit-code --tags $(GIT_ORIGIN_REMOTE) $(RELEASE_TAG) 1>/dev/null; then \
+		$(ECHO) "$(RED)Error: Tag '$(RELEASE_TAG)' already exists on $(GIT_ORIGIN_REMOTE) remote.$(OFF)"; \
 		exit 1; \
 	fi; \
 	if git show-ref --quiet --tags $(RELEASE_TAG); then \
@@ -241,7 +243,10 @@ define ENSURE_RELEASE_TAG_DOES_NOT_EXIST =
 endef
 
 # Name of the stable release branch (if the current version is appropriate).
-STABLE_BRANCH := $(shell python3 -c "exec(open('$(PUNCH_VERSION_FILE)').read()); print(f'stable/{year}.{minor}.x') if micro == 0 else print('undefined')")
+STABLE_BRANCH := $(shell \
+	python3 -c "exec(open('$(PUNCH_VERSION_FILE)').read()); \
+		print(f'stable/{year}.{minor}.x') if micro == 0 else print('undefined')" \
+)
 
 # Helper that ensures the stable branch name is valid.
 define ENSURE_VALID_STABLE_BRANCH =
@@ -254,8 +259,8 @@ endef
 # Helper that ensures the new stable branch doesn't already exist on the origin
 # remote.
 define ENSURE_STABLE_BRANCH_DOES_NOT_EXIST =
-	if git ls-remote --exit-code --heads $(OASIS_CORE_GIT_ORIGIN_REMOTE) $(STABLE_BRANCH) 1>/dev/null; then \
-		$(ECHO) "$(RED)Error: Branch '$(STABLE_BRANCH)' already exists on $(OASIS_CORE_GIT_ORIGIN_REMOTE) remote.$(OFF)"; \
+	if git ls-remote --exit-code --heads $(GIT_ORIGIN_REMOTE) $(STABLE_BRANCH) 1>/dev/null; then \
+		$(ECHO) "$(RED)Error: Branch '$(STABLE_BRANCH)' already exists on $(GIT_ORIGIN_REMOTE) remote.$(OFF)"; \
 		exit 1; \
 	fi; \
 	if git show-ref --quiet --heads $(STABLE_BRANCH); then \
