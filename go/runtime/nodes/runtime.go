@@ -12,6 +12,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
 	"github.com/oasisprotocol/oasis-core/go/common/node"
 	"github.com/oasisprotocol/oasis-core/go/common/pubsub"
+	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
 	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
 )
 
@@ -184,7 +185,24 @@ func NewRuntimeNodeLookup(
 
 	ch, sub, err := registry.WatchNodes(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("runtime: failed to watch nodes: %w", err)
+		return nil, fmt.Errorf("runtime/nodes/watcher: failed to watch nodes: %w", err)
+	}
+
+	// Setup initial state.
+	// This is needed since in case node is restarted, we won't be replaying
+	// old blocks and therefore won't receive the node registration update events
+	// for currently registered nodes.
+	nodes, err := rw.registry.GetNodes(ctx, consensus.HeightLatest)
+	// If there's no committee blocks this is a fresh node so initial state is empty.
+	if err != nil && err != consensus.ErrNoCommittedBlocks {
+		return nil, fmt.Errorf("runtime/nodes/watcher: error querying registry for nodes: %w", err)
+	}
+	for _, n := range nodes {
+		if n.GetRuntime(rw.runtimeID) == nil {
+			continue
+		}
+		// NOTE: Nothing else is accessing this yet, so no lock needed here.
+		rw.updateLocked(n)
 	}
 
 	go rw.watchRuntimeNodeUpdates(ctx, ch, sub)
