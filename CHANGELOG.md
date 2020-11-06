@@ -12,6 +12,207 @@ The format is inspired by [Keep a Changelog].
 
 <!-- TOWNCRIER -->
 
+## 20.12 (2020-11-03)
+
+| Protocol          | Version   |
+|:------------------|:---------:|
+| Consensus         | 2.0.0     |
+| Runtime Host      | 1.0.0     |
+| Runtime Committee | 1.0.0     |
+
+### Removals and Breaking Changes
+
+- go/common/crypto: Bump ed25519 version
+  ([#3458](https://github.com/oasisprotocol/oasis-core/issues/3458),
+   [#3470](https://github.com/oasisprotocol/oasis-core/issues/3470),
+   [#3471](https://github.com/oasisprotocol/oasis-core/issues/3471))
+
+### Configuration Changes
+
+- go/runtime/scheduling: Max queue size flag rename
+  ([#3434](https://github.com/oasisprotocol/oasis-core/issues/3434))
+
+  - `worker.executor.schedule_max_queue_size` ->
+  `worker.executor.schedule_max_tx_pool_size`
+
+- go/runtime/client: Add max transaction age
+  ([#3443](https://github.com/oasisprotocol/oasis-core/issues/3443))
+
+  Added `runtime.client.max_transaction_age` flag to configure number of
+  consensus blocks after which a submitted runtime transaction is considered
+  expired. Expired transactions are dropped by the client.
+
+### Features
+
+- go/runtime/scheduler: Switch to an ordered queue tx pool implementation
+  ([#3434](https://github.com/oasisprotocol/oasis-core/issues/3434))
+
+### Bug Fixes
+
+- go/runtime/client: Runtime client should retry processing any failed blocks
+  ([#3412](https://github.com/oasisprotocol/oasis-core/issues/3412))
+
+- go/storage/client: Retry `ErrNodeNotFound` errors on write requests
+  ([#3424](https://github.com/oasisprotocol/oasis-core/issues/3424))
+
+- go/worker/common: check if active epoch exists in HandlePeerMsg
+  ([#3432](https://github.com/oasisprotocol/oasis-core/issues/3432))
+
+  Fixes nil pointer dereference that can happen if the executor node tries to
+  publish a message before it is synced
+
+- go/runtime/client: Wait for initial consensus block and group version
+  ([#3443](https://github.com/oasisprotocol/oasis-core/issues/3443))
+
+  Before, the runtime client would publish invalid messages before obtaining the
+  initial group version. The messages were correctly retired upon receiving the
+  group version, but this resulted in needless messages.
+
+- Storage node should update access control policy on new node registrations
+  ([#3453](https://github.com/oasisprotocol/oasis-core/issues/3453))
+
+  Before, the storage node only updated policy when existing nodes updated
+  registrations or committee changed. This missed the case when new storage
+  node registered mid-epoch.
+
+- rust: Bump futures to 0.3.7
+  ([#3460](https://github.com/oasisprotocol/oasis-core/issues/3460))
+
+  Fixes [RUSTSEC-2020-0059].
+
+  [RUSTSEC-2020-0059]: https://rustsec.org/advisories/RUSTSEC-2020-0059
+
+## 20.11.3 (2020-10-16)
+
+| Protocol          | Version   |
+|:------------------|:---------:|
+| Consensus         | 1.0.0     |
+| Runtime Host      | 1.0.0     |
+| Runtime Committee | 1.0.0     |
+
+### Bug Fixes
+
+- go/storage/mkvs: Fix Finalize after checkpoint restore
+  ([#3330](https://github.com/oasisprotocol/oasis-core/issues/3330))
+
+### Internal Changes
+
+- go/storage/mkvs: Add node tracking to chunk restore
+  ([#3241](https://github.com/oasisprotocol/oasis-core/issues/3241))
+
+- go: Add ability to set initial block height at genesis
+  ([#3416](https://github.com/oasisprotocol/oasis-core/issues/3416))
+
+## 20.11.2 (2020-10-13)
+
+| Protocol          | Version   |
+|:------------------|:---------:|
+| Consensus         | 1.0.0     |
+| Runtime Host      | 1.0.0     |
+| Runtime Committee | 1.0.0     |
+
+### Features
+
+- go/runtime/client: remove unneeded P2P message republishing
+  ([#3325](https://github.com/oasisprotocol/oasis-core/issues/3325))
+
+### Bug Fixes
+
+- go/worker/p2p: Skip peer authentication for our own messages
+  ([#3319](https://github.com/oasisprotocol/oasis-core/issues/3319))
+
+  In practice this fixes a bug in a setup where executor nodes are used to
+  submit runtime transactions. The executor nodes that are not part of the
+  active committee, would end up self-rejecting transaction messages.
+
+- go/worker/executor: don't unnecessarily hold the lock during storage requests
+  ([#3320](https://github.com/oasisprotocol/oasis-core/issues/3320))
+
+- go/worker/executor: only remove incoming transactions on finalized round
+  ([#3332](https://github.com/oasisprotocol/oasis-core/issues/3332))
+
+  Simplifies the executor to only remove transactions from the incoming queue
+  once a round is successfully finalized. Before, the proposing executor also
+  removed transactions when proposing a batch, which was an unneeded leftover
+  from before the transaction scheduler committee was merged with into executor.
+
+  Also fixes an edge case where batch was not reinserted on failed rounds.
+
+- go/worker/common/committee: group version should be the epoch block
+  ([#3347](https://github.com/oasisprotocol/oasis-core/issues/3347))
+
+  When node is restarted, `EpochTransition` is called on the first received
+  block, which is not necessary the actual epoch transition block. Therefore the
+  epoch block needs to be queried to obtain the correct group version.
+
+- go: Seed node support configuring tendermint P2P settings
+  ([#3356](https://github.com/oasisprotocol/oasis-core/issues/3356))
+
+  Seed node now supports configuring relevant tendermint P2P settings via
+  existing tendermint configuration flags.
+
+- go: Seed node panics on `oasis-node control` CLI
+  ([#3356](https://github.com/oasisprotocol/oasis-core/issues/3356))
+
+  Seed node now implements the missing consensus backend methods and supports
+  `oasis-node control` CLI.
+
+- go/worker/p2p: Correctly update peers on `WatchNodeList` events
+  ([#3378](https://github.com/oasisprotocol/oasis-core/issues/3378))
+
+- go/registry.WatchNodeList: return current node list upon subscription
+  ([#3379](https://github.com/oasisprotocol/oasis-core/issues/3379))
+
+- go/worker/p2p: Relay some permanent errors
+  ([#3386](https://github.com/oasisprotocol/oasis-core/issues/3386))
+
+  Before the P2P worker would not relay any messages failing with a permanent
+  error. However there are cases where the client should permanently fail the
+  dispatch, but still relay the message to peers.
+
+  Adds `Relayable` error wrapper which can be used in handlers to notify that a
+  message should be relayed regardless if the error is permanent or not.
+
+- go/worker/p2p: Retry messages we consider permanent
+  ([#3386](https://github.com/oasisprotocol/oasis-core/issues/3386))
+
+  `p2pError.IsPermanent` notion of a permanent error differs from the upstream
+  `cenkalti/backoff/v4` notion. Correctly retry on `context.Canceled` errors as
+  we don't consider them permanent.
+
+- go/consensus/tendermint: Backport bug fixes
+  ([#3398](https://github.com/oasisprotocol/oasis-core/issues/3398))
+
+### Internal Changes
+
+- go/backoff: Update `cenkalti/backoff` to 4.1.0
+  ([#3390](https://github.com/oasisprotocol/oasis-core/issues/3390))
+
+- rust: bump crossbeam from 0.7.3 to 0.8.0
+  ([#3394](https://github.com/oasisprotocol/oasis-core/issues/3394))
+
+## 20.11.1 (2020-10-07)
+
+| Protocol          | Version   |
+|:------------------|:---------:|
+| Consensus         | 1.0.0     |
+| Runtime Host      | 1.0.0     |
+| Runtime Committee | 1.0.0     |
+
+### Features
+
+- go/consensus: add last retained block information
+  ([#3348](https://github.com/oasisprotocol/oasis-core/issues/3348))
+
+  New in the consensus API, the status struct now has information about
+  the earliest block available on this node. This differs from the
+  genesis block when pruning is enabled.
+
+### Internal Changes
+
+- go: Update to build on macOS
+  ([#3333](https://github.com/oasisprotocol/oasis-core/issues/3333))
+
 ## 20.11 (2020-09-23)
 
 | Protocol          | Version   |
