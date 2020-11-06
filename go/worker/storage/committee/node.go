@@ -514,10 +514,10 @@ func (n *Node) fetchDiff(round uint64, prevRoot, thisRoot *mkvsNode.Root, fetchM
 			)
 
 			// Prioritize committee nodes.
-			ctx := storageApi.WithNodePriorityHintFromMap(
-				n.ctx,
-				n.commonNode.Group.GetEpochSnapshot().GetStorageCommittee().PublicKeys,
-			)
+			ctx := n.ctx
+			if committee := n.commonNode.Group.GetEpochSnapshot().GetStorageCommittee(); committee != nil {
+				ctx = storageApi.WithNodePriorityHintFromMap(ctx, committee.PublicKeys)
+			}
 			it, err := n.storageClient.GetDiff(ctx, &storageApi.GetDiffRequest{StartRoot: *prevRoot, EndRoot: *thisRoot})
 			if err != nil {
 				result.err = err
