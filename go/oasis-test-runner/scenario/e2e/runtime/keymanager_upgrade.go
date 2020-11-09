@@ -60,6 +60,9 @@ func (sc *kmUpgradeImpl) Fixture() (*oasis.NetworkFixture, error) {
 	kmRuntimeFix.ExcludeFromGenesis = true
 	f.Runtimes = append(f.Runtimes, kmRuntimeFix)
 
+	// Allow keymanager-0 to exit after replication is done.
+	f.Keymanagers[0].AllowEarlyTermination = true
+
 	// Add the upgraded keymanager, will be started later.
 	f.Keymanagers = append(f.Keymanagers, oasis.KeymanagerFixture{Runtime: 2, Entity: 1, NoAutoStart: true})
 
@@ -273,11 +276,11 @@ func (sc *kmUpgradeImpl) Run(childEnv *env.Env) error {
 		return err
 	}
 
-	// Shutdown old km.
+	// Shutdown old keymanager and make sure it deregisters.
 	sc.Logger.Info("shutting down old keymanager")
 	oldKm := sc.Net.Keymanagers()[0]
-	if err = oldKm.Stop(); err != nil {
-		return fmt.Errorf("old keymanager node shutdown: %w", err)
+	if err = oldKm.RequestShutdown(ctx, true); err != nil {
+		return fmt.Errorf("failed to request shutdown: %w", err)
 	}
 
 	// Run client again.
