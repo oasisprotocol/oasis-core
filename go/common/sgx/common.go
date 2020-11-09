@@ -225,6 +225,9 @@ func (id *EnclaveIdentity) UnmarshalText(text []byte) error {
 	if err != nil {
 		return fmt.Errorf("sgx: malformed EnclaveIdentity: %w", err)
 	}
+	if len(b) != enclaveIdentitySize {
+		return fmt.Errorf("sgx: malformed EnclaveIdentity")
+	}
 	if err := id.MrEnclave.UnmarshalBinary(b[:MrEnclaveSize]); err != nil {
 		return fmt.Errorf("sgx: malformed MrEnclave in EnclaveIdentity: %w", err)
 	}
@@ -238,8 +241,11 @@ func (id *EnclaveIdentity) UnmarshalText(text []byte) error {
 // UnmarshalHex decodes a hex marshaled EnclaveIdentity.
 func (id *EnclaveIdentity) UnmarshalHex(text string) error {
 	b, err := hex.DecodeString(text)
-	if err != nil || len(b) != enclaveIdentitySize {
+	if err != nil {
 		return fmt.Errorf("sgx: malformed EnclaveIdentity: %w", err)
+	}
+	if len(b) != enclaveIdentitySize {
+		return fmt.Errorf("sgx: malformed EnclaveIdentity")
 	}
 
 	copy(id.MrEnclave[:], b[:MrEnclaveSize])
