@@ -29,8 +29,12 @@ func (dt Depth) MarshalBinary() []byte {
 	return data
 }
 
-// MarshalBinary encodes a Depth into binary form.
+// UnmarshalBinary decodes a binary marshaled depth.
 func (dt *Depth) UnmarshalBinary(data []byte) (int, error) {
+	if len(data) < DepthSize {
+		return 0, ErrMalformedNode
+	}
+
 	*dt = Depth(binary.LittleEndian.Uint16(data[0:DepthSize]))
 	return DepthSize, nil
 }

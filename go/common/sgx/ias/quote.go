@@ -14,6 +14,9 @@ const (
 	// quoteBodyLen is the length of the part of the quote body that comes before the report.
 	quoteBodyLen = 48
 
+	// quoteReportLen is the length of the report in bytes.
+	quoteReportLen = 384
+
 	// offsetReportReportData is the offset into the report structure of the report_data field.
 	offsetReportReportData = 320
 )
@@ -39,6 +42,10 @@ type Body struct {
 
 // UnmarshalBinary decodes Body from byte array.
 func (b *Body) UnmarshalBinary(data []byte) error {
+	if len(data) < quoteBodyLen {
+		return fmt.Errorf("ias/quote: invalid body length")
+	}
+
 	b.Version = binary.LittleEndian.Uint16(data[0:])
 	switch b.Version {
 	case 1, 2:
@@ -126,8 +133,12 @@ func (r *Report) MarshalBinary() ([]byte, error) {
 	return rBin, nil
 }
 
-// UnmarshalBinary decodes Report from byte array
+// UnmarshalBinary decodes Report from a byte array.
 func (r *Report) UnmarshalBinary(data []byte) error {
+	if len(data) < quoteReportLen {
+		return fmt.Errorf("ias/quote: invalid report length")
+	}
+
 	copy(r.CPUSVN[:], data[0:])
 	r.MiscSelect = binary.LittleEndian.Uint32(data[16:])
 	r.Attributes.Flags = sgx.AttributesFlags(binary.LittleEndian.Uint64(data[48:]))
