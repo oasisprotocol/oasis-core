@@ -61,8 +61,8 @@ is being made to know which part of the project's version to bump.
 To customize the release process, one can set the following environment
 variables:
 
-- `OASIS_CORE_GIT_ORIGIN_REMOTE` (default: `origin`): Name of the git remote
-  pointing to the canonical upstream git repository.
+- `GIT_ORIGIN_REMOTE` (default: `origin`): Name of the git remote pointing to
+  the canonical upstream git repository.
 - `RELEASE_BRANCH` (default: `master`): Name of the branch where to tag the next
   release.
 
