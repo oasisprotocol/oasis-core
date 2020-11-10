@@ -34,14 +34,16 @@ type proofNode struct {
 // ProofBuilder is a Merkle proof builder.
 type ProofBuilder struct {
 	root     hash.Hash
+	subtree  hash.Hash
 	included map[hash.Hash]*proofNode
 	size     uint64
 }
 
 // NewProofBuilder creates a new Merkle proof builder for the given root.
-func NewProofBuilder(root hash.Hash) *ProofBuilder {
+func NewProofBuilder(root, subtree hash.Hash) *ProofBuilder {
 	return &ProofBuilder{
 		root:     root,
+		subtree:  subtree,
 		included: make(map[hash.Hash]*proofNode),
 	}
 }
@@ -94,14 +96,14 @@ func (b *ProofBuilder) Include(n node.Node) {
 	b.size += 1 + uint64(len(pn.serialized))
 }
 
-// HasRoot returns true if the root node has already been included.
-func (b *ProofBuilder) HasRoot() bool {
-	return b.included[b.root] != nil
+// HasSubtree returns true if the subtree root node has already been included.
+func (b *ProofBuilder) HasSubtreeRoot() bool {
+	return b.included[b.subtree] != nil
 }
 
-// GetRoot returns the root hash for this proof.
-func (b *ProofBuilder) GetRoot() hash.Hash {
-	return b.root
+// GetSubtree returns the subtree root hash for this proof.
+func (b *ProofBuilder) GetSubtreeRoot() hash.Hash {
+	return b.subtree
 }
 
 // Size returns the current size of this proof.
@@ -111,10 +113,17 @@ func (b *ProofBuilder) Size() uint64 {
 
 // Build tries to build the proof.
 func (b *ProofBuilder) Build(ctx context.Context) (*Proof, error) {
-	proof := Proof{
-		UntrustedRoot: b.root,
+	var proof Proof
+	switch b.HasSubtreeRoot() {
+	case true:
+		// A partial proof for the subtree is available, include that.
+		proof.UntrustedRoot = b.subtree
+	case false:
+		// No partial proof available, we need to use the tree root.
+		proof.UntrustedRoot = b.root
 	}
-	if err := b.build(ctx, &proof, b.root); err != nil {
+
+	if err := b.build(ctx, &proof, proof.UntrustedRoot); err != nil {
 		return nil, err
 	}
 	return &proof, nil

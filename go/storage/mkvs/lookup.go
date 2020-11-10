@@ -48,7 +48,7 @@ func (t *tree) SyncGet(ctx context.Context, request *syncer.GetRequest) (*syncer
 	// Remember where the path from root to target node ends (will end).
 	t.cache.markPosition()
 
-	pb := syncer.NewProofBuilder(request.Tree.Position)
+	pb := syncer.NewProofBuilder(request.Tree.Root.Hash, request.Tree.Position)
 	opts := doGetOptions{
 		proofBuilder:    pb,
 		includeSiblings: request.IncludeSiblings,
@@ -108,10 +108,7 @@ func (t *tree) doGet(
 
 	// Include nodes in proof if we have a proof builder.
 	if pb := opts.proofBuilder; pb != nil && ptr != nil {
-		proofRoot := pb.GetRoot()
-		if pb.HasRoot() || proofRoot.Equal(&ptr.Hash) {
-			pb.Include(nd)
-		}
+		pb.Include(nd)
 	}
 
 	// This may be used to only include the given node in a proof and not
