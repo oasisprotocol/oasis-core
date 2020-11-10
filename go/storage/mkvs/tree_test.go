@@ -1634,6 +1634,46 @@ func testPruneLoneRootsShared2(t *testing.T, ndb db.NodeDB, factory NodeDBFactor
 	require.NoError(t, it.Err(), "tree should still be consistent")
 }
 
+func testPruneLoneRootsShared3(t *testing.T, ndb db.NodeDB, factory NodeDBFactory) {
+	require := require.New(t)
+	ctx := context.Background()
+
+	// Create a root in version 0.
+	tree := New(nil, ndb)
+	err := tree.Insert(ctx, []byte("foo"), []byte("bar"))
+	require.NoError(err, "Insert")
+	_, _, err = tree.Commit(ctx, testNs, 0)
+	require.NoError(err, "Commit")
+
+	// Create another root in version 0.
+	tree = New(nil, ndb)
+	err = tree.Insert(ctx, []byte("moo"), []byte("goo"))
+	require.NoError(err, "Insert")
+	_, rootHashR0_2, err := tree.Commit(ctx, testNs, 0)
+	require.NoError(err, "Commit")
+
+	// Create the same root as the first root in version 1.
+	tree = New(nil, ndb)
+	err = tree.Insert(ctx, []byte("foo"), []byte("bar"))
+	require.NoError(err, "Insert")
+	_, rootHashR1_1, err := tree.Commit(ctx, testNs, 1)
+	require.NoError(err, "Commit")
+
+	// Finalize version 0 with the second root.
+	err = ndb.Finalize(ctx, 0, []hash.Hash{rootHashR0_2})
+	require.NoError(err, "Finalize")
+
+	// Make sure that the first root in version 1 is still valid.
+	tree = NewWithRoot(nil, ndb, node.Root{
+		Namespace: testNs,
+		Version:   1,
+		Hash:      rootHashR1_1,
+	})
+	value, err := tree.Get(ctx, []byte("foo"))
+	require.NoError(err, "Get")
+	require.EqualValues([]byte("bar"), value)
+}
+
 func testPruneLoneRoots(t *testing.T, ndb db.NodeDB, factory NodeDBFactory) {
 	ctx := context.Background()
 
@@ -2064,6 +2104,7 @@ func testBackend(
 		{"PruneLoneRoots", testPruneLoneRoots},
 		{"PruneLoneRootsShared", testPruneLoneRootsShared},
 		{"PruneLoneRootsShared2", testPruneLoneRootsShared2},
+		{"PruneLoneRootsShared3", testPruneLoneRootsShared3},
 		{"PruneForkedRoots", testPruneForkedRoots},
 		{"SpecialCase1", testSpecialCase1},
 		{"SpecialCase2", testSpecialCase2},
