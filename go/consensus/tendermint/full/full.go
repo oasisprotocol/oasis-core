@@ -815,7 +815,11 @@ func (t *fullService) GetStatus(ctx context.Context) (*consensusAPI.Status, erro
 	status.NodePeers = peers
 
 	// Check if the local node is in the validator set for the latest (uncommitted) block.
-	vals, err := t.stateStore.LoadValidators(status.LatestHeight + 1)
+	valSetHeight := status.LatestHeight + 1
+	if valSetHeight < status.GenesisHeight {
+		valSetHeight = status.GenesisHeight
+	}
+	vals, err := t.stateStore.LoadValidators(valSetHeight)
 	if err != nil {
 		return nil, fmt.Errorf("failed to load validator set: %w", err)
 	}
