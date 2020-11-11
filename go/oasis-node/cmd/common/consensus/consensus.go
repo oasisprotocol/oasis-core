@@ -12,6 +12,7 @@ import (
 	"github.com/spf13/viper"
 
 	"github.com/oasisprotocol/oasis-core/go/common/cbor"
+	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	signerFile "github.com/oasisprotocol/oasis-core/go/common/crypto/signature/signers/file"
 	signerPlugin "github.com/oasisprotocol/oasis-core/go/common/crypto/signature/signers/plugin"
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
@@ -93,7 +94,7 @@ func GetTxNonceAndFee() (uint64, *transaction.Fee) {
 	return nonce, &fee
 }
 
-func SignAndSaveTx(ctx context.Context, tx *transaction.Transaction) {
+func SignAndSaveTx(ctx context.Context, tx *transaction.Transaction, signer signature.Signer) {
 	if viper.GetBool(CfgTxUnsigned) {
 		rawUnsignedTx := cbor.Marshal(tx)
 		if err := ioutil.WriteFile(viper.GetString(CfgTxFile), rawUnsignedTx, 0o600); err != nil {
@@ -105,21 +106,25 @@ func SignAndSaveTx(ctx context.Context, tx *transaction.Transaction) {
 		return
 	}
 
-	entityDir, err := cmdSigner.CLIDirOrPwd()
-	if err != nil {
-		logger.Error("failed to retrieve signer dir",
-			"err", err,
-		)
-		os.Exit(1)
+	var err error
+	var entityDir string
+	if signer == nil {
+		entityDir, err = cmdSigner.CLIDirOrPwd()
+		if err != nil {
+			logger.Error("failed to retrieve entity dir",
+				"err", err,
+			)
+			os.Exit(1)
+		}
+		_, signer, err = cmdCommon.LoadEntity(cmdSigner.Backend(), entityDir)
+		if err != nil {
+			logger.Error("failed to load signer",
+				"err", err,
+			)
+			os.Exit(1)
+		}
+		defer signer.Reset()
 	}
-	_, signer, err := cmdCommon.LoadEntity(cmdSigner.Backend(), entityDir)
-	if err != nil {
-		logger.Error("failed to load account entity",
-			"err", err,
-		)
-		os.Exit(1)
-	}
-	defer signer.Reset()
 
 	fmt.Printf("You are about to sign the following transaction:\n")
 	tx.PrettyPrint(ctx, "  ", os.Stdout)
