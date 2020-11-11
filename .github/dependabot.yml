@@ -57,6 +57,7 @@ updates:
       # version, remove it from the ignore list.
       - dependency-name: futures
       - dependency-name: grpcio
+      - dependency-name: tokio
       # Wait with update until https://github.com/Amanieu/intrusive-rs/pull/51
       # is merged and released, so we can continue using `intrusive_adapter!`
       # macro in`lru_cache.rs`.
