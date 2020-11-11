@@ -12,19 +12,30 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/scenario"
 )
 
-// EarlyQuery is the early query scenario where we query a validator node before the network
-// has started and there are no committed blocks.
-var EarlyQuery scenario.Scenario = &earlyQueryImpl{
-	E2E: *NewE2E("early-query"),
-}
+var (
+	// EarlyQuery is the early query scenario where we query a validator node before the network
+	// has started and there are no committed blocks.
+	EarlyQuery scenario.Scenario = &earlyQueryImpl{
+		E2E: *NewE2E("early-query"),
+	}
+
+	// EarlyQueryInitHeight is the same as EarlyQuery scenario but with an initial height set.
+	EarlyQueryInitHeight scenario.Scenario = &earlyQueryImpl{
+		E2E:           *NewE2E("early-query/init-height"),
+		initialHeight: 42,
+	}
+)
 
 type earlyQueryImpl struct {
 	E2E
+
+	initialHeight int64
 }
 
 func (sc *earlyQueryImpl) Clone() scenario.Scenario {
 	return &earlyQueryImpl{
-		E2E: sc.E2E.Clone(),
+		E2E:           sc.E2E.Clone(),
+		initialHeight: sc.initialHeight,
 	}
 }
 
@@ -33,6 +44,9 @@ func (sc *earlyQueryImpl) Fixture() (*oasis.NetworkFixture, error) {
 	if err != nil {
 		return nil, err
 	}
+
+	// Set initial height.
+	f.Network.InitialHeight = sc.initialHeight
 
 	// Only one validator should actually start to prevent the network from committing any blocks.
 	f.Validators[1].NoAutoStart = true

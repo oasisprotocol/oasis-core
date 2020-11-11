@@ -331,6 +331,7 @@ func RegisterScenarios() error {
 		Debond,
 		// Early query test.
 		EarlyQuery,
+		EarlyQueryInitHeight,
 		// Consensus state sync.
 		ConsensusStateSync,
 		// Multiple seeds test.
