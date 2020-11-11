@@ -77,5 +77,6 @@ The following records currently exist:
 * [ADR 0003](0003-consensus-runtime-token-transfer.md) - Consensus/Runtime Token Transfer
 * [ADR 0004](0004-runtime-governance.md) - Runtime Governance
 * [ADR 0005](0005-runtime-compute-slashing.md) - Runtime Compute Node Slashing
+* [ADR 0006](0006-consensus-governance.md) - Consensus Governance
 * [ADR 0007](0007-improved-random-beacon.md) - Improved Random Beacon
 <!-- markdownlint-enable line-length -->
