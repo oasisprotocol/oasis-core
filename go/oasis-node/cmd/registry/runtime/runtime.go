@@ -193,7 +193,7 @@ func doGenRegister(cmd *cobra.Command, args []string) {
 	nonce, fee := cmdConsensus.GetTxNonceAndFee()
 	tx := registry.NewRegisterRuntimeTx(nonce, fee, signed)
 
-	cmdConsensus.SignAndSaveTx(context.Background(), tx)
+	cmdConsensus.SignAndSaveTx(context.Background(), tx, nil)
 }
 
 func doList(cmd *cobra.Command, args []string) {
