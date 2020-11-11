@@ -89,6 +89,7 @@ func (val *Validator) startNode() error {
 		tendermintSubmissionGasPrice(val.consensus.SubmissionGasPrice).
 		tendermintPrune(val.consensus.PruneNumKept).
 		tendermintRecoverCorruptedWAL(val.consensus.TendermintRecoverCorruptedWAL).
+		configureDebugCrashPoints(val.crashPointsProbability).
 		appendNetwork(val.net).
 		appendEntity(val.entity)
 
@@ -134,6 +135,7 @@ func (net *Network) NewValidator(cfg *ValidatorCfg) (*Validator, error) {
 			dir:                                      valDir,
 			termEarlyOk:                              cfg.AllowEarlyTermination,
 			termErrorOk:                              cfg.AllowErrorTermination,
+			crashPointsProbability:                   cfg.CrashPointsProbability,
 			disableDefaultLogWatcherHandlerFactories: cfg.DisableDefaultLogWatcherHandlerFactories,
 			logWatcherHandlerFactories:               cfg.LogWatcherHandlerFactories,
 			consensus:                                cfg.Consensus,

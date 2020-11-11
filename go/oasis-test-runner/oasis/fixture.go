@@ -158,6 +158,8 @@ type ValidatorFixture struct { // nolint: maligned
 
 	NoAutoStart bool `json:"no_auto_start,omitempty"`
 
+	CrashPointsProbability float64 `json:"crash_points_probability,omitempty"`
+
 	Entity int `json:"entity"`
 
 	LogWatcherHandlerFactories []log.WatcherHandlerFactory `json:"-"`
@@ -186,6 +188,7 @@ func (f *ValidatorFixture) Create(net *Network) (*Validator, error) {
 			LogWatcherHandlerFactories: f.LogWatcherHandlerFactories,
 			Consensus:                  f.Consensus,
 			NoAutoStart:                f.NoAutoStart,
+			CrashPointsProbability:     f.CrashPointsProbability,
 		},
 		Entity:   entity,
 		Sentries: sentries,
@@ -291,6 +294,8 @@ type KeymanagerFixture struct {
 	// Consensus contains configuration for the consensus backend.
 	Consensus ConsensusFixture `json:"consensus"`
 
+	CrashPointsProbability float64 `json:"crash_points_probability,omitempty"`
+
 	LogWatcherHandlerFactories []log.WatcherHandlerFactory `json:"-"`
 }
 
@@ -314,6 +319,7 @@ func (f *KeymanagerFixture) Create(net *Network) (*Keymanager, error) {
 			AllowEarlyTermination:      f.AllowEarlyTermination,
 			AllowErrorTermination:      f.AllowErrorTermination,
 			LogWatcherHandlerFactories: f.LogWatcherHandlerFactories,
+			CrashPointsProbability:     f.CrashPointsProbability,
 			Consensus:                  f.Consensus,
 			NoAutoStart:                f.NoAutoStart,
 		},
@@ -347,6 +353,8 @@ type StorageWorkerFixture struct { // nolint: maligned
 	IgnoreApplies           bool          `json:"ignore_applies,omitempty"`
 	CheckpointSyncEnabled   bool          `json:"checkpoint_sync_enabled,omitempty"`
 
+	CrashPointsProbability float64 `json:"crash_points_probability,omitempty"`
+
 	// Runtimes contains the indexes of the runtimes to enable. Leave
 	// empty or nil for the default behaviour (i.e. include all runtimes).
 	Runtimes []int `json:"runtimes,omitempty"`
@@ -363,6 +371,7 @@ func (f *StorageWorkerFixture) Create(net *Network) (*Storage, error) {
 		NodeCfg: NodeCfg{
 			AllowEarlyTermination:      f.AllowEarlyTermination,
 			AllowErrorTermination:      f.AllowErrorTermination,
+			CrashPointsProbability:     f.CrashPointsProbability,
 			NoAutoStart:                f.NoAutoStart,
 			LogWatcherHandlerFactories: f.LogWatcherHandlerFactories,
 			Consensus:                  f.Consensus,
@@ -372,7 +381,7 @@ func (f *StorageWorkerFixture) Create(net *Network) (*Storage, error) {
 		SentryIndices:           f.Sentries,
 		CheckpointCheckInterval: f.CheckpointCheckInterval,
 		IgnoreApplies:           f.IgnoreApplies,
-		// The checkpoint syncing flas is intentionally flipped here.
+		// The checkpoint syncing flag is intentionally flipped here.
 		// Syncing should normally be enabled, but normally disabled in tests.
 		CheckpointSyncDisabled: !f.CheckpointSyncEnabled,
 		DisableCertRotation:    f.DisableCertRotation,
@@ -394,6 +403,8 @@ type ComputeWorkerFixture struct {
 	// Consensus contains configuration for the consensus backend.
 	Consensus ConsensusFixture `json:"consensus"`
 
+	CrashPointsProbability float64 `json:"crash_point_probability"`
+
 	LogWatcherHandlerFactories []log.WatcherHandlerFactory `json:"-"`
 
 	// Runtimes contains the indexes of the runtimes to enable.
@@ -412,6 +423,7 @@ func (f *ComputeWorkerFixture) Create(net *Network) (*Compute, error) {
 			AllowEarlyTermination:      f.AllowEarlyTermination,
 			AllowErrorTermination:      f.AllowErrorTermination,
 			NoAutoStart:                f.NoAutoStart,
+			CrashPointsProbability:     f.CrashPointsProbability,
 			LogWatcherHandlerFactories: f.LogWatcherHandlerFactories,
 			Consensus:                  f.Consensus,
 		},
@@ -437,6 +449,8 @@ func (f *SeedFixture) Create(net *Network) (*Seed, error) {
 type SentryFixture struct {
 	LogWatcherHandlerFactories []log.WatcherHandlerFactory `json:"-"`
 
+	CrashPointsProbability float64 `json:"crash_points_probability,omitempty"`
+
 	Validators        []int `json:"validators"`
 	StorageWorkers    []int `json:"storage_workers"`
 	KeymanagerWorkers []int `json:"keymanager_workers"`
@@ -447,6 +461,7 @@ func (f *SentryFixture) Create(net *Network) (*Sentry, error) {
 	return net.NewSentry(&SentryCfg{
 		NodeCfg: NodeCfg{
 			LogWatcherHandlerFactories: f.LogWatcherHandlerFactories,
+			CrashPointsProbability:     f.CrashPointsProbability,
 		},
 		ValidatorIndices:  f.Validators,
 		StorageIndices:    f.StorageWorkers,

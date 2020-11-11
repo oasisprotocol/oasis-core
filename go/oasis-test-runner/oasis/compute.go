@@ -104,6 +104,7 @@ func (worker *Compute) startNode() error {
 		workerRuntimeProvisioner(worker.runtimeProvisioner).
 		workerRuntimeSGXLoader(worker.net.cfg.RuntimeSGXLoaderBinary).
 		workerExecutorScheduleCheckTxEnabled().
+		configureDebugCrashPoints(worker.crashPointsProbability).
 		appendNetwork(worker.net).
 		appendSeedNodes(worker.net.seeds).
 		appendEntity(worker.entity)
@@ -155,10 +156,11 @@ func (net *Network) NewCompute(cfg *ComputeCfg) (*Compute, error) {
 			dir:                                      computeDir,
 			termEarlyOk:                              cfg.AllowEarlyTermination,
 			termErrorOk:                              cfg.AllowErrorTermination,
+			noAutoStart:                              cfg.NoAutoStart,
+			crashPointsProbability:                   cfg.CrashPointsProbability,
 			disableDefaultLogWatcherHandlerFactories: cfg.DisableDefaultLogWatcherHandlerFactories,
 			logWatcherHandlerFactories:               cfg.LogWatcherHandlerFactories,
 			consensus:                                cfg.Consensus,
-			noAutoStart:                              cfg.NoAutoStart,
 		},
 		entity:             cfg.Entity,
 		runtimeProvisioner: cfg.RuntimeProvisioner,

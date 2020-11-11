@@ -2,8 +2,10 @@ package crash
 
 import (
 	"sort"
+	"sync"
 	"testing"
 
+	"github.com/spf13/viper"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -27,14 +29,19 @@ func testCrashMethod() {
 	panic(CrashPanicValue)
 }
 
-func newTestCrasher(crashPointConfig map[string]float64, options CrasherOptions) *Crasher {
+func newTestCrasher(crashPoints map[string]float64, options CrasherOptions) *Crasher {
 	crasher := New(options)
+
+	var crashMap sync.Map
+	for k, v := range crashPoints {
+		crashMap.Store(k, v)
+	}
 
 	// The default CrashMethod is not something that we can `recover` from so
 	// it's not possible to use in tests. We replace it here with a panic that
 	// returns a specific value.
 	crasher.CrashMethod = testCrashMethod
-	crasher.CrashPointConfig = crashPointConfig
+	crasher.CrashPointConfig = &crashMap
 	return crasher
 }
 
@@ -98,9 +105,15 @@ func TestCrashPointRegistrationAndConfig(t *testing.T) {
 		"point3": 0.8,
 	})
 
-	assert.Equal(t, crasher.CrashPointConfig["point1"], 1.0, "should set point1 correctly")
-	assert.Equal(t, crasher.CrashPointConfig["point2"], 0.66, "should set point2 correctly")
-	assert.Equal(t, crasher.CrashPointConfig["point3"], 0.8, "should set point3 correctly")
+	p1, ok := crasher.CrashPointConfig.Load("point1")
+	assert.True(t, ok, "should set point1 correctly")
+	assert.Equal(t, 1.0, p1, "should set point1 correctly")
+	p2, ok := crasher.CrashPointConfig.Load("point2")
+	assert.True(t, ok, "should set point2 correctly")
+	assert.Equal(t, 0.66, p2, "should set point2 correctly")
+	p3, ok := crasher.CrashPointConfig.Load("point3")
+	assert.True(t, ok, "should set point3 correctly")
+	assert.Equal(t, 0.8, p3, "should set point3 correctly")
 
 	configShouldFail := func() {
 		// This should fail because point4 is not registered.
@@ -109,4 +122,31 @@ func TestCrashPointRegistrationAndConfig(t *testing.T) {
 		})
 	}
 	assert.Panics(t, configShouldFail, "should panic if point4 is unregistered")
+}
+
+func TestGlobalCrashPointRegistrationViaFlags(t *testing.T) {
+	testForceEnable = true
+	defer func() {
+		testForceEnable = false
+	}()
+
+	// Set non-zero default probability.
+	viper.Set(CfgDefaultCrashPointProbability, 0.1)
+
+	// Register test crash point.
+	RegisterCrashPoints("test.global.point")
+	RegisterCrashPoints("test.global.point2")
+
+	viper.Set(defaultCLIPrefix+"."+"test.global.point2", 0.5)
+
+	// Load values from flags.
+	LoadViperArgValues()
+
+	p1, ok := crashGlobal.CrashPointConfig.Load("test.global.point")
+	assert.True(t, ok, "should set test point correctly")
+	assert.Equal(t, 0.1, p1, "should set default point probability")
+
+	p2, ok := crashGlobal.CrashPointConfig.Load("test.global.point2")
+	assert.True(t, ok, "should set test point correctly")
+	assert.Equal(t, 0.5, p2, "should set configured point probability")
 }

@@ -11,6 +11,7 @@ import (
 	"github.com/spf13/viper"
 
 	"github.com/oasisprotocol/oasis-core/go/common"
+	"github.com/oasisprotocol/oasis-core/go/common/crash"
 	commonGrpc "github.com/oasisprotocol/oasis-core/go/common/grpc"
 	"github.com/oasisprotocol/oasis-core/go/common/sgx"
 	"github.com/oasisprotocol/oasis-core/go/consensus/tendermint"
@@ -491,6 +492,13 @@ func (args *argBuilder) appendSeedNodes(seeds []*Seed) *argBuilder {
 			"--" + tendermintCommon.CfgP2PSeed, fmt.Sprintf("%s@127.0.0.1:%d", seed.tmAddress, seed.consensusPort),
 		}...)
 	}
+	return args
+}
+
+func (args *argBuilder) configureDebugCrashPoints(prob float64) *argBuilder {
+	args.vec = append(args.vec,
+		"--"+crash.CfgDefaultCrashPointProbability, fmt.Sprintf("%f", prob),
+	)
 	return args
 }
 
