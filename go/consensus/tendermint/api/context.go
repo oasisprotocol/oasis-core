@@ -10,6 +10,7 @@ import (
 
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
+	staking "github.com/oasisprotocol/oasis-core/go/staking/api"
 	"github.com/oasisprotocol/oasis-core/go/storage/mkvs"
 )
 
@@ -59,6 +60,8 @@ func (m ContextMode) String() string {
 type Context struct {
 	context.Context
 
+	parent *Context
+
 	mode        ContextMode
 	currentTime time.Time
 
@@ -66,7 +69,8 @@ type Context struct {
 	events        []types.Event
 	gasAccountant GasAccountant
 
-	txSigner signature.PublicKey
+	txSigner      signature.PublicKey
+	callerAddress staking.Address
 
 	appState      ApplicationState
 	state         mkvs.Tree
@@ -117,10 +121,21 @@ func NewContext(
 //
 // After calling this method, the context should no longer be used.
 func (c *Context) Close() {
-	if c.IsSimulation() {
-		if tree, ok := c.state.(mkvs.ClosableTree); ok {
-			tree.Close()
+	switch c.parent {
+	case nil:
+		// This is the top-level context.
+		if c.IsSimulation() {
+			if tree, ok := c.state.(mkvs.ClosableTree); ok {
+				tree.Close()
+			}
 		}
+
+		if c.stateCheckpoint != nil {
+			panic("context: open checkpoint was never committed or discarded")
+		}
+	default:
+		// This is a child context.
+		c.parent.events = append(c.parent.events, c.events...)
 	}
 
 	c.events = nil
@@ -128,10 +143,6 @@ func (c *Context) Close() {
 	c.state = nil
 	c.blockCtx = nil
 	c.Context = nil
-
-	if c.stateCheckpoint != nil {
-		panic("context: open checkpoint was never committed or discarded")
-	}
 }
 
 // Logger returns the logger associated with this context.
@@ -172,9 +183,43 @@ func (c *Context) SetTxSigner(txSigner signature.PublicKey) {
 	switch c.mode {
 	case ContextCheckTx, ContextDeliverTx, ContextSimulateTx:
 		c.txSigner = txSigner
+		// By default, the caller is the transaction signer.
+		c.callerAddress = staking.NewAddress(txSigner)
 	default:
 		panic("context: only available in transaction context")
 	}
+}
+
+// CallerAddress returns the authenticated address representing the caller.
+func (c *Context) CallerAddress() staking.Address {
+	return c.callerAddress
+}
+
+// NewChild creates a new child context.
+func (c *Context) NewChild() *Context {
+	return &Context{
+		Context:         c.Context,
+		parent:          c,
+		mode:            c.mode,
+		currentTime:     c.currentTime,
+		gasAccountant:   c.gasAccountant,
+		txSigner:        c.txSigner,
+		callerAddress:   c.callerAddress,
+		appState:        c.appState,
+		state:           c.state,
+		blockHeight:     c.blockHeight,
+		blockCtx:        c.blockCtx,
+		initialHeight:   c.initialHeight,
+		stateCheckpoint: c.stateCheckpoint,
+		logger:          c.logger,
+	}
+}
+
+// WithCallerAddress creates a child context and sets a specific tx address.
+func (c *Context) WithCallerAddress(callerAddress staking.Address) *Context {
+	child := c.NewChild()
+	child.callerAddress = callerAddress
+	return child
 }
 
 // IsInitChain returns true if this ia an init chain context.
