@@ -39,4 +39,9 @@ impl Hash {
             0xce, 0xf0, 0x96, 0x7a,
         ])
     }
+
+    /// Hash truncated to the given number of bytes.
+    pub fn truncated(&self, n: usize) -> &[u8] {
+        &self.0[..n]
+    }
 }

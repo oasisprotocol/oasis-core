@@ -20,6 +20,7 @@ func TestReserved(t *testing.T) {
 	addr = NewAddress(pk)
 	require.True(addr.IsValid(), "test address should initially be valid")
 	require.False(addr.IsReserved(), "test address should not initially be reserved")
+	require.EqualValues("oasis1qryqqccycvckcxp453tflalujvlf78xymcdqw4vz", addr.String(), "test address should be correct")
 
 	err := addr.Reserve()
 	require.NoError(err, "marking test address as reserved should not fail")
@@ -45,6 +46,7 @@ func TestRuntimeAddress(t *testing.T) {
 
 	addr1 := NewRuntimeAddress(id1)
 	require.True(addr1.IsValid(), "runtime address should be valid")
+	require.EqualValues("oasis1qpllh99nhwzrd56px4txvl26atzgg4f3a58jzzad", addr1.String(), "runtime address should be correct")
 
 	addr2 := NewRuntimeAddress(id2)
 	require.NotEqualValues(addr1, addr2, "runtime addresses for different runtimes should be different")
