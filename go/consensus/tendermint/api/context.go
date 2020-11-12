@@ -135,7 +135,9 @@ func (c *Context) Close() {
 		}
 	default:
 		// This is a child context.
-		c.parent.events = append(c.parent.events, c.events...)
+		if !c.IsSimulation() {
+			c.parent.events = append(c.parent.events, c.events...)
+		}
 	}
 
 	c.events = nil
@@ -197,8 +199,7 @@ func (c *Context) CallerAddress() staking.Address {
 
 // NewChild creates a new child context.
 func (c *Context) NewChild() *Context {
-	return &Context{
-		Context:         c.Context,
+	cc := &Context{
 		parent:          c,
 		mode:            c.mode,
 		currentTime:     c.currentTime,
@@ -213,12 +214,25 @@ func (c *Context) NewChild() *Context {
 		stateCheckpoint: c.stateCheckpoint,
 		logger:          c.logger,
 	}
+	cc.Context = context.WithValue(c.Context, contextKey{}, cc)
+	return cc
 }
 
 // WithCallerAddress creates a child context and sets a specific tx address.
 func (c *Context) WithCallerAddress(callerAddress staking.Address) *Context {
 	child := c.NewChild()
 	child.callerAddress = callerAddress
+	return child
+}
+
+// WithSimulation creates a child context in simulation mode.
+//
+// Note that state is unchanged -- if you want to prevent propagation of state updates, start a
+// checkpoint manually.
+func (c *Context) WithSimulation() *Context {
+	child := c.NewChild()
+	child.mode = ContextSimulateTx
+	child.logger = child.logger.With("mode", child.mode)
 	return child
 }
 

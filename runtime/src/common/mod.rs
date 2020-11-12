@@ -12,5 +12,6 @@ pub mod registry;
 pub mod roothash;
 pub mod runtime;
 pub mod sgx;
+pub mod staking;
 pub mod time;
 pub mod version;

@@ -13,9 +13,11 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common"
 	"github.com/oasisprotocol/oasis-core/go/common/cbor"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
+	"github.com/oasisprotocol/oasis-core/go/common/quantity"
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
 	runtimeClient "github.com/oasisprotocol/oasis-core/go/runtime/client/api"
 	runtimeTransaction "github.com/oasisprotocol/oasis-core/go/runtime/transaction"
+	staking "github.com/oasisprotocol/oasis-core/go/staking/api"
 )
 
 // NameRuntime is the name of the runtime workload.
@@ -44,18 +46,22 @@ const (
 type runtimeRequest uint8
 
 const (
-	runtimeRequestInsert  runtimeRequest = 0
-	runtimeRequestGet     runtimeRequest = 1
-	runtimeRequestRemove  runtimeRequest = 2
-	runtimeRequestMessage runtimeRequest = 3
+	runtimeRequestInsert   runtimeRequest = 0
+	runtimeRequestGet      runtimeRequest = 1
+	runtimeRequestRemove   runtimeRequest = 2
+	runtimeRequestMessage  runtimeRequest = 3
+	runtimeRequestWithdraw runtimeRequest = 4
+	runtimeRequestTransfer runtimeRequest = 5
 )
 
 // Weights to select between requests types.
 var runtimeRequestWeights = map[runtimeRequest]int{
-	runtimeRequestInsert:  2,
-	runtimeRequestGet:     1,
-	runtimeRequestRemove:  2,
-	runtimeRequestMessage: 1,
+	runtimeRequestInsert:   3,
+	runtimeRequestGet:      2,
+	runtimeRequestRemove:   3,
+	runtimeRequestMessage:  1,
+	runtimeRequestWithdraw: 1,
+	runtimeRequestTransfer: 1,
 }
 
 // RuntimeFlags are the runtime workload flags.
@@ -66,6 +72,10 @@ type runtime struct {
 
 	runtimeID             common.Namespace
 	reckonedKeyValueState map[string]string
+
+	testAddress    staking.Address
+	testBalance    quantity.Quantity
+	runtimeBalance quantity.Quantity
 }
 
 func (r *runtime) generateVal(rng *rand.Rand, existingKey bool) string {
@@ -310,9 +320,177 @@ func (r *runtime) doMessageRequest(ctx context.Context, rng *rand.Rand, rtc runt
 	return nil
 }
 
+func (r *runtime) doWithdrawRequest(ctx context.Context, rng *rand.Rand, rtc runtimeClient.RuntimeClient) error {
+	// Submit message request.
+	amount := *quantity.NewFromUint64(1)
+	req := &runtimeTransaction.TxnCall{
+		Method: "consensus_withdraw",
+		Args: struct {
+			Withdraw staking.Withdraw `json:"withdraw"`
+			Nonce    uint64           `json:"nonce"`
+		}{
+			Withdraw: staking.Withdraw{
+				From:   r.testAddress,
+				Amount: amount,
+			},
+			Nonce: rng.Uint64(),
+		},
+	}
+	rsp, err := r.submitRuntimeRquest(ctx, rtc, req)
+	if err != nil {
+		r.Logger.Error("Submit withdraw request failure",
+			"request", req,
+			"err", err,
+		)
+		return fmt.Errorf("submit withdraw request failed: %w", err)
+	}
+
+	r.Logger.Debug("withdraw request success",
+		"request", req,
+		"response", rsp,
+	)
+
+	// Make sure the withdrawal was processed correctly in the consensus layer.
+	acct, err := r.Consensus().Staking().Account(ctx, &staking.OwnerQuery{
+		Height: consensus.HeightLatest,
+		Owner:  r.testAddress,
+	})
+	if err != nil {
+		return fmt.Errorf("failed to query test account: %w", err)
+	}
+
+	// Check source account balance.
+	if err = r.testBalance.Sub(&amount); err != nil {
+		return fmt.Errorf("failed to compute new test balance: %w", err)
+	}
+	if r.testBalance.Cmp(&acct.General.Balance) != 0 {
+		return fmt.Errorf("unexpected balance in test account (expected: %s got: %s)", r.testBalance, acct.General.Balance)
+	}
+
+	// Check runtime account balance.
+	acct, err = r.Consensus().Staking().Account(ctx, &staking.OwnerQuery{
+		Height: consensus.HeightLatest,
+		Owner:  staking.NewRuntimeAddress(r.runtimeID),
+	})
+	if err != nil {
+		return fmt.Errorf("failed to query runtime account: %w", err)
+	}
+
+	if err = r.runtimeBalance.Add(&amount); err != nil {
+		return fmt.Errorf("failed to compute new runtime balance: %w", err)
+	}
+	if r.runtimeBalance.Cmp(&acct.General.Balance) != 0 {
+		return fmt.Errorf("unexpected balance in runtime account (expected: %s got: %s)", r.runtimeBalance, acct.General.Balance)
+	}
+
+	return nil
+}
+
+func (r *runtime) doTransferRequest(ctx context.Context, rng *rand.Rand, rtc runtimeClient.RuntimeClient) error {
+	if r.runtimeBalance.IsZero() {
+		return nil
+	}
+
+	// Submit message request.
+	amount := *quantity.NewFromUint64(1)
+	req := &runtimeTransaction.TxnCall{
+		Method: "consensus_transfer",
+		Args: struct {
+			Transfer staking.Transfer `json:"transfer"`
+			Nonce    uint64           `json:"nonce"`
+		}{
+			Transfer: staking.Transfer{
+				To:     r.testAddress,
+				Amount: amount,
+			},
+			Nonce: rng.Uint64(),
+		},
+	}
+	rsp, err := r.submitRuntimeRquest(ctx, rtc, req)
+	if err != nil {
+		r.Logger.Error("Submit transfer request failure",
+			"request", req,
+			"err", err,
+		)
+		return fmt.Errorf("submit transfer request failed: %w", err)
+	}
+
+	r.Logger.Debug("transfer request success",
+		"request", req,
+		"response", rsp,
+	)
+
+	// Make sure the transfer was processed correctly in the consensus layer.
+	acct, err := r.Consensus().Staking().Account(ctx, &staking.OwnerQuery{
+		Height: consensus.HeightLatest,
+		Owner:  r.testAddress,
+	})
+	if err != nil {
+		return fmt.Errorf("failed to query test account: %w", err)
+	}
+
+	// Check source account balance.
+	if err = r.testBalance.Add(&amount); err != nil {
+		return fmt.Errorf("failed to compute new test balance: %w", err)
+	}
+	if r.testBalance.Cmp(&acct.General.Balance) != 0 {
+		return fmt.Errorf("unexpected balance in test account (expected: %s got: %s)", r.testBalance, acct.General.Balance)
+	}
+
+	// Check runtime account balance.
+	acct, err = r.Consensus().Staking().Account(ctx, &staking.OwnerQuery{
+		Height: consensus.HeightLatest,
+		Owner:  staking.NewRuntimeAddress(r.runtimeID),
+	})
+	if err != nil {
+		return fmt.Errorf("failed to query runtime account: %w", err)
+	}
+
+	if err = r.runtimeBalance.Sub(&amount); err != nil {
+		return fmt.Errorf("failed to compute new runtime balance: %w", err)
+	}
+	if r.runtimeBalance.Cmp(&acct.General.Balance) != 0 {
+		return fmt.Errorf("unexpected balance in runtime account (expected: %s got: %s)", r.runtimeBalance, acct.General.Balance)
+	}
+
+	return nil
+}
+
 // Implements Workload.
 func (r *runtime) NeedsFunds() bool {
-	return false
+	return true
+}
+
+func (r *runtime) initAccounts(ctx context.Context, fundingAccount signature.Signer) error {
+	// Allow the runtime to withdraw some funds from the funding account.
+	rtAddress := staking.NewRuntimeAddress(r.runtimeID)
+
+	tx := staking.NewAllowTx(0, nil, &staking.Allow{
+		Beneficiary:  rtAddress,
+		AmountChange: *quantity.NewFromUint64(100000),
+	})
+	if err := r.FundSignAndSubmitTx(ctx, fundingAccount, tx); err != nil {
+		r.Logger.Error("failed to sign and submit allow transaction",
+			"tx", tx,
+			"signer", fundingAccount.Public(),
+		)
+		return fmt.Errorf("failed to sign and submit allow tx: %w", err)
+	}
+
+	// Configure the address used for runtime tests.
+	r.testAddress = staking.NewAddress(fundingAccount.Public())
+
+	// Query initial account balance.
+	acct, err := r.Consensus().Staking().Account(ctx, &staking.OwnerQuery{
+		Height: consensus.HeightLatest,
+		Owner:  r.testAddress,
+	})
+	if err != nil {
+		return fmt.Errorf("failed to query account: %w", err)
+	}
+	r.testBalance = acct.General.Balance
+
+	return nil
 }
 
 // Implements Workload.
@@ -340,11 +518,16 @@ func (r *runtime) Run(
 	}
 	r.reckonedKeyValueState = make(map[string]string)
 
+	// Initialize staking accounts for testing runtime interactions.
+	if err = r.initAccounts(ctx, fundingAccount); err != nil {
+		return fmt.Errorf("failed to initialize accounts: %w", err)
+	}
+
 	// Set up the runtime client.
 	rtc := runtimeClient.NewRuntimeClient(conn)
 
 	// Wait for 2nd epoch, so that runtimes are up and running.
-	r.logger.Info("waiting for 2nd epoch")
+	r.Logger.Info("waiting for 2nd epoch")
 	if err := cnsc.WaitEpoch(ctx, 2); err != nil {
 		return fmt.Errorf("failed waiting for 2nd epoch: %w", err)
 	}
@@ -384,6 +567,14 @@ func (r *runtime) Run(
 		case runtimeRequestMessage:
 			if err := r.doMessageRequest(ctx, rng, rtc); err != nil {
 				return fmt.Errorf("doMessageRequest failure: %w", err)
+			}
+		case runtimeRequestWithdraw:
+			if err := r.doWithdrawRequest(ctx, rng, rtc); err != nil {
+				return fmt.Errorf("doWithdrawRequest failure: %w", err)
+			}
+		case runtimeRequestTransfer:
+			if err := r.doTransferRequest(ctx, rng, rtc); err != nil {
+				return fmt.Errorf("doTransferRequest failure: %w", err)
 			}
 		default:
 			return fmt.Errorf("unimplemented")

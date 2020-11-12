@@ -7,6 +7,7 @@ import (
 	roothashApi "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/apps/roothash/api"
 	roothash "github.com/oasisprotocol/oasis-core/go/roothash/api"
 	"github.com/oasisprotocol/oasis-core/go/roothash/api/message"
+	staking "github.com/oasisprotocol/oasis-core/go/staking/api"
 )
 
 func (app *rootHashApplication) processRuntimeMessages(
@@ -14,11 +15,32 @@ func (app *rootHashApplication) processRuntimeMessages(
 	rtState *roothash.RuntimeState,
 	msgs []message.Message,
 ) error {
+	ctx = ctx.WithCallerAddress(staking.NewRuntimeAddress(rtState.Runtime.ID))
+	defer ctx.Close()
+
+	switch ctx.IsSimulation() {
+	case false:
+		// Delivery -- gas was already accounted for.
+		ctx.SetGasAccountant(tmapi.NewNopGasAccountant())
+	case true:
+		// Gas estimation -- use parent gas accountant, discard state updates (there shouldn't be
+		// any as we are using simulation mode, but make sure).
+		cp := ctx.StartCheckpoint()
+		defer cp.Close()
+	}
+
 	for i, msg := range msgs {
+		ctx.Logger().Debug("dispatching runtime message",
+			"index", i,
+			"body", msg,
+		)
+
 		var err error
 		switch {
 		case msg.Noop != nil:
-			err = app.md.Publish(ctx, roothashApi.RuntimeMessageNoop, &msg.Noop)
+			err = app.md.Publish(ctx, roothashApi.RuntimeMessageNoop, msg.Noop)
+		case msg.Staking != nil:
+			err = app.md.Publish(ctx, roothashApi.RuntimeMessageStaking, msg.Staking)
 		default:
 			// Unsupported message.
 			err = roothash.ErrInvalidArgument

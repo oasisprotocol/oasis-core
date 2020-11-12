@@ -12,7 +12,7 @@ use oasis_core_runtime::{
             mrae::deoxysii::{DeoxysII, KEY_SIZE, NONCE_SIZE, TAG_SIZE},
         },
         key_format::KeyFormat,
-        roothash::Message,
+        roothash::{Message, StakingMessage},
         runtime::RuntimeId,
         version::Version,
     },
@@ -27,7 +27,7 @@ use oasis_core_runtime::{
     version_from_cargo, Protocol, RpcDemux, RpcDispatcher, TxnDispatcher, TxnMethDispatcher,
 };
 use simple_keymanager::trusted_policy_signers;
-use simple_keyvalue_api::{with_api, Key, KeyValue};
+use simple_keyvalue_api::{with_api, Key, KeyValue, Transfer, Withdraw};
 
 /// Key format used for transaction artifacts.
 #[derive(Debug)]
@@ -70,7 +70,7 @@ fn get_runtime_id(_args: &(), ctx: &mut TxnContext) -> Result<Option<String>> {
     Ok(Some(rctx.test_runtime_id.to_string()))
 }
 
-// Emit a message and schedule to check its result in the next round.
+/// Emit a message and schedule to check its result in the next round.
 fn message(_args: &u64, ctx: &mut TxnContext) -> Result<()> {
     if ctx.check_only {
         return Err(CheckOnlySuccess::default().into());
@@ -90,6 +90,50 @@ fn message(_args: &u64, ctx: &mut TxnContext) -> Result<()> {
             "all messages should have been processed"
         );
     });
+    Ok(())
+}
+
+/// Withdraw from the consensus layer into the runtime account.
+fn consensus_withdraw(args: &Withdraw, ctx: &mut TxnContext) -> Result<()> {
+    if ctx.check_only {
+        return Err(CheckOnlySuccess::default().into());
+    }
+
+    StorageContext::with_current(|mkvs, _untrusted_local| {
+        let index = ctx.emit_message(Message::Staking {
+            v: 0,
+            msg: StakingMessage::Withdraw(args.withdraw.clone()),
+        });
+
+        mkvs.insert(
+            IoContext::create_child(&ctx.io_ctx),
+            &PendingMessagesKeyFormat { index }.encode(),
+            b"withdraw",
+        );
+    });
+
+    Ok(())
+}
+
+/// Transfer from the runtime account to another account in the consensus layer.
+fn consensus_transfer(args: &Transfer, ctx: &mut TxnContext) -> Result<()> {
+    if ctx.check_only {
+        return Err(CheckOnlySuccess::default().into());
+    }
+
+    StorageContext::with_current(|mkvs, _untrusted_local| {
+        let index = ctx.emit_message(Message::Staking {
+            v: 0,
+            msg: StakingMessage::Transfer(args.transfer.clone()),
+        });
+
+        mkvs.insert(
+            IoContext::create_child(&ctx.io_ctx),
+            &PendingMessagesKeyFormat { index }.encode(),
+            b"transfer",
+        );
+    });
+
     Ok(())
 }
 
@@ -325,17 +369,25 @@ impl BlockHandler {
             });
 
             // Make sure metadata is as expected.
-            assert_eq!(
-                meta,
-                Some(b"noop".to_vec()),
-                "message metadata must be correct"
-            );
+            match meta.as_ref().map(|v| v.as_slice()) {
+                Some(b"noop") => {
+                    // Make sure the message was successfully processed.
+                    assert!(
+                        ev.is_success(),
+                        "messages should have been successfully processed"
+                    );
+                }
 
-            // Make sure the message was successfully processed.
-            assert!(
-                ev.is_success(),
-                "messages should have been successfully processed"
-            );
+                Some(b"withdraw") => {
+                    // Withdraw.
+                }
+
+                Some(b"transfer") => {
+                    // Transfer.
+                }
+
+                meta => panic!("unexpected message metadata: {:?}", meta),
+            }
         }
 
         // Check if there are any leftover pending messages metadata.

@@ -94,10 +94,14 @@ func (ga *nopGasAccountant) GasUsed() transaction.Gas {
 	return 0
 }
 
+// Always use the same global no-op gas accountant instance to make it easier to check whether a
+// no-op gas accountant is being used.
+var nopGasAccountantImpl = &nopGasAccountant{}
+
 // NewNopGasAccountant creates a no-op gas accountant that doesn't
 // do any accounting.
 func NewNopGasAccountant() GasAccountant {
-	return &nopGasAccountant{}
+	return nopGasAccountantImpl
 }
 
 // GasAccountantKey is the gas accountant block context key.

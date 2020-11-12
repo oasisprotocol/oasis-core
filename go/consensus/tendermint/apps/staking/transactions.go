@@ -35,7 +35,12 @@ func (app *stakingApplication) transfer(ctx *api.Context, state *stakingState.Mu
 		return err
 	}
 
-	fromAddr := staking.NewAddress(ctx.TxSigner())
+	// Return early for simulation as we only need gas accounting.
+	if ctx.IsSimulation() {
+		return nil
+	}
+
+	fromAddr := ctx.CallerAddress()
 	if fromAddr.IsReserved() || !isTransferPermitted(params, fromAddr) {
 		return staking.ErrForbidden
 	}
@@ -114,7 +119,12 @@ func (app *stakingApplication) burn(ctx *api.Context, state *stakingState.Mutabl
 		return err
 	}
 
-	fromAddr := staking.NewAddress(ctx.TxSigner())
+	// Return early for simulation as we only need gas accounting.
+	if ctx.IsSimulation() {
+		return nil
+	}
+
+	fromAddr := ctx.CallerAddress()
 	if fromAddr.IsReserved() {
 		return staking.ErrForbidden
 	}
@@ -175,12 +185,17 @@ func (app *stakingApplication) addEscrow(ctx *api.Context, state *stakingState.M
 		return err
 	}
 
+	// Return early for simulation as we only need gas accounting.
+	if ctx.IsSimulation() {
+		return nil
+	}
+
 	// Check if sender provided at least a minimum amount of stake.
 	if escrow.Amount.Cmp(&params.MinDelegationAmount) < 0 {
 		return staking.ErrInvalidArgument
 	}
 
-	fromAddr := staking.NewAddress(ctx.TxSigner())
+	fromAddr := ctx.CallerAddress()
 	if fromAddr.IsReserved() {
 		return staking.ErrForbidden
 	}
@@ -272,7 +287,12 @@ func (app *stakingApplication) reclaimEscrow(ctx *api.Context, state *stakingSta
 		return err
 	}
 
-	toAddr := staking.NewAddress(ctx.TxSigner())
+	// Return early for simulation as we only need gas accounting.
+	if ctx.IsSimulation() {
+		return nil
+	}
+
+	toAddr := ctx.CallerAddress()
 	if toAddr.IsReserved() {
 		return staking.ErrForbidden
 	}
@@ -391,12 +411,17 @@ func (app *stakingApplication) amendCommissionSchedule(
 		return err
 	}
 
+	// Return early for simulation as we only need gas accounting.
+	if ctx.IsSimulation() {
+		return nil
+	}
+
 	epoch, err := app.state.GetEpoch(ctx, ctx.BlockHeight()+1)
 	if err != nil {
 		return err
 	}
 
-	fromAddr := staking.NewAddress(ctx.TxSigner())
+	fromAddr := ctx.CallerAddress()
 	if fromAddr.IsReserved() {
 		return staking.ErrForbidden
 	}
@@ -439,13 +464,18 @@ func (app *stakingApplication) allow(
 		return err
 	}
 
+	// Return early for simulation as we only need gas accounting.
+	if ctx.IsSimulation() {
+		return nil
+	}
+
 	// Allowances are disabled in case either max allowances is zero or if transfers are disabled.
 	if params.DisableTransfers || params.MaxAllowances == 0 {
 		return staking.ErrForbidden
 	}
 
 	// Validate addresses -- if either is reserved or both are equal, the method should fail.
-	addr := staking.NewAddress(ctx.TxSigner())
+	addr := ctx.CallerAddress()
 	if addr.IsReserved() || allow.Beneficiary.IsReserved() {
 		return staking.ErrForbidden
 	}
@@ -523,13 +553,18 @@ func (app *stakingApplication) withdraw(
 		return err
 	}
 
+	// Return early for simulation as we only need gas accounting.
+	if ctx.IsSimulation() {
+		return nil
+	}
+
 	// Allowances are disabled in case either max allowances is zero or if transfers are disabled.
 	if params.DisableTransfers || params.MaxAllowances == 0 {
 		return staking.ErrForbidden
 	}
 
 	// Validate addresses -- if either is reserved or both are equal, the method should fail.
-	toAddr := staking.NewAddress(ctx.TxSigner())
+	toAddr := ctx.CallerAddress()
 	if toAddr.IsReserved() || withdraw.From.IsReserved() {
 		return staking.ErrForbidden
 	}

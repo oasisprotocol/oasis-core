@@ -15,6 +15,7 @@ import (
 	roothash "github.com/oasisprotocol/oasis-core/go/roothash/api"
 	"github.com/oasisprotocol/oasis-core/go/roothash/api/block"
 	"github.com/oasisprotocol/oasis-core/go/roothash/api/commitment"
+	"github.com/oasisprotocol/oasis-core/go/roothash/api/message"
 	scheduler "github.com/oasisprotocol/oasis-core/go/scheduler/api"
 )
 
@@ -205,14 +206,35 @@ func (app *rootHashApplication) executorCommit(
 		return err
 	}
 
+	// Account for gas consumed by messages.
+	msgGasAccountant := func(msgs []message.Message) error {
+		// Deliver messages in the simulation context to estimate gas.
+		msgCtx := ctx.WithSimulation()
+		defer msgCtx.Close()
+
+		return app.processRuntimeMessages(msgCtx, rtState, msgs)
+	}
+
 	for _, commit := range cc.Commits {
-		if err = rtState.ExecutorPool.AddExecutorCommitment(ctx, rtState.CurrentBlock, sv, nl, &commit); err != nil { // nolint: gosec
+		if err = rtState.ExecutorPool.AddExecutorCommitment(
+			ctx,
+			rtState.CurrentBlock,
+			sv,
+			nl,
+			&commit, // nolint: gosec
+			msgGasAccountant,
+		); err != nil {
 			ctx.Logger().Error("failed to add compute commitment to round",
 				"err", err,
 				"round", rtState.CurrentBlock.Header.Round,
 			)
 			return err
 		}
+	}
+
+	// Return early for simulation as we only need gas accounting.
+	if ctx.IsSimulation() {
+		return nil
 	}
 
 	// Try to finalize round.

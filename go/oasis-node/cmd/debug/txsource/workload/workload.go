@@ -80,6 +80,11 @@ func (bw *BaseWorkload) Init(
 	bw.fundingAccount = fundingAccount
 }
 
+// Consensus returns the consensus client backend.
+func (bw *BaseWorkload) Consensus() consensus.ClientBackend {
+	return bw.cc
+}
+
 // GasPrice returns the configured consensus gas price.
 func (bw *BaseWorkload) GasPrice() uint64 {
 	// NOTE: This cannot fail as workloads use static price discovery.

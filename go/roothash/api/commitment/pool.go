@@ -74,6 +74,10 @@ type NodeLookup interface {
 	Node(ctx context.Context, id signature.PublicKey) (*node.Node, error)
 }
 
+// MessageValidator is an arbitrary function that validates messages for validity. It can be used
+// for gas accounting.
+type MessageValidator func(msgs []message.Message) error
+
 // Pool is a serializable pool of commitments that can be used to perform
 // discrepancy detection.
 //
@@ -190,6 +194,7 @@ func (p *Pool) addOpenExecutorCommitment(
 	blk *block.Block,
 	sv SignatureVerifier,
 	nl NodeLookup,
+	msgValidator MessageValidator,
 	openCom *OpenExecutorCommitment,
 ) error {
 	if p.Committee == nil {
@@ -338,6 +343,18 @@ func (p *Pool) addOpenExecutorCommitment(
 				)
 				return ErrInvalidMessages
 			}
+
+			// Perform custom message validation and propagate the error unchanged.
+			if msgValidator != nil && len(body.Messages) > 0 {
+				err := msgValidator(body.Messages)
+				if err != nil {
+					logger.Debug("executor commitment from scheduler has invalid messages",
+						"err", err,
+						"node_id", id,
+					)
+					return err
+				}
+			}
 		case false:
 			// Other workers cannot include any messages.
 			if len(body.Messages) > 0 {
@@ -365,6 +382,7 @@ func (p *Pool) AddExecutorCommitment(
 	sv SignatureVerifier,
 	nl NodeLookup,
 	commitment *ExecutorCommitment,
+	msgValidator MessageValidator,
 ) error {
 	// Check the commitment signature and de-serialize into header.
 	openCom, err := commitment.Open()
@@ -372,7 +390,7 @@ func (p *Pool) AddExecutorCommitment(
 		return p2pError.Permanent(err)
 	}
 
-	return p.addOpenExecutorCommitment(ctx, blk, sv, nl, openCom)
+	return p.addOpenExecutorCommitment(ctx, blk, sv, nl, msgValidator, openCom)
 }
 
 // CheckEnoughCommitments checks if there are enough commitments in the pool to be

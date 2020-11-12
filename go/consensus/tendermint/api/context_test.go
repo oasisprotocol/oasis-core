@@ -131,4 +131,13 @@ func TestChildContext(t *testing.T) {
 
 	child.Close()
 	require.EqualValues(events, ctx.GetEvents(), "child events should propagate")
+
+	// Emitting an event should not propagate to parent in simulation mode.
+	ctx = appState.NewContext(ContextDeliverTx, now)
+	defer ctx.Close()
+
+	child = ctx.WithSimulation()
+	child.EmitEvent(NewEventBuilder("test").Attribute([]byte("foo"), []byte("bar")))
+	child.Close()
+	require.Empty(ctx.GetEvents(), "events should not propagate in simulation mode")
 }
