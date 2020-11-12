@@ -5,6 +5,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/oasisprotocol/oasis-core/go/common"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 )
 
@@ -34,4 +35,24 @@ func TestReserved(t *testing.T) {
 	require.False(addr2.IsValid(), "test address 2 should be invalid")
 	require.True(pk2.IsBlacklisted(), "public key for test address 2 should be blacklisted")
 	require.False(pk2.IsValid(), "public key for test address 2 should be invalid")
+}
+
+func TestRuntimeAddress(t *testing.T) {
+	require := require.New(t)
+
+	id1 := common.NewTestNamespaceFromSeed([]byte("runtime address test 1"), 0)
+	id2 := common.NewTestNamespaceFromSeed([]byte("runtime address test 2"), 0)
+
+	addr1 := NewRuntimeAddress(id1)
+	require.True(addr1.IsValid(), "runtime address should be valid")
+
+	addr2 := NewRuntimeAddress(id2)
+	require.NotEqualValues(addr1, addr2, "runtime addresses for different runtimes should be different")
+
+	// Make sure domain separation works.
+	var pk1 signature.PublicKey
+	err := pk1.UnmarshalBinary(id1[:])
+	require.NoError(err, "UnmarshalBinary")
+	addrPk1 := NewAddress(pk1)
+	require.NotEqualValues(addr1, addrPk1, "runtime addresses should be separated from staking addresses")
 }
