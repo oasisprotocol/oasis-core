@@ -4,7 +4,7 @@ use std::{collections::VecDeque, fmt, iter::Iterator, mem::replace, sync::Arc};
 use anyhow::{Error, Result};
 use io_context::Context;
 
-use crate::storage::mkvs::{cache::*, sync::*, tree::*};
+use crate::storage::mkvs::{self, cache::*, sync::*, tree::*};
 
 pub(super) struct FetcherSyncIterate<'a> {
     key: &'a Key,
@@ -93,51 +93,10 @@ impl<'tree> TreeIterator<'tree> {
         }
     }
 
-    /// Sets the number of next elements to prefetch.
-    pub fn set_prefetch(&mut self, prefetch: usize) {
-        self.prefetch = prefetch;
-    }
-
     fn reset(&mut self) {
         self.pos.clear();
         self.key = None;
         self.value = None;
-    }
-
-    /// Return whether the iterator is valid.
-    pub fn is_valid(&self) -> bool {
-        self.key.is_some()
-    }
-
-    /// Return the error that occurred during iteration if any.
-    pub fn error(&self) -> &Option<Error> {
-        &self.error
-    }
-
-    /// Move the iterator to the first key in the tree.
-    pub fn rewind(&mut self) {
-        self.seek(&[])
-    }
-
-    /// Moves the iterator either at the given key or at the next larger
-    /// key.
-    pub fn seek(&mut self, key: &[u8]) {
-        if self.error.is_some() {
-            return;
-        }
-
-        self.reset();
-        let pending_root = self.tree.cache.borrow().get_pending_root();
-        if let Err(error) = self._next(
-            pending_root,
-            0,
-            Key::new(),
-            key.to_vec(),
-            VisitState::Before,
-        ) {
-            self.error = Some(error);
-            self.reset();
-        }
     }
 
     fn next(&mut self) {
@@ -329,32 +288,89 @@ impl<'tree> Iterator for TreeIterator<'tree> {
     type Item = (Vec<u8>, Vec<u8>);
 
     fn next(&mut self) -> Option<Self::Item> {
+        use mkvs::Iterator;
+
         if !self.is_valid() {
             return None;
         }
 
         let key = self.key.as_ref().expect("iterator is valid").clone();
         let value = self.value.as_ref().expect("iterator is valid").clone();
-        self.next();
+        TreeIterator::next(self);
 
         Some((key, value))
     }
 }
 
+impl<'tree> mkvs::Iterator for TreeIterator<'tree> {
+    fn set_prefetch(&mut self, prefetch: usize) {
+        self.prefetch = prefetch;
+    }
+
+    fn is_valid(&self) -> bool {
+        self.key.is_some()
+    }
+
+    fn error(&self) -> &Option<Error> {
+        &self.error
+    }
+
+    fn rewind(&mut self) {
+        self.seek(&[])
+    }
+
+    fn seek(&mut self, key: &[u8]) {
+        if self.error.is_some() {
+            return;
+        }
+
+        self.reset();
+        let pending_root = self.tree.cache.borrow().get_pending_root();
+        if let Err(error) = self._next(
+            pending_root,
+            0,
+            Key::new(),
+            key.to_vec(),
+            VisitState::Before,
+        ) {
+            self.error = Some(error);
+            self.reset();
+        }
+    }
+
+    fn get_key(&self) -> &Option<Key> {
+        &self.key
+    }
+
+    fn get_value(&self) -> &Option<Vec<u8>> {
+        &self.value
+    }
+
+    fn next(&mut self) {
+        TreeIterator::next(self)
+    }
+}
+
 impl Tree {
-    /// Returns an iterator over the tree.
+    /// Return an iterator over the tree.
     pub fn iter(&self, ctx: Context) -> TreeIterator {
         TreeIterator::new(ctx, self)
     }
 }
 
 #[cfg(test)]
-mod test {
+pub(super) mod test {
+    use std::iter;
+
     use io_context::Context;
     use rustc_hex::FromHex;
 
     use super::{tree_test::generate_key_value_pairs_ex, *};
-    use crate::storage::mkvs::interop::{Driver, ProtocolServer};
+    use crate::storage::mkvs::{
+        self,
+        interop::{Driver, ProtocolServer},
+        Iterator,
+    };
 
     #[test]
     fn test_iterator() {
@@ -411,8 +427,17 @@ mod test {
         test_iterator_with(&items, it, &tests);
 
         // Remote.
-        let (write_log, hash) =
-            Tree::commit(&mut tree, Context::background(), Default::default(), 0).expect("commit");
+        let hash = tree
+            .commit(Context::background(), Default::default(), 0)
+            .expect("commit");
+        let write_log = items
+            .iter()
+            .cloned()
+            .map(|(key, value)| mkvs::LogEntry {
+                key,
+                value: Some(value),
+            })
+            .collect();
         server.apply(&write_log, hash, Default::default(), 0);
 
         let remote_tree = Tree::make()
@@ -522,7 +547,7 @@ mod test {
                 .unwrap();
         it.seek(&missing_key);
         assert!(it.is_valid(), "iterator should be valid");
-        let item = Iterator::next(&mut it);
+        let item = iter::Iterator::next(&mut it);
         assert_eq!(
             Some((items[0].0.clone(), b"value".to_vec())),
             item,
@@ -534,9 +559,11 @@ mod test {
     fn test_iterator_eviction() {
         let server = ProtocolServer::new();
 
-        let mut tree = Tree::make()
-            .with_capacity(0, 0)
-            .new(Box::new(NoopReadSyncer));
+        let mut tree = OverlayTree::new(
+            Tree::make()
+                .with_capacity(0, 0)
+                .new(Box::new(NoopReadSyncer)),
+        );
 
         let (keys, values) = generate_key_value_pairs_ex("T".to_owned(), 100);
         let items: Vec<(Vec<u8>, Vec<u8>)> = keys.into_iter().zip(values.into_iter()).collect();
@@ -544,8 +571,9 @@ mod test {
             tree.insert(Context::background(), &key, &value).unwrap();
         }
 
-        let (write_log, hash) =
-            Tree::commit(&mut tree, Context::background(), Default::default(), 0).expect("commit");
+        let (write_log, hash) = tree
+            .commit_both(Context::background(), Default::default(), 0)
+            .expect("commit");
         server.apply(&write_log, hash, Default::default(), 0);
 
         // Create a remote tree with limited cache capacity so that nodes will
@@ -576,9 +604,9 @@ mod test {
         assert_eq!(2, stats.sync_iterate_count, "sync_iterate_count");
     }
 
-    fn test_iterator_with(
+    pub(in super::super) fn test_iterator_with<I: mkvs::Iterator>(
         items: &Vec<(Vec<u8>, Vec<u8>)>,
-        mut it: TreeIterator,
+        mut it: I,
         tests: &Vec<(Vec<u8>, isize)>,
     ) {
         // Iterate through the whole tree.
@@ -605,7 +633,7 @@ mod test {
             }
 
             for expected in &items[*pos as usize..] {
-                let item = Iterator::next(&mut it);
+                let item = iter::Iterator::next(&mut it);
                 assert_eq!(
                     Some(expected.clone()),
                     item,

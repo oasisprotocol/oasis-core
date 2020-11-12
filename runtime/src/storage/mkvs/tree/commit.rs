@@ -5,18 +5,13 @@ use io_context::Context;
 
 use crate::{
     common::{crypto::hash::Hash, roothash::Namespace},
-    storage::mkvs::{cache::*, tree::*, LogEntry, WriteLog},
+    storage::mkvs::{cache::*, tree::*},
 };
 
 impl Tree {
     /// Commit tree updates to the underlying database and return
     /// the write log and new merkle root.
-    pub fn commit(
-        &mut self,
-        ctx: Context,
-        namespace: Namespace,
-        version: u64,
-    ) -> Result<(WriteLog, Hash)> {
+    pub fn commit(&mut self, ctx: Context, namespace: Namespace, version: u64) -> Result<Hash> {
         let ctx = ctx.freeze();
         let mut update_list: UpdateList<LRUCache> = UpdateList::new();
         let pending_root = self.cache.borrow().get_pending_root();
@@ -24,26 +19,13 @@ impl Tree {
 
         update_list.commit(&mut self.cache.borrow_mut());
 
-        let mut log: WriteLog = Vec::new();
-        for (_, entry) in self.pending_write_log.iter() {
-            // Skip all entries that do not exist after all the updates and
-            // did not exist before.
-            if entry.value.is_none() && !entry.existed {
-                continue;
-            }
-            log.push(LogEntry {
-                key: entry.key.clone(),
-                value: entry.value.clone(),
-            });
-        }
-        self.pending_write_log.clear();
         self.cache.borrow_mut().set_sync_root(Root {
             namespace,
             version,
             hash: new_hash,
         });
 
-        Ok((log, new_hash))
+        Ok(new_hash)
     }
 }
 

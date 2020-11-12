@@ -149,7 +149,7 @@ impl serde::Serialize for OutputArtifacts {
 /// A Merkle tree containing transaction artifacts.
 pub struct Tree {
     io_root: Root,
-    tree: mkvs::Tree,
+    tree: mkvs::OverlayTree<mkvs::Tree>,
 }
 
 impl Tree {
@@ -157,7 +157,7 @@ impl Tree {
     pub fn new(read_syncer: Box<dyn ReadSync>, io_root: Root) -> Self {
         Self {
             io_root,
-            tree: mkvs::Tree::make().with_root(io_root).new(read_syncer),
+            tree: mkvs::OverlayTree::new(mkvs::Tree::make().with_root(io_root).new(read_syncer)),
         }
     }
 
@@ -222,7 +222,7 @@ impl Tree {
     /// log and root hash.
     pub fn commit(&mut self, ctx: Context) -> Result<(WriteLog, Hash)> {
         self.tree
-            .commit(ctx, self.io_root.namespace, self.io_root.version)
+            .commit_both(ctx, self.io_root.namespace, self.io_root.version)
     }
 }
 

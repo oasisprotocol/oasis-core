@@ -20,8 +20,12 @@ struct CtxGuard;
 impl CtxGuard {
     fn new<M>(mkvs: &mut M, untrusted_local: Arc<dyn KeyValue>) -> Self
     where
-        M: MKVS + 'static,
+        M: MKVS,
     {
+        // This is safe because the reference is only valid within StorageContext::enter within
+        // the same thread.
+        let mkvs = unsafe { std::mem::transmute::<&mut dyn MKVS, &mut (dyn MKVS + 'static)>(mkvs) };
+
         CTX.with(|ctx| {
             assert!(ctx.borrow().is_none(), "nested enter is not allowed");
             ctx.borrow_mut().replace(Ctx {
@@ -49,7 +53,7 @@ impl StorageContext {
     /// Enter the storage context.
     pub fn enter<M, F, R>(mkvs: &mut M, untrusted_local: Arc<dyn KeyValue>, f: F) -> R
     where
-        M: MKVS + 'static,
+        M: MKVS,
         F: FnOnce() -> R,
     {
         let _guard = CtxGuard::new(mkvs, untrusted_local);
@@ -68,6 +72,8 @@ impl StorageContext {
         CTX.with(|ctx| {
             let ctx = ctx.borrow();
             let ctx_ref = ctx.as_ref().expect("must only be called while entered");
+            // This is safe because the reference is only valid within StorageContext::enter within
+            // the same thread.
             let mkvs_ref = unsafe { ctx_ref.mkvs.as_mut().expect("pointer is never null") };
 
             f(mkvs_ref, &ctx_ref.untrusted_local)

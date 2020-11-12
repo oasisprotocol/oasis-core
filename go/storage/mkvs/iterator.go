@@ -150,7 +150,7 @@ func IteratorPrefetch(prefetch uint16) IteratorOption {
 // visited nodes.
 func WithProof(root hash.Hash) IteratorOption {
 	return func(it Iterator) {
-		it.(*treeIterator).proofBuilder = syncer.NewProofBuilder(root)
+		it.(*treeIterator).proofBuilder = syncer.NewProofBuilder(root, root)
 	}
 }
 
@@ -251,10 +251,7 @@ func (it *treeIterator) doNext(ptr *node.Pointer, bitDepth node.Depth, path, key
 
 	// Include nodes in proof if we have a proof builder.
 	if pb := it.proofBuilder; pb != nil && ptr != nil {
-		proofRoot := pb.GetRoot()
-		if pb.HasRoot() || proofRoot.Equal(&ptr.Hash) {
-			pb.Include(nd)
-		}
+		pb.Include(nd)
 	}
 
 	switch n := nd.(type) {

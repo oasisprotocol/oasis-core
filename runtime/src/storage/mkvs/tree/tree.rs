@@ -1,18 +1,12 @@
-use std::{
-    cell::RefCell,
-    collections::BTreeMap,
-    fmt,
-    rc::Rc,
-    sync::{Arc, Mutex},
+use std::{cell::RefCell, fmt, rc::Rc};
+
+use anyhow::Result;
+use io_context::Context;
+
+use crate::{
+    common::{crypto::hash::Hash, roothash::Namespace},
+    storage::mkvs::{self, cache::*, sync::*, tree::*},
 };
-
-use crate::storage::mkvs::{cache::*, sync::*, tree::*};
-
-pub struct PendingLogEntry {
-    pub key: Vec<u8>,
-    pub value: Option<Vec<u8>>,
-    pub existed: bool,
-}
 
 /// A container for the parameters used to construct a new MKVS tree instance.
 pub struct Options {
@@ -52,9 +46,10 @@ impl Options {
 /// A patricia tree-based MKVS implementation.
 pub struct Tree {
     pub(crate) cache: RefCell<Box<LRUCache>>,
-    pub(crate) pending_write_log: BTreeMap<Key, PendingLogEntry>,
-    pub(crate) lock: Arc<Mutex<isize>>,
 }
+
+// Tree is Send as long as ownership of internal Rcs cannot leak out via any of its methods.
+unsafe impl Send for Tree {}
 
 impl Tree {
     /// Construct a new tree instance using the given read syncer and options struct.
@@ -65,8 +60,6 @@ impl Tree {
                 opts.value_capacity,
                 read_syncer,
             )),
-            pending_write_log: BTreeMap::new(),
-            lock: Arc::new(Mutex::new(0)),
         };
 
         if let Some(root) = opts.root {
@@ -96,5 +89,40 @@ impl Tree {
 impl fmt::Debug for Tree {
     fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
         self.cache.borrow().get_pending_root().fmt(f)
+    }
+}
+
+impl mkvs::FallibleMKVS for Tree {
+    fn get(&self, ctx: Context, key: &[u8]) -> Result<Option<Vec<u8>>> {
+        Tree::get(self, ctx, key)
+    }
+
+    fn cache_contains_key(&self, ctx: Context, key: &[u8]) -> bool {
+        Tree::cache_contains_key(self, ctx, key)
+    }
+
+    fn insert(&mut self, ctx: Context, key: &[u8], value: &[u8]) -> Result<Option<Vec<u8>>> {
+        Tree::insert(self, ctx, key, value)
+    }
+
+    fn remove(&mut self, ctx: Context, key: &[u8]) -> Result<Option<Vec<u8>>> {
+        Tree::remove(self, ctx, key)
+    }
+
+    fn prefetch_prefixes(
+        &self,
+        ctx: Context,
+        prefixes: &Vec<mkvs::Prefix>,
+        limit: u16,
+    ) -> Result<()> {
+        Tree::prefetch_prefixes(self, ctx, prefixes, limit)
+    }
+
+    fn iter(&self, ctx: Context) -> Box<dyn mkvs::Iterator + '_> {
+        Box::new(Tree::iter(self, ctx))
+    }
+
+    fn commit(&mut self, ctx: Context, namespace: Namespace, version: u64) -> Result<Hash> {
+        Tree::commit(self, ctx, namespace, version)
     }
 }

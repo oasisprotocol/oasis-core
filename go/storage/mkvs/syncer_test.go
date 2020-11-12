@@ -31,9 +31,9 @@ func TestProof(t *testing.T) {
 	require.NoError(err, "Commit")
 
 	// Create a Merkle proof, starting at the root node.
-	builder := syncer.NewProofBuilder(rootHash)
-	require.False(builder.HasRoot(), "HasRoot should return false")
-	require.EqualValues(rootHash, builder.GetRoot(), "GetRoot should return correct root")
+	builder := syncer.NewProofBuilder(rootHash, rootHash)
+	require.False(builder.HasSubtreeRoot(), "HasSubtreeRoot should return false")
+	require.EqualValues(rootHash, builder.GetSubtreeRoot(), "GetSubtreeRoot should return correct root")
 
 	rootOnlyProof, err := builder.Build(ctx)
 	require.NoError(err, "Build should not fail without a root present")
@@ -44,7 +44,7 @@ func TestProof(t *testing.T) {
 	// Include root node.
 	rootNode := tree.cache.pendingRoot.Node
 	builder.Include(rootNode)
-	require.True(builder.HasRoot(), "HasRoot should return true after root included")
+	require.True(builder.HasSubtreeRoot(), "HasRoot should return true after root included")
 
 	proof, err := builder.Build(ctx)
 	require.NoError(err, "Build should not fail")
@@ -107,7 +107,7 @@ func TestProof(t *testing.T) {
 	// Empty root proof should verify.
 	var emptyHash hash.Hash
 	emptyHash.Empty()
-	builder = syncer.NewProofBuilder(emptyHash)
+	builder = syncer.NewProofBuilder(emptyHash, emptyHash)
 	emptyRootProof, err := builder.Build(ctx)
 	require.NoError(err, "Build should not fail for an empty root")
 	emptyRootPtr, err := pv.VerifyProof(ctx, emptyHash, emptyRootProof)

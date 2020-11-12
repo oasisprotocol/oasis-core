@@ -20,22 +20,6 @@ impl Tree {
 
         let (new_root, old_val) =
             self._insert(&ctx, pending_root, 0, &boxed_key, boxed_val.clone(), 0)?;
-        let existed = old_val != None;
-        match self.pending_write_log.get_mut(&boxed_key) {
-            None => {
-                self.pending_write_log.insert(
-                    boxed_key,
-                    PendingLogEntry {
-                        key: key.to_vec(),
-                        value: Some(boxed_val.clone()),
-                        existed: existed,
-                    },
-                );
-            }
-            Some(ref mut entry) => {
-                entry.value = Some(boxed_val.clone());
-            }
-        };
         self.cache.borrow_mut().set_pending_root(new_root.clone());
 
         Ok(old_val)

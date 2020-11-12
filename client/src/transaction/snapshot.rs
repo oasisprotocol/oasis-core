@@ -1,5 +1,5 @@
 //! A block snapshot.
-use std::any::Any;
+use std::{any::Any, sync::Mutex};
 
 use anyhow::{Context as AnyContext, Result};
 use grpcio::CallOption;
@@ -11,7 +11,7 @@ use oasis_core_runtime::{
         roothash::{Block, Namespace},
     },
     storage::{
-        mkvs::{sync::*, Prefix, Root, Tree, WriteLog},
+        mkvs::{sync::*, Iterator, Prefix, Root, Tree, WriteLog},
         MKVS,
     },
     transaction::types::{TxnCall, TxnOutput},
@@ -57,7 +57,7 @@ pub struct BlockSnapshot {
     pub block_hash: Hash,
 
     read_syncer: RemoteReadSync,
-    mkvs: Tree,
+    mkvs: Mutex<Tree>,
 }
 
 impl Clone for BlockSnapshot {
@@ -77,7 +77,7 @@ impl Clone for BlockSnapshot {
             block,
             block_hash,
             read_syncer,
-            mkvs,
+            mkvs: Mutex::new(mkvs),
         }
     }
 }
@@ -97,18 +97,20 @@ impl BlockSnapshot {
             block_hash: block.header.encoded_hash(),
             block,
             read_syncer,
-            mkvs,
+            mkvs: Mutex::new(mkvs),
         }
     }
 }
 
 impl MKVS for BlockSnapshot {
     fn get(&self, ctx: Context, key: &[u8]) -> Option<Vec<u8>> {
-        MKVS::get(&self.mkvs, ctx, key)
+        let mkvs = self.mkvs.lock().unwrap();
+        mkvs.get(ctx, key).unwrap()
     }
 
     fn cache_contains_key(&self, ctx: Context, key: &[u8]) -> bool {
-        MKVS::cache_contains_key(&self.mkvs, ctx, key)
+        let mkvs = self.mkvs.lock().unwrap();
+        mkvs.cache_contains_key(ctx, key)
     }
 
     fn insert(&mut self, _ctx: Context, _key: &[u8], _value: &[u8]) -> Option<Vec<u8>> {
@@ -120,7 +122,12 @@ impl MKVS for BlockSnapshot {
     }
 
     fn prefetch_prefixes(&self, ctx: Context, prefixes: &Vec<Prefix>, limit: u16) {
-        MKVS::prefetch_prefixes(&self.mkvs, ctx, prefixes, limit)
+        let mkvs = self.mkvs.lock().unwrap();
+        mkvs.prefetch_prefixes(ctx, prefixes, limit).unwrap()
+    }
+
+    fn iter(&self, _ctx: Context) -> Box<dyn Iterator + '_> {
+        unimplemented!("block snapshot doesn't support iterators");
     }
 
     fn commit(
@@ -129,10 +136,6 @@ impl MKVS for BlockSnapshot {
         _namespace: Namespace,
         _round: u64,
     ) -> Result<(WriteLog, Hash)> {
-        unimplemented!("block snapshot is read-only");
-    }
-
-    fn rollback(&mut self) {
         unimplemented!("block snapshot is read-only");
     }
 }

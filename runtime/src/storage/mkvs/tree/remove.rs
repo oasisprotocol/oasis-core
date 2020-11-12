@@ -8,36 +8,17 @@ use crate::storage::mkvs::{cache::*, tree::*};
 use super::lookup::FetcherSyncGet;
 
 impl Tree {
-    /// Remove a key from the tree and return true if the tree was modified.
+    /// Remove entry with given key, returning the value at the key if the key was previously
+    /// in the database.
     pub fn remove(&mut self, ctx: Context, key: &[u8]) -> Result<Option<Vec<u8>>> {
         let ctx = ctx.freeze();
         let boxed_key = key.to_vec();
         let pending_root = self.cache.borrow().get_pending_root();
 
-        // If the key has already been removed locally, don't try to remove it again.
-        if let Some(PendingLogEntry { value: None, .. }) = self.pending_write_log.get(&boxed_key) {
-            return Ok(None);
-        }
-
         // Remember where the path from root to target node ends (will end).
         self.cache.borrow_mut().mark_position();
 
-        let (new_root, changed, old_val) = self._remove(&ctx, pending_root, 0, &boxed_key, 0)?;
-        match self.pending_write_log.get_mut(&boxed_key) {
-            None => {
-                self.pending_write_log.insert(
-                    boxed_key.clone(),
-                    PendingLogEntry {
-                        key: boxed_key,
-                        value: None,
-                        existed: changed,
-                    },
-                );
-            }
-            Some(ref mut entry) => {
-                entry.value = None;
-            }
-        };
+        let (new_root, _, old_val) = self._remove(&ctx, pending_root, 0, &boxed_key, 0)?;
         self.cache.borrow_mut().set_pending_root(new_root);
 
         Ok(old_val)
