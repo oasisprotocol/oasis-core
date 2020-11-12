@@ -30,9 +30,6 @@ updates:
       # Tendermint is manualy kept up to date.
       - dependency-name: github.com/tendermint/tendermint
       - dependency-name: github.com/tendermint/tm-db
-      # libp2p/go-libp2p-core@0.7.0 has build errors.
-      - dependency-name: github.com/libp2p/go-libp2p-core
-        versions: ["0.7.0"]
 
   # Manage Rust pacakge versions.
   - package-ecosystem: cargo
