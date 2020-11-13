@@ -87,6 +87,18 @@ lint-docs:
 
 lint: $(lint-targets)
 
+# Audit dependencies for vulnerabilities.
+audit-targets := audit-go audit-rust
+
+audit-go:
+	@$(MAKE) -C go audit
+
+audit-rust:
+	@$(ECHO) "$(CYAN)*** Running cargo audit...$(OFF)"
+	@cargo audit
+
+audit: $(audit-targets)
+
 # Test.
 test-unit-targets := test-unit-rust test-unit-go
 test-targets := test-unit test-e2e
@@ -214,6 +226,7 @@ docker-shell:
 	update-docs \
 	$(fmt-targets) fmt \
 	$(lint-targets) lint \
+	$(audit-targets) audit \
 	$(test-unit-targets) $(test-targets) test \
 	$(clean-targets) clean \
 	fetch-git \
