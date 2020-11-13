@@ -12,6 +12,22 @@ The format is inspired by [Keep a Changelog].
 
 <!-- TOWNCRIER -->
 
+## 20.12.2 (2020-11-13)
+
+| Protocol          | Version   |
+|:------------------|:---------:|
+| Consensus         | 2.0.0     |
+| Runtime Host      | 1.0.0     |
+| Runtime Committee | 1.0.0     |
+
+### Bug Fixes
+
+- Bump Go to 1.15.5
+  ([#3512](https://github.com/oasisprotocol/oasis-core/issues/3512))
+
+  This fixes a recently disclosed security vulnerability in the Go runtime
+  library.
+
 ## 20.12.1 (2020-11-04)
 
 | Protocol          | Version   |
