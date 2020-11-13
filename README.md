@@ -2,6 +2,7 @@
 
 [![Build status][buildkite-badge]][buildkite-link]
 [![CI lint status][github-ci-lint-badge]][github-ci-lint-link]
+[![CI audit Rust status][github-ci-audit-rust-badge]][github-ci-audit-rust-link]
 [![CI reproducibility status][github-ci-repr-badge]][github-ci-repr-link]
 [![Docker status][github-docker-badge]][github-docker-link]
 [![Release status][github-release-badge]][github-release-link]
@@ -19,6 +20,8 @@ work around that and make the second (non-header) row also bold. -->
 [buildkite-link]: https://buildkite.com/oasisprotocol/oasis-core-ci
 [github-ci-lint-badge]: https://github.com/oasisprotocol/oasis-core/workflows/ci-lint/badge.svg
 [github-ci-lint-link]: https://github.com/oasisprotocol/oasis-core/actions?query=workflow:ci-lint+branch:master
+[github-ci-audit-rust-badge]: https://github.com/oasisprotocol/oasis-core/workflows/ci-audit-rust/badge.svg
+[github-ci-audit-rust-link]: https://github.com/oasisprotocol/oasis-core/actions?query=workflow:ci-audit-rust+branch:master
 [github-ci-repr-badge]: https://github.com/oasisprotocol/oasis-core/workflows/ci-reproducibility/badge.svg
 [github-ci-repr-link]: https://github.com/oasisprotocol/oasis-core/actions?query=workflow:ci-reproducibility
 [github-docker-badge]: https://github.com/oasisprotocol/oasis-core/workflows/docker/badge.svg

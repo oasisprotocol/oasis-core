@@ -48,6 +48,22 @@ jobs:
           python -m pip install \
             https://github.com/oasislabs/towncrier/archive/oasis-master.tar.gz \
             gitlint
+      - name: Install Nancy
+        run: |
+          set -eux
+          cd $(mktemp --directory /tmp/nancy.XXXXX)
+          NANCY_TARBALL=nancy-linux.amd64-v${NANCY_VERSION}.tar.gz
+          ${CURL_CMD} ${NANCY_URL_PREFIX}/v${NANCY_VERSION}/${NANCY_TARBALL} \
+            --output ${NANCY_TARBALL}
+          ${CURL_CMD} ${NANCY_URL_PREFIX}/v${NANCY_VERSION}/nancychecksums.txt \
+            --output CHECKSUMS
+          sha256sum --check --ignore-missing CHECKSUMS
+          tar -xf ${NANCY_TARBALL}
+          sudo mv nancy /usr/local/bin
+        env:
+          NANCY_URL_PREFIX: https://github.com/sonatype-nexus-community/nancy/releases/download/
+          NANCY_VERSION: 1.0.1
+          CURL_CMD: curl --proto =https --tlsv1.2 -sSL --fail
       - name: Check for presence of a Change Log fragment (only pull requests)
         run: |
           # Fetch the pull request' base branch so towncrier will be able to
@@ -79,6 +95,11 @@ jobs:
         run: |
           pushd go/extra/extract-metrics && go build && popd
           make lint-docs
+        # Always run this step so that all linting errors can be seen at once.
+        if: always()
+      - name: Audit Go dependencies for vulnerabilities
+        run: |
+          make audit-go
         # Always run this step so that all linting errors can be seen at once.
         if: always()
       - name: Check go mod tidy
