@@ -618,6 +618,7 @@ func (sc *registryCLIImpl) testRuntime(ctx context.Context, childEnv *env.Env, c
 			GroupBackupSize:   2,
 			AllowedStragglers: 1,
 			RoundTimeout:      5,
+			MinPoolSize:       3, // GroupSize + GroupBackupSize
 		},
 		TxnScheduler: registry.TxnSchedulerParameters{
 			Algorithm:         registry.TxnSchedulerSimple,
@@ -631,11 +632,12 @@ func (sc *registryCLIImpl) testRuntime(ctx context.Context, childEnv *env.Env, c
 			MinWriteReplication:     9,
 			MaxApplyWriteLogEntries: 10,
 			MaxApplyOps:             11,
+			MinPoolSize:             9,
 		},
 		AdmissionPolicy: registry.RuntimeAdmissionPolicy{
 			EntityWhitelist: &registry.EntityWhitelistRuntimeAdmissionPolicy{
-				Entities: map[signature.PublicKey]bool{
-					testEntity.ID: true,
+				Entities: map[signature.PublicKey]registry.EntityWhitelistConfig{
+					testEntity.ID: {},
 				},
 			},
 		},
@@ -645,6 +647,7 @@ func (sc *registryCLIImpl) testRuntime(ctx context.Context, childEnv *env.Env, c
 				staking.KindNodeStorage: q,
 			},
 		},
+		GovernanceModel: registry.GovernanceEntity,
 	}
 	// Runtime ID 0x0 is for simple-keyvalue, 0xf... is for the keymanager. Let's use 0x1.
 	_ = testRuntime.ID.UnmarshalHex("8000000000000000000000000000000000000000000000000000000000000001")

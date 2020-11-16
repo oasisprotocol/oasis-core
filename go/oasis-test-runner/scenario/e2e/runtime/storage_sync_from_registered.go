@@ -48,6 +48,7 @@ func (sc *storageSyncFromRegisteredImpl) Fixture() (*oasis.NetworkFixture, error
 	// be in the committee.
 	f.Network.EpochtimeMock = true
 	f.Runtimes[1].Storage.GroupSize = 1
+	f.Runtimes[1].Storage.MinPoolSize = f.Runtimes[1].Storage.GroupSize
 	f.Runtimes[1].Storage.MinWriteReplication = 1
 
 	// Configure runtime for storage checkpointing.

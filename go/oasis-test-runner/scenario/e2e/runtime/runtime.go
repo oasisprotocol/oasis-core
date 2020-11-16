@@ -166,6 +166,7 @@ func (sc *runtimeImpl) Fixture() (*oasis.NetworkFixture, error) {
 					GroupBackupSize: 1,
 					RoundTimeout:    20,
 					MaxMessages:     128,
+					MinPoolSize:     3, // GroupSize + GroupBackupSize
 				},
 				TxnScheduler: registry.TxnSchedulerParameters{
 					Algorithm:         registry.TxnSchedulerSimple,
@@ -179,6 +180,7 @@ func (sc *runtimeImpl) Fixture() (*oasis.NetworkFixture, error) {
 					MinWriteReplication:     2,
 					MaxApplyWriteLogEntries: 100_000,
 					MaxApplyOps:             2,
+					MinPoolSize:             2,
 				},
 				AdmissionPolicy: registry.RuntimeAdmissionPolicy{
 					AnyNode: &registry.AnyNodeRuntimeAdmissionPolicy{},

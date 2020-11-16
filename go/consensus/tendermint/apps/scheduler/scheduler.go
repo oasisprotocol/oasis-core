@@ -362,7 +362,7 @@ func (app *schedulerApplication) electCommittee(
 		rngCtx       []byte
 		isSuitableFn func(*api.Context, *node.Node, *registry.Runtime) bool
 
-		workerSize, backupSize int
+		workerSize, backupSize, minPoolSize int
 	)
 
 	switch kind {
@@ -371,10 +371,12 @@ func (app *schedulerApplication) electCommittee(
 		isSuitableFn = app.isSuitableExecutorWorker
 		workerSize = int(rt.Executor.GroupSize)
 		backupSize = int(rt.Executor.GroupBackupSize)
+		minPoolSize = int(rt.Executor.MinPoolSize)
 	case scheduler.KindStorage:
 		rngCtx = RNGContextStorage
 		isSuitableFn = app.isSuitableStorageWorker
 		workerSize = int(rt.Storage.GroupSize)
+		minPoolSize = int(rt.Storage.MinPoolSize)
 	default:
 		return fmt.Errorf("tendermint/scheduler: invalid committee type: %v", kind)
 	}
@@ -407,7 +409,22 @@ func (app *schedulerApplication) electCommittee(
 		return nil
 	}
 
-	nrNodes, wantedNodes := len(nodeList), workerSize+backupSize
+	nrNodes := len(nodeList)
+
+	if nrNodes < minPoolSize {
+		ctx.Logger().Error("not enough eligible nodes",
+			"kind", kind,
+			"runtime_id", rt.ID,
+			"nr_nodes", nrNodes,
+			"min_pool_size", minPoolSize,
+		)
+		if err = schedulerState.NewMutableState(ctx.State()).DropCommittee(ctx, kind, rt.ID); err != nil {
+			return fmt.Errorf("failed to drop committee: %w", err)
+		}
+		return nil
+	}
+
+	wantedNodes := workerSize + backupSize
 	if wantedNodes > nrNodes {
 		ctx.Logger().Error("committee size exceeds available nodes (pre-stake)",
 			"kind", kind,

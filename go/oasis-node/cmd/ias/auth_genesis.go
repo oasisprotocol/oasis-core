@@ -7,7 +7,6 @@ import (
 	genesis "github.com/oasisprotocol/oasis-core/go/genesis/file"
 	ias "github.com/oasisprotocol/oasis-core/go/ias/api"
 	iasProxy "github.com/oasisprotocol/oasis-core/go/ias/proxy"
-	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
 )
 
 type genesisAuthenticator struct {
@@ -51,13 +50,8 @@ func newGenesisAuthenticator() (iasProxy.Authenticator, error) {
 		logger:   logging.GetLogger("cmd/ias/proxy/auth/genesis"),
 		enclaves: newEnclaveStore(),
 	}
-	for _, v := range doc.Registry.Runtimes {
-		var rt registry.Runtime
-		if err = v.Open(registry.RegisterGenesisRuntimeSignatureContext, &rt); err != nil {
-			return nil, err
-		}
-
-		if _, err = auth.enclaves.addRuntime(&rt); err != nil {
+	for _, rt := range doc.Registry.Runtimes {
+		if _, err = auth.enclaves.addRuntime(rt); err != nil {
 			return nil, err
 		}
 	}

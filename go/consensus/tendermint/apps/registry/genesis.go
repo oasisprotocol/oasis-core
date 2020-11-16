@@ -46,11 +46,11 @@ func (app *registryApplication) InitChain(ctx *abciAPI.Context, request types.Re
 	}
 	// Register runtimes. First key manager and then compute runtime(s).
 	for _, k := range []registry.RuntimeKind{registry.KindKeyManager, registry.KindCompute} {
-		for i, v := range st.Runtimes {
-			if v == nil {
+		for i, rt := range st.Runtimes {
+			if rt == nil {
 				return fmt.Errorf("registry: genesis runtime index %d is nil", i)
 			}
-			rt, err := registry.VerifyRegisterRuntimeArgs(&st.Parameters, ctx.Logger(), v, ctx.IsInitChain(), false)
+			err := registry.VerifyRuntime(&st.Parameters, ctx.Logger(), rt, ctx.IsInitChain(), false)
 			if err != nil {
 				return err
 			}
@@ -58,34 +58,30 @@ func (app *registryApplication) InitChain(ctx *abciAPI.Context, request types.Re
 				continue
 			}
 			ctx.Logger().Debug("InitChain: Registering genesis runtime",
-				"runtime_owner", v.Signature.PublicKey,
+				"runtime_id", rt.ID,
 			)
-			if err := app.registerRuntime(ctx, state, v); err != nil {
+			if err := app.registerRuntime(ctx, state, rt); err != nil {
 				ctx.Logger().Error("InitChain: failed to register runtime",
 					"err", err,
-					"runtime", v,
+					"runtime_id", rt.ID,
 				)
 				return fmt.Errorf("registry: genesis runtime registration failure: %w", err)
 			}
 		}
 	}
-	for i, v := range st.SuspendedRuntimes {
-		if v == nil {
+	for i, rt := range st.SuspendedRuntimes {
+		if rt == nil {
 			return fmt.Errorf("registry: genesis suspended runtime index %d is nil", i)
 		}
 		ctx.Logger().Debug("InitChain: Registering genesis suspended runtime",
-			"runtime_owner", v.Signature.PublicKey,
+			"runtime_id", rt.ID,
 		)
-		if err := app.registerRuntime(ctx, state, v); err != nil {
+		if err := app.registerRuntime(ctx, state, rt); err != nil {
 			ctx.Logger().Error("InitChain: failed to register runtime",
 				"err", err,
-				"runtime", v,
+				"runtime_id", rt.ID,
 			)
 			return fmt.Errorf("registry: genesis suspended runtime registration failure: %w", err)
-		}
-		var rt registry.Runtime
-		if err := cbor.Unmarshal(v.Blob, &rt); err != nil {
-			return fmt.Errorf("registry: malformed genesis suspended runtime: %w", err)
 		}
 		if err := state.SuspendRuntime(ctx, rt.ID); err != nil {
 			return fmt.Errorf("registry: failed to suspend runtime at genesis: %w", err)
@@ -130,7 +126,7 @@ func (rq *registryQuerier) Genesis(ctx context.Context) (*registry.Genesis, erro
 	if err != nil {
 		return nil, err
 	}
-	signedRuntimes, err := rq.state.SignedRuntimes(ctx)
+	runtimes, err := rq.state.Runtimes(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -177,7 +173,7 @@ func (rq *registryQuerier) Genesis(ctx context.Context) (*registry.Genesis, erro
 	gen := registry.Genesis{
 		Parameters:        *params,
 		Entities:          signedEntities,
-		Runtimes:          signedRuntimes,
+		Runtimes:          runtimes,
 		SuspendedRuntimes: suspendedRuntimes,
 		Nodes:             validatorNodes,
 		NodeStatuses:      nodeStatuses,

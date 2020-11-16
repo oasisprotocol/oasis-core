@@ -108,6 +108,7 @@ func newDefaultFixture() (*oasis.NetworkFixture, error) {
 					GroupSize:       2,
 					GroupBackupSize: 1,
 					RoundTimeout:    20,
+					MinPoolSize:     3, // GroupSize + GroupBackupSize
 				},
 				TxnScheduler: registry.TxnSchedulerParameters{
 					Algorithm:         registry.TxnSchedulerSimple,
@@ -121,6 +122,7 @@ func newDefaultFixture() (*oasis.NetworkFixture, error) {
 					MinWriteReplication:     1,
 					MaxApplyWriteLogEntries: 100_000,
 					MaxApplyOps:             2,
+					MinPoolSize:             1,
 				},
 				AdmissionPolicy: registry.RuntimeAdmissionPolicy{
 					AnyNode: &registry.AnyNodeRuntimeAdmissionPolicy{},

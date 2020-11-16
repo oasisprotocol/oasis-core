@@ -8,6 +8,7 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -37,15 +38,16 @@ import (
 )
 
 const (
-	CfgID             = "runtime.id"
-	CfgTEEHardware    = "runtime.tee_hardware"
-	CfgGenesisState   = "runtime.genesis.state"
-	CfgGenesisRound   = "runtime.genesis.round"
-	CfgKind           = "runtime.kind"
-	CfgKeyManager     = "runtime.keymanager"
-	cfgOutput         = "runtime.genesis.file"
-	CfgVersion        = "runtime.version"
-	CfgVersionEnclave = "runtime.version.enclave"
+	CfgID              = "runtime.id"
+	CfgTEEHardware     = "runtime.tee_hardware"
+	CfgGenesisState    = "runtime.genesis.state"
+	CfgGenesisRound    = "runtime.genesis.round"
+	CfgKind            = "runtime.kind"
+	CfgKeyManager      = "runtime.keymanager"
+	cfgOutput          = "runtime.genesis.file"
+	CfgVersion         = "runtime.version"
+	CfgVersionEnclave  = "runtime.version.enclave"
+	CfgGovernanceModel = "runtime.governance_model"
 
 	// Executor committee flags.
 	CfgExecutorGroupSize         = "runtime.executor.group_size"
@@ -53,6 +55,7 @@ const (
 	CfgExecutorAllowedStragglers = "runtime.executor.allowed_stragglers"
 	CfgExecutorRoundTimeout      = "runtime.executor.round_timeout"
 	CfgExecutorMaxMessages       = "runtime.executor.max_messages"
+	CfgExecutorMinPoolSize       = "runtime.executor.min_pool_size"
 
 	// Storage committee flags.
 	CfgStorageGroupSize               = "runtime.storage.group_size"
@@ -62,6 +65,7 @@ const (
 	CfgStorageCheckpointInterval      = "runtime.storage.checkpoint_interval"
 	CfgStorageCheckpointNumKept       = "runtime.storage.checkpoint_num_kept"
 	CfgStorageCheckpointChunkSize     = "runtime.storage.checkpoint_chunk_size"
+	CfgStorageMinPoolSize             = "runtime.storage.min_pool_size"
 
 	// Transaction scheduler flags.
 	CfgTxnSchedulerAlgorithm         = "runtime.txn_scheduler.algorithm"
@@ -143,20 +147,15 @@ func doInitGenesis(cmd *cobra.Command, args []string) {
 		os.Exit(1)
 	}
 
-	rt, signer, err := runtimeFromFlags()
+	rt, err := runtimeFromFlags()
 	if err != nil {
 		os.Exit(1)
 	}
 
-	signed, err := signForRegistration(rt, signer, true)
-	if err != nil {
-		os.Exit(1)
-	}
-
-	// Write out the signed runtime registration.
-	b, _ := json.Marshal(signed)
+	// Write out the runtime registration.
+	b, _ := json.Marshal(rt)
 	if err = ioutil.WriteFile(filepath.Join(dataDir, viper.GetString(cfgOutput)), b, 0o600); err != nil {
-		logger.Error("failed to write signed runtime genesis registration",
+		logger.Error("failed to write runtime genesis registration",
 			"err", err,
 		)
 		os.Exit(1)
@@ -175,7 +174,7 @@ func doGenRegister(cmd *cobra.Command, args []string) {
 	cmdConsensus.InitGenesis()
 	cmdConsensus.AssertTxFileOK()
 
-	rt, signer, err := runtimeFromFlags()
+	rt, err := runtimeFromFlags()
 	if err != nil {
 		logger.Info("failed to get runtime",
 			"err", err,
@@ -183,16 +182,8 @@ func doGenRegister(cmd *cobra.Command, args []string) {
 		os.Exit(1)
 	}
 
-	signed, err := signForRegistration(rt, signer, false)
-	if err != nil {
-		logger.Info("failed to sign runtime descriptor",
-			"err", err,
-		)
-		os.Exit(1)
-	}
-
 	nonce, fee := cmdConsensus.GetTxNonceAndFee()
-	tx := registry.NewRegisterRuntimeTx(nonce, fee, signed)
+	tx := registry.NewRegisterRuntimeTx(nonce, fee, rt)
 
 	cmdConsensus.SignAndSaveTx(context.Background(), tx, nil)
 }
@@ -231,13 +222,13 @@ func doList(cmd *cobra.Command, args []string) {
 	}
 }
 
-func runtimeFromFlags() (*registry.Runtime, signature.Signer, error) { // nolint: gocyclo
+func runtimeFromFlags() (*registry.Runtime, error) { // nolint: gocyclo
 	var id common.Namespace
 	if err := id.UnmarshalHex(viper.GetString(CfgID)); err != nil {
 		logger.Error("failed to parse runtime ID",
 			"err", err,
 		)
-		return nil, nil, err
+		return nil, err
 	}
 
 	var teeHardware node.TEEHardware
@@ -246,7 +237,7 @@ func runtimeFromFlags() (*registry.Runtime, signature.Signer, error) { // nolint
 		logger.Error("invalid TEE hardware",
 			CfgTEEHardware, s,
 		)
-		return nil, nil, fmt.Errorf("invalid TEE hardware")
+		return nil, fmt.Errorf("invalid TEE hardware")
 	}
 
 	_, signer, err := cmdCommon.LoadEntitySigner()
@@ -254,7 +245,7 @@ func runtimeFromFlags() (*registry.Runtime, signature.Signer, error) { // nolint
 		logger.Error("failed to load owning entity's signer",
 			"err", err,
 		)
-		return nil, nil, err
+		return nil, err
 	}
 
 	var (
@@ -266,7 +257,7 @@ func runtimeFromFlags() (*registry.Runtime, signature.Signer, error) { // nolint
 		logger.Error("invalid runtime kind",
 			CfgKind, s,
 		)
-		return nil, nil, fmt.Errorf("invalid runtime kind")
+		return nil, fmt.Errorf("invalid runtime kind")
 	}
 	switch kind {
 	case registry.KindCompute:
@@ -276,7 +267,7 @@ func runtimeFromFlags() (*registry.Runtime, signature.Signer, error) { // nolint
 				logger.Error("failed to parse key manager ID",
 					"err", err,
 				)
-				return nil, nil, err
+				return nil, err
 			}
 			kmID = &tmpKmID
 		}
@@ -284,7 +275,7 @@ func runtimeFromFlags() (*registry.Runtime, signature.Signer, error) { // nolint
 			logger.Error("runtime ID has the key manager flag set",
 				"id", id,
 			)
-			return nil, nil, fmt.Errorf("invalid runtime flags")
+			return nil, fmt.Errorf("invalid runtime flags")
 		}
 	case registry.KindKeyManager:
 		// Key managers don't have their own key manager.
@@ -292,10 +283,10 @@ func runtimeFromFlags() (*registry.Runtime, signature.Signer, error) { // nolint
 			logger.Error("runtime ID does not have the key manager flag set",
 				"id", id,
 			)
-			return nil, nil, fmt.Errorf("invalid runtime flags")
+			return nil, fmt.Errorf("invalid runtime flags")
 		}
 	case registry.KindInvalid:
-		return nil, nil, fmt.Errorf("cannot create runtime with invalid kind")
+		return nil, fmt.Errorf("cannot create runtime with invalid kind")
 	}
 
 	// TODO: Support root upload when registering.
@@ -312,7 +303,7 @@ func runtimeFromFlags() (*registry.Runtime, signature.Signer, error) { // nolint
 				"err", err,
 				"filename", state,
 			)
-			return nil, nil, err
+			return nil, err
 		}
 
 		var log storage.WriteLog
@@ -321,7 +312,7 @@ func runtimeFromFlags() (*registry.Runtime, signature.Signer, error) { // nolint
 				"err", err,
 				"filename", state,
 			)
-			return nil, nil, err
+			return nil, err
 		}
 
 		// Use in-memory MKVS tree to calculate the new root.
@@ -334,7 +325,7 @@ func runtimeFromFlags() (*registry.Runtime, signature.Signer, error) { // nolint
 					"err", err,
 					"filename", state,
 				)
-				return nil, nil, err
+				return nil, err
 			}
 		}
 
@@ -345,11 +336,17 @@ func runtimeFromFlags() (*registry.Runtime, signature.Signer, error) { // nolint
 				"err", err,
 				"filename", state,
 			)
-			return nil, nil, err
+			return nil, err
 		}
 
 		gen.StateRoot = newRoot
 		gen.State = log
+	}
+
+	var govModel registry.RuntimeGovernanceModel
+	if err = govModel.UnmarshalText([]byte(strings.ToLower(viper.GetString(CfgGovernanceModel)))); err != nil {
+		logger.Error("invalid runtime governance model specified")
+		return nil, err
 	}
 
 	rt := &registry.Runtime{
@@ -369,6 +366,7 @@ func runtimeFromFlags() (*registry.Runtime, signature.Signer, error) { // nolint
 			AllowedStragglers: viper.GetUint64(CfgExecutorAllowedStragglers),
 			RoundTimeout:      viper.GetInt64(CfgExecutorRoundTimeout),
 			MaxMessages:       viper.GetUint32(CfgExecutorMaxMessages),
+			MinPoolSize:       viper.GetUint64(CfgExecutorMinPoolSize),
 		},
 		TxnScheduler: registry.TxnSchedulerParameters{
 			Algorithm:         viper.GetString(CfgTxnSchedulerAlgorithm),
@@ -385,7 +383,9 @@ func runtimeFromFlags() (*registry.Runtime, signature.Signer, error) { // nolint
 			CheckpointInterval:      viper.GetUint64(CfgStorageCheckpointInterval),
 			CheckpointNumKept:       viper.GetUint64(CfgStorageCheckpointNumKept),
 			CheckpointChunkSize:     uint64(viper.GetSizeInBytes(CfgStorageCheckpointChunkSize)),
+			MinPoolSize:             viper.GetUint64(CfgStorageMinPoolSize),
 		},
+		GovernanceModel: govModel,
 	}
 	if teeHardware == node.TEEHardwareIntelSGX {
 		var vi registry.VersionInfoIntelSGX
@@ -395,7 +395,7 @@ func runtimeFromFlags() (*registry.Runtime, signature.Signer, error) { // nolint
 				logger.Error("failed to parse SGX enclave identity",
 					"err", err,
 				)
-				return nil, nil, err
+				return nil, err
 			}
 			vi.Enclaves = append(vi.Enclaves, enclaveID)
 		}
@@ -405,7 +405,7 @@ func runtimeFromFlags() (*registry.Runtime, signature.Signer, error) { // nolint
 	case AdmissionPolicyNameAnyNode:
 		rt.AdmissionPolicy.AnyNode = &registry.AnyNodeRuntimeAdmissionPolicy{}
 	case AdmissionPolicyNameEntityWhitelist:
-		entities := make(map[signature.PublicKey]bool)
+		entities := make(map[signature.PublicKey]registry.EntityWhitelistConfig)
 		for _, se := range viper.GetStringSlice(CfgAdmissionPolicyEntityWhitelist) {
 			var e signature.PublicKey
 			if err = e.UnmarshalText([]byte(se)); err != nil {
@@ -413,9 +413,14 @@ func runtimeFromFlags() (*registry.Runtime, signature.Signer, error) { // nolint
 					"err", err,
 					CfgAdmissionPolicyEntityWhitelist, se,
 				)
-				return nil, nil, fmt.Errorf("entity whitelist runtime admission policy parse entity ID: %w", err)
+				return nil, fmt.Errorf("entity whitelist runtime admission policy parse entity ID: %w", err)
 			}
-			entities[e] = true
+			entities[e] = registry.EntityWhitelistConfig{
+				MaxNodes: make(map[node.RolesMask]uint16),
+			}
+			// TODO: Handle the clusterfuck of parsing the nested map from
+			// command-line arguments sometime later.  As it is now, it's
+			// configured as unlimited nodes of any role for the given entity.
 		}
 		rt.AdmissionPolicy.EntityWhitelist = &registry.EntityWhitelistRuntimeAdmissionPolicy{
 			Entities: entities,
@@ -424,7 +429,7 @@ func runtimeFromFlags() (*registry.Runtime, signature.Signer, error) { // nolint
 		logger.Error("invalid runtime admission policy",
 			CfgAdmissionPolicy, sap,
 		)
-		return nil, nil, fmt.Errorf("invalid runtime admission policy")
+		return nil, fmt.Errorf("invalid runtime admission policy")
 	}
 
 	// Staking parameters.
@@ -437,14 +442,14 @@ func runtimeFromFlags() (*registry.Runtime, signature.Signer, error) { // nolint
 			)
 
 			if err = kind.UnmarshalText([]byte(kindRaw)); err != nil {
-				return nil, nil, fmt.Errorf("staking: bad threshold kind (%s): %w", kindRaw, err)
+				return nil, fmt.Errorf("staking: bad threshold kind (%s): %w", kindRaw, err)
 			}
 			if err = value.UnmarshalText([]byte(valueRaw)); err != nil {
-				return nil, nil, fmt.Errorf("staking: bad threshold value (%s): %w", valueRaw, err)
+				return nil, fmt.Errorf("staking: bad threshold value (%s): %w", valueRaw, err)
 			}
 
 			if _, ok := rt.Staking.Thresholds[kind]; ok {
-				return nil, nil, fmt.Errorf("staking: duplicate value for threshold '%s'", kind)
+				return nil, fmt.Errorf("staking: duplicate value for threshold '%s'", kind)
 			}
 			rt.Staking.Thresholds[kind] = value
 		}
@@ -452,30 +457,10 @@ func runtimeFromFlags() (*registry.Runtime, signature.Signer, error) { // nolint
 
 	// Validate descriptor.
 	if err = rt.ValidateBasic(true); err != nil {
-		return nil, nil, fmt.Errorf("invalid runtime descriptor: %w", err)
+		return nil, fmt.Errorf("invalid runtime descriptor: %w", err)
 	}
 
-	return rt, signer, nil
-}
-
-func signForRegistration(rt *registry.Runtime, signer signature.Signer, isGenesis bool) (*registry.SignedRuntime, error) {
-	var ctx signature.Context
-	switch isGenesis {
-	case false:
-		ctx = registry.RegisterRuntimeSignatureContext
-	case true:
-		ctx = registry.RegisterGenesisRuntimeSignatureContext
-	}
-
-	signed, err := registry.SignRuntime(signer, ctx, rt)
-	if err != nil {
-		logger.Error("failed to sign runtime descriptor",
-			"err", err,
-		)
-		return nil, err
-	}
-
-	return signed, err
+	return rt, nil
 }
 
 // Register registers the runtime sub-command and all of it's children.
@@ -521,6 +506,7 @@ func init() {
 	runtimeFlags.String(CfgKind, "compute", "Kind of runtime.  Supported values are \"compute\" and \"keymanager\"")
 	runtimeFlags.String(CfgVersion, "", "Runtime version. Value is 64-bit hex e.g. 0x0000000100020003 for 1.2.3")
 	runtimeFlags.StringSlice(CfgVersionEnclave, nil, "Runtime TEE enclave version(s)")
+	runtimeFlags.String(CfgGovernanceModel, "entity", "Runtime governance model (entity or runtime or consensus)")
 
 	// Init Executor committee flags.
 	runtimeFlags.Uint64(CfgExecutorGroupSize, 1, "Number of workers in the runtime executor group/committee")
@@ -528,6 +514,7 @@ func init() {
 	runtimeFlags.Uint64(CfgExecutorAllowedStragglers, 0, "Number of stragglers allowed per round in the runtime executor group")
 	runtimeFlags.Int64(CfgExecutorRoundTimeout, 5, "Executor committee round timeout for this runtime (in consensus blocks)")
 	runtimeFlags.Uint32(CfgExecutorMaxMessages, 32, "Maximum number of runtime messages that can be emitted in a round")
+	runtimeFlags.Uint64(CfgExecutorMinPoolSize, 1, "Minimum required candidate compute node pool size (should be >= GroupSize+GroupBackupSize)")
 
 	// Init Transaction scheduler flags.
 	runtimeFlags.String(CfgTxnSchedulerAlgorithm, registry.TxnSchedulerSimple, "Transaction scheduling algorithm")
@@ -544,6 +531,7 @@ func init() {
 	runtimeFlags.Uint64(CfgStorageCheckpointInterval, 10_000, "Storage checkpoint interval (in rounds)")
 	runtimeFlags.Uint64(CfgStorageCheckpointNumKept, 2, "Number of storage checkpoints to keep")
 	runtimeFlags.String(CfgStorageCheckpointChunkSize, "8mb", "Storage checkpoint chunk size")
+	runtimeFlags.Uint64(CfgStorageMinPoolSize, 1, "Minimum required candidate storage node pool size (should be >= GroupSize)")
 
 	// Init Admission policy flags.
 	runtimeFlags.String(CfgAdmissionPolicy, "", "What type of node admission policy to have")

@@ -33,10 +33,10 @@ var (
 	//
 	// Value is empty.
 	signedNodeByEntityKeyFmt = keyformat.New(0x12, keyformat.H(&signature.PublicKey{}), keyformat.H(&signature.PublicKey{}))
-	// signedRuntimeKeyFmt is the key format used for signed runtimes.
+	// runtimeKeyFmt is the key format used for runtimes.
 	//
-	// Value is CBOR-serialized signed runtime.
-	signedRuntimeKeyFmt = keyformat.New(0x13, keyformat.H(&common.Namespace{}))
+	// Value is CBOR-serialized runtime.
+	runtimeKeyFmt = keyformat.New(0x13, keyformat.H(&common.Namespace{}))
 	// nodeByConsAddressKeyFmt is the key format used for the consensus address to
 	// node public key mapping.
 	//
@@ -62,13 +62,13 @@ var (
 	keyMapKeyFmt = keyformat.New(0x17, keyformat.H(&signature.PublicKey{}))
 	// suspendedRuntimeKeyFmt is the key format used for suspended runtimes.
 	//
-	// Value is CBOR-serialized signed runtime.
+	// Value is CBOR-serialized runtime.
 	suspendedRuntimeKeyFmt = keyformat.New(0x18, keyformat.H(&common.Namespace{}))
-	// signedRuntimeByEntityKeyFmt is the key format used for signed runtime by entity
+	// runtimeByEntityKeyFmt is the key format used for runtime by entity
 	// index.
 	//
 	// Value is empty.
-	signedRuntimeByEntityKeyFmt = keyformat.New(0x19, keyformat.H(&signature.PublicKey{}), keyformat.H(&common.Namespace{}))
+	runtimeByEntityKeyFmt = keyformat.New(0x19, keyformat.H(&signature.PublicKey{}), keyformat.H(&common.Namespace{}))
 )
 
 // ImmutableState is the immutable registry state wrapper.
@@ -250,7 +250,7 @@ func (s *ImmutableState) SignedNodes(ctx context.Context) ([]*node.MultiSignedNo
 	return nodes, nil
 }
 
-func (s *ImmutableState) getSignedRuntime(ctx context.Context, keyFmt *keyformat.KeyFormat, id common.Namespace) (*registry.SignedRuntime, error) {
+func (s *ImmutableState) getRuntime(ctx context.Context, keyFmt *keyformat.KeyFormat, id common.Namespace) (*registry.Runtime, error) {
 	raw, err := s.is.Get(ctx, keyFmt.Encode(&id))
 	if err != nil {
 		return nil, abciAPI.UnavailableStateError(err)
@@ -259,20 +259,8 @@ func (s *ImmutableState) getSignedRuntime(ctx context.Context, keyFmt *keyformat
 		return nil, registry.ErrNoSuchRuntime
 	}
 
-	var signedRuntime registry.SignedRuntime
-	if err := cbor.Unmarshal(raw, &signedRuntime); err != nil {
-		return nil, abciAPI.UnavailableStateError(err)
-	}
-	return &signedRuntime, nil
-}
-
-func (s *ImmutableState) getRuntime(ctx context.Context, keyFmt *keyformat.KeyFormat, id common.Namespace) (*registry.Runtime, error) {
-	signedRuntime, err := s.getSignedRuntime(ctx, keyFmt, id)
-	if err != nil {
-		return nil, err
-	}
 	var runtime registry.Runtime
-	if err = cbor.Unmarshal(signedRuntime.Blob, &runtime); err != nil {
+	if err := cbor.Unmarshal(raw, &runtime); err != nil {
 		return nil, abciAPI.UnavailableStateError(err)
 	}
 	return &runtime, nil
@@ -283,7 +271,7 @@ func (s *ImmutableState) getRuntime(ctx context.Context, keyFmt *keyformat.KeyFo
 // This excludes any suspended runtimes, use SuspendedRuntime to query
 // suspended runtimes only.
 func (s *ImmutableState) Runtime(ctx context.Context, id common.Namespace) (*registry.Runtime, error) {
-	return s.getRuntime(ctx, signedRuntimeKeyFmt, id)
+	return s.getRuntime(ctx, runtimeKeyFmt, id)
 }
 
 // SuspendedRuntime looks up a suspended runtime by its identifier and
@@ -301,23 +289,10 @@ func (s *ImmutableState) AnyRuntime(ctx context.Context, id common.Namespace) (r
 	return
 }
 
-// SignedRuntime looks up a (signed) runtime by its identifier and returns it.
-//
-// This excludes any suspended runtimes, use SuspendedSignedRuntime to query
-// suspended runtimes only.
-func (s *ImmutableState) SignedRuntime(ctx context.Context, id common.Namespace) (*registry.SignedRuntime, error) {
-	return s.getSignedRuntime(ctx, signedRuntimeKeyFmt, id)
-}
-
-// SignedSuspendedRuntime looks up a (signed) suspended runtime by its identifier and returns it.
-func (s *ImmutableState) SignedSuspendedRuntime(ctx context.Context, id common.Namespace) (*registry.SignedRuntime, error) {
-	return s.getSignedRuntime(ctx, suspendedRuntimeKeyFmt, id)
-}
-
 func (s *ImmutableState) iterateRuntimes(
 	ctx context.Context,
 	keyFmt *keyformat.KeyFormat,
-	cb func(*registry.SignedRuntime) error,
+	cb func(*registry.Runtime) error,
 ) error {
 	it := s.is.NewIterator(ctx)
 	defer it.Close()
@@ -327,64 +302,16 @@ func (s *ImmutableState) iterateRuntimes(
 			break
 		}
 
-		var signedRt registry.SignedRuntime
-		if err := cbor.Unmarshal(it.Value(), &signedRt); err != nil {
+		var rt registry.Runtime
+		if err := cbor.Unmarshal(it.Value(), &rt); err != nil {
 			return abciAPI.UnavailableStateError(err)
 		}
 
-		if err := cb(&signedRt); err != nil {
+		if err := cb(&rt); err != nil {
 			return err
 		}
 	}
 	return abciAPI.UnavailableStateError(it.Err())
-}
-
-// SignedRuntimes returns a list of all registered runtimes (signed).
-//
-// This excludes any suspended runtimes.
-func (s *ImmutableState) SignedRuntimes(ctx context.Context) ([]*registry.SignedRuntime, error) {
-	var runtimes []*registry.SignedRuntime
-	err := s.iterateRuntimes(ctx, signedRuntimeKeyFmt, func(rt *registry.SignedRuntime) error {
-		runtimes = append(runtimes, rt)
-		return nil
-	})
-	if err != nil {
-		return nil, err
-	}
-	return runtimes, nil
-}
-
-// SuspendedRuntimes returns a list of all suspended runtimes (signed).
-func (s *ImmutableState) SuspendedRuntimes(ctx context.Context) ([]*registry.SignedRuntime, error) {
-	var runtimes []*registry.SignedRuntime
-	err := s.iterateRuntimes(ctx, suspendedRuntimeKeyFmt, func(rt *registry.SignedRuntime) error {
-		runtimes = append(runtimes, rt)
-		return nil
-	})
-	if err != nil {
-		return nil, err
-	}
-	return runtimes, nil
-}
-
-// AllSignedRuntimes returns a list of all runtimes (suspended included).
-func (s *ImmutableState) AllSignedRuntimes(ctx context.Context) ([]*registry.SignedRuntime, error) {
-	var runtimes []*registry.SignedRuntime
-	err := s.iterateRuntimes(ctx, signedRuntimeKeyFmt, func(rt *registry.SignedRuntime) error {
-		runtimes = append(runtimes, rt)
-		return nil
-	})
-	if err != nil {
-		return nil, err
-	}
-	err = s.iterateRuntimes(ctx, suspendedRuntimeKeyFmt, func(rt *registry.SignedRuntime) error {
-		runtimes = append(runtimes, rt)
-		return nil
-	})
-	if err != nil {
-		return nil, err
-	}
-	return runtimes, nil
 }
 
 // Runtimes returns a list of all registered runtimes.
@@ -392,12 +319,21 @@ func (s *ImmutableState) AllSignedRuntimes(ctx context.Context) ([]*registry.Sig
 // This excludes any suspended runtimes.
 func (s *ImmutableState) Runtimes(ctx context.Context) ([]*registry.Runtime, error) {
 	var runtimes []*registry.Runtime
-	err := s.iterateRuntimes(ctx, signedRuntimeKeyFmt, func(sigRt *registry.SignedRuntime) error {
-		var rt registry.Runtime
-		if err := cbor.Unmarshal(sigRt.Blob, &rt); err != nil {
-			return abciAPI.UnavailableStateError(err)
-		}
-		runtimes = append(runtimes, &rt)
+	err := s.iterateRuntimes(ctx, runtimeKeyFmt, func(rt *registry.Runtime) error {
+		runtimes = append(runtimes, rt)
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	return runtimes, nil
+}
+
+// SuspendedRuntimes returns a list of all suspended runtimes.
+func (s *ImmutableState) SuspendedRuntimes(ctx context.Context) ([]*registry.Runtime, error) {
+	var runtimes []*registry.Runtime
+	err := s.iterateRuntimes(ctx, suspendedRuntimeKeyFmt, func(rt *registry.Runtime) error {
+		runtimes = append(runtimes, rt)
 		return nil
 	})
 	if err != nil {
@@ -409,15 +345,11 @@ func (s *ImmutableState) Runtimes(ctx context.Context) ([]*registry.Runtime, err
 // AllRuntimes returns a list of all registered runtimes (suspended included).
 func (s *ImmutableState) AllRuntimes(ctx context.Context) ([]*registry.Runtime, error) {
 	var runtimes []*registry.Runtime
-	unpackFn := func(sigRt *registry.SignedRuntime) error {
-		var rt registry.Runtime
-		if err := cbor.Unmarshal(sigRt.Blob, &rt); err != nil {
-			return abciAPI.UnavailableStateError(err)
-		}
-		runtimes = append(runtimes, &rt)
+	unpackFn := func(rt *registry.Runtime) error {
+		runtimes = append(runtimes, rt)
 		return nil
 	}
-	if err := s.iterateRuntimes(ctx, signedRuntimeKeyFmt, unpackFn); err != nil {
+	if err := s.iterateRuntimes(ctx, runtimeKeyFmt, unpackFn); err != nil {
 		return nil, err
 	}
 	if err := s.iterateRuntimes(ctx, suspendedRuntimeKeyFmt, unpackFn); err != nil {
@@ -443,6 +375,46 @@ func (s *ImmutableState) NodeStatus(ctx context.Context, id signature.PublicKey)
 	return &status, nil
 }
 
+// GetEntityNodes returns nodes registered by given entity.
+// Note that this returns both active and expired nodes.
+func (s *ImmutableState) GetEntityNodes(ctx context.Context, id signature.PublicKey) ([]*node.Node, error) {
+	it := s.is.NewIterator(ctx)
+	defer it.Close()
+
+	hID := keyformat.PreHashed(id.Hash())
+
+	var nodes []*node.Node
+	for it.Seek(signedNodeByEntityKeyFmt.Encode(&id)); it.Valid(); it.Next() {
+		var hEntityID keyformat.PreHashed
+		var hNodeID keyformat.PreHashed
+
+		if !signedNodeByEntityKeyFmt.Decode(it.Key(), &hEntityID, &hNodeID) || !hEntityID.Equal(&hID) {
+			break
+		}
+
+		rawSignedNode, err := s.is.Get(ctx, signedNodeKeyFmt.Encode(&hNodeID))
+		if err != nil {
+			return nil, abciAPI.UnavailableStateError(err)
+		}
+		if rawSignedNode == nil {
+			return nil, abciAPI.UnavailableStateError(registry.ErrNoSuchNode)
+		}
+		var signedNode node.MultiSignedNode
+		if err = cbor.Unmarshal(rawSignedNode, &signedNode); err != nil {
+			return nil, abciAPI.UnavailableStateError(err)
+		}
+		var node node.Node
+		if err = cbor.Unmarshal(signedNode.Blob, &node); err != nil {
+			return nil, abciAPI.UnavailableStateError(err)
+		}
+
+		nodes = append(nodes, &node)
+	}
+
+	registry.SortNodeList(nodes)
+	return nodes, nil
+}
+
 // HasEntityNodes checks whether an entity has any registered nodes.
 func (s *ImmutableState) HasEntityNodes(ctx context.Context, id signature.PublicKey) (bool, error) {
 	it := s.is.NewIterator(ctx)
@@ -465,9 +437,9 @@ func (s *ImmutableState) HasEntityRuntimes(ctx context.Context, id signature.Pub
 	defer it.Close()
 
 	hID := keyformat.PreHashed(id.Hash())
-	if it.Seek(signedRuntimeByEntityKeyFmt.Encode(&id)); it.Valid() {
+	if it.Seek(runtimeByEntityKeyFmt.Encode(&id)); it.Valid() {
 		var hEntityID keyformat.PreHashed
-		if !signedRuntimeByEntityKeyFmt.Decode(it.Key(), &hEntityID) || !hEntityID.Equal(&hID) {
+		if !runtimeByEntityKeyFmt.Decode(it.Key(), &hEntityID) || !hEntityID.Equal(&hID) {
 			return false, nil
 		}
 		return true, nil
@@ -641,24 +613,24 @@ func (s *MutableState) RemoveNode(ctx context.Context, node *node.Node) error {
 	return nil
 }
 
-// SetRuntime sets a signed runtime descriptor for a registered runtime.
-func (s *MutableState) SetRuntime(ctx context.Context, rt *registry.Runtime, sigRt *registry.SignedRuntime, suspended bool) error {
-	if err := s.ms.Insert(ctx, signedRuntimeByEntityKeyFmt.Encode(&rt.EntityID, &rt.ID), []byte("")); err != nil {
+// SetRuntime sets a runtime descriptor for a registered runtime.
+func (s *MutableState) SetRuntime(ctx context.Context, rt *registry.Runtime, suspended bool) error {
+	if err := s.ms.Insert(ctx, runtimeByEntityKeyFmt.Encode(&rt.EntityID, &rt.ID), []byte("")); err != nil {
 		return abciAPI.UnavailableStateError(err)
 	}
 
 	var err error
 	if suspended {
-		err = s.ms.Insert(ctx, suspendedRuntimeKeyFmt.Encode(&rt.ID), cbor.Marshal(sigRt))
+		err = s.ms.Insert(ctx, suspendedRuntimeKeyFmt.Encode(&rt.ID), cbor.Marshal(rt))
 	} else {
-		err = s.ms.Insert(ctx, signedRuntimeKeyFmt.Encode(&rt.ID), cbor.Marshal(sigRt))
+		err = s.ms.Insert(ctx, runtimeKeyFmt.Encode(&rt.ID), cbor.Marshal(rt))
 	}
 	return abciAPI.UnavailableStateError(err)
 }
 
 // SuspendRuntime marks a runtime as suspended.
 func (s *MutableState) SuspendRuntime(ctx context.Context, id common.Namespace) error {
-	data, err := s.ms.RemoveExisting(ctx, signedRuntimeKeyFmt.Encode(&id))
+	data, err := s.ms.RemoveExisting(ctx, runtimeKeyFmt.Encode(&id))
 	if err != nil {
 		return abciAPI.UnavailableStateError(err)
 	}
@@ -678,7 +650,7 @@ func (s *MutableState) ResumeRuntime(ctx context.Context, id common.Namespace) e
 	if data == nil {
 		return registry.ErrNoSuchRuntime
 	}
-	err = s.ms.Insert(ctx, signedRuntimeKeyFmt.Encode(&id), data)
+	err = s.ms.Insert(ctx, runtimeKeyFmt.Encode(&id), data)
 	return abciAPI.UnavailableStateError(err)
 }
 

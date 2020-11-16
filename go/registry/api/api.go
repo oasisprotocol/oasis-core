@@ -50,17 +50,6 @@ var (
 	// migrating existing registrations into a new genesis document.
 	RegisterGenesisNodeSignatureContext = RegisterNodeSignatureContext
 
-	// RegisterRuntimeSignatureContext is the context used for runtime
-	// registration.
-	RegisterRuntimeSignatureContext = signature.NewContext("oasis-core/registry: register runtime")
-
-	// RegisterGenesisRuntimeSignatureContext is the context used for
-	// runtime registation in the genesis document.
-	//
-	// Note: This is identical to non-gensis registrations to support
-	// migrating existing registrations into a new genesis document.
-	RegisterGenesisRuntimeSignatureContext = RegisterRuntimeSignatureContext
-
 	// ErrInvalidArgument is the error returned on malformed argument(s).
 	ErrInvalidArgument = errors.New(ModuleName, 1, "registry: invalid argument")
 
@@ -140,7 +129,7 @@ var (
 	// MethodUnfreezeNode is the method name for unfreezing nodes.
 	MethodUnfreezeNode = transaction.NewMethodName(ModuleName, "UnfreezeNode", UnfreezeNode{})
 	// MethodRegisterRuntime is the method name for registering runtimes.
-	MethodRegisterRuntime = transaction.NewMethodName(ModuleName, "RegisterRuntime", SignedRuntime{})
+	MethodRegisterRuntime = transaction.NewMethodName(ModuleName, "RegisterRuntime", Runtime{})
 
 	// Methods is the list of all methods supported by the registry backend.
 	Methods = []transaction.MethodName{
@@ -282,8 +271,8 @@ func NewUnfreezeNodeTx(nonce uint64, fee *transaction.Fee, unfreeze *UnfreezeNod
 }
 
 // NewRegisterRuntimeTx creates a new register runtime transaction.
-func NewRegisterRuntimeTx(nonce uint64, fee *transaction.Fee, sigRt *SignedRuntime) *transaction.Transaction {
-	return transaction.NewTransaction(nonce, fee, MethodRegisterRuntime, sigRt)
+func NewRegisterRuntimeTx(nonce uint64, fee *transaction.Fee, rt *Runtime) *transaction.Transaction {
+	return transaction.NewTransaction(nonce, fee, MethodRegisterRuntime, rt)
 }
 
 // EntityEvent is the event that is returned via WatchEntities to signify
@@ -995,58 +984,45 @@ func exactlyOneTrue(conds ...bool) bool {
 	return total == 1
 }
 
-// VerifyRegisterRuntimeArgs verifies arguments for RegisterRuntime.
-func VerifyRegisterRuntimeArgs( // nolint: gocyclo
+// VerifyRuntime verifies the given runtime.
+func VerifyRuntime( // nolint: gocyclo
 	params *ConsensusParameters,
 	logger *logging.Logger,
-	sigRt *SignedRuntime,
+	rt *Runtime,
 	isGenesis bool,
 	isSanityCheck bool,
-) (*Runtime, error) {
-	var rt Runtime
-	if sigRt == nil {
-		return nil, ErrInvalidArgument
+) error {
+	if rt == nil {
+		return fmt.Errorf("%w: no runtime given", ErrInvalidArgument)
 	}
 
-	var ctx signature.Context
-	switch isGenesis {
-	case true:
-		ctx = RegisterGenesisRuntimeSignatureContext
-	case false:
-		ctx = RegisterRuntimeSignatureContext
-	}
-
-	if err := sigRt.Open(ctx, &rt); err != nil {
-		logger.Error("RegisterRuntime: invalid signature",
-			"signed_runtime", sigRt,
-		)
-		return nil, ErrInvalidSignature
-	}
-	if err := sigRt.Signed.Signature.SanityCheck(rt.EntityID); err != nil {
-		logger.Error("RegisterRuntime: invalid argument(s)",
-			"signed_runtime", sigRt,
-			"runtime", rt,
-			"err", err,
-		)
-		return nil, ErrInvalidArgument
-	}
 	if err := rt.ValidateBasic(!isGenesis && !isSanityCheck); err != nil {
 		logger.Error("RegisterRuntime: invalid runtime descriptor",
 			"runtime", rt,
 			"err", err,
 		)
-		return nil, fmt.Errorf("%w: %s", ErrInvalidArgument, err)
+		return fmt.Errorf("%w: %s", ErrInvalidArgument, err)
 	}
 
 	if rt.ID.IsTest() && !params.DebugAllowTestRuntimes {
 		logger.Error("RegisterRuntime: test runtime registration not allowed",
 			"id", rt.ID,
 		)
-		return nil, fmt.Errorf("%w: test runtime not allowed", ErrInvalidArgument)
+		return fmt.Errorf("%w: test runtime not allowed", ErrInvalidArgument)
 	}
 
 	if err := rt.Genesis.SanityCheck(isGenesis); err != nil {
-		return nil, err
+		return err
+	}
+
+	// Make sure the specified runtime governance model is allowed.
+	if len(params.EnableRuntimeGovernanceModels) == 0 {
+		// No runtime governance models are allowed.
+		return fmt.Errorf("%w: no runtime governance models are enabled", ErrForbidden)
+	}
+	if !params.EnableRuntimeGovernanceModels[rt.GovernanceModel] {
+		// Specified governance model is not allowed.
+		return fmt.Errorf("%w: runtime governance model is not enabled: %s", ErrForbidden, rt.GovernanceModel.String())
 	}
 
 	// Ensure a valid TEE hardware is specified.
@@ -1054,7 +1030,7 @@ func VerifyRegisterRuntimeArgs( // nolint: gocyclo
 		logger.Error("RegisterRuntime: invalid TEE hardware specified",
 			"runtime", rt,
 		)
-		return nil, fmt.Errorf("%w: invalid TEE hardware", ErrInvalidArgument)
+		return fmt.Errorf("%w: invalid TEE hardware", ErrInvalidArgument)
 	}
 
 	// If TEE is required, check if runtime provided at least one enclave ID.
@@ -1067,10 +1043,10 @@ func VerifyRegisterRuntimeArgs( // nolint: gocyclo
 					"version_info", vi,
 					"err", err,
 				)
-				return nil, fmt.Errorf("%w: invalid VersionInfo", ErrInvalidArgument)
+				return fmt.Errorf("%w: invalid VersionInfo", ErrInvalidArgument)
 			}
 			if len(vi.Enclaves) == 0 {
-				return nil, fmt.Errorf("%w: invalid VersionInfo", ErrNoEnclaveForRuntime)
+				return fmt.Errorf("%w: invalid VersionInfo", ErrNoEnclaveForRuntime)
 			}
 		}
 	}
@@ -1080,10 +1056,41 @@ func VerifyRegisterRuntimeArgs( // nolint: gocyclo
 		logger.Error("RegisterRuntime: invalid admission policy. exactly one policy should be non-nil",
 			"admission_policy", rt.AdmissionPolicy,
 		)
-		return nil, fmt.Errorf("%w: invalid admission policy", ErrInvalidArgument)
+		return fmt.Errorf("%w: invalid admission policy", ErrInvalidArgument)
 	}
 
-	return &rt, nil
+	// Using runtime governance for non-compute runtimes is invalid.
+	if rt.GovernanceModel == GovernanceRuntime && rt.Kind != KindCompute {
+		logger.Error("RegisterRuntime: runtime governance can only be used with compute runtimes")
+		return fmt.Errorf("%w: runtime governance can only be used with compute runtimes", ErrInvalidArgument)
+	}
+
+	// Ensure valid whitelist if present.
+	if rt.AdmissionPolicy.EntityWhitelist != nil {
+		for ent, wc := range rt.AdmissionPolicy.EntityWhitelist.Entities {
+			// Entity ID should be valid.
+			if !ent.IsValid() {
+				logger.Error("RegisterRuntime: invalid entity ID in whitelist",
+					"entity_id", ent,
+				)
+				return fmt.Errorf("%w: invalid entity ID in entity whitelist", ErrInvalidArgument)
+			}
+			// MaxNodes map should contain only single roles as keys.
+			if wc.MaxNodes != nil {
+				for role := range wc.MaxNodes {
+					if !role.IsSingleRole() {
+						logger.Error("RegisterRuntime: non-single role in entity whitelist max nodes map",
+							"entity_id", ent,
+							"role", role,
+						)
+						return fmt.Errorf("%w: non-single role in entity whitelist max nodes map", ErrInvalidArgument)
+					}
+				}
+			}
+		}
+	}
+
+	return nil
 }
 
 // VerifyRegisterComputeRuntimeArgs verifies compute runtime-specific arguments for RegisterRuntime.
@@ -1165,6 +1172,23 @@ func VerifyRuntimeUpdate(logger *logging.Logger, currentRt, newRt *Runtime) erro
 		)
 		return ErrRuntimeUpdateNotAllowed
 	}
+	// Check if governance model update is valid.
+	if currentRt.GovernanceModel != newRt.GovernanceModel {
+		// Transitioning from entity to runtime governance is allowed, but
+		// all other transitions are not.
+		if !(currentRt.GovernanceModel == GovernanceEntity && newRt.GovernanceModel == GovernanceRuntime) {
+			logger.Error("RegisterRuntime: invalid governance model transition",
+				"current_gm", currentRt.GovernanceModel.String(),
+				"new_gm", newRt.GovernanceModel.String(),
+			)
+			return ErrRuntimeUpdateNotAllowed
+		}
+	}
+	// Using runtime governance for non-compute runtimes is invalid.
+	if newRt.GovernanceModel == GovernanceRuntime && newRt.Kind != KindCompute {
+		logger.Error("RegisterRuntime: runtime governance can only be used with compute runtimes")
+		return ErrRuntimeUpdateNotAllowed
+	}
 	return nil
 }
 
@@ -1184,9 +1208,9 @@ type Genesis struct {
 	Entities []*entity.SignedEntity `json:"entities,omitempty"`
 
 	// Runtimes is the initial list of runtimes.
-	Runtimes []*SignedRuntime `json:"runtimes,omitempty"`
+	Runtimes []*Runtime `json:"runtimes,omitempty"`
 	// SuspendedRuntimes is the list of suspended runtimes.
-	SuspendedRuntimes []*SignedRuntime `json:"suspended_runtimes,omitempty"`
+	SuspendedRuntimes []*Runtime `json:"suspended_runtimes,omitempty"`
 
 	// Nodes is the initial list of nodes.
 	Nodes []*node.MultiSignedNode `json:"nodes,omitempty"`
@@ -1227,6 +1251,9 @@ type ConsensusParameters struct {
 	// MaxNodeExpiration is the maximum number of epochs relative to the epoch
 	// at registration time that a single node registration is valid for.
 	MaxNodeExpiration uint64 `json:"max_node_expiration,omitempty"`
+
+	// EnableRuntimeGovernanceModels is a set of enabled runtime governance models.
+	EnableRuntimeGovernanceModels map[RuntimeGovernanceModel]bool `json:"enable_runtime_governance_models,omitempty"`
 }
 
 const (

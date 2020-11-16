@@ -62,6 +62,7 @@ const (
 	CfgRegistryDebugAllowTestRuntimes                 = "registry.debug.allow_test_runtimes"
 	cfgRegistryDebugAllowEntitySignedNodeRegistration = "registry.debug.allow_entity_signed_registration"
 	cfgRegistryDebugBypassStake                       = "registry.debug.bypass_stake" // nolint: gosec
+	cfgRegistryEnableRuntimeGovernanceModels          = "registry.enable_runtime_governance_models"
 
 	// Scheduler config flags.
 	cfgSchedulerMinValidators          = "scheduler.min_validators"
@@ -314,10 +315,19 @@ func AppendRegistryState(doc *genesis.Document, entities, runtimes, nodes []stri
 			GasCosts:                               registry.DefaultGasCosts, // TODO: Make these configurable.
 			MaxNodeExpiration:                      viper.GetUint64(CfgRegistryMaxNodeExpiration),
 			DisableRuntimeRegistration:             viper.GetBool(CfgRegistryDisableRuntimeRegistration),
+			EnableRuntimeGovernanceModels:          make(map[registry.RuntimeGovernanceModel]bool),
 		},
 		Entities: make([]*entity.SignedEntity, 0, len(entities)),
-		Runtimes: make([]*registry.SignedRuntime, 0, len(runtimes)),
+		Runtimes: make([]*registry.Runtime, 0, len(runtimes)),
 		Nodes:    make([]*node.MultiSignedNode, 0, len(nodes)),
+	}
+
+	for _, gmStr := range viper.GetStringSlice(cfgRegistryEnableRuntimeGovernanceModels) {
+		var gm registry.RuntimeGovernanceModel
+		if err := gm.UnmarshalText([]byte(strings.ToLower(gmStr))); err != nil {
+			return fmt.Errorf("%w: '%s'", err, gmStr)
+		}
+		regSt.Parameters.EnableRuntimeGovernanceModels[gm] = true
 	}
 
 	entMap := make(map[signature.PublicKey]bool)
@@ -405,7 +415,7 @@ func AppendRegistryState(doc *genesis.Document, entities, runtimes, nodes []stri
 			return err
 		}
 
-		var rt registry.SignedRuntime
+		var rt registry.Runtime
 		if err = json.Unmarshal(b, &rt); err != nil {
 			l.Error("failed to parse genesis runtime registration",
 				"err", err,
@@ -718,6 +728,7 @@ func init() {
 	initGenesisFlags.Bool(CfgRegistryDebugAllowTestRuntimes, false, "enable test runtime registration")
 	initGenesisFlags.Bool(cfgRegistryDebugAllowEntitySignedNodeRegistration, false, "allow entity signed node registration (UNSAFE)")
 	initGenesisFlags.Bool(cfgRegistryDebugBypassStake, false, "bypass all stake checks and operations (UNSAFE)")
+	initGenesisFlags.StringSlice(cfgRegistryEnableRuntimeGovernanceModels, []string{"entity"}, "set of enabled runtime governance models")
 	_ = initGenesisFlags.MarkHidden(cfgRegistryDebugAllowUnroutableAddresses)
 	_ = initGenesisFlags.MarkHidden(CfgRegistryDebugAllowTestRuntimes)
 	_ = initGenesisFlags.MarkHidden(cfgRegistryDebugAllowEntitySignedNodeRegistration)

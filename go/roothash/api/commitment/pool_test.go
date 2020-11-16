@@ -132,10 +132,12 @@ func TestPoolSingleCommitment(t *testing.T) {
 		Storage: registry.StorageParameters{
 			GroupSize:           1,
 			MinWriteReplication: 1,
+			MinPoolSize:         1,
 		},
 		Executor: registry.ExecutorParameters{
 			MaxMessages: 32,
 		},
+		GovernanceModel: registry.GovernanceEntity,
 	}
 
 	// Generate a commitment signing key.
@@ -286,10 +288,11 @@ func TestPoolSingleCommitmentTEE(t *testing.T) {
 	_ = rtID.UnmarshalHex("0000000000000000000000000000000000000000000000000000000000000000")
 
 	rt := &registry.Runtime{
-		Versioned:   cbor.NewVersioned(registry.LatestRuntimeDescriptorVersion),
-		ID:          rtID,
-		Kind:        registry.KindCompute,
-		TEEHardware: node.TEEHardwareIntelSGX,
+		Versioned:       cbor.NewVersioned(registry.LatestRuntimeDescriptorVersion),
+		ID:              rtID,
+		Kind:            registry.KindCompute,
+		TEEHardware:     node.TEEHardwareIntelSGX,
+		GovernanceModel: registry.GovernanceEntity,
 	}
 
 	// Generate a commitment signing key.
@@ -377,12 +380,15 @@ func TestPoolStragglers(t *testing.T) {
 		Storage: registry.StorageParameters{
 			GroupSize:           1,
 			MinWriteReplication: 1,
+			MinPoolSize:         1,
 		},
 		Executor: registry.ExecutorParameters{
 			GroupSize:         2,
 			GroupBackupSize:   1,
 			AllowedStragglers: 1,
+			MinPoolSize:       3, // GroupSize + GroupBackupSize
 		},
+		GovernanceModel: registry.GovernanceEntity,
 	})
 	sk1 := sks[0]
 	sk2 := sks[1]
@@ -694,10 +700,11 @@ func TestPoolSerialization(t *testing.T) {
 	_ = rtID.UnmarshalHex("0000000000000000000000000000000000000000000000000000000000000000")
 
 	rt := &registry.Runtime{
-		Versioned:   cbor.NewVersioned(registry.LatestRuntimeDescriptorVersion),
-		ID:          rtID,
-		Kind:        registry.KindCompute,
-		TEEHardware: node.TEEHardwareInvalid,
+		Versioned:       cbor.NewVersioned(registry.LatestRuntimeDescriptorVersion),
+		ID:              rtID,
+		Kind:            registry.KindCompute,
+		TEEHardware:     node.TEEHardwareInvalid,
+		GovernanceModel: registry.GovernanceEntity,
 	}
 
 	// Generate a commitment signing key.
@@ -968,11 +975,14 @@ func generateMockCommittee(t *testing.T, rtTemplate *registry.Runtime) (
 			Storage: registry.StorageParameters{
 				GroupSize:           1,
 				MinWriteReplication: 1,
+				MinPoolSize:         1,
 			},
 			Executor: registry.ExecutorParameters{
 				GroupSize:       2,
 				GroupBackupSize: 1,
+				MinPoolSize:     3, // GroupSize + GroupBackupSize
 			},
+			GovernanceModel: registry.GovernanceEntity,
 		}
 	default:
 		// Use the provided runtime descriptor template.

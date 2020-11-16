@@ -48,16 +48,16 @@ func checkRegistry(ctx *abciAPI.Context, now epochtime.EpochTime) error {
 	}
 
 	// Check runtimes.
-	signedRuntimes, err := st.SignedRuntimes(ctx)
+	runtimes, err := st.Runtimes(ctx)
 	if err != nil {
-		return fmt.Errorf("AllSignedRuntimes: %w", err)
+		return fmt.Errorf("Runtimes: %w", err)
 	}
 	suspendedRuntimes, err := st.SuspendedRuntimes(ctx)
 	if err != nil {
 		return fmt.Errorf("SuspendedRuntimes: %w", err)
 	}
 
-	runtimeLookup, err := registry.SanityCheckRuntimes(logger, params, signedRuntimes, suspendedRuntimes, false)
+	runtimeLookup, err := registry.SanityCheckRuntimes(logger, params, runtimes, suspendedRuntimes, false)
 	if err != nil {
 		return fmt.Errorf("SanityCheckRuntimes: %w", err)
 	}
