@@ -184,7 +184,6 @@ steps:
       # TODO: Consider making this a part of the development Docker image.
       - go get -u github.com/dvyukov/go-fuzz/go-fuzz github.com/dvyukov/go-fuzz/go-fuzz-build
       - make -C go build-fuzz
-    soft_fail: true
     retry:
       <<: *retry_agent_failure
     plugins:
