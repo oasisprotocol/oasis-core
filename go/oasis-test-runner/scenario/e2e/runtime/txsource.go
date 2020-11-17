@@ -617,6 +617,7 @@ func (sc *txSourceImpl) startWorkload(childEnv *env.Env, errCh chan error, name 
 		"--" + txsource.CfgWorkload, name,
 		"--" + txsource.CfgTimeLimit, sc.timeLimit.String(),
 		"--" + txsource.CfgSeed, sc.seed,
+		"--" + txsource.CfgGasPrice, strconv.FormatUint(txSourceGasPrice, 10),
 		// Use half the configured interval due to fast blocks.
 		"--" + workload.CfgConsensusNumKeptVersions, strconv.FormatUint(node.Consensus().PruneNumKept/2, 10),
 	}

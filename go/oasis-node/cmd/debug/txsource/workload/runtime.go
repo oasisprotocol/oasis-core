@@ -13,16 +13,21 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common"
 	"github.com/oasisprotocol/oasis-core/go/common/cbor"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
-	"github.com/oasisprotocol/oasis-core/go/common/logging"
+	"github.com/oasisprotocol/oasis-core/go/common/quantity"
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
 	runtimeClient "github.com/oasisprotocol/oasis-core/go/runtime/client/api"
 	runtimeTransaction "github.com/oasisprotocol/oasis-core/go/runtime/transaction"
 )
 
-const (
-	// NameRuntime is the name of the runtime workload.
-	NameRuntime = "runtime"
+// NameRuntime is the name of the runtime workload.
+const NameRuntime = "runtime"
 
+// Runtime is the runtime workload.
+var Runtime = &runtime{
+	BaseWorkload: NewBaseWorkload(NameRuntime),
+}
+
+const (
 	// CfgRuntimeID is the runtime workload runtime ID.
 	CfgRuntimeID = "runtime.runtime_id"
 
@@ -58,7 +63,7 @@ var runtimeRequestWeights = map[runtimeRequest]int{
 var RuntimeFlags = flag.NewFlagSet("", flag.ContinueOnError)
 
 type runtime struct {
-	logger *logging.Logger
+	BaseWorkload
 
 	runtimeID             common.Namespace
 	reckonedKeyValueState map[string]string
@@ -123,7 +128,7 @@ func (r *runtime) submitRuntimeRquest(ctx context.Context, rtc runtimeClient.Run
 		Data:      cbor.Marshal(req),
 	}
 
-	r.logger.Debug("submitting request",
+	r.Logger.Debug("submitting request",
 		"request", req,
 	)
 
@@ -165,7 +170,7 @@ func (r *runtime) doInsertRequest(ctx context.Context, rng *rand.Rand, rtc runti
 	}
 	rsp, err := r.submitRuntimeRquest(ctx, rtc, req)
 	if err != nil {
-		r.logger.Error("Submit insert request failure",
+		r.Logger.Error("Submit insert request failure",
 			"request", req,
 			"existing_key", existing,
 			"err", err,
@@ -174,7 +179,7 @@ func (r *runtime) doInsertRequest(ctx context.Context, rng *rand.Rand, rtc runti
 	}
 
 	if err := r.validateResponse(key, rsp); err != nil {
-		r.logger.Error("Insert response validation failure",
+		r.Logger.Error("Insert response validation failure",
 			"request", req,
 			"response", rsp,
 			"existing_key", existing,
@@ -183,7 +188,7 @@ func (r *runtime) doInsertRequest(ctx context.Context, rng *rand.Rand, rtc runti
 		return fmt.Errorf("invalid response: %w", err)
 	}
 
-	r.logger.Debug("insert request success",
+	r.Logger.Debug("insert request success",
 		"request", req,
 		"response", rsp,
 		"existing_key", existing,
@@ -211,7 +216,7 @@ func (r *runtime) doGetRequest(ctx context.Context, rng *rand.Rand, rtc runtimeC
 	}
 	rsp, err := r.submitRuntimeRquest(ctx, rtc, req)
 	if err != nil {
-		r.logger.Error("Submit get request failure",
+		r.Logger.Error("Submit get request failure",
 			"request", req,
 			"existing_key", existing,
 			"err", err,
@@ -220,7 +225,7 @@ func (r *runtime) doGetRequest(ctx context.Context, rng *rand.Rand, rtc runtimeC
 	}
 
 	if err := r.validateResponse(key, rsp); err != nil {
-		r.logger.Error("Get response validation failure",
+		r.Logger.Error("Get response validation failure",
 			"request", req,
 			"response", rsp,
 			"existing_key", existing,
@@ -229,7 +234,7 @@ func (r *runtime) doGetRequest(ctx context.Context, rng *rand.Rand, rtc runtimeC
 		return fmt.Errorf("invalid response: %w", err)
 	}
 
-	r.logger.Debug("get request success",
+	r.Logger.Debug("get request success",
 		"request", req,
 		"response", rsp,
 		"existing_key", existing,
@@ -254,7 +259,7 @@ func (r *runtime) doRemoveRequest(ctx context.Context, rng *rand.Rand, rtc runti
 	}
 	rsp, err := r.submitRuntimeRquest(ctx, rtc, req)
 	if err != nil {
-		r.logger.Error("Submit remove request failure",
+		r.Logger.Error("Submit remove request failure",
 			"request", req,
 			"existing_key", existing,
 			"err", err,
@@ -263,7 +268,7 @@ func (r *runtime) doRemoveRequest(ctx context.Context, rng *rand.Rand, rtc runti
 	}
 
 	if err := r.validateResponse(key, rsp); err != nil {
-		r.logger.Error("Submit request validation failure",
+		r.Logger.Error("Submit request validation failure",
 			"request", req,
 			"response", rsp,
 			"existing_key", existing,
@@ -272,7 +277,7 @@ func (r *runtime) doRemoveRequest(ctx context.Context, rng *rand.Rand, rtc runti
 		return fmt.Errorf("invalid response: %w", err)
 	}
 
-	r.logger.Debug("remove request success",
+	r.Logger.Debug("remove request success",
 		"request", req,
 		"response", rsp,
 		"existing_key", existing,
@@ -285,21 +290,21 @@ func (r *runtime) doRemoveRequest(ctx context.Context, rng *rand.Rand, rtc runti
 }
 
 func (r *runtime) doMessageRequest(ctx context.Context, rng *rand.Rand, rtc runtimeClient.RuntimeClient) error {
-	// Submit request.
+	// Submit message request.
 	req := &runtimeTransaction.TxnCall{
 		Method: "message",
 		Args:   rng.Uint64(),
 	}
 	rsp, err := r.submitRuntimeRquest(ctx, rtc, req)
 	if err != nil {
-		r.logger.Error("Submit message request failure",
+		r.Logger.Error("Submit message request failure",
 			"request", req,
 			"err", err,
 		)
 		return fmt.Errorf("submit message request failed: %w", err)
 	}
 
-	r.logger.Debug("message request success",
+	r.Logger.Debug("message request success",
 		"request", req,
 		"response", rsp,
 	)
@@ -317,15 +322,18 @@ func (r *runtime) Run(
 	rng *rand.Rand,
 	conn *grpc.ClientConn,
 	cnsc consensus.ClientBackend,
+	sm consensus.SubmissionManager,
 	fundingAccount signature.Signer,
 ) error {
+	// Initialize base workload.
+	r.BaseWorkload.Init(cnsc, sm, fundingAccount)
+
 	ctx := context.Background()
 
-	r.logger = logging.GetLogger("cmd/txsource/workload/runtime")
 	// Simple-keyvalue runtime.
 	err := r.runtimeID.UnmarshalHex(viper.GetString(CfgRuntimeID))
 	if err != nil {
-		r.logger.Error("runtime unmsrshal error",
+		r.Logger.Error("runtime unmsrshal error",
 			"err", err,
 			"runtime_id", viper.GetString(CfgRuntimeID),
 		)
@@ -385,7 +393,7 @@ func (r *runtime) Run(
 		select {
 		case <-time.After(1 * time.Second):
 		case <-gracefulExit.Done():
-			r.logger.Debug("time's up")
+			r.Logger.Debug("time's up")
 			return nil
 		}
 	}

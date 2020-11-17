@@ -10,37 +10,45 @@ import (
 
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	memorySigner "github.com/oasisprotocol/oasis-core/go/common/crypto/signature/signers/memory"
-	"github.com/oasisprotocol/oasis-core/go/common/logging"
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
 	"github.com/oasisprotocol/oasis-core/go/consensus/api/transaction"
 	consensusGenesis "github.com/oasisprotocol/oasis-core/go/consensus/genesis"
 	staking "github.com/oasisprotocol/oasis-core/go/staking/api"
 )
 
-const (
-	// NameOversized is the name of the oversized workload.
-	NameOversized = "oversized"
+// NameOversized is the name of the oversized workload.
+const NameOversized = "oversized"
 
+// Oversized is the oversized workload.
+var Oversized = &oversized{
+	BaseWorkload: NewBaseWorkload(NameOversized),
+}
+
+const (
 	oversizedTxGasAmount = 10000
 )
 
-var oversizedLogger = logging.GetLogger("cmd/txsource/workload/oversized")
-
-type oversized struct{}
+type oversized struct {
+	BaseWorkload
+}
 
 // Implements Workload.
-func (oversized) NeedsFunds() bool {
+func (*oversized) NeedsFunds() bool {
 	return true
 }
 
 // Implements Workload.
-func (oversized) Run(
+func (o *oversized) Run(
 	gracefulExit context.Context,
 	rng *rand.Rand,
 	conn *grpc.ClientConn,
 	cnsc consensus.ClientBackend,
+	sm consensus.SubmissionManager,
 	fundingAccount signature.Signer,
 ) error {
+	// Initialize base workload.
+	o.BaseWorkload.Init(cnsc, sm, fundingAccount)
+
 	txSignerFactory := memorySigner.NewFactory()
 	txSigner, err := txSignerFactory.Generate(signature.SignerEntity, rng)
 	if err != nil {
@@ -58,13 +66,17 @@ func (oversized) Run(
 	}
 	params := genesisDoc.Consensus.Parameters
 
+	gasPrice, err := sm.PriceDiscovery().GasPrice(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to get gas price: %w", err)
+	}
+
 	var nonce uint64
 	fee := transaction.Fee{
 		Gas: oversizedTxGasAmount + transaction.Gas(params.MaxTxSize)*params.GasCosts[consensusGenesis.GasOpTxByte],
 	}
-	if err = fee.Amount.FromInt64(oversizedTxGasAmount * gasPrice); err != nil {
-		return fmt.Errorf("Fee amount error: %w", err)
-	}
+	_ = fee.Amount.FromInt64(oversizedTxGasAmount)
+	_ = fee.Amount.Mul(gasPrice)
 
 	for {
 		// Generate a big transfer transaction which is valid, but oversized.
@@ -82,13 +94,11 @@ func (oversized) Run(
 			return fmt.Errorf("failed to generate bogus transaction: %w", err)
 		}
 
-		if err = transferFunds(
+		if err = o.TransferFundsQty(
 			ctx,
-			oversizedLogger,
-			cnsc,
 			fundingAccount,
 			txSignerAddr,
-			int64(oversizedTxGasAmount*gasPrice),
+			&fee.Amount,
 		); err != nil {
 			return fmt.Errorf("workload/oversized: account funding failure: %w", err)
 		}
@@ -98,7 +108,7 @@ func (oversized) Run(
 		if err != nil {
 			return fmt.Errorf("transaction.Sign: %w", err)
 		}
-		oversizedLogger.Debug("submitting oversized transaction",
+		o.Logger.Debug("submitting oversized transaction",
 			"payload_size", len(xfer.Data),
 		)
 
@@ -113,10 +123,10 @@ func (oversized) Run(
 			return fmt.Errorf("successfully submitted an oversized transaction")
 		case consensus.ErrOversizedTx:
 			// Submitting an oversized transaction is an error, so we expect this to fail.
-			oversizedLogger.Info("transaction rejected due to ErrOversizedTx")
+			o.Logger.Info("transaction rejected due to ErrOversizedTx")
 		default:
 			// Timeout is expected if the client node skips CheckTx checks.
-			oversizedLogger.Warn("failed to submit oversized transaction",
+			o.Logger.Warn("failed to submit oversized transaction",
 				"err", err,
 			)
 		}
@@ -125,7 +135,7 @@ func (oversized) Run(
 		select {
 		case <-time.After(1 * time.Second):
 		case <-gracefulExit.Done():
-			oversizedLogger.Debug("time's up")
+			o.Logger.Debug("time's up")
 			return nil
 		}
 	}
