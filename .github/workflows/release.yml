@@ -55,7 +55,7 @@ jobs:
         run: |
           GIT_VERSION=${GITHUB_REF#refs/tags/v}
           if [[ ! ${GIT_VERSION} =~ ^[0-9]+\.[0-9]+$ ]]; then
-            echo ::set-env name=RELEASE_BRANCH::stable/${GIT_VERSION%.*}.x
+            echo "RELEASE_BRANCH=stable/${GIT_VERSION%.*}.x" >> $GITHUB_ENV
           fi
       - name: Build and publish the next release
         run: |
