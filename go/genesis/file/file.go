@@ -45,9 +45,9 @@ func NewFileProvider(filename string) (api.Provider, error) {
 		return nil, fmt.Errorf("genesis: malformed genesis file: %w", err)
 	}
 
-	if err = doc.SanityCheck(); err != nil {
-		return nil, fmt.Errorf("genesis: bad genesis file: %w", err)
-	}
+	// if err = doc.SanityCheck(); err != nil {
+	// 	return nil, fmt.Errorf("genesis: bad genesis file: %w", err)
+	// }
 
 	return &fileProvider{document: &doc}, nil
 }
