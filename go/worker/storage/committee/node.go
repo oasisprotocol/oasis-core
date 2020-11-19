@@ -575,10 +575,79 @@ type inFlight struct {
 	awaitingRetry outstandingMask
 }
 
-func (n *Node) initGenesis(rt *registryApi.Runtime) error {
+func (n *Node) initGenesis(rt *registryApi.Runtime, genesisBlock *block.Block) error {
 	n.logger.Info("initializing storage at genesis")
 
-	if rt.Genesis.State != nil {
+	// Check what the latest finalized version in the database is as we may be using a database
+	// from a previous version or network.
+	latestVersion, err := n.localStorage.NodeDB().GetLatestVersion(n.ctx)
+	if err != nil {
+		return fmt.Errorf("failed to get latest version: %w", err)
+	}
+
+	stateRoot := storageApi.Root{
+		Namespace: rt.ID,
+		Version:   genesisBlock.Header.Round,
+		Hash:      genesisBlock.Header.StateRoot,
+	}
+
+	var compatible bool
+	switch {
+	case latestVersion < stateRoot.Version:
+		// Latest version is earlier than the genesis state root. In case it has the same hash
+		// we can fill in all the missing versions.
+		maybeRoot := stateRoot
+		maybeRoot.Version = latestVersion
+
+		if n.localStorage.NodeDB().HasRoot(maybeRoot) {
+			n.logger.Debug("latest version earlier than genesis state root, filling in versions",
+				"genesis_state_root", genesisBlock.Header.StateRoot,
+				"genesis_round", genesisBlock.Header.Round,
+				"latest_version", latestVersion,
+			)
+			for v := latestVersion; v < stateRoot.Version; v++ {
+				_, err = n.localStorage.Apply(n.ctx, &storageApi.ApplyRequest{
+					Namespace: rt.ID,
+					SrcRound:  v,
+					SrcRoot:   stateRoot.Hash,
+					DstRound:  v + 1,
+					DstRoot:   stateRoot.Hash,
+					WriteLog:  nil, // No changes.
+				})
+				if err != nil {
+					return fmt.Errorf("failed to fill in version %d: %w", v, err)
+				}
+
+				err = n.localStorage.NodeDB().Finalize(n.ctx, v+1, []hash.Hash{
+					stateRoot.Hash, // We can ignore I/O roots.
+				})
+				if err != nil {
+					return fmt.Errorf("failed to finalize version %d: %w", v, err)
+				}
+			}
+			compatible = true
+		}
+	default:
+		// Latest finalized version is the same or ahead, root must exist.
+		compatible = n.localStorage.NodeDB().HasRoot(stateRoot)
+	}
+
+	// If we are incompatible and the database is not empty, we cannot do anything. If the database
+	// is empty we can either apply genesis state from the runtime descriptor (if relevant) or we
+	// assume the node will sync from a different node.
+	if !compatible && latestVersion > 0 {
+		n.logger.Error("existing state is incompatible with runtime genesis state",
+			"genesis_state_root", genesisBlock.Header.StateRoot,
+			"genesis_round", genesisBlock.Header.Round,
+			"latest_version", latestVersion,
+		)
+		return fmt.Errorf("existing state is incompatible with runtime genesis state")
+	}
+
+	// Check if the genesis round in the descriptor matches the current genesis round and if so,
+	// whether genesis state exists in the descriptor. Note that the rounds may not match in case a
+	// dump/restore of consensus layer state has been performed.
+	if genesisBlock.Header.Round == rt.Genesis.Round && rt.Genesis.State != nil {
 		var emptyRoot hash.Hash
 		emptyRoot.Empty()
 
@@ -595,22 +664,17 @@ func (n *Node) initGenesis(rt *registryApi.Runtime) error {
 			WriteLog:  rt.Genesis.State,
 		})
 		if err != nil {
-			return err
+			return fmt.Errorf("failed to apply genesis state: %w", err)
 		}
-	} else if !rt.Genesis.StateRoot.IsEmpty() {
-		// Non-empty state root and nil state. This is only allowed in case the storage node already
-		// has the state or can replicate it from some other node which has the state.
-		if !n.localStorage.NodeDB().HasRoot(storageApi.Root{
-			Namespace: rt.ID,
-			Version:   rt.Genesis.Round,
-			Hash:      rt.Genesis.StateRoot,
-		}) {
-			n.logger.Warn("non-empty state root but no state specified, assuming replication",
-				"state_root", rt.Genesis.StateRoot,
-			)
-		}
+		compatible = true
 	}
 
+	if !compatible {
+		// Database is empty, so assume the state will be replicated from another node.
+		n.logger.Warn("non-empty state root but no state specified, assuming replication",
+			"state_root", genesisBlock.Header.StateRoot,
+		)
+	}
 	return nil
 }
 
@@ -766,7 +830,7 @@ func (n *Node) worker() { // nolint: gocyclo
 			)
 			return
 		}
-		if err = n.initGenesis(rt); err != nil {
+		if err = n.initGenesis(rt, genesisBlock); err != nil {
 			n.logger.Error("failed to initialize storage at genesis",
 				"err", err,
 			)
