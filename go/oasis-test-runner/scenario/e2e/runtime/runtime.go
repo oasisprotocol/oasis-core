@@ -534,6 +534,7 @@ func RegisterScenarios() error {
 		KeymanagerReplicate,
 		// Dump/restore test.
 		DumpRestore,
+		DumpRestoreRuntimeRoundAdvance,
 		// Halt test.
 		HaltRestore,
 		// Multiple runtimes test.

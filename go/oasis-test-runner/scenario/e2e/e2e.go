@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"io/ioutil"
 	"path/filepath"
 
 	flag "github.com/spf13/pflag"
@@ -12,6 +13,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
 	"github.com/oasisprotocol/oasis-core/go/consensus/api/transaction"
 	consensusGenesis "github.com/oasisprotocol/oasis-core/go/consensus/genesis"
+	genesis "github.com/oasisprotocol/oasis-core/go/genesis/api"
 	genesisFile "github.com/oasisprotocol/oasis-core/go/genesis/file"
 	cmdCommon "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common"
 	cmdNode "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/node"
@@ -168,7 +170,12 @@ func (sc *E2E) ResetConsensusState(childEnv *env.Env) error {
 }
 
 // DumpRestoreNetwork first dumps the current network state and then attempts to restore it.
-func (sc *E2E) DumpRestoreNetwork(childEnv *env.Env, fixture *oasis.NetworkFixture, doDbDump bool) error {
+func (sc *E2E) DumpRestoreNetwork(
+	childEnv *env.Env,
+	fixture *oasis.NetworkFixture,
+	doDbDump bool,
+	genesisMapFn func(*genesis.Document),
+) error {
 	// Dump-restore network.
 	sc.Logger.Info("dumping network state",
 		"child", childEnv,
@@ -214,6 +221,30 @@ func (sc *E2E) DumpRestoreNetwork(childEnv *env.Env, fixture *oasis.NetworkFixtu
 	// Reset all the state back to the vanilla state.
 	if err := sc.ResetConsensusState(childEnv); err != nil {
 		return fmt.Errorf("scenario/e2e/dump_restore: failed to clean tendemint storage: %w", err)
+	}
+
+	// Apply optional mapping function to the genesis document.
+	if genesisMapFn != nil {
+		// Load the existing export.
+		fp, err := genesisFile.NewFileProvider(dumpPath)
+		if err != nil {
+			return fmt.Errorf("failed to instantiate genesis document file provider: %w", err)
+		}
+		doc, err := fp.GetGenesisDocument()
+		if err != nil {
+			return fmt.Errorf("failed to get genesis document: %w", err)
+		}
+
+		genesisMapFn(doc)
+
+		// Write back the updated document.
+		buf, err := json.Marshal(doc)
+		if err != nil {
+			return fmt.Errorf("failed to marshal updated genesis document: %w", err)
+		}
+		if err = ioutil.WriteFile(dumpPath, buf, 0o600); err != nil {
+			return fmt.Errorf("failed to write updated genesis document: %w", err)
+		}
 	}
 
 	// Start the network and the client again.
