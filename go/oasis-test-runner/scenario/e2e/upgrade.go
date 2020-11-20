@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"path"
+	"path/filepath"
 	"sync"
 	"time"
 
@@ -151,7 +152,7 @@ func (sc *nodeUpgradeImpl) Fixture() (*oasis.NetworkFixture, error) {
 	}, nil
 }
 
-func (sc *nodeUpgradeImpl) Run(childEnv *env.Env) error {
+func (sc *nodeUpgradeImpl) Run(childEnv *env.Env) error { // nolint: gocyclo
 	var err error
 	var descPath string
 
@@ -227,6 +228,17 @@ func (sc *nodeUpgradeImpl) Run(childEnv *env.Env) error {
 		return err
 	}
 	<-sc.validator.Exit()
+
+	// Verify that the node exported a genesis file before halting for upgrade.
+	sc.Logger.Info("gathering exported genesis files")
+	dumpGlobPath := filepath.Join(sc.validator.ExportsPath(), "genesis-*.json")
+	globMatch, err := filepath.Glob(dumpGlobPath)
+	if err != nil {
+		return fmt.Errorf("glob failed: %s: %w", dumpGlobPath, err)
+	}
+	if len(globMatch) == 0 {
+		return fmt.Errorf("no exported genesis files found in: %s", dumpGlobPath)
+	}
 
 	// Remove the stored descriptor so we can restart and submit a proper one.
 	sc.Logger.Info("clearing stored upgrade descriptor")
