@@ -53,8 +53,6 @@ func initVersions() {
 {{- with nodeVersion }}
 Consensus:
   Consensus protocol version: {{ .ConsensusProtocol }}
-  Tendermint Core version:    {{ .Tendermint }}
-  ABCI library version:       {{ .ABCI }}
 Runtime:
   Host protocol version:      {{ .RuntimeHostProtocol }}
   Committee protocol version: {{ .RuntimeCommitteeProtocol }}

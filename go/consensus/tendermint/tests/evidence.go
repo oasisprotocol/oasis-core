@@ -59,6 +59,9 @@ func MakeDoubleSignEvidence(t *testing.T, ident *identity.Identity, blk *consens
 		},
 	}
 	ev := &tmtypes.DuplicateVoteEvidence{
+		Timestamp:        blk.Time,
+		TotalVotingPower: 1,
+		ValidatorPower:   1,
 		// NOTE: ChainID must match the unit test genesis block.
 		VoteA: makeVote(pv1, genesisTestHelpers.TestChainID, 0, blk.Height, 2, 1, blockID1, blk.Time),
 		VoteB: makeVote(pv2, genesisTestHelpers.TestChainID, 0, blk.Height, 2, 1, blockID2, blk.Time),
