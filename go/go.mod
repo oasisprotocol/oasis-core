@@ -17,7 +17,7 @@ replace (
 )
 
 require (
-	github.com/blevesearch/bleve v1.0.12
+	github.com/blevesearch/bleve v1.0.13
 	github.com/btcsuite/btcutil v1.0.2
 	github.com/cenkalti/backoff/v4 v4.1.0
 	github.com/cznic/b v0.0.0-20181122101859-a26611c4d92d // indirect
