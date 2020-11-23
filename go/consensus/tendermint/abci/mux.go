@@ -400,6 +400,13 @@ func (mux *abciMux) BeginBlock(req types.RequestBeginBlock) types.ResponseBeginB
 	case nil:
 		// Everything ok.
 	case upgrade.ErrStopForUpgrade:
+		// Stop for upgrade -- but dispatch halt hooks first.
+		mux.logger.Debug("dispatching halt hooks before stopping for upgrade")
+		for _, hook := range mux.haltHooks {
+			hook(mux.state.ctx, blockHeight, currentEpoch)
+		}
+		mux.logger.Debug("halt hook dispatch complete")
+
 		panic("mux: reached upgrade epoch")
 	default:
 		panic(fmt.Sprintf("mux: error while trying to perform consensus upgrade: %v", err))
