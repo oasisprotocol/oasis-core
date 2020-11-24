@@ -803,29 +803,29 @@ func (t *fullService) GetStatus(ctx context.Context) (*consensusAPI.Status, erro
 		default:
 			return nil, fmt.Errorf("failed to fetch current block: %w", err)
 		}
-	}
 
-	// List of consensus peers.
-	tmpeers := t.node.Switch().Peers().List()
-	peers := make([]string, 0, len(tmpeers))
-	for _, tmpeer := range tmpeers {
-		p := string(tmpeer.ID()) + "@" + tmpeer.RemoteAddr().String()
-		peers = append(peers, p)
-	}
-	status.NodePeers = peers
+		// List of consensus peers.
+		tmpeers := t.node.Switch().Peers().List()
+		peers := make([]string, 0, len(tmpeers))
+		for _, tmpeer := range tmpeers {
+			p := string(tmpeer.ID()) + "@" + tmpeer.RemoteAddr().String()
+			peers = append(peers, p)
+		}
+		status.NodePeers = peers
 
-	// Check if the local node is in the validator set for the latest (uncommitted) block.
-	valSetHeight := status.LatestHeight + 1
-	if valSetHeight < status.GenesisHeight {
-		valSetHeight = status.GenesisHeight
+		// Check if the local node is in the validator set for the latest (uncommitted) block.
+		valSetHeight := status.LatestHeight + 1
+		if valSetHeight < status.GenesisHeight {
+			valSetHeight = status.GenesisHeight
+		}
+		vals, err := tmstate.LoadValidators(t.stateDb, valSetHeight)
+		if err != nil {
+			return nil, fmt.Errorf("failed to load validator set: %w", err)
+		}
+		consensusPk := t.identity.ConsensusSigner.Public()
+		consensusAddr := []byte(crypto.PublicKeyToTendermint(&consensusPk).Address())
+		status.IsValidator = vals.HasAddress(consensusAddr)
 	}
-	vals, err := tmstate.LoadValidators(t.stateDb, valSetHeight)
-	if err != nil {
-		return nil, fmt.Errorf("failed to load validator set: %w", err)
-	}
-	consensusPk := t.identity.ConsensusSigner.Public()
-	consensusAddr := []byte(crypto.PublicKeyToTendermint(&consensusPk).Address())
-	status.IsValidator = vals.HasAddress(consensusAddr)
 
 	return status, nil
 }
