@@ -38,7 +38,6 @@ import (
 	schedulerTests "github.com/oasisprotocol/oasis-core/go/scheduler/tests"
 	staking "github.com/oasisprotocol/oasis-core/go/staking/api"
 	stakingTests "github.com/oasisprotocol/oasis-core/go/staking/tests"
-	"github.com/oasisprotocol/oasis-core/go/storage"
 	storageAPI "github.com/oasisprotocol/oasis-core/go/storage/api"
 	storageClient "github.com/oasisprotocol/oasis-core/go/storage/client"
 	storageClientTests "github.com/oasisprotocol/oasis-core/go/storage/client/tests"
@@ -67,7 +66,7 @@ var (
 		{"log.format", "JSON"},
 		{cmdCommonFlags.CfgConsensusValidator, true},
 		{cmdCommonFlags.CfgDebugDontBlameOasis, true},
-		{storage.CfgBackend, "badger"},
+		{storageWorker.CfgBackend, "badger"},
 		{compute.CfgWorkerEnabled, true},
 		{workerCommon.CfgRuntimeProvisioner, workerCommon.RuntimeProvisionerMock},
 		{workerCommon.CfgClientPort, workerClientPort},
@@ -380,7 +379,7 @@ func testStorage(t *testing.T, node *testNode) {
 	require.NoError(t, err, "TempDir")
 	defer os.RemoveAll(dataDir)
 
-	backend, err := storage.New(context.Background(), dataDir, testRuntimeID, node.Identity)
+	backend, err := storageWorker.NewLocalBackend(dataDir, testRuntimeID, node.Identity)
 	require.NoError(t, err, "storage.New")
 	defer backend.Cleanup()
 	// We are always testing a local storage backend here.
@@ -470,7 +469,7 @@ func testStorageClientWithNode(t *testing.T, node *testNode) {
 	require.NoError(t, err, "GetRuntime")
 	localBackend := rt.Storage().(storageAPI.LocalBackend)
 
-	client, err := storageClient.NewStatic(ctx, testRuntimeID, node.Identity, node.Consensus.Registry(), node.Identity.NodeSigner.Public())
+	client, err := storageClient.NewStatic(ctx, node.Identity, node.Consensus.Registry(), node.Identity.NodeSigner.Public())
 	require.NoError(t, err, "NewStatic")
 
 	// Determine the current round. This is required so that we can commit into

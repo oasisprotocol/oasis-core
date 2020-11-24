@@ -73,6 +73,7 @@ func (sc *runtimeUpgradeImpl) Fixture() (*oasis.NetworkFixture, error) {
 	// Add the upgraded compute runtimes to the compute workers, will be started later.
 	sc.firstNewWorker = len(f.ComputeWorkers)
 	for i := range f.ComputeWorkers {
+		f.ComputeWorkers[i].AllowEarlyTermination = true // Allow stopping the worker early.
 		f.ComputeWorkers[i].Runtimes = []int{computeIndex}
 	}
 	for i := 0; i < sc.firstNewWorker; i++ {
@@ -208,12 +209,19 @@ func (sc *runtimeUpgradeImpl) Run(childEnv *env.Env) error {
 		return fmt.Errorf("updating policies: %w", err)
 	}
 
-	// Kill old compute workers.
+	// Stop old compute workers, making sure they deregister.
 	sc.Logger.Info("stopping old runtimes")
 	for i := 0; i < sc.firstNewWorker; i++ {
 		worker := sc.Net.ComputeWorkers()[i]
-		if err = worker.Stop(); err != nil {
-			return fmt.Errorf("stopping old compute worker: %w", err)
+		if err = worker.RequestShutdown(ctx, false); err != nil {
+			return fmt.Errorf("failed to request shutdown: %w", err)
+		}
+	}
+	// Wait for all old workers to exit.
+	for i := 0; i < sc.firstNewWorker; i++ {
+		worker := sc.Net.ComputeWorkers()[i]
+		if err = <-worker.Exit(); err != env.ErrEarlyTerm {
+			return fmt.Errorf("compute worker exited with error: %w", err)
 		}
 	}
 
@@ -244,15 +252,6 @@ func (sc *runtimeUpgradeImpl) Run(childEnv *env.Env) error {
 	for i := sc.firstNewWorker; i < len(sc.Net.ComputeWorkers()); i++ {
 		if err = sc.Net.ComputeWorkers()[i].WaitReady(ctx); err != nil {
 			return fmt.Errorf("error waiting for compute node to become ready: %w", err)
-		}
-	}
-
-	// Shutdown old workers.
-	sc.Logger.Info("shutting down old compute workers")
-	for i := 0; i < sc.firstNewWorker; i++ {
-		oldWorker := sc.Net.ComputeWorkers()[i]
-		if err = oldWorker.Stop(); err != nil {
-			return fmt.Errorf("old compute worker node shutdown: %w", err)
 		}
 	}
 

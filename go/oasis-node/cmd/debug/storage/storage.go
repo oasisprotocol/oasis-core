@@ -16,9 +16,9 @@ import (
 	cmdControl "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/control"
 	"github.com/oasisprotocol/oasis-core/go/roothash/api/block"
 	runtimeClient "github.com/oasisprotocol/oasis-core/go/runtime/client/api"
-	"github.com/oasisprotocol/oasis-core/go/storage"
 	storageAPI "github.com/oasisprotocol/oasis-core/go/storage/api"
 	"github.com/oasisprotocol/oasis-core/go/storage/mkvs/node"
+	"github.com/oasisprotocol/oasis-core/go/worker/storage"
 	storageWorkerAPI "github.com/oasisprotocol/oasis-core/go/worker/storage/api"
 	"github.com/oasisprotocol/oasis-core/go/worker/storage/committee"
 )

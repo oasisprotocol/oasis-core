@@ -83,6 +83,14 @@ func (c *runtimeClient) SubmitTx(ctx context.Context, request *api.SubmitTxReque
 		return nil, fmt.Errorf("client: cannot submit transaction, p2p disabled")
 	}
 
+	select {
+	case <-c.common.consensus.Synced():
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	default:
+		return nil, api.ErrNotSynced
+	}
+
 	var watcher *blockWatcher
 	var ok bool
 	var err error

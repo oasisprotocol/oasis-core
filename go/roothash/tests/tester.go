@@ -24,8 +24,8 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/roothash/api/commitment"
 	"github.com/oasisprotocol/oasis-core/go/runtime/transaction"
 	scheduler "github.com/oasisprotocol/oasis-core/go/scheduler/api"
-	"github.com/oasisprotocol/oasis-core/go/storage"
 	storageAPI "github.com/oasisprotocol/oasis-core/go/storage/api"
+	"github.com/oasisprotocol/oasis-core/go/worker/storage"
 )
 
 const (
@@ -251,7 +251,7 @@ func (s *runtimeState) generateExecutorCommitments(t *testing.T, consensus conse
 	var ns common.Namespace
 	copy(ns[:], rt.Runtime.ID[:])
 
-	storageBackend, err := storage.New(context.Background(), dataDir, ns, identity)
+	storageBackend, err := storage.NewLocalBackend(dataDir, ns, identity)
 	require.NoError(err, "storage.New")
 	defer storageBackend.Cleanup()
 

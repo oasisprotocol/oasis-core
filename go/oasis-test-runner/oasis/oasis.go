@@ -187,11 +187,16 @@ func (n *Node) WaitReady(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	if err = nodeCtrl.WaitReady(ctx); err != nil {
+	return nodeCtrl.WaitReady(ctx)
+}
+
+// RequestShutdown is a helper for creating a controller and calling node's RequestShutdown.
+func (n *Node) RequestShutdown(ctx context.Context, wait bool) error {
+	nodeCtrl, err := NewController(n.SocketPath())
+	if err != nil {
 		return err
 	}
-
-	return nil
+	return nodeCtrl.RequestShutdown(ctx, wait)
 }
 
 func (n *Node) handleExit(cmdErr error) error {

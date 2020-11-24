@@ -22,8 +22,8 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/identity"
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
 	cmdCommon "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common"
-	"github.com/oasisprotocol/oasis-core/go/storage"
 	storageAPI "github.com/oasisprotocol/oasis-core/go/storage/api"
+	"github.com/oasisprotocol/oasis-core/go/worker/storage"
 )
 
 const (
@@ -82,7 +82,7 @@ func doBenchmark(cmd *cobra.Command, args []string) { // nolint: gocyclo
 
 	var ns common.Namespace
 
-	storage, err := storage.New(context.Background(), dataDir, ns, ident)
+	storage, err := storage.NewLocalBackend(dataDir, ns, ident)
 	if err != nil {
 		logger.Error("failed to initialize storage",
 			"err", err,

@@ -101,6 +101,9 @@ fn get_encryption_context(ctx: &mut TxnContext, key: &[u8]) -> Result<Encryption
 
 /// (encrypted) Insert a key/value pair.
 fn enc_insert(args: &KeyValue, ctx: &mut TxnContext) -> Result<Option<String>> {
+    if ctx.check_only {
+        return Err(CheckOnlySuccess::default().into());
+    }
     // NOTE: This is only for example purposes, the correct way would be
     //       to also generate a (deterministic) nonce.
     let nonce = [0u8; NONCE_SIZE];
@@ -120,6 +123,9 @@ fn enc_insert(args: &KeyValue, ctx: &mut TxnContext) -> Result<Option<String>> {
 
 /// (encrypted) Retrieve a key/value pair.
 fn enc_get(args: &Key, ctx: &mut TxnContext) -> Result<Option<String>> {
+    if ctx.check_only {
+        return Err(CheckOnlySuccess::default().into());
+    }
     let enc_ctx = get_encryption_context(ctx, args.key.as_bytes())?;
     let existing = StorageContext::with_current(|mkvs, _untrusted_local| {
         enc_ctx.get(
@@ -133,6 +139,9 @@ fn enc_get(args: &Key, ctx: &mut TxnContext) -> Result<Option<String>> {
 
 /// (encrypted) Remove a key/value pair.
 fn enc_remove(args: &Key, ctx: &mut TxnContext) -> Result<Option<String>> {
+    if ctx.check_only {
+        return Err(CheckOnlySuccess::default().into());
+    }
     let enc_ctx = get_encryption_context(ctx, args.key.as_bytes())?;
     let existing = StorageContext::with_current(|mkvs, _untrusted_local| {
         enc_ctx.remove(

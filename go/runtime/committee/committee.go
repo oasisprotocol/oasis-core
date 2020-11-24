@@ -12,20 +12,21 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
 	"github.com/oasisprotocol/oasis-core/go/common/pubsub"
 	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
+	"github.com/oasisprotocol/oasis-core/go/runtime/nodes"
 	scheduler "github.com/oasisprotocol/oasis-core/go/scheduler/api"
 )
 
 // Watcher is the committee watcher interface.
 type Watcher interface {
 	// Nodes returns a node descriptor lookup interface that watches all nodes in the committee.
-	Nodes() NodeDescriptorLookup
+	Nodes() nodes.NodeDescriptorLookup
 
 	// EpochTransition signals an epoch transition to the committee watcher.
 	EpochTransition(ctx context.Context, height int64) error
 }
 
 type committeeWatcher struct { // nolint: maligned
-	nw        NodeDescriptorWatcher
+	nw        nodes.VersionedNodeDescriptorWatcher
 	scheduler scheduler.Backend
 
 	runtimeID common.Namespace
@@ -39,7 +40,7 @@ type committeeWatcher struct { // nolint: maligned
 	logger *logging.Logger
 }
 
-func (cw *committeeWatcher) Nodes() NodeDescriptorLookup {
+func (cw *committeeWatcher) Nodes() nodes.NodeDescriptorLookup {
 	return cw.nw
 }
 
@@ -201,7 +202,7 @@ func NewWatcher(
 	kind scheduler.CommitteeKind,
 	options ...WatcherOption,
 ) (Watcher, error) {
-	nw, err := NewNodeDescriptorWatcher(ctx, registry)
+	nw, err := nodes.NewVersionedNodeDescriptorWatcher(ctx, registry)
 	if err != nil {
 		return nil, fmt.Errorf("committee: failed to create node descriptor watcher: %w", err)
 	}

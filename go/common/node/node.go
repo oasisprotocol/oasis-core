@@ -101,6 +101,17 @@ const (
 	RoleReserved RolesMask = ((1 << 32) - 1) & ^((RoleConsensusRPC << 1) - 1)
 )
 
+// Roles returns a list of available valid roles.
+func Roles() (roles []RolesMask) {
+	return []RolesMask{
+		RoleComputeWorker,
+		RoleStorageWorker,
+		RoleKeyManager,
+		RoleValidator,
+		RoleConsensusRPC,
+	}
+}
+
 // IsSingleRole returns true if RolesMask encodes a single valid role.
 func (m RolesMask) IsSingleRole() bool {
 	// Ensures exactly one bit is set, and the set bit is a valid role.

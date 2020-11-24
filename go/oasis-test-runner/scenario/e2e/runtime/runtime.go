@@ -264,9 +264,20 @@ func (sc *runtimeImpl) resolveDefaultKeyManagerBinary() (string, error) {
 }
 
 func (sc *runtimeImpl) startClient(childEnv *env.Env) (*exec.Cmd, error) {
+	ctx := context.Background()
+
 	clients := sc.Net.Clients()
 	if len(clients) == 0 {
 		return nil, fmt.Errorf("scenario/e2e: network has no client nodes")
+	}
+
+	sc.Logger.Info("ensuring client node is synced")
+	ctrl, err := oasis.NewController(clients[0].SocketPath())
+	if err != nil {
+		return nil, fmt.Errorf("failed to create controller for client: %w", err)
+	}
+	if err = ctrl.WaitSync(ctx); err != nil {
+		return nil, fmt.Errorf("client-0 failed to sync: %w", err)
 	}
 
 	d, err := childEnv.NewSubDir("client")
@@ -513,6 +524,7 @@ func RegisterScenarios() error {
 		ByzantineExecutorSchedulerStraggler,
 		// Storage sync test.
 		StorageSync,
+		StorageSyncFromRegistered,
 		// Sentry test.
 		Sentry,
 		SentryEncryption,
@@ -522,6 +534,7 @@ func RegisterScenarios() error {
 		KeymanagerReplicate,
 		// Dump/restore test.
 		DumpRestore,
+		DumpRestoreRuntimeRoundAdvance,
 		// Halt test.
 		HaltRestore,
 		// Multiple runtimes test.

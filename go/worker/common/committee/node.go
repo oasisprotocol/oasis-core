@@ -14,7 +14,7 @@ import (
 	keymanagerClient "github.com/oasisprotocol/oasis-core/go/keymanager/client"
 	roothash "github.com/oasisprotocol/oasis-core/go/roothash/api"
 	"github.com/oasisprotocol/oasis-core/go/roothash/api/block"
-	"github.com/oasisprotocol/oasis-core/go/runtime/committee"
+	"github.com/oasisprotocol/oasis-core/go/runtime/nodes"
 	runtimeRegistry "github.com/oasisprotocol/oasis-core/go/runtime/registry"
 	"github.com/oasisprotocol/oasis-core/go/worker/common/api"
 	"github.com/oasisprotocol/oasis-core/go/worker/common/p2p"
@@ -82,7 +82,7 @@ type NodeHooks interface {
 	// Guarded by CrossNode.
 	HandleNewEventLocked(*roothash.Event)
 	// Guarded by CrossNode.
-	HandleNodeUpdateLocked(*committee.NodeUpdate, *EpochSnapshot)
+	HandleNodeUpdateLocked(*nodes.NodeUpdate, *EpochSnapshot)
 }
 
 // Node is a committee node.
@@ -299,7 +299,7 @@ func (n *Node) handleNewEventLocked(ev *roothash.Event) {
 }
 
 // Guarded by n.CrossNode.
-func (n *Node) handleNodeUpdateLocked(update *committee.NodeUpdate) {
+func (n *Node) handleNodeUpdateLocked(update *nodes.NodeUpdate) {
 	epoch := n.Group.GetEpochSnapshot()
 
 	for _, hooks := range n.hooks {

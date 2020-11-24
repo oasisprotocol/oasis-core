@@ -23,7 +23,7 @@ const (
 	testNumKept       = 2
 )
 
-func TestCheckpointer(t *testing.T) {
+func testCheckpointer(t *testing.T, earliestVersion uint64) {
 	require := require.New(t)
 
 	// Initialize a database.
@@ -60,9 +60,10 @@ func TestCheckpointer(t *testing.T) {
 	// Finalize a few rounds.
 	var root node.Root
 	root.Empty()
+	root.Version = earliestVersion
 	root.Namespace = testNs
 
-	for round := uint64(0); round < 10; round++ {
+	for round := earliestVersion; round < earliestVersion+10; round++ {
 		tree := mkvs.NewWithRoot(nil, ndb, root)
 		err = tree.Insert(ctx, []byte(fmt.Sprintf("round %d", round)), []byte(fmt.Sprintf("value %d", round)))
 		require.NoError(err, "Insert")
@@ -84,7 +85,7 @@ func TestCheckpointer(t *testing.T) {
 		}
 
 		// Make sure that there are always the correct number of checkpoints.
-		if round > testNumKept+1 {
+		if round > earliestVersion+testNumKept+1 {
 			cps, err := fc.GetCheckpoints(ctx, &GetCheckpointsRequest{
 				Version:   checkpointVersion,
 				Namespace: testNs,
@@ -93,4 +94,13 @@ func TestCheckpointer(t *testing.T) {
 			require.Len(cps, testNumKept+1, "incorrect number of live checkpoints")
 		}
 	}
+}
+
+func TestCheckpointer(t *testing.T) {
+	t.Run("Basic", func(t *testing.T) {
+		testCheckpointer(t, 0)
+	})
+	t.Run("NonZeroEarliestVersion", func(t *testing.T) {
+		testCheckpointer(t, 1000)
+	})
 }

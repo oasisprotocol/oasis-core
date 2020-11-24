@@ -51,7 +51,6 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/sentry"
 	sentryAPI "github.com/oasisprotocol/oasis-core/go/sentry/api"
 	stakingAPI "github.com/oasisprotocol/oasis-core/go/staking/api"
-	"github.com/oasisprotocol/oasis-core/go/storage"
 	storageAPI "github.com/oasisprotocol/oasis-core/go/storage/api"
 	"github.com/oasisprotocol/oasis-core/go/upgrade"
 	upgradeAPI "github.com/oasisprotocol/oasis-core/go/upgrade/api"
@@ -63,6 +62,7 @@ import (
 	workerKeymanager "github.com/oasisprotocol/oasis-core/go/worker/keymanager"
 	"github.com/oasisprotocol/oasis-core/go/worker/registration"
 	workerSentry "github.com/oasisprotocol/oasis-core/go/worker/sentry"
+	"github.com/oasisprotocol/oasis-core/go/worker/storage"
 	workerStorage "github.com/oasisprotocol/oasis-core/go/worker/storage"
 )
 
@@ -348,19 +348,6 @@ func (n *Node) initRuntimeWorkers() error {
 	}
 	n.svcMgr.Register(n.RegistrationWorker)
 
-	// Initialize the key manager worker.
-	n.KeymanagerWorker, err = workerKeymanager.New(
-		dataDir,
-		n.CommonWorker,
-		n.IAS,
-		n.RegistrationWorker,
-		n.Consensus.KeyManager(),
-	)
-	if err != nil {
-		return err
-	}
-	n.svcMgr.Register(n.KeymanagerWorker)
-
 	// Initialize the storage worker.
 	n.StorageWorker, err = workerStorage.New(
 		n.grpcInternal,
@@ -373,6 +360,25 @@ func (n *Node) initRuntimeWorkers() error {
 		return err
 	}
 	n.svcMgr.Register(n.StorageWorker)
+
+	// Commit storage settings to the registered runtimes.
+	err = n.RuntimeRegistry.FinishInitialization(n.svcMgr.Ctx)
+	if err != nil {
+		return err
+	}
+
+	// Initialize the key manager worker.
+	n.KeymanagerWorker, err = workerKeymanager.New(
+		dataDir,
+		n.CommonWorker,
+		n.IAS,
+		n.RegistrationWorker,
+		n.Consensus.KeyManager(),
+	)
+	if err != nil {
+		return err
+	}
+	n.svcMgr.Register(n.KeymanagerWorker)
 
 	// Initialize the executor worker.
 	n.ExecutorWorker, err = executor.New(

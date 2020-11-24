@@ -27,7 +27,6 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/debug/byzantine"
 	runtimeClient "github.com/oasisprotocol/oasis-core/go/runtime/client"
 	runtimeRegistry "github.com/oasisprotocol/oasis-core/go/runtime/registry"
-	"github.com/oasisprotocol/oasis-core/go/storage"
 	workerCommon "github.com/oasisprotocol/oasis-core/go/worker/common"
 	"github.com/oasisprotocol/oasis-core/go/worker/common/p2p"
 	"github.com/oasisprotocol/oasis-core/go/worker/compute"
@@ -202,7 +201,7 @@ func (args *argBuilder) tendermintStateSync(
 
 func (args *argBuilder) storageBackend(backend string) *argBuilder {
 	args.vec = append(args.vec, []string{
-		"--" + storage.CfgBackend, backend,
+		"--" + workerStorage.CfgBackend, backend,
 	}...)
 	return args
 }
