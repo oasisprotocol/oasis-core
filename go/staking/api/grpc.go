@@ -24,6 +24,8 @@ var (
 	methodCommonPool = serviceName.NewMethod("CommonPool", int64(0))
 	// methodLastBlockFees is the LastBlockFees method.
 	methodLastBlockFees = serviceName.NewMethod("LastBlockFees", int64(0))
+	// methodGovernanceDeposits is the GovernanceDeposits method.
+	methodGovernanceDeposits = serviceName.NewMethod("methodGovernanceDeposits", int64(0))
 	// methodThreshold is the Threshold method.
 	methodThreshold = serviceName.NewMethod("Threshold", ThresholdQuery{})
 	// methodAddresses is the Addresses method.
@@ -70,6 +72,10 @@ var (
 			{
 				MethodName: methodLastBlockFees.ShortName(),
 				Handler:    handlerLastBlockFees,
+			},
+			{
+				MethodName: methodGovernanceDeposits.ShortName(),
+				Handler:    handlerGovernanceDeposits,
 			},
 			{
 				MethodName: methodThreshold.ShortName(),
@@ -221,6 +227,29 @@ func handlerLastBlockFees( // nolint: golint
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(Backend).LastBlockFees(ctx, req.(int64))
+	}
+	return interceptor(ctx, height, info, handler)
+}
+
+func handlerGovernanceDeposits( // nolint: golint
+	srv interface{},
+	ctx context.Context,
+	dec func(interface{}) error,
+	interceptor grpc.UnaryServerInterceptor,
+) (interface{}, error) {
+	var height int64
+	if err := dec(&height); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(Backend).GovernanceDeposits(ctx, height)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: methodGovernanceDeposits.FullName(),
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(Backend).GovernanceDeposits(ctx, req.(int64))
 	}
 	return interceptor(ctx, height, info, handler)
 }
@@ -504,6 +533,14 @@ func (c *stakingClient) CommonPool(ctx context.Context, height int64) (*quantity
 func (c *stakingClient) LastBlockFees(ctx context.Context, height int64) (*quantity.Quantity, error) {
 	var rsp quantity.Quantity
 	if err := c.conn.Invoke(ctx, methodLastBlockFees.FullName(), height, &rsp); err != nil {
+		return nil, err
+	}
+	return &rsp, nil
+}
+
+func (c *stakingClient) GovernanceDeposits(ctx context.Context, height int64) (*quantity.Quantity, error) {
+	var rsp quantity.Quantity
+	if err := c.conn.Invoke(ctx, methodGovernanceDeposits.FullName(), height, &rsp); err != nil {
 		return nil, err
 	}
 	return &rsp, nil

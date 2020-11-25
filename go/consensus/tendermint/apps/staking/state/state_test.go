@@ -333,3 +333,78 @@ func TestEpochSigning(t *testing.T) {
 	require.Zero(esClear.Total, "cleared epoch signing info total")
 	require.Empty(esClear.ByEntity, "cleared epoch signing info by entity")
 }
+
+func TestProposalDeposits(t *testing.T) {
+	now := time.Unix(1580461674, 0)
+	appState := abciAPI.NewMockApplicationState(&abciAPI.MockApplicationStateConfig{})
+	ctx := appState.NewContext(abciAPI.ContextDeliverTx, now)
+	defer ctx.Close()
+
+	// Prepare state.
+	s := NewMutableState(ctx.State())
+	pk1 := signature.NewPublicKey("aaafffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff")
+	addr1 := staking.NewAddress(pk1)
+	pk2 := signature.NewPublicKey("bbbfffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff")
+	addr2 := staking.NewAddress(pk2)
+
+	err := s.SetAccount(ctx, addr1, &staking.Account{
+		General: staking.GeneralAccount{
+			Balance: *quantity.NewFromUint64(200),
+		},
+	})
+	require.NoError(t, err, "SetAccount")
+	err = s.SetAccount(ctx, addr2, &staking.Account{
+		General: staking.GeneralAccount{
+			Balance: *quantity.NewFromUint64(200),
+		},
+	})
+	require.NoError(t, err, "SetAccount")
+	err = s.SetGovernanceDeposits(ctx, quantity.NewFromUint64(0))
+	require.NoError(t, err, "SetGovernanceDeposits")
+
+	// Do governance deposits.
+	err = s.TransferToGovernanceDeposits(ctx, addr1, quantity.NewFromUint64(10))
+	require.NoError(t, err, "TransferToGovernanceDeposits")
+	err = s.TransferToGovernanceDeposits(ctx, addr2, quantity.NewFromUint64(20))
+	require.NoError(t, err, "TransferToGovernanceDeposits")
+
+	var deposits *quantity.Quantity
+	deposits, err = s.GovernanceDeposits(ctx)
+	require.NoError(t, err, "GovernanceDeposits")
+	require.EqualValues(t, quantity.NewFromUint64(30), deposits, "expected governance deposit should be made")
+
+	var acc1 *staking.Account
+	acc1, err = s.Account(ctx, addr1)
+	require.NoError(t, err, "Account")
+	require.EqualValues(t, *quantity.NewFromUint64(190), acc1.General.Balance, "expected governance deposit should be made")
+
+	var acc2 *staking.Account
+	acc2, err = s.Account(ctx, addr2)
+	require.NoError(t, err, "Account")
+	require.EqualValues(t, *quantity.NewFromUint64(180), acc2.General.Balance, "expected governance deposit should be made")
+
+	// Discard pk1 deposit.
+	err = s.DiscardGovernanceDeposit(ctx, quantity.NewFromUint64(10))
+	require.NoError(t, err, "DiscardGovernanceDeposit")
+
+	// Reclaim pk2 deposit.
+	err = s.TransferFromGovernanceDeposits(ctx, addr2, quantity.NewFromUint64(20))
+	require.NoError(t, err, "TransferFromGovernanceDeposits")
+
+	// Ensure final ballances are correct.
+	deposits, err = s.CommonPool(ctx)
+	require.NoError(t, err, "CommonPool")
+	require.EqualValues(t, quantity.NewFromUint64(10), deposits, "governance funds should be discarded into the common pool")
+
+	deposits, err = s.GovernanceDeposits(ctx)
+	require.NoError(t, err, "GovernanceDeposits")
+	require.EqualValues(t, quantity.NewFromUint64(0), deposits, "governance deposits should be empty")
+
+	acc1, err = s.Account(ctx, addr1)
+	require.NoError(t, err, "Account")
+	require.EqualValues(t, *quantity.NewFromUint64(190), acc1.General.Balance, "governance deposit should be discarded")
+
+	acc2, err = s.Account(ctx, addr2)
+	require.NoError(t, err, "Account")
+	require.EqualValues(t, *quantity.NewFromUint64(200), acc2.General.Balance, "governance deposit should be reclaimed")
+}

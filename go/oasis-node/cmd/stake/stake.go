@@ -157,6 +157,17 @@ func doInfo(cmd *cobra.Command, args []string) {
 	token.PrettyPrintAmount(ctx, *lastBlockFees, os.Stdout)
 	fmt.Println()
 
+	governanceDeposits, err := client.GovernanceDeposits(ctx, consensus.HeightLatest)
+	if err != nil {
+		logger.Error("failed to query governance deposits",
+			"err", err,
+		)
+		os.Exit(1)
+	}
+	fmt.Print("Governance deposits: ")
+	token.PrettyPrintAmount(ctx, *governanceDeposits, os.Stdout)
+	fmt.Println()
+
 	thresholdsToQuery := []api.ThresholdKind{
 		api.KindEntity,
 		api.KindNodeValidator,

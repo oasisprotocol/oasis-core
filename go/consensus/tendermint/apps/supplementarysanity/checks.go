@@ -163,6 +163,15 @@ func checkStaking(ctx *abciAPI.Context, now epochtime.EpochTime) error {
 		return fmt.Errorf("common pool %v is invalid", commonPool)
 	}
 
+	governanceDeposits, err := st.GovernanceDeposits(ctx)
+	if err != nil {
+		return fmt.Errorf("GovernanceDeposits: %w", err)
+	}
+	if !governanceDeposits.IsValid() {
+		return fmt.Errorf("governance deposits %v is invalid", governanceDeposits)
+	}
+
+	_ = total.Add(governanceDeposits)
 	_ = total.Add(commonPool)
 	_ = total.Add(totalFees)
 	if total.Cmp(totalSupply) != 0 {

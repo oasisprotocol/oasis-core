@@ -71,6 +71,10 @@ var (
 	//
 	// Value is CBOR-serialized EpochSigning.
 	epochSigningKeyFmt = keyformat.New(0x58)
+	// governanceDepositsKeyFmt is the key format used for the governance deposits balance.
+	//
+	// Value is a CBOR-serialized quantity.
+	governanceDepositsKeyFmt = keyformat.New(0x59)
 
 	logger = logging.GetLogger("tendermint/staking")
 )
@@ -80,8 +84,8 @@ type ImmutableState struct {
 	is *abciAPI.ImmutableState
 }
 
-func (s *ImmutableState) TotalSupply(ctx context.Context) (*quantity.Quantity, error) {
-	value, err := s.is.Get(ctx, totalSupplyKeyFmt.Encode())
+func (s *ImmutableState) loadStoredBalance(ctx context.Context, key *keyformat.KeyFormat) (*quantity.Quantity, error) {
+	value, err := s.is.Get(ctx, key.Encode())
 	if err != nil {
 		return nil, abciAPI.UnavailableStateError(err)
 	}
@@ -90,27 +94,19 @@ func (s *ImmutableState) TotalSupply(ctx context.Context) (*quantity.Quantity, e
 	}
 
 	var q quantity.Quantity
-	if err := cbor.Unmarshal(value, &q); err != nil {
+	if err = cbor.Unmarshal(value, &q); err != nil {
 		return nil, abciAPI.UnavailableStateError(err)
 	}
 	return &q, nil
 }
 
+func (s *ImmutableState) TotalSupply(ctx context.Context) (*quantity.Quantity, error) {
+	return s.loadStoredBalance(ctx, totalSupplyKeyFmt)
+}
+
 // CommonPool returns the balance of the global common pool.
 func (s *ImmutableState) CommonPool(ctx context.Context) (*quantity.Quantity, error) {
-	value, err := s.is.Get(ctx, commonPoolKeyFmt.Encode())
-	if err != nil {
-		return nil, abciAPI.UnavailableStateError(err)
-	}
-	if value == nil {
-		return &quantity.Quantity{}, nil
-	}
-
-	var q quantity.Quantity
-	if err := cbor.Unmarshal(value, &q); err != nil {
-		return nil, abciAPI.UnavailableStateError(err)
-	}
-	return &q, nil
+	return s.loadStoredBalance(ctx, commonPoolKeyFmt)
 }
 
 func (s *ImmutableState) ConsensusParameters(ctx context.Context) (*staking.ConsensusParameters, error) {
@@ -425,19 +421,11 @@ func (s *ImmutableState) Slashing(ctx context.Context) (map[staking.SlashReason]
 }
 
 func (s *ImmutableState) LastBlockFees(ctx context.Context) (*quantity.Quantity, error) {
-	value, err := s.is.Get(ctx, lastBlockFeesKeyFmt.Encode())
-	if err != nil {
-		return nil, abciAPI.UnavailableStateError(err)
-	}
-	if value == nil {
-		return &quantity.Quantity{}, nil
-	}
+	return s.loadStoredBalance(ctx, lastBlockFeesKeyFmt)
+}
 
-	var q quantity.Quantity
-	if err = cbor.Unmarshal(value, &q); err != nil {
-		return nil, abciAPI.UnavailableStateError(err)
-	}
-	return &q, nil
+func (s *ImmutableState) GovernanceDeposits(ctx context.Context) (*quantity.Quantity, error) {
+	return s.loadStoredBalance(ctx, governanceDepositsKeyFmt)
 }
 
 type EpochSigning struct {
@@ -612,6 +600,11 @@ func (s *MutableState) ClearEpochSigning(ctx context.Context) error {
 	return abciAPI.UnavailableStateError(err)
 }
 
+func (s *MutableState) SetGovernanceDeposits(ctx context.Context, q *quantity.Quantity) error {
+	err := s.ms.Insert(ctx, governanceDepositsKeyFmt.Encode(), cbor.Marshal(q))
+	return abciAPI.UnavailableStateError(err)
+}
+
 func slashPool(dst *quantity.Quantity, p *staking.SharePool, amount, total *quantity.Quantity) error {
 	// slashAmount = amount * p.Balance / total
 	slashAmount := p.Balance.Clone()
@@ -738,6 +731,125 @@ func (s *MutableState) TransferFromCommon(
 	}
 
 	return ret, nil
+}
+
+// TransferToGovernanceDeposits transfers the amount from the submitter to the
+// governance deposits pool.
+func (s *MutableState) TransferToGovernanceDeposits(
+	ctx *api.Context,
+	fromAddr staking.Address,
+	amount *quantity.Quantity,
+) error {
+	from, err := s.Account(ctx, fromAddr)
+	if err != nil {
+		return fmt.Errorf("tendermint/staking: failed to query account %s: %w", fromAddr, err)
+	}
+
+	deposits, err := s.GovernanceDeposits(ctx)
+	if err != nil {
+		return fmt.Errorf("tendermint/staking: failed to query governance deposit for deposit %w", err)
+	}
+
+	if err = quantity.Move(deposits, &from.General.Balance, amount); err != nil {
+		return fmt.Errorf("tendermint/staking: failed to transfer to governance deposits, from: %s: %w", fromAddr, err)
+	}
+
+	if err = s.SetAccount(ctx, fromAddr, from); err != nil {
+		return fmt.Errorf("tendermint/staking: failed to set governance deposit submitter account: %w", err)
+	}
+	if err = s.SetGovernanceDeposits(ctx, deposits); err != nil {
+		return fmt.Errorf("tendermint/staking: failed to set governance deposits: %w", err)
+	}
+
+	if !ctx.IsCheckOnly() {
+		ev := cbor.Marshal(&staking.TransferEvent{
+			From:   fromAddr,
+			To:     staking.GovernanceDepositsAddress,
+			Amount: *amount,
+		})
+		ctx.EmitEvent(api.NewEventBuilder(AppName).Attribute(KeyTransfer, ev))
+	}
+
+	return nil
+}
+
+// TransferFromGovernanceDeposits transfers the amount from the governance
+// deposits pool to the specified address.
+func (s *MutableState) TransferFromGovernanceDeposits(
+	ctx *api.Context,
+	toAddr staking.Address,
+	amount *quantity.Quantity,
+) error {
+	to, err := s.Account(ctx, toAddr)
+	if err != nil {
+		return fmt.Errorf("tendermint/staking: failed to query account %s: %w", toAddr, err)
+	}
+
+	deposits, err := s.GovernanceDeposits(ctx)
+	if err != nil {
+		return fmt.Errorf("tendermint/staking: failed to query governance deposit %w", err)
+	}
+
+	if err = quantity.Move(&to.General.Balance, deposits, amount); err != nil {
+		return fmt.Errorf("tendermint/staking: failed to transfer from governance deposits, to: %s: %w", toAddr, err)
+	}
+
+	if err = s.SetAccount(ctx, toAddr, to); err != nil {
+		return fmt.Errorf("tendermint/staking: failed to set governance deposit submitter account: %w", err)
+	}
+	if err = s.SetGovernanceDeposits(ctx, deposits); err != nil {
+		return fmt.Errorf("tendermint/staking: failed to set governance deposits: %w", err)
+	}
+
+	if !ctx.IsCheckOnly() {
+		ev := cbor.Marshal(&staking.TransferEvent{
+			From:   staking.GovernanceDepositsAddress,
+			To:     toAddr,
+			Amount: *amount,
+		})
+		ctx.EmitEvent(api.NewEventBuilder(AppName).Attribute(KeyTransfer, ev))
+	}
+
+	return nil
+}
+
+// DiscardGovernanceDeposit discards the amount from the governance
+// deposits pool to the common pool.
+func (s *MutableState) DiscardGovernanceDeposit(
+	ctx *api.Context,
+	amount *quantity.Quantity,
+) error {
+	commonPool, err := s.CommonPool(ctx)
+	if err != nil {
+		return fmt.Errorf("tendermint/staking: failed to query common pool for transfer: %w", err)
+	}
+
+	deposits, err := s.GovernanceDeposits(ctx)
+	if err != nil {
+		return fmt.Errorf("tendermint/staking: failed to query governance deposit %w", err)
+	}
+
+	if err = quantity.Move(commonPool, deposits, amount); err != nil {
+		return fmt.Errorf("tendermint/staking: failed to transfer from governance deposits, to common pool: %w", err)
+	}
+
+	if err = s.SetGovernanceDeposits(ctx, deposits); err != nil {
+		return fmt.Errorf("tendermint/staking: failed to set governance deposits: %w", err)
+	}
+	if err = s.SetCommonPool(ctx, commonPool); err != nil {
+		return fmt.Errorf("tendermint/staking: failed to set common pool: %w", err)
+	}
+
+	if !ctx.IsCheckOnly() {
+		ev := cbor.Marshal(&staking.TransferEvent{
+			From:   staking.GovernanceDepositsAddress,
+			To:     staking.CommonPoolAddress,
+			Amount: *amount,
+		})
+		ctx.EmitEvent(api.NewEventBuilder(AppName).Attribute(KeyTransfer, ev))
+	}
+
+	return nil
 }
 
 // AddRewards computes and transfers a staking reward to active escrow accounts.

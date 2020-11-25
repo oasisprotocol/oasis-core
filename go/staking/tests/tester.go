@@ -95,7 +95,9 @@ func StakingImplementationTests(
 		fn func(*testing.T, *stakingTestsState, api.Backend, consensusAPI.Backend)
 	}{
 		{"Thresholds", testThresholds},
+		{"CommonPool", testCommonPool},
 		{"LastBlockFees", testLastBlockFees},
+		{"GovernanceDeposits", testGovernanceDeposits},
 		{"Transfer", testTransfer},
 		{"TransferSelf", testSelfTransfer},
 		{"Burn", testBurn},
@@ -153,12 +155,39 @@ func testThresholds(t *testing.T, state *stakingTestsState, backend api.Backend,
 	}
 }
 
+func testCommonPool(t *testing.T, state *stakingTestsState, backend api.Backend, consensus consensusAPI.Backend) {
+	require := require.New(t)
+
+	commonPool, err := backend.CommonPool(context.Background(), consensusAPI.HeightLatest)
+	require.NoError(err, "CommonPool")
+
+	commonPoolAcc, err := backend.Account(context.Background(), &api.OwnerQuery{Height: consensusAPI.HeightLatest, Owner: api.CommonPoolAddress})
+	require.NoError(err, "Account - CommonPool")
+	require.EqualValues(commonPool, &commonPoolAcc.General.Balance, "CommonPool Account - initial value should match")
+}
+
 func testLastBlockFees(t *testing.T, state *stakingTestsState, backend api.Backend, consensus consensusAPI.Backend) {
 	require := require.New(t)
 
 	lastBlockFees, err := backend.LastBlockFees(context.Background(), consensusAPI.HeightLatest)
 	require.NoError(err, "LastBlockFees")
 	require.True(lastBlockFees.IsZero(), "LastBlockFees - initial value")
+
+	lastBlockFeesAcc, err := backend.Account(context.Background(), &api.OwnerQuery{Height: consensusAPI.HeightLatest, Owner: api.FeeAccumulatorAddress})
+	require.NoError(err, "Account - LastBlockFees")
+	require.True(lastBlockFeesAcc.General.Balance.IsZero(), "LastBlockFees Account - initial value")
+}
+
+func testGovernanceDeposits(t *testing.T, state *stakingTestsState, backend api.Backend, consensus consensusAPI.Backend) {
+	require := require.New(t)
+
+	governanceDeposits, err := backend.GovernanceDeposits(context.Background(), consensusAPI.HeightLatest)
+	require.NoError(err, "GovernanceDeposits")
+	require.True(governanceDeposits.IsZero(), "GovernanceDeposits - initial value")
+
+	governanceDepositsAcc, err := backend.Account(context.Background(), &api.OwnerQuery{Height: consensusAPI.HeightLatest, Owner: api.GovernanceDepositsAddress})
+	require.NoError(err, "Account - GovernanceDeposits")
+	require.True(governanceDepositsAcc.General.Balance.IsZero(), "GovernaceDeposits Account - initial value")
 }
 
 func testTransfer(t *testing.T, state *stakingTestsState, backend api.Backend, consensus consensusAPI.Backend) {
@@ -820,6 +849,10 @@ func testSlashDoubleSigning(
 	err = consensusAPI.SignAndSubmitTx(context.Background(), consensus, srcSigner, tx)
 	require.NoError(err, "AddEscrow")
 
+	// Query updated validator account state.
+	entAcc, err := backend.Account(context.Background(), &api.OwnerQuery{Owner: entAddr, Height: consensusAPI.HeightLatest})
+	require.NoError(err, "Account")
+
 	select {
 	case rawEv := <-ch:
 		if rawEv.Escrow == nil || rawEv.Escrow.Add == nil {
@@ -859,7 +892,7 @@ WaitLoop:
 			if e := ev.Escrow.Take; e != nil {
 				require.Equal(entAddr, e.Owner, "TakeEscrowEvent - owner must be entity's address")
 				// All stake must be slashed as defined in debugGenesisState.
-				require.Equal(escrow.Amount, e.Amount, "TakeEscrowEvent - all stake slashed")
+				require.Equal(entAcc.Escrow.Active.Balance, e.Amount, "TakeEscrowEvent - all stake slashed")
 				break WaitLoop
 			}
 		case <-time.After(recvTimeout):
