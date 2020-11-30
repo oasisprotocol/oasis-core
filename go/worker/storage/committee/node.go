@@ -8,6 +8,7 @@ import (
 	"math"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/eapache/channels"
 	"github.com/prometheus/client_golang/prometheus"
@@ -83,6 +84,8 @@ const (
 	RoundLatest = math.MaxUint64
 
 	defaultUndefinedRound = ^uint64(0)
+
+	checkpointSyncRetryDelay = 10 * time.Second
 )
 
 // outstandingMask records which storage roots still need to be synced or need to be retried.
@@ -206,6 +209,7 @@ type Node struct {
 
 	checkpointer           checkpoint.Checkpointer
 	checkpointSyncDisabled bool
+	checkpointSyncForced   bool
 
 	syncedLock  sync.RWMutex
 	syncedState watcherState
@@ -321,13 +325,19 @@ func NewNode(
 			GetParameters: func(ctx context.Context) (*checkpoint.CreationParameters, error) {
 				rt, rerr := commonNode.Runtime.RegistryDescriptor(ctx)
 				if rerr != nil {
-					return nil, rerr
+					return nil, fmt.Errorf("failed to retrieve runtime descriptor: %w", rerr)
+				}
+
+				blk, rerr := commonNode.Consensus.RootHash().GetGenesisBlock(ctx, rt.ID, consensus.HeightLatest)
+				if rerr != nil {
+					return nil, fmt.Errorf("failed to retrieve genesis block: %w", rerr)
 				}
 
 				return &checkpoint.CreationParameters{
-					Interval:  rt.Storage.CheckpointInterval,
-					NumKept:   rt.Storage.CheckpointNumKept,
-					ChunkSize: rt.Storage.CheckpointChunkSize,
+					Interval:       rt.Storage.CheckpointInterval,
+					NumKept:        rt.Storage.CheckpointNumKept,
+					ChunkSize:      rt.Storage.CheckpointChunkSize,
+					InitialVersion: blk.Header.Round,
 				}, nil
 			},
 			GetRoots: func(ctx context.Context, version uint64) ([]hash.Hash, error) {
@@ -674,6 +684,7 @@ func (n *Node) initGenesis(rt *registryApi.Runtime, genesisBlock *block.Block) e
 		n.logger.Warn("non-empty state root but no state specified, assuming replication",
 			"state_root", genesisBlock.Header.StateRoot,
 		)
+		n.checkpointSyncForced = true
 	}
 	return nil
 }
@@ -838,6 +849,12 @@ func (n *Node) worker() { // nolint: gocyclo
 		}
 	}
 
+	// Notify the checkpointer of the genesis round so it can be checkpointed.
+	if n.checkpointer != nil {
+		n.checkpointer.NotifyNewVersion(genesisBlock.Header.Round)
+		n.checkpointer.Flush()
+	}
+
 	n.logger.Info("worker initialized",
 		"genesis_round", genesisBlock.Header.Round,
 		"last_synced", cachedLastRound,
@@ -871,15 +888,44 @@ func (n *Node) worker() { // nolint: gocyclo
 	}
 
 	// Try to perform initial sync from state and io checkpoints.
-	if !n.checkpointSyncDisabled {
-		var summary *blockSummary
-		summary, err = n.syncCheckpoints()
-		if err != nil {
-			// Try syncing again. The main reason for this is the sync failing due to a
-			// checkpoint pruning race condition (where nodes list a checkpoint which is
-			// then deleted just before we request its chunks). One retry is enough.
-			n.logger.Info("first checkpoint sync failed, trying once more", "err", err)
+	if !n.checkpointSyncDisabled || n.checkpointSyncForced {
+		var (
+			summary *blockSummary
+			attempt int
+		)
+	CheckpointSyncRetry:
+		for {
 			summary, err = n.syncCheckpoints()
+			if err == nil {
+				break
+			}
+
+			attempt++
+			switch n.checkpointSyncForced {
+			case true:
+				// We have no other options but to perform a checkpoint sync as we are missing
+				// genesis state.
+				n.logger.Info("checkpoint sync required as we don't have genesis state, retrying",
+					"err", err,
+					"attempt", attempt,
+				)
+			case false:
+				if attempt > 1 {
+					break CheckpointSyncRetry
+				}
+
+				// Try syncing again. The main reason for this is the sync failing due to a
+				// checkpoint pruning race condition (where nodes list a checkpoint which is
+				// then deleted just before we request its chunks). One retry is enough.
+				n.logger.Info("first checkpoint sync failed, trying once more", "err", err)
+			}
+
+			// Delay before retrying.
+			select {
+			case <-time.After(checkpointSyncRetryDelay):
+			case <-n.ctx.Done():
+				return
+			}
 		}
 		if err != nil {
 			n.logger.Info("checkpoint sync failed", "err", err)
