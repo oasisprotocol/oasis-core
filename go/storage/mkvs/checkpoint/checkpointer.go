@@ -52,6 +52,9 @@ type CreationParameters struct {
 
 	// ChunkSize is the chunk size parameter for checkpoint creation.
 	ChunkSize uint64
+
+	// InitialVersion is the initial version.
+	InitialVersion uint64
 }
 
 // Checkpointer is a checkpointer.
@@ -162,12 +165,14 @@ func (c *checkpointer) maybeCheckpoint(ctx context.Context, version uint64, para
 		return fmt.Errorf("checkpointer: failed to get earliest version: %w", err)
 	}
 	if lastCheckpointVersion < earlyVersion {
-		lastCheckpointVersion = earlyVersion
+		lastCheckpointVersion = earlyVersion - params.Interval
+	}
+	if lastCheckpointVersion < params.InitialVersion {
+		lastCheckpointVersion = params.InitialVersion - params.Interval
 	}
 
 	// Checkpoint any missing versions.
-	cpInterval := params.Interval
-	for cpVersion := lastCheckpointVersion + cpInterval; cpVersion < version; cpVersion = cpVersion + cpInterval {
+	for cpVersion := lastCheckpointVersion + params.Interval; cpVersion < version; cpVersion = cpVersion + params.Interval {
 		c.logger.Info("checkpointing version",
 			"version", cpVersion,
 		)
