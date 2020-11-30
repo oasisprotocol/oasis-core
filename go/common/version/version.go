@@ -9,8 +9,6 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
-
-	"github.com/tendermint/tendermint/version"
 )
 
 // NOTE: This should be kept in sync with runtime/src/common/version.rs.
@@ -93,12 +91,6 @@ var (
 	// https://github.com/tendermint/tendermint/blob/1635d1339c73ae6a82e062cd2dc7191b029efa14/state/validation.go#L21-L22.
 	TendermintAppVersion = ConsensusProtocol.MaskNonMajor().ToU64()
 
-	// Tendermint exposes the tendermint core version.
-	Tendermint = parseSemVerStr(version.TMCoreSemVer)
-
-	// ABCI is the version of the tendermint ABCI library.
-	ABCI = parseSemVerStr(version.ABCIVersion)
-
 	// Toolchain is the version of the Go compiler/standard library.
 	Toolchain = parseSemVerStr(strings.TrimPrefix(runtime.Version(), "go"))
 )
@@ -108,15 +100,11 @@ var Versions = struct {
 	RuntimeHostProtocol      Version
 	RuntimeCommitteeProtocol Version
 	ConsensusProtocol        Version
-	Tendermint               Version
-	ABCI                     Version
 	Toolchain                Version
 }{
 	RuntimeHostProtocol,
 	RuntimeCommitteeProtocol,
 	ConsensusProtocol,
-	Tendermint,
-	ABCI,
 	Toolchain,
 }
 
@@ -132,7 +120,7 @@ func parseSemVerStr(s string) Version {
 		}
 		ver, err := strconv.ParseUint(v, 10, 16)
 		if err != nil {
-			panic("version: failed to parse SemVer: " + err.Error())
+			panic(fmt.Errorf("version: failed to parse SemVer '%s': %w", s, err))
 		}
 		semVers[i] = uint16(ver)
 	}
