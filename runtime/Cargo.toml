@@ -6,7 +6,7 @@ edition = "2018"
 
 [dependencies]
 log = "0.4"
-slog = "2.4.1"
+slog = "2.7.0"
 slog-json = "2.3.0"
 slog-scope = "4.1.1"
 slog-stdlog = "4.1.0"
