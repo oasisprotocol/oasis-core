@@ -15,8 +15,6 @@ import (
 	consensusGenesis "github.com/oasisprotocol/oasis-core/go/consensus/genesis"
 	genesis "github.com/oasisprotocol/oasis-core/go/genesis/api"
 	genesisFile "github.com/oasisprotocol/oasis-core/go/genesis/file"
-	cmdCommon "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common"
-	cmdNode "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/node"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/cmd"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/env"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/oasis"
@@ -121,47 +119,39 @@ func (sc *E2E) Init(childEnv *env.Env, net *oasis.Network) error {
 // ResetConsensusState removes all consensus state, preserving runtime storage and node-local
 // storage databases.
 func (sc *E2E) ResetConsensusState(childEnv *env.Env) error {
-	doClean := func(dataDir string, cleanArgs []string) error {
-		args := append([]string{
-			"unsafe-reset",
-			"--" + cmdCommon.CfgDataDir, dataDir,
-		}, cleanArgs...)
-
-		return cli.RunSubCommand(childEnv, sc.Logger, "unsafe-reset", sc.Net.Config().NodeBinary, args)
-	}
-
+	cli := cli.New(childEnv, sc.Net, sc.Logger)
 	for _, val := range sc.Net.Validators() {
-		if err := doClean(val.DataDir(), nil); err != nil {
+		if err := cli.UnsafeReset(val.DataDir(), false, false); err != nil {
 			return err
 		}
 	}
 	for _, cw := range sc.Net.ComputeWorkers() {
-		if err := doClean(cw.DataDir(), nil); err != nil {
+		if err := cli.UnsafeReset(cw.DataDir(), false, false); err != nil {
 			return err
 		}
 	}
 	for _, cl := range sc.Net.Clients() {
-		if err := doClean(cl.DataDir(), nil); err != nil {
+		if err := cli.UnsafeReset(cl.DataDir(), false, false); err != nil {
 			return err
 		}
 	}
 	for _, bz := range sc.Net.Byzantine() {
-		if err := doClean(bz.DataDir(), nil); err != nil {
+		if err := cli.UnsafeReset(bz.DataDir(), false, false); err != nil {
 			return err
 		}
 	}
 	for _, se := range sc.Net.Sentries() {
-		if err := doClean(se.DataDir(), nil); err != nil {
+		if err := cli.UnsafeReset(se.DataDir(), false, false); err != nil {
 			return err
 		}
 	}
 	for _, sw := range sc.Net.StorageWorkers() {
-		if err := doClean(sw.DataDir(), []string{"--" + cmdNode.CfgPreserveMKVSDatabase}); err != nil {
+		if err := cli.UnsafeReset(sw.DataDir(), true, false); err != nil {
 			return err
 		}
 	}
 	for _, kw := range sc.Net.Keymanagers() {
-		if err := doClean(kw.DataDir(), []string{"--" + cmdNode.CfgPreserveLocalStorage}); err != nil {
+		if err := cli.UnsafeReset(kw.DataDir(), false, true); err != nil {
 			return err
 		}
 	}
