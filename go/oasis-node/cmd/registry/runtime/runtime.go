@@ -389,7 +389,7 @@ func runtimeFromFlags() (*registry.Runtime, signature.Signer, error) { // nolint
 			MaxApplyOps:             viper.GetUint64(CfgStorageMaxApplyOps),
 			CheckpointInterval:      viper.GetUint64(CfgStorageCheckpointInterval),
 			CheckpointNumKept:       viper.GetUint64(CfgStorageCheckpointNumKept),
-			CheckpointChunkSize:     viper.GetUint64(CfgStorageCheckpointChunkSize),
+			CheckpointChunkSize:     uint64(viper.GetSizeInBytes(CfgStorageCheckpointChunkSize)),
 		},
 	}
 	if teeHardware == node.TEEHardwareIntelSGX {
@@ -545,9 +545,9 @@ func init() {
 	runtimeFlags.Uint64(CfgStorageMinWriteReplication, 1, "Minimum required storage write replication")
 	runtimeFlags.Uint64(CfgStorageMaxApplyWriteLogEntries, 100_000, "Maximum number of write log entries")
 	runtimeFlags.Uint64(CfgStorageMaxApplyOps, 2, "Maximum number of apply operations in a batch")
-	runtimeFlags.Uint64(CfgStorageCheckpointInterval, 0, "Storage checkpoint interval (in rounds)")
-	runtimeFlags.Uint64(CfgStorageCheckpointNumKept, 0, "Number of storage checkpoints to keep")
-	runtimeFlags.Uint64(CfgStorageCheckpointChunkSize, 0, "Storage checkpoint chunk size")
+	runtimeFlags.Uint64(CfgStorageCheckpointInterval, 10_000, "Storage checkpoint interval (in rounds)")
+	runtimeFlags.Uint64(CfgStorageCheckpointNumKept, 2, "Number of storage checkpoints to keep")
+	runtimeFlags.String(CfgStorageCheckpointChunkSize, "8mb", "Storage checkpoint chunk size")
 
 	// Init Admission policy flags.
 	runtimeFlags.String(CfgAdmissionPolicy, "", "What type of node admission policy to have")

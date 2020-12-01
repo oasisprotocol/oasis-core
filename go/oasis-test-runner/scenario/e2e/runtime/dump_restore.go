@@ -1,8 +1,13 @@
 package runtime
 
 import (
+	"context"
+	"fmt"
+
 	genesis "github.com/oasisprotocol/oasis-core/go/genesis/api"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/env"
+	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/oasis"
+	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/oasis/cli"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/scenario"
 )
 
@@ -52,6 +57,20 @@ func (sc *dumpRestoreImpl) Clone() scenario.Scenario {
 	}
 }
 
+func (sc *dumpRestoreImpl) Fixture() (*oasis.NetworkFixture, error) {
+	f, err := sc.runtimeImpl.Fixture()
+	if err != nil {
+		return nil, err
+	}
+
+	// Configure runtime for storage checkpointing.
+	f.Runtimes[1].Storage.CheckpointInterval = 10
+	f.Runtimes[1].Storage.CheckpointNumKept = 1
+	f.Runtimes[1].Storage.CheckpointChunkSize = 1 * 1024
+
+	return f, nil
+}
+
 func (sc *dumpRestoreImpl) Run(childEnv *env.Env) error {
 	clientErrCh, cmd, err := sc.start(childEnv)
 	if err != nil {
@@ -73,8 +92,33 @@ func (sc *dumpRestoreImpl) Run(childEnv *env.Env) error {
 	if err != nil {
 		return err
 	}
+
+	// Completely reset state for one of the storage nodes so we can test initial sync.
+	sc.Logger.Info("completely resetting state for one of the storage nodes")
+	cli := cli.New(childEnv, sc.Net, sc.Logger)
+	if err = cli.UnsafeReset(sc.Net.StorageWorkers()[1].DataDir(), false, false); err != nil {
+		return fmt.Errorf("failed to reset state for storage worker: %w", err)
+	}
+
 	if err = sc.DumpRestoreNetwork(childEnv, fixture, true, sc.mapGenesisDocumentFn); err != nil {
 		return err
+	}
+	if err = sc.Net.Start(); err != nil {
+		return fmt.Errorf("failed to start restored network: %w", err)
+	}
+
+	// Wait for all storage and compute nodes to be ready.
+	ctx := context.Background()
+	sc.Logger.Info("waiting for all storage and compute nodes to be ready")
+	for _, n := range sc.Net.StorageWorkers() {
+		if err = n.WaitReady(ctx); err != nil {
+			return fmt.Errorf("failed to wait for a storage worker: %w", err)
+		}
+	}
+	for _, n := range sc.Net.ComputeWorkers() {
+		if err = n.WaitReady(ctx); err != nil {
+			return fmt.Errorf("failed to wait for a compute worker: %w", err)
+		}
 	}
 
 	// Check that everything works with restored state.
