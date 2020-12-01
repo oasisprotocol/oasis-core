@@ -196,9 +196,7 @@ steps:
     command:
       - .buildkite/go/test_and_coverage.sh
     artifact_paths:
-      - coverage-misc.txt
-      - coverage-oasis-node.txt
-      - coverage-mkvs.txt
+      - coverage-*.txt
       - /tmp/oasis-node-test_*/test-node.log
     retry:
       <<: *retry_agent_failure
