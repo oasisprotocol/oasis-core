@@ -52,12 +52,18 @@ type CreationParameters struct {
 
 	// ChunkSize is the chunk size parameter for checkpoint creation.
 	ChunkSize uint64
+
+	// InitialVersion is the initial version.
+	InitialVersion uint64
 }
 
 // Checkpointer is a checkpointer.
 type Checkpointer interface {
 	// NotifyNewVersion notifies the checkpointer that a new version has been finalized.
 	NotifyNewVersion(version uint64)
+
+	// Flush makes the checkpointer immediately process any notifications.
+	Flush()
 }
 
 type checkpointer struct {
@@ -66,6 +72,7 @@ type checkpointer struct {
 	ndb      db.NodeDB
 	creator  Creator
 	notifyCh *channels.RingChannel
+	flushCh  *channels.RingChannel
 	statusCh chan struct{}
 
 	logger *logging.Logger
@@ -74,6 +81,11 @@ type checkpointer struct {
 // Implements Checkpointer.
 func (c *checkpointer) NotifyNewVersion(version uint64) {
 	c.notifyCh.In() <- version
+}
+
+// Implements Checkpointer.
+func (c *checkpointer) Flush() {
+	c.flushCh.In() <- struct{}{}
 }
 
 func (c *checkpointer) checkpoint(ctx context.Context, version uint64, params *CreationParameters) (err error) {
@@ -162,12 +174,14 @@ func (c *checkpointer) maybeCheckpoint(ctx context.Context, version uint64, para
 		return fmt.Errorf("checkpointer: failed to get earliest version: %w", err)
 	}
 	if lastCheckpointVersion < earlyVersion {
-		lastCheckpointVersion = earlyVersion
+		lastCheckpointVersion = earlyVersion - params.Interval
+	}
+	if lastCheckpointVersion < params.InitialVersion {
+		lastCheckpointVersion = params.InitialVersion - params.Interval
 	}
 
 	// Checkpoint any missing versions.
-	cpInterval := params.Interval
-	for cpVersion := lastCheckpointVersion + cpInterval; cpVersion < version; cpVersion = cpVersion + cpInterval {
+	for cpVersion := lastCheckpointVersion + params.Interval; cpVersion < version; cpVersion = cpVersion + params.Interval {
 		c.logger.Info("checkpointing version",
 			"version", cpVersion,
 		)
@@ -221,50 +235,52 @@ func (c *checkpointer) worker(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			var version uint64
-			select {
-			case <-ctx.Done():
-				return
-			case v := <-c.notifyCh.Out():
-				version = v.(uint64)
-			}
+		case <-c.flushCh.Out():
+		}
 
-			// Fetch current checkpoint parameters.
-			params := c.cfg.Parameters
-			if params == nil && c.cfg.GetParameters != nil {
-				var err error
-				params, err = c.cfg.GetParameters(ctx)
-				if err != nil {
-					c.logger.Error("failed to get checkpoint parameters",
-						"err", err,
-						"version", version,
-					)
-					continue
-				}
-			}
-			if params == nil {
-				c.logger.Error("no checkpoint parameters")
-				continue
-			}
+		var version uint64
+		select {
+		case <-ctx.Done():
+			return
+		case v := <-c.notifyCh.Out():
+			version = v.(uint64)
+		}
 
-			// Don't checkpoint if checkpoints are disabled.
-			if params.Interval == 0 {
-				continue
-			}
-
-			if err := c.maybeCheckpoint(ctx, version, params); err != nil {
-				c.logger.Error("failed to checkpoint",
-					"version", version,
+		// Fetch current checkpoint parameters.
+		params := c.cfg.Parameters
+		if params == nil && c.cfg.GetParameters != nil {
+			var err error
+			params, err = c.cfg.GetParameters(ctx)
+			if err != nil {
+				c.logger.Error("failed to get checkpoint parameters",
 					"err", err,
+					"version", version,
 				)
 				continue
 			}
+		}
+		if params == nil {
+			c.logger.Error("no checkpoint parameters")
+			continue
+		}
 
-			// Emit status update if someone is listening. This is only used in tests.
-			select {
-			case c.statusCh <- struct{}{}:
-			default:
-			}
+		// Don't checkpoint if checkpoints are disabled.
+		if params.Interval == 0 {
+			continue
+		}
+
+		if err := c.maybeCheckpoint(ctx, version, params); err != nil {
+			c.logger.Error("failed to checkpoint",
+				"version", version,
+				"err", err,
+			)
+			continue
+		}
+
+		// Emit status update if someone is listening. This is only used in tests.
+		select {
+		case c.statusCh <- struct{}{}:
+		default:
 		}
 	}
 }
@@ -282,6 +298,7 @@ func NewCheckpointer(
 		ndb:      ndb,
 		creator:  creator,
 		notifyCh: channels.NewRingChannel(1),
+		flushCh:  channels.NewRingChannel(1),
 		statusCh: make(chan struct{}),
 		logger:   logging.GetLogger("storage/mkvs/checkpoint/"+cfg.Name).With("namespace", cfg.Namespace),
 	}

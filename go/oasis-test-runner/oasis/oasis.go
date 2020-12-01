@@ -244,11 +244,12 @@ type NodeCfg struct { // nolint: maligned
 }
 
 // Network is a test Oasis network.
-type Network struct {
+type Network struct { // nolint: maligned
 	logger *logging.Logger
 
 	env     *env.Env
 	baseDir *env.Dir
+	running bool
 
 	entities       []*Entity
 	validators     []*Validator
@@ -491,6 +492,10 @@ func (net *Network) CheckLogWatchers() (err error) {
 
 // Start starts the network.
 func (net *Network) Start() error { // nolint: gocyclo
+	if net.running {
+		return nil
+	}
+
 	net.logger.Info("starting network")
 
 	// Figure out if the IAS proxy is needed by peeking at all the
@@ -706,6 +711,7 @@ func (net *Network) Start() error { // nolint: gocyclo
 	}
 
 	net.logger.Info("network started")
+	net.running = true
 
 	return nil
 }
@@ -713,6 +719,7 @@ func (net *Network) Start() error { // nolint: gocyclo
 // Stop stops the network.
 func (net *Network) Stop() {
 	net.env.Cleanup()
+	net.running = false
 }
 
 func (net *Network) runNodeBinary(consoleWriter io.Writer, args ...string) error {

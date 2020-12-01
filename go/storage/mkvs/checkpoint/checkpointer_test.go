@@ -23,8 +23,9 @@ const (
 	testNumKept       = 2
 )
 
-func testCheckpointer(t *testing.T, earliestVersion uint64) {
+func testCheckpointer(t *testing.T, earliestVersion uint64, preExistingData bool) {
 	require := require.New(t)
+	ctx := context.Background()
 
 	// Initialize a database.
 	dir, err := ioutil.TempDir("", "mkvs.checkpointer")
@@ -38,31 +39,58 @@ func testCheckpointer(t *testing.T, earliestVersion uint64) {
 	})
 	require.NoError(err, "New")
 
+	var root node.Root
+	root.Empty()
+	root.Namespace = testNs
+
+	if preExistingData && earliestVersion > 0 {
+		// Create some pre-existing roots in the database.
+		for round := uint64(0); round < earliestVersion; round++ {
+			tree := mkvs.NewWithRoot(nil, ndb, root)
+			err = tree.Insert(ctx, []byte(fmt.Sprintf("round %d", round)), []byte(fmt.Sprintf("value %d", round)))
+			require.NoError(err, "Insert")
+
+			var rootHash hash.Hash
+			_, rootHash, err = tree.Commit(ctx, testNs, round)
+			require.NoError(err, "Commit")
+
+			root.Version = round
+			root.Hash = rootHash
+
+			err = ndb.Finalize(ctx, root.Version, []hash.Hash{root.Hash})
+			require.NoError(err, "Finalize")
+		}
+	} else {
+		root.Version = earliestVersion
+	}
+
 	// Create a file-based checkpoint creator.
 	fc, err := NewFileCreator(filepath.Join(dir, "checkpoints"), ndb)
 	require.NoError(err, "NewFileCreator")
 
 	// Create a checkpointer.
-	ctx := context.Background()
 	cp, err := NewCheckpointer(ctx, ndb, fc, CheckpointerConfig{
 		Name:            "test",
 		Namespace:       testNs,
 		CheckInterval:   testCheckInterval,
 		RootsPerVersion: 1,
 		Parameters: &CreationParameters{
-			Interval:  1,
-			NumKept:   testNumKept,
-			ChunkSize: 16 * 1024,
+			Interval:       1,
+			NumKept:        testNumKept,
+			ChunkSize:      16 * 1024,
+			InitialVersion: earliestVersion,
+		},
+		GetRoots: func(ctx context.Context, version uint64) ([]hash.Hash, error) {
+			if version < earliestVersion {
+				// Simulate early block fetch failing.
+				return nil, fmt.Errorf("version not found")
+			}
+			return ndb.GetRootsForVersion(ctx, version)
 		},
 	})
 	require.NoError(err, "NewCheckpointer")
 
 	// Finalize a few rounds.
-	var root node.Root
-	root.Empty()
-	root.Version = earliestVersion
-	root.Namespace = testNs
-
 	for round := earliestVersion; round < earliestVersion+10; round++ {
 		tree := mkvs.NewWithRoot(nil, ndb, root)
 		err = tree.Insert(ctx, []byte(fmt.Sprintf("round %d", round)), []byte(fmt.Sprintf("value %d", round)))
@@ -98,9 +126,12 @@ func testCheckpointer(t *testing.T, earliestVersion uint64) {
 
 func TestCheckpointer(t *testing.T) {
 	t.Run("Basic", func(t *testing.T) {
-		testCheckpointer(t, 0)
+		testCheckpointer(t, 0, false)
 	})
 	t.Run("NonZeroEarliestVersion", func(t *testing.T) {
-		testCheckpointer(t, 1000)
+		testCheckpointer(t, 1000, false)
+	})
+	t.Run("NonZeroEarliestInitialVersion", func(t *testing.T) {
+		testCheckpointer(t, 100, true)
 	})
 }
