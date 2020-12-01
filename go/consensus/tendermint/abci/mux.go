@@ -39,9 +39,6 @@ const (
 
 	metricsUpdateInterval = 10 * time.Second
 
-	// debugTxLifetime is the transaction mempool lifetime when CheckTx is disabled (debug only).
-	debugTxLifetime = 1 * time.Minute
-
 	// LogEventABCIStateSyncComplete is a log event value that signals an ABCI state syncing
 	// completed event.
 	LogEventABCIStateSyncComplete = "tendermint/abci/state_sync_complete"
@@ -68,7 +65,6 @@ type ApplicationConfig struct { // nolint: maligned
 	Pruning         PruneConfig
 	HaltEpochHeight epochtime.EpochTime
 	MinGasPrice     uint64
-	DisableCheckTx  bool
 
 	DisableCheckpointer       bool
 	CheckpointerCheckInterval time.Duration
@@ -225,9 +221,6 @@ type abciMux struct {
 	// invalidatedTxs maps transaction hashes (hash.Hash) to a subscriber
 	// waiting for that transaction to become invalid.
 	invalidatedTxs sync.Map
-	// debugExpiringTxs maps transaction hashes to the time at which they were created. This is only
-	// used in case CheckTx is disabled (for debug purposes only).
-	debugExpiringTxs map[hash.Hash]time.Time
 
 	md messageDispatcher
 }
@@ -621,35 +614,6 @@ func (mux *abciMux) notifyInvalidatedCheckTx(txHash hash.Hash, err error) {
 }
 
 func (mux *abciMux) CheckTx(req types.RequestCheckTx) types.ResponseCheckTx {
-	if mux.state.disableCheckTx {
-		// Blindly accept all transactions if configured to do so. We still need to periodically
-		// remove old transactions as otherwise the mempool will fill up, so keep track of when
-		// transactions were added and invalidate them after the configured interval.
-		txHash := hash.NewFromBytes(req.Tx)
-
-		if req.Type == types.CheckTxType_Recheck {
-			// Check timestamp.
-			if ts, ok := mux.debugExpiringTxs[txHash]; ok && mux.currentTime.Sub(ts) > debugTxLifetime {
-				delete(mux.debugExpiringTxs, txHash)
-
-				err := fmt.Errorf("mux: transaction expired (debug only)")
-				mux.notifyInvalidatedCheckTx(txHash, err)
-
-				return types.ResponseCheckTx{
-					Codespace: errors.UnknownModule,
-					Code:      1,
-					Log:       err.Error(),
-				}
-			}
-		} else {
-			mux.debugExpiringTxs[txHash] = mux.currentTime
-		}
-
-		return types.ResponseCheckTx{
-			Code: types.CodeTypeOK,
-		}
-	}
-
 	ctx := mux.state.NewContext(api.ContextCheckTx, mux.currentTime)
 	defer ctx.Close()
 
@@ -1086,11 +1050,6 @@ func newABCIMux(ctx context.Context, upgrader upgrade.Backend, cfg *ApplicationC
 		appsByName:     make(map[string]api.Application),
 		appsByMethod:   make(map[transaction.MethodName]api.Application),
 		lastBeginBlock: -1,
-	}
-
-	// Create a map of expiring transactions if CheckTx is disabled (debug only).
-	if state.disableCheckTx {
-		mux.debugExpiringTxs = make(map[hash.Hash]time.Time)
 	}
 
 	mux.logger.Debug("ABCI multiplexer initialized",

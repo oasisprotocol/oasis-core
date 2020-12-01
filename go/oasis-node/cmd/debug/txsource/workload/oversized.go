@@ -112,25 +112,20 @@ func (o *oversized) Run(
 			"payload_size", len(xfer.Data),
 		)
 
-		// Wait for a maximum of 5 seconds as submission may block forever in case the client node
-		// is skipping all CheckTx checks.
+		// Wait for a maximum of 5 seconds.
 		submitCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
 		err = cnsc.SubmitTx(submitCtx, signedTx)
+		cancel()
 		switch err {
 		case nil:
 			// This should never happen.
-			cancel()
 			return fmt.Errorf("successfully submitted an oversized transaction")
 		case consensus.ErrOversizedTx:
 			// Submitting an oversized transaction is an error, so we expect this to fail.
 			o.Logger.Info("transaction rejected due to ErrOversizedTx")
 		default:
-			// Timeout is expected if the client node skips CheckTx checks.
-			o.Logger.Warn("failed to submit oversized transaction",
-				"err", err,
-			)
+			return fmt.Errorf("failed to submit oversized transaction: %w", err)
 		}
-		cancel()
 
 		select {
 		case <-time.After(1 * time.Second):

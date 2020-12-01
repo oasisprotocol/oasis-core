@@ -104,8 +104,6 @@ const (
 
 	// CfgMinGasPrice configures the minimum gas price for this validator.
 	CfgMinGasPrice = "consensus.tendermint.min_gas_price"
-	// CfgDebugDisableCheckTx disables CheckTx.
-	CfgDebugDisableCheckTx = "consensus.tendermint.debug.disable_check_tx"
 
 	// CfgSupplementarySanityEnabled is the supplementary sanity enabled flag.
 	CfgSupplementarySanityEnabled = "consensus.tendermint.supplementarysanity.enabled"
@@ -1094,7 +1092,6 @@ func (t *fullService) lazyInit() error {
 		HaltEpochHeight:           t.genesis.HaltEpoch,
 		MinGasPrice:               viper.GetUint64(CfgMinGasPrice),
 		OwnTxSigner:               t.identity.NodeSigner.Public(),
-		DisableCheckTx:            viper.GetBool(CfgDebugDisableCheckTx) && cmflags.DebugDontBlameOasis(),
 		DisableCheckpointer:       viper.GetBool(CfgCheckpointerDisabled),
 		CheckpointerCheckInterval: viper.GetDuration(CfgCheckpointerCheckInterval),
 		InitialHeight:             uint64(t.genesis.Height),
@@ -1487,7 +1484,6 @@ func init() {
 	Flags.Bool(CfgP2PDisablePeerExchange, false, "Disable Tendermint's peer-exchange reactor")
 	Flags.Duration(CfgP2PPersistenPeersMaxDialPeriod, 0*time.Second, "Tendermint max timeout when redialing a persistent peer (default: unlimited)")
 	Flags.Uint64(CfgMinGasPrice, 0, "minimum gas price")
-	Flags.Bool(CfgDebugDisableCheckTx, false, "do not perform CheckTx on incoming transactions (UNSAFE)")
 	Flags.Bool(CfgDebugUnsafeReplayRecoverCorruptedWAL, false, "Enable automatic recovery from corrupted WAL during replay (UNSAFE).")
 
 	Flags.Bool(CfgSupplementarySanityEnabled, false, "enable supplementary sanity checks (slows down consensus)")
@@ -1500,7 +1496,6 @@ func init() {
 	Flags.Uint64(CfgConsensusStateSyncTrustHeight, 0, "state sync: light client trusted height")
 	Flags.String(CfgConsensusStateSyncTrustHash, "", "state sync: light client trusted consensus header hash")
 
-	_ = Flags.MarkHidden(CfgDebugDisableCheckTx)
 	_ = Flags.MarkHidden(CfgDebugUnsafeReplayRecoverCorruptedWAL)
 
 	_ = Flags.MarkHidden(CfgSupplementarySanityEnabled)

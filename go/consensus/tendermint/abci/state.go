@@ -68,7 +68,6 @@ type applicationState struct { // nolint: maligned
 	minGasPrice        quantity.Quantity
 	ownTxSigner        signature.PublicKey
 	ownTxSignerAddress staking.Address
-	disableCheckTx     bool
 
 	metricsClosedCh chan struct{}
 }
@@ -546,7 +545,6 @@ func newApplicationState(ctx context.Context, cfg *ApplicationConfig) (*applicat
 		minGasPrice:        minGasPrice,
 		ownTxSigner:        cfg.OwnTxSigner,
 		ownTxSignerAddress: staking.NewAddress(cfg.OwnTxSigner),
-		disableCheckTx:     cfg.DisableCheckTx,
 		metricsClosedCh:    make(chan struct{}),
 	}
 

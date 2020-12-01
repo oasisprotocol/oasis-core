@@ -132,9 +132,6 @@ type ConsensusFixture struct { // nolint: maligned
 	// SubmissionGasPrice is the gas price to use when submitting consensus transactions.
 	SubmissionGasPrice uint64 `json:"submission_gas_price"`
 
-	// DisableCheckTx causes the consensus layer to skip transaction checks.
-	DisableCheckTx bool `json:"disable_check_tx"`
-
 	// PruneNumKept is the number of blocks to keep (zero disables pruning).
 	PruneNumKept uint64 `json:"prune_num_kept"`
 

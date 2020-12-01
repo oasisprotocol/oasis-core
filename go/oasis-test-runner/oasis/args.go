@@ -124,13 +124,6 @@ func (args *argBuilder) tendermintPrune(numKept uint64) *argBuilder {
 	return args
 }
 
-func (args *argBuilder) tendermintDebugDisableCheckTx(disable bool) *argBuilder {
-	if disable {
-		args.vec = append(args.vec, "--"+tendermintFull.CfgDebugDisableCheckTx)
-	}
-	return args
-}
-
 func (args *argBuilder) tendermintRecoverCorruptedWAL(enable bool) *argBuilder {
 	if enable {
 		args.vec = append(args.vec, "--"+tendermintFull.CfgDebugUnsafeReplayRecoverCorruptedWAL)
