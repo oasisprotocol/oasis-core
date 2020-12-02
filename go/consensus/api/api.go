@@ -137,6 +137,15 @@ type ClientBackend interface {
 
 	// GetStatus returns the current status overview.
 	GetStatus(ctx context.Context) (*Status, error)
+
+	// Registry returns the registry backend.
+	Registry() registry.Backend
+
+	// Staking returns the staking backend.
+	Staking() staking.Backend
+
+	// Scheduler returns the scheduler backend.
+	Scheduler() scheduler.Backend
 }
 
 // Block is a consensus block.
@@ -233,17 +242,8 @@ type ServicesBackend interface {
 	// KeyManager returns the keymanager backend.
 	KeyManager() keymanager.Backend
 
-	// Registry returns the registry backend.
-	Registry() registry.Backend
-
 	// RootHash returns the roothash backend.
 	RootHash() roothash.Backend
-
-	// Staking returns the staking backend.
-	Staking() staking.Backend
-
-	// Scheduler returns the scheduler backend.
-	Scheduler() scheduler.Backend
 }
 
 // TransactionAuthHandler is the interface for handling transaction authentication
