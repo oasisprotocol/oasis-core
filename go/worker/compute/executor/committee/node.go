@@ -569,16 +569,18 @@ func (n *Node) HandleNewBlockLocked(blk *block.Block) {
 func (n *Node) checkTx(ctx context.Context, tx []byte) error {
 	n.commonNode.CrossNode.Lock()
 	currentBlock := n.commonNode.CurrentBlock
+	currentConsensusBlock := n.commonNode.CurrentConsensusBlock
 	n.commonNode.CrossNode.Unlock()
 
-	if currentBlock == nil {
+	if currentBlock == nil || currentConsensusBlock == nil {
 		return errNotReady
 	}
 
 	checkRq := &protocol.Body{
 		RuntimeCheckTxBatchRequest: &protocol.RuntimeCheckTxBatchRequest{
-			Inputs: transaction.RawBatch{tx},
-			Block:  *currentBlock,
+			ConsensusBlock: *currentConsensusBlock,
+			Inputs:         transaction.RawBatch{tx},
+			Block:          *currentBlock,
 		},
 	}
 	rt := n.GetHostedRuntime()
@@ -974,6 +976,7 @@ func (n *Node) startProcessingBatchLocked(batch *unresolvedBatch) {
 	// Request the worker host to process a batch. This is done in a separate
 	// goroutine so that the committee node can continue processing blocks.
 	blk := n.commonNode.CurrentBlock
+	consensusBlk := n.commonNode.CurrentConsensusBlock
 	height := n.commonNode.CurrentBlockHeight
 	go func() {
 		defer close(done)
@@ -1010,6 +1013,7 @@ func (n *Node) startProcessingBatchLocked(batch *unresolvedBatch) {
 		}
 		rq := &protocol.Body{
 			RuntimeExecuteTxBatchRequest: &protocol.RuntimeExecuteTxBatchRequest{
+				ConsensusBlock: *consensusBlk,
 				MessageResults: msgResults,
 				IORoot:         batch.ioRoot.Hash,
 				Inputs:         resolvedBatch,

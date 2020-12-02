@@ -105,13 +105,23 @@ type Connection interface {
 	// Only one of InitHost/InitGuest can be called otherwise the method may panic.
 	//
 	// Returns the self-reported runtime version.
-	InitHost(ctx context.Context, conn net.Conn) (*version.Version, error)
+	InitHost(ctx context.Context, conn net.Conn, hi *HostInfo) (*version.Version, error)
 
 	// InitGuest performs initialization in guest mode and transitions the connection to Ready
 	// state.
 	//
 	// Only one of InitHost/InitGuest can be called otherwise the method may panic.
 	InitGuest(ctx context.Context, conn net.Conn) error
+}
+
+// HostInfo contains the information about the host environment that is sent to the runtime during
+// connection initialization.
+type HostInfo struct {
+	// ConsensusBackend is the name of the consensus backend that is in use for the consensus layer.
+	ConsensusBackend string
+	// ConsensusProtocolVersion is the consensus protocol version that is in use for the consensus
+	// layer.
+	ConsensusProtocolVersion uint64
 }
 
 // state is the connection state.
@@ -511,12 +521,14 @@ func (c *connection) InitGuest(ctx context.Context, conn net.Conn) error {
 }
 
 // Implements Connection.
-func (c *connection) InitHost(ctx context.Context, conn net.Conn) (*version.Version, error) {
+func (c *connection) InitHost(ctx context.Context, conn net.Conn, hi *HostInfo) (*version.Version, error) {
 	c.initConn(conn)
 
 	// Check Runtime Host Protocol version.
 	rsp, err := c.call(ctx, &Body{RuntimeInfoRequest: &RuntimeInfoRequest{
-		RuntimeID: c.runtimeID,
+		RuntimeID:                c.runtimeID,
+		ConsensusBackend:         hi.ConsensusBackend,
+		ConsensusProtocolVersion: hi.ConsensusProtocolVersion,
 	}})
 	switch {
 	default:

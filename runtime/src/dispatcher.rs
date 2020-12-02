@@ -45,7 +45,7 @@ use crate::{
         types::TxnBatch,
         Context as TxnContext,
     },
-    types::{Body, ComputedBatch},
+    types::{Body, ComputedBatch, HostStorageEndpoint},
 };
 
 /// Maximum amount of requests that can be in the dispatcher queue.
@@ -648,7 +648,7 @@ impl Cache {
     }
 
     fn new_tree(protocol: &Arc<Protocol>, root: Root) -> Tree {
-        let read_syncer = HostReadSyncer::new(protocol.clone());
+        let read_syncer = HostReadSyncer::new(protocol.clone(), HostStorageEndpoint::Runtime);
         Tree::make()
             .with_capacity(100_000, 10_000_000)
             .with_root(root)

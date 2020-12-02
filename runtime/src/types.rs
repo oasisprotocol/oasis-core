@@ -1,6 +1,7 @@
 //! Types used by the worker-host protocol.
 use serde::{self, Deserialize, Deserializer, Serialize, Serializer};
 use serde_bytes;
+use serde_repr::*;
 
 use crate::{
     common::{
@@ -46,6 +47,14 @@ pub enum StorageSyncResponse {
     ProofResponse(sync::ProofResponse),
 }
 
+/// Host storage endpoint.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize_repr, Deserialize_repr)]
+#[repr(u8)]
+pub enum HostStorageEndpoint {
+    Runtime = 0,
+    Consensus = 1,
+}
+
 /// Runtime host protocol message body.
 #[derive(Debug, Serialize, Deserialize)]
 pub enum Body {
@@ -65,6 +74,8 @@ pub enum Body {
     // Runtime interface.
     RuntimeInfoRequest {
         runtime_id: RuntimeId,
+        consensus_backend: String,
+        consensus_protocol_version: u64,
     },
     RuntimeInfoResponse {
         protocol_version: u64,
@@ -140,6 +151,7 @@ pub enum Body {
         response: Vec<u8>,
     },
     HostStorageSyncRequest {
+        endpoint: HostStorageEndpoint,
         #[serde(flatten)]
         request: StorageSyncRequest,
     },

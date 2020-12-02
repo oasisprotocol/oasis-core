@@ -8,6 +8,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	"github.com/oasisprotocol/oasis-core/go/common/sgx/ias"
+	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
 	roothash "github.com/oasisprotocol/oasis-core/go/roothash/api"
 	"github.com/oasisprotocol/oasis-core/go/roothash/api/block"
 	"github.com/oasisprotocol/oasis-core/go/roothash/api/commitment"
@@ -119,6 +120,12 @@ type Error struct {
 type RuntimeInfoRequest struct {
 	// RuntimeID is the assigned runtime ID of the loaded runtime.
 	RuntimeID common.Namespace `json:"runtime_id"`
+
+	// ConsensusBackend is the name of the consensus backend that is in use for the consensus layer.
+	ConsensusBackend string `json:"consensus_backend"`
+	// ConsensusProtocolVersion is the consensus protocol version that is in use for the consensus
+	// layer.
+	ConsensusProtocolVersion uint64 `json:"consensus_protocol_version"`
 }
 
 // RuntimeInfoResponse is a worker info response message body.
@@ -174,6 +181,10 @@ type RuntimeLocalRPCCallResponse struct {
 
 // RuntimeCheckTxBatchRequest is a worker check tx batch request message body.
 type RuntimeCheckTxBatchRequest struct {
+	// ConsensusBlock is the consensus light block at the last finalized round
+	// height (e.g., corresponding to .Block.Header.Round).
+	ConsensusBlock consensus.LightBlock `json:"consensus_block"`
+
 	// Batch of runtime inputs to check.
 	Inputs transaction.RawBatch `json:"inputs"`
 	// Block on which the batch check should be based.
@@ -208,6 +219,10 @@ func (b *ComputedBatch) String() string {
 
 // RuntimeExecuteTxBatchRequest is a worker execute tx batch request message body.
 type RuntimeExecuteTxBatchRequest struct {
+	// ConsensusBlock is the consensus light block at the last finalized round
+	// height (e.g., corresponding to .Block.Header.Round).
+	ConsensusBlock consensus.LightBlock `json:"consensus_block"`
+
 	// MessageResults are the results of executing messages emitted by the
 	// runtime in the previous round.
 	MessageResults []*roothash.MessageEvent `json:"message_results,omitempty"`
@@ -243,8 +258,21 @@ type HostRPCCallResponse struct {
 	Response []byte `json:"response"`
 }
 
+// HostStorageEndpoint is the host storage endpoint.
+type HostStorageEndpoint uint8
+
+const (
+	// HostStorageEndpointRuntime is the runtime state storage endpoint.
+	HostStorageEndpointRuntime HostStorageEndpoint = 0
+	// HostStorageEndpointConsensus is the consensus layer state storage endpoint.
+	HostStorageEndpointConsensus HostStorageEndpoint = 1
+)
+
 // HostStorageSyncRequest is a host storage read syncer request message body.
 type HostStorageSyncRequest struct {
+	// Endpoint is the storage endpoint to which this request should be routed.
+	Endpoint HostStorageEndpoint `json:"endpoint,omitempty"`
+
 	SyncGet         *storage.GetRequest         `json:",omitempty"`
 	SyncGetPrefixes *storage.GetPrefixesRequest `json:",omitempty"`
 	SyncIterate     *storage.IterateRequest     `json:",omitempty"`

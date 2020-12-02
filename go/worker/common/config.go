@@ -1,6 +1,7 @@
 package common
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"time"
@@ -11,10 +12,12 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common"
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
 	"github.com/oasisprotocol/oasis-core/go/common/node"
+	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
 	ias "github.com/oasisprotocol/oasis-core/go/ias/api"
 	cmdFlags "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/flags"
 	runtimeHost "github.com/oasisprotocol/oasis-core/go/runtime/host"
 	hostMock "github.com/oasisprotocol/oasis-core/go/runtime/host/mock"
+	hostProtocol "github.com/oasisprotocol/oasis-core/go/runtime/host/protocol"
 	hostSandbox "github.com/oasisprotocol/oasis-core/go/runtime/host/sandbox"
 	hostSgx "github.com/oasisprotocol/oasis-core/go/runtime/host/sgx"
 	"github.com/oasisprotocol/oasis-core/go/worker/common/configparser"
@@ -117,7 +120,7 @@ func (c *Config) GetNodeAddresses() ([]node.Address, error) {
 }
 
 // NewConfig creates a new worker config.
-func NewConfig(ias ias.Endpoint) (*Config, error) {
+func NewConfig(consensus consensus.Backend, ias ias.Endpoint) (*Config, error) {
 	// Parse register address overrides.
 	clientAddresses, err := configparser.ParseAddressList(viper.GetStringSlice(cfgClientAddresses))
 	if err != nil {
@@ -145,6 +148,16 @@ func NewConfig(ias ias.Endpoint) (*Config, error) {
 	// Check if any runtimes are configured to be hosted.
 	if viper.IsSet(CfgRuntimePaths) {
 		var rh RuntimeHostConfig
+
+		// Configure host environment information.
+		cs, err := consensus.GetStatus(context.Background())
+		if err != nil {
+			return nil, fmt.Errorf("failed to get consensus layer status: %w", err)
+		}
+		hostInfo := &hostProtocol.HostInfo{
+			ConsensusBackend:         cs.Backend,
+			ConsensusProtocolVersion: cs.Version.ToU64(),
+		}
 
 		// Register provisioners based on the configured provisioner.
 		var insecureNoSandbox bool
@@ -175,6 +188,7 @@ func NewConfig(ias ias.Endpoint) (*Config, error) {
 			}
 			// Sandboxed provisioner, can be used with no TEE or with Intel SGX.
 			rh.Provisioners[node.TEEHardwareInvalid], err = hostSandbox.New(hostSandbox.Config{
+				HostInfo:          hostInfo,
 				InsecureNoSandbox: insecureNoSandbox,
 				SandboxBinaryPath: sandboxBinary,
 			})
@@ -183,6 +197,7 @@ func NewConfig(ias ias.Endpoint) (*Config, error) {
 			}
 
 			rh.Provisioners[node.TEEHardwareIntelSGX], err = hostSgx.New(hostSgx.Config{
+				HostInfo:          hostInfo,
 				LoaderPath:        viper.GetString(CfgRuntimeSGXLoader),
 				IAS:               ias,
 				SandboxBinaryPath: sandboxBinary,

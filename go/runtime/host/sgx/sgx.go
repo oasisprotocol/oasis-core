@@ -47,6 +47,9 @@ const (
 
 // Config contains SGX-specific provisioner configuration options.
 type Config struct {
+	// HostInfo provides information about the host environment.
+	HostInfo *protocol.HostInfo
+
 	// LoaderPath is the path to the runtime loader binary.
 	LoaderPath string
 
@@ -369,6 +372,7 @@ func New(cfg Config) (host.Provisioner, error) {
 	}
 	p, err := sandbox.New(sandbox.Config{
 		GetSandboxConfig:  s.getSandboxConfig,
+		HostInfo:          cfg.HostInfo,
 		HostInitializer:   s.hostInitializer,
 		InsecureNoSandbox: cfg.InsecureNoSandbox,
 		Logger:            s.logger,
