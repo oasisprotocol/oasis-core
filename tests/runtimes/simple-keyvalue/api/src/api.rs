@@ -35,9 +35,6 @@ runtime_api! {
     //  Gets runtime ID of the runtime.
     pub fn get_runtime_id(()) -> Option<String>;
 
-    // Emit a runtime message.
-    pub fn message(u64) -> ();
-
     // Withdraw from the consensus layer into the runtime account.
     pub fn consensus_withdraw(Withdraw) -> ();
 

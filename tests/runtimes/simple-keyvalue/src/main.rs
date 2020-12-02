@@ -70,29 +70,6 @@ fn get_runtime_id(_args: &(), ctx: &mut TxnContext) -> Result<Option<String>> {
     Ok(Some(rctx.test_runtime_id.to_string()))
 }
 
-/// Emit a message and schedule to check its result in the next round.
-fn message(_args: &u64, ctx: &mut TxnContext) -> Result<()> {
-    if ctx.check_only {
-        return Err(CheckOnlySuccess::default().into());
-    }
-
-    StorageContext::with_current(|mkvs, _untrusted_local| {
-        // Emit a message.
-        let index = ctx.emit_message(Message::Noop {});
-
-        let existing = mkvs.insert(
-            IoContext::create_child(&ctx.io_ctx),
-            &PendingMessagesKeyFormat { index }.encode(),
-            b"noop", // Value is ignored.
-        );
-        assert!(
-            existing.is_none(),
-            "all messages should have been processed"
-        );
-    });
-    Ok(())
-}
-
 /// Withdraw from the consensus layer into the runtime account.
 fn consensus_withdraw(args: &Withdraw, ctx: &mut TxnContext) -> Result<()> {
     if ctx.check_only {
@@ -370,14 +347,6 @@ impl BlockHandler {
 
             // Make sure metadata is as expected.
             match meta.as_ref().map(|v| v.as_slice()) {
-                Some(b"noop") => {
-                    // Make sure the message was successfully processed.
-                    assert!(
-                        ev.is_success(),
-                        "messages should have been successfully processed"
-                    );
-                }
-
                 Some(b"withdraw") => {
                     // Withdraw.
                 }

@@ -55,9 +55,6 @@ impl Default for HeaderType {
 /// A message that can be emitted by the runtime to be processed by the consensus layer.
 #[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum Message {
-    #[serde(rename = "noop")]
-    Noop {},
-
     #[serde(rename = "staking")]
     Staking {
         v: u16,
@@ -227,10 +224,6 @@ mod tests {
             (
                 vec![],
                 "c672b8d1ef56ed28ab87c3622c5114069bdd3ad7b8f9737498d0c01ecef0967a",
-            ),
-            (
-                vec![Message::Noop {}],
-                "c8b55f87109e30fe2ba57507ffc0e96e40df7c0d24dfef82a858632f5f8420f1",
             ),
             (
                 vec![Message::Staking {

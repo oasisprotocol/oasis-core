@@ -11,15 +11,12 @@ import (
 
 // Message is a message that can be sent by a runtime.
 type Message struct {
-	Noop    *NoopMessage    `json:"noop,omitempty"`
 	Staking *StakingMessage `json:"staking,omitempty"`
 }
 
 // ValidateBasic performs basic validation of the runtime message.
 func (m *Message) ValidateBasic() error {
 	switch {
-	case m.Noop != nil:
-		return m.Noop.ValidateBasic()
 	case m.Staking != nil:
 		return m.Staking.ValidateBasic()
 	default:
@@ -35,17 +32,6 @@ func MessagesHash(msgs []Message) (h hash.Hash) {
 		return
 	}
 	return hash.NewFrom(msgs)
-}
-
-// NoopMessage is a runtime message that doesn't result in any actions being performed and it always
-// returns success when delivered.
-type NoopMessage struct {
-	// Noop message has no fields.
-}
-
-// ValidateBasic performs basic validation of the runtime message.
-func (nm *NoopMessage) ValidateBasic() error {
-	return nil
 }
 
 // StakingMessage is a runtime message that allows a runtime to perform staking operations.

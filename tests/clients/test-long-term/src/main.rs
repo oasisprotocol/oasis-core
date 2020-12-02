@@ -88,7 +88,11 @@ fn main() {
         if mode != "part1-nomsg" {
             // Emit message so emitted messages will be pending before epoch transition.
             println!("Testing runtime message emission...");
-            rt.block_on(kv_client.message(rng.gen())).unwrap();
+            rt.block_on(kv_client.consensus_transfer(Transfer {
+                nonce: rng.gen(),
+                transfer: Default::default(),
+            }))
+            .unwrap();
         }
     }
 

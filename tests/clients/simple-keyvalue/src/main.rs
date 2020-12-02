@@ -117,7 +117,11 @@ fn main() {
     long_kv.nonce = Some(rng.gen());
 
     println!("Testing runtime message emission...");
-    rt.block_on(kv_client.message(rng.gen())).unwrap();
+    rt.block_on(kv_client.consensus_transfer(Transfer {
+        nonce: rng.gen(),
+        transfer: Default::default(),
+    }))
+    .unwrap();
 
     println!("Getting long key...");
     let r = rt.block_on(kv_client.get(long_k.clone())).unwrap();

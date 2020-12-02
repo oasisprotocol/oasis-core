@@ -37,8 +37,6 @@ func (app *rootHashApplication) processRuntimeMessages(
 
 		var err error
 		switch {
-		case msg.Noop != nil:
-			err = app.md.Publish(ctx, roothashApi.RuntimeMessageNoop, msg.Noop)
 		case msg.Staking != nil:
 			err = app.md.Publish(ctx, roothashApi.RuntimeMessageStaking, msg.Staking)
 		default:

@@ -49,9 +49,8 @@ const (
 	runtimeRequestInsert   runtimeRequest = 0
 	runtimeRequestGet      runtimeRequest = 1
 	runtimeRequestRemove   runtimeRequest = 2
-	runtimeRequestMessage  runtimeRequest = 3
-	runtimeRequestWithdraw runtimeRequest = 4
-	runtimeRequestTransfer runtimeRequest = 5
+	runtimeRequestWithdraw runtimeRequest = 3
+	runtimeRequestTransfer runtimeRequest = 4
 )
 
 // Weights to select between requests types.
@@ -59,7 +58,6 @@ var runtimeRequestWeights = map[runtimeRequest]int{
 	runtimeRequestInsert:   3,
 	runtimeRequestGet:      2,
 	runtimeRequestRemove:   3,
-	runtimeRequestMessage:  1,
 	runtimeRequestWithdraw: 1,
 	runtimeRequestTransfer: 1,
 }
@@ -295,28 +293,6 @@ func (r *runtime) doRemoveRequest(ctx context.Context, rng *rand.Rand, rtc runti
 	// Update local state.
 	delete(r.reckonedKeyValueState, key)
 
-	return nil
-}
-
-func (r *runtime) doMessageRequest(ctx context.Context, rng *rand.Rand, rtc runtimeClient.RuntimeClient) error {
-	// Submit message request.
-	req := &runtimeTransaction.TxnCall{
-		Method: "message",
-		Args:   rng.Uint64(),
-	}
-	rsp, err := r.submitRuntimeRquest(ctx, rtc, req)
-	if err != nil {
-		r.Logger.Error("Submit message request failure",
-			"request", req,
-			"err", err,
-		)
-		return fmt.Errorf("submit message request failed: %w", err)
-	}
-
-	r.Logger.Debug("message request success",
-		"request", req,
-		"response", rsp,
-	)
 	return nil
 }
 
@@ -563,10 +539,6 @@ func (r *runtime) Run(
 		case runtimeRequestRemove:
 			if err := r.doRemoveRequest(ctx, rng, rtc, rng.Float64() < runtimeRemoveExistingRatio); err != nil {
 				return fmt.Errorf("doRemoveRequest failure: %w", err)
-			}
-		case runtimeRequestMessage:
-			if err := r.doMessageRequest(ctx, rng, rtc); err != nil {
-				return fmt.Errorf("doMessageRequest failure: %w", err)
 			}
 		case runtimeRequestWithdraw:
 			if err := r.doWithdrawRequest(ctx, rng, rtc); err != nil {
