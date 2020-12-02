@@ -92,6 +92,10 @@ type ExecutorParameters struct {
 
 	// RoundTimeout is the round timeout in consensus blocks.
 	RoundTimeout int64 `json:"round_timeout"`
+
+	// MaxMessages is the maximum number of messages that can be emitted by the runtime in a
+	// single round.
+	MaxMessages uint32 `json:"max_messages"`
 }
 
 // ValidateBasic performs basic executor parameter validity checks.

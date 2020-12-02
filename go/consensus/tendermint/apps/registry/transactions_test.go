@@ -29,7 +29,8 @@ func TestRegisterNode(t *testing.T) {
 	ctx := appState.NewContext(abciAPI.ContextDeliverTx, now)
 	defer ctx.Close()
 
-	app := registryApplication{appState}
+	var md abciAPI.NoopMessageDispatcher
+	app := registryApplication{appState, &md}
 	state := registryState.NewMutableState(ctx.State())
 	stakeState := stakingState.NewMutableState(ctx.State())
 

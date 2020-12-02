@@ -974,8 +974,29 @@ func (n *Node) startProcessingBatchLocked(batch *unresolvedBatch) {
 	// Request the worker host to process a batch. This is done in a separate
 	// goroutine so that the committee node can continue processing blocks.
 	blk := n.commonNode.CurrentBlock
+	height := n.commonNode.CurrentBlockHeight
 	go func() {
 		defer close(done)
+
+		// Fetch message results emitted during the last normal round.
+		state, err := n.commonNode.Consensus.RootHash().GetRuntimeState(ctx, blk.Header.Namespace, height)
+		if err != nil {
+			n.logger.Error("failed to query runtime state",
+				"err", err,
+				"height", height,
+				"round", blk.Header.Round,
+			)
+			return
+		}
+		msgResults, err := n.commonNode.Runtime.History().GetMessageResults(ctx, state.LastNormalRound)
+		if err != nil {
+			n.logger.Error("failed to query message results",
+				"err", err,
+				"height", height,
+				"round", blk.Header.Round,
+			)
+			return
+		}
 
 		// Resolve the batch and dispatch it to the runtime.
 		readStartTime := time.Now()
@@ -989,9 +1010,10 @@ func (n *Node) startProcessingBatchLocked(batch *unresolvedBatch) {
 		}
 		rq := &protocol.Body{
 			RuntimeExecuteTxBatchRequest: &protocol.RuntimeExecuteTxBatchRequest{
-				IORoot: batch.ioRoot.Hash,
-				Inputs: resolvedBatch,
-				Block:  *blk,
+				MessageResults: msgResults,
+				IORoot:         batch.ioRoot.Hash,
+				Inputs:         resolvedBatch,
+				Block:          *blk,
 			},
 		}
 		batchReadTime.With(n.getMetricLabels()).Observe(time.Since(readStartTime).Seconds())
@@ -1093,6 +1115,10 @@ func (n *Node) proposeBatchLocked(processedBatch *processedBatch) {
 		TxnSchedSig:      state.batch.txnSchedSignature,
 		InputRoot:        state.batch.ioRoot.Hash,
 		InputStorageSigs: state.batch.storageSignatures,
+	}
+	// If we are the transaction scheduler also include all the emitted messages.
+	if epoch.IsTransactionScheduler(n.commonNode.CurrentBlock.Header.Round) {
+		proposedResults.Messages = batch.Messages
 	}
 
 	// Commit I/O and state write logs to storage.

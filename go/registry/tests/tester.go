@@ -759,6 +759,15 @@ func testRegistryRuntime(t *testing.T, backend api.Backend, consensus consensusA
 			false,
 			true,
 		},
+		// Runtime with too large MaxMessages parameter.
+		{
+			"TooBigMaxMessages",
+			func(rt *api.Runtime) {
+				rt.Executor.MaxMessages = 64 // MaxRuntimeMessages in these tests is 32.
+			},
+			false,
+			false,
+		},
 	}
 
 	rtMap := make(map[common.Namespace]*api.Runtime)
@@ -1612,6 +1621,7 @@ func NewTestRuntime(seed []byte, ent *TestEntity, isKeyManager bool) (*TestRunti
 			GroupBackupSize:   5,
 			AllowedStragglers: 1,
 			RoundTimeout:      10,
+			MaxMessages:       32,
 		},
 		TxnScheduler: api.TxnSchedulerParameters{
 			Algorithm:         api.TxnSchedulerSimple,

@@ -26,11 +26,6 @@ const (
 	// CfgRuntimeID is the runtime workload runtime ID.
 	CfgRuntimeID = "runtime.runtime_id"
 
-	// Weights to select between requests types.
-	runtimeDoInsertRequestWeight     = 2
-	runtimeDoGetRequestTypeWeight    = 1
-	runtimeDoRemoveRequestTypeWeight = 2
-
 	// Ratio of insert requests that should be an upsert.
 	runtimeInsertExistingRatio = 0.3
 	// Ratio of get requests that should get an existing key.
@@ -40,6 +35,24 @@ const (
 
 	runtimeRequestTimeout = 120 * time.Second
 )
+
+// Possible request types.
+type runtimeRequest uint8
+
+const (
+	runtimeRequestInsert  runtimeRequest = 0
+	runtimeRequestGet     runtimeRequest = 1
+	runtimeRequestRemove  runtimeRequest = 2
+	runtimeRequestMessage runtimeRequest = 3
+)
+
+// Weights to select between requests types.
+var runtimeRequestWeights = map[runtimeRequest]int{
+	runtimeRequestInsert:  2,
+	runtimeRequestGet:     1,
+	runtimeRequestRemove:  2,
+	runtimeRequestMessage: 1,
+}
 
 // RuntimeFlags are the runtime workload flags.
 var RuntimeFlags = flag.NewFlagSet("", flag.ContinueOnError)
@@ -271,6 +284,28 @@ func (r *runtime) doRemoveRequest(ctx context.Context, rng *rand.Rand, rtc runti
 	return nil
 }
 
+func (r *runtime) doMessageRequest(ctx context.Context, rng *rand.Rand, rtc runtimeClient.RuntimeClient) error {
+	// Submit request.
+	req := &runtimeTransaction.TxnCall{
+		Method: "message",
+		Args:   rng.Uint64(),
+	}
+	rsp, err := r.submitRuntimeRquest(ctx, rtc, req)
+	if err != nil {
+		r.logger.Error("Submit message request failure",
+			"request", req,
+			"err", err,
+		)
+		return fmt.Errorf("submit message request failed: %w", err)
+	}
+
+	r.logger.Debug("message request success",
+		"request", req,
+		"response", rsp,
+	)
+	return nil
+}
+
 // Implements Workload.
 func (r *runtime) NeedsFunds() bool {
 	return false
@@ -307,20 +342,41 @@ func (r *runtime) Run(
 		return fmt.Errorf("failed waiting for 2nd epoch: %w", err)
 	}
 
+	var totalWeight int
+	for _, w := range runtimeRequestWeights {
+		totalWeight = totalWeight + w
+	}
+
 	for {
-		p := rng.Intn(runtimeDoInsertRequestWeight + runtimeDoGetRequestTypeWeight + runtimeDoRemoveRequestTypeWeight)
-		switch {
-		case p < runtimeDoInsertRequestWeight:
+		// Determine which request to perform based on the configured weight table.
+		p := rng.Intn(totalWeight)
+		var (
+			cw      int
+			request runtimeRequest
+		)
+		for r, w := range runtimeRequestWeights {
+			if cw = cw + w; p < cw {
+				request = r
+				break
+			}
+		}
+
+		switch request {
+		case runtimeRequestInsert:
 			if err := r.doInsertRequest(ctx, rng, rtc, rng.Float64() < runtimeInsertExistingRatio); err != nil {
 				return fmt.Errorf("doInsertRequest failure: %w", err)
 			}
-		case p < runtimeDoInsertRequestWeight+runtimeDoGetRequestTypeWeight:
+		case runtimeRequestGet:
 			if err := r.doGetRequest(ctx, rng, rtc, rng.Float64() < runtimeGetExistingRatio); err != nil {
 				return fmt.Errorf("doGetRequest failure: %w", err)
 			}
-		case p < runtimeDoInsertRequestWeight+runtimeDoGetRequestTypeWeight+runtimeDoRemoveRequestTypeWeight:
+		case runtimeRequestRemove:
 			if err := r.doRemoveRequest(ctx, rng, rtc, rng.Float64() < runtimeRemoveExistingRatio); err != nil {
 				return fmt.Errorf("doRemoveRequest failure: %w", err)
+			}
+		case runtimeRequestMessage:
+			if err := r.doMessageRequest(ctx, rng, rtc); err != nil {
+				return fmt.Errorf("doMessageRequest failure: %w", err)
 			}
 		default:
 			return fmt.Errorf("unimplemented")

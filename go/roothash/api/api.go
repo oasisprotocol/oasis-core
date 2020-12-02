@@ -9,10 +9,11 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
 	"github.com/oasisprotocol/oasis-core/go/common/errors"
+	"github.com/oasisprotocol/oasis-core/go/common/logging"
 	"github.com/oasisprotocol/oasis-core/go/common/pubsub"
 	"github.com/oasisprotocol/oasis-core/go/consensus/api/transaction"
 	"github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/flags"
-	"github.com/oasisprotocol/oasis-core/go/registry/api"
+	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
 	"github.com/oasisprotocol/oasis-core/go/roothash/api/block"
 	"github.com/oasisprotocol/oasis-core/go/roothash/api/commitment"
 )
@@ -54,6 +55,10 @@ var (
 	// ErrProposerTimeoutNotAllowed is the error returned when proposer timeout is not allowed.
 	ErrProposerTimeoutNotAllowed = errors.New(ModuleName, 6, "roothash: proposer timeout not allowed")
 
+	// ErrMaxMessagesTooBig is the error returned when the MaxMessages parameter is set to a value
+	// larger than the MaxRuntimeMessages specified in consensus parameters.
+	ErrMaxMessagesTooBig = errors.New(ModuleName, 7, "roothash: max runtime messages is too big")
+
 	// MethodExecutorCommit is the method name for executor commit submission.
 	MethodExecutorCommit = transaction.NewMethodName(ModuleName, "ExecutorCommit", ExecutorCommit{})
 
@@ -77,6 +82,9 @@ type Backend interface {
 	// The metadata contained in this block can be further used to get
 	// the latest state from the storage backend.
 	GetLatestBlock(ctx context.Context, runtimeID common.Namespace, height int64) (*block.Block, error)
+
+	// GetRuntimeState returns the given runtime's state.
+	GetRuntimeState(ctx context.Context, runtimeID common.Namespace, height int64) (*RuntimeState, error)
 
 	// WatchBlocks returns a channel that produces a stream of
 	// annotated blocks.
@@ -130,6 +138,25 @@ func NewRequestProposerTimeoutTx(nonce uint64, fee *transaction.Fee, runtimeID c
 	})
 }
 
+// RuntimeState is the per-runtime state.
+type RuntimeState struct {
+	Runtime   *registry.Runtime `json:"runtime"`
+	Suspended bool              `json:"suspended,omitempty"`
+
+	GenesisBlock *block.Block `json:"genesis_block"`
+
+	CurrentBlock       *block.Block `json:"current_block"`
+	CurrentBlockHeight int64        `json:"current_block_height"`
+
+	// LastNormalRound is the runtime round which was normally processed by the runtime. This is
+	// also the round that contains the message results for the last processed runtime messages.
+	LastNormalRound uint64 `json:"last_normal_round"`
+	// LastNormalHeight is the consensus block height corresponding to LastNormalRound.
+	LastNormalHeight int64 `json:"last_normal_height"`
+
+	ExecutorPool *commitment.Pool `json:"executor_pool"`
+}
+
 // AnnotatedBlock is an annotated roothash block.
 type AnnotatedBlock struct {
 	// Height is the underlying roothash backend's block height that
@@ -157,6 +184,18 @@ type FinalizedEvent struct {
 	Round uint64 `json:"round"`
 }
 
+// MessageEvent is a runtime message processed event.
+type MessageEvent struct {
+	Module string `json:"module,omitempty"`
+	Code   uint32 `json:"code,omitempty"`
+	Index  uint32 `json:"index,omitempty"`
+}
+
+// IsSuccess returns true if the event indicates that the message was successfully processed.
+func (me *MessageEvent) IsSuccess() bool {
+	return me.Code == errors.CodeNoError
+}
+
 // Event is a roothash event.
 type Event struct {
 	Height int64     `json:"height,omitempty"`
@@ -166,7 +205,8 @@ type Event struct {
 
 	ExecutorCommitted            *ExecutorCommittedEvent            `json:"executor_committed,omitempty"`
 	ExecutionDiscrepancyDetected *ExecutionDiscrepancyDetectedEvent `json:"execution_discrepancy,omitempty"`
-	FinalizedEvent               *FinalizedEvent                    `json:"finalized,omitempty"`
+	Finalized                    *FinalizedEvent                    `json:"finalized,omitempty"`
+	Message                      *MessageEvent                      `json:"message,omitempty"`
 }
 
 // MetricsMonitorable is the interface exposed by backends capable of
@@ -179,13 +219,21 @@ type MetricsMonitorable interface {
 	WatchAllBlocks() (<-chan *block.Block, *pubsub.Subscription)
 }
 
+// GenesisRuntimeState contains state for runtimes that are restored in a genesis block.
+type GenesisRuntimeState struct {
+	registry.RuntimeGenesis
+
+	// MessageResults are the message results emitted at the last processed round.
+	MessageResults []*MessageEvent `json:"message_results,omitempty"`
+}
+
 // Genesis is the roothash genesis state.
 type Genesis struct {
 	// Parameters are the roothash consensus parameters.
 	Parameters ConsensusParameters `json:"params"`
 
-	// RuntimeStates is the per-runtime map of genesis blocks.
-	RuntimeStates map[common.Namespace]*api.RuntimeGenesis `json:"runtime_states,omitempty"`
+	// RuntimeStates are the runtime states at genesis.
+	RuntimeStates map[common.Namespace]*GenesisRuntimeState `json:"runtime_states,omitempty"`
 }
 
 // ConsensusParameters are the roothash consensus parameters.
@@ -200,6 +248,10 @@ type ConsensusParameters struct {
 	// DebugBypassStake is true iff the roothash should bypass all of the staking
 	// related checks and operations.
 	DebugBypassStake bool `json:"debug_bypass_stake,omitempty"`
+
+	// MaxRuntimeMessages is the maximum number of allowed messages that can be emitted by a runtime
+	// in a single round.
+	MaxRuntimeMessages uint32 `json:"max_runtime_messages"`
 }
 
 const (
@@ -242,6 +294,15 @@ func (g *Genesis) SanityCheck() error {
 		if err := rtg.SanityCheck(true); err != nil {
 			return err
 		}
+	}
+	return nil
+}
+
+// VerifyRuntimeParameters verifies whether the runtime parameters are valid in the context of the
+// roothash service.
+func VerifyRuntimeParameters(logger *logging.Logger, rt *registry.Runtime, params *ConsensusParameters) error {
+	if rt.Executor.MaxMessages > params.MaxRuntimeMessages {
+		return ErrMaxMessagesTooBig
 	}
 	return nil
 }

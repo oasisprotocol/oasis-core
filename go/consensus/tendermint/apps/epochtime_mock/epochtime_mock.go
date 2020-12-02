@@ -39,7 +39,7 @@ func (app *epochTimeMockApplication) Dependencies() []string {
 	return nil
 }
 
-func (app *epochTimeMockApplication) OnRegister(state api.ApplicationState) {
+func (app *epochTimeMockApplication) OnRegister(state api.ApplicationState, md api.MessageDispatcher) {
 	app.state = state
 }
 
@@ -87,6 +87,10 @@ func (app *epochTimeMockApplication) BeginBlock(ctx *api.Context, request types.
 	return nil
 }
 
+func (app *epochTimeMockApplication) ExecuteMessage(ctx *api.Context, kind, msg interface{}) error {
+	return fmt.Errorf("epochtime_mock: unexpected message")
+}
+
 func (app *epochTimeMockApplication) ExecuteTx(ctx *api.Context, tx *transaction.Transaction) error {
 	state := newMutableState(ctx.State())
 
@@ -101,10 +105,6 @@ func (app *epochTimeMockApplication) ExecuteTx(ctx *api.Context, tx *transaction
 	default:
 		return fmt.Errorf("epochtime_mock: invalid method: %s", tx.Method)
 	}
-}
-
-func (app *epochTimeMockApplication) ForeignExecuteTx(ctx *api.Context, other api.Application, tx *transaction.Transaction) error {
-	return nil
 }
 
 func (app *epochTimeMockApplication) EndBlock(ctx *api.Context, request types.RequestEndBlock) (types.ResponseEndBlock, error) {

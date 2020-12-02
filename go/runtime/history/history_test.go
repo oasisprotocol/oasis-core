@@ -60,22 +60,27 @@ func TestHistory(t *testing.T) {
 	}
 	blk.Block.Header.Round = 10
 
-	err = history.Commit(&blk)
+	msgResults := []*roothash.MessageEvent{
+		{Module: "", Code: 0, Index: 0},
+		{Module: "", Code: 0, Index: 1},
+	}
+
+	err = history.Commit(&blk, msgResults)
 	require.Error(err, "Commit should fail for lower consensus height")
 
 	blk.Height = 50
 	copy(blk.Block.Header.Namespace[:], runtimeID2[:])
-	err = history.Commit(&blk)
+	err = history.Commit(&blk, msgResults)
 	require.Error(err, "Commit should fail for different runtime")
 
 	copy(blk.Block.Header.Namespace[:], runtimeID[:])
-	err = history.Commit(&blk)
+	err = history.Commit(&blk, msgResults)
 	require.NoError(err, "Commit")
 	putBlk := *blk.Block
-	err = history.Commit(&blk)
+	err = history.Commit(&blk, msgResults)
 	require.Error(err, "Commit should fail for the same round")
 	blk.Block.Header.Round = 5
-	err = history.Commit(&blk)
+	err = history.Commit(&blk, msgResults)
 	require.Error(err, "Commit should fail for a lower round")
 
 	lastHeight, err = history.LastConsensusHeight()
@@ -89,6 +94,10 @@ func TestHistory(t *testing.T) {
 	gotLatestBlk, err := history.GetLatestBlock(context.Background())
 	require.NoError(err, "GetLatestBlock")
 	require.Equal(&putBlk, gotLatestBlk, "GetLatestBlock should return the correct block")
+
+	gotResults, err := history.GetMessageResults(context.Background(), 10)
+	require.NoError(err, "GetMessageResults")
+	require.Equal(msgResults, gotResults, "GetMessageResults should return the correct results")
 
 	// Close history and try to reopen and continue.
 	history.Close()
@@ -114,6 +123,10 @@ func TestHistory(t *testing.T) {
 	gotLatestBlk, err = history.GetLatestBlock(context.Background())
 	require.NoError(err, "GetLatestBlock")
 	require.Equal(&putBlk, gotLatestBlk, "GetLatestBlock should return the correct block")
+
+	gotResults, err = history.GetMessageResults(context.Background(), 10)
+	require.NoError(err, "GetMessageResults")
+	require.Equal(msgResults, gotResults, "GetMessageResults should return the correct results")
 }
 
 type testPruneHandler struct {
@@ -172,7 +185,15 @@ func TestHistoryPrune(t *testing.T) {
 		}
 		blk.Block.Header.Round = uint64(i)
 
-		err = history.Commit(&blk)
+		var msgResults []*roothash.MessageEvent
+		if i%5 == 0 {
+			msgResults = []*roothash.MessageEvent{
+				{Module: "", Code: 0, Index: 0},
+				{Module: "", Code: 0, Index: 1},
+			}
+		}
+
+		err = history.Commit(&blk, msgResults)
 		require.NoError(err, "Commit")
 	}
 
@@ -209,6 +230,14 @@ func TestHistoryPrune(t *testing.T) {
 			require.Equal(roothash.ErrNotFound, err)
 		} else {
 			require.NoError(err, "GetBlock(%d)", i)
+		}
+
+		msgResults, err := history.GetMessageResults(context.Background(), uint64(i))
+		require.NoError(err, "GetMessageResults(%d)", i)
+		if i <= 40 {
+			require.Empty(msgResults, "GetMessageResults should return no entries for pruned block %d", i)
+		} else if i%5 == 0 {
+			require.NotEmpty(msgResults, "GetMessageResults should return correct results for block %d", i)
 		}
 	}
 
@@ -254,7 +283,7 @@ func TestHistoryPruneError(t *testing.T) {
 		}
 		blk.Block.Header.Round = uint64(i)
 
-		err = history.Commit(&blk)
+		err = history.Commit(&blk, nil)
 		require.NoError(err, "Commit")
 	}
 

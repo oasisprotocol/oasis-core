@@ -42,7 +42,7 @@ func (app *stakingApplication) Dependencies() []string {
 	return nil
 }
 
-func (app *stakingApplication) OnRegister(state api.ApplicationState) {
+func (app *stakingApplication) OnRegister(state api.ApplicationState, md api.MessageDispatcher) {
 	app.state = state
 }
 
@@ -96,6 +96,10 @@ func (app *stakingApplication) BeginBlock(ctx *api.Context, request types.Reques
 	}
 
 	return nil
+}
+
+func (app *stakingApplication) ExecuteMessage(ctx *api.Context, kind, msg interface{}) error {
+	return staking.ErrInvalidArgument
 }
 
 func (app *stakingApplication) ExecuteTx(ctx *api.Context, tx *transaction.Transaction) error {
@@ -154,10 +158,6 @@ func (app *stakingApplication) ExecuteTx(ctx *api.Context, tx *transaction.Trans
 	default:
 		return staking.ErrInvalidArgument
 	}
-}
-
-func (app *stakingApplication) ForeignExecuteTx(ctx *api.Context, other api.Application, tx *transaction.Transaction) error {
-	return nil
 }
 
 func (app *stakingApplication) EndBlock(ctx *api.Context, request types.RequestEndBlock) (types.ResponseEndBlock, error) {

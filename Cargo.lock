@@ -1858,6 +1858,7 @@ name = "simple-keyvalue"
 version = "0.3.0-alpha"
 dependencies = [
  "anyhow",
+ "byteorder",
  "io-context",
  "oasis-core-client",
  "oasis-core-keymanager-api-common",

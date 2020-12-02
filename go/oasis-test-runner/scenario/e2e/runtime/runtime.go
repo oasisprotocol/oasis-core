@@ -165,6 +165,7 @@ func (sc *runtimeImpl) Fixture() (*oasis.NetworkFixture, error) {
 					GroupSize:       2,
 					GroupBackupSize: 1,
 					RoundTimeout:    20,
+					MaxMessages:     128,
 				},
 				TxnScheduler: registry.TxnSchedulerParameters{
 					Algorithm:         registry.TxnSchedulerSimple,

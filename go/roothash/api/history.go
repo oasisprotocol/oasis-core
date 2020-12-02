@@ -17,7 +17,7 @@ type BlockHistory interface {
 	// Commit commits an annotated block into history.
 	//
 	// Must be called in order, sorted by round.
-	Commit(blk *AnnotatedBlock) error
+	Commit(blk *AnnotatedBlock, msgResults []*MessageEvent) error
 
 	// ConsensusCheckpoint records the last consensus height which was processed
 	// by the roothash backend.
@@ -35,4 +35,7 @@ type BlockHistory interface {
 
 	// GetLatestBlock returns the block at latest round.
 	GetLatestBlock(ctx context.Context) (*block.Block, error)
+
+	// GetMessageResults returns the message results for the given round.
+	GetMessageResults(ctx context.Context, round uint64) ([]*MessageEvent, error)
 }

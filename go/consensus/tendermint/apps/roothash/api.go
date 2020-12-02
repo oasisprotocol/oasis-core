@@ -47,6 +47,9 @@ var (
 	// KeyFinalized is an ABCI event attribute key for finalized blocks
 	// (value is a CBOR serialized ValueFinalized).
 	KeyFinalized = []byte("finalized")
+	// KeyMessage is an ABCI event attribute key for message result events
+	// (value is a CBOR serialized ValueMessage).
+	KeyMessage = []byte("message")
 )
 
 // QueryForRuntime returns a query for filtering transactions processed by the roothash application
@@ -78,4 +81,10 @@ type ValueFinalized struct {
 type ValueExecutionDiscrepancyDetected struct {
 	ID    common.Namespace                           `json:"id"`
 	Event roothash.ExecutionDiscrepancyDetectedEvent `json:"event"`
+}
+
+// ValueMessage is the value component of a KeyMessage.
+type ValueMessage struct {
+	ID    common.Namespace      `json:"id"`
+	Event roothash.MessageEvent `json:"event"`
 }

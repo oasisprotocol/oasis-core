@@ -71,8 +71,8 @@ type Header struct { // nolint: maligned
 	// StateRoot is the state merkle root.
 	StateRoot hash.Hash `json:"state_root"`
 
-	// Messages are the roothash messages sent in this round.
-	Messages []*Message `json:"messages"`
+	// MessagesHash is the hash of emitted runtime messages.
+	MessagesHash hash.Hash `json:"messages_hash"`
 
 	// StorageSignatures are the storage receipt signatures for the merkle
 	// roots.

@@ -51,9 +51,41 @@ impl Default for HeaderType {
     }
 }
 
-/// Roothash message.
+/// A message that can be emitted by the runtime to be processed by the consensus layer.
 #[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
-pub enum Message {}
+pub enum Message {
+    #[serde(rename = "noop")]
+    Noop {},
+}
+
+impl Message {
+    /// Returns a hash of provided runtime messages.
+    pub fn messages_hash(msgs: &[Message]) -> Hash {
+        if msgs.is_empty() {
+            // Special case if there are no messages.
+            return Hash::empty_hash();
+        }
+        Hash::digest_bytes(&cbor::to_vec(&msgs))
+    }
+}
+
+/// Result of a message being processed by the consensus layer.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct MessageEvent {
+    #[serde(default)]
+    pub module: String,
+    #[serde(default)]
+    pub code: u32,
+    #[serde(default)]
+    pub index: u32,
+}
+
+impl MessageEvent {
+    /// Returns true if the event indicates that the message was successfully processed.
+    pub fn is_success(&self) -> bool {
+        return self.code == 0;
+    }
+}
 
 /// Block header.
 #[derive(Clone, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -74,8 +106,8 @@ pub struct Header {
     pub io_root: Hash,
     /// State merkle root.
     pub state_root: Hash,
-    /// Messages sent this round.
-    pub messages: Option<Vec<Message>>,
+    /// Messages hash.
+    pub messages_hash: Hash,
     /// Storage receipt signatures.
     pub storage_signatures: Option<Vec<SignatureBundle>>,
 }
@@ -107,9 +139,9 @@ pub struct ComputeResultsHeader {
     /// The root hash of the state after computing this batch.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub state_root: Option<Hash>,
-    /// Messages sent from this batch.
-    #[serde(skip_serializing_if = "Vec::is_empty")]
-    pub messages: Vec<Message>,
+    /// Hash of messages sent from this batch.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub messages_hash: Option<Hash>,
 }
 
 impl ComputeResultsHeader {
@@ -129,7 +161,7 @@ mod tests {
         let empty = Header::default();
         assert_eq!(
             empty.encoded_hash(),
-            Hash::from("727b8c92cd436abc597df9ccbe3a02eeba8d7409cc68fcdf0ce3b577450631ac")
+            Hash::from("f7f340550630426b4962c3054cb7f21cf3662bd916642daff4efc9a00b4aab3f")
         );
 
         let populated = Header {
@@ -141,11 +173,12 @@ mod tests {
             previous_hash: empty.encoded_hash(),
             io_root: Hash::empty_hash(),
             state_root: Hash::empty_hash(),
+            messages_hash: Hash::empty_hash(),
             ..Default::default()
         };
         assert_eq!(
             populated.encoded_hash(),
-            Hash::from("c39e8aefea5a1f794fb57f294a4ea8599381cd8739e67a8a9acb7763b54a630a")
+            Hash::from("e5f8d6958fdedf15e705cb8fc8e2515d870c79d80dd2fa17f35c9e307ca4215a")
         );
     }
 
@@ -163,11 +196,29 @@ mod tests {
             previous_hash: empty.encoded_hash(),
             io_root: Some(Hash::empty_hash()),
             state_root: Some(Hash::empty_hash()),
-            messages: Vec::new(),
+            messages_hash: Some(Hash::empty_hash()),
         };
         assert_eq!(
             populated.encoded_hash(),
-            Hash::from("374021bcba44f1014d0d9919e876a1ecd7fe5ec1a92ecf9c8b313cd4976fbc01")
+            Hash::from("430ff02fafc53fc0e5eb432ad3e8b09167842a3948e09a7ee4bdd88e83e01d5a")
         );
+    }
+
+    #[test]
+    fn test_consistent_messages_hash() {
+        // NOTE: These hashes MUST be synced with go/roothash/api/block/messages_test.go.
+        let tcs = vec![
+            (
+                vec![],
+                "c672b8d1ef56ed28ab87c3622c5114069bdd3ad7b8f9737498d0c01ecef0967a",
+            ),
+            (
+                vec![Message::Noop {}],
+                "c8b55f87109e30fe2ba57507ffc0e96e40df7c0d24dfef82a858632f5f8420f1",
+            ),
+        ];
+        for (msgs, expected_hash) in tcs {
+            assert_eq!(Message::messages_hash(&msgs), Hash::from(expected_hash));
+        }
     }
 }

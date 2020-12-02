@@ -8,7 +8,8 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	"github.com/oasisprotocol/oasis-core/go/common/sgx/ias"
-	roothash "github.com/oasisprotocol/oasis-core/go/roothash/api/block"
+	roothash "github.com/oasisprotocol/oasis-core/go/roothash/api"
+	"github.com/oasisprotocol/oasis-core/go/roothash/api/block"
 	"github.com/oasisprotocol/oasis-core/go/roothash/api/commitment"
 	"github.com/oasisprotocol/oasis-core/go/runtime/transaction"
 	storage "github.com/oasisprotocol/oasis-core/go/storage/api"
@@ -175,7 +176,7 @@ type RuntimeCheckTxBatchRequest struct {
 	// Batch of runtime inputs to check.
 	Inputs transaction.RawBatch `json:"inputs"`
 	// Block on which the batch check should be based.
-	Block roothash.Block `json:"block"`
+	Block block.Block `json:"block"`
 }
 
 // RuntimeCheckTxBatchResponse is a worker check tx batch response message body.
@@ -195,6 +196,8 @@ type ComputedBatch struct {
 	// If this runtime uses a TEE, then this is the signature of Header with
 	// node's RAK for this runtime.
 	RakSig signature.RawSignature `json:"rak_sig"`
+	// Messages are the emitted runtime messages.
+	Messages []block.Message `json:"messages"`
 }
 
 // String returns a string representation of a computed batch.
@@ -204,13 +207,17 @@ func (b *ComputedBatch) String() string {
 
 // RuntimeExecuteTxBatchRequest is a worker execute tx batch request message body.
 type RuntimeExecuteTxBatchRequest struct {
+	// MessageResults are the results of executing messages emitted by the
+	// runtime in the previous round.
+	MessageResults []*roothash.MessageEvent `json:"message_results,omitempty"`
+
 	// IORoot is the I/O root containing the inputs (transactions) that
 	// the compute node should use. It must match what is passed in "inputs".
 	IORoot hash.Hash `json:"io_root"`
 	// Batch of inputs (transactions).
 	Inputs transaction.RawBatch `json:"inputs"`
 	// Block on which the batch computation should be based.
-	Block roothash.Block `json:"block"`
+	Block block.Block `json:"block"`
 }
 
 // RuntimeExecuteTxBatchResponse is a worker execute tx batch response message body.

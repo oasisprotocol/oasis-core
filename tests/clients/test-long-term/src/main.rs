@@ -32,7 +32,7 @@ fn main() {
                 .long("mode")
                 .help("client operation mode")
                 .takes_value(true)
-                .possible_values(&["sleep", "part1", "part2"])
+                .possible_values(&["sleep", "part1", "part1-nomsg", "part2"])
                 .default_value("sleep"),
         )
         .arg(
@@ -73,7 +73,7 @@ fn main() {
         nonce: rng.gen(),
     };
 
-    if mode == "sleep" || mode == "part1" {
+    if mode == "sleep" || mode == "part1" || mode == "part1-nomsg" {
         println!("Inserting key/value pair");
         let r = rt.block_on(kv_client.insert(kv.clone())).unwrap();
         assert_eq!(r, None); // key should not exist in db before
@@ -84,6 +84,12 @@ fn main() {
         let r = rt.block_on(kv_client.get(key.clone())).unwrap();
         assert_eq!(r.unwrap(), kv.value); // key should exist in db
         key.nonce = rng.gen();
+
+        if mode != "part1-nomsg" {
+            // Emit message so emitted messages will be pending before epoch transition.
+            println!("Testing runtime message emission...");
+            rt.block_on(kv_client.message(rng.gen())).unwrap();
+        }
     }
 
     if mode == "sleep" {

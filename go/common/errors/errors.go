@@ -80,7 +80,14 @@ func FromCode(module string, code uint32) error {
 //
 // In case the error is not of the correct type, default values
 // for an unknown error are returned.
+//
+// In case the error is nil, an empty module name and CodeNoError
+// are returned.
 func Code(err error) (string, uint32) {
+	if err == nil {
+		return "", CodeNoError
+	}
+
 	var ce *codedError
 	if !As(err, &ce) {
 		ce = errUnknownError.(*codedError)

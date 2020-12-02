@@ -8,17 +8,14 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/cbor"
 	"github.com/oasisprotocol/oasis-core/go/common/keyformat"
 	"github.com/oasisprotocol/oasis-core/go/consensus/tendermint/api"
-	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
 	roothash "github.com/oasisprotocol/oasis-core/go/roothash/api"
-	"github.com/oasisprotocol/oasis-core/go/roothash/api/block"
-	"github.com/oasisprotocol/oasis-core/go/roothash/api/commitment"
 	"github.com/oasisprotocol/oasis-core/go/storage/mkvs"
 )
 
 var (
 	// runtimeKeyFmt is the key format used for per-runtime roothash state.
 	//
-	// Value is CBOR-serialized runtime state.
+	// Value is CBOR-serialized roothash.RuntimeState.
 	runtimeKeyFmt = keyformat.New(0x20, keyformat.H(&common.Namespace{}))
 	// parametersKeyFmt is the key format used for consensus parameters.
 	//
@@ -29,19 +26,6 @@ var (
 	// The format is (height, runtimeID). Value is runtimeID.
 	roundTimeoutQueueKeyFmt = keyformat.New(0x22, int64(0), keyformat.H(&common.Namespace{}))
 )
-
-// RuntimeState is the per-runtime roothash state.
-type RuntimeState struct {
-	Runtime   *registry.Runtime `json:"runtime"`
-	Suspended bool              `json:"suspended,omitempty"`
-
-	GenesisBlock *block.Block `json:"genesis_block"`
-
-	CurrentBlock       *block.Block `json:"current_block"`
-	CurrentBlockHeight int64        `json:"current_block_height"`
-
-	ExecutorPool *commitment.Pool `json:"executor_pool"`
-}
 
 // ImmutableState is the immutable roothash state wrapper.
 type ImmutableState struct {
@@ -103,7 +87,7 @@ func (s *ImmutableState) RuntimesWithRoundTimeoutsAny(ctx context.Context) ([]co
 }
 
 // RuntimeState returns the roothash runtime state for a specific runtime.
-func (s *ImmutableState) RuntimeState(ctx context.Context, id common.Namespace) (*RuntimeState, error) {
+func (s *ImmutableState) RuntimeState(ctx context.Context, id common.Namespace) (*roothash.RuntimeState, error) {
 	raw, err := s.is.Get(ctx, runtimeKeyFmt.Encode(&id))
 	if err != nil {
 		return nil, api.UnavailableStateError(err)
@@ -112,7 +96,7 @@ func (s *ImmutableState) RuntimeState(ctx context.Context, id common.Namespace) 
 		return nil, roothash.ErrInvalidRuntime
 	}
 
-	var state RuntimeState
+	var state roothash.RuntimeState
 	if err = cbor.Unmarshal(raw, &state); err != nil {
 		return nil, api.UnavailableStateError(err)
 	}
@@ -120,17 +104,17 @@ func (s *ImmutableState) RuntimeState(ctx context.Context, id common.Namespace) 
 }
 
 // Runtimes returns the list of all roothash runtime states.
-func (s *ImmutableState) Runtimes(ctx context.Context) ([]*RuntimeState, error) {
+func (s *ImmutableState) Runtimes(ctx context.Context) ([]*roothash.RuntimeState, error) {
 	it := s.is.NewIterator(ctx)
 	defer it.Close()
 
-	var runtimes []*RuntimeState
+	var runtimes []*roothash.RuntimeState
 	for it.Seek(runtimeKeyFmt.Encode()); it.Valid(); it.Next() {
 		if !runtimeKeyFmt.Decode(it.Key()) {
 			break
 		}
 
-		var state RuntimeState
+		var state roothash.RuntimeState
 		if err := cbor.Unmarshal(it.Value(), &state); err != nil {
 			return nil, api.UnavailableStateError(err)
 		}
@@ -177,7 +161,7 @@ func NewMutableState(tree mkvs.KeyValueTree) *MutableState {
 }
 
 // SetRuntimeState sets a runtime's roothash state.
-func (s *MutableState) SetRuntimeState(ctx context.Context, state *RuntimeState) error {
+func (s *MutableState) SetRuntimeState(ctx context.Context, state *roothash.RuntimeState) error {
 	err := s.ms.Insert(ctx, runtimeKeyFmt.Encode(&state.Runtime.ID), cbor.Marshal(state))
 	return api.UnavailableStateError(err)
 }

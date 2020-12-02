@@ -22,7 +22,7 @@ use crate::{
             signature::{Signature, Signer},
         },
         logger::get_logger,
-        roothash::{Block, ComputeResultsHeader, COMPUTE_RESULTS_HEADER_CONTEXT},
+        roothash::{self, Block, ComputeResultsHeader, COMPUTE_RESULTS_HEADER_CONTEXT},
     },
     enclave_rpc::{
         demux::Demux as RpcDemux,
@@ -227,6 +227,7 @@ impl Dispatcher {
                     ctx,
                     id,
                     Body::RuntimeExecuteTxBatchRequest {
+                        message_results,
                         io_root,
                         inputs,
                         block,
@@ -242,6 +243,7 @@ impl Dispatcher {
                         io_root,
                         inputs,
                         block,
+                        message_results,
                         false,
                     );
                 }
@@ -256,6 +258,7 @@ impl Dispatcher {
                         Hash::default(),
                         inputs,
                         block,
+                        vec![],
                         true,
                     );
                 }
@@ -300,11 +303,13 @@ impl Dispatcher {
         io_root: Hash,
         mut inputs: TxnBatch,
         block: Block,
+        message_results: Vec<roothash::MessageEvent>,
         check_only: bool,
     ) {
         debug!(self.logger, "Received transaction batch request";
             "state_root" => ?block.header.state_root,
             "round" => block.header.round + 1,
+            "message_results" => ?message_results,
             "check_only" => check_only,
         );
 
@@ -320,7 +325,7 @@ impl Dispatcher {
             Context::create_child(&ctx),
             protocol.clone(),
         ));
-        let txn_ctx = TxnContext::new(ctx.clone(), &block.header, check_only);
+        let txn_ctx = TxnContext::new(ctx.clone(), &block.header, &message_results, check_only);
         let mut overlay = OverlayTree::new(&mut cache.mkvs);
         match StorageContext::enter(&mut overlay, untrusted_local.clone(), || {
             txn_dispatcher.dispatch_batch(&inputs, txn_ctx)
@@ -409,13 +414,14 @@ impl Dispatcher {
                         previous_hash: block.header.encoded_hash(),
                         io_root: Some(io_root),
                         state_root: Some(new_state_root),
-                        messages,
+                        messages_hash: Some(roothash::Message::messages_hash(&messages)),
                     };
 
                     debug!(self.logger, "Transaction batch execution complete";
                         "previous_hash" => ?header.previous_hash,
                         "io_root" => ?header.io_root,
-                        "state_root" => ?header.state_root
+                        "state_root" => ?header.state_root,
+                        "messages_hash" => ?header.messages_hash,
                     );
 
                     let rak_sig = if self.rak.public_key().is_some() {
@@ -431,6 +437,7 @@ impl Dispatcher {
                         io_write_log,
                         state_write_log,
                         rak_sig,
+                        messages,
                     };
 
                     // Send the result back.
