@@ -62,6 +62,7 @@ func (app *rootHashApplication) OnRegister(state tmapi.ApplicationState, md tmap
 	// Subscribe to messages emitted by other apps.
 	md.Subscribe(registryApi.MessageNewRuntimeRegistered, app)
 	md.Subscribe(registryApi.MessageRuntimeUpdated, app)
+	md.Subscribe(registryApi.MessageRuntimeResumed, app)
 	md.Subscribe(roothashApi.RuntimeMessageNoop, app)
 }
 
@@ -292,6 +293,9 @@ func (app *rootHashApplication) ExecuteMessage(ctx *tmapi.Context, kind, msg int
 			return nil
 		}
 		return app.verifyRuntimeUpdate(ctx, msg.(*registry.Runtime))
+	case registryApi.MessageRuntimeResumed:
+		// A previously suspended runtime has been resumed.
+		return nil
 	case roothashApi.RuntimeMessageNoop:
 		// Noop message always succeeds.
 		return nil

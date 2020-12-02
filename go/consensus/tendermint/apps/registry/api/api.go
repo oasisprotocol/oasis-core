@@ -11,8 +11,13 @@ var (
 	MessageNewRuntimeRegistered = messageKind(0)
 
 	// MessageRuntimeUpdated is the message kind for runtime registration updates. The message is
-	// the runtime descriptor of the runtime that has been updated.
+	// the runtime descriptor of the runtime that has been updated. Any errors returned from the
+	// handler will prevent the runtime update from taking place.
 	//
 	// The message is also emitted for new runtime registrations.
 	MessageRuntimeUpdated = messageKind(1)
+
+	// MessageRuntimeResumed is the message kind for suspended runtime resumptions. The message is
+	// the runtime descriptor of the runtime that has been resumed.
+	MessageRuntimeResumed = messageKind(2)
 )
