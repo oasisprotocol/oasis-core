@@ -3,7 +3,11 @@ package api
 
 import (
 	"context"
+	"fmt"
+	"io/ioutil"
+	"os"
 
+	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
 	"github.com/oasisprotocol/oasis-core/go/common/errors"
 	epochtime "github.com/oasisprotocol/oasis-core/go/epochtime/api"
 )
@@ -11,10 +15,6 @@ import (
 const (
 	// ModuleName is the upgrade module name.
 	ModuleName = "upgrade"
-
-	// UpgradeMethInternal is the internal upgrade method,
-	// where the node binary itself has the migration code.
-	UpgradeMethInternal = "internal"
 
 	// LogEventStartupUpgrade is a log event value that signals the startup upgrade handler was called.
 	LogEventStartupUpgrade = "dummy-migration/startup-upgrade"
@@ -62,28 +62,120 @@ var (
 	ErrUpgradeInProgress = errors.New(ModuleName, 6, "upgrade: can not cancel upgrade in progress")
 )
 
+// OwnHash returns the hash of the executable that started the current process.
+func OwnHash() (*hash.Hash, error) {
+	path, err := os.Executable()
+	if err != nil {
+		return nil, err
+	}
+
+	contents, err := ioutil.ReadFile(path)
+	if err != nil {
+		return nil, err
+	}
+
+	h := hash.NewFromBytes(contents)
+	return &h, nil
+}
+
+// UpgradeMethod is an upgrade descriptor method.
+type UpgradeMethod uint8
+
+const (
+	// UpgradeMethodInternal is the internal upgrade method, where the node
+	// binary itself has the migration code.
+	UpgradeMethodInternal UpgradeMethod = 1
+
+	// UpgradeMethodInternalName is the name of the upgrade method.
+	UpgradeMethodInternalName = "internal"
+)
+
+// String returns a string representation of a UpgradeMethod.
+func (m UpgradeMethod) String() string {
+	switch m {
+	case UpgradeMethodInternal:
+		return UpgradeMethodInternalName
+	default:
+		return fmt.Sprintf("[unknown upgrade method: %d]", m)
+	}
+}
+
+// MarshalText encodes a UpgradeMethod into text form.
+func (m UpgradeMethod) MarshalText() ([]byte, error) {
+	switch m {
+	case UpgradeMethodInternal:
+		return []byte(UpgradeMethodInternalName), nil
+	default:
+		return nil, fmt.Errorf("invalid upgrade method: %d", m)
+	}
+}
+
+// UnmarshalText decodes a text slice into an UpgradeMethod.
+func (m *UpgradeMethod) UnmarshalText(text []byte) error {
+	switch string(text) {
+	case UpgradeMethodInternalName:
+		*m = UpgradeMethodInternal
+	default:
+		return fmt.Errorf("invalid upgrade method: %s", string(text))
+	}
+	return nil
+}
+
 // Descriptor describes an upgrade.
 type Descriptor struct {
 	// Name is the name of the upgrade. It should be derived from the node version.
 	Name string `json:"name"`
 	// Method is the upgrade method that should be used for this upgrade.
-	Method string `json:"method"`
+	Method UpgradeMethod `json:"method"`
 	// Identifier is a hash of the binary to be used for upgrading.
-	// Upgrade methods other than "internal" may have differently formatted identifiers.
 	Identifier string `json:"identifier"`
 	// Epoch is the epoch at which the upgrade should happen.
 	Epoch epochtime.EpochTime `json:"epoch"`
 }
 
-// IsValid checks if the upgrade descriptor is valid.
-func (d Descriptor) IsValid() bool {
-	if d.Method != UpgradeMethInternal {
-		return false
+// ValidateBasic does basic validation checks of the upgrade descriptor.
+func (d Descriptor) ValidateBasic() error {
+	switch d.Method {
+	case UpgradeMethodInternal:
+		// For internal upgrade method the identifier needs to be a valid hex encoded hash.
+		var idHash hash.Hash
+		if err := idHash.UnmarshalHex(d.Identifier); err != nil {
+			return fmt.Errorf("invalid internal upgrade descriptor identifier: %s: %w", d.Identifier, err)
+		}
+	default:
+		return fmt.Errorf("invalid descriptor method: %v", d)
 	}
 	if d.Epoch < 1 {
-		return false
+		return fmt.Errorf("invalid descriptor epoch: %d", d.Epoch)
 	}
-	return true
+
+	return nil
+}
+
+// EnsureCompatible checks if currently running binary is compatible with
+// the upgrade descriptor.
+func (d *Descriptor) EnsureCompatible() error {
+	switch d.Method {
+	case UpgradeMethodInternal:
+		// For Internal upgrade method, the current binary hash needs to match the
+		// descriptor identifier.
+		OwnHash, err := OwnHash()
+		if err != nil {
+			return fmt.Errorf("error obtaining own binary hash: %w", err)
+		}
+
+		var descriptorHash hash.Hash
+		if err = descriptorHash.UnmarshalHex(d.Identifier); err != nil {
+			return fmt.Errorf("can't decode stored upgrade identifier: %w", err)
+		}
+
+		if !OwnHash.Equal(&descriptorHash) {
+			return fmt.Errorf("binary hash missmatch: own: %d, required: %d", OwnHash, descriptorHash)
+		}
+	default:
+		return fmt.Errorf("invalid upgrade method: %d", d.Method)
+	}
+	return nil
 }
 
 // PendingUpgrade describes a currently pending upgrade and includes the

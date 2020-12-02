@@ -9,11 +9,8 @@ package upgrade
 import (
 	"context"
 	"fmt"
-	"io/ioutil"
-	"os"
 	"sync"
 
-	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
 	"github.com/oasisprotocol/oasis-core/go/common/persistent"
 	"github.com/oasisprotocol/oasis-core/go/common/version"
@@ -29,21 +26,6 @@ var (
 
 	thisVersion = makeVersionString()
 )
-
-func hashSelf() (*hash.Hash, error) {
-	path, err := os.Executable()
-	if err != nil {
-		return nil, err
-	}
-
-	contents, err := ioutil.ReadFile(path)
-	if err != nil {
-		return nil, err
-	}
-
-	h := hash.NewFromBytes(contents)
-	return &h, nil
-}
 
 func makeVersionString() string {
 	return version.SoftwareVersion
@@ -130,19 +112,9 @@ func (u *upgradeManager) checkStatus() error {
 		return nil
 	}
 
-	// Otherwise, the upgrade should proceed right now. Check that we're the right binary.
-	thisHash, err := hashSelf()
-	if err != nil {
-		return err
-	}
-
-	var upgraderHash hash.Hash
-	if err = upgraderHash.UnmarshalHex(u.pending.Descriptor.Identifier); err != nil {
-		return fmt.Errorf("can't decode stored upgrade identifier: %w", err)
-	}
-
-	if !thisHash.Equal(&upgraderHash) {
-		return api.ErrUpgradePending
+	// Otherwise, the upgrade should proceed right now. Check that we have the right binary.
+	if err := u.pending.Descriptor.EnsureCompatible(); err != nil {
+		return fmt.Errorf("%w: %v", api.ErrAlreadyPending, err)
 	}
 
 	// In case the previous startup was e.g. interruptd during the second part of the

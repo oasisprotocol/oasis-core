@@ -157,8 +157,10 @@ func doUpgradeBinary(cmd *cobra.Command, args []string) {
 		os.Exit(1)
 	}
 
-	if !desc.IsValid() {
-		logger.Error("submitted upgrade descriptor is not valid")
+	if err = desc.ValidateBasic(); err != nil {
+		logger.Error("submitted upgrade descriptor is not valid",
+			"err", err,
+		)
 		os.Exit(1)
 	}
 
