@@ -14,6 +14,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/node"
 	"github.com/oasisprotocol/oasis-core/go/common/pubsub"
 	"github.com/oasisprotocol/oasis-core/go/common/service"
+	"github.com/oasisprotocol/oasis-core/go/common/version"
 	"github.com/oasisprotocol/oasis-core/go/consensus/api/transaction"
 	"github.com/oasisprotocol/oasis-core/go/consensus/api/transaction/results"
 	epochtime "github.com/oasisprotocol/oasis-core/go/epochtime/api"
@@ -167,8 +168,8 @@ type Block struct {
 
 // Status is the current status overview.
 type Status struct { // nolint: maligned
-	// ConsensusVersion is the version of the consensus protocol that the node is using.
-	ConsensusVersion string `json:"consensus_version"`
+	// Version is the version of the consensus protocol that the node is using.
+	Version version.Version `json:"version"`
 	// Backend is the consensus backend identifier.
 	Backend string `json:"backend"`
 	// Features are the indicated consensus backend features.

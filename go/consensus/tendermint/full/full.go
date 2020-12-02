@@ -754,9 +754,9 @@ func (t *fullService) GetUnconfirmedTransactions(ctx context.Context) ([][]byte,
 
 func (t *fullService) GetStatus(ctx context.Context) (*consensusAPI.Status, error) {
 	status := &consensusAPI.Status{
-		ConsensusVersion: version.ConsensusProtocol.String(),
-		Backend:          api.BackendName,
-		Features:         t.SupportedFeatures(),
+		Version:  version.ConsensusProtocol,
+		Backend:  api.BackendName,
+		Features: t.SupportedFeatures(),
 	}
 
 	status.GenesisHeight = t.genesis.Height
