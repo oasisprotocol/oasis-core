@@ -38,6 +38,7 @@ var (
 	ErrMajorityFailure        = errors.New(moduleName, 17, "roothash/commitment: majority commitments indicated failure")
 	ErrInvalidRound           = errors.New(moduleName, 18, "roothash/commitment: invalid round")
 	ErrNoProposerCommitment   = errors.New(moduleName, 19, "roothash/commitment: no proposer commitment")
+	ErrBadProposerCommitment  = errors.New(moduleName, 20, "roothash/commitment: bad proposer commitment")
 )
 
 const (
@@ -481,16 +482,7 @@ func (p *Pool) CheckProposerTimeout(
 	return nil
 }
 
-// DetectDiscrepancy performs discrepancy detection on the current commitments in
-// the pool.
-//
-// The caller must verify that there are enough commitments in the pool.
-func (p *Pool) DetectDiscrepancy() (OpenCommitment, error) {
-	if p.Committee == nil {
-		return nil, ErrNoCommittee
-	}
-
-	// Determine the proposer commitment.
+func (p *Pool) getProposerCommitment() (OpenCommitment, error) {
 	var proposerCommit OpenCommitment
 	switch p.Committee.Kind {
 	case scheduler.KindComputeExecutor:
@@ -506,6 +498,23 @@ func (p *Pool) DetectDiscrepancy() (OpenCommitment, error) {
 		}
 	default:
 		panic("roothash/commitment: unknown committee kind while checking commitments: " + p.Committee.Kind.String())
+	}
+	return proposerCommit, nil
+}
+
+// DetectDiscrepancy performs discrepancy detection on the current commitments in
+// the pool.
+//
+// The caller must verify that there are enough commitments in the pool.
+func (p *Pool) DetectDiscrepancy() (OpenCommitment, error) {
+	if p.Committee == nil {
+		return nil, ErrNoCommittee
+	}
+
+	// Determine the proposer commitment.
+	proposerCommit, err := p.getProposerCommitment()
+	if err != nil {
+		return nil, err
 	}
 
 	// Check for discrepancy among all the commitments.
@@ -591,13 +600,28 @@ func (p *Pool) ResolveDiscrepancy() (OpenCommitment, error) {
 
 		return nil, ErrMajorityFailure
 	}
+	var majorityCommit OpenCommitment
 	for _, ent := range votes {
 		if ent.tally >= minVotes {
-			return ent.commit, nil
+			majorityCommit = ent.commit
+			break
 		}
 	}
+	if majorityCommit == nil {
+		return nil, ErrInsufficientVotes
+	}
 
-	return nil, ErrInsufficientVotes
+	// Make sure that the majority commitment is the same as the proposer commitment. We must return
+	// the proposer commitment as that one contains additional data.
+	proposerCommit, err := p.getProposerCommitment()
+	if err != nil {
+		return nil, err
+	}
+	if !proposerCommit.MostlyEqual(majorityCommit) {
+		return nil, ErrBadProposerCommitment
+	}
+
+	return proposerCommit, nil
 }
 
 // TryFinalize attempts to finalize the commitments by performing discrepancy
