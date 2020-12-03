@@ -42,21 +42,42 @@ public key as follows:
 
 <!-- markdownlint-disable line-length -->
 ```
-[ 1 byte <ctx-version> ][ first 20 bytes of SHA512-256(<ctx-identifier> || <ctx-version> || <pubkey>) ]
+[ 1 byte <ctx-version> ][ first 20 bytes of SHA512-256(<ctx-identifier> || <ctx-version> || <data>) ]
 ```
 <!-- markdownlint-disable line-length -->
 
-where `<ctx-version>` and `<ctx-identifier>` represent the staking account
-address' context version and identifier as defined by the
-[`AddressV0Context` variable],
-and `<pubkey>` represents the account signer's public key (e.g. entity id).
+Where `<ctx-version>` and `<ctx-identifier>` represent the staking account
+address' context version and identifier and `<data>` represents the data
+specific to the address kind.
+
+There are two kinds of accounts:
+
+* User accounts linked to a specific public key.
+* Runtime accounts linked to a specific [runtime identifier].
+
+Addresses use [Bech32 encoding] for text serialization with `oasis` as its human
+readable part (HRP) prefix (for both kinds of accounts).
+
+### User Accounts
+
+In case of user accounts, the `<ctx-version>` and `<ctx-identifier>` are as
+defined by the [`AddressV0Context` variable], and `<data>` represents the
+account signer's public key (e.g. entity id).
 
 For more details, see the [`NewAddress` function].
 
-Addresses use [Bech32 encoding] for text serialization with `oasis` as its human
-readable part (HRP) prefix.
+### Runtime Accounts
 
-### Reserved addresses
+In case of runtime accounts, the `<ctx-version>` and `<ctx-identifier>` are as
+defined by the [`AddressRuntimeV0Context` variable], and `<data>` represents the
+[runtime identifier].
+
+For more details, see the [`NewRuntimeAddress` function].
+
+The runtime accounts belong to runtimes and can only be manipulated by the
+runtime by [emitting messages] to the consensus layer.
+
+### Reserved Addresses
 
 Some staking account addresses are reserved to prevent them from being
 accidentally used in the actual ledger.
@@ -69,10 +90,16 @@ Currently, they are:
   address (defined by [`FeeAccumulatorAddress` variable]).
 
 <!-- markdownlint-disable line-length -->
+[runtime identifier]: ../runtime/identifiers.md
 [`AddressV0Context` variable]:
   https://pkg.go.dev/github.com/oasisprotocol/oasis-core/go/staking/api?tab=doc#pkg-variables
 [`NewAddress` function]:
   https://pkg.go.dev/github.com/oasisprotocol/oasis-core/go/staking/api?tab=doc#NewAddress
+[`AddressRuntimeV0Context` variable]:
+  https://pkg.go.dev/github.com/oasisprotocol/oasis-core/go/staking/api?tab=doc#pkg-variables
+[`NewRuntimeAddress` function]:
+  https://pkg.go.dev/github.com/oasisprotocol/oasis-core/go/staking/api?tab=doc#NewRuntimeAddress
+[emitting messages]: ../runtime/messages.md
 [Bech32 encoding]:
   https://github.com/bitcoin/bips/blob/master/bip-0173.mediawiki#bech32
 [`CommonPoolAddress` variable]:
@@ -384,7 +411,290 @@ The transaction signer implicitly specifies the escrow account.
   https://pkg.go.dev/github.com/oasisprotocol/oasis-core/go/staking/api?tab=doc#NewAmendCommissionScheduleTx
 <!-- markdownlint-enable line-length -->
 
+### Allow
+
+Allow enables an account holder to set an allowance for a beneficiary. A new
+allow transaction can be generated using [`NewAllowTx` function].
+
+**Method name:**
+
+```
+staking.Allow
+```
+
+**Body:**
+
+```golang
+type Allow struct {
+    Beneficiary  Address           `json:"beneficiary"`
+    Negative     bool              `json:"negative,omitempty"`
+    AmountChange quantity.Quantity `json:"amount_change"`
+}
+```
+
+**Fields:**
+
+* `beneficiary` specifies the beneficiary account address.
+* `amount_change` specifies the absolute value of the amount of base units to
+  change the allowance for.
+* `negative` specifies whether the `amount_change` should be subtracted instead
+  of added.
+
+The transaction signer implicitly specifies the general account. Upon executing
+the allow the following actions are performed:
+
+* If either the `disable_transfers` staking consensus parameter is set to `true`
+  or the `max_allowances` staking consensus parameter is set to zero, the method
+  fails with `ErrForbidden`.
+
+* It is checked whether either the transaction signer address or the
+  `beneficiary` address are reserved. If any are reserved, the method fails with
+  `ErrForbidden`.
+
+* Address specified by `beneficiary` is compared with the transaction signer
+  address. If the addresses are the same, the method fails with
+  `ErrInvalidArgument`.
+
+* The account indicated by the signer is loaded.
+
+* If the allow would create a new allowance and the maximum number of allowances
+  for an account has been reached, the method fails with `ErrTooManyAllowances`.
+
+* The set of allowances is updated so that the allowance is updated as specified
+  by `amount_change`/`negative`. In case the change would cause the allowance to
+  be equal to zero or negative, the allowance is removed.
+
+* The account is saved.
+
+* The corresponding [`AllowanceChangeEvent`] is emitted.
+
+<!-- markdownlint-disable line-length -->
+[`NewAllowTx` function]:
+  https://pkg.go.dev/github.com/oasisprotocol/oasis-core/go/staking/api?tab=doc#NewAllowTx
+[`AllowanceChangeEvent`]: #allowance-change-event
+<!-- markdownlint-enable line-length -->
+
+### Withdraw
+
+Withdraw enables a beneficiary to withdraw from the given account. A new
+withdraw transaction can be generated using [`NewWithdrawTx` function].
+
+**Method name:**
+
+```
+staking.Withdraw
+```
+
+**Body:**
+
+```golang
+type Withdraw struct {
+    From   Address           `json:"from"`
+    Amount quantity.Quantity `json:"amount"`
+}
+```
+
+**Fields:**
+
+* `from` specifies the account address to withdraw from.
+* `amount` specifies the amount of base units to withdraw.
+
+The transaction signer implicitly specifies the destination general account.
+Upon executing the withdrawal the following actions are performed:
+
+* If either the `disable_transfers` staking consensus parameter is set to `true`
+  or the `max_allowances` staking consensus parameter is set to zero, the method
+  fails with `ErrForbidden`.
+
+* It is checked whether either the transaction signer address or the
+  `from` address are reserved. If any are reserved, the method fails with
+  `ErrForbidden`.
+
+* Address specified by `from` is compared with the transaction signer address.
+  If the addresses are the same, the method fails with `ErrInvalidArgument`.
+
+* The source account indicated by `from` is loaded.
+
+* The destination account indicated by the transaction signer is loaded.
+
+* `amount` is deducted from the corresponding allowance in the source account.
+  If this would cause the allowance to go negative, the method fails with
+  `ErrForbidden`.
+
+* `amount` is deducted from the source general account balance. If this would
+  cause the balance to go negative, the method fails with
+  `ErrInsufficientBalance`.
+
+* `amount` is added to the destination general account balance.
+
+* Both source and destination accounts are saved.
+
+* The corresponding [`TransferEvent`] is emitted.
+
+* The corresponding [`AllowanceChangeEvent`] is emitted with the updated
+  allowance.
+
+<!-- markdownlint-disable line-length -->
+[`NewWithdrawTx` function]:
+  https://pkg.go.dev/github.com/oasisprotocol/oasis-core/go/staking/api?tab=doc#NewWithdrawTx
+[`TransferEvent`]: #transfer-event
+<!-- markdownlint-enable line-length -->
+
 ## Events
+
+### Transfer Event
+
+The transfer event is emitted when tokens are transferred from a source account
+to a destination account.
+
+**Body:**
+
+```golang
+type TransferEvent struct {
+  From   Address           `json:"from"`
+  To     Address           `json:"to"`
+  Amount quantity.Quantity `json:"amount"`
+}
+```
+
+**Fields:**
+
+* `from` contains the address of the source account.
+* `to` contains the address of the destination account.
+* `amount` contains the amount (in base units) transferred.
+
+### Burn Event
+
+The burn event is emitted when tokens are burned.
+
+**Body:**
+
+```golang
+type BurnEvent struct {
+  Owner  Address           `json:"owner"`
+  Amount quantity.Quantity `json:"amount"`
+}
+```
+
+**Fields:**
+
+* `owner` contains the address of the account that burned tokens.
+* `amount` contains the amount (in base units) burned.
+
+### Escrow Event
+
+Escrow events are emitted when tokens are escrowed, taken from escrow by the
+protocol or reclaimed from escrow by the account owner.
+
+**Body:**
+
+```golang
+type EscrowEvent struct {
+  Add     *AddEscrowEvent     `json:"add,omitempty"`
+  Take    *TakeEscrowEvent    `json:"take,omitempty"`
+  Reclaim *ReclaimEscrowEvent `json:"reclaim,omitempty"`
+}
+```
+
+**Fields:**
+
+* `add` is set if the emitted event is an _Add Escrow_ event.
+* `take` is set if the emitted event is a _Take Escrow_ event.
+* `reclaim` is set if the emitted event is a _Reclaim Escrow_ event.
+
+#### Add Escrow Event
+
+The add escrow event is emitted when funds are escrowed.
+
+**Body:**
+
+```golang
+type AddEscrowEvent struct {
+  Owner  Address           `json:"owner"`
+  Escrow Address           `json:"escrow"`
+  Amount quantity.Quantity `json:"amount"`
+}
+```
+
+**Fields:**
+
+* `owner` contains the address of the source account.
+* `escrow` contains the address of the destination account the tokens are being
+  escrowed to.
+* `amount` contains the amount (in base units) escrowed.
+
+#### Take Escrow Event
+
+The take escrow event is emitted by the protocol when escrowed funds are
+slashed for whatever reason.
+
+**Body:**
+
+```golang
+type TakeEscrowEvent struct {
+  Owner  Address           `json:"owner"`
+  Amount quantity.Quantity `json:"amount"`
+}
+```
+
+**Fields:**
+
+* `owner` contains the address of the account escrow has been taken from.
+* `amount` contains the amount (in base units) taken.
+
+#### Reclaim Escrow Event
+
+The reclaim escrow event is emitted when a reclaim escrow operation completes
+successfully (after the debonding period has passed).
+
+**Body:**
+
+```golang
+type ReclaimEscrowEvent struct {
+  Owner  Address           `json:"owner"`
+  Escrow Address           `json:"escrow"`
+  Amount quantity.Quantity `json:"amount"`
+}
+```
+
+**Fields:**
+
+* `owner` contains the address of the account that reclaimed tokens from escrow.
+* `escrow` contains the address of the account escrow has been reclaimed from.
+* `amount` contains the amount (in base units) reclaimed.
+
+### Allowance Change Event
+
+**Body:**
+
+```golang
+type AllowanceChangeEvent struct {
+    Owner        Address           `json:"owner"`
+    Beneficiary  Address           `json:"beneficiary"`
+    Allowance    quantity.Quantity `json:"allowance"`
+    Negative     bool              `json:"negative,omitempty"`
+    AmountChange quantity.Quantity `json:"amount_change"`
+}
+```
+
+**Fields:**
+
+* `owner` contains the address of the account owner where allowance has been
+  changed.
+* `beneficiary` contains the address of the beneficiary.
+* `allowance` contains the new total allowance.
+* `amount_change` contains the absolute amount the allowance has changed for.
+* `negative` specifies whether the allowance has been reduced rather than
+  increased.
+
+The event is emitted even if the new allowance is zero.
+
+## Consensus Parameters
+
+* `max_allowances` (uint32) specifies the maximum number of [allowances] an
+  account can store. Zero means that allowance functionality is disabled.
+
+[allowances]: #allow
 
 ## Test Vectors
 

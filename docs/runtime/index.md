@@ -175,3 +175,11 @@ The runtime is also suspended in case the registering entity no longer has
 enough stake to cover the entity and runtime deposits. The runtime will be
 resumed on the epoch transition if runtime nodes will register and the
 registering entity will have enough stake.
+
+### Emitting Messages
+
+Runtimes may [emit messages] to instruct the consensus layer what to do on their
+behalf. This makes it possible for runtimes to [own staking accounts].
+
+[emit messages]: messages.md
+[own staking accounts]: ../consensus/staking.md#runtime-accounts

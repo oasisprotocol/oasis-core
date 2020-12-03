@@ -31,6 +31,7 @@
 * [Runtime Layer](runtime/index.md)
   * [Runtime Host Protocol](runtime/runtime-host-protocol.md)
   * [Identifiers](runtime/identifiers.md)
+  * [Messages](runtime/messages.md)
 * Oasis Node
   * [RPC](oasis-node/rpc.md)
   * [Metrics](oasis-node/metrics.md)

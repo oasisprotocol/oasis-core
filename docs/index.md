@@ -56,14 +56,10 @@ implementations.
   * [Genesis Document](consensus/genesis.md)
   * [Transaction Test Vectors](consensus/test-vectors.md)
 * [Runtime Layer](runtime/index.md)
-  * [Runtimes](runtime/index.md#runtimes)
-    * [Operation Model](runtime/index.md#operation-model)
-    * [Runtime Host Protocol](runtime/runtime-host-protocol.md)
-    * [Identifiers](runtime/identifiers.md)
-  * Transaction Processing Pipeline
-    * Executor Nodes
-    * Storage Nodes
-    * Key Manager Nodes
+  * [Operation Model](runtime/index.md#operation-model)
+  * [Runtime Host Protocol](runtime/runtime-host-protocol.md)
+  * [Identifiers](runtime/identifiers.md)
+  * [Messages](runtime/messages.md)
 * Oasis Node (`oasis-node`)
   * [RPC](oasis-node/rpc.md)
   * [Metrics](oasis-node/metrics.md)

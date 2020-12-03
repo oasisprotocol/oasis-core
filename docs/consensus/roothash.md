@@ -47,3 +47,11 @@ type ExecutorCommit struct {
 <!-- markdownlint-enable line-length -->
 
 ## Events
+
+## Consensus Parameters
+
+* `max_runtime_messages` (uint32) specifies the global limit on the number of
+  [messages] that can be emitted in each round by the runtime. The default value
+  of `0` disables the use of runtime messages.
+
+[messages]: ../runtime/messages.md
