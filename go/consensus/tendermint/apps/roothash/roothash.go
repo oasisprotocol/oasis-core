@@ -483,7 +483,7 @@ func (app *rootHashApplication) tryFinalizeExecutorCommits(
 	forced bool,
 ) error {
 	runtime := rtState.Runtime
-	round := rtState.CurrentBlock.Header.Round
+	round := rtState.CurrentBlock.Header.Round + 1
 
 	commit, err := rtState.ExecutorPool.TryFinalize(ctx.BlockHeight(), runtime.Executor.RoundTimeout, forced, true)
 	switch err {

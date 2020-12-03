@@ -501,7 +501,7 @@ func TestPoolTwoCommitments(t *testing.T) {
 	})
 
 	t.Run("Discrepancy", func(t *testing.T) {
-		pool, childBlk, _, correctBody := setupDiscrepancy(t, rt, sks, committee, nl)
+		pool, childBlk, _, correctBody, _ := setupDiscrepancy(t, rt, sks, committee, nl)
 
 		commit3, err := SignExecutorCommitment(sk3, correctBody)
 		require.NoError(t, err, "SignExecutorCommitment")
@@ -522,14 +522,36 @@ func TestPoolTwoCommitments(t *testing.T) {
 		require.EqualValues(t, &correctBody.Header, &header, "DR should return the same header")
 	})
 
-	t.Run("DiscrepancyResolutionFailure", func(t *testing.T) {
-		pool, _, _, _ := setupDiscrepancy(t, rt, sks, committee, nl)
+	t.Run("DiscrepancyResolutionFailureVotes", func(t *testing.T) {
+		pool, _, _, _, _ := setupDiscrepancy(t, rt, sks, committee, nl)
 
 		// Discrepancy resolution should fail.
 		dc, err := pool.ResolveDiscrepancy()
 		require.Nil(t, dc, "ResolveDiscrepancy")
 		require.Error(t, err, "ResolveDiscrepancy")
 		require.Equal(t, ErrInsufficientVotes, err)
+	})
+
+	t.Run("DiscrepancyResolutionFailureNotProposer", func(t *testing.T) {
+		pool, childBlk, _, _, badBody := setupDiscrepancy(t, rt, sks, committee, nl)
+
+		commit3, err := SignExecutorCommitment(sk3, badBody)
+		require.NoError(t, err, "SignExecutorCommitment")
+
+		// Resolve discrepancy with commit from backup worker. Use the BAD commit which is different
+		// from what the proposer committed.
+		err = pool.AddExecutorCommitment(context.Background(), childBlk, nopSV, nl, commit3)
+		require.NoError(t, err, "AddExecutorCommitment")
+
+		// There should be enough executor commitments from backup workers.
+		err = pool.CheckEnoughCommitments(false)
+		require.NoError(t, err, "CheckEnoughCommitments")
+
+		// Discrepancy resolution should fail.
+		dc, err := pool.ResolveDiscrepancy()
+		require.Nil(t, dc, "ResolveDiscrepancy")
+		require.Error(t, err, "ResolveDiscrepancy")
+		require.Equal(t, ErrBadProposerCommitment, err)
 	})
 }
 
@@ -626,7 +648,7 @@ func TestPoolFailureIndicatingCommitment(t *testing.T) {
 	})
 
 	t.Run("DiscrepancyFailureIndicating", func(t *testing.T) {
-		pool, childBlk, _, body := setupDiscrepancy(t, rt, sks, committee, nl)
+		pool, childBlk, _, body, _ := setupDiscrepancy(t, rt, sks, committee, nl)
 		body.SetFailure(FailureUnknown)
 
 		commit3, err := SignExecutorCommitment(sk3, body)
@@ -762,7 +784,7 @@ func TestTryFinalize(t *testing.T) {
 	})
 
 	t.Run("Discrepancy", func(t *testing.T) {
-		pool, childBlk, _, correctBody := setupDiscrepancy(t, rt, sks, committee, nl)
+		pool, childBlk, _, correctBody, _ := setupDiscrepancy(t, rt, sks, committee, nl)
 
 		commit3, err := SignExecutorCommitment(sk3, correctBody)
 		require.NoError(t, err, "SignExecutorCommitment")
@@ -1042,7 +1064,7 @@ func setupDiscrepancy(
 	sks []signature.Signer,
 	committee *scheduler.Committee,
 	nl NodeLookup,
-) (*Pool, *block.Block, *block.Block, *ComputeBody) {
+) (*Pool, *block.Block, *block.Block, *ComputeBody, *ComputeBody) {
 	sk1 := sks[0]
 	sk2 := sks[1]
 
@@ -1100,5 +1122,5 @@ func setupDiscrepancy(
 	require.Error(t, err, "CheckEnoughCommitments")
 	require.Equal(t, ErrStillWaiting, err, "CheckEnoughCommitments")
 
-	return &pool, childBlk, parentBlk, &correctBody
+	return &pool, childBlk, parentBlk, &correctBody, &body
 }
