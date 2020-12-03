@@ -9,10 +9,10 @@ use crate::{
             hash::Hash,
             signature::{PublicKey, Signature},
         },
-        roothash::{self, Block, ComputeResultsHeader},
         runtime::RuntimeId,
         sgx::avr::AVR,
     },
+    consensus::roothash::{self, Block, ComputeResultsHeader},
     storage::mkvs::{sync, WriteLog},
     transaction::types::TxnBatch,
 };

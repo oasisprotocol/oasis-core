@@ -7,10 +7,13 @@
 use serde::{Deserialize, Serialize};
 use serde_repr::*;
 
-use super::{
-    cbor,
-    crypto::{hash::Hash, signature::SignatureBundle},
-    staking,
+use crate::{
+    common::{
+        cbor,
+        crypto::{hash::Hash, signature::SignatureBundle},
+        namespace::Namespace,
+    },
+    consensus::staking,
 };
 
 /// Runtime block.
@@ -28,8 +31,6 @@ pub struct AnnotatedBlock {
     /// Runtime block.
     pub block: Block,
 }
-
-impl_bytes!(Namespace, 32, "Chain namespace.");
 
 /// Header type.
 ///

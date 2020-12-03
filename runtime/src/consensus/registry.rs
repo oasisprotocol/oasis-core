@@ -4,9 +4,9 @@
 //!
 //! This **MUST** be kept in sync with go/registry/api.
 //!
-use super::{
-    super::storage::mkvs::WriteLog,
-    crypto::{hash, signature::SignatureBundle},
+use crate::{
+    common::crypto::{hash, signature::SignatureBundle},
+    storage::mkvs::WriteLog,
 };
 use serde::{Deserialize, Serialize};
 

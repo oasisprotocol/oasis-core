@@ -4,11 +4,8 @@ use serde::{Deserialize, Serialize};
 use serde_bytes::ByteBuf;
 
 use oasis_core_runtime::{
-    common::{
-        crypto::hash::Hash,
-        roothash::{AnnotatedBlock, Block},
-        runtime::RuntimeId,
-    },
+    common::{crypto::hash::Hash, runtime::RuntimeId},
+    consensus::roothash::{AnnotatedBlock, Block},
     transaction::types::TxnBatch,
 };
 

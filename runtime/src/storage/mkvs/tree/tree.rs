@@ -4,7 +4,7 @@ use anyhow::Result;
 use io_context::Context;
 
 use crate::{
-    common::{crypto::hash::Hash, roothash::Namespace},
+    common::{crypto::hash::Hash, namespace::Namespace},
     storage::mkvs::{self, cache::*, sync::*, tree::*},
 };
 

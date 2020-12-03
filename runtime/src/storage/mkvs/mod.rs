@@ -10,7 +10,7 @@ use io_context::Context;
 use serde::{self, ser::SerializeSeq, Deserialize, Serialize, Serializer};
 use serde_bytes::Bytes;
 
-use crate::common::{crypto::hash::Hash, roothash::Namespace};
+use crate::common::{crypto::hash::Hash, namespace::Namespace};
 
 #[macro_use]
 mod tree;

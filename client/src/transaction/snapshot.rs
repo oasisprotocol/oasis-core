@@ -5,11 +5,8 @@ use anyhow::{Context as AnyContext, Result};
 use grpcio::CallOption;
 use io_context::Context;
 use oasis_core_runtime::{
-    common::{
-        cbor,
-        crypto::hash::Hash,
-        roothash::{Block, Namespace},
-    },
+    common::{cbor, crypto::hash::Hash, namespace::Namespace},
+    consensus::roothash::Block,
     storage::{
         mkvs::{sync::*, Iterator, Prefix, Root, Tree, WriteLog},
         MKVS,

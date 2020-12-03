@@ -16,7 +16,10 @@ use super::{
     tags::Tags,
     types::{TxnBatch, TxnCall, TxnCheckResult, TxnOutput},
 };
-use crate::common::{cbor, crypto::hash::Hash, roothash};
+use crate::{
+    common::{cbor, crypto::hash::Hash},
+    consensus::roothash,
+};
 
 /// Dispatch error.
 #[derive(Error, Debug)]
@@ -359,7 +362,7 @@ mod tests {
     use io_context::Context as IoContext;
     use serde::{Deserialize, Serialize};
 
-    use crate::common::{cbor, roothash::Header};
+    use crate::{common::cbor, consensus::roothash::Header};
 
     use super::*;
 

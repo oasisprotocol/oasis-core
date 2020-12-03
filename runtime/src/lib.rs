@@ -49,6 +49,7 @@ use sgx_isa::{AttributesFlags, Report};
 
 #[macro_use]
 pub mod common;
+pub mod consensus;
 pub mod dispatcher;
 pub mod enclave_rpc;
 pub mod executor;

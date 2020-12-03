@@ -22,8 +22,8 @@ use crate::{
             signature::{Signature, Signer},
         },
         logger::get_logger,
-        roothash::{self, Block, ComputeResultsHeader, COMPUTE_RESULTS_HEADER_CONTEXT},
     },
+    consensus::roothash::{self, Block, ComputeResultsHeader, COMPUTE_RESULTS_HEADER_CONTEXT},
     enclave_rpc::{
         demux::Demux as RpcDemux,
         dispatcher::Dispatcher as RpcDispatcher,

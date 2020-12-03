@@ -6,7 +6,7 @@
 //!
 use serde::{Deserialize, Serialize};
 
-use super::{address::Address, quantity::Quantity};
+use crate::{common::quantity::Quantity, consensus::address::Address};
 
 /// A stake transfer.
 #[derive(Clone, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]

@@ -5,7 +5,7 @@ use bech32::{self, FromBase32, ToBase32};
 
 use crate::common::{
     crypto::{hash::Hash, signature::PublicKey},
-    roothash::Namespace,
+    namespace::Namespace,
 };
 
 const ADDRESS_VERSION_SIZE: usize = 1;
@@ -153,7 +153,7 @@ impl<'de> serde::Deserialize<'de> for Address {
 #[cfg(test)]
 mod test {
     use super::Address;
-    use crate::common::{crypto::signature::PublicKey, roothash::Namespace};
+    use crate::common::{crypto::signature::PublicKey, namespace::Namespace};
 
     #[test]
     fn test_address() {

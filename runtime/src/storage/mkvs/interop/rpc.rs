@@ -5,7 +5,7 @@ use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use serde_cbor::Value;
 
 use crate::{
-    common::{cbor, crypto::hash::Hash, roothash::Namespace},
+    common::{cbor, crypto::hash::Hash, namespace::Namespace},
     storage::mkvs::{sync, WriteLog},
 };
 

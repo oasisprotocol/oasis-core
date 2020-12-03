@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-use oasis_core_runtime::{common::staking, runtime_api};
+use oasis_core_runtime::{consensus::staking, runtime_api};
 
 #[derive(Clone, Serialize, Deserialize)]
 pub struct Key {
