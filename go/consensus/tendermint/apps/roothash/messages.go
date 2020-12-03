@@ -6,13 +6,13 @@ import (
 	tmapi "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/api"
 	roothashApi "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/apps/roothash/api"
 	roothash "github.com/oasisprotocol/oasis-core/go/roothash/api"
-	"github.com/oasisprotocol/oasis-core/go/roothash/api/block"
+	"github.com/oasisprotocol/oasis-core/go/roothash/api/message"
 )
 
 func (app *rootHashApplication) processRuntimeMessages(
 	ctx *tmapi.Context,
 	rtState *roothash.RuntimeState,
-	msgs []block.Message,
+	msgs []message.Message,
 ) error {
 	for i, msg := range msgs {
 		var err error

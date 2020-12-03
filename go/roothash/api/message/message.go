@@ -1,4 +1,5 @@
-package block
+// Package message implements the supported runtime messages.
+package message
 
 import (
 	"fmt"

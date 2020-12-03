@@ -17,6 +17,7 @@ import (
 	genesisTestHelpers "github.com/oasisprotocol/oasis-core/go/genesis/tests"
 	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
 	"github.com/oasisprotocol/oasis-core/go/roothash/api/block"
+	"github.com/oasisprotocol/oasis-core/go/roothash/api/message"
 	scheduler "github.com/oasisprotocol/oasis-core/go/scheduler/api"
 	storage "github.com/oasisprotocol/oasis-core/go/storage/api"
 )
@@ -1003,7 +1004,7 @@ func generateComputeBody(t *testing.T, round uint64) (*block.Block, *block.Block
 	parentBlk := block.NewEmptyBlock(childBlk, 1, block.Normal)
 
 	// TODO: Add tests with some emitted messages.
-	msgsHash := block.MessagesHash(nil)
+	msgsHash := message.MessagesHash(nil)
 
 	body := ComputeBody{
 		Header: ComputeResultsHeader{

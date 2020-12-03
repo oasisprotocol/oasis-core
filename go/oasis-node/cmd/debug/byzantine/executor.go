@@ -13,6 +13,7 @@ import (
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
 	"github.com/oasisprotocol/oasis-core/go/roothash/api/block"
 	"github.com/oasisprotocol/oasis-core/go/roothash/api/commitment"
+	"github.com/oasisprotocol/oasis-core/go/roothash/api/message"
 	"github.com/oasisprotocol/oasis-core/go/runtime/transaction"
 	storage "github.com/oasisprotocol/oasis-core/go/storage/api"
 	"github.com/oasisprotocol/oasis-core/go/storage/mkvs"
@@ -278,7 +279,7 @@ func (cbc *computeBatchContext) createCommitment(id *identity.Identity, rak sign
 		storageSigs = append(storageSigs, receipt.Signature)
 	}
 	// TODO: allow script to set roothash messages?
-	msgsHash := block.MessagesHash(nil)
+	msgsHash := message.MessagesHash(nil)
 	header := commitment.ComputeResultsHeader{
 		Round:        cbc.bd.Header.Round + 1,
 		PreviousHash: cbc.bd.Header.EncodedHash(),

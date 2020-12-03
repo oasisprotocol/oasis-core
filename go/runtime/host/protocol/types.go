@@ -11,6 +11,7 @@ import (
 	roothash "github.com/oasisprotocol/oasis-core/go/roothash/api"
 	"github.com/oasisprotocol/oasis-core/go/roothash/api/block"
 	"github.com/oasisprotocol/oasis-core/go/roothash/api/commitment"
+	"github.com/oasisprotocol/oasis-core/go/roothash/api/message"
 	"github.com/oasisprotocol/oasis-core/go/runtime/transaction"
 	storage "github.com/oasisprotocol/oasis-core/go/storage/api"
 )
@@ -197,7 +198,7 @@ type ComputedBatch struct {
 	// node's RAK for this runtime.
 	RakSig signature.RawSignature `json:"rak_sig"`
 	// Messages are the emitted runtime messages.
-	Messages []block.Message `json:"messages"`
+	Messages []message.Message `json:"messages"`
 }
 
 // String returns a string representation of a computed batch.

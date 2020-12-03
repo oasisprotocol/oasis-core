@@ -11,6 +11,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/node"
 	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
 	"github.com/oasisprotocol/oasis-core/go/roothash/api/block"
+	"github.com/oasisprotocol/oasis-core/go/roothash/api/message"
 	scheduler "github.com/oasisprotocol/oasis-core/go/scheduler/api"
 	p2pError "github.com/oasisprotocol/oasis-core/go/worker/common/p2p/error"
 )
@@ -329,7 +330,7 @@ func (p *Pool) addOpenExecutorCommitment(
 				)
 				return ErrInvalidMessages
 			}
-			if h := block.MessagesHash(body.Messages); !h.Equal(header.MessagesHash) {
+			if h := message.MessagesHash(body.Messages); !h.Equal(header.MessagesHash) {
 				logger.Debug("executor commitment from scheduler has invalid messages hash",
 					"node_id", id,
 					"expected_hash", h,
