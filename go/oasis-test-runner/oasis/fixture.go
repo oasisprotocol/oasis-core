@@ -468,6 +468,9 @@ func (f *SentryFixture) Create(net *Network) (*Sentry, error) {
 
 // ClientFixture is a client node fixture.
 type ClientFixture struct {
+	AllowErrorTermination bool `json:"allow_error_termination"`
+	AllowEarlyTermination bool `json:"allow_early_termination"`
+
 	// Consensus contains configuration for the consensus backend.
 	Consensus ConsensusFixture `json:"consensus"`
 
@@ -479,7 +482,9 @@ type ClientFixture struct {
 func (f *ClientFixture) Create(net *Network) (*Client, error) {
 	return net.NewClient(&ClientCfg{
 		NodeCfg: NodeCfg{
-			Consensus: f.Consensus,
+			Consensus:             f.Consensus,
+			AllowErrorTermination: f.AllowErrorTermination,
+			AllowEarlyTermination: f.AllowEarlyTermination,
 		},
 		MaxTransactionAge: f.MaxTransactionAge,
 	})

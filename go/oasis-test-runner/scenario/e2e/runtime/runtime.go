@@ -550,6 +550,10 @@ func RegisterScenarios() error {
 		DumpRestoreRuntimeRoundAdvance,
 		// Halt test.
 		HaltRestore,
+		// Consensus upgrade tests.
+		GovernanceConsensusUpgrade,
+		GovernanceConsensusFailUpgrade,
+		GovernanceConsensusCancelUpgrade,
 		// Multiple runtimes test.
 		MultipleRuntimes,
 		// Node shutdown test.

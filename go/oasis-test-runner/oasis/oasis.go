@@ -32,6 +32,7 @@ import (
 	consensusGenesis "github.com/oasisprotocol/oasis-core/go/consensus/genesis"
 	genesisFile "github.com/oasisprotocol/oasis-core/go/genesis/file"
 	genesisTestHelpers "github.com/oasisprotocol/oasis-core/go/genesis/tests"
+	governance "github.com/oasisprotocol/oasis-core/go/governance/api"
 	"github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common"
 	"github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/grpc"
 	"github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/metrics"
@@ -225,7 +226,8 @@ func (n *Node) Consensus() ConsensusFixture {
 	return n.consensus
 }
 
-// SetConsensusStateSync configures wheteher a node should perform
+// SetConsensusStateSync configures whether a node should perform consensus
+// state sync.
 func (n *Node) SetConsensusStateSync(cfg *ConsensusStateSyncCfg) {
 	n.Lock()
 	defer n.Unlock()
@@ -330,6 +332,9 @@ type NetworkCfg struct { // nolint: maligned
 	// StakingGenesis is the staking genesis data to be included if
 	// GenesisFile is not set.
 	StakingGenesis *staking.Genesis `json:"staking_genesis,omitempty"`
+
+	// GovernanceParameters are the governance consensus parameters.
+	GovernanceParameters *governance.ConsensusParameters `json:"governance_parameters,omitempty"`
 
 	// A set of log watcher handler factories used by default on all nodes
 	// created in this test network.
@@ -913,6 +918,16 @@ func (net *Network) MakeGenesis() error {
 	}
 	if net.cfg.DeterministicIdentities {
 		args = append(args, "--beacon.debug.deterministic")
+	}
+	if cfg := net.cfg.GovernanceParameters; cfg != nil {
+		args = append(args, []string{
+			"--" + genesis.CfgGovernanceMinProposalDeposit, strconv.FormatUint(cfg.MinProposalDeposit.ToBigInt().Uint64(), 10),
+			"--" + genesis.CfgGovernanceQuorum, strconv.FormatUint(uint64(cfg.Quorum), 10),
+			"--" + genesis.CfgGovernanceThreshold, strconv.FormatUint(uint64(cfg.Threshold), 10),
+			"--" + genesis.CfgGovernanceUpgradeCancelMinEpochDiff, strconv.FormatUint(uint64(cfg.UpgradeCancelMinEpochDiff), 10),
+			"--" + genesis.CfgGovernanceUpgradeMinEpochDiff, strconv.FormatUint(uint64(cfg.UpgradeMinEpochDiff), 10),
+			"--" + genesis.CfgGovernanceVotingPeriod, strconv.FormatUint(uint64(cfg.VotingPeriod), 10),
+		}...)
 	}
 	for _, v := range net.entities {
 		args = append(args, v.toGenesisDescriptorArgs()...)
