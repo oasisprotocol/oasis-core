@@ -6,10 +6,14 @@ package version
 
 import (
 	"fmt"
+	"regexp"
 	"runtime"
 	"strconv"
 	"strings"
 )
+
+// VersionUndefined represents an undefined version.
+const VersionUndefined = "undefined"
 
 // NOTE: This should be kept in sync with runtime/src/common/version.rs.
 
@@ -126,4 +130,28 @@ func parseSemVerStr(s string) Version {
 	}
 
 	return Version{Major: semVers[0], Minor: semVers[1], Patch: semVers[2]}
+}
+
+var goModulesVersionRegex = regexp.MustCompile(`v0.(?P<year>[0-9]{2})(?P<minor>[0-9]{2}).(?P<micro>[0-9]+)`)
+
+// Convert Go Modules compatible version to Oasis Core's canonical version.
+func ConvertGoModulesVersion(goModVersion string) string {
+	match := goModulesVersionRegex.FindStringSubmatch(goModVersion)
+	// NOTE: match[0] contains the whole matched string.
+	if len(match) != 4 {
+		return VersionUndefined
+	}
+
+	result := make(map[string]string)
+	for i, name := range goModulesVersionRegex.SubexpNames() {
+		if i != 0 && name != "" {
+			result[name] = match[i]
+		}
+	}
+
+	version := result["year"] + "." + strings.TrimPrefix(result["minor"], "0")
+	if result["micro"] != "0" {
+		version += "." + result["micro"]
+	}
+	return version
 }
