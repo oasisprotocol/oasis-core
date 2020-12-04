@@ -110,6 +110,37 @@ func main() {
 					}
 				}
 			}
+
+			// Valid allow transactions.
+			beneficiary := memorySigner.NewTestSigner("oasis-core staking test vectors: Allow beneficiary")
+			beneficiaryAddr := staking.NewAddress(beneficiary.Public())
+			for _, amt := range []uint64{0, 1000, 10_000_000} {
+				for _, negative := range []bool{false, true} {
+					for _, tx := range []*transaction.Transaction{
+						staking.NewAllowTx(nonce, fee, &staking.Allow{
+							Beneficiary:  beneficiaryAddr,
+							Negative:     negative,
+							AmountChange: *quantity.NewFromUint64(amt),
+						}),
+					} {
+						vectors = append(vectors, testvectors.MakeTestVector("Withdraw", tx))
+					}
+				}
+			}
+
+			// Valid withdraw transactions.
+			withdrawSrc := memorySigner.NewTestSigner("oasis-core staking test vectors: Withdraw src")
+			withdrawSrcAddr := staking.NewAddress(withdrawSrc.Public())
+			for _, amt := range []uint64{0, 1000, 10_000_000} {
+				for _, tx := range []*transaction.Transaction{
+					staking.NewWithdrawTx(nonce, fee, &staking.Withdraw{
+						From:   withdrawSrcAddr,
+						Amount: *quantity.NewFromUint64(amt),
+					}),
+				} {
+					vectors = append(vectors, testvectors.MakeTestVector("Withdraw", tx))
+				}
+			}
 		}
 	}
 
