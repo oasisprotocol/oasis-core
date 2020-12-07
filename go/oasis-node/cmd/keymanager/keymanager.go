@@ -444,7 +444,7 @@ func doGenUpdate(cmd *cobra.Command, args []string) {
 	// Build, sign, and write the UpdatePolicy transaction.
 	nonce, fee := cmdConsensus.GetTxNonceAndFee()
 	tx := kmApi.NewUpdatePolicyTx(nonce, fee, &signedPolicy)
-	cmdConsensus.SignAndSaveTx(context.Background(), tx)
+	cmdConsensus.SignAndSaveTx(context.Background(), tx, nil)
 }
 
 func statusFromFlags() (*kmApi.Status, error) {
