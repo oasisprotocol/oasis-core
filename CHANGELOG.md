@@ -12,6 +12,153 @@ The format is inspired by [Keep a Changelog].
 
 <!-- TOWNCRIER -->
 
+## 20.12.3 (2020-12-07)
+
+| Protocol          | Version   |
+|:------------------|:---------:|
+| Consensus         | 2.0.0     |
+| Runtime Host      | 1.0.0     |
+| Runtime Committee | 1.0.0     |
+
+### Configuration Changes
+
+- go: Change storage backend configuration options
+  ([#3323](https://github.com/oasisprotocol/oasis-core/issues/3323))
+
+  All the `--storage.*` options have been renamed to `--worker.storage.*`.
+  Nodes that don't have the storage worker enabled don't need to configure
+  the storage backend anymore, since it will be chosen correctly
+  automatically.
+
+### Features
+
+- Runtime client should fail `SubmitTx` calls until consensus is synced
+  ([#3452](https://github.com/oasisprotocol/oasis-core/issues/3452))
+
+- Runtime storage sync should use any storage node
+  ([#3454](https://github.com/oasisprotocol/oasis-core/issues/3454))
+
+  Before storage node sync only used nodes from the current storage committee.
+  Now it also syncs (with lower priority) from other storage nodes registered
+  for the runtime.
+
+- go/consensus/tendermint: Also dump state when shutting down for upgrade
+  ([#3516](https://github.com/oasisprotocol/oasis-core/issues/3516))
+
+- go/common/version: Add `ConvertGoModulesVersion()` function
+  ([#3546](https://github.com/oasisprotocol/oasis-core/issues/3546))
+
+  It can be used to convert a Go Modules compatible version defined in
+  [ADR 0002] (i.e. a Go Modules compatible Git tag without the `go/` prefix) to
+  the canonical Oasis Core version.
+
+  [ADR 0002]: docs/adr/0002-go-modules-compatible-git-tags.md
+
+### Bug Fixes
+
+- go/storage/mkvs/checkpoint: Fix handling of non-zero earliest version
+  ([#3480](https://github.com/oasisprotocol/oasis-core/issues/3480))
+
+- go/consensus/tendermint: Fix early `GetStatus()` with initial height > 1
+  ([#3481](https://github.com/oasisprotocol/oasis-core/issues/3481))
+
+- go: Add missing size checks to `UnmarshalBinary()` methods
+  ([#3497](https://github.com/oasisprotocol/oasis-core/issues/3497))
+
+  Note that in practice these will never currently be triggered as the
+  caller always checks the overall size before calling the more specific
+  `UnmarshalBinary()` method.
+
+- go/oasis-node/cmd/registry/entity: Reuse signer instead of creating a new one
+  ([#3505](https://github.com/oasisprotocol/oasis-core/issues/3505))
+
+  The `oasis-node registry entity register` CLI command previously always
+  created two signer factories, one for signing the entity descriptor and one
+  for signing the entity registration transaction.
+
+  Some signers assign exclusive access to an underlying resource (e.g., HSM) to
+  the given factory. In that case, all operations on the second signer factory
+  would fail.
+
+- go/worker/storage: Fill in additional versions when restoring state
+  ([#3525](https://github.com/oasisprotocol/oasis-core/issues/3525))
+
+  When a storage database from one network is used in a new network (e.g. when
+  the consensus layer did a dump/restore upgrade) properly handle the case
+  where there were additional rounds after the runtime has stopped (e.g., due
+  to epoch transitions).
+
+- go/consensus/tendermint: Report peers and validator status only after started
+  ([#3534](https://github.com/oasisprotocol/oasis-core/issues/3534))
+
+  When accessing the node status in very early stages of initialization when a
+  Tendermint node structure is not available, the status RPC would make the node
+  panic. Leave the peers and validator status blank instead.
+
+- go/worker/storage: Force checkpoint sync when replication is needed
+  ([#3538](https://github.com/oasisprotocol/oasis-core/issues/3538))
+
+  Previously a freshly initialized storage node with no genesis state would
+  fall back to incremental sync even though there was no chance of that
+  succeeding.
+
+### Internal Changes
+
+- ci: bump actions/setup-python from v2.1.2 to v2.1.3
+  ([#3349](https://github.com/oasisprotocol/oasis-core/issues/3349))
+
+- Prioritize nodes that signed storage receipts
+  ([#3354](https://github.com/oasisprotocol/oasis-core/issues/3354))
+
+  The compute executor and tag indexer now prioritize reads from storage nodes
+  that signed the corresponding storage receipts.
+
+- go/storage: Support node prioritization in read requests
+  ([#3354](https://github.com/oasisprotocol/oasis-core/issues/3354))
+
+  The following new functions are added to the storage API package to help
+  storage backend implementations:
+
+  - `WithNodePriorityHint`
+  - `WithNodePriorityHintFromSignatures`
+  - `NodePriorityHintFromContext`
+
+- ci: Bump actions/setup-node from v2.1.1 to v2.1.2
+  ([#3364](https://github.com/oasisprotocol/oasis-core/issues/3364))
+
+- ci: Bump actions/setup-go from v2.1.2 to v2.1.3
+  ([#3365](https://github.com/oasisprotocol/oasis-core/issues/3365))
+
+- ci: Bump actions/upload-artifact from v2.1.4 to v2.2.0
+  ([#3367](https://github.com/oasisprotocol/oasis-core/issues/3367))
+
+- e2e/runtime/runtime-upgrade: Wait for old compute nodes to expire
+  ([#3404](https://github.com/oasisprotocol/oasis-core/issues/3404))
+
+- ci: bump actions/setup-python from v2.1.3 to v2.1.4
+  ([#3405](https://github.com/oasisprotocol/oasis-core/issues/3405))
+
+- go/oasis-node/cmd/common/consensus: Augment `SignAndSaveTx()` with `signer`
+  ([#3506](https://github.com/oasisprotocol/oasis-core/issues/3506))
+
+  Add ability to pass a pre-existing `signature.Signer` as `signer` parameter to
+  the `SignAndSaveTx()` function.
+
+- go: Update libp2p dependencies
+  ([#3510](https://github.com/oasisprotocol/oasis-core/issues/3510))
+
+  - github.com/libp2p/go-libp2p-core from 0.6.1 to 0.7.0
+  - github.com/libp2p/go-libp2p from 0.11.0 to 0.12.0
+  - github.com/libp2p/go-libp2p-pubsub from 0.3.6 to 0.4.0
+
+- go/storage/mkvs/checkpoint: Add initial version parameter
+  ([#3538](https://github.com/oasisprotocol/oasis-core/issues/3538))
+
+  Previously if the local database contained a version earlier than the genesis
+  version, the checkpointer would attempt to create a new checkpoint at that
+  earlier version (and fail). Now the version is clamped at the initial
+  version.
+
 ## 20.12.2 (2020-11-13)
 
 | Protocol          | Version   |
