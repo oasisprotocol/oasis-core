@@ -22,14 +22,12 @@ type RootCache struct {
 
 	applyLocks      *lru.Cache
 	applyLocksGuard sync.Mutex
-
-	persistEverything mkvs.Option
 }
 
 // GetTree gets a tree entry from the cache by the root iff present, or creates
 // a new tree with the specified root in the node database.
 func (rc *RootCache) GetTree(ctx context.Context, root Root) (mkvs.Tree, error) {
-	return mkvs.NewWithRoot(rc.remoteSyncer, rc.localDB, root, rc.persistEverything), nil
+	return mkvs.NewWithRoot(rc.remoteSyncer, rc.localDB, root), nil
 }
 
 // Apply applies the write log, bypassing the apply operation iff the new root
@@ -54,7 +52,7 @@ func (rc *RootCache) Apply(
 	// Check if we already have the expected new root in our local DB.
 	if !rc.localDB.HasRoot(expectedNewRoot) {
 		// We don't, apply operations.
-		tree := mkvs.NewWithRoot(rc.remoteSyncer, rc.localDB, root, rc.persistEverything)
+		tree := mkvs.NewWithRoot(rc.remoteSyncer, rc.localDB, root)
 		defer tree.Close()
 
 		if err := tree.ApplyWriteLog(ctx, writelog.NewStaticIterator(writeLog)); err != nil {
@@ -114,16 +112,10 @@ func NewRootCache(
 		return nil, fmt.Errorf("storage/rootcache: failed to create applyLocks: %w", err)
 	}
 
-	// When we implement a caching client again, we want to persist
-	// everything that we obtain from the remote syncer in our local
-	// database.
-	persistEverything := mkvs.PersistEverythingFromSyncer(remoteSyncer != nil)
-
 	return &RootCache{
 		localDB:            localDB,
 		remoteSyncer:       remoteSyncer,
 		insecureSkipChecks: insecureSkipChecks,
 		applyLocks:         applyLocks,
-		persistEverything:  persistEverything,
 	}, nil
 }

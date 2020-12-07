@@ -40,8 +40,6 @@ type cache struct {
 	nodeCapacity uint64
 	// Maximum capacity of leaf values.
 	valueCapacity uint64
-	// Persist all the nodes and values we obtain from the remote syncer?
-	persistEverythingFromSyncer bool
 
 	lruInternal    *list.List
 	lruInternalPos *list.Element
@@ -54,13 +52,12 @@ const MaxPrefetchDepth = 255
 
 func newCache(ndb db.NodeDB, rs syncer.ReadSyncer, rootType node.RootType) *cache {
 	c := &cache{
-		db:                          ndb,
-		rs:                          rs,
-		lruInternal:                 list.New(),
-		lruLeaf:                     list.New(),
-		persistEverythingFromSyncer: false,
-		valueCapacity:               16 * 1024 * 1024,
-		nodeCapacity:                5000,
+		db:            ndb,
+		rs:            rs,
+		lruInternal:   list.New(),
+		lruLeaf:       list.New(),
+		valueCapacity: 16 * 1024 * 1024,
+		nodeCapacity:  5000,
 	}
 	// By default the sync root is an empty root.
 	c.syncRoot.Empty()
@@ -415,18 +412,6 @@ func (c *cache) remoteSync(ctx context.Context, ptr *node.Pointer, fetcher readS
 	}
 
 	// Merge resulting nodes.
-	var batch db.Batch
-	var dbSubtree db.Subtree
-	if c.persistEverythingFromSyncer {
-		// NOTE: This is a dummy batch, we assume that the node database backend is a
-		//       cache-only backend and does not care about correct values.
-		batch, err = c.db.NewBatch(c.syncRoot, c.syncRoot.Version, false)
-		if err != nil {
-			return fmt.Errorf("mkvs: failed to create batch: %w", err)
-		}
-		dbSubtree = batch.MaybeStartSubtree(nil, 0, subtree)
-	}
-
 	var commitNode func(*node.Pointer) error
 	commitNode = func(p *node.Pointer) error {
 		if p == nil || p.Node == nil {
@@ -451,12 +436,6 @@ func (c *cache) remoteSync(ctx context.Context, ptr *node.Pointer, fetcher readS
 			}
 		}
 
-		// Persist synced nodes to local node database when configured. We assume that
-		// in this case the node database backend is a cache-only backend and does not
-		// perform any subtree aggregation.
-		if c.persistEverythingFromSyncer {
-			_ = dbSubtree.PutNode(0, p)
-		}
 		return nil
 	}
 
@@ -466,16 +445,6 @@ func (c *cache) remoteSync(ctx context.Context, ptr *node.Pointer, fetcher readS
 			return nil
 		}
 		return err
-	}
-
-	// Persist synced nodes to local node database when configured.
-	if c.persistEverythingFromSyncer {
-		if err := dbSubtree.Commit(); err != nil {
-			return err
-		}
-		if err := batch.Commit(c.syncRoot); err != nil {
-			return err
-		}
 	}
 
 	return nil

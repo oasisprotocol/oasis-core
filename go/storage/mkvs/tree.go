@@ -50,16 +50,6 @@ func Capacity(nodeCapacity, valueCapacityBytes uint64) Option {
 	}
 }
 
-// PersistEverythingFromSyncer sets whether to persist all the nodes and
-// values obtained from the remote syncer to local database.
-//
-// If not specified, the default is false.
-func PersistEverythingFromSyncer(doit bool) Option {
-	return func(t *tree) {
-		t.cache.persistEverythingFromSyncer = doit
-	}
-}
-
 // WithoutWriteLog disables building a write log when performing operations.
 //
 // Note that this option cannot be used together with specifying a ReadSyncer and trying to use it
