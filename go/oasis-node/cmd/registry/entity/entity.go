@@ -285,17 +285,9 @@ func doGenRegister(cmd *cobra.Command, args []string) {
 	cmdConsensus.InitGenesis()
 	cmdConsensus.AssertTxFileOK()
 
-	entityDir, err := cmdSigner.CLIDirOrPwd()
+	ent, signer, err := cmdCommon.LoadEntitySigner()
 	if err != nil {
-		logger.Error("failed to retrieve entity dir",
-			"err", err,
-		)
-		os.Exit(1)
-	}
-
-	ent, signer, err := cmdCommon.LoadEntity(cmdSigner.Backend(), entityDir)
-	if err != nil {
-		logger.Error("failed to load entity",
+		logger.Error("failed to load entity and its signer",
 			"err", err,
 		)
 		os.Exit(1)

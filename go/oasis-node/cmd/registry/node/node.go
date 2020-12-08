@@ -108,8 +108,7 @@ func doInit(cmd *cobra.Command, args []string) { // nolint: gocyclo
 
 	// Get the entity ID or entity.
 	var (
-		entityDir string
-		entityID  signature.PublicKey
+		entityID signature.PublicKey
 
 		entity       *entity.Entity
 		entitySigner signature.Signer
@@ -128,16 +127,9 @@ func doInit(cmd *cobra.Command, args []string) { // nolint: gocyclo
 
 		isSelfSigned = true
 	} else {
-		entityDir, err = cmdSigner.CLIDirOrPwd()
+		entity, entitySigner, err = cmdCommon.LoadEntitySigner()
 		if err != nil {
-			logger.Error("failed to retrieve entity dir",
-				"err", err,
-			)
-			os.Exit(1)
-		}
-		entity, entitySigner, err = cmdCommon.LoadEntity(cmdSigner.Backend(), entityDir)
-		if err != nil {
-			logger.Error("failed to load entity",
+			logger.Error("failed to load entity and its signer",
 				"err", err,
 			)
 			os.Exit(1)
