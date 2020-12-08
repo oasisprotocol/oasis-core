@@ -88,6 +88,8 @@ Currently, they are:
   (defined by [`CommonPoolAddress` variable]).
 * `oasis1qqnv3peudzvekhulf8v3ht29z4cthkhy7gkxmph5`: per-block fee accumulator
   address (defined by [`FeeAccumulatorAddress` variable]).
+* `oasis1qp65laz8zsa9a305wxeslpnkh9x4dv2h2qhjz0ec`: governance deposits address
+  (defined by the [`GovernanceDeposits` variable]).
 
 <!-- markdownlint-disable line-length -->
 [runtime identifier]: ../runtime/identifiers.md
@@ -105,6 +107,8 @@ Currently, they are:
 [`CommonPoolAddress` variable]:
   https://pkg.go.dev/github.com/oasisprotocol/oasis-core/go/staking/api?tab=doc#pkg-variables
 [`FeeAccumulatorAddress` variable]:
+  https://pkg.go.dev/github.com/oasisprotocol/oasis-core/go/staking/api?tab=doc#pkg-variables
+[`GovernanceDeposits` variable]:
   https://pkg.go.dev/github.com/oasisprotocol/oasis-core/go/staking/api?tab=doc#pkg-variables
 <!-- markdownlint-enable line-length -->
 

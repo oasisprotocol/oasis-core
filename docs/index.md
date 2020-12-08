@@ -51,6 +51,7 @@ implementations.
     * [Staking](consensus/staking.md)
     * [Registry](consensus/registry.md)
     * [Committee Scheduler](consensus/scheduler.md)
+    * [Governance](consensus/governance.md)
     * [Root Hash](consensus/roothash.md)
     * [Key Manager](consensus/keymanager.md)
   * [Genesis Document](consensus/genesis.md)
