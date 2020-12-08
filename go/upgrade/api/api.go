@@ -226,6 +226,9 @@ type Backend interface {
 	// which then schedules and manages the upgrade.
 	SubmitDescriptor(context.Context, *Descriptor) error
 
+	// PendingUpgrade returns a pending upgrade if it exists.
+	PendingUpgrade(context.Context) (*PendingUpgrade, error)
+
 	// CancelUpgrade cancels a pending upgrade, unless it is already in progress.
 	CancelUpgrade(context.Context) error
 

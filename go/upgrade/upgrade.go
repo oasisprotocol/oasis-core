@@ -63,6 +63,13 @@ func (u *upgradeManager) SubmitDescriptor(ctx context.Context, descriptor *api.D
 	return u.flushDescriptor()
 }
 
+func (u *upgradeManager) PendingUpgrade(ctx context.Context) (*api.PendingUpgrade, error) {
+	u.lock.Lock()
+	defer u.lock.Unlock()
+
+	return u.pending, nil
+}
+
 func (u *upgradeManager) CancelUpgrade(ctx context.Context) error {
 	u.lock.Lock()
 	defer u.lock.Unlock()

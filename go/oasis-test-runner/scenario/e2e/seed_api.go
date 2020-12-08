@@ -99,6 +99,9 @@ func (sc *seedAPI) Run(childEnv *env.Env) error { // nolint: gocyclo
 	if len(status.Consensus.NodePeers) == 0 {
 		return fmt.Errorf("seed should be conencted at least to the client-0")
 	}
+	if p := status.PendingUpgrade; p != nil {
+		return fmt.Errorf("unexpected pending upgrade: %v", p)
+	}
 
 	sc.Logger.Info("testing SetEpoch")
 	if err = seedCtrl.SetEpoch(ctx, epochtime.EpochTime(0)); err == nil {

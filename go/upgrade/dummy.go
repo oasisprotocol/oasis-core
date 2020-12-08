@@ -15,6 +15,10 @@ func (u *dummyUpgradeManager) SubmitDescriptor(ctx context.Context, descriptor *
 	return nil
 }
 
+func (u *dummyUpgradeManager) PendingUpgrade(ctx context.Context) (*api.PendingUpgrade, error) {
+	return nil, nil
+}
+
 func (u *dummyUpgradeManager) CancelUpgrade(ctx context.Context) error {
 	return nil
 }

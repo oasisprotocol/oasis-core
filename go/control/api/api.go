@@ -68,6 +68,9 @@ type Status struct {
 
 	// Registration is the node's registration status.
 	Registration RegistrationStatus `json:"registration"`
+
+	// PendingUpgrade is the node's pending upgrade state.
+	PendingUpgrade *upgrade.PendingUpgrade `json:"pending_upgrade"`
 }
 
 // IdentityStatus is the current node identity status, listing all the public keys that identify
@@ -139,6 +142,11 @@ type ControlledNode interface {
 
 	// GetRuntimeStatus returns the node's current per-runtime status.
 	GetRuntimeStatus(ctx context.Context) (map[common.Namespace]RuntimeStatus, error)
+
+	// GetPendingUpgrade returns the node's pending upgrade.
+	//
+	// If there is no pending upgrade, `nil` should be returned.
+	GetPendingUpgrade(ctx context.Context) (*upgrade.PendingUpgrade, error)
 }
 
 // DebugModuleName is the module name for the debug controller service.

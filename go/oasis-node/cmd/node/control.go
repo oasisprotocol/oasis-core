@@ -9,6 +9,7 @@ import (
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
 	control "github.com/oasisprotocol/oasis-core/go/control/api"
 	storage "github.com/oasisprotocol/oasis-core/go/storage/api"
+	upgrade "github.com/oasisprotocol/oasis-core/go/upgrade/api"
 	"github.com/oasisprotocol/oasis-core/go/worker/registration"
 )
 
@@ -147,4 +148,9 @@ func (n *Node) GetRuntimeStatus(ctx context.Context) (map[common.Namespace]contr
 		runtimes[rt.ID()] = status
 	}
 	return runtimes, nil
+}
+
+// Implements control.ControlledNode.
+func (n *Node) GetPendingUpgrade(ctx context.Context) (*upgrade.PendingUpgrade, error) {
+	return n.Upgrader.PendingUpgrade(ctx)
 }

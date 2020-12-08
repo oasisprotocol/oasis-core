@@ -97,6 +97,11 @@ func (c *nodeController) GetStatus(ctx context.Context) (*control.Status, error)
 		return nil, fmt.Errorf("failed to get runtime status: %w", err)
 	}
 
+	pendingUpgrade, err := c.node.GetPendingUpgrade(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get pending upgrade: %w", err)
+	}
+
 	ident := c.node.GetIdentity()
 
 	return &control.Status{
@@ -107,9 +112,10 @@ func (c *nodeController) GetStatus(ctx context.Context) (*control.Status, error)
 			Consensus: ident.ConsensusSigner.Public(),
 			TLS:       ident.GetTLSPubKeys(),
 		},
-		Consensus:    *cs,
-		Runtimes:     runtimes,
-		Registration: *rs,
+		Consensus:      *cs,
+		Runtimes:       runtimes,
+		Registration:   *rs,
+		PendingUpgrade: pendingUpgrade,
 	}, nil
 }
 
