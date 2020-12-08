@@ -106,17 +106,9 @@ func SignAndSaveTx(ctx context.Context, tx *transaction.Transaction, signer sign
 		return
 	}
 
-	var err error
-	var entityDir string
 	if signer == nil {
-		entityDir, err = cmdSigner.CLIDirOrPwd()
-		if err != nil {
-			logger.Error("failed to retrieve entity dir",
-				"err", err,
-			)
-			os.Exit(1)
-		}
-		_, signer, err = cmdCommon.LoadEntity(cmdSigner.Backend(), entityDir)
+		var err error
+		_, signer, err = cmdCommon.LoadEntitySigner()
 		if err != nil {
 			logger.Error("failed to load signer",
 				"err", err,

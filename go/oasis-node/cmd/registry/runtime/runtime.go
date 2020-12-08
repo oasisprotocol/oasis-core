@@ -249,16 +249,9 @@ func runtimeFromFlags() (*registry.Runtime, signature.Signer, error) { // nolint
 		return nil, nil, fmt.Errorf("invalid TEE hardware")
 	}
 
-	entityDir, err := cmdSigner.CLIDirOrPwd()
+	_, signer, err := cmdCommon.LoadEntitySigner()
 	if err != nil {
-		logger.Error("failed to retrieve signer dir",
-			"err", err,
-		)
-		return nil, nil, fmt.Errorf("failed to retrieve signer dir")
-	}
-	_, signer, err := cmdCommon.LoadEntity(cmdSigner.Backend(), entityDir)
-	if err != nil {
-		logger.Error("failed to load owning entity",
+		logger.Error("failed to load owning entity's signer",
 			"err", err,
 		)
 		return nil, nil, err

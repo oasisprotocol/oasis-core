@@ -249,15 +249,19 @@ func GetInputReader(cmd *cobra.Command, cfg string) (io.ReadCloser, bool, error)
 	return r, true, err
 }
 
-// LoadEntity loads the entity and it's signer.
-func LoadEntity(signerBackend, entityDir string) (*entity.Entity, signature.Signer, error) {
+// LoadEntitySigner loads the entity and its signer.
+func LoadEntitySigner() (*entity.Entity, signature.Signer, error) {
 	if flags.DebugTestEntity() {
 		return entity.TestEntity()
 	}
-
-	factory, err := cmdSigner.NewFactory(signerBackend, entityDir, signature.SignerEntity)
+	entityDir, err := cmdSigner.CLIDirOrPwd()
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, fmt.Errorf("failed to retrieve entity dir: %w", err)
+	}
+
+	factory, err := cmdSigner.NewFactory(cmdSigner.Backend(), entityDir, signature.SignerEntity)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to create signer factory for %s: %w", cmdSigner.Backend(), err)
 	}
 
 	return entity.Load(entityDir, factory)
