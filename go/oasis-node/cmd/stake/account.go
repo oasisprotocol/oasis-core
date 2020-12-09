@@ -58,7 +58,7 @@ var (
 
 	accountInfoCmd = &cobra.Command{
 		Use:   "info",
-		Short: "query account info",
+		Short: "get account info",
 		Run:   doAccountInfo,
 	}
 
@@ -76,25 +76,25 @@ var (
 
 	accountBurnCmd = &cobra.Command{
 		Use:   "gen_burn",
-		Short: "Generate a burn transaction",
+		Short: "generate a burn transaction",
 		Run:   doAccountBurn,
 	}
 
 	accountEscrowCmd = &cobra.Command{
 		Use:   "gen_escrow",
-		Short: "Generate an escrow (stake) transaction",
+		Short: "generate an escrow (stake) transaction",
 		Run:   doAccountEscrow,
 	}
 
 	accountReclaimEscrowCmd = &cobra.Command{
 		Use:   "gen_reclaim_escrow",
-		Short: "Generate a reclaim_escrow (unstake) transaction",
+		Short: "generate a reclaim escrow (unstake) transaction",
 		Run:   doAccountReclaimEscrow,
 	}
 
 	accountAmendCommissionScheduleCmd = &cobra.Command{
 		Use:   "gen_amend_commission_schedule",
-		Short: "Generate an amend_commission_schedule transaction",
+		Short: "generate an amend commission schedule transaction",
 		Run:   doAccountAmendCommissionSchedule,
 	}
 )
