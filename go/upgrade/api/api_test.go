@@ -99,6 +99,80 @@ func TestValidateBasic(t *testing.T) {
 	}
 }
 
+func TestEquals(t *testing.T) {
+	hh, err := OwnHash()
+	require.NoError(t, err, "OwnHash()")
+	h := hex.EncodeToString(hh[:])
+
+	for _, tc := range []struct {
+		msg    string
+		d1     *Descriptor
+		d2     *Descriptor
+		equals bool
+	}{
+		{
+			msg:    "empty upgrade descriptor should be equal",
+			d1:     &Descriptor{},
+			d2:     &Descriptor{},
+			equals: true,
+		},
+		{
+			msg: "different name should not be equal",
+			d1: &Descriptor{
+				Name: "d1",
+			},
+			d2: &Descriptor{
+				Name: "d2",
+			},
+			equals: false,
+		},
+		{
+			msg: "different method should not be equal",
+			d1: &Descriptor{
+				Method: UpgradeMethodInternal,
+			},
+			d2:     &Descriptor{},
+			equals: false,
+		},
+		{
+			msg: "different epoch should not be equal",
+			d1: &Descriptor{
+				Epoch: 42,
+			},
+			d2: &Descriptor{
+				Epoch: 41,
+			},
+			equals: false,
+		},
+		{
+			msg: "different identifier should not be equal",
+			d1: &Descriptor{
+				Identifier: h,
+			},
+			d2:     &Descriptor{},
+			equals: false,
+		},
+		{
+			msg: "same descriptors should be equal",
+			d1: &Descriptor{
+				Name:       "d",
+				Method:     UpgradeMethodInternal,
+				Epoch:      42,
+				Identifier: h,
+			},
+			d2: &Descriptor{
+				Name:       "d",
+				Method:     UpgradeMethodInternal,
+				Epoch:      42,
+				Identifier: h,
+			},
+			equals: true,
+		},
+	} {
+		require.Equal(t, tc.equals, tc.d1.Equals(tc.d2), tc.msg)
+	}
+}
+
 func TestEnsureCompatible(t *testing.T) {
 	hh, err := OwnHash()
 	require.NoError(t, err, "OwnHash()")

@@ -151,6 +151,6 @@ func (n *Node) GetRuntimeStatus(ctx context.Context) (map[common.Namespace]contr
 }
 
 // Implements control.ControlledNode.
-func (n *Node) GetPendingUpgrade(ctx context.Context) (*upgrade.PendingUpgrade, error) {
-	return n.Upgrader.PendingUpgrade(ctx)
+func (n *Node) GetPendingUpgrades(ctx context.Context) ([]*upgrade.PendingUpgrade, error) {
+	return n.Upgrader.PendingUpgrades(ctx)
 }

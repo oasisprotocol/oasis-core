@@ -52,7 +52,7 @@ var (
 	}
 
 	controlCancelUpgradeCmd = &cobra.Command{
-		Use:   "cancel-upgrade",
+		Use:   "cancel-upgrade <upgrade-name>",
 		Short: "cancel a pending upgrade unless it is already in progress",
 		Run:   doCancelUpgrade,
 	}
@@ -176,7 +176,12 @@ func doCancelUpgrade(cmd *cobra.Command, args []string) {
 	conn, client := DoConnect(cmd)
 	defer conn.Close()
 
-	err := client.CancelUpgrade(context.Background())
+	if len(args) == 0 {
+		logger.Error("expected descriptor name")
+		os.Exit(1)
+	}
+
+	err := client.CancelUpgrade(context.Background(), args[0])
 	if err != nil {
 		logger.Error("failed to send upgrade cancellation request",
 			"err", err,

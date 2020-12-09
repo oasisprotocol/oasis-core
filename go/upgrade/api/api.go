@@ -55,8 +55,8 @@ var (
 	// started performing the upgrade.
 	ErrInvalidResumingVersion = errors.New(ModuleName, 4, "upgrade: node restarted mid-upgrade with different version")
 
-	// ErrAlreadyPending is the error returned from SubmitDescriptor when there is already an upgrade pending.
-	ErrAlreadyPending = errors.New(ModuleName, 5, "upgrade: an upgrade is already pending, can not submit new descriptor")
+	// ErrAlreadyPending is the error returned from SubmitDescriptor when the specific upgrade is already pending.
+	ErrAlreadyPending = errors.New(ModuleName, 5, "upgrade: submitted upgrade is already pending, can not resubmit descriptor")
 
 	// ErrUpgradeInProgress is the error returned from CancelUpgrade when the upgrade being cancelled is already in progress.
 	ErrUpgradeInProgress = errors.New(ModuleName, 6, "upgrade: can not cancel upgrade in progress")
@@ -131,6 +131,23 @@ type Descriptor struct {
 	Identifier string `json:"identifier"`
 	// Epoch is the epoch at which the upgrade should happen.
 	Epoch epochtime.EpochTime `json:"epoch"`
+}
+
+// Equals compares descriptors for equality.
+func (d *Descriptor) Equals(other *Descriptor) bool {
+	if d.Name != other.Name {
+		return false
+	}
+	if d.Method != other.Method {
+		return false
+	}
+	if d.Identifier != other.Identifier {
+		return false
+	}
+	if d.Epoch != other.Epoch {
+		return false
+	}
+	return true
 }
 
 // ValidateBasic does basic validation checks of the upgrade descriptor.
@@ -226,11 +243,11 @@ type Backend interface {
 	// which then schedules and manages the upgrade.
 	SubmitDescriptor(context.Context, *Descriptor) error
 
-	// PendingUpgrade returns a pending upgrade if it exists.
-	PendingUpgrade(context.Context) (*PendingUpgrade, error)
+	// PendingUpgrades returns pending upgrades.
+	PendingUpgrades(context.Context) ([]*PendingUpgrade, error)
 
-	// CancelUpgrade cancels a pending upgrade, unless it is already in progress.
-	CancelUpgrade(context.Context) error
+	// CancelUpgrade cancels a specific pending upgrade, unless it is already in progress.
+	CancelUpgrade(ctx context.Context, name string) error
 
 	// StartupUpgrade performs the startup portion of the upgrade.
 	// It is idempotent with respect to the current upgrade descriptor.
