@@ -43,7 +43,7 @@ const (
 )
 
 var (
-	accountInfoFlags        = flag.NewFlagSet("", flag.ContinueOnError)
+	commonAccountFlags      = flag.NewFlagSet("", flag.ContinueOnError)
 	amountFlags             = flag.NewFlagSet("", flag.ContinueOnError)
 	sharesFlags             = flag.NewFlagSet("", flag.ContinueOnError)
 	commonEscrowFlags       = flag.NewFlagSet("", flag.ContinueOnError)
@@ -58,8 +58,14 @@ var (
 
 	accountInfoCmd = &cobra.Command{
 		Use:   "info",
-		Short: "query account info",
+		Short: "get account info",
 		Run:   doAccountInfo,
+	}
+
+	accountNonceCmd = &cobra.Command{
+		Use:   "nonce",
+		Short: "get account nonce",
+		Run:   doAccountNonce,
 	}
 
 	accountTransferCmd = &cobra.Command{
@@ -70,25 +76,25 @@ var (
 
 	accountBurnCmd = &cobra.Command{
 		Use:   "gen_burn",
-		Short: "Generate a burn transaction",
+		Short: "generate a burn transaction",
 		Run:   doAccountBurn,
 	}
 
 	accountEscrowCmd = &cobra.Command{
 		Use:   "gen_escrow",
-		Short: "Generate an escrow (stake) transaction",
+		Short: "generate an escrow (stake) transaction",
 		Run:   doAccountEscrow,
 	}
 
 	accountReclaimEscrowCmd = &cobra.Command{
 		Use:   "gen_reclaim_escrow",
-		Short: "Generate a reclaim_escrow (unstake) transaction",
+		Short: "generate a reclaim escrow (unstake) transaction",
 		Run:   doAccountReclaimEscrow,
 	}
 
 	accountAmendCommissionScheduleCmd = &cobra.Command{
 		Use:   "gen_amend_commission_schedule",
-		Short: "Generate an amend_commission_schedule transaction",
+		Short: "generate an amend commission schedule transaction",
 		Run:   doAccountAmendCommissionSchedule,
 	}
 )
@@ -126,6 +132,27 @@ func doAccountInfo(cmd *cobra.Command, args []string) {
 	ctx = context.WithValue(ctx, prettyprint.ContextKeyTokenSymbol, symbol)
 	ctx = context.WithValue(ctx, prettyprint.ContextKeyTokenValueExponent, exp)
 	acct.PrettyPrint(ctx, "", os.Stdout)
+}
+
+func doAccountNonce(cmd *cobra.Command, args []string) {
+	if err := cmdCommon.Init(); err != nil {
+		cmdCommon.EarlyLogAndExit(err)
+	}
+
+	var addr api.Address
+	if err := addr.UnmarshalText([]byte(viper.GetString(CfgAccountAddr))); err != nil {
+		logger.Error("failed to parse account address",
+			"err", err,
+		)
+		os.Exit(1)
+	}
+
+	conn, client := doConnect(cmd)
+	defer conn.Close()
+
+	ctx := context.Background()
+	acct := getAccount(ctx, cmd, addr, client)
+	fmt.Println(acct.General.Nonce)
 }
 
 func doAccountTransfer(cmd *cobra.Command, args []string) {
@@ -315,6 +342,7 @@ func doAccountAmendCommissionSchedule(cmd *cobra.Command, args []string) {
 func registerAccountCmd() {
 	for _, v := range []*cobra.Command{
 		accountInfoCmd,
+		accountNonceCmd,
 		accountTransferCmd,
 		accountBurnCmd,
 		accountEscrowCmd,
@@ -324,7 +352,8 @@ func registerAccountCmd() {
 		accountCmd.AddCommand(v)
 	}
 
-	accountInfoCmd.Flags().AddFlagSet(accountInfoFlags)
+	accountInfoCmd.Flags().AddFlagSet(commonAccountFlags)
+	accountNonceCmd.Flags().AddFlagSet(commonAccountFlags)
 	accountTransferCmd.Flags().AddFlagSet(accountTransferFlags)
 	accountBurnCmd.Flags().AddFlagSet(accountBurnFlags)
 	accountEscrowCmd.Flags().AddFlagSet(commonEscrowFlags)
@@ -335,9 +364,9 @@ func registerAccountCmd() {
 }
 
 func init() {
-	accountInfoFlags.String(CfgAccountAddr, "", "account address")
-	_ = viper.BindPFlags(accountInfoFlags)
-	accountInfoFlags.AddFlagSet(cmdGrpc.ClientFlags)
+	commonAccountFlags.String(CfgAccountAddr, "", "account address")
+	_ = viper.BindPFlags(commonAccountFlags)
+	commonAccountFlags.AddFlagSet(cmdGrpc.ClientFlags)
 
 	amountFlags.String(CfgAmount, "0", "amount of stake (in base units) for the transaction")
 	_ = viper.BindPFlags(amountFlags)
