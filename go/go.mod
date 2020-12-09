@@ -17,12 +17,9 @@ replace (
 )
 
 require (
-	github.com/blevesearch/bleve v1.0.13
+	github.com/blevesearch/bleve v1.0.14
 	github.com/btcsuite/btcutil v1.0.2
 	github.com/cenkalti/backoff/v4 v4.1.0
-	github.com/cznic/b v0.0.0-20181122101859-a26611c4d92d // indirect
-	github.com/cznic/mathutil v0.0.0-20181122101859-297441e03548 // indirect
-	github.com/cznic/strutil v0.0.0-20181122101858-275e90344537 // indirect
 	github.com/dgraph-io/badger/v2 v2.2007.2
 	github.com/eapache/channels v1.1.0
 	github.com/fxamacker/cbor/v2 v2.2.1-0.20200820021930-bafca87fa6db
@@ -46,7 +43,6 @@ require (
 	github.com/prometheus/client_golang v1.8.0
 	github.com/prometheus/common v0.15.0
 	github.com/prometheus/procfs v0.2.0
-	github.com/remyoudompheng/bigfft v0.0.0-20200410134404-eec4a21b6bb0 // indirect
 	github.com/seccomp/libseccomp-golang v0.9.1
 	github.com/spf13/cobra v1.1.1
 	github.com/spf13/pflag v1.0.5
