@@ -40,6 +40,15 @@ const (
 
 	// CfgCommissionScheduleBounds configures the commission schedule rate bound steps.
 	CfgCommissionScheduleBounds = "stake.commission_schedule.bounds"
+
+	// CfgAllowBeneficiary configures the beneficiary address.
+	CfgAllowBeneficiary = "stake.allow.beneficiary"
+
+	// CfgAllowAmountChange configures the allowance change.
+	CfgAllowAmountChange = "stake.allow.amount_change"
+
+	// CfgWithdrawSource configures the withdrawal source address.
+	CfgWithdrawSource = "stake.withdraw.source"
 )
 
 var (
@@ -50,6 +59,8 @@ var (
 	commissionScheduleFlags = flag.NewFlagSet("", flag.ContinueOnError)
 	accountTransferFlags    = flag.NewFlagSet("", flag.ContinueOnError)
 	accountBurnFlags        = flag.NewFlagSet("", flag.ContinueOnError)
+	accountAllowFlags       = flag.NewFlagSet("", flag.ContinueOnError)
+	accountWithdrawFlags    = flag.NewFlagSet("", flag.ContinueOnError)
 
 	accountCmd = &cobra.Command{
 		Use:   "account",
@@ -96,6 +107,18 @@ var (
 		Use:   "gen_amend_commission_schedule",
 		Short: "generate an amend commission schedule transaction",
 		Run:   doAccountAmendCommissionSchedule,
+	}
+
+	accountAllowCmd = &cobra.Command{
+		Use:   "gen_allow",
+		Short: "generate an allow transaction",
+		Run:   doAccountAllow,
+	}
+
+	accountWithdrawCmd = &cobra.Command{
+		Use:   "gen_withdraw",
+		Short: "generate a withdraw transaction",
+		Run:   doAccountWithdraw,
 	}
 )
 
@@ -339,6 +362,71 @@ func doAccountAmendCommissionSchedule(cmd *cobra.Command, args []string) {
 	cmdConsensus.SignAndSaveTx(getCtxWithInfo(genesis), tx, nil)
 }
 
+func doAccountAllow(cmd *cobra.Command, args []string) {
+	if err := cmdCommon.Init(); err != nil {
+		cmdCommon.EarlyLogAndExit(err)
+	}
+
+	genesis := cmdConsensus.InitGenesis()
+	cmdConsensus.AssertTxFileOK()
+
+	var allow api.Allow
+	if err := allow.Beneficiary.UnmarshalText([]byte(viper.GetString(CfgAllowBeneficiary))); err != nil {
+		logger.Error("failed to parse beneficiary account address",
+			"err", err,
+		)
+		os.Exit(1)
+	}
+	amountRaw := viper.GetString(CfgAllowAmountChange)
+	if len(amountRaw) < 1 {
+		logger.Error("malformed allowance change amount")
+		os.Exit(1)
+	}
+	if amountRaw[0] == '-' {
+		allow.Negative = true
+		amountRaw = amountRaw[1:]
+	}
+	if err := allow.AmountChange.UnmarshalText([]byte(amountRaw)); err != nil {
+		logger.Error("failed to parse allowance change amount",
+			"err", err,
+		)
+		os.Exit(1)
+	}
+
+	nonce, fee := cmdConsensus.GetTxNonceAndFee()
+	tx := api.NewAllowTx(nonce, fee, &allow)
+
+	cmdConsensus.SignAndSaveTx(getCtxWithInfo(genesis), tx, nil)
+}
+
+func doAccountWithdraw(cmd *cobra.Command, args []string) {
+	if err := cmdCommon.Init(); err != nil {
+		cmdCommon.EarlyLogAndExit(err)
+	}
+
+	genesis := cmdConsensus.InitGenesis()
+	cmdConsensus.AssertTxFileOK()
+
+	var withdraw api.Withdraw
+	if err := withdraw.From.UnmarshalText([]byte(viper.GetString(CfgWithdrawSource))); err != nil {
+		logger.Error("failed to parse source account address",
+			"err", err,
+		)
+		os.Exit(1)
+	}
+	if err := withdraw.Amount.UnmarshalText([]byte(viper.GetString(CfgAmount))); err != nil {
+		logger.Error("failed to parse withdraw amount",
+			"err", err,
+		)
+		os.Exit(1)
+	}
+
+	nonce, fee := cmdConsensus.GetTxNonceAndFee()
+	tx := api.NewWithdrawTx(nonce, fee, &withdraw)
+
+	cmdConsensus.SignAndSaveTx(getCtxWithInfo(genesis), tx, nil)
+}
+
 func registerAccountCmd() {
 	for _, v := range []*cobra.Command{
 		accountInfoCmd,
@@ -348,6 +436,8 @@ func registerAccountCmd() {
 		accountEscrowCmd,
 		accountReclaimEscrowCmd,
 		accountAmendCommissionScheduleCmd,
+		accountAllowCmd,
+		accountWithdrawCmd,
 	} {
 		accountCmd.AddCommand(v)
 	}
@@ -361,6 +451,8 @@ func registerAccountCmd() {
 	accountReclaimEscrowCmd.Flags().AddFlagSet(commonEscrowFlags)
 	accountReclaimEscrowCmd.Flags().AddFlagSet(sharesFlags)
 	accountAmendCommissionScheduleCmd.Flags().AddFlagSet(commissionScheduleFlags)
+	accountAllowCmd.Flags().AddFlagSet(accountAllowFlags)
+	accountWithdrawCmd.Flags().AddFlagSet(accountWithdrawFlags)
 }
 
 func init() {
@@ -403,4 +495,16 @@ func init() {
 	_ = viper.BindPFlags(commissionScheduleFlags)
 	commissionScheduleFlags.AddFlagSet(cmdConsensus.TxFlags)
 	commissionScheduleFlags.AddFlagSet(cmdFlags.AssumeYesFlag)
+
+	accountAllowFlags.String(CfgAllowBeneficiary, "", "allowance beneficiary address")
+	accountAllowFlags.String(CfgAllowAmountChange, "0", "allowance change amount (in base units)")
+	_ = viper.BindPFlags(accountAllowFlags)
+	accountAllowFlags.AddFlagSet(cmdConsensus.TxFlags)
+	accountAllowFlags.AddFlagSet(cmdFlags.AssumeYesFlag)
+
+	accountWithdrawFlags.String(CfgWithdrawSource, "", "withdraw source address")
+	_ = viper.BindPFlags(accountWithdrawFlags)
+	accountWithdrawFlags.AddFlagSet(cmdConsensus.TxFlags)
+	accountWithdrawFlags.AddFlagSet(amountFlags)
+	accountWithdrawFlags.AddFlagSet(cmdFlags.AssumeYesFlag)
 }
