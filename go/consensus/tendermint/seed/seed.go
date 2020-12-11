@@ -199,6 +199,11 @@ func (srv *seedService) GetEpoch(ctx context.Context, height int64) (epochtime.E
 }
 
 // Implements Backend.
+func (srv *seedService) EpochtimeConsensusParameters(ctx context.Context, height int64) (*epochtime.ConsensusParameters, error) {
+	return nil, consensus.ErrUnsupported
+}
+
+// Implements Backend.
 func (srv *seedService) GetBlock(ctx context.Context, height int64) (*consensus.Block, error) {
 	return nil, consensus.ErrUnsupported
 }

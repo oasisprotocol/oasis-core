@@ -88,7 +88,7 @@ func (sc *serviceClient) StateToGenesis(ctx context.Context, height int64) (*api
 func (sc *serviceClient) ConsensusParameters(ctx context.Context, height int64) (*api.ConsensusParameters, error) {
 	return &api.ConsensusParameters{
 		DebugMockBackend: false,
-		Interval: sc.interval,
+		Interval:         sc.interval,
 	}, nil
 }
 

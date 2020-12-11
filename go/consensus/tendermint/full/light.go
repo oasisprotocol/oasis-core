@@ -68,9 +68,15 @@ func (t *fullService) GetParameters(ctx context.Context, height int64) (*consens
 		return nil, fmt.Errorf("tendermint: failed to marshal consensus params: %w", err)
 	}
 
+	genesisDoc, err := t.GetGenesisDocument(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("tendermint: failed to get genesis document: %w", err)
+	}
+
 	return &consensusAPI.Parameters{
-		Height: params.BlockHeight,
-		Meta:   meta,
+		Height:     params.BlockHeight,
+		Parameters: genesisDoc.Consensus.Parameters,
+		Meta:       meta,
 	}, nil
 }
 

@@ -640,6 +640,13 @@ func (t *fullService) WaitEpoch(ctx context.Context, epoch epochtimeAPI.EpochTim
 	}
 }
 
+func (t *fullService) EpochtimeConsensusParameters(ctx context.Context, height int64) (*epochtimeAPI.ConsensusParameters, error) {
+	if t.epochtime == nil {
+		return nil, consensusAPI.ErrUnsupported
+	}
+	return t.epochtime.ConsensusParameters(ctx, height)
+}
+
 func (t *fullService) GetBlock(ctx context.Context, height int64) (*consensusAPI.Block, error) {
 	blk, err := t.GetTendermintBlock(ctx, height)
 	if err != nil {
