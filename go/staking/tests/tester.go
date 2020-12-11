@@ -69,7 +69,7 @@ func newStakingTestsState(t *testing.T, backend api.Backend, consensus consensus
 }
 
 var (
-	debugGenesisState = debug.DebugGenesisState
+	debugGenesisState = debug.GenesisState()
 
 	qtyOne = *quantity.NewFromUint64(1)
 

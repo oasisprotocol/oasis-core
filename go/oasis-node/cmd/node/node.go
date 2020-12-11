@@ -31,6 +31,7 @@ import (
 	genesisAPI "github.com/oasisprotocol/oasis-core/go/genesis/api"
 	genesisFile "github.com/oasisprotocol/oasis-core/go/genesis/file"
 	genesisTestHelpers "github.com/oasisprotocol/oasis-core/go/genesis/tests"
+	governanceAPI "github.com/oasisprotocol/oasis-core/go/governance/api"
 	"github.com/oasisprotocol/oasis-core/go/ias"
 	iasAPI "github.com/oasisprotocol/oasis-core/go/ias/api"
 	keymanagerAPI "github.com/oasisprotocol/oasis-core/go/keymanager/api"
@@ -64,6 +65,7 @@ import (
 	workerSentry "github.com/oasisprotocol/oasis-core/go/worker/sentry"
 	"github.com/oasisprotocol/oasis-core/go/worker/storage"
 	workerStorage "github.com/oasisprotocol/oasis-core/go/worker/storage"
+	workerGovernanceUpgrade "github.com/oasisprotocol/oasis-core/go/worker/upgrade"
 )
 
 // Flags has the configuration flags.
@@ -115,15 +117,16 @@ type Node struct {
 	RuntimeRegistry runtimeRegistry.Registry
 	RuntimeClient   runtimeClientAPI.RuntimeClient
 
-	CommonWorker       *workerCommon.Worker
-	ExecutorWorker     *executor.Worker
-	StorageWorker      *workerStorage.Worker
-	SentryWorker       *workerSentry.Worker
-	P2P                *p2p.P2P
-	RegistrationWorker *registration.Worker
-	KeymanagerWorker   *workerKeymanager.Worker
-	ConsensusWorker    *workerConsensusRPC.Worker
-	readyCh            chan struct{}
+	CommonWorker            *workerCommon.Worker
+	ExecutorWorker          *executor.Worker
+	StorageWorker           *workerStorage.Worker
+	SentryWorker            *workerSentry.Worker
+	P2P                     *p2p.P2P
+	RegistrationWorker      *registration.Worker
+	KeymanagerWorker        *workerKeymanager.Worker
+	ConsensusWorker         *workerConsensusRPC.Worker
+	GovernanceUpgradeWorker *workerGovernanceUpgrade.Worker
+	readyCh                 chan struct{}
 
 	logger *logging.Logger
 }
@@ -200,6 +203,7 @@ func (n *Node) startRuntimeServices() error {
 	registryAPI.RegisterService(grpcSrv, n.Consensus.Registry())
 	stakingAPI.RegisterService(grpcSrv, n.Consensus.Staking())
 	keymanagerAPI.RegisterService(grpcSrv, n.Consensus.KeyManager())
+	governanceAPI.RegisterService(grpcSrv, n.Consensus.Governance())
 
 	// Register dump genesis halt hook.
 	n.Consensus.RegisterHaltHook(func(ctx context.Context, blockHeight int64, epoch epochtime.EpochTime) {
@@ -339,7 +343,6 @@ func (n *Node) initRuntimeWorkers() error {
 	if genesisDoc.Registry.Parameters.DebugAllowUnroutableAddresses {
 		registration.DebugForceAllowUnroutableAddresses()
 	}
-
 	if err != nil {
 		n.logger.Error("failed to initialize worker registration",
 			"err", err,
@@ -347,6 +350,18 @@ func (n *Node) initRuntimeWorkers() error {
 		return err
 	}
 	n.svcMgr.Register(n.RegistrationWorker)
+
+	n.GovernanceUpgradeWorker, err = workerGovernanceUpgrade.New(
+		n.Consensus,
+		n.Upgrader,
+	)
+	if err != nil {
+		n.logger.Error("failed to initialize governance upgrade worker",
+			"err", err,
+		)
+		return err
+	}
+	n.svcMgr.Register(n.GovernanceUpgradeWorker)
 
 	// Initialize the storage worker.
 	n.StorageWorker, err = workerStorage.New(
@@ -434,6 +449,11 @@ func (n *Node) startRuntimeWorkers() error {
 
 	// Start the worker registration service.
 	if err := n.RegistrationWorker.Start(); err != nil {
+		return err
+	}
+
+	// Start the consensus upgrade worker.
+	if err := n.GovernanceUpgradeWorker.Start(); err != nil {
 		return err
 	}
 

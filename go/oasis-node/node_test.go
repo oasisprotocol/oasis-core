@@ -26,6 +26,8 @@ import (
 	consensusTests "github.com/oasisprotocol/oasis-core/go/consensus/tests"
 	epochtime "github.com/oasisprotocol/oasis-core/go/epochtime/api"
 	epochtimeTests "github.com/oasisprotocol/oasis-core/go/epochtime/tests"
+	governance "github.com/oasisprotocol/oasis-core/go/governance/api"
+	governanceTests "github.com/oasisprotocol/oasis-core/go/governance/tests"
 	cmdCommon "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common"
 	cmdCommonFlags "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/flags"
 	"github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/node"
@@ -231,6 +233,10 @@ func TestNode(t *testing.T) {
 		// Runtime client tests also need a functional runtime.
 		{"RuntimeClient", testRuntimeClient},
 
+		// Governance requires a registered node that is a validator and was
+		// not slashed.
+		{"Governance", testGovernance},
+
 		// Staking requires a registered node that is a validator.
 		{"Staking", testStaking},
 		{"StakingClient", testStakingClient},
@@ -424,6 +430,24 @@ func testStakingClient(t *testing.T, node *testNode) {
 
 func testRootHash(t *testing.T, node *testNode) {
 	roothashTests.RootHashImplementationTests(t, node.Consensus.RootHash(), node.Consensus, node.Identity)
+}
+
+func testGovernance(t *testing.T, node *testNode) {
+	// Directly.
+	t.Run("Direct", func(t *testing.T) {
+		governanceTests.GovernanceImplementationTests(t, node.Consensus.Governance(), node.Consensus, node.entity, node.entitySigner)
+	})
+
+	// Over gRPC.
+	t.Run("OverGrpc", func(t *testing.T) {
+		// Create a client backend connected to the local node's internal socket.
+		conn, err := cmnGrpc.Dial("unix:"+filepath.Join(node.dataDir, "internal.sock"), grpc.WithInsecure())
+		require.NoError(t, err, "Dial")
+		defer conn.Close()
+
+		client := governance.NewGovernanceClient(conn)
+		governanceTests.GovernanceImplementationTests(t, client, node.Consensus, node.entity, node.entitySigner)
+	})
 }
 
 func testExecutorWorker(t *testing.T, node *testNode) {

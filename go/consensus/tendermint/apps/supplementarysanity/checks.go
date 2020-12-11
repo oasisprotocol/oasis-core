@@ -6,11 +6,13 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common"
 	"github.com/oasisprotocol/oasis-core/go/common/quantity"
 	abciAPI "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/api"
+	governanceState "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/apps/governance/state"
 	keymanagerState "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/apps/keymanager/state"
 	registryState "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/apps/registry/state"
 	roothashState "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/apps/roothash/state"
 	stakingState "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/apps/staking/state"
 	epochtime "github.com/oasisprotocol/oasis-core/go/epochtime/api"
+	governance "github.com/oasisprotocol/oasis-core/go/governance/api"
 	keymanager "github.com/oasisprotocol/oasis-core/go/keymanager/api"
 	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
 	roothash "github.com/oasisprotocol/oasis-core/go/roothash/api"
@@ -176,8 +178,8 @@ func checkStaking(ctx *abciAPI.Context, now epochtime.EpochTime) error {
 	_ = total.Add(totalFees)
 	if total.Cmp(totalSupply) != 0 {
 		return fmt.Errorf(
-			"balances in accounts plus common pool (%s) plus last block fees (%s) does not add up to total supply (%s)",
-			total.String(), totalFees.String(), totalSupply.String(),
+			"balances in accounts plus governance deposits (%s), plus common pool (%s), plus last block fees (%s), does not add up to total supply (%s)",
+			governanceDeposits.String(), commonPool.String(), totalFees.String(), totalSupply.String(),
 		)
 	}
 
@@ -238,6 +240,56 @@ func checkKeyManager(ctx *abciAPI.Context, now epochtime.EpochTime) error {
 	err = keymanager.SanityCheckStatuses(statuses)
 	if err != nil {
 		return fmt.Errorf("SanityCheckStatuses: %w", err)
+	}
+
+	return nil
+}
+
+func checkGovernance(ctx *abciAPI.Context, epoch epochtime.EpochTime) error {
+	st := governanceState.NewMutableState(ctx.State())
+	stakingState := stakingState.NewMutableState(ctx.State())
+	govDeposits, err := stakingState.GovernanceDeposits(ctx)
+	if err != nil {
+		return fmt.Errorf("GovernanceDeposits: %w", err)
+	}
+
+	params, err := st.ConsensusParameters(ctx)
+	if err != nil {
+		return fmt.Errorf("ConsensusParameters: %w", err)
+	}
+	err = params.SanityCheck()
+	if err != nil {
+		return fmt.Errorf("SanityCheck ConsensusParameters: %w", err)
+	}
+	// Sanity check proposals.
+	proposals, err := st.Proposals(ctx)
+	if err != nil {
+		return fmt.Errorf("Proposals: %w", err)
+	}
+	err = governance.SanityCheckProposals(proposals, epoch, govDeposits)
+	if err != nil {
+		return fmt.Errorf("SanityCheck Proposals: %w", err)
+	}
+	// Sanity check votes.
+	for _, p := range proposals {
+		var votes []*governance.VoteEntry
+		votes, err = st.Votes(ctx, p.ID)
+		if err != nil {
+			return fmt.Errorf("Votes: %w", err)
+		}
+		err = governance.SanityCheckVotes(p, votes)
+		if err != nil {
+			return fmt.Errorf("SanityCheck Votes: %w", err)
+		}
+	}
+	// Sanity check pending upgrades.
+	pendingUpgrades, err := st.PendingUpgrades(ctx)
+	if err != nil {
+		return fmt.Errorf("PendingUpgrades: %w", err)
+	}
+	err = governance.SanityCheckPendingUpgrades(pendingUpgrades, epoch, params)
+	if err != nil {
+		return fmt.Errorf("SanityCheck PendingUpgrades: %w", err)
 	}
 
 	return nil

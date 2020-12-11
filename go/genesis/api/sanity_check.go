@@ -48,6 +48,9 @@ func (d *Document) SanityCheck() error {
 	if err := d.Beacon.SanityCheck(); err != nil {
 		return err
 	}
+	if err := d.Governance.SanityCheck(epoch, &d.Staking.GovernanceDeposits); err != nil {
+		return err
+	}
 
 	if d.HaltEpoch < epoch {
 		return fmt.Errorf("genesis: sanity check failed: halt epoch is in the past")

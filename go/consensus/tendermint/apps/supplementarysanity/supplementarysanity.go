@@ -122,6 +122,7 @@ func (app *supplementarySanityApplication) endBlockImpl(ctx *api.Context, reques
 		{"checkScheduler", checkScheduler},
 		{"checkBeacon", checkBeacon},
 		{"checkConsensus", checkConsensus},
+		{"checkGovernance", checkGovernance},
 		{"checkHalt", checkHalt},
 		{"checkStakeClaims", checkStakeClaims},
 	} {

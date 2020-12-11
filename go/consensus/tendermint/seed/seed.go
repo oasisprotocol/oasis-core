@@ -30,6 +30,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/consensus/tendermint/crypto"
 	epochtime "github.com/oasisprotocol/oasis-core/go/epochtime/api"
 	genesis "github.com/oasisprotocol/oasis-core/go/genesis/api"
+	governance "github.com/oasisprotocol/oasis-core/go/governance/api"
 	keymanager "github.com/oasisprotocol/oasis-core/go/keymanager/api"
 	cmflags "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/flags"
 	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
@@ -297,6 +298,11 @@ func (srv *seedService) Staking() staking.Backend {
 
 // Implements Backend.
 func (srv *seedService) Scheduler() scheduler.Backend {
+	panic(consensus.ErrUnsupported)
+}
+
+// Implements Backend.
+func (srv *seedService) Governance() governance.Backend {
 	panic(consensus.ErrUnsupported)
 }
 

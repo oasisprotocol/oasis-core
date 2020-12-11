@@ -24,6 +24,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/entity"
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
 	"github.com/oasisprotocol/oasis-core/go/common/node"
+	"github.com/oasisprotocol/oasis-core/go/common/quantity"
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
 	"github.com/oasisprotocol/oasis-core/go/consensus/api/transaction"
 	consensusGenesis "github.com/oasisprotocol/oasis-core/go/consensus/genesis"
@@ -31,6 +32,7 @@ import (
 	epochtime "github.com/oasisprotocol/oasis-core/go/epochtime/api"
 	genesis "github.com/oasisprotocol/oasis-core/go/genesis/api"
 	genesisFile "github.com/oasisprotocol/oasis-core/go/genesis/file"
+	governance "github.com/oasisprotocol/oasis-core/go/governance/api"
 	keymanager "github.com/oasisprotocol/oasis-core/go/keymanager/api"
 	cmdCommon "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common"
 	"github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/flags"
@@ -67,6 +69,14 @@ const (
 	cfgSchedulerMaxValidatorsPerEntity = "scheduler.max_validators_per_entity"
 	cfgSchedulerDebugBypassStake       = "scheduler.debug.bypass_stake" // nolint: gosec
 	cfgSchedulerDebugStaticValidators  = "scheduler.debug.static_validators"
+
+	// Governance config flags.
+	CfgGovernanceMinProposalDeposit        = "governance.min_proposal_deposit"
+	CfgGovernanceQuorum                    = "governance.quorum"
+	CfgGovernanceThreshold                 = "governance.threshold"
+	CfgGovernanceUpgradeCancelMinEpochDiff = "governance.upgrade_cancel_min_epoch_diff"
+	CfgGovernanceUpgradeMinEpochDiff       = "governance.upgrade_min_epoch_diff"
+	CfgGovernanceVotingPeriod              = "governance.voting_period"
 
 	// Beacon config flags.
 	cfgBeaconDebugDeterministic = "beacon.debug.deterministic"
@@ -213,6 +223,18 @@ func doInitGenesis(cmd *cobra.Command, args []string) {
 			MaxValidatorsPerEntity: viper.GetInt(cfgSchedulerMaxValidatorsPerEntity),
 			DebugBypassStake:       viper.GetBool(cfgSchedulerDebugBypassStake),
 			DebugStaticValidators:  viper.GetBool(cfgSchedulerDebugStaticValidators),
+		},
+	}
+
+	doc.Governance = governance.Genesis{
+		Parameters: governance.ConsensusParameters{
+			GasCosts:                  governance.DefaultGasCosts, // TODO: configurable.
+			MinProposalDeposit:        *quantity.NewFromUint64(viper.GetUint64(CfgGovernanceMinProposalDeposit)),
+			Quorum:                    uint8(viper.GetInt(CfgGovernanceQuorum)),
+			Threshold:                 uint8(viper.GetInt(CfgGovernanceThreshold)),
+			UpgradeCancelMinEpochDiff: epochtime.EpochTime(viper.GetUint64(CfgGovernanceUpgradeCancelMinEpochDiff)),
+			UpgradeMinEpochDiff:       epochtime.EpochTime(viper.GetUint64(CfgGovernanceUpgradeMinEpochDiff)),
+			VotingPeriod:              epochtime.EpochTime(viper.GetUint64(CfgGovernanceVotingPeriod)),
 		},
 	}
 
@@ -709,6 +731,14 @@ func init() {
 	initGenesisFlags.Bool(cfgSchedulerDebugStaticValidators, false, "bypass all validator elections (UNSAFE)")
 	_ = initGenesisFlags.MarkHidden(cfgSchedulerDebugBypassStake)
 	_ = initGenesisFlags.MarkHidden(cfgSchedulerDebugStaticValidators)
+
+	// Governance config flags.
+	initGenesisFlags.Uint64(CfgGovernanceMinProposalDeposit, 100, "proposal deposit for governance proposals")
+	initGenesisFlags.Uint8(CfgGovernanceQuorum, 90, "required quorum for governance proposals to be accepted")
+	initGenesisFlags.Uint8(CfgGovernanceThreshold, 90, "required threshold for governance proposals to be accepted")
+	initGenesisFlags.Uint64(CfgGovernanceUpgradeCancelMinEpochDiff, 300, "minimum number of epochs in advance for canceling proposals")
+	initGenesisFlags.Uint64(CfgGovernanceUpgradeMinEpochDiff, 300, "minimum number of epochs the upgrade needs to be scheduled in advance")
+	initGenesisFlags.Uint64(CfgGovernanceVotingPeriod, 100, "voting period (in epochs)")
 
 	// Beacon config flags.
 	initGenesisFlags.Bool(cfgBeaconDebugDeterministic, false, "enable deterministic beacon output (UNSAFE)")

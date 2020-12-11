@@ -19,6 +19,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/consensus/api/transaction/results"
 	epochtime "github.com/oasisprotocol/oasis-core/go/epochtime/api"
 	genesis "github.com/oasisprotocol/oasis-core/go/genesis/api"
+	governance "github.com/oasisprotocol/oasis-core/go/governance/api"
 	keymanager "github.com/oasisprotocol/oasis-core/go/keymanager/api"
 	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
 	roothash "github.com/oasisprotocol/oasis-core/go/roothash/api"
@@ -150,6 +151,9 @@ type ClientBackend interface {
 
 	// Scheduler returns the scheduler backend.
 	Scheduler() scheduler.Backend
+
+	// Governance returns the governance backend.
+	Governance() governance.Backend
 }
 
 // Block is a consensus block.

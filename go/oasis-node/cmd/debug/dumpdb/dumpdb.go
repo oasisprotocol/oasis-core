@@ -20,6 +20,7 @@ import (
 	abciState "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/abci/state"
 	tendermintAPI "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/api"
 	beaconApp "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/apps/beacon"
+	governanceApp "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/apps/governance"
 	keymanagerApp "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/apps/keymanager"
 	registryApp "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/apps/registry"
 	roothashApp "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/apps/roothash"
@@ -29,6 +30,7 @@ import (
 	epochtime "github.com/oasisprotocol/oasis-core/go/epochtime/api"
 	genesis "github.com/oasisprotocol/oasis-core/go/genesis/api"
 	genesisFile "github.com/oasisprotocol/oasis-core/go/genesis/file"
+	governance "github.com/oasisprotocol/oasis-core/go/governance/api"
 	keymanager "github.com/oasisprotocol/oasis-core/go/keymanager/api"
 	cmdCommon "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common"
 	"github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/flags"
@@ -208,6 +210,16 @@ func doDumpDB(cmd *cobra.Command, args []string) {
 	}
 	doc.Scheduler = *schedulerSt
 
+	// Governance
+	governanceSt, err := dumpGovernance(ctx, qs)
+	if err != nil {
+		logger.Error("failed to dump governance state",
+			"err", err,
+		)
+		return
+	}
+	doc.Governance = *governanceSt
+
 	// Beacon
 	beaconSt, err := dumpBeacon(ctx, qs)
 	if err != nil {
@@ -321,6 +333,19 @@ func dumpScheduler(ctx context.Context, qs *dumpQueryState) (*scheduler.Genesis,
 	st, err := q.Genesis(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("dumpdb: failed to dump scheduler state: %w", err)
+	}
+	return st, nil
+}
+
+func dumpGovernance(ctx context.Context, qs *dumpQueryState) (*governance.Genesis, error) {
+	qf := governanceApp.NewQueryFactory(qs)
+	q, err := qf.QueryAt(ctx, qs.BlockHeight())
+	if err != nil {
+		return nil, fmt.Errorf("dumpdb: failed to create governance query: %w", err)
+	}
+	st, err := q.Genesis(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("dumpdb: failed to dump governance state: %w", err)
 	}
 	return st, nil
 }

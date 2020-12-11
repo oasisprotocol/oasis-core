@@ -6,6 +6,7 @@ import (
 	cmnGrpc "github.com/oasisprotocol/oasis-core/go/common/grpc"
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
 	control "github.com/oasisprotocol/oasis-core/go/control/api"
+	governance "github.com/oasisprotocol/oasis-core/go/governance/api"
 	keymanager "github.com/oasisprotocol/oasis-core/go/keymanager/api"
 	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
 	runtimeClient "github.com/oasisprotocol/oasis-core/go/runtime/client/api"
@@ -21,6 +22,7 @@ type Controller struct {
 
 	Consensus     consensus.ClientBackend
 	Staking       staking.Backend
+	Governance    governance.Backend
 	Registry      registry.Backend
 	RuntimeClient runtimeClient.RuntimeClient
 	Storage       storage.Backend
@@ -51,6 +53,7 @@ func NewController(socketPath string) (*Controller, error) {
 		NodeController:  control.NewNodeControllerClient(conn),
 		Consensus:       consensus.NewConsensusClient(conn),
 		Staking:         staking.NewStakingClient(conn),
+		Governance:      governance.NewGovernanceClient(conn),
 		Registry:        registry.NewRegistryClient(conn),
 		RuntimeClient:   runtimeClient.NewRuntimeClient(conn),
 		Storage:         storage.NewStorageClient(conn),

@@ -24,6 +24,7 @@ import (
 	epochtime "github.com/oasisprotocol/oasis-core/go/epochtime/api"
 	genesis "github.com/oasisprotocol/oasis-core/go/genesis/api"
 	genesisTestHelpers "github.com/oasisprotocol/oasis-core/go/genesis/tests"
+	governance "github.com/oasisprotocol/oasis-core/go/governance/api"
 	keymanager "github.com/oasisprotocol/oasis-core/go/keymanager/api"
 	cmdFlags "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/flags"
 	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
@@ -33,46 +34,58 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/staking/api/token"
 	stakingTests "github.com/oasisprotocol/oasis-core/go/staking/tests/debug"
 	storage "github.com/oasisprotocol/oasis-core/go/storage/api"
+	upgrade "github.com/oasisprotocol/oasis-core/go/upgrade/api"
 )
 
 // Note: If you are here wanting to alter the genesis document used for
 // the node that is spun up as part of the tests, you really want
 // consensus/tendermint/tests/genesis/genesis.go.
-var testDoc = &genesis.Document{
-	Height:    1,
-	ChainID:   genesisTestHelpers.TestChainID,
-	Time:      time.Unix(1574858284, 0),
-	HaltEpoch: epochtime.EpochTime(math.MaxUint64),
-	EpochTime: epochtime.Genesis{
-		Parameters: epochtime.ConsensusParameters{
-			DebugMockBackend: true,
+func testDoc() genesis.Document {
+	return genesis.Document{
+		Height:    1,
+		ChainID:   genesisTestHelpers.TestChainID,
+		Time:      time.Unix(1574858284, 0),
+		HaltEpoch: epochtime.EpochTime(math.MaxUint64),
+		EpochTime: epochtime.Genesis{
+			Parameters: epochtime.ConsensusParameters{
+				DebugMockBackend: true,
+			},
 		},
-	},
-	Registry: registry.Genesis{
-		Parameters: registry.ConsensusParameters{
-			DebugAllowUnroutableAddresses:          true,
-			DebugBypassStake:                       true,
-			DebugAllowEntitySignedNodeRegistration: true,
+		Registry: registry.Genesis{
+			Parameters: registry.ConsensusParameters{
+				DebugAllowUnroutableAddresses:          true,
+				DebugBypassStake:                       true,
+				DebugAllowEntitySignedNodeRegistration: true,
+			},
 		},
-	},
-	Scheduler: scheduler.Genesis{
-		Parameters: scheduler.ConsensusParameters{
-			MinValidators:          1,
-			MaxValidators:          100,
-			MaxValidatorsPerEntity: 100,
-			DebugBypassStake:       true,
-			DebugStaticValidators:  true,
-			// Zero RewardFactorEpochElectionAny is normal.
+		Governance: governance.Genesis{
+			Parameters: governance.ConsensusParameters{
+				Quorum:                    90,
+				Threshold:                 90,
+				VotingPeriod:              100,
+				UpgradeCancelMinEpochDiff: 200,
+				UpgradeMinEpochDiff:       200,
+			},
 		},
-	},
-	Consensus: consensus.Genesis{
-		Backend: tendermint.BackendName,
-		Parameters: consensus.Parameters{
-			TimeoutCommit:     1 * time.Millisecond,
-			SkipTimeoutCommit: true,
+		Scheduler: scheduler.Genesis{
+			Parameters: scheduler.ConsensusParameters{
+				MinValidators:          1,
+				MaxValidators:          100,
+				MaxValidatorsPerEntity: 100,
+				DebugBypassStake:       true,
+				DebugStaticValidators:  true,
+				// Zero RewardFactorEpochElectionAny is normal.
+			},
 		},
-	},
-	Staking: stakingTests.DebugGenesisState,
+		Consensus: consensus.Genesis{
+			Backend: tendermint.BackendName,
+			Parameters: consensus.Parameters{
+				TimeoutCommit:     1 * time.Millisecond,
+				SkipTimeoutCommit: true,
+			},
+		},
+		Staking: stakingTests.GenesisState(),
+	}
 }
 
 func signEntityOrDie(signer signature.Signer, e *entity.Entity) *entity.SignedEntity {
@@ -121,12 +134,12 @@ func hex2ns(str string, force bool) common.Namespace {
 
 func TestGenesisChainContext(t *testing.T) {
 	// Ensure that the chain context is stable.
-	stableDoc := *testDoc
+	stableDoc := testDoc()
 	// NOTE: Staking part is not stable as it generates a new public key
 	//       on each run.
 	stableDoc.Staking = staking.Genesis{}
 
-	require.Equal(t, "926eef60f270f10d87dcdc4f5c24fc861d23e6ef153a9085c789862bac8d9f3e", stableDoc.ChainContext())
+	require.Equal(t, "de9b402aa6926ff2014b6611a4e01ff17800419d2ac31dff0278d7d6a8751d26", stableDoc.ChainContext())
 }
 
 func TestGenesisSanityCheck(t *testing.T) {
@@ -257,22 +270,23 @@ func TestGenesisSanityCheck(t *testing.T) {
 	entitySignedTestNode := signNodeOrDie(append([]signature.Signer{signer}, nodeSigners...), testNode)
 
 	// Test genesis document should pass sanity check.
-	require.NoError(testDoc.SanityCheck(), "test genesis document should be valid")
+	d := testDoc()
+	require.NoError(d.SanityCheck(), "test genesis document should be valid")
 
 	// Test top-level genesis checks.
-	d := *testDoc
+	d = testDoc()
 	d.Height = -123
 	require.Error(d.SanityCheck(), "height < 0 should be invalid")
 
-	d = *testDoc
+	d = testDoc()
 	d.Height = 0
 	require.Error(d.SanityCheck(), "height < 1 should be invalid")
 
-	d = *testDoc
+	d = testDoc()
 	d.ChainID = "   \t"
 	require.Error(d.SanityCheck(), "empty chain ID should be invalid")
 
-	d = *testDoc
+	d = testDoc()
 	d.EpochTime.Parameters.DebugMockBackend = false
 	d.EpochTime.Parameters.Interval = 600
 	d.EpochTime.Base = 10
@@ -280,28 +294,28 @@ func TestGenesisSanityCheck(t *testing.T) {
 	require.Error(d.SanityCheck(), "halt epoch in the past should be invalid")
 
 	// Test consensus genesis checks.
-	d = *testDoc
+	d = testDoc()
 	d.Consensus.Parameters.TimeoutCommit = 0
 	d.Consensus.Parameters.SkipTimeoutCommit = false
 	require.Error(d.SanityCheck(), "too small timeout commit should be invalid")
 
-	d = *testDoc
+	d = testDoc()
 	d.Consensus.Parameters.TimeoutCommit = 0
 	d.Consensus.Parameters.SkipTimeoutCommit = true
 	require.NoError(d.SanityCheck(), "too small timeout commit should be allowed if it's skipped")
 
 	// Test epochtime genesis checks.
-	d = *testDoc
+	d = testDoc()
 	d.EpochTime.Base = epochtime.EpochInvalid
 	require.Error(d.SanityCheck(), "invalid base epoch should be rejected")
 
-	d = *testDoc
+	d = testDoc()
 	d.EpochTime.Parameters.Interval = 0
 	d.EpochTime.Parameters.DebugMockBackend = false
 	require.Error(d.SanityCheck(), "invalid epoch interval should be rejected")
 
 	// Test keymanager genesis checks.
-	d = *testDoc
+	d = testDoc()
 	d.KeyManager = keymanager.Genesis{
 		Statuses: []*keymanager.Status{
 			{
@@ -311,7 +325,7 @@ func TestGenesisSanityCheck(t *testing.T) {
 	}
 	require.Error(d.SanityCheck(), "invalid keymanager runtime should be rejected")
 
-	d = *testDoc
+	d = testDoc()
 	d.KeyManager = keymanager.Genesis{
 		Statuses: []*keymanager.Status{
 			{
@@ -333,7 +347,7 @@ func TestGenesisSanityCheck(t *testing.T) {
 		return nil
 	}
 
-	d = *testDoc
+	d = testDoc()
 	d.RootHash.RuntimeStates = make(map[common.Namespace]*roothash.GenesisRuntimeState)
 	d.RootHash.RuntimeStates[validNS] = &roothash.GenesisRuntimeState{
 		RuntimeGenesis: registry.RuntimeGenesis{
@@ -345,7 +359,7 @@ func TestGenesisSanityCheck(t *testing.T) {
 	require.Error(rtsSanityCheck(d.RootHash, false), "empty StorageReceipts for StateRoot should be rejected")
 	require.NoError(rtsSanityCheck(d.RootHash, true), "empty StorageReceipts for StateRoot should be ignored, if isGenesis=true")
 
-	d = *testDoc
+	d = testDoc()
 	d.RootHash.RuntimeStates = make(map[common.Namespace]*roothash.GenesisRuntimeState)
 	d.RootHash.RuntimeStates[validNS] = &roothash.GenesisRuntimeState{
 		RuntimeGenesis: registry.RuntimeGenesis{
@@ -357,7 +371,7 @@ func TestGenesisSanityCheck(t *testing.T) {
 	require.Error(rtsSanityCheck(d.RootHash, false), "empty StorageReceipt for StateRoot should be rejected")
 	require.NoError(rtsSanityCheck(d.RootHash, true), "empty StorageReceipt for StateRoot should be ignored, if isGenesis=true")
 
-	d = *testDoc
+	d = testDoc()
 	signature.SetChainContext("test: oasis-core tests")
 	stateRootSig, _ := signature.Sign(signer, storage.ReceiptSignatureContext, nonEmptyHash[:])
 	stateRootSig2, _ := signature.Sign(signer2, storage.ReceiptSignatureContext, nonEmptyHash[:])
@@ -373,7 +387,7 @@ func TestGenesisSanityCheck(t *testing.T) {
 	require.Error(rtsSanityCheck(d.RootHash, false), "some incorrect StorageReceipt for StateRoot should be rejected")
 	require.NoError(rtsSanityCheck(d.RootHash, true), "some incorrect StorageReceipt for StateRoot should be ignored, if isGenesis=true")
 
-	d = *testDoc
+	d = testDoc()
 	d.RootHash.RuntimeStates = make(map[common.Namespace]*roothash.GenesisRuntimeState)
 	d.RootHash.RuntimeStates[validNS] = &roothash.GenesisRuntimeState{
 		RuntimeGenesis: registry.RuntimeGenesis{
@@ -384,7 +398,7 @@ func TestGenesisSanityCheck(t *testing.T) {
 	require.NoError(rtsSanityCheck(d.RootHash, false), "non-empty StateRoot with all correct StorageReceipts should pass")
 	require.NoError(rtsSanityCheck(d.RootHash, true), "non-empty StateRoot with all correct StorageReceipts should pass, if isGenesis=true")
 
-	d = *testDoc
+	d = testDoc()
 	nonEmptyState := storage.WriteLog{storage.LogEntry{
 		Key:   []byte{1, 2, 3},
 		Value: []byte{1, 2, 3},
@@ -412,25 +426,25 @@ func TestGenesisSanityCheck(t *testing.T) {
 	require.NoError(rtsSanityCheck(d.RootHash, true), "non-empty StateRoot with non-empty State and all valid StorageReceipts should pass, if isGenesis=true")
 
 	// Test registry genesis checks.
-	d = *testDoc
+	d = testDoc()
 	d.Registry.Entities = []*entity.SignedEntity{signedTestEntity}
 	require.NoError(d.SanityCheck(), "test entity should pass")
 
-	d = *testDoc
+	d = testDoc()
 	te := *testEntity
 	te.ID = invalidPK
 	signedBrokenEntity := signEntityOrDie(signer, &te)
 	d.Registry.Entities = []*entity.SignedEntity{signedBrokenEntity}
 	require.Error(d.SanityCheck(), "invalid test entity ID should be rejected")
 
-	d = *testDoc
+	d = testDoc()
 	te = *testEntity
 	te.Nodes = []signature.PublicKey{invalidPK}
 	signedBrokenEntity = signEntityOrDie(signer, &te)
 	d.Registry.Entities = []*entity.SignedEntity{signedBrokenEntity}
 	require.Error(d.SanityCheck(), "test entity's invalid node public key should be rejected")
 
-	d = *testDoc
+	d = testDoc()
 	te = *testEntity
 	signedBrokenEntity, err := entity.SignEntity(signer, signature.NewContext("genesis sanity check invalid ctx"), &te)
 	if err != nil {
@@ -439,34 +453,34 @@ func TestGenesisSanityCheck(t *testing.T) {
 	d.Registry.Entities = []*entity.SignedEntity{signedBrokenEntity}
 	require.Error(d.SanityCheck(), "test entity with invalid signing context should be rejected")
 
-	d = *testDoc
+	d = testDoc()
 	d.Registry.Entities = []*entity.SignedEntity{signedTestEntity}
 	d.Registry.Runtimes = []*registry.SignedRuntime{signedTestKMRuntime}
 	require.NoError(d.SanityCheck(), "test keymanager runtime should pass")
 
-	d = *testDoc
+	d = testDoc()
 	d.Registry.Entities = []*entity.SignedEntity{signedTestEntity}
 	d.Registry.Runtimes = []*registry.SignedRuntime{signedTestKMRuntime, signedTestRuntime}
 	require.NoError(d.SanityCheck(), "test runtimes should pass")
 
-	d = *testDoc
+	d = testDoc()
 	d.Registry.Entities = []*entity.SignedEntity{signedTestEntity}
 	d.Registry.Runtimes = []*registry.SignedRuntime{signedTestRuntime, signedTestKMRuntime}
 	require.NoError(d.SanityCheck(), "test runtimes in reverse order should pass")
 
-	d = *testDoc
+	d = testDoc()
 	d.Registry.Entities = []*entity.SignedEntity{signedTestEntity}
 	d.Registry.Runtimes = []*registry.SignedRuntime{signedTestRuntime}
 	require.Error(d.SanityCheck(), "test runtime with missing keymanager runtime should be rejected")
 
-	d = *testDoc
+	d = testDoc()
 	d.Registry.Entities = []*entity.SignedEntity{signedTestEntity}
 	d.Registry.Runtimes = []*registry.SignedRuntime{signedTestKMRuntime, signedTestRuntime, signedTestRuntime}
 	require.Error(d.SanityCheck(), "duplicate runtime IDs should be rejected")
 
 	// TODO: fiddle with executor/merge/txnsched parameters.
 
-	d = *testDoc
+	d = testDoc()
 	te = *testEntity
 	te.Nodes = []signature.PublicKey{testNode.ID}
 	signedEntityWithTestNode := signEntityOrDie(signer, &te)
@@ -475,7 +489,7 @@ func TestGenesisSanityCheck(t *testing.T) {
 	d.Registry.Nodes = []*node.MultiSignedNode{signedTestNode}
 	require.NoError(d.SanityCheck(), "entity with node should pass")
 
-	d = *testDoc
+	d = testDoc()
 	te = *testEntity
 	te.Nodes = []signature.PublicKey{unknownPK}
 	te.AllowEntitySignedNodes = false
@@ -485,7 +499,7 @@ func TestGenesisSanityCheck(t *testing.T) {
 	d.Registry.Nodes = []*node.MultiSignedNode{signedTestNode}
 	require.Error(d.SanityCheck(), "node not listed among controlling entity's nodes should be rejected if the entity doesn't allow entity-signed nodes")
 
-	d = *testDoc
+	d = testDoc()
 	te = *testEntity
 	te.Nodes = []signature.PublicKey{unknownPK}
 	te.AllowEntitySignedNodes = true
@@ -495,7 +509,7 @@ func TestGenesisSanityCheck(t *testing.T) {
 	d.Registry.Nodes = []*node.MultiSignedNode{entitySignedTestNode}
 	require.NoError(d.SanityCheck(), "node not listed among controlling entity's nodes should still be accepted if the entity allows entity-signed nodes")
 
-	d = *testDoc
+	d = testDoc()
 	tn := *testNode
 	tn.EntityID = unknownPK
 	signedBrokenTestNode := signNodeOrDie(nodeSigners, &tn)
@@ -504,7 +518,7 @@ func TestGenesisSanityCheck(t *testing.T) {
 	d.Registry.Nodes = []*node.MultiSignedNode{signedBrokenTestNode}
 	require.Error(d.SanityCheck(), "node with unknown entity ID should be rejected")
 
-	d = *testDoc
+	d = testDoc()
 	tn = *testNode
 	signedBrokenTestNode, err = node.MultiSignNode(
 		[]signature.Signer{
@@ -521,7 +535,7 @@ func TestGenesisSanityCheck(t *testing.T) {
 	d.Registry.Nodes = []*node.MultiSignedNode{signedBrokenTestNode}
 	require.Error(d.SanityCheck(), "node with wrong signing context should be rejected")
 
-	d = *testDoc
+	d = testDoc()
 	tn = *testNode
 	tn.Roles = 1<<16 | 1<<17
 	signedBrokenTestNode = signNodeOrDie(nodeSigners, &tn)
@@ -530,7 +544,7 @@ func TestGenesisSanityCheck(t *testing.T) {
 	d.Registry.Nodes = []*node.MultiSignedNode{signedBrokenTestNode}
 	require.Error(d.SanityCheck(), "node with any reserved role bits set should be rejected")
 
-	d = *testDoc
+	d = testDoc()
 	tn = *testNode
 	tn.Roles = 0
 	signedBrokenTestNode = signNodeOrDie(nodeSigners, &tn)
@@ -539,7 +553,7 @@ func TestGenesisSanityCheck(t *testing.T) {
 	d.Registry.Nodes = []*node.MultiSignedNode{signedBrokenTestNode}
 	require.Error(d.SanityCheck(), "node without any role bits set should be rejected")
 
-	d = *testDoc
+	d = testDoc()
 	tn = *testNode
 	tn.TLS.PubKey = signature.PublicKey{}
 	signedBrokenTestNode = signNodeOrDie(nodeSigners, &tn)
@@ -548,7 +562,7 @@ func TestGenesisSanityCheck(t *testing.T) {
 	d.Registry.Nodes = []*node.MultiSignedNode{signedBrokenTestNode}
 	require.Error(d.SanityCheck(), "node with invalid TLS public key should be rejected")
 
-	d = *testDoc
+	d = testDoc()
 	tn = *testNode
 	tn.Consensus.ID = invalidPK
 	signedBrokenTestNode = signNodeOrDie(nodeSigners, &tn)
@@ -557,7 +571,7 @@ func TestGenesisSanityCheck(t *testing.T) {
 	d.Registry.Nodes = []*node.MultiSignedNode{signedBrokenTestNode}
 	require.Error(d.SanityCheck(), "node with invalid consensus ID should be rejected")
 
-	d = *testDoc
+	d = testDoc()
 	tn = *testNode
 	tn.Roles = node.RoleComputeWorker
 	signedBrokenTestNode = signNodeOrDie(nodeSigners, &tn)
@@ -566,7 +580,7 @@ func TestGenesisSanityCheck(t *testing.T) {
 	d.Registry.Nodes = []*node.MultiSignedNode{signedBrokenTestNode}
 	require.Error(d.SanityCheck(), "compute node without runtimes should be rejected")
 
-	d = *testDoc
+	d = testDoc()
 	tn = *testNode
 	tn.Roles = node.RoleKeyManager
 	signedBrokenTestNode = signNodeOrDie(nodeSigners, &tn)
@@ -575,7 +589,7 @@ func TestGenesisSanityCheck(t *testing.T) {
 	d.Registry.Nodes = []*node.MultiSignedNode{signedBrokenTestNode}
 	require.Error(d.SanityCheck(), "keymanager node without runtimes should be rejected")
 
-	d = *testDoc
+	d = testDoc()
 	tn = *testNode
 	tn.Roles = node.RoleKeyManager
 	tn.Runtimes = []*node.Runtime{
@@ -589,7 +603,7 @@ func TestGenesisSanityCheck(t *testing.T) {
 	d.Registry.Nodes = []*node.MultiSignedNode{signedKMTestNode}
 	require.NoError(d.SanityCheck(), "keymanager node with valid runtime should pass")
 
-	d = *testDoc
+	d = testDoc()
 	tn = *testNode
 	tn.Roles = node.RoleKeyManager
 	tn.Runtimes = []*node.Runtime{
@@ -603,7 +617,7 @@ func TestGenesisSanityCheck(t *testing.T) {
 	d.Registry.Nodes = []*node.MultiSignedNode{signedBrokenTestNode}
 	require.Error(d.SanityCheck(), "keymanager node with invalid runtime should be rejected")
 
-	d = *testDoc
+	d = testDoc()
 	tn = *testNode
 	tn.Roles = node.RoleKeyManager
 	tn.Runtimes = []*node.Runtime{
@@ -617,7 +631,7 @@ func TestGenesisSanityCheck(t *testing.T) {
 	d.Registry.Nodes = []*node.MultiSignedNode{signedBrokenTestNode}
 	require.Error(d.SanityCheck(), "keymanager node with non-KM runtime should be rejected")
 
-	d = *testDoc
+	d = testDoc()
 	tn = *testNode
 	tn.Roles = node.RoleComputeWorker
 	tn.Runtimes = []*node.Runtime{
@@ -631,7 +645,7 @@ func TestGenesisSanityCheck(t *testing.T) {
 	d.Registry.Nodes = []*node.MultiSignedNode{signedBrokenTestNode}
 	require.Error(d.SanityCheck(), "compute node with non-compute runtime should be rejected")
 
-	d = *testDoc
+	d = testDoc()
 	tn = *testNode
 	tn.Roles = node.RoleComputeWorker
 	tn.Runtimes = []*node.Runtime{
@@ -645,7 +659,7 @@ func TestGenesisSanityCheck(t *testing.T) {
 	d.Registry.Nodes = []*node.MultiSignedNode{signedComputeTestNode}
 	require.NoError(d.SanityCheck(), "compute node with compute runtime should pass")
 
-	d = *testDoc
+	d = testDoc()
 	tn = *testNode
 	tn.Roles = node.RoleStorageWorker
 	tn.Runtimes = []*node.Runtime{
@@ -661,7 +675,7 @@ func TestGenesisSanityCheck(t *testing.T) {
 
 	// Test staking genesis checks.
 
-	d = *testDoc
+	d = testDoc()
 	d.Staking.TokenSymbol = ""
 	require.EqualError(
 		d.SanityCheck(),
@@ -669,7 +683,7 @@ func TestGenesisSanityCheck(t *testing.T) {
 		"empty token symbol should be rejected",
 	)
 
-	d = *testDoc
+	d = testDoc()
 	d.Staking.TokenSymbol = "foo"
 	require.EqualError(
 		d.SanityCheck(),
@@ -677,7 +691,7 @@ func TestGenesisSanityCheck(t *testing.T) {
 		"lower case token symbol should be rejected",
 	)
 
-	d = *testDoc
+	d = testDoc()
 	d.Staking.TokenSymbol = "LONGSYMBOL"
 	require.EqualError(
 		d.SanityCheck(),
@@ -685,7 +699,7 @@ func TestGenesisSanityCheck(t *testing.T) {
 		"too long token symbol should be rejected",
 	)
 
-	d = *testDoc
+	d = testDoc()
 	d.Staking.TokenValueExponent = 21
 	require.EqualError(
 		d.SanityCheck(),
@@ -695,39 +709,39 @@ func TestGenesisSanityCheck(t *testing.T) {
 
 	// NOTE: There doesn't seem to be a way to generate invalid Quantities, so
 	// we're just going to test the code that checks if things add up.
-	d = *testDoc
+	d = testDoc()
 	d.Staking.TotalSupply = *quantity.NewFromUint64(100)
 	require.Error(d.SanityCheck(), "invalid total supply should be rejected")
 
-	d = *testDoc
+	d = testDoc()
 	d.Staking.CommonPool = *quantity.NewFromUint64(100)
 	require.Error(d.SanityCheck(), "invalid common pool should be rejected")
 
-	d = *testDoc
+	d = testDoc()
 	d.Staking.LastBlockFees = *quantity.NewFromUint64(100)
 	require.Error(d.SanityCheck(), "invalid last block fees should be rejected")
 
-	d = *testDoc
+	d = testDoc()
 	d.Staking.Ledger[stakingTests.DebugStateSrcAddress].General.Balance = *quantity.NewFromUint64(100)
 	require.Error(d.SanityCheck(), "invalid general balance should be rejected")
 
-	d = *testDoc
-	d.Staking.Ledger[stakingTests.DebugStateSrcAddress].Escrow.Active.Balance = *quantity.NewFromUint64(100)
+	d = testDoc()
+	d.Staking.Ledger[stakingTests.DebugStateSrcAddress].Escrow.Active.Balance = *quantity.NewFromUint64(42)
 	require.Error(d.SanityCheck(), "invalid escrow active balance should be rejected")
 
-	d = *testDoc
+	d = testDoc()
 	d.Staking.Ledger[stakingTests.DebugStateSrcAddress].Escrow.Debonding.Balance = *quantity.NewFromUint64(100)
 	require.Error(d.SanityCheck(), "invalid escrow debonding balance should be rejected")
 
-	d = *testDoc
+	d = testDoc()
 	d.Staking.Ledger[stakingTests.DebugStateSrcAddress].Escrow.Active.TotalShares = *quantity.NewFromUint64(1)
 	require.Error(d.SanityCheck(), "invalid escrow active total shares should be rejected")
 
-	d = *testDoc
+	d = testDoc()
 	d.Staking.Ledger[stakingTests.DebugStateSrcAddress].Escrow.Debonding.TotalShares = *quantity.NewFromUint64(1)
 	require.Error(d.SanityCheck(), "invalid escrow debonding total shares should be rejected")
 
-	d = *testDoc
+	d = testDoc()
 	d.Staking.Delegations = map[staking.Address]map[staking.Address]*staking.Delegation{
 		stakingTests.DebugStateSrcAddress: {
 			stakingTests.DebugStateDestAddress: {
@@ -737,7 +751,7 @@ func TestGenesisSanityCheck(t *testing.T) {
 	}
 	require.Error(d.SanityCheck(), "invalid delegation should be rejected")
 
-	d = *testDoc
+	d = testDoc()
 	d.Staking.DebondingDelegations = map[staking.Address]map[staking.Address][]*staking.DebondingDelegation{
 		stakingTests.DebugStateSrcAddress: {
 			stakingTests.DebugStateDestAddress: {
@@ -749,4 +763,176 @@ func TestGenesisSanityCheck(t *testing.T) {
 		},
 	}
 	require.Error(d.SanityCheck(), "invalid debonding delegation should be rejected")
+
+	// Test governance sanity checks.
+	d = testDoc()
+	d.Governance.Parameters.Quorum = 1
+	require.Error(d.SanityCheck(), "quorum to low should be rejected")
+
+	d = testDoc()
+	d.Governance.Parameters.Threshold = 1
+	require.Error(d.SanityCheck(), "threshold to low should be rejected")
+
+	d = testDoc()
+	d.Governance.Parameters.Quorum = 110
+	require.Error(d.SanityCheck(), "quorum to high should be rejected")
+
+	d = testDoc()
+	d.Governance.Parameters.Threshold = 110
+	require.Error(d.SanityCheck(), "threshold to high should be rejected")
+
+	d = testDoc()
+	d.Governance.Parameters.Quorum = 80
+	d.Governance.Parameters.Threshold = 80
+	require.Error(d.SanityCheck(), "quorum*threshold to low should be rejected")
+
+	d = testDoc()
+	d.Governance.Parameters.UpgradeCancelMinEpochDiff = 50
+	require.Error(d.SanityCheck(), "upgrade_cancel_min_epoch_diff < voting_period should be rejected")
+
+	d = testDoc()
+	d.Governance.Parameters.UpgradeMinEpochDiff = 50
+	require.Error(d.SanityCheck(), "upgrade_min_epoch_diff < voting_period should be rejected")
+
+	ownHash, err := upgrade.OwnHash()
+	require.NoError(err, "upgrade.OwnHash()")
+	validTestProposals := func() []*governance.Proposal {
+		return []*governance.Proposal{
+			{
+				CreatedAt: 1,
+				ClosesAt:  100,
+				Submitter: stakingTests.DebugStateDestAddress,
+				Content: governance.ProposalContent{
+					Upgrade: &governance.UpgradeProposal{
+						Descriptor: upgrade.Descriptor{Method: upgrade.UpgradeMethodInternal, Epoch: 500, Identifier: hex.EncodeToString(ownHash[:])},
+					},
+				},
+				State: governance.StateActive,
+				ID:    1,
+			},
+		}
+	}
+	d = testDoc()
+	d.EpochTime.Base = 10
+	d.EpochTime.Parameters.DebugMockBackend = false
+	d.EpochTime.Parameters.Interval = 100
+	d.Governance.Proposals = validTestProposals()
+	require.NoError(d.SanityCheck(), "valid proposal should pass")
+
+	d.Governance.Proposals = validTestProposals()
+	d.Governance.Proposals[0].Deposit = *quantity.NewFromUint64(100)
+	require.Error(d.SanityCheck(), "proposal deposit doesn't match governance deposits")
+	d.Staking.GovernanceDeposits = *quantity.NewFromUint64(100)
+	totalSupply := d.Staking.TotalSupply.Clone()
+	require.NoError(totalSupply.Add(&d.Staking.GovernanceDeposits), "totalSupply.Add(GovernanceDeposits)")
+	d.Staking.TotalSupply = *totalSupply
+	require.NoError(d.SanityCheck(), "proposal deposit matches governance deposits")
+
+	d = testDoc()
+	d.EpochTime.Base = 10
+	d.EpochTime.Parameters.DebugMockBackend = false
+	d.EpochTime.Parameters.Interval = 100
+	d.Governance.Proposals = validTestProposals()
+	d.Governance.Proposals[0].CreatedAt = 15
+	require.Error(d.SanityCheck(), "proposal created in future")
+
+	d.Governance.Proposals = validTestProposals()
+	d.Governance.Proposals[0].Submitter = staking.CommonPoolAddress
+	require.Error(d.SanityCheck(), "proposal submitter reserved address")
+
+	d.Governance.Proposals = validTestProposals()
+	d.Governance.Proposals[0].Content.Upgrade = nil
+	require.Error(d.SanityCheck(), "proposal invalid content")
+
+	d.Governance.Proposals = validTestProposals()
+	d.Governance.Proposals[0].Content.Upgrade.Identifier = "abc"
+	require.Error(d.SanityCheck(), "proposal upgrade invalid identifier")
+
+	d.Governance.Proposals = validTestProposals()
+	d.Governance.Proposals[0].ClosesAt = 5
+	require.Error(d.SanityCheck(), "active proposal with past closing epoch")
+
+	d.Governance.Proposals = validTestProposals()
+	d.Governance.Proposals[0].Content.Upgrade.Epoch = 2
+	require.Error(d.SanityCheck(), "active proposal upgrade with past upgrade epoch")
+
+	d.Governance.Proposals = validTestProposals()
+	d.Governance.Proposals[0].Results = map[governance.Vote]quantity.Quantity{governance.VoteYes: *quantity.NewFromUint64(1)}
+	require.Error(d.SanityCheck(), "active proposal with non-empty results")
+
+	d.Governance.Proposals = validTestProposals()
+	d.Governance.Proposals[0].InvalidVotes = 5
+	require.Error(d.SanityCheck(), "active proposal with non-empty invalid results")
+
+	d.Governance.Proposals = validTestProposals()
+	d.Governance.Proposals[0].State = governance.StateRejected
+	require.Error(d.SanityCheck(), "closed proposal with closing epoch in future")
+
+	d.Governance.Proposals = validTestProposals()
+	d.Governance.VoteEntries = map[uint64][]*governance.VoteEntry{
+		d.Governance.Proposals[0].ID: {
+			{
+				Voter: stakingTests.DebugStateSrcAddress,
+				Vote:  governance.VoteYes,
+			},
+		},
+	}
+	require.NoError(d.SanityCheck(), "valid vote should pass sanity check")
+
+	d.Governance.Proposals = validTestProposals()
+	d.Governance.VoteEntries = map[uint64][]*governance.VoteEntry{
+		d.Governance.Proposals[0].ID: {
+			{
+				Voter: staking.CommonPoolAddress,
+				Vote:  governance.VoteYes,
+			},
+		},
+	}
+	require.Error(d.SanityCheck(), "vote from a reserved address")
+	d.Governance.VoteEntries = nil
+
+	d.Governance.Proposals = validTestProposals()
+	d.Governance.Proposals = []*governance.Proposal{
+		{
+			CreatedAt: 1,
+			ClosesAt:  2,
+			Submitter: stakingTests.DebugStateDestAddress,
+			Content: governance.ProposalContent{
+				Upgrade: &governance.UpgradeProposal{
+					Descriptor: upgrade.Descriptor{Method: upgrade.UpgradeMethodInternal, Epoch: 400, Identifier: hex.EncodeToString(ownHash[:])},
+				},
+			},
+			State: governance.StatePassed,
+			ID:    1,
+		},
+	}
+	require.NoError(d.SanityCheck(), "valid closed proposal")
+
+	d.Governance.Proposals = append(d.Governance.Proposals, &governance.Proposal{
+		CreatedAt: 1,
+		ClosesAt:  2,
+		Submitter: stakingTests.DebugStateDestAddress,
+		Content: governance.ProposalContent{
+			Upgrade: &governance.UpgradeProposal{
+				Descriptor: upgrade.Descriptor{Method: upgrade.UpgradeMethodInternal, Epoch: 710, Identifier: hex.EncodeToString(ownHash[:])},
+			},
+		},
+		State: governance.StatePassed,
+		ID:    2,
+	})
+	require.NoError(d.SanityCheck(), "valid closed proposal")
+
+	d.Governance.Proposals = append(d.Governance.Proposals, &governance.Proposal{
+		CreatedAt: 1,
+		ClosesAt:  2,
+		Submitter: stakingTests.DebugStateDestAddress,
+		Content: governance.ProposalContent{
+			Upgrade: &governance.UpgradeProposal{
+				Descriptor: upgrade.Descriptor{Method: upgrade.UpgradeMethodInternal, Epoch: 410, Identifier: hex.EncodeToString(ownHash[:])},
+			},
+		},
+		State: governance.StatePassed,
+		ID:    3,
+	})
+	require.Error(d.SanityCheck(), "pending upgrades not UpgradeMinEpochDiff apart")
 }
