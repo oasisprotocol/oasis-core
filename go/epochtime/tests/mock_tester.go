@@ -84,9 +84,13 @@ func MustAdvanceEpoch(t *testing.T, backend api.SetableBackend, increment uint64
 	epoch, err := backend.GetEpoch(ctx, consensus.HeightLatest)
 	require.NoError(err, "GetEpoch")
 
-	epoch = epoch + api.EpochTime(increment)
-	err = backend.SetEpoch(ctx, epoch)
-	require.NoError(err, "SetEpoch")
+	for i := uint64(0); i < increment; i++ {
+		ctx, cancel = context.WithTimeout(context.Background(), recvTimeout)
+		defer cancel()
+		epoch++
+		err = backend.SetEpoch(ctx, epoch)
+		require.NoError(err, "SetEpoch")
+	}
 
 	return epoch
 }
