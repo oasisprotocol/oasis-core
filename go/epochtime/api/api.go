@@ -48,6 +48,9 @@ type Backend interface {
 
 	// StateToGenesis returns the genesis state at the specified block height.
 	StateToGenesis(ctx context.Context, height int64) (*Genesis, error)
+
+	// ConsensusParameters returns the epochtime consensus parameters.
+	ConsensusParameters(ctx context.Context, height int64) (*ConsensusParameters, error)
 }
 
 // SetableBackend is a Backend that supports setting the current epoch.

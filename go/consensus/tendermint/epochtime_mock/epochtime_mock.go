@@ -127,6 +127,10 @@ func (sc *serviceClient) StateToGenesis(ctx context.Context, height int64) (*api
 	}, nil
 }
 
+func (sc *serviceClient) ConsensusParameters(ctx context.Context, height int64) (*api.ConsensusParameters, error) {
+	return &api.ConsensusParameters{DebugMockBackend: true}, nil
+}
+
 func (sc *serviceClient) SetEpoch(ctx context.Context, epoch api.EpochTime) error {
 	ch, sub := sc.WatchEpochs()
 	defer sub.Close()

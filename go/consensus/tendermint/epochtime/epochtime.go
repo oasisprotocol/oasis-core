@@ -85,6 +85,13 @@ func (sc *serviceClient) StateToGenesis(ctx context.Context, height int64) (*api
 	}, nil
 }
 
+func (sc *serviceClient) ConsensusParameters(ctx context.Context, height int64) (*api.ConsensusParameters, error) {
+	return &api.ConsensusParameters{
+		DebugMockBackend: false,
+		Interval: sc.interval,
+	}, nil
+}
+
 // Implements api.ServiceClient.
 func (sc *serviceClient) ServiceDescriptor() tmapi.ServiceDescriptor {
 	return tmapi.NewStaticServiceDescriptor(api.ModuleName, "", nil)
