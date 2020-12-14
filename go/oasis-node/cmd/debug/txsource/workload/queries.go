@@ -77,9 +77,9 @@ type queries struct {
 	logger *logging.Logger
 
 	runtimeID       common.Namespace
-	epochtimeParams epochtime.ConsensusParameters
-	stakingParams   staking.ConsensusParameters
-	schedulerParams scheduler.ConsensusParameters
+	epochtimeParams *epochtime.ConsensusParameters
+	stakingParams   *staking.ConsensusParameters
+	schedulerParams *scheduler.ConsensusParameters
 
 	control   control.NodeController
 	staking   staking.Backend
@@ -802,6 +802,7 @@ func (q *queries) Run(
 	sm consensus.SubmissionManager,
 	fundingAccount signature.Signer,
 ) error {
+	var err error
 	ctx := context.Background()
 
 	q.logger = logging.GetLogger("cmd/txsource/workload/queries")
@@ -813,14 +814,18 @@ func (q *queries) Run(
 	q.scheduler = scheduler.NewSchedulerClient(conn)
 	q.staking = staking.NewStakingClient(conn)
 
-	// TODO: could add a methods to get consensus parameters directly.
-	doc, err := q.consensus.StateToGenesis(ctx, consensus.HeightLatest)
+	q.stakingParams, err = q.staking.ConsensusParameters(ctx, consensus.HeightLatest)
 	if err != nil {
-		return fmt.Errorf("consensus.StateToGenesis error: %w", err)
+		return fmt.Errorf("failed to query staking consensus parameters: %w", err)
 	}
-	q.epochtimeParams = doc.EpochTime.Parameters
-	q.stakingParams = doc.Staking.Parameters
-	q.schedulerParams = doc.Scheduler.Parameters
+	q.schedulerParams, err = q.scheduler.ConsensusParameters(ctx, consensus.HeightLatest)
+	if err != nil {
+		return fmt.Errorf("failed to query scheduler consensus parameters: %w", err)
+	}
+	q.epochtimeParams, err = q.consensus.EpochtimeConsensusParameters(ctx, consensus.HeightLatest)
+	if err != nil {
+		return fmt.Errorf("failed to query epochtime consensus parameters: %w", err)
+	}
 
 	// Setup simple-keyvalue runtime info.
 	err = q.runtimeID.UnmarshalHex(viper.GetString(CfgRuntimeID))

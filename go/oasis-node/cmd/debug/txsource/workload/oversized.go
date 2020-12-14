@@ -58,13 +58,10 @@ func (o *oversized) Run(
 
 	ctx := context.Background()
 
-	// Fetch genesis consensus parameters.
-	// TODO: Don't dump everything, instead add a method to query just the parameters.
-	genesisDoc, err := cnsc.StateToGenesis(ctx, 1)
+	params, err := cnsc.GetParameters(ctx, consensus.HeightLatest)
 	if err != nil {
-		return fmt.Errorf("failed to query state at genesis: %w", err)
+		return fmt.Errorf("failed to query consensus parameters: %w", err)
 	}
-	params := genesisDoc.Consensus.Parameters
 
 	gasPrice, err := sm.PriceDiscovery().GasPrice(ctx)
 	if err != nil {
@@ -73,7 +70,9 @@ func (o *oversized) Run(
 
 	var nonce uint64
 	fee := transaction.Fee{
-		Gas: oversizedTxGasAmount + transaction.Gas(params.MaxTxSize)*params.GasCosts[consensusGenesis.GasOpTxByte],
+		Gas: oversizedTxGasAmount +
+			transaction.Gas(params.Parameters.MaxTxSize)*
+				params.Parameters.GasCosts[consensusGenesis.GasOpTxByte],
 	}
 	_ = fee.Amount.FromInt64(oversizedTxGasAmount)
 	_ = fee.Amount.Mul(gasPrice)
@@ -88,7 +87,7 @@ func (o *oversized) Run(
 			// Send zero stake to self, so the transaction will be valid.
 			To: txSignerAddr,
 			// Include some extra random data so we are over the MaxTxSize limit.
-			Data: make([]byte, genesisDoc.Consensus.Parameters.MaxTxSize),
+			Data: make([]byte, params.Parameters.MaxTxSize),
 		}
 		if _, err = rng.Read(xfer.Data); err != nil {
 			return fmt.Errorf("failed to generate bogus transaction: %w", err)
