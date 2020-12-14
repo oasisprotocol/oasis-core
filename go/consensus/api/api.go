@@ -111,6 +111,9 @@ type ClientBackend interface {
 	// GetEpoch returns the current epoch.
 	GetEpoch(ctx context.Context, height int64) (epochtime.EpochTime, error)
 
+	// EpochtimeConsensusParameters returns the epochtime consensus parameters.
+	EpochtimeConsensusParameters(ctx context.Context, height int64) (*epochtime.ConsensusParameters, error)
+
 	// GetBlock returns a consensus block at a specific height.
 	GetBlock(ctx context.Context, height int64) (*Block, error)
 

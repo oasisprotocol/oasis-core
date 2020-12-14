@@ -23,6 +23,10 @@ func EpochtimeSetableImplementationTest(t *testing.T, backend api.Backend) {
 	require.Implements((*api.SetableBackend)(nil), backend, "epoch time backend is mock")
 	timeSource := (backend).(api.SetableBackend)
 
+	parameters, err := timeSource.ConsensusParameters(context.Background(), consensus.HeightLatest)
+	require.NoError(err, "ConsensusParameters")
+	require.True(parameters.DebugMockBackend, "expected debug backend")
+
 	epoch, err := timeSource.GetEpoch(context.Background(), consensus.HeightLatest)
 	require.NoError(err, "GetEpoch")
 

@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/oasisprotocol/oasis-core/go/consensus/api/transaction"
+	"github.com/oasisprotocol/oasis-core/go/consensus/genesis"
 	"github.com/oasisprotocol/oasis-core/go/storage/mkvs/syncer"
 )
 
@@ -40,10 +41,10 @@ type LightBlock struct {
 type Parameters struct {
 	// Height contains the block height these consensus parameters are for.
 	Height int64 `json:"height"`
+	// Parameters are the backend agnostic consensus parameters.
+	Parameters genesis.Parameters `json:"parameters"`
 	// Meta contains the consensus backend specific consensus parameters.
 	Meta []byte `json:"meta"`
-
-	// TODO: Consider also including consensus/genesis.Parameters which are backend-agnostic.
 }
 
 // Evidence is evidence of a node's Byzantine behavior.

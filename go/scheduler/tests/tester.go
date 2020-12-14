@@ -24,6 +24,7 @@ const recvTimeout = 5 * time.Second
 // SchedulerImplementationTests exercises the basic functionality of a
 // scheduler backend.
 func SchedulerImplementationTests(t *testing.T, name string, backend api.Backend, consensus consensusAPI.Backend) {
+	ctx := context.Background()
 	seed := []byte("SchedulerImplementationTests/" + name)
 
 	require := require.New(t)
@@ -34,7 +35,10 @@ func SchedulerImplementationTests(t *testing.T, name string, backend api.Backend
 	// Populate the registry with an entity and nodes.
 	nodes := rt.Populate(t, consensus.Registry(), consensus, seed)
 
-	ch, sub, err := backend.WatchCommittees(context.Background())
+	// Query genesis parameters.
+	_, err = backend.ConsensusParameters(ctx, consensusAPI.HeightLatest)
+
+	ch, sub, err := backend.WatchCommittees(ctx)
 	require.NoError(err, "WatchCommittees")
 	defer sub.Close()
 

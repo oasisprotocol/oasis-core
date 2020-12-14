@@ -43,6 +43,14 @@ func (sc *serviceClient) StateToGenesis(ctx context.Context, height int64) (*api
 	return q.Genesis(ctx)
 }
 
+func (sc *serviceClient) ConsensusParameters(ctx context.Context, height int64) (*api.ConsensusParameters, error) {
+	q, err := sc.querier.QueryAt(ctx, height)
+	if err != nil {
+		return nil, fmt.Errorf("scheduler: genesis query failed: %w", err)
+	}
+	return q.ConsensusParameters(ctx)
+}
+
 func (sc *serviceClient) Cleanup() {
 }
 

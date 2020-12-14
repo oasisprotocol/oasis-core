@@ -19,6 +19,8 @@ var (
 	methodGetCommittees = serviceName.NewMethod("GetCommittees", GetCommitteesRequest{})
 	// methodStateToGenesis is the StateToGenesis method.
 	methodStateToGenesis = serviceName.NewMethod("StateToGenesis", int64(0))
+	// methodConsensusParameters is the ConsensusParameters method.
+	methodConsensusParameters = serviceName.NewMethod("ConsensusParameters", int64(0))
 
 	// methodWatchCommittees is the WatchCommittees method.
 	methodWatchCommittees = serviceName.NewMethod("WatchCommittees", nil)
@@ -39,6 +41,10 @@ var (
 			{
 				MethodName: methodStateToGenesis.ShortName(),
 				Handler:    handlerStateToGenesis,
+			},
+			{
+				MethodName: methodConsensusParameters.ShortName(),
+				Handler:    handlerConsensusParameters,
 			},
 		},
 		Streams: []grpc.StreamDesc{
@@ -120,6 +126,29 @@ func handlerStateToGenesis( // nolint: golint
 	return interceptor(ctx, height, info, handler)
 }
 
+func handlerConsensusParameters( // nolint: golint
+	srv interface{},
+	ctx context.Context,
+	dec func(interface{}) error,
+	interceptor grpc.UnaryServerInterceptor,
+) (interface{}, error) {
+	var height int64
+	if err := dec(&height); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(Backend).ConsensusParameters(ctx, height)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: methodConsensusParameters.FullName(),
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(Backend).ConsensusParameters(ctx, req.(int64))
+	}
+	return interceptor(ctx, height, info, handler)
+}
+
 func handlerWatchCommittees(srv interface{}, stream grpc.ServerStream) error {
 	if err := stream.RecvMsg(nil); err != nil {
 		return err
@@ -176,6 +205,14 @@ func (c *schedulerClient) GetCommittees(ctx context.Context, request *GetCommitt
 func (c *schedulerClient) StateToGenesis(ctx context.Context, height int64) (*Genesis, error) {
 	var rsp Genesis
 	if err := c.conn.Invoke(ctx, methodStateToGenesis.FullName(), height, &rsp); err != nil {
+		return nil, err
+	}
+	return &rsp, nil
+}
+
+func (c *schedulerClient) ConsensusParameters(ctx context.Context, height int64) (*ConsensusParameters, error) {
+	var rsp ConsensusParameters
+	if err := c.conn.Invoke(ctx, methodConsensusParameters.FullName(), height, &rsp); err != nil {
 		return nil, err
 	}
 	return &rsp, nil

@@ -34,6 +34,8 @@ var (
 	methodGetEpoch = serviceName.NewMethod("GetEpoch", int64(0))
 	// methodWaitEpoch is the WaitEpoch method.
 	methodWaitEpoch = serviceName.NewMethod("WaitEpoch", epochtime.EpochTime(0))
+	// methodEpochtimeConsensusParameters is the EpochtimeConsensusParameters method.
+	methodEpochtimeConsensusParameters = serviceName.NewMethod("ConsensusParameters", int64(0))
 	// methodGetBlock is the GetBlock method.
 	methodGetBlock = serviceName.NewMethod("GetBlock", int64(0))
 	// methodGetTransactions is the GetTransactions method.
@@ -93,6 +95,10 @@ var (
 			{
 				MethodName: methodWaitEpoch.ShortName(),
 				Handler:    handlerWaitEpoch,
+			},
+			{
+				MethodName: methodEpochtimeConsensusParameters.ShortName(),
+				Handler:    handlerEpochtimeConsensusParameters,
 			},
 			{
 				MethodName: methodGetBlock.ShortName(),
@@ -301,6 +307,29 @@ func handlerWaitEpoch( // nolint: golint
 		return nil, srv.(ClientBackend).WaitEpoch(ctx, req.(epochtime.EpochTime))
 	}
 	return interceptor(ctx, epoch, info, handler)
+}
+
+func handlerEpochtimeConsensusParameters( // nolint: golint
+	srv interface{},
+	ctx context.Context,
+	dec func(interface{}) error,
+	interceptor grpc.UnaryServerInterceptor,
+) (interface{}, error) {
+	var height int64
+	if err := dec(&height); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ClientBackend).EpochtimeConsensusParameters(ctx, height)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: methodEpochtimeConsensusParameters.FullName(),
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ClientBackend).EpochtimeConsensusParameters(ctx, req.(int64))
+	}
+	return interceptor(ctx, height, info, handler)
 }
 
 func handlerGetBlock( // nolint: golint
@@ -741,6 +770,14 @@ func (c *consensusClient) GetEpoch(ctx context.Context, height int64) (epochtime
 		return epochtime.EpochTime(0), err
 	}
 	return epoch, nil
+}
+
+func (c *consensusClient) EpochtimeConsensusParameters(ctx context.Context, height int64) (*epochtime.ConsensusParameters, error) {
+	var parameters epochtime.ConsensusParameters
+	if err := c.conn.Invoke(ctx, methodEpochtimeConsensusParameters.FullName(), height, &parameters); err != nil {
+		return nil, err
+	}
+	return &parameters, nil
 }
 
 func (c *consensusClient) GetBlock(ctx context.Context, height int64) (*Block, error) {

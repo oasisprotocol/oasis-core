@@ -52,6 +52,10 @@ func (b *simTimeSource) StateToGenesis(ctx context.Context, height int64) (*api.
 	}, nil
 }
 
+func (b *simTimeSource) ConsensusParameters(ctx context.Context, height int64) (*api.ConsensusParameters, error) {
+	return &api.ConsensusParameters{Interval: b.interval}, nil
+}
+
 func newSimTimeSource(genesis *api.Genesis) *simTimeSource {
 	return &simTimeSource{
 		base:     genesis.Base,

@@ -16,6 +16,7 @@ type Query interface {
 	AllCommittees(context.Context) ([]*scheduler.Committee, error)
 	KindsCommittees(context.Context, []scheduler.CommitteeKind) ([]*scheduler.Committee, error)
 	Genesis(context.Context) (*scheduler.Genesis, error)
+	ConsensusParameters(context.Context) (*scheduler.ConsensusParameters, error)
 }
 
 // QueryFactory is the scheduler query factory.
@@ -96,6 +97,10 @@ func (sq *schedulerQuerier) AllCommittees(ctx context.Context) ([]*scheduler.Com
 
 func (sq *schedulerQuerier) KindsCommittees(ctx context.Context, kinds []scheduler.CommitteeKind) ([]*scheduler.Committee, error) {
 	return sq.state.KindsCommittees(ctx, kinds)
+}
+
+func (sq *schedulerQuerier) ConsensusParameters(ctx context.Context) (*scheduler.ConsensusParameters, error) {
+	return sq.state.ConsensusParameters(ctx)
 }
 
 func (app *schedulerApplication) QueryFactory() interface{} {
