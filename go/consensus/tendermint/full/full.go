@@ -986,23 +986,38 @@ func (t *fullService) GetLastRetainedVersion(ctx context.Context) (int64, error)
 	return t.mux.State().LastRetainedVersion()
 }
 
-func (t *fullService) GetTendermintBlock(ctx context.Context, height int64) (*tmtypes.Block, error) {
-	if err := t.ensureStarted(ctx); err != nil {
-		return nil, err
-	}
-
+func (t *fullService) heightToTendermintHeight(height int64) (int64, error) {
 	var tmHeight int64
 	if height == consensusAPI.HeightLatest {
-		// Do not let Tendermint determine the latest height (e.g., by passing nil here) as that
+		// Do not let Tendermint determine the latest height (e.g., by passing nil) as that
 		// completely ignores ABCI processing so it can return a block for which local state does
 		// not yet exist. Use our mux notion of latest height instead.
 		tmHeight = t.mux.State().BlockHeight()
 		if tmHeight == 0 {
 			// No committed blocks yet.
-			return nil, nil
+			return 0, consensusAPI.ErrNoCommittedBlocks
 		}
 	} else {
 		tmHeight = height
+	}
+
+	return tmHeight, nil
+}
+
+func (t *fullService) GetTendermintBlock(ctx context.Context, height int64) (*tmtypes.Block, error) {
+	if err := t.ensureStarted(ctx); err != nil {
+		return nil, err
+	}
+
+	tmHeight, err := t.heightToTendermintHeight(height)
+	switch err {
+	case nil:
+		// Continues bellow.
+	case consensusAPI.ErrNoCommittedBlocks:
+		// No committed blocks yet.
+		return nil, nil
+	default:
+		return nil, err
 	}
 	result, err := t.client.Block(ctx, &tmHeight)
 	if err != nil {
@@ -1015,20 +1030,14 @@ func (t *fullService) GetBlockResults(ctx context.Context, height int64) (*tmrpc
 	if t.client == nil {
 		panic("client not available yet")
 	}
-
-	// As in GetTendermintBlock above, get the latest tendermint block height
-	// from our mux.
-	var tmHeight int64
-	if height == consensusAPI.HeightLatest {
-		tmHeight = t.mux.State().BlockHeight()
-		if tmHeight == 0 {
-			// No committed blocks yet.
-			return nil, consensusAPI.ErrNoCommittedBlocks
-		}
-	} else {
-		tmHeight = height
+	if err := t.ensureStarted(ctx); err != nil {
+		return nil, err
 	}
 
+	tmHeight, err := t.heightToTendermintHeight(height)
+	if err != nil {
+		return nil, err
+	}
 	result, err := t.client.BlockResults(ctx, &tmHeight)
 	if err != nil {
 		return nil, fmt.Errorf("tendermint: block results query failed: %w", err)

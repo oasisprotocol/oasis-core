@@ -115,10 +115,21 @@ func ConsensusImplementationTests(t *testing.T, backend consensus.ClientBackend)
 	require.Equal(shdr.Height, blk.Height, "returned light block height should be correct")
 	require.NotNil(shdr.Meta, "returned light block should contain metadata")
 
+	// Late block queries.
+	lshdr, err := backend.GetLightBlock(ctx, consensus.HeightLatest)
+	require.NoError(err, "GetLightBlock(HeightLatest)")
+	require.True(lshdr.Height >= shdr.Height, "returned latest light block height should be greater or equal")
+	require.NotNil(shdr.Meta, "returned latest light block should contain metadata")
+
 	params, err := backend.GetParameters(ctx, blk.Height)
 	require.NoError(err, "GetParameters")
 	require.Equal(params.Height, blk.Height, "returned parameters height should be correct")
 	require.NotNil(params.Meta, "returned parameters should contain metadata")
+	require.NotEqual(0, params.Parameters.StateCheckpointInterval, "returned parameters should contain parameters")
+
+	lparams, err := backend.GetParameters(ctx, blk.Height)
+	require.NoError(err, "GetParameters(HeightLatest)")
+	require.NotEqual(0, lparams.Parameters.StateCheckpointInterval, "returned parameters should contain parameters")
 
 	err = backend.SubmitTxNoWait(ctx, &transaction.SignedTransaction{})
 	require.Error(err, "SubmitTxNoWait should fail with invalid transaction")
