@@ -1,0 +1,6 @@
+[advisories]
+ignore = [
+  # Need to wait for new release od slog-stdlog that bumps the arc-swap dependency.
+  # arc-swap 0.4.7 <- slog-scope 4.3.0 <- slog-stdlog 4.1.0
+  "RUSTSEC-2020-0091"
+]
