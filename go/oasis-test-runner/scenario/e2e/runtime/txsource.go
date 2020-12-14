@@ -297,9 +297,6 @@ func (sc *txSourceImpl) Fixture() (*oasis.NetworkFixture, error) {
 		},
 	}
 
-	// Disable CheckTx on the client node so we can submit invalid transactions.
-	f.Clients[0].Consensus.DisableCheckTx = true
-
 	// Runtime configuration.
 	// Transaction scheduling.
 	f.Runtimes[1].TxnScheduler.MaxBatchSize = 100
@@ -617,6 +614,7 @@ func (sc *txSourceImpl) startWorkload(childEnv *env.Env, errCh chan error, name 
 		"--" + txsource.CfgWorkload, name,
 		"--" + txsource.CfgTimeLimit, sc.timeLimit.String(),
 		"--" + txsource.CfgSeed, sc.seed,
+		"--" + txsource.CfgGasPrice, strconv.FormatUint(txSourceGasPrice, 10),
 		// Use half the configured interval due to fast blocks.
 		"--" + workload.CfgConsensusNumKeptVersions, strconv.FormatUint(node.Consensus().PruneNumKept/2, 10),
 	}

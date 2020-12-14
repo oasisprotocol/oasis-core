@@ -14,6 +14,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/node"
 	"github.com/oasisprotocol/oasis-core/go/common/pubsub"
 	"github.com/oasisprotocol/oasis-core/go/common/service"
+	"github.com/oasisprotocol/oasis-core/go/common/version"
 	"github.com/oasisprotocol/oasis-core/go/consensus/api/transaction"
 	"github.com/oasisprotocol/oasis-core/go/consensus/api/transaction/results"
 	epochtime "github.com/oasisprotocol/oasis-core/go/epochtime/api"
@@ -137,6 +138,15 @@ type ClientBackend interface {
 
 	// GetStatus returns the current status overview.
 	GetStatus(ctx context.Context) (*Status, error)
+
+	// Registry returns the registry backend.
+	Registry() registry.Backend
+
+	// Staking returns the staking backend.
+	Staking() staking.Backend
+
+	// Scheduler returns the scheduler backend.
+	Scheduler() scheduler.Backend
 }
 
 // Block is a consensus block.
@@ -158,8 +168,8 @@ type Block struct {
 
 // Status is the current status overview.
 type Status struct { // nolint: maligned
-	// ConsensusVersion is the version of the consensus protocol that the node is using.
-	ConsensusVersion string `json:"consensus_version"`
+	// Version is the version of the consensus protocol that the node is using.
+	Version version.Version `json:"version"`
 	// Backend is the consensus backend identifier.
 	Backend string `json:"backend"`
 	// Features are the indicated consensus backend features.
@@ -233,17 +243,8 @@ type ServicesBackend interface {
 	// KeyManager returns the keymanager backend.
 	KeyManager() keymanager.Backend
 
-	// Registry returns the registry backend.
-	Registry() registry.Backend
-
 	// RootHash returns the roothash backend.
 	RootHash() roothash.Backend
-
-	// Staking returns the staking backend.
-	Staking() staking.Backend
-
-	// Scheduler returns the scheduler backend.
-	Scheduler() scheduler.Backend
 }
 
 // TransactionAuthHandler is the interface for handling transaction authentication

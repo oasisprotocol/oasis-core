@@ -1,10 +1,13 @@
 package quantity
 
 import (
+	"encoding/hex"
 	"math/big"
 	"testing"
 
 	"github.com/stretchr/testify/require"
+
+	"github.com/oasisprotocol/oasis-core/go/common/cbor"
 )
 
 func fromInt(n int) *Quantity {
@@ -88,6 +91,36 @@ func TestQuantityBinaryRoundTrip(t *testing.T) {
 	require.NoError(err, "UnmarshalBinary")
 
 	require.Zero(q.Cmp(&nq), "Round trip matches")
+}
+
+func TestQuantityCBORRoundTrip(t *testing.T) {
+	require := require.New(t)
+
+	// NOTE: These should be synced with runtime/src/common/quantity.rs.
+	for _, tc := range []struct {
+		value  uint64
+		rawHex string
+	}{
+		{0, "40"},
+		{1, "4101"},
+		{10, "410a"},
+		{100, "4164"},
+		{1000, "4203e8"},
+		{1000000, "430f4240"},
+		{18446744073709551615, "48ffffffffffffffff"},
+	} {
+		raw, err := hex.DecodeString(tc.rawHex)
+		require.NoError(err, "DecodeString(%s)", tc.rawHex)
+
+		q := NewFromUint64(tc.value)
+		enc := cbor.Marshal(q)
+		require.EqualValues(raw, enc, "serialization should match")
+
+		var dec Quantity
+		err = cbor.Unmarshal(enc, &dec)
+		require.NoError(err, "deserialization should succeed")
+		require.EqualValues(&dec, q, "serialization should round-trip")
+	}
 }
 
 func TestQuantityAdd(t *testing.T) {

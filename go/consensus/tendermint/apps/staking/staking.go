@@ -11,8 +11,10 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/consensus/api/transaction"
 	"github.com/oasisprotocol/oasis-core/go/consensus/tendermint/api"
 	registryState "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/apps/registry/state"
+	roothashApi "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/apps/roothash/api"
 	stakingState "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/apps/staking/state"
 	epochtime "github.com/oasisprotocol/oasis-core/go/epochtime/api"
+	"github.com/oasisprotocol/oasis-core/go/roothash/api/message"
 	staking "github.com/oasisprotocol/oasis-core/go/staking/api"
 )
 
@@ -44,6 +46,9 @@ func (app *stakingApplication) Dependencies() []string {
 
 func (app *stakingApplication) OnRegister(state api.ApplicationState, md api.MessageDispatcher) {
 	app.state = state
+
+	// Subscribe to messages emitted by other apps.
+	md.Subscribe(roothashApi.RuntimeMessageStaking, app)
 }
 
 func (app *stakingApplication) OnCleanup() {
@@ -99,7 +104,22 @@ func (app *stakingApplication) BeginBlock(ctx *api.Context, request types.Reques
 }
 
 func (app *stakingApplication) ExecuteMessage(ctx *api.Context, kind, msg interface{}) error {
-	return staking.ErrInvalidArgument
+	state := stakingState.NewMutableState(ctx.State())
+
+	switch kind {
+	case roothashApi.RuntimeMessageStaking:
+		m := msg.(*message.StakingMessage)
+		switch {
+		case m.Transfer != nil:
+			return app.transfer(ctx, state, m.Transfer)
+		case m.Withdraw != nil:
+			return app.withdraw(ctx, state, m.Withdraw)
+		default:
+			return staking.ErrInvalidArgument
+		}
+	default:
+		return staking.ErrInvalidArgument
+	}
 }
 
 func (app *stakingApplication) ExecuteTx(ctx *api.Context, tx *transaction.Transaction) error {

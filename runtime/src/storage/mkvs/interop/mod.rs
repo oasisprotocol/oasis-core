@@ -1,6 +1,6 @@
 //! MKVS interoperability test helpers.
 use crate::{
-    common::{crypto::hash::Hash, roothash::Namespace},
+    common::{crypto::hash::Hash, namespace::Namespace},
     storage::mkvs::WriteLog,
 };
 

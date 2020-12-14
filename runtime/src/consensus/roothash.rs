@@ -1,4 +1,4 @@
-//! Roothash structures.
+//! Consensus roothash structures.
 //!
 //! # Note
 //!
@@ -7,9 +7,13 @@
 use serde::{Deserialize, Serialize};
 use serde_repr::*;
 
-use super::{
-    cbor,
-    crypto::{hash::Hash, signature::SignatureBundle},
+use crate::{
+    common::{
+        cbor,
+        crypto::{hash::Hash, signature::SignatureBundle},
+        namespace::Namespace,
+    },
+    consensus::staking,
 };
 
 /// Runtime block.
@@ -27,8 +31,6 @@ pub struct AnnotatedBlock {
     /// Runtime block.
     pub block: Block,
 }
-
-impl_bytes!(Namespace, 32, "Chain namespace.");
 
 /// Header type.
 ///
@@ -54,8 +56,12 @@ impl Default for HeaderType {
 /// A message that can be emitted by the runtime to be processed by the consensus layer.
 #[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum Message {
-    #[serde(rename = "noop")]
-    Noop {},
+    #[serde(rename = "staking")]
+    Staking {
+        v: u16,
+        #[serde(flatten)]
+        msg: StakingMessage,
+    },
 }
 
 impl Message {
@@ -67,6 +73,14 @@ impl Message {
         }
         Hash::digest_bytes(&cbor::to_vec(&msgs))
     }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub enum StakingMessage {
+    #[serde(rename = "transfer")]
+    Transfer(staking::Transfer),
+    #[serde(rename = "withdraw")]
+    Withdraw(staking::Withdraw),
 }
 
 /// Result of a message being processed by the consensus layer.
@@ -213,8 +227,18 @@ mod tests {
                 "c672b8d1ef56ed28ab87c3622c5114069bdd3ad7b8f9737498d0c01ecef0967a",
             ),
             (
-                vec![Message::Noop {}],
-                "c8b55f87109e30fe2ba57507ffc0e96e40df7c0d24dfef82a858632f5f8420f1",
+                vec![Message::Staking {
+                    v: 0,
+                    msg: StakingMessage::Transfer(staking::Transfer::default()),
+                }],
+                "a6b91f974b34a9192efd12025659a768520d2f04e1dae9839677456412cdb2be",
+            ),
+            (
+                vec![Message::Staking {
+                    v: 0,
+                    msg: StakingMessage::Withdraw(staking::Withdraw::default()),
+                }],
+                "069b0fda76d804e3fd65d4bbd875c646f15798fb573ac613100df67f5ba4c3fd",
             ),
         ];
         for (msgs, expected_hash) in tcs {

@@ -12,6 +12,7 @@ import (
 	cmnIAS "github.com/oasisprotocol/oasis-core/go/common/sgx/ias"
 	iasHttp "github.com/oasisprotocol/oasis-core/go/ias/http"
 	"github.com/oasisprotocol/oasis-core/go/runtime/host"
+	"github.com/oasisprotocol/oasis-core/go/runtime/host/protocol"
 	"github.com/oasisprotocol/oasis-core/go/runtime/host/tests"
 )
 
@@ -61,6 +62,7 @@ func TestProvisionerSGX(t *testing.T) {
 	t.Run("Naked", func(t *testing.T) {
 		tests.TestProvisioner(t, cfg, func() (host.Provisioner, error) {
 			return New(Config{
+				HostInfo:              &protocol.HostInfo{},
 				LoaderPath:            envRuntimeLoaderPath,
 				IAS:                   ias,
 				RuntimeAttestInterval: 2 * time.Second,
@@ -73,6 +75,7 @@ func TestProvisionerSGX(t *testing.T) {
 	t.Run("Sandboxed", func(t *testing.T) {
 		tests.TestProvisioner(t, cfg, func() (host.Provisioner, error) {
 			return New(Config{
+				HostInfo:              &protocol.HostInfo{},
 				LoaderPath:            envRuntimeLoaderPath,
 				RuntimeAttestInterval: 2 * time.Second,
 				IAS:                   ias,

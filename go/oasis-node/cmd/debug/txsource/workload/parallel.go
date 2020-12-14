@@ -17,10 +17,15 @@ import (
 	staking "github.com/oasisprotocol/oasis-core/go/staking/api"
 )
 
-const (
-	// NameParallel is the name of the parallel workload.
-	NameParallel = "parallel"
+// NameParallel is the name of the parallel workload.
+const NameParallel = "parallel"
 
+// Parallel is the parallel workload.
+var Parallel = &parallel{
+	BaseWorkload: NewBaseWorkload(NameParallel),
+}
+
+const (
 	parallelSendWaitTimeoutInterval = 30 * time.Second
 	parallelSendTimeoutInterval     = 60 * time.Second
 	parallelConcurency              = 200
@@ -30,21 +35,27 @@ const (
 
 var parallelLogger = logging.GetLogger("cmd/txsource/workload/parallel")
 
-type parallel struct{}
+type parallel struct {
+	BaseWorkload
+}
 
 // Implements Workload.
-func (parallel) NeedsFunds() bool {
+func (p *parallel) NeedsFunds() bool {
 	return true
 }
 
 // Implements workload.
-func (parallel) Run(
+func (p *parallel) Run(
 	gracefulExit context.Context,
 	rng *rand.Rand,
 	conn *grpc.ClientConn,
 	cnsc consensus.ClientBackend,
+	sm consensus.SubmissionManager,
 	fundingAccount signature.Signer,
 ) error {
+	// Initialize base workload.
+	p.BaseWorkload.Init(cnsc, sm, fundingAccount)
+
 	ctx := context.Background()
 	var err error
 
@@ -63,6 +74,7 @@ func (parallel) Run(
 	if err != nil {
 		return fmt.Errorf("failed to estimate gas: %w", err)
 	}
+	gasPrice := p.GasPrice()
 
 	accounts := make([]signature.Signer, parallelConcurency)
 	fac := memorySigner.NewFactory()
@@ -74,9 +86,9 @@ func (parallel) Run(
 
 		// Initial funding of accounts.
 		fundAmount := parallelTxTransferAmount + // self transfer amount
-			parallelTxFundInterval*txGasAmount*gasPrice // gas for `parallelTxFundInterval` transfers.
+			parallelTxFundInterval*uint64(txGasAmount)*gasPrice // gas for `parallelTxFundInterval` transfers.
 		addr := staking.NewAddress(accounts[i].Public())
-		if err = transferFunds(ctx, parallelLogger, cnsc, fundingAccount, addr, int64(fundAmount)); err != nil {
+		if err = p.TransferFunds(ctx, fundingAccount, addr, fundAmount); err != nil {
 			return fmt.Errorf("account funding failure: %w", err)
 		}
 	}
@@ -159,9 +171,9 @@ func (parallel) Run(
 		if i%parallelTxFundInterval == 0 {
 			// Re-fund accounts for next `parallelTxFundInterval` transfers.
 			for i := range accounts {
-				fundAmount := parallelTxFundInterval * txGasAmount * gasPrice // gas for `parallelTxFundInterval` transfers.
+				fundAmount := parallelTxFundInterval * uint64(txGasAmount) * gasPrice // gas for `parallelTxFundInterval` transfers.
 				addr := staking.NewAddress(accounts[i].Public())
-				if err = transferFunds(ctx, parallelLogger, cnsc, fundingAccount, addr, int64(fundAmount)); err != nil {
+				if err = p.TransferFunds(ctx, fundingAccount, addr, fundAmount); err != nil {
 					return fmt.Errorf("account funding failure: %w", err)
 				}
 			}

@@ -25,7 +25,7 @@ use oasis_core_runtime::{
     common::{crypto::hash::Hash, runtime::RuntimeId},
     storage::MKVS,
 };
-use simple_keyvalue_api::{with_api, Key, KeyValue};
+use simple_keyvalue_api::{with_api, Key, KeyValue, Transfer, Withdraw};
 
 with_api! {
     create_txn_api_client!(SimpleKeyValueClient, api);
@@ -117,7 +117,11 @@ fn main() {
     long_kv.nonce = Some(rng.gen());
 
     println!("Testing runtime message emission...");
-    rt.block_on(kv_client.message(rng.gen())).unwrap();
+    rt.block_on(kv_client.consensus_transfer(Transfer {
+        nonce: rng.gen(),
+        transfer: Default::default(),
+    }))
+    .unwrap();
 
     println!("Getting long key...");
     let r = rt.block_on(kv_client.get(long_k.clone())).unwrap();

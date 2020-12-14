@@ -3,7 +3,7 @@ use std::{cell::RefCell, rc::Rc};
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    common::{crypto::hash::Hash, roothash::Namespace},
+    common::{crypto::hash::Hash, namespace::Namespace},
     storage::mkvs::{cache::*, marshal::*},
 };
 

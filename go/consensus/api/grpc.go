@@ -10,6 +10,9 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/consensus/api/transaction"
 	epochtime "github.com/oasisprotocol/oasis-core/go/epochtime/api"
 	genesis "github.com/oasisprotocol/oasis-core/go/genesis/api"
+	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
+	scheduler "github.com/oasisprotocol/oasis-core/go/scheduler/api"
+	staking "github.com/oasisprotocol/oasis-core/go/staking/api"
 	"github.com/oasisprotocol/oasis-core/go/storage/mkvs/syncer"
 )
 
@@ -821,6 +824,18 @@ func (c *consensusClient) WatchBlocks(ctx context.Context) (<-chan *Block, pubsu
 	}()
 
 	return ch, sub, nil
+}
+
+func (c *consensusClient) Registry() registry.Backend {
+	return registry.NewRegistryClient(c.conn)
+}
+
+func (c *consensusClient) Staking() staking.Backend {
+	return staking.NewStakingClient(c.conn)
+}
+
+func (c *consensusClient) Scheduler() scheduler.Backend {
+	return scheduler.NewSchedulerClient(c.conn)
 }
 
 // NewConsensusClient creates a new gRPC consensus client service.

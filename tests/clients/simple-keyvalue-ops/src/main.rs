@@ -7,7 +7,7 @@ use tokio::runtime::Runtime;
 
 use oasis_core_client::{create_txn_api_client, Node, TxnClient};
 use oasis_core_runtime::common::{crypto::hash::Hash, runtime::RuntimeId};
-use simple_keyvalue_api::{with_api, Key, KeyValue};
+use simple_keyvalue_api::{with_api, Key, KeyValue, Transfer, Withdraw};
 
 with_api! {
     create_txn_api_client!(KeyValueOpsClient, api);

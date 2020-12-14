@@ -35,10 +35,13 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/storage/mkvs"
 )
 
-const (
-	// NameQueries is the name of the queries workload.
-	NameQueries = "queries"
+// NameQueries is the name of the queries workload.
+const NameQueries = "queries"
 
+// Queries is the queries workload.
+var Queries = &queries{}
+
+const (
 	// CfgConsensusNumKeptVersions is the number of last consensus state versions that the nodes are
 	// keeping (e.g., due to a configured pruning policy). Versions older than that will not be
 	// queried.
@@ -791,7 +794,14 @@ func (q *queries) NeedsFunds() bool {
 }
 
 // Implements Workload.
-func (q *queries) Run(gracefulExit context.Context, rng *rand.Rand, conn *grpc.ClientConn, cnsc consensus.ClientBackend, fundingAccount signature.Signer) error {
+func (q *queries) Run(
+	gracefulExit context.Context,
+	rng *rand.Rand,
+	conn *grpc.ClientConn,
+	cnsc consensus.ClientBackend,
+	sm consensus.SubmissionManager,
+	fundingAccount signature.Signer,
+) error {
 	ctx := context.Background()
 
 	q.logger = logging.GetLogger("cmd/txsource/workload/queries")

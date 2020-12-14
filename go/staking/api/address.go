@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"sync"
 
+	"github.com/oasisprotocol/oasis-core/go/common"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/address"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	"github.com/oasisprotocol/oasis-core/go/common/encoding/bech32"
@@ -13,6 +14,8 @@ import (
 var (
 	// AddressV0Context is the unique context for v0 staking account addresses.
 	AddressV0Context = address.NewContext("oasis-core/address: staking", 0)
+	// AddressRuntimeV0Context is the unique context for v0 runtime account addresses.
+	AddressRuntimeV0Context = address.NewContext("oasis-core/address: runtime", 0)
 	// AddressBech32HRP is the unique human readable part of Bech32 encoded
 	// staking account addresses.
 	AddressBech32HRP = address.NewBech32HRP("oasis")
@@ -87,6 +90,12 @@ func (a Address) IsValid() bool {
 func NewAddress(pk signature.PublicKey) (a Address) {
 	pkData, _ := pk.MarshalBinary()
 	return (Address)(address.NewAddress(AddressV0Context, pkData))
+}
+
+// NewRuntimeAddress creates a new runtime address for the given runtime ID.
+func NewRuntimeAddress(id common.Namespace) (a Address) {
+	nsData, _ := id.MarshalBinary()
+	return (Address)(address.NewAddress(AddressRuntimeV0Context, nsData))
 }
 
 // NewReservedAddress creates a new reserved address from the given public key

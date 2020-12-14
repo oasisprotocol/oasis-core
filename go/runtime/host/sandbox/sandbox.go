@@ -39,6 +39,9 @@ type Config struct {
 	// specified a default function is used.
 	GetSandboxConfig func(cfg host.Config, socketPath, runtimeDir string) (process.Config, error)
 
+	// HostInfo provides information about the host environment.
+	HostInfo *protocol.HostInfo
+
 	// HostInitializer is a function that additionally initializes the runtime host. In case it is
 	// not specified a default function is used.
 	HostInitializer func(context.Context, host.Runtime, version.Version, process.Process, protocol.Connection) (*host.StartedEvent, error)
@@ -317,7 +320,7 @@ func (r *sandboxedRuntime) startProcess() (err error) {
 	var rtVersion *version.Version
 	initCtx, cancelInit := context.WithTimeout(ctx, runtimeInitTimeout)
 	defer cancelInit()
-	if rtVersion, err = pc.InitHost(initCtx, conn); err != nil {
+	if rtVersion, err = pc.InitHost(initCtx, conn, r.cfg.HostInfo); err != nil {
 		return fmt.Errorf("failed to initialize connection: %w", err)
 	}
 
@@ -506,6 +509,10 @@ func New(cfg Config) (host.Provisioner, error) {
 				SandboxBinaryPath: cfg.SandboxBinaryPath,
 			}, nil
 		}
+	}
+	// Make sure host environment information was provided in HostInfo.
+	if cfg.HostInfo == nil {
+		return nil, fmt.Errorf("no host information provided")
 	}
 	// Use a default HostInitializer if none was provided.
 	if cfg.HostInitializer == nil {

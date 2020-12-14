@@ -7,7 +7,7 @@ import (
 
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
-	"github.com/oasisprotocol/oasis-core/go/roothash/api/block"
+	"github.com/oasisprotocol/oasis-core/go/roothash/api/message"
 )
 
 func TestConsistentHash(t *testing.T) {
@@ -93,7 +93,7 @@ func TestValidateBasic(t *testing.T) {
 		{
 			"Bad runtime messages",
 			func(b ComputeBody) ComputeBody {
-				b.Messages = []block.Message{
+				b.Messages = []message.Message{
 					{}, // A message without any variant is invalid.
 				}
 				return b

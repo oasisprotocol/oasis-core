@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
+	fileSigner "github.com/oasisprotocol/oasis-core/go/common/crypto/signature/signers/file"
 	"github.com/oasisprotocol/oasis-core/go/common/entity"
 	"github.com/oasisprotocol/oasis-core/go/common/prettyprint"
 	"github.com/oasisprotocol/oasis-core/go/common/quantity"
@@ -19,6 +20,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/consensus"
 	"github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/flags"
 	"github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/grpc"
+	cmdSigner "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/signer"
 	"github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/stake"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/env"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/oasis"
@@ -43,6 +45,12 @@ const (
 	// Test reclaim escrow shares.
 	reclaimEscrowShares = 1234
 
+	// Test allowance amount.
+	allowAmount = 1000
+
+	// Test withdraw amount.
+	withdrawAmount = 500
+
 	// Transaction fee amount.
 	feeAmount = 10
 
@@ -52,9 +60,6 @@ const (
 	// Testing source account public key (hex-encoded).
 	srcPubkeyHex = "4ea5328f943ef6f66daaed74cb0e99c3b1c45f76307b425003dbc7cb3638ed35"
 
-	// Testing destination account public key (hex-encoded).
-	dstPubkeyHex = "5ea5328f943ef6f66daaed74cb0e99c3b1c45f76307b425003dbc7cb3638ed35"
-
 	// Testing escrow account public key (hex-encoded).
 	escrowPubkeyHex = "6ea5328f943ef6f66daaed74cb0e99c3b1c45f76307b425003dbc7cb3638ed35"
 )
@@ -62,9 +67,6 @@ const (
 var (
 	// Testing source account address.
 	srcAddress = api.NewAddress(signature.NewPublicKey(srcPubkeyHex))
-
-	// Testing destination account address.
-	dstAddress = api.NewAddress(signature.NewPublicKey(dstPubkeyHex))
 
 	// Testing escrow account address.
 	escrowAddress = api.NewAddress(signature.NewPublicKey(escrowPubkeyHex))
@@ -136,6 +138,7 @@ func (sc *stakeCLIImpl) Fixture() (*oasis.NetworkFixture, error) {
 				MaxRateSteps:       4,
 				MaxBoundSteps:      12,
 			},
+			MaxAllowances: 32,
 		},
 	}
 
@@ -143,13 +146,29 @@ func (sc *stakeCLIImpl) Fixture() (*oasis.NetworkFixture, error) {
 }
 
 func (sc *stakeCLIImpl) Run(childEnv *env.Env) error {
-	if err := sc.Net.Start(); err != nil {
+	// Generate beneficiary entity.
+	beneficiaryEntityDir, err := childEnv.NewSubDir("beneficiary-entity")
+	if err != nil {
+		return fmt.Errorf("failed to create directory: %w", err)
+	}
+	signerFactory, err := fileSigner.NewFactory(beneficiaryEntityDir.String(), signature.SignerEntity)
+	if err != nil {
+		return fmt.Errorf("failed to generate beneficiary entity: %w", err)
+	}
+	_, beneficiarySigner, err := entity.Generate(beneficiaryEntityDir.String(), signerFactory, nil)
+	if err != nil {
+		return fmt.Errorf("failed to generate beneficiary entity: %w", err)
+	}
+	beneficiaryAddress := api.NewAddress(beneficiarySigner.Public())
+
+	// Start the network.
+	if err = sc.Net.Start(); err != nil {
 		return err
 	}
 
 	ctx := context.Background()
 	sc.Logger.Info("waiting for nodes to register")
-	if err := sc.Net.Controller().WaitNodesRegistered(ctx, 3); err != nil {
+	if err = sc.Net.Controller().WaitNodesRegistered(ctx, 3); err != nil {
 		return fmt.Errorf("waiting for nodes to register: %w", err)
 	}
 	sc.Logger.Info("nodes registered")
@@ -157,7 +176,7 @@ func (sc *stakeCLIImpl) Run(childEnv *env.Env) error {
 	cli := cli.New(childEnv, sc.Net, sc.Logger)
 
 	// Common staking info.
-	if err := sc.getInfo(childEnv); err != nil {
+	if err = sc.getInfo(childEnv); err != nil {
 		return err
 	}
 
@@ -195,7 +214,6 @@ func (sc *stakeCLIImpl) Run(childEnv *env.Env) error {
 		expectError   bool
 	}{
 		{signature.NewPublicKey(srcPubkeyHex).String(), srcAddress.String(), false},
-		{signature.NewPublicKey(dstPubkeyHex).String(), dstAddress.String(), false},
 		{signature.NewPublicKey(escrowPubkeyHex).String(), escrowAddress.String(), false},
 		// Empty public key.
 		{"", "", true},
@@ -214,7 +232,7 @@ func (sc *stakeCLIImpl) Run(childEnv *env.Env) error {
 	}
 
 	// Transfer
-	if err = sc.testTransfer(childEnv, cli, srcAddress, dstAddress); err != nil {
+	if err = sc.testTransfer(childEnv, cli, srcAddress, beneficiaryAddress); err != nil {
 		return fmt.Errorf("error while running Transfer test: %w", err)
 	}
 
@@ -235,7 +253,12 @@ func (sc *stakeCLIImpl) Run(childEnv *env.Env) error {
 
 	// AmendCommissionSchedule
 	if err = sc.testAmendCommissionSchedule(childEnv, cli, srcAddress); err != nil {
-		return fmt.Errorf("error while running AmendCommissionSchedule: %w", err)
+		return fmt.Errorf("error while running AmendCommissionSchedule test: %w", err)
+	}
+
+	// Allow and Withdraw
+	if err = sc.testAllowWithdraw(childEnv, cli, srcAddress, beneficiaryAddress, beneficiaryEntityDir.String()); err != nil {
+		return fmt.Errorf("error while running AllowWithdraw test: %w", err)
 	}
 
 	// Stop the network.
@@ -569,6 +592,70 @@ func (sc *stakeCLIImpl) testAmendCommissionSchedule(childEnv *env.Env, cli *cli.
 	return nil
 }
 
+// testAllowWithdraw tests setting an allowance and withdrawing.
+func (sc *stakeCLIImpl) testAllowWithdraw(childEnv *env.Env, cli *cli.Helpers, src, beneficiary api.Address, beneficiaryEntityDir string) error {
+	srcNonce, err := sc.getAccountNonce(childEnv, src)
+	if err != nil {
+		return fmt.Errorf("getAccountNonce for source account %s: %w", src, err)
+	}
+	beneficiaryNonce, err := sc.getAccountNonce(childEnv, beneficiary)
+	if err != nil {
+		return fmt.Errorf("getAccountNonce for source account %s: %w", src, err)
+	}
+	ctx := contextWithTokenInfo()
+
+	// Set allowance.
+	allowTxPath := filepath.Join(childEnv.Dir(), "stake_allow.json")
+	if err = sc.genAllowTx(childEnv, allowAmount, srcNonce, beneficiary, allowTxPath); err != nil {
+		return err
+	}
+	if err = sc.showTx(childEnv, allowTxPath); err != nil {
+		return err
+	}
+
+	if err = cli.Consensus.SubmitTx(allowTxPath); err != nil {
+		return fmt.Errorf("failed to submit Allow tx: %w", err)
+	}
+
+	// Withdraw.
+	withdrawTxPath := filepath.Join(childEnv.Dir(), "stake_withdraw.json")
+	if err = sc.genWithdrawTx(childEnv, withdrawAmount, beneficiaryNonce, src, beneficiaryEntityDir, withdrawTxPath); err != nil {
+		return err
+	}
+	if err = sc.showTx(childEnv, withdrawTxPath); err != nil {
+		return err
+	}
+
+	if err = cli.Consensus.SubmitTx(withdrawTxPath); err != nil {
+		return fmt.Errorf("failed to submit Withdraw tx: %w", err)
+	}
+
+	// Check source general balance.
+	expectedGeneralBalance := mustInitQuantity(
+		initBalance - transferAmount - burnAmount - escrowAmount + reclaimEscrowAmount - withdrawAmount - 6*feeAmount,
+	)
+	if err = sc.checkGeneralAccount(ctx, childEnv, src, &api.GeneralAccount{
+		Balance: expectedGeneralBalance,
+		Nonce:   srcNonce + 1,
+		Allowances: map[api.Address]quantity.Quantity{
+			beneficiary: mustInitQuantity(allowAmount - withdrawAmount),
+		},
+	}); err != nil {
+		return err
+	}
+	// Check beneficiary general balance.
+	expectedGeneralBalance = mustInitQuantity(
+		transferAmount - feeAmount + withdrawAmount,
+	)
+	if err = sc.checkGeneralAccount(
+		ctx, childEnv, beneficiary, &api.GeneralAccount{Balance: expectedGeneralBalance, Nonce: 1},
+	); err != nil {
+		return err
+	}
+
+	return nil
+}
+
 func (sc *stakeCLIImpl) getInfo(childEnv *env.Env) error {
 	sc.Logger.Info("querying common staking info")
 	args := []string{
@@ -668,7 +755,7 @@ func (sc *stakeCLIImpl) checkGeneralAccount(
 	match := regexp.MustCompile(regexPattern).FindStringSubmatch(accountInfo)
 	if match == nil {
 		return fmt.Errorf(
-			"checkGeneralAccount: couldn't find expected general account %+v in account info", expectedAccount,
+			"checkGeneralAccount: couldn't find expected general account %+v in account info: %s", expectedAccount, accountInfo,
 		)
 	}
 
@@ -841,7 +928,7 @@ func (sc *stakeCLIImpl) genBurnTx(childEnv *env.Env, amount int, nonce uint64, t
 }
 
 func (sc *stakeCLIImpl) genEscrowTx(childEnv *env.Env, amount int, nonce uint64, escrow api.Address, txPath string) error {
-	sc.Logger.Info("generating stake escrow tx", "stake.CfgEscrowAccount", escrow)
+	sc.Logger.Info("generating stake escrow tx", stake.CfgEscrowAccount, escrow)
 
 	args := []string{
 		"stake", "account", "gen_escrow",
@@ -906,6 +993,50 @@ func (sc *stakeCLIImpl) genAmendCommissionScheduleTx(childEnv *env.Env, nonce ui
 	}
 	if out, err := cli.RunSubCommandWithOutput(childEnv, sc.Logger, "gen_amend_commission_schedule", sc.Net.Config().NodeBinary, args); err != nil {
 		return fmt.Errorf("genAmendCommissionScheduleTx: failed to generate amend commission schedule tx: error: %w output: %s", err, out.String())
+	}
+	return nil
+}
+
+func (sc *stakeCLIImpl) genAllowTx(childEnv *env.Env, amount int, nonce uint64, beneficiary api.Address, txPath string) error {
+	sc.Logger.Info("generating stake allow tx", stake.CfgAllowBeneficiary, beneficiary)
+
+	args := []string{
+		"stake", "account", "gen_allow",
+		"--" + consensus.CfgTxNonce, strconv.FormatUint(nonce, 10),
+		"--" + consensus.CfgTxFile, txPath,
+		"--" + stake.CfgAllowAmountChange, strconv.Itoa(amount),
+		"--" + stake.CfgAllowBeneficiary, beneficiary.String(),
+		"--" + consensus.CfgTxFeeAmount, strconv.Itoa(feeAmount),
+		"--" + consensus.CfgTxFeeGas, strconv.Itoa(feeGas),
+		"--" + flags.CfgDebugDontBlameOasis,
+		"--" + flags.CfgDebugTestEntity,
+		"--" + common.CfgDebugAllowTestKeys,
+		"--" + flags.CfgGenesisFile, sc.Net.GenesisPath(),
+	}
+	if out, err := cli.RunSubCommandWithOutput(childEnv, sc.Logger, "gen_allow", sc.Net.Config().NodeBinary, args); err != nil {
+		return fmt.Errorf("genAllowTx: failed to generate allow tx: error: %w output: %s", err, out.String())
+	}
+	return nil
+}
+
+func (sc *stakeCLIImpl) genWithdrawTx(childEnv *env.Env, amount int, nonce uint64, src api.Address, entityDir, txPath string) error {
+	sc.Logger.Info("generating stake withdraw tx", stake.CfgWithdrawSource, src)
+
+	args := []string{
+		"stake", "account", "gen_withdraw",
+		"--" + consensus.CfgTxNonce, strconv.FormatUint(nonce, 10),
+		"--" + consensus.CfgTxFile, txPath,
+		"--" + stake.CfgAmount, strconv.Itoa(amount),
+		"--" + stake.CfgWithdrawSource, src.String(),
+		"--" + consensus.CfgTxFeeAmount, strconv.Itoa(feeAmount),
+		"--" + consensus.CfgTxFeeGas, strconv.Itoa(feeGas),
+		"--" + flags.CfgDebugDontBlameOasis,
+		"--" + common.CfgDebugAllowTestKeys,
+		"--" + cmdSigner.CfgCLISignerDir, entityDir,
+		"--" + flags.CfgGenesisFile, sc.Net.GenesisPath(),
+	}
+	if out, err := cli.RunSubCommandWithOutput(childEnv, sc.Logger, "gen_withdraw", sc.Net.Config().NodeBinary, args); err != nil {
+		return fmt.Errorf("genAllowTx: failed to generate withdraw tx: error: %w output: %s", err, out.String())
 	}
 	return nil
 }

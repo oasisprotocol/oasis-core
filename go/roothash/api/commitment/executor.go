@@ -11,6 +11,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	"github.com/oasisprotocol/oasis-core/go/roothash/api/block"
+	"github.com/oasisprotocol/oasis-core/go/roothash/api/message"
 	storage "github.com/oasisprotocol/oasis-core/go/storage/api"
 )
 
@@ -84,7 +85,7 @@ type ComputeBody struct {
 
 	StorageSignatures []signature.Signature   `json:"storage_signatures,omitempty"`
 	RakSig            *signature.RawSignature `json:"rak_sig,omitempty"`
-	Messages          []block.Message         `json:"messages,omitempty"`
+	Messages          []message.Message       `json:"messages,omitempty"`
 }
 
 // SetFailure sets failure reason and clears any fields that should be clear

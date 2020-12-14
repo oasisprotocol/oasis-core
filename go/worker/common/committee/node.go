@@ -106,10 +106,11 @@ type Node struct {
 
 	// Mutable and shared between nodes' workers.
 	// Guarded by .CrossNode.
-	CrossNode          sync.Mutex
-	CurrentBlock       *block.Block
-	CurrentBlockHeight int64
-	Height             int64
+	CrossNode             sync.Mutex
+	CurrentBlock          *block.Block
+	CurrentBlockHeight    int64
+	CurrentConsensusBlock *consensus.LightBlock
+	Height                int64
 
 	logger *logging.Logger
 }
@@ -242,9 +243,21 @@ func (n *Node) handleNewBlockLocked(blk *block.Block, height int64) {
 	// Helps in cases where node is restarted mid epoch.
 	firstBlockReceived := n.CurrentBlock == nil
 
+	// Fetch light consensus block.
+	consensusBlk, err := n.Consensus.GetLightBlock(n.ctx, height)
+	if err != nil {
+		n.logger.Error("failed to query light block",
+			"err", err,
+			"height", height,
+			"round", blk.Header.Round,
+		)
+		return
+	}
+
 	// Update the current block.
 	n.CurrentBlock = blk
 	n.CurrentBlockHeight = height
+	n.CurrentConsensusBlock = consensusBlk
 
 	for _, hooks := range n.hooks {
 		hooks.HandleNewBlockEarlyLocked(blk)

@@ -12,16 +12,20 @@ import (
 	memorySigner "github.com/oasisprotocol/oasis-core/go/common/crypto/signature/signers/memory"
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
-	"github.com/oasisprotocol/oasis-core/go/consensus/api/transaction"
 	epochtime "github.com/oasisprotocol/oasis-core/go/epochtime/api"
 	staking "github.com/oasisprotocol/oasis-core/go/staking/api"
 )
 
-const (
-	// NameCommission is the name of the commission schedule amendements
-	// workload.
-	NameCommission = "commission"
+// NameCommission is the name of the commission schedule amendements
+// workload.
+const NameCommission = "commission"
 
+// Commission is the commission schedule amendments workload.
+var Commission = &commission{
+	BaseWorkload: NewBaseWorkload(NameCommission),
+}
+
+const (
 	// Max number of rate change intervals between two bound steps.
 	commissionMaxBoundChangeIntervals = 10
 	// Max number of rate change intervals between two rate steps.
@@ -29,13 +33,12 @@ const (
 )
 
 type commission struct {
-	logger *logging.Logger
+	BaseWorkload
 
-	rules          staking.CommissionScheduleRules
-	signer         signature.Signer
-	address        staking.Address
-	reckonedNonce  uint64
-	fundingAccount signature.Signer
+	rules         staking.CommissionScheduleRules
+	signer        signature.Signer
+	address       staking.Address
+	reckonedNonce uint64
 }
 
 // currentBound returns the rate bounds at the latest bound step that has
@@ -126,7 +129,7 @@ func findNextExclusiveBound(bounds []staking.CommissionRateBoundStep, currentBou
 }
 
 func (c *commission) doAmendCommissionSchedule(ctx context.Context, rng *rand.Rand, cnsc consensus.ClientBackend, stakingClient staking.Backend) error {
-	c.logger.Debug("amend commission schedule")
+	c.Logger.Debug("amend commission schedule")
 
 	// Get current epoch.
 	currentEpoch, err := cnsc.GetEpoch(ctx, consensus.HeightLatest)
@@ -253,7 +256,7 @@ func (c *commission) doAmendCommissionSchedule(ctx context.Context, rng *rand.Ra
 		currentBound := currentBound(&newSchedule, startEpoch)
 		if currentBound == nil {
 			// This is not expected to ever happen.
-			c.logger.Error("no active bound at epoch",
+			c.Logger.Error("no active bound at epoch",
 				"epoch", startEpoch,
 				"schedule", newSchedule,
 			)
@@ -261,7 +264,7 @@ func (c *commission) doAmendCommissionSchedule(ctx context.Context, rng *rand.Ra
 		}
 		// Find first following exclusive bound.
 		nextBound := findNextExclusiveBound(newSchedule.Bounds, currentBound)
-		c.logger.Debug("finding next exclusive bound",
+		c.Logger.Debug("finding next exclusive bound",
 			"current_bound", currentBound,
 			"epoch", startEpoch,
 			"end_epoch", endEpoch,
@@ -289,13 +292,13 @@ func (c *commission) doAmendCommissionSchedule(ctx context.Context, rng *rand.Ra
 			needMoreRateStpes = true
 		}
 
-		c.logger.Debug("Generating valid rate step",
+		c.Logger.Debug("Generating valid rate step",
 			"start_epoch", startEpoch,
 			"end_epoch", endEpoch,
 			"bounds", newSchedule.Bounds,
 			"need_more", needMoreRateStpes,
 		)
-		step := genValidRateStep(rng, c.logger, newSchedule, startEpoch, endEpoch)
+		step := genValidRateStep(rng, c.Logger, newSchedule, startEpoch, endEpoch)
 		amendSchedule.Amendment.Rates = append(amendSchedule.Amendment.Rates, step)
 
 		// Next rate should start at endEpoch.
@@ -306,54 +309,26 @@ func (c *commission) doAmendCommissionSchedule(ctx context.Context, rng *rand.Ra
 	// This happens when more than number of allowed amendment rate steps are
 	// needed to satisfy all bound steps.
 	if len(amendSchedule.Amendment.Rates) > int(maxRateSteps) {
-		c.logger.Debug("To many rate steps needed to satisfy bonds, skipping amendment",
+		c.Logger.Debug("To many rate steps needed to satisfy bonds, skipping amendment",
 			"amendment", amendSchedule,
 		)
 		return nil
 	}
 
 	// Generate transaction.
-	tx := staking.NewAmendCommissionScheduleTx(c.reckonedNonce, &transaction.Fee{}, &amendSchedule)
+	tx := staking.NewAmendCommissionScheduleTx(c.reckonedNonce, nil, &amendSchedule)
 	c.reckonedNonce++
 
-	// Estimate gas.
-	gas, err := cnsc.EstimateGas(ctx, &consensus.EstimateGasRequest{
-		Signer:      c.signer.Public(),
-		Transaction: tx,
-	})
-	if err != nil {
-		return fmt.Errorf("failed to estimate gas: %w", err)
-	}
-	tx.Fee.Gas = gas
-	feeAmount := int64(gas) * gasPrice
-	if err = tx.Fee.Amount.FromInt64(feeAmount); err != nil {
-		return fmt.Errorf("fee amount from int64: %w", err)
-	}
-
-	// Fund account to cover AmendCommissionSchedule transaction fees.
-	fundAmount := int64(gas) * gasPrice // transaction costs
-	if err = transferFunds(ctx, c.logger, cnsc, c.fundingAccount, c.address, fundAmount); err != nil {
-		return fmt.Errorf("account funding failure: %w", err)
-	}
-
-	// Sign transaction.
-	signedTx, err := transaction.Sign(c.signer, tx)
-	if err != nil {
-		return fmt.Errorf("transaction.Sign: %w", err)
-	}
-
-	c.logger.Debug("submitting amend commission schedule transaction",
+	c.Logger.Debug("submitting amend commission schedule transaction",
 		"signer", c.signer.Public(),
 		"account", c.address,
 		"amendment", amendSchedule,
 		"existing", existingCommissionSchedule,
 	)
 
-	// Submit transaction.
-	if err = cnsc.SubmitTx(ctx, signedTx); err != nil {
-		return fmt.Errorf("cnsc.SubmitTx: %w", err)
+	if err = c.FundSignAndSubmitTx(ctx, c.signer, tx); err != nil {
+		return fmt.Errorf("failed to submit transaction: %w", err)
 	}
-
 	return nil
 }
 
@@ -363,12 +338,19 @@ func (c *commission) NeedsFunds() bool {
 }
 
 // Implements Workload.
-func (c *commission) Run(gracefulExit context.Context, rng *rand.Rand, conn *grpc.ClientConn, cnsc consensus.ClientBackend, fundingAccount signature.Signer) error {
+func (c *commission) Run(
+	gracefulExit context.Context,
+	rng *rand.Rand,
+	conn *grpc.ClientConn,
+	cnsc consensus.ClientBackend,
+	sm consensus.SubmissionManager,
+	fundingAccount signature.Signer,
+) error {
+	// Initialize base workload.
+	c.BaseWorkload.Init(cnsc, sm, fundingAccount)
+
 	var err error
 	ctx := context.Background()
-
-	c.logger = logging.GetLogger("cmd/txsource/workload/commission")
-	c.fundingAccount = fundingAccount
 
 	fac := memorySigner.NewFactory()
 	c.signer, err = fac.Generate(signature.SignerEntity, rng)
@@ -393,7 +375,7 @@ func (c *commission) Run(gracefulExit context.Context, rng *rand.Rand, conn *grp
 		select {
 		case <-time.After(1 * time.Second):
 		case <-gracefulExit.Done():
-			c.logger.Debug("time's up")
+			c.Logger.Debug("time's up")
 			return nil
 		}
 	}

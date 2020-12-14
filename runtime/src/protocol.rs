@@ -252,8 +252,19 @@ impl Protocol {
         request: Body,
     ) -> Result<Option<Body>> {
         match request {
-            Body::RuntimeInfoRequest { runtime_id } => {
-                // Store the passed Runtime ID.
+            Body::RuntimeInfoRequest {
+                runtime_id,
+                consensus_backend,
+                consensus_protocol_version,
+            } => {
+                info!(self.logger, "Received host environment information";
+                    "runtime_id" => ?runtime_id,
+                    "consensus_backend" => consensus_backend,
+                    "consensus_protocol_version" => consensus_protocol_version,
+                );
+                // TODO: Verify consensus backend/protocol compatibility.
+
+                // Store the passed runtime ID.
                 *self.runtime_id.lock().unwrap() = Some(runtime_id);
 
                 self.dispatcher.start(self.clone());

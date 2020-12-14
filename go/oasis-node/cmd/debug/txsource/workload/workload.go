@@ -6,13 +6,13 @@ import (
 	"math/rand"
 	"time"
 
-	"github.com/cenkalti/backoff/v4"
 	flag "github.com/spf13/pflag"
 	"google.golang.org/grpc"
 
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	"github.com/oasisprotocol/oasis-core/go/common/entity"
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
+	"github.com/oasisprotocol/oasis-core/go/common/quantity"
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
 	"github.com/oasisprotocol/oasis-core/go/consensus/api/transaction"
 	staking "github.com/oasisprotocol/oasis-core/go/staking/api"
@@ -20,165 +20,24 @@ import (
 
 const (
 	maxSubmissionRetryElapsedTime = 120 * time.Second
-	maxSubmissionRetryInterval    = 10 * time.Second
 
 	fundAccountAmount = 10000000000
-	// gasPrice should be at least the configured min gas prices of validators.
-	gasPrice = 1
 )
 
-// FundAccountFromTestEntity funds an account from test entity.
-func FundAccountFromTestEntity(
-	ctx context.Context,
-	logger *logging.Logger,
-	cnsc consensus.ClientBackend,
-	to signature.Signer,
-) error {
-	_, testEntitySigner, _ := entity.TestEntity()
-	toAddr := staking.NewAddress(to.Public())
-	return transferFunds(ctx, logger, cnsc, testEntitySigner, toAddr, fundAccountAmount)
+// ByName is the registry of workloads that you can access with `--workload <name>` on the command line.
+var ByName = map[string]Workload{
+	NameCommission:   Commission,
+	NameDelegation:   Delegation,
+	NameOversized:    Oversized,
+	NameParallel:     Parallel,
+	NameQueries:      Queries,
+	NameRegistration: Registration,
+	NameRuntime:      Runtime,
+	NameTransfer:     Transfer,
 }
 
-func fundSignAndSubmitTx(
-	ctx context.Context,
-	logger *logging.Logger,
-	cnsc consensus.ClientBackend,
-	caller signature.Signer,
-	tx *transaction.Transaction,
-	fundingAccount signature.Signer,
-) error {
-	// Estimate gas needed if not set.
-	if tx.Fee.Gas == 0 {
-		gas, err := cnsc.EstimateGas(ctx, &consensus.EstimateGasRequest{
-			Signer:      caller.Public(),
-			Transaction: tx,
-		})
-		if err != nil {
-			return fmt.Errorf("failed to estimate gas: %w", err)
-		}
-		tx.Fee.Gas = gas
-	}
-
-	// Fund caller to cover transaction fees.
-	feeAmount := int64(tx.Fee.Gas) * gasPrice
-	if err := tx.Fee.Amount.FromInt64(feeAmount); err != nil {
-		return fmt.Errorf("fee amount from int64: %w", err)
-	}
-	callerAddr := staking.NewAddress(caller.Public())
-	if err := transferFunds(ctx, logger, cnsc, fundingAccount, callerAddr, feeAmount); err != nil {
-		return fmt.Errorf("account funding failure: %w", err)
-	}
-
-	// Sign tx.
-	signedTx, err := transaction.Sign(caller, tx)
-	if err != nil {
-		return fmt.Errorf("transaction.Sign: %w", err)
-	}
-
-	logger.Debug("submitting transaction",
-		"tx", tx,
-		"signed_tx", signedTx,
-		"tx_caller", caller.Public(),
-	)
-
-	// SubmitTx.
-	// Wait for a maximum of 60 seconds to submit transaction.
-	submitCtx, cancel := context.WithTimeout(ctx, 60*time.Second)
-	err = cnsc.SubmitTx(submitCtx, signedTx)
-	switch err {
-	case nil:
-		cancel()
-		return nil
-	default:
-		cancel()
-		logger.Error("failed to submit transaction",
-			"err", err,
-			"tx", tx,
-			"signed_tx", signedTx,
-			"tx_caller", caller.Public(),
-		)
-		return fmt.Errorf("cnsc.SubmitTx: %w", err)
-	}
-}
-
-// transferFunds transfer funds between accounts.
-func transferFunds(
-	ctx context.Context,
-	logger *logging.Logger,
-	cnsc consensus.ClientBackend,
-	from signature.Signer,
-	to staking.Address,
-	transferAmount int64,
-) error {
-	sched := backoff.NewExponentialBackOff()
-	sched.MaxInterval = maxSubmissionRetryInterval
-	sched.MaxElapsedTime = maxSubmissionRetryElapsedTime
-	// Since multiple workloads run simultaneously (in separate processes)
-	// there is a nonce race condition, in case of invalid nonce errors
-	// submission should be retried. (similarly as it is done in the
-	// SubmissionManager).
-	// Maybe just expose the SignAndSubmit() method in the
-	// consensus.ClientBackend?
-	return backoff.Retry(func() error {
-		fromAddr := staking.NewAddress(from.Public())
-		// Get test entity nonce.
-		nonce, err := cnsc.GetSignerNonce(ctx, &consensus.GetSignerNonceRequest{
-			AccountAddress: fromAddr,
-			Height:         consensus.HeightLatest,
-		})
-		if err != nil {
-			return backoff.Permanent(fmt.Errorf("GetSignerNonce TestEntity error: %w", err))
-		}
-
-		transfer := staking.Transfer{
-			To: to,
-		}
-		if err = transfer.Amount.FromInt64(transferAmount); err != nil {
-			return backoff.Permanent(fmt.Errorf("transfer base units FromInt64 %d: %w", transferAmount, err))
-		}
-		logger.Debug("transferring funds", "from", from.Public(), "to", to, "amount", transferAmount, "nonce", nonce)
-
-		var fee transaction.Fee
-		tx := staking.NewTransferTx(nonce, &fee, &transfer)
-		// Estimate fee.
-		gas, err := cnsc.EstimateGas(ctx, &consensus.EstimateGasRequest{
-			Signer:      from.Public(),
-			Transaction: tx,
-		})
-		if err != nil {
-			return fmt.Errorf("failed to estimate gas: %w", err)
-		}
-		tx.Fee.Gas = gas
-		feeAmount := int64(gas) * gasPrice
-		if err = tx.Fee.Amount.FromInt64(feeAmount); err != nil {
-			return fmt.Errorf("fee amount from int64: %w", err)
-		}
-
-		signedTx, err := transaction.Sign(from, tx)
-		if err != nil {
-			return backoff.Permanent(fmt.Errorf("transaction.Sign: %w", err))
-		}
-
-		// Wait for a maximum of 5 seconds as submission may block forever in case the client node
-		// is skipping all CheckTx checks.
-		submitCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
-		defer cancel()
-		if err = cnsc.SubmitTx(submitCtx, signedTx); err != nil {
-			// Expected errors are:
-			// - invalid nonce
-			// - timeout due to transaction being stuck due to invalid nonce (as client is skipping check-tx)
-			// In any case no it doesn't hurt to retry on all submission errors.
-			logger.Debug("SubmitTX error, retrying...",
-				"err", err,
-				"from", from.Public(),
-				"to", to,
-				"nonce", tx.Nonce,
-			)
-			return err
-		}
-		return nil
-	}, backoff.WithContext(sched, ctx))
-}
+// Flags has the workload flags.
+var Flags = flag.NewFlagSet("", flag.ContinueOnError)
 
 // Workload is a DRBG-backed schedule of transactions.
 type Workload interface {
@@ -194,24 +53,124 @@ type Workload interface {
 		rng *rand.Rand,
 		conn *grpc.ClientConn,
 		cnsc consensus.ClientBackend,
+		sm consensus.SubmissionManager,
 		fundingAccount signature.Signer,
 	) error
 }
 
-// ByName is the registry of workloads that you can access with `--workload <name>` on the command line.
-var ByName = map[string]Workload{
-	NameCommission:   &commission{},
-	NameDelegation:   &delegation{},
-	NameOversized:    oversized{},
-	NameParallel:     parallel{},
-	NameQueries:      &queries{},
-	NameRegistration: &registration{},
-	NameRuntime:      &runtime{},
-	NameTransfer:     &transfer{},
+// BaseWorkload provides common methods for a workload.
+type BaseWorkload struct {
+	// Logger is the logger for the workload.
+	Logger *logging.Logger
+
+	cc consensus.ClientBackend
+	sm consensus.SubmissionManager
+
+	fundingAccount signature.Signer
 }
 
-// Flags has the workload flags.
-var Flags = flag.NewFlagSet("", flag.ContinueOnError)
+// Init initializes the base workload.
+func (bw *BaseWorkload) Init(
+	cc consensus.ClientBackend,
+	sm consensus.SubmissionManager,
+	fundingAccount signature.Signer,
+) {
+	bw.cc = cc
+	bw.sm = sm
+	bw.fundingAccount = fundingAccount
+}
+
+// Consensus returns the consensus client backend.
+func (bw *BaseWorkload) Consensus() consensus.ClientBackend {
+	return bw.cc
+}
+
+// GasPrice returns the configured consensus gas price.
+func (bw *BaseWorkload) GasPrice() uint64 {
+	// NOTE: This cannot fail as workloads use static price discovery.
+	gasPrice, _ := bw.sm.PriceDiscovery().GasPrice(context.Background())
+	return gasPrice.ToBigInt().Uint64()
+}
+
+// FundSignAndSubmitTx funds the caller to cover transaction fees, signs the transaction and submits
+// it to the consensus layer.
+func (bw *BaseWorkload) FundSignAndSubmitTx(ctx context.Context, caller signature.Signer, tx *transaction.Transaction) error {
+	// Estimate fee.
+	if err := bw.sm.EstimateGasAndSetFee(ctx, caller, tx); err != nil {
+		return fmt.Errorf("failed to estimate fee: %w", err)
+	}
+
+	// Fund caller to cover transaction fees.
+	callerAddr := staking.NewAddress(caller.Public())
+	if err := bw.TransferFundsQty(ctx, bw.fundingAccount, callerAddr, &tx.Fee.Amount); err != nil {
+		return fmt.Errorf("account funding failure: %w", err)
+	}
+
+	bw.Logger.Debug("submitting transaction",
+		"tx", tx,
+		"tx_caller", caller.Public(),
+	)
+
+	// Wait for a maximum of 60 seconds to submit transaction.
+	submitCtx, cancel := context.WithTimeout(ctx, 60*time.Second)
+	defer cancel()
+	if err := bw.sm.SignAndSubmitTx(submitCtx, caller, tx); err != nil {
+		bw.Logger.Error("failed to submit transaction",
+			"err", err,
+			"tx", tx,
+			"tx_caller", caller.Public(),
+		)
+		return fmt.Errorf("failed to submit transaction: %w", err)
+	}
+	return nil
+}
+
+// TransferFunds transfers funds from one account to the other.
+func (bw *BaseWorkload) TransferFunds(ctx context.Context, from signature.Signer, to staking.Address, amount uint64) error {
+	return bw.TransferFundsQty(ctx, from, to, quantity.NewFromUint64(amount))
+}
+
+// TransferFundsQty transfers funds from one account to the other, taking a Quantity amount.
+func (bw *BaseWorkload) TransferFundsQty(ctx context.Context, from signature.Signer, to staking.Address, amount *quantity.Quantity) error {
+	tx := staking.NewTransferTx(0, nil, &staking.Transfer{
+		To:     to,
+		Amount: *amount,
+	})
+
+	submitCtx, cancel := context.WithTimeout(ctx, maxSubmissionRetryElapsedTime)
+	defer cancel()
+	if err := bw.sm.SignAndSubmitTx(submitCtx, from, tx); err != nil {
+		bw.Logger.Error("failed to submit transaction",
+			"err", err,
+			"tx", tx,
+			"tx_caller", from.Public(),
+		)
+		return fmt.Errorf("failed to submit transaction: %w", err)
+	}
+	return nil
+}
+
+// NewBaseWorkload creates a new BaseWorkload.
+func NewBaseWorkload(name string) BaseWorkload {
+	return BaseWorkload{
+		Logger: logging.GetLogger("cmd/txsource/workload/" + name),
+	}
+}
+
+// FundAccountFromTestEntity funds an account from test entity.
+func FundAccountFromTestEntity(
+	ctx context.Context,
+	cc consensus.ClientBackend,
+	sm consensus.SubmissionManager,
+	to signature.Signer,
+) error {
+	_, testEntitySigner, _ := entity.TestEntity()
+	toAddr := staking.NewAddress(to.Public())
+
+	bw := NewBaseWorkload("funding")
+	bw.Init(cc, sm, testEntitySigner)
+	return bw.TransferFunds(ctx, testEntitySigner, toAddr, fundAccountAmount)
+}
 
 func init() {
 	Flags.AddFlagSet(QueriesFlags)
