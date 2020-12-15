@@ -4,7 +4,6 @@ package api
 import (
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
 	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
-	"github.com/oasisprotocol/oasis-core/go/runtime/transaction"
 )
 
 // Scheduler defines an algorithm for scheduling incoming transactions.
@@ -12,20 +11,8 @@ type Scheduler interface {
 	// Name is the scheduler algorithm name.
 	Name() string
 
-	// Initialize initializes the internal scheduler state.
-	// Scheduler should use the provided transaction dispatcher to dispatch
-	// transactions.
-	Initialize(td TransactionDispatcher) error
-
-	// IsInitialized returns true, if the scheduler has been initialized.
-	IsInitialized() bool
-
-	// ScheduleTx attempts to schedule a transaction.
-	//
-	// The scheduling algorithm may peek into the transaction to extract
-	// metadata needed for scheduling. In this case, the transaction bytes
-	// must correspond to a transaction.TxnCall structure.
-	ScheduleTx(tx []byte) error
+	// QueueTx queues a transaction for scheduling.
+	QueueTx(tx []byte) error
 
 	// AppendTxBatch appends a transaction batch for scheduling.
 	//
@@ -36,8 +23,8 @@ type Scheduler interface {
 	// RemoveTxBatch removes a transaction batch.
 	RemoveTxBatch(tx [][]byte) error
 
-	// Flush flushes queued transactions.
-	Flush(force bool) error
+	// GetBatch returns a batch of scheduled transactions (if any is available).
+	GetBatch(force bool) [][]byte
 
 	// UnscheduledSize returns number of unscheduled items.
 	UnscheduledSize() uint64
@@ -50,10 +37,4 @@ type Scheduler interface {
 
 	// Clear clears the transaction queue.
 	Clear()
-}
-
-// TransactionDispatcher dispatches transactions to a scheduled executor committee.
-type TransactionDispatcher interface {
-	// Dispatch attempts to dispatch a batch to a executor committee.
-	Dispatch(batch transaction.RawBatch) error
 }

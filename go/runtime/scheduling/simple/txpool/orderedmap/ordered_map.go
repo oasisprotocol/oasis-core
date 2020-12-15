@@ -188,12 +188,13 @@ func (q *orderedMap) UpdateConfig(cfg api.Config) error {
 		if current == nil {
 			break
 		}
-		if cfg.MaxPoolSize > uint64(newQueue.Len()) {
+		if uint64(newQueue.Len()) >= cfg.MaxPoolSize {
 			break
 		}
 		el := current.Value.(*pair)
 		txSize := uint64(len(el.Value))
 		if txSize > cfg.MaxBatchSizeBytes {
+			current = current.Prev()
 			continue
 		}
 		newQueue.PushFront(el)

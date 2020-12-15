@@ -3,7 +3,6 @@ package tests
 
 import (
 	"crypto"
-	"errors"
 	"fmt"
 	"math/rand"
 	"sync"
@@ -20,87 +19,39 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/runtime/transaction"
 )
 
-type testDispatcher struct {
-	ShouldFail        bool
-	DispatchedBatches []transaction.RawBatch
-	scheduler         api.Scheduler
-}
-
-func (t *testDispatcher) Clear() {
-	t.DispatchedBatches = []transaction.RawBatch{}
-}
-
-func (t *testDispatcher) Dispatch(batch transaction.RawBatch) error {
-	if t.ShouldFail {
-		return errors.New("dispatch failed")
-	}
-	t.DispatchedBatches = append(t.DispatchedBatches, batch)
-	_ = t.scheduler.RemoveTxBatch(batch)
-	return nil
-}
-
 // SchedulerImplementationTests runs the scheduler implementation tests.
-func SchedulerImplementationTests(
-	t *testing.T,
-	scheduler api.Scheduler,
-) {
-	td := testDispatcher{ShouldFail: false, scheduler: scheduler}
-
-	err := scheduler.Initialize(&td)
-	require.NoError(t, err, "Initialize(td)")
-
+func SchedulerImplementationTests(t *testing.T, scheduler api.Scheduler) {
 	// Run the test cases.
 	t.Run("ScheduleTxs", func(t *testing.T) {
-		testScheduleTransactions(t, &td, scheduler)
+		testScheduleTransactions(t, scheduler)
 	})
 }
 
-func testScheduleTransactions(t *testing.T, td *testDispatcher, scheduler api.Scheduler) {
+func testScheduleTransactions(t *testing.T, scheduler api.Scheduler) {
 	require.EqualValues(t, 0, scheduler.UnscheduledSize(), "no transactions should be scheduled")
 
-	// Test ScheduleTx.
+	// Test QueueTx.
 	testTx := []byte("hello world")
 	txBytes := hash.NewFromBytes(testTx)
-	err := scheduler.ScheduleTx(testTx)
-	require.NoError(t, err, "ScheduleTx(testTx)")
+	err := scheduler.QueueTx(testTx)
+	require.NoError(t, err, "QueueTx(testTx)")
 	require.True(t, scheduler.IsQueued(txBytes), "IsQueued(tx)")
 
-	// Test FlushTx.
-	err = scheduler.Flush(false)
-	require.NoError(t, err, "Flush(force=false)")
-	require.EqualValues(t, 1, scheduler.UnscheduledSize(), "transaction should remain unscheduled after a non-forced flush")
+	// Test GetBatch.
+	batch := scheduler.GetBatch(false)
+	require.Empty(t, batch, "non-forced GetBatch should not return any transactions")
+	require.EqualValues(t, 1, scheduler.UnscheduledSize(), "transaction should remain in the queue")
 	require.True(t, scheduler.IsQueued(txBytes), "IsQueued(tx)")
-	err = scheduler.Flush(true)
-	require.NoError(t, err, "Flush(force=true)")
-	require.EqualValues(t, 0, scheduler.UnscheduledSize(), "no transactions should be scheduled after flushing a single tx")
-	require.Equal(t, 1, len(td.DispatchedBatches), "one batch should be dispatched")
-	require.EqualValues(t, transaction.RawBatch{testTx}, td.DispatchedBatches[0], "transaction should be dispatched")
+
+	batch = scheduler.GetBatch(true)
+	require.EqualValues(t, transaction.RawBatch{testTx}, batch, "transaction should be returned")
+	require.True(t, scheduler.IsQueued(txBytes), "IsQueued(tx)")
+
+	// Test RemoveTxBatch.
+	err = scheduler.RemoveTxBatch(batch)
+	require.NoError(t, err, "RemoveTxBatch")
 	require.False(t, scheduler.IsQueued(txBytes), "IsQueued(tx)")
-
-	// Test with a Failing Dispatcher.
-	td.Clear()
-	td.ShouldFail = true
-	testTx2 := []byte("hello world2")
-	tx2Bytes := hash.NewFromBytes(testTx2)
-
-	err = scheduler.ScheduleTx(testTx2)
-	require.NoError(t, err, "ScheduleTx(testTx2)")
-	require.True(t, scheduler.IsQueued(tx2Bytes), "IsQueued(tx)")
-	require.False(t, scheduler.IsQueued(txBytes), "IsQueued(tx)")
-
-	err = scheduler.Flush(true)
-	require.Error(t, err, "dispatch failed", "Flush(force=true)")
-	require.EqualValues(t, 1, scheduler.UnscheduledSize(), "failed dispatch should return tx in the queue")
-
-	// Retry failed transaction with a Working Dispatcher.
-	td.ShouldFail = false
-	err = scheduler.Flush(true)
-	require.NoError(t, err, "Flush(force=true)")
-	require.EqualValues(t, 0, scheduler.UnscheduledSize(), "no transactions after flushing a single tx")
-	require.False(t, scheduler.IsQueued(tx2Bytes), "IsQueued(tx)")
-	require.Equal(t, 1, len(td.DispatchedBatches), "one batch should be dispatched")
-	require.EqualValues(t, transaction.RawBatch{testTx2}, td.DispatchedBatches[0], "transaction should be dispatched")
-	td.Clear()
+	require.EqualValues(t, 0, scheduler.UnscheduledSize(), "no transactions should remain")
 
 	// Test schedule batch.
 	testBatch := [][]byte{
@@ -115,18 +66,17 @@ func testScheduleTransactions(t *testing.T, td *testDispatcher, scheduler api.Sc
 		require.True(t, scheduler.IsQueued(hash.NewFromBytes(tx)), fmt.Sprintf("IsQueued(%s)", tx))
 	}
 	// Clear the queue.
-	err = scheduler.Flush(true)
-	require.NoError(t, err, "Flush(force=true)")
+	scheduler.Clear()
 	require.EqualValues(t, 0, scheduler.UnscheduledSize(), "no transactions after flushing")
 
 	// Test Update configuration.
 	// First insert a transaction.
-	err = scheduler.ScheduleTx(testTx)
-	require.NoError(t, err, "ScheduleTx(testTx)")
+	err = scheduler.QueueTx(testTx)
+	require.NoError(t, err, "QueueTx(testTx)")
 	// Make sure transaction doesn't get scheduled.
-	err = scheduler.Flush(false)
-	require.NoError(t, err, "Flush(force=false)")
-	require.EqualValues(t, 1, scheduler.UnscheduledSize(), "transaction should remain unscheduled after a non-forced flush")
+	batch = scheduler.GetBatch(false)
+	require.Empty(t, batch, "non-forced GetBatch should not return any transactions")
+	require.EqualValues(t, 1, scheduler.UnscheduledSize(), "transaction should remain in the queue")
 	// Update configuration to BatchSize=1.
 	err = scheduler.UpdateParameters(
 		registry.TxnSchedulerParameters{
@@ -136,10 +86,10 @@ func testScheduleTransactions(t *testing.T, td *testDispatcher, scheduler api.Sc
 		},
 	)
 	require.NoError(t, err, "UpdateParameters")
+	require.EqualValues(t, 1, scheduler.UnscheduledSize(), "transaction should remain in the queue")
 	// Make sure transaction gets scheduled now.
-	err = scheduler.Flush(false)
-	require.NoError(t, err, "Flush(force=false)")
-	require.EqualValues(t, 0, scheduler.UnscheduledSize(), "transaction should get scheduled after a non-forced flush")
+	batch = scheduler.GetBatch(false)
+	require.Len(t, batch, 1, "transaction should be returned")
 
 	// Test update clear transactions.
 	// Update configuration back to BatchSize=10.
@@ -152,10 +102,10 @@ func testScheduleTransactions(t *testing.T, td *testDispatcher, scheduler api.Sc
 	)
 	require.NoError(t, err, "UpdateParameters")
 	// Insert a transaction.
-	err = scheduler.ScheduleTx(testTx)
-	require.NoError(t, err, "ScheduleTx(testTx)")
-	// Make sure transaction is scheduled.
-	require.EqualValues(t, 1, scheduler.UnscheduledSize(), "one transaction scheduled")
+	err = scheduler.QueueTx(testTx)
+	require.NoError(t, err, "QueueTx(testTx)")
+	// Make sure transaction is queued.
+	require.EqualValues(t, 1, scheduler.UnscheduledSize(), "one transaction queued")
 	// Update configuration to MaxBatchSizeBytes=1.
 	err = scheduler.UpdateParameters(
 		registry.TxnSchedulerParameters{
@@ -166,7 +116,7 @@ func testScheduleTransactions(t *testing.T, td *testDispatcher, scheduler api.Sc
 	)
 	require.NoError(t, err, "UpdateParameters")
 	// Make sure the transaction was removed.
-	require.EqualValues(t, 0, scheduler.UnscheduledSize(), "transaction should get scheduled after a non-forced flush")
+	require.EqualValues(t, 0, scheduler.UnscheduledSize(), "transaction should get removed on update")
 
 	// Test invalid udpate.
 	err = scheduler.UpdateParameters(
@@ -178,7 +128,7 @@ func testScheduleTransactions(t *testing.T, td *testDispatcher, scheduler api.Sc
 }
 
 type benchmarkingDispatcher interface {
-	api.TransactionDispatcher
+	Dispatch(batch transaction.RawBatch)
 	DispatchedSize() int
 }
 
@@ -187,10 +137,12 @@ type noOpDispatcher struct {
 	scheduler         api.Scheduler
 }
 
-func (t *noOpDispatcher) Dispatch(batch transaction.RawBatch) error {
+func (t *noOpDispatcher) Dispatch(batch transaction.RawBatch) {
+	if len(batch) == 0 {
+		return
+	}
 	t.DispatchedBatches = append(t.DispatchedBatches, batch...)
 	_ = t.scheduler.RemoveTxBatch(batch)
-	return nil
 }
 
 func (t *noOpDispatcher) DispatchedSize() int {
@@ -204,11 +156,13 @@ type delayDispatcher struct {
 	scheduler         api.Scheduler
 }
 
-func (t *delayDispatcher) Dispatch(batch transaction.RawBatch) error {
+func (t *delayDispatcher) Dispatch(batch transaction.RawBatch) {
+	if len(batch) == 0 {
+		return
+	}
 	<-time.After(t.delay(t.rng))
 	t.DispatchedBatches = append(t.DispatchedBatches, batch...)
 	_ = t.scheduler.RemoveTxBatch(batch)
-	return nil
 }
 
 func (t *delayDispatcher) DispatchedSize() int {
@@ -229,8 +183,6 @@ func SchedulerImplementationBenchmarks(b *testing.B, scheduler api.Scheduler) {
 			noOpTd := &noOpDispatcher{
 				scheduler: scheduler,
 			}
-			err := scheduler.Initialize(noOpTd)
-			require.NoError(b, err, "Initialize(noOpTd)")
 
 			benchmarkScheduleTransactions(b, rng, noOpTd, scheduler, values)
 		}
@@ -245,8 +197,6 @@ func SchedulerImplementationBenchmarks(b *testing.B, scheduler api.Scheduler) {
 				},
 				scheduler: scheduler,
 			}
-			err := scheduler.Initialize(delayTd)
-			require.NoError(b, err, "Initialize(delayTd)")
 
 			benchmarkScheduleTransactions(b, rng, delayTd, scheduler, values)
 		}
@@ -260,7 +210,7 @@ func benchmarkScheduleTransactions(b *testing.B, rng *rand.Rand, dispatcher benc
 			if scheduler.UnscheduledSize() == 0 {
 				break
 			}
-			scheduler.Flush(true)
+			dispatcher.Dispatch(scheduler.GetBatch(true))
 		}
 	}
 
@@ -270,10 +220,11 @@ func benchmarkScheduleTransactions(b *testing.B, rng *rand.Rand, dispatcher benc
 		wg.Add(1)
 		go func(v []byte, wg *sync.WaitGroup) {
 			defer wg.Done()
-			err := scheduler.ScheduleTx(v)
+			err := scheduler.QueueTx(v)
 			if err != nil {
 				panic(err)
 			}
+			dispatcher.Dispatch(scheduler.GetBatch(false))
 		}(v, &wg)
 	}
 	wg.Wait()

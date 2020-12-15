@@ -3,7 +3,6 @@ package simple
 
 import (
 	"fmt"
-	"sync/atomic"
 
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
@@ -23,53 +22,22 @@ type scheduler struct {
 
 	txPool        txpool.TxPool
 	maxTxPoolSize uint64
-
-	dispatcher         api.TransactionDispatcher
-	dispatchInProgress uint32
 }
 
-func (s *scheduler) scheduleBatch(force bool) error {
-	if !atomic.CompareAndSwapUint32(&s.dispatchInProgress, 0, 1) {
-		// Dispatch already in progress.
+func (s *scheduler) QueueTx(tx []byte) error {
+	switch err := s.txPool.Add(tx); err {
+	case nil:
 		return nil
-	}
-	defer atomic.StoreUint32(&s.dispatchInProgress, 0)
-
-	batch := s.txPool.GetBatch(force)
-	if len(batch) > 0 {
-		// Try to dispatch batch.
-		if err := s.dispatcher.Dispatch(batch); err != nil {
-			return err
-		}
-	}
-
-	return nil
-}
-
-func (s *scheduler) ScheduleTx(tx []byte) error {
-	if err := s.txPool.Add(tx); err != nil {
+	case txpool.ErrCallAlreadyExists:
 		// Return success in case of duplicate calls to avoid the client
 		// mistaking this for an actual error.
-		if err == txpool.ErrCallAlreadyExists {
-			s.logger.Warn("ignoring duplicate call",
-				"batch", tx,
-			)
-		} else {
-			return err
-		}
-	}
-
-	// Try scheduling a batch.
-	if err := s.scheduleBatch(false); err != nil {
-		// XXX: Log a warning here as the expected common failures are
-		// whenever we try dispatching a batch and we are not the scheduler,
-		// or when another batch is being processed.
-		s.logger.Warn("failed scheduling a batch",
-			"err", err,
+		s.logger.Warn("ignoring duplicate call",
+			"batch", tx,
 		)
+		return nil
+	default:
+		return err
 	}
-
-	return nil
 }
 
 // AppendTxBatch appends a batch of transactions.
@@ -88,19 +56,8 @@ func (s *scheduler) RemoveTxBatch(tx [][]byte) error {
 	return s.txPool.RemoveBatch(tx)
 }
 
-func (s *scheduler) Flush(force bool) error {
-	// Schedule a batch.
-	if err := s.scheduleBatch(force); err != nil {
-		// XXX: Log a warning here as the expected common failures are
-		// whenever we try dispatching a batch and we are not the scheduler,
-		// or when another batch is being processed.
-		s.logger.Warn("failed scheduling a batch",
-			"err", err,
-		)
-		return err
-	}
-
-	return nil
+func (s *scheduler) GetBatch(force bool) [][]byte {
+	return s.txPool.GetBatch(force)
 }
 
 func (s *scheduler) UnscheduledSize() uint64 {
@@ -113,16 +70,6 @@ func (s *scheduler) IsQueued(id hash.Hash) bool {
 
 func (s *scheduler) Clear() {
 	s.txPool.Clear()
-}
-
-func (s *scheduler) Initialize(td api.TransactionDispatcher) error {
-	s.dispatcher = td
-
-	return nil
-}
-
-func (s *scheduler) IsInitialized() bool {
-	return s.dispatcher != nil
 }
 
 func (s *scheduler) UpdateParameters(params registry.TxnSchedulerParameters) error {
