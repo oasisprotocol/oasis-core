@@ -13,6 +13,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/control"
 	"github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/debug"
 	"github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/genesis"
+	"github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/governance"
 	"github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/ias"
 	"github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/identity"
 	"github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/keymanager"
@@ -73,6 +74,7 @@ func init() {
 		control.Register,
 		debug.Register,
 		genesis.Register,
+		governance.Register,
 		ias.Register,
 		identity.Register,
 		keymanager.Register,
