@@ -111,8 +111,7 @@ func (bw *BaseWorkload) FundSignAndSubmitTx(ctx context.Context, caller signatur
 		"tx_caller", caller.Public(),
 	)
 
-	// Wait for a maximum of 60 seconds to submit transaction.
-	submitCtx, cancel := context.WithTimeout(ctx, 60*time.Second)
+	submitCtx, cancel := context.WithTimeout(ctx, maxSubmissionRetryElapsedTime)
 	defer cancel()
 	if err := bw.sm.SignAndSubmitTx(submitCtx, caller, tx); err != nil {
 		bw.Logger.Error("failed to submit transaction",
