@@ -24,7 +24,7 @@ pub struct Context<'a> {
     pub check_only: bool,
 
     /// List of emitted tags for each transaction.
-    tags: Vec<Tags>,
+    tags: Tags,
 
     /// List of emitted messages.
     messages: Vec<Message>,
@@ -44,19 +44,19 @@ impl<'a> Context<'a> {
             message_results,
             runtime: Box::new(NoRuntimeContext),
             check_only,
-            tags: Vec::new(),
+            tags: Tags::new(),
             messages: Vec::new(),
         }
     }
 
-    /// Start a new transaction.
-    pub fn start_transaction(&mut self) {
-        self.tags.push(Tags::new());
+    /// Close the context and return the sent roothash messages.
+    pub fn close(self) -> Vec<Message> {
+        self.messages
     }
 
-    /// Close the context and return the emitted tags and sent roothash messages.
-    pub fn close(self) -> (Vec<Tags>, Vec<Message>) {
-        (self.tags, self.messages)
+    /// Takes the tags accumulated so far and replaces them with an empty set.
+    pub fn take_tags(&mut self) -> Tags {
+        std::mem::take(&mut self.tags)
     }
 
     /// Emit a runtime-specific indexable tag refering to the specific
@@ -64,24 +64,12 @@ impl<'a> Context<'a> {
     ///
     /// If multiple tags with the same key are emitted for a transaction, only
     /// the last one will be indexed.
-    ///
-    /// # Panics
-    ///
-    /// Calling this method outside of a transaction will panic.
-    ///
     pub fn emit_txn_tag<K, V>(&mut self, key: K, value: V)
     where
         K: AsRef<[u8]>,
         V: AsRef<[u8]>,
     {
-        assert!(
-            !self.tags.is_empty(),
-            "must only be called inside a transaction"
-        );
-
         self.tags
-            .last_mut()
-            .expect("tags is not empty")
             .push(Tag::new(key.as_ref().to_vec(), value.as_ref().to_vec()))
     }
 

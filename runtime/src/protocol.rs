@@ -208,7 +208,7 @@ impl Protocol {
                     }
                     Err(error) => Body::Error {
                         module: "".to_owned(), // XXX: Error codes.
-                        code: 0,               // XXX: Error codes.
+                        code: 1,               // XXX: Error codes.
                         message: format!("{}", error),
                     },
                 };

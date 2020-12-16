@@ -11,6 +11,7 @@ use crate::common::cbor::Value;
 
 /// Transaction call.
 #[derive(Clone, Debug, Serialize, Deserialize)]
+#[deprecated(note = "see oasis-core#3572")]
 pub struct TxnCall {
     /// Method name.
     pub method: String,
@@ -20,6 +21,7 @@ pub struct TxnCall {
 
 /// Transaction call output.
 #[derive(Clone, Debug, Serialize, Deserialize)]
+#[deprecated(note = "see oasis-core#3572")]
 pub enum TxnOutput {
     /// Call invoked successfully.
     Success(Value),
@@ -29,6 +31,7 @@ pub enum TxnOutput {
 
 /// The result of a successful CheckTx call.
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
+#[deprecated(note = "see oasis-core#3572")]
 pub struct TxnCheckResult {
     /// Predicted read/write set.
     pub predicted_rw_set: ReadWriteSet,

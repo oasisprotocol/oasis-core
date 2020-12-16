@@ -5,6 +5,7 @@ use serde_repr::*;
 
 use crate::{
     common::{
+        cbor,
         crypto::{
             hash::Hash,
             signature::{PublicKey, Signature},
@@ -122,7 +123,7 @@ pub enum Body {
         block: Block,
     },
     RuntimeCheckTxBatchResponse {
-        results: TxnBatch,
+        results: Vec<CheckTxResult>,
     },
     RuntimeExecuteTxBatchRequest {
         #[serde(default)]
@@ -178,6 +179,27 @@ pub enum Body {
         value: Vec<u8>,
     },
     HostLocalStorageSetResponse {},
+}
+
+/// A serializable error.
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+pub struct Error {
+    #[serde(default)]
+    pub module: String,
+    #[serde(default)]
+    pub code: u32,
+    #[serde(default)]
+    pub message: String,
+}
+
+/// Result of a CheckTx operation.
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+pub struct CheckTxResult {
+    #[serde(rename = "error")]
+    pub error: Error,
+
+    #[serde(rename = "meta")]
+    pub meta: Option<cbor::Value>,
 }
 
 #[derive(Clone, Copy, Debug)]
