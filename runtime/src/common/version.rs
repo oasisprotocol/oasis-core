@@ -5,9 +5,9 @@
 /// A protocol or runtime version.
 #[derive(Clone, Copy, Debug)]
 pub struct Version {
-    major: u16,
-    minor: u16,
-    patch: u16,
+    pub major: u16,
+    pub minor: u16,
+    pub patch: u16,
 }
 
 #[macro_export]
@@ -23,7 +23,7 @@ macro_rules! version_from_cargo {
 
 impl Version {
     /// Creates a new version with given major, minor, and patch segments.
-    pub fn new(major: u16, minor: u16, patch: u16) -> Version {
+    pub const fn new(major: u16, minor: u16, patch: u16) -> Version {
         Version {
             major: major,
             minor: minor,
