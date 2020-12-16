@@ -8,6 +8,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/eapache/channels"
 	"github.com/opentracing/opentracing-go"
 	"github.com/prometheus/client_golang/prometheus"
 
@@ -140,6 +141,7 @@ type Node struct { // nolint: maligned
 	lastScheduledCache     *lru.Cache
 	scheduleCheckTxEnabled bool
 	scheduleMaxTxPoolSize  uint64
+	scheduleCh             *channels.RingChannel
 
 	// The scheduler mutex is here to protect the initialization
 	// of the scheduler variable. After initialization the variable
@@ -442,7 +444,7 @@ func (n *Node) transitionLocked(state NodeState) {
 func (n *Node) HandleEpochTransitionLocked(epoch *committee.EpochSnapshot) {
 	n.schedulerMutex.RLock()
 	defer n.schedulerMutex.RUnlock()
-	if n.scheduler == nil || !n.scheduler.IsInitialized() {
+	if n.scheduler == nil {
 		n.logger.Error("scheduling algorithm not available yet")
 		return
 	}
@@ -561,7 +563,11 @@ func (n *Node) HandleNewBlockLocked(blk *block.Block) {
 
 	// Check if we are a proposer and if so try to immediately schedule a new batch.
 	if n.commonNode.Group.GetEpochSnapshot().IsTransactionScheduler(blk.Header.Round) {
-		go n.scheduler.Flush(false)
+		n.logger.Info("we are a transaction scheduler",
+			"round", blk.Header.Round,
+		)
+
+		n.scheduleCh.In() <- struct{}{}
 	}
 }
 
@@ -632,7 +638,7 @@ func (n *Node) QueueTx(tx []byte) error {
 	n.schedulerMutex.RLock()
 	defer n.schedulerMutex.RUnlock()
 
-	if n.scheduler == nil || !n.scheduler.IsInitialized() {
+	if n.scheduler == nil {
 		return errNotReady
 	}
 
@@ -644,7 +650,7 @@ func (n *Node) QueueTx(tx []byte) error {
 		}
 	}
 
-	if err := n.scheduler.ScheduleTx(tx); err != nil {
+	if err := n.scheduler.QueueTx(tx); err != nil {
 		return err
 	}
 
@@ -658,6 +664,9 @@ func (n *Node) QueueTx(tx []byte) error {
 		}
 	}
 	incomingQueueSize.With(n.getMetricLabels()).Set(float64(n.scheduler.UnscheduledSize()))
+
+	// Notify event loop to attempt to schedule a batch.
+	n.scheduleCh.In() <- struct{}{}
 
 	return nil
 }
@@ -745,53 +754,79 @@ func (n *Node) proposeTimeoutLocked() error {
 	return nil
 }
 
-// Dispatch dispatches a batch to the executor committee.
-func (n *Node) Dispatch(batch transaction.RawBatch) error {
-	n.logger.Debug("dispatching a batch",
-		"batch", batch,
-		"size", len(batch),
-	)
-	lastHeader, err := func() (*block.Header, error) {
+func (n *Node) handleScheduleBatch(force bool) {
+	epoch, lastHeader, err := func() (*committee.EpochSnapshot, *block.Header, error) {
 		n.commonNode.CrossNode.Lock()
 		defer n.commonNode.CrossNode.Unlock()
 
 		// If we are not waiting for a batch, don't do anything.
 		if _, ok := n.state.(StateWaitingForBatch); !ok {
-			return nil, errIncorrectState
+			return nil, nil, errIncorrectState
 		}
 		if n.commonNode.CurrentBlock == nil {
-			return nil, errNoBlocks
+			return nil, nil, errNoBlocks
 		}
 		header := n.commonNode.CurrentBlock.Header
-		round := header.Round
 		epoch := n.commonNode.Group.GetEpochSnapshot()
 
-		switch {
-		case epoch.IsTransactionScheduler(round):
-			// Continues bellow.
-		case epoch.IsExecutorWorker():
-			// If we are an executor and not a scheduler try proposing a timeout.
-			err := n.proposeTimeoutLocked()
-			if err != nil {
-				n.logger.Error("error proposing a timeout",
-					"err", err,
-				)
-			}
-
-			fallthrough
-		default:
-			// XXX: Always return an error here in case we are not a txn scheduler,
-			// so that the batch is reinserted back into the queue.
-			return nil, errNotTxnScheduler
+		// If we are not an executor worker in this epoch, we don't need to do anything.
+		if !epoch.IsExecutorWorker() {
+			return nil, nil, errNotTxnScheduler
 		}
-		return &header, nil
+		return epoch, &header, nil
 	}()
 	if err != nil {
-		return err
+		n.logger.Debug("not scheduling a batch",
+			"err", err,
+		)
+		return
 	}
 
+	// Ask the scheduler to get us a scheduled batch.
+	batch := n.scheduler.GetBatch(force)
+	if len(batch) == 0 {
+		return
+	}
+
+	// If we are an executor and not a scheduler try proposing a timeout.
+	if !epoch.IsTransactionScheduler(lastHeader.Round) {
+		n.logger.Debug("proposing a timeout",
+			"round", lastHeader.Round,
+		)
+
+		err = func() error {
+			n.commonNode.CrossNode.Lock()
+			defer n.commonNode.CrossNode.Unlock()
+
+			// Make sure we are still in the right state/round.
+			if _, ok := n.state.(StateWaitingForBatch); !ok || lastHeader.Round != n.commonNode.CurrentBlock.Header.Round {
+				return errIncorrectState
+			}
+			return n.proposeTimeoutLocked()
+		}()
+		switch err {
+		case nil:
+		case errIncorrectState:
+			return
+		default:
+			n.logger.Error("error proposing a timeout",
+				"err", err,
+			)
+		}
+
+		// If we are not a transaction scheduler, we can't really schedule.
+		n.logger.Debug("not scheduling a batch as we are not a transaction scheduler",
+			"batch_size", len(batch),
+		)
+		return
+	}
+
+	n.logger.Debug("scheduling a batch",
+		"batch_size", len(batch),
+	)
+
 	// Scheduler node opens a new parent span for batch processing.
-	batchSpan := opentracing.StartSpan("TakeBatchFromQueue(batch)")
+	batchSpan := opentracing.StartSpan("ScheduleBatch(batch)")
 	defer batchSpan.Finish()
 	batchSpanCtx := batchSpan.Context()
 
@@ -811,7 +846,7 @@ func (n *Node) Dispatch(batch transaction.RawBatch) error {
 			n.logger.Error("failed to create I/O tree",
 				"err", err,
 			)
-			return err
+			return
 		}
 	}
 
@@ -820,7 +855,7 @@ func (n *Node) Dispatch(batch transaction.RawBatch) error {
 		n.logger.Error("failed to create I/O tree",
 			"err", err,
 		)
-		return err
+		return
 	}
 
 	// Commit I/O tree to storage and obtain receipts.
@@ -841,7 +876,7 @@ func (n *Node) Dispatch(batch transaction.RawBatch) error {
 		n.logger.Error("failed to commit I/O tree to storage",
 			"err", err,
 		)
-		return err
+		return
 	}
 	spanInsert.Finish()
 
@@ -866,7 +901,7 @@ func (n *Node) Dispatch(batch transaction.RawBatch) error {
 		n.logger.Error("failed to sign txn scheduler batch",
 			"err", err,
 		)
-		return fmt.Errorf("failed to sign txn scheduler batch: %w", err)
+		return
 	}
 
 	n.commonNode.CrossNode.Lock()
@@ -877,7 +912,7 @@ func (n *Node) Dispatch(batch transaction.RawBatch) error {
 		n.logger.Error("new state since started the dispatch",
 			"state", n.state,
 		)
-		return errIncorrectState
+		return
 	}
 
 	// Ensure we are still in the same round as when we started the dispatch.
@@ -886,7 +921,7 @@ func (n *Node) Dispatch(batch transaction.RawBatch) error {
 			"expected_round", lastHeader.Round,
 			"round", n.commonNode.CurrentBlock.Header.Round,
 		)
-		return errSeenNewerBlock
+		return
 	}
 
 	n.logger.Debug("dispatching a new batch proposal",
@@ -905,7 +940,7 @@ func (n *Node) Dispatch(batch transaction.RawBatch) error {
 		n.logger.Error("failed to publish batch to committee",
 			"err", err,
 		)
-		return err
+		return
 	}
 	crash.Here(crashPointBatchPublishAfter)
 	spanPublish.Finish()
@@ -918,8 +953,6 @@ func (n *Node) Dispatch(batch transaction.RawBatch) error {
 		signedDispatchMsg.Signature,
 		ioReceiptSignatures,
 	)
-
-	return nil
 }
 
 // Guarded by n.commonNode.CrossNode.
@@ -1482,12 +1515,6 @@ func (n *Node) worker() {
 		)
 		return
 	}
-	if err = scheduler.Initialize(n); err != nil {
-		n.logger.Error("failed initializing transaction scheduler algorithm",
-			"err", err,
-		)
-		return
-	}
 
 	n.schedulerMutex.Lock()
 	n.scheduler = scheduler
@@ -1546,8 +1573,11 @@ func (n *Node) worker() {
 				return
 			}
 		case <-txnScheduleTicker.C:
-			// Flush a batch from algorithm.
-			n.scheduler.Flush(true)
+			// Force scheduling a batch if possible.
+			n.handleScheduleBatch(true)
+		case <-n.scheduleCh.Out():
+			// Regular scheduling of a batch.
+			n.handleScheduleBatch(false)
 		case <-n.reselect:
 			// Recalculate select set.
 		}
@@ -1591,6 +1621,7 @@ func NewNode(
 		scheduleCheckTxEnabled: scheduleCheckTxEnabled,
 		scheduleMaxTxPoolSize:  scheduleMaxTxPoolSize,
 		lastScheduledCache:     cache,
+		scheduleCh:             channels.NewRingChannel(1),
 		ctx:                    ctx,
 		cancelCtx:              cancel,
 		stopCh:                 make(chan struct{}),

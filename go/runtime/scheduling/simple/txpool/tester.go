@@ -35,6 +35,10 @@ func TxPoolImplementationTests(
 	t.Run("TestRemoveBatch", func(t *testing.T) {
 		testRemoveBatch(t, pool)
 	})
+
+	t.Run("TestUpdateConfig", func(t *testing.T) {
+		testUpdateConfig(t, pool)
+	})
 }
 
 func testBasic(t *testing.T, pool api.TxPool) {
@@ -186,6 +190,54 @@ func testRemoveBatch(t *testing.T, pool api.TxPool) {
 	})
 	require.NoError(t, err, "RemoveBatch not existing batch")
 	require.EqualValues(t, 2, pool.Size(), "Size")
+}
+
+func testUpdateConfig(t *testing.T, pool api.TxPool) {
+	pool.Clear()
+
+	err := pool.UpdateConfig(api.Config{
+		MaxPoolSize:       50,
+		MaxBatchSize:      10,
+		MaxBatchSizeBytes: 100,
+	})
+	require.NoError(t, err, "UpdateConfig")
+
+	err = pool.Add([]byte("hello world 1"))
+	require.NoError(t, err, "Add")
+
+	batch := pool.GetBatch(false)
+	require.Empty(t, batch, "no transactions should be returned")
+
+	// Update configuration to BatchSize=1.
+	err = pool.UpdateConfig(api.Config{
+		MaxPoolSize:       50,
+		MaxBatchSize:      1,
+		MaxBatchSizeBytes: 100,
+	})
+	require.NoError(t, err, "UpdateConfig")
+
+	batch = pool.GetBatch(false)
+	require.Len(t, batch, 1, "one transaction should be returned")
+
+	// Update configuration back to BatchSize=10.
+	err = pool.UpdateConfig(api.Config{
+		MaxPoolSize:       50,
+		MaxBatchSize:      10,
+		MaxBatchSizeBytes: 100,
+	})
+	require.NoError(t, err, "UpdateConfig")
+	// Make sure the transaction is still there.
+	require.EqualValues(t, 1, pool.Size(), "transaction should remain after update")
+
+	// Update configuration to MaxBatchSizeBytes=1.
+	err = pool.UpdateConfig(api.Config{
+		MaxPoolSize:       50,
+		MaxBatchSize:      10,
+		MaxBatchSizeBytes: 1,
+	})
+	require.NoError(t, err, "UpdateConfig")
+	// Make sure the transaction was removed.
+	require.EqualValues(t, 0, pool.Size(), "transaction should get removed on update")
 }
 
 // TxPoolImplementationBenchmarks runs the tx pool implementation benchmarks.
