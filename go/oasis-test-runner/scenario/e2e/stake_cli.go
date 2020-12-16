@@ -231,6 +231,35 @@ func (sc *stakeCLIImpl) Run(childEnv *env.Env) error {
 		}
 	}
 
+	// Ensure validating account addresses works.
+	addressWithSpaces := "oasis1 qzm9 xjzq gsdc zc64 v3zp 8jkf ekx7 n8kh y502 pxwq"
+	validateAddressTestVectors := []struct {
+		addressText string
+		expectError bool
+	}{
+		{srcAddress.String(), false},
+		{escrowAddress.String(), false},
+		// Empty address should be invalid.
+		{"", true},
+		// Address with spaces should be invalid.
+		{addressWithSpaces, true},
+		// Same address without spaces should be valid.
+		{strings.ReplaceAll(addressWithSpaces, " ", ""), false},
+		// Hex-formatted public keys should be invalid.
+		{srcPubkeyHex, true},
+		{escrowPubkeyHex, true},
+	}
+	sc.Logger.Info("test validation of staking account addresses")
+	for _, vector := range validateAddressTestVectors {
+		err = sc.testValidateAddress(childEnv, vector.addressText)
+		if err != nil && !vector.expectError {
+			return fmt.Errorf("unexpected validate_address error: %w", err)
+		}
+		if err == nil && vector.expectError {
+			return fmt.Errorf("validate_address for address '%s' should error", vector.addressText)
+		}
+	}
+
 	// Transfer
 	if err = sc.testTransfer(childEnv, cli, srcAddress, beneficiaryAddress); err != nil {
 		return fmt.Errorf("error while running Transfer test: %w", err)
@@ -288,6 +317,21 @@ func (sc *stakeCLIImpl) testPubkey2Address(childEnv *env.Env, publicKeyText, add
 		return fmt.Errorf("pubkey2address converted public key %s to address %s (expected address: %s)",
 			publicKeyText, addr, addressText,
 		)
+	}
+
+	return nil
+}
+
+func (sc *stakeCLIImpl) testValidateAddress(childEnv *env.Env, addressText string) error {
+	args := []string{
+		"stake", "account", "validate_address",
+		"--verbose",
+		"--" + stake.CfgAccountAddr, addressText,
+	}
+
+	out, err := cli.RunSubCommandWithOutput(childEnv, sc.Logger, "info", sc.Net.Config().NodeBinary, args)
+	if err != nil {
+		return fmt.Errorf("failed to validate account address: error: %w output: %s", err, out.String())
 	}
 
 	return nil

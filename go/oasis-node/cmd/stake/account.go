@@ -79,6 +79,12 @@ var (
 		Run:   doAccountNonce,
 	}
 
+	accountValidateAddressCmd = &cobra.Command{
+		Use:   "validate_address",
+		Short: "validate account address",
+		Run:   doValidateAddress,
+	}
+
 	accountTransferCmd = &cobra.Command{
 		Use:   "gen_transfer",
 		Short: "generate a transfer transaction",
@@ -176,6 +182,29 @@ func doAccountNonce(cmd *cobra.Command, args []string) {
 	ctx := context.Background()
 	acct := getAccount(ctx, cmd, addr, client)
 	fmt.Println(acct.General.Nonce)
+}
+
+func doValidateAddress(cmd *cobra.Command, args []string) {
+	if err := cmdCommon.Init(); err != nil {
+		cmdCommon.EarlyLogAndExit(err)
+	}
+
+	addrStr := viper.GetString(CfgAccountAddr)
+	var addr api.Address
+	err := addr.UnmarshalText([]byte(addrStr))
+
+	switch cmdFlags.Verbose() {
+	case true:
+		if err != nil {
+			fmt.Printf("account address '%s' is not valid: %v\n", addrStr, err)
+			os.Exit(1)
+		}
+		fmt.Printf("account address '%s' is valid", addrStr)
+	default:
+		if err != nil {
+			os.Exit(1)
+		}
+	}
 }
 
 func doAccountTransfer(cmd *cobra.Command, args []string) {
@@ -431,6 +460,7 @@ func registerAccountCmd() {
 	for _, v := range []*cobra.Command{
 		accountInfoCmd,
 		accountNonceCmd,
+		accountValidateAddressCmd,
 		accountTransferCmd,
 		accountBurnCmd,
 		accountEscrowCmd,
@@ -444,6 +474,8 @@ func registerAccountCmd() {
 
 	accountInfoCmd.Flags().AddFlagSet(commonAccountFlags)
 	accountNonceCmd.Flags().AddFlagSet(commonAccountFlags)
+	accountValidateAddressCmd.Flags().AddFlagSet(commonAccountFlags)
+	accountValidateAddressCmd.Flags().AddFlagSet(cmdFlags.VerboseFlags)
 	accountTransferCmd.Flags().AddFlagSet(accountTransferFlags)
 	accountBurnCmd.Flags().AddFlagSet(accountBurnFlags)
 	accountEscrowCmd.Flags().AddFlagSet(commonEscrowFlags)
