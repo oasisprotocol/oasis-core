@@ -40,7 +40,7 @@ require (
 	github.com/oasisprotocol/ed25519 v0.0.0-20201103162138-a1dadbe24dd5
 	github.com/opentracing/opentracing-go v1.2.0
 	github.com/petermattis/goid v0.0.0-20180202154549-b0b1615b78e5 // indirect
-	github.com/prometheus/client_golang v1.8.0
+	github.com/prometheus/client_golang v1.9.0
 	github.com/prometheus/common v0.15.0
 	github.com/prometheus/procfs v0.2.0
 	github.com/seccomp/libseccomp-golang v0.9.1
