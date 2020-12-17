@@ -72,8 +72,8 @@ RUN wget https://dl.google.com/go/go${GO_VERSION}.linux-amd64.tar.gz && \
     GO111MODULE=on go get mvdan.cc/gofumpt@${GOFUMPT_VERSION} && \
     GO111MODULE=on go get mvdan.cc/gofumpt/gofumports@${GOFUMPT_VERSION}
 
-# Install bubblewrap (we need version 0.3.3 which is not available for 18.04).
-RUN wget http://archive.ubuntu.com/ubuntu/pool/main/b/bubblewrap/bubblewrap_0.3.3-2_amd64.deb && \
-    echo '1cf9bdae5cfab75f292fad9ee0ef76a7c55243dbc0515709624b2a9573d19447 bubblewrap_0.3.3-2_amd64.deb' | sha256sum -c && \
-    dpkg -i bubblewrap_0.3.3-2_amd64.deb && \
-    rm bubblewrap_0.3.3-2_amd64.deb
+# Install bubblewrap (we need at least version 0.3.3 which is not available for 18.04).
+RUN wget http://archive.ubuntu.com/ubuntu/pool/main/b/bubblewrap/bubblewrap_0.4.1-1_amd64.deb && \
+    echo '25de452f209e4fdb4b009851c33ca9a0269ebf0b92f4bd9b86186480592cc3e2 bubblewrap_0.4.1-1_amd64.deb' | sha256sum -c && \
+    dpkg -i bubblewrap_0.4.1-1_amd64.deb && \
+    rm bubblewrap_0.4.1-1_amd64.deb
