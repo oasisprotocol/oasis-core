@@ -128,6 +128,40 @@ func (r *runtime) validateResponse(key string, rsp *runtimeTransaction.TxnOutput
 	return nil
 }
 
+func (r *runtime) validateEvents(ctx context.Context, rtc runtimeClient.RuntimeClient, op, key string) error {
+	evs, err := rtc.GetEvents(ctx, &runtimeClient.GetEventsRequest{
+		RuntimeID: r.runtimeID,
+		Round:     runtimeClient.RoundLatest,
+	})
+	if err != nil {
+		return fmt.Errorf("failed to fetch events: %w", err)
+	}
+
+	if len(evs) != 2 {
+		r.Logger.Error("unexpected number of events",
+			"events", evs,
+			"expected_op", op,
+			"expected_key", key,
+		)
+		return fmt.Errorf("unexpected number of events (expected: %d got: %d)", 2, len(evs))
+	}
+	for _, ev := range evs {
+		switch string(ev.Key) {
+		case "kv_op":
+			if string(ev.Value) != op {
+				return fmt.Errorf("unexpected kv_op event value (expected: %s got: %s)", op, string(ev.Value))
+			}
+		case "kv_key":
+			if string(ev.Value) != key {
+				return fmt.Errorf("unexpected kv_key event value (expected: %s got: %s)", key, string(ev.Value))
+			}
+		default:
+			return fmt.Errorf("unexpected event type: %s", ev.Key)
+		}
+	}
+	return nil
+}
+
 func (r *runtime) submitRuntimeRquest(ctx context.Context, rtc runtimeClient.RuntimeClient, req *runtimeTransaction.TxnCall) (*runtimeTransaction.TxnOutput, error) {
 	var rsp runtimeTransaction.TxnOutput
 	rtx := &runtimeClient.SubmitTxRequest{
@@ -195,6 +229,10 @@ func (r *runtime) doInsertRequest(ctx context.Context, rng *rand.Rand, rtc runti
 		return fmt.Errorf("invalid response: %w", err)
 	}
 
+	if err := r.validateEvents(ctx, rtc, "insert", key); err != nil {
+		return err
+	}
+
 	r.Logger.Debug("insert request success",
 		"request", req,
 		"response", rsp,
@@ -241,6 +279,10 @@ func (r *runtime) doGetRequest(ctx context.Context, rng *rand.Rand, rtc runtimeC
 		return fmt.Errorf("invalid response: %w", err)
 	}
 
+	if err := r.validateEvents(ctx, rtc, "get", key); err != nil {
+		return err
+	}
+
 	r.Logger.Debug("get request success",
 		"request", req,
 		"response", rsp,
@@ -282,6 +324,10 @@ func (r *runtime) doRemoveRequest(ctx context.Context, rng *rand.Rand, rtc runti
 			"err", err,
 		)
 		return fmt.Errorf("invalid response: %w", err)
+	}
+
+	if err := r.validateEvents(ctx, rtc, "remove", key); err != nil {
+		return err
 	}
 
 	r.Logger.Debug("remove request success",
