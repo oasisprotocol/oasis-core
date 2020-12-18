@@ -21,7 +21,9 @@ import (
 	memorySigner "github.com/oasisprotocol/oasis-core/go/common/crypto/signature/signers/memory"
 	"github.com/oasisprotocol/oasis-core/go/common/identity"
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
+	genesisTests "github.com/oasisprotocol/oasis-core/go/genesis/tests"
 	cmdCommon "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common"
+	commonFlags "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/flags"
 	storageAPI "github.com/oasisprotocol/oasis-core/go/storage/api"
 	"github.com/oasisprotocol/oasis-core/go/worker/storage"
 )
@@ -69,6 +71,7 @@ func doBenchmark(cmd *cobra.Command, args []string) { // nolint: gocyclo
 	}
 
 	// Create an identity.
+	genesisTests.SetTestChainContext()
 	ident, err := identity.LoadOrGenerate(dataDir, memorySigner.NewFactory(), false)
 	if err != nil {
 		logger.Error("failed to generate a new identity",
@@ -81,6 +84,10 @@ func doBenchmark(cmd *cobra.Command, args []string) { // nolint: gocyclo
 	viper.Set("storage.debug.insecure_skip_checks", true)
 
 	var ns common.Namespace
+
+	// Set some extra options to make the database cooperate with the specifics here.
+	viper.SetDefault(storage.CfgInsecureSkipChecks, true)
+	viper.SetDefault(commonFlags.CfgDebugDontBlameOasis, true)
 
 	storage, err := storage.NewLocalBackend(dataDir, ns, ident)
 	if err != nil {
