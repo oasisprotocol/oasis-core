@@ -1820,9 +1820,9 @@ dependencies = [
 
 [[package]]
 name = "sgxs-loaders"
-version = "0.3.0"
+version = "0.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e88df1c55b5b64504b425c03780448d737690497e5d76a325f0dee9fffba6e13"
+checksum = "298eead018a05324582b8f2dbd661015f19cc1f7df03f1d252597ae1a4cac94a"
 dependencies = [
  "bitflags",
  "failure",
