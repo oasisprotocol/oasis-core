@@ -199,7 +199,7 @@ func doValidateAddress(cmd *cobra.Command, args []string) {
 			fmt.Printf("account address '%s' is not valid: %v\n", addrStr, err)
 			os.Exit(1)
 		}
-		fmt.Printf("account address '%s' is valid", addrStr)
+		fmt.Printf("account address '%s' is valid\n", addrStr)
 	default:
 		if err != nil {
 			os.Exit(1)
