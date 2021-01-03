@@ -1,7 +1,6 @@
 package workload
 
 import (
-	"bytes"
 	"context"
 	"fmt"
 	"io"
@@ -100,101 +99,79 @@ func (q *queries) sanityCheckTransactionEvents(ctx context.Context, height int64
 	if err != nil {
 		return fmt.Errorf("registry.GetEvents error at height %d: %w", height, err)
 	}
-	var expectedRegistryEvents []*registry.Event
+	expectedRegistryEvents := make(map[hash.Hash]int)
 	for _, event := range registryEvents {
 		if event.TxHash.IsEmpty() {
 			continue
 		}
-		expectedRegistryEvents = append(expectedRegistryEvents, event)
+		h := hash.NewFromBytes(cbor.Marshal(event)[:])
+		expectedRegistryEvents[h] = expectedRegistryEvents[h] + 1
 	}
 	stakingEvents, err := q.staking.GetEvents(ctx, height)
 	if err != nil {
-		return fmt.Errorf("staking.GetEven error at height %d: %w", height, err)
+		return fmt.Errorf("staking.GetEvents error at height %d: %w", height, err)
 	}
-	var expectedStakingEvents []*staking.Event
+	expectedStakingEvents := make(map[hash.Hash]int)
 	for _, event := range stakingEvents {
 		if event.TxHash.IsEmpty() {
 			continue
 		}
-		expectedStakingEvents = append(expectedStakingEvents, event)
+		h := hash.NewFromBytes(cbor.Marshal(event)[:])
+		expectedStakingEvents[h] = expectedStakingEvents[h] + 1
 	}
 
-	compareEvents := func(e1, e2 interface{}) int {
-		return bytes.Compare(cbor.Marshal(e1), cbor.Marshal(e2))
-	}
-	ensureEventExists := func(txEvent *results.Event) error {
-		var found bool
+	for _, txEvent := range txEvents {
+		var (
+			expectedEvents map[hash.Hash]int
+			event          interface{}
+		)
 		switch {
 		case txEvent.Registry != nil:
-			for _, registryEvent := range expectedRegistryEvents {
-				if compareEvents(registryEvent, txEvent.Registry) == 0 {
-					found = true
-					break
-				}
-			}
+			expectedEvents = expectedRegistryEvents
+			event = txEvent.Registry
 		case txEvent.Staking != nil:
-			for _, stakingEvent := range expectedStakingEvents {
-				if compareEvents(stakingEvent, txEvent.Staking) == 0 {
-					found = true
-					break
-				}
-			}
+			expectedEvents = expectedStakingEvents
+			event = txEvent.Staking
 		case txEvent.RootHash != nil:
 			// XXX: we cannot get roothash events from a client.
-			found = true
+			continue
+		default:
+			return fmt.Errorf("unsupported event: %+v", txEvent)
 		}
-		if !found {
-			return fmt.Errorf("GetTransactionsWithResults transaction event not found")
+		h := hash.NewFromBytes(cbor.Marshal(event)[:])
+
+		// Make sure that the event is expected.
+		switch {
+		case expectedEvents[h] == 1:
+			// Remove the event from expected events map as counter reached zero.
+			delete(expectedEvents, h)
+		case expectedEvents[h] < 1:
+			// Unexpected event.
+			q.logger.Error("GetTransactionsWithResults produced an unexpected event",
+				"transaction_event", txEvent,
+				"registry_events", registryEvents,
+				"staking_events", stakingEvents,
+				"height", height,
+			)
+			return fmt.Errorf("GetTransactionsWithResults produced an unexpected event")
+		default:
+			// More events remaining.
+			expectedEvents[h] = expectedEvents[h] - 1
 		}
-		return nil
 	}
 
-	var numStakingEvents, numRegistryEvents int
-	seenEvents := make(map[hash.Hash]struct{})
-	for _, txEvent := range txEvents {
-		if err := ensureEventExists(txEvent); err != nil {
-			q.logger.Error("GetTransactionsWithResults ensure event exists failed",
-				"transaction_event", txEvent,
-				"registry_events", expectedRegistryEvents,
-				"staking_events", expectedStakingEvents,
-				"height", height,
-			)
-			return err
-		}
-		if txEvent.Staking != nil {
-			numStakingEvents++
-		}
-		if txEvent.Registry != nil {
-			numRegistryEvents++
-		}
-		h := hash.NewFromBytes(cbor.Marshal(txEvent)[:])
-		if _, ok := seenEvents[h]; ok {
-			q.logger.Error("GetTransactionsWithResults duplicate event",
-				"registry_events", expectedRegistryEvents,
-				"staking_events", expectedStakingEvents,
-				"transaction_events", txEvents,
-				"height", height,
-			)
-			return fmt.Errorf("GetTransactionsWithResults duplicate event")
-		}
-		seenEvents[h] = struct{}{}
-	}
-	// If all events exist and lengths match (with no duplicates), the results are equal.
-	if len(expectedStakingEvents) != numStakingEvents {
-		q.logger.Error("GetTransactionsWithResults staking events lengths missmatch",
-			"events", txEvents,
-			"staking_events", expectedStakingEvents,
-			"height", height,
+	// All expected events should be seen.
+	if len(expectedRegistryEvents) != 0 {
+		q.logger.Error("GetTransactionsWithResults did not produce all expected registry events",
+			"missing_events", expectedRegistryEvents,
 		)
-		return fmt.Errorf("GetTransactionsWithResults staking events length missmatch")
+		return fmt.Errorf("GetTransactionsWithResults did not produce all expected registry events")
 	}
-	if len(expectedRegistryEvents) != numRegistryEvents {
-		q.logger.Error("GetTransactionsWithResults registry events lengths missmatch",
-			"events", txEvents,
-			"registry_events", expectedRegistryEvents,
-			"height", height,
+	if len(expectedStakingEvents) != 0 {
+		q.logger.Error("GetTransactionsWithResults did not produce all expected staking events",
+			"missing_events", expectedStakingEvents,
 		)
-		return fmt.Errorf("GetTransactionsWithResults registry events length missmatch")
+		return fmt.Errorf("GetTransactionsWithResults did not produce all expected staking events")
 	}
 
 	return nil
