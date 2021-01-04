@@ -340,9 +340,10 @@ func (sc *serviceClient) getRuntimeNotifiers(id common.Namespace) *runtimeBroker
 	return notifiers
 }
 
-func (sc *serviceClient) reindexBlocks(currentHeight int64, bh api.BlockHistory) error {
+func (sc *serviceClient) reindexBlocks(currentHeight int64, bh api.BlockHistory) (uint64, error) {
+	lastRound := api.RoundInvalid
 	if currentHeight <= 0 {
-		return nil
+		return lastRound, nil
 	}
 
 	logger := sc.logger.With("runtime_id", bh.RuntimeID())
@@ -353,7 +354,7 @@ func (sc *serviceClient) reindexBlocks(currentHeight int64, bh api.BlockHistory)
 		sc.logger.Error("failed to get last indexed height",
 			"err", err,
 		)
-		return fmt.Errorf("failed to get last indexed height: %w", err)
+		return lastRound, fmt.Errorf("failed to get last indexed height: %w", err)
 	}
 	// +1 since we want the last non-seen height.
 	lastHeight++
@@ -361,7 +362,7 @@ func (sc *serviceClient) reindexBlocks(currentHeight int64, bh api.BlockHistory)
 	// Take prune strategy into account.
 	lastRetainedHeight, err := sc.backend.GetLastRetainedVersion(sc.ctx)
 	if err != nil {
-		return fmt.Errorf("failed to get last retained height: %w", err)
+		return lastRound, fmt.Errorf("failed to get last retained height: %w", err)
 	}
 	if lastHeight < lastRetainedHeight {
 		logger.Debug("last height pruned, skipping until last retained",
@@ -374,7 +375,7 @@ func (sc *serviceClient) reindexBlocks(currentHeight int64, bh api.BlockHistory)
 	// Take initial genesis height into account.
 	genesisDoc, err := sc.backend.GetGenesisDocument(sc.ctx)
 	if err != nil {
-		return fmt.Errorf("failed to get genesis document: %w", err)
+		return lastRound, fmt.Errorf("failed to get genesis document: %w", err)
 	}
 	if lastHeight < genesisDoc.Height {
 		lastHeight = genesisDoc.Height
@@ -397,7 +398,7 @@ func (sc *serviceClient) reindexBlocks(currentHeight int64, bh api.BlockHistory)
 				"err", err,
 				"height", height,
 			)
-			return fmt.Errorf("failed to get tendermint block results: %w", err)
+			return lastRound, fmt.Errorf("failed to get tendermint block results: %w", err)
 		}
 
 		// Index block.
@@ -418,7 +419,7 @@ func (sc *serviceClient) reindexBlocks(currentHeight int64, bh api.BlockHistory)
 							"err", err,
 							"height", height,
 						)
-						return fmt.Errorf("failed to unmarshal finalized event: %w", err)
+						return 0, fmt.Errorf("failed to unmarshal finalized event: %w", err)
 					}
 
 					// Only process finalized events for tracked runtimes.
@@ -426,16 +427,19 @@ func (sc *serviceClient) reindexBlocks(currentHeight int64, bh api.BlockHistory)
 						continue
 					}
 					if err = sc.processFinalizedEvent(sc.ctx, height, value.ID, &value.Round, false); err != nil {
-						return fmt.Errorf("failed to process finalized event: %w", err)
+						return 0, fmt.Errorf("failed to process finalized event: %w", err)
 					}
+					lastRound = value.Round
 				}
 			}
 		}
 	}
 
-	sc.logger.Debug("block reindex complete")
+	sc.logger.Debug("block reindex complete",
+		"last_round", lastRound,
+	)
 
-	return nil
+	return lastRound, nil
 }
 
 // Implements api.ServiceClient.
@@ -579,10 +583,11 @@ func (sc *serviceClient) processFinalizedEvent(
 		crash.Here(crashPointBlockBeforeIndex)
 
 		// Perform reindex if required.
+		lastRound := api.RoundInvalid
 		if reindex && !tr.reindexDone {
 			// Note that we need to reindex up to the previous height as the current height is
 			// already being processed right now.
-			if err = sc.reindexBlocks(height-1, tr.blockHistory); err != nil {
+			if lastRound, err = sc.reindexBlocks(height-1, tr.blockHistory); err != nil {
 				sc.logger.Error("failed to reindex blocks",
 					"err", err,
 					"runtime_id", runtimeID,
@@ -592,21 +597,26 @@ func (sc *serviceClient) processFinalizedEvent(
 			tr.reindexDone = true
 		}
 
-		sc.logger.Debug("commit block",
-			"runtime_id", runtimeID,
-			"height", height,
-			"round", blk.Header.Round,
-		)
-
-		err = tr.blockHistory.Commit(annBlk, msgResults)
-		if err != nil {
-			sc.logger.Error("failed to commit block to history keeper",
-				"err", err,
+		// Only commit the block in case it was not already committed during reindex. Note that even
+		// in case we only reindex up to height-1 this can still happen on the first emitted block
+		// since that height is not guaranteed to be the one that contains a round finalized event.
+		if lastRound == api.RoundInvalid || blk.Header.Round > lastRound {
+			sc.logger.Debug("commit block",
 				"runtime_id", runtimeID,
 				"height", height,
 				"round", blk.Header.Round,
 			)
-			return fmt.Errorf("failed to commit block to history keeper: %w", err)
+
+			err = tr.blockHistory.Commit(annBlk, msgResults)
+			if err != nil {
+				sc.logger.Error("failed to commit block to history keeper",
+					"err", err,
+					"runtime_id", runtimeID,
+					"height", height,
+					"round", blk.Header.Round,
+				)
+				return fmt.Errorf("failed to commit block to history keeper: %w", err)
+			}
 		}
 	}
 

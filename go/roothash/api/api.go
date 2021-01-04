@@ -4,6 +4,7 @@ package api
 import (
 	"context"
 	"fmt"
+	"math"
 	"time"
 
 	"github.com/oasisprotocol/oasis-core/go/common"
@@ -21,6 +22,9 @@ import (
 const (
 	// ModuleName is a unique module name for the roothash module.
 	ModuleName = "roothash"
+
+	// RoundInvalid is a special round number that refers to an invalid round.
+	RoundInvalid uint64 = math.MaxUint64
 
 	// LogEventExecutionDiscrepancyDetected is a log event value that signals
 	// an execution discrepancy has been detected.
