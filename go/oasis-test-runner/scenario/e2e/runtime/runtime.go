@@ -582,6 +582,10 @@ func RegisterScenarios() error {
 	for _, s := range []scenario.Scenario{
 		// Transaction source test. Non-default, because it runs for ~6 hours.
 		TxSourceMulti,
+		// SGX version of the txsource-multi-short test. Non-default, because
+		// it is identical to the txsource-multi-short, only using fewer nodes
+		// due to SGX CI instance resource constrains.
+		TxSourceMultiShortSGX,
 	} {
 		if err := cmd.RegisterNondefault(s); err != nil {
 			return err
