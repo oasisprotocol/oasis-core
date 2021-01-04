@@ -242,7 +242,7 @@ steps:
       - /tmp/e2e/**/*.log
     env:
       OASIS_E2E_COVERAGE: enable
-      OASIS_EXCLUDE_E2E: e2e/runtime/txsource-multi
+      OASIS_EXCLUDE_E2E: e2e/runtime/txsource-multi,e2e/runtime/txsource-multi-short
       TEST_BASE_DIR: /tmp
       # libp2p logging.
       IPFS_LOGGING: debug

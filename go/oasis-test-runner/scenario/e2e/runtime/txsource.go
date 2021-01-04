@@ -68,10 +68,38 @@ var TxSourceMultiShort scenario.Scenario = &txSourceImpl{
 	consensusPruneDisabledProbability: 0.1,
 	consensusPruneMinKept:             100,
 	consensusPruneMaxKept:             200,
-	// XXX: use no more than 2 storage, 4 compute nodes as SGX E2E test
-	// instances cannot handle any more nodes that are currently configured.
-	numStorageNodes: 2,
-	numComputeNodes: 4,
+	numValidatorNodes:                 4,
+	numKeyManagerNodes:                2,
+	numStorageNodes:                   2,
+	numComputeNodes:                   4,
+}
+
+// TxSourceMultiShortSGX uses multiple workloads for a short time.
+var TxSourceMultiShortSGX scenario.Scenario = &txSourceImpl{
+	runtimeImpl: *newRuntimeImpl("txsource-multi-short-sgx", "", nil),
+	clientWorkloads: []string{
+		workload.NameCommission,
+		workload.NameDelegation,
+		workload.NameOversized,
+		workload.NameParallel,
+		workload.NameRegistration,
+		workload.NameRuntime,
+		workload.NameTransfer,
+	},
+	allNodeWorkloads: []string{
+		workload.NameQueries,
+	},
+	timeLimit:                         timeLimitShort,
+	livenessCheckInterval:             livenessCheckInterval,
+	consensusPruneDisabledProbability: 0.1,
+	consensusPruneMinKept:             100,
+	consensusPruneMaxKept:             200,
+	// XXX: don't use more node as SGX E2E test instances cannot handle much
+	// more nodes that are currently configured.
+	numValidatorNodes:  3,
+	numKeyManagerNodes: 1,
+	numStorageNodes:    2,
+	numComputeNodes:    4,
 }
 
 // TxSourceMulti uses multiple workloads.
@@ -102,6 +130,12 @@ var TxSourceMulti scenario.Scenario = &txSourceImpl{
 	// node is restarted. Enable automatic corrupted WAL recovery for validator
 	// nodes.
 	tendermintRecoverCorruptedWAL: true,
+	// Use 4 validators so that consensus can keep making progress
+	// when a node is being killed and restarted.
+	numValidatorNodes: 4,
+	// Use 2 keymanager so that at least one keymanager is accessible when
+	// the other one is being killed or shut down.
+	numKeyManagerNodes: 2,
 	// Use 4 storage nodes so runtime continues to work when one of the nodes
 	// is shut down.
 	numStorageNodes: 4,
@@ -133,6 +167,10 @@ type txSourceImpl struct { // nolint: maligned
 
 	enableCrashPoints bool
 
+	numValidatorNodes  int
+	numKeyManagerNodes int
+	numComputeNodes    int
+
 	// Configurable number of storage nodes. If running tests with long node
 	// shutdowns enabled, make sure this is at least `MinWriteReplication+1`,
 	// so that the runtime continues to work, even if one of the nodes is shut
@@ -141,9 +179,6 @@ type txSourceImpl struct { // nolint: maligned
 	// more test nodes that we already use, and we don't need additional storage
 	// nodes in the short test variant.
 	numStorageNodes int
-
-	// Configurable number of compute nodes.
-	numComputeNodes int
 
 	rng  *rand.Rand
 	seed string
@@ -336,14 +371,21 @@ func (sc *txSourceImpl) Fixture() (*oasis.NetworkFixture, error) {
 		f.Network.DefaultLogWatcherHandlerFactories = []log.WatcherHandlerFactory{}
 	}
 
-	// Use at least 4 validators so that consensus can keep making progress
-	// when a node is being killed and restarted.
-	f.Validators = []oasis.ValidatorFixture{
-		{Entity: 1},
-		{Entity: 1},
-		{Entity: 1},
-		{Entity: 1},
+	var validators []oasis.ValidatorFixture
+	for i := 0; i < sc.numValidatorNodes; i++ {
+		validators = append(validators, oasis.ValidatorFixture{
+			Entity: 1,
+		})
 	}
+	f.Validators = validators
+	var keymanagers []oasis.KeymanagerFixture
+	for i := 0; i < sc.numKeyManagerNodes; i++ {
+		keymanagers = append(keymanagers, oasis.KeymanagerFixture{
+			Runtime: 0,
+			Entity:  1,
+		})
+	}
+	f.Keymanagers = keymanagers
 	var computeWorkers []oasis.ComputeWorkerFixture
 	for i := 0; i < sc.numComputeNodes; i++ {
 		computeWorkers = append(computeWorkers, oasis.ComputeWorkerFixture{
@@ -352,10 +394,6 @@ func (sc *txSourceImpl) Fixture() (*oasis.NetworkFixture, error) {
 		})
 	}
 	f.ComputeWorkers = computeWorkers
-	f.Keymanagers = []oasis.KeymanagerFixture{
-		{Runtime: 0, Entity: 1},
-		{Runtime: 0, Entity: 1},
-	}
 	var storageWorkers []oasis.StorageWorkerFixture
 	for i := 0; i < sc.numStorageNodes; i++ {
 		storageWorkers = append(storageWorkers, oasis.StorageWorkerFixture{
@@ -672,6 +710,8 @@ func (sc *txSourceImpl) Clone() scenario.Scenario {
 		consensusPruneMaxKept:             sc.consensusPruneMaxKept,
 		tendermintRecoverCorruptedWAL:     sc.tendermintRecoverCorruptedWAL,
 		enableCrashPoints:                 sc.enableCrashPoints,
+		numValidatorNodes:                 sc.numValidatorNodes,
+		numKeyManagerNodes:                sc.numKeyManagerNodes,
 		numStorageNodes:                   sc.numStorageNodes,
 		numComputeNodes:                   sc.numComputeNodes,
 		seed:                              sc.seed,
