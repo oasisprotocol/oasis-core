@@ -3,9 +3,13 @@ package e2e
 
 import (
 	"bytes"
+	"crypto/sha256"
 	"encoding/json"
 	"fmt"
+	goHash "hash"
+	"io"
 	"io/ioutil"
+	"os"
 	"path/filepath"
 
 	flag "github.com/spf13/pflag"
@@ -114,6 +118,71 @@ func (sc *E2E) Fixture() (*oasis.NetworkFixture, error) {
 func (sc *E2E) Init(childEnv *env.Env, net *oasis.Network) error {
 	sc.Net = net
 	return nil
+}
+
+// GetExportedGenesisFiles gathers exported genesis files and ensures
+// all exported genesis files match.
+func (sc *E2E) GetExportedGenesisFiles() ([]string, error) {
+	dumpGlob := "genesis-*.json"
+
+	// Gather all nodes.
+	var nodes []interface {
+		ExportsPath() string
+	}
+	for _, v := range sc.Net.Validators() {
+		nodes = append(nodes, v)
+	}
+	for _, n := range sc.Net.ComputeWorkers() {
+		nodes = append(nodes, n)
+	}
+	for _, n := range sc.Net.StorageWorkers() {
+		nodes = append(nodes, n)
+	}
+	for _, n := range sc.Net.Keymanagers() {
+		nodes = append(nodes, n)
+	}
+
+	// Gather all genesis files.
+	var files []string
+	for _, node := range nodes {
+		dumpGlobPath := filepath.Join(node.ExportsPath(), dumpGlob)
+		globMatch, err := filepath.Glob(dumpGlobPath)
+		if err != nil {
+			return nil, fmt.Errorf("glob failed: %s: %w", dumpGlobPath, err)
+		}
+		if len(globMatch) == 0 {
+			return nil, fmt.Errorf("genesis file not found in: %s", dumpGlobPath)
+		}
+		if len(globMatch) > 1 {
+			return nil, fmt.Errorf("more than one genesis file found in: %s", dumpGlobPath)
+		}
+		files = append(files, globMatch[0])
+	}
+
+	// Assert all exported files match.
+	var firstHash goHash.Hash
+	for _, file := range files {
+		// Compute hash.
+		f, err := os.Open(file)
+		if err != nil {
+			return nil, fmt.Errorf("failed to open file: %s: %w", file, err)
+		}
+		defer f.Close()
+		hnew := sha256.New()
+		if _, err := io.Copy(hnew, f); err != nil {
+			return nil, fmt.Errorf("sha256 failed on: %s: %w", file, err)
+		}
+		if firstHash == nil {
+			firstHash = hnew
+		}
+
+		// Compare hash with first hash.
+		if !bytes.Equal(firstHash.Sum(nil), hnew.Sum(nil)) {
+			return nil, fmt.Errorf("exported genesis files do not match %s, %s", files[0], file)
+		}
+	}
+
+	return files, nil
 }
 
 // ResetConsensusState removes all consensus state, preserving runtime storage and node-local

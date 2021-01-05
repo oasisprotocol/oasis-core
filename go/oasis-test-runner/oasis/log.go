@@ -77,6 +77,18 @@ func LogAssertUpgradeConsensus() log.WatcherHandlerFactory {
 	return LogAssertEvent(upgrade.LogEventConsensusUpgrade, "expected consensus upgrade did not run")
 }
 
+// LogAssertNoUpgradeStartup returns a handler which checks that no startup migration
+// handler was run based on JSON log output.
+func LogAssertNoUpgradeStartup() log.WatcherHandlerFactory {
+	return LogAssertNotEvent(upgrade.LogEventStartupUpgrade, "unexpected startup upgrade was run")
+}
+
+// LogAssertNoUpgradeConsensus returns a handler which checks that no consensus migration
+// handler was run based on JSON log output.
+func LogAssertNoUpgradeConsensus() log.WatcherHandlerFactory {
+	return LogAssertNotEvent(upgrade.LogEventConsensusUpgrade, "unexpected consensus upgrade was run")
+}
+
 // LogEventABCIPruneDelete returns a handler which checks whether a ABCI pruning delete
 // was detected based on JSON log output.
 func LogEventABCIPruneDelete() log.WatcherHandlerFactory {

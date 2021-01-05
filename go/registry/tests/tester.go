@@ -34,7 +34,7 @@ import (
 const (
 	recvTimeout = 5 * time.Second
 
-	testRuntimeNodeExpiration epochtime.EpochTime = 100
+	testRuntimeNodeExpiration epochtime.EpochTime = 15
 )
 
 var (

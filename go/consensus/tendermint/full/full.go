@@ -54,6 +54,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/consensus/tendermint/db"
 	tmepochtime "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/epochtime"
 	tmepochtimemock "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/epochtime_mock"
+	tmgovernance "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/governance"
 	tmkeymanager "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/keymanager"
 	"github.com/oasisprotocol/oasis-core/go/consensus/tendermint/light"
 	tmregistry "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/registry"
@@ -62,6 +63,7 @@ import (
 	tmstaking "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/staking"
 	epochtimeAPI "github.com/oasisprotocol/oasis-core/go/epochtime/api"
 	genesisAPI "github.com/oasisprotocol/oasis-core/go/genesis/api"
+	governanceAPI "github.com/oasisprotocol/oasis-core/go/governance/api"
 	keymanagerAPI "github.com/oasisprotocol/oasis-core/go/keymanager/api"
 	cmbackground "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/background"
 	cmflags "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/flags"
@@ -162,11 +164,12 @@ type fullService struct { // nolint: maligned
 
 	beacon        beaconAPI.Backend
 	epochtime     epochtimeAPI.Backend
+	governance    governanceAPI.Backend
 	keymanager    keymanagerAPI.Backend
 	registry      registryAPI.Backend
 	roothash      roothashAPI.Backend
-	staking       stakingAPI.Backend
 	scheduler     schedulerAPI.Backend
+	staking       stakingAPI.Backend
 	submissionMgr consensusAPI.SubmissionManager
 
 	serviceClients   []api.ServiceClient
@@ -379,6 +382,15 @@ func (t *fullService) StateToGenesis(ctx context.Context, blockHeight int64) (*g
 		return nil, err
 	}
 
+	governanceGenesis, err := t.governance.StateToGenesis(ctx, blockHeight)
+	if err != nil {
+		t.Logger.Error("governance StateToGenesis failure",
+			"err", err,
+			"block_height", blockHeight,
+		)
+		return nil, err
+	}
+
 	return &genesisAPI.Document{
 		Height:     blockHeight,
 		ChainID:    genesisDoc.ChainID,
@@ -388,6 +400,7 @@ func (t *fullService) StateToGenesis(ctx context.Context, blockHeight int64) (*g
 		Registry:   *registryGenesis,
 		RootHash:   *roothashGenesis,
 		Staking:    *stakingGenesis,
+		Governance: *governanceGenesis,
 		KeyManager: *keymanagerGenesis,
 		Scheduler:  *schedulerGenesis,
 		Beacon:     genesisDoc.Beacon,
@@ -610,6 +623,10 @@ func (t *fullService) Scheduler() schedulerAPI.Backend {
 	return t.scheduler
 }
 
+func (t *fullService) Governance() governanceAPI.Backend {
+	return t.governance
+}
+
 func (t *fullService) GetEpoch(ctx context.Context, height int64) (epochtimeAPI.EpochTime, error) {
 	if t.epochtime == nil {
 		return epochtimeAPI.EpochInvalid, consensusAPI.ErrUnsupported
@@ -745,6 +762,20 @@ func (t *fullService) GetTransactionsWithResults(ctx context.Context, height int
 		for _, e := range roothashEvents {
 			result.Events = append(result.Events, &results.Event{RootHash: e})
 		}
+
+		// Transaction governance events.
+		governanceEvents, err := tmgovernance.EventsFromTendermint(
+			txsWithResults.Transactions[txIdx],
+			blk.Height,
+			rs.Events,
+		)
+		if err != nil {
+			return nil, err
+		}
+		for _, e := range governanceEvents {
+			result.Events = append(result.Events, &results.Event{Governance: e})
+		}
+
 		txsWithResults.Results = append(txsWithResults.Results, result)
 	}
 	return &txsWithResults, nil
@@ -970,6 +1001,17 @@ func (t *fullService) initialize() error {
 	t.roothash = roothash.NewMetricsWrapper(scRootHash)
 	t.serviceClients = append(t.serviceClients, scRootHash)
 	t.svcMgr.RegisterCleanupOnly(t.roothash, "roothash backend")
+
+	var scGovernance tmgovernance.ServiceClient
+	if scGovernance, err = tmgovernance.New(t.ctx, t); err != nil {
+		t.Logger.Error("governance: failed to initialize governance backend",
+			"err", err,
+		)
+		return err
+	}
+	t.governance = scGovernance
+	t.serviceClients = append(t.serviceClients, scGovernance)
+	t.svcMgr.RegisterCleanupOnly(t.governance, "governance backend")
 
 	// Enable supplementary sanity checks when enabled.
 	if viper.GetBool(CfgSupplementarySanityEnabled) {

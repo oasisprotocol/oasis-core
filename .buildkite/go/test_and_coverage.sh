@@ -29,10 +29,14 @@ pushd go
   env -u GOPATH go test -race -coverprofile=../coverage-misc.txt -covermode=atomic -v \
     $(go list ./... | \
         grep -v github.com/oasisprotocol/oasis-core/go/oasis-node | \
+        grep -v github.com/oasisprotocol/oasis-core/go/genesis | \
         grep -v github.com/oasisprotocol/oasis-core/go/storage/mkvs )
   # Oasis node tests.
   pushd oasis-node
     env -u GOPATH go test -race -coverpkg ../... -coverprofile=../../coverage-oasis-node.txt -covermode=atomic -v ./...
+  popd
+  pushd genesis
+    env -u GOPATH go test -race -coverpkg ../... -coverprofile=../../coverage-genesis.txt -covermode=atomic -v ./...
   popd
   # MKVS tests.
   pushd storage/mkvs

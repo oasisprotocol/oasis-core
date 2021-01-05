@@ -19,6 +19,14 @@ type EpochTime uint64
 // EpochInvalid is the placeholder invalid epoch.
 const EpochInvalid EpochTime = 0xffffffffffffffff // ~50 quadrillion years away.
 
+// AbsDiff returns the absolute difference (in epochs) between two epochtimes.
+func (e EpochTime) AbsDiff(other EpochTime) EpochTime {
+	if e > other {
+		return e - other
+	}
+	return other - e
+}
+
 // Backend is a timekeeping implementation.
 type Backend interface {
 	// GetBaseEpoch returns the base epoch.

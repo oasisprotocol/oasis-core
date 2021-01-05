@@ -45,8 +45,9 @@ type NodeController interface {
 	// and shut down.
 	UpgradeBinary(ctx context.Context, descriptor *upgrade.Descriptor) error
 
-	// CancelUpgrade cancels a pending upgrade, unless it is already in progress.
-	CancelUpgrade(ctx context.Context) error
+	// CancelUpgrade cancels the specific pending upgrade, unless it is already in progress.
+	// TODO: currently pending upgrade name uniqueness is not enforced.
+	CancelUpgrade(ctx context.Context, name string) error
 
 	// GetStatus returns the current status overview of the node.
 	GetStatus(ctx context.Context) (*Status, error)
@@ -68,6 +69,9 @@ type Status struct {
 
 	// Registration is the node's registration status.
 	Registration RegistrationStatus `json:"registration"`
+
+	// PendingUpgrades are the node's pending upgrades.
+	PendingUpgrades []*upgrade.PendingUpgrade `json:"pending_upgrades"`
 }
 
 // IdentityStatus is the current node identity status, listing all the public keys that identify
@@ -139,6 +143,9 @@ type ControlledNode interface {
 
 	// GetRuntimeStatus returns the node's current per-runtime status.
 	GetRuntimeStatus(ctx context.Context) (map[common.Namespace]RuntimeStatus, error)
+
+	// GetPendingUpgrade returns the node's pending upgrades.
+	GetPendingUpgrades(ctx context.Context) ([]*upgrade.PendingUpgrade, error)
 }
 
 // DebugModuleName is the module name for the debug controller service.

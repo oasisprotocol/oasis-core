@@ -77,8 +77,8 @@ func (c *nodeController) UpgradeBinary(ctx context.Context, descriptor *upgrade.
 	return c.upgrader.SubmitDescriptor(ctx, descriptor)
 }
 
-func (c *nodeController) CancelUpgrade(ctx context.Context) error {
-	return c.upgrader.CancelUpgrade(ctx)
+func (c *nodeController) CancelUpgrade(ctx context.Context, name string) error {
+	return c.upgrader.CancelUpgrade(ctx, name)
 }
 
 func (c *nodeController) GetStatus(ctx context.Context) (*control.Status, error) {
@@ -97,6 +97,11 @@ func (c *nodeController) GetStatus(ctx context.Context) (*control.Status, error)
 		return nil, fmt.Errorf("failed to get runtime status: %w", err)
 	}
 
+	pendingUpgrades, err := c.node.GetPendingUpgrades(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get pending upgrades: %w", err)
+	}
+
 	ident := c.node.GetIdentity()
 
 	return &control.Status{
@@ -107,9 +112,10 @@ func (c *nodeController) GetStatus(ctx context.Context) (*control.Status, error)
 			Consensus: ident.ConsensusSigner.Public(),
 			TLS:       ident.GetTLSPubKeys(),
 		},
-		Consensus:    *cs,
-		Runtimes:     runtimes,
-		Registration: *rs,
+		Consensus:       *cs,
+		Runtimes:        runtimes,
+		Registration:    *rs,
+		PendingUpgrades: pendingUpgrades,
 	}, nil
 }
 

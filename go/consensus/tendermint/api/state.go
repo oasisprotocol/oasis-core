@@ -84,6 +84,14 @@ type ApplicationQueryState interface {
 	LastRetainedVersion() (int64, error)
 }
 
+// MockApplicationState is the mock application state interface.
+type MockApplicationState interface {
+	ApplicationState
+
+	// UpdateMockApplicationStateConfig updates the mock application config.
+	UpdateMockApplicationStateConfig(cfg *MockApplicationStateConfig)
+}
+
 // MockApplicationStateConfig is the configuration for the mock application state.
 type MockApplicationStateConfig struct {
 	BlockHeight int64
@@ -182,15 +190,13 @@ func (ms *mockApplicationState) NewContext(mode ContextMode, now time.Time) *Con
 	return c
 }
 
-// NewMockApplicationState creates a new mock application state for testing.
-func NewMockApplicationState(cfg *MockApplicationStateConfig) ApplicationState {
-	tree := mkvs.New(nil, nil)
+func (ms *mockApplicationState) UpdateMockApplicationStateConfig(cfg *MockApplicationStateConfig) {
+	ms.cfg = cfg
 
-	blockCtx := NewBlockContext()
 	if cfg.MaxBlockGas > 0 {
-		blockCtx.Set(GasAccountantKey{}, NewGasAccountant(cfg.MaxBlockGas))
+		ms.blockCtx.Set(GasAccountantKey{}, NewGasAccountant(cfg.MaxBlockGas))
 	} else {
-		blockCtx.Set(GasAccountantKey{}, NewNopGasAccountant())
+		ms.blockCtx.Set(GasAccountantKey{}, NewNopGasAccountant())
 	}
 
 	if cfg.Genesis == nil {
@@ -199,13 +205,21 @@ func NewMockApplicationState(cfg *MockApplicationStateConfig) ApplicationState {
 	if cfg.Genesis.Height == 0 {
 		cfg.Genesis.Height = 1
 	}
+}
 
-	return &mockApplicationState{
-		cfg:                cfg,
+// NewMockApplicationState creates a new mock application state for testing.
+func NewMockApplicationState(cfg *MockApplicationStateConfig) MockApplicationState {
+	tree := mkvs.New(nil, nil)
+
+	blockCtx := NewBlockContext()
+	m := &mockApplicationState{
 		blockCtx:           blockCtx,
 		tree:               tree,
 		ownTxSignerAddress: staking.NewAddress(cfg.OwnTxSigner),
 	}
+	m.UpdateMockApplicationStateConfig(cfg)
+
+	return m
 }
 
 // ImmutableState is an immutable state wrapper.

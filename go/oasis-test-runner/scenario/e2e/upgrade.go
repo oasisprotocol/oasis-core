@@ -251,10 +251,10 @@ func (sc *nodeUpgradeImpl) Run(childEnv *env.Env) error { // nolint: gocyclo
 		store.Close()
 		return fmt.Errorf("can't open upgraded node's upgrade module storage: %w", err)
 	}
-	if err = svcStore.Delete([]byte("descriptor")); err != nil {
+	if err = svcStore.Delete([]byte("descriptors")); err != nil {
 		svcStore.Close()
 		store.Close()
-		return fmt.Errorf("can't delete descripotor from upgraded node's persistent store: %w", err)
+		return fmt.Errorf("can't delete descriptor from upgraded node's persistent store: %w", err)
 	}
 	svcStore.Close()
 	store.Close()

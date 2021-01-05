@@ -16,7 +16,14 @@ var (
 	DebugStateSrcEscrowActiveBalance = *quantity.NewFromUint64(100)
 	DebugStateSrcEscrowActiveShares  = *quantity.NewFromUint64(1000)
 
-	DebugGenesisState = api.Genesis{
+	DebugStateSrcSigner   = mustGenerateSigner()
+	DebugStateSrcAddress  = api.NewAddress(DebugStateSrcSigner.Public())
+	DebugStateDestSigner  = mustGenerateSigner()
+	DebugStateDestAddress = api.NewAddress(DebugStateDestSigner.Public())
+)
+
+func GenesisState() api.Genesis {
+	return api.Genesis{
 		Parameters: api.ConsensusParameters{
 			DebondingInterval: 1,
 			Thresholds: map[api.ThresholdKind]quantity.Quantity{
@@ -63,12 +70,7 @@ var (
 			},
 		},
 	}
-
-	DebugStateSrcSigner   = mustGenerateSigner()
-	DebugStateSrcAddress  = api.NewAddress(DebugStateSrcSigner.Public())
-	DebugStateDestSigner  = mustGenerateSigner()
-	DebugStateDestAddress = api.NewAddress(DebugStateDestSigner.Public())
-)
+}
 
 func AddressFromString(s string) api.Address {
 	var addr api.Address

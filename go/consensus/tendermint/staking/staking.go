@@ -84,6 +84,15 @@ func (sc *serviceClient) LastBlockFees(ctx context.Context, height int64) (*quan
 	return q.LastBlockFees(ctx)
 }
 
+func (sc *serviceClient) GovernanceDeposits(ctx context.Context, height int64) (*quantity.Quantity, error) {
+	q, err := sc.querier.QueryAt(ctx, height)
+	if err != nil {
+		return nil, err
+	}
+
+	return q.GovernanceDeposits(ctx)
+}
+
 func (sc *serviceClient) Threshold(ctx context.Context, query *api.ThresholdQuery) (*quantity.Quantity, error) {
 	q, err := sc.querier.QueryAt(ctx, query.Height)
 	if err != nil {

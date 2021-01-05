@@ -479,6 +479,11 @@ func (q *queries) doStakingQueries(ctx context.Context, rng *rand.Rand, height i
 		return fmt.Errorf("staking.LastBLockFees: %w", err)
 	}
 
+	governanceDeposits, err := q.staking.GovernanceDeposits(ctx, height)
+	if err != nil {
+		return fmt.Errorf("staking.GovernanceDeposits: %w", err)
+	}
+
 	thKind := staking.ThresholdKind(rng.Intn(int(staking.KindMax)))
 	threshold, err := q.staking.Threshold(ctx, &staking.ThresholdQuery{
 		Height: height,
@@ -547,6 +552,7 @@ func (q *queries) doStakingQueries(ctx context.Context, rng *rand.Rand, height i
 		}
 	}
 	_ = totalSum.Add(commonPool)
+	_ = totalSum.Add(governanceDeposits)
 	_ = totalSum.Add(lastBlockFees)
 	_ = totalSum.Add(&accSum)
 
@@ -554,6 +560,7 @@ func (q *queries) doStakingQueries(ctx context.Context, rng *rand.Rand, height i
 		q.logger.Error("Staking total supply mismatch",
 			"height", height,
 			"common_pool", commonPool,
+			"governance_deposits", governanceDeposits,
 			"last_block_fees", lastBlockFees,
 			"accounts_sum", accSum,
 			"total_sum", totalSum,
@@ -573,6 +580,7 @@ func (q *queries) doStakingQueries(ctx context.Context, rng *rand.Rand, height i
 		"height", height,
 		"total", total,
 		"common_pool", commonPool,
+		"governance_deposits", governanceDeposits,
 		"last_block_fees", lastBlockFees,
 		"threshold", threshold,
 	)

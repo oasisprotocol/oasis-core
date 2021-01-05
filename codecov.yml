@@ -7,6 +7,7 @@ ignore:
   - "go/oasis-test-runner" # E2E test runner.
   - "go/registry/gen_vectors" # Registry test vector generator.
   - "go/staking/gen_vectors" # Staking test vector generator.
+  - "go/governance/gen_vectors" # Governance test vector generator.
   - "go/storage/fuzz" # Fuzz tests.
   - "go/storage/mkvs/fuzz" # Fuzz tests.
   - "go/storage/mkvs/interop" # MKVS interoperability test helpers.

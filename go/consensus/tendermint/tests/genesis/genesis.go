@@ -9,6 +9,7 @@ import (
 	tmtypes "github.com/tendermint/tendermint/types"
 
 	"github.com/oasisprotocol/oasis-core/go/common/identity"
+	"github.com/oasisprotocol/oasis-core/go/common/quantity"
 	"github.com/oasisprotocol/oasis-core/go/common/version"
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/genesis"
 	tendermint "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/api"
@@ -16,6 +17,7 @@ import (
 	epochtime "github.com/oasisprotocol/oasis-core/go/epochtime/api"
 	genesis "github.com/oasisprotocol/oasis-core/go/genesis/api"
 	genesisTestHelpers "github.com/oasisprotocol/oasis-core/go/genesis/tests"
+	governance "github.com/oasisprotocol/oasis-core/go/governance/api"
 	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
 	roothash "github.com/oasisprotocol/oasis-core/go/roothash/api"
 	scheduler "github.com/oasisprotocol/oasis-core/go/scheduler/api"
@@ -67,6 +69,16 @@ func NewTestNodeGenesisProvider(identity *identity.Identity) (genesis.Provider, 
 				DebugStaticValidators:  true,
 			},
 		},
+		Governance: governance.Genesis{
+			Parameters: governance.ConsensusParameters{
+				Quorum:                    90,
+				Threshold:                 90,
+				UpgradeCancelMinEpochDiff: 20,
+				UpgradeMinEpochDiff:       20,
+				VotingPeriod:              10,
+				MinProposalDeposit:        *quantity.NewFromUint64(100),
+			},
+		},
 		RootHash: roothash.Genesis{
 			Parameters: roothash.ConsensusParameters{
 				DebugDoNotSuspendRuntimes: true,
@@ -80,7 +92,7 @@ func NewTestNodeGenesisProvider(identity *identity.Identity) (genesis.Provider, 
 				SkipTimeoutCommit: true,
 			},
 		},
-		Staking: stakingTests.DebugGenesisState,
+		Staking: stakingTests.GenesisState(),
 	}
 	b, err := json.Marshal(doc)
 	if err != nil {

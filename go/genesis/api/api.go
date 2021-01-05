@@ -12,6 +12,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/genesis"
 	epochtime "github.com/oasisprotocol/oasis-core/go/epochtime/api"
+	governance "github.com/oasisprotocol/oasis-core/go/governance/api"
 	keymanager "github.com/oasisprotocol/oasis-core/go/keymanager/api"
 	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
 	roothash "github.com/oasisprotocol/oasis-core/go/roothash/api"
@@ -43,6 +44,8 @@ type Document struct {
 	Scheduler scheduler.Genesis `json:"scheduler"`
 	// Beacon is the beacon genesis state.
 	Beacon beacon.Genesis `json:"beacon"`
+	// Governance is the governance genesis state.
+	Governance governance.Genesis `json:"governance"`
 	// Consensus is the consensus genesis state.
 	Consensus consensus.Genesis `json:"consensus"`
 	// HaltEpoch is the epoch height at which the network will stop processing

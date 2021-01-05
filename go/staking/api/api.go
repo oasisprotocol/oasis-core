@@ -40,6 +40,12 @@ var (
 		signature.NewPublicKey("1abe11edfeeaccffffffffffffffffffffffffffffffffffffffffffffffffff"),
 	)
 
+	// GovernanceDepositsAddress is the governance deposits address.
+	// This address is reserved to prevent it from being accidentally used in the actual ledger.
+	GovernanceDepositsAddress = NewReservedAddress(
+		signature.NewPublicKey("1abe11eddeaccfffffffffffffffffffffffffffffffffffffffffffffffffff"),
+	)
+
 	// ErrInvalidArgument is the error returned on malformed arguments.
 	ErrInvalidArgument = errors.New(ModuleName, 1, "staking: invalid argument")
 
@@ -124,6 +130,9 @@ type Backend interface {
 
 	// LastBlockFees returns the collected fees for previous block.
 	LastBlockFees(ctx context.Context, height int64) (*quantity.Quantity, error)
+
+	// GovernanceDeposits returns the governance deposits account balance.
+	GovernanceDeposits(ctx context.Context, height int64) (*quantity.Quantity, error)
 
 	// Threshold returns the specific staking threshold by kind.
 	Threshold(ctx context.Context, query *ThresholdQuery) (*quantity.Quantity, error)
@@ -947,6 +956,8 @@ type Genesis struct {
 	CommonPool quantity.Quantity `json:"common_pool"`
 	// LastBlockFees are the collected fees for previous block.
 	LastBlockFees quantity.Quantity `json:"last_block_fees"`
+	// GovernanceDeposits are network's governance deposits.
+	GovernanceDeposits quantity.Quantity `json:"governance_deposits"`
 
 	// Ledger is a map of staking accounts.
 	Ledger map[Address]*Account `json:"ledger,omitempty"`

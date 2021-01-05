@@ -2,13 +2,14 @@
 
 ## Changelog
 
+- 2020-12-08: Updates to match the actual implementation
 - 2020-10-27: Voting period in epochs, min upgrade cancellation difference,
   failed proposal state
 - 2020-10-16: Initial draft
 
 ## Status
 
-Proposed
+Accepted
 
 ## Context
 
@@ -84,6 +85,7 @@ This proposal adds the following consensus layer state in the governance module:
       StateFailed   ProposalState = 4
   )
 
+  // Proposal is a consensus upgrade proposal.
   type Proposal struct {
       // ID is the unique identifier of the proposal.
       ID uint64 `json:"id"`
@@ -117,7 +119,7 @@ This proposal adds the following consensus layer state in the governance module:
   storage key with the following key format:
 
   ```
-  0x82 <closes-at (beacon.EpochTime)> <proposal-id (uint64)>
+  0x82 <closes-at-epoch (uint64)> <proposal-id (uint64)>
   ```
 
   The value is empty as the proposal ID can be inferred from the key.
@@ -150,7 +152,49 @@ This proposal adds the following consensus layer state in the governance module:
   key format:
 
   ```
-  0x84 <upgrade-epoch (beacon.EpochTime)> <proposal-id (uint64)>
+  0x84 <upgrade-epoch (uint64)> <proposal-id (uint64)>
+  ```
+
+  The value is empty as the proposal upgrade descriptor can be obtained via
+  proposal that can be inferred from the key.
+
+- **Parameters (`0x85`)**
+
+  Governance consensus parameters.
+
+  With CBOR-serialized value:
+
+  ```golang
+  // ConsensusParameters are the governance consensus parameters.
+  type ConsensusParameters struct {
+      // GasCosts are the governance transaction gas costs.
+      GasCosts transaction.Costs `json:"gas_costs,omitempty"`
+
+      // MinProposalDeposit is the number of base units that are deposited when
+      // creating a new proposal.
+      MinProposalDeposit quantity.Quantity `json:"min_proposal_deposit,omitempty"`
+
+      // VotingPeriod is the number of epochs after which the voting for a proposal
+      // is closed and the votes are tallied.
+      VotingPeriod beacon.EpochTime `json:"voting_period,omitempty"`
+
+      // Quorum is he minimum percentage of voting power that needs to be cast on
+      // a proposal for the result to be valid.
+      Quorum uint8 `json:"quorum,omitempty"`
+
+      // Threshold is the minimum percentage of VoteYes votes in order for a
+      // proposal to be accepted.
+      Threshold uint8 `json:"threshold,omitempty"`
+
+      // UpgradeMinEpochDiff is the minimum number of epochs between the current
+      // epoch and the proposed upgrade epoch for the upgrade proposal to be valid.
+      // This is also the minimum number of epochs between two pending upgrades.
+      UpgradeMinEpochDiff beacon.EpochTime `json:"upgrade_min_epoch_diff,omitempty"`
+
+      // UpgradeCancelMinEpochDiff is the minimum number of epochs between the current
+      // epoch and the proposed upgrade epoch for the upgrade cancellation proposal to be valid.
+      UpgradeCancelMinEpochDiff beacon.EpochTime `json:"upgrade_cancel_min_epoch_diff,omitempty"`
+  }
   ```
 
 ### Genesis Document
@@ -174,7 +218,7 @@ created.
 **Method name:**
 
 ```
-gov.SubmitProposal
+governance.SubmitProposal
 ```
 
 **Body:**
@@ -223,8 +267,9 @@ Upon processing an **`UpgradeProposal`** the following steps are then performed:
   the current epoch, the method call fails with `ErrUpgradeTooSoon`.
 
 - The set of pending upgrades is checked to make sure that no upgrades are
-  currently pending. If there is an existing upgrade pending, the method call
-  fails with `ErrUpgradeAlreadyPending`.
+  currently pending within `upgrade_min_epoch_diff` epochs of the upgrade
+  descriptor's `epoch` field. If there is such an existing upgrade pending, the
+  method call fails with `ErrUpgradeAlreadyPending`.
 
 Upon processing a **`CancelUpgradeProposal`** the following steps are then
 performed:
@@ -268,7 +313,7 @@ Voting for submitted consensus layer governance proposals.
 **Method name:**
 
 ```
-gov.CastVote
+governance.CastVote
 ```
 
 **Body:**
@@ -329,6 +374,18 @@ type Backend interface {
 
     // PendingUpgrades returns a list of all pending upgrades.
     PendingUpgrades(ctx context.Context, height int64) ([]*upgrade.Descriptor, error)
+
+    // StateToGenesis returns the genesis state at specified block height.
+    StateToGenesis(ctx context.Context, height int64) (*Genesis, error)
+
+    // ConsensusParameters returns the governance consensus parameters.
+    ConsensusParameters(ctx context.Context, height int64) (*ConsensusParameters, error)
+
+    // GetEvents returns the events at specified block height.
+    GetEvents(ctx context.Context, height int64) ([]*Event, error)
+
+    // WatchEvents returns a channel that produces a stream of Events.
+    WatchEvents(ctx context.Context) (<-chan *Event, pubsub.ClosableSubscription, error)
 }
 
 // ProposalQuery is a proposal query.
@@ -341,6 +398,17 @@ type ProposalQuery struct {
 type VoteEntry struct {
     Voter staking.Address `json:"voter"`
     Vote  Vote            `json:"vote"`
+}
+
+// Event signifies a governance event, returned via GetEvents.
+type Event struct {
+    Height int64     `json:"height,omitempty"`
+    TxHash hash.Hash `json:"tx_hash,omitempty"`
+
+    ProposalSubmitted *ProposalSubmittedEvent `json:"proposal_submitted,omitempty"`
+    ProposalExecuted  *ProposalExecutedEvent  `json:"proposal_executed,omitempty"`
+    ProposalFinalized *ProposalFinalizedEvent `json:"proposal_finalized,omitempty"`
+    Vote              *VoteEvent              `json:"vote,omitempty"`
 }
 ```
 
@@ -416,13 +484,14 @@ type ProposalExecutedEvent struct {
 #### Upgrade Proposal
 
 The set of pending upgrades is checked to make sure that no upgrades are
-currently pending. If there is an existing upgrade pending the upgrade proposal
-fails.
+currently pending within `upgrade_min_epoch_diff` of the upgrade descriptor's
+`epoch` field. If there is such an existing pending upgrade the upgrade proposal
+execution fails.
 
 When an upgrade proposal is executed, a new entry is added to the list of
 pending upgrades using `epoch` as `<upgrade-epoch>`.
 
-On each epoch transition (as part of `BeginBlock`) it is checked wheter a
+On each epoch transition (as part of `BeginBlock`) it is checked whether a
 pending upgrade is scheduled for that epoch. In case it is and we are not
 running the new version, the consensus layer will panic. Otherwise, the pending
 upgrade proposal is removed.
@@ -438,21 +507,24 @@ case the pending upgrade does not exist anymore, no action is performed.
 This proposal introduces the following new consensus parameters in the
 governance module:
 
+- `gas_costs` (transaction.Costs) are the governance transaction gas costs.
+
 - `min_proposal_deposit` (base units) specifies the number of base units that
   are deposited when creating a new proposal.
 
 - `voting_period` (epochs) specifies the number of epochs after which the voting
   for a proposal is closed and the votes are tallied.
 
-- `quorum` (uint8) specifies the minimum percentage of voting power that needs
-  to be cast on a proposal for the result to be valid.
+- `quorum` (uint8: \[0,100\]) specifies the minimum percentage of voting power
+  that needs to be cast on a proposal for the result to be valid.
 
-- `threshold` (uint8) specifies the minimum percentage of `VoteYes` votes in
-  order for a proposal to be accepted.
+- `threshold` (uint8: \[0,100\]) specifies the minimum percentage of `VoteYes`
+  votes in order for a proposal to be accepted.
 
 - `upgrade_min_epoch_diff` (epochs) specifies the minimum number of epochs
   between the current epoch and the proposed upgrade epoch for the upgrade
-  proposal to be valid.
+  proposal to be valid. Additionally specifies the minimum number of epochs
+  between two consecutive pending upgrades.
 
 - `upgrade_cancel_min_epoch_diff` (epochs) specifies the minimum number of
   epochs between the current epoch and the proposed upgrade epoch for the

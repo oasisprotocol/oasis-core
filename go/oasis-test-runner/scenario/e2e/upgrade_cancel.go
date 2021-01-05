@@ -14,13 +14,15 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/scenario"
 )
 
+const upgradeName = "__e2e-test-upgrade-cancel"
+
 var (
 	// NodeUpgradeCancel is the node upgrade scenario.
 	NodeUpgradeCancel scenario.Scenario = newNodeUpgradeCancelImpl()
 
 	// Warning: this string contains printf conversions, it's NOT directly usable as a descriptor.
 	descriptorTemplate = `{
-		"name": "__e2e-test-upgrade-cancel",
+		"name": "%v",
 		"epoch": 3,
 		"method": "internal",
 		"identifier": "%v"
@@ -110,7 +112,7 @@ func (sc *nodeUpgradeCancelImpl) Run(childEnv *env.Env) error {
 	}
 	nodeHash.FromBytes(nodeText)
 
-	descriptor := fmt.Sprintf(descriptorTemplate, nodeHash.String())
+	descriptor := fmt.Sprintf(descriptorTemplate, upgradeName, nodeHash.String())
 
 	filePath := path.Join(sc.Net.BasePath(), "upgrade-descriptor.json")
 	if err = ioutil.WriteFile(filePath, []byte(descriptor), 0o644); err != nil { //nolint: gosec
@@ -138,6 +140,7 @@ func (sc *nodeUpgradeCancelImpl) Run(childEnv *env.Env) error {
 		"--log.level", "debug",
 		"--wait",
 		"--address", "unix:" + val.SocketPath(),
+		upgradeName,
 	}
 	if err = cli.RunSubCommand(childEnv, sc.Logger, "control-upgrade", sc.Net.Config().NodeBinary, cancelArgs); err != nil {
 		return fmt.Errorf("error canceling upgrade: %w", err)

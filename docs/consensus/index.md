@@ -21,6 +21,7 @@ Each consensus backend needs to provide the following services:
 - [Staking], operations required to operate a PoS blockchain.
 - [Registry], an entity/node/runtime public key and metadata registry service.
 - [Committee Scheduler] service.
+- [Governance] service.
 - [Root Hash], runtime commitment processing and minimal runtime state keeping
   service.
 - [Key Manager] policy state keeping service.
@@ -45,6 +46,7 @@ consensus backend agnostic).
 [Staking]: staking.md
 [Registry]: registry.md
 [Committee Scheduler]: scheduler.md
+[Governance]: governance.md
 [Root Hash]: roothash.md
 [Key Manager]: keymanager.md
 [consensus transaction]: transactions.md

@@ -357,6 +357,13 @@ func (mux *abciMux) InitChain(req types.RequestInitChain) types.ResponseInitChai
 	return resp
 }
 
+func (mux *abciMux) dispatchHaltHooks(blockHeight int64, currentEpoch epochtime.EpochTime) {
+	for _, hook := range mux.haltHooks {
+		hook(mux.state.ctx, blockHeight, currentEpoch)
+	}
+	mux.logger.Debug("halt hook dispatch complete")
+}
+
 func (mux *abciMux) BeginBlock(req types.RequestBeginBlock) types.ResponseBeginBlock {
 	blockHeight := mux.state.BlockHeight()
 
@@ -397,11 +404,7 @@ func (mux *abciMux) BeginBlock(req types.RequestBeginBlock) types.ResponseBeginB
 	case upgrade.ErrStopForUpgrade:
 		// Stop for upgrade -- but dispatch halt hooks first.
 		mux.logger.Debug("dispatching halt hooks before stopping for upgrade")
-		for _, hook := range mux.haltHooks {
-			hook(mux.state.ctx, blockHeight, currentEpoch)
-		}
-		mux.logger.Debug("halt hook dispatch complete")
-
+		mux.dispatchHaltHooks(blockHeight, currentEpoch)
 		panic("mux: reached upgrade epoch")
 	default:
 		panic(fmt.Sprintf("mux: error while trying to perform consensus upgrade: %v", err))
@@ -417,11 +420,8 @@ func (mux *abciMux) BeginBlock(req types.RequestBeginBlock) types.ResponseBeginB
 			"block_height", blockHeight,
 			"epoch", mux.state.haltEpochHeight,
 		)
-		mux.logger.Debug("Dispatching halt hooks")
-		for _, hook := range mux.haltHooks {
-			hook(mux.state.ctx, blockHeight, mux.state.haltEpochHeight)
-		}
-		mux.logger.Debug("Halt hook dispatch complete")
+		mux.logger.Debug("dispatching halt hooks before halt epoch")
+		mux.dispatchHaltHooks(blockHeight, currentEpoch)
 		return types.ResponseBeginBlock{}
 	case true:
 		if !mux.state.afterHaltEpoch(ctx) {
@@ -444,6 +444,8 @@ func (mux *abciMux) BeginBlock(req types.RequestBeginBlock) types.ResponseBeginB
 				"err", err,
 				"app", app.Name(),
 			)
+			mux.logger.Debug("dispatching halt hooks on begin block failure")
+			mux.dispatchHaltHooks(blockHeight, currentEpoch)
 			panic("mux: BeginBlock: fatal error in application: '" + app.Name() + "': " + err.Error())
 		}
 	}

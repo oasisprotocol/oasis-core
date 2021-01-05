@@ -283,11 +283,12 @@ func (g *Genesis) SanityCheck(now epochtime.EpochTime) error { // nolint: gocycl
 			return fmt.Errorf("staking: non-empty stake accumulator in genesis")
 		}
 	}
+	_ = total.Add(&g.GovernanceDeposits)
 	_ = total.Add(&g.CommonPool)
 	_ = total.Add(&g.LastBlockFees)
 	if total.Cmp(&g.TotalSupply) != 0 {
 		return fmt.Errorf(
-			"staking: sanity check failed: balances in accounts plus common pool (%s) does not add up to total supply (%s)",
+			"staking: sanity check failed: balances in accounts, plus governance deposits, plus common pool, plus last block fees (%s), does not add up to total supply (%s)",
 			total.String(), g.TotalSupply.String(),
 		)
 	}

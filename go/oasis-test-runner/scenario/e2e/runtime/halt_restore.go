@@ -1,14 +1,8 @@
 package runtime
 
 import (
-	"bytes"
 	"context"
-	"crypto/sha256"
 	"fmt"
-	"hash"
-	"io"
-	"os"
-	"path/filepath"
 	"reflect"
 
 	genesis "github.com/oasisprotocol/oasis-core/go/genesis/file"
@@ -17,12 +11,8 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/scenario"
 )
 
-var (
-	// HaltRestore is the halt and restore scenario.
-	HaltRestore scenario.Scenario = newHaltRestoreImpl()
-
-	dumpGlob = "genesis-*.json"
-)
+// HaltRestore is the halt and restore scenario.
+var HaltRestore scenario.Scenario = newHaltRestoreImpl()
 
 const haltEpoch = 3
 
@@ -56,67 +46,6 @@ func (sc *haltRestoreImpl) Fixture() (*oasis.NetworkFixture, error) {
 		val.AllowEarlyTermination = true
 	}
 	return f, nil
-}
-
-func (sc *haltRestoreImpl) getExportedGenesisFiles() ([]string, error) {
-	// Gather all nodes.
-	var nodes []interface {
-		ExportsPath() string
-	}
-	for _, v := range sc.Net.Validators() {
-		nodes = append(nodes, v)
-	}
-	for _, n := range sc.Net.ComputeWorkers() {
-		nodes = append(nodes, n)
-	}
-	for _, n := range sc.Net.StorageWorkers() {
-		nodes = append(nodes, n)
-	}
-	for _, n := range sc.Net.Keymanagers() {
-		nodes = append(nodes, n)
-	}
-
-	// Gather all genesis files.
-	var files []string
-	for _, node := range nodes {
-		dumpGlobPath := filepath.Join(node.ExportsPath(), dumpGlob)
-		globMatch, err := filepath.Glob(dumpGlobPath)
-		if err != nil {
-			return nil, fmt.Errorf("glob failed: %s: %w", dumpGlobPath, err)
-		}
-		if len(globMatch) == 0 {
-			return nil, fmt.Errorf("genesis file not found in: %s", dumpGlobPath)
-		}
-		if len(globMatch) > 1 {
-			return nil, fmt.Errorf("more than one genesis file found in: %s", dumpGlobPath)
-		}
-		files = append(files, globMatch[0])
-	}
-
-	// Assert all exported files match.
-	var firstHash hash.Hash
-	for _, file := range files {
-		// Compute hash.
-		f, err := os.Open(file)
-		if err != nil {
-			return nil, fmt.Errorf("failed to open file: %s: %w", file, err)
-		}
-		defer f.Close()
-		hnew := sha256.New()
-		if _, err := io.Copy(hnew, f); err != nil {
-			return nil, fmt.Errorf("sha256 failed on: %s: %w", file, err)
-		}
-		if firstHash == nil {
-			firstHash = hnew
-		}
-
-		// Compare hash with first hash.
-		if !bytes.Equal(firstHash.Sum(nil), hnew.Sum(nil)) {
-			return nil, fmt.Errorf("exported genesis files do not match %s, %s", files[0], file)
-		}
-	}
-
-	return files, nil
 }
 
 func (sc *haltRestoreImpl) Run(childEnv *env.Env) error {
@@ -156,7 +85,7 @@ func (sc *haltRestoreImpl) Run(childEnv *env.Env) error {
 	_, _, _ = reflect.Select(exitChs)
 
 	sc.Logger.Info("gathering exported genesis files")
-	files, err := sc.getExportedGenesisFiles()
+	files, err := sc.GetExportedGenesisFiles()
 	if err != nil {
 		return fmt.Errorf("failure getting exported genesis files: %w", err)
 	}

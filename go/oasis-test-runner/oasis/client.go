@@ -75,10 +75,12 @@ func (net *Network) NewClient(cfg *ClientCfg) (*Client, error) {
 
 	client := &Client{
 		Node: Node{
-			Name:      clientName,
-			net:       net,
-			dir:       clientDir,
-			consensus: cfg.Consensus,
+			Name:        clientName,
+			net:         net,
+			dir:         clientDir,
+			consensus:   cfg.Consensus,
+			termEarlyOk: cfg.AllowEarlyTermination,
+			termErrorOk: cfg.AllowErrorTermination,
 		},
 		maxTransactionAge: cfg.MaxTransactionAge,
 		consensusPort:     net.nextNodePort,
