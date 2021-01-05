@@ -12,6 +12,12 @@ on:
   schedule:
     - cron: "0 0 * * *"
 
+# Global environment variables.
+env:
+  GORELEASER_URL_PREFIX: https://github.com/goreleaser/goreleaser/releases/download/
+  GORELEASER_VERSION: 0.143.0
+  CURL_CMD: curl --proto =https --tlsv1.2 --location --silent --show-error --fail
+
 jobs:
 
   build-code:
@@ -54,10 +60,7 @@ jobs:
           tar -xf ${GORELEASER_TARBALL}
           sudo mv goreleaser /usr/local/bin
         env:
-          GORELEASER_URL_PREFIX: https://github.com/goreleaser/goreleaser/releases/download/
-          GORELEASER_VERSION: 0.143.0
           GORELEASER_TARBALL: goreleaser_Linux_x86_64.tar.gz
-          CURL_CMD: curl --proto =https --tlsv1.2 -sSL
       - name: Build Oasis Node with Make
         run: |
           cd build${{ matrix.build_number }}/go
