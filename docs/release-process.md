@@ -149,7 +149,7 @@ checksums, and publish a GitHub Release that accompanies the versioned git tag.
 Browse to [Oasis Core's releases page] and make sure the new release is properly
 published.
 
-### Create `stable/MAJOR.MINOR.x` Branch
+### Create `stable/YY.MINOR.x` Branch
 
 To prepare a new stable branch from the new release tag and push it to the
 origin remote, use:

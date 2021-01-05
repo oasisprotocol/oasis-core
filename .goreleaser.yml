@@ -3,7 +3,7 @@
 # For more info, browse to http://goreleaser.com.
 #
 # NOTE: The GoReleaser is not meant to be run directly, but rather through
-# Make's release target.
+# Make's release-build target.
 
 project_name: Oasis Core
 
@@ -73,7 +73,7 @@ archives:
       - CHANGELOG.md
       - README.md
       - LICENSE
-      # NOTE: We assume that the Makefile release target prepares this binary.
+      # NOTE: We assume that the Makefile release-build target prepares this binary.
       - oasis-core-runtime-loader
 
 checksum:
