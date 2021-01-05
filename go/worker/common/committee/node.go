@@ -326,6 +326,15 @@ func (n *Node) worker() {
 	defer close(n.quitCh)
 	defer (n.cancelCtx)()
 
+	// Wait for consensus sync.
+	n.logger.Info("delaying worker start until after initial synchronization")
+	select {
+	case <-n.stopCh:
+		return
+	case <-n.Consensus.Synced():
+	}
+	n.logger.Info("consensus has finished initial synchronization")
+
 	// Wait for the runtime.
 	rt, err := n.Runtime.RegistryDescriptor(n.ctx)
 	if err != nil {
