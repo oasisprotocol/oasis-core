@@ -34,6 +34,8 @@ var (
 	methodGetTxByBlockHash = serviceName.NewMethod("GetTxByBlockHash", GetTxByBlockHashRequest{})
 	// methodGetTxs is the GetTxs method.
 	methodGetTxs = serviceName.NewMethod("GetTxs", GetTxsRequest{})
+	// methodGetEvents is the GetEvents method.
+	methodGetEvents = serviceName.NewMethod("GetEvents", GetEventsRequest{})
 	// methodQueryTx is the QueryTx method.
 	methodQueryTx = serviceName.NewMethod("QueryTx", QueryTxRequest{})
 	// methodQueryTxs is the QueryTxs method.
@@ -76,6 +78,10 @@ var (
 			{
 				MethodName: methodGetTxs.ShortName(),
 				Handler:    handlerGetTxs,
+			},
+			{
+				MethodName: methodGetEvents.ShortName(),
+				Handler:    handlerGetEvents,
 			},
 			{
 				MethodName: methodQueryTx.ShortName(),
@@ -298,6 +304,29 @@ func handlerGetTxs( // nolint: golint
 	return interceptor(ctx, &rq, info, handler)
 }
 
+func handlerGetEvents( // nolint: golint
+	srv interface{},
+	ctx context.Context,
+	dec func(interface{}) error,
+	interceptor grpc.UnaryServerInterceptor,
+) (interface{}, error) {
+	var rq GetEventsRequest
+	if err := dec(&rq); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(RuntimeClient).GetEvents(ctx, &rq)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: methodGetEvents.FullName(),
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(RuntimeClient).GetEvents(ctx, req.(*GetEventsRequest))
+	}
+	return interceptor(ctx, &rq, info, handler)
+}
+
 func handlerQueryTx( // nolint: golint
 	srv interface{},
 	ctx context.Context,
@@ -460,6 +489,14 @@ func (c *runtimeClient) GetTxByBlockHash(ctx context.Context, request *GetTxByBl
 func (c *runtimeClient) GetTxs(ctx context.Context, request *GetTxsRequest) ([][]byte, error) {
 	var rsp [][]byte
 	if err := c.conn.Invoke(ctx, methodGetTxs.FullName(), request, &rsp); err != nil {
+		return nil, err
+	}
+	return rsp, nil
+}
+
+func (c *runtimeClient) GetEvents(ctx context.Context, request *GetEventsRequest) ([]*Event, error) {
+	var rsp []*Event
+	if err := c.conn.Invoke(ctx, methodGetEvents.FullName(), request, &rsp); err != nil {
 		return nil, err
 	}
 	return rsp, nil

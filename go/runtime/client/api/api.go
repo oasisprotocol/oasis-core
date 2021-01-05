@@ -59,6 +59,9 @@ type RuntimeClient interface {
 	// GetTxs fetches all runtime transactions in a given block.
 	GetTxs(ctx context.Context, request *GetTxsRequest) ([][]byte, error)
 
+	// GetEvents returns all events emitted in a given block.
+	GetEvents(ctx context.Context, request *GetEventsRequest) ([]*Event, error)
+
 	// QueryTx queries the indexer for a specific runtime transaction.
 	QueryTx(ctx context.Context, request *QueryTxRequest) (*TxResult, error)
 
@@ -120,6 +123,21 @@ type GetTxsRequest struct {
 	RuntimeID common.Namespace `json:"runtime_id"`
 	Round     uint64           `json:"round"`
 	IORoot    hash.Hash        `json:"io_root"`
+}
+
+// GetEventsRequest is a GetEvents request.
+type GetEventsRequest struct {
+	RuntimeID common.Namespace `json:"runtime_id"`
+	Round     uint64           `json:"round"`
+}
+
+// Event is an event emitted by a runtime in the form of a runtime transaction tag.
+//
+// Key and value semantics are runtime-dependent.
+type Event struct {
+	Key    []byte    `json:"key"`
+	Value  []byte    `json:"value"`
+	TxHash hash.Hash `json:"tx_hash"`
 }
 
 // QueryTxRequest is a QueryTx request.

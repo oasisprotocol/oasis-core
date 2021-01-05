@@ -5,8 +5,10 @@ import (
 	"reflect"
 
 	"github.com/oasisprotocol/oasis-core/go/common"
+	"github.com/oasisprotocol/oasis-core/go/common/cbor"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
+	"github.com/oasisprotocol/oasis-core/go/common/errors"
 	"github.com/oasisprotocol/oasis-core/go/common/sgx/ias"
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
 	roothash "github.com/oasisprotocol/oasis-core/go/roothash/api"
@@ -116,6 +118,11 @@ type Error struct {
 	Message string `json:"message,omitempty"`
 }
 
+// String returns a string representation of this runtime error.
+func (e Error) String() string {
+	return fmt.Sprintf("runtime error: module: %s code: %d message: %s", e.Module, e.Code, e.Message)
+}
+
 // RuntimeInfoRequest is a worker info request message body.
 type RuntimeInfoRequest struct {
 	// RuntimeID is the assigned runtime ID of the loaded runtime.
@@ -191,10 +198,25 @@ type RuntimeCheckTxBatchRequest struct {
 	Block block.Block `json:"block"`
 }
 
+// CheckTxResult contains the result of a CheckTx operation.
+type CheckTxResult struct {
+	// Error is the error (if any) that resulted from the operation.
+	Error Error `json:"error"`
+
+	// Meta contains optional arbitrary runtime-specific metadata that can be used for scheduling
+	// transactions by the scheduler.
+	Meta cbor.RawMessage `json:"meta,omitempty"`
+}
+
+// IsSuccess returns true if transaction execution was successful.
+func (r *CheckTxResult) IsSuccess() bool {
+	return r.Error.Code == errors.CodeNoError
+}
+
 // RuntimeCheckTxBatchResponse is a worker check tx batch response message body.
 type RuntimeCheckTxBatchResponse struct {
-	// Batch of runtime check results.
-	Results transaction.RawBatch `json:"results"`
+	// Batch of CheckTx results corresponding to transactions passed on input.
+	Results []CheckTxResult `json:"results"`
 }
 
 // ComputedBatch is a computed batch.

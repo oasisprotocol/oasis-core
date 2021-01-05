@@ -615,19 +615,12 @@ func (n *Node) checkTx(ctx context.Context, tx []byte) error {
 	}
 
 	// Interpret CheckTx result.
-	resultRaw := resp.RuntimeCheckTxBatchResponse.Results[0]
-	var result transaction.TxnOutput
-	if err = cbor.Unmarshal(resultRaw, &result); err != nil {
-		n.logger.Error("CheckTx: runtime response failed to deserialize",
-			"err", err,
-		)
-		return errCheckTxFailed
-	}
-	if result.Error != nil {
+	result := resp.RuntimeCheckTxBatchResponse.Results[0]
+	if !result.IsSuccess() {
 		n.logger.Error("CheckTx: runtime failed with error",
 			"err", result.Error,
 		)
-		return fmt.Errorf("%w: %s", errCheckTxFailed, *result.Error)
+		return fmt.Errorf("%w: %s", errCheckTxFailed, result.Error)
 	}
 
 	return nil

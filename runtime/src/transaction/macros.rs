@@ -10,6 +10,7 @@
 /// }
 /// ```
 #[macro_export]
+#[deprecated(note = "see oasis-core#3572")]
 macro_rules! register_runtime_txn_methods {
     (
         $txn_dispatcher:ident,

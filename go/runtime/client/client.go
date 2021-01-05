@@ -296,6 +296,32 @@ func (c *runtimeClient) GetTxs(ctx context.Context, request *api.GetTxsRequest) 
 }
 
 // Implements api.RuntimeClient.
+func (c *runtimeClient) GetEvents(ctx context.Context, request *api.GetEventsRequest) ([]*api.Event, error) {
+	blk, err := c.GetBlock(ctx, &api.GetBlockRequest{RuntimeID: request.RuntimeID, Round: request.Round})
+	if err != nil {
+		return nil, err
+	}
+
+	tree := c.getTxnTree(blk)
+	defer tree.Close()
+
+	tags, err := tree.GetTags(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	var events []*api.Event
+	for _, tag := range tags {
+		events = append(events, &api.Event{
+			Key:    tag.Key,
+			Value:  tag.Value,
+			TxHash: tag.TxHash,
+		})
+	}
+	return events, nil
+}
+
+// Implements api.RuntimeClient.
 func (c *runtimeClient) GetBlockByHash(ctx context.Context, request *api.GetBlockByHashRequest) (*block.Block, error) {
 	tagIndexer, err := c.tagIndexer(request.RuntimeID)
 	if err != nil {
