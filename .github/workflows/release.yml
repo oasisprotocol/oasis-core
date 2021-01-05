@@ -14,7 +14,7 @@ on:
 # Global environment variables.
 env:
   GORELEASER_URL_PREFIX: https://github.com/goreleaser/goreleaser/releases/download/
-  GORELEASER_VERSION: 0.143.0
+  GORELEASER_VERSION: 0.152.0
   CURL_CMD: curl --proto =https --tlsv1.2 --location --silent --show-error --fail
 
 jobs:
