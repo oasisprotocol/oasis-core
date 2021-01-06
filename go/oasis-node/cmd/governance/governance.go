@@ -33,6 +33,8 @@ const (
 	cfgVoteProposalID = "vote.proposal.id"
 
 	cfgProposalID = "proposal.id"
+
+	cfgIncludeClosed = "include_closed"
 )
 
 var (
@@ -40,6 +42,7 @@ var (
 	submitProposalFlags = flag.NewFlagSet("", flag.ContinueOnError)
 	castVoteFlags       = flag.NewFlagSet("", flag.ContinueOnError)
 	proposalFlags       = flag.NewFlagSet("", flag.ContinueOnError)
+	listProposalsFlags  = flag.NewFlagSet("", flag.ContinueOnError)
 
 	governanceCmd = &cobra.Command{
 		Use:   "governance",
@@ -72,7 +75,7 @@ var (
 
 	listProposalsCmd = &cobra.Command{
 		Use:   "list_proposals",
-		Short: "lists all active proposals",
+		Short: "lists active proposals",
 		Run:   doListProposals,
 	}
 
@@ -230,7 +233,8 @@ func doProposalVotes(cmd *cobra.Command, args []string) {
 }
 
 func doListProposals(cmd *cobra.Command, args []string) {
-	if err := cmdCommon.Init(); err != nil {
+	var err error
+	if err = cmdCommon.Init(); err != nil {
 		cmdCommon.EarlyLogAndExit(err)
 	}
 
@@ -238,13 +242,20 @@ func doListProposals(cmd *cobra.Command, args []string) {
 	defer conn.Close()
 
 	ctx := context.Background()
-	ps, err := client.ActiveProposals(ctx, consensus.HeightLatest)
+
+	var proposals []*governance.Proposal
+	switch viper.GetBool(cfgIncludeClosed) {
+	case true:
+		proposals, err = client.Proposals(ctx, consensus.HeightLatest)
+	case false:
+		proposals, err = client.ActiveProposals(ctx, consensus.HeightLatest)
+	}
 	if err != nil {
 		logger.Error("error querying proposals", "err", err)
 		os.Exit(1)
 	}
 
-	o, _ := json.Marshal(ps)
+	o, _ := json.Marshal(proposals)
 	fmt.Println(string(o))
 }
 
@@ -270,6 +281,7 @@ func Register(parentCmd *cobra.Command) {
 	proposalVotesCmd.Flags().AddFlagSet(proposalFlags)
 
 	listProposalsCmd.Flags().AddFlagSet(cmdGrpc.ClientFlags)
+	listProposalsCmd.Flags().AddFlagSet(listProposalsFlags)
 
 	parentCmd.AddCommand(governanceCmd)
 }
@@ -293,4 +305,7 @@ func init() {
 
 	proposalFlags.Uint64(cfgProposalID, 0, "Proposal ID")
 	_ = viper.BindPFlags(proposalFlags)
+
+	listProposalsFlags.Bool(cfgIncludeClosed, false, "Include closed proposals.")
+	_ = viper.BindPFlags(listProposalsFlags)
 }

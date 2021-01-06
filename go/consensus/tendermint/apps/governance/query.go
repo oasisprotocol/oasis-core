@@ -12,6 +12,7 @@ import (
 // Query is the governance query interface.
 type Query interface {
 	ActiveProposals(context.Context) ([]*governance.Proposal, error)
+	Proposals(context.Context) ([]*governance.Proposal, error)
 	Proposal(context.Context, uint64) (*governance.Proposal, error)
 	Votes(context.Context, uint64) ([]*governance.VoteEntry, error)
 	PendingUpgrades(context.Context) ([]*upgrade.Descriptor, error)
@@ -39,6 +40,10 @@ type governanceQuerier struct {
 
 func (gq *governanceQuerier) ActiveProposals(ctx context.Context) ([]*governance.Proposal, error) {
 	return gq.state.ActiveProposals(ctx)
+}
+
+func (gq *governanceQuerier) Proposals(ctx context.Context) ([]*governance.Proposal, error) {
+	return gq.state.Proposals(ctx)
 }
 
 func (gq *governanceQuerier) Proposal(ctx context.Context, id uint64) (*governance.Proposal, error) {

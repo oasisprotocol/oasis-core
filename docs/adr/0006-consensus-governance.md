@@ -2,6 +2,7 @@
 
 ## Changelog
 
+- 2021-01-06: Update API to include Proposals() method
 - 2020-12-08: Updates to match the actual implementation
 - 2020-10-27: Voting period in epochs, min upgrade cancellation difference,
   failed proposal state
@@ -365,6 +366,9 @@ This proposal introduces the following query methods in the governance module:
 type Backend interface {
     // ActiveProposals returns a list of all proposals that have not yet closed.
     ActiveProposals(ctx context.Context, height int64) ([]*Proposal, error)
+
+    // Proposals returns a list of all proposals.
+    Proposals(ctx context.Context, height int64) ([]*Proposal, error)
 
     // Proposal looks up a specific proposal.
     Proposal(ctx context.Context, query *ProposalQuery) (*Proposal, error)

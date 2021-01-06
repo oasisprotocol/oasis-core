@@ -48,6 +48,15 @@ func (sc *serviceClient) ActiveProposals(ctx context.Context, height int64) ([]*
 	return q.ActiveProposals(ctx)
 }
 
+func (sc *serviceClient) Proposals(ctx context.Context, height int64) ([]*api.Proposal, error) {
+	q, err := sc.querier.QueryAt(ctx, height)
+	if err != nil {
+		return nil, err
+	}
+
+	return q.Proposals(ctx)
+}
+
 func (sc *serviceClient) Proposal(ctx context.Context, query *api.ProposalQuery) (*api.Proposal, error) {
 	q, err := sc.querier.QueryAt(ctx, query.Height)
 	if err != nil {
