@@ -34,6 +34,7 @@ var ByName = map[string]Workload{
 	NameRegistration: Registration,
 	NameRuntime:      Runtime,
 	NameTransfer:     Transfer,
+	NameGovernance:   Governance,
 }
 
 // Flags has the workload flags.
@@ -91,15 +92,6 @@ func (bw *BaseWorkload) GasPrice() uint64 {
 	// NOTE: This cannot fail as workloads use static price discovery.
 	gasPrice, _ := bw.sm.PriceDiscovery().GasPrice(context.Background())
 	return gasPrice.ToBigInt().Uint64()
-}
-
-// LoadNonce returns the current nonce for the provided address.
-func (bw *BaseWorkload) LoadNonce(ctx context.Context, addr staking.Address) (uint64, error) {
-	acc, err := bw.cc.Staking().Account(ctx, &staking.OwnerQuery{Height: consensus.HeightLatest, Owner: addr})
-	if err != nil {
-		return 0, fmt.Errorf("failed to query account info: %w", err)
-	}
-	return acc.General.Nonce, nil
 }
 
 // FundSignAndSubmitTx funds the caller to cover transaction fees, signs the transaction and submits
