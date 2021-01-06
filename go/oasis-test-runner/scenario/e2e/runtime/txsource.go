@@ -60,6 +60,7 @@ var TxSourceMultiShort scenario.Scenario = &txSourceImpl{
 		workload.NameRegistration,
 		workload.NameRuntime,
 		workload.NameTransfer,
+		workload.NameGovernance,
 	},
 	allNodeWorkloads: []string{
 		workload.NameQueries,
@@ -86,6 +87,7 @@ var TxSourceMultiShortSGX scenario.Scenario = &txSourceImpl{
 		workload.NameRegistration,
 		workload.NameRuntime,
 		workload.NameTransfer,
+		workload.NameGovernance,
 	},
 	allNodeWorkloads: []string{
 		workload.NameQueries,
@@ -114,6 +116,7 @@ var TxSourceMulti scenario.Scenario = &txSourceImpl{
 		workload.NameRegistration,
 		workload.NameRuntime,
 		workload.NameTransfer,
+		workload.NameGovernance,
 	},
 	allNodeWorkloads: []string{
 		workload.NameQueries,
@@ -261,7 +264,7 @@ func (sc *txSourceImpl) Fixture() (*oasis.NetworkFixture, error) {
 			FeeSplitWeightVote:        *quantity.NewFromUint64(1),
 			FeeSplitWeightNextPropose: *quantity.NewFromUint64(1),
 		},
-		TotalSupply: *quantity.NewFromUint64(150000000000),
+		TotalSupply: *quantity.NewFromUint64(150000000400),
 		Ledger: map[staking.Address]*staking.Account{
 			e2e.DeterministicValidator0: {
 				General: staking.GeneralAccount{
@@ -338,7 +341,69 @@ func (sc *txSourceImpl) Fixture() (*oasis.NetworkFixture, error) {
 					Balance: *quantity.NewFromUint64(10000000000),
 				},
 			},
+			// Entity accounts need escrow so that validators have voting power
+			// for governance.
+			e2e.DeterministicEntity1: {
+				Escrow: staking.EscrowAccount{
+					Active: staking.SharePool{
+						Balance:     *quantity.NewFromUint64(100),
+						TotalShares: *quantity.NewFromUint64(100),
+					},
+				},
+			},
+			e2e.DeterministicEntity2: {
+				Escrow: staking.EscrowAccount{
+					Active: staking.SharePool{
+						Balance:     *quantity.NewFromUint64(100),
+						TotalShares: *quantity.NewFromUint64(100),
+					},
+				},
+			},
+			e2e.DeterministicEntity3: {
+				Escrow: staking.EscrowAccount{
+					Active: staking.SharePool{
+						Balance:     *quantity.NewFromUint64(100),
+						TotalShares: *quantity.NewFromUint64(100),
+					},
+				},
+			},
+			e2e.DeterministicEntity4: {
+				Escrow: staking.EscrowAccount{
+					Active: staking.SharePool{
+						Balance:     *quantity.NewFromUint64(100),
+						TotalShares: *quantity.NewFromUint64(100),
+					},
+				},
+			},
 		},
+		Delegations: map[staking.Address]map[staking.Address]*staking.Delegation{
+			e2e.DeterministicEntity1: {
+				e2e.DeterministicEntity1: &staking.Delegation{
+					Shares: *quantity.NewFromUint64(100),
+				},
+			},
+			e2e.DeterministicEntity2: {
+				e2e.DeterministicEntity2: &staking.Delegation{
+					Shares: *quantity.NewFromUint64(100),
+				},
+			},
+			e2e.DeterministicEntity3: {
+				e2e.DeterministicEntity3: &staking.Delegation{
+					Shares: *quantity.NewFromUint64(100),
+				},
+			},
+			e2e.DeterministicEntity4: {
+				e2e.DeterministicEntity4: &staking.Delegation{
+					Shares: *quantity.NewFromUint64(100),
+				},
+			},
+		},
+	}
+	f.Entities = []oasis.EntityCfg{
+		{IsDebugTestEntity: true},
+	}
+	for i := 0; i < sc.numValidatorNodes; i++ {
+		f.Entities = append(f.Entities, oasis.EntityCfg{})
 	}
 
 	// Runtime configuration.
@@ -383,7 +448,7 @@ func (sc *txSourceImpl) Fixture() (*oasis.NetworkFixture, error) {
 	var validators []oasis.ValidatorFixture
 	for i := 0; i < sc.numValidatorNodes; i++ {
 		validators = append(validators, oasis.ValidatorFixture{
-			Entity: 1,
+			Entity: i + 1, // Skip 0, which is the test entity.
 		})
 	}
 	f.Validators = validators
@@ -664,6 +729,9 @@ func (sc *txSourceImpl) startWorkload(childEnv *env.Env, errCh chan error, name 
 		"--" + txsource.CfgGasPrice, strconv.FormatUint(txSourceGasPrice, 10),
 		// Use half the configured interval due to fast blocks.
 		"--" + workload.CfgConsensusNumKeptVersions, strconv.FormatUint(node.Consensus().PruneNumKept/2, 10),
+	}
+	for _, ent := range sc.Net.Entities()[1:] {
+		args = append(args, "--"+txsource.CfgValidatorEntity, ent.EntityKeyPath())
 	}
 	// Disable runtime queries on non-client node.
 	if node.Name != sc.Net.Clients()[0].Name {
