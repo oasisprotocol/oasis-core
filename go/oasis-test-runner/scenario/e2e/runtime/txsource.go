@@ -22,6 +22,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/quantity"
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
 	"github.com/oasisprotocol/oasis-core/go/consensus/api/transaction"
+	governance "github.com/oasisprotocol/oasis-core/go/governance/api"
 	"github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common"
 	"github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/flags"
 	"github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/debug/txsource"
@@ -230,6 +231,14 @@ func (sc *txSourceImpl) Fixture() (*oasis.NetworkFixture, error) {
 	}
 	// Use deterministic identities as we need to allocate funds to nodes.
 	f.Network.DeterministicIdentities = true
+	f.Network.GovernanceParameters = &governance.ConsensusParameters{
+		VotingPeriod:              10,
+		MinProposalDeposit:        *quantity.NewFromUint64(300),
+		Quorum:                    90,
+		Threshold:                 90,
+		UpgradeMinEpochDiff:       40,
+		UpgradeCancelMinEpochDiff: 20,
+	}
 	f.Network.StakingGenesis = &staking.Genesis{
 		Parameters: staking.ConsensusParameters{
 			CommissionScheduleRules: staking.CommissionScheduleRules{

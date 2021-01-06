@@ -345,6 +345,7 @@ func (c *commission) Run(
 	cnsc consensus.ClientBackend,
 	sm consensus.SubmissionManager,
 	fundingAccount signature.Signer,
+	validatorEntities []signature.Signer,
 ) error {
 	// Initialize base workload.
 	c.BaseWorkload.Init(cnsc, sm, fundingAccount)
