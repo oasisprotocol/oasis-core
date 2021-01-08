@@ -221,7 +221,42 @@ pub trait Iterator: iter::Iterator<Item = (Vec<u8>, Vec<u8>)> {
     fn next(&mut self);
 }
 
-impl<T: FallibleMKVS> FallibleMKVS for &mut T {
+impl<T: MKVS + ?Sized> MKVS for &mut T {
+    fn get(&self, ctx: Context, key: &[u8]) -> Option<Vec<u8>> {
+        T::get(self, ctx, key)
+    }
+
+    fn cache_contains_key(&self, ctx: Context, key: &[u8]) -> bool {
+        T::cache_contains_key(self, ctx, key)
+    }
+
+    fn insert(&mut self, ctx: Context, key: &[u8], value: &[u8]) -> Option<Vec<u8>> {
+        T::insert(self, ctx, key, value)
+    }
+
+    fn remove(&mut self, ctx: Context, key: &[u8]) -> Option<Vec<u8>> {
+        T::remove(self, ctx, key)
+    }
+
+    fn prefetch_prefixes(&self, ctx: Context, prefixes: &Vec<Prefix>, limit: u16) {
+        T::prefetch_prefixes(self, ctx, prefixes, limit)
+    }
+
+    fn iter(&self, ctx: Context) -> Box<dyn Iterator + '_> {
+        T::iter(self, ctx)
+    }
+
+    fn commit(
+        &mut self,
+        ctx: Context,
+        namespace: Namespace,
+        version: u64,
+    ) -> Result<(WriteLog, Hash)> {
+        T::commit(self, ctx, namespace, version)
+    }
+}
+
+impl<T: FallibleMKVS + ?Sized> FallibleMKVS for &mut T {
     fn get(&self, ctx: Context, key: &[u8]) -> Result<Option<Vec<u8>>> {
         T::get(self, ctx, key)
     }
