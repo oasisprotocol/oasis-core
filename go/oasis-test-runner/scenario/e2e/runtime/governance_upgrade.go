@@ -487,6 +487,10 @@ func (sc *governanceConsensusUpgradeImpl) Run(childEnv *env.Env) error { // noli
 	}
 
 	// Check that runtime still works after the upgrade.
-	sc.runtimeImpl.clientArgs = []string{"--mode", "part2"}
+	sc.runtimeImpl.clientArgs = []string{
+		"--mode", "part2",
+		// Use a different nonce seed.
+		"--seed", "second_seed",
+	}
 	return sc.runtimeImpl.Run(childEnv)
 }

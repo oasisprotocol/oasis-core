@@ -144,6 +144,10 @@ func (sc *haltRestoreImpl) Run(childEnv *env.Env) error {
 	// socket path length.
 	sc.Net.Config().UseShortGrpcSocketPaths = true
 
-	sc.runtimeImpl.clientArgs = []string{"--mode", "part2"}
+	sc.runtimeImpl.clientArgs = []string{
+		"--mode", "part2",
+		// Use a different nonce seed.
+		"--seed", "second_seed",
+	}
 	return sc.runtimeImpl.Run(childEnv)
 }
