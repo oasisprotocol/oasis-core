@@ -424,6 +424,10 @@ WaitForSubmittedVote:
 			assertAccountBalance(t, consensus, staking.GovernanceDepositsAddress, consensusAPI.HeightLatest, quantity.NewQuantity())
 			assertAccountBalance(t, consensus, submitterAddr, ev.Height, testState.submitterBalance)
 
+			// Test proposals query.
+			proposals, err := backend.Proposals(ctx, consensusAPI.HeightLatest)
+			require.NoError(err, "Proposals query")
+			require.True(len(proposals) > 1, "At least two proposals should exist")
 			return
 		case <-time.After(recvTimeout):
 			t.Fatalf("failed to receive event")

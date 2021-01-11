@@ -34,6 +34,7 @@ var ByName = map[string]Workload{
 	NameRegistration: Registration,
 	NameRuntime:      Runtime,
 	NameTransfer:     Transfer,
+	NameGovernance:   Governance,
 }
 
 // Flags has the workload flags.
@@ -55,6 +56,7 @@ type Workload interface {
 		cnsc consensus.ClientBackend,
 		sm consensus.SubmissionManager,
 		fundingAccount signature.Signer,
+		validatorEntities []signature.Signer,
 	) error
 }
 

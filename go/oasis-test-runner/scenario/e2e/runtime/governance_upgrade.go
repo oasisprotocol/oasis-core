@@ -113,7 +113,7 @@ func (sc *governanceConsensusUpgradeImpl) Fixture() (*oasis.NetworkFixture, erro
 		CommonPool:  *quantity.NewFromUint64(100),
 		Ledger: map[staking.Address]*staking.Account{
 			// Fund entity account so we'll be able to submit the proposal.
-			e2e.Entity1Account: {
+			e2e.DeterministicEntity1: {
 				General: staking.GeneralAccount{
 					Balance: *quantity.NewFromUint64(1000),
 				},
@@ -126,8 +126,8 @@ func (sc *governanceConsensusUpgradeImpl) Fixture() (*oasis.NetworkFixture, erro
 			},
 		},
 		Delegations: map[staking.Address]map[staking.Address]*staking.Delegation{
-			e2e.Entity1Account: {
-				e2e.Entity1Account: &staking.Delegation{
+			e2e.DeterministicEntity1: {
+				e2e.DeterministicEntity1: &staking.Delegation{
 					Shares: *quantity.NewFromUint64(100),
 				},
 			},
@@ -333,7 +333,7 @@ func (sc *governanceConsensusUpgradeImpl) Run(childEnv *env.Env) error { // noli
 	entityAcc, err := sc.Net.Controller().Staking.Account(sc.ctx,
 		&staking.OwnerQuery{
 			Height: consensus.HeightLatest,
-			Owner:  e2e.Entity1Account,
+			Owner:  e2e.DeterministicEntity1,
 		},
 	)
 	if err != nil {
@@ -487,6 +487,10 @@ func (sc *governanceConsensusUpgradeImpl) Run(childEnv *env.Env) error { // noli
 	}
 
 	// Check that runtime still works after the upgrade.
-	sc.runtimeImpl.clientArgs = []string{"--mode", "part2"}
+	sc.runtimeImpl.clientArgs = []string{
+		"--mode", "part2",
+		// Use a different nonce seed.
+		"--seed", "second_seed",
+	}
 	return sc.runtimeImpl.Run(childEnv)
 }

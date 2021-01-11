@@ -106,6 +106,9 @@ type Backend interface {
 	// ActiveProposals returns a list of all proposals that have not yet closed.
 	ActiveProposals(ctx context.Context, height int64) ([]*Proposal, error)
 
+	// Proposals returns a list of all proposals.
+	Proposals(ctx context.Context, height int64) ([]*Proposal, error)
+
 	// Proposal looks up a specific proposal.
 	Proposal(ctx context.Context, query *ProposalQuery) (*Proposal, error)
 

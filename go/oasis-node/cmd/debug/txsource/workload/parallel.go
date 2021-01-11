@@ -52,6 +52,7 @@ func (p *parallel) Run(
 	cnsc consensus.ClientBackend,
 	sm consensus.SubmissionManager,
 	fundingAccount signature.Signer,
+	validatorEntities []signature.Signer,
 ) error {
 	// Initialize base workload.
 	p.BaseWorkload.Init(cnsc, sm, fundingAccount)

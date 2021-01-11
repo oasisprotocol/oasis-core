@@ -111,7 +111,7 @@ func (app *governanceApplication) submitProposal(
 		switch err {
 		case nil:
 		case governance.ErrNoSuchUpgrade:
-			ctx.Logger().Error("governance: cancel upgrade for a non existing upgrade proposal",
+			ctx.Logger().Error("governance: cancel upgrade for a non existing pending upgrade",
 				"proposal_id", cancelUpgrade.ProposalID,
 				"err", err,
 			)

@@ -160,6 +160,7 @@ func (r *registration) Run( // nolint: gocyclo
 	cnsc consensus.ClientBackend,
 	sm consensus.SubmissionManager,
 	fundingAccount signature.Signer,
+	validatorEntities []signature.Signer,
 ) error {
 	// Initialize base workload.
 	r.BaseWorkload.Init(cnsc, sm, fundingAccount)

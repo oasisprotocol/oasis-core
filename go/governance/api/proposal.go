@@ -97,7 +97,6 @@ type Proposal struct {
 	ClosesAt epochtime.EpochTime `json:"closes_at"`
 	// Results are the final tallied results after the voting period has
 	// ended.
-
 	Results map[Vote]quantity.Quantity `json:"results,omitempty"`
 	// InvalidVotes is the number of invalid votes after tallying.
 	InvalidVotes uint64 `json:"invalid_votes,omitempty"`

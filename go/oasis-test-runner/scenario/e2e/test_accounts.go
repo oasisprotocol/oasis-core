@@ -4,8 +4,11 @@ import stakingTests "github.com/oasisprotocol/oasis-core/go/staking/tests/debug"
 
 // Deterministic Test Accounts.
 var (
-	EntityAccount  = stakingTests.AddressFromString("oasis1qq7us2p22udg2t24u6ry4m29wzql005pjsske8gt")
-	Entity1Account = stakingTests.AddressFromString("oasis1qqncl383h8458mr9cytatygctzwsx02n4c5f8ed7")
+	TestEntityAccount    = stakingTests.AddressFromString("oasis1qq7us2p22udg2t24u6ry4m29wzql005pjsske8gt")
+	DeterministicEntity1 = stakingTests.AddressFromString("oasis1qqncl383h8458mr9cytatygctzwsx02n4c5f8ed7")
+	DeterministicEntity2 = stakingTests.AddressFromString("oasis1qznshq4ttrgh83d9wqvgmsuq3pfsndg3tus7lx98")
+	DeterministicEntity3 = stakingTests.AddressFromString("oasis1qrz6kjp9lu6vc6snhlszq3p2nlx76qasaqr2auqk")
+	DeterministicEntity4 = stakingTests.AddressFromString("oasis1qqw3ka3eeuy5qaytyhesxtj4fe5pp0xkdy954uwk")
 
 	DeterministicValidator0 = stakingTests.AddressFromString("oasis1qpt202cf6t0s5ugkk34p83yf0c30gpjkny92u7dh")
 	DeterministicValidator1 = stakingTests.AddressFromString("oasis1qryg8qf3ydzcphr328l8psz007fms9dxeuy8lgzq")

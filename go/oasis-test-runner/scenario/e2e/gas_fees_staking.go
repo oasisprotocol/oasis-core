@@ -83,7 +83,7 @@ func (sc *gasFeesImpl) Fixture() (*oasis.NetworkFixture, error) {
 				CommonPool:    *quantity.NewFromUint64(150),
 				LastBlockFees: *quantity.NewFromUint64(50),
 				Ledger: map[staking.Address]*staking.Account{
-					EntityAccount: {
+					TestEntityAccount: {
 						General: staking.GeneralAccount{
 							Balance: *quantity.NewFromUint64(1000),
 						},

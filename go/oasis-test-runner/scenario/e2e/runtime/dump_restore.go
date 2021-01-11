@@ -124,6 +124,10 @@ func (sc *dumpRestoreImpl) Run(childEnv *env.Env) error {
 	}
 
 	// Check that everything works with restored state.
-	sc.runtimeImpl.clientArgs = []string{"--mode", "part2"}
+	sc.runtimeImpl.clientArgs = []string{
+		"--mode", "part2",
+		// Use a different nonce seed.
+		"--seed", "second_seed",
+	}
 	return sc.runtimeImpl.Run(childEnv)
 }

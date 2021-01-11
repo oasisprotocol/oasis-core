@@ -16,6 +16,8 @@ var (
 
 	// methodActiveProposals is the ActiveProposals method.
 	methodActiveProposals = serviceName.NewMethod("ActiveProposals", int64(0))
+	// methodProposals is the Proposals method.
+	methodProposals = serviceName.NewMethod("Proposals", int64(0))
 	// methodProposal is the Proposal method.
 	methodProposal = serviceName.NewMethod("Proposal", ProposalQuery{})
 	// methodVotes is the Votes method.
@@ -40,6 +42,10 @@ var (
 			{
 				MethodName: methodActiveProposals.ShortName(),
 				Handler:    handlerActiveProposals,
+			},
+			{
+				MethodName: methodProposals.ShortName(),
+				Handler:    handlerProposals,
 			},
 			{
 				MethodName: methodProposal.ShortName(),
@@ -95,6 +101,29 @@ func handlerActiveProposals( // nolint: golint
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(Backend).ActiveProposals(ctx, req.(int64))
+	}
+	return interceptor(ctx, height, info, handler)
+}
+
+func handlerProposals( // nolint: golint
+	srv interface{},
+	ctx context.Context,
+	dec func(interface{}) error,
+	interceptor grpc.UnaryServerInterceptor,
+) (interface{}, error) {
+	var height int64
+	if err := dec(&height); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(Backend).Proposals(ctx, height)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: methodProposals.FullName(),
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(Backend).Proposals(ctx, req.(int64))
 	}
 	return interceptor(ctx, height, info, handler)
 }
@@ -276,6 +305,14 @@ type governanceClient struct {
 func (c *governanceClient) ActiveProposals(ctx context.Context, height int64) ([]*Proposal, error) {
 	var rsp []*Proposal
 	if err := c.conn.Invoke(ctx, methodActiveProposals.FullName(), height, &rsp); err != nil {
+		return nil, err
+	}
+	return rsp, nil
+}
+
+func (c *governanceClient) Proposals(ctx context.Context, height int64) ([]*Proposal, error) {
+	var rsp []*Proposal
+	if err := c.conn.Invoke(ctx, methodProposals.FullName(), height, &rsp); err != nil {
 		return nil, err
 	}
 	return rsp, nil

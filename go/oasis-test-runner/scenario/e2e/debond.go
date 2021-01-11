@@ -48,7 +48,7 @@ func (s *debondImpl) Fixture() (*oasis.NetworkFixture, error) {
 		},
 		TotalSupply: *quantity.NewFromUint64(1000),
 		Ledger: map[staking.Address]*staking.Account{
-			EntityAccount: {
+			TestEntityAccount: {
 				Escrow: staking.EscrowAccount{
 					Debonding: staking.SharePool{
 						Balance:     *quantity.NewFromUint64(1000),
@@ -58,7 +58,7 @@ func (s *debondImpl) Fixture() (*oasis.NetworkFixture, error) {
 			},
 		},
 		DebondingDelegations: map[staking.Address]map[staking.Address][]*staking.DebondingDelegation{
-			EntityAccount: {
+			TestEntityAccount: {
 				DeterministicValidator0: {
 					{
 						Shares:        *quantity.NewFromUint64(500),
