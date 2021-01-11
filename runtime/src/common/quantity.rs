@@ -1,17 +1,69 @@
 //! An arbitrary precision unsigned integer.
-use std::fmt;
+use core::cmp::Ordering::{Equal, Greater, Less};
+use std::{
+    fmt,
+    ops::{Add, AddAssign, Sub},
+};
 
 use num_bigint::BigUint;
 use num_traits::{Num, Zero};
 use serde;
 
 /// An arbitrary precision unsigned integer.
-#[derive(Clone, Debug, Default, PartialEq, Eq, Hash)]
+#[derive(Clone, Debug, Default, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Quantity(BigUint);
+
+impl Quantity {
+    /// Subtracts two numbers, checking for underflow. If underflow happens, `None` is returned.
+    #[inline]
+    pub fn checked_sub(&self, other: &Quantity) -> Option<Quantity> {
+        // NOTE: This does not implemented the num_traits::CheckedSub trait because this forces
+        //       one to also implement Sub which we explicitly don't want to do.
+        match self.0.cmp(&other.0) {
+            Less => None,
+            Equal => Some(Zero::zero()),
+            Greater => Some(Quantity(self.0.clone().sub(&other.0))),
+        }
+    }
+}
+
+impl Zero for Quantity {
+    fn zero() -> Self {
+        Quantity(BigUint::zero())
+    }
+
+    fn is_zero(&self) -> bool {
+        self.0.is_zero()
+    }
+}
 
 impl From<u64> for Quantity {
     fn from(v: u64) -> Quantity {
         Quantity(BigUint::from(v))
+    }
+}
+
+impl Add for Quantity {
+    type Output = Quantity;
+
+    fn add(mut self, other: Quantity) -> Quantity {
+        self += &other;
+        self
+    }
+}
+
+impl<'a> Add<&'a Quantity> for Quantity {
+    type Output = Quantity;
+
+    fn add(mut self, other: &Quantity) -> Quantity {
+        self += other;
+        self
+    }
+}
+
+impl<'a> AddAssign<&'a Quantity> for Quantity {
+    fn add_assign(&mut self, other: &Quantity) {
+        self.0 += &other.0;
     }
 }
 
