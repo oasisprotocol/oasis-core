@@ -72,7 +72,7 @@ func (u *upgradeManager) PendingUpgrades(ctx context.Context) ([]*api.PendingUpg
 	return u.pending, nil
 }
 
-func (u *upgradeManager) CancelUpgrade(ctx context.Context, name string) error {
+func (u *upgradeManager) CancelUpgrade(ctx context.Context, descriptor *api.Descriptor) error {
 	u.lock.Lock()
 	defer u.lock.Unlock()
 
@@ -83,7 +83,7 @@ func (u *upgradeManager) CancelUpgrade(ctx context.Context, name string) error {
 
 	var pending []*api.PendingUpgrade
 	for _, pu := range u.pending {
-		if pu.Descriptor.Name != name {
+		if !pu.Descriptor.Equals(descriptor) {
 			pending = append(pending, pu)
 			continue
 		}

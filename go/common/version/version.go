@@ -107,6 +107,23 @@ type ProtocolVersions struct {
 	Toolchain                Version `json:"toolchain"`
 }
 
+// Compatible returns if the two protocol versions are compatible.
+func (pv *ProtocolVersions) Compatible(other ProtocolVersions) bool {
+	if pv.RuntimeHostProtocol.MaskNonMajor() != other.RuntimeHostProtocol.MaskNonMajor() {
+		return false
+	}
+	if pv.RuntimeCommitteeProtocol.MaskNonMajor() != other.RuntimeCommitteeProtocol.MaskNonMajor() {
+		return false
+	}
+	if pv.ConsensusProtocol.MaskNonMajor() != other.ConsensusProtocol.MaskNonMajor() {
+		return false
+	}
+	if pv.Toolchain.MaskNonMajor() != other.Toolchain.MaskNonMajor() {
+		return false
+	}
+	return true
+}
+
 // Versions are current protocol versions.
 var Versions = ProtocolVersions{
 	RuntimeHostProtocol,

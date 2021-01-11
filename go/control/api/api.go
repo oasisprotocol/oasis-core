@@ -46,8 +46,7 @@ type NodeController interface {
 	UpgradeBinary(ctx context.Context, descriptor *upgrade.Descriptor) error
 
 	// CancelUpgrade cancels the specific pending upgrade, unless it is already in progress.
-	// TODO: currently pending upgrade name uniqueness is not enforced.
-	CancelUpgrade(ctx context.Context, name string) error
+	CancelUpgrade(ctx context.Context, descriptor *upgrade.Descriptor) error
 
 	// GetStatus returns the current status overview of the node.
 	GetStatus(ctx context.Context) (*Status, error)

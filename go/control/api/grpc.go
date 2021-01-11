@@ -200,21 +200,21 @@ func handlerCancelUpgrade( // nolint: golint
 	dec func(interface{}) error,
 	interceptor grpc.UnaryServerInterceptor,
 ) (interface{}, error) {
-	var name string
-	if err := dec(&name); err != nil {
+	var descriptor upgradeApi.Descriptor
+	if err := dec(&descriptor); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return nil, srv.(NodeController).CancelUpgrade(ctx, name)
+		return nil, srv.(NodeController).CancelUpgrade(ctx, &descriptor)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
 		FullMethod: methodCancelUpgrade.FullName(),
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return nil, srv.(NodeController).CancelUpgrade(ctx, req.(string))
+		return nil, srv.(NodeController).CancelUpgrade(ctx, req.(*upgradeApi.Descriptor))
 	}
-	return interceptor(ctx, name, info, handler)
+	return interceptor(ctx, &descriptor, info, handler)
 }
 
 func handlerGetStatus( // nolint: golint
@@ -277,8 +277,8 @@ func (c *nodeControllerClient) UpgradeBinary(ctx context.Context, descriptor *up
 	return c.conn.Invoke(ctx, methodUpgradeBinary.FullName(), descriptor, nil)
 }
 
-func (c *nodeControllerClient) CancelUpgrade(ctx context.Context, name string) error {
-	return c.conn.Invoke(ctx, methodCancelUpgrade.FullName(), name, nil)
+func (c *nodeControllerClient) CancelUpgrade(ctx context.Context, descriptor *upgradeApi.Descriptor) error {
+	return c.conn.Invoke(ctx, methodCancelUpgrade.FullName(), descriptor, nil)
 }
 
 func (c *nodeControllerClient) GetStatus(ctx context.Context) (*Status, error) {

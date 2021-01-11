@@ -2,14 +2,15 @@
 package main
 
 import (
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"math"
 
+	"github.com/oasisprotocol/oasis-core/go/common/cbor"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	"github.com/oasisprotocol/oasis-core/go/common/quantity"
+	"github.com/oasisprotocol/oasis-core/go/common/version"
 	"github.com/oasisprotocol/oasis-core/go/consensus/api/transaction"
 	"github.com/oasisprotocol/oasis-core/go/consensus/api/transaction/testvectors"
 	epochtime "github.com/oasisprotocol/oasis-core/go/epochtime/api"
@@ -25,9 +26,6 @@ func main() {
 
 	var vectors []testvectors.TestVector
 
-	var emptyHash hash.Hash
-	emptyHash.Empty()
-
 	// Generate different gas fees.
 	for _, fee := range []*transaction.Fee{
 		{},
@@ -40,14 +38,40 @@ func main() {
 			// Valid submit upgrade proposal transaction.
 			for _, epoch := range []uint64{0, 1000, 10_000_000} {
 				for _, name := range []string{"", "descriptor-name"} {
-					for _, identifier := range []string{hex.EncodeToString([]byte{}), hex.EncodeToString(emptyHash[:]), "000000000000000000000000000000000000000000000000000000000abcdefg"} {
+					for _, identifier := range []version.ProtocolVersions{
+						{},
+						{ConsensusProtocol: version.Version{Major: 1, Minor: 2, Patch: 3}},
+						{
+							ConsensusProtocol: version.Version{
+								Major: 0,
+								Minor: 12,
+								Patch: 1,
+							},
+							RuntimeCommitteeProtocol: version.Version{
+								Major: 42,
+								Minor: 0,
+								Patch: 1,
+							},
+							RuntimeHostProtocol: version.Version{
+								Major: 1,
+								Minor: 2,
+								Patch: 3,
+							},
+							Toolchain: version.Version{
+								Major: 10,
+								Minor: 2,
+								Patch: 0,
+							},
+						},
+						version.Versions,
+					} {
 						for _, tx := range []*transaction.Transaction{
 							governance.NewSubmitProposalTx(nonce, fee, &governance.ProposalContent{
 								Upgrade: &governance.UpgradeProposal{
 									Descriptor: api.Descriptor{
 										Name:       name,
 										Method:     api.UpgradeMethodInternal,
-										Identifier: identifier,
+										Identifier: cbor.Marshal(identifier),
 										Epoch:      epochtime.EpochTime(epoch),
 									},
 								},

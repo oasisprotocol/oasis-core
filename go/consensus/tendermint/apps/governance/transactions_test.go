@@ -86,7 +86,7 @@ func TestSubmitProposal(t *testing.T) {
 				Descriptor: upgrade.Descriptor{
 					Method:     upgrade.UpgradeMethodInternal,
 					Epoch:      10,
-					Identifier: emptyHashHex,
+					Identifier: identifier,
 				},
 			}},
 			func() {},
@@ -100,7 +100,7 @@ func TestSubmitProposal(t *testing.T) {
 				Descriptor: upgrade.Descriptor{
 					Method:     upgrade.UpgradeMethodInternal,
 					Epoch:      10,
-					Identifier: emptyHashHex,
+					Identifier: identifier,
 				},
 			}},
 			func() {},
@@ -122,7 +122,7 @@ func TestSubmitProposal(t *testing.T) {
 				Descriptor: upgrade.Descriptor{
 					Method:     upgrade.UpgradeMethodInternal,
 					Epoch:      10,
-					Identifier: emptyHashHex,
+					Identifier: identifier,
 				},
 			}},
 			func() {},
@@ -149,7 +149,7 @@ func TestSubmitProposal(t *testing.T) {
 				upgrade := upgrade.Descriptor{
 					Method:     upgrade.UpgradeMethodInternal,
 					Epoch:      10,
-					Identifier: emptyHashHex,
+					Identifier: identifier,
 				}
 				err = state.SetPendingUpgrade(ctx, 10, &upgrade)
 				require.NoError(err, "SetPendingUpgrade()")
@@ -173,7 +173,7 @@ func TestSubmitProposal(t *testing.T) {
 				Descriptor: upgrade.Descriptor{
 					Method:     upgrade.UpgradeMethodInternal,
 					Epoch:      200,
-					Identifier: emptyHashHex,
+					Identifier: identifier,
 				},
 			}},
 			func() {},
@@ -230,7 +230,7 @@ func TestSubmitProposal(t *testing.T) {
 			&governance.ProposalContent{Upgrade: &governance.UpgradeProposal{
 				Descriptor: upgrade.Descriptor{
 					Method:     upgrade.UpgradeMethodInternal,
-					Identifier: emptyHashHex,
+					Identifier: identifier,
 					Epoch:      210,
 				},
 			}},
@@ -238,7 +238,7 @@ func TestSubmitProposal(t *testing.T) {
 				upgrade := upgrade.Descriptor{
 					Method:     upgrade.UpgradeMethodInternal,
 					Epoch:      200,
-					Identifier: emptyHashHex,
+					Identifier: identifier,
 				}
 				err = state.SetPendingUpgrade(ctx, 10, &upgrade)
 				require.NoError(err, "SetPendingUpgrade()")

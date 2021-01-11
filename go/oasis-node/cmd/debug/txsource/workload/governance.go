@@ -10,8 +10,10 @@ import (
 
 	"google.golang.org/grpc"
 
+	"github.com/oasisprotocol/oasis-core/go/common/cbor"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	memorySigner "github.com/oasisprotocol/oasis-core/go/common/crypto/signature/signers/memory"
+	"github.com/oasisprotocol/oasis-core/go/common/version"
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
 	epochtime "github.com/oasisprotocol/oasis-core/go/epochtime/api"
 	governance "github.com/oasisprotocol/oasis-core/go/governance/api"
@@ -134,17 +136,12 @@ func (g *governanceWorkload) submitProposalContent(pc *governance.ProposalConten
 }
 
 func (g *governanceWorkload) doUpgradeProposal() error {
-	// Generate proposal content.
-	h, err := upgrade.OwnHash()
-	if err != nil {
-		return err
-	}
 	minUpgradeEpoch := int64(g.currentEpoch + g.parameters.UpgradeMinEpochDiff)
 	maxUpgradeEpoch := minUpgradeEpoch + int64(3*g.parameters.UpgradeMinEpochDiff)
 	// [minUpgradeEpoch, maxUpgradeEpoch]
 	upgradeEpoch := epochtime.EpochTime(g.rng.Int63n(maxUpgradeEpoch-minUpgradeEpoch+1) + minUpgradeEpoch)
 	nameSuffix := make([]byte, 20)
-	if _, err = g.rng.Read(nameSuffix); err != nil {
+	if _, err := g.rng.Read(nameSuffix); err != nil {
 		return err
 	}
 	proposalContent := &governance.ProposalContent{
@@ -152,7 +149,7 @@ func (g *governanceWorkload) doUpgradeProposal() error {
 			Descriptor: upgrade.Descriptor{
 				Name:       fmt.Sprintf("test-upgrade_%s", hex.EncodeToString(nameSuffix)),
 				Method:     upgrade.UpgradeMethodInternal,
-				Identifier: hex.EncodeToString(h[:]),
+				Identifier: cbor.Marshal(version.Versions),
 				Epoch:      upgradeEpoch,
 			},
 		},

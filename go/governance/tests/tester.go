@@ -2,16 +2,18 @@
 package tests
 
 import (
+	"bytes"
 	"context"
-	"encoding/hex"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/oasisprotocol/oasis-core/go/common/cbor"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	"github.com/oasisprotocol/oasis-core/go/common/entity"
 	"github.com/oasisprotocol/oasis-core/go/common/quantity"
+	"github.com/oasisprotocol/oasis-core/go/common/version"
 	consensusAPI "github.com/oasisprotocol/oasis-core/go/consensus/api"
 	epochtime "github.com/oasisprotocol/oasis-core/go/epochtime/api"
 	epochtimeTests "github.com/oasisprotocol/oasis-core/go/epochtime/tests"
@@ -147,13 +149,10 @@ func testProposals(t *testing.T, backend api.Backend, consensus consensusAPI.Bac
 	require.Equal(api.ErrNoSuchProposal, err, "SubmitProposalTx")
 
 	// Good proposal.
-	ownHash, err := upgrade.OwnHash()
-	require.NoError(err, "upgrade.OwnHash()")
-
 	proposal = &api.ProposalContent{
 		Upgrade: &api.UpgradeProposal{
 			Descriptor: upgrade.Descriptor{
-				Identifier: hex.EncodeToString(ownHash[:]),
+				Identifier: cbor.Marshal(version.Versions),
 				Epoch:      currentEpoch + 200,
 				Method:     upgrade.UpgradeMethodInternal,
 				Name:       "test-upgrade",
@@ -177,7 +176,7 @@ func testProposals(t *testing.T, backend api.Backend, consensus consensusAPI.Bac
 			require.NoError(err, "Proposal query")
 
 			// Skip if this is not the proposal we submitted earlier.
-			if p.Content.Upgrade == nil || p.Content.Upgrade.Identifier != proposal.Upgrade.Identifier {
+			if p.Content.Upgrade == nil || !bytes.Equal(p.Content.Upgrade.Identifier, proposal.Upgrade.Identifier) {
 				continue
 			}
 

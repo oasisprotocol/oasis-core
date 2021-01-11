@@ -19,7 +19,7 @@ func (u *dummyUpgradeManager) PendingUpgrades(ctx context.Context) ([]*api.Pendi
 	return nil, nil
 }
 
-func (u *dummyUpgradeManager) CancelUpgrade(ctx context.Context, name string) error {
+func (u *dummyUpgradeManager) CancelUpgrade(ctx context.Context, descriptor *api.Descriptor) error {
 	return nil
 }
 
