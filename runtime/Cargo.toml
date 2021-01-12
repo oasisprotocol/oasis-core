@@ -53,7 +53,7 @@ bech32 = "0.7.2"
 [dev-dependencies]
 # For storage interoperability tests only.
 grpcio = "0.4.6"
-tempfile = "3.0.7"
+tempfile = "3.2.0"
 
 [[bin]]
 name = "fuzz-mkvs-proof"
