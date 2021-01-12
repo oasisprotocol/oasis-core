@@ -12,7 +12,6 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/quantity"
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
 	"github.com/oasisprotocol/oasis-core/go/consensus/api/transaction"
-	epoch "github.com/oasisprotocol/oasis-core/go/epochtime/api"
 	epochtime "github.com/oasisprotocol/oasis-core/go/epochtime/api"
 	"github.com/oasisprotocol/oasis-core/go/governance/api"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/env"
@@ -41,7 +40,7 @@ var (
 type governanceConsensusUpgradeImpl struct {
 	runtimeImpl
 
-	currentEpoch epoch.EpochTime
+	currentEpoch epochtime.EpochTime
 	entityNonce  uint64
 
 	correctBinaryHash   bool
@@ -478,6 +477,14 @@ func (sc *governanceConsensusUpgradeImpl) Run(childEnv *env.Env) error { // noli
 		_, err = sc.Net.Controller().Registry.GetEntity(sc.ctx, idQuery)
 		if err != nil {
 			return fmt.Errorf("can't get registered test entity: %w", err)
+		}
+
+		// Wait for compute nodes to be ready.
+		sc.Logger.Info("waiting for compute nodes to be ready")
+		for _, n := range sc.Net.ComputeWorkers() {
+			if err = n.WaitReady(sc.ctx); err != nil {
+				return fmt.Errorf("failed to wait for a compute node: %w", err)
+			}
 		}
 	}
 
