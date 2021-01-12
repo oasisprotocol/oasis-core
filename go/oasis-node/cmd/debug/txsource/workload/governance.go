@@ -15,6 +15,7 @@ import (
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
 	epochtime "github.com/oasisprotocol/oasis-core/go/epochtime/api"
 	governance "github.com/oasisprotocol/oasis-core/go/governance/api"
+	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
 	staking "github.com/oasisprotocol/oasis-core/go/staking/api"
 	upgrade "github.com/oasisprotocol/oasis-core/go/upgrade/api"
 )
@@ -274,13 +275,18 @@ func (g *governanceWorkload) submitVote(voter signature.Signer, proposalID uint6
 		ID:   proposalID,
 		Vote: vote,
 	})
-	if err := g.FundSignAndSubmitTx(g.ctx, voter, tx); err != nil {
+	err := g.FundSignAndSubmitTx(g.ctx, voter, tx)
+	switch {
+	case err == nil:
+		g.Logger.Debug("proposal vote cast", "vote", vote, "voter", voter.Public(), "proposal_id", proposalID)
+		return nil
+	case errors.Is(err, registry.ErrNoSuchNode),
+		errors.Is(err, governance.ErrNotEligible):
+		g.Logger.Error("submitting vote error: voter not a validator, continuing", "err", err)
+		return nil
+	default:
 		return fmt.Errorf("failed to sign and submit cast vote transaction: %w", err)
 	}
-
-	g.Logger.Debug("proposal vote cast", "vote", vote, "voter", voter.Public(), "proposal_id", proposalID)
-
-	return nil
 }
 
 func (g *governanceWorkload) doGovernanceVote() error {
