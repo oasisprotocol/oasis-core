@@ -17,6 +17,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/roothash/api/commitment"
 	"github.com/oasisprotocol/oasis-core/go/roothash/api/message"
 	scheduler "github.com/oasisprotocol/oasis-core/go/scheduler/api"
+	staking "github.com/oasisprotocol/oasis-core/go/staking/api"
 )
 
 var _ commitment.SignatureVerifier = (*roothashSignatureVerifier)(nil)
@@ -263,6 +264,118 @@ func (app *rootHashApplication) executorCommit(
 				Attribute(KeyExecutorCommitted, cbor.Marshal(evV)).
 				Attribute(KeyRuntimeID, ValueRuntimeID(cc.ID)),
 		)
+	}
+
+	return nil
+}
+
+func (app *rootHashApplication) submitEvidence(
+	ctx *abciAPI.Context,
+	state *roothashState.MutableState,
+	evidence *roothash.Evidence,
+) error {
+	// Validate proposal content basics.
+	if err := evidence.ValidateBasic(); err != nil {
+		ctx.Logger().Error("Evidence: submitted evidence not valid",
+			"evidence", evidence,
+			"err", err,
+		)
+		return fmt.Errorf("%w: %v", roothash.ErrInvalidEvidence, err)
+	}
+
+	if ctx.IsCheckOnly() {
+		return nil
+	}
+
+	// Charge gas for this transaction.
+	params, err := state.ConsensusParameters(ctx)
+	if err != nil {
+		ctx.Logger().Error("Evidence: failed to fetch consensus parameters",
+			"err", err,
+		)
+		return err
+	}
+	if err = ctx.Gas().UseGas(1, roothash.GasOpEvidence, params.GasCosts); err != nil {
+		return err
+	}
+
+	rtState, _, _, err := app.getRuntimeState(ctx, state, evidence.ID)
+	if err != nil {
+		return err
+	}
+
+	if len(rtState.Runtime.Staking.Slashing) == 0 {
+		// No slashing instructions for runtime, no point in collecting evidence.
+		ctx.Logger().Error("Evidence: runtime has no slashing instructions",
+			"err", roothash.ErrRuntimeDoesNotSlash,
+		)
+		return roothash.ErrRuntimeDoesNotSlash
+	}
+	slash := rtState.Runtime.Staking.Slashing[staking.SlashRuntimeEquivocation].Amount
+	if slash.IsZero() {
+		// Slash amount is zero for runtime, no point in collecting evidence.
+		ctx.Logger().Error("Evidence: runtime has no slashing instructions for equivocation",
+			"err", roothash.ErrRuntimeDoesNotSlash,
+		)
+		return roothash.ErrRuntimeDoesNotSlash
+	}
+
+	// Ensure evidence is not expired.
+	var round uint64
+	var pk signature.PublicKey
+	switch {
+	case evidence.EquivocationExecutor != nil:
+		commitA, _ := evidence.EquivocationExecutor.CommitA.Open()
+
+		if commitA.Body.Header.Round+params.MaxEvidenceAge < rtState.CurrentBlock.Header.Round {
+			ctx.Logger().Error("Evidence: commitment equivocation evidence expired",
+				"evidence", evidence.EquivocationExecutor,
+				"current_round", rtState.CurrentBlock.Header.Round,
+				"max_evidence_age", params.MaxEvidenceAge,
+			)
+			return fmt.Errorf("%w: equivocation evidence expired", roothash.ErrInvalidEvidence)
+		}
+		round = commitA.Body.Header.Round
+		pk = commitA.Signature.PublicKey
+	case evidence.EquivocationBatch != nil:
+		var batchA commitment.ProposedBatch
+		_ = evidence.EquivocationBatch.BatchA.Open(&batchA)
+
+		if batchA.Header.Round+params.MaxEvidenceAge < rtState.CurrentBlock.Header.Round {
+			ctx.Logger().Error("Evidence: proposed batch equivocation evidence expired",
+				"evidence", evidence.EquivocationExecutor,
+				"current_round", rtState.CurrentBlock.Header.Round,
+				"max_evidence_age", params.MaxEvidenceAge,
+			)
+			return fmt.Errorf("%w: equivocation evidence expired", roothash.ErrInvalidEvidence)
+		}
+		round = batchA.Header.Round
+		pk = evidence.EquivocationBatch.BatchA.Signature.PublicKey
+	}
+
+	// Evidence is valid. Store the evidence and slash the node.
+	evHash, err := evidence.Hash()
+	if err != nil {
+		return fmt.Errorf("error computing evidence hash: %w", err)
+	}
+	b, err := state.ImmutableState.EvidenceHashExists(ctx, rtState.Runtime.ID, round, evHash)
+	if err != nil {
+		return fmt.Errorf("error querying evidence hash: %w", err)
+	}
+	if b {
+		return roothash.ErrDuplicateEvidence
+	}
+	if err = state.SetEvidenceHash(ctx, rtState.Runtime.ID, round, evHash); err != nil {
+		return err
+	}
+
+	if err = onEvidenceRuntimeEquivocation(
+		ctx,
+		pk,
+		rtState.Runtime.ID,
+		&slash,
+	); err != nil {
+		return fmt.Errorf("error slashing runtime node: %w", err)
 	}
 
 	return nil

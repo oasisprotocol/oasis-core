@@ -6,6 +6,7 @@ import (
 
 	"github.com/oasisprotocol/oasis-core/go/common"
 	"github.com/oasisprotocol/oasis-core/go/common/cbor"
+	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
 	"github.com/oasisprotocol/oasis-core/go/common/keyformat"
 	"github.com/oasisprotocol/oasis-core/go/consensus/tendermint/api"
 	roothash "github.com/oasisprotocol/oasis-core/go/roothash/api"
@@ -29,6 +30,10 @@ var (
 	//
 	// Value is a CBOR-serialized `true`.
 	rejectTransactionsKeyFmt = keyformat.New(0x23)
+	// evidenceKeyFmt is the key format used for storing valid misbehaviour evidence.
+	//
+	// Key format is: 0x24 <H(runtime-id) (hash.Hash)> <round (uint64)> <evidence-hash (hash.Hash)>
+	evidenceKeyFmt = keyformat.New(0x24, keyformat.H(&common.Namespace{}), uint64(0), &hash.Hash{})
 
 	cborTrue = cbor.Marshal(true)
 )
@@ -164,6 +169,12 @@ func (s *ImmutableState) RejectTransactions(ctx context.Context) (bool, error) {
 	return true, nil
 }
 
+// EvidenceHashExists returns true if the evidence hash for the runtime exists.
+func (s *ImmutableState) EvidenceHashExists(ctx context.Context, runtimeID common.Namespace, round uint64, hash hash.Hash) (bool, error) {
+	data, err := s.is.Get(ctx, evidenceKeyFmt.Encode(&runtimeID, round, &hash))
+	return data != nil, api.UnavailableStateError(err)
+}
+
 // MutableState is the mutable roothash state wrapper.
 type MutableState struct {
 	*ImmutableState
@@ -215,4 +226,38 @@ func (s *MutableState) SetRejectTransactions(ctx context.Context) error {
 func (s *MutableState) ClearRejectTransactions(ctx context.Context) error {
 	err := s.ms.Remove(ctx, rejectTransactionsKeyFmt.Encode())
 	return api.UnavailableStateError(err)
+}
+
+// SetEvidenceHash sets the provided evidence hash.
+func (s *MutableState) SetEvidenceHash(ctx context.Context, runtimeID common.Namespace, round uint64, hash hash.Hash) error {
+	err := s.ms.Insert(ctx, evidenceKeyFmt.Encode(&runtimeID, round, &hash), []byte(""))
+	return api.UnavailableStateError(err)
+}
+
+// RemoveExpiredEvidence removes expired evidence.
+func (s *MutableState) RemoveExpiredEvidence(ctx context.Context, runtimeID common.Namespace, minRound uint64) error {
+	it := s.is.NewIterator(ctx)
+	defer it.Close()
+
+	var toDelete [][]byte
+	for it.Seek(evidenceKeyFmt.Encode(&runtimeID)); it.Valid(); it.Next() {
+		var runtimeID keyformat.PreHashed
+		var round uint64
+		var hash hash.Hash
+		if !evidenceKeyFmt.Decode(it.Key(), &runtimeID, &round, &hash) {
+			break
+		}
+		if round > minRound {
+			break
+		}
+		toDelete = append(toDelete, it.Key())
+	}
+
+	for _, key := range toDelete {
+		if err := s.ms.Remove(ctx, key); err != nil {
+			return api.UnavailableStateError(err)
+		}
+	}
+
+	return nil
 }

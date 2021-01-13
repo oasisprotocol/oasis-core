@@ -132,6 +132,20 @@ func (app *rootHashApplication) onCommitteeChanged(ctx *tmapi.Context, state *ro
 			return fmt.Errorf("failed to fetch runtime state: %w", err)
 		}
 
+		// Expire past evidence of runtime node misbehaviour.
+		if rtState.CurrentBlock != nil {
+			if round := rtState.CurrentBlock.Header.Round; round > params.MaxEvidenceAge {
+				ctx.Logger().Debug("removing expired runtime evidence",
+					"runtime", rt.ID,
+					"round", round,
+					"max_evidence_age", params.MaxEvidenceAge,
+				)
+				if err = state.RemoveExpiredEvidence(ctx, rt.ID, round-params.MaxEvidenceAge); err != nil {
+					return fmt.Errorf("failed to remove expired runtime evidence: %s %w", rt.ID, err)
+				}
+			}
+		}
+
 		// Since the runtime is in the list of active runtimes in the registry we
 		// can safely clear the suspended flag.
 		rtState.Suspended = false
@@ -359,6 +373,13 @@ func (app *rootHashApplication) ExecuteTx(ctx *tmapi.Context, tx *transaction.Tr
 		}
 
 		return app.executorProposerTimeout(ctx, state, &xc)
+	case roothash.MethodEvidence:
+		var ev roothash.Evidence
+		if err := cbor.Unmarshal(tx.Body, &ev); err != nil {
+			return err
+		}
+
+		return app.submitEvidence(ctx, state, &ev)
 	default:
 		return roothash.ErrInvalidArgument
 	}

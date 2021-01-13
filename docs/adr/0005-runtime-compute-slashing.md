@@ -175,13 +175,13 @@ Any slashing instructions related to freezing nodes are currently ignored.
 This proposal introduces/updates the following consensus state in the roothash
 module:
 
-- **List of past valid evidence (`0x23`)**
+- **List of past valid evidence (`0x24`)**
 
   A hash uniquely identifying the evidence is stored for each successfully
   processed evidence that has not yet expired using the following key format:
 
   ```
-  0x23 <H(runtime-id) (hash.Hash)> <round (uint64)> <evidence-hash (hash.Hash)>
+  0x24 <H(runtime-id) (hash.Hash)> <round (uint64)> <evidence-hash (hash.Hash)>
   ```
 
   The value is empty as we only need to detect duplicate evidence.
@@ -293,7 +293,7 @@ performed to verify evidence validity:
 - Public keys of signers of both commitments are compared. If they are not the
   same, the evidence is invalid.
 
-- Signatures of both proposed batches are compared. If either is invalid, the
+- Signatures of both proposed batches are validated. If either is invalid, the
   evidence is invalid.
 
 - Otherwise the evidence is valid.

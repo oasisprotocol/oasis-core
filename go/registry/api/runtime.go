@@ -263,6 +263,9 @@ type RuntimeStakingParameters struct {
 	// In case a node is registered for multiple runtimes, it will need to satisfy the maximum
 	// threshold of all the runtimes.
 	Thresholds map[staking.ThresholdKind]quantity.Quantity `json:"thresholds,omitempty"`
+
+	// Slashing are the per-runtime misbehavior slashing parameters.
+	Slashing map[staking.SlashReason]staking.Slash `json:"slashing,omitempty"`
 }
 
 // ValidateBasic performs basic descriptor validity checks.

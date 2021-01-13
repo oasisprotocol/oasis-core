@@ -12,6 +12,8 @@ func TestSlashReason(t *testing.T) {
 	// Test valid SlashReasons.
 	for _, k := range []SlashReason{
 		SlashConsensusEquivocation,
+		SlashRuntimeIncorrectResults,
+		SlashRuntimeEquivocation,
 	} {
 		enc, err := k.MarshalText()
 		require.NoError(err, "MarshalText")

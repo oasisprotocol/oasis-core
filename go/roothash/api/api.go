@@ -63,16 +63,30 @@ var (
 	// larger than the MaxRuntimeMessages specified in consensus parameters.
 	ErrMaxMessagesTooBig = errors.New(ModuleName, 7, "roothash: max runtime messages is too big")
 
+	// ErrRuntimeDoesNotSlash is the error returned when misbehaviour evidence is submitted for a
+	// runtime that does not slash.
+	ErrRuntimeDoesNotSlash = errors.New(ModuleName, 8, "roothash: runtime does not slash")
+
+	// ErrDuplicateEvidence is the error returned when submitting already existing evidence.
+	ErrDuplicateEvidence = errors.New(ModuleName, 9, "roothash: duplicate evidence")
+
+	// ErrInvalidEvidence is the error return when an invalid evidence is submitted.
+	ErrInvalidEvidence = errors.New(ModuleName, 10, "roothash: invalid evidence")
+
 	// MethodExecutorCommit is the method name for executor commit submission.
 	MethodExecutorCommit = transaction.NewMethodName(ModuleName, "ExecutorCommit", ExecutorCommit{})
 
-	// MethodExecutorProposerTimeout is the method name for executor.
+	// MethodExecutorProposerTimeout is the method name for executor proposer timeout.
 	MethodExecutorProposerTimeout = transaction.NewMethodName(ModuleName, "ExecutorProposerTimeout", ExecutorProposerTimeoutRequest{})
+
+	// MethodEvidence is the method name for submitting evidence of node misbehavior.
+	MethodEvidence = transaction.NewMethodName(ModuleName, "Evidence", Evidence{})
 
 	// Methods is a list of all methods supported by the roothash backend.
 	Methods = []transaction.MethodName{
 		MethodExecutorCommit,
 		MethodExecutorProposerTimeout,
+		MethodEvidence,
 	}
 )
 
@@ -140,6 +154,150 @@ func NewRequestProposerTimeoutTx(nonce uint64, fee *transaction.Fee, runtimeID c
 		ID:    runtimeID,
 		Round: round,
 	})
+}
+
+// EvidenceKind is the evidence kind.
+type EvidenceKind uint8
+
+const (
+	// EvidenceKindEquivocation is the evidence kind for equivocation.
+	EvidenceKindEquivocation = 1
+)
+
+// Evidence is an evidence of node misbehaviour.
+type Evidence struct {
+	ID common.Namespace `json:"id"`
+
+	EquivocationExecutor *EquivocationExecutorEvidence `json:"equivocation_executor,omitempty"`
+	EquivocationBatch    *EquivocationBatchEvidence    `json:"equivocation_batch,omitempty"`
+}
+
+// Hash computes the evidence hash.
+//
+// Hash is derived by hashing the evidence kind and the public key of the signer.
+// Assumes evidence has been validated.
+func (ev *Evidence) Hash() (hash.Hash, error) {
+	switch {
+	case ev.EquivocationBatch != nil:
+		return hash.NewFromBytes([]byte{EvidenceKindEquivocation}, ev.EquivocationBatch.BatchA.Signature.PublicKey[:]), nil
+	case ev.EquivocationExecutor != nil:
+		return hash.NewFromBytes([]byte{EvidenceKindEquivocation}, ev.EquivocationExecutor.CommitA.Signature.PublicKey[:]), nil
+	default:
+		return hash.Hash{}, fmt.Errorf("cannot compute hash, invalid evidence")
+	}
+}
+
+// ValidateBasic performs basic evidence validity checks.
+func (ev *Evidence) ValidateBasic() error {
+	switch {
+	case ev.EquivocationExecutor != nil && ev.EquivocationBatch != nil:
+		return fmt.Errorf("evidence has multiple fields set")
+	case ev.EquivocationExecutor != nil:
+		return ev.EquivocationExecutor.ValidateBasic()
+	case ev.EquivocationBatch != nil:
+		return ev.EquivocationBatch.ValidateBasic()
+	default:
+		return fmt.Errorf("evidence content has no fields set")
+	}
+}
+
+// EquivocationExecutorEvidence is evidence of executor commitment equivocation.
+type EquivocationExecutorEvidence struct {
+	CommitA commitment.ExecutorCommitment `json:"commit_a"`
+	CommitB commitment.ExecutorCommitment `json:"commit_b"`
+}
+
+// ValidateBasic performs basic executor evidence validation checks.
+// TODO: maybe rename to: Validate(), might better indicate that this actually
+// checks if evidence is valid and is not just a basic check.
+func (ev *EquivocationExecutorEvidence) ValidateBasic() error {
+	a, err := ev.CommitA.Open()
+	if err != nil {
+		return fmt.Errorf("opening CommitA: %w", err)
+	}
+	b, err := ev.CommitB.Open()
+	if err != nil {
+		return fmt.Errorf("opening CommitB: %w", err)
+	}
+
+	if a.Body == nil {
+		return fmt.Errorf("CommitA: body empty")
+	}
+	if b.Body == nil {
+		return fmt.Errorf("CommitB: body empty")
+	}
+
+	if a.Body.Header.Round != b.Body.Header.Round {
+		return fmt.Errorf("equivocation evidence commit headers not for same round")
+	}
+
+	if err := a.Body.ValidateBasic(); err != nil {
+		return fmt.Errorf("equivocation evidence commit A not valid: %w", err)
+	}
+	if err := b.Body.ValidateBasic(); err != nil {
+		return fmt.Errorf("equivocation evidence commit B not valid: %w", err)
+	}
+
+	switch {
+	// Note: ValidBasics checks above ensure that none of these fields are nil.
+	case a.Body.Failure == commitment.FailureNone && b.Body.Failure == commitment.FailureNone:
+		if a.Body.Header.PreviousHash.Equal(&b.Body.Header.PreviousHash) &&
+			a.Body.Header.IORoot.Equal(b.Body.Header.IORoot) &&
+			a.Body.Header.StateRoot.Equal(b.Body.Header.StateRoot) &&
+			a.Body.Header.MessagesHash.Equal(b.Body.Header.MessagesHash) {
+			return fmt.Errorf("equivocation evidence commit headers match, no sign of equivocation")
+		}
+	default:
+		if a.Body.Failure == b.Body.Failure {
+			return fmt.Errorf("equivocation evidence failure indication fields match, no sign of equivocation")
+		}
+	}
+
+	if !a.Signature.PublicKey.Equal(b.Signature.PublicKey) {
+		return fmt.Errorf("equivocation executor evidence signature public keys don't match")
+	}
+
+	return nil
+}
+
+// EquivocationBatchEvidence is evidence of executor proposed batch equivocation.
+type EquivocationBatchEvidence struct {
+	BatchA commitment.SignedProposedBatch `json:"batch_a"`
+	BatchB commitment.SignedProposedBatch `json:"batch_b"`
+}
+
+// ValidateBasic performs basic batch evidence validation checks.
+// TODO: maybe rename to: Validate(), might better indicate that this actually
+// checks if evidence is valid and is not just a basic check.
+func (ev *EquivocationBatchEvidence) ValidateBasic() error {
+	var a, b commitment.ProposedBatch
+	if err := ev.BatchA.Open(&a); err != nil {
+		return fmt.Errorf("opening BatchA: %w", err)
+	}
+	if err := ev.BatchB.Open(&b); err != nil {
+		return fmt.Errorf("opening BatchB: %w", err)
+	}
+
+	if a.Header.Round != b.Header.Round {
+		return fmt.Errorf("equivocation evidence batch header rounds don't match")
+	}
+
+	// TODO: validate header fields.
+
+	if a.IORoot.Equal(&b.IORoot) {
+		return fmt.Errorf("equivocation evidence batch io roots match, no sign of equivocation")
+	}
+
+	if !ev.BatchA.Signature.PublicKey.Equal(ev.BatchB.Signature.PublicKey) {
+		return fmt.Errorf("equivocation batch evidence signature public keys don't match")
+	}
+
+	return nil
+}
+
+// NewEvidenceTx creates a new evidence transaction.
+func NewEvidenceTx(nonce uint64, fee *transaction.Fee, evidence *Evidence) *transaction.Transaction {
+	return transaction.NewTransaction(nonce, fee, MethodEvidence, evidence)
 }
 
 // RuntimeState is the per-runtime state.
@@ -256,6 +414,9 @@ type ConsensusParameters struct {
 	// MaxRuntimeMessages is the maximum number of allowed messages that can be emitted by a runtime
 	// in a single round.
 	MaxRuntimeMessages uint32 `json:"max_runtime_messages"`
+
+	// MaxEvidenceAge is the maximum age of submitted evidence in the number of rounds.
+	MaxEvidenceAge uint64 `json:"max_evidence_age"`
 }
 
 const (
@@ -264,6 +425,9 @@ const (
 
 	// GasOpProposerTimeout is the gas operation identifier for executor propose timeout cost.
 	GasOpProposerTimeout transaction.Op = "proposer_timeout"
+
+	// GasOpEvidence is the gas operation identifier for evidence submission transaction cost.
+	GasOpEvidence transaction.Op = "evidence"
 )
 
 // XXX: Define reasonable default gas costs.
@@ -272,6 +436,7 @@ const (
 var DefaultGasCosts = transaction.Costs{
 	GasOpComputeCommit:   1000,
 	GasOpProposerTimeout: 1000,
+	GasOpEvidence:        1000,
 }
 
 // SanityCheckBlocks examines the blocks table.
