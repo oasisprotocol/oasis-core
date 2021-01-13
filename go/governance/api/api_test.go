@@ -1,18 +1,16 @@
 package api
 
 import (
-	"encoding/hex"
 	"testing"
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/oasisprotocol/oasis-core/go/common/cbor"
+	"github.com/oasisprotocol/oasis-core/go/common/version"
 	"github.com/oasisprotocol/oasis-core/go/upgrade/api"
 )
 
 func TestValidateBasic(t *testing.T) {
-	hh, err := api.OwnHash()
-	require.NoError(t, err, "OwnHash()")
-	h := hex.EncodeToString(hh[:])
 	for _, tc := range []struct {
 		msg       string
 		p         *ProposalContent
@@ -45,7 +43,7 @@ func TestValidateBasic(t *testing.T) {
 					Descriptor: api.Descriptor{
 						Method:     api.UpgradeMethodInternal,
 						Epoch:      42,
-						Identifier: h,
+						Identifier: cbor.Marshal(version.Versions),
 					},
 				},
 			},

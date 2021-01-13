@@ -2,13 +2,13 @@
 package api
 
 import (
+	"bytes"
 	"context"
 	"fmt"
-	"io/ioutil"
-	"os"
 
-	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
+	"github.com/oasisprotocol/oasis-core/go/common/cbor"
 	"github.com/oasisprotocol/oasis-core/go/common/errors"
+	"github.com/oasisprotocol/oasis-core/go/common/version"
 	epochtime "github.com/oasisprotocol/oasis-core/go/epochtime/api"
 )
 
@@ -62,22 +62,6 @@ var (
 	ErrUpgradeInProgress = errors.New(ModuleName, 6, "upgrade: can not cancel upgrade in progress")
 )
 
-// OwnHash returns the hash of the executable that started the current process.
-func OwnHash() (*hash.Hash, error) {
-	path, err := os.Executable()
-	if err != nil {
-		return nil, err
-	}
-
-	contents, err := ioutil.ReadFile(path)
-	if err != nil {
-		return nil, err
-	}
-
-	h := hash.NewFromBytes(contents)
-	return &h, nil
-}
-
 // UpgradeMethod is an upgrade descriptor method.
 type UpgradeMethod uint8
 
@@ -127,8 +111,8 @@ type Descriptor struct {
 	Name string `json:"name"`
 	// Method is the upgrade method that should be used for this upgrade.
 	Method UpgradeMethod `json:"method"`
-	// Identifier is a hash of the binary to be used for upgrading.
-	Identifier string `json:"identifier"`
+	// Identifier is the upgrade method specific upgrade identifier.
+	Identifier cbor.RawMessage `json:"identifier"`
 	// Epoch is the epoch at which the upgrade should happen.
 	Epoch epochtime.EpochTime `json:"epoch"`
 }
@@ -141,7 +125,7 @@ func (d *Descriptor) Equals(other *Descriptor) bool {
 	if d.Method != other.Method {
 		return false
 	}
-	if d.Identifier != other.Identifier {
+	if !bytes.Equal(d.Identifier, other.Identifier) {
 		return false
 	}
 	if d.Epoch != other.Epoch {
@@ -154,10 +138,9 @@ func (d *Descriptor) Equals(other *Descriptor) bool {
 func (d Descriptor) ValidateBasic() error {
 	switch d.Method {
 	case UpgradeMethodInternal:
-		// For internal upgrade method the identifier needs to be a valid hex encoded hash.
-		var idHash hash.Hash
-		if err := idHash.UnmarshalHex(d.Identifier); err != nil {
-			return fmt.Errorf("invalid internal upgrade descriptor identifier: %s: %w", d.Identifier, err)
+		var descriptorVersion version.ProtocolVersions
+		if err := cbor.Unmarshal(d.Identifier, &descriptorVersion); err != nil {
+			return fmt.Errorf("can't decode descriptor upgrade identifier: %w", err)
 		}
 	default:
 		return fmt.Errorf("invalid descriptor method: %v", d)
@@ -174,20 +157,15 @@ func (d Descriptor) ValidateBasic() error {
 func (d *Descriptor) EnsureCompatible() error {
 	switch d.Method {
 	case UpgradeMethodInternal:
-		// For Internal upgrade method, the current binary hash needs to match the
-		// descriptor identifier.
-		OwnHash, err := OwnHash()
-		if err != nil {
-			return fmt.Errorf("error obtaining own binary hash: %w", err)
+		ownVersion := version.Versions
+
+		var descriptorVersion version.ProtocolVersions
+		if err := cbor.Unmarshal(d.Identifier, &descriptorVersion); err != nil {
+			return fmt.Errorf("can't decode descriptor upgrade identifier: %w", err)
 		}
 
-		var descriptorHash hash.Hash
-		if err = descriptorHash.UnmarshalHex(d.Identifier); err != nil {
-			return fmt.Errorf("can't decode stored upgrade identifier: %w", err)
-		}
-
-		if !OwnHash.Equal(&descriptorHash) {
-			return fmt.Errorf("binary hash missmatch: own: %d, required: %d", OwnHash, descriptorHash)
+		if !ownVersion.Compatible(descriptorVersion) {
+			return fmt.Errorf("binary version not compatible: own: %d, required: %d", ownVersion, descriptorVersion)
 		}
 	default:
 		return fmt.Errorf("invalid upgrade method: %d", d.Method)
@@ -247,7 +225,7 @@ type Backend interface {
 	PendingUpgrades(context.Context) ([]*PendingUpgrade, error)
 
 	// CancelUpgrade cancels a specific pending upgrade, unless it is already in progress.
-	CancelUpgrade(ctx context.Context, name string) error
+	CancelUpgrade(context.Context, *Descriptor) error
 
 	// StartupUpgrade performs the startup portion of the upgrade.
 	// It is idempotent with respect to the current upgrade descriptor.

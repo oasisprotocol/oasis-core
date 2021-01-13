@@ -2,6 +2,7 @@ package e2e
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io/ioutil"
@@ -10,9 +11,10 @@ import (
 	"sync"
 	"time"
 
-	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
+	"github.com/oasisprotocol/oasis-core/go/common/cbor"
 	"github.com/oasisprotocol/oasis-core/go/common/persistent"
 	"github.com/oasisprotocol/oasis-core/go/common/pubsub"
+	"github.com/oasisprotocol/oasis-core/go/common/version"
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
 	epoch "github.com/oasisprotocol/oasis-core/go/epochtime/api"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/env"
@@ -21,6 +23,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/oasis/cli"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/scenario"
 	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
+	upgrade "github.com/oasisprotocol/oasis-core/go/upgrade/api"
 	"github.com/oasisprotocol/oasis-core/go/upgrade/migrations"
 )
 
@@ -35,21 +38,12 @@ var (
 		"identifier": "this is a hash. i repeat. this is a hash, not a string."
 	}`)
 
-	// Warning: this string contains printf conversions, it's NOT directly usable as a descriptor.
-	nonexistentDescriptorTemplate = `{
-		"name": "nonexistent-handler",
-		"epoch": %d,
-		"method": "internal",
-		"identifier": "0000000000000000000000000000000000000000000000000000000000000000"
-	}`
-
-	// Warning: this string contains printf conversions, it's NOT directly usable as a descriptor.
-	validDescriptorTemplate = `{
-		"name": "%v",
-		"epoch": %d,
-		"method": "internal",
-		"identifier": "%v"
-	}`
+	baseDescriptor = upgrade.Descriptor{
+		Name:       "base",
+		Epoch:      epoch.EpochTime(1),
+		Method:     upgrade.UpgradeMethodInternal,
+		Identifier: cbor.Marshal(version.Versions),
+	}
 )
 
 type nodeUpgradeImpl struct {
@@ -206,8 +200,15 @@ func (sc *nodeUpgradeImpl) Run(childEnv *env.Env) error { // nolint: gocyclo
 	// Try submitting a well formed descriptor but with an off hash, so no handlers are run.
 	// The node should exit immediately.
 	sc.Logger.Info("submitting descriptor with nonexistent upgrade handler")
-	nonexistentDescriptor := fmt.Sprintf(nonexistentDescriptorTemplate, sc.currentEpoch+1)
-	if descPath, err = sc.writeDescriptor("nonexistent", []byte(nonexistentDescriptor)); err != nil {
+	nonExistingDescriptor := baseDescriptor
+	nonExistingDescriptor.Name = "nonexistent"
+	nonExistingDescriptor.Epoch = sc.currentEpoch + 1
+
+	desc, err := json.Marshal(nonExistingDescriptor)
+	if err != nil {
+		return fmt.Errorf("json.Marshal(nonExistingDescriptor): %w", err)
+	}
+	if descPath, err = sc.writeDescriptor("nonexistent", desc); err != nil {
 		return err
 	}
 
@@ -259,17 +260,14 @@ func (sc *nodeUpgradeImpl) Run(childEnv *env.Env) error { // nolint: gocyclo
 	svcStore.Close()
 	store.Close()
 
-	// Generate a valid upgrade descriptor; this should exercise the test handlers in the node.
-	var nodeHash hash.Hash
-	nodeText, err := ioutil.ReadFile(sc.Net.Validators()[0].BinaryPath())
+	validDescriptor := baseDescriptor
+	validDescriptor.Name = migrations.DummyUpgradeName
+	validDescriptor.Epoch = sc.currentEpoch + 1
+	desc, err = json.Marshal(validDescriptor)
 	if err != nil {
-		return fmt.Errorf("can't read node binary for hashing: %w", err)
+		return fmt.Errorf("json.Marshal(validDescriptor): %w", err)
 	}
-	nodeHash.FromBytes(nodeText)
-
-	validDescriptor := fmt.Sprintf(validDescriptorTemplate, migrations.DummyUpgradeName, sc.currentEpoch+1, nodeHash.String())
-
-	if descPath, err = sc.writeDescriptor("valid", []byte(validDescriptor)); err != nil {
+	if descPath, err = sc.writeDescriptor("valid", desc); err != nil {
 		return err
 	}
 

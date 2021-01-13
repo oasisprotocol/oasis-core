@@ -7,9 +7,11 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/oasisprotocol/oasis-core/go/common/cbor"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	memorySigner "github.com/oasisprotocol/oasis-core/go/common/crypto/signature/signers/memory"
 	"github.com/oasisprotocol/oasis-core/go/common/quantity"
+	"github.com/oasisprotocol/oasis-core/go/common/version"
 	abciAPI "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/api"
 	epochtime "github.com/oasisprotocol/oasis-core/go/epochtime/api"
 	governance "github.com/oasisprotocol/oasis-core/go/governance/api"
@@ -34,7 +36,7 @@ func initProposals(require *require.Assertions, ctx *abciAPI.Context, s *Mutable
 				Upgrade: &governance.UpgradeProposal{
 					Descriptor: upgrade.Descriptor{
 						Name:       "test",
-						Identifier: "1",
+						Identifier: cbor.Marshal(version.ProtocolVersions{ConsensusProtocol: version.FromU64(1)}),
 						Epoch:      epochtime.EpochTime(100),
 					},
 				},
@@ -50,7 +52,7 @@ func initProposals(require *require.Assertions, ctx *abciAPI.Context, s *Mutable
 				Upgrade: &governance.UpgradeProposal{
 					Descriptor: upgrade.Descriptor{
 						Name:       "test2",
-						Identifier: "12",
+						Identifier: cbor.Marshal(version.ProtocolVersions{ConsensusProtocol: version.FromU64(2)}),
 						Epoch:      epochtime.EpochTime(200),
 					},
 				},
@@ -66,7 +68,7 @@ func initProposals(require *require.Assertions, ctx *abciAPI.Context, s *Mutable
 				Upgrade: &governance.UpgradeProposal{
 					Descriptor: upgrade.Descriptor{
 						Name:       "test3",
-						Identifier: "123",
+						Identifier: cbor.Marshal(version.ProtocolVersions{ConsensusProtocol: version.FromU64(3)}),
 						Epoch:      epochtime.EpochTime(300),
 					},
 				},
@@ -82,7 +84,7 @@ func initProposals(require *require.Assertions, ctx *abciAPI.Context, s *Mutable
 				Upgrade: &governance.UpgradeProposal{
 					Descriptor: upgrade.Descriptor{
 						Name:       "test4",
-						Identifier: "1234",
+						Identifier: cbor.Marshal(version.ProtocolVersions{ConsensusProtocol: version.FromU64(4)}),
 						Epoch:      epochtime.EpochTime(300),
 					},
 				},

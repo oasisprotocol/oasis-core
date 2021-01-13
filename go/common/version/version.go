@@ -99,13 +99,33 @@ var (
 	Toolchain = parseSemVerStr(strings.TrimPrefix(runtime.Version(), "go"))
 )
 
-// Versions contains all known protocol versions.
-var Versions = struct {
-	RuntimeHostProtocol      Version
-	RuntimeCommitteeProtocol Version
-	ConsensusProtocol        Version
-	Toolchain                Version
-}{
+// ProtocolVersions are the protocol versions.
+type ProtocolVersions struct {
+	RuntimeHostProtocol      Version `json:"runtime_host_protocol"`
+	RuntimeCommitteeProtocol Version `json:"runtime_committee_protocol"`
+	ConsensusProtocol        Version `json:"consensus_protocol"`
+	Toolchain                Version `json:"toolchain"`
+}
+
+// Compatible returns if the two protocol versions are compatible.
+func (pv *ProtocolVersions) Compatible(other ProtocolVersions) bool {
+	if pv.RuntimeHostProtocol.MaskNonMajor() != other.RuntimeHostProtocol.MaskNonMajor() {
+		return false
+	}
+	if pv.RuntimeCommitteeProtocol.MaskNonMajor() != other.RuntimeCommitteeProtocol.MaskNonMajor() {
+		return false
+	}
+	if pv.ConsensusProtocol.MaskNonMajor() != other.ConsensusProtocol.MaskNonMajor() {
+		return false
+	}
+	if pv.Toolchain.MaskNonMajor() != other.Toolchain.MaskNonMajor() {
+		return false
+	}
+	return true
+}
+
+// Versions are current protocol versions.
+var Versions = ProtocolVersions{
 	RuntimeHostProtocol,
 	RuntimeCommitteeProtocol,
 	ConsensusProtocol,

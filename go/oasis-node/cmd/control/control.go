@@ -177,11 +177,27 @@ func doCancelUpgrade(cmd *cobra.Command, args []string) {
 	defer conn.Close()
 
 	if len(args) == 0 {
-		logger.Error("expected descriptor name")
+		logger.Error("expected descriptor path")
 		os.Exit(1)
 	}
 
-	err := client.CancelUpgrade(context.Background(), args[0])
+	descriptorBytes, err := ioutil.ReadFile(args[0])
+	if err != nil {
+		logger.Error("failed to read upgrade descriptor",
+			"err", err,
+		)
+		os.Exit(1)
+	}
+
+	var desc upgrade.Descriptor
+	if err = json.Unmarshal(descriptorBytes, &desc); err != nil {
+		logger.Error("can't parse upgrade descriptor",
+			"err", err,
+		)
+		os.Exit(1)
+	}
+
+	err = client.CancelUpgrade(context.Background(), &desc)
 	if err != nil {
 		logger.Error("failed to send upgrade cancellation request",
 			"err", err,

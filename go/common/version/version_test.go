@@ -90,3 +90,68 @@ func TestConvertGoModulesVersion(t *testing.T) {
 		}
 	}
 }
+
+func TestProtocolVersionCompatible(t *testing.T) {
+	for _, v := range []struct {
+		versions     func() ProtocolVersions
+		isCompatible bool
+		msg          string
+	}{
+		{
+			func() ProtocolVersions {
+				v := Versions
+				v.ConsensusProtocol.Patch++
+				return v
+			},
+			true,
+			"patch version change is compatible",
+		},
+		{
+			func() ProtocolVersions {
+				v := Versions
+				v.ConsensusProtocol.Minor++
+				return v
+			},
+			true,
+			"minor version change is compatible",
+		},
+		{
+			func() ProtocolVersions {
+				v := Versions
+				v.ConsensusProtocol.Major++
+				return v
+			},
+			false,
+			"consensus protocol major version change is not compatible",
+		},
+		{
+			func() ProtocolVersions {
+				v := Versions
+				v.Toolchain.Major++
+				return v
+			},
+			false,
+			"toolchain major version change is not compatible",
+		},
+		{
+			func() ProtocolVersions {
+				v := Versions
+				v.RuntimeCommitteeProtocol.Major++
+				return v
+			},
+			false,
+			"runtime committee protocol major version change is not compatible",
+		},
+		{
+			func() ProtocolVersions {
+				v := Versions
+				v.RuntimeHostProtocol.Major++
+				return v
+			},
+			false,
+			"runtime host protocol major version change is not compatible",
+		},
+	} {
+		require.Equal(t, v.isCompatible, Versions.Compatible(v.versions()), v.msg)
+	}
+}

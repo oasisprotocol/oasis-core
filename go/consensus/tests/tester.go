@@ -63,12 +63,12 @@ func ConsensusImplementationTests(t *testing.T, backend consensus.ClientBackend)
 	require.Len(
 		txsWithResults.Transactions,
 		len(txs),
-		"GetTransactionsWithResults.Transactions length missmatch",
+		"GetTransactionsWithResults.Transactions length mismatch",
 	)
 	require.Len(
 		txsWithResults.Results,
 		len(txsWithResults.Transactions),
-		"GetTransactionsWithResults.Results length missmatch",
+		"GetTransactionsWithResults.Results length mismatch",
 	)
 
 	_, err = backend.GetUnconfirmedTransactions(ctx)

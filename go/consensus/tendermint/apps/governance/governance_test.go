@@ -2,7 +2,6 @@ package governance
 
 import (
 	"context"
-	"encoding/hex"
 	"errors"
 	"fmt"
 	"testing"
@@ -17,6 +16,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/entity"
 	"github.com/oasisprotocol/oasis-core/go/common/node"
 	"github.com/oasisprotocol/oasis-core/go/common/quantity"
+	"github.com/oasisprotocol/oasis-core/go/common/version"
 	abciAPI "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/api"
 	governanceState "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/apps/governance/state"
 	registryState "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/apps/registry/state"
@@ -328,12 +328,10 @@ func TestExecuteProposal(t *testing.T) {
 	ctx := appState.NewContext(abciAPI.ContextDeliverTx, now)
 	defer ctx.Close()
 
-	ownHash, err := upgrade.OwnHash()
-	require.NoError(err, "upgrade.OwnHash()")
 	defaultUpgradeProposal := &governance.UpgradeProposal{
 		Descriptor: upgrade.Descriptor{
 			Method:     upgrade.UpgradeMethodInternal,
-			Identifier: hex.EncodeToString(ownHash[:]),
+			Identifier: cbor.Marshal(version.Versions),
 			Epoch:      20,
 		},
 	}
@@ -434,7 +432,7 @@ func TestExecuteProposal(t *testing.T) {
 						Name:       "test-upgrade",
 						Method:     upgrade.UpgradeMethodInternal,
 						Epoch:      22, // Already scheduled upgrade is at epoch 20.
-						Identifier: emptyHashHex,
+						Identifier: identifier,
 					},
 				}},
 			},
@@ -517,14 +515,12 @@ func TestBeginBlock(t *testing.T) {
 		state: appState,
 	}
 
-	ownHash, err := upgrade.OwnHash()
-	require.NoError(err, "upgrade.OwnHash()")
 	// Prepare some pending upgrades.
 	upgrade11 := &governance.UpgradeProposal{
-		Descriptor: upgrade.Descriptor{Epoch: 11, Method: upgrade.UpgradeMethodInternal, Identifier: hex.EncodeToString(ownHash[:])},
+		Descriptor: upgrade.Descriptor{Epoch: 11, Method: upgrade.UpgradeMethodInternal, Identifier: cbor.Marshal(version.Versions)},
 	}
 	upgrade12 := &governance.UpgradeProposal{
-		Descriptor: upgrade.Descriptor{Epoch: 12, Method: upgrade.UpgradeMethodInternal, Identifier: hex.EncodeToString(ownHash[:])},
+		Descriptor: upgrade.Descriptor{Epoch: 12, Method: upgrade.UpgradeMethodInternal, Identifier: cbor.Marshal(version.Versions)},
 	}
 	err = state.SetProposal(ctx, &governance.Proposal{ID: 1, Content: governance.ProposalContent{Upgrade: upgrade11}})
 	require.NoError(err, "SetProposal")

@@ -77,8 +77,8 @@ func (c *nodeController) UpgradeBinary(ctx context.Context, descriptor *upgrade.
 	return c.upgrader.SubmitDescriptor(ctx, descriptor)
 }
 
-func (c *nodeController) CancelUpgrade(ctx context.Context, name string) error {
-	return c.upgrader.CancelUpgrade(ctx, name)
+func (c *nodeController) CancelUpgrade(ctx context.Context, descriptor *upgrade.Descriptor) error {
+	return c.upgrader.CancelUpgrade(ctx, descriptor)
 }
 
 func (c *nodeController) GetStatus(ctx context.Context) (*control.Status, error) {

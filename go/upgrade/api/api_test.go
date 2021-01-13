@@ -1,12 +1,12 @@
 package api
 
 import (
-	"encoding/hex"
 	"testing"
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
+	"github.com/oasisprotocol/oasis-core/go/common/cbor"
+	"github.com/oasisprotocol/oasis-core/go/common/version"
 )
 
 func TestUpgradeMethod(t *testing.T) {
@@ -39,10 +39,6 @@ func TestUpgradeMethod(t *testing.T) {
 }
 
 func TestValidateBasic(t *testing.T) {
-	hh, err := OwnHash()
-	require.NoError(t, err, "OwnHash()")
-	h := hex.EncodeToString(hh[:])
-
 	for _, tc := range []struct {
 		msg       string
 		d         *Descriptor
@@ -58,7 +54,7 @@ func TestValidateBasic(t *testing.T) {
 			d: &Descriptor{
 				Method:     42,
 				Epoch:      100,
-				Identifier: h,
+				Identifier: cbor.Marshal(version.Versions),
 			},
 			shouldErr: true,
 		},
@@ -67,7 +63,7 @@ func TestValidateBasic(t *testing.T) {
 			d: &Descriptor{
 				Method:     UpgradeMethodInternal,
 				Epoch:      0,
-				Identifier: h,
+				Identifier: cbor.Marshal(version.Versions),
 			},
 			shouldErr: true,
 		},
@@ -76,7 +72,7 @@ func TestValidateBasic(t *testing.T) {
 			d: &Descriptor{
 				Method:     UpgradeMethodInternal,
 				Epoch:      42,
-				Identifier: "invalid",
+				Identifier: cbor.Marshal("invalid"),
 			},
 			shouldErr: true,
 		},
@@ -85,7 +81,7 @@ func TestValidateBasic(t *testing.T) {
 			d: &Descriptor{
 				Method:     UpgradeMethodInternal,
 				Epoch:      42,
-				Identifier: h,
+				Identifier: cbor.Marshal(version.Versions),
 			},
 			shouldErr: false,
 		},
@@ -100,10 +96,6 @@ func TestValidateBasic(t *testing.T) {
 }
 
 func TestEquals(t *testing.T) {
-	hh, err := OwnHash()
-	require.NoError(t, err, "OwnHash()")
-	h := hex.EncodeToString(hh[:])
-
 	for _, tc := range []struct {
 		msg    string
 		d1     *Descriptor
@@ -147,7 +139,7 @@ func TestEquals(t *testing.T) {
 		{
 			msg: "different identifier should not be equal",
 			d1: &Descriptor{
-				Identifier: h,
+				Identifier: cbor.Marshal(version.Versions),
 			},
 			d2:     &Descriptor{},
 			equals: false,
@@ -158,13 +150,13 @@ func TestEquals(t *testing.T) {
 				Name:       "d",
 				Method:     UpgradeMethodInternal,
 				Epoch:      42,
-				Identifier: h,
+				Identifier: cbor.Marshal(version.Versions),
 			},
 			d2: &Descriptor{
 				Name:       "d",
 				Method:     UpgradeMethodInternal,
 				Epoch:      42,
-				Identifier: h,
+				Identifier: cbor.Marshal(version.Versions),
 			},
 			equals: true,
 		},
@@ -174,13 +166,6 @@ func TestEquals(t *testing.T) {
 }
 
 func TestEnsureCompatible(t *testing.T) {
-	hh, err := OwnHash()
-	require.NoError(t, err, "OwnHash()")
-	h := hex.EncodeToString(hh[:])
-
-	var emptyHash hash.Hash
-	emptyH := hex.EncodeToString(emptyHash[:])
-
 	for _, tc := range []struct {
 		msg       string
 		d         *Descriptor
@@ -196,7 +181,7 @@ func TestEnsureCompatible(t *testing.T) {
 			d: &Descriptor{
 				Method:     UpgradeMethodInternal,
 				Epoch:      100,
-				Identifier: emptyH,
+				Identifier: cbor.Marshal(version.ProtocolVersions{RuntimeHostProtocol: version.FromU64(42)}),
 			},
 			shouldErr: true,
 		},
@@ -205,7 +190,7 @@ func TestEnsureCompatible(t *testing.T) {
 			d: &Descriptor{
 				Method:     UpgradeMethodInternal,
 				Epoch:      42,
-				Identifier: h,
+				Identifier: cbor.Marshal(version.Versions),
 			},
 			shouldErr: false,
 		},

@@ -1,7 +1,6 @@
 package governance
 
 import (
-	"encoding/hex"
 	"fmt"
 	"testing"
 	"time"
@@ -9,9 +8,10 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/tendermint/tendermint/abci/types"
 
-	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
+	"github.com/oasisprotocol/oasis-core/go/common/cbor"
 	memorySigner "github.com/oasisprotocol/oasis-core/go/common/crypto/signature/signers/memory"
 	"github.com/oasisprotocol/oasis-core/go/common/quantity"
+	"github.com/oasisprotocol/oasis-core/go/common/version"
 	abciAPI "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/api"
 	governanceState "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/apps/governance/state"
 	epochtime "github.com/oasisprotocol/oasis-core/go/epochtime/api"
@@ -21,10 +21,7 @@ import (
 	upgrade "github.com/oasisprotocol/oasis-core/go/upgrade/api"
 )
 
-var (
-	emptyHash    hash.Hash
-	emptyHashHex = hex.EncodeToString(emptyHash[:])
-)
+var identifier = cbor.Marshal(version.ProtocolVersions{ConsensusProtocol: version.FromU64(42)})
 
 func TestInitChain(t *testing.T) {
 	require := require.New(t)
@@ -107,7 +104,7 @@ func TestInitChain(t *testing.T) {
 						ClosesAt:     20,
 						State:        governance.StatePassed,
 						InvalidVotes: 0,
-						Content:      governance.ProposalContent{Upgrade: &governance.UpgradeProposal{Descriptor: upgrade.Descriptor{Method: upgrade.UpgradeMethodInternal, Identifier: emptyHashHex, Epoch: 30}}},
+						Content:      governance.ProposalContent{Upgrade: &governance.UpgradeProposal{Descriptor: upgrade.Descriptor{Method: upgrade.UpgradeMethodInternal, Identifier: identifier, Epoch: 30}}},
 						CreatedAt:    10,
 						Deposit:      *quantity.NewFromUint64(10),
 						Submitter:    addresses[1],
@@ -135,7 +132,7 @@ func TestInitChain(t *testing.T) {
 						ClosesAt:     100,
 						State:        governance.StateActive,
 						InvalidVotes: 0,
-						Content:      governance.ProposalContent{Upgrade: &governance.UpgradeProposal{Descriptor: upgrade.Descriptor{Method: upgrade.UpgradeMethodInternal, Identifier: emptyHashHex, Epoch: 10000}}},
+						Content:      governance.ProposalContent{Upgrade: &governance.UpgradeProposal{Descriptor: upgrade.Descriptor{Method: upgrade.UpgradeMethodInternal, Identifier: identifier, Epoch: 10000}}},
 						CreatedAt:    20,
 						Deposit:      *quantity.NewFromUint64(10),
 						Submitter:    addresses[3],
@@ -146,7 +143,7 @@ func TestInitChain(t *testing.T) {
 						ClosesAt:     70,
 						State:        governance.StatePassed,
 						InvalidVotes: 0,
-						Content:      governance.ProposalContent{Upgrade: &governance.UpgradeProposal{Descriptor: upgrade.Descriptor{Method: upgrade.UpgradeMethodInternal, Identifier: emptyHashHex, Epoch: 1000}}},
+						Content:      governance.ProposalContent{Upgrade: &governance.UpgradeProposal{Descriptor: upgrade.Descriptor{Method: upgrade.UpgradeMethodInternal, Identifier: identifier, Epoch: 1000}}},
 						CreatedAt:    20,
 						Deposit:      *quantity.NewFromUint64(10),
 						Submitter:    addresses[4],
@@ -160,7 +157,7 @@ func TestInitChain(t *testing.T) {
 						ClosesAt:     70,
 						State:        governance.StatePassed,
 						InvalidVotes: 0,
-						Content:      governance.ProposalContent{Upgrade: &governance.UpgradeProposal{Descriptor: upgrade.Descriptor{Method: upgrade.UpgradeMethodInternal, Identifier: emptyHashHex, Epoch: 2000}}},
+						Content:      governance.ProposalContent{Upgrade: &governance.UpgradeProposal{Descriptor: upgrade.Descriptor{Method: upgrade.UpgradeMethodInternal, Identifier: identifier, Epoch: 2000}}},
 						CreatedAt:    60,
 						Deposit:      *quantity.NewFromUint64(10),
 						Submitter:    addresses[4],
@@ -174,7 +171,7 @@ func TestInitChain(t *testing.T) {
 						ClosesAt:     70,
 						State:        governance.StatePassed,
 						InvalidVotes: 0,
-						Content:      governance.ProposalContent{Upgrade: &governance.UpgradeProposal{Descriptor: upgrade.Descriptor{Method: upgrade.UpgradeMethodInternal, Identifier: emptyHashHex, Epoch: 2000}}},
+						Content:      governance.ProposalContent{Upgrade: &governance.UpgradeProposal{Descriptor: upgrade.Descriptor{Method: upgrade.UpgradeMethodInternal, Identifier: identifier, Epoch: 2000}}},
 						CreatedAt:    60,
 						Deposit:      *quantity.NewFromUint64(10),
 						Submitter:    addresses[4],
@@ -287,7 +284,7 @@ func TestGenesis(t *testing.T) {
 			ClosesAt:     20,
 			State:        governance.StateRejected,
 			InvalidVotes: 3,
-			Content:      governance.ProposalContent{Upgrade: &governance.UpgradeProposal{Descriptor: upgrade.Descriptor{Method: upgrade.UpgradeMethodInternal, Identifier: emptyHashHex, Epoch: 30}}},
+			Content:      governance.ProposalContent{Upgrade: &governance.UpgradeProposal{Descriptor: upgrade.Descriptor{Method: upgrade.UpgradeMethodInternal, Identifier: identifier, Epoch: 30}}},
 			CreatedAt:    10,
 			Deposit:      *quantity.NewFromUint64(10),
 			Submitter:    addresses[0],
@@ -301,7 +298,7 @@ func TestGenesis(t *testing.T) {
 			ClosesAt:     20,
 			State:        governance.StatePassed,
 			InvalidVotes: 0,
-			Content:      governance.ProposalContent{Upgrade: &governance.UpgradeProposal{Descriptor: upgrade.Descriptor{Method: upgrade.UpgradeMethodInternal, Identifier: emptyHashHex, Epoch: 30}}},
+			Content:      governance.ProposalContent{Upgrade: &governance.UpgradeProposal{Descriptor: upgrade.Descriptor{Method: upgrade.UpgradeMethodInternal, Identifier: identifier, Epoch: 30}}},
 			CreatedAt:    10,
 			Deposit:      *quantity.NewFromUint64(10),
 			Submitter:    addresses[1],
@@ -329,7 +326,7 @@ func TestGenesis(t *testing.T) {
 			ClosesAt:     100,
 			State:        governance.StateActive,
 			InvalidVotes: 0,
-			Content:      governance.ProposalContent{Upgrade: &governance.UpgradeProposal{Descriptor: upgrade.Descriptor{Method: upgrade.UpgradeMethodInternal, Identifier: emptyHashHex, Epoch: 10000}}},
+			Content:      governance.ProposalContent{Upgrade: &governance.UpgradeProposal{Descriptor: upgrade.Descriptor{Method: upgrade.UpgradeMethodInternal, Identifier: identifier, Epoch: 10000}}},
 			CreatedAt:    20,
 			Deposit:      *quantity.NewFromUint64(10),
 			Submitter:    addresses[3],
@@ -340,7 +337,7 @@ func TestGenesis(t *testing.T) {
 			ClosesAt:     100,
 			State:        governance.StatePassed,
 			InvalidVotes: 0,
-			Content:      governance.ProposalContent{Upgrade: &governance.UpgradeProposal{Descriptor: upgrade.Descriptor{Method: upgrade.UpgradeMethodInternal, Identifier: emptyHashHex, Epoch: 1000}}},
+			Content:      governance.ProposalContent{Upgrade: &governance.UpgradeProposal{Descriptor: upgrade.Descriptor{Method: upgrade.UpgradeMethodInternal, Identifier: identifier, Epoch: 1000}}},
 			CreatedAt:    20,
 			Deposit:      *quantity.NewFromUint64(10),
 			Submitter:    addresses[4],

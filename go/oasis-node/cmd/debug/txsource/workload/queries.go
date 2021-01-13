@@ -255,24 +255,24 @@ func (q *queries) doConsensusQueries(ctx context.Context, rng *rand.Rand, height
 		return fmt.Errorf("GetTransactionsWithResults at height %d: %w", height, err)
 	}
 	if len(txs) != len(txsWithRes.Transactions) {
-		q.logger.Error("GetTransactionsWithResults transactions length missmatch",
+		q.logger.Error("GetTransactionsWithResults transactions length mismatch",
 			"txs", txs,
 			"txs_with_results", txsWithRes,
 			"height", height,
 		)
 		return fmt.Errorf(
-			"GetTransactionsWithResults transactions length missmatch, expected: %d, got: %d",
+			"GetTransactionsWithResults transactions length mismatch, expected: %d, got: %d",
 			len(txs), len(txsWithRes.Transactions),
 		)
 	}
 	if len(txsWithRes.Transactions) != len(txsWithRes.Results) {
-		q.logger.Error("GetTransactionsWithResults results length missmatch",
+		q.logger.Error("GetTransactionsWithResults results length mismatch",
 			"txs", txs,
 			"txs_with_results", txsWithRes,
 			"height", height,
 		)
 		return fmt.Errorf(
-			"GetTransactionsWithResults results length missmatch, expected: %d, got: %d",
+			"GetTransactionsWithResults results length mismatch, expected: %d, got: %d",
 			len(txsWithRes.Transactions), len(txsWithRes.Results),
 		)
 	}
@@ -722,7 +722,7 @@ func (q *queries) doRuntimeQueries(ctx context.Context, rng *rand.Rand) error {
 		return fmt.Errorf("runtimeClient.GetBlockByHash, hash: %s: %w", block.Header.EncodedHash(), err)
 	}
 	if block.Header.EncodedHash() != block2.Header.EncodedHash() {
-		q.logger.Error("runtime block header hash missmatch",
+		q.logger.Error("runtime block header hash mismatch",
 			"round", round,
 			"latest_round", latestRound,
 			"round_hash", block.Header.EncodedHash(),

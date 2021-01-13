@@ -19,6 +19,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/node"
 	"github.com/oasisprotocol/oasis-core/go/common/quantity"
 	"github.com/oasisprotocol/oasis-core/go/common/sgx"
+	"github.com/oasisprotocol/oasis-core/go/common/version"
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/genesis"
 	tendermint "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/api"
 	epochtime "github.com/oasisprotocol/oasis-core/go/epochtime/api"
@@ -840,8 +841,6 @@ func TestGenesisSanityCheck(t *testing.T) {
 	d.Governance.Parameters.UpgradeMinEpochDiff = 50
 	require.Error(d.SanityCheck(), "upgrade_min_epoch_diff < voting_period should be rejected")
 
-	ownHash, err := upgrade.OwnHash()
-	require.NoError(err, "upgrade.OwnHash()")
 	validTestProposals := func() []*governance.Proposal {
 		return []*governance.Proposal{
 			{
@@ -850,7 +849,7 @@ func TestGenesisSanityCheck(t *testing.T) {
 				Submitter: stakingTests.DebugStateDestAddress,
 				Content: governance.ProposalContent{
 					Upgrade: &governance.UpgradeProposal{
-						Descriptor: upgrade.Descriptor{Method: upgrade.UpgradeMethodInternal, Epoch: 500, Identifier: hex.EncodeToString(ownHash[:])},
+						Descriptor: upgrade.Descriptor{Method: upgrade.UpgradeMethodInternal, Epoch: 500, Identifier: cbor.Marshal(version.Versions)},
 					},
 				},
 				State: governance.StateActive,
@@ -891,7 +890,7 @@ func TestGenesisSanityCheck(t *testing.T) {
 	require.Error(d.SanityCheck(), "proposal invalid content")
 
 	d.Governance.Proposals = validTestProposals()
-	d.Governance.Proposals[0].Content.Upgrade.Identifier = "abc"
+	d.Governance.Proposals[0].Content.Upgrade.Identifier = cbor.Marshal("abc")
 	require.Error(d.SanityCheck(), "proposal upgrade invalid identifier")
 
 	d.Governance.Proposals = validTestProposals()
@@ -945,7 +944,7 @@ func TestGenesisSanityCheck(t *testing.T) {
 			Submitter: stakingTests.DebugStateDestAddress,
 			Content: governance.ProposalContent{
 				Upgrade: &governance.UpgradeProposal{
-					Descriptor: upgrade.Descriptor{Method: upgrade.UpgradeMethodInternal, Epoch: 400, Identifier: hex.EncodeToString(ownHash[:])},
+					Descriptor: upgrade.Descriptor{Method: upgrade.UpgradeMethodInternal, Epoch: 400, Identifier: cbor.Marshal(version.Versions)},
 				},
 			},
 			State: governance.StatePassed,
@@ -960,7 +959,7 @@ func TestGenesisSanityCheck(t *testing.T) {
 		Submitter: stakingTests.DebugStateDestAddress,
 		Content: governance.ProposalContent{
 			Upgrade: &governance.UpgradeProposal{
-				Descriptor: upgrade.Descriptor{Method: upgrade.UpgradeMethodInternal, Epoch: 710, Identifier: hex.EncodeToString(ownHash[:])},
+				Descriptor: upgrade.Descriptor{Method: upgrade.UpgradeMethodInternal, Epoch: 710, Identifier: cbor.Marshal(version.Versions)},
 			},
 		},
 		State: governance.StatePassed,
@@ -974,7 +973,7 @@ func TestGenesisSanityCheck(t *testing.T) {
 		Submitter: stakingTests.DebugStateDestAddress,
 		Content: governance.ProposalContent{
 			Upgrade: &governance.UpgradeProposal{
-				Descriptor: upgrade.Descriptor{Method: upgrade.UpgradeMethodInternal, Epoch: 410, Identifier: hex.EncodeToString(ownHash[:])},
+				Descriptor: upgrade.Descriptor{Method: upgrade.UpgradeMethodInternal, Epoch: 410, Identifier: cbor.Marshal(version.Versions)},
 			},
 		},
 		State: governance.StatePassed,

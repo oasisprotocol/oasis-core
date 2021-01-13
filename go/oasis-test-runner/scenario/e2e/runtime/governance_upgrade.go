@@ -2,14 +2,13 @@ package runtime
 
 import (
 	"context"
-	"encoding/hex"
 	"fmt"
-	"io/ioutil"
 	"sync"
 	"time"
 
-	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
+	"github.com/oasisprotocol/oasis-core/go/common/cbor"
 	"github.com/oasisprotocol/oasis-core/go/common/quantity"
+	"github.com/oasisprotocol/oasis-core/go/common/version"
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
 	"github.com/oasisprotocol/oasis-core/go/consensus/api/transaction"
 	epochtime "github.com/oasisprotocol/oasis-core/go/epochtime/api"
@@ -43,17 +42,17 @@ type governanceConsensusUpgradeImpl struct {
 	currentEpoch epochtime.EpochTime
 	entityNonce  uint64
 
-	correctBinaryHash   bool
-	shouldCancelUpgrade bool
+	correctUpgradeVersion bool
+	shouldCancelUpgrade   bool
 
 	entity *oasis.Entity
 
 	ctx context.Context
 }
 
-func newGovernanceConsensusUpgradeImpl(correctBinaryHash, cancelUpgrade bool) scenario.Scenario {
+func newGovernanceConsensusUpgradeImpl(correctUpgradeVersion, cancelUpgrade bool) scenario.Scenario {
 	var name string
-	switch correctBinaryHash {
+	switch correctUpgradeVersion {
 	case true:
 		name = "governance-upgrade"
 	case false:
@@ -69,21 +68,21 @@ func newGovernanceConsensusUpgradeImpl(correctBinaryHash, cancelUpgrade bool) sc
 			"test-long-term-client",
 			[]string{"--mode", "part1"},
 		),
-		correctBinaryHash:   correctBinaryHash,
-		shouldCancelUpgrade: cancelUpgrade,
-		ctx:                 context.Background(),
+		correctUpgradeVersion: correctUpgradeVersion,
+		shouldCancelUpgrade:   cancelUpgrade,
+		ctx:                   context.Background(),
 	}
 	return sc
 }
 
 func (sc *governanceConsensusUpgradeImpl) Clone() scenario.Scenario {
 	return &governanceConsensusUpgradeImpl{
-		runtimeImpl:         *sc.runtimeImpl.Clone().(*runtimeImpl),
-		currentEpoch:        sc.currentEpoch,
-		entityNonce:         sc.entityNonce,
-		correctBinaryHash:   sc.correctBinaryHash,
-		shouldCancelUpgrade: sc.shouldCancelUpgrade,
-		ctx:                 context.Background(),
+		runtimeImpl:           *sc.runtimeImpl.Clone().(*runtimeImpl),
+		currentEpoch:          sc.currentEpoch,
+		entityNonce:           sc.entityNonce,
+		correctUpgradeVersion: sc.correctUpgradeVersion,
+		shouldCancelUpgrade:   sc.shouldCancelUpgrade,
+		ctx:                   context.Background(),
 	}
 }
 
@@ -159,7 +158,7 @@ func (sc *governanceConsensusUpgradeImpl) Fixture() (*oasis.NetworkFixture, erro
 	}
 
 	switch {
-	case sc.correctBinaryHash && !sc.shouldCancelUpgrade:
+	case sc.correctUpgradeVersion && !sc.shouldCancelUpgrade:
 		f.Network.DefaultLogWatcherHandlerFactories = append(
 			f.Network.DefaultLogWatcherHandlerFactories,
 			oasis.LogAssertUpgradeStartup(),
@@ -342,24 +341,18 @@ func (sc *governanceConsensusUpgradeImpl) Run(childEnv *env.Env) error { // noli
 
 	// Prepare upgrade proposal.
 	upgradeEpoch := sc.currentEpoch + sc.Net.Config().GovernanceParameters.UpgradeMinEpochDiff
-	var descriptorHash hash.Hash
-	switch sc.correctBinaryHash {
+	var identifier version.ProtocolVersions
+	switch sc.correctUpgradeVersion {
 	case true:
-		// Use nodes hash so that upgrade will succeed.
-		var nodeBinary []byte
-		nodeBinary, err = ioutil.ReadFile(sc.Net.Validators()[0].BinaryPath())
-		if err != nil {
-			return fmt.Errorf("can't read node binary for hashing: %w", err)
-		}
-		descriptorHash.FromBytes(nodeBinary)
+		identifier = version.Versions
 	default:
-		// Use empty hash so that upgrade should fail.
+		// Use empty version so that upgrade should fail.
 	}
 
 	content := &api.ProposalContent{
 		Upgrade: &api.UpgradeProposal{
 			Descriptor: upgrade.Descriptor{
-				Identifier: hex.EncodeToString(descriptorHash[:]),
+				Identifier: cbor.Marshal(identifier),
 				Epoch:      upgradeEpoch,
 				Method:     upgrade.UpgradeMethodInternal,
 				Name:       migrations.DummyUpgradeName,
@@ -391,7 +384,7 @@ func (sc *governanceConsensusUpgradeImpl) Run(childEnv *env.Env) error { // noli
 	// Make sure all nodes will restart once the upgrade epoch is reached.
 	var group sync.WaitGroup
 	errCh := make(chan error, len(sc.Net.Nodes()))
-	if sc.correctBinaryHash && !sc.shouldCancelUpgrade {
+	if sc.correctUpgradeVersion && !sc.shouldCancelUpgrade {
 		for i, nd := range sc.Net.Nodes() {
 			group.Add(1)
 			go func(i int, nd *oasis.Node) {
@@ -423,7 +416,7 @@ func (sc *governanceConsensusUpgradeImpl) Run(childEnv *env.Env) error { // noli
 		}
 
 		// If this is the upgrade epoch.
-		switch sc.correctBinaryHash {
+		switch sc.correctUpgradeVersion {
 		case true:
 			// Should work normally.
 			if err != nil {
