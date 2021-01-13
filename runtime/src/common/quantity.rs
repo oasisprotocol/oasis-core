@@ -67,6 +67,12 @@ impl<'a> AddAssign<&'a Quantity> for Quantity {
     }
 }
 
+impl fmt::Display for Quantity {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        self.0.fmt(f)
+    }
+}
+
 impl serde::Serialize for Quantity {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
