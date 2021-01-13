@@ -16,6 +16,15 @@ import (
 // precompute a CBOR encoding.
 type RawMessage = cbor.RawMessage
 
+// Marshaler is the interface implemented by types that can marshal themselves
+// into valid CBOR.
+type Marshaler = cbor.Marshaler
+
+// Unmarshaler is the interface implemented by types that wish to unmarshal
+// CBOR data themselves.  The input is a valid CBOR value. UnmarshalCBOR
+// must copy the CBOR data if it needs to use it after returning.
+type Unmarshaler = cbor.Unmarshaler
+
 var (
 	encOptions = cbor.EncOptions{
 		Sort:          cbor.SortCanonical,
