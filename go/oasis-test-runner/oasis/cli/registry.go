@@ -30,6 +30,7 @@ func (r *RegistryHelpers) runRegistryRuntimeSubcommand(
 		"--" + cmdRegRt.CfgTEEHardware, runtime.TEEHardware.String(),
 		"--" + cmdRegRt.CfgKind, runtime.Kind.String(),
 		"--" + cmdRegRt.CfgVersion, runtime.Version.Version.String(),
+		"--" + cmdRegRt.CfgGovernanceModel, runtime.GovernanceModel.String(),
 	}
 	args = append(args, extraArgs...)
 
@@ -59,6 +60,7 @@ func (r *RegistryHelpers) runRegistryRuntimeSubcommand(
 			"--"+cmdRegRt.CfgExecutorAllowedStragglers, strconv.FormatUint(runtime.Executor.AllowedStragglers, 10),
 			"--"+cmdRegRt.CfgExecutorRoundTimeout, strconv.FormatInt(runtime.Executor.RoundTimeout, 10),
 			"--"+cmdRegRt.CfgExecutorMaxMessages, strconv.FormatUint(uint64(runtime.Executor.MaxMessages), 10),
+			"--"+cmdRegRt.CfgExecutorMinPoolSize, strconv.FormatUint(runtime.Executor.MinPoolSize, 10),
 			"--"+cmdRegRt.CfgStorageGroupSize, strconv.FormatUint(runtime.Storage.GroupSize, 10),
 			"--"+cmdRegRt.CfgStorageMinWriteReplication, strconv.FormatUint(runtime.Storage.MinWriteReplication, 10),
 			"--"+cmdRegRt.CfgStorageMaxApplyWriteLogEntries, strconv.FormatUint(runtime.Storage.MaxApplyWriteLogEntries, 10),
@@ -66,6 +68,7 @@ func (r *RegistryHelpers) runRegistryRuntimeSubcommand(
 			"--"+cmdRegRt.CfgStorageCheckpointInterval, strconv.FormatUint(runtime.Storage.CheckpointInterval, 10),
 			"--"+cmdRegRt.CfgStorageCheckpointNumKept, strconv.FormatUint(runtime.Storage.CheckpointNumKept, 10),
 			"--"+cmdRegRt.CfgStorageCheckpointChunkSize, strconv.FormatUint(runtime.Storage.CheckpointChunkSize, 10),
+			"--"+cmdRegRt.CfgStorageMinPoolSize, strconv.FormatUint(runtime.Storage.MinPoolSize, 10),
 			"--"+cmdRegRt.CfgTxnSchedulerAlgorithm, runtime.TxnScheduler.Algorithm,
 			"--"+cmdRegRt.CfgTxnSchedulerBatchFlushTimeout, runtime.TxnScheduler.BatchFlushTimeout.String(),
 			"--"+cmdRegRt.CfgTxnSchedulerMaxBatchSize, strconv.FormatUint(runtime.TxnScheduler.MaxBatchSize, 10),

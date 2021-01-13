@@ -131,6 +131,7 @@ func (net *Network) NewRuntime(cfg *RuntimeCfg) (*Runtime, error) {
 		Storage:         cfg.Storage,
 		AdmissionPolicy: cfg.AdmissionPolicy,
 		Staking:         cfg.Staking,
+		GovernanceModel: registry.GovernanceEntity,
 	}
 
 	rtDir, err := net.baseDir.NewSubDir("runtime-" + cfg.ID.String())

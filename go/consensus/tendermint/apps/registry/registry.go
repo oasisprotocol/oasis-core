@@ -95,12 +95,11 @@ func (app *registryApplication) ExecuteTx(ctx *api.Context, tx *transaction.Tran
 
 		return app.unfreezeNode(ctx, state, &unfreeze)
 	case registry.MethodRegisterRuntime:
-		var sigRt registry.SignedRuntime
-		if err := cbor.Unmarshal(tx.Body, &sigRt); err != nil {
+		var rt registry.Runtime
+		if err := cbor.Unmarshal(tx.Body, &rt); err != nil {
 			return err
 		}
-
-		return app.registerRuntime(ctx, state, &sigRt)
+		return app.registerRuntime(ctx, state, &rt)
 	default:
 		return registry.ErrInvalidArgument
 	}

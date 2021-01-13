@@ -55,6 +55,7 @@ func getRuntime(entityID signature.PublicKey, id common.Namespace) *registry.Run
 			GroupSize:    1,
 			RoundTimeout: 5,
 			MaxMessages:  32,
+			MinPoolSize:  1,
 		},
 		TxnScheduler: registry.TxnSchedulerParameters{
 			Algorithm:         "simple",
@@ -68,10 +69,12 @@ func getRuntime(entityID signature.PublicKey, id common.Namespace) *registry.Run
 			MinWriteReplication:     1,
 			MaxApplyWriteLogEntries: 100_000,
 			MaxApplyOps:             2,
+			MinPoolSize:             1,
 		},
 		AdmissionPolicy: registry.RuntimeAdmissionPolicy{
 			AnyNode: &registry.AnyNodeRuntimeAdmissionPolicy{},
 		},
+		GovernanceModel: registry.GovernanceEntity,
 	}
 	rt.Genesis.StateRoot.Empty()
 	return rt
@@ -267,12 +270,7 @@ func (r *registration) Run( // nolint: gocyclo
 		// also periodically register new runtimes.
 		if i == 0 {
 			runtimeDesc := getRuntime(entityAccs[i].signer.Public(), r.ns)
-			sigRuntime, err := registry.SignRuntime(entityAccs[i].signer, registry.RegisterRuntimeSignatureContext, runtimeDesc)
-			if err != nil {
-				return fmt.Errorf("failed to sign entity: %w", err)
-			}
-
-			tx := registry.NewRegisterRuntimeTx(entityAccs[i].reckonedNonce, nil, sigRuntime)
+			tx := registry.NewRegisterRuntimeTx(entityAccs[i].reckonedNonce, nil, runtimeDesc)
 			entityAccs[i].reckonedNonce++
 			if err := r.FundSignAndSubmitTx(ctx, entityAccs[i].signer, tx); err != nil {
 				r.Logger.Error("failed to sign and submit register runtime transaction",

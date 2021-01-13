@@ -53,7 +53,7 @@ launch, see: [Genesis File Overview].
 {% endhint %}
 
 [Genesis File Overview]:
-  https://docs.oasis.dev/general/pre-mainnet/genesis-file
+  https://docs.oasis.dev/general/mainnet/genesis-file
 
 ### Canonical Form
 

@@ -58,6 +58,10 @@ func NewTestNodeGenesisProvider(identity *identity.Identity) (genesis.Provider, 
 				DebugAllowTestRuntimes:                 true,
 				DebugAllowEntitySignedNodeRegistration: true,
 				DebugBypassStake:                       true,
+				EnableRuntimeGovernanceModels: map[registry.RuntimeGovernanceModel]bool{
+					registry.GovernanceEntity:  true,
+					registry.GovernanceRuntime: true,
+				},
 			},
 		},
 		Scheduler: scheduler.Genesis{

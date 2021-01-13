@@ -16,6 +16,7 @@ import (
 )
 
 var (
+	entitySigner     = memorySigner.NewTestSigner("consensus/tendermint/apps/registry/state: entity signer")
 	nodeSigner       = memorySigner.NewTestSigner("consensus/tendermint/apps/registry/state: node signer")
 	consensusSigner1 = memorySigner.NewTestSigner("consensus/tendermint/apps/registry/state: consensus signer 1")
 	consensusSigner2 = memorySigner.NewTestSigner("consensus/tendermint/apps/registry/state: consensus signer 2")
@@ -41,10 +42,15 @@ func TestNodeUpdate(t *testing.T) {
 
 	s := NewMutableState(ctx.State())
 
+	nodes, err := s.GetEntityNodes(ctx, entitySigner.Public())
+	require.NoError(err, "GetEntityNodes")
+	require.True(len(nodes) == 0, "returned node list should be empty")
+
 	// Create a new node.
 	n := node.Node{
 		Versioned: cbor.NewVersioned(node.LatestNodeDescriptorVersion),
 		ID:        nodeSigner.Public(),
+		EntityID:  entitySigner.Public(),
 		P2P: node.P2PInfo{
 			ID: p2pSigner1.Public(),
 		},
@@ -55,8 +61,18 @@ func TestNodeUpdate(t *testing.T) {
 			PubKey: tlsSigner1.Public(),
 		},
 	}
-	err := s.SetNode(ctx, nil, &n, mustMultiSignNode(t, &n))
+	err = s.SetNode(ctx, nil, &n, mustMultiSignNode(t, &n))
 	require.NoError(err, "SetNode")
+
+	var retrievedNode *node.Node
+	retrievedNode, err = s.Node(ctx, n.ID)
+	require.NoError(err, "Node")
+	require.EqualValues(n, *retrievedNode, "returned node should be correct")
+
+	nodes, err = s.GetEntityNodes(ctx, entitySigner.Public())
+	require.NoError(err, "GetEntityNodes")
+	require.EqualValues(1, len(nodes), "returned node list should have exactly one node")
+	require.EqualValues(n, *nodes[0], "returned node should be correct")
 
 	// Make sure all indices have been created.
 	consensusAddress := []byte(tmcrypto.PublicKeyToTendermint(&n.Consensus.ID).Address())

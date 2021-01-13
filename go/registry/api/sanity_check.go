@@ -106,24 +106,22 @@ func SanityCheckEntities(logger *logging.Logger, entities []*entity.SignedEntity
 func SanityCheckRuntimes(
 	logger *logging.Logger,
 	params *ConsensusParameters,
-	runtimes []*SignedRuntime,
-	suspendedRuntimes []*SignedRuntime,
+	runtimes []*Runtime,
+	suspendedRuntimes []*Runtime,
 	isGenesis bool,
 ) (RuntimeLookup, error) {
 	// First go through all runtimes and perform general sanity checks.
 	seenRuntimes := []*Runtime{}
-	for _, signedRt := range runtimes {
-		rt, err := VerifyRegisterRuntimeArgs(params, logger, signedRt, isGenesis, true)
-		if err != nil {
+	for _, rt := range runtimes {
+		if err := VerifyRuntime(params, logger, rt, isGenesis, true); err != nil {
 			return nil, fmt.Errorf("runtime sanity check failed: %w", err)
 		}
 		seenRuntimes = append(seenRuntimes, rt)
 	}
 
 	seenSuspendedRuntimes := []*Runtime{}
-	for _, signedRt := range suspendedRuntimes {
-		rt, err := VerifyRegisterRuntimeArgs(params, logger, signedRt, isGenesis, true)
-		if err != nil {
+	for _, rt := range suspendedRuntimes {
+		if err := VerifyRuntime(params, logger, rt, isGenesis, true); err != nil {
 			return nil, fmt.Errorf("runtime sanity check failed: %w", err)
 		}
 		seenSuspendedRuntimes = append(seenSuspendedRuntimes, rt)

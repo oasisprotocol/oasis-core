@@ -68,6 +68,7 @@ func (sc *historyReindexImpl) Fixture() (*oasis.NetworkFixture, error) {
 	// Use a single compute node.
 	f.Runtimes[rtIdx].Executor.GroupSize = 1
 	f.Runtimes[rtIdx].Executor.GroupBackupSize = 0
+	f.Runtimes[rtIdx].Executor.MinPoolSize = f.Runtimes[rtIdx].Executor.GroupSize + f.Runtimes[rtIdx].Executor.GroupBackupSize
 
 	return f, nil
 }

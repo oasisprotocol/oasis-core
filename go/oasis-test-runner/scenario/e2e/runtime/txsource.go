@@ -418,12 +418,14 @@ func (sc *txSourceImpl) Fixture() (*oasis.NetworkFixture, error) {
 
 	// Storage committee.
 	f.Runtimes[1].Storage.GroupSize = uint64(sc.numStorageNodes)
+	f.Runtimes[1].Storage.MinPoolSize = f.Runtimes[1].Storage.GroupSize
 	f.Runtimes[1].Storage.MinWriteReplication = f.Runtimes[1].Storage.GroupSize
 
 	// Executor committee.
 	f.Runtimes[1].Executor.GroupBackupSize = 1
 	f.Runtimes[1].Executor.GroupSize = uint64(sc.numComputeNodes) -
 		f.Runtimes[1].Executor.GroupBackupSize
+	f.Runtimes[1].Executor.MinPoolSize = uint64(sc.numComputeNodes)
 
 	if sc.nodeLongRestartInterval > 0 {
 		// One storage node could be offline.

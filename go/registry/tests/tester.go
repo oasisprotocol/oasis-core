@@ -5,6 +5,7 @@ import (
 	"context"
 	"crypto"
 	"errors"
+	"fmt"
 	"net"
 	"testing"
 	"time"
@@ -71,7 +72,7 @@ func testRegistryEntityNodes( // nolint: gocyclo
 	ctx := context.Background()
 
 	// Generate the entities used for the test cases.
-	entities, err := NewTestEntities(entityNodeSeed, 3)
+	entities, err := NewTestEntities(entityNodeSeed, 4)
 	require.NoError(t, err, "NewTestEntities")
 
 	timeSource := consensus.EpochTime().(epochtime.SetableBackend)
@@ -178,6 +179,14 @@ func testRegistryEntityNodes( // nolint: gocyclo
 	nonWhitelistedNodes, err := entities[0].NewTestNodes(1, 1, []byte("nonWhitelistedNodes"), nodeRuntimesEW, epoch+2, consensus)
 	require.NoError(t, err, "NewTestNodes non-whitelisted")
 
+	// Append nodes used for testing the MaxNodes whitelist.
+	// Entity 3 is allowed to have only one compute node.  This is set-up in
+	// "EntityWhitelist" test in testRegistryRuntime() below.
+	ent3nodes, err := entities[3].NewTestNodes(2, 1, []byte("ent3nodes"), nodeRuntimesEW, epoch+2, consensus)
+	require.NoError(t, err, "NewTestNodes for entity 3")
+	whitelistedNodes = append(whitelistedNodes, ent3nodes[0])
+	nonWhitelistedNodes = append(nonWhitelistedNodes, ent3nodes[1], ent3nodes[2])
+
 	nodeCh, nodeSub, err := backend.WatchNodes(ctx)
 	require.NoError(t, err, "WatchNodes")
 	defer nodeSub.Close()
@@ -270,8 +279,8 @@ func testRegistryEntityNodes( // nolint: gocyclo
 				t.Fatalf("failed to receive node registration event, whitelisted")
 			}
 		}
-		for _, tn := range nonWhitelistedNodes {
-			require.Error(tn.Register(consensus, tn.SignedRegistration), "register node from non whitelisted entity")
+		for ti, tn := range nonWhitelistedNodes {
+			require.Error(tn.Register(consensus, tn.SignedRegistration), fmt.Sprintf("register node from non whitelisted entity (index %d)", ti))
 		}
 	})
 
@@ -564,12 +573,22 @@ func testRegistryRuntime(t *testing.T, backend api.Backend, consensus consensusA
 			"EntityWhitelist",
 			func(rt *api.Runtime) {
 				var nodeEntities []*TestEntity
-				nodeEntities, err = NewTestEntities(entityNodeSeed, 3)
+				nodeEntities, err = NewTestEntities(entityNodeSeed, 4)
 				require.NoError(err, "NewTestEntities with entity node seed")
 				rt.AdmissionPolicy = api.RuntimeAdmissionPolicy{
 					EntityWhitelist: &api.EntityWhitelistRuntimeAdmissionPolicy{
-						Entities: map[signature.PublicKey]bool{
-							nodeEntities[1].Entity.ID: true,
+						Entities: map[signature.PublicKey]api.EntityWhitelistConfig{
+							nodeEntities[1].Entity.ID: {
+								MaxNodes: map[node.RolesMask]uint16{
+									node.RoleComputeWorker: 2,
+									node.RoleStorageWorker: 2,
+								},
+							},
+							nodeEntities[3].Entity.ID: {
+								MaxNodes: map[node.RolesMask]uint16{
+									node.RoleComputeWorker: 1,
+								},
+							},
 						},
 					},
 				}
@@ -768,6 +787,33 @@ func testRegistryRuntime(t *testing.T, backend api.Backend, consensus consensusA
 			false,
 			false,
 		},
+		// Runtime with too small executor MinPoolSize parameter.
+		{
+			"TooSmallExecutorMinPoolSize",
+			func(rt *api.Runtime) {
+				rt.Executor.MinPoolSize = rt.Executor.GroupSize - 1
+			},
+			false,
+			false,
+		},
+		// Runtime with too small storage MinPoolSize parameter.
+		{
+			"TooSmallStorageMinPoolSize",
+			func(rt *api.Runtime) {
+				rt.Storage.MinPoolSize = rt.Storage.GroupSize - 1
+			},
+			false,
+			false,
+		},
+		// Runtime with consensus governance after genesis time.
+		{
+			"ConsensusGovernanceAfterGenesis",
+			func(rt *api.Runtime) {
+				rt.GovernanceModel = api.GovernanceConsensus
+			},
+			false,
+			false,
+		},
 	}
 
 	rtMap := make(map[common.Namespace]*api.Runtime)
@@ -800,6 +846,43 @@ func testRegistryRuntime(t *testing.T, backend api.Backend, consensus consensusA
 		}
 	}
 	require.Len(rtMap, 0, "all runtimes were registered")
+
+	// Test runtime re-registration.
+	var re *TestRuntime
+	re, err = NewTestRuntime([]byte("Runtime re-registration test 1"), entity, false)
+	require.NoError(err, "NewTestRuntime (re-registration test 1)")
+	re.MustRegister(t, backend, consensus)
+	// Entity to runtime governance transition should succeed.
+	re.Runtime.GovernanceModel = api.GovernanceRuntime
+	re.MustRegister(t, backend, consensus)
+	// Runtime to consensus governance transition should fail.
+	re.Runtime.GovernanceModel = api.GovernanceConsensus
+	re.MustNotRegister(t, backend, consensus)
+	// Runtime back to entity governance transition should fail.
+	re.Runtime.GovernanceModel = api.GovernanceEntity
+	re.MustNotRegister(t, backend, consensus)
+	// Any updates to runtime parameters should fail for runtime-governed runtimes.
+	re.Runtime.GovernanceModel = api.GovernanceRuntime
+	re.Runtime.TxnScheduler.ProposerTimeout = 6
+	re.MustNotRegister(t, backend, consensus)
+
+	re, err = NewTestRuntime([]byte("Runtime re-registration test 2"), entity, true)
+	require.NoError(err, "NewTestRuntime (re-registration test 2)")
+	re.Runtime.Kind = api.KindKeyManager
+	re.MustRegister(t, backend, consensus)
+	// Non-compute runtimes cannot transition to runtime governance.
+	re.Runtime.GovernanceModel = api.GovernanceRuntime
+	re.MustNotRegister(t, backend, consensus)
+	// Entity to consensus governance transition should fail for KM runtimes too.
+	re.Runtime.GovernanceModel = api.GovernanceConsensus
+	re.MustNotRegister(t, backend, consensus)
+
+	re, err = NewTestRuntime([]byte("Runtime re-registration test 3"), entity, false)
+	require.NoError(err, "NewTestRuntime (re-registration test 3)")
+	re.MustRegister(t, backend, consensus)
+	// Entity to consensus governance transition should fail.
+	re.Runtime.GovernanceModel = api.GovernanceConsensus
+	re.MustNotRegister(t, backend, consensus)
 
 	// No way to de-register the runtime or the controlling entity, so it will be left there.
 
@@ -1373,10 +1456,7 @@ func (rt *TestRuntime) MustRegister(t *testing.T, backend api.Backend, consensus
 	require.NoError(err, "WatchRuntimes")
 	defer sub.Close()
 
-	signed, err := signature.SignSigned(rt.Signer, api.RegisterRuntimeSignatureContext, rt.Runtime)
-	require.NoError(err, "signed runtime descriptor")
-
-	tx := api.NewRegisterRuntimeTx(0, nil, &api.SignedRuntime{Signed: *signed})
+	tx := api.NewRegisterRuntimeTx(0, nil, rt.Runtime)
 	err = consensusAPI.SignAndSubmitTx(context.Background(), consensus, rt.Signer, tx)
 	require.NoError(err, "RegisterRuntime")
 
@@ -1424,11 +1504,8 @@ func (rt *TestRuntime) MustRegister(t *testing.T, backend api.Backend, consensus
 func (rt *TestRuntime) MustNotRegister(t *testing.T, backend api.Backend, consensus consensusAPI.Backend) {
 	require := require.New(t)
 
-	signed, err := signature.SignSigned(rt.Signer, api.RegisterRuntimeSignatureContext, rt.Runtime)
-	require.NoError(err, "signed runtime descriptor")
-
-	tx := api.NewRegisterRuntimeTx(0, nil, &api.SignedRuntime{Signed: *signed})
-	err = consensusAPI.SignAndSubmitTx(context.Background(), consensus, rt.Signer, tx)
+	tx := api.NewRegisterRuntimeTx(0, nil, rt.Runtime)
+	err := consensusAPI.SignAndSubmitTx(context.Background(), consensus, rt.Signer, tx)
 	require.Error(err, "RegisterRuntime failure")
 }
 
@@ -1622,6 +1699,7 @@ func NewTestRuntime(seed []byte, ent *TestEntity, isKeyManager bool) (*TestRunti
 			AllowedStragglers: 1,
 			RoundTimeout:      10,
 			MaxMessages:       32,
+			MinPoolSize:       8, // GroupSize + GroupBackupSize
 		},
 		TxnScheduler: api.TxnSchedulerParameters{
 			Algorithm:         api.TxnSchedulerSimple,
@@ -1635,10 +1713,12 @@ func NewTestRuntime(seed []byte, ent *TestEntity, isKeyManager bool) (*TestRunti
 			MinWriteReplication:     3,
 			MaxApplyWriteLogEntries: 100_000,
 			MaxApplyOps:             2,
+			MinPoolSize:             3,
 		},
 		AdmissionPolicy: api.RuntimeAdmissionPolicy{
 			AnyNode: &api.AnyNodeRuntimeAdmissionPolicy{},
 		},
+		GovernanceModel: api.GovernanceEntity,
 	}
 	// TODO: Test with non-empty state root when enabled.
 	rt.Runtime.Genesis.StateRoot.Empty()

@@ -51,12 +51,25 @@ offline and having entities as separate resources enables that.
 
 A [runtime] is effectively a replicated application with shared state. The
 registry resource describes a runtime's operational parameters, including its
-identifier, kind, admission policy, committee scheduling, storage etc. For a
-full description of the runtime descriptor see [the `Runtime` structure].
+identifier, kind, admission policy, committee scheduling, storage, governance
+model, etc. For a full description of the runtime descriptor see
+[the `Runtime` structure].
 
-Currently only the owning entity is allowed to make any modifications to the
-runtime. There are plans to enable runtimes to update their own descriptors in
-the future to enable runtimes to be self-governing.
+<!-- markdownlint-disable no-space-in-emphasis -->
+The chosen governance model indicates how the runtime descriptor can be updated
+in the future.
+
+There are currently three supported governance models:
+
+* **Entity governance** where the runtime owner is the only one who can update
+  the runtime descriptor via `registry.RegisterRuntime` method calls.
+
+* **Runtime-defined governance** where the runtime itself is the only one who
+  can update the runtime descriptor by emitting a runtime message.
+
+* **Consensus layer governance** where only the consensus layer itself can
+  update the runtime descriptor through network governance.
+<!-- markdownlint-enable no-space-in-emphasis -->
 
 <!-- markdownlint-disable line-length -->
 [runtime]: ../runtime/index.md
@@ -209,16 +222,18 @@ runtime transaction can be generated using [`NewRegisterRuntimeTx`].
 registry.RegisterRuntime
 ```
 
-The body of a register runtime transaction must be a [`SignedRuntime`]
-structure, which is a [signed envelope] containing a [`Runtime`] descriptor.
+The body of a register runtime transaction must be a [`Runtime`] descriptor.
 The signer of the transaction MUST be the owning entity key.
 
-Registering a runtime may require sufficient stake in the owning entity's
-[escrow account].
+Registering a runtime may require sufficient stake in either the owning
+entity's (when entity governance is used) or the runtime's (when runtime
+governance is used) [escrow account].
+
+Changing the governance model from entity governance to runtime governance is
+allowed. Any other governance model changes are not allowed.
 
 <!-- markdownlint-disable line-length -->
 [`NewRegisterRuntimeTx`]: https://pkg.go.dev/github.com/oasisprotocol/oasis-core/go/registry/api?tab=doc#NewRegisterRuntimeTx
-[`SignedRuntime`]: https://pkg.go.dev/github.com/oasisprotocol/oasis-core/go/registry/api?tab=doc#SignedRuntime
 [`Runtime`]: https://pkg.go.dev/github.com/oasisprotocol/oasis-core/go/registry/api?tab=doc#Runtime
 <!-- markdownlint-enable line-length -->
 

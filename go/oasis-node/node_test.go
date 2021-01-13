@@ -90,6 +90,7 @@ var (
 			GroupSize:       1,
 			GroupBackupSize: 0,
 			RoundTimeout:    20,
+			MinPoolSize:     1,
 		},
 		TxnScheduler: registry.TxnSchedulerParameters{
 			Algorithm:         registry.TxnSchedulerSimple,
@@ -103,10 +104,12 @@ var (
 			MinWriteReplication:     1,
 			MaxApplyWriteLogEntries: 100_000,
 			MaxApplyOps:             2,
+			MinPoolSize:             1,
 		},
 		AdmissionPolicy: registry.RuntimeAdmissionPolicy{
 			AnyNode: &registry.AnyNodeRuntimeAdmissionPolicy{},
 		},
+		GovernanceModel: registry.GovernanceEntity,
 	}
 
 	testRuntimeID common.Namespace
@@ -287,9 +290,7 @@ func testRegisterEntityRuntime(t *testing.T, node *testNode) {
 	require.NoError(err, "register test entity")
 
 	// Register the test runtime.
-	signedRt, err := registry.SignRuntime(testEntitySigner, registry.RegisterRuntimeSignatureContext, testRuntime)
-	require.NoError(err, "sign runtime descriptor")
-	tx = registry.NewRegisterRuntimeTx(0, nil, signedRt)
+	tx = registry.NewRegisterRuntimeTx(0, nil, testRuntime)
 	err = consensusAPI.SignAndSubmitTx(context.Background(), node.Consensus, testEntitySigner, tx)
 	require.NoError(err, "register test entity")
 

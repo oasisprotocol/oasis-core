@@ -41,6 +41,10 @@ func (s SlashReason) MarshalText() ([]byte, error) {
 // UnmarshalText decodes a text slice into a SlashReason.
 func (s *SlashReason) UnmarshalText(text []byte) error {
 	switch string(text) {
+	// XXX: The "0" case is only for backward compatibility, so that the old
+	// genesis file loads -- remove this once mainnet is upgraded!
+	case "0":
+		fallthrough
 	case SlashDoubleSigningName:
 		*s = SlashDoubleSigning
 	default:
