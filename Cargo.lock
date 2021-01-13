@@ -1740,13 +1740,13 @@ dependencies = [
 
 [[package]]
 name = "rustracing"
-version = "0.5.0"
+version = "0.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "27b95bc9f4c062eac8d29d7852571015a34ba888d192536c19bb3759e6fc6e26"
+checksum = "a44822b10c095e574869de2b891e40c724fef42cadaea040d1cd3bdbb13d36a5"
 dependencies = [
  "backtrace",
  "crossbeam-channel 0.5.0",
- "rand 0.7.3",
+ "rand 0.8.1",
  "trackable",
 ]
 
