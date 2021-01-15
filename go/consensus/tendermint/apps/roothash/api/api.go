@@ -9,4 +9,7 @@ var (
 
 	// RuntimeMessageStaking is the message kind used when dispatching Staking runtime messages.
 	RuntimeMessageStaking = messageKind(1)
+
+	// RuntimeMessageRegistry is the message kind used when dispatching Registry runtime messages.
+	RuntimeMessageRegistry = messageKind(2)
 )

@@ -6,6 +6,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
+	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
 	staking "github.com/oasisprotocol/oasis-core/go/staking/api"
 )
 
@@ -41,6 +42,9 @@ func TestMessageValidateBasic(t *testing.T) {
 		{"StakingNoFieldsSet", Message{Staking: &StakingMessage{}}, false},
 		{"StakingMultipleFieldsSet", Message{Staking: &StakingMessage{Transfer: &staking.Transfer{}, Withdraw: &staking.Withdraw{}}}, false},
 		{"ValidStaking", Message{Staking: &StakingMessage{Transfer: &staking.Transfer{}}}, true},
+		{"RegistryNoFieldsSet", Message{Registry: &RegistryMessage{}}, false},
+		{"RegistryInvalid", Message{Registry: &RegistryMessage{UpdateRuntime: nil}}, false},
+		{"ValidRegistry", Message{Registry: &RegistryMessage{UpdateRuntime: &registry.Runtime{}}}, true},
 	} {
 		err := tc.msg.ValidateBasic()
 		if tc.valid {

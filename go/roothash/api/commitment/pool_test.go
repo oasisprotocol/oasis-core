@@ -218,7 +218,7 @@ func TestPoolSingleCommitment(t *testing.T) {
 
 	// Test message validator function.
 	bodyWithMsgs := body
-	bodyWithMsgs.Messages = []message.Message{{Staking: &message.StakingMessage{Transfer: &staking.Transfer{}}}}
+	bodyWithMsgs.Messages = []message.Message{{Staking: &message.StakingMessage{Transfer: &staking.Transfer{}}}, {Registry: &message.RegistryMessage{UpdateRuntime: &registry.Runtime{}}}}
 	msgHash := message.MessagesHash(bodyWithMsgs.Messages)
 	bodyWithMsgs.Header.MessagesHash = &msgHash
 	incorrectCommit, err := SignExecutorCommitment(sk, rtID, &bodyWithMsgs)
