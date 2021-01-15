@@ -12,7 +12,7 @@ use x25519_dalek;
 use oasis_core_runtime::{
     common::{
         crypto::signature::{PublicKey as OasisPublicKey, Signature, SignatureBundle},
-        runtime::RuntimeId,
+        namespace::Namespace,
         sgx::avr::EnclaveIdentity,
     },
     impl_bytes, runtime_api,
@@ -78,13 +78,13 @@ pub struct ReplicateResponse {
 #[derive(Clone, Serialize, Deserialize)]
 pub struct RequestIds {
     /// Runtime ID.
-    pub runtime_id: RuntimeId,
+    pub runtime_id: Namespace,
     /// Key pair ID.
     pub key_pair_id: KeyPairId,
 }
 
 impl RequestIds {
-    pub fn new(runtime_id: RuntimeId, key_pair_id: KeyPairId) -> Self {
+    pub fn new(runtime_id: Namespace, key_pair_id: KeyPairId) -> Self {
         Self {
             runtime_id,
             key_pair_id,
@@ -213,14 +213,14 @@ pub enum KeyManagerError {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct PolicySGX {
     pub serial: u32,
-    pub id: RuntimeId,
+    pub id: Namespace,
     pub enclaves: HashMap<EnclaveIdentity, EnclavePolicySGX>,
 }
 
 /// Per enclave key manager access control policy.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct EnclavePolicySGX {
-    pub may_query: HashMap<RuntimeId, Vec<EnclaveIdentity>>,
+    pub may_query: HashMap<Namespace, Vec<EnclaveIdentity>>,
     pub may_replicate: Vec<EnclaveIdentity>,
 }
 

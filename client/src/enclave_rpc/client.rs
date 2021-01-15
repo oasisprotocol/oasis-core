@@ -21,7 +21,7 @@ use thiserror::Error;
 use tokio_executor::spawn;
 
 #[cfg(not(target_env = "sgx"))]
-use oasis_core_runtime::common::runtime::RuntimeId;
+use oasis_core_runtime::common::namespace::Namespace;
 use oasis_core_runtime::{
     common::{cbor, sgx::avr::EnclaveIdentity},
     enclave_rpc::{
@@ -140,7 +140,7 @@ impl RpcClient {
     pub fn new_grpc(
         builder: Builder,
         channel: Channel,
-        runtime_id: RuntimeId,
+        runtime_id: Namespace,
         endpoint: &str,
     ) -> Self {
         Self::new(

@@ -3,13 +3,13 @@ use grpcio::{CallOption, Channel, Client, ClientUnaryReceiver, Result};
 use serde::{Deserialize, Serialize};
 use serde_bytes::ByteBuf;
 
-use oasis_core_runtime::common::runtime::RuntimeId;
+use oasis_core_runtime::common::namespace::Namespace;
 
 /// A call_enclave request.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct CallEnclaveRequest {
     /// Runtime ID of the target runtime.
-    pub runtime_id: RuntimeId,
+    pub runtime_id: Namespace,
     /// Endpoint name.
     pub endpoint: String,
     /// EnclaveRPC payload to transport to the target runtime.

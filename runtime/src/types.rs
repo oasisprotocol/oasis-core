@@ -10,7 +10,7 @@ use crate::{
             hash::Hash,
             signature::{PublicKey, Signature},
         },
-        runtime::RuntimeId,
+        namespace::Namespace,
         sgx::avr::AVR,
     },
     consensus::roothash::{self, Block, ComputeResultsHeader},
@@ -74,7 +74,7 @@ pub enum Body {
 
     // Runtime interface.
     RuntimeInfoRequest {
-        runtime_id: RuntimeId,
+        runtime_id: Namespace,
         consensus_backend: String,
         consensus_protocol_version: u64,
     },

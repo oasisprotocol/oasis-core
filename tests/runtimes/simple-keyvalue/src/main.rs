@@ -12,7 +12,7 @@ use oasis_core_runtime::{
             mrae::deoxysii::{DeoxysII, KEY_SIZE, NONCE_SIZE, TAG_SIZE},
         },
         key_format::KeyFormat,
-        runtime::RuntimeId,
+        namespace::Namespace,
         version::Version,
     },
     consensus::roothash::{Message, StakingMessage},
@@ -59,7 +59,7 @@ impl KeyFormat for PendingMessagesKeyFormat {
 }
 
 struct Context {
-    test_runtime_id: RuntimeId,
+    test_runtime_id: Namespace,
     km_client: Arc<dyn KeyManagerClient>,
 }
 

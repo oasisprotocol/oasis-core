@@ -13,7 +13,7 @@ use oasis_core_keymanager_api_common::*;
 use oasis_core_runtime::{
     common::{
         cbor,
-        runtime::RuntimeId,
+        namespace::Namespace,
         sgx::{
             avr::EnclaveIdentity,
             seal::{seal, unseal},
@@ -196,8 +196,8 @@ impl Policy {
 struct CachedPolicy {
     pub checksum: Vec<u8>,
     pub serial: u32,
-    pub runtime_id: RuntimeId,
-    pub may_query: HashMap<RuntimeId, HashSet<EnclaveIdentity>>,
+    pub runtime_id: Namespace,
+    pub may_query: HashMap<Namespace, HashSet<EnclaveIdentity>>,
     pub may_replicate: HashSet<EnclaveIdentity>,
     pub may_replicate_from: HashSet<EnclaveIdentity>,
 }
@@ -253,7 +253,7 @@ impl CachedPolicy {
         CachedPolicy {
             checksum: vec![],
             serial: 0,
-            runtime_id: RuntimeId::default(),
+            runtime_id: Namespace::default(),
             may_query: HashMap::new(),
             may_replicate: HashSet::new(),
             may_replicate_from: HashSet::new(),

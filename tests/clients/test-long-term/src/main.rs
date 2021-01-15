@@ -6,7 +6,7 @@ use rand::{rngs::StdRng, Rng, SeedableRng};
 use tokio::runtime::Runtime;
 
 use oasis_core_client::{create_txn_api_client, Node, TxnClient};
-use oasis_core_runtime::common::{crypto::hash::Hash, runtime::RuntimeId};
+use oasis_core_runtime::common::{crypto::hash::Hash, namespace::Namespace};
 use simple_keyvalue_api::{with_api, Key, KeyValue, Transfer, Withdraw};
 
 with_api! {
@@ -46,7 +46,7 @@ fn main() {
         .get_matches();
 
     let node_address = matches.value_of("node-address").unwrap();
-    let runtime_id = value_t_or_exit!(matches, "runtime-id", RuntimeId);
+    let runtime_id = value_t_or_exit!(matches, "runtime-id", Namespace);
     let mode = matches.value_of("mode").unwrap();
     let nonce_seed = matches
         .value_of("seed")

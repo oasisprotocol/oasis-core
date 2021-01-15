@@ -460,6 +460,16 @@ impl Dispatcher {
             "check_only" => check_only,
         );
 
+        // Verify that the runtime ID matches the block's namespace. This is a protocol violation
+        // as the compute node should never change the runtime ID.
+        if block.header.namespace != protocol.get_runtime_id() {
+            panic!(
+                "block namespace does not match runtime id (namespace: {:?} runtime ID: {:?})",
+                block.header.namespace,
+                protocol.get_runtime_id(),
+            );
+        }
+
         // Create a new context and dispatch the batch.
         let ctx = ctx.freeze();
         cache.maybe_replace(Root {

@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 use serde_bytes::ByteBuf;
 
 use oasis_core_runtime::{
-    common::{crypto::hash::Hash, runtime::RuntimeId},
+    common::{crypto::hash::Hash, namespace::Namespace},
     consensus::roothash::{AnnotatedBlock, Block},
     transaction::types::TxnBatch,
 };
@@ -14,20 +14,20 @@ pub const ROUND_LATEST: u64 = u64::max_value();
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct SubmitTxRequest {
-    pub runtime_id: RuntimeId,
+    pub runtime_id: Namespace,
     #[serde(with = "serde_bytes")]
     pub data: Vec<u8>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct GetBlockRequest {
-    pub runtime_id: RuntimeId,
+    pub runtime_id: Namespace,
     pub round: u64,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct GetBlockByHashRequest {
-    pub runtime_id: RuntimeId,
+    pub runtime_id: Namespace,
     pub block_hash: Hash,
 }
 
@@ -44,28 +44,28 @@ pub struct TxResult {
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct GetTxRequest {
-    pub runtime_id: RuntimeId,
+    pub runtime_id: Namespace,
     pub round: u64,
     pub index: u32,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct GetTxByBlockHashRequest {
-    pub runtime_id: RuntimeId,
+    pub runtime_id: Namespace,
     pub block_hash: Hash,
     pub index: u32,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct GetTxsRequest {
-    pub runtime_id: RuntimeId,
+    pub runtime_id: Namespace,
     pub round: u64,
     pub io_root: Hash,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct QueryTxRequest {
-    pub runtime_id: RuntimeId,
+    pub runtime_id: Namespace,
     #[serde(with = "serde_bytes")]
     pub key: Vec<u8>,
     #[serde(with = "serde_bytes")]
@@ -102,13 +102,13 @@ pub struct Query {
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct QueryTxsRequest {
-    pub runtime_id: RuntimeId,
+    pub runtime_id: Namespace,
     pub query: Query,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct WaitBlockIndexedRequest {
-    pub runtime_id: RuntimeId,
+    pub runtime_id: Namespace,
     pub round: u64,
 }
 
@@ -170,7 +170,7 @@ grpc_method!(
 grpc_stream!(
     METHOD_WATCH_BLOCKS,
     "/oasis-core.RuntimeClient/WatchBlocks",
-    RuntimeId,
+    Namespace,
     AnnotatedBlock
 );
 
@@ -268,7 +268,7 @@ impl RuntimeClient {
 
     pub fn watch_blocks(
         &self,
-        runtime_id: RuntimeId,
+        runtime_id: Namespace,
     ) -> Result<ClientSStreamReceiver<AnnotatedBlock>> {
         self.client
             .server_streaming(&METHOD_WATCH_BLOCKS, &runtime_id, Default::default())

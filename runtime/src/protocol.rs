@@ -16,7 +16,7 @@ use slog::Logger;
 use thiserror::Error;
 
 use crate::{
-    common::{cbor, logger::get_logger, runtime::RuntimeId, version::Version},
+    common::{cbor, logger::get_logger, namespace::Namespace, version::Version},
     dispatcher::Dispatcher,
     rak::RAK,
     storage::KeyValue,
@@ -66,7 +66,7 @@ pub struct Protocol {
     /// Pending outgoing requests.
     pending_out_requests: Mutex<HashMap<u64, channel::Sender<Body>>>,
     /// Runtime identifier.
-    runtime_id: Mutex<Option<RuntimeId>>,
+    runtime_id: Mutex<Option<Namespace>>,
     /// Runtime version.
     runtime_version: Version,
 }
@@ -99,7 +99,7 @@ impl Protocol {
     /// # Panics
     ///
     /// Panics, if the runtime identifier is not set.
-    pub fn get_runtime_id(self: &Protocol) -> RuntimeId {
+    pub fn get_runtime_id(self: &Protocol) -> Namespace {
         self.runtime_id
             .lock()
             .unwrap()

@@ -10,7 +10,7 @@ use serde::{de::DeserializeOwned, Serialize};
 use thiserror::Error;
 
 use oasis_core_runtime::{
-    common::{cbor, crypto::hash::Hash, runtime::RuntimeId},
+    common::{cbor, crypto::hash::Hash, namespace::Namespace},
     transaction::types::{TxnBatch, TxnCall, TxnOutput},
 };
 
@@ -41,7 +41,7 @@ pub struct TxnClient {
     /// The underlying storage gRPC interface.
     storage_client: api::storage::StorageClient,
     /// Runtime identifier.
-    runtime_id: RuntimeId,
+    runtime_id: Namespace,
     /// RPC timeout.
     timeout: Option<Duration>,
     /// Block watcher for `get_latest_block` call.
@@ -50,7 +50,7 @@ pub struct TxnClient {
 
 impl TxnClient {
     /// Create a new transaction client.
-    pub fn new(channel: Channel, runtime_id: RuntimeId, timeout: Option<Duration>) -> Self {
+    pub fn new(channel: Channel, runtime_id: Namespace, timeout: Option<Duration>) -> Self {
         Self {
             client: api::client::RuntimeClient::new(channel.clone()),
             node_controller: api::control::NodeControllerClient::new(channel.clone()),
