@@ -15,7 +15,7 @@ use lru::LruCache;
 use oasis_core_client::{create_rpc_api_client, BoxFuture, RpcClient};
 use oasis_core_keymanager_api_common::*;
 use oasis_core_runtime::{
-    common::{cbor, runtime::RuntimeId, sgx::avr::EnclaveIdentity},
+    common::{cbor, namespace::Namespace, sgx::avr::EnclaveIdentity},
     enclave_rpc::session,
     protocol::Protocol,
     rak::RAK,
@@ -31,8 +31,8 @@ with_api! {
 const KEY_MANAGER_ENDPOINT: &'static str = "key-manager";
 
 struct Inner {
-    /// Runtime Id for which we are going to request keys.
-    runtime_id: RuntimeId,
+    /// Runtime identifier for which we are going to request keys.
+    runtime_id: Namespace,
     /// RPC client.
     rpc_client: Client,
     /// Local cache for the get_or_create_keys KeyManager endpoint.
@@ -47,7 +47,7 @@ pub struct RemoteClient {
 }
 
 impl RemoteClient {
-    fn new(runtime_id: RuntimeId, client: RpcClient, keys_cache_sizes: usize) -> Self {
+    fn new(runtime_id: Namespace, client: RpcClient, keys_cache_sizes: usize) -> Self {
         Self {
             inner: Arc::new(Inner {
                 runtime_id,
@@ -61,7 +61,7 @@ impl RemoteClient {
     /// Create a new key manager client with runtime-internal transport and explicit key manager
     /// enclave identities.
     pub fn new_runtime_with_enclave_identities(
-        runtime_id: RuntimeId,
+        runtime_id: Namespace,
         enclaves: Option<HashSet<EnclaveIdentity>>,
         protocol: Arc<Protocol>,
         rak: Arc<RAK>,
@@ -87,7 +87,7 @@ impl RemoteClient {
     /// method. In case of sgx, the session establishment will fail until the
     /// initial policies will be updated.
     pub fn new_runtime(
-        runtime_id: RuntimeId,
+        runtime_id: Namespace,
         protocol: Arc<Protocol>,
         rak: Arc<RAK>,
         keys_cache_sizes: usize,
@@ -116,7 +116,7 @@ impl RemoteClient {
     /// Create a new key manager client with gRPC transport.
     #[cfg(not(target_env = "sgx"))]
     pub fn new_grpc(
-        runtime_id: RuntimeId,
+        runtime_id: Namespace,
         enclaves: Option<HashSet<EnclaveIdentity>>,
         channel: Channel,
         keys_cache_sizes: usize,

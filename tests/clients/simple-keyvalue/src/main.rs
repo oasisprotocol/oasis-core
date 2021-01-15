@@ -22,7 +22,7 @@ use oasis_core_client::{
     Node, TxnClient,
 };
 use oasis_core_runtime::{
-    common::{crypto::hash::Hash, runtime::RuntimeId},
+    common::{crypto::hash::Hash, namespace::Namespace},
     storage::MKVS,
 };
 use simple_keyvalue_api::{with_api, Key, KeyValue, Transfer, Withdraw};
@@ -49,7 +49,7 @@ fn main() {
         .get_matches();
 
     let node_address = matches.value_of("node-address").unwrap();
-    let runtime_id = value_t_or_exit!(matches, "runtime-id", RuntimeId);
+    let runtime_id = value_t_or_exit!(matches, "runtime-id", Namespace);
     let nonce_seed = matches
         .value_of("seed")
         .unwrap_or("seeeeeeeeeeeeeeeeeeeeeeeeeeeeeed")

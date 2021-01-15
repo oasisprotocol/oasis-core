@@ -6,7 +6,7 @@ use futures::Future;
 use io_context::Context;
 
 #[cfg(not(target_env = "sgx"))]
-use oasis_core_runtime::common::runtime::RuntimeId;
+use oasis_core_runtime::common::namespace::Namespace;
 use oasis_core_runtime::{common::cbor, enclave_rpc::types, protocol::Protocol, types::Body};
 
 #[cfg(not(target_env = "sgx"))]
@@ -71,7 +71,7 @@ impl Transport for RuntimeTransport {
 #[cfg(not(target_env = "sgx"))]
 pub struct GrpcTransport {
     pub grpc_client: EnclaveRPCClient,
-    pub runtime_id: RuntimeId,
+    pub runtime_id: Namespace,
     pub endpoint: String,
 }
 
