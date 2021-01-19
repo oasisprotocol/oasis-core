@@ -435,6 +435,7 @@ func (sc *txSourceImpl) Fixture() (*oasis.NetworkFixture, error) {
 
 		// One executor can be offline.
 		f.Runtimes[1].Executor.GroupSize--
+		f.Runtimes[1].Executor.MinPoolSize--
 
 		// Lower proposer and round timeouts as nodes are expected to go offline for longer time.
 		f.Runtimes[1].TxnScheduler.ProposerTimeout = 5
