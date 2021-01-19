@@ -12,6 +12,27 @@ The format is inspired by [Keep a Changelog].
 
 <!-- TOWNCRIER -->
 
+## 20.12.4 (2021-01-19)
+
+| Protocol          | Version   |
+|:------------------|:---------:|
+| Consensus         | 2.0.0     |
+| Runtime Host      | 1.0.0     |
+| Runtime Committee | 1.0.0     |
+
+### Bug Fixes
+
+- go/consensus/tendermint: Bump Tendermint Core to fix evidence handling
+  ([#3638](https://github.com/oasisprotocol/oasis-core/issues/3638))
+
+### Internal Changes
+
+- rust: bump arc-swap to 0.4.8
+  ([#3511](https://github.com/oasisprotocol/oasis-core/issues/3511))
+
+- Update smallvec to 0.6.14
+  ([#3604](https://github.com/oasisprotocol/oasis-core/issues/3604))
+
 ## 20.12.3 (2020-12-07)
 
 | Protocol          | Version   |
