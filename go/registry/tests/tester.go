@@ -6,6 +6,7 @@ import (
 	"crypto"
 	"errors"
 	"fmt"
+	"math"
 	"net"
 	"testing"
 	"time"
@@ -1732,6 +1733,13 @@ func NewTestRuntime(seed []byte, ent *TestEntity, isKeyManager bool) (*TestRunti
 			AnyNode: &api.AnyNodeRuntimeAdmissionPolicy{},
 		},
 		GovernanceModel: api.GovernanceEntity,
+		Staking: api.RuntimeStakingParameters{
+			Slashing: map[staking.SlashReason]staking.Slash{
+				staking.SlashRuntimeEquivocation: {
+					Amount: *quantity.NewFromUint64(math.MaxInt64),
+				},
+			},
+		},
 	}
 	// TODO: Test with non-empty state root when enabled.
 	rt.Runtime.Genesis.StateRoot.Empty()

@@ -73,7 +73,7 @@ var (
 
 	qtyOne = *quantity.NewFromUint64(1)
 
-	srcSigner  = debug.DebugStateSrcSigner
+	SrcSigner  = debug.DebugStateSrcSigner
 	SrcAddr    = debug.DebugStateSrcAddress
 	destSigner = debug.DebugStateDestSigner
 	DestAddr   = debug.DebugStateDestAddress
@@ -208,7 +208,7 @@ func testTransfer(t *testing.T, state *stakingTestsState, backend api.Backend, c
 		Amount: *quantity.NewFromUint64(math.MaxUint8),
 	}
 	tx := api.NewTransferTx(srcAcc.General.Nonce, nil, xfer)
-	err = consensusAPI.SignAndSubmitTx(context.Background(), consensus, srcSigner, tx)
+	err = consensusAPI.SignAndSubmitTx(context.Background(), consensus, SrcSigner, tx)
 	require.NoError(err, "Transfer")
 
 	var gotTransfer bool
@@ -276,7 +276,7 @@ TransferWaitLoop:
 	xfer.Amount = newSrcAcc.General.Balance
 
 	tx = api.NewTransferTx(newSrcAcc.General.Nonce, nil, xfer)
-	err = consensusAPI.SignAndSubmitTx(context.Background(), consensus, srcSigner, tx)
+	err = consensusAPI.SignAndSubmitTx(context.Background(), consensus, SrcSigner, tx)
 	require.Error(err, "Transfer - more than available balance")
 }
 
@@ -295,7 +295,7 @@ func testSelfTransfer(t *testing.T, state *stakingTestsState, backend api.Backen
 		Amount: *quantity.NewFromUint64(math.MaxUint8),
 	}
 	tx := api.NewTransferTx(srcAcc.General.Nonce, nil, xfer)
-	err = consensusAPI.SignAndSubmitTx(context.Background(), consensus, srcSigner, tx)
+	err = consensusAPI.SignAndSubmitTx(context.Background(), consensus, SrcSigner, tx)
 	require.NoError(err, "Transfer")
 
 	var gotTransfer bool
@@ -343,7 +343,7 @@ TransferWaitLoop:
 	xfer.Amount = newSrcAcc.General.Balance
 
 	tx = api.NewTransferTx(newSrcAcc.General.Nonce, nil, xfer)
-	err = consensusAPI.SignAndSubmitTx(context.Background(), consensus, srcSigner, tx)
+	err = consensusAPI.SignAndSubmitTx(context.Background(), consensus, SrcSigner, tx)
 	require.Error(err, "Transfer - more than available balance")
 }
 
@@ -364,7 +364,7 @@ func testBurn(t *testing.T, state *stakingTestsState, backend api.Backend, conse
 		Amount: *quantity.NewFromUint64(math.MaxUint32),
 	}
 	tx := api.NewBurnTx(srcAcc.General.Nonce, nil, burn)
-	err = consensusAPI.SignAndSubmitTx(context.Background(), consensus, srcSigner, tx)
+	err = consensusAPI.SignAndSubmitTx(context.Background(), consensus, SrcSigner, tx)
 	require.NoError(err, "Burn")
 
 	select {
@@ -407,11 +407,11 @@ func testBurn(t *testing.T, state *stakingTestsState, backend api.Backend, conse
 }
 
 func testEscrow(t *testing.T, state *stakingTestsState, backend api.Backend, consensus consensusAPI.Backend) {
-	testEscrowEx(t, state, backend, consensus, SrcAddr, srcSigner, DestAddr)
+	testEscrowEx(t, state, backend, consensus, SrcAddr, SrcSigner, DestAddr)
 }
 
 func testSelfEscrow(t *testing.T, state *stakingTestsState, backend api.Backend, consensus consensusAPI.Backend) {
-	testEscrowEx(t, state, backend, consensus, SrcAddr, srcSigner, SrcAddr)
+	testEscrowEx(t, state, backend, consensus, SrcAddr, SrcSigner, SrcAddr)
 }
 
 func testEscrowEx( // nolint: gocyclo
@@ -420,7 +420,7 @@ func testEscrowEx( // nolint: gocyclo
 	backend api.Backend,
 	consensus consensusAPI.Backend,
 	srcAddr api.Address,
-	srcSigner signature.Signer,
+	SrcSigner signature.Signer,
 	dstAddr api.Address,
 ) {
 	require := require.New(t)
@@ -454,7 +454,7 @@ func testEscrowEx( // nolint: gocyclo
 		Amount:  *quantity.NewFromUint64(math.MaxUint32),
 	}
 	tx := api.NewAddEscrowTx(srcAcc.General.Nonce, nil, escrow)
-	err = consensusAPI.SignAndSubmitTx(context.Background(), consensus, srcSigner, tx)
+	err = consensusAPI.SignAndSubmitTx(context.Background(), consensus, SrcSigner, tx)
 	require.NoError(err, "AddEscrow")
 	require.NoError(totalEscrowed.Add(&escrow.Amount))
 
@@ -521,7 +521,7 @@ func testEscrowEx( // nolint: gocyclo
 		Amount:  *quantity.NewFromUint64(math.MaxUint32),
 	}
 	tx = api.NewAddEscrowTx(srcAcc.General.Nonce, nil, escrow)
-	err = consensusAPI.SignAndSubmitTx(context.Background(), consensus, srcSigner, tx)
+	err = consensusAPI.SignAndSubmitTx(context.Background(), consensus, SrcSigner, tx)
 	require.NoError(err, "AddEscrow")
 	require.NoError(totalEscrowed.Add(&escrow.Amount))
 
@@ -592,7 +592,7 @@ func testEscrowEx( // nolint: gocyclo
 		Shares:  dstAcc.Escrow.Active.TotalShares,
 	}
 	tx = api.NewReclaimEscrowTx(srcAcc.General.Nonce, nil, reclaim)
-	err = consensusAPI.SignAndSubmitTx(context.Background(), consensus, srcSigner, tx)
+	err = consensusAPI.SignAndSubmitTx(context.Background(), consensus, SrcSigner, tx)
 	require.NoError(err, "ReclaimEscrow")
 
 	// Query debonding delegations.
@@ -666,7 +666,7 @@ func testEscrowEx( // nolint: gocyclo
 		Shares:  reclaim.Shares,
 	}
 	tx = api.NewReclaimEscrowTx(newSrcAcc.General.Nonce, nil, reclaim)
-	err = consensusAPI.SignAndSubmitTx(context.Background(), consensus, srcSigner, tx)
+	err = consensusAPI.SignAndSubmitTx(context.Background(), consensus, SrcSigner, tx)
 	require.Error(err, "ReclaimEscrow")
 
 	debs, err = backend.DebondingDelegations(context.Background(), &api.OwnerQuery{Owner: srcAddr, Height: consensusAPI.HeightLatest})
@@ -679,7 +679,7 @@ func testEscrowEx( // nolint: gocyclo
 		Amount:  *quantity.NewFromUint64(1), // Minimum is 10.
 	}
 	tx = api.NewAddEscrowTx(srcAcc.General.Nonce, nil, escrow)
-	err = consensusAPI.SignAndSubmitTx(context.Background(), consensus, srcSigner, tx)
+	err = consensusAPI.SignAndSubmitTx(context.Background(), consensus, SrcSigner, tx)
 	require.Error(err, "AddEscrow")
 }
 
@@ -701,7 +701,7 @@ func testAllowance(t *testing.T, state *stakingTestsState, backend api.Backend, 
 		AmountChange: *quantity.NewFromUint64(math.MaxUint8),
 	}
 	tx := api.NewAllowTx(srcAcc.General.Nonce, nil, allow)
-	err = consensusAPI.SignAndSubmitTx(context.Background(), consensus, srcSigner, tx)
+	err = consensusAPI.SignAndSubmitTx(context.Background(), consensus, SrcSigner, tx)
 	require.NoError(err, "Allow")
 
 	// Compute what new the total expected allowance should be.
@@ -846,7 +846,7 @@ func testSlashConsensusEquivocation(
 		Amount:  *quantity.NewFromUint64(math.MaxUint32),
 	}
 	tx := api.NewAddEscrowTx(srcAcc.General.Nonce, nil, escrow)
-	err = consensusAPI.SignAndSubmitTx(context.Background(), consensus, srcSigner, tx)
+	err = consensusAPI.SignAndSubmitTx(context.Background(), consensus, SrcSigner, tx)
 	require.NoError(err, "AddEscrow")
 
 	// Query updated validator account state.
