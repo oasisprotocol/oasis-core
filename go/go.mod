@@ -11,7 +11,7 @@ replace (
 	// https://github.com/spf13/cobra/issues/1091
 	github.com/gorilla/websocket => github.com/gorilla/websocket v1.4.2
 
-	github.com/tendermint/tendermint => github.com/oasisprotocol/tendermint v0.34.0-oasis1
+	github.com/tendermint/tendermint => github.com/oasisprotocol/tendermint v0.34.3-oasis1
 	golang.org/x/crypto/curve25519 => github.com/oasisprotocol/ed25519/extra/x25519 v0.0.0-20201103162138-a1dadbe24dd5
 	golang.org/x/crypto/ed25519 => github.com/oasisprotocol/ed25519 v0.0.0-20201103162138-a1dadbe24dd5
 )
@@ -55,8 +55,8 @@ require (
 	github.com/uber/jaeger-lib v2.2.0+incompatible // indirect
 	github.com/whyrusleeping/go-logging v0.0.1
 	gitlab.com/yawning/dynlib.git v0.0.0-20200603163025-35fe007b0761
-	golang.org/x/crypto v0.0.0-20201016220609-9e8e0b390897
-	golang.org/x/net v0.0.0-20200822124328-c89045814202
+	golang.org/x/crypto v0.0.0-20201117144127-c1f2f97bffc9
+	golang.org/x/net v0.0.0-20201021035429-f5854403a974
 	google.golang.org/genproto v0.0.0-20201111145450-ac7456db90a6
 	google.golang.org/grpc v1.35.0
 	google.golang.org/grpc/security/advancedtls v0.0.0-20200902210233-8630cac324bf
