@@ -88,10 +88,22 @@ func TestOnEvidenceConsensusEquivocation(t *testing.T) {
 	})
 	require.NoError(err, "SetConsensusParameters")
 
-	// Should fail as the validator has no stake (which is an invariant violation as a validator
-	// needs to have some stake).
+	// Should not fail if the validator has no stake (which is in any case an
+	// invariant violation as a validator needs to have some stake).
 	err = onEvidenceConsensusEquivocation(ctx, validatorAddress, 1, now, 1)
-	require.Error(err, "should fail when validator has no stake")
+	require.NoError(err, "should not fail when validator has no stake")
+	// Node should be frozen.
+	status, err := regState.NodeStatus(ctx, nod.ID)
+	require.NoError(err, "NodeStatus")
+	require.True(status.IsFrozen(), "node should be frozen after slashing")
+	require.EqualValues(registry.FreezeForever, status.FreezeEndTime, "node should be frozen forever")
+
+	// Should not fail slashing a frozen node.
+	err = onEvidenceConsensusEquivocation(ctx, validatorAddress, 1, now, 1)
+	require.NoError(err, "should not fail when validator is frozen")
+	// Unfreeze the node.
+	err = regState.SetNodeStatus(ctx, nod.ID, &registry.NodeStatus{FreezeEndTime: 0})
+	require.NoError(err, "SetNodeStatus")
 
 	// Computes entity's staking address.
 	addr := staking.NewAddress(ent.ID)
@@ -122,7 +134,7 @@ func TestOnEvidenceConsensusEquivocation(t *testing.T) {
 	require.EqualValues(balance, acct.Escrow.Active.Balance, "entity stake should be slashed")
 
 	// Node should be frozen.
-	status, err := regState.NodeStatus(ctx, nod.ID)
+	status, err = regState.NodeStatus(ctx, nod.ID)
 	require.NoError(err, "NodeStatus")
 	require.True(status.IsFrozen(), "node should be frozen after slashing")
 	require.EqualValues(registry.FreezeForever, status.FreezeEndTime, "node should be frozen forever")
