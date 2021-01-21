@@ -136,6 +136,11 @@ func (app *rootHashApplication) executorProposerTimeout(
 		return err
 	}
 
+	// Return early for simulation as we only need gas accounting.
+	if ctx.IsSimulation() {
+		return nil
+	}
+
 	rtState, sv, nl, err := app.getRuntimeState(ctx, state, rpt.ID)
 	if err != nil {
 		return err
@@ -299,6 +304,11 @@ func (app *rootHashApplication) submitEvidence(
 		return err
 	}
 
+	// Return early for simulation as we only need gas accounting.
+	if ctx.IsSimulation() {
+		return nil
+	}
+
 	rtState, _, _, err := app.getRuntimeState(ctx, state, evidence.ID)
 	if err != nil {
 		return err
@@ -351,6 +361,9 @@ func (app *rootHashApplication) submitEvidence(
 		}
 		round = batchA.Header.Round
 		pk = evidence.EquivocationBatch.BatchA.Signature.PublicKey
+	default:
+		// This should never happen due to ValidateBasic check above.
+		return roothash.ErrInvalidEvidence
 	}
 
 	// Evidence is valid. Store the evidence and slash the node.
@@ -372,7 +385,7 @@ func (app *rootHashApplication) submitEvidence(
 	if err = onEvidenceRuntimeEquivocation(
 		ctx,
 		pk,
-		rtState.Runtime.ID,
+		rtState.Runtime,
 		&slash,
 	); err != nil {
 		return fmt.Errorf("error slashing runtime node: %w", err)

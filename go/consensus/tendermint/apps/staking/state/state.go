@@ -697,18 +697,24 @@ func (s *MutableState) SlashEscrow(
 // to the general balance of the account, returning true iff the
 // amount transferred is > 0.
 //
+// If the escrow flag is true then the amount is escrowed instead of being
+// transferred. The escrow operation takes the entity's commission rate into
+// account and the rest is distributed to all delegators equally.
+//
 // WARNING: This is an internal routine to be used to implement incentivization
 // policy, and MUST NOT be exposed outside of backend implementations.
 func (s *MutableState) TransferFromCommon(
 	ctx *abciAPI.Context,
 	toAddr staking.Address,
 	amount *quantity.Quantity,
+	escrow bool,
 ) (bool, error) {
 	commonPool, err := s.CommonPool(ctx)
 	if err != nil {
 		return false, fmt.Errorf("tendermint/staking: failed to query common pool for transfer: %w", err)
 	}
 
+	// Transfer up to the given amount from the common pool to the general account balance.
 	to, err := s.Account(ctx, toAddr)
 	if err != nil {
 		return false, fmt.Errorf("tendermint/staking: failed to query account %s: %w", toAddr, err)
@@ -717,27 +723,95 @@ func (s *MutableState) TransferFromCommon(
 	if err != nil {
 		return false, fmt.Errorf("tendermint/staking: failed to transfer from common pool: %w", err)
 	}
+	if transferred.IsZero() {
+		// Common pool has been depleated, nothing to transfer.
+		return false, nil
+	}
 
-	ret := !transferred.IsZero()
-	if ret {
-		if err = s.SetCommonPool(ctx, commonPool); err != nil {
-			return false, fmt.Errorf("tendermint/staking: failed to set common pool: %w", err)
-		}
-		if err = s.SetAccount(ctx, toAddr, to); err != nil {
-			return false, fmt.Errorf("tendermint/staking: failed to set account %s: %w", toAddr, err)
+	// If escrow is requested, escrow the transferred stake immediately.
+	if escrow {
+		var com *quantity.Quantity
+		switch to.Escrow.Active.TotalShares.IsZero() {
+		case false:
+			// Compute commission.
+			var epoch beacon.EpochTime
+			epoch, err = ctx.AppState().GetCurrentEpoch(ctx)
+			if err != nil {
+				return false, fmt.Errorf("tendermint/staking: failed to get current epoch: %w", err)
+			}
+
+			q := transferred.Clone()
+			rate := to.Escrow.CommissionSchedule.CurrentRate(epoch)
+			if rate != nil {
+				com = q.Clone()
+				// Multiply first.
+				if err = com.Mul(rate); err != nil {
+					return false, fmt.Errorf("tendermint/staking: failed multiplying by commission rate: %w", err)
+				}
+				if err = com.Quo(staking.CommissionRateDenominator); err != nil {
+					return false, fmt.Errorf("tendermint/staking: failed dividing by commission rate denominator: %w", err)
+				}
+
+				if err = q.Sub(com); err != nil {
+					return false, fmt.Errorf("tendermint/staking: failed subtracting commission: %w", err)
+				}
+			}
+
+			// Escrow everything except the commission (increases value of all shares).
+			if err = quantity.Move(&to.Escrow.Active.Balance, &to.General.Balance, q); err != nil {
+				return false, fmt.Errorf("tendermint/staking: failed transferring to active escrow balance from common pool: %w", err)
+			}
+		case true:
+			// If nothing has been escrowed before, everything counts as commission.
+			com = transferred.Clone()
 		}
 
-		if !ctx.IsCheckOnly() {
+		// Escrow commission.
+		if com != nil && !com.IsZero() {
+			var delegation *staking.Delegation
+			delegation, err = s.Delegation(ctx, toAddr, toAddr)
+			if err != nil {
+				return false, fmt.Errorf("tendermint/staking: failed to query delegation: %w", err)
+			}
+
+			if err = to.Escrow.Active.Deposit(&delegation.Shares, &to.General.Balance, com); err != nil {
+				return false, fmt.Errorf("tendermint/staking: failed to deposit to escrow: %w", err)
+			}
+
+			if err = s.SetDelegation(ctx, toAddr, toAddr, delegation); err != nil {
+				return false, fmt.Errorf("tendermint/staking: failed to set delegation: %w", err)
+			}
+		}
+	}
+
+	if err = s.SetCommonPool(ctx, commonPool); err != nil {
+		return false, fmt.Errorf("tendermint/staking: failed to set common pool: %w", err)
+	}
+	if err = s.SetAccount(ctx, toAddr, to); err != nil {
+		return false, fmt.Errorf("tendermint/staking: failed to set account %s: %w", toAddr, err)
+	}
+
+	// Emit event(s).
+	if !ctx.IsCheckOnly() {
+		switch escrow {
+		case false:
 			ev := cbor.Marshal(&staking.TransferEvent{
 				From:   staking.CommonPoolAddress,
 				To:     toAddr,
 				Amount: *transferred,
 			})
 			ctx.EmitEvent(api.NewEventBuilder(AppName).Attribute(KeyTransfer, ev))
+		case true:
+			ev := cbor.Marshal(&staking.AddEscrowEvent{
+				Owner:  staking.CommonPoolAddress,
+				Escrow: toAddr,
+				Amount: *transferred,
+			})
+			ctx.EmitEvent(api.NewEventBuilder(AppName).Attribute(KeyAddEscrow, ev))
 		}
 	}
 
-	return ret, nil
+	return true, nil
 }
 
 // TransferToGovernanceDeposits transfers the amount from the submitter to the

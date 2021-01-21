@@ -266,10 +266,24 @@ type RuntimeStakingParameters struct {
 
 	// Slashing are the per-runtime misbehavior slashing parameters.
 	Slashing map[staking.SlashReason]staking.Slash `json:"slashing,omitempty"`
+
+	// RewardSlashEquvocationRuntimePercent is the percentage of the reward obtained when slashing
+	// for equivocation that is transferred to the runtime's account.
+	RewardSlashEquvocationRuntimePercent uint8 `json:"reward_equivocation,omitempty"`
+
+	// RewardSlashBadResultsRuntimePercent is the percentage of the reward obtained when slashing
+	// for incorrect results that is transferred to the runtime's account.
+	RewardSlashBadResultsRuntimePercent uint8 `json:"reward_bad_results,omitempty"`
 }
 
 // ValidateBasic performs basic descriptor validity checks.
 func (s *RuntimeStakingParameters) ValidateBasic(runtimeKind RuntimeKind) error {
+	if s.RewardSlashEquvocationRuntimePercent > 100 {
+		return fmt.Errorf("runtime reward percentage from slashing for equivocation must be <= 100")
+	}
+	if s.RewardSlashBadResultsRuntimePercent > 100 {
+		return fmt.Errorf("runtime reward percentage from slashing for bad results must be <= 100")
+	}
 	for kind, q := range s.Thresholds {
 		switch kind {
 		case staking.KindNodeCompute, staking.KindNodeStorage:

@@ -1,13 +1,20 @@
 package runtime
 
 import (
+	"context"
+	"fmt"
 	"strconv"
 
+	"github.com/oasisprotocol/oasis-core/go/common/quantity"
+	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
 	"github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/debug/byzantine"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/env"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/log"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/oasis"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/scenario"
+	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/scenario/e2e"
+	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
+	staking "github.com/oasisprotocol/oasis-core/go/staking/api"
 )
 
 var (
@@ -31,6 +38,7 @@ var (
 		nil,
 		oasis.ByzantineDefaultIdentitySeed,
 		nil,
+		nil,
 	)
 	// ByzantineExecutorSchedulerHonest is the byzantine executor scheduler honest scenario.
 	ByzantineExecutorSchedulerHonest scenario.Scenario = newByzantineImpl(
@@ -38,6 +46,7 @@ var (
 		"executor",
 		nil,
 		oasis.ByzantineSlot3IdentitySeed,
+		nil,
 		[]string{
 			"--" + byzantine.CfgSchedulerRoleExpected,
 		},
@@ -53,6 +62,10 @@ var (
 			oasis.LogAssertExecutionDiscrepancyDetected(),
 		},
 		oasis.ByzantineDefaultIdentitySeed,
+		// Byzantine node entity should be slashed once for submitting incorrect commitment.
+		map[staking.SlashReason]uint64{
+			staking.SlashRuntimeIncorrectResults: 1,
+		},
 		[]string{
 			"--" + byzantine.CfgExecutorMode, byzantine.ModeExecutorWrong.String(),
 		},
@@ -69,6 +82,7 @@ var (
 			oasis.LogAssertExecutionDiscrepancyDetected(),
 		},
 		oasis.ByzantineSlot3IdentitySeed,
+		nil,
 		[]string{
 			"--" + byzantine.CfgSchedulerRoleExpected,
 			"--" + byzantine.CfgExecutorMode, byzantine.ModeExecutorWrong.String(),
@@ -85,6 +99,7 @@ var (
 			oasis.LogAssertExecutionDiscrepancyDetected(),
 		},
 		oasis.ByzantineDefaultIdentitySeed,
+		nil,
 		[]string{
 			"--" + byzantine.CfgExecutorMode, byzantine.ModeExecutorStraggler.String(),
 		},
@@ -101,6 +116,7 @@ var (
 			oasis.LogAssertExecutionDiscrepancyDetected(),
 		},
 		oasis.ByzantineSlot3IdentitySeed,
+		nil,
 		[]string{
 			"--" + byzantine.CfgSchedulerRoleExpected,
 			"--" + byzantine.CfgExecutorMode, byzantine.ModeExecutorStraggler.String(),
@@ -118,6 +134,7 @@ var (
 			oasis.LogAssertExecutionDiscrepancyDetected(),
 		},
 		oasis.ByzantineDefaultIdentitySeed,
+		nil,
 		[]string{
 			"--" + byzantine.CfgExecutorMode, byzantine.ModeExecutorFailureIndicating.String(),
 		},
@@ -134,6 +151,7 @@ var (
 			oasis.LogAssertExecutionDiscrepancyDetected(),
 		},
 		oasis.ByzantineSlot3IdentitySeed,
+		nil,
 		[]string{
 			"--" + byzantine.CfgSchedulerRoleExpected,
 			"--" + byzantine.CfgExecutorMode, byzantine.ModeExecutorFailureIndicating.String(),
@@ -146,6 +164,7 @@ var (
 		nil,
 		oasis.ByzantineDefaultIdentitySeed,
 		nil,
+		nil,
 	)
 	// ByzantineStorageFailApply is the byzantine storage scenario where storage node fails
 	// first 5 Apply requests.
@@ -156,6 +175,7 @@ var (
 		// should keep retrying proposing a batch until it succeeds.
 		nil,
 		oasis.ByzantineDefaultIdentitySeed,
+		nil,
 		[]string{
 			// Fail first 5 ApplyBatch requests.
 			"--" + byzantine.CfgNumStorageFailApply, strconv.Itoa(5),
@@ -173,6 +193,7 @@ var (
 			oasis.LogAssertRoundFailures(),
 		},
 		oasis.ByzantineDefaultIdentitySeed,
+		nil,
 		[]string{
 			// Fail first 3 ApplyBatch requests - from the 2 executor workers and 1 backup node.
 			"--" + byzantine.CfgNumStorageFailApplyBatch, strconv.Itoa(3),
@@ -182,9 +203,10 @@ var (
 	ByzantineStorageFailRead scenario.Scenario = newByzantineImpl(
 		"storage-fail-read",
 		"storage",
-		// There should be no discrepancy or round failrues.
+		// There should be no discrepancy or round failures.
 		nil,
 		oasis.ByzantineDefaultIdentitySeed,
+		nil,
 		[]string{
 			// Fail all read requests.
 			"--" + byzantine.CfgFailReadRequests,
@@ -200,6 +222,11 @@ type byzantineImpl struct {
 
 	identitySeed               string
 	logWatcherHandlerFactories []log.WatcherHandlerFactory
+
+	// expectedSlashes are the expected slashes of the byzantine entity. Value
+	// is the number of times the entity is expected to be slashed for the specific
+	// reason.
+	expectedSlashes map[staking.SlashReason]uint64
 }
 
 func newByzantineImpl(
@@ -207,6 +234,7 @@ func newByzantineImpl(
 	script string,
 	logWatcherHandlerFactories []log.WatcherHandlerFactory,
 	identitySeed string,
+	expectedSlashes map[staking.SlashReason]uint64,
 	extraArgs []string,
 ) scenario.Scenario {
 	return &byzantineImpl{
@@ -219,6 +247,7 @@ func newByzantineImpl(
 		extraArgs:                  extraArgs,
 		identitySeed:               identitySeed,
 		logWatcherHandlerFactories: logWatcherHandlerFactories,
+		expectedSlashes:            expectedSlashes,
 	}
 }
 
@@ -229,6 +258,7 @@ func (sc *byzantineImpl) Clone() scenario.Scenario {
 		extraArgs:                  sc.extraArgs,
 		identitySeed:               sc.identitySeed,
 		logWatcherHandlerFactories: sc.logWatcherHandlerFactories,
+		expectedSlashes:            sc.expectedSlashes,
 	}
 }
 
@@ -236,6 +266,42 @@ func (sc *byzantineImpl) Fixture() (*oasis.NetworkFixture, error) {
 	f, err := sc.runtimeImpl.Fixture()
 	if err != nil {
 		return nil, err
+	}
+
+	// Add another entity (DeterministicEntity2) that will get slashed.
+	f.Entities = append(f.Entities, oasis.EntityCfg{})
+
+	f.Runtimes[1].Staking = registry.RuntimeStakingParameters{
+		Slashing: map[staking.SlashReason]staking.Slash{
+			staking.SlashRuntimeIncorrectResults: {
+				Amount: *quantity.NewFromUint64(50),
+			},
+			staking.SlashRuntimeEquivocation: {
+				Amount: *quantity.NewFromUint64(50),
+			},
+		},
+	}
+	f.Network.StakingGenesis = &staking.Genesis{
+		TotalSupply: *quantity.NewFromUint64(100),
+		Ledger: map[staking.Address]*staking.Account{
+			// Entity account needs escrow so that the byzantine node can get
+			// slashed.
+			e2e.DeterministicEntity2: {
+				Escrow: staking.EscrowAccount{
+					Active: staking.SharePool{
+						Balance:     *quantity.NewFromUint64(100),
+						TotalShares: *quantity.NewFromUint64(100),
+					},
+				},
+			},
+		},
+		Delegations: map[staking.Address]map[staking.Address]*staking.Delegation{
+			e2e.DeterministicEntity2: {
+				e2e.DeterministicEntity2: &staking.Delegation{
+					Shares: *quantity.NewFromUint64(100),
+				},
+			},
+		},
 	}
 
 	// The byzantine node requires deterministic identities.
@@ -253,7 +319,7 @@ func (sc *byzantineImpl) Fixture() (*oasis.NetworkFixture, error) {
 			Script:          sc.script,
 			ExtraArgs:       sc.extraArgs,
 			IdentitySeed:    sc.identitySeed,
-			Entity:          1,
+			Entity:          2,
 			ActivationEpoch: 1,
 		},
 	}
@@ -261,6 +327,8 @@ func (sc *byzantineImpl) Fixture() (*oasis.NetworkFixture, error) {
 }
 
 func (sc *byzantineImpl) Run(childEnv *env.Env) error {
+	ctx := context.Background()
+
 	clientErrCh, cmd, err := sc.runtimeImpl.start(childEnv)
 	if err != nil {
 		return err
@@ -274,6 +342,33 @@ func (sc *byzantineImpl) Run(childEnv *env.Env) error {
 	if err = sc.initialEpochTransitions(fixture); err != nil {
 		return err
 	}
+	err = sc.wait(childEnv, cmd, clientErrCh)
+	if err != nil {
+		return err
+	}
 
-	return sc.wait(childEnv, cmd, clientErrCh)
+	// Ensure entity has expected stake.
+	acc, err := sc.Net.ClientController().Staking.Account(ctx, &staking.OwnerQuery{
+		Height: consensus.HeightLatest,
+		Owner:  e2e.DeterministicEntity2,
+	})
+	if err != nil {
+		return err
+	}
+
+	// Calculate expected stake by going through expected slashes.
+	expectedStake := fixture.Network.StakingGenesis.Ledger[e2e.DeterministicEntity2].Escrow.Active.Balance.Clone()
+	for reason, times := range sc.expectedSlashes {
+		slashAmount := fixture.Runtimes[1].Staking.Slashing[reason].Amount
+		for i := uint64(0); i < times; i++ {
+			if err = expectedStake.Sub(&slashAmount); err != nil {
+				return fmt.Errorf("expectedStake.Sub(slashAmount): %w", err)
+			}
+		}
+	}
+	if expectedStake.Cmp(&acc.Escrow.Active.Balance) != 0 {
+		return fmt.Errorf("expected entity stake: %v got: %v", expectedStake, acc.General.Balance)
+	}
+
+	return nil
 }

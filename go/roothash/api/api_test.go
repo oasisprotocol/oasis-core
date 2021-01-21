@@ -212,7 +212,8 @@ func TestEquivocationBatchEvidenceValidateBasic(t *testing.T) {
 
 	rt1ID := common.NewTestNamespaceFromSeed([]byte("roothash/api_test: runtime1"), 0)
 	rt1Blk1 := block.NewGenesisBlock(rt1ID, 0)
-	rt1Blk2 := block.NewEmptyBlock(rt1Blk1, 0, block.Normal)
+	rt1Blk2 := block.NewEmptyBlock(rt1Blk1, 0, block.Normal) // Different round.
+	rt1Blk3 := block.NewGenesisBlock(rt1ID, 0xDEADBEEF)      // Same round, different timestamp.
 
 	rt2ID := common.NewTestNamespaceFromSeed([]byte("roothash/api_test: runtime2"), 0)
 	rt2Blk1 := block.NewGenesisBlock(rt2ID, 0)
@@ -228,19 +229,35 @@ func TestEquivocationBatchEvidenceValidateBasic(t *testing.T) {
 	require.NoError(err, "SignProposedBatch")
 
 	rt1Batch2 := &commitment.ProposedBatch{
-		IORoot:            rt1Blk2.Header.IORoot,
-		StorageSignatures: []signature.Signature{},
-		Header:            rt1Blk2.Header,
+		IORoot:            rt1Blk2.Header.IORoot,   // Different IO root.
+		StorageSignatures: []signature.Signature{}, // Same storage signatures.
+		Header:            rt1Blk2.Header,          // Different header.
 	}
 	signedR1B2, err := commitment.SignProposedBatch(sk, rt1Batch2)
 	require.NoError(err, "SignProposedBatch")
 
 	rt1Batch3 := &commitment.ProposedBatch{
-		IORoot:            hash.NewFromBytes([]byte("invalid root")),
-		StorageSignatures: []signature.Signature{},
-		Header:            rt1Blk1.Header,
+		IORoot:            hash.NewFromBytes([]byte("invalid root")), // Different IO root.
+		StorageSignatures: []signature.Signature{},                   // Same storage signatures.
+		Header:            rt1Blk1.Header,                            // Same header.
 	}
 	signedR1B3, err := commitment.SignProposedBatch(sk, rt1Batch3)
+	require.NoError(err, "SignProposedBatch")
+
+	rt1Batch4 := &commitment.ProposedBatch{
+		IORoot:            rt1Batch1.IORoot,          // Same IO root.
+		StorageSignatures: []signature.Signature{{}}, // Different storage signatures.
+		Header:            rt1Batch1.Header,          // Same header.
+	}
+	signedR1B4, err := commitment.SignProposedBatch(sk, rt1Batch4)
+	require.NoError(err, "SignProposedBatch")
+
+	rt1Batch5 := &commitment.ProposedBatch{
+		IORoot:            rt1Batch1.IORoot,        // Same IO root.
+		StorageSignatures: []signature.Signature{}, // Same storage signatures.
+		Header:            rt1Blk3.Header,          // Different header for same round.
+	}
+	signedR1B5, err := commitment.SignProposedBatch(sk, rt1Batch5)
 	require.NoError(err, "SignProposedBatch")
 
 	signed2R1B3, err := commitment.SignProposedBatch(sk2, rt1Batch3)
@@ -308,7 +325,7 @@ func TestEquivocationBatchEvidenceValidateBasic(t *testing.T) {
 				BatchB: *signedR1B3,
 			},
 			false,
-			"same height different IORoot is valid evidence",
+			"same round different IORoot is valid evidence",
 		},
 		{
 			EquivocationBatchEvidence{
@@ -317,6 +334,22 @@ func TestEquivocationBatchEvidenceValidateBasic(t *testing.T) {
 			},
 			true,
 			"different signer is not valid evidence",
+		},
+		{
+			EquivocationBatchEvidence{
+				BatchA: *signedR1B1,
+				BatchB: *signedR1B4,
+			},
+			true,
+			"same round, io root and same header is not valid evidence",
+		},
+		{
+			EquivocationBatchEvidence{
+				BatchA: *signedR1B1,
+				BatchB: *signedR1B5,
+			},
+			false,
+			"same round and io root but different header is valid evidence",
 		},
 	} {
 		err := ev.ev.ValidateBasic()

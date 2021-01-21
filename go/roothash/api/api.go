@@ -207,10 +207,18 @@ type EquivocationExecutorEvidence struct {
 	CommitB commitment.ExecutorCommitment `json:"commit_b"`
 }
 
-// ValidateBasic performs basic executor evidence validation checks.
-// TODO: maybe rename to: Validate(), might better indicate that this actually
-// checks if evidence is valid and is not just a basic check.
+// ValidateBasic performs stateless executor evidence validation checks.
+//
+// Particularly evidence is not verified to not be expired as this requires stateful checks.
 func (ev *EquivocationExecutorEvidence) ValidateBasic() error {
+	if ev.CommitA.Equal(&ev.CommitB) {
+		return fmt.Errorf("commits are equal, no sign of equivocation")
+	}
+
+	if !ev.CommitA.Signature.PublicKey.Equal(ev.CommitB.Signature.PublicKey) {
+		return fmt.Errorf("equivocation executor evidence signature public keys don't match")
+	}
+
 	a, err := ev.CommitA.Open()
 	if err != nil {
 		return fmt.Errorf("opening CommitA: %w", err)
@@ -218,13 +226,6 @@ func (ev *EquivocationExecutorEvidence) ValidateBasic() error {
 	b, err := ev.CommitB.Open()
 	if err != nil {
 		return fmt.Errorf("opening CommitB: %w", err)
-	}
-
-	if a.Body == nil {
-		return fmt.Errorf("CommitA: body empty")
-	}
-	if b.Body == nil {
-		return fmt.Errorf("CommitB: body empty")
 	}
 
 	if a.Body.Header.Round != b.Body.Header.Round {
@@ -253,10 +254,6 @@ func (ev *EquivocationExecutorEvidence) ValidateBasic() error {
 		}
 	}
 
-	if !a.Signature.PublicKey.Equal(b.Signature.PublicKey) {
-		return fmt.Errorf("equivocation executor evidence signature public keys don't match")
-	}
-
 	return nil
 }
 
@@ -266,10 +263,18 @@ type EquivocationBatchEvidence struct {
 	BatchB commitment.SignedProposedBatch `json:"batch_b"`
 }
 
-// ValidateBasic performs basic batch evidence validation checks.
-// TODO: maybe rename to: Validate(), might better indicate that this actually
-// checks if evidence is valid and is not just a basic check.
+// ValidateBasic performs stateless batch evidence validation checks.
+//
+// Particularly evidence is not verified to not be expired as this requires stateful checks.
 func (ev *EquivocationBatchEvidence) ValidateBasic() error {
+	if ev.BatchA.Equal(&ev.BatchB) {
+		return fmt.Errorf("batches are equal, no sign of equivocation")
+	}
+
+	if !ev.BatchA.Signature.PublicKey.Equal(ev.BatchB.Signature.PublicKey) {
+		return fmt.Errorf("equivocation batch evidence signature public keys don't match")
+	}
+
 	var a, b commitment.ProposedBatch
 	if err := ev.BatchA.Open(&a); err != nil {
 		return fmt.Errorf("opening BatchA: %w", err)
@@ -282,14 +287,8 @@ func (ev *EquivocationBatchEvidence) ValidateBasic() error {
 		return fmt.Errorf("equivocation evidence batch header rounds don't match")
 	}
 
-	// TODO: validate header fields.
-
-	if a.IORoot.Equal(&b.IORoot) {
+	if a.IORoot.Equal(&b.IORoot) && a.Header.MostlyEqual(&b.Header) {
 		return fmt.Errorf("equivocation evidence batch io roots match, no sign of equivocation")
-	}
-
-	if !ev.BatchA.Signature.PublicKey.Equal(ev.BatchB.Signature.PublicKey) {
-		return fmt.Errorf("equivocation batch evidence signature public keys don't match")
 	}
 
 	return nil

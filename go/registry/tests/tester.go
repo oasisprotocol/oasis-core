@@ -1739,6 +1739,7 @@ func NewTestRuntime(seed []byte, ent *TestEntity, isKeyManager bool) (*TestRunti
 					Amount: *quantity.NewFromUint64(math.MaxInt64),
 				},
 			},
+			RewardSlashEquvocationRuntimePercent: 100,
 		},
 	}
 	// TODO: Test with non-empty state root when enabled.
