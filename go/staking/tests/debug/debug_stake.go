@@ -36,7 +36,7 @@ func GenesisState() api.Genesis {
 				api.KindRuntimeKeyManager: *quantity.NewFromUint64(7),
 			},
 			Slashing: map[api.SlashReason]api.Slash{
-				api.SlashDoubleSigning: {
+				api.SlashConsensusEquivocation: {
 					Amount:         *quantity.NewFromUint64(math.MaxInt64), // Slash everything.
 					FreezeInterval: 1,
 				},

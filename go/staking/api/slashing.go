@@ -8,21 +8,21 @@ import (
 )
 
 // SlashReason is the reason why a node was slashed.
-type SlashReason int
+type SlashReason uint8
 
 const (
-	// SlashDoubleSigning is slashing due to double signing.
-	SlashDoubleSigning SlashReason = 0
+	// SlashConsensusEquivocation is slashing due to equivocation.
+	SlashConsensusEquivocation SlashReason = 0x00
 
-	// SlashDoubleSigningName is the string representation of SlashDoubleSigning.
-	SlashDoubleSigningName = "double-signing"
+	// SlashConsensusEquivocationName is the string representation of SlashConsensusEquivocation.
+	SlashConsensusEquivocationName = "consensus-equivocation"
 )
 
 // String returns a string representation of a SlashReason.
 func (s SlashReason) String() string {
 	switch s {
-	case SlashDoubleSigning:
-		return SlashDoubleSigningName
+	case SlashConsensusEquivocation:
+		return SlashConsensusEquivocationName
 	default:
 		return "[unknown slash reason]"
 	}
@@ -31,8 +31,8 @@ func (s SlashReason) String() string {
 // MarshalText encodes a SlashReason into text form.
 func (s SlashReason) MarshalText() ([]byte, error) {
 	switch s {
-	case SlashDoubleSigning:
-		return []byte(SlashDoubleSigningName), nil
+	case SlashConsensusEquivocation:
+		return []byte(SlashConsensusEquivocationName), nil
 	default:
 		return nil, fmt.Errorf("invalid slash reason: %d", s)
 	}
@@ -45,8 +45,8 @@ func (s *SlashReason) UnmarshalText(text []byte) error {
 	// genesis file loads -- remove this once mainnet is upgraded!
 	case "0":
 		fallthrough
-	case SlashDoubleSigningName:
-		*s = SlashDoubleSigning
+	case SlashConsensusEquivocationName:
+		*s = SlashConsensusEquivocation
 	default:
 		return fmt.Errorf("invalid slash reason: %s", string(text))
 	}

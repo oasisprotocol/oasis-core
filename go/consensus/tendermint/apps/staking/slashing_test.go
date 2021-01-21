@@ -20,7 +20,7 @@ import (
 	staking "github.com/oasisprotocol/oasis-core/go/staking/api"
 )
 
-func TestOnEvidenceDoubleSign(t *testing.T) {
+func TestOnEvidenceConsensusEquivocation(t *testing.T) {
 	require := require.New(t)
 
 	now := time.Unix(1580461674, 0)
@@ -39,7 +39,7 @@ func TestOnEvidenceDoubleSign(t *testing.T) {
 	stakeState := stakingState.NewMutableState(ctx.State())
 
 	// Validator address is not known as there are no nodes.
-	err := onEvidenceDoubleSign(ctx, validatorAddress, 1, now, 1)
+	err := onEvidenceConsensusEquivocation(ctx, validatorAddress, 1, now, 1)
 	require.NoError(err, "should not fail when validator address is not known")
 
 	// Add entity.
@@ -64,7 +64,7 @@ func TestOnEvidenceDoubleSign(t *testing.T) {
 	require.NoError(err, "SetNode")
 
 	// Should not fail if node status is not available.
-	err = onEvidenceDoubleSign(ctx, validatorAddress, 1, now, 1)
+	err = onEvidenceConsensusEquivocation(ctx, validatorAddress, 1, now, 1)
 	require.NoError(err, "should not fail when node status is not available")
 
 	// Add node status.
@@ -72,7 +72,7 @@ func TestOnEvidenceDoubleSign(t *testing.T) {
 	require.NoError(err, "SetNodeStatus")
 
 	// Should fail if unable to get the slashing procedure.
-	err = onEvidenceDoubleSign(ctx, validatorAddress, 1, now, 1)
+	err = onEvidenceConsensusEquivocation(ctx, validatorAddress, 1, now, 1)
 	require.Error(err, "should fail when unable to get the slashing procedure")
 
 	// Add slashing procedure.
@@ -80,7 +80,7 @@ func TestOnEvidenceDoubleSign(t *testing.T) {
 	_ = slashAmount.FromUint64(100)
 	err = stakeState.SetConsensusParameters(ctx, &staking.ConsensusParameters{
 		Slashing: map[staking.SlashReason]staking.Slash{
-			staking.SlashDoubleSigning: {
+			staking.SlashConsensusEquivocation: {
 				Amount:         slashAmount,
 				FreezeInterval: registry.FreezeForever,
 			},
@@ -90,7 +90,7 @@ func TestOnEvidenceDoubleSign(t *testing.T) {
 
 	// Should fail as the validator has no stake (which is an invariant violation as a validator
 	// needs to have some stake).
-	err = onEvidenceDoubleSign(ctx, validatorAddress, 1, now, 1)
+	err = onEvidenceConsensusEquivocation(ctx, validatorAddress, 1, now, 1)
 	require.Error(err, "should fail when validator has no stake")
 
 	// Computes entity's staking address.
@@ -112,7 +112,7 @@ func TestOnEvidenceDoubleSign(t *testing.T) {
 	require.NoError(err, "SetAccount")
 
 	// Should slash.
-	err = onEvidenceDoubleSign(ctx, validatorAddress, 1, now, 1)
+	err = onEvidenceConsensusEquivocation(ctx, validatorAddress, 1, now, 1)
 	require.NoError(err, "slashing should succeed")
 
 	// Entity stake should be slashed.

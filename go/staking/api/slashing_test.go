@@ -11,7 +11,7 @@ func TestSlashReason(t *testing.T) {
 
 	// Test valid SlashReasons.
 	for _, k := range []SlashReason{
-		SlashDoubleSigning,
+		SlashConsensusEquivocation,
 	} {
 		enc, err := k.MarshalText()
 		require.NoError(err, "MarshalText")
@@ -24,7 +24,7 @@ func TestSlashReason(t *testing.T) {
 	}
 
 	// Test invalid SlashReasons.
-	sr := SlashReason(-1)
+	sr := SlashReason(0xff)
 	require.Equal("[unknown slash reason]", sr.String())
 	enc, err := sr.MarshalText()
 	require.Nil(enc, "MarshalText on invalid slash reason should be nil")
