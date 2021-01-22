@@ -251,9 +251,9 @@ func TestRewardAndSlash(t *testing.T) {
 	require.NoError(err, "Account")
 	require.Equal(mustInitQuantity(t, 300), escrowAccount.Escrow.Active.Balance, "reward late epoch - escrow active escrow")
 
-	slashedNonzero, err := s.SlashEscrow(ctx, escrowAddr, mustInitQuantityP(t, 40))
+	slashed, err := s.SlashEscrow(ctx, escrowAddr, mustInitQuantityP(t, 40))
 	require.NoError(err, "slash escrow")
-	require.True(slashedNonzero, "slashed nonzero")
+	require.False(slashed.IsZero(), "slashed nonzero")
 
 	// Loss of 40 base units.
 	delegatorAccount, err = s.Account(ctx, delegatorAddr)

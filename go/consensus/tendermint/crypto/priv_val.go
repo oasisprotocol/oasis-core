@@ -261,13 +261,13 @@ func (pv *privVal) GetPubKey() (tmcrypto.PubKey, error) {
 func (pv *privVal) SignVote(chainID string, vote *tmproto.Vote) error {
 	height, round, step := vote.Height, vote.Round, voteToStep(vote)
 
-	doubleSigned, err := pv.CheckHRS(height, round, step)
+	equivocation, err := pv.CheckHRS(height, round, step)
 	if err != nil {
 		return fmt.Errorf("tendermint/crypto: failed to check vote H/R/S: %w", err)
 	}
 
 	signBytes := tmtypes.VoteSignBytes(chainID, vote)
-	if doubleSigned {
+	if equivocation {
 		if bytes.Equal(signBytes, pv.SignBytes) {
 			vote.Signature = pv.Signature
 		} else if ts, ok := checkVotesOnlyDifferByTimestamp(pv.SignBytes, signBytes); ok {
@@ -294,13 +294,13 @@ func (pv *privVal) SignVote(chainID string, vote *tmproto.Vote) error {
 func (pv *privVal) SignProposal(chainID string, proposal *tmproto.Proposal) error {
 	height, round, step := proposal.Height, proposal.Round, stepPropose
 
-	doubleSigned, err := pv.CheckHRS(height, round, step)
+	equivocation, err := pv.CheckHRS(height, round, step)
 	if err != nil {
 		return fmt.Errorf("tendermint/crypto: failed to check proposal H/R/S: %w", err)
 	}
 
 	signBytes := tmtypes.ProposalSignBytes(chainID, proposal)
-	if doubleSigned {
+	if equivocation {
 		if bytes.Equal(signBytes, pv.SignBytes) {
 			proposal.Signature = pv.Signature
 		} else if ts, ok := checkProposalsOnlyDifferByTimestamp(pv.SignBytes, signBytes); ok {

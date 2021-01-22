@@ -16,7 +16,7 @@ import (
 	staking "github.com/oasisprotocol/oasis-core/go/staking/api"
 )
 
-func onEvidenceDoubleSign(
+func onEvidenceConsensusEquivocation(
 	ctx *abciAPI.Context,
 	addr tmcrypto.Address,
 	height int64,
@@ -66,7 +66,7 @@ func onEvidenceDoubleSign(
 		return err
 	}
 
-	penalty := st[staking.SlashDoubleSigning]
+	penalty := st[staking.SlashConsensusEquivocation]
 
 	// Freeze validator to prevent it being slashed again. This also prevents the
 	// validator from being scheduled in the next epoch.

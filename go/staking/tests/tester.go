@@ -110,9 +110,9 @@ func StakingImplementationTests(
 	}
 
 	// Separate test as it requires some arguments that others don't.
-	t.Run("SlashDoubleSigning", func(t *testing.T) {
+	t.Run("SlashConsensusEquivocation", func(t *testing.T) {
 		state := newStakingTestsState(t, backend, consensus)
-		testSlashDoubleSigning(t, state, backend, consensus, identity, entity, entitySigner, runtimeID)
+		testSlashConsensusEquivocation(t, state, backend, consensus, identity, entity, entitySigner, runtimeID)
 	})
 }
 
@@ -819,7 +819,7 @@ AllowWaitLoop:
 	require.Equal(expectedNewAllowance, *newAllowance, "Allowance should return the correct value")
 }
 
-func testSlashDoubleSigning(
+func testSlashConsensusEquivocation(
 	t *testing.T,
 	state *stakingTestsState,
 	backend api.Backend,
@@ -877,7 +877,7 @@ func testSlashDoubleSigning(
 	// consensus backend, we need to change this part.
 	blk, err := consensus.GetBlock(context.Background(), 1)
 	require.NoError(err, "GetBlock")
-	err = consensus.SubmitEvidence(context.Background(), tendermintTests.MakeDoubleSignEvidence(t, ident, blk))
+	err = consensus.SubmitEvidence(context.Background(), tendermintTests.MakeConsensusEquivocationEvidence(t, ident, blk))
 	require.NoError(err, "SubmitEvidence")
 
 	// Wait for the node to get slashed.

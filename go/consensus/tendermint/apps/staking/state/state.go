@@ -606,6 +606,10 @@ func (s *MutableState) SetGovernanceDeposits(ctx context.Context, q *quantity.Qu
 }
 
 func slashPool(dst *quantity.Quantity, p *staking.SharePool, amount, total *quantity.Quantity) error {
+	if total.IsZero() {
+		// Nothing to slash.
+		return nil
+	}
 	// slashAmount = amount * p.Balance / total
 	slashAmount := p.Balance.Clone()
 	if err := slashAmount.Mul(amount); err != nil {
@@ -624,7 +628,7 @@ func slashPool(dst *quantity.Quantity, p *staking.SharePool, amount, total *quan
 
 // SlashEscrow slashes the escrow balance and the escrow-but-undergoing-debonding
 // balance of the account, transferring it to the global common pool, returning
-// true iff the amount actually slashed is > 0.
+// the amount actually slashed.
 //
 // WARNING: This is an internal routine to be used to implement staking policy,
 // and MUST NOT be exposed outside of backend implementations.
@@ -632,47 +636,47 @@ func (s *MutableState) SlashEscrow(
 	ctx *abciAPI.Context,
 	fromAddr staking.Address,
 	amount *quantity.Quantity,
-) (bool, error) {
+) (*quantity.Quantity, error) {
+	var slashed quantity.Quantity
+
 	commonPool, err := s.CommonPool(ctx)
 	if err != nil {
-		return false, fmt.Errorf("tendermint/staking: failed to query common pool for slash: %w", err)
+		return nil, fmt.Errorf("tendermint/staking: failed to query common pool for slash: %w", err)
 	}
 
 	from, err := s.Account(ctx, fromAddr)
 	if err != nil {
-		return false, fmt.Errorf("tendermint/staking: failed to query account %s: %w", fromAddr, err)
+		return nil, fmt.Errorf("tendermint/staking: failed to query account %s: %w", fromAddr, err)
 	}
 
 	// Compute the amount we need to slash each pool. The amount is split
 	// between the pools based on relative total balance.
 	total := from.Escrow.Active.Balance.Clone()
 	if err = total.Add(&from.Escrow.Debonding.Balance); err != nil {
-		return false, fmt.Errorf("tendermint/staking: compute total balance: %w", err)
+		return nil, fmt.Errorf("tendermint/staking: account total balance: %w", err)
 	}
-
-	var slashed quantity.Quantity
 	if err = slashPool(&slashed, &from.Escrow.Active, amount, total); err != nil {
-		return false, fmt.Errorf("tendermint/staking: failed slashing active escrow: %w", err)
+		return nil, fmt.Errorf("tendermint/staking: failed slashing active escrow: %w", err)
 	}
 	if err = slashPool(&slashed, &from.Escrow.Debonding, amount, total); err != nil {
-		return false, fmt.Errorf("tendermint/staking: failed slashing debonding escrow: %w", err)
+		return nil, fmt.Errorf("tendermint/staking: failed slashing debonding escrow: %w", err)
 	}
-
+	// Nothing was slashed.
 	if slashed.IsZero() {
-		return false, nil
+		return &slashed, nil
 	}
 
 	totalSlashed := slashed.Clone()
 
 	if err = quantity.Move(commonPool, &slashed, totalSlashed); err != nil {
-		return false, fmt.Errorf("tendermint/staking: failed moving stake to common pool: %w", err)
+		return nil, fmt.Errorf("tendermint/staking: failed moving stake to common pool: %w", err)
 	}
 
 	if err = s.SetCommonPool(ctx, commonPool); err != nil {
-		return false, fmt.Errorf("tendermint/staking: failed to set common pool: %w", err)
+		return nil, fmt.Errorf("tendermint/staking: failed to set common pool: %w", err)
 	}
 	if err = s.SetAccount(ctx, fromAddr, from); err != nil {
-		return false, fmt.Errorf("tendermint/staking: failed to set account. %w", err)
+		return nil, fmt.Errorf("tendermint/staking: failed to set account: %w", err)
 	}
 
 	if !ctx.IsCheckOnly() {
@@ -683,7 +687,7 @@ func (s *MutableState) SlashEscrow(
 		ctx.EmitEvent(api.NewEventBuilder(AppName).Attribute(KeyTakeEscrow, ev))
 	}
 
-	return true, nil
+	return totalSlashed, nil
 }
 
 // TransferFromCommon transfers up to the amount from the global common pool

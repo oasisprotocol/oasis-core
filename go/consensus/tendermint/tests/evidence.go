@@ -17,8 +17,8 @@ import (
 	genesisTestHelpers "github.com/oasisprotocol/oasis-core/go/genesis/tests"
 )
 
-// MakeDoubleSignEvidence creates consensus evidence of double signing.
-func MakeDoubleSignEvidence(t *testing.T, ident *identity.Identity, blk *consensus.Block) *consensus.Evidence {
+// MakeConsensusEquivocationEvidence creates consensus evidence of equivocation.
+func MakeConsensusEquivocationEvidence(t *testing.T, ident *identity.Identity, blk *consensus.Block) *consensus.Evidence {
 	require := require.New(t)
 
 	// Create empty directory for private validator metadata.

@@ -90,7 +90,7 @@ func (app *stakingApplication) BeginBlock(ctx *api.Context, request types.Reques
 	for _, evidence := range request.ByzantineValidators {
 		switch evidence.Type {
 		case types.EvidenceType_DUPLICATE_VOTE:
-			if err := onEvidenceDoubleSign(ctx, evidence.Validator.Address, evidence.Height, evidence.Time, evidence.Validator.Power); err != nil {
+			if err := onEvidenceConsensusEquivocation(ctx, evidence.Validator.Address, evidence.Height, evidence.Time, evidence.Validator.Power); err != nil {
 				return err
 			}
 		default:
