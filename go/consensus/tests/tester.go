@@ -94,6 +94,9 @@ func ConsensusImplementationTests(t *testing.T, backend consensus.ClientBackend)
 	require.NoError(err, "GetEpoch")
 	require.True(epoch > 0, "epoch height should be greater than zero")
 
+	_, err = backend.EstimateGas(ctx, &consensus.EstimateGasRequest{})
+	require.ErrorIs(err, consensus.ErrInvalidArgument, "EstimateGas with nil transaction should fail")
+
 	_, err = backend.EstimateGas(ctx, &consensus.EstimateGasRequest{
 		Signer:      memorySigner.NewTestSigner("estimate gas signer").Public(),
 		Transaction: transaction.NewTransaction(0, nil, staking.MethodTransfer, &staking.Transfer{}),

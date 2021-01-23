@@ -54,6 +54,9 @@ var (
 
 	// ErrDuplicateTx is the error returned when the transaction already exists in the mempool.
 	ErrDuplicateTx = errors.New(moduleName, 5, "consensus: duplicate transaction")
+
+	// ErrInvalidArgument is the error returned when the request contains an invalid argument.
+	ErrInvalidArgument = errors.New(moduleName, 6, "consensus: invalid argument")
 )
 
 // FeatureMask is the consensus backend feature bitmask.

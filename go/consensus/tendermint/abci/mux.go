@@ -573,6 +573,10 @@ func (mux *abciMux) executeTx(ctx *api.Context, rawTx []byte) error {
 }
 
 func (mux *abciMux) EstimateGas(caller signature.PublicKey, tx *transaction.Transaction) (transaction.Gas, error) {
+	if tx == nil {
+		return 0, consensus.ErrInvalidArgument
+	}
+
 	// As opposed to other transaction dispatch entry points (CheckTx/DeliverTx), this method can
 	// be called in parallel to the consensus layer and to other invocations.
 	//
