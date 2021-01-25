@@ -430,6 +430,7 @@ func (sc *txSourceImpl) Fixture() (*oasis.NetworkFixture, error) {
 	if sc.nodeLongRestartInterval > 0 {
 		// One storage node could be offline.
 		f.Runtimes[1].Storage.GroupSize--
+		f.Runtimes[1].Storage.MinPoolSize--
 		// Storage node that is part of the committee could be offline.
 		f.Runtimes[1].Storage.MinWriteReplication = f.Runtimes[1].Storage.GroupSize - 1
 
