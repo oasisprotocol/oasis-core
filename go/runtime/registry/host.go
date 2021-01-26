@@ -1,4 +1,4 @@
-package common
+package registry
 
 import (
 	"context"
@@ -7,14 +7,12 @@ import (
 
 	"github.com/oasisprotocol/oasis-core/go/runtime/host"
 	"github.com/oasisprotocol/oasis-core/go/runtime/host/protocol"
-	runtimeRegistry "github.com/oasisprotocol/oasis-core/go/runtime/registry"
 )
 
 // RuntimeHostNode provides methods for nodes that need to host runtimes.
 type RuntimeHostNode struct {
 	sync.Mutex
 
-	cfg      *RuntimeHostConfig
 	factory  RuntimeHostHandlerFactory
 	notifier protocol.Notifier
 
@@ -26,20 +24,9 @@ type RuntimeHostNode struct {
 // This method may return before the runtime is fully provisioned. The returned runtime will not be
 // started automatically, you must call Start explicitly.
 func (n *RuntimeHostNode) ProvisionHostedRuntime(ctx context.Context) (host.Runtime, protocol.Notifier, error) {
-	rt, err := n.factory.GetRuntime().RegistryDescriptor(ctx)
+	cfg, provisioner, err := n.factory.GetRuntime().Host(ctx)
 	if err != nil {
-		return nil, nil, fmt.Errorf("failed to get runtime registry descriptor: %w", err)
-	}
-
-	provisioner, ok := n.cfg.Provisioners[rt.TEEHardware]
-	if !ok {
-		return nil, nil, fmt.Errorf("no provisioner suitable for TEE hardware '%s'", rt.TEEHardware)
-	}
-
-	// Get a copy of the configuration template for the given runtime and apply updates.
-	cfg, ok := n.cfg.Runtimes[rt.ID]
-	if !ok {
-		return nil, nil, fmt.Errorf("missing runtime host configuration for runtime '%s'", rt.ID)
+		return nil, nil, fmt.Errorf("failed to get runtime host: %w", err)
 	}
 	cfg.MessageHandler = n.factory.NewRuntimeHostHandler()
 
@@ -70,7 +57,7 @@ func (n *RuntimeHostNode) GetHostedRuntime() host.Runtime {
 // notifiers when provisioning hosted runtimes.
 type RuntimeHostHandlerFactory interface {
 	// GetRuntime returns the registered runtime for which a runtime host handler is to be created.
-	GetRuntime() runtimeRegistry.Runtime
+	GetRuntime() Runtime
 
 	// NewRuntimeHostHandler creates a new runtime host handler.
 	NewRuntimeHostHandler() protocol.Handler
@@ -80,13 +67,6 @@ type RuntimeHostHandlerFactory interface {
 }
 
 // NewRuntimeHostNode creates a new runtime host node.
-func NewRuntimeHostNode(cfg *RuntimeHostConfig, factory RuntimeHostHandlerFactory) (*RuntimeHostNode, error) {
-	if cfg == nil {
-		return nil, fmt.Errorf("runtime host not configured")
-	}
-
-	return &RuntimeHostNode{
-		cfg:     cfg,
-		factory: factory,
-	}, nil
+func NewRuntimeHostNode(factory RuntimeHostHandlerFactory) (*RuntimeHostNode, error) {
+	return &RuntimeHostNode{factory: factory}, nil
 }

@@ -5,6 +5,7 @@ package registry
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sync"
 
@@ -13,10 +14,13 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common"
 	"github.com/oasisprotocol/oasis-core/go/common/identity"
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
+	"github.com/oasisprotocol/oasis-core/go/common/node"
 	"github.com/oasisprotocol/oasis-core/go/common/pubsub"
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
+	ias "github.com/oasisprotocol/oasis-core/go/ias/api"
 	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
 	"github.com/oasisprotocol/oasis-core/go/runtime/history"
+	runtimeHost "github.com/oasisprotocol/oasis-core/go/runtime/host"
 	"github.com/oasisprotocol/oasis-core/go/runtime/localstorage"
 	"github.com/oasisprotocol/oasis-core/go/runtime/tagindexer"
 	storageAPI "github.com/oasisprotocol/oasis-core/go/storage/api"
@@ -31,6 +35,10 @@ const (
 	// LocalStorageFile is the filename of the worker's local storage database.
 	LocalStorageFile = "worker-local-storage.badger.db"
 )
+
+// ErrRuntimeHostNotConfigured is the error returned when the runtime host is not configured for a
+// specified runtime and a request is made to get the runtime host provisioner.
+var ErrRuntimeHostNotConfigured = errors.New("runtime/registry: runtime host not configured")
 
 // Registry is the running node's runtime registry interface.
 type Registry interface {
@@ -83,6 +91,9 @@ type Runtime interface {
 
 	// LocalStorage returns the per-runtime local storage.
 	LocalStorage() localstorage.LocalStorage
+
+	// Host returns the runtime host configuration and provisioner if configured.
+	Host(ctx context.Context) (runtimeHost.Config, runtimeHost.Provisioner, error)
 }
 
 type runtime struct {
@@ -102,6 +113,9 @@ type runtime struct {
 	cancelCtx          context.CancelFunc
 	descriptorCh       chan struct{}
 	descriptorNotifier *pubsub.Broker
+
+	hostProvisioners map[node.TEEHardware]runtimeHost.Provisioner
+	hostConfig       *runtimeHost.Config
 
 	logger *logging.Logger
 }
@@ -162,6 +176,24 @@ func (r *runtime) Storage() storageAPI.Backend {
 
 func (r *runtime) LocalStorage() localstorage.LocalStorage {
 	return r.localStorage
+}
+
+func (r *runtime) Host(ctx context.Context) (runtimeHost.Config, runtimeHost.Provisioner, error) {
+	if r.hostProvisioners == nil || r.hostConfig == nil {
+		return runtimeHost.Config{}, nil, ErrRuntimeHostNotConfigured
+	}
+
+	rt, err := r.RegistryDescriptor(ctx)
+	if err != nil {
+		return runtimeHost.Config{}, nil, fmt.Errorf("failed to get runtime registry descriptor: %w", err)
+	}
+
+	provisioner, ok := r.hostProvisioners[rt.TEEHardware]
+	if !ok {
+		return runtimeHost.Config{}, nil, fmt.Errorf("no provisioner suitable for TEE hardware '%s'", rt.TEEHardware)
+	}
+
+	return *r.hostConfig, provisioner, nil
 }
 
 func (r *runtime) stop() {
@@ -238,7 +270,9 @@ type runtimeRegistry struct {
 
 	logger *logging.Logger
 
-	dataDir   string
+	dataDir string
+	cfg     *RuntimeConfig
+
 	consensus consensus.Backend
 	identity  *identity.Identity
 
@@ -268,7 +302,7 @@ func (r *runtimeRegistry) Runtimes() []Runtime {
 }
 
 func (r *runtimeRegistry) NewUnmanagedRuntime(ctx context.Context, runtimeID common.Namespace) (Runtime, error) {
-	return newRuntime(ctx, runtimeID, r.consensus, r.logger)
+	return newRuntime(ctx, runtimeID, r.cfg, r.consensus, r.logger)
 }
 
 func (r *runtimeRegistry) StorageRouter() storageAPI.Backend {
@@ -296,7 +330,7 @@ func (r *runtimeRegistry) FinishInitialization(ctx context.Context) error {
 	return nil
 }
 
-func (r *runtimeRegistry) addSupportedRuntime(ctx context.Context, id common.Namespace, cfg *RuntimeConfig) (rerr error) {
+func (r *runtimeRegistry) addSupportedRuntime(ctx context.Context, id common.Namespace) (rerr error) {
 	r.Lock()
 	defer r.Unlock()
 
@@ -313,13 +347,13 @@ func (r *runtimeRegistry) addSupportedRuntime(ctx context.Context, id common.Nam
 		return err
 	}
 
-	rt, err := newRuntime(ctx, id, r.consensus, r.logger)
+	rt, err := newRuntime(ctx, id, r.cfg, r.consensus, r.logger)
 	if err != nil {
 		return err
 	}
 
 	// Create runtime history keeper.
-	history, err := history.New(path, id, &cfg.History)
+	history, err := history.New(path, id, &r.cfg.History)
 	if err != nil {
 		return fmt.Errorf("runtime/registry: cannot create block history for runtime %s: %w", id, err)
 	}
@@ -345,7 +379,7 @@ func (r *runtimeRegistry) addSupportedRuntime(ctx context.Context, id common.Nam
 	copy(ns[:], id[:])
 
 	// Create runtime tag indexer (to be started later).
-	tagIndexer, err := tagindexer.New(path, cfg.TagIndexer, history, r.consensus.RootHash())
+	tagIndexer, err := tagindexer.New(path, r.cfg.TagIndexer, history, r.consensus.RootHash())
 	if err != nil {
 		return fmt.Errorf("runtime/registry: cannot create tag indexer for runtime %s: %w", id, err)
 	}
@@ -363,7 +397,13 @@ func (r *runtimeRegistry) addSupportedRuntime(ctx context.Context, id common.Nam
 	return nil
 }
 
-func newRuntime(ctx context.Context, id common.Namespace, consensus consensus.Backend, logger *logging.Logger) (*runtime, error) {
+func newRuntime(
+	ctx context.Context,
+	id common.Namespace,
+	cfg *RuntimeConfig,
+	consensus consensus.Backend,
+	logger *logging.Logger,
+) (*runtime, error) {
 	// Start watching this runtime's descriptor.
 	ch, sub, err := consensus.Registry().WatchRuntimes(ctx)
 	if err != nil {
@@ -381,22 +421,29 @@ func newRuntime(ctx context.Context, id common.Namespace, consensus consensus.Ba
 	}
 	go rt.watchUpdates(watchCtx, ch, sub)
 
+	// Configure runtime host if needed.
+	if cfg.Host != nil {
+		rt.hostProvisioners = cfg.Host.Provisioners
+		rt.hostConfig = cfg.Host.Runtimes[id]
+	}
+
 	return rt, nil
 }
 
 // New creates a new runtime registry.
-func New(ctx context.Context, dataDir string, consensus consensus.Backend, identity *identity.Identity) (Registry, error) {
+func New(ctx context.Context, dataDir string, consensus consensus.Backend, identity *identity.Identity, ias ias.Endpoint) (Registry, error) {
+	cfg, err := newConfig(consensus, ias)
+	if err != nil {
+		return nil, err
+	}
+
 	r := &runtimeRegistry{
 		logger:    logging.GetLogger("runtime/registry"),
 		dataDir:   dataDir,
+		cfg:       cfg,
 		consensus: consensus,
 		identity:  identity,
 		runtimes:  make(map[common.Namespace]*runtime),
-	}
-
-	cfg, err := newConfig()
-	if err != nil {
-		return nil, err
 	}
 
 	runtimes, err := ParseRuntimeMap(viper.GetStringSlice(CfgSupported))
@@ -408,7 +455,7 @@ func New(ctx context.Context, dataDir string, consensus consensus.Backend, ident
 			"id", id,
 		)
 
-		if err := r.addSupportedRuntime(ctx, id, cfg); err != nil {
+		if err := r.addSupportedRuntime(ctx, id); err != nil {
 			r.logger.Error("failed to add supported runtime",
 				"err", err,
 				"id", id,

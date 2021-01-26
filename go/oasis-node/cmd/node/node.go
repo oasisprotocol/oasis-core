@@ -225,14 +225,6 @@ func (n *Node) startRuntimeServices() error {
 		)
 	})
 
-	// Initialize the node's runtime registry.
-	n.RuntimeRegistry, err = runtimeRegistry.New(n.svcMgr.Ctx, cmdCommon.DataDir(), n.Consensus, n.Identity)
-	if err != nil {
-		return err
-	}
-	n.svcMgr.RegisterCleanupOnly(n.RuntimeRegistry, "runtime registry")
-	storageAPI.RegisterService(n.grpcInternal.Server(), n.RuntimeRegistry.StorageRouter())
-
 	// Initialize runtime workers.
 	if err = n.initRuntimeWorkers(); err != nil {
 		n.logger.Error("failed to initialize workers",
@@ -305,6 +297,14 @@ func (n *Node) initRuntimeWorkers() error {
 		)
 		return err
 	}
+
+	// Initialize the node's runtime registry.
+	n.RuntimeRegistry, err = runtimeRegistry.New(n.svcMgr.Ctx, cmdCommon.DataDir(), n.Consensus, n.Identity, n.IAS)
+	if err != nil {
+		return err
+	}
+	n.svcMgr.RegisterCleanupOnly(n.RuntimeRegistry, "runtime registry")
+	storageAPI.RegisterService(n.grpcInternal.Server(), n.RuntimeRegistry.StorageRouter())
 
 	// Initialize the common worker.
 	n.CommonWorker, err = workerCommon.New(

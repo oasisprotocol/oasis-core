@@ -29,6 +29,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/runtime/host"
 	"github.com/oasisprotocol/oasis-core/go/runtime/host/protocol"
 	"github.com/oasisprotocol/oasis-core/go/runtime/nodes"
+	runtimeRegistry "github.com/oasisprotocol/oasis-core/go/runtime/registry"
 	"github.com/oasisprotocol/oasis-core/go/runtime/scheduling"
 	schedulingAPI "github.com/oasisprotocol/oasis-core/go/runtime/scheduling/api"
 	"github.com/oasisprotocol/oasis-core/go/runtime/transaction"
@@ -134,7 +135,7 @@ var (
 
 // Node is a committee node.
 type Node struct { // nolint: maligned
-	*commonWorker.RuntimeHostNode
+	*runtimeRegistry.RuntimeHostNode
 
 	runtimeVersion version.Version
 
@@ -1591,7 +1592,7 @@ func NewNode(
 	})
 
 	// Prepare the runtime host node helpers.
-	rhn, err := commonWorker.NewRuntimeHostNode(commonCfg.RuntimeHost, commonNode)
+	rhn, err := runtimeRegistry.NewRuntimeHostNode(commonNode)
 	if err != nil {
 		return nil, err
 	}

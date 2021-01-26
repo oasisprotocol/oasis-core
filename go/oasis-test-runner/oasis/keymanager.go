@@ -14,7 +14,7 @@ import (
 	kmCmd "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/keymanager"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/env"
 	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
-	workerCommon "github.com/oasisprotocol/oasis-core/go/worker/common"
+	runtimeRegistry "github.com/oasisprotocol/oasis-core/go/runtime/registry"
 )
 
 const (
@@ -272,10 +272,10 @@ func (km *Keymanager) startNode() error {
 		tendermintPrune(km.consensus.PruneNumKept).
 		tendermintRecoverCorruptedWAL(km.consensus.TendermintRecoverCorruptedWAL).
 		workerClientPort(km.workerClientPort).
-		workerRuntimeProvisioner(workerCommon.RuntimeProvisionerSandboxed).
-		workerRuntimeSGXLoader(km.net.cfg.RuntimeSGXLoaderBinary).
+		runtimeProvisioner(runtimeRegistry.RuntimeProvisionerSandboxed).
+		runtimeSGXLoader(km.net.cfg.RuntimeSGXLoaderBinary).
 		// XXX: could support configurable binary idx if ever needed.
-		workerRuntimePath(km.runtime.id, km.runtime.binaries[0]).
+		runtimePath(km.runtime.id, km.runtime.binaries[0]).
 		workerKeymanagerEnabled().
 		workerKeymanagerRuntimeID(km.runtime.id).
 		configureDebugCrashPoints(km.crashPointsProbability).

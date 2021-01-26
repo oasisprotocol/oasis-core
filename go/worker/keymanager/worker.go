@@ -50,7 +50,7 @@ var (
 // runtimes in order to update the access control lists.
 type Worker struct { // nolint: maligned
 	sync.RWMutex
-	*workerCommon.RuntimeHostNode
+	*runtimeRegistry.RuntimeHostNode
 
 	logger *logging.Logger
 
