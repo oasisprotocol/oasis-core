@@ -8,6 +8,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
 	"github.com/oasisprotocol/oasis-core/go/common/errors"
 	"github.com/oasisprotocol/oasis-core/go/common/pubsub"
+	"github.com/oasisprotocol/oasis-core/go/common/service"
 	roothash "github.com/oasisprotocol/oasis-core/go/roothash/api"
 	"github.com/oasisprotocol/oasis-core/go/roothash/api/block"
 	enclaverpc "github.com/oasisprotocol/oasis-core/go/runtime/enclaverpc/api"
@@ -73,9 +74,12 @@ type RuntimeClient interface {
 
 	// WaitBlockIndexed waits for a runtime block to be indexed by the indexer.
 	WaitBlockIndexed(ctx context.Context, request *WaitBlockIndexedRequest) error
+}
 
-	// Cleanup cleans up the backend.
-	Cleanup()
+// RuntimeClientService is the runtime client service interface.
+type RuntimeClientService interface {
+	RuntimeClient
+	service.BackgroundService
 }
 
 // SubmitTxRequest is a SubmitTx request.

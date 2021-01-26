@@ -557,9 +557,6 @@ func (c *runtimeClient) WatchBlocks(ctx context.Context, runtimeID common.Namesp
 	return ch, sub, nil
 }
 
-func (c *runtimeClient) Cleanup() {
-}
-
 // NewRuntimeClient creates a new gRPC runtime client service.
 func NewRuntimeClient(c *grpc.ClientConn) RuntimeClient {
 	return &runtimeClient{

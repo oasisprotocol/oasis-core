@@ -92,6 +92,9 @@ type Runtime interface {
 	// LocalStorage returns the per-runtime local storage.
 	LocalStorage() localstorage.LocalStorage
 
+	// HasHost checks whether this runtime can be hosted by the current node.
+	HasHost() bool
+
 	// Host returns the runtime host configuration and provisioner if configured.
 	Host(ctx context.Context) (runtimeHost.Config, runtimeHost.Provisioner, error)
 }
@@ -176,6 +179,10 @@ func (r *runtime) Storage() storageAPI.Backend {
 
 func (r *runtime) LocalStorage() localstorage.LocalStorage {
 	return r.localStorage
+}
+
+func (r *runtime) HasHost() bool {
+	return r.hostProvisioners != nil && r.hostConfig != nil
 }
 
 func (r *runtime) Host(ctx context.Context) (runtimeHost.Config, runtimeHost.Provisioner, error) {

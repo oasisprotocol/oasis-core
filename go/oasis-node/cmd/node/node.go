@@ -116,7 +116,7 @@ type Node struct {
 	IAS      iasAPI.Endpoint
 
 	RuntimeRegistry runtimeRegistry.Registry
-	RuntimeClient   runtimeClientAPI.RuntimeClient
+	RuntimeClient   runtimeClientAPI.RuntimeClientService
 
 	CommonWorker            *workerCommon.Worker
 	ExecutorWorker          *executor.Worker
@@ -244,7 +244,7 @@ func (n *Node) startRuntimeServices() error {
 	if err != nil {
 		return err
 	}
-	n.svcMgr.RegisterCleanupOnly(n.RuntimeClient, "client service")
+	n.svcMgr.Register(n.RuntimeClient)
 	runtimeClientAPI.RegisterService(n.grpcInternal.Server(), n.RuntimeClient)
 	enclaverpc.RegisterService(n.grpcInternal.Server(), n.RuntimeClient)
 
@@ -441,6 +441,11 @@ func (n *Node) initRuntimeWorkers() error {
 }
 
 func (n *Node) startRuntimeWorkers() error {
+	// Start the runtime client service.
+	if err := n.RuntimeClient.Start(); err != nil {
+		return fmt.Errorf("failed to start runtime client service: %w", err)
+	}
+
 	// Start the storage worker.
 	if err := n.StorageWorker.Start(); err != nil {
 		return err

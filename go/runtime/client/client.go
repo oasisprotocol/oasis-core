@@ -59,7 +59,9 @@ type runtimeClient struct {
 	sync.Mutex
 
 	common *clientCommon
+	quitCh chan struct{}
 
+	hosts     map[common.Namespace]*clientHost
 	watchers  map[common.Namespace]*blockWatcher
 	kmClients map[common.Namespace]*keymanager.Client
 
@@ -464,12 +466,47 @@ func (c *runtimeClient) CallEnclave(ctx context.Context, request *enclaverpc.Cal
 	}
 }
 
-// Cleanup stops all running block watchers and waits for them to finish.
-func (c *runtimeClient) Cleanup() {
+// Implements service.BackgroundService.
+func (c *runtimeClient) Name() string {
+	return "runtime client"
+}
+
+// Implements service.BackgroundService.
+func (c *runtimeClient) Start() error {
+	for _, host := range c.hosts {
+		if err := host.Start(); err != nil {
+			return err
+		}
+	}
+	go func() {
+		defer close(c.quitCh)
+		for _, host := range c.hosts {
+			<-host.Quit()
+		}
+	}()
+	return nil
+}
+
+// Implements service.BackgroundService.
+func (c *runtimeClient) Stop() {
 	// Watchers.
 	for _, watcher := range c.watchers {
 		watcher.Stop()
 	}
+	// Hosts.
+	for _, host := range c.hosts {
+		host.Stop()
+	}
+}
+
+// Implements service.BackgroundService.
+func (c *runtimeClient) Quit() <-chan struct{} {
+	return c.quitCh
+}
+
+// Cleanup waits for all block watchers to finish.
+func (c *runtimeClient) Cleanup() {
+	// Watchers.
 	for _, watcher := range c.watchers {
 		<-watcher.Quit()
 	}
@@ -482,7 +519,7 @@ func New(
 	consensus consensus.Backend,
 	runtimeRegistry runtimeRegistry.Registry,
 	p2p *p2p.P2P,
-) (api.RuntimeClient, error) {
+) (api.RuntimeClientService, error) {
 	maxTransactionAge := viper.GetInt64(CfgMaxTransactionAge)
 	if maxTransactionAge < minMaxTransactionAge && !cmdFlags.DebugDontBlameOasis() {
 		return nil, fmt.Errorf("max transaction age too low: %d, minimum: %d", maxTransactionAge, minMaxTransactionAge)
@@ -496,11 +533,27 @@ func New(
 			ctx:             ctx,
 			p2p:             p2p,
 		},
+		quitCh:            make(chan struct{}),
+		hosts:             make(map[common.Namespace]*clientHost),
 		watchers:          make(map[common.Namespace]*blockWatcher),
 		kmClients:         make(map[common.Namespace]*keymanager.Client),
 		maxTransactionAge: maxTransactionAge,
 		logger:            logging.GetLogger("runtime/client"),
 	}
+
+	// Create all configured runtime hosts.
+	for _, rt := range runtimeRegistry.Runtimes() {
+		if !rt.HasHost() {
+			continue
+		}
+
+		host, err := newClientHost(rt, consensus)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create new client host for %s: %w", rt.ID(), err)
+		}
+		c.hosts[rt.ID()] = host
+	}
+
 	return c, nil
 }
 
