@@ -12,9 +12,12 @@ import (
 )
 
 var (
+	// ErrInvalidArgument is the error returned when any of the passed method arguments is invalid.
 	ErrInvalidArgument = errors.New("runtime: invalid argument")
-	ErrInternal        = errors.New("runtime: internal error")
-	ErrCheckTxFailed   = errors.New("runtime: check tx failed")
+	// ErrCheckTxFailed is the error returned when a transaction is rejected by the runtime.
+	ErrCheckTxFailed = errors.New("runtime: check tx failed")
+	// ErrInternal is the error returned when an unspecified internal error occurs.
+	ErrInternal = errors.New("runtime: internal error")
 )
 
 // RichRuntime provides higher-level functions for talking with a runtime.

@@ -7,6 +7,7 @@ import (
 
 	beacon "github.com/oasisprotocol/oasis-core/go/beacon/api"
 	"github.com/oasisprotocol/oasis-core/go/common"
+	"github.com/oasisprotocol/oasis-core/go/common/node"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/env"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/oasis"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/scenario"
@@ -56,13 +57,13 @@ func (sc *multipleRuntimesImpl) Fixture() (*oasis.NetworkFixture, error) {
 	// Remove existing compute runtimes from fixture, remember RuntimeID and
 	// binary from the first one.
 	var id common.Namespace
-	var runtimeBinary string
+	var runtimeBinaries map[node.TEEHardware][]string
 	var rts []oasis.RuntimeFixture
 	for _, rt := range f.Runtimes {
 		if rt.Kind == registry.KindCompute {
-			if runtimeBinary == "" {
+			if runtimeBinaries == nil {
 				copy(id[:], rt.ID[:])
-				runtimeBinary = rt.Binaries[0]
+				runtimeBinaries = rt.Binaries
 			}
 		} else {
 			rts = append(rts, rt)
@@ -84,7 +85,7 @@ func (sc *multipleRuntimesImpl) Fixture() (*oasis.NetworkFixture, error) {
 			Kind:       registry.KindCompute,
 			Entity:     0,
 			Keymanager: 0,
-			Binaries:   []string{runtimeBinary},
+			Binaries:   runtimeBinaries,
 			Executor: registry.ExecutorParameters{
 				GroupSize:       uint64(executorGroupSize),
 				GroupBackupSize: 0,

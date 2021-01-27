@@ -14,6 +14,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common"
 	"github.com/oasisprotocol/oasis-core/go/common/crash"
 	commonGrpc "github.com/oasisprotocol/oasis-core/go/common/grpc"
+	"github.com/oasisprotocol/oasis-core/go/common/node"
 	"github.com/oasisprotocol/oasis-core/go/common/sgx"
 	"github.com/oasisprotocol/oasis-core/go/consensus/tendermint"
 	"github.com/oasisprotocol/oasis-core/go/consensus/tendermint/abci"
@@ -534,9 +535,9 @@ func (args *argBuilder) appendRuntimePruner(p *RuntimePrunerCfg) *argBuilder {
 	return args
 }
 
-func (args *argBuilder) appendComputeNodeRuntime(rt *Runtime, binaryIdx int) *argBuilder {
+func (args *argBuilder) appendHostedRuntime(rt *Runtime, tee node.TEEHardware, binaryIdx int) *argBuilder {
 	args = args.runtimeSupported(rt.id).
-		runtimePath(rt.id, rt.binaries[binaryIdx]).
+		runtimePath(rt.id, rt.binaries[tee][binaryIdx]).
 		appendRuntimePruner(&rt.pruner)
 	return args
 }

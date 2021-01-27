@@ -17,12 +17,6 @@ WORKDIR=$PWD
 #################
 # Run test suite.
 #################
-# Determine correct runtime to use for SGX.
-runtime_target="default"
-if [[ "${OASIS_TEE_HARDWARE:-""}" == "intel-sgx" ]]; then
-    runtime_target="sgx/x86_64-fortanix-unknown-sgx"
-fi
-
 # We need a directory in the workdir so that Buildkite can fetch artifacts.
 if [[ "${BUILDKITE:-""}" != "" ]]; then
     mkdir -p ${TEST_BASE_DIR:-$PWD}/e2e
@@ -55,7 +49,8 @@ ${test_runner_binary} \
     --basedir.no_cleanup \
     --e2e.node.binary ${node_binary} \
     --e2e/runtime.client.binary_dir ${WORKDIR}/target/default/debug \
-    --e2e/runtime.runtime.binary_dir ${WORKDIR}/target/${runtime_target}/debug \
+    --e2e/runtime.runtime.binary_dir.default ${WORKDIR}/target/default/debug \
+    --e2e/runtime.runtime.binary_dir.intel-sgx ${WORKDIR}/target/sgx/x86_64-fortanix-unknown-sgx/debug \
     --e2e/runtime.runtime.loader ${WORKDIR}/target/default/debug/oasis-core-runtime-loader \
     --e2e/runtime.tee_hardware ${OASIS_TEE_HARDWARE:-""} \
     --e2e/runtime.ias.mock=${ias_mock} \

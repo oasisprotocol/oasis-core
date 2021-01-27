@@ -145,6 +145,7 @@ func newConfig(consensus consensus.Backend, ias ias.Endpoint) (*RuntimeConfig, e
 					return nil, fmt.Errorf("failed to stat sandbox binary: %w", err)
 				}
 			}
+
 			// Sandboxed provisioner, can be used with no TEE or with Intel SGX.
 			rh.Provisioners[node.TEEHardwareInvalid], err = hostSandbox.New(hostSandbox.Config{
 				HostInfo:          hostInfo,
@@ -155,15 +156,29 @@ func newConfig(consensus consensus.Backend, ias ias.Endpoint) (*RuntimeConfig, e
 				return nil, fmt.Errorf("failed to create runtime provisioner: %w", err)
 			}
 
-			rh.Provisioners[node.TEEHardwareIntelSGX], err = hostSgx.New(hostSgx.Config{
-				HostInfo:          hostInfo,
-				LoaderPath:        viper.GetString(CfgRuntimeSGXLoader),
-				IAS:               ias,
-				SandboxBinaryPath: sandboxBinary,
-				InsecureNoSandbox: insecureNoSandbox,
-			})
-			if err != nil {
-				return nil, fmt.Errorf("failed to create SGX runtime provisioner: %w", err)
+			switch sgxLoader := viper.GetString(CfgRuntimeSGXLoader); sgxLoader {
+			case "":
+				// No SGX loader is configured, remap to non-SGX.
+				rh.Provisioners[node.TEEHardwareIntelSGX], err = hostSandbox.New(hostSandbox.Config{
+					HostInfo:          hostInfo,
+					InsecureNoSandbox: insecureNoSandbox,
+					SandboxBinaryPath: sandboxBinary,
+				})
+				if err != nil {
+					return nil, fmt.Errorf("failed to create runtime provisioner: %w", err)
+				}
+			default:
+				// Configure the provided SGX loader.
+				rh.Provisioners[node.TEEHardwareIntelSGX], err = hostSgx.New(hostSgx.Config{
+					HostInfo:          hostInfo,
+					LoaderPath:        sgxLoader,
+					IAS:               ias,
+					SandboxBinaryPath: sandboxBinary,
+					InsecureNoSandbox: insecureNoSandbox,
+				})
+				if err != nil {
+					return nil, fmt.Errorf("failed to create SGX runtime provisioner: %w", err)
+				}
 			}
 		default:
 			return nil, fmt.Errorf("unsupported runtime provisioner: %s", p)

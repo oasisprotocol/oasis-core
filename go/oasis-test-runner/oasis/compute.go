@@ -112,7 +112,7 @@ func (worker *Compute) startNode() error {
 	for _, idx := range worker.runtimes {
 		v := worker.net.runtimes[idx]
 		// XXX: could support configurable binary idx if ever needed.
-		args = args.appendComputeNodeRuntime(v, 0)
+		args = args.appendHostedRuntime(v, v.teeHardware, 0)
 	}
 
 	if err := worker.net.startOasisNode(&worker.Node, nil, args); err != nil {

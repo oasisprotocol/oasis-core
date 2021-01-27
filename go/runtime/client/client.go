@@ -3,6 +3,7 @@ package client
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sync"
 
@@ -21,6 +22,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/roothash/api/block"
 	"github.com/oasisprotocol/oasis-core/go/runtime/client/api"
 	enclaverpc "github.com/oasisprotocol/oasis-core/go/runtime/enclaverpc/api"
+	"github.com/oasisprotocol/oasis-core/go/runtime/host"
 	runtimeRegistry "github.com/oasisprotocol/oasis-core/go/runtime/registry"
 	"github.com/oasisprotocol/oasis-core/go/runtime/tagindexer"
 	"github.com/oasisprotocol/oasis-core/go/runtime/transaction"
@@ -85,12 +87,36 @@ func (c *runtimeClient) SubmitTx(ctx context.Context, request *api.SubmitTxReque
 		return nil, fmt.Errorf("client: cannot submit transaction, p2p disabled")
 	}
 
+	// Make sure consensus is synced.
 	select {
 	case <-c.common.consensus.Synced():
 	case <-ctx.Done():
 		return nil, ctx.Err()
 	default:
 		return nil, api.ErrNotSynced
+	}
+
+	// Perform a local transaction check when a hosted runtime is available.
+	if hrt, ok := c.hosts[request.RuntimeID]; ok && hrt.GetHostedRuntime() != nil {
+		// Get current blocks.
+		rs, err := c.common.consensus.RootHash().GetRuntimeState(ctx, request.RuntimeID, consensus.HeightLatest)
+		if err != nil {
+			return nil, fmt.Errorf("client: failed to get runtime %s state: %w", request.RuntimeID, err)
+		}
+		lb, err := c.common.consensus.GetLightBlock(ctx, rs.CurrentBlockHeight)
+		if err != nil {
+			return nil, fmt.Errorf("client: failed to get light block at height %d: %w", rs.CurrentBlockHeight, err)
+		}
+
+		// Perform transaction checks.
+		err = hrt.GetHostedRuntime().CheckTx(ctx, rs.CurrentBlock, lb, request.Data)
+		switch {
+		case err == nil:
+		case errors.Is(err, host.ErrCheckTxFailed):
+			return nil, fmt.Errorf("%w: %s", api.ErrCheckTxFailed, err)
+		default:
+			return nil, fmt.Errorf("client: local transaction check failed: %w", err)
+		}
 	}
 
 	var watcher *blockWatcher

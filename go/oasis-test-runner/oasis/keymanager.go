@@ -275,7 +275,7 @@ func (km *Keymanager) startNode() error {
 		runtimeProvisioner(runtimeRegistry.RuntimeProvisionerSandboxed).
 		runtimeSGXLoader(km.net.cfg.RuntimeSGXLoaderBinary).
 		// XXX: could support configurable binary idx if ever needed.
-		runtimePath(km.runtime.id, km.runtime.binaries[0]).
+		runtimePath(km.runtime.id, km.runtime.binaries[km.runtime.teeHardware][0]).
 		workerKeymanagerEnabled().
 		workerKeymanagerRuntimeID(km.runtime.id).
 		configureDebugCrashPoints(km.crashPointsProbability).

@@ -29,9 +29,11 @@ var (
 	ErrInternal = errors.New(ModuleName, 2, "client: internal error")
 	// ErrTransactionExpired is an error returned when transaction expired.
 	ErrTransactionExpired = errors.New(ModuleName, 3, "client: transaction expired")
-	// ErrNotSynced is an error return if transaction is submitted before node has finished
+	// ErrNotSynced is an error returned if transaction is submitted before node has finished
 	// initial syncing.
 	ErrNotSynced = errors.New(ModuleName, 4, "client: not finished initial sync")
+	// ErrCheckTxFailed is an error returned if the local transaction check fails.
+	ErrCheckTxFailed = errors.New(ModuleName, 5, "client: transaction check failed")
 )
 
 // RuntimeClient is the runtime client interface.

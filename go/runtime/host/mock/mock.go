@@ -7,6 +7,7 @@ import (
 
 	"github.com/oasisprotocol/oasis-core/go/common"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
+	"github.com/oasisprotocol/oasis-core/go/common/errors"
 	"github.com/oasisprotocol/oasis-core/go/common/pubsub"
 	"github.com/oasisprotocol/oasis-core/go/roothash/api/commitment"
 	"github.com/oasisprotocol/oasis-core/go/runtime/host"
@@ -87,6 +88,21 @@ func (r *runtime) Call(ctx context.Context, body *protocol.Body) (*protocol.Body
 				IOWriteLog: ioWriteLog,
 			},
 			// No RakSig in mock response.
+		}}, nil
+	case body.RuntimeCheckTxBatchRequest != nil:
+		rq := body.RuntimeCheckTxBatchRequest
+
+		var results []protocol.CheckTxResult
+		for range rq.Inputs {
+			results = append(results, protocol.CheckTxResult{
+				Error: protocol.Error{
+					Code: errors.CodeNoError,
+				},
+			})
+		}
+
+		return &protocol.Body{RuntimeCheckTxBatchResponse: &protocol.RuntimeCheckTxBatchResponse{
+			Results: results,
 		}}, nil
 	default:
 		return nil, fmt.Errorf("(mock) method not supported")

@@ -199,10 +199,10 @@ type RuntimeFixture struct { // nolint: maligned
 	Entity     int                  `json:"entity"`
 	Keymanager int                  `json:"keymanager"`
 
-	Binaries         []string         `json:"binaries"`
-	GenesisState     storage.WriteLog `json:"genesis_state,omitempty"`
-	GenesisStatePath string           `json:"genesis_state_path,omitempty"`
-	GenesisRound     uint64           `json:"genesis_round,omitempty"`
+	Binaries         map[node.TEEHardware][]string `json:"binaries"`
+	GenesisState     storage.WriteLog              `json:"genesis_state,omitempty"`
+	GenesisStatePath string                        `json:"genesis_state_path,omitempty"`
+	GenesisRound     uint64                        `json:"genesis_round,omitempty"`
 
 	Executor     registry.ExecutorParameters     `json:"executor"`
 	TxnScheduler registry.TxnSchedulerParameters `json:"txn_scheduler"`
