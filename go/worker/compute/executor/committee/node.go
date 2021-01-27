@@ -54,7 +54,6 @@ var (
 	// Transaction scheduling errors.
 	errNoBlocks        = fmt.Errorf("executor: no blocks")
 	errNotReady        = fmt.Errorf("executor: runtime not ready")
-	errCheckTxFailed   = p2pError.Permanent(fmt.Errorf("executor: CheckTx failed"))
 	errNotTxnScheduler = fmt.Errorf("executor: not transaction scheduler in this round")
 	errDuplicateTx     = p2pError.Permanent(p2pError.Relayable(fmt.Errorf("executor: duplicate transaction")))
 
@@ -579,51 +578,24 @@ func (n *Node) checkTx(ctx context.Context, tx []byte) error {
 	currentConsensusBlock := n.commonNode.CurrentConsensusBlock
 	n.commonNode.CrossNode.Unlock()
 
-	if currentBlock == nil || currentConsensusBlock == nil {
-		return errNotReady
-	}
-
-	checkRq := &protocol.Body{
-		RuntimeCheckTxBatchRequest: &protocol.RuntimeCheckTxBatchRequest{
-			ConsensusBlock: *currentConsensusBlock,
-			Inputs:         transaction.RawBatch{tx},
-			Block:          *currentBlock,
-		},
-	}
 	rt := n.GetHostedRuntime()
 	if rt == nil {
 		n.logger.Error("CheckTx: hosted runtime not initialized")
 		return errNotReady
 	}
-	resp, err := rt.Call(ctx, checkRq)
+
+	err := rt.CheckTx(ctx, currentBlock, currentConsensusBlock, tx)
 	switch {
-	case err != nil:
-		n.logger.Error("CheckTx: runtime call error",
-			"err", err,
-		)
+	case err == nil:
+	case errors.Is(err, host.ErrInvalidArgument):
+		return errNotReady
+	case errors.Is(err, host.ErrInternal):
+		return err
+	case errors.Is(err, host.ErrCheckTxFailed):
 		return p2pError.Permanent(err)
-	case resp.RuntimeCheckTxBatchResponse == nil:
-		n.logger.Error("CheckTx: runtime response is nil")
-		return errCheckTxFailed
-	case resp.RuntimeCheckTxBatchResponse.Results == nil:
-		n.logger.Error("CheckTx: response contains no results")
-		return errCheckTxFailed
-	case len(resp.RuntimeCheckTxBatchResponse.Results) != 1:
-		n.logger.Error("CheckTx: runtime response doesn't contain exactly one result",
-			"num_results", len(resp.RuntimeCheckTxBatchResponse.Results),
-		)
-		return errCheckTxFailed
+	default:
+		return err
 	}
-
-	// Interpret CheckTx result.
-	result := resp.RuntimeCheckTxBatchResponse.Results[0]
-	if !result.IsSuccess() {
-		n.logger.Error("CheckTx: runtime failed with error",
-			"err", result.Error,
-		)
-		return fmt.Errorf("%w: %s", errCheckTxFailed, result.Error)
-	}
-
 	return nil
 }
 

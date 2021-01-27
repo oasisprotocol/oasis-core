@@ -16,14 +16,14 @@ type RuntimeHostNode struct {
 	factory  RuntimeHostHandlerFactory
 	notifier protocol.Notifier
 
-	runtime host.Runtime
+	runtime host.RichRuntime
 }
 
 // ProvisionHostedRuntime provisions the configured runtime.
 //
 // This method may return before the runtime is fully provisioned. The returned runtime will not be
 // started automatically, you must call Start explicitly.
-func (n *RuntimeHostNode) ProvisionHostedRuntime(ctx context.Context) (host.Runtime, protocol.Notifier, error) {
+func (n *RuntimeHostNode) ProvisionHostedRuntime(ctx context.Context) (host.RichRuntime, protocol.Notifier, error) {
 	cfg, provisioner, err := n.factory.GetRuntime().Host(ctx)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to get runtime host: %w", err)
@@ -36,17 +36,18 @@ func (n *RuntimeHostNode) ProvisionHostedRuntime(ctx context.Context) (host.Runt
 		return nil, nil, fmt.Errorf("failed to provision runtime: %w", err)
 	}
 	notifier := n.factory.NewNotifier(ctx, prt)
+	rr := host.NewRichRuntime(prt)
 
 	n.Lock()
-	n.runtime = prt
+	n.runtime = rr
 	n.notifier = notifier
 	n.Unlock()
 
-	return prt, notifier, nil
+	return rr, notifier, nil
 }
 
 // GetHostedRuntime returns the provisioned hosted runtime (if any).
-func (n *RuntimeHostNode) GetHostedRuntime() host.Runtime {
+func (n *RuntimeHostNode) GetHostedRuntime() host.RichRuntime {
 	n.Lock()
 	rt := n.runtime
 	n.Unlock()
