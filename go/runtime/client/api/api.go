@@ -5,6 +5,7 @@ import (
 	"math"
 
 	"github.com/oasisprotocol/oasis-core/go/common"
+	"github.com/oasisprotocol/oasis-core/go/common/cbor"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
 	"github.com/oasisprotocol/oasis-core/go/common/errors"
 	"github.com/oasisprotocol/oasis-core/go/common/pubsub"
@@ -34,6 +35,8 @@ var (
 	ErrNotSynced = errors.New(ModuleName, 4, "client: not finished initial sync")
 	// ErrCheckTxFailed is an error returned if the local transaction check fails.
 	ErrCheckTxFailed = errors.New(ModuleName, 5, "client: transaction check failed")
+	// ErrNoHostedRuntime is returned when the hosted runtime is not available locally.
+	ErrNoHostedRuntime = errors.New(ModuleName, 6, "client: no hosted runtime is available")
 )
 
 // RuntimeClient is the runtime client interface.
@@ -64,6 +67,9 @@ type RuntimeClient interface {
 
 	// GetEvents returns all events emitted in a given block.
 	GetEvents(ctx context.Context, request *GetEventsRequest) ([]*Event, error)
+
+	// Query makes a runtime-specific query.
+	Query(ctx context.Context, request *QueryRequest) (*QueryResponse, error)
 
 	// QueryTx queries the indexer for a specific runtime transaction.
 	QueryTx(ctx context.Context, request *QueryTxRequest) (*TxResult, error)
@@ -144,6 +150,19 @@ type Event struct {
 	Key    []byte    `json:"key"`
 	Value  []byte    `json:"value"`
 	TxHash hash.Hash `json:"tx_hash"`
+}
+
+// QueryRequest is a Query request.
+type QueryRequest struct {
+	RuntimeID common.Namespace `json:"runtime_id"`
+	Round     uint64           `json:"round"`
+	Method    string           `json:"method"`
+	Args      cbor.RawMessage  `json:"args"`
+}
+
+// QueryResponse is a response to the runtime query.
+type QueryResponse struct {
+	Data cbor.RawMessage `json:"data"`
 }
 
 // QueryTxRequest is a QueryTx request.

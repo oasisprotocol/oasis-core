@@ -12,6 +12,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/oasisprotocol/oasis-core/go/common"
+	"github.com/oasisprotocol/oasis-core/go/common/cbor"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
 	"github.com/oasisprotocol/oasis-core/go/runtime/client/api"
 )
@@ -178,4 +179,18 @@ func testQuery(
 	genBlk2, err := c.GetGenesisBlock(ctx, runtimeID)
 	require.NoError(t, err, "GetGenesisBlock2")
 	require.EqualValues(t, genBlk, genBlk2, "GetGenesisBlock should match previous GetGenesisBlock")
+
+	// Query runtime.
+	// Since we are using the mock runtime host the response should be a CBOR-serialized method name
+	// with the added " world" string.
+	rsp, err := c.Query(ctx, &api.QueryRequest{
+		RuntimeID: runtimeID,
+		Round:     blk.Header.Round,
+		Method:    "hello",
+	})
+	require.NoError(t, err, "Query")
+	var decMethod string
+	err = cbor.Unmarshal(rsp.Data, &decMethod)
+	require.NoError(t, err, "cbor.Unmarshal(<QueryResponse.Data>)")
+	require.EqualValues(t, "hello world", decMethod, "Query response should be correct")
 }

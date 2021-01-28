@@ -7,7 +7,7 @@ use std::{
     },
 };
 
-use anyhow::{anyhow, Context as AnyContext, Result};
+use anyhow::{Context as AnyContext, Result as AnyResult};
 use serde::{de::DeserializeOwned, Serialize};
 use thiserror::Error;
 
@@ -28,16 +28,74 @@ use crate::{
 /// to process transactions.
 pub trait Dispatcher {
     /// Execute the transactions in the given batch.
-    fn execute_batch(&self, ctx: Context, batch: &TxnBatch) -> Result<ExecuteBatchResult>;
+    fn execute_batch(
+        &self,
+        ctx: Context,
+        batch: &TxnBatch,
+    ) -> Result<ExecuteBatchResult, RuntimeError>;
 
     /// Check the transactions in the given batch for validity.
-    fn check_batch(&self, ctx: Context, batch: &TxnBatch) -> Result<Vec<CheckTxResult>>;
+    fn check_batch(
+        &self,
+        ctx: Context,
+        batch: &TxnBatch,
+    ) -> Result<Vec<CheckTxResult>, RuntimeError>;
 
     /// Invoke the finalizer (if any).
-    fn finalize(&self, new_storage_root: Hash);
+    fn finalize(&self, _new_storage_root: Hash) {
+        // Default implementation does nothing.
+    }
 
     /// Configure abort batch flag.
-    fn set_abort_batch_flag(&mut self, abort_batch: Arc<AtomicBool>);
+    fn set_abort_batch_flag(&mut self, _abort_batch: Arc<AtomicBool>) {
+        // Default implementation does nothing.
+    }
+
+    /// Process a query.
+    fn query(
+        &self,
+        _ctx: Context,
+        _method: &str,
+        _args: cbor::Value,
+    ) -> Result<cbor::Value, RuntimeError> {
+        // Default implementation returns an error.
+        Err(RuntimeError::new("dispatcher", 1, "query not supported"))
+    }
+}
+
+impl<T: Dispatcher + ?Sized> Dispatcher for Box<T> {
+    fn execute_batch(
+        &self,
+        ctx: Context,
+        batch: &TxnBatch,
+    ) -> Result<ExecuteBatchResult, RuntimeError> {
+        T::execute_batch(&*self, ctx, batch)
+    }
+
+    fn check_batch(
+        &self,
+        ctx: Context,
+        batch: &TxnBatch,
+    ) -> Result<Vec<CheckTxResult>, RuntimeError> {
+        T::check_batch(&*self, ctx, batch)
+    }
+
+    fn finalize(&self, new_storage_root: Hash) {
+        T::finalize(&*self, new_storage_root)
+    }
+
+    fn set_abort_batch_flag(&mut self, abort_batch: Arc<AtomicBool>) {
+        T::set_abort_batch_flag(&mut *self, abort_batch)
+    }
+
+    fn query(
+        &self,
+        ctx: Context,
+        method: &str,
+        args: cbor::Value,
+    ) -> Result<cbor::Value, RuntimeError> {
+        T::query(&*self, ctx, method, args)
+    }
 }
 
 /// Result of processing an ExecuteTx.
@@ -69,14 +127,22 @@ impl NoopDispatcher {
 }
 
 impl Dispatcher for NoopDispatcher {
-    fn execute_batch(&self, _ctx: Context, _batch: &TxnBatch) -> Result<ExecuteBatchResult> {
+    fn execute_batch(
+        &self,
+        _ctx: Context,
+        _batch: &TxnBatch,
+    ) -> Result<ExecuteBatchResult, RuntimeError> {
         Ok(ExecuteBatchResult {
             results: Vec::new(),
             messages: Vec::new(),
         })
     }
 
-    fn check_batch(&self, _ctx: Context, _batch: &TxnBatch) -> Result<Vec<CheckTxResult>> {
+    fn check_batch(
+        &self,
+        _ctx: Context,
+        _batch: &TxnBatch,
+    ) -> Result<Vec<CheckTxResult>, RuntimeError> {
         Ok(Vec::new())
     }
 
@@ -164,16 +230,16 @@ pub struct MethodDescriptor {
 /// Handler for a runtime method.
 pub trait MethodHandler<Call, Output> {
     /// Invoke the method implementation and return a response.
-    fn handle(&self, call: &Call, ctx: &mut Context) -> Result<Output>;
+    fn handle(&self, call: &Call, ctx: &mut Context) -> AnyResult<Output>;
 }
 
 impl<Call, Output, F> MethodHandler<Call, Output> for F
 where
     Call: 'static,
     Output: 'static,
-    F: Fn(&Call, &mut Context) -> Result<Output> + 'static,
+    F: Fn(&Call, &mut Context) -> AnyResult<Output> + 'static,
 {
-    fn handle(&self, call: &Call, ctx: &mut Context) -> Result<Output> {
+    fn handle(&self, call: &Call, ctx: &mut Context) -> AnyResult<Output> {
         (*self)(&call, ctx)
     }
 }
@@ -185,7 +251,7 @@ pub trait MethodHandlerDispatch {
     fn get_descriptor(&self) -> &MethodDescriptor;
 
     /// Dispatches the given raw call.
-    fn dispatch(&self, call: TxnCall, ctx: &mut Context) -> Result<cbor::Value>;
+    fn dispatch(&self, call: TxnCall, ctx: &mut Context) -> AnyResult<cbor::Value>;
 }
 
 struct MethodHandlerDispatchImpl<Call, Output> {
@@ -204,7 +270,7 @@ where
         &self.descriptor
     }
 
-    fn dispatch(&self, call: TxnCall, ctx: &mut Context) -> Result<cbor::Value> {
+    fn dispatch(&self, call: TxnCall, ctx: &mut Context) -> AnyResult<cbor::Value> {
         let call = cbor::from_value(call.args).context("unable to parse call arguments")?;
         let response = self.handler.handle(&call, ctx)?;
 
@@ -241,7 +307,7 @@ impl Method {
     }
 
     /// Dispatch method call.
-    pub fn dispatch(&self, call: TxnCall, ctx: &mut Context) -> Result<cbor::Value> {
+    pub fn dispatch(&self, call: TxnCall, ctx: &mut Context) -> AnyResult<cbor::Value> {
         self.dispatcher.dispatch(call, ctx)
     }
 }
@@ -343,7 +409,7 @@ impl MethodDispatcher {
         }
     }
 
-    fn dispatch_fallible(&self, call: &Vec<u8>, ctx: &mut Context) -> Result<cbor::Value> {
+    fn dispatch_fallible(&self, call: &Vec<u8>, ctx: &mut Context) -> AnyResult<cbor::Value> {
         let call: TxnCall = cbor::from_slice(call).context("unable to parse call")?;
 
         match self.methods.get(&call.method) {
@@ -357,7 +423,11 @@ impl MethodDispatcher {
 }
 
 impl Dispatcher for MethodDispatcher {
-    fn check_batch(&self, mut ctx: Context, batch: &TxnBatch) -> Result<Vec<CheckTxResult>> {
+    fn check_batch(
+        &self,
+        mut ctx: Context,
+        batch: &TxnBatch,
+    ) -> Result<Vec<CheckTxResult>, RuntimeError> {
         if let Some(ref ctx_init) = self.ctx_initializer {
             ctx_init.init(&mut ctx);
         }
@@ -376,7 +446,7 @@ impl Dispatcher for MethodDispatcher {
                 .map(|b| b.load(Ordering::SeqCst))
                 .unwrap_or(false)
             {
-                return Err(anyhow!("batch aborted"));
+                return Err(RuntimeError::new("dispatcher", 1, "batch aborted"));
             }
             results.push(self.dispatch_check(call, &mut ctx));
             let _ = ctx.take_tags();
@@ -385,7 +455,11 @@ impl Dispatcher for MethodDispatcher {
         Ok(results)
     }
 
-    fn execute_batch(&self, mut ctx: Context, batch: &TxnBatch) -> Result<ExecuteBatchResult> {
+    fn execute_batch(
+        &self,
+        mut ctx: Context,
+        batch: &TxnBatch,
+    ) -> Result<ExecuteBatchResult, RuntimeError> {
         if let Some(ref ctx_init) = self.ctx_initializer {
             ctx_init.init(&mut ctx);
         }
@@ -404,7 +478,7 @@ impl Dispatcher for MethodDispatcher {
                 .map(|b| b.load(Ordering::SeqCst))
                 .unwrap_or(false)
             {
-                return Err(anyhow!("batch aborted"));
+                return Err(RuntimeError::new("dispatcher", 1, "batch aborted"));
             }
             results.push(self.dispatch_execute(call, &mut ctx));
         }
@@ -456,7 +530,7 @@ mod tests {
             MethodDescriptor {
                 name: "dummy".to_owned(),
             },
-            |call: &Complex, ctx: &mut Context| -> Result<Complex> {
+            |call: &Complex, ctx: &mut Context| -> AnyResult<Complex> {
                 assert_eq!(ctx.header.timestamp, TEST_TIMESTAMP);
 
                 Ok(Complex {

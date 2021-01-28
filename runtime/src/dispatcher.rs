@@ -9,7 +9,7 @@ use std::{
     thread,
 };
 
-use anyhow::{anyhow, Result};
+use anyhow::{anyhow, Result as AnyResult};
 use crossbeam::channel;
 use io_context::Context;
 use slog::Logger;
@@ -23,7 +23,9 @@ use crate::{
         },
         logger::get_logger,
     },
-    consensus::roothash::{self, Block, ComputeResultsHeader, COMPUTE_RESULTS_HEADER_CONTEXT},
+    consensus::roothash::{
+        self, Block, ComputeResultsHeader, Header, COMPUTE_RESULTS_HEADER_CONTEXT,
+    },
     enclave_rpc::{
         demux::Demux as RpcDemux,
         dispatcher::Dispatcher as RpcDispatcher,
@@ -45,11 +47,11 @@ use crate::{
         types::TxnBatch,
         Context as TxnContext,
     },
-    types::{Body, ComputedBatch, HostStorageEndpoint},
+    types::{Body, ComputedBatch, Error, HostStorageEndpoint},
 };
 
 /// Maximum amount of requests that can be in the dispatcher queue.
-const BACKLOG_SIZE: usize = 10;
+const BACKLOG_SIZE: usize = 1000;
 
 /// Interface for dispatcher initializers.
 pub trait Initializer: Send + Sync {
@@ -148,14 +150,14 @@ impl Dispatcher {
     }
 
     /// Queue a new request to be dispatched.
-    pub fn queue_request(&self, ctx: Context, id: u64, body: Body) -> Result<()> {
+    pub fn queue_request(&self, ctx: Context, id: u64, body: Body) -> AnyResult<()> {
         self.queue_tx.try_send((ctx, id, body))?;
         Ok(())
     }
 
     /// Signals to dispatcher that it should abort and waits for the abort to
     /// complete.
-    pub fn abort_and_wait(&self, ctx: Context, id: u64, req: Body) -> Result<()> {
+    pub fn abort_and_wait(&self, ctx: Context, id: u64, req: Body) -> AnyResult<()> {
         self.abort_batch.store(true, Ordering::SeqCst);
         // Queue the request to break the dispatch loop in case nothing is
         // being processed at the moment.
@@ -168,7 +170,7 @@ impl Dispatcher {
         &self,
         initializer: Box<dyn Initializer>,
         rx: channel::Receiver<QueueItem>,
-    ) -> Result<()> {
+    ) -> AnyResult<()> {
         // Wait for the protocol instance to be available.
         let protocol = {
             let mut guard = self.protocol.lock().unwrap();
@@ -207,85 +209,93 @@ impl Dispatcher {
                 self.abort_tx.try_send(())?;
             }
 
-            match rx.recv() {
-                Ok((ctx, id, Body::RuntimeRPCCallRequest { request })) => {
+            let (ctx, id, request) = match rx.recv() {
+                Ok(data) => data,
+                Err(error) => {
+                    error!(self.logger, "Error while waiting for request"; "err" => %error);
+                    break 'dispatch;
+                }
+            };
+
+            let result = match request {
+                Body::RuntimeRPCCallRequest { request } => {
                     // RPC call.
-                    self.dispatch_rpc(
-                        &mut rpc_demux,
-                        &mut rpc_dispatcher,
-                        &protocol,
-                        ctx,
-                        id,
-                        request,
-                    );
+                    self.dispatch_rpc(&mut rpc_demux, &mut rpc_dispatcher, &protocol, ctx, request)
                 }
-                Ok((ctx, id, Body::RuntimeLocalRPCCallRequest { request })) => {
+                Body::RuntimeLocalRPCCallRequest { request } => {
                     // Local RPC call.
-                    self.dispatch_local_rpc(&mut rpc_dispatcher, &protocol, ctx, id, request);
+                    self.dispatch_local_rpc(&mut rpc_dispatcher, &protocol, ctx, request)
                 }
-                Ok((
-                    ctx,
-                    id,
-                    Body::RuntimeExecuteTxBatchRequest {
-                        message_results,
-                        io_root,
-                        inputs,
-                        block,
-                    },
-                )) => {
+                Body::RuntimeExecuteTxBatchRequest {
+                    message_results,
+                    io_root,
+                    inputs,
+                    block,
+                } => {
                     // Transaction execution.
                     self.dispatch_txn(
                         &mut cache,
                         &mut txn_dispatcher,
                         &protocol,
                         ctx,
-                        id,
                         io_root,
                         inputs,
                         block,
                         message_results,
                         false,
-                    );
+                    )
                 }
-                Ok((ctx, id, Body::RuntimeCheckTxBatchRequest { inputs, block })) => {
+                Body::RuntimeCheckTxBatchRequest { inputs, block } => {
                     // Transaction check.
                     self.dispatch_txn(
                         &mut cache_check,
                         &mut txn_dispatcher,
                         &protocol,
                         ctx,
-                        id,
                         Hash::default(),
                         inputs,
                         block,
                         vec![],
                         true,
-                    );
+                    )
                 }
-                Ok((ctx, id, Body::RuntimeKeyManagerPolicyUpdateRequest { signed_policy_raw })) => {
+                Body::RuntimeKeyManagerPolicyUpdateRequest { signed_policy_raw } => {
                     // KeyManager policy update local RPC call.
-                    self.handle_km_policy_update(
-                        &mut rpc_dispatcher,
+                    self.handle_km_policy_update(&mut rpc_dispatcher, ctx, signed_policy_raw)
+                }
+                Body::RuntimeQueryRequest {
+                    method,
+                    header,
+                    args,
+                } => {
+                    // Query.
+                    self.dispatch_query(
+                        &mut cache_check,
+                        &mut txn_dispatcher,
                         &protocol,
                         ctx,
-                        id,
-                        signed_policy_raw,
-                    );
+                        method,
+                        header,
+                        args,
+                    )
                 }
-                Ok((_ctx, _id, Body::RuntimeAbortRequest {})) => {
+                Body::RuntimeAbortRequest {} => {
                     // We handle the RuntimeAbortRequest here so that we break
                     // the recv loop and re-check abort flag.
                     info!(self.logger, "Received abort request");
+                    continue 'dispatch;
                 }
-                Ok(_) => {
+                _ => {
                     error!(self.logger, "Unsupported request type");
                     break 'dispatch;
                 }
-                Err(error) => {
-                    error!(self.logger, "Error while waiting for request"; "err" => %error);
-                    break 'dispatch;
-                }
-            }
+            };
+
+            let response = match result {
+                Ok(body) => body,
+                Err(error) => Body::Error(error),
+            };
+            protocol.send_response(id, response).unwrap();
         }
 
         info!(self.logger, "Runtime call dispatcher is terminating");
@@ -293,45 +303,83 @@ impl Dispatcher {
         Ok(())
     }
 
+    fn dispatch_query(
+        &self,
+        cache: &mut Cache,
+        txn_dispatcher: &mut dyn TxnDispatcher,
+        protocol: &Arc<Protocol>,
+        ctx: Context,
+        method: String,
+        header: Header,
+        args: cbor::Value,
+    ) -> Result<Body, Error> {
+        debug!(self.logger, "Received query request";
+            "state_root" => ?header.state_root,
+            "round" => ?header.round,
+        );
+
+        // Verify that the runtime ID matches the block's namespace. This is a protocol violation
+        // as the compute node should never change the runtime ID.
+        if header.namespace != protocol.get_runtime_id() {
+            panic!(
+                "block namespace does not match runtime id (namespace: {:?} runtime ID: {:?})",
+                header.namespace,
+                protocol.get_runtime_id(),
+            );
+        }
+
+        // Create a new context and dispatch the batch.
+        let ctx = ctx.freeze();
+        cache.maybe_replace(Root {
+            namespace: header.namespace,
+            version: header.round,
+            hash: header.state_root,
+        });
+
+        let untrusted_local = Arc::new(ProtocolUntrustedLocalStorage::new(
+            Context::create_child(&ctx),
+            protocol.clone(),
+        ));
+
+        let txn_ctx = TxnContext::new(ctx.clone(), &header, &[], true);
+        let mut overlay = OverlayTree::new(&mut cache.mkvs);
+        let result = StorageContext::enter(&mut overlay, untrusted_local, || {
+            txn_dispatcher.query(txn_ctx, &method, args)
+        });
+
+        result.map(|data| Body::RuntimeQueryResponse { data })
+    }
+
     fn txn_check_batch(
         &self,
         _ctx: Arc<Context>,
-        request_id: u64,
         cache: &mut Cache,
-        protocol: &Arc<Protocol>,
-        txn_dispatcher: &mut Box<dyn TxnDispatcher>,
+        txn_dispatcher: &mut dyn TxnDispatcher,
         txn_ctx: TxnContext,
         untrusted_local: Arc<ProtocolUntrustedLocalStorage>,
         inputs: TxnBatch,
         _io_root: Hash,
-    ) -> Result<()> {
+    ) -> Result<Body, Error> {
         let mut overlay = OverlayTree::new(&mut cache.mkvs);
         let results = StorageContext::enter(&mut overlay, untrusted_local.clone(), || {
             txn_dispatcher.check_batch(txn_ctx, &inputs)
-        })?;
+        });
 
         debug!(self.logger, "Transaction batch check complete");
 
-        // Send the result back.
-        protocol
-            .send_response(request_id, Body::RuntimeCheckTxBatchResponse { results })
-            .unwrap();
-
-        Ok(())
+        results.map(|results| Body::RuntimeCheckTxBatchResponse { results })
     }
 
     fn txn_execute_batch(
         &self,
         ctx: Arc<Context>,
-        request_id: u64,
         cache: &mut Cache,
-        protocol: &Arc<Protocol>,
-        txn_dispatcher: &mut Box<dyn TxnDispatcher>,
+        txn_dispatcher: &mut dyn TxnDispatcher,
         txn_ctx: TxnContext,
         untrusted_local: Arc<ProtocolUntrustedLocalStorage>,
         mut inputs: TxnBatch,
         io_root: Hash,
-    ) -> Result<()> {
+    ) -> Result<Body, Error> {
         let header = txn_ctx.header.clone();
         let mut overlay = OverlayTree::new(&mut cache.mkvs);
         let mut results = StorageContext::enter(&mut overlay, untrusted_local.clone(), || {
@@ -421,38 +469,29 @@ impl Dispatcher {
             Signature::default()
         };
 
-        let result = ComputedBatch {
-            header,
-            io_write_log,
-            state_write_log,
-            rak_sig,
-            messages: results.messages,
-        };
-
-        // Send the result back.
-        protocol
-            .send_response(
-                request_id,
-                Body::RuntimeExecuteTxBatchResponse { batch: result },
-            )
-            .unwrap();
-
-        Ok(())
+        Ok(Body::RuntimeExecuteTxBatchResponse {
+            batch: ComputedBatch {
+                header,
+                io_write_log,
+                state_write_log,
+                rak_sig,
+                messages: results.messages,
+            },
+        })
     }
 
     fn dispatch_txn(
         &self,
         cache: &mut Cache,
-        txn_dispatcher: &mut Box<dyn TxnDispatcher>,
+        txn_dispatcher: &mut dyn TxnDispatcher,
         protocol: &Arc<Protocol>,
         ctx: Context,
-        id: u64,
         io_root: Hash,
         inputs: TxnBatch,
         block: Block,
         message_results: Vec<roothash::MessageEvent>,
         check_only: bool,
-    ) {
+    ) -> Result<Body, Error> {
         debug!(self.logger, "Received transaction batch request";
             "state_root" => ?block.header.state_root,
             "round" => block.header.round + 1,
@@ -483,12 +522,10 @@ impl Dispatcher {
             protocol.clone(),
         ));
         let txn_ctx = TxnContext::new(ctx.clone(), &block.header, &message_results, check_only);
-        let results = if check_only {
+        if check_only {
             self.txn_check_batch(
                 ctx,
-                id,
                 cache,
-                &protocol,
                 txn_dispatcher,
                 txn_ctx,
                 untrusted_local,
@@ -498,30 +535,13 @@ impl Dispatcher {
         } else {
             self.txn_execute_batch(
                 ctx,
-                id,
                 cache,
-                &protocol,
                 txn_dispatcher,
                 txn_ctx,
                 untrusted_local,
                 inputs,
                 io_root,
             )
-        };
-
-        // Return and error response in case of failure.
-        if let Err(error) = results {
-            warn!(self.logger, "Dispatching batch error"; "err" => %error);
-            protocol
-                .send_response(
-                    id,
-                    Body::Error {
-                        module: "".to_owned(), // XXX: Error codes.
-                        code: 1,               // XXX: Error codes.
-                        message: format!("{}", error),
-                    },
-                )
-                .unwrap();
         }
     }
 
@@ -531,9 +551,8 @@ impl Dispatcher {
         rpc_dispatcher: &mut RpcDispatcher,
         protocol: &Arc<Protocol>,
         ctx: Context,
-        id: u64,
         request: Vec<u8>,
-    ) {
+    ) -> Result<Body, Error> {
         debug!(self.logger, "Received RPC call request");
 
         // Process frame.
@@ -542,22 +561,10 @@ impl Dispatcher {
             Ok(result) => result,
             Err(error) => {
                 error!(self.logger, "Error while processing frame"; "err" => %error);
-
-                protocol
-                    .send_response(
-                        id,
-                        Body::Error {
-                            module: "".to_owned(), // XXX: Error codes.
-                            code: 1,               // XXX: Error codes.
-                            message: format!("{}", error),
-                        },
-                    )
-                    .unwrap();
-                return;
+                return Err(Error::new("dispatcher", 1, &format!("{}", error)));
             }
         };
 
-        let protocol_response;
         if let Some((session_id, session_info, message, untrusted_plaintext)) = result {
             // Dispatch request.
             assert!(
@@ -574,14 +581,11 @@ impl Dispatcher {
                             "untrusted_plaintext" => ?untrusted_plaintext,
                             "method" => ?req.method
                         );
-                        let err_reponse = Body::Error {
-                            module: "".to_owned(), // XXX: Error codes.
-                            code: 1,               // XXX: Error codes.
-                            message: "Request's method doesn't match untrusted_plaintext copy."
-                                .to_string(),
-                        };
-                        protocol.send_response(id, err_reponse).unwrap();
-                        return;
+                        return Err(Error::new(
+                            "dispatcher",
+                            1,
+                            "Request's method doesn't match untrusted_plaintext copy.",
+                        ));
                     }
 
                     // Request, dispatch.
@@ -607,15 +611,11 @@ impl Dispatcher {
                     match rpc_demux.write_message(session_id, response, &mut buffer) {
                         Ok(_) => {
                             // Transmit response.
-                            protocol_response = Body::RuntimeRPCCallResponse { response: buffer };
+                            Ok(Body::RuntimeRPCCallResponse { response: buffer })
                         }
                         Err(error) => {
                             error!(self.logger, "Error while writing response"; "err" => %error);
-                            protocol_response = Body::Error {
-                                module: "".to_owned(), // XXX: Error codes.
-                                code: 1,               // XXX: Error codes.
-                                message: format!("{}", error),
-                            };
+                            Err(Error::new("dispatcher", 1, &format!("{}", error)))
                         }
                     }
                 }
@@ -625,33 +625,23 @@ impl Dispatcher {
                     match rpc_demux.close(session_id, &mut buffer) {
                         Ok(_) => {
                             // Transmit response.
-                            protocol_response = Body::RuntimeRPCCallResponse { response: buffer };
+                            Ok(Body::RuntimeRPCCallResponse { response: buffer })
                         }
                         Err(error) => {
                             error!(self.logger, "Error while closing session"; "err" => %error);
-                            protocol_response = Body::Error {
-                                module: "".to_owned(), // XXX: Error codes.
-                                code: 1,               // XXX: Error codes.
-                                message: format!("{}", error),
-                            };
+                            Err(Error::new("dispatcher", 1, &format!("{}", error)))
                         }
                     }
                 }
                 msg => {
                     warn!(self.logger, "Ignoring invalid RPC message type"; "msg" => ?msg);
-                    protocol_response = Body::Error {
-                        module: "".to_owned(), // XXX: Error codes.
-                        code: 1,               // XXX: Error codes.
-                        message: "invalid RPC message type".to_owned(),
-                    };
+                    Err(Error::new("dispatcher", 1, "invalid RPC message type"))
                 }
             }
         } else {
             // Send back any handshake frames.
-            protocol_response = Body::RuntimeRPCCallResponse { response: buffer };
+            Ok(Body::RuntimeRPCCallResponse { response: buffer })
         }
-
-        protocol.send_response(id, protocol_response).unwrap();
     }
 
     fn dispatch_local_rpc(
@@ -659,12 +649,12 @@ impl Dispatcher {
         rpc_dispatcher: &mut RpcDispatcher,
         protocol: &Arc<Protocol>,
         ctx: Context,
-        id: u64,
         request: Vec<u8>,
-    ) {
+    ) -> Result<Body, Error> {
         debug!(self.logger, "Received local RPC call request");
 
-        let req: RpcRequest = cbor::from_slice(&request).unwrap();
+        let req: RpcRequest = cbor::from_slice(&request)
+            .map_err(|_| Error::new("dispatcher", 1, "malformed request"))?;
 
         // Request, dispatch.
         let ctx = ctx.freeze();
@@ -685,26 +675,20 @@ impl Dispatcher {
         debug!(self.logger, "Local RPC call dispatch complete");
 
         let response = cbor::to_vec(&response);
-        let protocol_response = Body::RuntimeLocalRPCCallResponse { response };
-
-        protocol.send_response(id, protocol_response).unwrap();
+        Ok(Body::RuntimeLocalRPCCallResponse { response })
     }
 
     fn handle_km_policy_update(
         &self,
         rpc_dispatcher: &mut RpcDispatcher,
-        protocol: &Arc<Protocol>,
         _ctx: Context,
-        id: u64,
         signed_policy_raw: Vec<u8>,
-    ) {
+    ) -> Result<Body, Error> {
         debug!(self.logger, "Received km policy update request");
         rpc_dispatcher.handle_km_policy_update(signed_policy_raw);
         debug!(self.logger, "KM policy update request complete");
 
-        protocol
-            .send_response(id, Body::RuntimeKeyManagerPolicyUpdateResponse {})
-            .unwrap();
+        Ok(Body::RuntimeKeyManagerPolicyUpdateResponse {})
     }
 }
 

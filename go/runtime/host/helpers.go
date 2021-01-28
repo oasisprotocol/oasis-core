@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/oasisprotocol/oasis-core/go/common/cbor"
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
 	"github.com/oasisprotocol/oasis-core/go/roothash/api/block"
 	"github.com/oasisprotocol/oasis-core/go/runtime/host/protocol"
@@ -26,6 +27,9 @@ type RichRuntime interface {
 
 	// CheckTx requests the runtime to check a given transaction.
 	CheckTx(ctx context.Context, rb *block.Block, lb *consensus.LightBlock, tx []byte) error
+
+	// Query requests the runtime to answer a runtime-specific query.
+	Query(ctx context.Context, rb *block.Block, method string, args cbor.RawMessage) (cbor.RawMessage, error)
 }
 
 type richRuntime struct {
@@ -61,6 +65,28 @@ func (r *richRuntime) CheckTx(ctx context.Context, rb *block.Block, lb *consensu
 	}
 
 	return nil
+}
+
+// Implements RichRuntime.
+func (r *richRuntime) Query(ctx context.Context, rb *block.Block, method string, args cbor.RawMessage) (cbor.RawMessage, error) {
+	if rb == nil {
+		return nil, ErrInvalidArgument
+	}
+
+	resp, err := r.Call(ctx, &protocol.Body{
+		RuntimeQueryRequest: &protocol.RuntimeQueryRequest{
+			Method: method,
+			Header: rb.Header,
+			Args:   args,
+		},
+	})
+	switch {
+	case err != nil:
+		return nil, err
+	case resp.RuntimeQueryResponse == nil:
+		return nil, fmt.Errorf("%w: malformed runtime response", ErrInternal)
+	}
+	return resp.RuntimeQueryResponse.Data, nil
 }
 
 // NewRichRuntime creates a new higher-level wrapper for a given runtime. It provides additional

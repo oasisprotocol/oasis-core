@@ -365,6 +365,29 @@ func (c *runtimeClient) GetBlockByHash(ctx context.Context, request *api.GetBloc
 }
 
 // Implements api.RuntimeClient.
+func (c *runtimeClient) Query(ctx context.Context, request *api.QueryRequest) (*api.QueryResponse, error) {
+	hrt, ok := c.hosts[request.RuntimeID]
+	if !ok {
+		return nil, api.ErrNoHostedRuntime
+	}
+	rt := hrt.GetHostedRuntime()
+	if rt == nil {
+		return nil, api.ErrNoHostedRuntime
+	}
+
+	blk, err := c.GetBlock(ctx, &api.GetBlockRequest{RuntimeID: request.RuntimeID, Round: request.Round})
+	if err != nil {
+		return nil, err
+	}
+
+	data, err := rt.Query(ctx, blk, request.Method, request.Args)
+	if err != nil {
+		return nil, err
+	}
+	return &api.QueryResponse{Data: data}, nil
+}
+
+// Implements api.RuntimeClient.
 func (c *runtimeClient) QueryTx(ctx context.Context, request *api.QueryTxRequest) (*api.TxResult, error) {
 	tagIndexer, err := c.tagIndexer(request.RuntimeID)
 	if err != nil {

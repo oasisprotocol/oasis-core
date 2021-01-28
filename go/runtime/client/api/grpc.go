@@ -36,6 +36,8 @@ var (
 	methodGetTxs = serviceName.NewMethod("GetTxs", GetTxsRequest{})
 	// methodGetEvents is the GetEvents method.
 	methodGetEvents = serviceName.NewMethod("GetEvents", GetEventsRequest{})
+	// methodQuery is the Query method.
+	methodQuery = serviceName.NewMethod("Query", QueryRequest{})
 	// methodQueryTx is the QueryTx method.
 	methodQueryTx = serviceName.NewMethod("QueryTx", QueryTxRequest{})
 	// methodQueryTxs is the QueryTxs method.
@@ -82,6 +84,10 @@ var (
 			{
 				MethodName: methodGetEvents.ShortName(),
 				Handler:    handlerGetEvents,
+			},
+			{
+				MethodName: methodQuery.ShortName(),
+				Handler:    handlerQuery,
 			},
 			{
 				MethodName: methodQueryTx.ShortName(),
@@ -327,6 +333,31 @@ func handlerGetEvents( // nolint: golint
 	return interceptor(ctx, &rq, info, handler)
 }
 
+func handlerQuery( // nolint: golint
+	srv interface{},
+	ctx context.Context,
+	dec func(interface{}) error,
+	interceptor grpc.UnaryServerInterceptor,
+) (interface{}, error) {
+	var rq QueryRequest
+	if err := dec(&rq); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		rsp, err := srv.(RuntimeClient).Query(ctx, &rq)
+		return rsp, errorWrapNotFound(err)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: methodQuery.FullName(),
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		rsp, err := srv.(RuntimeClient).Query(ctx, req.(*QueryRequest))
+		return rsp, errorWrapNotFound(err)
+	}
+	return interceptor(ctx, &rq, info, handler)
+}
+
 func handlerQueryTx( // nolint: golint
 	srv interface{},
 	ctx context.Context,
@@ -500,6 +531,14 @@ func (c *runtimeClient) GetEvents(ctx context.Context, request *GetEventsRequest
 		return nil, err
 	}
 	return rsp, nil
+}
+
+func (c *runtimeClient) Query(ctx context.Context, request *QueryRequest) (*QueryResponse, error) {
+	var rsp QueryResponse
+	if err := c.conn.Invoke(ctx, methodQuery.FullName(), request, &rsp); err != nil {
+		return nil, err
+	}
+	return &rsp, nil
 }
 
 func (c *runtimeClient) QueryTx(ctx context.Context, request *QueryTxRequest) (*TxResult, error) {
