@@ -4,11 +4,21 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/oasisprotocol/oasis-core/go/common/cbor"
+	"github.com/oasisprotocol/oasis-core/go/common/quantity"
+	"github.com/oasisprotocol/oasis-core/go/common/version"
+	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
+	"github.com/oasisprotocol/oasis-core/go/consensus/api/transaction"
 	genesis "github.com/oasisprotocol/oasis-core/go/genesis/api"
+	governance "github.com/oasisprotocol/oasis-core/go/governance/api"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/env"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/oasis"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/oasis/cli"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/scenario"
+	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/scenario/e2e"
+	staking "github.com/oasisprotocol/oasis-core/go/staking/api"
+	upgrade "github.com/oasisprotocol/oasis-core/go/upgrade/api"
+	"github.com/oasisprotocol/oasis-core/go/upgrade/migrations"
 )
 
 var (
@@ -65,6 +75,43 @@ func (sc *dumpRestoreImpl) Fixture() (*oasis.NetworkFixture, error) {
 		return nil, err
 	}
 
+	// Set up governance for proposals.
+	f.Network.DeterministicIdentities = true
+	f.Network.RestoreIdentities = true
+	f.Network.GovernanceParameters = &governance.ConsensusParameters{
+		MinProposalDeposit:        *quantity.NewFromUint64(100),
+		VotingPeriod:              20,
+		Quorum:                    100,
+		Threshold:                 100,
+		UpgradeMinEpochDiff:       50,
+		UpgradeCancelMinEpochDiff: 40,
+	}
+	f.Network.StakingGenesis = &staking.Genesis{
+		TotalSupply: *quantity.NewFromUint64(1200),
+		CommonPool:  *quantity.NewFromUint64(100),
+		Ledger: map[staking.Address]*staking.Account{
+			// Fund entity account so we'll be able to submit the proposal.
+			e2e.DeterministicEntity1: {
+				General: staking.GeneralAccount{
+					Balance: *quantity.NewFromUint64(1000),
+				},
+				Escrow: staking.EscrowAccount{
+					Active: staking.SharePool{
+						Balance:     *quantity.NewFromUint64(100),
+						TotalShares: *quantity.NewFromUint64(100),
+					},
+				},
+			},
+		},
+		Delegations: map[staking.Address]map[staking.Address]*staking.Delegation{
+			e2e.DeterministicEntity1: {
+				e2e.DeterministicEntity1: &staking.Delegation{
+					Shares: *quantity.NewFromUint64(100),
+				},
+			},
+		},
+	}
+
 	// Configure runtime for storage checkpointing.
 	f.Runtimes[1].Storage.CheckpointInterval = 10
 	f.Runtimes[1].Storage.CheckpointNumKept = 1
@@ -77,6 +124,38 @@ func (sc *dumpRestoreImpl) Run(childEnv *env.Env) error {
 	clientErrCh, cmd, err := sc.start(childEnv)
 	if err != nil {
 		return err
+	}
+
+	ctx := context.Background()
+
+	// Try submitting a proposal so that deposits are made.
+	entityAcc, err := sc.Net.Controller().Staking.Account(ctx,
+		&staking.OwnerQuery{
+			Height: consensus.HeightLatest,
+			Owner:  e2e.DeterministicEntity1,
+		},
+	)
+	if err != nil {
+		return fmt.Errorf("failed querying account: %w", err)
+	}
+	content := &governance.ProposalContent{
+		Upgrade: &governance.UpgradeProposal{
+			Descriptor: upgrade.Descriptor{
+				Identifier: cbor.Marshal(version.ProtocolVersions{}),
+				Epoch:      200,
+				Method:     upgrade.UpgradeMethodInternal,
+				Name:       migrations.DummyUpgradeName,
+			},
+		},
+	}
+	tx := governance.NewSubmitProposalTx(entityAcc.General.Nonce, &transaction.Fee{Gas: 2000}, content)
+	sigTx, err := transaction.Sign(sc.Net.Entities()[0].Signer(), tx)
+	if err != nil {
+		return fmt.Errorf("failed signing submit proposal transaction: %w", err)
+	}
+	err = sc.Net.Controller().Consensus.SubmitTx(ctx, sigTx)
+	if err != nil {
+		return fmt.Errorf("failed submitting proposal transaction: %w", err)
 	}
 
 	// Wait for the client to exit.
@@ -110,7 +189,6 @@ func (sc *dumpRestoreImpl) Run(childEnv *env.Env) error {
 	}
 
 	// Wait for all storage and compute nodes to be ready.
-	ctx := context.Background()
 	sc.Logger.Info("waiting for all storage and compute nodes to be ready")
 	for _, n := range sc.Net.StorageWorkers() {
 		if err = n.WaitReady(ctx); err != nil {

@@ -323,6 +323,9 @@ type NetworkCfg struct { // nolint: maligned
 	// DeterministicIdentities is the deterministic identities flag.
 	DeterministicIdentities bool `json:"deterministic_identities"`
 
+	// RestoreIdentities is the restore identities flag.
+	RestoreIdentities bool `json:"restore_identities"`
+
 	// FundEntities is the fund entities flag.
 	FundEntities bool `json:"fund_entities"`
 
@@ -1040,7 +1043,7 @@ func (net *Network) GetCLIConfig() cli.Config {
 }
 
 func (net *Network) provisionNodeIdentity(dataDir *env.Dir, seed string, persistTLS bool) (signature.PublicKey, signature.PublicKey, *x509.Certificate, error) {
-	if net.cfg.DeterministicIdentities {
+	if net.cfg.DeterministicIdentities && !net.cfg.RestoreIdentities {
 		if err := net.generateDeterministicNodeIdentity(dataDir, seed); err != nil {
 			return signature.PublicKey{}, signature.PublicKey{}, nil, fmt.Errorf("oasis: failed to generate deterministic identity: %w", err)
 		}
