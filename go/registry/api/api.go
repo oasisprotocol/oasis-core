@@ -475,26 +475,31 @@ func VerifyRegisterNodeArgs( // nolint: gocyclo
 	}
 	expectedSigners = append(expectedSigners, n.ID)
 	if !inEntityNodeList {
-		// Entity signing node registrations is feature-gated by a consensus
-		// parameter, and a per-entity configuration option.
-		if !params.DebugAllowEntitySignedNodeRegistration || !entity.AllowEntitySignedNodes {
-			logger.Error("RegisterNode: registration likely signed by entity",
-				"signed_node", sigNode,
-				"node", n,
-			)
-			return nil, nil, fmt.Errorf("%w: registration likely signed by entity", ErrInvalidArgument)
-		}
-
 		// If we are using entity signing, descriptors will also be signed
 		// by the entity signing key.
-		if !sigNode.MultiSigned.IsSignedBy(entity.ID) {
-			logger.Error("RegisterNode: registration not signed by entity",
+		switch {
+		case sigNode.MultiSigned.IsSignedBy(entity.ID):
+			// Entity signing node registrations is feature-gated by a consensus
+			// parameter, and a per-entity configuration option.
+			//
+			// Ignore the per-entity option during sanity checks as the entity
+			// could have been modified (unless this is during genesis).
+			if !params.DebugAllowEntitySignedNodeRegistration || (!entity.AllowEntitySignedNodes && (!isSanityCheck || isGenesis)) {
+				logger.Error("RegisterNode: registration signed by entity",
+					"signed_node", sigNode,
+					"node", n,
+				)
+				return nil, nil, fmt.Errorf("%w: registration signed by entity", ErrInvalidArgument)
+			}
+
+			expectedSigners = append(expectedSigners, entity.ID)
+		case !isSanityCheck || isGenesis:
+			logger.Error("RegisterNode: node public key not found in entity's node list",
 				"signed_node", sigNode,
 				"node", n,
 			)
-			return nil, nil, fmt.Errorf("%w: registration not signed by entity", ErrInvalidArgument)
+			return nil, nil, fmt.Errorf("%w: node public key not found in entity's node list", ErrInvalidArgument)
 		}
-		expectedSigners = append(expectedSigners, entity.ID)
 	}
 
 	// Expired registrations are allowed here because this routine is abused

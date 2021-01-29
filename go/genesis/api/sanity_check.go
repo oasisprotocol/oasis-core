@@ -30,7 +30,7 @@ func (d *Document) SanityCheck() error {
 	}
 	epoch := d.EpochTime.GetInitialEpoch(d.Height)
 
-	if err := d.Registry.SanityCheck(epoch, d.Staking.Ledger, d.Staking.Parameters.Thresholds, pkBlacklist); err != nil {
+	if err := d.Registry.SanityCheck(d.Time, epoch, d.Staking.Ledger, d.Staking.Parameters.Thresholds, pkBlacklist); err != nil {
 		return err
 	}
 	if err := d.RootHash.SanityCheck(); err != nil {
