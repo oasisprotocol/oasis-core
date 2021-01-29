@@ -1,12 +1,19 @@
-/// Protocol and runtime versioning.
-
+//! Protocol and runtime versioning.
 // NOTE: This should be kept in sync with go/common/version/version.go.
+use num_traits::Zero;
+use serde::{Deserialize, Serialize};
 
 /// A protocol or runtime version.
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct Version {
+    #[serde(skip_serializing_if = "num_traits::Zero::is_zero")]
+    #[serde(default)]
     pub major: u16,
+    #[serde(skip_serializing_if = "num_traits::Zero::is_zero")]
+    #[serde(default)]
     pub minor: u16,
+    #[serde(skip_serializing_if = "num_traits::Zero::is_zero")]
+    #[serde(default)]
     pub patch: u16,
 }
 

@@ -10,11 +10,17 @@ use serde_repr::*;
 use crate::{
     common::{
         cbor,
-        crypto::{hash::Hash, signature::SignatureBundle},
+        crypto::{
+            hash::Hash,
+            signature::{PublicKey, SignatureBundle},
+        },
         namespace::Namespace,
+        quantity,
     },
-    consensus::staking,
+    consensus::{registry, staking},
 };
+
+use std::collections::BTreeMap;
 
 /// Runtime block.
 #[derive(Clone, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -62,6 +68,12 @@ pub enum Message {
         #[serde(flatten)]
         msg: StakingMessage,
     },
+    #[serde(rename = "registry")]
+    Registry {
+        v: u16,
+        #[serde(flatten)]
+        msg: RegistryMessage,
+    },
 }
 
 impl Message {
@@ -81,6 +93,12 @@ pub enum StakingMessage {
     Transfer(staking::Transfer),
     #[serde(rename = "withdraw")]
     Withdraw(staking::Withdraw),
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub enum RegistryMessage {
+    #[serde(rename = "update_runtime")]
+    UpdateRuntime(registry::Runtime),
 }
 
 /// Result of a message being processed by the consensus layer.
@@ -220,6 +238,76 @@ mod tests {
 
     #[test]
     fn test_consistent_messages_hash() {
+        // NOTE: This runtime structure must be synced with go/roothash/api/block/messages_test.go.
+        let test_ent_id =
+            PublicKey::from("4ea5328f943ef6f66daaed74cb0e99c3b1c45f76307b425003dbc7cb3638ed35");
+
+        let q = quantity::Quantity::from(1000);
+
+        let mut st = BTreeMap::new();
+        st.insert(staking::ThresholdKind::KindNodeCompute, q.clone());
+        st.insert(staking::ThresholdKind::KindNodeStorage, q.clone());
+
+        let mut wlc = BTreeMap::new();
+        wlc.insert(registry::RolesMask::RoleComputeWorker, 2);
+        wlc.insert(registry::RolesMask::RoleStorageWorker, 4);
+
+        let mut wl = BTreeMap::new();
+        wl.insert(
+            test_ent_id,
+            registry::EntityWhitelistConfig {
+                max_nodes: Some(wlc),
+            },
+        );
+
+        let rt = registry::Runtime {
+            v: 2,
+            id: Namespace::default(),
+            entity_id: test_ent_id,
+            genesis: registry::RuntimeGenesis {
+                state_root: Hash::empty_hash(),
+                state: None,
+                storage_receipts: None,
+                round: 0,
+            },
+            kind: registry::RuntimeKind::KindCompute,
+            tee_hardware: registry::TEEHardware::TEEHardwareInvalid,
+            versions: registry::VersionInfo::default(),
+            key_manager: None,
+            executor: registry::ExecutorParameters {
+                group_size: 3,
+                group_backup_size: 5,
+                allowed_stragglers: 1,
+                round_timeout: 10,
+                max_messages: 32,
+                min_pool_size: 8,
+            },
+            txn_scheduler: registry::TxnSchedulerParameters {
+                algorithm: "simple".to_string(),
+                batch_flush_timeout: 20000000000, // 20 seconds.
+                max_batch_size: 1,
+                max_batch_size_bytes: 1024,
+                propose_batch_timeout: 5,
+            },
+            storage: registry::StorageParameters {
+                group_size: 3,
+                min_write_replication: 3,
+                max_apply_write_log_entries: 100000,
+                max_apply_ops: 2,
+                checkpoint_interval: 0,
+                checkpoint_num_kept: 0,
+                checkpoint_chunk_size: 0,
+                min_pool_size: 3,
+            },
+            admission_policy: registry::RuntimeAdmissionPolicy::EntityWhitelist {
+                policy: registry::EntityWhitelistRuntimeAdmissionPolicy { entities: Some(wl) },
+            },
+            staking: registry::RuntimeStakingParameters {
+                thresholds: Some(st),
+            },
+            governance_model: registry::RuntimeGovernanceModel::GovernanceEntity,
+        };
+
         // NOTE: These hashes MUST be synced with go/roothash/api/block/messages_test.go.
         let tcs = vec![
             (
@@ -239,6 +327,20 @@ mod tests {
                     msg: StakingMessage::Withdraw(staking::Withdraw::default()),
                 }],
                 "069b0fda76d804e3fd65d4bbd875c646f15798fb573ac613100df67f5ba4c3fd",
+            ),
+            (
+                vec![Message::Registry {
+                    v: 0,
+                    msg: RegistryMessage::UpdateRuntime(registry::Runtime::default()),
+                }],
+                "939029b474d88441515b722f79aa6689195199895fbad7827f711956306c4614",
+            ),
+            (
+                vec![Message::Registry {
+                    v: 0,
+                    msg: RegistryMessage::UpdateRuntime(rt),
+                }],
+                "7afcd28fd8303ba3ef4b3342201e64149b00139be56afc0fb48b549c1a3a6b48",
             ),
         ];
         for (msgs, expected_hash) in tcs {

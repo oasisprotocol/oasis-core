@@ -388,7 +388,7 @@ impl MethodDispatcher {
                     error: RuntimeError {
                         module: "".to_string(),
                         code: 1,
-                        message: format!("{}", error),
+                        message: format!("{:#}", error),
                     },
                     meta: None,
                 },
@@ -400,7 +400,7 @@ impl MethodDispatcher {
     fn dispatch_execute(&self, call: &Vec<u8>, ctx: &mut Context) -> ExecuteTxResult {
         let rsp = match self.dispatch_fallible(call, ctx) {
             Ok(response) => TxnOutput::Success(response),
-            Err(error) => TxnOutput::Error(format!("{}", error)),
+            Err(error) => TxnOutput::Error(format!("{:#}", error)),
         };
 
         ExecuteTxResult {
