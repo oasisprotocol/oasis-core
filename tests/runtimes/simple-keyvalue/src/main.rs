@@ -317,7 +317,10 @@ impl EncryptionContext {
         // approximate it with a Deoxys-II call with an all 0 nonce.
 
         let nonce = [0u8; NONCE_SIZE];
-        self.d2.seal(&nonce, key.to_vec(), vec![])
+        // XXX: Prefix all keys by 0x01 to make sure they do not clash with pending messages.
+        let mut key = vec![0x01];
+        key.append(&mut self.d2.seal(&nonce, key.to_vec(), vec![]));
+        key
     }
 
     fn derive_nonce(nonce: &[u8]) -> [u8; NONCE_SIZE] {
