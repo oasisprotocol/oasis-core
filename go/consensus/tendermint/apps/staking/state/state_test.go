@@ -8,11 +8,11 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	beacon "github.com/oasisprotocol/oasis-core/go/beacon/api"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	memorySigner "github.com/oasisprotocol/oasis-core/go/common/crypto/signature/signers/memory"
 	"github.com/oasisprotocol/oasis-core/go/common/quantity"
 	abciAPI "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/api"
-	epochtime "github.com/oasisprotocol/oasis-core/go/epochtime/api"
 	staking "github.com/oasisprotocol/oasis-core/go/staking/api"
 )
 
@@ -79,7 +79,7 @@ func TestDelegationQueries(t *testing.T) {
 
 		// Init debonding delegation.
 		var deb staking.DebondingDelegation
-		deb.DebondEndTime = epochtime.EpochTime(i)
+		deb.DebondEndTime = beacon.EpochTime(i)
 		err = escrowAccount.Escrow.Debonding.Deposit(&deb.Shares, &account.General.Balance, mustInitQuantityP(t, i*100))
 		require.NoError(err, "debonding escrow deposit")
 		expectedDebDelegations[escrowAddr][addr] = []*staking.DebondingDelegation{&deb}

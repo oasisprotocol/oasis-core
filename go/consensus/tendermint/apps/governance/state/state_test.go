@@ -7,13 +7,13 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	beacon "github.com/oasisprotocol/oasis-core/go/beacon/api"
 	"github.com/oasisprotocol/oasis-core/go/common/cbor"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	memorySigner "github.com/oasisprotocol/oasis-core/go/common/crypto/signature/signers/memory"
 	"github.com/oasisprotocol/oasis-core/go/common/quantity"
 	"github.com/oasisprotocol/oasis-core/go/common/version"
 	abciAPI "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/api"
-	epochtime "github.com/oasisprotocol/oasis-core/go/epochtime/api"
 	governance "github.com/oasisprotocol/oasis-core/go/governance/api"
 	staking "github.com/oasisprotocol/oasis-core/go/staking/api"
 	upgrade "github.com/oasisprotocol/oasis-core/go/upgrade/api"
@@ -31,77 +31,77 @@ func initProposals(require *require.Assertions, ctx *abciAPI.Context, s *Mutable
 		{
 			Submitter: submitterAddr,
 			State:     governance.StateActive,
-			ClosesAt:  epochtime.EpochTime(10),
+			ClosesAt:  beacon.EpochTime(10),
 			Content: governance.ProposalContent{
 				Upgrade: &governance.UpgradeProposal{
 					Descriptor: upgrade.Descriptor{
 						Name:       "test",
 						Identifier: cbor.Marshal(version.ProtocolVersions{ConsensusProtocol: version.FromU64(1)}),
-						Epoch:      epochtime.EpochTime(100),
+						Epoch:      beacon.EpochTime(100),
 					},
 				},
 			},
-			CreatedAt: epochtime.EpochTime(1),
+			CreatedAt: beacon.EpochTime(1),
 			Deposit:   *quantity.NewFromUint64(10),
 		},
 		{
 			Submitter: submitterAddr,
 			State:     governance.StateActive,
-			ClosesAt:  epochtime.EpochTime(20),
+			ClosesAt:  beacon.EpochTime(20),
 			Content: governance.ProposalContent{
 				Upgrade: &governance.UpgradeProposal{
 					Descriptor: upgrade.Descriptor{
 						Name:       "test2",
 						Identifier: cbor.Marshal(version.ProtocolVersions{ConsensusProtocol: version.FromU64(2)}),
-						Epoch:      epochtime.EpochTime(200),
+						Epoch:      beacon.EpochTime(200),
 					},
 				},
 			},
-			CreatedAt: epochtime.EpochTime(11),
+			CreatedAt: beacon.EpochTime(11),
 			Deposit:   *quantity.NewFromUint64(100),
 		},
 		{
 			Submitter: submitterAddr,
 			State:     governance.StateActive,
-			ClosesAt:  epochtime.EpochTime(30),
+			ClosesAt:  beacon.EpochTime(30),
 			Content: governance.ProposalContent{
 				Upgrade: &governance.UpgradeProposal{
 					Descriptor: upgrade.Descriptor{
 						Name:       "test3",
 						Identifier: cbor.Marshal(version.ProtocolVersions{ConsensusProtocol: version.FromU64(3)}),
-						Epoch:      epochtime.EpochTime(300),
+						Epoch:      beacon.EpochTime(300),
 					},
 				},
 			},
-			CreatedAt: epochtime.EpochTime(21),
+			CreatedAt: beacon.EpochTime(21),
 			Deposit:   *quantity.NewFromUint64(100),
 		},
 		{
 			Submitter: submitterAddr,
 			State:     governance.StateActive,
-			ClosesAt:  epochtime.EpochTime(30),
+			ClosesAt:  beacon.EpochTime(30),
 			Content: governance.ProposalContent{
 				Upgrade: &governance.UpgradeProposal{
 					Descriptor: upgrade.Descriptor{
 						Name:       "test4",
 						Identifier: cbor.Marshal(version.ProtocolVersions{ConsensusProtocol: version.FromU64(4)}),
-						Epoch:      epochtime.EpochTime(300),
+						Epoch:      beacon.EpochTime(300),
 					},
 				},
 			},
-			CreatedAt: epochtime.EpochTime(21),
+			CreatedAt: beacon.EpochTime(21),
 			Deposit:   *quantity.NewFromUint64(100),
 		},
 		{
 			Submitter: submitterAddr,
 			State:     governance.StateActive,
-			ClosesAt:  epochtime.EpochTime(40),
+			ClosesAt:  beacon.EpochTime(40),
 			Content: governance.ProposalContent{
 				CancelUpgrade: &governance.CancelUpgradeProposal{
 					ProposalID: 0,
 				},
 			},
-			CreatedAt: epochtime.EpochTime(31),
+			CreatedAt: beacon.EpochTime(31),
 			Deposit:   *quantity.NewFromUint64(100),
 		},
 	}

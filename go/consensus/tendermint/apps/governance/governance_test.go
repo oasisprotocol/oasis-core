@@ -10,6 +10,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/tendermint/tendermint/abci/types"
 
+	beacon "github.com/oasisprotocol/oasis-core/go/beacon/api"
 	"github.com/oasisprotocol/oasis-core/go/common/cbor"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	memorySigner "github.com/oasisprotocol/oasis-core/go/common/crypto/signature/signers/memory"
@@ -22,7 +23,6 @@ import (
 	registryState "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/apps/registry/state"
 	schedulerState "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/apps/scheduler/state"
 	stakingState "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/apps/staking/state"
-	epochtime "github.com/oasisprotocol/oasis-core/go/epochtime/api"
 	governance "github.com/oasisprotocol/oasis-core/go/governance/api"
 	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
 	staking "github.com/oasisprotocol/oasis-core/go/staking/api"
@@ -184,9 +184,9 @@ func TestCloseProposal(t *testing.T) {
 		MinProposalDeposit:        *minProposalDeposit,
 		Quorum:                    90,
 		Threshold:                 90,
-		UpgradeCancelMinEpochDiff: epochtime.EpochTime(100),
-		UpgradeMinEpochDiff:       epochtime.EpochTime(100),
-		VotingPeriod:              epochtime.EpochTime(50),
+		UpgradeCancelMinEpochDiff: beacon.EpochTime(100),
+		UpgradeMinEpochDiff:       beacon.EpochTime(100),
+		VotingPeriod:              beacon.EpochTime(50),
 	}
 
 	baseValidatorEntitiesEscrow := map[staking.Address]*quantity.Quantity{
@@ -533,13 +533,13 @@ func TestBeginBlock(t *testing.T) {
 
 	for _, tc := range []struct {
 		msg            string
-		epoch          epochtime.EpochTime
+		epoch          beacon.EpochTime
 		isEpochChanged bool
 		check          func(ctx *abciAPI.Context, state *governanceState.MutableState)
 	}{
 		{
 			"nothing to do if no upgrades for current epoch change",
-			epochtime.EpochTime(10),
+			beacon.EpochTime(10),
 			true,
 			func(ctx *abciAPI.Context, state *governanceState.MutableState) {
 				var upgrades []*upgrade.Descriptor
@@ -550,7 +550,7 @@ func TestBeginBlock(t *testing.T) {
 		},
 		{
 			"nothing to do if epoch not changed",
-			epochtime.EpochTime(11),
+			beacon.EpochTime(11),
 			false,
 			func(ctx *abciAPI.Context, state *governanceState.MutableState) {
 				var upgrades []*upgrade.Descriptor
@@ -561,19 +561,19 @@ func TestBeginBlock(t *testing.T) {
 		},
 		{
 			"upgrade should be executed on epoch 11",
-			epochtime.EpochTime(11),
+			beacon.EpochTime(11),
 			true,
 			func(ctx *abciAPI.Context, state *governanceState.MutableState) {
 				var upgrades []*upgrade.Descriptor
 				upgrades, err = state.PendingUpgrades(ctx)
 				require.NoError(err, "PendingUpgrades")
 				require.Len(upgrades, 1, "one pending upgrade should remain")
-				require.EqualValues(upgrades[0].Epoch, epochtime.EpochTime(12), "upgrade for epoch12 should remain")
+				require.EqualValues(upgrades[0].Epoch, beacon.EpochTime(12), "upgrade for epoch12 should remain")
 			},
 		},
 		{
 			"upgrade should be executed on epoch 12",
-			epochtime.EpochTime(12),
+			beacon.EpochTime(12),
 			true,
 			func(ctx *abciAPI.Context, state *governanceState.MutableState) {
 				var upgrades []*upgrade.Descriptor
@@ -584,7 +584,7 @@ func TestBeginBlock(t *testing.T) {
 		},
 		{
 			"nothing to do on epoch 13",
-			epochtime.EpochTime(13),
+			beacon.EpochTime(13),
 			true,
 			func(ctx *abciAPI.Context, state *governanceState.MutableState) {
 				var upgrades []*upgrade.Descriptor
@@ -711,13 +711,13 @@ func TestEndBlock(t *testing.T) {
 
 	for _, tc := range []struct {
 		msg            string
-		epoch          epochtime.EpochTime
+		epoch          beacon.EpochTime
 		isEpochChanged bool
 		check          func()
 	}{
 		{
 			"nothing to do if no active proposals closing on this epoch",
-			epochtime.EpochTime(10),
+			beacon.EpochTime(10),
 			true,
 			func() {
 				var proposals []*governance.Proposal
@@ -728,7 +728,7 @@ func TestEndBlock(t *testing.T) {
 		},
 		{
 			"nothing to do if no not epoch changed",
-			epochtime.EpochTime(11),
+			beacon.EpochTime(11),
 			false,
 			func() {
 				var proposals []*governance.Proposal
@@ -739,7 +739,7 @@ func TestEndBlock(t *testing.T) {
 		},
 		{
 			"upgrade proposal should be rejected",
-			epochtime.EpochTime(11),
+			beacon.EpochTime(11),
 			true,
 			func() {
 				var activeProposals []*governance.Proposal
@@ -784,7 +784,7 @@ func TestEndBlock(t *testing.T) {
 		},
 		{
 			"upgrade proposal should pass",
-			epochtime.EpochTime(12),
+			beacon.EpochTime(12),
 			true,
 			func() {
 				var activeProposals []*governance.Proposal
@@ -827,7 +827,7 @@ func TestEndBlock(t *testing.T) {
 		},
 		{
 			"cancel upgrade proposal should pass but fail",
-			epochtime.EpochTime(13),
+			beacon.EpochTime(13),
 			true,
 			func() {
 				var activeProposals []*governance.Proposal
@@ -870,7 +870,7 @@ func TestEndBlock(t *testing.T) {
 		},
 		{
 			"cancel upgrade proposal should pass and succeed",
-			epochtime.EpochTime(14),
+			beacon.EpochTime(14),
 			true,
 			func() {
 				var activeProposals []*governance.Proposal

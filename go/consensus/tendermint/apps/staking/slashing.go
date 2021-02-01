@@ -8,10 +8,10 @@ import (
 
 	tmcrypto "github.com/tendermint/tendermint/crypto"
 
+	beacon "github.com/oasisprotocol/oasis-core/go/beacon/api"
 	abciAPI "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/api"
 	registryState "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/apps/registry/state"
 	stakingState "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/apps/staking/state"
-	epochtime "github.com/oasisprotocol/oasis-core/go/epochtime/api"
 	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
 	staking "github.com/oasisprotocol/oasis-core/go/staking/api"
 )
@@ -71,7 +71,7 @@ func onEvidenceConsensusEquivocation(
 	// Freeze validator to prevent it being slashed again. This also prevents the
 	// validator from being scheduled in the next epoch.
 	if penalty.FreezeInterval > 0 {
-		var epoch epochtime.EpochTime
+		var epoch beacon.EpochTime
 		epoch, err = ctx.AppState().GetEpoch(context.Background(), ctx.BlockHeight()+1)
 		if err != nil {
 			return err

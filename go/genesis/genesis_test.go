@@ -10,6 +10,7 @@ import (
 	"github.com/spf13/viper"
 	"github.com/stretchr/testify/require"
 
+	beacon "github.com/oasisprotocol/oasis-core/go/beacon/api"
 	"github.com/oasisprotocol/oasis-core/go/common"
 	"github.com/oasisprotocol/oasis-core/go/common/cbor"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
@@ -22,7 +23,6 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/version"
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/genesis"
 	tendermint "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/api"
-	epochtime "github.com/oasisprotocol/oasis-core/go/epochtime/api"
 	genesis "github.com/oasisprotocol/oasis-core/go/genesis/api"
 	genesisTestHelpers "github.com/oasisprotocol/oasis-core/go/genesis/tests"
 	governance "github.com/oasisprotocol/oasis-core/go/governance/api"
@@ -46,10 +46,12 @@ func testDoc() genesis.Document {
 		Height:    1,
 		ChainID:   genesisTestHelpers.TestChainID,
 		Time:      time.Unix(1574858284, 0),
-		HaltEpoch: epochtime.EpochTime(math.MaxUint64),
-		EpochTime: epochtime.Genesis{
-			Parameters: epochtime.ConsensusParameters{
-				DebugMockBackend: true,
+		HaltEpoch: beacon.EpochTime(math.MaxUint64),
+		Beacon: beacon.Genesis{
+			Parameters: beacon.ConsensusParameters{
+				Backend:            beacon.BackendInsecure,
+				DebugMockBackend:   true,
+				InsecureParameters: &beacon.InsecureParameters{},
 			},
 		},
 		Registry: registry.Genesis{
@@ -137,7 +139,9 @@ func TestGenesisChainContext(t *testing.T) {
 	//       on each run.
 	stableDoc.Staking = staking.Genesis{}
 
-	require.Equal(t, "e4a7ba9ec7a44ab72ab8218499dbe3e4dcd08f2d8d3966dae7b363cac68bde3a", stableDoc.ChainContext())
+	// Having to update this every single time the genesis structure
+	// changes isn't annoying at all.
+	require.Equal(t, "190c33831058e1f850a1528da9892259c4d86538f4524c561a93505fe41c4d83", stableDoc.ChainContext())
 }
 
 func TestGenesisSanityCheck(t *testing.T) {
@@ -287,9 +291,7 @@ func TestGenesisSanityCheck(t *testing.T) {
 	require.Error(d.SanityCheck(), "empty chain ID should be invalid")
 
 	d = testDoc()
-	d.EpochTime.Parameters.DebugMockBackend = false
-	d.EpochTime.Parameters.Interval = 600
-	d.EpochTime.Base = 10
+	d.Beacon.Base = 10
 	d.HaltEpoch = 5
 	require.Error(d.SanityCheck(), "halt epoch in the past should be invalid")
 
@@ -304,14 +306,16 @@ func TestGenesisSanityCheck(t *testing.T) {
 	d.Consensus.Parameters.SkipTimeoutCommit = true
 	require.NoError(d.SanityCheck(), "too small timeout commit should be allowed if it's skipped")
 
-	// Test epochtime genesis checks.
+	// Test beacon genesis checks.
 	d = testDoc()
-	d.EpochTime.Base = epochtime.EpochInvalid
+	d.Beacon.Base = beacon.EpochInvalid
 	require.Error(d.SanityCheck(), "invalid base epoch should be rejected")
 
 	d = testDoc()
-	d.EpochTime.Parameters.Interval = 0
-	d.EpochTime.Parameters.DebugMockBackend = false
+	d.Beacon.Parameters.DebugMockBackend = false
+	d.Beacon.Parameters.InsecureParameters = &beacon.InsecureParameters{
+		Interval: 0,
+	}
 	require.Error(d.SanityCheck(), "invalid epoch interval should be rejected")
 
 	// Test keymanager genesis checks.
@@ -858,9 +862,11 @@ func TestGenesisSanityCheck(t *testing.T) {
 		}
 	}
 	d = testDoc()
-	d.EpochTime.Base = 10
-	d.EpochTime.Parameters.DebugMockBackend = false
-	d.EpochTime.Parameters.Interval = 100
+	d.Beacon.Base = 10
+	d.Beacon.Parameters.DebugMockBackend = false
+	d.Beacon.Parameters.InsecureParameters = &beacon.InsecureParameters{
+		Interval: 100,
+	}
 	d.Governance.Proposals = validTestProposals()
 	require.NoError(d.SanityCheck(), "valid proposal should pass")
 
@@ -874,9 +880,11 @@ func TestGenesisSanityCheck(t *testing.T) {
 	require.NoError(d.SanityCheck(), "proposal deposit matches governance deposits")
 
 	d = testDoc()
-	d.EpochTime.Base = 10
-	d.EpochTime.Parameters.DebugMockBackend = false
-	d.EpochTime.Parameters.Interval = 100
+	d.Beacon.Base = 10
+	d.Beacon.Parameters.DebugMockBackend = false
+	d.Beacon.Parameters.InsecureParameters = &beacon.InsecureParameters{
+		Interval: 100,
+	}
 	d.Governance.Proposals = validTestProposals()
 	d.Governance.Proposals[0].CreatedAt = 15
 	require.Error(d.SanityCheck(), "proposal created in future")

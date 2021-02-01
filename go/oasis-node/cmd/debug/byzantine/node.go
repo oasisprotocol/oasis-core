@@ -7,12 +7,12 @@ import (
 
 	"github.com/spf13/viper"
 
+	beacon "github.com/oasisprotocol/oasis-core/go/beacon/api"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	"github.com/oasisprotocol/oasis-core/go/common/identity"
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
 	"github.com/oasisprotocol/oasis-core/go/common/node"
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
-	epochtime "github.com/oasisprotocol/oasis-core/go/epochtime/api"
 	"github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common"
 	"github.com/oasisprotocol/oasis-core/go/roothash/api/block"
 	"github.com/oasisprotocol/oasis-core/go/roothash/api/commitment"
@@ -97,6 +97,7 @@ func initializeAndRegisterByzantineNode(
 	expectedStorageRole scheduler.Role,
 	expectedExecutorRole scheduler.Role,
 	shouldBeExecutorProposer bool,
+	noCommittees bool,
 ) (*byzantine, error) {
 	var err error
 	b := &byzantine{
@@ -144,7 +145,7 @@ func initializeAndRegisterByzantineNode(
 	b.storage = storage
 
 	// Wait for activation epoch.
-	activationEpoch := epochtime.EpochTime(viper.GetUint64(CfgActivationEpoch))
+	activationEpoch := beacon.EpochTime(viper.GetUint64(CfgActivationEpoch))
 	if err = waitForEpoch(b.tendermint.service, activationEpoch); err != nil {
 		return nil, fmt.Errorf("waitForEpoch: %w", err)
 	}
@@ -157,6 +158,11 @@ func initializeAndRegisterByzantineNode(
 	}
 	if err = registryRegisterNode(b.tendermint.service, b.identity, common.DataDir(), getGrpcAddress(), b.p2p.service.Addresses(), defaultRuntimeID, b.capabilities, nodeRoles); err != nil {
 		return nil, fmt.Errorf("registryRegisterNode: %w", err)
+	}
+
+	// If we don't care about committees, bail early.
+	if noCommittees {
+		return b, nil
 	}
 
 	// Get next election committee.
@@ -203,8 +209,8 @@ func initializeAndRegisterByzantineNode(
 	return b, nil
 }
 
-func waitForEpoch(svc consensus.Backend, epoch epochtime.EpochTime) error {
-	ch, sub := svc.EpochTime().WatchEpochs()
+func waitForEpoch(svc consensus.Backend, epoch beacon.EpochTime) error {
+	ch, sub := svc.Beacon().WatchEpochs()
 	defer sub.Close()
 
 	for {

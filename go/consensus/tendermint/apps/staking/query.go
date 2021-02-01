@@ -3,10 +3,10 @@ package staking
 import (
 	"context"
 
+	beacon "github.com/oasisprotocol/oasis-core/go/beacon/api"
 	"github.com/oasisprotocol/oasis-core/go/common/quantity"
 	abciAPI "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/api"
 	stakingState "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/apps/staking/state"
-	epochtime "github.com/oasisprotocol/oasis-core/go/epochtime/api"
 	staking "github.com/oasisprotocol/oasis-core/go/staking/api"
 )
 
@@ -17,7 +17,7 @@ type Query interface {
 	LastBlockFees(context.Context) (*quantity.Quantity, error)
 	GovernanceDeposits(context.Context) (*quantity.Quantity, error)
 	Threshold(context.Context, staking.ThresholdKind) (*quantity.Quantity, error)
-	DebondingInterval(context.Context) (epochtime.EpochTime, error)
+	DebondingInterval(context.Context) (beacon.EpochTime, error)
 	Addresses(context.Context) ([]staking.Address, error)
 	Account(context.Context, staking.Address) (*staking.Account, error)
 	Delegations(context.Context, staking.Address) (map[staking.Address]*staking.Delegation, error)
@@ -73,7 +73,7 @@ func (sq *stakingQuerier) Threshold(ctx context.Context, kind staking.ThresholdK
 	return &threshold, nil
 }
 
-func (sq *stakingQuerier) DebondingInterval(ctx context.Context) (epochtime.EpochTime, error) {
+func (sq *stakingQuerier) DebondingInterval(ctx context.Context) (beacon.EpochTime, error) {
 	return sq.state.DebondingInterval(ctx)
 }
 

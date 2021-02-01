@@ -3,6 +3,7 @@ package registry
 import (
 	"fmt"
 
+	beacon "github.com/oasisprotocol/oasis-core/go/beacon/api"
 	"github.com/oasisprotocol/oasis-core/go/common/cbor"
 	"github.com/oasisprotocol/oasis-core/go/common/entity"
 	"github.com/oasisprotocol/oasis-core/go/common/node"
@@ -443,6 +444,10 @@ func (app *registryApplication) registerNode( // nolint: gocyclo
 			// Node doesn't exist, create empty status.
 			status = &registry.NodeStatus{}
 		}
+
+		// In either case, the node isn't immediately eligible to serve
+		// on a non-validator committee.
+		status.ElectionEligibleAfter = beacon.EpochInvalid
 
 		if err = state.SetNodeStatus(ctx, newNode.ID, status); err != nil {
 			ctx.Logger().Error("RegisterNode: failed to set node status",

@@ -7,12 +7,12 @@ import (
 	"math"
 	"strings"
 
+	beacon "github.com/oasisprotocol/oasis-core/go/beacon/api"
 	"github.com/oasisprotocol/oasis-core/go/common"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	"github.com/oasisprotocol/oasis-core/go/common/pubsub"
 	"github.com/oasisprotocol/oasis-core/go/common/quantity"
-	epochtime "github.com/oasisprotocol/oasis-core/go/epochtime/api"
 	"github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/flags"
 )
 
@@ -128,7 +128,7 @@ type Committee struct {
 	RuntimeID common.Namespace `json:"runtime_id"`
 
 	// ValidFor is the epoch for which the committee is valid.
-	ValidFor epochtime.EpochTime `json:"valid_for"`
+	ValidFor beacon.EpochTime `json:"valid_for"`
 }
 
 // Workers returns committee nodes with Worker role.

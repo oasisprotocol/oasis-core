@@ -6,10 +6,10 @@ import (
 	"context"
 	"fmt"
 
+	beacon "github.com/oasisprotocol/oasis-core/go/beacon/api"
 	"github.com/oasisprotocol/oasis-core/go/common/cbor"
 	"github.com/oasisprotocol/oasis-core/go/common/errors"
 	"github.com/oasisprotocol/oasis-core/go/common/version"
-	epochtime "github.com/oasisprotocol/oasis-core/go/epochtime/api"
 )
 
 const (
@@ -114,7 +114,7 @@ type Descriptor struct {
 	// Identifier is the upgrade method specific upgrade identifier.
 	Identifier cbor.RawMessage `json:"identifier"`
 	// Epoch is the epoch at which the upgrade should happen.
-	Epoch epochtime.EpochTime `json:"epoch"`
+	Epoch beacon.EpochTime `json:"epoch"`
 }
 
 // Equals compares descriptors for equality.
@@ -233,7 +233,7 @@ type Backend interface {
 
 	// ConsensusUpgrade performs the consensus portion of the upgrade.
 	// It is idempotent with respect to the current upgrade descriptor.
-	ConsensusUpgrade(interface{}, epochtime.EpochTime, int64) error
+	ConsensusUpgrade(interface{}, beacon.EpochTime, int64) error
 
 	// Close cleans up any upgrader state and database handles.
 	Close()

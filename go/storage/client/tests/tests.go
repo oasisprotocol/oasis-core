@@ -7,12 +7,12 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	beacon "github.com/oasisprotocol/oasis-core/go/beacon/api"
+	beaconTests "github.com/oasisprotocol/oasis-core/go/beacon/tests"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
 	"github.com/oasisprotocol/oasis-core/go/common/identity"
 	"github.com/oasisprotocol/oasis-core/go/common/node"
 	consensusAPI "github.com/oasisprotocol/oasis-core/go/consensus/api"
-	epochtime "github.com/oasisprotocol/oasis-core/go/epochtime/api"
-	epochtimeTests "github.com/oasisprotocol/oasis-core/go/epochtime/tests"
 	registryTests "github.com/oasisprotocol/oasis-core/go/registry/tests"
 	scheduler "github.com/oasisprotocol/oasis-core/go/scheduler/api"
 	"github.com/oasisprotocol/oasis-core/go/storage/api"
@@ -65,8 +65,8 @@ func ClientWorkerTests(
 	require.Nil(r, "result should be nil")
 
 	// Advance the epoch.
-	timeSource := consensus.EpochTime().(epochtime.SetableBackend)
-	epochtimeTests.MustAdvanceEpoch(t, timeSource, 1)
+	timeSource := consensus.Beacon().(beacon.SetableBackend)
+	beaconTests.MustAdvanceEpoch(t, timeSource, 1)
 
 	// Wait for initialization.
 	select {

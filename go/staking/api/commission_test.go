@@ -7,9 +7,9 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	beacon "github.com/oasisprotocol/oasis-core/go/beacon/api"
 	"github.com/oasisprotocol/oasis-core/go/common/prettyprint"
 	"github.com/oasisprotocol/oasis-core/go/common/quantity"
-	epochtime "github.com/oasisprotocol/oasis-core/go/epochtime/api"
 )
 
 func mustInitQuantity(t *testing.T, i int64) (q quantity.Quantity) {
@@ -222,7 +222,7 @@ func TestCommissionSchedule(t *testing.T) {
 	}
 	for i := range cs.Rates {
 		// 0 through 40, inclusive.
-		cs.Rates[i].Start = epochtime.EpochTime(i * 10)
+		cs.Rates[i].Start = beacon.EpochTime(i * 10)
 		cs.Rates[i].Rate = mustInitQuantity(t, int64(50_000+i))
 	}
 	requireErrorShowDiagnostic(t, cs.PruneAndValidateForGenesis(&rules, 0), "overlong rate schedule")
@@ -238,7 +238,7 @@ func TestCommissionSchedule(t *testing.T) {
 	}
 	for i := range cs.Bounds {
 		// 0 through 40, inclusive.
-		cs.Bounds[i].Start = epochtime.EpochTime(i * 10)
+		cs.Bounds[i].Start = beacon.EpochTime(i * 10)
 		cs.Bounds[i].RateMin = mustInitQuantity(t, 0)
 		cs.Bounds[i].RateMax = mustInitQuantity(t, int64(100_000-i))
 	}
@@ -256,7 +256,7 @@ func TestCommissionSchedule(t *testing.T) {
 	}
 	for i := range cs.Rates {
 		// 0 through 30, inclusive.
-		cs.Rates[i].Start = epochtime.EpochTime(i * 10)
+		cs.Rates[i].Start = beacon.EpochTime(i * 10)
 		cs.Rates[i].Rate = mustInitQuantity(t, int64(50_000+i))
 	}
 	amendment := CommissionSchedule{
@@ -265,7 +265,7 @@ func TestCommissionSchedule(t *testing.T) {
 	}
 	for i := range amendment.Rates {
 		// 40 through 80, inclusive.
-		amendment.Rates[i].Start = epochtime.EpochTime(40 + i*10)
+		amendment.Rates[i].Start = beacon.EpochTime(40 + i*10)
 		amendment.Rates[i].Rate = mustInitQuantity(t, int64(60_000+i))
 	}
 	requireErrorShowDiagnostic(t, cs.AmendAndPruneAndValidate(&amendment, &rules, 0), "overlong amendment rate schedule")
@@ -282,7 +282,7 @@ func TestCommissionSchedule(t *testing.T) {
 	}
 	for i := range cs.Rates {
 		// 0 through 30, inclusive.
-		cs.Rates[i].Start = epochtime.EpochTime(i * 10)
+		cs.Rates[i].Start = beacon.EpochTime(i * 10)
 		cs.Rates[i].Rate = mustInitQuantity(t, int64(50_000+i))
 	}
 	requireErrorShowDiagnostic(t, cs.AmendAndPruneAndValidate(&CommissionSchedule{
@@ -307,7 +307,7 @@ func TestCommissionSchedule(t *testing.T) {
 	}
 	for i := range cs.Rates {
 		// 0 through 30, inclusive.
-		cs.Rates[i].Start = epochtime.EpochTime(i * 10)
+		cs.Rates[i].Start = beacon.EpochTime(i * 10)
 		cs.Rates[i].Rate = mustInitQuantity(t, int64(50_000+i))
 	}
 	amendment = CommissionSchedule{
@@ -316,7 +316,7 @@ func TestCommissionSchedule(t *testing.T) {
 	}
 	for i := range amendment.Rates {
 		// 30 through 60, inclusive.
-		amendment.Rates[i].Start = epochtime.EpochTime(30 + i*10)
+		amendment.Rates[i].Start = beacon.EpochTime(30 + i*10)
 		amendment.Rates[i].Rate = mustInitQuantity(t, int64(60_000+i))
 	}
 	require.NoError(t, cs.AmendAndPruneAndValidate(&amendment, &rules, 25), "complexity acceptable after replacing and pruning")
@@ -767,11 +767,11 @@ func TestCommissionSchedule(t *testing.T) {
 		},
 	}
 	require.NoError(t, cs.PruneAndValidateForGenesis(&rules, 1), "prune no effect")
-	require.Equal(t, epochtime.EpochTime(0), cs.Rates[0].Start, "prune 1 rates start")
-	require.Equal(t, epochtime.EpochTime(0), cs.Bounds[0].Start, "prune 1 bounds start")
+	require.Equal(t, beacon.EpochTime(0), cs.Rates[0].Start, "prune 1 rates start")
+	require.Equal(t, beacon.EpochTime(0), cs.Bounds[0].Start, "prune 1 bounds start")
 	require.NoError(t, cs.PruneAndValidateForGenesis(&rules, 10), "prune rate step")
-	require.Equal(t, epochtime.EpochTime(10), cs.Rates[0].Start, "prune 10 rates start")
-	require.Equal(t, epochtime.EpochTime(10), cs.Bounds[0].Start, "prune 10 bounds start")
+	require.Equal(t, beacon.EpochTime(10), cs.Rates[0].Start, "prune 10 rates start")
+	require.Equal(t, beacon.EpochTime(10), cs.Bounds[0].Start, "prune 10 bounds start")
 }
 
 func TestPrettyPrintCommissionRateStep(t *testing.T) {
@@ -779,7 +779,7 @@ func TestPrettyPrintCommissionRateStep(t *testing.T) {
 
 	for _, t := range []struct {
 		expectedPPrint string
-		rateStart      epochtime.EpochTime
+		rateStart      beacon.EpochTime
 		rateNumerator  *quantity.Quantity
 		index          int
 	}{
@@ -787,19 +787,19 @@ func TestPrettyPrintCommissionRateStep(t *testing.T) {
 			"" +
 				"(1) start: epoch 10\n" +
 				"    rate:  0.0%\n",
-			epochtime.EpochTime(10), quantity.NewFromUint64(0), 0,
+			beacon.EpochTime(10), quantity.NewFromUint64(0), 0,
 		},
 		{
 			"" +
 				"(11) start: epoch 20\n" +
 				"     rate:  50.0%\n",
-			epochtime.EpochTime(20), quantity.NewFromUint64(50_000), 10,
+			beacon.EpochTime(20), quantity.NewFromUint64(50_000), 10,
 		},
 		{
 			"" +
 				"(101) start: epoch 100\n" +
 				"      rate:  100.0%\n",
-			epochtime.EpochTime(100), quantity.NewFromUint64(100_000), 100,
+			beacon.EpochTime(100), quantity.NewFromUint64(100_000), 100,
 		},
 	} {
 		rateStep := CommissionRateStep{
@@ -819,7 +819,7 @@ func TestPrettyPrintCommissionRateBoundStep(t *testing.T) {
 
 	for _, t := range []struct {
 		expectedPPrint   string
-		rateStart        epochtime.EpochTime
+		rateStart        beacon.EpochTime
 		rateMinNumerator *quantity.Quantity
 		rateMaxNumerator *quantity.Quantity
 		index            int
@@ -829,21 +829,21 @@ func TestPrettyPrintCommissionRateBoundStep(t *testing.T) {
 				"(1) start:        epoch 10\n" +
 				"    minimum rate: 0.0%\n" +
 				"    maximum rate: 20.0%\n",
-			epochtime.EpochTime(10), quantity.NewFromUint64(0), quantity.NewFromUint64(20_000), 0,
+			beacon.EpochTime(10), quantity.NewFromUint64(0), quantity.NewFromUint64(20_000), 0,
 		},
 		{
 			"" +
 				"(11) start:        epoch 20\n" +
 				"     minimum rate: 40.0%\n" +
 				"     maximum rate: 60.0%\n",
-			epochtime.EpochTime(20), quantity.NewFromUint64(40_000), quantity.NewFromUint64(60_000), 10,
+			beacon.EpochTime(20), quantity.NewFromUint64(40_000), quantity.NewFromUint64(60_000), 10,
 		},
 		{
 			"" +
 				"(101) start:        epoch 100\n" +
 				"      minimum rate: 0.0%\n" +
 				"      maximum rate: 100.0%\n",
-			epochtime.EpochTime(100), quantity.NewFromUint64(0), quantity.NewFromUint64(100_000), 100,
+			beacon.EpochTime(100), quantity.NewFromUint64(0), quantity.NewFromUint64(100_000), 100,
 		},
 	} {
 		rateStep := CommissionRateBoundStep{

@@ -59,7 +59,7 @@ func (sc *registryCLIImpl) Fixture() (*oasis.NetworkFixture, error) {
 	}
 
 	// We will mock epochs for reclaiming the escrow.
-	f.Network.EpochtimeMock = true
+	f.Network.SetMockEpoch()
 
 	return f, nil
 }
@@ -508,6 +508,7 @@ func (sc *registryCLIImpl) initNode(childEnv *env.Env, ent *entity.Entity, entDi
 	testNode.TLS.NextPubKey = n.TLS.NextPubKey
 	testNode.P2P.ID = n.P2P.ID
 	testNode.Consensus.ID = n.Consensus.ID
+	testNode.Beacon = n.Beacon
 	for idx := range testNode.TLS.Addresses {
 		testNode.TLS.Addresses[idx].PubKey = n.TLS.PubKey
 	}

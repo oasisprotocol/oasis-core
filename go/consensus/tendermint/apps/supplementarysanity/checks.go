@@ -3,6 +3,7 @@ package supplementarysanity
 import (
 	"fmt"
 
+	beacon "github.com/oasisprotocol/oasis-core/go/beacon/api"
 	"github.com/oasisprotocol/oasis-core/go/common"
 	"github.com/oasisprotocol/oasis-core/go/common/quantity"
 	abciAPI "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/api"
@@ -11,7 +12,6 @@ import (
 	registryState "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/apps/registry/state"
 	roothashState "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/apps/roothash/state"
 	stakingState "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/apps/staking/state"
-	epochtime "github.com/oasisprotocol/oasis-core/go/epochtime/api"
 	governance "github.com/oasisprotocol/oasis-core/go/governance/api"
 	keymanager "github.com/oasisprotocol/oasis-core/go/keymanager/api"
 	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
@@ -20,8 +20,8 @@ import (
 	staking "github.com/oasisprotocol/oasis-core/go/staking/api"
 )
 
-func checkEpochTime(ctx *abciAPI.Context, now epochtime.EpochTime) error {
-	if now == epochtime.EpochInvalid {
+func checkEpochTime(ctx *abciAPI.Context, now beacon.EpochTime) error {
+	if now == beacon.EpochInvalid {
 		return fmt.Errorf("current epoch is invalid")
 	}
 
@@ -29,7 +29,7 @@ func checkEpochTime(ctx *abciAPI.Context, now epochtime.EpochTime) error {
 	return nil
 }
 
-func checkRegistry(ctx *abciAPI.Context, now epochtime.EpochTime) error {
+func checkRegistry(ctx *abciAPI.Context, now beacon.EpochTime) error {
 	st := registryState.NewMutableState(ctx.State())
 
 	params, err := st.ConsensusParameters(ctx)
@@ -75,7 +75,7 @@ func checkRegistry(ctx *abciAPI.Context, now epochtime.EpochTime) error {
 	return nil
 }
 
-func checkRootHash(ctx *abciAPI.Context, now epochtime.EpochTime) error {
+func checkRootHash(ctx *abciAPI.Context, now beacon.EpochTime) error {
 	st := roothashState.NewMutableState(ctx.State())
 
 	// Check blocks.
@@ -114,7 +114,7 @@ func checkRootHash(ctx *abciAPI.Context, now epochtime.EpochTime) error {
 	return nil
 }
 
-func checkStaking(ctx *abciAPI.Context, now epochtime.EpochTime) error {
+func checkStaking(ctx *abciAPI.Context, now beacon.EpochTime) error {
 	st := stakingState.NewMutableState(ctx.State())
 
 	parameters, err := st.ConsensusParameters(ctx)
@@ -230,7 +230,7 @@ func checkStaking(ctx *abciAPI.Context, now epochtime.EpochTime) error {
 	return nil
 }
 
-func checkKeyManager(ctx *abciAPI.Context, now epochtime.EpochTime) error {
+func checkKeyManager(ctx *abciAPI.Context, now beacon.EpochTime) error {
 	st := keymanagerState.NewMutableState(ctx.State())
 
 	statuses, err := st.Statuses(ctx)
@@ -245,7 +245,7 @@ func checkKeyManager(ctx *abciAPI.Context, now epochtime.EpochTime) error {
 	return nil
 }
 
-func checkGovernance(ctx *abciAPI.Context, epoch epochtime.EpochTime) error {
+func checkGovernance(ctx *abciAPI.Context, epoch beacon.EpochTime) error {
 	st := governanceState.NewMutableState(ctx.State())
 	stakingState := stakingState.NewMutableState(ctx.State())
 	govDeposits, err := stakingState.GovernanceDeposits(ctx)
@@ -295,27 +295,27 @@ func checkGovernance(ctx *abciAPI.Context, epoch epochtime.EpochTime) error {
 	return nil
 }
 
-func checkScheduler(*abciAPI.Context, epochtime.EpochTime) error {
+func checkScheduler(*abciAPI.Context, beacon.EpochTime) error {
 	// nothing to check yet
 	return nil
 }
 
-func checkBeacon(*abciAPI.Context, epochtime.EpochTime) error {
+func checkBeacon(*abciAPI.Context, beacon.EpochTime) error {
 	// nothing to check yet
 	return nil
 }
 
-func checkConsensus(*abciAPI.Context, epochtime.EpochTime) error {
+func checkConsensus(*abciAPI.Context, beacon.EpochTime) error {
 	// nothing to check yet
 	return nil
 }
 
-func checkHalt(*abciAPI.Context, epochtime.EpochTime) error {
+func checkHalt(*abciAPI.Context, beacon.EpochTime) error {
 	// nothing to check yet
 	return nil
 }
 
-func checkStakeClaims(ctx *abciAPI.Context, now epochtime.EpochTime) error {
+func checkStakeClaims(ctx *abciAPI.Context, now beacon.EpochTime) error {
 	regSt := registryState.NewMutableState(ctx.State())
 	stakingSt := stakingState.NewMutableState(ctx.State())
 

@@ -9,11 +9,11 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	beacon "github.com/oasisprotocol/oasis-core/go/beacon/api"
+	beaconTests "github.com/oasisprotocol/oasis-core/go/beacon/tests"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	"github.com/oasisprotocol/oasis-core/go/common/node"
 	consensusAPI "github.com/oasisprotocol/oasis-core/go/consensus/api"
-	epochtime "github.com/oasisprotocol/oasis-core/go/epochtime/api"
-	epochtimeTests "github.com/oasisprotocol/oasis-core/go/epochtime/tests"
 	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
 	registryTests "github.com/oasisprotocol/oasis-core/go/registry/tests"
 	"github.com/oasisprotocol/oasis-core/go/scheduler/api"
@@ -43,8 +43,8 @@ func SchedulerImplementationTests(t *testing.T, name string, backend api.Backend
 	defer sub.Close()
 
 	// Advance the epoch.
-	epochtime := consensus.EpochTime().(epochtime.SetableBackend)
-	epoch := epochtimeTests.MustAdvanceEpoch(t, epochtime, 1)
+	timeSource := consensus.Beacon().(beacon.SetableBackend)
+	epoch := beaconTests.MustAdvanceEpoch(t, timeSource, 1)
 
 	ensureValidCommittees := func(expectedExecutor, expectedStorage int) {
 		var executor, storage *api.Committee
@@ -124,7 +124,7 @@ func SchedulerImplementationTests(t *testing.T, name string, backend api.Backend
 	rt.Runtime.Storage.MinWriteReplication = 1
 	rt.MustRegister(t, consensus.Registry(), consensus)
 
-	epoch = epochtimeTests.MustAdvanceEpoch(t, epochtime, 1)
+	epoch = beaconTests.MustAdvanceEpoch(t, timeSource, 1)
 
 	ensureValidCommittees(
 		3,

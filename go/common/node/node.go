@@ -14,6 +14,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common"
 	"github.com/oasisprotocol/oasis-core/go/common/cbor"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
+	"github.com/oasisprotocol/oasis-core/go/common/crypto/pvss"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	"github.com/oasisprotocol/oasis-core/go/common/prettyprint"
 	"github.com/oasisprotocol/oasis-core/go/common/sgx/ias"
@@ -71,8 +72,9 @@ type Node struct { // nolint: maligned
 	// Beacon contains information for this node's participation
 	// in the random beacon protocol.
 	//
-	// NOTE: This is reserved for future use.
-	Beacon cbor.RawMessage `json:"beacon,omitempty"`
+	// TODO: This is optional for now, make mandatory once enough
+	// nodes provide this field.
+	Beacon *BeaconInfo `json:"beacon,omitempty"`
 
 	// Runtimes are the node's runtimes.
 	Runtimes []*Runtime `json:"runtimes"`
@@ -281,6 +283,13 @@ type ConsensusInfo struct {
 
 	// Addresses is the list of addresses at which the node can be reached.
 	Addresses []ConsensusAddress `json:"addresses"`
+}
+
+// BeaconInfo contains information for this node's participation in
+// the random beacon protocol.
+type BeaconInfo struct {
+	// Point is the elliptic curve point used for the PVSS algorithm.
+	Point pvss.Point `json:"point"`
 }
 
 // Capabilities represents a node's capabilities.

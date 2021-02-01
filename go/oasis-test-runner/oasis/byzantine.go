@@ -3,8 +3,8 @@ package oasis
 import (
 	"fmt"
 
+	beacon "github.com/oasisprotocol/oasis-core/go/beacon/api"
 	"github.com/oasisprotocol/oasis-core/go/common/node"
-	epochtime "github.com/oasisprotocol/oasis-core/go/epochtime/api"
 	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
 )
 
@@ -19,7 +19,7 @@ type Byzantine struct {
 
 	consensusPort   uint16
 	p2pPort         uint16
-	activationEpoch epochtime.EpochTime
+	activationEpoch beacon.EpochTime
 }
 
 // ByzantineCfg is the Oasis byzantine node configuration.
@@ -32,7 +32,7 @@ type ByzantineCfg struct {
 	IdentitySeed string
 	Entity       *Entity
 
-	ActivationEpoch epochtime.EpochTime
+	ActivationEpoch beacon.EpochTime
 }
 
 func (worker *Byzantine) startNode() error {

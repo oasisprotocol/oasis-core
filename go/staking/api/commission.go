@@ -6,9 +6,9 @@ import (
 	"io"
 	"math/big"
 
+	beacon "github.com/oasisprotocol/oasis-core/go/beacon/api"
 	"github.com/oasisprotocol/oasis-core/go/common/prettyprint"
 	"github.com/oasisprotocol/oasis-core/go/common/quantity"
-	epochtime "github.com/oasisprotocol/oasis-core/go/epochtime/api"
 )
 
 // commissionRateDenominatorExponent is the commission rate denominator's
@@ -32,9 +32,9 @@ var (
 type CommissionScheduleRules struct {
 	// Epoch period when commission rates are allowed to be changed (e.g.
 	// setting it to 3 means they can be changed every third epoch).
-	RateChangeInterval epochtime.EpochTime `json:"rate_change_interval,omitempty"`
+	RateChangeInterval beacon.EpochTime `json:"rate_change_interval,omitempty"`
 	// Number of epochs a commission rate bound change must specified in advance.
-	RateBoundLead epochtime.EpochTime `json:"rate_bound_lead,omitempty"`
+	RateBoundLead beacon.EpochTime `json:"rate_bound_lead,omitempty"`
 	// Maximum number of commission rate steps a commission schedule can specify.
 	MaxRateSteps uint16 `json:"max_rate_steps,omitempty"`
 	// Maximum number of commission rate bound steps a commission schedule can specify.
@@ -44,7 +44,7 @@ type CommissionScheduleRules struct {
 // CommissionRateStep sets a commission rate and its starting time.
 type CommissionRateStep struct {
 	// Epoch when the commission rate will go in effect.
-	Start epochtime.EpochTime `json:"start,omitempty"`
+	Start beacon.EpochTime `json:"start,omitempty"`
 	// Commission rate numerator. The rate is this value divided by CommissionRateDenominator.
 	Rate quantity.Quantity `json:"rate,omitempty"`
 }
@@ -68,7 +68,7 @@ func (crs CommissionRateStep) PrettyType() (interface{}, error) {
 // maximum commission rate) and its starting time.
 type CommissionRateBoundStep struct {
 	// Epoch when the commission rate bound will go in effect.
-	Start epochtime.EpochTime `json:"start,omitempty"`
+	Start beacon.EpochTime `json:"start,omitempty"`
 	// Minimum commission rate numerator. The minimum rate is this value divided by CommissionRateDenominator.
 	RateMin quantity.Quantity `json:"rate_min,omitempty"`
 	// Maximum commission rate numerator. The maximum rate is this value divided by CommissionRateDenominator.
@@ -177,7 +177,7 @@ func (cs *CommissionSchedule) validateNondegenerate(rules *CommissionScheduleRul
 }
 
 // validateAmendmentAcceptable apply policy for "when" changes can be made, for CommissionSchedules that are amendments.
-func (cs *CommissionSchedule) validateAmendmentAcceptable(rules *CommissionScheduleRules, now epochtime.EpochTime) error {
+func (cs *CommissionSchedule) validateAmendmentAcceptable(rules *CommissionScheduleRules, now beacon.EpochTime) error {
 	if len(cs.Rates) != 0 {
 		if cs.Rates[0].Start <= now {
 			return fmt.Errorf("rate schedule with start epoch %d must not alter rate on or before %d", cs.Rates[0].Start, now)
@@ -194,7 +194,7 @@ func (cs *CommissionSchedule) validateAmendmentAcceptable(rules *CommissionSched
 }
 
 // Prune discards past steps that aren't in effect anymore.
-func (cs *CommissionSchedule) Prune(now epochtime.EpochTime) {
+func (cs *CommissionSchedule) Prune(now beacon.EpochTime) {
 	for len(cs.Rates) > 1 {
 		if cs.Rates[1].Start > now {
 			// Remaining steps haven't started yet, so keep them and the current active one.
@@ -240,7 +240,7 @@ func (cs *CommissionSchedule) amend(amendment *CommissionSchedule) {
 }
 
 // validateWithinBound detects rates out of bound.
-func (cs *CommissionSchedule) validateWithinBound(now epochtime.EpochTime) error {
+func (cs *CommissionSchedule) validateWithinBound(now beacon.EpochTime) error {
 	if len(cs.Rates) == 0 && len(cs.Bounds) == 0 {
 		// Nothing to check.
 		return nil
@@ -258,7 +258,7 @@ func (cs *CommissionSchedule) validateWithinBound(now epochtime.EpochTime) error
 	currentBoundIndex := 0
 	currentBound := &cs.Bounds[currentBoundIndex]
 
-	var diagnosticTime epochtime.EpochTime
+	var diagnosticTime beacon.EpochTime
 	if currentRate.Start > now || currentBound.Start > now {
 		// We only care if the two schedules start simultaneously if they will start in the future.
 		// Steps that already started my have started at different times with older steps pruned.
@@ -331,7 +331,7 @@ func (cs *CommissionSchedule) validateWithinBound(now epochtime.EpochTime) error
 
 // PruneAndValidateForGenesis gets a schedule ready for use in the genesis document.
 // Returns an error if there is a validation failure. If it does, the schedule may be pruned already.
-func (cs *CommissionSchedule) PruneAndValidateForGenesis(rules *CommissionScheduleRules, now epochtime.EpochTime) error {
+func (cs *CommissionSchedule) PruneAndValidateForGenesis(rules *CommissionScheduleRules, now beacon.EpochTime) error {
 	if err := cs.validateComplexity(rules); err != nil {
 		return err
 	}
@@ -349,7 +349,7 @@ func (cs *CommissionSchedule) PruneAndValidateForGenesis(rules *CommissionSchedu
 
 // AmendAndPruneAndValidate applies a proposed amendment to a valid schedule.
 // Returns an error if there is a validation failure. If it does, the schedule may be amended and pruned already.
-func (cs *CommissionSchedule) AmendAndPruneAndValidate(amendment *CommissionSchedule, rules *CommissionScheduleRules, now epochtime.EpochTime) error {
+func (cs *CommissionSchedule) AmendAndPruneAndValidate(amendment *CommissionSchedule, rules *CommissionScheduleRules, now beacon.EpochTime) error {
 	if err := amendment.validateComplexity(rules); err != nil {
 		return fmt.Errorf("amendment: %w", err)
 	}
@@ -371,7 +371,7 @@ func (cs *CommissionSchedule) AmendAndPruneAndValidate(amendment *CommissionSche
 }
 
 // CurrentRate returns the rate at the latest rate step that has started or nil if no step has started.
-func (cs *CommissionSchedule) CurrentRate(now epochtime.EpochTime) *quantity.Quantity {
+func (cs *CommissionSchedule) CurrentRate(now beacon.EpochTime) *quantity.Quantity {
 	var latestStartedStep *CommissionRateStep
 	for i := range cs.Rates {
 		step := &cs.Rates[i]

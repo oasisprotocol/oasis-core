@@ -6,12 +6,12 @@ import (
 	"sync"
 	"time"
 
+	beacon "github.com/oasisprotocol/oasis-core/go/beacon/api"
 	"github.com/oasisprotocol/oasis-core/go/common/cbor"
 	"github.com/oasisprotocol/oasis-core/go/common/quantity"
 	"github.com/oasisprotocol/oasis-core/go/common/version"
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
 	"github.com/oasisprotocol/oasis-core/go/consensus/api/transaction"
-	epochtime "github.com/oasisprotocol/oasis-core/go/epochtime/api"
 	"github.com/oasisprotocol/oasis-core/go/governance/api"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/env"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/log"
@@ -39,7 +39,7 @@ var (
 type governanceConsensusUpgradeImpl struct {
 	runtimeImpl
 
-	currentEpoch epochtime.EpochTime
+	currentEpoch beacon.EpochTime
 	entityNonce  uint64
 
 	correctUpgradeVersion bool
@@ -93,7 +93,7 @@ func (sc *governanceConsensusUpgradeImpl) Fixture() (*oasis.NetworkFixture, erro
 	}
 
 	// Needed so we can fast-forward to upgrade epoch.
-	f.Network.EpochtimeMock = true
+	f.Network.SetMockEpoch()
 	// Needed as we will vote as validators.
 	f.Network.DeterministicIdentities = true
 	f.Network.DefaultLogWatcherHandlerFactories = []log.WatcherHandlerFactory{}
@@ -322,7 +322,7 @@ func (sc *governanceConsensusUpgradeImpl) Run(childEnv *env.Env) error { // noli
 	}
 
 	// We're at epoch 2 after the initial transitions.
-	sc.currentEpoch = epochtime.EpochTime(2)
+	sc.currentEpoch = beacon.EpochTime(2)
 	// Wait for the client to exit.
 	if err = sc.waitClient(childEnv, cmd, clientErrCh); err != nil {
 		return err
@@ -405,17 +405,27 @@ func (sc *governanceConsensusUpgradeImpl) Run(childEnv *env.Env) error { // noli
 
 		// In the fail-upgrade scenario the first node reaching the BeginBlock
 		// of the upgrade epoch will panic and cause the other nodes to not progress.
-		ctx, cancel := context.WithTimeout(sc.ctx, time.Second*10)
-		defer cancel()
-		err = sc.nextEpoch(ctx)
-		if err != nil && ep != upgradeEpoch {
-			return err
-		}
+		//
+		// Note: This can't use a shorter timeout either.  Setting the
+		// epoch can take a variable amount of time.
 		if ep != upgradeEpoch {
+			// Non-upgrade epoch.
+			if err = sc.nextEpoch(sc.ctx); err != nil {
+				return err
+			}
 			continue
+		} else {
+			// HACK HACK HACK
+			//
+			// That said, the epoch transition will never complete on
+			// the fail case upgrade epoch, so use a "long enough" timeout.
+			ctx, cancel := context.WithTimeout(sc.ctx, time.Second*60)
+			defer cancel()
+			err = sc.nextEpoch(ctx)
 		}
 
-		// If this is the upgrade epoch.
+		// If we reach here, this is the upgrade epoch.  Handle the epoch
+		// transition request result.
 		switch sc.correctUpgradeVersion {
 		case true:
 			// Should work normally.

@@ -29,7 +29,6 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/consensus/api/transaction"
 	consensusGenesis "github.com/oasisprotocol/oasis-core/go/consensus/genesis"
 	tendermint "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/api"
-	epochtime "github.com/oasisprotocol/oasis-core/go/epochtime/api"
 	genesis "github.com/oasisprotocol/oasis-core/go/genesis/api"
 	genesisFile "github.com/oasisprotocol/oasis-core/go/genesis/file"
 	governance "github.com/oasisprotocol/oasis-core/go/governance/api"
@@ -80,11 +79,16 @@ const (
 	CfgGovernanceVotingPeriod              = "governance.voting_period"
 
 	// Beacon config flags.
-	cfgBeaconDebugDeterministic = "beacon.debug.deterministic"
-
-	// EpochTime config flags.
-	cfgEpochTimeDebugMockBackend   = "epochtime.debug.mock_backend"
-	cfgEpochTimeTendermintInterval = "epochtime.tendermint.interval"
+	CfgBeaconBackend                    = "beacon.backend"
+	CfgBeaconDebugDeterministic         = "beacon.debug.deterministic"
+	CfgBeaconDebugMockBackend           = "beacon.debug.mock_backend"
+	CfgBeaconInsecureTendermintInterval = "beacon.insecure.tendermint.interval"
+	CfgBeaconPVSSParticipants           = "beacon.pvss.participants"
+	CfgBeaconPVSSThreshold              = "beacon.pvss.threshold"
+	CfgBeaconPVSSCommitInterval         = "beacon.pvss.commit_interval"
+	CfgBeaconPVSSRevealInterval         = "beacon.pvss.reveal_interval"
+	CfgBeaconPVSSTransitionDelay        = "beacon.pvss.transition_delay"
+	CfgBeaconPVSSDebugForcedParticipant = "beacon.pvss.debug.forced_participant"
 
 	// Roothash config flags.
 	cfgRoothashDebugDoNotSuspendRuntimes = "roothash.debug.do_not_suspend_runtimes"
@@ -181,7 +185,7 @@ func doInitGenesis(cmd *cobra.Command, args []string) {
 		Height:    viper.GetInt64(cfgInitialHeight),
 		ChainID:   chainID,
 		Time:      time.Now(),
-		HaltEpoch: epochtime.EpochTime(viper.GetUint64(cfgHaltEpoch)),
+		HaltEpoch: beacon.EpochTime(viper.GetUint64(cfgHaltEpoch)),
 	}
 	entities := viper.GetStringSlice(viperEntity)
 	runtimes := viper.GetStringSlice(cfgRuntime)
@@ -233,35 +237,51 @@ func doInitGenesis(cmd *cobra.Command, args []string) {
 			MinProposalDeposit:        *quantity.NewFromUint64(viper.GetUint64(CfgGovernanceMinProposalDeposit)),
 			Quorum:                    uint8(viper.GetInt(CfgGovernanceQuorum)),
 			Threshold:                 uint8(viper.GetInt(CfgGovernanceThreshold)),
-			UpgradeCancelMinEpochDiff: epochtime.EpochTime(viper.GetUint64(CfgGovernanceUpgradeCancelMinEpochDiff)),
-			UpgradeMinEpochDiff:       epochtime.EpochTime(viper.GetUint64(CfgGovernanceUpgradeMinEpochDiff)),
-			VotingPeriod:              epochtime.EpochTime(viper.GetUint64(CfgGovernanceVotingPeriod)),
+			UpgradeCancelMinEpochDiff: beacon.EpochTime(viper.GetUint64(CfgGovernanceUpgradeCancelMinEpochDiff)),
+			UpgradeMinEpochDiff:       beacon.EpochTime(viper.GetUint64(CfgGovernanceUpgradeMinEpochDiff)),
+			VotingPeriod:              beacon.EpochTime(viper.GetUint64(CfgGovernanceVotingPeriod)),
 		},
 	}
 
 	doc.Beacon = beacon.Genesis{
 		Parameters: beacon.ConsensusParameters{
-			DebugDeterministic: viper.GetBool(cfgBeaconDebugDeterministic),
+			Backend:            viper.GetString(CfgBeaconBackend),
+			DebugDeterministic: viper.GetBool(CfgBeaconDebugDeterministic),
+			DebugMockBackend:   viper.GetBool(CfgBeaconDebugMockBackend),
 		},
 	}
-
-	doc.EpochTime = epochtime.Genesis{
-		Parameters: epochtime.ConsensusParameters{
-			DebugMockBackend: viper.GetBool(cfgEpochTimeDebugMockBackend),
-			Interval:         viper.GetInt64(cfgEpochTimeTendermintInterval),
-		},
-	}
-
-	var pkBlacklist []signature.PublicKey
-	for _, pkStr := range viper.GetStringSlice(cfgConsensusBlacklistPublicKey) {
-		var pk signature.PublicKey
-		if err := pk.UnmarshalText([]byte(pkStr)); err != nil {
-			logger.Error("failed to parse blacklisted public key",
+	switch doc.Beacon.Parameters.Backend {
+	case beacon.BackendInsecure:
+		doc.Beacon.Parameters.InsecureParameters = &beacon.InsecureParameters{
+			Interval: viper.GetInt64(CfgBeaconInsecureTendermintInterval),
+		}
+	case beacon.BackendPVSS:
+		var forcedParticipants []signature.PublicKey
+		forcedParticipants, err := parsePublicKeyStringSlice(CfgBeaconPVSSDebugForcedParticipant)
+		if err != nil {
+			logger.Error("failed to parse PVSS forced public key",
 				"err", err,
 			)
 			return
 		}
-		pkBlacklist = append(pkBlacklist, pk)
+
+		doc.Beacon.Parameters.PVSSParameters = &beacon.PVSSParameters{
+			Participants:            viper.GetUint32(CfgBeaconPVSSParticipants),
+			Threshold:               viper.GetUint32(CfgBeaconPVSSThreshold),
+			CommitInterval:          viper.GetInt64(CfgBeaconPVSSCommitInterval),
+			RevealInterval:          viper.GetInt64(CfgBeaconPVSSRevealInterval),
+			TransitionDelay:         viper.GetInt64(CfgBeaconPVSSTransitionDelay),
+			GasCosts:                beacon.DefaultGasCosts, // TODO: Make these configurable.
+			DebugForcedParticipants: forcedParticipants,
+		}
+	}
+
+	pkBlacklist, err := parsePublicKeyStringSlice(cfgConsensusBlacklistPublicKey)
+	if err != nil {
+		logger.Error("failed to parse blacklisted public key",
+			"err", err,
+		)
+		return
 	}
 
 	doc.Consensus = consensusGenesis.Genesis{
@@ -752,13 +772,19 @@ func init() {
 	initGenesisFlags.Uint64(CfgGovernanceVotingPeriod, 100, "voting period (in epochs)")
 
 	// Beacon config flags.
-	initGenesisFlags.Bool(cfgBeaconDebugDeterministic, false, "enable deterministic beacon output (UNSAFE)")
-	_ = initGenesisFlags.MarkHidden(cfgBeaconDebugDeterministic)
-
-	// EpochTime config flags.
-	initGenesisFlags.Bool(cfgEpochTimeDebugMockBackend, false, "use debug mock Epoch time backend")
-	initGenesisFlags.Int64(cfgEpochTimeTendermintInterval, 86400, "Epoch interval (in blocks)")
-	_ = initGenesisFlags.MarkHidden(cfgEpochTimeDebugMockBackend)
+	initGenesisFlags.String(CfgBeaconBackend, "insecure", "beacon backend")
+	initGenesisFlags.Bool(CfgBeaconDebugDeterministic, false, "enable deterministic beacon output (UNSAFE)")
+	initGenesisFlags.Bool(CfgBeaconDebugMockBackend, false, "use debug mock Epoch time backend")
+	initGenesisFlags.Int64(CfgBeaconInsecureTendermintInterval, 86400, "Epoch interval (in blocks)")
+	initGenesisFlags.Uint32(CfgBeaconPVSSParticipants, 10, "number of participants in a PVSS round")
+	initGenesisFlags.Uint32(CfgBeaconPVSSThreshold, 7, "threshold entropy contributors")
+	initGenesisFlags.Int64(CfgBeaconPVSSCommitInterval, 43200, "PVSS round commit interval (in blocks)")
+	initGenesisFlags.Int64(CfgBeaconPVSSRevealInterval, 34560, "PVSS round reveal interval (in blocks)")
+	initGenesisFlags.Int64(CfgBeaconPVSSTransitionDelay, 8639, "PVSS round transition delay (in blocks)")
+	initGenesisFlags.StringSlice(CfgBeaconPVSSDebugForcedParticipant, nil, "PVSS forced participant public keys")
+	_ = initGenesisFlags.MarkHidden(CfgBeaconDebugDeterministic)
+	_ = initGenesisFlags.MarkHidden(CfgBeaconDebugMockBackend)
+	_ = initGenesisFlags.MarkHidden(CfgBeaconPVSSDebugForcedParticipant)
 
 	// Roothash config flags.
 	initGenesisFlags.Bool(cfgRoothashDebugDoNotSuspendRuntimes, false, "do not suspend runtimes (UNSAFE)")
@@ -794,4 +820,20 @@ func init() {
 	initGenesisFlags.AddFlagSet(flags.DebugTestEntityFlags)
 	initGenesisFlags.AddFlagSet(flags.GenesisFileFlags)
 	initGenesisFlags.AddFlagSet(flags.DebugDontBlameOasisFlag)
+}
+
+func parsePublicKeyStringSlice(cfg string) ([]signature.PublicKey, error) {
+	var pks []signature.PublicKey
+	for _, pkStr := range viper.GetStringSlice(cfg) {
+		var pk signature.PublicKey
+		if err := pk.UnmarshalText([]byte(pkStr)); err != nil {
+			logger.Error("failed to parse public key",
+				"err", err,
+			)
+			return nil, err
+		}
+		pks = append(pks, pk)
+	}
+
+	return pks, nil
 }

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 
+	beacon "github.com/oasisprotocol/oasis-core/go/beacon/api"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	"github.com/oasisprotocol/oasis-core/go/common/errors"
@@ -13,7 +14,6 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/pubsub"
 	"github.com/oasisprotocol/oasis-core/go/common/quantity"
 	"github.com/oasisprotocol/oasis-core/go/consensus/api/transaction"
-	epochtime "github.com/oasisprotocol/oasis-core/go/epochtime/api"
 	"github.com/oasisprotocol/oasis-core/go/staking/api/token"
 )
 
@@ -934,8 +934,8 @@ type Delegation struct {
 
 // DebondingDelegation is a debonding delegation descriptor.
 type DebondingDelegation struct {
-	Shares        quantity.Quantity   `json:"shares"`
-	DebondEndTime epochtime.EpochTime `json:"debond_end"`
+	Shares        quantity.Quantity `json:"shares"`
+	DebondEndTime beacon.EpochTime  `json:"debond_end"`
 }
 
 // Genesis is the initial staking state for use in the genesis block.
@@ -973,7 +973,7 @@ type Genesis struct {
 // ConsensusParameters are the staking consensus parameters.
 type ConsensusParameters struct { // nolint: maligned
 	Thresholds                        map[ThresholdKind]quantity.Quantity `json:"thresholds,omitempty"`
-	DebondingInterval                 epochtime.EpochTime                 `json:"debonding_interval,omitempty"`
+	DebondingInterval                 beacon.EpochTime                    `json:"debonding_interval,omitempty"`
 	RewardSchedule                    []RewardStep                        `json:"reward_schedule,omitempty"`
 	SigningRewardThresholdNumerator   uint64                              `json:"signing_reward_threshold_numerator,omitempty"`
 	SigningRewardThresholdDenominator uint64                              `json:"signing_reward_threshold_denominator,omitempty"`

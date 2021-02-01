@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"time"
 
+	beacon "github.com/oasisprotocol/oasis-core/go/beacon/api"
 	"github.com/oasisprotocol/oasis-core/go/common"
 	"github.com/oasisprotocol/oasis-core/go/common/cbor"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
@@ -13,7 +14,6 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/sgx"
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
 	"github.com/oasisprotocol/oasis-core/go/consensus/api/transaction"
-	epochtime "github.com/oasisprotocol/oasis-core/go/epochtime/api"
 	keymanager "github.com/oasisprotocol/oasis-core/go/keymanager/api"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/env"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/oasis"
@@ -35,7 +35,7 @@ const (
 type runtimeDynamicImpl struct {
 	runtimeImpl
 
-	epoch epochtime.EpochTime
+	epoch beacon.EpochTime
 }
 
 func newRuntimeDynamicImpl() scenario.Scenario {
@@ -74,7 +74,7 @@ func (sc *runtimeDynamicImpl) Fixture() (*oasis.NetworkFixture, error) {
 	// We need IAS proxy to use the registry as we are registering runtimes dynamically.
 	f.Network.IAS.UseRegistry = true
 	// Avoid unexpected blocks.
-	f.Network.EpochtimeMock = true
+	f.Network.SetMockEpoch()
 	// Exclude all runtimes from genesis as we will register those dynamically.
 	for i := range f.Runtimes {
 		f.Runtimes[i].ExcludeFromGenesis = true

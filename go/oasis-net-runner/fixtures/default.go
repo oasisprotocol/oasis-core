@@ -61,7 +61,6 @@ func newDefaultFixture() (*oasis.NetworkFixture, error) {
 					TimeoutCommit: 1 * time.Second,
 				},
 			},
-			EpochtimeMock: viper.GetBool(cfgEpochtimeMock),
 			InitialHeight: viper.GetInt64(cfgInitialHeight),
 			HaltEpoch:     viper.GetUint64(cfgHaltEpoch),
 			IAS: oasis.IASCfg{
@@ -78,6 +77,9 @@ func newDefaultFixture() (*oasis.NetworkFixture, error) {
 			{Entity: 1},
 		},
 		Seeds: []oasis.SeedFixture{{}},
+	}
+	if viper.GetBool(cfgEpochtimeMock) {
+		fixture.Network.SetMockEpoch()
 	}
 
 	for i := 0; i < viper.GetInt(cfgNumEntities); i++ {

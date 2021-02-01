@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"time"
 
+	beacon "github.com/oasisprotocol/oasis-core/go/beacon/api"
 	"github.com/oasisprotocol/oasis-core/go/common"
-	epochtime "github.com/oasisprotocol/oasis-core/go/epochtime/api"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/env"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/oasis"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/scenario"
@@ -71,7 +71,7 @@ func (sc *multipleRuntimesImpl) Fixture() (*oasis.NetworkFixture, error) {
 	f.Runtimes = rts
 
 	// Avoid unexpected blocks.
-	f.Network.EpochtimeMock = true
+	f.Network.SetMockEpoch()
 
 	// Add some more consecutive runtime IDs with the same binary.
 	numComputeRuntimes, _ := sc.Flags.GetInt(cfgNumComputeRuntimes)
@@ -152,7 +152,7 @@ func (sc *multipleRuntimesImpl) Run(childEnv *env.Env) error {
 	ctx := context.Background()
 
 	// Submit transactions.
-	epoch := epochtime.EpochTime(3)
+	epoch := beacon.EpochTime(3)
 	numComputeRuntimeTxns, _ := sc.Flags.GetInt(cfgNumComputeRuntimeTxns)
 	for _, r := range sc.Net.Runtimes() {
 		rt := r.ToRuntimeDescriptor()

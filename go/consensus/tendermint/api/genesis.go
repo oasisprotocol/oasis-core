@@ -8,6 +8,7 @@ import (
 	tmproto "github.com/tendermint/tendermint/proto/tendermint/types"
 	tmtypes "github.com/tendermint/tendermint/types"
 
+	beacon "github.com/oasisprotocol/oasis-core/go/beacon/api"
 	"github.com/oasisprotocol/oasis-core/go/common/node"
 	"github.com/oasisprotocol/oasis-core/go/common/quantity"
 	"github.com/oasisprotocol/oasis-core/go/common/version"
@@ -85,10 +86,27 @@ func genesisToTendermint(d *genesis.Document) (*tmtypes.GenesisDoc, error) {
 		// not in debug mode, this will just cause startup to fail which is good.
 		debondingInterval = 1
 	}
-	epochInterval := d.EpochTime.Parameters.Interval
-	if epochInterval == 0 && cmdFlags.DebugDontBlameOasis() && d.EpochTime.Parameters.DebugMockBackend {
-		// Use a default of 100 blocks in case epoch interval is unset and we are using debug mode.
-		epochInterval = 100
+	var epochInterval int64
+	switch d.Beacon.Parameters.Backend {
+	case beacon.BackendInsecure:
+		params := d.Beacon.Parameters.InsecureParameters
+		epochInterval = params.Interval
+		if epochInterval == 0 && cmdFlags.DebugDontBlameOasis() && d.Beacon.Parameters.DebugMockBackend {
+			// Use a default of 100 blocks in case epoch interval is unset
+			// and we are using debug mode.
+			epochInterval = 100
+		}
+	case beacon.BackendPVSS:
+		// Note: This assumes no protocol failures (the common case).
+		// In the event of a failure, it is entirely possible that epochs
+		// can drag on for significantly longer.
+		params := d.Beacon.Parameters.PVSSParameters
+		epochInterval = params.CommitInterval + params.RevealInterval + params.TransitionDelay
+	default:
+		return nil, fmt.Errorf("tendermint: unknown beacon backend: '%s'", d.Beacon.Parameters.Backend)
+	}
+	if epochInterval == 0 {
+		return nil, fmt.Errorf("tendermint: unable to determine epoch interval")
 	}
 
 	var evCfg tmproto.EvidenceParams

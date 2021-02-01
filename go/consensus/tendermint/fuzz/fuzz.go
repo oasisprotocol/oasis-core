@@ -15,7 +15,6 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/consensus/api/transaction"
 	"github.com/oasisprotocol/oasis-core/go/consensus/tendermint/abci"
 	"github.com/oasisprotocol/oasis-core/go/consensus/tendermint/api"
-	epochtimemock "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/apps/epochtime_mock"
 	registryApp "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/apps/registry"
 	stakingApp "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/apps/staking"
 	"github.com/oasisprotocol/oasis-core/go/upgrade"
@@ -26,7 +25,6 @@ var (
 
 	// FuzzableApps is a list of ABCI apps the fuzzer can fuzz.
 	FuzzableApps []api.Application = []api.Application{
-		epochtimemock.New(),
 		registryApp.New(),
 		stakingApp.New(),
 	}

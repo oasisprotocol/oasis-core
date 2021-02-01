@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"math"
 
+	beacon "github.com/oasisprotocol/oasis-core/go/beacon/api"
 	"github.com/oasisprotocol/oasis-core/go/common/cbor"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
@@ -13,7 +14,6 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/version"
 	"github.com/oasisprotocol/oasis-core/go/consensus/api/transaction"
 	"github.com/oasisprotocol/oasis-core/go/consensus/api/transaction/testvectors"
-	epochtime "github.com/oasisprotocol/oasis-core/go/epochtime/api"
 	governance "github.com/oasisprotocol/oasis-core/go/governance/api"
 	"github.com/oasisprotocol/oasis-core/go/upgrade/api"
 )
@@ -72,7 +72,7 @@ func main() {
 										Name:       name,
 										Method:     api.UpgradeMethodInternal,
 										Identifier: cbor.Marshal(identifier),
-										Epoch:      epochtime.EpochTime(epoch),
+										Epoch:      beacon.EpochTime(epoch),
 									},
 								},
 							}),

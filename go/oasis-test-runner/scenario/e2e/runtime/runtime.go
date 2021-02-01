@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	beacon "github.com/oasisprotocol/oasis-core/go/beacon/api"
 	"github.com/oasisprotocol/oasis-core/go/common"
 	"github.com/oasisprotocol/oasis-core/go/common/cbor"
 	"github.com/oasisprotocol/oasis-core/go/common/node"
@@ -122,8 +123,7 @@ func (sc *runtimeImpl) Fixture() (*oasis.NetworkFixture, error) {
 	}
 	runtimeLoader, _ := sc.Flags.GetString(cfgRuntimeLoader)
 	iasMock, _ := sc.Flags.GetBool(cfgIasMock)
-	epochInterval, _ := sc.Flags.GetInt64(cfgEpochInterval)
-	return &oasis.NetworkFixture{
+	ff := &oasis.NetworkFixture{
 		TEE: oasis.TEEFixture{
 			Hardware: tee,
 			MrSigner: mrSigner,
@@ -136,7 +136,6 @@ func (sc *runtimeImpl) Fixture() (*oasis.NetworkFixture, error) {
 			IAS: oasis.IASCfg{
 				Mock: iasMock,
 			},
-			EpochtimeTendermintInterval: epochInterval,
 		},
 		Entities: []oasis.EntityCfg{
 			{IsDebugTestEntity: true},
@@ -212,7 +211,14 @@ func (sc *runtimeImpl) Fixture() (*oasis.NetworkFixture, error) {
 		Clients: []oasis.ClientFixture{
 			{},
 		},
-	}, nil
+	}
+
+	epochInterval, _ := sc.Flags.GetInt64(cfgEpochInterval)
+	ff.Network.Beacon.InsecureParameters = &beacon.InsecureParameters{
+		Interval: epochInterval,
+	}
+
+	return ff, nil
 }
 
 func (sc *runtimeImpl) start(childEnv *env.Env) (<-chan error, *exec.Cmd, error) {

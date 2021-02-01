@@ -9,6 +9,7 @@ import (
 
 	"github.com/tendermint/tendermint/abci/types"
 
+	beacon "github.com/oasisprotocol/oasis-core/go/beacon/api"
 	"github.com/oasisprotocol/oasis-core/go/common"
 	"github.com/oasisprotocol/oasis-core/go/common/cbor"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/drbg"
@@ -26,7 +27,6 @@ import (
 	schedulerState "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/apps/scheduler/state"
 	stakingapp "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/apps/staking"
 	stakingState "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/apps/staking/state"
-	epochtime "github.com/oasisprotocol/oasis-core/go/epochtime/api"
 	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
 	scheduler "github.com/oasisprotocol/oasis-core/go/scheduler/api"
 	staking "github.com/oasisprotocol/oasis-core/go/staking/api"
@@ -44,7 +44,7 @@ var (
 type schedulerApplication struct {
 	state api.ApplicationState
 
-	baseEpoch epochtime.EpochTime
+	baseEpoch beacon.EpochTime
 }
 
 func (app *schedulerApplication) Name() string {
@@ -93,7 +93,12 @@ func (app *schedulerApplication) BeginBlock(ctx *api.Context, request types.Requ
 		}
 
 		beacState := beaconState.NewMutableState(ctx.State())
-		beacon, err := beacState.Beacon(ctx)
+		beaconParameters, err := beacState.ConsensusParameters(ctx)
+		if err != nil {
+			return fmt.Errorf("tendermint/scheduler: couldn't get beacon parameters: %w", err)
+		}
+		filterCommitteeNodes := beaconParameters.Backend == beacon.BackendPVSS
+		entropy, err := beacState.Beacon(ctx)
 		if err != nil {
 			return fmt.Errorf("tendermint/scheduler: couldn't get beacon: %w", err)
 		}
@@ -109,7 +114,7 @@ func (app *schedulerApplication) BeginBlock(ctx *api.Context, request types.Requ
 		}
 
 		// Filter nodes.
-		var nodes []*node.Node
+		var nodes, committeeNodes []*node.Node
 		for _, node := range allNodes {
 			var status *registry.NodeStatus
 			status, err = regState.NodeStatus(ctx, node.ID)
@@ -127,6 +132,9 @@ func (app *schedulerApplication) BeginBlock(ctx *api.Context, request types.Requ
 			}
 
 			nodes = append(nodes, node)
+			if !filterCommitteeNodes || (status.ElectionEligibleAfter != beacon.EpochInvalid && epoch > status.ElectionEligibleAfter) {
+				committeeNodes = append(committeeNodes, node)
+			}
 		}
 
 		state := schedulerState.NewMutableState(ctx.State())
@@ -154,9 +162,9 @@ func (app *schedulerApplication) BeginBlock(ctx *api.Context, request types.Requ
 		}
 
 		// Handle the validator election first, because no consensus is
-		// catastrophic, while no validators is not.
+		// catastrophic, while failing to elect other committees is not.
 		if !params.DebugStaticValidators {
-			if err = app.electValidators(ctx, beacon, stakeAcc, entitiesEligibleForReward, nodes, params); err != nil {
+			if err = app.electValidators(ctx, entropy, stakeAcc, entitiesEligibleForReward, nodes, params); err != nil {
 				// It is unclear what the behavior should be if the validator
 				// election fails.  The system can not ensure integrity, so
 				// presumably manual intervention is required...
@@ -169,7 +177,7 @@ func (app *schedulerApplication) BeginBlock(ctx *api.Context, request types.Requ
 			scheduler.KindStorage,
 		}
 		for _, kind := range kinds {
-			if err = app.electAllCommittees(ctx, request, epoch, beacon, stakeAcc, entitiesEligibleForReward, runtimes, nodes, kind); err != nil {
+			if err = app.electAllCommittees(ctx, request, epoch, entropy, stakeAcc, entitiesEligibleForReward, runtimes, committeeNodes, kind); err != nil {
 				return fmt.Errorf("tendermint/scheduler: couldn't elect %s committees: %w", kind, err)
 			}
 		}
@@ -340,7 +348,7 @@ func GetPerm(beacon []byte, runtimeID common.Namespace, rngCtx []byte, nrNodes i
 // For non-fatal problems, save a problem condition to the state and return successfully.
 func (app *schedulerApplication) electCommittee(
 	ctx *api.Context,
-	epoch epochtime.EpochTime,
+	epoch beacon.EpochTime,
 	beacon []byte,
 	stakeAcc *stakingState.StakeAccumulatorCache,
 	entitiesEligibleForReward map[staking.Address]bool,
@@ -490,7 +498,7 @@ func (app *schedulerApplication) electCommittee(
 func (app *schedulerApplication) electAllCommittees(
 	ctx *api.Context,
 	request types.RequestBeginBlock,
-	epoch epochtime.EpochTime,
+	epoch beacon.EpochTime,
 	beacon []byte,
 	stakeAcc *stakingState.StakeAccumulatorCache,
 	entitiesEligibleForReward map[staking.Address]bool,

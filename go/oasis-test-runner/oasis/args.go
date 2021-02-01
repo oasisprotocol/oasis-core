@@ -10,6 +10,7 @@ import (
 
 	"github.com/spf13/viper"
 
+	beacon "github.com/oasisprotocol/oasis-core/go/beacon/api"
 	"github.com/oasisprotocol/oasis-core/go/common"
 	"github.com/oasisprotocol/oasis-core/go/common/crash"
 	commonGrpc "github.com/oasisprotocol/oasis-core/go/common/grpc"
@@ -19,7 +20,6 @@ import (
 	tendermintCommon "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/common"
 	tendermintFull "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/full"
 	tendermintSeed "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/seed"
-	epochtime "github.com/oasisprotocol/oasis-core/go/epochtime/api"
 	"github.com/oasisprotocol/oasis-core/go/ias"
 	cmdCommon "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common"
 	"github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/flags"
@@ -581,7 +581,7 @@ func (args *argBuilder) byzantineVersionFakeEnclaveID(rt *Runtime) *argBuilder {
 	return args
 }
 
-func (args *argBuilder) byzantineActivationEpoch(epoch epochtime.EpochTime) *argBuilder {
+func (args *argBuilder) byzantineActivationEpoch(epoch beacon.EpochTime) *argBuilder {
 	args.vec = append(args.vec, "--"+byzantine.CfgActivationEpoch, strconv.FormatUint(uint64(epoch), 10))
 	return args
 }

@@ -5,12 +5,12 @@ import (
 	"context"
 	"fmt"
 
+	beacon "github.com/oasisprotocol/oasis-core/go/beacon/api"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
 	"github.com/oasisprotocol/oasis-core/go/common/errors"
 	"github.com/oasisprotocol/oasis-core/go/common/pubsub"
 	"github.com/oasisprotocol/oasis-core/go/common/quantity"
 	"github.com/oasisprotocol/oasis-core/go/consensus/api/transaction"
-	epochtime "github.com/oasisprotocol/oasis-core/go/epochtime/api"
 	staking "github.com/oasisprotocol/oasis-core/go/staking/api"
 	upgrade "github.com/oasisprotocol/oasis-core/go/upgrade/api"
 )
@@ -172,7 +172,7 @@ type ConsensusParameters struct {
 
 	// VotingPeriod is the number of epochs after which the voting for a proposal
 	// is closed and the votes are tallied.
-	VotingPeriod epochtime.EpochTime `json:"voting_period,omitempty"`
+	VotingPeriod beacon.EpochTime `json:"voting_period,omitempty"`
 
 	// Quorum is he minimum percentage of voting power that needs to be cast on
 	// a proposal for the result to be valid.
@@ -185,11 +185,11 @@ type ConsensusParameters struct {
 	// UpgradeMinEpochDiff is the minimum number of epochs between the current
 	// epoch and the proposed upgrade epoch for the upgrade proposal to be valid.
 	// This is also the minimum number of epochs between two pending upgrades.
-	UpgradeMinEpochDiff epochtime.EpochTime `json:"upgrade_min_epoch_diff,omitempty"`
+	UpgradeMinEpochDiff beacon.EpochTime `json:"upgrade_min_epoch_diff,omitempty"`
 
 	// UpgradeCancelMinEpochDiff is the minimum number of epochs between the current
 	// epoch and the proposed upgrade epoch for the upgrade cancellation proposal to be valid.
-	UpgradeCancelMinEpochDiff epochtime.EpochTime `json:"upgrade_cancel_min_epoch_diff,omitempty"`
+	UpgradeCancelMinEpochDiff beacon.EpochTime `json:"upgrade_cancel_min_epoch_diff,omitempty"`
 }
 
 // Event signifies a governance event, returned via GetEvents.

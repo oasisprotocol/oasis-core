@@ -13,6 +13,7 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
+	beacon "github.com/oasisprotocol/oasis-core/go/beacon/api"
 	"github.com/oasisprotocol/oasis-core/go/common"
 	"github.com/oasisprotocol/oasis-core/go/common/cbor"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
@@ -26,7 +27,6 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/consensus/api/transaction/results"
 	tmcrypto "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/crypto"
 	control "github.com/oasisprotocol/oasis-core/go/control/api"
-	epochtime "github.com/oasisprotocol/oasis-core/go/epochtime/api"
 	governance "github.com/oasisprotocol/oasis-core/go/governance/api"
 	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
 	runtimeClient "github.com/oasisprotocol/oasis-core/go/runtime/client/api"
@@ -77,7 +77,7 @@ type queries struct {
 	logger *logging.Logger
 
 	runtimeID       common.Namespace
-	epochtimeParams *epochtime.ConsensusParameters
+	epochtimeParams *beacon.ConsensusParameters
 	stakingParams   *staking.ConsensusParameters
 	schedulerParams *scheduler.ConsensusParameters
 
@@ -214,14 +214,14 @@ func (q *queries) doConsensusQueries(ctx context.Context, rng *rand.Rand, height
 	if block.Height != height {
 		return fmt.Errorf("block.Height: %d == %d violated", block.Height, height)
 	}
-	if !q.epochtimeParams.DebugMockBackend {
-		expectedEpoch := epochtime.EpochTime(block.Height / q.epochtimeParams.Interval)
+	if params := q.epochtimeParams.InsecureParameters; params != nil && !q.epochtimeParams.DebugMockBackend {
+		expectedEpoch := beacon.EpochTime(block.Height / params.Interval)
 		if expectedEpoch != epoch {
 			q.logger.Error("invalid epoch",
 				"expected", expectedEpoch,
 				"epoch", epoch,
 				"height", block.Height,
-				"epoch_interval", q.epochtimeParams.Interval,
+				"epoch_interval", params.Interval,
 			)
 			return fmt.Errorf("Invalid epoch: %d", epoch)
 		}
@@ -880,7 +880,7 @@ func (q *queries) Run(
 	if err != nil {
 		return fmt.Errorf("failed to query scheduler consensus parameters: %w", err)
 	}
-	q.epochtimeParams, err = q.consensus.EpochtimeConsensusParameters(ctx, consensus.HeightLatest)
+	q.epochtimeParams, err = q.consensus.BeaconConsensusParameters(ctx, consensus.HeightLatest)
 	if err != nil {
 		return fmt.Errorf("failed to query epochtime consensus parameters: %w", err)
 	}

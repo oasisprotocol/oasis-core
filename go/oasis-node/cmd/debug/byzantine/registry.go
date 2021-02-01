@@ -57,11 +57,19 @@ func registryRegisterNode(svc consensus.Backend, id *identity.Identity, dataDir 
 		Consensus: node.ConsensusInfo{
 			ID: id.ConsensusSigner.Public(),
 		},
+		Beacon: &node.BeaconInfo{
+			Point: id.BeaconScalar.Point(),
+		},
 		Runtimes: runtimes,
 		Roles:    roles,
 	}
 	if capabilities != nil {
 		nodeDesc.Runtimes[0].Capabilities = *capabilities
+	}
+	if roles&node.RoleValidator != 0 {
+		if nodeDesc.Consensus.Addresses, err = svc.GetAddresses(); err != nil {
+			return fmt.Errorf("consensus GetAddresses: %w", err)
+		}
 	}
 	signedNode, err := node.MultiSignNode(
 		[]signature.Signer{

@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"regexp"
 
+	beacon "github.com/oasisprotocol/oasis-core/go/beacon/api"
 	"github.com/oasisprotocol/oasis-core/go/common/quantity"
-	epochtime "github.com/oasisprotocol/oasis-core/go/epochtime/api"
 	"github.com/oasisprotocol/oasis-core/go/staking/api/token"
 )
 
@@ -45,7 +45,7 @@ func (p *ConsensusParameters) SanityCheck() error {
 func SanityCheckAccount(
 	total *quantity.Quantity,
 	parameters *ConsensusParameters,
-	now epochtime.EpochTime,
+	now beacon.EpochTime,
 	addr Address,
 	acct *Account,
 ) error {
@@ -234,7 +234,7 @@ func SanityCheckAccountShares(
 }
 
 // SanityCheck does basic sanity checking on the genesis state.
-func (g *Genesis) SanityCheck(now epochtime.EpochTime) error { // nolint: gocyclo
+func (g *Genesis) SanityCheck(now beacon.EpochTime) error { // nolint: gocyclo
 	if err := g.Parameters.SanityCheck(); err != nil {
 		return fmt.Errorf("staking: sanity check failed: %w", err)
 	}

@@ -8,6 +8,7 @@ import (
 	"github.com/tendermint/tendermint/abci/types"
 	"golang.org/x/crypto/sha3"
 
+	beacon "github.com/oasisprotocol/oasis-core/go/beacon/api"
 	"github.com/oasisprotocol/oasis-core/go/common/cbor"
 	"github.com/oasisprotocol/oasis-core/go/common/node"
 	"github.com/oasisprotocol/oasis-core/go/consensus/api/transaction"
@@ -16,7 +17,6 @@ import (
 	registryapp "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/apps/registry"
 	registryState "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/apps/registry/state"
 	stakingState "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/apps/staking/state"
-	epochtime "github.com/oasisprotocol/oasis-core/go/epochtime/api"
 	"github.com/oasisprotocol/oasis-core/go/keymanager/api"
 	keymanager "github.com/oasisprotocol/oasis-core/go/keymanager/api"
 	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
@@ -85,7 +85,7 @@ func (app *keymanagerApplication) EndBlock(ctx *tmapi.Context, request types.Req
 	return types.ResponseEndBlock{}, nil
 }
 
-func (app *keymanagerApplication) onEpochChange(ctx *tmapi.Context, epoch epochtime.EpochTime) error {
+func (app *keymanagerApplication) onEpochChange(ctx *tmapi.Context, epoch beacon.EpochTime) error {
 	// Query the runtime and node lists.
 	regState := registryState.NewMutableState(ctx.State())
 	runtimes, _ := regState.Runtimes(ctx)

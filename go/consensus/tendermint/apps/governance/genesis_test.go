@@ -8,13 +8,13 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/tendermint/tendermint/abci/types"
 
+	beacon "github.com/oasisprotocol/oasis-core/go/beacon/api"
 	"github.com/oasisprotocol/oasis-core/go/common/cbor"
 	memorySigner "github.com/oasisprotocol/oasis-core/go/common/crypto/signature/signers/memory"
 	"github.com/oasisprotocol/oasis-core/go/common/quantity"
 	"github.com/oasisprotocol/oasis-core/go/common/version"
 	abciAPI "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/api"
 	governanceState "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/apps/governance/state"
-	epochtime "github.com/oasisprotocol/oasis-core/go/epochtime/api"
 	"github.com/oasisprotocol/oasis-core/go/genesis/api"
 	governance "github.com/oasisprotocol/oasis-core/go/governance/api"
 	staking "github.com/oasisprotocol/oasis-core/go/staking/api"
@@ -247,7 +247,7 @@ func TestInitChain(t *testing.T) {
 func TestGenesis(t *testing.T) {
 	require := require.New(t)
 	var err error
-	currentEpoch := epochtime.EpochTime(80)
+	currentEpoch := beacon.EpochTime(80)
 
 	now := time.Unix(1580461674, 0)
 	appState := abciAPI.NewMockApplicationState(&abciAPI.MockApplicationStateConfig{
@@ -273,9 +273,9 @@ func TestGenesis(t *testing.T) {
 		MinProposalDeposit:        *quantity.NewFromUint64(42),
 		Quorum:                    90,
 		Threshold:                 90,
-		UpgradeCancelMinEpochDiff: epochtime.EpochTime(100),
-		UpgradeMinEpochDiff:       epochtime.EpochTime(100),
-		VotingPeriod:              epochtime.EpochTime(50),
+		UpgradeCancelMinEpochDiff: beacon.EpochTime(100),
+		UpgradeMinEpochDiff:       beacon.EpochTime(100),
+		VotingPeriod:              beacon.EpochTime(50),
 	}
 	proposals := []*governance.Proposal{
 		// Closed rejected proposal.
