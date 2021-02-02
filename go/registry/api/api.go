@@ -20,7 +20,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
 	"github.com/oasisprotocol/oasis-core/go/common/node"
 	"github.com/oasisprotocol/oasis-core/go/common/pubsub"
-	"github.com/oasisprotocol/oasis-core/go/common/sgx/ias"
+	"github.com/oasisprotocol/oasis-core/go/common/sgx"
 	"github.com/oasisprotocol/oasis-core/go/consensus/api/transaction"
 	staking "github.com/oasisprotocol/oasis-core/go/staking/api"
 )
@@ -761,65 +761,17 @@ func VerifyNodeRuntimeEnclaveIDs(logger *logging.Logger, rt *node.Runtime, regRt
 		return nil
 	}
 
-	switch rt.Capabilities.TEE.Hardware {
-	case node.TEEHardwareInvalid:
-	case node.TEEHardwareIntelSGX:
-		// Check MRENCLAVE/MRSIGNER.
-		var avrBundle ias.AVRBundle
-		if err := cbor.Unmarshal(rt.Capabilities.TEE.Attestation, &avrBundle); err != nil {
-			return err
-		}
-
-		avr, err := avrBundle.Open(ias.IntelTrustRoots, ts)
-		if err != nil {
-			return err
-		}
-
-		// Extract the original ISV quote.
-		q, err := avr.Quote()
-		if err != nil {
-			return err
-		}
-
-		if regRt.TEEHardware != rt.Capabilities.TEE.Hardware {
-			logger.Error("VerifyNodeRuntimeEnclaveIDs: runtime TEE.Hardware mismatch",
-				"quote", q,
-				"node_runtime", rt,
-				"registry_runtime", regRt,
-				"ts", ts,
-			)
-			return ErrTEEHardwareMismatch
-		}
-
-		var vi VersionInfoIntelSGX
-		if err := cbor.Unmarshal(regRt.Version.TEE, &vi); err != nil {
-			return err
-		}
-		var eidValid bool
-		for _, eid := range vi.Enclaves {
-			eidMrenclave := eid.MrEnclave
-			eidMrsigner := eid.MrSigner
-			// Compare MRENCLAVE/MRSIGNER to the one stored in the registry.
-			if bytes.Equal(eidMrenclave[:], q.Report.MRENCLAVE[:]) && bytes.Equal(eidMrsigner[:], q.Report.MRSIGNER[:]) {
-				eidValid = true
-				break
-			}
-		}
-
-		if !eidValid {
-			logger.Error("VerifyNodeRuntimeEnclaveIDs: bad enclave ID",
-				"quote", q,
-				"node_runtime", rt,
-				"registry_runtime", regRt,
-				"ts", ts,
-			)
-			return ErrBadEnclaveIdentity
-		}
-	default:
-		return ErrBadCapabilitiesTEEHardware
+	if regRt.TEEHardware != rt.Capabilities.TEE.Hardware {
+		logger.Error("VerifyNodeRuntimeEnclaveIDs: runtime TEE.Hardware mismatch",
+			"runtime_id", rt.ID,
+			"required_tee_hardware", regRt.TEEHardware,
+			"tee_hardware", rt.Capabilities.TEE.Hardware,
+			"ts", ts,
+		)
+		return ErrTEEHardwareMismatch
 	}
 
-	if err := rt.Capabilities.TEE.Verify(ts); err != nil {
+	if err := rt.Capabilities.TEE.Verify(ts, regRt.Version.TEE); err != nil {
 		logger.Error("VerifyNodeRuntimeEnclaveIDs: failed to validate attestation",
 			"runtime_id", rt.ID,
 			"ts", ts,
@@ -1064,16 +1016,15 @@ func VerifyRuntime( // nolint: gocyclo
 	if rt.TEEHardware != node.TEEHardwareInvalid {
 		switch rt.TEEHardware {
 		case node.TEEHardwareIntelSGX:
-			var vi VersionInfoIntelSGX
-			if err := cbor.Unmarshal(rt.Version.TEE, &vi); err != nil {
-				logger.Error("RegisterRuntime: invalid SGX TEE Version Info",
-					"version_info", vi,
+			var cs sgx.Constraints
+			if err := cbor.Unmarshal(rt.Version.TEE, &cs); err != nil {
+				logger.Error("RegisterRuntime: invalid SGX TEE constraints",
 					"err", err,
 				)
-				return fmt.Errorf("%w: invalid VersionInfo", ErrInvalidArgument)
+				return fmt.Errorf("%w: invalid SGX TEE constraints", ErrInvalidArgument)
 			}
-			if len(vi.Enclaves) == 0 {
-				return fmt.Errorf("%w: invalid VersionInfo", ErrNoEnclaveForRuntime)
+			if len(cs.Enclaves) == 0 {
+				return fmt.Errorf("%w: invalid SGX TEE constraints", ErrNoEnclaveForRuntime)
 			}
 		}
 	}

@@ -388,7 +388,7 @@ func runtimeFromFlags() (*registry.Runtime, error) { // nolint: gocyclo
 		GovernanceModel: govModel,
 	}
 	if teeHardware == node.TEEHardwareIntelSGX {
-		var vi registry.VersionInfoIntelSGX
+		var cs sgx.Constraints
 		for _, v := range viper.GetStringSlice(CfgVersionEnclave) {
 			var enclaveID sgx.EnclaveIdentity
 			if err = enclaveID.UnmarshalHex(v); err != nil {
@@ -397,9 +397,9 @@ func runtimeFromFlags() (*registry.Runtime, error) { // nolint: gocyclo
 				)
 				return nil, err
 			}
-			vi.Enclaves = append(vi.Enclaves, enclaveID)
+			cs.Enclaves = append(cs.Enclaves, enclaveID)
 		}
-		rt.Version.TEE = cbor.Marshal(vi)
+		rt.Version.TEE = cbor.Marshal(cs)
 	}
 	switch sap := viper.GetString(CfgAdmissionPolicy); sap {
 	case AdmissionPolicyNameAnyNode:

@@ -258,3 +258,9 @@ func (id *EnclaveIdentity) UnmarshalHex(text string) error {
 func (id EnclaveIdentity) String() string {
 	return hex.EncodeToString(id.MrEnclave[:]) + hex.EncodeToString(id.MrSigner[:])
 }
+
+// Constraints are the Intel SGX TEE constraints.
+type Constraints struct {
+	// Enclaves is the allowed MRENCLAVE/MRSIGNER pairs.
+	Enclaves []EnclaveIdentity `json:"enclaves"`
+}

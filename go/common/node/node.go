@@ -4,6 +4,7 @@
 package node
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -17,6 +18,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/pvss"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	"github.com/oasisprotocol/oasis-core/go/common/prettyprint"
+	"github.com/oasisprotocol/oasis-core/go/common/sgx"
 	"github.com/oasisprotocol/oasis-core/go/common/sgx/ias"
 	"github.com/oasisprotocol/oasis-core/go/common/version"
 )
@@ -29,6 +31,10 @@ var (
 	// ErrRAKHashMismatch is the error returned when the TEE attestation
 	// does not contain the node's RAK hash.
 	ErrRAKHashMismatch = errors.New("node: RAK hash mismatch")
+
+	// ErrBadEnclaveIdentity is the error returned when the TEE enclave
+	// identity doesn't match the required values.
+	ErrBadEnclaveIdentity = errors.New("node: bad TEE enclave identity")
 
 	teeHashContext = []byte("oasis-core/node: TEE RAK binding")
 
@@ -363,7 +369,7 @@ func RAKHash(rak signature.PublicKey) hash.Hash {
 }
 
 // Verify verifies the node's TEE capabilities, at the provided timestamp.
-func (c *CapabilityTEE) Verify(ts time.Time) error {
+func (c *CapabilityTEE) Verify(ts time.Time, constraints []byte) error {
 	rakHash := RAKHash(c.RAK)
 
 	switch c.Hardware {
@@ -382,6 +388,25 @@ func (c *CapabilityTEE) Verify(ts time.Time) error {
 		q, err := avr.Quote()
 		if err != nil {
 			return err
+		}
+
+		// Ensure that the MRENCLAVE/MRSIGNER match what is specified
+		// in the TEE-specific constraints field.
+		var cs sgx.Constraints
+		if err := cbor.Unmarshal(constraints, &cs); err != nil {
+			return fmt.Errorf("node: malformed SGX constraints: %w", err)
+		}
+		var eidValid bool
+		for _, eid := range cs.Enclaves {
+			eidMrenclave := eid.MrEnclave
+			eidMrsigner := eid.MrSigner
+			if bytes.Equal(eidMrenclave[:], q.Report.MRENCLAVE[:]) && bytes.Equal(eidMrsigner[:], q.Report.MRSIGNER[:]) {
+				eidValid = true
+				break
+			}
+		}
+		if !eidValid {
+			return ErrBadEnclaveIdentity
 		}
 
 		// Ensure that the ISV quote includes the hash of the node's
