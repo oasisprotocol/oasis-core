@@ -10,6 +10,7 @@ import (
 	"math"
 	"sort"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
@@ -38,6 +39,8 @@ const (
 	stateKeyInitChainEvents = "OasisInitChainEvents"
 
 	metricsUpdateInterval = 10 * time.Second
+
+	blockHeightInvalid = -1
 
 	// LogEventABCIStateSyncComplete is a log event value that signals an ABCI state syncing
 	// completed event.
@@ -376,7 +379,9 @@ func (mux *abciMux) BeginBlock(req types.RequestBeginBlock) types.ResponseBeginB
 	if mux.lastBeginBlock == blockHeight {
 		panic("mux: redundant BeginBlock")
 	}
-	mux.lastBeginBlock = blockHeight
+	defer func() {
+		atomic.StoreInt64(&mux.lastBeginBlock, blockHeight)
+	}()
 	mux.currentTime = req.Header.Time
 
 	params := mux.state.ConsensusParameters()
@@ -572,6 +577,12 @@ func (mux *abciMux) executeTx(ctx *api.Context, rawTx []byte) error {
 func (mux *abciMux) EstimateGas(caller signature.PublicKey, tx *transaction.Transaction) (transaction.Gas, error) {
 	if tx == nil {
 		return 0, consensus.ErrInvalidArgument
+	}
+
+	// Certain modules, in particular the beacon require InitChain or BeginBlock
+	// to have completed before initialization is complete.
+	if atomic.LoadInt64(&mux.lastBeginBlock) == blockHeightInvalid {
+		return 0, consensus.ErrNoCommittedBlocks
 	}
 
 	// As opposed to other transaction dispatch entry points (CheckTx/DeliverTx), this method can
@@ -1052,7 +1063,7 @@ func newABCIMux(ctx context.Context, upgrader upgrade.Backend, cfg *ApplicationC
 		state:          state,
 		appsByName:     make(map[string]api.Application),
 		appsByMethod:   make(map[transaction.MethodName]api.Application),
-		lastBeginBlock: -1,
+		lastBeginBlock: blockHeightInvalid,
 	}
 
 	mux.logger.Debug("ABCI multiplexer initialized",
