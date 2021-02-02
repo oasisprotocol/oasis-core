@@ -20,7 +20,7 @@ import (
 	staking "github.com/oasisprotocol/oasis-core/go/staking/api"
 )
 
-func TestOnEvidenceConsensusEquivocation(t *testing.T) {
+func TestOnEvidenceByzantineConsensus(t *testing.T) {
 	require := require.New(t)
 
 	now := time.Unix(1580461674, 0)
@@ -39,7 +39,7 @@ func TestOnEvidenceConsensusEquivocation(t *testing.T) {
 	stakeState := stakingState.NewMutableState(ctx.State())
 
 	// Validator address is not known as there are no nodes.
-	err := onEvidenceConsensusEquivocation(ctx, validatorAddress, 1, now, 1)
+	err := onEvidenceByzantineConsensus(ctx, staking.SlashConsensusEquivocation, validatorAddress, 1, now, 1)
 	require.NoError(err, "should not fail when validator address is not known")
 
 	// Add entity.
@@ -64,7 +64,7 @@ func TestOnEvidenceConsensusEquivocation(t *testing.T) {
 	require.NoError(err, "SetNode")
 
 	// Should not fail if node status is not available.
-	err = onEvidenceConsensusEquivocation(ctx, validatorAddress, 1, now, 1)
+	err = onEvidenceByzantineConsensus(ctx, staking.SlashConsensusEquivocation, validatorAddress, 1, now, 1)
 	require.NoError(err, "should not fail when node status is not available")
 
 	// Add node status.
@@ -72,7 +72,7 @@ func TestOnEvidenceConsensusEquivocation(t *testing.T) {
 	require.NoError(err, "SetNodeStatus")
 
 	// Should fail if unable to get the slashing procedure.
-	err = onEvidenceConsensusEquivocation(ctx, validatorAddress, 1, now, 1)
+	err = onEvidenceByzantineConsensus(ctx, staking.SlashConsensusEquivocation, validatorAddress, 1, now, 1)
 	require.Error(err, "should fail when unable to get the slashing procedure")
 
 	// Add slashing procedure.
@@ -90,7 +90,7 @@ func TestOnEvidenceConsensusEquivocation(t *testing.T) {
 
 	// Should not fail if the validator has no stake (which is in any case an
 	// invariant violation as a validator needs to have some stake).
-	err = onEvidenceConsensusEquivocation(ctx, validatorAddress, 1, now, 1)
+	err = onEvidenceByzantineConsensus(ctx, staking.SlashConsensusEquivocation, validatorAddress, 1, now, 1)
 	require.NoError(err, "should not fail when validator has no stake")
 	// Node should be frozen.
 	status, err := regState.NodeStatus(ctx, nod.ID)
@@ -99,7 +99,7 @@ func TestOnEvidenceConsensusEquivocation(t *testing.T) {
 	require.EqualValues(registry.FreezeForever, status.FreezeEndTime, "node should be frozen forever")
 
 	// Should not fail slashing a frozen node.
-	err = onEvidenceConsensusEquivocation(ctx, validatorAddress, 1, now, 1)
+	err = onEvidenceByzantineConsensus(ctx, staking.SlashConsensusEquivocation, validatorAddress, 1, now, 1)
 	require.NoError(err, "should not fail when validator is frozen")
 	// Unfreeze the node.
 	err = regState.SetNodeStatus(ctx, nod.ID, &registry.NodeStatus{FreezeEndTime: 0})
@@ -124,7 +124,7 @@ func TestOnEvidenceConsensusEquivocation(t *testing.T) {
 	require.NoError(err, "SetAccount")
 
 	// Should slash.
-	err = onEvidenceConsensusEquivocation(ctx, validatorAddress, 1, now, 1)
+	err = onEvidenceByzantineConsensus(ctx, staking.SlashConsensusEquivocation, validatorAddress, 1, now, 1)
 	require.NoError(err, "slashing should succeed")
 
 	// Entity stake should be slashed.
@@ -138,4 +138,8 @@ func TestOnEvidenceConsensusEquivocation(t *testing.T) {
 	require.NoError(err, "NodeStatus")
 	require.True(status.IsFrozen(), "node should be frozen after slashing")
 	require.EqualValues(registry.FreezeForever, status.FreezeEndTime, "node should be frozen forever")
+
+	// Should not fail in case the slashing penalty is not configured.
+	err = onEvidenceByzantineConsensus(ctx, staking.SlashConsensusLightClientAttack, validatorAddress, 1, now, 1)
+	require.NoError(err, "slashing should not fail")
 }

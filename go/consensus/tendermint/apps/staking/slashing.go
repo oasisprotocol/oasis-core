@@ -16,8 +16,9 @@ import (
 	staking "github.com/oasisprotocol/oasis-core/go/staking/api"
 )
 
-func onEvidenceConsensusEquivocation(
+func onEvidenceByzantineConsensus(
 	ctx *abciAPI.Context,
+	reason staking.SlashReason,
 	addr tmcrypto.Address,
 	height int64,
 	time time.Time,
@@ -57,16 +58,16 @@ func onEvidenceConsensusEquivocation(
 		return nil
 	}
 
-	// Retrieve the slash procedure for double signing.
+	// Retrieve the slash procedure.
 	st, err := stakeState.Slashing(ctx)
 	if err != nil {
-		ctx.Logger().Error("failed to get slashing table entry for double signing",
+		ctx.Logger().Error("failed to get slashing table entry",
 			"err", err,
 		)
 		return err
 	}
 
-	penalty := st[staking.SlashConsensusEquivocation]
+	penalty := st[reason]
 
 	// Freeze validator to prevent it being slashed again. This also prevents the
 	// validator from being scheduled in the next epoch.
@@ -106,7 +107,8 @@ func onEvidenceConsensusEquivocation(
 		return err
 	}
 
-	ctx.Logger().Warn("slashed validator for double signing",
+	ctx.Logger().Warn("slashed validator",
+		"reason", reason,
 		"node_id", node.ID,
 		"entity_id", node.EntityID,
 	)

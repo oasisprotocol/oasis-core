@@ -19,6 +19,8 @@ const (
 	SlashBeaconInvalidReveal SlashReason = 0x02
 	// SlashBeaconNonparticipation is slashing due to nonparticipation.
 	SlashBeaconNonparticipation SlashReason = 0x03
+	// SlashConsensusLightClientAttack is slashing due to light client attacks.
+	SlashConsensusLightClientAttack SlashReason = 0x04
 
 	// SlashConsensusEquivocationName is the string representation of SlashConsensusEquivocation.
 	SlashConsensusEquivocationName = "consensus-equivocation"
@@ -28,6 +30,8 @@ const (
 	SlashBeaconInvalidRevealName = "beacon-invalid-reveal"
 	// SlashBeaconNonparticipationName is the string representation of SlashBeaconNonparticipation.
 	SlashBeaconNonparticipationName = "beacon-nonparticipation"
+	// SlashConsensusLightClientAttackName is the string representation of SlashConsensusLightClientAttack.
+	SlashConsensusLightClientAttackName = "consensus-light-client-attack"
 )
 
 // String returns a string representation of a SlashReason.
@@ -46,6 +50,8 @@ func (s SlashReason) checkedString() (string, error) {
 		return SlashBeaconInvalidRevealName, nil
 	case SlashBeaconNonparticipation:
 		return SlashBeaconNonparticipationName, nil
+	case SlashConsensusLightClientAttack:
+		return SlashConsensusLightClientAttackName, nil
 	default:
 		return "[unknown slash reason]", fmt.Errorf("unknown slash reason: %d", s)
 	}
@@ -76,6 +82,8 @@ func (s *SlashReason) UnmarshalText(text []byte) error {
 		*s = SlashBeaconInvalidReveal
 	case SlashBeaconNonparticipationName:
 		*s = SlashBeaconNonparticipation
+	case SlashConsensusLightClientAttackName:
+		*s = SlashConsensusLightClientAttack
 	default:
 		return fmt.Errorf("invalid slash reason: %s", string(text))
 	}
