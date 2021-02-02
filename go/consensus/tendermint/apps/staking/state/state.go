@@ -416,6 +416,9 @@ func (s *ImmutableState) Slashing(ctx context.Context) (map[staking.SlashReason]
 	if err != nil {
 		return nil, err
 	}
+	if params.Slashing == nil {
+		return make(map[staking.SlashReason]staking.Slash), nil
+	}
 
 	return params.Slashing, nil
 }

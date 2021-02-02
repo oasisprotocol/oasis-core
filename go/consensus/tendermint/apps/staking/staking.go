@@ -88,15 +88,21 @@ func (app *stakingApplication) BeginBlock(ctx *api.Context, request types.Reques
 	// Iterate over any submitted evidence of a validator misbehaving. Note that
 	// the actual evidence has already been verified by Tendermint to be valid.
 	for _, evidence := range request.ByzantineValidators {
+		var reason staking.SlashReason
 		switch evidence.Type {
 		case types.EvidenceType_DUPLICATE_VOTE:
-			if err := onEvidenceConsensusEquivocation(ctx, evidence.Validator.Address, evidence.Height, evidence.Time, evidence.Validator.Power); err != nil {
-				return err
-			}
+			reason = staking.SlashConsensusEquivocation
+		case types.EvidenceType_LIGHT_CLIENT_ATTACK:
+			reason = staking.SlashConsensusLightClientAttack
 		default:
 			ctx.Logger().Warn("ignoring unknown evidence type",
 				"evidence_type", evidence.Type,
 			)
+			continue
+		}
+
+		if err := onEvidenceByzantineConsensus(ctx, reason, evidence.Validator.Address, evidence.Height, evidence.Time, evidence.Validator.Power); err != nil {
+			return err
 		}
 	}
 
