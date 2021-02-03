@@ -676,6 +676,9 @@ func (w *Worker) registerNode(epoch epochtime.EpochTime, hook RegisterNodeHook) 
 		Consensus: node.ConsensusInfo{
 			ID: w.identity.ConsensusSigner.Public(),
 		},
+		Beacon: (&node.BeaconInfo{
+			Point: w.identity.BeaconScalar.Point(),
+		}).MustRawCBOR(),
 	}
 
 	if err := hook(&nodeDesc); err != nil {

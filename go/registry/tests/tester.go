@@ -15,6 +15,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/cbor"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/drbg"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
+	"github.com/oasisprotocol/oasis-core/go/common/crypto/pvss"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	memorySigner "github.com/oasisprotocol/oasis-core/go/common/crypto/signature/signers/memory"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/tls"
@@ -876,11 +877,20 @@ func randomIdentity(rng *drbg.Drbg) *identity.Identity {
 		}
 		return signer
 	}
+	mustGenerateScalar := func() pvss.Scalar {
+		// Note: This is non-deterministic, but that's ok for now.
+		scalar, _, err := pvss.NewKeyPair()
+		if err != nil {
+			panic(err)
+		}
+		return *scalar
+	}
 
 	ident := &identity.Identity{
 		NodeSigner:      mustGenerateSigner(),
 		P2PSigner:       mustGenerateSigner(),
 		ConsensusSigner: mustGenerateSigner(),
+		BeaconScalar:    mustGenerateScalar(),
 	}
 
 	cert, err := tls.Generate(identity.CommonName)
@@ -933,8 +943,11 @@ func (ent *TestEntity) NewTestNodes(nCompute, nStorage int, idNonce []byte, runt
 			ID:         nod.Signer.Public(),
 			EntityID:   ent.Entity.ID,
 			Expiration: uint64(expiration),
-			Runtimes:   runtimes,
-			Roles:      role,
+			Beacon: (&node.BeaconInfo{
+				Point: nodeIdentity.BeaconScalar.Point(),
+			}).MustRawCBOR(),
+			Runtimes: runtimes,
+			Roles:    role,
 		}
 		addr := node.Address{
 			TCPAddr: net.TCPAddr{
