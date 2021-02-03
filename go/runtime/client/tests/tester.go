@@ -193,4 +193,11 @@ func testQuery(
 	err = cbor.Unmarshal(rsp.Data, &decMethod)
 	require.NoError(t, err, "cbor.Unmarshal(<QueryResponse.Data>)")
 	require.EqualValues(t, "hello world", decMethod, "Query response should be correct")
+
+	// Execute CheckTx using the mock runtime host.
+	err = c.CheckTx(ctx, &api.CheckTxRequest{
+		RuntimeID: runtimeID,
+		Data:      []byte("test checktx request"),
+	})
+	require.NoError(t, err, "CheckTx")
 }

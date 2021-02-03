@@ -22,6 +22,8 @@ var (
 
 	// methodSubmitTx is the SubmitTx method.
 	methodSubmitTx = serviceName.NewMethod("SubmitTx", SubmitTxRequest{})
+	// methodCheckTx is the CheckTx method.
+	methodCheckTx = serviceName.NewMethod("CheckTx", CheckTxRequest{})
 	// methodGetGenesisBlock is the GetGenesisBlock method.
 	methodGetGenesisBlock = serviceName.NewMethod("GetGenesisBlock", common.Namespace{})
 	// methodGetBlock is the GetBlock method.
@@ -56,6 +58,10 @@ var (
 			{
 				MethodName: methodSubmitTx.ShortName(),
 				Handler:    handlerSubmitTx,
+			},
+			{
+				MethodName: methodCheckTx.ShortName(),
+				Handler:    handlerCheckTx,
 			},
 			{
 				MethodName: methodGetGenesisBlock.ShortName(),
@@ -131,6 +137,29 @@ func handlerSubmitTx( // nolint: golint
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(RuntimeClient).SubmitTx(ctx, req.(*SubmitTxRequest))
+	}
+	return interceptor(ctx, &rq, info, handler)
+}
+
+func handlerCheckTx( // nolint: golint
+	srv interface{},
+	ctx context.Context,
+	dec func(interface{}) error,
+	interceptor grpc.UnaryServerInterceptor,
+) (interface{}, error) {
+	var rq CheckTxRequest
+	if err := dec(&rq); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return nil, srv.(RuntimeClient).CheckTx(ctx, &rq)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: methodCheckTx.FullName(),
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return nil, srv.(RuntimeClient).CheckTx(ctx, req.(*CheckTxRequest))
 	}
 	return interceptor(ctx, &rq, info, handler)
 }
@@ -475,6 +504,10 @@ func (c *runtimeClient) SubmitTx(ctx context.Context, request *SubmitTxRequest) 
 		return nil, err
 	}
 	return rsp, nil
+}
+
+func (c *runtimeClient) CheckTx(ctx context.Context, request *CheckTxRequest) error {
+	return c.conn.Invoke(ctx, methodCheckTx.FullName(), request, nil)
 }
 
 func (c *runtimeClient) GetGenesisBlock(ctx context.Context, runtimeID common.Namespace) (*block.Block, error) {

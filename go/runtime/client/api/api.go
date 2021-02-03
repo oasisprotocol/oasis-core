@@ -46,6 +46,9 @@ type RuntimeClient interface {
 	// SubmitTx submits a transaction to the runtime transaction scheduler.
 	SubmitTx(ctx context.Context, request *SubmitTxRequest) ([]byte, error)
 
+	// CheckTx asks the local runtime to check the specified transaction.
+	CheckTx(ctx context.Context, request *CheckTxRequest) error
+
 	// GetGenesisBlock returns the genesis block.
 	GetGenesisBlock(ctx context.Context, runtimeID common.Namespace) (*block.Block, error)
 
@@ -92,6 +95,12 @@ type RuntimeClientService interface {
 
 // SubmitTxRequest is a SubmitTx request.
 type SubmitTxRequest struct {
+	RuntimeID common.Namespace `json:"runtime_id"`
+	Data      []byte           `json:"data"`
+}
+
+// CheckTxRequest is a CheckTx request.
+type CheckTxRequest struct {
 	RuntimeID common.Namespace `json:"runtime_id"`
 	Data      []byte           `json:"data"`
 }
