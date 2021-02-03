@@ -97,7 +97,7 @@ func New(
 		w.runtimeHostHandler = newHostHandler(w, commonWorker, localStorage)
 
 		// Prepare the runtime host node helpers.
-		w.RuntimeHostNode, err = workerCommon.NewRuntimeHostNode(commonWorker.GetConfig().RuntimeHost, w)
+		w.RuntimeHostNode, err = runtimeRegistry.NewRuntimeHostNode(w)
 		if err != nil {
 			return nil, fmt.Errorf("worker/keymanager: failed to create runtime host helpers: %w", err)
 		}

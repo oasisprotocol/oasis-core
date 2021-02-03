@@ -14,6 +14,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common"
 	"github.com/oasisprotocol/oasis-core/go/common/crash"
 	commonGrpc "github.com/oasisprotocol/oasis-core/go/common/grpc"
+	"github.com/oasisprotocol/oasis-core/go/common/node"
 	"github.com/oasisprotocol/oasis-core/go/common/sgx"
 	"github.com/oasisprotocol/oasis-core/go/consensus/tendermint"
 	"github.com/oasisprotocol/oasis-core/go/consensus/tendermint/abci"
@@ -275,23 +276,23 @@ func (args *argBuilder) workerP2pEnabled() *argBuilder {
 	return args
 }
 
-func (args *argBuilder) workerRuntimeProvisioner(provisioner string) *argBuilder {
+func (args *argBuilder) runtimeProvisioner(provisioner string) *argBuilder {
 	args.vec = append(args.vec, []string{
-		"--" + workerCommon.CfgRuntimeProvisioner, provisioner,
+		"--" + runtimeRegistry.CfgRuntimeProvisioner, provisioner,
 	}...)
 	return args
 }
 
-func (args *argBuilder) workerRuntimeSGXLoader(fn string) *argBuilder {
+func (args *argBuilder) runtimeSGXLoader(fn string) *argBuilder {
 	args.vec = append(args.vec, []string{
-		"--" + workerCommon.CfgRuntimeSGXLoader, fn,
+		"--" + runtimeRegistry.CfgRuntimeSGXLoader, fn,
 	}...)
 	return args
 }
 
-func (args *argBuilder) workerRuntimePath(id common.Namespace, fn string) *argBuilder {
+func (args *argBuilder) runtimePath(id common.Namespace, fn string) *argBuilder {
 	args.vec = append(args.vec, []string{
-		"--" + workerCommon.CfgRuntimePaths, id.String() + "=" + fn,
+		"--" + runtimeRegistry.CfgRuntimePaths, id.String() + "=" + fn,
 	}...)
 	return args
 }
@@ -534,9 +535,9 @@ func (args *argBuilder) appendRuntimePruner(p *RuntimePrunerCfg) *argBuilder {
 	return args
 }
 
-func (args *argBuilder) appendComputeNodeRuntime(rt *Runtime, binaryIdx int) *argBuilder {
+func (args *argBuilder) appendHostedRuntime(rt *Runtime, tee node.TEEHardware, binaryIdx int) *argBuilder {
 	args = args.runtimeSupported(rt.id).
-		workerRuntimePath(rt.id, rt.binaries[binaryIdx]).
+		runtimePath(rt.id, rt.binaries[tee][binaryIdx]).
 		appendRuntimePruner(&rt.pruner)
 	return args
 }

@@ -116,7 +116,7 @@ type Node struct {
 	IAS      iasAPI.Endpoint
 
 	RuntimeRegistry runtimeRegistry.Registry
-	RuntimeClient   runtimeClientAPI.RuntimeClient
+	RuntimeClient   runtimeClientAPI.RuntimeClientService
 
 	CommonWorker            *workerCommon.Worker
 	ExecutorWorker          *executor.Worker
@@ -225,14 +225,6 @@ func (n *Node) startRuntimeServices() error {
 		)
 	})
 
-	// Initialize the node's runtime registry.
-	n.RuntimeRegistry, err = runtimeRegistry.New(n.svcMgr.Ctx, cmdCommon.DataDir(), n.Consensus, n.Identity)
-	if err != nil {
-		return err
-	}
-	n.svcMgr.RegisterCleanupOnly(n.RuntimeRegistry, "runtime registry")
-	storageAPI.RegisterService(n.grpcInternal.Server(), n.RuntimeRegistry.StorageRouter())
-
 	// Initialize runtime workers.
 	if err = n.initRuntimeWorkers(); err != nil {
 		n.logger.Error("failed to initialize workers",
@@ -252,7 +244,7 @@ func (n *Node) startRuntimeServices() error {
 	if err != nil {
 		return err
 	}
-	n.svcMgr.RegisterCleanupOnly(n.RuntimeClient, "client service")
+	n.svcMgr.Register(n.RuntimeClient)
 	runtimeClientAPI.RegisterService(n.grpcInternal.Server(), n.RuntimeClient)
 	enclaverpc.RegisterService(n.grpcInternal.Server(), n.RuntimeClient)
 
@@ -305,6 +297,14 @@ func (n *Node) initRuntimeWorkers() error {
 		)
 		return err
 	}
+
+	// Initialize the node's runtime registry.
+	n.RuntimeRegistry, err = runtimeRegistry.New(n.svcMgr.Ctx, cmdCommon.DataDir(), n.Consensus, n.Identity, n.IAS)
+	if err != nil {
+		return err
+	}
+	n.svcMgr.RegisterCleanupOnly(n.RuntimeRegistry, "runtime registry")
+	storageAPI.RegisterService(n.grpcInternal.Server(), n.RuntimeRegistry.StorageRouter())
 
 	// Initialize the common worker.
 	n.CommonWorker, err = workerCommon.New(
@@ -441,6 +441,11 @@ func (n *Node) initRuntimeWorkers() error {
 }
 
 func (n *Node) startRuntimeWorkers() error {
+	// Start the runtime client service.
+	if err := n.RuntimeClient.Start(); err != nil {
+		return fmt.Errorf("failed to start runtime client service: %w", err)
+	}
+
 	// Start the storage worker.
 	if err := n.StorageWorker.Start(); err != nil {
 		return err

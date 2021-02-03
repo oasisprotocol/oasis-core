@@ -70,7 +70,7 @@ var (
 		{cmdCommonFlags.CfgDebugDontBlameOasis, true},
 		{storageWorker.CfgBackend, "badger"},
 		{compute.CfgWorkerEnabled, true},
-		{workerCommon.CfgRuntimeProvisioner, workerCommon.RuntimeProvisionerMock},
+		{runtimeRegistry.CfgRuntimeProvisioner, runtimeRegistry.RuntimeProvisionerMock},
 		{workerCommon.CfgClientPort, workerClientPort},
 		{storageWorker.CfgWorkerEnabled, true},
 		{executor.CfgScheduleCheckTxEnabled, false},
@@ -163,7 +163,7 @@ func newTestNode(t *testing.T) *testNode {
 	viper.Set("log.file", filepath.Join(dataDir, "test-node.log"))
 	viper.Set(runtimeRegistry.CfgSupported, testRuntimeID.String())
 	viper.Set(runtimeRegistry.CfgTagIndexerBackend, "bleve")
-	viper.Set(workerCommon.CfgRuntimePaths, map[string]string{
+	viper.Set(runtimeRegistry.CfgRuntimePaths, map[string]string{
 		testRuntimeID.String(): "mock-runtime",
 	})
 	viper.Set("worker.registration.entity", filepath.Join(dataDir, "entity.json"))

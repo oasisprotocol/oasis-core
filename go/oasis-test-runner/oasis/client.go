@@ -3,6 +3,7 @@ package oasis
 import (
 	"fmt"
 
+	"github.com/oasisprotocol/oasis-core/go/common/node"
 	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
 )
 
@@ -44,8 +45,8 @@ func (client *Client) startNode() error {
 		if v.kind != registry.KindCompute {
 			continue
 		}
-		args = args.runtimeSupported(v.id).
-			appendRuntimePruner(&v.pruner)
+		// XXX: could support configurable binary idx if ever needed.
+		args = args.appendHostedRuntime(v, node.TEEHardwareInvalid, 0)
 	}
 
 	if err := client.net.startOasisNode(&client.Node, nil, args); err != nil {

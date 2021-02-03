@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"sync"
 
-	commonWorker "github.com/oasisprotocol/oasis-core/go/worker/common"
+	runtimeRegistry "github.com/oasisprotocol/oasis-core/go/runtime/registry"
 )
 
 const (
@@ -101,8 +101,8 @@ func (worker *Compute) startNode() error {
 		workerClientPort(worker.clientPort).
 		workerP2pPort(worker.p2pPort).
 		workerComputeEnabled().
-		workerRuntimeProvisioner(worker.runtimeProvisioner).
-		workerRuntimeSGXLoader(worker.net.cfg.RuntimeSGXLoaderBinary).
+		runtimeProvisioner(worker.runtimeProvisioner).
+		runtimeSGXLoader(worker.net.cfg.RuntimeSGXLoaderBinary).
 		workerExecutorScheduleCheckTxEnabled().
 		configureDebugCrashPoints(worker.crashPointsProbability).
 		appendNetwork(worker.net).
@@ -112,7 +112,7 @@ func (worker *Compute) startNode() error {
 	for _, idx := range worker.runtimes {
 		v := worker.net.runtimes[idx]
 		// XXX: could support configurable binary idx if ever needed.
-		args = args.appendComputeNodeRuntime(v, 0)
+		args = args.appendHostedRuntime(v, v.teeHardware, 0)
 	}
 
 	if err := worker.net.startOasisNode(&worker.Node, nil, args); err != nil {
@@ -146,7 +146,7 @@ func (net *Network) NewCompute(cfg *ComputeCfg) (*Compute, error) {
 	}
 
 	if cfg.RuntimeProvisioner == "" {
-		cfg.RuntimeProvisioner = commonWorker.RuntimeProvisionerSandboxed
+		cfg.RuntimeProvisioner = runtimeRegistry.RuntimeProvisionerSandboxed
 	}
 
 	worker := &Compute{

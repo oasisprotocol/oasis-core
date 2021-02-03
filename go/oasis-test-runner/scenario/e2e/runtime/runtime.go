@@ -26,12 +26,13 @@ import (
 )
 
 const (
-	cfgClientBinaryDir  = "client.binary_dir"
-	cfgRuntimeBinaryDir = "runtime.binary_dir"
-	cfgRuntimeLoader    = "runtime.loader"
-	cfgTEEHardware      = "tee_hardware"
-	cfgIasMock          = "ias.mock"
-	cfgEpochInterval    = "epoch.interval"
+	cfgClientBinaryDir          = "client.binary_dir"
+	cfgRuntimeBinaryDirDefault  = "runtime.binary_dir.default"
+	cfgRuntimeBinaryDirIntelSGX = "runtime.binary_dir.intel-sgx"
+	cfgRuntimeLoader            = "runtime.loader"
+	cfgTEEHardware              = "tee_hardware"
+	cfgIasMock                  = "ias.mock"
+	cfgEpochInterval            = "epoch.interval"
 )
 
 var (
@@ -78,7 +79,8 @@ func newRuntimeImpl(name, clientBinary string, clientArgs []string) *runtimeImpl
 		clientArgs:   clientArgs,
 	}
 	sc.Flags.String(cfgClientBinaryDir, "", "path to the client binaries directory")
-	sc.Flags.String(cfgRuntimeBinaryDir, "", "path to the runtime binaries directory")
+	sc.Flags.String(cfgRuntimeBinaryDirDefault, "", "(no-TEE) path to the runtime binaries directory")
+	sc.Flags.String(cfgRuntimeBinaryDirIntelSGX, "", "(Intel SGX) path to the runtime binaries directory")
 	sc.Flags.String(cfgRuntimeLoader, "oasis-core-runtime-loader", "path to the runtime loader")
 	sc.Flags.String(cfgTEEHardware, "", "TEE hardware to use")
 	sc.Flags.Bool(cfgIasMock, true, "if mock IAS service should be used")
@@ -113,14 +115,8 @@ func (sc *runtimeImpl) Fixture() (*oasis.NetworkFixture, error) {
 	if tee == node.TEEHardwareIntelSGX {
 		mrSigner = &sgx.FortanixDummyMrSigner
 	}
-	keyManagerBinary, err := sc.resolveDefaultKeyManagerBinary()
-	if err != nil {
-		return nil, err
-	}
-	runtimeBinary, err := sc.resolveRuntimeBinary("simple-keyvalue")
-	if err != nil {
-		return nil, err
-	}
+	keyManagerBinary := "simple-keymanager"
+	runtimeBinary := "simple-keyvalue"
 	runtimeLoader, _ := sc.Flags.GetString(cfgRuntimeLoader)
 	iasMock, _ := sc.Flags.GetBool(cfgIasMock)
 	ff := &oasis.NetworkFixture{
@@ -151,7 +147,7 @@ func (sc *runtimeImpl) Fixture() (*oasis.NetworkFixture, error) {
 				AdmissionPolicy: registry.RuntimeAdmissionPolicy{
 					AnyNode: &registry.AnyNodeRuntimeAdmissionPolicy{},
 				},
-				Binaries: []string{keyManagerBinary},
+				Binaries: sc.resolveRuntimeBinaries([]string{keyManagerBinary}),
 			},
 			// Compute runtime.
 			{
@@ -159,7 +155,7 @@ func (sc *runtimeImpl) Fixture() (*oasis.NetworkFixture, error) {
 				Kind:       registry.KindCompute,
 				Entity:     0,
 				Keymanager: 0,
-				Binaries:   []string{runtimeBinary},
+				Binaries:   sc.resolveRuntimeBinaries([]string{runtimeBinary}),
 				Executor: registry.ExecutorParameters{
 					GroupSize:       2,
 					GroupBackupSize: 1,
@@ -254,26 +250,31 @@ func (sc *runtimeImpl) resolveClientBinary(clientBinary string) string {
 	return filepath.Join(cbDir, clientBinary)
 }
 
-func (sc *runtimeImpl) resolveRuntimeBinary(runtimeBinary string) (string, error) {
-	tee, err := sc.getTEEHardware()
-	if err != nil {
-		return "", err
+func (sc *runtimeImpl) resolveRuntimeBinaries(runtimeBinaries []string) map[node.TEEHardware][]string {
+	binaries := make(map[node.TEEHardware][]string)
+	for _, tee := range []node.TEEHardware{
+		node.TEEHardwareInvalid,
+		node.TEEHardwareIntelSGX,
+	} {
+		for _, binary := range runtimeBinaries {
+			binaries[tee] = append(binaries[tee], sc.resolveRuntimeBinary(binary, tee))
+		}
 	}
+	return binaries
+}
 
-	var runtimeExt string
+func (sc *runtimeImpl) resolveRuntimeBinary(runtimeBinary string, tee node.TEEHardware) string {
+	var runtimeExt, path string
 	switch tee {
 	case node.TEEHardwareInvalid:
 		runtimeExt = ""
+		path, _ = sc.Flags.GetString(cfgRuntimeBinaryDirDefault)
 	case node.TEEHardwareIntelSGX:
 		runtimeExt = ".sgxs"
+		path, _ = sc.Flags.GetString(cfgRuntimeBinaryDirIntelSGX)
 	}
 
-	rtBinDir, _ := sc.Flags.GetString(cfgRuntimeBinaryDir)
-	return filepath.Join(rtBinDir, runtimeBinary+runtimeExt), nil
-}
-
-func (sc *runtimeImpl) resolveDefaultKeyManagerBinary() (string, error) {
-	return sc.resolveRuntimeBinary("simple-keymanager")
+	return filepath.Join(path, runtimeBinary+runtimeExt)
 }
 
 func (sc *runtimeImpl) startClient(childEnv *env.Env) (*exec.Cmd, error) {

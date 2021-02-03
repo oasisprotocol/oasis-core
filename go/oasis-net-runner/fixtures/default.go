@@ -94,7 +94,9 @@ func newDefaultFixture() (*oasis.NetworkFixture, error) {
 				Kind:       registry.KindKeyManager,
 				Entity:     0,
 				Keymanager: -1,
-				Binaries:   viper.GetStringSlice(cfgKeymanagerBinary),
+				Binaries: map[node.TEEHardware][]string{
+					tee: viper.GetStringSlice(cfgKeymanagerBinary),
+				},
 				AdmissionPolicy: registry.RuntimeAdmissionPolicy{
 					AnyNode: &registry.AnyNodeRuntimeAdmissionPolicy{},
 				},
@@ -105,7 +107,9 @@ func newDefaultFixture() (*oasis.NetworkFixture, error) {
 				Kind:       registry.KindCompute,
 				Entity:     0,
 				Keymanager: 0,
-				Binaries:   viper.GetStringSlice(cfgRuntimeBinary),
+				Binaries: map[node.TEEHardware][]string{
+					tee: viper.GetStringSlice(cfgRuntimeBinary),
+				},
 				Executor: registry.ExecutorParameters{
 					GroupSize:       2,
 					GroupBackupSize: 1,

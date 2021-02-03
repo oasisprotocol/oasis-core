@@ -31,7 +31,7 @@ type Runtime struct { // nolint: maligned
 	id   common.Namespace
 	kind registry.RuntimeKind
 
-	binaries    []string
+	binaries    map[node.TEEHardware][]string
 	teeHardware node.TEEHardware
 	mrEnclaves  []*sgx.MrEnclave
 	mrSigner    *sgx.MrSigner
@@ -52,7 +52,7 @@ type RuntimeCfg struct { // nolint: maligned
 	TEEHardware node.TEEHardware
 	MrSigner    *sgx.MrSigner
 
-	Binaries         []string
+	Binaries         map[node.TEEHardware][]string
 	GenesisState     storage.WriteLog
 	GenesisStatePath string
 	GenesisRound     uint64
@@ -162,7 +162,7 @@ func (net *Network) NewRuntime(cfg *RuntimeCfg) (*Runtime, error) {
 	var mrEnclaves []*sgx.MrEnclave
 	if cfg.TEEHardware == node.TEEHardwareIntelSGX {
 		enclaveIdentities := []sgx.EnclaveIdentity{}
-		for _, binary := range cfg.Binaries {
+		for _, binary := range cfg.Binaries[node.TEEHardwareIntelSGX] {
 			var mrEnclave *sgx.MrEnclave
 			if mrEnclave, err = deriveMrEnclave(binary); err != nil {
 				return nil, err

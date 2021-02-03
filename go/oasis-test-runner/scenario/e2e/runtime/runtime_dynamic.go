@@ -250,6 +250,12 @@ func (sc *runtimeDynamicImpl) Run(childEnv *env.Env) error { // nolint: gocyclo
 		}
 	}
 
+	// Perform an epoch transition to make sure all nodes are eligible. They may not be eligible
+	// if they have registered after the beacon commit phase.
+	if err := sc.epochTransition(ctx); err != nil {
+		return err
+	}
+
 	for i := 0; i < 5; i++ {
 		// Perform another epoch transition to elect compute runtime committees.
 		if err := sc.epochTransition(ctx); err != nil {
@@ -359,6 +365,12 @@ func (sc *runtimeDynamicImpl) Run(childEnv *env.Env) error { // nolint: gocyclo
 		if err = n.WaitReady(ctx); err != nil {
 			return fmt.Errorf("failed to wait for a compute worker: %w", err)
 		}
+	}
+
+	// Perform an epoch transition to make sure all nodes are eligible. They may not be eligible
+	// if they have registered after the beacon commit phase.
+	if err = sc.epochTransition(ctx); err != nil {
+		return err
 	}
 
 	// Epoch transition.
