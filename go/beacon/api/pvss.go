@@ -27,22 +27,7 @@ type PVSSParameters struct {
 	RevealInterval  int64 `json:"reveal_interval"`
 	TransitionDelay int64 `json:"transition_delay"`
 
-	GasCosts transaction.Costs `json:"gas_costs,omitempty"`
-
 	DebugForcedParticipants []signature.PublicKey `json:"debug_forced_participants,omitempty"`
-}
-
-const (
-	// GasOpPVSSCommit is the gas operation identifier for a commit.
-	GasOpPVSSCommit transaction.Op = "pvss_commit"
-	// GasOpPVSSReveal is the gas operation identifier for a reveal.
-	GasOpPVSSReveal transaction.Op = "pvss_reveal"
-)
-
-// DefaultGasCosts are the "default" gas costs for operations.
-var DefaultGasCosts = transaction.Costs{
-	GasOpPVSSCommit: 1000,
-	GasOpPVSSReveal: 1000,
 }
 
 // PVSSCommit is a PVSS commitment transaction payload.
@@ -53,12 +38,30 @@ type PVSSCommit struct {
 	Commit *pvss.Commit `json:"commit,omitempty"`
 }
 
+// Implements transaction.MethodMetadataProvider.
+func (pc PVSSCommit) MethodMetadata() transaction.MethodMetadata {
+	return transaction.MethodMetadata{
+		// Beacon transactions are critical to protocol operation. Since they can only be called
+		// by the block proposer this is safe to use.
+		Priority: transaction.MethodPriorityCritical,
+	}
+}
+
 // PVSSReveal is a PVSS reveal transaction payload.
 type PVSSReveal struct {
 	Epoch EpochTime `json:"epoch"`
 	Round uint64    `json:"round"`
 
 	Reveal *pvss.Reveal `json:"reveal,omitempty"`
+}
+
+// Implements transaction.MethodMetadataProvider.
+func (pr PVSSReveal) MethodMetadata() transaction.MethodMetadata {
+	return transaction.MethodMetadata{
+		// Beacon transactions are critical to protocol operation. Since they can only be called
+		// by the block proposer this is safe to use.
+		Priority: transaction.MethodPriorityCritical,
+	}
 }
 
 // RoundState is a PVSS round state.

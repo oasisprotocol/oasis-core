@@ -278,18 +278,7 @@ func (q *queries) doConsensusQueries(ctx context.Context, rng *rand.Rand, height
 	}
 
 	var txEvents []*results.Event
-	for txIdx, res := range txsWithRes.Results {
-		if res.IsSuccess() {
-			// Successful transaction should always produce events.
-			if len(res.Events) == 0 {
-				q.logger.Error("GetTransactionsWithResults successful transaction without events",
-					"transaction", txsWithRes.Transactions[txIdx],
-					"result", res,
-					"height", height,
-				)
-				return fmt.Errorf("GetTransactionsWithResults successful transaction result without events")
-			}
-		}
+	for _, res := range txsWithRes.Results {
 		txEvents = append(txEvents, res.Events...)
 	}
 	if err := q.sanityCheckTransactionEvents(ctx, height, txEvents); err != nil {
