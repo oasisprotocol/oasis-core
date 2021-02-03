@@ -209,9 +209,15 @@ func (sc *runtimeImpl) Fixture() (*oasis.NetworkFixture, error) {
 		},
 	}
 
-	epochInterval, _ := sc.Flags.GetInt64(cfgEpochInterval)
-	ff.Network.Beacon.InsecureParameters = &beacon.InsecureParameters{
-		Interval: epochInterval,
+	if epochInterval, _ := sc.Flags.GetInt64(cfgEpochInterval); epochInterval > 0 {
+		ff.Network.Beacon.InsecureParameters = &beacon.InsecureParameters{
+			Interval: epochInterval,
+		}
+		ff.Network.Beacon.PVSSParameters = &beacon.PVSSParameters{
+			CommitInterval:  epochInterval / 2,
+			RevealInterval:  (epochInterval / 2) - 4,
+			TransitionDelay: 4,
+		}
 	}
 
 	return ff, nil
