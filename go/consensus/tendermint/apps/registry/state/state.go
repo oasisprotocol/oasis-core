@@ -187,19 +187,30 @@ func (s *ImmutableState) Node(ctx context.Context, id signature.PublicKey) (*nod
 	return &node, nil
 }
 
-// NodeByConsensusAddress looks up a specific node by its consensus address.
-func (s *ImmutableState) NodeByConsensusAddress(ctx context.Context, address []byte) (*node.Node, error) {
+// NodeIDByConsensusAddress looks up a specific node ID by its consensus address.
+//
+// If you need to get the actual node descriptor, use NodeByConsensusAddress instead.
+func (s *ImmutableState) NodeIDByConsensusAddress(ctx context.Context, address []byte) (signature.PublicKey, error) {
 	rawID, err := s.is.Get(ctx, nodeByConsAddressKeyFmt.Encode(address))
 	if err != nil {
-		return nil, abciAPI.UnavailableStateError(err)
+		return signature.PublicKey{}, abciAPI.UnavailableStateError(err)
 	}
 	if rawID == nil {
-		return nil, registry.ErrNoSuchNode
+		return signature.PublicKey{}, registry.ErrNoSuchNode
 	}
 
 	var id signature.PublicKey
 	if err := id.UnmarshalBinary(rawID); err != nil {
-		return nil, abciAPI.UnavailableStateError(err)
+		return signature.PublicKey{}, abciAPI.UnavailableStateError(err)
+	}
+	return id, nil
+}
+
+// NodeByConsensusAddress looks up a specific node by its consensus address.
+func (s *ImmutableState) NodeByConsensusAddress(ctx context.Context, address []byte) (*node.Node, error) {
+	id, err := s.NodeIDByConsensusAddress(ctx, address)
+	if err != nil {
+		return nil, err
 	}
 	return s.Node(ctx, id)
 }

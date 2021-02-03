@@ -393,6 +393,7 @@ func (mux *abciMux) BeginBlock(req types.RequestBeginBlock) types.ResponseBeginB
 	} else {
 		mux.state.blockCtx.Set(api.GasAccountantKey{}, api.NewNopGasAccountant())
 	}
+	mux.state.blockCtx.Set(api.BlockProposerKey{}, req.Header.ProposerAddress)
 	// Create BeginBlock context.
 	ctx := mux.state.NewContext(api.ContextBeginBlock, mux.currentTime)
 	defer ctx.Close()
@@ -521,8 +522,21 @@ func (mux *abciMux) decodeTx(ctx *api.Context, rawTx []byte) (*transaction.Trans
 }
 
 func (mux *abciMux) processTx(ctx *api.Context, tx *transaction.Transaction, txSize int) error {
+	// Lookup method handler.
+	app := mux.appsByMethod[tx.Method]
+	if app == nil {
+		ctx.Logger().Error("unknown method",
+			"tx", tx,
+			"method", tx.Method,
+		)
+		return fmt.Errorf("mux: unknown method: %s", tx.Method)
+	}
+
 	// Pass the transaction through the fee handler if configured.
-	if txAuthHandler := mux.state.txAuthHandler; txAuthHandler != nil {
+	//
+	// Ignore fees for critical protocol methods to ensure they are processed in a block. Note that
+	// this relies on method handlers to prevent DoS.
+	if txAuthHandler := mux.state.txAuthHandler; txAuthHandler != nil && !tx.Method.IsCritical() {
 		if err := txAuthHandler.AuthenticateTx(ctx, tx); err != nil {
 			ctx.Logger().Debug("failed to authenticate transaction",
 				"tx", tx,
@@ -541,15 +555,6 @@ func (mux *abciMux) processTx(ctx *api.Context, tx *transaction.Transaction, txS
 	}
 
 	// Route to correct handler.
-	app := mux.appsByMethod[tx.Method]
-	if app == nil {
-		ctx.Logger().Error("unknown method",
-			"tx", tx,
-			"method", tx.Method,
-		)
-		return fmt.Errorf("mux: unknown method: %s", tx.Method)
-	}
-
 	ctx.Logger().Debug("dispatching",
 		"app", app.Name(),
 		"tx", tx,

@@ -39,6 +39,14 @@ var (
 	validatorEntropyCtx = []byte("EkB-validator")
 )
 
+// beaconTransactionIncludedKey is the block context key for storing the beacon transaction
+// inclusion flag to make sure that only a single beacon transaction is included.
+type beaconTransactionIncludedKey struct{}
+
+func (bti beaconTransactionIncludedKey) NewDefault() interface{} {
+	return false
+}
+
 type backendPVSS struct {
 	app *beaconApplication
 }
@@ -511,7 +519,7 @@ func (impl *backendPVSS) initRound(
 	// Note: Because of the +1, applied to BlockHeight, it may be required
 	// to strategically subtract 1 from one of the three interval/delay
 	// parameters (eg: Commit/Reveal/Delay set to 20/10/4 results in
-	// transitions at blocsk 35, 70, 105, ...).
+	// transitions at blocks 35, 70, 105, ...).
 
 	height := ctx.BlockHeight() + 1 // Current height is ctx.BlockHeight() + 1
 	pvssState.CommitDeadline = height + params.PVSSParameters.CommitInterval
@@ -550,10 +558,32 @@ func (impl *backendPVSS) ExecuteTx(
 		// time out due to the processing overhead.
 		//
 		// In an ideal world, beacon tx-es shouldn't be gossiped to begin
-		// with (and be rejected if received), and each block should be
-		// limited to one beacon tx.
-		if ctx.IsCheckOnly() && !staking.NewAddress(ctx.TxSigner()).Equal(ctx.AppState().OwnTxSignerAddress()) {
-			return fmt.Errorf("beacon: rejecting non-local beacon tx: %s", ctx.TxSigner())
+		// with.
+		switch {
+		case ctx.IsCheckOnly():
+			// During CheckTx do the quick check and only accept own transactions.
+			if !staking.NewAddress(ctx.TxSigner()).Equal(ctx.AppState().OwnTxSignerAddress()) {
+				return fmt.Errorf("beacon: rejecting non-local beacon tx: %s", ctx.TxSigner())
+			}
+		case ctx.IsSimulation():
+			// No checks needed during local simulation.
+		default:
+			// During DeliverTx make sure that the transaction comes from the block proposer.
+			registryState := registryState.NewMutableState(ctx.State())
+			proposerAddr := ctx.BlockContext().Get(api.BlockProposerKey{}).([]byte)
+			proposerNodeID, err := registryState.NodeIDByConsensusAddress(ctx, proposerAddr)
+			if err != nil {
+				return fmt.Errorf("beacon: failed to resolve proposer node: %w", err)
+			}
+			if !ctx.TxSigner().Equal(proposerNodeID) {
+				return fmt.Errorf("beacon: rejecting beacon tx not from proposer (proposer: %s signer: %s)", proposerNodeID, ctx.TxSigner())
+			}
+
+			// Also make sure that there is only a single beacon transaction in a block.
+			if ctx.BlockContext().Get(beaconTransactionIncludedKey{}).(bool) {
+				return fmt.Errorf("beacon: rejecting multiple beacon txes per block")
+			}
+			ctx.BlockContext().Set(beaconTransactionIncludedKey{}, true)
 		}
 		return impl.doPVSSTx(ctx, state, params, tx)
 	case MethodSetEpoch:
@@ -578,18 +608,6 @@ func (impl *backendPVSS) doPVSSTx(
 	}
 	if pvssState == nil {
 		return fmt.Errorf("beacon: no PVSS state, round not in progress")
-	}
-
-	// Charge gas for this transaction.
-	var gasOp transaction.Op
-	switch tx.Method {
-	case beacon.MethodPVSSCommit:
-		gasOp = beacon.GasOpPVSSCommit
-	case beacon.MethodPVSSReveal:
-		gasOp = beacon.GasOpPVSSReveal
-	}
-	if err = ctx.Gas().UseGas(1, gasOp, params.PVSSParameters.GasCosts); err != nil {
-		return err
 	}
 
 	// Ensure the tx is from a current valid participant.

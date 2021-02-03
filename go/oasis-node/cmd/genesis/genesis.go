@@ -271,7 +271,6 @@ func doInitGenesis(cmd *cobra.Command, args []string) {
 			CommitInterval:          viper.GetInt64(CfgBeaconPVSSCommitInterval),
 			RevealInterval:          viper.GetInt64(CfgBeaconPVSSRevealInterval),
 			TransitionDelay:         viper.GetInt64(CfgBeaconPVSSTransitionDelay),
-			GasCosts:                beacon.DefaultGasCosts, // TODO: Make these configurable.
 			DebugForcedParticipants: forcedParticipants,
 		}
 	}
