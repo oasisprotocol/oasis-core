@@ -221,6 +221,28 @@ func Sign(signer signature.Signer, tx *Transaction) (*SignedTransaction, error) 
 // MethodSeparator is the separator used to separate backend name from method name.
 const MethodSeparator = "."
 
+// MethodPriority is the method handling priority.
+type MethodPriority uint8
+
+const (
+	// MethodPriorityNormal is the normal method priority.
+	MethodPriorityNormal = 0
+	// MethodPriorityCritical is the priority for methods critical to the protocol operation.
+	MethodPriorityCritical = 255
+)
+
+// MethodMetadata is the method metadata.
+type MethodMetadata struct {
+	Priority MethodPriority
+}
+
+// MethodMetadataProvider is the method metadata provider interface that can be implemented by
+// method body types to provide additional method metadata.
+type MethodMetadataProvider interface {
+	// MethodMetadata returns the method metadata.
+	MethodMetadata() MethodMetadata
+}
+
 // MethodName is a method name.
 type MethodName string
 
@@ -237,6 +259,23 @@ func (m MethodName) SanityCheck() error {
 func (m MethodName) BodyType() interface{} {
 	bodyType, _ := registeredMethods.Load(string(m))
 	return bodyType
+}
+
+// Metadata returns the method metadata.
+func (m MethodName) Metadata() MethodMetadata {
+	mp, ok := m.BodyType().(MethodMetadataProvider)
+	if !ok {
+		// Return defaults.
+		return MethodMetadata{
+			Priority: MethodPriorityNormal,
+		}
+	}
+	return mp.MethodMetadata()
+}
+
+// IsCritical returns true if the method is critical for the operation of the protocol.
+func (m MethodName) IsCritical() bool {
+	return m.Metadata().Priority == MethodPriorityCritical
 }
 
 // NewMethodName creates a new method name.
