@@ -39,6 +39,14 @@ var (
 	validatorEntropyCtx = []byte("EkB-validator")
 )
 
+// beaconTransactionIncludedKey is the block context key for storing the beacon transaction
+// inclusion flag to make sure that only a single beacon transaction is included.
+type beaconTransactionIncludedKey struct{}
+
+func (bti beaconTransactionIncludedKey) NewDefault() interface{} {
+	return false
+}
+
 type backendPVSS struct {
 	app *beaconApplication
 }
@@ -550,8 +558,7 @@ func (impl *backendPVSS) ExecuteTx(
 		// time out due to the processing overhead.
 		//
 		// In an ideal world, beacon tx-es shouldn't be gossiped to begin
-		// with (and be rejected if received), and each block should be
-		// limited to one beacon tx.
+		// with.
 		switch {
 		case ctx.IsCheckOnly():
 			// During CheckTx do the quick check and only accept own transactions.
@@ -571,6 +578,12 @@ func (impl *backendPVSS) ExecuteTx(
 			if !ctx.TxSigner().Equal(proposerNodeID) {
 				return fmt.Errorf("beacon: rejecting beacon tx not from proposer (proposer: %s signer: %s)", proposerNodeID, ctx.TxSigner())
 			}
+
+			// Also make sure that there is only a single beacon transaction in a block.
+			if ctx.BlockContext().Get(beaconTransactionIncludedKey{}).(bool) {
+				return fmt.Errorf("beacon: rejecting multiple beacon txes per block")
+			}
+			ctx.BlockContext().Set(beaconTransactionIncludedKey{}, true)
 		}
 		return impl.doPVSSTx(ctx, state, params, tx)
 	case MethodSetEpoch:
