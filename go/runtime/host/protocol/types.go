@@ -84,6 +84,8 @@ type Body struct {
 	RuntimeAbortResponse                  *Empty                                 `json:",omitempty"`
 	RuntimeKeyManagerPolicyUpdateRequest  *RuntimeKeyManagerPolicyUpdateRequest  `json:",omitempty"`
 	RuntimeKeyManagerPolicyUpdateResponse *Empty                                 `json:",omitempty"`
+	RuntimeQueryRequest                   *RuntimeQueryRequest                   `json:",omitempty"`
+	RuntimeQueryResponse                  *RuntimeQueryResponse                  `json:",omitempty"`
 
 	// Host interface.
 	HostRPCCallRequest          *HostRPCCallRequest          `json:",omitempty"`
@@ -267,6 +269,18 @@ type RuntimeExecuteTxBatchResponse struct {
 // message body.
 type RuntimeKeyManagerPolicyUpdateRequest struct {
 	SignedPolicyRaw []byte `json:"signed_policy_raw"`
+}
+
+// RuntimeQueryRequest is a runtime query request message body.
+type RuntimeQueryRequest struct {
+	Method string          `json:"method"`
+	Header block.Header    `json:"header"`
+	Args   cbor.RawMessage `json:"args,omitempty"`
+}
+
+// RuntimeQueryRequest is a runtime query response message body.
+type RuntimeQueryResponse struct {
+	Data cbor.RawMessage `json:"data,omitempty"`
 }
 
 // HostRPCCallRequest is a host RPC call request message body.

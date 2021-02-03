@@ -21,7 +21,7 @@ use crate::{
     rak::RAK,
     storage::KeyValue,
     tracing,
-    types::{Body, Message, MessageType},
+    types::{Body, Error, Message, MessageType},
     BUILD_INFO,
 };
 
@@ -146,7 +146,7 @@ impl Protocol {
         self.encode_message(message)?;
 
         match rx.recv()? {
-            Body::Error { message, .. } => Err(anyhow!("{}", message)),
+            Body::Error(Error { message, .. }) => Err(anyhow!("{}", message)),
             body => Ok(body),
         }
     }
@@ -206,11 +206,7 @@ impl Protocol {
                         // is no need to do anything more.
                         return Ok(());
                     }
-                    Err(error) => Body::Error {
-                        module: "".to_owned(), // XXX: Error codes.
-                        code: 1,               // XXX: Error codes.
-                        message: format!("{}", error),
-                    },
+                    Err(error) => Body::Error(Error::new("dispatcher", 1, &format!("{}", error))),
                 };
 
                 // Send response back.
@@ -341,6 +337,11 @@ impl Protocol {
             }
             req @ Body::RuntimeKeyManagerPolicyUpdateRequest { .. } => {
                 info!(self.logger, "Received key manager policy update request");
+                self.can_handle_runtime_requests()?;
+                self.dispatcher.queue_request(ctx, id, req)?;
+                Ok(None)
+            }
+            req @ Body::RuntimeQueryRequest { .. } => {
                 self.can_handle_runtime_requests()?;
                 self.dispatcher.queue_request(ctx, id, req)?;
                 Ok(None)

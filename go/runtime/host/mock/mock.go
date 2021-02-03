@@ -6,6 +6,7 @@ import (
 	"fmt"
 
 	"github.com/oasisprotocol/oasis-core/go/common"
+	"github.com/oasisprotocol/oasis-core/go/common/cbor"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
 	"github.com/oasisprotocol/oasis-core/go/common/errors"
 	"github.com/oasisprotocol/oasis-core/go/common/pubsub"
@@ -103,6 +104,11 @@ func (r *runtime) Call(ctx context.Context, body *protocol.Body) (*protocol.Body
 
 		return &protocol.Body{RuntimeCheckTxBatchResponse: &protocol.RuntimeCheckTxBatchResponse{
 			Results: results,
+		}}, nil
+	case body.RuntimeQueryRequest != nil:
+		rq := body.RuntimeQueryRequest
+		return &protocol.Body{RuntimeQueryResponse: &protocol.RuntimeQueryResponse{
+			Data: cbor.Marshal(rq.Method + " world"),
 		}}, nil
 	default:
 		return nil, fmt.Errorf("(mock) method not supported")

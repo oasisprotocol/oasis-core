@@ -2,6 +2,7 @@
 use serde::{self, Deserialize, Deserializer, Serialize, Serializer};
 use serde_bytes;
 use serde_repr::*;
+use thiserror::Error;
 
 use crate::{
     common::{
@@ -13,7 +14,7 @@ use crate::{
         namespace::Namespace,
         sgx::avr::AVR,
     },
-    consensus::roothash::{self, Block, ComputeResultsHeader},
+    consensus::roothash::{self, Block, ComputeResultsHeader, Header},
     storage::mkvs::{sync, WriteLog},
     transaction::types::TxnBatch,
 };
@@ -63,14 +64,7 @@ pub enum Body {
     Empty {},
 
     // An error response.
-    Error {
-        #[serde(default)]
-        module: String,
-        #[serde(default)]
-        code: u32,
-        #[serde(default)]
-        message: String,
-    },
+    Error(Error),
 
     // Runtime interface.
     RuntimeInfoRequest {
@@ -140,6 +134,14 @@ pub enum Body {
         signed_policy_raw: Vec<u8>,
     },
     RuntimeKeyManagerPolicyUpdateResponse {},
+    RuntimeQueryRequest {
+        method: String,
+        header: Header,
+        args: cbor::Value,
+    },
+    RuntimeQueryResponse {
+        data: cbor::Value,
+    },
 
     // Host interface.
     HostRPCCallRequest {
@@ -182,14 +184,28 @@ pub enum Body {
 }
 
 /// A serializable error.
-#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+#[derive(Clone, Debug, Default, Error, Serialize, Deserialize)]
+#[error("module: {module} code: {code} message: {message}")]
 pub struct Error {
     #[serde(default)]
     pub module: String,
+
     #[serde(default)]
     pub code: u32,
+
     #[serde(default)]
     pub message: String,
+}
+
+impl Error {
+    /// Create a new error.
+    pub fn new(module: &str, code: u32, msg: &str) -> Self {
+        Self {
+            module: module.to_owned(),
+            code,
+            message: msg.to_owned(),
+        }
+    }
 }
 
 /// Result of a CheckTx operation.
