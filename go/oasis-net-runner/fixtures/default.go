@@ -6,6 +6,7 @@ import (
 
 	"github.com/spf13/viper"
 
+	beacon "github.com/oasisprotocol/oasis-core/go/beacon/api"
 	"github.com/oasisprotocol/oasis-core/go/common"
 	"github.com/oasisprotocol/oasis-core/go/common/node"
 	"github.com/oasisprotocol/oasis-core/go/common/sgx"
@@ -60,6 +61,9 @@ func newDefaultFixture() (*oasis.NetworkFixture, error) {
 				Parameters: consensusGenesis.Parameters{
 					TimeoutCommit: 1 * time.Second,
 				},
+			},
+			Beacon: beacon.ConsensusParameters{
+				Backend: beacon.BackendInsecure,
 			},
 			InitialHeight: viper.GetInt64(cfgInitialHeight),
 			HaltEpoch:     viper.GetUint64(cfgHaltEpoch),
