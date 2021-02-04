@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"sync"
 
+	"github.com/oasisprotocol/oasis-core/go/common/crypto/pvss"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature/signers/memory"
 	tlsCert "github.com/oasisprotocol/oasis-core/go/common/crypto/tls"
@@ -28,6 +29,8 @@ const (
 
 	// CommonName is the CommonName to use when generating TLS certificates.
 	CommonName = "oasis-node"
+
+	beaconScalarFilename = "beacon.pem"
 
 	tlsKeyFilename  = "tls_identity.pem"
 	tlsCertFilename = "tls_identity_cert.pem"
@@ -53,6 +56,8 @@ type Identity struct {
 	P2PSigner signature.Signer
 	// ConsensusSigner is a node consensus key signer.
 	ConsensusSigner signature.Signer
+	// BeaconScalar is a node beacon scalar.
+	BeaconScalar pvss.Scalar
 
 	// TLSSentryClientCertificate is the client certificate used for
 	// connecting to the sentry node's control connection.  It is never rotated.
@@ -272,10 +277,18 @@ func doLoadOrGenerate(dataDir string, signerFactory signature.SignerFactory, sho
 		}
 	}
 
+	// Load or generate the beacon scalar for this node.
+	beaconScalarPath := filepath.Join(dataDir, beaconScalarFilename)
+	var beaconScalar pvss.Scalar
+	if err := beaconScalar.LoadOrGeneratePEM(beaconScalarPath); err != nil {
+		return nil, err
+	}
+
 	return &Identity{
 		NodeSigner:                 signers[0],
 		P2PSigner:                  signers[1],
 		ConsensusSigner:            signers[2],
+		BeaconScalar:               beaconScalar,
 		tlsSigner:                  memory.NewFromRuntime(cert.PrivateKey.(ed25519.PrivateKey)),
 		tlsCertificate:             cert,
 		nextTLSSigner:              nextSigner,
