@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -44,8 +45,8 @@ const (
 	MetricsModePush = "push"
 )
 
-// Flags has the flags used by the metrics service.
 var (
+	// Flags has the flags used by the metrics service.
 	Flags = flag.NewFlagSet("", flag.ContinueOnError)
 
 	UpGauge = prometheus.NewGauge(
@@ -54,6 +55,8 @@ var (
 			Help: "Is oasis-test-runner active for specific scenario.",
 		},
 	)
+
+	invalidLabelCharactersRegexp = regexp.MustCompile(`[^a-zA-Z0-9_]`)
 )
 
 type stubService struct {
@@ -272,7 +275,7 @@ func Enabled() bool {
 
 // EscapeLabelCharacters replaces invalid prometheus label name characters with "_".
 func EscapeLabelCharacters(l string) string {
-	return strings.Replace(l, ".", "_", -1)
+	return invalidLabelCharactersRegexp.ReplaceAllString(l, "_")
 }
 
 // GetDefaultPushLabels generates standard Prometheus push labels based on test current test instance info.
