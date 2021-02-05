@@ -55,12 +55,12 @@ func (st *enclaveStore) addRuntime(runtime *registry.Runtime) (int, error) {
 		return len(st.enclaves), nil
 	}
 
-	var vi registry.VersionInfoIntelSGX
-	if err := cbor.Unmarshal(runtime.Version.TEE, &vi); err != nil {
+	var cs sgx.Constraints
+	if err := cbor.Unmarshal(runtime.Version.TEE, &cs); err != nil {
 		return len(st.enclaves), err
 	}
 
-	st.enclaves[runtime.ID] = vi.Enclaves
+	st.enclaves[runtime.ID] = cs.Enclaves
 
 	return len(st.enclaves), nil
 }

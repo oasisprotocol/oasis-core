@@ -187,7 +187,7 @@ func TestGenesisSanityCheck(t *testing.T) {
 		Kind:        registry.KindKeyManager,
 		TEEHardware: node.TEEHardwareIntelSGX,
 		Version: registry.VersionInfo{
-			TEE: cbor.Marshal(registry.VersionInfoIntelSGX{
+			TEE: cbor.Marshal(sgx.Constraints{
 				Enclaves: []sgx.EnclaveIdentity{{}},
 			}),
 		},
@@ -232,7 +232,7 @@ func TestGenesisSanityCheck(t *testing.T) {
 		},
 		TEEHardware: node.TEEHardwareIntelSGX,
 		Version: registry.VersionInfo{
-			TEE: cbor.Marshal(registry.VersionInfoIntelSGX{
+			TEE: cbor.Marshal(sgx.Constraints{
 				Enclaves: []sgx.EnclaveIdentity{{}},
 			}),
 		},

@@ -6,6 +6,7 @@ import (
 
 	"github.com/oasisprotocol/oasis-core/go/common/cbor"
 	"github.com/oasisprotocol/oasis-core/go/common/node"
+	"github.com/oasisprotocol/oasis-core/go/common/sgx"
 	cmdCommon "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common"
 	"github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/consensus"
 	"github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/flags"
@@ -37,12 +38,12 @@ func (r *RegistryHelpers) runRegistryRuntimeSubcommand(
 	switch runtime.TEEHardware {
 	case node.TEEHardwareInvalid:
 	case node.TEEHardwareIntelSGX:
-		var versionIntelSGX registry.VersionInfoIntelSGX
-		if err := cbor.Unmarshal(runtime.Version.TEE, &versionIntelSGX); err != nil {
+		var cs sgx.Constraints
+		if err := cbor.Unmarshal(runtime.Version.TEE, &cs); err != nil {
 			return fmt.Errorf("failed to unmarshal Intel SGX TEE version: %w", err)
 		}
 
-		for _, e := range versionIntelSGX.Enclaves {
+		for _, e := range cs.Enclaves {
 			args = append(args,
 				"--"+cmdRegRt.CfgVersionEnclave, e.String(),
 			)

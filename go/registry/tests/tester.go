@@ -687,10 +687,10 @@ func testRegistryRuntime(t *testing.T, backend api.Backend, consensus consensusA
 				rt.Kind = api.KindKeyManager
 				rt.TEEHardware = node.TEEHardwareIntelSGX
 
-				vi := api.VersionInfoIntelSGX{
+				cs := sgx.Constraints{
 					Enclaves: []sgx.EnclaveIdentity{{}},
 				}
-				rt.Version.TEE = cbor.Marshal(vi)
+				rt.Version.TEE = cbor.Marshal(cs)
 				// Set non-test runtime.
 				rt.ID = newNamespaceFromSeed([]byte("SGXKeyManager"), common.NamespaceKeyManager)
 			},
@@ -724,10 +724,10 @@ func testRegistryRuntime(t *testing.T, backend api.Backend, consensus consensusA
 				rt.KeyManager = &rtMapByName["KeyManager"].ID
 				rt.TEEHardware = node.TEEHardwareIntelSGX
 
-				vi := api.VersionInfoIntelSGX{
+				cs := sgx.Constraints{
 					Enclaves: []sgx.EnclaveIdentity{{}},
 				}
-				rt.Version.TEE = cbor.Marshal(vi)
+				rt.Version.TEE = cbor.Marshal(cs)
 				// Set non-test runtime.
 				rt.ID = newNamespaceFromSeed([]byte("SGXWithKM"), 0)
 			},

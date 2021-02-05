@@ -13,7 +13,6 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	"github.com/oasisprotocol/oasis-core/go/common/node"
 	"github.com/oasisprotocol/oasis-core/go/common/quantity"
-	"github.com/oasisprotocol/oasis-core/go/common/sgx"
 	"github.com/oasisprotocol/oasis-core/go/common/version"
 	"github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/flags"
 	staking "github.com/oasisprotocol/oasis-core/go/staking/api"
@@ -490,12 +489,6 @@ type VersionInfo struct {
 	// TEE is the enclave version information, in an enclave provider specific
 	// format if any.
 	TEE []byte `json:"tee,omitempty"`
-}
-
-// VersionInfoIntelSGX is the SGX TEE version information.
-type VersionInfoIntelSGX struct {
-	// Enclaves is the allowed MRENCLAVE/MRSIGNER pairs.
-	Enclaves []sgx.EnclaveIdentity `json:"enclaves"`
 }
 
 // RuntimeGenesis is the runtime genesis information that is used to

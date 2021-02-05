@@ -292,6 +292,9 @@ func (app *schedulerApplication) isSuitableExecutorWorker(ctx *api.Context, n *n
 		if !nrt.ID.Equal(&rt.ID) {
 			continue
 		}
+		if nrt.Version.MaskNonMajor() != rt.Version.Version.MaskNonMajor() {
+			return false
+		}
 		switch rt.TEEHardware {
 		case node.TEEHardwareInvalid:
 			if nrt.Capabilities.TEE != nil {
@@ -305,7 +308,7 @@ func (app *schedulerApplication) isSuitableExecutorWorker(ctx *api.Context, n *n
 			if nrt.Capabilities.TEE.Hardware != rt.TEEHardware {
 				return false
 			}
-			if err := nrt.Capabilities.TEE.Verify(ctx.Now()); err != nil {
+			if err := nrt.Capabilities.TEE.Verify(ctx.Now(), rt.Version.TEE); err != nil {
 				ctx.Logger().Warn("failed to verify node TEE attestaion",
 					"err", err,
 					"node", n,

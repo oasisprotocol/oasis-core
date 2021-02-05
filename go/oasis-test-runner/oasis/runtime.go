@@ -170,7 +170,7 @@ func (net *Network) NewRuntime(cfg *RuntimeCfg) (*Runtime, error) {
 			enclaveIdentities = append(enclaveIdentities, sgx.EnclaveIdentity{MrEnclave: *mrEnclave, MrSigner: *cfg.MrSigner})
 			mrEnclaves = append(mrEnclaves, mrEnclave)
 		}
-		descriptor.Version.TEE = cbor.Marshal(registry.VersionInfoIntelSGX{
+		descriptor.Version.TEE = cbor.Marshal(sgx.Constraints{
 			Enclaves: enclaveIdentities,
 		})
 	}
