@@ -437,10 +437,13 @@ func (sc *txSourceImpl) Fixture() (*oasis.NetworkFixture, error) {
 		// One executor can be offline.
 		f.Runtimes[1].Executor.GroupSize--
 		f.Runtimes[1].Executor.MinPoolSize--
+		// Allow one straggler to handle the case where the backup and primary worker are offline
+		// at the same time.
+		f.Runtimes[1].Executor.AllowedStragglers = 1
 
 		// Lower proposer and round timeouts as nodes are expected to go offline for longer time.
-		f.Runtimes[1].TxnScheduler.ProposerTimeout = 5
-		f.Runtimes[1].Executor.RoundTimeout = 15
+		f.Runtimes[1].TxnScheduler.ProposerTimeout = 4
+		f.Runtimes[1].Executor.RoundTimeout = 10
 	}
 
 	if sc.nodeRestartInterval > 0 || sc.nodeLongRestartInterval > 0 {
