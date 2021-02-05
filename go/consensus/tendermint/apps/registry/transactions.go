@@ -663,7 +663,7 @@ func (app *registryApplication) registerRuntime( // nolint: gocyclo
 
 		switch rtToCheck.GovernanceModel {
 		case registry.GovernanceEntity:
-			if !rtToCheck.EntityID.Equal(ctx.TxSigner()) {
+			if !ctx.CallerAddress().Equal(staking.NewAddress(rtToCheck.EntityID)) {
 				// Transaction must be signed by controlling entity.
 				ctx.Logger().Error("RegisterRuntime: transaction must be signed by controlling entity")
 				return registry.ErrIncorrectTxSigner
