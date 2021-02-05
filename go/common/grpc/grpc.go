@@ -13,7 +13,6 @@ import (
 	"sync/atomic"
 	"time"
 
-	grpc_middleware "github.com/grpc-ecosystem/go-grpc-middleware"
 	grpc_opentracing "github.com/grpc-ecosystem/go-grpc-middleware/tracing/opentracing"
 	"github.com/prometheus/client_golang/prometheus"
 	flag "github.com/spf13/pflag"
@@ -28,6 +27,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/identity"
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
 	"github.com/oasisprotocol/oasis-core/go/common/service"
+	cmdFlags "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/flags"
 )
 
 const (
@@ -591,15 +591,17 @@ func NewServer(config *ServerConfig) (*Server, error) {
 	var wrapper *grpcWrapper
 	unaryInterceptors := []grpc.UnaryServerInterceptor{
 		logAdapter.unaryLogger,
-		grpc_opentracing.UnaryServerInterceptor(),
 		serverUnaryErrorMapper,
 		auth.UnaryServerInterceptor(config.AuthFunc),
 	}
 	streamInterceptors := []grpc.StreamServerInterceptor{
 		logAdapter.streamLogger,
-		grpc_opentracing.StreamServerInterceptor(),
 		serverStreamErrorMapper,
 		auth.StreamServerInterceptor(config.AuthFunc),
+	}
+	if cmdFlags.DebugDontBlameOasis() {
+		unaryInterceptors = append(unaryInterceptors, grpc_opentracing.UnaryServerInterceptor())
+		streamInterceptors = append(streamInterceptors, grpc_opentracing.StreamServerInterceptor())
 	}
 	if config.InstallWrapper {
 		wrapper = newWrapper()
@@ -607,8 +609,8 @@ func NewServer(config *ServerConfig) (*Server, error) {
 		streamInterceptors = append(streamInterceptors, wrapper.streamInterceptor)
 	}
 	sOpts := []grpc.ServerOption{
-		grpc.UnaryInterceptor(grpc_middleware.ChainUnaryServer(unaryInterceptors...)),
-		grpc.StreamInterceptor(grpc_middleware.ChainStreamServer(streamInterceptors...)),
+		grpc.ChainUnaryInterceptor(unaryInterceptors...),
+		grpc.ChainStreamInterceptor(streamInterceptors...),
 		grpc.MaxRecvMsgSize(maxRecvMsgSize),
 		grpc.MaxSendMsgSize(maxSendMsgSize),
 		grpc.KeepaliveParams(serverKeepAliveParams),
