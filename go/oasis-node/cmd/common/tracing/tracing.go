@@ -12,6 +12,7 @@ import (
 
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
 	"github.com/oasisprotocol/oasis-core/go/common/service"
+	cmdFlags "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/flags"
 )
 
 const (
@@ -73,6 +74,11 @@ func (l *tracingLogger) Infof(msg string, args ...interface{}) {
 // New constructs a new tracing service.
 func New(serviceName string) (service.CleanupAble, error) {
 	enabled := viper.GetBool(cfgTracingEnabled)
+	if enabled && !cmdFlags.DebugDontBlameOasis() {
+		// Only allow to enable tracing when running in debug mode.
+		return nil, fmt.Errorf("tracing: enabling tracing requires use of unsafe debug flags")
+	}
+
 	reporterFlushInterval := viper.GetDuration(cfgTracingReporterFlushInterval)
 	reporterLocalAgentHostPort := viper.GetString(cfgTracingReporterLocalAgentHostPort)
 	samplerParam := viper.GetFloat64(cfgTracingSamplerParam)
@@ -97,7 +103,7 @@ func New(serviceName string) (service.CleanupAble, error) {
 }
 
 func init() {
-	Flags.Bool(cfgTracingEnabled, false, "Enable tracing")
+	Flags.Bool(cfgTracingEnabled, false, "Enable tracing (requires debug mode)")
 	Flags.Duration(cfgTracingReporterFlushInterval, 1*time.Second, "How often the buffer is force-flushed, even if it's not full")
 	Flags.String(cfgTracingReporterLocalAgentHostPort, "jaeger:6831", "Send spans to jaeger-agent at this address")
 	Flags.Float64(cfgTracingSamplerParam, 1.0, "Probability for probabilistic sampler")

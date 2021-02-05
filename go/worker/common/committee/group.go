@@ -17,6 +17,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/node"
 	"github.com/oasisprotocol/oasis-core/go/common/tracing"
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
+	cmdFlags "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/flags"
 	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
 	"github.com/oasisprotocol/oasis-core/go/roothash/api/commitment"
 	"github.com/oasisprotocol/oasis-core/go/runtime/nodes"
@@ -495,6 +496,11 @@ func (g *Group) HandlePeerMessage(unusedPeerID signature.PublicKey, msg *p2p.Mes
 
 	// Import SpanContext from the message and store it in the current Context.
 	if msg.SpanContext != nil {
+		if !cmdFlags.DebugDontBlameOasis() {
+			// Tracing is only allowed in debug mode.
+			return p2pError.Permanent(fmt.Errorf("tracing span context only allowed in debug mode"))
+		}
+
 		sc, err := tracing.SpanContextFromBinary(msg.SpanContext)
 		if err == nil {
 			parentSpan := opentracing.StartSpan("parent", opentracingExt.RPCServerOption(sc))
@@ -521,14 +527,12 @@ func (g *Group) Publish(spanCtx opentracing.SpanContext, msg *p2p.Message) error
 
 	pubCtx := g.activeEpoch.roundCtx
 
-	var scBinary []byte
-	if spanCtx != nil {
-		scBinary, _ = tracing.SpanContextToBinary(spanCtx)
+	if spanCtx != nil && cmdFlags.DebugDontBlameOasis() {
+		msg.SpanContext, _ = tracing.SpanContextToBinary(spanCtx)
 	}
 
 	// Populate message fields.
 	msg.GroupVersion = g.activeEpoch.groupVersion
-	msg.SpanContext = scBinary
 
 	// Publish message to the P2P network.
 	g.p2p.Publish(pubCtx, g.runtimeID, msg)
