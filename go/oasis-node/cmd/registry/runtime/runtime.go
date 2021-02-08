@@ -149,6 +149,9 @@ func doInitGenesis(cmd *cobra.Command, args []string) {
 
 	rt, err := runtimeFromFlags()
 	if err != nil {
+		logger.Error("failed to parse runtime from flags",
+			"err", err,
+		)
 		os.Exit(1)
 	}
 
@@ -176,7 +179,7 @@ func doGenRegister(cmd *cobra.Command, args []string) {
 
 	rt, err := runtimeFromFlags()
 	if err != nil {
-		logger.Info("failed to get runtime",
+		logger.Info("failed to parse runtime from flags",
 			"err", err,
 		)
 		os.Exit(1)
