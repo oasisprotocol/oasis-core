@@ -147,18 +147,6 @@ func (sc *seedAPI) Run(childEnv *env.Env) error { // nolint: gocyclo
 		return fmt.Errorf("seed node EstimateGas should fail with unsupported")
 	}
 
-	sc.Logger.Info("testing WaitEpoch")
-	err = seedCtrl.Consensus.WaitEpoch(ctx, 0)
-	if err != consensusAPI.ErrUnsupported {
-		return fmt.Errorf("seed node WaitEpoch should fail with unsupported")
-	}
-
-	sc.Logger.Info("testing GetEpoch")
-	_, err = seedCtrl.Consensus.GetEpoch(ctx, 0)
-	if err != consensusAPI.ErrUnsupported {
-		return fmt.Errorf("seed node GetEpoch should fail with unsupported")
-	}
-
 	sc.Logger.Info("testing GetBlock")
 	_, err = seedCtrl.Consensus.GetBlock(ctx, consensusAPI.HeightLatest)
 	if err != consensusAPI.ErrUnsupported {

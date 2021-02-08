@@ -12,6 +12,7 @@ import (
 	"github.com/spf13/viper"
 	"google.golang.org/grpc"
 
+	beacon "github.com/oasisprotocol/oasis-core/go/beacon/api"
 	"github.com/oasisprotocol/oasis-core/go/common"
 	"github.com/oasisprotocol/oasis-core/go/common/cbor"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
@@ -168,6 +169,7 @@ func (r *registration) Run( // nolint: gocyclo
 	// Initialize base workload.
 	r.BaseWorkload.Init(cnsc, sm, fundingAccount)
 
+	beacon := beacon.NewBeaconClient(conn)
 	ctx := context.Background()
 	var err error
 
@@ -288,7 +290,7 @@ func (r *registration) Run( // nolint: gocyclo
 		selectedNode := selectedAcc.nodeIdentities[rng.Intn(registryNumNodesPerEntity)]
 
 		// Current epoch.
-		epoch, err := cnsc.GetEpoch(ctx, consensus.HeightLatest)
+		epoch, err := beacon.GetEpoch(ctx, consensus.HeightLatest)
 		if err != nil {
 			return fmt.Errorf("failed to get current epoch: %w", err)
 		}

@@ -104,19 +104,6 @@ type ClientBackend interface {
 	// EstimateGas calculates the amount of gas required to execute the given transaction.
 	EstimateGas(ctx context.Context, req *EstimateGasRequest) (transaction.Gas, error)
 
-	// WaitEpoch waits for consensus to reach an epoch.
-	//
-	// Note that an epoch is considered reached even if any epoch greater than
-	// the one specified is reached (e.g., that the current epoch is already
-	// in the future).
-	WaitEpoch(ctx context.Context, epoch beacon.EpochTime) error
-
-	// GetEpoch returns the current epoch.
-	GetEpoch(ctx context.Context, height int64) (beacon.EpochTime, error)
-
-	// BeaconConsensusParameters returns the beacon consensus parameters.
-	BeaconConsensusParameters(ctx context.Context, height int64) (*beacon.ConsensusParameters, error)
-
 	// GetBlock returns a consensus block at a specific height.
 	GetBlock(ctx context.Context, height int64) (*Block, error)
 
@@ -144,6 +131,9 @@ type ClientBackend interface {
 
 	// GetStatus returns the current status overview.
 	GetStatus(ctx context.Context) (*Status, error)
+
+	// Beacon returns the beacon backend.
+	Beacon() beacon.Backend
 
 	// Registry returns the registry backend.
 	Registry() registry.Backend
@@ -242,9 +232,6 @@ type ServicesBackend interface {
 
 	// SubmissionManager returns the transaction submission manager.
 	SubmissionManager() SubmissionManager
-
-	// Beacon returns the beacon backend.
-	Beacon() beacon.Backend
 
 	// KeyManager returns the keymanager backend.
 	KeyManager() keymanager.Backend

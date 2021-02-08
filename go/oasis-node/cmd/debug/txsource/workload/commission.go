@@ -128,11 +128,11 @@ func findNextExclusiveBound(bounds []staking.CommissionRateBoundStep, currentBou
 	return nil
 }
 
-func (c *commission) doAmendCommissionSchedule(ctx context.Context, rng *rand.Rand, cnsc consensus.ClientBackend, stakingClient staking.Backend) error {
+func (c *commission) doAmendCommissionSchedule(ctx context.Context, rng *rand.Rand, stakingClient staking.Backend) error {
 	c.Logger.Debug("amend commission schedule")
 
 	// Get current epoch.
-	currentEpoch, err := cnsc.GetEpoch(ctx, consensus.HeightLatest)
+	currentEpoch, err := c.Consensus().Beacon().GetEpoch(ctx, consensus.HeightLatest)
 	if err != nil {
 		return fmt.Errorf("GetEpoch: %w", err)
 	}
@@ -369,7 +369,7 @@ func (c *commission) Run(
 	c.rules = params.CommissionScheduleRules
 
 	for {
-		if err = c.doAmendCommissionSchedule(ctx, rng, cnsc, stakingClient); err != nil {
+		if err = c.doAmendCommissionSchedule(ctx, rng, stakingClient); err != nil {
 			return err
 		}
 

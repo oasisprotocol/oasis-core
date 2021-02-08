@@ -31,7 +31,13 @@ func (w *Worker) doWatchGovernanceUpgrades() {
 
 	w.logger.Info("staring governance update worker")
 
-	epochCh, sub := w.beacon.WatchEpochs()
+	epochCh, sub, err := w.beacon.WatchEpochs(w.ctx)
+	if err != nil {
+		w.logger.Error("error watching epochs",
+			"err", err,
+		)
+		return
+	}
 	defer sub.Close()
 
 	// Wait for first block to be synced so that initial queries won't fail.

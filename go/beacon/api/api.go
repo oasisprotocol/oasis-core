@@ -58,11 +58,18 @@ type Backend interface {
 	// epoch.
 	GetEpochBlock(context.Context, EpochTime) (int64, error)
 
+	// WaitEpoch waits for a specific epoch.
+	//
+	// Note that an epoch is considered reached even if any epoch greater
+	// than the one specified is reached (e.g., that the current epoch
+	// is already in the future).
+	WaitEpoch(ctx context.Context, epoch EpochTime) error
+
 	// WatchEpochs returns a channel that produces a stream of messages
 	// on epoch transitions.
 	//
 	// Upon subscription the current epoch is sent immediately.
-	WatchEpochs() (<-chan EpochTime, *pubsub.Subscription)
+	WatchEpochs(ctx context.Context) (<-chan EpochTime, pubsub.ClosableSubscription, error)
 
 	// WatchLatestEpoch returns a channel that produces a stream of
 	// messages on epoch transitions. If an epoch transition happens
@@ -70,7 +77,7 @@ type Backend interface {
 	// epochs are overwritten.
 	//
 	// Upon subscription the current epoch is sent immediately.
-	WatchLatestEpoch() (<-chan EpochTime, *pubsub.Subscription)
+	WatchLatestEpoch(ctx context.Context) (<-chan EpochTime, pubsub.ClosableSubscription, error)
 
 	// GetBeacon gets the beacon for the provided block height.
 	// Calling this method with height `consensus.HeightLatest` should

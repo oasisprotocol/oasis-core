@@ -134,20 +134,42 @@ func (sc *serviceClient) GetEpochBlock(ctx context.Context, epoch beaconAPI.Epoc
 	}
 }
 
-func (sc *serviceClient) WatchEpochs() (<-chan beaconAPI.EpochTime, *pubsub.Subscription) {
+func (sc *serviceClient) WaitEpoch(ctx context.Context, epoch beaconAPI.EpochTime) error {
+	ch, sub, err := sc.WatchEpochs(ctx)
+	if err != nil {
+		return err
+	}
+	defer sub.Close()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case e, ok := <-ch:
+			if !ok {
+				return context.Canceled
+			}
+			if e >= epoch {
+				return nil
+			}
+		}
+	}
+}
+
+func (sc *serviceClient) WatchEpochs(ctx context.Context) (<-chan beaconAPI.EpochTime, pubsub.ClosableSubscription, error) {
 	typedCh := make(chan beaconAPI.EpochTime)
 	sub := sc.epochNotifier.Subscribe()
 	sub.Unwrap(typedCh)
 
-	return typedCh, sub
+	return typedCh, sub, nil
 }
 
-func (sc *serviceClient) WatchLatestEpoch() (<-chan beaconAPI.EpochTime, *pubsub.Subscription) {
+func (sc *serviceClient) WatchLatestEpoch(ctx context.Context) (<-chan beaconAPI.EpochTime, pubsub.ClosableSubscription, error) {
 	typedCh := make(chan beaconAPI.EpochTime)
 	sub := sc.epochNotifier.SubscribeBuffered(1)
 	sub.Unwrap(typedCh)
 
-	return typedCh, sub
+	return typedCh, sub, nil
 }
 
 func (sc *serviceClient) GetBeacon(ctx context.Context, height int64) ([]byte, error) {
@@ -177,7 +199,10 @@ func (sc *serviceClient) WatchLatestPVSSEvent() (<-chan *beaconAPI.PVSSEvent, *p
 }
 
 func (sc *serviceClient) SetEpoch(ctx context.Context, epoch beaconAPI.EpochTime) error {
-	ch, sub := sc.WatchEpochs()
+	ch, sub, err := sc.WatchEpochs(ctx)
+	if err != nil {
+		return fmt.Errorf("epochtime: watch epochs failed: %w", err)
+	}
 	defer sub.Close()
 
 	tx := transaction.NewTransaction(0, nil, app.MethodSetEpoch, epoch)

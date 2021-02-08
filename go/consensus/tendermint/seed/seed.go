@@ -189,21 +189,6 @@ func (srv *seedService) EstimateGas(ctx context.Context, req *consensus.Estimate
 }
 
 // Implements Backend.
-func (srv *seedService) WaitEpoch(ctx context.Context, epoch beacon.EpochTime) error {
-	return consensus.ErrUnsupported
-}
-
-// Implements Backend.
-func (srv *seedService) GetEpoch(ctx context.Context, height int64) (beacon.EpochTime, error) {
-	return 0, consensus.ErrUnsupported
-}
-
-// Implements Backend.
-func (srv *seedService) BeaconConsensusParameters(ctx context.Context, height int64) (*beacon.ConsensusParameters, error) {
-	return nil, consensus.ErrUnsupported
-}
-
-// Implements Backend.
 func (srv *seedService) GetBlock(ctx context.Context, height int64) (*consensus.Block, error) {
 	return nil, consensus.ErrUnsupported
 }

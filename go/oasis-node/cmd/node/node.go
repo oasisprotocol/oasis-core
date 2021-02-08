@@ -201,6 +201,7 @@ func (n *Node) startRuntimeServices() error {
 
 	// Initialize and register the internal gRPC services.
 	grpcSrv := n.grpcInternal.Server()
+	beacon.RegisterService(grpcSrv, n.Consensus.Beacon())
 	scheduler.RegisterService(grpcSrv, n.Consensus.Scheduler())
 	registryAPI.RegisterService(grpcSrv, n.Consensus.Registry())
 	stakingAPI.RegisterService(grpcSrv, n.Consensus.Staking())

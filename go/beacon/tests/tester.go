@@ -49,7 +49,8 @@ func EpochtimeSetableImplementationTest(t *testing.T, backend api.Backend) {
 
 	var e api.EpochTime
 
-	ch, sub := timeSource.WatchEpochs()
+	ch, sub, err := timeSource.WatchEpochs(context.Background())
+	require.NoError(err, "WatchEpochs")
 	defer sub.Close()
 	select {
 	case e = <-ch:
@@ -58,7 +59,8 @@ func EpochtimeSetableImplementationTest(t *testing.T, backend api.Backend) {
 		t.Fatalf("failed to receive current epoch on WatchEpochs")
 	}
 
-	latestCh, subCh := timeSource.WatchLatestEpoch()
+	latestCh, subCh, err := timeSource.WatchLatestEpoch(context.Background())
+	require.NoError(err, "WatchLatestEpoch")
 	defer subCh.Close()
 	select {
 	case e = <-latestCh:
