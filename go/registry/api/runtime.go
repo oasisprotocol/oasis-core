@@ -155,7 +155,7 @@ func (t *TxnSchedulerParameters) ValidateBasic() error {
 	if t.MaxBatchSizeBytes < 1024 {
 		return fmt.Errorf("transaction scheduler max batch bytes size parameter too small")
 	}
-	if t.ProposerTimeout < 5 {
+	if t.ProposerTimeout < 2 {
 		return fmt.Errorf("transaction scheduler proposer timeout parameter too small")
 	}
 
