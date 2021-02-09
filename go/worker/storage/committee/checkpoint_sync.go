@@ -188,7 +188,7 @@ func (n *Node) nodeWorker(
 	}
 }
 
-func (n *Node) handleCheckpoint(check *checkpoint.Metadata, nodesClient grpc.NodesClient, groupSize uint64) (int, error) {
+func (n *Node) handleCheckpoint(check *checkpoint.Metadata, nodesClient grpc.NodesClient, groupSize uint16) (int, error) {
 	chunkDispatchCh := make(chan *checkpoint.ChunkMetadata)
 	defer close(chunkDispatchCh)
 

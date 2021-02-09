@@ -13,6 +13,8 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/scenario"
 )
 
+const byzantineBeaconIdentitySeed = "ekiden byzantine node worker"
+
 var (
 	// ByzantineBeaconHonest is the honest byzantine beacon scenario.
 	ByzantineBeaconHonest scenario.Scenario = &byzantineBeaconImpl{
@@ -20,7 +22,7 @@ var (
 		extraArgs: []string{
 			"--" + byzantine.CfgBeaconMode, byzantine.ModeBeaconHonest.String(),
 		},
-		identitySeed: oasis.ByzantineDefaultIdentitySeed,
+		identitySeed: byzantineBeaconIdentitySeed,
 	}
 
 	// ByzantineBeaconCommitStraggler is the commit straggler byzantine beacon scenario.
@@ -29,7 +31,7 @@ var (
 		extraArgs: []string{
 			"--" + byzantine.CfgBeaconMode, byzantine.ModeBeaconCommitStraggler.String(),
 		},
-		identitySeed: oasis.ByzantineDefaultIdentitySeed,
+		identitySeed: byzantineBeaconIdentitySeed,
 	}
 
 	// ByzantineBeaconRevealStraggler is the reveal straggler byzantine beacon scenario.
@@ -38,7 +40,7 @@ var (
 		extraArgs: []string{
 			"--" + byzantine.CfgBeaconMode, byzantine.ModeBeaconRevealStraggler.String(),
 		},
-		identitySeed: oasis.ByzantineDefaultIdentitySeed,
+		identitySeed: byzantineBeaconIdentitySeed,
 	}
 )
 

@@ -132,7 +132,6 @@ func TestPoolSingleCommitment(t *testing.T) {
 		Storage: registry.StorageParameters{
 			GroupSize:           1,
 			MinWriteReplication: 1,
-			MinPoolSize:         1,
 		},
 		Executor: registry.ExecutorParameters{
 			MaxMessages: 32,
@@ -380,13 +379,11 @@ func TestPoolStragglers(t *testing.T) {
 		Storage: registry.StorageParameters{
 			GroupSize:           1,
 			MinWriteReplication: 1,
-			MinPoolSize:         1,
 		},
 		Executor: registry.ExecutorParameters{
 			GroupSize:         2,
 			GroupBackupSize:   1,
 			AllowedStragglers: 1,
-			MinPoolSize:       3, // GroupSize + GroupBackupSize
 		},
 		GovernanceModel: registry.GovernanceEntity,
 	})
@@ -1005,12 +1002,10 @@ func generateMockCommittee(t *testing.T, rtTemplate *registry.Runtime) (
 			Storage: registry.StorageParameters{
 				GroupSize:           1,
 				MinWriteReplication: 1,
-				MinPoolSize:         1,
 			},
 			Executor: registry.ExecutorParameters{
 				GroupSize:       2,
 				GroupBackupSize: 1,
-				MinPoolSize:     3, // GroupSize + GroupBackupSize
 			},
 			GovernanceModel: registry.GovernanceEntity,
 		}

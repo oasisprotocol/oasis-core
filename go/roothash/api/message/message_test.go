@@ -14,6 +14,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/node"
 	"github.com/oasisprotocol/oasis-core/go/common/quantity"
 	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
+	scheduler "github.com/oasisprotocol/oasis-core/go/scheduler/api"
 	staking "github.com/oasisprotocol/oasis-core/go/staking/api"
 )
 
@@ -35,8 +36,8 @@ func TestMessageHash(t *testing.T) {
 			AdmissionPolicy: registry.RuntimeAdmissionPolicy{
 				AnyNode: &registry.AnyNodeRuntimeAdmissionPolicy{},
 			},
-		}}}}, "939029b474d88441515b722f79aa6689195199895fbad7827f711956306c4614"},
-		{[]Message{{Registry: &RegistryMessage{UpdateRuntime: rt}}}, "7afcd28fd8303ba3ef4b3342201e64149b00139be56afc0fb48b549c1a3a6b48"},
+		}}}}, "bc26afcca2efa9ba8138d2339a38389482466163b5bda0e1dac735b03c879905"},
+		{[]Message{{Registry: &RegistryMessage{UpdateRuntime: rt}}}, "37a855783495d6699d3d229146b70f31b3da72a2a752e4cb4ded6dfe2d774382"},
 	} {
 		var h hash.Hash
 		err := h.UnmarshalHex(tc.expectedHash)
@@ -91,7 +92,6 @@ func newTestRuntime() *registry.Runtime {
 			AllowedStragglers: 1,
 			RoundTimeout:      10,
 			MaxMessages:       32,
-			MinPoolSize:       8, // GroupSize + GroupBackupSize
 		},
 		TxnScheduler: registry.TxnSchedulerParameters{
 			Algorithm:         registry.TxnSchedulerSimple,
@@ -105,7 +105,6 @@ func newTestRuntime() *registry.Runtime {
 			MinWriteReplication:     3,
 			MaxApplyWriteLogEntries: 100000,
 			MaxApplyOps:             2,
-			MinPoolSize:             3,
 		},
 		AdmissionPolicy: registry.RuntimeAdmissionPolicy{
 			EntityWhitelist: &registry.EntityWhitelistRuntimeAdmissionPolicy{
@@ -115,6 +114,31 @@ func newTestRuntime() *registry.Runtime {
 							node.RoleComputeWorker: 2,
 							node.RoleStorageWorker: 4,
 						},
+					},
+				},
+			},
+		},
+		Constraints: map[scheduler.CommitteeKind]map[scheduler.Role]registry.SchedulingConstraints{
+			scheduler.KindComputeExecutor: {
+				scheduler.RoleWorker: {
+					MinPoolSize: &registry.MinPoolSizeConstraint{
+						Limit: 1,
+					},
+					ValidatorSet: &registry.ValidatorSetConstraint{},
+				},
+				scheduler.RoleBackupWorker: {
+					MinPoolSize: &registry.MinPoolSizeConstraint{
+						Limit: 2,
+					},
+				},
+			},
+			scheduler.KindStorage: {
+				scheduler.RoleWorker: {
+					MinPoolSize: &registry.MinPoolSizeConstraint{
+						Limit: 9,
+					},
+					MaxNodes: &registry.MaxNodesConstraint{
+						Limit: 1,
 					},
 				},
 			},

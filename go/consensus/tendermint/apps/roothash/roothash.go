@@ -541,8 +541,34 @@ func (app *rootHashApplication) tryFinalizeExecutorCommits(
 ) error {
 	runtime := rtState.Runtime
 	round := rtState.CurrentBlock.Header.Round + 1
+	pool := rtState.ExecutorPool
 
-	commit, err := rtState.ExecutorPool.TryFinalize(ctx.BlockHeight(), runtime.Executor.RoundTimeout, forced, true)
+	commit, err := pool.TryFinalize(ctx.BlockHeight(), runtime.Executor.RoundTimeout, forced, true)
+	if err == commitment.ErrDiscrepancyDetected {
+		ctx.Logger().Warn("executor discrepancy detected",
+			"round", round,
+			logging.LogEvent, roothash.LogEventExecutionDiscrepancyDetected,
+		)
+
+		tagV := ValueExecutionDiscrepancyDetected{
+			ID: runtime.ID,
+			Event: roothash.ExecutionDiscrepancyDetectedEvent{
+				Timeout: forced,
+			},
+		}
+		ctx.EmitEvent(
+			tmapi.NewEventBuilder(app.Name()).
+				Attribute(KeyExecutionDiscrepancyDetected, cbor.Marshal(tagV)).
+				Attribute(KeyRuntimeID, ValueRuntimeID(runtime.ID)),
+		)
+
+		// We may also be able to already perform discrepancy resolution, check if this is possible
+		// by retrying finalization. We must make sure to not affect the computed timeout.
+		nextTimeout := pool.NextTimeout
+		commit, err = pool.TryFinalize(ctx.BlockHeight(), runtime.Executor.RoundTimeout, false, false)
+		pool.NextTimeout = nextTimeout
+	}
+
 	switch err {
 	case nil:
 		// Round has been finalized.
@@ -559,19 +585,19 @@ func (app *rootHashApplication) tryFinalizeExecutorCommits(
 		}
 
 		// If there was a discrepancy, slash nodes for incorrect results if configured.
-		if rtState.ExecutorPool.Discrepancy {
+		if pool.Discrepancy {
 			ctx.Logger().Debug("executor pool discrepancy",
 				"slashing", runtime.Staking.Slashing,
 			)
 			if penalty, ok := rtState.Runtime.Staking.Slashing[staking.SlashRuntimeIncorrectResults]; ok && !penalty.Amount.IsZero() {
-				commitments := rtState.ExecutorPool.ExecuteCommitments
+				commitments := pool.ExecuteCommitments
 				var (
 					// Worker nodes that submitted incorrect results get slashed.
 					workersIncorrectResults []signature.PublicKey
 					// Backup worker nodes that resolved the discrepancy get rewarded.
 					backupCorrectResults []signature.PublicKey
 				)
-				for _, n := range rtState.ExecutorPool.Committee.Members {
+				for _, n := range pool.Committee.Members {
 					c, ok := commitments[n.PublicKey]
 					if !ok || c.IsIndicatingFailure() {
 						continue
@@ -617,7 +643,7 @@ func (app *rootHashApplication) tryFinalizeExecutorCommits(
 		blk.Header.MessagesHash = *hdr.MessagesHash
 
 		// Timeout will be cleared by caller.
-		rtState.ExecutorPool.ResetCommitments(blk.Header.Round)
+		pool.ResetCommitments(blk.Header.Round)
 
 		// All good. Hook up the new block.
 		rtState.CurrentBlock = blk
@@ -644,23 +670,7 @@ func (app *rootHashApplication) tryFinalizeExecutorCommits(
 
 		return nil
 	case commitment.ErrDiscrepancyDetected:
-		// Discrepancy has been detected.
-		ctx.Logger().Warn("executor discrepancy detected",
-			"round", round,
-			logging.LogEvent, roothash.LogEventExecutionDiscrepancyDetected,
-		)
-
-		tagV := ValueExecutionDiscrepancyDetected{
-			ID: runtime.ID,
-			Event: roothash.ExecutionDiscrepancyDetectedEvent{
-				Timeout: forced,
-			},
-		}
-		ctx.EmitEvent(
-			tmapi.NewEventBuilder(app.Name()).
-				Attribute(KeyExecutionDiscrepancyDetected, cbor.Marshal(tagV)).
-				Attribute(KeyRuntimeID, ValueRuntimeID(runtime.ID)),
-		)
+		// This was already handled above, so it should not happen.
 		return nil
 	default:
 	}

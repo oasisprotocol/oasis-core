@@ -11,6 +11,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/oasis/cli"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/scenario"
 	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
+	scheduler "github.com/oasisprotocol/oasis-core/go/scheduler/api"
 )
 
 const (
@@ -68,7 +69,8 @@ func (sc *historyReindexImpl) Fixture() (*oasis.NetworkFixture, error) {
 	// Use a single compute node.
 	f.Runtimes[rtIdx].Executor.GroupSize = 1
 	f.Runtimes[rtIdx].Executor.GroupBackupSize = 0
-	f.Runtimes[rtIdx].Executor.MinPoolSize = f.Runtimes[rtIdx].Executor.GroupSize + f.Runtimes[rtIdx].Executor.GroupBackupSize
+	f.Runtimes[rtIdx].Constraints[scheduler.KindComputeExecutor][scheduler.RoleWorker].MinPoolSize.Limit = 1
+	f.Runtimes[rtIdx].Constraints[scheduler.KindComputeExecutor][scheduler.RoleBackupWorker].MinPoolSize.Limit = 0
 
 	return f, nil
 }

@@ -22,6 +22,7 @@ import (
 	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
 	runtimeClient "github.com/oasisprotocol/oasis-core/go/runtime/client/api"
 	runtimeTransaction "github.com/oasisprotocol/oasis-core/go/runtime/transaction"
+	scheduler "github.com/oasisprotocol/oasis-core/go/scheduler/api"
 	"github.com/oasisprotocol/oasis-core/go/storage/database"
 )
 
@@ -162,7 +163,6 @@ func (sc *runtimeImpl) Fixture() (*oasis.NetworkFixture, error) {
 					GroupBackupSize: 1,
 					RoundTimeout:    20,
 					MaxMessages:     128,
-					MinPoolSize:     3, // GroupSize + GroupBackupSize
 				},
 				TxnScheduler: registry.TxnSchedulerParameters{
 					Algorithm:         registry.TxnSchedulerSimple,
@@ -176,10 +176,30 @@ func (sc *runtimeImpl) Fixture() (*oasis.NetworkFixture, error) {
 					MinWriteReplication:     2,
 					MaxApplyWriteLogEntries: 100_000,
 					MaxApplyOps:             2,
-					MinPoolSize:             2,
 				},
 				AdmissionPolicy: registry.RuntimeAdmissionPolicy{
 					AnyNode: &registry.AnyNodeRuntimeAdmissionPolicy{},
+				},
+				Constraints: map[scheduler.CommitteeKind]map[scheduler.Role]registry.SchedulingConstraints{
+					scheduler.KindComputeExecutor: {
+						scheduler.RoleWorker: {
+							MinPoolSize: &registry.MinPoolSizeConstraint{
+								Limit: 2,
+							},
+						},
+						scheduler.RoleBackupWorker: {
+							MinPoolSize: &registry.MinPoolSizeConstraint{
+								Limit: 1,
+							},
+						},
+					},
+					scheduler.KindStorage: {
+						scheduler.RoleWorker: {
+							MinPoolSize: &registry.MinPoolSizeConstraint{
+								Limit: 2,
+							},
+						},
+					},
 				},
 				GovernanceModel: registry.GovernanceEntity,
 			},
@@ -354,6 +374,12 @@ func (sc *runtimeImpl) wait(childEnv *env.Env, cmd *exec.Cmd, clientErrCh <-chan
 	if err := sc.waitClient(childEnv, cmd, clientErrCh); err != nil {
 		return err
 	}
+
+	// Wait for logs to be fully processed before checking them. When the client exits very quickly
+	// the log watchers may not have processed the relevant logs yet.
+	// TODO: Find a better way to synchronize log watchers.
+	time.Sleep(1 * time.Second)
+
 	return sc.Net.CheckLogWatchers()
 }
 

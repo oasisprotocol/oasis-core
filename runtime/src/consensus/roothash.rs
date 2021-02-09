@@ -20,8 +20,6 @@ use crate::{
     consensus::{registry, staking},
 };
 
-use std::collections::BTreeMap;
-
 /// Runtime block.
 #[derive(Clone, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct Block {
@@ -185,7 +183,10 @@ impl ComputeResultsHeader {
 
 #[cfg(test)]
 mod tests {
+    use std::collections::BTreeMap;
+
     use super::*;
+    use crate::consensus::scheduler;
 
     #[test]
     fn test_consistent_hash_header() {
@@ -280,7 +281,6 @@ mod tests {
                 allowed_stragglers: 1,
                 round_timeout: 10,
                 max_messages: 32,
-                min_pool_size: 8,
             },
             txn_scheduler: registry::TxnSchedulerParameters {
                 algorithm: "simple".to_string(),
@@ -297,10 +297,45 @@ mod tests {
                 checkpoint_interval: 0,
                 checkpoint_num_kept: 0,
                 checkpoint_chunk_size: 0,
-                min_pool_size: 3,
             },
             admission_policy: registry::RuntimeAdmissionPolicy::EntityWhitelist {
                 policy: registry::EntityWhitelistRuntimeAdmissionPolicy { entities: Some(wl) },
+            },
+            constraints: {
+                let mut cs = BTreeMap::new();
+                cs.insert(scheduler::CommitteeKind::ComputeExecutor, {
+                    let mut ce = BTreeMap::new();
+                    ce.insert(
+                        scheduler::Role::Worker,
+                        registry::SchedulingConstraints {
+                            min_pool_size: Some(registry::MinPoolSizeConstraint { limit: 1 }),
+                            validator_set: Some(registry::ValidatorSetConstraint {}),
+                            ..Default::default()
+                        },
+                    );
+                    ce.insert(
+                        scheduler::Role::BackupWorker,
+                        registry::SchedulingConstraints {
+                            min_pool_size: Some(registry::MinPoolSizeConstraint { limit: 2 }),
+                            ..Default::default()
+                        },
+                    );
+                    ce
+                });
+                cs.insert(scheduler::CommitteeKind::Storage, {
+                    let mut st = BTreeMap::new();
+                    st.insert(
+                        scheduler::Role::Worker,
+                        registry::SchedulingConstraints {
+                            min_pool_size: Some(registry::MinPoolSizeConstraint { limit: 9 }),
+                            max_nodes: Some(registry::MaxNodesConstraint { limit: 1 }),
+                            ..Default::default()
+                        },
+                    );
+                    st
+                });
+
+                Some(cs)
             },
             staking: registry::RuntimeStakingParameters {
                 thresholds: Some(st),
@@ -308,7 +343,7 @@ mod tests {
             governance_model: registry::RuntimeGovernanceModel::GovernanceEntity,
         };
 
-        // NOTE: These hashes MUST be synced with go/roothash/api/block/messages_test.go.
+        // NOTE: These hashes MUST be synced with go/roothash/api/message/message_test.go.
         let tcs = vec![
             (
                 vec![],
@@ -333,14 +368,14 @@ mod tests {
                     v: 0,
                     msg: RegistryMessage::UpdateRuntime(registry::Runtime::default()),
                 }],
-                "939029b474d88441515b722f79aa6689195199895fbad7827f711956306c4614",
+                "bc26afcca2efa9ba8138d2339a38389482466163b5bda0e1dac735b03c879905",
             ),
             (
                 vec![Message::Registry {
                     v: 0,
                     msg: RegistryMessage::UpdateRuntime(rt),
                 }],
-                "7afcd28fd8303ba3ef4b3342201e64149b00139be56afc0fb48b549c1a3a6b48",
+                "37a855783495d6699d3d229146b70f31b3da72a2a752e4cb4ded6dfe2d774382",
             ),
         ];
         for (msgs, expected_hash) in tcs {

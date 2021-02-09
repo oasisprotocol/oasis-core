@@ -19,11 +19,11 @@ use crate::{
         quantity,
         version::Version,
     },
-    consensus::staking,
+    consensus::{scheduler, staking},
     storage::mkvs::WriteLog,
 };
 
-/// Runtime functionality.
+/// Runtime kind.
 #[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize_repr, Deserialize_repr)]
 #[repr(u32)]
 pub enum RuntimeKind {
@@ -49,13 +49,13 @@ impl Default for RuntimeKind {
 pub struct ExecutorParameters {
     /// Size of the committee.
     #[serde(default)]
-    pub group_size: u64,
+    pub group_size: u16,
     /// Size of the discrepancy resolution group.
     #[serde(default)]
-    pub group_backup_size: u64,
+    pub group_backup_size: u16,
     /// Number of allowed stragglers.
     #[serde(default)]
-    pub allowed_stragglers: u64,
+    pub allowed_stragglers: u16,
     /// rRound timeout in consensus blocks.
     #[serde(default)]
     pub round_timeout: i64,
@@ -63,9 +63,6 @@ pub struct ExecutorParameters {
     /// in a single round.
     #[serde(default)]
     pub max_messages: u32,
-    /// Minimum required candidate compute node pool size.
-    #[serde(default)]
-    pub min_pool_size: u64,
 }
 
 /// Parameters for the runtime transaction scheduler.
@@ -94,11 +91,11 @@ pub struct TxnSchedulerParameters {
 pub struct StorageParameters {
     /// Size of the storage group.
     #[serde(default)]
-    pub group_size: u64,
+    pub group_size: u16,
     /// Number of nodes to which any writes must be replicated before being
     /// assumed to be committed. It must be less than or equal to group_size.
     #[serde(default)]
-    pub min_write_replication: u64,
+    pub min_write_replication: u16,
     /// Maximum number of write log entries when performing an Apply operation.
     #[serde(default)]
     pub max_apply_write_log_entries: u64,
@@ -114,9 +111,43 @@ pub struct StorageParameters {
     /// Chunk size parameter for checkpoint creation.
     #[serde(default)]
     pub checkpoint_chunk_size: u64,
-    /// Minimum required candidate storage node pool size.
+}
+
+/// The node scheduling constraints.
+///
+/// Multiple fields may be set in which case the ALL the constraints must be satisfied.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct SchedulingConstraints {
+    #[serde(skip_serializing_if = "Option::is_none")]
     #[serde(default)]
-    pub min_pool_size: u64,
+    pub validator_set: Option<ValidatorSetConstraint>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(default)]
+    pub max_nodes: Option<MaxNodesConstraint>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(default)]
+    pub min_pool_size: Option<MinPoolSizeConstraint>,
+}
+
+/// A constraint which specifies that the entity must have a node that is part of the validator set.
+/// No other options can currently be specified.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct ValidatorSetConstraint {}
+
+/// A constraint which specifies that only the given number of nodes may be eligible per entity.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct MaxNodesConstraint {
+    #[serde(default)]
+    pub limit: u16,
+}
+
+/// A constraint which specifies the minimum required candidate pool size.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct MinPoolSizeConstraint {
+    #[serde(default)]
+    pub limit: u16,
 }
 
 /// Stake-related parameters for a runtime.
@@ -295,6 +326,12 @@ pub struct Runtime {
     /// Which nodes are allowed to register for this runtime.
     #[serde(default)]
     pub admission_policy: RuntimeAdmissionPolicy,
+    /// Node scheduling constraints.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(default)]
+    pub constraints: Option<
+        BTreeMap<scheduler::CommitteeKind, BTreeMap<scheduler::Role, SchedulingConstraints>>,
+    >,
     /// Runtime's staking-related parameters.
     #[serde(skip_serializing_if = "staking_params_are_empty")]
     #[serde(default)]

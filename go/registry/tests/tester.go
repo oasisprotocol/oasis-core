@@ -31,6 +31,7 @@ import (
 	consensusAPI "github.com/oasisprotocol/oasis-core/go/consensus/api"
 	tmcrypto "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/crypto"
 	"github.com/oasisprotocol/oasis-core/go/registry/api"
+	scheduler "github.com/oasisprotocol/oasis-core/go/scheduler/api"
 	staking "github.com/oasisprotocol/oasis-core/go/staking/api"
 )
 
@@ -786,24 +787,6 @@ func testRegistryRuntime(t *testing.T, backend api.Backend, consensus consensusA
 			"TooBigMaxMessages",
 			func(rt *api.Runtime) {
 				rt.Executor.MaxMessages = 64 // MaxRuntimeMessages in these tests is 32.
-			},
-			false,
-			false,
-		},
-		// Runtime with too small executor MinPoolSize parameter.
-		{
-			"TooSmallExecutorMinPoolSize",
-			func(rt *api.Runtime) {
-				rt.Executor.MinPoolSize = rt.Executor.GroupSize - 1
-			},
-			false,
-			false,
-		},
-		// Runtime with too small storage MinPoolSize parameter.
-		{
-			"TooSmallStorageMinPoolSize",
-			func(rt *api.Runtime) {
-				rt.Storage.MinPoolSize = rt.Storage.GroupSize - 1
 			},
 			false,
 			false,
@@ -1714,7 +1697,6 @@ func NewTestRuntime(seed []byte, ent *TestEntity, isKeyManager bool) (*TestRunti
 			AllowedStragglers: 1,
 			RoundTimeout:      10,
 			MaxMessages:       32,
-			MinPoolSize:       8, // GroupSize + GroupBackupSize
 		},
 		TxnScheduler: api.TxnSchedulerParameters{
 			Algorithm:         api.TxnSchedulerSimple,
@@ -1728,10 +1710,30 @@ func NewTestRuntime(seed []byte, ent *TestEntity, isKeyManager bool) (*TestRunti
 			MinWriteReplication:     3,
 			MaxApplyWriteLogEntries: 100_000,
 			MaxApplyOps:             2,
-			MinPoolSize:             3,
 		},
 		AdmissionPolicy: api.RuntimeAdmissionPolicy{
 			AnyNode: &api.AnyNodeRuntimeAdmissionPolicy{},
+		},
+		Constraints: map[scheduler.CommitteeKind]map[scheduler.Role]api.SchedulingConstraints{
+			scheduler.KindComputeExecutor: {
+				scheduler.RoleWorker: {
+					MinPoolSize: &api.MinPoolSizeConstraint{
+						Limit: 3,
+					},
+				},
+				scheduler.RoleBackupWorker: {
+					MinPoolSize: &api.MinPoolSizeConstraint{
+						Limit: 5,
+					},
+				},
+			},
+			scheduler.KindStorage: {
+				scheduler.RoleWorker: {
+					MinPoolSize: &api.MinPoolSizeConstraint{
+						Limit: 3,
+					},
+				},
+			},
 		},
 		GovernanceModel: api.GovernanceEntity,
 		Staking: api.RuntimeStakingParameters{

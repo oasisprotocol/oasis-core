@@ -32,6 +32,7 @@ import (
 	cmdGrpc "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/grpc"
 	cmdSigner "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/signer"
 	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
+	scheduler "github.com/oasisprotocol/oasis-core/go/scheduler/api"
 	staking "github.com/oasisprotocol/oasis-core/go/staking/api"
 	storage "github.com/oasisprotocol/oasis-core/go/storage/api"
 	"github.com/oasisprotocol/oasis-core/go/storage/mkvs"
@@ -55,7 +56,6 @@ const (
 	CfgExecutorAllowedStragglers = "runtime.executor.allowed_stragglers"
 	CfgExecutorRoundTimeout      = "runtime.executor.round_timeout"
 	CfgExecutorMaxMessages       = "runtime.executor.max_messages"
-	CfgExecutorMinPoolSize       = "runtime.executor.min_pool_size"
 
 	// Storage committee flags.
 	CfgStorageGroupSize               = "runtime.storage.group_size"
@@ -65,7 +65,6 @@ const (
 	CfgStorageCheckpointInterval      = "runtime.storage.checkpoint_interval"
 	CfgStorageCheckpointNumKept       = "runtime.storage.checkpoint_num_kept"
 	CfgStorageCheckpointChunkSize     = "runtime.storage.checkpoint_chunk_size"
-	CfgStorageMinPoolSize             = "runtime.storage.min_pool_size"
 
 	// Transaction scheduler flags.
 	CfgTxnSchedulerAlgorithm         = "runtime.txn_scheduler.algorithm"
@@ -79,6 +78,24 @@ const (
 	CfgAdmissionPolicyEntityWhitelist  = "runtime.admission_policy_entity_whitelist"
 	AdmissionPolicyNameAnyNode         = "any-node"
 	AdmissionPolicyNameEntityWhitelist = "entity-whitelist"
+
+	// Constraints flags.
+	cfgConstraints             = "runtime.constraints"
+	cfgConstraintsMinPoolSize  = "min_pool_size"
+	cfgConstraintsValidatorSet = "validator_set"
+	cfgConstraintsMaxNodes     = "max_nodes"
+
+	CfgConstraintsExecutorWorkerMinPoolSize  = "runtime.constraints.executor.worker.min_pool_size"
+	CfgConstraintsExecutorWorkerValidatorSet = "runtime.constraints.executor.worker.validator_set"
+	CfgConstraintsExecutorWorkerMaxNodes     = "runtime.constraints.executor.worker.max_nodes"
+
+	CfgConstraintsExecutorBackupWorkerMinPoolSize  = "runtime.constraints.executor.backup-worker.min_pool_size"
+	CfgConstraintsExecutorBackupWorkerValidatorSet = "runtime.constraints.executor.backup-worker.validator_set"
+	CfgConstraintsExecutorBackupWorkerMaxNodes     = "runtime.constraints.executor.backup-worker.max_nodes"
+
+	CfgConstraintsStorageWorkerMinPoolSize  = "runtime.constraints.storage.worker.min_pool_size"
+	CfgConstraintsStorageWorkerValidatorSet = "runtime.constraints.storage.worker.validator_set"
+	CfgConstraintsStorageWorkerMaxNodes     = "runtime.constraints.storage.worker.max_nodes"
 
 	// Staking parameters flags.
 	CfgStakingThreshold = "runtime.staking.threshold"
@@ -120,6 +137,20 @@ var (
 	}
 
 	logger = logging.GetLogger("cmd/registry/runtime")
+
+	cfgConstraintsAll = []string{
+		CfgConstraintsExecutorWorkerMinPoolSize,
+		CfgConstraintsExecutorWorkerValidatorSet,
+		CfgConstraintsExecutorWorkerMaxNodes,
+
+		CfgConstraintsExecutorBackupWorkerMinPoolSize,
+		CfgConstraintsExecutorBackupWorkerValidatorSet,
+		CfgConstraintsExecutorBackupWorkerMaxNodes,
+
+		CfgConstraintsStorageWorkerMinPoolSize,
+		CfgConstraintsStorageWorkerValidatorSet,
+		CfgConstraintsStorageWorkerMaxNodes,
+	}
 )
 
 func doConnect(cmd *cobra.Command) (*grpc.ClientConn, registry.Backend) {
@@ -365,12 +396,11 @@ func runtimeFromFlags() (*registry.Runtime, error) { // nolint: gocyclo
 		},
 		KeyManager: kmID,
 		Executor: registry.ExecutorParameters{
-			GroupSize:         viper.GetUint64(CfgExecutorGroupSize),
-			GroupBackupSize:   viper.GetUint64(CfgExecutorGroupBackupSize),
-			AllowedStragglers: viper.GetUint64(CfgExecutorAllowedStragglers),
+			GroupSize:         uint16(viper.GetUint64(CfgExecutorGroupSize)),
+			GroupBackupSize:   uint16(viper.GetUint64(CfgExecutorGroupBackupSize)),
+			AllowedStragglers: uint16(viper.GetUint64(CfgExecutorAllowedStragglers)),
 			RoundTimeout:      viper.GetInt64(CfgExecutorRoundTimeout),
 			MaxMessages:       viper.GetUint32(CfgExecutorMaxMessages),
-			MinPoolSize:       viper.GetUint64(CfgExecutorMinPoolSize),
 		},
 		TxnScheduler: registry.TxnSchedulerParameters{
 			Algorithm:         viper.GetString(CfgTxnSchedulerAlgorithm),
@@ -380,14 +410,13 @@ func runtimeFromFlags() (*registry.Runtime, error) { // nolint: gocyclo
 			ProposerTimeout:   viper.GetInt64(CfgTxnSchedulerProposerTimeout),
 		},
 		Storage: registry.StorageParameters{
-			GroupSize:               viper.GetUint64(CfgStorageGroupSize),
-			MinWriteReplication:     viper.GetUint64(CfgStorageMinWriteReplication),
+			GroupSize:               uint16(viper.GetUint64(CfgStorageGroupSize)),
+			MinWriteReplication:     uint16(viper.GetUint64(CfgStorageMinWriteReplication)),
 			MaxApplyWriteLogEntries: viper.GetUint64(CfgStorageMaxApplyWriteLogEntries),
 			MaxApplyOps:             viper.GetUint64(CfgStorageMaxApplyOps),
 			CheckpointInterval:      viper.GetUint64(CfgStorageCheckpointInterval),
 			CheckpointNumKept:       viper.GetUint64(CfgStorageCheckpointNumKept),
 			CheckpointChunkSize:     uint64(viper.GetSizeInBytes(CfgStorageCheckpointChunkSize)),
-			MinPoolSize:             viper.GetUint64(CfgStorageMinPoolSize),
 		},
 		GovernanceModel: govModel,
 	}
@@ -434,6 +463,56 @@ func runtimeFromFlags() (*registry.Runtime, error) { // nolint: gocyclo
 			CfgAdmissionPolicy, sap,
 		)
 		return nil, fmt.Errorf("invalid runtime admission policy")
+	}
+
+	// Constraints.
+	// TODO: Hack needed because viper's Sub doesn't work correctly.
+	var haveConstraints bool
+	cc := viper.New()
+	for _, key := range cfgConstraintsAll {
+		if viper.IsSet(key) {
+			cc.Set(key[len(cfgConstraints)+1:], viper.Get(key))
+			haveConstraints = true
+		}
+	}
+
+	if haveConstraints {
+		rt.Constraints = make(map[scheduler.CommitteeKind]map[scheduler.Role]registry.SchedulingConstraints)
+
+		for _, kind := range []scheduler.CommitteeKind{scheduler.KindComputeExecutor, scheduler.KindStorage} {
+			kindText, _ := kind.MarshalText()
+			ce := cc.Sub(string(kindText))
+			if ce == nil {
+				continue
+			}
+
+			cs := make(map[scheduler.Role]registry.SchedulingConstraints)
+			rt.Constraints[kind] = cs
+
+			for _, role := range []scheduler.Role{scheduler.RoleWorker, scheduler.RoleBackupWorker} {
+				roleText, _ := role.MarshalText()
+				cw := ce.Sub(string(roleText))
+				if cw == nil {
+					continue
+				}
+
+				var sc registry.SchedulingConstraints
+				if minPoolSize := cw.GetUint64(cfgConstraintsMinPoolSize); minPoolSize > 0 {
+					sc.MinPoolSize = &registry.MinPoolSizeConstraint{
+						Limit: uint16(minPoolSize),
+					}
+				}
+				if validatorSet := cw.GetBool(cfgConstraintsValidatorSet); validatorSet {
+					sc.ValidatorSet = &registry.ValidatorSetConstraint{}
+				}
+				if maxNodes := cw.GetUint64(cfgConstraintsMaxNodes); maxNodes > 0 {
+					sc.MaxNodes = &registry.MaxNodesConstraint{
+						Limit: uint16(maxNodes),
+					}
+				}
+				cs[role] = sc
+			}
+		}
 	}
 
 	// Staking parameters.
@@ -533,12 +612,11 @@ func init() {
 	runtimeFlags.String(CfgGovernanceModel, "entity", "Runtime governance model (entity or runtime or consensus)")
 
 	// Init Executor committee flags.
-	runtimeFlags.Uint64(CfgExecutorGroupSize, 1, "Number of workers in the runtime executor group/committee")
-	runtimeFlags.Uint64(CfgExecutorGroupBackupSize, 0, "Number of backup workers in the runtime executor group/committee")
-	runtimeFlags.Uint64(CfgExecutorAllowedStragglers, 0, "Number of stragglers allowed per round in the runtime executor group")
+	runtimeFlags.Uint16(CfgExecutorGroupSize, 1, "Number of workers in the runtime executor group/committee")
+	runtimeFlags.Uint16(CfgExecutorGroupBackupSize, 0, "Number of backup workers in the runtime executor group/committee")
+	runtimeFlags.Uint16(CfgExecutorAllowedStragglers, 0, "Number of stragglers allowed per round in the runtime executor group")
 	runtimeFlags.Int64(CfgExecutorRoundTimeout, 5, "Executor committee round timeout for this runtime (in consensus blocks)")
 	runtimeFlags.Uint32(CfgExecutorMaxMessages, 32, "Maximum number of runtime messages that can be emitted in a round")
-	runtimeFlags.Uint64(CfgExecutorMinPoolSize, 1, "Minimum required candidate compute node pool size (should be >= GroupSize+GroupBackupSize)")
 
 	// Init Transaction scheduler flags.
 	runtimeFlags.String(CfgTxnSchedulerAlgorithm, registry.TxnSchedulerSimple, "Transaction scheduling algorithm")
@@ -548,18 +626,30 @@ func init() {
 	runtimeFlags.Int64(CfgTxnSchedulerProposerTimeout, 5, "Timeout (in consensus blocks) before a round can be timeouted due to proposer not proposing")
 
 	// Init Storage committee flags.
-	runtimeFlags.Uint64(CfgStorageGroupSize, 1, "Number of storage nodes for the runtime")
-	runtimeFlags.Uint64(CfgStorageMinWriteReplication, 1, "Minimum required storage write replication")
+	runtimeFlags.Uint16(CfgStorageGroupSize, 1, "Number of storage nodes for the runtime")
+	runtimeFlags.Uint16(CfgStorageMinWriteReplication, 1, "Minimum required storage write replication")
 	runtimeFlags.Uint64(CfgStorageMaxApplyWriteLogEntries, 100_000, "Maximum number of write log entries")
 	runtimeFlags.Uint64(CfgStorageMaxApplyOps, 2, "Maximum number of apply operations in a batch")
 	runtimeFlags.Uint64(CfgStorageCheckpointInterval, 10_000, "Storage checkpoint interval (in rounds)")
 	runtimeFlags.Uint64(CfgStorageCheckpointNumKept, 2, "Number of storage checkpoints to keep")
 	runtimeFlags.String(CfgStorageCheckpointChunkSize, "8mb", "Storage checkpoint chunk size")
-	runtimeFlags.Uint64(CfgStorageMinPoolSize, 1, "Minimum required candidate storage node pool size (should be >= GroupSize)")
 
 	// Init Admission policy flags.
 	runtimeFlags.String(CfgAdmissionPolicy, "", "What type of node admission policy to have")
 	runtimeFlags.StringSlice(CfgAdmissionPolicyEntityWhitelist, nil, "For entity whitelist node admission policies, the IDs (hex) of the entities in the whitelist")
+
+	// Init constraints flags.
+	runtimeFlags.Uint16(CfgConstraintsExecutorWorkerMinPoolSize, 1, "Minimum required candidate primary compute node pool size (should be >= GroupSize)")
+	runtimeFlags.Bool(CfgConstraintsExecutorWorkerValidatorSet, false, "Validator set membership constraint for primary compute nodes")
+	runtimeFlags.Uint16(CfgConstraintsExecutorWorkerMaxNodes, 0, "Maximum elected nodes per entity for primary compute nodes")
+
+	runtimeFlags.Uint16(CfgConstraintsExecutorBackupWorkerMinPoolSize, 1, "Minimum required candidate backup compute node pool size (should be >= GroupBackupSize)")
+	runtimeFlags.Bool(CfgConstraintsExecutorBackupWorkerValidatorSet, false, "Validator set membership constraint for backup compute nodes")
+	runtimeFlags.Uint16(CfgConstraintsExecutorBackupWorkerMaxNodes, 0, "Maximum elected nodes per entity for backup compute nodes")
+
+	runtimeFlags.Uint16(CfgConstraintsStorageWorkerMinPoolSize, 1, "Minimum required candidate storage node pool size (should be >= GroupSize)")
+	runtimeFlags.Bool(CfgConstraintsStorageWorkerValidatorSet, false, "Validator set membership constraint for storage nodes")
+	runtimeFlags.Uint16(CfgConstraintsStorageWorkerMaxNodes, 0, "Maximum elected nodes per entity for storage nodes")
 
 	// Init Staking flags.
 	runtimeFlags.StringToString(CfgStakingThreshold, nil, "Additional staking threshold for this runtime (<kind>=<value>)")

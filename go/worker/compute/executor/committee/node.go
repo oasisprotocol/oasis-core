@@ -341,7 +341,7 @@ func (n *Node) queueBatchBlocking(
 		)
 		return p2pError.Permanent(err)
 	}
-	if uint64(len(storageSignatures)) < rt.Storage.MinWriteReplication {
+	if len(storageSignatures) < int(rt.Storage.MinWriteReplication) {
 		n.logger.Warn("received external batch with not enough storage receipts",
 			"min_write_replication", rt.Storage.MinWriteReplication,
 			"num_receipts", len(storageSignatures),
