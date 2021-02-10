@@ -333,7 +333,7 @@ func (g *governanceWorkload) doGovernanceVote() error {
 }
 
 func (g *governanceWorkload) checkEpochTransition() (bool, error) {
-	epoch, err := g.consensus.GetEpoch(g.ctx, consensus.HeightLatest)
+	epoch, err := g.Consensus().Beacon().GetEpoch(g.ctx, consensus.HeightLatest)
 	if err != nil {
 		return false, fmt.Errorf("querying epoch: %w", err)
 	}
@@ -418,7 +418,7 @@ func (g *governanceWorkload) Run(
 		}
 
 		var epoch beacon.EpochTime
-		epoch, err = cnsc.GetEpoch(g.ctx, consensus.HeightLatest)
+		epoch, err = g.Consensus().Beacon().GetEpoch(g.ctx, consensus.HeightLatest)
 		if err != nil {
 			return fmt.Errorf("querying epoch: %w", err)
 		}

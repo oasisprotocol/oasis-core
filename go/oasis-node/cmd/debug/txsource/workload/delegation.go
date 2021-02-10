@@ -39,11 +39,11 @@ type delegation struct {
 	}
 }
 
-func (d *delegation) doEscrowTx(ctx context.Context, rng *rand.Rand, cnsc consensus.ClientBackend) error {
+func (d *delegation) doEscrowTx(ctx context.Context, rng *rand.Rand) error {
 	d.Logger.Debug("escrow tx flow")
 
 	// Get current epoch.
-	epoch, err := cnsc.GetEpoch(ctx, consensus.HeightLatest)
+	epoch, err := d.Consensus().Beacon().GetEpoch(ctx, consensus.HeightLatest)
 	if err != nil {
 		return fmt.Errorf("GetEpoch: %w", err)
 	}
@@ -95,7 +95,7 @@ func (d *delegation) doEscrowTx(ctx context.Context, rng *rand.Rand, cnsc consen
 	return nil
 }
 
-func (d *delegation) doReclaimEscrowTx(ctx context.Context, rng *rand.Rand, cnsc consensus.ClientBackend, stakingClient staking.Backend) error {
+func (d *delegation) doReclaimEscrowTx(ctx context.Context, rng *rand.Rand, stakingClient staking.Backend) error {
 	d.Logger.Debug("reclaim escrow tx")
 
 	// Select an account that has active delegation.
@@ -224,11 +224,11 @@ func (d *delegation) Run(
 	for {
 		switch rng.Intn(2) {
 		case 0:
-			if err := d.doEscrowTx(ctx, rng, cnsc); err != nil {
+			if err := d.doEscrowTx(ctx, rng); err != nil {
 				return err
 			}
 		case 1:
-			if err := d.doReclaimEscrowTx(ctx, rng, cnsc, stakingClient); err != nil {
+			if err := d.doReclaimEscrowTx(ctx, rng, stakingClient); err != nil {
 				return err
 			}
 		default:

@@ -33,11 +33,15 @@ func (b *simTimeSource) GetEpochBlock(ctx context.Context, epoch api.EpochTime) 
 	return height, nil
 }
 
-func (b *simTimeSource) WatchEpochs() (<-chan api.EpochTime, *pubsub.Subscription) {
+func (b *simTimeSource) WaitEpoch(ctx context.Context, epoch api.EpochTime) error {
+	panic("consim/epochtime: WaitEpoch not supported")
+}
+
+func (b *simTimeSource) WatchEpochs(ctx context.Context) (<-chan api.EpochTime, pubsub.ClosableSubscription, error) {
 	panic("consim/epochtime: WatchEpochs not supported")
 }
 
-func (b *simTimeSource) WatchLatestEpoch() (<-chan api.EpochTime, *pubsub.Subscription) {
+func (b *simTimeSource) WatchLatestEpoch(ctx context.Context) (<-chan api.EpochTime, pubsub.ClosableSubscription, error) {
 	panic("consim/epochtime: WatchLatestEpoch not supported")
 }
 

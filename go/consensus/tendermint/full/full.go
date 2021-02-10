@@ -618,43 +618,6 @@ func (t *fullService) Governance() governanceAPI.Backend {
 	return t.governance
 }
 
-func (t *fullService) GetEpoch(ctx context.Context, height int64) (beaconAPI.EpochTime, error) {
-	if t.beacon == nil {
-		return beaconAPI.EpochInvalid, consensusAPI.ErrUnsupported
-	}
-	return t.beacon.GetEpoch(ctx, height)
-}
-
-func (t *fullService) WaitEpoch(ctx context.Context, epoch beaconAPI.EpochTime) error {
-	if t.beacon == nil {
-		return consensusAPI.ErrUnsupported
-	}
-
-	ch, sub := t.beacon.WatchEpochs()
-	defer sub.Close()
-
-	for {
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		case e, ok := <-ch:
-			if !ok {
-				return context.Canceled
-			}
-			if e >= epoch {
-				return nil
-			}
-		}
-	}
-}
-
-func (t *fullService) BeaconConsensusParameters(ctx context.Context, height int64) (*beaconAPI.ConsensusParameters, error) {
-	if t.beacon == nil {
-		return nil, consensusAPI.ErrUnsupported
-	}
-	return t.beacon.ConsensusParameters(ctx, height)
-}
-
 func (t *fullService) GetBlock(ctx context.Context, height int64) (*consensusAPI.Block, error) {
 	blk, err := t.GetTendermintBlock(ctx, height)
 	if err != nil {

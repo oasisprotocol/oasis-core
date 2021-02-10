@@ -223,7 +223,13 @@ func (w *Worker) registrationLoop() { // nolint: gocyclo
 	// (re-)register the node on each epoch transition. This doesn't
 	// need to be strict block-epoch time, since it just serves to
 	// extend the node's expiration.
-	ch, sub := w.beacon.WatchLatestEpoch()
+	ch, sub, err := w.beacon.WatchLatestEpoch(w.ctx)
+	if err != nil {
+		w.logger.Error("failed to watch epochs",
+			"err", err,
+		)
+		return
+	}
 	defer sub.Close()
 
 	regFn := func(epoch beacon.EpochTime, hook RegisterNodeHook, retry bool) error {

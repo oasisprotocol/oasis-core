@@ -82,6 +82,7 @@ type queries struct {
 	schedulerParams *scheduler.ConsensusParameters
 
 	control    control.NodeController
+	beacon     beacon.Backend
 	staking    staking.Backend
 	consensus  consensus.ClientBackend
 	registry   registry.Backend
@@ -196,14 +197,14 @@ func (q *queries) sanityCheckTransactionEvents(ctx context.Context, height int64
 	return nil
 }
 
-// doConsensusQueries does GetEpoch, GetBlock, GetTransaction queries for the
-// provided height.
+// doConsensusQueries does GetBlock, GetTransaction queries for the provided
+// height.
 func (q *queries) doConsensusQueries(ctx context.Context, rng *rand.Rand, height int64) error {
 	q.logger.Debug("doing consensus queries",
 		"height", height,
 	)
 
-	epoch, err := q.consensus.GetEpoch(ctx, height)
+	epoch, err := q.beacon.GetEpoch(ctx, height)
 	if err != nil {
 		return fmt.Errorf("GetEpoch at height %d: %w", height, err)
 	}
@@ -336,7 +337,7 @@ func (q *queries) doSchedulerQueries(ctx context.Context, rng *rand.Rand, height
 	if err != nil {
 		return fmt.Errorf("GetCommittees at height %d: %w", height, err)
 	}
-	epoch, err := q.consensus.GetEpoch(ctx, height)
+	epoch, err := q.beacon.GetEpoch(ctx, height)
 	if err != nil {
 		return fmt.Errorf("GetEpoch failure: %w", err)
 	}
@@ -855,6 +856,7 @@ func (q *queries) Run(
 
 	q.control = control.NewNodeControllerClient(conn)
 	q.consensus = cnsc
+	q.beacon = beacon.NewBeaconClient(conn)
 	q.registry = registry.NewRegistryClient(conn)
 	q.runtime = runtimeClient.NewRuntimeClient(conn)
 	q.scheduler = scheduler.NewSchedulerClient(conn)
@@ -869,7 +871,7 @@ func (q *queries) Run(
 	if err != nil {
 		return fmt.Errorf("failed to query scheduler consensus parameters: %w", err)
 	}
-	q.epochtimeParams, err = q.consensus.BeaconConsensusParameters(ctx, consensus.HeightLatest)
+	q.epochtimeParams, err = q.beacon.ConsensusParameters(ctx, consensus.HeightLatest)
 	if err != nil {
 		return fmt.Errorf("failed to query epochtime consensus parameters: %w", err)
 	}
@@ -892,7 +894,7 @@ func (q *queries) Run(
 	if viper.GetBool(CfgQueriesRuntimeEnabled) {
 		// Wait for 2nd epoch, so that runtimes are up and running.
 		q.logger.Info("waiting for 2nd epoch")
-		if err := cnsc.WaitEpoch(ctx, 2); err != nil {
+		if err := q.beacon.WaitEpoch(ctx, 2); err != nil {
 			return fmt.Errorf("failed waiting for 2nd epoch: %w", err)
 		}
 	}

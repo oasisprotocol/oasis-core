@@ -3,6 +3,7 @@ package oasis
 import (
 	"google.golang.org/grpc"
 
+	beacon "github.com/oasisprotocol/oasis-core/go/beacon/api"
 	cmnGrpc "github.com/oasisprotocol/oasis-core/go/common/grpc"
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
 	control "github.com/oasisprotocol/oasis-core/go/control/api"
@@ -20,6 +21,7 @@ type Controller struct {
 	control.DebugController
 	control.NodeController
 
+	Beacon        beacon.Backend
 	Consensus     consensus.ClientBackend
 	Staking       staking.Backend
 	Governance    governance.Backend
@@ -51,6 +53,7 @@ func NewController(socketPath string) (*Controller, error) {
 	return &Controller{
 		DebugController: control.NewDebugControllerClient(conn),
 		NodeController:  control.NewNodeControllerClient(conn),
+		Beacon:          beacon.NewBeaconClient(conn),
 		Consensus:       consensus.NewConsensusClient(conn),
 		Staking:         staking.NewStakingClient(conn),
 		Governance:      governance.NewGovernanceClient(conn),

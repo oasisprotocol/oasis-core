@@ -10,6 +10,7 @@ import (
 	"github.com/spf13/viper"
 	"google.golang.org/grpc"
 
+	beacon "github.com/oasisprotocol/oasis-core/go/beacon/api"
 	"github.com/oasisprotocol/oasis-core/go/common"
 	"github.com/oasisprotocol/oasis-core/go/common/cbor"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
@@ -528,6 +529,7 @@ func (r *runtime) Run(
 	// Initialize base workload.
 	r.BaseWorkload.Init(cnsc, sm, fundingAccount)
 
+	beacon := beacon.NewBeaconClient(conn)
 	ctx := context.Background()
 
 	// Simple-keyvalue runtime.
@@ -551,7 +553,7 @@ func (r *runtime) Run(
 
 	// Wait for 2nd epoch, so that runtimes are up and running.
 	r.Logger.Info("waiting for 2nd epoch")
-	if err := cnsc.WaitEpoch(ctx, 2); err != nil {
+	if err := beacon.WaitEpoch(ctx, 2); err != nil {
 		return fmt.Errorf("failed waiting for 2nd epoch: %w", err)
 	}
 
