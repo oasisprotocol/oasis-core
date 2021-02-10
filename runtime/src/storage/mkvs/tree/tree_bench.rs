@@ -19,7 +19,9 @@ fn gen_pairs() -> (Vec<Vec<u8>>, Vec<Vec<u8>>) {
 }
 
 fn gen_tree() -> (Tree, Vec<Vec<u8>>) {
-    let mut tree = Tree::make().new(Box::new(NoopReadSyncer));
+    let mut tree = Tree::make()
+        .with_root_type(RootType::State)
+        .new(Box::new(NoopReadSyncer));
 
     let (keys, vals) = gen_pairs();
     for i in 0..keys.len() {
@@ -53,7 +55,9 @@ fn bench_existing_scan(b: &mut Bencher) {
 #[bench]
 fn bench_single_inserts(b: &mut Bencher) {
     let (keys, vals) = gen_pairs();
-    let mut tree = Tree::make().new(Box::new(NoopReadSyncer));
+    let mut tree = Tree::make()
+        .with_root_type(RootType::State)
+        .new(Box::new(NoopReadSyncer));
 
     let mut i = 0;
     b.iter(|| {
@@ -72,7 +76,9 @@ fn bench_insert(b: &mut Bencher) {
     let (keys, vals) = gen_pairs();
 
     b.iter(|| {
-        let mut tree = Tree::make().new(Box::new(NoopReadSyncer));
+        let mut tree = Tree::make()
+            .with_root_type(RootType::State)
+            .new(Box::new(NoopReadSyncer));
 
         for i in 0..keys.len() {
             tree.insert(Context::background(), keys[i].as_ref(), vals[i].as_ref())
@@ -85,7 +91,9 @@ fn bench_insert(b: &mut Bencher) {
 
 fn bench_insert_batch(b: &mut Bencher, num_values: usize, commit: bool) {
     b.iter(|| {
-        let mut tree = Tree::make().new(Box::new(NoopReadSyncer));
+        let mut tree = Tree::make()
+            .with_root_type(RootType::State)
+            .new(Box::new(NoopReadSyncer));
         for i in 0..num_values {
             let key = format!("key {}", i);
             let value = format!("value {}", i);

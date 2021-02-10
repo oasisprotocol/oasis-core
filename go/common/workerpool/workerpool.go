@@ -89,6 +89,13 @@ func (p *Pool) Quit() <-chan struct{} {
 // Submit adds a task to the pool's queue and returns a channel that will be closed
 // once the task is complete.
 func (p *Pool) Submit(job func()) <-chan struct{} {
+	p.lock.Lock()
+	defer p.lock.Unlock()
+
+	if p.currentCount == 0 {
+		return nil
+	}
+
 	desc := &jobDescriptor{
 		job:        job,
 		completeCh: make(chan struct{}),

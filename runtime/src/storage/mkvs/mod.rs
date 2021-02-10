@@ -22,7 +22,7 @@ pub mod sync;
 #[cfg(test)]
 mod tests;
 
-pub use tree::{Depth, Key, NodeBox, OverlayTree, Root, Tree};
+pub use tree::{Depth, Key, NodeBox, OverlayTree, Root, RootType, Tree};
 
 /// The type of entry in the log.
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]

@@ -126,6 +126,7 @@ blockLoop:
 			tree := transaction.NewTree(st, storage.Root{
 				Namespace: blk.Header.Namespace,
 				Version:   blk.Header.Round,
+				Type:      storage.RootTypeIO,
 				Hash:      blk.Header.IORoot,
 			})
 			defer tree.Close()

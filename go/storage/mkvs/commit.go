@@ -65,6 +65,7 @@ func (t *tree) commitWithHooks(
 	if oldRoot.IsEmpty() {
 		oldRoot.Namespace = namespace
 		oldRoot.Version = version
+		oldRoot.Type = t.rootType
 	}
 
 	var batch db.Batch
@@ -124,6 +125,7 @@ func (t *tree) commitWithHooks(
 	root := node.Root{
 		Namespace: namespace,
 		Version:   version,
+		Type:      oldRoot.Type,
 		Hash:      rootHash,
 	}
 	if err := batch.PutWriteLog(log, logAnns); err != nil {

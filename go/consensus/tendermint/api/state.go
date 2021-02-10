@@ -209,7 +209,7 @@ func (ms *mockApplicationState) UpdateMockApplicationStateConfig(cfg *MockApplic
 
 // NewMockApplicationState creates a new mock application state for testing.
 func NewMockApplicationState(cfg *MockApplicationStateConfig) MockApplicationState {
-	tree := mkvs.New(nil, nil)
+	tree := mkvs.New(nil, nil, storage.RootTypeState)
 
 	blockCtx := NewBlockContext()
 	m := &mockApplicationState{
@@ -294,10 +294,7 @@ func NewImmutableState(ctx context.Context, state ApplicationQueryState, version
 		// Unexpected number of roots.
 		return nil, fmt.Errorf("state: incorrect number of roots (%d): %+v", version, roots)
 	}
-	tree := mkvs.NewWithRoot(nil, ndb, storage.Root{
-		Version: uint64(version),
-		Hash:    roots[0],
-	}, mkvs.WithoutWriteLog())
+	tree := mkvs.NewWithRoot(nil, ndb, roots[0], mkvs.WithoutWriteLog())
 
 	return &ImmutableState{tree}, nil
 }

@@ -101,6 +101,7 @@ func (n *Node) GetRuntimeStatus(ctx context.Context) (map[common.Namespace]contr
 			status.LatestTime = blk.Header.Timestamp
 			status.LatestStateRoot = storage.Root{
 				Version: blk.Header.Round,
+				Type:    storage.RootTypeState,
 				Hash:    blk.Header.StateRoot,
 			}
 		default:

@@ -14,7 +14,6 @@ import (
 
 	beacon "github.com/oasisprotocol/oasis-core/go/beacon/api"
 	"github.com/oasisprotocol/oasis-core/go/common"
-	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
 	"github.com/oasisprotocol/oasis-core/go/common/quantity"
@@ -286,8 +285,14 @@ func (s *applicationState) doCommit(now time.Time) (uint64, error) {
 	if err != nil {
 		return 0, fmt.Errorf("failed to commit: %w", err)
 	}
-	if err = s.storage.NodeDB().Finalize(s.ctx, s.stateRoot.Version+1, []hash.Hash{stateRootHash}); err != nil {
-		return 0, fmt.Errorf("failed to finalize height %d: %w", s.stateRoot.Version+1, err)
+	newStateRoot := storage.Root{
+		Namespace: s.stateRoot.Namespace,
+		Version:   s.stateRoot.Version + 1,
+		Type:      storage.RootTypeState,
+		Hash:      stateRootHash,
+	}
+	if err = s.storage.NodeDB().Finalize(s.ctx, []storage.Root{newStateRoot}); err != nil {
+		return 0, fmt.Errorf("failed to finalize height %d: %w", newStateRoot.Version, err)
 	}
 
 	s.stateRoot.Hash = stateRootHash
@@ -464,6 +469,7 @@ func InitStateStorage(ctx context.Context, cfg *ApplicationConfig) (storage.Loca
 	}
 	stateRoot := &storage.Root{
 		Version: latestVersion,
+		Type:    storage.RootTypeState,
 	}
 	switch len(roots) {
 	case 0:
@@ -474,7 +480,7 @@ func InitStateStorage(ctx context.Context, cfg *ApplicationConfig) (storage.Loca
 		stateRoot.Hash.Empty()
 	case 1:
 		// Exactly one root -- the usual case.
-		stateRoot.Hash = roots[0]
+		stateRoot.Hash = roots[0].Hash
 	default:
 		// More roots -- should not happen for our use case.
 		return nil, nil, nil, fmt.Errorf("state: more than one root, corrupted database?")

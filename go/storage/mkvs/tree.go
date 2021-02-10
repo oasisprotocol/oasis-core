@@ -11,8 +11,10 @@ import (
 
 var _ Tree = (*tree)(nil)
 
-type tree struct {
+type tree struct { // nolint: maligned
 	cache *cache
+
+	rootType node.RootType
 
 	// NOTE: This can be a map as updates are commutative.
 	pendingWriteLog map[string]*pendingEntry
@@ -48,16 +50,6 @@ func Capacity(nodeCapacity, valueCapacityBytes uint64) Option {
 	}
 }
 
-// PersistEverythingFromSyncer sets whether to persist all the nodes and
-// values obtained from the remote syncer to local database.
-//
-// If not specified, the default is false.
-func PersistEverythingFromSyncer(doit bool) Option {
-	return func(t *tree) {
-		t.cache.persistEverythingFromSyncer = doit
-	}
-}
-
 // WithoutWriteLog disables building a write log when performing operations.
 //
 // Note that this option cannot be used together with specifying a ReadSyncer and trying to use it
@@ -72,7 +64,7 @@ func WithoutWriteLog() Option {
 }
 
 // New creates a new empty MKVS tree backed by the given node database.
-func New(rs syncer.ReadSyncer, ndb db.NodeDB, options ...Option) Tree {
+func New(rs syncer.ReadSyncer, ndb db.NodeDB, rootType node.RootType, options ...Option) Tree {
 	if rs == nil {
 		rs = syncer.NopReadSyncer
 	}
@@ -81,7 +73,8 @@ func New(rs syncer.ReadSyncer, ndb db.NodeDB, options ...Option) Tree {
 	}
 
 	t := &tree{
-		cache:           newCache(ndb, rs),
+		cache:           newCache(ndb, rs, rootType),
+		rootType:        rootType,
 		pendingWriteLog: make(map[string]*pendingEntry),
 		withoutWriteLog: false,
 	}
@@ -96,7 +89,7 @@ func New(rs syncer.ReadSyncer, ndb db.NodeDB, options ...Option) Tree {
 // NewWithRoot creates a new MKVS tree with an existing root, backed by
 // the given node database.
 func NewWithRoot(rs syncer.ReadSyncer, ndb db.NodeDB, root node.Root, options ...Option) Tree {
-	t := New(rs, ndb, options...).(*tree)
+	t := New(rs, ndb, root.Type, options...).(*tree)
 	t.cache.setPendingRoot(&node.Pointer{
 		Clean: true,
 		Hash:  root.Hash,
@@ -137,6 +130,11 @@ func (t *tree) ApplyWriteLog(ctx context.Context, wl writelog.Iterator) error {
 		}
 	}
 	return nil
+}
+
+// Implements Tree.
+func (t *tree) RootType() node.RootType {
+	return t.rootType
 }
 
 // Implements Tree.

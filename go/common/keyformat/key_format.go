@@ -74,6 +74,11 @@ func (k *KeyFormat) Size() int {
 	return 1 + k.size
 }
 
+// Prefix returns the key format's prefix byte.
+func (k *KeyFormat) Prefix() byte {
+	return k.prefix
+}
+
 // Encode encodes values into a key.
 //
 // You can pass either the same amount of values as specified in the layout
@@ -150,6 +155,9 @@ func (k *KeyFormat) Encode(values ...interface{}) []byte {
 			}
 			if err != nil {
 				panic(fmt.Sprintf("key format: failed to marshal element %d: %s", i, err))
+			}
+			if len(data) != meta.size {
+				panic(fmt.Sprintf("key format: unexpected marshalled size %d for element %d", len(data), i))
 			}
 
 			copy(buf[:], data)

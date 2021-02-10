@@ -51,7 +51,11 @@ fn generate_long_key_value_pairs() -> (Vec<Vec<u8>>, Vec<Vec<u8>>) {
 
 #[test]
 fn test_basic() {
-    let mut tree = OverlayTree::new(Tree::make().new(Box::new(NoopReadSyncer)));
+    let mut tree = OverlayTree::new(
+        Tree::make()
+            .with_root_type(RootType::State)
+            .new(Box::new(NoopReadSyncer)),
+    );
 
     let key_zero = b"foo";
     let value_zero = b"bar";
@@ -296,7 +300,9 @@ fn test_basic() {
 
 #[test]
 fn test_long_keys() {
-    let mut tree = Tree::make().new(Box::new(NoopReadSyncer));
+    let mut tree = Tree::make()
+        .with_root_type(RootType::State)
+        .new(Box::new(NoopReadSyncer));
 
     // First insert keys 0..n and remove them in order n..0.
     let mut roots: Vec<Hash> = Vec::new();
@@ -357,7 +363,9 @@ fn test_long_keys() {
 
 #[test]
 fn test_empty_keys() {
-    let mut tree = Tree::make().new(Box::new(NoopReadSyncer));
+    let mut tree = Tree::make()
+        .with_root_type(RootType::State)
+        .new(Box::new(NoopReadSyncer));
 
     fn test_empty_key(tree: &mut Tree) {
         let empty_key = b"";
@@ -483,7 +491,9 @@ fn test_empty_keys() {
 
 #[test]
 fn test_insert_commit_batch() {
-    let mut tree = Tree::make().new(Box::new(NoopReadSyncer));
+    let mut tree = Tree::make()
+        .with_root_type(RootType::State)
+        .new(Box::new(NoopReadSyncer));
 
     let (keys, values) = generate_key_value_pairs();
     for i in 0..keys.len() {
@@ -510,6 +520,7 @@ fn test_insert_commit_batch() {
 fn test_insert_commit_each() {
     let mut tree = Tree::make()
         .with_capacity(0, 0)
+        .with_root_type(RootType::State)
         .new(Box::new(NoopReadSyncer));
 
     let (keys, values) = generate_key_value_pairs();
@@ -539,6 +550,7 @@ fn test_insert_commit_each() {
 fn test_remove() {
     let mut tree = Tree::make()
         .with_capacity(0, 0)
+        .with_root_type(RootType::State)
         .new(Box::new(NoopReadSyncer));
 
     // First insert keys 0..n and remove them in order n..0.
@@ -663,6 +675,7 @@ fn test_syncer_basic() {
     let mut tree = OverlayTree::new(
         Tree::make()
             .with_capacity(0, 0)
+            .with_root_type(RootType::State)
             .new(Box::new(NoopReadSyncer)),
     );
 
@@ -690,6 +703,7 @@ fn test_syncer_basic() {
     let remote_tree = Tree::make()
         .with_capacity(0, 0)
         .with_root(Root {
+            root_type: RootType::State,
             hash,
             ..Default::default()
         })
@@ -721,6 +735,7 @@ fn test_syncer_remove() {
     let mut tree = OverlayTree::new(
         Tree::make()
             .with_capacity(0, 0)
+            .with_root_type(RootType::State)
             .new(Box::new(NoopReadSyncer)),
     );
     let mut roots: Vec<Hash> = Vec::new();
@@ -749,6 +764,7 @@ fn test_syncer_remove() {
     let mut remote_tree = Tree::make()
         .with_capacity(0, 0)
         .with_root(Root {
+            root_type: RootType::State,
             hash: roots[roots.len() - 1],
             ..Default::default()
         })
@@ -787,6 +803,7 @@ fn test_syncer_insert() {
     let mut tree = OverlayTree::new(
         Tree::make()
             .with_capacity(0, 0)
+            .with_root_type(RootType::State)
             .new(Box::new(NoopReadSyncer)),
     );
 
@@ -809,6 +826,7 @@ fn test_syncer_insert() {
     let mut remote_tree = Tree::make()
         .with_capacity(0, 0)
         .with_root(Root {
+            root_type: RootType::State,
             hash,
             ..Default::default()
         })
@@ -842,6 +860,7 @@ fn test_syncer_writelog_remove() {
     let mut tree = OverlayTree::new(
         Tree::make()
             .with_capacity(0, 0)
+            .with_root_type(RootType::State)
             .new(Box::new(NoopReadSyncer)),
     );
 
@@ -879,6 +898,7 @@ fn test_syncer_prefetch_prefixes() {
     let mut tree = OverlayTree::new(
         Tree::make()
             .with_capacity(0, 0)
+            .with_root_type(RootType::State)
             .new(Box::new(NoopReadSyncer)),
     );
 
@@ -901,6 +921,7 @@ fn test_syncer_prefetch_prefixes() {
     let remote_tree = Tree::make()
         .with_capacity(0, 0)
         .with_root(Root {
+            root_type: RootType::State,
             hash,
             ..Default::default()
         })
@@ -934,6 +955,7 @@ fn test_syncer_prefetch_prefixes() {
 fn test_value_eviction() {
     let mut tree = Tree::make()
         .with_capacity(0, 512)
+        .with_root_type(RootType::State)
         .new(Box::new(NoopReadSyncer));
 
     let (keys, values) = generate_key_value_pairs();
@@ -964,6 +986,7 @@ fn test_value_eviction() {
 fn test_node_eviction() {
     let mut tree = Tree::make()
         .with_capacity(128, 0)
+        .with_root_type(RootType::State)
         .new(Box::new(NoopReadSyncer));
 
     let (keys, values) = generate_key_value_pairs_ex("foo".to_string(), 150);
@@ -1015,6 +1038,7 @@ fn test_special_case_from_json(fixture: &'static str) {
 
     let mut tree = Tree::make()
         .with_capacity(0, 0)
+        .with_root_type(RootType::State)
         .new(Box::new(NoopReadSyncer));
     let mut overlay = OverlayTree::new(&mut tree);
     let mut remote_tree: Option<Tree> = None;
@@ -1030,6 +1054,7 @@ fn test_special_case_from_json(fixture: &'static str) {
             Tree::make()
                 .with_capacity(0, 0)
                 .with_root(Root {
+                    root_type: RootType::State,
                     hash,
                     ..Default::default()
                 })

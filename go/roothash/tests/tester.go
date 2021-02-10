@@ -266,6 +266,7 @@ func (s *runtimeState) generateExecutorCommitments(t *testing.T, consensus conse
 	ioRoot := storageAPI.Root{
 		Namespace: child.Header.Namespace,
 		Version:   child.Header.Round + 1,
+		Type:      storageAPI.RootTypeIO,
 	}
 	ioRoot.Hash.Empty()
 
@@ -301,9 +302,9 @@ func (s *runtimeState) generateExecutorCommitments(t *testing.T, consensus conse
 		child.Header.Namespace,
 		child.Header.Round+1,
 		[]storageAPI.ApplyOp{
-			{SrcRound: child.Header.Round + 1, SrcRoot: emptyRoot, DstRoot: ioRootHash, WriteLog: ioWriteLog},
+			{RootType: storageAPI.RootTypeIO, SrcRound: child.Header.Round + 1, SrcRoot: emptyRoot, DstRoot: ioRootHash, WriteLog: ioWriteLog},
 			// NOTE: Twice to get a receipt over both roots which we set to the same value.
-			{SrcRound: child.Header.Round, SrcRoot: emptyRoot, DstRoot: ioRootHash, WriteLog: ioWriteLog},
+			{RootType: storageAPI.RootTypeState, SrcRound: child.Header.Round, SrcRoot: emptyRoot, DstRoot: ioRootHash, WriteLog: ioWriteLog},
 		},
 	)
 
@@ -776,7 +777,7 @@ func mustStore(
 	var signatures []signature.Signature
 	for _, node := range committee.workers {
 		var receipt *storageAPI.Receipt
-		receipt, err = storageAPI.SignReceipt(node.Signer, ns, round, body.Roots)
+		receipt, err = storageAPI.SignReceipt(node.Signer, ns, round, body.RootTypes, body.Roots)
 		require.NoError(err, "SignReceipt")
 
 		signatures = append(signatures, receipt.Signed.Signature)

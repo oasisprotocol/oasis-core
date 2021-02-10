@@ -22,6 +22,7 @@ impl Tree {
         self.cache.borrow_mut().set_sync_root(Root {
             namespace,
             version,
+            root_type: self.root_type,
             hash: new_hash,
         });
 

@@ -175,6 +175,7 @@ impl LRUCache {
         node_capacity: usize,
         value_capacity: usize,
         read_syncer: Box<dyn ReadSync>,
+        root_type: RootType,
     ) -> Box<LRUCache> {
         Box::new(LRUCache {
             read_syncer: read_syncer,
@@ -183,7 +184,10 @@ impl LRUCache {
                 node: None,
                 ..Default::default()
             })),
-            sync_root: Root::default(),
+            sync_root: Root {
+                root_type: root_type,
+                ..Default::default()
+            },
 
             lru_leaf: LRUList::new(value_capacity),
             lru_internal: LRUList::new(node_capacity),

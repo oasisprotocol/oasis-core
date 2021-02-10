@@ -27,7 +27,7 @@ type treeOverlay struct {
 func NewOverlay(inner Tree) OverlayTree {
 	return &treeOverlay{
 		inner:   inner,
-		overlay: New(nil, nil, WithoutWriteLog()),
+		overlay: New(nil, nil, inner.RootType(), WithoutWriteLog()),
 		dirty:   make(map[string]bool),
 	}
 }

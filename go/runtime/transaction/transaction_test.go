@@ -15,9 +15,10 @@ import (
 
 func TestTransaction(t *testing.T) {
 	ctx := context.Background()
-	store := mkvs.New(nil, nil)
+	store := mkvs.New(nil, nil, node.RootTypeState)
 
 	var emptyRoot node.Root
+	emptyRoot.Type = node.RootTypeState
 	emptyRoot.Empty()
 
 	tree := NewTree(store, emptyRoot)
@@ -144,7 +145,7 @@ func TestTransaction(t *testing.T) {
 	require.NoError(t, err, "Commit")
 	require.EqualValues(t, rootHash, storeRootHash)
 
-	tree = NewTree(store, node.Root{Hash: storeRootHash})
+	tree = NewTree(store, node.Root{Type: node.RootTypeState, Hash: storeRootHash})
 	txns, err = tree.GetTransactions(ctx)
 	require.NoError(t, err, "GetTransactions")
 	require.Len(t, txns, len(testTxns)+1, "there should be some transactions")
@@ -162,7 +163,7 @@ func TestTransaction(t *testing.T) {
 
 func TestTransactionInvalidBatchOrder(t *testing.T) {
 	ctx := context.Background()
-	store := mkvs.New(nil, nil)
+	store := mkvs.New(nil, nil, node.RootTypeState)
 
 	var emptyRoot node.Root
 	emptyRoot.Empty()

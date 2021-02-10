@@ -191,10 +191,12 @@ func doCheckRoots(cmd *cobra.Command, args []string) {
 	// Go through every block up to latestBlock and try getting write logs for each of them.
 	oldStateRoot := node.Root{
 		Namespace: id,
+		Type:      node.RootTypeState,
 	}
 	oldStateRoot.Hash.Empty()
 	emptyRoot := node.Root{
 		Namespace: id,
+		Type:      node.RootTypeIO,
 	}
 	emptyRoot.Hash.Empty()
 	for i := uint64(0); i <= latestBlock.Header.Round; i++ {
@@ -211,6 +213,7 @@ func doCheckRoots(cmd *cobra.Command, args []string) {
 		stateRoot := node.Root{
 			Namespace: id,
 			Version:   i,
+			Type:      node.RootTypeState,
 			Hash:      blk.Header.StateRoot,
 		}
 		if !oldStateRoot.Hash.Equal(&stateRoot.Hash) {
@@ -222,6 +225,7 @@ func doCheckRoots(cmd *cobra.Command, args []string) {
 		ioRoot := node.Root{
 			Namespace: id,
 			Version:   i,
+			Type:      node.RootTypeIO,
 			Hash:      blk.Header.IORoot,
 		}
 		if !ioRoot.Hash.IsEmpty() {

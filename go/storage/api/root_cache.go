@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/oasisprotocol/oasis-core/go/common"
 	"github.com/oasisprotocol/oasis-core/go/common/cache/lru"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
 	"github.com/oasisprotocol/oasis-core/go/storage/mkvs"
@@ -23,38 +22,22 @@ type RootCache struct {
 
 	applyLocks      *lru.Cache
 	applyLocksGuard sync.Mutex
-
-	persistEverything mkvs.Option
 }
 
 // GetTree gets a tree entry from the cache by the root iff present, or creates
 // a new tree with the specified root in the node database.
 func (rc *RootCache) GetTree(ctx context.Context, root Root) (mkvs.Tree, error) {
-	return mkvs.NewWithRoot(rc.remoteSyncer, rc.localDB, root, rc.persistEverything), nil
+	return mkvs.NewWithRoot(rc.remoteSyncer, rc.localDB, root), nil
 }
 
 // Apply applies the write log, bypassing the apply operation iff the new root
 // already is in the node database.
 func (rc *RootCache) Apply(
 	ctx context.Context,
-	ns common.Namespace,
-	srcVersion uint64,
-	srcRoot hash.Hash,
-	dstVersion uint64,
-	dstRoot hash.Hash,
+	root Root,
+	expectedNewRoot Root,
 	writeLog WriteLog,
 ) (*hash.Hash, error) {
-	root := Root{
-		Namespace: ns,
-		Version:   srcVersion,
-		Hash:      srcRoot,
-	}
-	expectedNewRoot := Root{
-		Namespace: ns,
-		Version:   dstVersion,
-		Hash:      dstRoot,
-	}
-
 	// Sanity check the expected new root.
 	if !expectedNewRoot.Follows(&root) {
 		return nil, ErrRootMustFollowOld
@@ -64,15 +47,12 @@ func (rc *RootCache) Apply(
 	mu.Lock()
 	defer mu.Unlock()
 
-	var r hash.Hash
+	r := expectedNewRoot.Hash
 
 	// Check if we already have the expected new root in our local DB.
-	if rc.localDB.HasRoot(expectedNewRoot) {
-		// We do, don't apply anything.
-		r = dstRoot
-	} else {
+	if !rc.localDB.HasRoot(expectedNewRoot) {
 		// We don't, apply operations.
-		tree := mkvs.NewWithRoot(rc.remoteSyncer, rc.localDB, root, rc.persistEverything)
+		tree := mkvs.NewWithRoot(rc.remoteSyncer, rc.localDB, root)
 		defer tree.Close()
 
 		if err := tree.ApplyWriteLog(ctx, writelog.NewStaticIterator(writeLog)); err != nil {
@@ -84,13 +64,10 @@ func (rc *RootCache) Apply(
 			_, err = tree.CommitKnown(ctx, expectedNewRoot)
 		} else {
 			// Skip known root checks -- only for use in benchmarks.
-			_, r, err = tree.Commit(ctx, ns, dstVersion)
-			dstRoot = r
-			expectedNewRoot.Hash = r
+			_, r, err = tree.Commit(ctx, root.Namespace, expectedNewRoot.Version)
 		}
 		switch err {
 		case nil:
-			r = dstRoot
 		case mkvs.ErrKnownRootMismatch:
 			return nil, ErrExpectedRootMismatch
 		default:
@@ -135,16 +112,10 @@ func NewRootCache(
 		return nil, fmt.Errorf("storage/rootcache: failed to create applyLocks: %w", err)
 	}
 
-	// When we implement a caching client again, we want to persist
-	// everything that we obtain from the remote syncer in our local
-	// database.
-	persistEverything := mkvs.PersistEverythingFromSyncer(remoteSyncer != nil)
-
 	return &RootCache{
 		localDB:            localDB,
 		remoteSyncer:       remoteSyncer,
 		insecureSkipChecks: insecureSkipChecks,
 		applyLocks:         applyLocks,
-		persistEverything:  persistEverything,
 	}, nil
 }

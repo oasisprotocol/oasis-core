@@ -94,4 +94,7 @@ type Tree interface {
 
 	// DumpLocal dumps the tree in the local memory into the given writer.
 	DumpLocal(ctx context.Context, w io.Writer, maxDepth node.Depth)
+
+	// RootType returns the storage root type.
+	RootType() node.RootType
 }

@@ -171,6 +171,7 @@ func NewBlock(blk *tmtypes.Block) *consensus.Block {
 		Time:   blk.Header.Time,
 		StateRoot: mkvsNode.Root{
 			Version: uint64(blk.Header.Height) - 1,
+			Type:    mkvsNode.RootTypeState,
 			Hash:    stateRoot,
 		},
 		Meta: rawMeta,

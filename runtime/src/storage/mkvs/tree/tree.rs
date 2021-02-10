@@ -13,6 +13,7 @@ pub struct Options {
     node_capacity: usize,
     value_capacity: usize,
     root: Option<Root>,
+    root_type: Option<RootType>,
 }
 
 impl Options {
@@ -32,13 +33,37 @@ impl Options {
     }
 
     /// Set an existing root as the root for the new tree.
+    ///
+    /// Either this or a root type must be specified to construct a new
+    /// tree. If neither is specified, or if both are set but don't agree on
+    /// the root type, the constructor will panic.
     pub fn with_root(mut self, root: Root) -> Self {
         self.root = Some(root);
         self
     }
 
+    /// Set the storage root type for this tree.
+    ///
+    /// Either this or an existing root must be specified to construct a new
+    /// tree. If neither is specified, or if both are set but don't agree on
+    /// the root type, the constructor will panic.
+    pub fn with_root_type(mut self, root_type: RootType) -> Self {
+        self.root_type = Some(root_type);
+        self
+    }
+
     /// Commit the options set so far into a newly constructed tree instance.
     pub fn new(self, read_syncer: Box<dyn ReadSync>) -> Tree {
+        if self.root_type.is_none() && self.root.is_none() {
+            panic!("mkvs/tree: neither root type nor storage root specified");
+        }
+        if let Some(root) = self.root {
+            if let Some(root_type) = self.root_type {
+                if root.root_type != root_type {
+                    panic!("mkvs/tree: specified storage root and incompatible root type");
+                }
+            }
+        }
         Tree::new(read_syncer, &self)
     }
 }
@@ -46,6 +71,7 @@ impl Options {
 /// A patricia tree-based MKVS implementation.
 pub struct Tree {
     pub(crate) cache: RefCell<Box<LRUCache>>,
+    pub(crate) root_type: RootType,
 }
 
 // Tree is Send as long as ownership of internal Rcs cannot leak out via any of its methods.
@@ -54,12 +80,19 @@ unsafe impl Send for Tree {}
 impl Tree {
     /// Construct a new tree instance using the given read syncer and options struct.
     pub fn new(read_syncer: Box<dyn ReadSync>, opts: &Options) -> Tree {
+        let root_type = if opts.root.is_none() {
+            opts.root_type.unwrap()
+        } else {
+            opts.root.unwrap().root_type
+        };
         let tree = Tree {
             cache: RefCell::new(LRUCache::new(
                 opts.node_capacity,
                 opts.value_capacity,
                 read_syncer,
+                root_type,
             )),
+            root_type: root_type,
         };
 
         if let Some(root) = opts.root {
@@ -82,6 +115,7 @@ impl Tree {
             node_capacity: 50_000,
             value_capacity: 16 * 1024 * 1024,
             root: None,
+            root_type: None,
         }
     }
 }

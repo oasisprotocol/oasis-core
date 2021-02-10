@@ -6,7 +6,7 @@ use serde_cbor::Value;
 
 use crate::{
     common::{cbor, crypto::hash::Hash, namespace::Namespace},
-    storage::mkvs::{sync, WriteLog},
+    storage::mkvs::{sync, tree::RootType, WriteLog},
 };
 
 // NOTE: The return value is intentionally ignored as it is not required
@@ -69,6 +69,7 @@ const CALL_TIMEOUT: Duration = Duration::from_secs(30);
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct ApplyRequest {
     pub namespace: Namespace,
+    pub root_type: RootType,
     pub src_round: u64,
     pub src_root: Hash,
     pub dst_round: u64,

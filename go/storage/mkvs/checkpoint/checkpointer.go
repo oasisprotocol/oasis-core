@@ -9,7 +9,6 @@ import (
 	"github.com/eapache/channels"
 
 	"github.com/oasisprotocol/oasis-core/go/common"
-	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
 	db "github.com/oasisprotocol/oasis-core/go/storage/mkvs/db/api"
 	"github.com/oasisprotocol/oasis-core/go/storage/mkvs/node"
@@ -39,7 +38,7 @@ type CheckpointerConfig struct {
 	// specified, all finalized roots will be checkpointed.
 	//
 	// This must return exactly RootsPerVersion roots.
-	GetRoots func(context.Context, uint64) ([]hash.Hash, error)
+	GetRoots func(context.Context, uint64) ([]node.Root, error)
 }
 
 // CreationParameters are the checkpoint creation parameters used by the checkpointer.
@@ -89,29 +88,20 @@ func (c *checkpointer) Flush() {
 }
 
 func (c *checkpointer) checkpoint(ctx context.Context, version uint64, params *CreationParameters) (err error) {
-	var rootHashes []hash.Hash
+	var roots []node.Root
 	if c.cfg.GetRoots == nil {
-		rootHashes, err = c.ndb.GetRootsForVersion(ctx, version)
+		roots, err = c.ndb.GetRootsForVersion(ctx, version)
 	} else {
-		rootHashes, err = c.cfg.GetRoots(ctx, version)
+		roots, err = c.cfg.GetRoots(ctx, version)
 	}
 	if err != nil {
 		return fmt.Errorf("checkpointer: failed to get storage roots: %w", err)
 	}
-	if len(rootHashes) != c.cfg.RootsPerVersion {
+	if len(roots) != c.cfg.RootsPerVersion {
 		return fmt.Errorf("checkpointer: unexpected number of roots for version (expected: %d got: %d)",
 			c.cfg.RootsPerVersion,
-			len(rootHashes),
+			len(roots),
 		)
-	}
-
-	var roots []node.Root
-	for _, h := range rootHashes {
-		roots = append(roots, node.Root{
-			Namespace: c.cfg.Namespace,
-			Version:   version,
-			Hash:      h,
-		})
 	}
 
 	defer func() {

@@ -182,6 +182,7 @@ func TestMessagesGasEstimation(t *testing.T) {
 		Version:   1,
 		Namespace: newBlk.Header.Namespace,
 		Round:     newBlk.Header.Round,
+		RootTypes: body.RootTypesForStorageReceipt(),
 		Roots:     body.RootsForStorageReceipt(),
 	}
 	signedReceipt, err := signature.SignSigned(sk, storage.ReceiptSignatureContext, &receiptBody)
