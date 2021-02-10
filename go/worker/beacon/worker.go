@@ -429,6 +429,11 @@ func (w *Worker) recoverPersistedState() {
 		)
 		return
 	}
+	if pvssState == nil {
+		w.logger.Debug("restore: no consensus state, round presumably complete")
+		w.persistState(nil)
+		return
+	}
 
 	// The round finished while we weren't looking, nothing to be done.
 	if pvssState.State == beacon.StateComplete {
