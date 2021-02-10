@@ -936,6 +936,7 @@ func (net *Network) MakeGenesis() error {
 		"--halt.epoch", strconv.FormatUint(net.cfg.HaltEpoch, 10),
 		"--consensus.backend", net.cfg.Consensus.Backend,
 		"--consensus.tendermint.timeout_commit", net.cfg.Consensus.Parameters.TimeoutCommit.String(),
+		"--registry.enable_runtime_governance_models", "entity,runtime",
 		"--registry.debug.allow_unroutable_addresses", "true",
 		"--" + genesis.CfgRegistryDebugAllowTestRuntimes, "true",
 		"--scheduler.max_validators_per_entity", strconv.Itoa(len(net.Validators())),

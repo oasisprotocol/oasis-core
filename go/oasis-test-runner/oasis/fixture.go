@@ -211,6 +211,8 @@ type RuntimeFixture struct { // nolint: maligned
 	AdmissionPolicy registry.RuntimeAdmissionPolicy   `json:"admission_policy"`
 	Staking         registry.RuntimeStakingParameters `json:"staking,omitempty"`
 
+	GovernanceModel registry.RuntimeGovernanceModel `json:"governance_model"`
+
 	Pruner RuntimePrunerCfg `json:"pruner,omitempty"`
 
 	ExcludeFromGenesis bool `json:"exclude_from_genesis,omitempty"`
@@ -253,6 +255,7 @@ func (f *RuntimeFixture) Create(netFixture *NetworkFixture, net *Network) (*Runt
 		GenesisRound:       f.GenesisRound,
 		Pruner:             f.Pruner,
 		ExcludeFromGenesis: f.ExcludeFromGenesis,
+		GovernanceModel:    f.GovernanceModel,
 	})
 }
 

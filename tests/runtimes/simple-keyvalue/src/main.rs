@@ -15,7 +15,10 @@ use oasis_core_runtime::{
         namespace::Namespace,
         version::Version,
     },
-    consensus::roothash::{Message, StakingMessage},
+    consensus::{
+        registry,
+        roothash::{Message, RegistryMessage, StakingMessage},
+    },
     executor::Executor,
     rak::RAK,
     register_runtime_txn_methods, runtime_context,
@@ -27,7 +30,7 @@ use oasis_core_runtime::{
     version_from_cargo, Protocol, RpcDemux, RpcDispatcher, TxnDispatcher, TxnMethDispatcher,
 };
 use simple_keymanager::trusted_policy_signers;
-use simple_keyvalue_api::{with_api, Key, KeyValue, Transfer, Withdraw};
+use simple_keyvalue_api::{with_api, Key, KeyValue, Transfer, UpdateRuntime, Withdraw};
 
 /// Key format used for transaction artifacts.
 #[derive(Debug)]
@@ -108,6 +111,28 @@ fn consensus_transfer(args: &Transfer, ctx: &mut TxnContext) -> Result<()> {
             IoContext::create_child(&ctx.io_ctx),
             &PendingMessagesKeyFormat { index }.encode(),
             b"transfer",
+        );
+    });
+
+    Ok(())
+}
+
+/// Update existing runtime with given descriptor.
+fn update_runtime(args: &UpdateRuntime, ctx: &mut TxnContext) -> Result<()> {
+    if ctx.check_only {
+        return Err(CheckOnlySuccess::default().into());
+    }
+
+    StorageContext::with_current(|mkvs, _untrusted_local| {
+        let index = ctx.emit_message(Message::Registry {
+            v: 0,
+            msg: RegistryMessage::UpdateRuntime(args.update_runtime.clone()),
+        });
+
+        mkvs.insert(
+            IoContext::create_child(&ctx.io_ctx),
+            &PendingMessagesKeyFormat { index }.encode(),
+            b"update_runtime",
         );
     });
 

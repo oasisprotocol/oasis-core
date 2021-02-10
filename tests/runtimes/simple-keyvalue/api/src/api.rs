@@ -1,6 +1,9 @@
 use serde::{Deserialize, Serialize};
 
-use oasis_core_runtime::{consensus::staking, runtime_api};
+use oasis_core_runtime::{
+    consensus::{registry, staking},
+    runtime_api,
+};
 
 #[derive(Clone, Serialize, Deserialize)]
 pub struct Key {
@@ -31,6 +34,14 @@ pub struct Transfer {
     pub transfer: staking::Transfer,
 }
 
+#[derive(Clone, Serialize, Deserialize)]
+pub struct UpdateRuntime {
+    pub update_runtime: registry::Runtime,
+    // Nonce is ignored by the runtime itself and can be used to avoid duplicate
+    // runtime transactions.
+    pub nonce: Option<u64>,
+}
+
 runtime_api! {
     //  Gets runtime ID of the runtime.
     pub fn get_runtime_id(()) -> Option<String>;
@@ -40,6 +51,9 @@ runtime_api! {
 
     // Transfer from the runtime account to another account in the consensus layer.
     pub fn consensus_transfer(Transfer) -> ();
+
+    // Update existing runtime with given descriptor.
+    pub fn update_runtime(UpdateRuntime) -> ();
 
     // Inserts key and corresponding value and returns old value, if any.
     // Both parameters are passed using a single serializable struct KeyValue.

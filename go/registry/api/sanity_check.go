@@ -268,9 +268,11 @@ func SanityCheckStake(
 		generatedEscrows[addr].StakeAccumulator.AddClaimUnchecked(StakeClaimForNode(node.ID), StakeThresholdsForNode(node, nodeRts))
 	}
 	for _, rt := range runtimes {
-		// Add runtime stake claims.
-		addr := staking.NewAddress(rt.EntityID)
-		generatedEscrows[addr].StakeAccumulator.AddClaimUnchecked(StakeClaimForRuntime(rt.ID), StakeThresholdsForRuntime(rt))
+		if rt.GovernanceModel == GovernanceEntity {
+			// Add runtime stake claims.
+			addr := staking.NewAddress(rt.EntityID)
+			generatedEscrows[addr].StakeAccumulator.AddClaimUnchecked(StakeClaimForRuntime(rt.ID), StakeThresholdsForRuntime(rt))
+		}
 	}
 
 	// Compare entities' generated escrow accounts with actual ones.

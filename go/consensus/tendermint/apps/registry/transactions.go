@@ -707,6 +707,7 @@ func (app *registryApplication) registerRuntime( // nolint: gocyclo
 			ctx.Logger().Error("RegisterRuntime: insufficient stake",
 				"err", err,
 				"entity", rt.EntityID,
+				"runtime", rt.ID,
 				"account", acctAddr,
 			)
 			return err
