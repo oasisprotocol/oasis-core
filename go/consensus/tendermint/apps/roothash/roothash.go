@@ -9,6 +9,7 @@ import (
 	beacon "github.com/oasisprotocol/oasis-core/go/beacon/api"
 	"github.com/oasisprotocol/oasis-core/go/common"
 	"github.com/oasisprotocol/oasis-core/go/common/cbor"
+	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
 	"github.com/oasisprotocol/oasis-core/go/consensus/api/transaction"
 	tmapi "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/api"
@@ -130,6 +131,20 @@ func (app *rootHashApplication) onCommitteeChanged(ctx *tmapi.Context, state *ro
 		rtState, err := state.RuntimeState(ctx, rt.ID)
 		if err != nil {
 			return fmt.Errorf("failed to fetch runtime state: %w", err)
+		}
+
+		// Expire past evidence of runtime node misbehaviour.
+		if rtState.CurrentBlock != nil {
+			if round := rtState.CurrentBlock.Header.Round; round > params.MaxEvidenceAge {
+				ctx.Logger().Debug("removing expired runtime evidence",
+					"runtime", rt.ID,
+					"round", round,
+					"max_evidence_age", params.MaxEvidenceAge,
+				)
+				if err = state.RemoveExpiredEvidence(ctx, rt.ID, round-params.MaxEvidenceAge); err != nil {
+					return fmt.Errorf("failed to remove expired runtime evidence: %s %w", rt.ID, err)
+				}
+			}
 		}
 
 		// Since the runtime is in the list of active runtimes in the registry we
@@ -359,6 +374,13 @@ func (app *rootHashApplication) ExecuteTx(ctx *tmapi.Context, tx *transaction.Tr
 		}
 
 		return app.executorProposerTimeout(ctx, state, &xc)
+	case roothash.MethodEvidence:
+		var ev roothash.Evidence
+		if err := cbor.Unmarshal(tx.Body, &ev); err != nil {
+			return err
+		}
+
+		return app.submitEvidence(ctx, state, &ev)
 	default:
 		return roothash.ErrInvalidArgument
 	}
@@ -525,6 +547,58 @@ func (app *rootHashApplication) tryFinalizeExecutorCommits(
 		// Process any runtime messages.
 		if err = app.processRuntimeMessages(ctx, rtState, body.Messages); err != nil {
 			return fmt.Errorf("failed to process runtime messages: %w", err)
+		}
+
+		// If there was a discrepancy, slash nodes for incorrect results if configured.
+		if rtState.ExecutorPool.Discrepancy {
+			ctx.Logger().Debug("executor pool discrepancy",
+				"slashing", runtime.Staking.Slashing,
+			)
+			if penalty, ok := rtState.Runtime.Staking.Slashing[staking.SlashRuntimeIncorrectResults]; ok && !penalty.Amount.IsZero() {
+				commitments := rtState.ExecutorPool.ExecuteCommitments
+				var (
+					// Worker nodes that submitted incorrect results get slashed.
+					workersIncorrectResults []signature.PublicKey
+					// Backup worker nodes that resolved the discrepancy get rewarded.
+					backupCorrectResults []signature.PublicKey
+				)
+				for _, n := range rtState.ExecutorPool.Committee.Members {
+					c, ok := commitments[n.PublicKey]
+					if !ok || c.IsIndicatingFailure() {
+						continue
+					}
+					switch n.Role {
+					case scheduler.RoleBackupWorker:
+						// Backup workers that resolved the discrepancy.
+						if !commit.MostlyEqual(c) {
+							continue
+						}
+						ctx.Logger().Debug("backup worker resolved the discrepancy",
+							"pubkey", n.PublicKey,
+						)
+						backupCorrectResults = append(backupCorrectResults, n.PublicKey)
+					case scheduler.RoleWorker:
+						// Workers that caused the discrepancy.
+						if commit.MostlyEqual(c) {
+							continue
+						}
+						ctx.Logger().Debug("worker caused the discrepancy",
+							"pubkey", n.PublicKey,
+						)
+						workersIncorrectResults = append(workersIncorrectResults, n.PublicKey)
+					}
+				}
+				// Slash for incorrect results.
+				if err = onRuntimeIncorrectResults(
+					ctx,
+					workersIncorrectResults,
+					backupCorrectResults,
+					runtime,
+					&penalty.Amount,
+				); err != nil {
+					return fmt.Errorf("failed to slash for incorrect results: %w", err)
+				}
+			}
 		}
 
 		// Generate the final block.

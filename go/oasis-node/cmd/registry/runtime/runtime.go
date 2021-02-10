@@ -82,6 +82,7 @@ const (
 
 	// Staking parameters flags.
 	CfgStakingThreshold = "runtime.staking.threshold"
+	CfgStakingSlashing  = "runtime.staking.slashing"
 
 	// List runtimes flags.
 	CfgIncludeSuspended = "include_suspended"
@@ -457,7 +458,27 @@ func runtimeFromFlags() (*registry.Runtime, error) { // nolint: gocyclo
 			rt.Staking.Thresholds[kind] = value
 		}
 	}
+	if sl := viper.GetStringMapString(CfgStakingSlashing); sl != nil {
+		rt.Staking.Slashing = make(map[staking.SlashReason]staking.Slash)
+		for reasonRaw, valueRaw := range sl {
+			var (
+				reason staking.SlashReason
+				value  quantity.Quantity
+			)
 
+			if err = reason.UnmarshalText([]byte(reasonRaw)); err != nil {
+				return nil, fmt.Errorf("staking: bad slash raeson (%s): %w", reasonRaw, err)
+			}
+			if err = value.UnmarshalText([]byte(valueRaw)); err != nil {
+				return nil, fmt.Errorf("staking: bad slash value (%s): %w", valueRaw, err)
+			}
+
+			if _, ok := rt.Staking.Slashing[reason]; ok {
+				return nil, fmt.Errorf("staking: duplicate value for reason '%s'", reason)
+			}
+			rt.Staking.Slashing[reason] = staking.Slash{Amount: value}
+		}
+	}
 	// Validate descriptor.
 	if err = rt.ValidateBasic(true); err != nil {
 		return nil, fmt.Errorf("invalid runtime descriptor: %w", err)
@@ -542,6 +563,7 @@ func init() {
 
 	// Init Staking flags.
 	runtimeFlags.StringToString(CfgStakingThreshold, nil, "Additional staking threshold for this runtime (<kind>=<value>)")
+	runtimeFlags.StringToString(CfgStakingSlashing, nil, "Staking slashing parameter for this runtime (<reason>=<value>)")
 
 	_ = viper.BindPFlags(runtimeFlags)
 	runtimeFlags.AddFlagSet(cmdSigner.Flags)

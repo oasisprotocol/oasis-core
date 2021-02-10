@@ -106,6 +106,14 @@ func (r *RegistryHelpers) runRegistryRuntimeSubcommand(
 			"--"+cmdRegRt.CfgStakingThreshold, fmt.Sprintf("%s=%s", string(kindRaw), string(valueRaw)),
 		)
 	}
+	for reason, value := range runtime.Staking.Slashing {
+		reasonRaw, _ := reason.MarshalText()
+		valueRaw, _ := value.Amount.MarshalText()
+
+		args = append(args,
+			"--"+cmdRegRt.CfgStakingSlashing, fmt.Sprintf("%s=%s", string(reasonRaw), string(valueRaw)),
+		)
+	}
 
 	if out, err := r.runSubCommandWithOutput("registry-runtime-"+cmd, args); err != nil {
 		return fmt.Errorf("failed to run 'registry runtime %s': error: %w output: %s", cmd, err, out.String())

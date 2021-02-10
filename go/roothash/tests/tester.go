@@ -17,6 +17,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	"github.com/oasisprotocol/oasis-core/go/common/identity"
+	"github.com/oasisprotocol/oasis-core/go/common/quantity"
 	consensusAPI "github.com/oasisprotocol/oasis-core/go/consensus/api"
 	registryTests "github.com/oasisprotocol/oasis-core/go/registry/tests"
 	"github.com/oasisprotocol/oasis-core/go/roothash/api"
@@ -24,6 +25,8 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/roothash/api/commitment"
 	"github.com/oasisprotocol/oasis-core/go/runtime/transaction"
 	scheduler "github.com/oasisprotocol/oasis-core/go/scheduler/api"
+	staking "github.com/oasisprotocol/oasis-core/go/staking/api"
+	stakingTests "github.com/oasisprotocol/oasis-core/go/staking/tests"
 	storageAPI "github.com/oasisprotocol/oasis-core/go/storage/api"
 	"github.com/oasisprotocol/oasis-core/go/worker/storage"
 )
@@ -109,6 +112,10 @@ func RootHashImplementationTests(t *testing.T, backend api.Backend, consensus co
 
 	t.Run("RoundTimeoutWithEpochTransition", func(t *testing.T) {
 		testRoundTimeoutWithEpochTransition(t, backend, consensus, identity, rtStates)
+	})
+
+	t.Run("EquivocationEvidence", func(t *testing.T) {
+		testSubmitEquivocationEvidence(t, backend, consensus, identity, rtStates)
 	})
 }
 
@@ -813,4 +820,91 @@ func MustTransitionEpoch(
 			t.Fatalf("failed to receive epoch transition block")
 		}
 	}
+}
+
+func testSubmitEquivocationEvidence(t *testing.T, backend api.Backend, consensus consensusAPI.Backend, identity *identity.Identity, states []*runtimeState) {
+	require := require.New(t)
+
+	ctx := context.Background()
+
+	s := states[0]
+	child, err := backend.GetLatestBlock(ctx, s.rt.Runtime.ID, consensusAPI.HeightLatest)
+	require.NoError(err, "GetLatestBlock")
+
+	// Generate and submit evidence of executor equivocation.
+	if len(s.executorCommittee.workers) < 2 {
+		t.Fatal("not enough executor nodes for running runtime misbehaviour evidence test")
+	}
+
+	// Generate evidence of executor equivocation.
+	node := s.executorCommittee.workers[0]
+	batch1 := &commitment.ProposedBatch{
+		IORoot:            child.Header.IORoot,
+		StorageSignatures: []signature.Signature{},
+		Header:            child.Header,
+	}
+	signedBatch1, err := commitment.SignProposedBatch(node.Signer, batch1)
+	require.NoError(err, "SignProposedBatch")
+
+	batch2 := &commitment.ProposedBatch{
+		IORoot:            hash.NewFromBytes([]byte("different root")),
+		StorageSignatures: []signature.Signature{},
+		Header:            child.Header,
+	}
+	signedBatch2, err := commitment.SignProposedBatch(node.Signer, batch2)
+	require.NoError(err, "SignProposedBatch")
+
+	ch, sub, err := consensus.Staking().WatchEvents(ctx)
+	require.NoError(err, "staking.WatchEvents")
+	defer sub.Close()
+
+	// Ensure misbehaving node entity has some stake.
+	entityAddress := staking.NewAddress(node.Node.EntityID)
+	escrow := &staking.Escrow{
+		Account: entityAddress,
+		Amount:  *quantity.NewFromUint64(100),
+	}
+	tx := staking.NewAddEscrowTx(0, nil, escrow)
+	err = consensusAPI.SignAndSubmitTx(ctx, consensus, stakingTests.SrcSigner, tx)
+	require.NoError(err, "AddEscrow")
+
+	// Submit evidence of executor equivocation.
+	tx = api.NewEvidenceTx(0, nil, &api.Evidence{
+		ID: s.rt.Runtime.ID,
+		EquivocationBatch: &api.EquivocationBatchEvidence{
+			BatchA: *signedBatch1,
+			BatchB: *signedBatch2,
+		},
+	})
+	submitter := s.executorCommittee.workers[1]
+	err = consensusAPI.SignAndSubmitTx(ctx, consensus, submitter.Signer, tx)
+	require.NoError(err, "SignAndSubmitTx(EvidenceTx)")
+
+	// Wait for the node to get slashed.
+WaitLoop:
+	for {
+		select {
+		case ev := <-ch:
+			if ev.Escrow == nil {
+				continue
+			}
+
+			if e := ev.Escrow.Take; e != nil {
+				require.EqualValues(entityAddress, e.Owner, "TakeEscrowEvent - owner must be entity's address")
+				// All stake must be slashed as defined in debugGenesisState.
+				require.EqualValues(escrow.Amount, e.Amount, "TakeEscrowEvent - all stake slashed")
+				break WaitLoop
+			}
+		case <-time.After(recvTimeout):
+			t.Fatalf("failed to receive slash event")
+		}
+	}
+
+	// Ensure runtime acc got the slashed funds.
+	runtimeAcc, err := consensus.Staking().Account(ctx, &staking.OwnerQuery{
+		Height: consensusAPI.HeightLatest,
+		Owner:  staking.NewRuntimeAddress(s.rt.Runtime.ID),
+	})
+	require.NoError(err, "staking.Account(runtimeAddr)")
+	require.EqualValues(escrow.Amount, runtimeAcc.General.Balance, "Runtime account expected salshed balance")
 }

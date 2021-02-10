@@ -263,6 +263,8 @@ func (p *Pool) addOpenExecutorCommitment(
 		return ErrTxnSchedSigInvalid
 	}
 
+	// TODO: Check for evidence of equivocation (oasis-core#3685).
+
 	switch openCom.IsIndicatingFailure() {
 	case true:
 	default:

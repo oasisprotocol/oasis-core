@@ -36,6 +36,11 @@ type SignedProposedBatch struct {
 	signature.Signed
 }
 
+// Equal compares vs another SignedProposedBatch for equality.
+func (s *SignedProposedBatch) Equal(cmp *SignedProposedBatch) bool {
+	return s.Signed.Equal(&cmp.Signed)
+}
+
 // Open first verifies the blob signature and then unmarshals the blob.
 func (s *SignedProposedBatch) Open(tsbd *ProposedBatch) error {
 	return s.Signed.Open(ProposedBatchSignatureContext, tsbd)

@@ -408,3 +408,126 @@ func TestProposalDeposits(t *testing.T) {
 	require.NoError(t, err, "Account")
 	require.EqualValues(t, *quantity.NewFromUint64(200), acc2.General.Balance, "governance deposit should be reclaimed")
 }
+
+func TestTransferFromCommon(t *testing.T) {
+	require := require.New(t)
+
+	now := time.Unix(1580461674, 0)
+	appState := abciAPI.NewMockApplicationState(&abciAPI.MockApplicationStateConfig{})
+	ctx := appState.NewContext(abciAPI.ContextDeliverTx, now)
+	defer ctx.Close()
+
+	// Prepare state.
+	s := NewMutableState(ctx.State())
+	pk1 := signature.NewPublicKey("aaafffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff")
+	addr1 := staking.NewAddress(pk1)
+	pk2 := signature.NewPublicKey("bbbfffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff")
+	addr2 := staking.NewAddress(pk2)
+
+	err := s.SetCommonPool(ctx, quantity.NewFromUint64(1000))
+	require.NoError(err, "SetCommonPool")
+
+	// Transfer without escrow.
+	ok, err := s.TransferFromCommon(ctx, addr1, quantity.NewFromUint64(100), false)
+	require.NoError(err, "TransferFromCommon without escrow")
+	require.True(ok, "TransferFromCommon should succeed")
+
+	acc1, err := s.Account(ctx, addr1)
+	require.NoError(err, "Account")
+	require.EqualValues(*quantity.NewFromUint64(100), acc1.General.Balance, "amount should be transferred to general balance")
+	require.EqualValues(*quantity.NewFromUint64(0), acc1.Escrow.Active.Balance, "nothing should be escrowed")
+
+	// Transfer with escrow (no delegations).
+	ok, err = s.TransferFromCommon(ctx, addr2, quantity.NewFromUint64(100), true)
+	require.NoError(err, "TransferFromCommon with escrow (no delegations)")
+	require.True(ok, "TransferFromCommon should succeed")
+
+	acc2, err := s.Account(ctx, addr2)
+	require.NoError(err, "Account")
+	require.EqualValues(*quantity.NewFromUint64(0), acc2.General.Balance, "nothing should be in general balance")
+	require.EqualValues(*quantity.NewFromUint64(100), acc2.Escrow.Active.Balance, "amount should be escrowed")
+	dg, err := s.Delegation(ctx, addr2, addr2)
+	require.NoError(err, "Delegation")
+	require.EqualValues(*quantity.NewFromUint64(100), dg.Shares, "amount should be self-delegated")
+
+	// Transfer with escrow (existing self-delegation).
+	ok, err = s.TransferFromCommon(ctx, addr2, quantity.NewFromUint64(100), true)
+	require.NoError(err, "TransferFromCommon with escrow (existing self-delegation)")
+	require.True(ok, "TransferFromCommon should succeed")
+
+	acc2, err = s.Account(ctx, addr2)
+	require.NoError(err, "Account")
+	require.EqualValues(*quantity.NewFromUint64(0), acc2.General.Balance, "nothing should be in general balance")
+	require.EqualValues(*quantity.NewFromUint64(200), acc2.Escrow.Active.Balance, "amount should be escrowed")
+	dg, err = s.Delegation(ctx, addr2, addr2)
+	require.NoError(err, "Delegation")
+	require.EqualValues(*quantity.NewFromUint64(100), dg.Shares, "shares should stay the same")
+
+	// Transfer with escrow (existing self-delegation and commission).
+	acc2.Escrow.CommissionSchedule = staking.CommissionSchedule{
+		Rates: []staking.CommissionRateStep{{
+			Start: 0,
+			Rate:  *quantity.NewFromUint64(20_000), // 20%
+		}},
+		Bounds: []staking.CommissionRateBoundStep{{
+			Start:   0,
+			RateMin: *quantity.NewFromUint64(0),
+			RateMax: *quantity.NewFromUint64(100_000), // 100%
+		}},
+	}
+	err = s.SetAccount(ctx, addr2, acc2)
+	require.NoError(err, "SetAccount")
+
+	ok, err = s.TransferFromCommon(ctx, addr2, quantity.NewFromUint64(100), true)
+	require.NoError(err, "TransferFromCommon with escrow (existing self-delegation and commission)")
+	require.True(ok, "TransferFromCommon should succeed")
+
+	acc2, err = s.Account(ctx, addr2)
+	require.NoError(err, "Account")
+	require.EqualValues(*quantity.NewFromUint64(0), acc2.General.Balance, "nothing should be in general balance")
+	require.EqualValues(*quantity.NewFromUint64(300), acc2.Escrow.Active.Balance, "amount should be escrowed")
+	dg, err = s.Delegation(ctx, addr2, addr2)
+	require.NoError(err, "Delegation")
+	require.EqualValues(*quantity.NewFromUint64(107), dg.Shares, "20%% of amount should go towards increasing self-delegation")
+
+	// Transfer with escrow (other delegations and commission).
+	var dg2 staking.Delegation
+	err = acc2.Escrow.Active.Deposit(&dg2.Shares, quantity.NewFromUint64(100), quantity.NewFromUint64(100))
+	require.NoError(err, "Deposit")
+	err = s.SetDelegation(ctx, addr1, addr2, &dg2)
+	require.NoError(err, "SetDelegation")
+
+	ok, err = s.TransferFromCommon(ctx, addr2, quantity.NewFromUint64(1000), true)
+	require.NoError(err, "TransferFromCommon with escrow (existing delegations and commission)")
+	require.True(ok, "TransferFromCommon should succeed")
+
+	acc2, err = s.Account(ctx, addr2)
+	require.NoError(err, "Account")
+	require.EqualValues(*quantity.NewFromUint64(0), acc2.General.Balance, "nothing should be in general balance")
+	require.EqualValues(*quantity.NewFromUint64(900), acc2.Escrow.Active.Balance, "remaining amount should be escrowed")
+	dg, err = s.Delegation(ctx, addr2, addr2)
+	require.NoError(err, "Delegation")
+	require.EqualValues(*quantity.NewFromUint64(123), dg.Shares, "20%% of amount should go towards increasing self-delegation")
+
+	acc1, err = s.Account(ctx, addr1)
+	require.NoError(err, "Account")
+	require.EqualValues(*quantity.NewFromUint64(100), acc1.General.Balance, "general balance should be unchanged")
+	dg, err = s.Delegation(ctx, addr1, addr2)
+	require.NoError(err, "Delegation")
+	require.EqualValues(dg2.Shares, dg.Shares, "delegated amount should be unchanged")
+
+	// There should be nothing left in the common pool.
+	cp, err := s.CommonPool(ctx)
+	require.NoError(err, "CommonPool")
+	require.True(cp.IsZero(), "common pool should be depleted after all the transfers")
+
+	// Transfer from empty common pool should have no effect.
+	ok, err = s.TransferFromCommon(ctx, addr1, quantity.NewFromUint64(100), false)
+	require.NoError(err, "TransferFromCommon from depleted common pool")
+	require.False(ok, "TransferFromCommon should indicate that nothing was transferred")
+
+	acc1, err = s.Account(ctx, addr1)
+	require.NoError(err, "Account")
+	require.EqualValues(*quantity.NewFromUint64(100), acc1.General.Balance, "amount should be unchanged")
+	require.EqualValues(*quantity.NewFromUint64(0), acc1.Escrow.Active.Balance, "escrow amount should be unchanged")
+}

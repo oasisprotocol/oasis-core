@@ -22,6 +22,13 @@ const (
 	// SlashConsensusLightClientAttack is slashing due to light client attacks.
 	SlashConsensusLightClientAttack SlashReason = 0x04
 
+	// SlashRuntimeIncorrectResults is slashing due to submission of incorrect
+	// results in runtime executor commitments.
+	SlashRuntimeIncorrectResults SlashReason = 0x80
+	// SlashRuntimeEquivocation is slashing due to signing two different
+	// executor commits or proposed batches for the same round.
+	SlashRuntimeEquivocation SlashReason = 0x81
+
 	// SlashConsensusEquivocationName is the string representation of SlashConsensusEquivocation.
 	SlashConsensusEquivocationName = "consensus-equivocation"
 	// SlashBeaconInvalidCommitName is the string representation of SlashBeaconInvalidCommit.
@@ -32,6 +39,10 @@ const (
 	SlashBeaconNonparticipationName = "beacon-nonparticipation"
 	// SlashConsensusLightClientAttackName is the string representation of SlashConsensusLightClientAttack.
 	SlashConsensusLightClientAttackName = "consensus-light-client-attack"
+	// SlashRuntimeIncorrectResultsName is the string representation of SlashRuntimeIncorrectResultsName.
+	SlashRuntimeIncorrectResultsName = "runtime-incorrect-results"
+	// SlashRuntimeEquivocationName is the string representation of SlashRuntimeEquivocation.
+	SlashRuntimeEquivocationName = "runtime-equivocation"
 )
 
 // String returns a string representation of a SlashReason.
@@ -52,6 +63,10 @@ func (s SlashReason) checkedString() (string, error) {
 		return SlashBeaconNonparticipationName, nil
 	case SlashConsensusLightClientAttack:
 		return SlashConsensusLightClientAttackName, nil
+	case SlashRuntimeIncorrectResults:
+		return SlashRuntimeIncorrectResultsName, nil
+	case SlashRuntimeEquivocation:
+		return SlashRuntimeEquivocationName, nil
 	default:
 		return "[unknown slash reason]", fmt.Errorf("unknown slash reason: %d", s)
 	}
@@ -84,6 +99,10 @@ func (s *SlashReason) UnmarshalText(text []byte) error {
 		*s = SlashBeaconNonparticipation
 	case SlashConsensusLightClientAttackName:
 		*s = SlashConsensusLightClientAttack
+	case SlashRuntimeIncorrectResultsName:
+		*s = SlashRuntimeIncorrectResults
+	case SlashRuntimeEquivocationName:
+		*s = SlashRuntimeEquivocation
 	default:
 		return fmt.Errorf("invalid slash reason: %s", string(text))
 	}

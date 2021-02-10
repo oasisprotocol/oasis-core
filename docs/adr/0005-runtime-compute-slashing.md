@@ -50,6 +50,14 @@ type RuntimeStakingParameters struct {
 
     // Slashing are the per-runtime misbehavior slashing parameters.
     Slashing map[staking.SlashReason]staking.Slash `json:"slashing,omitempty"`
+
+    // RewardSlashEquvocationRuntimePercent is the percentage of the reward obtained when slashing
+    // for equivocation that is transferred to the runtime's account.
+    RewardSlashEquvocationRuntimePercent uint8 `json:"reward_equivocation,omitempty"`
+
+    // RewardSlashBadResultsRuntimePercent is the percentage of the reward obtained when slashing
+    // for incorrect results that is transferred to the runtime's account.
+    RewardSlashBadResultsRuntimePercent uint8 `json:"reward_bad_results,omitempty"`
 }
 ```
 
@@ -175,13 +183,13 @@ Any slashing instructions related to freezing nodes are currently ignored.
 This proposal introduces/updates the following consensus state in the roothash
 module:
 
-- **List of past valid evidence (`0x23`)**
+- **List of past valid evidence (`0x24`)**
 
   A hash uniquely identifying the evidence is stored for each successfully
   processed evidence that has not yet expired using the following key format:
 
   ```
-  0x23 <H(runtime-id) (hash.Hash)> <round (uint64)> <evidence-hash (hash.Hash)>
+  0x24 <H(runtime-id) (hash.Hash)> <round (uint64)> <evidence-hash (hash.Hash)>
   ```
 
   The value is empty as we only need to detect duplicate evidence.
@@ -293,7 +301,7 @@ performed to verify evidence validity:
 - Public keys of signers of both commitments are compared. If they are not the
   same, the evidence is invalid.
 
-- Signatures of both proposed batches are compared. If either is invalid, the
+- Signatures of both proposed batches are validated. If either is invalid, the
   evidence is invalid.
 
 - Otherwise the evidence is valid.
