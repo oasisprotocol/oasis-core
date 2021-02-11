@@ -52,7 +52,7 @@ func (t *TreeFuzz) commitRemote(ctx context.Context) {
 	if t.remote != nil {
 		t.remote.Close()
 	}
-	t.remote = mkvs.NewWithRoot(t.inner, nil, mkvsNode.Root{Hash: rootHash}, mkvs.Capacity(0, 0))
+	t.remote = mkvs.NewWithRoot(t.inner, nil, mkvsNode.Root{Type: mkvsNode.RootTypeState, Hash: rootHash}, mkvs.Capacity(0, 0))
 }
 
 func (t *TreeFuzz) insert(ctx context.Context, tree mkvs.Tree, key, value []byte) {
@@ -265,7 +265,7 @@ func (t *TreeFuzz) fail(format string, a ...interface{}) {
 
 func NewTreeFuzz() (*TreeFuzz, *commonFuzz.InterfaceFuzzer) {
 	tf := &TreeFuzz{
-		inner:     mkvs.New(nil, nil, mkvs.Capacity(0, 0)),
+		inner:     mkvs.New(nil, nil, mkvsNode.RootTypeState, mkvs.Capacity(0, 0)),
 		reference: make(map[string][]byte),
 	}
 	fz := commonFuzz.NewInterfaceFuzzer(tf)

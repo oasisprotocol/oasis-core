@@ -724,7 +724,7 @@ func (q *queries) doRuntimeQueries(ctx context.Context, rng *rand.Rand) error {
 	_, err = q.runtime.QueryTxs(ctx, &runtimeClient.QueryTxsRequest{
 		RuntimeID: q.runtimeID,
 		Query: runtimeClient.Query{
-			RoundMin: 0,
+			RoundMin: q.runtimeGenesisRound,
 			RoundMax: round,
 		},
 	})
