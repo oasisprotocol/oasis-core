@@ -103,10 +103,12 @@ const (
 	RoleValidator RolesMask = 1 << 3
 	// RoleConsensusRPC is the public consensus RPC services worker role.
 	RoleConsensusRPC RolesMask = 1 << 4
+	// RoleStorageRPC is the public storage RPC services worker role.
+	RoleStorageRPC RolesMask = 1 << 5
 
 	// RoleReserved are all the bits of the Oasis node roles bitmask
 	// that are reserved and must not be used.
-	RoleReserved RolesMask = ((1 << 32) - 1) & ^((RoleConsensusRPC << 1) - 1)
+	RoleReserved RolesMask = ((1 << 32) - 1) & ^((RoleStorageRPC << 1) - 1)
 )
 
 // Roles returns a list of available valid roles.
@@ -117,6 +119,7 @@ func Roles() (roles []RolesMask) {
 		RoleKeyManager,
 		RoleValidator,
 		RoleConsensusRPC,
+		RoleStorageRPC,
 	}
 }
 
@@ -146,6 +149,9 @@ func (m RolesMask) String() string {
 	}
 	if m&RoleConsensusRPC != 0 {
 		ret = append(ret, "consensus-rpc")
+	}
+	if m&RoleStorageRPC != 0 {
+		ret = append(ret, "storage-rpc")
 	}
 
 	return strings.Join(ret, ",")

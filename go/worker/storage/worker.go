@@ -117,6 +117,13 @@ func (s *Worker) registerRuntime(dataDir string, commonNode *committeeCommon.Nod
 	if err != nil {
 		return fmt.Errorf("failed to create role provider: %w", err)
 	}
+	var rpRPC registration.RoleProvider
+	if viper.GetBool(CfgWorkerPublicRPCEnabled) {
+		rpRPC, err = s.registration.NewRuntimeRoleProvider(node.RoleStorageRPC, id)
+		if err != nil {
+			return fmt.Errorf("failed to create rpc role provider: %w", err)
+		}
+	}
 
 	path, err := registry.EnsureRuntimeStateDir(dataDir, id)
 	if err != nil {
@@ -135,6 +142,7 @@ func (s *Worker) registerRuntime(dataDir string, commonNode *committeeCommon.Nod
 		s.fetchPool,
 		s.watchState,
 		rp,
+		rpRPC,
 		s.commonWorker.GetConfig(),
 		localStorage,
 		checkpointerCfg,

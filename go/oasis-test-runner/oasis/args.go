@@ -370,6 +370,13 @@ func (args *argBuilder) workerStorageEnabled() *argBuilder {
 	return args
 }
 
+func (args *argBuilder) workerStoragePublicRPCEnabled(enabled bool) *argBuilder {
+	if enabled {
+		args.vec = append(args.vec, "--"+workerStorage.CfgWorkerPublicRPCEnabled)
+	}
+	return args
+}
+
 func (args *argBuilder) workerStorageDebugIgnoreApplies(ignore bool) *argBuilder {
 	if ignore {
 		args.vec = append(args.vec, "--"+workerStorage.CfgWorkerDebugIgnoreApply)

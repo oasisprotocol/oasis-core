@@ -8,11 +8,10 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	"github.com/oasisprotocol/oasis-core/go/common/identity"
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
+	"github.com/oasisprotocol/oasis-core/go/common/node"
 	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
-	"github.com/oasisprotocol/oasis-core/go/runtime/committee"
 	"github.com/oasisprotocol/oasis-core/go/runtime/nodes"
 	"github.com/oasisprotocol/oasis-core/go/runtime/nodes/grpc"
-	scheduler "github.com/oasisprotocol/oasis-core/go/scheduler/api"
 	"github.com/oasisprotocol/oasis-core/go/storage/api"
 )
 
@@ -50,30 +49,34 @@ func NewForNodes(
 	return NewForNodesClient(ctx, client, runtime)
 }
 
-// New creates a new storage client that automatically follows a given runtime's storage committee.
-func New(
+// NewForPublicStorage creates a new storage client that automatically follows a given runtime's storage nodes
+// which have public storage RPC enabled.
+func NewForPublicStorage(
 	ctx context.Context,
 	namespace common.Namespace,
 	ident *identity.Identity,
-	schedulerBackend scheduler.Backend,
 	registryBackend registry.Backend,
 	runtime registry.RuntimeDescriptorProvider,
-	extraWatcherOpts ...committee.WatcherOption,
 ) (api.Backend, error) {
-	watcherOpts := append(extraWatcherOpts, committee.WithAutomaticEpochTransitions())
-	committeeWatcher, err := committee.NewWatcher(
+	nl, err := nodes.NewRuntimeNodeLookup(
 		ctx,
-		schedulerBackend,
 		registryBackend,
 		namespace,
-		scheduler.KindStorage,
-		watcherOpts...,
 	)
 	if err != nil {
-		return nil, fmt.Errorf("storage/client: failed to create committee watcher: %w", err)
+		return nil, fmt.Errorf("storage/client: failed to create runtime node watcher: %w", err)
 	}
 
-	return NewForNodes(ctx, ident, committeeWatcher.Nodes(), runtime)
+	publicStorageNl := nodes.NewFilteredNodeLookup(nl,
+		nodes.WithAllFilters(
+			// Ignore self.
+			nodes.IgnoreNodeFilter(ident.NodeSigner.Public()),
+			// Only storage nodes that opted into public RPC.
+			nodes.TagFilter(nodes.TagsForRoleMask(node.RoleStorageRPC)[0]),
+		),
+	)
+
+	return NewForNodes(ctx, ident, publicStorageNl, runtime)
 }
 
 // NewStatic creates a new storage client that only follows a specific storage node.

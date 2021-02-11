@@ -73,6 +73,7 @@ var (
 		{runtimeRegistry.CfgRuntimeProvisioner, runtimeRegistry.RuntimeProvisionerMock},
 		{workerCommon.CfgClientPort, workerClientPort},
 		{storageWorker.CfgWorkerEnabled, true},
+		{storageWorker.CfgWorkerPublicRPCEnabled, true},
 		{executor.CfgScheduleCheckTxEnabled, false},
 		{tendermintCommon.CfgCoreListenAddress, "tcp://0.0.0.0:27565"},
 		{tendermintFull.CfgSupplementarySanityEnabled, true},

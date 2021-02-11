@@ -83,6 +83,14 @@ const (
 	defaultUndefinedRound = ^uint64(0)
 
 	checkpointSyncRetryDelay = 10 * time.Second
+
+	// The maximum number of rounds the worker can be behind the chain before it's sensible for
+	// it to register as available.
+	maximumRoundDelayForAvailability = uint64(10)
+
+	// The minimum number of rounds the worker can be behind the chain before it's sensible for
+	// it to stop advertising availability.
+	minimumRoundDelayForUnavailability = uint64(15)
 )
 
 type roundItem interface {
@@ -131,10 +139,12 @@ type watcherState struct {
 }
 
 // Node watches blocks for storage changes.
-type Node struct {
+type Node struct { // nolint: maligned
 	commonNode *committee.Node
 
-	roleProvider registration.RoleProvider
+	roleProvider    registration.RoleProvider
+	rpcRoleProvider registration.RoleProvider
+	roleAvailable   bool
 
 	logger *logging.Logger
 
@@ -180,6 +190,7 @@ func NewNode(
 	fetchPool *workerpool.Pool,
 	store *persistent.ServiceStore,
 	roleProvider registration.RoleProvider,
+	rpcRoleProvider registration.RoleProvider,
 	workerCommonCfg workerCommon.Config,
 	localStorage storageApi.LocalBackend,
 	checkpointerCfg *checkpoint.CheckpointerConfig,
@@ -188,7 +199,8 @@ func NewNode(
 	n := &Node{
 		commonNode: commonNode,
 
-		roleProvider: roleProvider,
+		roleProvider:    roleProvider,
+		rpcRoleProvider: rpcRoleProvider,
 
 		logger: logging.GetLogger("worker/storage/committee").With("runtime_id", commonNode.Runtime.ID()),
 
@@ -665,21 +677,32 @@ func (n *Node) updateExternalServicePolicy(rtComputeNodes nodes.NodeDescriptorLo
 
 	executorCommitteePolicy.AddRulesForNodeRoles(&policy, rtComputeNodes.GetNodes(), node.RoleComputeWorker)
 
-	// TODO: Query registry only for storage nodes after
-	// https://github.com/oasisprotocol/oasis-core/issues/1923 is implemented.
-	nodes, err := n.commonNode.Consensus.Registry().GetNodes(n.ctx, consensus.HeightLatest)
-	if err != nil {
-		n.logger.Error("couldn't get nodes from registry", "err", err)
-	}
-	if len(nodes) > 0 {
-		// Only include storage nodes for our runtime.
-		var storageNodes []*node.Node
-		for _, nd := range nodes {
-			if nd.GetRuntime(n.commonNode.Runtime.ID()) != nil && nd.HasRoles(node.RoleStorageWorker) {
-				storageNodes = append(storageNodes, nd)
-			}
+	switch {
+	// If public storage RPC was enabled in the config, then the normally gated methods need to be allowed
+	// for everyone.
+	case n.rpcRoleProvider != nil:
+		for _, act := range storageNodesPolicy.Actions {
+			policy.AllowAll(act)
 		}
-		storageNodesPolicy.AddRulesForNodeRoles(&policy, storageNodes, node.RoleStorageWorker)
+
+	// If not configured otherwise, state access should be restricted to storage committee members.
+	default:
+		// TODO: Query registry only for storage nodes after
+		// https://github.com/oasisprotocol/oasis-core/issues/1923 is implemented.
+		nodes, err := n.commonNode.Consensus.Registry().GetNodes(n.ctx, consensus.HeightLatest)
+		if err != nil {
+			n.logger.Error("couldn't get nodes from registry", "err", err)
+		}
+		if len(nodes) > 0 {
+			// Only include storage nodes for our runtime.
+			var storageNodes []*node.Node
+			for _, nd := range nodes {
+				if nd.GetRuntime(n.commonNode.Runtime.ID()) != nil && nd.HasRoles(node.RoleStorageWorker) {
+					storageNodes = append(storageNodes, nd)
+				}
+			}
+			storageNodesPolicy.AddRulesForNodeRoles(&policy, storageNodes, node.RoleStorageWorker)
+		}
 	}
 
 	// Update storage gRPC access policy for the current runtime.
@@ -748,6 +771,33 @@ func (n *Node) watchQuit() {
 	case <-n.rtWatcherQuitCh:
 	}
 	close(n.quitCh)
+}
+
+// This is only called from the main worker goroutine, so no locking should be necessary.
+func (n *Node) nudgeAvailability(lastSynced, latest uint64) {
+	if lastSynced == n.undefinedRound || latest == n.undefinedRound {
+		return
+	}
+	if latest-lastSynced < maximumRoundDelayForAvailability && !n.roleAvailable {
+		n.roleProvider.SetAvailable(func(nd *node.Node) error {
+			nd.AddOrUpdateRuntime(n.commonNode.Runtime.ID())
+			return nil
+		})
+		if n.rpcRoleProvider != nil {
+			n.rpcRoleProvider.SetAvailable(func(nd *node.Node) error {
+				nd.AddOrUpdateRuntime(n.commonNode.Runtime.ID())
+				return nil
+			})
+		}
+		n.roleAvailable = true
+	}
+	if latest-lastSynced > minimumRoundDelayForUnavailability && n.roleAvailable {
+		n.roleProvider.SetUnavailable()
+		if n.rpcRoleProvider != nil {
+			n.rpcRoleProvider.SetUnavailable()
+		}
+		n.roleAvailable = false
+	}
 }
 
 func (n *Node) worker() { // nolint: gocyclo
@@ -820,25 +870,6 @@ func (n *Node) worker() { // nolint: gocyclo
 
 	heap.Init(outOfOrderDiffs)
 
-	// We are now ready to service requests.
-	registeredCh := make(chan interface{})
-	n.roleProvider.SetAvailableWithCallback(func(nd *node.Node) error {
-		nd.AddOrUpdateRuntime(n.commonNode.Runtime.ID())
-		return nil
-	}, func(ctx context.Context) error {
-		close(registeredCh)
-		return nil
-	})
-
-	// Wait for the registration to finish, because we'll need to ask
-	// questions immediately.
-	n.logger.Debug("waiting for node registration to finish")
-	select {
-	case <-registeredCh:
-	case <-n.ctx.Done():
-		return
-	}
-
 	// Try to perform initial sync from state and io checkpoints.
 	if !n.checkpointSyncDisabled || n.checkpointSyncForced {
 		var (
@@ -890,6 +921,9 @@ func (n *Node) worker() { // nolint: gocyclo
 		}
 	}
 	close(n.initCh)
+
+	// Don't register availability immediately, we want to know first how far behind consensus we are.
+	latestBlockRound := n.undefinedRound
 
 	// Main processing loop. When a new block comes in, its state and io roots are inspected and their
 	// writelogs fetched from remote storage nodes in case we don't have them locally yet. Fetches are
@@ -972,6 +1006,10 @@ mainLoop:
 				"last_synced", lastFullyAppliedRound,
 				"last_finalized", cachedLastRound,
 			)
+
+			// Check if we're far enough to reasonably register as available.
+			latestBlockRound = blk.Header.Round
+			n.nudgeAvailability(cachedLastRound, latestBlockRound)
 
 			if _, ok := hashCache[lastFullyAppliedRound]; !ok && lastFullyAppliedRound == n.undefinedRound {
 				dummy := blockSummary{
@@ -1095,6 +1133,9 @@ mainLoop:
 			// only one finalize at a time is triggered (for round cachedLastRound+1)
 			cachedLastRound = n.flushSyncedState(finalized)
 			storageWorkerLastFullRound.With(n.getMetricLabels()).Set(float64(finalized.Round))
+
+			// Check if we're far enough to reasonably register as available.
+			n.nudgeAvailability(cachedLastRound, latestBlockRound)
 
 			// Notify the checkpointer that there is a new finalized round.
 			if n.checkpointer != nil {

@@ -338,6 +338,7 @@ type StorageWorkerFixture struct { // nolint: maligned
 	NoAutoStart bool `json:"no_auto_start,omitempty"`
 
 	DisableCertRotation bool `json:"disable_cert_rotation"`
+	DisablePublicRPC    bool `json:"disable_public_rpc"`
 
 	LogWatcherHandlerFactories []log.WatcherHandlerFactory `json:"-"`
 
@@ -382,6 +383,7 @@ func (f *StorageWorkerFixture) Create(net *Network) (*Storage, error) {
 		// Syncing should normally be enabled, but normally disabled in tests.
 		CheckpointSyncDisabled: !f.CheckpointSyncEnabled,
 		DisableCertRotation:    f.DisableCertRotation,
+		DisablePublicRPC:       f.DisablePublicRPC,
 		Runtimes:               f.Runtimes,
 	})
 }

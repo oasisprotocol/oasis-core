@@ -40,6 +40,19 @@ func TestPolicy(t *testing.T) {
 
 	// Remove nonexisting rule from a non-empty policy.
 	policy.Deny("anne", "write")
+
+	// Wildcard rules.
+	policy.Allow("anne", "read")
+	require.False(policy.IsAllowed("anne", "write"), "Anne should not have write access")
+	require.False(policy.IsAllowed("bob", "write"), "Bob should not have write access")
+	policy.AllowAll("write")
+	require.True(policy.IsAllowed("anne", "write"), "Anne should have write access")
+	require.True(policy.IsAllowed("bob", "write"), "Bob should have write access")
+	policy.Allow("bob", "write")
+	require.True(policy.IsAllowed("bob", "write"), "Bob should have write access")
+	policy.Deny(AnySubject, "write")
+	require.False(policy.IsAllowed("anne", "write"), "Anne should not have write access")
+	require.True(policy.IsAllowed("bob", "write"), "Bob should have write access")
 }
 
 func TestSubjectFromCertificate(t *testing.T) {
