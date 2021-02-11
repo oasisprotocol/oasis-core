@@ -768,11 +768,13 @@ func (sc *txSourceImpl) startWorkload(childEnv *env.Env, errCh chan error, name 
 	}
 
 	go func() {
-		errCh <- cmd.Wait()
+		waitErr := cmd.Wait()
+		errCh <- waitErr
 
 		sc.Logger.Info("workload finished",
 			"name", name,
 			"node", node.Name,
+			"err", waitErr,
 		)
 	}()
 
