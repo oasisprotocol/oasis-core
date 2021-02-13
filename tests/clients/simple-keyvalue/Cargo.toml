@@ -13,6 +13,6 @@ simple-keyvalue-api = { path = "../../runtimes/simple-keyvalue/api" }
 clap = "2.29.1"
 grpcio = "0.4.6"
 io-context = "0.2.0"
-rand = "0.7.3"
+rand = "0.8.1"
 tokio = "0.1.17"
 serde_bytes = "0.11.5"

@@ -12,5 +12,5 @@ simple-keyvalue-api = { path = "../../runtimes/simple-keyvalue/api" }
 
 clap = "2.29.1"
 grpcio = "0.4.6"
-rand = "0.7.3"
+rand = "0.8.1"
 tokio = "0.1.17"
