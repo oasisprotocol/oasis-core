@@ -61,6 +61,30 @@ func TestCommissionSchedule(t *testing.T) {
 		Rates:  nil,
 		Bounds: nil,
 	}
+	require.NoError(t, cs.PruneAndValidateForGenesis(&rules, 0), "empty")
+	require.Nil(t, cs.CurrentRate(0), "empty current rate")
+	require.NoError(t, cs.AmendAndPruneAndValidate(&CommissionSchedule{
+		Rates: []CommissionRateStep{
+			{
+				Start: 10,
+				Rate:  mustInitQuantity(t, 50_000),
+			},
+		},
+		Bounds: []CommissionRateBoundStep{
+			{
+				Start:   10,
+				RateMin: mustInitQuantity(t, 0),
+				RateMax: mustInitQuantity(t, 100_000),
+			},
+		},
+	}, &rules, 0), "amend init - ignore rate bound lead")
+
+	cs = CommissionSchedule{
+		Rates:  nil,
+		Bounds: nil,
+	}
+	require.NoError(t, cs.PruneAndValidateForGenesis(&rules, 0), "empty")
+	require.Nil(t, cs.CurrentRate(0), "empty current rate")
 	requireErrorShowDiagnostic(t, cs.AmendAndPruneAndValidate(&CommissionSchedule{
 		Rates: []CommissionRateStep{
 			{

@@ -148,11 +148,14 @@ func (c *commission) doAmendCommissionSchedule(ctx context.Context, rng *rand.Ra
 	existingCommissionSchedule := account.Escrow.CommissionSchedule
 	existingCommissionSchedule.Prune(currentEpoch)
 
-	// First epoch at which bound steps can be altered is
-	// `currentEpoch + RateBoundLead + 1`
-	// Note: Another +1 bellow since the epoch could have changed before this
-	// transaction is submitted.
-	nextAllowedBoundChangeEpoch := currentEpoch + c.rules.RateBoundLead + 1 + 1
+	// First epoch at which bound steps can be altered.
+	nextAllowedBoundChangeEpoch := currentEpoch +
+		1 + // Cannot alter for current epoch.
+		1 // The epoch could advance before the transaction is submitted.
+	if len(existingCommissionSchedule.Bounds) > 0 {
+		// In case this is not the initial schedule take into account RateBoundLead.
+		nextAllowedBoundChangeEpoch += c.rules.RateBoundLead
+	}
 	// Find first epoch after `nextAllowedBoundChangeEpoch` aligned with
 	// RateChangeInterval.
 	nextAlignedBoundChangeEpoch := (((nextAllowedBoundChangeEpoch - 1) / c.rules.RateChangeInterval) + 1) * c.rules.RateChangeInterval
