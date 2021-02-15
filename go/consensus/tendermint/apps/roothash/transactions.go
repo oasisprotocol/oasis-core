@@ -60,11 +60,11 @@ func (sv *roothashSignatureVerifier) VerifyCommitteeSignatures(kind scheduler.Co
 	return nil
 }
 
-// VerifyTxnSchedulerSignature verifies that the given signatures come from
+// VerifyTxnSchedulerSigner verifies that the given signature comes from
 // the transaction scheduler at provided round.
 //
 // Implements commitment.SignatureVerifier.
-func (sv *roothashSignatureVerifier) VerifyTxnSchedulerSignature(sig signature.Signature, round uint64) error {
+func (sv *roothashSignatureVerifier) VerifyTxnSchedulerSigner(sig signature.Signature, round uint64) error {
 	committee, err := sv.scheduler.Committee(sv.ctx, scheduler.KindComputeExecutor, sv.runtimeID)
 	if err != nil {
 		return err
@@ -335,7 +335,8 @@ func (app *rootHashApplication) submitEvidence(
 	var pk signature.PublicKey
 	switch {
 	case evidence.EquivocationExecutor != nil:
-		commitA, _ := evidence.EquivocationExecutor.CommitA.Open()
+		// Evidence validity check ensures this can open.
+		commitA, _ := evidence.EquivocationExecutor.CommitA.Open(evidence.ID)
 
 		if commitA.Body.Header.Round+params.MaxEvidenceAge < rtState.CurrentBlock.Header.Round {
 			ctx.Logger().Error("Evidence: commitment equivocation evidence expired",
@@ -348,8 +349,9 @@ func (app *rootHashApplication) submitEvidence(
 		round = commitA.Body.Header.Round
 		pk = commitA.Signature.PublicKey
 	case evidence.EquivocationBatch != nil:
+		// Evidence validity check ensures this can open.
 		var batchA commitment.ProposedBatch
-		_ = evidence.EquivocationBatch.BatchA.Open(&batchA)
+		_ = evidence.EquivocationBatch.BatchA.Open(&batchA, evidence.ID)
 
 		if batchA.Header.Round+params.MaxEvidenceAge < rtState.CurrentBlock.Header.Round {
 			ctx.Logger().Error("Evidence: proposed batch equivocation evidence expired",

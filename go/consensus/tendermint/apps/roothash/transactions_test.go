@@ -195,11 +195,11 @@ func TestMessagesGasEstimation(t *testing.T) {
 		StorageSignatures: body.InputStorageSigs,
 		Header:            blk.Header,
 	}
-	signedDispatch, err := commitment.SignProposedBatch(sk, dispatch)
+	signedDispatch, err := commitment.SignProposedBatch(sk, runtime.ID, dispatch)
 	require.NoError(err, "SignProposedBatch")
 	body.TxnSchedSig = signedDispatch.Signature
 
-	commit, err := commitment.SignExecutorCommitment(sk, &body)
+	commit, err := commitment.SignExecutorCommitment(sk, runtime.ID, &body)
 	require.NoError(err, "SignExecutorCommitment")
 
 	// Generate executor commit transaction body.
@@ -267,6 +267,7 @@ func TestEvidence(t *testing.T) {
 	require.NoError(err, "SetNode")
 
 	// Initialize runtimes.
+	uninitializedRtID := common.NewTestNamespaceFromSeed([]byte("tendermint/apps/roothash/transaction_test: non existing runtime"), 0)
 	slashAmount := quantity.NewFromUint64(40)
 	runtime := registry.Runtime{
 		Executor: registry.ExecutorParameters{
@@ -379,9 +380,15 @@ func TestEvidence(t *testing.T) {
 		StorageSignatures: []signature.Signature{},
 		Header:            blk2.Header,
 	}
-	signedBatch1, err := commitment.SignProposedBatch(sk, batch1)
+	signedBatch1, err := commitment.SignProposedBatch(sk, runtime.ID, batch1)
 	require.NoError(err, "SignProposedBatch")
-	nonExistingSignerBatch1, err := commitment.SignProposedBatch(nonExistingSigner, batch1)
+	noSlashingRtB1, err := commitment.SignProposedBatch(sk, runtimeNoSlashing.ID, batch1)
+	require.NoError(err, "SignProposedBatch")
+	zeroSlashingRtB1, err := commitment.SignProposedBatch(sk, runtimeZeroSlashing.ID, batch1)
+	require.NoError(err, "SignProposedBatch")
+	nonExistingSignerBatch1, err := commitment.SignProposedBatch(nonExistingSigner, runtime.ID, batch1)
+	require.NoError(err, "SignProposedBatch")
+	uninitializedRtB1, err := commitment.SignProposedBatch(sk, uninitializedRtID, batch1)
 	require.NoError(err, "SignProposedBatch")
 
 	batch2 := &commitment.ProposedBatch{
@@ -389,9 +396,15 @@ func TestEvidence(t *testing.T) {
 		StorageSignatures: []signature.Signature{},
 		Header:            blk2.Header,
 	}
-	signedBatch2, err := commitment.SignProposedBatch(sk, batch2)
+	signedBatch2, err := commitment.SignProposedBatch(sk, runtime.ID, batch2)
 	require.NoError(err, "SignProposedBatch")
-	nonExistingSignerBatch2, err := commitment.SignProposedBatch(nonExistingSigner, batch2)
+	noSlashingRtB2, err := commitment.SignProposedBatch(sk, runtimeNoSlashing.ID, batch2)
+	require.NoError(err, "SignProposedBatch")
+	zeroSlashingRtB2, err := commitment.SignProposedBatch(sk, runtimeZeroSlashing.ID, batch2)
+	require.NoError(err, "SignProposedBatch")
+	nonExistingSignerBatch2, err := commitment.SignProposedBatch(nonExistingSigner, runtime.ID, batch2)
+	require.NoError(err, "SignProposedBatch")
+	uninitializedRtB2, err := commitment.SignProposedBatch(sk, uninitializedRtID, batch2)
 	require.NoError(err, "SignProposedBatch")
 
 	// Executor commit.
@@ -404,10 +417,10 @@ func TestEvidence(t *testing.T) {
 			MessagesHash: &hash.Hash{},
 		},
 	}
-	signedCommitment1, err := commitment.SignExecutorCommitment(sk, &body)
+	signedCommitment1, err := commitment.SignExecutorCommitment(sk, runtime.ID, &body)
 	require.NoError(err, "SignExecutorCommitment")
 	body.Header.PreviousHash = hash.NewFromBytes([]byte("invalid ioroot"))
-	signedCommitment2, err := commitment.SignExecutorCommitment(sk, &body)
+	signedCommitment2, err := commitment.SignExecutorCommitment(sk, runtime.ID, &body)
 	require.NoError(err, "SignExecutorCommitment")
 
 	// Expired evidence.
@@ -417,14 +430,14 @@ func TestEvidence(t *testing.T) {
 		StorageSignatures: []signature.Signature{},
 		Header:            blk2.Header,
 	}
-	expiredB1, err := commitment.SignProposedBatch(sk, expired1)
+	expiredB1, err := commitment.SignProposedBatch(sk, runtime.ID, expired1)
 	require.NoError(err, "SignProposedBatch")
 	expired2 := &commitment.ProposedBatch{
 		IORoot:            hash.NewFromBytes([]byte("invalid root")),
 		StorageSignatures: []signature.Signature{},
 		Header:            blk2.Header,
 	}
-	expiredB2, err := commitment.SignProposedBatch(sk, expired2)
+	expiredB2, err := commitment.SignProposedBatch(sk, runtime.ID, expired2)
 	require.NoError(err, "SignProposedBatch")
 
 	expiredBody := commitment.ComputeBody{
@@ -436,10 +449,10 @@ func TestEvidence(t *testing.T) {
 			MessagesHash: &hash.Hash{},
 		},
 	}
-	expiredCommitment1, err := commitment.SignExecutorCommitment(sk, &expiredBody)
+	expiredCommitment1, err := commitment.SignExecutorCommitment(sk, runtime.ID, &expiredBody)
 	require.NoError(err, "SignExecutorCommitment")
 	expiredBody.Header.PreviousHash = hash.NewFromBytes([]byte("invalid ioroot"))
-	expiredCommitment2, err := commitment.SignExecutorCommitment(sk, &expiredBody)
+	expiredCommitment2, err := commitment.SignExecutorCommitment(sk, runtime.ID, &expiredBody)
 	require.NoError(err, "SignExecutorCommitment")
 	var md testMsgDispatcher
 	app := rootHashApplication{appState, &md}
@@ -456,21 +469,21 @@ func TestEvidence(t *testing.T) {
 		},
 		{
 			&roothash.Evidence{
-				ID: common.NewTestNamespaceFromSeed([]byte("tendermint/apps/roothash/transaction_test: non existing runtime"), 0),
+				ID: runtimeNoSlashing.ID,
 				EquivocationBatch: &roothash.EquivocationBatchEvidence{
 					BatchA: *signedBatch1,
 					BatchB: *signedBatch2,
 				},
 			},
-			roothash.ErrInvalidRuntime,
-			"evidence for nonexisting runtime",
+			roothash.ErrInvalidEvidence,
+			"invalid evidence (signed batch runtime does not match evidence runtime)",
 		},
 		{
 			&roothash.Evidence{
 				ID: runtimeNoSlashing.ID,
 				EquivocationBatch: &roothash.EquivocationBatchEvidence{
-					BatchA: *signedBatch1,
-					BatchB: *signedBatch2,
+					BatchA: *noSlashingRtB1,
+					BatchB: *noSlashingRtB2,
 				},
 			},
 			roothash.ErrRuntimeDoesNotSlash,
@@ -480,8 +493,8 @@ func TestEvidence(t *testing.T) {
 			&roothash.Evidence{
 				ID: runtimeZeroSlashing.ID,
 				EquivocationBatch: &roothash.EquivocationBatchEvidence{
-					BatchA: *signedBatch1,
-					BatchB: *signedBatch2,
+					BatchA: *zeroSlashingRtB1,
+					BatchB: *zeroSlashingRtB2,
 				},
 			},
 			roothash.ErrRuntimeDoesNotSlash,
@@ -506,6 +519,17 @@ func TestEvidence(t *testing.T) {
 			},
 			roothash.ErrInvalidEvidence,
 			"expired batch evidence",
+		},
+		{
+			&roothash.Evidence{
+				ID: uninitializedRtID,
+				EquivocationBatch: &roothash.EquivocationBatchEvidence{
+					BatchA: *uninitializedRtB1,
+					BatchB: *uninitializedRtB2,
+				},
+			},
+			roothash.ErrInvalidRuntime,
+			"evidence for nonexisting runtime",
 		},
 		{
 			&roothash.Evidence{

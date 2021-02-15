@@ -169,7 +169,7 @@ func doExecutorScenario(cmd *cobra.Command, args []string) {
 		}
 	case false:
 		// If we are not the scheduler, receive the proposed batch.
-		if err = cbc.receiveBatch(b.p2p); err != nil {
+		if err = cbc.receiveBatch(b.p2p, defaultRuntimeID); err != nil {
 			panic(fmt.Sprintf("compute receive batch failed: %+v", err))
 		}
 		logger.Debug("executor: received batch", "bd", cbc.bd)
@@ -226,11 +226,11 @@ func doExecutorScenario(cmd *cobra.Command, args []string) {
 	}
 	switch executorMode {
 	case ModeExecutorFailureIndicating:
-		if err = cbc.createCommitment(b.identity, b.rak, b.executorCommittee.EncodedMembersHash(), commitment.FailureUnknown); err != nil {
+		if err = cbc.createCommitment(b.identity, defaultRuntimeID, b.rak, b.executorCommittee.EncodedMembersHash(), commitment.FailureUnknown); err != nil {
 			panic(fmt.Sprintf("compute create commitment failed: %+v", err))
 		}
 	default:
-		if err = cbc.createCommitment(b.identity, b.rak, b.executorCommittee.EncodedMembersHash(), commitment.FailureNone); err != nil {
+		if err = cbc.createCommitment(b.identity, defaultRuntimeID, b.rak, b.executorCommittee.EncodedMembersHash(), commitment.FailureNone); err != nil {
 			panic(fmt.Sprintf("compute create commitment failed: %+v", err))
 		}
 

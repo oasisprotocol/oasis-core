@@ -193,9 +193,9 @@ func (ev *Evidence) ValidateBasic() error {
 	case ev.EquivocationExecutor != nil && ev.EquivocationBatch != nil:
 		return fmt.Errorf("evidence has multiple fields set")
 	case ev.EquivocationExecutor != nil:
-		return ev.EquivocationExecutor.ValidateBasic()
+		return ev.EquivocationExecutor.ValidateBasic(ev.ID)
 	case ev.EquivocationBatch != nil:
-		return ev.EquivocationBatch.ValidateBasic()
+		return ev.EquivocationBatch.ValidateBasic(ev.ID)
 	default:
 		return fmt.Errorf("evidence content has no fields set")
 	}
@@ -210,7 +210,7 @@ type EquivocationExecutorEvidence struct {
 // ValidateBasic performs stateless executor evidence validation checks.
 //
 // Particularly evidence is not verified to not be expired as this requires stateful checks.
-func (ev *EquivocationExecutorEvidence) ValidateBasic() error {
+func (ev *EquivocationExecutorEvidence) ValidateBasic(id common.Namespace) error {
 	if ev.CommitA.Equal(&ev.CommitB) {
 		return fmt.Errorf("commits are equal, no sign of equivocation")
 	}
@@ -219,11 +219,11 @@ func (ev *EquivocationExecutorEvidence) ValidateBasic() error {
 		return fmt.Errorf("equivocation executor evidence signature public keys don't match")
 	}
 
-	a, err := ev.CommitA.Open()
+	a, err := ev.CommitA.Open(id)
 	if err != nil {
 		return fmt.Errorf("opening CommitA: %w", err)
 	}
-	b, err := ev.CommitB.Open()
+	b, err := ev.CommitB.Open(id)
 	if err != nil {
 		return fmt.Errorf("opening CommitB: %w", err)
 	}
@@ -266,7 +266,7 @@ type EquivocationBatchEvidence struct {
 // ValidateBasic performs stateless batch evidence validation checks.
 //
 // Particularly evidence is not verified to not be expired as this requires stateful checks.
-func (ev *EquivocationBatchEvidence) ValidateBasic() error {
+func (ev *EquivocationBatchEvidence) ValidateBasic(id common.Namespace) error {
 	if ev.BatchA.Equal(&ev.BatchB) {
 		return fmt.Errorf("batches are equal, no sign of equivocation")
 	}
@@ -276,10 +276,10 @@ func (ev *EquivocationBatchEvidence) ValidateBasic() error {
 	}
 
 	var a, b commitment.ProposedBatch
-	if err := ev.BatchA.Open(&a); err != nil {
+	if err := ev.BatchA.Open(&a, id); err != nil {
 		return fmt.Errorf("opening BatchA: %w", err)
 	}
-	if err := ev.BatchB.Open(&b); err != nil {
+	if err := ev.BatchB.Open(&b, id); err != nil {
 		return fmt.Errorf("opening BatchB: %w", err)
 	}
 

@@ -148,7 +148,7 @@ func (cbc *computeBatchContext) prepareTransactionBatch(
 		dispatchMsg.IORoot = emptyRoot.Hash
 	}
 
-	signedDispatchMsg, err := commitment.SignProposedBatch(identity.NodeSigner, dispatchMsg)
+	signedDispatchMsg, err := commitment.SignProposedBatch(identity.NodeSigner, lastHeader.Namespace, dispatchMsg)
 	if err != nil {
 		return nil, fmt.Errorf("failed to sign txn scheduler batch: %w", err)
 	}
@@ -159,7 +159,7 @@ func (cbc *computeBatchContext) prepareTransactionBatch(
 	return signedDispatchMsg, nil
 }
 
-func (cbc *computeBatchContext) receiveBatch(ph *p2pHandle) error {
+func (cbc *computeBatchContext) receiveBatch(ph *p2pHandle, runtimeID common.Namespace) error {
 	var req p2pReqRes
 	for {
 		req = <-ph.requests
@@ -172,7 +172,7 @@ func (cbc *computeBatchContext) receiveBatch(ph *p2pHandle) error {
 		break
 	}
 
-	if err := req.msg.ProposedBatch.Open(&cbc.bd); err != nil {
+	if err := req.msg.ProposedBatch.Open(&cbc.bd, runtimeID); err != nil {
 		return fmt.Errorf("request message SignedProposedBatchDispatch Open: %w", err)
 	}
 
@@ -279,7 +279,13 @@ func (cbc *computeBatchContext) uploadBatch(ctx context.Context, clients []*stor
 	return nil
 }
 
-func (cbc *computeBatchContext) createCommitment(id *identity.Identity, rak signature.Signer, committeeID hash.Hash, failure commitment.ExecutorCommitmentFailure) error {
+func (cbc *computeBatchContext) createCommitment(
+	id *identity.Identity,
+	runtimeID common.Namespace,
+	rak signature.Signer,
+	committeeID hash.Hash,
+	failure commitment.ExecutorCommitmentFailure,
+) error {
 	var storageSigs []signature.Signature
 	for _, receipt := range cbc.storageReceipts {
 		storageSigs = append(storageSigs, receipt.Signature)
@@ -314,7 +320,7 @@ func (cbc *computeBatchContext) createCommitment(id *identity.Identity, rak sign
 	}
 
 	var err error
-	cbc.commit, err = commitment.SignExecutorCommitment(id.NodeSigner, computeBody)
+	cbc.commit, err = commitment.SignExecutorCommitment(id.NodeSigner, runtimeID, computeBody)
 	if err != nil {
 		return fmt.Errorf("commitment sign executor commitment: %w", err)
 	}

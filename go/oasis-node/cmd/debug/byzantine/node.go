@@ -75,7 +75,7 @@ func (b *byzantine) receiveAndScheduleTransactions(ctx context.Context, cbc *com
 	if mode == ModeExecutorFailureIndicating {
 		// Submit failure indicating commitment and stop.
 		logger.Debug("executor failure indicating: submitting commitment and stopping")
-		if err = cbc.createCommitment(b.identity, nil, b.executorCommittee.EncodedMembersHash(), commitment.FailureStorageUnavailable); err != nil {
+		if err = cbc.createCommitment(b.identity, defaultRuntimeID, nil, b.executorCommittee.EncodedMembersHash(), commitment.FailureStorageUnavailable); err != nil {
 			panic(fmt.Sprintf("compute create failure indicating commitment failed: %+v", err))
 		}
 		if err = cbc.publishToChain(b.tendermint.service, b.identity, defaultRuntimeID); err != nil {

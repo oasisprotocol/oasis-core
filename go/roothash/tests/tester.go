@@ -350,12 +350,12 @@ func (s *runtimeState) generateExecutorCommitments(t *testing.T, consensus conse
 		require.NotNil(schedulerNode, "TransactionScheduler missing in test nodes")
 
 		var signedDispatch *commitment.SignedProposedBatch
-		signedDispatch, err = commitment.SignProposedBatch(schedulerNode.Signer, dispatch)
+		signedDispatch, err = commitment.SignProposedBatch(schedulerNode.Signer, s.rt.Runtime.ID, dispatch)
 		require.NoError(err, "SignProposedBatch")
 		commitBody.TxnSchedSig = signedDispatch.Signature
 
 		// `err` shadows outside.
-		commit, err := commitment.SignExecutorCommitment(node.Signer, &commitBody) // nolint: vetshadow
+		commit, err := commitment.SignExecutorCommitment(node.Signer, s.rt.Runtime.ID, &commitBody) // nolint: vetshadow
 		require.NoError(err, "SignExecutorCommitment")
 
 		executorCommits = append(executorCommits, *commit)
@@ -844,7 +844,7 @@ func testSubmitEquivocationEvidence(t *testing.T, backend api.Backend, consensus
 		StorageSignatures: []signature.Signature{},
 		Header:            child.Header,
 	}
-	signedBatch1, err := commitment.SignProposedBatch(node.Signer, batch1)
+	signedBatch1, err := commitment.SignProposedBatch(node.Signer, s.rt.Runtime.ID, batch1)
 	require.NoError(err, "SignProposedBatch")
 
 	batch2 := &commitment.ProposedBatch{
@@ -852,7 +852,7 @@ func testSubmitEquivocationEvidence(t *testing.T, backend api.Backend, consensus
 		StorageSignatures: []signature.Signature{},
 		Header:            child.Header,
 	}
-	signedBatch2, err := commitment.SignProposedBatch(node.Signer, batch2)
+	signedBatch2, err := commitment.SignProposedBatch(node.Signer, s.rt.Runtime.ID, batch2)
 	require.NoError(err, "SignProposedBatch")
 
 	ch, sub, err := consensus.Staking().WatchEvents(ctx)
