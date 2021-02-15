@@ -40,6 +40,8 @@ var (
 	errMalformedContext    = errors.New("signature: malformed context")
 	errUnregisteredContext = errors.New("signature: unregistered context")
 	errNoChainContext      = errors.New("signature: chain domain separation context not set")
+	errNoSuffixConfigured  = errors.New("signature: domain separation context suffix not configured")
+	errNoDynamicSuffix     = errors.New("signature: dynamic context suffix not set")
 
 	registeredContexts        sync.Map
 	allowUnregisteredContexts bool
@@ -61,6 +63,9 @@ var (
 
 type contextOptions struct {
 	chainSeparation bool
+
+	dynamicSuffix       string
+	dynamicSuffixMaxLen int
 }
 
 // ContextOption is a context configuration option.
@@ -74,8 +79,44 @@ func WithChainSeparation() ContextOption {
 	}
 }
 
+// WithDynamicSuffix is a context option that configures the context to use
+// a dynamic suffix.
+func WithDynamicSuffix(str string, len int) ContextOption {
+	return func(o *contextOptions) {
+		o.dynamicSuffix = str
+		o.dynamicSuffixMaxLen = len
+	}
+}
+
 // Context is a domain separation context.
 type Context string
+
+// WithSuffix appends a suffix to the context.
+func (c Context) WithSuffix(str string) (Context, error) {
+	// Ensure that the context is registered for use and has dynamic suffix
+	// configured.
+	rawOpts, isRegistered := registeredContexts.Load(c)
+	if !isRegistered {
+		return c, errUnregisteredContext
+	}
+	opts := rawOpts.(*contextOptions)
+	if opts.dynamicSuffix == "" {
+		return c, errNoSuffixConfigured
+	}
+	if len(str) > opts.dynamicSuffixMaxLen {
+		return c, fmt.Errorf("suffix too long: %w (max suffix length: %v)", errMalformedContext, opts.dynamicSuffixMaxLen)
+	}
+
+	newCtx := c + Context(opts.dynamicSuffix+str)
+	// No dynamic suffix for the new context.
+	newOpts := contextOptions{
+		chainSeparation: opts.chainSeparation,
+	}
+	// Register the context so it can be looked up (same suffix can be used multiple times).
+	_, _ = registeredContexts.LoadOrStore(newCtx, &newOpts)
+
+	return newCtx, nil
+}
 
 // NewContext creates and registers a new context.  This routine will panic
 // if the context is malformed or is already registered.
@@ -97,6 +138,7 @@ func NewContext(rawContext string, opts ...ContextOption) Context {
 	if opt.chainSeparation {
 		l += len(chainContextSeparator) + chainContextMaxSize
 	}
+	l += len(opt.dynamicSuffix) + opt.dynamicSuffixMaxLen
 	if l > ed25519.ContextMaxSize {
 		panic(errMalformedContext)
 	}
@@ -287,6 +329,10 @@ func PrepareSignerContext(context Context) ([]byte, error) {
 			return nil, errNoChainContext
 		}
 		context = context + chainContextSeparator + chainContext
+	}
+
+	if opts.dynamicSuffix != "" {
+		return nil, errNoDynamicSuffix
 	}
 
 	return []byte(context), nil
