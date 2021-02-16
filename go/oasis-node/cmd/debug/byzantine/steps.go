@@ -8,7 +8,6 @@ import (
 
 	"github.com/spf13/viper"
 
-	"github.com/oasisprotocol/oasis-core/go/common"
 	"github.com/oasisprotocol/oasis-core/go/common/cbor"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	fileSigner "github.com/oasisprotocol/oasis-core/go/common/crypto/signature/signers/file"
@@ -18,12 +17,6 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/sgx"
 	"github.com/oasisprotocol/oasis-core/go/common/sgx/ias"
 )
-
-const (
-	defaultRuntimeIDHex = "8000000000000000000000000000000000000000000000000000000000000000"
-)
-
-var defaultRuntimeID common.Namespace
 
 func initDefaultIdentity(dataDir string) (*identity.Identity, error) {
 	signerFactory, err := fileSigner.NewFactory(dataDir, signature.SignerNode, signature.SignerP2P, signature.SignerEntity, signature.SignerConsensus)
@@ -99,10 +92,4 @@ func initFakeCapabilitiesSGX() (signature.Signer, *node.Capabilities, error) {
 	}
 
 	return fr, &fc, nil
-}
-
-func init() {
-	if err := defaultRuntimeID.UnmarshalHex(defaultRuntimeIDHex); err != nil {
-		panic(fmt.Sprintf("default runtime ID UnmarshalHex: %+v", err))
-	}
 }

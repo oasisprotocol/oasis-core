@@ -499,6 +499,7 @@ type ByzantineFixture struct { // nolint: maligned
 	Entity       int    `json:"entity"`
 
 	ActivationEpoch beacon.EpochTime `json:"activation_epoch"`
+	Runtime         int              `json:"runtime"`
 
 	// Consensus contains configuration for the consensus backend.
 	Consensus ConsensusFixture `json:"consensus"`
@@ -525,6 +526,7 @@ func (f *ByzantineFixture) Create(net *Network) (*Byzantine, error) {
 		IdentitySeed:    f.IdentitySeed,
 		Entity:          entity,
 		ActivationEpoch: f.ActivationEpoch,
+		Runtime:         f.Runtime,
 	})
 }
 

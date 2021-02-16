@@ -587,6 +587,11 @@ func (args *argBuilder) byzantineActivationEpoch(epoch beacon.EpochTime) *argBui
 	return args
 }
 
+func (args *argBuilder) byzantineRuntimeID(runtimeID common.Namespace) *argBuilder {
+	args.vec = append(args.vec, "--"+byzantine.CfgRuntimeID, runtimeID.String())
+	return args
+}
+
 func newArgBuilder() *argBuilder {
 	return &argBuilder{}
 }

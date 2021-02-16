@@ -24,6 +24,8 @@ import (
 )
 
 type computeBatchContext struct {
+	runtimeID common.Namespace
+
 	bd    commitment.ProposedBatch
 	bdSig signature.Signature
 
@@ -40,8 +42,10 @@ type computeBatchContext struct {
 	commit          *commitment.ExecutorCommitment
 }
 
-func newComputeBatchContext() *computeBatchContext {
-	return &computeBatchContext{}
+func newComputeBatchContext(runtimeID common.Namespace) *computeBatchContext {
+	return &computeBatchContext{
+		runtimeID: runtimeID,
+	}
 }
 
 func (cbc *computeBatchContext) receiveTransactions(ph *p2pHandle, timeout time.Duration) []*api.Tx {
@@ -80,7 +84,7 @@ func (cbc *computeBatchContext) publishTransactionBatch(
 ) {
 	p2pH.service.Publish(
 		ctx,
-		defaultRuntimeID,
+		cbc.runtimeID,
 		&p2p.Message{
 			GroupVersion:  groupVersion,
 			ProposedBatch: batch,
@@ -159,7 +163,7 @@ func (cbc *computeBatchContext) prepareTransactionBatch(
 	return signedDispatchMsg, nil
 }
 
-func (cbc *computeBatchContext) receiveBatch(ph *p2pHandle, runtimeID common.Namespace) error {
+func (cbc *computeBatchContext) receiveBatch(ph *p2pHandle) error {
 	var req p2pReqRes
 	for {
 		req = <-ph.requests
@@ -172,7 +176,7 @@ func (cbc *computeBatchContext) receiveBatch(ph *p2pHandle, runtimeID common.Nam
 		break
 	}
 
-	if err := req.msg.ProposedBatch.Open(&cbc.bd, runtimeID); err != nil {
+	if err := req.msg.ProposedBatch.Open(&cbc.bd, cbc.runtimeID); err != nil {
 		return fmt.Errorf("request message SignedProposedBatchDispatch Open: %w", err)
 	}
 
@@ -281,7 +285,6 @@ func (cbc *computeBatchContext) uploadBatch(ctx context.Context, clients []*stor
 
 func (cbc *computeBatchContext) createCommitment(
 	id *identity.Identity,
-	runtimeID common.Namespace,
 	rak signature.Signer,
 	committeeID hash.Hash,
 	failure commitment.ExecutorCommitmentFailure,
@@ -320,7 +323,7 @@ func (cbc *computeBatchContext) createCommitment(
 	}
 
 	var err error
-	cbc.commit, err = commitment.SignExecutorCommitment(id.NodeSigner, runtimeID, computeBody)
+	cbc.commit, err = commitment.SignExecutorCommitment(id.NodeSigner, cbc.runtimeID, computeBody)
 	if err != nil {
 		return fmt.Errorf("commitment sign executor commitment: %w", err)
 	}
@@ -328,8 +331,8 @@ func (cbc *computeBatchContext) createCommitment(
 	return nil
 }
 
-func (cbc *computeBatchContext) publishToChain(svc consensus.Backend, id *identity.Identity, runtimeID common.Namespace) error {
-	if err := roothashExecutorCommit(svc, id, runtimeID, []commitment.ExecutorCommitment{*cbc.commit}); err != nil {
+func (cbc *computeBatchContext) publishToChain(svc consensus.Backend, id *identity.Identity) error {
+	if err := roothashExecutorCommit(svc, id, cbc.runtimeID, []commitment.ExecutorCommitment{*cbc.commit}); err != nil {
 		return fmt.Errorf("roothash merge commitment: %w", err)
 	}
 

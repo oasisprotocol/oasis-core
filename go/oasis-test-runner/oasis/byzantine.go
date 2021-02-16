@@ -17,6 +17,7 @@ type Byzantine struct {
 
 	entity *Entity
 
+	runtime         int
 	consensusPort   uint16
 	p2pPort         uint16
 	activationEpoch beacon.EpochTime
@@ -33,6 +34,7 @@ type ByzantineCfg struct {
 	Entity       *Entity
 
 	ActivationEpoch beacon.EpochTime
+	Runtime         int
 }
 
 func (worker *Byzantine) startNode() error {
@@ -48,6 +50,9 @@ func (worker *Byzantine) startNode() error {
 		appendEntity(worker.entity).
 		byzantineActivationEpoch(worker.activationEpoch)
 
+	if worker.runtime > 0 {
+		args.byzantineRuntimeID(worker.net.runtimes[worker.runtime].id)
+	}
 	for _, v := range worker.net.Runtimes() {
 		if v.kind == registry.KindCompute && v.teeHardware == node.TEEHardwareIntelSGX {
 			args = args.byzantineFakeSGX()
@@ -111,6 +116,7 @@ func (net *Network) NewByzantine(cfg *ByzantineCfg) (*Byzantine, error) {
 		consensusPort:   net.nextNodePort,
 		p2pPort:         net.nextNodePort + 1,
 		activationEpoch: cfg.ActivationEpoch,
+		runtime:         cfg.Runtime,
 	}
 	worker.doStartNode = worker.startNode
 	copy(worker.NodeID[:], nodeKey[:])
