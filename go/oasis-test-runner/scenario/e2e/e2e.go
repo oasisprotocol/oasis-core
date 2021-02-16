@@ -122,7 +122,7 @@ func (sc *E2E) Init(childEnv *env.Env, net *oasis.Network) error {
 
 // GetExportedGenesisFiles gathers exported genesis files and ensures
 // all exported genesis files match.
-func (sc *E2E) GetExportedGenesisFiles() ([]string, error) {
+func (sc *E2E) GetExportedGenesisFiles(skipCompute bool) ([]string, error) {
 	dumpGlob := "genesis-*.json"
 
 	// Gather all nodes.
@@ -132,8 +132,10 @@ func (sc *E2E) GetExportedGenesisFiles() ([]string, error) {
 	for _, v := range sc.Net.Validators() {
 		nodes = append(nodes, v)
 	}
-	for _, n := range sc.Net.ComputeWorkers() {
-		nodes = append(nodes, n)
+	if !skipCompute {
+		for _, n := range sc.Net.ComputeWorkers() {
+			nodes = append(nodes, n)
+		}
 	}
 	for _, n := range sc.Net.StorageWorkers() {
 		nodes = append(nodes, n)

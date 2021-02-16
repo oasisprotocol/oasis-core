@@ -5,34 +5,55 @@ import (
 	"fmt"
 	"reflect"
 
+	beacon "github.com/oasisprotocol/oasis-core/go/beacon/api"
+	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
 	genesis "github.com/oasisprotocol/oasis-core/go/genesis/file"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/env"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/oasis"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/scenario"
+	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
 )
 
-// HaltRestore is the halt and restore scenario.
-var HaltRestore scenario.Scenario = newHaltRestoreImpl()
+var (
+	// HaltRestore is the halt and restore scenario.
+	HaltRestore scenario.Scenario = newHaltRestoreImpl(false)
+	// HaltRestoreSuspended is the halt and restore scenario with a suspended runtime.
+	HaltRestoreSuspended scenario.Scenario = newHaltRestoreImpl(true)
+)
 
 const haltEpoch = 3
 
 type haltRestoreImpl struct {
 	runtimeImpl
+
+	suspendRuntime bool
+	haltEpoch      int
 }
 
-func newHaltRestoreImpl() scenario.Scenario {
+func newHaltRestoreImpl(suspended bool) scenario.Scenario {
+	name := "halt-restore"
+	haltEpoch := haltEpoch
+	if suspended {
+		name += "-suspended"
+		// Add some epochs since we're also suspending a runtime.
+		haltEpoch += 5
+	}
 	return &haltRestoreImpl{
 		runtimeImpl: *newRuntimeImpl(
-			"halt-restore",
+			name,
 			"test-long-term-client",
 			[]string{"--mode", "part1"},
 		),
+		haltEpoch:      haltEpoch,
+		suspendRuntime: suspended,
 	}
 }
 
 func (sc *haltRestoreImpl) Clone() scenario.Scenario {
 	return &haltRestoreImpl{
-		runtimeImpl: *sc.runtimeImpl.Clone().(*runtimeImpl),
+		runtimeImpl:    *sc.runtimeImpl.Clone().(*runtimeImpl),
+		suspendRuntime: sc.suspendRuntime,
+		haltEpoch:      sc.haltEpoch,
 	}
 }
 
@@ -41,7 +62,8 @@ func (sc *haltRestoreImpl) Fixture() (*oasis.NetworkFixture, error) {
 	if err != nil {
 		return nil, err
 	}
-	f.Network.HaltEpoch = haltEpoch
+	f.Network.SetMockEpoch()
+	f.Network.HaltEpoch = uint64(sc.haltEpoch)
 	for _, val := range f.Validators {
 		val.AllowEarlyTermination = true
 	}
@@ -49,10 +71,22 @@ func (sc *haltRestoreImpl) Fixture() (*oasis.NetworkFixture, error) {
 }
 
 func (sc *haltRestoreImpl) Run(childEnv *env.Env) error {
+	ctx := context.Background()
+
 	clientErrCh, cmd, err := sc.runtimeImpl.start(childEnv)
 	if err != nil {
 		return err
 	}
+
+	fixture, err := sc.Fixture()
+	if err != nil {
+		return err
+	}
+	if err = sc.initialEpochTransitions(fixture); err != nil {
+		return err
+	}
+	// We're at epoch 2 after the initial transitions
+	nextEpoch := beacon.EpochTime(3)
 
 	// Wait for the client to exit.
 	select {
@@ -64,13 +98,53 @@ func (sc *haltRestoreImpl) Run(childEnv *env.Env) error {
 		return err
 	}
 
-	// Wait for the epoch after the halt epoch.
-	ctx := context.Background()
-	sc.Logger.Info("waiting for halt epoch")
-	// Wait for halt epoch.
-	err = sc.Net.Controller().Beacon.WaitEpoch(ctx, haltEpoch)
-	if err != nil {
-		return fmt.Errorf("failed waiting for halt epoch: %w", err)
+	if sc.suspendRuntime {
+		// Stop compute nodes.
+		sc.Logger.Info("stopping compute nodes")
+		for _, n := range sc.Net.ComputeWorkers() {
+			if err = n.Stop(); err != nil {
+				return fmt.Errorf("failed to stop node: %w", err)
+			}
+		}
+
+		// Epoch transitions so nodes expire.
+		sc.Logger.Info("performing epoch transitions so nodes expire")
+		for i := 0; i < 3; i++ {
+
+			if err = sc.Net.Controller().SetEpoch(ctx, nextEpoch); err != nil {
+				return fmt.Errorf("failed to set epoch %d: %w", nextEpoch, err)
+			}
+			nextEpoch++
+		}
+
+		// Ensure that runtime got suspended.
+		sc.Logger.Info("checking that runtime got suspended")
+		_, err = sc.Net.Controller().Registry.GetRuntime(ctx, &registry.NamespaceQuery{
+			Height: consensus.HeightLatest,
+			ID:     fixture.Runtimes[1].ID,
+		})
+		switch err {
+		case nil:
+			return fmt.Errorf("runtime should be suspended but it is not")
+		case registry.ErrNoSuchRuntime:
+			// Runtime is suspended.
+			sc.Logger.Info("runtime is suspended")
+		default:
+			return fmt.Errorf("unexpected error while fetching runtime: %w", err)
+		}
+	}
+
+	// Transition to halt epoch.
+	sc.Logger.Info("transitioning to halt epoch",
+		"halt_epoch", sc.haltEpoch,
+	)
+	for i := nextEpoch; i <= beacon.EpochTime(sc.haltEpoch); i++ {
+		sc.Logger.Info("setting epoch",
+			"epoch", i,
+		)
+		if err = sc.Net.Controller().SetEpoch(ctx, i); err != nil {
+			return fmt.Errorf("failed to set epoch %d: %w", i, err)
+		}
 	}
 
 	// Wait for validators to exit so that genesis docs are dumped.
@@ -85,7 +159,7 @@ func (sc *haltRestoreImpl) Run(childEnv *env.Env) error {
 	_, _, _ = reflect.Select(exitChs)
 
 	sc.Logger.Info("gathering exported genesis files")
-	files, err := sc.GetExportedGenesisFiles()
+	files, err := sc.GetExportedGenesisFiles(true)
 	if err != nil {
 		return fmt.Errorf("failure getting exported genesis files: %w", err)
 	}
@@ -100,11 +174,6 @@ func (sc *haltRestoreImpl) Run(childEnv *env.Env) error {
 	// Start the network and the client again and check that everything
 	// works with restored state.
 	sc.Logger.Info("starting the network again")
-
-	fixture, err := sc.Fixture()
-	if err != nil {
-		return err
-	}
 
 	// Update halt epoch in the exported genesis so the network doesn't
 	// instantly halt.
@@ -123,12 +192,38 @@ func (sc *haltRestoreImpl) Run(childEnv *env.Env) error {
 		)
 		return err
 	}
-	genesisDoc.HaltEpoch = 2 * haltEpoch
+	genesisDoc.HaltEpoch *= 2
+	// Don't need mock epoch anymore.
+	genesisDoc.Beacon.Parameters.DebugMockBackend = false
 	if err = genesisDoc.WriteFileJSON(files[0]); err != nil {
 		sc.Logger.Error("failed to update genesis",
 			"err", err,
 		)
 		return err
+	}
+
+	// Ensure compute runtime in genesis is in expected state.
+	var rtList []*registry.Runtime
+	switch sc.suspendRuntime {
+	case true:
+		rtList = genesisDoc.Registry.SuspendedRuntimes
+	default:
+		rtList = genesisDoc.Registry.Runtimes
+	}
+	var found bool
+	for _, rt := range rtList {
+		if rt.Kind != registry.KindCompute {
+			continue
+		}
+		found = true
+	}
+	if !found {
+		sc.Logger.Error("runtime not in expected state",
+			"expected_suspended", sc.suspendRuntime,
+			"runtimes", genesisDoc.Registry.Runtimes,
+			"suspended_runtimes", genesisDoc.Registry.SuspendedRuntimes,
+		)
+		return fmt.Errorf("runtime not in expected state")
 	}
 
 	// Use the updated genesis file.

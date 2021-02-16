@@ -461,7 +461,7 @@ func (sc *governanceConsensusUpgradeImpl) Run(childEnv *env.Env) error { // noli
 
 		// Ensure genesis was exported and matches on all nodes.
 		sc.Logger.Info("gathering exported genesis files")
-		_, err = sc.GetExportedGenesisFiles()
+		_, err = sc.GetExportedGenesisFiles(false)
 		if err != nil {
 			return fmt.Errorf("failure getting exported genesis files: %w", err)
 		}

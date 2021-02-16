@@ -327,7 +327,7 @@ func (app *rootHashApplication) ExecuteMessage(ctx *tmapi.Context, kind, msg int
 			"runtime", rt.ID,
 		)
 
-		return app.onNewRuntime(ctx, rt, nil)
+		return app.onNewRuntime(ctx, rt, nil, false)
 	case registryApi.MessageRuntimeUpdated:
 		// A runtime registration has been updated or a new runtime has been registered.
 		if ctx.IsInitChain() {
@@ -395,7 +395,7 @@ func (app *rootHashApplication) ExecuteTx(ctx *tmapi.Context, tx *transaction.Tr
 	}
 }
 
-func (app *rootHashApplication) onNewRuntime(ctx *tmapi.Context, runtime *registry.Runtime, genesis *roothash.Genesis) error {
+func (app *rootHashApplication) onNewRuntime(ctx *tmapi.Context, runtime *registry.Runtime, genesis *roothash.Genesis, suspended bool) error {
 	if !runtime.IsCompute() {
 		ctx.Logger().Warn("onNewRuntime: ignoring non-compute runtime",
 			"runtime", runtime,
@@ -431,6 +431,9 @@ func (app *rootHashApplication) onNewRuntime(ctx *tmapi.Context, runtime *regist
 			genesisBlock.Header.Round = genesisRts.Round
 			genesisBlock.Header.StateRoot = genesisRts.StateRoot
 			genesisBlock.Header.StorageSignatures = runtime.Genesis.StorageReceipts
+			if suspended {
+				genesisBlock.Header.HeaderType = block.Suspended
+			}
 
 			// Emit any message results now (will be deferred to the first block).
 			ctx.Logger().Debug("emitting message results",
