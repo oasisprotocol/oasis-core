@@ -1,7 +1,7 @@
 //! Consensus account address structures.
 use std::fmt;
 
-use bech32::{self, FromBase32, ToBase32};
+use bech32::{self, FromBase32, ToBase32, Variant};
 
 use crate::common::{
     crypto::{hash::Hash, signature::PublicKey},
@@ -54,7 +54,7 @@ impl Address {
 
     /// Converts an address to Bech32 representation.
     pub fn to_bech32(&self) -> String {
-        bech32::encode(ADDRESS_BECH32_HRP, self.0.to_base32()).unwrap()
+        bech32::encode(ADDRESS_BECH32_HRP, self.0.to_base32(), Variant::Bech32).unwrap()
     }
 }
 
@@ -106,8 +106,14 @@ impl<'de> serde::Deserialize<'de> for Address {
             where
                 E: serde::de::Error,
             {
-                let (hrp, data) = bech32::decode(data)
+                let (hrp, data, variant) = bech32::decode(data)
                     .map_err(|e| serde::de::Error::custom(format!("malformed address: {}", e)))?;
+                if variant != Variant::Bech32 {
+                    return Err(serde::de::Error::custom(format!(
+                        "invalid variant: {:?}",
+                        variant
+                    )));
+                }
                 if hrp != ADDRESS_BECH32_HRP {
                     return Err(serde::de::Error::custom(format!("invalid HRP: {}", hrp)));
                 }
