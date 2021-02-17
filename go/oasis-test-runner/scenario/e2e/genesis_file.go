@@ -99,7 +99,7 @@ func (s *genesisFileImpl) Run(childEnv *env.Env) error {
 		return fmt.Errorf("e2e/genesis-file: creating uncanonical genesis file failed: %w", err)
 	}
 	err = s.runGenesisCheckCmd(childEnv, uncanonicalPath)
-	expectedError := "genesis document is not marshalled in the canonical form"
+	expectedError := "genesis file is not in canonical form, see the diff on stderr"
 	switch {
 	case err == nil:
 		return fmt.Errorf("e2e/genesis-file: running genesis check for an uncanonical genesis file should fail")

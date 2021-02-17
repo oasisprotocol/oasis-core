@@ -21,6 +21,7 @@ import (
 	beacon "github.com/oasisprotocol/oasis-core/go/beacon/api"
 	"github.com/oasisprotocol/oasis-core/go/common"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
+	"github.com/oasisprotocol/oasis-core/go/common/diff"
 	"github.com/oasisprotocol/oasis-core/go/common/entity"
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
 	"github.com/oasisprotocol/oasis-core/go/common/node"
@@ -119,10 +120,6 @@ const (
 	// Our 'entity' flag overlaps with the common flag 'entity'.
 	// We bind it to a separate Viper key to disambiguate at runtime.
 	viperEntity = "provision_entity"
-
-	// Check command.
-	// Number of lines to print if document not in canonical form.
-	checkNotCanonicalLines = 10
 )
 
 var (
@@ -688,21 +685,21 @@ func doCheckGenesis(cmd *cobra.Command, args []string) {
 	}
 	// Actual genesis file should equal the canonical form.
 	if !bytes.Equal(actualGenesis, canonicalJSON) {
-		actualLines := strings.Split(string(actualGenesis), "\n")
-		if len(actualLines) > checkNotCanonicalLines {
-			actualLines = actualLines[:checkNotCanonicalLines]
+		var err error
+		if len(strings.Split(strings.TrimSpace(string(actualGenesis)), "\n")) == 1 {
+			err = fmt.Errorf("genesis file has everything on a single line")
+		} else {
+			err = fmt.Errorf("genesis file is not in canonical form, see the diff on stderr")
 		}
-		canonicalLines := strings.Split(string(canonicalJSON), "\n")
-		if len(canonicalLines) > checkNotCanonicalLines {
-			canonicalLines = canonicalLines[:checkNotCanonicalLines]
+		diff, derr := diff.UnifiedDiffString(
+			string(actualGenesis), string(canonicalJSON), "Actual", "Canonical")
+		if derr != nil {
+			err = fmt.Errorf("genesis file is not in canonical form, error computing diff: %w", derr)
 		}
-		logger.Error("genesis file is not in the canonical form")
-		fmt.Fprintf(os.Stderr,
-			"Error: genesis file is not in the canonical form:\n"+
-				"\nActual genesis file (trimmed):\n%s\n\n... trimmed ...\n"+
-				"\nExpected genesis file (trimmed):\n%s\n\n... trimmed ...\n",
-			strings.Join(actualLines, "\n"), strings.Join(canonicalLines, "\n"),
-		)
+		logger.Error("genesis file is not in canonical form", "err", err)
+		if derr == nil {
+			fmt.Fprintf(os.Stderr, "Diff:\n%s\n", diff)
+		}
 		os.Exit(1)
 	}
 }
