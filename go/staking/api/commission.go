@@ -177,7 +177,7 @@ func (cs *CommissionSchedule) validateNondegenerate(rules *CommissionScheduleRul
 }
 
 // validateAmendmentAcceptable apply policy for "when" changes can be made, for CommissionSchedules that are amendments.
-func (cs *CommissionSchedule) validateAmendmentAcceptable(rules *CommissionScheduleRules, now beacon.EpochTime) error {
+func (cs *CommissionSchedule) validateAmendmentAcceptable(rules *CommissionScheduleRules, now beacon.EpochTime, initialSchedule bool) error {
 	if len(cs.Rates) != 0 {
 		if cs.Rates[0].Start <= now {
 			return fmt.Errorf("rate schedule with start epoch %d must not alter rate on or before %d", cs.Rates[0].Start, now)
@@ -185,8 +185,13 @@ func (cs *CommissionSchedule) validateAmendmentAcceptable(rules *CommissionSched
 	}
 
 	if len(cs.Bounds) != 0 {
-		if cs.Bounds[0].Start <= now+rules.RateBoundLead {
-			return fmt.Errorf("bound schedule with start epoch %d must not alter bound on or before %d", cs.Bounds[0].Start, now+rules.RateBoundLead)
+		earliestAllowedChange := now + 1
+		if !initialSchedule {
+			// If this is not the initial schedule, the bounds can be amended only RateBoundLead in advance.
+			earliestAllowedChange += rules.RateBoundLead
+		}
+		if cs.Bounds[0].Start < earliestAllowedChange {
+			return fmt.Errorf("bound schedule with start epoch %d must not alter before %d", cs.Bounds[0].Start, earliestAllowedChange)
 		}
 	}
 
@@ -356,7 +361,7 @@ func (cs *CommissionSchedule) AmendAndPruneAndValidate(amendment *CommissionSche
 	if err := amendment.validateNondegenerate(rules); err != nil {
 		return fmt.Errorf("amendment: %w", err)
 	}
-	if err := amendment.validateAmendmentAcceptable(rules, now); err != nil {
+	if err := amendment.validateAmendmentAcceptable(rules, now, len(cs.Bounds) == 0); err != nil {
 		return fmt.Errorf("amendment: %w", err)
 	}
 	cs.Prune(now)
