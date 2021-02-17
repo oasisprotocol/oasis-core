@@ -607,15 +607,11 @@ func doCheckGenesis(cmd *cobra.Command, args []string) {
 		logger.Error("failed to open genesis file", "err", err)
 		os.Exit(1)
 	}
+	// NOTE: The genesis document sanity checks are performed inside the
+	// NewFileProvider() function.
 	doc, err := provider.GetGenesisDocument()
 	if err != nil {
 		logger.Error("failed to get genesis document", "err", err)
-		os.Exit(1)
-	}
-
-	err = doc.SanityCheck()
-	if err != nil {
-		logger.Error("genesis document sanity check failed", "err", err)
 		os.Exit(1)
 	}
 
