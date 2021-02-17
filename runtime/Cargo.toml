@@ -48,7 +48,7 @@ honggfuzz = "0.5.52"
 arbitrary = { version = "0.4.7", features = ["derive"] }
 num-bigint = { version = "0.3", features = ["serde"] }
 num-traits = "0.2.14"
-bech32 = "0.7.2"
+bech32 = "0.8.0"
 
 [dev-dependencies]
 # For storage interoperability tests only.
