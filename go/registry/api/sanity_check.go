@@ -254,10 +254,32 @@ func SanityCheckStake(
 		generatedEscrows[addr] = escrow
 	}
 
+	// Also generate escrow accounts for all runtimes that are using the
+	// runtime governance model.
 	runtimeMap := make(map[common.Namespace]*Runtime)
 	for _, rt := range runtimes {
 		runtimeMap[rt.ID] = rt
+
+		if rt.GovernanceModel == GovernanceRuntime {
+			// Generate escrow account for the runtime.
+			var escrow *staking.EscrowAccount
+			addr := staking.NewRuntimeAddress(rt.ID)
+			acct, ok := accounts[addr]
+			if ok {
+				escrow = &staking.EscrowAccount{
+					Active: staking.SharePool{
+						Balance:     acct.Escrow.Active.Balance,
+						TotalShares: acct.Escrow.Active.TotalShares,
+					},
+				}
+			} else {
+				escrow = &staking.EscrowAccount{}
+			}
+
+			generatedEscrows[addr] = escrow
+		}
 	}
+
 	for _, node := range nodes {
 		var nodeRts []*Runtime
 		for _, rt := range node.Runtimes {
@@ -268,11 +290,13 @@ func SanityCheckStake(
 		generatedEscrows[addr].StakeAccumulator.AddClaimUnchecked(StakeClaimForNode(node.ID), StakeThresholdsForNode(node, nodeRts))
 	}
 	for _, rt := range runtimes {
-		if rt.GovernanceModel == GovernanceEntity {
-			// Add runtime stake claims.
-			addr := staking.NewAddress(rt.EntityID)
-			generatedEscrows[addr].StakeAccumulator.AddClaimUnchecked(StakeClaimForRuntime(rt.ID), StakeThresholdsForRuntime(rt))
+		// Add runtime stake claims.
+		addr := rt.StakingAddress()
+		if addr == nil {
+			continue
 		}
+
+		generatedEscrows[*addr].StakeAccumulator.AddClaimUnchecked(StakeClaimForRuntime(rt.ID), StakeThresholdsForRuntime(rt))
 	}
 
 	// Compare entities' generated escrow accounts with actual ones.

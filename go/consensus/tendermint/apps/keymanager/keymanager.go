@@ -20,7 +20,6 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/keymanager/api"
 	keymanager "github.com/oasisprotocol/oasis-core/go/keymanager/api"
 	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
-	staking "github.com/oasisprotocol/oasis-core/go/staking/api"
 )
 
 var emptyHashSha3 = sha3.Sum256(nil)
@@ -118,13 +117,22 @@ func (app *keymanagerApplication) onEpochChange(ctx *tmapi.Context, epoch beacon
 
 		// Suspend the runtime in case the registering entity no longer has enough stake to cover
 		// the entity and runtime deposits.
-		if !params.DebugBypassStake {
-			acctAddr := staking.NewAddress(rt.EntityID)
-			if err = stakeAcc.CheckStakeClaims(acctAddr); err != nil {
+		if !params.DebugBypassStake && rt.GovernanceModel != registry.GovernanceConsensus {
+			acctAddr := rt.StakingAddress()
+			if acctAddr == nil {
+				// This should never happen.
+				ctx.Logger().Error("unknown runtime governance model",
+					"rt_id", rt.ID,
+					"gov_model", rt.GovernanceModel,
+				)
+				return fmt.Errorf("unknown runtime governance model on runtime %s: %s", rt.ID, rt.GovernanceModel)
+			}
+
+			if err = stakeAcc.CheckStakeClaims(*acctAddr); err != nil {
 				ctx.Logger().Warn("insufficient stake for key manager runtime operation",
 					"err", err,
 					"entity", rt.EntityID,
-					"account", acctAddr,
+					"account", *acctAddr,
 				)
 
 				// Suspend runtime.

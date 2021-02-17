@@ -498,6 +498,22 @@ func (r *Runtime) IsCompute() bool {
 	return r.Kind == KindCompute
 }
 
+// StakingAddress returns the correct staking address for the runtime based
+// on its governance model or nil if there is no staking address under the
+// given governance model.
+func (r *Runtime) StakingAddress() *staking.Address {
+	var acctAddr staking.Address
+	switch r.GovernanceModel {
+	case GovernanceEntity:
+		acctAddr = staking.NewAddress(r.EntityID)
+	case GovernanceRuntime:
+		acctAddr = staking.NewRuntimeAddress(r.ID)
+	default:
+		return nil
+	}
+	return &acctAddr
+}
+
 // VersionInfo is the per-runtime version information.
 type VersionInfo struct {
 	// Version of the runtime.
