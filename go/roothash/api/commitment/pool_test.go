@@ -527,7 +527,7 @@ func TestPoolTwoCommitments(t *testing.T) {
 	})
 
 	t.Run("Discrepancy", func(t *testing.T) {
-		pool, childBlk, _, correctBody, _ := setupDiscrepancy(t, rt, sks, committee, nl)
+		pool, childBlk, _, correctBody, _ := setupDiscrepancy(t, rt, sks, committee, nl, false)
 
 		commit3, err := SignExecutorCommitment(sk3, rt.ID, correctBody)
 		require.NoError(t, err, "SignExecutorCommitment")
@@ -549,7 +549,7 @@ func TestPoolTwoCommitments(t *testing.T) {
 	})
 
 	t.Run("DiscrepancyResolutionFailureVotes", func(t *testing.T) {
-		pool, _, _, _, _ := setupDiscrepancy(t, rt, sks, committee, nl)
+		pool, _, _, _, _ := setupDiscrepancy(t, rt, sks, committee, nl, false)
 
 		// Discrepancy resolution should fail.
 		dc, err := pool.ResolveDiscrepancy()
@@ -559,7 +559,7 @@ func TestPoolTwoCommitments(t *testing.T) {
 	})
 
 	t.Run("DiscrepancyResolutionFailureNotProposer", func(t *testing.T) {
-		pool, childBlk, _, _, badBody := setupDiscrepancy(t, rt, sks, committee, nl)
+		pool, childBlk, _, _, badBody := setupDiscrepancy(t, rt, sks, committee, nl, false)
 
 		commit3, err := SignExecutorCommitment(sk3, rt.ID, badBody)
 		require.NoError(t, err, "SignExecutorCommitment")
@@ -578,6 +578,36 @@ func TestPoolTwoCommitments(t *testing.T) {
 		require.Nil(t, dc, "ResolveDiscrepancy")
 		require.Error(t, err, "ResolveDiscrepancy")
 		require.Equal(t, ErrBadProposerCommitment, err)
+	})
+
+	t.Run("DiscrepancyResolutionRoleOverlap", func(t *testing.T) {
+		// Modify the committee so sk1 is both primary and backup.
+		committee2 := &scheduler.Committee{
+			Kind: scheduler.KindComputeExecutor,
+			Members: []*scheduler.CommitteeNode{
+				{
+					Role:      scheduler.RoleWorker,
+					PublicKey: sk1.Public(),
+				},
+				{
+					Role:      scheduler.RoleWorker,
+					PublicKey: sk2.Public(),
+				},
+				{
+					Role:      scheduler.RoleBackupWorker,
+					PublicKey: sk1.Public(),
+				},
+			},
+		}
+
+		pool, _, _, correctBody, _ := setupDiscrepancy(t, rt, sks, committee2, nl, true)
+
+		// Backup worker commitment should not be needed for discrepancy resolution.
+		dc, err := pool.ResolveDiscrepancy()
+		require.NoError(t, err, "ResolveDiscrepancy")
+		require.Equal(t, true, pool.Discrepancy)
+		header := dc.ToDDResult().(*ComputeBody).Header
+		require.EqualValues(t, &correctBody.Header, &header, "DR should return the same header")
 	})
 }
 
@@ -674,7 +704,7 @@ func TestPoolFailureIndicatingCommitment(t *testing.T) {
 	})
 
 	t.Run("DiscrepancyFailureIndicating", func(t *testing.T) {
-		pool, childBlk, _, body, _ := setupDiscrepancy(t, rt, sks, committee, nl)
+		pool, childBlk, _, body, _ := setupDiscrepancy(t, rt, sks, committee, nl, false)
 		body.SetFailure(FailureUnknown)
 
 		commit3, err := SignExecutorCommitment(sk3, rt.ID, body)
@@ -811,7 +841,7 @@ func TestTryFinalize(t *testing.T) {
 	})
 
 	t.Run("Discrepancy", func(t *testing.T) {
-		pool, childBlk, _, correctBody, _ := setupDiscrepancy(t, rt, sks, committee, nl)
+		pool, childBlk, _, correctBody, _ := setupDiscrepancy(t, rt, sks, committee, nl, false)
 
 		commit3, err := SignExecutorCommitment(sk3, rt.ID, correctBody)
 		require.NoError(t, err, "SignExecutorCommitment")
@@ -1095,6 +1125,7 @@ func setupDiscrepancy(
 	sks []signature.Signer,
 	committee *scheduler.Committee,
 	nl NodeLookup,
+	enoughBackupCommits bool,
 ) (*Pool, *block.Block, *block.Block, *ComputeBody, *ComputeBody) {
 	sk1 := sks[0]
 	sk2 := sks[1]
@@ -1148,10 +1179,16 @@ func setupDiscrepancy(
 	require.Equal(t, ErrDiscrepancyDetected, err)
 	require.Equal(t, true, pool.Discrepancy)
 
-	// There should not be enough executor commitments from backup workers.
 	err = pool.CheckEnoughCommitments(false)
-	require.Error(t, err, "CheckEnoughCommitments")
-	require.Equal(t, ErrStillWaiting, err, "CheckEnoughCommitments")
+	switch enoughBackupCommits {
+	case false:
+		// There should not be enough executor commitments from backup workers.
+		require.Error(t, err, "there should not be enough commitments from backup workers")
+		require.Equal(t, ErrStillWaiting, err, "CheckEnoughCommitments")
+	case true:
+		// There should be enough executor commitments from backup workers.
+		require.NoError(t, err, "there should be enough commitments from backup workers")
+	}
 
 	return &pool, childBlk, parentBlk, &correctBody, &body
 }

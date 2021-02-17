@@ -166,10 +166,10 @@ func (n *Node) GetStatus(ctx context.Context) (*api.Status, error) {
 	epoch := n.Group.GetEpochSnapshot()
 	status.LastCommitteeUpdateHeight = epoch.GetGroupVersion()
 	if cmte := epoch.GetExecutorCommittee(); cmte != nil {
-		status.ExecutorRole = cmte.Role
+		status.ExecutorRoles = cmte.Roles
 	}
 	if cmte := epoch.GetStorageCommittee(); cmte != nil {
-		status.StorageRole = cmte.Role
+		status.StorageRoles = cmte.Roles
 	}
 	status.IsTransactionScheduler = epoch.IsTransactionScheduler(status.LatestRound)
 

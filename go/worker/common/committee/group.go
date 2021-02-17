@@ -63,9 +63,19 @@ type MessageHandler interface {
 
 // CommitteeInfo contains information about a committee of nodes.
 type CommitteeInfo struct { // nolint: golint
-	Role       scheduler.Role
+	Roles      []scheduler.Role
 	Committee  *scheduler.Committee
 	PublicKeys map[signature.PublicKey]bool
+}
+
+// HasRole checks whether the node has the given role.
+func (ci *CommitteeInfo) HasRole(role scheduler.Role) bool {
+	for _, r := range ci.Roles {
+		if r == role {
+			return true
+		}
+	}
+	return false
 }
 
 type epoch struct {
@@ -132,7 +142,7 @@ func (e *EpochSnapshot) IsExecutorMember() bool {
 	if e.executorCommittee == nil {
 		return false
 	}
-	return e.executorCommittee.Role != scheduler.RoleInvalid
+	return len(e.executorCommittee.Roles) > 0
 }
 
 // IsExecutorWorker checks if the current node is a worker of the executor committee
@@ -141,7 +151,7 @@ func (e *EpochSnapshot) IsExecutorWorker() bool {
 	if e.executorCommittee == nil {
 		return false
 	}
-	return e.executorCommittee.Role == scheduler.RoleWorker
+	return e.executorCommittee.HasRole(scheduler.RoleWorker)
 }
 
 // IsExecutorBackupWorker checks if the current node is a backup worker of the executor
@@ -150,7 +160,7 @@ func (e *EpochSnapshot) IsExecutorBackupWorker() bool {
 	if e.executorCommittee == nil {
 		return false
 	}
-	return e.executorCommittee.Role == scheduler.RoleBackupWorker
+	return e.executorCommittee.HasRole(scheduler.RoleBackupWorker)
 }
 
 // IsTransactionScheduler checks if the current node is a a transaction scheduler
@@ -317,12 +327,12 @@ func (g *Group) EpochTransition(ctx context.Context, height int64) error {
 	var executorCommittee, storageCommittee *CommitteeInfo
 	publicIdentity := g.identity.NodeSigner.Public()
 	for _, cm := range committees {
-		var role scheduler.Role
+		var roles []scheduler.Role
 		publicKeys := make(map[signature.PublicKey]bool)
 		for _, member := range cm.Members {
 			publicKeys[member.PublicKey] = true
 			if member.PublicKey.Equal(publicIdentity) {
-				role = member.Role
+				roles = append(roles, member.Role)
 			}
 
 			// Start watching the member's node descriptor.
@@ -332,7 +342,7 @@ func (g *Group) EpochTransition(ctx context.Context, height int64) error {
 		}
 
 		ci := &CommitteeInfo{
-			Role:       role,
+			Roles:      roles,
 			Committee:  cm,
 			PublicKeys: publicKeys,
 		}
@@ -397,7 +407,8 @@ func (g *Group) EpochTransition(ctx context.Context, height int64) error {
 
 	g.logger.Info("epoch transition complete",
 		"group_version", groupVersion,
-		"executor_role", executorCommittee.Role,
+		"executor_roles", executorCommittee.Roles,
+		"storage_roles", storageCommittee.Roles,
 	)
 
 	return nil
@@ -445,7 +456,7 @@ func (g *Group) AuthenticatePeer(peerID signature.PublicKey, msg *p2p.Message) e
 
 	// If we are in the executor committee, we accept messages from all nodes.
 	// Otherwise reject and relay the message.
-	authorized := g.activeEpoch.executorCommittee.Role != scheduler.RoleInvalid
+	authorized := len(g.activeEpoch.executorCommittee.Roles) > 0
 	if !authorized {
 		err := fmt.Errorf("group: peer is not authorized")
 

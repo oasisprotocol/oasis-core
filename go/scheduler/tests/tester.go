@@ -154,12 +154,9 @@ func requireValidCommitteeMembers(t *testing.T, committee *api.Committee, runtim
 	}
 
 	var workers, backups int
-	seenMap := make(map[signature.PublicKey]bool)
 	for _, member := range committee.Members {
 		id := member.PublicKey
 		require.NotNil(nodeMap[id], "member is a node")
-		require.False(seenMap[id], "member is unique")
-		seenMap[id] = true
 
 		switch member.Role {
 		case api.RoleWorker:

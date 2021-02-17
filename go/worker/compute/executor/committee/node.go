@@ -1274,7 +1274,11 @@ func (n *Node) HandleNewEventLocked(ev *roothash.Event) {
 
 		discrepancyDetectedCount.With(n.getMetricLabels()).Inc()
 
-		if !n.commonNode.Group.GetEpochSnapshot().IsExecutorBackupWorker() {
+		// If the node is not a backup worker in this epoch, no need to do anything. Also if the
+		// node is an executor worker in this epoch, then it has already processed and submitted
+		// a commitment, so no need to do anything.
+		epoch := n.commonNode.Group.GetEpochSnapshot()
+		if !epoch.IsExecutorBackupWorker() || epoch.IsExecutorWorker() {
 			return
 		}
 
