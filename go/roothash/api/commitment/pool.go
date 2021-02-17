@@ -63,9 +63,9 @@ type SignatureVerifier interface {
 	// the current committee members of the given kind.
 	VerifyCommitteeSignatures(kind scheduler.CommitteeKind, sigs []signature.Signature) error
 
-	// VerifyTxnSchedulerSignature verifies that the given signatures come from
+	// VerifyTxnSchedulerSigner verifies that the given signature comes from
 	// the transaction scheduler at provided round.
-	VerifyTxnSchedulerSignature(sig signature.Signature, round uint64) error
+	VerifyTxnSchedulerSigner(sig signature.Signature, round uint64) error
 }
 
 // NodeLookup is an interface for looking up registry node descriptors.
@@ -189,7 +189,7 @@ func (p *Pool) getCommitment(id signature.PublicKey) (OpenCommitment, bool) {
 	return com, ok
 }
 
-func (p *Pool) addOpenExecutorCommitment(
+func (p *Pool) addOpenExecutorCommitment( // nolint: gocyclo
 	ctx context.Context,
 	blk *block.Block,
 	sv SignatureVerifier,
@@ -251,7 +251,7 @@ func (p *Pool) addOpenExecutorCommitment(
 		return ErrBadExecutorCommitment
 	}
 
-	if err := sv.VerifyTxnSchedulerSignature(body.TxnSchedSig, blk.Header.Round); err != nil {
+	if err := sv.VerifyTxnSchedulerSigner(body.TxnSchedSig, blk.Header.Round); err != nil {
 		logger.Debug("executor commitment has bad transaction scheduler signer",
 			"node_id", id,
 			"round", blk.Header.Round,
@@ -259,7 +259,15 @@ func (p *Pool) addOpenExecutorCommitment(
 		)
 		return err
 	}
-	if ok := body.VerifyTxnSchedSignature(blk.Header); !ok {
+	ok, err := body.VerifyTxnSchedSignature(p.Runtime.ID, blk.Header)
+	if err != nil {
+		logger.Error("verify txn scheduler signature error",
+			"runtime_id", p.Runtime.ID,
+			"err", err,
+		)
+		return err
+	}
+	if !ok {
 		return ErrTxnSchedSigInvalid
 	}
 
@@ -386,8 +394,11 @@ func (p *Pool) AddExecutorCommitment(
 	commitment *ExecutorCommitment,
 	msgValidator MessageValidator,
 ) error {
+	if p.Runtime == nil {
+		return ErrNoRuntime
+	}
 	// Check the commitment signature and de-serialize into header.
-	openCom, err := commitment.Open()
+	openCom, err := commitment.Open(p.Runtime.ID)
 	if err != nil {
 		return p2pError.Permanent(err)
 	}

@@ -10,6 +10,7 @@ import (
 	flag "github.com/spf13/pflag"
 	"github.com/spf13/viper"
 
+	"github.com/oasisprotocol/oasis-core/go/common"
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
 	"github.com/oasisprotocol/oasis-core/go/common/node"
 	"github.com/oasisprotocol/oasis-core/go/common/sgx/ias"
@@ -27,6 +28,8 @@ import (
 const (
 	// CfgFakeSGX configures registering with SGX capability.
 	CfgFakeSGX = "fake_sgx"
+	// CfgRuntimeID configures the runtime ID Byzantine node participates in.
+	CfgRuntimeID = "runtime_id"
 	// CfgVersionFakeEnclaveID configures runtime's EnclaveIdentity.
 	CfgVersionFakeEnclaveID = "runtime.version.fake_enclave_id"
 	// CfgActivationEpoch configures the epoch at which the Byzantine node activates.
@@ -37,6 +40,8 @@ const (
 	CfgExecutorMode = "executor_mode"
 	// CfgBeaconMode configures the byzantine beacon mode.
 	CfgBeaconMode = "beacon_mode"
+
+	defaultRuntimeIDHex = "8000000000000000000000000000000000000000000000000000000000000000"
 )
 
 // ExecutorMode represents the byzantine executor mode.
@@ -121,7 +126,12 @@ func activateCommonConfig(cmd *cobra.Command, args []string) {
 }
 
 func doStorageScenario(cmd *cobra.Command, args []string) {
-	b, err := initializeAndRegisterByzantineNode(node.RoleStorageWorker, scheduler.RoleWorker, scheduler.RoleInvalid, false, false)
+	var runtimeID common.Namespace
+	if err := runtimeID.UnmarshalHex(viper.GetString(CfgRuntimeID)); err != nil {
+		panic(fmt.Errorf("error initializing node: failed to parse runtime ID: %w", err))
+	}
+
+	b, err := initializeAndRegisterByzantineNode(runtimeID, node.RoleStorageWorker, scheduler.RoleWorker, scheduler.RoleInvalid, false, false)
 	if err != nil {
 		panic(fmt.Sprintf("error initializing node: %+v", err))
 	}
@@ -136,6 +146,11 @@ func doStorageScenario(cmd *cobra.Command, args []string) {
 func doExecutorScenario(cmd *cobra.Command, args []string) {
 	ctx := context.Background()
 
+	var runtimeID common.Namespace
+	if err := runtimeID.UnmarshalHex(viper.GetString(CfgRuntimeID)); err != nil {
+		panic(fmt.Errorf("error initializing node: failed to parse runtime ID: %w", err))
+	}
+
 	// Validate executor mode.
 	var executorMode ExecutorMode
 	if err := executorMode.FromString(viper.GetString(CfgExecutorMode)); err != nil {
@@ -143,7 +158,7 @@ func doExecutorScenario(cmd *cobra.Command, args []string) {
 	}
 
 	isTxScheduler := viper.GetBool(CfgSchedulerRoleExpected)
-	b, err := initializeAndRegisterByzantineNode(node.RoleComputeWorker, scheduler.RoleInvalid, scheduler.RoleWorker, isTxScheduler, false)
+	b, err := initializeAndRegisterByzantineNode(runtimeID, node.RoleComputeWorker, scheduler.RoleInvalid, scheduler.RoleWorker, isTxScheduler, false)
 	if err != nil {
 		panic(fmt.Sprintf("error initializing node: %+v", err))
 	}
@@ -156,7 +171,7 @@ func doExecutorScenario(cmd *cobra.Command, args []string) {
 		return
 	}
 
-	cbc := newComputeBatchContext()
+	cbc := newComputeBatchContext(runtimeID)
 	switch isTxScheduler {
 	case true:
 		var cont bool
@@ -236,7 +251,7 @@ func doExecutorScenario(cmd *cobra.Command, args []string) {
 
 	}
 
-	if err = cbc.publishToChain(b.tendermint.service, b.identity, defaultRuntimeID); err != nil {
+	if err = cbc.publishToChain(b.tendermint.service, b.identity); err != nil {
 		panic(fmt.Sprintf("compute publish to chain failed: %+v", err))
 	}
 	logger.Debug("executor: commitment sent")
@@ -253,6 +268,7 @@ func Register(parentCmd *cobra.Command) {
 func init() {
 	fs := flag.NewFlagSet("", flag.ContinueOnError)
 	fs.Bool(CfgFakeSGX, false, "register with SGX capability")
+	fs.String(CfgRuntimeID, defaultRuntimeIDHex, "runtime ID byzantine node participates in")
 	fs.String(CfgVersionFakeEnclaveID, "", "fake runtime enclave identity")
 	fs.Uint64(CfgActivationEpoch, 0, "epoch at which the Byzantine node should activate")
 	fs.Bool(CfgSchedulerRoleExpected, false, "is executor node expected to be scheduler or not")

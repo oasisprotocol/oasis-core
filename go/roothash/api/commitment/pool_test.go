@@ -32,7 +32,7 @@ func (n *nopSignatureVerifier) VerifyCommitteeSignatures(kind scheduler.Committe
 	return nil
 }
 
-func (n *nopSignatureVerifier) VerifyTxnSchedulerSignature(sig signature.Signature, round uint64) error {
+func (n *nopSignatureVerifier) VerifyTxnSchedulerSigner(sig signature.Signature, round uint64) error {
 	return nil
 }
 
@@ -58,7 +58,7 @@ func (n *staticSignatureVerifier) VerifyCommitteeSignatures(kind scheduler.Commi
 	return nil
 }
 
-func (n *staticSignatureVerifier) VerifyTxnSchedulerSignature(sig signature.Signature, round uint64) error {
+func (n *staticSignatureVerifier) VerifyTxnSchedulerSigner(sig signature.Signature, round uint64) error {
 	if !sig.PublicKey.Equal(n.txnSchedulerPublicKey) {
 		return errors.New("unknown public key")
 	}
@@ -96,7 +96,7 @@ func TestPoolDefault(t *testing.T) {
 			StateRoot:    &blk.Header.StateRoot,
 		},
 	}
-	commit, err := SignExecutorCommitment(sk, &body)
+	commit, err := SignExecutorCommitment(sk, id, &body)
 	require.NoError(t, err, "SignExecutorCommitment")
 
 	// An empty pool should work but should always error.
@@ -196,7 +196,7 @@ func TestPoolSingleCommitment(t *testing.T) {
 		tc.fn(&invalidBody)
 
 		var commit *ExecutorCommitment
-		commit, err = SignExecutorCommitment(sk, &invalidBody)
+		commit, err = SignExecutorCommitment(sk, rtID, &invalidBody)
 		require.NoError(t, err, "SignExecutorCommitment(%s)", tc.name)
 
 		err = pool.AddExecutorCommitment(context.Background(), childBlk, sv, nl, commit, nil)
@@ -205,7 +205,7 @@ func TestPoolSingleCommitment(t *testing.T) {
 	}
 
 	// Generate a valid commitment.
-	commit, err := SignExecutorCommitment(sk, &body)
+	commit, err := SignExecutorCommitment(sk, rtID, &body)
 	require.NoError(t, err, "SignExecutorCommitment")
 
 	// There should not be enough executor commitments.
@@ -221,7 +221,7 @@ func TestPoolSingleCommitment(t *testing.T) {
 	bodyWithMsgs.Messages = []message.Message{{Staking: &message.StakingMessage{Transfer: &staking.Transfer{}}}}
 	msgHash := message.MessagesHash(bodyWithMsgs.Messages)
 	bodyWithMsgs.Header.MessagesHash = &msgHash
-	incorrectCommit, err := SignExecutorCommitment(sk, &bodyWithMsgs)
+	incorrectCommit, err := SignExecutorCommitment(sk, rtID, &bodyWithMsgs)
 	require.NoError(t, err, "SignExecutorCommitment")
 
 	errMsgVal := errors.New("message validation error")
@@ -236,7 +236,7 @@ func TestPoolSingleCommitment(t *testing.T) {
 	bodyIncorrectStorageSig := body
 	// This generates a new signing key so verification should fail.
 	bodyIncorrectStorageSig.StorageSignatures[0] = generateStorageReceiptSignature(t, parentBlk, &bodyIncorrectStorageSig)
-	incorrectCommit, err = SignExecutorCommitment(sk, &bodyIncorrectStorageSig)
+	incorrectCommit, err = SignExecutorCommitment(sk, rtID, &bodyIncorrectStorageSig)
 	require.NoError(t, err, "SignExecutorCommitment")
 	err = pool.AddExecutorCommitment(context.Background(), childBlk, sv, nl, incorrectCommit, nil)
 	require.Error(t, err, "AddExecutorCommitment")
@@ -244,7 +244,7 @@ func TestPoolSingleCommitment(t *testing.T) {
 	// Adding a commitment having not enough storage receipts should fail.
 	bodyNotEnoughStorageSig := body
 	bodyNotEnoughStorageSig.StorageSignatures = []signature.Signature{}
-	incorrectCommit, err = SignExecutorCommitment(sk, &bodyNotEnoughStorageSig)
+	incorrectCommit, err = SignExecutorCommitment(sk, rtID, &bodyNotEnoughStorageSig)
 	require.NoError(t, err, "SignExecutorCommitment")
 	err = pool.AddExecutorCommitment(context.Background(), childBlk, sv, nl, incorrectCommit, nil)
 	require.Error(t, err, "AddExecutorCommitment")
@@ -254,8 +254,8 @@ func TestPoolSingleCommitment(t *testing.T) {
 	// public key should fail.
 	bodyIncorrectTxnSchedSig := body
 	// This generates a new signing key so verification should fail.
-	bodyIncorrectTxnSchedSig.TxnSchedSig = generateTxnSchedulerSignature(t, childBlk, &bodyIncorrectTxnSchedSig)
-	incorrectCommit, err = SignExecutorCommitment(sk, &bodyIncorrectTxnSchedSig)
+	bodyIncorrectTxnSchedSig.TxnSchedSig = generateTxnSchedulerSignature(t, childBlk, rt.ID, &bodyIncorrectTxnSchedSig)
+	incorrectCommit, err = SignExecutorCommitment(sk, rtID, &bodyIncorrectTxnSchedSig)
 	require.NoError(t, err, "SignExecutorCommitment")
 	err = pool.AddExecutorCommitment(context.Background(), childBlk, sv, nl, incorrectCommit, nil)
 	require.Error(t, err, "AddExecutorCommitment")
@@ -340,7 +340,7 @@ func TestPoolSingleCommitmentTEE(t *testing.T) {
 	require.NoError(t, err, "Sign")
 	body.RakSig = &rakSig.Signature
 
-	commit, err := SignExecutorCommitment(sk, &body)
+	commit, err := SignExecutorCommitment(sk, rtID, &body)
 	require.NoError(t, err, "SignExecutorCommitment")
 
 	// There should not be enough executor commitments.
@@ -404,10 +404,10 @@ func TestPoolStragglers(t *testing.T) {
 		// Generate a commitment.
 		childBlk, _, body := generateComputeBody(t, pool.Round)
 
-		commit1, err := SignExecutorCommitment(sk1, &body)
+		commit1, err := SignExecutorCommitment(sk1, rt.ID, &body)
 		require.NoError(t, err, "SignExecutorCommitment")
 
-		commit2, err := SignExecutorCommitment(sk2, &body)
+		commit2, err := SignExecutorCommitment(sk2, rt.ID, &body)
 		require.NoError(t, err, "SignExecutorCommitment")
 
 		// Add second commitment first as that one is not from the transaction scheduler.
@@ -449,7 +449,7 @@ func TestPoolStragglers(t *testing.T) {
 		// Generate a commitment.
 		childBlk, _, body := generateComputeBody(t, pool.Round)
 
-		commit1, err := SignExecutorCommitment(sk1, &body)
+		commit1, err := SignExecutorCommitment(sk1, rt.ID, &body)
 		require.NoError(t, err, "SignExecutorCommitment")
 
 		// Add first commitment first as that one is from the transaction scheduler.
@@ -492,10 +492,10 @@ func TestPoolTwoCommitments(t *testing.T) {
 		// Generate a commitment.
 		childBlk, _, body := generateComputeBody(t, pool.Round)
 
-		commit1, err := SignExecutorCommitment(sk1, &body)
+		commit1, err := SignExecutorCommitment(sk1, rt.ID, &body)
 		require.NoError(t, err, "SignExecutorCommitment")
 
-		commit2, err := SignExecutorCommitment(sk2, &body)
+		commit2, err := SignExecutorCommitment(sk2, rt.ID, &body)
 		require.NoError(t, err, "SignExecutorCommitment")
 
 		// Adding commitment 1 should succeed.
@@ -529,7 +529,7 @@ func TestPoolTwoCommitments(t *testing.T) {
 	t.Run("Discrepancy", func(t *testing.T) {
 		pool, childBlk, _, correctBody, _ := setupDiscrepancy(t, rt, sks, committee, nl)
 
-		commit3, err := SignExecutorCommitment(sk3, correctBody)
+		commit3, err := SignExecutorCommitment(sk3, rt.ID, correctBody)
 		require.NoError(t, err, "SignExecutorCommitment")
 
 		// Resolve discrepancy with commit from backup worker.
@@ -561,7 +561,7 @@ func TestPoolTwoCommitments(t *testing.T) {
 	t.Run("DiscrepancyResolutionFailureNotProposer", func(t *testing.T) {
 		pool, childBlk, _, _, badBody := setupDiscrepancy(t, rt, sks, committee, nl)
 
-		commit3, err := SignExecutorCommitment(sk3, badBody)
+		commit3, err := SignExecutorCommitment(sk3, rt.ID, badBody)
 		require.NoError(t, err, "SignExecutorCommitment")
 
 		// Resolve discrepancy with commit from backup worker. Use the BAD commit which is different
@@ -601,7 +601,7 @@ func TestPoolFailureIndicatingCommitment(t *testing.T) {
 		childBlk, _, body := generateComputeBody(t, pool.Round)
 
 		// Generate a valid commitment.
-		commit1, err := SignExecutorCommitment(sk1, &body)
+		commit1, err := SignExecutorCommitment(sk1, rt.ID, &body)
 		require.NoError(t, err, "SignExecutorCommitment")
 
 		failedBody := ComputeBody{
@@ -611,11 +611,11 @@ func TestPoolFailureIndicatingCommitment(t *testing.T) {
 			},
 			Failure: FailureStorageUnavailable,
 		}
-		failedBody.TxnSchedSig = generateTxnSchedulerSignature(t, childBlk, &failedBody)
-		commit2, err := SignExecutorCommitment(sk2, &failedBody)
+		failedBody.TxnSchedSig = generateTxnSchedulerSignature(t, childBlk, rt.ID, &failedBody)
+		commit2, err := SignExecutorCommitment(sk2, rt.ID, &failedBody)
 		require.NoError(t, err, "SignExecutorCommitment")
 
-		commit3, err := SignExecutorCommitment(sk3, &body)
+		commit3, err := SignExecutorCommitment(sk3, rt.ID, &body)
 		require.NoError(t, err, "SignExecutorCommitment")
 
 		// There should not be enough executor commitments.
@@ -677,7 +677,7 @@ func TestPoolFailureIndicatingCommitment(t *testing.T) {
 		pool, childBlk, _, body, _ := setupDiscrepancy(t, rt, sks, committee, nl)
 		body.SetFailure(FailureUnknown)
 
-		commit3, err := SignExecutorCommitment(sk3, body)
+		commit3, err := SignExecutorCommitment(sk3, rt.ID, body)
 		require.NoError(t, err, "SignExecutorCommitment")
 
 		// Resolve discrepancy with commit from backup worker.
@@ -738,7 +738,7 @@ func TestPoolSerialization(t *testing.T) {
 	// Generate a commitment.
 	childBlk, _, body := generateComputeBody(t, pool.Round)
 
-	commit, err := SignExecutorCommitment(sk, &body)
+	commit, err := SignExecutorCommitment(sk, rt.ID, &body)
 	require.NoError(t, err, "SignExecutorCommitment")
 
 	// Adding a commitment should succeed.
@@ -784,10 +784,10 @@ func TestTryFinalize(t *testing.T) {
 		// Generate a commitment.
 		childBlk, _, body := generateComputeBody(t, pool.Round)
 
-		commit1, err := SignExecutorCommitment(sk1, &body)
+		commit1, err := SignExecutorCommitment(sk1, rt.ID, &body)
 		require.NoError(t, err, "SignExecutorCommitment")
 
-		commit2, err := SignExecutorCommitment(sk2, &body)
+		commit2, err := SignExecutorCommitment(sk2, rt.ID, &body)
 		require.NoError(t, err, "SignExecutorCommitment")
 
 		// Adding commitment 1 should succeed.
@@ -813,7 +813,7 @@ func TestTryFinalize(t *testing.T) {
 	t.Run("Discrepancy", func(t *testing.T) {
 		pool, childBlk, _, correctBody, _ := setupDiscrepancy(t, rt, sks, committee, nl)
 
-		commit3, err := SignExecutorCommitment(sk3, correctBody)
+		commit3, err := SignExecutorCommitment(sk3, rt.ID, correctBody)
 		require.NoError(t, err, "SignExecutorCommitment")
 
 		// Resolve discrepancy with commit from backup worker.
@@ -838,10 +838,10 @@ func TestTryFinalize(t *testing.T) {
 		// Generate a commitment.
 		childBlk, _, body := generateComputeBody(t, pool.Round)
 
-		commit1, err := SignExecutorCommitment(sk1, &body)
+		commit1, err := SignExecutorCommitment(sk1, rt.ID, &body)
 		require.NoError(t, err, "SignExecutorCommitment")
 
-		commit3, err := SignExecutorCommitment(sk3, &body)
+		commit3, err := SignExecutorCommitment(sk3, rt.ID, &body)
 		require.NoError(t, err, "SignExecutorCommitment")
 
 		correctHeader := body.Header
@@ -947,7 +947,7 @@ func TestExecutorTimeoutRequest(t *testing.T) {
 
 		// Generate a commitment.
 		childBlk, _, body := generateComputeBody(t, pool.Round)
-		commit1, err := SignExecutorCommitment(sk1, &body)
+		commit1, err := SignExecutorCommitment(sk1, rt.ID, &body)
 		require.NoError(err, "SignExecutorCommitment")
 		// Adding commitment 1 should succeed.
 		err = pool.AddExecutorCommitment(ctx, childBlk, nopSV, nl, commit1, nil)
@@ -1051,7 +1051,7 @@ func generateComputeBody(t *testing.T, round uint64) (*block.Block, *block.Block
 	parentBlk.Header.StorageSignatures = []signature.Signature{sig}
 
 	// Generate dummy txn scheduler signature.
-	body.TxnSchedSig = generateTxnSchedulerSignature(t, childBlk, &body)
+	body.TxnSchedSig = generateTxnSchedulerSignature(t, childBlk, id, &body)
 
 	return childBlk, parentBlk, body
 }
@@ -1073,7 +1073,7 @@ func generateStorageReceiptSignature(t *testing.T, blk *block.Block, body *Compu
 	return signed.Signature
 }
 
-func generateTxnSchedulerSignature(t *testing.T, childBlk *block.Block, body *ComputeBody) signature.Signature {
+func generateTxnSchedulerSignature(t *testing.T, childBlk *block.Block, rtID common.Namespace, body *ComputeBody) signature.Signature {
 	body.InputRoot = hash.Hash{}
 	body.InputStorageSigs = []signature.Signature{}
 	dispatch := &ProposedBatch{
@@ -1083,7 +1083,7 @@ func generateTxnSchedulerSignature(t *testing.T, childBlk *block.Block, body *Co
 	}
 	sk, err := memorySigner.NewSigner(rand.Reader)
 	require.NoError(t, err, "NewSigner")
-	signedDispatch, err := SignProposedBatch(sk, dispatch)
+	signedDispatch, err := SignProposedBatch(sk, rtID, dispatch)
 	require.NoError(t, err, "SignProposedBatch")
 
 	return signedDispatch.Signature
@@ -1109,7 +1109,7 @@ func setupDiscrepancy(
 	// Generate a commitment.
 	childBlk, parentBlk, body := generateComputeBody(t, pool.Round)
 
-	commit1, err := SignExecutorCommitment(sk1, &body)
+	commit1, err := SignExecutorCommitment(sk1, rt.ID, &body)
 	require.NoError(t, err, "SignExecutorCommitment")
 
 	correctBody := body
@@ -1119,7 +1119,7 @@ func setupDiscrepancy(
 	body.Header.StateRoot = &badHash
 	body.StorageSignatures = []signature.Signature{generateStorageReceiptSignature(t, parentBlk, &body)}
 
-	commit2, err := SignExecutorCommitment(sk2, &body)
+	commit2, err := SignExecutorCommitment(sk2, rt.ID, &body)
 	require.NoError(t, err, "SignExecutorCommitment")
 
 	// Adding commitment 1 should succeed.

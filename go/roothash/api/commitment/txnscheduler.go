@@ -3,6 +3,7 @@ package commitment
 import (
 	"fmt"
 
+	"github.com/oasisprotocol/oasis-core/go/common"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	"github.com/oasisprotocol/oasis-core/go/roothash/api/block"
@@ -11,7 +12,11 @@ import (
 
 // ProposedBatchSignatureContext is the context used for signing propose batch
 // dispatch messages.
-var ProposedBatchSignatureContext = signature.NewContext("oasis-core/roothash: proposed batch", signature.WithChainSeparation())
+var ProposedBatchSignatureContext = signature.NewContext(
+	"oasis-core/roothash: proposed batch",
+	signature.WithChainSeparation(),
+	signature.WithDynamicSuffix(" for runtime ", common.NamespaceHexSize),
+)
 
 // ProposedBatch is the message sent from the transaction scheduler
 // to executor workers after a batch is ready to be executed.
@@ -42,14 +47,22 @@ func (s *SignedProposedBatch) Equal(cmp *SignedProposedBatch) bool {
 }
 
 // Open first verifies the blob signature and then unmarshals the blob.
-func (s *SignedProposedBatch) Open(tsbd *ProposedBatch) error {
-	return s.Signed.Open(ProposedBatchSignatureContext, tsbd)
+func (s *SignedProposedBatch) Open(tsbd *ProposedBatch, runtimeID common.Namespace) error {
+	sigCtx, err := ProposedBatchSignatureContext.WithSuffix(runtimeID.String())
+	if err != nil {
+		return fmt.Errorf("signature context error: %w", err)
+	}
+	return s.Signed.Open(sigCtx, tsbd)
 }
 
 // SignProposedBatch signs a ProposedBatch struct using the
 // given signer.
-func SignProposedBatch(signer signature.Signer, tsbd *ProposedBatch) (*SignedProposedBatch, error) {
-	signed, err := signature.SignSigned(signer, ProposedBatchSignatureContext, tsbd)
+func SignProposedBatch(signer signature.Signer, runtimeID common.Namespace, tsbd *ProposedBatch) (*SignedProposedBatch, error) {
+	sigCtx, err := ProposedBatchSignatureContext.WithSuffix(runtimeID.String())
+	if err != nil {
+		return nil, fmt.Errorf("signature context error: %w", err)
+	}
+	signed, err := signature.SignSigned(signer, sigCtx, tsbd)
 	if err != nil {
 		return nil, err
 	}

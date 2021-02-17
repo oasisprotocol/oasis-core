@@ -287,7 +287,7 @@ func (n *Node) HandlePeerMessage(ctx context.Context, message *p2p.Message, isOw
 
 		// Before opening the signed dispatch message, verify that it was
 		// actually signed by the current transaction scheduler.
-		if err := epoch.VerifyTxnSchedulerSignature(sbd.Signature, round); err != nil {
+		if err := epoch.VerifyTxnSchedulerSigner(sbd.Signature, round); err != nil {
 			// Not signed by a current txn scheduler!
 			return false, errMsgFromNonTxnSched
 		}
@@ -295,7 +295,7 @@ func (n *Node) HandlePeerMessage(ctx context.Context, message *p2p.Message, isOw
 		// Transaction scheduler checks out, open the signed dispatch message
 		// and add it to the processing queue.
 		var bd commitment.ProposedBatch
-		if err := sbd.Open(&bd); err != nil {
+		if err := sbd.Open(&bd, n.commonNode.Runtime.ID()); err != nil {
 			return false, p2pError.Permanent(err)
 		}
 
@@ -867,7 +867,7 @@ func (n *Node) handleScheduleBatch(force bool) {
 		StorageSignatures: ioReceiptSignatures,
 		Header:            *lastHeader,
 	}
-	signedDispatchMsg, err := commitment.SignProposedBatch(n.commonNode.Identity.NodeSigner, dispatchMsg)
+	signedDispatchMsg, err := commitment.SignProposedBatch(n.commonNode.Identity.NodeSigner, n.commonNode.Runtime.ID(), dispatchMsg)
 	if err != nil {
 		n.logger.Error("failed to sign txn scheduler batch",
 			"err", err,
@@ -1237,7 +1237,7 @@ func (n *Node) proposeBatchLocked(processedBatch *processedBatch) {
 }
 
 func (n *Node) signAndSubmitCommitment(body *commitment.ComputeBody) error {
-	commit, err := commitment.SignExecutorCommitment(n.commonNode.Identity.NodeSigner, body)
+	commit, err := commitment.SignExecutorCommitment(n.commonNode.Identity.NodeSigner, n.commonNode.Runtime.ID(), body)
 	if err != nil {
 		n.logger.Error("failed to sign commitment",
 			"commit", body,

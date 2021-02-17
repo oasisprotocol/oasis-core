@@ -15,6 +15,9 @@ const (
 	// NamespaceSize is the size of a chain namespace identifier in bytes.
 	NamespaceSize = 32
 
+	// NamespaceHexSize is the size of the chain namespace identifier in string format.
+	NamespaceHexSize = NamespaceSize * 2
+
 	// NamespaceIDSize is the size of the identifier component of a namespace.
 	NamespaceIDSize = NamespaceSize - 8
 

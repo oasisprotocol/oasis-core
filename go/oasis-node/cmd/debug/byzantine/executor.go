@@ -24,6 +24,8 @@ import (
 )
 
 type computeBatchContext struct {
+	runtimeID common.Namespace
+
 	bd    commitment.ProposedBatch
 	bdSig signature.Signature
 
@@ -40,8 +42,10 @@ type computeBatchContext struct {
 	commit          *commitment.ExecutorCommitment
 }
 
-func newComputeBatchContext() *computeBatchContext {
-	return &computeBatchContext{}
+func newComputeBatchContext(runtimeID common.Namespace) *computeBatchContext {
+	return &computeBatchContext{
+		runtimeID: runtimeID,
+	}
 }
 
 func (cbc *computeBatchContext) receiveTransactions(ph *p2pHandle, timeout time.Duration) []*api.Tx {
@@ -80,7 +84,7 @@ func (cbc *computeBatchContext) publishTransactionBatch(
 ) {
 	p2pH.service.Publish(
 		ctx,
-		defaultRuntimeID,
+		cbc.runtimeID,
 		&p2p.Message{
 			GroupVersion:  groupVersion,
 			ProposedBatch: batch,
@@ -148,7 +152,7 @@ func (cbc *computeBatchContext) prepareTransactionBatch(
 		dispatchMsg.IORoot = emptyRoot.Hash
 	}
 
-	signedDispatchMsg, err := commitment.SignProposedBatch(identity.NodeSigner, dispatchMsg)
+	signedDispatchMsg, err := commitment.SignProposedBatch(identity.NodeSigner, lastHeader.Namespace, dispatchMsg)
 	if err != nil {
 		return nil, fmt.Errorf("failed to sign txn scheduler batch: %w", err)
 	}
@@ -172,7 +176,7 @@ func (cbc *computeBatchContext) receiveBatch(ph *p2pHandle) error {
 		break
 	}
 
-	if err := req.msg.ProposedBatch.Open(&cbc.bd); err != nil {
+	if err := req.msg.ProposedBatch.Open(&cbc.bd, cbc.runtimeID); err != nil {
 		return fmt.Errorf("request message SignedProposedBatchDispatch Open: %w", err)
 	}
 
@@ -279,7 +283,12 @@ func (cbc *computeBatchContext) uploadBatch(ctx context.Context, clients []*stor
 	return nil
 }
 
-func (cbc *computeBatchContext) createCommitment(id *identity.Identity, rak signature.Signer, committeeID hash.Hash, failure commitment.ExecutorCommitmentFailure) error {
+func (cbc *computeBatchContext) createCommitment(
+	id *identity.Identity,
+	rak signature.Signer,
+	committeeID hash.Hash,
+	failure commitment.ExecutorCommitmentFailure,
+) error {
 	var storageSigs []signature.Signature
 	for _, receipt := range cbc.storageReceipts {
 		storageSigs = append(storageSigs, receipt.Signature)
@@ -314,7 +323,7 @@ func (cbc *computeBatchContext) createCommitment(id *identity.Identity, rak sign
 	}
 
 	var err error
-	cbc.commit, err = commitment.SignExecutorCommitment(id.NodeSigner, computeBody)
+	cbc.commit, err = commitment.SignExecutorCommitment(id.NodeSigner, cbc.runtimeID, computeBody)
 	if err != nil {
 		return fmt.Errorf("commitment sign executor commitment: %w", err)
 	}
@@ -322,8 +331,8 @@ func (cbc *computeBatchContext) createCommitment(id *identity.Identity, rak sign
 	return nil
 }
 
-func (cbc *computeBatchContext) publishToChain(svc consensus.Backend, id *identity.Identity, runtimeID common.Namespace) error {
-	if err := roothashExecutorCommit(svc, id, runtimeID, []commitment.ExecutorCommitment{*cbc.commit}); err != nil {
+func (cbc *computeBatchContext) publishToChain(svc consensus.Backend, id *identity.Identity) error {
+	if err := roothashExecutorCommit(svc, id, cbc.runtimeID, []commitment.ExecutorCommitment{*cbc.commit}); err != nil {
 		return fmt.Errorf("roothash merge commitment: %w", err)
 	}
 

@@ -208,10 +208,11 @@ func (e *EpochSnapshot) VerifyCommitteeSignatures(kind scheduler.CommitteeKind, 
 	return nil
 }
 
-// VerifyTxnSchedulerSignature verifies transaction scheduler signature.
+// VerifyTxnSchedulerSigner verifies that the given signature comes from
+// the transaction scheduler at provided round.
 //
 // Implements commitment.SignatureVerifier.
-func (e *EpochSnapshot) VerifyTxnSchedulerSignature(sig signature.Signature, round uint64) error {
+func (e *EpochSnapshot) VerifyTxnSchedulerSigner(sig signature.Signature, round uint64) error {
 	if e.executorCommittee == nil || e.executorCommittee.Committee == nil {
 		return fmt.Errorf("epoch: no active transaction scheduler")
 	}

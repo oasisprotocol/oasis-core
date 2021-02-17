@@ -9,6 +9,7 @@ import (
 	"github.com/spf13/viper"
 
 	beacon "github.com/oasisprotocol/oasis-core/go/beacon/api"
+	"github.com/oasisprotocol/oasis-core/go/common"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/pvss"
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
 	"github.com/oasisprotocol/oasis-core/go/common/node"
@@ -68,12 +69,17 @@ func (m *BeaconMode) FromString(s string) error {
 func doBeaconScenario(cmd *cobra.Command, args []string) {
 	ctx := context.Background()
 
+	var runtimeID common.Namespace
+	if err := runtimeID.UnmarshalHex(viper.GetString(CfgRuntimeID)); err != nil {
+		panic(fmt.Errorf("error initializing node: failed to parse runtime ID: %w", err))
+	}
+
 	var mode BeaconMode
 	if err := mode.FromString(viper.GetString(CfgBeaconMode)); err != nil {
 		panic(err)
 	}
 
-	b, err := initializeAndRegisterByzantineNode(node.RoleValidator, scheduler.RoleInvalid, scheduler.RoleInvalid, false, true)
+	b, err := initializeAndRegisterByzantineNode(runtimeID, node.RoleValidator, scheduler.RoleInvalid, scheduler.RoleInvalid, false, true)
 	if err != nil {
 		panic(fmt.Sprintf("error initializing node: %+v", err))
 	}

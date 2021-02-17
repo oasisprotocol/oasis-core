@@ -321,6 +321,7 @@ func (sc *byzantineImpl) Fixture() (*oasis.NetworkFixture, error) {
 			IdentitySeed:    sc.identitySeed,
 			Entity:          2,
 			ActivationEpoch: 1,
+			Runtime:         1,
 		},
 	}
 	return f, nil

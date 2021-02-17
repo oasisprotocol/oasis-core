@@ -76,6 +76,7 @@ func (sc *byzantineBeaconImpl) Fixture() (*oasis.NetworkFixture, error) {
 			IdentitySeed:    sc.identitySeed,
 			Entity:          1,
 			ActivationEpoch: 1,
+			Runtime:         -1,
 		},
 	}
 

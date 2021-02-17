@@ -18,7 +18,11 @@ import (
 var (
 	// ExecutorSignatureContext is the signature context used to sign executor
 	// worker commitments.
-	ExecutorSignatureContext = signature.NewContext("oasis-core/roothash: executor commitment", signature.WithChainSeparation())
+	ExecutorSignatureContext = signature.NewContext(
+		"oasis-core/roothash: executor commitment",
+		signature.WithChainSeparation(),
+		signature.WithDynamicSuffix(" for runtime ", common.NamespaceHexSize),
+	)
 
 	// ComputeResultsHeaderSignatureContext is the signature context used to
 	// sign compute results headers with RAK.
@@ -103,14 +107,17 @@ func (m *ComputeBody) SetFailure(failure ExecutorCommitmentFailure) {
 // VerifyTxnSchedSignature rebuilds the batch dispatch message from the data
 // in the ComputeBody struct and verifies if the txn scheduler signature
 // matches what we're seeing.
-func (m *ComputeBody) VerifyTxnSchedSignature(header block.Header) bool {
+func (m *ComputeBody) VerifyTxnSchedSignature(runtimeID common.Namespace, header block.Header) (bool, error) {
+	ctx, err := ProposedBatchSignatureContext.WithSuffix(runtimeID.String())
+	if err != nil {
+		return false, fmt.Errorf("proposed batch signature context error: %w", err)
+	}
 	dispatch := &ProposedBatch{
 		IORoot:            m.InputRoot,
 		StorageSignatures: m.InputStorageSigs,
 		Header:            header,
 	}
-
-	return m.TxnSchedSig.Verify(ProposedBatchSignatureContext, cbor.Marshal(dispatch))
+	return m.TxnSchedSig.Verify(ctx, cbor.Marshal(dispatch)), nil
 }
 
 // RootsForStorageReceipt gets the merkle roots that must be part of
@@ -305,9 +312,14 @@ func (c OpenExecutorCommitment) ToDDResult() interface{} {
 
 // Open validates the executor commitment signature, and de-serializes the message.
 // This does not validate the RAK signature.
-func (c *ExecutorCommitment) Open() (*OpenExecutorCommitment, error) {
+func (c *ExecutorCommitment) Open(runtimeID common.Namespace) (*OpenExecutorCommitment, error) {
+	sigCtx, err := ExecutorSignatureContext.WithSuffix(runtimeID.String())
+	if err != nil {
+		return nil, fmt.Errorf("roothash/commitment: signature context error: %w", err)
+	}
+
 	var body ComputeBody
-	if err := c.Signed.Open(ExecutorSignatureContext, &body); err != nil {
+	if err := c.Signed.Open(sigCtx, &body); err != nil {
 		return nil, errors.New("roothash/commitment: commitment has invalid signature")
 	}
 
@@ -318,8 +330,17 @@ func (c *ExecutorCommitment) Open() (*OpenExecutorCommitment, error) {
 }
 
 // SignExecutorCommitment serializes the message and signs the commitment.
-func SignExecutorCommitment(signer signature.Signer, body *ComputeBody) (*ExecutorCommitment, error) {
-	signed, err := signature.SignSigned(signer, ExecutorSignatureContext, body)
+func SignExecutorCommitment(
+	signer signature.Signer,
+	runtimeID common.Namespace,
+	body *ComputeBody,
+) (*ExecutorCommitment, error) {
+	sigCtx, err := ExecutorSignatureContext.WithSuffix(runtimeID.String())
+	if err != nil {
+		return nil, fmt.Errorf("roothash/commitment: signature context error: %w", err)
+	}
+
+	signed, err := signature.SignSigned(signer, sigCtx, body)
 	if err != nil {
 		return nil, err
 	}
