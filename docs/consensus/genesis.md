@@ -57,7 +57,7 @@ the parameter values that are used for the Oasis Network, see:
 ### Canonical Form
 
 The *canonical* form of a genesis file is the pretty-printed JSON file with
-2-space indents, where:
+2-space indents ending with a newline, where:
 
 - Struct fields are encoded in the order in which they are defined in the
   corresponding struct definitions.

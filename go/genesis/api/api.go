@@ -80,12 +80,14 @@ func (d *Document) SetChainContext() {
 // into a file.
 //
 // This is a pretty-printed JSON file with 2-space indents following Go
-// encoding/json package's JSON marshalling rules.
+// encoding/json package's JSON marshalling rules with a newline at the end.
 func (d *Document) CanonicalJSON() ([]byte, error) {
 	canonJSON, err := json.MarshalIndent(d, "", "  ")
 	if err != nil {
 		return []byte{}, fmt.Errorf("CanonicalJSON: failed to marshal genesis document: %w", err)
 	}
+	// Append a newline at the end.
+	canonJSON = append(canonJSON, []byte("\n")...)
 	return canonJSON, nil
 }
 
