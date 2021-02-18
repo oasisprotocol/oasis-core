@@ -104,6 +104,7 @@ func newDefaultFixture() (*oasis.NetworkFixture, error) {
 				AdmissionPolicy: registry.RuntimeAdmissionPolicy{
 					AnyNode: &registry.AnyNodeRuntimeAdmissionPolicy{},
 				},
+				GovernanceModel: registry.GovernanceEntity,
 			},
 			// Compute runtime.
 			{
@@ -119,6 +120,7 @@ func newDefaultFixture() (*oasis.NetworkFixture, error) {
 					GroupBackupSize: 1,
 					RoundTimeout:    20,
 					MinPoolSize:     3, // GroupSize + GroupBackupSize
+					MaxMessages:     128,
 				},
 				TxnScheduler: registry.TxnSchedulerParameters{
 					Algorithm:         registry.TxnSchedulerSimple,
@@ -139,6 +141,7 @@ func newDefaultFixture() (*oasis.NetworkFixture, error) {
 				},
 				GenesisStatePath: viper.GetString(cfgRuntimeGenesisState),
 				GenesisRound:     0,
+				GovernanceModel:  registry.GovernanceEntity,
 			},
 		}
 		fixture.KeymanagerPolicies = []oasis.KeymanagerPolicyFixture{

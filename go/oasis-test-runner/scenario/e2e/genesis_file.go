@@ -55,7 +55,7 @@ func (s *genesisFileImpl) Run(childEnv *env.Env) error {
 	// Manually provision genesis file.
 	s.Logger.Info("manually provisioning genesis file before starting the network")
 	if err := s.Net.MakeGenesis(); err != nil {
-		return fmt.Errorf("e2e/genesis-file: failed to create genesis file")
+		return fmt.Errorf("e2e/genesis-file: failed to create genesis file: %w", err)
 	}
 	// Set this genesis file in network's configuration.
 	cfg := s.Net.Config()

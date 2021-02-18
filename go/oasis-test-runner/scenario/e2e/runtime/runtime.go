@@ -147,7 +147,8 @@ func (sc *runtimeImpl) Fixture() (*oasis.NetworkFixture, error) {
 				AdmissionPolicy: registry.RuntimeAdmissionPolicy{
 					AnyNode: &registry.AnyNodeRuntimeAdmissionPolicy{},
 				},
-				Binaries: sc.resolveRuntimeBinaries([]string{keyManagerBinary}),
+				Binaries:        sc.resolveRuntimeBinaries([]string{keyManagerBinary}),
+				GovernanceModel: registry.GovernanceEntity,
 			},
 			// Compute runtime.
 			{
@@ -180,6 +181,7 @@ func (sc *runtimeImpl) Fixture() (*oasis.NetworkFixture, error) {
 				AdmissionPolicy: registry.RuntimeAdmissionPolicy{
 					AnyNode: &registry.AnyNodeRuntimeAdmissionPolicy{},
 				},
+				GovernanceModel: registry.GovernanceEntity,
 			},
 		},
 		Validators: []oasis.ValidatorFixture{
@@ -536,6 +538,7 @@ func RegisterScenarios() error {
 		// Runtime test.
 		Runtime,
 		RuntimeEncryption,
+		RuntimeGovernance,
 		// Byzantine executor node.
 		ByzantineExecutorHonest,
 		ByzantineExecutorSchedulerHonest,

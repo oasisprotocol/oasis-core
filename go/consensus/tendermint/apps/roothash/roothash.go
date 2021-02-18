@@ -164,13 +164,22 @@ func (app *rootHashApplication) onCommitteeChanged(ctx *tmapi.Context, state *ro
 		// cover the entity and runtime deposits (this check is skipped if the runtime would be
 		// suspended anyway due to nobody being there to pay maintenance fees).
 		sufficientStake := true
-		if !empty && !params.DebugBypassStake {
-			acctAddr := staking.NewAddress(rt.EntityID)
-			if err = stakeAcc.CheckStakeClaims(acctAddr); err != nil {
+		if !empty && !params.DebugBypassStake && rt.GovernanceModel != registry.GovernanceConsensus {
+			acctAddr := rt.StakingAddress()
+			if acctAddr == nil {
+				// This should never happen.
+				ctx.Logger().Error("unknown runtime governance model",
+					"rt_id", rt.ID,
+					"gov_model", rt.GovernanceModel,
+				)
+				return fmt.Errorf("unknown runtime governance model on runtime %s: %s", rt.ID, rt.GovernanceModel)
+			}
+
+			if err = stakeAcc.CheckStakeClaims(*acctAddr); err != nil {
 				ctx.Logger().Warn("insufficient stake for runtime operation",
 					"err", err,
 					"entity", rt.EntityID,
-					"account", acctAddr,
+					"account", *acctAddr,
 				)
 				sufficientStake = false
 			}

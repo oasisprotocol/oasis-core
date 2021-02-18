@@ -39,6 +39,8 @@ func (app *rootHashApplication) processRuntimeMessages(
 		switch {
 		case msg.Staking != nil:
 			err = app.md.Publish(ctx, roothashApi.RuntimeMessageStaking, msg.Staking)
+		case msg.Registry != nil:
+			err = app.md.Publish(ctx, roothashApi.RuntimeMessageRegistry, msg.Registry)
 		default:
 			// Unsupported message.
 			err = roothash.ErrInvalidArgument

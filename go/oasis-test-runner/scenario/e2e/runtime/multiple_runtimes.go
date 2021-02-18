@@ -109,6 +109,7 @@ func (sc *multipleRuntimesImpl) Fixture() (*oasis.NetworkFixture, error) {
 			AdmissionPolicy: registry.RuntimeAdmissionPolicy{
 				AnyNode: &registry.AnyNodeRuntimeAdmissionPolicy{},
 			},
+			GovernanceModel: registry.GovernanceEntity,
 		}
 
 		f.Runtimes = append(f.Runtimes, newRtFixture)

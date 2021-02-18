@@ -14,9 +14,11 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/consensus/api/transaction"
 	"github.com/oasisprotocol/oasis-core/go/consensus/tendermint/api"
 	registryState "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/apps/registry/state"
+	roothashApi "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/apps/roothash/api"
 	stakingapp "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/apps/staking"
 	stakingState "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/apps/staking/state"
 	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
+	"github.com/oasisprotocol/oasis-core/go/roothash/api/message"
 	staking "github.com/oasisprotocol/oasis-core/go/staking/api"
 )
 
@@ -50,6 +52,9 @@ func (app *registryApplication) Dependencies() []string {
 func (app *registryApplication) OnRegister(state api.ApplicationState, md api.MessageDispatcher) {
 	app.state = state
 	app.md = md
+
+	// Subscribe to messages emitted by other apps.
+	md.Subscribe(roothashApi.RuntimeMessageRegistry, app)
 }
 
 func (app *registryApplication) OnCleanup() {
@@ -64,7 +69,20 @@ func (app *registryApplication) BeginBlock(ctx *api.Context, request types.Reque
 }
 
 func (app *registryApplication) ExecuteMessage(ctx *api.Context, kind, msg interface{}) error {
-	return registry.ErrInvalidArgument
+	state := registryState.NewMutableState(ctx.State())
+
+	switch kind {
+	case roothashApi.RuntimeMessageRegistry:
+		m := msg.(*message.RegistryMessage)
+		switch {
+		case m.UpdateRuntime != nil:
+			return app.registerRuntime(ctx, state, m.UpdateRuntime)
+		default:
+			return registry.ErrInvalidArgument
+		}
+	default:
+		return registry.ErrInvalidArgument
+	}
 }
 
 func (app *registryApplication) ExecuteTx(ctx *api.Context, tx *transaction.Transaction) error {

@@ -25,7 +25,7 @@ use oasis_core_runtime::{
     common::{crypto::hash::Hash, namespace::Namespace},
     storage::MKVS,
 };
-use simple_keyvalue_api::{with_api, Key, KeyValue, Transfer, Withdraw};
+use simple_keyvalue_api::{with_api, Key, KeyValue, Transfer, UpdateRuntime, Withdraw};
 
 with_api! {
     create_txn_api_client!(SimpleKeyValueClient, api);

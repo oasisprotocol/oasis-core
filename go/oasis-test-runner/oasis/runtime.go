@@ -64,6 +64,8 @@ type RuntimeCfg struct { // nolint: maligned
 	AdmissionPolicy registry.RuntimeAdmissionPolicy
 	Staking         registry.RuntimeStakingParameters
 
+	GovernanceModel registry.RuntimeGovernanceModel
+
 	Pruner RuntimePrunerCfg
 
 	ExcludeFromGenesis bool
@@ -131,7 +133,7 @@ func (net *Network) NewRuntime(cfg *RuntimeCfg) (*Runtime, error) {
 		Storage:         cfg.Storage,
 		AdmissionPolicy: cfg.AdmissionPolicy,
 		Staking:         cfg.Staking,
-		GovernanceModel: registry.GovernanceEntity,
+		GovernanceModel: cfg.GovernanceModel,
 	}
 
 	rtDir, err := net.baseDir.NewSubDir("runtime-" + cfg.ID.String())

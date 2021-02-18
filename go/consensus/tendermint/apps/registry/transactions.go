@@ -462,9 +462,18 @@ func (app *registryApplication) registerNode( // nolint: gocyclo
 	for _, rt := range paidRuntimes {
 		// Only resume a runtime if the entity has enough stake to avoid having the runtime be
 		// suspended again on the next epoch transition.
-		if !params.DebugBypassStake {
-			acctAddr := staking.NewAddress(rt.EntityID)
-			if err = stakeAcc.CheckStakeClaims(acctAddr); err != nil {
+		if !params.DebugBypassStake && rt.GovernanceModel != registry.GovernanceConsensus {
+			acctAddr := rt.StakingAddress()
+			if acctAddr == nil {
+				// This should never happen.
+				ctx.Logger().Error("unknown runtime governance model",
+					"rt_id", rt.ID,
+					"gov_model", rt.GovernanceModel,
+				)
+				return fmt.Errorf("unknown runtime governance model on runtime %s: %s", rt.ID, rt.GovernanceModel)
+			}
+
+			if err = stakeAcc.CheckStakeClaims(*acctAddr); err != nil {
 				continue
 			}
 		}
@@ -661,28 +670,25 @@ func (app *registryApplication) registerRuntime( // nolint: gocyclo
 			rtToCheck = rt
 		}
 
-		switch rtToCheck.GovernanceModel {
-		case registry.GovernanceEntity:
-			if !rtToCheck.EntityID.Equal(ctx.TxSigner()) {
-				// Transaction must be signed by controlling entity.
+		expectedAddr := rtToCheck.StakingAddress()
+		if expectedAddr == nil {
+			ctx.Logger().Error("RegisterRuntime: runtimes with consensus-layer governance can only be registered at genesis")
+			return registry.ErrForbidden
+		}
+
+		if !ctx.CallerAddress().Equal(*expectedAddr) {
+			switch rtToCheck.GovernanceModel {
+			case registry.GovernanceEntity:
 				ctx.Logger().Error("RegisterRuntime: transaction must be signed by controlling entity")
 				return registry.ErrIncorrectTxSigner
-			}
-		case registry.GovernanceRuntime:
-			if !ctx.CallerAddress().Equal(staking.NewRuntimeAddress(rtToCheck.ID)) {
-				// Caller must be the runtime itself.
+			case registry.GovernanceRuntime:
 				ctx.Logger().Error("RegisterRuntime: caller must be the runtime itself")
 				return registry.ErrForbidden
+			default:
+				// Basic validation should have caught this, but just in case...
+				ctx.Logger().Error("RegisterRuntime: invalid governance model")
+				return registry.ErrInvalidArgument
 			}
-		case registry.GovernanceConsensus:
-			// Consensus-layer governance runtimes can only be registered
-			// during genesis.
-			ctx.Logger().Error("RegisterRuntime: runtimes with consensus-layer governance")
-			return registry.ErrForbidden
-		default:
-			// Basic validation should have caught this, but just in case...
-			ctx.Logger().Error("RegisterRuntime: invalid governance model")
-			return registry.ErrInvalidArgument
 		}
 	}
 
@@ -707,6 +713,7 @@ func (app *registryApplication) registerRuntime( // nolint: gocyclo
 			ctx.Logger().Error("RegisterRuntime: insufficient stake",
 				"err", err,
 				"entity", rt.EntityID,
+				"runtime", rt.ID,
 				"account", acctAddr,
 			)
 			return err
