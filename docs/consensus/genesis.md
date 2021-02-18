@@ -43,13 +43,12 @@ part of the [domain separation] context.
 
 ## Genesis File
 
-A genesis file is a JSON document corresponding to a serialized genesis
-document.
+A genesis file is a JSON file corresponding to a serialized genesis document.
 
 {% hint style="info" %}
-For a high-level overview of the genesis file, its various sections and
-parameters and the parameter values that will be used for Oasis Network Mainnet
-launch, see: [Genesis File Overview].
+For a high-level overview of the genesis file, its sections, parameters and
+the parameter values that are used for the Oasis Network, see:
+[Genesis File Overview].
 {% endhint %}
 
 [Genesis File Overview]:
@@ -58,7 +57,7 @@ launch, see: [Genesis File Overview].
 ### Canonical Form
 
 The *canonical* form of a genesis file is the pretty-printed JSON file with
-2-space indents, where:
+2-space indents ending with a newline, where:
 
 - Struct fields are encoded in the order in which they are defined in the
   corresponding struct definitions.

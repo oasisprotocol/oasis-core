@@ -76,14 +76,29 @@ func (d *Document) SetChainContext() {
 	signature.SetChainContext(d.ChainContext())
 }
 
-// WriteFileJSON writes the genesis document into a JSON file.
+// CanonicalJSON returns the canonical form of the genesis document serialized
+// into a file.
+//
+// This is a pretty-printed JSON file with 2-space indents following Go
+// encoding/json package's JSON marshalling rules with a newline at the end.
+func (d *Document) CanonicalJSON() ([]byte, error) {
+	canonJSON, err := json.MarshalIndent(d, "", "  ")
+	if err != nil {
+		return []byte{}, fmt.Errorf("CanonicalJSON: failed to marshal genesis document: %w", err)
+	}
+	// Append a newline at the end.
+	canonJSON = append(canonJSON, []byte("\n")...)
+	return canonJSON, nil
+}
+
+// WriteFileJSON writes the canonical form of genesis document into a file.
 func (d *Document) WriteFileJSON(filename string) error {
-	docJSON, err := json.Marshal(d)
+	canonJSON, err := d.CanonicalJSON()
 	if err != nil {
 		return err
 	}
 
-	if err = ioutil.WriteFile(filename, docJSON, filePerm); err != nil {
+	if err = ioutil.WriteFile(filename, canonJSON, filePerm); err != nil {
 		return fmt.Errorf("WriteFileJSON: failed to write genesis file: %w", err)
 	}
 	return nil

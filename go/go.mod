@@ -31,6 +31,7 @@ require (
 	github.com/hashicorp/go-multierror v1.1.0
 	github.com/hashicorp/go-plugin v1.4.0
 	github.com/hpcloud/tail v1.0.0
+	github.com/ianbruene/go-difflib v1.2.0
 	github.com/libp2p/go-libp2p v0.13.0
 	github.com/libp2p/go-libp2p-core v0.8.2
 	github.com/libp2p/go-libp2p-pubsub v0.4.1
