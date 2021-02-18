@@ -12,6 +12,9 @@ import (
 // Subject is an access control subject.
 type Subject string
 
+// AnySubject is a wildcard subject. When set for an action in a policy, it matches any subject.
+const AnySubject Subject = "*"
+
 // SubjectFromX509Certificate returns a Subject from the given X.509
 // certificate.
 func SubjectFromX509Certificate(cert *x509.Certificate) Subject {
@@ -57,6 +60,16 @@ func (p Policy) Allow(sub Subject, act Action) {
 	p[act][sub] = true
 }
 
+// AllowAll adds a policy rule that allows anyone to perform the given action.
+// The effect is similar as defining the action to have no access control, but is
+// better suited for configuration that depends on runtime parameters.
+func (p Policy) AllowAll(act Action) {
+	if p[act] == nil {
+		p[act] = make(map[Subject]bool)
+	}
+	p[act][AnySubject] = true
+}
+
 // Deny removes a policy rule that allows the given Subject to perform the
 // given Action.
 func (p Policy) Deny(sub Subject, act Action) {
@@ -72,7 +85,7 @@ func (p Policy) IsAllowed(sub Subject, act Action) bool {
 	if p[act] == nil {
 		return false
 	}
-	return p[act][sub]
+	return p[act][AnySubject] || p[act][sub]
 }
 
 // String returns the string representation of the policy.

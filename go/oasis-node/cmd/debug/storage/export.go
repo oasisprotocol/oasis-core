@@ -173,7 +173,7 @@ func newDirectStorageBackend(dataDir string, namespace common.Namespace) (storag
 		cfg.DB = filepath.Join(cfg.DB, storageDatabase.DefaultFileName(cfg.Backend))
 		return storageDatabase.New(cfg)
 	case storageClient.BackendName:
-		return storageClient.New(context.Background(), namespace, nil, nil, nil, nil)
+		return storageClient.NewForPublicStorage(context.Background(), namespace, nil, nil, nil)
 	default:
 		return nil, fmt.Errorf("storage: unsupported backend: '%v'", cfg.Backend)
 	}

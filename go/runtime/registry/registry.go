@@ -257,7 +257,7 @@ func (r *runtime) finishInitialization(ctx context.Context, ident *identity.Iden
 	defer r.Unlock()
 
 	if r.storage == nil {
-		storageBackend, err := client.New(ctx, r.id, ident, r.consensus.Scheduler(), r.consensus.Registry(), r)
+		storageBackend, err := client.NewForPublicStorage(ctx, r.id, ident, r.consensus.Registry(), r)
 		if err != nil {
 			return fmt.Errorf("runtime/registry: cannot create storage for runtime %s: %w", r.id, err)
 		}

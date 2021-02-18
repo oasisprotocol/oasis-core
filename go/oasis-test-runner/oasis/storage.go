@@ -24,6 +24,7 @@ type Storage struct { // nolint: maligned
 	entity  *Entity
 
 	disableCertRotation     bool
+	disablePublicRPC        bool
 	ignoreApplies           bool
 	checkpointSyncDisabled  bool
 	checkpointCheckInterval time.Duration
@@ -46,6 +47,7 @@ type StorageCfg struct { // nolint: maligned
 	Entity        *Entity
 
 	DisableCertRotation     bool
+	DisablePublicRPC        bool
 	IgnoreApplies           bool
 	CheckpointSyncDisabled  bool
 	CheckpointCheckInterval time.Duration
@@ -118,6 +120,7 @@ func (worker *Storage) startNode() error {
 		workerClientPort(worker.clientPort).
 		workerP2pPort(worker.p2pPort).
 		workerStorageEnabled().
+		workerStoragePublicRPCEnabled(!worker.disablePublicRPC).
 		workerStorageDebugIgnoreApplies(worker.ignoreApplies).
 		workerStorageDebugDisableCheckpointSync(worker.checkpointSyncDisabled).
 		workerStorageCheckpointCheckInterval(worker.checkpointCheckInterval).
@@ -204,6 +207,7 @@ func (net *Network) NewStorage(cfg *StorageCfg) (*Storage, error) {
 		entity:                  cfg.Entity,
 		sentryIndices:           cfg.SentryIndices,
 		disableCertRotation:     cfg.DisableCertRotation,
+		disablePublicRPC:        cfg.DisablePublicRPC,
 		ignoreApplies:           cfg.IgnoreApplies,
 		checkpointSyncDisabled:  cfg.CheckpointSyncDisabled,
 		checkpointCheckInterval: cfg.CheckpointCheckInterval,

@@ -11,6 +11,9 @@ import (
 var (
 	executorCommitteePolicy = &committee.AccessPolicy{
 		Actions: []accessctl.Action{
+			accessctl.Action(api.MethodSyncGet.FullName()),
+			accessctl.Action(api.MethodSyncGetPrefixes.FullName()),
+			accessctl.Action(api.MethodSyncIterate.FullName()),
 			accessctl.Action(api.MethodApply.FullName()),
 			accessctl.Action(api.MethodApplyBatch.FullName()),
 		},
@@ -20,16 +23,16 @@ var (
 	// sync-up.
 	storageNodesPolicy = &committee.AccessPolicy{
 		Actions: []accessctl.Action{
-			accessctl.Action(api.MethodGetDiff.FullName()),
-			accessctl.Action(api.MethodGetCheckpoints.FullName()),
-			accessctl.Action(api.MethodGetCheckpointChunk.FullName()),
+			accessctl.Action(api.MethodSyncGet.FullName()),
+			accessctl.Action(api.MethodSyncGetPrefixes.FullName()),
+			accessctl.Action(api.MethodSyncIterate.FullName()),
 		},
 	}
 	sentryNodesPolicy = &committee.AccessPolicy{
 		Actions: []accessctl.Action{
-			accessctl.Action(api.MethodGetDiff.FullName()),
-			accessctl.Action(api.MethodGetCheckpoints.FullName()),
-			accessctl.Action(api.MethodGetCheckpointChunk.FullName()),
+			accessctl.Action(api.MethodSyncGet.FullName()),
+			accessctl.Action(api.MethodSyncGetPrefixes.FullName()),
+			accessctl.Action(api.MethodSyncIterate.FullName()),
 			accessctl.Action(api.MethodApply.FullName()),
 			accessctl.Action(api.MethodApplyBatch.FullName()),
 		},

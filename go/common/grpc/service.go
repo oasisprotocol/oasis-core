@@ -26,6 +26,11 @@ type NamespaceExtractorFunc func(ctx context.Context, req interface{}) (common.N
 // a specific request. In case an error is returned the request is aborted.
 type AccessControlFunc func(ctx context.Context, req interface{}) (bool, error)
 
+// AccessControlAlways is a utility AccessControlFunc that enables access control for every request.
+func AccessControlAlways(ctx context.Context, req interface{}) (bool, error) {
+	return true, nil
+}
+
 // ServiceNameFromMethod extract service name from method name.
 func ServiceNameFromMethod(methodName string) ServiceName {
 	substrs := strings.Split(methodName, "/")
