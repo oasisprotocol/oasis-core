@@ -20,12 +20,7 @@ import (
 )
 
 func (app *schedulerApplication) InitChain(ctx *abciAPI.Context, req types.RequestInitChain, doc *genesis.Document) error {
-	baseEpoch, err := app.state.GetBaseEpoch()
-	if err != nil {
-		return fmt.Errorf("tendermint/scheduler: couldn't get base epoch: %w", err)
-	}
-	app.baseEpoch = baseEpoch
-
+	var err error
 	state := schedulerState.NewMutableState(ctx.State())
 	if err = state.SetConsensusParameters(ctx, &doc.Scheduler.Parameters); err != nil {
 		return fmt.Errorf("failed to set consensus parameters: %w", err)

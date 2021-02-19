@@ -23,6 +23,7 @@ import (
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
 	cmdCommon "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common"
 	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
+	scheduler "github.com/oasisprotocol/oasis-core/go/scheduler/api"
 	staking "github.com/oasisprotocol/oasis-core/go/staking/api"
 )
 
@@ -56,7 +57,6 @@ func getRuntime(entityID signature.PublicKey, id common.Namespace) *registry.Run
 			GroupSize:    1,
 			RoundTimeout: 5,
 			MaxMessages:  32,
-			MinPoolSize:  1,
 		},
 		TxnScheduler: registry.TxnSchedulerParameters{
 			Algorithm:         "simple",
@@ -70,10 +70,25 @@ func getRuntime(entityID signature.PublicKey, id common.Namespace) *registry.Run
 			MinWriteReplication:     1,
 			MaxApplyWriteLogEntries: 100_000,
 			MaxApplyOps:             2,
-			MinPoolSize:             1,
 		},
 		AdmissionPolicy: registry.RuntimeAdmissionPolicy{
 			AnyNode: &registry.AnyNodeRuntimeAdmissionPolicy{},
+		},
+		Constraints: map[scheduler.CommitteeKind]map[scheduler.Role]registry.SchedulingConstraints{
+			scheduler.KindComputeExecutor: {
+				scheduler.RoleWorker: {
+					MinPoolSize: &registry.MinPoolSizeConstraint{
+						Limit: 1,
+					},
+				},
+			},
+			scheduler.KindStorage: {
+				scheduler.RoleWorker: {
+					MinPoolSize: &registry.MinPoolSizeConstraint{
+						Limit: 1,
+					},
+				},
+			},
 		},
 		GovernanceModel: registry.GovernanceEntity,
 	}

@@ -34,6 +34,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/oasis/cli"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/scenario"
 	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
+	scheduler "github.com/oasisprotocol/oasis-core/go/scheduler/api"
 	staking "github.com/oasisprotocol/oasis-core/go/staking/api"
 )
 
@@ -619,7 +620,6 @@ func (sc *registryCLIImpl) testRuntime(ctx context.Context, childEnv *env.Env, c
 			GroupBackupSize:   2,
 			AllowedStragglers: 1,
 			RoundTimeout:      5,
-			MinPoolSize:       3, // GroupSize + GroupBackupSize
 		},
 		TxnScheduler: registry.TxnSchedulerParameters{
 			Algorithm:         registry.TxnSchedulerSimple,
@@ -633,12 +633,36 @@ func (sc *registryCLIImpl) testRuntime(ctx context.Context, childEnv *env.Env, c
 			MinWriteReplication:     9,
 			MaxApplyWriteLogEntries: 10,
 			MaxApplyOps:             11,
-			MinPoolSize:             9,
 		},
 		AdmissionPolicy: registry.RuntimeAdmissionPolicy{
 			EntityWhitelist: &registry.EntityWhitelistRuntimeAdmissionPolicy{
 				Entities: map[signature.PublicKey]registry.EntityWhitelistConfig{
 					testEntity.ID: {},
+				},
+			},
+		},
+		Constraints: map[scheduler.CommitteeKind]map[scheduler.Role]registry.SchedulingConstraints{
+			scheduler.KindComputeExecutor: {
+				scheduler.RoleWorker: {
+					MinPoolSize: &registry.MinPoolSizeConstraint{
+						Limit: 1,
+					},
+					ValidatorSet: &registry.ValidatorSetConstraint{},
+				},
+				scheduler.RoleBackupWorker: {
+					MinPoolSize: &registry.MinPoolSizeConstraint{
+						Limit: 2,
+					},
+				},
+			},
+			scheduler.KindStorage: {
+				scheduler.RoleWorker: {
+					MinPoolSize: &registry.MinPoolSizeConstraint{
+						Limit: 9,
+					},
+					MaxNodes: &registry.MaxNodesConstraint{
+						Limit: 1,
+					},
 				},
 			},
 		},

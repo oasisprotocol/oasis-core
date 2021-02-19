@@ -11,6 +11,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/env"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/log"
 	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
+	scheduler "github.com/oasisprotocol/oasis-core/go/scheduler/api"
 	storage "github.com/oasisprotocol/oasis-core/go/storage/api"
 )
 
@@ -208,8 +209,9 @@ type RuntimeFixture struct { // nolint: maligned
 	TxnScheduler registry.TxnSchedulerParameters `json:"txn_scheduler"`
 	Storage      registry.StorageParameters      `json:"storage"`
 
-	AdmissionPolicy registry.RuntimeAdmissionPolicy   `json:"admission_policy"`
-	Staking         registry.RuntimeStakingParameters `json:"staking,omitempty"`
+	AdmissionPolicy registry.RuntimeAdmissionPolicy                                               `json:"admission_policy"`
+	Constraints     map[scheduler.CommitteeKind]map[scheduler.Role]registry.SchedulingConstraints `json:"constraints,omitempty"`
+	Staking         registry.RuntimeStakingParameters                                             `json:"staking,omitempty"`
 
 	GovernanceModel registry.RuntimeGovernanceModel `json:"governance_model"`
 

@@ -19,16 +19,17 @@ import (
 
 var (
 	// Permutations generated in the epoch 2 election are
-	// executor:                   3 (w+s), 0 (w), 2 (b), 1 (i)
-	// storage (default fixture):  0   (w), 1 (w), 2 (i), 3 (i)
+	// executor worker:            1 (w+s), 3 (w), 0 (-), 2 (-)
+	// executor backup worker:     0   (b), 3 (-), 2 (-), 1 (-)
+	// storage worker:             0   (w), 1 (w)
 	// w = worker and not scheduler in first round
 	// w+s = worker and scheduler in first round
 	// b = backup
-	// i = invalid
+	// - = not elected for this role
 	//
 	//
-	// For executor scripts, it suffices to be index 0.
-	// For executor and scheduler scripts, it suffices to be index 3.
+	// For executor scripts, it suffices to be index 3.
+	// For executor and scheduler scripts, it suffices to be index 1.
 	// For storage worker scripts suffices to be index 0.
 
 	// ByzantineExecutorHonest is the byzantine executor honest scenario.
@@ -45,7 +46,7 @@ var (
 		"executor-scheduler-honest",
 		"executor",
 		nil,
-		oasis.ByzantineSlot3IdentitySeed,
+		oasis.ByzantineSlot1IdentitySeed,
 		nil,
 		[]string{
 			"--" + byzantine.CfgSchedulerRoleExpected,
@@ -81,7 +82,7 @@ var (
 			oasis.LogAssertTimeouts(),
 			oasis.LogAssertExecutionDiscrepancyDetected(),
 		},
-		oasis.ByzantineSlot3IdentitySeed,
+		oasis.ByzantineSlot1IdentitySeed,
 		nil,
 		[]string{
 			"--" + byzantine.CfgSchedulerRoleExpected,
@@ -115,7 +116,7 @@ var (
 			oasis.LogAssertTimeouts(),
 			oasis.LogAssertExecutionDiscrepancyDetected(),
 		},
-		oasis.ByzantineSlot3IdentitySeed,
+		oasis.ByzantineSlot1IdentitySeed,
 		nil,
 		[]string{
 			"--" + byzantine.CfgSchedulerRoleExpected,
@@ -150,7 +151,7 @@ var (
 			oasis.LogAssertTimeouts(),
 			oasis.LogAssertExecutionDiscrepancyDetected(),
 		},
-		oasis.ByzantineSlot3IdentitySeed,
+		oasis.ByzantineSlot1IdentitySeed,
 		nil,
 		[]string{
 			"--" + byzantine.CfgSchedulerRoleExpected,

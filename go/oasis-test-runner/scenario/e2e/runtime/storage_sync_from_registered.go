@@ -11,6 +11,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/env"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/oasis"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/scenario"
+	scheduler "github.com/oasisprotocol/oasis-core/go/scheduler/api"
 	"github.com/oasisprotocol/oasis-core/go/storage/database"
 )
 
@@ -48,7 +49,7 @@ func (sc *storageSyncFromRegisteredImpl) Fixture() (*oasis.NetworkFixture, error
 	// be in the committee.
 	f.Network.SetMockEpoch()
 	f.Runtimes[1].Storage.GroupSize = 1
-	f.Runtimes[1].Storage.MinPoolSize = f.Runtimes[1].Storage.GroupSize
+	f.Runtimes[1].Constraints[scheduler.KindStorage][scheduler.RoleWorker].MinPoolSize.Limit = 1
 	f.Runtimes[1].Storage.MinWriteReplication = 1
 
 	// Configure runtime for storage checkpointing.

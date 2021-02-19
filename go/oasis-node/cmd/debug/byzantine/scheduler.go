@@ -55,17 +55,20 @@ func schedulerGetCommittee(ht *honestTendermint, height int64, kind scheduler.Co
 }
 
 func schedulerCheckScheduled(committee *scheduler.Committee, nodeID signature.PublicKey, role scheduler.Role) error {
+	var roles []scheduler.Role
 	for _, member := range committee.Members {
 		if !member.PublicKey.Equal(nodeID) {
 			continue
 		}
 
-		if member.Role != role {
-			return fmt.Errorf("we're scheduled as %s, expected %s", member.Role, role)
+		if member.Role == role {
+			// All good.
+			return nil
 		}
-
-		// All good.
-		return nil
+		roles = append(roles, role)
+	}
+	if len(roles) > 0 {
+		return fmt.Errorf("we're scheduled as %s, expected %s", fmt.Sprintf("%+v", roles), role)
 	}
 	if role == scheduler.RoleInvalid {
 		// It's expected that we're not scheduled.

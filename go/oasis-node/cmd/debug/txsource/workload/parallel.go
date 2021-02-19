@@ -26,7 +26,7 @@ var Parallel = &parallel{
 }
 
 const (
-	parallelSendWaitTimeoutInterval = 30 * time.Second
+	parallelSendWaitTimeoutInterval = 60 * time.Second
 	parallelSendTimeoutInterval     = 60 * time.Second
 	parallelConcurency              = 200
 	parallelTxTransferAmount        = 100

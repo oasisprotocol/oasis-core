@@ -310,7 +310,7 @@ func (p *Pool) addOpenExecutorCommitment( // nolint: gocyclo
 		}
 
 		// Check if the header refers to merkle roots in storage.
-		if uint64(len(body.StorageSignatures)) < p.Runtime.Storage.MinWriteReplication {
+		if len(body.StorageSignatures) < int(p.Runtime.Storage.MinWriteReplication) {
 			logger.Debug("executor commitment doesn't have enough storage receipts",
 				"node_id", id,
 				"min_write_replication", p.Runtime.Storage.MinWriteReplication,

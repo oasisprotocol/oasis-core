@@ -118,9 +118,10 @@ func SchedulerImplementationTests(t *testing.T, name string, backend api.Backend
 	// Re-register the runtime with less nodes.
 	rt.Runtime.Executor.GroupSize = 2
 	rt.Runtime.Executor.GroupBackupSize = 1
-	rt.Runtime.Executor.MinPoolSize = 3
+	rt.Runtime.Constraints[api.KindComputeExecutor][api.RoleWorker].MinPoolSize.Limit = 2
+	rt.Runtime.Constraints[api.KindComputeExecutor][api.RoleBackupWorker].MinPoolSize.Limit = 1
 	rt.Runtime.Storage.GroupSize = 1
-	rt.Runtime.Storage.MinPoolSize = 1
+	rt.Runtime.Constraints[api.KindStorage][api.RoleWorker].MinPoolSize.Limit = 1
 	rt.Runtime.Storage.MinWriteReplication = 1
 	rt.MustRegister(t, consensus.Registry(), consensus)
 
@@ -154,12 +155,9 @@ func requireValidCommitteeMembers(t *testing.T, committee *api.Committee, runtim
 	}
 
 	var workers, backups int
-	seenMap := make(map[signature.PublicKey]bool)
 	for _, member := range committee.Members {
 		id := member.PublicKey
 		require.NotNil(nodeMap[id], "member is a node")
-		require.False(seenMap[id], "member is unique")
-		seenMap[id] = true
 
 		switch member.Role {
 		case api.RoleWorker:

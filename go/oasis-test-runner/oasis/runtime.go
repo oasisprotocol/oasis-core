@@ -16,6 +16,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/env"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/oasis/cli"
 	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
+	scheduler "github.com/oasisprotocol/oasis-core/go/scheduler/api"
 	storage "github.com/oasisprotocol/oasis-core/go/storage/api"
 )
 
@@ -62,6 +63,7 @@ type RuntimeCfg struct { // nolint: maligned
 	Storage      registry.StorageParameters
 
 	AdmissionPolicy registry.RuntimeAdmissionPolicy
+	Constraints     map[scheduler.CommitteeKind]map[scheduler.Role]registry.SchedulingConstraints
 	Staking         registry.RuntimeStakingParameters
 
 	GovernanceModel registry.RuntimeGovernanceModel
@@ -132,6 +134,7 @@ func (net *Network) NewRuntime(cfg *RuntimeCfg) (*Runtime, error) {
 		TxnScheduler:    cfg.TxnScheduler,
 		Storage:         cfg.Storage,
 		AdmissionPolicy: cfg.AdmissionPolicy,
+		Constraints:     cfg.Constraints,
 		Staking:         cfg.Staking,
 		GovernanceModel: cfg.GovernanceModel,
 	}

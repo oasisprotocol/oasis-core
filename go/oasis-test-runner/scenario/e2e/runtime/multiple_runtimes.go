@@ -12,6 +12,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/oasis"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/scenario"
 	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
+	scheduler "github.com/oasisprotocol/oasis-core/go/scheduler/api"
 )
 
 const (
@@ -33,7 +34,7 @@ var MultipleRuntimes = func() scenario.Scenario {
 	sc.Flags.Int(cfgNumComputeRuntimes, 2, "number of compute runtimes per worker")
 	sc.Flags.Int(cfgNumComputeRuntimeTxns, 2, "number of transactions to perform")
 	sc.Flags.Int(cfgNumComputeWorkers, 2, "number of workers to initiate")
-	sc.Flags.Int(cfgExecutorGroupSize, 2, "number of executor workers in committee")
+	sc.Flags.Uint16(cfgExecutorGroupSize, 2, "number of executor workers in committee")
 
 	return sc
 }()
@@ -76,7 +77,7 @@ func (sc *multipleRuntimesImpl) Fixture() (*oasis.NetworkFixture, error) {
 
 	// Add some more consecutive runtime IDs with the same binary.
 	numComputeRuntimes, _ := sc.Flags.GetInt(cfgNumComputeRuntimes)
-	executorGroupSize, _ := sc.Flags.GetInt(cfgExecutorGroupSize)
+	executorGroupSize, _ := sc.Flags.GetUint16(cfgExecutorGroupSize)
 	for i := 1; i <= numComputeRuntimes; i++ {
 		// Increase LSB by 1.
 		id[len(id)-1]++
@@ -87,10 +88,9 @@ func (sc *multipleRuntimesImpl) Fixture() (*oasis.NetworkFixture, error) {
 			Keymanager: 0,
 			Binaries:   runtimeBinaries,
 			Executor: registry.ExecutorParameters{
-				GroupSize:       uint64(executorGroupSize),
+				GroupSize:       executorGroupSize,
 				GroupBackupSize: 0,
 				RoundTimeout:    20,
-				MinPoolSize:     uint64(executorGroupSize),
 			},
 			TxnScheduler: registry.TxnSchedulerParameters{
 				Algorithm:         registry.TxnSchedulerSimple,
@@ -104,10 +104,25 @@ func (sc *multipleRuntimesImpl) Fixture() (*oasis.NetworkFixture, error) {
 				MinWriteReplication:     1,
 				MaxApplyWriteLogEntries: 100_000,
 				MaxApplyOps:             2,
-				MinPoolSize:             1,
 			},
 			AdmissionPolicy: registry.RuntimeAdmissionPolicy{
 				AnyNode: &registry.AnyNodeRuntimeAdmissionPolicy{},
+			},
+			Constraints: map[scheduler.CommitteeKind]map[scheduler.Role]registry.SchedulingConstraints{
+				scheduler.KindComputeExecutor: {
+					scheduler.RoleWorker: {
+						MinPoolSize: &registry.MinPoolSizeConstraint{
+							Limit: executorGroupSize,
+						},
+					},
+				},
+				scheduler.KindStorage: {
+					scheduler.RoleWorker: {
+						MinPoolSize: &registry.MinPoolSizeConstraint{
+							Limit: 1,
+						},
+					},
+				},
 			},
 			GovernanceModel: registry.GovernanceEntity,
 		}

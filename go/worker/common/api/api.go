@@ -14,10 +14,10 @@ type Status struct {
 	// LastCommitteeUpdateHeight is the consensus layer height of the last committee update.
 	LastCommitteeUpdateHeight int64 `json:"last_committee_update_height"`
 
-	// ExecutorRole is the node's role in the executor committee.
-	ExecutorRole scheduler.Role `json:"executor_role"`
-	// StorageRole is the node's role in the storage committee.
-	StorageRole scheduler.Role `json:"storage_role"`
+	// ExecutorRoles are the node's roles in the executor committee.
+	ExecutorRoles []scheduler.Role `json:"executor_roles"`
+	// StorageRole are the node's roles in the storage committee.
+	StorageRoles []scheduler.Role `json:"storage_roles"`
 
 	// IsTransactionScheduler indicates whether the node is a transaction scheduler in this round.
 	IsTransactionScheduler bool `json:"is_txn_scheduler"`

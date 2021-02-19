@@ -40,7 +40,7 @@ const (
 	// Ratio of remove requests that should delete an existing key.
 	runtimeRemoveExistingRatio = 0.5
 
-	runtimeRequestTimeout = 120 * time.Second
+	runtimeRequestTimeout = 240 * time.Second
 )
 
 // Possible request types.

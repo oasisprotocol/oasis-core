@@ -32,6 +32,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/oasis"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/scenario"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/scenario/e2e"
+	scheduler "github.com/oasisprotocol/oasis-core/go/scheduler/api"
 	staking "github.com/oasisprotocol/oasis-core/go/staking/api"
 	"github.com/oasisprotocol/oasis-core/go/storage/database"
 )
@@ -417,26 +418,28 @@ func (sc *txSourceImpl) Fixture() (*oasis.NetworkFixture, error) {
 	f.Runtimes[1].Storage.CheckpointChunkSize = 1024 * 1024
 
 	// Storage committee.
-	f.Runtimes[1].Storage.GroupSize = uint64(sc.numStorageNodes)
-	f.Runtimes[1].Storage.MinPoolSize = f.Runtimes[1].Storage.GroupSize
+	f.Runtimes[1].Storage.GroupSize = uint16(sc.numStorageNodes)
+	f.Runtimes[1].Constraints[scheduler.KindStorage][scheduler.RoleWorker].MinPoolSize.Limit = uint16(sc.numStorageNodes)
 	f.Runtimes[1].Storage.MinWriteReplication = f.Runtimes[1].Storage.GroupSize
 
 	// Executor committee.
 	f.Runtimes[1].Executor.GroupBackupSize = 1
-	f.Runtimes[1].Executor.GroupSize = uint64(sc.numComputeNodes) -
+	f.Runtimes[1].Executor.GroupSize = uint16(sc.numComputeNodes) -
 		f.Runtimes[1].Executor.GroupBackupSize
-	f.Runtimes[1].Executor.MinPoolSize = uint64(sc.numComputeNodes)
+	f.Runtimes[1].Constraints[scheduler.KindComputeExecutor][scheduler.RoleWorker].MinPoolSize.Limit = f.Runtimes[1].Executor.GroupSize
+	f.Runtimes[1].Constraints[scheduler.KindComputeExecutor][scheduler.RoleBackupWorker].MinPoolSize.Limit = f.Runtimes[1].Executor.GroupBackupSize
 
 	if sc.nodeLongRestartInterval > 0 {
 		// One storage node could be offline.
 		f.Runtimes[1].Storage.GroupSize--
-		f.Runtimes[1].Storage.MinPoolSize--
+		f.Runtimes[1].Constraints[scheduler.KindStorage][scheduler.RoleWorker].MinPoolSize.Limit--
 		// Storage node that is part of the committee could be offline.
 		f.Runtimes[1].Storage.MinWriteReplication = f.Runtimes[1].Storage.GroupSize - 1
 
 		// One executor can be offline.
 		f.Runtimes[1].Executor.GroupSize--
-		f.Runtimes[1].Executor.MinPoolSize--
+		f.Runtimes[1].Constraints[scheduler.KindComputeExecutor][scheduler.RoleWorker].MinPoolSize.Limit--
+		f.Runtimes[1].Constraints[scheduler.KindComputeExecutor][scheduler.RoleBackupWorker].MinPoolSize.Limit--
 		// Allow one straggler to handle the case where the backup and primary worker are offline
 		// at the same time.
 		f.Runtimes[1].Executor.AllowedStragglers = 1
