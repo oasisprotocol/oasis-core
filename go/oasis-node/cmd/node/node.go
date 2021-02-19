@@ -552,10 +552,8 @@ func (n *Node) dumpGenesis(ctx context.Context, blockHeight int64, epoch beacon.
 	}
 
 	filename := filepath.Join(exportsDir, fmt.Sprintf("genesis-%s-at-%d.json", doc.ChainID, doc.Height))
-	if nerr := doc.WriteFileJSON(filename); nerr != nil {
-		if err := common.Mkdir(exportsDir); err != nil {
-			return fmt.Errorf("dumpGenesis: failed to dump write genesis %w", err)
-		}
+	if err := doc.WriteFileJSON(filename); err != nil {
+		return fmt.Errorf("dumpGenesis: failed to write genesis file: %w", err)
 	}
 
 	return nil
