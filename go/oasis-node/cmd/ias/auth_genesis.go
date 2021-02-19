@@ -51,12 +51,12 @@ func newGenesisAuthenticator() (iasProxy.Authenticator, error) {
 		enclaves: newEnclaveStore(),
 	}
 	for _, rt := range doc.Registry.SuspendedRuntimes {
-		if err = auth.enclaves.addRuntime(rt); err != nil {
+		if _, err = auth.enclaves.addRuntime(rt); err != nil {
 			return nil, err
 		}
 	}
 	for _, rt := range doc.Registry.Runtimes {
-		if err = auth.enclaves.addRuntime(rt); err != nil {
+		if _, err = auth.enclaves.addRuntime(rt); err != nil {
 			return nil, err
 		}
 	}
