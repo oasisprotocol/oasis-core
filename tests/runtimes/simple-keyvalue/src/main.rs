@@ -30,7 +30,9 @@ use oasis_core_runtime::{
     version_from_cargo, Protocol, RpcDemux, RpcDispatcher, TxnDispatcher, TxnMethDispatcher,
 };
 use simple_keymanager::trusted_policy_signers;
-use simple_keyvalue_api::{with_api, Key, KeyValue, Transfer, UpdateRuntime, Withdraw};
+use simple_keyvalue_api::{
+    with_api, AddEscrow, Key, KeyValue, ReclaimEscrow, Transfer, UpdateRuntime, Withdraw,
+};
 
 /// Key format used for transaction artifacts.
 #[derive(Debug)]
@@ -111,6 +113,50 @@ fn consensus_transfer(args: &Transfer, ctx: &mut TxnContext) -> Result<()> {
             IoContext::create_child(&ctx.io_ctx),
             &PendingMessagesKeyFormat { index }.encode(),
             b"transfer",
+        );
+    });
+
+    Ok(())
+}
+
+/// Add escrow from the runtime account to an account in the consensus layer.
+fn consensus_add_escrow(args: &AddEscrow, ctx: &mut TxnContext) -> Result<()> {
+    if ctx.check_only {
+        return Err(CheckOnlySuccess::default().into());
+    }
+
+    StorageContext::with_current(|mkvs, _untrusted_local| {
+        let index = ctx.emit_message(Message::Staking {
+            v: 0,
+            msg: StakingMessage::AddEscrow(args.escrow.clone()),
+        });
+
+        mkvs.insert(
+            IoContext::create_child(&ctx.io_ctx),
+            &PendingMessagesKeyFormat { index }.encode(),
+            b"add_escrow",
+        );
+    });
+
+    Ok(())
+}
+
+/// Reclaim escrow to the runtime account.
+fn consensus_reclaim_escrow(args: &ReclaimEscrow, ctx: &mut TxnContext) -> Result<()> {
+    if ctx.check_only {
+        return Err(CheckOnlySuccess::default().into());
+    }
+
+    StorageContext::with_current(|mkvs, _untrusted_local| {
+        let index = ctx.emit_message(Message::Staking {
+            v: 0,
+            msg: StakingMessage::ReclaimEscrow(args.reclaim_escrow.clone()),
+        });
+
+        mkvs.insert(
+            IoContext::create_child(&ctx.io_ctx),
+            &PendingMessagesKeyFormat { index }.encode(),
+            b"reclaim_escrow",
         );
     });
 
@@ -381,6 +427,14 @@ impl BlockHandler {
 
                 Some(b"transfer") => {
                     // Transfer.
+                }
+
+                Some(b"add_escrow") => {
+                    // AddEscrow.
+                }
+
+                Some(b"reclaim_escrow") => {
+                    // ReclaimEscrow.
                 }
 
                 meta => panic!("unexpected message metadata: {:?}", meta),

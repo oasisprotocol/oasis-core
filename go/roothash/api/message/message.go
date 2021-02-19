@@ -42,20 +42,36 @@ func MessagesHash(msgs []Message) (h hash.Hash) {
 type StakingMessage struct {
 	cbor.Versioned
 
-	Transfer *staking.Transfer `json:"transfer,omitempty"`
-	Withdraw *staking.Withdraw `json:"withdraw,omitempty"`
+	Transfer      *staking.Transfer      `json:"transfer,omitempty"`
+	Withdraw      *staking.Withdraw      `json:"withdraw,omitempty"`
+	AddEscrow     *staking.Escrow        `json:"add_escrow,omitempty"`
+	ReclaimEscrow *staking.ReclaimEscrow `json:"reclaim_escrow,omitempty"`
 }
 
 // ValidateBasic performs basic validation of the runtime message.
 func (sm *StakingMessage) ValidateBasic() error {
-	switch {
-	case sm.Transfer != nil && sm.Withdraw != nil:
-		return fmt.Errorf("staking runtime message has multiple fields set")
-	case sm.Transfer != nil:
+	var setFields uint8
+	if sm.Transfer != nil {
 		// No validation at this time.
-		return nil
-	case sm.Withdraw != nil:
+		setFields++
+	}
+	if sm.Withdraw != nil {
 		// No validation at this time.
+		setFields++
+	}
+	if sm.AddEscrow != nil {
+		// No validation at this time.
+		setFields++
+	}
+	if sm.ReclaimEscrow != nil {
+		// No validation at this time.
+		setFields++
+	}
+	switch setFields {
+	case 0:
+		return fmt.Errorf("staking runtime message has no fields set")
+	case 1:
+		// Ok.
 		return nil
 	default:
 		return fmt.Errorf("staking runtime message has no fields set")

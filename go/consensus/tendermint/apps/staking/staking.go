@@ -120,6 +120,10 @@ func (app *stakingApplication) ExecuteMessage(ctx *api.Context, kind, msg interf
 			return app.transfer(ctx, state, m.Transfer)
 		case m.Withdraw != nil:
 			return app.withdraw(ctx, state, m.Withdraw)
+		case m.AddEscrow != nil:
+			return app.addEscrow(ctx, state, m.AddEscrow)
+		case m.ReclaimEscrow != nil:
+			return app.reclaimEscrow(ctx, state, m.ReclaimEscrow)
 		default:
 			return staking.ErrInvalidArgument
 		}

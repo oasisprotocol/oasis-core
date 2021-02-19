@@ -991,6 +991,10 @@ type ConsensusParameters struct { // nolint: maligned
 	DisableDelegation      bool             `json:"disable_delegation,omitempty"`
 	UndisableTransfersFrom map[Address]bool `json:"undisable_transfers_from,omitempty"`
 
+	// AllowEscrowMessages can be used to allow runtimes to perform AddEscrow
+	// and ReclaimEscrow via runtime messages.
+	AllowEscrowMessages bool `json:"allow_escrow_messages,omitempty"`
+
 	// MaxAllowances is the maximum number of allowances an account can have. Zero means disabled.
 	MaxAllowances uint32 `json:"max_allowances,omitempty"`
 

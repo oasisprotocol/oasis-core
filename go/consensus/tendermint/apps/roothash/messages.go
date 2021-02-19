@@ -15,6 +15,8 @@ func (app *rootHashApplication) processRuntimeMessages(
 	rtState *roothash.RuntimeState,
 	msgs []message.Message,
 ) error {
+	ctx = ctx.WithMessageExecution()
+	defer ctx.Close()
 	ctx = ctx.WithCallerAddress(staking.NewRuntimeAddress(rtState.Runtime.ID))
 	defer ctx.Close()
 

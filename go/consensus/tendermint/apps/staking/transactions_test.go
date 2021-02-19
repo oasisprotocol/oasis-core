@@ -617,3 +617,62 @@ func TestAddEscrow(t *testing.T) {
 		require.Equal(tc.err, err, tc.msg)
 	}
 }
+
+func TestAllowEscrowMessages(t *testing.T) {
+	require := require.New(t)
+	var err error
+
+	now := time.Unix(1580461674, 0)
+	appState := abciAPI.NewMockApplicationState(&abciAPI.MockApplicationStateConfig{})
+	ctx := appState.NewContext(abciAPI.ContextDeliverTx, now)
+	defer ctx.Close()
+
+	stakeState := stakingState.NewMutableState(ctx.State())
+	app := &stakingApplication{
+		state: appState,
+	}
+	err = stakeState.SetConsensusParameters(ctx, &staking.ConsensusParameters{
+		MaxAllowances: 1,
+	})
+	require.NoError(err, "setting staking consensus parameters should not error")
+
+	pk1 := signature.NewPublicKey("aaafffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff")
+	addr1 := staking.NewAddress(pk1)
+
+	err = stakeState.SetAccount(ctx, addr1, &staking.Account{
+		General: staking.GeneralAccount{
+			Balance: *quantity.NewFromUint64(50),
+		},
+	})
+	require.NoError(err, "SetAccount")
+
+	// Add escrow transaction should be allowed.
+	ctx.SetTxSigner(pk1)
+	err = app.addEscrow(ctx, stakeState, &staking.Escrow{Account: addr1, Amount: *quantity.NewFromUint64(10)})
+	require.NoError(err, "add escrow transaction should work")
+
+	// Reclaim escrow transaction should be allowed.
+	err = app.reclaimEscrow(ctx, stakeState, &staking.ReclaimEscrow{Account: addr1, Shares: *quantity.NewFromUint64(1)})
+	require.NoError(err, "reclaim escrow transaction should work")
+
+	ctx = ctx.WithMessageExecution()
+	// Add escrow message should not be allowed.
+	err = app.addEscrow(ctx, stakeState, &staking.Escrow{Account: addr1, Amount: *quantity.NewFromUint64(10)})
+	require.Equal(staking.ErrForbidden, err, "add escrow message should be denied")
+
+	// Reclaim escrow message should not be allowed.
+	err = app.reclaimEscrow(ctx, stakeState, &staking.ReclaimEscrow{Account: addr1, Shares: *quantity.NewFromUint64(1)})
+	require.Error(staking.ErrForbidden, err, "reclaim escrow transaction should work")
+
+	err = stakeState.SetConsensusParameters(ctx, &staking.ConsensusParameters{
+		AllowEscrowMessages: true,
+	})
+	require.NoError(err, "setting staking consensus parameters should not error")
+
+	// Escrow message should be allowed.
+	err = app.addEscrow(ctx, stakeState, &staking.Escrow{Account: addr1, Amount: *quantity.NewFromUint64(10)})
+	require.NoError(err, "add escrow message should be allowed")
+
+	err = app.reclaimEscrow(ctx, stakeState, &staking.ReclaimEscrow{Account: addr1, Shares: *quantity.NewFromUint64(1)})
+	require.NoError(err, "reclaim escrow message should work")
+}

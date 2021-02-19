@@ -185,6 +185,11 @@ func (app *stakingApplication) addEscrow(ctx *api.Context, state *stakingState.M
 		return err
 	}
 
+	// Check if escrow messages are allowed.
+	if ctx.IsMessageExecution() && !params.AllowEscrowMessages {
+		return staking.ErrForbidden
+	}
+
 	// Return early for simulation as we only need gas accounting.
 	if ctx.IsSimulation() {
 		return nil
@@ -285,6 +290,11 @@ func (app *stakingApplication) reclaimEscrow(ctx *api.Context, state *stakingSta
 	}
 	if err = ctx.Gas().UseGas(1, staking.GasOpReclaimEscrow, params.GasCosts); err != nil {
 		return err
+	}
+
+	// Check if escrow messages are allowed.
+	if ctx.IsMessageExecution() && !params.AllowEscrowMessages {
+		return staking.ErrForbidden
 	}
 
 	// Return early for simulation as we only need gas accounting.

@@ -49,6 +49,8 @@ func (nd *testMsgDispatcher) Publish(ctx *abciAPI.Context, kind, msg interface{}
 	gasCosts := transaction.Costs{
 		staking.GasOpTransfer:         1000,
 		staking.GasOpWithdraw:         2000,
+		staking.GasOpAddEscrow:        2000,
+		staking.GasOpReclaimEscrow:    2000,
 		registry.GasOpRegisterRuntime: 3000,
 	}
 
@@ -63,6 +65,16 @@ func (nd *testMsgDispatcher) Publish(ctx *abciAPI.Context, kind, msg interface{}
 			return nil
 		case m.Withdraw != nil:
 			if err := ctx.Gas().UseGas(1, staking.GasOpWithdraw, gasCosts); err != nil {
+				return err
+			}
+			return nil
+		case m.AddEscrow != nil:
+			if err := ctx.Gas().UseGas(1, staking.GasOpAddEscrow, gasCosts); err != nil {
+				return err
+			}
+			return nil
+		case m.ReclaimEscrow != nil:
+			if err := ctx.Gas().UseGas(1, staking.GasOpReclaimEscrow, gasCosts); err != nil {
 				return err
 			}
 			return nil
@@ -175,6 +187,10 @@ func TestMessagesGasEstimation(t *testing.T) {
 		{Staking: &message.StakingMessage{Transfer: &staking.Transfer{}}},
 		// Each withdraw message costs 2000 gas.
 		{Staking: &message.StakingMessage{Withdraw: &staking.Withdraw{}}},
+		// Each add escrow message costs 2000 gas.
+		{Staking: &message.StakingMessage{AddEscrow: &staking.Escrow{}}},
+		// Each reclaim escrow message costs 2000 gas.
+		{Staking: &message.StakingMessage{ReclaimEscrow: &staking.ReclaimEscrow{}}},
 		// Each update_runtime message costs 3000 gas.
 		{Registry: &message.RegistryMessage{UpdateRuntime: &registry.Runtime{}}},
 	}
@@ -224,7 +240,7 @@ func TestMessagesGasEstimation(t *testing.T) {
 
 	err = app.executorCommit(ctx, roothashState, cc)
 	require.NoError(err, "ExecutorCommit")
-	require.EqualValues(8000, ctx.Gas().GasUsed(), "gas amount should be correct")
+	require.EqualValues(12000, ctx.Gas().GasUsed(), "gas amount should be correct")
 }
 
 func TestEvidence(t *testing.T) {

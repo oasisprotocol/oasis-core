@@ -35,6 +35,18 @@ pub struct Transfer {
 }
 
 #[derive(Clone, Serialize, Deserialize)]
+pub struct AddEscrow {
+    pub nonce: u64,
+    pub escrow: staking::Escrow,
+}
+
+#[derive(Clone, Serialize, Deserialize)]
+pub struct ReclaimEscrow {
+    pub nonce: u64,
+    pub reclaim_escrow: staking::ReclaimEscrow,
+}
+
+#[derive(Clone, Serialize, Deserialize)]
 pub struct UpdateRuntime {
     pub update_runtime: registry::Runtime,
     // Nonce is ignored by the runtime itself and can be used to avoid duplicate
@@ -51,6 +63,12 @@ runtime_api! {
 
     // Transfer from the runtime account to another account in the consensus layer.
     pub fn consensus_transfer(Transfer) -> ();
+
+    // Add escrow from the runtime account to an account in the consensus layer.
+    pub fn consensus_add_escrow(AddEscrow) -> ();
+
+    // Reclaim escrow to the runtime account.
+    pub fn consensus_reclaim_escrow(ReclaimEscrow) -> ();
 
     // Update existing runtime with given descriptor.
     pub fn update_runtime(UpdateRuntime) -> ();
