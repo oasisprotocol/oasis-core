@@ -38,8 +38,17 @@ func (app *rootHashApplication) InitChain(ctx *abciAPI.Context, request types.Re
 		ctx.Logger().Info("InitChain: allocating per-runtime state",
 			"runtime", v.ID,
 		)
-		if err := app.onNewRuntime(ctx, v, &st); err != nil {
+		if err := app.onNewRuntime(ctx, v, &st, false); err != nil {
 			return fmt.Errorf("failed to initialize runtime %s state: %w", v.ID, err)
+		}
+	}
+	suspendedRuntimes, _ := regState.SuspendedRuntimes(ctx)
+	for _, v := range suspendedRuntimes {
+		ctx.Logger().Info("InitChain: allocating per-runtime state",
+			"runtime", v.ID,
+		)
+		if err := app.onNewRuntime(ctx, v, &st, true); err != nil {
+			return fmt.Errorf("failed to initialize (suspended) runtime %s state: %w", v.ID, err)
 		}
 	}
 
