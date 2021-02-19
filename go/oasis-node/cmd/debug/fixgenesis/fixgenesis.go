@@ -123,14 +123,15 @@ func doFixGenesis(cmd *cobra.Command, args []string) {
 	if shouldClose {
 		defer w.Close()
 	}
-	if raw, err = json.Marshal(newDoc); err != nil {
-		logger.Error("failed to marshal fixed genesis document into JSON",
+	canonJSON, err := newDoc.CanonicalJSON()
+	if err != nil {
+		logger.Error("failed to get canonical form of fixed genesis file",
 			"err", err,
 		)
 		os.Exit(1)
 	}
-	if _, err = w.Write(raw); err != nil {
-		logger.Error("failed to write new genesis file",
+	if _, err = w.Write(canonJSON); err != nil {
+		logger.Error("failed to write fixed genesis file",
 			"err", err,
 		)
 		os.Exit(1)

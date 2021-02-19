@@ -268,9 +268,15 @@ func doInitGenesis(cmd *cobra.Command, args []string) {
 		return
 	}
 
-	b, _ := json.MarshalIndent(doc, "", "  ")
-	if err := ioutil.WriteFile(f, b, 0o600); err != nil {
-		logger.Error("failed to save generated genesis document",
+	canonJSON, err := doc.CanonicalJSON()
+	if err != nil {
+		logger.Error("failed to get canonical form of genesis file",
+			"err", err,
+		)
+		return
+	}
+	if err := ioutil.WriteFile(f, canonJSON, 0o600); err != nil {
+		logger.Error("failed to write genesis file",
 			"err", err,
 		)
 		return
@@ -581,14 +587,14 @@ func doDumpGenesis(cmd *cobra.Command, args []string) {
 		defer w.Close()
 	}
 
-	data, err := json.MarshalIndent(doc, "", "  ")
+	canonJSON, err := doc.CanonicalJSON()
 	if err != nil {
-		logger.Error("failed to marshal genesis document into JSON",
+		logger.Error("failed to get canonical form of genesis file",
 			"err", err,
 		)
 		os.Exit(1)
 	}
-	if _, err = w.Write(data); err != nil {
+	if _, err = w.Write(canonJSON); err != nil {
 		logger.Error("failed to write genesis file",
 			"err", err,
 		)
@@ -607,46 +613,42 @@ func doCheckGenesis(cmd *cobra.Command, args []string) {
 		logger.Error("failed to open genesis file", "err", err)
 		os.Exit(1)
 	}
+	// NOTE: The genesis document sanity checks are performed inside the
+	// NewFileProvider() function.
 	doc, err := provider.GetGenesisDocument()
 	if err != nil {
 		logger.Error("failed to get genesis document", "err", err)
 		os.Exit(1)
 	}
 
-	err = doc.SanityCheck()
-	if err != nil {
-		logger.Error("genesis document sanity check failed", "err", err)
-		os.Exit(1)
-	}
-
-	// Load raw genesis file.
-	rawFile, err := ioutil.ReadFile(filename)
+	// Load genesis file to check if it is in the canonical form.
+	actualGenesis, err := ioutil.ReadFile(filename)
 	if err != nil {
 		logger.Error("failed to read genesis file:", "err", err)
 		os.Exit(1)
 	}
-	// Create a marshalled genesis document in the canonical form with 2 space indents.
-	rawCanonical, err := json.MarshalIndent(doc, "", "  ")
+	// Get canonical form of the genesis document serialized into a file.
+	canonicalJSON, err := doc.CanonicalJSON()
 	if err != nil {
-		logger.Error("failed to marshal genesis document", "err", err)
+		logger.Error("failed to get canonical form of genesis file", "err", err)
 		os.Exit(1)
 	}
-	// Genesis file should equal the canonical form.
-	if !bytes.Equal(rawFile, rawCanonical) {
-		fileLines := strings.Split(string(rawFile), "\n")
-		if len(fileLines) > checkNotCanonicalLines {
-			fileLines = fileLines[:checkNotCanonicalLines]
+	// Actual genesis file should equal the canonical form.
+	if !bytes.Equal(actualGenesis, canonicalJSON) {
+		actualLines := strings.Split(string(actualGenesis), "\n")
+		if len(actualLines) > checkNotCanonicalLines {
+			actualLines = actualLines[:checkNotCanonicalLines]
 		}
-		canonicalLines := strings.Split(string(rawCanonical), "\n")
+		canonicalLines := strings.Split(string(canonicalJSON), "\n")
 		if len(canonicalLines) > checkNotCanonicalLines {
 			canonicalLines = canonicalLines[:checkNotCanonicalLines]
 		}
-		logger.Error("genesis document is not marshalled in the canonical form")
+		logger.Error("genesis file is not in the canonical form")
 		fmt.Fprintf(os.Stderr,
-			"Error: genesis document is not marshalled in the canonical form:\n"+
-				"\nActual marshalled genesis document (trimmed):\n%s\n\n... trimmed ...\n"+
-				"\nExpected marshalled genesis document (trimmed):\n%s\n\n... trimmed ...\n",
-			strings.Join(fileLines, "\n"), strings.Join(canonicalLines, "\n"),
+			"Error: genesis file is not in the canonical form:\n"+
+				"\nActual genesis file (trimmed):\n%s\n\n... trimmed ...\n"+
+				"\nExpected genesis file (trimmed):\n%s\n\n... trimmed ...\n",
+			strings.Join(actualLines, "\n"), strings.Join(canonicalLines, "\n"),
 		)
 		os.Exit(1)
 	}
