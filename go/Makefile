@@ -60,6 +60,11 @@ lint:
 	@$(ECHO) "$(CYAN)*** Running Go linters...$(OFF)"
 	@env -u GOPATH golangci-lint run --timeout 4m
 
+lint-mod-tidy:
+	@$(ECHO) "$(CYAN)*** Checking go mod tidy...$(OFF)"
+	@$(ENSURE_GIT_CLEAN)
+	@$(CHECK_GO_MOD_TIDY)
+
 # Test.
 test-targets := test-unit test-node
 
