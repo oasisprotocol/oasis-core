@@ -1,0 +1,48 @@
+# NOTE: This name appears in GitHub's Checks API and in workflow's status badge.
+name: ci-audit-rust
+
+# Trigger the workflow when:
+on:
+  # A push occurs to one of the matched branches.
+  push:
+    # XXX: Ideally, on the master branch we would only run this workflow if
+    # there are changes to the Cargo.toml or Cargo.local files (like for pull
+    # requests).
+    # However, this doesn't work when pushing a new 'stable/*' branch. The build
+    # on a new branch does not trigger unless there are changes compared to
+    # master on the filtered path.
+    # If this is ever fixed, or per branch filters are possible, bring back the
+    # path filter to only run this workflow if there are changes to the
+    # Cargo.toml or Cargo.local files.
+    branches:
+      - master
+      - stable/*
+  # Or when a pull request event occurs for a pull request against one of the
+  # matched branches and at least one modified file matches the configured
+  # paths.
+  pull_request:
+    branches:
+      - master
+      - stable/*
+    paths:
+      - '**/Cargo.toml'
+      - '**/Cargo.lock'
+  # Or every day at 04:00 UTC (for the default/master branch).
+  schedule:
+    - cron: "0 4 * * *"
+
+jobs:
+
+  audit-rust:
+    # NOTE: This name appears in GitHub's Checks API.
+    name: audit-rust
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+      # NOTE: To run this step locally, make sure you have cargo-audit installed
+      # and run 'make audit-rust'.
+      - name: Audit Rust dependencies for vulnerabilities
+        uses: actions-rs/audit-check@v1
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}

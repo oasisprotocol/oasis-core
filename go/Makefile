@@ -60,6 +60,11 @@ lint:
 	@$(ECHO) "$(CYAN)*** Running Go linters...$(OFF)"
 	@env -u GOPATH golangci-lint run --timeout 4m
 
+# Audit dependencies for vulnerabilities.
+audit:
+	@$(ECHO) "$(CYAN)*** Running Nancy...$(OFF)"
+	@$(GO) list -json -m all | nancy sleuth
+
 # Test.
 test-targets := test-unit test-node
 
@@ -139,7 +144,7 @@ clean:
 	generate $(go-binaries) $(go-plugins) build \
 	$(test-helpers) build-helpers \
 	$(test-vectors-targets) \
-	fmt lint \
+	fmt lint audit \
 	$(test-targets) test force-test \
 	$(fuzz-targets) build-fuzz \
 	clean all
