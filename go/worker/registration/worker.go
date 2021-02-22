@@ -454,6 +454,8 @@ func (w *Worker) doNodeRegistration() {
 
 	if !w.storedDeregister {
 		w.registrationLoop()
+	} else {
+		w.logger.Debug("registration disabled, dropping to direct shutdown")
 	}
 
 	// Loop broken; shutdown requested.
@@ -500,6 +502,7 @@ func (w *Worker) doNodeRegistration() {
 }
 
 func (w *Worker) registrationStopped() {
+	w.logger.Info("registration stopped, shutting down")
 	if w.delegate != nil {
 		w.delegate.RegistrationStopped()
 	}
@@ -1018,9 +1021,14 @@ func (w *Worker) Start() error {
 	// HACK: This can be ok in certain configurations.
 	if !w.entityID.IsValid() || w.registrationSigner == nil {
 		w.logger.Warn("no entity/signer for this node, registration will NEVER succeed")
-		// Make sure the node is stopped on quit.
+		// Make sure the node is stopped on quit and that it can still respond to
+		// shutdown requests from the control api.
 		go func() {
-			<-w.stopCh
+			select {
+			case <-w.stopCh:
+			case <-w.stopRegCh:
+				w.registrationStopped()
+			}
 			close(w.quitCh)
 		}()
 		return nil

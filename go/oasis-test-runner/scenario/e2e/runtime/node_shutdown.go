@@ -101,5 +101,34 @@ func (sc *nodeShutdownImpl) Run(childEnv *env.Env) error {
 		return err
 	}
 
+	// Get the client node to shutdown as well, to make sure the code path works in corner cases too.
+	clientNode := sc.Net.Clients()[0]
+	clientCtrl, err := oasis.NewController(clientNode.SocketPath())
+	if err != nil {
+		return err
+	}
+	if err = clientCtrl.WaitReady(ctx); err != nil {
+		return err
+	}
+
+	sc.Logger.Info("requesting client node shutdown")
+	args = []string{
+		"control", "shutdown",
+		"--log.level", "debug",
+		"--address", "unix:" + clientNode.SocketPath(),
+	}
+	if err = cli.RunSubCommand(childEnv, sc.Logger, "control-shutdown", sc.Net.Config().NodeBinary, args); err != nil {
+		return fmt.Errorf("scenario/e2e/node_shutdown: send request to client node failed: %w", err)
+	}
+
+	// Wait for the node to exit.
+	err = <-clientNode.Exit()
+	if err != env.ErrEarlyTerm {
+		sc.Logger.Error("client node exited with error",
+			"err", err,
+		)
+		return err
+	}
+
 	return nil
 }
