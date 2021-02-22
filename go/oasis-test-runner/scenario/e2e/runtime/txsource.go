@@ -99,7 +99,7 @@ var TxSourceMultiShortSGX scenario.Scenario = &txSourceImpl{
 	consensusPruneDisabledProbability: 0.1,
 	consensusPruneMinKept:             100,
 	consensusPruneMaxKept:             200,
-	// XXX: don't use more node as SGX E2E test instances cannot handle much
+	// XXX: don't use more nodes as SGX E2E test instances cannot handle many
 	// more nodes that are currently configured.
 	numValidatorNodes:  3,
 	numKeyManagerNodes: 1,
@@ -133,13 +133,12 @@ var TxSourceMulti scenario.Scenario = &txSourceImpl{
 	consensusPruneMaxKept:             1000,
 	enableCrashPoints:                 true,
 	// Nodes getting killed commonly result in corrupted tendermint WAL when the
-	// node is restarted. Enable automatic corrupted WAL recovery for validator
-	// nodes.
+	// node is restarted. Enable automatic corrupted WAL recovery for nodes.
 	tendermintRecoverCorruptedWAL: true,
-	// Use 4 validators so that consensus can keep making progress
-	// when a node is being killed and restarted.
+	// Use 4 validators so that consensus can keep making progress when a node
+	// is being killed and restarted.
 	numValidatorNodes: 4,
-	// Use 2 keymanager so that at least one keymanager is accessible when
+	// Use 2 keymanagers so that at least one keymanager is accessible when
 	// the other one is being killed or shut down.
 	numKeyManagerNodes: 2,
 	// Use 4 storage nodes so runtime continues to work when one of the nodes
@@ -538,6 +537,13 @@ func (sc *txSourceImpl) Fixture() (*oasis.NetworkFixture, error) {
 		f.ByzantineNodes[i].Consensus.SubmissionGasPrice = txSourceGasPrice
 		sc.generateConsensusFixture(&f.ByzantineNodes[i].Consensus, false)
 	}
+
+	// Add a sanity-checker client node.
+	// NOTE: we skip the sanity checker on the validators as it blocks consensus
+	// and it can cause a node to fall behind.
+	f.Clients = append(f.Clients, oasis.ClientFixture{
+		Consensus: oasis.ConsensusFixture{SupplementarySanityInterval: 1},
+	})
 
 	return f, nil
 }
