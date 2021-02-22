@@ -96,7 +96,8 @@ type Node struct { // nolint: maligned
 	isStopping  bool
 	noAutoStart bool
 
-	crashPointsProbability float64
+	crashPointsProbability      float64
+	supplementarySanityInterval uint64
 
 	disableDefaultLogWatcherHandlerFactories bool
 	logWatcherHandlerFactories               []log.WatcherHandlerFactory
@@ -245,9 +246,10 @@ func (n *Node) SetConsensusStateSync(cfg *ConsensusStateSyncCfg) {
 
 // NodeCfg defines the common node configuration options.
 type NodeCfg struct { // nolint: maligned
-	AllowEarlyTermination  bool
-	AllowErrorTermination  bool
-	CrashPointsProbability float64
+	AllowEarlyTermination       bool
+	AllowErrorTermination       bool
+	CrashPointsProbability      float64
+	SupplementarySanityInterval uint64
 
 	NoAutoStart bool
 

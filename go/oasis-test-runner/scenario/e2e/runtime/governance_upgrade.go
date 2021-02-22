@@ -137,7 +137,7 @@ func (sc *governanceConsensusUpgradeImpl) Fixture() (*oasis.NetworkFixture, erro
 	}
 
 	f.Validators = []oasis.ValidatorFixture{
-		{Entity: 1, Consensus: oasis.ConsensusFixture{EnableConsensusRPCWorker: true}, AllowErrorTermination: true},
+		{Entity: 1, Consensus: oasis.ConsensusFixture{EnableConsensusRPCWorker: true, SupplementarySanityInterval: 1}, AllowErrorTermination: true},
 		{Entity: 1, Consensus: oasis.ConsensusFixture{EnableConsensusRPCWorker: true}, AllowErrorTermination: true},
 		{Entity: 1, Consensus: oasis.ConsensusFixture{EnableConsensusRPCWorker: true}, AllowErrorTermination: true},
 	}

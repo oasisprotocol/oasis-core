@@ -90,6 +90,7 @@ func (val *Validator) startNode() error {
 		tendermintPrune(val.consensus.PruneNumKept).
 		tendermintRecoverCorruptedWAL(val.consensus.TendermintRecoverCorruptedWAL).
 		configureDebugCrashPoints(val.crashPointsProbability).
+		tendermintSupplementarySanity(val.supplementarySanityInterval).
 		appendNetwork(val.net).
 		appendEntity(val.entity)
 
@@ -102,10 +103,6 @@ func (val *Validator) startNode() error {
 	if val.consensus.EnableConsensusRPCWorker {
 		args = args.workerClientPort(val.clientPort).
 			workerConsensusRPCEnabled()
-	}
-
-	if len(val.net.validators) >= 1 && val == val.net.validators[0] {
-		args = args.tendermintSupplementarySanityEnabled()
 	}
 
 	if err := val.net.startOasisNode(&val.Node, nil, args); err != nil {
@@ -136,6 +133,7 @@ func (net *Network) NewValidator(cfg *ValidatorCfg) (*Validator, error) {
 			termEarlyOk:                              cfg.AllowEarlyTermination,
 			termErrorOk:                              cfg.AllowErrorTermination,
 			crashPointsProbability:                   cfg.CrashPointsProbability,
+			supplementarySanityInterval:              cfg.SupplementarySanityInterval,
 			disableDefaultLogWatcherHandlerFactories: cfg.DisableDefaultLogWatcherHandlerFactories,
 			logWatcherHandlerFactories:               cfg.LogWatcherHandlerFactories,
 			consensus:                                cfg.Consensus,

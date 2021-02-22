@@ -279,6 +279,7 @@ func (km *Keymanager) startNode() error {
 		workerKeymanagerEnabled().
 		workerKeymanagerRuntimeID(km.runtime.id).
 		configureDebugCrashPoints(km.crashPointsProbability).
+		tendermintSupplementarySanity(km.supplementarySanityInterval).
 		appendNetwork(km.net).
 		appendEntity(km.entity)
 
@@ -344,6 +345,7 @@ func (net *Network) NewKeymanager(cfg *KeymanagerCfg) (*Keymanager, error) {
 			termEarlyOk:                              cfg.AllowEarlyTermination,
 			termErrorOk:                              cfg.AllowErrorTermination,
 			crashPointsProbability:                   cfg.CrashPointsProbability,
+			supplementarySanityInterval:              cfg.SupplementarySanityInterval,
 			disableDefaultLogWatcherHandlerFactories: cfg.DisableDefaultLogWatcherHandlerFactories,
 			logWatcherHandlerFactories:               cfg.LogWatcherHandlerFactories,
 			consensus:                                cfg.Consensus,

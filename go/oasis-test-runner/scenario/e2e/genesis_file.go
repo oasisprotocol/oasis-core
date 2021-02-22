@@ -44,7 +44,7 @@ func (s *genesisFileImpl) Fixture() (*oasis.NetworkFixture, error) {
 	// be possible to run this configuration as the PVSS backend
 	// currently requires multiple validators.
 	f.Validators = []oasis.ValidatorFixture{
-		{Entity: 1, Consensus: oasis.ConsensusFixture{EnableConsensusRPCWorker: true}},
+		{Entity: 1, Consensus: oasis.ConsensusFixture{EnableConsensusRPCWorker: true, SupplementarySanityInterval: 1}},
 	}
 	f.Network.Beacon.Backend = beacon.BackendInsecure
 

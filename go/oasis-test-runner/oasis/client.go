@@ -35,7 +35,8 @@ func (client *Client) startNode() error {
 		appendSeedNodes(client.net.seeds).
 		workerP2pPort(client.p2pPort).
 		workerP2pEnabled().
-		runtimeTagIndexerBackend("bleve")
+		runtimeTagIndexerBackend("bleve").
+		tendermintSupplementarySanity(client.supplementarySanityInterval)
 
 	if client.maxTransactionAge != 0 {
 		args = args.runtimeClientMaxTransactionAge(client.maxTransactionAge)
@@ -76,12 +77,13 @@ func (net *Network) NewClient(cfg *ClientCfg) (*Client, error) {
 
 	client := &Client{
 		Node: Node{
-			Name:        clientName,
-			net:         net,
-			dir:         clientDir,
-			consensus:   cfg.Consensus,
-			termEarlyOk: cfg.AllowEarlyTermination,
-			termErrorOk: cfg.AllowErrorTermination,
+			Name:                        clientName,
+			net:                         net,
+			dir:                         clientDir,
+			consensus:                   cfg.Consensus,
+			termEarlyOk:                 cfg.AllowEarlyTermination,
+			termErrorOk:                 cfg.AllowErrorTermination,
+			supplementarySanityInterval: cfg.SupplementarySanityInterval,
 		},
 		maxTransactionAge: cfg.MaxTransactionAge,
 		consensusPort:     net.nextNodePort,

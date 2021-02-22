@@ -125,6 +125,7 @@ func (worker *Storage) startNode() error {
 		workerStorageDebugDisableCheckpointSync(worker.checkpointSyncDisabled).
 		workerStorageCheckpointCheckInterval(worker.checkpointCheckInterval).
 		configureDebugCrashPoints(worker.crashPointsProbability).
+		tendermintSupplementarySanity(worker.supplementarySanityInterval).
 		appendNetwork(worker.net).
 		appendEntity(worker.entity)
 
@@ -199,6 +200,7 @@ func (net *Network) NewStorage(cfg *StorageCfg) (*Storage, error) {
 			termEarlyOk:                              cfg.AllowEarlyTermination,
 			termErrorOk:                              cfg.AllowErrorTermination,
 			crashPointsProbability:                   cfg.CrashPointsProbability,
+			supplementarySanityInterval:              cfg.SupplementarySanityInterval,
 			disableDefaultLogWatcherHandlerFactories: cfg.DisableDefaultLogWatcherHandlerFactories,
 			logWatcherHandlerFactories:               cfg.LogWatcherHandlerFactories,
 			consensus:                                cfg.Consensus,

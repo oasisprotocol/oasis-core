@@ -103,6 +103,7 @@ func (worker *Compute) startNode() error {
 		runtimeSGXLoader(worker.net.cfg.RuntimeSGXLoaderBinary).
 		workerExecutorScheduleCheckTxEnabled().
 		configureDebugCrashPoints(worker.crashPointsProbability).
+		tendermintSupplementarySanity(worker.supplementarySanityInterval).
 		appendNetwork(worker.net).
 		appendSeedNodes(worker.net.seeds).
 		appendEntity(worker.entity)
@@ -156,6 +157,7 @@ func (net *Network) NewCompute(cfg *ComputeCfg) (*Compute, error) {
 			termErrorOk:                              cfg.AllowErrorTermination,
 			noAutoStart:                              cfg.NoAutoStart,
 			crashPointsProbability:                   cfg.CrashPointsProbability,
+			supplementarySanityInterval:              cfg.SupplementarySanityInterval,
 			disableDefaultLogWatcherHandlerFactories: cfg.DisableDefaultLogWatcherHandlerFactories,
 			logWatcherHandlerFactories:               cfg.LogWatcherHandlerFactories,
 			consensus:                                cfg.Consensus,

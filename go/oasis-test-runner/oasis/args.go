@@ -208,11 +208,13 @@ func (args *argBuilder) runtimeSupported(id common.Namespace) *argBuilder {
 	return args
 }
 
-func (args *argBuilder) tendermintSupplementarySanityEnabled() *argBuilder {
-	args.vec = append(args.vec, "--"+tendermintFull.CfgSupplementarySanityEnabled)
-	args.vec = append(args.vec, []string{
-		"--" + tendermintFull.CfgSupplementarySanityInterval, "1",
-	}...)
+func (args *argBuilder) tendermintSupplementarySanity(interval uint64) *argBuilder {
+	if interval > 0 {
+		args.vec = append(args.vec, "--"+tendermintFull.CfgSupplementarySanityEnabled)
+		args.vec = append(args.vec, []string{
+			"--" + tendermintFull.CfgSupplementarySanityInterval, strconv.Itoa(int(interval)),
+		}...)
+	}
 	return args
 }
 

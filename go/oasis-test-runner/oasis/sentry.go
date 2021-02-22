@@ -80,6 +80,7 @@ func (sentry *Sentry) startNode() error {
 		tendermintPrune(sentry.consensus.PruneNumKept).
 		tendermintRecoverCorruptedWAL(sentry.consensus.TendermintRecoverCorruptedWAL).
 		configureDebugCrashPoints(sentry.crashPointsProbability).
+		tendermintSupplementarySanity(sentry.supplementarySanityInterval).
 		appendNetwork(sentry.net).
 		appendSeedNodes(sentry.net.seeds).
 		internalSocketAddress(sentry.net.validators[0].SocketPath())
@@ -150,6 +151,7 @@ func (net *Network) NewSentry(cfg *SentryCfg) (*Sentry, error) {
 			net:                                      net,
 			dir:                                      sentryDir,
 			crashPointsProbability:                   cfg.CrashPointsProbability,
+			supplementarySanityInterval:              cfg.SupplementarySanityInterval,
 			disableDefaultLogWatcherHandlerFactories: cfg.DisableDefaultLogWatcherHandlerFactories,
 			logWatcherHandlerFactories:               cfg.LogWatcherHandlerFactories,
 		},

@@ -141,6 +141,9 @@ type ConsensusFixture struct { // nolint: maligned
 
 	// EnableConsensusRPCWorker enables the public consensus RPC services worker.
 	EnableConsensusRPCWorker bool `json:"enable_consensusrpc_worker,omitempty"`
+
+	// SupplementarySanityInterval configures the sanity check application.
+	SupplementarySanityInterval uint64 `json:"supplementary_sanity_interval,omitempty"`
 }
 
 // TEEFixture is a TEE configuration fixture.
@@ -181,12 +184,13 @@ func (f *ValidatorFixture) Create(net *Network) (*Validator, error) {
 
 	return net.NewValidator(&ValidatorCfg{
 		NodeCfg: NodeCfg{
-			AllowEarlyTermination:      f.AllowEarlyTermination,
-			AllowErrorTermination:      f.AllowErrorTermination,
-			LogWatcherHandlerFactories: f.LogWatcherHandlerFactories,
-			Consensus:                  f.Consensus,
-			NoAutoStart:                f.NoAutoStart,
-			CrashPointsProbability:     f.CrashPointsProbability,
+			AllowEarlyTermination:       f.AllowEarlyTermination,
+			AllowErrorTermination:       f.AllowErrorTermination,
+			LogWatcherHandlerFactories:  f.LogWatcherHandlerFactories,
+			Consensus:                   f.Consensus,
+			NoAutoStart:                 f.NoAutoStart,
+			CrashPointsProbability:      f.CrashPointsProbability,
+			SupplementarySanityInterval: f.Consensus.SupplementarySanityInterval,
 		},
 		Entity:   entity,
 		Sentries: sentries,
@@ -318,12 +322,13 @@ func (f *KeymanagerFixture) Create(net *Network) (*Keymanager, error) {
 
 	return net.NewKeymanager(&KeymanagerCfg{
 		NodeCfg: NodeCfg{
-			AllowEarlyTermination:      f.AllowEarlyTermination,
-			AllowErrorTermination:      f.AllowErrorTermination,
-			LogWatcherHandlerFactories: f.LogWatcherHandlerFactories,
-			CrashPointsProbability:     f.CrashPointsProbability,
-			Consensus:                  f.Consensus,
-			NoAutoStart:                f.NoAutoStart,
+			AllowEarlyTermination:       f.AllowEarlyTermination,
+			AllowErrorTermination:       f.AllowErrorTermination,
+			LogWatcherHandlerFactories:  f.LogWatcherHandlerFactories,
+			CrashPointsProbability:      f.CrashPointsProbability,
+			SupplementarySanityInterval: f.Consensus.SupplementarySanityInterval,
+			Consensus:                   f.Consensus,
+			NoAutoStart:                 f.NoAutoStart,
 		},
 		Runtime:       runtime,
 		Entity:        entity,
@@ -372,12 +377,13 @@ func (f *StorageWorkerFixture) Create(net *Network) (*Storage, error) {
 
 	return net.NewStorage(&StorageCfg{
 		NodeCfg: NodeCfg{
-			AllowEarlyTermination:      f.AllowEarlyTermination,
-			AllowErrorTermination:      f.AllowErrorTermination,
-			CrashPointsProbability:     f.CrashPointsProbability,
-			NoAutoStart:                f.NoAutoStart,
-			LogWatcherHandlerFactories: f.LogWatcherHandlerFactories,
-			Consensus:                  f.Consensus,
+			AllowEarlyTermination:       f.AllowEarlyTermination,
+			AllowErrorTermination:       f.AllowErrorTermination,
+			CrashPointsProbability:      f.CrashPointsProbability,
+			SupplementarySanityInterval: f.Consensus.SupplementarySanityInterval,
+			NoAutoStart:                 f.NoAutoStart,
+			LogWatcherHandlerFactories:  f.LogWatcherHandlerFactories,
+			Consensus:                   f.Consensus,
 		},
 		Backend:                 f.Backend,
 		Entity:                  entity,
@@ -424,12 +430,13 @@ func (f *ComputeWorkerFixture) Create(net *Network) (*Compute, error) {
 
 	return net.NewCompute(&ComputeCfg{
 		NodeCfg: NodeCfg{
-			AllowEarlyTermination:      f.AllowEarlyTermination,
-			AllowErrorTermination:      f.AllowErrorTermination,
-			NoAutoStart:                f.NoAutoStart,
-			CrashPointsProbability:     f.CrashPointsProbability,
-			LogWatcherHandlerFactories: f.LogWatcherHandlerFactories,
-			Consensus:                  f.Consensus,
+			AllowEarlyTermination:       f.AllowEarlyTermination,
+			AllowErrorTermination:       f.AllowErrorTermination,
+			NoAutoStart:                 f.NoAutoStart,
+			CrashPointsProbability:      f.CrashPointsProbability,
+			SupplementarySanityInterval: f.Consensus.SupplementarySanityInterval,
+			LogWatcherHandlerFactories:  f.LogWatcherHandlerFactories,
+			Consensus:                   f.Consensus,
 		},
 		Entity:             entity,
 		RuntimeProvisioner: f.RuntimeProvisioner,
@@ -455,6 +462,9 @@ type SentryFixture struct {
 
 	CrashPointsProbability float64 `json:"crash_points_probability,omitempty"`
 
+	// Consensus contains configuration for the consensus backend.
+	Consensus ConsensusFixture `json:"consensus"`
+
 	Validators        []int `json:"validators"`
 	StorageWorkers    []int `json:"storage_workers"`
 	KeymanagerWorkers []int `json:"keymanager_workers"`
@@ -464,8 +474,9 @@ type SentryFixture struct {
 func (f *SentryFixture) Create(net *Network) (*Sentry, error) {
 	return net.NewSentry(&SentryCfg{
 		NodeCfg: NodeCfg{
-			LogWatcherHandlerFactories: f.LogWatcherHandlerFactories,
-			CrashPointsProbability:     f.CrashPointsProbability,
+			LogWatcherHandlerFactories:  f.LogWatcherHandlerFactories,
+			CrashPointsProbability:      f.CrashPointsProbability,
+			SupplementarySanityInterval: f.Consensus.SupplementarySanityInterval,
 		},
 		ValidatorIndices:  f.Validators,
 		StorageIndices:    f.StorageWorkers,
@@ -489,9 +500,10 @@ type ClientFixture struct {
 func (f *ClientFixture) Create(net *Network) (*Client, error) {
 	return net.NewClient(&ClientCfg{
 		NodeCfg: NodeCfg{
-			Consensus:             f.Consensus,
-			AllowErrorTermination: f.AllowErrorTermination,
-			AllowEarlyTermination: f.AllowEarlyTermination,
+			Consensus:                   f.Consensus,
+			AllowErrorTermination:       f.AllowErrorTermination,
+			AllowEarlyTermination:       f.AllowEarlyTermination,
+			SupplementarySanityInterval: f.Consensus.SupplementarySanityInterval,
 		},
 		MaxTransactionAge: f.MaxTransactionAge,
 	})

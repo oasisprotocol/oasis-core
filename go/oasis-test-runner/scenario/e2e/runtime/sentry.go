@@ -127,6 +127,7 @@ func (s *sentryImpl) Fixture() (*oasis.NetworkFixture, error) {
 			Entity:                     1,
 			LogWatcherHandlerFactories: validatorExtraLogWatcherHandlerFactories,
 			Sentries:                   []int{0, 1},
+			Consensus:                  oasis.ConsensusFixture{SupplementarySanityInterval: 1},
 		},
 		{
 			Entity:                     1,

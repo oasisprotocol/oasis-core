@@ -136,7 +136,7 @@ func (sc *nodeUpgradeImpl) Fixture() (*oasis.NetworkFixture, error) {
 			{},
 		},
 		Validators: []oasis.ValidatorFixture{
-			{Entity: 1, AllowErrorTermination: true},
+			{Entity: 1, AllowErrorTermination: true, Consensus: oasis.ConsensusFixture{SupplementarySanityInterval: 1}},
 			{Entity: 1, AllowErrorTermination: true},
 			{Entity: 1, AllowErrorTermination: true},
 			{Entity: 1, AllowErrorTermination: true},
