@@ -45,7 +45,7 @@ define CONFIRM_ACTION =
 endef
 
 # Name of git remote pointing to the canonical upstream git repository, i.e.
-# git@github.com:oasisprotocol/oasis-core.git.
+# git@github.com:oasisprotocol/<repo-name>.git.
 GIT_ORIGIN_REMOTE ?= origin
 
 # Name of the branch where to tag the next release.
@@ -63,8 +63,8 @@ GIT_VERSION := $(subst v,,$(shell \
 # Determine project's git branch.
 GIT_BRANCH ?= $(shell git rev-parse --abbrev-ref HEAD 2>/dev/null)
 
-PUNCH_CONFIG_FILE := $(abspath $(SELF_DIR)/.punch_config.py)
-PUNCH_VERSION_FILE := $(abspath $(SELF_DIR)/.punch_version.py)
+PUNCH_CONFIG_FILE := $(abspath $(SELF_DIR).punch_config.py)
+PUNCH_VERSION_FILE := $(abspath $(SELF_DIR).punch_version.py)
 # Obtain project's version as tracked by the Punch tool.
 # NOTE: The Punch tool doesn't have the ability fo print project's version to
 # stdout yet.
@@ -122,13 +122,10 @@ define ENSURE_GIT_VERSION_EQUALS_PUNCH_VERSION =
 endef
 
 # Go binary to use for all Go commands.
-OASIS_GO ?= go
+export OASIS_GO ?= go
 
 # Go command prefix to use in all Go commands.
 GO := env -u GOPATH $(OASIS_GO)
-
-# Go build command to use by default.
-GO_BUILD_CMD := env -u GOPATH $(OASIS_GO) build $(GOFLAGS)
 
 # Path to the MKVS interoperability test helpers binary in go/.
 GO_TEST_HELPER_MKVS_PATH := storage/mkvs/interop/mkvs-test-helpers
@@ -147,6 +144,37 @@ GOLDFLAGS_BRANCH := -X github.com/oasisprotocol/oasis-core/go/common/version.Git
 
 # Go's linker flags.
 export GOLDFLAGS ?= "$(GOLDFLAGS_VERSION) $(GOLDFLAGS_BRANCH)"
+
+# Helper that ensures the git workspace is clean.
+define ENSURE_GIT_CLEAN =
+	if [[ ! -z `git status --porcelain` ]]; then \
+		$(ECHO) "$(RED)Error: Git workspace is dirty.$(OFF)"; \
+		exit 1; \
+	fi
+endef
+
+# Helper that checks if the go mod tidy command was run.
+# NOTE: go mod tidy doesn't implement a check mode yet.
+# For more details, see: https://github.com/golang/go/issues/27005.
+define CHECK_GO_MOD_TIDY =
+    $(GO) mod tidy; \
+    if [[ ! -z `git status --porcelain go.mod go.sum` ]]; then \
+        $(ECHO) "$(RED)Error: The following changes detected after running 'go mod tidy':$(OFF)"; \
+        git diff go.mod go.sum; \
+        exit 1; \
+    fi
+endef
+
+# Helper that checks commits with gitlilnt.
+# NOTE: gitlint internally uses git rev-list, where A..B is asymmetric
+# difference, which is kind of the opposite of how git diff interprets
+# A..B vs A...B.
+define CHECK_GITLINT =
+	BRANCH=$(GIT_ORIGIN_REMOTE)/$(RELEASE_BRANCH); \
+	COMMIT_SHA=`git rev-parse $$BRANCH` && \
+	$(ECHO) "$(CYAN)*** Running gitlint for commits from $$BRANCH ($${COMMIT_SHA:0:7})... $(OFF)"; \
+	gitlint --commits $$BRANCH..HEAD
+endef
 
 # List of non-trivial Change Log fragments.
 CHANGELOG_FRAGMENTS_NON_TRIVIAL := $(filter-out $(wildcard .changelog/*trivial*.md),$(wildcard .changelog/[0-9]*.md))
@@ -284,7 +312,7 @@ define newline
 
 endef
 
-# GitHub release' text in Markdown format.
+# GitHub release text in Markdown format.
 define RELEASE_TEXT =
 For a list of changes in this release, see the [Change Log].
 

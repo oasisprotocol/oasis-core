@@ -82,15 +82,7 @@ jobs:
         # Always run this step so that all linting errors can be seen at once.
         if: always()
       - name: Check go mod tidy
-        # NOTE: go mod tidy doesn't implement a check mode yet.
-        # For more details, see: https://github.com/golang/go/issues/27005.
         run: |
-          cd go
-          go mod tidy
-          if [[ ! -z $(git status --porcelain go.mod go.sum) ]]; then
-            echo >&2 "Error: The following changes detected after running 'go mod tidy':"
-            git diff go.mod go.sum
-            exit 1
-          fi
+          make lint-go-mod-tidy
         # Always run this step so that all linting errors can be seen at once.
         if: always()

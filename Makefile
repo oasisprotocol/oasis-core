@@ -33,7 +33,7 @@ build-rust:
 	@$(ECHO) "$(MAGENTA)*** Building Rust libraries and runtime loader...$(OFF)"
 	@CARGO_TARGET_DIR=target/default cargo build
 
-build-go go:
+build-go:
 	@$(MAKE) -C go build
 
 build: $(build-targets)
@@ -63,17 +63,13 @@ fmt-go:
 fmt: $(fmt-targets)
 
 # Lint code, commits and documentation.
-lint-targets := lint-go lint-git lint-md lint-changelog lint-docs
+lint-targets := lint-go lint-git lint-md lint-changelog lint-docs lint-go-mod-tidy
 
 lint-go:
 	@$(MAKE) -C go lint
 
-# NOTE: gitlint internally uses git rev-list, where A..B is asymmetric difference, which is kind of the opposite of
-# how git diff interprets A..B vs A...B.
-lint-git: fetch-git
-	@COMMIT_SHA=`git rev-parse $(GIT_ORIGIN_REMOTE)/$(RELEASE_BRANCH)` && \
-	echo "Running gitlint for commits from $(GIT_ORIGIN_REMOTE)/$(RELEASE_BRANCH) ($${COMMIT_SHA:0:7})..."; \
-	gitlint --commits $(GIT_ORIGIN_REMOTE)/$(RELEASE_BRANCH)..HEAD
+lint-git:
+	@$(CHECK_GITLINT)
 
 lint-md:
 	@npx markdownlint-cli '**/*.md' --ignore .changelog/
@@ -84,6 +80,9 @@ lint-changelog:
 # Check whether docs are synced with source code.
 lint-docs:
 	@$(MAKE) -C docs check
+
+lint-go-mod-tidy:
+	@$(MAKE) -C go lint-mod-tidy
 
 lint: $(lint-targets)
 
@@ -209,7 +208,8 @@ docker-shell:
 
 # List of targets that are not actual files.
 .PHONY: \
-	$(build-targets) go build \
+	all \
+	$(build-targets) build \
 	build-helpers-go build-helpers build-go-generate \
 	update-docs \
 	$(fmt-targets) fmt \
@@ -217,7 +217,6 @@ docker-shell:
 	$(test-unit-targets) $(test-targets) test \
 	$(clean-targets) clean \
 	fetch-git \
-	_version_bump _changelog changelog \
+	_version-bump _changelog changelog \
 	release-tag release-stable-branch release-build \
-	docker-shell \
-	all
+	docker-shell
