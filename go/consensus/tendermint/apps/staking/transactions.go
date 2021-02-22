@@ -192,7 +192,7 @@ func (app *stakingApplication) addEscrow(ctx *api.Context, state *stakingState.M
 
 	// Check if sender provided at least a minimum amount of stake.
 	if escrow.Amount.Cmp(&params.MinDelegationAmount) < 0 {
-		return staking.ErrInvalidArgument
+		return staking.ErrUnderMinDelegationAmount
 	}
 
 	fromAddr := ctx.CallerAddress()

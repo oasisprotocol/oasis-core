@@ -72,6 +72,11 @@ var (
 	// exceed the maximum allowed number.
 	ErrTooManyAllowances = errors.New(ModuleName, 7, "staking: too many allowances")
 
+	// ErrUnderMinDelegationAmount is the error returned when the given escrow
+	// amount is lower than the minimum delegation amount specified in the
+	// consensus parameters.
+	ErrUnderMinDelegationAmount = errors.New(ModuleName, 8, "staking: amount is lower than the minimum delegation amount")
+
 	// MethodTransfer is the method name for transfers.
 	MethodTransfer = transaction.NewMethodName(ModuleName, "Transfer", Transfer{})
 	// MethodBurn is the method name for burns.
