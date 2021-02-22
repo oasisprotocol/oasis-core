@@ -16,7 +16,6 @@ on:
       - stable/*
 
 jobs:
-
   lint:
     # NOTE: This name appears in GitHub's Checks API.
     name: lint
@@ -43,16 +42,17 @@ jobs:
         uses: actions/setup-go@v2.1.3
         with:
           go-version: "1.15.x"
-      - name: Install prerequisites
+      - name: Install gitlint
         run: |
-          python -m pip install \
-            https://github.com/oasislabs/towncrier/archive/oasis-master.tar.gz \
-            gitlint
+          python -m pip install gitlint
+      - name: Install towncrier
+        run: |
+          python -m pip install https://github.com/oasisprotocol/towncrier/archive/oasis-master.tar.gz
       - name: Check for presence of a Change Log fragment (only pull requests)
+        # NOTE: The pull request' base branch needs to be fetched so towncrier
+        # is able to compare the current branch with the base branch.
+        # Source: https://github.com/actions/checkout/#fetch-all-branches.
         run: |
-          # Fetch the pull request' base branch so towncrier will be able to
-          # compare the current branch with the base branch.
-          # Source: https://github.com/actions/checkout/#fetch-all-branches.
           git fetch --no-tags origin +refs/heads/${BASE_BRANCH}:refs/remotes/origin/${BASE_BRANCH}
           towncrier check --compare-with origin/${BASE_BRANCH}
         env:
@@ -80,6 +80,11 @@ jobs:
           pushd go/extra/extract-metrics && go build && popd
           make lint-docs
         # Always run this step so that all linting errors can be seen at once.
+        if: always()
+      - name: Ensure a clean code checkout
+        uses: actions/checkout@v2
+        with:
+          clean: true
         if: always()
       - name: Check go mod tidy
         run: |
