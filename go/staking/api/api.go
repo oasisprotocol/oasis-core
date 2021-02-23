@@ -943,6 +943,18 @@ type DebondingDelegation struct {
 	DebondEndTime beacon.EpochTime  `json:"debond_end"`
 }
 
+// Merge merges debonding delegations with same debond end time by summing
+// the shares amounts.
+func (d *DebondingDelegation) Merge(other DebondingDelegation) error {
+	if d.DebondEndTime != other.DebondEndTime {
+		return fmt.Errorf("cannot merge debonding delegations, end time doesn't match")
+	}
+	if err := d.Shares.Add(&other.Shares); err != nil {
+		return fmt.Errorf("error adding debonding delegation shares: %w", err)
+	}
+	return nil
+}
+
 // Genesis is the initial staking state for use in the genesis block.
 type Genesis struct {
 	// Parameters are the staking consensus parameters.

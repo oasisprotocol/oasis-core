@@ -253,10 +253,10 @@ func (app *stakingApplication) onEpochChange(ctx *api.Context, epoch beacon.Epoc
 		}
 
 		// Update state.
-		if err = state.RemoveFromDebondingQueue(ctx, e.Epoch, e.DelegatorAddr, e.EscrowAddr, e.Seq); err != nil {
+		if err = state.RemoveFromDebondingQueue(ctx, e.Epoch, e.DelegatorAddr, e.EscrowAddr); err != nil {
 			return fmt.Errorf("failed to remove from debonding queue: %w", err)
 		}
-		if err = state.SetDebondingDelegation(ctx, e.DelegatorAddr, e.EscrowAddr, e.Seq, nil); err != nil {
+		if err = state.SetDebondingDelegation(ctx, e.DelegatorAddr, e.EscrowAddr, e.Delegation.DebondEndTime, nil); err != nil {
 			return fmt.Errorf("failed to set debonding delegation: %w", err)
 		}
 		if err = state.SetAccount(ctx, e.DelegatorAddr, delegator); err != nil {

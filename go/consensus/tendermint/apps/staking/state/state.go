@@ -50,15 +50,15 @@ var (
 	// Value is CBOR-serialized delegation.
 	delegationKeyFmt = keyformat.New(0x53, &staking.Address{}, &staking.Address{})
 	// debondingDelegationKeyFmt is the key format used for debonding delegations
-	// (delegator address, escrow address, seq no).
+	// (delegator address, escrow address, epoch).
 	//
 	// Value is CBOR-serialized debonding delegation.
 	debondingDelegationKeyFmt = keyformat.New(0x54, &staking.Address{}, &staking.Address{}, uint64(0))
-	// debondingQueueKeyFmt is the debonding queue key format (epoch,
-	// delegator address, escrow address, seq no).
+	// debondingQueueKeyFmt is the debonding queue key format
+	// (epoch, delegator address, escrow address).
 	//
 	// Value is empty.
-	debondingQueueKeyFmt = keyformat.New(0x55, uint64(0), &staking.Address{}, &staking.Address{}, uint64(0))
+	debondingQueueKeyFmt = keyformat.New(0x55, uint64(0), &staking.Address{}, &staking.Address{})
 	// parametersKeyFmt is the key format used for consensus parameters.
 	//
 	// Value is CBOR-serialized staking.ConsensusParameters.
@@ -355,9 +355,9 @@ func (s *ImmutableState) DebondingDelegationsFor(
 func (s *ImmutableState) DebondingDelegation(
 	ctx context.Context,
 	delegatorAddr, escrowAddr staking.Address,
-	seq uint64,
+	epoch beacon.EpochTime,
 ) (*staking.DebondingDelegation, error) {
-	value, err := s.is.Get(ctx, debondingDelegationKeyFmt.Encode(&delegatorAddr, &escrowAddr, seq))
+	value, err := s.is.Get(ctx, debondingDelegationKeyFmt.Encode(&delegatorAddr, &escrowAddr, uint64(epoch)))
 	if err != nil {
 		return nil, abciAPI.UnavailableStateError(err)
 	}
@@ -376,7 +376,6 @@ type DebondingQueueEntry struct {
 	Epoch         beacon.EpochTime
 	DelegatorAddr staking.Address
 	EscrowAddr    staking.Address
-	Seq           uint64
 	Delegation    *staking.DebondingDelegation
 }
 
@@ -386,14 +385,14 @@ func (s *ImmutableState) ExpiredDebondingQueue(ctx context.Context, epoch beacon
 
 	var entries []*DebondingQueueEntry
 	for it.Seek(debondingQueueKeyFmt.Encode()); it.Valid(); it.Next() {
-		var decEpoch, seq uint64
+		var decEpoch uint64
 		var escrowAddr staking.Address
 		var delegatorAddr staking.Address
-		if !debondingQueueKeyFmt.Decode(it.Key(), &decEpoch, &delegatorAddr, &escrowAddr, &seq) || decEpoch > uint64(epoch) {
+		if !debondingQueueKeyFmt.Decode(it.Key(), &decEpoch, &delegatorAddr, &escrowAddr) || decEpoch > uint64(epoch) {
 			break
 		}
 
-		deb, err := s.DebondingDelegation(ctx, delegatorAddr, escrowAddr, seq)
+		deb, err := s.DebondingDelegation(ctx, delegatorAddr, escrowAddr, beacon.EpochTime(decEpoch))
 		if err != nil {
 			return nil, err
 		}
@@ -401,7 +400,6 @@ func (s *ImmutableState) ExpiredDebondingQueue(ctx context.Context, epoch beacon
 			Epoch:         beacon.EpochTime(decEpoch),
 			DelegatorAddr: delegatorAddr,
 			EscrowAddr:    escrowAddr,
-			Seq:           seq,
 			Delegation:    deb,
 		})
 	}
@@ -548,15 +546,38 @@ func (s *MutableState) SetDelegation(
 func (s *MutableState) SetDebondingDelegation(
 	ctx context.Context,
 	delegatorAddr, escrowAddr staking.Address,
-	seq uint64,
+	epoch beacon.EpochTime,
 	d *staking.DebondingDelegation,
 ) error {
-	key := debondingDelegationKeyFmt.Encode(&delegatorAddr, &escrowAddr, seq)
+	key := debondingDelegationKeyFmt.Encode(&delegatorAddr, &escrowAddr, uint64(epoch))
 
 	if d == nil {
 		// Remove descriptor.
 		err := s.ms.Remove(ctx, key)
 		return abciAPI.UnavailableStateError(err)
+	}
+
+	// Create a copy so we don't modify the passed in object in case we are merging
+	// it with an existing delegation.
+	debDel := staking.DebondingDelegation{
+		Shares:        *d.Shares.Clone(),
+		DebondEndTime: d.DebondEndTime,
+	}
+
+	// If a debonding delegation for the account and same end epoch already exists,
+	// merge the debonding delegations.
+	value, err := s.is.Get(ctx, key)
+	if err != nil {
+		return abciAPI.UnavailableStateError(err)
+	}
+	if value != nil {
+		var deb staking.DebondingDelegation
+		if err = cbor.Unmarshal(value, &deb); err != nil {
+			return abciAPI.UnavailableStateError(err)
+		}
+		if err = debDel.Merge(deb); err != nil {
+			return fmt.Errorf("error merging debonding delegations: %w", err)
+		}
 	}
 
 	// Add to debonding queue.
@@ -565,14 +586,13 @@ func (s *MutableState) SetDebondingDelegation(
 		debondingQueueKeyFmt.Encode(uint64(d.DebondEndTime),
 			&delegatorAddr,
 			&escrowAddr,
-			seq,
 		),
 		[]byte{},
 	); err != nil {
 		return abciAPI.UnavailableStateError(err)
 	}
 	// Add descriptor.
-	if err := s.ms.Insert(ctx, key, cbor.Marshal(d)); err != nil {
+	if err := s.ms.Insert(ctx, key, cbor.Marshal(debDel)); err != nil {
 		return abciAPI.UnavailableStateError(err)
 	}
 	return nil
@@ -582,9 +602,8 @@ func (s *MutableState) RemoveFromDebondingQueue(
 	ctx context.Context,
 	epoch beacon.EpochTime,
 	delegatorAddr, escrowAddr staking.Address,
-	seq uint64,
 ) error {
-	err := s.ms.Remove(ctx, debondingQueueKeyFmt.Encode(uint64(epoch), &delegatorAddr, &escrowAddr, seq))
+	err := s.ms.Remove(ctx, debondingQueueKeyFmt.Encode(uint64(epoch), &delegatorAddr, &escrowAddr))
 	return abciAPI.UnavailableStateError(err)
 }
 

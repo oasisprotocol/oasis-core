@@ -383,8 +383,9 @@ func (app *stakingApplication) reclaimEscrow(ctx *api.Context, state *stakingSta
 		return staking.ErrInvalidArgument
 	}
 
-	// Include the nonce as the final disambiguator to prevent overwriting debonding delegations.
-	if err = state.SetDebondingDelegation(ctx, toAddr, reclaim.Account, to.General.Nonce, &deb); err != nil {
+	// Include the end time epoch as the disambiguator. If a debonding delegation for the same account
+	// and end time already exists, the delegations will be merged.
+	if err = state.SetDebondingDelegation(ctx, toAddr, reclaim.Account, deb.DebondEndTime, &deb); err != nil {
 		return fmt.Errorf("failed to set debonding delegation: %w", err)
 	}
 

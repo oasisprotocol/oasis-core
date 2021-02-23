@@ -5,6 +5,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/oasisprotocol/oasis-core/go/beacon/api"
 	"github.com/oasisprotocol/oasis-core/go/common/quantity"
 )
 
@@ -208,4 +209,41 @@ func TestStakeAccumulator(t *testing.T) {
 	err = acct.CheckStakeClaims(thresholds)
 	require.Error(err, "escrow account should no longer check out")
 	require.Equal(err, ErrInsufficientStake)
+}
+
+func TestDebondingDelegationMerge(t *testing.T) {
+	require := require.New(t)
+
+	one := mustInitQuantity(t, 1)
+	toAdd := DebondingDelegation{
+		Shares:        mustInitQuantity(t, 10),
+		DebondEndTime: api.EpochTime(100),
+	}
+	for _, t := range []struct {
+		base      *DebondingDelegation
+		msg       string
+		shouldErr bool
+		result    *DebondingDelegation
+	}{
+		{
+			&DebondingDelegation{Shares: one, DebondEndTime: 1},
+			"end time doesn't match",
+			true,
+			nil,
+		},
+		{
+			&DebondingDelegation{Shares: one, DebondEndTime: 100},
+			"merge should correctly merge debonding delegations",
+			false,
+			&DebondingDelegation{Shares: mustInitQuantity(t, 11), DebondEndTime: 100},
+		},
+	} {
+		err := t.base.Merge(toAdd)
+		if t.shouldErr {
+			require.Error(err, t.msg)
+			continue
+		}
+		require.NoError(err)
+		require.EqualValues(t.result, t.base, t.msg)
+	}
 }

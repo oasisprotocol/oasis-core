@@ -89,7 +89,7 @@ func TestDelegationQueries(t *testing.T) {
 		require.NoError(err, "SetAccount")
 		err = s.SetDelegation(ctx, addr, escrowAddr, &del)
 		require.NoError(err, "SetDelegation")
-		err = s.SetDebondingDelegation(ctx, addr, escrowAddr, uint64(i), &deb)
+		err = s.SetDebondingDelegation(ctx, addr, escrowAddr, deb.DebondEndTime, &deb)
 		require.NoError(err, "SetDebondingDelegation")
 	}
 
@@ -118,6 +118,68 @@ func TestDelegationQueries(t *testing.T) {
 	debDelegations, err := s.DebondingDelegations(ctx)
 	require.NoError(err, "state.DebondingDelegations")
 	require.EqualValues(expectedDebDelegations, debDelegations, "DebondingDelegations should match expected")
+}
+
+func TestDebondingDelegation(t *testing.T) {
+	require := require.New(t)
+
+	now := time.Unix(1580461674, 0)
+	appState := abciAPI.NewMockApplicationState(&abciAPI.MockApplicationStateConfig{})
+	ctx := appState.NewContext(abciAPI.ContextBeginBlock, now)
+	defer ctx.Close()
+	s := NewMutableState(ctx.State())
+
+	fac := memorySigner.NewFactory()
+	// Generate accounts.
+	acc1Signer, err := fac.Generate(signature.SignerEntity, rand.Reader)
+	require.NoError(err, "generating account signer")
+	acc1Addr := staking.NewAddress(acc1Signer.Public())
+	acc2Signer, err := fac.Generate(signature.SignerEntity, rand.Reader)
+	require.NoError(err, "generating account signer")
+	acc2Addr := staking.NewAddress(acc2Signer.Public())
+	acc3Signer, err := fac.Generate(signature.SignerEntity, rand.Reader)
+	require.NoError(err, "generating account signer")
+	acc3Addr := staking.NewAddress(acc3Signer.Public())
+
+	// Initial debonding delegation.
+	deb := staking.DebondingDelegation{
+		Shares:        mustInitQuantity(t, 100),
+		DebondEndTime: beacon.EpochTime(10),
+	}
+	deb2 := staking.DebondingDelegation{
+		Shares:        mustInitQuantity(t, 100),
+		DebondEndTime: beacon.EpochTime(20),
+	}
+	deb3 := staking.DebondingDelegation{
+		Shares:        mustInitQuantity(t, 10),
+		DebondEndTime: beacon.EpochTime(10),
+	}
+	require.NoError(s.SetDebondingDelegation(ctx, acc1Addr, acc2Addr, deb.DebondEndTime, &deb), "SetDebondingDelegation")
+
+	// Add debonding delegation for same epoch, but different account.
+	require.NoError(s.SetDebondingDelegation(ctx, acc1Addr, acc3Addr, deb.DebondEndTime, &deb), "SetDebondingDelegation")
+
+	// Add debonding delegation for different epoch.
+	require.NoError(s.SetDebondingDelegation(ctx, acc1Addr, acc2Addr, deb2.DebondEndTime, &deb2), "SetDebondingDelegation")
+
+	// Add debonding delegation for same epoch and account.
+	// Delegation should merge with the existing debonding delegation.
+	require.NoError(s.SetDebondingDelegation(ctx, acc1Addr, acc2Addr, deb.DebondEndTime, &deb3), "SetDebondingDelegation")
+
+	// Query final state.
+	dds, err := s.DebondingDelegationsFor(ctx, acc1Addr)
+	require.NoError(err, "DebondingDelegations")
+	expectedDds := map[staking.Address][]*staking.DebondingDelegation{
+		acc2Addr: {
+			// Merged deb & deb3.
+			{Shares: mustInitQuantity(t, 110), DebondEndTime: beacon.EpochTime(10)},
+			&deb2,
+		},
+		acc3Addr: {
+			&deb,
+		},
+	}
+	require.EqualValues(expectedDds, dds, "expected debonding delegations should exist")
 }
 
 func TestRewardAndSlash(t *testing.T) {
