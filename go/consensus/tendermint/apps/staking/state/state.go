@@ -291,6 +291,37 @@ func (s *ImmutableState) DelegationsFor(
 	return delegations, nil
 }
 
+func (s *ImmutableState) DelegationsTo(
+	ctx context.Context,
+	destAddr staking.Address,
+) (map[staking.Address]*staking.Delegation, error) {
+	it := s.is.NewIterator(ctx)
+	defer it.Close()
+
+	delegations := make(map[staking.Address]*staking.Delegation)
+	for it.Seek(delegationKeyFmt.Encode()); it.Valid(); it.Next() {
+		var escrowAddr staking.Address
+		var delegatorAddr staking.Address
+		if !delegationKeyFmt.Decode(it.Key(), &escrowAddr, &delegatorAddr) {
+			break
+		}
+		if !escrowAddr.Equal(destAddr) {
+			continue
+		}
+
+		var del staking.Delegation
+		if err := cbor.Unmarshal(it.Value(), &del); err != nil {
+			return nil, abciAPI.UnavailableStateError(err)
+		}
+
+		delegations[delegatorAddr] = &del
+	}
+	if it.Err() != nil {
+		return nil, abciAPI.UnavailableStateError(it.Err())
+	}
+	return delegations, nil
+}
+
 func (s *ImmutableState) DebondingDelegations(
 	ctx context.Context,
 ) (map[staking.Address]map[staking.Address][]*staking.DebondingDelegation, error) {
@@ -345,6 +376,37 @@ func (s *ImmutableState) DebondingDelegationsFor(
 		}
 
 		delegations[escrowAddr] = append(delegations[escrowAddr], &deb)
+	}
+	if it.Err() != nil {
+		return nil, abciAPI.UnavailableStateError(it.Err())
+	}
+	return delegations, nil
+}
+
+func (s *ImmutableState) DebondingDelegationsTo(
+	ctx context.Context,
+	destAddr staking.Address,
+) (map[staking.Address][]*staking.DebondingDelegation, error) {
+	it := s.is.NewIterator(ctx)
+	defer it.Close()
+
+	delegations := make(map[staking.Address][]*staking.DebondingDelegation)
+	for it.Seek(debondingDelegationKeyFmt.Encode()); it.Valid(); it.Next() {
+		var escrowAddr staking.Address
+		var delegatorAddr staking.Address
+		if !debondingDelegationKeyFmt.Decode(it.Key(), &delegatorAddr, &escrowAddr) {
+			break
+		}
+		if !escrowAddr.Equal(destAddr) {
+			continue
+		}
+
+		var deb staking.DebondingDelegation
+		if err := cbor.Unmarshal(it.Value(), &deb); err != nil {
+			return nil, abciAPI.UnavailableStateError(err)
+		}
+
+		delegations[delegatorAddr] = append(delegations[delegatorAddr], &deb)
 	}
 	if it.Err() != nil {
 		return nil, abciAPI.UnavailableStateError(it.Err())
