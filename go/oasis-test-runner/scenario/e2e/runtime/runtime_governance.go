@@ -133,6 +133,7 @@ func (sc *runtimeGovernanceImpl) Fixture() (*oasis.NetworkFixture, error) {
 			},
 		)
 	}
+	f.Clients[0].Runtimes = computeRuntimes
 
 	// Set up staking.
 	f.Network.StakingGenesis = &staking.Genesis{

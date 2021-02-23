@@ -148,6 +148,8 @@ func (sc *multipleRuntimesImpl) Fixture() (*oasis.NetworkFixture, error) {
 		)
 	}
 
+	f.Clients[0].Runtimes = computeRuntimes
+
 	return f, nil
 }
 

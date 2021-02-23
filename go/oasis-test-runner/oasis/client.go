@@ -4,13 +4,13 @@ import (
 	"fmt"
 
 	"github.com/oasisprotocol/oasis-core/go/common/node"
-	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
 )
 
 // Client is an Oasis client node.
 type Client struct {
 	Node
 
+	runtimes          []int
 	maxTransactionAge int64
 
 	consensusPort uint16
@@ -21,6 +21,7 @@ type Client struct {
 type ClientCfg struct {
 	NodeCfg
 
+	Runtimes          []int
 	MaxTransactionAge int64
 }
 
@@ -28,6 +29,7 @@ func (client *Client) startNode() error {
 	args := newArgBuilder().
 		debugDontBlameOasis().
 		debugAllowTestKeys().
+		debugEnableProfiling(client.Node.pprofPort).
 		tendermintPrune(client.consensus.PruneNumKept).
 		tendermintRecoverCorruptedWAL(client.consensus.TendermintRecoverCorruptedWAL).
 		tendermintCoreAddress(client.consensusPort).
@@ -35,17 +37,17 @@ func (client *Client) startNode() error {
 		appendSeedNodes(client.net.seeds).
 		workerP2pPort(client.p2pPort).
 		workerP2pEnabled().
-		runtimeTagIndexerBackend("bleve").
 		tendermintSupplementarySanity(client.supplementarySanityInterval)
 
 	if client.maxTransactionAge != 0 {
 		args = args.runtimeClientMaxTransactionAge(client.maxTransactionAge)
 	}
 
-	for _, v := range client.net.runtimes {
-		if v.kind != registry.KindCompute {
-			continue
-		}
+	if len(client.runtimes) > 0 {
+		args = args.runtimeTagIndexerBackend("bleve")
+	}
+	for _, idx := range client.runtimes {
+		v := client.net.runtimes[idx]
 		// XXX: could support configurable binary idx if ever needed.
 		args = args.appendHostedRuntime(v, node.TEEHardwareInvalid, 0)
 	}
@@ -85,14 +87,21 @@ func (net *Network) NewClient(cfg *ClientCfg) (*Client, error) {
 			termErrorOk:                 cfg.AllowErrorTermination,
 			supplementarySanityInterval: cfg.SupplementarySanityInterval,
 		},
+		runtimes:          cfg.Runtimes,
 		maxTransactionAge: cfg.MaxTransactionAge,
 		consensusPort:     net.nextNodePort,
 		p2pPort:           net.nextNodePort + 1,
 	}
+	net.nextNodePort += 2
+
 	client.doStartNode = client.startNode
 
+	if cfg.EnableProfiling {
+		client.Node.pprofPort = net.nextNodePort
+		net.nextNodePort++
+	}
+
 	net.clients = append(net.clients, client)
-	net.nextNodePort += 2
 
 	return client, nil
 }

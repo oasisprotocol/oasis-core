@@ -91,6 +91,7 @@ func (worker *Compute) startNode() error {
 	args := newArgBuilder().
 		debugDontBlameOasis().
 		debugAllowTestKeys().
+		debugEnableProfiling(worker.Node.pprofPort).
 		workerCertificateRotation(true).
 		tendermintCoreAddress(worker.consensusPort).
 		tendermintSubmissionGasPrice(worker.consensus.SubmissionGasPrice).
@@ -169,11 +170,16 @@ func (net *Network) NewCompute(cfg *ComputeCfg) (*Compute, error) {
 		p2pPort:            net.nextNodePort + 2,
 		runtimes:           cfg.Runtimes,
 	}
+	net.nextNodePort += 3
 	worker.doStartNode = worker.startNode
 	copy(worker.NodeID[:], nodeKey[:])
 
+	if cfg.EnableProfiling {
+		worker.Node.pprofPort = net.nextNodePort
+		net.nextNodePort++
+	}
+
 	net.computeWorkers = append(net.computeWorkers, worker)
-	net.nextNodePort += 3
 
 	if err := net.AddLogWatcher(&worker.Node); err != nil {
 		net.logger.Error("failed to add log watcher",

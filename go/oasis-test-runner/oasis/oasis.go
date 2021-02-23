@@ -105,6 +105,8 @@ type Node struct { // nolint: maligned
 	consensus            ConsensusFixture
 	consensusStateSync   *ConsensusStateSyncCfg
 	customGrpcSocketPath string
+
+	pprofPort uint16
 }
 
 // Exit returns a channel that will close once the node shuts down.
@@ -250,6 +252,7 @@ type NodeCfg struct { // nolint: maligned
 	AllowErrorTermination       bool
 	CrashPointsProbability      float64
 	SupplementarySanityInterval uint64
+	EnableProfiling             bool
 
 	NoAutoStart bool
 

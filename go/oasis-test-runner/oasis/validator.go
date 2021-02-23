@@ -82,6 +82,7 @@ func (val *Validator) startNode() error {
 	args := newArgBuilder().
 		debugDontBlameOasis().
 		debugAllowTestKeys().
+		debugEnableProfiling(val.Node.pprofPort).
 		workerCertificateRotation(true).
 		consensusValidator().
 		tendermintCoreAddress(val.consensusPort).
@@ -144,7 +145,13 @@ func (net *Network) NewValidator(cfg *ValidatorCfg) (*Validator, error) {
 		consensusPort: net.nextNodePort,
 		clientPort:    net.nextNodePort + 1,
 	}
+	net.nextNodePort += 2
 	val.doStartNode = val.startNode
+
+	if cfg.EnableProfiling {
+		val.Node.pprofPort = net.nextNodePort
+		net.nextNodePort++
+	}
 
 	var consensusAddrs []interface{ String() string }
 	localhost := netPkg.ParseIP("127.0.0.1")
@@ -214,7 +221,6 @@ func (net *Network) NewValidator(cfg *ValidatorCfg) (*Validator, error) {
 	}
 
 	net.validators = append(net.validators, val)
-	net.nextNodePort += 2
 
 	if err := net.AddLogWatcher(&val.Node); err != nil {
 		net.logger.Error("failed to add log watcher",

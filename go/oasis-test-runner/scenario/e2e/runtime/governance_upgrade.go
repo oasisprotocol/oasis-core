@@ -154,7 +154,7 @@ func (sc *governanceConsensusUpgradeImpl) Fixture() (*oasis.NetworkFixture, erro
 		{Entity: 1, Runtimes: []int{1}, AllowErrorTermination: true},
 	}
 	f.Clients = []oasis.ClientFixture{
-		{AllowErrorTermination: true},
+		{AllowErrorTermination: true, Runtimes: []int{1}},
 	}
 
 	switch {

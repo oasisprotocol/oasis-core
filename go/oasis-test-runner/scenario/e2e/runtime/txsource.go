@@ -76,6 +76,7 @@ var TxSourceMultiShort scenario.Scenario = &txSourceImpl{
 	numKeyManagerNodes:                2,
 	numStorageNodes:                   2,
 	numComputeNodes:                   4,
+	numClientNodes:                    2,
 }
 
 // TxSourceMultiShortSGX uses multiple workloads for a short time.
@@ -105,6 +106,7 @@ var TxSourceMultiShortSGX scenario.Scenario = &txSourceImpl{
 	numKeyManagerNodes: 1,
 	numStorageNodes:    2,
 	numComputeNodes:    4,
+	numClientNodes:     1,
 }
 
 // TxSourceMulti uses multiple workloads.
@@ -150,6 +152,9 @@ var TxSourceMulti scenario.Scenario = &txSourceImpl{
 	// In worst case, 2 nodes can be offline at the same time. Aditionally we
 	// need one backup node and one extra node.
 	numComputeNodes: 5,
+	// Second client node is used to run supplementary-sanity checks which can
+	// cause the node to fall behind over the long run.
+	numClientNodes: 2,
 }
 
 type txSourceImpl struct { // nolint: maligned
@@ -175,6 +180,7 @@ type txSourceImpl struct { // nolint: maligned
 	numValidatorNodes  int
 	numKeyManagerNodes int
 	numComputeNodes    int
+	numClientNodes     int
 
 	// Configurable number of storage nodes. If running tests with long node
 	// shutdowns enabled, make sure this is at least `MinWriteReplication+1`,
@@ -487,6 +493,21 @@ func (sc *txSourceImpl) Fixture() (*oasis.NetworkFixture, error) {
 		})
 	}
 	f.StorageWorkers = storageWorkers
+	var clients []oasis.ClientFixture
+	for i := 0; i < sc.numClientNodes; i++ {
+		c := oasis.ClientFixture{}
+		// Enable runtime on the first node.
+		if i == 0 {
+			c.Runtimes = []int{1}
+		}
+		// Enable supplementary sanity and profiling on the last client node.
+		if i == sc.numClientNodes-1 {
+			c.Consensus.SupplementarySanityInterval = 1
+			c.EnableProfiling = true
+		}
+		clients = append(clients, c)
+	}
+	f.Clients = clients
 
 	// Update validators to require fee payments.
 	for i := range f.Validators {
@@ -537,13 +558,6 @@ func (sc *txSourceImpl) Fixture() (*oasis.NetworkFixture, error) {
 		f.ByzantineNodes[i].Consensus.SubmissionGasPrice = txSourceGasPrice
 		sc.generateConsensusFixture(&f.ByzantineNodes[i].Consensus, false)
 	}
-
-	// Add a sanity-checker client node.
-	// NOTE: we skip the sanity checker on the validators as it blocks consensus
-	// and it can cause a node to fall behind.
-	f.Clients = append(f.Clients, oasis.ClientFixture{
-		Consensus: oasis.ConsensusFixture{SupplementarySanityInterval: 1},
-	})
 
 	return f, nil
 }
@@ -811,6 +825,7 @@ func (sc *txSourceImpl) Clone() scenario.Scenario {
 		numKeyManagerNodes:                sc.numKeyManagerNodes,
 		numStorageNodes:                   sc.numStorageNodes,
 		numComputeNodes:                   sc.numComputeNodes,
+		numClientNodes:                    sc.numClientNodes,
 		seed:                              sc.seed,
 		// rng must always be reinitialized from seed by calling PreInit().
 	}
