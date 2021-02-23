@@ -516,3 +516,104 @@ func TestWithdraw(t *testing.T) {
 		require.Equal(expectedBalance, afterAcct.General.Balance, "general balance should be correct after withdraw")
 	}
 }
+
+func TestAddEscrow(t *testing.T) {
+	require := require.New(t)
+	var err error
+
+	now := time.Unix(1580461674, 0)
+	appState := abciAPI.NewMockApplicationState(&abciAPI.MockApplicationStateConfig{})
+	ctx := appState.NewContext(abciAPI.ContextDeliverTx, now)
+	defer ctx.Close()
+
+	stakeState := stakingState.NewMutableState(ctx.State())
+
+	app := &stakingApplication{
+		state: appState,
+	}
+
+	pk1 := signature.NewPublicKey("aaafffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff")
+	addr1 := staking.NewAddress(pk1)
+	pk2 := signature.NewPublicKey("bbbfffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff")
+	addr2 := staking.NewAddress(pk2)
+	pk3 := signature.NewPublicKey("cccfffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff")
+	addr3 := staking.NewAddress(pk3)
+
+	reservedPK := signature.NewPublicKey("badaaaffffffffffffffffffffffffffffffffffffffffffffffffffffffffff")
+	_ = staking.NewReservedAddress(reservedPK)
+
+	err = stakeState.SetAccount(ctx, addr1, &staking.Account{
+		General: staking.GeneralAccount{
+			Balance: *quantity.NewFromUint64(100_000),
+		},
+	})
+	require.NoError(err, "SetAccount1")
+
+	err = stakeState.SetAccount(ctx, addr2, &staking.Account{
+		General: staking.GeneralAccount{
+			Balance: *quantity.NewFromUint64(100_000),
+		},
+	})
+	require.NoError(err, "SetAccount2")
+
+	for _, tc := range []struct {
+		msg      string
+		params   *staking.ConsensusParameters
+		txSigner signature.PublicKey
+		escrow   *staking.Escrow
+		err      error
+	}{
+		{
+			"should fail when under min delegation amount",
+			&staking.ConsensusParameters{
+				MinDelegationAmount: *quantity.NewFromUint64(1000),
+			},
+			pk1,
+			&staking.Escrow{
+				Account: addr2,
+				Amount:  *quantity.NewFromUint64(100),
+			},
+			staking.ErrUnderMinDelegationAmount,
+		},
+		{
+			"should succeed when over min delegation amount",
+			&staking.ConsensusParameters{
+				MinDelegationAmount: *quantity.NewFromUint64(1000),
+			},
+			pk2,
+			&staking.Escrow{
+				Account: addr1,
+				Amount:  *quantity.NewFromUint64(10000),
+			},
+			nil,
+		},
+		{
+			"should fail when not enough balance",
+			&staking.ConsensusParameters{},
+			pk3,
+			&staking.Escrow{
+				Account: addr1,
+				Amount:  *quantity.NewFromUint64(1000),
+			},
+			quantity.ErrInsufficientBalance,
+		},
+		{
+			"should fail when using reserved address",
+			&staking.ConsensusParameters{},
+			reservedPK,
+			&staking.Escrow{
+				Account: addr3,
+				Amount:  *quantity.NewFromUint64(1000),
+			},
+			staking.ErrForbidden,
+		},
+	} {
+		err = stakeState.SetConsensusParameters(ctx, tc.params)
+		require.NoError(err, "setting staking consensus parameters should not error")
+
+		ctx.SetTxSigner(tc.txSigner)
+
+		err = app.addEscrow(ctx, stakeState, tc.escrow)
+		require.Equal(tc.err, err, tc.msg)
+	}
+}
