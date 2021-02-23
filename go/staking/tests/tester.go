@@ -156,6 +156,7 @@ func StakingImplementationTests(
 		{"CommonPool", testCommonPool},
 		{"LastBlockFees", testLastBlockFees},
 		{"GovernanceDeposits", testGovernanceDeposits},
+		{"Delegations", testDelegations},
 		{"Transfer", testTransfer},
 		{"TransferSelf", testSelfTransfer},
 		{"Burn", testBurn},
@@ -183,6 +184,7 @@ func StakingClientImplementationTests(t *testing.T, backend api.Backend, consens
 	}{
 		{"Thresholds", testThresholds},
 		{"LastBlockFees", testLastBlockFees},
+		{"Delegations", testDelegations},
 		{"Transfer", testTransfer},
 		{"TransferSelf", testSelfTransfer},
 		{"Burn", testBurn},
@@ -246,6 +248,93 @@ func testGovernanceDeposits(t *testing.T, state *stakingTestsState, backend api.
 	governanceDepositsAcc, err := backend.Account(context.Background(), &api.OwnerQuery{Height: consensusAPI.HeightLatest, Owner: api.GovernanceDepositsAddress})
 	require.NoError(err, "Account - GovernanceDeposits")
 	require.True(governanceDepositsAcc.General.Balance.IsZero(), "GovernaceDeposits Account - initial value")
+}
+
+func testDelegations(t *testing.T, state *stakingTestsState, backend api.Backend, consensus consensusAPI.Backend) {
+	require := require.New(t)
+
+	accts := state.accounts
+
+	// Incoming delegations to accounts.
+	//
+	// NOTE: testEscrow/testSelfEscrow tests reclaim all active shares from
+	// account 1's escrow, so we omit accout 1 from these checks.
+	expectedDelegationsTo := map[int][]int{
+		// Delegations to account 1.
+		1: {1},
+		// Delegations to account 2.
+		2: {},
+		// Delegations to account 3.
+		3: {2, 5},
+		// Delegations to account 4.
+		4: {2, 3, 5, 6},
+		// Delegations to account 5.
+		5: {},
+		// Delegations to account 6.
+		6: {},
+		// Delegations to account 7.
+		7: {1, 5, 7},
+	}
+
+	for a := 2; a <= 7; a++ {
+		delegationsToAcc, err := backend.DelegationsTo(
+			context.Background(), &api.OwnerQuery{Owner: accts.GetAddress(a), Height: consensusAPI.HeightLatest},
+		)
+		require.NoErrorf(err, "account %d - DelegationsTo", a)
+		require.Lenf(delegationsToAcc, len(expectedDelegationsTo[a]), "account %d  - number of incoming delegations", a)
+		for _, i := range expectedDelegationsTo[a] {
+			require.Containsf(delegationsToAcc, accts.GetAddress(i), "account %d - expected delegation from account %d", a, i)
+		}
+	}
+
+	// Incoming debonding delegations to accounts.
+	expectedDebDelegationsTo := map[int]map[int]int{
+		// Debonding delegations to account 1.
+		1: {},
+		// Debonding delegations to account 2.
+		2: {},
+		// Debonding delegations to account 3.
+		3: {
+			// 2 debonding delegations from account 2.
+			2: 2,
+			// 1 debonding delegation from account 1.
+			5: 1,
+		},
+		// Debonding delegations to account 4.
+		4: {
+			// 1 debonding delegation from account 3.
+			3: 1,
+			// 2 debonding delegations from account 4.
+			4: 2,
+			// 4 debonding delegations from account 6.
+			6: 4,
+			// 3 debonding delegations from account 7.
+			7: 3,
+		},
+		// Debonding delegations to account 5.
+		5: {},
+		// Debonding delegations to account 6.
+		6: {},
+		// Debonding delegations to account 7.
+		7: {
+			// 1 debonding delegation from account 3.
+			3: 1,
+			// 2 debonding delegations from account 6.
+			6: 2,
+		},
+	}
+
+	for a := 1; a <= 7; a++ {
+		debDelegationsToAcc, err := backend.DebondingDelegationsTo(
+			context.Background(), &api.OwnerQuery{Owner: accts.GetAddress(a), Height: consensusAPI.HeightLatest},
+		)
+		require.NoErrorf(err, "account %d - DebondingDelegationsTo", a)
+		require.Lenf(debDelegationsToAcc, len(expectedDebDelegationsTo[a]), "account %d  - number of incoming debonding delegations", a)
+		for i, num := range expectedDebDelegationsTo[a] {
+			require.Containsf(debDelegationsToAcc, accts.GetAddress(i), "account %d - expected debonding delegation(s) from account %d", a, i)
+			require.Lenf(debDelegationsToAcc[accts.GetAddress(i)], num, "account %d - expected %d debonding delegation(s) from account %d", a, num, i)
+		}
+	}
 }
 
 func testTransfer(t *testing.T, state *stakingTestsState, backend api.Backend, consensus consensusAPI.Backend) {

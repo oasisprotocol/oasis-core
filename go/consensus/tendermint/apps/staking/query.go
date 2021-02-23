@@ -21,7 +21,9 @@ type Query interface {
 	Addresses(context.Context) ([]staking.Address, error)
 	Account(context.Context, staking.Address) (*staking.Account, error)
 	Delegations(context.Context, staking.Address) (map[staking.Address]*staking.Delegation, error)
+	DelegationsTo(context.Context, staking.Address) (map[staking.Address]*staking.Delegation, error)
 	DebondingDelegations(context.Context, staking.Address) (map[staking.Address][]*staking.DebondingDelegation, error)
+	DebondingDelegationsTo(context.Context, staking.Address) (map[staking.Address][]*staking.DebondingDelegation, error)
 	Genesis(context.Context) (*staking.Genesis, error)
 	ConsensusParameters(context.Context) (*staking.ConsensusParameters, error)
 }
@@ -123,8 +125,16 @@ func (sq *stakingQuerier) Delegations(ctx context.Context, addr staking.Address)
 	return sq.state.DelegationsFor(ctx, addr)
 }
 
+func (sq *stakingQuerier) DelegationsTo(ctx context.Context, addr staking.Address) (map[staking.Address]*staking.Delegation, error) {
+	return sq.state.DelegationsTo(ctx, addr)
+}
+
 func (sq *stakingQuerier) DebondingDelegations(ctx context.Context, addr staking.Address) (map[staking.Address][]*staking.DebondingDelegation, error) {
 	return sq.state.DebondingDelegationsFor(ctx, addr)
+}
+
+func (sq *stakingQuerier) DebondingDelegationsTo(ctx context.Context, addr staking.Address) (map[staking.Address][]*staking.DebondingDelegation, error) {
+	return sq.state.DebondingDelegationsTo(ctx, addr)
 }
 
 func (sq *stakingQuerier) ConsensusParameters(ctx context.Context) (*staking.ConsensusParameters, error) {

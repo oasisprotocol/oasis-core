@@ -153,9 +153,17 @@ type Backend interface {
 	// (delegator).
 	Delegations(ctx context.Context, query *OwnerQuery) (map[Address]*Delegation, error)
 
+	// DelegationsTo returns the list of (incoming) delegations to the given
+	// account.
+	DelegationsTo(ctx context.Context, query *OwnerQuery) (map[Address]*Delegation, error)
+
 	// DebondingDelegations returns the list of debonding delegations for
 	// the given owner (delegator).
 	DebondingDelegations(ctx context.Context, query *OwnerQuery) (map[Address][]*DebondingDelegation, error)
+
+	// DebondingDelegationsTo returns the list of (incoming) debonding
+	// delegations to the given account.
+	DebondingDelegationsTo(ctx context.Context, query *OwnerQuery) (map[Address][]*DebondingDelegation, error)
 
 	// Allowance looks up the allowance for the given owner/beneficiary combination.
 	Allowance(ctx context.Context, query *AllowanceQuery) (*quantity.Quantity, error)

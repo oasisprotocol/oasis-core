@@ -34,8 +34,12 @@ var (
 	methodAccount = serviceName.NewMethod("Account", OwnerQuery{})
 	// methodDelegations is the Delegations method.
 	methodDelegations = serviceName.NewMethod("Delegations", OwnerQuery{})
+	// methodDelegationsTo is the DelegationsTo method.
+	methodDelegationsTo = serviceName.NewMethod("DelegationsTo", OwnerQuery{})
 	// methodDebondingDelegations is the DebondingDelegations method.
 	methodDebondingDelegations = serviceName.NewMethod("DebondingDelegations", OwnerQuery{})
+	// methodDebondingDelegationsTo is the DebondingDelegationsTo method.
+	methodDebondingDelegationsTo = serviceName.NewMethod("DebondingDelegationsTo", OwnerQuery{})
 	// methodAllowance is the Allowance method.
 	methodAllowance = serviceName.NewMethod("Allowance", AllowanceQuery{})
 	// methodStateToGenesis is the StateToGenesis method.
@@ -94,8 +98,16 @@ var (
 				Handler:    handlerDelegations,
 			},
 			{
+				MethodName: methodDelegationsTo.ShortName(),
+				Handler:    handlerDelegationsTo,
+			},
+			{
 				MethodName: methodDebondingDelegations.ShortName(),
 				Handler:    handlerDebondingDelegations,
+			},
+			{
+				MethodName: methodDebondingDelegationsTo.ShortName(),
+				Handler:    handlerDebondingDelegationsTo,
 			},
 			{
 				MethodName: methodAllowance.ShortName(),
@@ -346,6 +358,29 @@ func handlerDelegations( // nolint: golint
 	return interceptor(ctx, &query, info, handler)
 }
 
+func handlerDelegationsTo( // nolint: golint
+	srv interface{},
+	ctx context.Context,
+	dec func(interface{}) error,
+	interceptor grpc.UnaryServerInterceptor,
+) (interface{}, error) {
+	var query OwnerQuery
+	if err := dec(&query); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(Backend).DelegationsTo(ctx, &query)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: methodDelegationsTo.FullName(),
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(Backend).DelegationsTo(ctx, req.(*OwnerQuery))
+	}
+	return interceptor(ctx, &query, info, handler)
+}
+
 func handlerDebondingDelegations( // nolint: golint
 	srv interface{},
 	ctx context.Context,
@@ -365,6 +400,29 @@ func handlerDebondingDelegations( // nolint: golint
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(Backend).DebondingDelegations(ctx, req.(*OwnerQuery))
+	}
+	return interceptor(ctx, &query, info, handler)
+}
+
+func handlerDebondingDelegationsTo( // nolint: golint
+	srv interface{},
+	ctx context.Context,
+	dec func(interface{}) error,
+	interceptor grpc.UnaryServerInterceptor,
+) (interface{}, error) {
+	var query OwnerQuery
+	if err := dec(&query); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(Backend).DebondingDelegationsTo(ctx, &query)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: methodDebondingDelegationsTo.FullName(),
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(Backend).DebondingDelegationsTo(ctx, req.(*OwnerQuery))
 	}
 	return interceptor(ctx, &query, info, handler)
 }
@@ -578,9 +636,25 @@ func (c *stakingClient) Delegations(ctx context.Context, query *OwnerQuery) (map
 	return rsp, nil
 }
 
+func (c *stakingClient) DelegationsTo(ctx context.Context, query *OwnerQuery) (map[Address]*Delegation, error) {
+	var rsp map[Address]*Delegation
+	if err := c.conn.Invoke(ctx, methodDelegationsTo.FullName(), query, &rsp); err != nil {
+		return nil, err
+	}
+	return rsp, nil
+}
+
 func (c *stakingClient) DebondingDelegations(ctx context.Context, query *OwnerQuery) (map[Address][]*DebondingDelegation, error) {
 	var rsp map[Address][]*DebondingDelegation
 	if err := c.conn.Invoke(ctx, methodDebondingDelegations.FullName(), query, &rsp); err != nil {
+		return nil, err
+	}
+	return rsp, nil
+}
+
+func (c *stakingClient) DebondingDelegationsTo(ctx context.Context, query *OwnerQuery) (map[Address][]*DebondingDelegation, error) {
+	var rsp map[Address][]*DebondingDelegation
+	if err := c.conn.Invoke(ctx, methodDebondingDelegationsTo.FullName(), query, &rsp); err != nil {
 		return nil, err
 	}
 	return rsp, nil
