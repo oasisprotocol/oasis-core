@@ -156,11 +156,52 @@ func doAccountInfo(cmd *cobra.Command, args []string) {
 
 	ctx := context.Background()
 	acct := getAccount(ctx, cmd, addr, client)
+	outgoingDelegationInfos := getDelegationInfosFor(ctx, cmd, addr, client)
+	incomingDelegations := getDelegationsTo(ctx, cmd, addr, client)
+	outgoingDebondingDelegationInfos := getDebondingDelegationInfosFor(ctx, cmd, addr, client)
+	incomingDebondingDelegations := getDebondingDelegationsTo(ctx, cmd, addr, client)
 	symbol := getTokenSymbol(ctx, cmd, client)
 	exp := getTokenValueExponent(ctx, cmd, client)
 	ctx = context.WithValue(ctx, prettyprint.ContextKeyTokenSymbol, symbol)
 	ctx = context.WithValue(ctx, prettyprint.ContextKeyTokenValueExponent, exp)
-	acct.PrettyPrint(ctx, "", os.Stdout)
+
+	fmt.Println("Balance:")
+	prettyPrintAccountBalanceAndDelegationsFrom(ctx, addr, acct.General, outgoingDelegationInfos, outgoingDebondingDelegationInfos, "  ", os.Stdout)
+	fmt.Println()
+
+	if len(acct.General.Allowances) > 0 {
+		fmt.Println("Allowances for this Account:")
+		prettyPrintAllowances(ctx, addr, acct.General.Allowances, "  ", os.Stdout)
+		fmt.Println()
+	}
+
+	if len(incomingDelegations) > 0 {
+		fmt.Println("Active Delegations to this Account:")
+		prettyPrintDelegationsTo(ctx, addr, acct.Escrow.Active, incomingDelegations, "  ", os.Stdout)
+		fmt.Println()
+	}
+
+	if len(incomingDebondingDelegations) > 0 {
+		fmt.Println("Debonding Delegations to this Account:")
+		prettyPrintDelegationsTo(ctx, addr, acct.Escrow.Debonding, incomingDebondingDelegations, "  ", os.Stdout)
+		fmt.Println()
+	}
+
+	cs := acct.Escrow.CommissionSchedule
+	if len(cs.Rates) > 0 || len(cs.Bounds) > 0 {
+		fmt.Println("Commission Schedule:")
+		cs.PrettyPrint(ctx, "  ", os.Stdout)
+		fmt.Println()
+	}
+
+	sa := acct.Escrow.StakeAccumulator
+	if len(sa.Claims) > 0 {
+		fmt.Println("Stake Accumulator:")
+		sa.PrettyPrint(ctx, "  ", os.Stdout)
+		fmt.Println()
+	}
+
+	fmt.Printf("Nonce: %d\n", acct.General.Nonce)
 }
 
 func doAccountNonce(cmd *cobra.Command, args []string) {
