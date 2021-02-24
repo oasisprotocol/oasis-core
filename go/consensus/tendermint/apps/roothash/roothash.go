@@ -302,8 +302,10 @@ func (app *rootHashApplication) emitEmptyBlock(ctx *tmapi.Context, runtime *root
 	}
 
 	tagV := ValueFinalized{
-		ID:    runtime.Runtime.ID,
-		Round: blk.Header.Round,
+		ID: runtime.Runtime.ID,
+		Event: roothash.FinalizedEvent{
+			Round: blk.Header.Round,
+		},
 	}
 	ctx.EmitEvent(
 		tmapi.NewEventBuilder(app.Name()).
@@ -474,8 +476,10 @@ func (app *rootHashApplication) onNewRuntime(ctx *tmapi.Context, runtime *regist
 
 	// This transaction now also includes a new block for the given runtime.
 	tagV := ValueFinalized{
-		ID:    runtime.ID,
-		Round: genesisBlock.Header.Round,
+		ID: runtime.ID,
+		Event: roothash.FinalizedEvent{
+			Round: genesisBlock.Header.Round,
+		},
 	}
 	ctx.EmitEvent(
 		tmapi.NewEventBuilder(app.Name()).
@@ -646,8 +650,12 @@ func (app *rootHashApplication) tryFinalizeExecutorCommits(
 		rtState.LastNormalHeight = ctx.BlockHeight() + 1
 
 		tagV := ValueFinalized{
-			ID:    rtState.Runtime.ID,
-			Round: blk.Header.Round,
+			ID: rtState.Runtime.ID,
+			Event: roothash.FinalizedEvent{
+				Round:            blk.Header.Round,
+				GoodComputeNodes: goodComputeNodes,
+				BadComputeNodes:  badComputeNodes,
+			},
 		}
 		ctx.EmitEvent(
 			tmapi.NewEventBuilder(app.Name()).

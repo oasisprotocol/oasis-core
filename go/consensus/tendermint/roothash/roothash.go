@@ -255,10 +255,16 @@ func (sc *serviceClient) getRoundResults(ctx context.Context, runtimeID common.N
 
 	results := new(api.RoundResults)
 	for _, ev := range evs {
-		if ev.Message == nil || !ev.RuntimeID.Equal(&runtimeID) {
+		switch {
+		case !ev.RuntimeID.Equal(&runtimeID):
 			continue
+		case ev.Message != nil:
+			results.Messages = append(results.Messages, ev.Message)
+		case ev.Finalized != nil:
+			results.GoodComputeNodes = ev.Finalized.GoodComputeNodes
+			results.BadComputeNodes = ev.Finalized.BadComputeNodes
+		default:
 		}
-		results.Messages = append(results.Messages, ev.Message)
 	}
 	return results, nil
 }
@@ -427,10 +433,10 @@ func (sc *serviceClient) reindexBlocks(currentHeight int64, bh api.BlockHistory)
 					if sc.trackedRuntime[value.ID] == nil {
 						continue
 					}
-					if err = sc.processFinalizedEvent(sc.ctx, height, value.ID, &value.Round, false); err != nil {
+					if err = sc.processFinalizedEvent(sc.ctx, height, value.ID, &value.Event.Round, false); err != nil {
 						return 0, fmt.Errorf("failed to process finalized event: %w", err)
 					}
-					lastRound = value.Round
+					lastRound = value.Event.Round
 				}
 			}
 		}
@@ -675,7 +681,7 @@ func EventsFromTendermint(
 					continue
 				}
 
-				ev := &api.Event{RuntimeID: value.ID, Height: height, TxHash: txHash, Finalized: &api.FinalizedEvent{Round: value.Round}}
+				ev := &api.Event{RuntimeID: value.ID, Height: height, TxHash: txHash, Finalized: &value.Event}
 				events = append(events, ev)
 			case bytes.Equal(key, app.KeyExecutionDiscrepancyDetected):
 				// An execution discrepancy has been detected.

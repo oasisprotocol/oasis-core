@@ -7,13 +7,6 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/roothash/api/block"
 )
 
-// RoundResults contains information about how a particular round was executed by the consensus
-// layer.
-type RoundResults struct {
-	// Messages are the results of executing emitted runtime messages.
-	Messages []*MessageEvent `json:"messages,omitempty"`
-}
-
 // BlockHistory is the root hash block history keeper interface.
 //
 // All methods operate on a specific runtime.

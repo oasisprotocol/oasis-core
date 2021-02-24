@@ -73,8 +73,8 @@ type ValueExecutorCommitted struct {
 
 // ValueFinalized is the value component of a TagFinalized.
 type ValueFinalized struct {
-	ID    common.Namespace `json:"id"`
-	Round uint64           `json:"round"`
+	ID    common.Namespace        `json:"id"`
+	Event roothash.FinalizedEvent `json:"event"`
 }
 
 // ValueExecutionDiscrepancyDetected is the value component of a KeyMergeDiscrepancyDetected.
