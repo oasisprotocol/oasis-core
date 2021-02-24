@@ -587,50 +587,41 @@ func (app *rootHashApplication) tryFinalizeExecutorCommits(
 			return fmt.Errorf("failed to process runtime messages: %w", err)
 		}
 
+		var (
+			goodComputeNodes []signature.PublicKey
+			badComputeNodes  []signature.PublicKey
+		)
+		commitments := pool.ExecuteCommitments
+		seen := make(map[signature.PublicKey]bool)
+		for _, n := range pool.Committee.Members {
+			c, ok := commitments[n.PublicKey]
+			if !ok || c.IsIndicatingFailure() || seen[n.PublicKey] {
+				continue
+			}
+			// Make sure to not include nodes in multiple roles multiple times.
+			seen[n.PublicKey] = true
+
+			switch commit.MostlyEqual(c) {
+			case true:
+				// Correct commit.
+				goodComputeNodes = append(goodComputeNodes, n.PublicKey)
+			case false:
+				// Incorrect commit.
+				badComputeNodes = append(badComputeNodes, n.PublicKey)
+			}
+		}
+
 		// If there was a discrepancy, slash nodes for incorrect results if configured.
 		if pool.Discrepancy {
 			ctx.Logger().Debug("executor pool discrepancy",
 				"slashing", runtime.Staking.Slashing,
 			)
 			if penalty, ok := rtState.Runtime.Staking.Slashing[staking.SlashRuntimeIncorrectResults]; ok && !penalty.Amount.IsZero() {
-				commitments := pool.ExecuteCommitments
-				var (
-					// Worker nodes that submitted incorrect results get slashed.
-					workersIncorrectResults []signature.PublicKey
-					// Backup worker nodes that resolved the discrepancy get rewarded.
-					backupCorrectResults []signature.PublicKey
-				)
-				for _, n := range pool.Committee.Members {
-					c, ok := commitments[n.PublicKey]
-					if !ok || c.IsIndicatingFailure() {
-						continue
-					}
-					switch n.Role {
-					case scheduler.RoleBackupWorker:
-						// Backup workers that resolved the discrepancy.
-						if !commit.MostlyEqual(c) {
-							continue
-						}
-						ctx.Logger().Debug("backup worker resolved the discrepancy",
-							"pubkey", n.PublicKey,
-						)
-						backupCorrectResults = append(backupCorrectResults, n.PublicKey)
-					case scheduler.RoleWorker:
-						// Workers that caused the discrepancy.
-						if commit.MostlyEqual(c) {
-							continue
-						}
-						ctx.Logger().Debug("worker caused the discrepancy",
-							"pubkey", n.PublicKey,
-						)
-						workersIncorrectResults = append(workersIncorrectResults, n.PublicKey)
-					}
-				}
 				// Slash for incorrect results.
 				if err = onRuntimeIncorrectResults(
 					ctx,
-					workersIncorrectResults,
-					backupCorrectResults,
+					badComputeNodes,
+					goodComputeNodes,
 					runtime,
 					&penalty.Amount,
 				); err != nil {
