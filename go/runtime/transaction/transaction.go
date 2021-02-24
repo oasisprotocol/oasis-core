@@ -85,6 +85,44 @@ var (
 	tagKeyFmt = keyformat.New('E', []byte{}, &hash.Hash{})
 )
 
+// ValidateIOWriteLog validates the writelog for IO storage.
+func ValidateIOWriteLog(writeLog writelog.WriteLog, maxBatchSize, maxBatchSizeBytes uint64) error {
+	var (
+		hash            hash.Hash
+		kind            artifactKind
+		decKey          []byte
+		inputs, outputs uint64
+		inputSize       uint64
+	)
+	for _, wle := range writeLog {
+		switch {
+		case txnKeyFmt.Decode(wle.Key, &hash, &kind):
+			if kind != kindInput && kind != kindOutput {
+				return fmt.Errorf("transaction: invalid artifact kind")
+			}
+			if kind == kindInput {
+				inputs++
+				inputSize += uint64(len(wle.Value))
+			}
+			if kind == kindOutput {
+				outputs++
+			}
+		case tagKeyFmt.Decode(wle.Key, &decKey, &hash):
+		default:
+			return fmt.Errorf("transaction: invalid key format")
+		}
+
+		if inputs > maxBatchSize || outputs > maxBatchSize {
+			return fmt.Errorf("transaction: too many inputs or outputs")
+		}
+		if inputSize > maxBatchSizeBytes {
+			return fmt.Errorf("transaction: input set size exceeds configuration")
+		}
+	}
+
+	return nil
+}
+
 // inputArtifacts are the input transaction artifacts.
 //
 // These are the artifacts that are stored CBOR-serialized in the Merkle tree.
