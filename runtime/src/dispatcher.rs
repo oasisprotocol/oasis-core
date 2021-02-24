@@ -227,7 +227,7 @@ impl Dispatcher {
                     self.dispatch_local_rpc(&mut rpc_dispatcher, &protocol, ctx, request)
                 }
                 Body::RuntimeExecuteTxBatchRequest {
-                    message_results,
+                    round_results,
                     io_root,
                     inputs,
                     block,
@@ -241,7 +241,7 @@ impl Dispatcher {
                         io_root,
                         inputs,
                         block,
-                        message_results,
+                        round_results,
                         false,
                     )
                 }
@@ -255,7 +255,7 @@ impl Dispatcher {
                         Hash::default(),
                         inputs,
                         block,
-                        vec![],
+                        Default::default(),
                         true,
                     )
                 }
@@ -342,7 +342,8 @@ impl Dispatcher {
             protocol.clone(),
         ));
 
-        let txn_ctx = TxnContext::new(ctx.clone(), &header, &[], true);
+        let results = Default::default();
+        let txn_ctx = TxnContext::new(ctx.clone(), &header, &results, true);
         let mut overlay = OverlayTree::new(&mut cache.mkvs);
         let result = StorageContext::enter(&mut overlay, untrusted_local, || {
             txn_dispatcher.query(txn_ctx, &method, args)
@@ -491,13 +492,13 @@ impl Dispatcher {
         io_root: Hash,
         inputs: TxnBatch,
         block: Block,
-        message_results: Vec<roothash::MessageEvent>,
+        round_results: roothash::RoundResults,
         check_only: bool,
     ) -> Result<Body, Error> {
         debug!(self.logger, "Received transaction batch request";
             "state_root" => ?block.header.state_root,
             "round" => block.header.round + 1,
-            "message_results" => ?message_results,
+            "round_results" => ?round_results,
             "check_only" => check_only,
         );
 
@@ -524,7 +525,7 @@ impl Dispatcher {
             Context::create_child(&ctx),
             protocol.clone(),
         ));
-        let txn_ctx = TxnContext::new(ctx.clone(), &block.header, &message_results, check_only);
+        let txn_ctx = TxnContext::new(ctx.clone(), &block.header, &round_results, check_only);
         if check_only {
             self.txn_check_batch(
                 ctx,

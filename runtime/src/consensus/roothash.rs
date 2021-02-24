@@ -121,6 +121,14 @@ impl MessageEvent {
     }
 }
 
+/// Information about how a particular round was executed by the consensus layer.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct RoundResults {
+    /// Results of executing emitted runtime messages.
+    #[serde(default)]
+    pub messages: Vec<MessageEvent>,
+}
+
 /// Block header.
 #[derive(Clone, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct Header {

@@ -118,7 +118,7 @@ func (p *keepLastPruner) Prune(ctx context.Context, latestRound uint64) error {
 				break
 			}
 
-			if err := tx.Delete(messageResultsKeyFmt.Encode(round)); err != nil {
+			if err := tx.Delete(roundResultsKeyFmt.Encode(round)); err != nil {
 				if err == badger.ErrTxnTooBig {
 					// We can't prune any more rounds in this transaction.
 					break

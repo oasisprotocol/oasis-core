@@ -4,7 +4,7 @@ use std::{any::Any, sync::Arc};
 use io_context::Context as IoContext;
 
 use super::tags::{Tag, Tags};
-use crate::consensus::roothash::{Header, Message, MessageEvent};
+use crate::consensus::roothash::{Header, Message, MessageEvent, RoundResults};
 
 struct NoRuntimeContext;
 
@@ -14,8 +14,8 @@ pub struct Context<'a> {
     pub io_ctx: Arc<IoContext>,
     /// The block header accompanying this transaction.
     pub header: &'a Header,
-    /// Results of message processing emitted in the previous round.
-    pub message_results: &'a [MessageEvent],
+    /// Results of processing the previous successful round.
+    pub round_results: &'a RoundResults,
     /// Runtime-specific context.
     pub runtime: Box<dyn Any>,
 
@@ -35,13 +35,13 @@ impl<'a> Context<'a> {
     pub fn new(
         io_ctx: Arc<IoContext>,
         header: &'a Header,
-        message_results: &'a [MessageEvent],
+        round_results: &'a RoundResults,
         check_only: bool,
     ) -> Self {
         Self {
             io_ctx,
             header,
-            message_results,
+            round_results,
             runtime: Box::new(NoRuntimeContext),
             check_only,
             tags: Tags::new(),
