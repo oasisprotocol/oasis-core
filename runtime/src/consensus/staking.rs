@@ -23,6 +23,20 @@ pub struct Withdraw {
     pub amount: Quantity,
 }
 
+/// A stake escrow.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct Escrow {
+    pub account: Address,
+    pub amount: Quantity,
+}
+
+/// A reclaim escrow.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct ReclaimEscrow {
+    pub account: Address,
+    pub shares: Quantity,
+}
+
 /// Kind of staking threshold.
 #[derive(Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize_repr, Deserialize_repr)]
 #[repr(i32)]

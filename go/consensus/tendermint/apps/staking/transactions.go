@@ -185,6 +185,11 @@ func (app *stakingApplication) addEscrow(ctx *api.Context, state *stakingState.M
 		return err
 	}
 
+	// Check if escrow messages are allowed.
+	if ctx.IsMessageExecution() && !params.AllowEscrowMessages {
+		return staking.ErrForbidden
+	}
+
 	// Return early for simulation as we only need gas accounting.
 	if ctx.IsSimulation() {
 		return nil
@@ -287,6 +292,11 @@ func (app *stakingApplication) reclaimEscrow(ctx *api.Context, state *stakingSta
 		return err
 	}
 
+	// Check if escrow messages are allowed.
+	if ctx.IsMessageExecution() && !params.AllowEscrowMessages {
+		return staking.ErrForbidden
+	}
+
 	// Return early for simulation as we only need gas accounting.
 	if ctx.IsSimulation() {
 		return nil
@@ -373,8 +383,9 @@ func (app *stakingApplication) reclaimEscrow(ctx *api.Context, state *stakingSta
 		return staking.ErrInvalidArgument
 	}
 
-	// Include the nonce as the final disambiguator to prevent overwriting debonding delegations.
-	if err = state.SetDebondingDelegation(ctx, toAddr, reclaim.Account, to.General.Nonce, &deb); err != nil {
+	// Include the end time epoch as the disambiguator. If a debonding delegation for the same account
+	// and end time already exists, the delegations will be merged.
+	if err = state.SetDebondingDelegation(ctx, toAddr, reclaim.Account, deb.DebondEndTime, &deb); err != nil {
 		return fmt.Errorf("failed to set debonding delegation: %w", err)
 	}
 

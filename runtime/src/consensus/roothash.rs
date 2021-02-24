@@ -91,6 +91,10 @@ pub enum StakingMessage {
     Transfer(staking::Transfer),
     #[serde(rename = "withdraw")]
     Withdraw(staking::Withdraw),
+    #[serde(rename = "add_escrow")]
+    AddEscrow(staking::Escrow),
+    #[serde(rename = "reclaim_escrow")]
+    ReclaimEscrow(staking::ReclaimEscrow),
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -362,6 +366,20 @@ mod tests {
                     msg: StakingMessage::Withdraw(staking::Withdraw::default()),
                 }],
                 "069b0fda76d804e3fd65d4bbd875c646f15798fb573ac613100df67f5ba4c3fd",
+            ),
+            (
+                vec![Message::Staking {
+                    v: 0,
+                    msg: StakingMessage::AddEscrow(staking::Escrow::default()),
+                }],
+                "65049870b9dae657390e44065df0c78176816876e67b96dac7791ee6a1aa42e2",
+            ),
+            (
+                vec![Message::Staking {
+                    v: 0,
+                    msg: StakingMessage::ReclaimEscrow(staking::ReclaimEscrow::default()),
+                }],
+                "c78547eae2f104268e49827cbe624cf2b350ee59e8d693dec0673a70a4664a2e",
             ),
             (
                 vec![Message::Registry {

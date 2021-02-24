@@ -5,4 +5,4 @@ extern crate oasis_core_runtime;
 #[macro_use]
 mod api;
 
-pub use api::{Key, KeyValue, Transfer, UpdateRuntime, Withdraw};
+pub use api::{AddEscrow, Key, KeyValue, ReclaimEscrow, Transfer, UpdateRuntime, Withdraw};

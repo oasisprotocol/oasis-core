@@ -140,4 +140,9 @@ func TestChildContext(t *testing.T) {
 	child.EmitEvent(NewEventBuilder("test").Attribute([]byte("foo"), []byte("bar")))
 	child.Close()
 	require.Empty(ctx.GetEvents(), "events should not propagate in simulation mode")
+
+	child = ctx.WithMessageExecution()
+	require.True(child.IsMessageExecution(), "child should have message execution enabled")
+	require.False(ctx.IsMessageExecution(), "parent should not have message execution enabled")
+	child.Close()
 }

@@ -47,20 +47,24 @@ const (
 type runtimeRequest uint8
 
 const (
-	runtimeRequestInsert   runtimeRequest = 0
-	runtimeRequestGet      runtimeRequest = 1
-	runtimeRequestRemove   runtimeRequest = 2
-	runtimeRequestWithdraw runtimeRequest = 3
-	runtimeRequestTransfer runtimeRequest = 4
+	runtimeRequestInsert        runtimeRequest = 0
+	runtimeRequestGet           runtimeRequest = 1
+	runtimeRequestRemove        runtimeRequest = 2
+	runtimeRequestWithdraw      runtimeRequest = 3
+	runtimeRequestTransfer      runtimeRequest = 4
+	runtimeRequestAddEscrow     runtimeRequest = 5
+	runtimeRequestReclaimEscrow runtimeRequest = 6
 )
 
 // Weights to select between requests types.
 var runtimeRequestWeights = map[runtimeRequest]int{
-	runtimeRequestInsert:   3,
-	runtimeRequestGet:      2,
-	runtimeRequestRemove:   3,
-	runtimeRequestWithdraw: 1,
-	runtimeRequestTransfer: 1,
+	runtimeRequestInsert:        3,
+	runtimeRequestGet:           2,
+	runtimeRequestRemove:        3,
+	runtimeRequestWithdraw:      2,
+	runtimeRequestTransfer:      1,
+	runtimeRequestAddEscrow:     1,
+	runtimeRequestReclaimEscrow: 1,
 }
 
 // RuntimeFlags are the runtime workload flags.
@@ -72,9 +76,15 @@ type runtime struct {
 	runtimeID             common.Namespace
 	reckonedKeyValueState map[string]string
 
-	testAddress    staking.Address
-	testBalance    quantity.Quantity
-	runtimeBalance quantity.Quantity
+	testAddress staking.Address
+
+	testInitialBalance quantity.Quantity
+	testInitialEscrow  quantity.Quantity
+
+	runtimeReclaimed   quantity.Quantity
+	runtimeWithdrawn   quantity.Quantity
+	runtimeTransferred quantity.Quantity
+	runtimeEscrowed    quantity.Quantity
 }
 
 func (r *runtime) generateVal(rng *rand.Rand, existingKey bool) string {
@@ -343,6 +353,112 @@ func (r *runtime) doRemoveRequest(ctx context.Context, rng *rand.Rand, rtc runti
 	return nil
 }
 
+func (r *runtime) balanceIsZero(ctx context.Context, address staking.Address) (bool, error) {
+	acct, err := r.Consensus().Staking().Account(ctx, &staking.OwnerQuery{
+		Height: consensus.HeightLatest,
+		Owner:  address,
+	})
+	if err != nil {
+		return false, fmt.Errorf("failed to query account: %w", err)
+	}
+
+	return acct.General.Balance.IsZero(), nil
+}
+
+func (r *runtime) escrowIsZero(ctx context.Context, address staking.Address) (bool, error) {
+	acct, err := r.Consensus().Staking().Account(ctx, &staking.OwnerQuery{
+		Height: consensus.HeightLatest,
+		Owner:  address,
+	})
+	if err != nil {
+		return false, fmt.Errorf("failed to query account: %w", err)
+	}
+
+	return acct.Escrow.Active.Balance.IsZero(), nil
+}
+
+// assertBalanceInvariants asserts some balance invariants that should hold true
+// at every iteration of the test.
+func (r *runtime) assertBalanceInvariants(ctx context.Context) error {
+	// Use a consistent height for querying balances.
+	blk, err := r.Consensus().GetBlock(ctx, consensus.HeightLatest)
+	if err != nil {
+		return err
+	}
+	height := blk.Height
+
+	testAcct, err := r.Consensus().Staking().Account(ctx, &staking.OwnerQuery{
+		Height: height,
+		Owner:  r.testAddress,
+	})
+	if err != nil {
+		return fmt.Errorf("failed to query test account: %w", err)
+	}
+
+	rtAcct, err := r.Consensus().Staking().Account(ctx, &staking.OwnerQuery{
+		Height: height,
+		Owner:  staking.NewRuntimeAddress(r.runtimeID),
+	})
+	if err != nil {
+		return fmt.Errorf("failed to query runtime account: %w", err)
+	}
+
+	r.Logger.Debug("asserting balance invariants",
+		"test_account_balance", testAcct.General.Balance,
+		"test_account_escrow", testAcct.Escrow.Active,
+		"test_account_debonding", testAcct.Escrow.Debonding,
+		"runtime_account_balance", rtAcct.General.Balance,
+	)
+
+	// Test account balance should match: initial balance + transferred - withdrawn.
+	expectedTestAcctBalance := r.testInitialBalance.Clone()
+	if err = expectedTestAcctBalance.Add(&r.runtimeTransferred); err != nil {
+		return fmt.Errorf("expectedTestAcctBalance.Add(runtimeTransferred): %w", err)
+	}
+	if err = expectedTestAcctBalance.Sub(&r.runtimeWithdrawn); err != nil {
+		return fmt.Errorf("expectedTestAcctBalance.Sub(runtimeWithdrawn): %w", err)
+	}
+	if testAcct.General.Balance.Cmp(expectedTestAcctBalance) != 0 {
+		return fmt.Errorf("unexpected balance in test account (expected: %s got: %s)", expectedTestAcctBalance, testAcct.General.Balance)
+	}
+
+	// Test account escrow should match: initial escrowed + escrowed - reclaimed.
+	expectedTestAcctEscrow := r.testInitialEscrow.Clone()
+	if err = expectedTestAcctEscrow.Add(&r.runtimeEscrowed); err != nil {
+		return fmt.Errorf("expectedTestAcctEscrow.Add(runtimeEscrowed): %w", err)
+	}
+	if err = expectedTestAcctEscrow.Sub(&r.runtimeReclaimed); err != nil {
+		return fmt.Errorf("expectedTestAcctEscrow.Sub(runtimeReclaimed): %w", err)
+	}
+	if testAcct.Escrow.Active.Balance.Cmp(expectedTestAcctEscrow) != 0 {
+		return fmt.Errorf("unexpected escrow in test account (expected: %s got: %s)", expectedTestAcctEscrow, testAcct.Escrow.Active.Balance)
+	}
+
+	// Runtime account balance + test account debonding, should match: widthdrawn + reclaimed - transferred - escrowed.
+	// NOTE: since reclaim escrow effect to the runtime account is delayed (debonding period), we cannot
+	// check runtime account balance directly.
+	rtAcctAndDebonding := rtAcct.General.Balance.Clone()
+	if err = rtAcctAndDebonding.Add(&testAcct.Escrow.Debonding.Balance); err != nil {
+		return fmt.Errorf("rtAcctAndDebonding.Add(testAcct.Escrow): %w", err)
+	}
+
+	expectedRtAndDebonding := r.runtimeWithdrawn.Clone()
+	if err = expectedRtAndDebonding.Add(&r.runtimeReclaimed); err != nil {
+		return fmt.Errorf("expectedRtAndDebonding.Add(runtimeReclaimed): %w", err)
+	}
+	if err = expectedRtAndDebonding.Sub(&r.runtimeTransferred); err != nil {
+		return fmt.Errorf("expectedRtAndDebonding.Sub(runtimeTransferred): %w", err)
+	}
+	if err = expectedRtAndDebonding.Sub(&r.runtimeEscrowed); err != nil {
+		return fmt.Errorf("expectedRtAndDebonding.Sub(runtimeEscrowed): %w", err)
+	}
+	if rtAcctAndDebonding.Cmp(expectedRtAndDebonding) != 0 {
+		return fmt.Errorf("unexpected balance + debonding of runtime account (expected: %s got: %s)", expectedRtAndDebonding, rtAcctAndDebonding)
+	}
+
+	return nil
+}
+
 func (r *runtime) doWithdrawRequest(ctx context.Context, rng *rand.Rand, rtc runtimeClient.RuntimeClient) error {
 	// Submit message request.
 	amount := *quantity.NewFromUint64(1)
@@ -373,44 +489,18 @@ func (r *runtime) doWithdrawRequest(ctx context.Context, rng *rand.Rand, rtc run
 		"response", rsp,
 	)
 
-	// Make sure the withdrawal was processed correctly in the consensus layer.
-	acct, err := r.Consensus().Staking().Account(ctx, &staking.OwnerQuery{
-		Height: consensus.HeightLatest,
-		Owner:  r.testAddress,
-	})
-	if err != nil {
-		return fmt.Errorf("failed to query test account: %w", err)
+	if err = r.runtimeWithdrawn.Add(&amount); err != nil {
+		return fmt.Errorf("error updating runtimeWidthdrawn: %w", err)
 	}
-
-	// Check source account balance.
-	if err = r.testBalance.Sub(&amount); err != nil {
-		return fmt.Errorf("failed to compute new test balance: %w", err)
-	}
-	if r.testBalance.Cmp(&acct.General.Balance) != 0 {
-		return fmt.Errorf("unexpected balance in test account (expected: %s got: %s)", r.testBalance, acct.General.Balance)
-	}
-
-	// Check runtime account balance.
-	acct, err = r.Consensus().Staking().Account(ctx, &staking.OwnerQuery{
-		Height: consensus.HeightLatest,
-		Owner:  staking.NewRuntimeAddress(r.runtimeID),
-	})
-	if err != nil {
-		return fmt.Errorf("failed to query runtime account: %w", err)
-	}
-
-	if err = r.runtimeBalance.Add(&amount); err != nil {
-		return fmt.Errorf("failed to compute new runtime balance: %w", err)
-	}
-	if r.runtimeBalance.Cmp(&acct.General.Balance) != 0 {
-		return fmt.Errorf("unexpected balance in runtime account (expected: %s got: %s)", r.runtimeBalance, acct.General.Balance)
-	}
-
-	return nil
+	return r.assertBalanceInvariants(ctx)
 }
 
 func (r *runtime) doTransferRequest(ctx context.Context, rng *rand.Rand, rtc runtimeClient.RuntimeClient) error {
-	if r.runtimeBalance.IsZero() {
+	zero, err := r.balanceIsZero(ctx, staking.NewRuntimeAddress(r.runtimeID))
+	if err != nil {
+		return err
+	}
+	if zero {
 		return nil
 	}
 
@@ -443,40 +533,100 @@ func (r *runtime) doTransferRequest(ctx context.Context, rng *rand.Rand, rtc run
 		"response", rsp,
 	)
 
-	// Make sure the transfer was processed correctly in the consensus layer.
-	acct, err := r.Consensus().Staking().Account(ctx, &staking.OwnerQuery{
-		Height: consensus.HeightLatest,
-		Owner:  r.testAddress,
-	})
+	if err = r.runtimeTransferred.Add(&amount); err != nil {
+		return fmt.Errorf("error updating runtimeTransferred: %w", err)
+	}
+	return r.assertBalanceInvariants(ctx)
+}
+
+func (r *runtime) doAddEscrowRequest(ctx context.Context, rng *rand.Rand, rtc runtimeClient.RuntimeClient) error {
+	zero, err := r.balanceIsZero(ctx, staking.NewRuntimeAddress(r.runtimeID))
 	if err != nil {
-		return fmt.Errorf("failed to query test account: %w", err)
+		return err
+	}
+	if zero {
+		return nil
 	}
 
-	// Check source account balance.
-	if err = r.testBalance.Add(&amount); err != nil {
-		return fmt.Errorf("failed to compute new test balance: %w", err)
+	// Submit message request.
+	amount := *quantity.NewFromUint64(1)
+	req := &runtimeTransaction.TxnCall{
+		Method: "consensus_add_escrow",
+		Args: struct {
+			Escrow staking.Escrow `json:"escrow"`
+			Nonce  uint64         `json:"nonce"`
+		}{
+			Escrow: staking.Escrow{
+				Account: r.testAddress,
+				Amount:  amount,
+			},
+			Nonce: rng.Uint64(),
+		},
 	}
-	if r.testBalance.Cmp(&acct.General.Balance) != 0 {
-		return fmt.Errorf("unexpected balance in test account (expected: %s got: %s)", r.testBalance, acct.General.Balance)
-	}
-
-	// Check runtime account balance.
-	acct, err = r.Consensus().Staking().Account(ctx, &staking.OwnerQuery{
-		Height: consensus.HeightLatest,
-		Owner:  staking.NewRuntimeAddress(r.runtimeID),
-	})
+	rsp, err := r.submitRuntimeRquest(ctx, rtc, req)
 	if err != nil {
-		return fmt.Errorf("failed to query runtime account: %w", err)
+		r.Logger.Error("Submit add escrow request failure",
+			"request", req,
+			"err", err,
+		)
+		return fmt.Errorf("submit add escrow request failed: %w", err)
 	}
 
-	if err = r.runtimeBalance.Sub(&amount); err != nil {
-		return fmt.Errorf("failed to compute new runtime balance: %w", err)
+	r.Logger.Debug("add escrow request success",
+		"request", req,
+		"response", rsp,
+	)
+
+	if err = r.runtimeEscrowed.Add(&amount); err != nil {
+		return fmt.Errorf("error updating runtimeEscrowed: %w", err)
 	}
-	if r.runtimeBalance.Cmp(&acct.General.Balance) != 0 {
-		return fmt.Errorf("unexpected balance in runtime account (expected: %s got: %s)", r.runtimeBalance, acct.General.Balance)
+	return r.assertBalanceInvariants(ctx)
+}
+
+func (r *runtime) doReclaimEscrowRequest(ctx context.Context, rng *rand.Rand, rtc runtimeClient.RuntimeClient) error {
+	zero, err := r.escrowIsZero(ctx, r.testAddress)
+	if err != nil {
+		return err
+	}
+	if zero {
+		return nil
 	}
 
-	return nil
+	// Submit message request.
+	// Shares should match balance in the test account, as the account is not
+	// getting any rewards or is being slashed.
+	amount := *quantity.NewFromUint64(1)
+	req := &runtimeTransaction.TxnCall{
+		Method: "consensus_reclaim_escrow",
+		Args: struct {
+			ReclaimEscrow staking.ReclaimEscrow `json:"reclaim_escrow"`
+			Nonce         uint64                `json:"nonce"`
+		}{
+			ReclaimEscrow: staking.ReclaimEscrow{
+				Account: r.testAddress,
+				Shares:  amount,
+			},
+			Nonce: rng.Uint64(),
+		},
+	}
+	rsp, err := r.submitRuntimeRquest(ctx, rtc, req)
+	if err != nil {
+		r.Logger.Error("Submit reclaim escrow request failure",
+			"request", req,
+			"err", err,
+		)
+		return fmt.Errorf("submit reclaim escrow request failed: %w", err)
+	}
+
+	r.Logger.Debug("reclaim escrow request success",
+		"request", req,
+		"response", rsp,
+	)
+
+	if err = r.runtimeReclaimed.Add(&amount); err != nil {
+		return fmt.Errorf("error updating runtimeReclaimed: %w", err)
+	}
+	return r.assertBalanceInvariants(ctx)
 }
 
 // Implements Workload.
@@ -511,7 +661,7 @@ func (r *runtime) initAccounts(ctx context.Context, fundingAccount signature.Sig
 	if err != nil {
 		return fmt.Errorf("failed to query account: %w", err)
 	}
-	r.testBalance = acct.General.Balance
+	r.testInitialBalance = acct.General.Balance
 
 	return nil
 }
@@ -535,7 +685,7 @@ func (r *runtime) Run(
 	// Simple-keyvalue runtime.
 	err := r.runtimeID.UnmarshalHex(viper.GetString(CfgRuntimeID))
 	if err != nil {
-		r.Logger.Error("runtime unmsrshal error",
+		r.Logger.Error("runtime unmarshal error",
 			"err", err,
 			"runtime_id", viper.GetString(CfgRuntimeID),
 		)
@@ -596,6 +746,14 @@ func (r *runtime) Run(
 		case runtimeRequestTransfer:
 			if err := r.doTransferRequest(ctx, rng, rtc); err != nil {
 				return fmt.Errorf("doTransferRequest failure: %w", err)
+			}
+		case runtimeRequestAddEscrow:
+			if err := r.doAddEscrowRequest(ctx, rng, rtc); err != nil {
+				return fmt.Errorf("doAddEscrowRequest failure: %w", err)
+			}
+		case runtimeRequestReclaimEscrow:
+			if err := r.doReclaimEscrowRequest(ctx, rng, rtc); err != nil {
+				return fmt.Errorf("doReclaimEscrowRequest failure: %w", err)
 			}
 		default:
 			return fmt.Errorf("unimplemented")

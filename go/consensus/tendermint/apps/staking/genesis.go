@@ -259,7 +259,7 @@ func (app *stakingApplication) initDebondingDelegations(ctx *abciAPI.Context, st
 					)
 				}
 
-				if err := state.SetDebondingDelegation(ctx, delegatorAddr, escrowAddr, uint64(idx), delegation); err != nil {
+				if err := state.SetDebondingDelegation(ctx, delegatorAddr, escrowAddr, delegation.DebondEndTime, delegation); err != nil {
 					return fmt.Errorf("tendermint/staking: failed to set debonding delegation to %s from %s index %d: %w",
 						escrowAddr, delegatorAddr, idx, err,
 					)

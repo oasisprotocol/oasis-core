@@ -57,13 +57,14 @@ func (m ContextMode) String() string {
 }
 
 // Context is the context of processing a transaction/block.
-type Context struct {
+type Context struct { // nolint: maligned
 	context.Context
 
 	parent *Context
 
-	mode        ContextMode
-	currentTime time.Time
+	mode               ContextMode
+	currentTime        time.Time
+	isMessageExecution bool
 
 	data          interface{}
 	events        []types.Event
@@ -200,19 +201,20 @@ func (c *Context) CallerAddress() staking.Address {
 // NewChild creates a new child context.
 func (c *Context) NewChild() *Context {
 	cc := &Context{
-		parent:          c,
-		mode:            c.mode,
-		currentTime:     c.currentTime,
-		gasAccountant:   c.gasAccountant,
-		txSigner:        c.txSigner,
-		callerAddress:   c.callerAddress,
-		appState:        c.appState,
-		state:           c.state,
-		blockHeight:     c.blockHeight,
-		blockCtx:        c.blockCtx,
-		initialHeight:   c.initialHeight,
-		stateCheckpoint: c.stateCheckpoint,
-		logger:          c.logger,
+		parent:             c,
+		mode:               c.mode,
+		currentTime:        c.currentTime,
+		isMessageExecution: c.isMessageExecution,
+		gasAccountant:      c.gasAccountant,
+		txSigner:           c.txSigner,
+		callerAddress:      c.callerAddress,
+		appState:           c.appState,
+		state:              c.state,
+		blockHeight:        c.blockHeight,
+		blockCtx:           c.blockCtx,
+		initialHeight:      c.initialHeight,
+		stateCheckpoint:    c.stateCheckpoint,
+		logger:             c.logger,
 	}
 	cc.Context = context.WithValue(c.Context, contextKey{}, cc)
 	return cc
@@ -236,6 +238,13 @@ func (c *Context) WithSimulation() *Context {
 	return child
 }
 
+// WithMessageExecution creates a child context and sets the message execution flag.
+func (c *Context) WithMessageExecution() *Context {
+	child := c.NewChild()
+	child.isMessageExecution = true
+	return child
+}
+
 // IsInitChain returns true if this ia an init chain context.
 func (c *Context) IsInitChain() bool {
 	return c.mode == ContextInitChain
@@ -249,6 +258,11 @@ func (c *Context) IsCheckOnly() bool {
 // IsSimulation returns true if this is a simulation-only context.
 func (c *Context) IsSimulation() bool {
 	return c.mode == ContextSimulateTx
+}
+
+// IsMessageExecution returns true if this is a message execution context.
+func (c *Context) IsMessageExecution() bool {
+	return c.isMessageExecution
 }
 
 // EmitData emits data to be serialized as transaction output.

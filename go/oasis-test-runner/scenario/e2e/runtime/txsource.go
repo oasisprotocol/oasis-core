@@ -38,8 +38,9 @@ import (
 )
 
 const (
-	timeLimitShort = 3 * time.Minute
-	timeLimitLong  = 12 * time.Hour
+	timeLimitShort    = 6 * time.Minute
+	timeLimitShortSGX = 3 * time.Minute
+	timeLimitLong     = 12 * time.Hour
 
 	nodeRestartIntervalLong = 2 * time.Minute
 	nodeLongRestartInterval = 15 * time.Minute
@@ -93,7 +94,7 @@ var TxSourceMultiShortSGX scenario.Scenario = &txSourceImpl{
 	allNodeWorkloads: []string{
 		workload.NameQueries,
 	},
-	timeLimit:                         timeLimitShort,
+	timeLimit:                         timeLimitShortSGX,
 	livenessCheckInterval:             livenessCheckInterval,
 	consensusPruneDisabledProbability: 0.1,
 	consensusPruneMinKept:             100,
@@ -264,6 +265,7 @@ func (sc *txSourceImpl) Fixture() (*oasis.NetworkFixture, error) {
 			FeeSplitWeightPropose:     *quantity.NewFromUint64(2),
 			FeeSplitWeightVote:        *quantity.NewFromUint64(1),
 			FeeSplitWeightNextPropose: *quantity.NewFromUint64(1),
+			AllowEscrowMessages:       true,
 		},
 		TotalSupply: *quantity.NewFromUint64(150000000400),
 		Ledger: map[staking.Address]*staking.Account{

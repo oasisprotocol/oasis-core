@@ -943,6 +943,18 @@ type DebondingDelegation struct {
 	DebondEndTime beacon.EpochTime  `json:"debond_end"`
 }
 
+// Merge merges debonding delegations with same debond end time by summing
+// the shares amounts.
+func (d *DebondingDelegation) Merge(other DebondingDelegation) error {
+	if d.DebondEndTime != other.DebondEndTime {
+		return fmt.Errorf("cannot merge debonding delegations, end time doesn't match")
+	}
+	if err := d.Shares.Add(&other.Shares); err != nil {
+		return fmt.Errorf("error adding debonding delegation shares: %w", err)
+	}
+	return nil
+}
+
 // Genesis is the initial staking state for use in the genesis block.
 type Genesis struct {
 	// Parameters are the staking consensus parameters.
@@ -990,6 +1002,10 @@ type ConsensusParameters struct { // nolint: maligned
 	DisableTransfers       bool             `json:"disable_transfers,omitempty"`
 	DisableDelegation      bool             `json:"disable_delegation,omitempty"`
 	UndisableTransfersFrom map[Address]bool `json:"undisable_transfers_from,omitempty"`
+
+	// AllowEscrowMessages can be used to allow runtimes to perform AddEscrow
+	// and ReclaimEscrow via runtime messages.
+	AllowEscrowMessages bool `json:"allow_escrow_messages,omitempty"`
 
 	// MaxAllowances is the maximum number of allowances an account can have. Zero means disabled.
 	MaxAllowances uint32 `json:"max_allowances,omitempty"`
