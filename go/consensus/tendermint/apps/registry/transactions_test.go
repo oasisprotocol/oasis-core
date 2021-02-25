@@ -165,7 +165,7 @@ func TestRegisterNode(t *testing.T) {
 			false,
 			false,
 		},
-		// Compute node with ehough per-runtime stake.
+		// Compute node with enough per-runtime stake.
 		{
 			"ComputeNodeWithPerRuntimeStake",
 			func(tcd *testCaseData) {
@@ -335,6 +335,52 @@ func TestRegisterNode(t *testing.T) {
 			nil,
 			false,
 			true, // We tried to update an existing node, so it should keep existing.
+		},
+		// Changing the roles of an active node should be allowed.
+		{
+			"UpdateValidatorRolesNotAllowed",
+			func(tcd *testCaseData) {
+				// Create a new runtime.
+				rt := registry.Runtime{
+					Versioned:       cbor.NewVersioned(registry.LatestRuntimeDescriptorVersion),
+					ID:              common.NewTestNamespaceFromSeed([]byte("consensus/tendermint/apps/registry: runtime: UpdateValidatorNotAllowed"), 0),
+					Kind:            registry.KindCompute,
+					GovernanceModel: registry.GovernanceEntity,
+				}
+
+				_ = state.SetRuntime(ctx, &rt, false)
+				*tcd = *tcData["Validator"]
+				tcd.node.Expiration++
+				tcd.node.Roles = node.RoleComputeWorker
+				tcd.node.Runtimes = []*node.Runtime{{ID: rt.ID}}
+			},
+			nil,
+			false,
+			true,
+		},
+		// Changing the roles of an expired node should be allowed.
+		{
+			"UpdateValidatorExpiredRolesAllowed",
+			func(tcd *testCaseData) {
+				// Create a new runtime.
+				rt := registry.Runtime{
+					Versioned:       cbor.NewVersioned(registry.LatestRuntimeDescriptorVersion),
+					ID:              common.NewTestNamespaceFromSeed([]byte("consensus/tendermint/apps/registry: runtime: UpdateValidatorExpiredAllowed"), 0),
+					Kind:            registry.KindCompute,
+					GovernanceModel: registry.GovernanceEntity,
+				}
+				_ = state.SetRuntime(ctx, &rt, false)
+				*tcd = *tcData["Validator"]
+				tcd.node.Roles = node.RoleComputeWorker
+				tcd.node.Runtimes = []*node.Runtime{{ID: rt.ID}}
+				tcd.node.Expiration = 12
+
+				// Make the existing node expired.
+				cfg.CurrentEpoch = 10
+			},
+			nil,
+			true,
+			true,
 		},
 	}
 
