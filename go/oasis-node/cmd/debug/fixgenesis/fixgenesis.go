@@ -19,8 +19,10 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/entity"
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
 	"github.com/oasisprotocol/oasis-core/go/common/node"
+	"github.com/oasisprotocol/oasis-core/go/common/quantity"
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/genesis"
 	genesis "github.com/oasisprotocol/oasis-core/go/genesis/api"
+	governance "github.com/oasisprotocol/oasis-core/go/governance/api"
 	keymanager "github.com/oasisprotocol/oasis-core/go/keymanager/api"
 	cmdCommon "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common"
 	"github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/flags"
@@ -63,14 +65,35 @@ type oldDocument struct {
 	Scheduler scheduler.Genesis `json:"scheduler"`
 	// Beacon is the beacon genesis state.
 	Beacon beacon.Genesis `json:"beacon"`
+	// Epochtime is the epochtime genesis state.
+	Epochtime oldEpochtimeGenesis `json:"epochtime"`
 	// Consensus is the consensus genesis state.
-	Consensus consensus.Genesis `json:"consensus"`
+	Consensus oldConsensusGenesis `json:"consensus"`
 	// HaltEpoch is the epoch height at which the network will stop processing
 	// any transactions and will halt.
 	HaltEpoch beacon.EpochTime `json:"halt_epoch"`
 	// Extra data is arbitrary extra data that is part of the
 	// genesis block but is otherwise ignored by the protocol.
 	ExtraData map[string][]byte `json:"extra_data"`
+}
+
+type oldConsensusGenesis struct {
+	Backend    string                 `json:"backend"`
+	Parameters oldConsensusParameters `json:"params"`
+}
+
+type oldConsensusParameters struct {
+	consensus.Parameters
+
+	MaxEvidenceNum int64 `json:"max_evidence_num"`
+}
+
+type oldEpochtimeGenesis struct {
+	Parameters oldEpochtimeParameters `json:"params"`
+}
+
+type oldEpochtimeParameters struct {
+	Interval int64 `json:"interval"`
 }
 
 type oldRegistryGenesis struct {
@@ -301,27 +324,55 @@ func updateGenesisDoc(oldDoc *oldDocument) (*genesis.Document, error) {
 		KeyManager: oldDoc.KeyManager,
 		Scheduler:  oldDoc.Scheduler,
 		Beacon:     oldDoc.Beacon,
-		Consensus:  oldDoc.Consensus,
 		HaltEpoch:  oldDoc.HaltEpoch,
 		ExtraData:  oldDoc.ExtraData,
 	}
 
-	newDoc.RootHash.Parameters.MaxRuntimeMessages = 32
+	// Consensus.
+	newDoc.Consensus.Backend = oldDoc.Consensus.Backend
+	newDoc.Consensus.Parameters = oldDoc.Consensus.Parameters.Parameters
+	newDoc.Consensus.Parameters.MaxEvidenceSize = 1024 * uint64(oldDoc.Consensus.Parameters.MaxEvidenceNum)
 
+	// Beacon.
+	oldEpochInterval := oldDoc.Epochtime.Parameters.Interval
+	newDoc.Beacon.Base = beacon.EpochTime(oldDoc.Height / oldEpochInterval)
+	newDoc.Beacon.Parameters.Backend = beacon.BackendPVSS
+	newDoc.Beacon.Parameters.PVSSParameters = &beacon.PVSSParameters{
+		CommitInterval:  oldEpochInterval / 2,
+		RevealInterval:  (oldEpochInterval / 2) - 4,
+		TransitionDelay: 4,
+		Threshold:       10,
+		Participants:    20,
+	}
+
+	// Roothash.
+	newDoc.RootHash.Parameters.MaxRuntimeMessages = 256
+	newDoc.RootHash.Parameters.MaxEvidenceAge = 100
+
+	// Governance.
+	newDoc.Governance.Parameters = governance.ConsensusParameters{
+		MinProposalDeposit: *quantity.NewFromUint64(10_000_000_000_000),
+		Quorum:             75,
+		Threshold:          90,
+		// XXX: these assume approx. 24 epochs per day.
+		VotingPeriod:              14 * 24,
+		UpgradeMinEpochDiff:       (14 + 14 + 1 + 10) * 24, // VotingPeriod + UpgradeCancelMinEpochDiff + 10 epochs.
+		UpgradeCancelMinEpochDiff: (14 + 1) * 24,           // VotingPeriod epoch.
+	}
+
+	// Registry.
 	newDoc.Registry = registry.Genesis{
 		Parameters:   oldDoc.Registry.Parameters,
 		Entities:     oldDoc.Registry.Entities,
 		Nodes:        oldDoc.Registry.Nodes,
 		NodeStatuses: oldDoc.Registry.NodeStatuses,
 	}
-
 	newDoc.Registry.Parameters.EnableRuntimeGovernanceModels = map[registry.RuntimeGovernanceModel]bool{
 		registry.GovernanceEntity:  true,
 		registry.GovernanceRuntime: true, // TODO: Do we want to enable this right away?
 	}
 
 	oldRegisterRuntimeSignatureContext := signature.NewContext("oasis-core/registry: register runtime")
-
 	for _, sigRt := range oldDoc.Registry.Runtimes {
 		var rt oldRuntime
 		if err := sigRt.Open(oldRegisterRuntimeSignatureContext, &rt); err != nil {
