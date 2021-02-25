@@ -532,8 +532,8 @@ func (p *SharePool) Deposit(shareDst, stakeSrc, baseUnitsAmount *quantity.Quanti
 	return nil
 }
 
-// stakeForShares computes the amount of base units for the given amount of shares.
-func (p *SharePool) stakeForShares(amount *quantity.Quantity) (*quantity.Quantity, error) {
+// StakeForShares computes the amount of base units for the given amount of shares.
+func (p *SharePool) StakeForShares(amount *quantity.Quantity) (*quantity.Quantity, error) {
 	if amount.IsZero() || p.Balance.IsZero() || p.TotalShares.IsZero() {
 		// No existing shares or no balance means no base units.
 		return quantity.NewQuantity(), nil
@@ -558,7 +558,7 @@ func (p *SharePool) stakeForShares(amount *quantity.Quantity) (*quantity.Quantit
 // Withdraw moves stake out of the combined balance, reducing the shares.
 // If an error occurs, the pool and affected accounts are left in an invalid state.
 func (p *SharePool) Withdraw(stakeDst, shareSrc, shareAmount *quantity.Quantity) error {
-	baseUnits, err := p.stakeForShares(shareAmount)
+	baseUnits, err := p.StakeForShares(shareAmount)
 	if err != nil {
 		return err
 	}
