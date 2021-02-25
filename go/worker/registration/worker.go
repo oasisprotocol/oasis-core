@@ -17,7 +17,6 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/accessctl"
 	"github.com/oasisprotocol/oasis-core/go/common/cbor"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
-	fileSigner "github.com/oasisprotocol/oasis-core/go/common/crypto/signature/signers/file"
 	"github.com/oasisprotocol/oasis-core/go/common/entity"
 	"github.com/oasisprotocol/oasis-core/go/common/identity"
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
@@ -875,56 +874,9 @@ func GetRegistrationSigner(logger *logging.Logger, dataDir string, identity *ide
 	if err != nil {
 		return defaultPk, nil, fmt.Errorf("worker/registration: failed to load entity descriptor: %w", err)
 	}
-	if !entity.AllowEntitySignedNodes {
-		// If the entity does not allow any entity-signed nodes, then
-		// registrations will always be node-signed.
-		return entity.ID, identity.NodeSigner, nil
-	}
-	for _, v := range entity.Nodes {
-		if v.Equal(identity.NodeSigner.Public()) {
-			// If the node is in the entity's list of allowed nodes
-			// then registrations MUST be node-signed.
-			return entity.ID, identity.NodeSigner, nil
-		}
-	}
 
-	if !flags.DebugDontBlameOasis() {
-		return defaultPk, nil, fmt.Errorf("worker/registration: entity signed nodes disallowed by node config")
-	}
-
-	// At this point, the entity allows entity-signed registrations,
-	// and the node is not in the entity's list of allowed
-	// node-signed nodes.
-	//
-	// TODO: The only reason why an entity descriptor ever needs to
-	// be provided, is for this check.  It would be better for the common
-	// case to just query the entity descriptor from the registry,
-	// given a entity ID.
-
-	// The entity allows self-signed nodes, try to load the entity private key.
-	f = viper.GetString(CfgDebugRegistrationPrivateKey)
-	if f == "" {
-		// If the private key is not provided, try using a node-signed
-		// registration, the local copy of the entity descriptor may
-		// just be stale.
-		logger.Warn("no entity signing key provided, falling back to the node identity key")
-
-		return entity.ID, identity.NodeSigner, nil
-	}
-
-	logger.Warn("using the entity signing key for node registration")
-
-	factory, err := fileSigner.NewFactory(dataDir, signature.SignerEntity)
-	if err != nil {
-		return defaultPk, nil, fmt.Errorf("worker/registration: failed to create entity signer factory: %w", err)
-	}
-	fileFactory := factory.(*fileSigner.Factory)
-	entitySigner, err := fileFactory.ForceLoad(f)
-	if err != nil {
-		return defaultPk, nil, fmt.Errorf("worker/registration: failed to load entity signing key: %w", err)
-	}
-
-	return entity.ID, entitySigner, nil
+	// Registrations are always node-signed.
+	return entity.ID, identity.NodeSigner, nil
 }
 
 // New constructs a new worker node registration service.

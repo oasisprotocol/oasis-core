@@ -194,6 +194,7 @@ func (net *Network) NewValidator(cfg *ValidatorCfg) (*Validator, error) {
 		"--" + cmdCommon.CfgDataDir, val.dir.String(),
 		"--" + cmdRegNode.CfgExpiration, "1",
 		"--" + cmdRegNode.CfgRole, "validator",
+		"--" + cmdRegNode.CfgEntityID, cfg.Entity.ID().String(),
 	}
 	for _, v := range consensusAddrs {
 		args = append(args, []string{"--" + cmdRegNode.CfgConsensusAddress, v.String()}...)

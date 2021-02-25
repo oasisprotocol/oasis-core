@@ -217,25 +217,11 @@ func (app *registryApplication) registerNode( // nolint: gocyclo
 		return err
 	}
 
-	// Charge gas for node registration if signed by entity. For node-signed
-	// registrations, the gas charges are pre-paid by the entity.
-	isEntitySigned := sigNode.MultiSigned.IsSignedBy(newNode.EntityID)
-	if isEntitySigned {
-		if err = ctx.Gas().UseGas(1, registry.GasOpRegisterNode, params.GasCosts); err != nil {
-			return err
-		}
-	}
-
-	// Make sure the signer of the transaction is the node identity key
-	// or the entity (iff the registration is entity signed).
+	// Make sure the signer of the transaction is the node identity key.
 	// NOTE: If this is invoked during InitChain then there is no actual transaction
 	//       and thus no transaction signer so we must skip this check.
 	if !ctx.IsInitChain() {
-		expectedTxSigner := newNode.ID
-		if isEntitySigned {
-			expectedTxSigner = newNode.EntityID
-		}
-		if !ctx.TxSigner().Equal(expectedTxSigner) {
+		if !ctx.TxSigner().Equal(newNode.ID) {
 			return registry.ErrIncorrectTxSigner
 		}
 	}

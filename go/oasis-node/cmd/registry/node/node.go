@@ -18,7 +18,6 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/cbor"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	fileSigner "github.com/oasisprotocol/oasis-core/go/common/crypto/signature/signers/file"
-	"github.com/oasisprotocol/oasis-core/go/common/entity"
 	"github.com/oasisprotocol/oasis-core/go/common/identity"
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
 	"github.com/oasisprotocol/oasis-core/go/common/node"
@@ -106,46 +105,21 @@ func doInit(cmd *cobra.Command, args []string) { // nolint: gocyclo
 		os.Exit(1)
 	}
 
-	// Get the entity ID or entity.
-	var (
-		entityID signature.PublicKey
+	// Get the entity ID.
+	var entityID signature.PublicKey
 
-		entity       *entity.Entity
-		entitySigner signature.Signer
-
-		isSelfSigned bool
-	)
-
-	if idStr := viper.GetString(CfgEntityID); idStr != "" {
-		if err = entityID.UnmarshalText([]byte(idStr)); err != nil {
-			logger.Error("malformed entity ID",
-				"err", err,
-			)
-			os.Exit(1)
-		}
-		logger.Info("entity ID provided, assuming self-signed node registrations")
-
-		isSelfSigned = true
-	} else {
-		entity, entitySigner, err = cmdCommon.LoadEntitySigner()
-		if err != nil {
-			logger.Error("failed to load entity and its signer",
-				"err", err,
-			)
-			os.Exit(1)
-		}
-
-		entityID = entity.ID
-		isSelfSigned = !entity.AllowEntitySignedNodes
-		if viper.GetBool(CfgSelfSigned) {
-			isSelfSigned = true
-		}
-		if !cmdFlags.DebugDontBlameOasis() && !isSelfSigned {
-			logger.Error("entity signed node descriptors are prohibited")
-			os.Exit(1)
-		}
-		defer entitySigner.Reset()
+	idStr := viper.GetString(CfgEntityID)
+	if idStr == "" {
+		logger.Error("missing --node.entity_id command-line argument")
+		os.Exit(1)
 	}
+	if err = entityID.UnmarshalText([]byte(idStr)); err != nil {
+		logger.Error("malformed entity ID",
+			"err", err,
+		)
+		os.Exit(1)
+	}
+	logger.Info("entity ID provided, assuming self-signed node registrations")
 
 	// Provision the node identity.
 	nodeSignerFactory, err := cmdSigner.NewFactory(
@@ -270,15 +244,12 @@ func doInit(cmd *cobra.Command, args []string) { // nolint: gocyclo
 	}
 
 	// Sign and write out the genesis node registration.
-	signers := []signature.Signer{nodeIdentity.NodeSigner}
-	if !isSelfSigned {
-		signers = append(signers, entitySigner)
-	}
-	signers = append(signers, []signature.Signer{
+	signers := []signature.Signer{
+		nodeIdentity.NodeSigner,
 		nodeIdentity.P2PSigner,
 		nodeIdentity.ConsensusSigner,
 		nodeIdentity.GetTLSSigner(),
-	}...)
+	}
 
 	signed, err := node.MultiSignNode(signers, registry.RegisterGenesisNodeSignatureContext, n)
 	if err != nil {
