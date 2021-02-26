@@ -21,8 +21,10 @@ type Query interface {
 	Addresses(context.Context) ([]staking.Address, error)
 	Account(context.Context, staking.Address) (*staking.Account, error)
 	DelegationsFor(context.Context, staking.Address) (map[staking.Address]*staking.Delegation, error)
+	DelegationInfosFor(context.Context, staking.Address) (map[staking.Address]*staking.DelegationInfo, error)
 	DelegationsTo(context.Context, staking.Address) (map[staking.Address]*staking.Delegation, error)
 	DebondingDelegationsFor(context.Context, staking.Address) (map[staking.Address][]*staking.DebondingDelegation, error)
+	DebondingDelegationInfosFor(context.Context, staking.Address) (map[staking.Address][]*staking.DebondingDelegationInfo, error)
 	DebondingDelegationsTo(context.Context, staking.Address) (map[staking.Address][]*staking.DebondingDelegation, error)
 	Genesis(context.Context) (*staking.Genesis, error)
 	ConsensusParameters(context.Context) (*staking.ConsensusParameters, error)
@@ -125,12 +127,54 @@ func (sq *stakingQuerier) DelegationsFor(ctx context.Context, addr staking.Addre
 	return sq.state.DelegationsFor(ctx, addr)
 }
 
+func (sq *stakingQuerier) DelegationInfosFor(ctx context.Context, addr staking.Address) (map[staking.Address]*staking.DelegationInfo, error) {
+	delegations, err := sq.state.DelegationsFor(ctx, addr)
+	if err != nil {
+		return nil, err
+	}
+	delegationInfos := make(map[staking.Address]*staking.DelegationInfo, len(delegations))
+	for delAddr, del := range delegations {
+		delAcct, err := sq.state.Account(ctx, delAddr)
+		if err != nil {
+			return nil, err
+		}
+		delegationInfos[delAddr] = &staking.DelegationInfo{
+			Delegation: *del,
+			Pool:       delAcct.Escrow.Active,
+		}
+	}
+	return delegationInfos, nil
+}
+
 func (sq *stakingQuerier) DelegationsTo(ctx context.Context, addr staking.Address) (map[staking.Address]*staking.Delegation, error) {
 	return sq.state.DelegationsTo(ctx, addr)
 }
 
 func (sq *stakingQuerier) DebondingDelegationsFor(ctx context.Context, addr staking.Address) (map[staking.Address][]*staking.DebondingDelegation, error) {
 	return sq.state.DebondingDelegationsFor(ctx, addr)
+}
+
+func (sq *stakingQuerier) DebondingDelegationInfosFor(ctx context.Context, addr staking.Address) (map[staking.Address][]*staking.DebondingDelegationInfo, error) {
+	delegations, err := sq.state.DebondingDelegationsFor(ctx, addr)
+	if err != nil {
+		return nil, err
+	}
+	delegationInfos := make(map[staking.Address][]*staking.DebondingDelegationInfo, len(delegations))
+	for delAddr, delList := range delegations {
+		delAcct, err := sq.state.Account(ctx, delAddr)
+		if err != nil {
+			return nil, err
+		}
+		delInfoList := make([]*staking.DebondingDelegationInfo, len(delList))
+		for i, del := range delList {
+			delInfoList[i] = &staking.DebondingDelegationInfo{
+				DebondingDelegation: *del,
+				Pool:                delAcct.Escrow.Debonding,
+			}
+		}
+		delegationInfos[delAddr] = delInfoList
+	}
+	return delegationInfos, nil
 }
 
 func (sq *stakingQuerier) DebondingDelegationsTo(ctx context.Context, addr staking.Address) (map[staking.Address][]*staking.DebondingDelegation, error) {

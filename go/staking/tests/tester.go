@@ -363,6 +363,23 @@ func testDelegations(t *testing.T, state *stakingTestsState, backend api.Backend
 		for _, i := range expectedDelegationsFor[a] {
 			require.Containsf(delegationsForAcc, accts.GetAddress(i), "account %d - expected delegation to account %d", a, i)
 		}
+		delegationInfosForAcc, err := backend.DelegationInfosFor(
+			context.Background(), &api.OwnerQuery{Owner: accts.GetAddress(a), Height: consensusAPI.HeightLatest},
+		)
+		require.NoErrorf(err, "account %d - DelegationInfosFor", a)
+		require.Lenf(delegationInfosForAcc, len(expectedDelegationsFor[a]), "account %d  - number of outgoing delegation infos", a)
+		for _, i := range expectedDelegationsFor[a] {
+			require.Containsf(delegationInfosForAcc, accts.GetAddress(i), "account %d - expected info about delegation to account %d", a, i)
+			delInfo := delegationInfosForAcc[accts.GetAddress(i)]
+			require.Equalf(
+				accts.getAccount(i).escrowActiveBalance, delInfo.Pool.Balance,
+				"account %d - info about delegation to account %d: pool balance doesn't match", a, i,
+			)
+			require.Equalf(
+				accts.getAccount(i).escrowActiveShares, delInfo.Pool.TotalShares,
+				"account %d - info about delegation to account %d: pool shares don't match", a, i,
+			)
+		}
 	}
 
 	// Outgoing debonding delegations for accounts.
@@ -414,6 +431,29 @@ func testDelegations(t *testing.T, state *stakingTestsState, backend api.Backend
 		for i, num := range expectedDebDelegationsFor[a] {
 			require.Containsf(debDelegationsForAcc, accts.GetAddress(i), "account %d - expected debonding delegation(s) to account %d", a, i)
 			require.Lenf(debDelegationsForAcc[accts.GetAddress(i)], num, "account %d - expected %d debonding delegation(s) to account %d", a, num, i)
+		}
+		debDelegationInfosForAcc, err := backend.DebondingDelegationInfosFor(
+			context.Background(), &api.OwnerQuery{Owner: accts.GetAddress(a), Height: consensusAPI.HeightLatest},
+		)
+		require.NoErrorf(err, "account %d - DebondingDelegationInfosFor", a)
+		require.Lenf(debDelegationInfosForAcc, len(expectedDebDelegationsFor[a]), "account %d  - number of outgoing debonding delegation infos", a)
+		for i, num := range expectedDebDelegationsFor[a] {
+			require.Containsf(
+				debDelegationInfosForAcc, accts.GetAddress(i),
+				"account %d - expected info about debonding delegation(s) to account %d", a, i,
+			)
+			debDelInfos := debDelegationInfosForAcc[accts.GetAddress(i)]
+			require.Lenf(debDelInfos, num, "account %d - expected %d debonding delegation(s) to account %d", a, num, i)
+			for j, debDelInfo := range debDelInfos {
+				require.Equalf(
+					accts.getAccount(i).escrowDebondingBalance, debDelInfo.Pool.Balance,
+					"account %d - info about debonding delegation %d to account %d: pool balance doesn't match", a, j, i,
+				)
+				require.Equalf(
+					accts.getAccount(i).escrowDebondingShares, debDelInfo.Pool.TotalShares,
+					"account %d - info about debonding delegation %d to account %d: pool shares don't match", a, j, i,
+				)
+			}
 		}
 	}
 }
