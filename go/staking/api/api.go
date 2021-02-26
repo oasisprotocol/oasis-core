@@ -945,6 +945,14 @@ type Delegation struct {
 	Shares quantity.Quantity `json:"shares"`
 }
 
+// DelegationInfo is a delegation descriptor with additional information.
+//
+// Additional information contains the share pool the delegation belongs to.
+type DelegationInfo struct {
+	Delegation
+	Pool SharePool `json:"pool"`
+}
+
 // DebondingDelegation is a debonding delegation descriptor.
 type DebondingDelegation struct {
 	Shares        quantity.Quantity `json:"shares"`
@@ -961,6 +969,16 @@ func (d *DebondingDelegation) Merge(other DebondingDelegation) error {
 		return fmt.Errorf("error adding debonding delegation shares: %w", err)
 	}
 	return nil
+}
+
+// DebondingDelegationInfo is a debonding delegation descriptor with additional
+// information.
+//
+// Additional information contains the share pool the debonding delegation
+// belongs to.
+type DebondingDelegationInfo struct {
+	DebondingDelegation
+	Pool SharePool `json:"pool"`
 }
 
 // Genesis is the initial staking state for use in the genesis block.
