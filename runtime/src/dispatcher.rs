@@ -231,6 +231,7 @@ impl Dispatcher {
                     io_root,
                     inputs,
                     block,
+                    max_messages,
                 } => {
                     // Transaction execution.
                     self.dispatch_txn(
@@ -242,6 +243,7 @@ impl Dispatcher {
                         inputs,
                         block,
                         round_results,
+                        max_messages,
                         false,
                     )
                 }
@@ -256,6 +258,7 @@ impl Dispatcher {
                         inputs,
                         block,
                         Default::default(),
+                        0,
                         true,
                     )
                 }
@@ -343,7 +346,7 @@ impl Dispatcher {
         ));
 
         let results = Default::default();
-        let txn_ctx = TxnContext::new(ctx.clone(), &header, &results, true);
+        let txn_ctx = TxnContext::new(ctx.clone(), &header, &results, 0, true);
         let mut overlay = OverlayTree::new(&mut cache.mkvs);
         let result = StorageContext::enter(&mut overlay, untrusted_local, || {
             txn_dispatcher.query(txn_ctx, &method, args)
@@ -493,6 +496,7 @@ impl Dispatcher {
         inputs: TxnBatch,
         block: Block,
         round_results: roothash::RoundResults,
+        max_messages: u32,
         check_only: bool,
     ) -> Result<Body, Error> {
         debug!(self.logger, "Received transaction batch request";
@@ -525,7 +529,13 @@ impl Dispatcher {
             Context::create_child(&ctx),
             protocol.clone(),
         ));
-        let txn_ctx = TxnContext::new(ctx.clone(), &block.header, &round_results, check_only);
+        let txn_ctx = TxnContext::new(
+            ctx.clone(),
+            &block.header,
+            &round_results,
+            max_messages,
+            check_only,
+        );
         if check_only {
             self.txn_check_batch(
                 ctx,

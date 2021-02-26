@@ -16,6 +16,8 @@ pub struct Context<'a> {
     pub header: &'a Header,
     /// Results of processing the previous successful round.
     pub round_results: &'a RoundResults,
+    /// The maximum number of messages that can be emitted in this round.
+    pub max_messages: u32,
     /// Runtime-specific context.
     pub runtime: Box<dyn Any>,
 
@@ -36,12 +38,14 @@ impl<'a> Context<'a> {
         io_ctx: Arc<IoContext>,
         header: &'a Header,
         round_results: &'a RoundResults,
+        max_messages: u32,
         check_only: bool,
     ) -> Self {
         Self {
             io_ctx,
             header,
             round_results,
+            max_messages,
             runtime: Box::new(NoRuntimeContext),
             check_only,
             tags: Tags::new(),

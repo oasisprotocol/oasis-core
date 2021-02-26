@@ -1022,6 +1022,7 @@ func (n *Node) startProcessingBatchLocked(batch *unresolvedBatch) {
 				IORoot:         batch.ioRoot.Hash,
 				Inputs:         resolvedBatch,
 				Block:          *blk,
+				MaxMessages:    state.Runtime.Executor.MaxMessages,
 			},
 		}
 		batchReadTime.With(n.getMetricLabels()).Observe(time.Since(readStartTime).Seconds())

@@ -257,6 +257,10 @@ type RuntimeExecuteTxBatchRequest struct {
 	Inputs transaction.RawBatch `json:"inputs"`
 	// Block on which the batch computation should be based.
 	Block block.Block `json:"block"`
+
+	// MaxMessages is the maximum number of messages that can be emitted in this
+	// round. Any more messages will be rejected by the consensus layer.
+	MaxMessages uint32 `json:"max_messages"`
 }
 
 // RuntimeExecuteTxBatchResponse is a worker execute tx batch response message body.

@@ -124,6 +124,7 @@ pub enum Body {
         io_root: Hash,
         inputs: TxnBatch,
         block: Block,
+        max_messages: u32,
     },
     RuntimeExecuteTxBatchResponse {
         batch: ComputedBatch,
