@@ -19,10 +19,12 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/cbor"
 	"github.com/oasisprotocol/oasis-core/go/common/crash"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
+	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
 	"github.com/oasisprotocol/oasis-core/go/common/pubsub"
 	tmapi "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/api"
 	app "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/apps/roothash"
+	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
 	"github.com/oasisprotocol/oasis-core/go/roothash/api"
 	"github.com/oasisprotocol/oasis-core/go/roothash/api/block"
 	runtimeRegistry "github.com/oasisprotocol/oasis-core/go/runtime/registry"
@@ -247,6 +249,27 @@ func (sc *serviceClient) StateToGenesis(ctx context.Context, height int64) (*api
 	return g, nil
 }
 
+func (sc *serviceClient) getNodeEntities(ctx context.Context, height int64, nodes []signature.PublicKey) ([]signature.PublicKey, error) {
+	var entities []signature.PublicKey
+	seen := make(map[signature.PublicKey]bool)
+	for _, id := range nodes {
+		node, err := sc.backend.Registry().GetNode(ctx, &registry.IDQuery{
+			Height: height,
+			ID:     id,
+		})
+		if err != nil {
+			return nil, fmt.Errorf("failed to fetch node %s: %w", id, err)
+		}
+
+		if seen[node.EntityID] {
+			continue
+		}
+		seen[node.EntityID] = true
+		entities = append(entities, node.EntityID)
+	}
+	return entities, nil
+}
+
 func (sc *serviceClient) getRoundResults(ctx context.Context, runtimeID common.Namespace, height int64) (*api.RoundResults, error) {
 	evs, err := sc.getEvents(ctx, height, nil)
 	if err != nil {
@@ -259,10 +282,19 @@ func (sc *serviceClient) getRoundResults(ctx context.Context, runtimeID common.N
 		case !ev.RuntimeID.Equal(&runtimeID):
 			continue
 		case ev.Message != nil:
+			// Runtime message processed event.
 			results.Messages = append(results.Messages, ev.Message)
 		case ev.Finalized != nil:
-			results.GoodComputeNodes = ev.Finalized.GoodComputeNodes
-			results.BadComputeNodes = ev.Finalized.BadComputeNodes
+			// Round finalized event.
+			results.GoodComputeEntities, err = sc.getNodeEntities(ctx, height, ev.Finalized.GoodComputeNodes)
+			if err != nil {
+				return nil, fmt.Errorf("failed to resolve good compute entities: %w", err)
+			}
+
+			results.BadComputeEntities, err = sc.getNodeEntities(ctx, height, ev.Finalized.BadComputeNodes)
+			if err != nil {
+				return nil, fmt.Errorf("failed to resolve bad compute entities: %w", err)
+			}
 		default:
 		}
 	}

@@ -128,14 +128,14 @@ pub struct RoundResults {
     #[serde(default)]
     pub messages: Vec<MessageEvent>,
 
-    /// Public keys of compute nodes that positively contributed to the round by replicating the
-    /// computation correctly.
+    /// Public keys of compute nodes' controlling entities that positively contributed to the round
+    /// by replicating the computation correctly.
     #[serde(default)]
-    pub good_compute_nodes: Vec<PublicKey>,
-    /// Public keys of compute nodes that negatively contributed to the round by causing
-    /// discrepancies.
+    pub good_compute_entities: Vec<PublicKey>,
+    /// Public keys of compute nodes' controlling entities that negatively contributed to the round
+    /// by causing discrepancies.
     #[serde(default)]
-    pub bad_compute_nodes: Vec<PublicKey>,
+    pub bad_compute_entities: Vec<PublicKey>,
 }
 
 /// Block header.
@@ -426,24 +426,24 @@ mod tests {
                 messages: vec![MessageEvent{module: "test".to_owned(), code: 1, index: 0}],
                 ..Default::default()
             }),
-            ("omhtZXNzYWdlc4GjZGNvZGUYKmVpbmRleAFmbW9kdWxlZHRlc3RyZ29vZF9jb21wdXRlX25vZGVzg1ggAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABYIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABWCAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAg",
+            ("omhtZXNzYWdlc4GjZGNvZGUYKmVpbmRleAFmbW9kdWxlZHRlc3R1Z29vZF9jb21wdXRlX2VudGl0aWVzg1ggAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABYIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABWCAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAg==",
                 RoundResults {
                     messages: vec![MessageEvent{module: "test".to_owned(), code: 42, index: 1}],
-                    good_compute_nodes: vec![
+                    good_compute_entities: vec![
                         "0000000000000000000000000000000000000000000000000000000000000000".into(),
                         "0000000000000000000000000000000000000000000000000000000000000001".into(),
                         "0000000000000000000000000000000000000000000000000000000000000002".into(),
                     ],
                     ..Default::default()
                 }),
-            ("o2htZXNzYWdlc4GjZGNvZGUYKmVpbmRleAFmbW9kdWxlZHRlc3RxYmFkX2NvbXB1dGVfbm9kZXOBWCAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAXJnb29kX2NvbXB1dGVfbm9kZXOCWCAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFggAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAI",
+            ("o2htZXNzYWdlc4GjZGNvZGUYKmVpbmRleAFmbW9kdWxlZHRlc3R0YmFkX2NvbXB1dGVfZW50aXRpZXOBWCAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAXVnb29kX2NvbXB1dGVfZW50aXRpZXOCWCAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFggAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAI=",
                 RoundResults {
                     messages: vec![MessageEvent{module: "test".to_owned(), code: 42, index: 1}],
-                    good_compute_nodes: vec![
+                    good_compute_entities: vec![
                         "0000000000000000000000000000000000000000000000000000000000000000".into(),
                         "0000000000000000000000000000000000000000000000000000000000000002".into(),
                     ],
-                    bad_compute_nodes: vec![
+                    bad_compute_entities: vec![
                         "0000000000000000000000000000000000000000000000000000000000000001".into(),
                     ],
                 }),
