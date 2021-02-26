@@ -995,9 +995,9 @@ func (n *Node) startProcessingBatchLocked(batch *unresolvedBatch) {
 			)
 			return
 		}
-		msgResults, err := n.commonNode.Runtime.History().GetMessageResults(ctx, state.LastNormalRound)
+		roundResults, err := n.commonNode.Runtime.History().GetRoundResults(ctx, state.LastNormalRound)
 		if err != nil {
-			n.logger.Error("failed to query message results",
+			n.logger.Error("failed to query round results",
 				"err", err,
 				"height", height,
 				"round", blk.Header.Round,
@@ -1018,10 +1018,11 @@ func (n *Node) startProcessingBatchLocked(batch *unresolvedBatch) {
 		rq := &protocol.Body{
 			RuntimeExecuteTxBatchRequest: &protocol.RuntimeExecuteTxBatchRequest{
 				ConsensusBlock: *consensusBlk,
-				MessageResults: msgResults,
+				RoundResults:   roundResults,
 				IORoot:         batch.ioRoot.Hash,
 				Inputs:         resolvedBatch,
 				Block:          *blk,
+				MaxMessages:    state.Runtime.Executor.MaxMessages,
 			},
 		}
 		batchReadTime.With(n.getMetricLabels()).Observe(time.Since(readStartTime).Seconds())

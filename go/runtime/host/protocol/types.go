@@ -247,9 +247,8 @@ type RuntimeExecuteTxBatchRequest struct {
 	// height (e.g., corresponding to .Block.Header.Round).
 	ConsensusBlock consensus.LightBlock `json:"consensus_block"`
 
-	// MessageResults are the results of executing messages emitted by the
-	// runtime in the previous round.
-	MessageResults []*roothash.MessageEvent `json:"message_results,omitempty"`
+	// RoundResults are the results of executing the previous successful round.
+	RoundResults *roothash.RoundResults `json:"round_results"`
 
 	// IORoot is the I/O root containing the inputs (transactions) that
 	// the compute node should use. It must match what is passed in "inputs".
@@ -258,6 +257,10 @@ type RuntimeExecuteTxBatchRequest struct {
 	Inputs transaction.RawBatch `json:"inputs"`
 	// Block on which the batch computation should be based.
 	Block block.Block `json:"block"`
+
+	// MaxMessages is the maximum number of messages that can be emitted in this
+	// round. Any more messages will be rejected by the consensus layer.
+	MaxMessages uint32 `json:"max_messages"`
 }
 
 // RuntimeExecuteTxBatchResponse is a worker execute tx batch response message body.

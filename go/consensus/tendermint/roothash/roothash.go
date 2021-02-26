@@ -237,29 +237,36 @@ func (sc *serviceClient) StateToGenesis(ctx context.Context, height int64) (*api
 			return nil, err
 		}
 
-		rt.MessageResults, err = sc.getMessageResults(ctx, runtimeID, state.LastNormalHeight)
+		rr, err := sc.getRoundResults(ctx, runtimeID, state.LastNormalHeight)
 		if err != nil {
 			return nil, fmt.Errorf("roothash: failed to get last message results for runtime %s: %w", runtimeID, err)
 		}
+		rt.MessageResults = rr.Messages
 	}
 
 	return g, nil
 }
 
-func (sc *serviceClient) getMessageResults(ctx context.Context, runtimeID common.Namespace, height int64) ([]*api.MessageEvent, error) {
+func (sc *serviceClient) getRoundResults(ctx context.Context, runtimeID common.Namespace, height int64) (*api.RoundResults, error) {
 	evs, err := sc.getEvents(ctx, height, nil)
 	if err != nil {
 		return nil, err
 	}
 
-	var mevs []*api.MessageEvent
+	results := new(api.RoundResults)
 	for _, ev := range evs {
-		if ev.Message == nil || !ev.RuntimeID.Equal(&runtimeID) {
+		switch {
+		case !ev.RuntimeID.Equal(&runtimeID):
 			continue
+		case ev.Message != nil:
+			results.Messages = append(results.Messages, ev.Message)
+		case ev.Finalized != nil:
+			results.GoodComputeNodes = ev.Finalized.GoodComputeNodes
+			results.BadComputeNodes = ev.Finalized.BadComputeNodes
+		default:
 		}
-		mevs = append(mevs, ev.Message)
 	}
-	return mevs, nil
+	return results, nil
 }
 
 func (sc *serviceClient) getEvents(ctx context.Context, height int64, txns [][]byte) ([]*api.Event, error) {
@@ -426,10 +433,10 @@ func (sc *serviceClient) reindexBlocks(currentHeight int64, bh api.BlockHistory)
 					if sc.trackedRuntime[value.ID] == nil {
 						continue
 					}
-					if err = sc.processFinalizedEvent(sc.ctx, height, value.ID, &value.Round, false); err != nil {
+					if err = sc.processFinalizedEvent(sc.ctx, height, value.ID, &value.Event.Round, false); err != nil {
 						return 0, fmt.Errorf("failed to process finalized event: %w", err)
 					}
-					lastRound = value.Round
+					lastRound = value.Event.Round
 				}
 			}
 		}
@@ -563,14 +570,14 @@ func (sc *serviceClient) processFinalizedEvent(
 		return fmt.Errorf("roothash: finalized event/query round mismatch")
 	}
 
-	msgResults, err := sc.getMessageResults(ctx, runtimeID, height)
+	roundResults, err := sc.getRoundResults(ctx, runtimeID, height)
 	if err != nil {
-		sc.logger.Error("failed to fetch message results",
+		sc.logger.Error("failed to fetch round results",
 			"err", err,
 			"height", height,
 			"runtime_id", runtimeID,
 		)
-		return fmt.Errorf("roothash: failed to fetch message results: %w", err)
+		return fmt.Errorf("roothash: failed to fetch round results: %w", err)
 	}
 
 	annBlk := &api.AnnotatedBlock{
@@ -607,7 +614,7 @@ func (sc *serviceClient) processFinalizedEvent(
 				"round", blk.Header.Round,
 			)
 
-			err = tr.blockHistory.Commit(annBlk, msgResults)
+			err = tr.blockHistory.Commit(annBlk, roundResults)
 			if err != nil {
 				sc.logger.Error("failed to commit block to history keeper",
 					"err", err,
@@ -674,7 +681,7 @@ func EventsFromTendermint(
 					continue
 				}
 
-				ev := &api.Event{RuntimeID: value.ID, Height: height, TxHash: txHash, Finalized: &api.FinalizedEvent{Round: value.Round}}
+				ev := &api.Event{RuntimeID: value.ID, Height: height, TxHash: txHash, Finalized: &value.Event}
 				events = append(events, ev)
 			case bytes.Equal(key, app.KeyExecutionDiscrepancyDetected):
 				// An execution discrepancy has been detected.

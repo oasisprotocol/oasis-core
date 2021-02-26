@@ -389,9 +389,9 @@ impl EncryptionContext {
 
         let nonce = [0u8; NONCE_SIZE];
         // XXX: Prefix all keys by 0x01 to make sure they do not clash with pending messages.
-        let mut key = vec![0x01];
-        key.append(&mut self.d2.seal(&nonce, key.to_vec(), vec![]));
-        key
+        let mut pkey = vec![0x01];
+        pkey.append(&mut self.d2.seal(&nonce, key.to_vec(), vec![]));
+        pkey
     }
 
     fn derive_nonce(nonce: &[u8]) -> [u8; NONCE_SIZE] {
@@ -410,7 +410,7 @@ struct BlockHandler;
 
 impl BlockHandler {
     fn process_message_results(&self, ctx: &mut TxnContext) {
-        for ev in ctx.message_results {
+        for ev in &ctx.round_results.messages {
             // Fetch and remove message metadata.
             let meta = StorageContext::with_current(|mkvs, _| {
                 mkvs.remove(

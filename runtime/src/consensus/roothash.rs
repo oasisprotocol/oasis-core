@@ -2,7 +2,7 @@
 //!
 //! # Note
 //!
-//! This **MUST** be kept in sync with go/roothash/api/block.
+//! This **MUST** be kept in sync with go/roothash/api.
 //!
 use serde::{Deserialize, Serialize};
 use serde_repr::*;
@@ -119,6 +119,23 @@ impl MessageEvent {
     pub fn is_success(&self) -> bool {
         return self.code == 0;
     }
+}
+
+/// Information about how a particular round was executed by the consensus layer.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct RoundResults {
+    /// Results of executing emitted runtime messages.
+    #[serde(default)]
+    pub messages: Vec<MessageEvent>,
+
+    /// Public keys of compute nodes that positively contributed to the round by replicating the
+    /// computation correctly.
+    #[serde(default)]
+    pub good_compute_nodes: Vec<PublicKey>,
+    /// Public keys of compute nodes that negatively contributed to the round by causing
+    /// discrepancies.
+    #[serde(default)]
+    pub bad_compute_nodes: Vec<PublicKey>,
 }
 
 /// Block header.
@@ -398,6 +415,43 @@ mod tests {
         ];
         for (msgs, expected_hash) in tcs {
             assert_eq!(Message::messages_hash(&msgs), Hash::from(expected_hash));
+        }
+    }
+
+    #[test]
+    fn test_consistent_round_results() {
+        let tcs = vec![
+            ("oA==", RoundResults::default()),
+            ("oWhtZXNzYWdlc4GiZGNvZGUBZm1vZHVsZWR0ZXN0", RoundResults {
+                messages: vec![MessageEvent{module: "test".to_owned(), code: 1, index: 0}],
+                ..Default::default()
+            }),
+            ("omhtZXNzYWdlc4GjZGNvZGUYKmVpbmRleAFmbW9kdWxlZHRlc3RyZ29vZF9jb21wdXRlX25vZGVzg1ggAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABYIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABWCAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAg",
+                RoundResults {
+                    messages: vec![MessageEvent{module: "test".to_owned(), code: 42, index: 1}],
+                    good_compute_nodes: vec![
+                        "0000000000000000000000000000000000000000000000000000000000000000".into(),
+                        "0000000000000000000000000000000000000000000000000000000000000001".into(),
+                        "0000000000000000000000000000000000000000000000000000000000000002".into(),
+                    ],
+                    ..Default::default()
+                }),
+            ("o2htZXNzYWdlc4GjZGNvZGUYKmVpbmRleAFmbW9kdWxlZHRlc3RxYmFkX2NvbXB1dGVfbm9kZXOBWCAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAXJnb29kX2NvbXB1dGVfbm9kZXOCWCAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFggAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAI",
+                RoundResults {
+                    messages: vec![MessageEvent{module: "test".to_owned(), code: 42, index: 1}],
+                    good_compute_nodes: vec![
+                        "0000000000000000000000000000000000000000000000000000000000000000".into(),
+                        "0000000000000000000000000000000000000000000000000000000000000002".into(),
+                    ],
+                    bad_compute_nodes: vec![
+                        "0000000000000000000000000000000000000000000000000000000000000001".into(),
+                    ],
+                }),
+        ];
+        for (encoded_base64, rr) in tcs {
+            let dec: RoundResults = cbor::from_slice(&base64::decode(encoded_base64).unwrap())
+                .expect("round results should deserialize correctly");
+            assert_eq!(dec, rr, "decoded results should match the expected value");
         }
     }
 }

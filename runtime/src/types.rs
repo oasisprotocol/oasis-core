@@ -120,11 +120,11 @@ pub enum Body {
         results: Vec<CheckTxResult>,
     },
     RuntimeExecuteTxBatchRequest {
-        #[serde(default)]
-        message_results: Vec<roothash::MessageEvent>,
+        round_results: roothash::RoundResults,
         io_root: Hash,
         inputs: TxnBatch,
         block: Block,
+        max_messages: u32,
     },
     RuntimeExecuteTxBatchResponse {
         batch: ComputedBatch,

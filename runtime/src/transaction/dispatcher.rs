@@ -560,7 +560,14 @@ mod tests {
             timestamp: TEST_TIMESTAMP,
             ..Default::default()
         };
-        let mut ctx = Context::new(IoContext::background().freeze(), &header, &[], false);
+        let results = Default::default();
+        let mut ctx = Context::new(
+            IoContext::background().freeze(),
+            &header,
+            &results,
+            0,
+            false,
+        );
 
         // Call runtime.
         let result = dispatcher.dispatch_execute(&call_encoded, &mut ctx);

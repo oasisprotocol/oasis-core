@@ -60,7 +60,7 @@ func (h *nopHistory) RuntimeID() common.Namespace {
 	return h.runtimeID
 }
 
-func (h *nopHistory) Commit(blk *roothash.AnnotatedBlock, msgResults []*roothash.MessageEvent) error {
+func (h *nopHistory) Commit(blk *roothash.AnnotatedBlock, roundResults *roothash.RoundResults) error {
 	return errNopHistory
 }
 
@@ -80,7 +80,7 @@ func (h *nopHistory) GetLatestBlock(ctx context.Context) (*block.Block, error) {
 	return nil, errNopHistory
 }
 
-func (h *nopHistory) GetMessageResults(ctx context.Context, round uint64) ([]*roothash.MessageEvent, error) {
+func (h *nopHistory) GetRoundResults(ctx context.Context, round uint64) (*roothash.RoundResults, error) {
 	return nil, errNopHistory
 }
 
@@ -118,8 +118,8 @@ func (h *runtimeHistory) RuntimeID() common.Namespace {
 	return h.runtimeID
 }
 
-func (h *runtimeHistory) Commit(blk *roothash.AnnotatedBlock, msgResults []*roothash.MessageEvent) error {
-	err := h.db.commit(blk, msgResults)
+func (h *runtimeHistory) Commit(blk *roothash.AnnotatedBlock, roundResults *roothash.RoundResults) error {
+	err := h.db.commit(blk, roundResults)
 	if err != nil {
 		return err
 	}
@@ -171,11 +171,11 @@ func (h *runtimeHistory) GetLatestBlock(ctx context.Context) (*block.Block, erro
 	return annBlk.Block, nil
 }
 
-func (h *runtimeHistory) GetMessageResults(ctx context.Context, round uint64) ([]*roothash.MessageEvent, error) {
+func (h *runtimeHistory) GetRoundResults(ctx context.Context, round uint64) (*roothash.RoundResults, error) {
 	if ctx.Err() != nil {
 		return nil, ctx.Err()
 	}
-	return h.db.getMessageResults(round)
+	return h.db.getRoundResults(round)
 }
 
 func (h *runtimeHistory) Pruner() Pruner {
