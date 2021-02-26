@@ -20,7 +20,7 @@ type Query interface {
 	DebondingInterval(context.Context) (beacon.EpochTime, error)
 	Addresses(context.Context) ([]staking.Address, error)
 	Account(context.Context, staking.Address) (*staking.Account, error)
-	Delegations(context.Context, staking.Address) (map[staking.Address]*staking.Delegation, error)
+	DelegationsFor(context.Context, staking.Address) (map[staking.Address]*staking.Delegation, error)
 	DelegationsTo(context.Context, staking.Address) (map[staking.Address]*staking.Delegation, error)
 	DebondingDelegations(context.Context, staking.Address) (map[staking.Address][]*staking.DebondingDelegation, error)
 	DebondingDelegationsTo(context.Context, staking.Address) (map[staking.Address][]*staking.DebondingDelegation, error)
@@ -121,7 +121,7 @@ func (sq *stakingQuerier) Account(ctx context.Context, addr staking.Address) (*s
 	}
 }
 
-func (sq *stakingQuerier) Delegations(ctx context.Context, addr staking.Address) (map[staking.Address]*staking.Delegation, error) {
+func (sq *stakingQuerier) DelegationsFor(ctx context.Context, addr staking.Address) (map[staking.Address]*staking.Delegation, error) {
 	return sq.state.DelegationsFor(ctx, addr)
 }
 

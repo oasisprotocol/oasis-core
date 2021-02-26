@@ -149,9 +149,9 @@ type Backend interface {
 	// Account returns the account descriptor for the given account.
 	Account(ctx context.Context, query *OwnerQuery) (*Account, error)
 
-	// Delegations returns the list of delegations for the given owner
-	// (delegator).
-	Delegations(ctx context.Context, query *OwnerQuery) (map[Address]*Delegation, error)
+	// DelegationsFor returns the list of (outgoing) delegations for the given
+	// owner (delegator).
+	DelegationsFor(ctx context.Context, query *OwnerQuery) (map[Address]*Delegation, error)
 
 	// DelegationsTo returns the list of (incoming) delegations to the given
 	// account.

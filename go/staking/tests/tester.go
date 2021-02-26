@@ -335,6 +335,35 @@ func testDelegations(t *testing.T, state *stakingTestsState, backend api.Backend
 			require.Lenf(debDelegationsToAcc[accts.GetAddress(i)], num, "account %d - expected %d debonding delegation(s) from account %d", a, num, i)
 		}
 	}
+
+	// Outgoing delegations for accounts.
+	//
+	// NOTE: Governance tests add a delegation from account 1 to validator's (i.e. node's) entity
+	// so we omit account 1 from these checks.
+	expectedDelegationsFor := map[int][]int{
+		// Delegations for account 2.
+		2: {3, 4},
+		// Delegations for account 3.
+		3: {4},
+		// Delegations for account 4.
+		4: {},
+		// Delegations for account 5.
+		5: {3, 4, 7},
+		// Delegations for account 6.
+		6: {4},
+		// Delegations for account 7.
+		7: {7},
+	}
+	for a := 2; a <= 7; a++ {
+		delegationsForAcc, err := backend.DelegationsFor(
+			context.Background(), &api.OwnerQuery{Owner: accts.GetAddress(a), Height: consensusAPI.HeightLatest},
+		)
+		require.NoErrorf(err, "account %d - DelegationsFor", a)
+		require.Lenf(delegationsForAcc, len(expectedDelegationsFor[a]), "account %d  - number of outgoing delegations", a)
+		for _, i := range expectedDelegationsFor[a] {
+			require.Containsf(delegationsForAcc, accts.GetAddress(i), "account %d - expected delegation to account %d", a, i)
+		}
+	}
 }
 
 func testTransfer(t *testing.T, state *stakingTestsState, backend api.Backend, consensus consensusAPI.Backend) {

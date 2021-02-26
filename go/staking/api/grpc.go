@@ -32,8 +32,8 @@ var (
 	methodAddresses = serviceName.NewMethod("Addresses", int64(0))
 	// methodAccount is the Account method.
 	methodAccount = serviceName.NewMethod("Account", OwnerQuery{})
-	// methodDelegations is the Delegations method.
-	methodDelegations = serviceName.NewMethod("Delegations", OwnerQuery{})
+	// methodDelegationsFor is the DelegationsFor method.
+	methodDelegationsFor = serviceName.NewMethod("DelegationsFor", OwnerQuery{})
 	// methodDelegationsTo is the DelegationsTo method.
 	methodDelegationsTo = serviceName.NewMethod("DelegationsTo", OwnerQuery{})
 	// methodDebondingDelegations is the DebondingDelegations method.
@@ -94,8 +94,8 @@ var (
 				Handler:    handlerAccount,
 			},
 			{
-				MethodName: methodDelegations.ShortName(),
-				Handler:    handlerDelegations,
+				MethodName: methodDelegationsFor.ShortName(),
+				Handler:    handlerDelegationsFor,
 			},
 			{
 				MethodName: methodDelegationsTo.ShortName(),
@@ -335,7 +335,7 @@ func handlerAccount( // nolint: golint
 	return interceptor(ctx, &query, info, handler)
 }
 
-func handlerDelegations( // nolint: golint
+func handlerDelegationsFor( // nolint: golint
 	srv interface{},
 	ctx context.Context,
 	dec func(interface{}) error,
@@ -346,14 +346,14 @@ func handlerDelegations( // nolint: golint
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(Backend).Delegations(ctx, &query)
+		return srv.(Backend).DelegationsFor(ctx, &query)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: methodDelegations.FullName(),
+		FullMethod: methodDelegationsFor.FullName(),
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(Backend).Delegations(ctx, req.(*OwnerQuery))
+		return srv.(Backend).DelegationsFor(ctx, req.(*OwnerQuery))
 	}
 	return interceptor(ctx, &query, info, handler)
 }
@@ -628,9 +628,9 @@ func (c *stakingClient) Account(ctx context.Context, query *OwnerQuery) (*Accoun
 	return &rsp, nil
 }
 
-func (c *stakingClient) Delegations(ctx context.Context, query *OwnerQuery) (map[Address]*Delegation, error) {
+func (c *stakingClient) DelegationsFor(ctx context.Context, query *OwnerQuery) (map[Address]*Delegation, error) {
 	var rsp map[Address]*Delegation
-	if err := c.conn.Invoke(ctx, methodDelegations.FullName(), query, &rsp); err != nil {
+	if err := c.conn.Invoke(ctx, methodDelegationsFor.FullName(), query, &rsp); err != nil {
 		return nil, err
 	}
 	return rsp, nil

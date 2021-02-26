@@ -115,7 +115,7 @@ func (d *delegation) doReclaimEscrowTx(ctx context.Context, rng *rand.Rand, stak
 	selectedIdx := perm[fromPermIdx]
 
 	// Query amount of delegated shares for the account.
-	delegations, err := stakingClient.Delegations(ctx, &staking.OwnerQuery{
+	delegations, err := stakingClient.DelegationsFor(ctx, &staking.OwnerQuery{
 		Height: consensus.HeightLatest,
 		Owner:  d.accounts[selectedIdx].address,
 	})

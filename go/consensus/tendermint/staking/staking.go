@@ -120,13 +120,13 @@ func (sc *serviceClient) Account(ctx context.Context, query *api.OwnerQuery) (*a
 	return q.Account(ctx, query.Owner)
 }
 
-func (sc *serviceClient) Delegations(ctx context.Context, query *api.OwnerQuery) (map[api.Address]*api.Delegation, error) {
+func (sc *serviceClient) DelegationsFor(ctx context.Context, query *api.OwnerQuery) (map[api.Address]*api.Delegation, error) {
 	q, err := sc.querier.QueryAt(ctx, query.Height)
 	if err != nil {
 		return nil, err
 	}
 
-	return q.Delegations(ctx, query.Owner)
+	return q.DelegationsFor(ctx, query.Owner)
 }
 
 func (sc *serviceClient) DelegationsTo(ctx context.Context, query *api.OwnerQuery) (map[api.Address]*api.Delegation, error) {
