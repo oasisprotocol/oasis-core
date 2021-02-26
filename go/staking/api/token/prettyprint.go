@@ -67,6 +67,6 @@ func PrettyPrintAmount(ctx context.Context, amount quantity.Quantity, w io.Write
 	if useBaseUnits {
 		fmt.Fprintf(w, "%s%s base units", sign, amount)
 	} else {
-		fmt.Fprintf(w, "%s %s%s", symbol, sign, tokenAmount)
+		fmt.Fprintf(w, "%s%s %s", sign, tokenAmount, symbol)
 	}
 }
