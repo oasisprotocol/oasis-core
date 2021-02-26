@@ -406,7 +406,7 @@ func (app *registryApplication) registerNode( // nolint: gocyclo
 
 	// If the node already exists make sure to verify the node update.
 	if existingNode != nil {
-		if err = registry.VerifyNodeUpdate(ctx.Logger(), existingNode, newNode); err != nil {
+		if err = registry.VerifyNodeUpdate(ctx.Logger(), existingNode, newNode, epoch); err != nil {
 			ctx.Logger().Error("RegisterNode: failed to verify node update",
 				"err", err,
 				"new_node", newNode,

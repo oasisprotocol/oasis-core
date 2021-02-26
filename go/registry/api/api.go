@@ -904,7 +904,7 @@ func verifyRuntimeCapabilities(logger *logging.Logger, currentCaps, newCaps *nod
 }
 
 // VerifyNodeUpdate verifies changes while updating the node.
-func VerifyNodeUpdate(logger *logging.Logger, currentNode, newNode *node.Node) error {
+func VerifyNodeUpdate(logger *logging.Logger, currentNode, newNode *node.Node, epoch beacon.EpochTime) error {
 	// XXX: In future we might want to allow updating some of these fields as well. But these updates
 	//      should only happen after the epoch transition.
 	//      For now, node should un-register and re-register to update any of these fields.
@@ -922,6 +922,20 @@ func VerifyNodeUpdate(logger *logging.Logger, currentNode, newNode *node.Node) e
 		)
 		return ErrNodeUpdateNotAllowed
 	}
+	// Every node requires a Consensus.ID and it shouldn't be updated.
+	if !currentNode.Consensus.ID.Equal(newNode.Consensus.ID) {
+		logger.Error("RegisterNode: trying to update consensus ID",
+			"current_id", currentNode.Consensus.ID,
+			"new_id", newNode.Consensus.ID,
+		)
+		return ErrNodeUpdateNotAllowed
+	}
+
+	// Following checks are only done for active nodes.
+	if currentNode.IsExpired(uint64(epoch)) {
+		return nil
+	}
+
 	if !verifyNodeRuntimeChanges(logger, currentNode.Runtimes, newNode.Runtimes) {
 		curNodeRuntimes, _ := json.Marshal(currentNode.Runtimes)
 		newNodeRuntimes, _ := json.Marshal(newNode.Runtimes)
@@ -937,15 +951,6 @@ func VerifyNodeUpdate(logger *logging.Logger, currentNode, newNode *node.Node) e
 		logger.Error("RegisterNode: trying to update node roles - downgrade",
 			"current_roles", currentNode.Roles,
 			"new_roles", newNode.Roles,
-		)
-		return ErrNodeUpdateNotAllowed
-	}
-
-	// Every node requires a Consensus.ID and it shouldn't be updated.
-	if !currentNode.Consensus.ID.Equal(newNode.Consensus.ID) {
-		logger.Error("RegisterNode: trying to update consensus ID",
-			"current_id", currentNode.Consensus.ID,
-			"new_id", newNode.Consensus.ID,
 		)
 		return ErrNodeUpdateNotAllowed
 	}
