@@ -182,6 +182,9 @@ func (k *KeyFormat) Encode(values ...interface{}) []byte {
 //
 // Returns false and doesn't modify the passed values if the key prefix
 // doesn't match.
+//
+// *NOTE:* If decoding fails for one of the values, previous values
+// will be modified.
 func (k *KeyFormat) Decode(data []byte, values ...interface{}) bool {
 	if data[0] != k.prefix {
 		return false
@@ -228,12 +231,12 @@ func (k *KeyFormat) Decode(data []byte, values ...interface{}) bool {
 				err = t.UnmarshalBinary(buf)
 			}
 			if err != nil {
-				panic(fmt.Sprintf("key format: failed to unmarshal: %s", err))
+				return false
 			}
 		case *[]byte:
 			if meta.custom != nil {
 				if err := meta.custom.UnmarshalBinary(t, buf); err != nil {
-					panic(fmt.Sprintf("key format: failed to unmarshal: %s", err))
+					return false
 				}
 			} else {
 				meta.checkSize(i, -1)

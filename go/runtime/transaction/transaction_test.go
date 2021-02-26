@@ -181,3 +181,81 @@ func TestTransactionInvalidBatchOrder(t *testing.T) {
 	_, err = tree.GetInputBatch(ctx, 0, 0)
 	require.Error(t, err, "GetInputBatch should fail with inconsistent order")
 }
+
+func TestIOWriteLogValidation(t *testing.T) {
+	var (
+		err  error
+		hash hash.Hash
+	)
+
+	hash.Empty()
+
+	// Test garbage first.
+	err = ValidateIOWriteLog(
+		writelog.WriteLog{
+			{Key: []byte("malformed key"), Value: []byte("some value")},
+		},
+		1024,
+		1024,
+	)
+	require.EqualError(t, err, "transaction: invalid key format")
+
+	garbledArtifact := txnKeyFmt.Encode(&hash)
+	garbledArtifact = append(garbledArtifact, uint8(42))
+	err = ValidateIOWriteLog(
+		writelog.WriteLog{
+			{Key: garbledArtifact, Value: []byte("some value")},
+		},
+		1024,
+		1024,
+	)
+	require.Error(t, err, "Decoding an invalid artifact type should fail")
+
+	err = ValidateIOWriteLog(
+		writelog.WriteLog{
+			{Key: txnKeyFmt.Encode(&hash, kindInput), Value: []byte("some value")},
+			{Key: tagKeyFmt.Encode([]byte("tag"), &hash), Value: []byte("some value")},
+		},
+		1024,
+		1024,
+	)
+	require.NoError(t, err, "All writelog keys should be valid")
+
+	// Test limits.
+	cases := []struct {
+		inputs, outputs   int
+		maxCount, maxSize uint64
+		expectedError     string
+	}{
+		// Overflow artifact count.
+		{2, 2, 2, 1024, ""},
+		{3, 2, 2, 1024, "transaction: too many inputs or outputs"},
+		{2, 3, 2, 1024, "transaction: too many inputs or outputs"},
+
+		// Overflow total input size
+		{1, 0, 10, 64, ""},
+		{10, 0, 10, 64, "transaction: input set size exceeds configuration"},
+	}
+
+	for num, c := range cases {
+		wl := writelog.WriteLog{}
+		for kind, cnt := range map[artifactKind]int{
+			kindInput:  c.inputs,
+			kindOutput: c.outputs,
+		} {
+			for i := 0; i < cnt; i++ {
+				wl = append(wl, writelog.LogEntry{
+					Key:   txnKeyFmt.Encode(&hash, kind),
+					Value: []byte("some long-ish value"),
+				})
+			}
+		}
+
+		err = ValidateIOWriteLog(wl, c.maxCount, c.maxSize)
+		if len(c.expectedError) > 0 {
+			require.EqualError(t, err, c.expectedError, fmt.Sprintf("bulk case %d", num))
+		} else {
+			require.NoError(t, err, fmt.Sprintf("bulk case %d", num))
+		}
+	}
+}

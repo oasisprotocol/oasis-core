@@ -36,8 +36,8 @@ func TestHashed(t *testing.T) {
 	require.True(ok, "Decode")
 	require.EqualValues(42, decInt, "decoded uint64 value must be correct")
 
-	require.Panics(func() { _ = fmt1.Decode(enc, &decInt, &decNs) })
-	require.Panics(func() { _ = fmt1.Decode(enc, &decInt, &decPh1, &decPk) })
+	require.False(fmt1.Decode(enc, &decInt, &decNs))
+	require.False(fmt1.Decode(enc, &decInt, &decPh1, &decPk))
 
 	ok = fmt1.Decode(enc, &decInt, &decPh1, &decPh2)
 	require.True(ok, "Decode")
@@ -61,5 +61,5 @@ func TestHashed(t *testing.T) {
 	require.Equal("0ac561fac838104e3f2e4ad107b4bee3e938bf15f2b15f009ccccd61a913f017", hex.EncodeToString(decPh1[:]))
 
 	var decBytes []byte
-	require.Panics(func() { _ = fmt2.Decode(enc, &decInt, &decBytes) })
+	require.False(fmt2.Decode(enc, &decInt, &decBytes))
 }

@@ -10,6 +10,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/grpc/auth"
 	"github.com/oasisprotocol/oasis-core/go/common/grpc/policy"
 	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
+	"github.com/oasisprotocol/oasis-core/go/runtime/transaction"
 	"github.com/oasisprotocol/oasis-core/go/storage/api"
 	"github.com/oasisprotocol/oasis-core/go/storage/mkvs/checkpoint"
 )
@@ -42,7 +43,7 @@ func (s *storageService) ensureInitialized(ctx context.Context) error {
 	}
 }
 
-func (s *storageService) getConfig(ctx context.Context, ns common.Namespace) (*registry.StorageParameters, error) {
+func (s *storageService) getConfig(ctx context.Context, ns common.Namespace) (*registry.Runtime, error) {
 	rt, err := s.w.commonWorker.RuntimeRegistry.GetRuntime(ns)
 	if err != nil {
 		return nil, fmt.Errorf("storage: failed to get runtime %s: %w", ns, err)
@@ -52,7 +53,7 @@ func (s *storageService) getConfig(ctx context.Context, ns common.Namespace) (*r
 	if err != nil {
 		return nil, fmt.Errorf("storage: failed to get runtime %s configuration: %w", ns, err)
 	}
-	return &rtDesc.Storage, nil
+	return rtDesc, nil
 }
 
 func (s *storageService) SyncGet(ctx context.Context, request *api.GetRequest) (*api.ProofResponse, error) {
@@ -89,8 +90,20 @@ func (s *storageService) Apply(ctx context.Context, request *api.ApplyRequest) (
 	if err != nil {
 		return nil, err
 	}
-	if uint64(len(request.WriteLog)) > cfg.MaxApplyWriteLogEntries {
+	if uint64(len(request.WriteLog)) > cfg.Storage.MaxApplyWriteLogEntries {
 		return nil, api.ErrLimitReached
+	}
+
+	// Validate the write log for IO roots.
+	if request.RootType == api.RootTypeIO {
+		err := transaction.ValidateIOWriteLog(
+			request.WriteLog,
+			cfg.TxnScheduler.MaxBatchSize,
+			cfg.TxnScheduler.MaxBatchSizeBytes,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("storage: malformed io root in Apply: %w", err)
+		}
 	}
 
 	return s.storage.Apply(ctx, request)
@@ -109,13 +122,23 @@ func (s *storageService) ApplyBatch(ctx context.Context, request *api.ApplyBatch
 	if err != nil {
 		return nil, err
 	}
-	if uint64(len(request.Ops)) > cfg.MaxApplyOps {
+	if uint64(len(request.Ops)) > cfg.Storage.MaxApplyOps {
 		return nil, api.ErrLimitReached
 	}
-	// Limit maximum number of entries in a write log.
+	// Limit maximum number of entries in a write log and validate write logs for IO roots.
 	for _, op := range request.Ops {
-		if uint64(len(op.WriteLog)) > cfg.MaxApplyWriteLogEntries {
+		if uint64(len(op.WriteLog)) > cfg.Storage.MaxApplyWriteLogEntries {
 			return nil, api.ErrLimitReached
+		}
+		if op.RootType == api.RootTypeIO {
+			err := transaction.ValidateIOWriteLog(
+				op.WriteLog,
+				cfg.TxnScheduler.MaxBatchSize,
+				cfg.TxnScheduler.MaxBatchSizeBytes,
+			)
+			if err != nil {
+				return nil, fmt.Errorf("storage: malformed io root in ApplyBatch: %w", err)
+			}
 		}
 	}
 
