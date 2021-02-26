@@ -1611,5 +1611,8 @@ func NewNode(
 		logger:                 logging.GetLogger("worker/executor/committee").With("runtime_id", commonNode.Runtime.ID()),
 	}
 
+	// Register prune handler.
+	commonNode.Runtime.History().Pruner().RegisterHandler(&pruneHandler{commonNode: commonNode})
+
 	return n, nil
 }
