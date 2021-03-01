@@ -22,7 +22,7 @@ type Query interface {
 	Account(context.Context, staking.Address) (*staking.Account, error)
 	DelegationsFor(context.Context, staking.Address) (map[staking.Address]*staking.Delegation, error)
 	DelegationsTo(context.Context, staking.Address) (map[staking.Address]*staking.Delegation, error)
-	DebondingDelegations(context.Context, staking.Address) (map[staking.Address][]*staking.DebondingDelegation, error)
+	DebondingDelegationsFor(context.Context, staking.Address) (map[staking.Address][]*staking.DebondingDelegation, error)
 	DebondingDelegationsTo(context.Context, staking.Address) (map[staking.Address][]*staking.DebondingDelegation, error)
 	Genesis(context.Context) (*staking.Genesis, error)
 	ConsensusParameters(context.Context) (*staking.ConsensusParameters, error)
@@ -129,7 +129,7 @@ func (sq *stakingQuerier) DelegationsTo(ctx context.Context, addr staking.Addres
 	return sq.state.DelegationsTo(ctx, addr)
 }
 
-func (sq *stakingQuerier) DebondingDelegations(ctx context.Context, addr staking.Address) (map[staking.Address][]*staking.DebondingDelegation, error) {
+func (sq *stakingQuerier) DebondingDelegationsFor(ctx context.Context, addr staking.Address) (map[staking.Address][]*staking.DebondingDelegation, error) {
 	return sq.state.DebondingDelegationsFor(ctx, addr)
 }
 

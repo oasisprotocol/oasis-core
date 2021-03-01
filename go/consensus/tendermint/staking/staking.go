@@ -138,13 +138,13 @@ func (sc *serviceClient) DelegationsTo(ctx context.Context, query *api.OwnerQuer
 	return q.DelegationsTo(ctx, query.Owner)
 }
 
-func (sc *serviceClient) DebondingDelegations(ctx context.Context, query *api.OwnerQuery) (map[api.Address][]*api.DebondingDelegation, error) {
+func (sc *serviceClient) DebondingDelegationsFor(ctx context.Context, query *api.OwnerQuery) (map[api.Address][]*api.DebondingDelegation, error) {
 	q, err := sc.querier.QueryAt(ctx, query.Height)
 	if err != nil {
 		return nil, err
 	}
 
-	return q.DebondingDelegations(ctx, query.Owner)
+	return q.DebondingDelegationsFor(ctx, query.Owner)
 }
 
 func (sc *serviceClient) DebondingDelegationsTo(ctx context.Context, query *api.OwnerQuery) (map[api.Address][]*api.DebondingDelegation, error) {

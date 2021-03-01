@@ -150,7 +150,7 @@ func (d *delegation) doReclaimEscrowTx(ctx context.Context, rng *rand.Rand, stak
 
 	// Query debonding end epoch for the account.
 	var debondingDelegations map[staking.Address][]*staking.DebondingDelegation
-	debondingDelegations, err = stakingClient.DebondingDelegations(ctx, &staking.OwnerQuery{
+	debondingDelegations, err = stakingClient.DebondingDelegationsFor(ctx, &staking.OwnerQuery{
 		Height: consensus.HeightLatest,
 		Owner:  d.accounts[selectedIdx].address,
 	})

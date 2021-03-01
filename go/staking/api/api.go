@@ -157,9 +157,9 @@ type Backend interface {
 	// account.
 	DelegationsTo(ctx context.Context, query *OwnerQuery) (map[Address]*Delegation, error)
 
-	// DebondingDelegations returns the list of debonding delegations for
-	// the given owner (delegator).
-	DebondingDelegations(ctx context.Context, query *OwnerQuery) (map[Address][]*DebondingDelegation, error)
+	// DebondingDelegationsFor returns the list of (outgoing) debonding
+	// delegations for the given owner (delegator).
+	DebondingDelegationsFor(ctx context.Context, query *OwnerQuery) (map[Address][]*DebondingDelegation, error)
 
 	// DebondingDelegationsTo returns the list of (incoming) debonding
 	// delegations to the given account.

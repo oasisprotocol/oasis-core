@@ -364,6 +364,58 @@ func testDelegations(t *testing.T, state *stakingTestsState, backend api.Backend
 			require.Containsf(delegationsForAcc, accts.GetAddress(i), "account %d - expected delegation to account %d", a, i)
 		}
 	}
+
+	// Outgoing debonding delegations for accounts.
+	expectedDebDelegationsFor := map[int]map[int]int{
+		// Debonding delegations for account 1.
+		1: {},
+		// Debonding delegations for account 2.
+		2: {
+			// 2 debonding delegations to account 3.
+			3: 2,
+		},
+		// Debonding delegations for account 3.
+		3: {
+			// 1 debonding delegation to account 4.
+			4: 1,
+			// 1 debonding delegation to account 7.
+			7: 1,
+		},
+		// Debonding delegations for account 4.
+		4: {
+			// 2 debonding delegations to account 4.
+			4: 2,
+		},
+		// Debonding delegations for account 5.
+		5: {
+			// 1 debonding delegation to account 3.
+			3: 1,
+		},
+		// Debonding delegations for account 6.
+		6: {
+			// 4 debonding delegations to account 4.
+			4: 4,
+			// 2 debonding delegations to account 7.
+			7: 2,
+		},
+		// Debonding delegations for account 7.
+		7: {
+			// 3 debonding delegations to account 4.
+			4: 3,
+		},
+	}
+
+	for a := 1; a <= 7; a++ {
+		debDelegationsForAcc, err := backend.DebondingDelegationsFor(
+			context.Background(), &api.OwnerQuery{Owner: accts.GetAddress(a), Height: consensusAPI.HeightLatest},
+		)
+		require.NoErrorf(err, "account %d - DebondingDelegationsFor", a)
+		require.Lenf(debDelegationsForAcc, len(expectedDebDelegationsFor[a]), "account %d  - number of outgoing debonding delegations", a)
+		for i, num := range expectedDebDelegationsFor[a] {
+			require.Containsf(debDelegationsForAcc, accts.GetAddress(i), "account %d - expected debonding delegation(s) to account %d", a, i)
+			require.Lenf(debDelegationsForAcc[accts.GetAddress(i)], num, "account %d - expected %d debonding delegation(s) to account %d", a, num, i)
+		}
+	}
 }
 
 func testTransfer(t *testing.T, state *stakingTestsState, backend api.Backend, consensus consensusAPI.Backend) {
@@ -719,7 +771,7 @@ func testEscrowHelper( // nolint: gocyclo
 	newDstAcc = nil
 
 	// Reclaim escrow (subject to debonding).
-	debs, err := backend.DebondingDelegations(context.Background(), &api.OwnerQuery{Owner: srcAccData.Address, Height: consensusAPI.HeightLatest})
+	debs, err := backend.DebondingDelegationsFor(context.Background(), &api.OwnerQuery{Owner: srcAccData.Address, Height: consensusAPI.HeightLatest})
 	require.NoError(err, "DebondingDelegations - before")
 	require.Len(debs, 0, "no debonding delegations before reclaiming escrow")
 
@@ -732,7 +784,7 @@ func testEscrowHelper( // nolint: gocyclo
 	require.NoError(err, "ReclaimEscrow")
 
 	// Query debonding delegations.
-	debs, err = backend.DebondingDelegations(context.Background(), &api.OwnerQuery{Owner: srcAccData.Address, Height: consensusAPI.HeightLatest})
+	debs, err = backend.DebondingDelegationsFor(context.Background(), &api.OwnerQuery{Owner: srcAccData.Address, Height: consensusAPI.HeightLatest})
 	require.NoError(err, "DebondingDelegations - after (in debonding)")
 	require.Len(debs, 1, "one debonding delegation after reclaiming escrow")
 	require.Len(debs[destAccData.Address], 1, "one debonding delegation after reclaiming escrow")
@@ -792,7 +844,7 @@ func testEscrowHelper( // nolint: gocyclo
 	require.True(newDstAcc.Escrow.Debonding.Balance.IsZero(), "dst: debonding escrow balance == 0 - after debond")
 	require.True(newDstAcc.Escrow.Debonding.TotalShares.IsZero(), "dst: debonding escrow total shares == 0 - after debond")
 
-	debs, err = backend.DebondingDelegations(context.Background(), &api.OwnerQuery{Owner: srcAccData.Address, Height: consensusAPI.HeightLatest})
+	debs, err = backend.DebondingDelegationsFor(context.Background(), &api.OwnerQuery{Owner: srcAccData.Address, Height: consensusAPI.HeightLatest})
 	require.NoError(err, "DebondingDelegations - after (debonding completed)")
 	require.Len(debs, 0, "no debonding delegations after debonding has completed")
 
@@ -805,7 +857,7 @@ func testEscrowHelper( // nolint: gocyclo
 	err = consensusAPI.SignAndSubmitTx(context.Background(), consensus, srcAccData.Signer, tx)
 	require.Error(err, "ReclaimEscrow")
 
-	debs, err = backend.DebondingDelegations(context.Background(), &api.OwnerQuery{Owner: srcAccData.Address, Height: consensusAPI.HeightLatest})
+	debs, err = backend.DebondingDelegationsFor(context.Background(), &api.OwnerQuery{Owner: srcAccData.Address, Height: consensusAPI.HeightLatest})
 	require.NoError(err, "DebondingDelegations")
 	require.Len(debs, 0, "no debonding delegations after failed reclaim")
 
