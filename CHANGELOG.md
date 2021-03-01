@@ -12,6 +12,36 @@ The format is inspired by [Keep a Changelog].
 
 <!-- TOWNCRIER -->
 
+## 20.12.5 (2021-03-01)
+
+| Protocol          | Version   |
+|:------------------|:---------:|
+| Consensus         | 2.0.0     |
+| Runtime Host      | 1.0.0     |
+| Runtime Committee | 1.0.0     |
+
+### Features
+
+- go/beacon: Backport the beacon key generation/registration
+  ([#3674](https://github.com/oasisprotocol/oasis-core/issues/3674))
+
+  To prepare for the future migration to a PVSS based beacon scheme, every
+  node should generate and register a elliptic curve point in advance of
+  the migration.  This commit selectively backports the required logic for
+  a hopefully smooth transition.
+
+- go/genesis/api: Update `WriteFileJSON()` to create files in the canonical form
+  ([#3709](https://github.com/oasisprotocol/oasis-core/issues/3709))
+
+  Consequentially, all its users (most notably the dump genesis halt hook) now
+  produce genesis files in the canonical form.
+
+- go/genesis/api: Add `CanonicalJSON()` method to `Document` type
+  ([#3709](https://github.com/oasisprotocol/oasis-core/issues/3709))
+
+  It can be used to obtain the canonical form of the genesis document
+  serialized into a file.
+
 ## 20.12.4 (2021-01-19)
 
 | Protocol          | Version   |
