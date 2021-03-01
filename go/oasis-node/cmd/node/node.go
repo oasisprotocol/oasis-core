@@ -397,6 +397,9 @@ func (n *Node) initRuntimeWorkers() error {
 	n.svcMgr.Register(n.KeymanagerWorker)
 
 	// Initialize the executor worker.
+	// Keep this step _after_ initializing the storage worker,
+	// because the executor worker will use the local storage backend
+	// if it is available.
 	n.ExecutorWorker, err = executor.New(
 		dataDir,
 		n.CommonWorker,
