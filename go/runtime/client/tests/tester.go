@@ -39,6 +39,13 @@ func ClientImplementationTests(
 		defer cancelFunc()
 		testQuery(ctx, t, runtimeID, client, testInput)
 	})
+
+	noWaitInput := "squid at: " + time.Now().String()
+	t.Run("SubmitTxNoWait", func(t *testing.T) {
+		ctx, cancelFunc := context.WithTimeout(context.Background(), timeout)
+		defer cancelFunc()
+		testSubmitTransactionNoWait(ctx, t, runtimeID, client, noWaitInput)
+	})
 }
 
 func testSubmitTransaction(
@@ -200,4 +207,36 @@ func testQuery(
 		Data:      []byte("test checktx request"),
 	})
 	require.NoError(t, err, "CheckTx")
+}
+
+func testSubmitTransactionNoWait(
+	ctx context.Context,
+	t *testing.T,
+	runtimeID common.Namespace,
+	c api.RuntimeClient,
+	input string,
+) {
+	// Based on SubmitTx and the mock worker.
+	testInput := []byte(input)
+	testOutput := testInput
+
+	// Query current block.
+	blkLatest, err := c.GetBlock(ctx, &api.GetBlockRequest{RuntimeID: runtimeID, Round: api.RoundLatest})
+	require.NoError(t, err, "GetBlock(RoundLatest)")
+
+	// Submit a test transaction.
+	err = c.SubmitTxNoWait(ctx, &api.SubmitTxRequest{Data: testInput, RuntimeID: runtimeID})
+
+	// Check if everything is in order.
+	require.NoError(t, err, "SubmitTxNoWait")
+
+	// Ensure transaction was executed.
+	err = c.WaitBlockIndexed(ctx, &api.WaitBlockIndexedRequest{RuntimeID: runtimeID, Round: blkLatest.Header.Round + 1})
+	require.NoError(t, err, "WaitBlockIndexed")
+
+	// Get transaction by latest round.
+	tx, err := c.GetTx(ctx, &api.GetTxRequest{RuntimeID: runtimeID, Round: api.RoundLatest, Index: 0})
+	require.NoError(t, err, "GetTx(RoundLatest)")
+	require.EqualValues(t, testInput, tx.Input)
+	require.EqualValues(t, testOutput, tx.Output)
 }
