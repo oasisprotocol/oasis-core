@@ -44,6 +44,9 @@ define CONFIRM_ACTION =
 	fi
 endef
 
+# Version of the markdownlint-cli package to use.
+MARKDOWNLINT_CLI_VERSION := 0.26.0
+
 # Name of git remote pointing to the canonical upstream git repository, i.e.
 # git@github.com:oasisprotocol/<repo-name>.git.
 GIT_ORIGIN_REMOTE ?= origin
@@ -188,7 +191,7 @@ CHANGELOG_FRAGMENTS_BREAKING := $(wildcard .changelog/*breaking*.md)
 define CHECK_CHANGELOG_FRAGMENTS =
 	exit_status=0; \
 	$(ECHO) "$(CYAN)*** Running markdownlint-cli for Change Log fragments... $(OFF)"; \
-	npx markdownlint-cli --config .changelog/.markdownlint.yml .changelog/ || exit_status=$$?; \
+	npx markdownlint-cli@$(MARKDOWNLINT_CLI_VERSION) --config .changelog/.markdownlint.yml .changelog/ || exit_status=$$?; \
 	$(ECHO) "$(CYAN)*** Running gitlint for Change Log fragments: $(OFF)"; \
 	for fragment in $(CHANGELOG_FRAGMENTS_NON_TRIVIAL); do \
 		$(ECHO) "- $$fragment"; \

@@ -72,7 +72,7 @@ lint-git:
 	@$(CHECK_GITLINT)
 
 lint-md:
-	@npx markdownlint-cli '**/*.md' --ignore .changelog/
+	@npx markdownlint-cli@$(MARKDOWNLINT_CLI_VERSION) '**/*.md' --ignore .changelog/
 
 lint-changelog:
 	@$(CHECK_CHANGELOG_FRAGMENTS)
