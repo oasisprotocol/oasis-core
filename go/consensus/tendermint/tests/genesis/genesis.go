@@ -56,10 +56,9 @@ func NewTestNodeGenesisProvider(identity *identity.Identity) (genesis.Provider, 
 		},
 		Registry: registry.Genesis{
 			Parameters: registry.ConsensusParameters{
-				DebugAllowUnroutableAddresses:          true,
-				DebugAllowTestRuntimes:                 true,
-				DebugAllowEntitySignedNodeRegistration: true,
-				DebugBypassStake:                       true,
+				DebugAllowUnroutableAddresses: true,
+				DebugAllowTestRuntimes:        true,
+				DebugBypassStake:              true,
 				EnableRuntimeGovernanceModels: map[registry.RuntimeGovernanceModel]bool{
 					registry.GovernanceEntity:  true,
 					registry.GovernanceRuntime: true,

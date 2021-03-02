@@ -478,32 +478,12 @@ func VerifyRegisterNodeArgs( // nolint: gocyclo
 		return nil, nil, fmt.Errorf("%w: registration not signed by node identity", ErrInvalidArgument)
 	}
 	expectedSigners = append(expectedSigners, n.ID)
-	if !inEntityNodeList {
-		// If we are using entity signing, descriptors will also be signed
-		// by the entity signing key.
-		switch {
-		case sigNode.MultiSigned.IsSignedBy(entity.ID):
-			// Entity signing node registrations is feature-gated by a consensus
-			// parameter, and a per-entity configuration option.
-			//
-			// Ignore the per-entity option during sanity checks as the entity
-			// could have been modified (unless this is during genesis).
-			if !params.DebugAllowEntitySignedNodeRegistration || (!entity.AllowEntitySignedNodes && (!isSanityCheck || isGenesis)) {
-				logger.Error("RegisterNode: registration signed by entity",
-					"signed_node", sigNode,
-					"node", n,
-				)
-				return nil, nil, fmt.Errorf("%w: registration signed by entity", ErrInvalidArgument)
-			}
-
-			expectedSigners = append(expectedSigners, entity.ID)
-		case !isSanityCheck || isGenesis:
-			logger.Error("RegisterNode: node public key not found in entity's node list",
-				"signed_node", sigNode,
-				"node", n,
-			)
-			return nil, nil, fmt.Errorf("%w: node public key not found in entity's node list", ErrInvalidArgument)
-		}
+	if !inEntityNodeList && (!isSanityCheck || isGenesis) {
+		logger.Error("RegisterNode: node public key not found in entity's node list",
+			"signed_node", sigNode,
+			"node", n,
+		)
+		return nil, nil, fmt.Errorf("%w: node public key not found in entity's node list", ErrInvalidArgument)
 	}
 
 	// Expired registrations are allowed here because this routine is abused
@@ -1211,10 +1191,6 @@ type ConsensusParameters struct {
 	// DebugAllowTestRuntimes is true iff test runtimes should be allowed to
 	// be registered.
 	DebugAllowTestRuntimes bool `json:"debug_allow_test_runtimes,omitempty"`
-
-	// DebugAllowEntitySignedNodeRegistration is true iff node registration
-	// signed by entity signing keys should be allowed.
-	DebugAllowEntitySignedNodeRegistration bool `json:"debug_allow_entity_signed_node_registration,omitempty"`
 
 	// DebugBypassStake is true iff the registry should bypass all of the staking
 	// related checks and operations.

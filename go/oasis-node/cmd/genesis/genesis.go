@@ -56,13 +56,12 @@ const (
 	cfgInitialHeight = "initial_height"
 
 	// Registry config flags.
-	CfgRegistryMaxNodeExpiration                      = "registry.max_node_expiration"
-	CfgRegistryDisableRuntimeRegistration             = "registry.disable_runtime_registration"
-	cfgRegistryDebugAllowUnroutableAddresses          = "registry.debug.allow_unroutable_addresses"
-	CfgRegistryDebugAllowTestRuntimes                 = "registry.debug.allow_test_runtimes"
-	cfgRegistryDebugAllowEntitySignedNodeRegistration = "registry.debug.allow_entity_signed_registration"
-	cfgRegistryDebugBypassStake                       = "registry.debug.bypass_stake" // nolint: gosec
-	cfgRegistryEnableRuntimeGovernanceModels          = "registry.enable_runtime_governance_models"
+	CfgRegistryMaxNodeExpiration             = "registry.max_node_expiration"
+	CfgRegistryDisableRuntimeRegistration    = "registry.disable_runtime_registration"
+	cfgRegistryDebugAllowUnroutableAddresses = "registry.debug.allow_unroutable_addresses"
+	CfgRegistryDebugAllowTestRuntimes        = "registry.debug.allow_test_runtimes"
+	cfgRegistryDebugBypassStake              = "registry.debug.bypass_stake" // nolint: gosec
+	cfgRegistryEnableRuntimeGovernanceModels = "registry.enable_runtime_governance_models"
 
 	// Scheduler config flags.
 	cfgSchedulerMinValidators          = "scheduler.min_validators"
@@ -330,14 +329,13 @@ func doInitGenesis(cmd *cobra.Command, args []string) {
 func AppendRegistryState(doc *genesis.Document, entities, runtimes, nodes []string, l *logging.Logger) error {
 	regSt := registry.Genesis{
 		Parameters: registry.ConsensusParameters{
-			DebugAllowUnroutableAddresses:          viper.GetBool(cfgRegistryDebugAllowUnroutableAddresses),
-			DebugAllowTestRuntimes:                 viper.GetBool(CfgRegistryDebugAllowTestRuntimes),
-			DebugAllowEntitySignedNodeRegistration: viper.GetBool(cfgRegistryDebugAllowEntitySignedNodeRegistration),
-			DebugBypassStake:                       viper.GetBool(cfgRegistryDebugBypassStake),
-			GasCosts:                               registry.DefaultGasCosts, // TODO: Make these configurable.
-			MaxNodeExpiration:                      viper.GetUint64(CfgRegistryMaxNodeExpiration),
-			DisableRuntimeRegistration:             viper.GetBool(CfgRegistryDisableRuntimeRegistration),
-			EnableRuntimeGovernanceModels:          make(map[registry.RuntimeGovernanceModel]bool),
+			DebugAllowUnroutableAddresses: viper.GetBool(cfgRegistryDebugAllowUnroutableAddresses),
+			DebugAllowTestRuntimes:        viper.GetBool(CfgRegistryDebugAllowTestRuntimes),
+			DebugBypassStake:              viper.GetBool(cfgRegistryDebugBypassStake),
+			GasCosts:                      registry.DefaultGasCosts, // TODO: Make these configurable.
+			MaxNodeExpiration:             viper.GetUint64(CfgRegistryMaxNodeExpiration),
+			DisableRuntimeRegistration:    viper.GetBool(CfgRegistryDisableRuntimeRegistration),
+			EnableRuntimeGovernanceModels: make(map[registry.RuntimeGovernanceModel]bool),
 		},
 		Entities: make([]*entity.SignedEntity, 0, len(entities)),
 		Runtimes: make([]*registry.Runtime, 0, len(runtimes)),
@@ -744,12 +742,10 @@ func init() {
 	initGenesisFlags.Bool(CfgRegistryDisableRuntimeRegistration, false, "disable non-genesis runtime registration")
 	initGenesisFlags.Bool(cfgRegistryDebugAllowUnroutableAddresses, false, "allow unroutable addreses (UNSAFE)")
 	initGenesisFlags.Bool(CfgRegistryDebugAllowTestRuntimes, false, "enable test runtime registration")
-	initGenesisFlags.Bool(cfgRegistryDebugAllowEntitySignedNodeRegistration, false, "allow entity signed node registration (UNSAFE)")
 	initGenesisFlags.Bool(cfgRegistryDebugBypassStake, false, "bypass all stake checks and operations (UNSAFE)")
 	initGenesisFlags.StringSlice(cfgRegistryEnableRuntimeGovernanceModels, []string{"entity"}, "set of enabled runtime governance models")
 	_ = initGenesisFlags.MarkHidden(cfgRegistryDebugAllowUnroutableAddresses)
 	_ = initGenesisFlags.MarkHidden(CfgRegistryDebugAllowTestRuntimes)
-	_ = initGenesisFlags.MarkHidden(cfgRegistryDebugAllowEntitySignedNodeRegistration)
 	_ = initGenesisFlags.MarkHidden(cfgRegistryDebugBypassStake)
 
 	// Scheduler config flags.

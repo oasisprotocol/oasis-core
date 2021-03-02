@@ -56,9 +56,8 @@ func testDoc() genesis.Document {
 		},
 		Registry: registry.Genesis{
 			Parameters: registry.ConsensusParameters{
-				DebugAllowUnroutableAddresses:          true,
-				DebugBypassStake:                       true,
-				DebugAllowEntitySignedNodeRegistration: true,
+				DebugAllowUnroutableAddresses: true,
+				DebugBypassStake:              true,
 				EnableRuntimeGovernanceModels: map[registry.RuntimeGovernanceModel]bool{
 					registry.GovernanceEntity:    true,
 					registry.GovernanceRuntime:   true,
@@ -141,7 +140,7 @@ func TestGenesisChainContext(t *testing.T) {
 
 	// Having to update this every single time the genesis structure
 	// changes isn't annoying at all.
-	require.Equal(t, "c7ca04c2279b2df5773258fda6a7ff9e473fe648eb7616e1be6474308e9174e8", stableDoc.ChainContext())
+	require.Equal(t, "4f50ffb995638282d3b3637315bb22be1d3ff4162e0df206991ebc637cc34729", stableDoc.ChainContext())
 }
 
 func TestGenesisSanityCheck(t *testing.T) {
@@ -173,9 +172,8 @@ func TestGenesisSanityCheck(t *testing.T) {
 	// Note that this test entity has no nodes by design, those will be added
 	// later by various tests.
 	testEntity := &entity.Entity{
-		Versioned:              cbor.NewVersioned(entity.LatestEntityDescriptorVersion),
-		ID:                     validPK,
-		AllowEntitySignedNodes: true,
+		Versioned: cbor.NewVersioned(entity.LatestEntityDescriptorVersion),
+		ID:        validPK,
 	}
 	signedTestEntity := signEntityOrDie(signer, testEntity)
 
@@ -285,7 +283,6 @@ func TestGenesisSanityCheck(t *testing.T) {
 		nodeConsensusSigner,
 	}
 	signedTestNode := signNodeOrDie(nodeSigners, testNode)
-	entitySignedTestNode := signNodeOrDie(append([]signature.Signer{signer}, nodeSigners...), testNode)
 
 	// Test genesis document should pass sanity check.
 	d := testDoc()
@@ -557,22 +554,11 @@ func TestGenesisSanityCheck(t *testing.T) {
 	d = testDoc()
 	te = *testEntity
 	te.Nodes = []signature.PublicKey{unknownPK}
-	te.AllowEntitySignedNodes = false
 	signedEntityWithBrokenNode := signEntityOrDie(signer, &te)
 	d.Registry.Entities = []*entity.SignedEntity{signedEntityWithBrokenNode}
 	d.Registry.Runtimes = []*registry.Runtime{}
 	d.Registry.Nodes = []*node.MultiSignedNode{signedTestNode}
-	require.Error(d.SanityCheck(), "node not listed among controlling entity's nodes should be rejected if the entity doesn't allow entity-signed nodes")
-
-	d = testDoc()
-	te = *testEntity
-	te.Nodes = []signature.PublicKey{unknownPK}
-	te.AllowEntitySignedNodes = true
-	signedEntityWithBrokenNode = signEntityOrDie(signer, &te)
-	d.Registry.Entities = []*entity.SignedEntity{signedEntityWithBrokenNode}
-	d.Registry.Runtimes = []*registry.Runtime{}
-	d.Registry.Nodes = []*node.MultiSignedNode{entitySignedTestNode}
-	require.NoError(d.SanityCheck(), "node not listed among controlling entity's nodes should still be accepted if the entity allows entity-signed nodes")
+	require.Error(d.SanityCheck(), "node not listed among controlling entity's nodes should be rejected")
 
 	d = testDoc()
 	tn := *testNode

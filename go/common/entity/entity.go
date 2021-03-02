@@ -51,10 +51,6 @@ type Entity struct { // nolint: maligned
 	// will sign the descriptor with the node signing key rather than the
 	// entity signing key.
 	Nodes []signature.PublicKey `json:"nodes,omitempty"`
-
-	// AllowEntitySignedNodes is true iff nodes belonging to this entity
-	// may be signed with the entity signing key.
-	AllowEntitySignedNodes bool `json:"allow_entity_signed_nodes,omitempty"`
 }
 
 // ValidateBasic performs basic descriptor validity checks.
@@ -147,7 +143,6 @@ func GenerateWithSigner(baseDir string, signer signature.Signer, template *Entit
 	}
 	if template != nil {
 		ent.Nodes = template.Nodes
-		ent.AllowEntitySignedNodes = template.AllowEntitySignedNodes
 	}
 
 	if err := ent.Save(baseDir); err != nil {
@@ -223,5 +218,4 @@ func init() {
 
 	testEntity.Versioned = cbor.NewVersioned(LatestEntityDescriptorVersion)
 	testEntity.ID = testEntitySigner.Public()
-	testEntity.AllowEntitySignedNodes = true
 }

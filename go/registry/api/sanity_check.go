@@ -28,7 +28,7 @@ func (g *Genesis) SanityCheck(
 	logger := logging.GetLogger("genesis/sanity-check")
 
 	if !flags.DebugDontBlameOasis() {
-		if g.Parameters.DebugAllowUnroutableAddresses || g.Parameters.DebugBypassStake || g.Parameters.DebugAllowEntitySignedNodeRegistration {
+		if g.Parameters.DebugAllowUnroutableAddresses || g.Parameters.DebugBypassStake {
 			return fmt.Errorf("registry: sanity check failed: one or more unsafe debug flags set")
 		}
 		if g.Parameters.MaxNodeExpiration == 0 {

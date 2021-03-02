@@ -30,10 +30,9 @@ import (
 )
 
 const (
-	cfgAllowEntitySignedNodes = "entity.debug.allow_entity_signed_nodes"
-	CfgNodeID                 = "entity.node.id"
-	CfgNodeDescriptor         = "entity.node.descriptor"
-	CfgReuseSigner            = "entity.reuse_signer"
+	CfgNodeID         = "entity.node.id"
+	CfgNodeDescriptor = "entity.node.descriptor"
+	CfgReuseSigner    = "entity.reuse_signer"
 
 	entityGenesisFilename = "entity_genesis.json"
 )
@@ -167,8 +166,6 @@ func doUpdate(cmd *cobra.Command, args []string) {
 	}
 
 	// Update the entity.
-	ent.AllowEntitySignedNodes = viper.GetBool(cfgAllowEntitySignedNodes)
-
 	ent.Nodes = nil
 	for _, v := range viper.GetStringSlice(CfgNodeID) {
 		var nodeID signature.PublicKey
@@ -357,10 +354,6 @@ func loadOrGenerateEntity(dataDir string, generate bool) (*entity.Entity, signat
 		return entity.TestEntity()
 	}
 
-	if viper.GetBool(cfgAllowEntitySignedNodes) && !cmdFlags.DebugDontBlameOasis() {
-		return nil, nil, fmt.Errorf("loadOrGenerateEntity: sanity check failed: one or more unsafe debug flags set")
-	}
-
 	entityDir, err := cmdSigner.CLIDirOrPwd()
 	if err != nil {
 		logger.Error("failed to retrieve entity dir",
@@ -375,8 +368,7 @@ func loadOrGenerateEntity(dataDir string, generate bool) (*entity.Entity, signat
 
 	if generate {
 		template := &entity.Entity{
-			Versioned:              cbor.NewVersioned(entity.LatestEntityDescriptorVersion),
-			AllowEntitySignedNodes: viper.GetBool(cfgAllowEntitySignedNodes),
+			Versioned: cbor.NewVersioned(entity.LatestEntityDescriptorVersion),
 		}
 
 		if viper.GetBool(CfgReuseSigner) {
@@ -417,10 +409,8 @@ func Register(parentCmd *cobra.Command) {
 }
 
 func init() {
-	entityFlags.Bool(cfgAllowEntitySignedNodes, false, "Entity signing key may be used for node registration (UNSAFE)")
 	entityFlags.AddFlagSet(cmdSigner.Flags)
 	entityFlags.AddFlagSet(cmdSigner.CLIFlags)
-	_ = entityFlags.MarkHidden(cfgAllowEntitySignedNodes)
 	_ = viper.BindPFlags(entityFlags)
 
 	initFlags.Bool(CfgReuseSigner, false, "Reuse entity signer instead of generating a new one")
