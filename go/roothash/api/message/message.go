@@ -74,7 +74,7 @@ func (sm *StakingMessage) ValidateBasic() error {
 		// Ok.
 		return nil
 	default:
-		return fmt.Errorf("staking runtime message has no fields set")
+		return fmt.Errorf("staking runtime message has multiple fields set")
 	}
 }
 
