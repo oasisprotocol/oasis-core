@@ -211,10 +211,9 @@ func doFixGenesis(cmd *cobra.Command, args []string) {
 
 	// Validate the new genesis document.
 	if err = newDoc.SanityCheck(); err != nil {
-		logger.Error("new genesis document sanity check failed",
+		logger.Warn("new genesis document sanity check failed",
 			"err", err,
 		)
-		os.Exit(1)
 	}
 
 	// Write out the new genesis document.
@@ -363,8 +362,6 @@ func updateGenesisDoc(oldDoc *oldDocument) (*genesis.Document, error) {
 	// Registry.
 	newDoc.Registry = registry.Genesis{
 		Parameters:   oldDoc.Registry.Parameters,
-		Entities:     oldDoc.Registry.Entities,
-		Nodes:        oldDoc.Registry.Nodes,
 		NodeStatuses: oldDoc.Registry.NodeStatuses,
 	}
 	newDoc.Registry.Parameters.EnableRuntimeGovernanceModels = map[registry.RuntimeGovernanceModel]bool{
@@ -397,7 +394,146 @@ func updateGenesisDoc(oldDoc *oldDocument) (*genesis.Document, error) {
 		newDoc.Registry.SuspendedRuntimes = append(newDoc.Registry.SuspendedRuntimes, newSRt)
 	}
 
+	// Remove entities with not enough stake.
+	var entities []*entity.Entity
+	var nodes []*node.Node
+	var runtimes []*registry.Runtime
+	for _, sigEntity := range oldDoc.Registry.Entities {
+		var entity entity.Entity
+		if err := sigEntity.Open(registry.RegisterGenesisEntitySignatureContext, &entity); err != nil {
+			return nil, fmt.Errorf("unable to open signed entity: %w", err)
+		}
+		entities = append(entities, &entity)
+	}
+	for _, sigNode := range oldDoc.Registry.Nodes {
+		var node node.Node
+		if err := sigNode.Open(registry.RegisterGenesisNodeSignatureContext, &node); err != nil {
+			return nil, fmt.Errorf("unable to open signed node: %w", err)
+		}
+		nodes = append(nodes, &node)
+	}
+	runtimes = append(runtimes, newDoc.Registry.Runtimes...)
+	runtimes = append(runtimes, newDoc.Registry.SuspendedRuntimes...)
+
+	generatedEscrows, err := computeStakeClaims(
+		entities,
+		nodes,
+		runtimes,
+		newDoc.Staking.Parameters.Thresholds,
+		newDoc.Staking.Ledger,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("unable to compute stake claims: %w", err)
+	}
+
+	removedEntities := make(map[signature.PublicKey]*entity.Entity)
+	for _, sigEntity := range oldDoc.Registry.Entities {
+		var entity entity.Entity
+		if err := sigEntity.Open(registry.RegisterEntitySignatureContext, &entity); err != nil {
+			return nil, fmt.Errorf("unable to open signed entity: %w", err)
+		}
+		addr := staking.NewAddress(entity.ID)
+		escrowAcc := generatedEscrows[addr]
+		if escrowAcc == nil {
+			// Entity cannot pass stake claims, drop entity.
+			logger.Warn("removing entity not passing stake claims: no account in ledger",
+				"entity_id", entity.ID,
+			)
+			removedEntities[entity.ID] = &entity
+			continue
+		}
+
+		if err := escrowAcc.CheckStakeClaims(newDoc.Staking.Parameters.Thresholds); err != nil {
+			logger.Warn("removing entity not passing stake claims",
+				"entity_id", entity.ID,
+				"err", err,
+			)
+			removedEntities[entity.ID] = &entity
+			continue
+		}
+		newDoc.Registry.Entities = append(newDoc.Registry.Entities, sigEntity)
+	}
+	for _, sigNode := range oldDoc.Registry.Nodes {
+		var node node.Node
+		if err := sigNode.Open(registry.RegisterGenesisNodeSignatureContext, &node); err != nil {
+			return nil, fmt.Errorf("unable to open signed node: %w", err)
+		}
+		if ent := removedEntities[node.EntityID]; ent != nil {
+			logger.Warn("removing node as owning entity doesn't pass stake claims",
+				"entity_id", node.EntityID,
+				"node_id", node.ID,
+			)
+			continue
+		}
+		newDoc.Registry.Nodes = append(newDoc.Registry.Nodes, sigNode)
+
+	}
+
 	return newDoc, nil
+}
+
+func computeStakeClaims(
+	entities []*entity.Entity,
+	nodes []*node.Node,
+	runtimes []*registry.Runtime,
+	stakeThresholds map[staking.ThresholdKind]quantity.Quantity,
+	accounts map[staking.Address]*staking.Account,
+) (map[staking.Address]*staking.EscrowAccount, error) {
+	computedStakeClaims := make(map[staking.Address]*staking.EscrowAccount)
+
+	// Entity accounts.
+	for _, entity := range entities {
+		addr := staking.NewAddress(entity.ID)
+		acc := accounts[addr]
+		accumulator := staking.StakeAccumulator{
+			Claims: make(map[staking.StakeClaim][]staking.StakeThreshold),
+		}
+		accumulator.AddClaimUnchecked(registry.StakeClaimRegisterEntity, staking.GlobalStakeThresholds(staking.KindEntity))
+		computedStakeClaims[addr] = &staking.EscrowAccount{
+			Active:           acc.Escrow.Active,
+			StakeAccumulator: accumulator,
+		}
+	}
+
+	// Runtime accounts.
+	runtimeMap := make(map[common.Namespace]*registry.Runtime)
+	for _, rt := range runtimes {
+		runtimeMap[rt.ID] = rt
+
+		if rt.GovernanceModel == registry.GovernanceRuntime {
+			addr := staking.NewRuntimeAddress(rt.ID)
+			acc := accounts[addr]
+			accumulator := staking.StakeAccumulator{
+				Claims: make(map[staking.StakeClaim][]staking.StakeThreshold),
+			}
+			computedStakeClaims[addr] = &staking.EscrowAccount{
+				Active:           acc.Escrow.Active,
+				StakeAccumulator: accumulator,
+			}
+		}
+	}
+
+	// Node stake claims.
+	for _, node := range nodes {
+		var nodeRts []*registry.Runtime
+		for _, rt := range node.Runtimes {
+			nodeRts = append(nodeRts, runtimeMap[rt.ID])
+		}
+		addr := staking.NewAddress(node.EntityID)
+		computedStakeClaims[addr].StakeAccumulator.AddClaimUnchecked(registry.StakeClaimForNode(node.ID), registry.StakeThresholdsForNode(node, nodeRts))
+	}
+
+	// Runtime stake claims.
+	for _, rt := range runtimes {
+		addr := rt.StakingAddress()
+		if addr == nil {
+			continue
+		}
+
+		computedStakeClaims[*addr].StakeAccumulator.AddClaimUnchecked(registry.StakeClaimForRuntime(rt.ID), registry.StakeThresholdsForRuntime(rt))
+	}
+
+	return computedStakeClaims, nil
 }
 
 // Register registers the fix-genesis sub-command and all of it's children.
