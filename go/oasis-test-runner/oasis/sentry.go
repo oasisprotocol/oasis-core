@@ -73,6 +73,7 @@ func (sentry *Sentry) startNode() error {
 	args := newArgBuilder().
 		debugDontBlameOasis().
 		debugAllowTestKeys().
+		debugEnableProfiling(sentry.Node.pprofPort).
 		workerCertificateRotation(false).
 		workerSentryEnabled().
 		workerSentryControlPort(sentry.controlPort).
@@ -80,6 +81,7 @@ func (sentry *Sentry) startNode() error {
 		tendermintPrune(sentry.consensus.PruneNumKept).
 		tendermintRecoverCorruptedWAL(sentry.consensus.TendermintRecoverCorruptedWAL).
 		configureDebugCrashPoints(sentry.crashPointsProbability).
+		tendermintSupplementarySanity(sentry.supplementarySanityInterval).
 		appendNetwork(sentry.net).
 		appendSeedNodes(sentry.net.seeds).
 		internalSocketAddress(sentry.net.validators[0].SocketPath())
@@ -150,6 +152,7 @@ func (net *Network) NewSentry(cfg *SentryCfg) (*Sentry, error) {
 			net:                                      net,
 			dir:                                      sentryDir,
 			crashPointsProbability:                   cfg.CrashPointsProbability,
+			supplementarySanityInterval:              cfg.SupplementarySanityInterval,
 			disableDefaultLogWatcherHandlerFactories: cfg.DisableDefaultLogWatcherHandlerFactories,
 			logWatcherHandlerFactories:               cfg.LogWatcherHandlerFactories,
 		},
@@ -163,10 +166,15 @@ func (net *Network) NewSentry(cfg *SentryCfg) (*Sentry, error) {
 		controlPort:       net.nextNodePort + 1,
 		sentryPort:        net.nextNodePort + 2,
 	}
+	net.nextNodePort += 3
 	sentry.doStartNode = sentry.startNode
 
+	if cfg.EnableProfiling {
+		sentry.Node.pprofPort = net.nextNodePort
+		net.nextNodePort++
+	}
+
 	net.sentries = append(net.sentries, sentry)
-	net.nextNodePort += 3
 
 	if err := net.AddLogWatcher(&sentry.Node); err != nil {
 		net.logger.Error("failed to add log watcher",

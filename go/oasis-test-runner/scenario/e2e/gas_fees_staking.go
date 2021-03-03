@@ -106,7 +106,7 @@ func (sc *gasFeesImpl) Fixture() (*oasis.NetworkFixture, error) {
 		Validators: []oasis.ValidatorFixture{
 			// Create three validators, each with its own entity so we can test
 			// if gas disbursement works correctly.
-			{Entity: 1, Consensus: oasis.ConsensusFixture{MinGasPrice: 1}},
+			{Entity: 1, Consensus: oasis.ConsensusFixture{MinGasPrice: 1, SupplementarySanityInterval: 1}},
 			{Entity: 2, Consensus: oasis.ConsensusFixture{MinGasPrice: 1}},
 			{Entity: 3, Consensus: oasis.ConsensusFixture{MinGasPrice: 1}},
 		},

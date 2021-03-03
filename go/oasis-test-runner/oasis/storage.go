@@ -111,6 +111,7 @@ func (worker *Storage) startNode() error {
 	args := newArgBuilder().
 		debugDontBlameOasis().
 		debugAllowTestKeys().
+		debugEnableProfiling(worker.Node.pprofPort).
 		workerCertificateRotation(!worker.disableCertRotation).
 		tendermintCoreAddress(worker.consensusPort).
 		tendermintSubmissionGasPrice(worker.consensus.SubmissionGasPrice).
@@ -125,6 +126,7 @@ func (worker *Storage) startNode() error {
 		workerStorageDebugDisableCheckpointSync(worker.checkpointSyncDisabled).
 		workerStorageCheckpointCheckInterval(worker.checkpointCheckInterval).
 		configureDebugCrashPoints(worker.crashPointsProbability).
+		tendermintSupplementarySanity(worker.supplementarySanityInterval).
 		appendNetwork(worker.net).
 		appendEntity(worker.entity)
 
@@ -199,6 +201,7 @@ func (net *Network) NewStorage(cfg *StorageCfg) (*Storage, error) {
 			termEarlyOk:                              cfg.AllowEarlyTermination,
 			termErrorOk:                              cfg.AllowErrorTermination,
 			crashPointsProbability:                   cfg.CrashPointsProbability,
+			supplementarySanityInterval:              cfg.SupplementarySanityInterval,
 			disableDefaultLogWatcherHandlerFactories: cfg.DisableDefaultLogWatcherHandlerFactories,
 			logWatcherHandlerFactories:               cfg.LogWatcherHandlerFactories,
 			consensus:                                cfg.Consensus,
@@ -218,11 +221,16 @@ func (net *Network) NewStorage(cfg *StorageCfg) (*Storage, error) {
 		p2pPort:                 net.nextNodePort + 2,
 		runtimes:                cfg.Runtimes,
 	}
+	net.nextNodePort += 3
 	worker.doStartNode = worker.startNode
 	copy(worker.NodeID[:], nodeKey[:])
 
+	if cfg.EnableProfiling {
+		worker.Node.pprofPort = net.nextNodePort
+		net.nextNodePort++
+	}
+
 	net.storageWorkers = append(net.storageWorkers, worker)
-	net.nextNodePort += 3
 
 	if err := net.AddLogWatcher(&worker.Node); err != nil {
 		net.logger.Error("failed to add log watcher",

@@ -78,7 +78,7 @@ func newDefaultFixture() (*oasis.NetworkFixture, error) {
 			{IsDebugTestEntity: true},
 		},
 		Validators: []oasis.ValidatorFixture{
-			{Entity: 1},
+			{Entity: 1, Consensus: oasis.ConsensusFixture{SupplementarySanityInterval: 1}},
 		},
 		Seeds: []oasis.SeedFixture{{}},
 	}

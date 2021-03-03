@@ -76,6 +76,7 @@ var TxSourceMultiShort scenario.Scenario = &txSourceImpl{
 	numKeyManagerNodes:                2,
 	numStorageNodes:                   2,
 	numComputeNodes:                   4,
+	numClientNodes:                    2,
 }
 
 // TxSourceMultiShortSGX uses multiple workloads for a short time.
@@ -99,12 +100,13 @@ var TxSourceMultiShortSGX scenario.Scenario = &txSourceImpl{
 	consensusPruneDisabledProbability: 0.1,
 	consensusPruneMinKept:             100,
 	consensusPruneMaxKept:             200,
-	// XXX: don't use more node as SGX E2E test instances cannot handle much
+	// XXX: don't use more nodes as SGX E2E test instances cannot handle many
 	// more nodes that are currently configured.
 	numValidatorNodes:  3,
 	numKeyManagerNodes: 1,
 	numStorageNodes:    2,
 	numComputeNodes:    4,
+	numClientNodes:     1,
 }
 
 // TxSourceMulti uses multiple workloads.
@@ -133,13 +135,12 @@ var TxSourceMulti scenario.Scenario = &txSourceImpl{
 	consensusPruneMaxKept:             1000,
 	enableCrashPoints:                 true,
 	// Nodes getting killed commonly result in corrupted tendermint WAL when the
-	// node is restarted. Enable automatic corrupted WAL recovery for validator
-	// nodes.
+	// node is restarted. Enable automatic corrupted WAL recovery for nodes.
 	tendermintRecoverCorruptedWAL: true,
-	// Use 4 validators so that consensus can keep making progress
-	// when a node is being killed and restarted.
+	// Use 4 validators so that consensus can keep making progress when a node
+	// is being killed and restarted.
 	numValidatorNodes: 4,
-	// Use 2 keymanager so that at least one keymanager is accessible when
+	// Use 2 keymanagers so that at least one keymanager is accessible when
 	// the other one is being killed or shut down.
 	numKeyManagerNodes: 2,
 	// Use 4 storage nodes so runtime continues to work when one of the nodes
@@ -151,6 +152,9 @@ var TxSourceMulti scenario.Scenario = &txSourceImpl{
 	// In worst case, 2 nodes can be offline at the same time. Aditionally we
 	// need one backup node and one extra node.
 	numComputeNodes: 5,
+	// Second client node is used to run supplementary-sanity checks which can
+	// cause the node to fall behind over the long run.
+	numClientNodes: 2,
 }
 
 type txSourceImpl struct { // nolint: maligned
@@ -176,6 +180,7 @@ type txSourceImpl struct { // nolint: maligned
 	numValidatorNodes  int
 	numKeyManagerNodes int
 	numComputeNodes    int
+	numClientNodes     int
 
 	// Configurable number of storage nodes. If running tests with long node
 	// shutdowns enabled, make sure this is at least `MinWriteReplication+1`,
@@ -239,7 +244,7 @@ func (sc *txSourceImpl) Fixture() (*oasis.NetworkFixture, error) {
 	f.Network.GovernanceParameters = &governance.ConsensusParameters{
 		VotingPeriod:              10,
 		MinProposalDeposit:        *quantity.NewFromUint64(300),
-		Quorum:                    90,
+		Quorum:                    75,
 		Threshold:                 90,
 		UpgradeMinEpochDiff:       40,
 		UpgradeCancelMinEpochDiff: 20,
@@ -488,6 +493,21 @@ func (sc *txSourceImpl) Fixture() (*oasis.NetworkFixture, error) {
 		})
 	}
 	f.StorageWorkers = storageWorkers
+	var clients []oasis.ClientFixture
+	for i := 0; i < sc.numClientNodes; i++ {
+		c := oasis.ClientFixture{}
+		// Enable runtime on the first node.
+		if i == 0 {
+			c.Runtimes = []int{1}
+		}
+		// Enable supplementary sanity and profiling on the last client node.
+		if i == sc.numClientNodes-1 {
+			c.Consensus.SupplementarySanityInterval = 1
+			c.EnableProfiling = true
+		}
+		clients = append(clients, c)
+	}
+	f.Clients = clients
 
 	// Update validators to require fee payments.
 	for i := range f.Validators {
@@ -805,6 +825,7 @@ func (sc *txSourceImpl) Clone() scenario.Scenario {
 		numKeyManagerNodes:                sc.numKeyManagerNodes,
 		numStorageNodes:                   sc.numStorageNodes,
 		numComputeNodes:                   sc.numComputeNodes,
+		numClientNodes:                    sc.numClientNodes,
 		seed:                              sc.seed,
 		// rng must always be reinitialized from seed by calling PreInit().
 	}

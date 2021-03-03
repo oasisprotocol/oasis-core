@@ -266,6 +266,7 @@ func (km *Keymanager) startNode() error {
 	args := newArgBuilder().
 		debugDontBlameOasis().
 		debugAllowTestKeys().
+		debugEnableProfiling(km.Node.pprofPort).
 		workerCertificateRotation(true).
 		tendermintCoreAddress(km.consensusPort).
 		tendermintSubmissionGasPrice(km.consensus.SubmissionGasPrice).
@@ -279,6 +280,7 @@ func (km *Keymanager) startNode() error {
 		workerKeymanagerEnabled().
 		workerKeymanagerRuntimeID(km.runtime.id).
 		configureDebugCrashPoints(km.crashPointsProbability).
+		tendermintSupplementarySanity(km.supplementarySanityInterval).
 		appendNetwork(km.net).
 		appendEntity(km.entity)
 
@@ -344,6 +346,7 @@ func (net *Network) NewKeymanager(cfg *KeymanagerCfg) (*Keymanager, error) {
 			termEarlyOk:                              cfg.AllowEarlyTermination,
 			termErrorOk:                              cfg.AllowErrorTermination,
 			crashPointsProbability:                   cfg.CrashPointsProbability,
+			supplementarySanityInterval:              cfg.SupplementarySanityInterval,
 			disableDefaultLogWatcherHandlerFactories: cfg.DisableDefaultLogWatcherHandlerFactories,
 			logWatcherHandlerFactories:               cfg.LogWatcherHandlerFactories,
 			consensus:                                cfg.Consensus,
@@ -359,11 +362,16 @@ func (net *Network) NewKeymanager(cfg *KeymanagerCfg) (*Keymanager, error) {
 		workerClientPort: net.nextNodePort + 1,
 		mayGenerate:      len(net.keymanagers) == 0,
 	}
+	net.nextNodePort += 2
 	km.doStartNode = km.startNode
 	copy(km.NodeID[:], nodeKey[:])
 
+	if cfg.EnableProfiling {
+		km.Node.pprofPort = net.nextNodePort
+		net.nextNodePort++
+	}
+
 	net.keymanagers = append(net.keymanagers, km)
-	net.nextNodePort += 2
 
 	if err := net.AddLogWatcher(&km.Node); err != nil {
 		net.logger.Error("failed to add log watcher",

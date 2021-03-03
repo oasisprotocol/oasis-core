@@ -25,28 +25,31 @@ import (
 // NameGovernance is the name of the governance workload.
 const NameGovernance = "governance"
 
-var errUnexpectedGovTxResult = fmt.Errorf("unexpected governance tx result")
+var (
 
-// Governance is the governance workload.
-var Governance = &governanceWorkload{
-	BaseWorkload: NewBaseWorkload(NameGovernance),
-}
+	// Governance is the governance workload.
+	Governance = &governanceWorkload{
+		BaseWorkload: NewBaseWorkload(NameGovernance),
+	}
 
-var numProposerAccounts = 10
-
-// How likely voters should vote YES for the proposal made by i'th proposer.
-var proposersVoteYesRate = []uint8{
-	100,
-	99,
-	98,
-	95,
-	92,
-	90,
-	80,
-	70,
-	50,
-	0,
-}
+	// Timeout after each governance workload iteration.
+	iterationTimeout         = 2 * time.Second
+	errUnexpectedGovTxResult = fmt.Errorf("unexpected governance tx result")
+	numProposerAccounts      = 10
+	// How likely voters should vote YES for the proposal made by i'th proposer.
+	proposersVoteYesRate = []uint8{
+		100,
+		99,
+		98,
+		95,
+		92,
+		90,
+		80,
+		70,
+		50,
+		0,
+	}
+)
 
 type governanceWorkload struct {
 	BaseWorkload
@@ -247,6 +250,7 @@ OUTER:
 	if pendingUpgrade == nil {
 		g.Logger.Debug("no eligible pending upgrade for submitting cancel upgrade proposal, skipping",
 			"pending_upgrades", pendingUpgrades,
+			"current_epoch", g.currentEpoch,
 		)
 		return nil
 	}
@@ -279,7 +283,11 @@ func (g *governanceWorkload) submitVote(voter signature.Signer, proposalID uint6
 		return nil
 	case errors.Is(err, registry.ErrNoSuchNode),
 		errors.Is(err, governance.ErrNotEligible):
-		g.Logger.Error("submitting vote error: voter not a validator, continuing", "err", err)
+		g.Logger.Error("submitting vote error: voter not a validator, continuing",
+			"err", err,
+			"voter", voter.Public(),
+			"proposal_id", proposalID,
+		)
 		return nil
 	default:
 		return fmt.Errorf("failed to sign and submit cast vote transaction: %w", err)
@@ -411,7 +419,7 @@ func (g *governanceWorkload) Run(
 	// Main workload loop.
 	for {
 		select {
-		case <-time.After(1 * time.Second):
+		case <-time.After(iterationTimeout):
 		case <-gracefulExit.Done():
 			g.Logger.Debug("time's up")
 			return nil
@@ -433,12 +441,15 @@ func (g *governanceWorkload) Run(
 			var upgrades []*upgrade.Descriptor
 			upgrades, err = g.governance.PendingUpgrades(g.ctx, consensus.HeightLatest)
 			if err != nil {
-				return fmt.Errorf("querying penging upgrades: %w", err)
+				return fmt.Errorf("querying pending upgrades: %w", err)
 			}
 			for _, up := range upgrades {
 				if up.Epoch.AbsDiff(g.currentEpoch) != g.parameters.UpgradeCancelMinEpochDiff+2 {
 					continue
 				}
+				g.Logger.Debug("ensuring pending upgrade canceled",
+					"upgrade", up,
+				)
 				if err = g.ensureUpgradeCanceled(up); err != nil {
 					return fmt.Errorf("ensuring upgrade canceled: %w", err)
 				}

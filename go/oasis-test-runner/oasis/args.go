@@ -26,6 +26,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/flags"
 	"github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/grpc"
 	"github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/metrics"
+	"github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/pprof"
 	"github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/debug/byzantine"
 	runtimeClient "github.com/oasisprotocol/oasis-core/go/runtime/client"
 	runtimeRegistry "github.com/oasisprotocol/oasis-core/go/runtime/registry"
@@ -63,6 +64,16 @@ func (args *argBuilder) debugDontBlameOasis() *argBuilder {
 
 func (args *argBuilder) debugAllowTestKeys() *argBuilder {
 	args.vec = append(args.vec, "--"+cmdCommon.CfgDebugAllowTestKeys)
+	return args
+}
+
+func (args *argBuilder) debugEnableProfiling(port uint16) *argBuilder {
+	if port == 0 {
+		return args
+	}
+	args.vec = append(args.vec,
+		"--"+pprof.CfgPprofBind, "0.0.0.0:"+strconv.Itoa(int(port)),
+	)
 	return args
 }
 
@@ -208,11 +219,13 @@ func (args *argBuilder) runtimeSupported(id common.Namespace) *argBuilder {
 	return args
 }
 
-func (args *argBuilder) tendermintSupplementarySanityEnabled() *argBuilder {
-	args.vec = append(args.vec, "--"+tendermintFull.CfgSupplementarySanityEnabled)
-	args.vec = append(args.vec, []string{
-		"--" + tendermintFull.CfgSupplementarySanityInterval, "1",
-	}...)
+func (args *argBuilder) tendermintSupplementarySanity(interval uint64) *argBuilder {
+	if interval > 0 {
+		args.vec = append(args.vec, "--"+tendermintFull.CfgSupplementarySanityEnabled)
+		args.vec = append(args.vec, []string{
+			"--" + tendermintFull.CfgSupplementarySanityInterval, strconv.Itoa(int(interval)),
+		}...)
+	}
 	return args
 }
 

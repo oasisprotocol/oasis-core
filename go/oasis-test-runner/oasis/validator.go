@@ -82,6 +82,7 @@ func (val *Validator) startNode() error {
 	args := newArgBuilder().
 		debugDontBlameOasis().
 		debugAllowTestKeys().
+		debugEnableProfiling(val.Node.pprofPort).
 		workerCertificateRotation(true).
 		consensusValidator().
 		tendermintCoreAddress(val.consensusPort).
@@ -90,6 +91,7 @@ func (val *Validator) startNode() error {
 		tendermintPrune(val.consensus.PruneNumKept).
 		tendermintRecoverCorruptedWAL(val.consensus.TendermintRecoverCorruptedWAL).
 		configureDebugCrashPoints(val.crashPointsProbability).
+		tendermintSupplementarySanity(val.supplementarySanityInterval).
 		appendNetwork(val.net).
 		appendEntity(val.entity)
 
@@ -102,10 +104,6 @@ func (val *Validator) startNode() error {
 	if val.consensus.EnableConsensusRPCWorker {
 		args = args.workerClientPort(val.clientPort).
 			workerConsensusRPCEnabled()
-	}
-
-	if len(val.net.validators) >= 1 && val == val.net.validators[0] {
-		args = args.tendermintSupplementarySanityEnabled()
 	}
 
 	if err := val.net.startOasisNode(&val.Node, nil, args); err != nil {
@@ -136,6 +134,7 @@ func (net *Network) NewValidator(cfg *ValidatorCfg) (*Validator, error) {
 			termEarlyOk:                              cfg.AllowEarlyTermination,
 			termErrorOk:                              cfg.AllowErrorTermination,
 			crashPointsProbability:                   cfg.CrashPointsProbability,
+			supplementarySanityInterval:              cfg.SupplementarySanityInterval,
 			disableDefaultLogWatcherHandlerFactories: cfg.DisableDefaultLogWatcherHandlerFactories,
 			logWatcherHandlerFactories:               cfg.LogWatcherHandlerFactories,
 			consensus:                                cfg.Consensus,
@@ -146,7 +145,13 @@ func (net *Network) NewValidator(cfg *ValidatorCfg) (*Validator, error) {
 		consensusPort: net.nextNodePort,
 		clientPort:    net.nextNodePort + 1,
 	}
+	net.nextNodePort += 2
 	val.doStartNode = val.startNode
+
+	if cfg.EnableProfiling {
+		val.Node.pprofPort = net.nextNodePort
+		net.nextNodePort++
+	}
 
 	var consensusAddrs []interface{ String() string }
 	localhost := netPkg.ParseIP("127.0.0.1")
@@ -216,7 +221,6 @@ func (net *Network) NewValidator(cfg *ValidatorCfg) (*Validator, error) {
 	}
 
 	net.validators = append(net.validators, val)
-	net.nextNodePort += 2
 
 	if err := net.AddLogWatcher(&val.Node); err != nil {
 		net.logger.Error("failed to add log watcher",

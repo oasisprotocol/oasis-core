@@ -18,7 +18,8 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/service"
 )
 
-const cfgPprofBind = "pprof.bind"
+// CfgPprofBind enables profiling endpoint at the given address.
+const CfgPprofBind = "pprof.bind"
 
 // Flags has the flags used by the pprof service.
 var Flags = flag.NewFlagSet("", flag.ContinueOnError)
@@ -118,7 +119,7 @@ func (p *pprofService) Cleanup() {
 
 // New constructs a new pprof service.
 func New(ctx context.Context) (service.BackgroundService, error) {
-	address := viper.GetString(cfgPprofBind)
+	address := viper.GetString(CfgPprofBind)
 
 	return &pprofService{
 		BaseBackgroundService: *service.NewBaseBackgroundService("pprof"),
@@ -129,7 +130,7 @@ func New(ctx context.Context) (service.BackgroundService, error) {
 }
 
 func init() {
-	Flags.String(cfgPprofBind, "", "enable profiling endpoint at given address")
+	Flags.String(CfgPprofBind, "", "enable profiling endpoint at given address")
 
 	_ = viper.BindPFlags(Flags)
 }

@@ -68,6 +68,10 @@ const (
 	// nodes have gap in history for the queried height, due to restoring from checkpoint. See also:
 	// https://github.com/oasisprotocol/oasis-core/issues/3337
 	queriesNumAllowedQueryTxsHistoricalFailures = 5
+
+	// doQueryAllProposalsEvery configures how often the queries workload should query all (including)
+	// past proposals.
+	doQueryAllProposalsEvery = 10
 )
 
 // QueriesFlags are the queries workload flags.
@@ -94,6 +98,8 @@ type queries struct {
 	queryTxsHistoricalFailures uint64
 
 	runtimeGenesisRound uint64
+
+	iteration uint64
 }
 
 func (q *queries) sanityCheckTransactionEvents(ctx context.Context, height int64, txEvents []*results.Event) error {
@@ -602,11 +608,34 @@ func (q *queries) doGovernanceQueries(ctx context.Context, rng *rand.Rand, heigh
 	q.logger.Debug("doing governance queries",
 		"height", height,
 	)
-	proposals, err := q.governance.Proposals(ctx, height)
-	if err != nil {
-		return fmt.Errorf("governance.Proposals: %w", err)
+
+	if q.iteration%doQueryAllProposalsEvery == 0 {
+		proposals, err := q.governance.Proposals(ctx, height)
+		if err != nil {
+			return fmt.Errorf("governance.Proposals: %w", err)
+		}
+		for _, p := range proposals {
+			var p2 *governance.Proposal
+			p2, err = q.governance.Proposal(ctx, &governance.ProposalQuery{Height: height, ProposalID: p.ID})
+			if err != nil {
+				return fmt.Errorf("governance.Proposal: %w", err)
+			}
+			if !p.Content.Equals(&p2.Content) {
+				return fmt.Errorf("proposal contents not equal")
+			}
+
+			_, err = q.governance.Votes(ctx, &governance.ProposalQuery{Height: height, ProposalID: p.ID})
+			if err != nil {
+				return fmt.Errorf("governance.Votes: %w", err)
+			}
+		}
 	}
-	for _, p := range proposals {
+
+	activeProposals, err := q.governance.ActiveProposals(ctx, height)
+	if err != nil {
+		return fmt.Errorf("governance.ActiveProposals: %w", err)
+	}
+	for _, p := range activeProposals {
 		var p2 *governance.Proposal
 		p2, err = q.governance.Proposal(ctx, &governance.ProposalQuery{Height: height, ProposalID: p.ID})
 		if err != nil {
@@ -620,14 +649,6 @@ func (q *queries) doGovernanceQueries(ctx context.Context, rng *rand.Rand, heigh
 		if err != nil {
 			return fmt.Errorf("governance.Votes: %w", err)
 		}
-	}
-
-	activeProposals, err := q.governance.ActiveProposals(ctx, height)
-	if err != nil {
-		return fmt.Errorf("governance.ActiveProposals: %w", err)
-	}
-	if l1, l2 := len(activeProposals), len(proposals); l1 > l2 {
-		return fmt.Errorf("more active proposals(%v) than all proposals(%v)", l1, l2)
 	}
 
 	pendingUpgrades, err := q.governance.PendingUpgrades(ctx, height)
@@ -916,6 +937,7 @@ func (q *queries) Run(
 		default:
 			return err
 		}
+		q.iteration++
 
 		select {
 		case <-time.After(1 * time.Second):

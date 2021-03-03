@@ -63,7 +63,9 @@ func (sc *lateStartImpl) Run(childEnv *env.Env) error {
 	time.Sleep(lateStartInitialWait)
 
 	sc.Logger.Info("Starting the client node")
-	clientFixture := &oasis.ClientFixture{}
+	clientFixture := &oasis.ClientFixture{
+		Runtimes: []int{1},
+	}
 	client, err := clientFixture.Create(sc.Net)
 	if err != nil {
 		return err

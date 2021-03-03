@@ -41,6 +41,7 @@ func (worker *Byzantine) startNode() error {
 	args := newArgBuilder().
 		debugDontBlameOasis().
 		debugAllowTestKeys().
+		debugEnableProfiling(worker.Node.pprofPort).
 		tendermintDebugAllowDuplicateIP().
 		tendermintCoreAddress(worker.consensusPort).
 		tendermintDebugAddrBookLenient().
@@ -118,11 +119,16 @@ func (net *Network) NewByzantine(cfg *ByzantineCfg) (*Byzantine, error) {
 		activationEpoch: cfg.ActivationEpoch,
 		runtime:         cfg.Runtime,
 	}
+	net.nextNodePort += 2
 	worker.doStartNode = worker.startNode
 	copy(worker.NodeID[:], nodeKey[:])
 
+	if cfg.EnableProfiling {
+		worker.Node.pprofPort = net.nextNodePort
+		net.nextNodePort++
+	}
+
 	net.byzantine = append(net.byzantine, worker)
-	net.nextNodePort += 2
 
 	if err := net.AddLogWatcher(&worker.Node); err != nil {
 		net.logger.Error("failed to add log watcher",

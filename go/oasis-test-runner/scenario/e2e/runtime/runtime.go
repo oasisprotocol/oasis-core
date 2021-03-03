@@ -205,7 +205,7 @@ func (sc *runtimeImpl) Fixture() (*oasis.NetworkFixture, error) {
 			},
 		},
 		Validators: []oasis.ValidatorFixture{
-			{Entity: 1, Consensus: oasis.ConsensusFixture{EnableConsensusRPCWorker: true}},
+			{Entity: 1, Consensus: oasis.ConsensusFixture{EnableConsensusRPCWorker: true, SupplementarySanityInterval: 1}},
 			{Entity: 1, Consensus: oasis.ConsensusFixture{EnableConsensusRPCWorker: true}},
 			{Entity: 1, Consensus: oasis.ConsensusFixture{EnableConsensusRPCWorker: true}},
 		},
@@ -227,7 +227,7 @@ func (sc *runtimeImpl) Fixture() (*oasis.NetworkFixture, error) {
 		Sentries: []oasis.SentryFixture{},
 		Seeds:    []oasis.SeedFixture{{}},
 		Clients: []oasis.ClientFixture{
-			{},
+			{Runtimes: []int{1}},
 		},
 	}
 
