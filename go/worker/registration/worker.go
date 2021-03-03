@@ -363,7 +363,7 @@ Loop:
 		}
 
 		// Check if the entity under which we are registering actually exists.
-		_, err := w.registry.GetEntity(w.ctx, &registry.IDQuery{
+		ent, err := w.registry.GetEntity(w.ctx, &registry.IDQuery{
 			Height: consensus.HeightLatest,
 			ID:     w.entityID,
 		})
@@ -371,7 +371,7 @@ Loop:
 		case nil:
 		case registry.ErrNoSuchEntity:
 			// Entity does not yet exist.
-			w.logger.Warn("defering registration as the owning entity does not exist",
+			w.logger.Warn("deferring registration as the owning entity does not exist",
 				"entity_id", w.entityID,
 			)
 			continue
@@ -380,6 +380,23 @@ Loop:
 			w.logger.Error("failed to query owning entity",
 				"err", err,
 				"entity_id", w.entityID,
+			)
+			continue
+		}
+
+		// Check if we are whitelisted by the entity.
+		nodeID := w.identity.NodeSigner.Public()
+		var whitelisted bool
+		for _, id := range ent.Nodes {
+			if id.Equal(nodeID) {
+				whitelisted = true
+				break
+			}
+		}
+		if !whitelisted {
+			w.logger.Warn("deferring registration as the owning entity does not have us in its node list",
+				"entity_id", w.entityID,
+				"node_id", nodeID,
 			)
 			continue
 		}
