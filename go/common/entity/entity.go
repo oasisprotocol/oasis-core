@@ -32,7 +32,7 @@ var (
 const (
 	// LatestEntityDescriptorVersion is the latest entity descriptor version that should be used for
 	// all new descriptors. Using earlier versions may be rejected.
-	LatestEntityDescriptorVersion = 1
+	LatestEntityDescriptorVersion = 2
 
 	// Minimum and maximum descriptor versions that are allowed.
 	minEntityDescriptorVersion = 1
@@ -51,6 +51,12 @@ type Entity struct { // nolint: maligned
 	// will sign the descriptor with the node signing key rather than the
 	// entity signing key.
 	Nodes []signature.PublicKey `json:"nodes,omitempty"`
+
+	// AllowEntitySignedNodes must always be set to false in v1 descriptors
+	// and left unset in v2 descriptors.  It is kept only for backward
+	// compatibility when deserializing existing descriptors that might
+	// have had this set.
+	AllowEntitySignedNodes bool `json:"allow_entity_signed_nodes,omitempty"`
 }
 
 // ValidateBasic performs basic descriptor validity checks.
@@ -73,6 +79,10 @@ func (e *Entity) ValidateBasic(strictVersion bool) error {
 				maxEntityDescriptorVersion,
 			)
 		}
+	}
+	// Make sure that AllowEntitySignedNodes is false.
+	if e.AllowEntitySignedNodes {
+		return fmt.Errorf("allow_entity_signed_nodes must be false")
 	}
 	return nil
 }
