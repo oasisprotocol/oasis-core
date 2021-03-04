@@ -28,7 +28,6 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/runtime/transaction"
 	storage "github.com/oasisprotocol/oasis-core/go/storage/api"
 	"github.com/oasisprotocol/oasis-core/go/worker/common/p2p"
-	executor "github.com/oasisprotocol/oasis-core/go/worker/compute/executor/api"
 )
 
 const (
@@ -63,9 +62,9 @@ type runtimeClient struct {
 	common *clientCommon
 	quitCh chan struct{}
 
-	hosts     map[common.Namespace]*clientHost
-	watchers  map[common.Namespace]*blockWatcher
-	kmClients map[common.Namespace]*keymanager.Client
+	hosts        map[common.Namespace]*clientHost
+	txSubmitters map[common.Namespace]*txSubmitter
+	kmClients    map[common.Namespace]*keymanager.Client
 
 	maxTransactionAge int64
 
@@ -81,8 +80,7 @@ func (c *runtimeClient) tagIndexer(runtimeID common.Namespace) (tagindexer.Query
 	return rt.TagIndexer(), nil
 }
 
-// Implements api.RuntimeClient.
-func (c *runtimeClient) SubmitTx(ctx context.Context, request *api.SubmitTxRequest) ([]byte, error) {
+func (c *runtimeClient) submitTx(ctx context.Context, request *api.SubmitTxRequest) (<-chan *txResult, error) {
 	if c.common.p2p == nil {
 		return nil, fmt.Errorf("client: cannot submit transaction, p2p disabled")
 	}
@@ -107,29 +105,22 @@ func (c *runtimeClient) SubmitTx(ctx context.Context, request *api.SubmitTxReque
 		}
 	}
 
-	var watcher *blockWatcher
+	var submitter *txSubmitter
 	var ok bool
-	var err error
 	c.Lock()
-	if watcher, ok = c.watchers[request.RuntimeID]; !ok {
-		watcher, err = newWatcher(c.common, request.RuntimeID, c.common.p2p, c.maxTransactionAge)
-		if err != nil {
-			c.Unlock()
-			return nil, err
-		}
-		if err = watcher.Start(); err != nil {
-			c.Unlock()
-			return nil, err
-		}
-		c.watchers[request.RuntimeID] = watcher
+	if submitter, ok = c.txSubmitters[request.RuntimeID]; !ok {
+		submitter = newTxSubmitter(c.common, request.RuntimeID, c.common.p2p, c.maxTransactionAge)
+		submitter.Start()
+		c.txSubmitters[request.RuntimeID] = submitter
 	}
 	c.Unlock()
 
 	// Send a request for watching a new runtime transaction.
-	respCh := make(chan *watchResult)
-	req := &watchRequest{
+	respCh := make(chan *txResult)
+	req := &txRequest{
 		ctx:    ctx,
 		respCh: respCh,
+		req:    request,
 	}
 	req.id.FromBytes(request.Data)
 	select {
@@ -139,12 +130,22 @@ func (c *runtimeClient) SubmitTx(ctx context.Context, request *api.SubmitTxReque
 	case <-c.common.ctx.Done():
 		// Client is shutting down.
 		return nil, fmt.Errorf("client: shutting down")
-	case watcher.newCh <- req:
+	case submitter.newCh <- req:
 	}
 
-	// Wait for response, handling retries if/when needed.
+	return respCh, nil
+}
+
+// Implements api.RuntimeClient.
+func (c *runtimeClient) SubmitTx(ctx context.Context, request *api.SubmitTxRequest) ([]byte, error) {
+	respCh, err := c.submitTx(ctx, request)
+	if err != nil {
+		return nil, err
+	}
+
+	// Wait for result.
 	for {
-		var resp *watchResult
+		var resp *txResult
 		var ok bool
 
 		select {
@@ -158,27 +159,15 @@ func (c *runtimeClient) SubmitTx(ctx context.Context, request *api.SubmitTxReque
 			if !ok {
 				return nil, fmt.Errorf("client: block watch channel closed unexpectedly (unknown error)")
 			}
-
-			if resp.err != nil {
-				return nil, resp.err
-			}
-
-			// The main event is getting a response from the watcher, handled below. If there is
-			// no result yet, this means that we need to retry publish.
-			if resp.result == nil {
-				break
-			}
-
-			return resp.result, nil
+			return resp.result, resp.err
 		}
-
-		c.common.p2p.Publish(context.Background(), request.RuntimeID, &p2p.Message{
-			Tx: &executor.Tx{
-				Data: request.Data,
-			},
-			GroupVersion: resp.groupVersion,
-		})
 	}
+}
+
+// Implements api.RuntimeClient.
+func (c *runtimeClient) SubmitTxNoWait(ctx context.Context, request *api.SubmitTxRequest) error {
+	_, err := c.submitTx(ctx, request)
+	return err
 }
 
 // Implements api.RuntimeClient.
@@ -561,9 +550,11 @@ func (c *runtimeClient) Start() error {
 // Implements service.BackgroundService.
 func (c *runtimeClient) Stop() {
 	// Watchers.
-	for _, watcher := range c.watchers {
-		watcher.Stop()
+	c.Lock()
+	for _, submitter := range c.txSubmitters {
+		submitter.Stop()
 	}
+	c.Unlock()
 	// Hosts.
 	for _, host := range c.hosts {
 		host.Stop()
@@ -578,9 +569,11 @@ func (c *runtimeClient) Quit() <-chan struct{} {
 // Cleanup waits for all block watchers to finish.
 func (c *runtimeClient) Cleanup() {
 	// Watchers.
-	for _, watcher := range c.watchers {
-		<-watcher.Quit()
+	c.Lock()
+	for _, submitter := range c.txSubmitters {
+		<-submitter.Quit()
 	}
+	c.Unlock()
 }
 
 // New returns a new runtime client instance.
@@ -606,7 +599,7 @@ func New(
 		},
 		quitCh:            make(chan struct{}),
 		hosts:             make(map[common.Namespace]*clientHost),
-		watchers:          make(map[common.Namespace]*blockWatcher),
+		txSubmitters:      make(map[common.Namespace]*txSubmitter),
 		kmClients:         make(map[common.Namespace]*keymanager.Client),
 		maxTransactionAge: maxTransactionAge,
 		logger:            logging.GetLogger("runtime/client"),

@@ -22,6 +22,8 @@ var (
 
 	// methodSubmitTx is the SubmitTx method.
 	methodSubmitTx = serviceName.NewMethod("SubmitTx", SubmitTxRequest{})
+	// methodSubmitTxNoWait is the SubmitTxNoWait method.
+	methodSubmitTxNoWait = serviceName.NewMethod("SubmitTxNoWait", SubmitTxRequest{})
 	// methodCheckTx is the CheckTx method.
 	methodCheckTx = serviceName.NewMethod("CheckTx", CheckTxRequest{})
 	// methodGetGenesisBlock is the GetGenesisBlock method.
@@ -58,6 +60,10 @@ var (
 			{
 				MethodName: methodSubmitTx.ShortName(),
 				Handler:    handlerSubmitTx,
+			},
+			{
+				MethodName: methodSubmitTxNoWait.ShortName(),
+				Handler:    handlerSubmitTxNoWait,
 			},
 			{
 				MethodName: methodCheckTx.ShortName(),
@@ -137,6 +143,29 @@ func handlerSubmitTx( // nolint: golint
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(RuntimeClient).SubmitTx(ctx, req.(*SubmitTxRequest))
+	}
+	return interceptor(ctx, &rq, info, handler)
+}
+
+func handlerSubmitTxNoWait( // nolint: golint
+	srv interface{},
+	ctx context.Context,
+	dec func(interface{}) error,
+	interceptor grpc.UnaryServerInterceptor,
+) (interface{}, error) {
+	var rq SubmitTxRequest
+	if err := dec(&rq); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return nil, srv.(RuntimeClient).SubmitTxNoWait(ctx, &rq)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: methodSubmitTxNoWait.FullName(),
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return nil, srv.(RuntimeClient).SubmitTxNoWait(ctx, req.(*SubmitTxRequest))
 	}
 	return interceptor(ctx, &rq, info, handler)
 }
@@ -504,6 +533,10 @@ func (c *runtimeClient) SubmitTx(ctx context.Context, request *SubmitTxRequest) 
 		return nil, err
 	}
 	return rsp, nil
+}
+
+func (c *runtimeClient) SubmitTxNoWait(ctx context.Context, request *SubmitTxRequest) error {
+	return c.conn.Invoke(ctx, methodSubmitTxNoWait.FullName(), request, nil)
 }
 
 func (c *runtimeClient) CheckTx(ctx context.Context, request *CheckTxRequest) error {

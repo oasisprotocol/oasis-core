@@ -43,8 +43,13 @@ var (
 type RuntimeClient interface {
 	enclaverpc.Transport
 
-	// SubmitTx submits a transaction to the runtime transaction scheduler.
+	// SubmitTx submits a transaction to the runtime transaction scheduler and waits
+	// for transaction execution results.
 	SubmitTx(ctx context.Context, request *SubmitTxRequest) ([]byte, error)
+
+	// SubmitTxNoWait submits a transaction to the runtime transaction scheduler but does
+	// not wait for transaction execution.
+	SubmitTxNoWait(ctx context.Context, request *SubmitTxRequest) error
 
 	// CheckTx asks the local runtime to check the specified transaction.
 	CheckTx(ctx context.Context, request *CheckTxRequest) error

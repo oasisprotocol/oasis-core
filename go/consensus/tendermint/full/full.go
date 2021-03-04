@@ -788,6 +788,13 @@ func (t *fullService) GetStatus(ctx context.Context) (*consensusAPI.Status, erro
 			status.LatestHash = latestBlk.Hash
 			status.LatestTime = latestBlk.Time
 			status.LatestStateRoot = latestBlk.StateRoot
+
+			var epoch beaconAPI.EpochTime
+			epoch, err = t.beacon.GetEpoch(ctx, status.LatestHeight)
+			if err != nil {
+				return nil, fmt.Errorf("failed to fetch epoch: %w", err)
+			}
+			status.LatestEpoch = epoch
 		case consensusAPI.ErrNoCommittedBlocks:
 			// No committed blocks yet.
 		default:

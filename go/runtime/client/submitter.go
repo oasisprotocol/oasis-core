@@ -6,61 +6,68 @@ import (
 
 	"github.com/oasisprotocol/oasis-core/go/common"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
-	"github.com/oasisprotocol/oasis-core/go/common/service"
+	"github.com/oasisprotocol/oasis-core/go/common/logging"
 	"github.com/oasisprotocol/oasis-core/go/roothash/api/block"
 	"github.com/oasisprotocol/oasis-core/go/runtime/client/api"
 	"github.com/oasisprotocol/oasis-core/go/runtime/transaction"
 	storage "github.com/oasisprotocol/oasis-core/go/storage/api"
 	"github.com/oasisprotocol/oasis-core/go/worker/common/p2p"
+	executor "github.com/oasisprotocol/oasis-core/go/worker/compute/executor/api"
 )
 
-type watchRequest struct {
+type txRequest struct {
 	id     hash.Hash
 	ctx    context.Context
-	respCh chan *watchResult
+	req    *api.SubmitTxRequest
 	height int64
+
+	respCh chan<- *txResult
 }
 
-func (w *watchRequest) send(res *watchResult, height int64) error {
-	w.height = height
-
+func (w *txRequest) result(res *txResult) {
 	select {
 	case <-w.ctx.Done():
-		return w.ctx.Err()
 	case w.respCh <- res:
-		return nil
 	}
 }
 
-type watchResult struct {
-	err          error
-	result       []byte
-	groupVersion int64
+type txResult struct {
+	err    error
+	result []byte
 }
 
-type blockWatcher struct {
-	service.BaseBackgroundService
+type txSubmitter struct {
+	logger *logging.Logger
 
 	common *clientCommon
 	id     common.Namespace
 
-	watched map[hash.Hash]*watchRequest
-	newCh   chan *watchRequest
+	transactions map[hash.Hash]*txRequest
+	newCh        chan *txRequest
 
 	maxTransactionAge int64
-
-	toBeChecked []*block.Block
+	toBeChecked       []*block.Block
 
 	stopCh chan struct{}
+	quitCh chan struct{}
 }
 
-func (w *blockWatcher) checkBlock(blk *block.Block) error {
+func (w *txSubmitter) publishTx(tx *txRequest, groupVersion int64) {
+	w.common.p2p.Publish(w.common.ctx, w.id, &p2p.Message{
+		Tx: &executor.Tx{
+			Data: tx.req.Data,
+		},
+		GroupVersion: groupVersion,
+	})
+}
+
+func (w *txSubmitter) checkBlock(blk *block.Block) error {
 	if blk.Header.IORoot.IsEmpty() {
 		return nil
 	}
 
 	// If there's no pending transactions, we can skip the check.
-	if len(w.watched) == 0 {
+	if len(w.transactions) == 0 {
 		return nil
 	}
 
@@ -77,7 +84,7 @@ func (w *blockWatcher) checkBlock(blk *block.Block) error {
 
 	// Check if there's anything interesting in this block.
 	var txHashes []hash.Hash
-	for txHash := range w.watched {
+	for txHash := range w.transactions {
 		txHashes = append(txHashes, txHash)
 	}
 
@@ -87,21 +94,18 @@ func (w *blockWatcher) checkBlock(blk *block.Block) error {
 	}
 
 	for txHash, tx := range matches {
-		watch := w.watched[txHash]
-		res := &watchResult{
+		txReq := w.transactions[txHash]
+		txReq.result(&txResult{
 			result: tx.Output,
-		}
-
-		// Ignore errors, the watch is getting deleted anyway.
-		_ = watch.send(res, 0)
-		close(watch.respCh)
-		delete(w.watched, txHash)
+		})
+		close(txReq.respCh)
+		delete(w.transactions, txHash)
 	}
 
 	return nil
 }
 
-func (w *blockWatcher) getGroupVersion(height int64) (int64, error) {
+func (w *txSubmitter) getGroupVersion(height int64) (int64, error) {
 	epoch, err := w.common.consensus.Beacon().GetEpoch(w.common.ctx, height)
 	if err != nil {
 		return 0, fmt.Errorf("failed querying for epoch: %w", err)
@@ -109,18 +113,18 @@ func (w *blockWatcher) getGroupVersion(height int64) (int64, error) {
 	return w.common.consensus.Beacon().GetEpochBlock(w.common.ctx, epoch)
 }
 
-func (w *blockWatcher) watch() {
+func (w *txSubmitter) start() {
 	defer func() {
-		for _, watch := range w.watched {
-			close(watch.respCh)
+		for _, txReq := range w.transactions {
+			close(txReq.respCh)
 		}
-		w.BaseBackgroundService.Stop()
+		close(w.quitCh)
 	}()
 
 	// Start watching roothash blocks.
 	blocks, blocksSub, err := w.common.consensus.RootHash().WatchBlocks(w.id)
 	if err != nil {
-		w.Logger.Error("failed to subscribe to roothash blocks",
+		w.logger.Error("failed to subscribe to roothash blocks",
 			"err", err,
 		)
 		return
@@ -130,7 +134,7 @@ func (w *blockWatcher) watch() {
 	// Start watching consensus blocks.
 	consensusBlocks, consensusBlocksSub, err := w.common.consensus.WatchBlocks(w.common.ctx)
 	if err != nil {
-		w.Logger.Error("failed to subscribe to consensus blocks",
+		w.logger.Error("failed to subscribe to consensus blocks",
 			"err", err,
 		)
 		return
@@ -151,7 +155,7 @@ func (w *blockWatcher) watch() {
 		latestHeight = blk.Height
 		latestGroupVersion, err = w.getGroupVersion(blk.Height)
 		if err != nil {
-			w.Logger.Error("failed querying for latest group version",
+			w.logger.Error("failed querying for latest group version",
 				"err", err,
 			)
 			return
@@ -167,7 +171,7 @@ func (w *blockWatcher) watch() {
 			var failedBlocks []*block.Block
 			for _, b := range w.toBeChecked {
 				if err = w.checkBlock(b); err != nil {
-					w.Logger.Error("error checking block",
+					w.logger.Error("error checking block",
 						"err", err,
 						"round", b.Header.Round,
 					)
@@ -175,7 +179,7 @@ func (w *blockWatcher) watch() {
 				}
 			}
 			if len(failedBlocks) > 0 {
-				w.Logger.Warn("failed roothash blocks",
+				w.logger.Warn("failed roothash blocks",
 					"num_failed_blocks", len(failedBlocks),
 				)
 			}
@@ -190,21 +194,16 @@ func (w *blockWatcher) watch() {
 			// Get group version.
 			latestGroupVersion, err = w.getGroupVersion(blk.Height)
 			if err != nil {
-				w.Logger.Error("failed querying for latest group version",
+				w.logger.Error("failed querying for latest group version",
 					"err", err,
 				)
 				continue
 			}
 
-			// Tell every client to resubmit as messages with old groupVersion
-			// will be discarded.
-			for key, watch := range w.watched {
-				res := &watchResult{
-					groupVersion: latestGroupVersion,
-				}
-				if watch.send(res, latestHeight) != nil {
-					delete(w.watched, key)
-				}
+			// Republish all transactions as messages with old groupVersion will
+			// be discarded.
+			for _, req := range w.transactions {
+				w.publishTx(req, latestGroupVersion)
 			}
 		case blk := <-consensusBlocks:
 			if blk == nil {
@@ -213,68 +212,61 @@ func (w *blockWatcher) watch() {
 			latestHeight = blk.Height
 
 			// Check if any transaction is considered expired.
-			for key, watch := range w.watched {
-				if (latestHeight - w.maxTransactionAge) < watch.height {
+			for key, req := range w.transactions {
+				if (latestHeight - w.maxTransactionAge) < req.height {
 					continue
 				}
-				w.Logger.Debug("expired transaction",
+				w.logger.Debug("expired transaction",
 					"key", key,
 					"latest_height", latestHeight,
 					"max_transaction_age", w.maxTransactionAge,
-					"watch_height", watch.height,
+					"initial_height", req.height,
 				)
-				res := &watchResult{
+				req.result(&txResult{
 					err: api.ErrTransactionExpired,
-				}
-				// Ignore errors, the watch is getting deleted anyway.
-				_ = watch.send(res, 0)
-				close(watch.respCh)
-				delete(w.watched, key)
+				})
+				close(req.respCh)
+				delete(w.transactions, key)
 			}
-		case newWatch := <-w.newCh:
-			w.watched[newWatch.id] = newWatch
-
-			res := &watchResult{
-				groupVersion: latestGroupVersion,
-			}
-			if newWatch.send(res, latestHeight) != nil {
-				delete(w.watched, newWatch.id)
-			}
-
+		case newRequest := <-w.newCh:
+			w.transactions[newRequest.id] = newRequest
+			newRequest.height = latestHeight
+			w.publishTx(newRequest, latestGroupVersion)
 		case <-w.stopCh:
-			w.Logger.Info("stop requested, aborting watcher")
+			w.logger.Info("stop requested, aborting watcher")
 			return
 		case <-w.common.ctx.Done():
-			w.Logger.Info("context cancelled, aborting watcher")
+			w.logger.Info("context cancelled, aborting watcher")
 			return
 		}
 	}
 }
 
-// Start starts a new per-runtime block watcher.
-func (w *blockWatcher) Start() error {
-	go w.watch()
-	return nil
+func (w *txSubmitter) Quit() <-chan struct{} {
+	return w.quitCh
 }
 
-// Stop initiates watcher shutdown.
-func (w *blockWatcher) Stop() {
+func (w *txSubmitter) Start() {
+	go w.start()
+}
+
+func (w *txSubmitter) Stop() {
 	close(w.stopCh)
 }
 
-func newWatcher(common *clientCommon, id common.Namespace, p2pSvc *p2p.P2P, maxTransactionAge int64) (*blockWatcher, error) {
+func newTxSubmitter(common *clientCommon, id common.Namespace, p2pSvc *p2p.P2P, maxTransactionAge int64) *txSubmitter {
 	// Register handler.
 	p2pSvc.RegisterHandler(id, &p2p.BaseHandler{})
 
-	svc := service.NewBaseBackgroundService("client/watcher")
-	watcher := &blockWatcher{
-		BaseBackgroundService: *svc,
-		common:                common,
-		id:                    id,
-		maxTransactionAge:     maxTransactionAge,
-		watched:               make(map[hash.Hash]*watchRequest),
-		newCh:                 make(chan *watchRequest),
-		stopCh:                make(chan struct{}),
+	txSubmitter := &txSubmitter{
+		logger:            logging.GetLogger("client/txsubmitter"),
+		common:            common,
+		id:                id,
+		maxTransactionAge: maxTransactionAge,
+		transactions:      make(map[hash.Hash]*txRequest),
+		newCh:             make(chan *txRequest),
+		stopCh:            make(chan struct{}),
+		quitCh:            make(chan struct{}),
 	}
-	return watcher, nil
+	return txSubmitter
 }
