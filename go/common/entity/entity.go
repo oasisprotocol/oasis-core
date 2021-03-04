@@ -32,7 +32,7 @@ var (
 const (
 	// LatestEntityDescriptorVersion is the latest entity descriptor version that should be used for
 	// all new descriptors. Using earlier versions may be rejected.
-	LatestEntityDescriptorVersion = 1
+	LatestEntityDescriptorVersion = 2
 
 	// Minimum and maximum descriptor versions that are allowed.
 	minEntityDescriptorVersion = 1
@@ -51,6 +51,46 @@ type Entity struct { // nolint: maligned
 	// will sign the descriptor with the node signing key rather than the
 	// entity signing key.
 	Nodes []signature.PublicKey `json:"nodes,omitempty"`
+}
+
+// UnmarshalCBOR is a custom deserializer that handles both v1 and v2 Entity
+// structures.  A v1 structure is converted to v2 seamlessly if the field
+// AllowEntitySignedNodes is false or missing, otherwise an error is returned.
+func (e *Entity) UnmarshalCBOR(data []byte) error {
+	// Determine Entity structure version.
+	v, err := cbor.GetVersion(data)
+	if err != nil {
+		return err
+	}
+	switch v {
+	case 1:
+		// Old version had an extra field that was used only for debugging/tests.
+		type EntityV1 struct { // nolint: maligned
+			cbor.Versioned
+			ID                     signature.PublicKey   `json:"id"`
+			Nodes                  []signature.PublicKey `json:"nodes,omitempty"`
+			AllowEntitySignedNodes bool                  `json:"allow_entity_signed_nodes,omitempty"`
+		}
+		var ev1 EntityV1
+		if err = cbor.Unmarshal(data, &ev1); err != nil {
+			return err
+		}
+		// Make sure that AllowEntitySignedNodes is not enabled.
+		if ev1.AllowEntitySignedNodes {
+			return fmt.Errorf("entity descriptor must have allow_entity_signed_nodes set to false")
+		}
+		// Convert into new format.
+		e.Versioned = cbor.NewVersioned(2)
+		e.ID = ev1.ID
+		e.Nodes = ev1.Nodes
+		return nil
+	case 2:
+		// New version, call the default unmarshaler.
+		type ev2 Entity
+		return cbor.Unmarshal(data, (*ev2)(e))
+	default:
+		return fmt.Errorf("invalid entity descriptor version: %v", v)
+	}
 }
 
 // ValidateBasic performs basic descriptor validity checks.
