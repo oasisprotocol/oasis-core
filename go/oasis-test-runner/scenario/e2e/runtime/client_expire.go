@@ -5,10 +5,13 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/oasisprotocol/oasis-core/go/common/cbor"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/env"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/oasis"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/scenario"
 	"github.com/oasisprotocol/oasis-core/go/runtime/client/api"
+	runtimeClient "github.com/oasisprotocol/oasis-core/go/runtime/client/api"
+	runtimeTransaction "github.com/oasisprotocol/oasis-core/go/runtime/transaction"
 )
 
 // ClientExpire is the ClientExpire node scenario.
@@ -59,6 +62,23 @@ func (sc *clientExpireImpl) Run(childEnv *env.Env) error {
 	}
 	if err = nodeCtrl.WaitReady(ctx); err != nil {
 		return err
+	}
+
+	err = nodeCtrl.RuntimeClient.SubmitTxNoWait(ctx, &runtimeClient.SubmitTxRequest{
+		RuntimeID: runtimeID,
+		Data: cbor.Marshal(&runtimeTransaction.TxnCall{
+			Method: "insert",
+			Args: struct {
+				Key   string `json:"key"`
+				Value string `json:"value"`
+			}{
+				Key:   "hello",
+				Value: "test",
+			},
+		}),
+	})
+	if err != nil {
+		return fmt.Errorf("SubmitTxNoWait expected no error, got: %b", err)
 	}
 
 	err = sc.submitKeyValueRuntimeInsertTx(ctx, runtimeID, "hello", "test")
