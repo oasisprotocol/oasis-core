@@ -346,7 +346,7 @@ type FinalizedEvent struct {
 	// Round is the round that was finalized.
 	Round uint64 `json:"round"`
 
-	// Good ComputeNodes are the public keys of compute nodes that positively contributed to the
+	// GoodComputeNodes are the public keys of compute nodes that positively contributed to the
 	// round by replicating the computation correctly.
 	GoodComputeNodes []signature.PublicKey `json:"good_compute_nodes,omitempty"`
 
