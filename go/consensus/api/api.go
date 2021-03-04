@@ -221,6 +221,9 @@ type Backend interface {
 	GetAddresses() ([]node.ConsensusAddress, error)
 }
 
+// HaltHook is a function that gets called when consensus needs to halt for some reason.
+type HaltHook func(ctx context.Context, blockHeight int64, epoch beacon.EpochTime, err error)
+
 // ServicesBackend is an interface for consensus backends which indicate support for
 // communicating with consensus services.
 //
@@ -228,9 +231,8 @@ type Backend interface {
 type ServicesBackend interface {
 	ClientBackend
 
-	// RegisterHaltHook registers a function to be called when the
-	// consensus Halt epoch height is reached.
-	RegisterHaltHook(func(ctx context.Context, blockHeight int64, epoch beacon.EpochTime))
+	// RegisterHaltHook registers a function to be called when the consensus needs to halt.
+	RegisterHaltHook(hook HaltHook)
 
 	// SubmissionManager returns the transaction submission manager.
 	SubmissionManager() SubmissionManager

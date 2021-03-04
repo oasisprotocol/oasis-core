@@ -137,7 +137,7 @@ func (a *ApplicationServer) Register(app api.Application) error {
 
 // RegisterHaltHook registers a function to be called when the
 // consensus Halt epoch height is reached.
-func (a *ApplicationServer) RegisterHaltHook(hook func(ctx context.Context, blockHeight int64, epoch beacon.EpochTime)) {
+func (a *ApplicationServer) RegisterHaltHook(hook consensus.HaltHook) {
 	a.mux.registerHaltHook(hook)
 }
 
@@ -208,9 +208,8 @@ type abciMux struct {
 	sync.RWMutex
 	types.BaseApplication
 
-	logger   *logging.Logger
-	upgrader upgrade.Backend
-	state    *applicationState
+	logger *logging.Logger
+	state  *applicationState
 
 	appsByName     map[string]api.Application
 	appsByMethod   map[transaction.MethodName]api.Application
@@ -220,7 +219,7 @@ type abciMux struct {
 	lastBeginBlock int64
 	currentTime    time.Time
 
-	haltHooks []func(context.Context, int64, beacon.EpochTime)
+	haltHooks []consensus.HaltHook
 
 	// invalidatedTxs maps transaction hashes (hash.Hash) to a subscriber
 	// waiting for that transaction to become invalid.
@@ -258,7 +257,7 @@ func (mux *abciMux) watchInvalidatedTx(txHash hash.Hash) (<-chan error, pubsub.C
 	return resultCh, sub, nil
 }
 
-func (mux *abciMux) registerHaltHook(hook func(context.Context, int64, beacon.EpochTime)) {
+func (mux *abciMux) registerHaltHook(hook consensus.HaltHook) {
 	mux.Lock()
 	defer mux.Unlock()
 
@@ -361,9 +360,9 @@ func (mux *abciMux) InitChain(req types.RequestInitChain) types.ResponseInitChai
 	return resp
 }
 
-func (mux *abciMux) dispatchHaltHooks(blockHeight int64, currentEpoch beacon.EpochTime) {
+func (mux *abciMux) dispatchHaltHooks(blockHeight int64, currentEpoch beacon.EpochTime, err error) {
 	for _, hook := range mux.haltHooks {
-		hook(mux.state.ctx, blockHeight, currentEpoch)
+		hook(mux.state.ctx, blockHeight, currentEpoch, err)
 	}
 	mux.logger.Debug("halt hook dispatch complete")
 }
@@ -404,19 +403,6 @@ func (mux *abciMux) BeginBlock(req types.RequestBeginBlock) types.ResponseBeginB
 		panic("mux: can't get current epoch in BeginBlock")
 	}
 
-	// Check if there are any upgrades pending or if we need to halt for an upgrade.
-	switch err = mux.upgrader.ConsensusUpgrade(ctx, currentEpoch, blockHeight); err {
-	case nil:
-		// Everything ok.
-	case upgrade.ErrStopForUpgrade:
-		// Stop for upgrade -- but dispatch halt hooks first.
-		mux.logger.Debug("dispatching halt hooks before stopping for upgrade")
-		mux.dispatchHaltHooks(blockHeight, currentEpoch)
-		panic("mux: reached upgrade epoch")
-	default:
-		panic(fmt.Sprintf("mux: error while trying to perform consensus upgrade: %v", err))
-	}
-
 	switch mux.state.haltMode {
 	case false:
 		if !mux.state.inHaltEpoch(ctx) {
@@ -428,7 +414,7 @@ func (mux *abciMux) BeginBlock(req types.RequestBeginBlock) types.ResponseBeginB
 			"epoch", mux.state.haltEpochHeight,
 		)
 		mux.logger.Debug("dispatching halt hooks before halt epoch")
-		mux.dispatchHaltHooks(blockHeight, currentEpoch)
+		mux.dispatchHaltHooks(blockHeight, currentEpoch, nil)
 		return types.ResponseBeginBlock{}
 	case true:
 		// After one block into the halt epoch, terminate.
@@ -448,8 +434,13 @@ func (mux *abciMux) BeginBlock(req types.RequestBeginBlock) types.ResponseBeginB
 				"err", err,
 				"app", app.Name(),
 			)
+
+			// Epoch may have changed due to earlier BeginBlock processing.
+			currentEpoch, _ = mux.state.GetCurrentEpoch(ctx)
+
 			mux.logger.Debug("dispatching halt hooks on begin block failure")
-			mux.dispatchHaltHooks(blockHeight, currentEpoch)
+			mux.dispatchHaltHooks(blockHeight, currentEpoch, err)
+
 			panic("mux: BeginBlock: fatal error in application: '" + app.Name() + "': " + err.Error())
 		}
 	}
@@ -1058,14 +1049,13 @@ func (mux *abciMux) checkDependencies() error {
 }
 
 func newABCIMux(ctx context.Context, upgrader upgrade.Backend, cfg *ApplicationConfig) (*abciMux, error) {
-	state, err := newApplicationState(ctx, cfg)
+	state, err := newApplicationState(ctx, upgrader, cfg)
 	if err != nil {
 		return nil, err
 	}
 
 	mux := &abciMux{
 		logger:         logging.GetLogger("abci-mux"),
-		upgrader:       upgrader,
 		state:          state,
 		appsByName:     make(map[string]api.Application),
 		appsByMethod:   make(map[transaction.MethodName]api.Application),

@@ -129,6 +129,8 @@ const (
 	// NOTE: this is only used during the initial sync.
 	syncWorkerLastBlockTimeDiffThreshold = 1 * time.Minute
 
+	minUpgradeStopWaitPeriod = 5 * time.Second
+
 	// tmSubscriberID is the subscriber identifier used for all internal Tendermint pubsub
 	// subscriptions. If any other subscriber IDs need to be derived they will be under this prefix.
 	tmSubscriberID = "oasis-core"
@@ -178,8 +180,10 @@ type fullService struct { // nolint: maligned
 	isInitialized, isStarted bool
 	startedCh                chan struct{}
 	syncedCh                 chan struct{}
+	quitCh                   chan struct{}
 
-	startFn func() error
+	startFn  func() error
+	stopOnce sync.Once
 
 	nextSubscriberID uint64
 }
@@ -216,6 +220,19 @@ func (t *fullService) Start() error {
 			return fmt.Errorf("tendermint: failed to start service: %w", err)
 		}
 
+		// Make sure the quit channel is closed when the node shuts down.
+		go func() {
+			select {
+			case <-t.quitCh:
+			case <-t.node.Quit():
+				select {
+				case <-t.quitCh:
+				default:
+					close(t.quitCh)
+				}
+			}
+		}()
+
 		// Start event dispatchers for all the service clients.
 		t.serviceClientsWg.Add(len(t.serviceClients))
 		for _, svc := range t.serviceClients {
@@ -244,11 +261,7 @@ func (t *fullService) Start() error {
 
 // Implements service.BackgroundService.
 func (t *fullService) Quit() <-chan struct{} {
-	if !t.started() {
-		return make(chan struct{})
-	}
-
-	return t.node.Quit()
+	return t.quitCh
 }
 
 // Implements service.BackgroundService.
@@ -263,14 +276,15 @@ func (t *fullService) Stop() {
 		return
 	}
 
-	t.failMonitor.markCleanShutdown()
-	if err := t.node.Stop(); err != nil {
-		t.Logger.Error("Error on stopping node", err)
-	}
+	t.stopOnce.Do(func() {
+		t.failMonitor.markCleanShutdown()
+		if err := t.node.Stop(); err != nil {
+			t.Logger.Error("Error on stopping node", err)
+		}
 
-	t.svcMgr.Stop()
-	t.mux.Stop()
-	t.node.Wait()
+		t.svcMgr.Stop()
+		t.mux.Stop()
+	})
 }
 
 func (t *fullService) Started() <-chan struct{} {
@@ -407,7 +421,7 @@ func (t *fullService) GetGenesisDocument(ctx context.Context) (*genesisAPI.Docum
 	return t.genesis, nil
 }
 
-func (t *fullService) RegisterHaltHook(hook func(context.Context, int64, beaconAPI.EpochTime)) {
+func (t *fullService) RegisterHaltHook(hook consensusAPI.HaltHook) {
 	if !t.initialized() {
 		return
 	}
@@ -1289,6 +1303,38 @@ func (t *fullService) lazyInit() error {
 		t.client = tmcli.New(t.node)
 		t.failMonitor = newFailMonitor(t.ctx, t.Logger, t.node.ConsensusState().Wait)
 
+		// Register a halt hook that handles upgrades gracefully.
+		t.RegisterHaltHook(func(ctx context.Context, blockHeight int64, epoch beaconAPI.EpochTime, err error) {
+			if !errors.Is(err, upgradeAPI.ErrStopForUpgrade) {
+				return
+			}
+
+			// Mark this as a clean shutdown and request the node to stop gracefully.
+			t.failMonitor.markCleanShutdown()
+
+			// Wait before stopping to give time for P2P messages to propagate. Sleep for at least
+			// minUpgradeStopWaitPeriod or the configured commit timeout.
+			t.Logger.Info("waiting a bit before stopping the node for upgrade")
+			waitPeriod := minUpgradeStopWaitPeriod
+			if tc := t.genesis.Consensus.Parameters.TimeoutCommit; tc > waitPeriod {
+				waitPeriod = tc
+			}
+			time.Sleep(waitPeriod)
+
+			go func() {
+				// Sleep another period so there is some time between when consensus shuts down and
+				// when all the other services start shutting down.
+				time.Sleep(waitPeriod)
+
+				t.Logger.Info("stopping the node for upgrade")
+				t.Stop()
+
+				// Close the quit channel early to force the node to stop. This is needed because
+				// the Tendermint node will otherwise never quit.
+				close(t.quitCh)
+			}()
+		})
+
 		return nil
 	}
 
@@ -1450,6 +1496,7 @@ func New(
 		dataDir:               dataDir,
 		startedCh:             make(chan struct{}),
 		syncedCh:              make(chan struct{}),
+		quitCh:                make(chan struct{}),
 	}
 
 	t.Logger.Info("starting a full consensus node")

@@ -73,7 +73,12 @@ func (sc *nodeUpgradeImpl) writeDescriptor(name string, content []byte) (string,
 func (sc *nodeUpgradeImpl) nextEpoch() error {
 	sc.currentEpoch++
 	if err := sc.Net.Controller().SetEpoch(sc.ctx, sc.currentEpoch); err != nil {
-		return fmt.Errorf("failed to set epoch to %d: %w", sc.currentEpoch, err)
+		// Errors can happen because an upgrade happens exactly during an epoch transition. So
+		// make sure to ignore them.
+		sc.Logger.Warn("failed to set epoch",
+			"epoch", sc.currentEpoch,
+			"err", err,
+		)
 	}
 	return nil
 }

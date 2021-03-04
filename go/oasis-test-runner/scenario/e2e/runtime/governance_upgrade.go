@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"sync"
-	"time"
 
 	beacon "github.com/oasisprotocol/oasis-core/go/beacon/api"
 	"github.com/oasisprotocol/oasis-core/go/common/cbor"
@@ -164,6 +163,12 @@ func (sc *governanceConsensusUpgradeImpl) Fixture() (*oasis.NetworkFixture, erro
 			oasis.LogAssertUpgradeStartup(),
 			oasis.LogAssertUpgradeConsensus(),
 		)
+	case !sc.correctUpgradeVersion:
+		f.Network.DefaultLogWatcherHandlerFactories = append(
+			f.Network.DefaultLogWatcherHandlerFactories,
+			oasis.LogAssertUpgradeIncompatibleBinary(),
+		)
+		fallthrough
 	default:
 		f.Network.DefaultLogWatcherHandlerFactories = append(
 			f.Network.DefaultLogWatcherHandlerFactories,
@@ -177,7 +182,12 @@ func (sc *governanceConsensusUpgradeImpl) Fixture() (*oasis.NetworkFixture, erro
 func (sc *governanceConsensusUpgradeImpl) nextEpoch(ctx context.Context) error {
 	sc.currentEpoch++
 	if err := sc.Net.Controller().SetEpoch(ctx, sc.currentEpoch); err != nil {
-		return fmt.Errorf("failed to set epoch to %d: %w", sc.currentEpoch, err)
+		// Errors can happen because an upgrade happens exactly during an epoch transition. So
+		// make sure to ignore them.
+		sc.Logger.Warn("failed to set epoch",
+			"epoch", sc.currentEpoch,
+			"err", err,
+		)
 	}
 	return nil
 }
@@ -384,7 +394,7 @@ func (sc *governanceConsensusUpgradeImpl) Run(childEnv *env.Env) error { // noli
 	// Make sure all nodes will restart once the upgrade epoch is reached.
 	var group sync.WaitGroup
 	errCh := make(chan error, len(sc.Net.Nodes()))
-	if sc.correctUpgradeVersion && !sc.shouldCancelUpgrade {
+	if !sc.shouldCancelUpgrade {
 		for i, nd := range sc.Net.Nodes() {
 			group.Add(1)
 			go func(i int, nd *oasis.Node) {
@@ -403,51 +413,10 @@ func (sc *governanceConsensusUpgradeImpl) Run(childEnv *env.Env) error { // noli
 	for ep := sc.currentEpoch + 1; ep <= upgradeEpoch; ep++ {
 		sc.Logger.Info("transitioning to epoch", "epoch", ep)
 
-		// In the fail-upgrade scenario the first node reaching the BeginBlock
-		// of the upgrade epoch will panic and cause the other nodes to not progress.
-		//
-		// Note: This can't use a shorter timeout either.  Setting the
-		// epoch can take a variable amount of time.
-		if ep != upgradeEpoch {
-			// Non-upgrade epoch.
-			if err = sc.nextEpoch(sc.ctx); err != nil {
-				return err
-			}
-			continue
-		} else {
-			// HACK HACK HACK
-			//
-			// That said, the epoch transition will never complete on
-			// the fail case upgrade epoch, so use a "long enough" timeout.
-			ctx, cancel := context.WithTimeout(sc.ctx, time.Second*60)
-			defer cancel()
-			err = sc.nextEpoch(ctx)
-		}
-
-		// If we reach here, this is the upgrade epoch.  Handle the epoch
-		// transition request result.
-		switch sc.correctUpgradeVersion {
-		case true:
-			// Should work normally.
-			if err != nil {
-				return err
-			}
-		case false:
-			// The upgrade descriptor hash doesn't match the node hash.
-			// The node should panic during the epoch transition causing the
-			// setEpoch call to fail.
-			if err == nil {
-				return fmt.Errorf("expected set epoch to fail for upgrade epoch")
-			}
-			// This is also the end of the test for the invalid upgrade binary test, as the validator-0
-			// (receiving set epoch transaction) will keep panicking now and the other two nodes
-			// might never even reach the halt epoch.
-			return sc.Net.CheckLogWatchers()
+		if err = sc.nextEpoch(sc.ctx); err != nil {
+			return err
 		}
 	}
-
-	// The following is only reached by the test case when the node binary hash
-	// matches the one in the upgrade descriptor.
 
 	if !sc.shouldCancelUpgrade {
 		// Nodes should restart.
@@ -457,6 +426,17 @@ func (sc *governanceConsensusUpgradeImpl) Run(childEnv *env.Env) error { // noli
 		case err = <-errCh:
 			return fmt.Errorf("can't restart node for consensus upgrade test: %w", err)
 		default:
+		}
+
+		if !sc.correctUpgradeVersion {
+			// In case the upgrade descriptor binary doesn't match the upgraded version, all of the
+			// nodes should halt even after being restarted.
+			for _, nd := range sc.Net.Nodes() {
+				sc.Logger.Info("waiting for node to exit", "node", nd.Name)
+				<-nd.Exit()
+			}
+			sc.Logger.Info("all nodes have exited after restart")
+			return sc.Net.CheckLogWatchers()
 		}
 
 		// Ensure genesis was exported and matches on all nodes.

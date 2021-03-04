@@ -209,7 +209,7 @@ func (n *Node) startRuntimeServices() error {
 	governanceAPI.RegisterService(grpcSrv, n.Consensus.Governance())
 
 	// Register dump genesis halt hook.
-	n.Consensus.RegisterHaltHook(func(ctx context.Context, blockHeight int64, epoch beacon.EpochTime) {
+	n.Consensus.RegisterHaltHook(func(ctx context.Context, blockHeight int64, epoch beacon.EpochTime, _ error) {
 		n.logger.Info("Consensus halt hook: dumping genesis",
 			"epoch", epoch,
 			"block_height", blockHeight,

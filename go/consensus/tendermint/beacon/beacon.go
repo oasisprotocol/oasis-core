@@ -41,6 +41,7 @@ type serviceClient struct {
 	querier *app.QueryFactory
 
 	backend tmAPI.Backend
+	ctx     context.Context
 
 	epochNotifier     *pubsub.Broker
 	epochLastNotified beaconAPI.EpochTime
@@ -143,6 +144,8 @@ func (sc *serviceClient) WaitEpoch(ctx context.Context, epoch beaconAPI.EpochTim
 
 	for {
 		select {
+		case <-sc.ctx.Done():
+			return sc.ctx.Err()
 		case <-ctx.Done():
 			return ctx.Err()
 		case e, ok := <-ch:
@@ -212,6 +215,8 @@ func (sc *serviceClient) SetEpoch(ctx context.Context, epoch beaconAPI.EpochTime
 
 	for {
 		select {
+		case <-sc.ctx.Done():
+			return sc.ctx.Err()
 		case newEpoch, ok := <-ch:
 			if !ok {
 				return context.Canceled
@@ -220,7 +225,7 @@ func (sc *serviceClient) SetEpoch(ctx context.Context, epoch beaconAPI.EpochTime
 				return nil
 			}
 		case <-ctx.Done():
-			return context.Canceled
+			return ctx.Err()
 		}
 	}
 }
@@ -357,6 +362,7 @@ func New(ctx context.Context, backend tmAPI.Backend) (ServiceClient, error) {
 		logger:  logging.GetLogger("beacon/tendermint"),
 		querier: a.QueryFactory().(*app.QueryFactory),
 		backend: backend,
+		ctx:     ctx,
 	}
 	sc.epochNotifier = pubsub.NewBrokerEx(func(ch channels.Channel) {
 		sc.RLock()
