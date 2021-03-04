@@ -183,6 +183,8 @@ type Status struct { // nolint: maligned
 	LatestHash []byte `json:"latest_hash"`
 	// LatestTime is the timestamp of the latest block.
 	LatestTime time.Time `json:"latest_time"`
+	// LatestEpoch is the epoch of the latest block.
+	LatestEpoch beacon.EpochTime `json:"latest_epoch"`
 	// LatestStateRoot is the Merkle root of the consensus state tree.
 	LatestStateRoot mkvsNode.Root `json:"latest_state_root"`
 
