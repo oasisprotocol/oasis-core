@@ -12,7 +12,7 @@ import (
 var mockSPID []byte
 
 type iasProxy struct {
-	Node
+	*Node
 
 	mock        bool
 	useRegistry bool
@@ -24,16 +24,15 @@ func (ias *iasProxy) tlsCertPath() string {
 	return tlsCertPath
 }
 
-func (ias *iasProxy) startNode() error {
-	args := newArgBuilder().
-		debugDontBlameOasis().
+func (ias *iasProxy) AddArgs(args *argBuilder) error {
+	args.debugDontBlameOasis().
 		debugAllowTestKeys().
 		grpcServerPort(ias.grpcPort).
 		grpcWait()
 
 	// If non-mock, IAS Proxy should get the SPID and API key through env vars.
 	if ias.mock {
-		args = args.iasDebugMock().iasSPID(mockSPID)
+		args.iasDebugMock().iasSPID(mockSPID)
 	}
 
 	switch ias.useRegistry {
@@ -42,12 +41,16 @@ func (ias *iasProxy) startNode() error {
 		if ias.net.cfg.UseShortGrpcSocketPaths && ias.net.validators[0].customGrpcSocketPath == "" {
 			ias.net.validators[0].customGrpcSocketPath = ias.net.generateTempSocketPath()
 		}
-		args = args.internalSocketAddress(ias.net.validators[0].SocketPath())
+		args.internalSocketAddress(ias.net.validators[0].SocketPath())
 	case false:
-		args = args.iasUseGenesis()
+		args.iasUseGenesis()
 	}
 
-	if err := ias.net.startOasisNode(&ias.Node, []string{"ias", "proxy"}, args); err != nil {
+	return nil
+}
+
+func (ias *iasProxy) CustomStart(args *argBuilder) error {
+	if err := ias.net.startOasisNode(ias.Node, []string{"ias", "proxy"}, args); err != nil {
 		return fmt.Errorf("oasis/ias: failed to launch node %s: %w", ias.Name, err)
 	}
 
@@ -60,18 +63,14 @@ func (net *Network) newIASProxy() (*iasProxy, error) {
 	}
 
 	iasName := "ias-proxy"
-
-	iasDir, err := net.baseDir.NewSubDir(iasName)
+	host, err := net.GetNamedNode(iasName, nil)
 	if err != nil {
-		net.logger.Error("failed to create ias proxy subdir",
-			"err", err,
-		)
-		return nil, fmt.Errorf("oasis/ias: failed to create ias proxy subdir: %w", err)
+		return nil, err
 	}
 
 	// Pre-provision the IAS TLS certificates as they are used by other nodes
 	// during startup.
-	tlsCertPath, tlsKeyPath := iasCmd.TLSCertPaths(iasDir.String())
+	tlsCertPath, tlsKeyPath := iasCmd.TLSCertPaths(host.dir.String())
 	if _, err = tlsCert.LoadOrGenerate(tlsCertPath, tlsKeyPath, iasProxyApi.CommonName); err != nil {
 		net.logger.Error("failed to generate IAS proxy TLS cert",
 			"err", err,
@@ -80,18 +79,13 @@ func (net *Network) newIASProxy() (*iasProxy, error) {
 	}
 
 	net.iasProxy = &iasProxy{
-		Node: Node{
-			Name: iasName,
-			net:  net,
-			dir:  iasDir,
-		},
+		Node:        host,
 		useRegistry: net.cfg.IAS.UseRegistry,
 		mock:        net.cfg.IAS.Mock,
-		grpcPort:    net.nextNodePort,
+		grpcPort:    host.getProvisionedPort("iasgrpc"),
 	}
-	net.iasProxy.doStartNode = net.iasProxy.startNode
 
-	net.nextNodePort++
+	host.features = append(host.features, net.iasProxy)
 
 	return net.iasProxy, nil
 }

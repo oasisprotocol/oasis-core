@@ -19,8 +19,8 @@ var (
 	// ByzantineBeaconHonest is the honest byzantine beacon scenario.
 	ByzantineBeaconHonest scenario.Scenario = &byzantineBeaconImpl{
 		E2E: *NewE2E("byzantine/beacon-honest"),
-		extraArgs: []string{
-			"--" + byzantine.CfgBeaconMode, byzantine.ModeBeaconHonest.String(),
+		extraArgs: []oasis.Argument{
+			{Name: byzantine.CfgBeaconMode, Values: []string{byzantine.ModeBeaconHonest.String()}},
 		},
 		identitySeed: byzantineBeaconIdentitySeed,
 	}
@@ -28,8 +28,8 @@ var (
 	// ByzantineBeaconCommitStraggler is the commit straggler byzantine beacon scenario.
 	ByzantineBeaconCommitStraggler scenario.Scenario = &byzantineBeaconImpl{
 		E2E: *NewE2E("byzantine/beacon-commit-straggler"),
-		extraArgs: []string{
-			"--" + byzantine.CfgBeaconMode, byzantine.ModeBeaconCommitStraggler.String(),
+		extraArgs: []oasis.Argument{
+			{Name: byzantine.CfgBeaconMode, Values: []string{byzantine.ModeBeaconCommitStraggler.String()}},
 		},
 		identitySeed: byzantineBeaconIdentitySeed,
 	}
@@ -37,8 +37,8 @@ var (
 	// ByzantineBeaconRevealStraggler is the reveal straggler byzantine beacon scenario.
 	ByzantineBeaconRevealStraggler scenario.Scenario = &byzantineBeaconImpl{
 		E2E: *NewE2E("byzantine/beacon-reveal-straggler"),
-		extraArgs: []string{
-			"--" + byzantine.CfgBeaconMode, byzantine.ModeBeaconRevealStraggler.String(),
+		extraArgs: []oasis.Argument{
+			{Name: byzantine.CfgBeaconMode, Values: []string{byzantine.ModeBeaconRevealStraggler.String()}},
 		},
 		identitySeed: byzantineBeaconIdentitySeed,
 	}
@@ -47,7 +47,7 @@ var (
 type byzantineBeaconImpl struct {
 	E2E
 
-	extraArgs    []string
+	extraArgs    []oasis.Argument
 	identitySeed string
 }
 

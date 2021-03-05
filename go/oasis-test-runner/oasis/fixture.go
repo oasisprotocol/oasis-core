@@ -47,6 +47,9 @@ func (f *NetworkFixture) Create(env *env.Env) (*Network, error) {
 		return nil, err
 	}
 
+	// Ensure the creation order here is good enough for proper startup in
+	// net.Start, since that'll just iterate through node objects.
+
 	// Provision entities.
 	for _, entCfg := range f.Entities {
 		if _, err = net.NewEntity(&entCfg); err != nil { // nolint: gosec
@@ -146,6 +149,13 @@ type ConsensusFixture struct { // nolint: maligned
 	SupplementarySanityInterval uint64 `json:"supplementary_sanity_interval,omitempty"`
 }
 
+// NodeFixture is a common subset of settings for node-backed fixtures.
+type NodeFixture struct {
+	// Name is the name of the node that hosts the feature. Leave empty
+	// to automatically instantiate a dedicated node with a default name.
+	Name string `json:"node_name,omitempty"`
+}
+
 // TEEFixture is a TEE configuration fixture.
 type TEEFixture struct {
 	Hardware node.TEEHardware `json:"hardware"`
@@ -154,6 +164,8 @@ type TEEFixture struct {
 
 // ValidatorFixture is a validator fixture.
 type ValidatorFixture struct { // nolint: maligned
+	NodeFixture
+
 	AllowEarlyTermination bool `json:"allow_early_termination"`
 	AllowErrorTermination bool `json:"allow_error_termination"`
 
@@ -186,6 +198,7 @@ func (f *ValidatorFixture) Create(net *Network) (*Validator, error) {
 
 	return net.NewValidator(&ValidatorCfg{
 		NodeCfg: NodeCfg{
+			Name:                        f.Name,
 			AllowEarlyTermination:       f.AllowEarlyTermination,
 			AllowErrorTermination:       f.AllowErrorTermination,
 			LogWatcherHandlerFactories:  f.LogWatcherHandlerFactories,
@@ -194,8 +207,8 @@ func (f *ValidatorFixture) Create(net *Network) (*Validator, error) {
 			CrashPointsProbability:      f.CrashPointsProbability,
 			SupplementarySanityInterval: f.Consensus.SupplementarySanityInterval,
 			EnableProfiling:             f.EnableProfiling,
+			Entity:                      entity,
 		},
-		Entity:   entity,
 		Sentries: sentries,
 	})
 }
@@ -289,6 +302,8 @@ func (f *KeymanagerPolicyFixture) Create(net *Network) (*KeymanagerPolicy, error
 
 // KeymanagerFixture is a key manager fixture.
 type KeymanagerFixture struct {
+	NodeFixture
+
 	Runtime int `json:"runtime"`
 	Entity  int `json:"entity"`
 	Policy  int `json:"policy"`
@@ -327,6 +342,7 @@ func (f *KeymanagerFixture) Create(net *Network) (*Keymanager, error) {
 
 	return net.NewKeymanager(&KeymanagerCfg{
 		NodeCfg: NodeCfg{
+			Name:                        f.Name,
 			AllowEarlyTermination:       f.AllowEarlyTermination,
 			AllowErrorTermination:       f.AllowErrorTermination,
 			LogWatcherHandlerFactories:  f.LogWatcherHandlerFactories,
@@ -335,9 +351,9 @@ func (f *KeymanagerFixture) Create(net *Network) (*Keymanager, error) {
 			EnableProfiling:             f.EnableProfiling,
 			Consensus:                   f.Consensus,
 			NoAutoStart:                 f.NoAutoStart,
+			Entity:                      entity,
 		},
 		Runtime:       runtime,
-		Entity:        entity,
 		Policy:        policy,
 		SentryIndices: f.Sentries,
 	})
@@ -345,6 +361,8 @@ func (f *KeymanagerFixture) Create(net *Network) (*Keymanager, error) {
 
 // StorageWorkerFixture is a storage worker fixture.
 type StorageWorkerFixture struct { // nolint: maligned
+	NodeFixture
+
 	Backend string `json:"backend"`
 	Entity  int    `json:"entity"`
 
@@ -385,6 +403,7 @@ func (f *StorageWorkerFixture) Create(net *Network) (*Storage, error) {
 
 	return net.NewStorage(&StorageCfg{
 		NodeCfg: NodeCfg{
+			Name:                        f.Name,
 			AllowEarlyTermination:       f.AllowEarlyTermination,
 			AllowErrorTermination:       f.AllowErrorTermination,
 			CrashPointsProbability:      f.CrashPointsProbability,
@@ -393,9 +412,9 @@ func (f *StorageWorkerFixture) Create(net *Network) (*Storage, error) {
 			NoAutoStart:                 f.NoAutoStart,
 			LogWatcherHandlerFactories:  f.LogWatcherHandlerFactories,
 			Consensus:                   f.Consensus,
+			Entity:                      entity,
 		},
 		Backend:                 f.Backend,
-		Entity:                  entity,
 		SentryIndices:           f.Sentries,
 		CheckpointCheckInterval: f.CheckpointCheckInterval,
 		IgnoreApplies:           f.IgnoreApplies,
@@ -410,6 +429,8 @@ func (f *StorageWorkerFixture) Create(net *Network) (*Storage, error) {
 
 // ComputeWorkerFixture is a compute worker fixture.
 type ComputeWorkerFixture struct {
+	NodeFixture
+
 	Entity int `json:"entity"`
 
 	RuntimeProvisioner string `json:"runtime_provisioner"`
@@ -441,6 +462,7 @@ func (f *ComputeWorkerFixture) Create(net *Network) (*Compute, error) {
 
 	return net.NewCompute(&ComputeCfg{
 		NodeCfg: NodeCfg{
+			Name:                        f.Name,
 			AllowEarlyTermination:       f.AllowEarlyTermination,
 			AllowErrorTermination:       f.AllowErrorTermination,
 			NoAutoStart:                 f.NoAutoStart,
@@ -449,8 +471,8 @@ func (f *ComputeWorkerFixture) Create(net *Network) (*Compute, error) {
 			EnableProfiling:             f.EnableProfiling,
 			LogWatcherHandlerFactories:  f.LogWatcherHandlerFactories,
 			Consensus:                   f.Consensus,
+			Entity:                      entity,
 		},
-		Entity:             entity,
 		RuntimeProvisioner: f.RuntimeProvisioner,
 		Runtimes:           f.Runtimes,
 	})
@@ -458,18 +480,23 @@ func (f *ComputeWorkerFixture) Create(net *Network) (*Compute, error) {
 
 // SeedFixture is a seed node fixture.
 type SeedFixture struct {
+	NodeFixture
+
 	DisableAddrBookFromGenesis bool `json:"disable_addr_book_from_genesis"`
 }
 
 // Create instantiates the seed node described by the fixture.
 func (f *SeedFixture) Create(net *Network) (*Seed, error) {
 	return net.NewSeed(&SeedCfg{
+		Name:                       f.Name,
 		DisableAddrBookFromGenesis: f.DisableAddrBookFromGenesis,
 	})
 }
 
 // SentryFixture is a sentry node fixture.
 type SentryFixture struct {
+	NodeFixture
+
 	LogWatcherHandlerFactories []log.WatcherHandlerFactory `json:"-"`
 
 	CrashPointsProbability float64 `json:"crash_points_probability,omitempty"`
@@ -488,6 +515,7 @@ type SentryFixture struct {
 func (f *SentryFixture) Create(net *Network) (*Sentry, error) {
 	return net.NewSentry(&SentryCfg{
 		NodeCfg: NodeCfg{
+			Name:                        f.Name,
 			LogWatcherHandlerFactories:  f.LogWatcherHandlerFactories,
 			CrashPointsProbability:      f.CrashPointsProbability,
 			SupplementarySanityInterval: f.Consensus.SupplementarySanityInterval,
@@ -501,6 +529,8 @@ func (f *SentryFixture) Create(net *Network) (*Sentry, error) {
 
 // ClientFixture is a client node fixture.
 type ClientFixture struct {
+	NodeFixture
+
 	AllowErrorTermination bool `json:"allow_error_termination"`
 	AllowEarlyTermination bool `json:"allow_early_termination"`
 
@@ -520,6 +550,7 @@ type ClientFixture struct {
 func (f *ClientFixture) Create(net *Network) (*Client, error) {
 	return net.NewClient(&ClientCfg{
 		NodeCfg: NodeCfg{
+			Name:                        f.Name,
 			Consensus:                   f.Consensus,
 			AllowErrorTermination:       f.AllowErrorTermination,
 			AllowEarlyTermination:       f.AllowEarlyTermination,
@@ -533,8 +564,10 @@ func (f *ClientFixture) Create(net *Network) (*Client, error) {
 
 // ByzantineFixture is a byzantine node fixture.
 type ByzantineFixture struct { // nolint: maligned
-	Script    string   `json:"script"`
-	ExtraArgs []string `json:"extra_args"`
+	NodeFixture
+
+	Script    string     `json:"script"`
+	ExtraArgs []Argument `json:"extra_args"`
 
 	IdentitySeed string `json:"identity_seed"`
 	Entity       int    `json:"entity"`
@@ -560,15 +593,17 @@ func (f *ByzantineFixture) Create(net *Network) (*Byzantine, error) {
 
 	return net.NewByzantine(&ByzantineCfg{
 		NodeCfg: NodeCfg{
+			Name:                                     f.Name,
 			DisableDefaultLogWatcherHandlerFactories: !f.EnableDefaultLogWatcherHandlerFactories,
 			LogWatcherHandlerFactories:               f.LogWatcherHandlerFactories,
 			Consensus:                                f.Consensus,
 			EnableProfiling:                          f.EnableProfiling,
+			AllowEarlyTermination:                    true,
+			Entity:                                   entity,
 		},
 		Script:          f.Script,
 		ExtraArgs:       f.ExtraArgs,
 		IdentitySeed:    f.IdentitySeed,
-		Entity:          entity,
 		ActivationEpoch: f.ActivationEpoch,
 		Runtime:         f.Runtime,
 	})

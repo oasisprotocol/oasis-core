@@ -151,12 +151,11 @@ func (net *Network) NewKeymanagerPolicy(cfg *KeymanagerPolicyCfg) (*KeymanagerPo
 
 // Keymanager is an Oasis key manager.
 type Keymanager struct { // nolint: maligned
-	Node
+	*Node
 
 	sentryIndices []int
 
 	runtime *Runtime
-	entity  *Entity
 	policy  *KeymanagerPolicy
 
 	sentryPubKey     signature.PublicKey
@@ -174,7 +173,6 @@ type KeymanagerCfg struct {
 	SentryIndices []int
 
 	Runtime *Runtime
-	Entity  *Entity
 	Policy  *KeymanagerPolicy
 }
 
@@ -206,11 +204,6 @@ func (km *Keymanager) TLSCertPath() string {
 // ExportsPath returns the path to the node's exports data dir.
 func (km *Keymanager) ExportsPath() string {
 	return nodeExportsPath(km.dir)
-}
-
-// Start starts an Oasis node.
-func (km *Keymanager) Start() error {
-	return km.startNode()
 }
 
 func (km *Keymanager) provisionGenesis() error {
@@ -255,16 +248,13 @@ func (km *Keymanager) toGenesisArgs() []string {
 	}
 }
 
-func (km *Keymanager) startNode() error {
-	var err error
-
+func (km *Keymanager) AddArgs(args *argBuilder) error {
 	sentries, err := resolveSentries(km.net, km.sentryIndices)
 	if err != nil {
 		return err
 	}
 
-	args := newArgBuilder().
-		debugDontBlameOasis().
+	args.debugDontBlameOasis().
 		debugAllowTestKeys().
 		debugEnableProfiling(km.Node.pprofPort).
 		workerCertificateRotation(true).
@@ -285,19 +275,15 @@ func (km *Keymanager) startNode() error {
 		appendEntity(km.entity)
 
 	if km.mayGenerate {
-		args = args.workerKeymanagerMayGenerate()
+		args.workerKeymanagerMayGenerate()
 	}
 
 	// Sentry configuration.
 	if len(sentries) > 0 {
-		args = args.addSentries(sentries).
+		args.addSentries(sentries).
 			tendermintDisablePeerExchange()
 	} else {
-		args = args.appendSeedNodes(km.net.seeds)
-	}
-
-	if err = km.net.startOasisNode(&km.Node, nil, args); err != nil {
-		return fmt.Errorf("oasis/keymanager: failed to launch node %s: %w", km.Name, err)
+		args.appendSeedNodes(km.net.seeds)
 	}
 
 	return nil
@@ -306,13 +292,9 @@ func (km *Keymanager) startNode() error {
 // NewKeymanager provisions a new keymanager and adds it to the network.
 func (net *Network) NewKeymanager(cfg *KeymanagerCfg) (*Keymanager, error) {
 	kmName := fmt.Sprintf("keymanager-%d", len(net.keymanagers))
-
-	kmDir, err := net.baseDir.NewSubDir(kmName)
+	host, err := net.GetNamedNode(kmName, &cfg.NodeCfg)
 	if err != nil {
-		net.logger.Error("failed to create keymanager subdir",
-			"err", err,
-		)
-		return nil, fmt.Errorf("oasis/keymanager: failed to create keymanager subdir: %w", err)
+		return nil, err
 	}
 
 	if cfg.Policy == nil {
@@ -320,18 +302,14 @@ func (net *Network) NewKeymanager(cfg *KeymanagerCfg) (*Keymanager, error) {
 	}
 
 	// Pre-provision the node identity so that we can update the entity.
-	seed := fmt.Sprintf(keymanagerIdentitySeedTemplate, len(net.keymanagers))
-	nodeKey, p2pKey, sentryClientCert, err := net.provisionNodeIdentity(kmDir, seed, false)
+	err = host.setProvisionedIdentity(false, fmt.Sprintf(keymanagerIdentitySeedTemplate, len(net.keymanagers)))
 	if err != nil {
 		return nil, fmt.Errorf("oasis/keymanager: failed to provision node identity: %w", err)
 	}
-	if err := cfg.Entity.addNode(nodeKey); err != nil {
-		return nil, err
-	}
 	// Sentry client cert.
-	pk, ok := sentryClientCert.PublicKey.(ed25519.PublicKey)
+	pk, ok := host.sentryCert.PublicKey.(ed25519.PublicKey)
 	if !ok {
-		return nil, fmt.Errorf("oasis/keymanager: bad sentry client public key type (expected: Ed25519 got: %T)", sentryClientCert.PublicKey)
+		return nil, fmt.Errorf("oasis/keymanager: bad sentry client public key type (expected: Ed25519 got: %T)", host.sentryCert.PublicKey)
 	}
 	var sentryPubKey signature.PublicKey
 	if err := sentryPubKey.UnmarshalBinary(pk[:]); err != nil {
@@ -339,46 +317,19 @@ func (net *Network) NewKeymanager(cfg *KeymanagerCfg) (*Keymanager, error) {
 	}
 
 	km := &Keymanager{
-		Node: Node{
-			Name:                                     kmName,
-			net:                                      net,
-			dir:                                      kmDir,
-			termEarlyOk:                              cfg.AllowEarlyTermination,
-			termErrorOk:                              cfg.AllowErrorTermination,
-			crashPointsProbability:                   cfg.CrashPointsProbability,
-			supplementarySanityInterval:              cfg.SupplementarySanityInterval,
-			disableDefaultLogWatcherHandlerFactories: cfg.DisableDefaultLogWatcherHandlerFactories,
-			logWatcherHandlerFactories:               cfg.LogWatcherHandlerFactories,
-			consensus:                                cfg.Consensus,
-			noAutoStart:                              cfg.NoAutoStart,
-		},
+		Node:             host,
 		runtime:          cfg.Runtime,
-		entity:           cfg.Entity,
 		policy:           cfg.Policy,
 		sentryIndices:    cfg.SentryIndices,
-		tmAddress:        crypto.PublicKeyToTendermint(&p2pKey).Address().String(),
+		tmAddress:        crypto.PublicKeyToTendermint(&host.p2pSigner).Address().String(),
 		sentryPubKey:     sentryPubKey,
-		consensusPort:    net.nextNodePort,
-		workerClientPort: net.nextNodePort + 1,
+		consensusPort:    host.getProvisionedPort(nodePortConsensus),
+		workerClientPort: host.getProvisionedPort(nodePortClient),
 		mayGenerate:      len(net.keymanagers) == 0,
-	}
-	net.nextNodePort += 2
-	km.doStartNode = km.startNode
-	copy(km.NodeID[:], nodeKey[:])
-
-	if cfg.EnableProfiling {
-		km.Node.pprofPort = net.nextNodePort
-		net.nextNodePort++
 	}
 
 	net.keymanagers = append(net.keymanagers, km)
-
-	if err := net.AddLogWatcher(&km.Node); err != nil {
-		net.logger.Error("failed to add log watcher",
-			"err", err,
-		)
-		return nil, fmt.Errorf("oasis/keymanager: failed to add log watcher: %w", err)
-	}
+	host.features = append(host.features, km)
 
 	return km, nil
 }

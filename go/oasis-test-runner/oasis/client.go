@@ -8,7 +8,7 @@ import (
 
 // Client is an Oasis client node.
 type Client struct {
-	Node
+	*Node
 
 	runtimes          []int
 	maxTransactionAge int64
@@ -25,9 +25,8 @@ type ClientCfg struct {
 	MaxTransactionAge int64
 }
 
-func (client *Client) startNode() error {
-	args := newArgBuilder().
-		debugDontBlameOasis().
+func (client *Client) AddArgs(args *argBuilder) error {
+	args.debugDontBlameOasis().
 		debugAllowTestKeys().
 		debugEnableProfiling(client.Node.pprofPort).
 		tendermintPrune(client.consensus.PruneNumKept).
@@ -40,68 +39,39 @@ func (client *Client) startNode() error {
 		tendermintSupplementarySanity(client.supplementarySanityInterval)
 
 	if client.maxTransactionAge != 0 {
-		args = args.runtimeClientMaxTransactionAge(client.maxTransactionAge)
+		args.runtimeClientMaxTransactionAge(client.maxTransactionAge)
 	}
 
 	if len(client.runtimes) > 0 {
-		args = args.runtimeTagIndexerBackend("bleve")
+		args.runtimeTagIndexerBackend("bleve")
 	}
 	for _, idx := range client.runtimes {
 		v := client.net.runtimes[idx]
 		// XXX: could support configurable binary idx if ever needed.
-		args = args.appendHostedRuntime(v, node.TEEHardwareInvalid, 0)
-	}
-
-	if err := client.net.startOasisNode(&client.Node, nil, args); err != nil {
-		return fmt.Errorf("oasis/client: failed to launch node %s: %w", client.Name, err)
+		client.addHostedRuntime(v, node.TEEHardwareInvalid, 0)
 	}
 
 	return nil
 }
 
-// Start starts an Oasis node.
-func (client *Client) Start() error {
-	return client.startNode()
-}
-
 // NewClient provisions a new client node and adds it to the network.
 func (net *Network) NewClient(cfg *ClientCfg) (*Client, error) {
 	clientName := fmt.Sprintf("client-%d", len(net.clients))
-
-	clientDir, err := net.baseDir.NewSubDir(clientName)
+	host, err := net.GetNamedNode(clientName, &cfg.NodeCfg)
 	if err != nil {
-		net.logger.Error("failed to create client subdir",
-			"err", err,
-			"client_name", clientName,
-		)
-		return nil, fmt.Errorf("oasis/client: failed to create client subdir: %w", err)
+		return nil, err
 	}
 
 	client := &Client{
-		Node: Node{
-			Name:                        clientName,
-			net:                         net,
-			dir:                         clientDir,
-			consensus:                   cfg.Consensus,
-			termEarlyOk:                 cfg.AllowEarlyTermination,
-			termErrorOk:                 cfg.AllowErrorTermination,
-			supplementarySanityInterval: cfg.SupplementarySanityInterval,
-		},
+		Node:              host,
 		runtimes:          cfg.Runtimes,
 		maxTransactionAge: cfg.MaxTransactionAge,
-		consensusPort:     net.nextNodePort,
-		p2pPort:           net.nextNodePort + 1,
-	}
-	net.nextNodePort += 2
-
-	client.doStartNode = client.startNode
-
-	if cfg.EnableProfiling {
-		client.Node.pprofPort = net.nextNodePort
-		net.nextNodePort++
+		consensusPort:     host.getProvisionedPort(nodePortConsensus),
+		p2pPort:           host.getProvisionedPort(nodePortP2P),
 	}
 
 	net.clients = append(net.clients, client)
+	host.features = append(host.features, client)
 
 	return client, nil
 }

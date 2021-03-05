@@ -141,7 +141,7 @@ func (sc *storageSyncInconsistentImpl) Run(childEnv *env.Env) error {
 	if err = messyWorker.Stop(); err != nil {
 		return err
 	}
-	if err = sc.wipe(ctx, &messyWorker.Node); err != nil {
+	if err = sc.wipe(ctx, messyWorker.Node); err != nil {
 		return err
 	}
 

@@ -19,12 +19,11 @@ const storageIdentitySeedTemplate = "ekiden node storage %d"
 
 // Storage is an Oasis storage node.
 type Storage struct { // nolint: maligned
-	Node
+	*Node
 
 	sentryIndices []int
 
 	backend string
-	entity  *Entity
 
 	disableCertRotation     bool
 	disablePublicRPC        bool
@@ -47,7 +46,6 @@ type StorageCfg struct { // nolint: maligned
 
 	SentryIndices []int
 	Backend       string
-	Entity        *Entity
 
 	DisableCertRotation     bool
 	DisablePublicRPC        bool
@@ -128,21 +126,8 @@ func (worker *Storage) PauseCheckpointer(ctx context.Context, runtimeID common.N
 	return ctrl.StorageWorker.PauseCheckpointer(ctx, req)
 }
 
-// Start starts an Oasis node.
-func (worker *Storage) Start() error {
-	return worker.startNode()
-}
-
-func (worker *Storage) startNode() error {
-	var err error
-
-	sentries, err := resolveSentries(worker.net, worker.sentryIndices)
-	if err != nil {
-		return err
-	}
-
-	args := newArgBuilder().
-		debugDontBlameOasis().
+func (worker *Storage) AddArgs(args *argBuilder) error {
+	args.debugDontBlameOasis().
 		debugAllowTestKeys().
 		debugEnableProfiling(worker.Node.pprofPort).
 		workerCertificateRotation(!worker.disableCertRotation).
@@ -175,19 +160,20 @@ func (worker *Storage) startNode() error {
 		if v.kind != registry.KindCompute {
 			continue
 		}
-		args = args.runtimeSupported(v.id)
+		args.runtimeSupported(v.id)
 	}
 
 	// Sentry configuration.
-	if len(sentries) > 0 {
-		args = args.addSentries(sentries).
-			tendermintDisablePeerExchange()
-	} else {
-		args = args.appendSeedNodes(worker.net.seeds)
+	sentries, err := resolveSentries(worker.net, worker.sentryIndices)
+	if err != nil {
+		return err
 	}
 
-	if err = worker.net.startOasisNode(&worker.Node, nil, args); err != nil {
-		return fmt.Errorf("oasis/storage: failed to launch node %s: %w", worker.Name, err)
+	if len(sentries) > 0 {
+		args.addSentries(sentries).
+			tendermintDisablePeerExchange()
+	} else {
+		args.appendSeedNodes(worker.net.seeds)
 	}
 
 	return nil
@@ -196,29 +182,20 @@ func (worker *Storage) startNode() error {
 // NewStorage provisions a new storage node and adds it to the network.
 func (net *Network) NewStorage(cfg *StorageCfg) (*Storage, error) {
 	storageName := fmt.Sprintf("storage-%d", len(net.storageWorkers))
-
-	storageDir, err := net.baseDir.NewSubDir(storageName)
+	host, err := net.GetNamedNode(storageName, &cfg.NodeCfg)
 	if err != nil {
-		net.logger.Error("failed to create storage subdir",
-			"err", err,
-			"storage_name", storageName,
-		)
-		return nil, fmt.Errorf("oasis/storage: failed to create storage subdir: %w", err)
+		return nil, err
 	}
 
 	// Pre-provision the node identity so that we can update the entity.
-	seed := fmt.Sprintf(storageIdentitySeedTemplate, len(net.storageWorkers))
-	nodeKey, p2pKey, sentryClientCert, err := net.provisionNodeIdentity(storageDir, seed, cfg.DisableCertRotation)
+	err = host.setProvisionedIdentity(cfg.DisableCertRotation, fmt.Sprintf(storageIdentitySeedTemplate, len(net.storageWorkers)))
 	if err != nil {
 		return nil, fmt.Errorf("oasis/storage: failed to provision node identity: %w", err)
 	}
-	if err := cfg.Entity.addNode(nodeKey); err != nil {
-		return nil, err
-	}
 	// Sentry client cert.
-	pk, ok := sentryClientCert.PublicKey.(ed25519.PublicKey)
+	pk, ok := host.sentryCert.PublicKey.(ed25519.PublicKey)
 	if !ok {
-		return nil, fmt.Errorf("oasis/storage: bad sentry client public key type (expected: Ed25519 got: %T)", sentryClientCert.PublicKey)
+		return nil, fmt.Errorf("oasis/storage: bad sentry client public key type (expected: Ed25519 got: %T)", host.sentryCert.PublicKey)
 	}
 	var sentryPubKey signature.PublicKey
 	if err := sentryPubKey.UnmarshalBinary(pk[:]); err != nil {
@@ -226,21 +203,8 @@ func (net *Network) NewStorage(cfg *StorageCfg) (*Storage, error) {
 	}
 
 	worker := &Storage{
-		Node: Node{
-			Name:                                     storageName,
-			net:                                      net,
-			dir:                                      storageDir,
-			noAutoStart:                              cfg.NoAutoStart,
-			termEarlyOk:                              cfg.AllowEarlyTermination,
-			termErrorOk:                              cfg.AllowErrorTermination,
-			crashPointsProbability:                   cfg.CrashPointsProbability,
-			supplementarySanityInterval:              cfg.SupplementarySanityInterval,
-			disableDefaultLogWatcherHandlerFactories: cfg.DisableDefaultLogWatcherHandlerFactories,
-			logWatcherHandlerFactories:               cfg.LogWatcherHandlerFactories,
-			consensus:                                cfg.Consensus,
-		},
+		Node:                    host,
 		backend:                 cfg.Backend,
-		entity:                  cfg.Entity,
 		sentryIndices:           cfg.SentryIndices,
 		disableCertRotation:     cfg.DisableCertRotation,
 		disablePublicRPC:        cfg.DisablePublicRPC,
@@ -248,30 +212,15 @@ func (net *Network) NewStorage(cfg *StorageCfg) (*Storage, error) {
 		checkpointSyncDisabled:  cfg.CheckpointSyncDisabled,
 		checkpointCheckInterval: cfg.CheckpointCheckInterval,
 		sentryPubKey:            sentryPubKey,
-		tmAddress:               crypto.PublicKeyToTendermint(&p2pKey).Address().String(),
-		consensusPort:           net.nextNodePort,
-		clientPort:              net.nextNodePort + 1,
-		p2pPort:                 net.nextNodePort + 2,
+		tmAddress:               crypto.PublicKeyToTendermint(&host.p2pSigner).Address().String(),
+		consensusPort:           host.getProvisionedPort(nodePortConsensus),
+		clientPort:              host.getProvisionedPort(nodePortClient),
+		p2pPort:                 host.getProvisionedPort(nodePortP2P),
 		runtimes:                cfg.Runtimes,
-	}
-	net.nextNodePort += 3
-	worker.doStartNode = worker.startNode
-	copy(worker.NodeID[:], nodeKey[:])
-
-	if cfg.EnableProfiling {
-		worker.Node.pprofPort = net.nextNodePort
-		net.nextNodePort++
 	}
 
 	net.storageWorkers = append(net.storageWorkers, worker)
-
-	if err := net.AddLogWatcher(&worker.Node); err != nil {
-		net.logger.Error("failed to add log watcher",
-			"err", err,
-			"storage_name", storageName,
-		)
-		return nil, fmt.Errorf("oasis/storage: failed to add log watcher for %s: %w", storageName, err)
-	}
+	host.features = append(host.features, worker)
 
 	return worker, nil
 }

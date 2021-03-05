@@ -446,22 +446,22 @@ func (sc *runtimeImpl) waitNodesSynced() error {
 	sc.Logger.Info("waiting for all nodes to be synced")
 
 	for _, n := range sc.Net.Validators() {
-		if err := checkSynced(&n.Node); err != nil {
+		if err := checkSynced(n.Node); err != nil {
 			return err
 		}
 	}
 	for _, n := range sc.Net.StorageWorkers() {
-		if err := checkSynced(&n.Node); err != nil {
+		if err := checkSynced(n.Node); err != nil {
 			return err
 		}
 	}
 	for _, n := range sc.Net.ComputeWorkers() {
-		if err := checkSynced(&n.Node); err != nil {
+		if err := checkSynced(n.Node); err != nil {
 			return err
 		}
 	}
 	for _, n := range sc.Net.Clients() {
-		if err := checkSynced(&n.Node); err != nil {
+		if err := checkSynced(n.Node); err != nil {
 			return err
 		}
 	}
@@ -566,6 +566,9 @@ func RegisterScenarios() error {
 		RuntimeEncryption,
 		RuntimeGovernance,
 		RuntimeMessage,
+		// Single node with multiple workers tests.
+		MultihostDouble,
+		MultihostTriple,
 		// Byzantine executor node.
 		ByzantineExecutorHonest,
 		ByzantineExecutorSchedulerHonest,
