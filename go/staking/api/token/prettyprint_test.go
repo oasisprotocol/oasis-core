@@ -102,6 +102,13 @@ func TestPrettyPrintAmount(t *testing.T) {
 		var actualPrettyPrint bytes.Buffer
 		PrettyPrintAmount(ctx, *t.amount, &actualPrettyPrint)
 		require.Equal(t.expectedPrettyPrint, actualPrettyPrint.String(),
-			"pretty printing stake amount didn't return the expected result")
+			"pretty printing stake amount (from quantity.Quantity) didn't return the expected result")
+
+		actualPrettyPrint.Reset()
+		ppQuantityAmount := prettyprint.NewFromQuanQuantity(t.amount)
+		PrettyPrintAmount(ctx, ppQuantityAmount, &actualPrettyPrint)
+		require.Equal(t.expectedPrettyPrint, actualPrettyPrint.String(),
+			"pretty printing stake amount (from prettyprint.Quantity) didn't return the expected result")
+
 	}
 }
