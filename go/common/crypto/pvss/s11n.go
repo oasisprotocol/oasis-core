@@ -2,6 +2,7 @@ package pvss
 
 import (
 	"crypto/elliptic"
+	"encoding/base64"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -70,6 +71,16 @@ func (p *Point) UnmarshalPEM(data []byte) error {
 	return p.UnmarshalBinary(b)
 }
 
+// UnmarshalText decodes a text marshaled point.
+func (p *Point) UnmarshalText(text []byte) error {
+	b, err := base64.StdEncoding.DecodeString(string(text))
+	if err != nil {
+		return fmt.Errorf("pvss/s11n: failed to deserialize base64 encoded point: %w", err)
+	}
+
+	return p.UnmarshalBinary(b)
+}
+
 // MarshalBinary implements the encoding.BinaryMarshaler interface.
 func (p Point) MarshalBinary() ([]byte, error) {
 	if err := p.isWellFormed(); err != nil {
@@ -92,6 +103,16 @@ func (p Point) MarshalPEM() ([]byte, error) {
 	}
 
 	return pem.Marshal(pointPEMType, b)
+}
+
+// MarshalText encodes a point into text form.
+func (p *Point) MarshalText() ([]byte, error) {
+	b, err := p.MarshalBinary()
+	if err != nil {
+		return nil, err
+	}
+
+	return []byte(base64.StdEncoding.EncodeToString(b)), nil
 }
 
 // LoadPEM loads a point from a PEM file on disk.  Iff the point is missing
