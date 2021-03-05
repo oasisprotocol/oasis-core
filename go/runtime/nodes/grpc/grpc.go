@@ -29,7 +29,7 @@ const (
 	defaultCloseDelay = 5 * time.Second
 
 	// gRPC backoff max delay when establishing connections (default: 120).
-	grpcBackoffMaxDelay = 10 * time.Second
+	grpcBackoffMaxDelay = 5 * time.Second
 	// Default.
 	grpcMinConnectTimeout = 20 * time.Second
 )
@@ -346,6 +346,10 @@ func (nc *nodesClient) updateConnectionLocked(n *node.Node) error {
 			CommonName: identity.CommonName,
 			GetServerPubKeys: func() (map[signature.PublicKey]bool, error) {
 				nc.RLock()
+				nc.logger.Debug("getting server pubkeys",
+					"pubkeys", cs.tlsKeys,
+					"node", n.ID,
+				)
 				keys := cs.tlsKeys
 				nc.RUnlock()
 				return keys, nil

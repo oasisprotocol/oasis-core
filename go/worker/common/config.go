@@ -99,7 +99,7 @@ func init() {
 	Flags.StringSlice(cfgClientAddresses, []string{}, "Address/port(s) to use for client connections when registering this node (if not set, all non-loopback local interfaces will be used)")
 	Flags.StringSlice(CfgSentryAddresses, []string{}, "Address(es) of sentry node(s) to connect to of the form [PubKey@]ip:port (where PubKey@ part represents base64 encoded node TLS public key)")
 
-	Flags.Duration(cfgStorageCommitTimeout, 5*time.Second, "Storage commit timeout")
+	Flags.Duration(cfgStorageCommitTimeout, 10*time.Second, "Storage commit timeout")
 
 	_ = viper.BindPFlags(Flags)
 }
