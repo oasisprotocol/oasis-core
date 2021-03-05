@@ -129,6 +129,11 @@ func (u *upgradeManager) checkStatus() error {
 
 		// Otherwise, the upgrade should proceed right now. Check that we have the right binary.
 		if err = pu.Descriptor.EnsureCompatible(); err != nil {
+			u.logger.Error("incompatible binary version for upgrade",
+				"upgrade_name", pu.Descriptor.Name,
+				"err", err,
+				logging.LogEvent, api.LogEventIncompatibleBinary,
+			)
 			return err
 		}
 

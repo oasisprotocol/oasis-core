@@ -65,6 +65,12 @@ func LogAssertPeerExchangeDisabled() log.WatcherHandlerFactory {
 	return LogAssertEvent(tendermint.LogEventPeerExchangeDisabled, "peer exchange not disabled")
 }
 
+// LogAssertUpgradeIncompatibleBinary returns a handler which checks whether the binary was deemed
+// incompatible with the upgrade based on JSON log output.
+func LogAssertUpgradeIncompatibleBinary() log.WatcherHandlerFactory {
+	return LogAssertEvent(upgrade.LogEventIncompatibleBinary, "expected binary to be incompatible")
+}
+
 // LogAssertUpgradeStartup returns a handler which checks whether a startup migration
 // handler was run based on JSON log output.
 func LogAssertUpgradeStartup() log.WatcherHandlerFactory {

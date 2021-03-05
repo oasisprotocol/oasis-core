@@ -16,10 +16,15 @@ const (
 	// ModuleName is the upgrade module name.
 	ModuleName = "upgrade"
 
-	// LogEventStartupUpgrade is a log event value that signals the startup upgrade handler was called.
-	LogEventStartupUpgrade = "dummy-migration/startup-upgrade"
-	// LogEventConsensusUpgrade is a log event value that signals the consensus upgrade handler was called.
-	LogEventConsensusUpgrade = "dummy-migration/consensus-upgrade"
+	// LogEventIncompatibleBinary is a log event value that signals the currently running version
+	// of the binary is incompatible with the upgrade.
+	LogEventIncompatibleBinary = "upgrade/incompatible-binary"
+	// LogEventStartupUpgrade is a log event value that signals the startup upgrade handler was
+	// called.
+	LogEventStartupUpgrade = "upgrade/startup-upgrade"
+	// LogEventConsensusUpgrade is a log event value that signals the consensus upgrade handler was
+	// called.
+	LogEventConsensusUpgrade = "upgrade/consensus-upgrade"
 )
 
 // UpgradeStage is used in the upgrade descriptor to store completed stages.

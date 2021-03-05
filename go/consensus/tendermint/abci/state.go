@@ -26,6 +26,7 @@ import (
 	storageDB "github.com/oasisprotocol/oasis-core/go/storage/database"
 	"github.com/oasisprotocol/oasis-core/go/storage/mkvs"
 	"github.com/oasisprotocol/oasis-core/go/storage/mkvs/checkpoint"
+	upgrade "github.com/oasisprotocol/oasis-core/go/upgrade/api"
 )
 
 var _ api.ApplicationState = (*applicationState)(nil)
@@ -51,6 +52,7 @@ type applicationState struct { // nolint: maligned
 	prunerNotifyCh *channels.RingChannel
 
 	checkpointer checkpoint.Checkpointer
+	upgrader     upgrade.Backend
 
 	blockLock   sync.RWMutex
 	blockTime   time.Time
@@ -225,6 +227,10 @@ func (s *applicationState) OwnTxSigner() signature.PublicKey {
 
 func (s *applicationState) OwnTxSignerAddress() staking.Address {
 	return s.ownTxSignerAddress
+}
+
+func (s *applicationState) Upgrader() upgrade.Backend {
+	return s.upgrader
 }
 
 func (s *applicationState) inHaltEpoch(ctx *api.Context) bool {
@@ -491,7 +497,7 @@ func InitStateStorage(ctx context.Context, cfg *ApplicationConfig) (storage.Loca
 	return ldb, ndb, stateRoot, nil
 }
 
-func newApplicationState(ctx context.Context, cfg *ApplicationConfig) (*applicationState, error) {
+func newApplicationState(ctx context.Context, upgrader upgrade.Backend, cfg *ApplicationConfig) (*applicationState, error) {
 	if cfg.InitialHeight < 1 {
 		return nil, fmt.Errorf("state: initial height must be >= 1 (got: %d)", cfg.InitialHeight)
 	}
@@ -532,6 +538,7 @@ func newApplicationState(ctx context.Context, cfg *ApplicationConfig) (*applicat
 		statePruner:        statePruner,
 		prunerClosedCh:     make(chan struct{}),
 		prunerNotifyCh:     channels.NewRingChannel(1),
+		upgrader:           upgrader,
 		haltEpochHeight:    cfg.HaltEpochHeight,
 		minGasPrice:        minGasPrice,
 		ownTxSigner:        cfg.OwnTxSigner,

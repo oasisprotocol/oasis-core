@@ -92,20 +92,33 @@ func (app *governanceApplication) BeginBlock(ctx *api.Context, request types.Req
 		return nil
 	}
 
+	// Check if there are any upgrades pending or if we need to halt for an upgrade.
+	if upgrader := ctx.AppState().Upgrader(); upgrader != nil {
+		switch err := upgrader.ConsensusUpgrade(ctx, epoch, ctx.BlockHeight()); err {
+		case nil:
+			// Everything ok.
+		case upgrade.ErrStopForUpgrade:
+			// Signal graceful stop for upgrade.
+			return err
+		default:
+			return fmt.Errorf("error while trying to perform consensus upgrade: %w", err)
+		}
+	}
+
 	// Check if a pending upgrade is scheduled for current epoch.
 	state := governanceState.NewMutableState(ctx.State())
 	pendingUpgrades, err := state.PendingUpgrades(ctx)
 	if err != nil {
 		return fmt.Errorf("tendermint/governance: couldn't get pending upgrades: %w", err)
 	}
-	var upgrade *upgrade.Descriptor
+	var ud *upgrade.Descriptor
 	for _, pendingUpgrade := range pendingUpgrades {
 		if pendingUpgrade.Epoch == epoch {
-			upgrade = pendingUpgrade
+			ud = pendingUpgrade
 			break
 		}
 	}
-	if upgrade == nil {
+	if ud == nil {
 		ctx.Logger().Debug("no pending upgrades scheduled for current epoch",
 			"epoch", epoch,
 			"pending_upgrades", pendingUpgrades,
@@ -116,12 +129,15 @@ func (app *governanceApplication) BeginBlock(ctx *api.Context, request types.Req
 
 	ctx.Logger().Info("pending upgrade scheduled for this epoch",
 		"epoch", epoch,
-		"upgrade", upgrade,
+		"upgrade", ud,
 	)
 
 	// Check if we are running the correct version for the upgrade, if not - trigger a consensus halt.
-	if err := upgrade.EnsureCompatible(); err != nil {
-		return fmt.Errorf("tendermint/governance: not running updated binary: %w", err)
+	if err := ud.EnsureCompatible(); err != nil {
+		ctx.Logger().Error("not running updated binary",
+			"err", err,
+		)
+		return upgrade.ErrStopForUpgrade
 	}
 
 	ctx.Logger().Info("running version compatible, removing pending upgrade",

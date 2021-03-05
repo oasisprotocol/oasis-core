@@ -17,6 +17,7 @@ import (
 	staking "github.com/oasisprotocol/oasis-core/go/staking/api"
 	storage "github.com/oasisprotocol/oasis-core/go/storage/api"
 	"github.com/oasisprotocol/oasis-core/go/storage/mkvs"
+	upgrade "github.com/oasisprotocol/oasis-core/go/upgrade/api"
 )
 
 // ErrNoState is the error returned when state is nil.
@@ -62,6 +63,9 @@ type ApplicationState interface {
 
 	// OwnTxSignerAddress returns the transaction signer's staking address of the local node.
 	OwnTxSignerAddress() staking.Address
+
+	// Upgrader returns the upgrade backend if available.
+	Upgrader() upgrade.Backend
 
 	// NewContext creates a new application processing context.
 	NewContext(mode ContextMode, now time.Time) *Context
@@ -167,6 +171,10 @@ func (ms *mockApplicationState) OwnTxSigner() signature.PublicKey {
 
 func (ms *mockApplicationState) OwnTxSignerAddress() staking.Address {
 	return ms.ownTxSignerAddress
+}
+
+func (ms *mockApplicationState) Upgrader() upgrade.Backend {
+	return nil
 }
 
 func (ms *mockApplicationState) ConsensusParameters() *consensusGenesis.Parameters {
