@@ -124,6 +124,14 @@ func (pv *ProtocolVersions) Compatible(other ProtocolVersions) bool {
 	return true
 }
 
+// String returns the protocol versions as a string.
+func (pv ProtocolVersions) String() string {
+	return fmt.Sprintf(
+		"Consensus protocol: %s, Runtime Host protocol: %s, Runtime Committee protocol: %s, Go toolchain: %s",
+		pv.ConsensusProtocol, pv.RuntimeHostProtocol, pv.RuntimeCommitteeProtocol, pv.Toolchain,
+	)
+}
+
 // Versions are current protocol versions.
 var Versions = ProtocolVersions{
 	RuntimeHostProtocol,

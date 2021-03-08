@@ -170,7 +170,7 @@ func (d *Descriptor) EnsureCompatible() error {
 		}
 
 		if !ownVersion.Compatible(descriptorVersion) {
-			return fmt.Errorf("binary version not compatible: own: %d, required: %d", ownVersion, descriptorVersion)
+			return fmt.Errorf("binary version not compatible: own: %s, required: %s", ownVersion, descriptorVersion)
 		}
 	default:
 		return fmt.Errorf("invalid upgrade method: %d", d.Method)
