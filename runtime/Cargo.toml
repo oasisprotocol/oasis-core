@@ -46,7 +46,7 @@ sha2 = "0.9.3"
 hmac = "0.10.1"
 honggfuzz = "0.5.52"
 arbitrary = { version = "0.4.7", features = ["derive"] }
-num-bigint = { version = "0.3", features = ["serde"] }
+num-bigint = { version = "0.4", features = ["serde"] }
 num-traits = "0.2.14"
 bech32 = "0.8.0"
 
