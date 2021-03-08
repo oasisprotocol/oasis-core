@@ -77,3 +77,7 @@ func (th *dummyMigrationHandler) ConsensusUpgrade(ctx *Context, privateCtx inter
 
 	return nil
 }
+
+func init() {
+	Register(DummyUpgradeName, &dummyMigrationHandler{})
+}

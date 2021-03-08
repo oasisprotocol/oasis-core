@@ -14,7 +14,6 @@ import (
 	beacon "github.com/oasisprotocol/oasis-core/go/beacon/api"
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
 	"github.com/oasisprotocol/oasis-core/go/common/persistent"
-	"github.com/oasisprotocol/oasis-core/go/common/version"
 	"github.com/oasisprotocol/oasis-core/go/upgrade/api"
 	"github.com/oasisprotocol/oasis-core/go/upgrade/migrations"
 )
@@ -23,18 +22,13 @@ var (
 	_ api.Backend = (*upgradeManager)(nil)
 
 	metadataStoreKey = []byte("descriptors")
-
-	thisVersion = makeVersionString()
 )
 
-func makeVersionString() string {
-	return version.SoftwareVersion
-}
-
 type upgradeManager struct {
+	sync.Mutex
+
 	store   *persistent.ServiceStore
 	pending []*api.PendingUpgrade
-	lock    sync.Mutex
 
 	dataDir string
 
@@ -42,8 +36,8 @@ type upgradeManager struct {
 }
 
 func (u *upgradeManager) SubmitDescriptor(ctx context.Context, descriptor *api.Descriptor) error {
-	u.lock.Lock()
-	defer u.lock.Unlock()
+	u.Lock()
+	defer u.Unlock()
 
 	for _, pu := range u.pending {
 		if pu.Descriptor == descriptor {
@@ -54,7 +48,6 @@ func (u *upgradeManager) SubmitDescriptor(ctx context.Context, descriptor *api.D
 	pending := &api.PendingUpgrade{
 		Descriptor: descriptor,
 	}
-	pending.SubmittingVersion = thisVersion
 	u.pending = append(u.pending, pending)
 
 	u.logger.Info("received upgrade descriptor, scheduling shutdown",
@@ -66,15 +59,15 @@ func (u *upgradeManager) SubmitDescriptor(ctx context.Context, descriptor *api.D
 }
 
 func (u *upgradeManager) PendingUpgrades(ctx context.Context) ([]*api.PendingUpgrade, error) {
-	u.lock.Lock()
-	defer u.lock.Unlock()
+	u.Lock()
+	defer u.Unlock()
 
 	return u.pending, nil
 }
 
 func (u *upgradeManager) CancelUpgrade(ctx context.Context, descriptor *api.Descriptor) error {
-	u.lock.Lock()
-	defer u.lock.Unlock()
+	u.Lock()
+	defer u.Unlock()
 
 	if len(u.pending) == 0 {
 		// Make sure nothing is saved.
@@ -87,7 +80,7 @@ func (u *upgradeManager) CancelUpgrade(ctx context.Context, descriptor *api.Desc
 			pending = append(pending, pu)
 			continue
 		}
-		if pu.RunningVersion != "" || pu.UpgradeHeight != api.InvalidUpgradeHeight || pu.HasAnyStages() {
+		if pu.UpgradeHeight != api.InvalidUpgradeHeight || pu.HasAnyStages() {
 			return api.ErrUpgradeInProgress
 		}
 	}
@@ -101,6 +94,8 @@ func (u *upgradeManager) CancelUpgrade(ctx context.Context, descriptor *api.Desc
 }
 
 func (u *upgradeManager) checkStatus() error {
+	u.Lock()
+	defer u.Unlock()
 	var err error
 
 	if err = u.store.GetCBOR(metadataStoreKey, &u.pending); err != nil {
@@ -118,16 +113,12 @@ func (u *upgradeManager) checkStatus() error {
 			continue
 		}
 
-		// By this point, the descriptor is valid and still pending.
+		// Check if upgrade should proceed.
 		if pu.UpgradeHeight == api.InvalidUpgradeHeight {
-			// Only allow the old binary to run before the upgrade epoch.
-			if pu.SubmittingVersion != thisVersion {
-				return api.ErrNewTooSoon
-			}
-			return nil
+			continue
 		}
 
-		// Otherwise, the upgrade should proceed right now. Check that we have the right binary.
+		// The upgrade should proceed right now. Check that we have the right binary.
 		if err = pu.Descriptor.EnsureCompatible(); err != nil {
 			u.logger.Error("incompatible binary version for upgrade",
 				"upgrade_name", pu.Descriptor.Name,
@@ -137,14 +128,14 @@ func (u *upgradeManager) checkStatus() error {
 			return err
 		}
 
-		// In case the previous startup was e.g. interrupted during the second part of the
-		// upgrade, we need to make sure that we're the same version as the previous run.
-		if pu.RunningVersion != "" && pu.RunningVersion != thisVersion {
-			return api.ErrInvalidResumingVersion
+		// Ensure the upgrade handler exists.
+		if _, err = migrations.GetHandler(pu.Descriptor.Name); err != nil {
+			u.logger.Error("error getting migration handler for upgrade",
+				"name", pu.Descriptor.Name,
+				"err", err,
+			)
+			return err
 		}
-
-		// Everything checks out, fill in the blanks.
-		pu.RunningVersion = thisVersion
 	}
 
 	if err = u.flushDescriptorLocked(); err != nil {
@@ -184,8 +175,8 @@ func (u *upgradeManager) flushDescriptorLocked() error {
 }
 
 func (u *upgradeManager) StartupUpgrade() error {
-	u.lock.Lock()
-	defer u.lock.Unlock()
+	u.Lock()
+	defer u.Unlock()
 
 	for _, pu := range u.pending {
 		if pu.UpgradeHeight == api.InvalidUpgradeHeight {
@@ -194,33 +185,32 @@ func (u *upgradeManager) StartupUpgrade() error {
 		if pu.HasStage(api.UpgradeStageStartup) {
 			u.logger.Warn("startup upgrade already performed, skipping",
 				"name", pu.Descriptor.Name,
-				"submitted_by", pu.SubmittingVersion,
-				"version", pu.RunningVersion,
 			)
 			continue
 		}
 
 		// Execute the statup stage.
-		pu.PushStage(api.UpgradeStageStartup)
 		u.logger.Warn("performing startup upgrade",
 			"name", pu.Descriptor.Name,
-			"submitted_by", pu.SubmittingVersion,
-			"version", pu.RunningVersion,
 			logging.LogEvent, api.LogEventStartupUpgrade,
 		)
 		migrationCtx := migrations.NewContext(pu, u.dataDir)
-		handler := migrations.GetHandler(migrationCtx)
+		handler, err := migrations.GetHandler(pu.Descriptor.Name)
+		if err != nil {
+			return err
+		}
 		if err := handler.StartupUpgrade(migrationCtx); err != nil {
 			return err
 		}
+		pu.PushStage(api.UpgradeStageStartup)
 	}
 
 	return u.flushDescriptorLocked()
 }
 
 func (u *upgradeManager) ConsensusUpgrade(privateCtx interface{}, currentEpoch beacon.EpochTime, currentHeight int64) error {
-	u.lock.Lock()
-	defer u.lock.Unlock()
+	u.Lock()
+	defer u.Unlock()
 
 	for _, pu := range u.pending {
 		// If we haven't reached the upgrade epoch yet, we run normally;
@@ -249,13 +239,14 @@ func (u *upgradeManager) ConsensusUpgrade(privateCtx interface{}, currentEpoch b
 		if !pu.HasStage(api.UpgradeStageConsensus) {
 			u.logger.Warn("performing consensus upgrade",
 				"name", pu.Descriptor.Name,
-				"submitted_by", pu.SubmittingVersion,
-				"version", pu.RunningVersion,
 				logging.LogEvent, api.LogEventConsensusUpgrade,
 			)
 
 			migrationCtx := migrations.NewContext(pu, u.dataDir)
-			handler := migrations.GetHandler(migrationCtx)
+			handler, err := migrations.GetHandler(pu.Descriptor.Name)
+			if err != nil {
+				return err
+			}
 			if err := handler.ConsensusUpgrade(migrationCtx, privateCtx); err != nil {
 				return err
 			}
@@ -266,6 +257,8 @@ func (u *upgradeManager) ConsensusUpgrade(privateCtx interface{}, currentEpoch b
 }
 
 func (u *upgradeManager) Close() {
+	u.Lock()
+	defer u.Unlock()
 	_ = u.flushDescriptorLocked()
 	u.store.Close()
 }

@@ -48,18 +48,6 @@ var (
 	// the consensus layer has reached the scheduled shutdown epoch and should be interrupted.
 	ErrStopForUpgrade = errors.New(ModuleName, 1, "upgrade: reached upgrade epoch")
 
-	// ErrUpgradePending is the error returned when there is a pending upgrade and the node detects that it is
-	// not the one performing it.
-	ErrUpgradePending = errors.New(ModuleName, 2, "upgrade: this binary is scheduled to be replaced")
-
-	// ErrNewTooSoon is the error returned when the node started isn't the pre-upgrade version and the upgrade
-	// epoch hasn't been reached yet.
-	ErrNewTooSoon = errors.New(ModuleName, 3, "upgrade: running different binary before reaching the upgrade epoch")
-
-	// ErrInvalidResumingVersion is the error returned when the running node's version is different from the one that
-	// started performing the upgrade.
-	ErrInvalidResumingVersion = errors.New(ModuleName, 4, "upgrade: node restarted mid-upgrade with different version")
-
 	// ErrAlreadyPending is the error returned from SubmitDescriptor when the specific upgrade is already pending.
 	ErrAlreadyPending = errors.New(ModuleName, 5, "upgrade: submitted upgrade is already pending, can not resubmit descriptor")
 
@@ -183,11 +171,6 @@ func (d *Descriptor) EnsureCompatible() error {
 type PendingUpgrade struct {
 	// Descriptor is the upgrade descriptor describing the upgrade.
 	Descriptor *Descriptor `json:"descriptor"`
-
-	// SubmittingVersion is the version of the node used to submit the descriptor.
-	SubmittingVersion string `json:"submitting_version"`
-	// RunningVersion is the version of the node trying to execute the descriptor.
-	RunningVersion string `json:"running_version"`
 
 	// UpgradeHeight is the height at which the upgrade epoch was reached
 	// (or InvalidUpgradeHeight if it hasn't been reached yet).
