@@ -160,6 +160,12 @@ func convertValidators(d *genesis.Document) ([]tmtypes.GenesisValidator, error) 
 			continue
 		}
 
+		// Skip expired nodes.
+		if openedNode.IsExpired(uint64(d.Beacon.Base)) {
+			continue
+		}
+
+		// Calculate voting power from stake.
 		var power int64
 		if d.Scheduler.Parameters.DebugBypassStake {
 			power = 1
