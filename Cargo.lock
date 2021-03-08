@@ -123,6 +123,12 @@ name = "arbitrary"
 version = "0.4.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "db55d72333851e17d572bec876e390cd3b11eb1ef53ae821dd9f3b653d2b4569"
+
+[[package]]
+name = "arbitrary"
+version = "1.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "698b65a961a9d730fb45b6b0327e20207810c9f61ee421b082b27ba003f49e2b"
 dependencies = [
  "derive_arbitrary",
 ]
@@ -556,9 +562,9 @@ dependencies = [
 
 [[package]]
 name = "derive_arbitrary"
-version = "0.4.7"
+version = "1.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b1a012b5e473dc912f0db0546a1c9c6a194ce8494feb66fa0237160926f9e0e6"
+checksum = "df89dd0d075dea5cc5fdd6d5df6b8a61172a710b3efac1d6bdb9dd8b78f82c1a"
 dependencies = [
  "proc-macro2 1.0.24",
  "quote 1.0.7",
@@ -899,7 +905,7 @@ version = "0.5.52"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ead88897bcad1c396806d6ccba260a0363e11da997472e9e19ab9889969083a2"
 dependencies = [
- "arbitrary",
+ "arbitrary 0.4.7",
  "lazy_static",
  "memmap",
 ]
@@ -1275,7 +1281,7 @@ name = "oasis-core-runtime"
 version = "0.3.0-alpha"
 dependencies = [
  "anyhow",
- "arbitrary",
+ "arbitrary 1.0.0",
  "base64",
  "bech32",
  "bincode",
