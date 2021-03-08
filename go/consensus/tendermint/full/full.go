@@ -1367,8 +1367,6 @@ func (t *fullService) syncWorker() {
 				return
 			}
 			if !isFastSyncing {
-				t.Logger.Info("Tendermint Node finished fast-sync")
-
 				// Check latest block time.
 				tmBlock, err := t.GetTendermintBlock(t.ctx, consensusAPI.HeightLatest)
 				if err != nil {
