@@ -726,6 +726,9 @@ func TestGenesisSanityCheck(t *testing.T) {
 
 	// Test staking genesis checks.
 
+	testAcc1Address := stakingTests.Accounts.GetAddress(1)
+	testAcc2Address := stakingTests.Accounts.GetAddress(2)
+
 	d = testDoc()
 	d.Staking.TokenSymbol = ""
 	require.EqualError(
@@ -773,29 +776,29 @@ func TestGenesisSanityCheck(t *testing.T) {
 	require.Error(d.SanityCheck(), "invalid last block fees should be rejected")
 
 	d = testDoc()
-	d.Staking.Ledger[stakingTests.DebugStateSrcAddress].General.Balance = *quantity.NewFromUint64(100)
+	d.Staking.Ledger[testAcc1Address].General.Balance = *quantity.NewFromUint64(100)
 	require.Error(d.SanityCheck(), "invalid general balance should be rejected")
 
 	d = testDoc()
-	d.Staking.Ledger[stakingTests.DebugStateSrcAddress].Escrow.Active.Balance = *quantity.NewFromUint64(42)
+	d.Staking.Ledger[testAcc1Address].Escrow.Active.Balance = *quantity.NewFromUint64(42)
 	require.Error(d.SanityCheck(), "invalid escrow active balance should be rejected")
 
 	d = testDoc()
-	d.Staking.Ledger[stakingTests.DebugStateSrcAddress].Escrow.Debonding.Balance = *quantity.NewFromUint64(100)
+	d.Staking.Ledger[testAcc1Address].Escrow.Debonding.Balance = *quantity.NewFromUint64(100)
 	require.Error(d.SanityCheck(), "invalid escrow debonding balance should be rejected")
 
 	d = testDoc()
-	d.Staking.Ledger[stakingTests.DebugStateSrcAddress].Escrow.Active.TotalShares = *quantity.NewFromUint64(1)
+	d.Staking.Ledger[testAcc1Address].Escrow.Active.TotalShares = *quantity.NewFromUint64(1)
 	require.Error(d.SanityCheck(), "invalid escrow active total shares should be rejected")
 
 	d = testDoc()
-	d.Staking.Ledger[stakingTests.DebugStateSrcAddress].Escrow.Debonding.TotalShares = *quantity.NewFromUint64(1)
+	d.Staking.Ledger[testAcc1Address].Escrow.Debonding.TotalShares = *quantity.NewFromUint64(1)
 	require.Error(d.SanityCheck(), "invalid escrow debonding total shares should be rejected")
 
 	d = testDoc()
 	d.Staking.Delegations = map[staking.Address]map[staking.Address]*staking.Delegation{
-		stakingTests.DebugStateSrcAddress: {
-			stakingTests.DebugStateDestAddress: {
+		testAcc1Address: {
+			testAcc2Address: {
 				Shares: *quantity.NewFromUint64(1),
 			},
 		},
@@ -804,8 +807,8 @@ func TestGenesisSanityCheck(t *testing.T) {
 
 	d = testDoc()
 	d.Staking.DebondingDelegations = map[staking.Address]map[staking.Address][]*staking.DebondingDelegation{
-		stakingTests.DebugStateSrcAddress: {
-			stakingTests.DebugStateDestAddress: {
+		testAcc1Address: {
+			testAcc2Address: {
 				{
 					Shares:        *quantity.NewFromUint64(1),
 					DebondEndTime: 10,
@@ -850,7 +853,7 @@ func TestGenesisSanityCheck(t *testing.T) {
 			{
 				CreatedAt: 1,
 				ClosesAt:  100,
-				Submitter: stakingTests.DebugStateDestAddress,
+				Submitter: testAcc2Address,
 				Content: governance.ProposalContent{
 					Upgrade: &governance.UpgradeProposal{
 						Descriptor: upgrade.Descriptor{Method: upgrade.UpgradeMethodInternal, Epoch: 500, Identifier: cbor.Marshal(version.Versions)},
@@ -925,7 +928,7 @@ func TestGenesisSanityCheck(t *testing.T) {
 	d.Governance.VoteEntries = map[uint64][]*governance.VoteEntry{
 		d.Governance.Proposals[0].ID: {
 			{
-				Voter: stakingTests.DebugStateSrcAddress,
+				Voter: testAcc1Address,
 				Vote:  governance.VoteYes,
 			},
 		},
@@ -949,7 +952,7 @@ func TestGenesisSanityCheck(t *testing.T) {
 		{
 			CreatedAt: 1,
 			ClosesAt:  2,
-			Submitter: stakingTests.DebugStateDestAddress,
+			Submitter: testAcc2Address,
 			Content: governance.ProposalContent{
 				Upgrade: &governance.UpgradeProposal{
 					Descriptor: upgrade.Descriptor{Method: upgrade.UpgradeMethodInternal, Epoch: 400, Identifier: cbor.Marshal(version.Versions)},
@@ -964,7 +967,7 @@ func TestGenesisSanityCheck(t *testing.T) {
 	d.Governance.Proposals = append(d.Governance.Proposals, &governance.Proposal{
 		CreatedAt: 1,
 		ClosesAt:  2,
-		Submitter: stakingTests.DebugStateDestAddress,
+		Submitter: testAcc2Address,
 		Content: governance.ProposalContent{
 			Upgrade: &governance.UpgradeProposal{
 				Descriptor: upgrade.Descriptor{Method: upgrade.UpgradeMethodInternal, Epoch: 710, Identifier: cbor.Marshal(version.Versions)},
@@ -978,7 +981,7 @@ func TestGenesisSanityCheck(t *testing.T) {
 	d.Governance.Proposals = append(d.Governance.Proposals, &governance.Proposal{
 		CreatedAt: 1,
 		ClosesAt:  2,
-		Submitter: stakingTests.DebugStateDestAddress,
+		Submitter: testAcc2Address,
 		Content: governance.ProposalContent{
 			Upgrade: &governance.UpgradeProposal{
 				Descriptor: upgrade.Descriptor{Method: upgrade.UpgradeMethodInternal, Epoch: 410, Identifier: cbor.Marshal(version.Versions)},

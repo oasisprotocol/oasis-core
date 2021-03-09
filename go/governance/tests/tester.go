@@ -26,8 +26,8 @@ import (
 const recvTimeout = 5 * time.Second
 
 var (
-	submitterSigner = stakingTests.DebugStateSrcSigner
-	submitterAddr   = stakingTests.DebugStateSrcAddress
+	submitterSigner = stakingTests.Accounts.GetSigner(1)
+	submitterAddr   = stakingTests.Accounts.GetAddress(1)
 )
 
 // governanceTestsState holds the current state of governance tests.

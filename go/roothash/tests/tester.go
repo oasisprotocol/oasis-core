@@ -869,7 +869,7 @@ func testSubmitEquivocationEvidence(t *testing.T, backend api.Backend, consensus
 		Amount:  *quantity.NewFromUint64(100),
 	}
 	tx := staking.NewAddEscrowTx(0, nil, escrow)
-	err = consensusAPI.SignAndSubmitTx(ctx, consensus, stakingTests.SrcSigner, tx)
+	err = consensusAPI.SignAndSubmitTx(ctx, consensus, stakingTests.Accounts.GetSigner(1), tx)
 	require.NoError(err, "AddEscrow")
 
 	// Submit evidence of executor equivocation.
