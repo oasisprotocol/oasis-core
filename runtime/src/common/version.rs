@@ -1,6 +1,5 @@
 //! Protocol and runtime versioning.
 // NOTE: This should be kept in sync with go/common/version/version.go.
-use num_traits::Zero;
 use serde::{Deserialize, Serialize};
 
 /// A protocol or runtime version.

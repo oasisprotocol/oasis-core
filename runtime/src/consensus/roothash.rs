@@ -15,7 +15,6 @@ use crate::{
             signature::{PublicKey, SignatureBundle},
         },
         namespace::Namespace,
-        quantity,
     },
     consensus::{registry, staking},
 };
@@ -207,7 +206,7 @@ mod tests {
     use std::collections::BTreeMap;
 
     use super::*;
-    use crate::consensus::scheduler;
+    use crate::{common::quantity, consensus::scheduler};
 
     #[test]
     fn test_consistent_hash_header() {

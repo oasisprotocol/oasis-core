@@ -4,7 +4,7 @@ use std::{any::Any, sync::Arc};
 use io_context::Context as IoContext;
 
 use super::tags::{Tag, Tags};
-use crate::consensus::roothash::{Header, Message, MessageEvent, RoundResults};
+use crate::consensus::roothash::{Header, Message, RoundResults};
 
 struct NoRuntimeContext;
 
