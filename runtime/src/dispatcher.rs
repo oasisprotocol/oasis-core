@@ -240,7 +240,7 @@ impl Dispatcher {
                         &protocol,
                         ctx,
                         io_root,
-                        inputs,
+                        inputs.unwrap_or_default(),
                         block,
                         round_results,
                         max_messages,

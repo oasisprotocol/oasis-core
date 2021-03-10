@@ -123,7 +123,8 @@ pub enum Body {
     RuntimeExecuteTxBatchRequest {
         round_results: roothash::RoundResults,
         io_root: Hash,
-        inputs: TxnBatch,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        inputs: Option<TxnBatch>,
         block: Block,
         max_messages: u32,
     },

@@ -44,11 +44,8 @@ func (ub *unresolvedBatch) resolve(ctx context.Context, sb storage.Backend) (tra
 	defer txs.Close()
 
 	batch, err := txs.GetInputBatch(ctx, ub.maxBatchSize, ub.maxBatchSizeBytes)
-	if err != nil || len(batch) == 0 {
+	if err != nil {
 		return nil, fmt.Errorf("failed to fetch inputs from storage: %w", err)
-	}
-	if len(batch) == 0 {
-		return nil, fmt.Errorf("failed to fetch inputs from storage: batch is empty")
 	}
 	return batch, nil
 }
