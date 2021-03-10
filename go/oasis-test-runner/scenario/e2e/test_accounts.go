@@ -1,6 +1,6 @@
 package e2e
 
-import stakingTests "github.com/oasisprotocol/oasis-core/go/staking/tests/debug"
+import stakingTests "github.com/oasisprotocol/oasis-core/go/staking/tests"
 
 // Deterministic Test Accounts.
 var (

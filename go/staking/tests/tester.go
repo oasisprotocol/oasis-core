@@ -21,7 +21,6 @@ import (
 	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
 	"github.com/oasisprotocol/oasis-core/go/roothash/api/block"
 	"github.com/oasisprotocol/oasis-core/go/staking/api"
-	"github.com/oasisprotocol/oasis-core/go/staking/tests/debug"
 )
 
 const recvTimeout = 5 * time.Second
@@ -69,14 +68,14 @@ func newStakingTestsState(t *testing.T, backend api.Backend, consensus consensus
 }
 
 var (
-	debugGenesisState = debug.GenesisState()
+	debugGenesisState = GenesisState()
 
 	qtyOne = *quantity.NewFromUint64(1)
 
-	SrcSigner  = debug.DebugStateSrcSigner
-	SrcAddr    = debug.DebugStateSrcAddress
-	destSigner = debug.DebugStateDestSigner
-	DestAddr   = debug.DebugStateDestAddress
+	SrcSigner  = DebugStateSrcSigner
+	SrcAddr    = DebugStateSrcAddress
+	destSigner = DebugStateDestSigner
+	DestAddr   = DebugStateDestAddress
 )
 
 // StakingImplementationTests exercises the basic functionality of a staking

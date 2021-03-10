@@ -33,7 +33,7 @@ import (
 	scheduler "github.com/oasisprotocol/oasis-core/go/scheduler/api"
 	staking "github.com/oasisprotocol/oasis-core/go/staking/api"
 	"github.com/oasisprotocol/oasis-core/go/staking/api/token"
-	stakingTests "github.com/oasisprotocol/oasis-core/go/staking/tests/debug"
+	stakingTests "github.com/oasisprotocol/oasis-core/go/staking/tests"
 	storage "github.com/oasisprotocol/oasis-core/go/storage/api"
 	upgrade "github.com/oasisprotocol/oasis-core/go/upgrade/api"
 )

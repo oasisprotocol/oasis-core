@@ -21,7 +21,7 @@ import (
 	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
 	roothash "github.com/oasisprotocol/oasis-core/go/roothash/api"
 	scheduler "github.com/oasisprotocol/oasis-core/go/scheduler/api"
-	stakingTests "github.com/oasisprotocol/oasis-core/go/staking/tests/debug"
+	stakingTests "github.com/oasisprotocol/oasis-core/go/staking/tests"
 )
 
 var _ tendermint.GenesisProvider = (*testNodeGenesisProvider)(nil)
