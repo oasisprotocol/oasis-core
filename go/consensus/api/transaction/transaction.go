@@ -23,6 +23,10 @@ var (
 	// ErrInvalidNonce is the error returned when a nonce is invalid.
 	ErrInvalidNonce = errors.New(moduleName, 1, "transaction: invalid nonce")
 
+	// ErrUpgradePending is the error returned when an upgrade is pending and the transaction thus
+	// cannot be processed right now. The submitter should retry the transaction in this case.
+	ErrUpgradePending = errors.New(moduleName, 4, "transaction: upgrade pending")
+
 	// SignatureContext is the context used for signing transactions.
 	SignatureContext = signature.NewContext("oasis-core/consensus: tx", signature.WithChainSeparation())
 

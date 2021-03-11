@@ -212,6 +212,9 @@ type Backend interface {
 	// PendingUpgrades returns pending upgrades.
 	PendingUpgrades(context.Context) ([]*PendingUpgrade, error)
 
+	// HasPendingUpgradeAt returns whether there is a pending upgrade at a specified height.
+	HasPendingUpgradeAt(context.Context, int64) (bool, error)
+
 	// CancelUpgrade cancels a specific pending upgrade, unless it is already in progress.
 	CancelUpgrade(context.Context, *Descriptor) error
 

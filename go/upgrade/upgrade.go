@@ -35,6 +35,7 @@ type upgradeManager struct {
 	logger *logging.Logger
 }
 
+// Implements api.Backend.
 func (u *upgradeManager) SubmitDescriptor(ctx context.Context, descriptor *api.Descriptor) error {
 	u.Lock()
 	defer u.Unlock()
@@ -58,13 +59,33 @@ func (u *upgradeManager) SubmitDescriptor(ctx context.Context, descriptor *api.D
 	return u.flushDescriptorLocked()
 }
 
+// Implements api.Backend.
 func (u *upgradeManager) PendingUpgrades(ctx context.Context) ([]*api.PendingUpgrade, error) {
 	u.Lock()
 	defer u.Unlock()
 
-	return u.pending, nil
+	return append([]*api.PendingUpgrade{}, u.pending...), nil
 }
 
+// Implements api.Backend.
+func (u *upgradeManager) HasPendingUpgradeAt(ctx context.Context, height int64) (bool, error) {
+	u.Lock()
+	defer u.Unlock()
+
+	if height == api.InvalidUpgradeHeight {
+		return false, fmt.Errorf("invalid upgrade height specified")
+	}
+
+	for _, pu := range u.pending {
+		if pu.IsCompleted() || pu.UpgradeHeight == api.InvalidUpgradeHeight || pu.UpgradeHeight != height {
+			continue
+		}
+		return true, nil
+	}
+	return false, nil
+}
+
+// Implements api.Backend.
 func (u *upgradeManager) CancelUpgrade(ctx context.Context, descriptor *api.Descriptor) error {
 	u.Lock()
 	defer u.Unlock()
@@ -174,6 +195,7 @@ func (u *upgradeManager) flushDescriptorLocked() error {
 	return u.store.PutCBOR(metadataStoreKey, u.pending)
 }
 
+// Implements api.Backend.
 func (u *upgradeManager) StartupUpgrade() error {
 	u.Lock()
 	defer u.Unlock()
@@ -208,6 +230,7 @@ func (u *upgradeManager) StartupUpgrade() error {
 	return u.flushDescriptorLocked()
 }
 
+// Implements api.Backend.
 func (u *upgradeManager) ConsensusUpgrade(privateCtx interface{}, currentEpoch beacon.EpochTime, currentHeight int64) error {
 	u.Lock()
 	defer u.Unlock()
@@ -256,6 +279,7 @@ func (u *upgradeManager) ConsensusUpgrade(privateCtx interface{}, currentEpoch b
 	return u.flushDescriptorLocked()
 }
 
+// Implements api.Backend.
 func (u *upgradeManager) Close() {
 	u.Lock()
 	defer u.Unlock()

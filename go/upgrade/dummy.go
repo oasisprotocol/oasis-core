@@ -19,6 +19,10 @@ func (u *dummyUpgradeManager) PendingUpgrades(ctx context.Context) ([]*api.Pendi
 	return nil, nil
 }
 
+func (u *dummyUpgradeManager) HasPendingUpgradeAt(ctx context.Context, height int64) (bool, error) {
+	return false, nil
+}
+
 func (u *dummyUpgradeManager) CancelUpgrade(ctx context.Context, descriptor *api.Descriptor) error {
 	return nil
 }
