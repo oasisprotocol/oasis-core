@@ -212,6 +212,9 @@ type Backend interface {
 	// PendingUpgrades returns pending upgrades.
 	PendingUpgrades(context.Context) ([]*PendingUpgrade, error)
 
+	// HasPendingUpgradeAt returns whether there is a pending upgrade at a specified height.
+	HasPendingUpgradeAt(context.Context, int64) (bool, error)
+
 	// CancelUpgrade cancels a specific pending upgrade, unless it is already in progress.
 	CancelUpgrade(context.Context, *Descriptor) error
 
@@ -219,7 +222,10 @@ type Backend interface {
 	// It is idempotent with respect to the current upgrade descriptor.
 	StartupUpgrade() error
 
-	// ConsensusUpgrade performs the consensus portion of the upgrade.
+	// ConsensusUpgrade performs the consensus portion of the upgrade. Note that this will be called
+	// multiple times (in BeginBlock and EndBlock) where the context in the first argument can be
+	// used to determine which part it is.
+	//
 	// It is idempotent with respect to the current upgrade descriptor.
 	ConsensusUpgrade(interface{}, beacon.EpochTime, int64) error
 

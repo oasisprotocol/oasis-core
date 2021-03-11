@@ -12,6 +12,7 @@ import (
 type Query interface {
 	Beacon(context.Context) ([]byte, error)
 	Epoch(context.Context) (beacon.EpochTime, int64, error)
+	FutureEpoch(context.Context) (*beacon.EpochTimeState, error)
 	Genesis(context.Context) (*beacon.Genesis, error)
 	ConsensusParameters(context.Context) (*beacon.ConsensusParameters, error)
 
@@ -42,6 +43,10 @@ func (bq *beaconQuerier) Beacon(ctx context.Context) ([]byte, error) {
 
 func (bq *beaconQuerier) Epoch(ctx context.Context) (beacon.EpochTime, int64, error) {
 	return bq.state.GetEpoch(ctx)
+}
+
+func (bq *beaconQuerier) FutureEpoch(ctx context.Context) (*beacon.EpochTimeState, error) {
+	return bq.state.GetFutureEpoch(ctx)
 }
 
 func (bq *beaconQuerier) ConsensusParameters(ctx context.Context) (*beacon.ConsensusParameters, error) {

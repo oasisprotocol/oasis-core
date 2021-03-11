@@ -523,7 +523,13 @@ func (s *MutableState) SetCommonPool(ctx context.Context, q *quantity.Quantity) 
 	return abciAPI.UnavailableStateError(err)
 }
 
+// SetConsensusParameters sets staking consensus parameters.
+//
+// NOTE: This method must only be called from InitChain/EndBlock contexts.
 func (s *MutableState) SetConsensusParameters(ctx context.Context, params *staking.ConsensusParameters) error {
+	if err := s.is.CheckContextMode(ctx, []abciAPI.ContextMode{abciAPI.ContextInitChain, abciAPI.ContextEndBlock}); err != nil {
+		return err
+	}
 	err := s.ms.Insert(ctx, parametersKeyFmt.Encode(), cbor.Marshal(params))
 	return abciAPI.UnavailableStateError(err)
 }

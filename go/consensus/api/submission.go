@@ -147,15 +147,21 @@ func (m *submissionManager) signAndSubmitTx(ctx context.Context, signer signatur
 	}
 
 	if err = m.backend.SubmitTx(ctx, sigTx); err != nil {
-		if errors.Is(err, transaction.ErrInvalidNonce) {
+		switch {
+		case errors.Is(err, transaction.ErrUpgradePending):
+			// Pending upgrade, retry submission.
+			m.logger.Debug("retrying transaction submission due to pending upgrade")
+			return err
+		case errors.Is(err, transaction.ErrInvalidNonce):
 			// Invalid nonce, retry submission.
 			m.logger.Debug("retrying transaction submission due to invalid nonce",
 				"account_address", signerAddr,
 				"nonce", tx.Nonce,
 			)
 			return err
+		default:
+			return backoff.Permanent(err)
 		}
-		return backoff.Permanent(err)
 	}
 
 	return nil

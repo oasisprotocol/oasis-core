@@ -26,7 +26,7 @@ func TestRegisterNode(t *testing.T) {
 	now := time.Unix(1580461674, 0)
 	cfg := abciAPI.MockApplicationStateConfig{}
 	appState := abciAPI.NewMockApplicationState(&cfg)
-	ctx := appState.NewContext(abciAPI.ContextDeliverTx, now)
+	ctx := appState.NewContext(abciAPI.ContextEndBlock, now)
 	defer ctx.Close()
 
 	var md abciAPI.NoopMessageDispatcher
@@ -453,8 +453,10 @@ func TestRegisterNode(t *testing.T) {
 			require.NoError(err, "MultiSignNode")
 
 			// Attempt to register the node.
-			ctx.SetTxSigner(tcd.nodeSigner.Public())
-			err = app.registerNode(ctx, state, sigNode)
+			txCtx := appState.NewContext(abciAPI.ContextDeliverTx, now)
+			defer txCtx.Close()
+			txCtx.SetTxSigner(tcd.nodeSigner.Public())
+			err = app.registerNode(txCtx, state, sigNode)
 			switch tc.valid {
 			case true:
 				require.NoError(err, "node registration should succeed")

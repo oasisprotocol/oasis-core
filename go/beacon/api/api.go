@@ -44,6 +44,12 @@ func (e EpochTime) AbsDiff(other EpochTime) EpochTime {
 	return other - e
 }
 
+// EpochTimeState is the epoch state.
+type EpochTimeState struct {
+	Epoch  EpochTime `json:"epoch"`
+	Height int64     `json:"height"`
+}
+
 // Backend is a random beacon/time keeping implementation.
 type Backend interface {
 	// GetBaseEpoch returns the base epoch.
@@ -53,6 +59,13 @@ type Backend interface {
 	// Calling this method with height `consensus.HeightLatest`, should
 	// return the epoch of latest known block.
 	GetEpoch(context.Context, int64) (EpochTime, error)
+
+	// GetFutureEpoch returns any future epoch that is currently scheduled
+	// to occur at a specific height.
+	//
+	// Note that this may return a nil state in case no future epoch is
+	// currently scheduled.
+	GetFutureEpoch(context.Context, int64) (*EpochTimeState, error)
 
 	// GetEpochBlock returns the block height at the start of the said
 	// epoch.

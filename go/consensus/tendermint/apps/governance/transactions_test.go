@@ -26,7 +26,7 @@ func TestSubmitProposal(t *testing.T) {
 
 	now := time.Unix(1580461674, 0)
 	appState := abciAPI.NewMockApplicationState(&abciAPI.MockApplicationStateConfig{})
-	ctx := appState.NewContext(abciAPI.ContextDeliverTx, now)
+	ctx := appState.NewContext(abciAPI.ContextEndBlock, now)
 	defer ctx.Close()
 
 	// Setup staking state.
@@ -258,22 +258,24 @@ func TestSubmitProposal(t *testing.T) {
 		err = state.SetConsensusParameters(ctx, tc.params)
 		require.NoError(err, "setting governance consensus parameters should not error")
 
-		ctx.SetTxSigner(tc.txSigner)
+		txCtx := appState.NewContext(abciAPI.ContextDeliverTx, now)
+		defer txCtx.Close()
+		txCtx.SetTxSigner(tc.txSigner)
 
 		tc.prepareFn()
 
 		var governanceDepositsBefore, governanceDepositsAfter *quantity.Quantity
-		governanceDepositsBefore, err = stakeState.GovernanceDeposits(ctx)
+		governanceDepositsBefore, err = stakeState.GovernanceDeposits(txCtx)
 		require.NoError(err, "GovernanceDeposits()")
 
-		err = app.submitProposal(ctx, state, tc.proposalContent)
+		err = app.submitProposal(txCtx, state, tc.proposalContent)
 		if tc.err != nil {
 			require.True(errors.Is(err, tc.err), tc.msg)
 			continue
 		}
 
 		// If proposal passed, ensure proposal deposit was made.
-		governanceDepositsAfter, err = stakeState.GovernanceDeposits(ctx)
+		governanceDepositsAfter, err = stakeState.GovernanceDeposits(txCtx)
 		require.NoError(err, "GovernanceDeposits()")
 
 		err = governanceDepositsAfter.Sub(governanceDepositsBefore)
@@ -288,7 +290,7 @@ func TestCastVote(t *testing.T) {
 
 	now := time.Unix(1580461674, 0)
 	appState := abciAPI.NewMockApplicationState(&abciAPI.MockApplicationStateConfig{})
-	ctx := appState.NewContext(abciAPI.ContextDeliverTx, now)
+	ctx := appState.NewContext(abciAPI.ContextEndBlock, now)
 	defer ctx.Close()
 
 	// Setup state.
@@ -447,9 +449,11 @@ func TestCastVote(t *testing.T) {
 			},
 		},
 	} {
-		ctx.SetTxSigner(tc.txSigner)
+		txCtx := appState.NewContext(abciAPI.ContextDeliverTx, now)
+		defer txCtx.Close()
+		txCtx.SetTxSigner(tc.txSigner)
 
-		err = app.castVote(ctx, state, tc.vote)
+		err = app.castVote(txCtx, state, tc.vote)
 		require.Equal(tc.err, err, tc.msg)
 
 		tc.check()

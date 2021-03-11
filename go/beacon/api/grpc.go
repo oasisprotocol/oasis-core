@@ -16,8 +16,10 @@ var (
 
 	// methodGetBaseEpoch is the GetBaseEpoch method.
 	methodGetBaseEpoch = serviceName.NewMethod("GetBaseEpoch", nil)
-	// methodGetpoch is the GetEpoch method.
+	// methodGetEpoch is the GetEpoch method.
 	methodGetEpoch = serviceName.NewMethod("GetEpoch", int64(0))
+	// methodGetFutureEpoch is the GetFutureEpoch method.
+	methodGetFutureEpoch = serviceName.NewMethod("GetFutureEpoch", int64(0))
 	// methodGetEpochBlock is the GetEpochBlock method.
 	methodGetEpochBlock = serviceName.NewMethod("GetEpochBlock", EpochTime(0))
 	// methodWaitEpoch is the WaitEpoch method.
@@ -44,6 +46,10 @@ var (
 			{
 				MethodName: methodGetEpoch.ShortName(),
 				Handler:    handlerGetEpoch,
+			},
+			{
+				MethodName: methodGetFutureEpoch.ShortName(),
+				Handler:    handlerGetFutureEpoch,
 			},
 			{
 				MethodName: methodWaitEpoch.ShortName(),
@@ -114,6 +120,29 @@ func handlerGetEpoch( //nolint:golint
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(Backend).GetEpoch(ctx, req.(int64))
+	}
+	return interceptor(ctx, height, info, handler)
+}
+
+func handlerGetFutureEpoch( //nolint:golint
+	srv interface{},
+	ctx context.Context,
+	dec func(interface{}) error,
+	interceptor grpc.UnaryServerInterceptor,
+) (interface{}, error) {
+	var height int64
+	if err := dec(&height); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(Backend).GetFutureEpoch(ctx, height)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: methodGetFutureEpoch.FullName(),
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(Backend).GetFutureEpoch(ctx, req.(int64))
 	}
 	return interceptor(ctx, height, info, handler)
 }
@@ -284,6 +313,14 @@ func (c *beaconClient) GetEpoch(ctx context.Context, height int64) (EpochTime, e
 		return 0, err
 	}
 	return rsp, nil
+}
+
+func (c *beaconClient) GetFutureEpoch(ctx context.Context, height int64) (*EpochTimeState, error) {
+	var rsp EpochTimeState
+	if err := c.conn.Invoke(ctx, methodGetFutureEpoch.FullName(), height, &rsp); err != nil {
+		return nil, err
+	}
+	return &rsp, nil
 }
 
 func (c *beaconClient) GetEpochBlock(ctx context.Context, epoch EpochTime) (int64, error) {
