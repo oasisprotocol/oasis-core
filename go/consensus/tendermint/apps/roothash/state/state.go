@@ -198,7 +198,12 @@ func (s *MutableState) SetRuntimeState(ctx context.Context, state *roothash.Runt
 }
 
 // SetConsensusParameters sets roothash consensus parameters.
+//
+// NOTE: This method must only be called from InitChain/EndBlock contexts.
 func (s *MutableState) SetConsensusParameters(ctx context.Context, params *roothash.ConsensusParameters) error {
+	if err := s.is.CheckContextMode(ctx, []api.ContextMode{api.ContextInitChain, api.ContextEndBlock}); err != nil {
+		return err
+	}
 	err := s.ms.Insert(ctx, parametersKeyFmt.Encode(), cbor.Marshal(params))
 	return api.UnavailableStateError(err)
 }

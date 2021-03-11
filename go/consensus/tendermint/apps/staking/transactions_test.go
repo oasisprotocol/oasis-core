@@ -67,7 +67,7 @@ func TestReservedAddresses(t *testing.T) {
 
 	now := time.Unix(1580461674, 0)
 	appState := abciAPI.NewMockApplicationState(&abciAPI.MockApplicationStateConfig{})
-	ctx := appState.NewContext(abciAPI.ContextDeliverTx, now)
+	ctx := appState.NewContext(abciAPI.ContextEndBlock, now)
 	defer ctx.Close()
 
 	stakeState := stakingState.NewMutableState(ctx.State())
@@ -81,36 +81,39 @@ func TestReservedAddresses(t *testing.T) {
 		state: appState,
 	}
 
+	txCtx := appState.NewContext(abciAPI.ContextDeliverTx, now)
+	defer txCtx.Close()
+
 	// Create a new test public key, set it as the tx signer and create a new reserved address from it.
 	testPK := signature.NewPublicKey("badfffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff")
-	ctx.SetTxSigner(testPK)
+	txCtx.SetTxSigner(testPK)
 	_ = staking.NewReservedAddress(testPK)
 
 	// Make sure all transaction types fail for the reserved address.
-	err = app.transfer(ctx, stakeState, nil)
+	err = app.transfer(txCtx, stakeState, nil)
 	require.EqualError(err, "staking: forbidden by policy", "transfer for reserved address should error")
 
-	err = app.burn(ctx, stakeState, nil)
+	err = app.burn(txCtx, stakeState, nil)
 	require.EqualError(err, "staking: forbidden by policy", "burn for reserved address should error")
 
 	var q quantity.Quantity
 	_ = q.FromInt64(1_000)
 
 	// NOTE: We need to specify escrow amount since that is checked before the check for reserved address.
-	err = app.addEscrow(ctx, stakeState, &staking.Escrow{Amount: *q.Clone()})
+	err = app.addEscrow(txCtx, stakeState, &staking.Escrow{Amount: *q.Clone()})
 	require.EqualError(err, "staking: forbidden by policy", "adding escrow for reserved address should error")
 
 	// NOTE: We need to specify reclaim escrow shares since that is checked before the check for reserved address.
-	err = app.reclaimEscrow(ctx, stakeState, &staking.ReclaimEscrow{Shares: *q.Clone()})
+	err = app.reclaimEscrow(txCtx, stakeState, &staking.ReclaimEscrow{Shares: *q.Clone()})
 	require.EqualError(err, "staking: forbidden by policy", "reclaim escrow for reserved address should error")
 
-	err = app.amendCommissionSchedule(ctx, stakeState, nil)
+	err = app.amendCommissionSchedule(txCtx, stakeState, nil)
 	require.EqualError(err, "staking: forbidden by policy", "amending commission schedule for reserved address should error")
 
-	err = app.allow(ctx, stakeState, &staking.Allow{})
+	err = app.allow(txCtx, stakeState, &staking.Allow{})
 	require.EqualError(err, "staking: forbidden by policy", "allow for reserved address should error")
 
-	err = app.withdraw(ctx, stakeState, &staking.Withdraw{})
+	err = app.withdraw(txCtx, stakeState, &staking.Withdraw{})
 	require.EqualError(err, "staking: forbidden by policy", "withdraw for reserved address should error")
 }
 
@@ -120,7 +123,7 @@ func TestAllow(t *testing.T) {
 
 	now := time.Unix(1580461674, 0)
 	appState := abciAPI.NewMockApplicationState(&abciAPI.MockApplicationStateConfig{})
-	ctx := appState.NewContext(abciAPI.ContextDeliverTx, now)
+	ctx := appState.NewContext(abciAPI.ContextEndBlock, now)
 	defer ctx.Close()
 
 	stakeState := stakingState.NewMutableState(ctx.State())
@@ -270,16 +273,18 @@ func TestAllow(t *testing.T) {
 		err = stakeState.SetConsensusParameters(ctx, tc.params)
 		require.NoError(err, "setting staking consensus parameters should not error")
 
-		ctx.SetTxSigner(tc.txSigner)
+		txCtx := appState.NewContext(abciAPI.ContextDeliverTx, now)
+		defer txCtx.Close()
+		txCtx.SetTxSigner(tc.txSigner)
 
-		err = app.allow(ctx, stakeState, tc.allow)
+		err = app.allow(txCtx, stakeState, tc.allow)
 		require.Equal(tc.err, err, tc.msg)
 
 		addr := staking.NewAddress(tc.txSigner)
 		if addr.IsReserved() {
 			continue
 		}
-		acct, err := stakeState.Account(ctx, addr)
+		acct, err := stakeState.Account(txCtx, addr)
 		require.NoError(err, "reading account state should not error")
 
 		require.Equal(
@@ -296,7 +301,7 @@ func TestWithdraw(t *testing.T) {
 
 	now := time.Unix(1580461674, 0)
 	appState := abciAPI.NewMockApplicationState(&abciAPI.MockApplicationStateConfig{})
-	ctx := appState.NewContext(abciAPI.ContextDeliverTx, now)
+	ctx := appState.NewContext(abciAPI.ContextEndBlock, now)
 	defer ctx.Close()
 
 	stakeState := stakingState.NewMutableState(ctx.State())
@@ -485,20 +490,22 @@ func TestWithdraw(t *testing.T) {
 		err = stakeState.SetConsensusParameters(ctx, tc.params)
 		require.NoError(err, "setting staking consensus parameters should not error")
 
-		ctx.SetTxSigner(tc.txSigner)
+		txCtx := appState.NewContext(abciAPI.ContextDeliverTx, now)
+		defer txCtx.Close()
+		txCtx.SetTxSigner(tc.txSigner)
 
-		beforeAcct, err := stakeState.Account(ctx, tc.withdraw.From)
+		beforeAcct, err := stakeState.Account(txCtx, tc.withdraw.From)
 		if !tc.withdraw.From.IsReserved() {
 			require.NoError(err, "reading account state should not error")
 		}
 
-		err = app.withdraw(ctx, stakeState, tc.withdraw)
+		err = app.withdraw(txCtx, stakeState, tc.withdraw)
 		require.Equal(tc.err, err, tc.msg)
 
 		if tc.withdraw.From.IsReserved() {
 			continue
 		}
-		afterAcct, err := stakeState.Account(ctx, tc.withdraw.From)
+		afterAcct, err := stakeState.Account(txCtx, tc.withdraw.From)
 		require.NoError(err, "reading account state should not error")
 
 		expectedBalance := beforeAcct.General.Balance
@@ -523,7 +530,7 @@ func TestAddEscrow(t *testing.T) {
 
 	now := time.Unix(1580461674, 0)
 	appState := abciAPI.NewMockApplicationState(&abciAPI.MockApplicationStateConfig{})
-	ctx := appState.NewContext(abciAPI.ContextDeliverTx, now)
+	ctx := appState.NewContext(abciAPI.ContextEndBlock, now)
 	defer ctx.Close()
 
 	stakeState := stakingState.NewMutableState(ctx.State())
@@ -611,9 +618,11 @@ func TestAddEscrow(t *testing.T) {
 		err = stakeState.SetConsensusParameters(ctx, tc.params)
 		require.NoError(err, "setting staking consensus parameters should not error")
 
-		ctx.SetTxSigner(tc.txSigner)
+		txCtx := appState.NewContext(abciAPI.ContextDeliverTx, now)
+		defer txCtx.Close()
+		txCtx.SetTxSigner(tc.txSigner)
 
-		err = app.addEscrow(ctx, stakeState, tc.escrow)
+		err = app.addEscrow(txCtx, stakeState, tc.escrow)
 		require.Equal(tc.err, err, tc.msg)
 	}
 }
@@ -624,7 +633,7 @@ func TestAllowEscrowMessages(t *testing.T) {
 
 	now := time.Unix(1580461674, 0)
 	appState := abciAPI.NewMockApplicationState(&abciAPI.MockApplicationStateConfig{})
-	ctx := appState.NewContext(abciAPI.ContextDeliverTx, now)
+	ctx := appState.NewContext(abciAPI.ContextEndBlock, now)
 	defer ctx.Close()
 
 	stakeState := stakingState.NewMutableState(ctx.State())
@@ -646,22 +655,25 @@ func TestAllowEscrowMessages(t *testing.T) {
 	})
 	require.NoError(err, "SetAccount")
 
+	txCtx := appState.NewContext(abciAPI.ContextDeliverTx, now)
+	defer txCtx.Close()
+
 	// Add escrow transaction should be allowed.
-	ctx.SetTxSigner(pk1)
-	err = app.addEscrow(ctx, stakeState, &staking.Escrow{Account: addr1, Amount: *quantity.NewFromUint64(10)})
+	txCtx.SetTxSigner(pk1)
+	err = app.addEscrow(txCtx, stakeState, &staking.Escrow{Account: addr1, Amount: *quantity.NewFromUint64(10)})
 	require.NoError(err, "add escrow transaction should work")
 
 	// Reclaim escrow transaction should be allowed.
-	err = app.reclaimEscrow(ctx, stakeState, &staking.ReclaimEscrow{Account: addr1, Shares: *quantity.NewFromUint64(1)})
+	err = app.reclaimEscrow(txCtx, stakeState, &staking.ReclaimEscrow{Account: addr1, Shares: *quantity.NewFromUint64(1)})
 	require.NoError(err, "reclaim escrow transaction should work")
 
-	ctx = ctx.WithMessageExecution()
+	txCtx = txCtx.WithMessageExecution()
 	// Add escrow message should not be allowed.
-	err = app.addEscrow(ctx, stakeState, &staking.Escrow{Account: addr1, Amount: *quantity.NewFromUint64(10)})
+	err = app.addEscrow(txCtx, stakeState, &staking.Escrow{Account: addr1, Amount: *quantity.NewFromUint64(10)})
 	require.Equal(staking.ErrForbidden, err, "add escrow message should be denied")
 
 	// Reclaim escrow message should not be allowed.
-	err = app.reclaimEscrow(ctx, stakeState, &staking.ReclaimEscrow{Account: addr1, Shares: *quantity.NewFromUint64(1)})
+	err = app.reclaimEscrow(txCtx, stakeState, &staking.ReclaimEscrow{Account: addr1, Shares: *quantity.NewFromUint64(1)})
 	require.Error(staking.ErrForbidden, err, "reclaim escrow transaction should work")
 
 	err = stakeState.SetConsensusParameters(ctx, &staking.ConsensusParameters{
@@ -670,9 +682,9 @@ func TestAllowEscrowMessages(t *testing.T) {
 	require.NoError(err, "setting staking consensus parameters should not error")
 
 	// Escrow message should be allowed.
-	err = app.addEscrow(ctx, stakeState, &staking.Escrow{Account: addr1, Amount: *quantity.NewFromUint64(10)})
+	err = app.addEscrow(txCtx, stakeState, &staking.Escrow{Account: addr1, Amount: *quantity.NewFromUint64(10)})
 	require.NoError(err, "add escrow message should be allowed")
 
-	err = app.reclaimEscrow(ctx, stakeState, &staking.ReclaimEscrow{Account: addr1, Shares: *quantity.NewFromUint64(1)})
+	err = app.reclaimEscrow(txCtx, stakeState, &staking.ReclaimEscrow{Account: addr1, Shares: *quantity.NewFromUint64(1)})
 	require.NoError(err, "reclaim escrow message should work")
 }

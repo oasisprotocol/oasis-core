@@ -32,7 +32,7 @@ func TestInitChain(t *testing.T) {
 		BaseEpoch:    1,
 		CurrentEpoch: 80,
 	})
-	ctx := appState.NewContext(abciAPI.ContextDeliverTx, now)
+	ctx := appState.NewContext(abciAPI.ContextInitChain, now)
 	defer ctx.Close()
 
 	state := governanceState.NewMutableState(ctx.State())
@@ -255,7 +255,7 @@ func TestGenesis(t *testing.T) {
 		BaseEpoch:    1,
 		CurrentEpoch: currentEpoch,
 	})
-	ctx := appState.NewContext(abciAPI.ContextDeliverTx, now)
+	ctx := appState.NewContext(abciAPI.ContextEndBlock, now)
 	defer ctx.Close()
 
 	state := governanceState.NewMutableState(ctx.State())

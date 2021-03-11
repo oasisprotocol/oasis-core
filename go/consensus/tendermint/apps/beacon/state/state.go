@@ -147,7 +147,13 @@ func (s *MutableState) ClearFutureEpoch(ctx context.Context) error {
 	return abciAPI.UnavailableStateError(err)
 }
 
+// SetConsensusParameters sets beacon consensus parameters.
+//
+// NOTE: This method must only be called from InitChain/EndBlock contexts.
 func (s *MutableState) SetConsensusParameters(ctx context.Context, params *beacon.ConsensusParameters) error {
+	if err := s.is.CheckContextMode(ctx, []abciAPI.ContextMode{abciAPI.ContextInitChain, abciAPI.ContextEndBlock}); err != nil {
+		return err
+	}
 	err := s.ms.Insert(ctx, parametersKeyFmt.Encode(), cbor.Marshal(params))
 	return abciAPI.UnavailableStateError(err)
 }

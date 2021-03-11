@@ -28,7 +28,7 @@ func TestOnEvidenceByzantineConsensus(t *testing.T) {
 		// Use a non-zero current epoch so we test freeze overflow.
 		CurrentEpoch: 42,
 	})
-	ctx := appState.NewContext(abciAPI.ContextBeginBlock, now)
+	ctx := appState.NewContext(abciAPI.ContextEndBlock, now)
 	defer ctx.Close()
 
 	consensusSigner := memorySigner.NewTestSigner("consensus test signer")

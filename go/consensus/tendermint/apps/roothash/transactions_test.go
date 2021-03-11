@@ -105,7 +105,7 @@ func TestMessagesGasEstimation(t *testing.T) {
 
 	now := time.Unix(1580461674, 0)
 	appState := abciAPI.NewMockApplicationState(&abciAPI.MockApplicationStateConfig{})
-	ctx := appState.NewContext(abciAPI.ContextDeliverTx, now)
+	ctx := appState.NewContext(abciAPI.ContextEndBlock, now)
 	defer ctx.Close()
 
 	// Configure the maximum amount of gas.
@@ -251,7 +251,7 @@ func TestEvidence(t *testing.T) {
 
 	now := time.Unix(1580461674, 0)
 	appState := abciAPI.NewMockApplicationState(&abciAPI.MockApplicationStateConfig{})
-	ctx := appState.NewContext(abciAPI.ContextDeliverTx, now)
+	ctx := appState.NewContext(abciAPI.ContextEndBlock, now)
 	defer ctx.Close()
 
 	// Generate a private key for the node in this test.
@@ -486,6 +486,9 @@ func TestEvidence(t *testing.T) {
 	require.NoError(err, "SignExecutorCommitment")
 	var md testMsgDispatcher
 	app := rootHashApplication{appState, &md}
+
+	ctx = appState.NewContext(abciAPI.ContextDeliverTx, now)
+	defer ctx.Close()
 
 	for _, ev := range []struct {
 		ev  *roothash.Evidence
