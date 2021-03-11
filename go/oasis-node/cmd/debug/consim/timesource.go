@@ -25,6 +25,10 @@ func (b *simTimeSource) GetEpoch(ctx context.Context, height int64) (api.EpochTi
 	return b.base + api.EpochTime(height/b.interval), nil
 }
 
+func (b *simTimeSource) GetFutureEpoch(ctx context.Context, height int64) (*api.EpochTimeState, error) {
+	return nil, nil
+}
+
 func (b *simTimeSource) GetEpochBlock(ctx context.Context, epoch api.EpochTime) (int64, error) {
 	if epoch < b.base {
 		return 0, fmt.Errorf("consim/epochtime: epoch predates base")

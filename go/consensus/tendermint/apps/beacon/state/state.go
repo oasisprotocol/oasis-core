@@ -32,12 +32,6 @@ var (
 	parametersKeyFmt = keyformat.New(0x43)
 )
 
-// EpochTimeState is the epoch state.
-type EpochTimeState struct {
-	Epoch  beacon.EpochTime `json:"epoch"`
-	Height int64            `json:"height"`
-}
-
 // ImmutableState is the immutable beacon state wrapper.
 type ImmutableState struct {
 	is *abciAPI.ImmutableState
@@ -73,14 +67,14 @@ func (s *ImmutableState) GetEpoch(ctx context.Context) (beacon.EpochTime, int64,
 		return beacon.EpochTime(0), 0, nil
 	}
 
-	var state EpochTimeState
+	var state beacon.EpochTimeState
 	if err = cbor.Unmarshal(data, &state); err != nil {
 		return beacon.EpochInvalid, 0, abciAPI.UnavailableStateError(err)
 	}
 	return state.Epoch, state.Height, nil
 }
 
-func (s *ImmutableState) GetFutureEpoch(ctx context.Context) (*EpochTimeState, error) {
+func (s *ImmutableState) GetFutureEpoch(ctx context.Context) (*beacon.EpochTimeState, error) {
 	data, err := s.is.Get(ctx, epochFutureKeyFmt.Encode())
 	if err != nil {
 		return nil, abciAPI.UnavailableStateError(err)
@@ -89,7 +83,7 @@ func (s *ImmutableState) GetFutureEpoch(ctx context.Context) (*EpochTimeState, e
 		return nil, nil
 	}
 
-	var state EpochTimeState
+	var state beacon.EpochTimeState
 	if err := cbor.Unmarshal(data, &state); err != nil {
 		return nil, abciAPI.UnavailableStateError(err)
 	}
@@ -129,7 +123,7 @@ func (s *MutableState) SetBeacon(ctx context.Context, newBeacon []byte) error {
 }
 
 func (s *MutableState) SetEpoch(ctx context.Context, epoch beacon.EpochTime, height int64) error {
-	state := EpochTimeState{Epoch: epoch, Height: height}
+	state := beacon.EpochTimeState{Epoch: epoch, Height: height}
 	err := s.ms.Insert(ctx, epochCurrentKeyFmt.Encode(), cbor.Marshal(state))
 	return abciAPI.UnavailableStateError(err)
 }
@@ -143,7 +137,7 @@ func (s *MutableState) SetFutureEpoch(ctx context.Context, epoch beacon.EpochTim
 		return fmt.Errorf("tendermint/beacon: future epoch already pending")
 	}
 
-	state := EpochTimeState{Epoch: epoch, Height: height}
+	state := beacon.EpochTimeState{Epoch: epoch, Height: height}
 	err = s.ms.Insert(ctx, epochFutureKeyFmt.Encode(), cbor.Marshal(state))
 	return abciAPI.UnavailableStateError(err)
 }

@@ -90,6 +90,15 @@ func (sc *serviceClient) GetEpoch(ctx context.Context, height int64) (beaconAPI.
 	return epoch, err
 }
 
+func (sc *serviceClient) GetFutureEpoch(ctx context.Context, height int64) (*beaconAPI.EpochTimeState, error) {
+	q, err := sc.querier.QueryAt(ctx, height)
+	if err != nil {
+		return nil, err
+	}
+
+	return q.FutureEpoch(ctx)
+}
+
 func (sc *serviceClient) GetEpochBlock(ctx context.Context, epoch beaconAPI.EpochTime) (int64, error) {
 	now, currentBlk := sc.currentEpochBlock()
 	if epoch == now {
