@@ -377,7 +377,7 @@ func (mux *abciMux) BeginBlock(req types.RequestBeginBlock) types.ResponseBeginB
 
 	// 99% sure this is a protocol violation.
 	if mux.lastBeginBlock == blockHeight {
-		panic("mux: redundant BeginBlock")
+		panic(fmt.Errorf("mux: redundant BeginBlock"))
 	}
 	defer func() {
 		atomic.StoreInt64(&mux.lastBeginBlock, blockHeight)
@@ -400,7 +400,24 @@ func (mux *abciMux) BeginBlock(req types.RequestBeginBlock) types.ResponseBeginB
 
 	currentEpoch, err := mux.state.GetCurrentEpoch(ctx)
 	if err != nil {
-		panic("mux: can't get current epoch in BeginBlock")
+		panic(fmt.Errorf("mux: can't get current epoch in BeginBlock"))
+	}
+
+	// Check if there are any upgrades pending or if we need to halt for an upgrade. Note that these
+	// checks must run on each block to make sure that any pending upgrade descriptors are cleared
+	// after consensus upgrade is performed.
+	if upgrader := mux.state.Upgrader(); upgrader != nil {
+		switch err := upgrader.ConsensusUpgrade(ctx, currentEpoch, ctx.BlockHeight()); err {
+		case nil:
+			// Everything ok.
+		case upgrade.ErrStopForUpgrade:
+			// Signal graceful stop for upgrade.
+			mux.logger.Debug("dispatching halt hooks for upgrade")
+			mux.dispatchHaltHooks(blockHeight, currentEpoch, err)
+			panic(err)
+		default:
+			panic(fmt.Errorf("mux: error while trying to perform consensus upgrade: %w", err))
+		}
 	}
 
 	switch mux.state.haltMode {
@@ -435,13 +452,10 @@ func (mux *abciMux) BeginBlock(req types.RequestBeginBlock) types.ResponseBeginB
 				"app", app.Name(),
 			)
 
-			// Epoch may have changed due to earlier BeginBlock processing.
-			currentEpoch, _ = mux.state.GetCurrentEpoch(ctx)
-
 			mux.logger.Debug("dispatching halt hooks on begin block failure")
 			mux.dispatchHaltHooks(blockHeight, currentEpoch, err)
 
-			panic("mux: BeginBlock: fatal error in application: '" + app.Name() + "': " + err.Error())
+			panic(fmt.Errorf("mux: BeginBlock: fatal error in application: '%s': %w", app.Name(), err))
 		}
 	}
 
@@ -716,10 +730,24 @@ func (mux *abciMux) EndBlock(req types.RequestEndBlock) types.ResponseEndBlock {
 				"err", err,
 				"app", app.Name(),
 			)
-			panic("mux: EndBlock: fatal error in application: '" + app.Name() + "': " + err.Error())
+			panic(fmt.Errorf("mux: EndBlock: fatal error in application: '%s': %w", app.Name(), err))
 		}
 		if app.Blessed() {
 			resp = newResp
+		}
+	}
+
+	// Run any EndBlock upgrade handlers when there is an upgrade.
+	if upgrader := mux.state.Upgrader(); upgrader != nil {
+		currentEpoch, err := mux.state.GetCurrentEpoch(ctx)
+		if err != nil {
+			panic(fmt.Errorf("mux: can't get current epoch in BeginBlock"))
+		}
+
+		err = upgrader.ConsensusUpgrade(ctx, currentEpoch, ctx.BlockHeight())
+		// This should never fail as all the checks were already performed in BeginBlock.
+		if err != nil {
+			panic(fmt.Errorf("mux: error while trying to perform consensus upgrade: %w", err))
 		}
 	}
 

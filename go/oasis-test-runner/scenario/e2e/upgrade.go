@@ -194,6 +194,12 @@ func (sc *nodeUpgradeImpl) Run(childEnv *env.Env) error { // nolint: gocyclo
 		return err
 	}
 
+	// Fetch initial consensus parameters.
+	initialParams, err := sc.Net.Controller().Consensus.GetParameters(sc.ctx, consensus.HeightLatest)
+	if err != nil {
+		return fmt.Errorf("can't get consensus parameters: %w", err)
+	}
+
 	// Try submitting an invalid update descriptor.
 	// This should return immediately and the node should still be running.
 	sc.Logger.Info("submitting invalid upgrade descriptor")
@@ -336,6 +342,18 @@ func (sc *nodeUpgradeImpl) Run(childEnv *env.Env) error { // nolint: gocyclo
 	_, err = sc.Net.Controller().Registry.GetEntity(sc.ctx, idQuery)
 	if err != nil {
 		return fmt.Errorf("can't get registered test entity: %w", err)
+	}
+
+	// Check updated consensus parameters.
+	newParams, err := sc.Net.Controller().Consensus.GetParameters(sc.ctx, consensus.HeightLatest)
+	if err != nil {
+		return fmt.Errorf("can't get consensus parameters: %w", err)
+	}
+	if newParams.Parameters.MaxTxSize != initialParams.Parameters.MaxTxSize+1 {
+		return fmt.Errorf("consensus parameter MaxTxSize not updated correctly (expected: %d actual: %d)",
+			initialParams.Parameters.MaxTxSize+1,
+			newParams.Parameters.MaxTxSize,
+		)
 	}
 
 	return sc.finishWithoutChild()

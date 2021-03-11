@@ -170,9 +170,19 @@ func (s *applicationState) GetCurrentEpoch(ctx context.Context) (beacon.EpochTim
 	if blockHeight == 0 {
 		return beacon.EpochInvalid, nil
 	}
+	// Check if there is an epoch transition scheduled for the current height. This should be taken
+	// into account when GetCurrentEpoch is called before the time keeping app does the transition.
+	future, err := s.timeSource.GetFutureEpoch(ctx, blockHeight+1)
+	if err != nil {
+		return beacon.EpochInvalid, fmt.Errorf("failed to get future epoch for height %d: %w", blockHeight+1, err)
+	}
+	if future != nil && future.Height == blockHeight+1 {
+		return future.Epoch, nil
+	}
+
 	currentEpoch, err := s.timeSource.GetEpoch(ctx, blockHeight+1)
 	if err != nil {
-		return beacon.EpochInvalid, fmt.Errorf("application state time source get epoch for height %d: %w", blockHeight+1, err)
+		return beacon.EpochInvalid, fmt.Errorf("failed to get epoch for height %d: %w", blockHeight+1, err)
 	}
 	return currentEpoch, nil
 }

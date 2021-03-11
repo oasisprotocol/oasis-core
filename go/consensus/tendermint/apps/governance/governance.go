@@ -87,22 +87,6 @@ func (app *governanceApplication) ExecuteMessage(ctx *api.Context, kind, msg int
 func (app *governanceApplication) BeginBlock(ctx *api.Context, request types.RequestBeginBlock) error {
 	// Check if epoch has changed.
 	epochChanged, epoch := app.state.EpochChanged(ctx)
-
-	// Check if there are any upgrades pending or if we need to halt for an upgrade. Note that these
-	// checks must run on each block to make sure that any pending upgrade descriptors are cleared
-	// after consensus upgrade is performed.
-	if upgrader := ctx.AppState().Upgrader(); upgrader != nil {
-		switch err := upgrader.ConsensusUpgrade(ctx, epoch, ctx.BlockHeight()); err {
-		case nil:
-			// Everything ok.
-		case upgrade.ErrStopForUpgrade:
-			// Signal graceful stop for upgrade.
-			return err
-		default:
-			return fmt.Errorf("error while trying to perform consensus upgrade: %w", err)
-		}
-	}
-
 	if !epochChanged {
 		// Nothing to do.
 		return nil

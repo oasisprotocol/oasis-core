@@ -31,6 +31,9 @@ type Handler interface {
 	// the consensus portion of the upgrade. The interface argument is
 	// a private structure passed to Backend.ConsensusUpgrade by the
 	// consensus backend.
+	//
+	// This method will be called twice, once in BeginBlock and once in
+	// EndBlock.
 	ConsensusUpgrade(*Context, interface{}) error
 }
 

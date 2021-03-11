@@ -9,6 +9,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/cbor"
 	consensusAPI "github.com/oasisprotocol/oasis-core/go/consensus/api"
 	"github.com/oasisprotocol/oasis-core/go/consensus/api/transaction"
+	coreState "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/abci/state"
 	"github.com/oasisprotocol/oasis-core/go/storage/mkvs/syncer"
 )
 
@@ -75,14 +76,18 @@ func (t *fullService) GetParameters(ctx context.Context, height int64) (*consens
 		return nil, fmt.Errorf("tendermint: failed to marshal consensus params: %w", err)
 	}
 
-	genesisDoc, err := t.GetGenesisDocument(ctx)
+	cs, err := coreState.NewImmutableState(ctx, t.mux.State(), height)
 	if err != nil {
-		return nil, fmt.Errorf("tendermint: failed to get genesis document: %w", err)
+		return nil, fmt.Errorf("tendermint: failed to initialize core consensus state: %w", err)
+	}
+	cp, err := cs.ConsensusParameters(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("tendermint: failed to fetch core consensus parameters: %w", err)
 	}
 
 	return &consensusAPI.Parameters{
 		Height:     params.BlockHeight,
-		Parameters: genesisDoc.Consensus.Parameters,
+		Parameters: *cp,
 		Meta:       meta,
 	}, nil
 }
