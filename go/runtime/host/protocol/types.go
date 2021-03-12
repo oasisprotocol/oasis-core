@@ -135,6 +135,8 @@ type RuntimeInfoRequest struct {
 	// ConsensusProtocolVersion is the consensus protocol version that is in use for the consensus
 	// layer.
 	ConsensusProtocolVersion uint64 `json:"consensus_protocol_version"`
+	// ConsensusChainContext is the consensus layer chain domain separation context.
+	ConsensusChainContext string `json:"consensus_chain_context"`
 }
 
 // RuntimeInfoResponse is a worker info response message body.

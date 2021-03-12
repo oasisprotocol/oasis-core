@@ -113,9 +113,14 @@ func newConfig(consensus consensus.Backend, ias ias.Endpoint) (*RuntimeConfig, e
 		if err != nil {
 			return nil, fmt.Errorf("failed to get consensus layer status: %w", err)
 		}
+		chainCtx, err := consensus.GetChainContext(context.Background())
+		if err != nil {
+			return nil, fmt.Errorf("failed to get chain context: %w", err)
+		}
 		hostInfo := &hostProtocol.HostInfo{
 			ConsensusBackend:         cs.Backend,
 			ConsensusProtocolVersion: cs.Version.ToU64(),
+			ConsensusChainContext:    chainCtx,
 		}
 
 		// Register provisioners based on the configured provisioner.

@@ -421,6 +421,10 @@ func (t *fullService) GetGenesisDocument(ctx context.Context) (*genesisAPI.Docum
 	return t.genesis, nil
 }
 
+func (t *fullService) GetChainContext(ctx context.Context) (string, error) {
+	return t.genesis.ChainContext(), nil
+}
+
 func (t *fullService) RegisterHaltHook(hook consensusAPI.HaltHook) {
 	if !t.initialized() {
 		return
@@ -765,6 +769,7 @@ func (t *fullService) GetStatus(ctx context.Context) (*consensusAPI.Status, erro
 		Features: t.SupportedFeatures(),
 	}
 
+	status.ChainContext = t.genesis.ChainContext()
 	status.GenesisHeight = t.genesis.Height
 	if t.started() {
 		// Only attempt to fetch blocks in case the consensus service has started as otherwise

@@ -71,6 +71,7 @@ pub enum Body {
         runtime_id: Namespace,
         consensus_backend: String,
         consensus_protocol_version: u64,
+        consensus_chain_context: String,
     },
     RuntimeInfoResponse {
         protocol_version: u64,

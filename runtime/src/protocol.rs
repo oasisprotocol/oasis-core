@@ -44,8 +44,21 @@ pub enum ProtocolError {
     #[error("attestation required")]
     #[allow(unused)]
     AttestationRequired,
-    #[error("runtime id not set")]
-    RuntimeIDNotSet,
+    #[error("host environment information not configured")]
+    HostInfoNotConfigured,
+}
+
+/// Information about the host environment.
+#[derive(Debug, Clone)]
+pub struct HostInfo {
+    /// Assigned runtime identifier of the loaded runtime.
+    pub runtime_id: Namespace,
+    /// Name of the consensus backend that is in use for the consensus layer.
+    pub consensus_backend: String,
+    /// Consensus protocol version that is in use for the consensus layer.
+    pub consensus_protocol_version: u64,
+    /// Consensus layer chain domain separation context.
+    pub consensus_chain_context: String,
 }
 
 /// Runtime part of the runtime host protocol.
@@ -65,10 +78,10 @@ pub struct Protocol {
     last_request_id: AtomicUsize,
     /// Pending outgoing requests.
     pending_out_requests: Mutex<HashMap<u64, channel::Sender<Body>>>,
-    /// Runtime identifier.
-    runtime_id: Mutex<Option<Namespace>>,
     /// Runtime version.
     runtime_version: Version,
+    /// Host environment information.
+    host_info: Mutex<Option<HostInfo>>,
 }
 
 impl Protocol {
@@ -89,21 +102,37 @@ impl Protocol {
             stream,
             last_request_id: AtomicUsize::new(0),
             pending_out_requests: Mutex::new(HashMap::new()),
-            runtime_id: Mutex::new(None),
             runtime_version: runtime_version,
+            host_info: Mutex::new(None),
         }
     }
 
-    /// Return the runtime identifier for this worker.
+    /// The runtime identifier for this instance.
     ///
     /// # Panics
     ///
-    /// Panics, if the runtime identifier is not set.
+    /// Panics, if the host environment information is not set.
     pub fn get_runtime_id(self: &Protocol) -> Namespace {
-        self.runtime_id
+        self.host_info
             .lock()
             .unwrap()
-            .expect("runtime_id should be set")
+            .as_ref()
+            .expect("host environment information should be set")
+            .runtime_id
+    }
+
+    /// The host environment information for this instance.
+    ///
+    /// # Panics
+    ///
+    /// Panics, if the host environment information is not set.
+    pub fn get_host_info(self: &Protocol) -> HostInfo {
+        self.host_info
+            .lock()
+            .unwrap()
+            .as_ref()
+            .expect("host environment information should be set")
+            .clone()
     }
 
     /// Start the protocol handler loop.
@@ -252,16 +281,23 @@ impl Protocol {
                 runtime_id,
                 consensus_backend,
                 consensus_protocol_version,
+                consensus_chain_context,
             } => {
                 info!(self.logger, "Received host environment information";
                     "runtime_id" => ?runtime_id,
-                    "consensus_backend" => consensus_backend,
+                    "consensus_backend" => &consensus_backend,
                     "consensus_protocol_version" => consensus_protocol_version,
+                    "consensus_chain_context" => &consensus_chain_context,
                 );
                 // TODO: Verify consensus backend/protocol compatibility.
 
-                // Store the passed runtime ID.
-                *self.runtime_id.lock().unwrap() = Some(runtime_id);
+                // Configure the host environment info.
+                *self.host_info.lock().unwrap() = Some(HostInfo {
+                    runtime_id,
+                    consensus_backend,
+                    consensus_protocol_version,
+                    consensus_chain_context,
+                });
 
                 self.dispatcher.start(self.clone());
 
@@ -354,8 +390,8 @@ impl Protocol {
     }
 
     fn can_handle_runtime_requests(&self) -> Result<()> {
-        if self.runtime_id.lock().unwrap().is_none() {
-            return Err(ProtocolError::RuntimeIDNotSet.into());
+        if self.host_info.lock().unwrap().is_none() {
+            return Err(ProtocolError::HostInfoNotConfigured.into());
         }
 
         #[cfg(target_env = "sgx")]
