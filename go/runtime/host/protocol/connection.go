@@ -122,6 +122,8 @@ type HostInfo struct {
 	// ConsensusProtocolVersion is the consensus protocol version that is in use for the consensus
 	// layer.
 	ConsensusProtocolVersion uint64
+	// ConsensusChainContext is the consensus layer chain domain separation context.
+	ConsensusChainContext string
 }
 
 // state is the connection state.
@@ -529,6 +531,7 @@ func (c *connection) InitHost(ctx context.Context, conn net.Conn, hi *HostInfo) 
 		RuntimeID:                c.runtimeID,
 		ConsensusBackend:         hi.ConsensusBackend,
 		ConsensusProtocolVersion: hi.ConsensusProtocolVersion,
+		ConsensusChainContext:    hi.ConsensusChainContext,
 	}})
 	switch {
 	default:
