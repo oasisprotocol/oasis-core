@@ -41,6 +41,8 @@ var (
 	methodGetUnconfirmedTransactions = serviceName.NewMethod("GetUnconfirmedTransactions", nil)
 	// methodGetGenesisDocument is the GetGenesisDocument method.
 	methodGetGenesisDocument = serviceName.NewMethod("GetGenesisDocument", nil)
+	// methodGetChainContext is the GetChainContext method.
+	methodGetChainContext = serviceName.NewMethod("GetChainContext", nil)
 	// methodGetStatus is the GetStatus method.
 	methodGetStatus = serviceName.NewMethod("GetStatus", nil)
 
@@ -102,6 +104,10 @@ var (
 			{
 				MethodName: methodGetGenesisDocument.ShortName(),
 				Handler:    handlerGetGenesisDocument,
+			},
+			{
+				MethodName: methodGetChainContext.ShortName(),
+				Handler:    handlerGetChainContext,
 			},
 			{
 				MethodName: methodGetStatus.ShortName(),
@@ -349,6 +355,25 @@ func handlerGetGenesisDocument( // nolint: golint
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(ClientBackend).GetGenesisDocument(ctx)
+	}
+	return interceptor(ctx, nil, info, handler)
+}
+
+func handlerGetChainContext( // nolint: golint
+	srv interface{},
+	ctx context.Context,
+	dec func(interface{}) error,
+	interceptor grpc.UnaryServerInterceptor,
+) (interface{}, error) {
+	if interceptor == nil {
+		return srv.(ClientBackend).GetChainContext(ctx)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: methodGetChainContext.FullName(),
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ClientBackend).GetChainContext(ctx)
 	}
 	return interceptor(ctx, nil, info, handler)
 }
@@ -712,6 +737,14 @@ func (c *consensusClient) GetGenesisDocument(ctx context.Context) (*genesis.Docu
 		return nil, err
 	}
 	return &rsp, nil
+}
+
+func (c *consensusClient) GetChainContext(ctx context.Context) (string, error) {
+	var rsp string
+	if err := c.conn.Invoke(ctx, methodGetChainContext.FullName(), nil, &rsp); err != nil {
+		return "", err
+	}
+	return rsp, nil
 }
 
 func (c *consensusClient) GetStatus(ctx context.Context) (*Status, error) {

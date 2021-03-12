@@ -153,6 +153,11 @@ func (srv *seedService) GetGenesisDocument(ctx context.Context) (*genesis.Docume
 }
 
 // Implements Backend.
+func (srv *seedService) GetChainContext(ctx context.Context) (string, error) {
+	return srv.doc.ChainContext(), nil
+}
+
+// Implements Backend.
 func (srv *seedService) GetAddresses() ([]node.ConsensusAddress, error) {
 	u, err := tmcommon.GetExternalAddress()
 	if err != nil {

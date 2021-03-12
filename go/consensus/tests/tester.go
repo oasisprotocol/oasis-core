@@ -36,6 +36,10 @@ func ConsensusImplementationTests(t *testing.T, backend consensus.ClientBackend)
 	require.NoError(err, "GetGenesisDocument")
 	require.NotNil(genDoc, "returned genesis document should not be nil")
 
+	chainCtx, err := backend.GetChainContext(ctx)
+	require.NoError(err, "GetChainContext")
+	require.EqualValues(genDoc.ChainContext(), chainCtx, "returned chain context should be correct")
+
 	blk, err := backend.GetBlock(ctx, consensus.HeightLatest)
 	require.NoError(err, "GetBlock")
 	require.NotNil(blk, "returned block should not be nil")

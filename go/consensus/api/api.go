@@ -129,6 +129,9 @@ type ClientBackend interface {
 	// GetGenesisDocument returns the original genesis document.
 	GetGenesisDocument(ctx context.Context) (*genesis.Document, error)
 
+	// GetChainContext returns the chain domain separation context.
+	GetChainContext(ctx context.Context) (string, error)
+
 	// GetStatus returns the current status overview.
 	GetStatus(ctx context.Context) (*Status, error)
 
@@ -197,6 +200,9 @@ type Status struct { // nolint: maligned
 	LastRetainedHeight int64 `json:"last_retained_height"`
 	// LastRetainedHash is the hash of the oldest retained block.
 	LastRetainedHash []byte `json:"last_retained_hash"`
+
+	// ChainContext is the chain domain separation context.
+	ChainContext string `json:"chain_context"`
 
 	// IsValidator returns whether the current node is part of the validator set.
 	IsValidator bool `json:"is_validator"`
