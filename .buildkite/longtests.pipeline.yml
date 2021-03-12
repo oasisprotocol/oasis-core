@@ -99,8 +99,7 @@ steps:
       # libp2p logging.
       IPFS_LOGGING: debug
     agents:
-      queue: default-daily
-      buildkite_agent_class: stable
+      daily: true
     # NOTE: we actually don't want to retry, but this is the only way that we
     # can execute the notify step only if tests failed.
     retry:
