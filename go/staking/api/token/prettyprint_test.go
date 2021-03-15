@@ -59,23 +59,35 @@ func TestPrettyPrintAmount(t *testing.T) {
 		symbol              string
 		addExp              bool
 		exp                 uint8
+		addSign             bool
+		sign                string
 	}{
-		{"CORE 10000000000.0", quantity.NewFromUint64(10000000000000000000), true, "CORE", true, 9},
-		{"CORE 100.0", quantity.NewFromUint64(100000000000), true, "CORE", true, 9},
-		{"CORE 7999217230.1196", quantity.NewFromUint64(7999217230119600000), true, "CORE", true, 9},
-		{"CORE 0.0", quantity.NewFromUint64(0), true, "CORE", true, 9},
+		{"CORE 10000000000.0", quantity.NewFromUint64(10000000000000000000), true, "CORE", true, 9, false, ""},
+		{"CORE 100.0", quantity.NewFromUint64(100000000000), true, "CORE", true, 9, false, ""},
+		{"CORE 7999217230.1196", quantity.NewFromUint64(7999217230119600000), true, "CORE", true, 9, false, ""},
+		{"CORE 0.0", quantity.NewFromUint64(0), true, "CORE", true, 9, false, ""},
+		{"CORE -100.0", quantity.NewFromUint64(100000000000), true, "CORE", true, 9, true, "-"},
+		{"CORE +100.0", quantity.NewFromUint64(100000000000), true, "CORE", true, 9, true, "+"},
 		// Check large and small token's value base-10 exponents.
-		{"BIG 10.0", quantity.NewFromUint64(10000000000000000000), true, "BIG", true, 18},
-		{"SMALL 10000000000000000001.0", quantity.NewFromUint64(10000000000000000001), true, "SMALL", true, 0},
+		{"BIG 10.0", quantity.NewFromUint64(10000000000000000000), true, "BIG", true, 18, false, ""},
+		{"SMALL -10000000000000000001.0", quantity.NewFromUint64(10000000000000000001), true, "SMALL", true, 0, true, "-"},
 		// Check invalid token's value base-10 exponent.
-		{"100000000 base units", quantity.NewFromUint64(100000000), true, "TOOBIG", true, 21},
+		{"100000000 base units", quantity.NewFromUint64(100000000), true, "TOOBIG", true, 21, false, ""},
 		// Check invalid token's ticker symbol.
-		{"100000 base units", quantity.NewFromUint64(100000), true, "SOMETHINGLONG", true, 6},
-		{"100000 base units", quantity.NewFromUint64(100000), true, "", true, 6},
-		// Check missing combinations of token's symbol and value exponent.
-		{"100000 base units", quantity.NewFromUint64(100000), false, "MISSING", true, 6},
-		{"100000 base units", quantity.NewFromUint64(100000), true, "NOEXP", false, 0},
-		{"100000 base units", quantity.NewFromUint64(100000), false, "MISSING", false, 0},
+		{"-100000 base units", quantity.NewFromUint64(100000), true, "SOMETHINGLONG", true, 6, true, "-"},
+		{"100000 base units", quantity.NewFromUint64(100000), true, "", true, 6, false, ""},
+		// Check invalid token's value sign.
+		{"CORE 100.0", quantity.NewFromUint64(100000000000), true, "CORE", true, 9, true, ""},
+		{"CORE 100.0", quantity.NewFromUint64(100000000000), true, "CORE", true, 9, true, "--"},
+		{"CORE 100.0", quantity.NewFromUint64(100000000000), true, "CORE", true, 9, true, "++"},
+		{"CORE 100.0", quantity.NewFromUint64(100000000000), true, "CORE", true, 9, true, "?"},
+		// Check missing combinations of token's symbol, value exponent and value sign.
+		{"+100000 base units", quantity.NewFromUint64(100000), false, "MISSING", true, 6, true, "+"},
+		{"-100000 base units", quantity.NewFromUint64(100000), true, "NOEXP", false, 0, true, "-"},
+		{"100000 base units", quantity.NewFromUint64(100000), false, "MISSING", false, 0, true, "?"},
+		{"100000 base units", quantity.NewFromUint64(100000), false, "MISSING", true, 6, false, ""},
+		{"100000 base units", quantity.NewFromUint64(100000), true, "NOEXP", false, 0, false, ""},
+		{"100000 base units", quantity.NewFromUint64(100000), false, "MISSING", false, 0, false, ""},
 	} {
 		ctx := context.Background()
 		if t.addSymbol {
@@ -83,6 +95,9 @@ func TestPrettyPrintAmount(t *testing.T) {
 		}
 		if t.addExp {
 			ctx = context.WithValue(ctx, prettyprint.ContextKeyTokenValueExponent, t.exp)
+		}
+		if t.addSign {
+			ctx = context.WithValue(ctx, prettyprint.ContextKeyTokenValueSign, t.sign)
 		}
 		var actualPrettyPrint bytes.Buffer
 		PrettyPrintAmount(ctx, *t.amount, &actualPrettyPrint)
