@@ -8,7 +8,9 @@ import (
 
 	"github.com/oasisprotocol/oasis-core/go/common"
 	abciAPI "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/api"
+	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
 	"github.com/oasisprotocol/oasis-core/go/roothash/api"
+	"github.com/oasisprotocol/oasis-core/go/roothash/api/block"
 )
 
 func TestEvidence(t *testing.T) {
@@ -110,4 +112,42 @@ func TestEvidence(t *testing.T) {
 	b, err = s.EvidenceHashExists(ctx, rt1ID, 20, h)
 	require.NoError(err, "EvidenceHashExists")
 	require.True(b, "Not expired evidence hash should still exist")
+}
+
+func TestSeparateRuntimeRoots(t *testing.T) {
+	require := require.New(t)
+
+	now := time.Unix(1580461674, 0)
+	appState := abciAPI.NewMockApplicationState(&abciAPI.MockApplicationStateConfig{})
+	ctx := appState.NewContext(abciAPI.ContextBeginBlock, now)
+	defer ctx.Close()
+
+	st := NewMutableState(ctx.State())
+
+	var runtime registry.Runtime
+	err := runtime.ID.UnmarshalHex("8000000000000000000000000000000000000000000000000000000000000000")
+	require.NoError(err, "UnmarshalHex")
+
+	blk := block.NewGenesisBlock(runtime.ID, 0)
+	err = blk.Header.StateRoot.UnmarshalHex("0000000000000000000000000000000000000000000000000000000000000001")
+	require.NoError(err, "UnmarshalHex")
+	err = blk.Header.IORoot.UnmarshalHex("0000000000000000000000000000000000000000000000000000000000000002")
+	require.NoError(err, "UnmarshalHex")
+	err = st.SetRuntimeState(ctx, &api.RuntimeState{
+		Runtime:            &runtime,
+		GenesisBlock:       blk,
+		CurrentBlock:       blk,
+		CurrentBlockHeight: 1,
+		LastNormalRound:    0,
+		LastNormalHeight:   1,
+	})
+	require.NoError(err, "SetRuntimeState")
+
+	stateRoot, err := st.StateRoot(ctx, runtime.ID)
+	require.NoError(err, "StateRoot")
+	require.EqualValues(blk.Header.StateRoot, stateRoot)
+
+	ioRoot, err := st.IORoot(ctx, runtime.ID)
+	require.NoError(err, "IORoot")
+	require.EqualValues(blk.Header.IORoot, ioRoot)
 }
