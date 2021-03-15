@@ -412,11 +412,14 @@ type Allow struct {
 func (aw Allow) PrettyPrint(ctx context.Context, prefix string, w io.Writer) {
 	fmt.Fprintf(w, "%sBeneficiary:   %s\n", prefix, aw.Beneficiary)
 
-	var sign string
+	sign := "+"
 	if aw.Negative {
 		sign = "-"
 	}
-	fmt.Fprintf(w, "%sAmount Change: %s%s\n", prefix, sign, aw.AmountChange)
+	ctx = context.WithValue(ctx, prettyprint.ContextKeyTokenValueSign, sign)
+	fmt.Fprintf(w, "%sAmount change: ", prefix)
+	token.PrettyPrintAmount(ctx, aw.AmountChange, w)
+	fmt.Fprintln(w)
 }
 
 // PrettyType returns a representation of Allow that can be used for pretty printing.
@@ -438,7 +441,10 @@ type Withdraw struct {
 // PrettyPrint writes a pretty-printed representation of Withdraw to the given writer.
 func (wt Withdraw) PrettyPrint(ctx context.Context, prefix string, w io.Writer) {
 	fmt.Fprintf(w, "%sFrom:   %s\n", prefix, wt.From)
-	fmt.Fprintf(w, "%sAmount: %s\n", prefix, wt.Amount)
+
+	fmt.Fprintf(w, "%sAmount: ", prefix)
+	token.PrettyPrintAmount(ctx, wt.Amount, w)
+	fmt.Fprintln(w)
 }
 
 // PrettyType returns a representation of Withdraw that can be used for pretty printing.
