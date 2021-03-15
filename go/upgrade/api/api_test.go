@@ -52,6 +52,7 @@ func TestValidateBasic(t *testing.T) {
 		{
 			msg: "invalid upgrade method should fail",
 			d: &Descriptor{
+				Versioned:  cbor.NewVersioned(LatestDescriptorVersion),
 				Method:     42,
 				Epoch:      100,
 				Identifier: cbor.Marshal(version.Versions),
@@ -61,6 +62,7 @@ func TestValidateBasic(t *testing.T) {
 		{
 			msg: "invalid epoch should fail",
 			d: &Descriptor{
+				Versioned:  cbor.NewVersioned(LatestDescriptorVersion),
 				Method:     UpgradeMethodInternal,
 				Epoch:      0,
 				Identifier: cbor.Marshal(version.Versions),
@@ -70,6 +72,7 @@ func TestValidateBasic(t *testing.T) {
 		{
 			msg: "invalid identifier should fail",
 			d: &Descriptor{
+				Versioned:  cbor.NewVersioned(LatestDescriptorVersion),
 				Method:     UpgradeMethodInternal,
 				Epoch:      42,
 				Identifier: cbor.Marshal("invalid"),
@@ -77,8 +80,29 @@ func TestValidateBasic(t *testing.T) {
 			shouldErr: true,
 		},
 		{
+			msg: "invalid descriptor version should fail",
+			d: &Descriptor{
+				Versioned:  cbor.NewVersioned(maxDescriptorVersion + 1),
+				Method:     UpgradeMethodInternal,
+				Epoch:      42,
+				Identifier: cbor.Marshal(version.Versions),
+			},
+			shouldErr: true,
+		},
+		{
+			msg: "invalid descriptor version should fail",
+			d: &Descriptor{
+				Versioned:  cbor.NewVersioned(minDescriptorVersion - 1),
+				Method:     UpgradeMethodInternal,
+				Epoch:      42,
+				Identifier: cbor.Marshal(version.Versions),
+			},
+			shouldErr: true,
+		},
+		{
 			msg: "valid internal descriptor should not fail",
 			d: &Descriptor{
+				Versioned:  cbor.NewVersioned(LatestDescriptorVersion),
 				Method:     UpgradeMethodInternal,
 				Epoch:      42,
 				Identifier: cbor.Marshal(version.Versions),
@@ -145,14 +169,26 @@ func TestEquals(t *testing.T) {
 			equals: false,
 		},
 		{
+			msg: "different version should not be equal",
+			d1: &Descriptor{
+				Versioned: cbor.NewVersioned(123),
+			},
+			d2: &Descriptor{
+				Versioned: cbor.NewVersioned(LatestDescriptorVersion),
+			},
+			equals: false,
+		},
+		{
 			msg: "same descriptors should be equal",
 			d1: &Descriptor{
+				Versioned:  cbor.NewVersioned(LatestDescriptorVersion),
 				Name:       "d",
 				Method:     UpgradeMethodInternal,
 				Epoch:      42,
 				Identifier: cbor.Marshal(version.Versions),
 			},
 			d2: &Descriptor{
+				Versioned:  cbor.NewVersioned(LatestDescriptorVersion),
 				Name:       "d",
 				Method:     UpgradeMethodInternal,
 				Epoch:      42,
@@ -179,6 +215,7 @@ func TestEnsureCompatible(t *testing.T) {
 		{
 			msg: "different identifier should fail",
 			d: &Descriptor{
+				Versioned:  cbor.NewVersioned(LatestDescriptorVersion),
 				Method:     UpgradeMethodInternal,
 				Epoch:      100,
 				Identifier: cbor.Marshal(version.ProtocolVersions{RuntimeHostProtocol: version.FromU64(42)}),
@@ -188,6 +225,7 @@ func TestEnsureCompatible(t *testing.T) {
 		{
 			msg: "matching identifier should not fail",
 			d: &Descriptor{
+				Versioned:  cbor.NewVersioned(LatestDescriptorVersion),
 				Method:     UpgradeMethodInternal,
 				Epoch:      42,
 				Identifier: cbor.Marshal(version.Versions),

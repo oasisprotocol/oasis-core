@@ -41,6 +41,14 @@ const (
 
 	// InvalidUpgradeHeight means the upgrade epoch hasn't been reached yet.
 	InvalidUpgradeHeight = int64(0)
+
+	// LatestDescriptorVersion is the latest upgrade descriptor version that should be used for
+	// descriptors.
+	LatestDescriptorVersion = 1
+
+	// Minimum and maximum descriptor versions that are allowed.
+	minDescriptorVersion = 1
+	maxDescriptorVersion = LatestDescriptorVersion
 )
 
 var (
@@ -99,7 +107,9 @@ func (m *UpgradeMethod) UnmarshalText(text []byte) error {
 }
 
 // Descriptor describes an upgrade.
-type Descriptor struct {
+type Descriptor struct { // nolint: maligned
+	cbor.Versioned
+
 	// Name is the name of the upgrade. It should be derived from the node version.
 	Name string `json:"name"`
 	// Method is the upgrade method that should be used for this upgrade.
@@ -112,6 +122,9 @@ type Descriptor struct {
 
 // Equals compares descriptors for equality.
 func (d *Descriptor) Equals(other *Descriptor) bool {
+	if d.V != other.V {
+		return false
+	}
 	if d.Name != other.Name {
 		return false
 	}
@@ -129,6 +142,12 @@ func (d *Descriptor) Equals(other *Descriptor) bool {
 
 // ValidateBasic does basic validation checks of the upgrade descriptor.
 func (d Descriptor) ValidateBasic() error {
+	if d.V < minDescriptorVersion || d.V > maxDescriptorVersion {
+		return fmt.Errorf("invalid upgrade descriptor version (min: %d max: %d)",
+			minDescriptorVersion,
+			maxDescriptorVersion,
+		)
+	}
 	switch d.Method {
 	case UpgradeMethodInternal:
 		var descriptorVersion version.ProtocolVersions

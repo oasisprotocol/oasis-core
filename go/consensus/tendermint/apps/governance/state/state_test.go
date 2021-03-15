@@ -35,6 +35,7 @@ func initProposals(require *require.Assertions, ctx *abciAPI.Context, s *Mutable
 			Content: governance.ProposalContent{
 				Upgrade: &governance.UpgradeProposal{
 					Descriptor: upgrade.Descriptor{
+						Versioned:  cbor.NewVersioned(upgrade.LatestDescriptorVersion),
 						Name:       "test",
 						Identifier: cbor.Marshal(version.ProtocolVersions{ConsensusProtocol: version.FromU64(1)}),
 						Epoch:      beacon.EpochTime(100),
@@ -51,6 +52,7 @@ func initProposals(require *require.Assertions, ctx *abciAPI.Context, s *Mutable
 			Content: governance.ProposalContent{
 				Upgrade: &governance.UpgradeProposal{
 					Descriptor: upgrade.Descriptor{
+						Versioned:  cbor.NewVersioned(upgrade.LatestDescriptorVersion),
 						Name:       "test2",
 						Identifier: cbor.Marshal(version.ProtocolVersions{ConsensusProtocol: version.FromU64(2)}),
 						Epoch:      beacon.EpochTime(200),
@@ -67,6 +69,7 @@ func initProposals(require *require.Assertions, ctx *abciAPI.Context, s *Mutable
 			Content: governance.ProposalContent{
 				Upgrade: &governance.UpgradeProposal{
 					Descriptor: upgrade.Descriptor{
+						Versioned:  cbor.NewVersioned(upgrade.LatestDescriptorVersion),
 						Name:       "test3",
 						Identifier: cbor.Marshal(version.ProtocolVersions{ConsensusProtocol: version.FromU64(3)}),
 						Epoch:      beacon.EpochTime(300),
@@ -83,6 +86,7 @@ func initProposals(require *require.Assertions, ctx *abciAPI.Context, s *Mutable
 			Content: governance.ProposalContent{
 				Upgrade: &governance.UpgradeProposal{
 					Descriptor: upgrade.Descriptor{
+						Versioned:  cbor.NewVersioned(upgrade.LatestDescriptorVersion),
 						Name:       "test4",
 						Identifier: cbor.Marshal(version.ProtocolVersions{ConsensusProtocol: version.FromU64(4)}),
 						Epoch:      beacon.EpochTime(300),

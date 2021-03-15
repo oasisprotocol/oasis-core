@@ -152,6 +152,7 @@ func testProposals(t *testing.T, backend api.Backend, consensus consensusAPI.Bac
 	proposal = &api.ProposalContent{
 		Upgrade: &api.UpgradeProposal{
 			Descriptor: upgrade.Descriptor{
+				Versioned:  cbor.NewVersioned(upgrade.LatestDescriptorVersion),
 				Identifier: cbor.Marshal(version.Versions),
 				Epoch:      currentEpoch + 200,
 				Method:     upgrade.UpgradeMethodInternal,

@@ -141,6 +141,7 @@ func (sc *dumpRestoreImpl) Run(childEnv *env.Env) error {
 	content := &governance.ProposalContent{
 		Upgrade: &governance.UpgradeProposal{
 			Descriptor: upgrade.Descriptor{
+				Versioned:  cbor.NewVersioned(upgrade.LatestDescriptorVersion),
 				Identifier: cbor.Marshal(version.ProtocolVersions{}),
 				Epoch:      200,
 				Method:     upgrade.UpgradeMethodInternal,

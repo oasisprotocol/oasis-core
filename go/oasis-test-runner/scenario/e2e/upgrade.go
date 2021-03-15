@@ -32,6 +32,7 @@ var (
 	NodeUpgrade scenario.Scenario = newNodeUpgradeImpl()
 
 	malformedDescriptor = []byte(`{
+		"v": 1,
 		"name": "nifty upgrade",
 		"epoch": 1,
 		"method": "nifty",
@@ -39,6 +40,7 @@ var (
 	}`)
 
 	baseDescriptor = upgrade.Descriptor{
+		Versioned:  cbor.NewVersioned(upgrade.LatestDescriptorVersion),
 		Name:       "base",
 		Epoch:      beacon.EpochTime(1),
 		Method:     upgrade.UpgradeMethodInternal,

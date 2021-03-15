@@ -69,6 +69,7 @@ func main() {
 							governance.NewSubmitProposalTx(nonce, fee, &governance.ProposalContent{
 								Upgrade: &governance.UpgradeProposal{
 									Descriptor: api.Descriptor{
+										Versioned:  cbor.NewVersioned(api.LatestDescriptorVersion),
 										Name:       name,
 										Method:     api.UpgradeMethodInternal,
 										Identifier: cbor.Marshal(identifier),

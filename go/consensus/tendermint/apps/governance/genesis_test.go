@@ -90,10 +90,15 @@ func TestInitChain(t *testing.T) {
 						ClosesAt:     20,
 						State:        governance.StateRejected,
 						InvalidVotes: 3,
-						Content:      governance.ProposalContent{Upgrade: &governance.UpgradeProposal{Descriptor: upgrade.Descriptor{Method: upgrade.UpgradeMethodInternal}}},
-						CreatedAt:    10,
-						Deposit:      *quantity.NewFromUint64(10),
-						Submitter:    addresses[0],
+						Content: governance.ProposalContent{Upgrade: &governance.UpgradeProposal{
+							Descriptor: upgrade.Descriptor{
+								Versioned: cbor.NewVersioned(upgrade.LatestDescriptorVersion),
+								Method:    upgrade.UpgradeMethodInternal,
+							},
+						}},
+						CreatedAt: 10,
+						Deposit:   *quantity.NewFromUint64(10),
+						Submitter: addresses[0],
 						Results: map[governance.Vote]quantity.Quantity{
 							governance.VoteNo: *quantity.NewFromUint64(10),
 						},
@@ -104,10 +109,17 @@ func TestInitChain(t *testing.T) {
 						ClosesAt:     20,
 						State:        governance.StatePassed,
 						InvalidVotes: 0,
-						Content:      governance.ProposalContent{Upgrade: &governance.UpgradeProposal{Descriptor: upgrade.Descriptor{Method: upgrade.UpgradeMethodInternal, Identifier: identifier, Epoch: 30}}},
-						CreatedAt:    10,
-						Deposit:      *quantity.NewFromUint64(10),
-						Submitter:    addresses[1],
+						Content: governance.ProposalContent{Upgrade: &governance.UpgradeProposal{
+							Descriptor: upgrade.Descriptor{
+								Versioned:  cbor.NewVersioned(upgrade.LatestDescriptorVersion),
+								Method:     upgrade.UpgradeMethodInternal,
+								Identifier: identifier,
+								Epoch:      30,
+							},
+						}},
+						CreatedAt: 10,
+						Deposit:   *quantity.NewFromUint64(10),
+						Submitter: addresses[1],
 						Results: map[governance.Vote]quantity.Quantity{
 							governance.VoteYes: *quantity.NewFromUint64(10),
 						},
@@ -132,10 +144,17 @@ func TestInitChain(t *testing.T) {
 						ClosesAt:     100,
 						State:        governance.StateActive,
 						InvalidVotes: 0,
-						Content:      governance.ProposalContent{Upgrade: &governance.UpgradeProposal{Descriptor: upgrade.Descriptor{Method: upgrade.UpgradeMethodInternal, Identifier: identifier, Epoch: 10000}}},
-						CreatedAt:    20,
-						Deposit:      *quantity.NewFromUint64(10),
-						Submitter:    addresses[3],
+						Content: governance.ProposalContent{Upgrade: &governance.UpgradeProposal{
+							Descriptor: upgrade.Descriptor{
+								Versioned:  cbor.NewVersioned(upgrade.LatestDescriptorVersion),
+								Method:     upgrade.UpgradeMethodInternal,
+								Identifier: identifier,
+								Epoch:      10000,
+							},
+						}},
+						CreatedAt: 20,
+						Deposit:   *quantity.NewFromUint64(10),
+						Submitter: addresses[3],
 					},
 					// Closed accepted upgrade proposal.
 					{
@@ -143,10 +162,19 @@ func TestInitChain(t *testing.T) {
 						ClosesAt:     70,
 						State:        governance.StatePassed,
 						InvalidVotes: 0,
-						Content:      governance.ProposalContent{Upgrade: &governance.UpgradeProposal{Descriptor: upgrade.Descriptor{Method: upgrade.UpgradeMethodInternal, Identifier: identifier, Epoch: 1000}}},
-						CreatedAt:    20,
-						Deposit:      *quantity.NewFromUint64(10),
-						Submitter:    addresses[4],
+						Content: governance.ProposalContent{
+							Upgrade: &governance.UpgradeProposal{
+								Descriptor: upgrade.Descriptor{
+									Versioned:  cbor.NewVersioned(upgrade.LatestDescriptorVersion),
+									Method:     upgrade.UpgradeMethodInternal,
+									Identifier: identifier,
+									Epoch:      1000,
+								},
+							},
+						},
+						CreatedAt: 20,
+						Deposit:   *quantity.NewFromUint64(10),
+						Submitter: addresses[4],
 						Results: map[governance.Vote]quantity.Quantity{
 							governance.VoteYes: *quantity.NewFromUint64(10),
 						},
@@ -157,10 +185,19 @@ func TestInitChain(t *testing.T) {
 						ClosesAt:     70,
 						State:        governance.StatePassed,
 						InvalidVotes: 0,
-						Content:      governance.ProposalContent{Upgrade: &governance.UpgradeProposal{Descriptor: upgrade.Descriptor{Method: upgrade.UpgradeMethodInternal, Identifier: identifier, Epoch: 2000}}},
-						CreatedAt:    60,
-						Deposit:      *quantity.NewFromUint64(10),
-						Submitter:    addresses[4],
+						Content: governance.ProposalContent{
+							Upgrade: &governance.UpgradeProposal{
+								Descriptor: upgrade.Descriptor{
+									Versioned:  cbor.NewVersioned(upgrade.LatestDescriptorVersion),
+									Method:     upgrade.UpgradeMethodInternal,
+									Identifier: identifier,
+									Epoch:      2000,
+								},
+							},
+						},
+						CreatedAt: 60,
+						Deposit:   *quantity.NewFromUint64(10),
+						Submitter: addresses[4],
 						Results: map[governance.Vote]quantity.Quantity{
 							governance.VoteYes: *quantity.NewFromUint64(10),
 						},
@@ -171,10 +208,17 @@ func TestInitChain(t *testing.T) {
 						ClosesAt:     70,
 						State:        governance.StatePassed,
 						InvalidVotes: 0,
-						Content:      governance.ProposalContent{Upgrade: &governance.UpgradeProposal{Descriptor: upgrade.Descriptor{Method: upgrade.UpgradeMethodInternal, Identifier: identifier, Epoch: 2000}}},
-						CreatedAt:    60,
-						Deposit:      *quantity.NewFromUint64(10),
-						Submitter:    addresses[4],
+						Content: governance.ProposalContent{Upgrade: &governance.UpgradeProposal{
+							Descriptor: upgrade.Descriptor{
+								Versioned:  cbor.NewVersioned(upgrade.LatestDescriptorVersion),
+								Method:     upgrade.UpgradeMethodInternal,
+								Identifier: identifier,
+								Epoch:      2000,
+							},
+						}},
+						CreatedAt: 60,
+						Deposit:   *quantity.NewFromUint64(10),
+						Submitter: addresses[4],
 						Results: map[governance.Vote]quantity.Quantity{
 							governance.VoteYes: *quantity.NewFromUint64(10),
 						},
@@ -284,10 +328,18 @@ func TestGenesis(t *testing.T) {
 			ClosesAt:     20,
 			State:        governance.StateRejected,
 			InvalidVotes: 3,
-			Content:      governance.ProposalContent{Upgrade: &governance.UpgradeProposal{Descriptor: upgrade.Descriptor{Method: upgrade.UpgradeMethodInternal, Identifier: identifier, Epoch: 30}}},
-			CreatedAt:    10,
-			Deposit:      *quantity.NewFromUint64(10),
-			Submitter:    addresses[0],
+			Content: governance.ProposalContent{Upgrade: &governance.UpgradeProposal{
+				Descriptor: upgrade.Descriptor{
+
+					Versioned:  cbor.NewVersioned(upgrade.LatestDescriptorVersion),
+					Method:     upgrade.UpgradeMethodInternal,
+					Identifier: identifier,
+					Epoch:      30,
+				},
+			}},
+			CreatedAt: 10,
+			Deposit:   *quantity.NewFromUint64(10),
+			Submitter: addresses[0],
 			Results: map[governance.Vote]quantity.Quantity{
 				governance.VoteNo: *quantity.NewFromUint64(10),
 			},
@@ -298,10 +350,17 @@ func TestGenesis(t *testing.T) {
 			ClosesAt:     20,
 			State:        governance.StatePassed,
 			InvalidVotes: 0,
-			Content:      governance.ProposalContent{Upgrade: &governance.UpgradeProposal{Descriptor: upgrade.Descriptor{Method: upgrade.UpgradeMethodInternal, Identifier: identifier, Epoch: 30}}},
-			CreatedAt:    10,
-			Deposit:      *quantity.NewFromUint64(10),
-			Submitter:    addresses[1],
+			Content: governance.ProposalContent{Upgrade: &governance.UpgradeProposal{
+				Descriptor: upgrade.Descriptor{
+					Versioned:  cbor.NewVersioned(upgrade.LatestDescriptorVersion),
+					Method:     upgrade.UpgradeMethodInternal,
+					Identifier: identifier,
+					Epoch:      30,
+				},
+			}},
+			CreatedAt: 10,
+			Deposit:   *quantity.NewFromUint64(10),
+			Submitter: addresses[1],
 			Results: map[governance.Vote]quantity.Quantity{
 				governance.VoteYes: *quantity.NewFromUint64(10),
 			},
@@ -326,10 +385,17 @@ func TestGenesis(t *testing.T) {
 			ClosesAt:     100,
 			State:        governance.StateActive,
 			InvalidVotes: 0,
-			Content:      governance.ProposalContent{Upgrade: &governance.UpgradeProposal{Descriptor: upgrade.Descriptor{Method: upgrade.UpgradeMethodInternal, Identifier: identifier, Epoch: 10000}}},
-			CreatedAt:    20,
-			Deposit:      *quantity.NewFromUint64(10),
-			Submitter:    addresses[3],
+			Content: governance.ProposalContent{Upgrade: &governance.UpgradeProposal{
+				Descriptor: upgrade.Descriptor{
+					Versioned:  cbor.NewVersioned(upgrade.LatestDescriptorVersion),
+					Method:     upgrade.UpgradeMethodInternal,
+					Identifier: identifier,
+					Epoch:      10000,
+				},
+			}},
+			CreatedAt: 20,
+			Deposit:   *quantity.NewFromUint64(10),
+			Submitter: addresses[3],
 		},
 		// Closed accepted upgrade proposal.
 		{
@@ -337,10 +403,17 @@ func TestGenesis(t *testing.T) {
 			ClosesAt:     100,
 			State:        governance.StatePassed,
 			InvalidVotes: 0,
-			Content:      governance.ProposalContent{Upgrade: &governance.UpgradeProposal{Descriptor: upgrade.Descriptor{Method: upgrade.UpgradeMethodInternal, Identifier: identifier, Epoch: 1000}}},
-			CreatedAt:    20,
-			Deposit:      *quantity.NewFromUint64(10),
-			Submitter:    addresses[4],
+			Content: governance.ProposalContent{Upgrade: &governance.UpgradeProposal{
+				Descriptor: upgrade.Descriptor{
+					Versioned:  cbor.NewVersioned(upgrade.LatestDescriptorVersion),
+					Method:     upgrade.UpgradeMethodInternal,
+					Identifier: identifier,
+					Epoch:      1000,
+				},
+			}},
+			CreatedAt: 20,
+			Deposit:   *quantity.NewFromUint64(10),
+			Submitter: addresses[4],
 			Results: map[governance.Vote]quantity.Quantity{
 				governance.VoteYes: *quantity.NewFromUint64(10),
 			},

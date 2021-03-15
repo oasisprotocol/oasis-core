@@ -362,6 +362,7 @@ func (sc *governanceConsensusUpgradeImpl) Run(childEnv *env.Env) error { // noli
 	content := &api.ProposalContent{
 		Upgrade: &api.UpgradeProposal{
 			Descriptor: upgrade.Descriptor{
+				Versioned:  cbor.NewVersioned(upgrade.LatestDescriptorVersion),
 				Identifier: cbor.Marshal(identifier),
 				Epoch:      upgradeEpoch,
 				Method:     upgrade.UpgradeMethodInternal,
