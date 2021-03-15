@@ -19,15 +19,15 @@ import (
 	consensusAPI "github.com/oasisprotocol/oasis-core/go/consensus/api"
 	"github.com/oasisprotocol/oasis-core/go/governance/api"
 	staking "github.com/oasisprotocol/oasis-core/go/staking/api"
-	"github.com/oasisprotocol/oasis-core/go/staking/tests/debug"
+	stakingTests "github.com/oasisprotocol/oasis-core/go/staking/tests"
 	upgrade "github.com/oasisprotocol/oasis-core/go/upgrade/api"
 )
 
 const recvTimeout = 5 * time.Second
 
 var (
-	submitterSigner = debug.DebugStateSrcSigner
-	submitterAddr   = debug.DebugStateSrcAddress
+	submitterSigner = stakingTests.Accounts.GetSigner(1)
+	submitterAddr   = stakingTests.Accounts.GetAddress(1)
 )
 
 // governanceTestsState holds the current state of governance tests.

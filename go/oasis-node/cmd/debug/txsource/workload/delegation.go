@@ -115,7 +115,7 @@ func (d *delegation) doReclaimEscrowTx(ctx context.Context, rng *rand.Rand, stak
 	selectedIdx := perm[fromPermIdx]
 
 	// Query amount of delegated shares for the account.
-	delegations, err := stakingClient.Delegations(ctx, &staking.OwnerQuery{
+	delegations, err := stakingClient.DelegationsFor(ctx, &staking.OwnerQuery{
 		Height: consensus.HeightLatest,
 		Owner:  d.accounts[selectedIdx].address,
 	})
@@ -150,7 +150,7 @@ func (d *delegation) doReclaimEscrowTx(ctx context.Context, rng *rand.Rand, stak
 
 	// Query debonding end epoch for the account.
 	var debondingDelegations map[staking.Address][]*staking.DebondingDelegation
-	debondingDelegations, err = stakingClient.DebondingDelegations(ctx, &staking.OwnerQuery{
+	debondingDelegations, err = stakingClient.DebondingDelegationsFor(ctx, &staking.OwnerQuery{
 		Height: consensus.HeightLatest,
 		Owner:  d.accounts[selectedIdx].address,
 	})

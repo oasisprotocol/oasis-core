@@ -291,6 +291,37 @@ func (s *ImmutableState) DelegationsFor(
 	return delegations, nil
 }
 
+func (s *ImmutableState) DelegationsTo(
+	ctx context.Context,
+	destAddr staking.Address,
+) (map[staking.Address]*staking.Delegation, error) {
+	it := s.is.NewIterator(ctx)
+	defer it.Close()
+
+	delegations := make(map[staking.Address]*staking.Delegation)
+	for it.Seek(delegationKeyFmt.Encode()); it.Valid(); it.Next() {
+		var escrowAddr staking.Address
+		var delegatorAddr staking.Address
+		if !delegationKeyFmt.Decode(it.Key(), &escrowAddr, &delegatorAddr) {
+			break
+		}
+		if !escrowAddr.Equal(destAddr) {
+			continue
+		}
+
+		var del staking.Delegation
+		if err := cbor.Unmarshal(it.Value(), &del); err != nil {
+			return nil, abciAPI.UnavailableStateError(err)
+		}
+
+		delegations[delegatorAddr] = &del
+	}
+	if it.Err() != nil {
+		return nil, abciAPI.UnavailableStateError(it.Err())
+	}
+	return delegations, nil
+}
+
 func (s *ImmutableState) DebondingDelegations(
 	ctx context.Context,
 ) (map[staking.Address]map[staking.Address][]*staking.DebondingDelegation, error) {
@@ -319,6 +350,26 @@ func (s *ImmutableState) DebondingDelegations(
 		return nil, abciAPI.UnavailableStateError(it.Err())
 	}
 	return delegations, nil
+}
+
+func (s *ImmutableState) DebondingDelegation(
+	ctx context.Context,
+	delegatorAddr, escrowAddr staking.Address,
+	epoch beacon.EpochTime,
+) (*staking.DebondingDelegation, error) {
+	value, err := s.is.Get(ctx, debondingDelegationKeyFmt.Encode(&delegatorAddr, &escrowAddr, uint64(epoch)))
+	if err != nil {
+		return nil, abciAPI.UnavailableStateError(err)
+	}
+	if value == nil {
+		return &staking.DebondingDelegation{}, nil
+	}
+
+	var deb staking.DebondingDelegation
+	if err = cbor.Unmarshal(value, &deb); err != nil {
+		return nil, abciAPI.UnavailableStateError(err)
+	}
+	return &deb, nil
 }
 
 func (s *ImmutableState) DebondingDelegationsFor(
@@ -352,24 +403,35 @@ func (s *ImmutableState) DebondingDelegationsFor(
 	return delegations, nil
 }
 
-func (s *ImmutableState) DebondingDelegation(
+func (s *ImmutableState) DebondingDelegationsTo(
 	ctx context.Context,
-	delegatorAddr, escrowAddr staking.Address,
-	epoch beacon.EpochTime,
-) (*staking.DebondingDelegation, error) {
-	value, err := s.is.Get(ctx, debondingDelegationKeyFmt.Encode(&delegatorAddr, &escrowAddr, uint64(epoch)))
-	if err != nil {
-		return nil, abciAPI.UnavailableStateError(err)
-	}
-	if value == nil {
-		return &staking.DebondingDelegation{}, nil
-	}
+	destAddr staking.Address,
+) (map[staking.Address][]*staking.DebondingDelegation, error) {
+	it := s.is.NewIterator(ctx)
+	defer it.Close()
 
-	var deb staking.DebondingDelegation
-	if err = cbor.Unmarshal(value, &deb); err != nil {
-		return nil, abciAPI.UnavailableStateError(err)
+	delegations := make(map[staking.Address][]*staking.DebondingDelegation)
+	for it.Seek(debondingDelegationKeyFmt.Encode()); it.Valid(); it.Next() {
+		var escrowAddr staking.Address
+		var delegatorAddr staking.Address
+		if !debondingDelegationKeyFmt.Decode(it.Key(), &delegatorAddr, &escrowAddr) {
+			break
+		}
+		if !escrowAddr.Equal(destAddr) {
+			continue
+		}
+
+		var deb staking.DebondingDelegation
+		if err := cbor.Unmarshal(it.Value(), &deb); err != nil {
+			return nil, abciAPI.UnavailableStateError(err)
+		}
+
+		delegations[delegatorAddr] = append(delegations[delegatorAddr], &deb)
 	}
-	return &deb, nil
+	if it.Err() != nil {
+		return nil, abciAPI.UnavailableStateError(it.Err())
+	}
+	return delegations, nil
 }
 
 type DebondingQueueEntry struct {

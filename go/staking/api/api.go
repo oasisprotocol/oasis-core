@@ -149,13 +149,29 @@ type Backend interface {
 	// Account returns the account descriptor for the given account.
 	Account(ctx context.Context, query *OwnerQuery) (*Account, error)
 
-	// Delegations returns the list of delegations for the given owner
-	// (delegator).
-	Delegations(ctx context.Context, query *OwnerQuery) (map[Address]*Delegation, error)
+	// DelegationsFor returns the list of (outgoing) delegations for the given
+	// owner (delegator).
+	DelegationsFor(ctx context.Context, query *OwnerQuery) (map[Address]*Delegation, error)
 
-	// DebondingDelegations returns the list of debonding delegations for
-	// the given owner (delegator).
-	DebondingDelegations(ctx context.Context, query *OwnerQuery) (map[Address][]*DebondingDelegation, error)
+	// DelegationsInfosFor returns (outgoing) delegations with additional
+	// information for the given owner (delegator).
+	DelegationInfosFor(ctx context.Context, query *OwnerQuery) (map[Address]*DelegationInfo, error)
+
+	// DelegationsTo returns the list of (incoming) delegations to the given
+	// account.
+	DelegationsTo(ctx context.Context, query *OwnerQuery) (map[Address]*Delegation, error)
+
+	// DebondingDelegationsFor returns the list of (outgoing) debonding
+	// delegations for the given owner (delegator).
+	DebondingDelegationsFor(ctx context.Context, query *OwnerQuery) (map[Address][]*DebondingDelegation, error)
+
+	// DebondingDelegationsInfosFor returns (outgoing) debonding delegations
+	// with additional information for the given owner (delegator).
+	DebondingDelegationInfosFor(ctx context.Context, query *OwnerQuery) (map[Address][]*DebondingDelegationInfo, error)
+
+	// DebondingDelegationsTo returns the list of (incoming) debonding
+	// delegations to the given account.
+	DebondingDelegationsTo(ctx context.Context, query *OwnerQuery) (map[Address][]*DebondingDelegation, error)
 
 	// Allowance looks up the allowance for the given owner/beneficiary combination.
 	Allowance(ctx context.Context, query *AllowanceQuery) (*quantity.Quantity, error)
@@ -937,6 +953,14 @@ type Delegation struct {
 	Shares quantity.Quantity `json:"shares"`
 }
 
+// DelegationInfo is a delegation descriptor with additional information.
+//
+// Additional information contains the share pool the delegation belongs to.
+type DelegationInfo struct {
+	Delegation
+	Pool SharePool `json:"pool"`
+}
+
 // DebondingDelegation is a debonding delegation descriptor.
 type DebondingDelegation struct {
 	Shares        quantity.Quantity `json:"shares"`
@@ -953,6 +977,16 @@ func (d *DebondingDelegation) Merge(other DebondingDelegation) error {
 		return fmt.Errorf("error adding debonding delegation shares: %w", err)
 	}
 	return nil
+}
+
+// DebondingDelegationInfo is a debonding delegation descriptor with additional
+// information.
+//
+// Additional information contains the share pool the debonding delegation
+// belongs to.
+type DebondingDelegationInfo struct {
+	DebondingDelegation
+	Pool SharePool `json:"pool"`
 }
 
 // Genesis is the initial staking state for use in the genesis block.
