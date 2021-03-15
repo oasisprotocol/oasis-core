@@ -78,7 +78,7 @@ func (n *Node) GetRuntimeStatus(ctx context.Context) (map[common.Namespace]contr
 		// Fetch runtime registry descriptor. Do not wait too long for the descriptor to become
 		// available as otherwise we may be blocked until the node is synced.
 		dscCtx, cancel := context.WithTimeout(ctx, 10*time.Millisecond)
-		dsc, err := rt.RegistryDescriptor(dscCtx)
+		dsc, err := rt.ActiveDescriptor(dscCtx)
 		cancel()
 		switch err {
 		case nil:

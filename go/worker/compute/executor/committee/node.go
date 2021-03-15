@@ -337,9 +337,9 @@ func (n *Node) queueBatchBlocking(
 		return errInvalidReceipt
 	}
 	// Make sure there are enough signatures.
-	rt, err := n.commonNode.Runtime.RegistryDescriptor(ctx)
+	rt, err := n.commonNode.Runtime.ActiveDescriptor(ctx)
 	if err != nil {
-		n.logger.Warn("failed to fetch runtime registry descriptor",
+		n.logger.Warn("failed to fetch active runtime descriptor",
 			"err", err,
 		)
 		return p2pError.Permanent(err)
@@ -669,7 +669,7 @@ func (n *Node) proposeTimeoutLocked() error {
 	if n.commonNode.CurrentBlock == nil {
 		return fmt.Errorf("executor: propose timeout error, nil block")
 	}
-	rt, err := n.commonNode.Runtime.RegistryDescriptor(n.ctx)
+	rt, err := n.commonNode.Runtime.ActiveDescriptor(n.roundCtx)
 	if err != nil {
 		return err
 	}
@@ -784,9 +784,6 @@ func (n *Node) handleScheduleBatch(force bool) {
 
 	// Ask the scheduler to get us a scheduled batch.
 	batch := n.scheduler.GetBatch(force)
-	n.logger.Debug("got a batch",
-		"batch", batch,
-	)
 	if len(batch) == 0 && (!force || len(roundResults.Messages) == 0) {
 		return
 	}
@@ -1500,8 +1497,12 @@ func (n *Node) worker() {
 	}
 	defer hrtNotifier.Stop()
 
-	// Initialize transaction scheduling algorithm.
-	runtime, err := n.commonNode.Runtime.RegistryDescriptor(n.ctx)
+	// Initialize transaction scheduling algorithm with latest registry desctiptor.
+	// Note: in case the runtime is already running, the correct active descriptor
+	// is the version at the last epoch transition.
+	// This case will be handled by the first tick from the descriptor updates
+	// channel bellow, which will update the parameters.
+	runtime, err := n.commonNode.Runtime.ActiveDescriptor(n.ctx)
 	if err != nil {
 		n.logger.Error("failed to fetch runtime registry descriptor",
 			"err", err,
@@ -1527,7 +1528,7 @@ func (n *Node) worker() {
 	defer txnScheduleTicker.Stop()
 
 	// Watch runtime descriptor updates.
-	rtCh, rtSub, err := n.commonNode.Runtime.WatchRegistryDescriptor()
+	rtCh, rtSub, err := n.commonNode.Runtime.WatchActiveDescriptor()
 	if err != nil {
 		n.logger.Error("failed to watch runtimes",
 			"err", err,
@@ -1575,6 +1576,8 @@ func (n *Node) worker() {
 				)
 				return
 			}
+			// Update batch flush timeout ticker.
+			txnScheduleTicker.Reset(runtime.TxnScheduler.BatchFlushTimeout)
 		case <-txnScheduleTicker.C:
 			// Force scheduling a batch if possible.
 			n.handleScheduleBatch(true)

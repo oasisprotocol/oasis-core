@@ -336,7 +336,7 @@ func (n *Node) worker() {
 	n.logger.Info("consensus has finished initial synchronization")
 
 	// Wait for the runtime.
-	rt, err := n.Runtime.RegistryDescriptor(n.ctx)
+	rt, err := n.Runtime.ActiveDescriptor(n.ctx)
 	if err != nil {
 		n.logger.Error("failed to wait for registry descriptor",
 			"err", err,

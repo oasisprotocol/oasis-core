@@ -11,7 +11,9 @@ import (
 
 	"github.com/spf13/viper"
 
+	beacon "github.com/oasisprotocol/oasis-core/go/beacon/api"
 	"github.com/oasisprotocol/oasis-core/go/common"
+	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
 	"github.com/oasisprotocol/oasis-core/go/common/identity"
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
 	"github.com/oasisprotocol/oasis-core/go/common/node"
@@ -77,6 +79,13 @@ type Runtime interface {
 	// WatchRegistryDescriptor subscribes to registry descriptor updates.
 	WatchRegistryDescriptor() (<-chan *registry.Runtime, pubsub.ClosableSubscription, error)
 
+	// ActiveDescriptor waits for runtime to be initialized and then returns
+	// currently active runtime descriptor.
+	ActiveDescriptor(ctx context.Context) (*registry.Runtime, error)
+
+	// WatchActiveDescriptor subscribes to runtime active descriptor updates.
+	WatchActiveDescriptor() (<-chan *registry.Runtime, pubsub.ClosableSubscription, error)
+
 	// RegisterStorage sets the given local storage backend for the runtime.
 	RegisterStorage(storage storageAPI.Backend)
 
@@ -102,8 +111,10 @@ type Runtime interface {
 type runtime struct {
 	sync.RWMutex
 
-	id         common.Namespace
-	descriptor *registry.Runtime
+	id                   common.Namespace
+	registryDescriptor   *registry.Runtime
+	activeDescriptor     *registry.Runtime
+	activeDescriptorHash hash.Hash
 
 	consensus    consensus.Backend
 	storage      storageAPI.Backend
@@ -113,9 +124,11 @@ type runtime struct {
 	tagIndexer     *tagindexer.Service
 	indexerStarted bool
 
-	cancelCtx          context.CancelFunc
-	descriptorCh       chan struct{}
-	descriptorNotifier *pubsub.Broker
+	cancelCtx                  context.CancelFunc
+	registryDescriptorCh       chan struct{}
+	registryDescriptorNotifier *pubsub.Broker
+	activeDescriptorCh         chan struct{}
+	activeDescriptorNotifier   *pubsub.Broker
 
 	hostProvisioners map[node.TEEHardware]runtimeHost.Provisioner
 	hostConfig       *runtimeHost.Config
@@ -132,17 +145,39 @@ func (r *runtime) RegistryDescriptor(ctx context.Context) (*registry.Runtime, er
 	select {
 	case <-ctx.Done():
 		return nil, ctx.Err()
-	case <-r.descriptorCh:
+	case <-r.registryDescriptorCh:
 	}
 
 	r.RLock()
-	d := r.descriptor
+	d := r.registryDescriptor
 	r.RUnlock()
 	return d, nil
 }
 
+func (r *runtime) ActiveDescriptor(ctx context.Context) (*registry.Runtime, error) {
+	// Wait for the descriptor to be ready.
+	select {
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	case <-r.activeDescriptorCh:
+	}
+
+	r.RLock()
+	d := r.activeDescriptor
+	r.RUnlock()
+	return d, nil
+}
+
+func (r *runtime) WatchActiveDescriptor() (<-chan *registry.Runtime, pubsub.ClosableSubscription, error) {
+	sub := r.activeDescriptorNotifier.Subscribe()
+	ch := make(chan *registry.Runtime)
+	sub.Unwrap(ch)
+
+	return ch, sub, nil
+}
+
 func (r *runtime) WatchRegistryDescriptor() (<-chan *registry.Runtime, pubsub.ClosableSubscription, error) {
-	sub := r.descriptorNotifier.Subscribe()
+	sub := r.registryDescriptorNotifier.Subscribe()
 	ch := make(chan *registry.Runtime)
 	sub.Unwrap(ch)
 
@@ -221,33 +256,96 @@ func (r *runtime) stop() {
 	r.history.Close()
 }
 
-func (r *runtime) watchUpdates(ctx context.Context, ch <-chan *registry.Runtime, sub pubsub.ClosableSubscription) {
-	defer sub.Close()
+func (r *runtime) updateActiveDescriptor(ctx context.Context) bool {
+	state, err := r.consensus.RootHash().GetRuntimeState(ctx, r.id, consensus.HeightLatest)
+	if err != nil {
+		r.logger.Error("querying roothash state",
+			"err", err,
+		)
+		return false
+	}
 
-	var initialized bool
+	h := hash.NewFrom(state.Runtime)
+	// This is only called from the watchUpdates thread and activeDescriptorHash
+	// is only mutated bellow, so no need for a lock here.
+	if h.Equal(&r.activeDescriptorHash) {
+		r.logger.Debug("active runtime descriptor didn't change",
+			"runtime", state.Runtime,
+			"hash", h,
+		)
+		return false
+	}
+
+	r.logger.Debug("updating active runtime descriptor",
+		"runtime", state.Runtime,
+		"hash", h,
+	)
+	r.Lock()
+	r.activeDescriptor = state.Runtime
+	r.activeDescriptorHash = h
+	r.Unlock()
+
+	r.activeDescriptorNotifier.Broadcast(state.Runtime)
+
+	return true
+}
+
+func (r *runtime) watchUpdates(
+	ctx context.Context,
+	epoCh <-chan beacon.EpochTime,
+	sub pubsub.ClosableSubscription,
+	regCh <-chan *registry.Runtime,
+	regSub pubsub.ClosableSubscription,
+) {
+	defer sub.Close()
+	defer regSub.Close()
+
+	r.logger.Debug("waiting consensus sync")
+	select {
+	case <-ctx.Done():
+		return
+	case <-r.consensus.Synced():
+	}
+	r.logger.Debug("consensus synced")
+
+	var regInitialized, activeInitialized bool
 	for {
 		select {
 		case <-ctx.Done():
 			return
-		case rt := <-ch:
+		case <-epoCh:
+			if up := r.updateActiveDescriptor(ctx); up && !activeInitialized {
+				close(r.activeDescriptorCh)
+				activeInitialized = true
+			}
+		case rt := <-regCh:
 			if !rt.ID.Equal(&r.id) {
 				continue
 			}
 
-			r.logger.Debug("updated runtime descriptor",
+			r.logger.Debug("updating registry runtime descriptor",
 				"runtime", rt,
+				"kind", rt.Kind,
 			)
 
 			r.Lock()
-			r.descriptor = rt
+			r.registryDescriptor = rt
 			r.Unlock()
 
-			if !initialized {
-				close(r.descriptorCh)
-				initialized = true
+			if !regInitialized {
+				close(r.registryDescriptorCh)
+				regInitialized = true
 			}
+			r.registryDescriptorNotifier.Broadcast(rt)
 
-			r.descriptorNotifier.Broadcast(rt)
+			// If this is a compute runtime and the active descriptor is not
+			// initialized, update the active descriptor.
+			if !activeInitialized && rt.Kind == registry.KindCompute {
+				if up := r.updateActiveDescriptor(ctx); up && !activeInitialized {
+					close(r.activeDescriptorCh)
+					activeInitialized = true
+				}
+			}
 		}
 	}
 }
@@ -411,22 +509,27 @@ func newRuntime(
 	consensus consensus.Backend,
 	logger *logging.Logger,
 ) (*runtime, error) {
-	// Start watching this runtime's descriptor.
-	ch, sub, err := consensus.Registry().WatchRuntimes(ctx)
+	ch, sub, err := consensus.Beacon().WatchEpochs(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("runtime/registry: failed to watch epochs %s: %w", id, err)
+	}
+	regCh, regSub, err := consensus.Registry().WatchRuntimes(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("runtime/registry: failed to watch updates for runtime %s: %w", id, err)
 	}
 	watchCtx, cancel := context.WithCancel(ctx)
 
 	rt := &runtime{
-		id:                 id,
-		consensus:          consensus,
-		cancelCtx:          cancel,
-		descriptorCh:       make(chan struct{}),
-		descriptorNotifier: pubsub.NewBroker(true),
-		logger:             logger.With("runtime_id", id),
+		id:                         id,
+		consensus:                  consensus,
+		cancelCtx:                  cancel,
+		registryDescriptorCh:       make(chan struct{}),
+		registryDescriptorNotifier: pubsub.NewBroker(true),
+		activeDescriptorCh:         make(chan struct{}),
+		activeDescriptorNotifier:   pubsub.NewBroker(true),
+		logger:                     logger.With("runtime_id", id),
 	}
-	go rt.watchUpdates(watchCtx, ch, sub)
+	go rt.watchUpdates(watchCtx, ch, sub, regCh, regSub)
 
 	// Configure runtime host if needed.
 	if cfg.Host != nil {
