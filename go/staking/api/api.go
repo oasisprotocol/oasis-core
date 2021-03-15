@@ -441,7 +441,10 @@ type Withdraw struct {
 // PrettyPrint writes a pretty-printed representation of Withdraw to the given writer.
 func (wt Withdraw) PrettyPrint(ctx context.Context, prefix string, w io.Writer) {
 	fmt.Fprintf(w, "%sFrom:   %s\n", prefix, wt.From)
-	fmt.Fprintf(w, "%sAmount: %s\n", prefix, wt.Amount)
+
+	fmt.Fprintf(w, "%sAmount: ", prefix)
+	token.PrettyPrintAmount(ctx, wt.Amount, w)
+	fmt.Fprintln(w)
 }
 
 // PrettyType returns a representation of Withdraw that can be used for pretty printing.
