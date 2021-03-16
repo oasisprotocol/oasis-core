@@ -85,6 +85,9 @@ func (t Transaction) PrettyPrintBody(ctx context.Context, prefix string, w io.Wr
 // PrettyPrint writes a pretty-printed representation of the transaction to the
 // given writer.
 func (t Transaction) PrettyPrint(ctx context.Context, prefix string, w io.Writer) {
+	fmt.Fprintf(w, "%sMethod: %s\n", prefix, t.Method)
+	fmt.Fprintf(w, "%sBody:\n", prefix)
+	t.PrettyPrintBody(ctx, prefix+"  ", w)
 	fmt.Fprintf(w, "%sNonce:  %d\n", prefix, t.Nonce)
 	if t.Fee != nil {
 		fmt.Fprintf(w, "%sFee:\n", prefix)
@@ -92,10 +95,6 @@ func (t Transaction) PrettyPrint(ctx context.Context, prefix string, w io.Writer
 	} else {
 		fmt.Fprintf(w, "%sFee:   none\n", prefix)
 	}
-	fmt.Fprintf(w, "%sMethod: %s\n", prefix, t.Method)
-	fmt.Fprintf(w, "%sBody:\n", prefix)
-	t.PrettyPrintBody(ctx, prefix+"  ", w)
-
 	if genesisHash, ok := ctx.Value(prettyprint.ContextKeyGenesisHash).(hash.Hash); ok {
 		fmt.Println("Other info:")
 		fmt.Printf("  Genesis document's hash: %s\n", genesisHash)

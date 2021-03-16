@@ -62,25 +62,25 @@ func TestPrettyPrintAmount(t *testing.T) {
 		addSign             bool
 		sign                string
 	}{
-		{"CORE 10000000000.0", quantity.NewFromUint64(10000000000000000000), true, "CORE", true, 9, false, ""},
-		{"CORE 100.0", quantity.NewFromUint64(100000000000), true, "CORE", true, 9, false, ""},
-		{"CORE 7999217230.1196", quantity.NewFromUint64(7999217230119600000), true, "CORE", true, 9, false, ""},
-		{"CORE 0.0", quantity.NewFromUint64(0), true, "CORE", true, 9, false, ""},
-		{"CORE -100.0", quantity.NewFromUint64(100000000000), true, "CORE", true, 9, true, "-"},
-		{"CORE +100.0", quantity.NewFromUint64(100000000000), true, "CORE", true, 9, true, "+"},
+		{"10000000000.0 CORE", quantity.NewFromUint64(10000000000000000000), true, "CORE", true, 9, false, ""},
+		{"100.0 CORE", quantity.NewFromUint64(100000000000), true, "CORE", true, 9, false, ""},
+		{"7999217230.1196 CORE", quantity.NewFromUint64(7999217230119600000), true, "CORE", true, 9, false, ""},
+		{"0.0 CORE", quantity.NewFromUint64(0), true, "CORE", true, 9, false, ""},
+		{"-100.0 CORE", quantity.NewFromUint64(100000000000), true, "CORE", true, 9, true, "-"},
+		{"+100.0 CORE", quantity.NewFromUint64(100000000000), true, "CORE", true, 9, true, "+"},
 		// Check large and small token's value base-10 exponents.
-		{"BIG 10.0", quantity.NewFromUint64(10000000000000000000), true, "BIG", true, 18, false, ""},
-		{"SMALL -10000000000000000001.0", quantity.NewFromUint64(10000000000000000001), true, "SMALL", true, 0, true, "-"},
+		{"10.0 BIG", quantity.NewFromUint64(10000000000000000000), true, "BIG", true, 18, false, ""},
+		{"-10000000000000000001.0 SMALL", quantity.NewFromUint64(10000000000000000001), true, "SMALL", true, 0, true, "-"},
 		// Check invalid token's value base-10 exponent.
 		{"100000000 base units", quantity.NewFromUint64(100000000), true, "TOOBIG", true, 21, false, ""},
 		// Check invalid token's ticker symbol.
 		{"-100000 base units", quantity.NewFromUint64(100000), true, "SOMETHINGLONG", true, 6, true, "-"},
 		{"100000 base units", quantity.NewFromUint64(100000), true, "", true, 6, false, ""},
 		// Check invalid token's value sign.
-		{"CORE 100.0", quantity.NewFromUint64(100000000000), true, "CORE", true, 9, true, ""},
-		{"CORE 100.0", quantity.NewFromUint64(100000000000), true, "CORE", true, 9, true, "--"},
-		{"CORE 100.0", quantity.NewFromUint64(100000000000), true, "CORE", true, 9, true, "++"},
-		{"CORE 100.0", quantity.NewFromUint64(100000000000), true, "CORE", true, 9, true, "?"},
+		{"100.0 CORE", quantity.NewFromUint64(100000000000), true, "CORE", true, 9, true, ""},
+		{"100.0 CORE", quantity.NewFromUint64(100000000000), true, "CORE", true, 9, true, "--"},
+		{"100.0 CORE", quantity.NewFromUint64(100000000000), true, "CORE", true, 9, true, "++"},
+		{"100.0 CORE", quantity.NewFromUint64(100000000000), true, "CORE", true, 9, true, "?"},
 		// Check missing combinations of token's symbol, value exponent and value sign.
 		{"+100000 base units", quantity.NewFromUint64(100000), false, "MISSING", true, 6, true, "+"},
 		{"-100000 base units", quantity.NewFromUint64(100000), true, "NOEXP", false, 0, true, "-"},
