@@ -527,10 +527,20 @@ func (w *Worker) registrationStopped() {
 // GetRegistrationStatus returns the node's current registration status.
 func (w *Worker) GetRegistrationStatus(ctx context.Context) (*control.RegistrationStatus, error) {
 	w.RLock()
-	defer w.RUnlock()
-
 	status := new(control.RegistrationStatus)
 	*status = w.status
+	w.RUnlock()
+
+	if status == nil || status.Descriptor == nil {
+		return status, nil
+	}
+
+	ns, err := w.registry.GetNodeStatus(ctx, &registry.IDQuery{ID: status.Descriptor.ID, Height: consensus.HeightLatest})
+	if err != nil {
+		return nil, err
+	}
+	status.NodeStatus = ns
+
 	return status, nil
 }
 

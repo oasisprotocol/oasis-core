@@ -98,6 +98,9 @@ type RegistrationStatus struct {
 	// Descriptor is the node descriptor that the node successfully registered with. In case the
 	// node did not successfully register yet, it will be nil.
 	Descriptor *node.Node `json:"descriptor,omitempty"`
+
+	// NodeStatus is the registry live status of the node.
+	NodeStatus *registry.NodeStatus `json:"node_status,omitempty"`
 }
 
 // RuntimeStatus is the per-runtime status overview.
