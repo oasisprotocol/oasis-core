@@ -856,7 +856,12 @@ func TestGenesisSanityCheck(t *testing.T) {
 				Submitter: testAcc2Address,
 				Content: governance.ProposalContent{
 					Upgrade: &governance.UpgradeProposal{
-						Descriptor: upgrade.Descriptor{Method: upgrade.UpgradeMethodInternal, Epoch: 500, Identifier: cbor.Marshal(version.Versions)},
+						Descriptor: upgrade.Descriptor{
+							Versioned:  cbor.NewVersioned(upgrade.LatestDescriptorVersion),
+							Method:     upgrade.UpgradeMethodInternal,
+							Epoch:      500,
+							Identifier: cbor.Marshal(version.Versions),
+						},
 					},
 				},
 				State: governance.StateActive,
@@ -955,7 +960,12 @@ func TestGenesisSanityCheck(t *testing.T) {
 			Submitter: testAcc2Address,
 			Content: governance.ProposalContent{
 				Upgrade: &governance.UpgradeProposal{
-					Descriptor: upgrade.Descriptor{Method: upgrade.UpgradeMethodInternal, Epoch: 400, Identifier: cbor.Marshal(version.Versions)},
+					Descriptor: upgrade.Descriptor{
+						Versioned:  cbor.NewVersioned(upgrade.LatestDescriptorVersion),
+						Method:     upgrade.UpgradeMethodInternal,
+						Epoch:      400,
+						Identifier: cbor.Marshal(version.Versions),
+					},
 				},
 			},
 			State: governance.StatePassed,
@@ -970,7 +980,12 @@ func TestGenesisSanityCheck(t *testing.T) {
 		Submitter: testAcc2Address,
 		Content: governance.ProposalContent{
 			Upgrade: &governance.UpgradeProposal{
-				Descriptor: upgrade.Descriptor{Method: upgrade.UpgradeMethodInternal, Epoch: 710, Identifier: cbor.Marshal(version.Versions)},
+				Descriptor: upgrade.Descriptor{
+					Versioned:  cbor.NewVersioned(upgrade.LatestDescriptorVersion),
+					Method:     upgrade.UpgradeMethodInternal,
+					Epoch:      710,
+					Identifier: cbor.Marshal(version.Versions),
+				},
 			},
 		},
 		State: governance.StatePassed,
@@ -984,7 +999,12 @@ func TestGenesisSanityCheck(t *testing.T) {
 		Submitter: testAcc2Address,
 		Content: governance.ProposalContent{
 			Upgrade: &governance.UpgradeProposal{
-				Descriptor: upgrade.Descriptor{Method: upgrade.UpgradeMethodInternal, Epoch: 410, Identifier: cbor.Marshal(version.Versions)},
+				Descriptor: upgrade.Descriptor{
+					Versioned:  cbor.NewVersioned(upgrade.LatestDescriptorVersion),
+					Method:     upgrade.UpgradeMethodInternal,
+					Epoch:      410,
+					Identifier: cbor.Marshal(version.Versions),
+				},
 			},
 		},
 		State: governance.StatePassed,

@@ -330,6 +330,7 @@ func TestExecuteProposal(t *testing.T) {
 
 	defaultUpgradeProposal := &governance.UpgradeProposal{
 		Descriptor: upgrade.Descriptor{
+			Versioned:  cbor.NewVersioned(upgrade.LatestDescriptorVersion),
 			Method:     upgrade.UpgradeMethodInternal,
 			Identifier: cbor.Marshal(version.Versions),
 			Epoch:      20,
@@ -429,6 +430,7 @@ func TestExecuteProposal(t *testing.T) {
 				ID: 9,
 				Content: governance.ProposalContent{Upgrade: &governance.UpgradeProposal{
 					Descriptor: upgrade.Descriptor{
+						Versioned:  cbor.NewVersioned(upgrade.LatestDescriptorVersion),
 						Name:       "test-upgrade",
 						Method:     upgrade.UpgradeMethodInternal,
 						Epoch:      22, // Already scheduled upgrade is at epoch 20.
@@ -444,9 +446,10 @@ func TestExecuteProposal(t *testing.T) {
 				ID: 10,
 				Content: governance.ProposalContent{Upgrade: &governance.UpgradeProposal{
 					Descriptor: upgrade.Descriptor{
-						Name:   "test-upgrade",
-						Method: upgrade.UpgradeMethodInternal,
-						Epoch:  18, // Already scheduled upgrade is at epoch 20.
+						Versioned: cbor.NewVersioned(upgrade.LatestDescriptorVersion),
+						Name:      "test-upgrade",
+						Method:    upgrade.UpgradeMethodInternal,
+						Epoch:     18, // Already scheduled upgrade is at epoch 20.
 					},
 				}},
 			},
@@ -458,9 +461,10 @@ func TestExecuteProposal(t *testing.T) {
 				ID: 11,
 				Content: governance.ProposalContent{Upgrade: &governance.UpgradeProposal{
 					Descriptor: upgrade.Descriptor{
-						Name:   "test-upgrade",
-						Method: upgrade.UpgradeMethodInternal,
-						Epoch:  32, // Already scheduled upgrade is at epoch 20.
+						Versioned: cbor.NewVersioned(upgrade.LatestDescriptorVersion),
+						Name:      "test-upgrade",
+						Method:    upgrade.UpgradeMethodInternal,
+						Epoch:     32, // Already scheduled upgrade is at epoch 20.
 					},
 				}},
 			},
@@ -472,9 +476,10 @@ func TestExecuteProposal(t *testing.T) {
 				ID: 12,
 				Content: governance.ProposalContent{Upgrade: &governance.UpgradeProposal{
 					Descriptor: upgrade.Descriptor{
-						Name:   "test-upgrade",
-						Method: upgrade.UpgradeMethodInternal,
-						Epoch:  8, // Already scheduled upgrade is at epoch 20.
+						Versioned: cbor.NewVersioned(upgrade.LatestDescriptorVersion),
+						Name:      "test-upgrade",
+						Method:    upgrade.UpgradeMethodInternal,
+						Epoch:     8, // Already scheduled upgrade is at epoch 20.
 					},
 				}},
 			},
@@ -517,10 +522,20 @@ func TestBeginBlock(t *testing.T) {
 
 	// Prepare some pending upgrades.
 	upgrade11 := &governance.UpgradeProposal{
-		Descriptor: upgrade.Descriptor{Epoch: 11, Method: upgrade.UpgradeMethodInternal, Identifier: cbor.Marshal(version.Versions)},
+		Descriptor: upgrade.Descriptor{
+			Versioned:  cbor.NewVersioned(upgrade.LatestDescriptorVersion),
+			Epoch:      11,
+			Method:     upgrade.UpgradeMethodInternal,
+			Identifier: cbor.Marshal(version.Versions),
+		},
 	}
 	upgrade12 := &governance.UpgradeProposal{
-		Descriptor: upgrade.Descriptor{Epoch: 12, Method: upgrade.UpgradeMethodInternal, Identifier: cbor.Marshal(version.Versions)},
+		Descriptor: upgrade.Descriptor{
+			Versioned:  cbor.NewVersioned(upgrade.LatestDescriptorVersion),
+			Epoch:      12,
+			Method:     upgrade.UpgradeMethodInternal,
+			Identifier: cbor.Marshal(version.Versions),
+		},
 	}
 	err = state.SetProposal(ctx, &governance.Proposal{ID: 1, Content: governance.ProposalContent{Upgrade: upgrade11}})
 	require.NoError(err, "SetProposal")
@@ -652,7 +667,11 @@ func TestEndBlock(t *testing.T) {
 
 	// Upgrade proposal that should be rejected at epoch 11.
 	upgrade11 := &governance.UpgradeProposal{
-		Descriptor: upgrade.Descriptor{Epoch: 20, Name: "test"},
+		Descriptor: upgrade.Descriptor{
+			Versioned: cbor.NewVersioned(upgrade.LatestDescriptorVersion),
+			Epoch:     20,
+			Name:      "test",
+		},
 	}
 	p1 := &governance.Proposal{
 		ID:        1,
@@ -666,7 +685,11 @@ func TestEndBlock(t *testing.T) {
 
 	// Upgrade proposal that should pass at epoch 12.
 	upgrade12 := &governance.UpgradeProposal{
-		Descriptor: upgrade.Descriptor{Epoch: 30, Name: "test"},
+		Descriptor: upgrade.Descriptor{
+			Versioned: cbor.NewVersioned(upgrade.LatestDescriptorVersion),
+			Epoch:     30,
+			Name:      "test",
+		},
 	}
 	p2 := &governance.Proposal{
 		ID:        2,

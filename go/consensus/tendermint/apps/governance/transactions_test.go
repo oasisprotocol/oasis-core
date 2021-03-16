@@ -8,6 +8,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	beacon "github.com/oasisprotocol/oasis-core/go/beacon/api"
+	"github.com/oasisprotocol/oasis-core/go/common/cbor"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	"github.com/oasisprotocol/oasis-core/go/common/quantity"
 	abciAPI "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/api"
@@ -84,6 +85,7 @@ func TestSubmitProposal(t *testing.T) {
 			reservedPK,
 			&governance.ProposalContent{Upgrade: &governance.UpgradeProposal{
 				Descriptor: upgrade.Descriptor{
+					Versioned:  cbor.NewVersioned(upgrade.LatestDescriptorVersion),
 					Method:     upgrade.UpgradeMethodInternal,
 					Epoch:      10,
 					Identifier: identifier,
@@ -98,6 +100,7 @@ func TestSubmitProposal(t *testing.T) {
 			noFundsPk,
 			&governance.ProposalContent{Upgrade: &governance.UpgradeProposal{
 				Descriptor: upgrade.Descriptor{
+					Versioned:  cbor.NewVersioned(upgrade.LatestDescriptorVersion),
 					Method:     upgrade.UpgradeMethodInternal,
 					Epoch:      10,
 					Identifier: identifier,
@@ -120,6 +123,7 @@ func TestSubmitProposal(t *testing.T) {
 			pk1,
 			&governance.ProposalContent{Upgrade: &governance.UpgradeProposal{
 				Descriptor: upgrade.Descriptor{
+					Versioned:  cbor.NewVersioned(upgrade.LatestDescriptorVersion),
 					Method:     upgrade.UpgradeMethodInternal,
 					Epoch:      10,
 					Identifier: identifier,
@@ -147,6 +151,7 @@ func TestSubmitProposal(t *testing.T) {
 			}},
 			func() {
 				upgrade := upgrade.Descriptor{
+					Versioned:  cbor.NewVersioned(upgrade.LatestDescriptorVersion),
 					Method:     upgrade.UpgradeMethodInternal,
 					Epoch:      10,
 					Identifier: identifier,
@@ -171,6 +176,7 @@ func TestSubmitProposal(t *testing.T) {
 			pk1,
 			&governance.ProposalContent{Upgrade: &governance.UpgradeProposal{
 				Descriptor: upgrade.Descriptor{
+					Versioned:  cbor.NewVersioned(upgrade.LatestDescriptorVersion),
 					Method:     upgrade.UpgradeMethodInternal,
 					Epoch:      200,
 					Identifier: identifier,
@@ -188,8 +194,9 @@ func TestSubmitProposal(t *testing.T) {
 			}},
 			func() {
 				upgrade := upgrade.Descriptor{
-					Method: upgrade.UpgradeMethodInternal,
-					Epoch:  500,
+					Versioned: cbor.NewVersioned(upgrade.LatestDescriptorVersion),
+					Method:    upgrade.UpgradeMethodInternal,
+					Epoch:     500,
 				}
 				err = state.SetPendingUpgrade(ctx, 20, &upgrade)
 				require.NoError(err, "SetPendingUpgrade()")
@@ -229,6 +236,7 @@ func TestSubmitProposal(t *testing.T) {
 			pk1,
 			&governance.ProposalContent{Upgrade: &governance.UpgradeProposal{
 				Descriptor: upgrade.Descriptor{
+					Versioned:  cbor.NewVersioned(upgrade.LatestDescriptorVersion),
 					Method:     upgrade.UpgradeMethodInternal,
 					Identifier: identifier,
 					Epoch:      210,
@@ -236,6 +244,7 @@ func TestSubmitProposal(t *testing.T) {
 			}},
 			func() {
 				upgrade := upgrade.Descriptor{
+					Versioned:  cbor.NewVersioned(upgrade.LatestDescriptorVersion),
 					Method:     upgrade.UpgradeMethodInternal,
 					Epoch:      200,
 					Identifier: identifier,

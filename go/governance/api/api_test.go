@@ -8,6 +8,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/cbor"
 	"github.com/oasisprotocol/oasis-core/go/common/version"
 	"github.com/oasisprotocol/oasis-core/go/upgrade/api"
+	upgrade "github.com/oasisprotocol/oasis-core/go/upgrade/api"
 )
 
 func TestValidateBasic(t *testing.T) {
@@ -41,6 +42,7 @@ func TestValidateBasic(t *testing.T) {
 			p: &ProposalContent{
 				Upgrade: &UpgradeProposal{
 					Descriptor: api.Descriptor{
+						Versioned:  cbor.NewVersioned(upgrade.LatestDescriptorVersion),
 						Method:     api.UpgradeMethodInternal,
 						Epoch:      42,
 						Identifier: cbor.Marshal(version.Versions),

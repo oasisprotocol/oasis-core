@@ -8,6 +8,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	beacon "github.com/oasisprotocol/oasis-core/go/beacon/api"
+	"github.com/oasisprotocol/oasis-core/go/common/cbor"
 	"github.com/oasisprotocol/oasis-core/go/common/quantity"
 	"github.com/oasisprotocol/oasis-core/go/upgrade/api"
 	upgrade "github.com/oasisprotocol/oasis-core/go/upgrade/api"
@@ -258,8 +259,9 @@ func TestPendingUpgradesFromProposals(t *testing.T) {
 			Content: ProposalContent{
 				Upgrade: &UpgradeProposal{
 					Descriptor: api.Descriptor{
-						Name:  "in past",
-						Epoch: beacon.EpochTime(10),
+						Versioned: cbor.NewVersioned(upgrade.LatestDescriptorVersion),
+						Name:      "in past",
+						Epoch:     beacon.EpochTime(10),
 					},
 				},
 			},
@@ -271,8 +273,9 @@ func TestPendingUpgradesFromProposals(t *testing.T) {
 			Content: ProposalContent{
 				Upgrade: &UpgradeProposal{
 					Descriptor: api.Descriptor{
-						Name:  "canceled",
-						Epoch: beacon.EpochTime(30),
+						Versioned: cbor.NewVersioned(upgrade.LatestDescriptorVersion),
+						Name:      "canceled",
+						Epoch:     beacon.EpochTime(30),
 					},
 				},
 			},
@@ -284,8 +287,9 @@ func TestPendingUpgradesFromProposals(t *testing.T) {
 			Content: ProposalContent{
 				Upgrade: &UpgradeProposal{
 					Descriptor: api.Descriptor{
-						Name:  "not passed",
-						Epoch: beacon.EpochTime(30),
+						Versioned: cbor.NewVersioned(upgrade.LatestDescriptorVersion),
+						Name:      "not passed",
+						Epoch:     beacon.EpochTime(30),
 					},
 				},
 			},
@@ -297,8 +301,9 @@ func TestPendingUpgradesFromProposals(t *testing.T) {
 			Content: ProposalContent{
 				Upgrade: &UpgradeProposal{
 					Descriptor: api.Descriptor{
-						Name:  "passed",
-						Epoch: beacon.EpochTime(40),
+						Versioned: cbor.NewVersioned(upgrade.LatestDescriptorVersion),
+						Name:      "passed",
+						Epoch:     beacon.EpochTime(40),
 					},
 				},
 			},
@@ -310,8 +315,9 @@ func TestPendingUpgradesFromProposals(t *testing.T) {
 			Content: ProposalContent{
 				Upgrade: &UpgradeProposal{
 					Descriptor: api.Descriptor{
-						Name:  "passed2",
-						Epoch: beacon.EpochTime(50),
+						Versioned: cbor.NewVersioned(upgrade.LatestDescriptorVersion),
+						Name:      "passed2",
+						Epoch:     beacon.EpochTime(50),
 					},
 				},
 			},

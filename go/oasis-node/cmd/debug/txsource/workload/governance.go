@@ -150,6 +150,7 @@ func (g *governanceWorkload) doUpgradeProposal() error {
 	proposalContent := &governance.ProposalContent{
 		Upgrade: &governance.UpgradeProposal{
 			Descriptor: upgrade.Descriptor{
+				Versioned:  cbor.NewVersioned(upgrade.LatestDescriptorVersion),
 				Name:       fmt.Sprintf("test-upgrade_%s", hex.EncodeToString(nameSuffix)),
 				Method:     upgrade.UpgradeMethodInternal,
 				Identifier: cbor.Marshal(version.Versions),
