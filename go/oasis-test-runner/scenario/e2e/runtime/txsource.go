@@ -45,7 +45,7 @@ const (
 	nodeRestartIntervalLong = 2 * time.Minute
 	nodeLongRestartInterval = 15 * time.Minute
 	nodeLongRestartDuration = 10 * time.Minute
-	livenessCheckInterval   = 1 * time.Minute
+	livenessCheckInterval   = 2 * time.Minute
 	txSourceGasPrice        = 1
 
 	crashPointProbability = 0.0005
