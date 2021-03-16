@@ -49,7 +49,7 @@ func (s *storageService) getConfig(ctx context.Context, ns common.Namespace) (*r
 		return nil, fmt.Errorf("storage: failed to get runtime %s: %w", ns, err)
 	}
 
-	rtDesc, err := rt.RegistryDescriptor(ctx)
+	rtDesc, err := rt.ActiveDescriptor(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("storage: failed to get runtime %s configuration: %w", ns, err)
 	}

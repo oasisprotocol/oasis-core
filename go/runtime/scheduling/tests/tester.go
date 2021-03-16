@@ -86,10 +86,22 @@ func testScheduleTransactions(t *testing.T, scheduler api.Scheduler) {
 		},
 	)
 	require.NoError(t, err, "UpdateParameters")
+
+	// TestTx should remain queued.
+	require.True(t, scheduler.IsQueued(txBytes), "transaction should remain in the queue")
 	require.EqualValues(t, 1, scheduler.UnscheduledSize(), "transaction should remain in the queue")
+	// Re-quining should have no effect.
+	require.NoError(t, scheduler.QueueTx(testTx))
+
 	// Make sure transaction gets scheduled now.
 	batch = scheduler.GetBatch(false)
 	require.Len(t, batch, 1, "transaction should be returned")
+
+	// Remove after update.
+	require.NoError(t, scheduler.RemoveTxBatch(batch))
+	// Make sure queue is empty now.
+	batch = scheduler.GetBatch(true)
+	require.Empty(t, batch, "queue should be empty")
 
 	// Test update clear transactions.
 	// Update configuration back to BatchSize=10.

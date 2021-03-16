@@ -1,8 +1,7 @@
 //! An arbitrary precision unsigned integer.
-use core::cmp::Ordering::{Equal, Greater, Less};
 use std::{
     fmt,
-    ops::{Add, AddAssign, Div, DivAssign, Mul, MulAssign, Sub},
+    ops::{Add, AddAssign, Mul, MulAssign},
 };
 
 use num_bigint::BigUint;

@@ -204,6 +204,8 @@ func testUpdateConfig(t *testing.T, pool api.TxPool) {
 
 	err = pool.Add([]byte("hello world 1"))
 	require.NoError(t, err, "Add")
+	err = pool.Add([]byte("hello world 2"))
+	require.NoError(t, err, "Add")
 
 	batch := pool.GetBatch(false)
 	require.Empty(t, batch, "no transactions should be returned")
@@ -218,6 +220,9 @@ func testUpdateConfig(t *testing.T, pool api.TxPool) {
 
 	batch = pool.GetBatch(false)
 	require.Len(t, batch, 1, "one transaction should be returned")
+
+	require.NoError(t, pool.RemoveBatch(batch), "remove batch")
+	require.EqualValues(t, 1, pool.Size(), "one transaction should remain")
 
 	// Update configuration back to BatchSize=10.
 	err = pool.UpdateConfig(api.Config{

@@ -259,12 +259,15 @@ func (n *Node) HandlePeerMessage(ctx context.Context, message *p2p.Message, isOw
 			if err := n.checkTx(ctx, tx); err != nil {
 				return true, err
 			}
-			n.logger.Debug("worker CheckTx successful, queuing transaction")
 		}
 
+		n.logger.Debug("queuing transaction",
+			"transaction", tx,
+		)
 		err := n.QueueTx(tx)
 		if err != nil {
 			n.logger.Error("unable to queue transaction",
+				"tx", tx,
 				"err", err,
 			)
 			return true, err
@@ -334,9 +337,9 @@ func (n *Node) queueBatchBlocking(
 		return errInvalidReceipt
 	}
 	// Make sure there are enough signatures.
-	rt, err := n.commonNode.Runtime.RegistryDescriptor(ctx)
+	rt, err := n.commonNode.Runtime.ActiveDescriptor(ctx)
 	if err != nil {
-		n.logger.Warn("failed to fetch runtime registry descriptor",
+		n.logger.Warn("failed to fetch active runtime descriptor",
 			"err", err,
 		)
 		return p2pError.Permanent(err)
@@ -392,18 +395,20 @@ func (n *Node) handleInternalBatchLocked(
 	txnSchedSig signature.Signature,
 	inputStorageSigs []signature.Signature,
 ) {
-	n.maybeStartProcessingBatchLocked(&unresolvedBatch{
-		ioRoot: storage.Root{
-			Namespace: n.commonNode.CurrentBlock.Header.Namespace,
-			Version:   n.commonNode.CurrentBlock.Header.Round + 1,
-			Type:      storage.RootTypeIO,
-			Hash:      ioRoot,
+	n.maybeStartProcessingBatchLocked(
+		&unresolvedBatch{
+			ioRoot: storage.Root{
+				Namespace: n.commonNode.CurrentBlock.Header.Namespace,
+				Version:   n.commonNode.CurrentBlock.Header.Round + 1,
+				Type:      storage.RootTypeIO,
+				Hash:      ioRoot,
+			},
+			txnSchedSignature: txnSchedSig,
+			storageSignatures: inputStorageSigs,
+			batch:             batch,
+			spanCtx:           batchSpanCtx,
 		},
-		txnSchedSignature: txnSchedSig,
-		storageSignatures: inputStorageSigs,
-		batch:             batch,
-		spanCtx:           batchSpanCtx,
-	})
+	)
 }
 
 func (n *Node) bumpReselect() {
@@ -664,7 +669,7 @@ func (n *Node) proposeTimeoutLocked() error {
 	if n.commonNode.CurrentBlock == nil {
 		return fmt.Errorf("executor: propose timeout error, nil block")
 	}
-	rt, err := n.commonNode.Runtime.RegistryDescriptor(n.ctx)
+	rt, err := n.commonNode.Runtime.ActiveDescriptor(n.roundCtx)
 	if err != nil {
 		return err
 	}
@@ -723,26 +728,52 @@ func (n *Node) proposeTimeoutLocked() error {
 	return nil
 }
 
+func (n *Node) getRtStateAndRoundResults(ctx context.Context, height int64) (*roothash.RuntimeState, *roothash.RoundResults, error) {
+	state, err := n.commonNode.Consensus.RootHash().GetRuntimeState(ctx, n.commonNode.Runtime.ID(), height)
+	if err != nil {
+		n.logger.Error("failed to query runtime state",
+			"err", err,
+			"height", height,
+		)
+		return nil, nil, err
+	}
+	roundResults, err := n.commonNode.Runtime.History().GetRoundResults(ctx, state.LastNormalRound)
+	if err != nil {
+		n.logger.Error("failed to query round last normal round results",
+			"err", err,
+			"height", height,
+		)
+		return nil, nil, err
+	}
+
+	return state, roundResults, nil
+}
+
 func (n *Node) handleScheduleBatch(force bool) {
-	epoch, lastHeader, err := func() (*committee.EpochSnapshot, *block.Header, error) {
+	epoch, lastHeader, roundResults, err := func() (*committee.EpochSnapshot, *block.Header, *roothash.RoundResults, error) {
 		n.commonNode.CrossNode.Lock()
 		defer n.commonNode.CrossNode.Unlock()
 
 		// If we are not waiting for a batch, don't do anything.
 		if _, ok := n.state.(StateWaitingForBatch); !ok {
-			return nil, nil, errIncorrectState
+			return nil, nil, nil, errIncorrectState
 		}
 		if n.commonNode.CurrentBlock == nil {
-			return nil, nil, errNoBlocks
+			return nil, nil, nil, errNoBlocks
 		}
 		header := n.commonNode.CurrentBlock.Header
 		epoch := n.commonNode.Group.GetEpochSnapshot()
 
 		// If we are not an executor worker in this epoch, we don't need to do anything.
 		if !epoch.IsExecutorWorker() {
-			return nil, nil, errNotTxnScheduler
+			return nil, nil, nil, errNotTxnScheduler
 		}
-		return epoch, &header, nil
+
+		_, roundResults, err := n.getRtStateAndRoundResults(n.roundCtx, n.commonNode.CurrentBlockHeight)
+		if err != nil {
+			return nil, nil, nil, err
+		}
+		return epoch, &header, roundResults, nil
 	}()
 	if err != nil {
 		n.logger.Debug("not scheduling a batch",
@@ -753,7 +784,7 @@ func (n *Node) handleScheduleBatch(force bool) {
 
 	// Ask the scheduler to get us a scheduled batch.
 	batch := n.scheduler.GetBatch(force)
-	if len(batch) == 0 {
+	if len(batch) == 0 && (!force || len(roundResults.Messages) == 0) {
 		return
 	}
 
@@ -761,6 +792,8 @@ func (n *Node) handleScheduleBatch(force bool) {
 	if !epoch.IsTransactionScheduler(lastHeader.Round) {
 		n.logger.Debug("proposing a timeout",
 			"round", lastHeader.Round,
+			"batch", batch,
+			"round_results", roundResults,
 		)
 
 		err = func() error {
@@ -784,14 +817,13 @@ func (n *Node) handleScheduleBatch(force bool) {
 		}
 
 		// If we are not a transaction scheduler, we can't really schedule.
-		n.logger.Debug("not scheduling a batch as we are not a transaction scheduler",
-			"batch_size", len(batch),
-		)
+		n.logger.Debug("not scheduling a batch as we are not a transaction scheduler")
 		return
 	}
 
 	n.logger.Debug("scheduling a batch",
-		"batch_size", len(batch),
+		"batch_size", batch,
+		"round_results", roundResults,
 	)
 
 	// Scheduler node opens a new parent span for batch processing.
@@ -985,19 +1017,9 @@ func (n *Node) startProcessingBatchLocked(batch *unresolvedBatch) {
 	go func() {
 		defer close(done)
 
-		// Fetch message results emitted during the last normal round.
-		state, err := n.commonNode.Consensus.RootHash().GetRuntimeState(ctx, blk.Header.Namespace, height)
+		state, roundResults, err := n.getRtStateAndRoundResults(ctx, height)
 		if err != nil {
-			n.logger.Error("failed to query runtime state",
-				"err", err,
-				"height", height,
-				"round", blk.Header.Round,
-			)
-			return
-		}
-		roundResults, err := n.commonNode.Runtime.History().GetRoundResults(ctx, state.LastNormalRound)
-		if err != nil {
-			n.logger.Error("failed to query round results",
+			n.logger.Error("failed to query runtime state and last round results",
 				"err", err,
 				"height", height,
 				"round", blk.Header.Round,
@@ -1475,8 +1497,12 @@ func (n *Node) worker() {
 	}
 	defer hrtNotifier.Stop()
 
-	// Initialize transaction scheduling algorithm.
-	runtime, err := n.commonNode.Runtime.RegistryDescriptor(n.ctx)
+	// Initialize transaction scheduling algorithm with latest registry desctiptor.
+	// Note: in case the runtime is already running, the correct active descriptor
+	// is the version at the last epoch transition.
+	// This case will be handled by the first tick from the descriptor updates
+	// channel bellow, which will update the parameters.
+	runtime, err := n.commonNode.Runtime.ActiveDescriptor(n.ctx)
 	if err != nil {
 		n.logger.Error("failed to fetch runtime registry descriptor",
 			"err", err,
@@ -1502,7 +1528,7 @@ func (n *Node) worker() {
 	defer txnScheduleTicker.Stop()
 
 	// Watch runtime descriptor updates.
-	rtCh, rtSub, err := n.commonNode.Runtime.WatchRegistryDescriptor()
+	rtCh, rtSub, err := n.commonNode.Runtime.WatchActiveDescriptor()
 	if err != nil {
 		n.logger.Error("failed to watch runtimes",
 			"err", err,
@@ -1550,6 +1576,8 @@ func (n *Node) worker() {
 				)
 				return
 			}
+			// Update batch flush timeout ticker.
+			txnScheduleTicker.Reset(runtime.TxnScheduler.BatchFlushTimeout)
 		case <-txnScheduleTicker.C:
 			// Force scheduling a batch if possible.
 			n.handleScheduleBatch(true)

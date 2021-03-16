@@ -378,7 +378,8 @@ func (n *Node) syncCheckpoints() (*blockSummary, error) {
 	// for errors, driven by remainingRoots.
 	var syncState blockSummary
 
-	descriptor, err := n.commonNode.Runtime.RegistryDescriptor(n.ctx)
+	// Try getting the active descriptor first.
+	descriptor, err := n.commonNode.Runtime.ActiveDescriptor(n.ctx)
 	if err != nil {
 		return nil, fmt.Errorf("can't get runtime descriptor: %w", err)
 	}

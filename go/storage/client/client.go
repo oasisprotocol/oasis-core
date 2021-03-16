@@ -93,7 +93,7 @@ func (b *storageClientBackend) writeWithClient(
 	// conencted nodes.
 	minWriteReplication := n
 	if b.runtime != nil {
-		rt, err := b.runtime.RegistryDescriptor(ctx)
+		rt, err := b.runtime.ActiveDescriptor(ctx)
 		if err != nil {
 			return nil, fmt.Errorf("failed to fetch registry descriptor: %w", err)
 		}

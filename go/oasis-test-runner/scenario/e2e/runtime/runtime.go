@@ -565,6 +565,7 @@ func RegisterScenarios() error {
 		Runtime,
 		RuntimeEncryption,
 		RuntimeGovernance,
+		RuntimeMessage,
 		// Byzantine executor node.
 		ByzantineExecutorHonest,
 		ByzantineExecutorSchedulerHonest,

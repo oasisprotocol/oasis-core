@@ -613,7 +613,7 @@ func (rtg *RuntimeGenesis) SanityCheck(isGenesis bool) error {
 
 // RuntimeDescriptorProvider is an interface that provides access to runtime descriptors.
 type RuntimeDescriptorProvider interface {
-	// RegistryDescriptor waits for the runtime to be registered and then returns its registry
+	// ActiveDescriptor waits for the runtime to be initialized and then returns its active
 	// descriptor.
-	RegistryDescriptor(ctx context.Context) (*Runtime, error)
+	ActiveDescriptor(ctx context.Context) (*Runtime, error)
 }

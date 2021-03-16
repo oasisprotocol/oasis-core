@@ -400,7 +400,7 @@ func (mux *abciMux) BeginBlock(req types.RequestBeginBlock) types.ResponseBeginB
 
 	currentEpoch, err := mux.state.GetCurrentEpoch(ctx)
 	if err != nil {
-		panic(fmt.Errorf("mux: can't get current epoch in BeginBlock"))
+		panic(fmt.Errorf("mux: can't get current epoch in BeginBlock: %w", err))
 	}
 
 	// Check if there are any upgrades pending or if we need to halt for an upgrade. Note that these
@@ -753,7 +753,7 @@ func (mux *abciMux) EndBlock(req types.RequestEndBlock) types.ResponseEndBlock {
 	if upgrader := mux.state.Upgrader(); upgrader != nil {
 		currentEpoch, err := mux.state.GetCurrentEpoch(ctx)
 		if err != nil {
-			panic(fmt.Errorf("mux: can't get current epoch in BeginBlock"))
+			panic(fmt.Errorf("mux: can't get current epoch in BeginBlock: %w", err))
 		}
 
 		err = upgrader.ConsensusUpgrade(ctx, currentEpoch, ctx.BlockHeight())

@@ -91,6 +91,10 @@ func (q *orderedMap) AddBatch(batch [][]byte) error {
 		q.addTxLocked(tx, txHashes[i])
 	}
 
+	if len(q.transactions) != q.queue.Len() {
+		panic(fmt.Errorf("inconsistent sizes of the underlying list (%v) and map (%v), after AddBatch", q.queue.Len(), len(q.transactions)))
+	}
+
 	return errs
 }
 
@@ -150,6 +154,9 @@ func (q *orderedMap) RemoveBatch(batch [][]byte) error {
 			q.queueSizeBytes -= uint64(len(pair.Value))
 		}
 	}
+	if len(q.transactions) != q.queue.Len() {
+		panic(fmt.Errorf("inconsistent sizes of the underlying list (%v) and map (%v) after RemoveBatch", q.queue.Len(), len(q.transactions)))
+	}
 
 	return nil
 }
@@ -191,17 +198,21 @@ func (q *orderedMap) UpdateConfig(cfg api.Config) error {
 		if uint64(newQueue.Len()) >= cfg.MaxPoolSize {
 			break
 		}
-		el := current.Value.(*pair)
-		txSize := uint64(len(el.Value))
+		p := current.Value.(*pair)
+		txSize := uint64(len(p.Value))
 		if txSize > cfg.MaxBatchSizeBytes {
 			current = current.Prev()
 			continue
 		}
-		newQueue.PushFront(el)
-		newTxs[el.Key] = el
+		p.element = newQueue.PushFront(p)
+		newTxs[p.Key] = p
 		newMapSize += txSize
 
 		current = current.Prev()
+	}
+
+	if len(q.transactions) != q.queue.Len() {
+		panic(fmt.Errorf("inconsistent sizes of the underlying list (%v) and map (%v) after UpdateConfig", q.queue.Len(), len(q.transactions)))
 	}
 
 	// Update.

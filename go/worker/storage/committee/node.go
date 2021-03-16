@@ -281,7 +281,7 @@ func NewNode(
 			CheckInterval:   checkpointerCfg.CheckInterval,
 			RootsPerVersion: 2, // State root and I/O root.
 			GetParameters: func(ctx context.Context) (*checkpoint.CreationParameters, error) {
-				rt, rerr := commonNode.Runtime.RegistryDescriptor(ctx)
+				rt, rerr := commonNode.Runtime.ActiveDescriptor(ctx)
 				if rerr != nil {
 					return nil, fmt.Errorf("failed to retrieve runtime descriptor: %w", rerr)
 				}
@@ -836,7 +836,7 @@ func (n *Node) worker() { // nolint: gocyclo
 	// Initialize genesis from the runtime descriptor.
 	if cachedLastRound == n.undefinedRound {
 		var rt *registryApi.Runtime
-		rt, err = n.commonNode.Runtime.RegistryDescriptor(n.ctx)
+		rt, err = n.commonNode.Runtime.ActiveDescriptor(n.ctx)
 		if err != nil {
 			n.logger.Error("failed to retrieve runtime registry descriptor",
 				"err", err,
