@@ -8,6 +8,77 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/quantity"
 )
 
+func fromUint(n uint64) Quantity {
+	quanQ := quantity.NewFromUint64(n)
+	return NewFromQuanQuantity(quanQ)
+}
+
+func TestQuantityAdd(t *testing.T) {
+	require := require.New(t)
+
+	q := fromUint(100)
+
+	q.Add(fromUint(200))
+	require.True(q.IsValid(), "Add(200) valid")
+	require.Equal(fromUint(300), q, "Add(200) value")
+}
+
+func TestQuantitySub(t *testing.T) {
+	require := require.New(t)
+
+	q := fromUint(500)
+
+	q.Sub(fromUint(300))
+	require.True(q.IsValid(), "Sub(300) valid")
+	require.Equal(fromUint(200), q, "Sub(300) value")
+}
+
+func TestQuantityMul(t *testing.T) {
+	require := require.New(t)
+
+	q := fromUint(400)
+
+	q.Mul(fromUint(200))
+	require.True(q.IsValid(), "Mul(200) valid")
+	require.Equal(fromUint(80_000), q, "Mul(200) value")
+}
+
+func TestQuantityQuo(t *testing.T) {
+	require := require.New(t)
+
+	q := fromUint(1200)
+
+	q.Quo(fromUint(40))
+	require.True(q.IsValid(), "Quo(40) valid")
+	require.Equal(fromUint(30), q, "Quo(40) value")
+
+	q = fromUint(100)
+	p := fromUint(0)
+
+	q.Quo(p)
+	require.False(q.IsValid(), "Quo(0) valid")
+}
+
+func TestNewQuantity(t *testing.T) {
+	require := require.New(t)
+
+	q := NewQuantity()
+	require.True(q.IsValid(), "NewQuantity() valid")
+	require.Equal(fromUint(0), q, "NewQuantity() value")
+}
+
+func TestNewFromQuanQuantity(t *testing.T) {
+	require := require.New(t)
+
+	quanQ := quantity.NewFromUint64(200)
+	q := NewFromQuanQuantity(quanQ)
+	require.True(q.IsValid(), "NewFromQuanQuantity() valid")
+	p := Quantity{
+		quan: quantity.NewFromUint64(200),
+	}
+	require.Equal(p, q, "NewFromQuanQuantity() value")
+}
+
 func TestQuantityFrac(t *testing.T) {
 	require := require.New(t)
 

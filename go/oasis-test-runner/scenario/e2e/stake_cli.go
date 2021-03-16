@@ -27,6 +27,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/oasis/cli"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/scenario"
 	"github.com/oasisprotocol/oasis-core/go/staking/api"
+	"github.com/oasisprotocol/oasis-core/go/staking/api/token"
 )
 
 const (
@@ -794,12 +795,23 @@ func (sc *stakeCLIImpl) checkGeneralAccount(
 	}
 
 	var b bytes.Buffer
-	expectedAccount.PrettyPrint(ctx, "  ", &b)
+	fmt.Fprint(&b, "Available: ")
+	token.PrettyPrintAmount(ctx, expectedAccount.Balance, &b)
 	regexPattern := regexp.QuoteMeta(b.String())
 	match := regexp.MustCompile(regexPattern).FindStringSubmatch(accountInfo)
 	if match == nil {
 		return fmt.Errorf(
-			"checkGeneralAccount: couldn't find expected general account %+v in account info: %s", expectedAccount, accountInfo,
+			"checkGeneralAccount: couldn't find expected substring:\n\n%s\n\nin account info's output:\n\n%s",
+			b.String(), accountInfo,
+		)
+	}
+
+	nonce := fmt.Sprintf("Nonce: %d", expectedAccount.Nonce)
+	match = regexp.MustCompile(nonce).FindStringSubmatch(accountInfo)
+	if match == nil {
+		return fmt.Errorf(
+			"checkGeneralAccount: couldn't find expected substring:\n\n%s\n\nin account info's output:\n\n%s",
+			nonce, accountInfo,
 		)
 	}
 
@@ -817,21 +829,32 @@ func (sc *stakeCLIImpl) checkEscrowAccountSharePool(
 	if err != nil {
 		return err
 	}
+	balanceZero := expectedSharePool.Balance.IsZero()
 
-	prefix := "  "
 	var b bytes.Buffer
-	fmt.Fprintf(&b, "%s%s:\n", prefix, sharePoolName)
-	expectedSharePool.PrettyPrint(ctx, prefix+"  ", &b)
+	fmt.Fprintf(&b, "%s Delegations to this Account:\n", sharePoolName)
+	if !balanceZero {
+		prefix := "  "
+		fmt.Fprintf(&b, "%sTotal: ", prefix)
+		token.PrettyPrintAmount(ctx, expectedSharePool.Balance, &b)
+		fmt.Fprintf(&b, " (%s shares)", expectedSharePool.TotalShares)
+	}
 	regexPattern := regexp.QuoteMeta(b.String())
 	match := regexp.MustCompile(regexPattern).FindStringSubmatch(accountInfo)
-	if match == nil {
+	switch {
+	case !balanceZero && match == nil:
 		return fmt.Errorf(
-			"checkEscrowAccountSharePool: couldn't find expected escrow %s share pool %+v in account info",
-			sharePoolName, expectedSharePool,
+			"checkEscrowAccountSharePool: couldn't find expected substring:\n\n%s\n\nin account info's output:\n\n%s",
+			b.String(), accountInfo,
 		)
+	case balanceZero && match != nil:
+		return fmt.Errorf(
+			"checkEscrowAccountSharePool: shouldn't find expected substring:\n\n%s\n\nin account info's output:\n\n%s",
+			b.String(), accountInfo,
+		)
+	default:
+		return nil
 	}
-
-	return nil
 }
 
 func (sc *stakeCLIImpl) checkCommissionScheduleRates(
@@ -848,13 +871,13 @@ func (sc *stakeCLIImpl) checkCommissionScheduleRates(
 	for i, expectedRate := range expectedRates {
 		var b bytes.Buffer
 		ctx = context.WithValue(ctx, prettyprint.ContextKeyCommissionScheduleIndex, i)
-		expectedRate.PrettyPrint(ctx, "      ", &b)
+		expectedRate.PrettyPrint(ctx, "    ", &b)
 		regexPattern := regexp.QuoteMeta(b.String())
 		match := regexp.MustCompile(regexPattern).FindStringSubmatch(accountInfo)
 		if match == nil {
 			return fmt.Errorf(
-				"checkCommissionScheduleRates: couldn't find an expected commission schedule rate %+v in account info",
-				expectedRate,
+				"checkCommissionScheduleRates: couldn't find an expected substring:\n\n%s\n\nin account info's output:\n\n%s",
+				b.String(), accountInfo,
 			)
 		}
 	}
@@ -876,13 +899,13 @@ func (sc *stakeCLIImpl) checkCommissionScheduleRateBounds(
 	for i, expectedBound := range expectedRateBounds {
 		var b bytes.Buffer
 		ctx = context.WithValue(ctx, prettyprint.ContextKeyCommissionScheduleIndex, i)
-		expectedBound.PrettyPrint(ctx, "      ", &b)
+		expectedBound.PrettyPrint(ctx, "    ", &b)
 		regexPattern := regexp.QuoteMeta(b.String())
 		match := regexp.MustCompile(regexPattern).FindStringSubmatch(accountInfo)
 		if match == nil {
 			return fmt.Errorf(
-				"checkCommissionScheduleRateBounds: couldn't find an expected commission schedule rate bound %+v in account info",
-				expectedBound,
+				"checkCommissionScheduleRateBounds: couldn't find an expected substring:\n\n%s\n\nin account info's output:\n\n%s",
+				b.String(), accountInfo,
 			)
 		}
 	}
