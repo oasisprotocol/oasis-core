@@ -12,6 +12,7 @@ import (
 	"sync"
 
 	beacon "github.com/oasisprotocol/oasis-core/go/beacon/api"
+	"github.com/oasisprotocol/oasis-core/go/common/cbor"
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
 	"github.com/oasisprotocol/oasis-core/go/common/persistent"
 	"github.com/oasisprotocol/oasis-core/go/upgrade/api"
@@ -47,6 +48,7 @@ func (u *upgradeManager) SubmitDescriptor(ctx context.Context, descriptor *api.D
 	}
 
 	pending := &api.PendingUpgrade{
+		Versioned:  cbor.NewVersioned(api.LatestPendingUpgradeVersion),
 		Descriptor: descriptor,
 	}
 	u.pending = append(u.pending, pending)

@@ -49,6 +49,9 @@ const (
 	// Minimum and maximum descriptor versions that are allowed.
 	minDescriptorVersion = 1
 	maxDescriptorVersion = LatestDescriptorVersion
+
+	// LatestPendingUpgradeVersion is the latest pending upgrade struct version.
+	LatestPendingUpgradeVersion = 1
 )
 
 var (
@@ -188,6 +191,8 @@ func (d *Descriptor) EnsureCompatible() error {
 // PendingUpgrade describes a currently pending upgrade and includes the
 // submitted upgrade descriptor.
 type PendingUpgrade struct {
+	cbor.Versioned
+
 	// Descriptor is the upgrade descriptor describing the upgrade.
 	Descriptor *Descriptor `json:"descriptor"`
 
