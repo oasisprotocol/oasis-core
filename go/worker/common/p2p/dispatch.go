@@ -2,6 +2,7 @@ package p2p
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sync"
 	"sync/atomic"
@@ -177,16 +178,27 @@ func (h *topicHandler) dispatchMessage(peerID core.PeerID, m *queuedMsg, isIniti
 	}
 
 	h.logger.Debug("handling message", "message", m.msg, "from", m.from)
+	handled := false
+	var lastError error
 	for _, handler := range h.handlers {
 		// Dispatch the message to the handler.
-		// XXX: Could also dispatch the message to all handlers, and only fail after.
-		if err = handler.HandlePeerMessage(m.from, m.msg, m.peerID == h.p2p.host.ID()); err != nil {
+		err = handler.HandlePeerMessage(m.from, m.msg, m.peerID == h.p2p.host.ID())
+		if !errors.Is(err, p2pError.ErrUnhandledMessage) {
+			handled = true
+		}
+		switch {
+		case errors.Is(err, p2pError.ErrUnhandledMessage):
+			// Nothing to do here, continue to next handler.
+		case err != nil:
 			h.logger.Error("failed to handle message", "message", m.msg, "from", m.from, "err", err)
-			return err
+			lastError = err
 		}
 	}
+	if !handled {
+		return p2pError.EnsurePermanent(p2pError.ErrUnhandledMessage)
+	}
 
-	return nil
+	return lastError
 }
 
 func (h *topicHandler) retryWorker(m *queuedMsg) {
