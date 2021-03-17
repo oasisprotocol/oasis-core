@@ -466,6 +466,24 @@ func (sc *runtimeDynamicImpl) Run(childEnv *env.Env) error { // nolint: gocyclo
 		return err
 	}
 
+	// Restart nodes to test that the nodes will re-register although
+	// the runtime is suspended.
+	sc.Logger.Info("Restarting storage node to ensure it re-registers")
+	if err = sc.Net.StorageWorkers()[0].Stop(); err != nil {
+		return fmt.Errorf("failed to stop node: %w", err)
+	}
+	if err = sc.Net.StorageWorkers()[0].Start(); err != nil {
+		return fmt.Errorf("failed to start node: %w", err)
+	}
+
+	sc.Logger.Info("Restarting compute node to ensure it re-registers")
+	if err = sc.Net.ComputeWorkers()[0].Stop(); err != nil {
+		return fmt.Errorf("failed to stop node: %w", err)
+	}
+	if err = sc.Net.ComputeWorkers()[0].Start(); err != nil {
+		return fmt.Errorf("failed to start node: %w", err)
+	}
+
 	// Another epoch transition to make sure the runtime keeps being suspended.
 	if err = sc.epochTransition(ctx); err != nil {
 		return err
