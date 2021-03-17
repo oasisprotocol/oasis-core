@@ -2,7 +2,6 @@
 package api
 
 import (
-	"bytes"
 	"context"
 	"fmt"
 
@@ -66,59 +65,14 @@ var (
 	ErrUpgradeInProgress = errors.New(ModuleName, 6, "upgrade: can not cancel upgrade in progress")
 )
 
-// UpgradeMethod is an upgrade descriptor method.
-type UpgradeMethod uint8
-
-const (
-	// UpgradeMethodInternal is the internal upgrade method, where the node
-	// binary itself has the migration code.
-	UpgradeMethodInternal UpgradeMethod = 1
-
-	// UpgradeMethodInternalName is the name of the upgrade method.
-	UpgradeMethodInternalName = "internal"
-)
-
-// String returns a string representation of a UpgradeMethod.
-func (m UpgradeMethod) String() string {
-	switch m {
-	case UpgradeMethodInternal:
-		return UpgradeMethodInternalName
-	default:
-		return fmt.Sprintf("[unknown upgrade method: %d]", m)
-	}
-}
-
-// MarshalText encodes a UpgradeMethod into text form.
-func (m UpgradeMethod) MarshalText() ([]byte, error) {
-	switch m {
-	case UpgradeMethodInternal:
-		return []byte(UpgradeMethodInternalName), nil
-	default:
-		return nil, fmt.Errorf("invalid upgrade method: %d", m)
-	}
-}
-
-// UnmarshalText decodes a text slice into an UpgradeMethod.
-func (m *UpgradeMethod) UnmarshalText(text []byte) error {
-	switch string(text) {
-	case UpgradeMethodInternalName:
-		*m = UpgradeMethodInternal
-	default:
-		return fmt.Errorf("invalid upgrade method: %s", string(text))
-	}
-	return nil
-}
-
 // Descriptor describes an upgrade.
 type Descriptor struct { // nolint: maligned
 	cbor.Versioned
 
-	// Name is the name of the upgrade. It should be derived from the node version.
-	Name string `json:"name"`
-	// Method is the upgrade method that should be used for this upgrade.
-	Method UpgradeMethod `json:"method"`
-	// Identifier is the upgrade method specific upgrade identifier.
-	Identifier cbor.RawMessage `json:"identifier"`
+	// Handler is the name of the upgrade handler.
+	Handler string `json:"handler"`
+	// Target is upgrade's target version.
+	Target version.ProtocolVersions `json:"target"`
 	// Epoch is the epoch at which the upgrade should happen.
 	Epoch beacon.EpochTime `json:"epoch"`
 }
@@ -128,13 +82,10 @@ func (d *Descriptor) Equals(other *Descriptor) bool {
 	if d.V != other.V {
 		return false
 	}
-	if d.Name != other.Name {
+	if d.Handler != other.Handler {
 		return false
 	}
-	if d.Method != other.Method {
-		return false
-	}
-	if !bytes.Equal(d.Identifier, other.Identifier) {
+	if d.Target != other.Target {
 		return false
 	}
 	if d.Epoch != other.Epoch {
@@ -151,14 +102,12 @@ func (d Descriptor) ValidateBasic() error {
 			maxDescriptorVersion,
 		)
 	}
-	switch d.Method {
-	case UpgradeMethodInternal:
-		var descriptorVersion version.ProtocolVersions
-		if err := cbor.Unmarshal(d.Identifier, &descriptorVersion); err != nil {
-			return fmt.Errorf("can't decode descriptor upgrade identifier: %w", err)
-		}
-	default:
-		return fmt.Errorf("invalid descriptor method: %v", d)
+	if d.Handler == "" {
+		return fmt.Errorf("empty descriptor handler")
+	}
+	empty := version.ProtocolVersions{}
+	if d.Target == empty {
+		return fmt.Errorf("empty target version")
 	}
 	if d.Epoch < 1 {
 		return fmt.Errorf("invalid descriptor epoch: %d", d.Epoch)
@@ -170,20 +119,10 @@ func (d Descriptor) ValidateBasic() error {
 // EnsureCompatible checks if currently running binary is compatible with
 // the upgrade descriptor.
 func (d *Descriptor) EnsureCompatible() error {
-	switch d.Method {
-	case UpgradeMethodInternal:
-		ownVersion := version.Versions
+	ownVersion := version.Versions
 
-		var descriptorVersion version.ProtocolVersions
-		if err := cbor.Unmarshal(d.Identifier, &descriptorVersion); err != nil {
-			return fmt.Errorf("can't decode descriptor upgrade identifier: %w", err)
-		}
-
-		if !ownVersion.Compatible(descriptorVersion) {
-			return fmt.Errorf("binary version not compatible: own: %s, required: %s", ownVersion, descriptorVersion)
-		}
-	default:
-		return fmt.Errorf("invalid upgrade method: %d", d.Method)
+	if !ownVersion.Compatible(d.Target) {
+		return fmt.Errorf("binary version not compatible: own: %s, required: %s", ownVersion, d.Target)
 	}
 	return nil
 }

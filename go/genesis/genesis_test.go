@@ -857,10 +857,10 @@ func TestGenesisSanityCheck(t *testing.T) {
 				Content: governance.ProposalContent{
 					Upgrade: &governance.UpgradeProposal{
 						Descriptor: upgrade.Descriptor{
-							Versioned:  cbor.NewVersioned(upgrade.LatestDescriptorVersion),
-							Method:     upgrade.UpgradeMethodInternal,
-							Epoch:      500,
-							Identifier: cbor.Marshal(version.Versions),
+							Versioned: cbor.NewVersioned(upgrade.LatestDescriptorVersion),
+							Handler:   "genesis_tests",
+							Target:    version.Versions,
+							Epoch:     500,
 						},
 					},
 				},
@@ -906,8 +906,8 @@ func TestGenesisSanityCheck(t *testing.T) {
 	require.Error(d.SanityCheck(), "proposal invalid content")
 
 	d.Governance.Proposals = validTestProposals()
-	d.Governance.Proposals[0].Content.Upgrade.Identifier = cbor.Marshal("abc")
-	require.Error(d.SanityCheck(), "proposal upgrade invalid identifier")
+	d.Governance.Proposals[0].Content.Upgrade.Target = version.ProtocolVersions{}
+	require.Error(d.SanityCheck(), "proposal upgrade invalid target")
 
 	d.Governance.Proposals = validTestProposals()
 	d.Governance.Proposals[0].ClosesAt = 5
@@ -952,6 +952,14 @@ func TestGenesisSanityCheck(t *testing.T) {
 	require.Error(d.SanityCheck(), "vote from a reserved address")
 	d.Governance.VoteEntries = nil
 
+	descriptor := func(epoch beacon.EpochTime) upgrade.Descriptor {
+		return upgrade.Descriptor{
+			Versioned: cbor.NewVersioned(upgrade.LatestDescriptorVersion),
+			Handler:   "handler_tests",
+			Target:    version.Versions,
+			Epoch:     epoch,
+		}
+	}
 	d.Governance.Proposals = validTestProposals()
 	d.Governance.Proposals = []*governance.Proposal{
 		{
@@ -960,12 +968,7 @@ func TestGenesisSanityCheck(t *testing.T) {
 			Submitter: testAcc2Address,
 			Content: governance.ProposalContent{
 				Upgrade: &governance.UpgradeProposal{
-					Descriptor: upgrade.Descriptor{
-						Versioned:  cbor.NewVersioned(upgrade.LatestDescriptorVersion),
-						Method:     upgrade.UpgradeMethodInternal,
-						Epoch:      400,
-						Identifier: cbor.Marshal(version.Versions),
-					},
+					Descriptor: descriptor(400),
 				},
 			},
 			State: governance.StatePassed,
@@ -980,12 +983,7 @@ func TestGenesisSanityCheck(t *testing.T) {
 		Submitter: testAcc2Address,
 		Content: governance.ProposalContent{
 			Upgrade: &governance.UpgradeProposal{
-				Descriptor: upgrade.Descriptor{
-					Versioned:  cbor.NewVersioned(upgrade.LatestDescriptorVersion),
-					Method:     upgrade.UpgradeMethodInternal,
-					Epoch:      710,
-					Identifier: cbor.Marshal(version.Versions),
-				},
+				Descriptor: descriptor(710),
 			},
 		},
 		State: governance.StatePassed,
@@ -999,12 +997,7 @@ func TestGenesisSanityCheck(t *testing.T) {
 		Submitter: testAcc2Address,
 		Content: governance.ProposalContent{
 			Upgrade: &governance.UpgradeProposal{
-				Descriptor: upgrade.Descriptor{
-					Versioned:  cbor.NewVersioned(upgrade.LatestDescriptorVersion),
-					Method:     upgrade.UpgradeMethodInternal,
-					Epoch:      410,
-					Identifier: cbor.Marshal(version.Versions),
-				},
+				Descriptor: descriptor(410),
 			},
 		},
 		State: governance.StatePassed,

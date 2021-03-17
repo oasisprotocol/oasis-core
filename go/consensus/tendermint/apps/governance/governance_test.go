@@ -328,13 +328,18 @@ func TestExecuteProposal(t *testing.T) {
 	ctx := appState.NewContext(abciAPI.ContextEndBlock, now)
 	defer ctx.Close()
 
-	defaultUpgradeProposal := &governance.UpgradeProposal{
+	defaultUpgradeProposal := governance.UpgradeProposal{
 		Descriptor: upgrade.Descriptor{
-			Versioned:  cbor.NewVersioned(upgrade.LatestDescriptorVersion),
-			Method:     upgrade.UpgradeMethodInternal,
-			Identifier: cbor.Marshal(version.Versions),
-			Epoch:      20,
+			Versioned: cbor.NewVersioned(upgrade.LatestDescriptorVersion),
+			Handler:   "default",
+			Target:    version.Versions,
+			Epoch:     20,
 		},
+	}
+	defaultAtEpoch := func(epoch beacon.EpochTime) *governance.UpgradeProposal {
+		proposal := defaultUpgradeProposal
+		proposal.Descriptor.Epoch = epoch
+		return &proposal
 	}
 
 	// Setup governance state.
@@ -353,7 +358,7 @@ func TestExecuteProposal(t *testing.T) {
 	require.NoError(err, "setting governance consensus parameters should not error")
 	// Prepare proposals.
 	err = state.SetProposal(ctx,
-		&governance.Proposal{ID: 1, Content: governance.ProposalContent{Upgrade: defaultUpgradeProposal}},
+		&governance.Proposal{ID: 1, Content: governance.ProposalContent{Upgrade: &defaultUpgradeProposal}},
 	)
 	require.NoError(err, "SetProposal")
 	err = state.SetProposal(ctx, &governance.Proposal{ID: 2, Content: governance.ProposalContent{CancelUpgrade: &governance.CancelUpgradeProposal{ProposalID: 1}}})
@@ -372,7 +377,7 @@ func TestExecuteProposal(t *testing.T) {
 			"executing upgrade proposal should fail if upgrade is already pending",
 			&governance.Proposal{
 				ID:      4,
-				Content: governance.ProposalContent{Upgrade: defaultUpgradeProposal},
+				Content: governance.ProposalContent{Upgrade: &defaultUpgradeProposal},
 			},
 			governance.ErrUpgradeAlreadyPending,
 		},
@@ -412,7 +417,7 @@ func TestExecuteProposal(t *testing.T) {
 			"executing upgrade proposal should now work",
 			&governance.Proposal{
 				ID:      7,
-				Content: governance.ProposalContent{Upgrade: defaultUpgradeProposal},
+				Content: governance.ProposalContent{Upgrade: &defaultUpgradeProposal},
 			},
 			nil,
 		},
@@ -420,7 +425,7 @@ func TestExecuteProposal(t *testing.T) {
 			"executing upgrade proposal should again fail with existing upgrade for same epoch",
 			&governance.Proposal{
 				ID:      8,
-				Content: governance.ProposalContent{Upgrade: defaultUpgradeProposal},
+				Content: governance.ProposalContent{Upgrade: &defaultUpgradeProposal},
 			},
 			governance.ErrUpgradeAlreadyPending,
 		},
@@ -428,15 +433,10 @@ func TestExecuteProposal(t *testing.T) {
 			"executing upgrade proposal should fail with existing upgrade just before the upgrade epoch",
 			&governance.Proposal{
 				ID: 9,
-				Content: governance.ProposalContent{Upgrade: &governance.UpgradeProposal{
-					Descriptor: upgrade.Descriptor{
-						Versioned:  cbor.NewVersioned(upgrade.LatestDescriptorVersion),
-						Name:       "test-upgrade",
-						Method:     upgrade.UpgradeMethodInternal,
-						Epoch:      22, // Already scheduled upgrade is at epoch 20.
-						Identifier: identifier,
-					},
-				}},
+				Content: governance.ProposalContent{
+					// Already scheduled upgrade is at epoch 20.
+					Upgrade: defaultAtEpoch(22),
+				},
 			},
 			governance.ErrUpgradeAlreadyPending,
 		},
@@ -444,14 +444,10 @@ func TestExecuteProposal(t *testing.T) {
 			"executing upgrade proposal should fail with existing upgrade just after the upgrade epoch",
 			&governance.Proposal{
 				ID: 10,
-				Content: governance.ProposalContent{Upgrade: &governance.UpgradeProposal{
-					Descriptor: upgrade.Descriptor{
-						Versioned: cbor.NewVersioned(upgrade.LatestDescriptorVersion),
-						Name:      "test-upgrade",
-						Method:    upgrade.UpgradeMethodInternal,
-						Epoch:     18, // Already scheduled upgrade is at epoch 20.
-					},
-				}},
+				Content: governance.ProposalContent{
+					// Already scheduled upgrade is at epoch 20.
+					Upgrade: defaultAtEpoch(18),
+				},
 			},
 			governance.ErrUpgradeAlreadyPending,
 		},
@@ -459,14 +455,10 @@ func TestExecuteProposal(t *testing.T) {
 			"executing upgrade proposal work with existing upgrade far enough from the upgrade epoch",
 			&governance.Proposal{
 				ID: 11,
-				Content: governance.ProposalContent{Upgrade: &governance.UpgradeProposal{
-					Descriptor: upgrade.Descriptor{
-						Versioned: cbor.NewVersioned(upgrade.LatestDescriptorVersion),
-						Name:      "test-upgrade",
-						Method:    upgrade.UpgradeMethodInternal,
-						Epoch:     32, // Already scheduled upgrade is at epoch 20.
-					},
-				}},
+				Content: governance.ProposalContent{
+					// Already scheduled upgrade is at epoch 20.
+					Upgrade: defaultAtEpoch(32),
+				},
 			},
 			nil,
 		},
@@ -474,14 +466,10 @@ func TestExecuteProposal(t *testing.T) {
 			"executing upgrade proposal work with existing upgrade far enough from the upgrade epoch",
 			&governance.Proposal{
 				ID: 12,
-				Content: governance.ProposalContent{Upgrade: &governance.UpgradeProposal{
-					Descriptor: upgrade.Descriptor{
-						Versioned: cbor.NewVersioned(upgrade.LatestDescriptorVersion),
-						Name:      "test-upgrade",
-						Method:    upgrade.UpgradeMethodInternal,
-						Epoch:     8, // Already scheduled upgrade is at epoch 20.
-					},
-				}},
+				Content: governance.ProposalContent{
+					// Already scheduled upgrade is at epoch 20.
+					Upgrade: defaultAtEpoch(8),
+				},
 			},
 			nil,
 		},
@@ -523,18 +511,16 @@ func TestBeginBlock(t *testing.T) {
 	// Prepare some pending upgrades.
 	upgrade11 := &governance.UpgradeProposal{
 		Descriptor: upgrade.Descriptor{
-			Versioned:  cbor.NewVersioned(upgrade.LatestDescriptorVersion),
-			Epoch:      11,
-			Method:     upgrade.UpgradeMethodInternal,
-			Identifier: cbor.Marshal(version.Versions),
+			Versioned: cbor.NewVersioned(upgrade.LatestDescriptorVersion),
+			Target:    version.Versions,
+			Epoch:     11,
 		},
 	}
 	upgrade12 := &governance.UpgradeProposal{
 		Descriptor: upgrade.Descriptor{
-			Versioned:  cbor.NewVersioned(upgrade.LatestDescriptorVersion),
-			Epoch:      12,
-			Method:     upgrade.UpgradeMethodInternal,
-			Identifier: cbor.Marshal(version.Versions),
+			Versioned: cbor.NewVersioned(upgrade.LatestDescriptorVersion),
+			Target:    version.Versions,
+			Epoch:     12,
 		},
 	}
 	err = state.SetProposal(ctx, &governance.Proposal{ID: 1, Content: governance.ProposalContent{Upgrade: upgrade11}})
@@ -667,11 +653,7 @@ func TestEndBlock(t *testing.T) {
 
 	// Upgrade proposal that should be rejected at epoch 11.
 	upgrade11 := &governance.UpgradeProposal{
-		Descriptor: upgrade.Descriptor{
-			Versioned: cbor.NewVersioned(upgrade.LatestDescriptorVersion),
-			Epoch:     20,
-			Name:      "test",
-		},
+		Descriptor: baseAtEpoch(11),
 	}
 	p1 := &governance.Proposal{
 		ID:        1,
@@ -685,11 +667,7 @@ func TestEndBlock(t *testing.T) {
 
 	// Upgrade proposal that should pass at epoch 12.
 	upgrade12 := &governance.UpgradeProposal{
-		Descriptor: upgrade.Descriptor{
-			Versioned: cbor.NewVersioned(upgrade.LatestDescriptorVersion),
-			Epoch:     30,
-			Name:      "test",
-		},
+		Descriptor: baseAtEpoch(30),
 	}
 	p2 := &governance.Proposal{
 		ID:        2,

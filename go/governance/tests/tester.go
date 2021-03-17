@@ -2,7 +2,6 @@
 package tests
 
 import (
-	"bytes"
 	"context"
 	"testing"
 	"time"
@@ -152,11 +151,10 @@ func testProposals(t *testing.T, backend api.Backend, consensus consensusAPI.Bac
 	proposal = &api.ProposalContent{
 		Upgrade: &api.UpgradeProposal{
 			Descriptor: upgrade.Descriptor{
-				Versioned:  cbor.NewVersioned(upgrade.LatestDescriptorVersion),
-				Identifier: cbor.Marshal(version.Versions),
-				Epoch:      currentEpoch + 200,
-				Method:     upgrade.UpgradeMethodInternal,
-				Name:       "test-upgrade",
+				Versioned: cbor.NewVersioned(upgrade.LatestDescriptorVersion),
+				Handler:   "test-upgrade",
+				Target:    version.Versions,
+				Epoch:     currentEpoch + 200,
 			},
 		},
 	}
@@ -177,11 +175,11 @@ func testProposals(t *testing.T, backend api.Backend, consensus consensusAPI.Bac
 			require.NoError(err, "Proposal query")
 
 			// Skip if this is not the proposal we submitted earlier.
-			if p.Content.Upgrade == nil || !bytes.Equal(p.Content.Upgrade.Identifier, proposal.Upgrade.Identifier) {
+			if p.Content.Upgrade == nil || !p.Content.Upgrade.Descriptor.Equals(&proposal.Upgrade.Descriptor) {
 				continue
 			}
 
-			require.EqualValues(proposal.Upgrade.Name, p.Content.Upgrade.Name, "expected proposal received")
+			require.EqualValues(proposal.Upgrade.Handler, p.Content.Upgrade.Handler, "expected proposal received")
 			require.EqualValues(submitterAddr, p.Submitter, "proposal submitter should be correct")
 
 			testState.submittedProposalID = pID

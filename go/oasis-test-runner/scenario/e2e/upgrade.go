@@ -33,18 +33,16 @@ var (
 
 	malformedDescriptor = []byte(`{
 		"v": 1,
-		"name": "nifty upgrade",
+		"handler": "nifty upgrade",
+		"target": "not a version",
 		"epoch": 1,
-		"method": "nifty",
-		"identifier": "this is a hash. i repeat. this is a hash, not a string."
 	}`)
 
 	baseDescriptor = upgrade.Descriptor{
-		Versioned:  cbor.NewVersioned(upgrade.LatestDescriptorVersion),
-		Name:       "base",
-		Epoch:      beacon.EpochTime(1),
-		Method:     upgrade.UpgradeMethodInternal,
-		Identifier: cbor.Marshal(version.Versions),
+		Versioned: cbor.NewVersioned(upgrade.LatestDescriptorVersion),
+		Handler:   "base",
+		Target:    version.Versions,
+		Epoch:     beacon.EpochTime(1),
 	}
 )
 
@@ -217,7 +215,7 @@ func (sc *nodeUpgradeImpl) Run(childEnv *env.Env) error { // nolint: gocyclo
 	// The node should exit immediately.
 	sc.Logger.Info("submitting descriptor with nonexistent upgrade handler")
 	nonExistingDescriptor := baseDescriptor
-	nonExistingDescriptor.Name = "nonexistent"
+	nonExistingDescriptor.Handler = "nonexistent"
 	nonExistingDescriptor.Epoch = sc.currentEpoch + 1
 
 	desc, err := json.Marshal(nonExistingDescriptor)
@@ -277,7 +275,7 @@ func (sc *nodeUpgradeImpl) Run(childEnv *env.Env) error { // nolint: gocyclo
 	store.Close()
 
 	validDescriptor := baseDescriptor
-	validDescriptor.Name = migrations.DummyUpgradeName
+	validDescriptor.Handler = migrations.DummyUpgradeHandler
 	validDescriptor.Epoch = sc.currentEpoch + 1
 	desc, err = json.Marshal(validDescriptor)
 	if err != nil {

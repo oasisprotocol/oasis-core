@@ -104,10 +104,10 @@ func SanityCheckPendingUpgrades(upgrades []*upgrade.Descriptor, epoch beacon.Epo
 	var upgradeEpochs []beacon.EpochTime
 	for _, up := range upgrades {
 		if err := up.ValidateBasic(); err != nil {
-			return fmt.Errorf("pending upgrade %v: descriptor validation failure: %w", up.Name, err)
+			return fmt.Errorf("pending upgrade %v: descriptor validation failure: %w", up.Handler, err)
 		}
 		if up.Epoch < epoch {
-			return fmt.Errorf("pending upgrade %v: past upgrade epoch", up.Name)
+			return fmt.Errorf("pending upgrade %v: past upgrade epoch", up.Handler)
 		}
 		upgradeEpochs = append(upgradeEpochs, up.Epoch)
 	}

@@ -21,7 +21,14 @@ import (
 	upgrade "github.com/oasisprotocol/oasis-core/go/upgrade/api"
 )
 
-var identifier = cbor.Marshal(version.ProtocolVersions{ConsensusProtocol: version.FromU64(42)})
+func baseAtEpoch(epoch beacon.EpochTime) upgrade.Descriptor {
+	return upgrade.Descriptor{
+		Versioned: cbor.NewVersioned(upgrade.LatestDescriptorVersion),
+		Handler:   "base",
+		Target:    version.Versions,
+		Epoch:     epoch,
+	}
+}
 
 func TestInitChain(t *testing.T) {
 	require := require.New(t)
@@ -90,12 +97,11 @@ func TestInitChain(t *testing.T) {
 						ClosesAt:     20,
 						State:        governance.StateRejected,
 						InvalidVotes: 3,
-						Content: governance.ProposalContent{Upgrade: &governance.UpgradeProposal{
-							Descriptor: upgrade.Descriptor{
-								Versioned: cbor.NewVersioned(upgrade.LatestDescriptorVersion),
-								Method:    upgrade.UpgradeMethodInternal,
+						Content: governance.ProposalContent{
+							Upgrade: &governance.UpgradeProposal{
+								Descriptor: baseAtEpoch(1),
 							},
-						}},
+						},
 						CreatedAt: 10,
 						Deposit:   *quantity.NewFromUint64(10),
 						Submitter: addresses[0],
@@ -109,14 +115,11 @@ func TestInitChain(t *testing.T) {
 						ClosesAt:     20,
 						State:        governance.StatePassed,
 						InvalidVotes: 0,
-						Content: governance.ProposalContent{Upgrade: &governance.UpgradeProposal{
-							Descriptor: upgrade.Descriptor{
-								Versioned:  cbor.NewVersioned(upgrade.LatestDescriptorVersion),
-								Method:     upgrade.UpgradeMethodInternal,
-								Identifier: identifier,
-								Epoch:      30,
+						Content: governance.ProposalContent{
+							Upgrade: &governance.UpgradeProposal{
+								Descriptor: baseAtEpoch(30),
 							},
-						}},
+						},
 						CreatedAt: 10,
 						Deposit:   *quantity.NewFromUint64(10),
 						Submitter: addresses[1],
@@ -144,14 +147,11 @@ func TestInitChain(t *testing.T) {
 						ClosesAt:     100,
 						State:        governance.StateActive,
 						InvalidVotes: 0,
-						Content: governance.ProposalContent{Upgrade: &governance.UpgradeProposal{
-							Descriptor: upgrade.Descriptor{
-								Versioned:  cbor.NewVersioned(upgrade.LatestDescriptorVersion),
-								Method:     upgrade.UpgradeMethodInternal,
-								Identifier: identifier,
-								Epoch:      10000,
+						Content: governance.ProposalContent{
+							Upgrade: &governance.UpgradeProposal{
+								Descriptor: baseAtEpoch(10000),
 							},
-						}},
+						},
 						CreatedAt: 20,
 						Deposit:   *quantity.NewFromUint64(10),
 						Submitter: addresses[3],
@@ -164,12 +164,7 @@ func TestInitChain(t *testing.T) {
 						InvalidVotes: 0,
 						Content: governance.ProposalContent{
 							Upgrade: &governance.UpgradeProposal{
-								Descriptor: upgrade.Descriptor{
-									Versioned:  cbor.NewVersioned(upgrade.LatestDescriptorVersion),
-									Method:     upgrade.UpgradeMethodInternal,
-									Identifier: identifier,
-									Epoch:      1000,
-								},
+								Descriptor: baseAtEpoch(1000),
 							},
 						},
 						CreatedAt: 20,
@@ -187,12 +182,7 @@ func TestInitChain(t *testing.T) {
 						InvalidVotes: 0,
 						Content: governance.ProposalContent{
 							Upgrade: &governance.UpgradeProposal{
-								Descriptor: upgrade.Descriptor{
-									Versioned:  cbor.NewVersioned(upgrade.LatestDescriptorVersion),
-									Method:     upgrade.UpgradeMethodInternal,
-									Identifier: identifier,
-									Epoch:      2000,
-								},
+								Descriptor: baseAtEpoch(2000),
 							},
 						},
 						CreatedAt: 60,
@@ -208,14 +198,11 @@ func TestInitChain(t *testing.T) {
 						ClosesAt:     70,
 						State:        governance.StatePassed,
 						InvalidVotes: 0,
-						Content: governance.ProposalContent{Upgrade: &governance.UpgradeProposal{
-							Descriptor: upgrade.Descriptor{
-								Versioned:  cbor.NewVersioned(upgrade.LatestDescriptorVersion),
-								Method:     upgrade.UpgradeMethodInternal,
-								Identifier: identifier,
-								Epoch:      2000,
+						Content: governance.ProposalContent{
+							Upgrade: &governance.UpgradeProposal{
+								Descriptor: baseAtEpoch(2000),
 							},
-						}},
+						},
 						CreatedAt: 60,
 						Deposit:   *quantity.NewFromUint64(10),
 						Submitter: addresses[4],
@@ -328,15 +315,11 @@ func TestGenesis(t *testing.T) {
 			ClosesAt:     20,
 			State:        governance.StateRejected,
 			InvalidVotes: 3,
-			Content: governance.ProposalContent{Upgrade: &governance.UpgradeProposal{
-				Descriptor: upgrade.Descriptor{
-
-					Versioned:  cbor.NewVersioned(upgrade.LatestDescriptorVersion),
-					Method:     upgrade.UpgradeMethodInternal,
-					Identifier: identifier,
-					Epoch:      30,
+			Content: governance.ProposalContent{
+				Upgrade: &governance.UpgradeProposal{
+					Descriptor: baseAtEpoch(30),
 				},
-			}},
+			},
 			CreatedAt: 10,
 			Deposit:   *quantity.NewFromUint64(10),
 			Submitter: addresses[0],
@@ -350,14 +333,11 @@ func TestGenesis(t *testing.T) {
 			ClosesAt:     20,
 			State:        governance.StatePassed,
 			InvalidVotes: 0,
-			Content: governance.ProposalContent{Upgrade: &governance.UpgradeProposal{
-				Descriptor: upgrade.Descriptor{
-					Versioned:  cbor.NewVersioned(upgrade.LatestDescriptorVersion),
-					Method:     upgrade.UpgradeMethodInternal,
-					Identifier: identifier,
-					Epoch:      30,
+			Content: governance.ProposalContent{
+				Upgrade: &governance.UpgradeProposal{
+					Descriptor: baseAtEpoch(30),
 				},
-			}},
+			},
 			CreatedAt: 10,
 			Deposit:   *quantity.NewFromUint64(10),
 			Submitter: addresses[1],
@@ -385,14 +365,11 @@ func TestGenesis(t *testing.T) {
 			ClosesAt:     100,
 			State:        governance.StateActive,
 			InvalidVotes: 0,
-			Content: governance.ProposalContent{Upgrade: &governance.UpgradeProposal{
-				Descriptor: upgrade.Descriptor{
-					Versioned:  cbor.NewVersioned(upgrade.LatestDescriptorVersion),
-					Method:     upgrade.UpgradeMethodInternal,
-					Identifier: identifier,
-					Epoch:      10000,
+			Content: governance.ProposalContent{
+				Upgrade: &governance.UpgradeProposal{
+					Descriptor: baseAtEpoch(10000),
 				},
-			}},
+			},
 			CreatedAt: 20,
 			Deposit:   *quantity.NewFromUint64(10),
 			Submitter: addresses[3],
@@ -404,12 +381,7 @@ func TestGenesis(t *testing.T) {
 			State:        governance.StatePassed,
 			InvalidVotes: 0,
 			Content: governance.ProposalContent{Upgrade: &governance.UpgradeProposal{
-				Descriptor: upgrade.Descriptor{
-					Versioned:  cbor.NewVersioned(upgrade.LatestDescriptorVersion),
-					Method:     upgrade.UpgradeMethodInternal,
-					Identifier: identifier,
-					Epoch:      1000,
-				},
+				Descriptor: baseAtEpoch(10000),
 			}},
 			CreatedAt: 20,
 			Deposit:   *quantity.NewFromUint64(10),

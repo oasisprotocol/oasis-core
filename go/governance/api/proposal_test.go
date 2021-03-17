@@ -260,7 +260,7 @@ func TestPendingUpgradesFromProposals(t *testing.T) {
 				Upgrade: &UpgradeProposal{
 					Descriptor: api.Descriptor{
 						Versioned: cbor.NewVersioned(upgrade.LatestDescriptorVersion),
-						Name:      "in past",
+						Handler:   "in past",
 						Epoch:     beacon.EpochTime(10),
 					},
 				},
@@ -274,7 +274,7 @@ func TestPendingUpgradesFromProposals(t *testing.T) {
 				Upgrade: &UpgradeProposal{
 					Descriptor: api.Descriptor{
 						Versioned: cbor.NewVersioned(upgrade.LatestDescriptorVersion),
-						Name:      "canceled",
+						Handler:   "canceled",
 						Epoch:     beacon.EpochTime(30),
 					},
 				},
@@ -288,7 +288,7 @@ func TestPendingUpgradesFromProposals(t *testing.T) {
 				Upgrade: &UpgradeProposal{
 					Descriptor: api.Descriptor{
 						Versioned: cbor.NewVersioned(upgrade.LatestDescriptorVersion),
-						Name:      "not passed",
+						Handler:   "not passed",
 						Epoch:     beacon.EpochTime(30),
 					},
 				},
@@ -302,7 +302,7 @@ func TestPendingUpgradesFromProposals(t *testing.T) {
 				Upgrade: &UpgradeProposal{
 					Descriptor: api.Descriptor{
 						Versioned: cbor.NewVersioned(upgrade.LatestDescriptorVersion),
-						Name:      "passed",
+						Handler:   "passed",
 						Epoch:     beacon.EpochTime(40),
 					},
 				},
@@ -316,7 +316,7 @@ func TestPendingUpgradesFromProposals(t *testing.T) {
 				Upgrade: &UpgradeProposal{
 					Descriptor: api.Descriptor{
 						Versioned: cbor.NewVersioned(upgrade.LatestDescriptorVersion),
-						Name:      "passed2",
+						Handler:   "passed2",
 						Epoch:     beacon.EpochTime(50),
 					},
 				},

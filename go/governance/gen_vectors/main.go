@@ -36,49 +36,50 @@ func main() {
 		// Generate different nonces.
 		for _, nonce := range []uint64{0, 1, 10, 42, 1000, 1_000_000, 10_000_000, math.MaxUint64} {
 			// Valid submit upgrade proposal transaction.
-			for _, epoch := range []uint64{0, 1000, 10_000_000} {
-				for _, name := range []string{"", "descriptor-name"} {
-					for _, identifier := range []version.ProtocolVersions{
-						{},
-						{ConsensusProtocol: version.Version{Major: 1, Minor: 2, Patch: 3}},
-						{
-							ConsensusProtocol: version.Version{
-								Major: 0,
-								Minor: 12,
-								Patch: 1,
-							},
-							RuntimeCommitteeProtocol: version.Version{
-								Major: 42,
-								Minor: 0,
-								Patch: 1,
-							},
-							RuntimeHostProtocol: version.Version{
-								Major: 1,
-								Minor: 2,
-								Patch: 3,
-							},
-							Toolchain: version.Version{
-								Major: 10,
-								Minor: 2,
-								Patch: 0,
-							},
-						},
-						version.Versions,
-					} {
-						for _, tx := range []*transaction.Transaction{
-							governance.NewSubmitProposalTx(nonce, fee, &governance.ProposalContent{
-								Upgrade: &governance.UpgradeProposal{
-									Descriptor: api.Descriptor{
-										Versioned:  cbor.NewVersioned(api.LatestDescriptorVersion),
-										Name:       name,
-										Method:     api.UpgradeMethodInternal,
-										Identifier: cbor.Marshal(identifier),
-										Epoch:      beacon.EpochTime(epoch),
-									},
+			for _, v := range []uint16{0, api.LatestDescriptorVersion} {
+				for _, epoch := range []uint64{0, 1000, 10_000_000} {
+					for _, handler := range []string{"", "descriptor-handler"} {
+						for _, version := range []version.ProtocolVersions{
+							{},
+							{ConsensusProtocol: version.Version{Major: 1, Minor: 2, Patch: 3}},
+							{
+								ConsensusProtocol: version.Version{
+									Major: 0,
+									Minor: 12,
+									Patch: 1,
 								},
-							}),
+								RuntimeCommitteeProtocol: version.Version{
+									Major: 42,
+									Minor: 0,
+									Patch: 1,
+								},
+								RuntimeHostProtocol: version.Version{
+									Major: 1,
+									Minor: 2,
+									Patch: 3,
+								},
+								Toolchain: version.Version{
+									Major: 10,
+									Minor: 2,
+									Patch: 0,
+								},
+							},
+							version.Versions,
 						} {
-							vectors = append(vectors, testvectors.MakeTestVector("SubmitProposal", tx))
+							for _, tx := range []*transaction.Transaction{
+								governance.NewSubmitProposalTx(nonce, fee, &governance.ProposalContent{
+									Upgrade: &governance.UpgradeProposal{
+										Descriptor: api.Descriptor{
+											Versioned: cbor.NewVersioned(v),
+											Handler:   handler,
+											Target:    version,
+											Epoch:     beacon.EpochTime(epoch),
+										},
+									},
+								}),
+							} {
+								vectors = append(vectors, testvectors.MakeTestVector("SubmitProposal", tx))
+							}
 						}
 					}
 				}
