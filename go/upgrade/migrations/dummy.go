@@ -16,8 +16,8 @@ import (
 )
 
 const (
-	// DummyUpgradeName is the name of the dummy upgrade, for use in the upgrade descriptor.
-	DummyUpgradeName = "__e2e-test-valid"
+	// DummyUpgradeHandler is the name of the dummy upgrade, for use in the upgrade descriptor.
+	DummyUpgradeHandler = "__e2e-test-valid"
 
 	testSigningSeed = "__e2e-test-migration-entity"
 )
@@ -99,5 +99,5 @@ func (th *dummyMigrationHandler) ConsensusUpgrade(ctx *Context, privateCtx inter
 }
 
 func init() {
-	Register(DummyUpgradeName, &dummyMigrationHandler{})
+	Register(DummyUpgradeHandler, &dummyMigrationHandler{})
 }

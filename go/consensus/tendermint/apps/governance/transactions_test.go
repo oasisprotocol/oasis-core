@@ -8,7 +8,6 @@ import (
 	"github.com/stretchr/testify/require"
 
 	beacon "github.com/oasisprotocol/oasis-core/go/beacon/api"
-	"github.com/oasisprotocol/oasis-core/go/common/cbor"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	"github.com/oasisprotocol/oasis-core/go/common/quantity"
 	abciAPI "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/api"
@@ -18,7 +17,6 @@ import (
 	stakingState "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/apps/staking/state"
 	governance "github.com/oasisprotocol/oasis-core/go/governance/api"
 	staking "github.com/oasisprotocol/oasis-core/go/staking/api"
-	upgrade "github.com/oasisprotocol/oasis-core/go/upgrade/api"
 )
 
 func TestSubmitProposal(t *testing.T) {
@@ -84,12 +82,7 @@ func TestSubmitProposal(t *testing.T) {
 			baseConsParams,
 			reservedPK,
 			&governance.ProposalContent{Upgrade: &governance.UpgradeProposal{
-				Descriptor: upgrade.Descriptor{
-					Versioned:  cbor.NewVersioned(upgrade.LatestDescriptorVersion),
-					Method:     upgrade.UpgradeMethodInternal,
-					Epoch:      10,
-					Identifier: identifier,
-				},
+				Descriptor: baseAtEpoch(10),
 			}},
 			func() {},
 			staking.ErrForbidden,
@@ -99,12 +92,7 @@ func TestSubmitProposal(t *testing.T) {
 			baseConsParams,
 			noFundsPk,
 			&governance.ProposalContent{Upgrade: &governance.UpgradeProposal{
-				Descriptor: upgrade.Descriptor{
-					Versioned:  cbor.NewVersioned(upgrade.LatestDescriptorVersion),
-					Method:     upgrade.UpgradeMethodInternal,
-					Epoch:      10,
-					Identifier: identifier,
-				},
+				Descriptor: baseAtEpoch(10),
 			}},
 			func() {},
 			staking.ErrInsufficientBalance,
@@ -122,12 +110,7 @@ func TestSubmitProposal(t *testing.T) {
 			baseConsParams,
 			pk1,
 			&governance.ProposalContent{Upgrade: &governance.UpgradeProposal{
-				Descriptor: upgrade.Descriptor{
-					Versioned:  cbor.NewVersioned(upgrade.LatestDescriptorVersion),
-					Method:     upgrade.UpgradeMethodInternal,
-					Epoch:      10,
-					Identifier: identifier,
-				},
+				Descriptor: baseAtEpoch(10),
 			}},
 			func() {},
 			governance.ErrUpgradeTooSoon,
@@ -150,12 +133,7 @@ func TestSubmitProposal(t *testing.T) {
 				ProposalID: 10,
 			}},
 			func() {
-				upgrade := upgrade.Descriptor{
-					Versioned:  cbor.NewVersioned(upgrade.LatestDescriptorVersion),
-					Method:     upgrade.UpgradeMethodInternal,
-					Epoch:      10,
-					Identifier: identifier,
-				}
+				upgrade := baseAtEpoch(10)
 				err = state.SetPendingUpgrade(ctx, 10, &upgrade)
 				require.NoError(err, "SetPendingUpgrade()")
 				err = state.SetProposal(ctx, &governance.Proposal{
@@ -174,14 +152,11 @@ func TestSubmitProposal(t *testing.T) {
 			"should work with valid upgrade descriptor",
 			baseConsParams,
 			pk1,
-			&governance.ProposalContent{Upgrade: &governance.UpgradeProposal{
-				Descriptor: upgrade.Descriptor{
-					Versioned:  cbor.NewVersioned(upgrade.LatestDescriptorVersion),
-					Method:     upgrade.UpgradeMethodInternal,
-					Epoch:      200,
-					Identifier: identifier,
+			&governance.ProposalContent{
+				Upgrade: &governance.UpgradeProposal{
+					Descriptor: baseAtEpoch(200),
 				},
-			}},
+			},
 			func() {},
 			nil,
 		},
@@ -193,11 +168,7 @@ func TestSubmitProposal(t *testing.T) {
 				ProposalID: 20,
 			}},
 			func() {
-				upgrade := upgrade.Descriptor{
-					Versioned: cbor.NewVersioned(upgrade.LatestDescriptorVersion),
-					Method:    upgrade.UpgradeMethodInternal,
-					Epoch:     500,
-				}
+				upgrade := baseAtEpoch(500)
 				err = state.SetPendingUpgrade(ctx, 20, &upgrade)
 				require.NoError(err, "SetPendingUpgrade()")
 				err = state.SetProposal(ctx, &governance.Proposal{
@@ -234,21 +205,13 @@ func TestSubmitProposal(t *testing.T) {
 			"should fail submit upgrade proposal for pending upgrade scheduled close",
 			baseConsParams,
 			pk1,
-			&governance.ProposalContent{Upgrade: &governance.UpgradeProposal{
-				Descriptor: upgrade.Descriptor{
-					Versioned:  cbor.NewVersioned(upgrade.LatestDescriptorVersion),
-					Method:     upgrade.UpgradeMethodInternal,
-					Identifier: identifier,
-					Epoch:      210,
+			&governance.ProposalContent{
+				Upgrade: &governance.UpgradeProposal{
+					Descriptor: baseAtEpoch(210),
 				},
-			}},
+			},
 			func() {
-				upgrade := upgrade.Descriptor{
-					Versioned:  cbor.NewVersioned(upgrade.LatestDescriptorVersion),
-					Method:     upgrade.UpgradeMethodInternal,
-					Epoch:      200,
-					Identifier: identifier,
-				}
+				upgrade := baseAtEpoch(200)
 				err = state.SetPendingUpgrade(ctx, 10, &upgrade)
 				require.NoError(err, "SetPendingUpgrade()")
 				err = state.SetProposal(ctx, &governance.Proposal{

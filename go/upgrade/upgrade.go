@@ -54,7 +54,7 @@ func (u *upgradeManager) SubmitDescriptor(ctx context.Context, descriptor *api.D
 	u.pending = append(u.pending, pending)
 
 	u.logger.Info("received upgrade descriptor, scheduling shutdown",
-		"name", pending.Descriptor.Name,
+		"handler", pending.Descriptor.Handler,
 		"epoch", pending.Descriptor.Epoch,
 	)
 
@@ -144,7 +144,7 @@ func (u *upgradeManager) checkStatus() error {
 		// The upgrade should proceed right now. Check that we have the right binary.
 		if err = pu.Descriptor.EnsureCompatible(); err != nil {
 			u.logger.Error("incompatible binary version for upgrade",
-				"upgrade_name", pu.Descriptor.Name,
+				"handler", pu.Descriptor.Handler,
 				"err", err,
 				logging.LogEvent, api.LogEventIncompatibleBinary,
 			)
@@ -152,9 +152,9 @@ func (u *upgradeManager) checkStatus() error {
 		}
 
 		// Ensure the upgrade handler exists.
-		if _, err = migrations.GetHandler(pu.Descriptor.Name); err != nil {
+		if _, err = migrations.GetHandler(pu.Descriptor.Handler); err != nil {
 			u.logger.Error("error getting migration handler for upgrade",
-				"name", pu.Descriptor.Name,
+				"handler", pu.Descriptor.Handler,
 				"err", err,
 			)
 			return err
@@ -187,7 +187,7 @@ func (u *upgradeManager) flushDescriptorLocked() error {
 	for _, pu := range u.pending {
 		if pu.IsCompleted() {
 			u.logger.Info("upgrade completed, removing state",
-				"name", pu.Descriptor.Name,
+				"handler", pu.Descriptor.Handler,
 			)
 			continue
 		}
@@ -208,18 +208,18 @@ func (u *upgradeManager) StartupUpgrade() error {
 		}
 		if pu.HasStage(api.UpgradeStageStartup) {
 			u.logger.Warn("startup upgrade already performed, skipping",
-				"name", pu.Descriptor.Name,
+				"handler", pu.Descriptor.Handler,
 			)
 			continue
 		}
 
 		// Execute the statup stage.
 		u.logger.Warn("performing startup upgrade",
-			"name", pu.Descriptor.Name,
+			"handler", pu.Descriptor.Handler,
 			logging.LogEvent, api.LogEventStartupUpgrade,
 		)
 		migrationCtx := migrations.NewContext(pu, u.dataDir)
-		handler, err := migrations.GetHandler(pu.Descriptor.Name)
+		handler, err := migrations.GetHandler(pu.Descriptor.Handler)
 		if err != nil {
 			return err
 		}
@@ -263,12 +263,12 @@ func (u *upgradeManager) ConsensusUpgrade(privateCtx interface{}, currentEpoch b
 
 		if !pu.HasStage(api.UpgradeStageConsensus) {
 			u.logger.Warn("performing consensus upgrade",
-				"name", pu.Descriptor.Name,
+				"handler", pu.Descriptor.Handler,
 				logging.LogEvent, api.LogEventConsensusUpgrade,
 			)
 
 			migrationCtx := migrations.NewContext(pu, u.dataDir)
-			handler, err := migrations.GetHandler(pu.Descriptor.Name)
+			handler, err := migrations.GetHandler(pu.Descriptor.Handler)
 			if err != nil {
 				return err
 			}

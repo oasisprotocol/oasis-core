@@ -42,10 +42,10 @@ func TestValidateBasic(t *testing.T) {
 			p: &ProposalContent{
 				Upgrade: &UpgradeProposal{
 					Descriptor: api.Descriptor{
-						Versioned:  cbor.NewVersioned(upgrade.LatestDescriptorVersion),
-						Method:     api.UpgradeMethodInternal,
-						Epoch:      42,
-						Identifier: cbor.Marshal(version.Versions),
+						Versioned: cbor.NewVersioned(upgrade.LatestDescriptorVersion),
+						Handler:   "api_test_handler",
+						Target:    version.Versions,
+						Epoch:     42,
 					},
 				},
 			},
@@ -79,12 +79,12 @@ func TestProposalContentEquals(t *testing.T) {
 			msg: "upgrade proposals should be equal",
 			p1: &ProposalContent{
 				Upgrade: &UpgradeProposal{
-					Descriptor: api.Descriptor{Name: "test"},
+					Descriptor: api.Descriptor{Handler: "test"},
 				},
 			},
 			p2: &ProposalContent{
 				Upgrade: &UpgradeProposal{
-					Descriptor: api.Descriptor{Name: "test"},
+					Descriptor: api.Descriptor{Handler: "test"},
 				},
 			},
 			equals: true,
@@ -93,12 +93,12 @@ func TestProposalContentEquals(t *testing.T) {
 			msg: "upgrade proposals should not be equal",
 			p1: &ProposalContent{
 				Upgrade: &UpgradeProposal{
-					Descriptor: api.Descriptor{Name: "test"},
+					Descriptor: api.Descriptor{Handler: "test"},
 				},
 			},
 			p2: &ProposalContent{
 				Upgrade: &UpgradeProposal{
-					Descriptor: api.Descriptor{Name: "test2"},
+					Descriptor: api.Descriptor{Handler: "test2"},
 				},
 			},
 			equals: false,
@@ -107,7 +107,7 @@ func TestProposalContentEquals(t *testing.T) {
 			msg: "cancel upgrade and upgrade proposal should not be equal",
 			p1: &ProposalContent{
 				Upgrade: &UpgradeProposal{
-					Descriptor: api.Descriptor{Name: "test"},
+					Descriptor: api.Descriptor{Handler: "test"},
 				},
 			},
 			p2: &ProposalContent{

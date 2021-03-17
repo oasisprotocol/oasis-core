@@ -104,7 +104,6 @@ type ProtocolVersions struct {
 	RuntimeHostProtocol      Version `json:"runtime_host_protocol"`
 	RuntimeCommitteeProtocol Version `json:"runtime_committee_protocol"`
 	ConsensusProtocol        Version `json:"consensus_protocol"`
-	Toolchain                Version `json:"toolchain"`
 }
 
 // Compatible returns if the two protocol versions are compatible.
@@ -118,17 +117,14 @@ func (pv *ProtocolVersions) Compatible(other ProtocolVersions) bool {
 	if pv.ConsensusProtocol.MaskNonMajor() != other.ConsensusProtocol.MaskNonMajor() {
 		return false
 	}
-	if pv.Toolchain.MaskNonMajor() != other.Toolchain.MaskNonMajor() {
-		return false
-	}
 	return true
 }
 
 // String returns the protocol versions as a string.
 func (pv ProtocolVersions) String() string {
 	return fmt.Sprintf(
-		"Consensus protocol: %s, Runtime Host protocol: %s, Runtime Committee protocol: %s, Go toolchain: %s",
-		pv.ConsensusProtocol, pv.RuntimeHostProtocol, pv.RuntimeCommitteeProtocol, pv.Toolchain,
+		"Consensus protocol: %s, Runtime Host protocol: %s, Runtime Committee protocol: %s",
+		pv.ConsensusProtocol, pv.RuntimeHostProtocol, pv.RuntimeCommitteeProtocol,
 	)
 }
 
@@ -137,7 +133,6 @@ var Versions = ProtocolVersions{
 	RuntimeHostProtocol,
 	RuntimeCommitteeProtocol,
 	ConsensusProtocol,
-	Toolchain,
 }
 
 func parseSemVerStr(s string) Version {

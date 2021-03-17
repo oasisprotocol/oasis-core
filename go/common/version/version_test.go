@@ -127,15 +127,6 @@ func TestProtocolVersionCompatible(t *testing.T) {
 		{
 			func() ProtocolVersions {
 				v := Versions
-				v.Toolchain.Major++
-				return v
-			},
-			false,
-			"toolchain major version change is not compatible",
-		},
-		{
-			func() ProtocolVersions {
-				v := Versions
 				v.RuntimeCommitteeProtocol.Major++
 				return v
 			},

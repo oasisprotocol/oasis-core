@@ -14,7 +14,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/scenario"
 )
 
-const upgradeName = "__e2e-test-upgrade-cancel"
+const upgradeHandler = "__e2e-test-upgrade-cancel"
 
 // NodeUpgradeCancel is the node upgrade scenario.
 var NodeUpgradeCancel scenario.Scenario = newNodeUpgradeCancelImpl()
@@ -99,7 +99,7 @@ func (sc *nodeUpgradeCancelImpl) Run(childEnv *env.Env) error {
 	sc.Logger.Info("submitting upgrade descriptor")
 
 	descriptor := baseDescriptor
-	descriptor.Name = upgradeName
+	descriptor.Handler = upgradeHandler
 	descriptor.Epoch = 3
 
 	filePath := path.Join(sc.Net.BasePath(), "upgrade-descriptor.json")

@@ -19,6 +19,15 @@ import (
 	upgrade "github.com/oasisprotocol/oasis-core/go/upgrade/api"
 )
 
+func descriptor(epoch beacon.EpochTime, target version.ProtocolVersions) upgrade.Descriptor {
+	return upgrade.Descriptor{
+		Versioned: cbor.NewVersioned(upgrade.LatestDescriptorVersion),
+		Handler:   "base",
+		Target:    target,
+		Epoch:     epoch,
+	}
+}
+
 func initProposals(require *require.Assertions, ctx *abciAPI.Context, s *MutableState) []*governance.Proposal {
 	fac := memorySigner.NewFactory()
 
@@ -34,12 +43,7 @@ func initProposals(require *require.Assertions, ctx *abciAPI.Context, s *Mutable
 			ClosesAt:  beacon.EpochTime(10),
 			Content: governance.ProposalContent{
 				Upgrade: &governance.UpgradeProposal{
-					Descriptor: upgrade.Descriptor{
-						Versioned:  cbor.NewVersioned(upgrade.LatestDescriptorVersion),
-						Name:       "test",
-						Identifier: cbor.Marshal(version.ProtocolVersions{ConsensusProtocol: version.FromU64(1)}),
-						Epoch:      beacon.EpochTime(100),
-					},
+					Descriptor: descriptor(100, version.ProtocolVersions{ConsensusProtocol: version.FromU64(1)}),
 				},
 			},
 			CreatedAt: beacon.EpochTime(1),
@@ -51,12 +55,7 @@ func initProposals(require *require.Assertions, ctx *abciAPI.Context, s *Mutable
 			ClosesAt:  beacon.EpochTime(20),
 			Content: governance.ProposalContent{
 				Upgrade: &governance.UpgradeProposal{
-					Descriptor: upgrade.Descriptor{
-						Versioned:  cbor.NewVersioned(upgrade.LatestDescriptorVersion),
-						Name:       "test2",
-						Identifier: cbor.Marshal(version.ProtocolVersions{ConsensusProtocol: version.FromU64(2)}),
-						Epoch:      beacon.EpochTime(200),
-					},
+					Descriptor: descriptor(200, version.ProtocolVersions{ConsensusProtocol: version.FromU64(2)}),
 				},
 			},
 			CreatedAt: beacon.EpochTime(11),
@@ -68,12 +67,7 @@ func initProposals(require *require.Assertions, ctx *abciAPI.Context, s *Mutable
 			ClosesAt:  beacon.EpochTime(30),
 			Content: governance.ProposalContent{
 				Upgrade: &governance.UpgradeProposal{
-					Descriptor: upgrade.Descriptor{
-						Versioned:  cbor.NewVersioned(upgrade.LatestDescriptorVersion),
-						Name:       "test3",
-						Identifier: cbor.Marshal(version.ProtocolVersions{ConsensusProtocol: version.FromU64(3)}),
-						Epoch:      beacon.EpochTime(300),
-					},
+					Descriptor: descriptor(300, version.ProtocolVersions{ConsensusProtocol: version.FromU64(3)}),
 				},
 			},
 			CreatedAt: beacon.EpochTime(21),
@@ -85,12 +79,7 @@ func initProposals(require *require.Assertions, ctx *abciAPI.Context, s *Mutable
 			ClosesAt:  beacon.EpochTime(30),
 			Content: governance.ProposalContent{
 				Upgrade: &governance.UpgradeProposal{
-					Descriptor: upgrade.Descriptor{
-						Versioned:  cbor.NewVersioned(upgrade.LatestDescriptorVersion),
-						Name:       "test4",
-						Identifier: cbor.Marshal(version.ProtocolVersions{ConsensusProtocol: version.FromU64(4)}),
-						Epoch:      beacon.EpochTime(300),
-					},
+					Descriptor: descriptor(300, version.ProtocolVersions{ConsensusProtocol: version.FromU64(4)}),
 				},
 			},
 			CreatedAt: beacon.EpochTime(21),

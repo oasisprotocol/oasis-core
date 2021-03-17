@@ -351,22 +351,21 @@ func (sc *governanceConsensusUpgradeImpl) Run(childEnv *env.Env) error { // noli
 
 	// Prepare upgrade proposal.
 	upgradeEpoch := sc.currentEpoch + sc.Net.Config().GovernanceParameters.UpgradeMinEpochDiff
-	var identifier version.ProtocolVersions
+	var target version.ProtocolVersions
 	switch sc.correctUpgradeVersion {
 	case true:
-		identifier = version.Versions
+		target = version.Versions
 	default:
-		// Use empty version so that upgrade should fail.
+		target = version.ProtocolVersions{ConsensusProtocol: version.FromU64(192)}
 	}
 
 	content := &api.ProposalContent{
 		Upgrade: &api.UpgradeProposal{
 			Descriptor: upgrade.Descriptor{
-				Versioned:  cbor.NewVersioned(upgrade.LatestDescriptorVersion),
-				Identifier: cbor.Marshal(identifier),
-				Epoch:      upgradeEpoch,
-				Method:     upgrade.UpgradeMethodInternal,
-				Name:       migrations.DummyUpgradeName,
+				Versioned: cbor.NewVersioned(upgrade.LatestDescriptorVersion),
+				Handler:   migrations.DummyUpgradeHandler,
+				Target:    target,
+				Epoch:     upgradeEpoch,
 			},
 		},
 	}
