@@ -11,9 +11,9 @@ import (
 	"github.com/spf13/viper"
 
 	"github.com/oasisprotocol/oasis-core/go/common/prettyprint"
-	genesisAPI "github.com/oasisprotocol/oasis-core/go/genesis/api"
 	cmdCommon "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common"
 	cmdConsensus "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/consensus"
+	cmdContext "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/context"
 	cmdFlags "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/flags"
 	cmdGrpc "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/grpc"
 	"github.com/oasisprotocol/oasis-core/go/staking/api"
@@ -127,16 +127,6 @@ var (
 		Run:   doAccountWithdraw,
 	}
 )
-
-// getCtxWithInfo returns a new context with values that contain additional
-// information (ticker symbol, value base-10 exponent, genesis document's hash).
-func getCtxWithInfo(genesis *genesisAPI.Document) context.Context {
-	ctx := context.Background()
-	ctx = context.WithValue(ctx, prettyprint.ContextKeyTokenSymbol, genesis.Staking.TokenSymbol)
-	ctx = context.WithValue(ctx, prettyprint.ContextKeyTokenValueExponent, genesis.Staking.TokenValueExponent)
-	ctx = context.WithValue(ctx, prettyprint.ContextKeyGenesisHash, genesis.Hash())
-	return ctx
-}
 
 func doAccountInfo(cmd *cobra.Command, args []string) {
 	if err := cmdCommon.Init(); err != nil {
@@ -273,7 +263,7 @@ func doAccountTransfer(cmd *cobra.Command, args []string) {
 	nonce, fee := cmdConsensus.GetTxNonceAndFee()
 	tx := api.NewTransferTx(nonce, fee, &xfer)
 
-	cmdConsensus.SignAndSaveTx(getCtxWithInfo(genesis), tx, nil)
+	cmdConsensus.SignAndSaveTx(cmdContext.GetCtxWithGenesisInfo(genesis), tx, nil)
 }
 
 func doAccountBurn(cmd *cobra.Command, args []string) {
@@ -295,7 +285,7 @@ func doAccountBurn(cmd *cobra.Command, args []string) {
 	nonce, fee := cmdConsensus.GetTxNonceAndFee()
 	tx := api.NewBurnTx(nonce, fee, &burn)
 
-	cmdConsensus.SignAndSaveTx(getCtxWithInfo(genesis), tx, nil)
+	cmdConsensus.SignAndSaveTx(cmdContext.GetCtxWithGenesisInfo(genesis), tx, nil)
 }
 
 func doAccountEscrow(cmd *cobra.Command, args []string) {
@@ -323,7 +313,7 @@ func doAccountEscrow(cmd *cobra.Command, args []string) {
 	nonce, fee := cmdConsensus.GetTxNonceAndFee()
 	tx := api.NewAddEscrowTx(nonce, fee, &escrow)
 
-	cmdConsensus.SignAndSaveTx(getCtxWithInfo(genesis), tx, nil)
+	cmdConsensus.SignAndSaveTx(cmdContext.GetCtxWithGenesisInfo(genesis), tx, nil)
 }
 
 func doAccountReclaimEscrow(cmd *cobra.Command, args []string) {
@@ -351,7 +341,7 @@ func doAccountReclaimEscrow(cmd *cobra.Command, args []string) {
 	nonce, fee := cmdConsensus.GetTxNonceAndFee()
 	tx := api.NewReclaimEscrowTx(nonce, fee, &reclaim)
 
-	cmdConsensus.SignAndSaveTx(getCtxWithInfo(genesis), tx, nil)
+	cmdConsensus.SignAndSaveTx(cmdContext.GetCtxWithGenesisInfo(genesis), tx, nil)
 }
 
 func scanRateStep(dst *api.CommissionRateStep, raw string) error {
@@ -429,7 +419,7 @@ func doAccountAmendCommissionSchedule(cmd *cobra.Command, args []string) {
 	nonce, fee := cmdConsensus.GetTxNonceAndFee()
 	tx := api.NewAmendCommissionScheduleTx(nonce, fee, &amendCommissionSchedule)
 
-	cmdConsensus.SignAndSaveTx(getCtxWithInfo(genesis), tx, nil)
+	cmdConsensus.SignAndSaveTx(cmdContext.GetCtxWithGenesisInfo(genesis), tx, nil)
 }
 
 func doAccountAllow(cmd *cobra.Command, args []string) {
@@ -466,7 +456,7 @@ func doAccountAllow(cmd *cobra.Command, args []string) {
 	nonce, fee := cmdConsensus.GetTxNonceAndFee()
 	tx := api.NewAllowTx(nonce, fee, &allow)
 
-	cmdConsensus.SignAndSaveTx(getCtxWithInfo(genesis), tx, nil)
+	cmdConsensus.SignAndSaveTx(cmdContext.GetCtxWithGenesisInfo(genesis), tx, nil)
 }
 
 func doAccountWithdraw(cmd *cobra.Command, args []string) {
@@ -494,7 +484,7 @@ func doAccountWithdraw(cmd *cobra.Command, args []string) {
 	nonce, fee := cmdConsensus.GetTxNonceAndFee()
 	tx := api.NewWithdrawTx(nonce, fee, &withdraw)
 
-	cmdConsensus.SignAndSaveTx(getCtxWithInfo(genesis), tx, nil)
+	cmdConsensus.SignAndSaveTx(cmdContext.GetCtxWithGenesisInfo(genesis), tx, nil)
 }
 
 func registerAccountCmd() {
