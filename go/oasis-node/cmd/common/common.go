@@ -318,11 +318,9 @@ func GetUserConfirmation(prompt string) bool {
 // SetBasicVersionTemplate sets a basic custom version template for the given
 // cobra command that shows the version of Oasis Core and the Go toolchain.
 func SetBasicVersionTemplate(cmd *cobra.Command) {
-	cobra.AddTemplateFunc("additionalVersions", func() interface{} { return version.Versions })
+	cobra.AddTemplateFunc("toolchain", func() interface{} { return version.Toolchain })
 
 	cmd.SetVersionTemplate(`Software version: {{.Version}}
-{{- with additionalVersions }}
-Go toolchain version: {{ .Toolchain }}
-{{ end -}}
+Go toolchain version: {{ toolchain }}
 `)
 }

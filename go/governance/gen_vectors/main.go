@@ -58,11 +58,6 @@ func main() {
 									Minor: 2,
 									Patch: 3,
 								},
-								Toolchain: version.Version{
-									Major: 10,
-									Minor: 2,
-									Patch: 0,
-								},
 							},
 							version.Versions,
 						} {

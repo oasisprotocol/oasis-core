@@ -50,6 +50,7 @@ func Execute() {
 
 func initVersions() {
 	cobra.AddTemplateFunc("nodeVersion", func() interface{} { return version.Versions })
+	cobra.AddTemplateFunc("toolchain", func() interface{} { return version.Toolchain })
 
 	rootCmd.SetVersionTemplate(`Software version: {{.Version}}
 {{- with nodeVersion }}
@@ -58,8 +59,8 @@ Consensus:
 Runtime:
   Host protocol version:      {{ .RuntimeHostProtocol }}
   Committee protocol version: {{ .RuntimeCommitteeProtocol }}
-Go toolchain version: {{ .Toolchain }}
 {{ end -}}
+Go toolchain version: {{ toolchain }}
 `)
 }
 
