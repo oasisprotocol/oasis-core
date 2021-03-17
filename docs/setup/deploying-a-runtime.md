@@ -51,9 +51,9 @@ Should give output similar to:
 
 <!-- markdownlint-disable line-length -->
 ```
-{"v":1,"id":"JTUtHd4XYQjh//e6eYU7Pa/XMFG88WE+jixvceIfWrk=","nodes":["LQu4ZtFg8OJ0MC4M4QMeUR7Is6Xt4A/CW+PK/7TPiH0="]}
-{"v":1,"id":"+MJpnSTzc11dNI5emMa+asCJH5cxBiBCcpbYE4XBdso="}
-{"v":1,"id":"TqUyj5Q+9vZtqu10yw6Zw7HEX3Ywe0JQA9vHyzY47TU=","allow_entity_signed_nodes":true}
+{"v":2,"id":"JTUtHd4XYQjh//e6eYU7Pa/XMFG88WE+jixvceIfWrk=","nodes":["LQu4ZtFg8OJ0MC4M4QMeUR7Is6Xt4A/CW+PK/7TPiH0="]}
+{"v":2,"id":"+MJpnSTzc11dNI5emMa+asCJH5cxBiBCcpbYE4XBdso="}
+{"v":2,"id":"TqUyj5Q+9vZtqu10yw6Zw7HEX3Ywe0JQA9vHyzY47TU="}
 ```
 <!-- markdownlint-enable line-length -->
 
@@ -123,7 +123,7 @@ oasis-node registry runtime gen_register \
   --signer.dir $ENTITY_DIR \
   --runtime.id $RUNTIME_ID \
   --runtime.kind compute \
-  --runtime.genesis.state $RUNTIME_GENESIS_JSON \
+  --runtime.genesis.state "$RUNTIME_GENESIS_JSON" \
   --runtime.executor.group_size 1 \
   --runtime.storage.group_size 1 \
   --runtime.admission_policy entity-whitelist \
@@ -174,7 +174,7 @@ Should give output similar to
 
 <!-- markdownlint-disable line-length -->
 ```
-{"v":1,"id":"gAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAEjRWc=","entity_id":"+MJpnSTzc11dNI5emMa+asCJH5cxBiBCcpbYE4XBdso=","genesis":{"state_root":"xnK40e9W7Sirh8NiLFEUBpvdOte4+XN0mNDAHs7wlno=","state":null,"storage_receipts":null,"round":0},"kind":1,"tee_hardware":0,"versions":{"version":{"Major":0,"Minor":0,"Patch":0}},"executor":{"group_size":1,"group_backup_size":0,"allowed_stragglers":0,"round_timeout":5},"txn_scheduler":{"algorithm":"simple","batch_flush_timeout":1000000000,"max_batch_size":1000,"max_batch_size_bytes":16777216},"storage":{"group_size":1,"min_write_replication":1,"max_apply_write_log_entries":100000,"max_apply_ops":2,"checkpoint_interval":0,"checkpoint_num_kept":0,"checkpoint_chunk_size":0},"admission_policy":{"entity_whitelist":{"entities":{"+MJpnSTzc11dNI5emMa+asCJH5cxBiBCcpbYE4XBdso=":true}}},"staking":{}}
+{"v":2,"id":"gAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAEjRWc=","entity_id":"+MJpnSTzc11dNI5emMa+asCJH5cxBiBCcpbYE4XBdso=","genesis":{"state_root":"xnK40e9W7Sirh8NiLFEUBpvdOte4+XN0mNDAHs7wlno=","state":null,"storage_receipts":null,"round":0},"kind":1,"tee_hardware":0,"versions":{"version":{}},"executor":{"group_size":1,"group_backup_size":0,"allowed_stragglers":0,"round_timeout":5,"max_messages":32},"txn_scheduler":{"algorithm":"simple","batch_flush_timeout":1000000000,"max_batch_size":1000,"max_batch_size_bytes":16777216,"propose_batch_timeout":5},"storage":{"group_size":1,"min_write_replication":1,"max_apply_write_log_entries":100000,"max_apply_ops":2,"checkpoint_interval":10000,"checkpoint_num_kept":2,"checkpoint_chunk_size":8388608},"admission_policy":{"entity_whitelist":{"entities":{"+MJpnSTzc11dNI5emMa+asCJH5cxBiBCcpbYE4XBdso=":{}}}},"staking":{},"governance_model":"entity"}
 ```
 <!-- markdownlint-enable line-length -->
 
@@ -211,7 +211,7 @@ is initially provisioned.
 <!-- markdownlint-disable line-length -->
 ```
 export RUNTIME_BINARY=/workdir/target/default/debug/simple-keyvalue
-export SEED_NODE_ADDRESS=AFF00101C59433735A0A98645E453705EA1B140B@127.0.0.1:20002
+export SEED_NODE_ADDRESS=<seed-node-tendermint-addr>@127.0.0.1:20000
 
 # Runtime node data dir.
 mkdir -m 0700 /tmp/runtime-example/runtime-node
@@ -222,17 +222,16 @@ oasis-node \
   --log.level debug \
   --log.format json \
   --log.file /tmp/runtime-example/runtime-node/node.log \
+  --grpc.log.debug \
   --worker.registration.entity $ENTITY_DIR/entity.json \
   --genesis.file $GENESIS_JSON \
-  --storage.backend badger \
   --worker.storage.enabled \
   --worker.compute.enabled \
   --worker.executor.schedule_check_tx.enabled \
-  --worker.runtime.provisioner unconfined \
-  --grpc.log.debug \
+  --runtime.provisioner unconfined \
   --runtime.supported $RUNTIME_ID \
   --runtime.history.tag_indexer.backend bleve \
-  --worker.runtime.paths $RUNTIME_ID=$RUNTIME_BINARY \
+  --runtime.paths $RUNTIME_ID=$RUNTIME_BINARY \
   --consensus.tendermint.debug.addr_book_lenient \
   --consensus.tendermint.debug.allow_duplicate_ip \
   --consensus.tendermint.p2p.seed $SEED_NODE_ADDRESS \
