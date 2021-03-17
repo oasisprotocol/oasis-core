@@ -103,14 +103,8 @@ func TestPoolDefault(t *testing.T) {
 	pool := Pool{}
 	err = pool.AddExecutorCommitment(context.Background(), blk, nopSV, &staticNodeLookup{}, commit, nil)
 	require.Error(t, err, "AddExecutorCommitment")
-	err = pool.CheckEnoughCommitments(false)
-	require.Error(t, err, "CheckEnoughCommitments")
-	require.Equal(t, ErrNoCommittee, err)
-	_, err = pool.DetectDiscrepancy()
-	require.Error(t, err, "DetectDiscrepancy")
-	require.Equal(t, ErrNoCommittee, err)
-	_, err = pool.ResolveDiscrepancy()
-	require.Error(t, err, "ResolveDiscrepancy")
+	_, err = pool.ProcessCommitments(false)
+	require.Error(t, err, "ProcessCommitments")
 	require.Equal(t, ErrNoCommittee, err)
 	err = pool.CheckProposerTimeout(context.Background(), blk, nopSV, &staticNodeLookup{}, sk.Public(), 0)
 	require.Error(t, err, "CheckProposerTimeout")
@@ -208,12 +202,12 @@ func TestPoolSingleCommitment(t *testing.T) {
 	require.NoError(t, err, "SignExecutorCommitment")
 
 	// There should not be enough executor commitments.
-	err = pool.CheckEnoughCommitments(false)
-	require.Error(t, err, "CheckEnoughCommitments")
-	require.Equal(t, ErrStillWaiting, err, "CheckEnoughCommitments")
-	err = pool.CheckEnoughCommitments(true)
-	require.Error(t, err, "CheckEnoughCommitments")
-	require.Equal(t, ErrNoProposerCommitment, err, "CheckEnoughCommitments")
+	_, err = pool.ProcessCommitments(false)
+	require.Error(t, err, "ProcessCommitments")
+	require.Equal(t, ErrStillWaiting, err, "ProcessCommitments")
+	_, err = pool.ProcessCommitments(true)
+	require.Error(t, err, "ProcessCommitments")
+	require.Equal(t, ErrNoProposerCommitment, err, "ProcessCommitments")
 
 	// Test message validator function.
 	bodyWithMsgs := body
@@ -267,13 +261,9 @@ func TestPoolSingleCommitment(t *testing.T) {
 	err = pool.AddExecutorCommitment(context.Background(), childBlk, sv, nl, commit, nil)
 	require.Error(t, err, "AddExecutorCommitment(context.Background(), duplicate)")
 
-	// There should be enough executor commitments.
-	err = pool.CheckEnoughCommitments(false)
-	require.NoError(t, err, "CheckEnoughCommitments")
-
-	// There should be no discrepancy.
-	dc, err := pool.DetectDiscrepancy()
-	require.NoError(t, err, "DetectDiscrepancy")
+	// There should be enough executor commitments and no discrepancy.
+	dc, err := pool.ProcessCommitments(false)
+	require.NoError(t, err, "ProcessCommitments")
 	require.Equal(t, false, pool.Discrepancy)
 	header := dc.ToDDResult().(*ComputeBody).Header
 	require.EqualValues(t, &body.Header, &header, "DD should return the same header")
@@ -343,12 +333,12 @@ func TestPoolSingleCommitmentTEE(t *testing.T) {
 	require.NoError(t, err, "SignExecutorCommitment")
 
 	// There should not be enough executor commitments.
-	err = pool.CheckEnoughCommitments(false)
-	require.Error(t, err, "CheckEnoughCommitments")
-	require.Equal(t, ErrStillWaiting, err, "CheckEnoughCommitments")
-	err = pool.CheckEnoughCommitments(true)
-	require.Error(t, err, "CheckEnoughCommitments")
-	require.Equal(t, ErrNoProposerCommitment, err, "CheckEnoughCommitments")
+	_, err = pool.ProcessCommitments(false)
+	require.Error(t, err, "ProcessCommitments")
+	require.Equal(t, ErrStillWaiting, err, "ProcessCommitments")
+	_, err = pool.ProcessCommitments(true)
+	require.Error(t, err, "ProcessCommitments")
+	require.Equal(t, ErrNoProposerCommitment, err, "ProcessCommitments")
 
 	// Adding a commitment should succeed.
 	err = pool.AddExecutorCommitment(context.Background(), childBlk, nopSV, nl, commit, nil)
@@ -358,13 +348,9 @@ func TestPoolSingleCommitmentTEE(t *testing.T) {
 	err = pool.AddExecutorCommitment(context.Background(), childBlk, nopSV, nl, commit, nil)
 	require.Error(t, err, "AddExecutorCommitment(context.Background(), duplicate)")
 
-	// There should be enough executor commitments.
-	err = pool.CheckEnoughCommitments(false)
-	require.NoError(t, err, "CheckEnoughCommitments")
-
-	// There should be no discrepancy.
-	dc, err := pool.DetectDiscrepancy()
-	require.NoError(t, err, "DetectDiscrepancy")
+	// There should be enough executor commitments and no discrepancy.
+	dc, err := pool.ProcessCommitments(false)
+	require.NoError(t, err, "ProcessCommitments")
 	require.Equal(t, false, pool.Discrepancy)
 	header := dc.ToDDResult().(*ComputeBody).Header
 	require.EqualValues(t, &body.Header, &header, "DD should return the same header")
@@ -412,24 +398,20 @@ func TestPoolStragglers(t *testing.T) {
 		require.NoError(t, err, "AddExecutorCommitment")
 
 		// There should not be enough executor commitments.
-		err = pool.CheckEnoughCommitments(false)
-		require.Error(t, err, "CheckEnoughCommitments")
-		require.Equal(t, ErrStillWaiting, err, "CheckEnoughCommitments")
-		err = pool.CheckEnoughCommitments(true)
-		require.Error(t, err, "CheckEnoughCommitments")
-		require.Equal(t, ErrNoProposerCommitment, err, "CheckEnoughCommitments")
+		_, err = pool.ProcessCommitments(false)
+		require.Error(t, err, "ProcessCommitments")
+		require.Equal(t, ErrStillWaiting, err, "ProcessCommitments")
+		_, err = pool.ProcessCommitments(true)
+		require.Error(t, err, "ProcessCommitments")
+		require.Equal(t, ErrNoProposerCommitment, err, "ProcessCommitments")
 
 		// Adding commitment 1 should succeed.
 		err = pool.AddExecutorCommitment(context.Background(), childBlk, nopSV, nl, commit1, nil)
 		require.NoError(t, err, "AddExecutorCommitment")
 
-		// There should be enough executor commitments.
-		err = pool.CheckEnoughCommitments(false)
-		require.NoError(t, err, "CheckEnoughCommitments")
-
-		// There should be no discrepancy.
-		dc, err := pool.DetectDiscrepancy()
-		require.NoError(t, err, "DetectDiscrepancy")
+		// There should be enough executor commitments and no discrepancy.
+		dc, err := pool.ProcessCommitments(false)
+		require.NoError(t, err, "ProcessCommitments")
 		require.Equal(t, false, pool.Discrepancy)
 		header := dc.ToDDResult().(*ComputeBody).Header
 		require.EqualValues(t, &body.Header, &header, "DD should return the same header")
@@ -454,16 +436,14 @@ func TestPoolStragglers(t *testing.T) {
 		require.NoError(t, err, "AddExecutorCommitment")
 
 		// There should not be enough executor commitments pre-timeout.
-		err = pool.CheckEnoughCommitments(false)
-		require.Error(t, err, "CheckEnoughCommitments")
-		require.Equal(t, ErrStillWaiting, err, "CheckEnoughCommitments")
-		// There should be enough executor commitments after timeout (due to allowed stragglers).
-		err = pool.CheckEnoughCommitments(true)
-		require.NoError(t, err, "CheckEnoughCommitments")
+		_, err = pool.ProcessCommitments(false)
+		require.Error(t, err, "ProcessCommitments")
+		require.Equal(t, ErrStillWaiting, err, "ProcessCommitments")
 
-		// There should be no discrepancy.
-		dc, err := pool.DetectDiscrepancy()
-		require.NoError(t, err, "DetectDiscrepancy")
+		// There should be enough executor commitments after timeout (due to allowed stragglers)
+		// and no discrepancy.
+		dc, err := pool.ProcessCommitments(true)
+		require.NoError(t, err, "ProcessCommitments")
 		require.Equal(t, false, pool.Discrepancy)
 		header := dc.ToDDResult().(*ComputeBody).Header
 		require.EqualValues(t, &body.Header, &header, "DD should return the same header")
@@ -500,24 +480,20 @@ func TestPoolTwoCommitments(t *testing.T) {
 		require.NoError(t, err, "AddExecutorCommitment")
 
 		// There should not be enough executor commitments.
-		err = pool.CheckEnoughCommitments(false)
-		require.Error(t, err, "CheckEnoughCommitments")
-		require.Equal(t, ErrStillWaiting, err, "CheckEnoughCommitments")
-		err = pool.CheckEnoughCommitments(true)
-		require.Error(t, err, "CheckEnoughCommitments")
-		require.Equal(t, ErrStillWaiting, err, "CheckEnoughCommitments")
+		_, err = pool.ProcessCommitments(false)
+		require.Error(t, err, "ProcessCommitments")
+		require.Equal(t, ErrStillWaiting, err, "ProcessCommitments")
+		_, err = pool.ProcessCommitments(true)
+		require.Error(t, err, "ProcessCommitments")
+		require.Equal(t, ErrStillWaiting, err, "ProcessCommitments")
 
 		// Adding commitment 2 should succeed.
 		err = pool.AddExecutorCommitment(context.Background(), childBlk, nopSV, nl, commit2, nil)
 		require.NoError(t, err, "AddExecutorCommitment")
 
-		// There should be enough executor commitments.
-		err = pool.CheckEnoughCommitments(false)
-		require.NoError(t, err, "CheckEnoughCommitments")
-
-		// There should be no discrepancy.
-		dc, err := pool.DetectDiscrepancy()
-		require.NoError(t, err, "DetectDiscrepancy")
+		// There should be enough executor commitments and no discrepancy.
+		dc, err := pool.ProcessCommitments(false)
+		require.NoError(t, err, "ProcessCommitments")
 		require.Equal(t, false, pool.Discrepancy)
 		header := dc.ToDDResult().(*ComputeBody).Header
 		require.EqualValues(t, &body.Header, &header, "DD should return the same header")
@@ -533,13 +509,10 @@ func TestPoolTwoCommitments(t *testing.T) {
 		err = pool.AddExecutorCommitment(context.Background(), childBlk, nopSV, nl, commit3, nil)
 		require.NoError(t, err, "AddExecutorCommitment")
 
-		// There should be enough executor commitments from backup workers.
-		err = pool.CheckEnoughCommitments(false)
-		require.NoError(t, err, "CheckEnoughCommitments")
-
-		// Discrepancy resolution should succeed.
-		dc, err := pool.ResolveDiscrepancy()
-		require.NoError(t, err, "ResolveDiscrepancy")
+		// There should be enough executor commitments from backup workers and discrepancy
+		// resolution should succeed.
+		dc, err := pool.ProcessCommitments(false)
+		require.NoError(t, err, "ProcessCommitments")
 		require.Equal(t, true, pool.Discrepancy)
 		header := dc.ToDDResult().(*ComputeBody).Header
 		require.EqualValues(t, &correctBody.Header, &header, "DR should return the same header")
@@ -549,9 +522,9 @@ func TestPoolTwoCommitments(t *testing.T) {
 		pool, _, _, _, _ := setupDiscrepancy(t, rt, sks, committee, nl, false)
 
 		// Discrepancy resolution should fail.
-		dc, err := pool.ResolveDiscrepancy()
-		require.Nil(t, dc, "ResolveDiscrepancy")
-		require.Error(t, err, "ResolveDiscrepancy")
+		dc, err := pool.ProcessCommitments(true)
+		require.Nil(t, dc, "ProcessCommitments")
+		require.Error(t, err, "ProcessCommitments")
 		require.Equal(t, ErrInsufficientVotes, err)
 	})
 
@@ -566,14 +539,11 @@ func TestPoolTwoCommitments(t *testing.T) {
 		err = pool.AddExecutorCommitment(context.Background(), childBlk, nopSV, nl, commit3, nil)
 		require.NoError(t, err, "AddExecutorCommitment")
 
-		// There should be enough executor commitments from backup workers.
-		err = pool.CheckEnoughCommitments(false)
-		require.NoError(t, err, "CheckEnoughCommitments")
-
-		// Discrepancy resolution should fail.
-		dc, err := pool.ResolveDiscrepancy()
-		require.Nil(t, dc, "ResolveDiscrepancy")
-		require.Error(t, err, "ResolveDiscrepancy")
+		// There should be enough executor commitments from backup workers discrepancy resolution
+		// should fail.
+		dc, err := pool.ProcessCommitments(false)
+		require.Nil(t, dc, "ProcessCommitments")
+		require.Error(t, err, "ProcessCommitments")
 		require.Equal(t, ErrBadProposerCommitment, err)
 	})
 
@@ -600,8 +570,71 @@ func TestPoolTwoCommitments(t *testing.T) {
 		pool, _, _, correctBody, _ := setupDiscrepancy(t, rt, sks, committee2, nl, true)
 
 		// Backup worker commitment should not be needed for discrepancy resolution.
-		dc, err := pool.ResolveDiscrepancy()
-		require.NoError(t, err, "ResolveDiscrepancy")
+		dc, err := pool.ProcessCommitments(false)
+		require.NoError(t, err, "ProcessCommitments")
+		require.Equal(t, true, pool.Discrepancy)
+		header := dc.ToDDResult().(*ComputeBody).Header
+		require.EqualValues(t, &correctBody.Header, &header, "DR should return the same header")
+	})
+
+	t.Run("EarlyDiscrepancyDetectionAndResolution", func(t *testing.T) {
+		// Modify the committee so there are three primary workers and three backup workers.
+		sk4, err := memorySigner.NewSigner(rand.Reader)
+		require.NoError(t, err, "NewSigner")
+		sk5, err := memorySigner.NewSigner(rand.Reader)
+		require.NoError(t, err, "NewSigner")
+		sk6, err := memorySigner.NewSigner(rand.Reader)
+		require.NoError(t, err, "NewSigner")
+
+		committee2 := &scheduler.Committee{
+			Kind: scheduler.KindComputeExecutor,
+			Members: []*scheduler.CommitteeNode{
+				{
+					Role:      scheduler.RoleWorker,
+					PublicKey: sk1.Public(),
+				},
+				{
+					Role:      scheduler.RoleWorker,
+					PublicKey: sk2.Public(),
+				},
+				{
+					Role:      scheduler.RoleWorker,
+					PublicKey: sk3.Public(),
+				},
+				{
+					Role:      scheduler.RoleBackupWorker,
+					PublicKey: sk4.Public(),
+				},
+				{
+					Role:      scheduler.RoleBackupWorker,
+					PublicKey: sk5.Public(),
+				},
+				{
+					Role:      scheduler.RoleBackupWorker,
+					PublicKey: sk6.Public(),
+				},
+			},
+		}
+
+		// The setupDiscrepancy method will check whether a discrepancy was detected. This should
+		// succeed despite there being a third worker in the committee which hasn't yet submitted
+		// its own commitment.
+		pool, childBlk, _, correctBody, _ := setupDiscrepancy(t, rt, sks, committee2, nl, true)
+
+		// For discrepancy resolution, as soon as majority (two out of three) indicates a result,
+		// the process should finish.
+		commit4, err := SignExecutorCommitment(sk4, rt.ID, correctBody)
+		require.NoError(t, err, "SignExecutorCommitment")
+		commit5, err := SignExecutorCommitment(sk5, rt.ID, correctBody)
+		require.NoError(t, err, "SignExecutorCommitment")
+
+		err = pool.AddExecutorCommitment(context.Background(), childBlk, nopSV, nl, commit4, nil)
+		require.NoError(t, err, "AddExecutorCommitment")
+		err = pool.AddExecutorCommitment(context.Background(), childBlk, nopSV, nl, commit5, nil)
+		require.NoError(t, err, "AddExecutorCommitment")
+
+		dc, err := pool.ProcessCommitments(false)
+		require.NoError(t, err, "ProcessCommitments")
 		require.Equal(t, true, pool.Discrepancy)
 		header := dc.ToDDResult().(*ComputeBody).Header
 		require.EqualValues(t, &correctBody.Header, &header, "DR should return the same header")
@@ -646,12 +679,12 @@ func TestPoolFailureIndicatingCommitment(t *testing.T) {
 		require.NoError(t, err, "SignExecutorCommitment")
 
 		// There should not be enough executor commitments.
-		err = pool.CheckEnoughCommitments(false)
-		require.Error(t, err, "CheckEnoughCommitments")
-		require.Equal(t, ErrStillWaiting, err, "CheckEnoughCommitments")
-		err = pool.CheckEnoughCommitments(true)
-		require.Error(t, err, "CheckEnoughCommitments")
-		require.Equal(t, ErrNoProposerCommitment, err, "CheckEnoughCommitments")
+		_, err = pool.ProcessCommitments(false)
+		require.Error(t, err, "ProcessCommitments")
+		require.Equal(t, ErrStillWaiting, err, "ProcessCommitments")
+		_, err = pool.ProcessCommitments(true)
+		require.Error(t, err, "ProcessCommitments")
+		require.Equal(t, ErrNoProposerCommitment, err, "ProcessCommitments")
 
 		// Adding a commitment should succeed.
 		err = pool.AddExecutorCommitment(context.Background(), childBlk, nopSV, nl, commit1, nil)
@@ -662,39 +695,33 @@ func TestPoolFailureIndicatingCommitment(t *testing.T) {
 		require.Error(t, err, "AddExecutorCommitment(context.Background(), duplicate)")
 
 		// There should not be enough executor commitments.
-		err = pool.CheckEnoughCommitments(false)
-		require.Error(t, err, "CheckEnoughCommitments")
+		_, err = pool.ProcessCommitments(false)
+		require.Error(t, err, "ProcessCommitments")
+		require.Equal(t, ErrStillWaiting, err, "ProcessCommitments")
 
 		// Adding a failure indicating commitment.
 		err = pool.AddExecutorCommitment(context.Background(), childBlk, nopSV, nl, commit2, nil)
 		require.NoError(t, err, "AddExecutorCommitment")
 
-		// There should be enough commitments.
-		err = pool.CheckEnoughCommitments(false)
-		require.NoError(t, err, "CheckEnoughCommitments")
-
-		// There should be a discrepancy.
-		_, err = pool.DetectDiscrepancy()
-		require.Error(t, err, "DetectDiscrepancy")
+		// There should be enough commitments and there should be a discrepancy.
+		_, err = pool.ProcessCommitments(false)
+		require.Error(t, err, "ProcessCommitments")
 		require.Equal(t, ErrDiscrepancyDetected, err)
 		require.Equal(t, true, pool.Discrepancy)
 
 		// There should not be enough executor commitments from backup workers.
-		err = pool.CheckEnoughCommitments(false)
-		require.Error(t, err, "CheckEnoughCommitments")
-		require.Equal(t, ErrStillWaiting, err, "CheckEnoughCommitments")
+		_, err = pool.ProcessCommitments(false)
+		require.Error(t, err, "ProcessCommitments")
+		require.Equal(t, ErrStillWaiting, err, "ProcessCommitments")
 
 		// Resolve discrepancy with commit from backup worker.
 		err = pool.AddExecutorCommitment(context.Background(), childBlk, nopSV, nl, commit3, nil)
 		require.NoError(t, err, "AddExecutorCommitment")
 
-		// There should be enough executor commitments from backup workers.
-		err = pool.CheckEnoughCommitments(false)
-		require.NoError(t, err, "CheckEnoughCommitments")
-
-		// Discrepancy resolution should succeed.
-		dc, err := pool.ResolveDiscrepancy()
-		require.NoError(t, err, "ResolveDiscrepancy")
+		// There should be enough executor commitments from backup workers and discrepancy
+		// resolution should succeed.
+		dc, err := pool.ProcessCommitments(false)
+		require.NoError(t, err, "ProcessCommitments")
 		require.Equal(t, true, pool.Discrepancy)
 		header := dc.ToDDResult().(*ComputeBody).Header
 		require.EqualValues(t, &body.Header, &header, "DR should return the same header")
@@ -712,9 +739,9 @@ func TestPoolFailureIndicatingCommitment(t *testing.T) {
 		require.NoError(t, err, "AddExecutorCommitment")
 
 		// Discrepancy resolution should fail with failure indicating commitment.
-		dc, err := pool.ResolveDiscrepancy()
-		require.Nil(t, dc, "ResolveDiscrepancy")
-		require.Error(t, err, "ResolveDiscrepancy")
+		dc, err := pool.ProcessCommitments(false)
+		require.Nil(t, dc, "ProcessCommitments")
+		require.Error(t, err, "ProcessCommitments")
 		require.Equal(t, ErrMajorityFailure, err)
 	})
 }
@@ -777,13 +804,9 @@ func TestPoolSerialization(t *testing.T) {
 	err = cbor.Unmarshal(m, &d)
 	require.NoError(t, err)
 
-	// There should be enough executor commitments.
-	err = pool.CheckEnoughCommitments(false)
-	require.NoError(t, err, "CheckEnoughCommitments")
-
-	// There should be no discrepancy.
-	dc, err := pool.DetectDiscrepancy()
-	require.NoError(t, err, "DetectDiscrepancy")
+	// There should be enough executor commitments and there should be no discrepancy.
+	dc, err := pool.ProcessCommitments(false)
+	require.NoError(t, err, "ProcessCommitments")
 	require.Equal(t, false, pool.Discrepancy)
 	header := dc.ToDDResult().(*ComputeBody).Header
 	require.EqualValues(t, &body.Header, &header, "DD should return the same header")
@@ -995,7 +1018,7 @@ func generateMockCommittee(t *testing.T, rtTemplate *registry.Runtime) (
 ) {
 	switch rtTemplate {
 	case nil:
-		// Generate a defauolt.
+		// Generate a default.
 		rt = &registry.Runtime{
 			Kind:        registry.KindCompute,
 			TEEHardware: node.TEEHardwareInvalid,
@@ -1153,36 +1176,28 @@ func setupDiscrepancy(
 	require.NoError(t, err, "AddExecutorCommitment")
 
 	// There should not be enough executor commitments.
-	err = pool.CheckEnoughCommitments(false)
-	require.Error(t, err, "CheckEnoughCommitments")
-	require.Equal(t, ErrStillWaiting, err, "CheckEnoughCommitments")
-	err = pool.CheckEnoughCommitments(true)
-	require.Error(t, err, "CheckEnoughCommitments")
-	require.Equal(t, ErrStillWaiting, err, "CheckEnoughCommitments")
+	_, err = pool.ProcessCommitments(false)
+	require.Error(t, err, "ProcessCommitments")
+	require.Equal(t, ErrStillWaiting, err, "ProcessCommitments")
+	_, err = pool.ProcessCommitments(true)
+	require.Error(t, err, "ProcessCommitments")
+	require.Equal(t, ErrStillWaiting, err, "ProcessCommitments")
 
 	// Adding commitment 2 should succeed.
 	err = pool.AddExecutorCommitment(context.Background(), childBlk, nopSV, nl, commit2, nil)
 	require.NoError(t, err, "AddExecutorCommitment")
 
-	// There should be enough executor commitments.
-	err = pool.CheckEnoughCommitments(false)
-	require.NoError(t, err, "CheckEnoughCommitments")
-
-	// There should be a discrepancy.
-	_, err = pool.DetectDiscrepancy()
-	require.Error(t, err, "DetectDiscrepancy")
+	// There should be enough executor commitments and there should be a discrepancy.
+	_, err = pool.ProcessCommitments(false)
+	require.Error(t, err, "ProcessCommitments")
 	require.Equal(t, ErrDiscrepancyDetected, err)
 	require.Equal(t, true, pool.Discrepancy)
 
-	err = pool.CheckEnoughCommitments(false)
-	switch enoughBackupCommits {
-	case false:
+	if !enoughBackupCommits {
 		// There should not be enough executor commitments from backup workers.
+		_, err = pool.ProcessCommitments(false)
 		require.Error(t, err, "there should not be enough commitments from backup workers")
-		require.Equal(t, ErrStillWaiting, err, "CheckEnoughCommitments")
-	case true:
-		// There should be enough executor commitments from backup workers.
-		require.NoError(t, err, "there should be enough commitments from backup workers")
+		require.Equal(t, ErrStillWaiting, err, "ProcessCommitments")
 	}
 
 	return &pool, childBlk, parentBlk, &correctBody, &body
