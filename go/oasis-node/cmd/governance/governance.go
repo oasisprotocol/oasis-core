@@ -19,6 +19,7 @@ import (
 	governance "github.com/oasisprotocol/oasis-core/go/governance/api"
 	cmdCommon "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common"
 	cmdConsensus "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/consensus"
+	cmdContext "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/context"
 	cmdFlags "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/flags"
 	cmdGrpc "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/grpc"
 	cmdSigner "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/signer"
@@ -100,7 +101,7 @@ func doGenSubmitProposal(cmd *cobra.Command, args []string) {
 		cmdCommon.EarlyLogAndExit(err)
 	}
 
-	cmdConsensus.InitGenesis()
+	genesis := cmdConsensus.InitGenesis()
 	cmdConsensus.AssertTxFileOK()
 
 	nonce, fee := cmdConsensus.GetTxNonceAndFee()
@@ -149,7 +150,7 @@ func doGenSubmitProposal(cmd *cobra.Command, args []string) {
 		os.Exit(1)
 	}
 
-	cmdConsensus.SignAndSaveTx(context.Background(), tx, nil)
+	cmdConsensus.SignAndSaveTx(cmdContext.GetCtxWithGenesisInfo(genesis), tx, nil)
 }
 
 func doGenCastVote(cmd *cobra.Command, args []string) {
@@ -157,7 +158,7 @@ func doGenCastVote(cmd *cobra.Command, args []string) {
 		cmdCommon.EarlyLogAndExit(err)
 	}
 
-	cmdConsensus.InitGenesis()
+	genesis := cmdConsensus.InitGenesis()
 	cmdConsensus.AssertTxFileOK()
 
 	id := viper.GetUint64(cfgVoteProposalID)
@@ -179,7 +180,7 @@ func doGenCastVote(cmd *cobra.Command, args []string) {
 		ID:   id,
 		Vote: vote,
 	})
-	cmdConsensus.SignAndSaveTx(context.Background(), tx, nil)
+	cmdConsensus.SignAndSaveTx(cmdContext.GetCtxWithGenesisInfo(genesis), tx, nil)
 }
 
 func doProposalInfo(cmd *cobra.Command, args []string) {
