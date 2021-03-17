@@ -3,7 +3,6 @@ package keymanager
 
 import (
 	"bytes"
-	"context"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -25,6 +24,7 @@ import (
 	kmApi "github.com/oasisprotocol/oasis-core/go/keymanager/api"
 	cmdCommon "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common"
 	cmdConsensus "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/consensus"
+	cmdContext "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/context"
 	cmdFlags "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/flags"
 )
 
@@ -391,7 +391,7 @@ func doGenUpdate(cmd *cobra.Command, args []string) {
 		cmdCommon.EarlyLogAndExit(err)
 	}
 
-	cmdConsensus.InitGenesis()
+	genesis := cmdConsensus.InitGenesis()
 	cmdConsensus.AssertTxFileOK()
 
 	// Assemble the SignedPolicySGX from the policy document and detached
@@ -444,7 +444,7 @@ func doGenUpdate(cmd *cobra.Command, args []string) {
 	// Build, sign, and write the UpdatePolicy transaction.
 	nonce, fee := cmdConsensus.GetTxNonceAndFee()
 	tx := kmApi.NewUpdatePolicyTx(nonce, fee, &signedPolicy)
-	cmdConsensus.SignAndSaveTx(context.Background(), tx, nil)
+	cmdConsensus.SignAndSaveTx(cmdContext.GetCtxWithGenesisInfo(genesis), tx, nil)
 }
 
 func statusFromFlags() (*kmApi.Status, error) {

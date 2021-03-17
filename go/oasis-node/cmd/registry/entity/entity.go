@@ -23,6 +23,7 @@ import (
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
 	cmdCommon "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common"
 	cmdConsensus "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/consensus"
+	cmdContext "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/context"
 	cmdFlags "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/flags"
 	cmdGrpc "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/grpc"
 	cmdSigner "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/signer"
@@ -279,7 +280,7 @@ func doGenRegister(cmd *cobra.Command, args []string) {
 		cmdCommon.EarlyLogAndExit(err)
 	}
 
-	cmdConsensus.InitGenesis()
+	genesis := cmdConsensus.InitGenesis()
 	cmdConsensus.AssertTxFileOK()
 
 	ent, signer, err := cmdCommon.LoadEntitySigner()
@@ -302,7 +303,7 @@ func doGenRegister(cmd *cobra.Command, args []string) {
 	nonce, fee := cmdConsensus.GetTxNonceAndFee()
 	tx := registry.NewRegisterEntityTx(nonce, fee, signed)
 
-	cmdConsensus.SignAndSaveTx(context.Background(), tx, signer)
+	cmdConsensus.SignAndSaveTx(cmdContext.GetCtxWithGenesisInfo(genesis), tx, signer)
 }
 
 func doGenDeregister(cmd *cobra.Command, args []string) {
@@ -310,13 +311,13 @@ func doGenDeregister(cmd *cobra.Command, args []string) {
 		cmdCommon.EarlyLogAndExit(err)
 	}
 
-	cmdConsensus.InitGenesis()
+	genesis := cmdConsensus.InitGenesis()
 	cmdConsensus.AssertTxFileOK()
 
 	nonce, fee := cmdConsensus.GetTxNonceAndFee()
 	tx := registry.NewDeregisterEntityTx(nonce, fee)
 
-	cmdConsensus.SignAndSaveTx(context.Background(), tx, nil)
+	cmdConsensus.SignAndSaveTx(cmdContext.GetCtxWithGenesisInfo(genesis), tx, nil)
 }
 
 func doList(cmd *cobra.Command, args []string) {
