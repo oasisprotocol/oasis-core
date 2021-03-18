@@ -134,7 +134,6 @@ func (s *Worker) registerRuntime(dataDir string, commonNode *committeeCommon.Nod
 	if err != nil {
 		return fmt.Errorf("can't create local storage backend: %w", err)
 	}
-	commonNode.Runtime.RegisterStorage(localStorage)
 
 	node, err := committee.NewNode(
 		commonNode,
@@ -151,6 +150,7 @@ func (s *Worker) registerRuntime(dataDir string, commonNode *committeeCommon.Nod
 	if err != nil {
 		return err
 	}
+	commonNode.Runtime.RegisterStorage(newSyncedLocalStorage(node, localStorage))
 	commonNode.AddHooks(node)
 	s.runtimes[id] = node
 
