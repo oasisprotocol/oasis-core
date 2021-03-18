@@ -34,6 +34,7 @@ pr_and_no_code_related_changes() {
       ':(exclude).gitlint' \
       ':(exclude).markdownlint.yml' \
       ':(exclude).punch_config.py' \
+      ':(exclude).punch_version.py' \
       ':(exclude)docs/' \
       ':(exclude)towncrier.toml' \
       ':(exclude).gitbook.yaml'
