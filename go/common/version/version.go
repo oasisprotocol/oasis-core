@@ -5,15 +5,21 @@
 package version
 
 import (
+	"context"
 	"fmt"
+	"io"
 	"regexp"
 	"runtime"
 	"strconv"
 	"strings"
+
+	"github.com/oasisprotocol/oasis-core/go/common/prettyprint"
 )
 
 // VersionUndefined represents an undefined version.
 const VersionUndefined = "undefined"
+
+var _ prettyprint.PrettyPrinter = (*ProtocolVersions)(nil)
 
 // NOTE: This should be kept in sync with runtime/src/common/version.rs.
 
@@ -126,6 +132,20 @@ func (pv ProtocolVersions) String() string {
 		"Consensus protocol: %s, Runtime Host protocol: %s, Runtime Committee protocol: %s",
 		pv.ConsensusProtocol, pv.RuntimeHostProtocol, pv.RuntimeCommitteeProtocol,
 	)
+}
+
+// PrettyPrint writes a pretty-printed representation of ProtocolVersions to the
+// given writer.
+func (pv ProtocolVersions) PrettyPrint(ctx context.Context, prefix string, w io.Writer) {
+	fmt.Fprintf(w, "%sConsensus Protocol: %s\n", prefix, pv.ConsensusProtocol)
+	fmt.Fprintf(w, "%sRuntime Host Protocol: %s\n", prefix, pv.RuntimeHostProtocol)
+	fmt.Fprintf(w, "%sRuntime Committee Protocol: %s\n", prefix, pv.RuntimeCommitteeProtocol)
+}
+
+// PrettyType returns a representation of ProtocolVersions that can be used for
+// pretty printing.
+func (pv ProtocolVersions) PrettyType() (interface{}, error) {
+	return pv, nil
 }
 
 // Versions are current protocol versions.
