@@ -26,11 +26,11 @@ var Parallel = &parallel{
 }
 
 const (
-	parallelSendWaitTimeoutInterval = 60 * time.Second
-	parallelSendTimeoutInterval     = 60 * time.Second
-	parallelConcurency              = 200
-	parallelTxTransferAmount        = 100
-	parallelTxFundInterval          = 10
+	parallelSendWaitTimeout     = 120 * time.Second
+	parallelSendTimeoutInterval = 60 * time.Second
+	parallelConcurency          = 200
+	parallelTxTransferAmount    = 100
+	parallelTxFundInterval      = 10
 )
 
 var parallelLogger = logging.GetLogger("cmd/txsource/workload/parallel")
@@ -153,7 +153,7 @@ func (p *parallel) Run(
 		}()
 
 		select {
-		case <-time.After(parallelSendWaitTimeoutInterval):
+		case <-time.After(parallelSendWaitTimeout):
 			parallelLogger.Error("transactions not completed within timeout")
 			return fmt.Errorf("workload parallel: transactions not completed within timeout")
 
