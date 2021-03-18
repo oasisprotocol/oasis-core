@@ -4,10 +4,12 @@ package api
 import (
 	"context"
 	"fmt"
+	"io"
 
 	beacon "github.com/oasisprotocol/oasis-core/go/beacon/api"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
 	"github.com/oasisprotocol/oasis-core/go/common/errors"
+	"github.com/oasisprotocol/oasis-core/go/common/prettyprint"
 	"github.com/oasisprotocol/oasis-core/go/common/pubsub"
 	"github.com/oasisprotocol/oasis-core/go/common/quantity"
 	"github.com/oasisprotocol/oasis-core/go/consensus/api/transaction"
@@ -17,6 +19,10 @@ import (
 
 // ModuleName is a unique module name for the governance backend.
 const ModuleName = "governance"
+
+// ProposalContentInvalidText is the textual representation of an invalid
+// ProposalContent.
+const ProposalContentInvalidText = "(invalid)"
 
 var (
 	// ErrInvalidArgument is the error returned on malformed argument(s).
@@ -44,6 +50,11 @@ var (
 		MethodSubmitProposal,
 		MethodCastVote,
 	}
+
+	_ prettyprint.PrettyPrinter = (*ProposalContent)(nil)
+	_ prettyprint.PrettyPrinter = (*UpgradeProposal)(nil)
+	_ prettyprint.PrettyPrinter = (*CancelUpgradeProposal)(nil)
+	_ prettyprint.PrettyPrinter = (*ProposalVote)(nil)
 )
 
 // ProposalContent is a consensus layer governance proposal content.
@@ -82,9 +93,42 @@ func (p *ProposalContent) Equals(other *ProposalContent) bool {
 	}
 }
 
+// PrettyPrint writes a pretty-printed representation of ProposalContent to the
+// given writer.
+func (p ProposalContent) PrettyPrint(ctx context.Context, prefix string, w io.Writer) {
+	switch {
+	case p.Upgrade != nil && p.CancelUpgrade == nil:
+		fmt.Fprintf(w, "%sUpgrade:\n", prefix)
+		p.Upgrade.PrettyPrint(ctx, prefix+"  ", w)
+	case p.CancelUpgrade != nil && p.Upgrade == nil:
+		fmt.Fprintf(w, "%sCancel Upgrade:\n", prefix)
+		p.CancelUpgrade.PrettyPrint(ctx, prefix+"  ", w)
+	default:
+		fmt.Fprintf(w, "%s%s\n", prefix, ProposalContentInvalidText)
+	}
+}
+
+// PrettyType returns a representation of ProposalContent that can be used for
+// pretty printing.
+func (p ProposalContent) PrettyType() (interface{}, error) {
+	return p, nil
+}
+
 // UpgradeProposal is an upgrade proposal.
 type UpgradeProposal struct {
 	upgrade.Descriptor
+}
+
+// PrettyPrint writes a pretty-printed representation of UpgradeProposal to the
+// given writer.
+func (u UpgradeProposal) PrettyPrint(ctx context.Context, prefix string, w io.Writer) {
+	u.Descriptor.PrettyPrint(ctx, prefix, w)
+}
+
+// PrettyType returns a representation of UpgradeProposal that can be used for
+// pretty printing.
+func (u UpgradeProposal) PrettyType() (interface{}, error) {
+	return u, nil
 }
 
 // CancelUpgradeProposal is an upgrade cancellation proposal.
@@ -93,12 +137,37 @@ type CancelUpgradeProposal struct {
 	ProposalID uint64 `json:"proposal_id"`
 }
 
+// PrettyPrint writes a pretty-printed representation of CancelUpgradeProposal
+// to the given writer.
+func (cu CancelUpgradeProposal) PrettyPrint(ctx context.Context, prefix string, w io.Writer) {
+	fmt.Fprintf(w, "%sProposal ID: %d\n", prefix, cu.ProposalID)
+}
+
+// PrettyType returns a representation of CancelUpgradeProposal that can be used
+// for pretty printing.
+func (cu CancelUpgradeProposal) PrettyType() (interface{}, error) {
+	return cu, nil
+}
+
 // ProposalVote is a vote for a proposal.
 type ProposalVote struct {
 	// ID is the unique identifier of a proposal.
 	ID uint64 `json:"id"`
 	// Vote is the vote.
 	Vote Vote `json:"vote"`
+}
+
+// PrettyPrint writes a pretty-printed representation of ProposalVote to the
+// given writer.
+func (pv ProposalVote) PrettyPrint(ctx context.Context, prefix string, w io.Writer) {
+	fmt.Fprintf(w, "%sProposal ID: %d\n", prefix, pv.ID)
+	fmt.Fprintf(w, "%sVote:        %s\n", prefix, pv.Vote)
+}
+
+// PrettyType returns a representation of ProposalVote that can be used for
+// pretty printing.
+func (pv ProposalVote) PrettyType() (interface{}, error) {
+	return pv, nil
 }
 
 // Backend is a governance implementation.

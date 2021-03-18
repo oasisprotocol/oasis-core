@@ -1,6 +1,8 @@
 package api
 
 import (
+	"bytes"
+	"context"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -137,5 +139,46 @@ func TestProposalContentEquals(t *testing.T) {
 		},
 	} {
 		require.Equal(t, tc.equals, tc.p1.Equals(tc.p2), tc.msg)
+	}
+}
+
+func TestProposalContentPrettyPrint(t *testing.T) {
+	for _, tc := range []struct {
+		expRegex string
+		p        *ProposalContent
+	}{
+		{
+			expRegex: "^Upgrade:",
+			p: &ProposalContent{
+				Upgrade: &UpgradeProposal{
+					Descriptor: api.Descriptor{Handler: "test"},
+				},
+			},
+		},
+		{
+			expRegex: "^Cancel Upgrade:",
+			p: &ProposalContent{
+				CancelUpgrade: &CancelUpgradeProposal{ProposalID: 42},
+			},
+		},
+		{
+			expRegex: ProposalContentInvalidText,
+			p:        &ProposalContent{},
+		},
+		{
+			expRegex: ProposalContentInvalidText,
+			p: &ProposalContent{
+				Upgrade: &UpgradeProposal{
+					Descriptor: api.Descriptor{Handler: "test"},
+				},
+				CancelUpgrade: &CancelUpgradeProposal{ProposalID: 42},
+			},
+		},
+	} {
+		var actualPrettyPrint bytes.Buffer
+		tc.p.PrettyPrint(context.Background(), "", &actualPrettyPrint)
+		require.Regexp(t, tc.expRegex, actualPrettyPrint.String(),
+			"pretty printing proposal content didn't return the expected result",
+		)
 	}
 }
