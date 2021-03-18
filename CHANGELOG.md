@@ -12,6 +12,1206 @@ The format is inspired by [Keep a Changelog].
 
 <!-- TOWNCRIER -->
 
+## 21.0 (2021-03-18)
+
+| Protocol          | Version   |
+|:------------------|:---------:|
+| Consensus         | 3.0.0     |
+| Runtime Host      | 2.0.0     |
+| Runtime Committee | 2.0.0     |
+
+### Removals and Breaking Changes
+
+- go/consensus/tendermint: Handle `LIGHT_CLIENT_ATTACK` evidence
+  ([#3156](https://github.com/oasisprotocol/oasis-core/issues/3156))
+
+- go/beacon: Add a PVSS based beacon backend
+  ([#3180](https://github.com/oasisprotocol/oasis-core/issues/3180))
+
+  This is a significant improvement over the existing beacon, in that it at
+  least attempts to be secure.
+
+  For more details, see [ADR 0007].
+
+  [ADR 0007]: docs/adr/0007-improved-random-beacon.md
+
+- go: Use human readable identifiers for slashing reasons
+  ([#3276](https://github.com/oasisprotocol/oasis-core/issues/3276),
+   [#3646](https://github.com/oasisprotocol/oasis-core/issues/3646))
+
+  When serialized into JSON the slashing reason identifiers are now human
+  readable (e.g. `consensus-equivocation` instead of `0`).
+
+  Old:
+
+  ```json
+  "slashing": {
+      "0": {
+          "amount": "100",
+          "freeze_interval": 1
+      }
+  }
+  ```
+
+  New:
+
+  ```json
+  "slashing": {
+      "consensus-equivocation": {
+          "amount": "100",
+          "freeze_interval": 1
+      }
+  }
+  ```
+
+- go: Improve error message when delegating less than `MinDelegationAmount`
+  ([#3308](https://github.com/oasisprotocol/oasis-core/issues/3308))
+
+  Previously, an `ErrInvalidArgument` was returned in this case, which
+  is not very descriptive, so a separate error was created:
+  `ErrUnderMinDelegationAmount`.
+
+- go/worker/p2p: Include chain ID and remove patch version from topic IDs
+  ([#3311](https://github.com/oasisprotocol/oasis-core/issues/3311))
+
+- go: Move storage backend initialization to storage worker
+  ([#3323](https://github.com/oasisprotocol/oasis-core/issues/3323))
+
+  Notably, this also means that node command line options for storage
+  configuration have been renamed and that the backend type option isn't
+  needed anymore unless the storage worker is enabled.
+
+- Compare protocol versions according to SemVer 2.0.0
+  ([#3360](https://github.com/oasisprotocol/oasis-core/issues/3360))
+
+  As described in our [Versioning] document, we bumped the protocol versions to
+  version 1.0.0 with the release of [Oasis Core 20.10].
+
+  Hence, we also need to modify how we compare and detect backward-incompatible
+  changes to follow SemVer 2.0.0 rules.
+
+  From now onwards, only a change in a protocol's major version signifies
+  a backward-incompatible change.
+
+  [Versioning]: docs/versioning.md#version-100
+  [Oasis Core 20.10]:
+    https://github.com/oasisprotocol/oasis-core/blob/v20.10/CHANGELOG.md
+
+- go/common/version: Remove `MajorMinor()` method from `Version` type
+  ([#3360](https://github.com/oasisprotocol/oasis-core/issues/3360))
+
+- roothash: Add support for failure indicating commitments
+  ([#3391](https://github.com/oasisprotocol/oasis-core/issues/3391))
+
+  Failure-indicating executor commits are introduced in order to give the
+  compute nodes a possibility to vote for failure when they cannot execute the
+  given batch (e.g., due to unavailability of storage). Such commits will always
+  trigger a discrepancy during discrepancy detection and will vote for failing
+  the round in discrepancy resolution phase.
+
+  For more details, see [ADR 0005].
+
+  [ADR 0005]: docs/adr/0005-runtime-compute-slashing.md
+
+- Introduce storage root types
+  ([#3415](https://github.com/oasisprotocol/oasis-core/issues/3415))
+
+  Each storage root now has an associated type (i.e. IO or state). In
+  particular, this impacts the Apply and ApplyBatch calls and also changes
+  the storage format of the Badger NodeDB.
+
+- go/staking: Add support for beneficiary allowances
+  ([#3428](https://github.com/oasisprotocol/oasis-core/issues/3428))
+
+  The staking service now supports setting allowances on general account
+  balances as specified by [ADR 0003].
+
+  [ADR 0003]: docs/adr/0003-consensus-runtime-token-transfer.md
+
+- Add runtime accounts in the consensus layer
+  ([#3429](https://github.com/oasisprotocol/oasis-core/issues/3429))
+
+  As described in [ADR 0003] this adds support for runtimes having accounts in
+  the consensus layer. Runtimes can manipulate those accounts by emitting newly
+  introduced transfer and withdraw runtime messages.
+
+  [ADR 0003]: docs/adr/0003-consensus-runtime-token-transfer.md
+
+- go/roothash: Refactor runtime messages
+  ([#3430](https://github.com/oasisprotocol/oasis-core/issues/3430))
+
+  Several modifications are made to the runtime message representation and
+  processing as specified by [ADR 0003].
+
+  [ADR 0003]: docs/adr/0003-consensus-runtime-token-transfer.md
+
+- go/roothash: Renamed `FinalizedEvent` field in `roothash.Event`
+  ([#3448](https://github.com/oasisprotocol/oasis-core/issues/3448))
+
+  The `FinalizedEvent` field in the `roothash.Event` structure has been renamed
+  to just `Finalized` in order to be consistent with other fields.
+
+  Note that the serialization already used just `finalized` so that remains
+  unchanged.
+
+- Remove `SignedRuntime`
+  ([#3450](https://github.com/oasisprotocol/oasis-core/issues/3450))
+
+  As part of the work on [ADR 0004], support for signed runtime descriptors
+  has been removed, since they are no longer required.
+  All methods that used to take signed runtime descriptors now take
+  non-signed runtime descriptors instead.
+
+  This also affects the genesis file. Use the `oasis-node debug fix-genesis`
+  command to convert a genesis file from the old format to the new one.
+
+  [ADR 0004]: docs/adr/0004-runtime-governance.md
+
+- Modify runtime descriptors to support ADR 0004
+  ([#3450](https://github.com/oasisprotocol/oasis-core/issues/3450))
+
+  As described in [ADR 0004], the runtime descriptors are modified to
+  enable runtime governance.
+
+  [ADR 0004]: docs/adr/0004-runtime-governance.md
+
+- go/consensus/tendermint: Use canonical chain context in InitChain
+  ([#3477](https://github.com/oasisprotocol/oasis-core/issues/3477))
+
+- go/roothash/genesis: Restore state from suspended runtimes
+  ([#3484](https://github.com/oasisprotocol/oasis-core/issues/3484))
+
+  Roothash state of suspended runtimes in genesis was previously not correctly
+  restored, causing the suspended runtime state to reset once the runtime was
+  resumed.
+
+- Implement Consensus Governance backend
+  ([#3502](https://github.com/oasisprotocol/oasis-core/issues/3502))
+
+  As described in [ADR 0006] this adds the consensus governance backend
+  implementation.
+
+  See [ADR 0006] and [Governance backend documentation] for more
+  details.
+
+  [ADR 0006]: docs/adr/0006-consensus-governance.md
+  [Governance backend documentation]: docs/consensus/governance.md
+
+- runtime: Move consensus layer structures to its own module
+  ([#3511](https://github.com/oasisprotocol/oasis-core/issues/3511))
+
+  Everything under `common::{address, registry, roothash, staking}` in the
+  `oasis-core-runtime` crate has been moved under the `consensus` module.
+
+- go/consensus/api: Rename `ConsensusVersion` to `Version` in `Status` type
+  ([#3511](https://github.com/oasisprotocol/oasis-core/issues/3511))
+
+- go/upgrade: Support multiple pending upgrades
+  ([#3536](https://github.com/oasisprotocol/oasis-core/issues/3536))
+
+  Upgrade module now supports submitting multiple upgrades.
+
+- go/registry/api: Allow updating more fields when updating an expired node
+  ([#3539](https://github.com/oasisprotocol/oasis-core/issues/3539))
+
+  Before, registering an expired (but not yet deleted) node was subject to the
+  same update restrictions as an active node being updated.
+
+- go/oasis-node/cmd/stake: Enhance `account info`'s output
+  ([#3557](https://github.com/oasisprotocol/oasis-core/issues/3557))
+
+  It now also displays an account's incoming and outgoing active/debonding
+  delegations, total and available balance.
+
+- go/consensus: Include consensus genesis parameters in `GetParameters`
+  ([#3565](https://github.com/oasisprotocol/oasis-core/issues/3565))
+
+  Consensus `GetParameters` method response now includes the consensus genesis
+  parameters.
+
+- runtime: Make `CheckTx` result more generic
+  ([#3573](https://github.com/oasisprotocol/oasis-core/issues/3573))
+
+  The previous definition made it hard for the runtime host to reason about the
+  returned status code of `CheckTx` unless it was tied to the result format
+  defined by the runtime.
+
+  This is a breaking change to the Runtime Host Protocol as the
+  `RuntimeCheckTxBatchResponse` structure has changed. It also breaks the
+  `transaction::Dispatcher API`.
+
+- go/upgrade: Use `ProtocolVersions` as internal upgrade identifier
+  ([#3579](https://github.com/oasisprotocol/oasis-core/issues/3579))
+
+  Before this change the internal upgrades used node binary hashes to ensure
+  upgrade version compatibility. To make it more practical use software versions
+  instead.
+
+- Add ability to set a non-zero initial commission schedule
+  ([#3601](https://github.com/oasisprotocol/oasis-core/issues/3601))
+
+  When setting the initial commission schedule for an account, the
+  `RateBoundLead` restriction is ignored. Therefore the initial bounds and rates
+  can be set for the first next epoch aligned with `RateChangeInterval`.
+
+  This effectively means that accounts without a configured commission schedule
+  should be considered as having bounds: `0%-100%`, as the initial schedule can
+  be set at any next epoch.
+
+- go/scheduler: Check runtime versions for node eligibility
+  ([#3611](https://github.com/oasisprotocol/oasis-core/issues/3611))
+
+- go/roothash/api/message: Add `RegistryMessage` runtime message
+  ([#3628](https://github.com/oasisprotocol/oasis-core/issues/3628))
+
+  A new runtime message was added that enables runtimes to submit updated
+  runtime descriptors for their runtime to the registry.
+
+- runtime: Remove `common::runtime::RuntimeId`
+  ([#3633](https://github.com/oasisprotocol/oasis-core/issues/3633))
+
+  The Go API has been using `Namespace` for a while so this makes it
+  consistent in the Rust runtime as well.
+
+- go/roothash: Support slashing runtime compute nodes
+  ([#3640](https://github.com/oasisprotocol/oasis-core/issues/3640))
+
+  Runtimes can configure whether compute nodes should be slashed for submitting
+  incorrect results or equivocating.
+
+  For more details, see [ADR 0005].
+
+  [ADR 0005]: docs/adr/0005-runtime-compute-slashing.md
+
+- runtimes: Support for `Add/ReclaimEscrow` runtime messages
+  ([#3641](https://github.com/oasisprotocol/oasis-core/issues/3641))
+
+  Escrow runtime messages need to be explicitly enabled via the
+  `AllowEscrowMessages` consensus parameter.
+
+- go/roothash: Runtime domain separation context in executor commitments
+  ([#3643](https://github.com/oasisprotocol/oasis-core/issues/3643))
+
+- Add runtime scheduling constraints
+  ([#3644](https://github.com/oasisprotocol/oasis-core/issues/3644))
+
+  Each runtime can now impose additional scheduling constraints for its
+  committee nodes (separately for primary/backup):
+
+  - Validator set membership.
+  - Maximum number of nodes per entity.
+  - Minimum candidate node pool size.
+
+- go/slashing/api: Change `SlashReason` type to `uint8`
+  ([#3646](https://github.com/oasisprotocol/oasis-core/issues/3646))
+
+- go/staking/api: Rename `DoubleSigning` to `ConsensusEquivocation`
+  ([#3646](https://github.com/oasisprotocol/oasis-core/issues/3646))
+
+- go/registry: Fix node sanity checks
+  ([#3660](https://github.com/oasisprotocol/oasis-core/issues/3660))
+
+- Remove support for entity-signed node registrations
+  ([#3661](https://github.com/oasisprotocol/oasis-core/issues/3661))
+
+  Support for entity-signed node registrations has been removed,
+  as they were only used in tests and not on any real network.
+  Only node-signed node registrations are supported now.
+
+- go/registry: Change minimum `ProposerTimeout` from 5 to 2 blocks
+  ([#3682](https://github.com/oasisprotocol/oasis-core/issues/3682))
+
+- go/genesis/api: Change canonical form of genesis file to end with a newline
+  ([#3709](https://github.com/oasisprotocol/oasis-core/issues/3709))
+
+- go/staking/state: Remove nonce as the debonding delegations disambiguator
+  ([#3717](https://github.com/oasisprotocol/oasis-core/issues/3717))
+
+  Account nonce is removed from the debonding delegations state key. Instead,
+  if there are multiple debonding delegations for the same account and debond
+  end epoch, those get merged into a single debonding delegation record.
+
+- runtime: Introduce `RoundResults` to allow adding other information
+  ([#3726](https://github.com/oasisprotocol/oasis-core/issues/3726))
+
+  In addition to the existing runtime message execution results we want to
+  provide additional information about the last successful round to runtimes.
+  This introduces a `RoundResults` structure for this purpose.
+
+- go/staking/api: Rename `Delegations()` method to `DelegationsFor()`
+  ([#3774](https://github.com/oasisprotocol/oasis-core/issues/3774))
+
+- go/staking/api: Rename `DebondingDelegations()` method
+  ([#3774](https://github.com/oasisprotocol/oasis-core/issues/3774))
+
+  Rename it to `DebondingDelegationsFor()`.
+
+- go/upgrade/api: Version upgrade `Descriptor`
+  ([#3781](https://github.com/oasisprotocol/oasis-core/issues/3781))
+
+- go/consensus: Store runtime state roots in a single key
+  ([#3782](https://github.com/oasisprotocol/oasis-core/issues/3782))
+
+  That makes it easier to construct proofs starting at the consensus state root
+  that prove what the state root of a specific runtime is. You can then chain
+  these proofs to prove something about runtime state.
+
+- go/staking/api/token: Print token's symbol after the amount
+  ([#3784](https://github.com/oasisprotocol/oasis-core/issues/3784))
+
+  This is more consistent with how others present token amounts.
+
+- go/consensus/api/transaction: Print txn's method and body before the rest
+  ([#3784](https://github.com/oasisprotocol/oasis-core/issues/3784))
+
+  This is more intuitive and enables people to discover the transaction's main
+  information quicker.
+
+- go/consensus/tendermint: Bump Tendermint Core to v0.34.8-oasis1
+  ([#3786](https://github.com/oasisprotocol/oasis-core/issues/3786))
+
+- go/roothash: Finish commitment processing early when possible
+  ([#3790](https://github.com/oasisprotocol/oasis-core/issues/3790))
+
+  When the set of current commitments already determines the fate of the
+  process (e.g., when there is a discrepancy or a majority of votes indicate
+  success), proceed with the process instead of waiting for the remaining
+  commitments.
+
+- go/upgrade/api: Simplify upgrade `Descriptor`
+  ([#3793](https://github.com/oasisprotocol/oasis-core/issues/3793))
+
+  Remove `UpgradeMethod` type and `Method` field, rename `Name` field to
+  `Handler` and replace `Identifier` field with `Target` field which corresponds
+  to an upgrade's target version.
+
+- go/common/version: Remove `Toolchain` field from `ProtocolVersions`
+  ([#3793](https://github.com/oasisprotocol/oasis-core/issues/3793))
+
+### Configuration Changes
+
+- go: Change storage backend configuration options
+  ([#3323](https://github.com/oasisprotocol/oasis-core/issues/3323))
+
+  All the `--storage.*` options have been renamed to `--worker.storage.*`.
+
+  Nodes that don't have the storage worker enabled don't need to configure
+  the storage backend anymore, since it will be chosen correctly
+  automatically.
+
+- Change compute worker runtime configuration flags
+  ([#3653](https://github.com/oasisprotocol/oasis-core/issues/3653))
+
+  All the flags under `worker.runtime.*` have been moved under just
+  `runtime.*`.
+
+  For example the `worker.runtime.paths` flag needs to be renamed
+  to `runtime.paths`.
+
+### Features
+
+- go/common/version: Add `MaskNonMajor()` method to `Version` type
+  ([#3360](https://github.com/oasisprotocol/oasis-core/issues/3360))
+
+- go/worker/storage: Add validation for IO roots in `Apply` operations
+  ([#3440](https://github.com/oasisprotocol/oasis-core/issues/3440))
+
+- go/runtime/client: Add `SubmitTxNoWait` method
+  ([#3444](https://github.com/oasisprotocol/oasis-core/issues/3444))
+
+  `SubmitTxNoWait` method publishes the runtime transaction and doesn't wait
+  for results.
+
+- Runtime client should fail `SubmitTx` calls until consensus is synced
+  ([#3452](https://github.com/oasisprotocol/oasis-core/issues/3452))
+
+- Runtime storage sync should use any storage node
+  ([#3454](https://github.com/oasisprotocol/oasis-core/issues/3454))
+
+  Before, storage node sync only used nodes from the current storage committee.
+  Now it also syncs (with lower priority) from other storage nodes registered
+  for the runtime.
+
+- go/oasis-node/cmd: Add `oasis-node stake account validate_address` CLI command
+  ([#3493](https://github.com/oasisprotocol/oasis-core/issues/3493),
+   [#3589](https://github.com/oasisprotocol/oasis-core/issues/3589))
+
+  It can be used to validate a staking account's address.
+
+- runtime: Add `mkvs::Iterator` trait and `MKVS::iter` trait method
+  ([#3499](https://github.com/oasisprotocol/oasis-core/issues/3499))
+
+- runtime: Add `mkvs::OverlayTree` similar to its Go counterpart
+  ([#3499](https://github.com/oasisprotocol/oasis-core/issues/3499))
+
+- go/storage/mkvs: Generate proofs even if `Tree.Position` is not found
+  ([#3499](https://github.com/oasisprotocol/oasis-core/issues/3499))
+
+- go/consensus/api: Add `Registry()`/`Staking()`/`Scheduler()` to client backend
+  ([#3511](https://github.com/oasisprotocol/oasis-core/issues/3511))
+
+  This makes it more convenient to use the consensus client backend.
+
+- go/oasis-node/cmd/stake: Add commands for managing allowances
+  ([#3511](https://github.com/oasisprotocol/oasis-core/issues/3511))
+
+  Add `oasis-node stake account gen_allow` and
+  `oasis-node stake account gen_withdraw` CLI commands.
+
+- go/consensus/tendermint: Also dump state when shutting down for upgrade
+  ([#3516](https://github.com/oasisprotocol/oasis-core/issues/3516))
+
+- go/common/version: Add `ConvertGoModulesVersion()` function
+  ([#3546](https://github.com/oasisprotocol/oasis-core/issues/3546))
+
+  It can be used to convert a Go Modules compatible version defined in
+  [ADR 0002] (i.e. a Go Modules compatible Git tag without the `go/` prefix) to
+  the canonical Oasis Core version.
+
+  [ADR 0002]: docs/adr/0002-go-modules-compatible-git-tags.md
+
+- go/oasis-node/cmd: Add `oasis-node stake account nonce` CLI command
+  ([#3559](https://github.com/oasisprotocol/oasis-core/issues/3559))
+
+  It can be used to get a staking account's current nonce.
+
+- go/scheduler: Add `ConsensusParameters` method to scheduler backend
+  ([#3565](https://github.com/oasisprotocol/oasis-core/issues/3565))
+
+- go/epochtime: Add `ConsensusParameters` method to epochtime backend
+  ([#3565](https://github.com/oasisprotocol/oasis-core/issues/3565))
+
+- runtime/common/version: Make `Version::new` a `const` function
+  ([#3573](https://github.com/oasisprotocol/oasis-core/issues/3573))
+
+  Also expose members publicly.
+
+- go/runtime/client: Add `GetEvents` to fetch emitted runtime events
+  ([#3573](https://github.com/oasisprotocol/oasis-core/issues/3573))
+
+- go/worker/executor: Propose a new batch if there are message results
+  ([#3645](https://github.com/oasisprotocol/oasis-core/issues/3645))
+
+  The runtime executor now proposes a new batch if there are message results
+  from previous round even if there are no transactions.
+
+- go/runtime/client: Perform local `CheckTx` when a hosted runtime exists
+  ([#3653](https://github.com/oasisprotocol/oasis-core/issues/3653))
+
+- runtime: Add support for runtime-specific queries
+  ([#3662](https://github.com/oasisprotocol/oasis-core/issues/3662))
+
+  Runtimes can now implement a handler for `RuntimeQueryRequest` messages to
+  expose arbitrary queries to runtime clients. Query routing is performed using
+  method names.
+
+- go/runtime/client: Also expose `CheckTx`
+  ([#3662](https://github.com/oasisprotocol/oasis-core/issues/3662))
+
+  The `CheckTx` functionality is now also exposed via the runtime client API.
+
+- go/worker/storage: Add `StorageRPC` role and change access policy
+  ([#3696](https://github.com/oasisprotocol/oasis-core/issues/3696))
+
+  Getting checkpoints and diffs is now allowed for any connecting node,
+  which eliminates a race condition and initialization difficulty in the
+  storage committee node startup.
+
+  State access is made gated but optionally public as before, depending on the
+  value of the `worker.storage.public_rpc.enabled` configuration option.
+
+- go/common/diff: Add package implementing helpers for comparing objects
+  ([#3709](https://github.com/oasisprotocol/oasis-core/issues/3709))
+
+  Add `UnifiedDiffString()` which returns unified diff between two strings.
+
+- go/genesis/api: Update `WriteFileJSON()` to create files in the canonical form
+  ([#3709](https://github.com/oasisprotocol/oasis-core/issues/3709))
+
+  Consequentially, all its users (most notably the dump genesis halt hook) now
+  produce genesis files in the canonical form.
+
+- go/genesis/api: Add `CanonicalJSON()` method to `Document` type
+  ([#3709](https://github.com/oasisprotocol/oasis-core/issues/3709))
+
+  It can be used to obtain the canonical form of the genesis document
+  serialized into a file.
+
+- go/staking/api/token: Generalize `PrettyPrintAmount()`
+  ([#3725](https://github.com/oasisprotocol/oasis-core/issues/3725))
+
+  Support passing the amount as either `quantity.Quantity` or
+  `prettyprint.Quantity`.
+
+- go/staking/api: Add `StakeForShares()` method to `SharePool` type
+  ([#3725](https://github.com/oasisprotocol/oasis-core/issues/3725))
+
+  It can be used to compute the amount of base units for the given amount of
+  shares.
+
+- go/common/prettyprint: Add `Quantity` type
+  ([#3725](https://github.com/oasisprotocol/oasis-core/issues/3725))
+
+- runtime: Provide sets of good and bad compute nodes in round results
+  ([#3726](https://github.com/oasisprotocol/oasis-core/issues/3726))
+
+- go/control/GetStatus: Include the latest epoch
+  ([#3743](https://github.com/oasisprotocol/oasis-core/issues/3743))
+
+- go/runtime/registry: Add methods returning active runtime descriptors
+  ([#3771](https://github.com/oasisprotocol/oasis-core/issues/3771))
+
+  Runtime registry now includes methods returning the currently active runtime
+  descriptor. Active descriptor is the runtime descriptor valid for the current
+  epoch.
+
+- go/beacon: Add `GetFutureEpoch` method to beacon API
+  ([#3773](https://github.com/oasisprotocol/oasis-core/issues/3773))
+
+- go/consensus/tendermint/apps/staking/state: Add incoming delegation methods
+  ([#3774](https://github.com/oasisprotocol/oasis-core/issues/3774))
+
+  Add new methods to `ImmutableState` type for querying incoming (debonding)
+  delegations to an escrow account: `DelegationsTo()` and
+  `DebondingDelegationsTo()`.
+
+- go/staking/api: Add `DelegationsTo()`/`DebondingDelegationsTo()` methods
+  ([#3774](https://github.com/oasisprotocol/oasis-core/issues/3774))
+
+  They can be used to obtain all incoming (debonding) delegations to the given
+  account.
+
+- go/staking/api: Add `DelegationInfo` and `DebondingDelegationInfo` types
+  ([#3774](https://github.com/oasisprotocol/oasis-core/issues/3774))
+
+  They are (debonding) delegation descriptors with additional information about
+  the share pool they belong to.
+
+- go/staking/api: Add `DelegationInfosFor()`/`DebondingDelegationInfosFor()`
+  ([#3774](https://github.com/oasisprotocol/oasis-core/issues/3774))
+
+  They can be used to obtain incoming (debonding) delegations with additional
+  information for the given account.
+
+- runtime: Provide consensus layer chain domain separation context
+  ([#3778](https://github.com/oasisprotocol/oasis-core/issues/3778))
+
+  This adds a way for the runtime to be informed about the chain domain
+  separation context that the consensus layer is using. It can be used by the
+  runtime to perform domain separation for cryptographic signatures.
+
+- go/consensus: Add `GetChainContext`
+  ([#3778](https://github.com/oasisprotocol/oasis-core/issues/3778))
+
+  This makes it easier for clients to fetch the chain domain separation context
+  as previously they needed to fetch the genesis document and compute the chain
+  context from it. It also adds ChainContext to the node's consensus status
+  report.
+
+- go/staking/api/token: Add support for passing token's value sign via context
+  ([#3780](https://github.com/oasisprotocol/oasis-core/issues/3780))
+
+- go/control/api: Add node status to registration status response
+  ([#3783](https://github.com/oasisprotocol/oasis-core/issues/3783))
+
+- go/oasis-node/cmd: Improve transaction preview when generating transactions
+  ([#3792](https://github.com/oasisprotocol/oasis-core/issues/3792))
+
+  Display amounts in tokens and display genesis document's hash when previewing
+  transactions with various `oasis-node * gen_*` CLI commands.
+
+- go/oasis-node/cmd/common/context: Add `GetCtxWithGenesisInfo()` helper
+  ([#3792](https://github.com/oasisprotocol/oasis-core/issues/3792))
+
+- go/upgrade: Implement `PrettyPrint` interface for `Descriptor`
+  ([#3800](https://github.com/oasisprotocol/oasis-core/issues/3800))
+
+- go/governance: Implement `PrettyPrint` interface for various types
+  ([#3800](https://github.com/oasisprotocol/oasis-core/issues/3800))
+
+  Implement `PrettyPrinter` for `ProposalContent`, `UpgradeProposal`,
+  `CancelUpgradeProposal` and `ProposalVote` types.
+
+- go/common/version: Implement `PrettyPrint` interface for `ProtocolVersions`
+  ([#3800](https://github.com/oasisprotocol/oasis-core/issues/3800))
+
+### Bug Fixes
+
+- go/consensus: Include only top K validators at genesis time
+  ([#3177](https://github.com/oasisprotocol/oasis-core/issues/3177))
+
+  Previously, all the eligible validators were included in the validator set at
+  genesis time.
+
+  This has been fixed to include only the top `MaxValidators` as specified in
+  the scheduler consensus parameters.
+
+  Additionally, the `MaxValidatorsPerEntity` scheduler consensus parameter is
+  now enforced.
+
+- go/genesis: Fix epoch-based sanity checks
+  ([#3477](https://github.com/oasisprotocol/oasis-core/issues/3477))
+
+- go/storage/mkvs/checkpoint: Fix handling of non-zero earliest version
+  ([#3480](https://github.com/oasisprotocol/oasis-core/issues/3480))
+
+- go/consensus/tendermint: Fix early `GetStatus()` with initial height > 1
+  ([#3481](https://github.com/oasisprotocol/oasis-core/issues/3481))
+
+- go: Add missing size checks to `UnmarshalBinary()` methods
+  ([#3497](https://github.com/oasisprotocol/oasis-core/issues/3497))
+
+  Note that in practice these will never currently be triggered as the
+  caller always checks the overall size before calling the more specific
+  `UnmarshalBinary()` method.
+
+- go/storage/mkvs: Fix edge case in overlay iterator
+  ([#3499](https://github.com/oasisprotocol/oasis-core/issues/3499))
+
+- runtime: Remove incorrect `Sync` impl on `mkvs::Tree`
+  ([#3499](https://github.com/oasisprotocol/oasis-core/issues/3499))
+
+- go/oasis-node/cmd/registry/entity: Reuse signer instead of creating a new one
+  ([#3505](https://github.com/oasisprotocol/oasis-core/issues/3505))
+
+  The `oasis-node registry entity register` CLI command previously always
+  created two signer factories, one for signing the entity descriptor and one
+  for signing the entity registration transaction.
+
+  Some signers assign exclusive access to an underlying resource (e.g., HSM) to
+  the given factory. In that case, all operations on the second signer factory
+  would fail.
+
+- Bump Go to 1.15.5
+  ([#3512](https://github.com/oasisprotocol/oasis-core/issues/3512))
+
+  This fixes a recently disclosed security vulnerability in the Go runtime
+  library.
+
+- go/worker/registration: Fix `RequestShutdown` for nodes with no registration
+  ([#3524](https://github.com/oasisprotocol/oasis-core/issues/3524))
+
+  In cases where the registration worker was started with a dummy
+  goroutine that just waits for the service to stop, deregistration
+  requests would hang, because the dummy wasn't watching the
+  deregistration channel.
+
+- go/worker/storage: Fill in additional versions when restoring state
+  ([#3525](https://github.com/oasisprotocol/oasis-core/issues/3525))
+
+  When a storage database from one network is used in a new network (e.g. when
+  the consensus layer did a dump/restore upgrade) properly handle the case
+  where there were additional rounds after the runtime has stopped (e.g., due
+  to epoch transitions).
+
+- go/consensus/tendermint: Report peers and validator status only after started
+  ([#3534](https://github.com/oasisprotocol/oasis-core/issues/3534))
+
+  When accessing the node status in very early stages of initialization when a
+  Tendermint node structure is not available, the status RPC would make the node
+  panic. Leave the peers and validator status blank instead.
+
+- go/worker/storage: Force checkpoint sync when replication is needed
+  ([#3538](https://github.com/oasisprotocol/oasis-core/issues/3538))
+
+  Previously a freshly initialized storage node with no genesis state would
+  fall back to incremental sync even though there was no chance of that
+  succeeding.
+
+- go/roothash/api/commitment: Return proposer commit in DR
+  ([#3545](https://github.com/oasisprotocol/oasis-core/issues/3545))
+
+  A subtle bug introduced in [#3448] and discovered by daily long-term tests.
+
+  [#3448]: https://github.com/oasisprotocol/oasis-core/issues/3448
+
+- go/tendermint: Fix `GetLightBlock`,`GetParameters` queries for latest height
+  ([#3565](https://github.com/oasisprotocol/oasis-core/issues/3565))
+
+- go/runtime/scheduling: Consumer should pull from scheduler
+  ([#3569](https://github.com/oasisprotocol/oasis-core/issues/3569))
+
+  Previously the scheduler would push batches to the consumer (e.g. compute
+  node) which makes no sense as the consumer knows when it's ready to accept
+  new batches. This changes the model so that the consumer pulls batches from
+  the scheduler.
+
+- go/consensus/tendermint/roothash: Fix latest block reindexing
+  ([#3594](https://github.com/oasisprotocol/oasis-core/issues/3594))
+
+  Only commit the block in case it was not already committed during reindex.
+  This can happen when reindexing after a crash (e.g., the `before_index` crash
+  point) since the initial height at which the reindex happens does not
+  necessarily contain a round finalization event so reindexing up to height-1
+  doesn't help.
+
+  Discovered during long-term tests.
+
+- go/worker/common/committee: Wait for initial consensus sync
+  ([#3599](https://github.com/oasisprotocol/oasis-core/issues/3599))
+
+- go/consensus/tendermint: Fix `nil` dereference in `EstimateGas`
+  ([#3648](https://github.com/oasisprotocol/oasis-core/issues/3648))
+
+- go/oasis-node/cmd/node: Fix error handling when writing in `dumpGenesis()`
+  ([#3714](https://github.com/oasisprotocol/oasis-core/issues/3714))
+
+- go/cmd/fixgenesis: Add default beacon and governance parameters
+  ([#3728](https://github.com/oasisprotocol/oasis-core/issues/3728))
+
+- go/consensus: Move upgrade logic to governance, gracefully handle halt
+  ([#3755](https://github.com/oasisprotocol/oasis-core/issues/3755))
+
+- go/consensus: Exclude expired nodes from validator set at genesis time
+  ([#3763](https://github.com/oasisprotocol/oasis-core/issues/3763))
+
+  The validator set selection algorithm now properly ignores expired nodes.
+
+- go/upgrade: Ensure upgrade handler exists
+  ([#3768](https://github.com/oasisprotocol/oasis-core/issues/3768))
+
+- Allow switching binary while an upgrade is pending or in progress
+  ([#3768](https://github.com/oasisprotocol/oasis-core/issues/3768))
+
+  Removes `RunningVersion`/`SubmittingVersion` internal pending upgrade fields.
+  Binary can now be switched mid-upgrade as long as it remains compatible with
+  the in-progress upgrade.
+
+- Progress the startup upgrade stage only after a successful startup step
+  ([#3768](https://github.com/oasisprotocol/oasis-core/issues/3768))
+
+  Before, the startup state was progressed before the startup stage was run,
+  therefore in case of a failed startup upgrade the stage would be skipped after
+  the node restart.
+
+- runtime/scheduling: Fix `ordered_map.UpdateConfig`
+  ([#3771](https://github.com/oasisprotocol/oasis-core/issues/3771))
+
+  Before, `UpdateConfig` did not correctly update the list element reference
+  causing an inconsistency of the underlying map and queue.
+
+- go/roothash/reindexBlocks: Return latest known round if no new rounds indexed
+  ([#3791](https://github.com/oasisprotocol/oasis-core/issues/3791))
+
+  This fixes a case where a storage node would not register if restarted while
+  synced and there were no new runtime rounds (e.g. the runtime is suspended).
+
+- go/worker/executor: Avoid holding lock while applying processed batch
+  ([#3801](https://github.com/oasisprotocol/oasis-core/issues/3801))
+
+  Before, the executor worker would hold the `CrossNode` lock, while doing
+  requests to storage.
+
+### Documentation Improvements
+
+- ADR 0003: Consensus/Runtime Token Transfer
+  ([#3262](https://github.com/oasisprotocol/oasis-core/issues/3262))
+
+- ADR 0004: Runtime Governance
+  ([#3284](https://github.com/oasisprotocol/oasis-core/issues/3284))
+
+- Document [genesis document's hash]
+  ([#3312](https://github.com/oasisprotocol/oasis-core/issues/3312))
+
+  [genesis document's hash]: docs/consensus/genesis.md#genesis-documents-hash
+
+- Update [Release Process] documentation
+  ([#3327](https://github.com/oasisprotocol/oasis-core/issues/3327))
+
+  [Release Process]: docs/release-process.md
+
+- ADR 0005: Runtime Compute Node Slashing
+  ([#3339](https://github.com/oasisprotocol/oasis-core/issues/3339))
+
+- Rename Versioning scheme document to Versioning and include it in the index
+  ([#3360](https://github.com/oasisprotocol/oasis-core/issues/3360))
+
+- docs: Fix some links that break with gitbook
+  ([#3389](https://github.com/oasisprotocol/oasis-core/issues/3389))
+
+- ADR 0006: Consensus Governance
+  ([#3423](https://github.com/oasisprotocol/oasis-core/issues/3423))
+
+- ADR 0007: Improved Random Beacon
+  ([#3439](https://github.com/oasisprotocol/oasis-core/issues/3439))
+
+- Update Deploying a Runtime document's example
+  ([#3789](https://github.com/oasisprotocol/oasis-core/issues/3789))
+
+### Internal Changes
+
+- ci: Setup daily longterm tests with longer epoch periods
+  ([#3301](https://github.com/oasisprotocol/oasis-core/issues/3301))
+
+- Omit node operator link from release notes
+  ([#3313](https://github.com/oasisprotocol/oasis-core/issues/3313))
+
+- go: Bump github.com/prometheus/procfs from 0.1.3 to 0.3.0
+  ([#3314](https://github.com/oasisprotocol/oasis-core/issues/3314),
+   [#3616](https://github.com/oasisprotocol/oasis-core/issues/3616))
+
+- Make: Output messages to stderr instead of stdout
+  ([#3327](https://github.com/oasisprotocol/oasis-core/issues/3327))
+
+- Make: Refactor Change Log handling
+  ([#3327](https://github.com/oasisprotocol/oasis-core/issues/3327))
+
+- internal: Refactor project's version handling
+  ([#3327](https://github.com/oasisprotocol/oasis-core/issues/3327),
+   [#3345](https://github.com/oasisprotocol/oasis-core/issues/3345),
+   [#3492](https://github.com/oasisprotocol/oasis-core/issues/3492))
+
+  Simplify version computation logic in Make files and start using Punch's
+  version file to track version.
+
+- Make: Refactor release-related targets
+  ([#3327](https://github.com/oasisprotocol/oasis-core/issues/3327),
+   [#3368](https://github.com/oasisprotocol/oasis-core/issues/3368))
+
+  - Rename `tag-next-release` target to `release-tag`.
+  - Rename `release` target to `release-build`.
+  - Add `release-stable-branch` target that creates and pushes a stable branch
+    for the current release.
+
+- github: Bump GoReleaser in ci-reproducibility and release workflows to 0.152.0
+  ([#3327](https://github.com/oasisprotocol/oasis-core/issues/3327),
+   [#3368](https://github.com/oasisprotocol/oasis-core/issues/3368),
+   [#3602](https://github.com/oasisprotocol/oasis-core/issues/3602))
+
+- go/e2e/workload-queries: Allow historical `QueryTxs` to fail few times
+  ([#3338](https://github.com/oasisprotocol/oasis-core/issues/3338))
+
+- go/nancy: Remove `golang.org/x/net` false positive ignores
+  ([#3340](https://github.com/oasisprotocol/oasis-core/issues/3340))
+
+- go/dependencies/etcd: Update etcd with replace directive
+  ([#3341](https://github.com/oasisprotocol/oasis-core/issues/3341))
+
+- ci: Bump actions/setup-python from v2.1.2 to v2.2.1
+  ([#3349](https://github.com/oasisprotocol/oasis-core/issues/3349),
+   [#3405](https://github.com/oasisprotocol/oasis-core/issues/3405),
+   [#3582](https://github.com/oasisprotocol/oasis-core/issues/3582))
+
+- rust: Bump base64 from 0.12.3 to 0.13.0
+  ([#3353](https://github.com/oasisprotocol/oasis-core/issues/3353))
+
+- Prioritize nodes that signed storage receipts
+  ([#3354](https://github.com/oasisprotocol/oasis-core/issues/3354))
+
+  The compute executor and tag indexer now prioritize reads from storage nodes
+  that signed the corresponding storage receipts.
+
+- go/storage: Support node prioritization in read requests
+  ([#3354](https://github.com/oasisprotocol/oasis-core/issues/3354))
+
+  The following new functions are added to the storage API package to help
+  storage backend implementations:
+
+  - `WithNodePriorityHint`
+  - `WithNodePriorityHintFromSignatures`
+  - `NodePriorityHintFromContext`
+
+- ci: Bump actions/setup-node from v2.1.1 to v2.1.4
+  ([#3364](https://github.com/oasisprotocol/oasis-core/issues/3364),
+   [#3563](https://github.com/oasisprotocol/oasis-core/issues/3563),
+   [#3575](https://github.com/oasisprotocol/oasis-core/issues/3575))
+
+- ci: Bump actions/setup-go from v2.1.2 to v2.1.3
+  ([#3365](https://github.com/oasisprotocol/oasis-core/issues/3365))
+
+- ci: Bump actions/upload-artifact from v2.1.4 to v2.2.2
+  ([#3367](https://github.com/oasisprotocol/oasis-core/issues/3367),
+   [#3520](https://github.com/oasisprotocol/oasis-core/issues/3520),
+   [#3596](https://github.com/oasisprotocol/oasis-core/issues/3596))
+
+- go/oasis-test-runner: Fix `e2e/consensus-state-sync` scenario (take two)
+  ([#3369](https://github.com/oasisprotocol/oasis-core/issues/3369))
+
+  Previous "fix" actually made the test silently skip actually performing state
+  sync because it used the wrong validator index.
+
+- go/e2e/queries: Correctly ignore `UnexpectedEOF` errors
+  ([#3372](https://github.com/oasisprotocol/oasis-core/issues/3372))
+
+- ci: Make build-fuzz failures fatal now that upstream is fixed
+  ([#3374](https://github.com/oasisprotocol/oasis-core/issues/3374))
+
+- go: Bump github.com/blevesearch/bleve from 1.0.10 to 1.0.14
+  ([#3384](https://github.com/oasisprotocol/oasis-core/issues/3384),
+   [#3530](https://github.com/oasisprotocol/oasis-core/issues/3530),
+   [#3558](https://github.com/oasisprotocol/oasis-core/issues/3558))
+
+- ci: Daily long-term test minor fixes
+  ([#3387](https://github.com/oasisprotocol/oasis-core/issues/3387))
+
+  - Don't fail on `UnexpectedEOF` during `GetTransactionsWithResults`.
+
+  - Enable `"RecoverCorruptedWAL"` for all nodes.
+
+- go/roothash: Add consistent hash test for `ComputeResultsHeader`
+  ([#3391](https://github.com/oasisprotocol/oasis-core/issues/3391))
+
+- go: Bump github.com/libp2p/go-libp2p-pubsub from 0.3.5 to 0.4.1
+  ([#3392](https://github.com/oasisprotocol/oasis-core/issues/3392),
+   [#3510](https://github.com/oasisprotocol/oasis-core/issues/3510),
+   [#3624](https://github.com/oasisprotocol/oasis-core/issues/3624))
+
+- go/e2e/runtime/runtime-upgrade: Wait for old compute nodes to expire
+  ([#3404](https://github.com/oasisprotocol/oasis-core/issues/3404))
+
+- go: Bump github.com/golang/protobuf from 1.4.2 to 1.4.3
+  ([#3408](https://github.com/oasisprotocol/oasis-core/issues/3408))
+
+- go/e2e: Add storage byzantine E2E test cases
+  ([#3414](https://github.com/oasisprotocol/oasis-core/issues/3414))
+
+- go: Bump github.com/prometheus/client_golang from 1.7.1 to 1.9.0
+  ([#3419](https://github.com/oasisprotocol/oasis-core/issues/3419),
+   [#3576](https://github.com/oasisprotocol/oasis-core/issues/3576))
+
+- go: Bump github.com/spf13/cobra from 1.0.0 to 1.1.1
+  ([#3427](https://github.com/oasisprotocol/oasis-core/issues/3427))
+
+- go: Bump google.golang.org/grpc from 1.32.0 to 1.36.0
+  ([#3437](https://github.com/oasisprotocol/oasis-core/issues/3437),
+   [#3495](https://github.com/oasisprotocol/oasis-core/issues/3495),
+   [#3543](https://github.com/oasisprotocol/oasis-core/issues/3543),
+   [#3617](https://github.com/oasisprotocol/oasis-core/issues/3617),
+   [#3631](https://github.com/oasisprotocol/oasis-core/issues/3631),
+   [#3730](https://github.com/oasisprotocol/oasis-core/issues/3730))
+
+- rust: Bump rustracing
+  ([#3446](https://github.com/oasisprotocol/oasis-core/issues/3446))
+
+  - Bump `rustracing` from 0.4.0 to 0.5.0.
+  - Bump `rustracing_jaeger` from 0.5.0 to 0.6.0.
+
+- go/consensus/tendermint: Remove `ForeignExecuteTx`
+  ([#3448](https://github.com/oasisprotocol/oasis-core/issues/3448))
+
+  Use recently introduced message passing between apps instead.
+
+- go/consensus/tendermint: Add message passing between mux applications
+  ([#3448](https://github.com/oasisprotocol/oasis-core/issues/3448))
+
+- go/common/crash: Improvements to the debug crash framework
+  ([#3449](https://github.com/oasisprotocol/oasis-core/issues/3449))
+
+  - Threadsafe global crasher.
+  - Ability to configure default probability for all crash points.
+  - Fix reported caller information on crash.
+  - Crash with a specific exit code.
+
+- Add `GetEntityNodes()` query to registry state
+  ([#3450](https://github.com/oasisprotocol/oasis-core/issues/3450))
+
+- go: Bump github.com/hashicorp/go-plugin from 1.3.0 to 1.4.0
+  ([#3494](https://github.com/oasisprotocol/oasis-core/issues/3494))
+
+- go: Bump github.com/hashicorp/go-hclog from 0.14.1 to 0.15.0
+  ([#3496](https://github.com/oasisprotocol/oasis-core/issues/3496))
+
+- go/oasis-node/cmd/common/consensus: Augment `SignAndSaveTx()` with `signer`
+  ([#3506](https://github.com/oasisprotocol/oasis-core/issues/3506))
+
+  Add ability to pass a pre-existing `signature.Signer` as `signer` parameter to
+  the `SignAndSaveTx()` function.
+
+- go: Bump github.com/libp2p/go-libp2p-core from 0.6.1 to 0.8.5
+  ([#3510](https://github.com/oasisprotocol/oasis-core/issues/3510),
+   [#3711](https://github.com/oasisprotocol/oasis-core/issues/3711),
+   [#3718](https://github.com/oasisprotocol/oasis-core/issues/3718))
+
+- go: Bump github.com/libp2p/go-libp2p from 0.11.0 to 0.13.0
+  ([#3510](https://github.com/oasisprotocol/oasis-core/issues/3510),
+   [#3588](https://github.com/oasisprotocol/oasis-core/issues/3588))
+
+- rust: Bump arc-swap to 0.4.8
+  ([#3511](https://github.com/oasisprotocol/oasis-core/issues/3511))
+
+- ci: Bump actions/download-artifact from v2.0.5 to v2.0.8
+  ([#3519](https://github.com/oasisprotocol/oasis-core/issues/3519),
+   [#3571](https://github.com/oasisprotocol/oasis-core/issues/3571),
+   [#3597](https://github.com/oasisprotocol/oasis-core/issues/3597))
+
+- github: Replace deprecated `set-env` workflow command with environment file
+  ([#3522](https://github.com/oasisprotocol/oasis-core/issues/3522))
+
+- go/storage/mkvs/checkpoint: Add initial version parameter
+  ([#3538](https://github.com/oasisprotocol/oasis-core/issues/3538))
+
+  Previously, if the local database contained a version earlier than the genesis
+  version, the checkpointer would attempt to create a new checkpoint at that
+  earlier version (and fail). Now the version is clamped at the initial
+  version.
+
+- ci: Bump docker/build-push-action from v1 to v2.2.2
+  ([#3549](https://github.com/oasisprotocol/oasis-core/issues/3549),
+   [#3605](https://github.com/oasisprotocol/oasis-core/issues/3605))
+
+- go/oasis-node/cmd/common: Add `LoadEntitySigner()` helper
+  ([#3556](https://github.com/oasisprotocol/oasis-core/issues/3556))
+
+  Replace `LoadEntity()` helper with `LoadEntitySigner()` that requires no
+  arguments and loads the entity directory and obtains the signer backend by
+  itself.
+
+- go/oasis-node/txsource: Increase submission timeout
+  ([#3568](https://github.com/oasisprotocol/oasis-core/issues/3568))
+
+  Sometimes it can take up to two minutes for a transaction to get included in a
+  block due to high load.
+
+- dependencies: Update bubblewrap to 0.4.1
+  ([#3577](https://github.com/oasisprotocol/oasis-core/issues/3577))
+
+- go/oasis-node/txsource: Fix event validation in queries workload
+  ([#3593](https://github.com/oasisprotocol/oasis-core/issues/3593))
+
+  A single transaction can now emit multiple identical events when performing
+  runtime message execution emitting events.
+
+- go/e2e/txsource: Add txsource SGX scenario using fewer nodes
+  ([#3595](https://github.com/oasisprotocol/oasis-core/issues/3595))
+
+- go/oasis-test-runner/txsource: Add governance workload
+  ([#3603](https://github.com/oasisprotocol/oasis-core/issues/3603))
+
+- rust: Bump smallvec to 0.6.14
+  ([#3604](https://github.com/oasisprotocol/oasis-core/issues/3604))
+
+- runtime/storage/mkvs: Add MKVS impl for `&mut T`
+  ([#3604](https://github.com/oasisprotocol/oasis-core/issues/3604))
+
+- go/e2e/governance-upgrade: Wait for compute nodes to be ready
+  ([#3618](https://github.com/oasisprotocol/oasis-core/issues/3618))
+
+- rust: Bump honggfuzz from 0.5.51 to 0.5.52
+  ([#3621](https://github.com/oasisprotocol/oasis-core/issues/3621))
+
+- rust: Bump slog-scope from 4.3.0 to 4.4.0
+  ([#3622](https://github.com/oasisprotocol/oasis-core/issues/3622))
+
+- go/common/cbor: Re-export `Marshaler` and `Unmarshaler` interfaces
+  ([#3630](https://github.com/oasisprotocol/oasis-core/issues/3630))
+
+- go: Bump github.com/stretchr/testify from 1.6.1 to 1.7.0
+  ([#3632](https://github.com/oasisprotocol/oasis-core/issues/3632))
+
+- runtime: Validate block namespace against runtime ID
+  ([#3633](https://github.com/oasisprotocol/oasis-core/issues/3633))
+
+- go/oasis-test-runner/txsource: Decrease `MinPoolSize` for restarts
+  ([#3636](https://github.com/oasisprotocol/oasis-core/issues/3636))
+
+  When restarts are enabled there can be one less node so we should make sure
+  to decrease the `MinPoolSize` in this case.
+
+- go/runtime: Move host configuration to runtime registry
+  ([#3653](https://github.com/oasisprotocol/oasis-core/issues/3653))
+
+- go/runtime/host: Add helpers for common requests
+  ([#3653](https://github.com/oasisprotocol/oasis-core/issues/3653))
+
+  An additional interface `RichRuntime` is added which provides wrappers for
+  common requests (currently only `CheckTx`).
+
+- go: Bump ed25519 for fixes on 32-bit architectures
+  ([#3657](https://github.com/oasisprotocol/oasis-core/issues/3657))
+
+  Note that 32-bit architectures are not supported by Oasis Core.
+
+- runtime: Refactor the dispatcher
+  ([#3662](https://github.com/oasisprotocol/oasis-core/issues/3662))
+
+  Previously, each request handler performed its own response submission which
+  repeated a lot of code. This has now been changed by all handlers returning
+  a proper result type and the main dispatch loop sending the responses.
+
+- tests: Fix potential key clash in the confidential test KV runtime
+  ([#3663](https://github.com/oasisprotocol/oasis-core/issues/3663))
+
+  This was responsible for some E2E test flakiness.
+
+- beacon: Add a minimal gRPC service
+  ([#3666](https://github.com/oasisprotocol/oasis-core/issues/3666))
+
+- go/worker/beacon: Fix a state recovery edge case
+  ([#3668](https://github.com/oasisprotocol/oasis-core/issues/3668))
+
+- go/consensus/tendermint/abci/mux: Reject early `EstimateGas` calls
+  ([#3669](https://github.com/oasisprotocol/oasis-core/issues/3669))
+
+  With the new beacon, `EstimateGas` will not work till either `InitChain` or
+  `BeginBlock` have been called successfully at least once.
+
+- go/consensus: Add support for method priority
+  ([#3675](https://github.com/oasisprotocol/oasis-core/issues/3675))
+
+- go/oasis-node/cmd/common/metrics: Fix label escaping
+  ([#3678](https://github.com/oasisprotocol/oasis-core/issues/3678))
+
+- Make sure tracing is only enabled in debug mode
+  ([#3679](https://github.com/oasisprotocol/oasis-core/issues/3679))
+
+- rust: Bump bech32 from 0.7.2 to 0.8.0
+  ([#3699](https://github.com/oasisprotocol/oasis-core/issues/3699))
+
+- go/oasis-test-runner: Add support for configuring `pprof`
+  ([#3719](https://github.com/oasisprotocol/oasis-core/issues/3719))
+
+  Adds support for configuring `pprof` on the test nodes.
+
+- go/oasis-test-runner: Configurable supplementary sanity checker
+  ([#3719](https://github.com/oasisprotocol/oasis-core/issues/3719))
+
+  Previously, supplementary sanity checker was always automatically started on
+  the `validator-0`.
+
+- Make: Remove `build-go` target's `go` alias
+  ([#3722](https://github.com/oasisprotocol/oasis-core/issues/3722))
+
+- Make: Add `lint-go-mod-tidy` target
+  ([#3722](https://github.com/oasisprotocol/oasis-core/issues/3722))
+
+- go: Bump github.com/golang/snappy from 0.0.2 to 0.0.3
+  ([#3735](https://github.com/oasisprotocol/oasis-core/issues/3735))
+
+- rust: Bump aesm-client from 0.5.1 to 0.5.2
+  ([#3742](https://github.com/oasisprotocol/oasis-core/issues/3742))
+
+- runtime/common/quantity: Add `Mul/Div` implementations
+  ([#3744](https://github.com/oasisprotocol/oasis-core/issues/3744))
+
+- go/nodes/grpc: Tweak backoff timeouts
+  ([#3757](https://github.com/oasisprotocol/oasis-core/issues/3757))
+
+  Before, the default storage commit timeout was less than `grpcBackoffMaxDelay`
+  which made the storage commit request retries ineffective whenever the max
+  delay was reached (e.g. first few requests after a storage node was
+  restarted).
+
+- go/consensus: Validate mode in `SetContextParameters`
+  ([#3773](https://github.com/oasisprotocol/oasis-core/issues/3773))
+
+  This makes sure consensus parameters can only be updated in `InitChain` and
+  `EndBlock`.
+
+  Previously, we only did this check for the core consensus parameters
+  but it makes sense to extend it to all of the parameters.
+
+- go/staking/tests/debug: Move into go/staking/tests package
+  ([#3774](https://github.com/oasisprotocol/oasis-core/issues/3774))
+
+- go/staking/tests: Generalize account handling and add delegations
+  ([#3774](https://github.com/oasisprotocol/oasis-core/issues/3774))
+
+- go: Bump github.com/hashicorp/go-multierror from 1.1.0 to 1.1.1
+  ([#3777](https://github.com/oasisprotocol/oasis-core/issues/3777))
+
+- go: Bump github.com/prometheus/common to 0.19.0
+  ([#3779](https://github.com/oasisprotocol/oasis-core/issues/3779))
+
 ## 20.12 (2020-11-03)
 
 | Protocol          | Version   |
