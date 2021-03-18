@@ -4,10 +4,12 @@ package api
 import (
 	"context"
 	"fmt"
+	"io"
 
 	beacon "github.com/oasisprotocol/oasis-core/go/beacon/api"
 	"github.com/oasisprotocol/oasis-core/go/common/cbor"
 	"github.com/oasisprotocol/oasis-core/go/common/errors"
+	"github.com/oasisprotocol/oasis-core/go/common/prettyprint"
 	"github.com/oasisprotocol/oasis-core/go/common/version"
 )
 
@@ -63,6 +65,8 @@ var (
 
 	// ErrUpgradeInProgress is the error returned from CancelUpgrade when the upgrade being cancelled is already in progress.
 	ErrUpgradeInProgress = errors.New(ModuleName, 6, "upgrade: can not cancel upgrade in progress")
+
+	_ prettyprint.PrettyPrinter = (*Descriptor)(nil)
 )
 
 // Descriptor describes an upgrade.
@@ -125,6 +129,21 @@ func (d *Descriptor) EnsureCompatible() error {
 		return fmt.Errorf("binary version not compatible: own: %s, required: %s", ownVersion, d.Target)
 	}
 	return nil
+}
+
+// PrettyPrint writes a pretty-printed representation of Descriptor to the given
+// writer.
+func (d Descriptor) PrettyPrint(ctx context.Context, prefix string, w io.Writer) {
+	fmt.Fprintf(w, "%sHandler: %s\n", prefix, d.Handler)
+	fmt.Fprintf(w, "%sTarget Version:\n", prefix)
+	d.Target.PrettyPrint(ctx, prefix+"  ", w)
+	fmt.Fprintf(w, "%sEpoch: %d\n", prefix, d.Epoch)
+}
+
+// PrettyType returns a representation of Descriptor that can be used for pretty
+// printing.
+func (d Descriptor) PrettyType() (interface{}, error) {
+	return d, nil
 }
 
 // PendingUpgrade describes a currently pending upgrade and includes the
