@@ -90,6 +90,9 @@ func newDefaultFixture() (*oasis.NetworkFixture, error) {
 		fixture.Entities = append(fixture.Entities, oasis.EntityCfg{})
 	}
 
+	// Always run a client node.
+	fixture.Clients = []oasis.ClientFixture{{}}
+
 	if viper.GetBool(cfgSetupRuntimes) {
 		fixture.Runtimes = []oasis.RuntimeFixture{
 			// Key manager runtime.
@@ -156,7 +159,7 @@ func newDefaultFixture() (*oasis.NetworkFixture, error) {
 			{Entity: 1, Runtimes: []int{1}},
 			{Entity: 1, Runtimes: []int{1}},
 		}
-		fixture.Clients = []oasis.ClientFixture{{}}
+		fixture.Clients[0].Runtimes = []int{1}
 	}
 
 	return fixture, nil
