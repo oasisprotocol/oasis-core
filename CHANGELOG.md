@@ -12,6 +12,24 @@ The format is inspired by [Keep a Changelog].
 
 <!-- TOWNCRIER -->
 
+## 21.0.1 (2021-03-22)
+
+| Protocol          | Version   |
+|:------------------|:---------:|
+| Consensus         | 3.0.0     |
+| Runtime Host      | 2.0.0     |
+| Runtime Committee | 2.0.0     |
+
+### Features
+
+- oasis-net-runner: Configure a client node even without runtimes
+  ([#3794](https://github.com/oasisprotocol/oasis-core/issues/3794))
+
+### Bug Fixes
+
+- oasis-net-runner: Configure a runtime in default fixture
+  ([#3805](https://github.com/oasisprotocol/oasis-core/issues/3805))
+
 ## 21.0 (2021-03-18)
 
 | Protocol          | Version   |
