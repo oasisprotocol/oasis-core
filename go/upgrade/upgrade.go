@@ -103,7 +103,7 @@ func (u *upgradeManager) CancelUpgrade(ctx context.Context) error {
 	return nil
 }
 
-func (u *upgradeManager) checkStatus() error {
+func (u *upgradeManager) checkStatus(dataDir string) error {
 	var err error
 
 	if err = u.store.GetCBOR(metadataStoreKey, &u.pending); err != nil {
@@ -123,10 +123,6 @@ func (u *upgradeManager) checkStatus() error {
 
 	// By this point, the descriptor is valid and still pending.
 	if u.pending.UpgradeHeight == api.InvalidUpgradeHeight {
-		// Only allow the old binary to run before the upgrade epoch.
-		if u.pending.SubmittingVersion != thisVersion {
-			return api.ErrNewTooSoon
-		}
 		return nil
 	}
 
@@ -145,7 +141,11 @@ func (u *upgradeManager) checkStatus() error {
 		return api.ErrUpgradePending
 	}
 
-	// In case the previous startup was e.g. interruptd during the second part of the
+	// We are running the correct version, setup handler.
+	u.ctx = migrations.NewContext(u.pending, dataDir)
+	u.handler = migrations.GetHandler(u.ctx)
+
+	// In case the previous startup was e.g. interrupted during the second part of the
 	// upgrade, we need to make sure that we're the same version as the previous run.
 	if u.pending.RunningVersion != "" && u.pending.RunningVersion != thisVersion {
 		return api.ErrInvalidResumingVersion
@@ -274,13 +274,8 @@ func New(store *persistent.CommonStore, dataDir string) (api.Backend, error) {
 		logger: logging.GetLogger(api.ModuleName),
 	}
 
-	if err := upgrader.checkStatus(); err != nil {
+	if err := upgrader.checkStatus(dataDir); err != nil {
 		return nil, err
-	}
-
-	if upgrader.pending != nil {
-		upgrader.ctx = migrations.NewContext(upgrader.pending, dataDir)
-		upgrader.handler = migrations.GetHandler(upgrader.ctx)
 	}
 
 	return upgrader, nil
