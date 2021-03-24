@@ -1,0 +1,4 @@
+go/upgrade: fix node querying upgrade handler too soon
+
+Fixes node querying the upgrade handler too soon when restarted while the
+upgrade epoch was not yet reached.

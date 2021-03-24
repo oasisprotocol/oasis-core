@@ -215,6 +215,11 @@ func (sc *nodeUpgradeImpl) Run(childEnv *env.Env) error { // nolint: gocyclo
 		return fmt.Errorf("error submitting descriptor with nonexistent handler to node: %w", err)
 	}
 
+	// Restart the validator node. Should restart normally as upgrade epoch was not reached yet.
+	if err = sc.restart(true); err != nil {
+		return err
+	}
+
 	if err = sc.nextEpoch(); err != nil {
 		return err
 	}
