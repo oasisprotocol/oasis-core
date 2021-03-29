@@ -133,6 +133,11 @@ func (d *fetchedDiff) GetRound() uint64 {
 	return d.round
 }
 
+type finalizeResult struct {
+	summary *blockSummary
+	err     error
+}
+
 // watcherState is the (persistent) watcher state.
 type watcherState struct {
 	LastBlock blockSummary `json:"last_block"`
@@ -172,7 +177,7 @@ type Node struct { // nolint: maligned
 
 	blockCh    *channels.InfiniteChannel
 	diffCh     chan *fetchedDiff
-	finalizeCh chan *blockSummary
+	finalizeCh chan finalizeResult
 
 	ctx       context.Context
 	ctxCancel context.CancelFunc
@@ -217,7 +222,7 @@ func NewNode(
 
 		blockCh:    channels.NewInfiniteChannel(),
 		diffCh:     make(chan *fetchedDiff),
-		finalizeCh: make(chan *blockSummary),
+		finalizeCh: make(chan finalizeResult),
 
 		quitCh:          make(chan struct{}),
 		rtWatcherQuitCh: make(chan struct{}),
@@ -527,6 +532,7 @@ func (n *Node) finalize(summary *blockSummary) {
 		n.logger.Warn("storage round already finalized",
 			"round", summary.Round,
 		)
+		err = nil
 	default:
 		n.logger.Error("failed to finalize storage round",
 			"err", err,
@@ -534,7 +540,10 @@ func (n *Node) finalize(summary *blockSummary) {
 		)
 	}
 
-	n.finalizeCh <- summary
+	n.finalizeCh <- finalizeResult{
+		summary: summary,
+		err:     err,
+	}
 }
 
 type inFlight struct {
@@ -862,13 +871,13 @@ func (n *Node) worker() { // nolint: gocyclo
 		"last_synced", cachedLastRound,
 	)
 
-	outOfOrderDiffs := &outOfOrderRoundQueue{}
-	outOfOrderApplieds := &outOfOrderRoundQueue{}
+	outOfOrderDoneDiffs := &outOfOrderRoundQueue{}
+	outOfOrderFinalizable := &outOfOrderRoundQueue{}
 	syncingRounds := make(map[uint64]*inFlight)
 	hashCache := make(map[uint64]*blockSummary)
 	lastFullyAppliedRound := cachedLastRound
 
-	heap.Init(outOfOrderDiffs)
+	heap.Init(outOfOrderDoneDiffs)
 
 	// Try to perform initial sync from state and io checkpoints.
 	if !n.checkpointSyncDisabled || n.checkpointSyncForced {
@@ -929,9 +938,9 @@ func (n *Node) worker() { // nolint: gocyclo
 	// writelogs fetched from remote storage nodes in case we don't have them locally yet. Fetches are
 	// asynchronous and, once complete, trigger local Apply operations. These are serialized
 	// per round (all applies for a given round have to be complete before applying anyting for following
-	// rounds) using the outOfOrderDiffs priority queue and outOfOrderApplieds. Once a round has all its write
+	// rounds) using the outOfOrderDoneDiffs priority queue and outOfOrderFinalizable. Once a round has all its write
 	// logs applied, a Finalize for it is triggered, again serialized by round but otherwise asynchronous
-	// (outOfOrderApplieds and cachedLastRound).
+	// (outOfOrderFinalizable and cachedLastRound).
 mainLoop:
 	for {
 		// Drain the Apply and Finalize queues first, before waiting for new events in the select
@@ -940,8 +949,8 @@ mainLoop:
 
 		// Apply any writelogs that came in through fetchDiff, but only if they are for the round
 		// after the last fully applied one (lastFullyAppliedRound).
-		if len(*outOfOrderDiffs) > 0 && lastFullyAppliedRound+1 == (*outOfOrderDiffs)[0].GetRound() {
-			lastDiff := heap.Pop(outOfOrderDiffs).(*fetchedDiff)
+		if len(*outOfOrderDoneDiffs) > 0 && lastFullyAppliedRound+1 == (*outOfOrderDoneDiffs)[0].GetRound() {
+			lastDiff := heap.Pop(outOfOrderDoneDiffs).(*fetchedDiff)
 			// Apply the write log if one exists.
 			if lastDiff.fetched {
 				_, err = n.localStorage.Apply(n.ctx, &storageApi.ApplyRequest{
@@ -977,7 +986,7 @@ mainLoop:
 				// Finalize storage for this round. This happens asynchronously
 				// with respect to Apply operations for subsequent rounds.
 				lastFullyAppliedRound = lastDiff.round
-				heap.Push(outOfOrderApplieds, summary)
+				heap.Push(outOfOrderFinalizable, summary)
 			}
 
 			continue
@@ -988,8 +997,8 @@ mainLoop:
 		// The finalization happens asynchronously with respect to this worker loop and any
 		// applies that happen for subsequent rounds (which can proceed while earlier rounds are
 		// still finalizing).
-		if len(*outOfOrderApplieds) > 0 && cachedLastRound+1 == (*outOfOrderApplieds)[0].GetRound() {
-			lastSummary := heap.Pop(outOfOrderApplieds).(*blockSummary)
+		if len(*outOfOrderFinalizable) > 0 && cachedLastRound+1 == (*outOfOrderFinalizable)[0].GetRound() {
+			lastSummary := heap.Pop(outOfOrderFinalizable).(*blockSummary)
 			fetcherGroup.Add(1)
 			go func(lastSummary *blockSummary) {
 				defer fetcherGroup.Done()
@@ -1125,21 +1134,31 @@ mainLoop:
 				syncingRounds[item.round].outstanding.remove(item.thisRoot.Type)
 				syncingRounds[item.round].awaitingRetry.add(item.thisRoot.Type)
 			} else {
-				heap.Push(outOfOrderDiffs, item)
+				heap.Push(outOfOrderDoneDiffs, item)
 			}
 
 		case finalized := <-n.finalizeCh:
-			// No further sync or out of order handling needed here, since
-			// only one finalize at a time is triggered (for round cachedLastRound+1)
-			cachedLastRound = n.flushSyncedState(finalized)
-			storageWorkerLastFullRound.With(n.getMetricLabels()).Set(float64(finalized.Round))
+			// If finalization failed, things start falling apart.
+			// There's no point redoing it, since it's probably not a transient
+			// error, and cachedLastRound also can't be updated legitimately.
+			if finalized.err == nil {
+				// No further sync or out of order handling needed here, since
+				// only one finalize at a time is triggered (for round cachedLastRound+1)
+				cachedLastRound = n.flushSyncedState(finalized.summary)
+				storageWorkerLastFullRound.With(n.getMetricLabels()).Set(float64(finalized.summary.Round))
 
-			// Check if we're far enough to reasonably register as available.
-			n.nudgeAvailability(cachedLastRound, latestBlockRound)
+				// Check if we're far enough to reasonably register as available.
+				n.nudgeAvailability(cachedLastRound, latestBlockRound)
 
-			// Notify the checkpointer that there is a new finalized round.
-			if n.checkpointer != nil {
-				n.checkpointer.NotifyNewVersion(finalized.Round)
+				// Notify the checkpointer that there is a new finalized round.
+				if n.checkpointer != nil {
+					n.checkpointer.NotifyNewVersion(finalized.summary.Round)
+				}
+			} else {
+				// This is a cant-happen situation and there's no useful way
+				// to recover from it. Just request a node shutdown and stop fussing
+				// since, from this point onwards, syncing is effectively blocked.
+				_, _ = n.commonNode.HostNode.RequestShutdown()
 			}
 
 		case <-n.ctx.Done():
