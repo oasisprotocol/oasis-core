@@ -10,6 +10,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/identity"
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
+	control "github.com/oasisprotocol/oasis-core/go/control/api"
 	genesis "github.com/oasisprotocol/oasis-core/go/genesis/api"
 	ias "github.com/oasisprotocol/oasis-core/go/ias/api"
 	keymanagerApi "github.com/oasisprotocol/oasis-core/go/keymanager/api"
@@ -24,6 +25,7 @@ type Worker struct {
 	enabled bool
 	cfg     Config
 
+	HostNode          control.ControlledNode
 	DataDir           string
 	Identity          *identity.Identity
 	Consensus         consensus.Backend
@@ -181,6 +183,7 @@ func (w *Worker) NewUnmanagedCommitteeNode(runtime runtimeRegistry.Runtime, enab
 	}
 
 	return committee.NewNode(
+		w.HostNode,
 		runtime,
 		w.Identity,
 		w.KeyManager,
@@ -211,6 +214,7 @@ func (w *Worker) registerRuntime(runtime runtimeRegistry.Runtime) error {
 func newWorker(
 	ctx context.Context,
 	cancelCtx context.CancelFunc,
+	hostNode control.ControlledNode,
 	dataDir string,
 	enabled bool,
 	identity *identity.Identity,
@@ -227,6 +231,7 @@ func newWorker(
 	w := &Worker{
 		enabled:           enabled,
 		cfg:               cfg,
+		HostNode:          hostNode,
 		DataDir:           dataDir,
 		Identity:          identity,
 		Consensus:         consensus,
@@ -259,6 +264,7 @@ func newWorker(
 
 // New creates a new worker.
 func New(
+	hostNode control.ControlledNode,
 	dataDir string,
 	enabled bool,
 	identity *identity.Identity,
@@ -291,6 +297,7 @@ func New(
 	return newWorker(
 		ctx,
 		cancelCtx,
+		hostNode,
 		dataDir,
 		enabled,
 		identity,
