@@ -580,6 +580,7 @@ func RegisterScenarios() error {
 		ByzantineStorageFailApply,
 		ByzantineStorageFailApplyBatch,
 		ByzantineStorageFailRead,
+		ByzantineStorageCorruptGetDiff,
 		// Storage sync test.
 		StorageSync,
 		StorageSyncFromRegistered,
