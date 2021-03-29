@@ -279,7 +279,8 @@ func init() {
 
 	storageFlags.Uint64(CfgNumStorageFailApplyBatch, 0, "Number of ApplyBatch requests to fail")
 	storageFlags.Uint64(CfgNumStorageFailApply, 0, "Number of Apply requests to fail")
-	storageFlags.Bool(CfgFailReadRequests, false, "If storage worker should fail read requests")
+	storageFlags.Bool(CfgFailReadRequests, false, "Whether the storage node should fail read requests")
+	storageFlags.Bool(CfgCorruptGetDiff, false, "Whether the storage node should corrupt GetDiff responses")
 	_ = viper.BindPFlags(storageFlags)
 	byzantineCmd.PersistentFlags().AddFlagSet(storageFlags)
 

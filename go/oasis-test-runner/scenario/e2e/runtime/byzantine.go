@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strconv"
+	"time"
 
 	"github.com/oasisprotocol/oasis-core/go/common/quantity"
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
@@ -14,7 +15,9 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/scenario"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/scenario/e2e"
 	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
+	runtimeClient "github.com/oasisprotocol/oasis-core/go/runtime/client/api"
 	staking "github.com/oasisprotocol/oasis-core/go/staking/api"
+	"github.com/oasisprotocol/oasis-core/go/storage/mkvs"
 )
 
 var (
@@ -213,6 +216,20 @@ var (
 			"--" + byzantine.CfgFailReadRequests,
 		},
 	)
+	// ByzantineStorageCorruptGetDiff is the byzantine storage node scenario that corrupts GetDiff
+	// responses.
+	ByzantineStorageCorruptGetDiff scenario.Scenario = newByzantineImpl(
+		"storage-corrupt-getdiff",
+		"storage",
+		// There should be no discrepancy or round failures.
+		nil,
+		oasis.ByzantineDefaultIdentitySeed,
+		nil,
+		[]string{
+			// Corrupt all GetDiff responses.
+			"--" + byzantine.CfgCorruptGetDiff,
+		},
+	)
 )
 
 type byzantineImpl struct {
@@ -370,6 +387,69 @@ func (sc *byzantineImpl) Run(childEnv *env.Env) error {
 	}
 	if expectedStake.Cmp(&acc.Escrow.Active.Balance) != 0 {
 		return fmt.Errorf("expected entity stake: %v got: %v", expectedStake, acc.General.Balance)
+	}
+
+	// Wait for all storage nodes to be synced.
+	blk, err := sc.Net.ClientController().RuntimeClient.GetBlock(ctx, &runtimeClient.GetBlockRequest{
+		RuntimeID: runtimeID,
+		Round:     runtimeClient.RoundLatest,
+	})
+	if err != nil {
+		return fmt.Errorf("failed to fetch latest block: %w", err)
+	}
+
+	sc.Logger.Info("waiting for storage nodes to be synced",
+		"target_round", blk.Header.Round,
+	)
+
+	syncedNodes := make(map[string]bool)
+	storageCtx, cancelFn := context.WithTimeout(ctx, 10*time.Second)
+	defer cancelFn()
+StorageWorkerSyncLoop:
+	for {
+		if storageCtx.Err() != nil {
+			return fmt.Errorf("failed to wait for storage nodes to be synced: %w", storageCtx.Err())
+		}
+
+		for _, n := range sc.Net.StorageWorkers() {
+			if syncedNodes[n.Name] {
+				continue
+			}
+
+			ctrl, err := oasis.NewController(n.SocketPath())
+			if err != nil {
+				return fmt.Errorf("failed to create storage node controller: %w", err)
+			}
+
+			// Iterate over the roots to confirm they have been synced.
+			for _, root := range blk.Header.StorageRoots() {
+				state := mkvs.NewWithRoot(ctrl.Storage, nil, root)
+				it := state.NewIterator(storageCtx)
+
+				for it.Rewind(); it.Valid(); it.Next() {
+				}
+				err = it.Err()
+				it.Close()
+				state.Close()
+
+				if err != nil {
+					// Failed to iterate over the root.
+					sc.Logger.Warn("storage node is still not synced",
+						"node", n.Name,
+						"root", root,
+						"err", err,
+					)
+					time.Sleep(1 * time.Second)
+					continue StorageWorkerSyncLoop
+				}
+			}
+
+			sc.Logger.Warn("storage node is synced",
+				"node", n.Name,
+			)
+			syncedNodes[n.Name] = true
+		}
+		break
 	}
 
 	return nil
