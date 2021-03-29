@@ -52,15 +52,25 @@ type test struct {
 	ckNodes  keySet
 }
 
-func fillDB(ctx context.Context, require *require.Assertions, values [][]byte, version uint64, ndb api.NodeDB) node.Root {
-	emptyRoot := node.Root{
-		Namespace: testNs,
-		Version:   version,
-		Type:      node.RootTypeState,
+func fillDB(
+	ctx context.Context,
+	require *require.Assertions,
+	values [][]byte,
+	prevRoot *node.Root,
+	version, commitVersion uint64,
+	ndb api.NodeDB,
+) node.Root {
+	if prevRoot == nil {
+		emptyRoot := node.Root{
+			Namespace: testNs,
+			Version:   version,
+			Type:      node.RootTypeState,
+		}
+		emptyRoot.Hash.Empty()
+		prevRoot = &emptyRoot
 	}
-	emptyRoot.Hash.Empty()
 
-	tree := mkvs.NewWithRoot(nil, ndb, emptyRoot)
+	tree := mkvs.NewWithRoot(nil, ndb, *prevRoot)
 	require.NotNil(tree, "NewWithRoot()")
 
 	var wl writelog.WriteLog
@@ -71,7 +81,7 @@ func fillDB(ctx context.Context, require *require.Assertions, values [][]byte, v
 	err := tree.ApplyWriteLog(ctx, writelog.NewStaticIterator(wl))
 	require.NoError(err, "ApplyWriteLog()")
 
-	_, hash, err := tree.Commit(ctx, testNs, 2)
+	_, hash, err := tree.Commit(ctx, testNs, commitVersion)
 	require.NoError(err, "Commit()")
 
 	return node.Root{
@@ -90,7 +100,7 @@ func createCheckpoint(ctx context.Context, require *require.Assertions, dir stri
 	fc, err := checkpoint.NewFileCreator(dir, ndb)
 	require.NoError(err, "NewFileCreator()")
 
-	ckRoot := fillDB(ctx, require, values, version, ndb)
+	ckRoot := fillDB(ctx, require, values, nil, version, 2, ndb)
 	ckMeta, err := fc.CreateCheckpoint(ctx, ckRoot, 1024*1024)
 	require.NoError(err, "CreateCheckpoint()")
 
@@ -335,4 +345,32 @@ func TestReadOnlyBatch(t *testing.T) {
 
 	_, err = badgerdb.NewBatch(node.Root{}, 13, false)
 	require.Error(err, "NewBatch()")
+}
+
+func TestFinalizeBasic(t *testing.T) {
+	ctx := context.Background()
+	require := require.New(t)
+
+	offset := func(vals [][]byte) [][]byte {
+		ret := make([][]byte, 0, len(vals))
+		for _, val := range vals {
+			ret = append(ret, append(val, 0x0a))
+		}
+		return ret
+	}
+
+	ndb, err := New(dbCfg)
+	require.NoError(err, "New()")
+	defer ndb.Close()
+
+	root1 := fillDB(ctx, require, testValues, nil, 1, 2, ndb)
+	err = ndb.Finalize(ctx, []node.Root{root1})
+	require.NoError(err, "Finalize({root1})")
+
+	// Finalize a corrupted root.
+	currentValues := offset(testValues)
+	root2 := fillDB(ctx, require, currentValues, &root1, 2, 3, ndb)
+	root2.Hash[3]++
+	err = ndb.Finalize(ctx, []node.Root{root2})
+	require.Errorf(err, "mkvs: root not found", "Finalize({root2-broken})")
 }
