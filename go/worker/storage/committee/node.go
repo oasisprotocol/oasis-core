@@ -546,11 +546,6 @@ func (n *Node) finalize(summary *blockSummary) {
 	}
 }
 
-type inFlight struct {
-	outstanding   outstandingMask
-	awaitingRetry outstandingMask
-}
-
 func (n *Node) initGenesis(rt *registryApi.Runtime, genesisBlock *block.Block) error {
 	n.logger.Info("initializing storage at genesis")
 
@@ -952,6 +947,7 @@ mainLoop:
 		if len(*outOfOrderDoneDiffs) > 0 && lastFullyAppliedRound+1 == (*outOfOrderDoneDiffs)[0].GetRound() {
 			lastDiff := heap.Pop(outOfOrderDoneDiffs).(*fetchedDiff)
 			// Apply the write log if one exists.
+			err = nil
 			if lastDiff.fetched {
 				_, err = n.localStorage.Apply(n.ctx, &storageApi.ApplyRequest{
 					Namespace: lastDiff.thisRoot.Namespace,
@@ -971,22 +967,26 @@ mainLoop:
 				}
 			}
 
-			// Check if we have fully synced the given round. If we have, we can proceed
-			// with the Finalize operation.
 			syncing := syncingRounds[lastDiff.round]
-			syncing.outstanding.remove(lastDiff.thisRoot.Type)
-			if syncing.outstanding.isEmpty() && syncing.awaitingRetry.isEmpty() {
-				n.logger.Debug("finished syncing round", "round", lastDiff.round)
-				delete(syncingRounds, lastDiff.round)
-				summary := hashCache[lastDiff.round]
-				delete(hashCache, lastDiff.round-1)
+			if err != nil {
+				syncing.retry(lastDiff.thisRoot.Type)
+			} else {
+				// Check if we have fully synced the given round. If we have, we can proceed
+				// with the Finalize operation.
+				syncing.outstanding.remove(lastDiff.thisRoot.Type)
+				if syncing.outstanding.isEmpty() && syncing.awaitingRetry.isEmpty() {
+					n.logger.Debug("finished syncing round", "round", lastDiff.round)
+					delete(syncingRounds, lastDiff.round)
+					summary := hashCache[lastDiff.round]
+					delete(hashCache, lastDiff.round-1)
 
-				storageWorkerLastSyncedRound.With(n.getMetricLabels()).Set(float64(lastDiff.round))
+					storageWorkerLastSyncedRound.With(n.getMetricLabels()).Set(float64(lastDiff.round))
 
-				// Finalize storage for this round. This happens asynchronously
-				// with respect to Apply operations for subsequent rounds.
-				lastFullyAppliedRound = lastDiff.round
-				heap.Push(outOfOrderFinalizable, summary)
+					// Finalize storage for this round. This happens asynchronously
+					// with respect to Apply operations for subsequent rounds.
+					lastFullyAppliedRound = lastDiff.round
+					heap.Push(outOfOrderFinalizable, summary)
+				}
 			}
 
 			continue
@@ -1109,8 +1109,7 @@ mainLoop:
 				for i := range prevRoots {
 					rootType := prevRoots[i].Type
 					if !syncing.outstanding.contains(rootType) && syncing.awaitingRetry.contains(rootType) {
-						syncing.outstanding.add(rootType)
-						syncing.awaitingRetry.remove(rootType)
+						syncing.scheduleDiff(rootType)
 						fetcherGroup.Add(1)
 						n.fetchPool.Submit(func(round uint64, prevRoot, thisRoot storageApi.Root) func() {
 							return func() {
@@ -1131,8 +1130,7 @@ mainLoop:
 					"new_root", item.thisRoot,
 					"fetched", item.fetched,
 				)
-				syncingRounds[item.round].outstanding.remove(item.thisRoot.Type)
-				syncingRounds[item.round].awaitingRetry.add(item.thisRoot.Type)
+				syncingRounds[item.round].retry(item.thisRoot.Type)
 			} else {
 				heap.Push(outOfOrderDoneDiffs, item)
 			}

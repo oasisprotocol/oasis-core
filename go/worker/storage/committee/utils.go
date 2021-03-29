@@ -49,6 +49,21 @@ func (o outstandingMask) hasAll() bool {
 	return o == outstandingMaskFull
 }
 
+type inFlight struct {
+	outstanding   outstandingMask
+	awaitingRetry outstandingMask
+}
+
+func (i *inFlight) scheduleDiff(rootType storageApi.RootType) {
+	i.outstanding.add(rootType)
+	i.awaitingRetry.remove(rootType)
+}
+
+func (i *inFlight) retry(rootType storageApi.RootType) {
+	i.outstanding.remove(rootType)
+	i.awaitingRetry.add(rootType)
+}
+
 // blockSummary is a short summary of a single block.Block.
 type blockSummary struct {
 	Namespace common.Namespace  `json:"namespace"`
