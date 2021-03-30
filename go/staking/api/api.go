@@ -335,9 +335,9 @@ type Escrow struct {
 // PrettyPrint writes a pretty-printed representation of Escrow to the given
 // writer.
 func (e Escrow) PrettyPrint(ctx context.Context, prefix string, w io.Writer) {
-	fmt.Fprintf(w, "%sAccount: %s\n", prefix, e.Account)
+	fmt.Fprintf(w, "%sTo:     %s\n", prefix, e.Account)
 
-	fmt.Fprintf(w, "%sAmount:  ", prefix)
+	fmt.Fprintf(w, "%sAmount: ", prefix)
 	token.PrettyPrintAmount(ctx, e.Amount, w)
 	fmt.Fprintln(w)
 }
@@ -362,9 +362,9 @@ type ReclaimEscrow struct {
 // PrettyPrint writes a pretty-printed representation of ReclaimEscrow to the
 // given writer.
 func (re ReclaimEscrow) PrettyPrint(ctx context.Context, prefix string, w io.Writer) {
-	fmt.Fprintf(w, "%sAccount: %s\n", prefix, re.Account)
+	fmt.Fprintf(w, "%sFrom:   %s\n", prefix, re.Account)
 
-	fmt.Fprintf(w, "%sShares:  %s\n", prefix, re.Shares)
+	fmt.Fprintf(w, "%sShares: %s\n", prefix, re.Shares)
 }
 
 // PrettyType returns a representation of Transfer that can be used for pretty
