@@ -1,4 +1,7 @@
-use std::sync::Arc;
+// Allow until oasis-core#3572.
+#![allow(deprecated)]
+
+use std::{collections::BTreeMap, sync::Arc};
 
 use clap::{value_t_or_exit, App, Arg, SubCommand};
 use grpcio::EnvBuilder;
@@ -6,7 +9,14 @@ use rand::{rngs::StdRng, Rng, SeedableRng};
 use tokio::runtime::Runtime;
 
 use oasis_core_client::{create_txn_api_client, Node, TxnClient};
-use oasis_core_runtime::common::{crypto::hash::Hash, namespace::Namespace};
+use oasis_core_runtime::{
+    common::{crypto::hash::Hash, namespace::Namespace},
+    consensus::{
+        address::Address,
+        staking::{Account, Delegation},
+    },
+};
+
 use simple_keyvalue_api::{
     with_api, AddEscrow, Key, KeyValue, ReclaimEscrow, Transfer, UpdateRuntime, Withdraw,
 };

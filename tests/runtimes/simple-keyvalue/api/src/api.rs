@@ -1,7 +1,11 @@
 use serde::{Deserialize, Serialize};
 
 use oasis_core_runtime::{
-    consensus::{registry, staking},
+    consensus::{
+        address::Address,
+        registry, staking,
+        staking::{Account, Delegation},
+    },
     runtime_api,
 };
 
@@ -57,6 +61,9 @@ pub struct UpdateRuntime {
 runtime_api! {
     //  Gets runtime ID of the runtime.
     pub fn get_runtime_id(()) -> Option<String>;
+
+    // Does some consensus queries.
+    pub fn consensus_accounts(()) -> (BTreeMap<Address, Account>, BTreeMap<Address, BTreeMap<Address, Delegation>>);
 
     // Withdraw from the consensus layer into the runtime account.
     pub fn consensus_withdraw(Withdraw) -> ();

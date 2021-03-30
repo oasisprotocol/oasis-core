@@ -1,5 +1,8 @@
 //! Oasis Core client library.
 
+// Allow until oasis-core#3572.
+#![allow(deprecated)]
+
 #[cfg(not(target_env = "sgx"))]
 #[macro_use]
 pub mod grpc;
