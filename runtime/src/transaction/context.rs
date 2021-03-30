@@ -4,7 +4,10 @@ use std::{any::Any, sync::Arc};
 use io_context::Context as IoContext;
 
 use super::tags::{Tag, Tags};
-use crate::consensus::roothash::{Header, Message, RoundResults};
+use crate::consensus::{
+    roothash::{Header, Message, RoundResults},
+    state::ConsensusState,
+};
 
 struct NoRuntimeContext;
 
@@ -12,6 +15,8 @@ struct NoRuntimeContext;
 pub struct Context<'a> {
     /// I/O context.
     pub io_ctx: Arc<IoContext>,
+    /// Consensus state tree.
+    pub consensus_state: ConsensusState,
     /// The block header accompanying this transaction.
     pub header: &'a Header,
     /// Results of processing the previous successful round.
@@ -36,6 +41,7 @@ impl<'a> Context<'a> {
     /// Construct new transaction context.
     pub fn new(
         io_ctx: Arc<IoContext>,
+        consensus_state: ConsensusState,
         header: &'a Header,
         round_results: &'a RoundResults,
         max_messages: u32,
@@ -43,6 +49,7 @@ impl<'a> Context<'a> {
     ) -> Self {
         Self {
             io_ctx,
+            consensus_state,
             header,
             round_results,
             max_messages,

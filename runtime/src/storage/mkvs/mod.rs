@@ -194,6 +194,35 @@ pub trait FallibleMKVS {
     fn commit(&mut self, ctx: Context, namespace: Namespace, version: u64) -> Result<Hash>;
 }
 
+/// Immutable merkalized key value store.
+pub trait ImmutableMKVS {
+    /// Fetch entry with given key.
+    fn get(&self, ctx: Context, key: &[u8]) -> Result<Option<Vec<u8>>>;
+
+    /// Populate the in-memory tree with nodes for keys starting with given prefixes.
+    fn prefetch_prefixes(&self, ctx: Context, prefixes: &Vec<Prefix>, limit: u16) -> Result<()>;
+
+    /// Returns an iterator over the tree.
+    fn iter(&self, ctx: Context) -> Box<dyn Iterator + '_>;
+}
+
+impl<T> ImmutableMKVS for T
+where
+    T: FallibleMKVS,
+{
+    fn get(&self, ctx: Context, key: &[u8]) -> Result<Option<Vec<u8>>> {
+        T::get(self, ctx, key)
+    }
+
+    fn prefetch_prefixes(&self, ctx: Context, prefixes: &Vec<Prefix>, limit: u16) -> Result<()> {
+        T::prefetch_prefixes(self, ctx, prefixes, limit)
+    }
+
+    fn iter(&self, ctx: Context) -> Box<dyn Iterator + '_> {
+        T::iter(self, ctx)
+    }
+}
+
 /// An MKVS iterator.
 pub trait Iterator: iter::Iterator<Item = (Vec<u8>, Vec<u8>)> {
     /// Sets the number of next elements to prefetch.

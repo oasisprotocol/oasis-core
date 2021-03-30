@@ -13,6 +13,9 @@
 #![feature(test)]
 #![feature(box_into_pin)]
 #![feature(arbitrary_self_types)]
+#![feature(iter_map_while)]
+// Allow until oasis-core#3572.
+#![allow(deprecated)]
 
 #[macro_use]
 extern crate slog;

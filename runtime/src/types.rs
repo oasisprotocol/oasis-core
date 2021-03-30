@@ -14,7 +14,10 @@ use crate::{
         namespace::Namespace,
         sgx::avr::AVR,
     },
-    consensus::roothash::{self, Block, ComputeResultsHeader, Header},
+    consensus::{
+        roothash::{self, Block, ComputeResultsHeader, Header},
+        tendermint::LightBlock,
+    },
     storage::mkvs::{sync, WriteLog},
     transaction::types::TxnBatch,
 };
@@ -114,6 +117,7 @@ pub enum Body {
         response: Vec<u8>,
     },
     RuntimeCheckTxBatchRequest {
+        consensus_block: LightBlock,
         inputs: TxnBatch,
         block: Block,
     },
@@ -121,6 +125,7 @@ pub enum Body {
         results: Vec<CheckTxResult>,
     },
     RuntimeExecuteTxBatchRequest {
+        consensus_block: LightBlock,
         round_results: roothash::RoundResults,
         io_root: Hash,
         #[serde(skip_serializing_if = "Option::is_none")]
@@ -137,6 +142,7 @@ pub enum Body {
     },
     RuntimeKeyManagerPolicyUpdateResponse {},
     RuntimeQueryRequest {
+        consensus_block: LightBlock,
         method: String,
         header: Header,
         args: cbor::Value,

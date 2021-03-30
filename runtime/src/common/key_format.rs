@@ -1,3 +1,5 @@
+use std::convert::TryInto;
+
 /// A key formatting helper trait to be used together with key-value
 /// backends for constructing keys.
 pub trait KeyFormat {
@@ -72,6 +74,142 @@ pub trait KeyFormat {
 
         Some(Self::decode_atoms(&data[1..]))
     }
+}
+
+/// Part of the KeyFormat to be used with key-value backends for constructing keys.
+pub trait KeyFormatAtom {
+    fn size() -> usize;
+
+    fn encode_atom(self) -> Vec<u8>;
+
+    fn decode_atom(data: &[u8]) -> Self
+    where
+        Self: Sized;
+}
+
+impl KeyFormatAtom for u64 {
+    fn size() -> usize {
+        8
+    }
+
+    fn encode_atom(self) -> Vec<u8> {
+        self.to_be_bytes().to_vec()
+    }
+
+    fn decode_atom(data: &[u8]) -> Self
+    where
+        Self: Sized,
+    {
+        u64::from_be_bytes(data.try_into().expect("key_format: malformed u64 input"))
+    }
+}
+
+impl KeyFormatAtom for () {
+    fn size() -> usize {
+        0
+    }
+
+    fn encode_atom(self) -> Vec<u8> {
+        Vec::new()
+    }
+
+    fn decode_atom(_: &[u8]) -> () {
+        ()
+    }
+}
+
+impl<T1, T2> KeyFormatAtom for (T1, T2)
+where
+    T1: KeyFormatAtom,
+    T2: KeyFormatAtom,
+{
+    fn size() -> usize {
+        T1::size() + T2::size()
+    }
+
+    fn encode_atom(self) -> Vec<u8> {
+        let mut a = self.0.encode_atom();
+        let mut b = self.1.encode_atom();
+        a.append(&mut b);
+        a
+    }
+
+    fn decode_atom(data: &[u8]) -> (T1, T2) {
+        if data.len() < Self::size() {
+            panic!("key format atom: malformed input");
+        }
+
+        (
+            T1::decode_atom(&data[0..T1::size()]),
+            T2::decode_atom(&data[T2::size()..]),
+        )
+    }
+}
+
+// TODO: probably could generalize this for N sized tuples using macros.
+impl<T1, T2, T3> KeyFormatAtom for (T1, T2, T3)
+where
+    T1: KeyFormatAtom,
+    T2: KeyFormatAtom,
+    T3: KeyFormatAtom,
+{
+    fn size() -> usize {
+        T1::size() + T2::size() + T3::size()
+    }
+
+    fn encode_atom(self) -> Vec<u8> {
+        let mut a = self.0.encode_atom();
+        let mut b = self.1.encode_atom();
+        let mut c = self.2.encode_atom();
+        a.append(&mut b);
+        a.append(&mut c);
+        a
+    }
+
+    fn decode_atom(data: &[u8]) -> (T1, T2, T3) {
+        if data.len() < Self::size() {
+            panic!("key format atom: malformed input");
+        }
+
+        (
+            T1::decode_atom(&data[0..T1::size()]),
+            T2::decode_atom(&data[T2::size()..T3::size()]),
+            T3::decode_atom(&data[T3::size()..]),
+        )
+    }
+}
+
+/// Define a KeyFormat from KeyFromatAtom and a prefix.
+///
+/// # Examples
+///
+/// ```rust,ignore
+/// key_format!(NewKeyFormatName, 0x01, InnerType);
+/// ```
+#[macro_export]
+macro_rules! key_format {
+    ($name:ident, $prefix:expr, $inner:ty) => {
+        #[derive(Debug, Default)]
+        struct $name($inner);
+
+        impl KeyFormat for $name {
+            fn prefix() -> u8 {
+                $prefix
+            }
+
+            fn size() -> usize {
+                <$inner>::size()
+            }
+
+            fn encode_atoms(self, atoms: &mut Vec<Vec<u8>>) {
+                atoms.push(self.0.encode_atom());
+            }
+
+            fn decode_atoms(data: &[u8]) -> Self {
+                Self(<$inner>::decode_atom(data))
+            }
+        }
+    };
 }
 
 #[cfg(test)]
