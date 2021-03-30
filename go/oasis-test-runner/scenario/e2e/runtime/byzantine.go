@@ -41,6 +41,7 @@ var (
 		"executor",
 		nil,
 		oasis.ByzantineDefaultIdentitySeed,
+		false,
 		nil,
 		nil,
 	)
@@ -50,6 +51,7 @@ var (
 		"executor",
 		nil,
 		oasis.ByzantineSlot1IdentitySeed,
+		false,
 		nil,
 		[]string{
 			"--" + byzantine.CfgSchedulerRoleExpected,
@@ -66,6 +68,7 @@ var (
 			oasis.LogAssertExecutionDiscrepancyDetected(),
 		},
 		oasis.ByzantineDefaultIdentitySeed,
+		false,
 		// Byzantine node entity should be slashed once for submitting incorrect commitment.
 		map[staking.SlashReason]uint64{
 			staking.SlashRuntimeIncorrectResults: 1,
@@ -86,6 +89,7 @@ var (
 			oasis.LogAssertExecutionDiscrepancyDetected(),
 		},
 		oasis.ByzantineSlot1IdentitySeed,
+		false,
 		nil,
 		[]string{
 			"--" + byzantine.CfgSchedulerRoleExpected,
@@ -103,6 +107,7 @@ var (
 			oasis.LogAssertExecutionDiscrepancyDetected(),
 		},
 		oasis.ByzantineDefaultIdentitySeed,
+		false,
 		nil,
 		[]string{
 			"--" + byzantine.CfgExecutorMode, byzantine.ModeExecutorStraggler.String(),
@@ -120,6 +125,7 @@ var (
 			oasis.LogAssertExecutionDiscrepancyDetected(),
 		},
 		oasis.ByzantineSlot1IdentitySeed,
+		false,
 		nil,
 		[]string{
 			"--" + byzantine.CfgSchedulerRoleExpected,
@@ -138,6 +144,7 @@ var (
 			oasis.LogAssertExecutionDiscrepancyDetected(),
 		},
 		oasis.ByzantineDefaultIdentitySeed,
+		false,
 		nil,
 		[]string{
 			"--" + byzantine.CfgExecutorMode, byzantine.ModeExecutorFailureIndicating.String(),
@@ -155,6 +162,7 @@ var (
 			oasis.LogAssertExecutionDiscrepancyDetected(),
 		},
 		oasis.ByzantineSlot1IdentitySeed,
+		false,
 		nil,
 		[]string{
 			"--" + byzantine.CfgSchedulerRoleExpected,
@@ -167,6 +175,7 @@ var (
 		"storage",
 		nil,
 		oasis.ByzantineDefaultIdentitySeed,
+		false,
 		nil,
 		nil,
 	)
@@ -179,6 +188,7 @@ var (
 		// should keep retrying proposing a batch until it succeeds.
 		nil,
 		oasis.ByzantineDefaultIdentitySeed,
+		false,
 		nil,
 		[]string{
 			// Fail first 5 ApplyBatch requests.
@@ -197,6 +207,7 @@ var (
 			oasis.LogAssertRoundFailures(),
 		},
 		oasis.ByzantineDefaultIdentitySeed,
+		false,
 		nil,
 		[]string{
 			// Fail first 3 ApplyBatch requests - from the 2 executor workers and 1 backup node.
@@ -210,6 +221,12 @@ var (
 		// There should be no discrepancy or round failures.
 		nil,
 		oasis.ByzantineDefaultIdentitySeed,
+		// Hack to work around the way the storage client selects nodes.
+		// It can happen that for this test, the client will keep selecting the byzantine
+		// node instead of the other storage nodes and so would never be able to fully sync.
+		// It can take up to two minutes for storage-0 to sync in this scenario with the
+		// current shuffling method in the storage client. See also #1815.
+		true,
 		nil,
 		[]string{
 			// Fail all read requests.
@@ -224,6 +241,7 @@ var (
 		// There should be no discrepancy or round failures.
 		nil,
 		oasis.ByzantineDefaultIdentitySeed,
+		false,
 		nil,
 		[]string{
 			// Corrupt all GetDiff responses.
@@ -238,6 +256,7 @@ type byzantineImpl struct {
 	script    string
 	extraArgs []string
 
+	skipStorageSyncWait        bool
 	identitySeed               string
 	logWatcherHandlerFactories []log.WatcherHandlerFactory
 
@@ -252,6 +271,7 @@ func newByzantineImpl(
 	script string,
 	logWatcherHandlerFactories []log.WatcherHandlerFactory,
 	identitySeed string,
+	skipStorageWait bool,
 	expectedSlashes map[staking.SlashReason]uint64,
 	extraArgs []string,
 ) scenario.Scenario {
@@ -263,6 +283,7 @@ func newByzantineImpl(
 		),
 		script:                     script,
 		extraArgs:                  extraArgs,
+		skipStorageSyncWait:        skipStorageWait,
 		identitySeed:               identitySeed,
 		logWatcherHandlerFactories: logWatcherHandlerFactories,
 		expectedSlashes:            expectedSlashes,
@@ -274,6 +295,7 @@ func (sc *byzantineImpl) Clone() scenario.Scenario {
 		runtimeImpl:                *sc.runtimeImpl.Clone().(*runtimeImpl),
 		script:                     sc.script,
 		extraArgs:                  sc.extraArgs,
+		skipStorageSyncWait:        sc.skipStorageSyncWait,
 		identitySeed:               sc.identitySeed,
 		logWatcherHandlerFactories: sc.logWatcherHandlerFactories,
 		expectedSlashes:            sc.expectedSlashes,
@@ -389,6 +411,10 @@ func (sc *byzantineImpl) Run(childEnv *env.Env) error {
 		return fmt.Errorf("expected entity stake: %v got: %v", expectedStake, acc.General.Balance)
 	}
 
+	if sc.skipStorageSyncWait {
+		return nil
+	}
+
 	// Wait for all storage nodes to be synced.
 	blk, err := sc.Net.ClientController().RuntimeClient.GetBlock(ctx, &runtimeClient.GetBlockRequest{
 		RuntimeID: runtimeID,
@@ -403,7 +429,7 @@ func (sc *byzantineImpl) Run(childEnv *env.Env) error {
 	)
 
 	syncedNodes := make(map[string]bool)
-	storageCtx, cancelFn := context.WithTimeout(ctx, 10*time.Second)
+	storageCtx, cancelFn := context.WithTimeout(ctx, 60*time.Second)
 	defer cancelFn()
 StorageWorkerSyncLoop:
 	for {

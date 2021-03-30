@@ -71,7 +71,7 @@ type grpcResponse struct {
 	node *node.Node
 }
 
-func (b *storageClientBackend) writeWithClient(
+func (b *storageClientBackend) writeWithClient( // nolint: gocyclo
 	ctx context.Context,
 	ns common.Namespace,
 	round uint64,
@@ -104,7 +104,12 @@ func (b *storageClientBackend) writeWithClient(
 	// Use a buffered channel to allow all "write" goroutines to return as soon
 	// as they are finished.
 	ch := make(chan *grpcResponse, n)
+	connCount := 0
 	for _, conn := range conns {
+		if api.IsNodeBlacklistedInContext(ctx, conn.Node) {
+			continue
+		}
+		connCount++
 		go func(conn *grpc.ConnWithNodeMeta) {
 			var resp interface{}
 			op := func() error {
@@ -145,8 +150,8 @@ func (b *storageClientBackend) writeWithClient(
 	}
 
 	// Accumulate the responses.
-	receipts := make([]*api.Receipt, 0, n)
-	for i := 0; i < n; i++ {
+	receipts := make([]*api.Receipt, 0, connCount)
+	for i := 0; i < connCount; i++ {
 		var response *grpcResponse
 		select {
 		case <-ctx.Done():
@@ -316,14 +321,19 @@ func (b *storageClientBackend) readWithClient(
 			if !ok {
 				continue
 			}
-			nodes = append(nodes, c)
+			if !api.IsNodeBlacklistedInContext(ctx, c.Node) {
+				nodes = append(nodes, c)
+			}
 			delete(conns, nodeID)
 		}
 		prioritySlots := len(nodes)
 		// Then add the rest of the nodes in random order.
 		for _, c := range conns {
-			nodes = append(nodes, c)
+			if !api.IsNodeBlacklistedInContext(ctx, c.Node) {
+				nodes = append(nodes, c)
+			}
 		}
+
 		// TODO: Use a more clever approach to choose the order in which to read
 		// from the connected nodes:
 		// https://github.com/oasisprotocol/oasis-core/issues/1815.
@@ -346,6 +356,10 @@ func (b *storageClientBackend) readWithClient(
 					"runtime_id", ns,
 				)
 				continue
+			}
+			cb := api.NodeSelectionCallbackFromContext(ctx)
+			if cb != nil {
+				cb(conn.Node)
 			}
 			return nil
 		}
