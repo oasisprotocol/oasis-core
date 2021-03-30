@@ -2,6 +2,7 @@
 
 ## Changelog
 
+- 2021-03-30: Update name of the CastVote method's body
 - 2021-01-06: Update API to include Proposals() method
 - 2020-12-08: Updates to match the actual implementation
 - 2020-10-27: Voting period in epochs, min upgrade cancellation difference,
@@ -320,7 +321,7 @@ governance.CastVote
 **Body:**
 
 ```golang
-type CastVote struct {
+type ProposalVote struct {
     // ID is the unique identifier of a proposal.
     ID uint64 `json:"id"`
     // Vote is the vote.

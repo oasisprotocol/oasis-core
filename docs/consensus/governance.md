@@ -72,7 +72,7 @@ governance.CastVote
 **Body:**
 
 ```golang
-type CastVote struct {
+type ProposalVote struct {
     // ID is the unique identifier of a proposal.
     ID uint64 `json:"id"`
     // Vote is the vote.
