@@ -122,6 +122,7 @@ func (q *outOfOrderRoundQueue) Pop() interface{} {
 // fetchedDiff has all the context needed for a single GetDiff operation.
 type fetchedDiff struct {
 	fetched  bool
+	srcNode  *node.Node
 	err      error
 	round    uint64
 	prevRoot storageApi.Root
@@ -238,6 +239,7 @@ func NewNode(
 	}
 
 	n.ctx, n.ctxCancel = context.WithCancel(context.Background())
+	n.ctx = storageApi.WithNodeBlacklist(n.ctx)
 
 	// Create a new storage client that will be used for remote sync.
 	// This storage client connects to all registered storage nodes for the runtime.
@@ -489,11 +491,15 @@ func (n *Node) fetchDiff(round uint64, prevRoot, thisRoot storageApi.Root) {
 			)
 
 			// Prioritize committee nodes.
-			ctx := n.ctx
+			var selectedNode *node.Node
+			ctx := storageApi.WithNodeSelectionCallback(n.ctx, func(n *node.Node) {
+				selectedNode = n
+			})
 			if committee := n.commonNode.Group.GetEpochSnapshot().GetStorageCommittee(); committee != nil {
 				ctx = storageApi.WithNodePriorityHintFromMap(ctx, committee.PublicKeys)
 			}
 			it, err := n.storageClient.GetDiff(ctx, &storageApi.GetDiffRequest{StartRoot: prevRoot, EndRoot: thisRoot})
+			result.srcNode = selectedNode
 			if err != nil {
 				result.err = err
 				return
@@ -1023,6 +1029,12 @@ mainLoop:
 						"old_root", lastDiff.prevRoot,
 						"new_root", lastDiff.thisRoot,
 					)
+					if errors.Is(err, storageApi.ErrExpectedRootMismatch) && lastDiff.srcNode != nil {
+						storageApi.BlacklistAddNode(n.ctx, lastDiff.srcNode)
+						n.logger.Warn("node blacklisted due to bogus diff",
+							"node", lastDiff.srcNode,
+						)
+					}
 				}
 			}
 
@@ -1130,8 +1142,10 @@ mainLoop:
 			heartbeat.reset()
 
 		case <-heartbeat.C:
-			n.logger.Debug("heartbeat", "in_flight_rounds", len(syncingRounds))
-			triggerRoundFetches()
+			if latestBlockRound != n.undefinedRound {
+				n.logger.Debug("heartbeat", "in_flight_rounds", len(syncingRounds))
+				triggerRoundFetches()
+			}
 
 		case item := <-n.diffCh:
 			if item.err != nil {
