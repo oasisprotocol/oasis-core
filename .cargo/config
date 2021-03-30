@@ -1,7 +1,7 @@
 [build]
-rustflags = ["-C", "target-feature=+aes,+ssse3"]
-rustdocflags = ["-C", "target-feature=+aes,+ssse3"]
+rustflags = ["-C", "target-feature=+aes,+ssse3,+avx"]
+rustdocflags = ["-C", "target-feature=+aes,+ssse3,+avx"]
 
 [test]
-rustflags = ["-C", "target-feature=+aes,+ssse3"]
-rustdocflags = ["-C", "target-feature=+aes,+ssse3"]
+rustflags = ["-C", "target-feature=+aes,+ssse3,+avx"]
+rustdocflags = ["-C", "target-feature=+aes,+ssse3,+avx"]

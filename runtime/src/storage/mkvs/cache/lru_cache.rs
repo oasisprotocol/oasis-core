@@ -26,7 +26,7 @@ unsafe impl<T: CacheItem + Default> IntrusivePointer<CacheItemBox<T>>
     }
     #[inline]
     unsafe fn from_raw(ptr: *const CacheItemBox<T>) -> Self {
-        Box::into_pin(Box::from_raw(ptr as *mut CacheItemBox<T>))
+        Pin::from(Box::from_raw(ptr as *mut CacheItemBox<T>))
     }
 }
 
