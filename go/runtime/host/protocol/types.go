@@ -278,6 +278,10 @@ type RuntimeKeyManagerPolicyUpdateRequest struct {
 
 // RuntimeQueryRequest is a runtime query request message body.
 type RuntimeQueryRequest struct {
+	// ConsensusBlock is the consensus light block at the last finalized round
+	// height (e.g., corresponding to .Header.Round).
+	ConsensusBlock consensus.LightBlock `json:"consensus_block"`
+
 	Method string          `json:"method"`
 	Header block.Header    `json:"header"`
 	Args   cbor.RawMessage `json:"args,omitempty"`
