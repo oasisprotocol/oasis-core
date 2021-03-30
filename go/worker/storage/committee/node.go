@@ -929,6 +929,65 @@ func (n *Node) worker() { // nolint: gocyclo
 	// Don't register availability immediately, we want to know first how far behind consensus we are.
 	latestBlockRound := n.undefinedRound
 
+	heartbeat := heartbeat{}
+	heartbeat.reset()
+
+	triggerRoundFetches := func() {
+		for i := lastFullyAppliedRound + 1; i <= latestBlockRound; i++ {
+			syncing, ok := syncingRounds[i]
+			if ok && syncing.outstanding.hasAll() {
+				continue
+			}
+
+			if !ok {
+				syncing = &inFlight{
+					awaitingRetry: outstandingMaskFull,
+				}
+				syncingRounds[i] = syncing
+
+				if i == latestBlockRound {
+					storageWorkerLastPendingRound.With(n.getMetricLabels()).Set(float64(i))
+				}
+			}
+			n.logger.Debug("preparing round sync",
+				"round", i,
+				"outstanding_mask", syncing.outstanding,
+				"awaiting_retry", syncing.awaitingRetry,
+			)
+
+			prev := hashCache[i-1] // Closures take refs, so they need new variables here.
+			this := hashCache[i]
+			prevRoots := make([]storageApi.Root, len(prev.Roots))
+			copy(prevRoots, prev.Roots)
+			for i := range prevRoots {
+				if prevRoots[i].Type == storageApi.RootTypeIO {
+					// IO roots aren't chained, so clear it (but leave cache intact).
+					prevRoots[i] = storageApi.Root{
+						Namespace: this.Namespace,
+						Version:   this.Round,
+						Type:      storageApi.RootTypeIO,
+					}
+					prevRoots[i].Hash.Empty()
+					break
+				}
+			}
+
+			for i := range prevRoots {
+				rootType := prevRoots[i].Type
+				if !syncing.outstanding.contains(rootType) && syncing.awaitingRetry.contains(rootType) {
+					syncing.scheduleDiff(rootType)
+					fetcherGroup.Add(1)
+					n.fetchPool.Submit(func(round uint64, prevRoot, thisRoot storageApi.Root) func() {
+						return func() {
+							defer fetcherGroup.Done()
+							n.fetchDiff(round, prevRoot, thisRoot)
+						}
+					}(this.Round, prevRoots[i], this.Roots[i]))
+				}
+			}
+		}
+	}
+
 	// Main processing loop. When a new block comes in, its state and io roots are inspected and their
 	// writelogs fetched from remote storage nodes in case we don't have them locally yet. Fetches are
 	// asynchronous and, once complete, trigger local Apply operations. These are serialized
@@ -1067,59 +1126,12 @@ mainLoop:
 				hashCache[blk.Header.Round] = summaryFromBlock(blk)
 			}
 
-			for i := lastFullyAppliedRound + 1; i <= blk.Header.Round; i++ {
-				syncing, ok := syncingRounds[i]
-				if ok && syncing.outstanding.hasAll() {
-					continue
-				}
+			triggerRoundFetches()
+			heartbeat.reset()
 
-				if !ok {
-					syncing = &inFlight{
-						awaitingRetry: outstandingMaskFull,
-					}
-					syncingRounds[i] = syncing
-
-					if i == blk.Header.Round {
-						storageWorkerLastPendingRound.With(n.getMetricLabels()).Set(float64(i))
-					}
-				}
-				n.logger.Debug("preparing round sync",
-					"round", i,
-					"outstanding_mask", syncing.outstanding,
-					"awaiting_retry", syncing.awaitingRetry,
-				)
-
-				prev := hashCache[i-1] // Closures take refs, so they need new variables here.
-				this := hashCache[i]
-				prevRoots := make([]storageApi.Root, len(prev.Roots))
-				copy(prevRoots, prev.Roots)
-				for i := range prevRoots {
-					if prevRoots[i].Type == storageApi.RootTypeIO {
-						// IO roots aren't chained, so clear it (but leave cache intact).
-						prevRoots[i] = storageApi.Root{
-							Namespace: this.Namespace,
-							Version:   this.Round,
-							Type:      storageApi.RootTypeIO,
-						}
-						prevRoots[i].Hash.Empty()
-						break
-					}
-				}
-
-				for i := range prevRoots {
-					rootType := prevRoots[i].Type
-					if !syncing.outstanding.contains(rootType) && syncing.awaitingRetry.contains(rootType) {
-						syncing.scheduleDiff(rootType)
-						fetcherGroup.Add(1)
-						n.fetchPool.Submit(func(round uint64, prevRoot, thisRoot storageApi.Root) func() {
-							return func() {
-								defer fetcherGroup.Done()
-								n.fetchDiff(round, prevRoot, thisRoot)
-							}
-						}(this.Round, prevRoots[i], this.Roots[i]))
-					}
-				}
-			}
+		case <-heartbeat.C:
+			n.logger.Debug("heartbeat", "in_flight_rounds", len(syncingRounds))
+			triggerRoundFetches()
 
 		case item := <-n.diffCh:
 			if item.err != nil {

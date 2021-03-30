@@ -3,6 +3,9 @@ package committee
 import (
 	"fmt"
 	"strings"
+	"time"
+
+	"github.com/cenkalti/backoff/v4"
 
 	"github.com/oasisprotocol/oasis-core/go/common"
 	"github.com/oasisprotocol/oasis-core/go/roothash/api/block"
@@ -81,4 +84,18 @@ func summaryFromBlock(blk *block.Block) *blockSummary {
 		Round:     blk.Header.Round,
 		Roots:     blk.Header.StorageRoots(),
 	}
+}
+
+type heartbeat struct {
+	*backoff.Ticker
+}
+
+func (h *heartbeat) reset() {
+	if h.Ticker != nil {
+		h.Stop()
+	}
+
+	boff := backoff.NewExponentialBackOff()
+	boff.InitialInterval = 5 * time.Second
+	h.Ticker = backoff.NewTicker(boff)
 }
