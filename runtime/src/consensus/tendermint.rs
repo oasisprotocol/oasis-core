@@ -10,6 +10,9 @@ use crate::{
     storage::mkvs::{Root, RootType},
 };
 
+/// Tendermint consensus backend name.
+pub const BACKEND_NAME: &str = "tendermint";
+
 /// Light consensus block.
 #[derive(Debug, Serialize, Deserialize)]
 pub struct LightBlock {

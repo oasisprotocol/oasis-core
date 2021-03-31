@@ -25,7 +25,7 @@ func (h *testHandler) Handle(ctx context.Context, body *Body) (*Body, error) {
 		return &Body{
 			RuntimeInfoResponse: &RuntimeInfoResponse{
 				// Need to use the correct version.
-				ProtocolVersion: version.RuntimeHostProtocol.ToU64(),
+				ProtocolVersion: version.RuntimeHostProtocol,
 			},
 		}, nil
 	}

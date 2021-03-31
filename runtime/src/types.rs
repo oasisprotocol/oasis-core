@@ -13,6 +13,7 @@ use crate::{
         },
         namespace::Namespace,
         sgx::avr::AVR,
+        version::Version,
     },
     consensus::{
         roothash::{self, Block, ComputeResultsHeader, Header},
@@ -73,12 +74,12 @@ pub enum Body {
     RuntimeInfoRequest {
         runtime_id: Namespace,
         consensus_backend: String,
-        consensus_protocol_version: u64,
+        consensus_protocol_version: Version,
         consensus_chain_context: String,
     },
     RuntimeInfoResponse {
-        protocol_version: u64,
-        runtime_version: u64,
+        protocol_version: Version,
+        runtime_version: Version,
     },
     RuntimePingRequest {},
     RuntimeShutdownRequest {},

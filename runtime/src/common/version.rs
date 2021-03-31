@@ -36,6 +36,11 @@ impl Version {
             patch: patch,
         }
     }
+
+    /// Checks if two versions are compatible.
+    pub fn is_compatible_with(&self, other: &Version) -> bool {
+        self.major == other.major
+    }
 }
 
 // Returns the version as a platform-dependent u64.
@@ -60,7 +65,42 @@ impl From<u64> for Version {
 // and the runtime. This version MUST be compatible with the one supported by
 // the worker host.
 pub const PROTOCOL_VERSION: Version = Version {
-    major: 2,
+    major: 3,
     minor: 0,
     patch: 0,
 };
+
+// Version of the consensus protocol runtime code works with. This version MUST
+// be compatible with the one supported by the worker host.
+pub const CONSENSUS_VERSION: Version = Version {
+    major: 4,
+    minor: 0,
+    patch: 0,
+};
+
+#[cfg(test)]
+mod test {
+    use super::Version;
+
+    #[test]
+    fn test_version() {
+        assert!(Version {
+            major: 32,
+            minor: 25,
+            patch: 10,
+        }
+        .is_compatible_with(&Version {
+            major: 32,
+            minor: 10,
+            patch: 100,
+        }),);
+
+        let v = Version {
+            major: 17,
+            minor: 11,
+            patch: 1,
+        };
+        let vi: u64 = v.into();
+        assert_eq!(v, Version::from(vi));
+    }
+}

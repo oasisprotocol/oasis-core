@@ -65,7 +65,7 @@ pub mod tracing;
 pub mod transaction;
 pub mod types;
 
-use crate::common::version::{Version, PROTOCOL_VERSION};
+use crate::common::version::{Version, CONSENSUS_VERSION, PROTOCOL_VERSION};
 
 #[cfg(target_env = "sgx")]
 use self::common::sgx::avr::{EnclaveIdentity, MrSigner};
@@ -109,6 +109,7 @@ lazy_static! {
 
         BuildInfo {
             protocol_version: PROTOCOL_VERSION,
+            consensus_version: CONSENSUS_VERSION,
             is_secure,
         }
     };
@@ -118,6 +119,8 @@ lazy_static! {
 pub struct BuildInfo {
     /// Supported runtime protocol version.
     pub protocol_version: Version,
+    /// Supported consensus protocol version.
+    pub consensus_version: Version,
     /// True iff the build can provide integrity and confidentiality.
     pub is_secure: bool,
 }

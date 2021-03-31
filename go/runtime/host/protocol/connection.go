@@ -121,7 +121,7 @@ type HostInfo struct {
 	ConsensusBackend string
 	// ConsensusProtocolVersion is the consensus protocol version that is in use for the consensus
 	// layer.
-	ConsensusProtocolVersion uint64
+	ConsensusProtocolVersion version.Version
 	// ConsensusChainContext is the consensus layer chain domain separation context.
 	ConsensusChainContext string
 }
@@ -545,18 +545,18 @@ func (c *connection) InitHost(ctx context.Context, conn net.Conn, hi *HostInfo) 
 	}
 
 	info := rsp.RuntimeInfoResponse
-	if ver := version.FromU64(info.ProtocolVersion); ver.Major != version.RuntimeHostProtocol.Major {
+	if info.ProtocolVersion.Major != version.RuntimeHostProtocol.Major {
 		c.logger.Error("runtime has incompatible protocol version",
-			"version", ver,
+			"version", info.ProtocolVersion,
 			"expected_version", version.RuntimeHostProtocol,
 		)
 		return nil, fmt.Errorf("rhp: incompatible protocol version (expected: %s got: %s)",
 			version.RuntimeHostProtocol,
-			ver,
+			info.ProtocolVersion,
 		)
 	}
 
-	rtVersion := version.FromU64(info.RuntimeVersion)
+	rtVersion := info.RuntimeVersion
 	c.logger.Info("runtime host protocol initialized", "runtime_version", rtVersion)
 
 	// Transition the protocol state to Ready.

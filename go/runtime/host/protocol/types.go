@@ -10,6 +10,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	"github.com/oasisprotocol/oasis-core/go/common/errors"
 	"github.com/oasisprotocol/oasis-core/go/common/sgx/ias"
+	"github.com/oasisprotocol/oasis-core/go/common/version"
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
 	roothash "github.com/oasisprotocol/oasis-core/go/roothash/api"
 	"github.com/oasisprotocol/oasis-core/go/roothash/api/block"
@@ -134,7 +135,7 @@ type RuntimeInfoRequest struct {
 	ConsensusBackend string `json:"consensus_backend"`
 	// ConsensusProtocolVersion is the consensus protocol version that is in use for the consensus
 	// layer.
-	ConsensusProtocolVersion uint64 `json:"consensus_protocol_version"`
+	ConsensusProtocolVersion version.Version `json:"consensus_protocol_version"`
 	// ConsensusChainContext is the consensus layer chain domain separation context.
 	ConsensusChainContext string `json:"consensus_chain_context"`
 }
@@ -142,10 +143,10 @@ type RuntimeInfoRequest struct {
 // RuntimeInfoResponse is a worker info response message body.
 type RuntimeInfoResponse struct {
 	// ProtocolVersion is the runtime protocol version supported by the worker.
-	ProtocolVersion uint64 `json:"protocol_version"`
+	ProtocolVersion version.Version `json:"protocol_version"`
 
 	// RuntimeVersion is the version of the runtime.
-	RuntimeVersion uint64 `json:"runtime_version"`
+	RuntimeVersion version.Version `json:"runtime_version"`
 }
 
 // RuntimeCapabilityTEERakInitRequest is a worker RFC 0009 CapabilityTEE

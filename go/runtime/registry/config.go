@@ -119,7 +119,7 @@ func newConfig(consensus consensus.Backend, ias ias.Endpoint) (*RuntimeConfig, e
 		}
 		hostInfo := &hostProtocol.HostInfo{
 			ConsensusBackend:         cs.Backend,
-			ConsensusProtocolVersion: cs.Version.ToU64(),
+			ConsensusProtocolVersion: cs.Version,
 			ConsensusChainContext:    chainCtx,
 		}
 
