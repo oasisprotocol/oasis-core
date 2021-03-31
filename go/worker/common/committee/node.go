@@ -10,6 +10,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/identity"
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
+	control "github.com/oasisprotocol/oasis-core/go/control/api"
 	keymanagerApi "github.com/oasisprotocol/oasis-core/go/keymanager/api"
 	keymanagerClient "github.com/oasisprotocol/oasis-core/go/keymanager/client"
 	roothash "github.com/oasisprotocol/oasis-core/go/roothash/api"
@@ -88,6 +89,8 @@ type NodeHooks interface {
 // Node is a committee node.
 type Node struct {
 	Runtime runtimeRegistry.Runtime
+
+	HostNode control.ControlledNode
 
 	Identity         *identity.Identity
 	KeyManager       keymanagerApi.Backend
@@ -455,6 +458,7 @@ func (n *Node) worker() {
 }
 
 func NewNode(
+	hostNode control.ControlledNode,
 	runtime runtimeRegistry.Runtime,
 	identity *identity.Identity,
 	keymanager keymanagerApi.Backend,
@@ -468,6 +472,7 @@ func NewNode(
 	ctx, cancel := context.WithCancel(context.Background())
 
 	n := &Node{
+		HostNode:   hostNode,
 		Runtime:    runtime,
 		Identity:   identity,
 		KeyManager: keymanager,

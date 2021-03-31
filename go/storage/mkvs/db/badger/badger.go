@@ -561,8 +561,8 @@ func (d *badgerNodeDB) Finalize(ctx context.Context, roots []node.Root) error { 
 		return api.ErrAlreadyFinalized
 	}
 
-	// Determine a set of finalized roots. Finalization is transitive, so if
-	// a parent root is finalized the child should be consider finalized too.
+	// Determine the set of finalized roots. Finalization is transitive, so if
+	// a parent root is finalized the child should be considered finalized too.
 	finalizedRoots := make(map[typedHash]bool)
 	for _, root := range roots {
 		if root.Version != version {
@@ -591,6 +591,14 @@ func (d *badgerNodeDB) Finalize(ctx context.Context, roots []node.Root) error { 
 					updated = true
 				}
 			}
+		}
+	}
+
+	// Sanity check the input roots list.
+	for iroot := range finalizedRoots {
+		h := iroot.Hash()
+		if _, ok := rootsMeta.Roots[iroot]; !ok && !h.IsEmpty() {
+			return api.ErrRootNotFound
 		}
 	}
 

@@ -309,6 +309,7 @@ func (n *Node) initRuntimeWorkers() error {
 
 	// Initialize the common worker.
 	n.CommonWorker, err = workerCommon.New(
+		n,
 		dataDir,
 		compute.Enabled() || workerStorage.Enabled() || workerKeymanager.Enabled(),
 		n.Identity,

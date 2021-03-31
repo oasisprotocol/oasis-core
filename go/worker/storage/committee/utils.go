@@ -3,6 +3,9 @@ package committee
 import (
 	"fmt"
 	"strings"
+	"time"
+
+	"github.com/cenkalti/backoff/v4"
 
 	"github.com/oasisprotocol/oasis-core/go/common"
 	"github.com/oasisprotocol/oasis-core/go/roothash/api/block"
@@ -49,6 +52,21 @@ func (o outstandingMask) hasAll() bool {
 	return o == outstandingMaskFull
 }
 
+type inFlight struct {
+	outstanding   outstandingMask
+	awaitingRetry outstandingMask
+}
+
+func (i *inFlight) scheduleDiff(rootType storageApi.RootType) {
+	i.outstanding.add(rootType)
+	i.awaitingRetry.remove(rootType)
+}
+
+func (i *inFlight) retry(rootType storageApi.RootType) {
+	i.outstanding.remove(rootType)
+	i.awaitingRetry.add(rootType)
+}
+
 // blockSummary is a short summary of a single block.Block.
 type blockSummary struct {
 	Namespace common.Namespace  `json:"namespace"`
@@ -66,4 +84,18 @@ func summaryFromBlock(blk *block.Block) *blockSummary {
 		Round:     blk.Header.Round,
 		Roots:     blk.Header.StorageRoots(),
 	}
+}
+
+type heartbeat struct {
+	*backoff.Ticker
+}
+
+func (h *heartbeat) reset() {
+	if h.Ticker != nil {
+		h.Stop()
+	}
+
+	boff := backoff.NewExponentialBackOff()
+	boff.InitialInterval = 5 * time.Second
+	h.Ticker = backoff.NewTicker(boff)
 }
