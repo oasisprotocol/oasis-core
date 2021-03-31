@@ -26,8 +26,10 @@ const (
 	// CfgNumStorageFailApplyBatch configures how many apply-batch requests
 	// the storage node should fail.
 	CfgNumStorageFailApplyBatch = "num_storage_fail_apply_batch"
-	// CfgFailReadRequests configures if storage node should fail read requests.
+	// CfgFailReadRequests configures whether the storage node should fail read requests.
 	CfgFailReadRequests = "fail_read_requests"
+	// CfgCorruptGetDiff configures whether the storage node should corrupt GetDiff responses.
+	CfgCorruptGetDiff = "corrupt_get_diff"
 )
 
 var (
@@ -48,6 +50,7 @@ type storageWorker struct {
 	numFailApply      uint64
 	numFailApplyBatch uint64
 	failReadRequests  bool
+	corruptGetDiff    bool
 }
 
 func newStorageNode(id *identity.Identity, namespace common.Namespace, datadir string) (*storageWorker, error) {
@@ -74,6 +77,7 @@ func newStorageNode(id *identity.Identity, namespace common.Namespace, datadir s
 		numFailApply:      viper.GetUint64(CfgNumStorageFailApply),
 		numFailApplyBatch: viper.GetUint64(CfgNumStorageFailApplyBatch),
 		failReadRequests:  viper.GetBool(CfgFailReadRequests),
+		corruptGetDiff:    viper.GetBool(CfgCorruptGetDiff),
 	}, nil
 }
 
@@ -125,12 +129,46 @@ func (w *storageWorker) ApplyBatch(ctx context.Context, request *storage.ApplyBa
 	return w.backend.ApplyBatch(ctx, request)
 }
 
+type corruptIterator struct {
+	it        storage.WriteLogIterator
+	corrupted bool
+}
+
+// Implements storage.WriteLogIterator.
+func (ci *corruptIterator) Next() (bool, error) {
+	return ci.it.Next()
+}
+
+// Implements storage.WriteLogIterator.
+func (ci *corruptIterator) Value() (storage.LogEntry, error) {
+	v, err := ci.it.Value()
+	if err != nil {
+		return storage.LogEntry{}, err
+	}
+
+	// Corrupt the first entry.
+	if !ci.corrupted {
+		v.Value = []byte("corrupted")
+		ci.corrupted = true
+	}
+	return v, nil
+}
+
 func (w *storageWorker) GetDiff(ctx context.Context, request *storage.GetDiffRequest) (storage.WriteLogIterator, error) {
 	if w.failReadRequests {
 		return nil, errByzantine
 	}
 
-	return w.backend.GetDiff(ctx, request)
+	wl, err := w.backend.GetDiff(ctx, request)
+	if err != nil {
+		return nil, err
+	}
+
+	modifiedWl := wl
+	if w.corruptGetDiff {
+		modifiedWl = &corruptIterator{it: wl}
+	}
+	return modifiedWl, nil
 }
 
 func (w *storageWorker) GetCheckpoints(ctx context.Context, request *checkpoint.GetCheckpointsRequest) ([]*checkpoint.Metadata, error) {
