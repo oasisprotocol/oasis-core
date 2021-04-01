@@ -1,5 +1,7 @@
 use std::convert::TryInto;
 
+use impl_trait_for_tuples::impl_for_tuples;
+
 /// A key formatting helper trait to be used together with key-value
 /// backends for constructing keys.
 pub trait KeyFormat {
@@ -104,6 +106,23 @@ impl KeyFormatAtom for u64 {
     }
 }
 
+impl KeyFormatAtom for u8 {
+    fn size() -> usize {
+        1
+    }
+
+    fn encode_atom(self) -> Vec<u8> {
+        vec![self]
+    }
+
+    fn decode_atom(data: &[u8]) -> Self
+    where
+        Self: Sized,
+    {
+        data[0]
+    }
+}
+
 impl KeyFormatAtom for () {
     fn size() -> usize {
         0
@@ -118,63 +137,49 @@ impl KeyFormatAtom for () {
     }
 }
 
-impl<T1, T2> KeyFormatAtom for (T1, T2)
-where
-    T1: KeyFormatAtom,
-    T2: KeyFormatAtom,
-{
+#[impl_for_tuples(2, 10)]
+impl KeyFormatAtom for Tuple {
     fn size() -> usize {
-        T1::size() + T2::size()
+        for_tuples!( #( Tuple::size() )+* );
     }
 
     fn encode_atom(self) -> Vec<u8> {
-        let mut a = self.0.encode_atom();
-        let mut b = self.1.encode_atom();
-        a.append(&mut b);
-        a
+        let mut atoms: Vec<Vec<u8>> = [for_tuples!( #( self.Tuple.encode_atom() ),* )].to_vec();
+
+        atoms.into_iter().flatten().collect()
     }
 
-    fn decode_atom(data: &[u8]) -> (T1, T2) {
+    fn decode_atom(data: &[u8]) -> for_tuples!( ( #( Tuple ),* ) ) {
         if data.len() < Self::size() {
             panic!("key format atom: malformed input");
         }
 
-        (
-            T1::decode_atom(&data[0..T1::size()]),
-            T2::decode_atom(&data[T2::size()..]),
-        )
-    }
-}
+        let mut sizes: Vec<usize> = [for_tuples!( #( Tuple::size() ),* )].to_vec();
+        sizes.reverse();
+        let mut data = data.to_vec();
 
-// TODO: probably could generalize this for N sized tuples using macros.
-impl<T1, T2, T3> KeyFormatAtom for (T1, T2, T3)
-where
-    T1: KeyFormatAtom,
-    T2: KeyFormatAtom,
-    T3: KeyFormatAtom,
-{
-    fn size() -> usize {
-        T1::size() + T2::size() + T3::size()
-    }
-
-    fn encode_atom(self) -> Vec<u8> {
-        let mut a = self.0.encode_atom();
-        let mut b = self.1.encode_atom();
-        let mut c = self.2.encode_atom();
-        a.append(&mut b);
-        a.append(&mut c);
-        a
-    }
-
-    fn decode_atom(data: &[u8]) -> (T1, T2, T3) {
-        if data.len() < Self::size() {
-            panic!("key format atom: malformed input");
-        }
-
-        (
-            T1::decode_atom(&data[0..T1::size()]),
-            T2::decode_atom(&data[T2::size()..T3::size()]),
-            T3::decode_atom(&data[T3::size()..]),
+        /*
+            (
+                {
+                    let x = T1::decode_atom(data.drain(0..T1::size()));
+                    x
+                },
+                {
+                    let x = T2::decode_atom(data.drain(0..T2::size()));
+                    x
+                }
+                ...
+            )
+        */
+        for_tuples!(
+            (
+                #(
+                    {
+                        let x = Tuple::decode_atom(data.drain(0..sizes.pop().unwrap()).as_slice());
+                        x
+                    }
+                ),*
+            )
         )
     }
 }
@@ -189,7 +194,7 @@ where
 #[macro_export]
 macro_rules! key_format {
     ($name:ident, $prefix:expr, $inner:ty) => {
-        #[derive(Debug, Default)]
+        #[derive(Debug, Default, PartialEq, Eq, Clone)]
         struct $name($inner);
 
         impl KeyFormat for $name {
@@ -273,5 +278,16 @@ mod test {
         }
         .encode_partial(0);
         assert_eq!(enc.to_hex::<String>(), "54");
+    }
+
+    #[test]
+    fn test_key_format_atom() {
+        key_format!(TestKeyFormat, 0x01, (u8, u64, u8, u64, u64));
+
+        let key = TestKeyFormat((1, 2, 3, 4, 5));
+        let enc = key.clone().encode();
+        let dec = TestKeyFormat::decode(&enc);
+
+        assert_eq!(dec, Some(key),)
     }
 }

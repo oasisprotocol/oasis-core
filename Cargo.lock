@@ -950,6 +950,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "impl-trait-for-tuples"
+version = "0.2.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d5dacb10c5b3bb92d46ba347505a9041e676bb20ad220101326bffb0c93031ee"
+dependencies = [
+ "proc-macro2 1.0.24",
+ "quote 1.0.7",
+ "syn 1.0.60",
+]
+
+[[package]]
 name = "intrusive-collections"
 version = "0.8.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1342,6 +1353,7 @@ dependencies = [
  "grpcio",
  "hmac",
  "honggfuzz",
+ "impl-trait-for-tuples",
  "intrusive-collections",
  "io-context",
  "lazy_static",
