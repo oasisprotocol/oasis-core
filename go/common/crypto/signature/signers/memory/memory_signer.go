@@ -6,7 +6,7 @@ import (
 	"crypto/sha512"
 	"io"
 
-	"github.com/oasisprotocol/ed25519"
+	"github.com/oasisprotocol/curve25519-voi/primitives/ed25519"
 
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 )
