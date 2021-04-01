@@ -31,10 +31,6 @@ func (rs *restorer) StartRestore(ctx context.Context, checkpoint *Metadata) erro
 		return ErrRestoreAlreadyInProgress
 	}
 
-	if err := rs.ndb.StartMultipartInsert(checkpoint.Root.Version); err != nil {
-		return err
-	}
-
 	rs.currentCheckpoint = checkpoint
 	rs.pendingChunks = make(map[uint64]bool)
 	for idx := range checkpoint.Chunks {
@@ -51,7 +47,7 @@ func (rs *restorer) AbortRestore(ctx context.Context) error {
 	rs.pendingChunks = nil
 	rs.currentCheckpoint = nil
 
-	return rs.ndb.AbortMultipartInsert()
+	return nil
 }
 
 func (rs *restorer) GetCurrentCheckpoint() *Metadata {

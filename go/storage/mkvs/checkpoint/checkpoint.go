@@ -73,11 +73,15 @@ type Creator interface {
 // Restorer is a checkpoint restorer.
 type Restorer interface {
 	// StartRestore starts a checkpoint restoration process.
+	//
+	// Multipart management in the underlying database is the responsibility of the caller.
 	StartRestore(ctx context.Context, checkpoint *Metadata) error
 
 	// AbortRestore aborts a checkpoint restore in progress.
 	//
 	// It is not an error to call this method when no checkpoint restore is in progress.
+	//
+	// Multipart management in the underlying database is the responsibility of the caller.
 	AbortRestore(ctx context.Context) error
 
 	// GetCurrentCheckpoint returns the checkpoint that is being restored. If no restoration is in
@@ -88,7 +92,10 @@ type Restorer interface {
 	//
 	// This method requires that a restoration is in progress.
 	//
-	// Returns true when the checkpoint has been fully restored.
+	// Returns true when the checkpoint has been fully restored. At this point,
+	// the restoration is also cleaned  up so that AbortRestore doesn't need to be called.
+	//
+	// Multipart management in the underlying database is the responsibility of the caller.
 	RestoreChunk(ctx context.Context, index uint64, r io.Reader) (bool, error)
 }
 
