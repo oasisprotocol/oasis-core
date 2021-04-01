@@ -391,7 +391,7 @@ func (n *Node) checkCheckpointUsable(cp *checkpoint.Metadata, remainingMask outs
 	return false
 }
 
-func (n *Node) syncCheckpoints() (*blockSummary, error) {
+func (n *Node) syncCheckpoints(genesisRound uint64) (*blockSummary, error) {
 	// Store roots and round info for checkpoints that finished syncing.
 	// Round and namespace info will get overwritten as rounds are skipped
 	// for errors, driven by remainingRoots.
@@ -429,7 +429,7 @@ func (n *Node) syncCheckpoints() (*blockSummary, error) {
 	}()
 
 	for _, check := range metadata {
-		if !n.checkCheckpointUsable(check, remainingRoots) {
+		if check.Root.Version < genesisRound || !n.checkCheckpointUsable(check, remainingRoots) {
 			continue
 		}
 

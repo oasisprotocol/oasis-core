@@ -888,7 +888,7 @@ func (n *Node) worker() { // nolint: gocyclo
 		)
 	CheckpointSyncRetry:
 		for {
-			summary, err = n.syncCheckpoints()
+			summary, err = n.syncCheckpoints(genesisBlock.Header.Round)
 			if err == nil {
 				break
 			}
