@@ -149,6 +149,8 @@ func TestFileCheckpointCreator(t *testing.T) {
 	// Make sure that the chunk integrity is correct.
 	bogusCp.Chunks[1].FromBytes(bogusChunk)
 
+	err = ndb2.StartMultipartInsert(bogusCp.Root.Version)
+	require.NoError(err, "StartMultipartInsert")
 	err = rs.StartRestore(ctx, bogusCp)
 	require.NoError(err, "StartRestore")
 	for i := 0; i < len(bogusCp.Chunks); i++ {
@@ -357,6 +359,8 @@ func TestPruneGapAfterCheckpointRestore(t *testing.T) {
 	rs, err := NewRestorer(ndb2)
 	require.NoError(err, "NewRestorer")
 
+	err = ndb2.StartMultipartInsert(cp.Root.Version)
+	require.NoError(err, "StartMultipartInsert")
 	err = rs.StartRestore(ctx, cp)
 	require.NoError(err, "StartRestore")
 	for i := 0; i < len(cp.Chunks); i++ {

@@ -895,6 +895,12 @@ func (mux *abciMux) OfferSnapshot(req types.RequestOfferSnapshot) types.Response
 	}
 
 	// Snapshot seems correct (e.g., it is for the correct root), start the restoration process.
+	if err := mux.state.storage.NodeDB().StartMultipartInsert(cp.Root.Version); err != nil {
+		mux.logger.Error("failed to start multipart restoration",
+			"err", err,
+		)
+		return types.ResponseOfferSnapshot{Result: types.ResponseOfferSnapshot_ABORT}
+	}
 	if err := mux.state.storage.Checkpointer().StartRestore(mux.state.ctx, &cp); err != nil {
 		mux.logger.Error("failed to start restore",
 			"err", err,
@@ -962,6 +968,16 @@ func (mux *abciMux) ApplySnapshotChunk(req types.RequestApplySnapshotChunk) type
 	case errors.Is(err, checkpoint.ErrNoRestoreInProgress):
 		// This should never happen.
 		mux.logger.Error("ApplySnapshotChunk called without OfferSnapshot, aborting state sync")
+		if err = mux.state.storage.Checkpointer().AbortRestore(mux.state.ctx); err != nil {
+			mux.logger.Error("failed to abort checkpoint restore: %w",
+				"err", err,
+			)
+		}
+		if err = mux.state.storage.NodeDB().AbortMultipartInsert(); err != nil {
+			mux.logger.Error("failed to abort multipart restore: %w",
+				"err", err,
+			)
+		}
 		return types.ResponseApplySnapshotChunk{Result: types.ResponseApplySnapshotChunk_ABORT}
 	case errors.Is(err, checkpoint.ErrChunkAlreadyRestored):
 		return types.ResponseApplySnapshotChunk{Result: types.ResponseApplySnapshotChunk_ACCEPT}
@@ -991,6 +1007,16 @@ func (mux *abciMux) ApplySnapshotChunk(req types.RequestApplySnapshotChunk) type
 		mux.logger.Error("error during chunk restoration, aborting state sync",
 			"err", err,
 		)
+		if err = mux.state.storage.Checkpointer().AbortRestore(mux.state.ctx); err != nil {
+			mux.logger.Error("failed to abort checkpoint restore: %w",
+				"err", err,
+			)
+		}
+		if err = mux.state.storage.NodeDB().AbortMultipartInsert(); err != nil {
+			mux.logger.Error("failed to abort multipart restore: %w",
+				"err", err,
+			)
+		}
 
 		return types.ResponseApplySnapshotChunk{Result: types.ResponseApplySnapshotChunk_ABORT}
 	}
@@ -1002,6 +1028,11 @@ func (mux *abciMux) ApplySnapshotChunk(req types.RequestApplySnapshotChunk) type
 			mux.logger.Error("failed to finalize restored root",
 				"err", err,
 			)
+			if err = mux.state.storage.NodeDB().AbortMultipartInsert(); err != nil {
+				mux.logger.Error("failed to abort multipart restore: %w",
+					"err", err,
+				)
+			}
 			return types.ResponseApplySnapshotChunk{Result: types.ResponseApplySnapshotChunk_ABORT}
 		}
 

@@ -163,6 +163,8 @@ func restoreCheckpoint(ctx *test, ckMeta *checkpoint.Metadata, ckNodes keySet) c
 	restorer, err := checkpoint.NewRestorer(ctx.badgerdb)
 	ctx.require.NoError(err, "NewRestorer()")
 
+	err = ctx.badgerdb.StartMultipartInsert(ckMeta.Root.Version)
+	ctx.require.NoError(err, "StartMultipartInsert()")
 	err = restorer.StartRestore(ctx.ctx, ckMeta)
 	ctx.require.NoError(err, "StartRestore()")
 	for i := range ckMeta.Chunks {
@@ -230,6 +232,8 @@ func testAbort(ctx *test) {
 	restorer := restoreCheckpoint(ctx, ctx.ckMeta, ctx.ckNodes)
 	err := restorer.AbortRestore(ctx.ctx)
 	ctx.require.NoError(err, "AbortRestore()")
+	err = ctx.badgerdb.AbortMultipartInsert()
+	ctx.require.NoError(err, "AbortMultipartInsert()")
 
 	verifyNodes(ctx.require, ctx.badgerdb, keySet{})
 	checkNoLogKeys(ctx.require, ctx.badgerdb)
@@ -286,6 +290,8 @@ func testExistingNodes(ctx *test) {
 	restorer := restoreCheckpoint(ctx, ckMeta2, ckNodes2)
 	err = restorer.AbortRestore(ctx.ctx)
 	ctx.require.NoError(err, "AbortRestore()")
+	err = ctx.badgerdb.AbortMultipartInsert()
+	ctx.require.NoError(err, "AbortMultipartInsert()")
 	verifyNodes(ctx.require, ctx.badgerdb, ctx.ckNodes)
 }
 
