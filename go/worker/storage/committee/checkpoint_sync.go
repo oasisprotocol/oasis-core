@@ -188,7 +188,28 @@ func (n *Node) nodeWorker(
 	}
 }
 
-func (n *Node) handleCheckpoint(check *checkpoint.Metadata, nodesClient grpc.NodesClient, groupSize uint16) (int, error) {
+func (n *Node) handleCheckpoint(check *checkpoint.Metadata, nodesClient grpc.NodesClient, groupSize uint16) (cpStatus int, rerr error) {
+	if err := n.localStorage.Checkpointer().StartRestore(n.ctx, check); err != nil {
+		// Any previous restores were already aborted by the driver up the call stack, so
+		// things should have been going smoothly here; bail.
+		return checkpointStatusBail, fmt.Errorf("can't start checkpoint restore: %w", err)
+	}
+	// This defer has to be here so that we're sure no workers are running anymore during
+	// any potential aborts.
+	defer func() {
+		if cpStatus == checkpointStatusDone {
+			return
+		}
+		// Abort has to succeed even if we were interrupted by context cancellation.
+		ctx := context.Background()
+		if err := n.localStorage.Checkpointer().AbortRestore(ctx); err != nil {
+			cpStatus = checkpointStatusBail
+			n.logger.Error("error while aborting checkpoint restore on handler exit, aborting sync",
+				"err", err,
+			)
+		}
+	}()
+
 	chunkDispatchCh := make(chan *checkpoint.ChunkMetadata)
 	defer close(chunkDispatchCh)
 
@@ -203,14 +224,12 @@ func (n *Node) handleCheckpoint(check *checkpoint.Metadata, nodesClient grpc.Nod
 	if err != nil {
 		return checkpointStatusBail, fmt.Errorf("can't fetch chunks from committee nodes: %w", err)
 	}
-	defer cancel()
-
-	err = n.localStorage.Checkpointer().StartRestore(n.ctx, check)
-	if err != nil {
-		// Any previous restores were already aborted by the driver up the call stack, so
-		// things should have been going smoothly here; bail.
-		return checkpointStatusBail, fmt.Errorf("can't start checkpoint restore: %w", err)
-	}
+	// Cancel on exit and wait for the worker pool to drain so that the abort
+	// above can proceed safely.
+	defer func() {
+		cancel()
+		<-doneCh
+	}()
 
 	// Prepare the heap of chunks.
 	chunks := &chunkHeap{
@@ -372,7 +391,7 @@ func (n *Node) checkCheckpointUsable(cp *checkpoint.Metadata, remainingMask outs
 	return false
 }
 
-func (n *Node) syncCheckpoints() (*blockSummary, error) {
+func (n *Node) syncCheckpoints(genesisRound uint64) (*blockSummary, error) {
 	// Store roots and round info for checkpoints that finished syncing.
 	// Round and namespace info will get overwritten as rounds are skipped
 	// for errors, driven by remainingRoots.
@@ -391,20 +410,41 @@ func (n *Node) syncCheckpoints() (*blockSummary, error) {
 	}
 
 	// Try all the checkpoints now, from most recent backwards.
-	var prevVersion uint64
-	var mask outstandingMask
+	var (
+		prevVersion      uint64 = ^uint64(0)
+		multipartRunning bool
+		mask             outstandingMask
+	)
 	remainingRoots := outstandingMaskFull
+
+	defer func() {
+		if !multipartRunning {
+			return
+		}
+		if err := n.localStorage.NodeDB().AbortMultipartInsert(); err != nil {
+			n.logger.Error("error aborting multipart restore on exit from syncer",
+				"err", err,
+			)
+		}
+	}()
+
 	for _, check := range metadata {
-		if !n.checkCheckpointUsable(check, remainingRoots) {
+		if check.Root.Version < genesisRound || !n.checkCheckpointUsable(check, remainingRoots) {
 			continue
 		}
 
 		if check.Root.Version != prevVersion {
-			// Kill any previous restores that might be active. This should kill
-			// the restorer's state as well as the underlying DB multipart bookkeeping.
-			if err := n.localStorage.Checkpointer().AbortRestore(n.ctx); err != nil {
-				return nil, fmt.Errorf("error aborting previous restore for checkpoint sync: %w", err)
+			// Starting a new round, so we need to clean up all state from
+			// previous retores. Aborting multipart works with no multipart in
+			// progress too.
+			multipartRunning = false
+			if err := n.localStorage.NodeDB().AbortMultipartInsert(); err != nil {
+				return nil, fmt.Errorf("error aborting previous multipart restore: %w", err)
 			}
+			if err := n.localStorage.NodeDB().StartMultipartInsert(check.Root.Version); err != nil {
+				return nil, fmt.Errorf("error starting multipart insert for round %d: %w", check.Root.Version, err)
+			}
+			multipartRunning = true
 			remainingRoots = outstandingMaskFull
 			prevVersion = check.Root.Version
 			syncState.Roots = nil
@@ -426,16 +466,10 @@ func (n *Node) syncCheckpoints() (*blockSummary, error) {
 						"version", prevVersion,
 						"roots", syncState.Roots,
 					)
-					// Since finalize failed, we need to make sure to abort multipart insert
-					// otherwise all normal batch operations will continue to fail.
-					if abortErr := n.localStorage.NodeDB().AbortMultipartInsert(); abortErr != nil {
-						n.logger.Error("can't abort multipart insert after finalization failure",
-							"err", err,
-						)
-					}
 					// Likely a local problem, so just bail.
 					return nil, fmt.Errorf("can't finalize version after checkpoints restored: %w", err)
 				}
+				multipartRunning = false
 				return &syncState, nil
 			}
 			continue
