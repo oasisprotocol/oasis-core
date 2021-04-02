@@ -80,7 +80,7 @@ func (dh *displayHelper) DisplayStep(msg string) {
 
 func (dh *displayHelper) DisplayProgress(msg string, current, total uint64) {
 	if pretty {
-		if time.Since(dh.lastTime).Seconds() < 0.1 {
+		if time.Since(dh.lastTime).Seconds() < 0.1 && current < total {
 			return
 		}
 		dh.lastTime = time.Now()

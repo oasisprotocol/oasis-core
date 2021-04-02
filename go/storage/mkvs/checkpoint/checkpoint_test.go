@@ -72,13 +72,12 @@ func TestFileCheckpointCreator(t *testing.T) {
 	require.NoError(err, "CreateCheckpoint")
 	require.EqualValues(1, cp.Version, "version should be correct")
 	require.EqualValues(root, cp.Root, "checkpoint root should be correct")
-	require.Len(cp.Chunks, 3, "there should be the correct number of chunks")
+	require.Len(cp.Chunks, 2, "there should be the correct number of chunks")
 
 	var expectedChunks []hash.Hash
 	for _, hh := range []string{
-		"620f318c245858b351602a8b21e708663b03cd2befd982210ffbaa3c56bf9358",
-		"37d38a95492038df4afee65b5b91bf8499f522dea346c0e553e03d3333bff394",
-		"df608e9821dc8d248a0f0d0ff4cb998d51f329767dfc8a7520c15e38c47be1e9",
+		"bd09a699c0737d8a9783129f896fb6f452d9b77e81869237312e3bd48fb4cbc7",
+		"57557051abdf63cc03b831cca21a321f44f681c795454dcb897e46b55e082ca3",
 	} {
 		var h hash.Hash
 		_ = h.UnmarshalHex(hh)

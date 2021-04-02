@@ -104,7 +104,7 @@ func (mh *testMigrationHelper) DisplayProgress(msg string, current, total uint64
 	// Nothing to fo here for testing.
 }
 
-func TestBadgerV4MigrationSimple(t *testing.T) {
+func TestBadgerV5MigrationSimple(t *testing.T) {
 	ctx, ndb, bdb, tc := makeDB(t, "case-nonfinalized.json")
 	defer ndb.Close()
 	helper := &testMigrationHelper{}
@@ -113,8 +113,12 @@ func TestBadgerV4MigrationSimple(t *testing.T) {
 	newVersion, err := migrator.Migrate()
 	require.NoError(t, err, "Migrate")
 	require.Equal(t, uint64(4), newVersion, "Migrate")
+	migrator = originVersions[4](bdb, helper)
+	newVersion, err = migrator.Migrate()
+	require.NoError(t, err, "Migrate")
+	require.Equal(t, uint64(5), newVersion, "Migrate")
 
-	// Start using the migrated v4 database.
+	// Start using the migrated v5 database.
 	err = bdb.load()
 	require.NoError(t, err, "load")
 
@@ -130,7 +134,7 @@ func TestBadgerV4MigrationSimple(t *testing.T) {
 	checkContents(ctx, t, ndb, finalRoot, testData)
 }
 
-func TestBadgerV4MigrationChunks(t *testing.T) {
+func TestBadgerV5MigrationChunks(t *testing.T) {
 	ctx, ndb, bdb, tc := makeDB(t, "case-chunkrestore.json")
 	defer ndb.Close()
 	helper := &testMigrationHelper{}
@@ -139,6 +143,10 @@ func TestBadgerV4MigrationChunks(t *testing.T) {
 	newVersion, err := migrator.Migrate()
 	require.NoError(t, err, "Migrate")
 	require.Equal(t, uint64(4), newVersion, "Migrate")
+	migrator = originVersions[4](bdb, helper)
+	newVersion, err = migrator.Migrate()
+	require.NoError(t, err, "Migrate")
+	require.Equal(t, uint64(5), newVersion, "Migrate")
 
 	// Start using the migrated v4 database.
 	err = bdb.load()
@@ -193,7 +201,7 @@ func (ch *crashyMigrationHelper) GetRootForHash(root hash.Hash, version uint64) 
 	return ch.testMigrationHelper.GetRootForHash(root, version)
 }
 
-func TestBadgerV4MigrationCrashMeta(t *testing.T) {
+func TestBadgerV5MigrationCrashMeta(t *testing.T) {
 	ctx, ndb, bdb, tc := makeDB(t, "case-nonfinalized.json")
 	defer ndb.Close()
 	helper := &crashyMigrationHelper{
@@ -211,6 +219,10 @@ func TestBadgerV4MigrationCrashMeta(t *testing.T) {
 	newVersion, err := migrator.Migrate()
 	require.NoError(t, err, "Migrate")
 	require.Equal(t, uint64(4), newVersion, "Migrate")
+	migrator = originVersions[4](bdb, helper)
+	newVersion, err = migrator.Migrate()
+	require.NoError(t, err, "Migrate")
+	require.Equal(t, uint64(5), newVersion, "Migrate")
 
 	// Start using the migrated v4 database.
 	err = bdb.load()
@@ -249,7 +261,7 @@ func (sh *sharedRootMigrationHelper) GetRootForHash(root hash.Hash, version uint
 	}, nil
 }
 
-func TestBadgerV4SharedRoots(t *testing.T) {
+func TestBadgerV5SharedRoots(t *testing.T) {
 	ctx, ndb, bdb, tc := makeDB(t, "case-long.json")
 	defer ndb.Close()
 	helper := &sharedRootMigrationHelper{}
@@ -258,30 +270,36 @@ func TestBadgerV4SharedRoots(t *testing.T) {
 	newVersion, err := migrator.Migrate()
 	require.NoError(t, err, "Migrate")
 	require.Equal(t, uint64(4), newVersion, "Migrate")
+	migrator = originVersions[4](bdb, helper)
+	newVersion, err = migrator.Migrate()
+	require.NoError(t, err, "Migrate")
+	require.Equal(t, uint64(5), newVersion, "Migrate")
 
 	// Start using the migrated v4 database.
 	err = bdb.load()
 	require.NoError(t, err, "load")
 
-	// prettyPrintDBV4(ndb)
+	// prettyPrintDBV5(ndb)
 	rounds := uint64(len(tc.LongRoots))
 
-	// Finalize the last round first.
-	err = ndb.Finalize(ctx, []node.Root{
-		{
-			Namespace: testNs,
-			Version:   rounds,
-			Type:      node.RootTypeState,
-			Hash:      tc.LongRoots[rounds-1],
-		},
-		{
-			Namespace: testNs,
-			Version:   rounds,
-			Type:      node.RootTypeIO,
-			Hash:      tc.LongRoots[rounds-1],
-		},
-	})
-	require.NoError(t, err, "Finalize")
+	// Finalize all the rounds first.
+	for round := uint64(2); round < rounds; round++ {
+		err = ndb.Finalize(ctx, []node.Root{
+			{
+				Namespace: testNs,
+				Version:   round,
+				Type:      node.RootTypeState,
+				Hash:      tc.LongRoots[round-1],
+			},
+			{
+				Namespace: testNs,
+				Version:   round,
+				Type:      node.RootTypeIO,
+				Hash:      tc.LongRoots[round-1],
+			},
+		})
+		require.NoError(t, err, "Finalize(%d)", round)
+	}
 
 	allTypes := []node.RootType{
 		node.RootTypeState,
@@ -316,10 +334,86 @@ func TestBadgerV4SharedRoots(t *testing.T) {
 		err = ndb.Prune(ctx, round)
 		require.NoError(t, err, fmt.Sprintf("Prune/%d", round))
 	}
-	// prettyPrintDBV4(ndb)
+	// prettyPrintDBV5(ndb)
 }
 
-func TestBadgerV4KeyVersioning(t *testing.T) {
+func TestBadgerV5ToEmpty(t *testing.T) {
+	ctx, ndb, bdb, tc := makeDB(t, "case-long-toempty.json")
+	defer ndb.Close()
+	helper := &sharedRootMigrationHelper{}
+
+	migrator := originVersions[3](bdb, helper)
+	newVersion, err := migrator.Migrate()
+	require.NoError(t, err, "Migrate")
+	require.Equal(t, uint64(4), newVersion, "Migrate")
+	migrator = originVersions[4](bdb, helper)
+	newVersion, err = migrator.Migrate()
+	require.NoError(t, err, "Migrate")
+	require.Equal(t, uint64(5), newVersion, "Migrate")
+
+	// Start using the migrated v4 database.
+	err = bdb.load()
+	require.NoError(t, err, "load")
+
+	// prettyPrintDBV5(ndb)
+	rounds := uint64(len(tc.LongRoots))
+
+	// Finalize all the rounds first.
+	for round := uint64(2); round < rounds; round++ {
+		err = ndb.Finalize(ctx, []node.Root{
+			{
+				Namespace: testNs,
+				Version:   round,
+				Type:      node.RootTypeState,
+				Hash:      tc.LongRoots[round-1],
+			},
+			{
+				Namespace: testNs,
+				Version:   round,
+				Type:      node.RootTypeIO,
+				Hash:      tc.LongRoots[round-1],
+			},
+		})
+		require.NoError(t, err, "Finalize(%d)", round)
+	}
+
+	allTypes := []node.RootType{
+		node.RootTypeState,
+		node.RootTypeIO,
+	}
+	for round := uint64(1); round < rounds; round++ {
+		// Check key accessibility for this round.
+		for _, typ := range allTypes {
+			root := node.Root{
+				Namespace: testNs,
+				Version:   round,
+				Type:      typ,
+				Hash:      tc.LongRoots[round-1],
+			}
+			tree := mkvs.NewWithRoot(nil, ndb, root)
+			require.NotNil(t, tree, "NewWithRoot")
+			for i := 1; i < 5; i++ {
+				key, val := mkLongKV(round, i)
+				var treeVal []byte
+				treeVal, err = tree.Get(ctx, key)
+				require.NoError(t, err, fmt.Sprintf("Get round %d, key %d", round, i))
+				require.Equal(t, val, treeVal, fmt.Sprintf("Value round %d, key %d", round, i))
+			}
+			tree.Close()
+		}
+
+		// Some extra checks.
+		err = checkSanityInternal(ctx, bdb, helper)
+		require.NoError(t, err, fmt.Sprintf("checkSanityInternal/%d", round))
+
+		// Try pruning, then move on. The following rounds should all still work.
+		err = ndb.Prune(ctx, round)
+		require.NoError(t, err, fmt.Sprintf("Prune/%d", round))
+	}
+	// prettyPrintDBV5(ndb)
+}
+
+func TestBadgerV5KeyVersioning(t *testing.T) {
 	// case-long has some keys that are both inserted and then deleted in
 	// a later version. All of these should be migrated and readable as V4 keys.
 	_, ndb, bdb, _ := makeDB(t, "case-long.json")
@@ -330,6 +424,10 @@ func TestBadgerV4KeyVersioning(t *testing.T) {
 	newVersion, err := migrator.Migrate()
 	require.NoError(t, err, "Migrate")
 	require.Equal(t, uint64(4), newVersion, "Migrate")
+	migrator = originVersions[4](bdb, helper)
+	newVersion, err = migrator.Migrate()
+	require.NoError(t, err, "Migrate")
+	require.Equal(t, uint64(5), newVersion, "Migrate")
 
 	// Start using the migrated v4 database.
 	err = bdb.load()
@@ -387,7 +485,7 @@ func TestBadgerV4KeyVersioning(t *testing.T) {
 	}
 }
 
-func prettyPrintDBV4(ndb api.NodeDB) { // nolint: deadcode, unused
+func prettyPrintDBV5(ndb api.NodeDB) { // nolint: deadcode, unused
 	db := ndb.(*badgerNodeDB).db
 	txn := db.NewTransactionAt(math.MaxUint64, false)
 	defer txn.Discard()
@@ -680,5 +778,59 @@ func TestBadgerV3MultiroundFill(t *testing.T) {
 
 	// Dump everything.
 	dumpDB(ndb, "case-long.json", tc)
+	prettyPrintDBV3(ndb)
+}
+
+// Produce multiple rounds that eventually reduce to an empty root.
+func TestBadgerV3MultiroundFillToEmpty(t *testing.T) {
+	ctx := context.Background()
+
+	ndb, err := New(dbCfg)
+	require.NoError(t, err, "New")
+	defer ndb.Close()
+
+	emptyRoot := node.Root{
+		Namespace: testNs,
+		Version:   0,
+	}
+	emptyRoot.Hash.Empty()
+
+	tree := mkvs.NewWithRoot(nil, ndb, emptyRoot)
+	require.NotNil(t, tree, "NewWithRoot")
+
+	tc := testCase{}
+
+	var clearWl writelog.WriteLog
+	maxRound := uint64(5)
+	for round := uint64(1); round < maxRound; round++ {
+		wl := writelog.WriteLog{}
+		for i := 1; i < 5; i++ {
+			key, val := mkLongKV(round, i)
+			wl = append(wl, writelog.LogEntry{Key: key, Value: val})
+			clearWl = append(clearWl, writelog.LogEntry{Key: key, Value: nil})
+		}
+		err := tree.ApplyWriteLog(ctx, writelog.NewStaticIterator(wl))
+		require.NoError(t, err, "ApplyWriteLog")
+
+		_, rootHash, err := tree.Commit(ctx, testNs, round)
+		require.NoError(t, err, "Commit")
+		tc.LongRoots = append(tc.LongRoots, rootHash)
+		if round < maxRound-1 {
+			err = ndb.Finalize(ctx, round, []hash.Hash{rootHash})
+			require.NoError(t, err, "Finalize")
+		}
+	}
+
+	err = tree.ApplyWriteLog(ctx, writelog.NewStaticIterator(clearWl))
+	require.NoError(t, err, "ApplyWriteLog")
+
+	_, rootHash, err := tree.Commit(ctx, testNs, maxRound)
+	require.NoError(t, err, "Commit")
+	require.True(t, rootHash.IsEmpty())
+
+	tree.Close()
+
+	// Dump everything.
+	dumpDB(ndb, "case-long-toempty.json", tc)
 	prettyPrintDBV3(ndb)
 }*/

@@ -98,7 +98,6 @@ fn test_serialization_internal() {
 #[test]
 fn test_hash_leaf() {
     let mut leaf_node = LeafNode {
-        version: 0xDEADBEEF,
         key: b"a golden key".to_vec(),
         value: b"value".to_vec(),
         ..Default::default()
@@ -107,7 +106,7 @@ fn test_hash_leaf() {
     leaf_node.update_hash();
     assert_eq!(
         leaf_node.hash,
-        Hash::from_str("1bf37ec60c5494775e7029ec2a888c42d14f9710852c86ffe0afab8e3c43b782").unwrap()
+        Hash::from_str("5c05183d4158b5920b16833acb78ccda464da83f720f824177b3a55a75f9fd88").unwrap()
     );
 }
 
@@ -118,7 +117,6 @@ fn test_hash_internal() {
     let right_hash = Hash::digest_bytes(b"everyone move to the right");
 
     let mut int_node = InternalNode {
-        version: 0xDEADBEEF,
         label: b"abc".to_vec(),
         label_bit_length: 23,
         leaf_node: Rc::new(RefCell::new(NodePointer {
@@ -142,7 +140,7 @@ fn test_hash_internal() {
     int_node.update_hash();
     assert_eq!(
         int_node.hash,
-        Hash::from_str("e760353e9796f41b3bb2cfa2cf45f7e00ca687b6b84dc658e0ecadc906d5d21e").unwrap()
+        Hash::from_str("75c37c67c265e2c836f76dec35173fa336e976938ea46f088390a983e46efced").unwrap()
     );
 }
 
