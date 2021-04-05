@@ -16,7 +16,7 @@ use crate::common::{crypto::hash::Hash, namespace::Namespace};
 mod tree;
 mod cache;
 #[cfg(test)]
-mod interop;
+pub mod interop;
 pub mod marshal;
 pub mod sync;
 #[cfg(test)]

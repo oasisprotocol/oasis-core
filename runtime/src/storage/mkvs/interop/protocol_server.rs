@@ -4,6 +4,7 @@
 //! This should only be used for testing.
 use std::{
     any::Any,
+    fmt,
     process::{Child, Command},
     sync::Arc,
 };
@@ -34,9 +35,24 @@ struct ProtocolServerReadSyncer {
     client: rpc::StorageClient,
 }
 
+/// Interoperability protocol server fixtures.
+pub enum Fixture {
+    None,
+    ConsensusMock,
+}
+
+impl fmt::Display for Fixture {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Fixture::ConsensusMock => write!(f, "consensus_mock"),
+            _ => write!(f, ""),
+        }
+    }
+}
+
 impl ProtocolServer {
     /// Create a new protocol server for testing.
-    pub fn new() -> Self {
+    pub fn new(fixture: Option<Fixture>) -> Self {
         let datadir = tempfile::Builder::new()
             .prefix("oasis-test-storage-protocol-server")
             .tempdir()
@@ -44,14 +60,16 @@ impl ProtocolServer {
         let socket_path = datadir.path().join("socket");
 
         // Start protocol server.
-        let server_process = Command::new(PROTOCOL_SERVER_BINARY)
+        let mut server_cmd = Command::new(PROTOCOL_SERVER_BINARY);
+        server_cmd
             .arg("proto-server")
             .arg("--datadir")
             .arg(datadir.path())
             .arg("--socket")
             .arg(socket_path.clone())
-            .spawn()
-            .expect("protocol server failed to start");
+            .arg("--fixture")
+            .arg(fixture.unwrap_or(Fixture::None).to_string());
+        let server_process = server_cmd.spawn().expect("protocol server failed to start");
 
         // Create connection with the protocol server.
         let env = Arc::new(EnvBuilder::new().build());

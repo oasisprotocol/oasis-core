@@ -374,7 +374,7 @@ pub(super) mod test {
 
     #[test]
     fn test_iterator() {
-        let server = ProtocolServer::new();
+        let server = ProtocolServer::new(None);
 
         let mut tree = Tree::make()
             .with_root_type(RootType::State)
@@ -566,7 +566,7 @@ pub(super) mod test {
 
     #[test]
     fn test_iterator_eviction() {
-        let server = ProtocolServer::new();
+        let server = ProtocolServer::new(None);
 
         let mut tree = OverlayTree::new(
             Tree::make()

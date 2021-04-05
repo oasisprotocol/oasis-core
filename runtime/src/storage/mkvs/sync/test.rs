@@ -9,7 +9,7 @@ use crate::storage::mkvs::{
 
 #[test]
 fn test_nil_pointers() {
-    let server = ProtocolServer::new();
+    let server = ProtocolServer::new(None);
 
     let mut tree = Tree::make()
         .with_root_type(RootType::State)

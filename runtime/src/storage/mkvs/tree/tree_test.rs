@@ -670,7 +670,7 @@ fn test_remove() {
 
 #[test]
 fn test_syncer_basic() {
-    let server = ProtocolServer::new();
+    let server = ProtocolServer::new(None);
 
     let mut tree = OverlayTree::new(
         Tree::make()
@@ -730,7 +730,7 @@ fn test_syncer_basic() {
 
 #[test]
 fn test_syncer_remove() {
-    let server = ProtocolServer::new();
+    let server = ProtocolServer::new(None);
 
     let mut tree = OverlayTree::new(
         Tree::make()
@@ -798,7 +798,7 @@ fn test_syncer_remove() {
 
 #[test]
 fn test_syncer_insert() {
-    let server = ProtocolServer::new();
+    let server = ProtocolServer::new(None);
 
     let mut tree = OverlayTree::new(
         Tree::make()
@@ -855,7 +855,7 @@ fn test_syncer_insert() {
 
 #[test]
 fn test_syncer_writelog_remove() {
-    let server = ProtocolServer::new();
+    let server = ProtocolServer::new(None);
 
     let mut tree = OverlayTree::new(
         Tree::make()
@@ -893,7 +893,7 @@ fn test_syncer_writelog_remove() {
 
 #[test]
 fn test_syncer_prefetch_prefixes() {
-    let server = ProtocolServer::new();
+    let server = ProtocolServer::new(None);
 
     let mut tree = OverlayTree::new(
         Tree::make()
@@ -1028,7 +1028,7 @@ fn test_node_eviction() {
 const TEST_VECTORS_DIR: &'static str = "../go/storage/mkvs/testdata";
 
 fn test_special_case_from_json(fixture: &'static str) {
-    let server = ProtocolServer::new();
+    let server = ProtocolServer::new(None);
 
     let file =
         File::open(Path::new(TEST_VECTORS_DIR).join(fixture)).expect("failed to open fixture");
