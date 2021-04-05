@@ -203,3 +203,308 @@ impl<'a, T: ImmutableMKVS> ImmutableState<'a, T> {
         Ok(result)
     }
 }
+
+#[cfg(test)]
+mod test {
+    use std::sync::Arc;
+
+    use crate::{
+        common::crypto::{hash::Hash, signature::PublicKey},
+        consensus::staking::{EscrowAccount, GeneralAccount, SharePool},
+        storage::mkvs::{
+            interop::{Fixture, ProtocolServer},
+            Root, RootType, Tree,
+        },
+    };
+
+    use super::*;
+
+    #[test]
+    fn test_staking_state_interop() {
+        // Keep in sync with go/consensus/tendermint/apps/staking/state/interop/interop.go.
+        // If mock consensus state changes, update the root hash bellow.
+        // See protocol server stdout for hash.
+
+        // Setup protocol server with initialized mock consensus state.
+        let server = ProtocolServer::new(Fixture::ConsensusMock.into());
+        let mock_consensus_root = Root {
+            version: 1,
+            root_type: RootType::State,
+            hash: Hash::from("8bc9288a3394dae816cec993cfd9762d1fbf4b1136a32653ff8ff46c7322a33a"),
+            ..Default::default()
+        };
+        let mkvs = Tree::make()
+            .with_capacity(100_000, 10_000_000)
+            .with_root(mock_consensus_root)
+            .new(server.read_sync());
+        let staking_state = ImmutableState::new(&mkvs);
+
+        let ctx = Arc::new(Context::background());
+
+        let pk =
+            PublicKey::from("7e57baaad01fffffffffffffffffffffffffffffffffffffffffffffffffffff");
+        let pk2 =
+            PublicKey::from("7e57baaad02fffffffffffffffffffffffffffffffffffffffffffffffffffff");
+        let pk3 =
+            PublicKey::from("7e57baaad03fffffffffffffffffffffffffffffffffffffffffffffffffffff");
+        let expected_addrs = vec![
+            Address::from_pk(&pk),
+            Address::from_pk(&pk2),
+            Address::from_pk(&pk3),
+        ];
+
+        // Test all addresses and accounts.
+        let addrs = staking_state
+            .addresses(Context::create_child(&ctx))
+            .expect("addresses query should work");
+        assert_eq!(expected_addrs, addrs, "expected addresses should match");
+
+        let mut accounts = Vec::new();
+        for addr in &addrs {
+            let acc = staking_state
+                .account(Context::create_child(&ctx), addr.clone())
+                .expect("accounts query should work");
+            accounts.push(acc);
+        }
+
+        let expected_accounts = vec![
+            Account {
+                general: GeneralAccount {
+                    balance: Quantity::from(23),
+                    nonce: 13,
+                    ..Default::default()
+                },
+                escrow: EscrowAccount {
+                    active: SharePool {
+                        balance: Quantity::from(100),
+                        total_shares: Quantity::from(10),
+                    },
+                    debonding: SharePool {
+                        balance: Quantity::from(5),
+                        total_shares: Quantity::from(5),
+                    },
+                    ..Default::default()
+                },
+                ..Default::default()
+            },
+            Account {
+                general: GeneralAccount {
+                    balance: Quantity::from(23),
+                    nonce: 1,
+                    ..Default::default()
+                },
+                escrow: EscrowAccount {
+                    active: SharePool {
+                        balance: Quantity::from(500),
+                        total_shares: Quantity::from(5),
+                    },
+                    ..Default::default()
+                },
+                ..Default::default()
+            },
+            Account {
+                general: GeneralAccount {
+                    balance: Quantity::from(113),
+                    nonce: 17,
+                    ..Default::default()
+                },
+                escrow: EscrowAccount {
+                    active: SharePool {
+                        balance: Quantity::from(400),
+                        total_shares: Quantity::from(35),
+                    },
+                    ..Default::default()
+                },
+                ..Default::default()
+            },
+        ];
+        assert_eq!(
+            expected_accounts, accounts,
+            "expected addresses should match"
+        );
+
+        // Test all delegations.
+        let delegations = staking_state
+            .delegations(Context::create_child(&ctx))
+            .expect("delegations query should work");
+        for (escrow_addr, dels) in &delegations {
+            for (delegator_addr, del) in dels.clone() {
+                let d = staking_state
+                    .delegation(
+                        Context::create_child(&ctx),
+                        delegator_addr,
+                        escrow_addr.clone(),
+                    )
+                    .expect("delegation query should work");
+                assert_eq!(del, d, "delegation should match")
+            }
+        }
+
+        let mut expected_delegations: BTreeMap<Address, BTreeMap<Address, Delegation>> =
+            BTreeMap::new();
+        // Delegations to address[0].
+        expected_delegations.insert(
+            addrs[0].clone(),
+            [
+                (
+                    addrs[0].clone(),
+                    Delegation {
+                        shares: Quantity::from(5),
+                    },
+                ),
+                (
+                    addrs[1].clone(),
+                    Delegation {
+                        shares: Quantity::from(5),
+                    },
+                ),
+            ]
+            .iter()
+            .cloned()
+            .collect(),
+        );
+        // Delegations to address[1].
+        expected_delegations.insert(
+            addrs[1].clone(),
+            [(
+                addrs[2].clone(),
+                Delegation {
+                    shares: Quantity::from(5),
+                },
+            )]
+            .iter()
+            .cloned()
+            .collect(),
+        );
+        // Delegations to address[2].
+        expected_delegations.insert(
+            addrs[2].clone(),
+            [
+                (
+                    addrs[0].clone(),
+                    Delegation {
+                        shares: Quantity::from(20),
+                    },
+                ),
+                (
+                    addrs[1].clone(),
+                    Delegation {
+                        shares: Quantity::from(6),
+                    },
+                ),
+                (
+                    addrs[2].clone(),
+                    Delegation {
+                        shares: Quantity::from(10),
+                    },
+                ),
+            ]
+            .iter()
+            .cloned()
+            .collect(),
+        );
+        assert_eq!(
+            expected_delegations, delegations,
+            "expected delegations should match"
+        );
+
+        // Test all debonding delegations.
+        let debonding_delegations = staking_state
+            .debonding_delegations(Context::create_child(&ctx))
+            .expect("debonding delegations query should work");
+        for (escrow_addr, debss) in &debonding_delegations {
+            for (delegator_addr, debs) in debss {
+                for deb in debs {
+                    let d = staking_state
+                        .debonding_delegation(
+                            Context::create_child(&ctx),
+                            delegator_addr.clone(),
+                            escrow_addr.clone(),
+                            deb.debond_end_time,
+                        )
+                        .expect("debonding delegation query should work");
+                    assert_eq!(deb.clone(), d, "debonding delegation should match")
+                }
+            }
+        }
+        let mut expected_debonding: BTreeMap<Address, BTreeMap<Address, Vec<DebondingDelegation>>> =
+            BTreeMap::new();
+        // Debonding delegations in address[0].
+        expected_debonding.insert(
+            addrs[0].clone(),
+            [
+                (
+                    addrs[0].clone(),
+                    vec![DebondingDelegation {
+                        shares: Quantity::from(1),
+                        debond_end_time: 33,
+                    }],
+                ),
+                (
+                    addrs[1].clone(),
+                    vec![
+                        DebondingDelegation {
+                            shares: Quantity::from(1),
+                            debond_end_time: 15,
+                        },
+                        DebondingDelegation {
+                            shares: Quantity::from(1),
+                            debond_end_time: 21,
+                        },
+                    ],
+                ),
+                (
+                    addrs[2].clone(),
+                    vec![DebondingDelegation {
+                        shares: Quantity::from(2),
+                        debond_end_time: 100,
+                    }],
+                ),
+            ]
+            .iter()
+            .cloned()
+            .collect(),
+        );
+        assert_eq!(
+            expected_debonding, debonding_delegations,
+            "expected debonding delegations should match"
+        );
+
+        // Test all stored balances.
+        let total_supply = staking_state
+            .total_supply(Context::create_child(&ctx))
+            .expect("total supply query should work");
+        assert_eq!(
+            Quantity::from(10000),
+            total_supply,
+            "total supply should match expected"
+        );
+
+        let common_pool = staking_state
+            .common_pool(Context::create_child(&ctx))
+            .expect("common pool query should work");
+        assert_eq!(
+            Quantity::from(1000),
+            common_pool,
+            "common pool should match expected"
+        );
+
+        let last_block_fees = staking_state
+            .last_block_fees(Context::create_child(&ctx))
+            .expect("last block fees query should work");
+        assert_eq!(
+            Quantity::from(33),
+            last_block_fees,
+            "last block fees should match expected"
+        );
+
+        let governance_deposits = staking_state
+            .governance_deposits(Context::create_child(&ctx))
+            .expect("governance deposits query should work");
+        assert_eq!(
+            Quantity::from(12),
+            governance_deposits,
+            "governance deposits should match expected"
+        );
+    }
+}
