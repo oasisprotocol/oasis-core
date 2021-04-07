@@ -8,6 +8,10 @@ import (
 	"github.com/cenkalti/backoff/v4"
 )
 
+// ErrUnhandledMessage indicates to the dispatcher that the handler didn't handle the message.
+// It should be returned plainly, not wrapped as permanent or relayable.
+var ErrUnhandledMessage = errors.New("unhandled message")
+
 // relayError signals that the message should be relayed.
 type relayError struct {
 	error

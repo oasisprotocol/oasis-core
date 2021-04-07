@@ -2,7 +2,6 @@ package committee
 
 import (
 	"context"
-	"errors"
 	"sync"
 
 	"github.com/prometheus/client_golang/prometheus"
@@ -198,7 +197,7 @@ func (n *Node) HandlePeerMessage(ctx context.Context, message *p2p.Message, isOw
 			return nil
 		}
 	}
-	return p2pError.Permanent(errors.New("unknown message type"))
+	return p2pError.ErrUnhandledMessage
 }
 
 // Guarded by n.CrossNode.
