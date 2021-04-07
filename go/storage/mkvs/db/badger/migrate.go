@@ -1174,20 +1174,9 @@ func (v5 *v5Migrator) pruneVersion(version uint64) error {
 		return fmt.Errorf("error decoding roots metadata for version %d: %w", version, err)
 	}
 
-	maybeLoneRoots := make(map[typedHash]bool)
 	for rootHash, derivedRoots := range rootsMeta.Roots {
-		if len(derivedRoots) == 0 {
-			// Need to only set the flag iff the flag has not already been set
-			// to either value before.
-			if _, ok := maybeLoneRoots[rootHash]; !ok {
-				maybeLoneRoots[rootHash] = true
-			}
-		} else {
-			maybeLoneRoots[rootHash] = false
-		}
-	}
-	for rootHash, isLone := range maybeLoneRoots {
-		if !isLone {
+		if len(derivedRoots) > 0 {
+			// Not a lone root.
 			continue
 		}
 
