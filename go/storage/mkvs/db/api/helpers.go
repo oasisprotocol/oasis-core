@@ -123,9 +123,17 @@ func doVisit(ctx context.Context, ndb NodeDB, root node.Root, visitor NodeVisito
 	default:
 	}
 
-	nd, err := ndb.GetNode(root, ptr)
-	if err != nil {
-		return err
+	var (
+		nd  node.Node
+		err error
+	)
+	if ptr.Node == nil {
+		nd, err = ndb.GetNode(root, ptr)
+		if err != nil {
+			return err
+		}
+	} else {
+		nd = ptr.Node
 	}
 
 	if !visitor(ctx, nd) {

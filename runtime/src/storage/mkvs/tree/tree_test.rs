@@ -15,12 +15,12 @@ use crate::{
 };
 
 const INSERT_ITEMS: usize = 1000;
-const ALL_ITEMS_ROOT: &str = "71bb02a598b13c6c8e1e969e4c7f91b30a441bb9140e97b4a2d2962d4ed9d63a";
+const ALL_ITEMS_ROOT: &str = "2187c55627819b60069888ba86f83dc2a9f50c827624b0e31e31261806300ede";
 
 const LONG_KEY: &str = "Unlock the potential of your data without compromising security or privacy";
 const LONG_VALUE: &str = "The platform that puts data privacy first. From sharing medical records, to analyzing personal financial information, to training machine learning models, the Oasis platform supports applications that use even the most sensitive data without compromising privacy or performance.";
 const ALL_LONG_ITEMS_ROOT: &str =
-    "51ab169f7362d3261a63883e8a4011108784108107c93e8a1693c26fbeed4715";
+    "d829bb244a709bacf33bc2d8b4a016592e5310a10910aa980ef91cb3b4347dcb";
 
 pub fn generate_key_value_pairs_ex(prefix: String, count: usize) -> (Vec<Vec<u8>>, Vec<Vec<u8>>) {
     let mut keys: Vec<Vec<u8>> = Vec::with_capacity(count);
@@ -110,7 +110,7 @@ fn test_basic() {
         .expect("commit");
     assert_eq!(
         format!("{:?}", hash),
-        "68e0c95d0dcb3a4ace95d1a64b8d7bb1dd08e3708abdca4068c1ccf32b7076d4"
+        "db67c0572006673b488342a45e6590a75e8919265e6da706c80c6b2776017aa7"
     );
     assert_eq!(
         log,
@@ -239,7 +239,7 @@ fn test_basic() {
         .expect("commit");
     assert_eq!(
         format!("{:?}", hash),
-        "821d13489eae34debd85117823058a143ee3c534e91828a0db8d48ecb2128b8c"
+        "e627581db43e18410a52793e662e4f21ae6a4fca14e16915a85ec4c3e3e41a13"
     );
     // Order of transactions in writelog is arbitrary.
     assert_eq!(
@@ -275,7 +275,7 @@ fn test_basic() {
         .expect("commit");
     assert_eq!(
         format!("{:?}", hash),
-        "68e0c95d0dcb3a4ace95d1a64b8d7bb1dd08e3708abdca4068c1ccf32b7076d4"
+        "db67c0572006673b488342a45e6590a75e8919265e6da706c80c6b2776017aa7"
     );
     assert_eq!(
         log,

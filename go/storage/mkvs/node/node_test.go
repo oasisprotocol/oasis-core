@@ -10,9 +10,8 @@ import (
 
 func TestSerializationLeafNode(t *testing.T) {
 	leafNode := &LeafNode{
-		Version: 0xDEADBEEF,
-		Key:     []byte("a golden key"),
-		Value:   []byte("value"),
+		Key:   []byte("a golden key"),
+		Value: []byte("value"),
 	}
 
 	rawLeafNodeFull, err := leafNode.MarshalBinary()
@@ -26,7 +25,6 @@ func TestSerializationLeafNode(t *testing.T) {
 		require.NoError(t, err, "UnmarshalBinary")
 
 		require.True(t, decodedLeafNode.Clean)
-		require.Equal(t, leafNode.Version, decodedLeafNode.Version)
 		require.Equal(t, leafNode.Key, decodedLeafNode.Key)
 		require.Equal(t, leafNode.Value, decodedLeafNode.Value)
 	}
@@ -45,7 +43,6 @@ func TestSerializationInternalNode(t *testing.T) {
 	labelBitLength := Depth(24)
 
 	intNode := &InternalNode{
-		Version:        0xDEADBEEF,
 		Label:          label,
 		LabelBitLength: labelBitLength,
 		LeafNode:       &Pointer{Clean: true, Node: leafNode, Hash: leafNode.Hash},
@@ -64,7 +61,6 @@ func TestSerializationInternalNode(t *testing.T) {
 		require.NoError(t, err, "UnmarshalBinary")
 
 		require.True(t, decodedIntNode.Clean)
-		require.Equal(t, intNode.Version, decodedIntNode.Version)
 		require.Equal(t, intNode.Label, decodedIntNode.Label)
 		require.Equal(t, intNode.LabelBitLength, decodedIntNode.LabelBitLength)
 		require.Equal(t, intNode.LeafNode.Hash, decodedIntNode.LeafNode.Hash)
@@ -85,14 +81,13 @@ func TestSerializationInternalNode(t *testing.T) {
 
 func TestHashLeafNode(t *testing.T) {
 	leafNode := &LeafNode{
-		Version: 0xDEADBEEF,
-		Key:     []byte("a golden key"),
-		Value:   []byte("value"),
+		Key:   []byte("a golden key"),
+		Value: []byte("value"),
 	}
 
 	leafNode.UpdateHash()
 
-	require.Equal(t, leafNode.Hash.String(), "1bf37ec60c5494775e7029ec2a888c42d14f9710852c86ffe0afab8e3c43b782")
+	require.Equal(t, "5c05183d4158b5920b16833acb78ccda464da83f720f824177b3a55a75f9fd88", leafNode.Hash.String())
 }
 
 func TestHashInternalNode(t *testing.T) {
@@ -101,7 +96,6 @@ func TestHashInternalNode(t *testing.T) {
 	rightHash := hash.NewFromBytes([]byte("everyone move to the right"))
 
 	intNode := &InternalNode{
-		Version:        0xDEADBEEF,
 		Label:          Key("abc"),
 		LabelBitLength: 23,
 		LeafNode:       &Pointer{Clean: true, Hash: leafNodeHash},
@@ -111,15 +105,14 @@ func TestHashInternalNode(t *testing.T) {
 
 	intNode.UpdateHash()
 
-	require.Equal(t, "e760353e9796f41b3bb2cfa2cf45f7e00ca687b6b84dc658e0ecadc906d5d21e", intNode.Hash.String())
+	require.Equal(t, "75c37c67c265e2c836f76dec35173fa336e976938ea46f088390a983e46efced", intNode.Hash.String())
 }
 
 func TestExtractLeafNode(t *testing.T) {
 	leafNode := &LeafNode{
-		Clean:   true,
-		Version: 0xDEADBEEF,
-		Key:     []byte("a golden key"),
-		Value:   []byte("value"),
+		Clean: true,
+		Key:   []byte("a golden key"),
+		Value: []byte("value"),
 	}
 
 	exLeafNode := leafNode.Extract().(*LeafNode)
@@ -127,7 +120,6 @@ func TestExtractLeafNode(t *testing.T) {
 	require.False(t, leafNode == exLeafNode, "extracted node must have a different address")
 	require.False(t, &leafNode.Value == &exLeafNode.Value, "extracted value must have a different address")
 	require.Equal(t, true, exLeafNode.Clean, "extracted leaf must be clean")
-	require.Equal(t, leafNode.Version, exLeafNode.Version, "extracted leaf must have the same version")
 	require.EqualValues(t, leafNode.Key, exLeafNode.Key, "extracted leaf must have the same key")
 	require.EqualValues(t, leafNode.Value, exLeafNode.Value, "extracted leaf's value must have the same value")
 }
@@ -137,10 +129,9 @@ func TestExtractInternalNode(t *testing.T) {
 	rightHash := hash.NewFromBytes([]byte("everyone move to the right"))
 
 	intNode := &InternalNode{
-		Clean:   true,
-		Version: 0xDEADBEEF,
-		Left:    &Pointer{Clean: true, Hash: leftHash},
-		Right:   &Pointer{Clean: true, Hash: rightHash},
+		Clean: true,
+		Left:  &Pointer{Clean: true, Hash: leftHash},
+		Right: &Pointer{Clean: true, Hash: rightHash},
 	}
 
 	exIntNode := intNode.Extract().(*InternalNode)
@@ -149,7 +140,6 @@ func TestExtractInternalNode(t *testing.T) {
 	require.False(t, intNode.Left == exIntNode.Left, "extracted left pointer must have a different address")
 	require.False(t, intNode.Right == exIntNode.Right, "extracted right pointer must have a different address")
 	require.Equal(t, true, exIntNode.Clean, "extracted internal node must be clean")
-	require.Equal(t, intNode.Version, exIntNode.Version, "extracted internal node must have the same version")
 	require.Equal(t, leftHash, exIntNode.Left.Hash, "extracted left pointer must have the same hash")
 	require.Equal(t, true, exIntNode.Left.Clean, "extracted left pointer must be clean")
 	require.Equal(t, rightHash, exIntNode.Right.Hash, "extracted right pointer must have the same hash")

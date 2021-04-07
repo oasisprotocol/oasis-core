@@ -21,7 +21,7 @@ import (
 )
 
 const (
-	dbVersion = 4
+	dbVersion = 5
 
 	// multipartVersionNone is the value used for the multipart version in metadata
 	// when no multipart restore is in progress.
@@ -634,10 +634,10 @@ func (d *badgerNodeDB) Finalize(ctx context.Context, roots []node.Root) error { 
 				}
 			}
 		} else {
-			// Remove any non-finalized roots. It is safe to remove these nodes
-			// as they can never be resurrected due to the version being part of the
-			// node hash as long as we make sure that these nodes are not shared
-			// with any finalized roots added in the same version.
+			// Remove any non-finalized roots. It is safe to remove these nodes as Badger's version
+			// control will make sure they are not removed if they are resurrected in any later
+			// version as long as we make sure that these nodes are not shared with any finalized
+			// roots added in the same version.
 			for _, n := range updatedNodes {
 				if !n.Removed {
 					maybeLoneNodes[n.Hash] = true
@@ -747,20 +747,9 @@ func (d *badgerNodeDB) Prune(ctx context.Context, version uint64) error {
 		return err
 	}
 
-	maybeLoneRoots := make(map[typedHash]bool)
 	for rootHash, derivedRoots := range rootsMeta.Roots {
-		if len(derivedRoots) == 0 {
-			// Need to only set the flag iff the flag has not already been set
-			// to either value before.
-			if _, ok := maybeLoneRoots[rootHash]; !ok {
-				maybeLoneRoots[rootHash] = true
-			}
-		} else {
-			maybeLoneRoots[rootHash] = false
-		}
-	}
-	for rootHash, isLone := range maybeLoneRoots {
-		if !isLone {
+		if len(derivedRoots) > 0 {
+			// Not a lone root.
 			continue
 		}
 
@@ -773,8 +762,13 @@ func (d *badgerNodeDB) Prune(ctx context.Context, version uint64) error {
 		}
 		var innerErr error
 		err := api.Visit(ctx, d, root, func(ctx context.Context, n node.Node) bool {
-			if n.GetCreatedVersion() == version {
-				h := n.GetHash()
+			h := n.GetHash()
+			var item *badger.Item
+			if item, innerErr = tx.Get(nodeKeyFmt.Encode(&h)); innerErr != nil {
+				return false
+			}
+
+			if tsToVersion(item.Version()) == version {
 				if innerErr = batch.Delete(nodeKeyFmt.Encode(&h)); innerErr != nil {
 					return false
 				}

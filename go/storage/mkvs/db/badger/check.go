@@ -64,6 +64,8 @@ func checkSanityInternal(ctx context.Context, db *badgerNodeDB, display DisplayH
 	txn := db.db.NewTransactionAt(maxTimestamp, false)
 	defer txn.Discard()
 
+	lastRootsMetadataKey := []byte{rootsMetadataKeyFmt.Prefix(), 0xff}
+
 	// Determine last version in the db.
 	firstVersion, lastVersion, err := func() (uint64, uint64, error) {
 		itOpts := badger.DefaultIteratorOptions
@@ -73,7 +75,7 @@ func checkSanityInternal(ctx context.Context, db *badgerNodeDB, display DisplayH
 		itR := txn.NewIterator(itOpts)
 		defer itR.Close()
 
-		itR.Seek([]byte{rootsMetadataKeyFmt.Prefix(), 0xff})
+		itR.Seek(lastRootsMetadataKey)
 		if !itR.Valid() {
 			return 0, 0, fmt.Errorf("no roots stored")
 		}
@@ -103,7 +105,9 @@ func checkSanityInternal(ctx context.Context, db *badgerNodeDB, display DisplayH
 	}
 	totalVersions := lastVersion - firstVersion + 1
 
+	// Check versions.
 	itOpts := badger.DefaultIteratorOptions
+	itOpts.Reverse = true
 	itOpts.Prefix = rootsMetadataKeyFmt.Encode()
 	it := txn.NewIterator(itOpts)
 	defer it.Close()
@@ -119,7 +123,8 @@ func checkSanityInternal(ctx context.Context, db *badgerNodeDB, display DisplayH
 		hashes: map[hash.Hash]*list.Element{},
 	}
 
-	for it.Rewind(); it.Valid(); it.Next() {
+	lastRoots := make(map[typedHash]uint64)
+	for it.Seek(lastRootsMetadataKey); it.Valid(); it.Next() {
 		rootsMeta := &rootsMetadata{}
 		if !rootsMetadataKeyFmt.Decode(it.Item().Key(), &version) {
 			return fmt.Errorf("mkvs/badger/check: undecodable roots metadata key (%v) at item version %d", it.Item().Key(), it.Item().Version())
@@ -131,12 +136,28 @@ func checkSanityInternal(ctx context.Context, db *badgerNodeDB, display DisplayH
 			return fmt.Errorf("mkvs/badger/check: error reading roots metadata for version %d: %w", version, err)
 		}
 
-		for rootHash := range rootsMeta.Roots {
+		for rootHash, dstRoots := range rootsMeta.Roots {
+			// Make sure a writelog exists for each root pair.
+			for _, dstRoot := range dstRoots {
+				dstVersion, ok := lastRoots[dstRoot]
+				if !ok {
+					return fmt.Errorf("mkvs/badger/check: missing target root (%s -> %s)", rootHash, dstRoot)
+				}
+				_, err = txn.Get(writeLogKeyFmt.Encode(dstVersion, &dstRoot, &rootHash)) //nolint: gosec
+				if err != nil {
+					return fmt.Errorf("mkvs/badger/check: missing write log (%d, %s, %s)", dstVersion, dstRoot, rootHash)
+				}
+			}
+			lastRoots[rootHash] = version
+
 			root := node.Root{
 				Namespace: db.namespace,
 				Version:   version,
 				Type:      rootHash.Type(),
 				Hash:      rootHash.Hash(),
+			}
+			if root.Hash.IsEmpty() {
+				continue
 			}
 			if err = common.checkNodes(root); err != nil {
 				return fmt.Errorf("mkvs/badger/check: error traversing tree nodes for root %v: %w", root, err)
@@ -146,6 +167,30 @@ func checkSanityInternal(ctx context.Context, db *badgerNodeDB, display DisplayH
 		doneVersions++
 		display.DisplayProgress("versions checked", doneVersions, totalVersions)
 	}
+
+	// Check write logs.
+	display.DisplayStepBegin("checking write logs")
+	itOpts = badger.DefaultIteratorOptions
+	itOpts.Prefix = writeLogKeyFmt.Encode()
+	it = txn.NewIterator(itOpts)
+	defer it.Close()
+
+	for it.Rewind(); it.Valid(); it.Next() {
+		var srcRoot, dstRoot typedHash
+		if !writeLogKeyFmt.Decode(it.Item().Key(), &version, &dstRoot, &srcRoot) {
+			return fmt.Errorf("mkvs/badger/check: undecodable write log key (%v) at item version %d", it.Item().Key(), it.Item().Version())
+		}
+
+		// Make sure that both roots exist.
+		srcRootHash, dstRootHash := srcRoot.Hash(), dstRoot.Hash()
+		if _, err = txn.Get(rootNodeKeyFmt.Encode(&srcRoot)); err != nil && !srcRootHash.IsEmpty() {
+			return fmt.Errorf("mkvs/badger/check: bad source root in write log (%d, %s, %s): %w", version, dstRoot, srcRoot, err)
+		}
+		if _, err = txn.Get(rootNodeKeyFmt.Encode(&dstRoot)); err != nil && !dstRootHash.IsEmpty() {
+			return fmt.Errorf("mkvs/badger/check: bad destination root in write log (%d, %s, %s): %w", version, dstRoot, srcRoot, err)
+		}
+	}
+	display.DisplayStepEnd("done")
 
 	return nil
 }
