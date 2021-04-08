@@ -524,7 +524,9 @@ func (d *badgerNodeDB) HasRoot(root node.Root) bool {
 	if err != nil {
 		panic(err)
 	}
-	return rootsMeta.Roots[typedHashFromRoot(root)] != nil
+
+	_, exists := rootsMeta.Roots[typedHashFromRoot(root)]
+	return exists
 }
 
 func (d *badgerNodeDB) Finalize(ctx context.Context, roots []node.Root) error { // nolint: gocyclo

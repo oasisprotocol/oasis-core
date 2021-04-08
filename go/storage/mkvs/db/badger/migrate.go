@@ -1023,7 +1023,7 @@ func (v5 *v5Migrator) migrateVersion(version uint64, migratedRoots map[typedHash
 		}
 
 		newRoot := typedHashFromParts(root.Type(), newRootHash)
-		newRoots[newRoot] = nil
+		newRoots[newRoot] = []typedHash{}
 		for _, dstRoot := range dstRoots {
 			if migratedRoot, exists := migratedRoots[dstRoot]; exists {
 				newRoots[newRoot] = append(newRoots[newRoot], migratedRoot.Hash)
