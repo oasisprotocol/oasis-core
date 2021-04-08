@@ -88,6 +88,10 @@ func (mh *testMigrationHelper) GetRootForHash(root hash.Hash, version uint64) ([
 	}}, nil
 }
 
+func (mh *testMigrationHelper) Display(msg string) {
+	// Nothing to do here for testing.
+}
+
 func (mh *testMigrationHelper) DisplayStepBegin(msg string) {
 	// Nothing to do here for testing.
 }

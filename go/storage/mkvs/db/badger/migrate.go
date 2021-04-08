@@ -96,6 +96,7 @@ type v3SerializedMetadata = serializedMetadata
 type v4SerializedMetadata = serializedMetadata
 
 type DisplayHelper interface {
+	Display(msg string)
 	DisplayStepBegin(msg string)
 	DisplayStepEnd(msg string)
 	DisplayStep(msg string)
@@ -1078,7 +1079,7 @@ func (v5 *v5Migrator) migrateVersion(version uint64, migratedRoots map[typedHash
 			return false, fmt.Errorf("error reading updated nodes metadata: %w", err)
 		}
 
-		v5.helper.DisplayStep(fmt.Sprintf("migrated root %s -> %s", root, newRoot))
+		v5.helper.Display(fmt.Sprintf("migrated root %s -> %s", root, newRoot))
 	}
 
 	// Update roots metadata.

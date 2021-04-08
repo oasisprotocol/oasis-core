@@ -115,11 +115,13 @@ func (b *storageClientBackend) writeWithClient( // nolint: gocyclo
 			op := func() error {
 				var rerr error
 				resp, rerr = fn(ctx, api.NewStorageClient(conn.ClientConn), conn.Node)
-				b.logger.Debug("storage write request error",
-					"err", rerr,
-					"node", conn.Node,
-					"status_code", status.Code(rerr),
-				)
+				if rerr != nil {
+					b.logger.Debug("storage write request error",
+						"err", rerr,
+						"node", conn.Node,
+						"status_code", status.Code(rerr),
+					)
+				}
 				switch {
 				case status.Code(rerr) == codes.Unavailable:
 					// Storage node may be temporarily unavailable.

@@ -3,6 +3,9 @@ package client
 import (
 	"context"
 	"fmt"
+	"time"
+
+	"github.com/cenkalti/backoff/v4"
 
 	"github.com/oasisprotocol/oasis-core/go/common"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
@@ -47,6 +50,7 @@ type txSubmitter struct {
 
 	maxTransactionAge int64
 	toBeChecked       []*block.Block
+	recheckTicker     *backoff.Ticker
 
 	stopCh chan struct{}
 	quitCh chan struct{}
@@ -103,6 +107,39 @@ func (w *txSubmitter) checkBlock(blk *block.Block) error {
 	}
 
 	return nil
+}
+
+func (w *txSubmitter) checkBlocks() {
+	if len(w.toBeChecked) == 0 {
+		return
+	}
+
+	var failedBlocks []*block.Block
+	for _, b := range w.toBeChecked {
+		if err := w.checkBlock(b); err != nil {
+			w.logger.Error("error checking block",
+				"err", err,
+				"round", b.Header.Round,
+			)
+			failedBlocks = append(failedBlocks, b)
+		}
+	}
+	if len(failedBlocks) > 0 {
+		w.logger.Warn("failed roothash blocks",
+			"num_failed_blocks", len(failedBlocks),
+		)
+
+		// Start recheck ticker.
+		if w.recheckTicker == nil {
+			boff := backoff.NewExponentialBackOff()
+			boff.InitialInterval = 5 * time.Second
+			w.recheckTicker = backoff.NewTicker(boff)
+		}
+	} else if w.recheckTicker != nil {
+		w.recheckTicker.Stop()
+		w.recheckTicker = nil
+	}
+	w.toBeChecked = failedBlocks
 }
 
 func (w *txSubmitter) getGroupVersion(height int64) (int64, error) {
@@ -163,27 +200,16 @@ func (w *txSubmitter) start() {
 	}
 
 	for {
+		var recheckCh <-chan time.Time
+		if w.recheckTicker != nil {
+			recheckCh = w.recheckTicker.C
+		}
+
 		// Wait for stuff to happen.
 		select {
 		case blk := <-blocks:
 			w.toBeChecked = append(w.toBeChecked, blk.Block)
-
-			var failedBlocks []*block.Block
-			for _, b := range w.toBeChecked {
-				if err = w.checkBlock(b); err != nil {
-					w.logger.Error("error checking block",
-						"err", err,
-						"round", b.Header.Round,
-					)
-					failedBlocks = append(failedBlocks, b)
-				}
-			}
-			if len(failedBlocks) > 0 {
-				w.logger.Warn("failed roothash blocks",
-					"num_failed_blocks", len(failedBlocks),
-				)
-			}
-			w.toBeChecked = failedBlocks
+			w.checkBlocks()
 
 			// If this is an epoch transition block, update latest known group
 			// version and resend all transactions.
@@ -205,6 +231,9 @@ func (w *txSubmitter) start() {
 			for _, req := range w.transactions {
 				w.publishTx(req, latestGroupVersion)
 			}
+		case <-recheckCh:
+			// Recheck blocks if needed.
+			w.checkBlocks()
 		case blk := <-consensusBlocks:
 			if blk == nil {
 				break
