@@ -38,7 +38,6 @@ var (
 	runtimesGlob = filepath.Join(runtimeRegistry.RuntimesDir, "*")
 
 	nodeStateGlobs = []string{
-		"abci-mux-state.*.db",
 		"persistent-store.*.db",
 		tendermintCommon.StateDir,
 		filepath.Join(runtimesGlob, history.DbFilename),
