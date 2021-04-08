@@ -66,6 +66,10 @@ func (dh *displayHelper) display(base, format string, args ...interface{}) {
 	dh.lastStatus = base
 }
 
+func (dh *displayHelper) Display(msg string) {
+	dh.display(msg, "- %s\n", msg)
+}
+
 func (dh *displayHelper) DisplayStepBegin(msg string) {
 	dh.display(msg, "- %s... ", msg)
 }
