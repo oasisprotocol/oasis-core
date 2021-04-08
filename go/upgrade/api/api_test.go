@@ -21,7 +21,27 @@ func TestValidateBasic(t *testing.T) {
 			shouldErr: true,
 		},
 		{
-			msg: "invalid epoch should fail",
+			msg: "descriptor version below min should fail",
+			d: &Descriptor{
+				Versioned: cbor.NewVersioned(MinDescriptorVersion - 1),
+				Handler:   "TestHandler",
+				Target:    version.Versions,
+				Epoch:     42,
+			},
+			shouldErr: true,
+		},
+		{
+			msg: "descriptor version above max should fail",
+			d: &Descriptor{
+				Versioned: cbor.NewVersioned(MaxDescriptorVersion + 1),
+				Handler:   "TestHandler",
+				Target:    version.Versions,
+				Epoch:     42,
+			},
+			shouldErr: true,
+		},
+		{
+			msg: "epoch below min epoch should fail",
 			d: &Descriptor{
 				Versioned: cbor.NewVersioned(LatestDescriptorVersion),
 				Handler:   "TestHandler",
@@ -31,7 +51,37 @@ func TestValidateBasic(t *testing.T) {
 			shouldErr: true,
 		},
 		{
-			msg: "invalid target should fail",
+			msg: "epoch above max epoch should fail",
+			d: &Descriptor{
+				Versioned: cbor.NewVersioned(LatestDescriptorVersion),
+				Handler:   "TestHandler",
+				Target:    version.Versions,
+				Epoch:     MaxUpgradeEpoch + 1,
+			},
+			shouldErr: true,
+		},
+		{
+			msg: "too short handler should fail",
+			d: &Descriptor{
+				Versioned: cbor.NewVersioned(LatestDescriptorVersion),
+				Handler:   "TH",
+				Target:    version.Versions,
+				Epoch:     42,
+			},
+			shouldErr: true,
+		},
+		{
+			msg: "too long handler should fail",
+			d: &Descriptor{
+				Versioned: cbor.NewVersioned(LatestDescriptorVersion),
+				Handler:   "Tooooooo-Long-33-Char-TestHandler",
+				Target:    version.Versions,
+				Epoch:     42,
+			},
+			shouldErr: true,
+		},
+		{
+			msg: "empty target version should fail",
 			d: &Descriptor{
 				Versioned: cbor.NewVersioned(LatestDescriptorVersion),
 				Handler:   "TestHandler",
@@ -41,22 +91,35 @@ func TestValidateBasic(t *testing.T) {
 			shouldErr: true,
 		},
 		{
-			msg: "invalid descriptor version should fail",
+			msg: "only consensus version in target version should fail",
 			d: &Descriptor{
-				Versioned: cbor.NewVersioned(maxDescriptorVersion + 1),
+				Versioned: cbor.NewVersioned(LatestDescriptorVersion),
 				Handler:   "TestHandler",
-				Target:    version.Versions,
-				Epoch:     42,
+				Target: version.ProtocolVersions{
+					ConsensusProtocol: version.Version{Major: 1, Minor: 2, Patch: 3},
+				},
+				Epoch: 42,
 			},
 			shouldErr: true,
 		},
 		{
-			msg: "invalid descriptor version should fail",
+			msg: "empty runtime host protocol target subversion should fail",
 			d: &Descriptor{
-				Versioned: cbor.NewVersioned(minDescriptorVersion - 1),
+				Versioned: cbor.NewVersioned(LatestDescriptorVersion),
 				Handler:   "TestHandler",
-				Target:    version.Versions,
-				Epoch:     42,
+				Target: version.ProtocolVersions{
+					ConsensusProtocol: version.Version{
+						Major: 0,
+						Minor: 12,
+						Patch: 1,
+					},
+					RuntimeCommitteeProtocol: version.Version{
+						Major: 42,
+						Minor: 0,
+						Patch: 1,
+					},
+				},
+				Epoch: 42,
 			},
 			shouldErr: true,
 		},

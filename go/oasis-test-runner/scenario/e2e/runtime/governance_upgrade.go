@@ -356,7 +356,19 @@ func (sc *governanceConsensusUpgradeImpl) Run(childEnv *env.Env) error { // noli
 	case true:
 		target = version.Versions
 	default:
-		target = version.ProtocolVersions{ConsensusProtocol: version.FromU64(192)}
+		target = version.ProtocolVersions{
+			ConsensusProtocol: version.FromU64(192),
+			RuntimeHostProtocol: version.Version{
+				Major: 1,
+				Minor: 2,
+				Patch: 3,
+			},
+			RuntimeCommitteeProtocol: version.Version{
+				Major: 4,
+				Minor: 5,
+				Patch: 6,
+			},
+		}
 	}
 
 	content := &api.ProposalContent{
