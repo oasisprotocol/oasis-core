@@ -34,9 +34,10 @@ const (
 	// used for all new descriptors. Using earlier versions may be rejected.
 	LatestDescriptorVersion = 2
 
-	// Minimum and maximum descriptor versions that are allowed.
-	minDescriptorVersion = 1
-	maxDescriptorVersion = LatestDescriptorVersion
+	// MinDescriptorVersion is the minimum descriptor version that is allowed.
+	MinDescriptorVersion = 1
+	// MaxDescriptorVersion is the maximum descriptor version that is allowed.
+	MaxDescriptorVersion = LatestDescriptorVersion
 )
 
 // Entity represents an entity that controls one or more Nodes and or
@@ -100,17 +101,18 @@ func (e *Entity) ValidateBasic(strictVersion bool) error {
 	case true:
 		// Only the latest version is allowed.
 		if v != LatestDescriptorVersion {
-			return fmt.Errorf("invalid entity descriptor version (expected: %d got: %d)",
-				LatestDescriptorVersion,
+			return fmt.Errorf("invalid entity descriptor version: %d (expected: %d)",
 				v,
+				LatestDescriptorVersion,
 			)
 		}
 	case false:
 		// A range of versions is allowed.
-		if v < minDescriptorVersion || v > maxDescriptorVersion {
-			return fmt.Errorf("invalid entity descriptor version (min: %d max: %d)",
-				minDescriptorVersion,
-				maxDescriptorVersion,
+		if v < MinDescriptorVersion || v > MaxDescriptorVersion {
+			return fmt.Errorf("invalid entity descriptor version: %d (min: %d max: %d)",
+				v,
+				MinDescriptorVersion,
+				MaxDescriptorVersion,
 			)
 		}
 	}
