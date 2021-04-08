@@ -1179,8 +1179,12 @@ func (v5 *v5Migrator) pruneVersion(version uint64) error {
 			// Not a lone root.
 			continue
 		}
+		rh := rootHash.Hash()
+		if rh.IsEmpty() {
+			continue
+		}
 
-		if err = v5.maybePruneNode(rootHash.Hash(), version); err != nil {
+		if err = v5.maybePruneNode(rh, version); err != nil {
 			return fmt.Errorf("error pruning root %s: %w", rootHash, err)
 		}
 
