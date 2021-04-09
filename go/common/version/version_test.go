@@ -6,6 +6,49 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+func TestValidateBasic(t *testing.T) {
+	require := require.New(t)
+
+	for _, tc := range []struct {
+		msg       string
+		v         Version
+		shouldErr bool
+	}{
+		{
+			msg:       "empty version should fail",
+			v:         Version{},
+			shouldErr: true,
+		},
+		{
+			msg:       "valid version should not fail",
+			v:         Version{1, 2, 3},
+			shouldErr: false,
+		},
+		{
+			msg:       "version with only major version should not fail",
+			v:         Version{Major: 1},
+			shouldErr: false,
+		},
+		{
+			msg:       "version with only minor version should not fail",
+			v:         Version{Minor: 2},
+			shouldErr: false,
+		},
+		{
+			msg:       "version with only patch version should not fail",
+			v:         Version{Patch: 13},
+			shouldErr: false,
+		},
+	} {
+		err := tc.v.ValidateBasic()
+		if tc.shouldErr {
+			require.NotNil(err, tc.msg)
+			continue
+		}
+		require.Nil(err, tc.msg)
+	}
+}
+
 func TestMaskNonMajor(t *testing.T) {
 	require := require.New(t)
 
@@ -88,6 +131,62 @@ func TestConvertGoModulesVersion(t *testing.T) {
 		} else {
 			require.Equal(VersionUndefined, version, "Invalid Go modules version is not undefined")
 		}
+	}
+}
+
+func TestProtocolVersionsValidateBasic(t *testing.T) {
+	require := require.New(t)
+
+	for _, tc := range []struct {
+		msg       string
+		v         ProtocolVersions
+		shouldErr bool
+	}{
+		{
+			msg:       "empty protocol versions should fail",
+			v:         ProtocolVersions{},
+			shouldErr: true,
+		},
+		{
+			msg: "empty protocol versions should fail",
+			v: ProtocolVersions{
+				ConsensusProtocol:        Version{},
+				RuntimeHostProtocol:      Version{},
+				RuntimeCommitteeProtocol: Version{},
+			},
+			shouldErr: true,
+		},
+		{
+			msg: "protocol versions with only consensus version should fail",
+			v: ProtocolVersions{
+				ConsensusProtocol: Version{1, 2, 3},
+			},
+			shouldErr: true,
+		},
+		{
+			msg: "protocol versions with only runtime versions should fail",
+			v: ProtocolVersions{
+				RuntimeHostProtocol:      Version{2, 0, 1},
+				RuntimeCommitteeProtocol: Version{3, 2, 1},
+			},
+			shouldErr: true,
+		},
+		{
+			msg: "valid protocol versions should not fail",
+			v: ProtocolVersions{
+				ConsensusProtocol:        Version{1, 0, 1},
+				RuntimeHostProtocol:      Version{2, 0, 0},
+				RuntimeCommitteeProtocol: Version{4, 2, 3},
+			},
+			shouldErr: false,
+		},
+	} {
+		err := tc.v.ValidateBasic()
+		if tc.shouldErr {
+			require.NotNil(err, tc.msg)
+			continue
+		}
+		require.Nil(err, tc.msg)
 	}
 }
 

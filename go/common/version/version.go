@@ -30,6 +30,15 @@ type Version struct {
 	Patch uint16 `json:"patch,omitempty"`
 }
 
+// ValidateBasic does basic validation of a protocol version.
+func (v Version) ValidateBasic() error {
+	empty := Version{}
+	if v == empty {
+		return fmt.Errorf("invalid version: %s", empty)
+	}
+	return nil
+}
+
 // ToU64 returns the version as platform-dependent uint64.
 func (v Version) ToU64() uint64 {
 	return (uint64(v.Major) << 32) | (uint64(v.Minor) << 16) | (uint64(v.Patch))
@@ -110,6 +119,20 @@ type ProtocolVersions struct {
 	RuntimeHostProtocol      Version `json:"runtime_host_protocol"`
 	RuntimeCommitteeProtocol Version `json:"runtime_committee_protocol"`
 	ConsensusProtocol        Version `json:"consensus_protocol"`
+}
+
+// ValidateBasic does basic validation checks of the protocol versions.
+func (pv *ProtocolVersions) ValidateBasic() error {
+	if err := pv.ConsensusProtocol.ValidateBasic(); err != nil {
+		return fmt.Errorf("invalid Consensus protocol version: %w", err)
+	}
+	if err := pv.RuntimeHostProtocol.ValidateBasic(); err != nil {
+		return fmt.Errorf("invalid Runtime Host protocol version: %w", err)
+	}
+	if err := pv.RuntimeCommitteeProtocol.ValidateBasic(); err != nil {
+		return fmt.Errorf("invalid Runtime Committee protocol version: %w", err)
+	}
+	return nil
 }
 
 // Compatible returns if the two protocol versions are compatible.
