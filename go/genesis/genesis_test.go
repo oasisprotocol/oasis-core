@@ -172,7 +172,7 @@ func TestGenesisSanityCheck(t *testing.T) {
 	// Note that this test entity has no nodes by design, those will be added
 	// later by various tests.
 	testEntity := &entity.Entity{
-		Versioned: cbor.NewVersioned(entity.LatestEntityDescriptorVersion),
+		Versioned: cbor.NewVersioned(entity.LatestDescriptorVersion),
 		ID:        validPK,
 	}
 	signedTestEntity := signEntityOrDie(signer, testEntity)

@@ -38,7 +38,7 @@ func main() {
 			entitySigner := memorySigner.NewTestSigner("oasis-core registry test vectors: RegisterEntity signer")
 			for _, numNodes := range []int{0, 1, 2, 5} {
 				ent := entity.Entity{
-					Versioned: cbor.NewVersioned(entity.LatestEntityDescriptorVersion),
+					Versioned: cbor.NewVersioned(entity.LatestDescriptorVersion),
 					ID:        entitySigner.Public(),
 				}
 				for i := 0; i < numNodes; i++ {
