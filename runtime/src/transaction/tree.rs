@@ -74,6 +74,9 @@ struct TagKeyFormat {
     tx_hash: Hash,
 }
 
+/// Hash used for block emitted tags not tied to a specific transaction.
+pub const TAG_BLOCK_TX_HASH: Hash = Hash([0u8; 32]);
+
 impl KeyFormat for TagKeyFormat {
     fn prefix() -> u8 {
         'E' as u8
@@ -209,6 +212,25 @@ impl Tree {
                 &TagKeyFormat {
                     key: tag.key,
                     tx_hash,
+                }
+                .encode(),
+                &tag.value,
+            )?;
+        }
+
+        Ok(())
+    }
+
+    /// Add block tags.
+    pub fn add_block_tags(&mut self, ctx: Context, tags: Tags) -> Result<()> {
+        let ctx = ctx.freeze();
+
+        for tag in tags {
+            self.tree.insert(
+                Context::create_child(&ctx),
+                &TagKeyFormat {
+                    key: tag.key,
+                    tx_hash: TAG_BLOCK_TX_HASH,
                 }
                 .encode(),
                 &tag.value,
