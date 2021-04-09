@@ -1120,14 +1120,15 @@ func VerifyRuntimeUpdate(logger *logging.Logger, currentRt, newRt *Runtime) erro
 		logger.Error("RegisterRuntime: trying to update genesis")
 		return ErrRuntimeUpdateNotAllowed
 	}
-	if (currentRt.KeyManager == nil) != (newRt.KeyManager == nil) {
-		logger.Error("RegisterRuntime: trying to change key manager",
+	// Going from having a key manager to no key manager is not allowed.
+	if currentRt.KeyManager != nil && newRt.KeyManager == nil {
+		logger.Error("RegisterRuntime: trying to remove key manager",
 			"current_km", currentRt.KeyManager,
 			"new_km", newRt.KeyManager,
 		)
 		return ErrRuntimeUpdateNotAllowed
 	}
-	// Both descriptors must either have the key manager set or not.
+	// If the key manager was set before it must not change.
 	if currentRt.KeyManager != nil && !currentRt.KeyManager.Equal(newRt.KeyManager) {
 		logger.Error("RegisterRuntime: trying to change key manager",
 			"current_km", currentRt.KeyManager,
