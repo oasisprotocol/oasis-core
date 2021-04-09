@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"math"
+	"os"
 
 	"github.com/oasisprotocol/oasis-core/go/common/cbor"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
@@ -16,6 +17,13 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/consensus/api/transaction/testvectors"
 	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
 )
+
+func valideRegisterEntity(v uint16) bool {
+	if v < entity.MinDescriptorVersion || v > entity.MaxDescriptorVersion {
+		return false
+	}
+	return true
+}
 
 func main() {
 	// Configure chain context for all signatures using chain domain separation.
@@ -34,35 +42,42 @@ func main() {
 	} {
 		// Generate different nonces.
 		for _, nonce := range []uint64{0, 1, 10, 42, 1000, 1_000_000, 10_000_000, math.MaxUint64} {
-			// Valid register entity transactions.
-			entitySigner := memorySigner.NewTestSigner("oasis-core registry test vectors: RegisterEntity signer")
-			for _, numNodes := range []int{0, 1, 2, 5} {
-				ent := entity.Entity{
-					Versioned: cbor.NewVersioned(entity.LatestDescriptorVersion),
-					ID:        entitySigner.Public(),
+
+			// Generate register entity transactions.
+			for _, v := range []uint16{1, entity.LatestDescriptorVersion} {
+				for _, numNodes := range []int{0, 1, 2, 5} {
+					entitySigner := memorySigner.NewTestSigner("oasis-core registry test vectors: RegisterEntity signer")
+					ent := entity.Entity{
+						Versioned: cbor.NewVersioned(v),
+						ID:        entitySigner.Public(),
+					}
+					for i := 0; i < numNodes; i++ {
+						nodeSigner := memorySigner.NewTestSigner(fmt.Sprintf("oasis core registry test vectors: node signer %d", i))
+						ent.Nodes = append(ent.Nodes, nodeSigner.Public())
+					}
+					sigEnt, err := entity.SignEntity(entitySigner, registry.RegisterEntitySignatureContext, &ent)
+					if err != nil {
+						panic(err)
+					}
+					tx := registry.NewRegisterEntityTx(nonce, fee, sigEnt)
+					valid := valideRegisterEntity(v)
+					vectors = append(vectors, testvectors.MakeTestVectorWithSigner("RegisterEntity", tx, valid, entitySigner))
 				}
-				for i := 0; i < numNodes; i++ {
-					nodeSigner := memorySigner.NewTestSigner(fmt.Sprintf("oasis core registry test vectors: node signer %d", i))
-					ent.Nodes = append(ent.Nodes, nodeSigner.Public())
-				}
-				sigEnt, err := entity.SignEntity(entitySigner, registry.RegisterEntitySignatureContext, &ent)
-				if err != nil {
-					panic(err)
-				}
-				tx := registry.NewRegisterEntityTx(nonce, fee, sigEnt)
-				vectors = append(vectors, testvectors.MakeTestVectorWithSigner("RegisterEntity", tx, entitySigner))
 			}
 
-			// Valid unfreeze node transactions.
+			// Generate unfreeze node transactions.
 			nodeSigner := memorySigner.NewTestSigner("oasis-core registry test vectors: UnfreezeNode signer")
 			tx := registry.NewUnfreezeNodeTx(nonce, fee, &registry.UnfreezeNode{
 				NodeID: nodeSigner.Public(),
 			})
-			vectors = append(vectors, testvectors.MakeTestVector("UnfreezeNode", tx))
+			vectors = append(vectors, testvectors.MakeTestVector("UnfreezeNode", tx, true))
 		}
 	}
 
 	// Generate output.
-	jsonOut, _ := json.MarshalIndent(&vectors, "", "  ")
+	jsonOut, err := json.MarshalIndent(&vectors, "", "  ")
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error encoding test vectors: %v\n", err)
+	}
 	fmt.Printf("%s", jsonOut)
 }
