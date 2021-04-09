@@ -1009,7 +1009,7 @@ func (v5 *v5Migrator) migrateVersion(version uint64, migratedRoots map[typedHash
 	}
 
 	newRoots := make(map[typedHash][]typedHash)
-	for root, dstRoots := range roots.Roots {
+	for root := range roots.Roots {
 		// Migrate the tree (if not empty).
 		var newRootHash hash.Hash
 		if rootHash := root.Hash(); !rootHash.IsEmpty() {
@@ -1025,22 +1025,6 @@ func (v5 *v5Migrator) migrateVersion(version uint64, migratedRoots map[typedHash
 
 		newRoot := typedHashFromParts(root.Type(), newRootHash)
 		newRoots[newRoot] = []typedHash{}
-		for _, dstRoot := range dstRoots {
-			if migratedRoot, exists := migratedRoots[dstRoot]; exists {
-				newRoots[newRoot] = append(newRoots[newRoot], migratedRoot.Hash)
-
-				// Migrate write log.
-				if err = v5.migrateWriteLog(root, dstRoot, newRoot, migratedRoot); err != nil {
-					return false, err
-				}
-			} else {
-				return false, fmt.Errorf("internal error: derived root %s not migrated", dstRoot)
-			}
-		}
-		for _, dstRoot := range dstRoots {
-			delete(migratedRoots, dstRoot)
-		}
-
 		migratedRoots[root] = v5MigratedRoot{Hash: newRoot, Version: version}
 
 		// Check for a write log from empty root.
@@ -1080,6 +1064,28 @@ func (v5 *v5Migrator) migrateVersion(version uint64, migratedRoots map[typedHash
 		}
 
 		v5.helper.Display(fmt.Sprintf("migrated root %s -> %s", root, newRoot))
+	}
+	for root, dstRoots := range roots.Roots {
+		newRoot := migratedRoots[root].Hash
+
+		for _, dstRoot := range dstRoots {
+			migratedRoot, exists := migratedRoots[dstRoot]
+			if !exists {
+				return false, fmt.Errorf("internal error: derived root %s not migrated", dstRoot)
+			}
+			newRoots[newRoot] = append(newRoots[newRoot], migratedRoot.Hash)
+
+			// Migrate write log.
+			if err = v5.migrateWriteLog(root, dstRoot, newRoot, migratedRoot); err != nil {
+				return false, err
+			}
+		}
+	}
+	// Remove any migrated roots that are not in this version.
+	for root, meta := range migratedRoots {
+		if meta.Version != version {
+			delete(migratedRoots, root)
+		}
 	}
 
 	// Update roots metadata.
@@ -1200,13 +1206,13 @@ func (v5 *v5Migrator) pruneVersion(version uint64) error {
 	}
 
 	// Prune all write logs in version.
-	prefix := writeLogKeyFmt.Encode(version)
+	prefix := v4WriteLogKeyFmt.Encode(version)
 	it := v5.readTxn.NewIterator(badger.IteratorOptions{Prefix: prefix})
 	defer it.Close()
 
 	for it.Rewind(); it.Valid(); it.Next() {
 		if err = v5.changeBatch.DeleteAt(it.Item().KeyCopy(nil), it.Item().Version()); err != nil {
-			return err
+			return fmt.Errorf("error pruning writelog: %w", err)
 		}
 	}
 
@@ -1217,6 +1223,19 @@ func (v5 *v5Migrator) pruneVersion(version uint64) error {
 		return err
 	}
 
+	return nil
+}
+
+func (v5 *v5Migrator) pruneWriteLog(version uint64, oldRoot typedHash) error {
+	prefix := v4WriteLogKeyFmt.Encode(version, &oldRoot)
+	it := v5.readTxn.NewIterator(badger.IteratorOptions{Prefix: prefix})
+	defer it.Close()
+
+	for it.Rewind(); it.Valid(); it.Next() {
+		if err := v5.changeBatch.DeleteAt(it.Item().KeyCopy(nil), it.Item().Version()); err != nil {
+			return fmt.Errorf("error pruning writelog: %w", err)
+		}
+	}
 	return nil
 }
 
@@ -1303,6 +1322,16 @@ func (v5 *v5Migrator) Migrate() (rversion uint64, rerr error) {
 		}
 		if !exists {
 			break
+		}
+	}
+
+	// Make sure to prune any write logs which originate before the first version.
+	for old, new := range migratedRoots {
+		if new.Version != firstVersion {
+			continue
+		}
+		if err = v5.pruneWriteLog(new.Version, old); err != nil {
+			return 0, fmt.Errorf("error pruning old writelogs: %w", err)
 		}
 	}
 
