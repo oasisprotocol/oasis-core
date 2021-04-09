@@ -81,16 +81,6 @@ var (
 	// This is mostly used for reporting and metrics.
 	GitBranch = ""
 
-	// RuntimeHostProtocol versions the protocol between the Oasis node(s) and
-	// the runtime.
-	//
-	// NOTE: This version must be synced with runtime/src/common/version.rs.
-	RuntimeHostProtocol = Version{Major: 2, Minor: 0, Patch: 0}
-
-	// RuntimeCommitteeProtocol versions the P2P protocol used by the runtime
-	// committee members.
-	RuntimeCommitteeProtocol = Version{Major: 2, Minor: 0, Patch: 0}
-
 	// ConsensusProtocol versions all data structures and processing used by
 	// the epochtime, beacon, registry, roothash, etc. modules that are
 	// backend by consensus.
@@ -100,6 +90,16 @@ var (
 	// It is converted to TendermintAppVersion whose compatibility is checked
 	// via Tendermint's version checks.
 	ConsensusProtocol = Version{Major: 4, Minor: 0, Patch: 0}
+
+	// RuntimeHostProtocol versions the protocol between the Oasis node(s) and
+	// the runtime.
+	//
+	// NOTE: This version must be synced with runtime/src/common/version.rs.
+	RuntimeHostProtocol = Version{Major: 2, Minor: 0, Patch: 0}
+
+	// RuntimeCommitteeProtocol versions the P2P protocol used by the runtime
+	// committee members.
+	RuntimeCommitteeProtocol = Version{Major: 2, Minor: 0, Patch: 0}
 
 	// TendermintAppVersion is Tendermint ABCI application's version computed by
 	// masking non-major consensus protocol version segments to 0 to be
@@ -116,9 +116,9 @@ var (
 
 // ProtocolVersions are the protocol versions.
 type ProtocolVersions struct {
+	ConsensusProtocol        Version `json:"consensus_protocol"`
 	RuntimeHostProtocol      Version `json:"runtime_host_protocol"`
 	RuntimeCommitteeProtocol Version `json:"runtime_committee_protocol"`
-	ConsensusProtocol        Version `json:"consensus_protocol"`
 }
 
 // ValidateBasic does basic validation checks of the protocol versions.
@@ -137,13 +137,13 @@ func (pv *ProtocolVersions) ValidateBasic() error {
 
 // Compatible returns if the two protocol versions are compatible.
 func (pv *ProtocolVersions) Compatible(other ProtocolVersions) bool {
+	if pv.ConsensusProtocol.MaskNonMajor() != other.ConsensusProtocol.MaskNonMajor() {
+		return false
+	}
 	if pv.RuntimeHostProtocol.MaskNonMajor() != other.RuntimeHostProtocol.MaskNonMajor() {
 		return false
 	}
 	if pv.RuntimeCommitteeProtocol.MaskNonMajor() != other.RuntimeCommitteeProtocol.MaskNonMajor() {
-		return false
-	}
-	if pv.ConsensusProtocol.MaskNonMajor() != other.ConsensusProtocol.MaskNonMajor() {
 		return false
 	}
 	return true
@@ -173,9 +173,9 @@ func (pv ProtocolVersions) PrettyType() (interface{}, error) {
 
 // Versions are current protocol versions.
 var Versions = ProtocolVersions{
+	ConsensusProtocol,
 	RuntimeHostProtocol,
 	RuntimeCommitteeProtocol,
-	ConsensusProtocol,
 }
 
 func parseSemVerStr(s string) Version {
