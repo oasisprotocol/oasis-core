@@ -136,18 +136,8 @@ func checkSanityInternal(ctx context.Context, db *badgerNodeDB, display DisplayH
 			return fmt.Errorf("mkvs/badger/check: error reading roots metadata for version %d: %w", version, err)
 		}
 
-		for rootHash, dstRoots := range rootsMeta.Roots {
-			// Make sure a writelog exists for each root pair.
-			for _, dstRoot := range dstRoots {
-				dstVersion, ok := lastRoots[dstRoot]
-				if !ok {
-					return fmt.Errorf("mkvs/badger/check: missing target root (%s -> %s)", rootHash, dstRoot)
-				}
-				_, err = txn.Get(writeLogKeyFmt.Encode(dstVersion, &dstRoot, &rootHash)) //nolint: gosec
-				if err != nil {
-					return fmt.Errorf("mkvs/badger/check: missing write log (%d, %s, %s)", dstVersion, dstRoot, rootHash)
-				}
-			}
+		// Check tree consistenncy.
+		for rootHash := range rootsMeta.Roots {
 			lastRoots[rootHash] = version
 
 			root := node.Root{
@@ -161,6 +151,25 @@ func checkSanityInternal(ctx context.Context, db *badgerNodeDB, display DisplayH
 			}
 			if err = common.checkNodes(root); err != nil {
 				return fmt.Errorf("mkvs/badger/check: error traversing tree nodes for root %v: %w", root, err)
+			}
+		}
+
+		// Make sure a writelog exists for each root pair.
+		for rootHash, dstRoots := range rootsMeta.Roots {
+			for _, dstRoot := range dstRoots {
+				dstVersion, ok := lastRoots[dstRoot]
+				if !ok {
+					return fmt.Errorf("mkvs/badger/check: missing target root (%s -> %s)", rootHash, dstRoot)
+				}
+				_, err = txn.Get(writeLogKeyFmt.Encode(dstVersion, &dstRoot, &rootHash)) //nolint: gosec
+				if err != nil {
+					return fmt.Errorf("mkvs/badger/check: missing write log (%d, %s, %s)", dstVersion, dstRoot, rootHash)
+				}
+			}
+		}
+		for rootHash, v := range lastRoots {
+			if v != version {
+				delete(lastRoots, rootHash)
 			}
 		}
 
