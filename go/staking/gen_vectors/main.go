@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"math"
+	"os"
 
 	beacon "github.com/oasisprotocol/oasis-core/go/beacon/api"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
@@ -33,7 +34,8 @@ func main() {
 	} {
 		// Generate different nonces.
 		for _, nonce := range []uint64{0, 1, 10, 42, 1000, 1_000_000, 10_000_000, math.MaxUint64} {
-			// Valid transfer transactions.
+
+			// Generate transfer transactions.
 			transferDst := memorySigner.NewTestSigner("oasis-core staking test vectors: Transfer dst")
 			transferDstAddr := staking.NewAddress(transferDst.Public())
 			for _, amt := range []uint64{0, 1000, 10_000_000} {
@@ -43,22 +45,22 @@ func main() {
 						Amount: *quantity.NewFromUint64(amt),
 					}),
 				} {
-					vectors = append(vectors, testvectors.MakeTestVector("Transfer", tx))
+					vectors = append(vectors, testvectors.MakeTestVector("Transfer", tx, true))
 				}
 			}
 
-			// Valid burn transactions.
+			// Generate burn transactions.
 			for _, amt := range []uint64{0, 1000, 10_000_000} {
 				for _, tx := range []*transaction.Transaction{
 					staking.NewBurnTx(nonce, fee, &staking.Burn{
 						Amount: *quantity.NewFromUint64(amt),
 					}),
 				} {
-					vectors = append(vectors, testvectors.MakeTestVector("Burn", tx))
+					vectors = append(vectors, testvectors.MakeTestVector("Burn", tx, true))
 				}
 			}
 
-			// Valid escrow transactions.
+			// Generate escrow transactions.
 			escrowDst := memorySigner.NewTestSigner("oasis-core staking test vectors: Escrow dst")
 			escrowDstAddr := staking.NewAddress(escrowDst.Public())
 			for _, amt := range []uint64{0, 1000, 10_000_000} {
@@ -68,11 +70,11 @@ func main() {
 						Amount:  *quantity.NewFromUint64(amt),
 					}),
 				} {
-					vectors = append(vectors, testvectors.MakeTestVector("Escrow", tx))
+					vectors = append(vectors, testvectors.MakeTestVector("Escrow", tx, true))
 				}
 			}
 
-			// Valid reclaim escrow transactions.
+			// Generate reclaim escrow transactions.
 			escrowSrc := memorySigner.NewTestSigner("oasis-core staking test vectors: ReclaimEscrow src")
 			escrowSrcAddr := staking.NewAddress(escrowSrc.Public())
 			for _, amt := range []uint64{0, 1000, 10_000_000} {
@@ -82,11 +84,11 @@ func main() {
 						Shares:  *quantity.NewFromUint64(amt),
 					}),
 				} {
-					vectors = append(vectors, testvectors.MakeTestVector("ReclaimEscrow", tx))
+					vectors = append(vectors, testvectors.MakeTestVector("ReclaimEscrow", tx, true))
 				}
 			}
 
-			// Valid amend commission schedule transactions.
+			// Generate amend commission schedule transactions.
 			for _, steps := range []int{0, 1, 2, 5} {
 				for _, startEpoch := range []uint64{0, 10, 1000, 1_000_000} {
 					for _, rate := range []uint64{0, 10, 1000, 10_000, 50_000, 100_000} {
@@ -106,12 +108,12 @@ func main() {
 						tx := staking.NewAmendCommissionScheduleTx(nonce, fee, &staking.AmendCommissionSchedule{
 							Amendment: cs,
 						})
-						vectors = append(vectors, testvectors.MakeTestVector("AmendCommissionSchedule", tx))
+						vectors = append(vectors, testvectors.MakeTestVector("AmendCommissionSchedule", tx, true))
 					}
 				}
 			}
 
-			// Valid allow transactions.
+			// Generate allow transactions.
 			beneficiary := memorySigner.NewTestSigner("oasis-core staking test vectors: Allow beneficiary")
 			beneficiaryAddr := staking.NewAddress(beneficiary.Public())
 			for _, amt := range []uint64{0, 1000, 10_000_000} {
@@ -123,12 +125,12 @@ func main() {
 							AmountChange: *quantity.NewFromUint64(amt),
 						}),
 					} {
-						vectors = append(vectors, testvectors.MakeTestVector("Withdraw", tx))
+						vectors = append(vectors, testvectors.MakeTestVector("Withdraw", tx, true))
 					}
 				}
 			}
 
-			// Valid withdraw transactions.
+			// Generate withdraw transactions.
 			withdrawSrc := memorySigner.NewTestSigner("oasis-core staking test vectors: Withdraw src")
 			withdrawSrcAddr := staking.NewAddress(withdrawSrc.Public())
 			for _, amt := range []uint64{0, 1000, 10_000_000} {
@@ -138,13 +140,16 @@ func main() {
 						Amount: *quantity.NewFromUint64(amt),
 					}),
 				} {
-					vectors = append(vectors, testvectors.MakeTestVector("Withdraw", tx))
+					vectors = append(vectors, testvectors.MakeTestVector("Withdraw", tx, true))
 				}
 			}
 		}
 	}
 
 	// Generate output.
-	jsonOut, _ := json.MarshalIndent(&vectors, "", "  ")
+	jsonOut, err := json.MarshalIndent(&vectors, "", "  ")
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error encoding test vectors: %v\n", err)
+	}
 	fmt.Printf("%s", jsonOut)
 }

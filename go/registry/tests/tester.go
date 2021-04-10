@@ -1446,7 +1446,7 @@ func NewTestEntities(seed []byte, n int) ([]*TestEntity, error) {
 			return nil, err
 		}
 		ent.Entity = &entity.Entity{
-			Versioned: cbor.NewVersioned(entity.LatestEntityDescriptorVersion),
+			Versioned: cbor.NewVersioned(entity.LatestDescriptorVersion),
 			ID:        ent.Signer.Public(),
 		}
 

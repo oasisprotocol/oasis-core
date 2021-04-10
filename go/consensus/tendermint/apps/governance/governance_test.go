@@ -55,7 +55,7 @@ func initValidatorsEscrowState(
 		signers = append(signers, entitySigner)
 
 		ent := entity.Entity{
-			Versioned: cbor.NewVersioned(entity.LatestEntityDescriptorVersion),
+			Versioned: cbor.NewVersioned(entity.LatestDescriptorVersion),
 			ID:        entitySigner.Public(),
 			Nodes:     []signature.PublicKey{nodeSigner.Public()},
 		}

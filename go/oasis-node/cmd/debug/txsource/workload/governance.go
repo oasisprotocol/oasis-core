@@ -143,7 +143,7 @@ func (g *governanceWorkload) doUpgradeProposal() error {
 	maxUpgradeEpoch := minUpgradeEpoch + int64(3*g.parameters.UpgradeMinEpochDiff)
 	// [minUpgradeEpoch, maxUpgradeEpoch]
 	upgradeEpoch := beacon.EpochTime(g.rng.Int63n(maxUpgradeEpoch-minUpgradeEpoch+1) + minUpgradeEpoch)
-	nameSuffix := make([]byte, 20)
+	nameSuffix := make([]byte, 8)
 	if _, err := g.rng.Read(nameSuffix); err != nil {
 		return err
 	}

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"math"
+	"os"
 
 	beacon "github.com/oasisprotocol/oasis-core/go/beacon/api"
 	"github.com/oasisprotocol/oasis-core/go/common/cbor"
@@ -15,8 +16,29 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/consensus/api/transaction"
 	"github.com/oasisprotocol/oasis-core/go/consensus/api/transaction/testvectors"
 	governance "github.com/oasisprotocol/oasis-core/go/governance/api"
-	"github.com/oasisprotocol/oasis-core/go/upgrade/api"
+	upgrade "github.com/oasisprotocol/oasis-core/go/upgrade/api"
 )
+
+func valideSubmitProposal(v uint16, epoch uint64, handler string, target version.ProtocolVersions) bool {
+	if v < upgrade.MinDescriptorVersion || v > upgrade.MaxDescriptorVersion ||
+		epoch < uint64(upgrade.MinUpgradeEpoch) || epoch > uint64(upgrade.MaxUpgradeEpoch) ||
+		len(handler) < upgrade.MinUpgradeHandlerLength || len(handler) > upgrade.MaxUpgradeHandlerLength {
+		return false
+	}
+	if err := target.ValidateBasic(); err != nil {
+		return false
+	}
+	return true
+}
+
+func valideCastVote(vote governance.Vote) bool {
+	for _, v := range []governance.Vote{governance.VoteAbstain, governance.VoteYes, governance.VoteNo} {
+		if vote == v {
+			return true
+		}
+	}
+	return false
+}
 
 func main() {
 	// Configure chain context for all signatures using chain domain separation.
@@ -35,11 +57,12 @@ func main() {
 	} {
 		// Generate different nonces.
 		for _, nonce := range []uint64{0, 1, 10, 42, 1000, 1_000_000, 10_000_000, math.MaxUint64} {
-			// Valid submit upgrade proposal transaction.
-			for _, v := range []uint16{0, api.LatestDescriptorVersion} {
-				for _, epoch := range []uint64{0, 1000, 10_000_000} {
-					for _, handler := range []string{"", "descriptor-handler"} {
-						for _, version := range []version.ProtocolVersions{
+
+			// Generate upgrade proposal transactions.
+			for _, v := range []uint16{0, upgrade.LatestDescriptorVersion} {
+				for _, epoch := range []uint64{0, 1000, 10_000_000, math.MaxUint64 - 1, math.MaxUint64} {
+					for _, handler := range []string{"", "descriptor-handler", "tooooooo-long-33-char-description"} {
+						for _, target := range []version.ProtocolVersions{
 							{},
 							{ConsensusProtocol: version.Version{Major: 1, Minor: 2, Patch: 3}},
 							{
@@ -64,23 +87,24 @@ func main() {
 							for _, tx := range []*transaction.Transaction{
 								governance.NewSubmitProposalTx(nonce, fee, &governance.ProposalContent{
 									Upgrade: &governance.UpgradeProposal{
-										Descriptor: api.Descriptor{
+										Descriptor: upgrade.Descriptor{
 											Versioned: cbor.NewVersioned(v),
 											Handler:   handler,
-											Target:    version,
+											Target:    target,
 											Epoch:     beacon.EpochTime(epoch),
 										},
 									},
 								}),
 							} {
-								vectors = append(vectors, testvectors.MakeTestVector("SubmitProposal", tx))
+								valid := valideSubmitProposal(v, epoch, handler, target)
+								vectors = append(vectors, testvectors.MakeTestVector("SubmitProposal", tx, valid))
 							}
 						}
 					}
 				}
 			}
 
-			// Valid submit cancel upgrade proposal transaction.
+			// Generate cancel upgrade proposal transactions.
 			for _, id := range []uint64{0, 1000, 10_000_000, math.MaxUint64} {
 				for _, tx := range []*transaction.Transaction{
 					governance.NewSubmitProposalTx(nonce, fee, &governance.ProposalContent{
@@ -89,20 +113,23 @@ func main() {
 						},
 					}),
 				} {
-					vectors = append(vectors, testvectors.MakeTestVector("SubmitProposal", tx))
+					vectors = append(vectors, testvectors.MakeTestVector("SubmitProposal", tx, true))
 				}
 			}
 
-			// Valid cast vote transactions.
+			// Generate cast vote transactions.
 			for _, id := range []uint64{0, 1000, 10_000_000, math.MaxUint64} {
-				for _, vote := range []governance.Vote{governance.VoteAbstain, governance.VoteYes, governance.VoteNo} {
+				for _, vote := range []governance.Vote{
+					governance.VoteAbstain, governance.VoteYes, governance.VoteNo,
+				} {
 					for _, tx := range []*transaction.Transaction{
 						governance.NewCastVoteTx(nonce, fee, &governance.ProposalVote{
 							ID:   id,
 							Vote: vote,
 						}),
 					} {
-						vectors = append(vectors, testvectors.MakeTestVector("SubmitProposal", tx))
+						valid := valideCastVote(vote)
+						vectors = append(vectors, testvectors.MakeTestVector("SubmitProposal", tx, valid))
 					}
 				}
 			}
@@ -110,6 +137,9 @@ func main() {
 	}
 
 	// Generate output.
-	jsonOut, _ := json.MarshalIndent(&vectors, "", "  ")
+	jsonOut, err := json.MarshalIndent(&vectors, "", "  ")
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error encoding test vectors: %v\n", err)
+	}
 	fmt.Printf("%s", jsonOut)
 }

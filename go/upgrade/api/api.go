@@ -47,12 +47,23 @@ const (
 	// descriptors.
 	LatestDescriptorVersion = 1
 
-	// Minimum and maximum descriptor versions that are allowed.
-	minDescriptorVersion = 1
-	maxDescriptorVersion = LatestDescriptorVersion
+	// MinDescriptorVersion is the minimum descriptor version that is allowed.
+	MinDescriptorVersion = 1
+	// MaxDescriptorVersion is the maximum descriptor version that is allowed.
+	MaxDescriptorVersion = LatestDescriptorVersion
 
 	// LatestPendingUpgradeVersion is the latest pending upgrade struct version.
 	LatestPendingUpgradeVersion = 1
+
+	// MinUpgradeHandlerLength is the minimum length of upgrade handler's name.
+	MinUpgradeHandlerLength = 3
+	// MaxUpgradeHandlerLength is the maximum length of upgrade handler's name.
+	MaxUpgradeHandlerLength = 32
+
+	// MinUpgradeEpoch is the minimum upgrade epoch.
+	MinUpgradeEpoch = beacon.EpochTime(1)
+	// MaxUpgradeEpoch is the maximum upgrade epoch.
+	MaxUpgradeEpoch = beacon.EpochInvalid - 1
 )
 
 var (
@@ -100,21 +111,29 @@ func (d *Descriptor) Equals(other *Descriptor) bool {
 
 // ValidateBasic does basic validation checks of the upgrade descriptor.
 func (d Descriptor) ValidateBasic() error {
-	if d.V < minDescriptorVersion || d.V > maxDescriptorVersion {
-		return fmt.Errorf("invalid upgrade descriptor version (min: %d max: %d)",
-			minDescriptorVersion,
-			maxDescriptorVersion,
+	if d.V < MinDescriptorVersion || d.V > MaxDescriptorVersion {
+		return fmt.Errorf("invalid upgrade descriptor version: %d (min: %d max: %d)",
+			d.V,
+			MinDescriptorVersion,
+			MaxDescriptorVersion,
 		)
 	}
-	if d.Handler == "" {
-		return fmt.Errorf("empty descriptor handler")
+	if len(d.Handler) < MinUpgradeHandlerLength || len(d.Handler) > MaxUpgradeHandlerLength {
+		return fmt.Errorf("invalid upgrade descriptor handler length: %d (min: %d max: %d)",
+			len(d.Handler),
+			MinUpgradeHandlerLength,
+			MaxUpgradeHandlerLength,
+		)
 	}
-	empty := version.ProtocolVersions{}
-	if d.Target == empty {
-		return fmt.Errorf("empty target version")
+	if err := d.Target.ValidateBasic(); err != nil {
+		return fmt.Errorf("invalid upgrade descriptor target version: %w", err)
 	}
-	if d.Epoch < 1 {
-		return fmt.Errorf("invalid descriptor epoch: %d", d.Epoch)
+	if d.Epoch < MinUpgradeEpoch || d.Epoch > MaxUpgradeEpoch {
+		return fmt.Errorf("invalid upgrade descriptor epoch: %d (min: %d max: %d)",
+			d.Epoch,
+			MinUpgradeEpoch,
+			MaxUpgradeEpoch,
+		)
 	}
 
 	return nil

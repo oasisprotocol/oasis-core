@@ -235,7 +235,7 @@ func (r *registration) Run( // nolint: gocyclo
 		}
 
 		ent := &entity.Entity{
-			Versioned: cbor.NewVersioned(entity.LatestEntityDescriptorVersion),
+			Versioned: cbor.NewVersioned(entity.LatestDescriptorVersion),
 			ID:        entityAccs[i].signer.Public(),
 		}
 

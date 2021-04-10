@@ -407,7 +407,7 @@ func TestRegisterNode(t *testing.T) {
 
 			// Prepare a test entity that owns the nodes.
 			ent := entity.Entity{
-				Versioned: cbor.NewVersioned(entity.LatestEntityDescriptorVersion),
+				Versioned: cbor.NewVersioned(entity.LatestDescriptorVersion),
 				ID:        tcd.entitySigner.Public(),
 				Nodes:     []signature.PublicKey{tcd.nodeSigner.Public()},
 			}

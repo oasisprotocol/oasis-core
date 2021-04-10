@@ -32,7 +32,7 @@ var (
 
 func init() {
 	entitySigner = memory.NewTestSigner(testSigningSeed)
-	TestEntity.Versioned = cbor.NewVersioned(entity.LatestEntityDescriptorVersion)
+	TestEntity.Versioned = cbor.NewVersioned(entity.LatestDescriptorVersion)
 	TestEntity.ID = entitySigner.Public()
 }
 
