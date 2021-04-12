@@ -12,6 +12,116 @@ The format is inspired by [Keep a Changelog].
 
 <!-- TOWNCRIER -->
 
+## 21.1 (2021-04-12)
+
+| Protocol          | Version   |
+|:------------------|:---------:|
+| Consensus         | 4.0.0     |
+| Runtime Host      | 2.0.0     |
+| Runtime Committee | 2.0.0     |
+
+### Removals and Breaking Changes
+
+- go/registry: Allow update from no key manager to with key manager
+  ([#3802](https://github.com/oasisprotocol/oasis-core/issues/3802))
+
+- go/common/entity: Rename `LatestEntityDescriptorVersion`
+  ([#3845](https://github.com/oasisprotocol/oasis-core/issues/3845))
+
+  Rename it to `LatestDescriptorVersion`.
+
+- go/upgrade: Limit `Descriptor`'s field values
+  ([#3845](https://github.com/oasisprotocol/oasis-core/issues/3845))
+
+  Add variables defining `Descriptor`'s field value limits:
+  `MinDescriptorVersion`, `MaxDescriptorVersion`, `MinUpgradeHandlerLength`,
+  `MaxUpgradeHandlerLength`, `MinUpgradeEpoch`, `MaxUpgradeEpoch`.
+
+- storage: Drop the MKVS node version field
+  ([#3500](https://github.com/oasisprotocol/oasis-core/issues/3500))
+
+- go/common/version: Move `ConsensusProtocol` ver to top of `ProtocolVersions`
+  ([#3845](https://github.com/oasisprotocol/oasis-core/issues/3845))
+
+### Features
+
+- oasis-net-runner: Configure a client node even without runtimes
+  ([#3794](https://github.com/oasisprotocol/oasis-core/issues/3794))
+
+- go/staking: Improve pretty-print for `Escrow`/`ReclaimEscrow` transactions
+  ([#3819](https://github.com/oasisprotocol/oasis-core/issues/3819))
+
+- go/common/entity: Add `{Min,Max}DescriptorVersion` constants
+  ([#3845](https://github.com/oasisprotocol/oasis-core/issues/3845))
+
+- go/common/version: Add `ValidateBasic()` to `Version` and `ProtocolVersions`
+  ([#3845](https://github.com/oasisprotocol/oasis-core/issues/3845))
+
+- go/worker/compute/executor: Enable scheduler transaction checks by default
+  ([#3851](https://github.com/oasisprotocol/oasis-core/issues/3851))
+
+### Bug Fixes
+
+- oasis-net-runner: Configure a runtime in default fixture
+  ([#3805](https://github.com/oasisprotocol/oasis-core/issues/3805))
+
+- go/worker/storage: Fix Finalize and Apply failure handling
+  ([#3820](https://github.com/oasisprotocol/oasis-core/issues/3820))
+
+- go/storage: Fix failure handling in checkpoint syncing
+  ([#3830](https://github.com/oasisprotocol/oasis-core/issues/3830))
+
+  In some cases, the database could be left in a corrupt state after a
+  checkpoint chunk failed to be restored.
+
+- go/consensus/tendermint: Bump Tendermint Core to v0.34.9-oasis2
+  ([#3844](https://github.com/oasisprotocol/oasis-core/issues/3844))
+
+### Internal Changes
+
+- go: bump github.com/golang/protobuf from 1.4.3 to 1.5.1
+  ([#3799](https://github.com/oasisprotocol/oasis-core/issues/3799))
+
+- go: bump github.com/prometheus/client_golang from 1.9.0 to 1.10.0
+  ([#3803](https://github.com/oasisprotocol/oasis-core/issues/3803))
+
+- go: bump github.com/prometheus/common from 0.19.0 to 0.20.0
+  ([#3811](https://github.com/oasisprotocol/oasis-core/issues/3811))
+
+- go: bump google.golang.org/grpc from 1.36.0 to 1.36.1
+  ([#3816](https://github.com/oasisprotocol/oasis-core/issues/3816))
+
+- go/storage/client: Implement node blacklisting
+  ([#3820](https://github.com/oasisprotocol/oasis-core/issues/3820))
+
+- go/worker/storage: Add independent heartbeat for syncing retries
+  ([#3820](https://github.com/oasisprotocol/oasis-core/issues/3820))
+
+- go: bump github.com/golang/protobuf from 1.5.1 to 1.5.2
+  ([#3821](https://github.com/oasisprotocol/oasis-core/issues/3821))
+
+- go/worker/common: Iterate over all handlers on unhandled peer message
+  ([#3838](https://github.com/oasisprotocol/oasis-core/issues/3838))
+
+- go/runtime/client: Also recheck blocks periodically
+  ([#3842](https://github.com/oasisprotocol/oasis-core/issues/3842))
+
+- go/consensus/api/transaction/testvectors: Extend meaning of the `Valid` field
+  ([#3845](https://github.com/oasisprotocol/oasis-core/issues/3845))
+
+  Extend meaning of `TestVector`'s `Valid` field to also indicate that the
+  given test vector's transaction passes basic static validation (besides having
+  a valid signature and being correctly serialized).
+
+  Update `MakeTestVector()` and `MakeTestVectorWithSigner()` functions to take
+  the `valid` argument indicating whether the transaction is valid or not.
+
+  Update go/registry/gen_vectors, go/staking/gen_vectors and
+  go/governance/gen_vectors packages.
+
+  Expand go/governance/gen_vectors package to cover more (invalid) transaction
+  cases.
+
 ## 21.0 (2021-03-18)
 
 | Protocol          | Version   |
