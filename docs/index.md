@@ -79,3 +79,4 @@ implementations.
 * [Architectural Decision Records](adr/index.md)
 * [Release Process](release-process.md)
 * [Versioning](versioning.md)
+* [Security](../SECURITY.md)
