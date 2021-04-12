@@ -1,18 +1,23 @@
 # Security
 
-Bugs should be reported to
-[security@oasislabs.com](mailto:security@oasislabs.com).  We prefer
-that reports to be encrypted using the [security GnuPG key on our
-website](https://www.oasis-protocol.org/security).
+At [Oasis Foundation], we take security very seriously and we deeply appreciate
+any effort to discover and fix vulnerabilities in [Oasis Core] and other
+projects powering the [Oasis Network].
+
+We prefer that security reports be sent through our [private bug bounty program
+linked on our website](https://oasisprotocol.org/security).
 
 We sketch out the general classification of the kinds of errors
-below.  This is not intended to be an exhaustive list.
+below. This is not intended to be an exhaustive list.
+
+[Oasis Foundation]: https://oasisprotocol.org/
+[Oasis Core]: https://github.com/oasisprotocol/oasis-core
+[Oasis Network]: https://docs.oasis.dev/general/oasis-network/overview
 
 ## Specifications
 
-Our [whitepapers](https://www.oasis-protocol.org/whitepapers)
-specifies what we are building.  Additional designs and specifications
-may be made available later.
+Our [papers] specify what we are building.  Additional designs and
+specifications may be made available later.
 
 NB: Our designs/specifications describe what we are building toward,
 and do not necessarily reflect the state of the current iteration of
@@ -25,6 +30,8 @@ expected.
 
 - Mismatch between specifications and implementation of any subsystems
   / modules, when the implementation is considered complete.
+
+[papers]: https://oasisprotocol.org/papers
 
 ## Contract Computational/Data Integrity
 
