@@ -39,8 +39,8 @@ objects (test vectors). Each test vector has the following fields:
   CBOR encoding is a binary encoding it also needs to be Base64-encoded) signed
   transaction. **This is what is actually broadcast to the network.**
 
-* `valid` is a boolean flag indicating indicating whether the given test vector
-  represents a valid transaction, including:
+* `valid` is a boolean flag indicating whether the given test vector represents
+  a valid transaction, including:
 
   * transaction having a valid signature,
   * transaction being correctly serialized,
