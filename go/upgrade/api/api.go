@@ -128,7 +128,8 @@ func (d Descriptor) ValidateBasic() error {
 	if err := d.Target.ValidateBasic(); err != nil {
 		return fmt.Errorf("invalid upgrade descriptor target version: %w", err)
 	}
-	if d.Epoch < MinUpgradeEpoch || d.Epoch > MaxUpgradeEpoch {
+	minUpgradeEpoch, maxUpgradeEpoch := MinUpgradeEpoch, MaxUpgradeEpoch // Work-around for incorrect go-fuzz instrumentation.
+	if d.Epoch < minUpgradeEpoch || d.Epoch > maxUpgradeEpoch {
 		return fmt.Errorf("invalid upgrade descriptor epoch: %d (min: %d max: %d)",
 			d.Epoch,
 			MinUpgradeEpoch,
