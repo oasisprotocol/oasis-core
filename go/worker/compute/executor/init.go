@@ -39,7 +39,7 @@ func New(
 }
 
 func init() {
-	Flags.Bool(CfgScheduleCheckTxEnabled, false, "Enable checking transactions before scheduling them")
+	Flags.Bool(CfgScheduleCheckTxEnabled, true, "Enable checking transactions before scheduling them")
 	Flags.Uint64(cfgMaxTxPoolSize, 10000, "Maximum size of the scheduling transaction pool")
 	Flags.Uint64(cfgScheduleTxCacheSize, 1000, "Cache size of recently scheduled transactions to prevent re-scheduling")
 
