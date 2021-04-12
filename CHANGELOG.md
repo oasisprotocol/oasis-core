@@ -12,6 +12,22 @@ The format is inspired by [Keep a Changelog].
 
 <!-- TOWNCRIER -->
 
+## 20.12.6 (2021-04-12)
+
+| Protocol          | Version   |
+|:------------------|:---------:|
+| Consensus         | 2.0.0     |
+| Runtime Host      | 1.0.0     |
+| Runtime Committee | 1.0.0     |
+
+### Bug Fixes
+
+- go/upgrade: Fix node querying upgrade handler too soon
+  ([#3813](https://github.com/oasisprotocol/oasis-core/issues/3813))
+
+  Fixes node querying the upgrade handler too soon when restarted while the
+  upgrade epoch was not yet reached.
+
 ## 20.12.5 (2021-03-01)
 
 | Protocol          | Version   |
