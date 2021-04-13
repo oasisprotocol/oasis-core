@@ -1117,7 +1117,12 @@ func (v5 *v5Migrator) migrateVersion(version uint64, migratedRoots map[typedHash
 
 func (v5 *v5Migrator) maybePruneNode(h hash.Hash, version uint64) error {
 	item, err := v5.readTxn.Get(v4NodeKeyFmt.Encode(&h))
-	if err != nil {
+	switch err {
+	case nil:
+	case badger.ErrKeyNotFound:
+		// Node was already pruned (could be shared with some root in the same version).
+		return nil
+	default:
 		return fmt.Errorf("error loading node %s: %w", h, err)
 	}
 	raw, err := item.ValueCopy(nil)
