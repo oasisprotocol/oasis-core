@@ -4,6 +4,7 @@ package genesis
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -699,6 +700,19 @@ func doCheckGenesis(cmd *cobra.Command, args []string) {
 			fmt.Fprintf(os.Stderr, "Diff:\n%s\n", diff)
 		}
 		os.Exit(1)
+	}
+
+	fmt.Println("genesis file is valid and in canonical form")
+	fmt.Printf("genesis document's hash: %s\n", doc.ChainContext())
+	fmt.Printf("genesis file's SHA256 checksum: ")
+
+	sha256Hasher := sha256.New()
+	_, herr := sha256Hasher.Write(actualGenesis)
+	switch herr {
+	case nil:
+		fmt.Printf("%x\n", sha256Hasher.Sum(nil))
+	default:
+		fmt.Println("[unknown]")
 	}
 }
 
