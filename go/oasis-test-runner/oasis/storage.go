@@ -1,15 +1,18 @@
 package oasis
 
 import (
+	"context"
 	"crypto/ed25519"
 	"fmt"
 	"path/filepath"
 	"time"
 
+	"github.com/oasisprotocol/oasis-core/go/common"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	"github.com/oasisprotocol/oasis-core/go/consensus/tendermint/crypto"
 	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
 	"github.com/oasisprotocol/oasis-core/go/storage/database"
+	workerStorage "github.com/oasisprotocol/oasis-core/go/worker/storage/api"
 )
 
 const storageIdentitySeedTemplate = "ekiden node storage %d"
@@ -93,6 +96,36 @@ func (worker *Storage) ExportsPath() string {
 // DatabasePath returns the path to the node's database.
 func (worker *Storage) DatabasePath() string {
 	return filepath.Join(worker.dir.String(), database.DefaultFileName(worker.backend))
+}
+
+// WaitForRoot waits until the node syncs up to the given root.
+func (worker *Storage) WaitForRound(ctx context.Context, runtimeID common.Namespace, round uint64) (uint64, error) {
+	ctrl, err := NewController(worker.SocketPath())
+	if err != nil {
+		return 0, err
+	}
+	req := &workerStorage.WaitForRoundRequest{
+		RuntimeID: runtimeID,
+		Round:     round,
+	}
+	resp, err := ctrl.StorageWorker.WaitForRound(ctx, req)
+	if err != nil {
+		return 0, err
+	}
+	return resp.LastRound, nil
+}
+
+// PauseCheckpointer pauses or unpauses the storage worker's checkpointer.
+func (worker *Storage) PauseCheckpointer(ctx context.Context, runtimeID common.Namespace, pause bool) error {
+	ctrl, err := NewController(worker.SocketPath())
+	if err != nil {
+		return err
+	}
+	req := &workerStorage.PauseCheckpointerRequest{
+		RuntimeID: runtimeID,
+		Pause:     pause,
+	}
+	return ctrl.StorageWorker.PauseCheckpointer(ctx, req)
 }
 
 // Start starts an Oasis node.

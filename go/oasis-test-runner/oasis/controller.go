@@ -13,6 +13,7 @@ import (
 	runtimeClient "github.com/oasisprotocol/oasis-core/go/runtime/client/api"
 	staking "github.com/oasisprotocol/oasis-core/go/staking/api"
 	storage "github.com/oasisprotocol/oasis-core/go/storage/api"
+	workerStorage "github.com/oasisprotocol/oasis-core/go/worker/storage/api"
 )
 
 // Controller is a network controller that connects to one of the
@@ -29,6 +30,8 @@ type Controller struct {
 	RuntimeClient runtimeClient.RuntimeClient
 	Storage       storage.Backend
 	Keymanager    *keymanager.KeymanagerClient
+
+	StorageWorker workerStorage.StorageWorker
 
 	conn *grpc.ClientConn
 }
@@ -61,6 +64,8 @@ func NewController(socketPath string) (*Controller, error) {
 		RuntimeClient:   runtimeClient.NewRuntimeClient(conn),
 		Storage:         storage.NewStorageClient(conn),
 		Keymanager:      keymanager.NewKeymanagerClient(conn),
+
+		StorageWorker: workerStorage.NewStorageWorkerClient(conn),
 
 		conn: conn,
 	}, nil
