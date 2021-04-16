@@ -1,11 +1,13 @@
 package api
 
 import (
+	"encoding/base64"
 	"testing"
 
 	"github.com/stretchr/testify/require"
 
 	"github.com/oasisprotocol/oasis-core/go/beacon/api"
+	"github.com/oasisprotocol/oasis-core/go/common/cbor"
 	"github.com/oasisprotocol/oasis-core/go/common/quantity"
 )
 
@@ -245,5 +247,115 @@ func TestDebondingDelegationMerge(t *testing.T) {
 		}
 		require.NoError(err)
 		require.EqualValues(t.result, t.base, t.msg)
+	}
+}
+
+func TestAccountsSerialization(t *testing.T) {
+	require := require.New(t)
+
+	kind := KindNodeCompute
+	// NOTE: These cases should be synced with tests in runtime/src/consensus/staking.rs.
+	for _, tc := range []struct {
+		rr             Account
+		expectedBase64 string
+	}{
+		{Account{}, "oA=="},
+		{Account{General: GeneralAccount{
+			Balance: mustInitQuantity(t, 10),
+			Nonce:   33,
+		}}, "oWdnZW5lcmFsomVub25jZRghZ2JhbGFuY2VBCg=="},
+		{Account{
+			General: GeneralAccount{
+				Allowances: map[Address]quantity.Quantity{
+					CommonPoolAddress:         mustInitQuantity(t, 100),
+					GovernanceDepositsAddress: mustInitQuantity(t, 33),
+				},
+			},
+		}, "oWdnZW5lcmFsoWphbGxvd2FuY2VzolUAdU/0RxQ6XsX0cbMPhna5TVaxV1BBIVUA98Te1iET4sKC6oZyI6VE7VXWum5BZA=="},
+		{Account{
+			Escrow: EscrowAccount{
+				Active: SharePool{
+					Balance:     mustInitQuantity(t, 1100),
+					TotalShares: mustInitQuantity(t, 11),
+				},
+				Debonding: SharePool{},
+				CommissionSchedule: CommissionSchedule{
+					Bounds: []CommissionRateBoundStep{
+						{
+							Start:   33,
+							RateMin: mustInitQuantity(t, 10),
+							RateMax: mustInitQuantity(t, 1000),
+						},
+					},
+				},
+				StakeAccumulator: StakeAccumulator{map[StakeClaim][]StakeThreshold{
+					KindEntityName: {
+						{Constant: mustInitQuantityP(t, 77)},
+						{
+							Global: &kind,
+						},
+					},
+				}},
+			},
+		}, "oWZlc2Nyb3ejZmFjdGl2ZaJnYmFsYW5jZUIETGx0b3RhbF9zaGFyZXNBC3FzdGFrZV9hY2N1bXVsYXRvcqFmY2xhaW1zoWZlbnRpdHmCoWVjb25zdEFNoWZnbG9iYWwCc2NvbW1pc3Npb25fc2NoZWR1bGWhZmJvdW5kc4GjZXN0YXJ0GCFocmF0ZV9tYXhCA+hocmF0ZV9taW5BCg=="},
+	} {
+		enc := cbor.Marshal(tc.rr)
+		require.Equal(tc.expectedBase64, base64.StdEncoding.EncodeToString(enc), "serialization should match")
+
+		var dec Account
+		err := cbor.Unmarshal(enc, &dec)
+		require.NoError(err, "Unmarshal")
+		require.EqualValues(tc.rr, dec, "Account serialization should round-trip")
+	}
+}
+
+func TestDelegationSerialization(t *testing.T) {
+	require := require.New(t)
+
+	// NOTE: These cases should be synced with tests in runtime/src/consensus/staking.rs.
+	for _, tc := range []struct {
+		rr             Delegation
+		expectedBase64 string
+	}{
+		{Delegation{}, "oWZzaGFyZXNA"},
+		{
+			Delegation{Shares: mustInitQuantity(t, 100)},
+			"oWZzaGFyZXNBZA==",
+		},
+	} {
+		enc := cbor.Marshal(tc.rr)
+		require.Equal(tc.expectedBase64, base64.StdEncoding.EncodeToString(enc), "serialization should match")
+
+		var dec Delegation
+		err := cbor.Unmarshal(enc, &dec)
+		require.NoError(err, "Unmarshal")
+		require.EqualValues(tc.rr, dec, "Delegation serialization should round-trip")
+	}
+}
+
+func TestDebondingDelegationSerialization(t *testing.T) {
+	require := require.New(t)
+
+	// NOTE: These cases should be synced with tests in runtime/src/consensus/staking.rs.
+	for _, tc := range []struct {
+		rr             DebondingDelegation
+		expectedBase64 string
+	}{
+		{DebondingDelegation{}, "omZzaGFyZXNAamRlYm9uZF9lbmQA"},
+		{
+			DebondingDelegation{
+				Shares:        mustInitQuantity(t, 100),
+				DebondEndTime: 23,
+			},
+			"omZzaGFyZXNBZGpkZWJvbmRfZW5kFw==",
+		},
+	} {
+		enc := cbor.Marshal(tc.rr)
+		require.Equal(tc.expectedBase64, base64.StdEncoding.EncodeToString(enc), "serialization should match")
+
+		var dec DebondingDelegation
+		err := cbor.Unmarshal(enc, &dec)
+		require.NoError(err, "Unmarshal")
+		require.EqualValues(tc.rr, dec, "DebondingDelegation serialization should round-trip")
 	}
 }

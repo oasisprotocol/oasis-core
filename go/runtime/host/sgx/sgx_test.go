@@ -10,6 +10,8 @@ import (
 
 	"github.com/oasisprotocol/oasis-core/go/common/node"
 	cmnIAS "github.com/oasisprotocol/oasis-core/go/common/sgx/ias"
+	"github.com/oasisprotocol/oasis-core/go/common/version"
+	tendermint "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/api"
 	iasHttp "github.com/oasisprotocol/oasis-core/go/ias/http"
 	"github.com/oasisprotocol/oasis-core/go/runtime/host"
 	"github.com/oasisprotocol/oasis-core/go/runtime/host/protocol"
@@ -62,7 +64,10 @@ func TestProvisionerSGX(t *testing.T) {
 	t.Run("Naked", func(t *testing.T) {
 		tests.TestProvisioner(t, cfg, func() (host.Provisioner, error) {
 			return New(Config{
-				HostInfo:              &protocol.HostInfo{},
+				HostInfo: &protocol.HostInfo{
+					ConsensusBackend:         tendermint.BackendName,
+					ConsensusProtocolVersion: version.Versions.ConsensusProtocol,
+				},
 				LoaderPath:            envRuntimeLoaderPath,
 				IAS:                   ias,
 				RuntimeAttestInterval: 2 * time.Second,
@@ -75,7 +80,10 @@ func TestProvisionerSGX(t *testing.T) {
 	t.Run("Sandboxed", func(t *testing.T) {
 		tests.TestProvisioner(t, cfg, func() (host.Provisioner, error) {
 			return New(Config{
-				HostInfo:              &protocol.HostInfo{},
+				HostInfo: &protocol.HostInfo{
+					ConsensusBackend:         tendermint.BackendName,
+					ConsensusProtocolVersion: version.Versions.ConsensusProtocol,
+				},
 				LoaderPath:            envRuntimeLoaderPath,
 				RuntimeAttestInterval: 2 * time.Second,
 				IAS:                   ias,

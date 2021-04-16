@@ -23,8 +23,9 @@ use crate::{
         },
         logger::get_logger,
     },
-    consensus::roothash::{
-        self, Block, ComputeResultsHeader, Header, COMPUTE_RESULTS_HEADER_CONTEXT,
+    consensus::{
+        roothash::{self, Block, ComputeResultsHeader, Header, COMPUTE_RESULTS_HEADER_CONTEXT},
+        state::ConsensusState,
     },
     enclave_rpc::{
         demux::Demux as RpcDemux,
@@ -227,17 +228,25 @@ impl Dispatcher {
                     self.dispatch_local_rpc(&mut rpc_dispatcher, &protocol, ctx, request)
                 }
                 Body::RuntimeExecuteTxBatchRequest {
+                    consensus_block,
                     round_results,
                     io_root,
                     inputs,
                     block,
                     max_messages,
                 } => {
+                    let light_block = consensus_block.decode_meta()?;
+                    let consensus_state = ConsensusState::from_protocol(
+                        protocol.clone(),
+                        light_block.get_state_root(),
+                    );
+
                     // Transaction execution.
                     self.dispatch_txn(
                         &mut cache,
                         &mut txn_dispatcher,
                         &protocol,
+                        consensus_state,
                         ctx,
                         io_root,
                         inputs.unwrap_or_default(),
@@ -247,12 +256,23 @@ impl Dispatcher {
                         false,
                     )
                 }
-                Body::RuntimeCheckTxBatchRequest { inputs, block } => {
+                Body::RuntimeCheckTxBatchRequest {
+                    consensus_block,
+                    inputs,
+                    block,
+                } => {
+                    let light_block = consensus_block.decode_meta()?;
+                    let consensus_state = ConsensusState::from_protocol(
+                        protocol.clone(),
+                        light_block.get_state_root(),
+                    );
+
                     // Transaction check.
                     self.dispatch_txn(
                         &mut cache_check,
                         &mut txn_dispatcher,
                         &protocol,
+                        consensus_state,
                         ctx,
                         Hash::default(),
                         inputs,
@@ -267,15 +287,23 @@ impl Dispatcher {
                     self.handle_km_policy_update(&mut rpc_dispatcher, ctx, signed_policy_raw)
                 }
                 Body::RuntimeQueryRequest {
+                    consensus_block,
                     method,
                     header,
                     args,
                 } => {
+                    let light_block = consensus_block.decode_meta()?;
+                    let consensus_state = ConsensusState::from_protocol(
+                        protocol.clone(),
+                        light_block.get_state_root(),
+                    );
+
                     // Query.
                     self.dispatch_query(
                         &mut cache_check,
                         &mut txn_dispatcher,
                         &protocol,
+                        consensus_state,
                         ctx,
                         method,
                         header,
@@ -311,6 +339,7 @@ impl Dispatcher {
         cache: &mut Cache,
         txn_dispatcher: &mut dyn TxnDispatcher,
         protocol: &Arc<Protocol>,
+        consensus_state: ConsensusState,
         ctx: Context,
         method: String,
         header: Header,
@@ -346,7 +375,7 @@ impl Dispatcher {
         ));
 
         let results = Default::default();
-        let txn_ctx = TxnContext::new(ctx.clone(), &header, &results, 0, true);
+        let txn_ctx = TxnContext::new(ctx.clone(), consensus_state, &header, &results, 0, true);
         let mut overlay = OverlayTree::new(&mut cache.mkvs);
         let result = StorageContext::enter(&mut overlay, untrusted_local, || {
             txn_dispatcher.query(txn_ctx, &method, args)
@@ -491,6 +520,7 @@ impl Dispatcher {
         cache: &mut Cache,
         txn_dispatcher: &mut dyn TxnDispatcher,
         protocol: &Arc<Protocol>,
+        consensus_state: ConsensusState,
         ctx: Context,
         io_root: Hash,
         inputs: TxnBatch,
@@ -531,6 +561,7 @@ impl Dispatcher {
         ));
         let txn_ctx = TxnContext::new(
             ctx.clone(),
+            consensus_state,
             &block.header,
             &round_results,
             max_messages,

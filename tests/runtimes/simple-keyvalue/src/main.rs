@@ -1,4 +1,7 @@
-use std::{io::Cursor, sync::Arc};
+// Allow until oasis-core#3572.
+#![allow(deprecated)]
+
+use std::{collections::BTreeMap, io::Cursor, sync::Arc};
 
 use anyhow::{anyhow, Result};
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
@@ -16,8 +19,10 @@ use oasis_core_runtime::{
         version::Version,
     },
     consensus::{
-        registry,
+        address::Address,
         roothash::{Message, RegistryMessage, StakingMessage},
+        staking::{Account, Delegation},
+        state::staking::ImmutableState as StakingImmutableState,
     },
     executor::Executor,
     rak::RAK,
@@ -73,6 +78,34 @@ fn get_runtime_id(_args: &(), ctx: &mut TxnContext) -> Result<Option<String>> {
     let rctx = runtime_context!(ctx, Context);
 
     Ok(Some(rctx.test_runtime_id.to_string()))
+}
+
+/// Queries all consensus accounts.
+/// Note: this is a transaction but could be a query in a non-test runtime.
+fn consensus_accounts(
+    _args: &(),
+    ctx: &mut TxnContext,
+) -> Result<(
+    BTreeMap<Address, Account>,
+    BTreeMap<Address, BTreeMap<Address, Delegation>>,
+)> {
+    if ctx.check_only {
+        return Err(CheckOnlySuccess::default().into());
+    }
+
+    let state = StakingImmutableState::new(&ctx.consensus_state);
+    let mut result = BTreeMap::new();
+    let addrs = state.addresses(IoContext::create_child(&ctx.io_ctx))?;
+    for addr in addrs {
+        result.insert(
+            addr.clone(),
+            state.account(IoContext::create_child(&ctx.io_ctx), addr)?,
+        );
+    }
+
+    let delegations = state.delegations(IoContext::create_child(&ctx.io_ctx))?;
+
+    Ok((result, delegations))
 }
 
 /// Withdraw from the consensus layer into the runtime account.

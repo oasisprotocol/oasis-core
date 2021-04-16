@@ -13,8 +13,12 @@ use crate::{
         },
         namespace::Namespace,
         sgx::avr::AVR,
+        version::Version,
     },
-    consensus::roothash::{self, Block, ComputeResultsHeader, Header},
+    consensus::{
+        roothash::{self, Block, ComputeResultsHeader, Header},
+        tendermint::LightBlock,
+    },
     storage::mkvs::{sync, WriteLog},
     transaction::types::TxnBatch,
 };
@@ -70,12 +74,12 @@ pub enum Body {
     RuntimeInfoRequest {
         runtime_id: Namespace,
         consensus_backend: String,
-        consensus_protocol_version: u64,
+        consensus_protocol_version: Version,
         consensus_chain_context: String,
     },
     RuntimeInfoResponse {
-        protocol_version: u64,
-        runtime_version: u64,
+        protocol_version: Version,
+        runtime_version: Version,
     },
     RuntimePingRequest {},
     RuntimeShutdownRequest {},
@@ -114,6 +118,7 @@ pub enum Body {
         response: Vec<u8>,
     },
     RuntimeCheckTxBatchRequest {
+        consensus_block: LightBlock,
         inputs: TxnBatch,
         block: Block,
     },
@@ -121,6 +126,7 @@ pub enum Body {
         results: Vec<CheckTxResult>,
     },
     RuntimeExecuteTxBatchRequest {
+        consensus_block: LightBlock,
         round_results: roothash::RoundResults,
         io_root: Hash,
         #[serde(skip_serializing_if = "Option::is_none")]
@@ -137,6 +143,7 @@ pub enum Body {
     },
     RuntimeKeyManagerPolicyUpdateResponse {},
     RuntimeQueryRequest {
+        consensus_block: LightBlock,
         method: String,
         header: Header,
         args: cbor::Value,

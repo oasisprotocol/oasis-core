@@ -1,3 +1,6 @@
+// Allow until oasis-core#3572.
+#![allow(deprecated)]
+
 #[macro_use]
 extern crate clap;
 extern crate grpcio;
@@ -7,7 +10,7 @@ extern crate oasis_core_runtime;
 extern crate simple_keyvalue_api;
 extern crate tokio;
 
-use std::sync::Arc;
+use std::{collections::BTreeMap, sync::Arc};
 
 use clap::{App, Arg};
 use grpcio::EnvBuilder;
@@ -23,6 +26,10 @@ use oasis_core_client::{
 };
 use oasis_core_runtime::{
     common::{crypto::hash::Hash, namespace::Namespace},
+    consensus::{
+        address::Address,
+        staking::{Account, Delegation},
+    },
     storage::MKVS,
 };
 use simple_keyvalue_api::{
@@ -252,6 +259,22 @@ fn main() {
             "round={} index={} input={:?} output={:?}",
             txn.block_snapshot.block.header.round, txn.index, txn.input, txn.output
         );
+    }
+
+    println!("Testing consensus queries:");
+    let (accounts, delegations) = rt
+        .block_on(kv_client.consensus_accounts(()))
+        .expect("query consensus account");
+
+    for (addr, acc) in accounts {
+        println!("Account: {:?}: {:?}", addr, acc);
+    }
+
+    println!("Delegations:");
+    for (addr, dels) in delegations {
+        for (addr2, del) in dels {
+            println!("Escrow: {:?}: Delegator: {:?}: {:?}", addr, addr2, del);
+        }
     }
 
     println!("Simple key/value client finished.");

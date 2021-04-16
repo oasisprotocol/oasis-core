@@ -17,6 +17,7 @@ use thiserror::Error;
 
 use crate::{
     common::{cbor, logger::get_logger, namespace::Namespace, version::Version},
+    consensus::tendermint,
     dispatcher::Dispatcher,
     rak::RAK,
     storage::KeyValue,
@@ -46,6 +47,8 @@ pub enum ProtocolError {
     AttestationRequired,
     #[error("host environment information not configured")]
     HostInfoNotConfigured,
+    #[error("incompatible consensus backend")]
+    IncompatibleConsensusBackend,
 }
 
 /// Information about the host environment.
@@ -56,7 +59,7 @@ pub struct HostInfo {
     /// Name of the consensus backend that is in use for the consensus layer.
     pub consensus_backend: String,
     /// Consensus protocol version that is in use for the consensus layer.
-    pub consensus_protocol_version: u64,
+    pub consensus_protocol_version: Version,
     /// Consensus layer chain domain separation context.
     pub consensus_chain_context: String,
 }
@@ -286,10 +289,19 @@ impl Protocol {
                 info!(self.logger, "Received host environment information";
                     "runtime_id" => ?runtime_id,
                     "consensus_backend" => &consensus_backend,
-                    "consensus_protocol_version" => consensus_protocol_version,
+                    "consensus_protocol_version" => ?consensus_protocol_version,
                     "consensus_chain_context" => &consensus_chain_context,
                 );
-                // TODO: Verify consensus backend/protocol compatibility.
+
+                if tendermint::BACKEND_NAME != &consensus_backend {
+                    return Err(ProtocolError::IncompatibleConsensusBackend.into());
+                }
+                if !BUILD_INFO
+                    .consensus_version
+                    .is_compatible_with(&consensus_protocol_version)
+                {
+                    return Err(ProtocolError::IncompatibleConsensusBackend.into());
+                }
 
                 // Configure the host environment info.
                 *self.host_info.lock().unwrap() = Some(HostInfo {
@@ -302,8 +314,8 @@ impl Protocol {
                 self.dispatcher.start(self.clone());
 
                 Ok(Some(Body::RuntimeInfoResponse {
-                    protocol_version: BUILD_INFO.protocol_version.into(),
-                    runtime_version: self.runtime_version.into(),
+                    protocol_version: BUILD_INFO.protocol_version,
+                    runtime_version: self.runtime_version,
                 }))
             }
             Body::RuntimePingRequest {} => Ok(Some(Body::Empty {})),

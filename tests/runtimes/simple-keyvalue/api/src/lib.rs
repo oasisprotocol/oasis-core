@@ -1,3 +1,6 @@
+// Allow until oasis-core#3572.
+#![allow(deprecated)]
+
 extern crate serde;
 
 extern crate oasis_core_runtime;

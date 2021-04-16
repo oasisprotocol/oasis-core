@@ -29,7 +29,7 @@ type RichRuntime interface {
 	CheckTx(ctx context.Context, rb *block.Block, lb *consensus.LightBlock, tx []byte) error
 
 	// Query requests the runtime to answer a runtime-specific query.
-	Query(ctx context.Context, rb *block.Block, method string, args cbor.RawMessage) (cbor.RawMessage, error)
+	Query(ctx context.Context, rb *block.Block, lb *consensus.LightBlock, method string, args cbor.RawMessage) (cbor.RawMessage, error)
 }
 
 type richRuntime struct {
@@ -68,16 +68,17 @@ func (r *richRuntime) CheckTx(ctx context.Context, rb *block.Block, lb *consensu
 }
 
 // Implements RichRuntime.
-func (r *richRuntime) Query(ctx context.Context, rb *block.Block, method string, args cbor.RawMessage) (cbor.RawMessage, error) {
+func (r *richRuntime) Query(ctx context.Context, rb *block.Block, lb *consensus.LightBlock, method string, args cbor.RawMessage) (cbor.RawMessage, error) {
 	if rb == nil {
 		return nil, ErrInvalidArgument
 	}
 
 	resp, err := r.Call(ctx, &protocol.Body{
 		RuntimeQueryRequest: &protocol.RuntimeQueryRequest{
-			Method: method,
-			Header: rb.Header,
-			Args:   args,
+			ConsensusBlock: *lb,
+			Method:         method,
+			Header:         rb.Header,
+			Args:           args,
 		},
 	})
 	switch {

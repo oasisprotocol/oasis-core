@@ -511,7 +511,11 @@ mod tests {
     use io_context::Context as IoContext;
     use serde::{Deserialize, Serialize};
 
-    use crate::{common::cbor, consensus::roothash::Header};
+    use crate::{
+        common::cbor,
+        consensus::{roothash::Header, state::ConsensusState},
+        storage::mkvs::{sync::NoopReadSyncer, RootType, Tree},
+    };
 
     use super::*;
 
@@ -546,6 +550,11 @@ mod tests {
         let mut dispatcher = MethodDispatcher::new();
         register_dummy_method(&mut dispatcher);
 
+        let mkvs = Tree::make()
+            .with_root_type(RootType::State)
+            .new(Box::new(NoopReadSyncer));
+        let consensus_state = ConsensusState::new(mkvs);
+
         // Prepare a dummy call.
         let call = TxnCall {
             method: "dummy".to_owned(),
@@ -563,6 +572,7 @@ mod tests {
         let results = Default::default();
         let mut ctx = Context::new(
             IoContext::background().freeze(),
+            consensus_state,
             &header,
             &results,
             0,

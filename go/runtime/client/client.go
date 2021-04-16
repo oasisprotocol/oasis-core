@@ -386,12 +386,17 @@ func (c *runtimeClient) Query(ctx context.Context, request *api.QueryRequest) (*
 		return nil, api.ErrNoHostedRuntime
 	}
 
-	blk, err := c.GetBlock(ctx, &api.GetBlockRequest{RuntimeID: request.RuntimeID, Round: request.Round})
+	// Get current blocks.
+	rs, err := c.common.consensus.RootHash().GetRuntimeState(ctx, request.RuntimeID, consensus.HeightLatest)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("client: failed to get runtime %s state: %w", request.RuntimeID, err)
+	}
+	lb, err := c.common.consensus.GetLightBlock(ctx, rs.CurrentBlockHeight)
+	if err != nil {
+		return nil, fmt.Errorf("client: failed to get light block at height %d: %w", rs.CurrentBlockHeight, err)
 	}
 
-	data, err := rt.Query(ctx, blk, request.Method, request.Args)
+	data, err := rt.Query(ctx, rs.CurrentBlock, lb, request.Method, request.Args)
 	if err != nil {
 		return nil, err
 	}

@@ -100,6 +100,7 @@ func (s *ImmutableState) loadStoredBalance(ctx context.Context, key *keyformat.K
 	return &q, nil
 }
 
+// TotalSupply returns the total supply balance.
 func (s *ImmutableState) TotalSupply(ctx context.Context) (*quantity.Quantity, error) {
 	return s.loadStoredBalance(ctx, totalSupplyKeyFmt)
 }
@@ -109,6 +110,7 @@ func (s *ImmutableState) CommonPool(ctx context.Context) (*quantity.Quantity, er
 	return s.loadStoredBalance(ctx, commonPoolKeyFmt)
 }
 
+// ConsensusParameters returns the consensus parameters.
 func (s *ImmutableState) ConsensusParameters(ctx context.Context) (*staking.ConsensusParameters, error) {
 	raw, err := s.is.Get(ctx, parametersKeyFmt.Encode())
 	if err != nil {
@@ -162,6 +164,7 @@ func (s *ImmutableState) Thresholds(ctx context.Context) (map[staking.ThresholdK
 	return params.Thresholds, nil
 }
 
+// Addresses returns the non-empty addresses from the staking ledger.
 func (s *ImmutableState) Addresses(ctx context.Context) ([]staking.Address, error) {
 	it := s.is.NewIterator(ctx)
 	defer it.Close()
@@ -211,6 +214,7 @@ func (s *ImmutableState) EscrowBalance(ctx context.Context, address staking.Addr
 	return &account.Escrow.Active.Balance, nil
 }
 
+// Delegations returns all active delegations.
 func (s *ImmutableState) Delegations(
 	ctx context.Context,
 ) (map[staking.Address]map[staking.Address]*staking.Delegation, error) {
@@ -241,6 +245,7 @@ func (s *ImmutableState) Delegations(
 	return delegations, nil
 }
 
+// Delegation returns the delegation descriptor.
 func (s *ImmutableState) Delegation(
 	ctx context.Context,
 	delegatorAddr, escrowAddr staking.Address,
@@ -483,10 +488,12 @@ func (s *ImmutableState) Slashing(ctx context.Context) (map[staking.SlashReason]
 	return params.Slashing, nil
 }
 
+// LastBlockFees returns the last block fees balance.
 func (s *ImmutableState) LastBlockFees(ctx context.Context) (*quantity.Quantity, error) {
 	return s.loadStoredBalance(ctx, lastBlockFeesKeyFmt)
 }
 
+// GovernanceDeposits returns the governance deposits balance.
 func (s *ImmutableState) GovernanceDeposits(ctx context.Context) (*quantity.Quantity, error) {
 	return s.loadStoredBalance(ctx, governanceDepositsKeyFmt)
 }

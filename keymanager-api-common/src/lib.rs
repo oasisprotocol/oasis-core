@@ -1,4 +1,8 @@
 //! Key manager API common types and functions.
+
+// Allow until oasis-core#3572.
+#![allow(deprecated)]
+
 use anyhow::Result;
 use lazy_static::lazy_static;
 use oasis_core_runtime::common::{cbor, crypto::signature::PublicKey as OasisPublicKey};

@@ -34,6 +34,8 @@ rand = "0.7.3"
 futures = "0.1.25"
 tokio-current-thread = "0.1.5"
 tokio-executor = "0.1.6"
+tendermint = "0.18.1"
+tendermint-proto = "0.18.1"
 io-context = "0.2.0"
 x25519-dalek = "1.1.0"
 ed25519-dalek = "1.0.1"
@@ -49,6 +51,7 @@ arbitrary = { version = "1.0.0", features = ["derive"] }
 num-bigint = { version = "0.4", features = ["serde"] }
 num-traits = "0.2.14"
 bech32 = "0.8.0"
+impl-trait-for-tuples = "0.2.1"
 
 [dev-dependencies]
 # For storage interoperability tests only.
