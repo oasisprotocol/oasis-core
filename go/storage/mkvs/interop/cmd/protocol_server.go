@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"os"
@@ -16,13 +17,19 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
 	genesisTestHelpers "github.com/oasisprotocol/oasis-core/go/genesis/tests"
 	"github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/background"
+	"github.com/oasisprotocol/oasis-core/go/storage/api"
 	storage "github.com/oasisprotocol/oasis-core/go/storage/api"
 	"github.com/oasisprotocol/oasis-core/go/storage/database"
+	badgerNodedb "github.com/oasisprotocol/oasis-core/go/storage/mkvs/db/badger"
+	"github.com/oasisprotocol/oasis-core/go/storage/mkvs/interop/fixtures"
+	"github.com/oasisprotocol/oasis-core/go/storage/mkvs/node"
 )
 
 const (
 	cfgServerSocket  = "socket"
 	cfgServerDataDir = "datadir"
+
+	cfgServerFixture = "fixture"
 )
 
 var (
@@ -96,6 +103,42 @@ func doProtoServer(cmd *cobra.Command, args []string) {
 		InsecureSkipChecks: false,
 		MaxCacheSize:       16 * 1024 * 1024,
 	}
+
+	if fixtureName := viper.GetString(cfgServerFixture); fixtureName != "" {
+		ctx := context.Background()
+		ndbCfg := storageCfg.ToNodeDB()
+		var ndb api.NodeDB
+		ndb, err = badgerNodedb.New(ndbCfg)
+		if err != nil {
+			logger.Error("failed to initialize node db",
+				"err", err,
+			)
+			return
+		}
+		var fixture fixtures.Fixture
+		fixture, err = fixtures.GetFixture(fixtureName)
+		if err != nil {
+			logger.Error("failed getting fixture",
+				"err", err,
+				"fixture", fixture.Name(),
+			)
+			return
+		}
+		var root *node.Root
+		root, err = fixture.Populate(ctx, ndb)
+		if err != nil {
+			logger.Error("failed to populate fixture",
+				"err", err,
+				"fixture", fixture.Name(),
+			)
+			return
+		}
+
+		fmt.Printf("Fixture: %s, populated root hash: %s\n", fixtureName, root.Hash)
+
+		ndb.Close()
+	}
+
 	backend, err := database.New(&storageCfg)
 	if err != nil {
 		logger.Error("failed to initialize storage backend",
@@ -130,5 +173,6 @@ func RegisterProtoServer(parentCmd *cobra.Command) {
 func init() {
 	protoServerFlags.String(cfgServerSocket, "storage.sock", "path to storage protocol server socket")
 	protoServerFlags.String(cfgServerDataDir, "", "path to data directory")
+	protoServerFlags.String(cfgServerFixture, "", "fixture for initializing initial state")
 	_ = viper.BindPFlags(protoServerFlags)
 }
