@@ -442,27 +442,6 @@ func (n *Node) GetLastSynced() (uint64, storageApi.Root, storageApi.Root) {
 	return n.syncedState.LastBlock.Round, io, state
 }
 
-// ForceFinalize forces a storage finalization for the given round.
-func (n *Node) ForceFinalize(ctx context.Context, round uint64) error {
-	n.logger.Debug("forcing round finalization",
-		"round", round,
-	)
-
-	var block *block.Block
-	var err error
-
-	if round == RoundLatest {
-		block, err = n.commonNode.Consensus.RootHash().GetLatestBlock(ctx, n.commonNode.Runtime.ID(), consensus.HeightLatest)
-	} else {
-		block, err = n.commonNode.Runtime.History().GetBlock(ctx, round)
-	}
-
-	if err != nil {
-		return err
-	}
-	return n.localStorage.NodeDB().Finalize(ctx, block.Header.StorageRoots())
-}
-
 func (n *Node) fetchDiff(round uint64, prevRoot, thisRoot storageApi.Root) {
 	result := &fetchedDiff{
 		fetched:  false,

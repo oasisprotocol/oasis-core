@@ -21,12 +21,3 @@ func (w *Worker) GetLastSyncedRound(ctx context.Context, request *api.GetLastSyn
 		StateRoot: stateRoot,
 	}, nil
 }
-
-func (w *Worker) ForceFinalize(ctx context.Context, request *api.ForceFinalizeRequest) error {
-	node := w.runtimes[request.RuntimeID]
-	if node == nil {
-		return api.ErrRuntimeNotFound
-	}
-
-	return node.ForceFinalize(ctx, request.Round)
-}

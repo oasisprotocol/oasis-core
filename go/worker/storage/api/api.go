@@ -18,9 +18,6 @@ var ErrRuntimeNotFound = errors.New(ModuleName, 1, "worker/storage: runtime not 
 type StorageWorker interface {
 	// GetLastSyncedRound retrieves the last synced round for the storage worker.
 	GetLastSyncedRound(ctx context.Context, request *GetLastSyncedRoundRequest) (*GetLastSyncedRoundResponse, error)
-
-	// ForceFinalize forces finalization of a specific round.
-	ForceFinalize(ctx context.Context, request *ForceFinalizeRequest) error
 }
 
 // GetLastSyncedRoundRequest is a GetLastSyncedRound request.
@@ -33,12 +30,6 @@ type GetLastSyncedRoundResponse struct {
 	Round     uint64       `json:"round"`
 	IORoot    storage.Root `json:"io_root"`
 	StateRoot storage.Root `json:"state_root"`
-}
-
-// ForceFinalizeRequest is a ForceFinalize request.
-type ForceFinalizeRequest struct {
-	RuntimeID common.Namespace `json:"runtime_id"`
-	Round     uint64           `json:"round"`
 }
 
 // Status is the storage worker status.
