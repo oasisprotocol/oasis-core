@@ -174,16 +174,17 @@ func (n *Node) nodeWorker(
 				"root", chunk.Root,
 				"err", result.err,
 			)
-			fallthrough
-		case errors.Is(result.err, checkpoint.ErrChunkCorrupted):
-			chunkReturnCh <- chunk
-			return result.err
-		case errors.Is(result.err, checkpoint.ErrChunkProofVerificationFailed):
-			errorCh <- checkpointStatusNext
-			return backoff.Permanent(result.err)
-		case result.err != nil:
-			errorCh <- checkpointStatusBail
-			return backoff.Permanent(result.err)
+			switch {
+			case errors.Is(result.err, checkpoint.ErrChunkCorrupted):
+				chunkReturnCh <- chunk
+				return result.err
+			case errors.Is(result.err, checkpoint.ErrChunkProofVerificationFailed):
+				errorCh <- checkpointStatusNext
+				return backoff.Permanent(result.err)
+			default:
+				errorCh <- checkpointStatusBail
+				return backoff.Permanent(result.err)
+			}
 		}
 	}
 }
