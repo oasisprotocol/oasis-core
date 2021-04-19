@@ -112,6 +112,8 @@ pub struct ExecuteBatchResult {
     pub results: Vec<ExecuteTxResult>,
     /// Emitted runtime messages.
     pub messages: Vec<roothash::Message>,
+    /// Block emitted tags (not emitted by a specific transaction).
+    pub block_tags: Tags,
 }
 
 /// No-op dispatcher.
@@ -135,6 +137,7 @@ impl Dispatcher for NoopDispatcher {
         Ok(ExecuteBatchResult {
             results: Vec::new(),
             messages: Vec::new(),
+            block_tags: Tags::new(),
         })
     }
 
@@ -491,6 +494,8 @@ impl Dispatcher for MethodDispatcher {
         Ok(ExecuteBatchResult {
             results,
             messages: ctx.close(),
+            // No support for block tags in the deprecated dispatcher.
+            block_tags: Tags::new(),
         })
     }
 

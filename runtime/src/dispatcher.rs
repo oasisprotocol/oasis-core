@@ -477,6 +477,10 @@ impl Dispatcher {
                 .expect("add transaction must succeed");
         }
 
+        txn_tree
+            .add_block_tags(Context::create_child(&ctx), results.block_tags)
+            .expect("adding block tags must succeed");
+
         let (io_write_log, io_root) = txn_tree
             .commit(Context::create_child(&ctx))
             .expect("io commit must succeed");
