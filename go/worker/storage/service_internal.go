@@ -22,11 +22,30 @@ func (w *Worker) GetLastSyncedRound(ctx context.Context, request *api.GetLastSyn
 	}, nil
 }
 
-func (w *Worker) ForceFinalize(ctx context.Context, request *api.ForceFinalizeRequest) error {
+func (w *Worker) WaitForRound(ctx context.Context, request *api.WaitForRoundRequest) (*api.WaitForRoundResponse, error) {
+	node := w.runtimes[request.RuntimeID]
+	if node == nil {
+		return nil, api.ErrRuntimeNotFound
+	}
+
+	ch, err := node.WaitForRound(request.Round, request.Root)
+	if err != nil {
+		return nil, err
+	}
+
+	select {
+	case round := <-ch:
+		return &api.WaitForRoundResponse{LastRound: round}, nil
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	}
+}
+
+func (w *Worker) PauseCheckpointer(ctx context.Context, request *api.PauseCheckpointerRequest) error {
 	node := w.runtimes[request.RuntimeID]
 	if node == nil {
 		return api.ErrRuntimeNotFound
 	}
 
-	return node.ForceFinalize(ctx, request.Round)
+	return node.PauseCheckpointer(request.Pause)
 }

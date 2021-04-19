@@ -20,6 +20,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/persistent"
 	"github.com/oasisprotocol/oasis-core/go/common/workerpool"
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
+	commonFlags "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/flags"
 	registryApi "github.com/oasisprotocol/oasis-core/go/registry/api"
 	roothashApi "github.com/oasisprotocol/oasis-core/go/roothash/api"
 	"github.com/oasisprotocol/oasis-core/go/roothash/api/block"
@@ -144,6 +145,11 @@ type watcherState struct {
 	LastBlock blockSummary `json:"last_block"`
 }
 
+type roundWaiter struct {
+	round uint64
+	ch    chan uint64
+}
+
 // Node watches blocks for storage changes.
 type Node struct { // nolint: maligned
 	commonNode *committee.Node
@@ -173,8 +179,9 @@ type Node struct { // nolint: maligned
 	checkpointSyncDisabled bool
 	checkpointSyncForced   bool
 
-	syncedLock  sync.RWMutex
-	syncedState watcherState
+	syncedLock   sync.RWMutex
+	syncedState  watcherState
+	roundWaiters []roundWaiter
 
 	blockCh    *channels.InfiniteChannel
 	diffCh     chan *fetchedDiff
@@ -388,6 +395,39 @@ func (n *Node) getMetricLabels() prometheus.Labels {
 	}
 }
 
+func (n *Node) WaitForRound(round uint64, root *storageApi.Root) (<-chan uint64, error) {
+	retCh := make(chan uint64, 1)
+
+	if root != nil {
+		round = root.Version
+	}
+
+	n.syncedLock.Lock()
+	defer n.syncedLock.Unlock()
+
+	if round <= n.syncedState.LastBlock.Round || (root != nil && n.localStorage.NodeDB().HasRoot(*root)) {
+		retCh <- n.syncedState.LastBlock.Round
+		close(retCh)
+		return retCh, nil
+	}
+
+	n.roundWaiters = append(n.roundWaiters, roundWaiter{
+		round: round,
+		ch:    retCh,
+	})
+	return retCh, nil
+}
+
+func (n *Node) PauseCheckpointer(pause bool) error {
+	n.logger.Info("TRYING to pause checkpointer")
+	if !commonFlags.DebugDontBlameOasis() {
+		return api.ErrCantPauseCheckpointer
+	}
+	n.checkpointer.Pause(pause)
+	n.logger.Info("PAUSED checkpointer")
+	return nil
+}
+
 // NodeHooks implementation.
 
 func (n *Node) HandlePeerMessage(context.Context, *p2p.Message, bool) (bool, error) {
@@ -440,27 +480,6 @@ func (n *Node) GetLastSynced() (uint64, storageApi.Root, storageApi.Root) {
 	}
 
 	return n.syncedState.LastBlock.Round, io, state
-}
-
-// ForceFinalize forces a storage finalization for the given round.
-func (n *Node) ForceFinalize(ctx context.Context, round uint64) error {
-	n.logger.Debug("forcing round finalization",
-		"round", round,
-	)
-
-	var block *block.Block
-	var err error
-
-	if round == RoundLatest {
-		block, err = n.commonNode.Consensus.RootHash().GetLatestBlock(ctx, n.commonNode.Runtime.ID(), consensus.HeightLatest)
-	} else {
-		block, err = n.commonNode.Runtime.History().GetBlock(ctx, round)
-	}
-
-	if err != nil {
-		return err
-	}
-	return n.localStorage.NodeDB().Finalize(ctx, block.Header.StorageRoots())
 }
 
 func (n *Node) fetchDiff(round uint64, prevRoot, thisRoot storageApi.Root) {
@@ -672,6 +691,18 @@ func (n *Node) flushSyncedState(summary *blockSummary) uint64 {
 	if err := n.stateStore.PutCBOR(rtID[:], &n.syncedState); err != nil {
 		n.logger.Error("can't store watcher state to database", "err", err)
 	}
+
+	// Wake up any round waiters.
+	filtered := make([]roundWaiter, 0, len(n.roundWaiters))
+	for _, w := range n.roundWaiters {
+		if w.round <= n.syncedState.LastBlock.Round {
+			w.ch <- n.syncedState.LastBlock.Round
+			close(w.ch)
+		} else {
+			filtered = append(filtered, w)
+		}
+	}
+	n.roundWaiters = filtered
 
 	return n.syncedState.LastBlock.Round
 }

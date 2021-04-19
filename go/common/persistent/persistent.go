@@ -21,6 +21,12 @@ const dbName = "persistent-store.badger.db"
 // ErrNotFound is returned when the requested key could not be found in the database.
 var ErrNotFound = errors.New("persistent: key not found in database")
 
+// GetPersistentStoreDBDir returns the database directory path for the node with
+// the given data directory.
+func GetPersistentStoreDBDir(dataDir string) string {
+	return filepath.Join(dataDir, dbName)
+}
+
 // CommonStore is the interface to the common storage for the node.
 type CommonStore struct {
 	db *badger.DB
@@ -46,7 +52,7 @@ func (cs *CommonStore) GetServiceStore(name string) (*ServiceStore, error) {
 func NewCommonStore(dataDir string) (*CommonStore, error) {
 	logger := logging.GetLogger("common/persistent")
 
-	opts := badger.DefaultOptions(filepath.Join(dataDir, dbName))
+	opts := badger.DefaultOptions(GetPersistentStoreDBDir(dataDir))
 	opts = opts.WithLogger(cmnBadger.NewLogAdapter(logger))
 	opts = opts.WithSyncWrites(true)
 	// Allow value log truncation if required (this is needed to recover the

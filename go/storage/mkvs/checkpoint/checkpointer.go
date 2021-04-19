@@ -63,6 +63,11 @@ type Checkpointer interface {
 
 	// Flush makes the checkpointer immediately process any notifications.
 	Flush()
+
+	// Pause pauses or unpauses the checkpointer. Pausing doesn't influence the checkpointing
+	// intervals; after unpausing, a checkpoint won't be created immediately, but the checkpointer
+	// will wait for the next regular event.
+	Pause(pause bool)
 }
 
 type checkpointer struct {
@@ -73,6 +78,7 @@ type checkpointer struct {
 	notifyCh *channels.RingChannel
 	flushCh  *channels.RingChannel
 	statusCh chan struct{}
+	pausedCh chan bool
 
 	logger *logging.Logger
 }
@@ -85,6 +91,10 @@ func (c *checkpointer) NotifyNewVersion(version uint64) {
 // Implements Checkpointer.
 func (c *checkpointer) Flush() {
 	c.flushCh.In() <- struct{}{}
+}
+
+func (c *checkpointer) Pause(pause bool) {
+	c.pausedCh <- pause
 }
 
 func (c *checkpointer) checkpoint(ctx context.Context, version uint64, params *CreationParameters) (err error) {
@@ -220,12 +230,16 @@ func (c *checkpointer) worker(ctx context.Context) {
 	ticker := time.NewTicker(c.cfg.CheckInterval)
 	defer ticker.Stop()
 
+	paused := false
+
 	for {
 		select {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
 		case <-c.flushCh.Out():
+		case paused = <-c.pausedCh:
+			continue
 		}
 
 		var version uint64
@@ -234,6 +248,10 @@ func (c *checkpointer) worker(ctx context.Context) {
 			return
 		case v := <-c.notifyCh.Out():
 			version = v.(uint64)
+		}
+
+		if paused {
+			continue
 		}
 
 		// Fetch current checkpoint parameters.
@@ -290,6 +308,7 @@ func NewCheckpointer(
 		notifyCh: channels.NewRingChannel(1),
 		flushCh:  channels.NewRingChannel(1),
 		statusCh: make(chan struct{}),
+		pausedCh: make(chan bool),
 		logger:   logging.GetLogger("storage/mkvs/checkpoint/"+cfg.Name).With("namespace", cfg.Namespace),
 	}
 	go c.worker(ctx)
