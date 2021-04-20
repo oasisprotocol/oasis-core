@@ -1,6 +1,9 @@
 module github.com/oasisprotocol/oasis-core/go
 
 replace (
+	// CVE-2021-3121
+	github.com/gogo/protobuf => github.com/gogo/protobuf v1.3.2
+
 	// Updates the version used in spf13/cobra (dependency via tendermint) as
 	// there is no release yet with the fix. Remove once an updated release of
 	// spf13/cobra exists and tendermint is updated to include it.
