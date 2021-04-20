@@ -50,6 +50,9 @@ func (app *governanceApplication) Dependencies() []string {
 
 func (app *governanceApplication) OnRegister(state api.ApplicationState, md api.MessageDispatcher) {
 	app.state = state
+
+	// Subscribe to messages emitted by other apps.
+	md.Subscribe(api.MessageStateSyncCompleted, app)
 }
 
 func (app *governanceApplication) OnCleanup() {
@@ -81,7 +84,34 @@ func (app *governanceApplication) ExecuteTx(ctx *api.Context, tx *transaction.Tr
 }
 
 func (app *governanceApplication) ExecuteMessage(ctx *api.Context, kind, msg interface{}) error {
-	return governance.ErrInvalidArgument
+	state := governanceState.NewMutableState(ctx.State())
+
+	switch kind {
+	case api.MessageStateSyncCompleted:
+		// State sync has just completed, check whether there are any pending upgrades to make
+		// sure we don't miss them after the sync.
+		pendingUpgrades, err := state.PendingUpgrades(ctx)
+		if err != nil {
+			return fmt.Errorf("tendermint/governance: couldn't get pending upgrades: %w", err)
+		}
+
+		// Apply all pending upgrades locally.
+		if upgrader := ctx.AppState().Upgrader(); upgrader != nil {
+			for _, pu := range pendingUpgrades {
+				switch err = upgrader.SubmitDescriptor(ctx, pu); err {
+				case nil, upgrade.ErrAlreadyPending:
+				default:
+					ctx.Logger().Error("failed to locally apply the upgrade descriptor",
+						"err", err,
+						"descriptor", pu,
+					)
+				}
+			}
+		}
+		return nil
+	default:
+		return governance.ErrInvalidArgument
+	}
 }
 
 func (app *governanceApplication) BeginBlock(ctx *api.Context, request types.RequestBeginBlock) error {
@@ -170,6 +200,16 @@ func (app *governanceApplication) executeProposal(ctx *api.Context, state *gover
 		if err != nil {
 			return fmt.Errorf("failed to set pending upgrade: %w", err)
 		}
+
+		// Locally apply the upgrade proposal.
+		if upgrader := ctx.AppState().Upgrader(); upgrader != nil {
+			if err = upgrader.SubmitDescriptor(ctx, &proposal.Content.Upgrade.Descriptor); err != nil {
+				ctx.Logger().Error("failed to locally apply the upgrade descriptor",
+					"err", err,
+					"descriptor", proposal.Content.Upgrade.Descriptor,
+				)
+			}
+		}
 	case proposal.Content.CancelUpgrade != nil:
 		cancelingProposal, err := state.Proposal(ctx, proposal.Content.CancelUpgrade.ProposalID)
 		if err != nil {
@@ -178,13 +218,23 @@ func (app *governanceApplication) executeProposal(ctx *api.Context, state *gover
 		if cancelingProposal.Content.Upgrade == nil {
 			return fmt.Errorf("%w: canceling proposal needs to be an upgrade proposal", governance.ErrNoSuchUpgrade)
 		}
-		_, err = state.PendingUpgradeProposal(ctx, cancelingProposal.ID)
+		upgradeProposal, err := state.PendingUpgradeProposal(ctx, cancelingProposal.ID)
 		if err != nil {
 			return fmt.Errorf("failed to get pending upgrade: %w", err)
 		}
 		err = state.RemovePendingUpgrade(ctx, cancelingProposal.Content.Upgrade.Epoch, cancelingProposal.ID)
 		if err != nil {
 			return fmt.Errorf("failed to remove pending upgrade: %w", err)
+		}
+
+		// Locally cancel the upgrade proposal.
+		if upgrader := ctx.AppState().Upgrader(); upgrader != nil {
+			if err = upgrader.CancelUpgrade(ctx, &upgradeProposal.Descriptor); err != nil {
+				ctx.Logger().Error("failed to locally cancel the upgrade",
+					"err", err,
+					"descriptor", upgradeProposal.Descriptor,
+				)
+			}
 		}
 	default:
 		return governance.ErrInvalidArgument

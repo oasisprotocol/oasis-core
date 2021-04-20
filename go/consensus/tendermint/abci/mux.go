@@ -1047,6 +1047,17 @@ func (mux *abciMux) ApplySnapshotChunk(req types.RequestApplySnapshotChunk) type
 			"root", cp.Root,
 			logging.LogEvent, LogEventABCIStateSyncComplete,
 		)
+
+		// Notify applications that state has been synced.
+		ctx := mux.state.NewContext(api.ContextEndBlock, mux.currentTime)
+		defer ctx.Close()
+
+		if err = mux.md.Publish(ctx, api.MessageStateSyncCompleted, nil); err != nil {
+			mux.logger.Error("failed to dispatch state sync completed message",
+				"err", err,
+			)
+			return types.ResponseApplySnapshotChunk{Result: types.ResponseApplySnapshotChunk_ABORT}
+		}
 	}
 
 	return types.ResponseApplySnapshotChunk{Result: types.ResponseApplySnapshotChunk_ACCEPT}

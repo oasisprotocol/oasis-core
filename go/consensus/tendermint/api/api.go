@@ -336,3 +336,9 @@ func (bpk BlockProposerKey) NewDefault() interface{} {
 	// multiplexer.
 	panic("no proposer address in block context")
 }
+
+type messageKind uint8
+
+// MessageStateSyncCompleted is the message kind for when the node successfully performs a state
+// sync. The message itself is nil.
+var MessageStateSyncCompleted = messageKind(0)

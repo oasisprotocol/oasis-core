@@ -205,6 +205,13 @@ func (args *argBuilder) tendermintStateSync(
 	return args
 }
 
+func (args *argBuilder) tendermintUpgradeStopDelay(delay time.Duration) *argBuilder {
+	args.vec = append(args.vec,
+		"--"+tendermintFull.CfgUpgradeStopDelay, delay.String(),
+	)
+	return args
+}
+
 func (args *argBuilder) storageBackend(backend string) *argBuilder {
 	args.vec = append(args.vec, []string{
 		"--" + workerStorage.CfgBackend, backend,
