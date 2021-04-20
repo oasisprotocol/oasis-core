@@ -133,7 +133,7 @@ func (a *ApplicationServer) Register(app api.Application) error {
 
 // RegisterHaltHook registers a function to be called when the
 // consensus Halt epoch height is reached.
-func (a *ApplicationServer) RegisterHaltHook(hook func(ctx context.Context, blockHeight int64, epoch epochtime.EpochTime)) {
+func (a *ApplicationServer) RegisterHaltHook(hook consensus.HaltHook) {
 	a.mux.registerHaltHook(hook)
 }
 
@@ -216,7 +216,7 @@ type abciMux struct {
 	lastBeginBlock int64
 	currentTime    time.Time
 
-	haltHooks []func(context.Context, int64, epochtime.EpochTime)
+	haltHooks []consensus.HaltHook
 
 	// invalidatedTxs maps transaction hashes (hash.Hash) to a subscriber
 	// waiting for that transaction to become invalid.
@@ -255,7 +255,7 @@ func (mux *abciMux) watchInvalidatedTx(txHash hash.Hash) (<-chan error, pubsub.C
 	return resultCh, sub, nil
 }
 
-func (mux *abciMux) registerHaltHook(hook func(context.Context, int64, epochtime.EpochTime)) {
+func (mux *abciMux) registerHaltHook(hook consensus.HaltHook) {
 	mux.Lock()
 	defer mux.Unlock()
 
@@ -358,6 +358,13 @@ func (mux *abciMux) InitChain(req types.RequestInitChain) types.ResponseInitChai
 	return resp
 }
 
+func (mux *abciMux) dispatchHaltHooks(blockHeight int64, currentEpoch epochtime.EpochTime, err error) {
+	for _, hook := range mux.haltHooks {
+		hook(mux.state.ctx, blockHeight, currentEpoch, err)
+	}
+	mux.logger.Debug("halt hook dispatch complete")
+}
+
 func (mux *abciMux) BeginBlock(req types.RequestBeginBlock) types.ResponseBeginBlock {
 	blockHeight := mux.state.BlockHeight()
 
@@ -396,14 +403,10 @@ func (mux *abciMux) BeginBlock(req types.RequestBeginBlock) types.ResponseBeginB
 	case nil:
 		// Everything ok.
 	case upgrade.ErrStopForUpgrade:
-		// Stop for upgrade -- but dispatch halt hooks first.
-		mux.logger.Debug("dispatching halt hooks before stopping for upgrade")
-		for _, hook := range mux.haltHooks {
-			hook(mux.state.ctx, blockHeight, currentEpoch)
-		}
-		mux.logger.Debug("halt hook dispatch complete")
-
-		panic("mux: reached upgrade epoch")
+		// Signal graceful stop for upgrade.
+		mux.logger.Debug("dispatching halt hooks for upgrade")
+		mux.dispatchHaltHooks(blockHeight, currentEpoch, err)
+		panic(err)
 	default:
 		panic(fmt.Sprintf("mux: error while trying to perform consensus upgrade: %v", err))
 	}
@@ -418,11 +421,8 @@ func (mux *abciMux) BeginBlock(req types.RequestBeginBlock) types.ResponseBeginB
 			"block_height", blockHeight,
 			"epoch", mux.state.haltEpochHeight,
 		)
-		mux.logger.Debug("Dispatching halt hooks")
-		for _, hook := range mux.haltHooks {
-			hook(mux.state.ctx, blockHeight, mux.state.haltEpochHeight)
-		}
-		mux.logger.Debug("Halt hook dispatch complete")
+		mux.logger.Debug("dispatching halt hooks before halt epoch")
+		mux.dispatchHaltHooks(blockHeight, currentEpoch, nil)
 		return types.ResponseBeginBlock{}
 	case true:
 		if !mux.state.afterHaltEpoch(ctx) {

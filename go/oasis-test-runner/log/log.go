@@ -3,8 +3,10 @@ package log
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/hpcloud/tail"
+	"github.com/hpcloud/tail/watch"
 )
 
 // WatcherHandlerFactory is a factory interface for log file watcher handlers.
@@ -48,6 +50,10 @@ func (l *Watcher) Cleanup() {
 	if l.tail == nil {
 		return
 	}
+
+	// Wait for two polling rounds to complete before stopping so that the watcher had the time to
+	// process any remaining bits.
+	time.Sleep(2 * watch.POLL_DURATION)
 
 	_ = l.tail.Stop()
 	l.tail = nil

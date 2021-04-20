@@ -254,7 +254,7 @@ func (srv *seedService) SubmitTxNoWait(ctx context.Context, tx *transaction.Sign
 }
 
 // Implements Backend.
-func (srv *seedService) RegisterHaltHook(func(ctx context.Context, blockHeight int64, epoch epochtime.EpochTime)) {
+func (srv *seedService) RegisterHaltHook(consensus.HaltHook) {
 	panic(consensus.ErrUnsupported)
 }
 

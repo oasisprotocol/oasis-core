@@ -60,11 +60,16 @@ func (m *ServiceManager) Wait() {
 	// Cancel the context before stopping the services.
 	m.cancelFn()
 
+	m.logger.Debug("stopping services")
 	for _, svc := range m.services {
 		if svc != m.termSvc {
+			m.logger.Debug("stopping service",
+				"svc", svc.Name(),
+			)
 			svc.Stop()
 		}
 	}
+	m.logger.Debug("all services stopped")
 }
 
 // Stop stops all services.
