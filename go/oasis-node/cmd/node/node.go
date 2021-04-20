@@ -66,7 +66,6 @@ import (
 	workerSentry "github.com/oasisprotocol/oasis-core/go/worker/sentry"
 	"github.com/oasisprotocol/oasis-core/go/worker/storage"
 	workerStorage "github.com/oasisprotocol/oasis-core/go/worker/storage"
-	workerGovernanceUpgrade "github.com/oasisprotocol/oasis-core/go/worker/upgrade"
 )
 
 // Flags has the configuration flags.
@@ -118,17 +117,16 @@ type Node struct {
 	RuntimeRegistry runtimeRegistry.Registry
 	RuntimeClient   runtimeClientAPI.RuntimeClientService
 
-	CommonWorker            *workerCommon.Worker
-	ExecutorWorker          *executor.Worker
-	StorageWorker           *workerStorage.Worker
-	SentryWorker            *workerSentry.Worker
-	P2P                     *p2p.P2P
-	RegistrationWorker      *registration.Worker
-	KeymanagerWorker        *workerKeymanager.Worker
-	ConsensusWorker         *workerConsensusRPC.Worker
-	BeaconWorker            *workerBeacon.Worker
-	GovernanceUpgradeWorker *workerGovernanceUpgrade.Worker
-	readyCh                 chan struct{}
+	CommonWorker       *workerCommon.Worker
+	ExecutorWorker     *executor.Worker
+	StorageWorker      *workerStorage.Worker
+	SentryWorker       *workerSentry.Worker
+	P2P                *p2p.P2P
+	RegistrationWorker *registration.Worker
+	KeymanagerWorker   *workerKeymanager.Worker
+	ConsensusWorker    *workerConsensusRPC.Worker
+	BeaconWorker       *workerBeacon.Worker
+	readyCh            chan struct{}
 
 	logger *logging.Logger
 }
@@ -366,19 +364,6 @@ func (n *Node) initRuntimeWorkers() error {
 	}
 	n.svcMgr.Register(n.BeaconWorker)
 
-	// Initialize the consensus upgrade worker.
-	n.GovernanceUpgradeWorker, err = workerGovernanceUpgrade.New(
-		n.Consensus,
-		n.Upgrader,
-	)
-	if err != nil {
-		n.logger.Error("failed to initialize governance upgrade worker",
-			"err", err,
-		)
-		return err
-	}
-	n.svcMgr.Register(n.GovernanceUpgradeWorker)
-
 	// Initialize the storage worker.
 	n.StorageWorker, err = workerStorage.New(
 		n.grpcInternal,
@@ -475,11 +460,6 @@ func (n *Node) startRuntimeWorkers() error {
 
 	// Start the beacon worker.
 	if err := n.BeaconWorker.Start(); err != nil {
-		return err
-	}
-
-	// Start the consensus upgrade worker.
-	if err := n.GovernanceUpgradeWorker.Start(); err != nil {
 		return err
 	}
 
