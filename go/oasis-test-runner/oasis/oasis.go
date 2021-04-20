@@ -850,7 +850,8 @@ func (net *Network) startOasisNode(
 		extraArgs = extraArgs.
 			appendIASProxy(net.iasProxy).
 			tendermintDebugAddrBookLenient().
-			tendermintDebugAllowDuplicateIP()
+			tendermintDebugAllowDuplicateIP().
+			tendermintUpgradeStopDelay(10 * time.Second)
 	}
 	if net.cfg.UseShortGrpcSocketPaths {
 		// Keep the socket, if it was already generated!
