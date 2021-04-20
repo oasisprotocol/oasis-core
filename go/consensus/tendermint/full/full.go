@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"math/rand"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -120,6 +121,9 @@ const (
 	CfgConsensusStateSyncTrustHeight = "consensus.tendermint.state_sync.trust_height"
 	// CfgConsensusStateSyncTrustHash is the known trusted block header hash for the light client.
 	CfgConsensusStateSyncTrustHash = "consensus.tendermint.state_sync.trust_hash"
+
+	// CfgUpgradeStopDelay is the average amount of time to delay shutting down the node on upgrade.
+	CfgUpgradeStopDelay = "consensus.tendermint.upgrade.stop_delay"
 )
 
 const (
@@ -1329,7 +1333,10 @@ func (t *fullService) lazyInit() error {
 			go func() {
 				// Sleep another period so there is some time between when consensus shuts down and
 				// when all the other services start shutting down.
-				time.Sleep(waitPeriod)
+				//
+				// Randomize the period so that not all nodes shut down at the same time.
+				delay := getRandomValueFromInterval(0.5, rand.Float64(), viper.GetDuration(CfgUpgradeStopDelay))
+				time.Sleep(delay)
 
 				t.Logger.Info("stopping the node for upgrade")
 				t.Stop()
@@ -1536,6 +1543,8 @@ func init() {
 	Flags.Duration(CfgConsensusStateSyncTrustPeriod, 24*time.Hour, "state sync: light client trust period")
 	Flags.Uint64(CfgConsensusStateSyncTrustHeight, 0, "state sync: light client trusted height")
 	Flags.String(CfgConsensusStateSyncTrustHash, "", "state sync: light client trusted consensus header hash")
+
+	Flags.Duration(CfgUpgradeStopDelay, 60*time.Second, "average amount of time to delay shutting down the node on upgrade")
 
 	_ = Flags.MarkHidden(CfgDebugUnsafeReplayRecoverCorruptedWAL)
 
