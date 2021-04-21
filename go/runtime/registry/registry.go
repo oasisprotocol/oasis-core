@@ -455,7 +455,20 @@ func (r *runtimeRegistry) AddRoles(roles node.RolesMask, runtimeID *common.Names
 }
 
 func (r *runtimeRegistry) StorageRouter() storageAPI.Backend {
-	return &storageRouter{registry: r}
+	return NewStorageRouter(
+		func(ns common.Namespace) (storageAPI.Backend, error) {
+			rt, err := r.GetRuntime(ns)
+			if err != nil {
+				return nil, err
+			}
+			return rt.Storage(), nil
+		},
+		func() {
+			for _, rt := range r.Runtimes() {
+				<-rt.Storage().Initialized()
+			}
+		},
+	)
 }
 
 func (r *runtimeRegistry) Cleanup() {

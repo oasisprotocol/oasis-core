@@ -438,6 +438,11 @@ func (n *Node) PauseCheckpointer(pause bool) error {
 	return nil
 }
 
+// GetLocalStorage returns the local storage backend used by this storage node.
+func (n *Node) GetLocalStorage() storageApi.LocalBackend {
+	return n.localStorage
+}
+
 // NodeHooks implementation.
 
 func (n *Node) HandlePeerMessage(context.Context, *p2p.Message, bool) (bool, error) {
