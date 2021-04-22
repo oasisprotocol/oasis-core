@@ -205,9 +205,9 @@ func (n *Node) startRuntimeServices() error {
 	n.Consensus.RegisterHaltHook(func(ctx context.Context, blockHeight int64, epoch epochtime.EpochTime, _ error) {
 		n.logger.Info("Consensus halt hook: dumping genesis",
 			"epoch", epoch,
-			"block_height", blockHeight,
+			"block_height", blockHeight+1,
 		)
-		if err = n.dumpGenesis(ctx, blockHeight, epoch); err != nil {
+		if err = n.dumpGenesis(ctx, blockHeight+1, epoch); err != nil {
 			n.logger.Error("halt hook: failed to dump genesis",
 				"err", err,
 			)
@@ -215,7 +215,7 @@ func (n *Node) startRuntimeServices() error {
 		}
 		n.logger.Info("Consensus halt hook: genesis dumped",
 			"epoch", epoch,
-			"block_height", blockHeight,
+			"block_height", blockHeight+1,
 		)
 	})
 
