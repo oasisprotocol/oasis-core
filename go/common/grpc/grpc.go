@@ -36,6 +36,8 @@ const (
 
 	maxRecvMsgSize = 104857600 // 100 MiB
 	maxSendMsgSize = 104857600 // 100 MiB
+
+	gracefulStopWaitPeriod = 5 * time.Second
 )
 
 var (
@@ -506,7 +508,19 @@ func (s *Server) Stop() {
 			}
 		default:
 		}
-		s.server.GracefulStop() // Repeated calls are ok.
+
+		// Attempt to stop gracefully, but if that doesn't work, stop forcibly.
+		gracefulCh := make(chan struct{})
+		go func() {
+			s.server.GracefulStop()
+			close(gracefulCh)
+		}()
+		select {
+		case <-gracefulCh:
+		case <-time.After(gracefulStopWaitPeriod):
+			s.Logger.Warn("graceful stop failed, forcing stop")
+			s.server.Stop()
+		}
 		s.server = nil
 	}
 }

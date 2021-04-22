@@ -13,3 +13,4 @@ CVE-2018-17848
 CVE-2020-15114
 CVE-2020-15136
 CVE-2020-15115
+CVE-2020-26160 # Until viper and etcd/prometheus are upgraded to not need jwt-go.
