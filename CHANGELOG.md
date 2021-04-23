@@ -12,6 +12,27 @@ The format is inspired by [Keep a Changelog].
 
 <!-- TOWNCRIER -->
 
+## 20.12.7 (2021-04-23)
+
+| Protocol          | Version   |
+|:------------------|:---------:|
+| Consensus         | 2.0.0     |
+| Runtime Host      | 1.0.0     |
+| Runtime Committee | 1.0.0     |
+
+### Bug Fixes
+
+- go/consensus: Gracefully handle halt
+  ([#3755](https://github.com/oasisprotocol/oasis-core/issues/3755))
+
+- go/oasis-node: Dump correct block height on halt
+  ([#3873](https://github.com/oasisprotocol/oasis-core/issues/3873))
+
+### Internal Changes
+
+- go: Ignore jwt-go vulnerabilities since we're not using the features
+  ([#3877](https://github.com/oasisprotocol/oasis-core/issues/3877))
+
 ## 20.12.6 (2021-04-12)
 
 | Protocol          | Version   |
