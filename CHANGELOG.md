@@ -12,6 +12,41 @@ The format is inspired by [Keep a Changelog].
 
 <!-- TOWNCRIER -->
 
+## 21.1.1 (2021-04-23)
+
+| Protocol          | Version   |
+|:------------------|:---------:|
+| Consensus         | 4.0.0     |
+| Runtime Host      | 2.0.0     |
+| Runtime Committee | 2.0.0     |
+
+### Features
+
+- go/oasis-node/cmd/genesis: Display doc's hash and SHA256 checksum with `check`
+  ([#3858](https://github.com/oasisprotocol/oasis-core/issues/3858))
+
+### Bug Fixes
+
+- go/oasis-node: Dump correct block height on halt
+  ([#3755](https://github.com/oasisprotocol/oasis-core/issues/3755))
+
+- go/storage/mkvs: Skip already pruned nodes in migration
+  ([#3857](https://github.com/oasisprotocol/oasis-core/issues/3857))
+
+- go/worker/storage: Fix checkpoint sync error handling
+  ([#3869](https://github.com/oasisprotocol/oasis-core/issues/3869))
+
+- Apply upgrade proposals directly from governance consensus application
+  ([#3870](https://github.com/oasisprotocol/oasis-core/issues/3870))
+
+  This should make it more robust in light of fast sync as otherwise the worker
+  could miss upgrade events in certain edge cases.
+
+### Internal Changes
+
+- go: Ignore jwt-go vulnerabilities since we're not using the features
+  ([#3877](https://github.com/oasisprotocol/oasis-core/issues/3877))
+
 ## 21.1 (2021-04-12)
 
 | Protocol          | Version   |
