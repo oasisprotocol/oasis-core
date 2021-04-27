@@ -96,26 +96,17 @@ make changelog
 Review the staged changes and make appropriate adjustment to the Change Log
 (e.g. re-order entries, make formatting/spelling fixes, ...).
 
-Add a table with protocol versions just below the next version's heading:
-
-```
-| Protocol          | Version   |
-|:------------------|:---------:|
-| Consensus         | <VERSION> |
-| Runtime Host      | <VERSION> |
-| Runtime Committee | <VERSION> |
-```
-
-where `<VERSION>` strings are replaced with appropriate protocol versions as
-defined in [go/common/version/version.go][version-file] file.
+Replace the `<VERSION>` strings in the protocol versions table just below the
+next version's heading with appropriate protocol versions as defined in
+[go/common/version/version.go][version-file] file.
 
 For example:
 
 | Protocol          | Version   |
 |:------------------|:---------:|
-| Consensus         | 1.0.0     |
-| Runtime Host      | 1.0.0     |
-| Runtime Committee | 1.0.0     |
+| Consensus         | 4.0.0     |
+| Runtime Host      | 2.0.0     |
+| Runtime Committee | 2.0.0     |
 
 After you are content with the changes, commit them, push them to the origin
 and make a pull request.
@@ -215,6 +206,10 @@ make changelog
 
 *NOTE: The `changelog` Make target will bump the `MICRO` part of the version
 automatically.*
+
+Replace the `<VERSION>` strings in the protocol versions table just below the
+next version's heading with appropriate protocol versions as defined in
+[go/common/version/version.go][version-file] file.
 
 After reviewing the staged changes, commit them, push the changes to the origin
 and make a pull request against the `${RELEASE_BRANCH}` branch.
