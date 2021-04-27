@@ -63,7 +63,13 @@ func AuthenticateAndPayFees(
 			"account_nonce", account.General.Nonce,
 			"nonce", nonce,
 		)
-		return transaction.ErrInvalidNonce
+		switch {
+		case ctx.IsCheckOnly() && nonce > account.General.Nonce:
+			// We are executing CheckTx, so the nonce could become valid since the mempool does
+			// not support transaction ordering.
+		default:
+			return transaction.ErrInvalidNonce
+		}
 	}
 
 	if fee == nil {
