@@ -39,10 +39,10 @@ jobs:
           # Copy rust-toolchain file as it gets checked out into a subdir which is not
           # supported by actions-rs/toolchain.
           cp build${{ matrix.build_number }}/rust-toolchain .
-      - name: Set up Go 1.15
+      - name: Set up Go 1.16
         uses: actions/setup-go@v2.1.3
         with:
-          go-version: "1.15.x"
+          go-version: "1.16.x"
       - name: Set up Rust
         uses: actions-rs/toolchain@v1
       - name: Install Oasis Node prerequisites
