@@ -86,11 +86,10 @@ that bumps the respective version(s) before proceeding with the release process.
 Before a release, all [Change Log fragments] should be assembled into a new
 section of the [Change Log] using the `changelog` [Make] target.
 
-Create a new branch, e.g. `<GITHUB-NAME>/changelog`, and then
-run [Make]:
+Create a new branch, e.g. `changelog`, and then run [Make]:
 
 ```bash
-git checkout -b <GITHUB-NAME>/changelog
+git checkout -b changelog
 make changelog
 ```
 
@@ -177,19 +176,19 @@ from an upcoming release and release them without also releasing all the other
 
 To make the following steps easier, set the `RELEASE_BRANCH` environment
 variable to the name of the stable branch of the `YY.MINOR` release you want
-to back-port the changes to, e.g. `stable/20.11.x`:
+to back-port the changes to, e.g. `stable/21.2.x`:
 
 ```bash
-RELEASE_BRANCH="stable/20.11.x"
+RELEASE_BRANCH="stable/21.2.x"
 ```
 
 ### Back-port Changes
 
-Create a new branch, e.g. `<GITHUB-NAME>/${RELEASE_BRANCH}/backport-foo`, from
-the `${RELEASE_BRANCH}` branch:
+Create a new branch, e.g. `${RELEASE_BRANCH}/backport-foo`, from the
+`${RELEASE_BRANCH}` branch:
 
 ```bash
-git checkout -b <GITHUB-NAME>/${RELEASE_BRANCH}/backport-foo ${RELEASE_BRANCH}
+git checkout -b ${RELEASE_BRANCH}/backport-foo ${RELEASE_BRANCH}
 ```
 
 After back-porting all the desired changes, push it to the origin and make a
@@ -201,11 +200,11 @@ As with a regular release, the back-ported changes should include the
 corresponding [Change Log Fragments] that need to be assembled into a new
 section of the [Change Log] using the `changelog` [Make] target.
 
-Create a new branch, e.g. `<GITHUB-NAME>/${RELEASE_BRANCH}/changelog`, from the
+Create a new branch, e.g. `${RELEASE_BRANCH}/changelog`, from the
 `${RELEASE_BRANCH}` branch:
 
 ```bash
-git checkout -b <GITHUB-NAME>/${RELEASE_BRANCH}/changelog ${RELEASE_BRANCH}
+git checkout -b ${RELEASE_BRANCH}/changelog ${RELEASE_BRANCH}
 ```
 
 Then run [Make]'s `changelog` target:
