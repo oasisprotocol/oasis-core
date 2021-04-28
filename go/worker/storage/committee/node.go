@@ -419,12 +419,10 @@ func (n *Node) WaitForRound(round uint64, root *storageApi.Root) (<-chan uint64,
 }
 
 func (n *Node) PauseCheckpointer(pause bool) error {
-	n.logger.Info("TRYING to pause checkpointer")
 	if !commonFlags.DebugDontBlameOasis() {
 		return api.ErrCantPauseCheckpointer
 	}
 	n.checkpointer.Pause(pause)
-	n.logger.Info("PAUSED checkpointer")
 	return nil
 }
 
