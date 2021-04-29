@@ -1,5 +1,11 @@
 {# This a Jinja2 template for preparing a new section of the Change Log with the towncrier utility.#}
 ## {{ versiondata.version }} ({{ versiondata.date }})
+
+| Protocol          | Version   |
+|:------------------|:---------:|
+| Consensus         | <VERSION> |
+| Runtime Host      | <VERSION> |
+| Runtime Committee | <VERSION> |
 {% for section, _ in sections.items() %}
 
 {% if sections[section] %}

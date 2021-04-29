@@ -86,37 +86,27 @@ that bumps the respective version(s) before proceeding with the release process.
 Before a release, all [Change Log fragments] should be assembled into a new
 section of the [Change Log] using the `changelog` [Make] target.
 
-Create a new branch, e.g. `<GITHUB-NAME>/changelog`, and then
-run [Make]:
+Create a new branch, e.g. `changelog`, and then run [Make]:
 
 ```bash
-git checkout -b <GITHUB-NAME>/changelog
+git checkout -b changelog
 make changelog
 ```
 
 Review the staged changes and make appropriate adjustment to the Change Log
 (e.g. re-order entries, make formatting/spelling fixes, ...).
 
-Add a table with protocol versions just below the next version's heading:
-
-```
-| Protocol          | Version   |
-|:------------------|:---------:|
-| Consensus         | <VERSION> |
-| Runtime Host      | <VERSION> |
-| Runtime Committee | <VERSION> |
-```
-
-where `<VERSION>` strings are replaced with appropriate protocol versions as
-defined in [go/common/version/version.go][version-file] file.
+Replace the `<VERSION>` strings in the protocol versions table just below the
+next version's heading with appropriate protocol versions as defined in
+[go/common/version/version.go][version-file] file.
 
 For example:
 
 | Protocol          | Version   |
 |:------------------|:---------:|
-| Consensus         | 1.0.0     |
-| Runtime Host      | 1.0.0     |
-| Runtime Committee | 1.0.0     |
+| Consensus         | 4.0.0     |
+| Runtime Host      | 2.0.0     |
+| Runtime Committee | 2.0.0     |
 
 After you are content with the changes, commit them, push them to the origin
 and make a pull request.
@@ -175,21 +165,21 @@ back-port some fixes (e.g. a security fix) and (backwards compatible) changes
 from an upcoming release and release them without also releasing all the other
 (potentially breaking) changes.
 
-To make the following steps easier, set the `RELEASE_BRANCH` environment
-variable to the name of the stable branch of the `YY.MINOR` release you want
-to back-port the changes to, e.g. `stable/20.11.x`:
+Set the `RELEASE_BRANCH` environment variable to the name of the stable branch
+of the `YY.MINOR` release you want to back-port the changes to, e.g.
+`stable/21.2.x`, and export it:
 
 ```bash
-RELEASE_BRANCH="stable/20.11.x"
+export RELEASE_BRANCH="stable/21.2.x"
 ```
 
 ### Back-port Changes
 
-Create a new branch, e.g. `<GITHUB-NAME>/${RELEASE_BRANCH}/backport-foo`, from
-the `${RELEASE_BRANCH}` branch:
+Create a new branch, e.g. `${RELEASE_BRANCH}/backport-foo`, from the
+`${RELEASE_BRANCH}` branch:
 
 ```bash
-git checkout -b <GITHUB-NAME>/${RELEASE_BRANCH}/backport-foo ${RELEASE_BRANCH}
+git checkout -b ${RELEASE_BRANCH}/backport-foo ${RELEASE_BRANCH}
 ```
 
 After back-porting all the desired changes, push it to the origin and make a
@@ -201,11 +191,11 @@ As with a regular release, the back-ported changes should include the
 corresponding [Change Log Fragments] that need to be assembled into a new
 section of the [Change Log] using the `changelog` [Make] target.
 
-Create a new branch, e.g. `<GITHUB-NAME>/${RELEASE_BRANCH}/changelog`, from the
+Create a new branch, e.g. `${RELEASE_BRANCH}/changelog`, from the
 `${RELEASE_BRANCH}` branch:
 
 ```bash
-git checkout -b <GITHUB-NAME>/${RELEASE_BRANCH}/changelog ${RELEASE_BRANCH}
+git checkout -b ${RELEASE_BRANCH}/changelog ${RELEASE_BRANCH}
 ```
 
 Then run [Make]'s `changelog` target:
@@ -216,6 +206,10 @@ make changelog
 
 *NOTE: The `changelog` Make target will bump the `MICRO` part of the version
 automatically.*
+
+Replace the `<VERSION>` strings in the protocol versions table just below the
+next version's heading with appropriate protocol versions as defined in
+[go/common/version/version.go][version-file] file.
 
 After reviewing the staged changes, commit them, push the changes to the origin
 and make a pull request against the `${RELEASE_BRANCH}` branch.
