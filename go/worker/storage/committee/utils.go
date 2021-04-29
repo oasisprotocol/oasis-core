@@ -97,5 +97,10 @@ func (h *heartbeat) reset() {
 
 	boff := backoff.NewExponentialBackOff()
 	boff.InitialInterval = 5 * time.Second
+	boff.MaxElapsedTime = 0
+	boff.MaxInterval = 20 * time.Second
 	h.Ticker = backoff.NewTicker(boff)
+
+	// Gobble the first tick, which is immediate.
+	<-h.C
 }

@@ -413,9 +413,7 @@ func (n *Node) worker() {
 	}
 	defer nodeUpsSub.Close()
 
-	// We are initialized.
-	close(n.initCh)
-
+	initialized := false
 	for {
 		select {
 		case <-n.stopCh:
@@ -431,6 +429,13 @@ func (n *Node) worker() {
 				n.Height = blk.Height
 			}()
 		case blk := <-blocks:
+			// We are initialized after we have received the first block. This makes sure that any
+			// history reindexing has been completed.
+			if !initialized {
+				close(n.initCh)
+				initialized = true
+			}
+
 			// Received a block (annotated).
 			func() {
 				n.CrossNode.Lock()
