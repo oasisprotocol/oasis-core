@@ -16,6 +16,7 @@ use crate::{
         version::Version,
     },
     consensus::{
+        beacon::EpochTime,
         roothash::{self, Block, ComputeResultsHeader, Header},
         tendermint::LightBlock,
     },
@@ -121,6 +122,7 @@ pub enum Body {
         consensus_block: LightBlock,
         inputs: TxnBatch,
         block: Block,
+        epoch: EpochTime,
     },
     RuntimeCheckTxBatchResponse {
         results: Vec<CheckTxResult>,
@@ -132,6 +134,7 @@ pub enum Body {
         #[serde(skip_serializing_if = "Option::is_none")]
         inputs: Option<TxnBatch>,
         block: Block,
+        epoch: EpochTime,
         max_messages: u32,
     },
     RuntimeExecuteTxBatchResponse {
@@ -144,8 +147,9 @@ pub enum Body {
     RuntimeKeyManagerPolicyUpdateResponse {},
     RuntimeQueryRequest {
         consensus_block: LightBlock,
-        method: String,
         header: Header,
+        epoch: EpochTime,
+        method: String,
         args: cbor::Value,
     },
     RuntimeQueryResponse {

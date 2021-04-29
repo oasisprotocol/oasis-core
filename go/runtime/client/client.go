@@ -190,8 +190,12 @@ func (c *runtimeClient) CheckTx(ctx context.Context, request *api.CheckTxRequest
 	if err != nil {
 		return fmt.Errorf("client: failed to get light block at height %d: %w", rs.CurrentBlockHeight, err)
 	}
+	epoch, err := c.common.consensus.Beacon().GetEpoch(ctx, consensus.HeightLatest)
+	if err != nil {
+		return fmt.Errorf("client: failed to get current epoch: %w", err)
+	}
 
-	err = rt.CheckTx(ctx, rs.CurrentBlock, lb, request.Data)
+	err = rt.CheckTx(ctx, rs.CurrentBlock, lb, epoch, request.Data)
 	switch {
 	case err == nil:
 		return nil
@@ -395,8 +399,12 @@ func (c *runtimeClient) Query(ctx context.Context, request *api.QueryRequest) (*
 	if err != nil {
 		return nil, fmt.Errorf("client: failed to get light block at height %d: %w", rs.CurrentBlockHeight, err)
 	}
+	epoch, err := c.common.consensus.Beacon().GetEpoch(ctx, rs.CurrentBlockHeight)
+	if err != nil {
+		return nil, fmt.Errorf("client: failed to get epoch at height %d: %w", rs.CurrentBlockHeight, err)
+	}
 
-	data, err := rt.Query(ctx, rs.CurrentBlock, lb, request.Method, request.Args)
+	data, err := rt.Query(ctx, rs.CurrentBlock, lb, epoch, request.Method, request.Args)
 	if err != nil {
 		return nil, err
 	}

@@ -2,6 +2,7 @@ package byzantine
 
 import (
 	"context"
+	"encoding/binary"
 	"fmt"
 	"strings"
 	"time"
@@ -194,6 +195,14 @@ func doExecutorScenario(cmd *cobra.Command, args []string) {
 		panic(fmt.Sprintf("compute open trees failed: %+v", err))
 	}
 	defer cbc.closeTrees()
+
+	// Update current epoch to mimic the test key-value runtime.
+	var encodedEpoch [8]byte
+	binary.BigEndian.PutUint64(encodedEpoch[:], uint64(b.executorCommittee.ValidFor))
+
+	if err = cbc.stateTree.Insert(ctx, []byte{0x02}, encodedEpoch[:]); err != nil {
+		panic(fmt.Sprintf("compute state tree set failed: %+v", err))
+	}
 
 	switch executorMode {
 	case ModeExecutorHonest:

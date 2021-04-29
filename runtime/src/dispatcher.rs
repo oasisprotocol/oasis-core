@@ -24,6 +24,7 @@ use crate::{
         logger::get_logger,
     },
     consensus::{
+        beacon::EpochTime,
         roothash::{self, Block, ComputeResultsHeader, Header, COMPUTE_RESULTS_HEADER_CONTEXT},
         state::ConsensusState,
     },
@@ -233,6 +234,7 @@ impl Dispatcher {
                     io_root,
                     inputs,
                     block,
+                    epoch,
                     max_messages,
                 } => {
                     let light_block = consensus_block.decode_meta()?;
@@ -251,6 +253,7 @@ impl Dispatcher {
                         io_root,
                         inputs.unwrap_or_default(),
                         block,
+                        epoch,
                         round_results,
                         max_messages,
                         false,
@@ -260,6 +263,7 @@ impl Dispatcher {
                     consensus_block,
                     inputs,
                     block,
+                    epoch,
                 } => {
                     let light_block = consensus_block.decode_meta()?;
                     let consensus_state = ConsensusState::from_protocol(
@@ -277,6 +281,7 @@ impl Dispatcher {
                         Hash::default(),
                         inputs,
                         block,
+                        epoch,
                         Default::default(),
                         0,
                         true,
@@ -288,8 +293,9 @@ impl Dispatcher {
                 }
                 Body::RuntimeQueryRequest {
                     consensus_block,
-                    method,
                     header,
+                    epoch,
+                    method,
                     args,
                 } => {
                     let light_block = consensus_block.decode_meta()?;
@@ -305,8 +311,9 @@ impl Dispatcher {
                         &protocol,
                         consensus_state,
                         ctx,
-                        method,
                         header,
+                        epoch,
+                        method,
                         args,
                     )
                 }
@@ -341,8 +348,9 @@ impl Dispatcher {
         protocol: &Arc<Protocol>,
         consensus_state: ConsensusState,
         ctx: Context,
-        method: String,
         header: Header,
+        epoch: EpochTime,
+        method: String,
         args: cbor::Value,
     ) -> Result<Body, Error> {
         debug!(self.logger, "Received query request";
@@ -375,7 +383,15 @@ impl Dispatcher {
         ));
 
         let results = Default::default();
-        let txn_ctx = TxnContext::new(ctx.clone(), consensus_state, &header, &results, 0, true);
+        let txn_ctx = TxnContext::new(
+            ctx.clone(),
+            consensus_state,
+            &header,
+            epoch,
+            &results,
+            0,
+            true,
+        );
         let mut overlay = OverlayTree::new(&mut cache.mkvs);
         let result = StorageContext::enter(&mut overlay, untrusted_local, || {
             txn_dispatcher.query(txn_ctx, &method, args)
@@ -529,6 +545,7 @@ impl Dispatcher {
         io_root: Hash,
         inputs: TxnBatch,
         block: Block,
+        epoch: EpochTime,
         round_results: roothash::RoundResults,
         max_messages: u32,
         check_only: bool,
@@ -567,6 +584,7 @@ impl Dispatcher {
             ctx.clone(),
             consensus_state,
             &block.header,
+            epoch,
             &round_results,
             max_messages,
             check_only,

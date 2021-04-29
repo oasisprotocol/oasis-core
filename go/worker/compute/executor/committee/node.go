@@ -247,9 +247,9 @@ func (n *Node) HandlePeerMessage(ctx context.Context, message *p2p.Message, isOw
 		// Note: if an epoch transition is just about to happen we can be out of
 		// the committee by the time we queue the transaction, but this is fine
 		// as scheduling is aware of this.
-		if !n.commonNode.Group.GetEpochSnapshot().IsExecutorWorker() {
+		if es := n.commonNode.Group.GetEpochSnapshot(); !es.IsExecutorWorker() {
 			n.logger.Debug("unable to handle transaction message, not execution worker",
-				"current_epoch", n.commonNode.Group.GetEpochSnapshot().GetEpochNumber(),
+				"current_epoch", es.GetEpochNumber(),
 			)
 			return true, nil
 		}
@@ -584,6 +584,7 @@ func (n *Node) checkTx(ctx context.Context, tx []byte) error {
 	n.commonNode.CrossNode.Lock()
 	currentBlock := n.commonNode.CurrentBlock
 	currentConsensusBlock := n.commonNode.CurrentConsensusBlock
+	currentEpoch := n.commonNode.Group.GetEpochSnapshot().GetEpochNumber()
 	n.commonNode.CrossNode.Unlock()
 
 	rt := n.GetHostedRuntime()
@@ -592,7 +593,7 @@ func (n *Node) checkTx(ctx context.Context, tx []byte) error {
 		return errNotReady
 	}
 
-	err := rt.CheckTx(ctx, currentBlock, currentConsensusBlock, tx)
+	err := rt.CheckTx(ctx, currentBlock, currentConsensusBlock, currentEpoch, tx)
 	switch {
 	case err == nil:
 	case errors.Is(err, host.ErrInvalidArgument):
@@ -1008,6 +1009,8 @@ func (n *Node) startProcessingBatchLocked(batch *unresolvedBatch) {
 	blk := n.commonNode.CurrentBlock
 	consensusBlk := n.commonNode.CurrentConsensusBlock
 	height := n.commonNode.CurrentBlockHeight
+	epoch := n.commonNode.Group.GetEpochSnapshot()
+
 	go func() {
 		defer close(done)
 
@@ -1038,6 +1041,7 @@ func (n *Node) startProcessingBatchLocked(batch *unresolvedBatch) {
 				IORoot:         batch.ioRoot.Hash,
 				Inputs:         resolvedBatch,
 				Block:          *blk,
+				Epoch:          epoch.GetEpochNumber(),
 				MaxMessages:    state.Runtime.Executor.MaxMessages,
 			},
 		}

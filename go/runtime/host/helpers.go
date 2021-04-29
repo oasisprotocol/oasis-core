@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 
+	beacon "github.com/oasisprotocol/oasis-core/go/beacon/api"
 	"github.com/oasisprotocol/oasis-core/go/common/cbor"
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
 	"github.com/oasisprotocol/oasis-core/go/roothash/api/block"
@@ -26,10 +27,23 @@ type RichRuntime interface {
 	Runtime
 
 	// CheckTx requests the runtime to check a given transaction.
-	CheckTx(ctx context.Context, rb *block.Block, lb *consensus.LightBlock, tx []byte) error
+	CheckTx(
+		ctx context.Context,
+		rb *block.Block,
+		lb *consensus.LightBlock,
+		epoch beacon.EpochTime,
+		tx []byte,
+	) error
 
 	// Query requests the runtime to answer a runtime-specific query.
-	Query(ctx context.Context, rb *block.Block, lb *consensus.LightBlock, method string, args cbor.RawMessage) (cbor.RawMessage, error)
+	Query(
+		ctx context.Context,
+		rb *block.Block,
+		lb *consensus.LightBlock,
+		epoch beacon.EpochTime,
+		method string,
+		args cbor.RawMessage,
+	) (cbor.RawMessage, error)
 }
 
 type richRuntime struct {
@@ -37,7 +51,13 @@ type richRuntime struct {
 }
 
 // Implements RichRuntime.
-func (r *richRuntime) CheckTx(ctx context.Context, rb *block.Block, lb *consensus.LightBlock, tx []byte) error {
+func (r *richRuntime) CheckTx(
+	ctx context.Context,
+	rb *block.Block,
+	lb *consensus.LightBlock,
+	epoch beacon.EpochTime,
+	tx []byte,
+) error {
 	if rb == nil || lb == nil {
 		return ErrInvalidArgument
 	}
@@ -47,6 +67,7 @@ func (r *richRuntime) CheckTx(ctx context.Context, rb *block.Block, lb *consensu
 			ConsensusBlock: *lb,
 			Inputs:         transaction.RawBatch{tx},
 			Block:          *rb,
+			Epoch:          epoch,
 		},
 	})
 	switch {
@@ -68,7 +89,14 @@ func (r *richRuntime) CheckTx(ctx context.Context, rb *block.Block, lb *consensu
 }
 
 // Implements RichRuntime.
-func (r *richRuntime) Query(ctx context.Context, rb *block.Block, lb *consensus.LightBlock, method string, args cbor.RawMessage) (cbor.RawMessage, error) {
+func (r *richRuntime) Query(
+	ctx context.Context,
+	rb *block.Block,
+	lb *consensus.LightBlock,
+	epoch beacon.EpochTime,
+	method string,
+	args cbor.RawMessage,
+) (cbor.RawMessage, error) {
 	if rb == nil {
 		return nil, ErrInvalidArgument
 	}
@@ -76,8 +104,9 @@ func (r *richRuntime) Query(ctx context.Context, rb *block.Block, lb *consensus.
 	resp, err := r.Call(ctx, &protocol.Body{
 		RuntimeQueryRequest: &protocol.RuntimeQueryRequest{
 			ConsensusBlock: *lb,
-			Method:         method,
 			Header:         rb.Header,
+			Epoch:          epoch,
+			Method:         method,
 			Args:           args,
 		},
 	})

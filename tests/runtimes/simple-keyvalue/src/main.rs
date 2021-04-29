@@ -499,6 +499,15 @@ impl BatchHandler for BlockHandler {
         }
 
         self.process_message_results(ctx);
+
+        // Store current epoch to test consistency.
+        StorageContext::with_current(|mkvs, _| {
+            mkvs.insert(
+                IoContext::create_child(&ctx.io_ctx),
+                &[0x02],
+                &ctx.epoch.to_be_bytes(),
+            );
+        });
     }
 
     fn end_batch(&self, _ctx: &mut TxnContext) {}
