@@ -254,9 +254,8 @@ func (sc *kmUpgradeImpl) Run(childEnv *env.Env) error {
 	// Update runtime to include the new enclave identity.
 	sc.Logger.Info("updating keymanager runtime descriptor")
 	newRt := sc.Net.Runtimes()[2]
-	kmRtDesc := newRt.ToRuntimeDescriptor()
-	kmTxPath := filepath.Join(childEnv.Dir(), "register_update_km_runtime.json")
-	if err = cli.Registry.GenerateRegisterRuntimeTx(sc.nonce, kmRtDesc, kmTxPath, ""); err != nil {
+	kmTxPath := filepath.Join(childEnv.Dir(), "register_km_runtime.json")
+	if err = cli.Registry.GenerateRegisterRuntimeTx(childEnv.Dir(), newRt.ToRuntimeDescriptor(), sc.nonce, kmTxPath); err != nil {
 		return fmt.Errorf("failed to generate register KM runtime tx: %w", err)
 	}
 	sc.nonce++
