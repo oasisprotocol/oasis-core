@@ -42,12 +42,18 @@ build-helpers: $(test-helpers)
 
 # List of test vectors to generate.
 test-vectors-targets := staking/gen_vectors \
+	staking/gen_account_vectors \
 	registry/gen_vectors \
 	governance/gen_vectors
 
 $(test-vectors-targets):
 	@$(ECHO) "$(MAGENTA)*** Generating test vectors ($@)...$(OFF)"
 	@$(GO) run ./$@
+
+# Extended set of staking/gen_account_vectors test vectors.
+staking/gen_account_vectors_extended:
+	@$(ECHO) "$(MAGENTA)*** Generating test vectors ($@)...$(OFF)"
+	@$(GO) run ./staking/gen_account_vectors -extended
 
 # Format code.
 fmt:
