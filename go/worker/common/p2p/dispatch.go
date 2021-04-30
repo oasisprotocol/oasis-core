@@ -125,15 +125,14 @@ func (h *topicHandler) topicMessageValidator(ctx context.Context, unused core.Pe
 	return true
 }
 
-func (h *topicHandler) dispatchMessage(peerID core.PeerID, m *queuedMsg, isInitial bool) error {
-	var err error
+func (h *topicHandler) dispatchMessage(peerID core.PeerID, m *queuedMsg, isInitial bool) (retErr error) {
 	defer func() {
-		if err == nil || !isInitial {
+		if retErr == nil || !isInitial {
 			return
 		}
-		if p2pError.IsPermanent(err) {
+		if p2pError.IsPermanent(retErr) {
 			h.logger.Error("failed to dispatch message in-line, not retrying",
-				"err", err,
+				"err", retErr,
 				"peer_id", peerID,
 			)
 			return
@@ -151,7 +150,7 @@ func (h *topicHandler) dispatchMessage(peerID core.PeerID, m *queuedMsg, isIniti
 			}
 			if atomic.CompareAndSwapUint64(&h.numWorkers, numWorkers, numWorkers+1) {
 				h.logger.Error("failed to dispatch message in-line, retrying",
-					"err", err,
+					"err", retErr,
 					"peer_id", peerID,
 				)
 
@@ -161,6 +160,8 @@ func (h *topicHandler) dispatchMessage(peerID core.PeerID, m *queuedMsg, isIniti
 			}
 		}
 	}()
+
+	var err error
 
 	h.handlersLock.RLock()
 	defer h.handlersLock.RUnlock()
