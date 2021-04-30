@@ -544,7 +544,7 @@ func (mux *abciMux) processTx(ctx *api.Context, tx *transaction.Transaction, txS
 	// this relies on method handlers to prevent DoS.
 	if txAuthHandler := mux.state.txAuthHandler; txAuthHandler != nil && !tx.Method.IsCritical() {
 		if err := txAuthHandler.AuthenticateTx(ctx, tx); err != nil {
-			ctx.Logger().Debug("failed to authenticate transaction",
+			ctx.Logger().Debug("failed to authenticate transaction (pre-execute)",
 				"tx", tx,
 				"tx_signer", ctx.TxSigner(),
 				"method", tx.Method,
@@ -568,6 +568,19 @@ func (mux *abciMux) processTx(ctx *api.Context, tx *transaction.Transaction, txS
 
 	if err := app.ExecuteTx(ctx, tx); err != nil {
 		return err
+	}
+
+	//  Pass the transaction through the PostExecuteTx handler if configured.
+	if txAuthHandler := mux.state.txAuthHandler; txAuthHandler != nil {
+		if err := txAuthHandler.PostExecuteTx(ctx, tx); err != nil {
+			ctx.Logger().Debug("failed to authenticate transaction (post-execute)",
+				"tx", tx,
+				"tx_signer", ctx.TxSigner(),
+				"method", tx.Method,
+				"err", err,
+			)
+			return err
+		}
 	}
 
 	return nil

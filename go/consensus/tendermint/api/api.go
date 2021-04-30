@@ -221,6 +221,10 @@ type TransactionAuthHandler interface {
 	//
 	// The context may be modified to configure a gas accountant.
 	AuthenticateTx(ctx *Context, tx *transaction.Transaction) error
+
+	// PostExecuteTx is called after the transaction has been executed. It is
+	// only called in case the execution did not produce an error.
+	PostExecuteTx(ctx *Context, tx *transaction.Transaction) error
 }
 
 // ServiceEvent is a Tendermint-specific consensus.ServiceEvent.
