@@ -21,7 +21,7 @@ fn derive_symmetric_key(public: &[u8; 32], private: &[u8; 32]) -> [u8; KEY_SIZE]
 
     let pmk = private.diffie_hellman(&public);
 
-    let mut kdf = Kdf::new_varkey(b"MRAE_Box_Deoxys-II-256-128").expect("Hmac::new_varkey");
+    let mut kdf = Kdf::new_from_slice(b"MRAE_Box_Deoxys-II-256-128").expect("Hmac::new_from_slice");
     kdf.update(pmk.as_bytes());
     drop(pmk);
 
