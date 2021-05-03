@@ -98,6 +98,7 @@ if [ "$(FUZZ_NO_BUILD)" != "1" ]; then \
 	mkdir -p "$$WORKDIR"; \
 	pushd $$TARGETDIR >/dev/null; \
 		$(ECHO) "$(CYAN)*** Building fuzzer for $@...$(OFF)"; \
+		go get github.com/dvyukov/go-fuzz; \
 		go-fuzz-build -o $$WORKDIR/fuzz.zip || exit 1; \
 	popd >/dev/null; \
 fi; \
