@@ -1,7 +1,9 @@
 package fixtures
 
 import (
+	"encoding/json"
 	"fmt"
+	"io/ioutil"
 	"math"
 	"time"
 
@@ -33,11 +35,10 @@ const (
 	cfgSetupRuntimes           = "fixture.default.setup_runtimes"
 	cfgTEEHardware             = "fixture.default.tee_hardware"
 	cfgInitialHeight           = "fixture.default.initial_height"
+	cfgStakingGenesis          = "fixture.default.staking_genesis"
 )
 
-var (
-	keymanagerID common.Namespace
-)
+var keymanagerID common.Namespace
 
 // newDefaultFixture returns a default network fixture.
 func newDefaultFixture() (*oasis.NetworkFixture, error) {
@@ -49,6 +50,18 @@ func newDefaultFixture() (*oasis.NetworkFixture, error) {
 	var mrSigner *sgx.MrSigner
 	if tee == node.TEEHardwareIntelSGX {
 		mrSigner = &sgx.FortanixDummyMrSigner
+	}
+
+	var stakingGenesis staking.Genesis
+	if genesis := viper.GetString(cfgStakingGenesis); genesis != "" {
+		var raw []byte
+		raw, err = ioutil.ReadFile(genesis)
+		if err != nil {
+			return nil, fmt.Errorf("loading staking genesis file: %w", err)
+		}
+		if err = json.Unmarshal(raw, &stakingGenesis); err != nil {
+			return nil, fmt.Errorf("loading staking genesis: %w", err)
+		}
 	}
 
 	fixture := &oasis.NetworkFixture{
@@ -74,7 +87,7 @@ func newDefaultFixture() (*oasis.NetworkFixture, error) {
 			},
 			DeterministicIdentities: viper.GetBool(cfgDeterministicIdentities),
 			FundEntities:            viper.GetBool(cfgFundEntities),
-			StakingGenesis:          &staking.Genesis{},
+			StakingGenesis:          &stakingGenesis,
 		},
 		Entities: []oasis.EntityCfg{
 			{IsDebugTestEntity: true},
@@ -208,6 +221,7 @@ func init() {
 	DefaultFixtureFlags.String(cfgTEEHardware, "", "TEE hardware to use")
 	DefaultFixtureFlags.Uint64(cfgHaltEpoch, math.MaxUint64, "halt epoch height")
 	DefaultFixtureFlags.Int64(cfgInitialHeight, 1, "initial block height")
+	DefaultFixtureFlags.String(cfgStakingGenesis, "", "path to the staking genesis to use")
 
 	_ = viper.BindPFlags(DefaultFixtureFlags)
 
