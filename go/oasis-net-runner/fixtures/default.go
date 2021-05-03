@@ -1,6 +1,7 @@
 package fixtures
 
 import (
+	"fmt"
 	"math"
 	"time"
 
@@ -11,6 +12,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/node"
 	"github.com/oasisprotocol/oasis-core/go/common/sgx"
 	consensusGenesis "github.com/oasisprotocol/oasis-core/go/consensus/genesis"
+	cmdCommon "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/oasis"
 	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
 	staking "github.com/oasisprotocol/oasis-core/go/staking/api"
@@ -24,6 +26,7 @@ const (
 	cfgKeymanagerBinary        = "fixture.default.keymanager.binary"
 	cfgNodeBinary              = "fixture.default.node.binary"
 	cfgNumEntities             = "fixture.default.num_entities"
+	cfgRuntimeID               = "fixture.default.runtime.id"
 	cfgRuntimeBinary           = "fixture.default.runtime.binary"
 	cfgRuntimeGenesisState     = "fixture.default.runtime.genesis_state"
 	cfgRuntimeLoader           = "fixture.default.runtime.loader"
@@ -33,7 +36,6 @@ const (
 )
 
 var (
-	runtimeID    common.Namespace
 	keymanagerID common.Namespace
 )
 
@@ -109,41 +111,6 @@ func newDefaultFixture() (*oasis.NetworkFixture, error) {
 				},
 				GovernanceModel: registry.GovernanceEntity,
 			},
-			// Compute runtime.
-			{
-				ID:         runtimeID,
-				Kind:       registry.KindCompute,
-				Entity:     0,
-				Keymanager: 0,
-				Binaries: map[node.TEEHardware][]string{
-					tee: viper.GetStringSlice(cfgRuntimeBinary),
-				},
-				Executor: registry.ExecutorParameters{
-					GroupSize:       2,
-					GroupBackupSize: 1,
-					RoundTimeout:    20,
-					MaxMessages:     128,
-				},
-				TxnScheduler: registry.TxnSchedulerParameters{
-					Algorithm:         registry.TxnSchedulerSimple,
-					MaxBatchSize:      1,
-					MaxBatchSizeBytes: 16 * 1024 * 1024, // 16 MiB
-					BatchFlushTimeout: 20 * time.Second,
-					ProposerTimeout:   20,
-				},
-				Storage: registry.StorageParameters{
-					GroupSize:               1,
-					MinWriteReplication:     1,
-					MaxApplyWriteLogEntries: 100_000,
-					MaxApplyOps:             2,
-				},
-				AdmissionPolicy: registry.RuntimeAdmissionPolicy{
-					AnyNode: &registry.AnyNodeRuntimeAdmissionPolicy{},
-				},
-				GenesisStatePath: viper.GetString(cfgRuntimeGenesisState),
-				GenesisRound:     0,
-				GovernanceModel:  registry.GovernanceEntity,
-			},
 		}
 		fixture.KeymanagerPolicies = []oasis.KeymanagerPolicyFixture{
 			{Runtime: 0, Serial: 1},
@@ -155,11 +122,71 @@ func newDefaultFixture() (*oasis.NetworkFixture, error) {
 			{Backend: "badger", Entity: 1},
 		}
 		fixture.ComputeWorkers = []oasis.ComputeWorkerFixture{
-			{Entity: 1, Runtimes: []int{1}},
-			{Entity: 1, Runtimes: []int{1}},
-			{Entity: 1, Runtimes: []int{1}},
+			{Entity: 1, Runtimes: []int{}},
+			{Entity: 1, Runtimes: []int{}},
+			{Entity: 1, Runtimes: []int{}},
 		}
-		fixture.Clients[0].Runtimes = []int{1}
+	}
+
+	var runtimeIDs []common.Namespace
+	for _, rtID := range viper.GetStringSlice(cfgRuntimeID) {
+		var rt common.Namespace
+		if err = rt.UnmarshalHex(rtID); err != nil {
+			cmdCommon.EarlyLogAndExit(fmt.Errorf("invalid runtime ID: %s: %w", rtID, err))
+		}
+		runtimeIDs = append(runtimeIDs, rt)
+	}
+	rtGenesisStates := viper.GetStringSlice(cfgRuntimeGenesisState)
+
+	runtimes := viper.GetStringSlice(cfgRuntimeBinary)
+	if l1, l2 := len(runtimeIDs), len(runtimes); l1 < l2 {
+		cmdCommon.EarlyLogAndExit(fmt.Errorf("missing runtime IDs, provided: %d, required: %d", l1, l2))
+	}
+	if l1, l2 := len(rtGenesisStates), len(runtimes); l1 < l2 {
+		cmdCommon.EarlyLogAndExit(fmt.Errorf("missing runtime genesis states, provided: %d, required: %d", l1, l2))
+	}
+
+	for i, rt := range runtimes {
+		// Compute runtime.
+		fixture.Runtimes = append(fixture.Runtimes, oasis.RuntimeFixture{
+			ID:         runtimeIDs[i],
+			Kind:       registry.KindCompute,
+			Entity:     0,
+			Keymanager: 0,
+			Binaries: map[node.TEEHardware][]string{
+				tee: {rt},
+			},
+			Executor: registry.ExecutorParameters{
+				GroupSize:       2,
+				GroupBackupSize: 1,
+				RoundTimeout:    20,
+				MaxMessages:     128,
+			},
+			TxnScheduler: registry.TxnSchedulerParameters{
+				Algorithm:         registry.TxnSchedulerSimple,
+				MaxBatchSize:      1,
+				MaxBatchSizeBytes: 16 * 1024 * 1024, // 16 MiB
+				BatchFlushTimeout: 20 * time.Second,
+				ProposerTimeout:   20,
+			},
+			Storage: registry.StorageParameters{
+				GroupSize:               1,
+				MinWriteReplication:     1,
+				MaxApplyWriteLogEntries: 100_000,
+				MaxApplyOps:             2,
+			},
+			AdmissionPolicy: registry.RuntimeAdmissionPolicy{
+				AnyNode: &registry.AnyNodeRuntimeAdmissionPolicy{},
+			},
+			GenesisStatePath: rtGenesisStates[i],
+			GenesisRound:     0,
+			GovernanceModel:  registry.GovernanceEntity,
+		})
+
+		for j := range fixture.ComputeWorkers {
+			fixture.ComputeWorkers[j].Runtimes = append(fixture.ComputeWorkers[j].Runtimes, i+1)
+		}
+		fixture.Clients[0].Runtimes = append(fixture.Clients[0].Runtimes, i+1)
 	}
 
 	return fixture, nil
@@ -173,8 +200,10 @@ func init() {
 	DefaultFixtureFlags.Int(cfgNumEntities, 1, "number of (non debug) entities in genesis")
 	DefaultFixtureFlags.String(cfgKeymanagerBinary, "simple-keymanager", "path to the keymanager runtime")
 	DefaultFixtureFlags.String(cfgNodeBinary, "oasis-node", "path to the oasis-node binary")
-	DefaultFixtureFlags.String(cfgRuntimeBinary, "simple-keyvalue", "path to the runtime binary")
-	DefaultFixtureFlags.String(cfgRuntimeGenesisState, "", "path to the runtime genesis state")
+	DefaultFixtureFlags.StringSlice(cfgRuntimeID, []string{"8000000000000000000000000000000000000000000000000000000000000000"}, "runtime ID")
+	DefaultFixtureFlags.StringSlice(cfgRuntimeBinary, []string{"simple-keyvalue"}, "path to the runtime binary")
+	// []string{""} as default doesn't work and ends up as an empty slice.
+	DefaultFixtureFlags.StringSlice(cfgRuntimeGenesisState, []string{"", ""}, "path to the runtime genesis state")
 	DefaultFixtureFlags.String(cfgRuntimeLoader, "oasis-core-runtime-loader", "path to the runtime loader")
 	DefaultFixtureFlags.String(cfgTEEHardware, "", "TEE hardware to use")
 	DefaultFixtureFlags.Uint64(cfgHaltEpoch, math.MaxUint64, "halt epoch height")
@@ -182,6 +211,5 @@ func init() {
 
 	_ = viper.BindPFlags(DefaultFixtureFlags)
 
-	_ = runtimeID.UnmarshalHex("8000000000000000000000000000000000000000000000000000000000000000")
 	_ = keymanagerID.UnmarshalHex("c000000000000000ffffffffffffffffffffffffffffffffffffffffffffffff")
 }
