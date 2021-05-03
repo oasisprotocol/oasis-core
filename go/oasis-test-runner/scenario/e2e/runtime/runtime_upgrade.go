@@ -238,9 +238,8 @@ func (sc *runtimeUpgradeImpl) Run(childEnv *env.Env) error {
 	// Update runtime to include the new enclave identity.
 	sc.Logger.Info("updating runtime descriptor")
 	newRt := sc.Net.Runtimes()[len(sc.Net.Runtimes())-1]
-	newRtDesc := newRt.ToRuntimeDescriptor()
 	newTxPath := filepath.Join(childEnv.Dir(), "register_update_compute_runtime.json")
-	if err = cli.Registry.GenerateRegisterRuntimeTx(sc.nonce, newRtDesc, newTxPath, ""); err != nil {
+	if err = cli.Registry.GenerateRegisterRuntimeTx(childEnv.Dir(), newRt.ToRuntimeDescriptor(), sc.nonce, newTxPath); err != nil {
 		return fmt.Errorf("failed to generate register compute runtime tx: %w", err)
 	}
 	sc.nonce++

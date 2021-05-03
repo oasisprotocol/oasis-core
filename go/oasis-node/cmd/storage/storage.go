@@ -5,11 +5,14 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
+	"path/filepath"
 	"time"
 
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 
+	"github.com/oasisprotocol/oasis-core/go/common"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
 	cmdCommon "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common"
@@ -38,6 +41,12 @@ var (
 		Use:   "check",
 		Short: "check node databases for consistency",
 		RunE:  doCheck,
+	}
+
+	storageRenameNsCmd = &cobra.Command{
+		Use:   "rename-ns <src-ns> <dst-ns>",
+		Short: "change the namespace of a runtime database",
+		RunE:  doRenameNs,
 	}
 
 	logger = logging.GetLogger("cmd/storage")
@@ -220,11 +229,55 @@ func doCheck(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
+func doRenameNs(cmd *cobra.Command, args []string) error {
+	dataDir := cmdCommon.DataDir()
+
+	if len(args) != 2 {
+		return fmt.Errorf("need exactly two arguments (source and destination runtime IDs)")
+	}
+
+	var srcID, dstID common.Namespace
+	if err := srcID.UnmarshalHex(args[0]); err != nil {
+		return fmt.Errorf("malformed source runtime ID: %s", args[0])
+	}
+	if err := dstID.UnmarshalHex(args[1]); err != nil {
+		return fmt.Errorf("malformed source runtime ID: %s", args[0])
+	}
+	if pretty {
+		fmt.Printf("Renaming storage database for runtime from %s to %s...\n", srcID, dstID)
+	}
+
+	srcDir := registry.GetRuntimeStateDir(dataDir, srcID)
+	dstDir := registry.GetRuntimeStateDir(dataDir, dstID)
+
+	nodeCfg := &db.Config{
+		DB:        workerStorage.GetLocalBackendDBDir(srcDir, viper.GetString(workerStorage.CfgBackend)),
+		Namespace: srcID,
+	}
+
+	err := badger.RenameNamespace(nodeCfg, dstID)
+	if err != nil {
+		return fmt.Errorf("failed to rename namespace: %w", err)
+	}
+
+	if err = os.Rename(srcDir, dstDir); err != nil {
+		return fmt.Errorf("failed to move directory: %w", err)
+	}
+
+	// Remove history directory as that will be invalid now.
+	if err = os.RemoveAll(filepath.Join(dstDir, history.DbFilename)); err != nil {
+		return fmt.Errorf("failed to remove history directory: %w", err)
+	}
+
+	return nil
+}
+
 // Register registers the client sub-command and all of its children.
 func Register(parentCmd *cobra.Command) {
 	storageMigrateCmd.Flags().AddFlagSet(registry.Flags)
 	storageCheckCmd.Flags().AddFlagSet(registry.Flags)
 	storageCmd.AddCommand(storageMigrateCmd)
 	storageCmd.AddCommand(storageCheckCmd)
+	storageCmd.AddCommand(storageRenameNsCmd)
 	parentCmd.AddCommand(storageCmd)
 }

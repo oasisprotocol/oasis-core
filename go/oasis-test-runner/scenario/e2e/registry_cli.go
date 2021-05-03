@@ -681,12 +681,7 @@ func (sc *registryCLIImpl) testRuntime(ctx context.Context, childEnv *env.Env, c
 
 	// Generate register runtime transaction.
 	registerTxPath := filepath.Join(childEnv.Dir(), "registry_runtime_register.json")
-	genesisStatePath := filepath.Join(childEnv.Dir(), "registry_runtime_register_genesis_state.json")
-	genesisStateStr, _ := json.Marshal(testRuntime.Genesis.State)
-	if err = ioutil.WriteFile(genesisStatePath, genesisStateStr, 0o600); err != nil {
-		return err
-	}
-	if err = cli.Registry.GenerateRegisterRuntimeTx(0, testRuntime, registerTxPath, genesisStatePath); err != nil {
+	if err = cli.Registry.GenerateRegisterRuntimeTx(childEnv.Dir(), testRuntime, 0, registerTxPath); err != nil {
 		return fmt.Errorf("failed to generate runtime register tx: %w", err)
 	}
 

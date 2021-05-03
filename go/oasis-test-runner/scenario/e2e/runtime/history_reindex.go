@@ -135,9 +135,8 @@ func (sc *historyReindexImpl) Run(childEnv *env.Env) error {
 
 	// Register runtime.
 	compRt := sc.Net.Runtimes()[rtIdx]
-	compRtDesc := compRt.ToRuntimeDescriptor()
 	txPath := filepath.Join(childEnv.Dir(), "register_compute_runtime.json")
-	if err := cli.Registry.GenerateRegisterRuntimeTx(0, compRtDesc, txPath, compRt.GetGenesisStatePath()); err != nil {
+	if err := cli.Registry.GenerateRegisterRuntimeTx(childEnv.Dir(), compRt.ToRuntimeDescriptor(), 0, txPath); err != nil {
 		return fmt.Errorf("failed to generate register compute runtime tx: %w", err)
 	}
 	if err := cli.Consensus.SubmitTx(txPath); err != nil {
