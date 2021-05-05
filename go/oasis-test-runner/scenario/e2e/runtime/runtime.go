@@ -609,6 +609,7 @@ func RegisterScenarios() error {
 		MultipleRuntimes,
 		// Node shutdown test.
 		NodeShutdown,
+		OffsetRestart,
 		// Gas fees tests.
 		GasFeesRuntimes,
 		// Runtime prune test.

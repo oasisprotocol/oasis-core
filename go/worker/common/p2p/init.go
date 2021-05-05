@@ -18,6 +18,9 @@ const (
 	CfgP2PPeerOutboundQueueSize = "worker.p2p.peer_outbound_queue_size"
 	// CfgP2PValidateQueueSize sets the libp2p gossipsub buffer size of the validate queue.
 	CfgP2PValidateQueueSize = "worker.p2p.validate_queue_size"
+	// CfgP2PConnectednessLowWater sets the ratio of connected to unconnected peers at which
+	// the peer manager will try to reconnect to disconnected nodes.
+	CfgP2PConnectednessLowWater = "worker.p2p.connectedness_low_water"
 )
 
 // Enabled reads our enabled flag from viper.
@@ -34,6 +37,7 @@ func init() {
 	Flags.StringSlice(cfgP2pAddresses, []string{}, "Address/port(s) to use for P2P connections when registering this node (if not set, all non-loopback local interfaces will be used)")
 	Flags.Int64(CfgP2PPeerOutboundQueueSize, 32, "Set libp2p gossipsub buffer size for outbound messages")
 	Flags.Int64(CfgP2PValidateQueueSize, 32, "Set libp2p gossipsub buffer size of the validate queue")
+	Flags.Float64(CfgP2PConnectednessLowWater, 0.2, "Set the low water mark at which the peer manager will try to reconnect to peers")
 
 	_ = viper.BindPFlags(Flags)
 }

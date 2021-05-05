@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"sync"
 	"sync/atomic"
+	"time"
 
 	"github.com/cenkalti/backoff/v4"
 	core "github.com/libp2p/go-libp2p-core"
@@ -21,7 +22,12 @@ import (
 const (
 	redispatchMaxWorkers = 10
 	redispatchMaxRetries = 5
+	rawMsgQueueSize      = 50
 )
+
+type rawMessage struct {
+	msg []byte
+}
 
 // Handler is a handler for P2P messages.
 type Handler interface {
@@ -62,10 +68,13 @@ type topicHandler struct {
 	p2p *P2P
 
 	topic       *pubsub.Topic
+	host        core.Host
 	cancelRelay pubsub.RelayCancelFunc
 	handlers    []Handler
 
 	numWorkers uint64
+
+	pendingQueue chan *rawMessage
 
 	logger *logging.Logger
 }
@@ -236,6 +245,57 @@ func (h *topicHandler) retryWorker(m *queuedMsg) {
 	}
 }
 
+func (h *topicHandler) tryPublishing(rawMsg []byte) error {
+	if len(h.topic.ListPeers()) == 0 {
+		// On init, if there are no peers, the library will sometimes just
+		// swallow the message and mark it as seen without retrying or returning
+		// an error. This special case is to try to preempt that.
+		h.logger.Debug("no connected peers, handing off to retry worker")
+		select {
+		case h.pendingQueue <- &rawMessage{rawMsg}:
+			return nil
+		default:
+			return fmt.Errorf("worker/common/p2p: message queue overflow, libp2p still not initialized")
+		}
+	}
+
+	return h.topic.Publish(h.ctx, rawMsg)
+}
+
+// pendingMessagesWorker handles retrying for P2P messages when there are no connected peers.
+func (h *topicHandler) pendingMessagesWorker() {
+	mgrInitCh := h.p2p.PeerManager.Initialized()
+	for {
+		var msg *rawMessage
+
+		select {
+		case <-h.ctx.Done():
+			return
+		case msg = <-h.pendingQueue:
+		}
+
+	WaitLoop:
+		for mgrInitCh != nil || (len(h.topic.ListPeers()) == 0 && len(h.p2p.PeerManager.KnownPeers()) > 0) {
+			select {
+			case <-h.ctx.Done():
+				return
+			case <-mgrInitCh:
+				mgrInitCh = nil
+				if len(h.p2p.PeerManager.KnownPeers()) == 0 {
+					break WaitLoop
+				}
+			case <-time.After(1 * time.Second):
+			}
+		}
+
+		if err := h.topic.Publish(h.ctx, msg.msg); err != nil {
+			h.logger.Error("failed to publish message to the network",
+				"err", err,
+			)
+		}
+	}
+}
+
 func newTopicHandler(p *P2P, runtimeID common.Namespace, handlers []Handler) (string, *topicHandler, error) {
 	topicID := p.topicIDForRuntime(runtimeID)
 	topic, err := p.pubsub.Join(topicID) // Note: Disallows duplicates.
@@ -244,11 +304,13 @@ func newTopicHandler(p *P2P, runtimeID common.Namespace, handlers []Handler) (st
 	}
 
 	h := &topicHandler{
-		ctx:      p.ctx, // TODO: Should this support individual cancelation?
-		p2p:      p,
-		topic:    topic,
-		handlers: handlers,
-		logger:   logging.GetLogger("worker/common/p2p/" + topicID),
+		ctx:          p.ctx, // TODO: Should this support individual cancelation?
+		p2p:          p,
+		topic:        topic,
+		host:         p.host,
+		handlers:     handlers,
+		pendingQueue: make(chan *rawMessage, rawMsgQueueSize),
+		logger:       logging.GetLogger("worker/common/p2p/" + topicID),
 	}
 	if h.cancelRelay, err = h.topic.Relay(); err != nil {
 		// Well, ok, fine.  This should NEVER happen, but try to back out
@@ -261,6 +323,7 @@ func newTopicHandler(p *P2P, runtimeID common.Namespace, handlers []Handler) (st
 		return "", nil, fmt.Errorf("worker/common/p2p: failed to relay topic '%s': %w", topicID, err)
 	}
 
+	go h.pendingMessagesWorker()
 	return topicID, h, nil
 }
 

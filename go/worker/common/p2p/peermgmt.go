@@ -4,9 +4,13 @@ import (
 	"context"
 	"fmt"
 	"sync"
+	"time"
+
+	"github.com/spf13/viper"
 
 	"github.com/cenkalti/backoff/v4"
 	core "github.com/libp2p/go-libp2p-core"
+	"github.com/libp2p/go-libp2p-core/network"
 	"github.com/libp2p/go-libp2p-core/peer"
 	manet "github.com/multiformats/go-multiaddr/net"
 
@@ -16,6 +20,8 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/node"
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
 )
+
+const connectionRefreshInterval = 5 * time.Second
 
 // PeerManager handles managing peers in the gossipsub network.
 //
@@ -31,6 +37,9 @@ type PeerManager struct {
 	host  core.Host
 	peers map[core.PeerID]*p2pPeer
 
+	initCh   chan struct{}
+	initOnce sync.Once
+
 	logger *logging.Logger
 }
 
@@ -39,14 +48,38 @@ type p2pPeer struct {
 	cancelFn context.CancelFunc
 
 	addrHash hash.Hash
+	node     *node.Node
 
 	doneCh chan struct{}
+}
+
+// Initialized returns a channel that will be closed once the manager is initialized
+// and has received the first node refresh event.
+func (mgr *PeerManager) Initialized() <-chan struct{} {
+	return mgr.initCh
+}
+
+// KnownPeers returns a list of currently known peer IDs.
+func (mgr *PeerManager) KnownPeers() []core.PeerID {
+	mgr.RLock()
+	defer mgr.RUnlock()
+
+	peers := make([]core.PeerID, 0, len(mgr.peers))
+	for id := range mgr.peers {
+		peers = append(peers, id)
+	}
+
+	return peers
 }
 
 // SetNodes sets the membership of the gossipsub network.
 func (mgr *PeerManager) SetNodes(nodes []*node.Node) {
 	mgr.Lock()
 	defer mgr.Unlock()
+
+	defer mgr.initOnce.Do(func() {
+		close(mgr.initCh)
+	})
 
 	newNodes := make(map[core.PeerID]*node.Node)
 	for _, node := range nodes {
@@ -56,6 +89,9 @@ func (mgr *PeerManager) SetNodes(nodes []*node.Node) {
 				"err", err,
 				"node_id", node.ID,
 			)
+			continue
+		}
+		if peerID == mgr.host.ID() {
 			continue
 		}
 
@@ -87,6 +123,12 @@ func (mgr *PeerManager) UpdateNode(node *node.Node) error {
 	if err != nil {
 		return fmt.Errorf("worker/common/p2p/peermgr: failed to get peer ID from public key: %w", err)
 	}
+	defer mgr.initOnce.Do(func() {
+		close(mgr.initCh)
+	})
+	if peerID == mgr.host.ID() {
+		return nil
+	}
 
 	mgr.Lock()
 	defer mgr.Unlock()
@@ -101,33 +143,64 @@ func (mgr *PeerManager) removePeerLocked(peerID core.PeerID) {
 		existing.cancelFn()
 		<-existing.doneCh
 
-		mgr.peers[peerID] = nil
+		delete(mgr.peers, peerID)
 	}
 }
 
 func (mgr *PeerManager) updateNodeLocked(node *node.Node, peerID core.PeerID) {
 	var addrHash hash.Hash
 	addrHash.From(node.P2P.Addresses)
+	changedAddrs := true
 
 	// If this is an update, and the addresses have not changed in any
 	// way, then don't bother doing anything.
 	if oldNode := mgr.peers[peerID]; oldNode != nil {
 		if oldNode.addrHash.Equal(&addrHash) {
+			changedAddrs = false
+			// But, if the peer isn't connected for some reason, still try to reconnect to it.
+			if mgr.host.Network().Connectedness(peerID) == network.Connected {
+				mgr.logger.Debug("addresses unchanged and peer still connected",
+					"node_id", node.ID,
+					"peer_id", peerID,
+				)
+				return
+			}
+		}
+	}
+
+	// If addresses changed, then any current connection attempts have to be interrupted.
+	if changedAddrs {
+		mgr.removePeerLocked(peerID)
+	}
+
+	// Also don't bother doing anything if the address list is empty.
+	// It's unlikely for connection attempts to no addresses to succeed.
+	if len(node.P2P.Addresses) == 0 {
+		mgr.logger.Debug("no addresses to connect to", "node_id", node.ID, "peer_id", peerID)
+		return
+	}
+
+	// If we still want to reconnect, then if the worker is already running, just leave it,
+	// so we maintain backoff.
+	if existing := mgr.peers[peerID]; existing != nil {
+		select {
+		case <-existing.doneCh:
+			// Done, restart.
+		default:
+			// Still running.
 			return
 		}
 	}
 
-	// Cancel any existing connection attempts to the peer.
-	mgr.removePeerLocked(peerID)
-
 	peer := &p2pPeer{
 		addrHash: addrHash,
+		node:     node,
 		doneCh:   make(chan struct{}),
 	}
 	peer.ctx, peer.cancelFn = context.WithCancel(mgr.ctx)
 	mgr.peers[peerID] = peer
 
-	go peer.connectWorker(mgr, node, peerID)
+	go peer.connectWorker(mgr, peerID)
 }
 
 func (mgr *PeerManager) watchRegistryNodes(consensus consensus.Backend) {
@@ -152,6 +225,9 @@ func (mgr *PeerManager) watchRegistryNodes(consensus consensus.Backend) {
 	}
 	defer nSub.Close()
 
+	ticker := time.NewTicker(connectionRefreshInterval)
+	defer ticker.Stop()
+
 	for {
 		select {
 		case <-mgr.ctx.Done():
@@ -162,6 +238,39 @@ func (mgr *PeerManager) watchRegistryNodes(consensus consensus.Backend) {
 			if nodeEv.IsRegistration {
 				_ = mgr.UpdateNode(nodeEv.Node)
 			}
+		case <-ticker.C:
+			func() {
+				mgr.Lock()
+				defer mgr.Unlock()
+
+				if len(mgr.peers) == 0 {
+					return
+				}
+
+				connected := 0
+				for peerID := range mgr.peers {
+					if mgr.host.Network().Connectedness(peerID) == network.Connected {
+						connected++
+					}
+				}
+				mgr.logger.Debug("peer manager counted connected peers", "num_connected_peers", connected)
+
+				if float64(connected)/float64(len(mgr.peers)) < viper.GetFloat64(CfgP2PConnectednessLowWater) {
+					mgr.logger.Info("connected peer ratio below set low water mark, trying to reconnect",
+						"counted", connected,
+						"known", len(mgr.peers),
+					)
+					for peerID, p2p := range mgr.peers {
+						if mgr.host.Network().Connectedness(peerID) != network.Connected {
+							mgr.logger.Debug("reconnecting to peer",
+								"node_id", p2p.node.ID,
+								"peer_id", peerID,
+							)
+							mgr.updateNodeLocked(p2p.node, peerID)
+						}
+					}
+				}
+			}()
 		}
 	}
 }
@@ -171,6 +280,7 @@ func newPeerManager(ctx context.Context, host core.Host, consensus consensus.Bac
 		ctx:    ctx,
 		host:   host,
 		peers:  make(map[core.PeerID]*p2pPeer),
+		initCh: make(chan struct{}),
 		logger: logging.GetLogger("worker/common/p2p/peermgr"),
 	}
 	if consensus != nil {
@@ -179,27 +289,27 @@ func newPeerManager(ctx context.Context, host core.Host, consensus consensus.Bac
 	return mgr
 }
 
-func (p *p2pPeer) connectWorker(mgr *PeerManager, node *node.Node, peerID core.PeerID) {
+func (p *p2pPeer) connectWorker(mgr *PeerManager, peerID core.PeerID) {
 	defer func() {
 		close(p.doneCh)
 	}()
 
-	ai, err := nodeToAddrInfo(node)
+	ai, err := nodeToAddrInfo(p.node)
 	if err != nil {
 		mgr.logger.Error("failed to get node addresses, not retrying",
 			"err", err,
-			"node_id", node.ID,
+			"node_id", p.node.ID,
 		)
 		return
 	}
 
 	mgr.logger.Debug("updating libp2p gossipsub peer",
-		"node_id", node.ID,
+		"node_id", p.node.ID,
 	)
 
 	bctx := backoff.WithContext(backoff.NewExponentialBackOff(), p.ctx)
 
-	err = backoff.Retry(func() error {
+	err = backoff.Retry(func() (retError error) {
 		// This is blocking, which is stupid.
 		if perr := mgr.host.Connect(p.ctx, *ai); perr != nil {
 			switch perr {
@@ -220,7 +330,7 @@ func (p *p2pPeer) connectWorker(mgr *PeerManager, node *node.Node, peerID core.P
 	if err != nil {
 		mgr.logger.Warn("failed to connect to peer, not retrying",
 			"err", err,
-			"node_id", node.ID,
+			"node_id", p.node.ID,
 		)
 	}
 }
