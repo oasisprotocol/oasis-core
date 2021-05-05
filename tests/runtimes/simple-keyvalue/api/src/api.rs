@@ -1,11 +1,7 @@
 use serde::{Deserialize, Serialize};
 
 use oasis_core_runtime::{
-    consensus::{
-        address::Address,
-        registry, staking,
-        staking::{Account, Delegation},
-    },
+    consensus::{registry, staking},
     runtime_api,
 };
 

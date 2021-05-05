@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"reflect"
 
+	beacon "github.com/oasisprotocol/oasis-core/go/beacon/api"
 	"github.com/oasisprotocol/oasis-core/go/common"
 	"github.com/oasisprotocol/oasis-core/go/common/cbor"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
@@ -201,6 +202,8 @@ type RuntimeCheckTxBatchRequest struct {
 	Inputs transaction.RawBatch `json:"inputs"`
 	// Block on which the batch check should be based.
 	Block block.Block `json:"block"`
+	// Epoch is the current epoch number.
+	Epoch beacon.EpochTime `json:"epoch"`
 }
 
 // CheckTxResult contains the result of a CheckTx operation.
@@ -260,6 +263,8 @@ type RuntimeExecuteTxBatchRequest struct {
 	Inputs transaction.RawBatch `json:"inputs"`
 	// Block on which the batch computation should be based.
 	Block block.Block `json:"block"`
+	// Epoch is the current epoch number.
+	Epoch beacon.EpochTime `json:"epoch"`
 
 	// MaxMessages is the maximum number of messages that can be emitted in this
 	// round. Any more messages will be rejected by the consensus layer.
@@ -283,8 +288,12 @@ type RuntimeQueryRequest struct {
 	// height (e.g., corresponding to .Header.Round).
 	ConsensusBlock consensus.LightBlock `json:"consensus_block"`
 
+	// Header is the current block header.
+	Header block.Header `json:"header"`
+	// Epoch is the current epoch number.
+	Epoch beacon.EpochTime `json:"epoch"`
+
 	Method string          `json:"method"`
-	Header block.Header    `json:"header"`
 	Args   cbor.RawMessage `json:"args,omitempty"`
 }
 

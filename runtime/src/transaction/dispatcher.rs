@@ -579,6 +579,7 @@ mod tests {
             IoContext::background().freeze(),
             consensus_state,
             &header,
+            0,
             &results,
             0,
             false,

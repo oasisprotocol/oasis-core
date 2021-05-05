@@ -5,6 +5,7 @@ use io_context::Context as IoContext;
 
 use super::tags::{Tag, Tags};
 use crate::consensus::{
+    beacon::EpochTime,
     roothash::{Header, Message, RoundResults},
     state::ConsensusState,
 };
@@ -19,6 +20,8 @@ pub struct Context<'a> {
     pub consensus_state: ConsensusState,
     /// The block header accompanying this transaction.
     pub header: &'a Header,
+    /// Epoch corresponding to the currently processed block.
+    pub epoch: EpochTime,
     /// Results of processing the previous successful round.
     pub round_results: &'a RoundResults,
     /// The maximum number of messages that can be emitted in this round.
@@ -43,6 +46,7 @@ impl<'a> Context<'a> {
         io_ctx: Arc<IoContext>,
         consensus_state: ConsensusState,
         header: &'a Header,
+        epoch: EpochTime,
         round_results: &'a RoundResults,
         max_messages: u32,
         check_only: bool,
@@ -51,6 +55,7 @@ impl<'a> Context<'a> {
             io_ctx,
             consensus_state,
             header,
+            epoch,
             round_results,
             max_messages,
             runtime: Box::new(NoRuntimeContext),
