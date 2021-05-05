@@ -1417,7 +1417,7 @@ dependencies = [
  "tiny-keccak 2.0.2",
  "tokio-current-thread",
  "tokio-executor",
- "untrusted 0.8.0",
+ "untrusted",
  "webpki",
  "x25519-dalek",
  "zeroize 1.3.0",
@@ -1852,7 +1852,7 @@ dependencies = [
  "lazy_static",
  "libc",
  "spin",
- "untrusted 0.7.1",
+ "untrusted",
  "web-sys",
  "winapi 0.3.9",
 ]
@@ -2783,12 +2783,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a156c684c91ea7d62626509bce3cb4e1d9ed5c4d978f7b4352658f96a4c26b4a"
 
 [[package]]
-name = "untrusted"
-version = "0.8.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0329b750d1fc20cf7bf78a6b4b1651778075a873d20ac84ab29e4679543bee89"
-
-[[package]]
 name = "url"
 version = "2.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2907,7 +2901,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f1f50e1972865d6b1adb54167d1c8ed48606004c2c9d0ea5f1eeb34d95e863ef"
 dependencies = [
  "ring",
- "untrusted 0.7.1",
+ "untrusted",
 ]
 
 [[package]]
