@@ -4,6 +4,7 @@ package memory
 import (
 	goEd25519 "crypto/ed25519"
 	"crypto/sha512"
+	"fmt"
 	"io"
 
 	"github.com/oasisprotocol/curve25519-voi/primitives/ed25519"
@@ -11,8 +12,13 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 )
 
-// SignerName is the name used to identify the memory backed signer.
-const SignerName = "memory"
+const (
+	// SignerName is the name used to identify the memory backed signer.
+	SignerName = "memory"
+
+	// SeedSize is the size of an RFC 8032 seed in bytes.
+	SeedSize = ed25519.SeedSize
+)
 
 var (
 	_ signature.SignerFactory = (*Factory)(nil)
@@ -105,6 +111,19 @@ func NewFromRuntime(rtPrivKey goEd25519.PrivateKey) signature.Signer {
 	return &Signer{
 		privateKey: ed25519.NewKeyFromSeed(rtPrivKey.Seed()),
 	}
+}
+
+// NewFromSeed creates a new signer from a RFC 8032 seed.
+func NewFromSeed(seed []byte) (signature.Signer, error) {
+	if len(seed) != ed25519.SeedSize {
+		return nil, fmt.Errorf("signature/signer/memory: bad seed length: %d", len(seed))
+	}
+
+	privateKey := ed25519.NewKeyFromSeed(seed)
+
+	return &Signer{
+		privateKey: privateKey,
+	}, nil
 }
 
 // NewTestSigner generates a new signer deterministically from
