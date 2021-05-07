@@ -12,6 +12,37 @@ The format is inspired by [Keep a Changelog].
 
 <!-- TOWNCRIER -->
 
+## 21.1.2 (2021-05-07)
+
+### Features
+
+- go/cmd/registry: simplify register runtime command
+  ([#3903](https://github.com/oasisprotocol/oasis-core/issues/3903))
+
+  The `registry runtime gen_register` command now accepts a JSON runtime
+  descriptor, which should simplify generating runtime registration
+  transactions.
+  The `registy runtime init_genesis` command is removed as runtime
+  descriptors in genesis are not singed since version 21.0+ making the command
+  obsolete.
+
+- go/oasis-node: Add storage namespace rename subcommand
+  ([#3908](https://github.com/oasisprotocol/oasis-core/issues/3908))
+
+### Bug Fixes
+
+- Runtime workers should wait for history reindex
+  ([#3889](https://github.com/oasisprotocol/oasis-core/issues/3889))
+
+  If a node first syncs consensus without any runtimes configured and a runtime
+  is configured later, the workers should wait for historic runtime block
+  reindexing to complete before continuing with initialization. Otherwise
+  historic block queries may fail and prevent the worker from operating
+  normally.
+
+- worker/storage: Fix heartbeat stall
+  ([#3899](https://github.com/oasisprotocol/oasis-core/issues/3899))
+
 ## 21.1.1 (2021-04-23)
 
 | Protocol          | Version   |
