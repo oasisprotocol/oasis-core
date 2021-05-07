@@ -17,7 +17,8 @@ import (
 	"os"
 	"sync"
 
-	"github.com/oasisprotocol/ed25519"
+	"github.com/oasisprotocol/curve25519-voi/primitives/ed25519"
+	"github.com/oasisprotocol/curve25519-voi/primitives/ed25519/extra/cache"
 
 	"github.com/oasisprotocol/oasis-core/go/common/cbor"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
@@ -66,7 +67,18 @@ var (
 	testPublicKeys        sync.Map
 	blacklistedPublicKeys sync.Map
 
-	defaultOptions = &ed25519.Options{}
+	defaultOptions = &ed25519.Options{
+		Verify: &ed25519.VerifyOptions{
+			AllowSmallOrderA:   false,
+			AllowSmallOrderR:   false,
+			AllowNonCanonicalA: true,
+			AllowNonCanonicalR: true,
+		},
+	}
+
+	cachingVerifier = cache.NewVerifier(
+		cache.NewLRUCache(4096), // Should be big enough?
+	)
 )
 
 // PublicKey is a public key used for signing.
@@ -87,7 +99,7 @@ func (k PublicKey) Verify(context Context, message, sig []byte) bool {
 		return false
 	}
 
-	return ed25519.Verify(ed25519.PublicKey(k[:]), data, sig)
+	return cachingVerifier.VerifyWithOptions(k[:], data, sig, defaultOptions)
 }
 
 // MarshalBinary encodes a public key into binary form.
@@ -611,10 +623,7 @@ func VerifyManyToOne(context Context, message []byte, sigs []Signature) bool {
 		return false
 	}
 
-	// Adapt from our wrapper types to the types used by the library.
-	pks := make([]ed25519.PublicKey, 0, len(sigs))
-	rawSigs := make([][]byte, 0, len(sigs))
-	msgs := make([][]byte, 0, len(sigs))
+	verifier := ed25519.NewBatchVerifier()
 
 	for i := range sigs {
 		v := sigs[i] // This is deliberate.
@@ -622,17 +631,10 @@ func VerifyManyToOne(context Context, message []byte, sigs []Signature) bool {
 			return false
 		}
 
-		pks = append(pks, ed25519.PublicKey(v.PublicKey[:]))
-		rawSigs = append(rawSigs, v.Signature[:])
-		msgs = append(msgs, msg)
+		cachingVerifier.AddWithOptions(verifier, v.PublicKey[:], msg, v.Signature[:], defaultOptions)
 	}
 
-	allOk, _, err := ed25519.VerifyBatch(rand.Reader, pks, msgs, rawSigs, defaultOptions)
-	if err != nil {
-		return false
-	}
-
-	return allOk
+	return verifier.VerifyBatchOnly(rand.Reader)
 }
 
 // VerifyBatch verifies multiple signatures, made by multiple public keys,
@@ -643,33 +645,24 @@ func VerifyBatch(context Context, messages [][]byte, sigs []Signature) bool {
 		panic("signature: VerifyBatch messages/signature count mismatch")
 	}
 
-	// Adapt from our wrapper types to the types used by the library.
-	pks := make([]ed25519.PublicKey, 0, len(sigs))
-	rawSigs := make([][]byte, 0, len(sigs))
-	msgs := make([][]byte, 0, len(sigs))
+	verifier := ed25519.NewBatchVerifier()
 
 	for i := range sigs {
 		v := sigs[i] // This is deliberate.
 		if v.PublicKey.IsBlacklisted() {
 			return false
 		}
-		pks = append(pks, ed25519.PublicKey(v.PublicKey[:]))
-		rawSigs = append(rawSigs, v.Signature[:])
 
 		// Sigh. :(
 		msg, err := PrepareSignerMessage(context, messages[i])
 		if err != nil {
 			return false
 		}
-		msgs = append(msgs, msg)
+
+		cachingVerifier.AddWithOptions(verifier, v.PublicKey[:], msg, v.Signature[:], defaultOptions)
 	}
 
-	allOk, _, err := ed25519.VerifyBatch(rand.Reader, pks, msgs, rawSigs, defaultOptions)
-	if err != nil {
-		return false
-	}
-
-	return allOk
+	return verifier.VerifyBatchOnly(rand.Reader)
 }
 
 // NewPublicKey creates a new public key from the given hex representation or

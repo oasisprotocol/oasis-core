@@ -4,7 +4,7 @@ import (
 	"crypto/rand"
 	"testing"
 
-	curve25519 "github.com/oasisprotocol/ed25519/extra/x25519"
+	curve25519 "github.com/oasisprotocol/curve25519-voi/primitives/x25519"
 	"github.com/stretchr/testify/require"
 )
 
