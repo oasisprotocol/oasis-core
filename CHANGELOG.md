@@ -14,6 +14,12 @@ The format is inspired by [Keep a Changelog].
 
 ## 21.1.2 (2021-05-07)
 
+| Protocol          | Version   |
+|:------------------|:---------:|
+| Consensus         | 4.0.0     |
+| Runtime Host      | 2.0.0     |
+| Runtime Committee | 2.0.0     |
+
 ### Features
 
 - go/cmd/registry: simplify register runtime command
