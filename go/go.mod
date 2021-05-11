@@ -41,7 +41,7 @@ require (
 	github.com/oasisprotocol/deoxysii v0.0.0-20200527154044-851aec403956
 	github.com/opentracing/opentracing-go v1.2.0
 	github.com/prometheus/client_golang v1.10.0
-	github.com/prometheus/common v0.20.0
+	github.com/prometheus/common v0.24.0
 	github.com/prometheus/procfs v0.6.0
 	github.com/seccomp/libseccomp-golang v0.9.1
 	github.com/spf13/cobra v1.1.1
