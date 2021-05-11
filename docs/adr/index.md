@@ -79,5 +79,6 @@ The following records currently exist:
 * [ADR 0005](0005-runtime-compute-slashing.md) - Runtime Compute Node Slashing
 * [ADR 0006](0006-consensus-governance.md) - Consensus Governance
 * [ADR 0007](0007-improved-random-beacon.md) - Improved Random Beacon
-* [ADR 0008](0008-standard-account-key-generation) - Standard Account Key Generation
+* [ADR 0008](0008-standard-account-key-generation.md) - Standard Account Key Generation
+* [ADR 0009](0009-ed25519-semantics.md) - Ed25519 Signature Verification Semantics
 <!-- markdownlint-enable line-length -->
