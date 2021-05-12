@@ -56,7 +56,7 @@ jobs:
         run: |
           make release-build
       - name: Upload release artifacts
-        uses: actions/upload-artifact@v2.2.2
+        uses: actions/upload-artifact@v2.2.3
         with:
           name: oasis-core-dev-release
           path: dist/*.tar.gz
