@@ -313,12 +313,12 @@ func NewNode(
 				}, nil
 			},
 			GetRoots: func(ctx context.Context, version uint64) ([]storageApi.Root, error) {
-				blk, berr := commonNode.Runtime.History().GetBlock(ctx, version)
+				annBlk, berr := commonNode.Runtime.History().GetBlock(ctx, version)
 				if berr != nil {
 					return nil, berr
 				}
 
-				return blk.Header.StorageRoots(), nil
+				return annBlk.Block.Header.StorageRoots(), nil
 			},
 		}
 		n.checkpointer, err = checkpoint.NewCheckpointer(
@@ -1151,7 +1151,7 @@ mainLoop:
 				if _, ok := hashCache[i]; ok {
 					continue
 				}
-				var oldBlock *block.Block
+				var oldBlock *roothashApi.AnnotatedBlock
 				oldBlock, err = n.commonNode.Runtime.History().GetBlock(n.ctx, i)
 				if err != nil {
 					n.logger.Error("can't get block for round",
@@ -1161,7 +1161,7 @@ mainLoop:
 					)
 					panic("can't get block in storage worker")
 				}
-				hashCache[i] = summaryFromBlock(oldBlock)
+				hashCache[i] = summaryFromBlock(oldBlock.Block)
 			}
 			if _, ok := hashCache[blk.Header.Round]; !ok {
 				hashCache[blk.Header.Round] = summaryFromBlock(blk)

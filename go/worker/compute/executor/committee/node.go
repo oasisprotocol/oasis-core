@@ -34,6 +34,7 @@ import (
 	schedulingAPI "github.com/oasisprotocol/oasis-core/go/runtime/scheduling/api"
 	"github.com/oasisprotocol/oasis-core/go/runtime/transaction"
 	scheduler "github.com/oasisprotocol/oasis-core/go/scheduler/api"
+	staking "github.com/oasisprotocol/oasis-core/go/staking/api"
 	storage "github.com/oasisprotocol/oasis-core/go/storage/api"
 	commonWorker "github.com/oasisprotocol/oasis-core/go/worker/common"
 	"github.com/oasisprotocol/oasis-core/go/worker/common/committee"
@@ -729,14 +730,14 @@ func (n *Node) proposeTimeoutLocked(roundCtx context.Context) error {
 	return nil
 }
 
-func (n *Node) getRtStateAndRoundResults(ctx context.Context, height int64) (*roothash.RuntimeState, *roothash.RoundResults, error) {
+func (n *Node) getRuntimeRoundData(ctx context.Context, height int64, currentRound uint64) (*roothash.RuntimeState, *roothash.RoundResults, []*staking.Event, error) {
 	state, err := n.commonNode.Consensus.RootHash().GetRuntimeState(ctx, n.commonNode.Runtime.ID(), height)
 	if err != nil {
 		n.logger.Error("failed to query runtime state",
 			"err", err,
 			"height", height,
 		)
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 	roundResults, err := n.commonNode.Runtime.History().GetRoundResults(ctx, state.LastNormalRound)
 	if err != nil {
@@ -744,10 +745,25 @@ func (n *Node) getRtStateAndRoundResults(ctx context.Context, height int64) (*ro
 			"err", err,
 			"height", height,
 		)
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 
-	return state, roundResults, nil
+	// Load all events since last successful round.
+	var stakingEvents []*staking.Event
+	for r := state.LastNormalRound; r < currentRound; r++ {
+		events, err := n.commonNode.Runtime.History().GetRoundEvents(ctx, r)
+		if err != nil {
+			n.logger.Error("failed to query round events",
+				"err", err,
+				"height", height,
+			)
+			return nil, nil, nil, err
+		}
+		stakingEvents = append(stakingEvents, events...)
+	}
+	n.logger.Debug("round staking events", "num_events", len(stakingEvents), "events", stakingEvents)
+
+	return state, roundResults, stakingEvents, nil
 }
 
 func (n *Node) handleScheduleBatch(force bool) {
@@ -771,7 +787,7 @@ func (n *Node) handleScheduleBatch(force bool) {
 			return roundCtx, nil, nil, nil, errNotTxnScheduler
 		}
 
-		_, roundResults, err := n.getRtStateAndRoundResults(roundCtx, n.commonNode.CurrentBlockHeight)
+		_, roundResults, _, err := n.getRuntimeRoundData(roundCtx, n.commonNode.CurrentBlockHeight, n.commonNode.CurrentBlock.Header.Round)
 		if err != nil {
 			return roundCtx, nil, nil, nil, err
 		}
@@ -1010,11 +1026,10 @@ func (n *Node) startProcessingBatchLocked(batch *unresolvedBatch) {
 	consensusBlk := n.commonNode.CurrentConsensusBlock
 	height := n.commonNode.CurrentBlockHeight
 	epoch := n.commonNode.Group.GetEpochSnapshot()
-
 	go func() {
 		defer close(done)
 
-		state, roundResults, err := n.getRtStateAndRoundResults(ctx, height)
+		state, roundResults, stakingEvents, err := n.getRuntimeRoundData(ctx, height, blk.Header.Round)
 		if err != nil {
 			n.logger.Error("failed to query runtime state and last round results",
 				"err", err,
@@ -1037,6 +1052,7 @@ func (n *Node) startProcessingBatchLocked(batch *unresolvedBatch) {
 		rq := &protocol.Body{
 			RuntimeExecuteTxBatchRequest: &protocol.RuntimeExecuteTxBatchRequest{
 				ConsensusBlock: *consensusBlk,
+				StakingEvents:  stakingEvents,
 				RoundResults:   roundResults,
 				IORoot:         batch.ioRoot.Hash,
 				Inputs:         resolvedBatch,
