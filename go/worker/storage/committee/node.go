@@ -792,12 +792,12 @@ func (n *Node) runtimeNodesWatcher() {
 			if u.Update == nil {
 				continue
 			}
-			// Update policy (handled bellow).
+			// Update policy (handled below).
 		case u := <-storageNodeUps:
 			if u.Update == nil {
 				continue
 			}
-			// Update policy (handled bellow).
+			// Update policy (handled below).
 		}
 		n.updateExternalServicePolicy(committeeNodes)
 	}

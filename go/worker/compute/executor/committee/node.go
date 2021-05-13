@@ -1538,7 +1538,7 @@ func (n *Node) worker() {
 	// Note: in case the runtime is already running, the correct active descriptor
 	// is the version at the last epoch transition.
 	// This case will be handled by the first tick from the descriptor updates
-	// channel bellow, which will update the parameters.
+	// channel below, which will update the parameters.
 	runtime, err := n.commonNode.Runtime.ActiveDescriptor(n.ctx)
 	if err != nil {
 		n.logger.Error("failed to fetch runtime registry descriptor",

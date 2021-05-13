@@ -267,7 +267,7 @@ func (r *runtime) updateActiveDescriptor(ctx context.Context) bool {
 
 	h := hash.NewFrom(state.Runtime)
 	// This is only called from the watchUpdates thread and activeDescriptorHash
-	// is only mutated bellow, so no need for a lock here.
+	// is only mutated below, so no need for a lock here.
 	if h.Equal(&r.activeDescriptorHash) {
 		r.logger.Debug("active runtime descriptor didn't change",
 			"runtime", state.Runtime,
