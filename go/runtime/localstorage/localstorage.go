@@ -8,8 +8,8 @@ import (
 	"fmt"
 	"path/filepath"
 
-	"github.com/dgraph-io/badger/v2"
-	"github.com/dgraph-io/badger/v2/options"
+	"github.com/dgraph-io/badger/v3"
+	"github.com/dgraph-io/badger/v3/options"
 
 	"github.com/oasisprotocol/oasis-core/go/common"
 	cmnBadger "github.com/oasisprotocol/oasis-core/go/common/badger"
@@ -111,9 +111,6 @@ func New(dataDir, fn string, runtimeID common.Namespace) (LocalStorage, error) {
 	opts := badger.DefaultOptions(filepath.Join(dataDir, fn))
 	opts = opts.WithLogger(cmnBadger.NewLogAdapter(s.logger))
 	opts = opts.WithSyncWrites(true)
-	// Allow value log truncation if required (this is needed to recover the
-	// value log file which can get corrupted in crashes).
-	opts = opts.WithTruncate(true)
 	opts = opts.WithCompression(options.None)
 
 	var err error

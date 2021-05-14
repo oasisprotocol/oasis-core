@@ -1,8 +1,8 @@
 package badger
 
 import (
-	"github.com/dgraph-io/badger/v2"
-	"github.com/dgraph-io/badger/v2/options"
+	"github.com/dgraph-io/badger/v3"
+	"github.com/dgraph-io/badger/v3/options"
 
 	cmnBadger "github.com/oasisprotocol/oasis-core/go/common/badger"
 	"github.com/oasisprotocol/oasis-core/go/storage/mkvs/db/api"
@@ -31,11 +31,13 @@ func commonConfigToBadgerOptions(cfg *api.Config, db *badgerNodeDB) badger.Optio
 	opts := badger.DefaultOptions(cfg.DB)
 	opts = opts.WithLogger(cmnBadger.NewLogAdapter(db.logger))
 	opts = opts.WithSyncWrites(!cfg.NoFsync)
-	// Allow value log truncation if required (this is needed to recover the
-	// value log file which can get corrupted in crashes).
-	opts = opts.WithTruncate(true)
 	opts = opts.WithCompression(options.Snappy)
-	opts = opts.WithBlockCacheSize(cfg.MaxCacheSize)
+	if cfg.MaxCacheSize == 0 {
+		// Default to 64mb block cache size if not configured to avoid a panic.
+		opts = opts.WithBlockCacheSize(64 * 1024 * 1024)
+	} else {
+		opts = opts.WithBlockCacheSize(cfg.MaxCacheSize)
+	}
 	opts = opts.WithReadOnly(cfg.ReadOnly)
 	opts = opts.WithDetectConflicts(false)
 
