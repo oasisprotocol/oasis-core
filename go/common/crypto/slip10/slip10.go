@@ -13,8 +13,11 @@ import (
 )
 
 const (
-	// SeedSize is the BIP-0039 seed byte sequence size in bytes.
-	SeedSize = 64
+	// SeedMinSize is the minimum seed byte sequence size in bytes.
+	SeedMinSize = 16
+
+	// SeedMaxSize is the maximum seed byte sequence size in bytes.
+	SeedMaxSize = 64
 
 	// ChainCodeSize is the size of a SLIP-0010 chain code in bytes.
 	ChainCodeSize = 32
@@ -27,18 +30,18 @@ type ChainCode [ChainCodeSize]byte
 
 // NewMasterKey derives a master key and chain code from a seed byte sequence.
 func NewMasterKey(seed []byte) (signature.Signer, ChainCode, error) {
-	// 1. Generate a seed byte sequence S of 512 bits according to BIP-0039.
-	if len(seed) != SeedSize {
+	// Let S be a seed byte sequence of 128 to 512 bits in length.
+	if sLen := len(seed); sLen < SeedMinSize || sLen > SeedMaxSize {
 		return nil, ChainCode{}, fmt.Errorf("slip10: invalid seed")
 	}
 
-	// 2. Calculate I = HMAC-SHA512(Key = Curve, Data = S)
+	// 1. Calculate I = HMAC-SHA512(Key = Curve, Data = S)
 	mac := hmac.New(sha512.New, curveConstant)
 	_, _ = mac.Write(seed)
 	I := mac.Sum(nil)
 
-	// 3. Split I into two 32-byte sequences, IL and IR.
-	// 4. Use parse256(IL) as master secret key, and IR as master chain code.
+	// 2. Split I into two 32-byte sequences, IL and IR.
+	// 3. Use parse256(IL) as master secret key, and IR as master chain code.
 	return splitDigest(I)
 }
 
