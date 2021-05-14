@@ -272,12 +272,14 @@ func (app *stakingApplication) onEpochChange(ctx *api.Context, epoch beacon.Epoc
 			"escrow_addr", e.EscrowAddr,
 			"delegator_addr", e.DelegatorAddr,
 			"base_units", stakeAmount,
+			"num_shares", shareAmount,
 		)
 
 		evt := staking.ReclaimEscrowEvent{
 			Owner:  e.DelegatorAddr,
 			Escrow: e.EscrowAddr,
 			Amount: *stakeAmount,
+			Shares: *shareAmount,
 		}
 		ctx.EmitEvent(api.NewEventBuilder(app.Name()).Attribute(KeyReclaimEscrow, cbor.Marshal(evt)))
 	}

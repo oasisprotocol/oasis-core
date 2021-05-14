@@ -614,9 +614,10 @@ The add escrow event is emitted when funds are escrowed.
 
 ```golang
 type AddEscrowEvent struct {
-  Owner  Address           `json:"owner"`
-  Escrow Address           `json:"escrow"`
-  Amount quantity.Quantity `json:"amount"`
+  Owner     Address           `json:"owner"`
+  Escrow    Address           `json:"escrow"`
+  Amount    quantity.Quantity `json:"amount"`
+  NewShares quantity.Quantity `json:"new_shares"`
 }
 ```
 
@@ -626,6 +627,9 @@ type AddEscrowEvent struct {
 * `escrow` contains the address of the destination account the tokens are being
   escrowed to.
 * `amount` contains the amount (in base units) escrowed.
+* `new_shares` contains the amount of shares created as a result of the added
+  escrow event. Can be zero in case of (non-commissioned) rewards, where stake
+  is added without new shares to increase share price.
 
 #### Take Escrow Event
 
@@ -658,6 +662,7 @@ type ReclaimEscrowEvent struct {
   Owner  Address           `json:"owner"`
   Escrow Address           `json:"escrow"`
   Amount quantity.Quantity `json:"amount"`
+  Shares quantity.Quantity `json:"shares"`
 }
 ```
 
@@ -666,6 +671,7 @@ type ReclaimEscrowEvent struct {
 * `owner` contains the address of the account that reclaimed tokens from escrow.
 * `escrow` contains the address of the account escrow has been reclaimed from.
 * `amount` contains the amount (in base units) reclaimed.
+* `shares` contains the amount of shares reclaimed.
 
 ### Allowance Change Event
 

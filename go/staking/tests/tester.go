@@ -714,7 +714,9 @@ func testEscrowHelper( // nolint: gocyclo
 	}
 
 	currentTotalShares := dstAcc.Escrow.Active.TotalShares.Clone()
-	_ = dstAcc.Escrow.Active.Deposit(currentTotalShares, &srcAcc.General.Balance, &escrow.Amount)
+	sharesBefore := dstAcc.Escrow.Active.TotalShares.Clone()
+	newShares, err := dstAcc.Escrow.Active.Deposit(currentTotalShares, &srcAcc.General.Balance, &escrow.Amount)
+	require.NoError(err, "src: deposit")
 
 	newSrcAcc, err := backend.Account(context.Background(), &api.OwnerQuery{Owner: srcAccData.Address, Height: consensusAPI.HeightLatest})
 	require.NoError(err, "src: Account - after")
@@ -733,6 +735,12 @@ func testEscrowHelper( // nolint: gocyclo
 	}
 	require.Equal(dstAcc.Escrow.Active.Balance, newDstAcc.Escrow.Active.Balance, "dst: active escrow balance - after")
 	require.Equal(dstAcc.Escrow.Active.TotalShares, newDstAcc.Escrow.Active.TotalShares, "dst: active escrow total shares - after")
+
+	// Compute actually added shares.
+	addedShares := dstAcc.Escrow.Active.TotalShares.Clone()
+	require.NoError(addedShares.Sub(sharesBefore), "dst: totalShares.Sub(sharesBefore)")
+	require.Equal(addedShares, newShares, "dst: expected amount of added shares")
+
 	require.True(newDstAcc.Escrow.Debonding.Balance.IsZero(), "dst: debonding escrow balance == 0 - after")
 	require.True(newDstAcc.Escrow.Debonding.TotalShares.IsZero(), "dst: debonding escrow total shares == 0 - after")
 
@@ -783,7 +791,9 @@ func testEscrowHelper( // nolint: gocyclo
 	}
 
 	currentTotalShares = dstAcc.Escrow.Active.TotalShares.Clone()
-	_ = dstAcc.Escrow.Active.Deposit(currentTotalShares, &srcAcc.General.Balance, &escrow.Amount)
+	sharesBefore = dstAcc.Escrow.Active.TotalShares.Clone()
+	newShares, err = dstAcc.Escrow.Active.Deposit(currentTotalShares, &srcAcc.General.Balance, &escrow.Amount)
+	require.NoError(err, "src: deposit - after 2nd")
 
 	newSrcAcc, err = backend.Account(context.Background(), &api.OwnerQuery{Owner: srcAccData.Address, Height: consensusAPI.HeightLatest})
 	require.NoError(err, "src: Account - after 2nd")
@@ -802,6 +812,12 @@ func testEscrowHelper( // nolint: gocyclo
 	}
 	require.Equal(dstAcc.Escrow.Active.Balance, newDstAcc.Escrow.Active.Balance, "dst: active escrow balance - after 2nd")
 	require.Equal(dstAcc.Escrow.Active.TotalShares, newDstAcc.Escrow.Active.TotalShares, "dst: active escrow total shares - after 2nd")
+
+	// Compute actually added shares.
+	addedShares = dstAcc.Escrow.Active.TotalShares.Clone()
+	require.NoError(addedShares.Sub(sharesBefore), "dst: totalShares.Sub(sharesBefore) - after 2nd")
+	require.Equal(addedShares, newShares, "dst: expected amount of added shares - after 2nd")
+
 	require.True(newDstAcc.Escrow.Debonding.Balance.IsZero(), "dst: debonding escrow balance == 0 - after 2nd")
 	require.True(newDstAcc.Escrow.Debonding.TotalShares.IsZero(), "dst: debonding escrow total shares == 0 - after 2nd")
 

@@ -246,9 +246,10 @@ type Event struct {
 // AddEscrowEvent is the event emitted when stake is transferred into an escrow
 // account.
 type AddEscrowEvent struct {
-	Owner  Address           `json:"owner"`
-	Escrow Address           `json:"escrow"`
-	Amount quantity.Quantity `json:"amount"`
+	Owner     Address           `json:"owner"`
+	Escrow    Address           `json:"escrow"`
+	Amount    quantity.Quantity `json:"amount"`
+	NewShares quantity.Quantity `json:"new_shares"`
 }
 
 // TakeEscrowEvent is the event emitted when stake is taken from an escrow
@@ -264,6 +265,7 @@ type ReclaimEscrowEvent struct {
 	Owner  Address           `json:"owner"`
 	Escrow Address           `json:"escrow"`
 	Amount quantity.Quantity `json:"amount"`
+	Shares quantity.Quantity `json:"shares"`
 }
 
 // AllowanceChangeEvent is the event emitted when allowance is changed for a beneficiary.
@@ -510,26 +512,29 @@ func (p *SharePool) sharesForStake(amount *quantity.Quantity) (*quantity.Quantit
 }
 
 // Deposit moves stake into the combined balance, raising the shares.
+//
+// Returns the number of new shares created as a result of the deposit.
+//
 // If an error occurs, the pool and affected accounts are left in an invalid state.
-func (p *SharePool) Deposit(shareDst, stakeSrc, baseUnitsAmount *quantity.Quantity) error {
+func (p *SharePool) Deposit(shareDst, stakeSrc, baseUnitsAmount *quantity.Quantity) (*quantity.Quantity, error) {
 	shares, err := p.sharesForStake(baseUnitsAmount)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	if err = quantity.Move(&p.Balance, stakeSrc, baseUnitsAmount); err != nil {
-		return err
+		return nil, err
 	}
 
 	if err = p.TotalShares.Add(shares); err != nil {
-		return err
+		return nil, err
 	}
 
 	if err = shareDst.Add(shares); err != nil {
-		return err
+		return nil, err
 	}
 
-	return nil
+	return shares, nil
 }
 
 // StakeForShares computes the amount of base units for the given amount of shares.
