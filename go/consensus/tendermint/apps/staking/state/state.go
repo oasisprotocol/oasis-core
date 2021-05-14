@@ -822,8 +822,9 @@ func (s *MutableState) TransferFromCommon(
 		return false, nil
 	}
 
-	// If escrow is requested, escrow the transferred stake immediately.
-	if escrow {
+	switch escrow {
+	case true:
+		// If escrow is requested, escrow the transferred stake immediately.
 		var com *quantity.Quantity
 		switch to.Escrow.Active.TotalShares.IsZero() {
 		case false:
@@ -834,10 +835,9 @@ func (s *MutableState) TransferFromCommon(
 				return false, fmt.Errorf("tendermint/staking: failed to get current epoch: %w", err)
 			}
 
-			q := transferred.Clone()
 			rate := to.Escrow.CommissionSchedule.CurrentRate(epoch)
 			if rate != nil {
-				com = q.Clone()
+				com = transferred.Clone()
 				// Multiply first.
 				if err = com.Mul(rate); err != nil {
 					return false, fmt.Errorf("tendermint/staking: failed multiplying by commission rate: %w", err)
@@ -846,14 +846,26 @@ func (s *MutableState) TransferFromCommon(
 					return false, fmt.Errorf("tendermint/staking: failed dividing by commission rate denominator: %w", err)
 				}
 
-				if err = q.Sub(com); err != nil {
+				if err = transferred.Sub(com); err != nil {
 					return false, fmt.Errorf("tendermint/staking: failed subtracting commission: %w", err)
 				}
 			}
 
 			// Escrow everything except the commission (increases value of all shares).
-			if err = quantity.Move(&to.Escrow.Active.Balance, &to.General.Balance, q); err != nil {
+			if err = quantity.Move(&to.Escrow.Active.Balance, &to.General.Balance, transferred); err != nil {
 				return false, fmt.Errorf("tendermint/staking: failed transferring to active escrow balance from common pool: %w", err)
+			}
+
+			// Emit non commissioned reward event.
+			if !ctx.IsCheckOnly() {
+				ev := cbor.Marshal(&staking.AddEscrowEvent{
+					Owner:  staking.CommonPoolAddress,
+					Escrow: toAddr,
+					Amount: *transferred,
+					// No new shares as this is the reward. As a result existing share price increases.
+					NewShares: quantity.Quantity{},
+				})
+				ctx.EmitEvent(api.NewEventBuilder(AppName).Attribute(KeyAddEscrow, ev))
 			}
 		case true:
 			// If nothing has been escrowed before, everything counts as commission.
@@ -868,14 +880,45 @@ func (s *MutableState) TransferFromCommon(
 				return false, fmt.Errorf("tendermint/staking: failed to query delegation: %w", err)
 			}
 
-			if err = to.Escrow.Active.Deposit(&delegation.Shares, &to.General.Balance, com); err != nil {
+			var obtainedShares *quantity.Quantity
+			obtainedShares, err = to.Escrow.Active.Deposit(&delegation.Shares, &to.General.Balance, com)
+			if err != nil {
 				return false, fmt.Errorf("tendermint/staking: failed to deposit to escrow: %w", err)
 			}
 
 			if err = s.SetDelegation(ctx, toAddr, toAddr, delegation); err != nil {
 				return false, fmt.Errorf("tendermint/staking: failed to set delegation: %w", err)
 			}
+
+			// Emit events.
+			// Commission was transferred to the account, and automatically escrowed.
+			if !ctx.IsCheckOnly() {
+				ev := cbor.Marshal(&staking.TransferEvent{
+					From:   staking.CommonPoolAddress,
+					To:     toAddr,
+					Amount: *com,
+				})
+				ctx.EmitEvent(api.NewEventBuilder(AppName).Attribute(KeyTransfer, ev))
+
+				ev = cbor.Marshal(&staking.AddEscrowEvent{
+					Owner:     toAddr,
+					Escrow:    toAddr,
+					Amount:    *com,
+					NewShares: *obtainedShares,
+				})
+				ctx.EmitEvent(api.NewEventBuilder(AppName).Attribute(KeyAddEscrow, ev))
+			}
 		}
+	case false:
+		if !ctx.IsCheckOnly() {
+			ev := cbor.Marshal(&staking.TransferEvent{
+				From:   staking.CommonPoolAddress,
+				To:     toAddr,
+				Amount: *transferred,
+			})
+			ctx.EmitEvent(api.NewEventBuilder(AppName).Attribute(KeyTransfer, ev))
+		}
+
 	}
 
 	if err = s.SetCommonPool(ctx, commonPool); err != nil {
@@ -883,26 +926,6 @@ func (s *MutableState) TransferFromCommon(
 	}
 	if err = s.SetAccount(ctx, toAddr, to); err != nil {
 		return false, fmt.Errorf("tendermint/staking: failed to set account %s: %w", toAddr, err)
-	}
-
-	// Emit event(s).
-	if !ctx.IsCheckOnly() {
-		switch escrow {
-		case false:
-			ev := cbor.Marshal(&staking.TransferEvent{
-				From:   staking.CommonPoolAddress,
-				To:     toAddr,
-				Amount: *transferred,
-			})
-			ctx.EmitEvent(api.NewEventBuilder(AppName).Attribute(KeyTransfer, ev))
-		case true:
-			ev := cbor.Marshal(&staking.AddEscrowEvent{
-				Owner:  staking.CommonPoolAddress,
-				Escrow: toAddr,
-				Amount: *transferred,
-			})
-			ctx.EmitEvent(api.NewEventBuilder(AppName).Attribute(KeyAddEscrow, ev))
-		}
 	}
 
 	return true, nil
@@ -1108,6 +1131,8 @@ func (s *MutableState) AddRewards(
 				Owner:  staking.CommonPoolAddress,
 				Escrow: addr,
 				Amount: *q,
+				// No new shares as this is the reward. As a result existing share price increases.
+				NewShares: quantity.Quantity{},
 			})
 			ctx.EmitEvent(api.NewEventBuilder(AppName).Attribute(KeyAddEscrow, ev))
 		}
@@ -1119,7 +1144,9 @@ func (s *MutableState) AddRewards(
 				return fmt.Errorf("tendermint/staking: failed to query delegation: %w", err)
 			}
 
-			if err = ent.Escrow.Active.Deposit(&delegation.Shares, commonPool, com); err != nil {
+			var obtainedShares *quantity.Quantity
+			obtainedShares, err = ent.Escrow.Active.Deposit(&delegation.Shares, commonPool, com)
+			if err != nil {
 				return fmt.Errorf("tendermint/staking: depositing commission: %w", err)
 			}
 
@@ -1127,10 +1154,21 @@ func (s *MutableState) AddRewards(
 				return fmt.Errorf("tendermint/staking: failed to set delegation: %w", err)
 			}
 
-			ev := cbor.Marshal(&staking.AddEscrowEvent{
-				Owner:  staking.CommonPoolAddress,
-				Escrow: addr,
+			// Above, we directly desposit from the common pool into the delegation,
+			// which is a shorthand for transferring to the account and immediately
+			// escrowing it. Explicitly emit both events.
+			ev := cbor.Marshal(&staking.TransferEvent{
+				From:   staking.CommonPoolAddress,
+				To:     addr,
 				Amount: *com,
+			})
+			ctx.EmitEvent(api.NewEventBuilder(AppName).Attribute(KeyAddEscrow, ev))
+
+			ev = cbor.Marshal(&staking.AddEscrowEvent{
+				Owner:     addr,
+				Escrow:    addr,
+				Amount:    *com,
+				NewShares: *obtainedShares,
 			})
 			ctx.EmitEvent(api.NewEventBuilder(AppName).Attribute(KeyAddEscrow, ev))
 		}
@@ -1236,6 +1274,8 @@ func (s *MutableState) AddRewardSingleAttenuated(
 			Owner:  staking.CommonPoolAddress,
 			Escrow: address,
 			Amount: *q,
+			// No new shares as this is the reward. As a result existing share price increases.
+			NewShares: quantity.Quantity{},
 		})
 		ctx.EmitEvent(api.NewEventBuilder(AppName).Attribute(KeyAddEscrow, ev))
 	}
@@ -1247,7 +1287,9 @@ func (s *MutableState) AddRewardSingleAttenuated(
 			return fmt.Errorf("tendermint/staking: failed to query delegation: %w", err)
 		}
 
-		if err = acct.Escrow.Active.Deposit(&delegation.Shares, commonPool, com); err != nil {
+		var obtainedShares *quantity.Quantity
+		obtainedShares, err = acct.Escrow.Active.Deposit(&delegation.Shares, commonPool, com)
+		if err != nil {
 			return fmt.Errorf("tendermint/staking: failed depositing commission: %w", err)
 		}
 
@@ -1255,10 +1297,21 @@ func (s *MutableState) AddRewardSingleAttenuated(
 			return fmt.Errorf("tendermint/staking: failed to set delegation: %w", err)
 		}
 
-		ev := cbor.Marshal(&staking.AddEscrowEvent{
-			Owner:  staking.CommonPoolAddress,
-			Escrow: address,
+		// Above, we directly desposit from the common pool into the delegation,
+		// which is a shorthand for transferring to the account and immediately
+		// escrowing it. Explicitly emit both events.
+		ev := cbor.Marshal(&staking.TransferEvent{
+			From:   staking.CommonPoolAddress,
+			To:     address,
 			Amount: *com,
+		})
+		ctx.EmitEvent(api.NewEventBuilder(AppName).Attribute(KeyAddEscrow, ev))
+
+		ev = cbor.Marshal(&staking.AddEscrowEvent{
+			Owner:     address,
+			Escrow:    address,
+			Amount:    *com,
+			NewShares: *obtainedShares,
 		})
 		ctx.EmitEvent(api.NewEventBuilder(AppName).Attribute(KeyAddEscrow, ev))
 	}

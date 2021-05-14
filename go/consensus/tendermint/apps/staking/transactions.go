@@ -233,7 +233,8 @@ func (app *stakingApplication) addEscrow(ctx *api.Context, state *stakingState.M
 		return fmt.Errorf("failed to fetch delegation: %w", err)
 	}
 
-	if err = to.Escrow.Active.Deposit(&delegation.Shares, &from.General.Balance, &escrow.Amount); err != nil {
+	obtainedShares, err := to.Escrow.Active.Deposit(&delegation.Shares, &from.General.Balance, &escrow.Amount)
+	if err != nil {
 		ctx.Logger().Error("AddEscrow: failed to escrow stake",
 			"err", err,
 			"from", fromAddr,
@@ -261,12 +262,14 @@ func (app *stakingApplication) addEscrow(ctx *api.Context, state *stakingState.M
 		"from", fromAddr,
 		"to", escrow.Account,
 		"amount", escrow.Amount,
+		"obtained_shares", obtainedShares,
 	)
 
 	evt := &staking.AddEscrowEvent{
-		Owner:  fromAddr,
-		Escrow: escrow.Account,
-		Amount: escrow.Amount,
+		Owner:     fromAddr,
+		Escrow:    escrow.Account,
+		Amount:    escrow.Amount,
+		NewShares: *obtainedShares,
 	}
 	ctx.EmitEvent(api.NewEventBuilder(app.Name()).Attribute(KeyAddEscrow, cbor.Marshal(evt)))
 
@@ -365,7 +368,7 @@ func (app *stakingApplication) reclaimEscrow(ctx *api.Context, state *stakingSta
 	}
 	stakeAmount := baseUnits.Clone()
 
-	if err = from.Escrow.Debonding.Deposit(&deb.Shares, &baseUnits, stakeAmount); err != nil {
+	if _, err = from.Escrow.Debonding.Deposit(&deb.Shares, &baseUnits, stakeAmount); err != nil {
 		ctx.Logger().Error("ReclaimEscrow: failed to debond shares",
 			"err", err,
 			"to", toAddr,

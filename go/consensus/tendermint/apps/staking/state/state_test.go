@@ -73,15 +73,18 @@ func TestDelegationQueries(t *testing.T) {
 
 		// Init delegation.
 		var del staking.Delegation
-		err = escrowAccount.Escrow.Active.Deposit(&del.Shares, &account.General.Balance, mustInitQuantityP(t, i*100))
+		var newShares *quantity.Quantity
+		newShares, err = escrowAccount.Escrow.Active.Deposit(&del.Shares, &account.General.Balance, mustInitQuantityP(t, i*100))
 		require.NoError(err, "active escrow deposit")
+		require.Equal(newShares, &del.Shares, "new shares should equal initial delegation")
 		expectedDelegations[escrowAddr][addr] = &del
 
 		// Init debonding delegation.
 		var deb staking.DebondingDelegation
 		deb.DebondEndTime = beacon.EpochTime(i)
-		err = escrowAccount.Escrow.Debonding.Deposit(&deb.Shares, &account.General.Balance, mustInitQuantityP(t, i*100))
+		newShares, err = escrowAccount.Escrow.Debonding.Deposit(&deb.Shares, &account.General.Balance, mustInitQuantityP(t, i*100))
 		require.NoError(err, "debonding escrow deposit")
+		require.Equal(newShares, &del.Shares, "new shares should equal initial debonding delegation")
 		expectedDebDelegations[escrowAddr][addr] = []*staking.DebondingDelegation{&deb}
 
 		// Update state.
@@ -223,12 +226,12 @@ func TestRewardAndSlash(t *testing.T) {
 	require.NoError(err, "commission schedule")
 
 	del := &staking.Delegation{}
-	err = escrowAccount.Escrow.Active.Deposit(&del.Shares, &delegatorAccount.General.Balance, mustInitQuantityP(t, 100))
+	_, err = escrowAccount.Escrow.Active.Deposit(&del.Shares, &delegatorAccount.General.Balance, mustInitQuantityP(t, 100))
 	require.NoError(err, "active escrow deposit")
 
 	var deb staking.DebondingDelegation
 	deb.DebondEndTime = 21
-	err = escrowAccount.Escrow.Debonding.Deposit(&deb.Shares, &delegatorAccount.General.Balance, mustInitQuantityP(t, 100))
+	_, err = escrowAccount.Escrow.Debonding.Deposit(&deb.Shares, &delegatorAccount.General.Balance, mustInitQuantityP(t, 100))
 	require.NoError(err, "debonding escrow deposit")
 
 	now := time.Unix(1580461674, 0)
@@ -554,7 +557,7 @@ func TestTransferFromCommon(t *testing.T) {
 
 	// Transfer with escrow (other delegations and commission).
 	var dg2 staking.Delegation
-	err = acc2.Escrow.Active.Deposit(&dg2.Shares, quantity.NewFromUint64(100), quantity.NewFromUint64(100))
+	_, err = acc2.Escrow.Active.Deposit(&dg2.Shares, quantity.NewFromUint64(100), quantity.NewFromUint64(100))
 	require.NoError(err, "Deposit")
 	err = s.SetDelegation(ctx, addr1, addr2, &dg2)
 	require.NoError(err, "SetDelegation")
