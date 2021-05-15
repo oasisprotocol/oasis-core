@@ -2,8 +2,11 @@
 use std::io::Write;
 
 use serde::{Deserialize, Serialize};
-pub use serde_cbor::value::{from_value, Value};
 use serde_cbor::{self, Result};
+pub use serde_cbor::{
+    error::Error,
+    value::{from_value, Value},
+};
 
 /// Convert a value to a `Value`.
 pub fn to_value<T>(value: T) -> Value
