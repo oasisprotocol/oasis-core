@@ -3,9 +3,14 @@ use std::io::Cursor;
 
 use anyhow::Result;
 use byteorder::{LittleEndian, ReadBytesExt};
-use ed25519_dalek::{self, ed25519::signature::Signature as _, Signer as _, Verifier};
+use curve25519_dalek::{
+    edwards::{CompressedEdwardsY, EdwardsPoint},
+    scalar::Scalar,
+};
+use ed25519_dalek::{self, Signer as _};
 use rand::rngs::OsRng;
 use serde::{Deserialize, Serialize};
+use sha2::{Digest as _, Sha512};
 use thiserror::Error;
 use zeroize::Zeroize;
 
@@ -20,8 +25,16 @@ impl_bytes!(
 /// Signature error.
 #[derive(Error, Debug)]
 enum SignatureError {
+    #[error("point decompression failed")]
+    PointDecompressionError,
+    #[error("small order A")]
+    SmallOrderAError,
+    #[error("small order R")]
+    SmallOrderRError,
     #[error("signature malleability check failed")]
     MalleabilityError,
+    #[error("invalid signature")]
+    InvalidSignatureError,
 }
 
 static CURVE_ORDER: &'static [u64] = &[
@@ -92,19 +105,75 @@ impl_bytes!(Signature, 64, "An Ed25519 signature.");
 impl Signature {
     /// Verify signature.
     pub fn verify(&self, pk: &PublicKey, context: &[u8], message: &[u8]) -> Result<()> {
-        // TODO/#2103: Replace this with Ed25519ctx.
-        let pk = ed25519_dalek::PublicKey::from_bytes(pk.as_ref()).unwrap();
+        // Apply the Oasis core specific domain separation.
+        //
+        // Note: This should be Ed25519ctx based but "muh Ledger".
         let digest = Hash::digest_bytes_list(&[context, message]);
-        let sig_slice = self.as_ref();
-        let sig = ed25519_dalek::Signature::from_bytes(sig_slice).unwrap();
 
-        // ed25519-dalek does not enforce the RFC 8032 mandated constraint
-        // that s is in range [0, order), so signatures are malleable.
-        if !sc_minimal(&sig_slice[32..]) {
-            return Err(SignatureError::MalleabilityError.into());
+        self.verify_raw(pk, digest.as_ref())
+    }
+
+    /// Verify signature without applying domain separation.
+    #[allow(non_snake_case)] // Variable names matching RFC 8032 is more readable.
+    pub fn verify_raw(&self, pk: &PublicKey, msg: &[u8]) -> Result<()> {
+        // We have a very specific idea of what a valid Ed25519 signature
+        // is, that is different from what ed25519-dalek defines, so this
+        // needs to be done by hand.
+
+        // Decompress A (PublicKey)
+        //
+        // TODO/perf:
+        //  * PublicKey could just be an EdwardsPoint.
+        //  * Could cache the results of is_small_order() in PublicKey.
+        let A = CompressedEdwardsY::from_slice(pk.as_ref());
+        let A = match A.decompress() {
+            Some(point) => point,
+            None => return Err(SignatureError::PointDecompressionError.into()),
+        };
+        if A.is_small_order() {
+            return Err(SignatureError::SmallOrderAError.into());
         }
 
-        Ok(pk.verify(digest.as_ref(), &sig)?)
+        // Decompress R (signature point), S (signature scalar).
+        //
+        // Note:
+        //  * Reject S > L, small order A/R
+        //  * Accept non-canonical A/R
+        let sig_slice = self.as_ref();
+        let R_bits = &sig_slice[..32];
+        let S_bits = &sig_slice[32..];
+
+        let R = CompressedEdwardsY::from_slice(&R_bits);
+        let R = match R.decompress() {
+            Some(point) => point,
+            None => return Err(SignatureError::PointDecompressionError.into()),
+        };
+        if R.is_small_order() {
+            return Err(SignatureError::SmallOrderRError.into());
+        }
+
+        if !sc_minimal(&S_bits) {
+            return Err(SignatureError::MalleabilityError.into());
+        }
+        let mut S: [u8; 32] = [0u8; 32];
+        S.copy_from_slice(&S_bits);
+        let S = Scalar::from_bits(S);
+
+        // k = H(R,A,m)
+        let mut k: Sha512 = Sha512::new();
+        k.update(R_bits);
+        k.update(pk.as_ref());
+        k.update(&msg);
+        let k = Scalar::from_hash(k);
+
+        // Check the cofactored group equation ([8][S]B = [8]R + [8][k]A').
+        let neg_A = -A;
+        let should_be_small_order =
+            EdwardsPoint::vartime_double_scalar_mul_basepoint(&k, &neg_A, &S) - R;
+        match should_be_small_order.is_small_order() {
+            true => Ok(()),
+            false => Err(SignatureError::InvalidSignatureError.into()),
+        }
     }
 }
 
@@ -150,6 +219,7 @@ fn sc_minimal(raw_s: &[u8]) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use rustc_hex::FromHex;
 
     #[test]
     fn test_sc_minimal() {
@@ -236,4 +306,69 @@ mod tests {
     fn test_private_key_to_bytes_malformed_b() {
         PrivateKey::from_bytes(vec![1, 2, 3]);
     }
+
+    #[test]
+    fn verification_small_order_a() {
+        // Case 1 from ed25519-speccheck
+        let pbk = "c7176a703d4dd84fba3c0b760d10670f2a2053fa2c39ccc64ec7fd7792ac03fa";
+        let msg = "9bd9f44f4dcc75bd531b56b2cd280b0bb38fc1cd6d1230e14861d861de092e79";
+        let sig = "f7badec5b8abeaf699583992219b7b223f1df3fbbea919844e3f7c554a43dd43a5bb704786be79fc476f91d3f3f89b03984d8068dcf1bb7dfc6637b45450ac04";
+
+        let pbk: Vec<u8> = pbk.from_hex().unwrap();
+        let msg: Vec<u8> = msg.from_hex().unwrap();
+        let sig: Vec<u8> = sig.from_hex().unwrap();
+
+        let pbk = PublicKey::from(pbk);
+        let sig = Signature::from(sig);
+
+        assert!(
+            sig.verify_raw(&pbk, &msg).is_err(),
+            "small order A not rejected"
+        )
+    }
+
+    #[test]
+    fn verification_small_order_r() {
+        // Case 2 from ed25519-speccheck
+        let pbk = "f7badec5b8abeaf699583992219b7b223f1df3fbbea919844e3f7c554a43dd43";
+        let msg = "aebf3f2601a0c8c5d39cc7d8911642f740b78168218da8471772b35f9d35b9ab";
+        let sig = "c7176a703d4dd84fba3c0b760d10670f2a2053fa2c39ccc64ec7fd7792ac03fa8c4bd45aecaca5b24fb97bc10ac27ac8751a7dfe1baff8b953ec9f5833ca260e";
+
+        let pbk: Vec<u8> = pbk.from_hex().unwrap();
+        let msg: Vec<u8> = msg.from_hex().unwrap();
+        let sig: Vec<u8> = sig.from_hex().unwrap();
+
+        let pbk = PublicKey::from(pbk);
+        let sig = Signature::from(sig);
+
+        assert!(
+            sig.verify_raw(&pbk, &msg).is_err(),
+            "small order R not rejected"
+        )
+    }
+
+    #[test]
+    fn verification_is_cofactored() {
+        // Case 4 from ed25519-speccheck
+        let pbk = "cdb267ce40c5cd45306fa5d2f29731459387dbf9eb933b7bd5aed9a765b88d4d";
+        let msg = "e47d62c63f830dc7a6851a0b1f33ae4bb2f507fb6cffec4011eaccd55b53f56c";
+        let sig = "160a1cb0dc9c0258cd0a7d23e94d8fa878bcb1925f2c64246b2dee1796bed5125ec6bc982a269b723e0668e540911a9a6a58921d6925e434ab10aa7940551a09";
+
+        let pbk: Vec<u8> = pbk.from_hex().unwrap();
+        let msg: Vec<u8> = msg.from_hex().unwrap();
+        let sig: Vec<u8> = sig.from_hex().unwrap();
+
+        let pbk = PublicKey::from(pbk);
+        let sig = Signature::from(sig);
+
+        assert!(
+            sig.verify_raw(&pbk, &msg).is_ok(),
+            "verification is not cofactored(?)"
+        )
+    }
+
+    // Note: It is hard to test rejects small order A/R combined with
+    // accepts non-canonical A/R as there are no known non-small order
+    // points with a non-canonical encoding, that are not also small
+    // order.
 }
