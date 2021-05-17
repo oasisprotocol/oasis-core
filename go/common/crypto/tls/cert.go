@@ -52,13 +52,7 @@ func LoadOrGenerate(certPath, keyPath, commonName string) (*tls.Certificate, err
 	return cert, nil
 }
 
-// Generate generates a new TLS certificate.
-func Generate(commonName string) (*tls.Certificate, error) {
-	pubKey, privKey, err := ed25519.GenerateKey(rand.Reader)
-	if err != nil {
-		return nil, fmt.Errorf("tls: failed to generate keypair: %w", err)
-	}
-
+func makeCertificate(commonName string, privKey ed25519.PrivateKey) (*tls.Certificate, error) {
 	// Tweak the template for the cert.
 	//
 	// TODO: The expiration period is probably too long, and could be reduced,
@@ -70,7 +64,7 @@ func Generate(commonName string) (*tls.Certificate, error) {
 	template.NotBefore = time.Now().Add(-1 * time.Hour)
 	template.NotAfter = time.Now().AddDate(1, 0, 0)
 
-	certDER, err := x509.CreateCertificate(rand.Reader, &template, &template, pubKey, privKey)
+	certDER, err := x509.CreateCertificate(rand.Reader, &template, &template, privKey.Public(), privKey)
 	if err != nil {
 		return nil, fmt.Errorf("tls: failed to create certificate: %w", err)
 	}
@@ -79,6 +73,15 @@ func Generate(commonName string) (*tls.Certificate, error) {
 		Certificate: [][]byte{certDER},
 		PrivateKey:  privKey,
 	}, nil
+}
+
+// Generate generates a new TLS certificate.
+func Generate(commonName string) (*tls.Certificate, error) {
+	_, privKey, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		return nil, fmt.Errorf("tls: failed to generate keypair: %w", err)
+	}
+	return makeCertificate(commonName, privKey)
 }
 
 // Load loads a TLS certificate and private key.
@@ -94,15 +97,29 @@ func Load(certPath, keyPath string) (*tls.Certificate, error) {
 	return ImportPEM(certPEM, keyPEM)
 }
 
+// LoadFromKey loads a private key and regenerates the whole certificate from it.
+func LoadFromKey(keyPath, commonName string) (*tls.Certificate, error) {
+	keyPEM, err := ioutil.ReadFile(keyPath)
+	if err != nil {
+		return nil, err
+	}
+	key, err := ImportKeyPEM(keyPEM)
+	if err != nil {
+		return nil, err
+	}
+	ed25519Key, ok := key.(ed25519.PrivateKey)
+	if !ok {
+		return nil, fmt.Errorf("tls: private key not an Ed25519 private key")
+	}
+
+	return makeCertificate(commonName, ed25519Key)
+}
+
 // ImportPEM loads a TLS certificate and private key from in-memory PEM blobs.
 func ImportPEM(certPEM, keyPEM []byte) (*tls.Certificate, error) {
-	blk, _ := pem.Decode(keyPEM)
-	if blk == nil || blk.Type != keyPEMType {
-		return nil, fmt.Errorf("tls: failed to parse private key PEM")
-	}
-	key, err := x509.ParsePKCS8PrivateKey(blk.Bytes)
+	key, err := ImportKeyPEM(keyPEM)
 	if err != nil {
-		return nil, fmt.Errorf("tls: failed to parse private key: %w", err)
+		return nil, err
 	}
 
 	cert, err := ImportCertificatePEM(certPEM)
@@ -135,6 +152,19 @@ func ImportCertificatePEM(certPEM []byte) (*tls.Certificate, error) {
 	}, nil
 }
 
+// ImportKeyPEM loads a private key from an in-memory PEM blob.
+func ImportKeyPEM(keyPEM []byte) (interface{}, error) {
+	blk, _ := pem.Decode(keyPEM)
+	if blk == nil || blk.Type != keyPEMType {
+		return nil, fmt.Errorf("tls: failed to parse private key PEM")
+	}
+	key, err := x509.ParsePKCS8PrivateKey(blk.Bytes)
+	if err != nil {
+		return nil, fmt.Errorf("tls: failed to parse private key: %w", err)
+	}
+	return key, nil
+}
+
 // Save saves a TLS certificate and private key.
 func Save(certPath, keyPath string, cert *tls.Certificate) error {
 	certPEM, keyPEM, err := ExportPEM(cert)
@@ -150,6 +180,18 @@ func Save(certPath, keyPath string, cert *tls.Certificate) error {
 		return fmt.Errorf("tls: failed to write certificate: %w", err)
 	}
 
+	return nil
+}
+
+// SaveKey saves the private key from a certificate to a file.
+func SaveKey(keyPath string, cert *tls.Certificate) error {
+	_, keyPEM, err := ExportPEM(cert)
+	if err != nil {
+		return err
+	}
+	if err = ioutil.WriteFile(keyPath, keyPEM, 0o600); err != nil {
+		return fmt.Errorf("tls: failed to write private key: %w", err)
+	}
 	return nil
 }
 

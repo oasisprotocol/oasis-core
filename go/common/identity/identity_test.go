@@ -54,8 +54,8 @@ func TestLoadOrGenerate(t *testing.T) {
 	require.EqualValues(t, identity3.ConsensusSigner, identity4.ConsensusSigner)
 	require.NotEqual(t, identity.GetTLSSigner(), identity3.GetTLSSigner())
 	require.NotEqual(t, identity2.GetTLSSigner(), identity3.GetTLSSigner())
-	require.NotEqual(t, identity3.GetTLSSigner(), identity4.GetTLSSigner())
+	require.Equal(t, identity3.GetTLSSigner(), identity4.GetTLSSigner())
 	require.NotEqual(t, identity.GetTLSCertificate(), identity3.GetTLSCertificate())
 	require.NotEqual(t, identity2.GetTLSCertificate(), identity3.GetTLSCertificate())
-	require.NotEqual(t, identity3.GetTLSCertificate(), identity4.GetTLSCertificate())
+	require.Equal(t, identity3.GetTLSCertificate(), identity4.GetTLSCertificate())
 }
