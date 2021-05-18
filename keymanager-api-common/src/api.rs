@@ -15,7 +15,7 @@ use oasis_core_runtime::{
         namespace::Namespace,
         sgx::avr::EnclaveIdentity,
     },
-    impl_bytes, runtime_api,
+    impl_bytes,
 };
 
 impl_bytes!(KeyPairId, 32, "A 256-bit key pair identifier.");
@@ -207,6 +207,8 @@ pub enum KeyManagerError {
     PolicyInvalidSignature,
     #[error("policy has insufficient signatures")]
     PolicyInsufficientSignatures,
+    #[error(transparent)]
+    Other(anyhow::Error),
 }
 
 /// Key manager access control policy.
@@ -249,10 +251,12 @@ impl Default for TrustedPolicySigners {
     }
 }
 
-runtime_api! {
-    pub fn get_or_create_keys(RequestIds) -> KeyPair;
+/// Name of the `get_or_create_keys` method.
+pub const METHOD_GET_OR_CREATE_KEYS: &str = "get_or_create_keys";
+/// Name of the `get_public_key` method.
+pub const METHOD_GET_PUBLIC_KEY: &str = "get_public_key";
+/// Name of the `replicate_master_secret` method.
+pub const METHOD_REPLICATE_MASTER_SECRET: &str = "replicate_master_secret";
 
-    pub fn get_public_key(RequestIds) -> Option<SignedPublicKey>;
-
-    pub fn replicate_master_secret(ReplicateRequest) -> ReplicateResponse;
-}
+/// Name of the `init` local method.
+pub const LOCAL_METHOD_INIT: &str = "init";

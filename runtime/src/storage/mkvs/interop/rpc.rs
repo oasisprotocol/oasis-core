@@ -1,6 +1,9 @@
 use std::time::Duration;
 
-use grpcio::{CallOption, Channel, Client, Error, Marshaller, Method, MethodType, Result};
+use grpcio::{
+    CallOption, Channel, Client, Error, GrpcSlice, Marshaller, MessageReader, Method, MethodType,
+    Result,
+};
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use serde_cbor::Value;
 
@@ -142,18 +145,23 @@ impl StorageClient {
 }
 
 #[inline]
-fn cbor_encode<T>(t: &T, buf: &mut Vec<u8>)
+fn cbor_encode<T>(t: &T, buf: &mut GrpcSlice)
 where
     T: Serialize,
 {
-    cbor::to_writer(buf, t)
+    // XXX: Avoid an extra copy.
+    let value = cbor::to_vec(t);
+    unsafe {
+        let bytes = buf.realloc(value.len());
+        let raw_bytes = &mut *(bytes as *mut [std::mem::MaybeUninit<u8>] as *mut [u8]);
+        raw_bytes.copy_from_slice(&value);
+    }
 }
 
-/// CBOR decoding wrapper for gRPC.
 #[inline]
-fn cbor_decode<T>(buf: &[u8]) -> Result<T>
+fn cbor_decode<T>(reader: MessageReader) -> Result<T>
 where
     T: DeserializeOwned,
 {
-    cbor::from_slice(buf).map_err(|e| Error::Codec(Box::new(e)))
+    cbor::from_reader(reader).map_err(|e| Error::Codec(Box::new(e)))
 }

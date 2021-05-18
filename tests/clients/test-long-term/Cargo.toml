@@ -11,6 +11,6 @@ oasis-core-runtime = { path = "../../../runtime" }
 simple-keyvalue-api = { path = "../../runtimes/simple-keyvalue/api" }
 
 clap = "2.29.1"
-grpcio = "0.4.6"
+grpcio = "0.8.2"
 rand = "0.7.3"
-tokio = "0.1.17"
+tokio = { version = "1", features = ["rt-multi-thread"] }

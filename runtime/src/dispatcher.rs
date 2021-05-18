@@ -196,6 +196,11 @@ impl Dispatcher {
         };
         txn_dispatcher.set_abort_batch_flag(self.abort_batch.clone());
 
+        // Create the single-threaded Tokio runtime that can be used to schedule async I/O.
+        let tokio_rt = tokio::runtime::Builder::new_current_thread()
+            .build()
+            .unwrap();
+
         // Create common MKVS to use as a cache as long as the root stays the same. Use separate
         // caches for executing and checking transactions.
         let mut cache = Cache::new(protocol.clone());
@@ -222,11 +227,18 @@ impl Dispatcher {
             let result = match request {
                 Body::RuntimeRPCCallRequest { request } => {
                     // RPC call.
-                    self.dispatch_rpc(&mut rpc_demux, &mut rpc_dispatcher, &protocol, ctx, request)
+                    self.dispatch_rpc(
+                        &mut rpc_demux,
+                        &mut rpc_dispatcher,
+                        &protocol,
+                        &tokio_rt,
+                        ctx,
+                        request,
+                    )
                 }
                 Body::RuntimeLocalRPCCallRequest { request } => {
                     // Local RPC call.
-                    self.dispatch_local_rpc(&mut rpc_dispatcher, &protocol, ctx, request)
+                    self.dispatch_local_rpc(&mut rpc_dispatcher, &protocol, &tokio_rt, ctx, request)
                 }
                 Body::RuntimeExecuteTxBatchRequest {
                     consensus_block,
@@ -248,6 +260,7 @@ impl Dispatcher {
                         &mut cache,
                         &mut txn_dispatcher,
                         &protocol,
+                        &tokio_rt,
                         consensus_state,
                         ctx,
                         io_root,
@@ -276,6 +289,7 @@ impl Dispatcher {
                         &mut cache_check,
                         &mut txn_dispatcher,
                         &protocol,
+                        &tokio_rt,
                         consensus_state,
                         ctx,
                         Hash::default(),
@@ -309,6 +323,7 @@ impl Dispatcher {
                         &mut cache_check,
                         &mut txn_dispatcher,
                         &protocol,
+                        &tokio_rt,
                         consensus_state,
                         ctx,
                         header,
@@ -346,6 +361,7 @@ impl Dispatcher {
         cache: &mut Cache,
         txn_dispatcher: &mut dyn TxnDispatcher,
         protocol: &Arc<Protocol>,
+        tokio_rt: &tokio::runtime::Runtime,
         consensus_state: ConsensusState,
         ctx: Context,
         header: Header,
@@ -385,6 +401,7 @@ impl Dispatcher {
         let results = Default::default();
         let txn_ctx = TxnContext::new(
             ctx.clone(),
+            tokio_rt,
             consensus_state,
             &header,
             epoch,
@@ -540,6 +557,7 @@ impl Dispatcher {
         cache: &mut Cache,
         txn_dispatcher: &mut dyn TxnDispatcher,
         protocol: &Arc<Protocol>,
+        tokio_rt: &tokio::runtime::Runtime,
         consensus_state: ConsensusState,
         ctx: Context,
         io_root: Hash,
@@ -582,6 +600,7 @@ impl Dispatcher {
         ));
         let txn_ctx = TxnContext::new(
             ctx.clone(),
+            tokio_rt,
             consensus_state,
             &block.header,
             epoch,
@@ -617,6 +636,7 @@ impl Dispatcher {
         rpc_demux: &mut RpcDemux,
         rpc_dispatcher: &mut RpcDispatcher,
         protocol: &Arc<Protocol>,
+        tokio_rt: &tokio::runtime::Runtime,
         ctx: Context,
         request: Vec<u8>,
     ) -> Result<Body, Error> {
@@ -665,7 +685,8 @@ impl Dispatcher {
                         Context::create_child(&ctx),
                         protocol.clone(),
                     ));
-                    let rpc_ctx = RpcContext::new(ctx.clone(), self.rak.clone(), session_info);
+                    let rpc_ctx =
+                        RpcContext::new(ctx.clone(), tokio_rt, self.rak.clone(), session_info);
                     let response =
                         StorageContext::enter(&mut overlay, untrusted_local.clone(), || {
                             rpc_dispatcher.dispatch(req, rpc_ctx)
@@ -717,6 +738,7 @@ impl Dispatcher {
         &self,
         rpc_dispatcher: &mut RpcDispatcher,
         protocol: &Arc<Protocol>,
+        tokio_rt: &tokio::runtime::Runtime,
         ctx: Context,
         request: Vec<u8>,
     ) -> Result<Body, Error> {
@@ -735,7 +757,7 @@ impl Dispatcher {
             Context::create_child(&ctx),
             protocol.clone(),
         ));
-        let rpc_ctx = RpcContext::new(ctx.clone(), self.rak.clone(), None);
+        let rpc_ctx = RpcContext::new(ctx.clone(), tokio_rt, self.rak.clone(), None);
         let response = StorageContext::enter(&mut overlay, untrusted_local.clone(), || {
             rpc_dispatcher.dispatch_local(req, rpc_ctx)
         });

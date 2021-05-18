@@ -42,13 +42,16 @@ macro_rules! create_txn_api_client {
 
             // Generate methods.
             $(
-                pub fn $method_name(
+                pub async fn $method_name(
                     &self,
                     arguments: $request_type
-                ) -> $crate::BoxFuture<$response_type> {
-                    self.txn_client.call(stringify!($method_name), arguments)
+                ) -> Result<$response_type, $crate::transaction::macros::Error> {
+                    Ok(self.txn_client.call(stringify!($method_name), arguments).await?)
                 }
             )*
         }
     };
 }
+
+// Re-exported for use in macros.
+pub use anyhow::Error;

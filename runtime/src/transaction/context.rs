@@ -16,6 +16,8 @@ struct NoRuntimeContext;
 pub struct Context<'a> {
     /// I/O context.
     pub io_ctx: Arc<IoContext>,
+    /// Tokio runtime.
+    pub tokio: &'a tokio::runtime::Runtime,
     /// Consensus state tree.
     pub consensus_state: ConsensusState,
     /// The block header accompanying this transaction.
@@ -44,6 +46,7 @@ impl<'a> Context<'a> {
     /// Construct new transaction context.
     pub fn new(
         io_ctx: Arc<IoContext>,
+        tokio: &'a tokio::runtime::Runtime,
         consensus_state: ConsensusState,
         header: &'a Header,
         epoch: EpochTime,
@@ -53,6 +56,7 @@ impl<'a> Context<'a> {
     ) -> Self {
         Self {
             io_ctx,
+            tokio,
             consensus_state,
             header,
             epoch,

@@ -8,10 +8,10 @@ edition = "2018"
 oasis-core-client = { path = "../client" }
 oasis-core-runtime = { path = "../runtime" }
 oasis-core-keymanager-api-common = { path = "../keymanager-api-common" }
-anyhow = "1.0"
-futures = "0.1.25"
+futures = "0.3.15"
 io-context = "0.2.0"
 lru = "0.6.5"
+thiserror = "1.0"
 
 [target.'cfg(not(target_env = "sgx"))'.dependencies]
-grpcio = "0.4.6"
+grpcio = "0.8.2"

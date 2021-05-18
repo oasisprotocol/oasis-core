@@ -24,7 +24,6 @@ use oasis_core_runtime::{
         staking::{Account, Delegation},
         state::staking::ImmutableState as StakingImmutableState,
     },
-    executor::Executor,
     rak::RAK,
     register_runtime_txn_methods, runtime_context,
     storage::{StorageContext, MKVS},
@@ -277,7 +276,7 @@ fn get_encryption_context(ctx: &mut TxnContext, key: &[u8]) -> Result<Encryption
     // Fetch encryption keys.
     let io_ctx = IoContext::create_child(&ctx.io_ctx);
     let result = rctx.km_client.get_or_create_keys(io_ctx, key_pair_id);
-    let key = Executor::with_current(|executor| executor.block_on(result))?;
+    let key = ctx.tokio.block_on(result)?;
 
     Ok(EncryptionContext::new(key.state_key.as_ref()))
 }
