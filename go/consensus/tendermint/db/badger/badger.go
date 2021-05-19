@@ -9,8 +9,8 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/dgraph-io/badger/v2"
-	"github.com/dgraph-io/badger/v2/options"
+	"github.com/dgraph-io/badger/v3"
+	"github.com/dgraph-io/badger/v3/options"
 	"github.com/tendermint/tendermint/node"
 	dbm "github.com/tendermint/tm-db"
 
@@ -66,13 +66,10 @@ func New(fn string, noSuffix bool) (dbm.DB, error) {
 	opts := badger.DefaultOptions(fn) // This may benefit from LSMOnlyOptions.
 	opts = opts.WithLogger(cmnBadger.NewLogAdapter(logger))
 	opts = opts.WithSyncWrites(false)
-	// Allow value log truncation if required (this is needed to recover the
-	// value log file which can get corrupted in crashes).
-	opts = opts.WithTruncate(true)
 	opts = opts.WithCompression(options.Snappy)
 	opts = opts.WithBlockCacheSize(64 * 1024 * 1024)
 
-	db, err := badger.Open(opts)
+	db, err := cmnBadger.Open(opts)
 	if err != nil {
 		return nil, fmt.Errorf("tendermint/db/badger: failed to open database: %w", err)
 	}

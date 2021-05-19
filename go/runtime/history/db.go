@@ -3,8 +3,8 @@ package history
 import (
 	"fmt"
 
-	"github.com/dgraph-io/badger/v2"
-	"github.com/dgraph-io/badger/v2/options"
+	"github.com/dgraph-io/badger/v3"
+	"github.com/dgraph-io/badger/v3/options"
 
 	"github.com/oasisprotocol/oasis-core/go/common"
 	cmnBadger "github.com/oasisprotocol/oasis-core/go/common/badger"
@@ -57,12 +57,9 @@ func newDB(fn string, runtimeID common.Namespace) (*DB, error) {
 	opts := badger.DefaultOptions(fn)
 	opts = opts.WithLogger(cmnBadger.NewLogAdapter(logger))
 	opts = opts.WithSyncWrites(true)
-	// Allow value log truncation if required (this is needed to recover the
-	// value log file which can get corrupted in crashes).
-	opts = opts.WithTruncate(true)
 	opts = opts.WithCompression(options.None)
 
-	db, err := badger.Open(opts)
+	db, err := cmnBadger.Open(opts)
 	if err != nil {
 		return nil, fmt.Errorf("runtime/history: failed to open database: %w", err)
 	}

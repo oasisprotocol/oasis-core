@@ -3,9 +3,10 @@ package badger
 import (
 	"fmt"
 
-	"github.com/dgraph-io/badger/v2"
+	"github.com/dgraph-io/badger/v3"
 
 	"github.com/oasisprotocol/oasis-core/go/common"
+	cmnBadger "github.com/oasisprotocol/oasis-core/go/common/badger"
 	"github.com/oasisprotocol/oasis-core/go/common/cbor"
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
 	"github.com/oasisprotocol/oasis-core/go/storage/mkvs/db/api"
@@ -21,7 +22,7 @@ func RenameNamespace(cfg *api.Config, newNamespace common.Namespace) error {
 	opts := commonConfigToBadgerOptions(cfg, db)
 
 	var err error
-	if db.db, err = badger.OpenManaged(opts); err != nil {
+	if db.db, err = cmnBadger.OpenManaged(opts); err != nil {
 		return fmt.Errorf("failed to open database: %w", err)
 	}
 	defer db.Close()

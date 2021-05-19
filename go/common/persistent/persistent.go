@@ -8,8 +8,8 @@ import (
 	"fmt"
 	"path/filepath"
 
-	"github.com/dgraph-io/badger/v2"
-	"github.com/dgraph-io/badger/v2/options"
+	"github.com/dgraph-io/badger/v3"
+	"github.com/dgraph-io/badger/v3/options"
 
 	cmnBadger "github.com/oasisprotocol/oasis-core/go/common/badger"
 	"github.com/oasisprotocol/oasis-core/go/common/cbor"
@@ -55,12 +55,9 @@ func NewCommonStore(dataDir string) (*CommonStore, error) {
 	opts := badger.DefaultOptions(GetPersistentStoreDBDir(dataDir))
 	opts = opts.WithLogger(cmnBadger.NewLogAdapter(logger))
 	opts = opts.WithSyncWrites(true)
-	// Allow value log truncation if required (this is needed to recover the
-	// value log file which can get corrupted in crashes).
-	opts = opts.WithTruncate(true)
 	opts = opts.WithCompression(options.None)
 
-	db, err := badger.Open(opts)
+	db, err := cmnBadger.Open(opts)
 	if err != nil {
 		return nil, fmt.Errorf("failed to open persistence database: %w", err)
 	}
