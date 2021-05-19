@@ -76,7 +76,7 @@ func New(cfg *api.Config) (api.NodeDB, error) {
 	opts := commonConfigToBadgerOptions(cfg, db)
 
 	var err error
-	if db.db, err = badger.OpenManaged(opts); err != nil {
+	if db.db, err = cmnBadger.OpenManaged(opts); err != nil {
 		return nil, fmt.Errorf("mkvs/badger: failed to open database: %w", err)
 	}
 

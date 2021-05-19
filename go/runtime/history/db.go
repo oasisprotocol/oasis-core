@@ -59,7 +59,7 @@ func newDB(fn string, runtimeID common.Namespace) (*DB, error) {
 	opts = opts.WithSyncWrites(true)
 	opts = opts.WithCompression(options.None)
 
-	db, err := badger.Open(opts)
+	db, err := cmnBadger.Open(opts)
 	if err != nil {
 		return nil, fmt.Errorf("runtime/history: failed to open database: %w", err)
 	}

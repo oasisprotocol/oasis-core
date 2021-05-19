@@ -114,7 +114,7 @@ func New(dataDir, fn string, runtimeID common.Namespace) (LocalStorage, error) {
 	opts = opts.WithCompression(options.None)
 
 	var err error
-	if s.db, err = badger.Open(opts); err != nil {
+	if s.db, err = cmnBadger.Open(opts); err != nil {
 		return nil, fmt.Errorf("failed to open local storage database: %w", err)
 	}
 	s.gc = cmnBadger.NewGCWorker(s.logger, s.db)
