@@ -7,18 +7,17 @@ use std::{
     },
 };
 
-use anyhow::Result;
+use anyhow;
 use futures::{
-    future,
+    channel::{mpsc, oneshot},
     prelude::*,
-    sync::{mpsc, oneshot},
 };
 #[cfg(not(target_env = "sgx"))]
 use grpcio::Channel;
 use io_context::Context;
 use serde::{de::DeserializeOwned, Serialize};
 use thiserror::Error;
-use tokio_executor::spawn;
+use tokio;
 
 #[cfg(not(target_env = "sgx"))]
 use oasis_core_runtime::common::namespace::Namespace;
@@ -36,7 +35,6 @@ use super::api::EnclaveRPCClient;
 #[cfg(not(target_env = "sgx"))]
 use super::transport::GrpcTransport;
 use super::transport::{RuntimeTransport, Transport};
-use crate::BoxFuture;
 
 /// Internal send queue backlog.
 const SENDQ_BACKLOG: usize = 10;
@@ -54,12 +52,16 @@ pub enum RpcClientError {
     Transport,
     #[error("client dropped")]
     Dropped,
+    #[error("decode error: {0}")]
+    DecodeError(#[from] cbor::Error),
+    #[error("unknown error: {0}")]
+    Unknown(#[from] anyhow::Error),
 }
 
 type SendqRequest = (
     Arc<Context>,
     types::Request,
-    oneshot::Sender<Result<types::Response>>,
+    oneshot::Sender<Result<types::Response, RpcClientError>>,
     usize,
 );
 
@@ -154,7 +156,12 @@ impl RpcClient {
     }
 
     /// Call a remote method.
-    pub fn call<C, O>(&self, ctx: Context, method: &'static str, args: C) -> BoxFuture<O>
+    pub async fn call<C, O>(
+        &self,
+        ctx: Context,
+        method: &'static str,
+        args: C,
+    ) -> Result<O, RpcClientError>
     where
         C: Serialize,
         O: DeserializeOwned + Send + 'static,
@@ -164,217 +171,200 @@ impl RpcClient {
             args: cbor::to_value(args),
         };
 
-        Box::new(
-            self.execute_call(ctx, request)
-                .and_then(|response| match response.body {
-                    types::Body::Success(value) => Ok(cbor::from_value(value)?),
-                    types::Body::Error(error) => Err(RpcClientError::CallFailed(error).into()),
-                }),
-        )
+        let response = self.execute_call(ctx, request).await?;
+        match response.body {
+            types::Body::Success(value) => Ok(cbor::from_value(value)?),
+            types::Body::Error(error) => Err(RpcClientError::CallFailed(error)),
+        }
     }
 
-    fn execute_call(&self, ctx: Context, request: types::Request) -> BoxFuture<types::Response> {
-        let inner = self.inner.clone();
-        Box::new(future::lazy(move || {
-            // Spawn a new controller if we haven't spawned one yet.
-            if !inner
-                .has_controller
-                .compare_and_swap(false, true, Ordering::SeqCst)
-            {
-                let rx = inner
-                    .recvq
-                    .lock()
-                    .unwrap()
-                    .take()
-                    .expect("has_controller was false");
+    async fn execute_call(
+        &self,
+        ctx: Context,
+        request: types::Request,
+    ) -> Result<types::Response, RpcClientError> {
+        // Spawn a new controller if we haven't spawned one yet.
+        if !self
+            .inner
+            .has_controller
+            .compare_and_swap(false, true, Ordering::SeqCst)
+        {
+            let mut rx = self
+                .inner
+                .recvq
+                .lock()
+                .unwrap()
+                .take()
+                .expect("has_controller was false");
+            let inner = self.inner.clone();
 
-                let inner = inner.clone();
-                let inner2 = inner.clone();
-                spawn(
-                    rx.for_each(move |(ctx, request, rsp_tx, retries)| {
-                        let inner = inner.clone();
-                        let inner2 = inner.clone();
-                        let request2 = request.clone();
-                        let ctx2 = ctx.clone();
+            tokio::spawn(async move {
+                while let Some((ctx, request, rsp_tx, retries)) = rx.next().await {
+                    let result = async {
+                        // Attempt to establish a connection. This will not do anything in case the
+                        // session has already been established.
+                        Self::connect(inner.clone(), Context::create_child(&ctx)).await?;
 
-                        Self::connect(inner.clone(), Context::create_child(&ctx))
-                            .and_then(move |_| {
-                                Self::call_raw(inner.clone(), Context::create_child(&ctx), request)
-                            })
-                            .then(
-                                move |result| -> Box<dyn Future<Item = (), Error = ()> + Send> {
-                                    match result {
-                                        ref r if r.is_ok() || retries >= inner2.max_retries => {
-                                            drop(rsp_tx.send(result));
-                                            Box::new(future::ok(()))
-                                        }
-                                        _ => {
-                                            // Attempt retry if number of retries is not exceeded.
-                                            Box::new(
-                                                inner2
-                                                    .sendq
-                                                    .clone()
-                                                    .send((ctx2, request2, rsp_tx, retries + 1))
-                                                    .map(|_| ())
-                                                    .or_else(|err| {
-                                                        let (_, _, rsp_tx, _) = err.into_inner();
-                                                        rsp_tx
-                                                            .send(Err(
-                                                                RpcClientError::Dropped.into()
-                                                            ))
-                                                            .map_err(|_err| ())
-                                                    })
-                                                    .map_err(|_err| ()),
-                                            )
-                                        }
-                                    }
-                                },
-                            )
-                    })
-                    .then(move |_| {
-                        // Close stream after the client is dropped.
-                        Self::close(inner2).map_err(|_err| ())
-                    }),
-                );
-            }
+                        // Perform the call.
+                        Self::call_raw(inner.clone(), Context::create_child(&ctx), request.clone())
+                            .await
+                    }
+                    .await;
 
-            // Send request to controller.
-            let (rsp_tx, rsp_rx) = oneshot::channel();
-            inner
-                .sendq
-                .clone()
-                .send((ctx.freeze(), request, rsp_tx, 0))
-                .map_err(|err| err.into())
-                .and_then(move |_| rsp_rx.map_err(|err| err.into()).and_then(|result| result))
-        }))
+                    match result {
+                        ref r if r.is_ok() || retries >= inner.max_retries => {
+                            // Request was successful or number of retries has been exceeded.
+                            let _ = rsp_tx.send(result);
+                        }
+
+                        _ => {
+                            // Attempt retry if number of retries is not exceeded. Retry is
+                            // performed by queueing another request.
+                            let _ = inner
+                                .sendq
+                                .clone()
+                                .send((ctx, request, rsp_tx, retries + 1))
+                                .await;
+                        }
+                    }
+                }
+
+                // Close stream after the client is dropped.
+                let _ = Self::close(inner).await;
+            });
+        }
+
+        // Send request to controller.
+        let (rsp_tx, rsp_rx) = oneshot::channel();
+        self.inner
+            .sendq
+            .clone()
+            .send((ctx.freeze(), request, rsp_tx, 0))
+            .await
+            .map_err(|_| RpcClientError::Dropped)?;
+
+        rsp_rx.await.map_err(|_| RpcClientError::Dropped)?
     }
 
-    fn connect(inner: Arc<Inner>, ctx: Context) -> BoxFuture<()> {
-        Box::new(future::lazy(move || -> BoxFuture<()> {
+    async fn connect(inner: Arc<Inner>, ctx: Context) -> Result<(), RpcClientError> {
+        let mut buffer = vec![];
+        let session_id;
+        {
             let mut session = inner.session.lock().unwrap();
             if session.inner.is_connected() {
-                return Box::new(future::ok(()));
+                return Ok(());
+            }
+            if session.inner.is_closed() {
+                // In case the session is closed, reset it.
+                session.reset();
             }
 
-            let mut buffer = vec![];
             // Handshake1 -> Handshake2
             session
                 .inner
                 .process_data(vec![], &mut buffer)
                 .expect("initiation must always succeed");
-            let session_id = session.id;
-            drop(session);
+            session_id = session.id;
+        }
 
-            let fctx = ctx.freeze();
-            let ctx = Context::create_child(&fctx);
-            let inner = inner.clone();
-            let inner2 = inner.clone();
-            Box::new(
-                inner
-                    .transport
-                    .write_message(ctx, session_id, buffer, String::new())
-                    .and_then(move |data| -> BoxFuture<()> {
-                        let mut session = inner.session.lock().unwrap();
-                        let mut buffer = vec![];
-                        // Handshake2 -> Transport
-                        if let Err(error) = session.inner.process_data(data, &mut buffer) {
-                            return Box::new(future::err(error));
-                        }
+        let fctx = ctx.freeze();
+        let ctx = Context::create_child(&fctx);
 
-                        let ctx = Context::create_child(&fctx);
-                        Box::new(
-                            inner
-                                .transport
-                                .write_message(ctx, session.id, buffer, String::new())
-                                .map(|_| ()),
-                        )
-                    })
-                    .or_else(move |err| {
-                        // Failed to establish a session, we must reset it as otherwise
-                        // it will always fail.
-                        let mut session = inner2.session.lock().unwrap();
-                        session.reset();
+        let data = inner
+            .transport
+            .write_message(ctx, session_id, buffer, String::new())
+            .await
+            .map_err(|_| RpcClientError::Transport)?;
 
-                        Err(err)
-                    }),
-            )
-        }))
+        let mut buffer = vec![];
+        {
+            let mut session = inner.session.lock().unwrap();
+            // Handshake2 -> Transport
+            session
+                .inner
+                .process_data(data, &mut buffer)
+                .map_err(|_| RpcClientError::Transport)?;
+        }
+
+        let ctx = Context::create_child(&fctx);
+        inner
+            .transport
+            .write_message(ctx, session_id, buffer, String::new())
+            .await
+            .map_err(|_| RpcClientError::Transport)?;
+
+        Ok(())
     }
 
-    fn close(inner: Arc<Inner>) -> BoxFuture<()> {
-        let mut session = inner.session.lock().unwrap();
+    async fn close(inner: Arc<Inner>) -> Result<(), RpcClientError> {
         let mut buffer = vec![];
-        if let Err(error) = session
-            .inner
-            .write_message(types::Message::Close, &mut buffer)
+        let session_id;
         {
-            return Box::new(future::err(error));
+            let mut session = inner.session.lock().unwrap();
+            session
+                .inner
+                .write_message(types::Message::Close, &mut buffer)
+                .map_err(|_| RpcClientError::Transport)?;
+            session_id = session.id;
         }
 
         let ctx = Context::background();
-        let inner = inner.clone();
-        Box::new(
-            inner
-                .transport
-                .write_message(ctx, session.id, buffer, String::new())
-                .and_then(move |data| {
-                    // Verify that session is closed.
-                    let mut session = inner.session.lock().unwrap();
-                    let msg = session
-                        .inner
-                        .process_data(data, vec![])?
-                        .expect("message must be decoded if there is no error");
+        let data = inner
+            .transport
+            .write_message(ctx, session_id, buffer, String::new())
+            .await
+            .map_err(|_| RpcClientError::Transport)?;
 
-                    match msg {
-                        types::Message::Close => {
-                            session.inner.close();
-                            Ok(())
-                        }
-                        msg => Err(RpcClientError::ExpectedCloseMessage(msg).into()),
-                    }
-                }),
-        )
+        // Verify that session is closed.
+        let mut session = inner.session.lock().unwrap();
+        let msg = session
+            .inner
+            .process_data(data, vec![])?
+            .expect("message must be decoded if there is no error");
+
+        match msg {
+            types::Message::Close => {
+                session.inner.close();
+                Ok(())
+            }
+            msg => Err(RpcClientError::ExpectedCloseMessage(msg)),
+        }
     }
 
-    fn call_raw(
+    async fn call_raw(
         inner: Arc<Inner>,
         ctx: Context,
         request: types::Request,
-    ) -> BoxFuture<types::Response> {
+    ) -> Result<types::Response, RpcClientError> {
         let method = request.method.clone();
         let msg = types::Message::Request(request);
-        let mut session = inner.session.lock().unwrap();
+        let session_id;
         let mut buffer = vec![];
-        if let Err(error) = session.inner.write_message(msg, &mut buffer) {
-            return Box::new(future::err(error));
+        {
+            let mut session = inner.session.lock().unwrap();
+            session
+                .inner
+                .write_message(msg, &mut buffer)
+                .map_err(|_| RpcClientError::Transport)?;
+            session_id = session.id;
         }
 
-        let inner = inner.clone();
-        let inner2 = inner.clone();
-        Box::new(
-            inner
-                .transport
-                .write_message(ctx, session.id, buffer, method)
-                .and_then(move |data| {
-                    let mut session = inner.session.lock().unwrap();
-                    let msg = session
-                        .inner
-                        .process_data(data, vec![])?
-                        .expect("message must be decoded if there is no error");
+        let data = inner
+            .transport
+            .write_message(ctx, session_id, buffer, method)
+            .await
+            .map_err(|_| RpcClientError::Transport)?;
 
-                    match msg {
-                        types::Message::Response(rsp) => Ok(rsp),
-                        msg => Err(RpcClientError::ExpectedResponseMessage(msg).into()),
-                    }
-                })
-                .or_else(move |err| {
-                    // Failed to communicate, we must reset it as otherwise it will always fail.
-                    let mut session = inner2.session.lock().unwrap();
-                    session.reset();
+        let mut session = inner.session.lock().unwrap();
+        let msg = session
+            .inner
+            .process_data(data, vec![])?
+            .expect("message must be decoded if there is no error");
 
-                    Err(err)
-                }),
-        )
+        match msg {
+            types::Message::Response(rsp) => Ok(rsp),
+            msg => Err(RpcClientError::ExpectedResponseMessage(msg)),
+        }
     }
 
     /// Update session enclaves if changed.
@@ -395,9 +385,8 @@ mod test {
     };
 
     use anyhow::anyhow;
-    use futures::future;
+    use futures::future::{self, BoxFuture};
     use io_context::Context;
-    use tokio::runtime::Runtime;
 
     use oasis_core_runtime::{
         enclave_rpc::{demux::Demux, session, types},
@@ -405,7 +394,6 @@ mod test {
     };
 
     use super::{super::transport::Transport, RpcClient};
-    use crate::BoxFuture;
 
     #[derive(Clone)]
     struct MockTransport {
@@ -436,12 +424,16 @@ mod test {
     }
 
     impl Transport for MockTransport {
-        fn write_message_impl(&self, _ctx: Context, data: Vec<u8>) -> BoxFuture<Vec<u8>> {
+        fn write_message_impl(
+            &self,
+            _ctx: Context,
+            data: Vec<u8>,
+        ) -> BoxFuture<Result<Vec<u8>, anyhow::Error>> {
             if self
                 .next_error
                 .compare_and_swap(true, false, Ordering::SeqCst)
             {
-                return Box::new(future::err(anyhow!("transport error")));
+                return Box::pin(future::err(anyhow!("transport error")));
             }
 
             let mut demux = self.demux.lock().unwrap();
@@ -449,7 +441,7 @@ mod test {
             // Deliver directly to the multiplexer.
             let mut buffer = Vec::new();
             match demux.process_frame(data, &mut buffer) {
-                Err(err) => Box::new(future::err(err)),
+                Err(err) => Box::pin(future::err(err)),
                 Ok(Some((session_id, _session_info, message, _untrusted_plaintext))) => {
                     // Message, process and write reply.
                     let body = match message {
@@ -463,13 +455,13 @@ mod test {
 
                     let mut buffer = Vec::new();
                     match demux.write_message(session_id, response, &mut buffer) {
-                        Ok(_) => Box::new(future::ok(buffer)),
-                        Err(error) => Box::new(future::err(error)),
+                        Ok(_) => Box::pin(future::ok(buffer)),
+                        Err(error) => Box::pin(future::err(error)),
                     }
                 }
                 Ok(None) => {
                     // Handshake.
-                    Box::new(future::ok(buffer))
+                    Box::pin(future::ok(buffer))
                 }
             }
         }
@@ -477,7 +469,9 @@ mod test {
 
     #[test]
     fn test_rpc_client() {
-        let mut rt = Runtime::new().unwrap();
+        let rt = tokio::runtime::Builder::new_current_thread()
+            .build()
+            .unwrap();
         let transport = MockTransport::new();
         let builder = session::Builder::new();
         let client = RpcClient::new(Box::new(transport.clone()), builder);

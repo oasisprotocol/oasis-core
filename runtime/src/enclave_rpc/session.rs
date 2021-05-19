@@ -240,10 +240,19 @@ impl Session {
         self.info.clone()
     }
 
-    /// Return true if session handshake has completed and the session
+    /// Whether the session handshake has completed and the session
     /// is in transport mode.
     pub fn is_connected(&self) -> bool {
         if let State::Transport(_) = self.state {
+            true
+        } else {
+            false
+        }
+    }
+
+    /// Whether the session is in closed state.
+    pub fn is_closed(&self) -> bool {
+        if let State::Closed = self.state {
             true
         } else {
             false

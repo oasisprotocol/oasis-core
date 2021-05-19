@@ -63,7 +63,7 @@ fn main() {
     let mut rng: StdRng = SeedableRng::from_seed(h.into());
 
     println!("Initializing simple key/value runtime client!");
-    let mut rt = Runtime::new().unwrap();
+    let rt = Runtime::new().unwrap();
     let env = Arc::new(EnvBuilder::new().build());
     let node = Node::new(env, node_address);
     let txn_client = TxnClient::new(node.channel(), runtime_id, None);

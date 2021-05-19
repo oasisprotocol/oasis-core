@@ -10,10 +10,10 @@ use oasis_core_runtime::{
         Context as RpcContext,
     },
     rak::RAK,
-    register_runtime_rpc_methods, Protocol, RpcDemux, RpcDispatcher, TxnDispatcher,
+    Protocol, RpcDemux, RpcDispatcher, TxnDispatcher,
 };
 
-use crate::{context, kdf::Kdf, policy::Policy};
+use crate::{context, kdf::Kdf, methods, policy::Policy};
 
 /// Initialize the Kdf.
 fn init_kdf(req: &InitRequest, ctx: &mut RpcContext) -> Result<SignedInitResponse> {
@@ -33,18 +33,39 @@ pub fn new_keymanager(signers: TrustedPolicySigners) -> Box<dyn Initializer> {
         set_trusted_policy_signers(signers.clone());
 
         // Register RPC methods exposed via EnclaveRPC to remote clients.
-        {
-            use crate::methods::*;
-            with_api! { register_runtime_rpc_methods!(rpc, api); }
-        }
-
-        // TODO: Someone that cares can add macros for this, I do not.  Note
-        // that these are local methods, for use by the node key manager
-        // component.
         rpc.add_method(
             RpcMethod::new(
                 RpcMethodDescriptor {
-                    name: "init".to_string(),
+                    name: METHOD_GET_OR_CREATE_KEYS.to_string(),
+                },
+                methods::get_or_create_keys,
+            ),
+            false,
+        );
+        rpc.add_method(
+            RpcMethod::new(
+                RpcMethodDescriptor {
+                    name: METHOD_GET_PUBLIC_KEY.to_string(),
+                },
+                methods::get_public_key,
+            ),
+            false,
+        );
+        rpc.add_method(
+            RpcMethod::new(
+                RpcMethodDescriptor {
+                    name: METHOD_REPLICATE_MASTER_SECRET.to_string(),
+                },
+                methods::replicate_master_secret,
+            ),
+            false,
+        );
+
+        // Register local methods, for use by the node key manager component.
+        rpc.add_method(
+            RpcMethod::new(
+                RpcMethodDescriptor {
+                    name: LOCAL_METHOD_INIT.to_string(),
                 },
                 init_kdf,
             ),

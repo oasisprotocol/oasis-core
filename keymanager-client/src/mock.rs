@@ -1,9 +1,11 @@
 //! Mock key manager client which stores everything locally.
 use std::{collections::HashMap, sync::Mutex};
 
-use futures::{future, Future};
+use futures::{
+    future::{self, BoxFuture},
+    TryFutureExt,
+};
 use io_context::Context;
-use oasis_core_client::BoxFuture;
 use oasis_core_keymanager_api_common::*;
 use oasis_core_runtime::common::crypto::signature::Signature;
 
@@ -26,7 +28,11 @@ impl MockClient {
 impl KeyManagerClient for MockClient {
     fn clear_cache(&self) {}
 
-    fn get_or_create_keys(&self, _ctx: Context, key_pair_id: KeyPairId) -> BoxFuture<KeyPair> {
+    fn get_or_create_keys(
+        &self,
+        _ctx: Context,
+        key_pair_id: KeyPairId,
+    ) -> BoxFuture<Result<KeyPair, KeyManagerError>> {
         let mut keys = self.keys.lock().unwrap();
         let key = match keys.get(&key_pair_id) {
             Some(key) => key.clone(),
@@ -37,24 +43,27 @@ impl KeyManagerClient for MockClient {
             }
         };
 
-        Box::new(future::ok(key))
+        Box::pin(future::ok(key))
     }
 
     fn get_public_key(
         &self,
         ctx: Context,
         key_pair_id: KeyPairId,
-    ) -> BoxFuture<Option<SignedPublicKey>> {
-        Box::new(self.get_or_create_keys(ctx, key_pair_id).map(|ck| {
-            Some(SignedPublicKey {
+    ) -> BoxFuture<Result<Option<SignedPublicKey>, KeyManagerError>> {
+        Box::pin(self.get_or_create_keys(ctx, key_pair_id).and_then(|ck| {
+            future::ok(Some(SignedPublicKey {
                 key: ck.input_keypair.get_pk(),
                 checksum: vec![],
                 signature: Signature::default(),
-            })
+            }))
         }))
     }
 
-    fn replicate_master_secret(&self, _ctx: Context) -> BoxFuture<Option<MasterSecret>> {
+    fn replicate_master_secret(
+        &self,
+        _ctx: Context,
+    ) -> BoxFuture<Result<Option<MasterSecret>, KeyManagerError>> {
         unimplemented!();
     }
 }

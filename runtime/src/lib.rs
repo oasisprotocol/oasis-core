@@ -42,8 +42,6 @@ extern crate rustc_hex;
 extern crate snow;
 #[cfg(test)]
 extern crate tempfile;
-extern crate tokio_current_thread;
-extern crate tokio_executor;
 extern crate webpki;
 
 use lazy_static::lazy_static;
@@ -55,7 +53,6 @@ pub mod common;
 pub mod consensus;
 pub mod dispatcher;
 pub mod enclave_rpc;
-pub mod executor;
 pub mod init;
 pub mod macros;
 pub mod protocol;

@@ -560,6 +560,10 @@ mod tests {
             .new(Box::new(NoopReadSyncer));
         let consensus_state = ConsensusState::new(mkvs);
 
+        let tokio_rt = tokio::runtime::Builder::new_current_thread()
+            .build()
+            .unwrap();
+
         // Prepare a dummy call.
         let call = TxnCall {
             method: "dummy".to_owned(),
@@ -577,6 +581,7 @@ mod tests {
         let results = Default::default();
         let mut ctx = Context::new(
             IoContext::background().freeze(),
+            &tokio_rt,
             consensus_state,
             &header,
             0,

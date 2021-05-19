@@ -3,7 +3,6 @@
 pub mod context;
 pub mod demux;
 pub mod dispatcher;
-pub mod macros;
 pub mod session;
 pub mod types;
 

@@ -1,11 +1,11 @@
 //! Canonical CBOR serialization/deserialization functions.
-use std::io::Write;
+use std::io::{Read, Write};
 
-use serde::{Deserialize, Serialize};
+use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use serde_cbor::{self, Result};
 pub use serde_cbor::{
-    error::Error,
     value::{from_value, Value},
+    Error,
 };
 
 /// Convert a value to a `Value`.
@@ -41,4 +41,13 @@ where
     T: Deserialize<'a>,
 {
     serde_cbor::from_slice(slice)
+}
+
+/// Deserializes data from a reader to a value.
+pub fn from_reader<T, R>(reader: R) -> Result<T>
+where
+    T: DeserializeOwned,
+    R: Read,
+{
+    serde_cbor::from_reader(reader)
 }

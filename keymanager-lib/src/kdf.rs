@@ -28,7 +28,6 @@ use oasis_core_runtime::{
         sgx::egetkey::egetkey,
     },
     enclave_rpc::Context as RpcContext,
-    executor::Executor,
     runtime_context,
     storage::StorageContext,
     BUILD_INFO,
@@ -236,8 +235,7 @@ impl Kdf {
 
                     let result =
                         km_client.replicate_master_secret(IoContext::create_child(&ctx.io_ctx));
-                    let master_secret =
-                        Executor::with_current(|executor| executor.block_on(result))?;
+                    let master_secret = ctx.tokio.block_on(result)?;
                     (master_secret.unwrap(), true)
                 }
             };
