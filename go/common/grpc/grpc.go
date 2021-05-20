@@ -628,7 +628,7 @@ func NewServer(config *ServerConfig) (*Server, error) {
 		grpc.MaxRecvMsgSize(maxRecvMsgSize),
 		grpc.MaxSendMsgSize(maxSendMsgSize),
 		grpc.KeepaliveParams(serverKeepAliveParams),
-		grpc.CustomCodec(&CBORCodec{}), // nolint: staticcheck
+		grpc.ForceServerCodec(&CBORCodec{}),
 	}
 	if config.Identity != nil && config.Identity.GetTLSCertificate() != nil {
 		tlsConfig := &tls.Config{
