@@ -25,6 +25,7 @@ docker_plugin_default_config: &docker_plugin_default_config
     - "LANG=C.UTF-8"
     - "CARGO_TARGET_DIR=/var/tmp/artifacts"
     - "CARGO_INSTALL_ROOT=/root/.cargo"
+    - "CARGO_INCREMENTAL=0"
     - "GOPROXY=https://proxy.golang.org/"
     - "SLACK_WEBHOOK_URL"
     - "METRICS_PUSH_ADDR"
