@@ -66,6 +66,11 @@ account signer's public key (e.g. entity id).
 
 For more details, see the [`NewAddress` function].
 
+{% hint style="info" %}
+When generating an account's private/public key pair, follow [ADR 0008:
+Standard Account Key Generation][ADR 0008].
+{% endhint %}
+
 ### Runtime Accounts
 
 In case of runtime accounts, the `<ctx-version>` and `<ctx-identifier>` are as
@@ -110,6 +115,7 @@ Currently, they are:
   https://pkg.go.dev/github.com/oasisprotocol/oasis-core/go/staking/api?tab=doc#pkg-variables
 [`GovernanceDeposits` variable]:
   https://pkg.go.dev/github.com/oasisprotocol/oasis-core/go/staking/api?tab=doc#pkg-variables
+[ADR 0008]: ../adr/0008-standard-account-key-generation.md
 <!-- markdownlint-enable line-length -->
 
 ### General

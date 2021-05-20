@@ -88,8 +88,17 @@ messages:
 The envelopes are themselves CBOR-encoded. While no separate test vectors are
 provided, [those used for transactions] can be used as a reference.
 
+## Standard Account Key Generation
+
+When generating an [account]'s private/public key pair, follow [ADR 0008:
+Standard Account Key Generation][ADR 0008].
+
 <!-- markdownlint-disable line-length -->
-[Single signature envelope (`Signed`)]: https://pkg.go.dev/github.com/oasisprotocol/oasis-core/go/common/crypto/signature?tab=doc#Signed
-[Multiple signature envelope (`MultiSigned`)]: https://pkg.go.dev/github.com/oasisprotocol/oasis-core/go/common/crypto/signature?tab=doc#MultiSigned
+[Single signature envelope (`Signed`)]:
+  https://pkg.go.dev/github.com/oasisprotocol/oasis-core/go/common/crypto/signature?tab=doc#Signed
+[Multiple signature envelope (`MultiSigned`)]:
+  https://pkg.go.dev/github.com/oasisprotocol/oasis-core/go/common/crypto/signature?tab=doc#MultiSigned
 [those used for transactions]: consensus/test-vectors.md
+[account]: consensus/staking.md#accounts
+[ADR 0008]: adr/0008-standard-account-key-generation.md
 <!-- markdownlint-enable line-length -->
