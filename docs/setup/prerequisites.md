@@ -124,8 +124,8 @@ Core:
   active toolchain
   ----------------
 
-  nightly-2021-05-07-x86_64-unknown-linux-gnu (overridden by '/code/rust-toolchain')
-  rustc 1.54.0-nightly (676ee1472 2021-05-06)
+  nightly-2021-05-20-x86_64-unknown-linux-gnu (overridden by '/code/rust-toolchain')
+  rustc 1.54.0-nightly (f94942d84 2021-05-19)
   ```
 
   Then add the Fortanix SGX Rust target to this version of the Rust toolchain by
