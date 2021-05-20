@@ -9,7 +9,6 @@ import (
 	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
 	"github.com/oasisprotocol/oasis-core/go/runtime/scheduling/api"
 	txpool "github.com/oasisprotocol/oasis-core/go/runtime/scheduling/simple/txpool/api"
-	"github.com/oasisprotocol/oasis-core/go/runtime/scheduling/simple/txpool/orderedmap"
 	"github.com/oasisprotocol/oasis-core/go/runtime/scheduling/simple/txpool/priorityqueue"
 	"github.com/oasisprotocol/oasis-core/go/runtime/transaction"
 )
@@ -94,8 +93,6 @@ func New(txPoolImpl string, maxTxPoolSize uint64, algo string, weightLimits map[
 	switch txPoolImpl {
 	case priorityqueue.Name:
 		pool = priorityqueue.New(poolCfg)
-	case orderedmap.Name:
-		pool = orderedmap.New(poolCfg)
 	default:
 		return nil, fmt.Errorf("invalid transaction pool: %s", txPoolImpl)
 	}

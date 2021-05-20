@@ -5,7 +5,6 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/oasisprotocol/oasis-core/go/runtime/scheduling/simple/txpool/orderedmap"
 	"github.com/oasisprotocol/oasis-core/go/runtime/scheduling/simple/txpool/priorityqueue"
 	"github.com/oasisprotocol/oasis-core/go/runtime/scheduling/tests"
 	"github.com/oasisprotocol/oasis-core/go/runtime/transaction"
@@ -29,17 +28,6 @@ func BenchmarkSimpleSchedulerPriorityQueue(b *testing.B) {
 	}
 
 	algo, err := New(priorityqueue.Name, 1000000, Name, weightLimits)
-	require.NoError(b, err, "New()")
-	tests.SchedulerImplementationBenchmarks(b, algo)
-}
-
-func BenchmarkSimpleSchedulerOrderedMap(b *testing.B) {
-	weightLimits := map[string]uint64{
-		transaction.WeightCount:     1000,
-		transaction.WeightSizeBytes: 16 * 1024 * 1024,
-	}
-
-	algo, err := New(orderedmap.Name, 1000000, Name, weightLimits)
 	require.NoError(b, err, "New()")
 	tests.SchedulerImplementationBenchmarks(b, algo)
 }
