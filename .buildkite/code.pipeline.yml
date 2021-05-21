@@ -255,7 +255,7 @@ steps:
   # E2E test - intel-sgx with IAS
   ###############################
   - label: E2E tests - intel-sgx - IAS
-    timeout_in_minutes: 10
+    timeout_in_minutes: 15
     command:
       - .buildkite/scripts/sgx_ias_tests.sh
     # A unique string to identify the step. The value is available in the
