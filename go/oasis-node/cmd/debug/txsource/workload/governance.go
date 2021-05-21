@@ -122,7 +122,9 @@ func (g *governanceWorkload) submitProposalContent(pc *governance.ProposalConten
 	g.Logger.Debug("proposal submitted",
 		"proposal_content", pc,
 	)
-	// Ensure proposal exists.
+	// Find submitted proposal.
+	// In case there are multiple proposals with identical content, select the
+	// one with higher ID - since that is the more recently submitted proposal.
 	aps, err := g.governance.ActiveProposals(g.ctx, consensus.HeightLatest)
 	if err != nil {
 		return 0, fmt.Errorf("failed to query active proposals: %w", err)
@@ -130,9 +132,13 @@ func (g *governanceWorkload) submitProposalContent(pc *governance.ProposalConten
 	var proposal *governance.Proposal
 	for _, ap := range aps {
 		if ap.Content.Equals(pc) {
-			proposal = ap
-			break
+			if proposal == nil || proposal.ID < ap.ID {
+				proposal = ap
+			}
 		}
+	}
+	if proposal == nil {
+		return 0, fmt.Errorf("submitted proposal not found: %v", pc)
 	}
 
 	return proposal.ID, nil
