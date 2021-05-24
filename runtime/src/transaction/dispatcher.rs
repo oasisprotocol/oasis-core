@@ -378,14 +378,16 @@ impl MethodDispatcher {
     /// Dispatches a raw runtime check request.
     fn dispatch_check(&self, call: &Vec<u8>, ctx: &mut Context) -> CheckTxResult {
         match self.dispatch_fallible(call, ctx) {
-            Ok(response) => CheckTxResult {
+            Ok(_response) => CheckTxResult {
                 error: Default::default(),
-                meta: Some(cbor::to_value(&response)),
+                // Deprecated method dispatcher doesn't support check tx metadata.
+                meta: None,
             },
             Err(error) => match error.downcast::<CheckOnlySuccess>() {
-                Ok(check_result) => CheckTxResult {
+                Ok(_check_result) => CheckTxResult {
                     error: Default::default(),
-                    meta: Some(cbor::to_value(check_result.0)),
+                    // Deprecated method dispatcher doesn't support check tx metadata.
+                    meta: None,
                 },
                 Err(error) => CheckTxResult {
                     error: RuntimeError {

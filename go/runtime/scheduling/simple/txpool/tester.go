@@ -10,8 +10,10 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/drbg"
+	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/mathrand"
 	"github.com/oasisprotocol/oasis-core/go/runtime/scheduling/simple/txpool/api"
+	"github.com/oasisprotocol/oasis-core/go/runtime/transaction"
 )
 
 // TxPoolImplementationTests runs the tx pool implementation tests.
@@ -22,10 +24,6 @@ func TxPoolImplementationTests(
 	// Run the test cases.
 	t.Run("TestBasic", func(t *testing.T) {
 		testBasic(t, pool)
-	})
-
-	t.Run("TestAddBatch", func(t *testing.T) {
-		testAddBatch(t, pool)
 	})
 
 	t.Run("TestGetBatch", func(t *testing.T) {
@@ -39,34 +37,49 @@ func TxPoolImplementationTests(
 	t.Run("TestUpdateConfig", func(t *testing.T) {
 		testUpdateConfig(t, pool)
 	})
+
+	t.Run("TestWeights", func(t *testing.T) {
+		testWeights(t, pool)
+	})
+
+	t.Run("TestPriority", func(t *testing.T) {
+		testPriority(t, pool)
+	})
 }
 
 func testBasic(t *testing.T, pool api.TxPool) {
 	pool.Clear()
 
 	err := pool.UpdateConfig(api.Config{
-		MaxPoolSize:       51,
-		MaxBatchSize:      10,
-		MaxBatchSizeBytes: 100,
+		MaxPoolSize: 51,
+		WeightLimits: map[string]uint64{
+			transaction.WeightCount:     10,
+			transaction.WeightSizeBytes: 100,
+		},
 	})
 	require.NoError(t, err, "UpdateConfig")
 
-	err = pool.Add([]byte("hello world"))
+	tx := transaction.RawCheckedTransaction([]byte("hello world"))
+
+	err = pool.Add(tx)
 	require.NoError(t, err, "Add")
 
-	err = pool.Add([]byte("hello world"))
+	err = pool.Add(tx)
 	require.Error(t, err, "Add error on duplicates")
 
-	err = pool.Add(make([]byte, 200))
+	oversized := transaction.RawCheckedTransaction(make([]byte, 200))
+	err = pool.Add(oversized)
 	require.Error(t, err, "Add error on oversized calls")
 
 	// Add some more calls.
 	for i := 0; i < 50; i++ {
-		err = pool.Add([]byte(fmt.Sprintf("call %d", i)))
+		err = pool.Add(
+			transaction.RawCheckedTransaction([]byte(fmt.Sprintf("call %d", i))),
+		)
 		require.NoError(t, err, "Add")
 	}
 
-	err = pool.Add([]byte("another call"))
+	err = pool.Add(transaction.RawCheckedTransaction([]byte("another call")))
 	require.Error(t, err, "Add error on queue full")
 
 	require.EqualValues(t, 51, pool.Size(), "Size")
@@ -75,35 +88,27 @@ func testBasic(t *testing.T, pool api.TxPool) {
 	require.EqualValues(t, 10, len(batch), "Batch size")
 	require.EqualValues(t, 51, pool.Size(), "Size")
 
-	err = pool.RemoveBatch(batch)
+	hashes := make([]hash.Hash, len(batch))
+	for i, tx := range batch {
+		hashes[i] = tx.Hash()
+	}
+	err = pool.RemoveBatch(hashes)
 	require.NoError(t, err, "RemoveBatch")
 	require.EqualValues(t, 41, pool.Size(), "Size")
-
-	if pool.IsQueue() {
-		require.EqualValues(t, batch[0], []byte("hello world"))
-		for i := 0; i < 9; i++ {
-			require.EqualValues(t, batch[i+1], []byte(fmt.Sprintf("call %d", i)))
-		}
-		// Not a duplicate anymore.
-		err = pool.Add([]byte("hello world"))
-		require.NoError(t, err, "Add")
-		require.EqualValues(t, 42, pool.Size(), "Size")
-
-		pool.Clear()
-		require.EqualValues(t, 0, pool.Size(), "Size")
-	}
 }
 
 func testGetBatch(t *testing.T, pool api.TxPool) {
 	pool.Clear()
 	err := pool.UpdateConfig(api.Config{
-		MaxPoolSize:       51,
-		MaxBatchSize:      10,
-		MaxBatchSizeBytes: 100,
+		MaxPoolSize: 51,
+		WeightLimits: map[string]uint64{
+			transaction.WeightCount:     10,
+			transaction.WeightSizeBytes: 100,
+		},
 	})
 	require.NoError(t, err, "UpdateConfig")
 
-	err = pool.Add([]byte("hello world"))
+	err = pool.Add(transaction.RawCheckedTransaction([]byte("hello world")))
 	require.NoError(t, err, "Add")
 
 	batch := pool.GetBatch(false)
@@ -113,80 +118,54 @@ func testGetBatch(t *testing.T, pool api.TxPool) {
 	require.EqualValues(t, 1, len(batch), "Batch size")
 	require.EqualValues(t, 1, pool.Size(), "Size")
 
-	err = pool.RemoveBatch(batch)
+	hashes := make([]hash.Hash, len(batch))
+	for i, tx := range batch {
+		hashes[i] = tx.Hash()
+	}
+	err = pool.RemoveBatch(hashes)
 	require.NoError(t, err, "RemoveBatch")
 	require.EqualValues(t, 0, pool.Size(), "Size")
-}
-
-func testAddBatch(t *testing.T, pool api.TxPool) {
-	pool.Clear()
-
-	err := pool.UpdateConfig(api.Config{
-		MaxPoolSize:       51,
-		MaxBatchSize:      10,
-		MaxBatchSizeBytes: 100,
-	})
-	require.NoError(t, err, "UpdateConfig")
-
-	err = pool.AddBatch([][]byte{
-		[]byte("hello world"),
-		[]byte("hello world"),
-		[]byte("one"),
-		[]byte("two"),
-		[]byte("three"),
-	})
-	// AddBatch should notify error about duplicate transaction.
-	require.Error(t, err, "AddBatch")
-	// Inserting transactions should still succeed.
-	require.EqualValues(t, 4, pool.Size(), "Size")
-
-	for i := 0; i < 10; i++ {
-		_ = pool.AddBatch([][]byte{
-			[]byte(fmt.Sprintf("a %d", i)),
-			[]byte(fmt.Sprintf("b %d", i)),
-			[]byte(fmt.Sprintf("c %d", i)),
-			[]byte(fmt.Sprintf("d %d", i)),
-			[]byte(fmt.Sprintf("e %d", i)),
-		})
-	}
-	require.True(t, pool.Size() <= 51, "queue must not overflow")
 }
 
 func testRemoveBatch(t *testing.T, pool api.TxPool) {
 	pool.Clear()
 
 	err := pool.UpdateConfig(api.Config{
-		MaxPoolSize:       51,
-		MaxBatchSize:      10,
-		MaxBatchSizeBytes: 100,
+		MaxPoolSize: 51,
+		WeightLimits: map[string]uint64{
+			transaction.WeightCount:     10,
+			transaction.WeightSizeBytes: 100,
+		},
 	})
 	require.NoError(t, err, "UpdateConfig")
 
-	err = pool.RemoveBatch([][]byte{})
+	err = pool.RemoveBatch([]hash.Hash{})
 	require.NoError(t, err, "RemoveBatch empty queue")
 
-	err = pool.AddBatch([][]byte{
-		[]byte("hello world"),
-		[]byte("one"),
-		[]byte("two"),
-		[]byte("three"),
-	})
-	require.NoError(t, err, "AddBatch")
+	// TODO: change to add.
+	for _, tx := range []*transaction.CheckedTransaction{
+		transaction.RawCheckedTransaction([]byte("hello world")),
+		transaction.RawCheckedTransaction([]byte("one")),
+		transaction.RawCheckedTransaction([]byte("two")),
+		transaction.RawCheckedTransaction([]byte("three")),
+	} {
+		require.NoError(t, pool.Add(tx), "Add")
+	}
 	require.EqualValues(t, 4, pool.Size(), "Size")
 
-	err = pool.RemoveBatch([][]byte{})
+	err = pool.RemoveBatch([]hash.Hash{})
 	require.NoError(t, err, "RemoveBatch empty batch")
 	require.EqualValues(t, 4, pool.Size(), "Size")
 
-	err = pool.RemoveBatch([][]byte{
-		[]byte("hello world"),
-		[]byte("two"),
+	err = pool.RemoveBatch([]hash.Hash{
+		hash.NewFromBytes([]byte("hello world")),
+		hash.NewFromBytes([]byte("two")),
 	})
 	require.NoError(t, err, "RemoveBatch")
 	require.EqualValues(t, 2, pool.Size(), "Size")
 
-	err = pool.RemoveBatch([][]byte{
-		[]byte("hello world"),
+	err = pool.RemoveBatch([]hash.Hash{
+		hash.NewFromBytes([]byte("hello world")),
 	})
 	require.NoError(t, err, "RemoveBatch not existing batch")
 	require.EqualValues(t, 2, pool.Size(), "Size")
@@ -196,15 +175,17 @@ func testUpdateConfig(t *testing.T, pool api.TxPool) {
 	pool.Clear()
 
 	err := pool.UpdateConfig(api.Config{
-		MaxPoolSize:       50,
-		MaxBatchSize:      10,
-		MaxBatchSizeBytes: 100,
+		MaxPoolSize: 50,
+		WeightLimits: map[string]uint64{
+			transaction.WeightCount:     10,
+			transaction.WeightSizeBytes: 100,
+		},
 	})
 	require.NoError(t, err, "UpdateConfig")
 
-	err = pool.Add([]byte("hello world 1"))
+	err = pool.Add(transaction.RawCheckedTransaction([]byte("hello world 1")))
 	require.NoError(t, err, "Add")
-	err = pool.Add([]byte("hello world 2"))
+	err = pool.Add(transaction.RawCheckedTransaction([]byte("hello world 2")))
 	require.NoError(t, err, "Add")
 
 	batch := pool.GetBatch(false)
@@ -212,23 +193,31 @@ func testUpdateConfig(t *testing.T, pool api.TxPool) {
 
 	// Update configuration to BatchSize=1.
 	err = pool.UpdateConfig(api.Config{
-		MaxPoolSize:       50,
-		MaxBatchSize:      1,
-		MaxBatchSizeBytes: 100,
+		MaxPoolSize: 50,
+		WeightLimits: map[string]uint64{
+			transaction.WeightCount:     1,
+			transaction.WeightSizeBytes: 100,
+		},
 	})
 	require.NoError(t, err, "UpdateConfig")
 
 	batch = pool.GetBatch(false)
 	require.Len(t, batch, 1, "one transaction should be returned")
 
-	require.NoError(t, pool.RemoveBatch(batch), "remove batch")
+	hashes := make([]hash.Hash, len(batch))
+	for i, tx := range batch {
+		hashes[i] = tx.Hash()
+	}
+	require.NoError(t, pool.RemoveBatch(hashes), "remove batch")
 	require.EqualValues(t, 1, pool.Size(), "one transaction should remain")
 
 	// Update configuration back to BatchSize=10.
 	err = pool.UpdateConfig(api.Config{
-		MaxPoolSize:       50,
-		MaxBatchSize:      10,
-		MaxBatchSizeBytes: 100,
+		MaxPoolSize: 50,
+		WeightLimits: map[string]uint64{
+			transaction.WeightCount:     10,
+			transaction.WeightSizeBytes: 100,
+		},
 	})
 	require.NoError(t, err, "UpdateConfig")
 	// Make sure the transaction is still there.
@@ -236,13 +225,141 @@ func testUpdateConfig(t *testing.T, pool api.TxPool) {
 
 	// Update configuration to MaxBatchSizeBytes=1.
 	err = pool.UpdateConfig(api.Config{
-		MaxPoolSize:       50,
-		MaxBatchSize:      10,
-		MaxBatchSizeBytes: 1,
+		MaxPoolSize: 50,
+		WeightLimits: map[string]uint64{
+			transaction.WeightCount:     10,
+			transaction.WeightSizeBytes: 1,
+		},
 	})
 	require.NoError(t, err, "UpdateConfig")
+
+	batch = pool.GetBatch(true)
+	require.Empty(t, batch, "no transaction should be returned")
 	// Make sure the transaction was removed.
-	require.EqualValues(t, 0, pool.Size(), "transaction should get removed on update")
+	require.EqualValues(t, 0, pool.Size(), "transaction should get removed after update")
+}
+
+func testWeights(t *testing.T, pool api.TxPool) {
+	pool.Clear()
+
+	err := pool.UpdateConfig(api.Config{
+		MaxPoolSize: 50,
+		WeightLimits: map[string]uint64{
+			transaction.WeightCount:             10,
+			transaction.WeightSizeBytes:         100,
+			transaction.WeightConsensusMessages: 10,
+			"custom_weight":                     5,
+		},
+	})
+	require.NoError(t, err, "UpdateConfig")
+
+	err = pool.Add(transaction.NewCheckedTransaction(
+		[]byte("hello world 1"),
+		0,
+		map[string]uint64{
+			transaction.WeightConsensusMessages: 9,
+			"custom_weight":                     1,
+		},
+	))
+	require.NoError(t, err, "Add")
+
+	err = pool.Add(transaction.NewCheckedTransaction(
+		[]byte("hello world 2"),
+		0,
+		map[string]uint64{
+			transaction.WeightConsensusMessages: 1,
+			"custom_weight":                     4,
+		},
+	))
+	require.NoError(t, err, "Add")
+
+	err = pool.Add(transaction.NewCheckedTransaction(
+		[]byte("hello world 3"),
+		0,
+		map[string]uint64{
+			transaction.WeightConsensusMessages: 1,
+			"custom_weight":                     1,
+		},
+	))
+	require.NoError(t, err, "Add")
+
+	batch := pool.GetBatch(true)
+	require.Len(t, batch, 2, "two transactions should be returned")
+
+	err = pool.UpdateConfig(api.Config{
+		MaxPoolSize: 50,
+		WeightLimits: map[string]uint64{
+			transaction.WeightCount:             10,
+			transaction.WeightSizeBytes:         100,
+			transaction.WeightConsensusMessages: 11,
+			"custom_weight":                     6,
+		},
+	})
+	require.NoError(t, err, "UpdateConfig")
+
+	batch = pool.GetBatch(true)
+	require.Len(t, batch, 3, "two transactions should be returned")
+
+	err = pool.UpdateConfig(api.Config{
+		MaxPoolSize: 50,
+		WeightLimits: map[string]uint64{
+			transaction.WeightCount:             10,
+			transaction.WeightSizeBytes:         100,
+			transaction.WeightConsensusMessages: 5,
+			"custom_weight":                     5,
+		},
+	})
+	require.NoError(t, err, "UpdateConfig")
+
+	batch = pool.GetBatch(true)
+	require.Len(t, batch, 2, "two transactions should be returned")
+}
+
+func testPriority(t *testing.T, pool api.TxPool) {
+	pool.Clear()
+
+	err := pool.UpdateConfig(api.Config{
+		MaxPoolSize: 50,
+		WeightLimits: map[string]uint64{
+			transaction.WeightCount:     10,
+			transaction.WeightSizeBytes: 100,
+		},
+	})
+	require.NoError(t, err, "UpdateConfig")
+
+	txs := []*transaction.CheckedTransaction{
+		transaction.NewCheckedTransaction(
+			[]byte("hello world 10"),
+			10,
+			nil,
+		),
+		transaction.NewCheckedTransaction(
+			[]byte("hello world 5"),
+			5,
+			nil,
+		),
+		transaction.NewCheckedTransaction(
+			[]byte("hello world 20"),
+			20,
+			nil,
+		),
+	}
+	for _, tx := range txs {
+		require.NoError(t, pool.Add(tx), "Add")
+	}
+
+	batch := pool.GetBatch(true)
+	require.Len(t, batch, 3, "three transactions should be returned")
+	require.EqualValues(
+		t,
+		[]*transaction.CheckedTransaction{
+			txs[2], // 20
+			txs[0], // 10
+			txs[1], // 5
+		},
+		batch,
+		"elements should be returned by priority",
+	)
 }
 
 // TxPoolImplementationBenchmarks runs the tx pool implementation benchmarks.
@@ -258,32 +375,22 @@ func TxPoolImplementationBenchmarks(
 func benchmarkIncommingQueue(b *testing.B, pool api.TxPool) {
 	values := prepareValues(b)
 
-	batchSize := 100
+	batchSize := 10000
 
-	b.Run(fmt.Sprintf("AddBatch:%d", batchSize), func(b *testing.B) {
-		for n := 0; n < b.N; n++ {
-			// Exclude preparation.
-			b.StopTimer()
-			pool.Clear()
-			_ = pool.UpdateConfig(api.Config{
-				MaxPoolSize:       10000000,
-				MaxBatchSize:      10000000,
-				MaxBatchSizeBytes: 10000000,
-			})
+	b.Run(fmt.Sprintf("Add:%d", batchSize), func(b *testing.B) {
+		// Exclude preparation.
+		pool.Clear()
+		_ = pool.UpdateConfig(api.Config{
+			MaxPoolSize: 10000000,
+			WeightLimits: map[string]uint64{
+				transaction.WeightCount:     10000000,
+				transaction.WeightSizeBytes: 10000000,
+			},
+		})
+
+		for i := 0; i < b.N; i++ {
 			for _, tx := range values {
 				_ = pool.Add(tx)
-			}
-			b.StartTimer()
-
-			cntr := 0
-			for {
-				startIdx := cntr * batchSize
-				endIdx := (cntr + 1) * batchSize
-				if endIdx > len(values) {
-					break
-				}
-				cntr++
-				_ = pool.AddBatch(values[(startIdx):(endIdx)])
 			}
 		}
 	})
@@ -293,46 +400,56 @@ func benchmarkIncommingQueue(b *testing.B, pool api.TxPool) {
 		b.StopTimer()
 		pool.Clear()
 		_ = pool.UpdateConfig(api.Config{
-			MaxPoolSize:       10000000,
-			MaxBatchSize:      10000000,
-			MaxBatchSizeBytes: 10000000,
+			MaxPoolSize: 10000000,
+			WeightLimits: map[string]uint64{
+				transaction.WeightCount:     10000000,
+				transaction.WeightSizeBytes: 10000000,
+			},
 		})
-		for _, tx := range values {
-			_ = pool.Add(tx)
-		}
-		b.StartTimer()
 
-		for i := 0; i < 1000; i++ {
-			pool.GetBatch(true)
+		for i := 0; i < b.N; i++ {
+			b.StopTimer()
+			for _, tx := range values {
+				_ = pool.Add(tx)
+			}
+			b.StartTimer()
+			_ = pool.GetBatch(true)
 		}
 	})
 
 	b.Run(fmt.Sprintf("RemoveBatch:%d", batchSize), func(b *testing.B) {
+		// Exclude preparation.
+		b.StopTimer()
 		pool.Clear()
 		_ = pool.UpdateConfig(api.Config{
-			MaxPoolSize:       10000000,
-			MaxBatchSize:      10000000,
-			MaxBatchSizeBytes: 10000000,
+			MaxPoolSize: 10000000,
+			WeightLimits: map[string]uint64{
+				transaction.WeightCount:     10000000,
+				transaction.WeightSizeBytes: 10000000,
+			},
 		})
-		for _, tx := range values {
+
+		hashes := make([]hash.Hash, len(values))
+		for i, tx := range values {
 			_ = pool.Add(tx)
+			hashes[i] = tx.Hash()
 		}
 		b.StartTimer()
 
 		cntr := 0
-		for {
+		for i := 0; i < b.N; i++ {
 			startIdx := cntr * batchSize
 			endIdx := (cntr + 1) * batchSize
 			if endIdx > len(values) {
 				break
 			}
 			cntr++
-			_ = pool.RemoveBatch(values[(startIdx):(endIdx)])
+			_ = pool.RemoveBatch(hashes[(startIdx):(endIdx)])
 		}
 	})
 }
 
-func prepareValues(b *testing.B) [][]byte {
+func prepareValues(b *testing.B) []*transaction.CheckedTransaction {
 	b.StopTimer()
 	rngSrc, err := drbg.New(crypto.SHA512, []byte("seeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeed"), nil, []byte("incoming queue benchmark"))
 	if err != nil {
@@ -340,11 +457,11 @@ func prepareValues(b *testing.B) [][]byte {
 	}
 	rng := rand.New(mathrand.New(rngSrc))
 
-	values := [][]byte{}
+	values := []*transaction.CheckedTransaction{}
 	for i := 0; i < 1000000; i++ {
 		b := make([]byte, rng.Intn(128/2)+1)
 		rng.Read(b)
-		values = append(values, b)
+		values = append(values, transaction.RawCheckedTransaction(b))
 	}
 	b.StartTimer()
 

@@ -14,7 +14,6 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/drbg"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/mathrand"
-	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
 	"github.com/oasisprotocol/oasis-core/go/runtime/scheduling/api"
 	"github.com/oasisprotocol/oasis-core/go/runtime/transaction"
 )
@@ -28,46 +27,42 @@ func SchedulerImplementationTests(t *testing.T, scheduler api.Scheduler) {
 }
 
 func testScheduleTransactions(t *testing.T, scheduler api.Scheduler) {
+	err := scheduler.UpdateParameters(
+		scheduler.Name(),
+		map[string]uint64{
+			transaction.WeightCount:     100,
+			transaction.WeightSizeBytes: 1000,
+		},
+	)
+	require.NoError(t, err, "UpdateParameters")
+
 	require.EqualValues(t, 0, scheduler.UnscheduledSize(), "no transactions should be scheduled")
 
 	// Test QueueTx.
-	testTx := []byte("hello world")
-	txBytes := hash.NewFromBytes(testTx)
-	err := scheduler.QueueTx(testTx)
+	testTx := transaction.NewCheckedTransaction([]byte("hello world"), 10, make(map[string]uint64))
+	err = scheduler.QueueTx(testTx)
 	require.NoError(t, err, "QueueTx(testTx)")
-	require.True(t, scheduler.IsQueued(txBytes), "IsQueued(tx)")
+	require.True(t, scheduler.IsQueued(testTx.Hash()), "IsQueued(tx)")
 
 	// Test GetBatch.
 	batch := scheduler.GetBatch(false)
 	require.Empty(t, batch, "non-forced GetBatch should not return any transactions")
 	require.EqualValues(t, 1, scheduler.UnscheduledSize(), "transaction should remain in the queue")
-	require.True(t, scheduler.IsQueued(txBytes), "IsQueued(tx)")
+	require.True(t, scheduler.IsQueued(testTx.Hash()), "IsQueued(tx)")
 
 	batch = scheduler.GetBatch(true)
-	require.EqualValues(t, transaction.RawBatch{testTx}, batch, "transaction should be returned")
-	require.True(t, scheduler.IsQueued(txBytes), "IsQueued(tx)")
+	require.EqualValues(t, []*transaction.CheckedTransaction{testTx}, batch, "transaction should be returned")
+	require.True(t, scheduler.IsQueued(testTx.Hash()), "IsQueued(tx)")
 
 	// Test RemoveTxBatch.
-	err = scheduler.RemoveTxBatch(batch)
+	hashes := make([]hash.Hash, len(batch))
+	for i, tx := range batch {
+		hashes[i] = tx.Hash()
+	}
+	err = scheduler.RemoveTxBatch(hashes)
 	require.NoError(t, err, "RemoveTxBatch")
-	require.False(t, scheduler.IsQueued(txBytes), "IsQueued(tx)")
+	require.False(t, scheduler.IsQueued(testTx.Hash()), "IsQueued(tx)")
 	require.EqualValues(t, 0, scheduler.UnscheduledSize(), "no transactions should remain")
-
-	// Test schedule batch.
-	testBatch := [][]byte{
-		[]byte("hello world"),
-		[]byte("hello world2"),
-		[]byte("hello world3"),
-		[]byte("hello world4"),
-	}
-	err = scheduler.AppendTxBatch(testBatch)
-	require.NoError(t, err, "AppendTxBatch(testBatch)")
-	for _, tx := range testBatch {
-		require.True(t, scheduler.IsQueued(hash.NewFromBytes(tx)), fmt.Sprintf("IsQueued(%s)", tx))
-	}
-	// Clear the queue.
-	scheduler.Clear()
-	require.EqualValues(t, 0, scheduler.UnscheduledSize(), "no transactions after flushing")
 
 	// Test Update configuration.
 	// First insert a transaction.
@@ -79,16 +74,16 @@ func testScheduleTransactions(t *testing.T, scheduler api.Scheduler) {
 	require.EqualValues(t, 1, scheduler.UnscheduledSize(), "transaction should remain in the queue")
 	// Update configuration to BatchSize=1.
 	err = scheduler.UpdateParameters(
-		registry.TxnSchedulerParameters{
-			Algorithm:         scheduler.Name(),
-			MaxBatchSize:      1,
-			MaxBatchSizeBytes: 10000,
+		scheduler.Name(),
+		map[string]uint64{
+			transaction.WeightCount:     1,
+			transaction.WeightSizeBytes: 10000,
 		},
 	)
 	require.NoError(t, err, "UpdateParameters")
 
 	// TestTx should remain queued.
-	require.True(t, scheduler.IsQueued(txBytes), "transaction should remain in the queue")
+	require.True(t, scheduler.IsQueued(testTx.Hash()), "transaction should remain in the queue")
 	require.EqualValues(t, 1, scheduler.UnscheduledSize(), "transaction should remain in the queue")
 	// Re-quining should have no effect.
 	require.NoError(t, scheduler.QueueTx(testTx))
@@ -98,7 +93,11 @@ func testScheduleTransactions(t *testing.T, scheduler api.Scheduler) {
 	require.Len(t, batch, 1, "transaction should be returned")
 
 	// Remove after update.
-	require.NoError(t, scheduler.RemoveTxBatch(batch))
+	hashes = make([]hash.Hash, len(batch))
+	for i, tx := range batch {
+		hashes[i] = tx.Hash()
+	}
+	require.NoError(t, scheduler.RemoveTxBatch(hashes))
 	// Make sure queue is empty now.
 	batch = scheduler.GetBatch(true)
 	require.Empty(t, batch, "queue should be empty")
@@ -106,10 +105,10 @@ func testScheduleTransactions(t *testing.T, scheduler api.Scheduler) {
 	// Test update clear transactions.
 	// Update configuration back to BatchSize=10.
 	err = scheduler.UpdateParameters(
-		registry.TxnSchedulerParameters{
-			Algorithm:         scheduler.Name(),
-			MaxBatchSize:      10,
-			MaxBatchSizeBytes: 10000,
+		scheduler.Name(),
+		map[string]uint64{
+			transaction.WeightCount:     10,
+			transaction.WeightSizeBytes: 10000,
 		},
 	)
 	require.NoError(t, err, "UpdateParameters")
@@ -120,41 +119,72 @@ func testScheduleTransactions(t *testing.T, scheduler api.Scheduler) {
 	require.EqualValues(t, 1, scheduler.UnscheduledSize(), "one transaction queued")
 	// Update configuration to MaxBatchSizeBytes=1.
 	err = scheduler.UpdateParameters(
-		registry.TxnSchedulerParameters{
-			Algorithm:         scheduler.Name(),
-			MaxBatchSize:      10,
-			MaxBatchSizeBytes: 1,
+		scheduler.Name(),
+		map[string]uint64{
+			transaction.WeightCount:     10,
+			transaction.WeightSizeBytes: 1,
 		},
 	)
 	require.NoError(t, err, "UpdateParameters")
-	// Make sure the transaction was removed.
+
+	// Make sure is removed from the pool.
+	batch = scheduler.GetBatch(true)
+	require.Empty(t, batch, "queue should be empty")
 	require.EqualValues(t, 0, scheduler.UnscheduledSize(), "transaction should get removed on update")
 
 	// Test invalid udpate.
 	err = scheduler.UpdateParameters(
-		registry.TxnSchedulerParameters{
-			Algorithm: "invalid",
-		},
+		"invalid",
+		map[string]uint64{},
 	)
 	require.Error(t, err, "UpdateParameters invalid udpate")
+
+	// Test priorities.
+	err = scheduler.UpdateParameters(
+		scheduler.Name(),
+		map[string]uint64{
+			transaction.WeightCount:     1,
+			transaction.WeightSizeBytes: 1000,
+		},
+	)
+	require.NoError(t, err, "UpdateParameters")
+	txs := make([]*transaction.CheckedTransaction, 50)
+	perm := rand.Perm(50)
+	for i := 0; i < 50; i++ {
+		txs[i] = transaction.NewCheckedTransaction([]byte(fmt.Sprintf("tx-%d", i)), uint64(perm[i]), map[string]uint64{})
+		require.NoError(t, scheduler.QueueTx(txs[i]))
+	}
+	returned := make([]*transaction.CheckedTransaction, 50)
+	prios := make([]uint64, 50)
+	for i := 0; i < 50; i++ {
+		returned[i] = scheduler.GetBatch(false)[0]
+		prios[i] = returned[i].Priority()
+		require.NoError(t, scheduler.RemoveTxBatch([]hash.Hash{returned[i].Hash()}))
+	}
+	require.ElementsMatch(t, txs, returned, "all transactions should be returned")
+	require.IsDecreasing(t, prios, "transactions should be sorted by priority")
 }
 
 type benchmarkingDispatcher interface {
-	Dispatch(batch transaction.RawBatch)
+	Dispatch(batch []*transaction.CheckedTransaction)
 	DispatchedSize() int
 }
 
 type noOpDispatcher struct {
-	DispatchedBatches transaction.RawBatch
+	DispatchedBatches []*transaction.CheckedTransaction
 	scheduler         api.Scheduler
 }
 
-func (t *noOpDispatcher) Dispatch(batch transaction.RawBatch) {
+func (t *noOpDispatcher) Dispatch(batch []*transaction.CheckedTransaction) {
 	if len(batch) == 0 {
 		return
 	}
 	t.DispatchedBatches = append(t.DispatchedBatches, batch...)
-	_ = t.scheduler.RemoveTxBatch(batch)
+	hashes := make([]hash.Hash, len(batch))
+	for i, tx := range batch {
+		hashes[i] = tx.Hash()
+	}
+	_ = t.scheduler.RemoveTxBatch(hashes)
 }
 
 func (t *noOpDispatcher) DispatchedSize() int {
@@ -164,17 +194,27 @@ func (t *noOpDispatcher) DispatchedSize() int {
 type delayDispatcher struct {
 	rng               *rand.Rand
 	delay             func(*rand.Rand) time.Duration
-	DispatchedBatches transaction.RawBatch
+	DispatchedBatches []*transaction.CheckedTransaction
 	scheduler         api.Scheduler
 }
 
-func (t *delayDispatcher) Dispatch(batch transaction.RawBatch) {
+func (t *delayDispatcher) Dispatch(batch []*transaction.CheckedTransaction) {
 	if len(batch) == 0 {
 		return
 	}
 	<-time.After(t.delay(t.rng))
 	t.DispatchedBatches = append(t.DispatchedBatches, batch...)
-	_ = t.scheduler.RemoveTxBatch(batch)
+	hashes := make([]hash.Hash, len(batch))
+	for i, tx := range batch {
+		hashes[i] = tx.Hash()
+	}
+	size := t.scheduler.UnscheduledSize()
+	t1 := time.Now()
+	defer func() {
+		t2 := time.Now()
+		fmt.Println("Removing batch: ", len(batch), t2.Sub(t1).Microseconds(), size)
+	}()
+	_ = t.scheduler.RemoveTxBatch(hashes)
 }
 
 func (t *delayDispatcher) DispatchedSize() int {
@@ -215,7 +255,7 @@ func SchedulerImplementationBenchmarks(b *testing.B, scheduler api.Scheduler) {
 	})
 }
 
-func benchmarkScheduleTransactions(b *testing.B, rng *rand.Rand, dispatcher benchmarkingDispatcher, scheduler api.Scheduler, values [][]byte) {
+func benchmarkScheduleTransactions(b *testing.B, rng *rand.Rand, dispatcher benchmarkingDispatcher, scheduler api.Scheduler, values []*transaction.CheckedTransaction) {
 	waitForClear := func(dispatcher benchmarkingDispatcher, scheduler api.Scheduler) {
 		// Wait for queue to empty out.
 		for {
@@ -230,7 +270,7 @@ func benchmarkScheduleTransactions(b *testing.B, rng *rand.Rand, dispatcher benc
 	var wg sync.WaitGroup
 	for _, v := range values {
 		wg.Add(1)
-		go func(v []byte, wg *sync.WaitGroup) {
+		go func(v *transaction.CheckedTransaction, wg *sync.WaitGroup) {
 			defer wg.Done()
 			err := scheduler.QueueTx(v)
 			if err != nil {
@@ -245,14 +285,14 @@ func benchmarkScheduleTransactions(b *testing.B, rng *rand.Rand, dispatcher benc
 	waitForClear(dispatcher, scheduler)
 }
 
-func prepareTxs(b *testing.B, rng *rand.Rand, n uint64) [][]byte {
+func prepareTxs(b *testing.B, rng *rand.Rand, n uint64) []*transaction.CheckedTransaction {
 	b.StopTimer()
 
-	values := [][]byte{}
+	values := make([]*transaction.CheckedTransaction, n)
 	for i := uint64(0); i < n; i++ {
 		b := make([]byte, rng.Intn(128/2)+1)
 		rng.Read(b)
-		values = append(values, b)
+		values[i] = transaction.RawCheckedTransaction(b)
 	}
 	b.StartTimer()
 

@@ -33,7 +33,7 @@ type RichRuntime interface {
 		lb *consensus.LightBlock,
 		epoch beacon.EpochTime,
 		tx []byte,
-	) error
+	) (*transaction.CheckedTransaction, error)
 
 	// Query requests the runtime to answer a runtime-specific query.
 	Query(
@@ -57,9 +57,9 @@ func (r *richRuntime) CheckTx(
 	lb *consensus.LightBlock,
 	epoch beacon.EpochTime,
 	tx []byte,
-) error {
+) (*transaction.CheckedTransaction, error) {
 	if rb == nil || lb == nil {
-		return ErrInvalidArgument
+		return nil, ErrInvalidArgument
 	}
 
 	resp, err := r.Call(ctx, &protocol.Body{
@@ -72,20 +72,20 @@ func (r *richRuntime) CheckTx(
 	})
 	switch {
 	case err != nil:
-		return fmt.Errorf("%w: %s", ErrInternal, err)
+		return nil, fmt.Errorf("%w: %s", ErrInternal, err)
 	case resp.RuntimeCheckTxBatchResponse == nil:
-		return fmt.Errorf("%w: malformed runtime response", ErrInternal)
+		return nil, fmt.Errorf("%w: malformed runtime response", ErrInternal)
 	case len(resp.RuntimeCheckTxBatchResponse.Results) != 1:
-		return fmt.Errorf("%w: malformed runtime response: incorrect number of results", ErrInternal)
+		return nil, fmt.Errorf("%w: malformed runtime response: incorrect number of results", ErrInternal)
 	}
 
 	// Interpret CheckTx result.
 	result := resp.RuntimeCheckTxBatchResponse.Results[0]
 	if !result.IsSuccess() {
-		return fmt.Errorf("%w: %s", ErrCheckTxFailed, result.Error)
+		return nil, fmt.Errorf("%w: %s", ErrCheckTxFailed, result.Error)
 	}
 
-	return nil
+	return result.ToCheckedTransaction(tx), nil
 }
 
 // Implements RichRuntime.
