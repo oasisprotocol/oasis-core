@@ -1,11 +1,13 @@
 //! An arbitrary precision unsigned integer.
 use std::{
+    convert::TryFrom,
     fmt,
+    num::IntErrorKind,
     ops::{Add, AddAssign, Mul, MulAssign},
 };
 
 use num_bigint::BigUint;
-use num_traits::{CheckedDiv, CheckedSub, Num, Zero};
+use num_traits::{CheckedDiv, CheckedSub, Num, ToPrimitive, Zero};
 use serde;
 
 /// An arbitrary precision unsigned integer.
@@ -44,6 +46,14 @@ impl Zero for Quantity {
 impl From<u64> for Quantity {
     fn from(v: u64) -> Quantity {
         Quantity(BigUint::from(v))
+    }
+}
+
+impl TryFrom<&Quantity> for u64 {
+    type Error = IntErrorKind;
+
+    fn try_from(value: &Quantity) -> Result<u64, Self::Error> {
+        value.0.to_u64().ok_or(IntErrorKind::PosOverflow)
     }
 }
 
