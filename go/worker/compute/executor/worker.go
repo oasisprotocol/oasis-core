@@ -17,9 +17,8 @@ import (
 type Worker struct {
 	enabled bool
 
-	scheduleCheckTxEnabled bool
-	scheduleMaxTxPoolSize  uint64
-	scheduleTxCacheSize    uint64
+	scheduleMaxTxPoolSize uint64
+	scheduleTxCacheSize   uint64
 
 	commonWorker *workerCommon.Worker
 	registration *registration.Worker
@@ -175,25 +174,23 @@ func newWorker(
 	enabled bool,
 	commonWorker *workerCommon.Worker,
 	registration *registration.Worker,
-	scheduleCheckTxEnabled bool,
 	scheduleMaxTxPoolSize uint64,
 	scheduleTxCacheSize uint64,
 ) (*Worker, error) {
 	ctx, cancelCtx := context.WithCancel(context.Background())
 
 	w := &Worker{
-		enabled:                enabled,
-		commonWorker:           commonWorker,
-		scheduleCheckTxEnabled: scheduleCheckTxEnabled,
-		scheduleMaxTxPoolSize:  scheduleMaxTxPoolSize,
-		scheduleTxCacheSize:    scheduleTxCacheSize,
-		registration:           registration,
-		runtimes:               make(map[common.Namespace]*committee.Node),
-		ctx:                    ctx,
-		cancelCtx:              cancelCtx,
-		quitCh:                 make(chan struct{}),
-		initCh:                 make(chan struct{}),
-		logger:                 logging.GetLogger("worker/executor"),
+		enabled:               enabled,
+		commonWorker:          commonWorker,
+		scheduleMaxTxPoolSize: scheduleMaxTxPoolSize,
+		scheduleTxCacheSize:   scheduleTxCacheSize,
+		registration:          registration,
+		runtimes:              make(map[common.Namespace]*committee.Node),
+		ctx:                   ctx,
+		cancelCtx:             cancelCtx,
+		quitCh:                make(chan struct{}),
+		initCh:                make(chan struct{}),
+		logger:                logging.GetLogger("worker/executor"),
 	}
 
 	if enabled {

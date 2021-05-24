@@ -46,7 +46,6 @@ import (
 	storageTests "github.com/oasisprotocol/oasis-core/go/storage/tests"
 	workerCommon "github.com/oasisprotocol/oasis-core/go/worker/common"
 	"github.com/oasisprotocol/oasis-core/go/worker/compute"
-	"github.com/oasisprotocol/oasis-core/go/worker/compute/executor"
 	executorCommittee "github.com/oasisprotocol/oasis-core/go/worker/compute/executor/committee"
 	executorWorkerTests "github.com/oasisprotocol/oasis-core/go/worker/compute/executor/tests"
 	storageWorker "github.com/oasisprotocol/oasis-core/go/worker/storage"
@@ -74,7 +73,6 @@ var (
 		{workerCommon.CfgClientPort, workerClientPort},
 		{storageWorker.CfgWorkerEnabled, true},
 		{storageWorker.CfgWorkerPublicRPCEnabled, true},
-		{executor.CfgScheduleCheckTxEnabled, false},
 		{tendermintCommon.CfgCoreListenAddress, "tcp://0.0.0.0:27565"},
 		{tendermintFull.CfgSupplementarySanityEnabled, true},
 		{tendermintFull.CfgSupplementarySanityInterval, 1},

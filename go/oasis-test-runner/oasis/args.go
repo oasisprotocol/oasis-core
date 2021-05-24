@@ -33,7 +33,6 @@ import (
 	workerCommon "github.com/oasisprotocol/oasis-core/go/worker/common"
 	"github.com/oasisprotocol/oasis-core/go/worker/common/p2p"
 	"github.com/oasisprotocol/oasis-core/go/worker/compute"
-	"github.com/oasisprotocol/oasis-core/go/worker/compute/executor"
 	workerConsensusRPC "github.com/oasisprotocol/oasis-core/go/worker/consensusrpc"
 	"github.com/oasisprotocol/oasis-core/go/worker/keymanager"
 	"github.com/oasisprotocol/oasis-core/go/worker/registration"
@@ -493,11 +492,6 @@ func (args *argBuilder) workerCertificateRotation(enabled bool) *argBuilder {
 		arg.Values = []string{"1"}
 	}
 	args.vec = append(args.vec, arg)
-	return args
-}
-
-func (args *argBuilder) workerExecutorScheduleCheckTxEnabled() *argBuilder {
-	args.vec = append(args.vec, Argument{Name: executor.CfgScheduleCheckTxEnabled})
 	return args
 }
 

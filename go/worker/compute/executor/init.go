@@ -10,10 +10,6 @@ import (
 )
 
 const (
-	// CfgScheduleCheckTxEnabled enables checking each transaction before
-	// scheduling it.
-	CfgScheduleCheckTxEnabled = "worker.executor.schedule_check_tx.enabled"
-
 	cfgMaxTxPoolSize       = "worker.executor.schedule_max_tx_pool_size"
 	cfgScheduleTxCacheSize = "worker.executor.schedule_tx_cache_size"
 )
@@ -32,14 +28,12 @@ func New(
 		compute.Enabled(),
 		commonWorker,
 		registration,
-		viper.GetBool(CfgScheduleCheckTxEnabled),
 		viper.GetUint64(cfgMaxTxPoolSize),
 		viper.GetUint64(cfgScheduleTxCacheSize),
 	)
 }
 
 func init() {
-	Flags.Bool(CfgScheduleCheckTxEnabled, true, "Enable checking transactions before scheduling them")
 	Flags.Uint64(cfgMaxTxPoolSize, 10000, "Maximum size of the scheduling transaction pool")
 	Flags.Uint64(cfgScheduleTxCacheSize, 1000, "Cache size of recently scheduled transactions to prevent re-scheduling")
 

@@ -92,7 +92,6 @@ func (worker *Compute) AddArgs(args *argBuilder) error {
 		workerComputeEnabled().
 		runtimeProvisioner(worker.runtimeProvisioner).
 		runtimeSGXLoader(worker.net.cfg.RuntimeSGXLoaderBinary).
-		workerExecutorScheduleCheckTxEnabled().
 		configureDebugCrashPoints(worker.crashPointsProbability).
 		tendermintSupplementarySanity(worker.supplementarySanityInterval).
 		appendNetwork(worker.net).
