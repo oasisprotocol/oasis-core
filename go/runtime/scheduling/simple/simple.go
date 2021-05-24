@@ -62,10 +62,9 @@ func (s *scheduler) Clear() {
 	s.txPool.Clear()
 }
 
-// TODO: remove registry.TxnSchedulerParameters, with separate.
-func (s *scheduler) UpdateParameters(params registry.TxnSchedulerParameters, weightLimits map[string]uint64) error {
-	if params.Algorithm != Name {
-		return fmt.Errorf("unexpected transaction scheduling algorithm: %s", params.Algorithm)
+func (s *scheduler) UpdateParameters(algo string, weightLimits map[string]uint64) error {
+	if algo != Name {
+		return fmt.Errorf("unexpected transaction scheduling algorithm: %s", algo)
 	}
 
 	if err := s.txPool.UpdateConfig(txpool.Config{
@@ -82,10 +81,9 @@ func (s *scheduler) Name() string {
 }
 
 // New creates a new simple scheduler.
-// TODO: replace params with separate.
-func New(txPoolImpl string, maxTxPoolSize uint64, params registry.TxnSchedulerParameters, weightLimits map[string]uint64) (api.Scheduler, error) {
-	if params.Algorithm != Name {
-		return nil, fmt.Errorf("unexpected transaction scheduling algorithm: %s", params.Algorithm)
+func New(txPoolImpl string, maxTxPoolSize uint64, algo string, weightLimits map[string]uint64) (api.Scheduler, error) {
+	if algo != Name {
+		return nil, fmt.Errorf("unexpected transaction scheduling algorithm: %s", algo)
 	}
 
 	poolCfg := txpool.Config{
@@ -94,10 +92,10 @@ func New(txPoolImpl string, maxTxPoolSize uint64, params registry.TxnSchedulerPa
 	}
 	var pool txpool.TxPool
 	switch txPoolImpl {
-	case orderedmap.Name:
-		pool = orderedmap.New(poolCfg)
 	case priorityqueue.Name:
 		pool = priorityqueue.New(poolCfg)
+	case orderedmap.Name:
+		pool = orderedmap.New(poolCfg)
 	default:
 		return nil, fmt.Errorf("invalid transaction pool: %s", txPoolImpl)
 	}

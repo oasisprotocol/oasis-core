@@ -74,7 +74,7 @@ func (q *orderedMap) GetBatch(force bool) []*transaction.CheckedTransaction {
 	// Check if a batch is ready.
 	queueSize := uint64(q.queue.Len())
 	// TODO: could also check if any other weight limits are reached.
-	if queueSize < q.weightLimits[transaction.WeightSize] && !force {
+	if queueSize < q.weightLimits[transaction.WeightCount] && !force {
 		return nil
 	}
 
@@ -124,9 +124,9 @@ OUTER:
 		}
 
 		batch = append(batch, el.Value)
-		for _, w := range el.Value.Weights() {
-			if _, ok := batchWeights[w]; ok {
-				batchWeights[w] += el.Value.Weight(w)
+		for k, v := range el.Value.Weights() {
+			if _, ok := batchWeights[k]; ok {
+				batchWeights[k] += v
 			}
 		}
 

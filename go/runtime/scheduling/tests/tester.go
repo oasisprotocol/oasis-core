@@ -208,12 +208,6 @@ func (t *delayDispatcher) Dispatch(batch []*transaction.CheckedTransaction) {
 	for i, tx := range batch {
 		hashes[i] = tx.Hash()
 	}
-	size := t.scheduler.UnscheduledSize()
-	t1 := time.Now()
-	defer func() {
-		t2 := time.Now()
-		fmt.Println("Removing batch: ", len(batch), t2.Sub(t1).Microseconds(), size)
-	}()
 	_ = t.scheduler.RemoveTxBatch(hashes)
 }
 

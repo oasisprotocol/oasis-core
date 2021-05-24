@@ -153,7 +153,6 @@ func (w *Worker) registerRuntime(commonNode *committeeCommon.Node) error {
 		commonNode,
 		w.commonWorker.GetConfig(),
 		rp,
-		w.scheduleCheckTxEnabled,
 		w.scheduleMaxTxPoolSize,
 		w.scheduleTxCacheSize,
 	)
