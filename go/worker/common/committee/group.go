@@ -579,7 +579,6 @@ func NewGroup(
 		return nil, fmt.Errorf("group: failed to create node watcher: %w", err)
 	}
 
-	// TODO: If the current node is a storage node, always include self (oasis-core#3251).
 	sc, err := storageClient.NewForNodes(
 		ctx,
 		identity,

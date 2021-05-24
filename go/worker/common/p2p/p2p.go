@@ -117,7 +117,7 @@ func (p *P2P) Publish(ctx context.Context, runtimeID common.Namespace, msg *Mess
 		return
 	}
 
-	if err := h.topic.Publish(h.ctx, rawMsg); err != nil {
+	if err := h.tryPublishing(rawMsg); err != nil {
 		h.logger.Error("failed to publish message to the network",
 			"err", err,
 		)

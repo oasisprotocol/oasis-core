@@ -54,6 +54,10 @@ type Registry interface {
 	// registry.
 	NewUnmanagedRuntime(ctx context.Context, runtimeID common.Namespace) (Runtime, error)
 
+	// AddRoles adds available node roles to the runtime. Specify nil as the runtimeID
+	// to set the role for all runtimes.
+	AddRoles(roles node.RolesMask, runtimeID *common.Namespace) error
+
 	// StorageRouter returns a storage backend which routes requests to the
 	// correct per-runtime storage backend based on the namespace contained
 	// in the request.
@@ -89,6 +93,12 @@ type Runtime interface {
 	// RegisterStorage sets the given local storage backend for the runtime.
 	RegisterStorage(storage storageAPI.Backend)
 
+	// AddRoles adds available node roles to the runtime.
+	AddRoles(roles node.RolesMask)
+
+	// HasRoles checks if the node has all of the roles specified for this runtime.
+	HasRoles(roles node.RolesMask) bool
+
 	// History returns the history for this runtime.
 	History() history.History
 
@@ -108,13 +118,14 @@ type Runtime interface {
 	Host(ctx context.Context) (runtimeHost.Config, runtimeHost.Provisioner, error)
 }
 
-type runtime struct {
+type runtime struct { // nolint: maligned
 	sync.RWMutex
 
 	id                   common.Namespace
 	registryDescriptor   *registry.Runtime
 	activeDescriptor     *registry.Runtime
 	activeDescriptorHash hash.Hash
+	roles                node.RolesMask
 
 	consensus    consensus.Backend
 	storage      storageAPI.Backend
@@ -192,6 +203,20 @@ func (r *runtime) RegisterStorage(storage storageAPI.Backend) {
 		panic("runtime storage backend already assigned")
 	}
 	r.storage = storage
+}
+
+func (r *runtime) AddRoles(roles node.RolesMask) {
+	r.Lock()
+	defer r.Unlock()
+
+	r.roles |= roles
+}
+
+func (r *runtime) HasRoles(roles node.RolesMask) bool {
+	r.Lock()
+	defer r.Unlock()
+
+	return r.roles&roles == roles
 }
 
 func (r *runtime) History() history.History {
@@ -410,8 +435,40 @@ func (r *runtimeRegistry) NewUnmanagedRuntime(ctx context.Context, runtimeID com
 	return newRuntime(ctx, runtimeID, r.cfg, r.consensus, r.logger)
 }
 
+func (r *runtimeRegistry) AddRoles(roles node.RolesMask, runtimeID *common.Namespace) error {
+	r.RLock()
+	defer r.RUnlock()
+
+	if runtimeID != nil {
+		rt, ok := r.runtimes[*runtimeID]
+		if !ok {
+			return fmt.Errorf("runtime/registry: runtime %s is not supported", *runtimeID)
+		}
+		rt.AddRoles(roles)
+		return nil
+	}
+
+	for _, rt := range r.runtimes {
+		rt.AddRoles(roles)
+	}
+	return nil
+}
+
 func (r *runtimeRegistry) StorageRouter() storageAPI.Backend {
-	return &storageRouter{registry: r}
+	return NewStorageRouter(
+		func(ns common.Namespace) (storageAPI.Backend, error) {
+			rt, err := r.GetRuntime(ns)
+			if err != nil {
+				return nil, err
+			}
+			return rt.Storage(), nil
+		},
+		func() {
+			for _, rt := range r.Runtimes() {
+				<-rt.Storage().Initialized()
+			}
+		},
+	)
 }
 
 func (r *runtimeRegistry) Cleanup() {

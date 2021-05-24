@@ -53,8 +53,8 @@ var (
 		oasis.ByzantineSlot1IdentitySeed,
 		false,
 		nil,
-		[]string{
-			"--" + byzantine.CfgSchedulerRoleExpected,
+		[]oasis.Argument{
+			{Name: byzantine.CfgSchedulerRoleExpected},
 		},
 	)
 	// ByzantineExecutorWrong is the byzantine executor wrong scenario.
@@ -73,8 +73,8 @@ var (
 		map[staking.SlashReason]uint64{
 			staking.SlashRuntimeIncorrectResults: 1,
 		},
-		[]string{
-			"--" + byzantine.CfgExecutorMode, byzantine.ModeExecutorWrong.String(),
+		[]oasis.Argument{
+			{Name: byzantine.CfgExecutorMode, Values: []string{byzantine.ModeExecutorWrong.String()}},
 		},
 	)
 	// ByzantineExecutorSchedulerWrong is the byzantine executor wrong scheduler scenario.
@@ -91,9 +91,9 @@ var (
 		oasis.ByzantineSlot1IdentitySeed,
 		false,
 		nil,
-		[]string{
-			"--" + byzantine.CfgSchedulerRoleExpected,
-			"--" + byzantine.CfgExecutorMode, byzantine.ModeExecutorWrong.String(),
+		[]oasis.Argument{
+			{Name: byzantine.CfgSchedulerRoleExpected},
+			{Name: byzantine.CfgExecutorMode, Values: []string{byzantine.ModeExecutorWrong.String()}},
 		},
 	)
 	// ByzantineExecutorStraggler is the byzantine executor straggler scenario.
@@ -109,8 +109,8 @@ var (
 		oasis.ByzantineDefaultIdentitySeed,
 		false,
 		nil,
-		[]string{
-			"--" + byzantine.CfgExecutorMode, byzantine.ModeExecutorStraggler.String(),
+		[]oasis.Argument{
+			{Name: byzantine.CfgExecutorMode, Values: []string{byzantine.ModeExecutorStraggler.String()}},
 		},
 	)
 	// ByzantineExecutorSchedulerStraggler is the byzantine executor scheduler straggler scenario.
@@ -127,9 +127,9 @@ var (
 		oasis.ByzantineSlot1IdentitySeed,
 		false,
 		nil,
-		[]string{
-			"--" + byzantine.CfgSchedulerRoleExpected,
-			"--" + byzantine.CfgExecutorMode, byzantine.ModeExecutorStraggler.String(),
+		[]oasis.Argument{
+			{Name: byzantine.CfgSchedulerRoleExpected},
+			{Name: byzantine.CfgExecutorMode, Values: []string{byzantine.ModeExecutorStraggler.String()}},
 		},
 	)
 	// ByzantineExecutorFailureIndicating is the byzantine executor that submits fialure indicating
@@ -146,8 +146,8 @@ var (
 		oasis.ByzantineDefaultIdentitySeed,
 		false,
 		nil,
-		[]string{
-			"--" + byzantine.CfgExecutorMode, byzantine.ModeExecutorFailureIndicating.String(),
+		[]oasis.Argument{
+			{Name: byzantine.CfgExecutorMode, Values: []string{byzantine.ModeExecutorFailureIndicating.String()}},
 		},
 	)
 	// ByzantineExecutorSchedulerFailureIndicating is the byzantine executor scheduler failure indicating scenario.
@@ -164,9 +164,9 @@ var (
 		oasis.ByzantineSlot1IdentitySeed,
 		false,
 		nil,
-		[]string{
-			"--" + byzantine.CfgSchedulerRoleExpected,
-			"--" + byzantine.CfgExecutorMode, byzantine.ModeExecutorFailureIndicating.String(),
+		[]oasis.Argument{
+			{Name: byzantine.CfgSchedulerRoleExpected},
+			{Name: byzantine.CfgExecutorMode, Values: []string{byzantine.ModeExecutorFailureIndicating.String()}},
 		},
 	)
 	// ByzantineStorageHonest is the byzantine storage honest scenario.
@@ -190,9 +190,9 @@ var (
 		oasis.ByzantineDefaultIdentitySeed,
 		false,
 		nil,
-		[]string{
+		[]oasis.Argument{
 			// Fail first 5 ApplyBatch requests.
-			"--" + byzantine.CfgNumStorageFailApply, strconv.Itoa(5),
+			{Name: byzantine.CfgNumStorageFailApply, Values: []string{strconv.Itoa(5)}},
 		},
 	)
 	// ByzantineStorageFailApplyBatch is the byzantine storage scenario where storage node fails
@@ -209,9 +209,9 @@ var (
 		oasis.ByzantineDefaultIdentitySeed,
 		false,
 		nil,
-		[]string{
+		[]oasis.Argument{
 			// Fail first 3 ApplyBatch requests - from the 2 executor workers and 1 backup node.
-			"--" + byzantine.CfgNumStorageFailApplyBatch, strconv.Itoa(3),
+			{Name: byzantine.CfgNumStorageFailApplyBatch, Values: []string{strconv.Itoa(3)}},
 		},
 	)
 	// ByzantineStorageFailRead is the byzantine storage node scenario that fails all read requests.
@@ -228,9 +228,9 @@ var (
 		// current shuffling method in the storage client. See also #1815.
 		true,
 		nil,
-		[]string{
+		[]oasis.Argument{
 			// Fail all read requests.
-			"--" + byzantine.CfgFailReadRequests,
+			{Name: byzantine.CfgFailReadRequests},
 		},
 	)
 	// ByzantineStorageCorruptGetDiff is the byzantine storage node scenario that corrupts GetDiff
@@ -243,9 +243,9 @@ var (
 		oasis.ByzantineDefaultIdentitySeed,
 		false,
 		nil,
-		[]string{
+		[]oasis.Argument{
 			// Corrupt all GetDiff responses.
-			"--" + byzantine.CfgCorruptGetDiff,
+			{Name: byzantine.CfgCorruptGetDiff},
 		},
 	)
 )
@@ -254,7 +254,7 @@ type byzantineImpl struct {
 	runtimeImpl
 
 	script    string
-	extraArgs []string
+	extraArgs []oasis.Argument
 
 	skipStorageSyncWait        bool
 	identitySeed               string
@@ -273,7 +273,7 @@ func newByzantineImpl(
 	identitySeed string,
 	skipStorageWait bool,
 	expectedSlashes map[staking.SlashReason]uint64,
-	extraArgs []string,
+	extraArgs []oasis.Argument,
 ) scenario.Scenario {
 	return &byzantineImpl{
 		runtimeImpl: *newRuntimeImpl(

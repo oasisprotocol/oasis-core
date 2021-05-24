@@ -79,10 +79,24 @@ func New(
 		}
 
 		// Attach storage interface to gRPC server.
+		localRouter := registry.NewStorageRouter(
+			func(ns common.Namespace) (api.Backend, error) {
+				node := s.GetRuntime(ns)
+				if node == nil {
+					return nil, fmt.Errorf("worker/storage: runtime %s is not supported", ns)
+				}
+				return node.GetLocalStorage(), nil
+			},
+			func() {
+				for _, node := range s.runtimes {
+					<-node.Initialized()
+				}
+			},
+		)
 		s.grpcPolicy = policy.NewDynamicRuntimePolicyChecker(api.ServiceName, s.commonWorker.GrpcPolicyWatcher)
 		api.RegisterService(s.commonWorker.Grpc.Server(), &storageService{
 			w:                  s,
-			storage:            s.commonWorker.RuntimeRegistry.StorageRouter(),
+			storage:            localRouter,
 			debugRejectUpdates: viper.GetBool(CfgWorkerDebugIgnoreApply) && flags.DebugDontBlameOasis(),
 		})
 
@@ -134,7 +148,6 @@ func (s *Worker) registerRuntime(dataDir string, commonNode *committeeCommon.Nod
 	if err != nil {
 		return fmt.Errorf("can't create local storage backend: %w", err)
 	}
-	commonNode.Runtime.RegisterStorage(localStorage)
 
 	node, err := committee.NewNode(
 		commonNode,
@@ -151,6 +164,7 @@ func (s *Worker) registerRuntime(dataDir string, commonNode *committeeCommon.Nod
 	if err != nil {
 		return err
 	}
+	commonNode.Runtime.RegisterStorage(newSyncedLocalStorage(node, localStorage))
 	commonNode.AddHooks(node)
 	s.runtimes[id] = node
 

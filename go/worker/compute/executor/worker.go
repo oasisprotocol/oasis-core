@@ -149,7 +149,14 @@ func (w *Worker) registerRuntime(commonNode *committeeCommon.Node) error {
 	}
 
 	// Create committee node for the given runtime.
-	node, err := committee.NewNode(commonNode, w.commonWorker.GetConfig(), rp, w.scheduleCheckTxEnabled, w.scheduleMaxTxPoolSize, w.scheduleTxCacheSize)
+	node, err := committee.NewNode(
+		commonNode,
+		w.commonWorker.GetConfig(),
+		rp,
+		w.scheduleCheckTxEnabled,
+		w.scheduleMaxTxPoolSize,
+		w.scheduleTxCacheSize,
+	)
 	if err != nil {
 		return err
 	}

@@ -577,6 +577,12 @@ func (w *Worker) newRoleProvider(role node.RolesMask, runtimeID *common.Namespac
 	if !role.IsSingleRole() {
 		return nil, fmt.Errorf("RegisterRole: registration role mask does not encode a single role. RoleMask: '%s'", role)
 	}
+	if err := w.runtimeRegistry.AddRoles(role, runtimeID); err != nil {
+		w.logger.Info("runtime doesn't exist, roles not registered",
+			"err", err,
+			"role", role,
+		)
+	}
 
 	rp := &roleProvider{
 		w:         w,

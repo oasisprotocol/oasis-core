@@ -92,6 +92,10 @@ const (
 	// The minimum number of rounds the worker can be behind the chain before it's sensible for
 	// it to stop advertising availability.
 	minimumRoundDelayForUnavailability = uint64(15)
+
+	// The number of rounds ahead of consensus that the worker will allow round waiters to wait.
+	// Trying to wait for rounds further in the future will return an error immediately.
+	roundWaitConsensusOffset = uint64(1)
 )
 
 type roundItem interface {
@@ -402,6 +406,14 @@ func (n *Node) WaitForRound(round uint64, root *storageApi.Root) (<-chan uint64,
 		round = root.Version
 	}
 
+	n.commonNode.CrossNode.Lock()
+	consensusRound := n.commonNode.CurrentBlock.Header.Round
+	n.commonNode.CrossNode.Unlock()
+	if round > consensusRound+roundWaitConsensusOffset && !commonFlags.DebugDontBlameOasis() {
+		close(retCh)
+		return nil, storageApi.ErrVersionNotFound
+	}
+
 	n.syncedLock.Lock()
 	defer n.syncedLock.Unlock()
 
@@ -424,6 +436,11 @@ func (n *Node) PauseCheckpointer(pause bool) error {
 	}
 	n.checkpointer.Pause(pause)
 	return nil
+}
+
+// GetLocalStorage returns the local storage backend used by this storage node.
+func (n *Node) GetLocalStorage() storageApi.LocalBackend {
+	return n.localStorage
 }
 
 // NodeHooks implementation.

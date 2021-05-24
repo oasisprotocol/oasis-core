@@ -593,16 +593,16 @@ func (sc *txSourceImpl) manager(env *env.Env, errCh chan error) {
 	var restartableNodes []*oasis.Node
 	// Keep one of each types of nodes always running.
 	for _, v := range sc.Net.Validators()[1:] {
-		restartableNodes = append(restartableNodes, &v.Node)
+		restartableNodes = append(restartableNodes, v.Node)
 	}
 	for _, s := range sc.Net.StorageWorkers()[1:] {
-		restartableNodes = append(restartableNodes, &s.Node)
+		restartableNodes = append(restartableNodes, s.Node)
 	}
 	for _, c := range sc.Net.ComputeWorkers()[1:] {
-		restartableNodes = append(restartableNodes, &c.Node)
+		restartableNodes = append(restartableNodes, c.Node)
 	}
 	for _, k := range sc.Net.Keymanagers()[1:] {
-		restartableNodes = append(restartableNodes, &k.Node)
+		restartableNodes = append(restartableNodes, k.Node)
 	}
 
 	restartTicker := time.NewTicker(sc.nodeRestartInterval)
@@ -851,7 +851,7 @@ func (sc *txSourceImpl) Run(childEnv *env.Env) error {
 	// Start all configured workloads.
 	errCh := make(chan error, len(sc.clientWorkloads)+len(sc.allNodeWorkloads)+2)
 	for _, name := range sc.clientWorkloads {
-		if err := sc.startWorkload(childEnv, errCh, name, &sc.Net.Clients()[0].Node); err != nil {
+		if err := sc.startWorkload(childEnv, errCh, name, sc.Net.Clients()[0].Node); err != nil {
 			return fmt.Errorf("failed to start client workload %s: %w", name, err)
 		}
 	}

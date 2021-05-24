@@ -10,12 +10,10 @@ import (
 
 // Byzantine is an Oasis byzantine node.
 type Byzantine struct {
-	Node
+	*Node
 
 	script    string
-	extraArgs []string
-
-	entity *Entity
+	extraArgs []Argument
 
 	runtime         int
 	consensusPort   uint16
@@ -28,18 +26,16 @@ type ByzantineCfg struct {
 	NodeCfg
 
 	Script    string
-	ExtraArgs []string
+	ExtraArgs []Argument
 
 	IdentitySeed string
-	Entity       *Entity
 
 	ActivationEpoch beacon.EpochTime
 	Runtime         int
 }
 
-func (worker *Byzantine) startNode() error {
-	args := newArgBuilder().
-		debugDontBlameOasis().
+func (worker *Byzantine) AddArgs(args *argBuilder) error {
+	args.debugDontBlameOasis().
 		debugAllowTestKeys().
 		debugEnableProfiling(worker.Node.pprofPort).
 		tendermintDebugAllowDuplicateIP().
@@ -56,13 +52,17 @@ func (worker *Byzantine) startNode() error {
 	}
 	for _, v := range worker.net.Runtimes() {
 		if v.kind == registry.KindCompute && v.teeHardware == node.TEEHardwareIntelSGX {
-			args = args.byzantineFakeSGX()
-			args = args.byzantineVersionFakeEnclaveID(v)
+			args.byzantineFakeSGX()
+			args.byzantineVersionFakeEnclaveID(v)
 		}
 	}
 	args.vec = append(args.vec, worker.extraArgs...)
 
-	if err := worker.net.startOasisNode(&worker.Node, []string{"debug", "byzantine", worker.script}, args); err != nil {
+	return nil
+}
+
+func (worker *Byzantine) CustomStart(args *argBuilder) error {
+	if err := worker.net.startOasisNode(worker.Node, []string{"debug", "byzantine", worker.script}, args); err != nil {
 		return fmt.Errorf("oasis/byzantine: failed to launch node %s: %w", worker.Name, err)
 	}
 
@@ -72,14 +72,9 @@ func (worker *Byzantine) startNode() error {
 // NewByzantine provisions a new byzantine node and adds it to the network.
 func (net *Network) NewByzantine(cfg *ByzantineCfg) (*Byzantine, error) {
 	byzantineName := fmt.Sprintf("byzantine-%d", len(net.byzantine))
-
-	byzantineDir, err := net.baseDir.NewSubDir(byzantineName)
+	host, err := net.GetNamedNode(byzantineName, &cfg.NodeCfg)
 	if err != nil {
-		net.logger.Error("failed to create byzantine node subdir",
-			"err", err,
-			"byzantine_name", byzantineName,
-		)
-		return nil, fmt.Errorf("oasis/byzantine: failed to create byzantine node subdir: %w", err)
+		return nil, err
 	}
 
 	if cfg.Script == "" {
@@ -93,50 +88,27 @@ func (net *Network) NewByzantine(cfg *ByzantineCfg) (*Byzantine, error) {
 	}
 
 	// Pre-provision the node identity so that we can update the entity.
-	nodeKey, _, _, err := net.provisionNodeIdentity(byzantineDir, cfg.IdentitySeed, false)
+	host.nodeSigner, host.p2pSigner, host.sentryCert, err = net.provisionNodeIdentity(host.dir, cfg.IdentitySeed, false)
 	if err != nil {
 		return nil, fmt.Errorf("oasis/byzantine: failed to provision node identity: %w", err)
 	}
-	if err := cfg.Entity.addNode(nodeKey); err != nil {
+	if err := cfg.Entity.addNode(host.nodeSigner); err != nil {
 		return nil, err
 	}
 
 	worker := &Byzantine{
-		Node: Node{
-			Name:                                     byzantineName,
-			net:                                      net,
-			dir:                                      byzantineDir,
-			termEarlyOk:                              true,
-			disableDefaultLogWatcherHandlerFactories: cfg.DisableDefaultLogWatcherHandlerFactories,
-			logWatcherHandlerFactories:               cfg.LogWatcherHandlerFactories,
-			consensus:                                cfg.Consensus,
-		},
+		Node:            host,
 		script:          cfg.Script,
 		extraArgs:       cfg.ExtraArgs,
-		entity:          cfg.Entity,
-		consensusPort:   net.nextNodePort,
-		p2pPort:         net.nextNodePort + 1,
+		consensusPort:   host.getProvisionedPort(nodePortConsensus),
+		p2pPort:         host.getProvisionedPort(nodePortP2P),
 		activationEpoch: cfg.ActivationEpoch,
 		runtime:         cfg.Runtime,
 	}
-	net.nextNodePort += 2
-	worker.doStartNode = worker.startNode
-	copy(worker.NodeID[:], nodeKey[:])
-
-	if cfg.EnableProfiling {
-		worker.Node.pprofPort = net.nextNodePort
-		net.nextNodePort++
-	}
+	copy(worker.NodeID[:], host.nodeSigner[:])
 
 	net.byzantine = append(net.byzantine, worker)
-
-	if err := net.AddLogWatcher(&worker.Node); err != nil {
-		net.logger.Error("failed to add log watcher",
-			"err", err,
-			"byzantine_name", byzantineName,
-		)
-		return nil, fmt.Errorf("oasis/byzantine: failed to add log watcher for %s: %w", byzantineName, err)
-	}
+	host.features = append(host.features, worker)
 
 	return worker, nil
 }
