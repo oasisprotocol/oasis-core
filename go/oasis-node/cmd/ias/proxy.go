@@ -3,6 +3,7 @@ package ias
 
 import (
 	"context"
+	"crypto/ed25519"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -107,6 +108,10 @@ func doProxy(cmd *cobra.Command, args []string) {
 		)
 		return
 	}
+
+	logger.Info("loaded/generated IAS TLS certificate",
+		"public_key", cert.PrivateKey.(ed25519.PrivateKey).Public().(ed25519.PublicKey),
+	)
 
 	endpoint, err := iasEndpointFromFlags()
 	if err != nil {

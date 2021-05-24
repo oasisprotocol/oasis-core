@@ -1,9 +1,11 @@
 package oasis
 
 import (
+	"crypto/ed25519"
 	"encoding/hex"
 	"fmt"
 
+	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	tlsCert "github.com/oasisprotocol/oasis-core/go/common/crypto/tls"
 	iasProxyApi "github.com/oasisprotocol/oasis-core/go/ias/proxy"
 	iasCmd "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/ias"
@@ -17,11 +19,8 @@ type iasProxy struct {
 	mock        bool
 	useRegistry bool
 	grpcPort    uint16
-}
 
-func (ias *iasProxy) tlsCertPath() string {
-	tlsCertPath, _ := iasCmd.TLSCertPaths(ias.dir.String())
-	return tlsCertPath
+	tlsPublicKey signature.PublicKey
 }
 
 func (ias *iasProxy) AddArgs(args *argBuilder) error {
@@ -71,18 +70,25 @@ func (net *Network) newIASProxy() (*iasProxy, error) {
 	// Pre-provision the IAS TLS certificates as they are used by other nodes
 	// during startup.
 	tlsCertPath, tlsKeyPath := iasCmd.TLSCertPaths(host.dir.String())
-	if _, err = tlsCert.LoadOrGenerate(tlsCertPath, tlsKeyPath, iasProxyApi.CommonName); err != nil {
+	iasCert, err := tlsCert.LoadOrGenerate(tlsCertPath, tlsKeyPath, iasProxyApi.CommonName)
+	if err != nil {
 		net.logger.Error("failed to generate IAS proxy TLS cert",
 			"err", err,
 		)
 		return nil, fmt.Errorf("oasis/ias: failed to generate IAS proxy TLS cert: %w", err)
 	}
+	tlsPublicKey := iasCert.PrivateKey.(ed25519.PrivateKey).Public().(ed25519.PublicKey)
 
 	net.iasProxy = &iasProxy{
 		Node:        host,
 		useRegistry: net.cfg.IAS.UseRegistry,
 		mock:        net.cfg.IAS.Mock,
 		grpcPort:    host.getProvisionedPort("iasgrpc"),
+	}
+
+	// Store TLS public key so other nodes can configure authentication.
+	if err = net.iasProxy.tlsPublicKey.UnmarshalBinary(tlsPublicKey[:]); err != nil {
+		return nil, fmt.Errorf("oasis/ias: failed to unmarshal IAS proxy TLS public key: %w", err)
 	}
 
 	host.features = append(host.features, net.iasProxy)

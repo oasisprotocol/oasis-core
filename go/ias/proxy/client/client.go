@@ -4,12 +4,14 @@ package client
 import (
 	"context"
 	"crypto/tls"
-	"crypto/x509"
-	"errors"
+	"fmt"
+	"strings"
 
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/resolver"
+	"google.golang.org/grpc/resolver/manual"
 
-	tlsCert "github.com/oasisprotocol/oasis-core/go/common/crypto/tls"
+	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	cmnGrpc "github.com/oasisprotocol/oasis-core/go/common/grpc"
 	"github.com/oasisprotocol/oasis-core/go/common/identity"
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
@@ -88,52 +90,61 @@ func (c *proxyClient) Cleanup() {
 }
 
 // New creates a new IAS proxy client endpoint.
-func New(identity *identity.Identity, proxyAddr, tlsCertFile string) (api.Endpoint, error) {
+func New(identity *identity.Identity, addresses []string) (api.Endpoint, error) {
 	c := &proxyClient{
 		identity: identity,
 		logger:   logging.GetLogger("ias/proxyclient"),
 	}
 
-	if proxyAddr == "" {
+	if len(addresses) == 0 {
 		c.logger.Warn("IAS proxy is not configured, all reports will be mocked")
 
 		c.spidInfo = &api.SPIDInfo{}
 		_ = c.spidInfo.SPID.UnmarshalBinary(make([]byte, ias.SPIDSize))
 	} else {
-		if tlsCertFile == "" {
-			c.logger.Error("IAS proxy TLS certificate not configured")
-			return nil, errors.New("ias: proxy TLS certificate not configured")
-		}
+		var resolverState resolver.State
+		pubKeys := make(map[signature.PublicKey]bool)
+		for _, addr := range addresses {
+			spl := strings.Split(addr, "@")
+			if len(spl) != 2 {
+				return nil, fmt.Errorf("missing public key in address '%s'", addr)
+			}
 
-		proxyCert, err := tlsCert.LoadCertificate(tlsCertFile)
-		if err != nil {
-			return nil, err
-		}
+			var pk signature.PublicKey
+			if err := pk.UnmarshalText([]byte(spl[0])); err != nil {
+				return nil, fmt.Errorf("malformed public key in address '%s': %w", addr, err)
+			}
 
-		parsedCert, err := x509.ParseCertificate(proxyCert.Certificate[0])
-		if err != nil {
-			return nil, err
+			pubKeys[pk] = true
+			resolverState.Addresses = append(resolverState.Addresses, resolver.Address{Addr: spl[1]})
 		}
 
 		creds, err := cmnGrpc.NewClientCreds(&cmnGrpc.ClientOptions{
-			GetServerPubKeys: cmnGrpc.ServerPubKeysGetterFromCertificate(parsedCert),
-			CommonName:       proxy.CommonName,
+			ServerPubKeys: pubKeys,
+			CommonName:    proxy.CommonName,
 			GetClientCertificate: func(cri *tls.CertificateRequestInfo) (*tls.Certificate, error) {
 				return identity.GetTLSCertificate(), nil
 			},
 		})
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("failed to create client credentials: %w", err)
 		}
 
+		manualResolver := manual.NewBuilderWithScheme("oasis-core-resolver")
 		conn, err := cmnGrpc.Dial(
-			proxyAddr,
+			"oasis-core-resolver:///",
 			grpc.WithTransportCredentials(creds),
+			// https://github.com/grpc/grpc-go/issues/3003
+			grpc.WithDefaultServiceConfig(`{"loadBalancingPolicy":"round_robin"}`),
 			grpc.WithDefaultCallOptions(grpc.WaitForReady(true)),
+			grpc.WithResolvers(manualResolver),
 		)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("failed to dial IAS proxy: %w", err)
 		}
+
+		manualResolver.UpdateState(resolverState)
+
 		c.conn = conn
 		c.endpoint = api.NewEndpointClient(conn)
 	}

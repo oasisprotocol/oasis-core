@@ -645,8 +645,7 @@ func (args *argBuilder) appendEntity(ent *Entity) *argBuilder {
 func (args *argBuilder) appendIASProxy(iasProxy *iasProxy) *argBuilder {
 	if iasProxy != nil {
 		args.vec = append(args.vec, []Argument{
-			{ias.CfgProxyAddress, []string{"127.0.0.1:" + strconv.Itoa(int(iasProxy.grpcPort))}, false},
-			{ias.CfgTLSCertFile, []string{iasProxy.tlsCertPath()}, false},
+			{ias.CfgProxyAddress, []string{fmt.Sprintf("%s@127.0.0.1:%d", iasProxy.tlsPublicKey, iasProxy.grpcPort)}, false},
 			{Name: ias.CfgAllowDebugEnclaves},
 		}...)
 		if iasProxy.mock {

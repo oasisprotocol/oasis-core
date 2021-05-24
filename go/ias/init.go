@@ -14,8 +14,7 @@ import (
 )
 
 const (
-	CfgProxyAddress       = "ias.proxy_addr"
-	CfgTLSCertFile        = "ias.tls"
+	CfgProxyAddress       = "ias.proxy.address"
 	CfgDebugSkipVerify    = "ias.debug.skip_verify"
 	CfgAllowDebugEnclaves = "ias.debug.allow_debug_enclaves"
 )
@@ -41,14 +40,12 @@ func New(identity *identity.Identity) (api.Endpoint, error) {
 
 	return client.New(
 		identity,
-		viper.GetString(CfgProxyAddress),
-		viper.GetString(CfgTLSCertFile),
+		viper.GetStringSlice(CfgProxyAddress),
 	)
 }
 
 func init() {
-	Flags.String(CfgProxyAddress, "", "IAS proxy address")
-	Flags.String(CfgTLSCertFile, "", "IAS proxy TLS certificate")
+	Flags.StringSlice(CfgProxyAddress, []string{}, "IAS proxy address of the form ID@HOST:PORT")
 	Flags.Bool(CfgDebugSkipVerify, false, "skip IAS AVR signature verification (UNSAFE)")
 	Flags.Bool(CfgAllowDebugEnclaves, false, "allow enclaves compiled in debug mode (UNSAFE)")
 
