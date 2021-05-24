@@ -68,6 +68,10 @@ func main() {
 			"network want title crash employ twelve elegant unlock arrow marriage cat april",
 			"grape weapon help home entire invest warfare curious advance immense group vintage",
 			"vibrant length learn peanut garlic boil battle jeans fan cliff alone round setup dove shoe twist dumb trophy imitate coil team grocery when else",
+			// Trust Wallet Core's test mnemonic:
+			// https://github.com/trustwallet/wallet-core/blob/219b85286b6d042f9306402acefd33c08b2b3b66/android/app/src/androidTest/java/com/trustwallet/core/app/blockchains/CoinAddressDerivationTests.kt#L18,
+			// https://github.com/trustwallet/wallet-core/blob/219b85286b6d042f9306402acefd33c08b2b3b66/swift/Tests/CoinAddressDerivationTests.swift#L13.
+			"shoot island position soft burden budget tooth cruel issue economy destroy above",
 		}...)
 	}
 
