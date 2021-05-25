@@ -590,6 +590,9 @@ func (net *Network) startOasisNode(
 	node.Lock()
 	defer node.Unlock()
 
+	// Make a deep copy as we will be modifying the arguments.
+	initialExtraArgs := extraArgs.clone()
+
 	baseArgs := []string{
 		"--" + cmdCommon.CfgDataDir, node.dir.String(),
 		"--log.level", "debug",
@@ -667,7 +670,7 @@ func (net *Network) startOasisNode(
 			if errors.As(err, &exitErr) && exitErr.ExitCode() == crash.CrashDefaultExitCode {
 				// Termination due to crasher. Restart node.
 				net.logger.Info("Node debug crash point triggered. Restarting...", "node", node.Name)
-				if err = net.startOasisNode(node, subCmd, extraArgs); err != nil {
+				if err = net.startOasisNode(node, subCmd, initialExtraArgs); err != nil {
 					net.errCh <- fmt.Errorf("oasis: %s failed restarting node after crash point: %w", node.Name, err)
 				}
 				return
