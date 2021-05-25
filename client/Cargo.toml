@@ -16,7 +16,7 @@ tokio = { version = "1", features = ["rt", "sync"] }
 io-context = "0.2.0"
 
 [target.'cfg(not(target_env = "sgx"))'.dependencies]
-grpcio = "0.8.2"
+grpcio = "0.9.0"
 rustracing = "0.5.1"
 rustracing_jaeger = "0.6.1"
 tokio-stream = { version = "0.1.6", features = ["sync"] }

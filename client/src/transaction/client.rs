@@ -2,7 +2,7 @@
 use std::time::Duration;
 
 use futures::prelude::*;
-use grpcio::{Channel, Error::RpcFailure, RpcStatus, RpcStatusCode};
+use grpcio::{Channel, Error::RpcFailure, RpcStatusCode};
 use rustracing::{sampler::AllSampler, tag};
 use rustracing_jaeger::{span::Span, Tracer};
 use serde::{de::DeserializeOwned, Serialize};
@@ -170,10 +170,7 @@ impl TxnClient {
             .await;
 
         match rsp {
-            Err(RpcFailure(RpcStatus {
-                status: RpcStatusCode::NOT_FOUND,
-                ..
-            })) => Ok(None),
+            Err(RpcFailure(s)) if s.code() == RpcStatusCode::NOT_FOUND => Ok(None),
             Err(err) => Err(TxnClientError::CallFailed(format!("{}", err))),
             Ok(rsp) => Ok(Some(BlockSnapshot::new(storage_client, rsp))),
         }
@@ -200,10 +197,7 @@ impl TxnClient {
             .await;
 
         match rsp {
-            Err(RpcFailure(RpcStatus {
-                status: RpcStatusCode::NOT_FOUND,
-                ..
-            })) => Ok(None),
+            Err(RpcFailure(s)) if s.code() == RpcStatusCode::NOT_FOUND => Ok(None),
             Err(err) => Err(TxnClientError::CallFailed(format!("{}", err))),
             Ok(rsp) => Ok(Some(
                 TransactionSnapshot::new(storage_client, rsp.block, index, rsp.input, rsp.output)
@@ -233,10 +227,7 @@ impl TxnClient {
             .await;
 
         match rsp {
-            Err(RpcFailure(RpcStatus {
-                status: RpcStatusCode::NOT_FOUND,
-                ..
-            })) => Ok(None),
+            Err(RpcFailure(s)) if s.code() == RpcStatusCode::NOT_FOUND => Ok(None),
             Err(err) => Err(TxnClientError::CallFailed(format!("{}", err))),
             Ok(rsp) => Ok(Some(
                 TransactionSnapshot::new(storage_client, rsp.block, index, rsp.input, rsp.output)
@@ -281,10 +272,7 @@ impl TxnClient {
             .await;
 
         match rsp {
-            Err(RpcFailure(RpcStatus {
-                status: RpcStatusCode::NOT_FOUND,
-                ..
-            })) => Ok(None),
+            Err(RpcFailure(s)) if s.code() == RpcStatusCode::NOT_FOUND => Ok(None),
             Err(err) => Err(TxnClientError::CallFailed(format!("{}", err))),
             Ok(rsp) => Ok(Some(BlockSnapshot::new(storage_client, rsp))),
         }
@@ -315,10 +303,7 @@ impl TxnClient {
             .await;
 
         match rsp {
-            Err(RpcFailure(RpcStatus {
-                status: RpcStatusCode::NOT_FOUND,
-                ..
-            })) => Ok(None),
+            Err(RpcFailure(s)) if s.code() == RpcStatusCode::NOT_FOUND => Ok(None),
             Err(err) => Err(TxnClientError::CallFailed(format!("{}", err))),
             Ok(rsp) => Ok(Some(
                 TransactionSnapshot::new(
