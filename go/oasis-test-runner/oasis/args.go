@@ -60,6 +60,16 @@ type argBuilder struct {
 	dontBlameOasis bool
 }
 
+func (args *argBuilder) clone() *argBuilder {
+	vec := make([]Argument, len(args.vec))
+	copy(vec[:], args.vec)
+
+	return &argBuilder{
+		vec:            vec,
+		dontBlameOasis: args.dontBlameOasis,
+	}
+}
+
 func (args *argBuilder) internalSocketAddress(path string) *argBuilder {
 	args.vec = append(args.vec, Argument{
 		Name:   grpc.CfgAddress,
