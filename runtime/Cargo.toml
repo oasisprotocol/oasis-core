@@ -39,7 +39,7 @@ io-context = "0.2.0"
 curve25519-dalek = "3.0.0"
 x25519-dalek = "1.1.0"
 ed25519-dalek = "1.0.1"
-deoxysii = { git = "https://github.com/oasisprotocol/deoxysii-rust" }
+deoxysii = "0.2.2"
 tiny-keccak = { version = "2.0.2", features = ["sha3"] }
 sp800-185 = "0.2.0"
 zeroize = "1.3"
@@ -55,7 +55,7 @@ impl-trait-for-tuples = "0.2.1"
 
 [dev-dependencies]
 # For storage interoperability tests only.
-grpcio = "0.8.2"
+grpcio = "0.9.0"
 tempfile = "3.2.0"
 
 [[bin]]
