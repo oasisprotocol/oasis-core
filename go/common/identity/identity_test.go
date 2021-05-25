@@ -57,5 +57,7 @@ func TestLoadOrGenerate(t *testing.T) {
 	require.Equal(t, identity3.GetTLSSigner(), identity4.GetTLSSigner())
 	require.NotEqual(t, identity.GetTLSCertificate(), identity3.GetTLSCertificate())
 	require.NotEqual(t, identity2.GetTLSCertificate(), identity3.GetTLSCertificate())
-	require.Equal(t, identity3.GetTLSCertificate(), identity4.GetTLSCertificate())
+	// Private key for identity4 must be the same, but the certificate might be regenerated
+	// and different if the wall clock minute changed.
+	require.Equal(t, identity3.GetTLSCertificate().PrivateKey, identity4.GetTLSCertificate().PrivateKey)
 }
