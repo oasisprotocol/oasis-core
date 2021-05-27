@@ -24,7 +24,7 @@ sgx-isa = { version = "0.3.3", features = ["sgxstd"] }
 webpki = "0.21.2"
 untrusted = "0.7.0"
 bincode = "1.3.3"
-snow = { version = "0.7.2", default-features = false, features = ["ring-accelerated"] }
+snow = { version = "0.8.0", default-features = false, features = ["ring-accelerated"] }
 percent-encoding = "2.1.0"
 pem = "0.8.3"
 chrono = "0.4.19"
