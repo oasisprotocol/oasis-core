@@ -60,7 +60,7 @@ func (app *rootHashApplication) processRuntimeMessages(
 			err = roothash.ErrInvalidArgument
 		}
 
-		module, code := errors.Code(err)
+		module, code, _ := errors.Code(err)
 		evV := ValueMessage{
 			ID: rtState.Runtime.ID,
 			Event: roothash.MessageEvent{
