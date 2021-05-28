@@ -474,12 +474,7 @@ func (t *fullService) SubmitTx(ctx context.Context, tx *transaction.SignedTransa
 		return v
 	case v := <-txSub.Out():
 		if result := v.Data().(tmtypes.EventDataTx).Result; !result.IsOK() {
-			err := errors.FromCode(result.GetCodespace(), result.GetCode())
-			if err == nil {
-				// Fallback to an ordinary error.
-				err = fmt.Errorf(result.GetLog())
-			}
-			return err
+			return errors.FromCode(result.GetCodespace(), result.GetCode(), result.GetLog())
 		}
 		return nil
 	case <-txSub.Cancelled():
@@ -511,12 +506,7 @@ func (t *fullService) broadcastTxRaw(data []byte) error {
 
 	rsp := <-ch
 	if result := rsp.GetCheckTx(); !result.IsOK() {
-		err := errors.FromCode(result.GetCodespace(), result.GetCode())
-		if err == nil {
-			// Fallback to an ordinary error.
-			err = fmt.Errorf(result.GetLog())
-		}
-		return err
+		return errors.FromCode(result.GetCodespace(), result.GetCode(), result.GetLog())
 	}
 
 	return nil

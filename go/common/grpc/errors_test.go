@@ -25,6 +25,7 @@ type ErrorTestResponse struct {
 
 type ErrorTestService interface {
 	ErrorTest(context.Context, *ErrorTestRequest) (*ErrorTestResponse, error)
+	ErrorTestWithContext(context.Context, *ErrorTestRequest) (*ErrorTestResponse, error)
 	ErrorStatusTest(context.Context, *ErrorTestRequest) (*ErrorTestResponse, error)
 }
 
@@ -33,6 +34,10 @@ type errorTestServer struct {
 
 func (s *errorTestServer) ErrorTest(ctx context.Context, req *ErrorTestRequest) (*ErrorTestResponse, error) {
 	return &ErrorTestResponse{}, errTest
+}
+
+func (s *errorTestServer) ErrorTestWithContext(ctx context.Context, req *ErrorTestRequest) (*ErrorTestResponse, error) {
+	return &ErrorTestResponse{}, errors.WithContext(errTest, "my test context")
 }
 
 func (s *errorTestServer) ErrorStatusTest(ctx context.Context, req *ErrorTestRequest) (*ErrorTestResponse, error) {
@@ -46,6 +51,15 @@ type errorTestClient struct {
 func (c *errorTestClient) ErrorTest(ctx context.Context, req *ErrorTestRequest) (*ErrorTestResponse, error) {
 	rsp := new(ErrorTestResponse)
 	err := c.cc.Invoke(ctx, "/ErrorTestService/ErrorTest", req, rsp)
+	if err != nil {
+		return nil, err
+	}
+	return rsp, nil
+}
+
+func (c *errorTestClient) ErrorTestWithContext(ctx context.Context, req *ErrorTestRequest) (*ErrorTestResponse, error) {
+	rsp := new(ErrorTestResponse)
+	err := c.cc.Invoke(ctx, "/ErrorTestService/ErrorTestWithContext", req, rsp)
 	if err != nil {
 		return nil, err
 	}
@@ -68,6 +82,10 @@ var errorTestServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ErrorTest",
 			Handler:    handlerErrorTest,
+		},
+		{
+			MethodName: "ErrorTestWithContext",
+			Handler:    handlerErrorTestWithContext,
 		},
 		{
 			MethodName: "ErrorStatusTest",
@@ -96,6 +114,29 @@ func handlerErrorTest( // nolint: golint
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(ErrorTestService).ErrorTest(ctx, req.(*ErrorTestRequest))
+	}
+	return interceptor(ctx, req, info, handler)
+}
+
+func handlerErrorTestWithContext( // nolint: golint
+	srv interface{},
+	ctx context.Context,
+	dec func(interface{}) error,
+	interceptor grpc.UnaryServerInterceptor,
+) (interface{}, error) {
+	req := new(ErrorTestRequest)
+	if err := dec(req); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ErrorTestService).ErrorTest(ctx, req)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/ErrorTestService/ErrorTestWithContext",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ErrorTestService).ErrorTestWithContext(ctx, req.(*ErrorTestRequest))
 	}
 	return interceptor(ctx, req, info, handler)
 }
@@ -153,6 +194,12 @@ func TestErrorMapping(t *testing.T) {
 	_, err = client.ErrorTest(context.Background(), &ErrorTestRequest{})
 	require.Error(err, "ErrorTest should return an error")
 	require.Equal(err, errTest, "errors should be properly mapped")
+
+	_, err = client.ErrorTestWithContext(context.Background(), &ErrorTestRequest{})
+	require.Error(err, "ErrorTestWithContext should return an error")
+	require.True(errors.Is(err, errTest), "errors should be properly mapped")
+	require.Equal(err.Error(), "just testing errors: my test context")
+	require.Equal(errors.Context(err), "my test context")
 
 	_, err = client.ErrorStatusTest(context.Background(), &ErrorTestRequest{})
 	require.Error(err, "ErrorStatusTest should return an error")

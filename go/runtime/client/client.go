@@ -3,7 +3,6 @@ package client
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"sync"
 
@@ -12,6 +11,7 @@ import (
 
 	"github.com/oasisprotocol/oasis-core/go/common"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
+	"github.com/oasisprotocol/oasis-core/go/common/errors"
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
 	"github.com/oasisprotocol/oasis-core/go/common/pubsub"
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
@@ -200,7 +200,7 @@ func (c *runtimeClient) CheckTx(ctx context.Context, request *api.CheckTxRequest
 	case err == nil:
 		return nil
 	case errors.Is(err, host.ErrCheckTxFailed):
-		return fmt.Errorf("%w: %s", api.ErrCheckTxFailed, err)
+		return errors.WithContext(api.ErrCheckTxFailed, errors.Context(err))
 	default:
 		return fmt.Errorf("client: local transaction check failed: %w", err)
 	}

@@ -2,11 +2,11 @@ package host
 
 import (
 	"context"
-	"errors"
 	"fmt"
 
 	beacon "github.com/oasisprotocol/oasis-core/go/beacon/api"
 	"github.com/oasisprotocol/oasis-core/go/common/cbor"
+	"github.com/oasisprotocol/oasis-core/go/common/errors"
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
 	"github.com/oasisprotocol/oasis-core/go/roothash/api/block"
 	"github.com/oasisprotocol/oasis-core/go/runtime/host/protocol"
@@ -15,11 +15,11 @@ import (
 
 var (
 	// ErrInvalidArgument is the error returned when any of the passed method arguments is invalid.
-	ErrInvalidArgument = errors.New("runtime: invalid argument")
+	ErrInvalidArgument = fmt.Errorf("runtime: invalid argument")
 	// ErrCheckTxFailed is the error returned when a transaction is rejected by the runtime.
-	ErrCheckTxFailed = errors.New("runtime: check tx failed")
+	ErrCheckTxFailed = fmt.Errorf("runtime: check tx failed")
 	// ErrInternal is the error returned when an unspecified internal error occurs.
-	ErrInternal = errors.New("runtime: internal error")
+	ErrInternal = fmt.Errorf("runtime: internal error")
 )
 
 // RichRuntime provides higher-level functions for talking with a runtime.
@@ -72,17 +72,17 @@ func (r *richRuntime) CheckTx(
 	})
 	switch {
 	case err != nil:
-		return nil, fmt.Errorf("%w: %s", ErrInternal, err)
+		return nil, errors.WithContext(ErrInternal, err.Error())
 	case resp.RuntimeCheckTxBatchResponse == nil:
-		return nil, fmt.Errorf("%w: malformed runtime response", ErrInternal)
+		return nil, errors.WithContext(ErrInternal, "malformed runtime response")
 	case len(resp.RuntimeCheckTxBatchResponse.Results) != 1:
-		return nil, fmt.Errorf("%w: malformed runtime response: incorrect number of results", ErrInternal)
+		return nil, errors.WithContext(ErrInternal, "malformed runtime response: incorrect number of results")
 	}
 
 	// Interpret CheckTx result.
 	result := resp.RuntimeCheckTxBatchResponse.Results[0]
 	if !result.IsSuccess() {
-		return nil, fmt.Errorf("%w: %s", ErrCheckTxFailed, result.Error)
+		return nil, errors.WithContext(ErrCheckTxFailed, result.Error.String())
 	}
 
 	return result.ToCheckedTransaction(tx), nil
@@ -114,7 +114,7 @@ func (r *richRuntime) Query(
 	case err != nil:
 		return nil, err
 	case resp.RuntimeQueryResponse == nil:
-		return nil, fmt.Errorf("%w: malformed runtime response", ErrInternal)
+		return nil, errors.WithContext(ErrInternal, "malformed runtime response")
 	}
 	return resp.RuntimeQueryResponse.Data, nil
 }

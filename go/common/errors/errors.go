@@ -37,6 +37,44 @@ func (e *codedError) Error() string {
 	return e.msg
 }
 
+type codedErrorWithContext struct {
+	err     error
+	context string
+}
+
+func (e *codedErrorWithContext) Error() string {
+	return fmt.Sprintf("%v: %s", e.err, e.context)
+}
+
+func (e *codedErrorWithContext) Unwrap() error {
+	return e.err
+}
+
+// WithContext creates a wrapped error that provides additional context.
+func WithContext(err error, context string) error {
+	if len(context) == 0 {
+		return err
+	}
+
+	return &codedErrorWithContext{
+		err:     err,
+		context: context,
+	}
+}
+
+// Context returns the additional context associated with the error.
+func Context(err error) string {
+	if err == nil {
+		return ""
+	}
+
+	var cec *codedErrorWithContext
+	if As(err, &cec) {
+		return cec.context
+	}
+	return ""
+}
+
 // New creates a new error.
 //
 // Module and code pair must be unique. If they are not, this method
@@ -66,14 +104,15 @@ func New(module string, code uint32, msg string) error {
 // FromCode reconstructs a previously registered error from module
 // and code.
 //
-// In case an error cannot be resolved, this method returns nil.
-func FromCode(module string, code uint32) error {
+// In case an error cannot be resolved, this method returns a new
+// error with its message equal to the passed context string.
+func FromCode(module string, code uint32, context string) error {
 	err, exists := registeredErrors.Load(errorKey(module, code))
 	if !exists || err == errUnknownError {
-		return nil
+		return errors.New(context)
 	}
 
-	return err.(*codedError)
+	return WithContext(err.(*codedError), context)
 }
 
 // Code returns the module and code for the given error.
@@ -83,17 +122,28 @@ func FromCode(module string, code uint32) error {
 //
 // In case the error is nil, an empty module name and CodeNoError
 // are returned.
-func Code(err error) (string, uint32) {
+func Code(err error) (string, uint32, string) {
 	if err == nil {
-		return "", CodeNoError
+		return "", CodeNoError, ""
+	}
+
+	// First try to see if there is a context attached.
+	var (
+		cec     *codedErrorWithContext
+		context string
+	)
+	if As(err, &cec) {
+		context = cec.context
+		err = cec.err
 	}
 
 	var ce *codedError
 	if !As(err, &ce) {
 		ce = errUnknownError.(*codedError)
+		context = err.Error()
 	}
 
-	return ce.module, ce.code
+	return ce.module, ce.code, context
 }
 
 func errorKey(module string, code uint32) string {

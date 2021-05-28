@@ -270,10 +270,7 @@ func (c *connection) call(ctx context.Context, body *Body) (result *Body, err er
 
 		if resp.Error != nil {
 			// Decode error.
-			err = errors.FromCode(resp.Error.Module, resp.Error.Code)
-			if err == nil {
-				err = fmt.Errorf("%s", resp.Error.Message)
-			}
+			err = errors.FromCode(resp.Error.Module, resp.Error.Code, resp.Error.Message)
 			return nil, err
 		}
 
@@ -361,12 +358,12 @@ func (c *connection) workerOutgoing() {
 }
 
 func errorToBody(err error) *Body {
-	module, code := errors.Code(err)
+	module, code, context := errors.Code(err)
 	return &Body{
 		Error: &Error{
 			Module:  module,
 			Code:    code,
-			Message: err.Error(),
+			Message: context,
 		},
 	}
 }
