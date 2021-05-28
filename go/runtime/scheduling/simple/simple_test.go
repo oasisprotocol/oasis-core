@@ -5,30 +5,29 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
-	"github.com/oasisprotocol/oasis-core/go/runtime/scheduling/simple/txpool/orderedmap"
+	"github.com/oasisprotocol/oasis-core/go/runtime/scheduling/simple/txpool/priorityqueue"
 	"github.com/oasisprotocol/oasis-core/go/runtime/scheduling/tests"
+	"github.com/oasisprotocol/oasis-core/go/runtime/transaction"
 )
 
-func TestSimpleScheduler(t *testing.T) {
-	params := registry.TxnSchedulerParameters{
-		Algorithm:         Name,
-		MaxBatchSize:      10,
-		MaxBatchSizeBytes: 16 * 1024 * 1024,
+func TestSimpleSchedulerPriorityQueue(t *testing.T) {
+	weightLimits := map[string]uint64{
+		transaction.WeightCount:     10,
+		transaction.WeightSizeBytes: 16 * 1024 * 1024,
 	}
-	algo, err := New(orderedmap.Name, 100, params)
-	require.NoError(t, err, "New()")
 
+	algo, err := New(priorityqueue.Name, 100, Name, weightLimits)
+	require.NoError(t, err, "New()")
 	tests.SchedulerImplementationTests(t, algo)
 }
 
-func BenchmarkSimpleSchedulerOrderedMap(b *testing.B) {
-	params := registry.TxnSchedulerParameters{
-		Algorithm:         Name,
-		MaxBatchSize:      100,
-		MaxBatchSizeBytes: 16 * 1024 * 1024,
+func BenchmarkSimpleSchedulerPriorityQueue(b *testing.B) {
+	weightLimits := map[string]uint64{
+		transaction.WeightCount:     1000,
+		transaction.WeightSizeBytes: 16 * 1024 * 1024,
 	}
-	algo, err := New(orderedmap.Name, 1000000, params)
+
+	algo, err := New(priorityqueue.Name, 1000000, Name, weightLimits)
 	require.NoError(b, err, "New()")
 	tests.SchedulerImplementationBenchmarks(b, algo)
 }

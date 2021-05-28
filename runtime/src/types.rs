@@ -1,4 +1,6 @@
 //! Types used by the worker-host protocol.
+use std::collections::BTreeMap;
+
 use serde::{self, Deserialize, Deserializer, Serialize, Serializer};
 use serde_bytes;
 use serde_repr::*;
@@ -228,7 +230,29 @@ pub struct CheckTxResult {
     pub error: Error,
 
     #[serde(rename = "meta")]
-    pub meta: Option<cbor::Value>,
+    pub meta: Option<CheckTxMetadata>,
+}
+
+/// CheckTx transaction metadata.
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+pub struct CheckTxMetadata {
+    #[serde(skip_serializing_if = "num_traits::Zero::is_zero")]
+    #[serde(default)]
+    pub priority: u64,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(default)]
+    pub weights: Option<BTreeMap<CheckTxWeight, u64>>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
+#[serde(untagged)]
+pub enum CheckTxWeight {
+    /// Consensus messages weight key.
+    #[serde(rename = "consensus_messages")]
+    ConsensusMessages,
+    /// Runtime specific weight key.
+    Custom(String),
 }
 
 #[derive(Clone, Copy, Debug)]

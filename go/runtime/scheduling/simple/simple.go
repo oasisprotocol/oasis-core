@@ -9,7 +9,8 @@ import (
 	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
 	"github.com/oasisprotocol/oasis-core/go/runtime/scheduling/api"
 	txpool "github.com/oasisprotocol/oasis-core/go/runtime/scheduling/simple/txpool/api"
-	"github.com/oasisprotocol/oasis-core/go/runtime/scheduling/simple/txpool/orderedmap"
+	"github.com/oasisprotocol/oasis-core/go/runtime/scheduling/simple/txpool/priorityqueue"
+	"github.com/oasisprotocol/oasis-core/go/runtime/transaction"
 )
 
 const (
@@ -24,7 +25,7 @@ type scheduler struct {
 	maxTxPoolSize uint64
 }
 
-func (s *scheduler) QueueTx(tx []byte) error {
+func (s *scheduler) QueueTx(tx *transaction.CheckedTransaction) error {
 	switch err := s.txPool.Add(tx); err {
 	case nil:
 		return nil
@@ -40,23 +41,11 @@ func (s *scheduler) QueueTx(tx []byte) error {
 	}
 }
 
-// AppendTxBatch appends a batch of transactions.
-//
-// Transactions that fail checks are skipped, not affecting the insertion of
-// other transactions. If any transaction fails a check a non-nil error is
-// returned.
-// Aditionally this method does not try to schedule the transactions after the
-// insert is finished, and is as such suited for reinserting transactions after
-// a failed batch scheduling/processing.
-func (s *scheduler) AppendTxBatch(batch [][]byte) error {
-	return s.txPool.AddBatch(batch)
-}
-
-func (s *scheduler) RemoveTxBatch(tx [][]byte) error {
+func (s *scheduler) RemoveTxBatch(tx []hash.Hash) error {
 	return s.txPool.RemoveBatch(tx)
 }
 
-func (s *scheduler) GetBatch(force bool) [][]byte {
+func (s *scheduler) GetBatch(force bool) []*transaction.CheckedTransaction {
 	return s.txPool.GetBatch(force)
 }
 
@@ -72,14 +61,14 @@ func (s *scheduler) Clear() {
 	s.txPool.Clear()
 }
 
-func (s *scheduler) UpdateParameters(params registry.TxnSchedulerParameters) error {
-	if params.Algorithm != Name {
-		return fmt.Errorf("unexpected transaction scheduling algorithm: %s", params.Algorithm)
+func (s *scheduler) UpdateParameters(algo string, weightLimits map[string]uint64) error {
+	if algo != Name {
+		return fmt.Errorf("unexpected transaction scheduling algorithm: %s", algo)
 	}
+
 	if err := s.txPool.UpdateConfig(txpool.Config{
-		MaxBatchSize:      params.MaxBatchSize,
-		MaxBatchSizeBytes: params.MaxBatchSizeBytes,
-		MaxPoolSize:       s.maxTxPoolSize,
+		MaxPoolSize:  s.maxTxPoolSize,
+		WeightLimits: weightLimits,
 	}); err != nil {
 		return fmt.Errorf("error updating parameters: %w", err)
 	}
@@ -91,20 +80,19 @@ func (s *scheduler) Name() string {
 }
 
 // New creates a new simple scheduler.
-func New(txPoolImpl string, maxTxPoolSize uint64, params registry.TxnSchedulerParameters) (api.Scheduler, error) {
-	if params.Algorithm != Name {
-		return nil, fmt.Errorf("unexpected transaction scheduling algorithm: %s", params.Algorithm)
+func New(txPoolImpl string, maxTxPoolSize uint64, algo string, weightLimits map[string]uint64) (api.Scheduler, error) {
+	if algo != Name {
+		return nil, fmt.Errorf("unexpected transaction scheduling algorithm: %s", algo)
 	}
 
 	poolCfg := txpool.Config{
-		MaxBatchSize:      params.MaxBatchSize,
-		MaxBatchSizeBytes: params.MaxBatchSizeBytes,
-		MaxPoolSize:       maxTxPoolSize,
+		MaxPoolSize:  maxTxPoolSize,
+		WeightLimits: weightLimits,
 	}
 	var pool txpool.TxPool
 	switch txPoolImpl {
-	case orderedmap.Name:
-		pool = orderedmap.New(poolCfg)
+	case priorityqueue.Name:
+		pool = priorityqueue.New(poolCfg)
 	default:
 		return nil, fmt.Errorf("invalid transaction pool: %s", txPoolImpl)
 	}

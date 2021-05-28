@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
+	"github.com/oasisprotocol/oasis-core/go/runtime/transaction"
 	p2pError "github.com/oasisprotocol/oasis-core/go/worker/common/p2p/error"
 )
 
@@ -16,9 +17,9 @@ var (
 
 // Config is a transaction pool configuration.
 type Config struct {
-	MaxPoolSize       uint64
-	MaxBatchSize      uint64
-	MaxBatchSizeBytes uint64
+	MaxPoolSize uint64
+
+	WeightLimits map[string]uint64
 }
 
 // TxPool is the transaction pool interface.
@@ -27,16 +28,13 @@ type TxPool interface {
 	Name() string
 
 	// Add adds a single transaction into the transaction pool.
-	Add(tx []byte) error
-
-	// AddBatch adds a transaction batch into the transaction pool.
-	AddBatch(batch [][]byte) error
+	Add(tx *transaction.CheckedTransaction) error
 
 	// GetBatch gets a transaction batch from the transaction pool.
-	GetBatch(force bool) [][]byte
+	GetBatch(force bool) []*transaction.CheckedTransaction
 
 	// RemoveBatch removes a batch from the transaction pool.
-	RemoveBatch(batch [][]byte) error
+	RemoveBatch(batch []hash.Hash) error
 
 	// IsQueued returns whether a transaction is in the queue already.
 	IsQueued(txHash hash.Hash) bool
@@ -46,9 +44,6 @@ type TxPool interface {
 
 	// UpdateConfig updates the transaction pool config.
 	UpdateConfig(Config) error
-
-	// IsQueue returns true if pool maintains FIFO order of transactions.
-	IsQueue() bool
 
 	// Clear clears the transaction pool.
 	Clear()

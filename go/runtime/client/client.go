@@ -195,7 +195,7 @@ func (c *runtimeClient) CheckTx(ctx context.Context, request *api.CheckTxRequest
 		return fmt.Errorf("client: failed to get current epoch: %w", err)
 	}
 
-	err = rt.CheckTx(ctx, rs.CurrentBlock, lb, epoch, request.Data)
+	_, err = rt.CheckTx(ctx, rs.CurrentBlock, lb, epoch, request.Data)
 	switch {
 	case err == nil:
 		return nil

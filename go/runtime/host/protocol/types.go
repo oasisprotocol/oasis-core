@@ -211,14 +211,34 @@ type CheckTxResult struct {
 	// Error is the error (if any) that resulted from the operation.
 	Error Error `json:"error"`
 
-	// Meta contains optional arbitrary runtime-specific metadata that can be used for scheduling
-	// transactions by the scheduler.
-	Meta cbor.RawMessage `json:"meta,omitempty"`
+	// Meta contains metadata that can be used for scheduling transactions by the scheduler.
+	Meta *CheckTxMetadata `json:"meta,omitempty"`
+}
+
+// CheckTxMetadata is the transaction check-tx metadata.
+type CheckTxMetadata struct {
+	// Priority is the transaction's priority.
+	Priority uint64 `json:"priority,omitempty"`
+
+	// Weight are runtime specific transaction weights.
+	Weights map[string]uint64 `json:"weights,omitempty"`
 }
 
 // IsSuccess returns true if transaction execution was successful.
 func (r *CheckTxResult) IsSuccess() bool {
 	return r.Error.Code == errors.CodeNoError
+}
+
+// ToCheckedTransaction creates CheckedTransaction from CheckTx result.
+//
+// Assumes a successful result.
+func (r *CheckTxResult) ToCheckedTransaction(rawTx []byte) *transaction.CheckedTransaction {
+	switch r.Meta {
+	case nil:
+		return transaction.NewCheckedTransaction(rawTx, 0, nil)
+	default:
+		return transaction.NewCheckedTransaction(rawTx, r.Meta.Priority, r.Meta.Weights)
+	}
 }
 
 // RuntimeCheckTxBatchResponse is a worker check tx batch response message body.

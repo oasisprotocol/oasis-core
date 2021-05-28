@@ -99,7 +99,7 @@ func testQueueTx(
 
 	// Queue a test call.
 	// Include a timestamp so each test invocation uses an unique key.
-	testCall := []byte("hello world at: " + time.Now().String())
+	testCall := transaction.RawCheckedTransaction([]byte("hello world at: " + time.Now().String()))
 	err = rtNode.QueueTx(testCall)
 	require.NoError(t, err, "QueueCall")
 
@@ -135,9 +135,9 @@ blockLoop:
 			txs, err = tree.GetTransactions(ctx)
 			require.NoError(t, err, "GetTransactions")
 			require.Len(t, txs, 1, "there should be one transaction")
-			require.EqualValues(t, testCall, txs[0].Input)
+			require.EqualValues(t, testCall.Raw(), txs[0].Input)
 			// NOTE: Mock host produces output equal to input.
-			require.EqualValues(t, testCall, txs[0].Output)
+			require.EqualValues(t, testCall.Raw(), txs[0].Output)
 
 			// NOTE: Mock host produces an empty state root.
 			var stateRoot hash.Hash

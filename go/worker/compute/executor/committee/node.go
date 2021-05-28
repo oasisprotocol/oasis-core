@@ -138,10 +138,9 @@ type Node struct { // nolint: maligned
 
 	runtimeVersion version.Version
 
-	lastScheduledCache     *lru.Cache
-	scheduleCheckTxEnabled bool
-	scheduleMaxTxPoolSize  uint64
-	scheduleCh             *channels.RingChannel
+	lastScheduledCache    *lru.Cache
+	scheduleMaxTxPoolSize uint64
+	scheduleCh            *channels.RingChannel
 
 	// The scheduler mutex is here to protect the initialization
 	// of the scheduler variable. After initialization the variable
@@ -244,7 +243,7 @@ func (n *Node) HandlePeerMessage(ctx context.Context, message *p2p.Message, isOw
 
 	switch {
 	case message.Tx != nil:
-		tx := message.Tx.Data
+		rawTx := message.Tx.Data
 
 		// Note: if an epoch transition is just about to happen we can be out of
 		// the committee by the time we queue the transaction, but this is fine
@@ -256,17 +255,16 @@ func (n *Node) HandlePeerMessage(ctx context.Context, message *p2p.Message, isOw
 			return true, nil
 		}
 
-		if n.scheduleCheckTxEnabled {
-			// Check transaction before queuing it.
-			if err := n.checkTx(ctx, tx); err != nil {
-				return true, err
-			}
+		// Check transaction before queuing it.
+		tx, err := n.checkTx(ctx, rawTx)
+		if err != nil {
+			return true, err
 		}
 
 		n.logger.Debug("queuing transaction",
 			"transaction", tx,
 		)
-		err := n.QueueTx(tx)
+		err = n.QueueTx(tx)
 		if err != nil {
 			n.logger.Error("unable to queue transaction",
 				"tx", tx,
@@ -582,7 +580,7 @@ func (n *Node) HandleNewBlockLocked(blk *block.Block) {
 }
 
 // checkTx requests the runtime to check the validity of the given transaction.
-func (n *Node) checkTx(ctx context.Context, tx []byte) error {
+func (n *Node) checkTx(ctx context.Context, rawTx []byte) (*transaction.CheckedTransaction, error) {
 	n.commonNode.CrossNode.Lock()
 	currentBlock := n.commonNode.CurrentBlock
 	currentConsensusBlock := n.commonNode.CurrentConsensusBlock
@@ -592,26 +590,26 @@ func (n *Node) checkTx(ctx context.Context, tx []byte) error {
 	rt := n.GetHostedRuntime()
 	if rt == nil {
 		n.logger.Error("CheckTx: hosted runtime not initialized")
-		return errNotReady
+		return nil, errNotReady
 	}
 
-	err := rt.CheckTx(ctx, currentBlock, currentConsensusBlock, currentEpoch, tx)
+	tx, err := rt.CheckTx(ctx, currentBlock, currentConsensusBlock, currentEpoch, rawTx)
 	switch {
 	case err == nil:
 	case errors.Is(err, host.ErrInvalidArgument):
-		return errNotReady
+		return nil, errNotReady
 	case errors.Is(err, host.ErrInternal):
-		return err
+		return nil, err
 	case errors.Is(err, host.ErrCheckTxFailed):
-		return p2pError.Permanent(err)
+		return nil, p2pError.Permanent(err)
 	default:
-		return err
+		return nil, err
 	}
-	return nil
+	return tx, nil
 }
 
 // QueueTx queues a runtime transaction for scheduling.
-func (n *Node) QueueTx(tx []byte) error {
+func (n *Node) QueueTx(tx *transaction.CheckedTransaction) error {
 	n.schedulerMutex.RLock()
 	defer n.schedulerMutex.RUnlock()
 
@@ -619,10 +617,9 @@ func (n *Node) QueueTx(tx []byte) error {
 		return errNotReady
 	}
 
-	txHash := hash.NewFromBytes(tx)
 	// Check if transaction was recently scheduled.
 	if n.lastScheduledCache != nil {
-		if _, b := n.lastScheduledCache.Get(txHash); b {
+		if _, b := n.lastScheduledCache.Get(tx.Hash()); b {
 			return errDuplicateTx
 		}
 	}
@@ -632,7 +629,7 @@ func (n *Node) QueueTx(tx []byte) error {
 	}
 
 	if n.lastScheduledCache != nil {
-		if err := n.lastScheduledCache.Put(txHash, true); err != nil {
+		if err := n.lastScheduledCache.Put(tx.Hash(), true); err != nil {
 			// cache.Put can only error if capacity in bytes is used and the
 			// inserted value is too large. This should never happen in here.
 			n.logger.Error("cache put error",
@@ -649,10 +646,14 @@ func (n *Node) QueueTx(tx []byte) error {
 }
 
 // removeTxBatch removes a batch from scheduling queue.
-func (n *Node) removeTxBatch(batch [][]byte) error {
+func (n *Node) removeTxBatch(batch transaction.RawBatch) error {
+	hashes := make([]hash.Hash, len(batch))
+	for i, b := range batch {
+		hashes[i] = hash.NewFromBytes(b)
+	}
 	// XXX: remove batch can only happen after a batch was already scheduled, meaning
 	// the scheduler already exists and there is no need for the scheduler mutex.
-	if err := n.scheduler.RemoveTxBatch(batch); err != nil {
+	if err := n.scheduler.RemoveTxBatch(hashes); err != nil {
 		return err
 	}
 
@@ -847,13 +848,15 @@ func (n *Node) handleScheduleBatch(force bool) {
 	ioTree := transaction.NewTree(nil, emptyRoot)
 	defer ioTree.Close()
 
+	rawBatch := make(transaction.RawBatch, len(batch))
 	for idx, tx := range batch {
-		if err = ioTree.AddTransaction(roundCtx, transaction.Transaction{Input: tx, BatchOrder: uint32(idx)}, nil); err != nil {
+		if err = ioTree.AddTransaction(roundCtx, transaction.Transaction{Input: tx.Raw(), BatchOrder: uint32(idx)}, nil); err != nil {
 			n.logger.Error("failed to create I/O tree",
 				"err", err,
 			)
 			return
 		}
+		rawBatch[idx] = tx.Raw()
 	}
 
 	ioWriteLog, ioRoot, err := ioTree.Commit(roundCtx)
@@ -949,7 +952,7 @@ func (n *Node) handleScheduleBatch(force bool) {
 	n.handleInternalBatchLocked(
 		batchSpanCtx,
 		ioRoot,
-		batch,
+		rawBatch,
 		signedDispatchMsg.Signature,
 		ioReceiptSignatures,
 	)
@@ -1534,7 +1537,8 @@ func (n *Node) worker() {
 	}
 	scheduler, err := scheduling.New(
 		n.scheduleMaxTxPoolSize,
-		runtime.TxnScheduler,
+		runtime.TxnScheduler.Algorithm,
+		make(map[string]uint64),
 	)
 	if err != nil {
 		n.logger.Error("failed to create new transaction scheduler algorithm",
@@ -1593,7 +1597,14 @@ func (n *Node) worker() {
 			// At that point also update the schedulerMutex usage across the
 			// code, as it will be no longer be true that the scheduler
 			// variable never gets updated.
-			if err = n.scheduler.UpdateParameters(runtime.TxnScheduler); err != nil {
+
+			// Set per round weight limits.
+			weightLimits := map[string]uint64{
+				transaction.WeightConsensusMessages: uint64(runtime.Executor.MaxMessages),
+				transaction.WeightSizeBytes:         runtime.TxnScheduler.MaxBatchSizeBytes,
+				transaction.WeightCount:             runtime.TxnScheduler.MaxBatchSize,
+			}
+			if err = n.scheduler.UpdateParameters(runtime.TxnScheduler.Algorithm, weightLimits); err != nil {
 				n.logger.Error("error updating scheduler parameters",
 					"err", err,
 				)
@@ -1622,7 +1633,6 @@ func NewNode(
 	commonNode *committee.Node,
 	commonCfg commonWorker.Config,
 	roleProvider registration.RoleProvider,
-	scheduleCheckTxEnabled bool,
 	scheduleMaxTxPoolSize uint64,
 	lastScheduledCacheSize uint64,
 ) (*Node, error) {
@@ -1658,24 +1668,23 @@ func NewNode(
 	}
 
 	n := &Node{
-		RuntimeHostNode:        rhn,
-		commonNode:             commonNode,
-		commonCfg:              commonCfg,
-		roleProvider:           roleProvider,
-		scheduleCheckTxEnabled: scheduleCheckTxEnabled,
-		scheduleMaxTxPoolSize:  scheduleMaxTxPoolSize,
-		lastScheduledCache:     cache,
-		scheduleCh:             channels.NewRingChannel(1),
-		storage:                storageMux,
-		ctx:                    ctx,
-		cancelCtx:              cancel,
-		stopCh:                 make(chan struct{}),
-		quitCh:                 make(chan struct{}),
-		initCh:                 make(chan struct{}),
-		state:                  StateNotReady{},
-		stateTransitions:       pubsub.NewBroker(false),
-		reselect:               make(chan struct{}, 1),
-		logger:                 logging.GetLogger("worker/executor/committee").With("runtime_id", commonNode.Runtime.ID()),
+		RuntimeHostNode:       rhn,
+		commonNode:            commonNode,
+		commonCfg:             commonCfg,
+		roleProvider:          roleProvider,
+		scheduleMaxTxPoolSize: scheduleMaxTxPoolSize,
+		lastScheduledCache:    cache,
+		scheduleCh:            channels.NewRingChannel(1),
+		storage:               storageMux,
+		ctx:                   ctx,
+		cancelCtx:             cancel,
+		stopCh:                make(chan struct{}),
+		quitCh:                make(chan struct{}),
+		initCh:                make(chan struct{}),
+		state:                 StateNotReady{},
+		stateTransitions:      pubsub.NewBroker(false),
+		reselect:              make(chan struct{}, 1),
+		logger:                logging.GetLogger("worker/executor/committee").With("runtime_id", commonNode.Runtime.ID()),
 	}
 
 	// Register prune handler.

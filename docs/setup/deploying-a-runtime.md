@@ -276,7 +276,6 @@ oasis-node \
   --genesis.file $GENESIS_JSON \
   --worker.storage.enabled \
   --worker.compute.enabled \
-  --worker.executor.schedule_check_tx.enabled \
   --runtime.provisioner unconfined \
   --runtime.supported $RUNTIME_ID \
   --runtime.history.tag_indexer.backend bleve \
