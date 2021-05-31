@@ -20,7 +20,7 @@ replace (
 require (
 	github.com/blevesearch/bleve v1.0.14
 	github.com/btcsuite/btcutil v1.0.2
-	github.com/cenkalti/backoff/v4 v4.1.0
+	github.com/cenkalti/backoff/v4 v4.1.1
 	github.com/dgraph-io/badger/v2 v2.2007.2
 	github.com/dgraph-io/badger/v3 v3.2011.1
 	github.com/eapache/channels v1.1.0
