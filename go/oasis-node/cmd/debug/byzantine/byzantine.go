@@ -144,7 +144,7 @@ func doStorageScenario(cmd *cobra.Command, args []string) {
 	time.Sleep(120 * time.Second)
 }
 
-func doExecutorScenario(cmd *cobra.Command, args []string) {
+func doExecutorScenario(cmd *cobra.Command, args []string) { //nolint: gocyclo
 	ctx := context.Background()
 
 	var runtimeID common.Namespace
@@ -207,25 +207,44 @@ func doExecutorScenario(cmd *cobra.Command, args []string) {
 	switch executorMode {
 	case ModeExecutorHonest:
 		// Process transaction honestly.
-		if err = cbc.stateTree.Insert(ctx, []byte("hello_key"), []byte("hello_value")); err != nil {
-			panic(fmt.Sprintf("compute state tree set failed: %+v", err))
-		}
-		if err = cbc.addResultSuccess(ctx, cbc.txs[0], nil, transaction.Tags{
-			transaction.Tag{Key: []byte("kv_op"), Value: []byte("insert")},
-			transaction.Tag{Key: []byte("kv_key"), Value: []byte("hello_key")},
-		}); err != nil {
-			panic(fmt.Sprintf("compute add result success failed: %+v", err))
+		switch len(cbc.txs) {
+		case 0:
+			// No transactions, don't modify anything else.
+		case 1:
+			// A single transaction, simulate the key-value runtime.
+			if err = cbc.stateTree.Insert(ctx, []byte("hello_key"), []byte("hello_value")); err != nil {
+				panic(fmt.Sprintf("compute state tree set failed: %+v", err))
+			}
+			if err = cbc.addResultSuccess(ctx, cbc.txs[0], nil, transaction.Tags{
+				transaction.Tag{Key: []byte("kv_op"), Value: []byte("insert")},
+				transaction.Tag{Key: []byte("kv_key"), Value: []byte("hello_key")},
+			}); err != nil {
+				panic(fmt.Sprintf("compute add result success failed: %+v", err))
+			}
+		default:
+			// Unsupported condition.
+			panic(fmt.Sprintf("unsupported number of transactions: %d", len(cbc.txs)))
 		}
 	case ModeExecutorWrong:
-		// Alter the state wrong.
+		// Alter the state incorrectly.
 		if err = cbc.stateTree.Insert(ctx, []byte("hello_key"), []byte("wrong")); err != nil {
 			panic(fmt.Sprintf("compute state tree set failed: %+v", err))
 		}
-		if err = cbc.addResultSuccess(ctx, cbc.txs[0], nil, transaction.Tags{
-			transaction.Tag{Key: []byte("kv_op"), Value: []byte("insert")},
-			transaction.Tag{Key: []byte("kv_key"), Value: []byte("hello_key")},
-		}); err != nil {
-			panic(fmt.Sprintf("compute add result success failed: %+v", err))
+
+		switch len(cbc.txs) {
+		case 0:
+			// No transactions.
+		case 1:
+			// A single transaction.
+			if err = cbc.addResultSuccess(ctx, cbc.txs[0], nil, transaction.Tags{
+				transaction.Tag{Key: []byte("kv_op"), Value: []byte("insert")},
+				transaction.Tag{Key: []byte("kv_key"), Value: []byte("hello_key")},
+			}); err != nil {
+				panic(fmt.Sprintf("compute add result success failed: %+v", err))
+			}
+		default:
+			// Unsupported condition.
+			panic(fmt.Sprintf("unsupported number of transactions: %d", len(cbc.txs)))
 		}
 	case ModeExecutorFailureIndicating:
 		// No need to process anything as we'll submit a failure indicating commitment anyway.
