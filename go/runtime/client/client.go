@@ -339,6 +339,29 @@ func (c *runtimeClient) GetTxs(ctx context.Context, request *api.GetTxsRequest) 
 }
 
 // Implements api.RuntimeClient.
+func (c *runtimeClient) GetTransactions(ctx context.Context, request *api.GetTransactionsRequest) ([][]byte, error) {
+	blk, err := c.GetBlock(ctx, &api.GetBlockRequest{RuntimeID: request.RuntimeID, Round: request.Round})
+	if err != nil {
+		return nil, err
+	}
+
+	tree := c.getTxnTree(blk)
+	defer tree.Close()
+
+	txs, err := tree.GetTransactions(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	inputs := [][]byte{}
+	for _, tx := range txs {
+		inputs = append(inputs, tx.Input)
+	}
+
+	return inputs, nil
+}
+
+// Implements api.RuntimeClient.
 func (c *runtimeClient) GetEvents(ctx context.Context, request *api.GetEventsRequest) ([]*api.Event, error) {
 	blk, err := c.GetBlock(ctx, &api.GetBlockRequest{RuntimeID: request.RuntimeID, Round: request.Round})
 	if err != nil {
