@@ -80,36 +80,38 @@ type serviceClient struct {
 	trackedRuntime map[common.Namespace]*trackedRuntime
 }
 
-func (sc *serviceClient) GetGenesisBlock(ctx context.Context, runtimeID common.Namespace, height int64) (*block.Block, error) {
+// Implements api.Backend.
+func (sc *serviceClient) GetGenesisBlock(ctx context.Context, request *api.RuntimeRequest) (*block.Block, error) {
 	// First check if we have the genesis blocks cached. They are immutable so easy
 	// to cache to avoid repeated requests to the Tendermint app.
 	sc.RLock()
-	if blk := sc.genesisBlocks[runtimeID]; blk != nil {
+	if blk := sc.genesisBlocks[request.RuntimeID]; blk != nil {
 		sc.RUnlock()
 		return blk, nil
 	}
 	sc.RUnlock()
 
-	q, err := sc.querier.QueryAt(ctx, height)
+	q, err := sc.querier.QueryAt(ctx, request.Height)
 	if err != nil {
 		return nil, err
 	}
 
-	blk, err := q.GenesisBlock(ctx, runtimeID)
+	blk, err := q.GenesisBlock(ctx, request.RuntimeID)
 	if err != nil {
 		return nil, err
 	}
 
 	// Update the genesis block cache.
 	sc.Lock()
-	sc.genesisBlocks[runtimeID] = blk
+	sc.genesisBlocks[request.RuntimeID] = blk
 	sc.Unlock()
 
 	return blk, nil
 }
 
-func (sc *serviceClient) GetLatestBlock(ctx context.Context, runtimeID common.Namespace, height int64) (*block.Block, error) {
-	return sc.getLatestBlockAt(ctx, runtimeID, height)
+// Implements api.Backend.
+func (sc *serviceClient) GetLatestBlock(ctx context.Context, request *api.RuntimeRequest) (*block.Block, error) {
+	return sc.getLatestBlockAt(ctx, request.RuntimeID, request.Height)
 }
 
 func (sc *serviceClient) getLatestBlockAt(ctx context.Context, runtimeID common.Namespace, height int64) (*block.Block, error) {
@@ -121,16 +123,18 @@ func (sc *serviceClient) getLatestBlockAt(ctx context.Context, runtimeID common.
 	return q.LatestBlock(ctx, runtimeID)
 }
 
-func (sc *serviceClient) GetRuntimeState(ctx context.Context, runtimeID common.Namespace, height int64) (*api.RuntimeState, error) {
-	q, err := sc.querier.QueryAt(ctx, height)
+// Implements api.Backend.
+func (sc *serviceClient) GetRuntimeState(ctx context.Context, request *api.RuntimeRequest) (*api.RuntimeState, error) {
+	q, err := sc.querier.QueryAt(ctx, request.Height)
 	if err != nil {
 		return nil, err
 	}
 
-	return q.RuntimeState(ctx, runtimeID)
+	return q.RuntimeState(ctx, request.RuntimeID)
 }
 
-func (sc *serviceClient) WatchBlocks(id common.Namespace) (<-chan *api.AnnotatedBlock, *pubsub.Subscription, error) {
+// Implements api.Backend.
+func (sc *serviceClient) WatchBlocks(ctx context.Context, id common.Namespace) (<-chan *api.AnnotatedBlock, pubsub.ClosableSubscription, error) {
 	notifiers := sc.getRuntimeNotifiers(id)
 
 	sub := notifiers.blockNotifier.SubscribeEx(-1, func(ch channels.Channel) {
@@ -186,7 +190,8 @@ func (sc *serviceClient) WatchAllBlocks() (<-chan *block.Block, *pubsub.Subscrip
 	return ch, sub
 }
 
-func (sc *serviceClient) WatchEvents(id common.Namespace) (<-chan *api.Event, *pubsub.Subscription, error) {
+// Implements api.Backend.
+func (sc *serviceClient) WatchEvents(ctx context.Context, id common.Namespace) (<-chan *api.Event, pubsub.ClosableSubscription, error) {
 	notifiers := sc.getRuntimeNotifiers(id)
 	sub := notifiers.eventNotifier.Subscribe()
 	ch := make(chan *api.Event)
@@ -201,6 +206,7 @@ func (sc *serviceClient) WatchEvents(id common.Namespace) (<-chan *api.Event, *p
 	return ch, sub, nil
 }
 
+// Implements api.Backend.
 func (sc *serviceClient) TrackRuntime(ctx context.Context, history api.BlockHistory) error {
 	return sc.trackRuntime(ctx, history.RuntimeID(), history)
 }
@@ -219,6 +225,7 @@ func (sc *serviceClient) trackRuntime(ctx context.Context, id common.Namespace, 
 	return nil
 }
 
+// Implements api.Backend.
 func (sc *serviceClient) StateToGenesis(ctx context.Context, height int64) (*api.Genesis, error) {
 	q, err := sc.querier.QueryAt(ctx, height)
 	if err != nil {
@@ -234,7 +241,10 @@ func (sc *serviceClient) StateToGenesis(ctx context.Context, height int64) (*api
 	//
 	// NOTE: This requires historic lookups.
 	for runtimeID, rt := range g.RuntimeStates {
-		state, err := sc.GetRuntimeState(ctx, runtimeID, height)
+		state, err := sc.GetRuntimeState(ctx, &api.RuntimeRequest{
+			RuntimeID: runtimeID,
+			Height:    height,
+		})
 		if err != nil {
 			return nil, err
 		}
@@ -346,6 +356,7 @@ func (sc *serviceClient) getEvents(ctx context.Context, height int64, txns [][]b
 	return events, nil
 }
 
+// Implements api.Backend.
 func (sc *serviceClient) GetEvents(ctx context.Context, height int64) ([]*api.Event, error) {
 	// Get transactions at given height.
 	txns, err := sc.backend.GetTransactions(ctx, height)
@@ -360,6 +371,7 @@ func (sc *serviceClient) GetEvents(ctx context.Context, height int64) ([]*api.Ev
 	return sc.getEvents(ctx, height, txns)
 }
 
+// Implements api.Backend.
 func (sc *serviceClient) Cleanup() {
 }
 

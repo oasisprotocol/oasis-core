@@ -21,6 +21,7 @@ import (
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
 	ias "github.com/oasisprotocol/oasis-core/go/ias/api"
 	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
+	roothash "github.com/oasisprotocol/oasis-core/go/roothash/api"
 	"github.com/oasisprotocol/oasis-core/go/runtime/history"
 	runtimeHost "github.com/oasisprotocol/oasis-core/go/runtime/host"
 	"github.com/oasisprotocol/oasis-core/go/runtime/localstorage"
@@ -282,7 +283,10 @@ func (r *runtime) stop() {
 }
 
 func (r *runtime) updateActiveDescriptor(ctx context.Context) bool {
-	state, err := r.consensus.RootHash().GetRuntimeState(ctx, r.id, consensus.HeightLatest)
+	state, err := r.consensus.RootHash().GetRuntimeState(ctx, &roothash.RuntimeRequest{
+		RuntimeID: r.id,
+		Height:    consensus.HeightLatest,
+	})
 	if err != nil {
 		r.logger.Error("querying roothash state",
 			"err", err,

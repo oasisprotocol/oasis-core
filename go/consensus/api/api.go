@@ -149,6 +149,9 @@ type ClientBackend interface {
 
 	// Governance returns the governance backend.
 	Governance() governance.Backend
+
+	// RootHash returns the roothash backend.
+	RootHash() roothash.Backend
 }
 
 // Block is a consensus block.
@@ -245,9 +248,6 @@ type ServicesBackend interface {
 
 	// KeyManager returns the keymanager backend.
 	KeyManager() keymanager.Backend
-
-	// RootHash returns the roothash backend.
-	RootHash() roothash.Backend
 }
 
 // TransactionAuthHandler is the interface for handling transaction authentication

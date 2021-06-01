@@ -17,5 +17,8 @@ func roothashExecutorCommit(svc consensus.Backend, id *identity.Identity, runtim
 }
 
 func getRoothashLatestBlock(ctx context.Context, sbc consensus.Backend, runtimeID common.Namespace) (*block.Block, error) {
-	return sbc.RootHash().GetLatestBlock(ctx, runtimeID, consensus.HeightLatest)
+	return sbc.RootHash().GetLatestBlock(ctx, &roothash.RuntimeRequest{
+		RuntimeID: runtimeID,
+		Height:    consensus.HeightLatest,
+	})
 }

@@ -384,7 +384,7 @@ func (n *Node) worker() {
 	defer consensusBlocksSub.Close()
 
 	// Start watching roothash blocks.
-	blocks, blocksSub, err := n.Consensus.RootHash().WatchBlocks(n.Runtime.ID())
+	blocks, blocksSub, err := n.Consensus.RootHash().WatchBlocks(n.ctx, n.Runtime.ID())
 	if err != nil {
 		n.logger.Error("failed to subscribe to roothash blocks",
 			"err", err,
@@ -394,7 +394,7 @@ func (n *Node) worker() {
 	defer blocksSub.Close()
 
 	// Start watching roothash events.
-	events, eventsSub, err := n.Consensus.RootHash().WatchEvents(n.Runtime.ID())
+	events, eventsSub, err := n.Consensus.RootHash().WatchEvents(n.ctx, n.Runtime.ID())
 	if err != nil {
 		n.logger.Error("failed to subscribe to roothash events",
 			"err", err,

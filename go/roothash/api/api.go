@@ -94,16 +94,16 @@ var (
 // Backend is a root hash implementation.
 type Backend interface {
 	// GetGenesisBlock returns the genesis block.
-	GetGenesisBlock(ctx context.Context, runtimeID common.Namespace, height int64) (*block.Block, error)
+	GetGenesisBlock(ctx context.Context, request *RuntimeRequest) (*block.Block, error)
 
 	// GetLatestBlock returns the latest block.
 	//
 	// The metadata contained in this block can be further used to get
 	// the latest state from the storage backend.
-	GetLatestBlock(ctx context.Context, runtimeID common.Namespace, height int64) (*block.Block, error)
+	GetLatestBlock(ctx context.Context, request *RuntimeRequest) (*block.Block, error)
 
 	// GetRuntimeState returns the given runtime's state.
-	GetRuntimeState(ctx context.Context, runtimeID common.Namespace, height int64) (*RuntimeState, error)
+	GetRuntimeState(ctx context.Context, request *RuntimeRequest) (*RuntimeState, error)
 
 	// WatchBlocks returns a channel that produces a stream of
 	// annotated blocks.
@@ -111,10 +111,10 @@ type Backend interface {
 	// The latest block if any will get pushed to the stream immediately.
 	// Subsequent blocks will be pushed into the stream as they are
 	// confirmed.
-	WatchBlocks(runtimeID common.Namespace) (<-chan *AnnotatedBlock, *pubsub.Subscription, error)
+	WatchBlocks(ctx context.Context, runtimeID common.Namespace) (<-chan *AnnotatedBlock, pubsub.ClosableSubscription, error)
 
 	// WatchEvents returns a stream of protocol events.
-	WatchEvents(runtimeID common.Namespace) (<-chan *Event, *pubsub.Subscription, error)
+	WatchEvents(ctx context.Context, runtimeID common.Namespace) (<-chan *Event, pubsub.ClosableSubscription, error)
 
 	// TrackRuntime adds a runtime the history of which should be tracked.
 	TrackRuntime(ctx context.Context, history BlockHistory) error
@@ -127,6 +127,12 @@ type Backend interface {
 
 	// Cleanup cleans up the roothash backend.
 	Cleanup()
+}
+
+// RuntimeRequest is a generic roothash get request for a specific runtime.
+type RuntimeRequest struct {
+	RuntimeID common.Namespace `json:"runtime_id"`
+	Height    int64            `json:"height"`
 }
 
 // ExecutorCommit is the argument set for the ExecutorCommit method.

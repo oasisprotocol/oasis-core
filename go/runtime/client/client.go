@@ -182,7 +182,10 @@ func (c *runtimeClient) CheckTx(ctx context.Context, request *api.CheckTxRequest
 	}
 
 	// Get current blocks.
-	rs, err := c.common.consensus.RootHash().GetRuntimeState(ctx, request.RuntimeID, consensus.HeightLatest)
+	rs, err := c.common.consensus.RootHash().GetRuntimeState(ctx, &roothash.RuntimeRequest{
+		RuntimeID: request.RuntimeID,
+		Height:    consensus.HeightLatest,
+	})
 	if err != nil {
 		return fmt.Errorf("client: failed to get runtime %s state: %w", request.RuntimeID, err)
 	}
@@ -208,12 +211,15 @@ func (c *runtimeClient) CheckTx(ctx context.Context, request *api.CheckTxRequest
 
 // Implements api.RuntimeClient.
 func (c *runtimeClient) WatchBlocks(ctx context.Context, runtimeID common.Namespace) (<-chan *roothash.AnnotatedBlock, pubsub.ClosableSubscription, error) {
-	return c.common.consensus.RootHash().WatchBlocks(runtimeID)
+	return c.common.consensus.RootHash().WatchBlocks(ctx, runtimeID)
 }
 
 // Implements api.RuntimeClient.
 func (c *runtimeClient) GetGenesisBlock(ctx context.Context, runtimeID common.Namespace) (*block.Block, error) {
-	return c.common.consensus.RootHash().GetGenesisBlock(ctx, runtimeID, consensus.HeightLatest)
+	return c.common.consensus.RootHash().GetGenesisBlock(ctx, &roothash.RuntimeRequest{
+		RuntimeID: runtimeID,
+		Height:    consensus.HeightLatest,
+	})
 }
 
 // Implements api.RuntimeClient.
@@ -414,7 +420,10 @@ func (c *runtimeClient) Query(ctx context.Context, request *api.QueryRequest) (*
 	}
 
 	// Get current blocks.
-	rs, err := c.common.consensus.RootHash().GetRuntimeState(ctx, request.RuntimeID, consensus.HeightLatest)
+	rs, err := c.common.consensus.RootHash().GetRuntimeState(ctx, &roothash.RuntimeRequest{
+		RuntimeID: request.RuntimeID,
+		Height:    consensus.HeightLatest,
+	})
 	if err != nil {
 		return nil, fmt.Errorf("client: failed to get runtime %s state: %w", request.RuntimeID, err)
 	}

@@ -87,7 +87,7 @@ func testQueueTx(
 	st storage.Backend,
 ) {
 	// Subscribe to roothash blocks.
-	blocksCh, sub, err := roothash.WatchBlocks(runtimeID)
+	blocksCh, sub, err := roothash.WatchBlocks(context.Background(), runtimeID)
 	require.NoError(t, err, "WatchBlocks")
 	defer sub.Close()
 

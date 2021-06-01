@@ -1127,7 +1127,7 @@ func testSlashConsensusEquivocation(
 	}
 
 	// Subscribe to roothash blocks.
-	blocksCh, blocksSub, err := consensus.RootHash().WatchBlocks(runtimeID)
+	blocksCh, blocksSub, err := consensus.RootHash().WatchBlocks(context.Background(), runtimeID)
 	require.NoError(err, "WatchBlocks")
 	defer blocksSub.Close()
 

@@ -8,6 +8,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/identity"
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
 	control "github.com/oasisprotocol/oasis-core/go/control/api"
+	roothash "github.com/oasisprotocol/oasis-core/go/roothash/api"
 	storage "github.com/oasisprotocol/oasis-core/go/storage/api"
 	upgrade "github.com/oasisprotocol/oasis-core/go/upgrade/api"
 	"github.com/oasisprotocol/oasis-core/go/worker/registration"
@@ -93,7 +94,10 @@ func (n *Node) GetRuntimeStatus(ctx context.Context) (map[common.Namespace]contr
 		}
 
 		// Fetch latest block as seen by this node.
-		blk, err := n.Consensus.RootHash().GetLatestBlock(ctx, rt.ID(), consensus.HeightLatest)
+		blk, err := n.Consensus.RootHash().GetLatestBlock(ctx, &roothash.RuntimeRequest{
+			RuntimeID: rt.ID(),
+			Height:    consensus.HeightLatest,
+		})
 		switch err {
 		case nil:
 			status.LatestRound = blk.Header.Round
@@ -112,7 +116,10 @@ func (n *Node) GetRuntimeStatus(ctx context.Context) (map[common.Namespace]contr
 		}
 
 		// Fetch latest genesis block as seen by this node.
-		blk, err = n.Consensus.RootHash().GetGenesisBlock(ctx, rt.ID(), consensus.HeightLatest)
+		blk, err = n.Consensus.RootHash().GetGenesisBlock(ctx, &roothash.RuntimeRequest{
+			RuntimeID: rt.ID(),
+			Height:    consensus.HeightLatest,
+		})
 		switch err {
 		case nil:
 			status.GenesisRound = blk.Header.Round

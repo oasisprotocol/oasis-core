@@ -1,6 +1,7 @@
 package roothash
 
 import (
+	"context"
 	"sync"
 	"time"
 
@@ -39,8 +40,8 @@ type metricsWrapper struct {
 	api.Backend
 }
 
-func (w *metricsWrapper) WatchBlocks(id common.Namespace) (<-chan *api.AnnotatedBlock, *pubsub.Subscription, error) {
-	return w.Backend.WatchBlocks(id)
+func (w *metricsWrapper) WatchBlocks(ctx context.Context, id common.Namespace) (<-chan *api.AnnotatedBlock, pubsub.ClosableSubscription, error) {
+	return w.Backend.WatchBlocks(ctx, id)
 }
 
 func (w *metricsWrapper) worker() {
