@@ -44,7 +44,7 @@ func (s *Service) worker(storageBackend storage.Backend) {
 	s.Logger.Info("started indexer for runtime")
 
 	// Start watching roothash blocks.
-	blocksCh, blocksSub, err := s.roothash.WatchBlocks(s.runtimeID)
+	blocksCh, blocksSub, err := s.roothash.WatchBlocks(s.ctx, s.runtimeID)
 	if err != nil {
 		s.Logger.Error("failed to subscribe to roothash blocks",
 			"err", err,

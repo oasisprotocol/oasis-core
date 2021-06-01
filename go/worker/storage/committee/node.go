@@ -304,7 +304,10 @@ func NewNode(
 					return nil, fmt.Errorf("failed to retrieve runtime descriptor: %w", rerr)
 				}
 
-				blk, rerr := commonNode.Consensus.RootHash().GetGenesisBlock(ctx, rt.ID, consensus.HeightLatest)
+				blk, rerr := commonNode.Consensus.RootHash().GetGenesisBlock(ctx, &roothashApi.RuntimeRequest{
+					RuntimeID: rt.ID,
+					Height:    consensus.HeightLatest,
+				})
 				if rerr != nil {
 					return nil, fmt.Errorf("failed to retrieve genesis block: %w", rerr)
 				}
@@ -873,7 +876,10 @@ func (n *Node) worker() { // nolint: gocyclo
 
 	n.logger.Info("starting committee node")
 
-	genesisBlock, err := n.commonNode.Consensus.RootHash().GetGenesisBlock(n.ctx, n.commonNode.Runtime.ID(), consensus.HeightLatest)
+	genesisBlock, err := n.commonNode.Consensus.RootHash().GetGenesisBlock(n.ctx, &roothashApi.RuntimeRequest{
+		RuntimeID: n.commonNode.Runtime.ID(),
+		Height:    consensus.HeightLatest,
+	})
 	if err != nil {
 		n.logger.Error("can't retrieve genesis block", "err", err)
 		return

@@ -3,6 +3,7 @@ package tests
 
 import (
 	"context"
+	"fmt"
 	"io/ioutil"
 	"os"
 	"strconv"
@@ -48,7 +49,7 @@ type runtimeState struct {
 // RootHashImplementationTests exercises the basic functionality of a
 // roothash backend.
 func RootHashImplementationTests(t *testing.T, backend api.Backend, consensus consensusAPI.Backend, identity *identity.Identity) {
-	seedBase := []byte("RootHashImplementationTests")
+	seedBase := []byte(fmt.Sprintf("RootHashImplementationTests: %T", backend))
 
 	require := require.New(t)
 
@@ -123,7 +124,7 @@ func testGenesisBlock(t *testing.T, backend api.Backend, state *runtimeState) {
 	require := require.New(t)
 
 	id := state.rt.Runtime.ID
-	ch, sub, err := backend.WatchBlocks(id)
+	ch, sub, err := backend.WatchBlocks(context.Background(), id)
 	require.NoError(err, "WatchBlocks")
 	defer sub.Close()
 
@@ -142,7 +143,10 @@ func testGenesisBlock(t *testing.T, backend api.Backend, state *runtimeState) {
 		t.Fatalf("failed to receive block")
 	}
 
-	blk, err := backend.GetLatestBlock(context.Background(), id, consensusAPI.HeightLatest)
+	blk, err := backend.GetLatestBlock(context.Background(), &api.RuntimeRequest{
+		RuntimeID: id,
+		Height:    consensusAPI.HeightLatest,
+	})
 	require.NoError(err, "GetLatestBlock")
 	require.EqualValues(genesisBlock, blk, "retreived block is genesis block")
 
@@ -150,7 +154,10 @@ func testGenesisBlock(t *testing.T, backend api.Backend, state *runtimeState) {
 	// to subscribe to these updates and this would not be needed.
 	time.Sleep(1 * time.Second)
 
-	blk, err = backend.GetGenesisBlock(context.Background(), id, consensusAPI.HeightLatest)
+	blk, err = backend.GetGenesisBlock(context.Background(), &api.RuntimeRequest{
+		RuntimeID: id,
+		Height:    consensusAPI.HeightLatest,
+	})
 	require.NoError(err, "GetGenesisBlock")
 	require.EqualValues(genesisBlock, blk, "retrieved block is genesis block")
 }
@@ -160,7 +167,10 @@ func testEpochTransitionBlock(t *testing.T, backend api.Backend, consensus conse
 
 	// Before an epoch transition there should just be a genesis block.
 	for _, v := range states {
-		genesisBlock, err := backend.GetLatestBlock(context.Background(), v.rt.Runtime.ID, consensusAPI.HeightLatest)
+		genesisBlock, err := backend.GetLatestBlock(context.Background(), &api.RuntimeRequest{
+			RuntimeID: v.rt.Runtime.ID,
+			Height:    consensusAPI.HeightLatest,
+		})
 		require.NoError(err, "GetLatestBlock")
 		require.EqualValues(0, genesisBlock.Header.Round, "genesis block round")
 
@@ -171,7 +181,7 @@ func testEpochTransitionBlock(t *testing.T, backend api.Backend, consensus conse
 	var blkChannels []<-chan *api.AnnotatedBlock
 	for i := range states {
 		v := states[i]
-		ch, sub, err := backend.WatchBlocks(v.rt.Runtime.ID)
+		ch, sub, err := backend.WatchBlocks(context.Background(), v.rt.Runtime.ID)
 		require.NoError(err, "WatchBlocks")
 		defer sub.Close()
 
@@ -190,7 +200,10 @@ func testEpochTransitionBlock(t *testing.T, backend api.Backend, consensus conse
 
 	// Check if GetGenesisBlock still returns the correct genesis block.
 	for i := range states {
-		blk, err := backend.GetGenesisBlock(context.Background(), states[i].rt.Runtime.ID, consensusAPI.HeightLatest)
+		blk, err := backend.GetGenesisBlock(context.Background(), &api.RuntimeRequest{
+			RuntimeID: states[i].rt.Runtime.ID,
+			Height:    consensusAPI.HeightLatest,
+		})
 		require.NoError(err, "GetGenesisBlock")
 		require.EqualValues(0, blk.Header.Round, "retrieved block is genesis block")
 	}
@@ -366,10 +379,13 @@ func (s *runtimeState) generateExecutorCommitments(t *testing.T, consensus conse
 func (s *runtimeState) testSuccessfulRound(t *testing.T, backend api.Backend, consensus consensusAPI.Backend, identity *identity.Identity) {
 	require := require.New(t)
 
-	child, err := backend.GetLatestBlock(context.Background(), s.rt.Runtime.ID, consensusAPI.HeightLatest)
+	child, err := backend.GetLatestBlock(context.Background(), &api.RuntimeRequest{
+		RuntimeID: s.rt.Runtime.ID,
+		Height:    consensusAPI.HeightLatest,
+	})
 	require.NoError(err, "GetLatestBlock")
 
-	ch, sub, err := backend.WatchBlocks(s.rt.Runtime.ID)
+	ch, sub, err := backend.WatchBlocks(context.Background(), s.rt.Runtime.ID)
 	require.NoError(err, "WatchBlocks")
 	defer sub.Close()
 
@@ -444,10 +460,13 @@ func testRoundTimeout(t *testing.T, backend api.Backend, consensus consensusAPI.
 func (s *runtimeState) testRoundTimeout(t *testing.T, backend api.Backend, consensus consensusAPI.Backend, identity *identity.Identity) {
 	require := require.New(t)
 
-	child, err := backend.GetLatestBlock(context.Background(), s.rt.Runtime.ID, consensusAPI.HeightLatest)
+	child, err := backend.GetLatestBlock(context.Background(), &api.RuntimeRequest{
+		RuntimeID: s.rt.Runtime.ID,
+		Height:    consensusAPI.HeightLatest,
+	})
 	require.NoError(err, "GetLatestBlock")
 
-	ch, sub, err := backend.WatchBlocks(s.rt.Runtime.ID)
+	ch, sub, err := backend.WatchBlocks(context.Background(), s.rt.Runtime.ID)
 	require.NoError(err, "WatchBlocks")
 	defer sub.Close()
 
@@ -518,10 +537,13 @@ func testRoundTimeoutWithEpochTransition(t *testing.T, backend api.Backend, cons
 func (s *runtimeState) testRoundTimeoutWithEpochTransition(t *testing.T, backend api.Backend, consensus consensusAPI.Backend, identity *identity.Identity) {
 	require := require.New(t)
 
-	child, err := backend.GetLatestBlock(context.Background(), s.rt.Runtime.ID, consensusAPI.HeightLatest)
+	child, err := backend.GetLatestBlock(context.Background(), &api.RuntimeRequest{
+		RuntimeID: s.rt.Runtime.ID,
+		Height:    consensusAPI.HeightLatest,
+	})
 	require.NoError(err, "GetLatestBlock")
 
-	ch, sub, err := backend.WatchBlocks(s.rt.Runtime.ID)
+	ch, sub, err := backend.WatchBlocks(context.Background(), s.rt.Runtime.ID)
 	require.NoError(err, "WatchBlocks")
 	defer sub.Close()
 
@@ -594,10 +616,13 @@ func (s *runtimeState) testProposerTimeout(t *testing.T, backend api.Backend, co
 	require := require.New(t)
 	ctx := context.Background()
 
-	child, err := backend.GetLatestBlock(ctx, s.rt.Runtime.ID, consensusAPI.HeightLatest)
+	child, err := backend.GetLatestBlock(ctx, &api.RuntimeRequest{
+		RuntimeID: s.rt.Runtime.ID,
+		Height:    consensusAPI.HeightLatest,
+	})
 	require.NoError(err, "GetLatestBlock")
 
-	ch, sub, err := backend.WatchBlocks(s.rt.Runtime.ID)
+	ch, sub, err := backend.WatchBlocks(context.Background(), s.rt.Runtime.ID)
 	require.NoError(err, "WatchBlocks")
 	defer sub.Close()
 
@@ -802,7 +827,7 @@ func MustTransitionEpoch(
 	ctx, cancel := context.WithTimeout(context.Background(), recvTimeout)
 	defer cancel()
 
-	blocksCh, sub, err := roothash.WatchBlocks(runtimeID)
+	blocksCh, sub, err := roothash.WatchBlocks(context.Background(), runtimeID)
 	require.NoError(err, "WatchBlocks")
 	defer sub.Close()
 
@@ -832,7 +857,10 @@ func testSubmitEquivocationEvidence(t *testing.T, backend api.Backend, consensus
 	ctx := context.Background()
 
 	s := states[0]
-	child, err := backend.GetLatestBlock(ctx, s.rt.Runtime.ID, consensusAPI.HeightLatest)
+	child, err := backend.GetLatestBlock(ctx, &api.RuntimeRequest{
+		RuntimeID: s.rt.Runtime.ID,
+		Height:    consensusAPI.HeightLatest,
+	})
 	require.NoError(err, "GetLatestBlock")
 
 	// Generate and submit evidence of executor equivocation.

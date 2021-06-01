@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	roothash "github.com/oasisprotocol/oasis-core/go/roothash/api"
 	"github.com/oasisprotocol/oasis-core/go/worker/common/committee"
 )
 
@@ -19,7 +20,10 @@ func (p *pruneHandler) Prune(ctx context.Context, rounds []uint64) error {
 
 	// Make sure we never prune past the last successful round as we need that round in history so
 	// we can fetch any needed round results.
-	state, err := p.commonNode.Consensus.RootHash().GetRuntimeState(ctx, p.commonNode.Runtime.ID(), height)
+	state, err := p.commonNode.Consensus.RootHash().GetRuntimeState(ctx, &roothash.RuntimeRequest{
+		RuntimeID: p.commonNode.Runtime.ID(),
+		Height:    height,
+	})
 	if err != nil {
 		return fmt.Errorf("worker/executor: failed to fetch runtime state at %d: %w", height, err)
 	}

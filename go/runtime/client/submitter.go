@@ -159,7 +159,7 @@ func (w *txSubmitter) start() {
 	}()
 
 	// Start watching roothash blocks.
-	blocks, blocksSub, err := w.common.consensus.RootHash().WatchBlocks(w.id)
+	blocks, blocksSub, err := w.common.consensus.RootHash().WatchBlocks(w.common.ctx, w.id)
 	if err != nil {
 		w.logger.Error("failed to subscribe to roothash blocks",
 			"err", err,

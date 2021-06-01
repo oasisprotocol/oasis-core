@@ -733,7 +733,10 @@ func (n *Node) proposeTimeoutLocked(roundCtx context.Context) error {
 }
 
 func (n *Node) getRtStateAndRoundResults(ctx context.Context, height int64) (*roothash.RuntimeState, *roothash.RoundResults, error) {
-	state, err := n.commonNode.Consensus.RootHash().GetRuntimeState(ctx, n.commonNode.Runtime.ID(), height)
+	state, err := n.commonNode.Consensus.RootHash().GetRuntimeState(ctx, &roothash.RuntimeRequest{
+		RuntimeID: n.commonNode.Runtime.ID(),
+		Height:    height,
+	})
 	if err != nil {
 		n.logger.Error("failed to query runtime state",
 			"err", err,

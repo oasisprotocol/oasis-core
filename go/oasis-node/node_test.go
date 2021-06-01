@@ -32,6 +32,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/node"
 	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
 	registryTests "github.com/oasisprotocol/oasis-core/go/registry/tests"
+	roothash "github.com/oasisprotocol/oasis-core/go/roothash/api"
 	roothashTests "github.com/oasisprotocol/oasis-core/go/roothash/tests"
 	runtimeClient "github.com/oasisprotocol/oasis-core/go/runtime/client/api"
 	clientTests "github.com/oasisprotocol/oasis-core/go/runtime/client/tests"
@@ -438,7 +439,21 @@ func testStakingClient(t *testing.T, node *testNode) {
 }
 
 func testRootHash(t *testing.T, node *testNode) {
-	roothashTests.RootHashImplementationTests(t, node.Consensus.RootHash(), node.Consensus, node.Identity)
+	// Directly.
+	t.Run("Direct", func(t *testing.T) {
+		roothashTests.RootHashImplementationTests(t, node.Consensus.RootHash(), node.Consensus, node.Identity)
+	})
+
+	// Over gRPC.
+	t.Run("OverGrpc", func(t *testing.T) {
+		// Create a client backend connected to the local node's internal socket.
+		conn, err := cmnGrpc.Dial("unix:"+filepath.Join(node.dataDir, "internal.sock"), grpc.WithInsecure())
+		require.NoError(t, err, "Dial")
+		defer conn.Close()
+
+		client := roothash.NewRootHashClient(conn)
+		roothashTests.RootHashImplementationTests(t, client, node.Consensus, node.Identity)
+	})
 }
 
 func testGovernance(t *testing.T, node *testNode) {
@@ -509,7 +524,10 @@ func testStorageClientWithNode(t *testing.T, node *testNode) {
 
 	// Determine the current round. This is required so that we can commit into
 	// storage at the next (non-finalized) round.
-	blk, err := node.Consensus.RootHash().GetLatestBlock(ctx, testRuntimeID, consensusAPI.HeightLatest)
+	blk, err := node.Consensus.RootHash().GetLatestBlock(ctx, &roothash.RuntimeRequest{
+		RuntimeID: testRuntimeID,
+		Height:    consensusAPI.HeightLatest,
+	})
 	require.NoError(t, err, "GetLatestBlock")
 
 	storageTests.StorageImplementationTests(t, localBackend, client, testRuntimeID, blk.Header.Round+1)

@@ -44,6 +44,7 @@ import (
 	cmdSigner "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/signer"
 	"github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/tracing"
 	registryAPI "github.com/oasisprotocol/oasis-core/go/registry/api"
+	roothashAPI "github.com/oasisprotocol/oasis-core/go/roothash/api"
 	runtimeClient "github.com/oasisprotocol/oasis-core/go/runtime/client"
 	runtimeClientAPI "github.com/oasisprotocol/oasis-core/go/runtime/client/api"
 	enclaverpc "github.com/oasisprotocol/oasis-core/go/runtime/enclaverpc/api"
@@ -204,6 +205,7 @@ func (n *Node) startRuntimeServices() error {
 	registryAPI.RegisterService(grpcSrv, n.Consensus.Registry())
 	stakingAPI.RegisterService(grpcSrv, n.Consensus.Staking())
 	keymanagerAPI.RegisterService(grpcSrv, n.Consensus.KeyManager())
+	roothashAPI.RegisterService(grpcSrv, n.Consensus.RootHash())
 	governanceAPI.RegisterService(grpcSrv, n.Consensus.Governance())
 
 	// Register dump genesis halt hook.
