@@ -154,6 +154,12 @@ func testQuery(
 	// Check for values from TestNode/Client/SubmitTx
 	require.EqualValues(t, testInput, txns[0])
 
+	txns, err = c.GetTransactions(ctx, &api.GetTransactionsRequest{RuntimeID: runtimeID, Round: blk.Header.Round})
+	require.NoError(t, err, "GetTransactions")
+	require.Len(t, txns, 1)
+	// Check for values from TestNode/Client/SubmitTx
+	require.EqualValues(t, testInput, txns[0])
+
 	// Check events query (see mock worker for emitted events).
 	events, err := c.GetEvents(ctx, &api.GetEventsRequest{RuntimeID: runtimeID, Round: 2})
 	require.NoError(t, err, "GetEvents")

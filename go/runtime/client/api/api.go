@@ -71,7 +71,13 @@ type RuntimeClient interface {
 	GetTxByBlockHash(ctx context.Context, request *GetTxByBlockHashRequest) (*TxResult, error)
 
 	// GetTxs fetches all runtime transactions in a given block.
+	//
+	// DEPRECATED: This method is deprecated and may be removed in a future release, use
+	//             `GetTransactions` instead.
 	GetTxs(ctx context.Context, request *GetTxsRequest) ([][]byte, error)
+
+	// GetTransactions fetches all runtime transactions in a given block.
+	GetTransactions(ctx context.Context, request *GetTransactionsRequest) ([][]byte, error)
 
 	// GetEvents returns all events emitted in a given block.
 	GetEvents(ctx context.Context, request *GetEventsRequest) ([]*Event, error)
@@ -149,6 +155,12 @@ type GetTxsRequest struct {
 	RuntimeID common.Namespace `json:"runtime_id"`
 	Round     uint64           `json:"round"`
 	IORoot    hash.Hash        `json:"io_root"`
+}
+
+// GetTransactionsRequest is a GetTransactions request.
+type GetTransactionsRequest struct {
+	RuntimeID common.Namespace `json:"runtime_id"`
+	Round     uint64           `json:"round"`
 }
 
 // GetEventsRequest is a GetEvents request.
