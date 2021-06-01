@@ -757,31 +757,38 @@ func (n *Node) getRtStateAndRoundResults(ctx context.Context, height int64) (*ro
 }
 
 func (n *Node) handleScheduleBatch(force bool) {
-	roundCtx, epoch, lastHeader, roundResults, err := func() (context.Context, *committee.EpochSnapshot, *block.Header, *roothash.RoundResults, error) {
+	roundCtx, epoch, lastHeader, rtState, roundResults, err := func() (
+		context.Context,
+		*committee.EpochSnapshot,
+		*block.Header,
+		*roothash.RuntimeState,
+		*roothash.RoundResults,
+		error,
+	) {
 		n.commonNode.CrossNode.Lock()
 		defer n.commonNode.CrossNode.Unlock()
 		roundCtx := n.roundCtx
 
 		// If we are not waiting for a batch, don't do anything.
 		if _, ok := n.state.(StateWaitingForBatch); !ok {
-			return roundCtx, nil, nil, nil, errIncorrectState
+			return roundCtx, nil, nil, nil, nil, errIncorrectState
 		}
 		if n.commonNode.CurrentBlock == nil {
-			return roundCtx, nil, nil, nil, errNoBlocks
+			return roundCtx, nil, nil, nil, nil, errNoBlocks
 		}
 		header := n.commonNode.CurrentBlock.Header
 		epoch := n.commonNode.Group.GetEpochSnapshot()
 
 		// If we are not an executor worker in this epoch, we don't need to do anything.
 		if !epoch.IsExecutorWorker() {
-			return roundCtx, nil, nil, nil, errNotTxnScheduler
+			return roundCtx, nil, nil, nil, nil, errNotTxnScheduler
 		}
 
-		_, roundResults, err := n.getRtStateAndRoundResults(roundCtx, n.commonNode.CurrentBlockHeight)
+		rtState, roundResults, err := n.getRtStateAndRoundResults(roundCtx, n.commonNode.CurrentBlockHeight)
 		if err != nil {
-			return roundCtx, nil, nil, nil, err
+			return roundCtx, nil, nil, nil, nil, err
 		}
-		return roundCtx, epoch, &header, roundResults, nil
+		return roundCtx, epoch, &header, rtState, roundResults, nil
 	}()
 	if err != nil {
 		n.logger.Debug("not scheduling a batch",
@@ -790,9 +797,18 @@ func (n *Node) handleScheduleBatch(force bool) {
 		return
 	}
 
-	// Ask the scheduler to get us a scheduled batch.
+	// Ask the scheduler to get a batch of transactions for us and see if we should be proposing
+	// a new batch to other nodes.
 	batch := n.scheduler.GetBatch(force)
-	if len(batch) == 0 && (!force || len(roundResults.Messages) == 0) {
+	switch {
+	case len(batch) > 0:
+		// We have some transactions, schedule batch.
+	case force && len(roundResults.Messages) > 0:
+		// We have runtime message results (and batch timeout expired), schedule batch.
+	case rtState.LastNormalRound == rtState.GenesisBlock.Header.Round:
+		// This is the runtime genesis, schedule batch.
+	default:
+		// No need to schedule a batch.
 		return
 	}
 

@@ -68,10 +68,10 @@ func (sc *runtimeMessageImpl) Run(childEnv *env.Env) error {
 	ctx := context.Background()
 	c := sc.Net.ClientController().RuntimeClient
 
-	// We should be at round 2 after the epoch transitions.
+	// We should be at round 2 after the epoch transitions, plus 1 for the genesis block.
 	waitCtx, cancel := context.WithTimeout(ctx, waitTimeout)
 	defer cancel()
-	if err = c.WaitBlockIndexed(waitCtx, &api.WaitBlockIndexedRequest{RuntimeID: runtimeID, Round: 2}); err != nil {
+	if err = c.WaitBlockIndexed(waitCtx, &api.WaitBlockIndexedRequest{RuntimeID: runtimeID, Round: 3}); err != nil {
 		return err
 	}
 
@@ -83,8 +83,8 @@ func (sc *runtimeMessageImpl) Run(childEnv *env.Env) error {
 	}
 	latestRound := round.Header.Round
 	sc.Logger.Debug("latest runtime round", "round", latestRound)
-	if latestRound != 2 {
-		return fmt.Errorf("unexpected latest round, got: %d, expected: %d", latestRound, 2)
+	if latestRound != 3 {
+		return fmt.Errorf("unexpected latest round, got: %d, expected: %d", latestRound, 3)
 	}
 
 	blkCh, sub, err := c.WatchBlocks(ctx, runtimeID)

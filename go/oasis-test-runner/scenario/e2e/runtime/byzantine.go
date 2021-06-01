@@ -15,6 +15,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/scenario"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/scenario/e2e"
 	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
+	"github.com/oasisprotocol/oasis-core/go/roothash/api/block"
 	runtimeClient "github.com/oasisprotocol/oasis-core/go/runtime/client/api"
 	staking "github.com/oasisprotocol/oasis-core/go/staking/api"
 	"github.com/oasisprotocol/oasis-core/go/storage/mkvs"
@@ -132,7 +133,7 @@ var (
 			{Name: byzantine.CfgExecutorMode, Values: []string{byzantine.ModeExecutorStraggler.String()}},
 		},
 	)
-	// ByzantineExecutorFailureIndicating is the byzantine executor that submits fialure indicating
+	// ByzantineExecutorFailureIndicating is the byzantine executor that submits failure indicating
 	// commitments scenario.
 	ByzantineExecutorFailureIndicating scenario.Scenario = newByzantineImpl(
 		"executor-failure-indicating",
@@ -276,11 +277,7 @@ func newByzantineImpl(
 	extraArgs []oasis.Argument,
 ) scenario.Scenario {
 	return &byzantineImpl{
-		runtimeImpl: *newRuntimeImpl(
-			"byzantine/"+name,
-			"simple-keyvalue-ops-client",
-			[]string{"set", "hello_key", "hello_value"},
-		),
+		runtimeImpl:                *newRuntimeImpl("byzantine/"+name, "", nil),
 		script:                     script,
 		extraArgs:                  extraArgs,
 		skipStorageSyncWait:        skipStorageWait,
@@ -370,8 +367,7 @@ func (sc *byzantineImpl) Fixture() (*oasis.NetworkFixture, error) {
 func (sc *byzantineImpl) Run(childEnv *env.Env) error {
 	ctx := context.Background()
 
-	clientErrCh, cmd, err := sc.runtimeImpl.start(childEnv)
-	if err != nil {
+	if err := sc.Net.Start(); err != nil {
 		return err
 	}
 
@@ -380,11 +376,39 @@ func (sc *byzantineImpl) Run(childEnv *env.Env) error {
 		return err
 	}
 
+	// Start watching for runtime blocks.
+	blkCh, blkSub, err := sc.Net.ClientController().RuntimeClient.WatchBlocks(ctx, runtimeID)
+	if err != nil {
+		return fmt.Errorf("failed to watch blocks: %w", err)
+	}
+	defer blkSub.Close()
+
 	if err = sc.initialEpochTransitions(fixture); err != nil {
 		return err
 	}
-	err = sc.wait(childEnv, cmd, clientErrCh)
+
+	genesisBlk, err := sc.Net.ClientController().RuntimeClient.GetGenesisBlock(ctx, runtimeID)
 	if err != nil {
+		return fmt.Errorf("failed to get genesis block: %w", err)
+	}
+
+	// NOTE: There is no need to submit any transactions as the nodes are proposing a block
+	//       immediately after genesis. We just wait for a successful round.
+WatchBlocksLoop:
+	for {
+		select {
+		case blk := <-blkCh:
+			if blk.Block.Header.HeaderType != block.Normal || blk.Block.Header.Round <= genesisBlk.Header.Round {
+				continue
+			}
+
+			break WatchBlocksLoop
+		case <-time.After(120 * time.Second):
+			return fmt.Errorf("timeout while waiting for successful round")
+		}
+	}
+
+	if err = sc.Net.CheckLogWatchers(); err != nil {
 		return err
 	}
 
