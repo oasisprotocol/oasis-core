@@ -38,7 +38,7 @@ require (
 	github.com/libp2p/go-libp2p v0.14.0
 	github.com/libp2p/go-libp2p-core v0.8.5
 	github.com/libp2p/go-libp2p-pubsub v0.4.1
-	github.com/multiformats/go-multiaddr v0.3.1
+	github.com/multiformats/go-multiaddr v0.3.2
 	github.com/oasisprotocol/curve25519-voi v0.0.0-20210505121811-294cf0fbfb43
 	github.com/oasisprotocol/deoxysii v0.0.0-20200527154044-851aec403956
 	github.com/opentracing/opentracing-go v1.2.0
