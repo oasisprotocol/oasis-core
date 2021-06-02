@@ -19,7 +19,7 @@ var (
 type Config struct {
 	MaxPoolSize uint64
 
-	WeightLimits map[string]uint64
+	WeightLimits map[transaction.Weight]uint64
 }
 
 // TxPool is the transaction pool interface.

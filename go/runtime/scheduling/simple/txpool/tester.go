@@ -52,7 +52,7 @@ func testBasic(t *testing.T, pool api.TxPool) {
 
 	err := pool.UpdateConfig(api.Config{
 		MaxPoolSize: 51,
-		WeightLimits: map[string]uint64{
+		WeightLimits: map[transaction.Weight]uint64{
 			transaction.WeightCount:     10,
 			transaction.WeightSizeBytes: 100,
 		},
@@ -101,7 +101,7 @@ func testGetBatch(t *testing.T, pool api.TxPool) {
 	pool.Clear()
 	err := pool.UpdateConfig(api.Config{
 		MaxPoolSize: 51,
-		WeightLimits: map[string]uint64{
+		WeightLimits: map[transaction.Weight]uint64{
 			transaction.WeightCount:     10,
 			transaction.WeightSizeBytes: 100,
 		},
@@ -132,7 +132,7 @@ func testRemoveBatch(t *testing.T, pool api.TxPool) {
 
 	err := pool.UpdateConfig(api.Config{
 		MaxPoolSize: 51,
-		WeightLimits: map[string]uint64{
+		WeightLimits: map[transaction.Weight]uint64{
 			transaction.WeightCount:     10,
 			transaction.WeightSizeBytes: 100,
 		},
@@ -176,7 +176,7 @@ func testUpdateConfig(t *testing.T, pool api.TxPool) {
 
 	err := pool.UpdateConfig(api.Config{
 		MaxPoolSize: 50,
-		WeightLimits: map[string]uint64{
+		WeightLimits: map[transaction.Weight]uint64{
 			transaction.WeightCount:     10,
 			transaction.WeightSizeBytes: 100,
 		},
@@ -194,7 +194,7 @@ func testUpdateConfig(t *testing.T, pool api.TxPool) {
 	// Update configuration to BatchSize=1.
 	err = pool.UpdateConfig(api.Config{
 		MaxPoolSize: 50,
-		WeightLimits: map[string]uint64{
+		WeightLimits: map[transaction.Weight]uint64{
 			transaction.WeightCount:     1,
 			transaction.WeightSizeBytes: 100,
 		},
@@ -214,7 +214,7 @@ func testUpdateConfig(t *testing.T, pool api.TxPool) {
 	// Update configuration back to BatchSize=10.
 	err = pool.UpdateConfig(api.Config{
 		MaxPoolSize: 50,
-		WeightLimits: map[string]uint64{
+		WeightLimits: map[transaction.Weight]uint64{
 			transaction.WeightCount:     10,
 			transaction.WeightSizeBytes: 100,
 		},
@@ -226,7 +226,7 @@ func testUpdateConfig(t *testing.T, pool api.TxPool) {
 	// Update configuration to MaxBatchSizeBytes=1.
 	err = pool.UpdateConfig(api.Config{
 		MaxPoolSize: 50,
-		WeightLimits: map[string]uint64{
+		WeightLimits: map[transaction.Weight]uint64{
 			transaction.WeightCount:     10,
 			transaction.WeightSizeBytes: 1,
 		},
@@ -244,7 +244,7 @@ func testWeights(t *testing.T, pool api.TxPool) {
 
 	err := pool.UpdateConfig(api.Config{
 		MaxPoolSize: 50,
-		WeightLimits: map[string]uint64{
+		WeightLimits: map[transaction.Weight]uint64{
 			transaction.WeightCount:             10,
 			transaction.WeightSizeBytes:         100,
 			transaction.WeightConsensusMessages: 10,
@@ -256,7 +256,7 @@ func testWeights(t *testing.T, pool api.TxPool) {
 	err = pool.Add(transaction.NewCheckedTransaction(
 		[]byte("hello world 1"),
 		0,
-		map[string]uint64{
+		map[transaction.Weight]uint64{
 			transaction.WeightConsensusMessages: 9,
 			"custom_weight":                     1,
 		},
@@ -266,7 +266,7 @@ func testWeights(t *testing.T, pool api.TxPool) {
 	err = pool.Add(transaction.NewCheckedTransaction(
 		[]byte("hello world 2"),
 		0,
-		map[string]uint64{
+		map[transaction.Weight]uint64{
 			transaction.WeightConsensusMessages: 1,
 			"custom_weight":                     4,
 		},
@@ -276,7 +276,7 @@ func testWeights(t *testing.T, pool api.TxPool) {
 	err = pool.Add(transaction.NewCheckedTransaction(
 		[]byte("hello world 3"),
 		0,
-		map[string]uint64{
+		map[transaction.Weight]uint64{
 			transaction.WeightConsensusMessages: 1,
 			"custom_weight":                     1,
 		},
@@ -288,7 +288,7 @@ func testWeights(t *testing.T, pool api.TxPool) {
 
 	err = pool.UpdateConfig(api.Config{
 		MaxPoolSize: 50,
-		WeightLimits: map[string]uint64{
+		WeightLimits: map[transaction.Weight]uint64{
 			transaction.WeightCount:             10,
 			transaction.WeightSizeBytes:         100,
 			transaction.WeightConsensusMessages: 11,
@@ -302,7 +302,7 @@ func testWeights(t *testing.T, pool api.TxPool) {
 
 	err = pool.UpdateConfig(api.Config{
 		MaxPoolSize: 50,
-		WeightLimits: map[string]uint64{
+		WeightLimits: map[transaction.Weight]uint64{
 			transaction.WeightCount:             10,
 			transaction.WeightSizeBytes:         100,
 			transaction.WeightConsensusMessages: 5,
@@ -320,7 +320,7 @@ func testPriority(t *testing.T, pool api.TxPool) {
 
 	err := pool.UpdateConfig(api.Config{
 		MaxPoolSize: 50,
-		WeightLimits: map[string]uint64{
+		WeightLimits: map[transaction.Weight]uint64{
 			transaction.WeightCount:     10,
 			transaction.WeightSizeBytes: 100,
 		},
@@ -382,7 +382,7 @@ func benchmarkIncommingQueue(b *testing.B, pool api.TxPool) {
 		pool.Clear()
 		_ = pool.UpdateConfig(api.Config{
 			MaxPoolSize: 10000000,
-			WeightLimits: map[string]uint64{
+			WeightLimits: map[transaction.Weight]uint64{
 				transaction.WeightCount:     10000000,
 				transaction.WeightSizeBytes: 10000000,
 			},
@@ -401,7 +401,7 @@ func benchmarkIncommingQueue(b *testing.B, pool api.TxPool) {
 		pool.Clear()
 		_ = pool.UpdateConfig(api.Config{
 			MaxPoolSize: 10000000,
-			WeightLimits: map[string]uint64{
+			WeightLimits: map[transaction.Weight]uint64{
 				transaction.WeightCount:     10000000,
 				transaction.WeightSizeBytes: 10000000,
 			},
@@ -423,7 +423,7 @@ func benchmarkIncommingQueue(b *testing.B, pool api.TxPool) {
 		pool.Clear()
 		_ = pool.UpdateConfig(api.Config{
 			MaxPoolSize: 10000000,
-			WeightLimits: map[string]uint64{
+			WeightLimits: map[transaction.Weight]uint64{
 				transaction.WeightCount:     10000000,
 				transaction.WeightSizeBytes: 10000000,
 			},

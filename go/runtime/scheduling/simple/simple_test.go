@@ -11,7 +11,7 @@ import (
 )
 
 func TestSimpleSchedulerPriorityQueue(t *testing.T) {
-	weightLimits := map[string]uint64{
+	weightLimits := map[transaction.Weight]uint64{
 		transaction.WeightCount:     10,
 		transaction.WeightSizeBytes: 16 * 1024 * 1024,
 	}
@@ -22,7 +22,7 @@ func TestSimpleSchedulerPriorityQueue(t *testing.T) {
 }
 
 func BenchmarkSimpleSchedulerPriorityQueue(b *testing.B) {
-	weightLimits := map[string]uint64{
+	weightLimits := map[transaction.Weight]uint64{
 		transaction.WeightCount:     1000,
 		transaction.WeightSizeBytes: 16 * 1024 * 1024,
 	}
