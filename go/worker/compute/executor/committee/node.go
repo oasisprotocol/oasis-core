@@ -807,6 +807,8 @@ func (n *Node) handleScheduleBatch(force bool) {
 		// We have runtime message results (and batch timeout expired), schedule batch.
 	case rtState.LastNormalRound == rtState.GenesisBlock.Header.Round:
 		// This is the runtime genesis, schedule batch.
+	case force && rtState.LastNormalHeight < epoch.GetGroupVersion():
+		// No block in this epoch processed by runtime yet, schedule batch.
 	default:
 		// No need to schedule a batch.
 		return
