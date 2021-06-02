@@ -253,11 +253,49 @@ pub struct CheckTxMetadata {
     pub weights: Option<BTreeMap<CheckTxWeight, u64>>,
 }
 
+// https://github.com/serde-rs/serde/issues/1560#issuecomment-506915291
+macro_rules! named_unit_variant {
+    ($variant:ident) => {
+        pub mod $variant {
+            pub fn serialize<S>(serializer: S) -> Result<S::Ok, S::Error>
+            where
+                S: serde::Serializer,
+            {
+                serializer.serialize_str(stringify!($variant))
+            }
+
+            pub fn deserialize<'de, D>(deserializer: D) -> Result<(), D::Error>
+            where
+                D: serde::Deserializer<'de>,
+            {
+                struct V;
+                impl<'de> serde::de::Visitor<'de> for V {
+                    type Value = ();
+                    fn expecting(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+                        f.write_str(concat!("\"", stringify!($variant), "\""))
+                    }
+                    fn visit_str<E: serde::de::Error>(self, value: &str) -> Result<Self::Value, E> {
+                        if value == stringify!($variant) {
+                            Ok(())
+                        } else {
+                            Err(E::invalid_value(serde::de::Unexpected::Str(value), &self))
+                        }
+                    }
+                }
+                deserializer.deserialize_str(V)
+            }
+        }
+    };
+}
+mod strings {
+    named_unit_variant!(consensus_messages);
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 #[serde(untagged)]
 pub enum CheckTxWeight {
     /// Consensus messages weight key.
-    #[serde(rename = "consensus_messages")]
+    #[serde(with = "strings::consensus_messages")]
     ConsensusMessages,
     /// Runtime specific weight key.
     Custom(String),
@@ -317,4 +355,28 @@ pub struct Message {
     /// Opentracing's SpanContext serialized in binary format.
     #[serde(with = "serde_bytes")]
     pub span_context: Vec<u8>,
+}
+
+mod test {
+    use super::*;
+
+    #[test]
+    fn test_consistent_check_tx_weight() {
+        let tcs = vec![
+            (
+                "cmNvbnNlbnN1c19tZXNzYWdlcw==",
+                CheckTxWeight::ConsensusMessages,
+            ),
+            ("cmNvbnNlbnN1c19tZXNzYWdlcw==", "consensus_messages".into()),
+            ("Y2dhcw==", "gas".into()),
+        ];
+        for (encoded_base64, rr) in tcs {
+            let dec: CheckTxWeight = cbor::from_slice(&base64::decode(encoded_base64).unwrap())
+                .expect("CheckTxWeight should deserialize correctly");
+            assert_eq!(
+                dec, rr,
+                "decoded CheckTxWeight should match the expected value"
+            );
+        }
+    }
 }
