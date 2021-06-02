@@ -523,14 +523,14 @@ func testStorageClientWithNode(t *testing.T, node *testNode) {
 	require.NoError(t, err, "NewStatic")
 
 	// Determine the current round. This is required so that we can commit into
-	// storage at the next (non-finalized) round.
+	// storage at some higher (non-finalized) round.
 	blk, err := node.Consensus.RootHash().GetLatestBlock(ctx, &roothash.RuntimeRequest{
 		RuntimeID: testRuntimeID,
 		Height:    consensusAPI.HeightLatest,
 	})
 	require.NoError(t, err, "GetLatestBlock")
 
-	storageTests.StorageImplementationTests(t, localBackend, client, testRuntimeID, blk.Header.Round+1)
+	storageTests.StorageImplementationTests(t, localBackend, client, testRuntimeID, blk.Header.Round+1000)
 }
 
 func testStorageClientWithoutNode(t *testing.T, node *testNode) {
