@@ -243,7 +243,9 @@ impl Protocol {
                         // is no need to do anything more.
                         return Ok(());
                     }
-                    Err(error) => Body::Error(Error::new("dispatcher", 1, &format!("{}", error))),
+                    Err(error) => {
+                        Body::Error(Error::new("rhp/dispatcher", 1, &format!("{}", error)))
+                    }
                 };
 
                 // Send response back.

@@ -59,7 +59,11 @@ pub trait Dispatcher {
         _args: cbor::Value,
     ) -> Result<cbor::Value, RuntimeError> {
         // Default implementation returns an error.
-        Err(RuntimeError::new("dispatcher", 1, "query not supported"))
+        Err(RuntimeError::new(
+            "rhp/dispatcher",
+            2,
+            "query not supported",
+        ))
     }
 }
 
@@ -451,7 +455,7 @@ impl Dispatcher for MethodDispatcher {
                 .map(|b| b.load(Ordering::SeqCst))
                 .unwrap_or(false)
             {
-                return Err(RuntimeError::new("dispatcher", 1, "batch aborted"));
+                return Err(RuntimeError::new("rhp/dispatcher", 1, "batch aborted"));
             }
             results.push(self.dispatch_check(call, &mut ctx));
             let _ = ctx.take_tags();
@@ -483,7 +487,7 @@ impl Dispatcher for MethodDispatcher {
                 .map(|b| b.load(Ordering::SeqCst))
                 .unwrap_or(false)
             {
-                return Err(RuntimeError::new("dispatcher", 1, "batch aborted"));
+                return Err(RuntimeError::new("rhp/dispatcher", 1, "batch aborted"));
             }
             results.push(self.dispatch_execute(call, &mut ctx));
         }

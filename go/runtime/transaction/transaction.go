@@ -188,7 +188,7 @@ type CheckedTransaction struct {
 
 // String returns string representation of the raw transaction data.
 func (t *CheckedTransaction) String() string {
-	return string(t.tx)
+	return fmt.Sprintf("CheckedTransaction{hash: %v, priority: %v, weights: %v}", t.hash, t.priority, t.weights)
 }
 
 // RawCheckedTransactions creates a new CheckedTransactions from the raw bytes.

@@ -12,6 +12,7 @@ import (
 	"github.com/opentracing/opentracing-go"
 	"github.com/prometheus/client_golang/prometheus"
 
+	beacon "github.com/oasisprotocol/oasis-core/go/beacon/api"
 	"github.com/oasisprotocol/oasis-core/go/common/cache/lru"
 	"github.com/oasisprotocol/oasis-core/go/common/cbor"
 	"github.com/oasisprotocol/oasis-core/go/common/crash"
@@ -143,12 +144,16 @@ type Node struct { // nolint: maligned
 	scheduleCh            *channels.RingChannel
 
 	// The scheduler mutex is here to protect the initialization
-	// of the scheduler variable. After initialization the variable
-	// will never change though -- so if the variable is non-nil
-	// (which must be checked while holding the read lock) it can
-	// safely be used without holding the lock.
+	// of the scheduler variable and updates to scheduler parameters.
 	schedulerMutex sync.RWMutex
 	scheduler      schedulingAPI.Scheduler
+	// Guarded by schedulerMutex.
+	// roundWeightLimits are the per round batch weight limits.
+	roundWeightLimits map[transaction.Weight]uint64
+	// limitsLastUpdate is the round of the last update of the round weight limits.
+	limitsLastUpdate uint64
+	// schedulerAlgorithm is the scheduler algorithm.
+	schedulerAlgorithm string
 
 	// Guarded by .commonNode.CrossNode.
 	proposingTimeout bool
@@ -662,6 +667,55 @@ func (n *Node) removeTxBatch(batch transaction.RawBatch) error {
 	return nil
 }
 
+func (n *Node) updateRoundBatchWeightLimits(ctx context.Context, blk *block.Block, lb *consensus.LightBlock, epoch beacon.EpochTime) error {
+	n.schedulerMutex.Lock()
+	defer n.schedulerMutex.Unlock()
+
+	if n.limitsLastUpdate != 0 && n.limitsLastUpdate >= blk.Header.Round {
+		// Already queried weights for this round.
+		return nil
+	}
+
+	rt := n.GetHostedRuntime()
+	if rt == nil {
+		return fmt.Errorf("updating runtime weight limtis while hosted runtime is not initialized")
+	}
+
+	// Query batch limits.
+	batchLimits, err := rt.QueryBatchLimits(ctx, blk, lb, epoch)
+	if err != nil {
+		return fmt.Errorf("querying batch round limits: %w", err)
+	}
+
+	// Remove batch custom weight limits that don't exist anymore.
+	for w := range n.roundWeightLimits {
+		// Skip non custom runtime weights.
+		if !w.IsCustom() {
+			continue
+		}
+
+		if _, exists := batchLimits[w]; !exists {
+			delete(n.roundWeightLimits, w)
+		}
+	}
+	// Update batch weight limits.
+	for w, l := range batchLimits {
+		n.roundWeightLimits[w] = l
+	}
+
+	if err = n.scheduler.UpdateParameters(n.schedulerAlgorithm, n.roundWeightLimits); err != nil {
+		return fmt.Errorf("updating scheduler parameters: %w", err)
+	}
+	n.limitsLastUpdate = blk.Header.Round
+
+	n.logger.Debug("updated round batch weight limits",
+		"round", n.limitsLastUpdate,
+		"weight_limits", n.roundWeightLimits,
+	)
+
+	return nil
+}
+
 func (n *Node) proposeTimeoutLocked(roundCtx context.Context) error {
 	// Do not propose a timeout if we are already proposing it.
 	// The flag will get cleared on the next round or if the propose timeout
@@ -757,12 +811,13 @@ func (n *Node) getRtStateAndRoundResults(ctx context.Context, height int64) (*ro
 }
 
 func (n *Node) handleScheduleBatch(force bool) {
-	roundCtx, epoch, lastHeader, rtState, roundResults, err := func() (
+	roundCtx, epoch, rtState, roundResults, blk, lb, err := func() (
 		context.Context,
 		*committee.EpochSnapshot,
-		*block.Header,
 		*roothash.RuntimeState,
 		*roothash.RoundResults,
+		*block.Block,
+		*consensus.LightBlock,
 		error,
 	) {
 		n.commonNode.CrossNode.Lock()
@@ -771,30 +826,38 @@ func (n *Node) handleScheduleBatch(force bool) {
 
 		// If we are not waiting for a batch, don't do anything.
 		if _, ok := n.state.(StateWaitingForBatch); !ok {
-			return roundCtx, nil, nil, nil, nil, errIncorrectState
+			return roundCtx, nil, nil, nil, nil, nil, errIncorrectState
 		}
 		if n.commonNode.CurrentBlock == nil {
-			return roundCtx, nil, nil, nil, nil, errNoBlocks
+			return roundCtx, nil, nil, nil, nil, nil, errNoBlocks
 		}
-		header := n.commonNode.CurrentBlock.Header
 		epoch := n.commonNode.Group.GetEpochSnapshot()
 
 		// If we are not an executor worker in this epoch, we don't need to do anything.
 		if !epoch.IsExecutorWorker() {
-			return roundCtx, nil, nil, nil, nil, errNotTxnScheduler
+			return roundCtx, nil, nil, nil, nil, nil, errNotTxnScheduler
 		}
 
 		rtState, roundResults, err := n.getRtStateAndRoundResults(roundCtx, n.commonNode.CurrentBlockHeight)
 		if err != nil {
-			return roundCtx, nil, nil, nil, nil, err
+			return roundCtx, nil, nil, nil, nil, nil, err
 		}
-		return roundCtx, epoch, &header, rtState, roundResults, nil
+		return roundCtx, epoch, rtState, roundResults, n.commonNode.CurrentBlock, n.commonNode.CurrentConsensusBlock, nil
 	}()
 	if err != nil {
 		n.logger.Debug("not scheduling a batch",
 			"err", err,
 		)
 		return
+	}
+
+	// Update per round scheduler parameters.
+	// XXX: could avoid querying here on every round if runtimes would return
+	// next round limits in last execute tx response.
+	if err = n.updateRoundBatchWeightLimits(roundCtx, blk, lb, epoch.GetEpochNumber()); err != nil {
+		n.logger.Error("failed updating batch weight limits",
+			"err", err,
+		)
 	}
 
 	// Ask the scheduler to get a batch of transactions for us and see if we should be proposing
@@ -815,9 +878,9 @@ func (n *Node) handleScheduleBatch(force bool) {
 	}
 
 	// If we are an executor and not a scheduler try proposing a timeout.
-	if !epoch.IsTransactionScheduler(lastHeader.Round) {
+	if !epoch.IsTransactionScheduler(blk.Header.Round) {
 		n.logger.Debug("proposing a timeout",
-			"round", lastHeader.Round,
+			"round", blk.Header.Round,
 			"batch", batch,
 			"round_results", roundResults,
 		)
@@ -827,7 +890,7 @@ func (n *Node) handleScheduleBatch(force bool) {
 			defer n.commonNode.CrossNode.Unlock()
 
 			// Make sure we are still in the right state/round.
-			if _, ok := n.state.(StateWaitingForBatch); !ok || lastHeader.Round != n.commonNode.CurrentBlock.Header.Round {
+			if _, ok := n.state.(StateWaitingForBatch); !ok || blk.Header.Round != n.commonNode.CurrentBlock.Header.Round {
 				return errIncorrectState
 			}
 			return n.proposeTimeoutLocked(roundCtx)
@@ -860,8 +923,8 @@ func (n *Node) handleScheduleBatch(force bool) {
 	// Generate the initial I/O root containing only the inputs (outputs and
 	// tags will be added later by the executor nodes).
 	emptyRoot := storage.Root{
-		Namespace: lastHeader.Namespace,
-		Version:   lastHeader.Round + 1,
+		Namespace: blk.Header.Namespace,
+		Version:   blk.Header.Round + 1,
 		Type:      storage.RootTypeIO,
 	}
 	emptyRoot.Hash.Empty()
@@ -894,11 +957,11 @@ func (n *Node) handleScheduleBatch(force bool) {
 	)
 
 	ioReceipts, err := n.storage.Apply(roundCtx, &storage.ApplyRequest{
-		Namespace: lastHeader.Namespace,
+		Namespace: blk.Header.Namespace,
 		RootType:  storage.RootTypeIO,
-		SrcRound:  lastHeader.Round + 1,
+		SrcRound:  blk.Header.Round + 1,
 		SrcRoot:   emptyRoot.Hash,
-		DstRound:  lastHeader.Round + 1,
+		DstRound:  blk.Header.Round + 1,
 		DstRoot:   ioRoot,
 		WriteLog:  ioWriteLog,
 	})
@@ -914,7 +977,7 @@ func (n *Node) handleScheduleBatch(force bool) {
 	// Dispatch batch to group.
 	spanPublish := opentracing.StartSpan("PublishScheduledBatch(batchHash, header)",
 		opentracing.Tag{Key: "ioRoot", Value: ioRoot},
-		opentracing.Tag{Key: "header", Value: lastHeader},
+		opentracing.Tag{Key: "header", Value: blk.Header},
 		opentracing.ChildOf(batchSpanCtx),
 	)
 	ioReceiptSignatures := []signature.Signature{}
@@ -925,7 +988,7 @@ func (n *Node) handleScheduleBatch(force bool) {
 	dispatchMsg := &commitment.ProposedBatch{
 		IORoot:            ioRoot,
 		StorageSignatures: ioReceiptSignatures,
-		Header:            *lastHeader,
+		Header:            blk.Header,
 	}
 	signedDispatchMsg, err := commitment.SignProposedBatch(n.commonNode.Identity.NodeSigner, n.commonNode.Runtime.ID(), dispatchMsg)
 	if err != nil {
@@ -939,10 +1002,10 @@ func (n *Node) handleScheduleBatch(force bool) {
 	defer n.commonNode.CrossNode.Unlock()
 
 	// Make sure we are still in the right state/round.
-	if _, ok := n.state.(StateWaitingForBatch); !ok || lastHeader.Round != n.commonNode.CurrentBlock.Header.Round {
+	if _, ok := n.state.(StateWaitingForBatch); !ok || blk.Header.Round != n.commonNode.CurrentBlock.Header.Round {
 		n.logger.Error("new state or round since started the dispatch",
 			"state", n.state,
-			"expected_round", lastHeader.Round,
+			"expected_round", blk.Header.Round,
 			"round", n.commonNode.CurrentBlock.Header.Round,
 		)
 		return
@@ -950,7 +1013,7 @@ func (n *Node) handleScheduleBatch(force bool) {
 
 	n.logger.Debug("dispatching a new batch proposal",
 		"io_root", ioRoot,
-		"num_txs", len(batch),
+		"batch", batch,
 	)
 
 	err = n.commonNode.Group.Publish(
@@ -1556,21 +1619,24 @@ func (n *Node) worker() {
 		)
 		return
 	}
+
+	n.schedulerMutex.Lock()
+	n.schedulerAlgorithm = runtime.TxnScheduler.Algorithm
 	scheduler, err := scheduling.New(
 		n.scheduleMaxTxPoolSize,
-		runtime.TxnScheduler.Algorithm,
-		make(map[string]uint64),
+		n.schedulerAlgorithm,
+		n.roundWeightLimits,
 	)
 	if err != nil {
 		n.logger.Error("failed to create new transaction scheduler algorithm",
 			"err", err,
 		)
+		n.schedulerMutex.Unlock()
 		return
 	}
-
-	n.schedulerMutex.Lock()
 	n.scheduler = scheduler
 	n.schedulerMutex.Unlock()
+
 	// Check incoming queue every FlushTimeout.
 	txnScheduleTicker := time.NewTicker(runtime.TxnScheduler.BatchFlushTimeout)
 	defer txnScheduleTicker.Stop()
@@ -1619,18 +1685,21 @@ func (n *Node) worker() {
 			// code, as it will be no longer be true that the scheduler
 			// variable never gets updated.
 
-			// Set per round weight limits.
-			weightLimits := map[string]uint64{
-				transaction.WeightConsensusMessages: uint64(runtime.Executor.MaxMessages),
-				transaction.WeightSizeBytes:         runtime.TxnScheduler.MaxBatchSizeBytes,
-				transaction.WeightCount:             runtime.TxnScheduler.MaxBatchSize,
-			}
-			if err = n.scheduler.UpdateParameters(runtime.TxnScheduler.Algorithm, weightLimits); err != nil {
+			// Update per round weight limits.
+			n.schedulerMutex.Lock()
+			n.roundWeightLimits[transaction.WeightConsensusMessages] = uint64(runtime.Executor.MaxMessages)
+			n.roundWeightLimits[transaction.WeightSizeBytes] = runtime.TxnScheduler.MaxBatchSizeBytes
+			n.roundWeightLimits[transaction.WeightCount] = runtime.TxnScheduler.MaxBatchSize
+			n.schedulerAlgorithm = runtime.TxnScheduler.Algorithm
+			if err = n.scheduler.UpdateParameters(n.schedulerAlgorithm, n.roundWeightLimits); err != nil {
 				n.logger.Error("error updating scheduler parameters",
 					"err", err,
 				)
+				n.schedulerMutex.Unlock()
 				return
 			}
+			n.schedulerMutex.Unlock()
+
 			// Update batch flush timeout ticker.
 			txnScheduleTicker.Reset(runtime.TxnScheduler.BatchFlushTimeout)
 		case <-txnScheduleTicker.C:
@@ -1695,6 +1764,7 @@ func NewNode(
 		roleProvider:          roleProvider,
 		scheduleMaxTxPoolSize: scheduleMaxTxPoolSize,
 		lastScheduledCache:    cache,
+		roundWeightLimits:     make(map[transaction.Weight]uint64),
 		scheduleCh:            channels.NewRingChannel(1),
 		storage:               storageMux,
 		ctx:                   ctx,

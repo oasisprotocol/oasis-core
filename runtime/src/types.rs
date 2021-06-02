@@ -26,6 +26,9 @@ use crate::{
     transaction::types::TxnBatch,
 };
 
+/// Name of the batch weight limit runtime query method.
+pub const BATCH_WEIGHT_LIMIT_QUERY_METHOD: &'static str = "internal.BatchWeightLimits";
+
 /// Computed batch.
 #[derive(Debug, Serialize, Deserialize)]
 pub struct ComputedBatch {
@@ -156,7 +159,8 @@ pub enum Body {
         header: Header,
         epoch: EpochTime,
         method: String,
-        args: cbor::Value,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        args: Option<cbor::Value>,
     },
     RuntimeQueryResponse {
         data: cbor::Value,
@@ -257,6 +261,15 @@ pub enum CheckTxWeight {
     ConsensusMessages,
     /// Runtime specific weight key.
     Custom(String),
+}
+
+impl From<&str> for CheckTxWeight {
+    fn from(s: &str) -> Self {
+        match s {
+            "consensus_messages" => Self::ConsensusMessages,
+            _ => Self::Custom(s.to_string()),
+        }
+    }
 }
 
 #[derive(Clone, Copy, Debug)]
