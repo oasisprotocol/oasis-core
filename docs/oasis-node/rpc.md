@@ -83,6 +83,9 @@ The following gRPC services are exposed (with links to API documentation):
   * [Staking] (`oasis-core.Staking`)
   * [Registry] (`oasis-core.Registry`)
   * [Scheduler] (`oasis-core.Scheduler`)
+  * [RootHash] (`oasis-core.RootHash`)
+  * [Governance] (`oasis-core.Governance`)
+  * [Beacon] (`oasis-core.Beacon`)
 * **Runtime Layer**
   * [Storage] (`oasis-core.Storage`)
   * [Runtime Client] (`oasis-core.RuntimeClient`)
@@ -114,6 +117,9 @@ err := cc.SubmitTx(ctx, &tx)
 [Staking]: https://pkg.go.dev/github.com/oasisprotocol/oasis-core/go/staking/api?tab=doc#Backend
 [Registry]: https://pkg.go.dev/github.com/oasisprotocol/oasis-core/go/registry/api?tab=doc#Backend
 [Scheduler]: https://pkg.go.dev/github.com/oasisprotocol/oasis-core/go/scheduler/api?tab=doc#Backend
+[RootHash]: https://pkg.go.dev/github.com/oasisprotocol/oasis-core/go/roothash/api?tab=doc#Backend
+[Governance]: https://pkg.go.dev/github.com/oasisprotocol/oasis-core/go/governance/api?tab=doc#Backend
+[Beacon]: https://pkg.go.dev/github.com/oasisprotocol/oasis-core/go/beacon/api?tab=doc#Backend
 [Storage]: https://pkg.go.dev/github.com/oasisprotocol/oasis-core/go/storage/api?tab=doc#Backend
 [Runtime Client]: https://pkg.go.dev/github.com/oasisprotocol/oasis-core/go/runtime/client/api?tab=doc#RuntimeClient
 [EnclaveRPC]: https://pkg.go.dev/github.com/oasisprotocol/oasis-core/go/runtime/enclaverpc/api?tab=doc#Transport
