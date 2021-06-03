@@ -2284,7 +2284,6 @@ dependencies = [
  "chacha20poly1305",
  "rand 0.8.3",
  "rand_core 0.6.2",
- "ring",
  "rustc_version",
  "sha2",
  "subtle",
