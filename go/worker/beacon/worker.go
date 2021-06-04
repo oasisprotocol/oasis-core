@@ -102,7 +102,13 @@ func (w *Worker) worker() {
 	w.recoverPersistedState()
 
 	// Subscribe to PVSS events.
-	eventCh, eventSub := w.backend.WatchLatestPVSSEvent()
+	eventCh, eventSub, err := w.backend.WatchLatestPVSSEvent(w.ctx)
+	if err != nil {
+		w.logger.Error("failed to subscribe to PVSS events",
+			"err", err,
+		)
+		return
+	}
 	defer eventSub.Close()
 
 	for {

@@ -202,12 +202,12 @@ func (sc *serviceClient) GetPVSSState(ctx context.Context, height int64) (*beaco
 	return q.PVSSState(ctx)
 }
 
-func (sc *serviceClient) WatchLatestPVSSEvent() (<-chan *beaconAPI.PVSSEvent, *pubsub.Subscription) {
+func (sc *serviceClient) WatchLatestPVSSEvent(ctx context.Context) (<-chan *beaconAPI.PVSSEvent, *pubsub.Subscription, error) {
 	typedCh := make(chan *beaconAPI.PVSSEvent)
 	sub := sc.pvssNotifier.Subscribe()
 	sub.Unwrap(typedCh)
 
-	return typedCh, sub
+	return typedCh, sub, nil
 }
 
 func (sc *serviceClient) SetEpoch(ctx context.Context, epoch beaconAPI.EpochTime) error {

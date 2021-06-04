@@ -94,7 +94,10 @@ func doBeaconScenario(cmd *cobra.Command, args []string) {
 	}
 
 	// Start watching for PVSS events
-	ch, sub := backend.WatchLatestPVSSEvent()
+	ch, sub, err := backend.WatchLatestPVSSEvent(ctx)
+	if err != nil {
+		panic(fmt.Sprintf("failed to subscribe to PVSS events: %+v", err))
+	}
 	defer sub.Close()
 
 	var iter int
