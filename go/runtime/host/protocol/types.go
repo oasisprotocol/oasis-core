@@ -302,7 +302,8 @@ type RuntimeExecuteTxBatchRequest struct {
 
 // RuntimeExecuteTxBatchResponse is a worker execute tx batch response message body.
 type RuntimeExecuteTxBatchResponse struct {
-	Batch ComputedBatch `json:"batch"`
+	Batch             ComputedBatch                 `json:"batch"`
+	BatchWeightLimits map[transaction.Weight]uint64 `json:"batch_weight_limits"`
 }
 
 // RuntimeKeyManagerPolicyUpdateRequest is a runtime key manager policy request

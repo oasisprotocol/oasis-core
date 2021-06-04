@@ -1,6 +1,6 @@
 //! Runtime transaction batch dispatcher.
 use std::{
-    collections::HashMap,
+    collections::{BTreeMap, HashMap},
     sync::{
         atomic::{AtomicBool, Ordering},
         Arc,
@@ -19,7 +19,7 @@ use super::{
 use crate::{
     common::{cbor, crypto::hash::Hash},
     consensus::roothash,
-    types::{CheckTxResult, Error as RuntimeError},
+    types::{CheckTxResult, CheckTxWeight, Error as RuntimeError},
 };
 
 /// Runtime transaction dispatcher trait.
@@ -118,6 +118,9 @@ pub struct ExecuteBatchResult {
     pub messages: Vec<roothash::Message>,
     /// Block emitted tags (not emitted by a specific transaction).
     pub block_tags: Tags,
+    /// Batch weight limits valid for next round. This is used as a fast-path,
+    /// to avoid having the transaction scheduler query these on every round.
+    pub batch_weight_limits: Option<BTreeMap<CheckTxWeight, u64>>,
 }
 
 /// No-op dispatcher.
@@ -142,6 +145,7 @@ impl Dispatcher for NoopDispatcher {
             results: Vec::new(),
             messages: Vec::new(),
             block_tags: Tags::new(),
+            batch_weight_limits: None,
         })
     }
 
@@ -502,6 +506,8 @@ impl Dispatcher for MethodDispatcher {
             messages: ctx.close(),
             // No support for block tags in the deprecated dispatcher.
             block_tags: Tags::new(),
+            // No support for custom batch weight limits.
+            batch_weight_limits: None,
         })
     }
 

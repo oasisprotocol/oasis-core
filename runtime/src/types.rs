@@ -148,6 +148,8 @@ pub enum Body {
     },
     RuntimeExecuteTxBatchResponse {
         batch: ComputedBatch,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        batch_weight_limits: Option<BTreeMap<CheckTxWeight, u64>>,
     },
     RuntimeKeyManagerPolicyUpdateRequest {
         #[serde(with = "serde_bytes")]

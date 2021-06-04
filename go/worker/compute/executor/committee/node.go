@@ -574,6 +574,14 @@ func (n *Node) HandleNewBlockLocked(blk *block.Block) {
 	// Clear the potentially set "is proposing timeout" flag from the previous round.
 	n.proposingTimeout = false
 
+	if header.HeaderType != block.Normal {
+		// If last round was not successful, make sure we re-query the round weight limits
+		// before scheduling a batch as ExecuteTxResponse could have set invalid weights.
+		n.schedulerMutex.Lock()
+		n.limitsLastUpdate = header.Round - 1
+		n.schedulerMutex.Unlock()
+	}
+
 	// Check if we are a proposer and if so try to immediately schedule a new batch.
 	if n.commonNode.Group.GetEpochSnapshot().IsTransactionScheduler(blk.Header.Round) {
 		n.logger.Info("we are a transaction scheduler",
@@ -667,18 +675,54 @@ func (n *Node) removeTxBatch(batch transaction.RawBatch) error {
 	return nil
 }
 
-func (n *Node) updateRoundBatchWeightLimits(ctx context.Context, blk *block.Block, lb *consensus.LightBlock, epoch beacon.EpochTime) error {
+// Assumes n.schedulerMutex lock is held.
+func (n *Node) updateRoundWeightLimitsLocked(newBatchLimits map[transaction.Weight]uint64, round uint64) error {
+	// Remove batch custom weight limits that don't exist anymore.
+	for w := range n.roundWeightLimits {
+		// Skip non custom runtime weights.
+		if !w.IsCustom() {
+			continue
+		}
+
+		if _, exists := newBatchLimits[w]; !exists {
+			delete(n.roundWeightLimits, w)
+		}
+	}
+	// Update batch weight limits.
+	for w, l := range newBatchLimits {
+		n.roundWeightLimits[w] = l
+	}
+
+	if err := n.scheduler.UpdateParameters(n.schedulerAlgorithm, n.roundWeightLimits); err != nil {
+		return fmt.Errorf("updating scheduler parameters: %w", err)
+	}
+	n.limitsLastUpdate = round
+
+	n.logger.Debug("updated round batch weight limits",
+		"last_update_round", n.limitsLastUpdate,
+		"weight_limits", n.roundWeightLimits,
+	)
+
+	return nil
+}
+
+func (n *Node) updateBatchWeightLimits(ctx context.Context, blk *block.Block, lb *consensus.LightBlock, epoch beacon.EpochTime) error {
 	n.schedulerMutex.Lock()
 	defer n.schedulerMutex.Unlock()
 
 	if n.limitsLastUpdate != 0 && n.limitsLastUpdate >= blk.Header.Round {
+		n.logger.Debug("skipping querying batch weight limits",
+			"last_update_round", n.limitsLastUpdate,
+			"round", blk.Header.Round,
+			"weight_limits", n.roundWeightLimits,
+		)
 		// Already queried weights for this round.
 		return nil
 	}
 
 	rt := n.GetHostedRuntime()
 	if rt == nil {
-		return fmt.Errorf("updating runtime weight limtis while hosted runtime is not initialized")
+		return fmt.Errorf("updating runtime weight limits while hosted runtime is not initialized")
 	}
 
 	// Query batch limits.
@@ -687,33 +731,7 @@ func (n *Node) updateRoundBatchWeightLimits(ctx context.Context, blk *block.Bloc
 		return fmt.Errorf("querying batch round limits: %w", err)
 	}
 
-	// Remove batch custom weight limits that don't exist anymore.
-	for w := range n.roundWeightLimits {
-		// Skip non custom runtime weights.
-		if !w.IsCustom() {
-			continue
-		}
-
-		if _, exists := batchLimits[w]; !exists {
-			delete(n.roundWeightLimits, w)
-		}
-	}
-	// Update batch weight limits.
-	for w, l := range batchLimits {
-		n.roundWeightLimits[w] = l
-	}
-
-	if err = n.scheduler.UpdateParameters(n.schedulerAlgorithm, n.roundWeightLimits); err != nil {
-		return fmt.Errorf("updating scheduler parameters: %w", err)
-	}
-	n.limitsLastUpdate = blk.Header.Round
-
-	n.logger.Debug("updated round batch weight limits",
-		"round", n.limitsLastUpdate,
-		"weight_limits", n.roundWeightLimits,
-	)
-
-	return nil
+	return n.updateRoundWeightLimitsLocked(batchLimits, blk.Header.Round)
 }
 
 func (n *Node) proposeTimeoutLocked(roundCtx context.Context) error {
@@ -851,10 +869,8 @@ func (n *Node) handleScheduleBatch(force bool) {
 		return
 	}
 
-	// Update per round scheduler parameters.
-	// XXX: could avoid querying here on every round if runtimes would return
-	// next round limits in last execute tx response.
-	if err = n.updateRoundBatchWeightLimits(roundCtx, blk, lb, epoch.GetEpochNumber()); err != nil {
+	// Update per round scheduler parameters if needed.
+	if err = n.updateBatchWeightLimits(roundCtx, blk, lb, epoch.GetEpochNumber()); err != nil {
 		n.logger.Error("failed updating batch weight limits",
 			"err", err,
 		)
@@ -1177,6 +1193,15 @@ func (n *Node) startProcessingBatchLocked(batch *unresolvedBatch) {
 			)
 			return
 		}
+
+		// Update round batch weight limits.
+		n.schedulerMutex.Lock()
+		if err = n.updateRoundWeightLimitsLocked(rsp.RuntimeExecuteTxBatchResponse.BatchWeightLimits, blk.Header.Round+1); err != nil {
+			n.logger.Error("failed updating batch weight limits",
+				"err", err,
+			)
+		}
+		n.schedulerMutex.Unlock()
 
 		// Submit response to the executor worker.
 		done <- &processedBatch{

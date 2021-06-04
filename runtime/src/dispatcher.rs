@@ -549,6 +549,7 @@ impl Dispatcher {
                 rak_sig,
                 messages: results.messages,
             },
+            batch_weight_limits: results.batch_weight_limits,
         })
     }
 
