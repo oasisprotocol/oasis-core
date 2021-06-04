@@ -627,7 +627,7 @@ func (net *Network) startOasisNode(
 	}
 	args := append([]string{}, subCmd...)
 	args = append(args, baseArgs...)
-	args = append(args, extraArgs.merge()...)
+	args = append(args, extraArgs.merge(node.dir.String())...)
 
 	w, err := node.dir.NewLogWriter(logConsoleFile)
 	if err != nil {

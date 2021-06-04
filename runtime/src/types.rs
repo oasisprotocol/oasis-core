@@ -79,6 +79,10 @@ pub enum Body {
         consensus_backend: String,
         consensus_protocol_version: Version,
         consensus_chain_context: String,
+
+        #[serde(default)]
+        #[serde(skip_serializing_if = "BTreeMap::is_empty")]
+        local_config: BTreeMap<String, cbor::Value>,
     },
     RuntimeInfoResponse {
         protocol_version: Version,

@@ -48,6 +48,9 @@ const (
 	// The value should be a map of runtime IDs to corresponding resource paths.
 	CfgRuntimeSGXSignatures = "runtime.sgx.signatures"
 
+	// CfgRuntimeConfig configures node-local runtime configuration.
+	CfgRuntimeConfig = "runtime.config"
+
 	// CfgHistoryPrunerStrategy configures the history pruner strategy.
 	CfgHistoryPrunerStrategy = "runtime.history.pruner.strategy"
 	// CfgHistoryPrunerInterval configures the history pruner interval.
@@ -198,9 +201,18 @@ func newConfig(consensus consensus.Backend, ias ias.Endpoint) (*RuntimeConfig, e
 				return nil, fmt.Errorf("bad runtime identifier '%s': %w", runtimeID, err)
 			}
 
+			// Unmarshal any local runtime configuration.
+			var localConfig map[string]interface{}
+			if sub := viper.Sub(CfgRuntimeConfig); sub != nil {
+				if err := sub.UnmarshalKey(runtimeID, &localConfig); err != nil {
+					return nil, fmt.Errorf("bad runtime configuration: %w", err)
+				}
+			}
+
 			runtimeHostCfg := &runtimeHost.Config{
-				RuntimeID: id,
-				Path:      path,
+				RuntimeID:   id,
+				Path:        path,
+				LocalConfig: localConfig,
 			}
 
 			// This config is SGX specific, but that's all that's supported

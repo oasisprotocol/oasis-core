@@ -1,6 +1,6 @@
 //! Runtime side of the worker-host protocol.
 use std::{
-    collections::HashMap,
+    collections::{BTreeMap, HashMap},
     io::{BufReader, BufWriter, Read, Write},
     sync::{
         atomic::{AtomicUsize, Ordering},
@@ -62,6 +62,11 @@ pub struct HostInfo {
     pub consensus_protocol_version: Version,
     /// Consensus layer chain domain separation context.
     pub consensus_chain_context: String,
+    /// Node-local runtime configuration.
+    ///
+    /// This configuration must not be used in any context which requires determinism across
+    /// replicated runtime instances.
+    pub local_config: BTreeMap<String, cbor::Value>,
 }
 
 /// Runtime part of the runtime host protocol.
@@ -285,12 +290,14 @@ impl Protocol {
                 consensus_backend,
                 consensus_protocol_version,
                 consensus_chain_context,
+                local_config,
             } => {
                 info!(self.logger, "Received host environment information";
                     "runtime_id" => ?runtime_id,
                     "consensus_backend" => &consensus_backend,
                     "consensus_protocol_version" => ?consensus_protocol_version,
                     "consensus_chain_context" => &consensus_chain_context,
+                    "local_config" => ?local_config,
                 );
 
                 if tendermint::BACKEND_NAME != &consensus_backend {
@@ -309,6 +316,7 @@ impl Protocol {
                     consensus_backend,
                     consensus_protocol_version,
                     consensus_chain_context,
+                    local_config,
                 });
 
                 self.dispatcher.start(self.clone());

@@ -451,6 +451,9 @@ type ComputeWorkerFixture struct {
 
 	// Runtimes contains the indexes of the runtimes to enable.
 	Runtimes []int `json:"runtimes,omitempty"`
+
+	// RuntimeConfig contains the per-runtime node-local configuration.
+	RuntimeConfig map[int]map[string]interface{} `json:"runtime_config,omitempty"`
 }
 
 // Create instantiates the compute worker described by the fixture.
@@ -475,6 +478,7 @@ func (f *ComputeWorkerFixture) Create(net *Network) (*Compute, error) {
 		},
 		RuntimeProvisioner: f.RuntimeProvisioner,
 		Runtimes:           f.Runtimes,
+		RuntimeConfig:      f.RuntimeConfig,
 	})
 }
 
@@ -542,6 +546,9 @@ type ClientFixture struct {
 	// Runtimes contains the indexes of the runtimes to enable.
 	Runtimes []int `json:"runtimes,omitempty"`
 
+	// RuntimeConfig contains the per-runtime node-local configuration.
+	RuntimeConfig map[int]map[string]interface{} `json:"runtime_config,omitempty"`
+
 	// MaxTransactionAge configures the MaxTransactionAge configuration of the client.
 	MaxTransactionAge int64 `json:"max_transaction_age"`
 }
@@ -559,6 +566,7 @@ func (f *ClientFixture) Create(net *Network) (*Client, error) {
 		},
 		MaxTransactionAge: f.MaxTransactionAge,
 		Runtimes:          f.Runtimes,
+		RuntimeConfig:     f.RuntimeConfig,
 	})
 }
 

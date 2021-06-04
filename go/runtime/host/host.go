@@ -26,6 +26,9 @@ type Config struct {
 
 	// MessageHandler is the message handler for the Runtime Host Protocol messages.
 	MessageHandler protocol.Handler
+
+	// LocalConfig is the node-local runtime configuration.
+	LocalConfig map[string]interface{}
 }
 
 // Provisioner is the runtime provisioner interface.

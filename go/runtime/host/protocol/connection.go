@@ -124,6 +124,30 @@ type HostInfo struct {
 	ConsensusProtocolVersion version.Version
 	// ConsensusChainContext is the consensus layer chain domain separation context.
 	ConsensusChainContext string
+
+	// LocalConfig is the node-local runtime configuration.
+	//
+	// This configuration must not be used in any context which requires determinism across
+	// replicated runtime instances.
+	LocalConfig map[string]interface{}
+}
+
+// Clone returns a copy of the HostInfo structure.
+func (hi *HostInfo) Clone() *HostInfo {
+	var localConfig map[string]interface{}
+	if hi.LocalConfig != nil {
+		localConfig = make(map[string]interface{})
+		for k, v := range hi.LocalConfig {
+			localConfig[k] = v
+		}
+	}
+
+	return &HostInfo{
+		ConsensusBackend:         hi.ConsensusBackend,
+		ConsensusProtocolVersion: hi.ConsensusProtocolVersion,
+		ConsensusChainContext:    hi.ConsensusChainContext,
+		LocalConfig:              localConfig,
+	}
 }
 
 // state is the connection state.
@@ -529,6 +553,7 @@ func (c *connection) InitHost(ctx context.Context, conn net.Conn, hi *HostInfo) 
 		ConsensusBackend:         hi.ConsensusBackend,
 		ConsensusProtocolVersion: hi.ConsensusProtocolVersion,
 		ConsensusChainContext:    hi.ConsensusChainContext,
+		LocalConfig:              hi.LocalConfig,
 	}})
 	switch {
 	default:

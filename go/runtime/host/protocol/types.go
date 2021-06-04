@@ -139,6 +139,12 @@ type RuntimeInfoRequest struct {
 	ConsensusProtocolVersion version.Version `json:"consensus_protocol_version"`
 	// ConsensusChainContext is the consensus layer chain domain separation context.
 	ConsensusChainContext string `json:"consensus_chain_context"`
+
+	// LocalConfig is the node-local runtime configuration.
+	//
+	// This configuration must not be used in any context which requires determinism across
+	// replicated runtime instances.
+	LocalConfig map[string]interface{} `json:"local_config,omitempty"`
 }
 
 // RuntimeInfoResponse is a worker info response message body.
