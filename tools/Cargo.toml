@@ -1,6 +1,6 @@
 [package]
 name = "oasis-core-tools"
-version = "0.3.0-alpha"
+version = "0.0.0"
 authors = ["Oasis Labs Inc. <info@oasislabs.com>"]
 edition = "2018"
 
