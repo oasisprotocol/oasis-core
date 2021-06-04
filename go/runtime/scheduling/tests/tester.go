@@ -29,7 +29,7 @@ func SchedulerImplementationTests(t *testing.T, scheduler api.Scheduler) {
 func testScheduleTransactions(t *testing.T, scheduler api.Scheduler) {
 	err := scheduler.UpdateParameters(
 		scheduler.Name(),
-		map[string]uint64{
+		map[transaction.Weight]uint64{
 			transaction.WeightCount:     100,
 			transaction.WeightSizeBytes: 1000,
 		},
@@ -39,7 +39,7 @@ func testScheduleTransactions(t *testing.T, scheduler api.Scheduler) {
 	require.EqualValues(t, 0, scheduler.UnscheduledSize(), "no transactions should be scheduled")
 
 	// Test QueueTx.
-	testTx := transaction.NewCheckedTransaction([]byte("hello world"), 10, make(map[string]uint64))
+	testTx := transaction.NewCheckedTransaction([]byte("hello world"), 10, make(map[transaction.Weight]uint64))
 	err = scheduler.QueueTx(testTx)
 	require.NoError(t, err, "QueueTx(testTx)")
 	require.True(t, scheduler.IsQueued(testTx.Hash()), "IsQueued(tx)")
@@ -75,7 +75,7 @@ func testScheduleTransactions(t *testing.T, scheduler api.Scheduler) {
 	// Update configuration to BatchSize=1.
 	err = scheduler.UpdateParameters(
 		scheduler.Name(),
-		map[string]uint64{
+		map[transaction.Weight]uint64{
 			transaction.WeightCount:     1,
 			transaction.WeightSizeBytes: 10000,
 		},
@@ -106,7 +106,7 @@ func testScheduleTransactions(t *testing.T, scheduler api.Scheduler) {
 	// Update configuration back to BatchSize=10.
 	err = scheduler.UpdateParameters(
 		scheduler.Name(),
-		map[string]uint64{
+		map[transaction.Weight]uint64{
 			transaction.WeightCount:     10,
 			transaction.WeightSizeBytes: 10000,
 		},
@@ -120,7 +120,7 @@ func testScheduleTransactions(t *testing.T, scheduler api.Scheduler) {
 	// Update configuration to MaxBatchSizeBytes=1.
 	err = scheduler.UpdateParameters(
 		scheduler.Name(),
-		map[string]uint64{
+		map[transaction.Weight]uint64{
 			transaction.WeightCount:     10,
 			transaction.WeightSizeBytes: 1,
 		},
@@ -135,14 +135,14 @@ func testScheduleTransactions(t *testing.T, scheduler api.Scheduler) {
 	// Test invalid udpate.
 	err = scheduler.UpdateParameters(
 		"invalid",
-		map[string]uint64{},
+		map[transaction.Weight]uint64{},
 	)
 	require.Error(t, err, "UpdateParameters invalid udpate")
 
 	// Test priorities.
 	err = scheduler.UpdateParameters(
 		scheduler.Name(),
-		map[string]uint64{
+		map[transaction.Weight]uint64{
 			transaction.WeightCount:     1,
 			transaction.WeightSizeBytes: 1000,
 		},
@@ -151,7 +151,7 @@ func testScheduleTransactions(t *testing.T, scheduler api.Scheduler) {
 	txs := make([]*transaction.CheckedTransaction, 50)
 	perm := rand.Perm(50)
 	for i := 0; i < 50; i++ {
-		txs[i] = transaction.NewCheckedTransaction([]byte(fmt.Sprintf("tx-%d", i)), uint64(perm[i]), map[string]uint64{})
+		txs[i] = transaction.NewCheckedTransaction([]byte(fmt.Sprintf("tx-%d", i)), uint64(perm[i]), map[transaction.Weight]uint64{})
 		require.NoError(t, scheduler.QueueTx(txs[i]))
 	}
 	returned := make([]*transaction.CheckedTransaction, 50)

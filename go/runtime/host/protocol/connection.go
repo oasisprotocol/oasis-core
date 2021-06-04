@@ -27,8 +27,8 @@ const (
 	connWriteTimeout = 5 * time.Second
 )
 
-// ErrNotReady is the error reported when the Runtime Host Protocol is not initialized.
 var (
+	// ErrNotReady is the error reported when the Runtime Host Protocol is not initialized.
 	ErrNotReady = errors.New(moduleName, 1, "rhp: not ready")
 
 	rhpLatency = prometheus.NewSummaryVec(

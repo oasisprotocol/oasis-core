@@ -61,7 +61,7 @@ func (s *scheduler) Clear() {
 	s.txPool.Clear()
 }
 
-func (s *scheduler) UpdateParameters(algo string, weightLimits map[string]uint64) error {
+func (s *scheduler) UpdateParameters(algo string, weightLimits map[transaction.Weight]uint64) error {
 	if algo != Name {
 		return fmt.Errorf("unexpected transaction scheduling algorithm: %s", algo)
 	}
@@ -80,7 +80,7 @@ func (s *scheduler) Name() string {
 }
 
 // New creates a new simple scheduler.
-func New(txPoolImpl string, maxTxPoolSize uint64, algo string, weightLimits map[string]uint64) (api.Scheduler, error) {
+func New(txPoolImpl string, maxTxPoolSize uint64, algo string, weightLimits map[transaction.Weight]uint64) (api.Scheduler, error) {
 	if algo != Name {
 		return nil, fmt.Errorf("unexpected transaction scheduling algorithm: %s", algo)
 	}

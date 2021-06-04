@@ -21,6 +21,9 @@ import (
 	storage "github.com/oasisprotocol/oasis-core/go/storage/api"
 )
 
+// MethodQueryBatchWeightLimits is the name of the runtime batch weight limits query method.
+const MethodQueryBatchWeightLimits = "internal.BatchWeightLimits"
+
 // NOTE: Bump RuntimeProtocol version in go/common/version if you
 //       change any of the structures below.
 
@@ -227,7 +230,7 @@ type CheckTxMetadata struct {
 	Priority uint64 `json:"priority,omitempty"`
 
 	// Weight are runtime specific transaction weights.
-	Weights map[string]uint64 `json:"weights,omitempty"`
+	Weights map[transaction.Weight]uint64 `json:"weights,omitempty"`
 }
 
 // IsSuccess returns true if transaction execution was successful.
@@ -299,7 +302,8 @@ type RuntimeExecuteTxBatchRequest struct {
 
 // RuntimeExecuteTxBatchResponse is a worker execute tx batch response message body.
 type RuntimeExecuteTxBatchResponse struct {
-	Batch ComputedBatch `json:"batch"`
+	Batch             ComputedBatch                 `json:"batch"`
+	BatchWeightLimits map[transaction.Weight]uint64 `json:"batch_weight_limits"`
 }
 
 // RuntimeKeyManagerPolicyUpdateRequest is a runtime key manager policy request

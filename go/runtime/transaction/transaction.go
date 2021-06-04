@@ -149,14 +149,27 @@ type outputArtifacts struct {
 	Output []byte
 }
 
+// Weight is the transaction weight type.
+type Weight string
+
 const (
 	// WeightConsensusMessages is the consensus messages weight key.
-	WeightConsensusMessages = "consensus_messages"
+	WeightConsensusMessages = Weight("consensus_messages")
 	// WeightSizeBytes is the transaction byte size weight key.
-	WeightSizeBytes = "size_bytes"
+	WeightSizeBytes = Weight("size_bytes")
 	// WeightCount is the transaction count weight key.
-	WeightCount = "count"
+	WeightCount = Weight("count")
 )
+
+// IsCustom returns if the weight is a custom runtime weight.
+func (w Weight) IsCustom() bool {
+	switch w {
+	case WeightConsensusMessages, WeightSizeBytes, WeightCount:
+		return false
+	default:
+		return true
+	}
+}
 
 // CheckedTransaction is a checked transaction to be scheduled.
 type CheckedTransaction struct {
@@ -168,14 +181,14 @@ type CheckedTransaction struct {
 	priority uint64
 	// weights defines the transaction's runtime specific weights as specified
 	// in the CheckTx response.
-	weights map[string]uint64
+	weights map[Weight]uint64
 
 	hash hash.Hash
 }
 
 // String returns string representation of the raw transaction data.
 func (t *CheckedTransaction) String() string {
-	return string(t.tx)
+	return fmt.Sprintf("CheckedTransaction{hash: %v, priority: %v, weights: %v}", t.hash, t.priority, t.weights)
 }
 
 // RawCheckedTransactions creates a new CheckedTransactions from the raw bytes.
@@ -185,9 +198,9 @@ func RawCheckedTransaction(raw []byte) *CheckedTransaction {
 
 // NewCheckedTransaction creates a new CheckedTransactions from the provided
 // bytes, priority and weights.
-func NewCheckedTransaction(tx []byte, priority uint64, weights map[string]uint64) *CheckedTransaction {
+func NewCheckedTransaction(tx []byte, priority uint64, weights map[Weight]uint64) *CheckedTransaction {
 	if weights == nil {
-		weights = make(map[string]uint64)
+		weights = make(map[Weight]uint64)
 	}
 	checkedTx := &CheckedTransaction{
 		tx:       tx,
@@ -207,7 +220,7 @@ func (t *CheckedTransaction) Priority() uint64 {
 }
 
 // Weight returns the specific transaction weight.
-func (t *CheckedTransaction) Weight(w string) uint64 {
+func (t *CheckedTransaction) Weight(w Weight) uint64 {
 	return t.weights[w]
 }
 
@@ -215,7 +228,7 @@ func (t *CheckedTransaction) Weight(w string) uint64 {
 //
 // To avoid unnecessary allocations the internal weights map is returned.
 // The caller should not modify the map.
-func (t *CheckedTransaction) Weights() map[string]uint64 {
+func (t *CheckedTransaction) Weights() map[Weight]uint64 {
 	return t.weights
 }
 

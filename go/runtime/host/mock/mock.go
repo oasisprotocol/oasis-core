@@ -108,9 +108,18 @@ func (r *runtime) Call(ctx context.Context, body *protocol.Body) (*protocol.Body
 		}}, nil
 	case body.RuntimeQueryRequest != nil:
 		rq := body.RuntimeQueryRequest
-		return &protocol.Body{RuntimeQueryResponse: &protocol.RuntimeQueryResponse{
-			Data: cbor.Marshal(rq.Method + " world"),
-		}}, nil
+
+		switch rq.Method {
+		// Handle Batch Weight Limits request.
+		case protocol.MethodQueryBatchWeightLimits:
+			return &protocol.Body{RuntimeQueryResponse: &protocol.RuntimeQueryResponse{
+				Data: cbor.Marshal(map[transaction.Weight]uint64{}),
+			}}, nil
+		default:
+			return &protocol.Body{RuntimeQueryResponse: &protocol.RuntimeQueryResponse{
+				Data: cbor.Marshal(rq.Method + " world"),
+			}}, nil
+		}
 	default:
 		return nil, fmt.Errorf("(mock) method not supported")
 	}

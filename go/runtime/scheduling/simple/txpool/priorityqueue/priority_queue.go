@@ -39,8 +39,8 @@ type priorityQueue struct {
 
 	maxTxPoolSize uint64
 
-	poolWeights  map[string]uint64
-	weightLimits map[string]uint64
+	poolWeights  map[transaction.Weight]uint64
+	weightLimits map[transaction.Weight]uint64
 }
 
 // Implements api.TxPool.
@@ -97,7 +97,7 @@ func (q *priorityQueue) GetBatch(force bool) []*transaction.CheckedTransaction {
 	}
 
 	var batch []*transaction.CheckedTransaction
-	batchWeights := make(map[string]uint64)
+	batchWeights := make(map[transaction.Weight]uint64)
 	for w := range q.weightLimits {
 		batchWeights[w] = 0
 	}
@@ -209,7 +209,7 @@ func (q *priorityQueue) Clear() {
 
 	q.priorityIndex.Clear(true)
 	q.transactions = make(map[hash.Hash]*item)
-	q.poolWeights = make(map[string]uint64)
+	q.poolWeights = make(map[transaction.Weight]uint64)
 }
 
 // NOTE: Assumes lock is held.
@@ -239,7 +239,7 @@ func (q *priorityQueue) isQueuedLocked(txHash hash.Hash) bool {
 func New(cfg api.Config) api.TxPool {
 	return &priorityQueue{
 		transactions:  make(map[hash.Hash]*item),
-		poolWeights:   make(map[string]uint64),
+		poolWeights:   make(map[transaction.Weight]uint64),
 		priorityIndex: btree.New(2),
 		maxTxPoolSize: cfg.MaxPoolSize,
 		weightLimits:  cfg.WeightLimits,

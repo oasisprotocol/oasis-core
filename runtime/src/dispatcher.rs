@@ -329,7 +329,7 @@ impl Dispatcher {
                         header,
                         epoch,
                         method,
-                        args,
+                        args.unwrap_or(cbor::Value::Null),
                     )
                 }
                 Body::RuntimeAbortRequest {} => {
@@ -549,6 +549,7 @@ impl Dispatcher {
                 rak_sig,
                 messages: results.messages,
             },
+            batch_weight_limits: results.batch_weight_limits,
         })
     }
 
@@ -648,7 +649,7 @@ impl Dispatcher {
             Ok(result) => result,
             Err(error) => {
                 error!(self.logger, "Error while processing frame"; "err" => %error);
-                return Err(Error::new("dispatcher", 1, &format!("{}", error)));
+                return Err(Error::new("rhp/dispatcher", 1, &format!("{}", error)));
             }
         };
 
@@ -669,7 +670,7 @@ impl Dispatcher {
                             "method" => ?req.method
                         );
                         return Err(Error::new(
-                            "dispatcher",
+                            "rhp/dispatcher",
                             1,
                             "Request's method doesn't match untrusted_plaintext copy.",
                         ));
@@ -705,7 +706,7 @@ impl Dispatcher {
                         }
                         Err(error) => {
                             error!(self.logger, "Error while writing response"; "err" => %error);
-                            Err(Error::new("dispatcher", 1, &format!("{}", error)))
+                            Err(Error::new("rhp/dispatcher", 1, &format!("{}", error)))
                         }
                     }
                 }
@@ -719,13 +720,13 @@ impl Dispatcher {
                         }
                         Err(error) => {
                             error!(self.logger, "Error while closing session"; "err" => %error);
-                            Err(Error::new("dispatcher", 1, &format!("{}", error)))
+                            Err(Error::new("rhp/dispatcher", 1, &format!("{}", error)))
                         }
                     }
                 }
                 msg => {
                     warn!(self.logger, "Ignoring invalid RPC message type"; "msg" => ?msg);
-                    Err(Error::new("dispatcher", 1, "invalid RPC message type"))
+                    Err(Error::new("rhp/dispatcher", 1, "invalid RPC message type"))
                 }
             }
         } else {
@@ -745,7 +746,7 @@ impl Dispatcher {
         debug!(self.logger, "Received local RPC call request");
 
         let req: RpcRequest = cbor::from_slice(&request)
-            .map_err(|_| Error::new("dispatcher", 1, "malformed request"))?;
+            .map_err(|_| Error::new("rhp/dispatcher", 1, "malformed request"))?;
 
         // Request, dispatch.
         let ctx = ctx.freeze();

@@ -27,7 +27,7 @@ type Scheduler interface {
 	IsQueued(hash.Hash) bool
 
 	// UpdateParameters updates the scheduling parameters.
-	UpdateParameters(algo string, weightLimits map[string]uint64) error
+	UpdateParameters(algo string, weightLimits map[transaction.Weight]uint64) error
 
 	// Clear clears the transaction queue.
 	Clear()
