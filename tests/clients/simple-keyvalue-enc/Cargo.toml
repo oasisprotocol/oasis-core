@@ -1,7 +1,7 @@
 [package]
 name = "simple-keyvalue-enc-client"
 version = "0.0.0"
-authors = ["Oasis Labs Inc. <info@oasislabs.com>"]
+authors = ["Oasis Protocol Foundation <info@oasisprotocol.org>"]
 description = "Encrypted key value test client"
 edition = "2018"
 
