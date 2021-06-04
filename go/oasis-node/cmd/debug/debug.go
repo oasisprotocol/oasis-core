@@ -4,6 +4,7 @@ package debug
 import (
 	"github.com/spf13/cobra"
 
+	"github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/debug/beacon"
 	"github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/debug/byzantine"
 	"github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/debug/consim"
 	"github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/debug/control"
@@ -27,6 +28,7 @@ func Register(parentCmd *cobra.Command) {
 	control.Register(debugCmd)
 	consim.Register(debugCmd)
 	dumpdb.Register(debugCmd)
+	beacon.Register(debugCmd)
 
 	parentCmd.AddCommand(debugCmd)
 }
