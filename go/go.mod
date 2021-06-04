@@ -43,7 +43,7 @@ require (
 	github.com/oasisprotocol/deoxysii v0.0.0-20200527154044-851aec403956
 	github.com/opentracing/opentracing-go v1.2.0
 	github.com/prometheus/client_golang v1.10.0
-	github.com/prometheus/common v0.25.0
+	github.com/prometheus/common v0.27.0
 	github.com/prometheus/procfs v0.6.0
 	github.com/seccomp/libseccomp-golang v0.9.1
 	github.com/spf13/cobra v1.1.1
@@ -60,7 +60,7 @@ require (
 	gitlab.com/yawning/dynlib.git v0.0.0-20200603163025-35fe007b0761
 	go.dedis.ch/kyber/v3 v3.0.13
 	golang.org/x/crypto v0.0.0-20210322153248-0c34fe9e7dc2
-	golang.org/x/net v0.0.0-20210423184538-5f58ad60dda6
+	golang.org/x/net v0.0.0-20210525063256-abc453219eb5
 	google.golang.org/genproto v0.0.0-20201119123407-9b1e624d6bc4
 	google.golang.org/grpc v1.38.0
 	google.golang.org/grpc/security/advancedtls v0.0.0-20200902210233-8630cac324bf
