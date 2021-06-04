@@ -41,6 +41,8 @@ import (
 	workerStorage "github.com/oasisprotocol/oasis-core/go/worker/storage"
 )
 
+const generatedConfigFilename = "config.yml"
+
 // Argument is a single argument on the commandline, including its values.
 type Argument struct {
 	// Name is the name of the argument, i.e. the leading dashed component.
@@ -57,6 +59,9 @@ type argBuilder struct {
 
 	// dontBlameOasis is true, if CfgDebugDontBlameOasis is passed.
 	dontBlameOasis bool
+
+	// config contains options that must be defined using a config file.
+	config *viper.Viper
 }
 
 func (args *argBuilder) clone() *argBuilder {
@@ -66,7 +71,18 @@ func (args *argBuilder) clone() *argBuilder {
 	return &argBuilder{
 		vec:            vec,
 		dontBlameOasis: args.dontBlameOasis,
+		config:         args.config,
 	}
+}
+
+func (args *argBuilder) mergeConfigMap(cfg map[string]interface{}) *argBuilder {
+	if args.config == nil {
+		args.config = viper.New()
+	}
+	if err := args.config.MergeConfigMap(cfg); err != nil {
+		panic(fmt.Errorf("failed to merge config map: %w", err))
+	}
+	return args
 }
 
 func (args *argBuilder) internalSocketAddress(path string) *argBuilder {
@@ -626,10 +642,22 @@ func (args *argBuilder) appendRuntimePruner(p *RuntimePrunerCfg) *argBuilder {
 	return args
 }
 
-func (args *argBuilder) appendHostedRuntime(rt *Runtime, tee node.TEEHardware, binaryIdx int) *argBuilder {
+func (args *argBuilder) appendHostedRuntime(rt *Runtime, tee node.TEEHardware, binaryIdx int, localConfig map[string]interface{}) *argBuilder {
 	args = args.runtimeSupported(rt.id).
 		runtimePath(rt.id, rt.binaries[tee][binaryIdx]).
 		appendRuntimePruner(&rt.pruner)
+
+	// When local runtime config is set, we need to generate a config file.
+	if localConfig != nil {
+		args.mergeConfigMap(map[string]interface{}{
+			"runtime": map[string]interface{}{
+				"config": map[string]interface{}{
+					rt.id.String(): localConfig,
+				},
+			},
+		})
+	}
+
 	return args
 }
 
@@ -692,7 +720,15 @@ func (args *argBuilder) byzantineRuntimeID(runtimeID common.Namespace) *argBuild
 	return args
 }
 
-func (args *argBuilder) merge() []string {
+func (args *argBuilder) configFile(path string) *argBuilder {
+	args.vec = append(args.vec, Argument{
+		Name:   cmdCommon.CfgConfigFile,
+		Values: []string{path},
+	})
+	return args
+}
+
+func (args *argBuilder) merge(configDir string) []string {
 	output := []string{}
 	shipped := map[string][]string{}
 	multiValued := map[string][][]string{}
@@ -707,6 +743,15 @@ func (args *argBuilder) merge() []string {
 			}
 		}
 		return true
+	}
+
+	// Generate a configuration file in the passed directory when required.
+	if args.config != nil {
+		configFile := filepath.Join(configDir, generatedConfigFilename)
+		if err := args.config.WriteConfigAs(configFile); err != nil {
+			panic(fmt.Errorf("args: failed to write config file to %s: %w", configDir, err))
+		}
+		args.configFile(configFile)
 	}
 
 	for _, arg := range args.vec {

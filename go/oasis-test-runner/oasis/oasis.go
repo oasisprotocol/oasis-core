@@ -69,9 +69,10 @@ type CustomStartFeature interface {
 }
 
 type hostedRuntime struct {
-	runtime   *Runtime
-	tee       commonNode.TEEHardware
-	binaryIdx int
+	runtime     *Runtime
+	tee         commonNode.TEEHardware
+	binaryIdx   int
+	localConfig map[string]interface{}
 }
 
 // Node defines the common fields for all node types.
@@ -127,13 +128,14 @@ func (n *Node) getProvisionedPort(portName string) uint16 {
 	return port
 }
 
-func (n *Node) addHostedRuntime(rt *Runtime, tee commonNode.TEEHardware, binaryIdx int) {
+func (n *Node) addHostedRuntime(rt *Runtime, tee commonNode.TEEHardware, binaryIdx int, localConfig map[string]interface{}) {
 	hosted, ok := n.hostedRuntimes[rt.id]
 	if !ok {
 		n.hostedRuntimes[rt.id] = &hostedRuntime{
-			runtime:   rt,
-			tee:       tee,
-			binaryIdx: binaryIdx,
+			runtime:     rt,
+			tee:         tee,
+			binaryIdx:   binaryIdx,
+			localConfig: localConfig,
 		}
 		return
 	}
@@ -197,7 +199,7 @@ func (n *Node) Start() error {
 		}
 	}
 	for _, hosted := range n.hostedRuntimes {
-		args.appendHostedRuntime(hosted.runtime, hosted.tee, hosted.binaryIdx)
+		args.appendHostedRuntime(hosted.runtime, hosted.tee, hosted.binaryIdx, hosted.localConfig)
 	}
 
 	if customStart != nil {

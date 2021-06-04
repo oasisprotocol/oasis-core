@@ -31,7 +31,7 @@ const (
 	// CfgDebugRlimit is the command flag to set RLIMIT_NOFILE on launch.
 	CfgDebugRlimit = "debug.rlimit"
 
-	cfgConfigFile = "config"
+	CfgConfigFile = "config"
 	CfgDataDir    = "datadir"
 
 	badDefaultRlimit = 1024
@@ -123,7 +123,7 @@ func init() {
 	_ = debugRlimitFlag.MarkHidden(CfgDebugRlimit)
 	_ = viper.BindPFlags(debugRlimitFlag)
 
-	RootFlags.StringVar(&cfgFile, cfgConfigFile, "", "config file")
+	RootFlags.StringVar(&cfgFile, CfgConfigFile, "", "config file")
 	RootFlags.String(CfgDataDir, "", "data directory")
 	_ = viper.BindPFlags(RootFlags)
 

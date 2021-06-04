@@ -26,7 +26,8 @@ type Compute struct { // nolint: maligned
 	clientPort    uint16
 	p2pPort       uint16
 
-	runtimes []int
+	runtimes      []int
+	runtimeConfig map[int]map[string]interface{}
 }
 
 // ComputeCfg is the Oasis compute node configuration.
@@ -35,7 +36,8 @@ type ComputeCfg struct {
 
 	RuntimeProvisioner string
 
-	Runtimes []int
+	Runtimes      []int
+	RuntimeConfig map[int]map[string]interface{}
 }
 
 // UpdateRuntimes updates the worker node runtimes.
@@ -101,7 +103,7 @@ func (worker *Compute) AddArgs(args *argBuilder) error {
 	for _, idx := range worker.runtimes {
 		v := worker.net.runtimes[idx]
 		// XXX: could support configurable binary idx if ever needed.
-		worker.addHostedRuntime(v, v.teeHardware, 0)
+		worker.addHostedRuntime(v, v.teeHardware, 0, worker.runtimeConfig[idx])
 	}
 
 	return nil
@@ -132,6 +134,7 @@ func (net *Network) NewCompute(cfg *ComputeCfg) (*Compute, error) {
 		clientPort:         host.getProvisionedPort(nodePortClient),
 		p2pPort:            host.getProvisionedPort(nodePortP2P),
 		runtimes:           cfg.Runtimes,
+		runtimeConfig:      cfg.RuntimeConfig,
 	}
 
 	net.computeWorkers = append(net.computeWorkers, worker)

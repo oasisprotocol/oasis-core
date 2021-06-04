@@ -11,6 +11,7 @@ type Client struct {
 	*Node
 
 	runtimes          []int
+	runtimeConfig     map[int]map[string]interface{}
 	maxTransactionAge int64
 
 	consensusPort uint16
@@ -22,6 +23,7 @@ type ClientCfg struct {
 	NodeCfg
 
 	Runtimes          []int
+	RuntimeConfig     map[int]map[string]interface{}
 	MaxTransactionAge int64
 }
 
@@ -48,7 +50,7 @@ func (client *Client) AddArgs(args *argBuilder) error {
 	for _, idx := range client.runtimes {
 		v := client.net.runtimes[idx]
 		// XXX: could support configurable binary idx if ever needed.
-		client.addHostedRuntime(v, node.TEEHardwareInvalid, 0)
+		client.addHostedRuntime(v, node.TEEHardwareInvalid, 0, client.runtimeConfig[idx])
 	}
 
 	return nil
@@ -65,6 +67,7 @@ func (net *Network) NewClient(cfg *ClientCfg) (*Client, error) {
 	client := &Client{
 		Node:              host,
 		runtimes:          cfg.Runtimes,
+		runtimeConfig:     cfg.RuntimeConfig,
 		maxTransactionAge: cfg.MaxTransactionAge,
 		consensusPort:     host.getProvisionedPort(nodePortConsensus),
 		p2pPort:           host.getProvisionedPort(nodePortP2P),

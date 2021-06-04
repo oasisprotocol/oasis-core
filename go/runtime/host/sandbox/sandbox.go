@@ -316,11 +316,15 @@ func (r *sandboxedRuntime) startProcess() (err error) {
 	}()
 	defer cancel()
 
+	// Populate the runtime-specific parts of host information.
+	hi := r.cfg.HostInfo.Clone()
+	hi.LocalConfig = r.rtCfg.LocalConfig
+
 	// Perform common host initialization.
 	var rtVersion *version.Version
 	initCtx, cancelInit := context.WithTimeout(ctx, runtimeInitTimeout)
 	defer cancelInit()
-	if rtVersion, err = pc.InitHost(initCtx, conn, r.cfg.HostInfo); err != nil {
+	if rtVersion, err = pc.InitHost(initCtx, conn, hi); err != nil {
 		return fmt.Errorf("failed to initialize connection: %w", err)
 	}
 
