@@ -1,6 +1,6 @@
 [package]
 name = "simple-keyvalue-ops-client"
-version = "0.3.0-alpha"
+version = "0.0.0"
 authors = ["Oasis Labs Inc. <info@oasislabs.com>"]
 description = "Simple key value operation test client"
 edition = "2018"
