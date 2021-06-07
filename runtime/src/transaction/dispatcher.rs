@@ -19,7 +19,7 @@ use super::{
 use crate::{
     common::{cbor, crypto::hash::Hash},
     consensus::roothash,
-    types::{CheckTxResult, CheckTxWeight, Error as RuntimeError},
+    types::{CheckTxResult, Error as RuntimeError, TransactionWeight},
 };
 
 /// Runtime transaction dispatcher trait.
@@ -120,7 +120,7 @@ pub struct ExecuteBatchResult {
     pub block_tags: Tags,
     /// Batch weight limits valid for next round. This is used as a fast-path,
     /// to avoid having the transaction scheduler query these on every round.
-    pub batch_weight_limits: Option<BTreeMap<CheckTxWeight, u64>>,
+    pub batch_weight_limits: Option<BTreeMap<TransactionWeight, u64>>,
 }
 
 /// No-op dispatcher.
