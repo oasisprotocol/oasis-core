@@ -149,7 +149,7 @@ pub enum Body {
     RuntimeExecuteTxBatchResponse {
         batch: ComputedBatch,
         #[serde(skip_serializing_if = "Option::is_none")]
-        batch_weight_limits: Option<BTreeMap<CheckTxWeight, u64>>,
+        batch_weight_limits: Option<BTreeMap<TransactionWeight, u64>>,
     },
     RuntimeKeyManagerPolicyUpdateRequest {
         #[serde(with = "serde_bytes")]
@@ -252,7 +252,7 @@ pub struct CheckTxMetadata {
 
     #[serde(skip_serializing_if = "Option::is_none")]
     #[serde(default)]
-    pub weights: Option<BTreeMap<CheckTxWeight, u64>>,
+    pub weights: Option<BTreeMap<TransactionWeight, u64>>,
 }
 
 // https://github.com/serde-rs/serde/issues/1560#issuecomment-506915291
@@ -295,7 +295,7 @@ mod strings {
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 #[serde(untagged)]
-pub enum CheckTxWeight {
+pub enum TransactionWeight {
     /// Consensus messages weight key.
     #[serde(with = "strings::consensus_messages")]
     ConsensusMessages,
@@ -303,7 +303,7 @@ pub enum CheckTxWeight {
     Custom(String),
 }
 
-impl From<&str> for CheckTxWeight {
+impl From<&str> for TransactionWeight {
     fn from(s: &str) -> Self {
         match s {
             "consensus_messages" => Self::ConsensusMessages,
@@ -368,17 +368,17 @@ mod test {
         let tcs = vec![
             (
                 "cmNvbnNlbnN1c19tZXNzYWdlcw==",
-                CheckTxWeight::ConsensusMessages,
+                TransactionWeight::ConsensusMessages,
             ),
             ("cmNvbnNlbnN1c19tZXNzYWdlcw==", "consensus_messages".into()),
             ("Y2dhcw==", "gas".into()),
         ];
         for (encoded_base64, rr) in tcs {
-            let dec: CheckTxWeight = cbor::from_slice(&base64::decode(encoded_base64).unwrap())
-                .expect("CheckTxWeight should deserialize correctly");
+            let dec: TransactionWeight = cbor::from_slice(&base64::decode(encoded_base64).unwrap())
+                .expect("TransactionWeight should deserialize correctly");
             assert_eq!(
                 dec, rr,
-                "decoded CheckTxWeight should match the expected value"
+                "decoded TransactionWeight should match the expected value"
             );
         }
     }
