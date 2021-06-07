@@ -696,3 +696,9 @@ func (crw *clientRuntimeWatcher) HandleNewEventLocked(*roothash.Event) {
 func (crw *clientRuntimeWatcher) HandleNodeUpdateLocked(update *nodes.NodeUpdate, snapshot *committeeCommon.EpochSnapshot) {
 	crw.updateExternalServicePolicyLocked(snapshot)
 }
+
+func (crw *clientRuntimeWatcher) Initialized() <-chan struct{} {
+	ch := make(chan struct{})
+	close(ch)
+	return ch
+}

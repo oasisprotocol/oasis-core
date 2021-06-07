@@ -83,6 +83,10 @@ type NodeHooks interface {
 	HandleNewEventLocked(*roothash.Event)
 	// Guarded by CrossNode.
 	HandleNodeUpdateLocked(*nodes.NodeUpdate, *EpochSnapshot)
+
+	// Initialized returns a channel that will be closed when the worker is initialized and ready
+	// to service requests.
+	Initialized() <-chan struct{}
 }
 
 // Node is a committee node.
@@ -432,8 +436,22 @@ func (n *Node) worker() {
 			// We are initialized after we have received the first block. This makes sure that any
 			// history reindexing has been completed.
 			if !initialized {
+				n.logger.Debug("common worker is initialized")
+
 				close(n.initCh)
 				initialized = true
+
+				// Wait for all child workers to initialize as well.
+				n.logger.Debug("waiting for child worker initialization")
+				for _, hooks := range n.hooks {
+					select {
+					case <-hooks.Initialized():
+					case <-n.stopCh:
+						n.logger.Info("termination requested while waiting for child worker initialization")
+						return
+					}
+				}
+				n.logger.Debug("all child workers are initialized")
 			}
 
 			// Received a block (annotated).
