@@ -30,6 +30,8 @@ var (
 	methodStateToGenesis = serviceName.NewMethod("StateToGenesis", int64(0))
 	// methodConsensusParameters is the ConsensusParameters method.
 	methodConsensusParameters = serviceName.NewMethod("ConsensusParameters", int64(0))
+	// methodGetPVSSState is the GetPVSSState method.
+	methodGetPVSSState = serviceName.NewMethod("GetPVSSState", nil)
 
 	// methodWatchEpochs is the WatchEpochs method.
 	methodWatchEpochs = serviceName.NewMethod("WatchEpochs", nil)
@@ -70,6 +72,10 @@ var (
 			{
 				MethodName: methodConsensusParameters.ShortName(),
 				Handler:    handlerConsensusParameters,
+			},
+			{
+				MethodName: methodGetPVSSState.ShortName(),
+				Handler:    handlerGetPVSSState,
 			},
 		},
 		Streams: []grpc.StreamDesc{
@@ -262,6 +268,33 @@ func handlerConsensusParameters( //nolint:golint
 	return interceptor(ctx, height, info, handler)
 }
 
+func handlerGetPVSSState( //nolint:golint
+	srv interface{},
+	ctx context.Context,
+	dec func(interface{}) error,
+	interceptor grpc.UnaryServerInterceptor,
+) (interface{}, error) {
+	pvssBackend, ok := srv.(PVSSBackend)
+	if !ok {
+		return nil, fmt.Errorf("beacon: not using PVSS backend")
+	}
+	var height int64
+	if err := dec(&height); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return pvssBackend.GetPVSSState(ctx, height)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: methodGetPVSSState.FullName(),
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return pvssBackend.GetPVSSState(ctx, req.(int64))
+	}
+	return interceptor(ctx, height, info, handler)
+}
+
 func handlerWatchEpochs(srv interface{}, stream grpc.ServerStream) error {
 	if err := stream.RecvMsg(nil); err != nil {
 		return err
@@ -398,6 +431,20 @@ func (c *beaconClient) ConsensusParameters(ctx context.Context, height int64) (*
 		return nil, err
 	}
 	return &rsp, nil
+}
+
+func (c *beaconClient) GetPVSSState(ctx context.Context, height int64) (*PVSSState, error) {
+	var rsp PVSSState
+	if err := c.conn.Invoke(ctx, methodGetPVSSState.FullName(), height, &rsp); err != nil {
+		return nil, err
+	}
+	return &rsp, nil
+}
+
+func (c *beaconClient) WatchLatestPVSSEvent(ctx context.Context) (<-chan *PVSSEvent, *pubsub.Subscription, error) {
+	// The only thing that uses this is the beacon worker, and it is not
+	// over gRPC.
+	return nil, nil, fmt.Errorf("beacon: gRPC method not implemented")
 }
 
 func (c *beaconClient) Cleanup() {

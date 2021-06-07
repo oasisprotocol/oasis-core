@@ -145,5 +145,5 @@ type PVSSBackend interface {
 	// from the channel, old events are overwritten.
 	//
 	// Upon subscription the current round event is sent immediately.
-	WatchLatestPVSSEvent() (<-chan *PVSSEvent, *pubsub.Subscription)
+	WatchLatestPVSSEvent(ctx context.Context) (<-chan *PVSSEvent, *pubsub.Subscription, error)
 }
