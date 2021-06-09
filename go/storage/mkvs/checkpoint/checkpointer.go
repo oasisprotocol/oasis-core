@@ -173,15 +173,18 @@ func (c *checkpointer) maybeCheckpoint(ctx context.Context, version uint64, para
 	if err != nil {
 		return fmt.Errorf("checkpointer: failed to get earliest version: %w", err)
 	}
-	if lastCheckpointVersion < earlyVersion {
-		lastCheckpointVersion = earlyVersion - params.Interval
+	firstCheckpointVersion := lastCheckpointVersion + 1 // We can checkpoint the next version.
+	if firstCheckpointVersion < earlyVersion {
+		firstCheckpointVersion = earlyVersion
 	}
-	if lastCheckpointVersion < params.InitialVersion {
-		lastCheckpointVersion = params.InitialVersion - params.Interval
+	if firstCheckpointVersion < params.InitialVersion {
+		firstCheckpointVersion = params.InitialVersion
 	}
 
-	// Checkpoint any missing versions.
-	for cpVersion := lastCheckpointVersion + params.Interval; cpVersion < version; cpVersion = cpVersion + params.Interval {
+	// Checkpoint any missing versions in descending order, stopping at NumKept checkpoints.
+	newCheckpointVersion := ((version-params.InitialVersion)/params.Interval)*params.Interval + params.InitialVersion
+	var numAddedCheckpoints uint64
+	for cpVersion := newCheckpointVersion; cpVersion >= firstCheckpointVersion; {
 		c.logger.Info("checkpointing version",
 			"version", cpVersion,
 		)
@@ -191,7 +194,20 @@ func (c *checkpointer) maybeCheckpoint(ctx context.Context, version uint64, para
 				"version", cpVersion,
 				"err", err,
 			)
-			return fmt.Errorf("checkpointer: failed to checkpoint version: %w", err)
+			break
+		}
+
+		// Move to the next version, avoiding possible underflow.
+		if cpVersion < params.Interval {
+			break
+		}
+		cpVersion = cpVersion - params.Interval
+
+		// Stop when we have enough checkpoints as otherwise we will be creating checkpoints which
+		// will be garbage collected anyway.
+		numAddedCheckpoints++
+		if numAddedCheckpoints >= params.NumKept {
+			break
 		}
 	}
 
