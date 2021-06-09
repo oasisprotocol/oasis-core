@@ -23,7 +23,7 @@ const (
 	testNumKept       = 2
 )
 
-func testCheckpointer(t *testing.T, earliestVersion uint64, preExistingData bool) {
+func testCheckpointer(t *testing.T, earliestVersion, interval uint64, preExistingData bool) {
 	require := require.New(t)
 	ctx := context.Background()
 
@@ -76,7 +76,7 @@ func testCheckpointer(t *testing.T, earliestVersion uint64, preExistingData bool
 		CheckInterval:   testCheckInterval,
 		RootsPerVersion: 1,
 		Parameters: &CreationParameters{
-			Interval:       1,
+			Interval:       interval,
 			NumKept:        testNumKept,
 			ChunkSize:      16 * 1024,
 			InitialVersion: earliestVersion,
@@ -92,7 +92,7 @@ func testCheckpointer(t *testing.T, earliestVersion uint64, preExistingData bool
 	require.NoError(err, "NewCheckpointer")
 
 	// Finalize a few rounds.
-	for round := earliestVersion; round < earliestVersion+10; round++ {
+	for round := earliestVersion; round < earliestVersion+(testNumKept+1)*interval; round++ {
 		tree := mkvs.NewWithRoot(nil, ndb, root)
 		err = tree.Insert(ctx, []byte(fmt.Sprintf("round %d", round)), []byte(fmt.Sprintf("value %d", round)))
 		require.NoError(err, "Insert")
@@ -114,25 +114,28 @@ func testCheckpointer(t *testing.T, earliestVersion uint64, preExistingData bool
 		}
 
 		// Make sure that there are always the correct number of checkpoints.
-		if round > earliestVersion+testNumKept+1 {
+		if round > earliestVersion+(testNumKept+1)*interval {
 			cps, err := fc.GetCheckpoints(ctx, &GetCheckpointsRequest{
 				Version:   checkpointVersion,
 				Namespace: testNs,
 			})
 			require.NoError(err, "GetCheckpoints")
-			require.Len(cps, testNumKept+1, "incorrect number of live checkpoints")
+			require.Len(cps, testNumKept, "incorrect number of live checkpoints")
 		}
 	}
 }
 
 func TestCheckpointer(t *testing.T) {
 	t.Run("Basic", func(t *testing.T) {
-		testCheckpointer(t, 0, false)
+		testCheckpointer(t, 0, 1, false)
 	})
 	t.Run("NonZeroEarliestVersion", func(t *testing.T) {
-		testCheckpointer(t, 1000, false)
+		testCheckpointer(t, 1000, 1, false)
 	})
 	t.Run("NonZeroEarliestInitialVersion", func(t *testing.T) {
-		testCheckpointer(t, 100, true)
+		testCheckpointer(t, 100, 1, true)
+	})
+	t.Run("MaybeUnderflow", func(t *testing.T) {
+		testCheckpointer(t, 5, 10, true)
 	})
 }
