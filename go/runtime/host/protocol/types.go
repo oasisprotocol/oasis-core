@@ -58,7 +58,6 @@ type Message struct {
 	ID          uint64      `json:"id"`
 	MessageType MessageType `json:"message_type"`
 	Body        Body        `json:"body"`
-	SpanContext []byte      `json:"span_context"`
 }
 
 // Body is a protocol message body.

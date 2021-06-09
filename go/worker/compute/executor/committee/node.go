@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"github.com/eapache/channels"
-	"github.com/opentracing/opentracing-go"
 	"github.com/prometheus/client_golang/prometheus"
 
 	beacon "github.com/oasisprotocol/oasis-core/go/beacon/api"
@@ -21,7 +20,6 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
 	"github.com/oasisprotocol/oasis-core/go/common/node"
 	"github.com/oasisprotocol/oasis-core/go/common/pubsub"
-	"github.com/oasisprotocol/oasis-core/go/common/tracing"
 	"github.com/oasisprotocol/oasis-core/go/common/version"
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
 	roothash "github.com/oasisprotocol/oasis-core/go/roothash/api"
@@ -382,9 +380,6 @@ func (n *Node) queueBatchBlocking(
 		maxBatchSize:      rt.TxnScheduler.MaxBatchSize,
 		maxBatchSizeBytes: rt.TxnScheduler.MaxBatchSizeBytes,
 	}
-	if batchSpan := opentracing.SpanFromContext(ctx); batchSpan != nil {
-		batch.spanCtx = batchSpan.Context()
-	}
 
 	n.commonNode.CrossNode.Lock()
 	defer n.commonNode.CrossNode.Unlock()
@@ -394,7 +389,6 @@ func (n *Node) queueBatchBlocking(
 // handleInternalBatchLocked processes a batch from the internal transaction scheduler.
 // Guarded by n.commonNode.CrossNode.
 func (n *Node) handleInternalBatchLocked(
-	batchSpanCtx opentracing.SpanContext,
 	ioRoot hash.Hash,
 	batch transaction.RawBatch,
 	txnSchedSig signature.Signature,
@@ -411,7 +405,6 @@ func (n *Node) handleInternalBatchLocked(
 			txnSchedSignature: txnSchedSig,
 			storageSignatures: inputStorageSigs,
 			batch:             batch,
-			spanCtx:           batchSpanCtx,
 		},
 	)
 }
@@ -931,10 +924,7 @@ func (n *Node) handleScheduleBatch(force bool) {
 		"round_results", roundResults,
 	)
 
-	// Scheduler node opens a new parent span for batch processing.
-	batchSpan := opentracing.StartSpan("ScheduleBatch(batch)")
-	defer batchSpan.Finish()
-	batchSpanCtx := batchSpan.Context()
+	// Scheduler node starts batch processing.
 
 	// Generate the initial I/O root containing only the inputs (outputs and
 	// tags will be added later by the executor nodes).
@@ -968,9 +958,6 @@ func (n *Node) handleScheduleBatch(force bool) {
 	}
 
 	// Commit I/O tree to storage and obtain receipts.
-	spanInsert, roundCtx := tracing.StartSpanWithContext(roundCtx, "Apply(ioWriteLog)",
-		opentracing.ChildOf(batchSpanCtx),
-	)
 
 	ioReceipts, err := n.storage.Apply(roundCtx, &storage.ApplyRequest{
 		Namespace: blk.Header.Namespace,
@@ -982,20 +969,13 @@ func (n *Node) handleScheduleBatch(force bool) {
 		WriteLog:  ioWriteLog,
 	})
 	if err != nil {
-		spanInsert.Finish()
 		n.logger.Error("failed to commit I/O tree to storage",
 			"err", err,
 		)
 		return
 	}
-	spanInsert.Finish()
 
 	// Dispatch batch to group.
-	spanPublish := opentracing.StartSpan("PublishScheduledBatch(batchHash, header)",
-		opentracing.Tag{Key: "ioRoot", Value: ioRoot},
-		opentracing.Tag{Key: "header", Value: blk.Header},
-		opentracing.ChildOf(batchSpanCtx),
-	)
 	ioReceiptSignatures := []signature.Signature{}
 	for _, receipt := range ioReceipts {
 		ioReceiptSignatures = append(ioReceiptSignatures, receipt.Signature)
@@ -1033,24 +1013,20 @@ func (n *Node) handleScheduleBatch(force bool) {
 	)
 
 	err = n.commonNode.Group.Publish(
-		batchSpanCtx,
 		&p2p.Message{
 			ProposedBatch: signedDispatchMsg,
 		},
 	)
 	if err != nil {
-		spanPublish.Finish()
 		n.logger.Error("failed to publish batch to committee",
 			"err", err,
 		)
 		return
 	}
 	crash.Here(crashPointBatchPublishAfter)
-	spanPublish.Finish()
 
 	// Also process the batch locally.
 	n.handleInternalBatchLocked(
-		batchSpanCtx,
 		ioRoot,
 		rawBatch,
 		signedDispatchMsg.Signature,
@@ -1152,13 +1128,6 @@ func (n *Node) startProcessingBatchLocked(batch *unresolvedBatch) {
 		}
 		batchReadTime.With(n.getMetricLabels()).Observe(time.Since(readStartTime).Seconds())
 		batchSize.With(n.getMetricLabels()).Observe(float64(len(resolvedBatch)))
-
-		span := opentracing.StartSpan("CallBatch(rq)",
-			opentracing.Tag{Key: "rq", Value: rq},
-			opentracing.ChildOf(batch.spanCtx),
-		)
-		ctx = opentracing.ContextWithSpan(ctx, span)
-		defer span.Finish()
 
 		rtStartTime := time.Now()
 		defer func() {
@@ -1270,12 +1239,7 @@ func (n *Node) proposeBatch(
 		start := time.Now()
 		defer storageCommitLatency.With(n.getMetricLabels()).Observe(time.Since(start).Seconds())
 
-		span, ctx := tracing.StartSpanWithContext(roundCtx, "Apply(io, state)",
-			opentracing.ChildOf(unresolved.spanCtx),
-		)
-		defer span.Finish()
-
-		ctx, cancel := context.WithTimeout(ctx, n.commonCfg.StorageCommitTimeout)
+		ctx, cancel := context.WithTimeout(roundCtx, n.commonCfg.StorageCommitTimeout)
 		defer cancel()
 
 		// NOTE: Order is important for verifying the receipt.

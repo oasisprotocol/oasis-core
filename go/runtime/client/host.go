@@ -5,8 +5,6 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/opentracing/opentracing-go"
-
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
 	"github.com/oasisprotocol/oasis-core/go/runtime/host"
@@ -70,8 +68,6 @@ func (h *clientHost) Handle(ctx context.Context, body *protocol.Body) (*protocol
 	// Storage.
 	case body.HostStorageSyncRequest != nil:
 		rq := body.HostStorageSyncRequest
-		span, sctx := opentracing.StartSpanFromContext(ctx, "storage.Sync")
-		defer span.Finish()
 
 		var rs syncer.ReadSyncer
 		switch rq.Endpoint {
@@ -89,11 +85,11 @@ func (h *clientHost) Handle(ctx context.Context, body *protocol.Body) (*protocol
 		var err error
 		switch {
 		case rq.SyncGet != nil:
-			rsp, err = rs.SyncGet(sctx, rq.SyncGet)
+			rsp, err = rs.SyncGet(ctx, rq.SyncGet)
 		case rq.SyncGetPrefixes != nil:
-			rsp, err = rs.SyncGetPrefixes(sctx, rq.SyncGetPrefixes)
+			rsp, err = rs.SyncGetPrefixes(ctx, rq.SyncGetPrefixes)
 		case rq.SyncIterate != nil:
-			rsp, err = rs.SyncIterate(sctx, rq.SyncIterate)
+			rsp, err = rs.SyncIterate(ctx, rq.SyncIterate)
 		default:
 			return nil, errMethodNotSupported
 		}

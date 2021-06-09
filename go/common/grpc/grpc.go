@@ -13,7 +13,6 @@ import (
 	"sync/atomic"
 	"time"
 
-	grpc_opentracing "github.com/grpc-ecosystem/go-grpc-middleware/tracing/opentracing"
 	"github.com/prometheus/client_golang/prometheus"
 	flag "github.com/spf13/pflag"
 	"github.com/spf13/viper"
@@ -27,7 +26,6 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/identity"
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
 	"github.com/oasisprotocol/oasis-core/go/common/service"
-	cmdFlags "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/flags"
 )
 
 const (
@@ -612,10 +610,6 @@ func NewServer(config *ServerConfig) (*Server, error) {
 		logAdapter.streamLogger,
 		serverStreamErrorMapper,
 		auth.StreamServerInterceptor(config.AuthFunc),
-	}
-	if cmdFlags.DebugDontBlameOasis() {
-		unaryInterceptors = append(unaryInterceptors, grpc_opentracing.UnaryServerInterceptor())
-		streamInterceptors = append(streamInterceptors, grpc_opentracing.StreamServerInterceptor())
 	}
 	if config.InstallWrapper {
 		wrapper = newWrapper()

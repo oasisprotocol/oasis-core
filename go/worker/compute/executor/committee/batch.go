@@ -4,8 +4,6 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/opentracing/opentracing-go"
-
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	"github.com/oasisprotocol/oasis-core/go/runtime/transaction"
 	storage "github.com/oasisprotocol/oasis-core/go/storage/api"
@@ -20,8 +18,7 @@ type unresolvedBatch struct {
 	// storageSignatures are the storage node signatures of storage receipts for the I/O root.
 	storageSignatures []signature.Signature
 
-	batch   transaction.RawBatch
-	spanCtx opentracing.SpanContext
+	batch transaction.RawBatch
 
 	maxBatchSize      uint64
 	maxBatchSizeBytes uint64
