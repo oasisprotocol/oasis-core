@@ -149,7 +149,7 @@ func openWithMigrations(opts badger.Options, managed bool) (*badger.DB, error) {
 	}
 
 	// Perform the migration.
-	if err := migrateDatabase(opts); err != nil {
+	if err := migrateDatabase(opts, managed); err != nil {
 		return nil, fmt.Errorf("migration failed: %w", err)
 	}
 
@@ -157,7 +157,7 @@ func openWithMigrations(opts badger.Options, managed bool) (*badger.DB, error) {
 	return openFn(opts)
 }
 
-func migrateDatabase(opts badger.Options) error {
+func migrateDatabase(opts badger.Options, managed bool) error {
 	var logger *logging.Logger
 	adapter, _ := opts.Logger.(*badgerLogger)
 	if logger != nil {
@@ -180,12 +180,19 @@ func migrateDatabase(opts badger.Options) error {
 		return fmt.Errorf("failed to remove temporary destination '%s': %w", temporaryDbName, err)
 	}
 
+	openFnV2 := badgerV2.Open
+	openFnV3 := badger.Open
+	if managed {
+		openFnV2 = badgerV2.OpenManaged
+		openFnV3 = badger.OpenManaged
+	}
+
 	// Open the database as Badger v2.
 	optsV2 := badgerV2.DefaultOptions(opts.Dir)
 	optsV2 = optsV2.WithNumVersionsToKeep(math.MaxInt32)
 	optsV2 = optsV2.WithLogger(nil)
 
-	dbV2, err := badgerV2.Open(optsV2)
+	dbV2, err := openFnV2(optsV2)
 	if err != nil {
 		return fmt.Errorf("failed to open source database: %w", err)
 	}
@@ -196,7 +203,7 @@ func migrateDatabase(opts badger.Options) error {
 	optsV3 = optsV3.WithNumVersionsToKeep(math.MaxInt32)
 	optsV3 = optsV3.WithLogger(NewLogAdapter(logger))
 
-	dbV3, err := badger.Open(optsV3)
+	dbV3, err := openFnV3(optsV3)
 	if err != nil {
 		return fmt.Errorf("failed to open destination database: %w", err)
 	}
@@ -213,7 +220,7 @@ func migrateDatabase(opts badger.Options) error {
 		defer w.Close()
 		defer bw.Flush()
 
-		_, errBackup := dbV2.Backup(bw, 0)
+		_, errBackup := backup(dbV2, bw, managed)
 		backupCh <- errBackup
 	}()
 
