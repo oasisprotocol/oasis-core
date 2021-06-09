@@ -99,4 +99,5 @@ func Register(parentCmd *cobra.Command) {
 	beaconCmd.PersistentFlags().AddFlagSet(cmdGrpc.ClientFlags)
 
 	beaconCmd.AddCommand(beaconStatusCmd)
+	parentCmd.AddCommand(beaconCmd)
 }

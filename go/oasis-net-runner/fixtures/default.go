@@ -139,67 +139,67 @@ func newDefaultFixture() (*oasis.NetworkFixture, error) {
 			{Entity: 1, Runtimes: []int{}},
 			{Entity: 1, Runtimes: []int{}},
 		}
-	}
 
-	var runtimeIDs []common.Namespace
-	for _, rtID := range viper.GetStringSlice(cfgRuntimeID) {
-		var rt common.Namespace
-		if err = rt.UnmarshalHex(rtID); err != nil {
-			cmdCommon.EarlyLogAndExit(fmt.Errorf("invalid runtime ID: %s: %w", rtID, err))
+		var runtimeIDs []common.Namespace
+		for _, rtID := range viper.GetStringSlice(cfgRuntimeID) {
+			var rt common.Namespace
+			if err = rt.UnmarshalHex(rtID); err != nil {
+				cmdCommon.EarlyLogAndExit(fmt.Errorf("invalid runtime ID: %s: %w", rtID, err))
+			}
+			runtimeIDs = append(runtimeIDs, rt)
 		}
-		runtimeIDs = append(runtimeIDs, rt)
-	}
-	rtGenesisStates := viper.GetStringSlice(cfgRuntimeGenesisState)
+		rtGenesisStates := viper.GetStringSlice(cfgRuntimeGenesisState)
 
-	runtimes := viper.GetStringSlice(cfgRuntimeBinary)
-	if l1, l2 := len(runtimeIDs), len(runtimes); l1 < l2 {
-		cmdCommon.EarlyLogAndExit(fmt.Errorf("missing runtime IDs, provided: %d, required: %d", l1, l2))
-	}
-	if l1, l2 := len(rtGenesisStates), len(runtimes); l1 < l2 {
-		cmdCommon.EarlyLogAndExit(fmt.Errorf("missing runtime genesis states, provided: %d, required: %d", l1, l2))
-	}
-
-	for i, rt := range runtimes {
-		// Compute runtime.
-		fixture.Runtimes = append(fixture.Runtimes, oasis.RuntimeFixture{
-			ID:         runtimeIDs[i],
-			Kind:       registry.KindCompute,
-			Entity:     0,
-			Keymanager: 0,
-			Binaries: map[node.TEEHardware][]string{
-				tee: {rt},
-			},
-			Executor: registry.ExecutorParameters{
-				GroupSize:       2,
-				GroupBackupSize: 1,
-				RoundTimeout:    20,
-				MaxMessages:     128,
-			},
-			TxnScheduler: registry.TxnSchedulerParameters{
-				Algorithm:         registry.TxnSchedulerSimple,
-				MaxBatchSize:      1,
-				MaxBatchSizeBytes: 16 * 1024 * 1024, // 16 MiB
-				BatchFlushTimeout: 20 * time.Second,
-				ProposerTimeout:   20,
-			},
-			Storage: registry.StorageParameters{
-				GroupSize:               1,
-				MinWriteReplication:     1,
-				MaxApplyWriteLogEntries: 100_000,
-				MaxApplyOps:             2,
-			},
-			AdmissionPolicy: registry.RuntimeAdmissionPolicy{
-				AnyNode: &registry.AnyNodeRuntimeAdmissionPolicy{},
-			},
-			GenesisStatePath: rtGenesisStates[i],
-			GenesisRound:     0,
-			GovernanceModel:  registry.GovernanceEntity,
-		})
-
-		for j := range fixture.ComputeWorkers {
-			fixture.ComputeWorkers[j].Runtimes = append(fixture.ComputeWorkers[j].Runtimes, i+1)
+		runtimes := viper.GetStringSlice(cfgRuntimeBinary)
+		if l1, l2 := len(runtimeIDs), len(runtimes); l1 < l2 {
+			cmdCommon.EarlyLogAndExit(fmt.Errorf("missing runtime IDs, provided: %d, required: %d", l1, l2))
 		}
-		fixture.Clients[0].Runtimes = append(fixture.Clients[0].Runtimes, i+1)
+		if l1, l2 := len(rtGenesisStates), len(runtimes); l1 < l2 {
+			cmdCommon.EarlyLogAndExit(fmt.Errorf("missing runtime genesis states, provided: %d, required: %d", l1, l2))
+		}
+
+		for i, rt := range runtimes {
+			// Compute runtime.
+			fixture.Runtimes = append(fixture.Runtimes, oasis.RuntimeFixture{
+				ID:         runtimeIDs[i],
+				Kind:       registry.KindCompute,
+				Entity:     0,
+				Keymanager: 0,
+				Binaries: map[node.TEEHardware][]string{
+					tee: {rt},
+				},
+				Executor: registry.ExecutorParameters{
+					GroupSize:       2,
+					GroupBackupSize: 1,
+					RoundTimeout:    20,
+					MaxMessages:     128,
+				},
+				TxnScheduler: registry.TxnSchedulerParameters{
+					Algorithm:         registry.TxnSchedulerSimple,
+					MaxBatchSize:      1,
+					MaxBatchSizeBytes: 16 * 1024 * 1024, // 16 MiB
+					BatchFlushTimeout: 20 * time.Second,
+					ProposerTimeout:   20,
+				},
+				Storage: registry.StorageParameters{
+					GroupSize:               1,
+					MinWriteReplication:     1,
+					MaxApplyWriteLogEntries: 100_000,
+					MaxApplyOps:             2,
+				},
+				AdmissionPolicy: registry.RuntimeAdmissionPolicy{
+					AnyNode: &registry.AnyNodeRuntimeAdmissionPolicy{},
+				},
+				GenesisStatePath: rtGenesisStates[i],
+				GenesisRound:     0,
+				GovernanceModel:  registry.GovernanceEntity,
+			})
+
+			for j := range fixture.ComputeWorkers {
+				fixture.ComputeWorkers[j].Runtimes = append(fixture.ComputeWorkers[j].Runtimes, i+1)
+			}
+			fixture.Clients[0].Runtimes = append(fixture.Clients[0].Runtimes, i+1)
+		}
 	}
 
 	return fixture, nil
