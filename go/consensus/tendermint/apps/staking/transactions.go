@@ -368,7 +368,8 @@ func (app *stakingApplication) reclaimEscrow(ctx *api.Context, state *stakingSta
 	}
 	stakeAmount := baseUnits.Clone()
 
-	if _, err = from.Escrow.Debonding.Deposit(&deb.Shares, &baseUnits, stakeAmount); err != nil {
+	var debondingShares *quantity.Quantity
+	if debondingShares, err = from.Escrow.Debonding.Deposit(&deb.Shares, &baseUnits, stakeAmount); err != nil {
 		ctx.Logger().Error("ReclaimEscrow: failed to debond shares",
 			"err", err,
 			"to", toAddr,
@@ -403,6 +404,23 @@ func (app *stakingApplication) reclaimEscrow(ctx *api.Context, state *stakingSta
 			return fmt.Errorf("failed to set account: %w", err)
 		}
 	}
+
+	ctx.Logger().Debug("ReclaimEscrow: started debonding stake",
+		"from", reclaim.Account,
+		"to", toAddr,
+		"base_units", stakeAmount,
+		"active_shares", reclaim.Shares,
+		"debonding_shares", debondingShares,
+	)
+
+	evt := &staking.DebondingStartEscrowEvent{
+		Owner:           toAddr,
+		Escrow:          reclaim.Account,
+		Amount:          *stakeAmount,
+		ActiveShares:    reclaim.Shares,
+		DebondingShares: *debondingShares,
+	}
+	ctx.EmitEvent(api.NewEventBuilder(app.Name()).Attribute(KeyDebondingStart, cbor.Marshal(evt)))
 
 	return nil
 }

@@ -839,6 +839,38 @@ func testEscrowHelper( // nolint: gocyclo
 	err = consensusAPI.SignAndSubmitTx(context.Background(), consensus, srcAccData.Signer, tx)
 	require.NoError(err, "ReclaimEscrow")
 
+	// Wait for debonding start event.
+	select {
+	case rawEv := <-ch:
+		if rawEv.Escrow == nil || rawEv.Escrow.DebondingStart == nil {
+			t.Fatalf("expected debonding start event, got: %+v", rawEv)
+		}
+
+		ev := rawEv.Escrow.DebondingStart
+		require.NotNil(ev)
+		require.Equal(srcAccData.Address, ev.Owner, "Event: owner")
+		require.Equal(destAccData.Address, ev.Escrow, "Event: escrow")
+		require.Equal(totalEscrowed, &ev.Amount, "Event: amount")
+		require.Equal(reclaim.Shares, ev.ActiveShares, "Event: active shares")
+		require.Equal(totalEscrowed, &ev.DebondingShares, "Event: debonding shares") // Nothing else is debonding, so ratio is 1:1.
+
+		// Make sure that GetEvents also returns the debonding start event.
+		evts, grr := backend.GetEvents(context.Background(), rawEv.Height)
+		require.NoError(grr, "GetEvents")
+		var gotIt bool
+		for _, evt := range evts {
+			if evt.Escrow != nil && evt.Escrow.DebondingStart != nil {
+				if evt.Escrow.DebondingStart.Owner.Equal(ev.Owner) && evt.Escrow.DebondingStart.Escrow.Equal(ev.Escrow) && evt.Escrow.DebondingStart.Amount.Cmp(&ev.Amount) == 0 {
+					gotIt = true
+					break
+				}
+			}
+		}
+		require.EqualValues(true, gotIt, "GetEvents should return debonding start event")
+	case <-time.After(recvTimeout):
+		t.Fatalf("failed to receive debonding start event")
+	}
+
 	// Query debonding delegations.
 	debs, err = backend.DebondingDelegationsFor(context.Background(), &api.OwnerQuery{Owner: srcAccData.Address, Height: consensusAPI.HeightLatest})
 	require.NoError(err, "DebondingDelegations - after (in debonding)")
