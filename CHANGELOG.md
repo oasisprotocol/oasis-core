@@ -12,6 +12,37 @@ The format is inspired by [Keep a Changelog].
 
 <!-- TOWNCRIER -->
 
+## 21.2.1 (2021-06-10)
+
+| Protocol          | Version   |
+|:------------------|:---------:|
+| Consensus         | 4.0.0     |
+| Runtime Host      | 3.0.0     |
+| Runtime Committee | 2.0.0     |
+
+### Features
+
+- go/staking: Add DebondingStartEscrowEvent
+  ([#4014](https://github.com/oasisprotocol/oasis-core/issues/4014))
+
+  This makes it easier to reason about the debonded amounts, both in shares and
+  in base units.
+
+### Bug Fixes
+
+- go/oasis-net-runner: Always honor fixture.default.setup_runtimes
+  ([#4009](https://github.com/oasisprotocol/oasis-core/issues/4009))
+
+- go/common/badger: Fix v2->v3 migration for managed mode
+  ([#4010](https://github.com/oasisprotocol/oasis-core/issues/4010))
+
+- go/storage/mkvs/checkpoint: Checkpoint in descending order
+  ([#4010](https://github.com/oasisprotocol/oasis-core/issues/4010))
+
+  Previously the checkpointer would generate checkpoints in ascending order
+  which meant that it could generate many checkpoints only to garbage collect
+  them in the next step.
+
 ## 21.2 (2021-06-07)
 
 | Protocol          | Version   |
