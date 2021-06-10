@@ -175,11 +175,11 @@ export RELEASE_BRANCH="stable/21.2.x"
 
 ### Back-port Changes
 
-Create a new branch, e.g. `${RELEASE_BRANCH}-backport-foo`, from the
+Create a new branch, e.g. `backport-foo-${RELEASE_BRANCH#stable/}`, from the
 `${RELEASE_BRANCH}` branch:
 
 ```bash
-git checkout -b ${RELEASE_BRANCH}-backport-foo ${RELEASE_BRANCH}
+git checkout -b backport-foo-${RELEASE_BRANCH#stable/} ${RELEASE_BRANCH}
 ```
 
 After back-porting all the desired changes, push it to the origin and make a
@@ -191,11 +191,11 @@ As with a regular release, the back-ported changes should include the
 corresponding [Change Log Fragments] that need to be assembled into a new
 section of the [Change Log] using the `changelog` [Make] target.
 
-Create a new branch, e.g. `${RELEASE_BRANCH}-changelog`, from the
+Create a new branch, e.g. `changelog-${RELEASE_BRANCH#stable/}`, from the
 `${RELEASE_BRANCH}` branch:
 
 ```bash
-git checkout -b ${RELEASE_BRANCH}-changelog ${RELEASE_BRANCH}
+git checkout -b changelog-${RELEASE_BRANCH#stable/} ${RELEASE_BRANCH}
 ```
 
 Then run [Make]'s `changelog` target:
