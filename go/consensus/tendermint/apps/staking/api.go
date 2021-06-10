@@ -41,6 +41,9 @@ var (
 	// (value is an api.AddEscrowEvent).
 	KeyAddEscrow = stakingState.KeyAddEscrow
 
+	// KeyDebondingStart is an ABCI event attribute key for DebondingStartEscrowEvents.
+	KeyDebondingStart = []byte("debonding_start")
+
 	// KeyAllowanceChange is an ABCI event attribute key for AllowanceChangeEvents.
 	KeyAllowanceChange = []byte("allowance_change")
 )
