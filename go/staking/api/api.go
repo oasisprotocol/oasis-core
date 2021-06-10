@@ -227,9 +227,10 @@ type BurnEvent struct {
 
 // EscrowEvent is an escrow event.
 type EscrowEvent struct {
-	Add     *AddEscrowEvent     `json:"add,omitempty"`
-	Take    *TakeEscrowEvent    `json:"take,omitempty"`
-	Reclaim *ReclaimEscrowEvent `json:"reclaim,omitempty"`
+	Add            *AddEscrowEvent            `json:"add,omitempty"`
+	Take           *TakeEscrowEvent           `json:"take,omitempty"`
+	DebondingStart *DebondingStartEscrowEvent `json:"debonding_start,omitempty"`
+	Reclaim        *ReclaimEscrowEvent        `json:"reclaim,omitempty"`
 }
 
 // Event signifies a staking event, returned via GetEvents.
@@ -257,6 +258,21 @@ type AddEscrowEvent struct {
 type TakeEscrowEvent struct {
 	Owner  Address           `json:"owner"`
 	Amount quantity.Quantity `json:"amount"`
+}
+
+// DebondingStartEvent is the event emitted when the debonding process has
+// started and the given number of active shares have been moved into the
+// debonding pool and started debonding.
+//
+// Note that the given amount is valid at the time of debonding start and
+// may not correspond to the final debonded amount in case any escrowed
+// stake is subject to slashing.
+type DebondingStartEscrowEvent struct {
+	Owner           Address           `json:"owner"`
+	Escrow          Address           `json:"escrow"`
+	Amount          quantity.Quantity `json:"amount"`
+	ActiveShares    quantity.Quantity `json:"active_shares"`
+	DebondingShares quantity.Quantity `json:"debonding_shares"`
 }
 
 // ReclaimEscrowEvent is the event emitted when stake is reclaimed from an
