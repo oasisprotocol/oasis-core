@@ -34,7 +34,6 @@ require (
 	github.com/golang/protobuf v1.5.2
 	github.com/golang/snappy v0.0.3
 	github.com/google/btree v1.0.1
-	github.com/grpc-ecosystem/go-grpc-middleware v1.3.0
 	github.com/hashicorp/go-hclog v0.16.1
 	github.com/hashicorp/go-multierror v1.1.1
 	github.com/hashicorp/go-plugin v1.4.2
@@ -46,7 +45,6 @@ require (
 	github.com/multiformats/go-multiaddr v0.3.2
 	github.com/oasisprotocol/curve25519-voi v0.0.0-20210505121811-294cf0fbfb43
 	github.com/oasisprotocol/deoxysii v0.0.0-20200527154044-851aec403956
-	github.com/opentracing/opentracing-go v1.2.0
 	github.com/prometheus/client_golang v1.11.0
 	github.com/prometheus/common v0.28.0
 	github.com/prometheus/procfs v0.6.0
@@ -59,8 +57,6 @@ require (
 	github.com/tendermint/tm-db v0.6.4
 	github.com/thepudds/fzgo v0.2.2
 	github.com/tyler-smith/go-bip39 v1.1.0
-	github.com/uber/jaeger-client-go v2.29.1+incompatible
-	github.com/uber/jaeger-lib v2.2.0+incompatible // indirect
 	github.com/whyrusleeping/go-logging v0.0.1
 	gitlab.com/yawning/dynlib.git v0.0.0-20200603163025-35fe007b0761
 	go.dedis.ch/kyber/v3 v3.0.13

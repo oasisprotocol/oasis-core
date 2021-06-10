@@ -3,8 +3,6 @@ use std::time::Duration;
 
 use futures::prelude::*;
 use grpcio::{Channel, Error::RpcFailure, RpcStatusCode};
-use rustracing::{sampler::AllSampler, tag};
-use rustracing_jaeger::{span::Span, Tracer};
 use serde::{de::DeserializeOwned, Serialize};
 use thiserror::Error;
 
@@ -80,7 +78,7 @@ impl TxnClient {
     where
         C: Serialize,
     {
-        let (_span, options) = self.prepare_options("TxnClient::submit_tx_raw");
+        let options = self.prepare_options();
         let request = api::client::SubmitTxRequest {
             runtime_id: self.runtime_id,
             data: cbor::to_vec(&call),
@@ -98,7 +96,7 @@ impl TxnClient {
 
     /// Wait for the node to finish syncing.
     pub async fn wait_sync(&self) -> Result<(), TxnClientError> {
-        let (_span, options) = self.prepare_options("TxnClient::wait_sync");
+        let options = self.prepare_options();
 
         self.node_controller
             .wait_sync(options)
@@ -111,7 +109,7 @@ impl TxnClient {
 
     /// Check if the node is finished syncing.
     pub async fn is_synced(&self) -> Result<bool, TxnClientError> {
-        let (_span, options) = self.prepare_options("TxnClient::is_synced");
+        let options = self.prepare_options();
 
         Ok(self
             .node_controller
@@ -156,7 +154,7 @@ impl TxnClient {
 
     /// Retrieve block snapshot at specified round.
     pub async fn get_block(&self, round: u64) -> Result<Option<BlockSnapshot>, TxnClientError> {
-        let (_span, options) = self.prepare_options("TxnClient::get_block");
+        let options = self.prepare_options();
         let request = api::client::GetBlockRequest {
             runtime_id: self.runtime_id,
             round: round,
@@ -182,7 +180,7 @@ impl TxnClient {
         round: u64,
         index: u32,
     ) -> Result<Option<TransactionSnapshot>, TxnClientError> {
-        let (_span, options) = self.prepare_options("TxnClient::get_tx");
+        let options = self.prepare_options();
         let request = api::client::GetTxRequest {
             runtime_id: self.runtime_id,
             round,
@@ -212,7 +210,7 @@ impl TxnClient {
         block_hash: Hash,
         index: u32,
     ) -> Result<Option<TransactionSnapshot>, TxnClientError> {
-        let (_span, options) = self.prepare_options("TxnClient::get_tx_by_block_hash");
+        let options = self.prepare_options();
         let request = api::client::GetTxByBlockHashRequest {
             runtime_id: self.runtime_id,
             block_hash,
@@ -238,7 +236,7 @@ impl TxnClient {
 
     /// Retrieve transactions at specific I/O root.
     pub async fn get_txs(&self, round: u64, io_root: Hash) -> Result<TxnBatch, TxnClientError> {
-        let (_span, options) = self.prepare_options("TxnClient::get_txs");
+        let options = self.prepare_options();
         let request = api::client::GetTxsRequest {
             runtime_id: self.runtime_id,
             round,
@@ -258,7 +256,7 @@ impl TxnClient {
         &self,
         block_hash: Hash,
     ) -> Result<Option<BlockSnapshot>, TxnClientError> {
-        let (_span, options) = self.prepare_options("TxnClient::get_block_by_hash");
+        let options = self.prepare_options();
         let request = api::client::GetBlockByHashRequest {
             runtime_id: self.runtime_id,
             block_hash,
@@ -288,7 +286,7 @@ impl TxnClient {
         K: AsRef<[u8]>,
         V: AsRef<[u8]>,
     {
-        let (_span, options) = self.prepare_options("TxnClient::query_tx");
+        let options = self.prepare_options();
         let request = api::client::QueryTxRequest {
             runtime_id: self.runtime_id,
             key: key.as_ref().into(),
@@ -323,7 +321,7 @@ impl TxnClient {
         &self,
         query: api::client::Query,
     ) -> Result<Vec<TransactionSnapshot>, TxnClientError> {
-        let (_span, options) = self.prepare_options("TxnClient::query_txs");
+        let options = self.prepare_options();
         let request = api::client::QueryTxsRequest {
             runtime_id: self.runtime_id,
             query,
@@ -353,7 +351,7 @@ impl TxnClient {
 
     /// Wait for a block to be indexed by the indexer.
     pub async fn wait_block_indexed(&self, round: u64) -> Result<(), TxnClientError> {
-        let (_span, options) = self.prepare_options("TxnClient::wait_block_indexed");
+        let options = self.prepare_options();
         let request = api::client::WaitBlockIndexedRequest {
             runtime_id: self.runtime_id,
             round: round,
@@ -368,24 +366,13 @@ impl TxnClient {
         Ok(())
     }
 
-    fn prepare_options(&self, span_name: &'static str) -> (Span, grpcio::CallOption) {
-        // TODO: Use oasis_core_tracing to get the tracer.
-        let (tracer, _) = Tracer::new(AllSampler);
-
-        let span = tracer
-            .span(span_name)
-            .tag(tag::StdTag::span_kind("client"))
-            .start();
-
+    fn prepare_options(&self) -> grpcio::CallOption {
         let mut options = grpcio::CallOption::default().wait_for_ready(true);
         if let Some(timeout) = self.timeout {
             options = options.timeout(timeout);
         }
 
-        // TODO: Inject to options.
-        // options = inject_to_options(options, span.context());
-
-        (span, options)
+        options
     }
 }
 

@@ -21,7 +21,6 @@ use crate::{
     dispatcher::Dispatcher,
     rak::RAK,
     storage::KeyValue,
-    tracing,
     types::{Body, Error, Message, MessageType},
     BUILD_INFO,
 };
@@ -162,13 +161,11 @@ impl Protocol {
     }
 
     /// Make a new request to the worker host and wait for the response.
-    pub fn make_request(&self, ctx: Context, body: Body) -> Result<Body> {
+    pub fn make_request(&self, _ctx: Context, body: Body) -> Result<Body> {
         let id = self.last_request_id.fetch_add(1, Ordering::SeqCst) as u64;
-        let span_context = tracing::get_span_context(&ctx).unwrap_or(&vec![]).clone();
         let message = Message {
             id,
             body,
-            span_context,
             message_type: MessageType::Request,
         };
 
@@ -193,7 +190,6 @@ impl Protocol {
         self.encode_message(Message {
             id,
             body,
-            span_context: vec![],
             message_type: MessageType::Response,
         })
     }
@@ -233,8 +229,7 @@ impl Protocol {
             MessageType::Request => {
                 // Incoming request.
                 let id = message.id;
-                let mut ctx = Context::background();
-                tracing::add_span_context(&mut ctx, message.span_context);
+                let ctx = Context::background();
 
                 let body = match self.handle_request(ctx, id, message.body) {
                     Ok(Some(result)) => result,
@@ -253,7 +248,6 @@ impl Protocol {
                     id,
                     message_type: MessageType::Response,
                     body,
-                    span_context: vec![],
                 })?;
             }
             MessageType::Response => {

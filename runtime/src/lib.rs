@@ -59,7 +59,6 @@ pub mod macros;
 pub mod protocol;
 pub mod rak;
 pub mod storage;
-pub mod tracing;
 pub mod transaction;
 pub mod types;
 

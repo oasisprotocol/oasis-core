@@ -95,11 +95,11 @@ var (
 	// the runtime.
 	//
 	// NOTE: This version must be synced with runtime/src/common/version.rs.
-	RuntimeHostProtocol = Version{Major: 3, Minor: 0, Patch: 0}
+	RuntimeHostProtocol = Version{Major: 4, Minor: 0, Patch: 0}
 
 	// RuntimeCommitteeProtocol versions the P2P protocol used by the runtime
 	// committee members.
-	RuntimeCommitteeProtocol = Version{Major: 2, Minor: 0, Patch: 0}
+	RuntimeCommitteeProtocol = Version{Major: 3, Minor: 0, Patch: 0}
 
 	// TendermintAppVersion is Tendermint ABCI application's version computed by
 	// masking non-major consensus protocol version segments to 0 to be

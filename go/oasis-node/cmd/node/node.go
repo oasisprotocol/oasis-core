@@ -42,7 +42,6 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/metrics"
 	"github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/pprof"
 	cmdSigner "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/signer"
-	"github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/tracing"
 	registryAPI "github.com/oasisprotocol/oasis-core/go/registry/api"
 	roothashAPI "github.com/oasisprotocol/oasis-core/go/roothash/api"
 	runtimeClient "github.com/oasisprotocol/oasis-core/go/runtime/client"
@@ -652,18 +651,7 @@ func newNode(testNode bool) (node *Node, err error) { // nolint: gocyclo
 		"tls_pk", node.Identity.GetTLSSigner().Public(),
 	)
 
-	// Initialize the tracing client.
-	tracingSvc, err := tracing.New("oasis-node")
-	if err != nil {
-		logger.Error("failed to initialize tracing",
-			"err", err,
-		)
-		return nil, err
-	}
-	node.svcMgr.RegisterCleanupOnly(tracingSvc, "tracing")
-
 	// Initialize the internal gRPC server.
-	// Depends on global tracer.
 	node.grpcInternal, err = cmdGrpc.NewServerLocal(false)
 	if err != nil {
 		logger.Error("failed to initialize internal gRPC server",
@@ -790,7 +778,6 @@ func init() {
 	// Backend initialization flags.
 	for _, v := range []*flag.FlagSet{
 		metrics.Flags,
-		tracing.Flags,
 		cmdGrpc.ServerLocalFlags,
 		cmdSigner.Flags,
 		pprof.Flags,

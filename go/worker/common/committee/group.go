@@ -6,18 +6,13 @@ import (
 	"sync"
 	"time"
 
-	"github.com/opentracing/opentracing-go"
-	opentracingExt "github.com/opentracing/opentracing-go/ext"
-
 	beacon "github.com/oasisprotocol/oasis-core/go/beacon/api"
 	"github.com/oasisprotocol/oasis-core/go/common"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	"github.com/oasisprotocol/oasis-core/go/common/identity"
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
 	"github.com/oasisprotocol/oasis-core/go/common/node"
-	"github.com/oasisprotocol/oasis-core/go/common/tracing"
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
-	cmdFlags "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/flags"
 	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
 	"github.com/oasisprotocol/oasis-core/go/roothash/api/commitment"
 	"github.com/oasisprotocol/oasis-core/go/runtime/nodes"
@@ -506,27 +501,11 @@ func (g *Group) HandlePeerMessage(unusedPeerID signature.PublicKey, msg *p2p.Mes
 	ctx, cancel := context.WithTimeout(context.Background(), peerMessageProcessTimeout)
 	defer cancel()
 
-	// Import SpanContext from the message and store it in the current Context.
-	if msg.SpanContext != nil {
-		if !cmdFlags.DebugDontBlameOasis() {
-			// Tracing is only allowed in debug mode.
-			return p2pError.Permanent(fmt.Errorf("tracing span context only allowed in debug mode"))
-		}
-
-		sc, err := tracing.SpanContextFromBinary(msg.SpanContext)
-		if err == nil {
-			parentSpan := opentracing.StartSpan("parent", opentracingExt.RPCServerOption(sc))
-			span := opentracing.StartSpan("HandleBatch", opentracing.FollowsFrom(parentSpan.Context()))
-			defer span.Finish()
-			ctx = opentracing.ContextWithSpan(ctx, span)
-		}
-	}
-
 	return g.handler.HandlePeerMessage(ctx, msg, isOwn)
 }
 
 // Publish publishes a message to the P2P network.
-func (g *Group) Publish(spanCtx opentracing.SpanContext, msg *p2p.Message) error {
+func (g *Group) Publish(msg *p2p.Message) error {
 	g.RLock()
 	defer g.RUnlock()
 
@@ -538,10 +517,6 @@ func (g *Group) Publish(spanCtx opentracing.SpanContext, msg *p2p.Message) error
 	}
 
 	pubCtx := g.activeEpoch.roundCtx
-
-	if spanCtx != nil && cmdFlags.DebugDontBlameOasis() {
-		msg.SpanContext, _ = tracing.SpanContextToBinary(spanCtx)
-	}
 
 	// Populate message fields.
 	msg.GroupVersion = g.activeEpoch.groupVersion

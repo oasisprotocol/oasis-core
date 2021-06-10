@@ -5,8 +5,6 @@ import (
 	"errors"
 	"sync"
 
-	"github.com/opentracing/opentracing-go"
-
 	"github.com/oasisprotocol/oasis-core/go/common/cbor"
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
@@ -60,8 +58,6 @@ func (h *computeRuntimeHostHandler) Handle(ctx context.Context, body *protocol.B
 	// Storage.
 	if body.HostStorageSyncRequest != nil {
 		rq := body.HostStorageSyncRequest
-		span, sctx := opentracing.StartSpanFromContext(ctx, "storage.Sync")
-		defer span.Finish()
 
 		var rs syncer.ReadSyncer
 		switch rq.Endpoint {
@@ -74,7 +70,7 @@ func (h *computeRuntimeHostHandler) Handle(ctx context.Context, body *protocol.B
 			blk := h.node.CurrentBlock
 			h.node.CrossNode.Unlock()
 			if blk != nil {
-				sctx = storage.WithNodePriorityHintFromSignatures(sctx, blk.Header.StorageSignatures)
+				ctx = storage.WithNodePriorityHintFromSignatures(ctx, blk.Header.StorageSignatures)
 			}
 		case protocol.HostStorageEndpointConsensus:
 			// Consensus state storage.
@@ -87,11 +83,11 @@ func (h *computeRuntimeHostHandler) Handle(ctx context.Context, body *protocol.B
 		var err error
 		switch {
 		case rq.SyncGet != nil:
-			rsp, err = rs.SyncGet(sctx, rq.SyncGet)
+			rsp, err = rs.SyncGet(ctx, rq.SyncGet)
 		case rq.SyncGetPrefixes != nil:
-			rsp, err = rs.SyncGetPrefixes(sctx, rq.SyncGetPrefixes)
+			rsp, err = rs.SyncGetPrefixes(ctx, rq.SyncGetPrefixes)
 		case rq.SyncIterate != nil:
-			rsp, err = rs.SyncIterate(sctx, rq.SyncIterate)
+			rsp, err = rs.SyncIterate(ctx, rq.SyncIterate)
 		default:
 			return nil, errMethodNotSupported
 		}

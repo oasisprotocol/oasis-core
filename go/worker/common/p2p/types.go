@@ -15,9 +15,6 @@ type Message struct {
 	// non-matching group versions will be discarded.
 	GroupVersion int64 `json:"group_version,omitempty"`
 
-	// Jaeger's span context in binary format.
-	SpanContext []byte `json:"span,omitempty"`
-
 	ProposedBatch  *commitment.SignedProposedBatch `json:",omitempty"`
 	ExecutorCommit *commitment.ExecutorCommitment  `json:",omitempty"`
 	Tx             *executor.Tx                    `json:",omitempty"`
