@@ -369,6 +369,16 @@ func EventsFromTendermint(
 
 				evt := &api.Event{Height: height, TxHash: txHash, Escrow: &api.EscrowEvent{Add: &e}}
 				events = append(events, evt)
+			case bytes.Equal(key, app.KeyDebondingStart):
+				// Debonding start escrow event.
+				var e api.DebondingStartEscrowEvent
+				if err := cbor.Unmarshal(val, &e); err != nil {
+					errs = multierror.Append(errs, fmt.Errorf("staking: corrupt DebondingStart escrow event: %w", err))
+					continue
+				}
+
+				evt := &api.Event{Height: height, TxHash: txHash, Escrow: &api.EscrowEvent{DebondingStart: &e}}
+				events = append(events, evt)
 			case bytes.Equal(key, app.KeyBurn):
 				// Burn event.
 				var e api.BurnEvent
