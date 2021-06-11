@@ -19,9 +19,5 @@ members = [
     "tests/clients/test-long-term",
 ]
 
-[patch.crates-io]
-# TODO: Remove when merged upstream (briansmith/ring#738).
-ring = { git = "https://github.com/oasislabs/ring-sgx", branch = "sgx-target" }
-
 [profile.release]
 panic = "abort"
