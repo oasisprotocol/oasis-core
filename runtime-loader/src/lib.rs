@@ -1,10 +1,7 @@
 //! Oasis runtime loader.
-extern crate aesm_client;
-extern crate enclave_runner;
-extern crate failure;
-extern crate sgxs_loaders;
 
 pub mod elf;
+#[cfg(target_os = "linux")]
 pub mod sgxs;
 
 use failure::Fallible;
@@ -21,4 +18,6 @@ pub trait Loader {
 }
 
 // Re-exports.
-pub use self::{elf::ElfLoader, sgxs::SgxsLoader};
+pub use elf::ElfLoader;
+#[cfg(target_os = "linux")]
+pub use sgxs::SgxsLoader;
