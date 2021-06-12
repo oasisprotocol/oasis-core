@@ -30,6 +30,7 @@ const (
 	cfgNumEntities             = "fixture.default.num_entities"
 	cfgRuntimeID               = "fixture.default.runtime.id"
 	cfgRuntimeBinary           = "fixture.default.runtime.binary"
+	cfgRuntimeProvisioner      = "fixture.default.runtime.provisioner"
 	cfgRuntimeGenesisState     = "fixture.default.runtime.genesis_state"
 	cfgRuntimeLoader           = "fixture.default.runtime.loader"
 	cfgSetupRuntimes           = "fixture.default.setup_runtimes"
@@ -105,8 +106,12 @@ func newDefaultFixture() (*oasis.NetworkFixture, error) {
 		fixture.Entities = append(fixture.Entities, oasis.EntityCfg{})
 	}
 
+	runtimeProvisioner := viper.GetString(cfgRuntimeProvisioner)
+
 	// Always run a client node.
-	fixture.Clients = []oasis.ClientFixture{{}}
+	fixture.Clients = []oasis.ClientFixture{{
+		RuntimeProvisioner: runtimeProvisioner,
+	}}
 
 	if viper.GetBool(cfgSetupRuntimes) {
 		fixture.Runtimes = []oasis.RuntimeFixture{
@@ -129,15 +134,15 @@ func newDefaultFixture() (*oasis.NetworkFixture, error) {
 			{Runtime: 0, Serial: 1},
 		}
 		fixture.Keymanagers = []oasis.KeymanagerFixture{
-			{Runtime: 0, Entity: 1},
+			{Runtime: 0, Entity: 1, RuntimeProvisioner: runtimeProvisioner},
 		}
 		fixture.StorageWorkers = []oasis.StorageWorkerFixture{
 			{Backend: "badger", Entity: 1},
 		}
 		fixture.ComputeWorkers = []oasis.ComputeWorkerFixture{
-			{Entity: 1, Runtimes: []int{}},
-			{Entity: 1, Runtimes: []int{}},
-			{Entity: 1, Runtimes: []int{}},
+			{Entity: 1, Runtimes: []int{}, RuntimeProvisioner: runtimeProvisioner},
+			{Entity: 1, Runtimes: []int{}, RuntimeProvisioner: runtimeProvisioner},
+			{Entity: 1, Runtimes: []int{}, RuntimeProvisioner: runtimeProvisioner},
 		}
 
 		var runtimeIDs []common.Namespace
@@ -215,6 +220,7 @@ func init() {
 	DefaultFixtureFlags.String(cfgNodeBinary, "oasis-node", "path to the oasis-node binary")
 	DefaultFixtureFlags.StringSlice(cfgRuntimeID, []string{"8000000000000000000000000000000000000000000000000000000000000000"}, "runtime ID")
 	DefaultFixtureFlags.StringSlice(cfgRuntimeBinary, []string{"simple-keyvalue"}, "path to the runtime binary")
+	DefaultFixtureFlags.String(cfgRuntimeProvisioner, "sandboxed", "the runtime provisioner: mock, unconfined, or sandboxed")
 	// []string{""} as default doesn't work and ends up as an empty slice.
 	DefaultFixtureFlags.StringSlice(cfgRuntimeGenesisState, []string{"", ""}, "path to the runtime genesis state")
 	DefaultFixtureFlags.String(cfgRuntimeLoader, "oasis-core-runtime-loader", "path to the runtime loader")
