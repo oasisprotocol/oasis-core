@@ -308,6 +308,8 @@ type KeymanagerFixture struct {
 	Entity  int `json:"entity"`
 	Policy  int `json:"policy"`
 
+	RuntimeProvisioner string `json:"runtime_provisioner"`
+
 	AllowEarlyTermination bool `json:"allow_early_termination"`
 	AllowErrorTermination bool `json:"allow_error_termination"`
 
@@ -353,9 +355,10 @@ func (f *KeymanagerFixture) Create(net *Network) (*Keymanager, error) {
 			NoAutoStart:                 f.NoAutoStart,
 			Entity:                      entity,
 		},
-		Runtime:       runtime,
-		Policy:        policy,
-		SentryIndices: f.Sentries,
+		RuntimeProvisioner: f.RuntimeProvisioner,
+		Runtime:            runtime,
+		Policy:             policy,
+		SentryIndices:      f.Sentries,
 	})
 }
 
@@ -546,6 +549,8 @@ type ClientFixture struct {
 	// Runtimes contains the indexes of the runtimes to enable.
 	Runtimes []int `json:"runtimes,omitempty"`
 
+	RuntimeProvisioner string `json:"runtime_provisioner"`
+
 	// RuntimeConfig contains the per-runtime node-local configuration.
 	RuntimeConfig map[int]map[string]interface{} `json:"runtime_config,omitempty"`
 
@@ -564,9 +569,10 @@ func (f *ClientFixture) Create(net *Network) (*Client, error) {
 			SupplementarySanityInterval: f.Consensus.SupplementarySanityInterval,
 			EnableProfiling:             f.EnableProfiling,
 		},
-		MaxTransactionAge: f.MaxTransactionAge,
-		Runtimes:          f.Runtimes,
-		RuntimeConfig:     f.RuntimeConfig,
+		MaxTransactionAge:  f.MaxTransactionAge,
+		Runtimes:           f.Runtimes,
+		RuntimeProvisioner: f.RuntimeProvisioner,
+		RuntimeConfig:      f.RuntimeConfig,
 	})
 }
 

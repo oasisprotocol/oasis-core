@@ -4,15 +4,17 @@ import (
 	"fmt"
 
 	"github.com/oasisprotocol/oasis-core/go/common/node"
+	runtimeRegistry "github.com/oasisprotocol/oasis-core/go/runtime/registry"
 )
 
 // Client is an Oasis client node.
 type Client struct {
 	*Node
 
-	runtimes          []int
-	runtimeConfig     map[int]map[string]interface{}
-	maxTransactionAge int64
+	runtimes           []int
+	runtimeProvisioner string
+	runtimeConfig      map[int]map[string]interface{}
+	maxTransactionAge  int64
 
 	consensusPort uint16
 	p2pPort       uint16
@@ -22,15 +24,17 @@ type Client struct {
 type ClientCfg struct {
 	NodeCfg
 
-	Runtimes          []int
-	RuntimeConfig     map[int]map[string]interface{}
-	MaxTransactionAge int64
+	Runtimes           []int
+	RuntimeProvisioner string
+	RuntimeConfig      map[int]map[string]interface{}
+	MaxTransactionAge  int64
 }
 
 func (client *Client) AddArgs(args *argBuilder) error {
 	args.debugDontBlameOasis().
 		debugAllowTestKeys().
 		debugEnableProfiling(client.Node.pprofPort).
+		runtimeProvisioner(client.runtimeProvisioner).
 		tendermintPrune(client.consensus.PruneNumKept).
 		tendermintRecoverCorruptedWAL(client.consensus.TendermintRecoverCorruptedWAL).
 		tendermintCoreAddress(client.consensusPort).
@@ -64,13 +68,18 @@ func (net *Network) NewClient(cfg *ClientCfg) (*Client, error) {
 		return nil, err
 	}
 
+	if cfg.RuntimeProvisioner == "" {
+		cfg.RuntimeProvisioner = runtimeRegistry.RuntimeProvisionerSandboxed
+	}
+
 	client := &Client{
-		Node:              host,
-		runtimes:          cfg.Runtimes,
-		runtimeConfig:     cfg.RuntimeConfig,
-		maxTransactionAge: cfg.MaxTransactionAge,
-		consensusPort:     host.getProvisionedPort(nodePortConsensus),
-		p2pPort:           host.getProvisionedPort(nodePortP2P),
+		Node:               host,
+		runtimes:           cfg.Runtimes,
+		runtimeProvisioner: cfg.RuntimeProvisioner,
+		runtimeConfig:      cfg.RuntimeConfig,
+		maxTransactionAge:  cfg.MaxTransactionAge,
+		consensusPort:      host.getProvisionedPort(nodePortConsensus),
+		p2pPort:            host.getProvisionedPort(nodePortP2P),
 	}
 
 	net.clients = append(net.clients, client)
