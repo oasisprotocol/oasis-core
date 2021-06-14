@@ -62,7 +62,7 @@ require (
 	github.com/uber/jaeger-client-go v2.29.1+incompatible
 	github.com/uber/jaeger-lib v2.2.0+incompatible // indirect
 	github.com/whyrusleeping/go-logging v0.0.1
-	gitlab.com/yawning/dynlib.git v0.0.0-20200603163025-35fe007b0761
+	gitlab.com/yawning/dynlib.git v0.0.0-20210614104444-f6a90d03b144
 	go.dedis.ch/kyber/v3 v3.0.13
 	golang.org/x/crypto v0.0.0-20210322153248-0c34fe9e7dc2
 	golang.org/x/net v0.0.0-20210423184538-5f58ad60dda6
