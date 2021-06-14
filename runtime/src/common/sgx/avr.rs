@@ -5,13 +5,16 @@ use anyhow::{anyhow, Result};
 use base64;
 use byteorder::{LittleEndian, ReadBytesExt};
 use chrono::prelude::*;
-use pem::parse_many;
+use lazy_static::lazy_static;
+use oid_registry::{OID_PKCS1_RSAENCRYPTION, OID_PKCS1_SHA256WITHRSA};
 use percent_encoding;
+use rsa::{padding::PaddingScheme, Hash, PublicKey, RSAPublicKey};
 use serde::{Deserialize, Serialize};
 use serde_json;
 use sgx_isa::{AttributesFlags, Report};
+use sha2::{Digest, Sha256};
 use thiserror::Error;
-use webpki;
+use x509_parser::prelude::*;
 
 use crate::common::time::{insecure_posix_time, update_insecure_posix_time};
 
@@ -40,10 +43,16 @@ enum AVRError {
     MissingNonce,
     #[error("failed to parse quote")]
     MalformedQuote,
-    #[error("unable to find any certificates")]
-    NoCertificates,
+    #[error("unable to find exactly 2 certificates")]
+    ChainNotTwoCertificates,
     #[error("malformed certificate PEM")]
     MalformedCertificatePEM,
+    #[error("malformed certificate DER")]
+    MalformedCertificateDER,
+    #[error("expired certificate")]
+    ExpiredCertificate,
+    #[error("invalid signature")]
+    InvalidSignature,
 }
 
 pub const QUOTE_CONTEXT_LEN: usize = 8;
@@ -55,80 +64,57 @@ impl_bytes!(MrEnclave, 32, "Enclave hash (MRENCLAVE).");
 impl_bytes!(MrSigner, 32, "Enclave signer hash (MRSIGNER).");
 
 // AVR signature validation constants.
-static IAS_ANCHORS: [webpki::TrustAnchor<'static>; 1] = [
-    // Derived via webpki::trust_anchor_util::generate_code_for_trust_anchors.
-    //
-    // -----BEGIN CERTIFICATE-----
-    // MIIFSzCCA7OgAwIBAgIJANEHdl0yo7CUMA0GCSqGSIb3DQEBCwUAMH4xCzAJBgNV
-    // BAYTAlVTMQswCQYDVQQIDAJDQTEUMBIGA1UEBwwLU2FudGEgQ2xhcmExGjAYBgNV
-    // BAoMEUludGVsIENvcnBvcmF0aW9uMTAwLgYDVQQDDCdJbnRlbCBTR1ggQXR0ZXN0
-    // YXRpb24gUmVwb3J0IFNpZ25pbmcgQ0EwIBcNMTYxMTE0MTUzNzMxWhgPMjA0OTEy
-    // MzEyMzU5NTlaMH4xCzAJBgNVBAYTAlVTMQswCQYDVQQIDAJDQTEUMBIGA1UEBwwL
-    // U2FudGEgQ2xhcmExGjAYBgNVBAoMEUludGVsIENvcnBvcmF0aW9uMTAwLgYDVQQD
-    // DCdJbnRlbCBTR1ggQXR0ZXN0YXRpb24gUmVwb3J0IFNpZ25pbmcgQ0EwggGiMA0G
-    // CSqGSIb3DQEBAQUAA4IBjwAwggGKAoIBgQCfPGR+tXc8u1EtJzLA10Feu1Wg+p7e
-    // LmSRmeaCHbkQ1TF3Nwl3RmpqXkeGzNLd69QUnWovYyVSndEMyYc3sHecGgfinEeh
-    // rgBJSEdsSJ9FpaFdesjsxqzGRa20PYdnnfWcCTvFoulpbFR4VBuXnnVLVzkUvlXT
-    // L/TAnd8nIZk0zZkFJ7P5LtePvykkar7LcSQO85wtcQe0R1Raf/sQ6wYKaKmFgCGe
-    // NpEJUmg4ktal4qgIAxk+QHUxQE42sxViN5mqglB0QJdUot/o9a/V/mMeH8KvOAiQ
-    // byinkNndn+Bgk5sSV5DFgF0DffVqmVMblt5p3jPtImzBIH0QQrXJq39AT8cRwP5H
-    // afuVeLHcDsRp6hol4P+ZFIhu8mmbI1u0hH3W/0C2BuYXB5PC+5izFFh/nP0lc2Lf
-    // 6rELO9LZdnOhpL1ExFOq9H/B8tPQ84T3Sgb4nAifDabNt/zu6MmCGo5U8lwEFtGM
-    // RoOaX4AS+909x00lYnmtwsDVWv9vBiJCXRsCAwEAAaOByTCBxjBgBgNVHR8EWTBX
-    // MFWgU6BRhk9odHRwOi8vdHJ1c3RlZHNlcnZpY2VzLmludGVsLmNvbS9jb250ZW50
-    // L0NSTC9TR1gvQXR0ZXN0YXRpb25SZXBvcnRTaWduaW5nQ0EuY3JsMB0GA1UdDgQW
-    // BBR4Q3t2pn680K9+QjfrNXw7hwFRPDAfBgNVHSMEGDAWgBR4Q3t2pn680K9+Qjfr
-    // NXw7hwFRPDAOBgNVHQ8BAf8EBAMCAQYwEgYDVR0TAQH/BAgwBgEB/wIBADANBgkq
-    // hkiG9w0BAQsFAAOCAYEAeF8tYMXICvQqeXYQITkV2oLJsp6J4JAqJabHWxYJHGir
-    // IEqucRiJSSx+HjIJEUVaj8E0QjEud6Y5lNmXlcjqRXaCPOqK0eGRz6hi+ripMtPZ
-    // sFNaBwLQVV905SDjAzDzNIDnrcnXyB4gcDFCvwDFKKgLRjOB/WAqgscDUoGq5ZVi
-    // zLUzTqiQPmULAQaB9c6Oti6snEFJiCQ67JLyW/E83/frzCmO5Ru6WjU4tmsmy8Ra
-    // Ud4APK0wZTGtfPXU7w+IBdG5Ez0kE1qzxGQaL4gINJ1zMyleDnbuS8UicjJijvqA
-    // 152Sq049ESDz+1rRGc2NVEqh1KaGXmtXvqxXcTB+Ljy5Bw2ke0v8iGngFBPqCTVB
-    // 3op5KBG3RjbF6RRSzwzuWfL7QErNC8WEy5yDVARzTA5+xmBc388v9Dm21HGfcC8O
-    // DD+gT9sSpssq0ascmvH49MOgjt1yoysLtdCtJW/9FZpoOypaHx0R+mJTLwPXVMrv
-    // DaVzWh5aiEx+idkSGMnX
-    // -----END CERTIFICATE-----
-    webpki::TrustAnchor {
-        subject: &[
-            49, 11, 48, 9, 6, 3, 85, 4, 6, 19, 2, 85, 83, 49, 11, 48, 9, 6, 3, 85, 4, 8, 12, 2, 67,
-            65, 49, 20, 48, 18, 6, 3, 85, 4, 7, 12, 11, 83, 97, 110, 116, 97, 32, 67, 108, 97, 114,
-            97, 49, 26, 48, 24, 6, 3, 85, 4, 10, 12, 17, 73, 110, 116, 101, 108, 32, 67, 111, 114,
-            112, 111, 114, 97, 116, 105, 111, 110, 49, 48, 48, 46, 6, 3, 85, 4, 3, 12, 39, 73, 110,
-            116, 101, 108, 32, 83, 71, 88, 32, 65, 116, 116, 101, 115, 116, 97, 116, 105, 111, 110,
-            32, 82, 101, 112, 111, 114, 116, 32, 83, 105, 103, 110, 105, 110, 103, 32, 67, 65,
-        ],
-        spki: &[
-            48, 13, 6, 9, 42, 134, 72, 134, 247, 13, 1, 1, 1, 5, 0, 3, 130, 1, 143, 0, 48, 130, 1,
-            138, 2, 130, 1, 129, 0, 159, 60, 100, 126, 181, 119, 60, 187, 81, 45, 39, 50, 192, 215,
-            65, 94, 187, 85, 160, 250, 158, 222, 46, 100, 145, 153, 230, 130, 29, 185, 16, 213, 49,
-            119, 55, 9, 119, 70, 106, 106, 94, 71, 134, 204, 210, 221, 235, 212, 20, 157, 106, 47,
-            99, 37, 82, 157, 209, 12, 201, 135, 55, 176, 119, 156, 26, 7, 226, 156, 71, 161, 174,
-            0, 73, 72, 71, 108, 72, 159, 69, 165, 161, 93, 122, 200, 236, 198, 172, 198, 69, 173,
-            180, 61, 135, 103, 157, 245, 156, 9, 59, 197, 162, 233, 105, 108, 84, 120, 84, 27, 151,
-            158, 117, 75, 87, 57, 20, 190, 85, 211, 47, 244, 192, 157, 223, 39, 33, 153, 52, 205,
-            153, 5, 39, 179, 249, 46, 215, 143, 191, 41, 36, 106, 190, 203, 113, 36, 14, 243, 156,
-            45, 113, 7, 180, 71, 84, 90, 127, 251, 16, 235, 6, 10, 104, 169, 133, 128, 33, 158, 54,
-            145, 9, 82, 104, 56, 146, 214, 165, 226, 168, 8, 3, 25, 62, 64, 117, 49, 64, 78, 54,
-            179, 21, 98, 55, 153, 170, 130, 80, 116, 64, 151, 84, 162, 223, 232, 245, 175, 213,
-            254, 99, 30, 31, 194, 175, 56, 8, 144, 111, 40, 167, 144, 217, 221, 159, 224, 96, 147,
-            155, 18, 87, 144, 197, 128, 93, 3, 125, 245, 106, 153, 83, 27, 150, 222, 105, 222, 51,
-            237, 34, 108, 193, 32, 125, 16, 66, 181, 201, 171, 127, 64, 79, 199, 17, 192, 254, 71,
-            105, 251, 149, 120, 177, 220, 14, 196, 105, 234, 26, 37, 224, 255, 153, 20, 136, 110,
-            242, 105, 155, 35, 91, 180, 132, 125, 214, 255, 64, 182, 6, 230, 23, 7, 147, 194, 251,
-            152, 179, 20, 88, 127, 156, 253, 37, 115, 98, 223, 234, 177, 11, 59, 210, 217, 118,
-            115, 161, 164, 189, 68, 196, 83, 170, 244, 127, 193, 242, 211, 208, 243, 132, 247, 74,
-            6, 248, 156, 8, 159, 13, 166, 205, 183, 252, 238, 232, 201, 130, 26, 142, 84, 242, 92,
-            4, 22, 209, 140, 70, 131, 154, 95, 128, 18, 251, 221, 61, 199, 77, 37, 98, 121, 173,
-            194, 192, 213, 90, 255, 111, 6, 34, 66, 93, 27, 2, 3, 1, 0, 1,
-        ],
-        name_constraints: None,
-    },
-];
-static IAS_SIG_ALGS: &'static [&'static webpki::SignatureAlgorithm] =
-    &[&webpki::RSA_PKCS1_2048_8192_SHA256];
+const IAS_TRUST_ANCHOR_PEM: &str = r#"-----BEGIN CERTIFICATE-----
+MIIFSzCCA7OgAwIBAgIJANEHdl0yo7CUMA0GCSqGSIb3DQEBCwUAMH4xCzAJBgNV
+BAYTAlVTMQswCQYDVQQIDAJDQTEUMBIGA1UEBwwLU2FudGEgQ2xhcmExGjAYBgNV
+BAoMEUludGVsIENvcnBvcmF0aW9uMTAwLgYDVQQDDCdJbnRlbCBTR1ggQXR0ZXN0
+YXRpb24gUmVwb3J0IFNpZ25pbmcgQ0EwIBcNMTYxMTE0MTUzNzMxWhgPMjA0OTEy
+MzEyMzU5NTlaMH4xCzAJBgNVBAYTAlVTMQswCQYDVQQIDAJDQTEUMBIGA1UEBwwL
+U2FudGEgQ2xhcmExGjAYBgNVBAoMEUludGVsIENvcnBvcmF0aW9uMTAwLgYDVQQD
+DCdJbnRlbCBTR1ggQXR0ZXN0YXRpb24gUmVwb3J0IFNpZ25pbmcgQ0EwggGiMA0G
+CSqGSIb3DQEBAQUAA4IBjwAwggGKAoIBgQCfPGR+tXc8u1EtJzLA10Feu1Wg+p7e
+LmSRmeaCHbkQ1TF3Nwl3RmpqXkeGzNLd69QUnWovYyVSndEMyYc3sHecGgfinEeh
+rgBJSEdsSJ9FpaFdesjsxqzGRa20PYdnnfWcCTvFoulpbFR4VBuXnnVLVzkUvlXT
+L/TAnd8nIZk0zZkFJ7P5LtePvykkar7LcSQO85wtcQe0R1Raf/sQ6wYKaKmFgCGe
+NpEJUmg4ktal4qgIAxk+QHUxQE42sxViN5mqglB0QJdUot/o9a/V/mMeH8KvOAiQ
+byinkNndn+Bgk5sSV5DFgF0DffVqmVMblt5p3jPtImzBIH0QQrXJq39AT8cRwP5H
+afuVeLHcDsRp6hol4P+ZFIhu8mmbI1u0hH3W/0C2BuYXB5PC+5izFFh/nP0lc2Lf
+6rELO9LZdnOhpL1ExFOq9H/B8tPQ84T3Sgb4nAifDabNt/zu6MmCGo5U8lwEFtGM
+RoOaX4AS+909x00lYnmtwsDVWv9vBiJCXRsCAwEAAaOByTCBxjBgBgNVHR8EWTBX
+MFWgU6BRhk9odHRwOi8vdHJ1c3RlZHNlcnZpY2VzLmludGVsLmNvbS9jb250ZW50
+L0NSTC9TR1gvQXR0ZXN0YXRpb25SZXBvcnRTaWduaW5nQ0EuY3JsMB0GA1UdDgQW
+BBR4Q3t2pn680K9+QjfrNXw7hwFRPDAfBgNVHSMEGDAWgBR4Q3t2pn680K9+Qjfr
+NXw7hwFRPDAOBgNVHQ8BAf8EBAMCAQYwEgYDVR0TAQH/BAgwBgEB/wIBADANBgkq
+hkiG9w0BAQsFAAOCAYEAeF8tYMXICvQqeXYQITkV2oLJsp6J4JAqJabHWxYJHGir
+IEqucRiJSSx+HjIJEUVaj8E0QjEud6Y5lNmXlcjqRXaCPOqK0eGRz6hi+ripMtPZ
+sFNaBwLQVV905SDjAzDzNIDnrcnXyB4gcDFCvwDFKKgLRjOB/WAqgscDUoGq5ZVi
+zLUzTqiQPmULAQaB9c6Oti6snEFJiCQ67JLyW/E83/frzCmO5Ru6WjU4tmsmy8Ra
+Ud4APK0wZTGtfPXU7w+IBdG5Ez0kE1qzxGQaL4gINJ1zMyleDnbuS8UicjJijvqA
+152Sq049ESDz+1rRGc2NVEqh1KaGXmtXvqxXcTB+Ljy5Bw2ke0v8iGngFBPqCTVB
+3op5KBG3RjbF6RRSzwzuWfL7QErNC8WEy5yDVARzTA5+xmBc388v9Dm21HGfcC8O
+DD+gT9sSpssq0ascmvH49MOgjt1yoysLtdCtJW/9FZpoOypaHx0R+mJTLwPXVMrv
+DaVzWh5aiEx+idkSGMnX
+-----END CERTIFICATE-----"#;
 const PEM_CERTIFICATE_LABEL: &str = "CERTIFICATE";
 const IAS_TS_FMT: &str = "%FT%T%.6f";
+lazy_static! {
+    static ref IAS_TRUST_ANCHOR: Vec<u8> = {
+        let pem = match parse_x509_pem(IAS_TRUST_ANCHOR_PEM.as_bytes()) {
+            Ok((rem, pem)) => {
+                if !rem.is_empty() {
+                    panic!("anchor PEM has trailing garbage");
+                }
+                if pem.label != PEM_CERTIFICATE_LABEL {
+                    panic!("PEM does not contain a certificate: '{:?}'", pem.label);
+                }
+                pem
+            }
+            err => panic!("failed to decode anchor PEM: {:?}", err),
+        };
+
+        pem.contents.to_vec()
+    };
+}
 
 /// Decoded quote body.
 #[derive(Default, Debug)]
@@ -342,47 +328,156 @@ fn validate_avr_signature(
     signature: &[u8],
     unix_time: u64,
 ) -> Result<()> {
-    // Load the Intel SGX Attestation Report Signing CA certificate.
-    let anchors = webpki::TLSServerTrustAnchors(&IAS_ANCHORS);
+    // WARNING: This is the entirely wrong way to validate a certificate
+    // chain as it does not come close to implementing anything resembling
+    // what is specified in RFC 5280 6.1.  There probably should be a CRL
+    // check here as well, now that I think about it.
+    //
+    // The main assumptions made about how exactly the signing key is
+    // certified/distributed, and the AVR is signed are based on the
+    // following documentation:
+    //
+    //  * 4.2.2 Report Signature:
+    //    * "The Attestation Verification Report is cryptographically
+    //       signed by Report Signing Key (owned by the Attestation
+    //       Service) using the RSA-SHA256 algorithm."
+    //  * 4.2.3 Report Signing Certificate Chain:
+    //    * "The public part of Report Key is distributed in the form
+    //       of an x.509 digital certificate called Attestation Report
+    //       Signing Certificate. It is a leaf certificate issued by
+    //       the Attestation Report Signing CA Certificate"
+    //    * "A PEM-encoded certificate chain consisting of Attestation
+    //       Report Signing Certificate and Attestation Report Signing
+    //       CA Certificate is returned..."
+    //
+    // See: "Attestation Service for Intel(R) Software Guard Extensions
+    // (Intel(R) SGX): API Documentation" (Revision: 6.0)
 
-    // Decode the certificate chain.
+    // Decode the certificate chain from percent encoded PEM to DER.
     let raw_pem = percent_encoding::percent_decode(cert_chain).decode_utf8()?;
-    let mut cert_chain = Vec::new();
-    for pem in parse_many(&raw_pem.as_bytes()) {
-        if pem.tag != PEM_CERTIFICATE_LABEL {
+    let mut cert_ders = Vec::new();
+    for pem in pem::Pem::iter_from_buffer(&raw_pem.as_bytes()) {
+        let pem = match pem {
+            Ok(p) => p,
+            Err(_) => return Err(AVRError::MalformedCertificatePEM.into()),
+        };
+        if pem.label != PEM_CERTIFICATE_LABEL {
             return Err(AVRError::MalformedCertificatePEM.into());
         }
-        cert_chain.push(pem.contents);
-    }
-    if cert_chain.len() == 0 {
-        return Err(AVRError::NoCertificates.into());
+        cert_ders.push(pem.contents);
     }
 
-    // Decode the signature.
+    // IAS per the API will only ever send two certificates.
+    if cert_ders.len() != 2 {
+        return Err(AVRError::ChainNotTwoCertificates.into());
+    }
+
+    // Convert our timestamp to something that can be used to check
+    // certificate expiration.
+    let time = ASN1Time::from_timestamp(unix_time as i64);
+
+    // Attestation Report Signing CA Certificate:
+    //
+    // Ensure that it matches the hard-coded copy, and decode it, so
+    // that the expiration can be validated and the public key can
+    // be used to verify the leaf certificate's signature.
+    //
+    // This could be more paranoid and check that the cert doesn't
+    // have trailing garbage, the usage is correct, etc, but we can
+    // take it as a matter of faith that it is well-formed since
+    // it is the same as the hard-coded one.
+    //
+    // TODO/perf: In theory this can be done once and only once, but
+    // the borrow checker thwarted my attempts to initialize a tuple
+    // containing a X509Certificate and Pem via lazy_static.
+    if cert_ders[1] != *IAS_TRUST_ANCHOR {
+        return Err(anyhow!("AVR certificate chain trust anchor mismatch"));
+    }
+    let anchor = match parse_x509_certificate(&cert_ders[1]) {
+        Ok((_, cert)) => cert,
+        Err(_) => return Err(AVRError::MalformedCertificateDER.into()),
+    };
+    if !anchor.validity().is_valid_at(time) {
+        return Err(AVRError::ExpiredCertificate.into());
+    }
+    let anchor_pk = extract_certificate_rsa_public_key(&anchor)?;
+    if !check_certificate_rsa_signature(&anchor, &anchor_pk) {
+        // The hard-coded cert is self-signed.  This will need to be
+        // changed if it ever isn't.
+        return Err(anyhow!(
+            "AVR certificate chain trust anchor has invalid signature"
+        ));
+    }
+    if !anchor.tbs_certificate.is_ca() {
+        return Err(anyhow!("AVR certificate trust anchor is not a CA"));
+    }
+
+    // Attestation Report Signing Certificate (leaf):
+    //
+    // Decode the certificate, ensure that it appears to be sensible,
+    // and then pull out the public key that presumably signs the AVR.
+    let leaf = match parse_x509_certificate(&cert_ders[0]) {
+        Ok((rem, cert)) => {
+            if !rem.is_empty() {
+                return Err(AVRError::MalformedCertificateDER.into());
+            }
+            cert
+        }
+        Err(_) => return Err(AVRError::MalformedCertificateDER.into()),
+    };
+    if !check_certificate_rsa_signature(&leaf, &anchor_pk) {
+        return Err(anyhow!("invalid leaf certificate signature"));
+    }
+
+    if !leaf.validity().is_valid_at(time) {
+        return Err(AVRError::ExpiredCertificate.into());
+    }
+    match leaf.tbs_certificate.key_usage() {
+        Some(ku) => {
+            if !ku.1.digital_signature() {
+                return Err(anyhow!("leaf certificate can't sign"));
+            }
+        }
+        None => {
+            return Err(anyhow!("leaf cert missing key usage"));
+        }
+    }
+
+    // Validate the actual signature.
+    let leaf_pk = extract_certificate_rsa_public_key(&leaf)?;
+    let padding = PaddingScheme::new_pkcs1v15_sign(Some(Hash::SHA2_256));
+    let digest = Sha256::new().chain(message).finalize();
     let signature = base64::decode(signature)?;
-
-    let time = webpki::Time::from_seconds_since_unix_epoch(unix_time);
-
-    // Do all the actual validation.
-    match validate_decoded_avr_signature(&anchors, &cert_chain, message, signature, time) {
+    match leaf_pk.verify(padding, &digest, &signature) {
         Ok(_) => Ok(()),
-        Err(err) => Err(anyhow!("Failed to validate AVR signature: {:?}", err)),
+        Err(_) => return Err(AVRError::InvalidSignature.into()),
     }
 }
 
-fn validate_decoded_avr_signature(
-    anchors: &webpki::TLSServerTrustAnchors,
-    cert_ders: &Vec<Vec<u8>>,
-    message: &[u8],
-    signature: Vec<u8>,
-    time: webpki::Time,
-) -> Result<()> {
-    assert!(cert_ders.len() >= 1);
-    let (cert_der, inter_ders) = cert_ders.split_at(1);
-    let inter_ders: Vec<_> = inter_ders.iter().map(|der| &der[..]).collect();
-    let cert = webpki::EndEntityCert::from(&cert_der[0])?;
-    cert.verify_is_valid_tls_server_cert(IAS_SIG_ALGS, &anchors, &inter_ders, time)?;
-    Ok(cert.verify_signature(IAS_SIG_ALGS[0], message, &signature)?)
+fn extract_certificate_rsa_public_key(cert: &X509Certificate) -> Result<RSAPublicKey> {
+    let cert_spki = &cert.tbs_certificate.subject_pki;
+    if cert_spki.algorithm.algorithm != OID_PKCS1_RSAENCRYPTION {
+        return Err(anyhow!("invalid certificate public key algorithm"));
+    }
+
+    match RSAPublicKey::from_pkcs1(cert_spki.subject_public_key.data) {
+        Ok(pk) => Ok(pk),
+        Err(err) => return Err(anyhow!("invalid certificate public key: {:?}", err)),
+    }
+}
+
+fn check_certificate_rsa_signature(cert: &X509Certificate, public_key: &RSAPublicKey) -> bool {
+    if cert.signature_algorithm.algorithm != OID_PKCS1_SHA256WITHRSA {
+        return false;
+    }
+    let padding = PaddingScheme::new_pkcs1v15_sign(Some(Hash::SHA2_256));
+    let digest = Sha256::new()
+        .chain(cert.tbs_certificate.as_ref())
+        .finalize();
+
+    public_key
+        .verify(padding, &digest, &cert.signature_value.data)
+        .is_ok()
 }
 
 /// Return true iff the (POXIX) timestamp is considered "fresh" for the purposes
