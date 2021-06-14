@@ -21,7 +21,8 @@ use crate::{
 };
 
 /// Location of the protocol server binary.
-const PROTOCOL_SERVER_BINARY: &'static str = env!("OASIS_STORAGE_PROTOCOL_SERVER_BINARY");
+static PROTOCOL_SERVER_BINARY: Option<&'static str> =
+    option_env!("OASIS_STORAGE_PROTOCOL_SERVER_BINARY");
 
 /// Interoperability protocol server for testing storage.
 pub struct ProtocolServer {
@@ -60,7 +61,8 @@ impl ProtocolServer {
         let socket_path = datadir.path().join("socket");
 
         // Start protocol server.
-        let mut server_cmd = Command::new(PROTOCOL_SERVER_BINARY);
+        let server_binary = PROTOCOL_SERVER_BINARY.expect("no server binary configured");
+        let mut server_cmd = Command::new(server_binary);
         server_cmd
             .arg("proto-server")
             .arg("--datadir")
