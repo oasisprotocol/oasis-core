@@ -1110,8 +1110,8 @@ github.com/yuin/goldmark v1.1.32/go.mod h1:3hX8gzYuyVAZsxl0MRgGTJEmQBFcNTphYh9de
 github.com/yuin/goldmark v1.2.1/go.mod h1:3hX8gzYuyVAZsxl0MRgGTJEmQBFcNTphYh9decYSb74=
 gitlab.com/yawning/bsaes.git v0.0.0-20190805113838-0a714cd429ec h1:FpfFs4EhNehiVfzQttTuxanPIT43FtkkCFypIod8LHo=
 gitlab.com/yawning/bsaes.git v0.0.0-20190805113838-0a714cd429ec/go.mod h1:BZ1RAoRPbCxum9Grlv5aeksu2H8BiKehBYooU2LFiOQ=
-gitlab.com/yawning/dynlib.git v0.0.0-20200603163025-35fe007b0761 h1:27Qf3BkBLzRQ8tZbGy77kh+n+0MtnA/ucg1fAf7l9S0=
-gitlab.com/yawning/dynlib.git v0.0.0-20200603163025-35fe007b0761/go.mod h1:U41r+zgpFRTlkSzMhBjUqbupvVBafgokFFkKn0j+874=
+gitlab.com/yawning/dynlib.git v0.0.0-20210614104444-f6a90d03b144 h1:kVYkX5NmBStUtibJa2HEc03E/AwOydg5YyfS46ued74=
+gitlab.com/yawning/dynlib.git v0.0.0-20210614104444-f6a90d03b144/go.mod h1:U41r+zgpFRTlkSzMhBjUqbupvVBafgokFFkKn0j+874=
 gitlab.com/yawning/slice.git v0.0.0-20190714152416-bc4ae2510529 h1:GeSIG/kLmenUveo0XvlLXXtcKDeeItKA8iFnf0osNfg=
 gitlab.com/yawning/slice.git v0.0.0-20190714152416-bc4ae2510529/go.mod h1:sgaKGjNNjAAVrZvQQhE3oYIbnFZVaCBE2T7PmbpKJ4U=
 go.dedis.ch/fixbuf v1.0.3 h1:hGcV9Cd/znUxlusJ64eAlExS+5cJDIyTyEG+otu5wQs=
