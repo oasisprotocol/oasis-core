@@ -81,12 +81,12 @@ type Node struct { // nolint: maligned
 
 	Name   string
 	NodeID signature.PublicKey
-	Args   *argBuilder
 
 	net *Network
 	dir *env.Dir
 	cmd *exec.Cmd
 
+	extraArgs      []Argument
 	features       []Feature
 	hasValidators  bool
 	assignedPorts  map[string]uint16
@@ -201,6 +201,8 @@ func (n *Node) Start() error {
 	for _, hosted := range n.hostedRuntimes {
 		args.appendHostedRuntime(hosted.runtime, hosted.tee, hosted.binaryIdx, hosted.localConfig)
 	}
+
+	args.extraArgs(n.extraArgs)
 
 	if customStart != nil {
 		return customStart.CustomStart(args)
@@ -359,6 +361,8 @@ type NodeCfg struct { // nolint: maligned
 	Consensus ConsensusFixture
 
 	Entity *Entity
+
+	ExtraArgs []Argument
 }
 
 // Into sets node parameters of an existing node object from the configuration.
@@ -381,6 +385,7 @@ func (cfg *NodeCfg) Into(node *Node) {
 	if node.pprofPort == 0 && cfg.EnableProfiling {
 		node.pprofPort = node.getProvisionedPort(nodePortPprof)
 	}
+	node.extraArgs = cfg.ExtraArgs
 }
 
 func nodeLogPath(dir *env.Dir) string {
