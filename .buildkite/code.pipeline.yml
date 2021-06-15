@@ -279,24 +279,6 @@ steps:
     plugins:
       <<: *docker_plugin_sgx
 
-  ###############
-  # Consensus simulator tests
-  ###############
-  - label: Consensus simulator tests
-    timeout_in_minutes: 3
-    command:
-      - .buildkite/scripts/download_e2e_test_artifacts.sh
-      - .buildkite/scripts/test_consim.sh
-    artifact_paths:
-      - /tmp/consim-datadir/*.json
-      - /tmp/consim-datadir/consim.log
-    env:
-      TEST_BASE_DIR: /tmp
-    retry:
-      <<: *retry_agent_failure
-    plugins:
-      <<: *docker_plugin
-
   ####################################
   # Rust coverage job (only on master)
   ####################################
