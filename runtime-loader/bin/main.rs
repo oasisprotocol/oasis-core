@@ -5,7 +5,9 @@ use std::path::Path;
 
 use clap::{App, Arg};
 
-use oasis_core_runtime_loader::{ElfLoader, Loader, SgxsLoader};
+#[cfg(target_os = "linux")]
+use oasis_core_runtime_loader::SgxsLoader;
+use oasis_core_runtime_loader::{ElfLoader, Loader};
 
 fn main() {
     let matches = App::new("Oasis runtime loader")
@@ -52,7 +54,10 @@ fn main() {
 
     // Create appropriate loader and run the runtime.
     let loader: Box<dyn Loader> = match mode {
+        #[cfg(target_os = "linux")]
         "sgxs" => Box::new(SgxsLoader),
+        #[cfg(not(target_os = "linux"))]
+        "sgxs" => panic!("SGXS loader is only supported on Linux"),
         "elf" => Box::new(ElfLoader),
         _ => panic!("Invalid runtime type specified"),
     };
