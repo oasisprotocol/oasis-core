@@ -113,6 +113,8 @@ func newDefaultFixture() (*oasis.NetworkFixture, error) {
 		RuntimeProvisioner: runtimeProvisioner,
 	}}
 
+	usingKeymanager := viper.IsSet(cfgKeymanagerBinary)
+
 	if viper.GetBool(cfgSetupRuntimes) {
 		fixture.Runtimes = []oasis.RuntimeFixture{
 			// Key manager runtime.
@@ -130,11 +132,13 @@ func newDefaultFixture() (*oasis.NetworkFixture, error) {
 				GovernanceModel: registry.GovernanceEntity,
 			},
 		}
-		fixture.KeymanagerPolicies = []oasis.KeymanagerPolicyFixture{
-			{Runtime: 0, Serial: 1},
-		}
-		fixture.Keymanagers = []oasis.KeymanagerFixture{
-			{Runtime: 0, Entity: 1, RuntimeProvisioner: runtimeProvisioner},
+		if usingKeymanager {
+			fixture.KeymanagerPolicies = []oasis.KeymanagerPolicyFixture{
+				{Runtime: 0, Serial: 1},
+			}
+			fixture.Keymanagers = []oasis.KeymanagerFixture{
+				{Runtime: 0, Entity: 1, RuntimeProvisioner: runtimeProvisioner},
+			}
 		}
 		fixture.StorageWorkers = []oasis.StorageWorkerFixture{
 			{Backend: "badger", Entity: 1},
@@ -163,13 +167,18 @@ func newDefaultFixture() (*oasis.NetworkFixture, error) {
 			cmdCommon.EarlyLogAndExit(fmt.Errorf("missing runtime genesis states, provided: %d, required: %d", l1, l2))
 		}
 
+		keymanagerIdx := -1
+		if usingKeymanager {
+			keymanagerIdx = 0
+		}
+
 		for i, rt := range runtimes {
 			// Compute runtime.
 			fixture.Runtimes = append(fixture.Runtimes, oasis.RuntimeFixture{
 				ID:         runtimeIDs[i],
 				Kind:       registry.KindCompute,
 				Entity:     0,
-				Keymanager: 0,
+				Keymanager: keymanagerIdx,
 				Binaries: map[node.TEEHardware][]string{
 					tee: {rt},
 				},
