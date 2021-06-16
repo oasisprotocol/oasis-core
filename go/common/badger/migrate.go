@@ -57,6 +57,14 @@ func backup(db *badgerV2.DB, w io.Writer, managed bool) (uint64, error) {
 				Meta:      []byte{meta},
 			}
 			list.Kv = append(list.Kv, kv)
+
+			if !managed {
+				// Migrate only last version of the key in case this is a non-managed database.
+				// All non-managed oasis-core databases are configured to only keep one version,
+				// but due to what looks like a badger bug, it can happen that a key can have
+				// multiple historical versions in the database.
+				return list, nil
+			}
 		}
 		return list, nil
 	}
