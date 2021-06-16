@@ -3,7 +3,6 @@ package governance
 import (
 	"fmt"
 
-	"github.com/oasisprotocol/oasis-core/go/common/cbor"
 	"github.com/oasisprotocol/oasis-core/go/common/node"
 	"github.com/oasisprotocol/oasis-core/go/consensus/tendermint/api"
 	governanceState "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/apps/governance/state"
@@ -177,11 +176,10 @@ func (app *governanceApplication) submitProposal(
 
 	// Emit events.
 	// Proposal submitted.
-	evt := &governance.ProposalSubmittedEvent{
+	ctx.EmitEvent(api.NewEventBuilder(app.Name()).TypedAttribute(&governance.ProposalSubmittedEvent{
 		ID:        proposal.ID,
 		Submitter: proposal.Submitter,
-	}
-	ctx.EmitEvent(api.NewEventBuilder(app.Name()).Attribute(KeyProposalSubmitted, cbor.Marshal(evt)))
+	}))
 
 	return nil
 }
@@ -277,12 +275,11 @@ func (app *governanceApplication) castVote(
 	}
 
 	// Emit event.
-	evt := &governance.VoteEvent{
+	ctx.EmitEvent(api.NewEventBuilder(app.Name()).TypedAttribute(&governance.VoteEvent{
 		ID:        proposal.ID,
 		Submitter: submitterAddr,
 		Vote:      proposalVote.Vote,
-	}
-	ctx.EmitEvent(api.NewEventBuilder(app.Name()).Attribute(KeyVote, cbor.Marshal(evt)))
+	}))
 
 	return nil
 }

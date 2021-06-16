@@ -296,7 +296,7 @@ func (sc *serviceClient) DeliverEvent(ctx context.Context, height int64, tx tmty
 				sc.epochNotifier.Broadcast(epoch)
 			}
 		}
-		if bytes.Equal(pair.GetKey(), app.KeyPVSSRound) {
+		if tmAPI.IsAttributeKind(pair.GetKey(), &beaconAPI.PVSSEvent{}) {
 			var event beaconAPI.PVSSEvent
 			if err := cbor.Unmarshal(pair.GetValue(), &event); err != nil {
 				sc.logger.Error("beacon: malformed PVSS round",

@@ -280,10 +280,20 @@ type ProposalSubmittedEvent struct {
 	Submitter staking.Address `json:"submitter"`
 }
 
+// EventKind returns a string representation of this event's kind.
+func (e *ProposalSubmittedEvent) EventKind() string {
+	return "proposal-submitted"
+}
+
 // ProposalExecutedEvent is emitted when a proposal is executed.
 type ProposalExecutedEvent struct {
 	// ID is the unique identifier of a proposal.
 	ID uint64 `json:"id"`
+}
+
+// EventKind returns a string representation of this event's kind.
+func (e *ProposalExecutedEvent) EventKind() string {
+	return "proposal-executed"
 }
 
 // ProposalFinalizedEvent is the event emitted when a proposal is finalized.
@@ -294,6 +304,11 @@ type ProposalFinalizedEvent struct {
 	State ProposalState `json:"state"`
 }
 
+// EventKind returns a string representation of this event's kind.
+func (e *ProposalFinalizedEvent) EventKind() string {
+	return "proposal-finalized"
+}
+
 // VoteEvent is the event emitted when a vote is cast.
 type VoteEvent struct {
 	// ID is the unique identifier of a proposal.
@@ -302,6 +317,11 @@ type VoteEvent struct {
 	Submitter staking.Address `json:"submitter"`
 	// Vote is the cast vote.
 	Vote Vote `json:"vote"`
+}
+
+// EventKind returns a string representation of this event's kind.
+func (e *VoteEvent) EventKind() string {
+	return "vote"
 }
 
 // NewSubmitProposalTx creates a new submit proposal transaction.

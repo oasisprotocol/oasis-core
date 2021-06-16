@@ -28,10 +28,6 @@ import (
 )
 
 var (
-	// KeyPVSSRound is the ABCI event attribute for specifying a PVSS
-	// round event.
-	KeyPVSSRound = []byte("pvss_round")
-
 	// KeyDisableRuntimes is the ABCI event attribute for signaling
 	// that runtimes should be disabled due to beacon failure.
 	KeyDisableRuntimes = []byte("disable_runtimes")
@@ -836,10 +832,7 @@ func (impl *backendPVSS) doEmitPVSSEvent(ctx *api.Context, pvssState *beacon.PVS
 	var event beacon.PVSSEvent
 	event.FromState(pvssState)
 
-	ctx.EmitEvent(api.NewEventBuilder(impl.app.Name()).Attribute(
-		KeyPVSSRound,
-		cbor.Marshal(event),
-	))
+	ctx.EmitEvent(api.NewEventBuilder(impl.app.Name()).TypedAttribute(&event))
 }
 
 func (impl *backendPVSS) appendFailures(pvssState *beacon.PVSSState, failures []signature.PublicKey) {
