@@ -5,7 +5,6 @@ import (
 	"bufio"
 	"fmt"
 	"io"
-	"math"
 	"os"
 	"strings"
 	"sync"
@@ -13,6 +12,7 @@ import (
 
 	badgerV2 "github.com/dgraph-io/badger/v2"
 	"github.com/dgraph-io/badger/v3"
+	"github.com/spf13/viper"
 
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
 )
@@ -187,9 +187,15 @@ func migrateDatabase(opts badger.Options, managed bool) error {
 		openFnV3 = badger.OpenManaged
 	}
 
+	// All non-managed databases used by oasis-core are configured to keep only one version.
+	// Part of the migrator assumes this, therefore fail in case this is not the case.
+	if !managed && opts.NumVersionsToKeep != 1 {
+		return fmt.Errorf("migration assumes 1 version to keep for non-managed databases")
+	}
+
 	// Open the database as Badger v2.
 	optsV2 := badgerV2.DefaultOptions(opts.Dir)
-	optsV2 = optsV2.WithNumVersionsToKeep(math.MaxInt32)
+	optsV2 = optsV2.WithNumVersionsToKeep(opts.NumVersionsToKeep)
 	optsV2 = optsV2.WithLogger(nil)
 
 	dbV2, err := openFnV2(optsV2)
@@ -199,9 +205,10 @@ func migrateDatabase(opts badger.Options, managed bool) error {
 	defer dbV2.Close()
 
 	// Open the destination database as Badger v3.
-	optsV3 := badger.DefaultOptions(temporaryDbName)
-	optsV3 = optsV3.WithNumVersionsToKeep(math.MaxInt32)
-	optsV3 = optsV3.WithLogger(NewLogAdapter(logger))
+	optsV3 := opts
+	optsV3 = optsV3.WithDir(temporaryDbName)
+	optsV3 = optsV3.WithValueDir(temporaryDbName)
+	optsV3 = optsV3.WithNumGoroutines(viper.GetInt(cfgMigrateNumGoRoutines))
 
 	dbV3, err := openFnV3(optsV3)
 	if err != nil {

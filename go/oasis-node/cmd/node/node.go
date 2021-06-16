@@ -14,6 +14,7 @@ import (
 
 	beacon "github.com/oasisprotocol/oasis-core/go/beacon/api"
 	"github.com/oasisprotocol/oasis-core/go/common"
+	"github.com/oasisprotocol/oasis-core/go/common/badger"
 	"github.com/oasisprotocol/oasis-core/go/common/crash"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	"github.com/oasisprotocol/oasis-core/go/common/grpc"
@@ -797,6 +798,7 @@ func init() {
 		workerSentry.Flags,
 		workerConsensusRPC.Flags,
 		crash.InitFlags(),
+		badger.MigrationFlags,
 	} {
 		Flags.AddFlagSet(v)
 	}
