@@ -1162,7 +1162,7 @@ func (s *MutableState) AddRewards(
 				To:     addr,
 				Amount: *com,
 			})
-			ctx.EmitEvent(api.NewEventBuilder(AppName).Attribute(KeyAddEscrow, ev))
+			ctx.EmitEvent(api.NewEventBuilder(AppName).Attribute(KeyTransfer, ev))
 
 			ev = cbor.Marshal(&staking.AddEscrowEvent{
 				Owner:     addr,
@@ -1305,7 +1305,7 @@ func (s *MutableState) AddRewardSingleAttenuated(
 			To:     address,
 			Amount: *com,
 		})
-		ctx.EmitEvent(api.NewEventBuilder(AppName).Attribute(KeyAddEscrow, ev))
+		ctx.EmitEvent(api.NewEventBuilder(AppName).Attribute(KeyTransfer, ev))
 
 		ev = cbor.Marshal(&staking.AddEscrowEvent{
 			Owner:     address,
