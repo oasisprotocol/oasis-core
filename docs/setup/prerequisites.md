@@ -169,6 +169,28 @@ Core:
   committed for convenience.  Installing protoc-gen-go is only required if you
   are a developer making changes to protobuf definitions used by Go._
 
+* (**OPTIONAL**) [jemalloc] (version 5.2.1, built with `'je_'` jemalloc-prefix)
+
+  Alternatively set `OASIS_BADGER_NO_JEMALLOC="1"` environment variable when
+  building `oasis-node` code, to build BadgerDB without `jemalloc` support.
+
+  Download and install `jemalloc` with:
+
+  <!-- markdownlint-disable line-length -->
+  ```
+  export JEMALLOC_VERSION=5.2.1
+  export JEMALLOC_CHECKSUM=34330e5ce276099e2e8950d9335db5a875689a4c6a56751ef3b1d8c537f887f6
+  wget -O jemalloc.tar.bz2 "https://github.com/jemalloc/jemalloc/releases/download/${JEMALLOC_VERSION}/jemalloc-${JEMALLOC_VERSION}.tar.bz2"
+  # Ensure checksum matches.
+  echo "${JEMALLOC_CHECKSUM} jemalloc.tar.bz2" | sha256sum -c
+  tar -xjf ./jemalloc.tar.bz2 -v --no-same-owner
+  cd jemalloc-${JEMALLOC_VERSION}
+  ./configure --with-jemalloc-prefix='je_' --with-malloc-conf='background_thread:true,metadata_thp:auto'
+  make
+  make install
+  ```
+  <!-- markdownlint-enable line-length -->
+
 In the following instructions, the top-level directory is the directory
 where the code has been checked out.
 
@@ -192,6 +214,7 @@ where the code has been checked out.
 [Fortanix Rust EDP]: https://edp.fortanix.com
 [gofumpt and gofumports]: https://github.com/mvdan/gofumpt
 [protoc-gen-go]: https://github.com/golang/protobuf
+[jemalloc]: https://github.com/jemalloc/jemalloc
 
 ## Using the Development Docker Image
 

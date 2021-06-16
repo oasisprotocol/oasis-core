@@ -10,6 +10,8 @@ ARG GOLANGCILINT_VERSION=1.28.2
 ARG GOCOVMERGE_VERSION=b5bfa59ec0adc420475f97f89b58045c721d761c
 ARG GOFUMPT_VERSION=abc0db2c416aca0f60ea33c23c76665f6e7ba0b6
 ARG RUST_NIGHTLY_VERSION=2021-05-20
+ARG JEMALLOC_VERSION=5.2.1
+ARG JEMALLOC_CHECKSUM=34330e5ce276099e2e8950d9335db5a875689a4c6a56751ef3b1d8c537f887f6
 
 ARG DEBIAN_FRONTEND=noninteractive
 
@@ -71,6 +73,14 @@ RUN wget https://dl.google.com/go/go${GO_VERSION}.linux-amd64.tar.gz && \
     # Install gofumpt for code formatting.
     GO111MODULE=on go get mvdan.cc/gofumpt@${GOFUMPT_VERSION} && \
     GO111MODULE=on go get mvdan.cc/gofumpt/gofumports@${GOFUMPT_VERSION}
+
+# Install jemalloc (used by badgerdb).
+RUN wget -O jemalloc.tar.bz2 https://github.com/jemalloc/jemalloc/releases/download/${JEMALLOC_VERSION}/jemalloc-${JEMALLOC_VERSION}.tar.bz2 && \
+    echo "${JEMALLOC_CHECKSUM} jemalloc.tar.bz2" | sha256sum -c && \
+    tar -xjf ./jemalloc.tar.bz2 -v --no-same-owner && cd jemalloc-${JEMALLOC_VERSION} && \
+    ./configure --with-jemalloc-prefix='je_' --with-malloc-conf='background_thread:true,metadata_thp:auto' && \
+    make && make install && \
+    cd .. && rm jemalloc.tar.bz2 && rm -rf jemalloc-${JEMALLOC_VERSION}
 
 # Install bubblewrap (we need at least version 0.3.3 which is not available for 18.04).
 RUN wget http://archive.ubuntu.com/ubuntu/pool/main/b/bubblewrap/bubblewrap_0.4.1-1_amd64.deb && \
