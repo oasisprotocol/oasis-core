@@ -2,7 +2,8 @@ module github.com/oasisprotocol/oasis-core/go
 
 replace (
 	// Fixes vulnerabilities in etcd v3.3.{10,13} (dependencies via viper).
-	// Can be removed once there is a spf13/viper release with updated etcd.
+	// Can be removed once there is a spf13/viper release with updated
+	// etcd and other dependencies using viper are updated.
 	// https://github.com/spf13/viper/issues/956
 	github.com/coreos/etcd => github.com/coreos/etcd v3.3.25+incompatible
 	// Updates the version used by badgerdb, because some of the Go
@@ -10,11 +11,6 @@ replace (
 	// build failures.
 	// https://github.com/google/flatbuffers/issues/6466
 	github.com/google/flatbuffers => github.com/google/flatbuffers v1.12.1
-	// Updates the version used in spf13/cobra (dependency via tendermint) as
-	// there is no release yet with the fix. Remove once an updated release of
-	// spf13/cobra exists and tendermint is updated to include it.
-	// https://github.com/spf13/cobra/issues/1091
-	github.com/gorilla/websocket => github.com/gorilla/websocket v1.4.2
 
 	github.com/tendermint/tendermint => github.com/oasisprotocol/tendermint v0.34.9-oasis2
 
@@ -51,7 +47,7 @@ require (
 	github.com/seccomp/libseccomp-golang v0.9.1
 	github.com/spf13/cobra v1.1.1
 	github.com/spf13/pflag v1.0.5
-	github.com/spf13/viper v1.7.1
+	github.com/spf13/viper v1.8.0
 	github.com/stretchr/testify v1.7.0
 	github.com/tendermint/tendermint v0.34.9
 	github.com/tendermint/tm-db v0.6.4
@@ -62,7 +58,7 @@ require (
 	go.dedis.ch/kyber/v3 v3.0.13
 	golang.org/x/crypto v0.0.0-20210322153248-0c34fe9e7dc2
 	golang.org/x/net v0.0.0-20210525063256-abc453219eb5
-	google.golang.org/genproto v0.0.0-20201119123407-9b1e624d6bc4
+	google.golang.org/genproto v0.0.0-20210602131652-f16073e35f0c
 	google.golang.org/grpc v1.38.0
 	google.golang.org/grpc/security/advancedtls v0.0.0-20200902210233-8630cac324bf
 	google.golang.org/protobuf v1.26.0
