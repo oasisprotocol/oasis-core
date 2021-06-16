@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"math"
 
-	"github.com/oasisprotocol/oasis-core/go/common/cbor"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	"github.com/oasisprotocol/oasis-core/go/common/quantity"
 	"github.com/oasisprotocol/oasis-core/go/consensus/api/transaction"
@@ -106,12 +105,11 @@ func AuthenticateAndPayFees(
 
 	// Emit transfer event if fee is non-zero.
 	if !fee.Amount.IsZero() {
-		ev := cbor.Marshal(&staking.TransferEvent{
+		ctx.EmitEvent(abciAPI.NewEventBuilder(AppName).TypedAttribute(&staking.TransferEvent{
 			From:   addr,
 			To:     staking.FeeAccumulatorAddress,
 			Amount: fee.Amount,
-		})
-		ctx.EmitEvent(abciAPI.NewEventBuilder(AppName).Attribute(KeyTransfer, ev))
+		}))
 	}
 
 	// Configure gas accountant on the context.

@@ -3,7 +3,6 @@ package staking
 import (
 	"fmt"
 
-	"github.com/oasisprotocol/oasis-core/go/common/cbor"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	"github.com/oasisprotocol/oasis-core/go/common/quantity"
 	abciAPI "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/api"
@@ -77,12 +76,11 @@ func (app *stakingApplication) disburseFeesP(
 		}
 
 		// Emit transfer event.
-		evt := &staking.TransferEvent{
+		ctx.EmitEvent(abciAPI.NewEventBuilder(app.Name()).TypedAttribute(&staking.TransferEvent{
 			From:   staking.FeeAccumulatorAddress,
 			To:     proposerAddr,
 			Amount: *feeProposerAmt,
-		}
-		ctx.EmitEvent(abciAPI.NewEventBuilder(app.Name()).Attribute(KeyTransfer, cbor.Marshal(evt)))
+		}))
 	}
 
 	// Put the rest into the common pool (in case there is no proposer entity to pay).
@@ -100,12 +98,11 @@ func (app *stakingApplication) disburseFeesP(
 		}
 
 		// Emit transfer event.
-		evt := &staking.TransferEvent{
+		ctx.EmitEvent(abciAPI.NewEventBuilder(app.Name()).TypedAttribute(&staking.TransferEvent{
 			From:   staking.FeeAccumulatorAddress,
 			To:     staking.CommonPoolAddress,
 			Amount: *remaining,
-		}
-		ctx.EmitEvent(abciAPI.NewEventBuilder(app.Name()).Attribute(KeyTransfer, cbor.Marshal(evt)))
+		}))
 	}
 
 	return nil
@@ -193,12 +190,11 @@ func (app *stakingApplication) disburseFeesVQ(
 		}
 
 		// Emit transfer event.
-		evt := &staking.TransferEvent{
+		ctx.EmitEvent(abciAPI.NewEventBuilder(app.Name()).TypedAttribute(&staking.TransferEvent{
 			From:   staking.FeeAccumulatorAddress,
 			To:     proposerAddr,
 			Amount: *nextProposerTotal,
-		}
-		ctx.EmitEvent(abciAPI.NewEventBuilder(app.Name()).Attribute(KeyTransfer, cbor.Marshal(evt)))
+		}))
 	}
 
 	// Pay the voters.
@@ -217,12 +213,11 @@ func (app *stakingApplication) disburseFeesVQ(
 			}
 
 			// Emit transfer event.
-			evt := &staking.TransferEvent{
+			ctx.EmitEvent(abciAPI.NewEventBuilder(app.Name()).TypedAttribute(&staking.TransferEvent{
 				From:   staking.FeeAccumulatorAddress,
 				To:     voterAddr,
 				Amount: *shareVote,
-			}
-			ctx.EmitEvent(abciAPI.NewEventBuilder(app.Name()).Attribute(KeyTransfer, cbor.Marshal(evt)))
+			}))
 		}
 	}
 
@@ -241,12 +236,11 @@ func (app *stakingApplication) disburseFeesVQ(
 		}
 
 		// Emit transfer event.
-		evt := &staking.TransferEvent{
+		ctx.EmitEvent(abciAPI.NewEventBuilder(app.Name()).TypedAttribute(&staking.TransferEvent{
 			From:   staking.FeeAccumulatorAddress,
 			To:     staking.CommonPoolAddress,
 			Amount: *remaining,
-		}
-		ctx.EmitEvent(abciAPI.NewEventBuilder(app.Name()).Attribute(KeyTransfer, cbor.Marshal(evt)))
+		}))
 	}
 
 	return nil

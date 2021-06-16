@@ -78,7 +78,7 @@ func (app *schedulerApplication) BeginBlock(ctx *api.Context, request types.Requ
 	// Check if any stake slashing has occurred in the staking layer.
 	// NOTE: This will NOT trigger for any slashing that happens as part of
 	//       any transactions being submitted to the chain.
-	slashed := ctx.HasEvent(stakingapp.AppName, stakingapp.KeyTakeEscrow)
+	slashed := ctx.HasTypedEvent(stakingapp.AppName, &staking.TakeEscrowEvent{})
 	// Check if epoch has changed.
 	// TODO: We'll later have this for each type of committee.
 	epochChanged, epoch := app.state.EpochChanged(ctx)

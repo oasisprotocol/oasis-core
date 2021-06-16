@@ -9,6 +9,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	beacon "github.com/oasisprotocol/oasis-core/go/beacon/api"
+	"github.com/oasisprotocol/oasis-core/go/common/cbor"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	memorySigner "github.com/oasisprotocol/oasis-core/go/common/crypto/signature/signers/memory"
 	"github.com/oasisprotocol/oasis-core/go/common/quantity"
@@ -276,6 +277,30 @@ func TestRewardAndSlash(t *testing.T) {
 	// Epoch 10 is during the first step.
 	require.NoError(s.AddRewards(ctx, 10, mustInitQuantityP(t, 100_000), escrowAddrAsList), "add rewards epoch 10")
 
+	// Adding rewards should emit the correct events.
+	evs := ctx.GetEvents()
+	require.Len(evs, 3, "adding rewards should emit 3 events")
+	for _, ev := range evs {
+		require.Equal(abciAPI.EventTypeForApp(AppName), ev.Type, "all emitted events should be staking events")
+		require.Len(ev.Attributes, 1, "each event should have a single attribute")
+
+		switch string(ev.Attributes[0].Key) {
+		case "add_escrow":
+			var v staking.AddEscrowEvent
+			err = cbor.Unmarshal(ev.Attributes[0].Value, &v)
+			require.NoError(err, "malformed add escrow event")
+		case "transfer":
+			var v staking.TransferEvent
+			err = cbor.Unmarshal(ev.Attributes[0].Value, &v)
+			require.NoError(err, "malformed add escrow event")
+		default:
+			t.Fatalf("unexpected event key: %+v", ev.Attributes[0].Key)
+		}
+	}
+	require.Equal("add_escrow", string(evs[0].Attributes[0].Key), "first event should be an add escrow event")
+	require.Equal("transfer", string(evs[1].Attributes[0].Key), "second event should be a transfer event")
+	require.Equal("add_escrow", string(evs[2].Attributes[0].Key), "second event should be an add escrow event")
+
 	// 100% gain.
 	delegatorAccount, err = s.Account(ctx, delegatorAddr)
 	require.NoError(err, "Account")
@@ -332,8 +357,35 @@ func TestRewardAndSlash(t *testing.T) {
 	require.NoError(err, "load common pool")
 	require.Equal(mustInitQuantityP(t, 9840), commonPool, "slash - common pool")
 
+	ctx = appState.NewContext(abciAPI.ContextEndBlock, now)
+	defer ctx.Close()
+
 	// Epoch 10 is during the first step.
 	require.NoError(s.AddRewardSingleAttenuated(ctx, 10, mustInitQuantityP(t, 10_000), 5, 10, escrowAddr), "add attenuated rewards epoch 30")
+
+	// Adding rewards should emit the correct events.
+	evs = ctx.GetEvents()
+	require.Len(evs, 3, "adding rewards should emit 3 events")
+	for _, ev := range evs {
+		require.Equal(abciAPI.EventTypeForApp(AppName), ev.Type, "all emitted events should be staking events")
+		require.Len(ev.Attributes, 1, "each event should have a single attribute")
+
+		switch string(ev.Attributes[0].Key) {
+		case "add_escrow":
+			var v staking.AddEscrowEvent
+			err = cbor.Unmarshal(ev.Attributes[0].Value, &v)
+			require.NoError(err, "malformed add escrow event")
+		case "transfer":
+			var v staking.TransferEvent
+			err = cbor.Unmarshal(ev.Attributes[0].Value, &v)
+			require.NoError(err, "malformed add escrow event")
+		default:
+			t.Fatalf("unexpected event key: %+v", ev.Attributes[0].Key)
+		}
+	}
+	require.Equal("add_escrow", string(evs[0].Attributes[0].Key), "first event should be an add escrow event")
+	require.Equal("transfer", string(evs[1].Attributes[0].Key), "second event should be a transfer event")
+	require.Equal("add_escrow", string(evs[2].Attributes[0].Key), "second event should be an add escrow event")
 
 	// 5% gain.
 	escrowAccount, err = s.Account(ctx, escrowAddr)

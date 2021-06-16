@@ -2,7 +2,6 @@
 package staking
 
 import (
-	"bytes"
 	"context"
 	"fmt"
 
@@ -329,7 +328,7 @@ func EventsFromTendermint(
 			val := pair.GetValue()
 
 			switch {
-			case bytes.Equal(key, app.KeyTakeEscrow):
+			case tmapi.IsAttributeKind(key, &api.TakeEscrowEvent{}):
 				// Take escrow event.
 				var e api.TakeEscrowEvent
 				if err := cbor.Unmarshal(val, &e); err != nil {
@@ -339,7 +338,7 @@ func EventsFromTendermint(
 
 				evt := &api.Event{Height: height, TxHash: txHash, Escrow: &api.EscrowEvent{Take: &e}}
 				events = append(events, evt)
-			case bytes.Equal(key, app.KeyTransfer):
+			case tmapi.IsAttributeKind(key, &api.TransferEvent{}):
 				// Transfer event.
 				var e api.TransferEvent
 				if err := cbor.Unmarshal(val, &e); err != nil {
@@ -349,7 +348,7 @@ func EventsFromTendermint(
 
 				evt := &api.Event{Height: height, TxHash: txHash, Transfer: &e}
 				events = append(events, evt)
-			case bytes.Equal(key, app.KeyReclaimEscrow):
+			case tmapi.IsAttributeKind(key, &api.ReclaimEscrowEvent{}):
 				// Reclaim escrow event.
 				var e api.ReclaimEscrowEvent
 				if err := cbor.Unmarshal(val, &e); err != nil {
@@ -359,7 +358,7 @@ func EventsFromTendermint(
 
 				evt := &api.Event{Height: height, TxHash: txHash, Escrow: &api.EscrowEvent{Reclaim: &e}}
 				events = append(events, evt)
-			case bytes.Equal(key, app.KeyAddEscrow):
+			case tmapi.IsAttributeKind(key, &api.AddEscrowEvent{}):
 				// Add escrow event.
 				var e api.AddEscrowEvent
 				if err := cbor.Unmarshal(val, &e); err != nil {
@@ -369,7 +368,7 @@ func EventsFromTendermint(
 
 				evt := &api.Event{Height: height, TxHash: txHash, Escrow: &api.EscrowEvent{Add: &e}}
 				events = append(events, evt)
-			case bytes.Equal(key, app.KeyDebondingStart):
+			case tmapi.IsAttributeKind(key, &api.DebondingStartEscrowEvent{}):
 				// Debonding start escrow event.
 				var e api.DebondingStartEscrowEvent
 				if err := cbor.Unmarshal(val, &e); err != nil {
@@ -379,7 +378,7 @@ func EventsFromTendermint(
 
 				evt := &api.Event{Height: height, TxHash: txHash, Escrow: &api.EscrowEvent{DebondingStart: &e}}
 				events = append(events, evt)
-			case bytes.Equal(key, app.KeyBurn):
+			case tmapi.IsAttributeKind(key, &api.BurnEvent{}):
 				// Burn event.
 				var e api.BurnEvent
 				if err := cbor.Unmarshal(val, &e); err != nil {
@@ -389,7 +388,7 @@ func EventsFromTendermint(
 
 				evt := &api.Event{Height: height, TxHash: txHash, Burn: &e}
 				events = append(events, evt)
-			case bytes.Equal(key, app.KeyAllowanceChange):
+			case tmapi.IsAttributeKind(key, &api.AllowanceChangeEvent{}):
 				// Allowance change event.
 				var e api.AllowanceChangeEvent
 				if err := cbor.Unmarshal(val, &e); err != nil {
