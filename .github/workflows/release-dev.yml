@@ -14,6 +14,8 @@ env:
   GORELEASER_URL_PREFIX: https://github.com/goreleaser/goreleaser/releases/download/
   GORELEASER_VERSION: 0.152.0
   CURL_CMD: curl --proto =https --tlsv1.2 --location --silent --show-error --fail
+  JEMALLOC_VERSION: 5.2.1
+  JEMALLOC_CHECKSUM: 34330e5ce276099e2e8950d9335db5a875689a4c6a56751ef3b1d8c537f887f6
 
 jobs:
 
@@ -40,6 +42,14 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install make libseccomp-dev protobuf-compiler
+      - name: Install jemalloc
+        run: |
+          wget -O jemalloc.tar.bz2 https://github.com/jemalloc/jemalloc/releases/download/${JEMALLOC_VERSION}/jemalloc-${JEMALLOC_VERSION}.tar.bz2
+          echo "${JEMALLOC_CHECKSUM} jemalloc.tar.bz2" | sha256sum -c
+          tar -xjf ./jemalloc.tar.bz2 -v --no-same-owner && cd jemalloc-${JEMALLOC_VERSION}
+          ./configure --with-jemalloc-prefix='je_' --with-malloc-conf='background_thread:true,metadata_thp:auto'
+          make
+          sudo make install
       - name: Install GoReleaser
         run: |
           cd $(mktemp --directory /tmp/goreleaser.XXXXX)

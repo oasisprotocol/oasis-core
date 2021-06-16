@@ -18,6 +18,10 @@ builds:
     dir: go/
     flags:
       - -trimpath
+      # Build oasis-node with jemalloc tag (used by badgerdb).
+      # TODO: Use 'tags' attribute when GoReleaser is udpated to newer version:
+      # https://github.com/goreleaser/goreleaser/pull/2268
+      - -tags=jemalloc
     ldflags:
       # NOTE: At the moment, GoReleaser produces different binaries when
       # releases are built from different git paths, unless -buildid= is added
