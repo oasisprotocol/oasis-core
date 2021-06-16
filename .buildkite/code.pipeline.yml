@@ -70,6 +70,18 @@ retry: &retry_agent_failure
       limit: 2
 
 steps:
+  # Require explicit confirmation for some PRs to avoid CI spam.
+  - block: Confirm CI run
+    prompt: Run CI for this pull request?
+    blocked_state: running
+    if: |
+      build.pull_request.id != null &&
+      !(build.pull_request.labels includes "s:ready-ci") &&
+      (
+        build.pull_request.draft ||
+        !(build.creator.teams includes "everyone")
+      )
+
   ###########
   # Lint jobs
   ###########
