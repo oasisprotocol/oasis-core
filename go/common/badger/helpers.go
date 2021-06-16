@@ -12,6 +12,7 @@ import (
 
 	badgerV2 "github.com/dgraph-io/badger/v2"
 	"github.com/dgraph-io/badger/v3"
+	"github.com/spf13/viper"
 
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
 )
@@ -207,6 +208,7 @@ func migrateDatabase(opts badger.Options, managed bool) error {
 	optsV3 := opts
 	optsV3 = optsV3.WithDir(temporaryDbName)
 	optsV3 = optsV3.WithValueDir(temporaryDbName)
+	optsV3 = optsV3.WithNumGoroutines(viper.GetInt(cfgMigrateNumGoRoutines))
 
 	dbV3, err := openFnV3(optsV3)
 	if err != nil {
