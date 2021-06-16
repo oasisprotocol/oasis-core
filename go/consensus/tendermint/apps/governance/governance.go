@@ -242,10 +242,9 @@ func (app *governanceApplication) executeProposal(ctx *api.Context, state *gover
 
 	proposal.State = governance.StatePassed
 	// If successful, emit Proposal executed event.
-	evt := &governance.ProposalExecutedEvent{
+	ctx.EmitEvent(api.NewEventBuilder(app.Name()).TypedAttribute(&governance.ProposalExecutedEvent{
 		ID: proposal.ID,
-	}
-	ctx.EmitEvent(api.NewEventBuilder(app.Name()).Attribute(KeyProposalExecuted, cbor.Marshal(evt)))
+	}))
 
 	return nil
 }
@@ -452,11 +451,10 @@ func (app *governanceApplication) EndBlock(ctx *api.Context, request types.Reque
 		}
 
 		// Emit Proposal finalized event.
-		evt := &governance.ProposalFinalizedEvent{
+		ctx.EmitEvent(api.NewEventBuilder(app.Name()).TypedAttribute(&governance.ProposalFinalizedEvent{
 			ID:    proposal.ID,
 			State: proposal.State,
-		}
-		ctx.EmitEvent(api.NewEventBuilder(app.Name()).Attribute(KeyProposalFinalized, cbor.Marshal(evt)))
+		}))
 
 		switch proposal.State {
 		case governance.StatePassed, governance.StateFailed:

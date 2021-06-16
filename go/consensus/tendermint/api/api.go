@@ -2,6 +2,7 @@
 package api
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"strings"
@@ -83,6 +84,18 @@ func NodeToP2PAddr(n *node.Node) (*tmp2p.NetAddress, error) {
 	return tmAddr, nil
 }
 
+// TypedAttribute is an interface implemented by types which can be transparently used as event
+// attributes.
+type TypedAttribute interface {
+	// EventKind returns a string representation of this event's kind.
+	EventKind() string
+}
+
+// IsAttributeKind checks whether the given attribute key corresponds to the passed typed attribute.
+func IsAttributeKind(key []byte, kind TypedAttribute) bool {
+	return bytes.Equal(key, []byte(kind.EventKind()))
+}
+
 // EventBuilder is a helper for constructing ABCI events.
 type EventBuilder struct {
 	app []byte
@@ -97,6 +110,14 @@ func (bld *EventBuilder) Attribute(key, value []byte) *EventBuilder {
 	})
 
 	return bld
+}
+
+// TypedAttribute appends a typed attribute to the event.
+//
+// The typed attribute is automatically converted to a key/value pair where its EventKind is used
+// as the key and a CBOR-marshalled value is used as value.
+func (bld *EventBuilder) TypedAttribute(value TypedAttribute) *EventBuilder {
+	return bld.Attribute([]byte(value.EventKind()), cbor.Marshal(value))
 }
 
 // Dirty returns true iff the EventBuilder has attributes.

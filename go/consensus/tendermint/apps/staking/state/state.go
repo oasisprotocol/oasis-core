@@ -22,15 +22,6 @@ import (
 var (
 	// AppName is the ABCI application name.
 	AppName = "100_staking"
-	// KeyAddEscrow is an ABCI event attribute key for AddEscrow calls
-	// (value is an api.AddEscrowEvent).
-	KeyAddEscrow = []byte("add_escrow")
-	// KeyTakeEscrow is an ABCI event attribute key for TakeEscrow calls
-	// (value is an app.TakeEscrowEvent).
-	KeyTakeEscrow = []byte("take_escrow")
-	// KeyTransfer is an ABCI event attribute key for Transfers (value is
-	// an app.TransferEvent).
-	KeyTransfer = []byte("transfer")
 
 	// accountKeyFmt is the key format used for accounts (account addresses).
 	//
@@ -777,11 +768,10 @@ func (s *MutableState) SlashEscrow(
 	}
 
 	if !ctx.IsCheckOnly() {
-		ev := cbor.Marshal(&staking.TakeEscrowEvent{
+		ctx.EmitEvent(api.NewEventBuilder(AppName).TypedAttribute(&staking.TakeEscrowEvent{
 			Owner:  fromAddr,
 			Amount: *totalSlashed,
-		})
-		ctx.EmitEvent(api.NewEventBuilder(AppName).Attribute(KeyTakeEscrow, ev))
+		}))
 	}
 
 	return totalSlashed, nil
@@ -858,14 +848,13 @@ func (s *MutableState) TransferFromCommon(
 
 			// Emit non commissioned reward event.
 			if !ctx.IsCheckOnly() {
-				ev := cbor.Marshal(&staking.AddEscrowEvent{
+				ctx.EmitEvent(api.NewEventBuilder(AppName).TypedAttribute(&staking.AddEscrowEvent{
 					Owner:  staking.CommonPoolAddress,
 					Escrow: toAddr,
 					Amount: *transferred,
 					// No new shares as this is the reward. As a result existing share price increases.
 					NewShares: quantity.Quantity{},
-				})
-				ctx.EmitEvent(api.NewEventBuilder(AppName).Attribute(KeyAddEscrow, ev))
+				}))
 			}
 		case true:
 			// If nothing has been escrowed before, everything counts as commission.
@@ -893,30 +882,27 @@ func (s *MutableState) TransferFromCommon(
 			// Emit events.
 			// Commission was transferred to the account, and automatically escrowed.
 			if !ctx.IsCheckOnly() {
-				ev := cbor.Marshal(&staking.TransferEvent{
+				ctx.EmitEvent(api.NewEventBuilder(AppName).TypedAttribute(&staking.TransferEvent{
 					From:   staking.CommonPoolAddress,
 					To:     toAddr,
 					Amount: *com,
-				})
-				ctx.EmitEvent(api.NewEventBuilder(AppName).Attribute(KeyTransfer, ev))
+				}))
 
-				ev = cbor.Marshal(&staking.AddEscrowEvent{
+				ctx.EmitEvent(api.NewEventBuilder(AppName).TypedAttribute(&staking.AddEscrowEvent{
 					Owner:     toAddr,
 					Escrow:    toAddr,
 					Amount:    *com,
 					NewShares: *obtainedShares,
-				})
-				ctx.EmitEvent(api.NewEventBuilder(AppName).Attribute(KeyAddEscrow, ev))
+				}))
 			}
 		}
 	case false:
 		if !ctx.IsCheckOnly() {
-			ev := cbor.Marshal(&staking.TransferEvent{
+			ctx.EmitEvent(api.NewEventBuilder(AppName).TypedAttribute(&staking.TransferEvent{
 				From:   staking.CommonPoolAddress,
 				To:     toAddr,
 				Amount: *transferred,
-			})
-			ctx.EmitEvent(api.NewEventBuilder(AppName).Attribute(KeyTransfer, ev))
+			}))
 		}
 
 	}
@@ -960,12 +946,11 @@ func (s *MutableState) TransferToGovernanceDeposits(
 	}
 
 	if !ctx.IsCheckOnly() {
-		ev := cbor.Marshal(&staking.TransferEvent{
+		ctx.EmitEvent(api.NewEventBuilder(AppName).TypedAttribute(&staking.TransferEvent{
 			From:   fromAddr,
 			To:     staking.GovernanceDepositsAddress,
 			Amount: *amount,
-		})
-		ctx.EmitEvent(api.NewEventBuilder(AppName).Attribute(KeyTransfer, ev))
+		}))
 	}
 
 	return nil
@@ -1000,12 +985,11 @@ func (s *MutableState) TransferFromGovernanceDeposits(
 	}
 
 	if !ctx.IsCheckOnly() {
-		ev := cbor.Marshal(&staking.TransferEvent{
+		ctx.EmitEvent(api.NewEventBuilder(AppName).TypedAttribute(&staking.TransferEvent{
 			From:   staking.GovernanceDepositsAddress,
 			To:     toAddr,
 			Amount: *amount,
-		})
-		ctx.EmitEvent(api.NewEventBuilder(AppName).Attribute(KeyTransfer, ev))
+		}))
 	}
 
 	return nil
@@ -1039,12 +1023,11 @@ func (s *MutableState) DiscardGovernanceDeposit(
 	}
 
 	if !ctx.IsCheckOnly() {
-		ev := cbor.Marshal(&staking.TransferEvent{
+		ctx.EmitEvent(api.NewEventBuilder(AppName).TypedAttribute(&staking.TransferEvent{
 			From:   staking.GovernanceDepositsAddress,
 			To:     staking.CommonPoolAddress,
 			Amount: *amount,
-		})
-		ctx.EmitEvent(api.NewEventBuilder(AppName).Attribute(KeyTransfer, ev))
+		}))
 	}
 
 	return nil
@@ -1127,14 +1110,13 @@ func (s *MutableState) AddRewards(
 			if err = quantity.Move(&ent.Escrow.Active.Balance, commonPool, q); err != nil {
 				return fmt.Errorf("tendermint/staking: failed transferring to active escrow balance from common pool: %w", err)
 			}
-			ev := cbor.Marshal(&staking.AddEscrowEvent{
+			ctx.EmitEvent(api.NewEventBuilder(AppName).TypedAttribute(&staking.AddEscrowEvent{
 				Owner:  staking.CommonPoolAddress,
 				Escrow: addr,
 				Amount: *q,
 				// No new shares as this is the reward. As a result existing share price increases.
 				NewShares: quantity.Quantity{},
-			})
-			ctx.EmitEvent(api.NewEventBuilder(AppName).Attribute(KeyAddEscrow, ev))
+			}))
 		}
 
 		if com != nil && !com.IsZero() {
@@ -1157,20 +1139,18 @@ func (s *MutableState) AddRewards(
 			// Above, we directly desposit from the common pool into the delegation,
 			// which is a shorthand for transferring to the account and immediately
 			// escrowing it. Explicitly emit both events.
-			ev := cbor.Marshal(&staking.TransferEvent{
+			ctx.EmitEvent(api.NewEventBuilder(AppName).TypedAttribute(&staking.TransferEvent{
 				From:   staking.CommonPoolAddress,
 				To:     addr,
 				Amount: *com,
-			})
-			ctx.EmitEvent(api.NewEventBuilder(AppName).Attribute(KeyAddEscrow, ev))
+			}))
 
-			ev = cbor.Marshal(&staking.AddEscrowEvent{
+			ctx.EmitEvent(api.NewEventBuilder(AppName).TypedAttribute(&staking.AddEscrowEvent{
 				Owner:     addr,
 				Escrow:    addr,
 				Amount:    *com,
 				NewShares: *obtainedShares,
-			})
-			ctx.EmitEvent(api.NewEventBuilder(AppName).Attribute(KeyAddEscrow, ev))
+			}))
 		}
 
 		if err = s.SetAccount(ctx, addr, ent); err != nil {
@@ -1270,14 +1250,13 @@ func (s *MutableState) AddRewardSingleAttenuated(
 		if err = quantity.Move(&acct.Escrow.Active.Balance, commonPool, q); err != nil {
 			return fmt.Errorf("tendermint/staking: failed transferring to active escrow balance from common pool: %w", err)
 		}
-		ev := cbor.Marshal(&staking.AddEscrowEvent{
+		ctx.EmitEvent(api.NewEventBuilder(AppName).TypedAttribute(&staking.AddEscrowEvent{
 			Owner:  staking.CommonPoolAddress,
 			Escrow: address,
 			Amount: *q,
 			// No new shares as this is the reward. As a result existing share price increases.
 			NewShares: quantity.Quantity{},
-		})
-		ctx.EmitEvent(api.NewEventBuilder(AppName).Attribute(KeyAddEscrow, ev))
+		}))
 	}
 
 	if com != nil && !com.IsZero() {
@@ -1300,20 +1279,18 @@ func (s *MutableState) AddRewardSingleAttenuated(
 		// Above, we directly desposit from the common pool into the delegation,
 		// which is a shorthand for transferring to the account and immediately
 		// escrowing it. Explicitly emit both events.
-		ev := cbor.Marshal(&staking.TransferEvent{
+		ctx.EmitEvent(api.NewEventBuilder(AppName).TypedAttribute(&staking.TransferEvent{
 			From:   staking.CommonPoolAddress,
 			To:     address,
 			Amount: *com,
-		})
-		ctx.EmitEvent(api.NewEventBuilder(AppName).Attribute(KeyAddEscrow, ev))
+		}))
 
-		ev = cbor.Marshal(&staking.AddEscrowEvent{
+		ctx.EmitEvent(api.NewEventBuilder(AppName).TypedAttribute(&staking.AddEscrowEvent{
 			Owner:     address,
 			Escrow:    address,
 			Amount:    *com,
 			NewShares: *obtainedShares,
-		})
-		ctx.EmitEvent(api.NewEventBuilder(AppName).Attribute(KeyAddEscrow, ev))
+		}))
 	}
 
 	if err = s.SetAccount(ctx, address, acct); err != nil {
