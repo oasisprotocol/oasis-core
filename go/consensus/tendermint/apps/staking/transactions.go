@@ -3,7 +3,6 @@ package staking
 import (
 	"fmt"
 
-	"github.com/oasisprotocol/oasis-core/go/common/cbor"
 	"github.com/oasisprotocol/oasis-core/go/common/quantity"
 	"github.com/oasisprotocol/oasis-core/go/consensus/tendermint/api"
 	stakingState "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/apps/staking/state"
@@ -95,12 +94,11 @@ func (app *stakingApplication) transfer(ctx *api.Context, state *stakingState.Mu
 		"amount", xfer.Amount,
 	)
 
-	evt := &staking.TransferEvent{
+	ctx.EmitEvent(api.NewEventBuilder(app.Name()).TypedAttribute(&staking.TransferEvent{
 		From:   fromAddr,
 		To:     xfer.To,
 		Amount: xfer.Amount,
-	}
-	ctx.EmitEvent(api.NewEventBuilder(app.Name()).Attribute(KeyTransfer, cbor.Marshal(evt)))
+	}))
 
 	return nil
 }
@@ -162,11 +160,10 @@ func (app *stakingApplication) burn(ctx *api.Context, state *stakingState.Mutabl
 		"amount", burn.Amount,
 	)
 
-	evt := &staking.BurnEvent{
+	ctx.EmitEvent(api.NewEventBuilder(app.Name()).TypedAttribute(&staking.BurnEvent{
 		Owner:  fromAddr,
 		Amount: burn.Amount,
-	}
-	ctx.EmitEvent(api.NewEventBuilder(app.Name()).Attribute(KeyBurn, cbor.Marshal(evt)))
+	}))
 
 	return nil
 }
@@ -265,13 +262,12 @@ func (app *stakingApplication) addEscrow(ctx *api.Context, state *stakingState.M
 		"obtained_shares", obtainedShares,
 	)
 
-	evt := &staking.AddEscrowEvent{
+	ctx.EmitEvent(api.NewEventBuilder(app.Name()).TypedAttribute(&staking.AddEscrowEvent{
 		Owner:     fromAddr,
 		Escrow:    escrow.Account,
 		Amount:    escrow.Amount,
 		NewShares: *obtainedShares,
-	}
-	ctx.EmitEvent(api.NewEventBuilder(app.Name()).Attribute(KeyAddEscrow, cbor.Marshal(evt)))
+	}))
 
 	return nil
 }
@@ -413,14 +409,13 @@ func (app *stakingApplication) reclaimEscrow(ctx *api.Context, state *stakingSta
 		"debonding_shares", debondingShares,
 	)
 
-	evt := &staking.DebondingStartEscrowEvent{
+	ctx.EmitEvent(api.NewEventBuilder(app.Name()).TypedAttribute(&staking.DebondingStartEscrowEvent{
 		Owner:           toAddr,
 		Escrow:          reclaim.Account,
 		Amount:          *stakeAmount,
 		ActiveShares:    reclaim.Shares,
 		DebondingShares: *debondingShares,
-	}
-	ctx.EmitEvent(api.NewEventBuilder(app.Name()).Attribute(KeyDebondingStart, cbor.Marshal(evt)))
+	}))
 
 	return nil
 }
@@ -555,14 +550,13 @@ func (app *stakingApplication) allow(
 		return fmt.Errorf("failed to set account: %w", err)
 	}
 
-	evt := &staking.AllowanceChangeEvent{
+	ctx.EmitEvent(api.NewEventBuilder(app.Name()).TypedAttribute(&staking.AllowanceChangeEvent{
 		Owner:        addr,
 		Beneficiary:  allow.Beneficiary,
 		Allowance:    allowance,
 		Negative:     allow.Negative,
 		AmountChange: *amountChange,
-	}
-	ctx.EmitEvent(api.NewEventBuilder(app.Name()).Attribute(KeyAllowanceChange, cbor.Marshal(evt)))
+	}))
 
 	return nil
 }
@@ -644,21 +638,19 @@ func (app *stakingApplication) withdraw(
 		return fmt.Errorf("failed to set account: %w", err)
 	}
 
-	xferEvt := &staking.TransferEvent{
+	ctx.EmitEvent(api.NewEventBuilder(app.Name()).TypedAttribute(&staking.TransferEvent{
 		From:   withdraw.From,
 		To:     toAddr,
 		Amount: withdraw.Amount,
-	}
-	ctx.EmitEvent(api.NewEventBuilder(app.Name()).Attribute(KeyTransfer, cbor.Marshal(xferEvt)))
+	}))
 
-	awEvt := &staking.AllowanceChangeEvent{
+	ctx.EmitEvent(api.NewEventBuilder(app.Name()).TypedAttribute(&staking.AllowanceChangeEvent{
 		Owner:        withdraw.From,
 		Beneficiary:  toAddr,
 		Allowance:    allowance,
 		Negative:     true,
 		AmountChange: withdraw.Amount,
-	}
-	ctx.EmitEvent(api.NewEventBuilder(app.Name()).Attribute(KeyAllowanceChange, cbor.Marshal(awEvt)))
+	}))
 
 	return nil
 }

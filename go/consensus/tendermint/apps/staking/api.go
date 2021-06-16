@@ -20,30 +20,4 @@ var (
 	// QueryApp is a query for filtering events processed by the
 	// staking application.
 	QueryApp = api.QueryForApp(AppName)
-
-	// KeyTakeEscrow is an ABCI event attribute key for TakeEscrow calls
-	// (value is an api.TakeEscrowEvent).
-	KeyTakeEscrow = stakingState.KeyTakeEscrow
-
-	// KeyReclaimEscrow is an ABCI event attribute key for ReclaimEscrow
-	// calls (value is an api.ReclaimEscrowEvent).
-	KeyReclaimEscrow = []byte("reclaim_escrow")
-
-	// KeyTransfer is an ABCI event attribute key for Transfers (value is
-	// an api.TransferEvent).
-	KeyTransfer = stakingState.KeyTransfer
-
-	// KeyBurn is an ABCI event attribute key for Burn calls (value is
-	// an api.BurnEvent).
-	KeyBurn = []byte("burn")
-
-	// KeyAddEscrow is an ABCI event attribute key for AddEscrow calls
-	// (value is an api.AddEscrowEvent).
-	KeyAddEscrow = stakingState.KeyAddEscrow
-
-	// KeyDebondingStart is an ABCI event attribute key for DebondingStartEscrowEvents.
-	KeyDebondingStart = []byte("debonding_start")
-
-	// KeyAllowanceChange is an ABCI event attribute key for AllowanceChangeEvents.
-	KeyAllowanceChange = []byte("allowance_change")
 )

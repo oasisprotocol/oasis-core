@@ -2,7 +2,6 @@
 package governance
 
 import (
-	"bytes"
 	"context"
 	"fmt"
 
@@ -211,7 +210,7 @@ func EventsFromTendermint(
 			val := pair.GetValue()
 
 			switch {
-			case bytes.Equal(key, app.KeyProposalSubmitted):
+			case tmapi.IsAttributeKind(key, &api.ProposalSubmittedEvent{}):
 				// Proposal submitted event.
 				var e api.ProposalSubmittedEvent
 				if err := cbor.Unmarshal(val, &e); err != nil {
@@ -221,7 +220,7 @@ func EventsFromTendermint(
 
 				evt := &api.Event{Height: height, TxHash: txHash, ProposalSubmitted: &e}
 				events = append(events, evt)
-			case bytes.Equal(key, app.KeyProposalExecuted):
+			case tmapi.IsAttributeKind(key, &api.ProposalExecutedEvent{}):
 				//  Proposal executed event.
 				var e api.ProposalExecutedEvent
 				if err := cbor.Unmarshal(val, &e); err != nil {
@@ -231,7 +230,7 @@ func EventsFromTendermint(
 
 				evt := &api.Event{Height: height, TxHash: txHash, ProposalExecuted: &e}
 				events = append(events, evt)
-			case bytes.Equal(key, app.KeyProposalFinalized):
+			case tmapi.IsAttributeKind(key, &api.ProposalFinalizedEvent{}):
 				// Proposal finalized event.
 				var e api.ProposalFinalizedEvent
 				if err := cbor.Unmarshal(val, &e); err != nil {
@@ -241,7 +240,7 @@ func EventsFromTendermint(
 
 				evt := &api.Event{Height: height, TxHash: txHash, ProposalFinalized: &e}
 				events = append(events, evt)
-			case bytes.Equal(key, app.KeyVote):
+			case tmapi.IsAttributeKind(key, &api.VoteEvent{}):
 				// Vote event.
 				var e api.VoteEvent
 				if err := cbor.Unmarshal(val, &e); err != nil {

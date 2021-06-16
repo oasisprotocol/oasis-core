@@ -304,6 +304,11 @@ func (c *Context) HasEvent(evType string, key []byte) bool {
 	return false
 }
 
+// HasTypedEvent checks if a specific typed event has been emitted.
+func (c *Context) HasTypedEvent(evType string, kind TypedAttribute) bool {
+	return c.HasEvent(evType, []byte(kind.EventKind()))
+}
+
 // SetGasAccountant configures the gas accountant on the context.
 func (c *Context) SetGasAccountant(ga GasAccountant) {
 	c.gasAccountant = ga

@@ -285,11 +285,11 @@ func TestRewardAndSlash(t *testing.T) {
 		require.Len(ev.Attributes, 1, "each event should have a single attribute")
 
 		switch string(ev.Attributes[0].Key) {
-		case string(KeyAddEscrow):
+		case "add_escrow":
 			var v staking.AddEscrowEvent
 			err = cbor.Unmarshal(ev.Attributes[0].Value, &v)
 			require.NoError(err, "malformed add escrow event")
-		case string(KeyTransfer):
+		case "transfer":
 			var v staking.TransferEvent
 			err = cbor.Unmarshal(ev.Attributes[0].Value, &v)
 			require.NoError(err, "malformed add escrow event")
@@ -297,9 +297,9 @@ func TestRewardAndSlash(t *testing.T) {
 			t.Fatalf("unexpected event key: %+v", ev.Attributes[0].Key)
 		}
 	}
-	require.Equal(KeyAddEscrow, evs[0].Attributes[0].Key, "first event should be an add escrow event")
-	require.Equal(KeyTransfer, evs[1].Attributes[0].Key, "second event should be a transfer event")
-	require.Equal(KeyAddEscrow, evs[2].Attributes[0].Key, "second event should be an add escrow event")
+	require.Equal("add_escrow", string(evs[0].Attributes[0].Key), "first event should be an add escrow event")
+	require.Equal("transfer", string(evs[1].Attributes[0].Key), "second event should be a transfer event")
+	require.Equal("add_escrow", string(evs[2].Attributes[0].Key), "second event should be an add escrow event")
 
 	// 100% gain.
 	delegatorAccount, err = s.Account(ctx, delegatorAddr)
@@ -371,11 +371,11 @@ func TestRewardAndSlash(t *testing.T) {
 		require.Len(ev.Attributes, 1, "each event should have a single attribute")
 
 		switch string(ev.Attributes[0].Key) {
-		case string(KeyAddEscrow):
+		case "add_escrow":
 			var v staking.AddEscrowEvent
 			err = cbor.Unmarshal(ev.Attributes[0].Value, &v)
 			require.NoError(err, "malformed add escrow event")
-		case string(KeyTransfer):
+		case "transfer":
 			var v staking.TransferEvent
 			err = cbor.Unmarshal(ev.Attributes[0].Value, &v)
 			require.NoError(err, "malformed add escrow event")
@@ -383,9 +383,9 @@ func TestRewardAndSlash(t *testing.T) {
 			t.Fatalf("unexpected event key: %+v", ev.Attributes[0].Key)
 		}
 	}
-	require.Equal(KeyAddEscrow, evs[0].Attributes[0].Key, "first event should be an add escrow event")
-	require.Equal(KeyTransfer, evs[1].Attributes[0].Key, "second event should be a transfer event")
-	require.Equal(KeyAddEscrow, evs[2].Attributes[0].Key, "second event should be an add escrow event")
+	require.Equal("add_escrow", string(evs[0].Attributes[0].Key), "first event should be an add escrow event")
+	require.Equal("transfer", string(evs[1].Attributes[0].Key), "second event should be a transfer event")
+	require.Equal("add_escrow", string(evs[2].Attributes[0].Key), "second event should be an add escrow event")
 
 	// 5% gain.
 	escrowAccount, err = s.Account(ctx, escrowAddr)
