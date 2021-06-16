@@ -148,6 +148,14 @@ func (cfg *NetworkCfg) SetMockEpoch() {
 	}
 }
 
+// SetInsecureBeacon force-enables the insecure (faster) beacon backend.
+func (cfg *NetworkCfg) SetInsecureBeacon() {
+	cfg.Beacon.Backend = beacon.BackendInsecure
+	if cfg.Beacon.InsecureParameters != nil {
+		cfg.Beacon.InsecureParameters.Interval = defaultEpochtimeTendermintInterval
+	}
+}
+
 // Config returns the network configuration.
 func (net *Network) Config() *NetworkCfg {
 	return net.cfg

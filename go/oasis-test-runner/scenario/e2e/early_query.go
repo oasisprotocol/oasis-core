@@ -45,6 +45,8 @@ func (sc *earlyQueryImpl) Fixture() (*oasis.NetworkFixture, error) {
 		return nil, err
 	}
 
+	f.Network.SetInsecureBeacon()
+
 	// Set initial height.
 	f.Network.InitialHeight = sc.initialHeight
 

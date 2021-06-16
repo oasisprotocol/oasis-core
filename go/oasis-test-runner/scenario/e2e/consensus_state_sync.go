@@ -35,6 +35,8 @@ func (sc *consensusStateSyncImpl) Fixture() (*oasis.NetworkFixture, error) {
 		return nil, err
 	}
 
+	f.Network.SetInsecureBeacon()
+
 	// Enable checkpoints.
 	f.Network.Consensus.Parameters.StateCheckpointInterval = 10
 	f.Network.Consensus.Parameters.StateCheckpointNumKept = 100

@@ -8,7 +8,6 @@ import (
 	"path/filepath"
 	"strings"
 
-	beacon "github.com/oasisprotocol/oasis-core/go/beacon/api"
 	genesisFile "github.com/oasisprotocol/oasis-core/go/genesis/file"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/env"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/oasis"
@@ -46,7 +45,7 @@ func (s *genesisFileImpl) Fixture() (*oasis.NetworkFixture, error) {
 	f.Validators = []oasis.ValidatorFixture{
 		{Entity: 1, Consensus: oasis.ConsensusFixture{EnableConsensusRPCWorker: true, SupplementarySanityInterval: 1}},
 	}
-	f.Network.Beacon.Backend = beacon.BackendInsecure
+	f.Network.SetInsecureBeacon()
 
 	return f, nil
 }
