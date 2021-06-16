@@ -11,7 +11,7 @@
 macro_rules! impl_bytes {
     ($name:ident, $size:expr, $doc:expr) => {
         #[doc=$doc]
-        #[derive(Clone)]
+        #[derive(Clone, Copy)]
         pub struct $name(pub [u8; $size]);
 
         impl $name {
@@ -62,8 +62,6 @@ macro_rules! impl_bytes {
                 $name([0; $size])
             }
         }
-
-        impl Copy for $name {}
 
         impl Into<[u8; $size]> for $name {
             fn into(self) -> [u8; $size] {

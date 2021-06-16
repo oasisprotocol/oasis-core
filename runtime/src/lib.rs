@@ -36,14 +36,15 @@ extern crate slog_stdlog;
 #[macro_use]
 extern crate intrusive_collections;
 extern crate io_context;
-extern crate pem;
+extern crate oid_registry;
 extern crate percent_encoding;
 extern crate rand;
+extern crate rsa;
 extern crate rustc_hex;
 extern crate snow;
 #[cfg(test)]
 extern crate tempfile;
-extern crate webpki;
+extern crate x509_parser;
 
 use lazy_static::lazy_static;
 #[cfg(target_env = "sgx")]
