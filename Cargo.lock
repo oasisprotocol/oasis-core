@@ -2302,20 +2302,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "simple-keyvalue-ops-client"
-version = "0.0.0"
-dependencies = [
- "clap",
- "grpcio",
- "io-context",
- "oasis-core-client",
- "oasis-core-runtime",
- "rand 0.7.3",
- "simple-keyvalue-api",
- "tokio 1.6.1",
-]
-
-[[package]]
 name = "simple_asn1"
 version = "0.5.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"

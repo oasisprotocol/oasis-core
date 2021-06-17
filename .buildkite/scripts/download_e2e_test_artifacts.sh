@@ -33,7 +33,6 @@ download_artifact simple-keymanager-upgrade target/default/debug 755
 download_artifact test-long-term-client target/default/debug 755
 download_artifact simple-keyvalue-client target/default/debug 755
 download_artifact simple-keyvalue-enc-client target/default/debug 755
-download_artifact simple-keyvalue-ops-client target/default/debug 755
 
 download_artifact simple-keyvalue.sgxs target/sgx/x86_64-fortanix-unknown-sgx/debug 755
 download_artifact simple-keyvalue target/default/debug 755

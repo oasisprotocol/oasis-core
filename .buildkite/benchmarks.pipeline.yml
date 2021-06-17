@@ -65,7 +65,6 @@ steps:
       - .buildkite/rust/build_generic.sh /workdir -p test-long-term-client
       - .buildkite/rust/build_generic.sh /workdir -p simple-keyvalue-client
       - .buildkite/rust/build_generic.sh /workdir -p simple-keyvalue-enc-client
-      - .buildkite/rust/build_generic.sh /workdir -p simple-keyvalue-ops-client
 
       # Upload the built artifacts.
       - cd /var/tmp/artifacts/default/debug
@@ -74,7 +73,6 @@ steps:
       - buildkite-agent artifact upload test-long-term-client
       - buildkite-agent artifact upload simple-keyvalue-client
       - buildkite-agent artifact upload simple-keyvalue-enc-client
-      - buildkite-agent artifact upload simple-keyvalue-ops-client
     plugins:
       <<: *docker_plugin
 

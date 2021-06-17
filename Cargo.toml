@@ -15,7 +15,6 @@ members = [
     # Test clients.
     "tests/clients/simple-keyvalue",
     "tests/clients/simple-keyvalue-enc",
-    "tests/clients/simple-keyvalue-ops",
     "tests/clients/test-long-term",
 ]
 
