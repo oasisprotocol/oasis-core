@@ -70,6 +70,18 @@ retry: &retry_agent_failure
       limit: 2
 
 steps:
+  # Require explicit confirmation for some PRs to avoid CI spam.
+  - block: Confirm CI run
+    prompt: Run CI for this pull request?
+    blocked_state: running
+    if: |
+      build.pull_request.id != null &&
+      !(build.pull_request.labels includes "s:ready-ci") &&
+      (
+        build.pull_request.draft ||
+        !(build.creator.teams includes "everyone")
+      )
+
   ###########
   # Lint jobs
   ###########
@@ -230,7 +242,30 @@ steps:
   ###########################
   # E2E test jobs - intel-sgx
   ###########################
-  - label: E2E tests - intel-sgx
+  - label: E2E tests - intel-sgx (basic)
+    branches: "!master !stable/*"
+    timeout_in_minutes: 40
+    command:
+      - .buildkite/scripts/download_e2e_test_artifacts.sh
+      # Only run runtime scenarios as others do not use SGX.
+      - .buildkite/scripts/test_e2e.sh --scenario e2e/runtime/runtime
+    artifact_paths:
+      - coverage-merged-e2e-*.txt
+      - /tmp/e2e/**/*.log
+    env:
+      OASIS_E2E_COVERAGE: enable
+      TEST_BASE_DIR: /tmp
+      # libp2p logging.
+      IPFS_LOGGING: debug
+    agents:
+      queue: intel-sgx
+    retry:
+      <<: *retry_agent_failure
+    plugins:
+      <<: *docker_plugin_sgx
+
+  - label: E2E tests - intel-sgx (full)
+    branches: master stable/*
     parallelism: 5
     timeout_in_minutes: 40
     command:
@@ -253,10 +288,11 @@ steps:
     plugins:
       <<: *docker_plugin_sgx
 
-  ###############################
-  # E2E test - intel-sgx with IAS
-  ###############################
+  ################################################
+  # E2E test - intel-sgx with IAS (only on master)
+  ################################################
   - label: E2E tests - intel-sgx - IAS
+    branches: master stable/*
     timeout_in_minutes: 15
     command:
       - .buildkite/scripts/sgx_ias_tests.sh
@@ -302,7 +338,7 @@ steps:
   ####################################
 
   - label: Coverage Rust crates
-    branches: master
+    branches: master stable/*
     command:
       # Build storage interoperability test helpers first.
       - make build-helpers

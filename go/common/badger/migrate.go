@@ -10,7 +10,16 @@ import (
 	badgerV2 "github.com/dgraph-io/badger/v2"
 	"github.com/dgraph-io/badger/v2/pb"
 	"github.com/golang/protobuf/proto" //nolint: staticcheck
+	flag "github.com/spf13/pflag"
+	"github.com/spf13/viper"
 )
+
+const (
+	cfgMigrateNumGoRoutines = "badger.migrate.num_go_routines"
+)
+
+// MigrationFlags has the migration flags.
+var MigrationFlags = flag.NewFlagSet("", flag.ContinueOnError)
 
 // Adapted from Badger v2 which is Copyright 2017 Dgraph Labs, Inc. and Contributors, released
 // under the Apache-2 license.
@@ -23,6 +32,7 @@ func backup(db *badgerV2.DB, w io.Writer, managed bool) (uint64, error) {
 	case false:
 		stream = db.NewStream()
 	}
+	stream.NumGo = viper.GetInt(cfgMigrateNumGoRoutines)
 
 	stream.LogPrefix = "migration"
 	stream.KeyToList = func(key []byte, itr *badgerV2.Iterator) (*pb.KVList, error) {
@@ -57,6 +67,14 @@ func backup(db *badgerV2.DB, w io.Writer, managed bool) (uint64, error) {
 				Meta:      []byte{meta},
 			}
 			list.Kv = append(list.Kv, kv)
+
+			if !managed {
+				// Migrate only last version of the key in case this is a non-managed database.
+				// All non-managed oasis-core databases are configured to only keep one version,
+				// but due to what looks like a badger bug, it can happen that a key can have
+				// multiple historical versions in the database.
+				return list, nil
+			}
 		}
 		return list, nil
 	}
@@ -83,4 +101,9 @@ func backup(db *badgerV2.DB, w io.Writer, managed bool) (uint64, error) {
 		return 0, err
 	}
 	return maxVersion, nil
+}
+
+func init() {
+	MigrationFlags.Int(cfgMigrateNumGoRoutines, 8, "number of go routines to use when migrating (useful to lower memory pressure during migration)")
+	_ = viper.BindPFlags(MigrationFlags)
 }

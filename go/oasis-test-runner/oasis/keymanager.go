@@ -155,8 +155,9 @@ type Keymanager struct { // nolint: maligned
 
 	sentryIndices []int
 
-	runtime *Runtime
-	policy  *KeymanagerPolicy
+	runtime            *Runtime
+	policy             *KeymanagerPolicy
+	runtimeProvisioner string
 
 	sentryPubKey     signature.PublicKey
 	tmAddress        string
@@ -172,8 +173,9 @@ type KeymanagerCfg struct {
 
 	SentryIndices []int
 
-	Runtime *Runtime
-	Policy  *KeymanagerPolicy
+	Runtime            *Runtime
+	Policy             *KeymanagerPolicy
+	RuntimeProvisioner string
 }
 
 // IdentityKeyPath returns the paths to the node's identity key.
@@ -254,6 +256,11 @@ func (km *Keymanager) AddArgs(args *argBuilder) error {
 		return err
 	}
 
+	runtimeBinaries := km.runtime.binaries[km.runtime.teeHardware]
+	if len(runtimeBinaries) < 1 {
+		return fmt.Errorf("oasis/keymanager: no runtime binaries configured")
+	}
+
 	args.debugDontBlameOasis().
 		debugAllowTestKeys().
 		debugEnableProfiling(km.Node.pprofPort).
@@ -263,10 +270,10 @@ func (km *Keymanager) AddArgs(args *argBuilder) error {
 		tendermintPrune(km.consensus.PruneNumKept).
 		tendermintRecoverCorruptedWAL(km.consensus.TendermintRecoverCorruptedWAL).
 		workerClientPort(km.workerClientPort).
-		runtimeProvisioner(runtimeRegistry.RuntimeProvisionerSandboxed).
+		runtimeProvisioner(km.runtimeProvisioner).
 		runtimeSGXLoader(km.net.cfg.RuntimeSGXLoaderBinary).
 		// XXX: could support configurable binary idx if ever needed.
-		runtimePath(km.runtime.id, km.runtime.binaries[km.runtime.teeHardware][0]).
+		runtimePath(km.runtime.id, runtimeBinaries[0]).
 		workerKeymanagerEnabled().
 		workerKeymanagerRuntimeID(km.runtime.id).
 		configureDebugCrashPoints(km.crashPointsProbability).
@@ -316,16 +323,21 @@ func (net *Network) NewKeymanager(cfg *KeymanagerCfg) (*Keymanager, error) {
 		return nil, fmt.Errorf("oasis/keymanager: sentry client public key unmarshal failure: %w", err)
 	}
 
+	if cfg.RuntimeProvisioner == "" {
+		cfg.RuntimeProvisioner = runtimeRegistry.RuntimeProvisionerSandboxed
+	}
+
 	km := &Keymanager{
-		Node:             host,
-		runtime:          cfg.Runtime,
-		policy:           cfg.Policy,
-		sentryIndices:    cfg.SentryIndices,
-		tmAddress:        crypto.PublicKeyToTendermint(&host.p2pSigner).Address().String(),
-		sentryPubKey:     sentryPubKey,
-		consensusPort:    host.getProvisionedPort(nodePortConsensus),
-		workerClientPort: host.getProvisionedPort(nodePortClient),
-		mayGenerate:      len(net.keymanagers) == 0,
+		Node:               host,
+		runtime:            cfg.Runtime,
+		policy:             cfg.Policy,
+		runtimeProvisioner: cfg.RuntimeProvisioner,
+		sentryIndices:      cfg.SentryIndices,
+		tmAddress:          crypto.PublicKeyToTendermint(&host.p2pSigner).Address().String(),
+		sentryPubKey:       sentryPubKey,
+		consensusPort:      host.getProvisionedPort(nodePortConsensus),
+		workerClientPort:   host.getProvisionedPort(nodePortClient),
+		mayGenerate:        len(net.keymanagers) == 0,
 	}
 
 	net.keymanagers = append(net.keymanagers, km)
