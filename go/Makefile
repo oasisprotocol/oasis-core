@@ -5,6 +5,11 @@ ifneq ($(GOLDFLAGS),)
 	GO_EXTRA_FLAGS += -ldflags $(GOLDFLAGS)
 endif
 
+# Build code with jemalloc tag unless explicitly disabled (used by badgerdb).
+ifneq ($(OASIS_BADGER_NO_JEMALLOC), 1)
+	GO_EXTRA_FLAGS += -tags jemalloc
+endif
+
 # Set all target as the default target.
 all: build
 

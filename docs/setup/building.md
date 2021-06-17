@@ -17,6 +17,15 @@ export OASIS_UNSAFE_SKIP_KM_POLICY="1"
 make
 ```
 
+To build BadgerDB without `jemalloc` support (and avoid installing `jemalloc`
+on your system), set
+
+```
+export OASIS_BADGER_NO_JEMALLOC="1"
+```
+
+Not using `jemalloc` is fine for development purposes.
+
 This will build all the required parts (build tools, Oasis node, runtime
 libraries, runtime loader, key manager and test runtimes). The AVR and KM flags
 are supported on production SGX systems only and these features must be disabled
