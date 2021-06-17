@@ -113,7 +113,7 @@ func newDefaultFixture() (*oasis.NetworkFixture, error) {
 		RuntimeProvisioner: runtimeProvisioner,
 	}}
 
-	usingKeymanager := viper.IsSet(cfgKeymanagerBinary)
+	usingKeymanager := len(viper.GetString(cfgKeymanagerBinary)) > 0
 
 	if viper.GetBool(cfgSetupRuntimes) {
 		fixture.Runtimes = []oasis.RuntimeFixture{
@@ -124,7 +124,7 @@ func newDefaultFixture() (*oasis.NetworkFixture, error) {
 				Entity:     0,
 				Keymanager: -1,
 				Binaries: map[node.TEEHardware][]string{
-					tee: viper.GetStringSlice(cfgKeymanagerBinary),
+					tee: {viper.GetString(cfgKeymanagerBinary)},
 				},
 				AdmissionPolicy: registry.RuntimeAdmissionPolicy{
 					AnyNode: &registry.AnyNodeRuntimeAdmissionPolicy{},

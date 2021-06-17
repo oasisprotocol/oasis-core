@@ -256,6 +256,11 @@ func (km *Keymanager) AddArgs(args *argBuilder) error {
 		return err
 	}
 
+	runtimeBinaries := km.runtime.binaries[km.runtime.teeHardware]
+	if len(runtimeBinaries) < 1 {
+		return fmt.Errorf("oasis/keymanager: no runtime binaries configured")
+	}
+
 	args.debugDontBlameOasis().
 		debugAllowTestKeys().
 		debugEnableProfiling(km.Node.pprofPort).
@@ -268,7 +273,7 @@ func (km *Keymanager) AddArgs(args *argBuilder) error {
 		runtimeProvisioner(km.runtimeProvisioner).
 		runtimeSGXLoader(km.net.cfg.RuntimeSGXLoaderBinary).
 		// XXX: could support configurable binary idx if ever needed.
-		runtimePath(km.runtime.id, km.runtime.binaries[km.runtime.teeHardware][0]).
+		runtimePath(km.runtime.id, runtimeBinaries[0]).
 		workerKeymanagerEnabled().
 		workerKeymanagerRuntimeID(km.runtime.id).
 		configureDebugCrashPoints(km.crashPointsProbability).
