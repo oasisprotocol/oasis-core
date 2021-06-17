@@ -172,24 +172,33 @@ Core:
 * (**OPTIONAL**) [jemalloc] (version 5.2.1, built with `'je_'` jemalloc-prefix)
 
   Alternatively set `OASIS_BADGER_NO_JEMALLOC="1"` environment variable when
-  building `oasis-node` code, to build BadgerDB without `jemalloc` support.
+  building `oasis-node` code, to build [BadgerDB] without `jemalloc` support.
 
   Download and install `jemalloc` with:
 
-  <!-- markdownlint-disable line-length -->
   ```
-  export JEMALLOC_VERSION=5.2.1
-  export JEMALLOC_CHECKSUM=34330e5ce276099e2e8950d9335db5a875689a4c6a56751ef3b1d8c537f887f6
-  wget -O jemalloc.tar.bz2 "https://github.com/jemalloc/jemalloc/releases/download/${JEMALLOC_VERSION}/jemalloc-${JEMALLOC_VERSION}.tar.bz2"
+  JEMALLOC_VERSION=5.2.1
+  JEMALLOC_CHECKSUM=34330e5ce276099e2e8950d9335db5a875689a4c6a56751ef3b1d8c537f887f6
+  JEMALLOC_GITHUB=https://github.com/jemalloc/jemalloc/releases/download/
+  pushd $(mktemp -d)
+  wget \
+    -O jemalloc.tar.bz2 \
+    "${JEMALLOC_GITHUB}/${JEMALLOC_VERSION}/jemalloc-${JEMALLOC_VERSION}.tar.bz2"
   # Ensure checksum matches.
   echo "${JEMALLOC_CHECKSUM} jemalloc.tar.bz2" | sha256sum -c
-  tar -xjf ./jemalloc.tar.bz2 -v --no-same-owner
+  tar -xf ./jemalloc.tar.bz2 --no-same-owner
   cd jemalloc-${JEMALLOC_VERSION}
-  ./configure --with-jemalloc-prefix='je_' --with-malloc-conf='background_thread:true,metadata_thp:auto'
+  ./configure \
+    --with-jemalloc-prefix='je_' \
+    --with-malloc-conf='background_thread:true,metadata_thp:auto'
   make
-  make install
+  sudo make install
+  popd
   ```
-  <!-- markdownlint-enable line-length -->
+
+  _NOTE: jemalloc needs to be installed to the (default) `/usr/local` prefix
+  (i.e. you can't use `./configure --prefix=$HOME/.local ...`) because upstream
+  authors [hardcode its path][jemalloc-hardcode-path]._
 
 In the following instructions, the top-level directory is the directory
 where the code has been checked out.
@@ -215,6 +224,11 @@ where the code has been checked out.
 [gofumpt and gofumports]: https://github.com/mvdan/gofumpt
 [protoc-gen-go]: https://github.com/golang/protobuf
 [jemalloc]: https://github.com/jemalloc/jemalloc
+[BadgerDB]: https://github.com/dgraph-io/badger/
+<!-- markdownlint-disable line-length -->
+[jemalloc-hardcode-path]:
+  https://github.com/dgraph-io/ristretto/blob/221ca9b2091d12e5d24aa5d7d56e49745fc175d8/z/calloc_jemalloc.go#L9-L13
+<!-- markdownlint-enable line-length -->
 
 ## Using the Development Docker Image
 
