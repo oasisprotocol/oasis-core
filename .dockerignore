@@ -1,1 +1,3 @@
 target
+!target/default/debug/oasis-core-runtime-loader
+!target/default/debug/simple-key*
