@@ -154,6 +154,8 @@ type NodeFixture struct {
 	// Name is the name of the node that hosts the feature. Leave empty
 	// to automatically instantiate a dedicated node with a default name.
 	Name string `json:"node_name,omitempty"`
+
+	ExtraArgs []Argument `json:"extra_args,omitempty"`
 }
 
 // TEEFixture is a TEE configuration fixture.
@@ -208,6 +210,7 @@ func (f *ValidatorFixture) Create(net *Network) (*Validator, error) {
 			SupplementarySanityInterval: f.Consensus.SupplementarySanityInterval,
 			EnableProfiling:             f.EnableProfiling,
 			Entity:                      entity,
+			ExtraArgs:                   f.ExtraArgs,
 		},
 		Sentries: sentries,
 	})
@@ -354,6 +357,7 @@ func (f *KeymanagerFixture) Create(net *Network) (*Keymanager, error) {
 			Consensus:                   f.Consensus,
 			NoAutoStart:                 f.NoAutoStart,
 			Entity:                      entity,
+			ExtraArgs:                   f.ExtraArgs,
 		},
 		RuntimeProvisioner: f.RuntimeProvisioner,
 		Runtime:            runtime,
@@ -416,6 +420,7 @@ func (f *StorageWorkerFixture) Create(net *Network) (*Storage, error) {
 			LogWatcherHandlerFactories:  f.LogWatcherHandlerFactories,
 			Consensus:                   f.Consensus,
 			Entity:                      entity,
+			ExtraArgs:                   f.ExtraArgs,
 		},
 		Backend:                 f.Backend,
 		SentryIndices:           f.Sentries,
@@ -478,6 +483,7 @@ func (f *ComputeWorkerFixture) Create(net *Network) (*Compute, error) {
 			LogWatcherHandlerFactories:  f.LogWatcherHandlerFactories,
 			Consensus:                   f.Consensus,
 			Entity:                      entity,
+			ExtraArgs:                   f.ExtraArgs,
 		},
 		RuntimeProvisioner: f.RuntimeProvisioner,
 		Runtimes:           f.Runtimes,
@@ -527,6 +533,7 @@ func (f *SentryFixture) Create(net *Network) (*Sentry, error) {
 			CrashPointsProbability:      f.CrashPointsProbability,
 			SupplementarySanityInterval: f.Consensus.SupplementarySanityInterval,
 			EnableProfiling:             f.EnableProfiling,
+			ExtraArgs:                   f.ExtraArgs,
 		},
 		ValidatorIndices:  f.Validators,
 		StorageIndices:    f.StorageWorkers,
@@ -568,6 +575,7 @@ func (f *ClientFixture) Create(net *Network) (*Client, error) {
 			AllowEarlyTermination:       f.AllowEarlyTermination,
 			SupplementarySanityInterval: f.Consensus.SupplementarySanityInterval,
 			EnableProfiling:             f.EnableProfiling,
+			ExtraArgs:                   f.ExtraArgs,
 		},
 		MaxTransactionAge:  f.MaxTransactionAge,
 		Runtimes:           f.Runtimes,
