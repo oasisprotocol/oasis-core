@@ -12,6 +12,22 @@ The format is inspired by [Keep a Changelog].
 
 <!-- TOWNCRIER -->
 
+## 21.2.3 (2021-06-18)
+
+| Protocol          | Version   |
+|:------------------|:---------:|
+| Consensus         | 4.0.0     |
+| Runtime Host      | 3.0.0     |
+| Runtime Committee | 2.0.0     |
+
+### Internal Changes
+
+- ci: Fix dirty Git state in release workflow
+  ([#4050](https://github.com/oasisprotocol/oasis-core/issues/4050))
+
+- github: Unify jemalloc installation with GoReleaser installation in workflows
+  ([#4052](https://github.com/oasisprotocol/oasis-core/issues/4052))
+
 ## 21.2.2 (2021-06-18)
 
 | Protocol          | Version   |
