@@ -44,6 +44,7 @@ jobs:
           sudo apt-get install make libseccomp-dev protobuf-compiler
       - name: Install jemalloc
         run: |
+          cd $(mktemp --directory /tmp/jemalloc.XXXXX)
           wget -O jemalloc.tar.bz2 https://github.com/jemalloc/jemalloc/releases/download/${JEMALLOC_VERSION}/jemalloc-${JEMALLOC_VERSION}.tar.bz2
           echo "${JEMALLOC_CHECKSUM} jemalloc.tar.bz2" | sha256sum -c
           tar -xjf ./jemalloc.tar.bz2 -v --no-same-owner && cd jemalloc-${JEMALLOC_VERSION}
