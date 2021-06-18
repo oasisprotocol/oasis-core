@@ -12,6 +12,100 @@ The format is inspired by [Keep a Changelog].
 
 <!-- TOWNCRIER -->
 
+## 21.2.2 (2021-06-18)
+
+| Protocol          | Version   |
+|:------------------|:---------:|
+| Consensus         | 4.0.0     |
+| Runtime Host      | 3.0.0     |
+| Runtime Committee | 2.0.0     |
+
+### Configuration Changes
+
+- Add flags controlling libp2p validator concurrency
+  ([#4025](https://github.com/oasisprotocol/oasis-core/issues/4025))
+
+  - `worker.p2p.validate_concurrency` - libp2p gossipsub per topic validator
+      concurrency limit
+  - `worker.p2p.validate_throttle` - libp2p gossipsub validator concurrency
+      limit
+
+- badger/migration: `badger.migrate.num_go_routines` flag
+  ([#4037](https://github.com/oasisprotocol/oasis-core/issues/4037),
+   [#4041](https://github.com/oasisprotocol/oasis-core/issues/4041))
+
+  The flag enables controlling the number of go routines badger uses when
+  doing the v2 -> v3 migration. Use the flag to lower memory pressure during
+  the migration, by lowering the amount of workers to e.g. 1.
+
+### Features
+
+- go/oasis-net-runner: allow setting runtime provisioner
+  ([#4024](https://github.com/oasisprotocol/oasis-core/issues/4024))
+
+  On systems that do not support bwrap, the runtime provisioner can be
+  set to `unconfined`.
+
+- go/oasis-net-runner: allow running without a keymanager
+  ([#4024](https://github.com/oasisprotocol/oasis-core/issues/4024))
+
+  This feature makes it easier to run debug runtimes that are not (yet)
+  associated with a keymanager.
+
+- runtime-loader: allow bulding for non-SGX use on platforms that aren't Linux
+  ([#4024](https://github.com/oasisprotocol/oasis-core/issues/4024))
+
+- oasis-net-runner: support setting custom node arguments in fixtures
+  ([#4025](https://github.com/oasisprotocol/oasis-core/issues/4025))
+
+- Build `oasis-node` with `jemalloc` tag (used by BadgerDB)
+  ([#4040](https://github.com/oasisprotocol/oasis-core/issues/4040))
+
+  In BadgerDB V3 using `jemalloc` seems to be recommended and better supported
+  option ([1], [2]). Based on testing using `jemalloc` reduces BadgerDB memory
+  usage.
+
+  To build `oasis-node` without `jemalloc` requirement, set the
+  `OASIS_BADGER_NO_JEMALLOC="1"` environment variable before invoking the
+  makefile.
+
+  [1]: https://dgraph.io/blog/post/manual-memory-management-golang-jemalloc/
+  [2]: https://discuss.dgraph.io/t/memory-issue-during-stream-operation/13033
+
+### Bug Fixes
+
+- go/consensus/tendermint/apps/staking: Fix emitted reward events
+  ([#4033](https://github.com/oasisprotocol/oasis-core/issues/4033))
+
+- badger/migration: keep only last version when migrating non-managed DB
+  ([#4037](https://github.com/oasisprotocol/oasis-core/issues/4037))
+
+  Even though oasis-core always configures non-managed badger databases to keep
+  a single version of keys, some databases in the wild contain multiple versions
+  of the same key.
+
+  Skip migrating more than the latest version when migrating non-managed
+  badger databases.
+
+### Internal Changes
+
+- go: bump github.com/dgraph-io/badger/v3 from 3.2011.1 to 3.2103.0
+  ([#4003](https://github.com/oasisprotocol/oasis-core/issues/4003))
+
+- runtime: Stop using webpki to validate the IAS cert chain
+  ([#4021](https://github.com/oasisprotocol/oasis-core/issues/4021))
+
+- go: Bump the dynlib import
+  ([#4026](https://github.com/oasisprotocol/oasis-core/issues/4026))
+
+- go/consensus/tendermint: Add typed attribute API
+  ([#4033](https://github.com/oasisprotocol/oasis-core/issues/4033))
+
+  Using typed events makes it slightly harder to use an incorrect key/value
+  combination. Unfortunately we cannot use this in all of the cases due to
+  events in registry/roothash not being nicely structured and changing this
+  would require existing nodes to resync due to internal event key changes.
+
 ## 21.2.1 (2021-06-10)
 
 | Protocol          | Version   |
