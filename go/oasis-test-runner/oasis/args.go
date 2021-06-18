@@ -75,6 +75,11 @@ func (args *argBuilder) clone() *argBuilder {
 	}
 }
 
+func (args *argBuilder) extraArgs(extra []Argument) *argBuilder {
+	args.vec = append(args.vec, extra...)
+	return args
+}
+
 func (args *argBuilder) mergeConfigMap(cfg map[string]interface{}) *argBuilder {
 	if args.config == nil {
 		args.config = viper.New()
