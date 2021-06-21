@@ -8,6 +8,7 @@ import (
 	"github.com/cenkalti/backoff/v4"
 
 	"github.com/oasisprotocol/oasis-core/go/common"
+	cmnBackoff "github.com/oasisprotocol/oasis-core/go/common/backoff"
 	"github.com/oasisprotocol/oasis-core/go/roothash/api/block"
 	storageApi "github.com/oasisprotocol/oasis-core/go/storage/api"
 )
@@ -95,9 +96,8 @@ func (h *heartbeat) reset() {
 		h.Stop()
 	}
 
-	boff := backoff.NewExponentialBackOff()
+	boff := cmnBackoff.NewExponentialBackOff()
 	boff.InitialInterval = 5 * time.Second
-	boff.MaxElapsedTime = 0
 	boff.MaxInterval = 20 * time.Second
 	h.Ticker = backoff.NewTicker(boff)
 

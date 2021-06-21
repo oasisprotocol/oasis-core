@@ -14,6 +14,7 @@ import (
 	"github.com/libp2p/go-libp2p-core/peer"
 	manet "github.com/multiformats/go-multiaddr/net"
 
+	cmnBackoff "github.com/oasisprotocol/oasis-core/go/common/backoff"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
@@ -307,7 +308,7 @@ func (p *p2pPeer) connectWorker(mgr *PeerManager, peerID core.PeerID) {
 		"node_id", p.node.ID,
 	)
 
-	bctx := backoff.WithContext(backoff.NewExponentialBackOff(), p.ctx)
+	bctx := backoff.WithContext(cmnBackoff.NewExponentialBackOff(), p.ctx)
 
 	err = backoff.Retry(func() (retError error) {
 		// This is blocking, which is stupid.

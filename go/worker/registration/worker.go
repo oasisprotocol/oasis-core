@@ -15,6 +15,7 @@ import (
 	beacon "github.com/oasisprotocol/oasis-core/go/beacon/api"
 	"github.com/oasisprotocol/oasis-core/go/common"
 	"github.com/oasisprotocol/oasis-core/go/common/accessctl"
+	cmnBackoff "github.com/oasisprotocol/oasis-core/go/common/backoff"
 	"github.com/oasisprotocol/oasis-core/go/common/cbor"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	"github.com/oasisprotocol/oasis-core/go/common/entity"
@@ -236,9 +237,7 @@ func (w *Worker) registrationLoop() { // nolint: gocyclo
 
 		switch retry {
 		case true:
-			expBackoff := backoff.NewExponentialBackOff()
-			expBackoff.MaxElapsedTime = 0
-			off = expBackoff
+			off = cmnBackoff.NewExponentialBackOff()
 		case false:
 			off = &backoff.StopBackOff{}
 		}

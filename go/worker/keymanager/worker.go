@@ -11,6 +11,7 @@ import (
 
 	"github.com/oasisprotocol/oasis-core/go/common"
 	"github.com/oasisprotocol/oasis-core/go/common/accessctl"
+	cmnBackoff "github.com/oasisprotocol/oasis-core/go/common/backoff"
 	"github.com/oasisprotocol/oasis-core/go/common/cbor"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	"github.com/oasisprotocol/oasis-core/go/common/grpc/policy"
@@ -187,7 +188,7 @@ func (w *Worker) updateStatus(status *api.Status, startedEvent *host.StartedEven
 		if !initOk {
 			// If initialization failed setup a retry ticker.
 			if w.initTicker == nil {
-				w.initTicker = backoff.NewTicker(backoff.NewExponentialBackOff())
+				w.initTicker = backoff.NewTicker(cmnBackoff.NewExponentialBackOff())
 				w.initTickerCh = w.initTicker.C
 			}
 		}
