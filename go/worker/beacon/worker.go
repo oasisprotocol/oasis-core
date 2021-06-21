@@ -10,6 +10,7 @@ import (
 	"github.com/cenkalti/backoff/v4"
 
 	beacon "github.com/oasisprotocol/oasis-core/go/beacon/api"
+	cmnBackoff "github.com/oasisprotocol/oasis-core/go/common/backoff"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/pvss"
 	"github.com/oasisprotocol/oasis-core/go/common/identity"
@@ -581,9 +582,7 @@ func (w *Worker) cancelSubmitTx() {
 
 func (w *Worker) retrySubmitTx(tx *transaction.Transaction) {
 	ctx := w.newRetryCtx()
-	expOff := backoff.NewExponentialBackOff()
-	expOff.MaxElapsedTime = 0
-	off := backoff.WithContext(expOff, ctx)
+	off := backoff.WithContext(cmnBackoff.NewExponentialBackOff(), ctx)
 
 	fn := func() error {
 		// Query state to make sure submitting the tx is still sensible.
