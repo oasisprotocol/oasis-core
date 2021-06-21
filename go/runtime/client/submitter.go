@@ -8,6 +8,7 @@ import (
 	"github.com/cenkalti/backoff/v4"
 
 	"github.com/oasisprotocol/oasis-core/go/common"
+	cmnBackoff "github.com/oasisprotocol/oasis-core/go/common/backoff"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
 	"github.com/oasisprotocol/oasis-core/go/roothash/api/block"
@@ -131,7 +132,7 @@ func (w *txSubmitter) checkBlocks() {
 
 		// Start recheck ticker.
 		if w.recheckTicker == nil {
-			boff := backoff.NewExponentialBackOff()
+			boff := cmnBackoff.NewExponentialBackOff()
 			boff.InitialInterval = 5 * time.Second
 			w.recheckTicker = backoff.NewTicker(boff)
 		}

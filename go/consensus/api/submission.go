@@ -7,6 +7,7 @@ import (
 
 	"github.com/cenkalti/backoff/v4"
 
+	cmnBackoff "github.com/oasisprotocol/oasis-core/go/common/backoff"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	"github.com/oasisprotocol/oasis-core/go/common/errors"
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
@@ -169,7 +170,7 @@ func (m *submissionManager) signAndSubmitTx(ctx context.Context, signer signatur
 
 // Implements SubmissionManager.
 func (m *submissionManager) SignAndSubmitTx(ctx context.Context, signer signature.Signer, tx *transaction.Transaction) error {
-	sched := backoff.NewExponentialBackOff()
+	sched := cmnBackoff.NewExponentialBackOff()
 	sched.MaxInterval = maxSubmissionRetryInterval
 	sched.MaxElapsedTime = maxSubmissionRetryElapsedTime
 

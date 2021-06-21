@@ -13,6 +13,7 @@ import (
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 
 	"github.com/oasisprotocol/oasis-core/go/common"
+	cmnBackoff "github.com/oasisprotocol/oasis-core/go/common/backoff"
 	"github.com/oasisprotocol/oasis-core/go/common/cbor"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
@@ -216,7 +217,7 @@ func (h *topicHandler) retryWorker(m *queuedMsg) {
 		atomic.AddUint64(&h.numWorkers, ^uint64(0))
 	}()
 
-	off := backoff.WithMaxRetries(backoff.NewExponentialBackOff(), redispatchMaxRetries)
+	off := backoff.WithMaxRetries(cmnBackoff.NewExponentialBackOff(), redispatchMaxRetries)
 	bctx := backoff.WithContext(off, h.ctx)
 
 	err := backoff.Retry(func() error {
