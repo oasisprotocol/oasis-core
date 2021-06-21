@@ -449,7 +449,9 @@ func (r *sandboxedRuntime) manager() {
 					})
 
 					if ticker == nil {
-						ticker = backoff.NewTicker(backoff.NewExponentialBackOff())
+						boff := backoff.NewExponentialBackOff()
+						boff.MaxElapsedTime = 0
+						ticker = backoff.NewTicker(boff)
 						tickerCh = ticker.C
 					}
 					continue
