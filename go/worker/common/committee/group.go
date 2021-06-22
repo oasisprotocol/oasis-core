@@ -577,9 +577,11 @@ func (g *Group) Start() error {
 	// Check if we have the local storage backend available (e.g., this node is also a storage node
 	// for this runtime). In this case we override the storage client's backend so that any updates
 	// don't go via gRPC but are redirected directly to the local backend instead.
+	var scOpts []storageClient.Option
 	var localStorageBackend storage.LocalBackend
 	if lsb, ok := g.runtime.Storage().(storage.LocalBackend); ok && g.runtime.HasRoles(node.RoleStorageWorker) {
 		localStorageBackend = lsb
+		scOpts = append(scOpts, storageClient.WithBackendOverride(g.identity.NodeSigner.Public(), lsb))
 	}
 
 	// Create the storage client.
@@ -588,6 +590,7 @@ func (g *Group) Start() error {
 		g.identity,
 		nodes.NewFilteredNodeLookup(g.nodes, nodes.TagFilter(TagForCommittee(scheduler.KindStorage))),
 		g.runtime,
+		scOpts...,
 	)
 	if err != nil {
 		return fmt.Errorf("group: failed to create storage client: %w", err)
