@@ -2,6 +2,7 @@ package committee
 
 import (
 	"context"
+	"fmt"
 	"sync"
 
 	"github.com/prometheus/client_golang/prometheus"
@@ -128,6 +129,10 @@ func (n *Node) Name() string {
 
 // Start starts the service.
 func (n *Node) Start() error {
+	if err := n.Group.Start(); err != nil {
+		return fmt.Errorf("failed to start group services: %w", err)
+	}
+
 	go n.worker()
 	return nil
 }

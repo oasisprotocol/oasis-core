@@ -18,6 +18,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/mathrand"
+	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
 	"github.com/oasisprotocol/oasis-core/go/common/node"
 	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
@@ -39,6 +40,21 @@ const (
 	maxRetries    = 15
 )
 
+// Option is a storage client option.
+type Option func(b *storageClientBackend)
+
+// WithBackendOverride overrides the storage backend for the specified node. The passed backend is
+// used instead of the gRPC backend when performing storage requests.
+func WithBackendOverride(nodeID signature.PublicKey, backend api.Backend) Option {
+	return func(b *storageClientBackend) {
+		if b.backendOverrides == nil {
+			b.backendOverrides = make(map[signature.PublicKey]api.Backend)
+		}
+
+		b.backendOverrides[nodeID] = backend
+	}
+}
+
 // storageClientBackend contains all information about the client storage API
 // backend, including the backend state and the connected storage nodes' state.
 type storageClientBackend struct {
@@ -48,6 +64,10 @@ type storageClientBackend struct {
 
 	nodesClient grpc.NodesClient
 	runtime     registry.RuntimeDescriptorProvider
+
+	// backendOverrides is a map of per-node storage backend overrides. This map can only be mutated
+	// during initialization via options so no lock is needed.
+	backendOverrides map[signature.PublicKey]api.Backend
 }
 
 // Implements api.StorageClient.
@@ -90,7 +110,7 @@ func (b *storageClientBackend) writeWithClient( // nolint: gocyclo
 
 	// Determine the minimum replication factor. In case we don't have a runtime descriptor provider
 	// we make the safe choice of assuming that the replication factor is the same as the number of
-	// conencted nodes.
+	// connected nodes.
 	minWriteReplication := n
 	if b.runtime != nil {
 		rt, err := b.runtime.ActiveDescriptor(ctx)
@@ -113,8 +133,16 @@ func (b *storageClientBackend) writeWithClient( // nolint: gocyclo
 		go func(conn *grpc.ConnWithNodeMeta) {
 			var resp interface{}
 			op := func() error {
+				// If a backend override is configured, use it instead of going through gRPC.
+				var backend api.Backend
+				if override, ok := b.backendOverrides[conn.Node.ID]; ok {
+					backend = override
+				} else {
+					backend = api.NewStorageClient(conn.ClientConn)
+				}
+
 				var rerr error
-				resp, rerr = fn(ctx, api.NewStorageClient(conn.ClientConn), conn.Node)
+				resp, rerr = fn(ctx, backend, conn.Node)
 				if rerr != nil {
 					b.logger.Debug("storage write request error",
 						"err", rerr,
@@ -347,7 +375,15 @@ func (b *storageClientBackend) readWithClient(
 
 		var err error
 		for _, conn := range nodes {
-			resp, err = fn(ctx, api.NewStorageClient(conn.ClientConn))
+			// If a backend override is configured, use it instead of going through gRPC.
+			var backend api.Backend
+			if override, ok := b.backendOverrides[conn.Node.ID]; ok {
+				backend = override
+			} else {
+				backend = api.NewStorageClient(conn.ClientConn)
+			}
+
+			resp, err = fn(ctx, backend)
 			if ctx.Err() != nil {
 				return backoff.Permanent(ctx.Err())
 			}

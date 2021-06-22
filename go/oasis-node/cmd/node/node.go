@@ -399,9 +399,6 @@ func (n *Node) initRuntimeWorkers() error {
 	n.svcMgr.Register(n.KeymanagerWorker)
 
 	// Initialize the executor worker.
-	// Keep this step _after_ initializing the storage worker,
-	// because the executor worker will use the local storage backend
-	// if it is available.
 	n.ExecutorWorker, err = executor.New(
 		dataDir,
 		n.CommonWorker,
@@ -433,6 +430,11 @@ func (n *Node) initRuntimeWorkers() error {
 }
 
 func (n *Node) startRuntimeWorkers() error {
+	// Start the common worker.
+	if err := n.CommonWorker.Start(); err != nil {
+		return err
+	}
+
 	// Start the runtime client service.
 	if err := n.RuntimeClient.Start(); err != nil {
 		return fmt.Errorf("failed to start runtime client service: %w", err)
@@ -445,11 +447,6 @@ func (n *Node) startRuntimeWorkers() error {
 
 	// Start the executor worker.
 	if err := n.ExecutorWorker.Start(); err != nil {
-		return err
-	}
-
-	// Start the common worker.
-	if err := n.CommonWorker.Start(); err != nil {
 		return err
 	}
 
