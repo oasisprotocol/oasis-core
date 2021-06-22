@@ -14,6 +14,7 @@ import (
 	"github.com/cenkalti/backoff/v4"
 
 	"github.com/oasisprotocol/oasis-core/go/common"
+	cmnBackoff "github.com/oasisprotocol/oasis-core/go/common/backoff"
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
 	"github.com/oasisprotocol/oasis-core/go/common/pubsub"
 	"github.com/oasisprotocol/oasis-core/go/common/version"
@@ -124,7 +125,7 @@ func (r *sandboxedRuntime) Call(ctx context.Context, body *protocol.Body) (rsp *
 	}
 
 	// Retry call in case the runtime is not yet ready.
-	err = backoff.Retry(callFn, backoff.WithContext(backoff.NewExponentialBackOff(), ctx))
+	err = backoff.Retry(callFn, backoff.WithContext(cmnBackoff.NewExponentialBackOff(), ctx))
 	return
 }
 
@@ -449,7 +450,7 @@ func (r *sandboxedRuntime) manager() {
 					})
 
 					if ticker == nil {
-						ticker = backoff.NewTicker(backoff.NewExponentialBackOff())
+						ticker = backoff.NewTicker(cmnBackoff.NewExponentialBackOff())
 						tickerCh = ticker.C
 					}
 					continue

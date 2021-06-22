@@ -24,6 +24,7 @@ func NewForNodesClient(
 	ctx context.Context,
 	client grpc.NodesClient,
 	runtime registry.RuntimeDescriptorProvider,
+	opts ...Option,
 ) (api.Backend, error) {
 	b := &storageClientBackend{
 		ctx:         ctx,
@@ -31,6 +32,11 @@ func NewForNodesClient(
 		nodesClient: client,
 		runtime:     runtime,
 	}
+
+	for _, opt := range opts {
+		opt(b)
+	}
+
 	return api.NewMetricsWrapper(b), nil
 }
 
@@ -41,12 +47,13 @@ func NewForNodes(
 	ident *identity.Identity,
 	nodes nodes.NodeDescriptorLookup,
 	runtime registry.RuntimeDescriptorProvider,
+	opts ...Option,
 ) (api.Backend, error) {
 	client, err := grpc.NewNodesClient(ctx, nodes, grpc.WithClientAuthentication(ident))
 	if err != nil {
 		return nil, fmt.Errorf("storage/client: failed to create committee client: %w", err)
 	}
-	return NewForNodesClient(ctx, client, runtime)
+	return NewForNodesClient(ctx, client, runtime, opts...)
 }
 
 // NewForPublicStorage creates a new storage client that automatically follows a given runtime's storage nodes
@@ -57,6 +64,7 @@ func NewForPublicStorage(
 	ident *identity.Identity,
 	registryBackend registry.Backend,
 	runtime registry.RuntimeDescriptorProvider,
+	opts ...Option,
 ) (api.Backend, error) {
 	nl, err := nodes.NewRuntimeNodeLookup(
 		ctx,
@@ -76,7 +84,7 @@ func NewForPublicStorage(
 		),
 	)
 
-	return NewForNodes(ctx, ident, publicStorageNl, runtime)
+	return NewForNodes(ctx, ident, publicStorageNl, runtime, opts...)
 }
 
 // NewStatic creates a new storage client that only follows a specific storage node.
@@ -87,13 +95,14 @@ func NewStatic(
 	ident *identity.Identity,
 	registryBackend registry.Backend,
 	nodeID signature.PublicKey,
+	opts ...Option,
 ) (api.Backend, error) {
 	nw, err := nodes.NewVersionedNodeDescriptorWatcher(ctx, registryBackend)
 	if err != nil {
 		return nil, fmt.Errorf("storage/client: failed to create node descriptor watcher: %w", err)
 	}
 
-	client, err := NewForNodes(ctx, ident, nw, nil)
+	client, err := NewForNodes(ctx, ident, nw, nil, opts...)
 	if err != nil {
 		return nil, err
 	}

@@ -8,6 +8,7 @@ import (
 	"github.com/cenkalti/backoff/v4"
 
 	"github.com/oasisprotocol/oasis-core/go/common"
+	cmnBackoff "github.com/oasisprotocol/oasis-core/go/common/backoff"
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
 	"github.com/oasisprotocol/oasis-core/go/common/service"
 	roothash "github.com/oasisprotocol/oasis-core/go/roothash/api"
@@ -71,7 +72,7 @@ func (s *Service) worker(storageBackend storage.Backend) {
 			var txs []*transaction.Transaction
 			var tags transaction.Tags
 			if !blk.Header.IORoot.IsEmpty() {
-				off := backoff.NewExponentialBackOff()
+				off := cmnBackoff.NewExponentialBackOff()
 				off.MaxElapsedTime = storageRetryTimeout
 
 				err = backoff.Retry(func() error {
