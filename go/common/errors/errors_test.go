@@ -1,7 +1,6 @@
 package errors
 
 import (
-	"errors"
 	"fmt"
 	"testing"
 
@@ -72,7 +71,7 @@ func TestErrors(t *testing.T) {
 
 	// Unknown module and code.
 	err = FromCode("test/does-not-exist", 5, "")
-	require.Equal(err, errors.New(""))
-	err = FromCode("test/errors", 3, "")
-	require.Equal(err, errors.New(""))
+	require.Equal(err, New("test/does-not-exist", 5, ""))
+	err = FromCode("test/errors", 3, "a test error occurred")
+	require.Equal(err, WithContext(New("test/errors", 3, "a test error occurred"), "a test error occurred"))
 }
