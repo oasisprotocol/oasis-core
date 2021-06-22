@@ -90,7 +90,7 @@ func (r *richRuntime) CheckTx(
 	// Interpret CheckTx result.
 	result := resp.RuntimeCheckTxBatchResponse.Results[0]
 	if !result.IsSuccess() {
-		return nil, errors.WithContext(ErrCheckTxFailed, result.Error.String())
+		return nil, errors.FromCode(result.Error.Module, result.Error.Code, result.Error.Message)
 	}
 
 	return result.ToCheckedTransaction(tx), nil
