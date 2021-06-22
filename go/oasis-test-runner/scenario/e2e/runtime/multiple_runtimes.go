@@ -29,7 +29,7 @@ const (
 // MultipleRuntimes is a scenario which tests running multiple runtimes on one node.
 var MultipleRuntimes = func() scenario.Scenario {
 	sc := &multipleRuntimesImpl{
-		runtimeImpl: *newRuntimeImpl("multiple-runtimes", "simple-keyvalue-client", nil),
+		runtimeImpl: *newRuntimeImpl("multiple-runtimes", nil),
 	}
 	sc.Flags.Int(cfgNumComputeRuntimes, 2, "number of compute runtimes per worker")
 	sc.Flags.Int(cfgNumComputeRuntimeTxns, 2, "number of transactions to perform")
@@ -182,7 +182,7 @@ func (sc *multipleRuntimesImpl) Run(childEnv *env.Env) error {
 					"runtime_id", rt.ID,
 				)
 
-				if err := sc.submitKeyValueRuntimeInsertTx(ctx, rt.ID, "hello", fmt.Sprintf("world at iteration %d from %s", i, rt.ID)); err != nil {
+				if err := sc.submitKeyValueRuntimeInsertTx(ctx, rt.ID, "hello", fmt.Sprintf("world at iteration %d from %s", i, rt.ID), 0); err != nil {
 					return err
 				}
 

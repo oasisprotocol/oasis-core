@@ -15,15 +15,15 @@ import (
 )
 
 // ClientExpire is the ClientExpire node scenario.
-var ClientExpire scenario.Scenario = newClientExpireImpl("client-expire", "simple-keyvalue-client", nil)
+var ClientExpire scenario.Scenario = newClientExpireImpl("client-expire")
 
 type clientExpireImpl struct {
 	runtimeImpl
 }
 
-func newClientExpireImpl(name, clientBinary string, clientArgs []string) scenario.Scenario {
+func newClientExpireImpl(name string) scenario.Scenario {
 	return &clientExpireImpl{
-		runtimeImpl: *newRuntimeImpl(name, clientBinary, clientArgs),
+		runtimeImpl: *newRuntimeImpl(name, nil),
 	}
 }
 
@@ -81,7 +81,7 @@ func (sc *clientExpireImpl) Run(childEnv *env.Env) error {
 		return fmt.Errorf("SubmitTxNoWait expected no error, got: %b", err)
 	}
 
-	err = sc.submitKeyValueRuntimeInsertTx(ctx, runtimeID, "hello", "test")
+	err = sc.submitKeyValueRuntimeInsertTx(ctx, runtimeID, "hello", "test", 0)
 	if !errors.Is(err, api.ErrTransactionExpired) {
 		return fmt.Errorf("expected error: %v, got: %v", api.ErrTransactionExpired, err)
 	}

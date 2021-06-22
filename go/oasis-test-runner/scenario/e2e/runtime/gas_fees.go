@@ -13,7 +13,7 @@ import (
 
 // GasFeesRuntimes is the runtime gas fees scenario.
 var GasFeesRuntimes scenario.Scenario = &gasFeesRuntimesImpl{
-	runtimeImpl: *newRuntimeImpl("gas-fees/runtimes", "", nil),
+	runtimeImpl: *newRuntimeImpl("gas-fees/runtimes", nil),
 }
 
 // gasPrice is the gas price used during the test.
@@ -129,7 +129,7 @@ func (sc *gasFeesRuntimesImpl) Run(childEnv *env.Env) error {
 
 	// Submit a runtime transaction to check whether transaction processing works.
 	sc.Logger.Info("submitting transaction to runtime")
-	if err := sc.submitKeyValueRuntimeInsertTx(ctx, runtimeID, "hello", "non-free world"); err != nil {
+	if err := sc.submitKeyValueRuntimeInsertTx(ctx, runtimeID, "hello", "non-free world", 0); err != nil {
 		return err
 	}
 

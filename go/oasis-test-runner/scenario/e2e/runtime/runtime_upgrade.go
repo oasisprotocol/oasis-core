@@ -30,11 +30,7 @@ type runtimeUpgradeImpl struct {
 
 func newRuntimeUpgradeImpl() scenario.Scenario {
 	return &runtimeUpgradeImpl{
-		runtimeImpl: *newRuntimeImpl(
-			"runtime-upgrade",
-			"simple-keyvalue-enc-client",
-			nil,
-		),
+		runtimeImpl: *newRuntimeImpl("runtime-upgrade", BasicKVEncTestClient),
 	}
 }
 
@@ -190,23 +186,17 @@ func (sc *runtimeUpgradeImpl) Run(childEnv *env.Env) error {
 	ctx := context.Background()
 	cli := cli.New(childEnv, sc.Net, sc.Logger)
 
-	clientErrCh, cmd, err := sc.runtimeImpl.start(childEnv)
-	if err != nil {
+	if err := sc.startNetworkAndTestClient(ctx, childEnv); err != nil {
 		return err
 	}
 	sc.Logger.Info("waiting for client to exit")
 	// Wait for the client to exit.
-	select {
-	case err = <-sc.runtimeImpl.Net.Errors():
-		_ = cmd.Process.Kill()
-	case err = <-clientErrCh:
-	}
-	if err != nil {
+	if err := sc.waitTestClientOnly(); err != nil {
 		return err
 	}
 
 	// Generate and update a policy that will allow the new runtime to run.
-	if err = sc.applyUpgradePolicy(childEnv); err != nil {
+	if err := sc.applyUpgradePolicy(childEnv); err != nil {
 		return fmt.Errorf("updating policies: %w", err)
 	}
 
@@ -214,14 +204,14 @@ func (sc *runtimeUpgradeImpl) Run(childEnv *env.Env) error {
 	sc.Logger.Info("stopping old runtimes")
 	for i := 0; i < sc.firstNewWorker; i++ {
 		worker := sc.Net.ComputeWorkers()[i]
-		if err = worker.RequestShutdown(ctx, false); err != nil {
+		if err := worker.RequestShutdown(ctx, false); err != nil {
 			return fmt.Errorf("failed to request shutdown: %w", err)
 		}
 	}
 	// Wait for all old workers to exit.
 	for i := 0; i < sc.firstNewWorker; i++ {
 		worker := sc.Net.ComputeWorkers()[i]
-		if err = <-worker.Exit(); err != env.ErrEarlyTerm {
+		if err := <-worker.Exit(); err != env.ErrEarlyTerm {
 			return fmt.Errorf("compute worker exited with error: %w", err)
 		}
 	}
@@ -230,7 +220,7 @@ func (sc *runtimeUpgradeImpl) Run(childEnv *env.Env) error {
 	sc.Logger.Info("starting new runtimes")
 	for i := sc.firstNewWorker; i < len(sc.Net.ComputeWorkers()); i++ {
 		newWorker := sc.Net.ComputeWorkers()[i]
-		if err = newWorker.Start(); err != nil {
+		if err := newWorker.Start(); err != nil {
 			return fmt.Errorf("starting new compute worker: %w", err)
 		}
 	}
@@ -239,35 +229,33 @@ func (sc *runtimeUpgradeImpl) Run(childEnv *env.Env) error {
 	sc.Logger.Info("updating runtime descriptor")
 	newRt := sc.Net.Runtimes()[len(sc.Net.Runtimes())-1]
 	newTxPath := filepath.Join(childEnv.Dir(), "register_update_compute_runtime.json")
-	if err = cli.Registry.GenerateRegisterRuntimeTx(childEnv.Dir(), newRt.ToRuntimeDescriptor(), sc.nonce, newTxPath); err != nil {
+	if err := cli.Registry.GenerateRegisterRuntimeTx(childEnv.Dir(), newRt.ToRuntimeDescriptor(), sc.nonce, newTxPath); err != nil {
 		return fmt.Errorf("failed to generate register compute runtime tx: %w", err)
 	}
 	sc.nonce++
-	if err = cli.Consensus.SubmitTx(newTxPath); err != nil {
+	if err := cli.Consensus.SubmitTx(newTxPath); err != nil {
 		return fmt.Errorf("failed to update compute runtime: %w", err)
 	}
 
 	// Wait for the new nodes to register.
 	sc.Logger.Info("waiting for new compute workers to be ready")
 	for i := sc.firstNewWorker; i < len(sc.Net.ComputeWorkers()); i++ {
-		if err = sc.Net.ComputeWorkers()[i].WaitReady(ctx); err != nil {
+		if err := sc.Net.ComputeWorkers()[i].WaitReady(ctx); err != nil {
 			return fmt.Errorf("error waiting for compute node to become ready: %w", err)
 		}
 	}
 
 	// Run client again.
 	sc.Logger.Info("starting a second client to check if runtime works")
-	sc.runtimeImpl.clientArgs = []string{
+	newTestClient := sc.testClient.Clone().(*BinaryTestClient)
+	newTestClient.args = []string{
 		"--key", "key2",
 		"--seed", "second_seed",
 	}
-	cmd, err = sc.startClient(childEnv)
-	if err != nil {
+	sc.runtimeImpl.testClient = newTestClient
+
+	if err := sc.startTestClientOnly(ctx, childEnv); err != nil {
 		return err
 	}
-	client2ErrCh := make(chan error)
-	go func() {
-		client2ErrCh <- cmd.Wait()
-	}()
-	return sc.wait(childEnv, cmd, client2ErrCh)
+	return sc.waitTestClient()
 }

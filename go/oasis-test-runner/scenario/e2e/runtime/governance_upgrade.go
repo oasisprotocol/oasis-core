@@ -64,8 +64,10 @@ func newGovernanceConsensusUpgradeImpl(correctUpgradeVersion, cancelUpgrade bool
 	sc := &governanceConsensusUpgradeImpl{
 		runtimeImpl: *newRuntimeImpl(
 			name,
-			"test-long-term-client",
-			[]string{"--mode", "part1"},
+			NewBinaryTestClient(
+				"test-long-term-client",
+				[]string{"--mode", "part1"},
+			),
 		),
 		correctUpgradeVersion: correctUpgradeVersion,
 		shouldCancelUpgrade:   cancelUpgrade,
@@ -310,16 +312,11 @@ func (sc *governanceConsensusUpgradeImpl) cancelUpgrade(proposalID uint64) error
 }
 
 func (sc *governanceConsensusUpgradeImpl) Run(childEnv *env.Env) error { // nolint: gocyclo
+	if err := sc.startNetworkAndTestClient(sc.ctx, childEnv); err != nil {
+		return err
+	}
+
 	sc.entity = sc.Net.Entities()[1]
-
-	clientErrCh, cmd, err := sc.runtimeImpl.start(childEnv)
-	if err != nil {
-		return err
-	}
-
-	if err = sc.Net.Start(); err != nil {
-		return err
-	}
 
 	fixture, err := sc.Fixture()
 	if err != nil {
@@ -334,7 +331,7 @@ func (sc *governanceConsensusUpgradeImpl) Run(childEnv *env.Env) error { // noli
 	// We're at epoch 2 after the initial transitions.
 	sc.currentEpoch = beacon.EpochTime(2)
 	// Wait for the client to exit.
-	if err = sc.waitClient(childEnv, cmd, clientErrCh); err != nil {
+	if err = sc.waitTestClientOnly(); err != nil {
 		return err
 	}
 
@@ -489,10 +486,12 @@ func (sc *governanceConsensusUpgradeImpl) Run(childEnv *env.Env) error { // noli
 	}
 
 	// Check that runtime still works after the upgrade.
-	sc.runtimeImpl.clientArgs = []string{
+	newTestClient := sc.testClient.Clone().(*BinaryTestClient)
+	newTestClient.args = []string{
 		"--mode", "part2",
 		// Use a different nonce seed.
 		"--seed", "second_seed",
 	}
+	sc.runtimeImpl.testClient = newTestClient
 	return sc.runtimeImpl.Run(childEnv)
 }

@@ -33,7 +33,7 @@ import (
 // runtime.
 var RuntimeGovernance = func() scenario.Scenario {
 	sc := &runtimeGovernanceImpl{
-		runtimeImpl: *newRuntimeImpl("runtime-governance", "simple-keyvalue-client", nil),
+		runtimeImpl: *newRuntimeImpl("runtime-governance", nil),
 	}
 	return sc
 }()

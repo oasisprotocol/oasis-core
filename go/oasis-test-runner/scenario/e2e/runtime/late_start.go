@@ -16,7 +16,7 @@ import (
 )
 
 // LateStart is the LateStart node basic scenario.
-var LateStart scenario.Scenario = newLateStartImpl("late-start", "simple-keyvalue-client", nil)
+var LateStart scenario.Scenario = newLateStartImpl("late-start")
 
 const lateStartInitialWait = 2 * time.Minute
 
@@ -24,9 +24,9 @@ type lateStartImpl struct {
 	runtimeImpl
 }
 
-func newLateStartImpl(name, clientBinary string, clientArgs []string) scenario.Scenario {
+func newLateStartImpl(name string) scenario.Scenario {
 	return &lateStartImpl{
-		runtimeImpl: *newRuntimeImpl(name, clientBinary, clientArgs),
+		runtimeImpl: *newRuntimeImpl(name, BasicKVTestClient),
 	}
 }
 
@@ -112,14 +112,12 @@ func (sc *lateStartImpl) Run(childEnv *env.Env) error {
 	}
 
 	sc.Logger.Info("Starting the basic test client")
-	cmd, err := sc.startClient(childEnv)
-	if err != nil {
+	// Explicitly wait for the client to sync, before starting the client.
+	if err = sc.waitForClientSync(ctx); err != nil {
 		return err
 	}
-	clientErrCh := make(chan error)
-	go func() {
-		clientErrCh <- cmd.Wait()
-	}()
-
-	return sc.wait(childEnv, cmd, clientErrCh)
+	if err = sc.startTestClientOnly(ctx, childEnv); err != nil {
+		return err
+	}
+	return sc.waitTestClient()
 }

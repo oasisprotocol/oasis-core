@@ -22,11 +22,7 @@ type kmReplicateImpl struct {
 
 func newKmReplicateImpl() scenario.Scenario {
 	return &kmReplicateImpl{
-		runtimeImpl: *newRuntimeImpl(
-			"keymanager-replication",
-			"simple-keyvalue-enc-client",
-			nil,
-		),
+		runtimeImpl: *newRuntimeImpl("keymanager-replication", BasicKVEncTestClient),
 	}
 }
 
@@ -52,18 +48,13 @@ func (sc *kmReplicateImpl) Fixture() (*oasis.NetworkFixture, error) {
 }
 
 func (sc *kmReplicateImpl) Run(childEnv *env.Env) error {
-	clientErrCh, cmd, err := sc.runtimeImpl.start(childEnv)
-	if err != nil {
+	ctx := context.Background()
+	if err := sc.startNetworkAndTestClient(ctx, childEnv); err != nil {
 		return err
 	}
 
 	// Wait for the client to exit.
-	select {
-	case err = <-sc.Net.Errors():
-		_ = cmd.Process.Kill()
-	case err = <-clientErrCh:
-	}
-	if err != nil {
+	if err := sc.waitTestClientOnly(); err != nil {
 		return err
 	}
 
@@ -80,7 +71,7 @@ func (sc *kmReplicateImpl) Run(childEnv *env.Env) error {
 
 	// Extract the replica's ExtraInfo.
 	node, err := ctrl.Registry.GetNode(
-		context.Background(),
+		ctx,
 		&registry.IDQuery{
 			ID: replica.NodeID,
 		},
@@ -99,7 +90,7 @@ func (sc *kmReplicateImpl) Run(childEnv *env.Env) error {
 
 	// Grab a state dump and cross check the checksum with that of
 	// the replica.
-	doc, err := ctrl.Consensus.StateToGenesis(context.Background(), 0)
+	doc, err := ctrl.Consensus.StateToGenesis(ctx, 0)
 	if err != nil {
 		return fmt.Errorf("failed to obtain consensus state: %w", err)
 	}
@@ -126,7 +117,7 @@ func (sc *kmReplicateImpl) Run(childEnv *env.Env) error {
 	// succeeded from the enclave's point of view.
 
 	// Query the node's keymanager consensus endpoint.
-	status, err := ctrl.Keymanager.GetStatus(context.Background(), &registry.NamespaceQuery{
+	status, err := ctrl.Keymanager.GetStatus(ctx, &registry.NamespaceQuery{
 		ID: keymanagerID,
 	})
 	if err != nil {

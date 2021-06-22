@@ -27,7 +27,13 @@ type storageSyncInconsistentImpl struct {
 
 func newStorageSyncInconsistentImpl() scenario.Scenario {
 	return &storageSyncInconsistentImpl{
-		runtimeImpl: *newRuntimeImpl("storage-sync-inconsistent", "simple-keyvalue-client", []string{"--repeat"}),
+		runtimeImpl: *newRuntimeImpl(
+			"storage-sync-inconsistent",
+			NewBinaryTestClient(
+				"simple-keyvalue-client",
+				[]string{"--repeat"},
+			),
+		),
 	}
 }
 
@@ -91,8 +97,7 @@ func (sc *storageSyncInconsistentImpl) Run(childEnv *env.Env) error {
 	sc.runtimeID = sc.Net.Runtimes()[1].ID()
 	ctx := context.Background()
 
-	clientErrCh, cmd, err := sc.runtimeImpl.start(childEnv)
-	if err != nil {
+	if err := sc.runtimeImpl.startNetworkAndTestClient(ctx, childEnv); err != nil {
 		return err
 	}
 
@@ -155,10 +160,11 @@ func (sc *storageSyncInconsistentImpl) Run(childEnv *env.Env) error {
 	// Wait for the client to exit. Odd error handling here; if killing succeeded, then everything
 	// must have been fine up to this point and we can ignore the exit error from the kill.
 	sc.Logger.Info("scenario done, killing client")
-	if err = cmd.Process.Kill(); err != nil {
+	testClient := sc.testClient.(*BinaryTestClient)
+	if err = testClient.Kill(); err != nil {
 		return nil
 	}
-	_ = sc.waitClient(childEnv, cmd, clientErrCh)
+	_ = sc.waitTestClient()
 
 	return sc.Net.CheckLogWatchers()
 }

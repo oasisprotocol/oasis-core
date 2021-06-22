@@ -52,10 +52,12 @@ func newDumpRestoreImpl(
 	sc := &dumpRestoreImpl{
 		runtimeImpl: *newRuntimeImpl(
 			name,
-			"test-long-term-client",
-			// Use -nomsg variant as this test also compares with the database dump which cannot
-			// reconstruct the emitted messages as those are not available in the state dump alone.
-			[]string{"--mode", "part1-nomsg"},
+			NewBinaryTestClient(
+				"test-long-term-client",
+				// Use -nomsg variant as this test also compares with the database dump which cannot
+				// reconstruct the emitted messages as those are not available in the state dump alone.
+				[]string{"--mode", "part1-nomsg"},
+			),
 		),
 		mapGenesisDocumentFn: mapGenesisDocumentFn,
 	}
@@ -121,12 +123,10 @@ func (sc *dumpRestoreImpl) Fixture() (*oasis.NetworkFixture, error) {
 }
 
 func (sc *dumpRestoreImpl) Run(childEnv *env.Env) error {
-	clientErrCh, cmd, err := sc.start(childEnv)
-	if err != nil {
+	ctx := context.Background()
+	if err := sc.startNetworkAndTestClient(ctx, childEnv); err != nil {
 		return err
 	}
-
-	ctx := context.Background()
 
 	// Try submitting a proposal so that deposits are made.
 	entityAcc, err := sc.Net.Controller().Staking.Account(ctx,
@@ -159,12 +159,7 @@ func (sc *dumpRestoreImpl) Run(childEnv *env.Env) error {
 	}
 
 	// Wait for the client to exit.
-	select {
-	case err = <-sc.Net.Errors():
-		_ = cmd.Process.Kill()
-	case err = <-clientErrCh:
-	}
-	if err != nil {
+	if err = sc.waitTestClientOnly(); err != nil {
 		return err
 	}
 
@@ -202,10 +197,12 @@ func (sc *dumpRestoreImpl) Run(childEnv *env.Env) error {
 	}
 
 	// Check that everything works with restored state.
-	sc.runtimeImpl.clientArgs = []string{
+	newTestClient := sc.testClient.Clone().(*BinaryTestClient)
+	newTestClient.args = []string{
 		"--mode", "part2",
 		// Use a different nonce seed.
 		"--seed", "second_seed",
 	}
+	sc.runtimeImpl.testClient = newTestClient
 	return sc.runtimeImpl.Run(childEnv)
 }

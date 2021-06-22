@@ -53,7 +53,7 @@ const (
 
 // TxSourceMultiShort uses multiple workloads for a short time.
 var TxSourceMultiShort scenario.Scenario = &txSourceImpl{
-	runtimeImpl: *newRuntimeImpl("txsource-multi-short", "", nil),
+	runtimeImpl: *newRuntimeImpl("txsource-multi-short", nil),
 	clientWorkloads: []string{
 		workload.NameCommission,
 		workload.NameDelegation,
@@ -81,7 +81,7 @@ var TxSourceMultiShort scenario.Scenario = &txSourceImpl{
 
 // TxSourceMultiShortSGX uses multiple workloads for a short time.
 var TxSourceMultiShortSGX scenario.Scenario = &txSourceImpl{
-	runtimeImpl: *newRuntimeImpl("txsource-multi-short-sgx", "", nil),
+	runtimeImpl: *newRuntimeImpl("txsource-multi-short-sgx", nil),
 	clientWorkloads: []string{
 		workload.NameCommission,
 		workload.NameDelegation,
@@ -111,7 +111,7 @@ var TxSourceMultiShortSGX scenario.Scenario = &txSourceImpl{
 
 // TxSourceMulti uses multiple workloads.
 var TxSourceMulti scenario.Scenario = &txSourceImpl{
-	runtimeImpl: *newRuntimeImpl("txsource-multi", "", nil),
+	runtimeImpl: *newRuntimeImpl("txsource-multi", nil),
 	clientWorkloads: []string{
 		workload.NameCommission,
 		workload.NameDelegation,
@@ -217,7 +217,7 @@ func (sc *txSourceImpl) PreInit(childEnv *env.Env) error {
 	if err != nil {
 		return fmt.Errorf("failed to create random source: %w", err)
 	}
-	sc.rng = rand.New(mathrand.New(src))
+	sc.rng = rand.New(mathrand.New(src)) //nolint:gosec
 
 	return nil
 }

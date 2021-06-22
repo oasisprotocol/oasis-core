@@ -26,11 +26,7 @@ type runtimeMessageImpl struct {
 
 func newRuntimeMessage() scenario.Scenario {
 	return &runtimeMessageImpl{
-		runtimeImpl: *newRuntimeImpl(
-			"runtime-message",
-			"",
-			nil,
-		),
+		runtimeImpl: *newRuntimeImpl("runtime-message", nil),
 	}
 }
 
@@ -98,15 +94,8 @@ func (sc *runtimeMessageImpl) Run(childEnv *env.Env) error {
 	//   - in first round the consensus transfer transaction should be executed
 	//   - in the second round there should be no transactions, the round should
 	//     contain message results of the consensus transfer.
-	args := struct {
-		Transfer staking.Transfer `json:"transfer"`
-		Nonce    uint64           `json:"nonce"`
-	}{
-		Transfer: staking.Transfer{},
-		Nonce:    0,
-	}
 	sc.Logger.Debug("submitting consensus_transfer runtime transaction")
-	if _, err = sc.submitRuntimeTx(ctx, runtimeID, "consensus_transfer", args); err != nil {
+	if err = sc.submitConsensusXferTx(ctx, runtimeID, staking.Transfer{}, 0); err != nil {
 		return err
 	}
 

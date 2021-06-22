@@ -19,7 +19,7 @@ type nodeShutdownImpl struct {
 
 func newNodeShutdownImpl() scenario.Scenario {
 	sc := &nodeShutdownImpl{
-		runtimeImpl: *newRuntimeImpl("node-shutdown", "", nil),
+		runtimeImpl: *newRuntimeImpl("node-shutdown", nil),
 	}
 	return sc
 }

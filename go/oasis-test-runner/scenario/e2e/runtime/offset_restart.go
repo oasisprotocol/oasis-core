@@ -17,7 +17,13 @@ type offsetRestartImpl struct {
 
 func newOffsetRestartImpl() scenario.Scenario {
 	sc := &offsetRestartImpl{
-		runtimeImpl: *newRuntimeImpl("offset-restart", "test-long-term-client", []string{"--mode", "part1"}),
+		runtimeImpl: *newRuntimeImpl(
+			"offset-restart",
+			NewBinaryTestClient(
+				"test-long-term-client",
+				[]string{"--mode", "part1"},
+			),
+		),
 	}
 	return sc
 }
@@ -46,9 +52,7 @@ func (sc *offsetRestartImpl) Fixture() (*oasis.NetworkFixture, error) {
 
 func (sc *offsetRestartImpl) Run(childEnv *env.Env) error {
 	ctx := context.Background()
-
-	clientErrCh, cmd, err := sc.runtimeImpl.start(childEnv)
-	if err != nil {
+	if err := sc.startNetworkAndTestClient(ctx, childEnv); err != nil {
 		return err
 	}
 
@@ -61,7 +65,7 @@ func (sc *offsetRestartImpl) Run(childEnv *env.Env) error {
 		return err
 	}
 
-	if err = sc.waitClient(childEnv, cmd, clientErrCh); err != nil {
+	if err = sc.waitTestClientOnly(); err != nil {
 		return err
 	}
 
@@ -89,9 +93,11 @@ func (sc *offsetRestartImpl) Run(childEnv *env.Env) error {
 	// if these disconnected after the client node had already seen them, thereby
 	// hanging the network (no transactions could be submitted).
 	sc.Logger.Info("network back up, trying to run client again")
-	sc.runtimeImpl.clientArgs = []string{
+	newTestClient := sc.testClient.Clone().(*BinaryTestClient)
+	newTestClient.args = []string{
 		"--mode", "part2",
 		"--seed", "second_seed",
 	}
+	sc.runtimeImpl.testClient = newTestClient
 	return sc.runtimeImpl.Run(childEnv)
 }

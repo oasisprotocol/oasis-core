@@ -31,7 +31,7 @@ type runtimePruneImpl struct {
 
 func newRuntimePruneImpl() scenario.Scenario {
 	return &runtimePruneImpl{
-		runtimeImpl: *newRuntimeImpl("runtime-prune", "", nil),
+		runtimeImpl: *newRuntimeImpl("runtime-prune", nil),
 	}
 }
 
@@ -82,7 +82,7 @@ func (sc *runtimePruneImpl) Run(childEnv *env.Env) error {
 			"seq", i,
 		)
 
-		if err = sc.submitKeyValueRuntimeInsertTx(ctx, runtimeID, "hello", fmt.Sprintf("world %d", i)); err != nil {
+		if err = sc.submitKeyValueRuntimeInsertTx(ctx, runtimeID, "hello", fmt.Sprintf("world %d", i), 0); err != nil {
 			return err
 		}
 	}

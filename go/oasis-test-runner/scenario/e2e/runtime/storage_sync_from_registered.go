@@ -25,11 +25,7 @@ type storageSyncFromRegisteredImpl struct {
 
 func newStorageSyncFromRegisteredImpl() scenario.Scenario {
 	return &storageSyncFromRegisteredImpl{
-		runtimeImpl: *newRuntimeImpl(
-			"storage-sync-registered",
-			"simple-keyvalue-enc-client",
-			nil,
-		),
+		runtimeImpl: *newRuntimeImpl("storage-sync-registered", BasicKVEncTestClient),
 	}
 }
 
@@ -80,8 +76,7 @@ func (sc *storageSyncFromRegisteredImpl) Run(childEnv *env.Env) error {
 	ctx := context.Background()
 	var nextEpoch beacon.EpochTime
 
-	clientErrCh, cmd, err := sc.runtimeImpl.start(childEnv)
-	if err != nil {
+	if err := sc.startNetworkAndTestClient(ctx, childEnv); err != nil {
 		return err
 	}
 
@@ -97,7 +92,7 @@ func (sc *storageSyncFromRegisteredImpl) Run(childEnv *env.Env) error {
 	nextEpoch = beacon.EpochTime(3)
 
 	// Wait for the client to exit.
-	if err = sc.waitClient(childEnv, cmd, clientErrCh); err != nil {
+	if err = sc.waitTestClientOnly(); err != nil {
 		return err
 	}
 
@@ -186,17 +181,14 @@ func (sc *storageSyncFromRegisteredImpl) Run(childEnv *env.Env) error {
 
 	// Run the client again.
 	sc.Logger.Info("starting a second client to check if runtime works with storage worker 1")
-	sc.runtimeImpl.clientArgs = []string{
+	newTestClient := sc.testClient.Clone().(*BinaryTestClient)
+	newTestClient.args = []string{
 		"--key", "key2",
 		"--seed", "second_seed",
 	}
-	cmd, err = sc.startClient(childEnv)
-	if err != nil {
+	sc.runtimeImpl.testClient = newTestClient
+	if err = sc.startTestClientOnly(ctx, childEnv); err != nil {
 		return err
 	}
-	client2ErrCh := make(chan error)
-	go func() {
-		client2ErrCh <- cmd.Wait()
-	}()
-	return sc.wait(childEnv, cmd, client2ErrCh)
+	return sc.waitTestClient()
 }
