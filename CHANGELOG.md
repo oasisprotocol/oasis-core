@@ -12,6 +12,38 @@ The format is inspired by [Keep a Changelog].
 
 <!-- TOWNCRIER -->
 
+## 21.2.4 (2021-06-22)
+
+| Protocol          | Version   |
+|:------------------|:---------:|
+| Consensus         | 4.0.0     |
+| Runtime Host      | 3.0.0     |
+| Runtime Committee | 2.0.0     |
+
+### Features
+
+- upgrade/migrations: Add max allowances upgrade handler
+  ([#4064](https://github.com/oasisprotocol/oasis-core/issues/4064))
+
+  Add `"consensus-staking-max-allowances-16"` upgrade handler which updates
+  the consensus staking parameter `MaxAllowances` to `16`.
+
+### Bug Fixes
+
+- go/runtime/host/sandbox: Prevent restart storm after 10m
+  ([#4059](https://github.com/oasisprotocol/oasis-core/issues/4059))
+
+- go/worker/executor: Do not route local storage applies via gRPC
+  ([#4061](https://github.com/oasisprotocol/oasis-core/issues/4061))
+
+### Internal Changes
+
+- go/common/backoff: Add `NewExponentialBackoff` with sane defaults
+  ([#4059](https://github.com/oasisprotocol/oasis-core/issues/4059))
+
+- go/worker/common: Move committee storage to `Group`
+  ([#4061](https://github.com/oasisprotocol/oasis-core/issues/4061))
+
 ## 21.2.3 (2021-06-18)
 
 | Protocol          | Version   |
