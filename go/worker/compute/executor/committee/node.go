@@ -163,8 +163,6 @@ type Node struct { // nolint: maligned
 	commonCfg    commonWorker.Config
 	roleProvider registration.RoleProvider
 
-	storage storage.Backend
-
 	ctx       context.Context
 	cancelCtx context.CancelFunc
 	stopCh    chan struct{}
@@ -972,7 +970,7 @@ func (n *Node) handleScheduleBatch(force bool) {
 		opentracing.ChildOf(batchSpanCtx),
 	)
 
-	ioReceipts, err := n.storage.Apply(roundCtx, &storage.ApplyRequest{
+	ioReceipts, err := n.commonNode.Group.Storage().Apply(roundCtx, &storage.ApplyRequest{
 		Namespace: blk.Header.Namespace,
 		RootType:  storage.RootTypeIO,
 		SrcRound:  blk.Header.Round + 1,
@@ -1131,7 +1129,7 @@ func (n *Node) startProcessingBatchLocked(batch *unresolvedBatch) {
 
 		// Resolve the batch and dispatch it to the runtime.
 		readStartTime := time.Now()
-		resolvedBatch, err := batch.resolve(ctx, n.storage)
+		resolvedBatch, err := batch.resolve(ctx, n.commonNode.Group.Storage())
 		if err != nil {
 			n.logger.Error("failed to resolve batch",
 				"err", err,
@@ -1298,7 +1296,7 @@ func (n *Node) proposeBatch(
 			},
 		}
 
-		receipts, err := n.storage.ApplyBatch(ctx, &storage.ApplyBatchRequest{
+		receipts, err := n.commonNode.Group.Storage().ApplyBatch(ctx, &storage.ApplyBatchRequest{
 			Namespace: lastHeader.Namespace,
 			DstRound:  lastHeader.Round + 1,
 			Ops:       applyOps,
@@ -1740,10 +1738,6 @@ func (n *Node) worker() {
 }
 
 // NewNode initializes a new executor node.
-//
-// NOTE: If the node is also a storage node, the executor node will use the
-// local storage backend in addition to the committee connections, so the storage
-// worker needs to be initialized before constructing the executor node.
 func NewNode(
 	commonNode *committee.Node,
 	commonCfg commonWorker.Config,
@@ -1771,17 +1765,6 @@ func NewNode(
 
 	ctx, cancel := context.WithCancel(context.Background())
 
-	var storageMux storage.Backend
-	if lsb, ok := commonNode.Runtime.Storage().(storage.LocalBackend); ok && commonNode.Runtime.HasRoles(node.RoleStorageWorker) {
-		storageMux = storage.NewStorageMux(
-			storage.MuxReadOpFinishEarly(storage.MuxIterateIgnoringErrors()),
-			lsb,
-			commonNode.Group.Storage(),
-		)
-	} else {
-		storageMux = commonNode.Group.Storage()
-	}
-
 	n := &Node{
 		RuntimeHostNode:       rhn,
 		commonNode:            commonNode,
@@ -1791,7 +1774,6 @@ func NewNode(
 		lastScheduledCache:    cache,
 		roundWeightLimits:     make(map[transaction.Weight]uint64),
 		scheduleCh:            channels.NewRingChannel(1),
-		storage:               storageMux,
 		ctx:                   ctx,
 		cancelCtx:             cancel,
 		stopCh:                make(chan struct{}),

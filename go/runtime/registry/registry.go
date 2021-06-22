@@ -127,6 +127,7 @@ type runtime struct { // nolint: maligned
 	activeDescriptor     *registry.Runtime
 	activeDescriptorHash hash.Hash
 	roles                node.RolesMask
+	managed              bool
 
 	consensus    consensus.Backend
 	storage      storageAPI.Backend
@@ -232,7 +233,7 @@ func (r *runtime) Storage() storageAPI.Backend {
 	r.RLock()
 	defer r.RUnlock()
 
-	if r.storage == nil {
+	if r.storage == nil && r.managed {
 		panic("runtime storage accessed before initialization")
 	}
 	return r.storage
@@ -517,6 +518,7 @@ func (r *runtimeRegistry) addSupportedRuntime(ctx context.Context, id common.Nam
 	if err != nil {
 		return err
 	}
+	rt.managed = true
 
 	// Create runtime history keeper.
 	history, err := history.New(path, id, &r.cfg.History)
