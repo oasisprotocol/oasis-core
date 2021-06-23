@@ -20,6 +20,11 @@ import (
 )
 
 const (
+	// cpListTimeout is the timeout for fetching a list of checkpoints from a node.
+	cpListTimeout = 5 * time.Second
+	// cpRestoreTimeout is the timeout for restoring a checkpoint chunk from a node.
+	cpRestoreTimeout = 60 * time.Second
+
 	retryInterval = 1 * time.Second
 	maxRetries    = 30
 
@@ -131,18 +136,22 @@ func (n *Node) nodeWorker(
 			}
 		}
 
+		chunkCtx, cancel := context.WithTimeout(ctx, cpRestoreTimeout)
+		defer cancel()
+
 		restoreCh := make(chan *restoreResult)
 		rd, wr := io.Pipe()
 		go func() {
-			done, err := n.localStorage.Checkpointer().RestoreChunk(ctx, chunk.Index, rd)
+			done, err := n.localStorage.Checkpointer().RestoreChunk(chunkCtx, chunk.Index, rd)
 			restoreCh <- &restoreResult{
 				done: done,
 				err:  err,
 			}
 		}()
-		err := api.GetCheckpointChunk(ctx, chunk, wr)
+		err := api.GetCheckpointChunk(chunkCtx, chunk, wr)
 		wr.Close()
 		result := <-restoreCh
+		cancel()
 
 		// GetCheckpointChunk errors.
 		// The chunk probably always needs to be returned here
@@ -302,7 +311,10 @@ func (n *Node) getCheckpointList(nodesClient grpc.NodesClient) ([]*checkpoint.Me
 		Version:   1,
 		Namespace: n.commonNode.Runtime.ID(),
 	}
-	getter := func(ctx context.Context, conn *grpc.ConnWithNodeMeta) error {
+	getter := func(opCtx context.Context, conn *grpc.ConnWithNodeMeta) error {
+		ctx, cancel := context.WithTimeout(opCtx, cpListTimeout)
+		defer cancel()
+
 		api := storageApi.NewStorageClient(conn.ClientConn)
 		meta, err := api.GetCheckpoints(ctx, req)
 		if err != nil {
