@@ -369,7 +369,7 @@ func (sc *runtimeImpl) submitConsensusXferTx(
 	xfer staking.Transfer,
 	nonce uint64,
 ) error {
-	_, err := sc.submitRuntimeTx(ctx, runtimeID, "consesus_transfer", struct {
+	_, err := sc.submitRuntimeTx(ctx, runtimeID, "consensus_transfer", struct {
 		Transfer staking.Transfer `json:"transfer"`
 		Nonce    uint64           `json:"nonce"`
 	}{

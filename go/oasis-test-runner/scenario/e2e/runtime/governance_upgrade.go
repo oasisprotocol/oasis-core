@@ -64,10 +64,7 @@ func newGovernanceConsensusUpgradeImpl(correctUpgradeVersion, cancelUpgrade bool
 	sc := &governanceConsensusUpgradeImpl{
 		runtimeImpl: *newRuntimeImpl(
 			name,
-			NewBinaryTestClient(
-				"test-long-term-client",
-				[]string{"--mode", "part1"},
-			),
+			NewLongTermTestClient().WithMode(ModePart1),
 		),
 		correctUpgradeVersion: correctUpgradeVersion,
 		shouldCancelUpgrade:   cancelUpgrade,
@@ -486,12 +483,7 @@ func (sc *governanceConsensusUpgradeImpl) Run(childEnv *env.Env) error { // noli
 	}
 
 	// Check that runtime still works after the upgrade.
-	newTestClient := sc.testClient.Clone().(*BinaryTestClient)
-	newTestClient.args = []string{
-		"--mode", "part2",
-		// Use a different nonce seed.
-		"--seed", "second_seed",
-	}
-	sc.runtimeImpl.testClient = newTestClient
+	newTestClient := sc.testClient.Clone().(*LongTermTestClient)
+	sc.runtimeImpl.testClient = newTestClient.WithMode(ModePart2).WithSeed("second_seed")
 	return sc.runtimeImpl.Run(childEnv)
 }

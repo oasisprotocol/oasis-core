@@ -49,15 +49,12 @@ func newDumpRestoreImpl(
 	name string,
 	mapGenesisDocumentFn func(*genesis.Document),
 ) scenario.Scenario {
+	// Use -nomsg variant as this test also compares with the database dump which cannot
+	// reconstruct the emitted messages as those are not available in the state dump alone.
 	sc := &dumpRestoreImpl{
 		runtimeImpl: *newRuntimeImpl(
 			name,
-			NewBinaryTestClient(
-				"test-long-term-client",
-				// Use -nomsg variant as this test also compares with the database dump which cannot
-				// reconstruct the emitted messages as those are not available in the state dump alone.
-				[]string{"--mode", "part1-nomsg"},
-			),
+			NewLongTermTestClient().WithMode(ModePart1NoMsg),
 		),
 		mapGenesisDocumentFn: mapGenesisDocumentFn,
 	}
@@ -197,12 +194,7 @@ func (sc *dumpRestoreImpl) Run(childEnv *env.Env) error {
 	}
 
 	// Check that everything works with restored state.
-	newTestClient := sc.testClient.Clone().(*BinaryTestClient)
-	newTestClient.args = []string{
-		"--mode", "part2",
-		// Use a different nonce seed.
-		"--seed", "second_seed",
-	}
-	sc.runtimeImpl.testClient = newTestClient
+	newTestClient := sc.testClient.Clone().(*LongTermTestClient)
+	sc.runtimeImpl.testClient = newTestClient.WithMode(ModePart2).WithSeed("second_seed")
 	return sc.runtimeImpl.Run(childEnv)
 }

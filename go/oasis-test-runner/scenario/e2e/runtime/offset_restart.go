@@ -19,10 +19,7 @@ func newOffsetRestartImpl() scenario.Scenario {
 	sc := &offsetRestartImpl{
 		runtimeImpl: *newRuntimeImpl(
 			"offset-restart",
-			NewBinaryTestClient(
-				"test-long-term-client",
-				[]string{"--mode", "part1"},
-			),
+			NewLongTermTestClient().WithMode(ModePart1),
 		),
 	}
 	return sc
@@ -93,11 +90,7 @@ func (sc *offsetRestartImpl) Run(childEnv *env.Env) error {
 	// if these disconnected after the client node had already seen them, thereby
 	// hanging the network (no transactions could be submitted).
 	sc.Logger.Info("network back up, trying to run client again")
-	newTestClient := sc.testClient.Clone().(*BinaryTestClient)
-	newTestClient.args = []string{
-		"--mode", "part2",
-		"--seed", "second_seed",
-	}
-	sc.runtimeImpl.testClient = newTestClient
+	newTestClient := sc.testClient.Clone().(*LongTermTestClient)
+	sc.runtimeImpl.testClient = newTestClient.WithMode(ModePart2).WithSeed("second_seed")
 	return sc.runtimeImpl.Run(childEnv)
 }
