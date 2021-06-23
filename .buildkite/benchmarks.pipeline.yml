@@ -62,17 +62,10 @@ steps:
   - label: Build Rust runtime loader
     command:
       - .buildkite/rust/build_generic.sh /workdir -p oasis-core-runtime-loader
-      - .buildkite/rust/build_generic.sh /workdir -p test-long-term-client
-      - .buildkite/rust/build_generic.sh /workdir -p simple-keyvalue-client
-      - .buildkite/rust/build_generic.sh /workdir -p simple-keyvalue-enc-client
 
       # Upload the built artifacts.
       - cd /var/tmp/artifacts/default/debug
       - buildkite-agent artifact upload oasis-core-runtime-loader
-      # Clients for E2E tests.
-      - buildkite-agent artifact upload test-long-term-client
-      - buildkite-agent artifact upload simple-keyvalue-client
-      - buildkite-agent artifact upload simple-keyvalue-enc-client
     plugins:
       <<: *docker_plugin
 

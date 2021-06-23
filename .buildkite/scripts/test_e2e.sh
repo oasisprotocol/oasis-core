@@ -48,7 +48,6 @@ ${test_runner_binary} \
     ${BUILDKITE:+--basedir ${TEST_BASE_DIR:-$PWD}/e2e} \
     --basedir.no_cleanup \
     --e2e.node.binary ${node_binary} \
-    --e2e/runtime.client.binary_dir ${WORKDIR}/target/default/debug \
     --e2e/runtime.runtime.binary_dir.default ${WORKDIR}/target/default/debug \
     --e2e/runtime.runtime.binary_dir.intel-sgx ${WORKDIR}/target/sgx/x86_64-fortanix-unknown-sgx/debug \
     --e2e/runtime.runtime.loader ${WORKDIR}/target/default/debug/oasis-core-runtime-loader \

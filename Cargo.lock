@@ -2272,36 +2272,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "simple-keyvalue-client"
-version = "0.0.0"
-dependencies = [
- "clap",
- "grpcio",
- "io-context",
- "oasis-core-client",
- "oasis-core-runtime",
- "rand 0.7.3",
- "serde_bytes",
- "simple-keyvalue-api",
- "tokio 1.6.1",
-]
-
-[[package]]
-name = "simple-keyvalue-enc-client"
-version = "0.0.0"
-dependencies = [
- "clap",
- "grpcio",
- "io-context",
- "oasis-core-client",
- "oasis-core-keymanager-client",
- "oasis-core-runtime",
- "rand 0.7.3",
- "simple-keyvalue-api",
- "tokio 1.6.1",
-]
-
-[[package]]
 name = "simple_asn1"
 version = "0.5.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2520,19 +2490,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "test-long-term-client"
-version = "0.0.0"
-dependencies = [
- "clap",
- "grpcio",
- "oasis-core-client",
- "oasis-core-runtime",
- "rand 0.7.3",
- "simple-keyvalue-api",
- "tokio 1.6.1",
-]
-
-[[package]]
 name = "textwrap"
 version = "0.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2636,7 +2593,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0a38d31d7831c6ed7aad00aa4c12d9375fd225a6dd77da1d25b707346319a975"
 dependencies = [
  "autocfg 1.0.1",
- "num_cpus",
  "pin-project-lite 0.2.6",
 ]
 

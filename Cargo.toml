@@ -11,11 +11,6 @@ members = [
     # Test runtimes.
     "tests/runtimes/simple-keyvalue",
     "tests/runtimes/simple-keymanager",
-
-    # Test clients.
-    "tests/clients/simple-keyvalue",
-    "tests/clients/simple-keyvalue-enc",
-    "tests/clients/test-long-term",
 ]
 
 [profile.release]
