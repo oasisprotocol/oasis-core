@@ -247,12 +247,8 @@ func (sc *runtimeUpgradeImpl) Run(childEnv *env.Env) error {
 
 	// Run client again.
 	sc.Logger.Info("starting a second client to check if runtime works")
-	newTestClient := sc.testClient.Clone().(*BinaryTestClient)
-	newTestClient.args = []string{
-		"--key", "key2",
-		"--seed", "second_seed",
-	}
-	sc.runtimeImpl.testClient = newTestClient
+	newTestClient := sc.testClient.Clone().(*KeyValueEncTestClient)
+	sc.runtimeImpl.testClient = newTestClient.WithKey("key2").WithSeed("second_seed")
 
 	if err := sc.startTestClientOnly(ctx, childEnv); err != nil {
 		return err
