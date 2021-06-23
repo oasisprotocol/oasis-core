@@ -409,8 +409,11 @@ func (n *Node) WaitForRound(round uint64, root *storageApi.Root) (<-chan uint64,
 		round = root.Version
 	}
 
+	consensusRound := roothashApi.RoundInvalid
 	n.commonNode.CrossNode.Lock()
-	consensusRound := n.commonNode.CurrentBlock.Header.Round
+	if blk := n.commonNode.CurrentBlock; blk != nil {
+		consensusRound = blk.Header.Round
+	}
 	n.commonNode.CrossNode.Unlock()
 	if round > consensusRound+roundWaitConsensusOffset && !commonFlags.DebugDontBlameOasis() {
 		close(retCh)
