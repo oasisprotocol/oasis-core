@@ -1581,7 +1581,7 @@ dependencies = [
  "sp800-185",
  "tempfile",
  "tendermint",
- "tendermint-proto",
+ "tendermint-proto 0.20.0",
  "thiserror",
  "tiny-keccak 2.0.2",
  "tokio 1.6.1",
@@ -2508,7 +2508,7 @@ dependencies = [
  "signature",
  "subtle",
  "subtle-encoding",
- "tendermint-proto",
+ "tendermint-proto 0.19.0",
  "thiserror",
  "toml",
  "url",
@@ -2520,6 +2520,25 @@ name = "tendermint-proto"
 version = "0.19.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "32bbc1bc55f09de4d00b5d69aa6b60392ba37c5e4761d869f76065d352bd3360"
+dependencies = [
+ "anomaly",
+ "bytes 1.0.1",
+ "chrono",
+ "num-derive",
+ "num-traits",
+ "prost",
+ "prost-types",
+ "serde",
+ "serde_bytes",
+ "subtle-encoding",
+ "thiserror",
+]
+
+[[package]]
+name = "tendermint-proto"
+version = "0.20.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fadcaea1eecd91dbdd9636fe8ad38d2b41fc0ae814c176e51e00925cdda78a34"
 dependencies = [
  "anomaly",
  "bytes 1.0.1",
