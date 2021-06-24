@@ -2,12 +2,8 @@ package runtime
 
 import (
 	"context"
-	"crypto"
 	"fmt"
 
-	"github.com/oasisprotocol/oasis-core/go/common/crypto/drbg"
-	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
-	"github.com/oasisprotocol/oasis-core/go/common/crypto/mathrand"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/env"
 	staking "github.com/oasisprotocol/oasis-core/go/staking/api"
 )
@@ -83,17 +79,13 @@ func (cli *LongTermTestClient) WithMode(mode LongTermMode) *LongTermTestClient {
 
 func (cli *LongTermTestClient) workload(ctx context.Context) error {
 	// Initialize the nonce DRBG.
-	h := hash.NewFromBytes([]byte(cli.seed))
-	drbg, err := drbg.New(
-		crypto.SHA512_256,
-		h[:],
-		nil,
+	rng, err := drbgFromSeed(
 		[]byte("oasis-core/oasis-test-runner/e2e/runtime/longterm"),
+		[]byte(cli.seed),
 	)
 	if err != nil {
-		return fmt.Errorf("failed to initialize drbg: %w", err)
+		return err
 	}
-	rng := mathrand.New(drbg)
 
 	cli.sc.Logger.Info("initializing simple key/value runtime!")
 
@@ -105,7 +97,7 @@ func (cli *LongTermTestClient) workload(ctx context.Context) error {
 	switch cli.mode {
 	case ModePart1, ModePart1NoMsg:
 		cli.sc.Logger.Info("inserting k/v pair")
-		if err = cli.sc.submitKeyValueRuntimeInsertTx(
+		if _, err = cli.sc.submitKeyValueRuntimeInsertTx(
 			ctx,
 			runtimeID,
 			myKey,

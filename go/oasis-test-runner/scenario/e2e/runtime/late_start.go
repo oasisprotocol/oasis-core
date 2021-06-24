@@ -111,6 +111,10 @@ func (sc *lateStartImpl) Run(childEnv *env.Env) error {
 		return fmt.Errorf("expected error: %v, got: %v", api.ErrNotSynced, err)
 	}
 
+	// Set the ClientController to the late-started one, so that the test
+	// client works.
+	sc.Net.SetClientController(ctrl)
+
 	sc.Logger.Info("Starting the basic test client")
 	// Explicitly wait for the client to sync, before starting the client.
 	if err = sc.waitForClientSync(ctx); err != nil {

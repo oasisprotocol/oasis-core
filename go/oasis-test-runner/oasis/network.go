@@ -304,6 +304,11 @@ func (net *Network) ClientController() *Controller {
 	return net.clientController
 }
 
+// SetClientController sets the client controller.
+func (net *Network) SetClientController(ctrl *Controller) {
+	net.clientController = ctrl
+}
+
 // NumRegisterNodes returns the number of all nodes that need to register.
 func (net *Network) NumRegisterNodes() int {
 	return len(net.validators) +

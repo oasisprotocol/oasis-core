@@ -26,7 +26,6 @@ import (
 )
 
 const (
-	cfgClientBinaryDir          = "client.binary_dir"
 	cfgRuntimeBinaryDirDefault  = "runtime.binary_dir.default"
 	cfgRuntimeBinaryDirIntelSGX = "runtime.binary_dir.intel-sgx"
 	cfgRuntimeLoader            = "runtime.loader"
@@ -76,7 +75,6 @@ func newRuntimeImpl(name string, testClient TestClient) *runtimeImpl {
 		E2E:        *e2e.NewE2E(fullName),
 		testClient: testClient,
 	}
-	sc.Flags.String(cfgClientBinaryDir, "", "path to the client binaries directory")
 	sc.Flags.String(cfgRuntimeBinaryDirDefault, "", "(no-TEE) path to the runtime binaries directory")
 	sc.Flags.String(cfgRuntimeBinaryDirIntelSGX, "", "(Intel SGX) path to the runtime binaries directory")
 	sc.Flags.String(cfgRuntimeLoader, "oasis-core-runtime-loader", "path to the runtime loader")

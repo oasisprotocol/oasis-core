@@ -2,14 +2,10 @@ package runtime
 
 import (
 	"context"
-	"crypto"
 	"fmt"
 
 	"github.com/oasisprotocol/oasis-core/go/common"
 	"github.com/oasisprotocol/oasis-core/go/common/cbor"
-	"github.com/oasisprotocol/oasis-core/go/common/crypto/drbg"
-	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
-	"github.com/oasisprotocol/oasis-core/go/common/crypto/mathrand"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/env"
 )
 
@@ -80,17 +76,13 @@ func (cli *KeyValueEncTestClient) WithKey(key string) *KeyValueEncTestClient {
 
 func (cli *KeyValueEncTestClient) workload(ctx context.Context) error {
 	// Initialize the nonce DRBG.
-	h := hash.NewFromBytes([]byte(cli.seed))
-	drbg, err := drbg.New(
-		crypto.SHA512_256,
-		h[:],
-		nil,
+	rng, err := drbgFromSeed(
 		[]byte("oasis-core/oasis-test-runner/e2e/runtime/kv-enc"),
+		[]byte(cli.seed),
 	)
 	if err != nil {
-		return fmt.Errorf("failed to initialize drbg: %w", err)
+		return err
 	}
-	rng := mathrand.New(drbg)
 
 	cli.sc.Logger.Info("initializing simple key/value runtime!")
 

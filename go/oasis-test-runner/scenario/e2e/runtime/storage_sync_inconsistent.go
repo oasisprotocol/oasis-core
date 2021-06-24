@@ -2,6 +2,7 @@ package runtime
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"time"
@@ -29,10 +30,7 @@ func newStorageSyncInconsistentImpl() scenario.Scenario {
 	return &storageSyncInconsistentImpl{
 		runtimeImpl: *newRuntimeImpl(
 			"storage-sync-inconsistent",
-			NewBinaryTestClient(
-				"simple-keyvalue-client",
-				[]string{"--repeat"},
-			),
+			NewKeyValueTestClient().WithRepeat(),
 		),
 	}
 }
@@ -160,11 +158,15 @@ func (sc *storageSyncInconsistentImpl) Run(childEnv *env.Env) error {
 	// Wait for the client to exit. Odd error handling here; if killing succeeded, then everything
 	// must have been fine up to this point and we can ignore the exit error from the kill.
 	sc.Logger.Info("scenario done, killing client")
-	testClient := sc.testClient.(*BinaryTestClient)
+	testClient := sc.testClient.(*KeyValueTestClient)
 	if err = testClient.Kill(); err != nil {
-		return nil
+		if errors.Is(err, context.Canceled) {
+			return nil
+		}
 	}
-	_ = sc.waitTestClient()
+
+	// No need to wait, client is dead at this point.  Unfortunately
+	// the error didn't indicate cancelation though.
 
 	return sc.Net.CheckLogWatchers()
 }

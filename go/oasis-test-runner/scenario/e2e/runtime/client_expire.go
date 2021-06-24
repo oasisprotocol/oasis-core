@@ -81,7 +81,7 @@ func (sc *clientExpireImpl) Run(childEnv *env.Env) error {
 		return fmt.Errorf("SubmitTxNoWait expected no error, got: %b", err)
 	}
 
-	err = sc.submitKeyValueRuntimeInsertTx(ctx, runtimeID, "hello", "test", 0)
+	_, err = sc.submitKeyValueRuntimeInsertTx(ctx, runtimeID, "hello", "test", 0)
 	if !errors.Is(err, api.ErrTransactionExpired) {
 		return fmt.Errorf("expected error: %v, got: %v", api.ErrTransactionExpired, err)
 	}
