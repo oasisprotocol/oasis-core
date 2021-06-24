@@ -148,5 +148,20 @@ func (sc *consensusStateSyncImpl) Run(childEnv *env.Env) error {
 		return err
 	}
 
+	// Query the validator status.
+	ctrl, err := oasis.NewController(val.SocketPath())
+	if err != nil {
+		return fmt.Errorf("failed to create controller for validator %s: %w", val.Name, err)
+	}
+	status, err := ctrl.GetStatus(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to fetch validator status: %w", err)
+	}
+
+	// Make sure that the last retained height has been set correctly.
+	if lrh := status.Consensus.LastRetainedHeight; lrh < 20 {
+		return fmt.Errorf("unexpected last retained height from state synced node (got: %d)", lrh)
+	}
+
 	return nil
 }

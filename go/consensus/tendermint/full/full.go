@@ -999,7 +999,10 @@ func (t *fullService) initialize() error {
 }
 
 func (t *fullService) GetLastRetainedVersion(ctx context.Context) (int64, error) {
-	return t.mux.State().LastRetainedVersion()
+	if err := t.ensureStarted(ctx); err != nil {
+		return -1, err
+	}
+	return t.node.BlockStore().Base(), nil
 }
 
 func (t *fullService) heightToTendermintHeight(height int64) (int64, error) {
