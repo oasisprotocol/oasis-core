@@ -922,6 +922,36 @@ func (n *Node) worker() { // nolint: gocyclo
 		n.checkpointer.Flush()
 	}
 
+	// Check if we are able to fetch the first block that we would be syncing if we used iterative
+	// syncing. In case we cannot (likely because we synced the consensus layer via state sync), we
+	// must wait for a later checkpoint to become available.
+	if !n.checkpointSyncForced {
+		// Determine what is the first round that we would need to sync.
+		iterativeSyncStart := cachedLastRound
+		if iterativeSyncStart == n.undefinedRound {
+			iterativeSyncStart++
+		}
+
+		// Check if we actually have information about that round. This assumes that any reindexing
+		// was already performed (the common node would not indicate being initialized otherwise).
+		_, err = n.commonNode.Runtime.History().GetBlock(n.ctx, iterativeSyncStart)
+		switch {
+		case err == nil:
+		case errors.Is(err, roothashApi.ErrNotFound):
+			// No information is available about this round, force checkpoint sync.
+			n.logger.Warn("forcing checkpoint sync as we don't have authoritative block info",
+				"round", iterativeSyncStart,
+			)
+			n.checkpointSyncForced = true
+		default:
+			// Unknown error while fetching block information, abort.
+			n.logger.Error("failed to query block",
+				"err", err,
+			)
+			return
+		}
+	}
+
 	n.logger.Info("worker initialized",
 		"genesis_round", genesisBlock.Header.Round,
 		"last_synced", cachedLastRound,
@@ -952,8 +982,8 @@ func (n *Node) worker() { // nolint: gocyclo
 			switch n.checkpointSyncForced {
 			case true:
 				// We have no other options but to perform a checkpoint sync as we are missing
-				// genesis state.
-				n.logger.Info("checkpoint sync required as we don't have genesis state, retrying",
+				// either state or authoritative blocks.
+				n.logger.Info("checkpoint sync required, retrying",
 					"err", err,
 					"attempt", attempt,
 				)
