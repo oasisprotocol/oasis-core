@@ -17,6 +17,7 @@ import (
 	staking "github.com/oasisprotocol/oasis-core/go/staking/api"
 	storage "github.com/oasisprotocol/oasis-core/go/storage/api"
 	"github.com/oasisprotocol/oasis-core/go/storage/mkvs"
+	"github.com/oasisprotocol/oasis-core/go/storage/mkvs/checkpoint"
 	upgrade "github.com/oasisprotocol/oasis-core/go/upgrade/api"
 )
 
@@ -77,6 +78,11 @@ type ApplicationQueryState interface {
 	// Storage returns the storage backend.
 	Storage() storage.LocalBackend
 
+	// Checkpointer returns the checkpointer associated with the application state.
+	//
+	// This may be nil in case checkpoints are disabled.
+	Checkpointer() checkpoint.Checkpointer
+
 	// BlockHeight returns the last committed block height.
 	BlockHeight() int64
 
@@ -123,6 +129,10 @@ type mockApplicationState struct {
 
 func (ms *mockApplicationState) Storage() storage.LocalBackend {
 	panic("not implemented")
+}
+
+func (ms *mockApplicationState) Checkpointer() checkpoint.Checkpointer {
+	return nil
 }
 
 func (ms *mockApplicationState) InitialHeight() int64 {

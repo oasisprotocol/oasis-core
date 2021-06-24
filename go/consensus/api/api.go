@@ -24,6 +24,7 @@ import (
 	roothash "github.com/oasisprotocol/oasis-core/go/roothash/api"
 	scheduler "github.com/oasisprotocol/oasis-core/go/scheduler/api"
 	staking "github.com/oasisprotocol/oasis-core/go/staking/api"
+	"github.com/oasisprotocol/oasis-core/go/storage/mkvs/checkpoint"
 	mkvsNode "github.com/oasisprotocol/oasis-core/go/storage/mkvs/node"
 )
 
@@ -228,6 +229,11 @@ type Backend interface {
 
 	// GetAddresses returns the consensus backend addresses.
 	GetAddresses() ([]node.ConsensusAddress, error)
+
+	// Checkpointer returns the checkpointer associated with consensus state.
+	//
+	// This may be nil in case checkpoints are disabled.
+	Checkpointer() checkpoint.Checkpointer
 }
 
 // HaltHook is a function that gets called when consensus needs to halt for some reason.
