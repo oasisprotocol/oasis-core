@@ -115,6 +115,9 @@ func (p *genericPruner) Initialize(latestVersion uint64) error {
 		return fmt.Errorf("failed to get earliest version: %w", err)
 	}
 
+	// Initially, the earliest version is the last retained version.
+	p.lastRetainedVersion = p.earliestVersion
+
 	return p.doPrune(context.Background(), latestVersion)
 }
 
