@@ -36,6 +36,7 @@ import (
 	roothash "github.com/oasisprotocol/oasis-core/go/roothash/api"
 	scheduler "github.com/oasisprotocol/oasis-core/go/scheduler/api"
 	staking "github.com/oasisprotocol/oasis-core/go/staking/api"
+	"github.com/oasisprotocol/oasis-core/go/storage/mkvs/checkpoint"
 	"github.com/oasisprotocol/oasis-core/go/storage/mkvs/syncer"
 )
 
@@ -171,6 +172,11 @@ func (srv *seedService) GetAddresses() ([]node.ConsensusAddress, error) {
 	addr.ID = srv.identity.P2PSigner.Public()
 
 	return []node.ConsensusAddress{addr}, nil
+}
+
+// Implements Backend.
+func (srv *seedService) Checkpointer() checkpoint.Checkpointer {
+	return nil
 }
 
 // Implements Backend.

@@ -72,6 +72,7 @@ import (
 	roothashAPI "github.com/oasisprotocol/oasis-core/go/roothash/api"
 	schedulerAPI "github.com/oasisprotocol/oasis-core/go/scheduler/api"
 	stakingAPI "github.com/oasisprotocol/oasis-core/go/staking/api"
+	"github.com/oasisprotocol/oasis-core/go/storage/mkvs/checkpoint"
 	upgradeAPI "github.com/oasisprotocol/oasis-core/go/upgrade/api"
 )
 
@@ -316,6 +317,10 @@ func (t *fullService) GetAddresses() ([]node.ConsensusAddress, error) {
 	addr.ID = t.identity.P2PSigner.Public()
 
 	return []node.ConsensusAddress{addr}, nil
+}
+
+func (t *fullService) Checkpointer() checkpoint.Checkpointer {
+	return t.mux.State().Checkpointer()
 }
 
 func (t *fullService) StateToGenesis(ctx context.Context, blockHeight int64) (*genesisAPI.Document, error) {
