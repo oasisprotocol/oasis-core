@@ -11,7 +11,6 @@ import (
 
 	"github.com/spf13/viper"
 
-	beacon "github.com/oasisprotocol/oasis-core/go/beacon/api"
 	"github.com/oasisprotocol/oasis-core/go/common"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
 	"github.com/oasisprotocol/oasis-core/go/common/identity"
@@ -320,16 +319,7 @@ func (r *runtime) updateActiveDescriptor(ctx context.Context) bool {
 	return true
 }
 
-func (r *runtime) watchUpdates(
-	ctx context.Context,
-	epoCh <-chan beacon.EpochTime,
-	sub pubsub.ClosableSubscription,
-	regCh <-chan *registry.Runtime,
-	regSub pubsub.ClosableSubscription,
-) {
-	defer sub.Close()
-	defer regSub.Close()
-
+func (r *runtime) watchUpdates(ctx context.Context) {
 	r.logger.Debug("waiting consensus sync")
 	select {
 	case <-ctx.Done():
@@ -337,6 +327,26 @@ func (r *runtime) watchUpdates(
 	case <-r.consensus.Synced():
 	}
 	r.logger.Debug("consensus synced")
+
+	// Subscribe to epoch transitions.
+	epoCh, sub, err := r.consensus.Beacon().WatchEpochs(ctx)
+	if err != nil {
+		r.logger.Error("failed to watch epochs",
+			"err", err,
+		)
+		return
+	}
+	defer sub.Close()
+
+	// Subscribe to runtime updates.
+	regCh, regSub, err := r.consensus.Registry().WatchRuntimes(ctx)
+	if err != nil {
+		r.logger.Error("failed to watch runtime updates",
+			"err", err,
+		)
+		return
+	}
+	defer regSub.Close()
 
 	var regInitialized, activeInitialized bool
 	for {
@@ -385,7 +395,7 @@ func (r *runtime) finishInitialization(ctx context.Context, ident *identity.Iden
 	defer r.Unlock()
 
 	if r.storage == nil {
-		storageBackend, err := client.NewForPublicStorage(ctx, r.id, ident, r.consensus.Registry(), r)
+		storageBackend, err := client.NewForPublicStorage(ctx, r.id, ident, r.consensus, r)
 		if err != nil {
 			return fmt.Errorf("runtime/registry: cannot create storage for runtime %s: %w", r.id, err)
 		}
@@ -572,14 +582,6 @@ func newRuntime(
 	consensus consensus.Backend,
 	logger *logging.Logger,
 ) (*runtime, error) {
-	ch, sub, err := consensus.Beacon().WatchEpochs(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("runtime/registry: failed to watch epochs %s: %w", id, err)
-	}
-	regCh, regSub, err := consensus.Registry().WatchRuntimes(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("runtime/registry: failed to watch updates for runtime %s: %w", id, err)
-	}
 	watchCtx, cancel := context.WithCancel(ctx)
 
 	rt := &runtime{
@@ -592,7 +594,7 @@ func newRuntime(
 		activeDescriptorNotifier:   pubsub.NewBroker(true),
 		logger:                     logger.With("runtime_id", id),
 	}
-	go rt.watchUpdates(watchCtx, ch, sub, regCh, regSub)
+	go rt.watchUpdates(watchCtx)
 
 	// Configure runtime host if needed.
 	if cfg.Host != nil {

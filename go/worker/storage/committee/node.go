@@ -254,11 +254,7 @@ func NewNode(
 
 	// Create a new storage client that will be used for remote sync.
 	// This storage client connects to all registered storage nodes for the runtime.
-	nl, err := nodes.NewRuntimeNodeLookup(
-		n.ctx,
-		n.commonNode.Consensus.Registry(),
-		rtID,
-	)
+	nl, err := nodes.NewRuntimeNodeLookup(n.ctx, n.commonNode.Consensus, rtID)
 	if err != nil {
 		return nil, fmt.Errorf("group: failed to create runtime node watcher: %w", err)
 	}

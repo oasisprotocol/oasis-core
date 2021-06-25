@@ -594,7 +594,7 @@ func NewGroup(
 	consensus consensus.Backend,
 	p2p *p2p.P2P,
 ) (*Group, error) {
-	nw, err := nodes.NewVersionedNodeDescriptorWatcher(ctx, consensus.Registry())
+	nw, err := nodes.NewVersionedNodeDescriptorWatcher(ctx, consensus)
 	if err != nil {
 		return nil, fmt.Errorf("group: failed to create node watcher: %w", err)
 	}

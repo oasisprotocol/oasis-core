@@ -29,7 +29,7 @@ type hostHandler struct {
 }
 
 func (h *hostHandler) initRemoteClient(commonWorker *workerCommon.Worker) {
-	remoteClient, err := client.New(h.w.ctx, h.w.runtime, commonWorker.KeyManager, commonWorker.Consensus.Registry(), commonWorker.Identity)
+	remoteClient, err := client.New(h.w.ctx, h.w.runtime, commonWorker.Consensus, commonWorker.Identity)
 	if err != nil {
 		h.w.logger.Error("failed to create remote client",
 			"err", err,

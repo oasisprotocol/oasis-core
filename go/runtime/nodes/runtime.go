@@ -13,7 +13,6 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/node"
 	"github.com/oasisprotocol/oasis-core/go/common/pubsub"
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
-	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
 )
 
 const roleTagPrefix = "role"
@@ -35,7 +34,7 @@ func TagsForRoleMask(nodeRoles node.RolesMask) (tags []string) {
 type runtimeNodesWatcher struct { // nolint: maligned
 	sync.RWMutex
 
-	registry registry.Backend
+	consensus consensus.Backend
 
 	runtimeID common.Namespace
 
@@ -128,8 +127,45 @@ func (rw *runtimeNodesWatcher) removeLocked(n *node.Node) {
 	})
 }
 
-func (rw *runtimeNodesWatcher) watchRuntimeNodeUpdates(ctx context.Context, ch <-chan *registry.NodeEvent, sub pubsub.ClosableSubscription) {
+func (rw *runtimeNodesWatcher) watchRuntimeNodeUpdates(ctx context.Context) {
+	rw.logger.Debug("waiting consensus sync")
+	select {
+	case <-ctx.Done():
+		return
+	case <-rw.consensus.Synced():
+	}
+	rw.logger.Debug("consensus synced")
+
+	ch, sub, err := rw.consensus.Registry().WatchNodes(ctx)
+	if err != nil {
+		rw.logger.Error("failed to watch nodes",
+			"err", err,
+		)
+		return
+	}
 	defer sub.Close()
+
+	// Setup initial state.
+	// This is needed since in case node is restarted, we won't be replaying
+	// old blocks and therefore won't receive the node registration update events
+	// for currently registered nodes.
+	nodes, err := rw.consensus.Registry().GetNodes(ctx, consensus.HeightLatest)
+	// If there's no committee blocks this is a fresh node so initial state is empty.
+	if err != nil && err != consensus.ErrNoCommittedBlocks {
+		rw.logger.Error("error querying registry for nodes",
+			"err", err,
+		)
+		return
+	}
+	for _, n := range nodes {
+		if n.GetRuntime(rw.runtimeID) == nil {
+			continue
+		}
+
+		rw.Lock()
+		rw.updateLocked(n)
+		rw.Unlock()
+	}
 
 	for {
 		select {
@@ -159,11 +195,11 @@ func (rw *runtimeNodesWatcher) watchRuntimeNodeUpdates(ctx context.Context, ch <
 // Aditionally, watched nodes are tagged by node roles.
 func NewRuntimeNodeLookup(
 	ctx context.Context,
-	registry registry.Backend,
+	consensus consensus.Backend,
 	runtimeID common.Namespace,
 ) (NodeDescriptorLookup, error) {
 	rw := &runtimeNodesWatcher{
-		registry:      registry,
+		consensus:     consensus,
 		runtimeID:     runtimeID,
 		nodes:         make(map[signature.PublicKey]*node.Node),
 		nodesByPeerID: make(map[signature.PublicKey]*node.Node),
@@ -183,29 +219,7 @@ func NewRuntimeNodeLookup(
 		}
 	})
 
-	ch, sub, err := registry.WatchNodes(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("runtime/nodes/watcher: failed to watch nodes: %w", err)
-	}
-
-	// Setup initial state.
-	// This is needed since in case node is restarted, we won't be replaying
-	// old blocks and therefore won't receive the node registration update events
-	// for currently registered nodes.
-	nodes, err := rw.registry.GetNodes(ctx, consensus.HeightLatest)
-	// If there's no committee blocks this is a fresh node so initial state is empty.
-	if err != nil && err != consensus.ErrNoCommittedBlocks {
-		return nil, fmt.Errorf("runtime/nodes/watcher: error querying registry for nodes: %w", err)
-	}
-	for _, n := range nodes {
-		if n.GetRuntime(rw.runtimeID) == nil {
-			continue
-		}
-		// NOTE: Nothing else is accessing this yet, so no lock needed here.
-		rw.updateLocked(n)
-	}
-
-	go rw.watchRuntimeNodeUpdates(ctx, ch, sub)
+	go rw.watchRuntimeNodeUpdates(ctx)
 
 	return rw, nil
 }

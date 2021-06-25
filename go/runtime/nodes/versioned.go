@@ -53,9 +53,7 @@ type VersionedNodeDescriptorWatcher interface {
 type versionedNodeDescriptorWatcher struct {
 	sync.RWMutex
 
-	registry registry.Backend
-
-	ctx context.Context
+	consensus consensus.Backend
 
 	frozen        bool
 	version       int64
@@ -133,7 +131,7 @@ func (nw *versionedNodeDescriptorWatcher) WatchNodeWithTag(ctx context.Context, 
 	}
 
 	// Fetch the latest version of the node from registry.
-	n, err := nw.registry.GetNode(ctx, &registry.IDQuery{ID: id, Height: consensus.HeightLatest})
+	n, err := nw.consensus.Registry().GetNode(ctx, &registry.IDQuery{ID: id, Height: consensus.HeightLatest})
 	if err != nil {
 		return nil, fmt.Errorf("committee: failed to fetch node info: %w", err)
 	}
@@ -220,12 +218,28 @@ func (nw *versionedNodeDescriptorWatcher) WatchNodeUpdates() (<-chan *NodeUpdate
 	return ch, sub, nil
 }
 
-func (nw *versionedNodeDescriptorWatcher) worker(ch <-chan *registry.NodeEvent, sub pubsub.ClosableSubscription) {
+func (nw *versionedNodeDescriptorWatcher) watchRuntimeNodeUpdates(ctx context.Context) {
+	nw.logger.Debug("waiting consensus sync")
+	select {
+	case <-ctx.Done():
+		return
+	case <-nw.consensus.Synced():
+	}
+	nw.logger.Debug("consensus synced")
+
+	// Subscribe to node updates.
+	ch, sub, err := nw.consensus.Registry().WatchNodes(ctx)
+	if err != nil {
+		nw.logger.Error("failed to watch nodes",
+			"err", err,
+		)
+		return
+	}
 	defer sub.Close()
 
 	for {
 		select {
-		case <-nw.ctx.Done():
+		case <-ctx.Done():
 			return
 		case ev := <-ch:
 			func() {
@@ -256,17 +270,10 @@ func (nw *versionedNodeDescriptorWatcher) Versioned() bool {
 //
 // This watcher will only track nodes that will be explicitly marked to watch
 // via WatchNode/WatchNodeWithTags methods.
-func NewVersionedNodeDescriptorWatcher(ctx context.Context, registry registry.Backend) (VersionedNodeDescriptorWatcher, error) {
-	// Subscribe to node updates.
-	ch, sub, err := registry.WatchNodes(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("committee: failed to watch nodes: %w", err)
-	}
-
+func NewVersionedNodeDescriptorWatcher(ctx context.Context, consensus consensus.Backend) (VersionedNodeDescriptorWatcher, error) {
 	nw := &versionedNodeDescriptorWatcher{
-		registry: registry,
-		ctx:      ctx,
-		logger:   logging.GetLogger("runtime/committee/nodedescriptorwatcher"),
+		consensus: consensus,
+		logger:    logging.GetLogger("runtime/committee/nodedescriptorwatcher"),
 	}
 	nw.notifier = pubsub.NewBrokerEx(func(ch channels.Channel) {
 		nw.RLock()
@@ -282,7 +289,7 @@ func NewVersionedNodeDescriptorWatcher(ctx context.Context, registry registry.Ba
 	})
 	nw.Reset()
 
-	go nw.worker(ch, sub)
+	go nw.watchRuntimeNodeUpdates(ctx)
 
 	return nw, nil
 }
