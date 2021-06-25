@@ -550,7 +550,7 @@ func (c *runtimeClient) CallEnclave(ctx context.Context, request *enclaverpc.Cal
 		if km = c.kmClients[rt.ID()]; km == nil {
 			c.logger.Debug("creating new key manager client instance")
 
-			km, err = keymanager.New(c.common.ctx, rt, c.common.consensus.KeyManager(), c.common.consensus.Registry(), nil)
+			km, err = keymanager.New(c.common.ctx, rt, c.common.consensus, nil)
 			if err != nil {
 				c.Unlock()
 				c.logger.Error("failed to create key manager client instance",

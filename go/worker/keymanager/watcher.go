@@ -4,24 +4,24 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/accessctl"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	"github.com/oasisprotocol/oasis-core/go/common/node"
-	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
+	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
 	"github.com/oasisprotocol/oasis-core/go/runtime/nodes"
 )
 
 type kmNodeWatcher struct {
-	w        *Worker
-	registry registry.Backend
+	w         *Worker
+	consensus consensus.Backend
 }
 
 func newKmNodeWatcher(w *Worker) *kmNodeWatcher {
 	return &kmNodeWatcher{
-		w:        w,
-		registry: w.commonWorker.Consensus.Registry(),
+		w:         w,
+		consensus: w.commonWorker.Consensus,
 	}
 }
 
 func (knw *kmNodeWatcher) watchNodes() {
-	nodesCh, nodesSub, err := knw.registry.WatchNodeList(knw.w.ctx)
+	nodesCh, nodesSub, err := knw.consensus.Registry().WatchNodeList(knw.w.ctx)
 	if err != nil {
 		knw.w.logger.Error("worker/keymanager: failed to watch node list",
 			"err", err,
@@ -30,7 +30,7 @@ func (knw *kmNodeWatcher) watchNodes() {
 	}
 	defer nodesSub.Close()
 
-	watcher, err := nodes.NewVersionedNodeDescriptorWatcher(knw.w.ctx, knw.registry)
+	watcher, err := nodes.NewVersionedNodeDescriptorWatcher(knw.w.ctx, knw.consensus)
 	if err != nil {
 		knw.w.logger.Error("worker/keymanager: failed to create node desc watcher",
 			"err", err,
