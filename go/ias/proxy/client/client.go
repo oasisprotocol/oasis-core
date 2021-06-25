@@ -80,6 +80,9 @@ func (c *proxyClient) GetSPIDInfo(ctx context.Context) (*api.SPIDInfo, error) {
 }
 
 func (c *proxyClient) GetSigRL(ctx context.Context, epidGID uint32) ([]byte, error) {
+	if c.endpoint == nil {
+		return nil, fmt.Errorf("IAS proxy is not configured, mock used")
+	}
 	return c.endpoint.GetSigRL(ctx, epidGID)
 }
 
