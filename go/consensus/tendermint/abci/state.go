@@ -120,6 +120,10 @@ func (s *applicationState) Storage() storage.LocalBackend {
 	return s.storage
 }
 
+func (s *applicationState) Checkpointer() checkpoint.Checkpointer {
+	return s.checkpointer
+}
+
 func (s *applicationState) InitialHeight() int64 {
 	return int64(s.initialHeight)
 }

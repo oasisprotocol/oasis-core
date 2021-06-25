@@ -39,6 +39,7 @@ import (
 	staking "github.com/oasisprotocol/oasis-core/go/staking/api"
 	storage "github.com/oasisprotocol/oasis-core/go/storage/api"
 	storageDB "github.com/oasisprotocol/oasis-core/go/storage/database"
+	"github.com/oasisprotocol/oasis-core/go/storage/mkvs/checkpoint"
 )
 
 const (
@@ -383,6 +384,10 @@ type dumpQueryState struct {
 
 func (qs *dumpQueryState) Storage() storage.LocalBackend {
 	return qs.ldb
+}
+
+func (qs *dumpQueryState) Checkpointer() checkpoint.Checkpointer {
+	return nil
 }
 
 func (qs *dumpQueryState) BlockHeight() int64 {

@@ -362,7 +362,7 @@ func (n *Node) worker() {
 	if rt.KeyManager != nil {
 		n.logger.Info("runtime indicates a key manager is required, waiting for it to be ready")
 
-		n.KeyManagerClient, err = keymanagerClient.New(n.ctx, n.Runtime, n.KeyManager, n.Consensus.Registry(), n.Identity)
+		n.KeyManagerClient, err = keymanagerClient.New(n.ctx, n.Runtime, n.Consensus, n.Identity)
 		if err != nil {
 			n.logger.Error("failed to create key manager client",
 				"err", err,

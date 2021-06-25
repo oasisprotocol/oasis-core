@@ -519,7 +519,7 @@ func testStorageClientWithNode(t *testing.T, node *testNode) {
 	require.NoError(t, err, "GetRuntime")
 	localBackend := rt.Storage().(storageAPI.LocalBackend)
 
-	client, err := storageClient.NewStatic(ctx, node.Identity, node.Consensus.Registry(), node.Identity.NodeSigner.Public())
+	client, err := storageClient.NewStatic(ctx, node.Identity, node.Consensus, node.Identity.NodeSigner.Public())
 	require.NoError(t, err, "NewStatic")
 
 	// Determine the current round. This is required so that we can commit into

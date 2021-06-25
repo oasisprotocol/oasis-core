@@ -42,7 +42,7 @@ func ClientWorkerTests(
 	ns := rt.Runtime.ID
 
 	// Initialize storage client.
-	client, err := storageClient.NewForPublicStorage(ctx, ns, identity, consensus.Registry(), nil)
+	client, err := storageClient.NewForPublicStorage(ctx, ns, identity, consensus, nil)
 	require.NoError(err, "NewStorageClient")
 
 	// Create mock root hash.
