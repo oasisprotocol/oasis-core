@@ -758,7 +758,7 @@ func (n *Node) proposeTimeoutLocked(roundCtx context.Context) error {
 	)
 	n.proposingTimeout = true
 	tx := roothash.NewRequestProposerTimeoutTx(0, nil, n.commonNode.Runtime.ID(), n.commonNode.CurrentBlock.Header.Round)
-	go func() {
+	go func(round uint64) {
 		// Wait a bit before actually proposing a timeout, to give the current
 		// scheduler some time to propose a batch in case it just received it.
 		//
@@ -769,8 +769,23 @@ func (n *Node) proposeTimeoutLocked(roundCtx context.Context) error {
 		select {
 		case <-time.After(proposeTimeoutDelay):
 		case <-roundCtx.Done():
+			n.logger.Info("not requesting proposer timeout, round context canceled")
 			return
 		}
+
+		// Make sure we are still in the right state/round.
+		n.commonNode.CrossNode.Lock()
+		if _, ok := n.state.(StateWaitingForBatch); !ok || round != n.commonNode.CurrentBlock.Header.Round {
+			n.logger.Info("not requesting proposer timeout",
+				"height", n.commonNode.Height,
+				"current_block_round", n.commonNode.CurrentBlock.Header.Round,
+				"proposing_round", round,
+				"state", n.state,
+			)
+			n.commonNode.CrossNode.Unlock()
+			return
+		}
+		n.commonNode.CrossNode.Unlock()
 
 		err := consensus.SignAndSubmitTx(roundCtx, n.commonNode.Consensus, n.commonNode.Identity.NodeSigner, tx)
 		switch err {
@@ -790,7 +805,7 @@ func (n *Node) proposeTimeoutLocked(roundCtx context.Context) error {
 			n.proposingTimeout = false
 			n.commonNode.CrossNode.Unlock()
 		}
-	}()
+	}(n.commonNode.CurrentBlock.Header.Round)
 
 	return nil
 }
