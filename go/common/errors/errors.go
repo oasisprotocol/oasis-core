@@ -109,7 +109,11 @@ func New(module string, code uint32, msg string) error {
 func FromCode(module string, code uint32, context string) error {
 	err, exists := registeredErrors.Load(errorKey(module, code))
 	if !exists || err == errUnknownError {
-		return errors.New(context)
+		return WithContext(&codedError{
+			module: module,
+			code:   code,
+			msg:    context,
+		}, context)
 	}
 
 	return WithContext(err.(*codedError), context)
