@@ -37,8 +37,7 @@ var ErrKeyManagerNotAvailable = errors.New("keymanager/client: key manager not a
 type Client struct {
 	runtime runtimeRegistry.Runtime
 
-	backend  api.Backend
-	registry registry.Backend
+	consensus consensus.Backend
 
 	ctx         context.Context
 	initCh      chan struct{}
@@ -116,7 +115,7 @@ func (c *Client) CallRemote(ctx context.Context, data []byte) ([]byte, error) {
 }
 
 func (c *Client) worker() {
-	stCh, stSub := c.backend.WatchStatuses()
+	stCh, stSub := c.consensus.KeyManager().WatchStatuses()
 	defer stSub.Close()
 
 	rtCh, rtSub, err := c.runtime.WatchRegistryDescriptor()
@@ -155,7 +154,7 @@ func (c *Client) worker() {
 			}
 
 			// Fetch current key manager status.
-			st, err := c.backend.GetStatus(c.ctx, &registry.NamespaceQuery{
+			st, err := c.consensus.KeyManager().GetStatus(c.ctx, &registry.NamespaceQuery{
 				ID:     *kmID,
 				Height: consensus.HeightLatest,
 			})
@@ -208,11 +207,10 @@ func (c *Client) updateState(status *api.Status) {
 func New(
 	ctx context.Context,
 	runtime runtimeRegistry.Runtime,
-	backend api.Backend,
-	registry registry.Backend,
+	consensus consensus.Backend,
 	identity *identity.Identity,
 ) (*Client, error) {
-	committeeNodes, err := nodes.NewVersionedNodeDescriptorWatcher(ctx, registry)
+	committeeNodes, err := nodes.NewVersionedNodeDescriptorWatcher(ctx, consensus)
 	if err != nil {
 		return nil, fmt.Errorf("keymanager/client: failed to create node descriptor watcher: %w", err)
 	}
@@ -228,8 +226,7 @@ func New(
 
 	c := &Client{
 		runtime:          runtime,
-		backend:          backend,
-		registry:         registry,
+		consensus:        consensus,
 		ctx:              ctx,
 		initCh:           make(chan struct{}),
 		committeeWatcher: committeeNodes,

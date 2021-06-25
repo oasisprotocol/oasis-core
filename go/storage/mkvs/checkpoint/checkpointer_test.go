@@ -91,8 +91,14 @@ func testCheckpointer(t *testing.T, earliestVersion, interval uint64, preExistin
 	})
 	require.NoError(err, "NewCheckpointer")
 
+	// Start watching checkpoints.
+	cpCh, sub, err := cp.WatchCheckpoints()
+	require.NoError(err, "WatchCheckpoints")
+	defer sub.Close()
+
 	// Finalize a few rounds.
-	for round := earliestVersion; round < earliestVersion+(testNumKept+1)*interval; round++ {
+	var round uint64
+	for round = earliestVersion; round < earliestVersion+(testNumKept+1)*interval; round++ {
 		tree := mkvs.NewWithRoot(nil, ndb, root)
 		err = tree.Insert(ctx, []byte(fmt.Sprintf("round %d", round)), []byte(fmt.Sprintf("value %d", round)))
 		require.NoError(err, "Insert")
@@ -121,7 +127,43 @@ func testCheckpointer(t *testing.T, earliestVersion, interval uint64, preExistin
 			})
 			require.NoError(err, "GetCheckpoints")
 			require.Len(cps, testNumKept, "incorrect number of live checkpoints")
+
+			// Make sure checkpoint event was emitted.
+			select {
+			case v := <-cpCh:
+				require.Equal(cps[len(cps)-1].Root.Version, v, "checkpoint event should be correct")
+			case <-time.After(2 * testCheckInterval):
+				t.Fatalf("failed to wait for checkpointer to emit event")
+			}
 		}
+	}
+
+	// Force a checkpoint at a version outside the regular interval.
+	if interval > 1 {
+		cpVersion := round - interval + 1
+		cp.ForceCheckpoint(cpVersion)
+
+		select {
+		case <-cp.(*checkpointer).statusCh:
+		case <-time.After(2 * testCheckInterval):
+			t.Fatalf("failed to wait for checkpointer to checkpoint")
+		}
+
+		// Make sure that the correct checkpoint was created.
+		cps, err := fc.GetCheckpoints(ctx, &GetCheckpointsRequest{
+			Version:   checkpointVersion,
+			Namespace: testNs,
+		})
+		require.NoError(err, "GetCheckpoints")
+
+		var found bool
+		for _, cpm := range cps {
+			if cpm.Root.Version == cpVersion {
+				found = true
+				break
+			}
+		}
+		require.True(found, "forced checkpoint should have been created")
 	}
 }
 
@@ -137,5 +179,8 @@ func TestCheckpointer(t *testing.T) {
 	})
 	t.Run("MaybeUnderflow", func(t *testing.T) {
 		testCheckpointer(t, 5, 10, true)
+	})
+	t.Run("ForceCheckpoint", func(t *testing.T) {
+		testCheckpointer(t, 0, 10, false)
 	})
 }

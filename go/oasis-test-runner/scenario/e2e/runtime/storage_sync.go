@@ -2,10 +2,12 @@ package runtime
 
 import (
 	"context"
+	"encoding/hex"
 	"fmt"
 	"strings"
 	"time"
 
+	control "github.com/oasisprotocol/oasis-core/go/control/api"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/env"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/log"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/oasis"
@@ -45,6 +47,11 @@ func (sc *storageSyncImpl) Fixture() (*oasis.NetworkFixture, error) {
 	// new node registers.
 	f.Network.SetMockEpoch()
 
+	// Enable consensus layer checkpoints.
+	f.Network.Consensus.Parameters.StateCheckpointInterval = 10
+	f.Network.Consensus.Parameters.StateCheckpointNumKept = 2
+	f.Network.Consensus.Parameters.StateCheckpointChunkSize = 1024 * 1024
+
 	// Make the first storage worker check for checkpoints more often.
 	f.StorageWorkers[0].CheckpointCheckInterval = 1 * time.Second
 	// Configure runtime to allow a smaller replication factor as otherwise execution may fail when
@@ -69,11 +76,22 @@ func (sc *storageSyncImpl) Fixture() (*oasis.NetworkFixture, error) {
 		CheckpointSyncEnabled:      true,
 		LogWatcherHandlerFactories: []log.WatcherHandlerFactory{oasis.LogAssertCheckpointSync()},
 	})
+	// And one more storage worker that will sync the consensus layer via state sync.
+	f.StorageWorkers = append(f.StorageWorkers, oasis.StorageWorkerFixture{
+		Backend:               database.BackendNameBadgerDB,
+		Entity:                1,
+		NoAutoStart:           true,
+		CheckpointSyncEnabled: true,
+		LogWatcherHandlerFactories: []log.WatcherHandlerFactory{
+			oasis.LogAssertCheckpointSync(),
+			oasis.LogEventABCIStateSyncComplete(),
+		},
+	})
 
 	return f, nil
 }
 
-func (sc *storageSyncImpl) Run(childEnv *env.Env) error {
+func (sc *storageSyncImpl) Run(childEnv *env.Env) error { //nolint: gocyclo
 	clientErrCh, cmd, err := sc.runtimeImpl.start(childEnv)
 	if err != nil {
 		return err
@@ -196,15 +214,72 @@ func (sc *storageSyncImpl) Run(childEnv *env.Env) error {
 		}
 	}
 
-	// Now spin up the last storage worker and check if it syncs with a checkpoint.
+	sc.Logger.Info("running first late storage worker")
+
+	// Now spin up the first late storage worker and check if it syncs with a checkpoint.
 	lateWorker := sc.Net.StorageWorkers()[3]
-	err = lateWorker.Start()
-	if err != nil {
-		return fmt.Errorf("can't start last storage worker: %w", err)
+	if err = lateWorker.Start(); err != nil {
+		return fmt.Errorf("can't start first late storage worker: %w", err)
 	}
-	if err := lateWorker.WaitReady(ctx); err != nil {
-		return fmt.Errorf("error waiting for late storage worker to become ready: %w", err)
+	if err = lateWorker.WaitReady(ctx); err != nil {
+		return fmt.Errorf("error waiting for first late storage worker to become ready: %w", err)
 	}
+
+	sc.Logger.Info("running second late storage worker")
+
+	// Get the TLS public key from the validators.
+	var (
+		consensusNodes []string
+		trustHeight    uint64
+		trustHash      string
+	)
+	for _, v := range sc.Net.Validators() {
+		var ctrl *oasis.Controller
+		ctrl, err = oasis.NewController(v.SocketPath())
+		if err != nil {
+			return fmt.Errorf("failed to create controller for validator %s: %w", v.Name, err)
+		}
+
+		var status *control.Status
+		status, err = ctrl.GetStatus(ctx)
+		if err != nil {
+			return fmt.Errorf("failed to get status for validator %s: %w", v.Name, err)
+		}
+
+		if status.Registration.Descriptor == nil {
+			return fmt.Errorf("validator %s has not registered", v.Name)
+		}
+		if len(status.Registration.Descriptor.TLS.Addresses) == 0 {
+			return fmt.Errorf("validator %s has no TLS addresses", v.Name)
+		}
+
+		var rawAddress []byte
+		tlsAddress := status.Registration.Descriptor.TLS.Addresses[0]
+		rawAddress, err = tlsAddress.MarshalText()
+		if err != nil {
+			return fmt.Errorf("failed to marshal TLS address: %w", err)
+		}
+		consensusNodes = append(consensusNodes, string(rawAddress))
+
+		trustHeight = uint64(status.Consensus.LatestHeight)
+		trustHash = hex.EncodeToString(status.Consensus.LatestHash)
+	}
+
+	// Configure state sync for the last storage node.
+	lateWorker = sc.Net.StorageWorkers()[4]
+	lateWorker.SetConsensusStateSync(&oasis.ConsensusStateSyncCfg{
+		ConsensusNodes: consensusNodes,
+		TrustHeight:    trustHeight,
+		TrustHash:      trustHash,
+	})
+
+	if err = lateWorker.Start(); err != nil {
+		return fmt.Errorf("can't start second late storage worker: %w", err)
+	}
+	if err = lateWorker.WaitReady(ctx); err != nil {
+		return fmt.Errorf("error waiting for second late storage worker to become ready: %w", err)
+	}
+
 	// Wait a bit to give the logger in the node time to sync; the message has already been
 	// logged by this point, it just might not be on disk yet.
 	<-time.After(1 * time.Second)

@@ -254,11 +254,7 @@ func NewNode(
 
 	// Create a new storage client that will be used for remote sync.
 	// This storage client connects to all registered storage nodes for the runtime.
-	nl, err := nodes.NewRuntimeNodeLookup(
-		n.ctx,
-		n.commonNode.Consensus.Registry(),
-		rtID,
-	)
+	nl, err := nodes.NewRuntimeNodeLookup(n.ctx, n.commonNode.Consensus, rtID)
 	if err != nil {
 		return nil, fmt.Errorf("group: failed to create runtime node watcher: %w", err)
 	}
@@ -363,6 +359,9 @@ func (n *Node) Name() string {
 func (n *Node) Start() error {
 	go n.watchQuit()
 	go n.worker()
+	if n.checkpointer != nil {
+		go n.consensusCheckpointSyncer()
+	}
 	return nil
 }
 
@@ -835,6 +834,56 @@ func (n *Node) watchQuit() {
 	close(n.quitCh)
 }
 
+func (n *Node) consensusCheckpointSyncer() {
+	// Make sure we always create a checkpoint when the consensus layer creates a checkpoint. The
+	// reason why we do this is to make it faster for storage nodes that use consensus state sync
+	// to catch up as exactly the right checkpoint will be available.
+	consensusCp := n.commonNode.Consensus.Checkpointer()
+	if consensusCp == nil {
+		return
+	}
+
+	ch, sub, err := consensusCp.WatchCheckpoints()
+	if err != nil {
+		n.logger.Error("failed to watch checkpoints",
+			"err", err,
+		)
+		return
+	}
+	defer sub.Close()
+
+	for {
+		select {
+		case <-n.quitCh:
+			return
+		case <-n.ctx.Done():
+			return
+		case version := <-ch:
+			// Lookup what runtime round corresponds to the given consensus layer version and make
+			// sure we checkpoint it.
+			blk, err := n.commonNode.Consensus.RootHash().GetLatestBlock(n.ctx, &roothashApi.RuntimeRequest{
+				RuntimeID: n.commonNode.Runtime.ID(),
+				Height:    int64(version),
+			})
+			if err != nil {
+				n.logger.Error("failed to get runtime block corresponding to consensus checkpoint",
+					"err", err,
+					"height", version,
+				)
+				continue
+			}
+
+			// Force runtime storage checkpointer to create a checkpoint at this round.
+			n.logger.Info("consensus checkpoint, force runtime checkpoint",
+				"height", version,
+				"round", blk.Header.Round,
+			)
+
+			n.checkpointer.ForceCheckpoint(blk.Header.Round)
+		}
+	}
+}
+
 // This is only called from the main worker goroutine, so no locking should be necessary.
 func (n *Node) nudgeAvailability(lastSynced, latest uint64) {
 	if lastSynced == n.undefinedRound || latest == n.undefinedRound {
@@ -922,6 +971,36 @@ func (n *Node) worker() { // nolint: gocyclo
 		n.checkpointer.Flush()
 	}
 
+	// Check if we are able to fetch the first block that we would be syncing if we used iterative
+	// syncing. In case we cannot (likely because we synced the consensus layer via state sync), we
+	// must wait for a later checkpoint to become available.
+	if !n.checkpointSyncForced {
+		// Determine what is the first round that we would need to sync.
+		iterativeSyncStart := cachedLastRound
+		if iterativeSyncStart == n.undefinedRound {
+			iterativeSyncStart++
+		}
+
+		// Check if we actually have information about that round. This assumes that any reindexing
+		// was already performed (the common node would not indicate being initialized otherwise).
+		_, err = n.commonNode.Runtime.History().GetBlock(n.ctx, iterativeSyncStart)
+		switch {
+		case err == nil:
+		case errors.Is(err, roothashApi.ErrNotFound):
+			// No information is available about this round, force checkpoint sync.
+			n.logger.Warn("forcing checkpoint sync as we don't have authoritative block info",
+				"round", iterativeSyncStart,
+			)
+			n.checkpointSyncForced = true
+		default:
+			// Unknown error while fetching block information, abort.
+			n.logger.Error("failed to query block",
+				"err", err,
+			)
+			return
+		}
+	}
+
 	n.logger.Info("worker initialized",
 		"genesis_round", genesisBlock.Header.Round,
 		"last_synced", cachedLastRound,
@@ -952,8 +1031,8 @@ func (n *Node) worker() { // nolint: gocyclo
 			switch n.checkpointSyncForced {
 			case true:
 				// We have no other options but to perform a checkpoint sync as we are missing
-				// genesis state.
-				n.logger.Info("checkpoint sync required as we don't have genesis state, retrying",
+				// either state or authoritative blocks.
+				n.logger.Info("checkpoint sync required, retrying",
 					"err", err,
 					"attempt", attempt,
 				)

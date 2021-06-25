@@ -9,6 +9,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/identity"
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
 	"github.com/oasisprotocol/oasis-core/go/common/node"
+	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
 	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
 	"github.com/oasisprotocol/oasis-core/go/runtime/nodes"
 	"github.com/oasisprotocol/oasis-core/go/runtime/nodes/grpc"
@@ -62,13 +63,13 @@ func NewForPublicStorage(
 	ctx context.Context,
 	namespace common.Namespace,
 	ident *identity.Identity,
-	registryBackend registry.Backend,
+	consensus consensus.Backend,
 	runtime registry.RuntimeDescriptorProvider,
 	opts ...Option,
 ) (api.Backend, error) {
 	nl, err := nodes.NewRuntimeNodeLookup(
 		ctx,
-		registryBackend,
+		consensus,
 		namespace,
 	)
 	if err != nil {
@@ -93,11 +94,11 @@ func NewForPublicStorage(
 func NewStatic(
 	ctx context.Context,
 	ident *identity.Identity,
-	registryBackend registry.Backend,
+	consensus consensus.Backend,
 	nodeID signature.PublicKey,
 	opts ...Option,
 ) (api.Backend, error) {
-	nw, err := nodes.NewVersionedNodeDescriptorWatcher(ctx, registryBackend)
+	nw, err := nodes.NewVersionedNodeDescriptorWatcher(ctx, consensus)
 	if err != nil {
 		return nil, fmt.Errorf("storage/client: failed to create node descriptor watcher: %w", err)
 	}
