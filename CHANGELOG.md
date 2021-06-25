@@ -12,6 +12,57 @@ The format is inspired by [Keep a Changelog].
 
 <!-- TOWNCRIER -->
 
+## 21.2.5 (2021-06-25)
+
+| Protocol          | Version   |
+|:------------------|:---------:|
+| Consensus         | 4.0.0     |
+| Runtime Host      | 3.0.0     |
+| Runtime Committee | 2.0.0     |
+
+### Features
+
+- go/worker/storage: Synchronize checkpoints with consensus layer
+  ([#4080](https://github.com/oasisprotocol/oasis-core/issues/4080))
+
+### Bug Fixes
+
+- go/consensus/tendermint: Fix last retained version query
+  ([#4060](https://github.com/oasisprotocol/oasis-core/issues/4060))
+
+  Previously the reported version was incorrect when the node used state sync
+  and pruning was disabled.
+
+- go/worker/storage: Add missing timeout for operations
+  ([#4072](https://github.com/oasisprotocol/oasis-core/issues/4072))
+
+- go/worker/storage: Don't crash on early query
+  ([#4072](https://github.com/oasisprotocol/oasis-core/issues/4072))
+
+- go/worker/storage: Force checkpoint sync when block info unavailable
+  ([#4080](https://github.com/oasisprotocol/oasis-core/issues/4080))
+
+- ias/proxy/client: `GetSigRL` don't panic if IAS proxy not configured
+  ([#4081](https://github.com/oasisprotocol/oasis-core/issues/4081))
+
+- go/worker/executor: skip proposer timeout if batch was received
+  ([#4083](https://github.com/oasisprotocol/oasis-core/issues/4083))
+
+### Internal Changes
+
+- go/consensus: Expose consensus state checkpointer
+  ([#4080](https://github.com/oasisprotocol/oasis-core/issues/4080))
+
+- go/storage/mkvs/checkpoint: Add ForceCheckpoint and WatchCheckpoints
+  ([#4080](https://github.com/oasisprotocol/oasis-core/issues/4080))
+
+- go/runtime: Delay subscriptions until after consensus sync
+  ([#4080](https://github.com/oasisprotocol/oasis-core/issues/4080))
+
+  Previously if the node used consensus state sync it would fail to receive any
+  updates for the various descriptors until the descriptors were updated after
+  the state sync checkpoint.
+
 ## 21.2.4 (2021-06-22)
 
 | Protocol          | Version   |
