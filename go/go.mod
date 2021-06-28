@@ -47,7 +47,7 @@ require (
 	github.com/seccomp/libseccomp-golang v0.9.1
 	github.com/spf13/cobra v1.1.1
 	github.com/spf13/pflag v1.0.5
-	github.com/spf13/viper v1.8.0
+	github.com/spf13/viper v1.8.1
 	github.com/stretchr/testify v1.7.0
 	github.com/tendermint/tendermint v0.34.9
 	github.com/tendermint/tm-db v0.6.4
