@@ -188,9 +188,9 @@ checksum = "904dfeac50f3cdaba28fc6f57fdcddb75f49ed61346676a78c4ffe55877802fd"
 
 [[package]]
 name = "bech32"
-version = "0.8.0"
+version = "0.8.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6c7f7096bc256f5e5cb960f60dfc4f4ef979ca65abe7fb9d5a4f77150d3783d4"
+checksum = "cf9ff0bbfd639f15c74af777d81383cf53efb7c93613f6cab67c6c11e05bbf8b"
 
 [[package]]
 name = "bincode"
@@ -2484,9 +2484,9 @@ dependencies = [
 
 [[package]]
 name = "tendermint"
-version = "0.19.0"
+version = "0.20.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "831486f28e65c6f6c6f8afb067796f3c470db91a44d177224f8e6287601391b6"
+checksum = "e7d330f5d92e5e1c7a84130805b48b4983d98a37257034544492e3566315142b"
 dependencies = [
  "anomaly",
  "async-trait",
@@ -2494,7 +2494,6 @@ dependencies = [
  "chrono",
  "ed25519",
  "ed25519-dalek",
- "funty",
  "futures 0.3.15",
  "num-traits",
  "once_cell",
@@ -2517,9 +2516,9 @@ dependencies = [
 
 [[package]]
 name = "tendermint-proto"
-version = "0.19.0"
+version = "0.20.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "32bbc1bc55f09de4d00b5d69aa6b60392ba37c5e4761d869f76065d352bd3360"
+checksum = "fadcaea1eecd91dbdd9636fe8ad38d2b41fc0ae814c176e51e00925cdda78a34"
 dependencies = [
  "anomaly",
  "bytes 1.0.1",
