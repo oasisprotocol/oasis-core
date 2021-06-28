@@ -64,7 +64,7 @@ jobs:
         run: |
           make lint-git
         # Always run this step so that all linting errors can be seen at once.
-        if: always()
+        if: always() && github.actor != 'dependabot[bot]'
       - name: Lint Markdown files
         run: |
           make lint-md
