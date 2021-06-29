@@ -78,10 +78,6 @@ type Network struct { // nolint: maligned
 
 // IASCfg is the Oasis test network IAS configuration.
 type IASCfg struct {
-	// UseRegistry specifies whether the IAS proxy should use the registry
-	// instead of the genesis document for authenticating runtime IDs.
-	UseRegistry bool `json:"use_registry,omitempty"`
-
 	// Mock specifies if Mock IAS Proxy should be used.
 	Mock bool `json:"mock,omitempty"`
 }

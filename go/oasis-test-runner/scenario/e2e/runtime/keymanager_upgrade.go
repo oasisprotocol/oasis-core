@@ -67,8 +67,6 @@ func (sc *kmUpgradeImpl) Fixture() (*oasis.NetworkFixture, error) {
 	// Add the upgraded keymanager, will be started later.
 	f.Keymanagers = append(f.Keymanagers, oasis.KeymanagerFixture{Runtime: 2, Entity: 1, NoAutoStart: true})
 
-	f.Network.IAS.UseRegistry = true
-
 	return f, nil
 }
 

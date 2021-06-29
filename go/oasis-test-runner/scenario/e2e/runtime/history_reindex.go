@@ -37,9 +37,6 @@ func (sc *historyReindexImpl) Fixture() (*oasis.NetworkFixture, error) {
 		return nil, err
 	}
 
-	// We need IAS proxy to use the registry as we are registering runtimes dynamically.
-	f.Network.IAS.UseRegistry = true
-
 	f.ComputeWorkers = []oasis.ComputeWorkerFixture{
 		{
 			Entity:   1,

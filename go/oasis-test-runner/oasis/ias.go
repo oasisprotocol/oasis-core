@@ -16,9 +16,8 @@ var mockSPID []byte
 type iasProxy struct {
 	*Node
 
-	mock        bool
-	useRegistry bool
-	grpcPort    uint16
+	mock     bool
+	grpcPort uint16
 
 	tlsPublicKey signature.PublicKey
 }
@@ -34,16 +33,11 @@ func (ias *iasProxy) AddArgs(args *argBuilder) error {
 		args.iasDebugMock().iasSPID(mockSPID)
 	}
 
-	switch ias.useRegistry {
-	case true:
-		// XXX: IAS proxy is started before the validators. Pregenerate temp validator internal socket path, if needed.
-		if ias.net.cfg.UseShortGrpcSocketPaths && ias.net.validators[0].customGrpcSocketPath == "" {
-			ias.net.validators[0].customGrpcSocketPath = ias.net.generateTempSocketPath()
-		}
-		args.internalSocketAddress(ias.net.validators[0].SocketPath())
-	case false:
-		args.iasUseGenesis()
+	// XXX: IAS proxy is started before the validators. Pregenerate temp validator internal socket path.
+	if ias.net.cfg.UseShortGrpcSocketPaths && ias.net.validators[0].customGrpcSocketPath == "" {
+		ias.net.validators[0].customGrpcSocketPath = ias.net.generateTempSocketPath()
 	}
+	args.internalSocketAddress(ias.net.validators[0].SocketPath())
 
 	return nil
 }
@@ -80,10 +74,9 @@ func (net *Network) newIASProxy() (*iasProxy, error) {
 	tlsPublicKey := iasCert.PrivateKey.(ed25519.PrivateKey).Public().(ed25519.PublicKey)
 
 	net.iasProxy = &iasProxy{
-		Node:        host,
-		useRegistry: net.cfg.IAS.UseRegistry,
-		mock:        net.cfg.IAS.Mock,
-		grpcPort:    host.getProvisionedPort("iasgrpc"),
+		Node:     host,
+		mock:     net.cfg.IAS.Mock,
+		grpcPort: host.getProvisionedPort("iasgrpc"),
 	}
 
 	// Store TLS public key so other nodes can configure authentication.
