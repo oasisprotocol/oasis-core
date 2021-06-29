@@ -555,6 +555,11 @@ func (g *Group) Start() error {
 	var scOpts []storageClient.Option
 	var localStorageBackend storage.LocalBackend
 	if lsb, ok := g.runtime.Storage().(storage.LocalBackend); ok && g.runtime.HasRoles(node.RoleStorageWorker) {
+		// Make sure to unwrap the local backend as we need the raw local backend here.
+		if wrapped, ok := lsb.(storage.WrappedLocalBackend); ok {
+			lsb = wrapped.Unwrap()
+		}
+
 		localStorageBackend = lsb
 		scOpts = append(scOpts, storageClient.WithBackendOverride(g.identity.NodeSigner.Public(), lsb))
 	}
