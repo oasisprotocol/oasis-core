@@ -91,6 +91,11 @@ func (s *syncedStorage) NodeDB() nodedb.NodeDB {
 	return s.wrapped.NodeDB()
 }
 
+// Implements storage.WrappedLocalBackend.
+func (s *syncedStorage) Unwrap() storage.LocalBackend {
+	return s.wrapped
+}
+
 func newSyncedLocalStorage(runtime *committee.Node, backend storage.LocalBackend) storage.LocalBackend {
 	return &syncedStorage{
 		runtime: runtime,
