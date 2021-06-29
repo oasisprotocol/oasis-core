@@ -89,7 +89,7 @@ func TestStorageMux(t *testing.T) {
 	faulty1.returnCh <- someError
 	faulty2.returnCh <- nil
 	getResp, err = mux.SyncGet(ctx, &GetRequest{})
-	require.EqualError(t, err, "error")
+	require.NoError(t, err, "second read succeeded, so there should be no error")
 	require.NotNil(t, getResp)
 	<-faulty1.calledCh
 	<-faulty2.calledCh
