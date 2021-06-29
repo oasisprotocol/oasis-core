@@ -1,4 +1,4 @@
-FROM ubuntu:18.04
+FROM ubuntu:20.04
 
 # Package versions.
 ARG GO_VERSION=1.16.3
@@ -19,17 +19,16 @@ RUN apt-get update -qq && apt-get upgrade -qq && apt-get install -qq \
     build-essential git gdb cmake \
     curl wget unzip \
     pkg-config software-properties-common \
-    python python-pyelftools \
+    python3 python3-pyelftools \
     # for gitlint
-    python-pip \
+    python3-pip \
     # for rust openssl
     libssl-dev libcurl4-openssl-dev \
     # for benchmarks
     python3-prometheus-client \
     # for seccomp Go bindings support
     libseccomp-dev \
-    # for bubblewrap
-    libcap2 && \
+    bubblewrap && \
     apt-get autoclean && apt-get autoremove && rm -rf /var/cache/apt/archives/* && \
     # for linting Git commits
     pip install gitlint
@@ -81,9 +80,3 @@ RUN wget -O jemalloc.tar.bz2 https://github.com/jemalloc/jemalloc/releases/downl
     ./configure --with-jemalloc-prefix='je_' --with-malloc-conf='background_thread:true,metadata_thp:auto' && \
     make && make install && \
     cd .. && rm jemalloc.tar.bz2 && rm -rf jemalloc-${JEMALLOC_VERSION}
-
-# Install bubblewrap (we need at least version 0.3.3 which is not available for 18.04).
-RUN wget http://archive.ubuntu.com/ubuntu/pool/main/b/bubblewrap/bubblewrap_0.4.1-1_amd64.deb && \
-    echo '25de452f209e4fdb4b009851c33ca9a0269ebf0b92f4bd9b86186480592cc3e2 bubblewrap_0.4.1-1_amd64.deb' | sha256sum -c && \
-    dpkg -i bubblewrap_0.4.1-1_amd64.deb && \
-    rm bubblewrap_0.4.1-1_amd64.deb
