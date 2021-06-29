@@ -337,6 +337,13 @@ type LocalBackend interface {
 	NodeDB() nodedb.NodeDB
 }
 
+// WrappedLocalBackend is an interface implemented by storage backends that wrap a local storage
+// backend in order to support unwrapping.
+type WrappedLocalBackend interface {
+	// Unwrap returns the underlying local storage backend.
+	Unwrap() LocalBackend
+}
+
 // ClientBackend is a storage client backend implementation.
 type ClientBackend interface {
 	Backend

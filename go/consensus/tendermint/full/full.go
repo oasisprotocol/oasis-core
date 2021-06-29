@@ -835,11 +835,13 @@ func (t *fullService) GetStatus(ctx context.Context) (*consensusAPI.Status, erro
 		}
 		vals, err := t.stateStore.LoadValidators(valSetHeight)
 		if err != nil {
-			return nil, fmt.Errorf("failed to load validator set: %w", err)
+			// Failed to load validator set.
+			status.IsValidator = false
+		} else {
+			consensusPk := t.identity.ConsensusSigner.Public()
+			consensusAddr := []byte(crypto.PublicKeyToTendermint(&consensusPk).Address())
+			status.IsValidator = vals.HasAddress(consensusAddr)
 		}
-		consensusPk := t.identity.ConsensusSigner.Public()
-		consensusAddr := []byte(crypto.PublicKeyToTendermint(&consensusPk).Address())
-		status.IsValidator = vals.HasAddress(consensusAddr)
 	}
 
 	return status, nil
