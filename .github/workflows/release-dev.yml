@@ -51,7 +51,11 @@ jobs:
           echo "${JEMALLOC_CHECKSUM} ${JEMALLOC_TARBALL}" | sha256sum --check
           tar -xf ${JEMALLOC_TARBALL}
           cd jemalloc-${JEMALLOC_VERSION}
-          ./configure --with-jemalloc-prefix='je_' --with-malloc-conf='background_thread:true,metadata_thp:auto'
+          # Ensure reproducible jemalloc build.
+          # https://reproducible-builds.org/docs/build-path/
+          EXTRA_CXXFLAGS=-ffile-prefix-map=$(pwd -L)=. \
+            EXTRA_CFLAGS=-ffile-prefix-map=$(pwd -L)=. \
+            ./configure --with-jemalloc-prefix='je_' --with-malloc-conf='background_thread:true,metadata_thp:auto'
           make
           sudo make install
         env:

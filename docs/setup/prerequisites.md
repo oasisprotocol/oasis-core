@@ -188,9 +188,13 @@ Core:
   echo "${JEMALLOC_CHECKSUM} jemalloc.tar.bz2" | sha256sum -c
   tar -xf ./jemalloc.tar.bz2 --no-same-owner
   cd jemalloc-${JEMALLOC_VERSION}
-  ./configure \
-    --with-jemalloc-prefix='je_' \
-    --with-malloc-conf='background_thread:true,metadata_thp:auto'
+  # Ensure reproducible jemalloc build.
+  # https://reproducible-builds.org/docs/build-path/
+  EXTRA_CXXFLAGS=-ffile-prefix-map=$(pwd -L)=. \
+    EXTRA_CFLAGS=-ffile-prefix-map=$(pwd -L)=. \
+    ./configure \
+      --with-jemalloc-prefix='je_' \
+      --with-malloc-conf='background_thread:true,metadata_thp:auto'
   make
   sudo make install
   popd
