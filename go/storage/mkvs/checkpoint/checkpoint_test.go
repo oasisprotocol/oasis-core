@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"io/ioutil"
 	"os"
 	"path/filepath"
@@ -77,7 +78,7 @@ func TestFileCheckpointCreator(t *testing.T) {
 	var expectedChunks []hash.Hash
 	for _, hh := range []string{
 		"bd09a699c0737d8a9783129f896fb6f452d9b77e81869237312e3bd48fb4cbc7",
-		"57557051abdf63cc03b831cca21a321f44f681c795454dcb897e46b55e082ca3",
+		"e852d2312ab1fe51ab066cc8a7a687e483d9e73206c3e56fc5caaecf6c347c7f",
 	} {
 		var h hash.Hash
 		_ = h.UnmarshalHex(hh)
@@ -257,6 +258,52 @@ func TestFileCheckpointCreator(t *testing.T) {
 	invalidRoot.Hash.FromBytes([]byte("mkvs checkpoint test invalid root"))
 	_, err = fc.CreateCheckpoint(ctx, invalidRoot, 16*1024)
 	require.Error(err, "CreateCheckpoint should fail for invalid root")
+}
+
+func TestOversizedChunks(t *testing.T) {
+	require := require.New(t)
+
+	// Generate some data.
+	dir, err := ioutil.TempDir("", "mkvs.checkpoint")
+	require.NoError(err, "TempDir")
+	defer os.RemoveAll(dir)
+
+	ndb, err := badgerDb.New(&db.Config{
+		DB:           filepath.Join(dir, "db"),
+		Namespace:    testNs,
+		MaxCacheSize: 16 * 1024 * 1024,
+	})
+	require.NoError(err, "New")
+
+	ctx := context.Background()
+	tree := mkvs.New(nil, ndb, node.RootTypeState)
+	for i := 0; i < 100; i++ {
+		err = tree.Insert(ctx,
+			[]byte(fmt.Sprintf("this is some key at index %d which is somewhat longish", i)),
+			[]byte(fmt.Sprintf("let's generate a somewhat long key at %d so that we try to overflow chunks", i)),
+		)
+		require.NoError(err, "Insert")
+	}
+
+	_, rootHash, err := tree.Commit(ctx, testNs, 0)
+	require.NoError(err, "Commit")
+	root := node.Root{
+		Namespace: testNs,
+		Version:   1,
+		Type:      node.RootTypeState,
+		Hash:      rootHash,
+	}
+
+	// Create a file-based checkpoint creator.
+	fc, err := NewFileCreator(filepath.Join(dir, "checkpoints"), ndb)
+	require.NoError(err, "NewFileCreator")
+
+	// Create a checkpoint and check that it has been created correctly.
+	cp, err := fc.CreateCheckpoint(ctx, root, 128)
+	require.NoError(err, "CreateCheckpoint")
+	require.EqualValues(1, cp.Version, "version should be correct")
+	require.EqualValues(root, cp.Root, "checkpoint root should be correct")
+	require.Len(cp.Chunks, 100, "there should be the correct number of chunks")
 }
 
 func TestPruneGapAfterCheckpointRestore(t *testing.T) {
