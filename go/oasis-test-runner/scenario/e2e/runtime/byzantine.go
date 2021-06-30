@@ -277,7 +277,7 @@ func newByzantineImpl(
 	extraArgs []oasis.Argument,
 ) scenario.Scenario {
 	return &byzantineImpl{
-		runtimeImpl:                *newRuntimeImpl("byzantine/"+name, "", nil),
+		runtimeImpl:                *newRuntimeImpl("byzantine/"+name, nil),
 		script:                     script,
 		extraArgs:                  extraArgs,
 		skipStorageSyncWait:        skipStorageWait,

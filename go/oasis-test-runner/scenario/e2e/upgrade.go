@@ -150,6 +150,7 @@ func (sc *nodeUpgradeImpl) Fixture() (*oasis.NetworkFixture, error) {
 	}
 
 	ff.Network.SetMockEpoch()
+	ff.Network.SetInsecureBeacon()
 
 	return ff, nil
 }

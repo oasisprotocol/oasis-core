@@ -41,8 +41,7 @@ func newHaltRestoreImpl(suspended bool) scenario.Scenario {
 	return &haltRestoreImpl{
 		runtimeImpl: *newRuntimeImpl(
 			name,
-			"test-long-term-client",
-			[]string{"--mode", "part1"},
+			NewLongTermTestClient().WithMode(ModePart1),
 		),
 		haltEpoch:      haltEpoch,
 		suspendRuntime: suspended,
@@ -72,9 +71,7 @@ func (sc *haltRestoreImpl) Fixture() (*oasis.NetworkFixture, error) {
 
 func (sc *haltRestoreImpl) Run(childEnv *env.Env) error {
 	ctx := context.Background()
-
-	clientErrCh, cmd, err := sc.runtimeImpl.start(childEnv)
-	if err != nil {
+	if err := sc.startNetworkAndTestClient(ctx, childEnv); err != nil {
 		return err
 	}
 
@@ -89,12 +86,7 @@ func (sc *haltRestoreImpl) Run(childEnv *env.Env) error {
 	nextEpoch := beacon.EpochTime(3)
 
 	// Wait for the client to exit.
-	select {
-	case err = <-sc.Net.Errors():
-		_ = cmd.Process.Kill()
-	case err = <-clientErrCh:
-	}
-	if err != nil {
+	if err = sc.waitTestClientOnly(); err != nil {
 		return err
 	}
 
@@ -239,10 +231,7 @@ func (sc *haltRestoreImpl) Run(childEnv *env.Env) error {
 	// socket path length.
 	sc.Net.Config().UseShortGrpcSocketPaths = true
 
-	sc.runtimeImpl.clientArgs = []string{
-		"--mode", "part2",
-		// Use a different nonce seed.
-		"--seed", "second_seed",
-	}
+	newTestClient := sc.testClient.Clone().(*LongTermTestClient)
+	sc.runtimeImpl.testClient = newTestClient.WithMode(ModePart2).WithSeed("second_seed")
 	return sc.runtimeImpl.Run(childEnv)
 }

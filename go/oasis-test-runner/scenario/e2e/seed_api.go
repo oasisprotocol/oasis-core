@@ -31,6 +31,8 @@ func (sc *seedAPI) Fixture() (*oasis.NetworkFixture, error) {
 	// Add a client which will connect to the seed.
 	f.Clients = append(f.Clients, oasis.ClientFixture{})
 
+	f.Network.SetInsecureBeacon()
+
 	return f, nil
 }
 

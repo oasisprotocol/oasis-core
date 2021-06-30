@@ -61,6 +61,7 @@ func (sc *registryCLIImpl) Fixture() (*oasis.NetworkFixture, error) {
 
 	// We will mock epochs for reclaiming the escrow.
 	f.Network.SetMockEpoch()
+	f.Network.SetInsecureBeacon()
 
 	return f, nil
 }

@@ -7,9 +7,9 @@ import (
 
 var (
 	// MultihostDouble is the MultiHost node scenario with nodes with two workers.
-	MultihostDouble scenario.Scenario = newMultiHostImpl("multihost-double", "simple-keyvalue-client", nil, false)
+	MultihostDouble scenario.Scenario = newMultiHostImpl("multihost-double", BasicKVTestClient, false)
 	// MultihostTriple is the MultiHost node scenario with nodes with three workers.
-	MultihostTriple scenario.Scenario = newMultiHostImpl("multihost-triple", "simple-keyvalue-client", nil, true)
+	MultihostTriple scenario.Scenario = newMultiHostImpl("multihost-triple", BasicKVTestClient, true)
 )
 
 type multiHostImpl struct {
@@ -17,9 +17,9 @@ type multiHostImpl struct {
 	triple bool
 }
 
-func newMultiHostImpl(name, clientBinary string, clientArgs []string, triple bool) scenario.Scenario {
+func newMultiHostImpl(name string, testClient TestClient, triple bool) scenario.Scenario {
 	return &multiHostImpl{
-		runtimeImpl: *newRuntimeImpl(name, clientBinary, clientArgs),
+		runtimeImpl: *newRuntimeImpl(name, testClient),
 		triple:      triple,
 	}
 }

@@ -2,6 +2,7 @@ package runtime
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"time"
@@ -27,7 +28,10 @@ type storageSyncInconsistentImpl struct {
 
 func newStorageSyncInconsistentImpl() scenario.Scenario {
 	return &storageSyncInconsistentImpl{
-		runtimeImpl: *newRuntimeImpl("storage-sync-inconsistent", "simple-keyvalue-client", []string{"--repeat"}),
+		runtimeImpl: *newRuntimeImpl(
+			"storage-sync-inconsistent",
+			NewKeyValueTestClient().WithRepeat(),
+		),
 	}
 }
 
@@ -91,8 +95,7 @@ func (sc *storageSyncInconsistentImpl) Run(childEnv *env.Env) error {
 	sc.runtimeID = sc.Net.Runtimes()[1].ID()
 	ctx := context.Background()
 
-	clientErrCh, cmd, err := sc.runtimeImpl.start(childEnv)
-	if err != nil {
+	if err := sc.runtimeImpl.startNetworkAndTestClient(ctx, childEnv); err != nil {
 		return err
 	}
 
@@ -155,10 +158,15 @@ func (sc *storageSyncInconsistentImpl) Run(childEnv *env.Env) error {
 	// Wait for the client to exit. Odd error handling here; if killing succeeded, then everything
 	// must have been fine up to this point and we can ignore the exit error from the kill.
 	sc.Logger.Info("scenario done, killing client")
-	if err = cmd.Process.Kill(); err != nil {
-		return nil
+	testClient := sc.testClient.(*KeyValueTestClient)
+	if err = testClient.Kill(); err != nil {
+		if errors.Is(err, context.Canceled) {
+			return nil
+		}
 	}
-	_ = sc.waitClient(childEnv, cmd, clientErrCh)
+
+	// No need to wait, client is dead at this point.  Unfortunately
+	// the error didn't indicate cancelation though.
 
 	return sc.Net.CheckLogWatchers()
 }

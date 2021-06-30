@@ -30,9 +30,9 @@ import (
 
 var (
 	// Sentry is the Sentry node basic scenario.
-	Sentry scenario.Scenario = newSentryImpl("sentry", "simple-keyvalue-client", nil)
+	Sentry scenario.Scenario = newSentryImpl("sentry", BasicKVTestClient)
 	// SentryEncryption is the Sentry node basic encryption scenario.
-	SentryEncryption scenario.Scenario = newSentryImpl("sentry-encryption", "simple-keyvalue-enc-client", nil)
+	SentryEncryption scenario.Scenario = newSentryImpl("sentry-encryption", BasicKVEncTestClient)
 
 	validatorExtraLogWatcherHandlerFactories = []log.WatcherHandlerFactory{
 		oasis.LogAssertPeerExchangeDisabled(),
@@ -55,9 +55,9 @@ type sentryImpl struct {
 	runtimeImpl
 }
 
-func newSentryImpl(name, clientBinary string, clientArgs []string) scenario.Scenario {
+func newSentryImpl(name string, testClient TestClient) scenario.Scenario {
 	return &sentryImpl{
-		runtimeImpl: *newRuntimeImpl(name, clientBinary, clientArgs),
+		runtimeImpl: *newRuntimeImpl(name, testClient),
 	}
 }
 

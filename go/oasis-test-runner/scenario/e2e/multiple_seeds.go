@@ -32,6 +32,8 @@ func (sc *multipleSeeds) Fixture() (*oasis.NetworkFixture, error) {
 		{DisableAddrBookFromGenesis: true},
 	}
 
+	f.Network.SetInsecureBeacon()
+
 	return f, nil
 }
 

@@ -31,11 +31,7 @@ func newKmUpgradeImpl() scenario.Scenario {
 	return &kmUpgradeImpl{
 		runtimeImpl: *newRuntimeImpl(
 			"keymanager-upgrade",
-			"simple-keyvalue-enc-client",
-			[]string{
-				"--key", "key1",
-				"--seed", "first_seed",
-			},
+			NewKeyValueEncTestClient().WithKey("key1").WithSeed("first_seed"),
 		),
 	}
 }
@@ -221,31 +217,25 @@ func (sc *kmUpgradeImpl) Run(childEnv *env.Env) error {
 	ctx := context.Background()
 	cli := cli.New(childEnv, sc.Net, sc.Logger)
 
-	clientErrCh, cmd, err := sc.runtimeImpl.start(childEnv)
-	if err != nil {
+	if err := sc.startNetworkAndTestClient(ctx, childEnv); err != nil {
 		return err
 	}
 	sc.Logger.Info("waiting for client to exit")
 	// Wait for the client to exit.
-	select {
-	case err = <-sc.Net.Errors():
-		_ = cmd.Process.Kill()
-	case err = <-clientErrCh:
-	}
-	if err != nil {
+	if err := sc.waitTestClientOnly(); err != nil {
 		return err
 	}
 
 	// Generate and update a policy that will allow replication for the new
 	// keymanager.
-	if err = sc.applyUpgradePolicy(childEnv); err != nil {
+	if err := sc.applyUpgradePolicy(childEnv); err != nil {
 		return fmt.Errorf("updating policies: %w", err)
 	}
 
 	// Start the new keymanager.
 	sc.Logger.Info("starting new keymanager")
 	newKm := sc.Net.Keymanagers()[1]
-	if err = newKm.Start(); err != nil {
+	if err := newKm.Start(); err != nil {
 		return fmt.Errorf("starting new key-manager: %w", err)
 	}
 
@@ -253,11 +243,11 @@ func (sc *kmUpgradeImpl) Run(childEnv *env.Env) error {
 	sc.Logger.Info("updating keymanager runtime descriptor")
 	newRt := sc.Net.Runtimes()[2]
 	kmTxPath := filepath.Join(childEnv.Dir(), "register_km_runtime.json")
-	if err = cli.Registry.GenerateRegisterRuntimeTx(childEnv.Dir(), newRt.ToRuntimeDescriptor(), sc.nonce, kmTxPath); err != nil {
+	if err := cli.Registry.GenerateRegisterRuntimeTx(childEnv.Dir(), newRt.ToRuntimeDescriptor(), sc.nonce, kmTxPath); err != nil {
 		return fmt.Errorf("failed to generate register KM runtime tx: %w", err)
 	}
 	sc.nonce++
-	if err = cli.Consensus.SubmitTx(kmTxPath); err != nil {
+	if err := cli.Consensus.SubmitTx(kmTxPath); err != nil {
 		return fmt.Errorf("failed to update KM runtime: %w", err)
 	}
 
@@ -265,35 +255,28 @@ func (sc *kmUpgradeImpl) Run(childEnv *env.Env) error {
 	sc.Logger.Info("waiting for new keymanager node to register",
 		"num_nodes", sc.Net.NumRegisterNodes(),
 	)
-	if err = sc.Net.Keymanagers()[1].WaitReady(ctx); err != nil {
+	if err := sc.Net.Keymanagers()[1].WaitReady(ctx); err != nil {
 		return fmt.Errorf("error waiting for new keymanager to be ready: %w", err)
 	}
 
 	// Ensure replication succeeded.
-	if err = sc.ensureReplicationWorked(ctx, newKm, newRt); err != nil {
+	if err := sc.ensureReplicationWorked(ctx, newKm, newRt); err != nil {
 		return err
 	}
 
 	// Shutdown old keymanager and make sure it deregisters.
 	sc.Logger.Info("shutting down old keymanager")
 	oldKm := sc.Net.Keymanagers()[0]
-	if err = oldKm.RequestShutdown(ctx, true); err != nil {
+	if err := oldKm.RequestShutdown(ctx, true); err != nil {
 		return fmt.Errorf("failed to request shutdown: %w", err)
 	}
 
 	// Run client again.
 	sc.Logger.Info("starting a second client to check if key manager works")
-	sc.runtimeImpl.clientArgs = []string{
-		"--key", "key2",
-		"--seed", "second_seed",
-	}
-	cmd, err = sc.startClient(childEnv)
-	if err != nil {
+	newTestClient := sc.testClient.Clone().(*KeyValueEncTestClient)
+	sc.runtimeImpl.testClient = newTestClient.WithKey("key2").WithSeed("second_seed")
+	if err := sc.startTestClientOnly(ctx, childEnv); err != nil {
 		return err
 	}
-	client2ErrCh := make(chan error)
-	go func() {
-		client2ErrCh <- cmd.Wait()
-	}()
-	return sc.wait(childEnv, cmd, client2ErrCh)
+	return sc.waitTestClient()
 }
