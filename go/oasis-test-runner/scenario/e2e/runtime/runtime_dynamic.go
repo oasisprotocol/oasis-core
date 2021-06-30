@@ -71,8 +71,6 @@ func (sc *runtimeDynamicImpl) Fixture() (*oasis.NetworkFixture, error) {
 			},
 		},
 	}
-	// We need IAS proxy to use the registry as we are registering runtimes dynamically.
-	f.Network.IAS.UseRegistry = true
 	// Avoid unexpected blocks.
 	f.Network.SetMockEpoch()
 	// Exclude all runtimes from genesis as we will register those dynamically.

@@ -521,11 +521,6 @@ func (args *argBuilder) workerConsensusRPCEnabled() *argBuilder {
 	return args
 }
 
-func (args *argBuilder) iasUseGenesis() *argBuilder {
-	args.vec = append(args.vec, Argument{Name: "ias.use_genesis"})
-	return args
-}
-
 func (args *argBuilder) iasDebugMock() *argBuilder {
 	args.vec = append(args.vec, Argument{Name: "ias.debug.mock"})
 	return args
