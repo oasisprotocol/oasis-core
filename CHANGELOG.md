@@ -12,6 +12,32 @@ The format is inspired by [Keep a Changelog].
 
 <!-- TOWNCRIER -->
 
+## 21.2.6 (2021-06-30)
+
+| Protocol          | Version   |
+|:------------------|:---------:|
+| Consensus         | 4.0.0     |
+| Runtime Host      | 3.0.0     |
+| Runtime Committee | 2.0.0     |
+
+### Bug Fixes
+
+- go/consensus/tendermint: Handle validator fetching error in `GetStatus()`
+  ([#4085](https://github.com/oasisprotocol/oasis-core/issues/4085))
+
+- go/worker/common: Always use naked local storage
+  ([#4093](https://github.com/oasisprotocol/oasis-core/issues/4093))
+
+  Previously the committee group could incorrectly use the synced version of
+  the local backend which could block operations resulting in failure to fetch
+  data.
+
+- go/storage/api/mux: Don't return an error on a successful read
+  ([#4093](https://github.com/oasisprotocol/oasis-core/issues/4093))
+
+- go/storage/mkvs/checkpoint: Determine next offset correctly
+  ([#4096](https://github.com/oasisprotocol/oasis-core/issues/4096))
+
 ## 21.2.5 (2021-06-25)
 
 | Protocol          | Version   |
