@@ -25,6 +25,9 @@ type MuxContinueWithError struct {
 }
 
 func (e MuxContinueWithError) Error() string {
+	if e.wrapped == nil {
+		return "<nil>"
+	}
 	return e.wrapped.Error()
 }
 
@@ -65,13 +68,18 @@ func MuxReadOpFinishEarly(next MuxController) MuxController {
 	}
 }
 
-// MuxIterateIgnoringErrors creates a controller that tells the muxer to continue iterating through
-// its backends even if one returns an error. The errors are stored and the last one is returned
-// at the end.
-func MuxIterateIgnoringErrors() MuxController {
+// MuxIterateIgnoringLocalErrors creates a controller that tells the muxer to continue iterating
+// through its backends even if a local one returns an error.
+func MuxIterateIgnoringLocalErrors() MuxController {
 	return func(i int, backend Backend, meth string, resp interface{}, err error) (interface{}, error) {
+		// Non-local errors are propagated as-is and abort processing.
+		if _, ok := backend.(LocalBackend); !ok {
+			return resp, err
+		}
+
+		// Error in a local backend is ignored.
 		if err != nil {
-			return resp, &MuxContinueWithError{err}
+			return resp, &MuxContinueWithError{nil}
 		}
 		return resp, nil
 	}

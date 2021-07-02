@@ -9,7 +9,7 @@ import (
 )
 
 type faultyBackend struct {
-	Backend
+	LocalBackend
 
 	calledCh chan struct{}
 	returnCh chan error
@@ -45,7 +45,7 @@ func TestStorageMux(t *testing.T) {
 	}
 
 	mux := NewStorageMux(
-		MuxReadOpFinishEarly(MuxIterateIgnoringErrors()),
+		MuxReadOpFinishEarly(MuxIterateIgnoringLocalErrors()),
 		faulty1,
 		faulty2,
 	)
@@ -69,7 +69,7 @@ func TestStorageMux(t *testing.T) {
 	faulty1.returnCh <- someError
 	faulty2.returnCh <- nil
 	applyResp, err = mux.Apply(ctx, &ApplyRequest{})
-	require.EqualError(t, err, "error")
+	require.NoError(t, err)
 	require.NotNil(t, applyResp)
 	<-faulty1.calledCh
 	<-faulty2.calledCh
