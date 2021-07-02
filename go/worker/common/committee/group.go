@@ -250,6 +250,7 @@ type Group struct {
 	// storage is the storage backend that tracks the current committee.
 	storage       storage.Backend
 	storageClient storage.ClientBackend
+	storageLocal  storage.LocalBackend
 
 	logger *logging.Logger
 }
@@ -544,6 +545,12 @@ func (g *Group) Storage() storage.Backend {
 	return g.storage
 }
 
+// StorageLocal returns the local storage backend if the local node is also a storage node.
+// Otherwise it returns nil.
+func (g *Group) StorageLocal() storage.LocalBackend {
+	return g.storageLocal
+}
+
 // Start starts the group services.
 func (g *Group) Start() error {
 	g.Lock()
@@ -553,14 +560,13 @@ func (g *Group) Start() error {
 	// for this runtime). In this case we override the storage client's backend so that any updates
 	// don't go via gRPC but are redirected directly to the local backend instead.
 	var scOpts []storageClient.Option
-	var localStorageBackend storage.LocalBackend
 	if lsb, ok := g.runtime.Storage().(storage.LocalBackend); ok && g.runtime.HasRoles(node.RoleStorageWorker) {
 		// Make sure to unwrap the local backend as we need the raw local backend here.
 		if wrapped, ok := lsb.(storage.WrappedLocalBackend); ok {
 			lsb = wrapped.Unwrap()
 		}
 
-		localStorageBackend = lsb
+		g.storageLocal = lsb
 		scOpts = append(scOpts, storageClient.WithBackendOverride(g.identity.NodeSigner.Public(), lsb))
 	}
 
@@ -578,10 +584,10 @@ func (g *Group) Start() error {
 	g.storageClient = sc.(storage.ClientBackend)
 
 	// Create the storage multiplexer if we have a local storage backend.
-	if localStorageBackend != nil {
+	if g.storageLocal != nil {
 		g.storage = storage.NewStorageMux(
-			storage.MuxReadOpFinishEarly(storage.MuxIterateIgnoringErrors()),
-			localStorageBackend,
+			storage.MuxReadOpFinishEarly(storage.MuxIterateIgnoringLocalErrors()),
+			g.storageLocal,
 			g.storageClient,
 		)
 	} else {
