@@ -1096,6 +1096,123 @@ func (n *Node) maybeStartProcessingBatchLocked(batch *unresolvedBatch) {
 	}
 }
 
+func (n *Node) startLocalStorageReplication(
+	ctx context.Context,
+	blk *block.Block,
+	ioRootHash hash.Hash,
+	batch transaction.RawBatch,
+) <-chan error {
+	ch := make(chan error, 1)
+	lsb := n.commonNode.Group.StorageLocal()
+	if lsb == nil {
+		// In case there is no local storage backend to replicate to, finish early.
+		ch <- nil
+		close(ch)
+		return ch
+	}
+
+	ioRoot := storage.Root{
+		Namespace: blk.Header.Namespace,
+		Version:   blk.Header.Round + 1,
+		Type:      storage.RootTypeIO,
+		Hash:      ioRootHash,
+	}
+
+	// If we have a local storage node, replicate batch locally so we will be able to Apply
+	// locally later when proposing a batch. This also avoids needless replication for things
+	// that we already have.
+	replicateIO := make(chan error)
+	go func() {
+		defer close(replicateIO)
+
+		// Check if the root is already present as in this case no replication is needed.
+		if lsb.NodeDB().HasRoot(ioRoot) {
+			replicateIO <- nil
+			return
+		}
+
+		n.logger.Debug("replicating I/O root locally",
+			"io_root", ioRoot,
+		)
+
+		emptyRoot := ioRoot
+		emptyRoot.Hash.Empty()
+
+		ioTree := transaction.NewTree(nil, emptyRoot)
+		defer ioTree.Close()
+
+		for idx, tx := range batch {
+			if err := ioTree.AddTransaction(ctx, transaction.Transaction{Input: tx, BatchOrder: uint32(idx)}, nil); err != nil {
+				n.logger.Error("failed to create I/O tree",
+					"err", err,
+				)
+				replicateIO <- err
+				return
+			}
+		}
+
+		ioWriteLog, ioRootHashCheck, err := ioTree.Commit(ctx)
+		if err != nil {
+			n.logger.Error("failed to create I/O tree",
+				"err", err,
+			)
+			replicateIO <- err
+			return
+		}
+		if !ioRootHashCheck.Equal(&ioRootHash) {
+			n.logger.Error("inconsistent I/O root",
+				"io_root_hash", ioRootHashCheck,
+				"expected", ioRootHash,
+			)
+			replicateIO <- fmt.Errorf("inconsistent I/O root")
+			return
+		}
+
+		_, err = lsb.Apply(ctx, &storage.ApplyRequest{
+			Namespace: ioRoot.Namespace,
+			RootType:  ioRoot.Type,
+			SrcRound:  ioRoot.Version,
+			SrcRoot:   emptyRoot.Hash,
+			DstRound:  ioRoot.Version,
+			DstRoot:   ioRoot.Hash,
+			WriteLog:  ioWriteLog,
+		})
+		if err != nil {
+			n.logger.Error("failed to apply I/O tree locally",
+				"err", err,
+			)
+			replicateIO <- err
+			return
+		}
+
+		replicateIO <- nil
+	}()
+
+	// Wait for replication to complete.
+	go func() {
+		defer close(ch)
+
+		var combinedErr error
+		select {
+		case <-ctx.Done():
+			combinedErr = ctx.Err()
+		case err := <-replicateIO:
+			if err != nil {
+				combinedErr = fmt.Errorf("failed to replicate I/O root: %w", err)
+			}
+		}
+		// TODO: We should also wait for state replication to avoid extra fetches.
+
+		n.logger.Debug("local storage replication done",
+			"io_root", ioRoot,
+		)
+
+		ch <- combinedErr
+	}()
+
+	return ch
+}
+
 // Guarded by n.commonNode.CrossNode.
 func (n *Node) startProcessingBatchLocked(batch *unresolvedBatch) {
 	if n.commonNode.CurrentBlock == nil {
@@ -1152,6 +1269,10 @@ func (n *Node) startProcessingBatchLocked(batch *unresolvedBatch) {
 			)
 			return
 		}
+
+		// Optionally start local storage replication in parallel to batch dispatch.
+		replicateCh := n.startLocalStorageReplication(ctx, blk, batch.ioRoot.Hash, resolvedBatch)
+
 		rq := &protocol.Body{
 			RuntimeExecuteTxBatchRequest: &protocol.RuntimeExecuteTxBatchRequest{
 				ConsensusBlock: *consensusBlk,
@@ -1215,6 +1336,21 @@ func (n *Node) startProcessingBatchLocked(batch *unresolvedBatch) {
 			)
 		}
 		n.schedulerMutex.Unlock()
+
+		// Wait for replication to complete before proposing a batch to ensure that we can cleanly
+		// apply any updates.
+		select {
+		case <-ctx.Done():
+			return
+		case err = <-replicateCh:
+			if err != nil {
+				n.logger.Error("local storage replication failed",
+					"err", err,
+				)
+				// We can still continue as other nodes may have the storage replicated. If this is
+				// not the case, generating a commit will fail in propose.
+			}
+		}
 
 		// Submit response to the executor worker.
 		done <- &processedBatch{
