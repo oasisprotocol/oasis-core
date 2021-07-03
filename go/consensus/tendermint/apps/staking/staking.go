@@ -59,16 +59,22 @@ func (app *stakingApplication) BeginBlock(ctx *api.Context, request types.Reques
 	stakeState := stakingState.NewMutableState(ctx.State())
 
 	// Look up the proposer's entity.
-	proposingEntity := app.resolveEntityIDFromProposer(ctx, regState, request)
+	proposingEntity, err := app.resolveEntityIDFromProposer(ctx, regState, request)
+	if err != nil {
+		return fmt.Errorf("failed to resolve proposer entity ID: %w", err)
+	}
 
 	// Go through all voters of the previous block and resolve entities.
 	// numEligibleValidators is how many total validators are in the validator set, while
 	// votingEntities is from the validators which actually voted.
 	numEligibleValidators := len(request.GetLastCommitInfo().Votes)
-	votingEntities := app.resolveEntityIDsFromVotes(ctx, regState, request.GetLastCommitInfo())
+	votingEntities, err := app.resolveEntityIDsFromVotes(ctx, regState, request.GetLastCommitInfo())
+	if err != nil {
+		return fmt.Errorf("failed to resolve entity IDs from votes: %w", err)
+	}
 
 	// Disburse fees from previous block.
-	if err := app.disburseFeesVQ(ctx, stakeState, proposingEntity, numEligibleValidators, votingEntities); err != nil {
+	if err = app.disburseFeesVQ(ctx, stakeState, proposingEntity, numEligibleValidators, votingEntities); err != nil {
 		return fmt.Errorf("disburse fees voters and next proposer: %w", err)
 	}
 
@@ -76,12 +82,12 @@ func (app *stakingApplication) BeginBlock(ctx *api.Context, request types.Reques
 	stakingState.SetBlockProposer(ctx, proposingEntity)
 
 	// Add rewards for proposer.
-	if err := app.rewardBlockProposing(ctx, stakeState, proposingEntity, numEligibleValidators, len(votingEntities)); err != nil {
+	if err = app.rewardBlockProposing(ctx, stakeState, proposingEntity, numEligibleValidators, len(votingEntities)); err != nil {
 		return fmt.Errorf("staking: block proposing reward: %w", err)
 	}
 
 	// Track signing for rewards.
-	if err := app.updateEpochSigning(ctx, stakeState, votingEntities); err != nil {
+	if err = app.updateEpochSigning(ctx, stakeState, votingEntities); err != nil {
 		return fmt.Errorf("staking: failed to update epoch signing info: %w", err)
 	}
 
@@ -101,7 +107,7 @@ func (app *stakingApplication) BeginBlock(ctx *api.Context, request types.Reques
 			continue
 		}
 
-		if err := onEvidenceByzantineConsensus(ctx, reason, evidence.Validator.Address, evidence.Height, evidence.Time, evidence.Validator.Power); err != nil {
+		if err = onEvidenceByzantineConsensus(ctx, reason, evidence.Validator.Address, evidence.Height, evidence.Time, evidence.Validator.Power); err != nil {
 			return err
 		}
 	}
