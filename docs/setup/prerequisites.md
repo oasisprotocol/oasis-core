@@ -186,7 +186,7 @@ Core:
     "${JEMALLOC_GITHUB}/${JEMALLOC_VERSION}/jemalloc-${JEMALLOC_VERSION}.tar.bz2"
   # Ensure checksum matches.
   echo "${JEMALLOC_CHECKSUM} jemalloc.tar.bz2" | sha256sum -c
-  tar -xf ./jemalloc.tar.bz2 --no-same-owner
+  tar -xf jemalloc.tar.bz2
   cd jemalloc-${JEMALLOC_VERSION}
   # Ensure reproducible jemalloc build.
   # https://reproducible-builds.org/docs/build-path/

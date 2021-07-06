@@ -73,14 +73,17 @@ RUN wget https://dl.google.com/go/go${GO_VERSION}.linux-amd64.tar.gz && \
     GO111MODULE=on go get mvdan.cc/gofumpt@${GOFUMPT_VERSION} && \
     GO111MODULE=on go get mvdan.cc/gofumpt/gofumports@${GOFUMPT_VERSION}
 
-# Install jemalloc (used by badgerdb).
-RUN wget -O jemalloc.tar.bz2 https://github.com/jemalloc/jemalloc/releases/download/${JEMALLOC_VERSION}/jemalloc-${JEMALLOC_VERSION}.tar.bz2 && \
-    echo "${JEMALLOC_CHECKSUM} jemalloc.tar.bz2" | sha256sum -c && \
-    tar -xjf ./jemalloc.tar.bz2 -v --no-same-owner && cd jemalloc-${JEMALLOC_VERSION} && \
+# Install jemalloc (used by BadgerDB).
+RUN wget -O jemalloc.tar.bz2 \
+    https://github.com/jemalloc/jemalloc/releases/download/${JEMALLOC_VERSION}/jemalloc-${JEMALLOC_VERSION}.tar.bz2 && \
+    # Ensure checksum matches.
+    echo "${JEMALLOC_CHECKSUM}  jemalloc.tar.bz2" | sha256sum -c && \
+    tar -xf jemalloc.tar.bz2 && \
+    cd jemalloc-${JEMALLOC_VERSION} && \
     # Ensure reproducible jemalloc build.
     # https://reproducible-builds.org/docs/build-path/
-    EXTRA_CXXFLAGS=-ffile-prefix-map=$(pwd -L)=. \
-    EXTRA_CFLAGS=-ffile-prefix-map=$(pwd -L)=. \
+    EXTRA_CXXFLAGS=-ffile-prefix-map=$(pwd -L)=. EXTRA_CFLAGS=-ffile-prefix-map=$(pwd -L)=. \
     ./configure --with-jemalloc-prefix='je_' --with-malloc-conf='background_thread:true,metadata_thp:auto' && \
-    make && make install && \
+    make && \
+    make install && \
     cd .. && rm jemalloc.tar.bz2 && rm -rf jemalloc-${JEMALLOC_VERSION}
