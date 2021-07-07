@@ -12,6 +12,35 @@ The format is inspired by [Keep a Changelog].
 
 <!-- TOWNCRIER -->
 
+## 21.2.7 (2021-07-07)
+
+| Protocol          | Version   |
+|:------------------|:---------:|
+| Consensus         | 4.0.0     |
+| Runtime Host      | 3.0.0     |
+| Runtime Committee | 2.0.0     |
+
+### Bug Fixes
+
+- go/worker/compute: Replicate input batch locally
+  ([#4107](https://github.com/oasisprotocol/oasis-core/issues/4107))
+
+  Previously storage commit could fail in case the node was both an executor
+  and a storage node but not in the storage committee.
+
+- go/consensus/tendermint: Correctly propagate errors
+  ([#4110](https://github.com/oasisprotocol/oasis-core/issues/4110))
+
+  Not propagating the state unavailable error could lead to corruption when the
+  database becomes unavailable (e.g., due to running out of space or file
+  descriptors).
+
+- go/runtime/host/sandbox: Add deadline to bwrap pipes
+  ([#4111](https://github.com/oasisprotocol/oasis-core/issues/4111))
+
+  This prevents the constructor from blocking forever in case something is
+  wrong with the sandbox setup.
+
 ## 21.2.6 (2021-06-30)
 
 | Protocol          | Version   |
