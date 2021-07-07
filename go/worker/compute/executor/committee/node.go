@@ -56,8 +56,10 @@ var (
 	errNotTxnScheduler = fmt.Errorf("executor: not transaction scheduler in this round")
 	errDuplicateTx     = p2pError.Permanent(p2pError.Relayable(fmt.Errorf("executor: duplicate transaction")))
 
-	// Duration to wait before submitting the propose timeout request.
+	// proposeTimeoutDelay is the duration to wait before submitting the propose timeout request.
 	proposeTimeoutDelay = 2 * time.Second
+	// abortTimeout is the duration to wait for the runtime to abort.
+	abortTimeout = 5 * time.Second
 )
 
 var (
@@ -1276,7 +1278,10 @@ func (n *Node) startProcessingBatchLocked(batch *unresolvedBatch) {
 			n.logger.Error("batch processing aborted by context, restarting runtime")
 
 			// Abort the runtime, so we can start processing the next batch.
-			if err = rt.Abort(n.ctx, false); err != nil {
+			abortCtx, cancel := context.WithTimeout(n.ctx, abortTimeout)
+			defer cancel()
+
+			if err = rt.Abort(abortCtx, false); err != nil {
 				n.logger.Error("failed to abort the runtime",
 					"err", err,
 				)
