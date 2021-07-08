@@ -141,7 +141,7 @@ func testQuery(
 	// Check that indexer has indexed txn keys (check the mock worker for key/values).
 	tx, err = c.QueryTx(ctx, &api.QueryTxRequest{RuntimeID: runtimeID, Key: []byte("txn_foo"), Value: []byte("txn_bar")})
 	require.NoError(t, err, "QueryTx")
-	require.EqualValues(t, 2, tx.Block.Header.Round)
+	require.EqualValues(t, 3, tx.Block.Header.Round)
 	require.EqualValues(t, 0, tx.Index)
 	// Check for values from TestNode/ExecutorWorker/QueueTx
 	require.True(t, strings.HasPrefix(string(tx.Input), "hello world"))
@@ -161,7 +161,7 @@ func testQuery(
 	require.EqualValues(t, testInput, txns[0])
 
 	// Check events query (see mock worker for emitted events).
-	events, err := c.GetEvents(ctx, &api.GetEventsRequest{RuntimeID: runtimeID, Round: 2})
+	events, err := c.GetEvents(ctx, &api.GetEventsRequest{RuntimeID: runtimeID, Round: 3})
 	require.NoError(t, err, "GetEvents")
 	require.Len(t, events, 1)
 	require.EqualValues(t, []byte("txn_foo"), events[0].Key)
@@ -170,7 +170,7 @@ func testQuery(
 	// Test advanced transaction queries.
 	query := api.Query{
 		RoundMin: 0,
-		RoundMax: 3,
+		RoundMax: 4,
 		Conditions: []api.QueryCondition{
 			{Key: []byte("txn_foo"), Values: [][]byte{[]byte("txn_bar")}},
 		},
@@ -182,7 +182,7 @@ func testQuery(
 	sort.Slice(results, func(i, j int) bool {
 		return bytes.Compare(results[i].Input, results[j].Input) < 0
 	})
-	require.EqualValues(t, 2, results[0].Block.Header.Round)
+	require.EqualValues(t, 3, results[0].Block.Header.Round)
 	require.EqualValues(t, 0, results[0].Index)
 	// Check for values from TestNode/ExecutorWorker/QueueTx
 	require.True(t, strings.HasPrefix(string(results[0].Input), "hello world"))
