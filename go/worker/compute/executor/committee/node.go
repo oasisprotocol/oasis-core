@@ -38,6 +38,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/worker/common/committee"
 	"github.com/oasisprotocol/oasis-core/go/worker/common/p2p"
 	p2pError "github.com/oasisprotocol/oasis-core/go/worker/common/p2p/error"
+	"github.com/oasisprotocol/oasis-core/go/worker/compute/executor/committee/orderedmap"
 	"github.com/oasisprotocol/oasis-core/go/worker/registration"
 )
 
@@ -52,9 +53,7 @@ var (
 
 	// Transaction scheduling errors.
 	errNoBlocks        = fmt.Errorf("executor: no blocks")
-	errNotReady        = fmt.Errorf("executor: runtime not ready")
 	errNotTxnScheduler = fmt.Errorf("executor: not transaction scheduler in this round")
-	errDuplicateTx     = p2pError.Permanent(p2pError.Relayable(fmt.Errorf("executor: duplicate transaction")))
 
 	// proposeTimeoutDelay is the duration to wait before submitting the propose timeout request.
 	proposeTimeoutDelay = 2 * time.Second
@@ -141,8 +140,9 @@ type Node struct { // nolint: maligned
 
 	lastScheduledCache    *lru.Cache
 	scheduleMaxTxPoolSize uint64
-	scheduleCh            *channels.RingChannel
+	checkTxCh             *channels.RingChannel
 
+	checkTxQueue *orderedmap.OrderedMap
 	// The scheduler mutex is here to protect the initialization
 	// of the scheduler variable and updates to scheduler parameters.
 	schedulerMutex sync.RWMutex
@@ -258,23 +258,18 @@ func (n *Node) HandlePeerMessage(ctx context.Context, message *p2p.Message, isOw
 			return true, nil
 		}
 
-		// Check transaction before queuing it.
-		tx, err := n.checkTx(ctx, rawTx)
-		if err != nil {
-			return true, err
-		}
-
-		n.logger.Debug("queuing transaction",
-			"transaction", tx,
+		// Queue transaction for check tx .
+		n.logger.Debug("queuing transaction for check",
+			"tx", rawTx,
 		)
-		err = n.QueueTx(tx)
-		if err != nil {
+		if err := n.checkTxQueue.Add(rawTx); err != nil {
 			n.logger.Error("unable to queue transaction",
-				"tx", tx,
+				"tx", rawTx,
 				"err", err,
 			)
 			return true, err
 		}
+		n.checkTxCh.In() <- struct{}{}
 		return true, nil
 
 	case message.ProposedBatch != nil:
@@ -542,7 +537,7 @@ func (n *Node) HandleNewBlockLocked(blk *block.Block) {
 					"header_io_root", header.IORoot,
 					"proposed_io_root", state.proposedIORoot,
 					"header_type", header.HeaderType,
-					"batch", state.raw,
+					"batch_size", len(state.raw),
 				)
 				return
 			}
@@ -551,14 +546,14 @@ func (n *Node) HandleNewBlockLocked(blk *block.Block) {
 			batchProcessingTime.With(n.getMetricLabels()).Observe(time.Since(state.batchStartTime).Seconds())
 
 			n.logger.Debug("removing processed batch from queue",
-				"batch", state.raw,
+				"batch_size", len(state.raw),
 				"io_root", header.IORoot,
 			)
 			// Removed processed transactions from queue.
 			if err := n.removeTxBatch(state.raw); err != nil {
 				n.logger.Warn("failed removing processed batch from queue",
 					"err", err,
-					"batch", state.raw,
+					"batch_size", len(state.raw),
 				)
 			}
 		}()
@@ -581,74 +576,86 @@ func (n *Node) HandleNewBlockLocked(blk *block.Block) {
 			"round", blk.Header.Round,
 		)
 
-		n.scheduleCh.In() <- struct{}{}
+		n.checkTxCh.In() <- struct{}{}
 	}
 }
 
-// checkTx requests the runtime to check the validity of the given transaction.
-func (n *Node) checkTx(ctx context.Context, rawTx []byte) (*transaction.CheckedTransaction, error) {
+// checkTxs requests the runtime to check the validity of the given transaction batch.
+func (n *Node) checkTxs() {
+	batch := n.checkTxQueue.GetBatch(true)
+	if len(batch) == 0 {
+		return
+	}
+	rt := n.GetHostedRuntime()
+	if rt == nil {
+		n.logger.Error("CheckTx: hosted runtime not initialized")
+		return
+	}
+
 	n.commonNode.CrossNode.Lock()
 	currentBlock := n.commonNode.CurrentBlock
 	currentConsensusBlock := n.commonNode.CurrentConsensusBlock
 	currentEpoch := n.commonNode.Group.GetEpochSnapshot().GetEpochNumber()
 	n.commonNode.CrossNode.Unlock()
 
-	rt := n.GetHostedRuntime()
-	if rt == nil {
-		n.logger.Error("CheckTx: hosted runtime not initialized")
-		return nil, errNotReady
+	// Check transaction batch.
+	results, err := rt.CheckTx(n.ctx, currentBlock, currentConsensusBlock, currentEpoch, batch)
+	if err != nil {
+		n.logger.Error("transaction batch check tx error", "err", err)
+		return
 	}
 
-	tx, err := rt.CheckTx(ctx, currentBlock, currentConsensusBlock, currentEpoch, rawTx)
-	switch {
-	case err == nil:
-	case errors.Is(err, host.ErrInvalidArgument):
-		return nil, errNotReady
-	case errors.Is(err, host.ErrInternal):
-		return nil, err
-	case errors.Is(err, host.ErrCheckTxFailed):
-		return nil, p2pError.Permanent(err)
-	default:
-		return nil, err
+	txs := make([]*transaction.CheckedTransaction, 0, len(results))
+	for i, res := range results {
+		if !res.IsSuccess() {
+			n.logger.Warn("check tx failed", "tx", batch[i], "result", res)
+			continue
+		}
+
+		txs = append(txs, res.ToCheckedTransaction(batch[i]))
 	}
-	return tx, nil
+
+	// Remove the checked transaction batch.
+	if err = n.checkTxQueue.RemoveBatch(batch); err != nil {
+		n.logger.Error("unable to remove transaction batch",
+			"txs", txs,
+			"err", err,
+		)
+	}
+
+	// Queue checked transactions for scheduling.
+	n.queueTxs(txs)
 }
 
-// QueueTx queues a runtime transaction for scheduling.
-func (n *Node) QueueTx(tx *transaction.CheckedTransaction) error {
+// queues a runtime transaction batch for scheduling.
+func (n *Node) queueTxs(txs []*transaction.CheckedTransaction) {
 	n.schedulerMutex.RLock()
 	defer n.schedulerMutex.RUnlock()
 
-	if n.scheduler == nil {
-		return errNotReady
-	}
-
-	// Check if transaction was recently scheduled.
-	if n.lastScheduledCache != nil {
-		if _, b := n.lastScheduledCache.Get(tx.Hash()); b {
-			return errDuplicateTx
+	for _, tx := range txs {
+		// Skip recently scheduled transactions.
+		if n.lastScheduledCache != nil {
+			if _, b := n.lastScheduledCache.Get(tx.Hash()); b {
+				n.logger.Debug("not scheduling duplicate transaction", "tx", tx)
+				continue
+			}
+		}
+		if err := n.scheduler.QueueTx(tx); err != nil {
+			n.logger.Error("unable to schedule transaction", "tx", tx)
+			continue
+		}
+		if n.lastScheduledCache != nil {
+			if err := n.lastScheduledCache.Put(tx.Hash(), true); err != nil {
+				// cache.Put can only error if capacity in bytes is used and the
+				// inserted value is too large. This should never happen in here.
+				n.logger.Error("cache put error",
+					"err", err,
+				)
+			}
 		}
 	}
 
-	if err := n.scheduler.QueueTx(tx); err != nil {
-		return err
-	}
-
-	if n.lastScheduledCache != nil {
-		if err := n.lastScheduledCache.Put(tx.Hash(), true); err != nil {
-			// cache.Put can only error if capacity in bytes is used and the
-			// inserted value is too large. This should never happen in here.
-			n.logger.Error("cache put error",
-				"err", err,
-			)
-		}
-	}
 	incomingQueueSize.With(n.getMetricLabels()).Set(float64(n.scheduler.UnscheduledSize()))
-
-	// Notify event loop to attempt to schedule a batch.
-	n.scheduleCh.In() <- struct{}{}
-
-	return nil
 }
 
 // removeTxBatch removes a batch from scheduling queue.
@@ -905,7 +912,7 @@ func (n *Node) handleScheduleBatch(force bool) {
 	if !epoch.IsTransactionScheduler(blk.Header.Round) {
 		n.logger.Debug("proposing a timeout",
 			"round", blk.Header.Round,
-			"batch", batch,
+			"batch_size", len(batch),
 			"round_results", roundResults,
 		)
 
@@ -935,7 +942,7 @@ func (n *Node) handleScheduleBatch(force bool) {
 	}
 
 	n.logger.Debug("scheduling a batch",
-		"batch_size", batch,
+		"batch_size", len(batch),
 		"round_results", roundResults,
 	)
 
@@ -1024,7 +1031,7 @@ func (n *Node) handleScheduleBatch(force bool) {
 
 	n.logger.Debug("dispatching a new batch proposal",
 		"io_root", ioRoot,
-		"batch", batch,
+		"batch_size", len(batch),
 	)
 
 	err = n.commonNode.Group.Publish(
@@ -1198,7 +1205,7 @@ func (n *Node) startProcessingBatchLocked(batch *unresolvedBatch) {
 	}
 
 	n.logger.Debug("processing batch",
-		"batch", batch,
+		"batch_size", len(batch.batch),
 	)
 
 	// Create batch processing context and channel for receiving the response.
@@ -1243,7 +1250,7 @@ func (n *Node) startProcessingBatchLocked(batch *unresolvedBatch) {
 		if err != nil {
 			n.logger.Error("failed to resolve batch",
 				"err", err,
-				"batch", batch,
+				"batch_size", len(batch.batch),
 			)
 			return
 		}
@@ -1371,7 +1378,7 @@ func (n *Node) proposeBatch(
 	epoch := n.commonNode.Group.GetEpochSnapshot()
 
 	n.logger.Debug("proposing batch",
-		"batch", batch,
+		"batch_size", len(processed.raw),
 	)
 
 	// Generate proposed compute results.
@@ -1848,8 +1855,8 @@ func (n *Node) worker() {
 		case <-txnScheduleTicker.C:
 			// Force scheduling a batch if possible.
 			n.handleScheduleBatch(true)
-		case <-n.scheduleCh.Out():
-			// Regular scheduling of a batch.
+		case <-n.checkTxCh.Out():
+			n.checkTxs()
 			n.handleScheduleBatch(false)
 		case <-n.reselect:
 			// Recalculate select set.
@@ -1892,8 +1899,9 @@ func NewNode(
 		roleProvider:          roleProvider,
 		scheduleMaxTxPoolSize: scheduleMaxTxPoolSize,
 		lastScheduledCache:    cache,
+		checkTxQueue:          orderedmap.New(1000000, 1000000, 100000000), // TODO.
 		roundWeightLimits:     make(map[transaction.Weight]uint64),
-		scheduleCh:            channels.NewRingChannel(1),
+		checkTxCh:             channels.NewRingChannel(1),
 		ctx:                   ctx,
 		cancelCtx:             cancel,
 		stopCh:                make(chan struct{}),
