@@ -30,8 +30,10 @@ rustc-hex = "2.0.1"
 rand = "0.7.3"
 futures = "0.3.15"
 tokio = { version = "1", features = ["rt"] }
-tendermint = "0.20.0"
-tendermint-proto = "0.20.0"
+# Switch back to specifying version once a release includes:
+# https://github.com/informalsystems/tendermint-rs/pull/926
+tendermint = { git = "https://github.com/informalsystems/tendermint-rs", rev = "1efe42c8625045fd99072718faf96e81aeb9c6e6" }
+tendermint-proto = { git = "https://github.com/informalsystems/tendermint-rs", rev = "1efe42c8625045fd99072718faf96e81aeb9c6e6" }
 io-context = "0.2.0"
 curve25519-dalek = "3.1.0"
 x25519-dalek = "1.1.0"
