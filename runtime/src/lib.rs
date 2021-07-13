@@ -22,6 +22,9 @@ use lazy_static::lazy_static;
 #[cfg(target_env = "sgx")]
 use sgx_isa::{AttributesFlags, Report};
 
+#[cfg_attr(test, macro_use)]
+extern crate base64_serde;
+
 #[macro_use]
 pub mod common;
 pub mod consensus;
