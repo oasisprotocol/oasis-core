@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"net"
 	"os"
 	"path/filepath"
 
@@ -12,7 +13,6 @@ import (
 	"github.com/spf13/viper"
 
 	memorySigner "github.com/oasisprotocol/oasis-core/go/common/crypto/signature/signers/memory"
-	"github.com/oasisprotocol/oasis-core/go/common/grpc"
 	"github.com/oasisprotocol/oasis-core/go/common/identity"
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
 	genesisTestHelpers "github.com/oasisprotocol/oasis-core/go/genesis/tests"
@@ -78,22 +78,6 @@ func doProtoServer(cmd *cobra.Command, args []string) {
 		return
 	}
 
-	// Initialize the gRPC server.
-	config := &grpc.ServerConfig{
-		Name:           "protocol_server",
-		Path:           viper.GetString(cfgServerSocket),
-		InstallWrapper: false,
-	}
-
-	grpcSrv, err := grpc.NewServer(config)
-	if err != nil {
-		logger.Error("failed to initialize gRPC server",
-			"err", err,
-		)
-		return
-	}
-	svcMgr.Register(grpcSrv)
-
 	// Initialize a dummy storage backend.
 	storageCfg := storage.Config{
 		Backend:            database.BackendNameBadgerDB,
@@ -146,11 +130,21 @@ func doProtoServer(cmd *cobra.Command, args []string) {
 		)
 		return
 	}
-	storage.RegisterService(grpcSrv.Server(), backend)
 
-	// Start the gRPC server.
-	if err := grpcSrv.Start(); err != nil {
-		logger.Error("failed to start gRPC server",
+	// Initialize the JSON-RPC listener/service.
+	ln, err := net.ListenUnix("unix", &net.UnixAddr{Name: viper.GetString(cfgServerSocket)})
+	if err != nil {
+		logger.Error("failed to listen on socket",
+			"err", err,
+		)
+		return
+	}
+	rpcSvr := newDbRPCService(ln, backend)
+	svcMgr.Register(rpcSvr)
+
+	// Start the JSON-RPC server.
+	if err := rpcSvr.Start(); err != nil {
+		logger.Error("failed to start JSON-RPC server",
 			"err", err,
 		)
 		return
