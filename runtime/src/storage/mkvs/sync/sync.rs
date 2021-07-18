@@ -2,8 +2,6 @@ use std::any::Any;
 
 use anyhow::Result;
 use io_context::Context;
-use serde::{Deserialize, Serialize};
-use serde_bytes;
 
 use crate::{
     common::crypto::hash::Hash,
@@ -13,7 +11,7 @@ use crate::{
 use super::Proof;
 
 /// Identifies a specific tree and a position within that tree.
-#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, Default, PartialEq, cbor::Encode, cbor::Decode)]
 pub struct TreeID {
     /// The Merkle tree root.
     pub root: Root,
@@ -23,17 +21,17 @@ pub struct TreeID {
 }
 
 /// Request for the SyncGet operation.
-#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, Default, PartialEq, cbor::Encode, cbor::Decode)]
 pub struct GetRequest {
     pub tree: TreeID,
-    #[serde(with = "serde_bytes")]
     pub key: Vec<u8>,
-    #[serde(default)]
+    #[cbor(optional)]
+    #[cbor(default)]
     pub include_siblings: bool,
 }
 
 /// Request for the SyncGetPrefixes operation.
-#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, Default, PartialEq, cbor::Encode, cbor::Decode)]
 pub struct GetPrefixesRequest {
     pub tree: TreeID,
     pub prefixes: Vec<Prefix>,
@@ -41,16 +39,15 @@ pub struct GetPrefixesRequest {
 }
 
 /// Request for the SyncIterate operation.
-#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, Default, PartialEq, cbor::Encode, cbor::Decode)]
 pub struct IterateRequest {
     pub tree: TreeID,
-    #[serde(with = "serde_bytes")]
     pub key: Vec<u8>,
     pub prefetch: u16,
 }
 
 /// Response for requests that produce proofs.
-#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, Default, PartialEq, cbor::Encode, cbor::Decode)]
 pub struct ProofResponse {
     pub proof: Proof,
 }

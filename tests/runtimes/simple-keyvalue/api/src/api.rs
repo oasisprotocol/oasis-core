@@ -1,56 +1,57 @@
-use serde::{Deserialize, Serialize};
-
 use oasis_core_runtime::{
     consensus::{registry, staking},
     runtime_api,
 };
 
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Clone, cbor::Encode, cbor::Decode)]
 pub struct Key {
     pub key: String,
     // Nonce is ignored by the runtime itself and can be used to avoid duplicate
     // runtime transactions.
+    #[cbor(optional)]
     pub nonce: Option<u64>,
 }
 
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Clone, cbor::Encode, cbor::Decode)]
 pub struct KeyValue {
     pub key: String,
     pub value: String,
     // Nonce is ignored by the runtime itself and can be used to avoid duplicate
     // runtime transactions.
+    #[cbor(optional)]
     pub nonce: Option<u64>,
 }
 
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Clone, cbor::Encode, cbor::Decode)]
 pub struct Withdraw {
     pub nonce: u64,
     pub withdraw: staking::Withdraw,
 }
 
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Clone, cbor::Encode, cbor::Decode)]
 pub struct Transfer {
     pub nonce: u64,
     pub transfer: staking::Transfer,
 }
 
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Clone, cbor::Encode, cbor::Decode)]
 pub struct AddEscrow {
     pub nonce: u64,
     pub escrow: staking::Escrow,
 }
 
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Clone, cbor::Encode, cbor::Decode)]
 pub struct ReclaimEscrow {
     pub nonce: u64,
     pub reclaim_escrow: staking::ReclaimEscrow,
 }
 
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Clone, cbor::Encode, cbor::Decode)]
 pub struct UpdateRuntime {
     pub update_runtime: registry::Runtime,
     // Nonce is ignored by the runtime itself and can be used to avoid duplicate
     // runtime transactions.
+    #[cbor(optional)]
     pub nonce: Option<u64>,
 }
 

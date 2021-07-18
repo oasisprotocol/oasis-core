@@ -1,14 +1,10 @@
 //! Types used by the worker-host protocol.
 use std::collections::BTreeMap;
 
-use serde::{self, Deserialize, Deserializer, Serialize, Serializer};
-use serde_bytes;
-use serde_repr::*;
 use thiserror::Error;
 
 use crate::{
     common::{
-        cbor,
         crypto::{
             hash::Hash,
             signature::{PublicKey, Signature},
@@ -30,7 +26,7 @@ use crate::{
 pub const BATCH_WEIGHT_LIMIT_QUERY_METHOD: &'static str = "internal.BatchWeightLimits";
 
 /// Computed batch.
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, cbor::Encode, cbor::Decode)]
 pub struct ComputedBatch {
     /// Compute results header.
     pub header: ComputeResultsHeader,
@@ -46,21 +42,60 @@ pub struct ComputedBatch {
 }
 
 /// Storage sync request.
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, cbor::Encode, cbor::Decode)]
 pub enum StorageSyncRequest {
     SyncGet(sync::GetRequest),
     SyncGetPrefixes(sync::GetPrefixesRequest),
     SyncIterate(sync::IterateRequest),
 }
 
+#[derive(Debug)]
+pub struct StorageSyncRequestWithEndpoint {
+    pub endpoint: HostStorageEndpoint,
+    pub request: StorageSyncRequest,
+}
+
+impl cbor::Encode for StorageSyncRequestWithEndpoint {
+    fn into_cbor_value(self) -> cbor::Value {
+        let mut request = cbor::EncodeAsMap::into_cbor_map(self.request);
+        // Add endpoint to the given map.
+        let key = cbor::values::IntoCborValue::into_cbor_value("endpoint");
+        request.push((key, self.endpoint.into_cbor_value()));
+        cbor::Value::Map(request)
+    }
+}
+
+impl cbor::Decode for StorageSyncRequestWithEndpoint {
+    fn try_from_cbor_value(value: cbor::Value) -> Result<Self, cbor::DecodeError> {
+        match value {
+            cbor::Value::Map(mut items) => {
+                // Take the endpoint field from the map and decode the rest.
+                let key = cbor::values::IntoCborValue::into_cbor_value("endpoint");
+                let (index, _) = items
+                    .iter()
+                    .enumerate()
+                    .find(|(_, v)| v.0 == key)
+                    .ok_or(cbor::DecodeError::MissingField)?;
+                let endpoint = items.remove(index).1;
+
+                Ok(Self {
+                    endpoint: cbor::Decode::try_from_cbor_value(endpoint)?,
+                    request: cbor::Decode::try_from_cbor_value(cbor::Value::Map(items))?,
+                })
+            }
+            _ => Err(cbor::DecodeError::UnexpectedType),
+        }
+    }
+}
+
 /// Storage sync response.
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, cbor::Encode, cbor::Decode)]
 pub enum StorageSyncResponse {
     ProofResponse(sync::ProofResponse),
 }
 
 /// Host storage endpoint.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize_repr, Deserialize_repr)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, cbor::Encode, cbor::Decode)]
 #[repr(u8)]
 pub enum HostStorageEndpoint {
     Runtime = 0,
@@ -68,7 +103,7 @@ pub enum HostStorageEndpoint {
 }
 
 /// Runtime host protocol message body.
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, cbor::Encode, cbor::Decode)]
 pub enum Body {
     // An empty body.
     Empty {},
@@ -83,8 +118,9 @@ pub enum Body {
         consensus_protocol_version: Version,
         consensus_chain_context: String,
 
-        #[serde(default)]
-        #[serde(skip_serializing_if = "BTreeMap::is_empty")]
+        #[cbor(optional)]
+        #[cbor(default)]
+        #[cbor(skip_serializing_if = "BTreeMap::is_empty")]
         local_config: BTreeMap<String, cbor::Value>,
     },
     RuntimeInfoResponse {
@@ -96,14 +132,12 @@ pub enum Body {
     RuntimeAbortRequest {},
     RuntimeAbortResponse {},
     RuntimeCapabilityTEERakInitRequest {
-        #[serde(with = "serde_bytes")]
         target_info: Vec<u8>,
     },
     RuntimeCapabilityTEERakInitResponse {},
     RuntimeCapabilityTEERakReportRequest {},
     RuntimeCapabilityTEERakReportResponse {
         rak_pub: PublicKey,
-        #[serde(with = "serde_bytes")]
         report: Vec<u8>,
         nonce: String,
     },
@@ -112,19 +146,15 @@ pub enum Body {
     },
     RuntimeCapabilityTEERakAvrResponse {},
     RuntimeRPCCallRequest {
-        #[serde(with = "serde_bytes")]
         request: Vec<u8>,
     },
     RuntimeRPCCallResponse {
-        #[serde(with = "serde_bytes")]
         response: Vec<u8>,
     },
     RuntimeLocalRPCCallRequest {
-        #[serde(with = "serde_bytes")]
         request: Vec<u8>,
     },
     RuntimeLocalRPCCallResponse {
-        #[serde(with = "serde_bytes")]
         response: Vec<u8>,
     },
     RuntimeCheckTxBatchRequest {
@@ -140,7 +170,7 @@ pub enum Body {
         consensus_block: LightBlock,
         round_results: roothash::RoundResults,
         io_root: Hash,
-        #[serde(skip_serializing_if = "Option::is_none")]
+        #[cbor(optional)]
         inputs: Option<TxnBatch>,
         block: Block,
         epoch: EpochTime,
@@ -148,11 +178,10 @@ pub enum Body {
     },
     RuntimeExecuteTxBatchResponse {
         batch: ComputedBatch,
-        #[serde(skip_serializing_if = "Option::is_none")]
+        #[cbor(optional)]
         batch_weight_limits: Option<BTreeMap<TransactionWeight, u64>>,
     },
     RuntimeKeyManagerPolicyUpdateRequest {
-        #[serde(with = "serde_bytes")]
         signed_policy_raw: Vec<u8>,
     },
     RuntimeKeyManagerPolicyUpdateResponse {},
@@ -161,8 +190,8 @@ pub enum Body {
         header: Header,
         epoch: EpochTime,
         method: String,
-        #[serde(skip_serializing_if = "Option::is_none")]
-        args: Option<cbor::Value>,
+        #[cbor(optional)]
+        args: cbor::Value,
     },
     RuntimeQueryResponse {
         data: cbor::Value,
@@ -171,54 +200,40 @@ pub enum Body {
     // Host interface.
     HostRPCCallRequest {
         endpoint: String,
-        #[serde(with = "serde_bytes")]
         request: Vec<u8>,
     },
     HostRPCCallResponse {
-        #[serde(with = "serde_bytes")]
         response: Vec<u8>,
     },
-    HostStorageSyncRequest {
-        endpoint: HostStorageEndpoint,
-        #[serde(flatten)]
-        request: StorageSyncRequest,
-    },
-    HostStorageSyncResponse {
-        #[serde(flatten)]
-        response: StorageSyncResponse,
-    },
-    HostStorageSyncSerializedResponse {
-        #[serde(with = "serde_bytes")]
-        serialized: Vec<u8>,
-    },
+    HostStorageSyncRequest(StorageSyncRequestWithEndpoint),
+    HostStorageSyncResponse(StorageSyncResponse),
     HostLocalStorageGetRequest {
-        #[serde(with = "serde_bytes")]
         key: Vec<u8>,
     },
     HostLocalStorageGetResponse {
-        #[serde(with = "serde_bytes")]
         value: Vec<u8>,
     },
     HostLocalStorageSetRequest {
-        #[serde(with = "serde_bytes")]
         key: Vec<u8>,
-        #[serde(with = "serde_bytes")]
         value: Vec<u8>,
     },
     HostLocalStorageSetResponse {},
 }
 
 /// A serializable error.
-#[derive(Clone, Debug, Default, Error, Serialize, Deserialize)]
+#[derive(Clone, Debug, Default, Error, cbor::Encode, cbor::Decode)]
 #[error("module: {module} code: {code} message: {message}")]
 pub struct Error {
-    #[serde(default)]
+    #[cbor(optional)]
+    #[cbor(default)]
     pub module: String,
 
-    #[serde(default)]
+    #[cbor(optional)]
+    #[cbor(default)]
     pub code: u32,
 
-    #[serde(default)]
+    #[cbor(optional)]
+    #[cbor(default)]
     pub message: String,
 }
 
@@ -234,70 +249,28 @@ impl Error {
 }
 
 /// Result of a CheckTx operation.
-#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+#[derive(Clone, Debug, Default, cbor::Encode, cbor::Decode)]
 pub struct CheckTxResult {
-    #[serde(rename = "error")]
     pub error: Error,
-
-    #[serde(rename = "meta")]
     pub meta: Option<CheckTxMetadata>,
 }
 
 /// CheckTx transaction metadata.
-#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+#[derive(Clone, Debug, Default, cbor::Encode, cbor::Decode)]
 pub struct CheckTxMetadata {
-    #[serde(skip_serializing_if = "num_traits::Zero::is_zero")]
-    #[serde(default)]
+    #[cbor(optional)]
+    #[cbor(default)]
+    #[cbor(skip_serializing_if = "num_traits::Zero::is_zero")]
     pub priority: u64,
 
-    #[serde(skip_serializing_if = "Option::is_none")]
-    #[serde(default)]
+    #[cbor(optional)]
     pub weights: Option<BTreeMap<TransactionWeight, u64>>,
 }
 
-// https://github.com/serde-rs/serde/issues/1560#issuecomment-506915291
-macro_rules! named_unit_variant {
-    ($variant:ident) => {
-        pub mod $variant {
-            pub fn serialize<S>(serializer: S) -> Result<S::Ok, S::Error>
-            where
-                S: serde::Serializer,
-            {
-                serializer.serialize_str(stringify!($variant))
-            }
-
-            pub fn deserialize<'de, D>(deserializer: D) -> Result<(), D::Error>
-            where
-                D: serde::Deserializer<'de>,
-            {
-                struct V;
-                impl<'de> serde::de::Visitor<'de> for V {
-                    type Value = ();
-                    fn expecting(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-                        f.write_str(concat!("\"", stringify!($variant), "\""))
-                    }
-                    fn visit_str<E: serde::de::Error>(self, value: &str) -> Result<Self::Value, E> {
-                        if value == stringify!($variant) {
-                            Ok(())
-                        } else {
-                            Err(E::invalid_value(serde::de::Unexpected::Str(value), &self))
-                        }
-                    }
-                }
-                deserializer.deserialize_str(V)
-            }
-        }
-    };
-}
-mod strings {
-    named_unit_variant!(consensus_messages);
-}
-
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
-#[serde(untagged)]
+/// Transaction weight kind.
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub enum TransactionWeight {
     /// Consensus messages weight key.
-    #[serde(with = "strings::consensus_messages")]
     ConsensusMessages,
     /// Runtime specific weight key.
     Custom(String),
@@ -312,7 +285,26 @@ impl From<&str> for TransactionWeight {
     }
 }
 
-#[derive(Clone, Copy, Debug)]
+impl cbor::Encode for TransactionWeight {
+    fn into_cbor_value(self) -> cbor::Value {
+        match self {
+            Self::ConsensusMessages => cbor::Value::TextString("consensus_messages".to_string()),
+            Self::Custom(other) => cbor::Value::TextString(other),
+        }
+    }
+}
+
+impl cbor::Decode for TransactionWeight {
+    fn try_from_cbor_value(value: cbor::Value) -> Result<Self, cbor::DecodeError> {
+        match value {
+            cbor::Value::TextString(v) if &v == "consensus_messages" => Ok(Self::ConsensusMessages),
+            cbor::Value::TextString(other) => Ok(Self::Custom(other)),
+            _ => Err(cbor::DecodeError::UnexpectedType),
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, cbor::Encode, cbor::Decode)]
 #[repr(u8)]
 pub enum MessageType {
     /// Invalid message (should never be seen on the wire).
@@ -323,30 +315,8 @@ pub enum MessageType {
     Response = 2,
 }
 
-impl serde::Serialize for MessageType {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
-        serializer.serialize_u8(*self as u8)
-    }
-}
-
-impl<'de> serde::Deserialize<'de> for MessageType {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        match u8::deserialize(deserializer)? {
-            1 => Ok(MessageType::Request),
-            2 => Ok(MessageType::Response),
-            _ => Err(serde::de::Error::custom("invalid message type")),
-        }
-    }
-}
-
 /// Runtime protocol message.
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, cbor::Encode, cbor::Decode)]
 pub struct Message {
     /// Unique request identifier.
     pub id: u64,

@@ -4,7 +4,7 @@ use anyhow::{anyhow, Error as AnyError};
 use futures::future::{self, BoxFuture};
 use io_context::Context;
 
-use oasis_core_runtime::{common::cbor, enclave_rpc::types, protocol::Protocol, types::Body};
+use oasis_core_runtime::{enclave_rpc::types, protocol::Protocol, types::Body};
 
 /// An EnclaveRPC transport.
 pub trait Transport: Send + Sync {
@@ -22,7 +22,7 @@ pub trait Transport: Send + Sync {
             payload: data,
         };
 
-        self.write_message_impl(ctx, cbor::to_vec(&frame))
+        self.write_message_impl(ctx, cbor::to_vec(frame))
     }
 
     fn write_message_impl(

@@ -4,71 +4,40 @@ use std::{
     ops::{Deref, DerefMut},
 };
 
-use serde::{Deserialize, Serialize};
-
 use super::rwset::ReadWriteSet;
-use crate::common::cbor::Value;
 
 /// Transaction call.
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, cbor::Encode, cbor::Decode)]
 #[deprecated(note = "see oasis-core#3572")]
 pub struct TxnCall {
     /// Method name.
     pub method: String,
     /// Method arguments.
-    pub args: Value,
+    pub args: cbor::Value,
 }
 
 /// Transaction call output.
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, cbor::Encode, cbor::Decode)]
 #[deprecated(note = "see oasis-core#3572")]
 pub enum TxnOutput {
     /// Call invoked successfully.
-    Success(Value),
+    Success(cbor::Value),
     /// Call raised an error.
     Error(String),
 }
 
 /// The result of a successful CheckTx call.
-#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+#[derive(Clone, Debug, Default, cbor::Encode, cbor::Decode)]
 #[deprecated(note = "see oasis-core#3572")]
 pub struct TxnCheckResult {
     /// Predicted read/write set.
     pub predicted_rw_set: ReadWriteSet,
 }
 
-/// Internal module to efficiently serialize batches.
-mod batch_serialize {
-    use serde::{
-        de::Deserializer,
-        ser::{SerializeSeq, Serializer},
-        Deserialize,
-    };
-    use serde_bytes::{ByteBuf, Bytes};
-
-    pub fn serialize<S>(batch: &Vec<Vec<u8>>, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
-        let mut seq = serializer.serialize_seq(Some(batch.len()))?;
-        for call in batch {
-            seq.serialize_element(&Bytes::new(&call[..]))?;
-        }
-        seq.end()
-    }
-
-    pub fn deserialize<'de, D>(deserializer: D) -> Result<Vec<Vec<u8>>, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        Vec::<ByteBuf>::deserialize(deserializer)
-            .map(|v| v.into_iter().map(ByteBuf::into_vec).collect())
-    }
-}
-
 /// Batch of transaction inputs/outputs.
-#[derive(Clone, Debug, Default, Eq, PartialEq, Serialize, Deserialize)]
-pub struct TxnBatch(#[serde(with = "batch_serialize")] pub Vec<Vec<u8>>);
+#[derive(Clone, Debug, Default, Eq, PartialEq, cbor::Encode, cbor::Decode)]
+#[cbor(transparent)]
+pub struct TxnBatch(pub Vec<Vec<u8>>);
 
 impl TxnBatch {
     pub fn new(txs: Vec<Vec<u8>>) -> TxnBatch {
@@ -118,12 +87,12 @@ impl Into<VecDeque<Vec<u8>>> for TxnBatch {
 mod tests {
     use super::*;
 
-    use crate::common::{cbor, crypto::hash::Hash};
+    use crate::common::crypto::hash::Hash;
 
     #[test]
     fn test_consistent_hash() {
         let batch = TxnBatch(vec![b"foo".to_vec(), b"bar".to_vec(), b"aaa".to_vec()]);
-        let h = Hash::digest_bytes(&cbor::to_vec(&batch));
+        let h = Hash::digest_bytes(&cbor::to_vec(batch));
         assert_eq!(
             h,
             Hash::from("c451dd4fd065b815e784aac6b300e479b2167408f0eebbb95a8bd36b9e71e34d")

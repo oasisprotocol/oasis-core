@@ -9,7 +9,6 @@ use curve25519_dalek::{
 };
 use ed25519_dalek::{self, Signer as _};
 use rand::rngs::OsRng;
-use serde::{Deserialize, Serialize};
 use sha2::{Digest as _, Sha512};
 use thiserror::Error;
 use zeroize::Zeroize;
@@ -178,7 +177,7 @@ impl Signature {
 }
 
 /// A signature bundled with a public key.
-#[derive(Clone, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Clone, Debug, Default, PartialEq, Eq, Hash, cbor::Encode, cbor::Decode)]
 pub struct SignatureBundle {
     /// Public key that produced the signature.
     pub public_key: Option<PublicKey>,

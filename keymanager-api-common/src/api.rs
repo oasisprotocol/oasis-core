@@ -3,9 +3,7 @@ use std::{
     default::Default,
 };
 
-use base64;
 use rand::{rngs::OsRng, Rng};
-use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use x25519_dalek;
 
@@ -25,28 +23,24 @@ impl_bytes!(StateKey, 32, "A state key.");
 impl_bytes!(MasterSecret, 32, "A 256 bit master secret.");
 
 /// Key manager initialization request.
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Clone, cbor::Encode, cbor::Decode)]
 pub struct InitRequest {
     /// Checksum for validating replication.
-    #[serde(with = "serde_bytes")]
     pub checksum: Vec<u8>,
     /// Policy for queries/replication.
-    #[serde(with = "serde_bytes")]
     pub policy: Vec<u8>,
     /// True iff the enclave may generate a new master secret.
     pub may_generate: bool,
 }
 
 /// Key manager initialization response.
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Clone, cbor::Encode, cbor::Decode)]
 pub struct InitResponse {
     /// True iff the key manager thinks it's running in a secure mode.
     pub is_secure: bool,
     /// Checksum for validating replication.
-    #[serde(with = "serde_bytes")]
     pub checksum: Vec<u8>,
     /// Checksum for identifying policy.
-    #[serde(with = "serde_bytes")]
     pub policy_checksum: Vec<u8>,
 }
 
@@ -54,7 +48,7 @@ pub struct InitResponse {
 pub const INIT_RESPONSE_CONTEXT: &'static [u8] = b"oasis-core/keymanager: init response";
 
 /// Signed InitResponse.
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Clone, cbor::Encode, cbor::Decode)]
 pub struct SignedInitResponse {
     /// InitResponse.
     pub init_response: InitResponse,
@@ -63,19 +57,19 @@ pub struct SignedInitResponse {
 }
 
 /// Key manager replication request.
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Clone, cbor::Encode, cbor::Decode)]
 pub struct ReplicateRequest {
     // Empty.
 }
 
 /// Key manager replication response.
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Clone, cbor::Encode, cbor::Decode)]
 pub struct ReplicateResponse {
     pub master_secret: MasterSecret,
 }
 
 /// Request runtime/key pair id tuple.
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Clone, cbor::Encode, cbor::Decode)]
 pub struct RequestIds {
     /// Runtime ID.
     pub runtime_id: Namespace,
@@ -99,14 +93,13 @@ impl RequestIds {
 }
 
 /// A key pair managed by the key manager.
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Clone, cbor::Encode, cbor::Decode)]
 pub struct KeyPair {
     /// Input key pair (pk, sk)
     pub input_keypair: InputKeyPair,
     /// State encryption key
     pub state_key: StateKey,
     /// Checksum of the key manager state.
-    #[serde(with = "serde_bytes")]
     pub checksum: Vec<u8>,
 }
 
@@ -147,7 +140,7 @@ impl KeyPair {
     }
 }
 
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Clone, cbor::Encode, cbor::Decode)]
 pub struct InputKeyPair {
     /// Pk
     pk: PublicKey,
@@ -173,12 +166,11 @@ impl InputKeyPair {
 pub const PUBLIC_KEY_CONTEXT: [u8; 8] = *b"EkKmPubK";
 
 /// Signed public key.
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, cbor::Encode, cbor::Decode)]
 pub struct SignedPublicKey {
     /// Public key.
     pub key: PublicKey,
     /// Checksum of the key manager state.
-    #[serde(with = "serde_bytes")]
     pub checksum: Vec<u8>,
     /// Sign(sk, (key || checksum)) from the key manager.
     pub signature: Signature,
@@ -212,7 +204,7 @@ pub enum KeyManagerError {
 }
 
 /// Key manager access control policy.
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, cbor::Encode, cbor::Decode)]
 pub struct PolicySGX {
     pub serial: u32,
     pub id: Namespace,
@@ -220,26 +212,26 @@ pub struct PolicySGX {
 }
 
 /// Per enclave key manager access control policy.
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, cbor::Encode, cbor::Decode)]
 pub struct EnclavePolicySGX {
     pub may_query: HashMap<Namespace, Vec<EnclaveIdentity>>,
     pub may_replicate: Vec<EnclaveIdentity>,
 }
 
 /// Signed key manager access control policy.
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, cbor::Encode, cbor::Decode)]
 pub struct SignedPolicySGX {
     pub policy: PolicySGX,
     pub signatures: Vec<SignatureBundle>,
 }
 
 /// Set of trusted key manager policy signing keys.
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, cbor::Encode, cbor::Decode)]
 pub struct TrustedPolicySigners {
     /// Set of trusted signers.
     pub signers: HashSet<OasisPublicKey>,
     /// Threshold for determining if enough valid signatures are present.
-    pub threshold: usize,
+    pub threshold: u64,
 }
 
 impl Default for TrustedPolicySigners {

@@ -5,7 +5,6 @@ use io_context::Context;
 
 use crate::{
     common::{
-        cbor,
         key_format::{KeyFormat, KeyFormatAtom},
         quantity::Quantity,
     },
@@ -270,18 +269,18 @@ mod test {
         let expected_accounts = vec![
             Account {
                 general: GeneralAccount {
-                    balance: Quantity::from(23),
+                    balance: Quantity::from(23u32),
                     nonce: 13,
                     ..Default::default()
                 },
                 escrow: EscrowAccount {
                     active: SharePool {
-                        balance: Quantity::from(100),
-                        total_shares: Quantity::from(10),
+                        balance: Quantity::from(100u32),
+                        total_shares: Quantity::from(10u32),
                     },
                     debonding: SharePool {
-                        balance: Quantity::from(5),
-                        total_shares: Quantity::from(5),
+                        balance: Quantity::from(5u32),
+                        total_shares: Quantity::from(5u32),
                     },
                     ..Default::default()
                 },
@@ -289,14 +288,14 @@ mod test {
             },
             Account {
                 general: GeneralAccount {
-                    balance: Quantity::from(23),
+                    balance: Quantity::from(23u32),
                     nonce: 1,
                     ..Default::default()
                 },
                 escrow: EscrowAccount {
                     active: SharePool {
-                        balance: Quantity::from(500),
-                        total_shares: Quantity::from(5),
+                        balance: Quantity::from(500u32),
+                        total_shares: Quantity::from(5u32),
                     },
                     ..Default::default()
                 },
@@ -304,14 +303,14 @@ mod test {
             },
             Account {
                 general: GeneralAccount {
-                    balance: Quantity::from(113),
+                    balance: Quantity::from(113u32),
                     nonce: 17,
                     ..Default::default()
                 },
                 escrow: EscrowAccount {
                     active: SharePool {
-                        balance: Quantity::from(400),
-                        total_shares: Quantity::from(35),
+                        balance: Quantity::from(400u32),
+                        total_shares: Quantity::from(35u32),
                     },
                     ..Default::default()
                 },
@@ -349,13 +348,13 @@ mod test {
                 (
                     addrs[0].clone(),
                     Delegation {
-                        shares: Quantity::from(5),
+                        shares: Quantity::from(5u32),
                     },
                 ),
                 (
                     addrs[1].clone(),
                     Delegation {
-                        shares: Quantity::from(5),
+                        shares: Quantity::from(5u32),
                     },
                 ),
             ]
@@ -369,7 +368,7 @@ mod test {
             [(
                 addrs[2].clone(),
                 Delegation {
-                    shares: Quantity::from(5),
+                    shares: Quantity::from(5u32),
                 },
             )]
             .iter()
@@ -383,19 +382,19 @@ mod test {
                 (
                     addrs[0].clone(),
                     Delegation {
-                        shares: Quantity::from(20),
+                        shares: Quantity::from(20u32),
                     },
                 ),
                 (
                     addrs[1].clone(),
                     Delegation {
-                        shares: Quantity::from(6),
+                        shares: Quantity::from(6u32),
                     },
                 ),
                 (
                     addrs[2].clone(),
                     Delegation {
-                        shares: Quantity::from(10),
+                        shares: Quantity::from(10u32),
                     },
                 ),
             ]
@@ -436,7 +435,7 @@ mod test {
                 (
                     addrs[0].clone(),
                     vec![DebondingDelegation {
-                        shares: Quantity::from(1),
+                        shares: Quantity::from(1u32),
                         debond_end_time: 33,
                     }],
                 ),
@@ -444,11 +443,11 @@ mod test {
                     addrs[1].clone(),
                     vec![
                         DebondingDelegation {
-                            shares: Quantity::from(1),
+                            shares: Quantity::from(1u32),
                             debond_end_time: 15,
                         },
                         DebondingDelegation {
-                            shares: Quantity::from(1),
+                            shares: Quantity::from(1u32),
                             debond_end_time: 21,
                         },
                     ],
@@ -456,7 +455,7 @@ mod test {
                 (
                     addrs[2].clone(),
                     vec![DebondingDelegation {
-                        shares: Quantity::from(2),
+                        shares: Quantity::from(2u32),
                         debond_end_time: 100,
                     }],
                 ),
@@ -475,7 +474,7 @@ mod test {
             .total_supply(Context::create_child(&ctx))
             .expect("total supply query should work");
         assert_eq!(
-            Quantity::from(10000),
+            Quantity::from(10000u32),
             total_supply,
             "total supply should match expected"
         );
@@ -484,7 +483,7 @@ mod test {
             .common_pool(Context::create_child(&ctx))
             .expect("common pool query should work");
         assert_eq!(
-            Quantity::from(1000),
+            Quantity::from(1000u32),
             common_pool,
             "common pool should match expected"
         );
@@ -493,7 +492,7 @@ mod test {
             .last_block_fees(Context::create_child(&ctx))
             .expect("last block fees query should work");
         assert_eq!(
-            Quantity::from(33),
+            Quantity::from(33u32),
             last_block_fees,
             "last block fees should match expected"
         );
@@ -502,7 +501,7 @@ mod test {
             .governance_deposits(Context::create_child(&ctx))
             .expect("governance deposits query should work");
         assert_eq!(
-            Quantity::from(12),
+            Quantity::from(12u32),
             governance_deposits,
             "governance deposits should match expected"
         );

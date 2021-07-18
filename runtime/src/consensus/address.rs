@@ -130,84 +130,20 @@ impl fmt::Debug for Address {
     }
 }
 
-impl serde::Serialize for Address {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: serde::Serializer,
-    {
-        let is_human_readable = serializer.is_human_readable();
-        if is_human_readable {
-            serializer.serialize_str(&self.to_bech32())
-        } else {
-            serializer.serialize_bytes(&self.0)
-        }
+impl cbor::Encode for Address {
+    fn into_cbor_value(self) -> cbor::Value {
+        cbor::Value::ByteString(self.as_ref().to_vec())
     }
 }
 
-impl<'de> serde::Deserialize<'de> for Address {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: serde::Deserializer<'de>,
-    {
-        struct BytesVisitor;
-
-        impl<'de> serde::de::Visitor<'de> for BytesVisitor {
-            type Value = Address;
-
-            fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
-                formatter.write_str("bytes or string expected")
-            }
-
-            fn visit_str<E>(self, data: &str) -> Result<Address, E>
-            where
-                E: serde::de::Error,
-            {
-                let (hrp, data, variant) = bech32::decode(data)
-                    .map_err(|e| serde::de::Error::custom(format!("malformed address: {}", e)))?;
-                if variant != Variant::Bech32 {
-                    return Err(serde::de::Error::custom(format!(
-                        "invalid variant: {:?}",
-                        variant
-                    )));
-                }
-                if hrp != ADDRESS_BECH32_HRP {
-                    return Err(serde::de::Error::custom(format!("invalid HRP: {}", hrp)));
-                }
-                let data: Vec<u8> = FromBase32::from_base32(&data)
-                    .map_err(|e| serde::de::Error::custom(format!("malformed address: {}", e)))?;
-                if data.len() != ADDRESS_SIZE {
-                    return Err(serde::de::Error::custom(format!(
-                        "invalid address length: {}",
-                        data.len()
-                    )));
-                }
-
-                let mut a = [0; ADDRESS_SIZE];
-                a.copy_from_slice(&data);
-                Ok(Address(a))
-            }
-
-            fn visit_bytes<E>(self, data: &[u8]) -> Result<Address, E>
-            where
-                E: serde::de::Error,
-            {
-                if data.len() != ADDRESS_SIZE {
-                    return Err(serde::de::Error::custom(format!(
-                        "invalid address length: {}",
-                        data.len()
-                    )));
-                }
-
-                let mut a = [0; ADDRESS_SIZE];
-                a.copy_from_slice(&data);
-                Ok(Address(a))
-            }
-        }
-
-        if deserializer.is_human_readable() {
-            Ok(deserializer.deserialize_string(BytesVisitor)?)
-        } else {
-            Ok(deserializer.deserialize_bytes(BytesVisitor)?)
+impl cbor::Decode for Address {
+    fn try_from_cbor_value(value: cbor::Value) -> Result<Self, cbor::DecodeError> {
+        match value {
+            cbor::Value::ByteString(data) => Ok(Address(
+                data.try_into()
+                    .map_err(|_| cbor::DecodeError::UnexpectedType)?,
+            )),
+            _ => Err(cbor::DecodeError::UnexpectedType),
         }
     }
 }

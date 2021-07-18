@@ -4,30 +4,27 @@
 //!
 //! This **MUST** be kept in sync with go/roothash/api.
 //!
-use serde::{Deserialize, Serialize};
-use serde_repr::*;
-
 use crate::{
     common::{
-        cbor,
         crypto::{
             hash::Hash,
             signature::{PublicKey, SignatureBundle},
         },
         namespace::Namespace,
+        versioned::Versioned,
     },
     consensus::{registry, staking},
 };
 
 /// Runtime block.
-#[derive(Clone, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Clone, Debug, Default, PartialEq, Eq, Hash, cbor::Encode, cbor::Decode)]
 pub struct Block {
     /// Header.
     pub header: Header,
 }
 
 /// Runtime block annotated with consensus information.
-#[derive(Clone, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Clone, Debug, Default, PartialEq, Eq, Hash, cbor::Encode, cbor::Decode)]
 pub struct AnnotatedBlock {
     /// Consensus height at which this runtime block was produced.
     pub consensus_height: i64,
@@ -40,7 +37,7 @@ pub struct AnnotatedBlock {
 /// # Note
 ///
 /// This should be kept in sync with go/roothash/api/block/header.go.
-#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize_repr, Deserialize_repr)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash, cbor::Encode, cbor::Decode)]
 #[repr(u8)]
 pub enum HeaderType {
     Invalid = 0,
@@ -57,20 +54,13 @@ impl Default for HeaderType {
 }
 
 /// A message that can be emitted by the runtime to be processed by the consensus layer.
-#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash, cbor::Encode, cbor::Decode)]
 pub enum Message {
-    #[serde(rename = "staking")]
-    Staking {
-        v: u16,
-        #[serde(flatten)]
-        msg: StakingMessage,
-    },
-    #[serde(rename = "registry")]
-    Registry {
-        v: u16,
-        #[serde(flatten)]
-        msg: RegistryMessage,
-    },
+    #[cbor(rename = "staking")]
+    Staking(Versioned<StakingMessage>),
+
+    #[cbor(rename = "registry")]
+    Registry(Versioned<RegistryMessage>),
 }
 
 impl Message {
@@ -80,36 +70,44 @@ impl Message {
             // Special case if there are no messages.
             return Hash::empty_hash();
         }
-        Hash::digest_bytes(&cbor::to_vec(&msgs))
+        Hash::digest_bytes(&cbor::to_vec(msgs.to_vec()))
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash, cbor::Encode, cbor::Decode)]
 pub enum StakingMessage {
-    #[serde(rename = "transfer")]
+    #[cbor(rename = "transfer")]
     Transfer(staking::Transfer),
-    #[serde(rename = "withdraw")]
+
+    #[cbor(rename = "withdraw")]
     Withdraw(staking::Withdraw),
-    #[serde(rename = "add_escrow")]
+
+    #[cbor(rename = "add_escrow")]
     AddEscrow(staking::Escrow),
-    #[serde(rename = "reclaim_escrow")]
+
+    #[cbor(rename = "reclaim_escrow")]
     ReclaimEscrow(staking::ReclaimEscrow),
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash, cbor::Encode, cbor::Decode)]
 pub enum RegistryMessage {
-    #[serde(rename = "update_runtime")]
+    #[cbor(rename = "update_runtime")]
     UpdateRuntime(registry::Runtime),
 }
 
 /// Result of a message being processed by the consensus layer.
-#[derive(Clone, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Clone, Debug, Default, PartialEq, Eq, Hash, cbor::Encode, cbor::Decode)]
 pub struct MessageEvent {
-    #[serde(default)]
+    #[cbor(optional)]
+    #[cbor(default)]
     pub module: String,
-    #[serde(default)]
+
+    #[cbor(optional)]
+    #[cbor(default)]
     pub code: u32,
-    #[serde(default)]
+
+    #[cbor(optional)]
+    #[cbor(default)]
     pub index: u32,
 }
 
@@ -121,24 +119,27 @@ impl MessageEvent {
 }
 
 /// Information about how a particular round was executed by the consensus layer.
-#[derive(Clone, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Clone, Debug, Default, PartialEq, Eq, Hash, cbor::Encode, cbor::Decode)]
 pub struct RoundResults {
     /// Results of executing emitted runtime messages.
-    #[serde(default)]
+    #[cbor(optional)]
+    #[cbor(default)]
     pub messages: Vec<MessageEvent>,
 
     /// Public keys of compute nodes' controlling entities that positively contributed to the round
     /// by replicating the computation correctly.
-    #[serde(default)]
+    #[cbor(optional)]
+    #[cbor(default)]
     pub good_compute_entities: Vec<PublicKey>,
     /// Public keys of compute nodes' controlling entities that negatively contributed to the round
     /// by causing discrepancies.
-    #[serde(default)]
+    #[cbor(optional)]
+    #[cbor(default)]
     pub bad_compute_entities: Vec<PublicKey>,
 }
 
 /// Block header.
-#[derive(Clone, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Clone, Debug, Default, PartialEq, Eq, Hash, cbor::Encode, cbor::Decode)]
 pub struct Header {
     /// Protocol version number.
     pub version: u16,
@@ -165,7 +166,7 @@ pub struct Header {
 impl Header {
     /// Returns a hash of an encoded header.
     pub fn encoded_hash(&self) -> Hash {
-        Hash::digest_bytes(&cbor::to_vec(&self))
+        Hash::digest_bytes(&cbor::to_vec(self.clone()))
     }
 }
 
@@ -177,27 +178,28 @@ pub const COMPUTE_RESULTS_HEADER_CONTEXT: &'static [u8] =
 /// The header of a computed batch output by a runtime. This header is a
 /// compressed representation (e.g., hashes instead of full content) of
 /// the actual results.
-#[derive(Clone, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Clone, Debug, Default, PartialEq, Eq, Hash, cbor::Encode, cbor::Decode)]
 pub struct ComputeResultsHeader {
     /// Round number.
     pub round: u64,
     /// Hash of the previous block header this batch was computed against.
     pub previous_hash: Hash,
+
     /// The I/O merkle root.
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[cbor(optional)]
     pub io_root: Option<Hash>,
     /// The root hash of the state after computing this batch.
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[cbor(optional)]
     pub state_root: Option<Hash>,
     /// Hash of messages sent from this batch.
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[cbor(optional)]
     pub messages_hash: Option<Hash>,
 }
 
 impl ComputeResultsHeader {
     /// Returns a hash of an encoded header.
     pub fn encoded_hash(&self) -> Hash {
-        Hash::digest_bytes(&cbor::to_vec(&self))
+        Hash::digest_bytes(&cbor::to_vec(self.clone()))
     }
 }
 
@@ -263,7 +265,7 @@ mod tests {
         let test_ent_id =
             PublicKey::from("4ea5328f943ef6f66daaed74cb0e99c3b1c45f76307b425003dbc7cb3638ed35");
 
-        let q = quantity::Quantity::from(1000);
+        let q = quantity::Quantity::from(1000u32);
 
         let mut st = BTreeMap::new();
         st.insert(staking::ThresholdKind::KindNodeCompute, q.clone());
@@ -318,9 +320,9 @@ mod tests {
                 checkpoint_num_kept: 0,
                 checkpoint_chunk_size: 0,
             },
-            admission_policy: registry::RuntimeAdmissionPolicy::EntityWhitelist {
-                policy: registry::EntityWhitelistRuntimeAdmissionPolicy { entities: Some(wl) },
-            },
+            admission_policy: registry::RuntimeAdmissionPolicy::EntityWhitelist(
+                registry::EntityWhitelistRuntimeAdmissionPolicy { entities: Some(wl) },
+            ),
             constraints: {
                 let mut cs = BTreeMap::new();
                 cs.insert(scheduler::CommitteeKind::ComputeExecutor, {
@@ -370,45 +372,45 @@ mod tests {
                 "c672b8d1ef56ed28ab87c3622c5114069bdd3ad7b8f9737498d0c01ecef0967a",
             ),
             (
-                vec![Message::Staking {
-                    v: 0,
-                    msg: StakingMessage::Transfer(staking::Transfer::default()),
-                }],
+                vec![Message::Staking(Versioned::new(
+                    0,
+                    StakingMessage::Transfer(staking::Transfer::default()),
+                ))],
                 "a6b91f974b34a9192efd12025659a768520d2f04e1dae9839677456412cdb2be",
             ),
             (
-                vec![Message::Staking {
-                    v: 0,
-                    msg: StakingMessage::Withdraw(staking::Withdraw::default()),
-                }],
+                vec![Message::Staking(Versioned::new(
+                    0,
+                    StakingMessage::Withdraw(staking::Withdraw::default()),
+                ))],
                 "069b0fda76d804e3fd65d4bbd875c646f15798fb573ac613100df67f5ba4c3fd",
             ),
             (
-                vec![Message::Staking {
-                    v: 0,
-                    msg: StakingMessage::AddEscrow(staking::Escrow::default()),
-                }],
+                vec![Message::Staking(Versioned::new(
+                    0,
+                    StakingMessage::AddEscrow(staking::Escrow::default()),
+                ))],
                 "65049870b9dae657390e44065df0c78176816876e67b96dac7791ee6a1aa42e2",
             ),
             (
-                vec![Message::Staking {
-                    v: 0,
-                    msg: StakingMessage::ReclaimEscrow(staking::ReclaimEscrow::default()),
-                }],
+                vec![Message::Staking(Versioned::new(
+                    0,
+                    StakingMessage::ReclaimEscrow(staking::ReclaimEscrow::default()),
+                ))],
                 "c78547eae2f104268e49827cbe624cf2b350ee59e8d693dec0673a70a4664a2e",
             ),
             (
-                vec![Message::Registry {
-                    v: 0,
-                    msg: RegistryMessage::UpdateRuntime(registry::Runtime::default()),
-                }],
+                vec![Message::Registry(Versioned::new(
+                    0,
+                    RegistryMessage::UpdateRuntime(registry::Runtime::default()),
+                ))],
                 "bc26afcca2efa9ba8138d2339a38389482466163b5bda0e1dac735b03c879905",
             ),
             (
-                vec![Message::Registry {
-                    v: 0,
-                    msg: RegistryMessage::UpdateRuntime(rt),
-                }],
+                vec![Message::Registry(Versioned::new(
+                    0,
+                    RegistryMessage::UpdateRuntime(rt),
+                ))],
                 "37a855783495d6699d3d229146b70f31b3da72a2a752e4cb4ded6dfe2d774382",
             ),
         ];

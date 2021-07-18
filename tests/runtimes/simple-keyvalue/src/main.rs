@@ -17,6 +17,7 @@ use oasis_core_runtime::{
         key_format::KeyFormat,
         namespace::Namespace,
         version::Version,
+        versioned::Versioned,
     },
     consensus::{
         address::Address,
@@ -114,10 +115,10 @@ fn consensus_withdraw(args: &Withdraw, ctx: &mut TxnContext) -> Result<()> {
     }
 
     StorageContext::with_current(|mkvs, _untrusted_local| {
-        let index = ctx.emit_message(Message::Staking {
-            v: 0,
-            msg: StakingMessage::Withdraw(args.withdraw.clone()),
-        });
+        let index = ctx.emit_message(Message::Staking(Versioned::new(
+            0,
+            StakingMessage::Withdraw(args.withdraw.clone()),
+        )));
 
         mkvs.insert(
             IoContext::create_child(&ctx.io_ctx),
@@ -136,10 +137,10 @@ fn consensus_transfer(args: &Transfer, ctx: &mut TxnContext) -> Result<()> {
     }
 
     StorageContext::with_current(|mkvs, _untrusted_local| {
-        let index = ctx.emit_message(Message::Staking {
-            v: 0,
-            msg: StakingMessage::Transfer(args.transfer.clone()),
-        });
+        let index = ctx.emit_message(Message::Staking(Versioned::new(
+            0,
+            StakingMessage::Transfer(args.transfer.clone()),
+        )));
 
         mkvs.insert(
             IoContext::create_child(&ctx.io_ctx),
@@ -158,10 +159,10 @@ fn consensus_add_escrow(args: &AddEscrow, ctx: &mut TxnContext) -> Result<()> {
     }
 
     StorageContext::with_current(|mkvs, _untrusted_local| {
-        let index = ctx.emit_message(Message::Staking {
-            v: 0,
-            msg: StakingMessage::AddEscrow(args.escrow.clone()),
-        });
+        let index = ctx.emit_message(Message::Staking(Versioned::new(
+            0,
+            StakingMessage::AddEscrow(args.escrow.clone()),
+        )));
 
         mkvs.insert(
             IoContext::create_child(&ctx.io_ctx),
@@ -180,10 +181,10 @@ fn consensus_reclaim_escrow(args: &ReclaimEscrow, ctx: &mut TxnContext) -> Resul
     }
 
     StorageContext::with_current(|mkvs, _untrusted_local| {
-        let index = ctx.emit_message(Message::Staking {
-            v: 0,
-            msg: StakingMessage::ReclaimEscrow(args.reclaim_escrow.clone()),
-        });
+        let index = ctx.emit_message(Message::Staking(Versioned::new(
+            0,
+            StakingMessage::ReclaimEscrow(args.reclaim_escrow.clone()),
+        )));
 
         mkvs.insert(
             IoContext::create_child(&ctx.io_ctx),
@@ -202,10 +203,10 @@ fn update_runtime(args: &UpdateRuntime, ctx: &mut TxnContext) -> Result<()> {
     }
 
     StorageContext::with_current(|mkvs, _untrusted_local| {
-        let index = ctx.emit_message(Message::Registry {
-            v: 0,
-            msg: RegistryMessage::UpdateRuntime(args.update_runtime.clone()),
-        });
+        let index = ctx.emit_message(Message::Registry(Versioned::new(
+            0,
+            RegistryMessage::UpdateRuntime(args.update_runtime.clone()),
+        )));
 
         mkvs.insert(
             IoContext::create_child(&ctx.io_ctx),

@@ -8,10 +8,7 @@ use super::{
     session::{Builder, Session, SessionInfo},
     types::{Frame, Message, SessionID},
 };
-use crate::{
-    common::{cbor, time::insecure_posix_system_time},
-    rak::RAK,
-};
+use crate::{common::time::insecure_posix_system_time, rak::RAK};
 
 /// Maximum concurrent EnclaveRPC sessions.
 const DEFAULT_MAX_CONCURRENT_SESSIONS: usize = 100;

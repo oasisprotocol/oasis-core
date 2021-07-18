@@ -18,34 +18,6 @@
 // Allow until oasis-core#3572.
 #![allow(deprecated)]
 
-#[macro_use]
-extern crate slog;
-extern crate anyhow;
-extern crate base64;
-extern crate bincode;
-extern crate chrono;
-extern crate crossbeam;
-extern crate lazy_static;
-extern crate serde_bytes;
-extern crate serde_cbor;
-extern crate serde_json;
-extern crate serde_repr;
-extern crate slog_json;
-extern crate slog_scope;
-extern crate slog_stdlog;
-#[macro_use]
-extern crate intrusive_collections;
-extern crate io_context;
-extern crate oid_registry;
-extern crate percent_encoding;
-extern crate rand;
-extern crate rsa;
-extern crate rustc_hex;
-extern crate snow;
-#[cfg(test)]
-extern crate tempfile;
-extern crate x509_parser;
-
 use lazy_static::lazy_static;
 #[cfg(target_env = "sgx")]
 use sgx_isa::{AttributesFlags, Report};
@@ -130,3 +102,6 @@ pub use self::{
     protocol::Protocol,
     transaction::dispatcher::{Dispatcher as TxnDispatcher, MethodDispatcher as TxnMethDispatcher},
 };
+
+// Re-export the cbor crate.
+pub use cbor;

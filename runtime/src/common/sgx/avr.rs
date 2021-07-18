@@ -9,7 +9,6 @@ use lazy_static::lazy_static;
 use oid_registry::{OID_PKCS1_RSAENCRYPTION, OID_PKCS1_SHA256WITHRSA};
 use percent_encoding;
 use rsa::{padding::PaddingScheme, Hash, PublicKey, RSAPublicKey};
-use serde::{Deserialize, Serialize};
 use serde_json;
 use sgx_isa::{AttributesFlags, Report};
 use sha2::{Digest, Sha256};
@@ -158,13 +157,10 @@ impl QuoteBody {
 }
 
 /// Attestation verification report.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, cbor::Encode, cbor::Decode)]
 pub struct AVR {
-    #[serde(with = "serde_bytes")]
     pub body: Vec<u8>,
-    #[serde(with = "serde_bytes")]
     pub signature: Vec<u8>,
-    #[serde(with = "serde_bytes")]
     pub certificate_chain: Vec<u8>,
 }
 
@@ -487,7 +483,7 @@ pub(crate) fn timestamp_is_fresh(now: i64, timestamp: i64) -> bool {
 }
 
 /// Enclave identity.
-#[derive(Debug, Clone, Hash, Eq, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Hash, Eq, PartialEq, cbor::Encode, cbor::Decode)]
 pub struct EnclaveIdentity {
     pub mr_enclave: MrEnclave,
     pub mr_signer: MrSigner,

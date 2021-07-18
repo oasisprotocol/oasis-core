@@ -13,12 +13,12 @@ use futures::{
     prelude::*,
 };
 use io_context::Context;
-use serde::{de::DeserializeOwned, Serialize};
 use thiserror::Error;
 use tokio;
 
 use oasis_core_runtime::{
-    common::{cbor, sgx::avr::EnclaveIdentity},
+    cbor,
+    common::sgx::avr::EnclaveIdentity,
     enclave_rpc::{
         session::{Builder, Session},
         types,
@@ -45,7 +45,7 @@ pub enum RpcClientError {
     #[error("client dropped")]
     Dropped,
     #[error("decode error: {0}")]
-    DecodeError(#[from] cbor::Error),
+    DecodeError(#[from] cbor::DecodeError),
     #[error("unknown error: {0}")]
     Unknown(#[from] anyhow::Error),
 }
@@ -137,8 +137,8 @@ impl RpcClient {
         args: C,
     ) -> Result<O, RpcClientError>
     where
-        C: Serialize,
-        O: DeserializeOwned + Send + 'static,
+        C: cbor::Encode,
+        O: cbor::Decode + Send + 'static,
     {
         let request = types::Request {
             method: method.to_owned(),

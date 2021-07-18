@@ -12,11 +12,11 @@ use anyhow::{anyhow, Result};
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 use crossbeam::channel;
 use io_context::Context;
-use slog::Logger;
+use slog::{error, info, warn, Logger};
 use thiserror::Error;
 
 use crate::{
-    common::{cbor, logger::get_logger, namespace::Namespace, version::Version},
+    common::{logger::get_logger, namespace::Namespace, version::Version},
     consensus::tendermint,
     dispatcher::Dispatcher,
     rak::RAK,
@@ -211,7 +211,7 @@ impl Protocol {
         let _guard = self.outgoing_mutex.lock().unwrap();
         let mut writer = BufWriter::new(&self.stream);
 
-        let buffer = cbor::to_vec(&message);
+        let buffer = cbor::to_vec(message);
         if buffer.len() > MAX_MESSAGE_SIZE {
             return Err(ProtocolError::MessageTooLarge.into());
         }

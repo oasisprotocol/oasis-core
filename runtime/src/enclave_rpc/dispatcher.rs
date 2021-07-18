@@ -2,14 +2,12 @@
 use std::collections::HashMap;
 
 use anyhow::Result;
-use serde::{de::DeserializeOwned, Serialize};
 use thiserror::Error;
 
 use super::{
     context::Context,
     types::{Body, Request, Response},
 };
-use crate::common::cbor;
 
 /// Dispatch error.
 #[derive(Error, Debug)]
@@ -75,8 +73,8 @@ struct MethodHandlerDispatchImpl<Rq, Rsp> {
 
 impl<Rq, Rsp> MethodHandlerDispatch for MethodHandlerDispatchImpl<Rq, Rsp>
 where
-    Rq: DeserializeOwned + 'static,
-    Rsp: Serialize + 'static,
+    Rq: cbor::Decode + 'static,
+    Rsp: cbor::Encode + 'static,
 {
     fn get_descriptor(&self) -> &MethodDescriptor {
         &self.descriptor
@@ -102,8 +100,8 @@ impl Method {
     /// Create a new enclave method descriptor.
     pub fn new<Rq, Rsp, Handler>(method: MethodDescriptor, handler: Handler) -> Self
     where
-        Rq: DeserializeOwned + 'static,
-        Rsp: Serialize + 'static,
+        Rq: cbor::Decode + 'static,
+        Rsp: cbor::Encode + 'static,
         Handler: MethodHandler<Rq, Rsp> + 'static,
     {
         Method {

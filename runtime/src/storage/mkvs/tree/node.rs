@@ -1,8 +1,5 @@
 use std::{cell::RefCell, rc::Rc};
 
-use serde::{Deserialize, Serialize};
-use serde_repr::*;
-
 use crate::{
     common::{crypto::hash::Hash, namespace::Namespace},
     storage::mkvs::{cache::*, marshal::*},
@@ -21,7 +18,7 @@ pub trait Node {
 }
 
 /// Storage root type.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize_repr, Deserialize_repr)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, cbor::Encode, cbor::Decode)]
 #[repr(u8)]
 pub enum RootType {
     /// Invalid or uninitialized storage root type.
@@ -39,10 +36,10 @@ impl Default for RootType {
 }
 
 /// Storage root.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, cbor::Encode, cbor::Decode)]
 pub struct Root {
     /// Namespace under which the root is stored.
-    #[serde(rename = "ns")]
+    #[cbor(rename = "ns")]
     pub namespace: Namespace,
     /// Monotonically increasing version number in which the root is stored.
     pub version: u64,

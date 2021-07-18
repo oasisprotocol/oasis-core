@@ -19,7 +19,6 @@ use oasis_core_keymanager_api_common::{
 use oasis_core_keymanager_client::{KeyManagerClient, RemoteClient};
 use oasis_core_runtime::{
     common::{
-        cbor,
         crypto::{
             mrae::deoxysii::{DeoxysII, NONCE_SIZE, TAG_SIZE},
             signature,
@@ -310,7 +309,7 @@ impl Kdf {
             policy_checksum,
         };
 
-        let body = cbor::to_vec(&init_response);
+        let body = cbor::to_vec(init_response.clone());
         let signature = inner
             .signer
             .as_ref()

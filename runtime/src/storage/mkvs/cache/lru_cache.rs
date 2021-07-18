@@ -1,7 +1,7 @@
 use std::{any::Any, cell::RefCell, pin::Pin, ptr::NonNull, rc::Rc, sync::Arc};
 
 use anyhow::{anyhow, Result};
-use intrusive_collections::{IntrusivePointer, LinkedList, LinkedListLink};
+use intrusive_collections::{intrusive_adapter, IntrusivePointer, LinkedList, LinkedListLink};
 use io_context::Context;
 use thiserror::Error;
 
