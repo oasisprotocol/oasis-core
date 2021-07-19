@@ -1,8 +1,5 @@
 //! RPC protocol types.
 use rand::{rngs::OsRng, Rng};
-use serde::{Deserialize, Serialize};
-
-use crate::common::cbor::Value;
 
 impl_bytes!(
     SessionID,
@@ -23,7 +20,7 @@ impl SessionID {
 }
 
 /// Frame.
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, cbor::Encode, cbor::Decode)]
 pub struct Frame {
     pub session: SessionID,
     // The `untrusted_plaintext` field is only a temporary workaround until
@@ -32,34 +29,33 @@ pub struct Frame {
     // This field contains a plaintext copy of the Request's `method` field
     // and is verified inside the enclave.  It is unused in other cases.
     pub untrusted_plaintext: String,
-    #[serde(with = "serde_bytes")]
     pub payload: Vec<u8>,
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, cbor::Encode, cbor::Decode)]
 pub struct Request {
     pub method: String,
-    pub args: Value,
+    pub args: cbor::Value,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, cbor::Encode, cbor::Decode)]
 pub struct Error {
     pub message: String,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, cbor::Encode, cbor::Decode)]
 pub enum Body {
-    Success(Value),
+    Success(cbor::Value),
     Error(String),
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, cbor::Encode, cbor::Decode)]
 pub struct Response {
     pub body: Body,
 }
 
 /// Protocol message.
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, cbor::Encode, cbor::Decode)]
 pub enum Message {
     Request(Request),
     Response(Response),

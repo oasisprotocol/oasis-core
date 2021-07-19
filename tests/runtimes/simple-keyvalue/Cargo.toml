@@ -27,6 +27,7 @@ oasis-core-keymanager-api-common = { path = "../../../keymanager-api-common" }
 simple-keymanager = { path = "../simple-keymanager" }
 simple-keyvalue-api = { path = "./api" }
 
+# Third party.
 anyhow = "1.0"
 io-context = "0.2.0"
 byteorder = "1.4.3"

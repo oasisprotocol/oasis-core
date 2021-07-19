@@ -5,10 +5,7 @@ use std::{
 };
 
 use anyhow::{Error, Result};
-use base64;
 use io_context::Context;
-use serde::{self, ser::SerializeSeq, Deserialize, Serialize, Serializer};
-use serde_bytes::Bytes;
 
 use crate::common::{crypto::hash::Hash, namespace::Namespace};
 
@@ -32,13 +29,12 @@ pub enum LogEntryKind {
 }
 
 /// An entry in the write log, describing a single update.
-#[derive(Clone, Debug, Eq, PartialEq, Deserialize, Hash)]
+#[derive(Clone, Debug, Eq, PartialEq, Hash, cbor::Encode, cbor::Decode)]
+#[cbor(as_array)]
 pub struct LogEntry {
     /// The key that was inserted or deleted.
-    #[serde(with = "serde_bytes")]
     pub key: Vec<u8>,
     /// The inserted value (empty if the key was deleted).
-    #[serde(with = "serde_bytes")]
     pub value: Option<Vec<u8>>,
 }
 
@@ -58,32 +54,15 @@ impl LogEntry {
     }
 }
 
-impl serde::Serialize for LogEntry {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
-        let is_human_readable = serializer.is_human_readable();
-        let mut seq = serializer.serialize_seq(Some(2))?;
-        if is_human_readable {
-            seq.serialize_element(&base64::encode(&self.key))?;
-            seq.serialize_element(&self.value.as_ref().map(|v| base64::encode(v)))?;
-        } else {
-            seq.serialize_element(&Bytes::new(&self.key))?;
-            seq.serialize_element(&self.value.as_ref().map(|v| Bytes::new(v)))?;
-        }
-        seq.end()
-    }
-}
-
 /// The write log.
 ///
 /// The keys in the write log must be unique.
 pub type WriteLog = Vec<LogEntry>;
 
 /// A key prefix.
-#[derive(Clone, Debug, Default, Eq, PartialEq, PartialOrd, Ord, Serialize, Deserialize)]
-pub struct Prefix(#[serde(with = "serde_bytes")] Vec<u8>);
+#[derive(Clone, Debug, Default, Eq, PartialEq, PartialOrd, Ord, cbor::Encode, cbor::Decode)]
+#[cbor(transparent)]
+pub struct Prefix(Vec<u8>);
 
 impl AsRef<[u8]> for Prefix {
     fn as_ref(&self) -> &[u8] {
@@ -319,8 +298,6 @@ impl<T: FallibleMKVS + ?Sized> FallibleMKVS for &mut T {
 mod _tests {
     use super::*;
 
-    use crate::common::cbor;
-
     #[test]
     fn test_write_log_serialization() {
         let write_log = vec![LogEntry {
@@ -328,7 +305,7 @@ mod _tests {
             value: Some(b"bar".to_vec()),
         }];
 
-        let raw = cbor::to_vec(&write_log);
+        let raw = cbor::to_vec(write_log.clone());
         let deserialized: WriteLog = cbor::from_slice(&raw).unwrap();
 
         assert_eq!(write_log, deserialized);

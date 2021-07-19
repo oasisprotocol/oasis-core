@@ -1,12 +1,10 @@
 //! Transaction I/O tree.
 use anyhow::{anyhow, Result};
 use io_context::Context;
-use serde::{self, ser::SerializeSeq, Deserialize, Serializer};
-use serde_bytes::{self, Bytes};
 
 use super::tags::Tags;
 use crate::{
-    common::{cbor, crypto::hash::Hash, key_format::KeyFormat},
+    common::{crypto::hash::Hash, key_format::KeyFormat},
     storage::mkvs::{self, sync::ReadSync, Root, WriteLog},
 };
 
@@ -103,10 +101,10 @@ impl KeyFormat for TagKeyFormat {
 /// The input transaction artifacts.
 ///
 /// These are the artifacts that are stored CBOR-serialized in the Merkle tree.
-#[derive(Clone, Debug, PartialEq, Deserialize)]
+#[derive(Clone, Debug, PartialEq, cbor::Encode, cbor::Decode)]
+#[cbor(as_array)]
 struct InputArtifacts {
     /// Transaction input.
-    #[serde(with = "serde_bytes")]
     pub input: Vec<u8>,
     /// Transaction order within the batch.
     ///
@@ -116,37 +114,14 @@ struct InputArtifacts {
     pub batch_order: u32,
 }
 
-impl serde::Serialize for InputArtifacts {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
-        let mut seq = serializer.serialize_seq(Some(2))?;
-        seq.serialize_element(&Bytes::new(&self.input))?;
-        seq.serialize_element(&self.batch_order)?;
-        seq.end()
-    }
-}
-
 /// The output transaction artifacts.
 ///
 /// These are the artifacts that are stored CBOR-serialized in the Merkle tree.
-#[derive(Clone, Debug, PartialEq, Deserialize)]
+#[derive(Clone, Debug, PartialEq, cbor::Encode, cbor::Decode)]
+#[cbor(as_array)]
 struct OutputArtifacts {
     /// Transaction output.
-    #[serde(with = "serde_bytes")]
     pub output: Vec<u8>,
-}
-
-impl serde::Serialize for OutputArtifacts {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
-        let mut seq = serializer.serialize_seq(Some(1))?;
-        seq.serialize_element(&Bytes::new(&self.output))?;
-        seq.end()
-    }
 }
 
 /// A Merkle tree containing transaction artifacts.
@@ -179,7 +154,7 @@ impl Tree {
                 kind: ArtifactKind::Input,
             }
             .encode(),
-            &cbor::to_vec(&InputArtifacts { input, batch_order }),
+            &cbor::to_vec(InputArtifacts { input, batch_order }),
         )?;
 
         Ok(())
@@ -202,7 +177,7 @@ impl Tree {
                 kind: ArtifactKind::Output,
             }
             .encode(),
-            &cbor::to_vec(&OutputArtifacts { output }),
+            &cbor::to_vec(OutputArtifacts { output }),
         )?;
 
         // Add tags if specified.

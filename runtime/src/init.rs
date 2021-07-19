@@ -1,4 +1,9 @@
 //! Runtime initialization.
+use std::{env, sync::Arc};
+
+use log;
+use slog::{error, info};
+
 use crate::{
     common::{
         logger::{get_logger, init_logger},
@@ -8,9 +13,6 @@ use crate::{
     protocol::{Protocol, Stream},
     rak::RAK,
 };
-
-use log;
-use std::{env, sync::Arc};
 
 /// Starts the runtime.
 pub fn start_runtime(initializer: Box<dyn Initializer>, version: Version) {

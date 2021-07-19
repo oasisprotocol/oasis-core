@@ -3,7 +3,7 @@ use std::sync::{Mutex, Once};
 
 use lazy_static::lazy_static;
 use log::Level;
-use slog::{self, Drain};
+use slog::{self, o, Drain};
 use slog_scope;
 use slog_stdlog;
 

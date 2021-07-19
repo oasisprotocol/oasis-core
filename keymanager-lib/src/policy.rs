@@ -12,7 +12,6 @@ use tiny_keccak::{Hasher, Sha3};
 use oasis_core_keymanager_api_common::*;
 use oasis_core_runtime::{
     common::{
-        cbor,
         namespace::Namespace,
         sgx::{
             avr::EnclaveIdentity,

@@ -1,8 +1,4 @@
 //! Key manager API common types and functions.
-
-// Allow until oasis-core#3572.
-#![allow(deprecated)]
-
 use std::{
     collections::HashSet,
     sync::{Mutex, Once},
@@ -10,7 +6,7 @@ use std::{
 
 use lazy_static::lazy_static;
 
-use oasis_core_runtime::common::{cbor, crypto::signature::PublicKey as OasisPublicKey};
+use oasis_core_runtime::common::crypto::signature::PublicKey as OasisPublicKey;
 
 #[macro_use]
 pub mod api;
@@ -42,7 +38,7 @@ impl SignedPolicySGX {
     /// Verify the signatures and return the PolicySGX, if the signatures are correct.
     pub fn verify(&self) -> Result<PolicySGX, KeyManagerError> {
         // Verify the signatures.
-        let untrusted_policy_raw = cbor::to_vec(&self.policy);
+        let untrusted_policy_raw = cbor::to_vec(self.policy.clone());
         let mut signers: HashSet<OasisPublicKey> = HashSet::new();
         for sig in &self.signatures {
             let public_key = match sig.public_key {
@@ -67,7 +63,7 @@ impl SignedPolicySGX {
             Some(_) => 2,
             None => trusted_signers.threshold,
         };
-        if signers.len() < multisig_threshold {
+        if signers.len() < multisig_threshold as usize {
             return Err(KeyManagerError::PolicyInsufficientSignatures);
         }
 

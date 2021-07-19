@@ -7,8 +7,7 @@ use std::{
 };
 
 use num_bigint::BigUint;
-use num_traits::{CheckedDiv, CheckedSub, Num, ToPrimitive, Zero};
-use serde;
+use num_traits::{CheckedDiv, CheckedSub, ToPrimitive, Zero};
 
 /// An arbitrary precision unsigned integer.
 #[derive(Clone, Debug, Default, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -43,9 +42,41 @@ impl Zero for Quantity {
     }
 }
 
+impl From<u8> for Quantity {
+    fn from(v: u8) -> Quantity {
+        Quantity(BigUint::from(v))
+    }
+}
+
+impl From<u16> for Quantity {
+    fn from(v: u16) -> Quantity {
+        Quantity(BigUint::from(v))
+    }
+}
+
+impl From<u32> for Quantity {
+    fn from(v: u32) -> Quantity {
+        Quantity(BigUint::from(v))
+    }
+}
+
 impl From<u64> for Quantity {
     fn from(v: u64) -> Quantity {
         Quantity(BigUint::from(v))
+    }
+}
+
+impl From<u128> for Quantity {
+    fn from(v: u128) -> Quantity {
+        Quantity(BigUint::from(v))
+    }
+}
+
+impl TryFrom<Quantity> for u64 {
+    type Error = IntErrorKind;
+
+    fn try_from(value: Quantity) -> Result<u64, Self::Error> {
+        value.0.to_u64().ok_or(IntErrorKind::PosOverflow)
     }
 }
 
@@ -54,6 +85,22 @@ impl TryFrom<&Quantity> for u64 {
 
     fn try_from(value: &Quantity) -> Result<u64, Self::Error> {
         value.0.to_u64().ok_or(IntErrorKind::PosOverflow)
+    }
+}
+
+impl TryFrom<Quantity> for u128 {
+    type Error = IntErrorKind;
+
+    fn try_from(value: Quantity) -> Result<u128, Self::Error> {
+        value.0.to_u128().ok_or(IntErrorKind::PosOverflow)
+    }
+}
+
+impl TryFrom<&Quantity> for u128 {
+    type Error = IntErrorKind;
+
+    fn try_from(value: &Quantity) -> Result<u128, Self::Error> {
+        value.0.to_u128().ok_or(IntErrorKind::PosOverflow)
     }
 }
 
@@ -153,61 +200,21 @@ impl fmt::Display for Quantity {
     }
 }
 
-impl serde::Serialize for Quantity {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: serde::Serializer,
-    {
-        let is_human_readable = serializer.is_human_readable();
-        if is_human_readable {
-            serializer.serialize_str(&self.0.to_str_radix(10))
+impl cbor::Encode for Quantity {
+    fn into_cbor_value(self) -> cbor::Value {
+        if self.0.is_zero() {
+            cbor::Value::ByteString(vec![])
         } else {
-            if self.0.is_zero() {
-                serializer.serialize_bytes(&[])
-            } else {
-                let data = self.0.to_bytes_be();
-                serializer.serialize_bytes(&data)
-            }
+            cbor::Value::ByteString(self.0.to_bytes_be())
         }
     }
 }
 
-impl<'de> serde::Deserialize<'de> for Quantity {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: serde::Deserializer<'de>,
-    {
-        struct BytesVisitor;
-
-        impl<'de> serde::de::Visitor<'de> for BytesVisitor {
-            type Value = Quantity;
-
-            fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
-                formatter.write_str("bytes or string expected")
-            }
-
-            fn visit_str<E>(self, data: &str) -> Result<Quantity, E>
-            where
-                E: serde::de::Error,
-            {
-                Ok(Quantity(
-                    BigUint::from_str_radix(data, 10)
-                        .map_err(|e| serde::de::Error::custom(format!("{}", e)))?,
-                ))
-            }
-
-            fn visit_bytes<E>(self, data: &[u8]) -> Result<Quantity, E>
-            where
-                E: serde::de::Error,
-            {
-                Ok(Quantity(BigUint::from_bytes_be(data)))
-            }
-        }
-
-        if deserializer.is_human_readable() {
-            Ok(deserializer.deserialize_string(BytesVisitor)?)
-        } else {
-            Ok(deserializer.deserialize_bytes(BytesVisitor)?)
+impl cbor::Decode for Quantity {
+    fn try_from_cbor_value(value: cbor::Value) -> Result<Self, cbor::DecodeError> {
+        match value {
+            cbor::Value::ByteString(data) => Ok(Quantity(BigUint::from_bytes_be(&data))),
+            _ => Err(cbor::DecodeError::UnexpectedType),
         }
     }
 }
@@ -216,13 +223,13 @@ impl<'de> serde::Deserialize<'de> for Quantity {
 mod test {
     use rustc_hex::ToHex;
 
-    use crate::common::{cbor, quantity::Quantity};
+    use crate::common::quantity::Quantity;
 
     #[test]
     fn test_serialization() {
         // NOTE: These should be synced with go/common/quantity/quantity_test.go.
         let cases = vec![
-            (0, "40"),
+            (0u128, "40"),
             (1, "4101"),
             (10, "410a"),
             (100, "4164"),
@@ -233,7 +240,7 @@ mod test {
 
         for tc in cases {
             let q = Quantity::from(tc.0);
-            let enc = cbor::to_vec(&q);
+            let enc = cbor::to_vec(q.clone());
             assert_eq!(enc.to_hex::<String>(), tc.1, "serialization should match");
 
             let dec: Quantity = cbor::from_slice(&enc).expect("deserialization should succeed");
@@ -245,51 +252,54 @@ mod test {
     fn test_ops() {
         // Add.
         assert_eq!(
-            Quantity::from(1000) + Quantity::from(2000),
-            Quantity::from(3000)
+            Quantity::from(1000u32) + Quantity::from(2000u32),
+            Quantity::from(3000u32)
         );
 
-        let mut a = Quantity::from(1000);
-        a += Quantity::from(42);
-        assert_eq!(a, Quantity::from(1042));
-        a += &Quantity::from(42);
-        assert_eq!(a, Quantity::from(1084));
+        let mut a = Quantity::from(1000u32);
+        a += Quantity::from(42u32);
+        assert_eq!(a, Quantity::from(1042u32));
+        a += &Quantity::from(42u32);
+        assert_eq!(a, Quantity::from(1084u32));
 
-        let mut a = Quantity::from(1000);
+        let mut a = Quantity::from(1000u32);
         a += 42;
-        assert_eq!(a, Quantity::from(1042));
+        assert_eq!(a, Quantity::from(1042u32));
 
         // Sub.
-        let a = Quantity::from(1000);
+        let a = Quantity::from(1000u32);
         assert_eq!(
-            a.checked_sub(&Quantity::from(42)),
-            Some(Quantity::from(958))
+            a.checked_sub(&Quantity::from(42u32)),
+            Some(Quantity::from(958u32))
         );
-        assert_eq!(a.checked_sub(&Quantity::from(1100)), None);
+        assert_eq!(a.checked_sub(&Quantity::from(1100u32)), None);
 
         // Mul.
         assert_eq!(
-            Quantity::from(1000) * Quantity::from(1000),
-            Quantity::from(1_000_000)
+            Quantity::from(1000u32) * Quantity::from(1000u32),
+            Quantity::from(1_000_000u32)
         );
 
-        let mut a = Quantity::from(1000);
-        a *= Quantity::from(1000);
-        assert_eq!(a, Quantity::from(1_000_000));
-        a *= &Quantity::from(1000);
-        assert_eq!(a, Quantity::from(1_000_000_000));
+        let mut a = Quantity::from(1000u32);
+        a *= Quantity::from(1000u32);
+        assert_eq!(a, Quantity::from(1_000_000u32));
+        a *= &Quantity::from(1000u32);
+        assert_eq!(a, Quantity::from(1_000_000_000u32));
 
-        let mut a = Quantity::from(1000);
+        let mut a = Quantity::from(1000u32);
         a *= 1000;
-        assert_eq!(a, Quantity::from(1_000_000));
+        assert_eq!(a, Quantity::from(1_000_000u32));
 
         // Div.
-        let a = Quantity::from(1000);
-        assert_eq!(a.checked_div(&Quantity::from(3)), Some(Quantity::from(333)));
+        let a = Quantity::from(1000u32);
         assert_eq!(
-            a.checked_div(&Quantity::from(1001)),
-            Some(Quantity::from(0))
+            a.checked_div(&Quantity::from(3u32)),
+            Some(Quantity::from(333u32))
         );
-        assert_eq!(a.checked_div(&Quantity::from(0)), None);
+        assert_eq!(
+            a.checked_div(&Quantity::from(1001u32)),
+            Some(Quantity::from(0u32))
+        );
+        assert_eq!(a.checked_div(&Quantity::from(0u32)), None);
     }
 }

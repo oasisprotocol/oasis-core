@@ -144,79 +144,27 @@ macro_rules! impl_bytes {
 
         // Serialization.
 
-        impl ::serde::Serialize for $name {
-            fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-            where
-                S: ::serde::Serializer,
-            {
-                if serializer.is_human_readable() {
-                    serializer.serialize_str(&base64::encode(&self))
-                } else {
-                    serializer.serialize_bytes(self.as_ref())
-                }
+        impl $crate::cbor::Encode for $name {
+            fn into_cbor_value(self) -> $crate::cbor::Value {
+                $crate::cbor::Value::ByteString(self.0.into())
             }
         }
 
         // Deserialization.
 
-        impl<'de> ::serde::Deserialize<'de> for $name {
-            fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-            where
-                D: ::serde::Deserializer<'de>,
-            {
-                struct BytesVisitor;
+        impl $crate::cbor::Decode for $name {
+            fn try_from_cbor_value(
+                value: $crate::cbor::Value,
+            ) -> Result<Self, $crate::cbor::DecodeError> {
+                use ::std::convert::TryInto;
 
-                impl<'de> ::serde::de::Visitor<'de> for BytesVisitor {
-                    type Value = $name;
-
-                    fn expecting(
-                        &self,
-                        formatter: &mut ::std::fmt::Formatter,
-                    ) -> ::std::fmt::Result {
-                        formatter.write_str("bytes or string expected")
-                    }
-
-                    fn visit_str<E>(self, data: &str) -> Result<$name, E>
-                    where
-                        E: ::serde::de::Error,
-                    {
-                        let mut array = [0; $size];
-                        let bytes = match base64::decode(data) {
-                            Ok(b) => b,
-                            Err(err) => return match err {
-                                base64::DecodeError::InvalidByte(pos, v) => Err(::serde::de::Error::custom(format!("invalid base64-encoded string: invalid byte '{}' at position {}", v, pos))),
-                                base64::DecodeError::InvalidLength => Err(::serde::de::Error::custom(format!("invalid base64-encoded string: invalid length {}", data.len()))),
-                                base64::DecodeError::InvalidLastSymbol(pos, v) => Err(::serde::de::Error::custom(format!("invalid base64-encoded string: invalid last symbol '{}' at position {}", v, pos))),
-                            },
-                        };
-                        if bytes.len() != $size {
-                            return Err(::serde::de::Error::invalid_length(bytes.len(), &self));
-                        }
-                        array[..].copy_from_slice(&bytes);
-
-                        Ok($name(array))
-                    }
-
-                   fn visit_bytes<E>(self, data: &[u8]) -> Result<$name, E>
-                    where
-                        E: ::serde::de::Error,
-                    {
-                        if data.len() != $size {
-                            return Err(::serde::de::Error::invalid_length(data.len(), &self));
-                        }
-                        let mut array = [0; $size];
-                        array[..].copy_from_slice(data);
-
-                        Ok($name(array))
-                    }
+                match value {
+                    $crate::cbor::Value::ByteString(data) => Ok(Self(
+                        data.try_into()
+                            .map_err(|_| $crate::cbor::DecodeError::UnexpectedType)?,
+                    )),
+                    _ => Err($crate::cbor::DecodeError::UnexpectedType),
                 }
-
-                if deserializer.is_human_readable() {
-                    Ok(deserializer.deserialize_string(BytesVisitor)?)
-                } else {
-                    Ok(deserializer.deserialize_bytes(BytesVisitor)?)
-                }
-
             }
         }
     };
@@ -239,25 +187,10 @@ mod tests {
     }
 
     #[test]
-    fn test_serde_base64() {
+    fn test_cbor() {
         // Serialize.
         let test_key = TestKey(TEST_KEY_BYTES);
-        let test_key_str = serde_json::to_string(&test_key).unwrap();
-        assert_eq!(
-            test_key_str,
-            "\"xnK40e9W7Sirh8NiLFEUBpvdOte4+XN0mNDAHs7wlno=\""
-        );
-
-        // Deserialize.
-        let new_test_key: TestKey = serde_json::from_str(&test_key_str).unwrap();
-        assert_eq!(new_test_key, test_key);
-    }
-
-    #[test]
-    fn test_serde_cbor() {
-        // Serialize.
-        let test_key = TestKey(TEST_KEY_BYTES);
-        let test_key_vec = serde_cbor::to_vec(&test_key).unwrap();
+        let test_key_vec = cbor::to_vec(test_key);
 
         // CBOR prepends "X " to the binary value.
         let mut expected_test_key_vec = vec![88, 32];
@@ -265,7 +198,7 @@ mod tests {
         assert_eq!(test_key_vec, expected_test_key_vec);
 
         // Deserialize.
-        let new_test_key: TestKey = serde_cbor::from_slice(&test_key_vec).unwrap();
+        let new_test_key: TestKey = cbor::from_slice(&test_key_vec).unwrap();
         assert_eq!(new_test_key, test_key);
     }
 }

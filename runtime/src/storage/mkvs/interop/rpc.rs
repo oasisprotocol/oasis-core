@@ -1,20 +1,18 @@
-use std::time::Duration;
+use std::{io::Read, time::Duration};
 
 use grpcio::{
     CallOption, Channel, Client, Error, GrpcSlice, Marshaller, MessageReader, Method, MethodType,
     Result,
 };
-use serde::{de::DeserializeOwned, Deserialize, Serialize};
-use serde_cbor::Value;
 
 use crate::{
-    common::{cbor, crypto::hash::Hash, namespace::Namespace},
+    common::{crypto::hash::Hash, namespace::Namespace},
     storage::mkvs::{sync, tree::RootType, WriteLog},
 };
 
 // NOTE: The return value is intentionally ignored as it is not required
 //       during the interoperability tests.
-const METHOD_APPLY: Method<ApplyRequest, Value> = Method {
+const METHOD_APPLY: Method<ApplyRequest, cbor::Value> = Method {
     ty: MethodType::Unary,
     name: "/oasis-core.Storage/Apply",
     req_mar: Marshaller {
@@ -69,7 +67,7 @@ const METHOD_SYNC_ITERATE: Method<sync::IterateRequest, sync::ProofResponse> = M
 // Calls should still have a timeout to handle the case where the interop server exits prematurely.
 const CALL_TIMEOUT: Duration = Duration::from_secs(30);
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, cbor::Encode, cbor::Decode)]
 pub struct ApplyRequest {
     pub namespace: Namespace,
     pub root_type: RootType,
@@ -147,10 +145,10 @@ impl StorageClient {
 #[inline]
 fn cbor_encode<T>(t: &T, buf: &mut GrpcSlice)
 where
-    T: Serialize,
+    T: cbor::Encode + Clone,
 {
     // XXX: Avoid an extra copy.
-    let value = cbor::to_vec(t);
+    let value = cbor::to_vec(t.clone());
     unsafe {
         let bytes = buf.realloc(value.len());
         let raw_bytes = &mut *(bytes as *mut [std::mem::MaybeUninit<u8>] as *mut [u8]);
@@ -159,9 +157,13 @@ where
 }
 
 #[inline]
-fn cbor_decode<T>(reader: MessageReader) -> Result<T>
+fn cbor_decode<T>(mut reader: MessageReader) -> Result<T>
 where
-    T: DeserializeOwned,
+    T: cbor::Decode,
 {
-    cbor::from_reader(reader).map_err(|e| Error::Codec(Box::new(e)))
+    let mut data = Vec::new();
+    reader
+        .read_to_end(&mut data)
+        .map_err(|e| Error::Codec(Box::new(e)))?;
+    cbor::from_slice(&data).map_err(|e| Error::Codec(Box::new(e)))
 }

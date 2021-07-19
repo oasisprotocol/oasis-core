@@ -3,7 +3,8 @@ name = "simple-keyvalue-api"
 version = "0.0.0"
 authors = ["Oasis Protocol Foundation <info@oasisprotocol.org>"]
 description = "Example of using a simple key/value store API"
+edition = "2018"
 
 [dependencies]
 oasis-core-runtime = { path = "../../../../runtime" }
-serde = { version = "1.0.116", features = ["derive"] }
+cbor = { version = "0.1.0", package = "oasis-cbor" }

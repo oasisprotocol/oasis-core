@@ -8,7 +8,6 @@ use std::{
 };
 
 use anyhow::{Context as AnyContext, Result as AnyResult};
-use serde::{de::DeserializeOwned, Serialize};
 use thiserror::Error;
 
 use super::{
@@ -17,7 +16,7 @@ use super::{
     types::{TxnBatch, TxnCall, TxnCheckResult, TxnOutput},
 };
 use crate::{
-    common::{cbor, crypto::hash::Hash},
+    common::crypto::hash::Hash,
     consensus::roothash,
     types::{CheckTxResult, Error as RuntimeError, TransactionWeight},
 };
@@ -274,8 +273,8 @@ struct MethodHandlerDispatchImpl<Call, Output> {
 
 impl<Call, Output> MethodHandlerDispatch for MethodHandlerDispatchImpl<Call, Output>
 where
-    Call: DeserializeOwned + 'static,
-    Output: Serialize + 'static,
+    Call: cbor::Decode + 'static,
+    Output: cbor::Encode + 'static,
 {
     fn get_descriptor(&self) -> &MethodDescriptor {
         &self.descriptor
@@ -300,8 +299,8 @@ impl Method {
     /// Create a new enclave method descriptor.
     pub fn new<Call, Output, Handler>(method: MethodDescriptor, handler: Handler) -> Self
     where
-        Call: DeserializeOwned + 'static,
-        Output: Serialize + 'static,
+        Call: cbor::Decode + 'static,
+        Output: cbor::Encode + 'static,
         Handler: MethodHandler<Call, Output> + 'static,
     {
         Method {
@@ -417,7 +416,7 @@ impl MethodDispatcher {
         };
 
         ExecuteTxResult {
-            output: cbor::to_vec(&rsp),
+            output: cbor::to_vec(rsp),
             tags: ctx.take_tags(),
         }
     }
@@ -526,10 +525,8 @@ impl Dispatcher for MethodDispatcher {
 #[cfg(test)]
 mod tests {
     use io_context::Context as IoContext;
-    use serde::{Deserialize, Serialize};
 
     use crate::{
-        common::cbor,
         consensus::{roothash::Header, state::ConsensusState},
         storage::mkvs::{sync::NoopReadSyncer, RootType, Tree},
     };
@@ -538,7 +535,7 @@ mod tests {
 
     const TEST_TIMESTAMP: u64 = 0xcafedeadbeefc0de;
 
-    #[derive(Debug, Eq, PartialEq, Serialize, Deserialize)]
+    #[derive(Debug, Eq, PartialEq, cbor::Encode, cbor::Decode)]
     struct Complex {
         text: String,
         number: u32,
@@ -584,7 +581,7 @@ mod tests {
                 number: 21,
             }),
         };
-        let call_encoded = cbor::to_vec(&call);
+        let call_encoded = cbor::to_vec(call);
 
         let header = Header {
             timestamp: TEST_TIMESTAMP,

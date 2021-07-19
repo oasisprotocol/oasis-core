@@ -6,157 +6,155 @@
 //!
 use std::collections::BTreeMap;
 
-use serde::{Deserialize, Serialize};
-use serde_repr::*;
-
 use crate::{
     common::quantity::Quantity,
     consensus::{address::Address, beacon::EpochTime},
 };
 
 /// A stake transfer.
-#[derive(Clone, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Clone, Debug, Default, PartialEq, Eq, Hash, cbor::Encode, cbor::Decode)]
 pub struct Transfer {
     pub to: Address,
     pub amount: Quantity,
 }
 
 /// A withdrawal from an account.
-#[derive(Clone, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Clone, Debug, Default, PartialEq, Eq, Hash, cbor::Encode, cbor::Decode)]
 pub struct Withdraw {
     pub from: Address,
     pub amount: Quantity,
 }
 
 /// A stake escrow.
-#[derive(Clone, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Clone, Debug, Default, PartialEq, Eq, Hash, cbor::Encode, cbor::Decode)]
 pub struct Escrow {
     pub account: Address,
     pub amount: Quantity,
 }
 
 /// A reclaim escrow.
-#[derive(Clone, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Clone, Debug, Default, PartialEq, Eq, Hash, cbor::Encode, cbor::Decode)]
 pub struct ReclaimEscrow {
     pub account: Address,
     pub shares: Quantity,
 }
 
 /// Kind of staking threshold.
-#[derive(Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize_repr, Deserialize_repr)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, cbor::Encode, cbor::Decode)]
 #[repr(i32)]
 pub enum ThresholdKind {
     /// Entity staking threshold.
-    #[serde(rename = "entity")]
     KindEntity = 0,
     /// Validator node staking threshold.
-    #[serde(rename = "node-validator")]
     KindNodeValidator = 1,
     /// Compute node staking threshold.
-    #[serde(rename = "node-compute")]
     KindNodeCompute = 2,
     /// Storage node staking threshold.
-    #[serde(rename = "node-storage")]
     KindNodeStorage = 3,
     /// Keymanager node staking threshold.
-    #[serde(rename = "node-keymanager")]
     KindNodeKeyManager = 4,
     /// Compute runtime staking threshold.
-    #[serde(rename = "runtime-compute")]
     KindRuntimeCompute = 5,
     /// Keymanager runtime staking threshold.
-    #[serde(rename = "runtime-keymanager")]
     KindRuntimeKeyManager = 6,
 }
 
 /// Entry in the staking ledger.
-#[derive(Clone, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Clone, Debug, Default, PartialEq, Eq, Hash, cbor::Encode, cbor::Decode)]
 pub struct Account {
-    #[serde(default)]
+    #[cbor(optional)]
+    #[cbor(default)]
     pub general: GeneralAccount,
-    #[serde(default)]
+
+    #[cbor(optional)]
+    #[cbor(default)]
     pub escrow: EscrowAccount,
 }
 
 /// General purpose account.
-#[derive(Clone, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Clone, Debug, Default, PartialEq, Eq, Hash, cbor::Encode, cbor::Decode)]
 pub struct GeneralAccount {
-    #[serde(default)]
+    #[cbor(optional)]
+    #[cbor(default)]
     pub balance: Quantity,
-    #[serde(default)]
+
+    #[cbor(optional)]
+    #[cbor(default)]
     pub nonce: u64,
 
-    #[serde(skip_serializing_if = "Option::is_none")]
-    #[serde(default)]
+    #[cbor(optional)]
     pub allowances: Option<BTreeMap<Address, Quantity>>,
 }
 
 /// Escrow account.
-#[derive(Clone, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Clone, Debug, Default, PartialEq, Eq, Hash, cbor::Encode, cbor::Decode)]
 pub struct EscrowAccount {
-    #[serde(default)]
+    #[cbor(optional)]
+    #[cbor(default)]
     pub active: SharePool,
 
-    #[serde(default)]
+    #[cbor(optional)]
+    #[cbor(default)]
     pub debonding: SharePool,
 
-    #[serde(default)]
+    #[cbor(optional)]
+    #[cbor(default)]
     pub commission_schedule: CommissionSchedule,
 
-    #[serde(default)]
+    #[cbor(optional)]
+    #[cbor(default)]
     pub stake_accumulator: StakeAccumulator,
 }
 
 /// Combined balance of serval entries, the relative sizes of which are tracked through shares.
-#[derive(Clone, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Clone, Debug, Default, PartialEq, Eq, Hash, cbor::Encode, cbor::Decode)]
 pub struct SharePool {
-    #[serde(default)]
+    #[cbor(optional)]
+    #[cbor(default)]
     pub balance: Quantity,
 
-    #[serde(default)]
+    #[cbor(optional)]
+    #[cbor(default)]
     pub total_shares: Quantity,
 }
 
 /// Defines a list of commission rates and commission rate bounds with their starting times.
-#[derive(Clone, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Clone, Debug, Default, PartialEq, Eq, Hash, cbor::Encode, cbor::Decode)]
 pub struct CommissionSchedule {
-    #[serde(skip_serializing_if = "Option::is_none")]
-    #[serde(default)]
+    #[cbor(optional)]
     pub rates: Option<Vec<CommissionRateStep>>,
 
-    #[serde(skip_serializing_if = "Option::is_none")]
-    #[serde(default)]
+    #[cbor(optional)]
     pub bounds: Option<Vec<CommissionRateBoundStep>>,
 }
 
 /// Commission rate and its starting time.
-#[derive(Clone, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Clone, Debug, Default, PartialEq, Eq, Hash, cbor::Encode, cbor::Decode)]
 pub struct CommissionRateStep {
-    #[serde(default)]
     pub start: EpochTime,
-
-    #[serde(default)]
     pub rate: Quantity,
 }
 
 /// Commission rate bound and its starting time.
-#[derive(Clone, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Clone, Debug, Default, PartialEq, Eq, Hash, cbor::Encode, cbor::Decode)]
 pub struct CommissionRateBoundStep {
-    #[serde(default)]
+    #[cbor(optional)]
+    #[cbor(default)]
     pub start: EpochTime,
 
-    #[serde(default)]
+    #[cbor(optional)]
+    #[cbor(default)]
     pub rate_min: Quantity,
 
-    #[serde(default)]
+    #[cbor(optional)]
+    #[cbor(default)]
     pub rate_max: Quantity,
 }
 
 /// Per escrow account stake accumulator.
-#[derive(Clone, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Clone, Debug, Default, PartialEq, Eq, Hash, cbor::Encode, cbor::Decode)]
 pub struct StakeAccumulator {
-    #[serde(skip_serializing_if = "Option::is_none")]
-    #[serde(default)]
+    #[cbor(optional)]
     pub claims: Option<BTreeMap<StakeClaim, Vec<StakeThreshold>>>,
 }
 
@@ -164,40 +162,35 @@ pub struct StakeAccumulator {
 pub type StakeClaim = String;
 
 /// Stake threshold used in the stake accumulator.
-#[derive(Clone, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Clone, Debug, Default, PartialEq, Eq, Hash, cbor::Encode, cbor::Decode)]
 pub struct StakeThreshold {
-    #[serde(skip_serializing_if = "Option::is_none")]
-    #[serde(default)]
+    #[cbor(optional)]
     pub global: Option<ThresholdKind>,
 
-    #[serde(skip_serializing_if = "Option::is_none")]
-    #[serde(default)]
-    #[serde(rename = "const")]
+    #[cbor(rename = "const")]
+    #[cbor(optional)]
     pub constant: Option<Quantity>,
 }
 
 /// Delegation descriptor.
-#[derive(Clone, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Clone, Debug, Default, PartialEq, Eq, Hash, cbor::Encode, cbor::Decode)]
 pub struct Delegation {
     pub shares: Quantity,
 }
 
 /// Debonding delegation descriptor.
-#[derive(Clone, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Clone, Debug, Default, PartialEq, Eq, Hash, cbor::Encode, cbor::Decode)]
 pub struct DebondingDelegation {
     pub shares: Quantity,
 
-    #[serde(rename = "debond_end")]
+    #[cbor(rename = "debond_end")]
     pub debond_end_time: EpochTime,
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{
-        common::cbor,
-        consensus::address::{COMMON_POOL_ADDRESS, GOVERNANCE_DEPOSITS_ADDRESS},
-    };
+    use crate::consensus::address::{COMMON_POOL_ADDRESS, GOVERNANCE_DEPOSITS_ADDRESS};
 
     #[test]
     fn test_consistent_accounts() {
@@ -207,7 +200,7 @@ mod tests {
             "oWdnZW5lcmFsomVub25jZRghZ2JhbGFuY2VBCg==",
             Account {
                 general: GeneralAccount {
-                    balance: Quantity::from(10),
+                    balance: Quantity::from(10u32),
                     nonce: 33,
                     ..Default::default()
                 },
@@ -220,8 +213,8 @@ mod tests {
                 Account {
                     general: GeneralAccount {
                         allowances: Some([
-                            (COMMON_POOL_ADDRESS.clone(), Quantity::from(100)),
-                            (GOVERNANCE_DEPOSITS_ADDRESS.clone(), Quantity::from(33))
+                            (COMMON_POOL_ADDRESS.clone(), Quantity::from(100u32)),
+                            (GOVERNANCE_DEPOSITS_ADDRESS.clone(), Quantity::from(33u32))
                         ].iter().cloned().collect()),
                         ..Default::default()
                         },
@@ -234,15 +227,15 @@ mod tests {
             Account {
                 escrow: EscrowAccount {
                     active: SharePool{
-                        balance: Quantity::from(1100),
-                        total_shares: Quantity::from(11),
+                        balance: Quantity::from(1100u32),
+                        total_shares: Quantity::from(11u32),
                     },
                     debonding: SharePool::default(),
                     commission_schedule: CommissionSchedule {
                         bounds: Some(vec![CommissionRateBoundStep{
                             start: 33,
-                            rate_min: Quantity::from(10),
-                            rate_max: Quantity::from(1000),
+                            rate_min: Quantity::from(10u32),
+                            rate_max: Quantity::from(1000u32),
                         }]),
                         ..Default::default()
                     },
@@ -252,7 +245,7 @@ mod tests {
                                 "entity".to_string(),
                                 vec![
                                     StakeThreshold{
-                                        constant: Some(Quantity::from(77)),
+                                        constant: Some(Quantity::from(77u32)),
                                         ..Default::default()
                                     },
                                     StakeThreshold{
@@ -282,7 +275,7 @@ mod tests {
             (
                 "oWZzaGFyZXNBZA==",
                 Delegation {
-                    shares: Quantity::from(100),
+                    shares: Quantity::from(100u32),
                 },
             ),
         ];
@@ -303,7 +296,7 @@ mod tests {
             (
                 "omZzaGFyZXNBZGpkZWJvbmRfZW5kFw==",
                 DebondingDelegation {
-                    shares: Quantity::from(100),
+                    shares: Quantity::from(100u32),
                     debond_end_time: 23,
                 },
             ),

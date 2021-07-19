@@ -12,11 +12,10 @@ use std::{
 use anyhow::{anyhow, Result as AnyResult};
 use crossbeam::channel;
 use io_context::Context;
-use slog::Logger;
+use slog::{debug, error, info, warn, Logger};
 
 use crate::{
     common::{
-        cbor,
         crypto::{
             hash::Hash,
             signature::{Signature, Signer},
@@ -329,7 +328,7 @@ impl Dispatcher {
                         header,
                         epoch,
                         method,
-                        args.unwrap_or(cbor::Value::Null),
+                        args,
                     )
                 }
                 Body::RuntimeAbortRequest {} => {
@@ -535,7 +534,10 @@ impl Dispatcher {
 
         let rak_sig = if self.rak.public_key().is_some() {
             self.rak
-                .sign(&COMPUTE_RESULTS_HEADER_CONTEXT, &cbor::to_vec(&header))
+                .sign(
+                    &COMPUTE_RESULTS_HEADER_CONTEXT,
+                    &cbor::to_vec(header.clone()),
+                )
                 .unwrap()
         } else {
             Signature::default()
@@ -768,7 +770,7 @@ impl Dispatcher {
 
         debug!(self.logger, "Local RPC call dispatch complete");
 
-        let response = cbor::to_vec(&response);
+        let response = cbor::to_vec(response);
         Ok(Body::RuntimeLocalRPCCallResponse { response })
     }
 

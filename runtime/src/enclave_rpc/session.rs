@@ -2,14 +2,12 @@
 use std::{collections::HashSet, io::Write, mem, sync::Arc};
 
 use anyhow::Result;
-use serde::{Deserialize, Serialize};
 use snow;
 use thiserror::Error;
 
 use super::types::Message;
 use crate::{
     common::{
-        cbor,
         crypto::signature::{PublicKey, Signature, Signer},
         sgx::avr,
     },
@@ -154,7 +152,7 @@ impl Session {
     /// be transmitted to the remote session counterpart.
     pub fn write_message<W: Write>(&mut self, msg: Message, mut writer: W) -> Result<()> {
         if let State::Transport(ref mut state) = self.state {
-            let msg = cbor::to_vec(&msg);
+            let msg = cbor::to_vec(msg);
             let len = state.write_message(&msg, &mut self.buf)?;
             writer.write_all(&self.buf[..len])?;
 
@@ -189,7 +187,7 @@ impl Session {
                         .unwrap(),
                 };
 
-                cbor::to_vec(&rak_binding)
+                cbor::to_vec(rak_binding)
             }
             None => vec![],
         }
@@ -270,7 +268,7 @@ impl Session {
 /// * `rak_pub` contains the public part of RAK.
 /// * `binding` is signed by `rak_pub` and binds the session's static
 ///   public key to RAK.
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Clone, cbor::Encode, cbor::Decode)]
 pub struct RAKBinding {
     pub avr: avr::AVR,
     pub rak_pub: PublicKey,

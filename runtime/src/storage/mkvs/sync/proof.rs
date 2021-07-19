@@ -3,8 +3,6 @@ use std::ops::{Deref, DerefMut};
 use anyhow::{anyhow, Result};
 use arbitrary::Arbitrary;
 use io_context::Context;
-use serde::{Deserialize, Serialize};
-use serde_bytes;
 
 use crate::{
     common::crypto::hash::Hash,
@@ -17,8 +15,9 @@ const PROOF_ENTRY_FULL: u8 = 0x01;
 const PROOF_ENTRY_HASH: u8 = 0x02;
 
 /// A raw proof entry.
-#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize, Arbitrary)]
-pub struct RawProofEntry(#[serde(with = "serde_bytes")] pub Vec<u8>);
+#[derive(Clone, Debug, Default, PartialEq, cbor::Encode, cbor::Decode, Arbitrary)]
+#[cbor(transparent)]
+pub struct RawProofEntry(pub Vec<u8>);
 
 impl AsRef<[u8]> for RawProofEntry {
     fn as_ref(&self) -> &[u8] {
@@ -53,7 +52,7 @@ impl From<Vec<u8>> for RawProofEntry {
 }
 
 /// A Merkle proof for a subtree.
-#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, Default, PartialEq, cbor::Encode, cbor::Decode)]
 pub struct Proof {
     /// The root hash this proof is for. This should only be used as a quick
     /// sanity check and proof verification MUST use an independently obtained
@@ -153,8 +152,6 @@ impl ProofVerifier {
 mod test {
     use base64;
     use io_context::Context;
-
-    use crate::common::cbor;
 
     use super::*;
 

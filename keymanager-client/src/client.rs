@@ -6,15 +6,13 @@ use std::{
 };
 
 use futures::future::{self, BoxFuture};
-#[cfg(not(target_env = "sgx"))]
-use grpcio::Channel;
 use io_context::Context;
 use lru::LruCache;
 
 use oasis_core_client::RpcClient;
 use oasis_core_keymanager_api_common::*;
 use oasis_core_runtime::{
-    common::{cbor, namespace::Namespace, sgx::avr::EnclaveIdentity},
+    common::{namespace::Namespace, sgx::avr::EnclaveIdentity},
     enclave_rpc::session,
     protocol::Protocol,
     rak::RAK,
@@ -104,26 +102,6 @@ impl RemoteClient {
             enclaves,
             protocol,
             rak,
-            keys_cache_sizes,
-        )
-    }
-
-    /// Create a new key manager client with gRPC transport.
-    #[cfg(not(target_env = "sgx"))]
-    pub fn new_grpc(
-        runtime_id: Namespace,
-        enclaves: Option<HashSet<EnclaveIdentity>>,
-        channel: Channel,
-        keys_cache_sizes: usize,
-    ) -> Self {
-        Self::new(
-            runtime_id,
-            RpcClient::new_grpc(
-                session::Builder::new().remote_enclaves(enclaves),
-                channel,
-                runtime_id,
-                KEY_MANAGER_ENDPOINT,
-            ),
             keys_cache_sizes,
         )
     }

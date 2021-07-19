@@ -1,7 +1,6 @@
 use std::convert::{TryFrom, TryInto};
 
 use anyhow::{anyhow, Result};
-use serde::{self, Deserialize, Serialize};
 use tendermint::block::signed_header::SignedHeader as TMSignedHeader;
 use tendermint_proto::{types::LightBlock as RawLightBlock, Protobuf};
 
@@ -14,11 +13,9 @@ use crate::{
 pub const BACKEND_NAME: &str = "tendermint";
 
 /// Light consensus block.
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, cbor::Encode, cbor::Decode)]
 pub struct LightBlock {
     pub height: i64,
-
-    #[serde(with = "serde_bytes")]
     pub meta: Vec<u8>,
 }
 
@@ -29,8 +26,7 @@ impl LightBlock {
 }
 
 /// Tendermint light consensus block metadata.
-#[derive(Debug, Serialize, Deserialize, Clone)]
-#[serde(try_from = "RawLightBlock", into = "RawLightBlock")]
+#[derive(Debug, Clone)]
 pub struct LightBlockMeta {
     pub signed_header: TMSignedHeader,
     // TODO: add other fields if/when needed.

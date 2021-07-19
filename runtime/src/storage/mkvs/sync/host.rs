@@ -6,7 +6,10 @@ use io_context::Context;
 use crate::{
     protocol::{Protocol, ProtocolError},
     storage::mkvs::sync::*,
-    types::{Body, HostStorageEndpoint, StorageSyncRequest, StorageSyncResponse},
+    types::{
+        Body, HostStorageEndpoint, StorageSyncRequest, StorageSyncRequestWithEndpoint,
+        StorageSyncResponse,
+    },
 };
 
 /// A proxy read syncer which forwards calls to the runtime host.
@@ -29,14 +32,14 @@ impl HostReadSyncer {
         ctx: Context,
         request: StorageSyncRequest,
     ) -> Result<ProofResponse> {
-        let request = Body::HostStorageSyncRequest {
+        let request = Body::HostStorageSyncRequest(StorageSyncRequestWithEndpoint {
             endpoint: self.endpoint,
             request,
-        };
+        });
         match self.protocol.make_request(ctx, request) {
-            Ok(Body::HostStorageSyncResponse {
-                response: StorageSyncResponse::ProofResponse(response),
-            }) => Ok(response),
+            Ok(Body::HostStorageSyncResponse(StorageSyncResponse::ProofResponse(response))) => {
+                Ok(response)
+            }
             Ok(_) => Err(ProtocolError::InvalidResponse.into()),
             Err(error) => Err(error),
         }

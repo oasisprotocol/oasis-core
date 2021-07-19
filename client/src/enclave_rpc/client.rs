@@ -12,17 +12,13 @@ use futures::{
     channel::{mpsc, oneshot},
     prelude::*,
 };
-#[cfg(not(target_env = "sgx"))]
-use grpcio::Channel;
 use io_context::Context;
-use serde::{de::DeserializeOwned, Serialize};
 use thiserror::Error;
 use tokio;
 
-#[cfg(not(target_env = "sgx"))]
-use oasis_core_runtime::common::namespace::Namespace;
 use oasis_core_runtime::{
-    common::{cbor, sgx::avr::EnclaveIdentity},
+    cbor,
+    common::sgx::avr::EnclaveIdentity,
     enclave_rpc::{
         session::{Builder, Session},
         types,
@@ -30,10 +26,6 @@ use oasis_core_runtime::{
     protocol::Protocol,
 };
 
-#[cfg(not(target_env = "sgx"))]
-use super::api::EnclaveRPCClient;
-#[cfg(not(target_env = "sgx"))]
-use super::transport::GrpcTransport;
 use super::transport::{RuntimeTransport, Transport};
 
 /// Internal send queue backlog.
@@ -53,7 +45,7 @@ pub enum RpcClientError {
     #[error("client dropped")]
     Dropped,
     #[error("decode error: {0}")]
-    DecodeError(#[from] cbor::Error),
+    DecodeError(#[from] cbor::DecodeError),
     #[error("unknown error: {0}")]
     Unknown(#[from] anyhow::Error),
 }
@@ -137,24 +129,6 @@ impl RpcClient {
         )
     }
 
-    /// Construct an unconnected RPC client with gRPC transport.
-    #[cfg(not(target_env = "sgx"))]
-    pub fn new_grpc(
-        builder: Builder,
-        channel: Channel,
-        runtime_id: Namespace,
-        endpoint: &str,
-    ) -> Self {
-        Self::new(
-            Box::new(GrpcTransport {
-                grpc_client: EnclaveRPCClient::new(channel),
-                runtime_id,
-                endpoint: endpoint.to_owned(),
-            }),
-            builder,
-        )
-    }
-
     /// Call a remote method.
     pub async fn call<C, O>(
         &self,
@@ -163,8 +137,8 @@ impl RpcClient {
         args: C,
     ) -> Result<O, RpcClientError>
     where
-        C: Serialize,
-        O: DeserializeOwned + Send + 'static,
+        C: cbor::Encode,
+        O: cbor::Decode + Send + 'static,
     {
         let request = types::Request {
             method: method.to_owned(),
