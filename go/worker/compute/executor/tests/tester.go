@@ -16,7 +16,9 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/roothash/api/block"
 	"github.com/oasisprotocol/oasis-core/go/runtime/transaction"
 	storage "github.com/oasisprotocol/oasis-core/go/storage/api"
+	"github.com/oasisprotocol/oasis-core/go/worker/common/p2p"
 	"github.com/oasisprotocol/oasis-core/go/worker/compute/executor"
+	executorAPI "github.com/oasisprotocol/oasis-core/go/worker/compute/executor/api"
 	"github.com/oasisprotocol/oasis-core/go/worker/compute/executor/committee"
 )
 
@@ -86,8 +88,10 @@ func testQueueTx(
 	roothash roothash.Backend,
 	st storage.Backend,
 ) {
+	ctx := context.Background()
+
 	// Subscribe to roothash blocks.
-	blocksCh, sub, err := roothash.WatchBlocks(context.Background(), runtimeID)
+	blocksCh, sub, err := roothash.WatchBlocks(ctx, runtimeID)
 	require.NoError(t, err, "WatchBlocks")
 	defer sub.Close()
 
@@ -97,11 +101,20 @@ func testQueueTx(
 		t.Fatalf("failed to receive block")
 	}
 
-	// Queue a test call.
-	// Include a timestamp so each test invocation uses an unique key.
-	testCall := transaction.RawCheckedTransaction([]byte("hello world at: " + time.Now().String()))
-	err = rtNode.QueueTx(testCall)
-	require.NoError(t, err, "QueueCall")
+	// Include a timestamp so each test invocation uses a unique transaction.
+	testTx := []byte("hello world at: " + time.Now().String())
+	// Submit a test transaction.
+	handled, err := rtNode.HandlePeerMessage(
+		ctx,
+		&p2p.Message{
+			Tx: &executorAPI.Tx{
+				Data: testTx,
+			},
+		},
+		false,
+	)
+	require.NoError(t, err, "tx message should be handled")
+	require.True(t, handled, "tx message should be handled")
 
 	// Node should transition to ProcessingBatch state.
 	waitForNodeTransition(t, stateCh, committee.ProcessingBatch)
@@ -118,11 +131,14 @@ blockLoop:
 		select {
 		case annBlk := <-blocksCh:
 			blk := annBlk.Block
-
-			// Check that correct block was generated.
 			require.EqualValues(t, block.Normal, blk.Header.HeaderType)
 
-			ctx := context.Background()
+			if blk.Header.Round <= 2 {
+				// Round <= 2 - genesis round.
+				continue
+			}
+
+			// Check that correct block was generated.
 			tree := transaction.NewTree(st, storage.Root{
 				Namespace: blk.Header.Namespace,
 				Version:   blk.Header.Round,
@@ -135,9 +151,9 @@ blockLoop:
 			txs, err = tree.GetTransactions(ctx)
 			require.NoError(t, err, "GetTransactions")
 			require.Len(t, txs, 1, "there should be one transaction")
-			require.EqualValues(t, testCall.Raw(), txs[0].Input)
+			require.EqualValues(t, testTx, txs[0].Input)
 			// NOTE: Mock host produces output equal to input.
-			require.EqualValues(t, testCall.Raw(), txs[0].Output)
+			require.EqualValues(t, testTx, txs[0].Output)
 
 			// NOTE: Mock host produces an empty state root.
 			var stateRoot hash.Hash
@@ -149,7 +165,26 @@ blockLoop:
 		}
 	}
 
-	// Requeuing same call should fail.
-	err = rtNode.QueueTx(testCall)
-	require.Error(t, err, "QueueCall duplicate transaction")
+	// Submitting the same transaction should not result in a new block.
+	handled, err = rtNode.HandlePeerMessage(
+		ctx,
+		&p2p.Message{
+			Tx: &executorAPI.Tx{
+				Data: testTx,
+			},
+		},
+		false,
+	)
+	require.NoError(t, err, "tx message should be handled")
+	require.True(t, handled, "tx message should be handled")
+
+blockLoop2:
+	for {
+		select {
+		case <-blocksCh:
+			t.Fatal("unexpected block as a result of a duplicate transaction")
+		case <-time.After(recvTimeout):
+			break blockLoop2
+		}
+	}
 }

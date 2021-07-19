@@ -19,6 +19,7 @@ type Worker struct {
 
 	scheduleMaxTxPoolSize uint64
 	scheduleTxCacheSize   uint64
+	checkTxMaxBatchSize   uint64
 
 	commonWorker *workerCommon.Worker
 	registration *registration.Worker
@@ -154,6 +155,7 @@ func (w *Worker) registerRuntime(commonNode *committeeCommon.Node) error {
 		rp,
 		w.scheduleMaxTxPoolSize,
 		w.scheduleTxCacheSize,
+		w.checkTxMaxBatchSize,
 	)
 	if err != nil {
 		return err
@@ -176,6 +178,7 @@ func newWorker(
 	registration *registration.Worker,
 	scheduleMaxTxPoolSize uint64,
 	scheduleTxCacheSize uint64,
+	checkTxMaxBatchSize uint64,
 ) (*Worker, error) {
 	ctx, cancelCtx := context.WithCancel(context.Background())
 
@@ -184,6 +187,7 @@ func newWorker(
 		commonWorker:          commonWorker,
 		scheduleMaxTxPoolSize: scheduleMaxTxPoolSize,
 		scheduleTxCacheSize:   scheduleTxCacheSize,
+		checkTxMaxBatchSize:   checkTxMaxBatchSize,
 		registration:          registration,
 		runtimes:              make(map[common.Namespace]*committee.Node),
 		ctx:                   ctx,

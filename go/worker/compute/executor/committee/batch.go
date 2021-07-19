@@ -44,5 +44,6 @@ func (ub *unresolvedBatch) resolve(ctx context.Context, sb storage.Backend) (tra
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch inputs from storage: %w", err)
 	}
+	ub.batch = batch
 	return batch, nil
 }
