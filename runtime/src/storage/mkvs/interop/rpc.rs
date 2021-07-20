@@ -1,67 +1,13 @@
-use std::{io::Read, time::Duration};
+use std::{path::PathBuf, time::Duration};
 
-use grpcio::{
-    CallOption, Channel, Client, Error, GrpcSlice, Marshaller, MessageReader, Method, MethodType,
-    Result,
-};
+use anyhow::Result;
+use base64::STANDARD;
+use jsonrpc::{simple_uds::UdsTransport, Client};
+use serde::{Deserialize, Serialize};
 
 use crate::{
     common::{crypto::hash::Hash, namespace::Namespace},
     storage::mkvs::{sync, tree::RootType, WriteLog},
-};
-
-// NOTE: The return value is intentionally ignored as it is not required
-//       during the interoperability tests.
-const METHOD_APPLY: Method<ApplyRequest, cbor::Value> = Method {
-    ty: MethodType::Unary,
-    name: "/oasis-core.Storage/Apply",
-    req_mar: Marshaller {
-        ser: cbor_encode,
-        de: cbor_decode,
-    },
-    resp_mar: Marshaller {
-        ser: cbor_encode,
-        de: cbor_decode,
-    },
-};
-
-const METHOD_SYNC_GET: Method<sync::GetRequest, sync::ProofResponse> = Method {
-    ty: MethodType::Unary,
-    name: "/oasis-core.Storage/SyncGet",
-    req_mar: Marshaller {
-        ser: cbor_encode,
-        de: cbor_decode,
-    },
-    resp_mar: Marshaller {
-        ser: cbor_encode,
-        de: cbor_decode,
-    },
-};
-
-const METHOD_SYNC_GET_PREFIXES: Method<sync::GetPrefixesRequest, sync::ProofResponse> = Method {
-    ty: MethodType::Unary,
-    name: "/oasis-core.Storage/SyncGetPrefixes",
-    req_mar: Marshaller {
-        ser: cbor_encode,
-        de: cbor_decode,
-    },
-    resp_mar: Marshaller {
-        ser: cbor_encode,
-        de: cbor_decode,
-    },
-};
-
-const METHOD_SYNC_ITERATE: Method<sync::IterateRequest, sync::ProofResponse> = Method {
-    ty: MethodType::Unary,
-    name: "/oasis-core.Storage/SyncIterate",
-    req_mar: Marshaller {
-        ser: cbor_encode,
-        de: cbor_decode,
-    },
-    resp_mar: Marshaller {
-        ser: cbor_encode,
-        de: cbor_decode,
-    },
 };
 
 // Calls should still have a timeout to handle the case where the interop server exits prematurely.
@@ -78,92 +24,113 @@ pub struct ApplyRequest {
     pub writelog: WriteLog,
 }
 
+base64_serde_type!(Base64Standard, STANDARD);
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct RPCRequest {
+    #[serde(with = "Base64Standard")]
+    pub payload: Vec<u8>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct RPCResponse {
+    #[serde(with = "Base64Standard")]
+    pub payload: Vec<u8>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct ApplyResponse {}
+
 /// A (simplified) storage gRPC service client.
 ///
 /// # Note
 ///
 /// This client only implements methods required for testing the
 /// interoperability of the read syncer interface.
-#[derive(Clone)]
 pub struct StorageClient {
     client: Client,
+    socket_path: PathBuf,
 }
 
 impl StorageClient {
-    pub fn new(channel: Channel) -> Self {
+    pub fn new(socket_path: PathBuf) -> Self {
+        let transport = UdsTransport {
+            sockpath: socket_path.clone(),
+            timeout: Some(CALL_TIMEOUT),
+        };
         StorageClient {
-            client: Client::new(channel),
+            client: Client::with_transport(transport),
+            socket_path: socket_path,
         }
     }
 
     pub fn apply(&self, request: &ApplyRequest) -> Result<()> {
-        self.client
-            .unary_call(
-                &METHOD_APPLY,
-                &request,
-                CallOption::default()
-                    .wait_for_ready(true)
-                    .timeout(CALL_TIMEOUT),
-            )
-            .map(|_| ())
+        let req = RPCRequest {
+            payload: cbor::to_vec(request.clone()),
+        };
+        match self
+            .client
+            .call::<ApplyResponse>("Database.Apply", &[jsonrpc::arg(req)])
+        {
+            Ok(_) => Ok(()),
+            Err(err) => Err(err.into()),
+        }
     }
 
     pub fn sync_get(&self, request: &sync::GetRequest) -> Result<sync::ProofResponse> {
-        self.client.unary_call(
-            &METHOD_SYNC_GET,
-            &request,
-            CallOption::default()
-                .wait_for_ready(true)
-                .timeout(CALL_TIMEOUT),
-        )
+        let req = RPCRequest {
+            payload: cbor::to_vec(request.clone()),
+        };
+        match self
+            .client
+            .call::<RPCResponse>("Database.SyncGet", &[jsonrpc::arg(req)])
+        {
+            Ok(resp) => match cbor::from_slice::<sync::ProofResponse>(&resp.payload) {
+                Ok(proof) => Ok(proof),
+                Err(err) => Err(err.into()),
+            },
+            Err(err) => Err(err.into()),
+        }
     }
 
     pub fn sync_get_prefixes(
         &self,
         request: &sync::GetPrefixesRequest,
     ) -> Result<sync::ProofResponse> {
-        self.client.unary_call(
-            &METHOD_SYNC_GET_PREFIXES,
-            &request,
-            CallOption::default()
-                .wait_for_ready(true)
-                .timeout(CALL_TIMEOUT),
-        )
+        let req = RPCRequest {
+            payload: cbor::to_vec(request.clone()),
+        };
+        match self
+            .client
+            .call::<RPCResponse>("Database.SyncGetPrefixes", &[jsonrpc::arg(req)])
+        {
+            Ok(resp) => match cbor::from_slice::<sync::ProofResponse>(&resp.payload) {
+                Ok(proof) => Ok(proof),
+                Err(err) => Err(err.into()),
+            },
+            Err(err) => Err(err.into()),
+        }
     }
 
     pub fn sync_iterate(&self, request: &sync::IterateRequest) -> Result<sync::ProofResponse> {
-        self.client.unary_call(
-            &METHOD_SYNC_ITERATE,
-            &request,
-            CallOption::default()
-                .wait_for_ready(true)
-                .timeout(CALL_TIMEOUT),
-        )
+        let req = RPCRequest {
+            payload: cbor::to_vec(request.clone()),
+        };
+        match self
+            .client
+            .call::<RPCResponse>("Database.SyncIterate", &[jsonrpc::arg(req)])
+        {
+            Ok(resp) => match cbor::from_slice::<sync::ProofResponse>(&resp.payload) {
+                Ok(proof) => Ok(proof),
+                Err(err) => Err(err.into()),
+            },
+            Err(err) => Err(err.into()),
+        }
     }
 }
 
-#[inline]
-fn cbor_encode<T>(t: &T, buf: &mut GrpcSlice)
-where
-    T: cbor::Encode + Clone,
-{
-    // XXX: Avoid an extra copy.
-    let value = cbor::to_vec(t.clone());
-    unsafe {
-        let bytes = buf.realloc(value.len());
-        let raw_bytes = &mut *(bytes as *mut [std::mem::MaybeUninit<u8>] as *mut [u8]);
-        raw_bytes.copy_from_slice(&value);
+impl Clone for StorageClient {
+    fn clone(&self) -> Self {
+        StorageClient::new(self.socket_path.clone())
     }
-}
-
-#[inline]
-fn cbor_decode<T>(mut reader: MessageReader) -> Result<T>
-where
-    T: cbor::Decode,
-{
-    let mut data = Vec::new();
-    reader
-        .read_to_end(&mut data)
-        .map_err(|e| Error::Codec(Box::new(e)))?;
-    cbor::from_slice(&data).map_err(|e| Error::Codec(Box::new(e)))
 }

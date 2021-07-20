@@ -6,11 +6,10 @@ use std::{
     any::Any,
     fmt,
     process::{Child, Command},
-    sync::Arc,
+    thread, time,
 };
 
 use anyhow::Result;
-use grpcio::{ChannelBuilder, EnvBuilder};
 use io_context::Context;
 use tempfile::{self, TempDir};
 
@@ -73,13 +72,12 @@ impl ProtocolServer {
             .arg(fixture.unwrap_or(Fixture::None).to_string());
         let server_process = server_cmd.spawn().expect("protocol server failed to start");
 
+        // Wait for the server to initialize, because the client is too
+        // stupid to attempt to reconnect if it can't the first time around.
+        thread::sleep(time::Duration::from_secs(5));
+
         // Create connection with the protocol server.
-        let env = Arc::new(EnvBuilder::new().build());
-        let channel = ChannelBuilder::new(env)
-            .max_receive_message_len(i32::max_value())
-            .max_send_message_len(i32::max_value())
-            .connect(&format!("unix:{}", socket_path.to_str().unwrap()));
-        let client = rpc::StorageClient::new(channel);
+        let client = rpc::StorageClient::new(socket_path.clone());
 
         Self {
             server_process,
