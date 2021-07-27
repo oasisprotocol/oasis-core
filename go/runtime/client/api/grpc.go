@@ -36,8 +36,6 @@ var (
 	methodGetTx = serviceName.NewMethod("GetTx", GetTxRequest{})
 	// methodGetTxByBlockHash is the GetTxByBlockHash method.
 	methodGetTxByBlockHash = serviceName.NewMethod("GetTxByBlockHash", GetTxByBlockHashRequest{})
-	// methodGetTxs is the GetTxs method.
-	methodGetTxs = serviceName.NewMethod("GetTxs", GetTxsRequest{})
 	// methodGetTransactions is the GetTransactions method.
 	methodGetTransactions = serviceName.NewMethod("GetTransactions", GetTransactionsRequest{})
 	// methodGetEvents is the GetEvents method.
@@ -90,10 +88,6 @@ var (
 			{
 				MethodName: methodGetTxByBlockHash.ShortName(),
 				Handler:    handlerGetTxByBlockHash,
-			},
-			{
-				MethodName: methodGetTxs.ShortName(),
-				Handler:    handlerGetTxs,
 			},
 			{
 				MethodName: methodGetTransactions.ShortName(),
@@ -351,29 +345,6 @@ func handlerGetTxByBlockHash( // nolint: golint
 	return interceptor(ctx, &rq, info, handler)
 }
 
-func handlerGetTxs( // nolint: golint
-	srv interface{},
-	ctx context.Context,
-	dec func(interface{}) error,
-	interceptor grpc.UnaryServerInterceptor,
-) (interface{}, error) {
-	var rq GetTxsRequest
-	if err := dec(&rq); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(RuntimeClient).GetTxs(ctx, &rq)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: methodGetTxs.FullName(),
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(RuntimeClient).GetTxs(ctx, req.(*GetTxsRequest))
-	}
-	return interceptor(ctx, &rq, info, handler)
-}
-
 func handlerGetTransactions( // nolint: golint
 	srv interface{},
 	ctx context.Context,
@@ -610,14 +581,6 @@ func (c *runtimeClient) GetTxByBlockHash(ctx context.Context, request *GetTxByBl
 		return nil, err
 	}
 	return &rsp, nil
-}
-
-func (c *runtimeClient) GetTxs(ctx context.Context, request *GetTxsRequest) ([][]byte, error) {
-	var rsp [][]byte
-	if err := c.conn.Invoke(ctx, methodGetTxs.FullName(), request, &rsp); err != nil {
-		return nil, err
-	}
-	return rsp, nil
 }
 
 func (c *runtimeClient) GetTransactions(ctx context.Context, request *GetTransactionsRequest) ([][]byte, error) {

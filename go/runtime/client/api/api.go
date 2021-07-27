@@ -70,12 +70,6 @@ type RuntimeClient interface {
 	// block is identified by its hash instead of its round number.
 	GetTxByBlockHash(ctx context.Context, request *GetTxByBlockHashRequest) (*TxResult, error)
 
-	// GetTxs fetches all runtime transactions in a given block.
-	//
-	// DEPRECATED: This method is deprecated and may be removed in a future release, use
-	//             `GetTransactions` instead.
-	GetTxs(ctx context.Context, request *GetTxsRequest) ([][]byte, error)
-
 	// GetTransactions fetches all runtime transactions in a given block.
 	GetTransactions(ctx context.Context, request *GetTransactionsRequest) ([][]byte, error)
 
@@ -148,13 +142,6 @@ type GetTxByBlockHashRequest struct {
 	RuntimeID common.Namespace `json:"runtime_id"`
 	BlockHash hash.Hash        `json:"block_hash"`
 	Index     uint32           `json:"index"`
-}
-
-// GetTxsRequest is a GetTxs request.
-type GetTxsRequest struct {
-	RuntimeID common.Namespace `json:"runtime_id"`
-	Round     uint64           `json:"round"`
-	IORoot    hash.Hash        `json:"io_root"`
 }
 
 // GetTransactionsRequest is a GetTransactions request.

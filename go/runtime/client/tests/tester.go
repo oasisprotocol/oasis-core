@@ -148,13 +148,7 @@ func testQuery(
 	require.True(t, strings.HasPrefix(string(tx.Output), "hello world"))
 
 	// Transactions (check the mock worker for content).
-	txns, err := c.GetTxs(ctx, &api.GetTxsRequest{RuntimeID: runtimeID, Round: blk.Header.Round, IORoot: blk.Header.IORoot})
-	require.NoError(t, err, "GetTxs")
-	require.Len(t, txns, 1)
-	// Check for values from TestNode/Client/SubmitTx
-	require.EqualValues(t, testInput, txns[0])
-
-	txns, err = c.GetTransactions(ctx, &api.GetTransactionsRequest{RuntimeID: runtimeID, Round: blk.Header.Round})
+	txns, err := c.GetTransactions(ctx, &api.GetTransactionsRequest{RuntimeID: runtimeID, Round: blk.Header.Round})
 	require.NoError(t, err, "GetTransactions")
 	require.Len(t, txns, 1)
 	// Check for values from TestNode/Client/SubmitTx
