@@ -8,7 +8,7 @@ use chrono::prelude::*;
 use lazy_static::lazy_static;
 use oid_registry::{OID_PKCS1_RSAENCRYPTION, OID_PKCS1_SHA256WITHRSA};
 use percent_encoding;
-use rsa::{padding::PaddingScheme, Hash, PublicKey, RSAPublicKey};
+use rsa::{padding::PaddingScheme, pkcs1::FromRsaPublicKey, Hash, PublicKey, RsaPublicKey};
 use serde_json;
 use sgx_isa::{AttributesFlags, Report};
 use sha2::{Digest, Sha256};
@@ -450,19 +450,19 @@ fn validate_avr_signature(
     }
 }
 
-fn extract_certificate_rsa_public_key(cert: &X509Certificate) -> Result<RSAPublicKey> {
+fn extract_certificate_rsa_public_key(cert: &X509Certificate) -> Result<RsaPublicKey> {
     let cert_spki = &cert.tbs_certificate.subject_pki;
     if cert_spki.algorithm.algorithm != OID_PKCS1_RSAENCRYPTION {
         return Err(anyhow!("invalid certificate public key algorithm"));
     }
 
-    match RSAPublicKey::from_pkcs1(cert_spki.subject_public_key.data) {
+    match RsaPublicKey::from_pkcs1_der(cert_spki.subject_public_key.data) {
         Ok(pk) => Ok(pk),
         Err(err) => return Err(anyhow!("invalid certificate public key: {:?}", err)),
     }
 }
 
-fn check_certificate_rsa_signature(cert: &X509Certificate, public_key: &RSAPublicKey) -> bool {
+fn check_certificate_rsa_signature(cert: &X509Certificate, public_key: &RsaPublicKey) -> bool {
     if cert.signature_algorithm.algorithm != OID_PKCS1_SHA256WITHRSA {
         return false;
     }
