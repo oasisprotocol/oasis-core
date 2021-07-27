@@ -315,35 +315,6 @@ func (c *runtimeClient) GetTxByBlockHash(ctx context.Context, request *api.GetTx
 }
 
 // Implements api.RuntimeClient.
-func (c *runtimeClient) GetTxs(ctx context.Context, request *api.GetTxsRequest) ([][]byte, error) {
-	if request.IORoot.IsEmpty() {
-		return [][]byte{}, nil
-	}
-
-	ioRoot := storage.Root{
-		Version: request.Round,
-		Type:    storage.RootTypeIO,
-		Hash:    request.IORoot,
-	}
-	copy(ioRoot.Namespace[:], request.RuntimeID[:])
-
-	tree := transaction.NewTree(c.common.storage, ioRoot)
-	defer tree.Close()
-
-	txs, err := tree.GetTransactions(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	inputs := [][]byte{}
-	for _, tx := range txs {
-		inputs = append(inputs, tx.Input)
-	}
-
-	return inputs, nil
-}
-
-// Implements api.RuntimeClient.
 func (c *runtimeClient) GetTransactions(ctx context.Context, request *api.GetTransactionsRequest) ([][]byte, error) {
 	blk, err := c.GetBlock(ctx, &api.GetBlockRequest{RuntimeID: request.RuntimeID, Round: request.Round})
 	if err != nil {

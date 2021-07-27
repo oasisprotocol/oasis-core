@@ -117,10 +117,9 @@ func (sc *runtimeMessageImpl) Run(childEnv *env.Env) error {
 				if ht := blk.Block.Header.HeaderType; ht != block.Normal {
 					return fmt.Errorf("expected normal round, got: %d", ht)
 				}
-				txs, err := c.GetTxs(ctx, &api.GetTxsRequest{
+				txs, err := c.GetTransactions(ctx, &api.GetTransactionsRequest{
 					RuntimeID: runtimeID,
 					Round:     round,
-					IORoot:    blk.Block.Header.IORoot,
 				})
 				if err != nil {
 					return err
