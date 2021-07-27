@@ -22,6 +22,9 @@ import (
 const (
 	// cpListTimeout is the timeout for fetching a list of checkpoints from a node.
 	cpListTimeout = 5 * time.Second
+	// cpListsEarlyStopInterval is the interval on which the checkpoint fetching will stop in case it
+	// has received some checkpoints.
+	cpListsEarlyStopInterval = 10 * time.Second
 	// cpRestoreTimeout is the timeout for restoring a checkpoint chunk from a node.
 	cpRestoreTimeout = 60 * time.Second
 
@@ -339,6 +342,8 @@ func (n *Node) getCheckpointList(nodesClient grpc.NodesClient) ([]*checkpoint.Me
 	}
 	defer cancel()
 
+	ticker := time.NewTicker(cpListsEarlyStopInterval)
+	defer ticker.Stop()
 	var list []*checkpoint.Metadata
 resultLoop:
 	for {
@@ -349,6 +354,12 @@ resultLoop:
 			return nil, n.ctx.Err()
 		case meta := <-listCh:
 			list = append(list, meta...)
+		case <-ticker.C:
+			// Stop waiting if some checkpoints were received.
+			if len(list) > 0 {
+				cancel()
+				break resultLoop
+			}
 		}
 	}
 
