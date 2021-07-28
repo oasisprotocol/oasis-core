@@ -22,6 +22,8 @@ import (
 const (
 	// cpListTimeout is the timeout for fetching a list of checkpoints from a node.
 	cpListTimeout = 5 * time.Second
+	// cpListsTimeout is the timeout for fetching checkpoints from all nodes.
+	cpListsTimeout = 30 * time.Second
 	// cpRestoreTimeout is the timeout for restoring a checkpoint chunk from a node.
 	cpRestoreTimeout = 60 * time.Second
 
@@ -338,6 +340,11 @@ func (n *Node) getCheckpointList(nodesClient grpc.NodesClient) ([]*checkpoint.Me
 		return nil, err
 	}
 	defer cancel()
+	// Wait at most cpListsTimeout for results.
+	go func() {
+		<-time.After(cpListsTimeout)
+		cancel()
+	}()
 
 	var list []*checkpoint.Metadata
 resultLoop:
