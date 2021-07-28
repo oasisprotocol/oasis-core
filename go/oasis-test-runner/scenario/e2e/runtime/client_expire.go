@@ -71,9 +71,11 @@ func (sc *clientExpireImpl) Run(childEnv *env.Env) error {
 			Args: struct {
 				Key   string `json:"key"`
 				Value string `json:"value"`
+				Nonce uint64 `json:"nonce"`
 			}{
 				Key:   "hello",
 				Value: "test",
+				Nonce: 0,
 			},
 		}),
 	})
