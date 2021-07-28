@@ -247,6 +247,7 @@ func (sc *runtimeGovernanceImpl) Run(childEnv *env.Env) error {
 	}
 
 	ctx := context.Background()
+	var rtNonce uint64
 
 	// Filter compute runtimes.
 	var crt []*registry.Runtime
@@ -273,11 +274,14 @@ func (sc *runtimeGovernanceImpl) Run(childEnv *env.Env) error {
 
 	if _, err = sc.submitRuntimeTx(ctx, rt.ID, "update_runtime", struct {
 		UpdateRuntime registry.Runtime `json:"update_runtime"`
+		Nonce         uint64           `json:"nonce"`
 	}{
 		UpdateRuntime: newRT,
+		Nonce:         rtNonce,
 	}); err != nil {
 		return err
 	}
+	rtNonce++
 
 	// Epoch transition.
 	sc.Logger.Info("triggering epoch transition",
@@ -321,8 +325,10 @@ func (sc *runtimeGovernanceImpl) Run(childEnv *env.Env) error {
 	)
 	if _, err = sc.submitRuntimeTx(ctx, otherRT.ID, "update_runtime", struct {
 		UpdateRuntime registry.Runtime `json:"update_runtime"`
+		Nonce         uint64           `json:"nonce"`
 	}{
 		UpdateRuntime: newRT,
+		Nonce:         rtNonce,
 	}); err != nil {
 		return err
 	}

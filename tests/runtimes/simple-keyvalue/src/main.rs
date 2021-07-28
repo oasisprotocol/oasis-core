@@ -68,6 +68,35 @@ impl KeyFormat for PendingMessagesKeyFormat {
     }
 }
 
+/// Key format used for transaction nonces.
+#[derive(Debug)]
+struct NonceKeyFormat {
+    nonce: u64,
+}
+
+impl KeyFormat for NonceKeyFormat {
+    fn prefix() -> u8 {
+        0xFF
+    }
+
+    fn size() -> usize {
+        8
+    }
+
+    fn encode_atoms(self, atoms: &mut Vec<Vec<u8>>) {
+        let mut nonce: Vec<u8> = Vec::with_capacity(8);
+        nonce.write_u64::<BigEndian>(self.nonce).unwrap();
+        atoms.push(nonce);
+    }
+
+    fn decode_atoms(data: &[u8]) -> Self {
+        let mut reader = Cursor::new(data);
+        Self {
+            nonce: reader.read_u64::<BigEndian>().unwrap(),
+        }
+    }
+}
+
 struct Context {
     test_runtime_id: Namespace,
     km_client: Arc<dyn KeyManagerClient>,
@@ -78,6 +107,21 @@ fn get_runtime_id(_args: &(), ctx: &mut TxnContext) -> Result<Option<String>> {
     let rctx = runtime_context!(ctx, Context);
 
     Ok(Some(rctx.test_runtime_id.to_string()))
+}
+
+fn check_nonce(nonce: u64, ctx: &mut TxnContext) -> Result<()> {
+    let nonce_key = NonceKeyFormat { nonce: nonce }.encode();
+    StorageContext::with_current(|mkvs, _untrusted_local| {
+        match mkvs.get(IoContext::create_child(&ctx.io_ctx), &nonce_key) {
+            Some(_) => Err(anyhow!("Duplicate nonce: {}", nonce)),
+            None => {
+                if !ctx.check_only {
+                    mkvs.insert(IoContext::create_child(&ctx.io_ctx), &nonce_key, &[0x1]);
+                }
+                Ok(())
+            }
+        }
+    })
 }
 
 /// Queries all consensus accounts.
@@ -110,6 +154,8 @@ fn consensus_accounts(
 
 /// Withdraw from the consensus layer into the runtime account.
 fn consensus_withdraw(args: &Withdraw, ctx: &mut TxnContext) -> Result<()> {
+    check_nonce(args.nonce, ctx)?;
+
     if ctx.check_only {
         return Err(CheckOnlySuccess::default().into());
     }
@@ -132,6 +178,8 @@ fn consensus_withdraw(args: &Withdraw, ctx: &mut TxnContext) -> Result<()> {
 
 /// Transfer from the runtime account to another account in the consensus layer.
 fn consensus_transfer(args: &Transfer, ctx: &mut TxnContext) -> Result<()> {
+    check_nonce(args.nonce, ctx)?;
+
     if ctx.check_only {
         return Err(CheckOnlySuccess::default().into());
     }
@@ -154,6 +202,8 @@ fn consensus_transfer(args: &Transfer, ctx: &mut TxnContext) -> Result<()> {
 
 /// Add escrow from the runtime account to an account in the consensus layer.
 fn consensus_add_escrow(args: &AddEscrow, ctx: &mut TxnContext) -> Result<()> {
+    check_nonce(args.nonce, ctx)?;
+
     if ctx.check_only {
         return Err(CheckOnlySuccess::default().into());
     }
@@ -176,6 +226,8 @@ fn consensus_add_escrow(args: &AddEscrow, ctx: &mut TxnContext) -> Result<()> {
 
 /// Reclaim escrow to the runtime account.
 fn consensus_reclaim_escrow(args: &ReclaimEscrow, ctx: &mut TxnContext) -> Result<()> {
+    check_nonce(args.nonce, ctx)?;
+
     if ctx.check_only {
         return Err(CheckOnlySuccess::default().into());
     }
@@ -198,6 +250,8 @@ fn consensus_reclaim_escrow(args: &ReclaimEscrow, ctx: &mut TxnContext) -> Resul
 
 /// Update existing runtime with given descriptor.
 fn update_runtime(args: &UpdateRuntime, ctx: &mut TxnContext) -> Result<()> {
+    check_nonce(args.nonce, ctx)?;
+
     if ctx.check_only {
         return Err(CheckOnlySuccess::default().into());
     }
@@ -220,6 +274,8 @@ fn update_runtime(args: &UpdateRuntime, ctx: &mut TxnContext) -> Result<()> {
 
 /// Insert a key/value pair.
 fn insert(args: &KeyValue, ctx: &mut TxnContext) -> Result<Option<String>> {
+    check_nonce(args.nonce, ctx)?;
+
     if args.value.as_bytes().len() > 128 {
         return Err(anyhow!("Value too big to be inserted."));
     }
@@ -241,6 +297,8 @@ fn insert(args: &KeyValue, ctx: &mut TxnContext) -> Result<Option<String>> {
 
 /// Retrieve a key/value pair.
 fn get(args: &Key, ctx: &mut TxnContext) -> Result<Option<String>> {
+    check_nonce(args.nonce, ctx)?;
+
     if ctx.check_only {
         return Err(CheckOnlySuccess::default().into());
     }
@@ -255,6 +313,8 @@ fn get(args: &Key, ctx: &mut TxnContext) -> Result<Option<String>> {
 
 /// Remove a key/value pair.
 fn remove(args: &Key, ctx: &mut TxnContext) -> Result<Option<String>> {
+    check_nonce(args.nonce, ctx)?;
+
     if ctx.check_only {
         return Err(CheckOnlySuccess::default().into());
     }
@@ -284,6 +344,8 @@ fn get_encryption_context(ctx: &mut TxnContext, key: &[u8]) -> Result<Encryption
 
 /// (encrypted) Insert a key/value pair.
 fn enc_insert(args: &KeyValue, ctx: &mut TxnContext) -> Result<Option<String>> {
+    check_nonce(args.nonce, ctx)?;
+
     if ctx.check_only {
         return Err(CheckOnlySuccess::default().into());
     }
@@ -306,6 +368,8 @@ fn enc_insert(args: &KeyValue, ctx: &mut TxnContext) -> Result<Option<String>> {
 
 /// (encrypted) Retrieve a key/value pair.
 fn enc_get(args: &Key, ctx: &mut TxnContext) -> Result<Option<String>> {
+    check_nonce(args.nonce, ctx)?;
+
     if ctx.check_only {
         return Err(CheckOnlySuccess::default().into());
     }
@@ -322,6 +386,8 @@ fn enc_get(args: &Key, ctx: &mut TxnContext) -> Result<Option<String>> {
 
 /// (encrypted) Remove a key/value pair.
 fn enc_remove(args: &Key, ctx: &mut TxnContext) -> Result<Option<String>> {
+    check_nonce(args.nonce, ctx)?;
+
     if ctx.check_only {
         return Err(CheckOnlySuccess::default().into());
     }

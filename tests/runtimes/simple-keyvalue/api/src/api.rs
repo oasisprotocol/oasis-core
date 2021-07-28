@@ -6,20 +6,14 @@ use oasis_core_runtime::{
 #[derive(Clone, cbor::Encode, cbor::Decode)]
 pub struct Key {
     pub key: String,
-    // Nonce is ignored by the runtime itself and can be used to avoid duplicate
-    // runtime transactions.
-    #[cbor(optional)]
-    pub nonce: Option<u64>,
+    pub nonce: u64,
 }
 
 #[derive(Clone, cbor::Encode, cbor::Decode)]
 pub struct KeyValue {
     pub key: String,
     pub value: String,
-    // Nonce is ignored by the runtime itself and can be used to avoid duplicate
-    // runtime transactions.
-    #[cbor(optional)]
-    pub nonce: Option<u64>,
+    pub nonce: u64,
 }
 
 #[derive(Clone, cbor::Encode, cbor::Decode)]
@@ -49,10 +43,7 @@ pub struct ReclaimEscrow {
 #[derive(Clone, cbor::Encode, cbor::Decode)]
 pub struct UpdateRuntime {
     pub update_runtime: registry::Runtime,
-    // Nonce is ignored by the runtime itself and can be used to avoid duplicate
-    // runtime transactions.
-    #[cbor(optional)]
-    pub nonce: Option<u64>,
+    pub nonce: u64,
 }
 
 runtime_api! {
