@@ -102,6 +102,7 @@ func (sc *runtimeDynamicImpl) epochTransition(ctx context.Context) error {
 }
 
 func (sc *runtimeDynamicImpl) Run(childEnv *env.Env) error { // nolint: gocyclo
+	var rtNonce uint64
 	if err := sc.Net.Start(); err != nil {
 		return err
 	}
@@ -267,11 +268,12 @@ func (sc *runtimeDynamicImpl) Run(childEnv *env.Env) error { // nolint: gocyclo
 				ctx,
 				runtimeID,
 				runtimeDynamicTestKey,
-				1234567890,
+				rtNonce,
 			)
 			if err != nil {
 				return err
 			}
+			rtNonce++
 			if rsp != runtimeDynamicTestValue {
 				return fmt.Errorf("incorrect value returned by runtime: %s", rsp)
 			}
@@ -281,9 +283,10 @@ func (sc *runtimeDynamicImpl) Run(childEnv *env.Env) error { // nolint: gocyclo
 		sc.Logger.Info("submitting transaction to runtime",
 			"seq", i,
 		)
-		if _, err := sc.submitKeyValueRuntimeInsertTx(ctx, runtimeID, "hello", fmt.Sprintf("world %d", i), 0); err != nil {
+		if _, err := sc.submitKeyValueRuntimeInsertTx(ctx, runtimeID, "hello", fmt.Sprintf("world %d", i), rtNonce); err != nil {
 			return err
 		}
+		rtNonce++
 	}
 
 	// Stop all runtime nodes, so they will not re-register, causing the nodes to expire.
@@ -370,9 +373,10 @@ func (sc *runtimeDynamicImpl) Run(childEnv *env.Env) error { // nolint: gocyclo
 
 	// Submit a runtime transaction to check whether the runtimes got resumed.
 	sc.Logger.Info("submitting transaction to runtime")
-	if _, err = sc.submitKeyValueRuntimeInsertTx(ctx, runtimeID, "hello", "final world", 0); err != nil {
+	if _, err = sc.submitKeyValueRuntimeInsertTx(ctx, runtimeID, "hello", "final world", rtNonce); err != nil {
 		return err
 	}
+	rtNonce++
 
 	// Now reclaim all stake from the debug entity which owns the runtime.
 	sc.Logger.Info("reclaiming stake from entity which owns the runtime")
@@ -528,7 +532,7 @@ func (sc *runtimeDynamicImpl) Run(childEnv *env.Env) error { // nolint: gocyclo
 
 	// Submit a runtime transaction to check whether the runtimes got resumed.
 	sc.Logger.Info("submitting transaction to runtime")
-	if _, err = sc.submitKeyValueRuntimeInsertTx(ctx, runtimeID, "hello", "final world for sure", 0); err != nil {
+	if _, err = sc.submitKeyValueRuntimeInsertTx(ctx, runtimeID, "hello", "final world for sure", rtNonce); err != nil {
 		return err
 	}
 
