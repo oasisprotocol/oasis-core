@@ -61,7 +61,7 @@ const (
 	// queriesIterationTimeout is the combined timeout for running all the queries that are executed
 	// in a single iteration. The purpose of this timeout is to prevent the client being stuck and
 	// treating that as an error instead.
-	queriesIterationTimeout = 120 * time.Second
+	queriesIterationTimeout = 300 * time.Second
 
 	// queriesNumAllowedQueryTxsHistoricalFailures is the number of allowed failures of histortical
 	// `QueryTxs` requests. A historical `QueryTxs` request can fail in case available storage
