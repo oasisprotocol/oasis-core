@@ -1,6 +1,7 @@
 package workload
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"math/rand"
@@ -16,6 +17,8 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	"github.com/oasisprotocol/oasis-core/go/common/quantity"
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
+	"github.com/oasisprotocol/oasis-core/go/roothash/api/block"
+	"github.com/oasisprotocol/oasis-core/go/runtime/client/api"
 	runtimeClient "github.com/oasisprotocol/oasis-core/go/runtime/client/api"
 	runtimeTransaction "github.com/oasisprotocol/oasis-core/go/runtime/transaction"
 	staking "github.com/oasisprotocol/oasis-core/go/staking/api"
@@ -139,10 +142,10 @@ func (r *runtime) validateResponse(key string, rsp *runtimeTransaction.TxnOutput
 	return nil
 }
 
-func (r *runtime) validateEvents(ctx context.Context, rtc runtimeClient.RuntimeClient, op, key string) error {
+func (r *runtime) validateEvents(ctx context.Context, rtc runtimeClient.RuntimeClient, round uint64, op, key string) error {
 	evs, err := rtc.GetEvents(ctx, &runtimeClient.GetEventsRequest{
 		RuntimeID: r.runtimeID,
-		Round:     runtimeClient.RoundLatest,
+		Round:     round,
 	})
 	if err != nil {
 		return fmt.Errorf("failed to fetch events: %w", err)
@@ -173,7 +176,7 @@ func (r *runtime) validateEvents(ctx context.Context, rtc runtimeClient.RuntimeC
 	return nil
 }
 
-func (r *runtime) submitRuntimeRquest(ctx context.Context, rtc runtimeClient.RuntimeClient, req *runtimeTransaction.TxnCall) (*runtimeTransaction.TxnOutput, error) {
+func (r *runtime) submitRuntimeRquest(ctx context.Context, rtc runtimeClient.RuntimeClient, req *runtimeTransaction.TxnCall) (*runtimeTransaction.TxnOutput, uint64, error) {
 	var rsp runtimeTransaction.TxnOutput
 	rtx := &runtimeClient.SubmitTxRequest{
 		RuntimeID: r.runtimeID,
@@ -184,23 +187,54 @@ func (r *runtime) submitRuntimeRquest(ctx context.Context, rtc runtimeClient.Run
 		"request", req,
 	)
 
+	blkCh, blkSub, err := rtc.WatchBlocks(ctx, r.runtimeID)
+	if err != nil {
+		return nil, 0, fmt.Errorf("failed to watch runtime blocks: %w", err)
+	}
+	defer blkSub.Close()
+
 	// Wait for a maximum of 'runtimeRequestTimeout' as invalid submissions may block
 	// forever.
 	submitCtx, cancel := context.WithTimeout(ctx, runtimeRequestTimeout)
+	// Start the watch timeout now, so that the request time is included in the timeout.
+	watchTimeout := time.After(runtimeRequestTimeout)
 	out, err := rtc.SubmitTx(submitCtx, rtx)
 	cancel()
 	if err != nil {
-		return nil, fmt.Errorf("failed to submit runtime transaction: %w", err)
+		return nil, 0, fmt.Errorf("failed to submit runtime transaction: %w", err)
 	}
 
 	if err = cbor.Unmarshal(out, &rsp); err != nil {
-		return nil, fmt.Errorf("malformed tx output from runtime: %w", err)
+		return nil, 0, fmt.Errorf("malformed tx output from runtime: %w", err)
 	}
 	if rsp.Error != nil {
-		return nil, fmt.Errorf("runtime tx failed: %s", *rsp.Error)
+		return nil, 0, fmt.Errorf("runtime tx failed: %s", *rsp.Error)
 	}
 
-	return &rsp, nil
+	// Wait for block to be indexed and obtain the runtime round of the transaction.
+	for {
+		select {
+		case blk := <-blkCh:
+			if blk.Block.Header.HeaderType != block.Normal {
+				continue
+			}
+			round := blk.Block.Header.Round
+			txs, err := rtc.GetTransactions(ctx, &api.GetTransactionsRequest{
+				RuntimeID: r.runtimeID,
+				Round:     round,
+			})
+			if err != nil {
+				return nil, 0, fmt.Errorf("failed getting runtme transactions: %w", err)
+			}
+			for _, tx := range txs {
+				if bytes.Equal(tx, rtx.Data) {
+					return &rsp, round, nil
+				}
+			}
+		case <-watchTimeout:
+			return nil, 0, fmt.Errorf("timed out waiting for roothashblock")
+		}
+	}
 }
 
 func (r *runtime) doInsertRequest(ctx context.Context, rng *rand.Rand, rtc runtimeClient.RuntimeClient, existing bool) error {
@@ -220,7 +254,7 @@ func (r *runtime) doInsertRequest(ctx context.Context, rng *rand.Rand, rtc runti
 			Nonce: rng.Uint64(),
 		},
 	}
-	rsp, err := r.submitRuntimeRquest(ctx, rtc, req)
+	rsp, round, err := r.submitRuntimeRquest(ctx, rtc, req)
 	if err != nil {
 		r.Logger.Error("Submit insert request failure",
 			"request", req,
@@ -240,7 +274,7 @@ func (r *runtime) doInsertRequest(ctx context.Context, rng *rand.Rand, rtc runti
 		return fmt.Errorf("invalid response: %w", err)
 	}
 
-	if err := r.validateEvents(ctx, rtc, "insert", key); err != nil {
+	if err := r.validateEvents(ctx, rtc, round, "insert", key); err != nil {
 		return err
 	}
 
@@ -248,6 +282,7 @@ func (r *runtime) doInsertRequest(ctx context.Context, rng *rand.Rand, rtc runti
 		"request", req,
 		"response", rsp,
 		"existing_key", existing,
+		"round", round,
 	)
 
 	// Update local state.
@@ -270,7 +305,7 @@ func (r *runtime) doGetRequest(ctx context.Context, rng *rand.Rand, rtc runtimeC
 			Nonce: rng.Uint64(),
 		},
 	}
-	rsp, err := r.submitRuntimeRquest(ctx, rtc, req)
+	rsp, round, err := r.submitRuntimeRquest(ctx, rtc, req)
 	if err != nil {
 		r.Logger.Error("Submit get request failure",
 			"request", req,
@@ -290,7 +325,7 @@ func (r *runtime) doGetRequest(ctx context.Context, rng *rand.Rand, rtc runtimeC
 		return fmt.Errorf("invalid response: %w", err)
 	}
 
-	if err := r.validateEvents(ctx, rtc, "get", key); err != nil {
+	if err := r.validateEvents(ctx, rtc, round, "get", key); err != nil {
 		return err
 	}
 
@@ -298,6 +333,7 @@ func (r *runtime) doGetRequest(ctx context.Context, rng *rand.Rand, rtc runtimeC
 		"request", req,
 		"response", rsp,
 		"existing_key", existing,
+		"round", round,
 	)
 
 	return nil
@@ -317,7 +353,7 @@ func (r *runtime) doRemoveRequest(ctx context.Context, rng *rand.Rand, rtc runti
 			Nonce: rng.Uint64(),
 		},
 	}
-	rsp, err := r.submitRuntimeRquest(ctx, rtc, req)
+	rsp, round, err := r.submitRuntimeRquest(ctx, rtc, req)
 	if err != nil {
 		r.Logger.Error("Submit remove request failure",
 			"request", req,
@@ -337,7 +373,7 @@ func (r *runtime) doRemoveRequest(ctx context.Context, rng *rand.Rand, rtc runti
 		return fmt.Errorf("invalid response: %w", err)
 	}
 
-	if err := r.validateEvents(ctx, rtc, "remove", key); err != nil {
+	if err := r.validateEvents(ctx, rtc, round, "remove", key); err != nil {
 		return err
 	}
 
@@ -345,6 +381,7 @@ func (r *runtime) doRemoveRequest(ctx context.Context, rng *rand.Rand, rtc runti
 		"request", req,
 		"response", rsp,
 		"existing_key", existing,
+		"round", round,
 	)
 
 	// Update local state.
@@ -475,7 +512,7 @@ func (r *runtime) doWithdrawRequest(ctx context.Context, rng *rand.Rand, rtc run
 			Nonce: rng.Uint64(),
 		},
 	}
-	rsp, err := r.submitRuntimeRquest(ctx, rtc, req)
+	rsp, round, err := r.submitRuntimeRquest(ctx, rtc, req)
 	if err != nil {
 		r.Logger.Error("Submit withdraw request failure",
 			"request", req,
@@ -487,6 +524,7 @@ func (r *runtime) doWithdrawRequest(ctx context.Context, rng *rand.Rand, rtc run
 	r.Logger.Debug("withdraw request success",
 		"request", req,
 		"response", rsp,
+		"round", round,
 	)
 
 	if err = r.runtimeWithdrawn.Add(&amount); err != nil {
@@ -519,7 +557,7 @@ func (r *runtime) doTransferRequest(ctx context.Context, rng *rand.Rand, rtc run
 			Nonce: rng.Uint64(),
 		},
 	}
-	rsp, err := r.submitRuntimeRquest(ctx, rtc, req)
+	rsp, round, err := r.submitRuntimeRquest(ctx, rtc, req)
 	if err != nil {
 		r.Logger.Error("Submit transfer request failure",
 			"request", req,
@@ -531,6 +569,7 @@ func (r *runtime) doTransferRequest(ctx context.Context, rng *rand.Rand, rtc run
 	r.Logger.Debug("transfer request success",
 		"request", req,
 		"response", rsp,
+		"round", round,
 	)
 
 	if err = r.runtimeTransferred.Add(&amount); err != nil {
@@ -563,7 +602,7 @@ func (r *runtime) doAddEscrowRequest(ctx context.Context, rng *rand.Rand, rtc ru
 			Nonce: rng.Uint64(),
 		},
 	}
-	rsp, err := r.submitRuntimeRquest(ctx, rtc, req)
+	rsp, round, err := r.submitRuntimeRquest(ctx, rtc, req)
 	if err != nil {
 		r.Logger.Error("Submit add escrow request failure",
 			"request", req,
@@ -575,6 +614,7 @@ func (r *runtime) doAddEscrowRequest(ctx context.Context, rng *rand.Rand, rtc ru
 	r.Logger.Debug("add escrow request success",
 		"request", req,
 		"response", rsp,
+		"round", round,
 	)
 
 	if err = r.runtimeEscrowed.Add(&amount); err != nil {
@@ -609,7 +649,7 @@ func (r *runtime) doReclaimEscrowRequest(ctx context.Context, rng *rand.Rand, rt
 			Nonce: rng.Uint64(),
 		},
 	}
-	rsp, err := r.submitRuntimeRquest(ctx, rtc, req)
+	rsp, round, err := r.submitRuntimeRquest(ctx, rtc, req)
 	if err != nil {
 		r.Logger.Error("Submit reclaim escrow request failure",
 			"request", req,
@@ -621,6 +661,7 @@ func (r *runtime) doReclaimEscrowRequest(ctx context.Context, rng *rand.Rand, rt
 	r.Logger.Debug("reclaim escrow request success",
 		"request", req,
 		"response", rsp,
+		"round", round,
 	)
 
 	if err = r.runtimeReclaimed.Add(&amount); err != nil {
@@ -689,7 +730,7 @@ func (r *runtime) Run(
 			"err", err,
 			"runtime_id", viper.GetString(CfgRuntimeID),
 		)
-		return fmt.Errorf("Runtime unmarshal: %w", err)
+		return fmt.Errorf("runtime unmarshal: %w", err)
 	}
 	r.reckonedKeyValueState = make(map[string]string)
 
