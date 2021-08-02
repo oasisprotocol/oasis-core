@@ -57,11 +57,12 @@ func testSubmitTransaction(
 ) {
 	testInput := []byte(input)
 	// Submit a test transaction.
-	testOutput, err := c.SubmitTx(ctx, &api.SubmitTxRequest{Data: testInput, RuntimeID: runtimeID})
+	resp, err := c.SubmitTxMeta(ctx, &api.SubmitTxRequest{Data: testInput, RuntimeID: runtimeID})
 
 	// Check if everything is in order.
-	require.NoError(t, err, "SubmitTx")
-	require.EqualValues(t, testInput, testOutput)
+	require.NoError(t, err, "SubmitTxWithMeta")
+	require.EqualValues(t, testInput, resp.Output)
+	require.True(t, resp.Round > 0, "SubmitTxMeta round should be non zero")
 }
 
 func testQuery(

@@ -47,6 +47,13 @@ type RuntimeClient interface {
 	// for transaction execution results.
 	SubmitTx(ctx context.Context, request *SubmitTxRequest) ([]byte, error)
 
+	// SubmitTxMeta submits a transaction to the runtime transaction scheduler and waits for
+	// transaction execution results.
+	//
+	// Response includes transaction metadata - e.g. round at which the transaction was included
+	// in a block.
+	SubmitTxMeta(ctx context.Context, request *SubmitTxRequest) (*SubmitTxMetaResponse, error)
+
 	// SubmitTxNoWait submits a transaction to the runtime transaction scheduler but does
 	// not wait for transaction execution.
 	SubmitTxNoWait(ctx context.Context, request *SubmitTxRequest) error
@@ -102,6 +109,13 @@ type RuntimeClientService interface {
 type SubmitTxRequest struct {
 	RuntimeID common.Namespace `json:"runtime_id"`
 	Data      []byte           `json:"data"`
+}
+
+// SubmitTxMetaResponse is the SubmitTxMeta response.
+type SubmitTxMetaResponse struct {
+	Round      uint64 `json:"round"`
+	Output     []byte `json:"data"`
+	BatchOrder uint32 `json:"batch_order"`
 }
 
 // CheckTxRequest is a CheckTx request.

@@ -22,6 +22,8 @@ var (
 
 	// methodSubmitTx is the SubmitTx method.
 	methodSubmitTx = serviceName.NewMethod("SubmitTx", SubmitTxRequest{})
+	// methodSubmitTxMeta is the SubmitTxMeta method.
+	methodSubmitTxMeta = serviceName.NewMethod("SubmitTxMeta", SubmitTxRequest{})
 	// methodSubmitTxNoWait is the SubmitTxNoWait method.
 	methodSubmitTxNoWait = serviceName.NewMethod("SubmitTxNoWait", SubmitTxRequest{})
 	// methodCheckTx is the CheckTx method.
@@ -60,6 +62,10 @@ var (
 			{
 				MethodName: methodSubmitTx.ShortName(),
 				Handler:    handlerSubmitTx,
+			},
+			{
+				MethodName: methodSubmitTxMeta.ShortName(),
+				Handler:    handlerSubmitTxMeta,
 			},
 			{
 				MethodName: methodSubmitTxNoWait.ShortName(),
@@ -143,6 +149,29 @@ func handlerSubmitTx( // nolint: golint
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(RuntimeClient).SubmitTx(ctx, req.(*SubmitTxRequest))
+	}
+	return interceptor(ctx, &rq, info, handler)
+}
+
+func handlerSubmitTxMeta( // nolint: golint
+	srv interface{},
+	ctx context.Context,
+	dec func(interface{}) error,
+	interceptor grpc.UnaryServerInterceptor,
+) (interface{}, error) {
+	var rq SubmitTxRequest
+	if err := dec(&rq); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(RuntimeClient).SubmitTxMeta(ctx, &rq)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: methodSubmitTxMeta.FullName(),
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(RuntimeClient).SubmitTxMeta(ctx, req.(*SubmitTxRequest))
 	}
 	return interceptor(ctx, &rq, info, handler)
 }
@@ -533,6 +562,14 @@ func (c *runtimeClient) SubmitTx(ctx context.Context, request *SubmitTxRequest) 
 		return nil, err
 	}
 	return rsp, nil
+}
+
+func (c *runtimeClient) SubmitTxMeta(ctx context.Context, request *SubmitTxRequest) (*SubmitTxMetaResponse, error) {
+	var rsp SubmitTxMetaResponse
+	if err := c.conn.Invoke(ctx, methodSubmitTxMeta.FullName(), request, &rsp); err != nil {
+		return nil, err
+	}
+	return &rsp, nil
 }
 
 func (c *runtimeClient) SubmitTxNoWait(ctx context.Context, request *SubmitTxRequest) error {

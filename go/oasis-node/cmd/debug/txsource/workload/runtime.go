@@ -1,7 +1,6 @@
 package workload
 
 import (
-	"bytes"
 	"context"
 	"fmt"
 	"math/rand"
@@ -17,8 +16,6 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	"github.com/oasisprotocol/oasis-core/go/common/quantity"
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
-	"github.com/oasisprotocol/oasis-core/go/roothash/api/block"
-	"github.com/oasisprotocol/oasis-core/go/runtime/client/api"
 	runtimeClient "github.com/oasisprotocol/oasis-core/go/runtime/client/api"
 	runtimeTransaction "github.com/oasisprotocol/oasis-core/go/runtime/transaction"
 	staking "github.com/oasisprotocol/oasis-core/go/staking/api"
@@ -187,54 +184,23 @@ func (r *runtime) submitRuntimeRquest(ctx context.Context, rtc runtimeClient.Run
 		"request", req,
 	)
 
-	blkCh, blkSub, err := rtc.WatchBlocks(ctx, r.runtimeID)
-	if err != nil {
-		return nil, 0, fmt.Errorf("failed to watch runtime blocks: %w", err)
-	}
-	defer blkSub.Close()
-
 	// Wait for a maximum of 'runtimeRequestTimeout' as invalid submissions may block
 	// forever.
 	submitCtx, cancel := context.WithTimeout(ctx, runtimeRequestTimeout)
 	// Start the watch timeout now, so that the request time is included in the timeout.
-	watchTimeout := time.After(runtimeRequestTimeout)
-	out, err := rtc.SubmitTx(submitCtx, rtx)
+	out, err := rtc.SubmitTxMeta(submitCtx, rtx)
 	cancel()
 	if err != nil {
 		return nil, 0, fmt.Errorf("failed to submit runtime transaction: %w", err)
 	}
 
-	if err = cbor.Unmarshal(out, &rsp); err != nil {
+	if err = cbor.Unmarshal(out.Output, &rsp); err != nil {
 		return nil, 0, fmt.Errorf("malformed tx output from runtime: %w", err)
 	}
 	if rsp.Error != nil {
 		return nil, 0, fmt.Errorf("runtime tx failed: %s", *rsp.Error)
 	}
-
-	// Wait for block to be indexed and obtain the runtime round of the transaction.
-	for {
-		select {
-		case blk := <-blkCh:
-			if blk.Block.Header.HeaderType != block.Normal {
-				continue
-			}
-			round := blk.Block.Header.Round
-			txs, err := rtc.GetTransactions(ctx, &api.GetTransactionsRequest{
-				RuntimeID: r.runtimeID,
-				Round:     round,
-			})
-			if err != nil {
-				return nil, 0, fmt.Errorf("failed getting runtme transactions: %w", err)
-			}
-			for _, tx := range txs {
-				if bytes.Equal(tx, rtx.Data) {
-					return &rsp, round, nil
-				}
-			}
-		case <-watchTimeout:
-			return nil, 0, fmt.Errorf("timed out waiting for roothashblock")
-		}
-	}
+	return &rsp, out.Round, nil
 }
 
 func (r *runtime) doInsertRequest(ctx context.Context, rng *rand.Rand, rtc runtimeClient.RuntimeClient, existing bool) error {

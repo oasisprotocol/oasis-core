@@ -137,6 +137,15 @@ func (c *runtimeClient) submitTx(ctx context.Context, request *api.SubmitTxReque
 
 // Implements api.RuntimeClient.
 func (c *runtimeClient) SubmitTx(ctx context.Context, request *api.SubmitTxRequest) ([]byte, error) {
+	resp, err := c.SubmitTxMeta(ctx, request)
+	if err != nil {
+		return nil, err
+	}
+	return resp.Output, nil
+}
+
+// Implements api.RuntimeClient.
+func (c *runtimeClient) SubmitTxMeta(ctx context.Context, request *api.SubmitTxRequest) (*api.SubmitTxMetaResponse, error) {
 	respCh, err := c.submitTx(ctx, request)
 	if err != nil {
 		return nil, err
