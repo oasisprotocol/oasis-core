@@ -44,7 +44,7 @@ func main() {
 		for _, nonce := range []uint64{0, 1, 10, 42, 1000, 1_000_000, 10_000_000, math.MaxUint64} {
 
 			// Generate register entity transactions.
-			for _, v := range []uint16{1, entity.LatestDescriptorVersion} {
+			for _, v := range []uint16{entity.LatestDescriptorVersion} {
 				for _, numNodes := range []int{0, 1, 2, 5} {
 					entitySigner := memorySigner.NewTestSigner("oasis-core registry test vectors: RegisterEntity signer")
 					ent := entity.Entity{
