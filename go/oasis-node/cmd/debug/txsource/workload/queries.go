@@ -99,7 +99,8 @@ type queries struct {
 
 	runtimeGenesisRound uint64
 
-	iteration uint64
+	iteration        uint64
+	queryingEarliest bool
 }
 
 func (q *queries) sanityCheckTransactionEvents(ctx context.Context, height int64, txEvents []*results.Event) error {
@@ -230,7 +231,7 @@ func (q *queries) doConsensusQueries(ctx context.Context, rng *rand.Rand, height
 				"height", block.Height,
 				"epoch_interval", params.Interval,
 			)
-			return fmt.Errorf("Invalid epoch: %d", epoch)
+			return fmt.Errorf("invalid epoch: %d", epoch)
 		}
 	}
 
@@ -332,7 +333,7 @@ func (q *queries) doSchedulerQueries(ctx context.Context, rng *rand.Rand, height
 		return fmt.Errorf("GetValidators at height %d: %w", height, err)
 	}
 	if len(validators) < q.schedulerParams.MinValidators {
-		return fmt.Errorf("Not enough validators at height %d, expected at least: %d, got: %d", height, q.schedulerParams.MinValidators, len(validators))
+		return fmt.Errorf("not enough validators at height %d, expected at least: %d, got: %d", height, q.schedulerParams.MinValidators, len(validators))
 	}
 
 	// Query commiteess for the runtime.
@@ -355,7 +356,7 @@ func (q *queries) doSchedulerQueries(ctx context.Context, rng *rand.Rand, height
 	// the committee should be elected from epoch 3 onward.
 	if epoch > 2 {
 		if committees == nil {
-			q.logger.Error("Missing committee for simple-keyvalue runtime",
+			q.logger.Error("missing committee for simple-keyvalue runtime",
 				"height", height,
 				"runtime_id", q.runtimeID,
 			)
@@ -509,12 +510,12 @@ func (q *queries) doStakingQueries(ctx context.Context, rng *rand.Rand, height i
 	}
 	expected := q.stakingParams.Thresholds[thKind]
 	if threshold.Cmp(&expected) != 0 {
-		q.logger.Error("Invalid treshold",
+		q.logger.Error("invalid treshold",
 			"expected", expected,
 			"threshold", threshold,
 			"height", height,
 		)
-		return fmt.Errorf("Invalid treshold")
+		return fmt.Errorf("invalid treshold")
 	}
 
 	addresses, err := q.staking.Addresses(ctx, height)
@@ -609,11 +610,14 @@ func (q *queries) doGovernanceQueries(ctx context.Context, rng *rand.Rand, heigh
 		"height", height,
 	)
 
-	if q.iteration%doQueryAllProposalsEvery == 0 {
-		proposals, err := q.governance.Proposals(ctx, height)
-		if err != nil {
-			return fmt.Errorf("governance.Proposals: %w", err)
-		}
+	proposals, err := q.governance.Proposals(ctx, height)
+	if err != nil {
+		return fmt.Errorf("governance.Proposals: %w", err)
+	}
+
+	// Avoid querying all proposals if we're querying earliest available round,
+	// as there can be a lot of proposals and the round could get pruned mid-iteration.
+	if q.iteration%doQueryAllProposalsEvery == 0 && !q.queryingEarliest {
 		for _, p := range proposals {
 			var p2 *governance.Proposal
 			p2, err = q.governance.Proposal(ctx, &governance.ProposalQuery{Height: height, ProposalID: p.ID})
@@ -631,24 +635,9 @@ func (q *queries) doGovernanceQueries(ctx context.Context, rng *rand.Rand, heigh
 		}
 	}
 
-	activeProposals, err := q.governance.ActiveProposals(ctx, height)
+	_, err = q.governance.ActiveProposals(ctx, height)
 	if err != nil {
 		return fmt.Errorf("governance.ActiveProposals: %w", err)
-	}
-	for _, p := range activeProposals {
-		var p2 *governance.Proposal
-		p2, err = q.governance.Proposal(ctx, &governance.ProposalQuery{Height: height, ProposalID: p.ID})
-		if err != nil {
-			return fmt.Errorf("governance.Proposal: %w", err)
-		}
-		if !p.Content.Equals(&p2.Content) {
-			return fmt.Errorf("proposal contents not equal")
-		}
-
-		_, err = q.governance.Votes(ctx, &governance.ProposalQuery{Height: height, ProposalID: p.ID})
-		if err != nil {
-			return fmt.Errorf("governance.Votes: %w", err)
-		}
 	}
 
 	pendingUpgrades, err := q.governance.PendingUpgrades(ctx, height)
@@ -739,7 +728,7 @@ func (q *queries) doRuntimeQueries(ctx context.Context, rng *rand.Rand) error {
 			"round_hash", block.Header.EncodedHash(),
 			"hash", block2.Header.EncodedHash(),
 		)
-		return fmt.Errorf("Expected equal blocks, got: byRound: %s byHash: %s", block.Header.EncodedHash(), block2.Header.EncodedHash())
+		return fmt.Errorf("expected equal blocks, got: byRound: %s byHash: %s", block.Header.EncodedHash(), block2.Header.EncodedHash())
 	}
 
 	_, err = q.runtime.QueryTxs(ctx, &runtimeClient.QueryTxsRequest{
@@ -806,11 +795,13 @@ func (q *queries) doQueries(ctx context.Context, rng *rand.Rand) error {
 
 	// Select height at which queries should be done. Earliest and latest
 	// heights are special cased with increased probability to be selected.
+	q.queryingEarliest = false
 	var height int64
 	p := rng.Float32()
 	switch {
 	case p < queriesEarliestHeightRatio:
 		height = earliestHeight
+		q.queryingEarliest = true
 	case p < queriesEarliestHeightRatio+queriesLatestHeightRatio:
 		height = block.Height
 	default:
@@ -904,11 +895,11 @@ func (q *queries) Run(
 			"err", err,
 			"runtime_id", viper.GetString(CfgRuntimeID),
 		)
-		return fmt.Errorf("Runtime unmarshal: %w", err)
+		return fmt.Errorf("runtime unmarshal: %w", err)
 	}
 	resp, err := q.runtime.GetGenesisBlock(ctx, q.runtimeID)
 	if err != nil {
-		return fmt.Errorf("Error querying runtime genesis block: %w", err)
+		return fmt.Errorf("error querying runtime genesis block: %w", err)
 	}
 	q.runtimeGenesisRound = resp.Header.Round
 
