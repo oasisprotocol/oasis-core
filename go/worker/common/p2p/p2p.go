@@ -96,10 +96,43 @@ func (p *P2P) Peers(runtimeID common.Namespace) []string {
 		if len(addrs) == 0 {
 			continue
 		}
+		if reachableAddrs := filterGloballyReachableAddresses(addrs); len(reachableAddrs) > 0 {
+			addrs = reachableAddrs
+		}
 
 		peers = append(peers, fmt.Sprintf("%s/p2p/%s", addrs[0].String(), peerID.Pretty()))
 	}
 	return peers
+}
+
+func filterGloballyReachableAddresses(addrs []multiaddr.Multiaddr) []multiaddr.Multiaddr {
+	ret := make([]multiaddr.Multiaddr, 0, len(addrs))
+	for _, addr := range addrs {
+		// Ugh, this multiaddr stuff is extremely obnoxious to work with.
+		addrStr, err := addr.ValueForProtocol(multiaddr.P_IP4)
+		if err != nil {
+			addrStr, err = addr.ValueForProtocol(multiaddr.P_IP6)
+			if err != nil {
+				continue
+			}
+		}
+
+		ip := net.ParseIP(addrStr)
+		if ip == nil {
+			continue
+		}
+		if !common.IsProbablyGloballyReachable(ip) {
+			continue
+		}
+
+		// I have no idea if multiaddr.Multiaddr copies correctly.
+		addrCopy, err := multiaddr.NewMultiaddr(addr.String())
+		if err != nil {
+			continue
+		}
+		ret = append(ret, addrCopy)
+	}
+	return ret
 }
 
 // Publish publishes a message to the gossip network.
