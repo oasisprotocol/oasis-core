@@ -82,7 +82,7 @@ steps:
 
   - label: Transaction source tests
     # Tests are set to run 12 hours + some buffer time.
-    timeout_in_minutes: 800
+    timeout_in_minutes: 900
     command:
       - .buildkite/scripts/download_e2e_test_artifacts.sh
       - .buildkite/scripts/daily_txsource.sh --e2e/runtime.epoch.interval=${epochtime_inverval}
