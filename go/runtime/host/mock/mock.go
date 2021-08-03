@@ -2,6 +2,7 @@
 package mock
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 
@@ -19,6 +20,9 @@ import (
 
 type provisioner struct {
 }
+
+// CheckTxFailInput is the input that will cause a CheckTx failure in the mock runtime.
+var CheckTxFailInput = []byte("checktx-mock-fail")
 
 // Implements host.Provisioner.
 func (p *provisioner) NewRuntime(ctx context.Context, cfg host.Config) (host.Runtime, error) {
@@ -95,12 +99,22 @@ func (r *runtime) Call(ctx context.Context, body *protocol.Body) (*protocol.Body
 		rq := body.RuntimeCheckTxBatchRequest
 
 		var results []protocol.CheckTxResult
-		for range rq.Inputs {
-			results = append(results, protocol.CheckTxResult{
-				Error: protocol.Error{
-					Code: errors.CodeNoError,
-				},
-			})
+		for _, input := range rq.Inputs {
+			switch {
+			case bytes.Equal(input, CheckTxFailInput):
+				results = append(results, protocol.CheckTxResult{
+					Error: protocol.Error{
+						Module: "mock",
+						Code:   1,
+					},
+				})
+			default:
+				results = append(results, protocol.CheckTxResult{
+					Error: protocol.Error{
+						Code: errors.CodeNoError,
+					},
+				})
+			}
 		}
 
 		return &protocol.Body{RuntimeCheckTxBatchResponse: &protocol.RuntimeCheckTxBatchResponse{

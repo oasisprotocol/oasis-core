@@ -15,6 +15,8 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/cbor"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
 	"github.com/oasisprotocol/oasis-core/go/runtime/client/api"
+	"github.com/oasisprotocol/oasis-core/go/runtime/host/mock"
+	"github.com/oasisprotocol/oasis-core/go/runtime/host/protocol"
 )
 
 // Keep this above the test network's max batch timeout.
@@ -46,6 +48,12 @@ func ClientImplementationTests(
 		defer cancelFunc()
 		testSubmitTransactionNoWait(ctx, t, runtimeID, client, noWaitInput)
 	})
+
+	t.Run("FailSubmitTx", func(t *testing.T) {
+		ctx, cancelFunc := context.WithTimeout(context.Background(), timeout)
+		defer cancelFunc()
+		testFailSubmitTransaction(ctx, t, runtimeID, client, testInput)
+	})
 }
 
 func testSubmitTransaction(
@@ -60,9 +68,28 @@ func testSubmitTransaction(
 	resp, err := c.SubmitTxMeta(ctx, &api.SubmitTxRequest{Data: testInput, RuntimeID: runtimeID})
 
 	// Check if everything is in order.
-	require.NoError(t, err, "SubmitTxWithMeta")
+	require.NoError(t, err, "SubmitTxMeta")
+	require.Nil(t, resp.CheckTxError, "SubmitTxMeta check tx error")
 	require.EqualValues(t, testInput, resp.Output)
 	require.True(t, resp.Round > 0, "SubmitTxMeta round should be non zero")
+}
+
+func testFailSubmitTransaction(
+	ctx context.Context,
+	t *testing.T,
+	runtimeID common.Namespace,
+	c api.RuntimeClient,
+	input string,
+) {
+	resp, err := c.SubmitTxMeta(ctx, &api.SubmitTxRequest{Data: mock.CheckTxFailInput, RuntimeID: runtimeID})
+	require.NoError(t, err, "SubmitTxMeta")
+	require.EqualValues(t, &protocol.Error{
+		Module: "mock",
+		Code:   1,
+	}, resp.CheckTxError, "SubmitTxMeta should fail check tx")
+
+	_, err = c.SubmitTx(ctx, &api.SubmitTxRequest{Data: mock.CheckTxFailInput, RuntimeID: runtimeID})
+	require.Error(t, err, "SubmitTx should fail check tx")
 }
 
 func testQuery(

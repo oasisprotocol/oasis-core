@@ -22,6 +22,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/roothash/api/block"
 	"github.com/oasisprotocol/oasis-core/go/runtime/client/api"
 	enclaverpc "github.com/oasisprotocol/oasis-core/go/runtime/enclaverpc/api"
+	"github.com/oasisprotocol/oasis-core/go/runtime/host/protocol"
 	runtimeRegistry "github.com/oasisprotocol/oasis-core/go/runtime/registry"
 	"github.com/oasisprotocol/oasis-core/go/runtime/tagindexer"
 	"github.com/oasisprotocol/oasis-core/go/runtime/transaction"
@@ -93,14 +94,27 @@ func (c *runtimeClient) submitTx(ctx context.Context, request *api.SubmitTxReque
 		return nil, api.ErrNotSynced
 	}
 
+	respCh := make(chan *txResult)
+
 	// Perform a local transaction check when a hosted runtime is available.
 	if hrt, ok := c.hosts[request.RuntimeID]; ok && hrt.GetHostedRuntime() != nil {
-		err := c.CheckTx(ctx, &api.CheckTxRequest{
+		resp, err := c.checkTx(ctx, &api.CheckTxRequest{
 			RuntimeID: request.RuntimeID,
 			Data:      request.Data,
 		})
 		if err != nil {
 			return nil, err
+		}
+		if !resp.IsSuccess() {
+			go func() {
+				respCh <- &txResult{
+					result: &api.SubmitTxMetaResponse{
+						CheckTxError: &resp.Error,
+					},
+				}
+				close(respCh)
+			}()
+			return respCh, nil
 		}
 	}
 
@@ -115,7 +129,6 @@ func (c *runtimeClient) submitTx(ctx context.Context, request *api.SubmitTxReque
 	c.Unlock()
 
 	// Send a request for watching a new runtime transaction.
-	respCh := make(chan *txResult)
 	req := &txRequest{
 		ctx:    ctx,
 		respCh: respCh,
@@ -140,6 +153,9 @@ func (c *runtimeClient) SubmitTx(ctx context.Context, request *api.SubmitTxReque
 	resp, err := c.SubmitTxMeta(ctx, request)
 	if err != nil {
 		return nil, err
+	}
+	if resp.CheckTxError != nil {
+		return nil, errors.WithContext(api.ErrCheckTxFailed, resp.CheckTxError.String())
 	}
 	return resp.Output, nil
 }
@@ -178,15 +194,14 @@ func (c *runtimeClient) SubmitTxNoWait(ctx context.Context, request *api.SubmitT
 	return err
 }
 
-// Implements api.RuntimeClient.
-func (c *runtimeClient) CheckTx(ctx context.Context, request *api.CheckTxRequest) error {
+func (c *runtimeClient) checkTx(ctx context.Context, request *api.CheckTxRequest) (*protocol.CheckTxResult, error) {
 	hrt, ok := c.hosts[request.RuntimeID]
 	if !ok {
-		return api.ErrNoHostedRuntime
+		return nil, api.ErrNoHostedRuntime
 	}
 	rt := hrt.GetHostedRuntime()
 	if rt == nil {
-		return api.ErrNoHostedRuntime
+		return nil, api.ErrNoHostedRuntime
 	}
 
 	// Get current blocks.
@@ -195,23 +210,32 @@ func (c *runtimeClient) CheckTx(ctx context.Context, request *api.CheckTxRequest
 		Height:    consensus.HeightLatest,
 	})
 	if err != nil {
-		return fmt.Errorf("client: failed to get runtime %s state: %w", request.RuntimeID, err)
+		return nil, fmt.Errorf("client: failed to get runtime %s state: %w", request.RuntimeID, err)
 	}
 	lb, err := c.common.consensus.GetLightBlock(ctx, rs.CurrentBlockHeight)
 	if err != nil {
-		return fmt.Errorf("client: failed to get light block at height %d: %w", rs.CurrentBlockHeight, err)
+		return nil, fmt.Errorf("client: failed to get light block at height %d: %w", rs.CurrentBlockHeight, err)
 	}
 	epoch, err := c.common.consensus.Beacon().GetEpoch(ctx, consensus.HeightLatest)
 	if err != nil {
-		return fmt.Errorf("client: failed to get current epoch: %w", err)
+		return nil, fmt.Errorf("client: failed to get current epoch: %w", err)
 	}
 
 	resp, err := rt.CheckTx(ctx, rs.CurrentBlock, lb, epoch, transaction.RawBatch{request.Data})
 	if err != nil {
-		return fmt.Errorf("client: local transaction check failed: %w", err)
+		return nil, fmt.Errorf("client: local transaction check failed: %w", err)
 	}
-	if !resp[0].IsSuccess() {
-		return errors.WithContext(api.ErrCheckTxFailed, resp[0].Error.String())
+	return &resp[0], nil
+}
+
+// Implements api.RuntimeClient.
+func (c *runtimeClient) CheckTx(ctx context.Context, request *api.CheckTxRequest) error {
+	resp, err := c.checkTx(ctx, request)
+	if err != nil {
+		return err
+	}
+	if !resp.IsSuccess() {
+		return errors.WithContext(api.ErrCheckTxFailed, resp.Error.String())
 	}
 
 	return nil

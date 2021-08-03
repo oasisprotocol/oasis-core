@@ -14,6 +14,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common"
 	"github.com/oasisprotocol/oasis-core/go/common/cbor"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
+	"github.com/oasisprotocol/oasis-core/go/common/errors"
 	"github.com/oasisprotocol/oasis-core/go/common/quantity"
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
 	runtimeClient "github.com/oasisprotocol/oasis-core/go/runtime/client/api"
@@ -193,7 +194,9 @@ func (r *runtime) submitRuntimeRquest(ctx context.Context, rtc runtimeClient.Run
 	if err != nil {
 		return nil, 0, fmt.Errorf("failed to submit runtime transaction: %w", err)
 	}
-
+	if out.CheckTxError != nil {
+		return nil, 0, fmt.Errorf("SubmitTxWithMeta check tx error: %w", errors.FromCode(out.CheckTxError.Module, out.CheckTxError.Code, out.CheckTxError.Message))
+	}
 	if err = cbor.Unmarshal(out.Output, &rsp); err != nil {
 		return nil, 0, fmt.Errorf("malformed tx output from runtime: %w", err)
 	}
