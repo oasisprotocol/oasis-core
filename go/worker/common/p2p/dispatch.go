@@ -48,8 +48,7 @@ type Handler interface {
 
 // BaseHandler handler is a P2P handler that can be used in publishing-only
 // clients.
-type BaseHandler struct {
-}
+type BaseHandler struct{}
 
 // AuthenticatePeer implements p2p Handler.
 func (h *BaseHandler) AuthenticatePeer(peerID signature.PublicKey, msg *Message) error {
