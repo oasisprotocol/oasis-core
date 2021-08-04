@@ -1058,9 +1058,9 @@ dependencies = [
 
 [[package]]
 name = "intrusive-collections"
-version = "0.8.5"
+version = "0.9.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d0153b585ad53d6b7d02519ae83d7a0a5e56ebb0f968b986bddae43f3eed0b9a"
+checksum = "eb4ed164b4cf1c6bd6e18c097490331a0e58fbb0f39e8f6b5ac7f168006511cd"
 dependencies = [
  "memoffset 0.5.6",
 ]
