@@ -43,13 +43,3 @@ updates:
     labels:
       - c:deps
       - rust
-    ignore:
-      # We are using a ring-sgx patch, so ring is manually updated.
-      # https://github.com/oasislabs/ring-sgx
-      - dependency-name: ring
-      # Webpki update forces ring update.
-      - dependency-name: webpki
-      # Wait with update until https://github.com/Amanieu/intrusive-rs/pull/51
-      # is merged and released, so we can continue using `intrusive_adapter!`
-      # macro in`lru_cache.rs`.
-      - dependency-name: intrusive-collections

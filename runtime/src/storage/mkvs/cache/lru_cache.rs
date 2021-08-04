@@ -1,7 +1,7 @@
 use std::{any::Any, cell::RefCell, pin::Pin, ptr::NonNull, rc::Rc, sync::Arc};
 
 use anyhow::{anyhow, Result};
-use intrusive_collections::{intrusive_adapter, IntrusivePointer, LinkedList, LinkedListLink};
+use intrusive_collections::{intrusive_adapter, LinkedList, LinkedListLink};
 use io_context::Context;
 use thiserror::Error;
 
@@ -15,19 +15,6 @@ struct RemoveLockedError;
 pub struct CacheItemBox<Item: CacheItem + Default> {
     item: Rc<RefCell<Item>>,
     link: LinkedListLink,
-}
-
-unsafe impl<T: CacheItem + Default> IntrusivePointer<CacheItemBox<T>>
-    for Pin<Box<CacheItemBox<T>>>
-{
-    #[inline]
-    fn into_raw(self) -> *const CacheItemBox<T> {
-        unsafe { Box::into_raw(Pin::into_inner_unchecked(self)) }
-    }
-    #[inline]
-    unsafe fn from_raw(ptr: *const CacheItemBox<T>) -> Self {
-        Box::into_pin(Box::from_raw(ptr as *mut CacheItemBox<T>))
-    }
 }
 
 intrusive_adapter!(
