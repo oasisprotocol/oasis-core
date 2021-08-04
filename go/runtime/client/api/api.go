@@ -13,6 +13,7 @@ import (
 	roothash "github.com/oasisprotocol/oasis-core/go/roothash/api"
 	"github.com/oasisprotocol/oasis-core/go/roothash/api/block"
 	enclaverpc "github.com/oasisprotocol/oasis-core/go/runtime/enclaverpc/api"
+	"github.com/oasisprotocol/oasis-core/go/runtime/host/protocol"
 )
 
 const (
@@ -46,6 +47,13 @@ type RuntimeClient interface {
 	// SubmitTx submits a transaction to the runtime transaction scheduler and waits
 	// for transaction execution results.
 	SubmitTx(ctx context.Context, request *SubmitTxRequest) ([]byte, error)
+
+	// SubmitTxMeta submits a transaction to the runtime transaction scheduler and waits for
+	// transaction execution results.
+	//
+	// Response includes transaction metadata - e.g. round at which the transaction was included
+	// in a block.
+	SubmitTxMeta(ctx context.Context, request *SubmitTxRequest) (*SubmitTxMetaResponse, error)
 
 	// SubmitTxNoWait submits a transaction to the runtime transaction scheduler but does
 	// not wait for transaction execution.
@@ -102,6 +110,19 @@ type RuntimeClientService interface {
 type SubmitTxRequest struct {
 	RuntimeID common.Namespace `json:"runtime_id"`
 	Data      []byte           `json:"data"`
+}
+
+// SubmitTxMetaResponse is the SubmitTxMeta response.
+type SubmitTxMetaResponse struct {
+	// Output is the transaction output.
+	Output []byte `json:"data,omitempty"`
+	// Round is the roothash round in which the transaction was executed.
+	Round uint64 `json:"round,omitempty"`
+	// BatchOrder is the order of the transaction in the execution batch.
+	BatchOrder uint32 `json:"batch_order,omitempty"`
+
+	// CheckTxError is the CheckTx error in case transaction failed the transaction check.
+	CheckTxError *protocol.Error `json:"check_tx_error,omitempty"`
 }
 
 // CheckTxRequest is a CheckTx request.

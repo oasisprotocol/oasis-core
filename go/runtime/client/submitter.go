@@ -37,7 +37,7 @@ func (w *txRequest) result(res *txResult) {
 
 type txResult struct {
 	err    error
-	result []byte
+	result *api.SubmitTxMetaResponse
 }
 
 type txSubmitter struct {
@@ -101,7 +101,11 @@ func (w *txSubmitter) checkBlock(blk *block.Block) error {
 	for txHash, tx := range matches {
 		txReq := w.transactions[txHash]
 		txReq.result(&txResult{
-			result: tx.Output,
+			result: &api.SubmitTxMetaResponse{
+				Round:      blk.Header.Round,
+				BatchOrder: tx.BatchOrder,
+				Output:     tx.Output,
+			},
 		})
 		close(txReq.respCh)
 		delete(w.transactions, txHash)
