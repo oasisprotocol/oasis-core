@@ -65,9 +65,13 @@ func main() {
 				}
 			}
 
+			// Generate deregister entity transactions.
+			tx := registry.NewDeregisterEntityTx(nonce, fee)
+			vectors = append(vectors, testvectors.MakeTestVector("DeregisterEntity", tx, true))
+
 			// Generate unfreeze node transactions.
 			nodeSigner := memorySigner.NewTestSigner("oasis-core registry test vectors: UnfreezeNode signer")
-			tx := registry.NewUnfreezeNodeTx(nonce, fee, &registry.UnfreezeNode{
+			tx = registry.NewUnfreezeNodeTx(nonce, fee, &registry.UnfreezeNode{
 				NodeID: nodeSigner.Public(),
 			})
 			vectors = append(vectors, testvectors.MakeTestVector("UnfreezeNode", tx, true))
