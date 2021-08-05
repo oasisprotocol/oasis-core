@@ -27,9 +27,52 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/upgrade/migrations"
 )
 
+type upgradeChecker interface {
+	PreUpgradeFn(context.Context, *oasis.Controller) error
+	PostUpgradeFn(context.Context, *oasis.Controller) error
+}
+
+type dummyUpgradeChecker struct {
+	preUpgradeParams *consensus.Parameters
+}
+
+func (d *dummyUpgradeChecker) PreUpgradeFn(ctx context.Context, ctrl *oasis.Controller) error {
+	initialParams, err := ctrl.Consensus.GetParameters(ctx, consensus.HeightLatest)
+	if err != nil {
+		return fmt.Errorf("can't get consensus parameters: %w", err)
+	}
+	d.preUpgradeParams = initialParams
+	return nil
+}
+
+func (d *dummyUpgradeChecker) PostUpgradeFn(ctx context.Context, ctrl *oasis.Controller) error {
+	// Check the entity set during consensus upgrade.
+	idQuery := &registry.IDQuery{
+		Height: consensus.HeightLatest,
+		ID:     migrations.TestEntity.ID,
+	}
+	_, err := ctrl.Registry.GetEntity(ctx, idQuery)
+	if err != nil {
+		return fmt.Errorf("can't get registered test entity: %w", err)
+	}
+
+	// Check updated consensus parameters.
+	newParams, err := ctrl.Consensus.GetParameters(ctx, consensus.HeightLatest)
+	if err != nil {
+		return fmt.Errorf("can't get consensus parameters: %w", err)
+	}
+	if newParams.Parameters.MaxTxSize != d.preUpgradeParams.Parameters.MaxTxSize+1 {
+		return fmt.Errorf("consensus parameter MaxTxSize not updated correctly (expected: %d actual: %d)",
+			d.preUpgradeParams.Parameters.MaxTxSize+1,
+			newParams.Parameters.MaxTxSize,
+		)
+	}
+	return nil
+}
+
 var (
-	// NodeUpgrade is the node upgrade scenario.
-	NodeUpgrade scenario.Scenario = newNodeUpgradeImpl()
+	// NodeUpgradeDummy is the node upgrade dummy scenario.
+	NodeUpgradeDummy scenario.Scenario = newNodeUpgradeImpl(migrations.DummyUpgradeHandler, &dummyUpgradeChecker{})
 
 	malformedDescriptor = []byte(`{
 		"v": 1,
@@ -56,6 +99,9 @@ type nodeUpgradeImpl struct {
 
 	ctx          context.Context
 	currentEpoch beacon.EpochTime
+
+	handlerName    string
+	upgradeChecker upgradeChecker
 }
 
 func (sc *nodeUpgradeImpl) writeDescriptor(name string, content []byte) (string, error) {
@@ -107,18 +153,22 @@ func (sc *nodeUpgradeImpl) restart(wait bool) error {
 	}
 }
 
-func newNodeUpgradeImpl() scenario.Scenario {
+func newNodeUpgradeImpl(handlerName string, upgradeChecker upgradeChecker) scenario.Scenario {
 	sc := &nodeUpgradeImpl{
-		E2E: *NewE2E("node-upgrade"),
-		ctx: context.Background(),
+		E2E:            *NewE2E("node-upgrade-" + handlerName),
+		ctx:            context.Background(),
+		handlerName:    handlerName,
+		upgradeChecker: upgradeChecker,
 	}
 	return sc
 }
 
 func (sc *nodeUpgradeImpl) Clone() scenario.Scenario {
 	return &nodeUpgradeImpl{
-		E2E: sc.E2E.Clone(),
-		ctx: context.Background(),
+		E2E:            sc.E2E.Clone(),
+		ctx:            context.Background(),
+		handlerName:    sc.handlerName,
+		upgradeChecker: sc.upgradeChecker,
 	}
 }
 
@@ -195,10 +245,9 @@ func (sc *nodeUpgradeImpl) Run(childEnv *env.Env) error { // nolint: gocyclo
 		return err
 	}
 
-	// Fetch initial consensus parameters.
-	initialParams, err := sc.Net.Controller().Consensus.GetParameters(sc.ctx, consensus.HeightLatest)
-	if err != nil {
-		return fmt.Errorf("can't get consensus parameters: %w", err)
+	// Run pre-upgrade checker.
+	if err = sc.upgradeChecker.PreUpgradeFn(sc.ctx, sc.Net.Controller()); err != nil {
+		return err
 	}
 
 	// Try submitting an invalid update descriptor.
@@ -276,7 +325,7 @@ func (sc *nodeUpgradeImpl) Run(childEnv *env.Env) error { // nolint: gocyclo
 	store.Close()
 
 	validDescriptor := baseDescriptor
-	validDescriptor.Handler = migrations.DummyUpgradeHandler
+	validDescriptor.Handler = sc.handlerName
 	validDescriptor.Epoch = sc.currentEpoch + 1
 	desc, err = json.Marshal(validDescriptor)
 	if err != nil {
@@ -335,26 +384,9 @@ func (sc *nodeUpgradeImpl) Run(childEnv *env.Env) error { // nolint: gocyclo
 		return err
 	}
 
-	// Check the entity set during consensus upgrade.
-	idQuery := &registry.IDQuery{
-		Height: consensus.HeightLatest,
-		ID:     migrations.TestEntity.ID,
-	}
-	_, err = sc.Net.Controller().Registry.GetEntity(sc.ctx, idQuery)
-	if err != nil {
-		return fmt.Errorf("can't get registered test entity: %w", err)
-	}
-
-	// Check updated consensus parameters.
-	newParams, err := sc.Net.Controller().Consensus.GetParameters(sc.ctx, consensus.HeightLatest)
-	if err != nil {
-		return fmt.Errorf("can't get consensus parameters: %w", err)
-	}
-	if newParams.Parameters.MaxTxSize != initialParams.Parameters.MaxTxSize+1 {
-		return fmt.Errorf("consensus parameter MaxTxSize not updated correctly (expected: %d actual: %d)",
-			initialParams.Parameters.MaxTxSize+1,
-			newParams.Parameters.MaxTxSize,
-		)
+	// Run post-upgrade checker.
+	if err = sc.upgradeChecker.PostUpgradeFn(sc.ctx, sc.Net.Controller()); err != nil {
+		return err
 	}
 
 	return sc.finishWithoutChild()
