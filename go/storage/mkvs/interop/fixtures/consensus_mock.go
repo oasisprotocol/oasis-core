@@ -16,8 +16,7 @@ const consensusMockName = "consensus_mock"
 
 var consensusMockFixture = consensusMock{}
 
-type consensusMock struct {
-}
+type consensusMock struct{}
 
 func (c *consensusMock) Name() string {
 	return consensusMockName

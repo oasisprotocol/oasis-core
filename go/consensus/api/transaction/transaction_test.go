@@ -6,11 +6,9 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-type testMethodBodyNormal struct {
-}
+type testMethodBodyNormal struct{}
 
-type testMethodBodyCritical struct {
-}
+type testMethodBodyCritical struct{}
 
 func (tb testMethodBodyCritical) MethodMetadata() MethodMetadata {
 	return MethodMetadata{

@@ -8,7 +8,7 @@ ARG GO_PROTOC_VERSION=3.6.1
 ARG GO_PROTOC_GEN_GO_VERSION=1.21.0
 ARG GOLANGCILINT_VERSION=1.28.2
 ARG GOCOVMERGE_VERSION=b5bfa59ec0adc420475f97f89b58045c721d761c
-ARG GOFUMPT_VERSION=abc0db2c416aca0f60ea33c23c76665f6e7ba0b6
+ARG GOFUMPT_VERSION=v0.1.1
 ARG RUST_NIGHTLY_VERSION=2021-05-20
 ARG JEMALLOC_VERSION=5.2.1
 ARG JEMALLOC_CHECKSUM=34330e5ce276099e2e8950d9335db5a875689a4c6a56751ef3b1d8c537f887f6
@@ -72,7 +72,7 @@ RUN wget https://dl.google.com/go/go${GO_VERSION}.linux-amd64.tar.gz && \
     chmod +x /go/bin/nancy && \
     # Install gofumpt for code formatting.
     GO111MODULE=on go get mvdan.cc/gofumpt@${GOFUMPT_VERSION} && \
-    GO111MODULE=on go get mvdan.cc/gofumpt/gofumports@${GOFUMPT_VERSION}
+    GO111MODULE=on go get golang.org/x/tools/cmd/goimports
 
 # Install jemalloc (used by badgerdb).
 RUN wget -O jemalloc.tar.bz2 https://github.com/jemalloc/jemalloc/releases/download/${JEMALLOC_VERSION}/jemalloc-${JEMALLOC_VERSION}.tar.bz2 && \

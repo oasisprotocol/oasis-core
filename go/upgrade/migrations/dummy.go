@@ -36,8 +36,7 @@ func init() {
 	TestEntity.ID = entitySigner.Public()
 }
 
-type dummyMigrationHandler struct {
-}
+type dummyMigrationHandler struct{}
 
 func (th *dummyMigrationHandler) StartupUpgrade(ctx *Context) error {
 	return nil

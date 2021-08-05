@@ -15,8 +15,7 @@ const (
 
 var _ Handler = (*maxAllowances16Handler)(nil)
 
-type maxAllowances16Handler struct {
-}
+type maxAllowances16Handler struct{}
 
 func (th *maxAllowances16Handler) StartupUpgrade(ctx *Context) error {
 	return nil

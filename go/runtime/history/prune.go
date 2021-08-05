@@ -60,8 +60,7 @@ func newPrunerBase() prunerBase {
 	return prunerBase{}
 }
 
-type nonePruner struct {
-}
+type nonePruner struct{}
 
 func (p *nonePruner) RegisterHandler(handler PruneHandler) {
 }

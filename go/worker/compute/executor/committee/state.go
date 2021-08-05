@@ -96,8 +96,7 @@ type NodeState interface {
 }
 
 // StateNotReady is the not ready state.
-type StateNotReady struct {
-}
+type StateNotReady struct{}
 
 // Name returns the name of the state.
 func (s StateNotReady) Name() StateName {

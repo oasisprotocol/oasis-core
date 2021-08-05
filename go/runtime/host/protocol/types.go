@@ -115,8 +115,7 @@ func (body Body) Type() string {
 }
 
 // Empty is an empty message body.
-type Empty struct {
-}
+type Empty struct{}
 
 // Error is a message body representing an error.
 type Error struct {
