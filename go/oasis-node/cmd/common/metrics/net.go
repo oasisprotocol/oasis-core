@@ -60,8 +60,7 @@ var (
 	netServiceOnce sync.Once
 )
 
-type netCollector struct {
-}
+type netCollector struct{}
 
 func (n *netCollector) Name() string {
 	return "net"

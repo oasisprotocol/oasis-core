@@ -42,8 +42,7 @@ var (
 	}
 )
 
-type enclaveRPCEndpoint struct {
-}
+type enclaveRPCEndpoint struct{}
 
 // Implements enclaverpc.Endpoint.
 func (e *enclaveRPCEndpoint) AccessControlRequired(ctx context.Context, request *enclaverpc.CallEnclaveRequest) (bool, error) {

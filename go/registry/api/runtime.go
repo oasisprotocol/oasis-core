@@ -253,8 +253,7 @@ type SchedulingConstraints struct {
 
 // ValidatorSetConstraint specifies that the entity must have a node that is part of the validator
 // set. No other options can currently be specified.
-type ValidatorSetConstraint struct {
-}
+type ValidatorSetConstraint struct{}
 
 // MaxNodesConstraint specifies that only the given number of nodes may be eligible per entity.
 type MaxNodesConstraint struct {

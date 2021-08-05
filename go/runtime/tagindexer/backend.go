@@ -90,8 +90,7 @@ type Backend interface {
 	Close()
 }
 
-type nopBackend struct {
-}
+type nopBackend struct{}
 
 func (n *nopBackend) Index(
 	ctx context.Context,

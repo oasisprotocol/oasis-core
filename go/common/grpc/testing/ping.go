@@ -80,8 +80,7 @@ type PingQuery struct {
 }
 
 // PingResponse is the response of the PingServer.
-type PingResponse struct {
-}
+type PingResponse struct{}
 
 // PingServer is a testing ping server interface.
 type PingServer interface {

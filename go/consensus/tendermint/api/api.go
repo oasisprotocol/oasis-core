@@ -334,8 +334,7 @@ type ServiceClient interface {
 
 // BaseServiceClient is a default ServiceClient implementation that provides noop implementations of
 // all the delivery methods. Implementations should override them as needed.
-type BaseServiceClient struct {
-}
+type BaseServiceClient struct{}
 
 // Implements ServiceClient.
 func (bsc *BaseServiceClient) DeliverBlock(ctx context.Context, height int64) error {
