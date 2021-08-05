@@ -255,8 +255,7 @@ func TestHistoryPrune(t *testing.T) {
 	}
 }
 
-type testPruneFailingHandler struct {
-}
+type testPruneFailingHandler struct{}
 
 func (h *testPruneFailingHandler) Prune(ctx context.Context, rounds []uint64) error {
 	return fmt.Errorf("thou shall not pass")

@@ -135,7 +135,7 @@ Core:
   rustup target add x86_64-fortanix-unknown-sgx
   ```
 
-* (**OPTIONAL**) [gofumpt and gofumports].
+* (**OPTIONAL**) [gofumpt] and [goimports].
 
   Required if you plan to change any of the Go code in order for automated code
   formatting (`make fmt`) to work.
@@ -143,9 +143,8 @@ Core:
   Download and install it with:
 
   ```
-  export GOFUMPT_VERSION=abc0db2c416aca0f60ea33c23c76665f6e7ba0b6
-  GO111MODULE=on ${OASIS_GO:-go} get mvdan.cc/gofumpt@${GOFUMPT_VERSION}
-  GO111MODULE=on ${OASIS_GO:-go} get mvdan.cc/gofumpt/gofumports@${GOFUMPT_VERSION}
+  GO111MODULE=on ${OASIS_GO:-go} get mvdan.cc/gofumpt@v0.1.1
+  GO111MODULE=on ${OASIS_GO:-go} get golang.org/x/tools/cmd/goimports
   ```
 
 * (**OPTIONAL**) [protoc-gen-go].
@@ -225,7 +224,8 @@ where the code has been checked out.
 [rust-toolchain-precedence]:
   https://github.com/rust-lang/rustup/blob/master/README.md#override-precedence
 [Fortanix Rust EDP]: https://edp.fortanix.com
-[gofumpt and gofumports]: https://github.com/mvdan/gofumpt
+[gofumpt]: https://github.com/mvdan/gofumpt
+[goimports]: https://pkg.go.dev/golang.org/x/tools/cmd/goimports
 [protoc-gen-go]: https://github.com/golang/protobuf
 [jemalloc]: https://github.com/jemalloc/jemalloc
 [BadgerDB]: https://github.com/dgraph-io/badger/

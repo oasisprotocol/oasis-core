@@ -164,8 +164,7 @@ func (b *ProofBuilder) build(ctx context.Context, proof *Proof, h hash.Hash) err
 }
 
 // ProofVerifier enables verifying proofs returned by the ReadSyncer API.
-type ProofVerifier struct {
-}
+type ProofVerifier struct{}
 
 // VerifyProof verifies a proof and generates an in-memory subtree representing
 // the nodes which are included in the proof.

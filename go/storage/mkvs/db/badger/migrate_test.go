@@ -76,8 +76,7 @@ func makeDB(t *testing.T, caseName string) (context.Context, api.NodeDB, *badger
 	return ctx, ndb, bdb, readDump(t, ndb, caseName)
 }
 
-type testMigrationHelper struct {
-}
+type testMigrationHelper struct{}
 
 func (mh *testMigrationHelper) GetRootForHash(root hash.Hash, version uint64) ([]node.Root, error) {
 	return []node.Root{{

@@ -18,8 +18,7 @@ import (
 	mkvsNode "github.com/oasisprotocol/oasis-core/go/storage/mkvs/node"
 )
 
-type provisioner struct {
-}
+type provisioner struct{}
 
 // CheckTxFailInput is the input that will cause a CheckTx failure in the mock runtime.
 var CheckTxFailInput = []byte("checktx-mock-fail")
