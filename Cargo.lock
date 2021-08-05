@@ -1501,7 +1501,7 @@ dependencies = [
  "serde_bytes",
  "serde_cbor",
  "thiserror",
- "tokio 1.6.1",
+ "tokio 1.9.0",
  "tokio-stream",
 ]
 
@@ -1603,7 +1603,7 @@ dependencies = [
  "tendermint-proto",
  "thiserror",
  "tiny-keccak 2.0.2",
- "tokio 1.6.1",
+ "tokio 1.9.0",
  "x25519-dalek",
  "x509-parser",
  "zeroize",
@@ -2329,7 +2329,7 @@ dependencies = [
  "rand 0.7.3",
  "serde_bytes",
  "simple-keyvalue-api",
- "tokio 1.6.1",
+ "tokio 1.9.0",
 ]
 
 [[package]]
@@ -2344,7 +2344,7 @@ dependencies = [
  "oasis-core-runtime",
  "rand 0.7.3",
  "simple-keyvalue-api",
- "tokio 1.6.1",
+ "tokio 1.9.0",
 ]
 
 [[package]]
@@ -2358,7 +2358,7 @@ dependencies = [
  "oasis-core-runtime",
  "rand 0.7.3",
  "simple-keyvalue-api",
- "tokio 1.6.1",
+ "tokio 1.9.0",
 ]
 
 [[package]]
@@ -2590,7 +2590,7 @@ dependencies = [
  "oasis-core-runtime",
  "rand 0.7.3",
  "simple-keyvalue-api",
- "tokio 1.6.1",
+ "tokio 1.9.0",
 ]
 
 [[package]]
@@ -2702,9 +2702,9 @@ dependencies = [
 
 [[package]]
 name = "tokio"
-version = "1.6.1"
+version = "1.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0a38d31d7831c6ed7aad00aa4c12d9375fd225a6dd77da1d25b707346319a975"
+checksum = "4b7b349f11a7047e6d1276853e612d152f5e8a352c61917887cc2169e2366b4c"
 dependencies = [
  "autocfg 1.0.1",
  "num_cpus",
@@ -2741,7 +2741,7 @@ checksum = "f8864d706fdb3cc0843a49647ac892720dac98a6eeb818b77190592cf4994066"
 dependencies = [
  "futures-core",
  "pin-project-lite 0.2.6",
- "tokio 1.6.1",
+ "tokio 1.9.0",
  "tokio-util",
 ]
 
@@ -2756,7 +2756,7 @@ dependencies = [
  "futures-sink",
  "log",
  "pin-project-lite 0.2.6",
- "tokio 1.6.1",
+ "tokio 1.9.0",
 ]
 
 [[package]]
