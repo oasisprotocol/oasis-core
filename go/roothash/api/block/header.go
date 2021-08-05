@@ -3,6 +3,7 @@ package block
 import (
 	"bytes"
 	"errors"
+	"time"
 
 	"github.com/oasisprotocol/oasis-core/go/common"
 	"github.com/oasisprotocol/oasis-core/go/common/cbor"
@@ -16,6 +17,28 @@ var ErrInvalidVersion = errors.New("roothash: invalid version")
 
 // HeaderType is the type of header.
 type HeaderType uint8
+
+// Timestamp is a custom time stamp type that encodes like time.Time when
+// marshaling to text.
+type Timestamp uint64
+
+// MarshalText encodes a Timestamp to text by converting it from Unix time to
+// local time.
+func (ts Timestamp) MarshalText() ([]byte, error) {
+	t := time.Unix(int64(ts), 0)
+	return t.MarshalText()
+}
+
+// UnmarshalText decodes a text slice into a Timestamp.
+func (ts *Timestamp) UnmarshalText(data []byte) error {
+	var t time.Time
+	err := t.UnmarshalText(data)
+	if err != nil {
+		return err
+	}
+	*ts = Timestamp(t.Unix())
+	return nil
+}
 
 const (
 	// Invalid is an invalid header type and should never be stored.
@@ -57,7 +80,7 @@ type Header struct { // nolint: maligned
 	Round uint64 `json:"round"`
 
 	// Timestamp is the block timestamp (POSIX time).
-	Timestamp uint64 `json:"timestamp"`
+	Timestamp Timestamp `json:"timestamp"`
 
 	// HeaderType is the header type.
 	HeaderType HeaderType `json:"header_type"`

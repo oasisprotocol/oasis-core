@@ -3,6 +3,7 @@ package block
 import (
 	"math/big"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 
@@ -113,4 +114,71 @@ func TestVerifyStorageReceipt(t *testing.T) {
 
 	err = header.VerifyStorageReceipt(&receipt)
 	require.NoError(t, err, "correct receipt")
+}
+
+func TestTimestamp(t *testing.T) {
+	require := require.New(t)
+
+	// Set local time zone to a fixed value to be able to compare the
+	// marshaled time stamps across different systems and configurations.
+	loc, err := time.LoadLocation("Pacific/Honolulu")
+	require.NoErrorf(err, "Failed to load a fixed time zone")
+	time.Local = loc
+
+	testVectors := []struct {
+		timestamp               Timestamp
+		timestampString         string
+		timestampStringValid    bool
+		timestampStringMatching bool
+		errMsg                  string
+	}{
+		// Valid.
+		{1, "1969-12-31T14:00:01-10:00", true, true, ""},
+		{1629075845, "2021-08-15T15:04:05-10:00", true, true, ""},
+		{4772384038, "2121-03-25T12:13:58-10:00", true, true, ""},
+
+		// Invalid - wrong syntax for marshalled time stamps.
+		{1629075845, "2021-08-15T15:04:05Z-10:00", false, false, "parsing time \"2021-08-15T15:04:05Z-10:00\": extra text: \"-10:00\""},
+		{1629032645, "2021-08-15T15:04:05+2:00", false, false, "parsing time \"2021-08-15T15:04:05+2:00\" as \"2006-01-02T15:04:05Z07:00\": cannot parse \"+2:00\" as \"Z07:00\""},
+
+		// Invalid - not marshaled using the correct time zone.
+		{1629039845, "2021-08-15T15:04:05Z", true, false, ""},
+		{1629032645, "2021-08-15T15:04:05+02:00", true, false, ""},
+	}
+
+	for _, v := range testVectors {
+		var unmarshaledTimestamp Timestamp
+		err := unmarshaledTimestamp.UnmarshalText([]byte(v.timestampString))
+		if !v.timestampStringValid {
+			require.EqualErrorf(
+				err,
+				v.errMsg,
+				"Unmarshaling invalid time stamp: '%s' should fail with expected error message",
+				v.timestampString,
+			)
+		} else {
+			require.NoErrorf(err, "Failed to unmarshal a valid time stamp: '%s'", v.timestampString)
+			require.Equalf(
+				v.timestamp,
+				unmarshaledTimestamp,
+				"Unmarshaled time stamp doesn't equal expected time stamp: %s %#s", v.timestamp, unmarshaledTimestamp,
+			)
+		}
+
+		textTimestamp, err := v.timestamp.MarshalText()
+		require.NoError(err, "Failed to marshal a valid time stamp: '%s'", v.timestamp)
+		if v.timestampStringMatching {
+			require.Equal(
+				v.timestampString,
+				string(textTimestamp),
+				"Marshaled time stamp doesn't equal expected text time stamp",
+			)
+		} else {
+			require.NotEqual(
+				v.timestampString,
+				string(textTimestamp),
+				"Marshaled time stamp shouldn't equal the expected text time stamp for invalid test cases",
+			)
+		}
+	}
 }

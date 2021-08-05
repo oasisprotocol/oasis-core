@@ -312,7 +312,7 @@ func (s *runtimeState) generateExecutorCommitments(t *testing.T, consensus conse
 			Version:      0,
 			Namespace:    child.Header.Namespace,
 			Round:        child.Header.Round + 1,
-			Timestamp:    uint64(time.Now().Unix()),
+			Timestamp:    block.Timestamp(time.Now().Unix()),
 			HeaderType:   block.Normal,
 			PreviousHash: child.Header.EncodedHash(),
 			IORoot:       ioRootHash,
