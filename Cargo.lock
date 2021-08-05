@@ -1097,9 +1097,9 @@ dependencies = [
 
 [[package]]
 name = "itertools"
-version = "0.9.0"
+version = "0.10.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "284f18f85651fe11e8a991b2adb42cb078325c996ed026d994719efcfca1d54b"
+checksum = "69ddb889f9d0d08a67338271fa9b62996bc788c7796a5c18cf057420aaed5eaf"
 dependencies = [
  "either",
 ]
@@ -1501,7 +1501,7 @@ dependencies = [
  "serde_bytes",
  "serde_cbor",
  "thiserror",
- "tokio 1.6.1",
+ "tokio 1.9.0",
  "tokio-stream",
 ]
 
@@ -1603,7 +1603,7 @@ dependencies = [
  "tendermint-proto",
  "thiserror",
  "tiny-keccak 2.0.2",
- "tokio 1.6.1",
+ "tokio 1.9.0",
  "x25519-dalek",
  "x509-parser",
  "zeroize",
@@ -1821,9 +1821,9 @@ dependencies = [
 
 [[package]]
 name = "prost"
-version = "0.7.0"
+version = "0.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9e6984d2f1a23009bd270b8bb56d0926810a3d483f59c987d77969e9d8e840b2"
+checksum = "de5e2533f59d08fcf364fd374ebda0692a70bd6d7e66ef97f306f45c6c5d8020"
 dependencies = [
  "bytes 1.0.1",
  "prost-derive",
@@ -1831,9 +1831,9 @@ dependencies = [
 
 [[package]]
 name = "prost-derive"
-version = "0.7.0"
+version = "0.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "169a15f3008ecb5160cba7d37bcd690a7601b6d30cfb87a117d45e59d52af5d4"
+checksum = "600d2f334aa05acb02a755e217ef1ab6dea4d51b58b7846588b747edec04efba"
 dependencies = [
  "anyhow",
  "itertools",
@@ -1844,9 +1844,9 @@ dependencies = [
 
 [[package]]
 name = "prost-types"
-version = "0.7.0"
+version = "0.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b518d7cdd93dab1d1122cf07fa9a60771836c668dde9d9e2a139f957f0d9f1bb"
+checksum = "603bbd6394701d13f3f25aada59c7de9d35a6a5887cfc156181234a44002771b"
 dependencies = [
  "bytes 1.0.1",
  "prost",
@@ -2329,7 +2329,7 @@ dependencies = [
  "rand 0.7.3",
  "serde_bytes",
  "simple-keyvalue-api",
- "tokio 1.6.1",
+ "tokio 1.9.0",
 ]
 
 [[package]]
@@ -2344,7 +2344,7 @@ dependencies = [
  "oasis-core-runtime",
  "rand 0.7.3",
  "simple-keyvalue-api",
- "tokio 1.6.1",
+ "tokio 1.9.0",
 ]
 
 [[package]]
@@ -2358,7 +2358,7 @@ dependencies = [
  "oasis-core-runtime",
  "rand 0.7.3",
  "simple-keyvalue-api",
- "tokio 1.6.1",
+ "tokio 1.9.0",
 ]
 
 [[package]]
@@ -2530,9 +2530,8 @@ dependencies = [
 
 [[package]]
 name = "tendermint"
-version = "0.19.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "831486f28e65c6f6c6f8afb067796f3c470db91a44d177224f8e6287601391b6"
+version = "0.20.0"
+source = "git+https://github.com/informalsystems/tendermint-rs?rev=1efe42c8625045fd99072718faf96e81aeb9c6e6#1efe42c8625045fd99072718faf96e81aeb9c6e6"
 dependencies = [
  "anomaly",
  "async-trait",
@@ -2540,7 +2539,6 @@ dependencies = [
  "chrono",
  "ed25519",
  "ed25519-dalek",
- "funty",
  "futures 0.3.15",
  "num-traits",
  "once_cell",
@@ -2563,9 +2561,8 @@ dependencies = [
 
 [[package]]
 name = "tendermint-proto"
-version = "0.19.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "32bbc1bc55f09de4d00b5d69aa6b60392ba37c5e4761d869f76065d352bd3360"
+version = "0.20.0"
+source = "git+https://github.com/informalsystems/tendermint-rs?rev=1efe42c8625045fd99072718faf96e81aeb9c6e6#1efe42c8625045fd99072718faf96e81aeb9c6e6"
 dependencies = [
  "anomaly",
  "bytes 1.0.1",
@@ -2590,7 +2587,7 @@ dependencies = [
  "oasis-core-runtime",
  "rand 0.7.3",
  "simple-keyvalue-api",
- "tokio 1.6.1",
+ "tokio 1.9.0",
 ]
 
 [[package]]
@@ -2702,9 +2699,9 @@ dependencies = [
 
 [[package]]
 name = "tokio"
-version = "1.6.1"
+version = "1.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0a38d31d7831c6ed7aad00aa4c12d9375fd225a6dd77da1d25b707346319a975"
+checksum = "4b7b349f11a7047e6d1276853e612d152f5e8a352c61917887cc2169e2366b4c"
 dependencies = [
  "autocfg 1.0.1",
  "num_cpus",
@@ -2741,7 +2738,7 @@ checksum = "f8864d706fdb3cc0843a49647ac892720dac98a6eeb818b77190592cf4994066"
 dependencies = [
  "futures-core",
  "pin-project-lite 0.2.6",
- "tokio 1.6.1",
+ "tokio 1.9.0",
  "tokio-util",
 ]
 
@@ -2756,7 +2753,7 @@ dependencies = [
  "futures-sink",
  "log",
  "pin-project-lite 0.2.6",
- "tokio 1.6.1",
+ "tokio 1.9.0",
 ]
 
 [[package]]
