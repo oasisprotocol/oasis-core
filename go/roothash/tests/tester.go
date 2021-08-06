@@ -83,6 +83,10 @@ func RootHashImplementationTests(t *testing.T, backend api.Backend, consensus co
 	}
 	registryTests.BulkPopulate(t, consensus.Registry(), consensus, runtimes, seedBase)
 
+	t.Run("ConsensusParameters", func(t *testing.T) {
+		testConsensusParameters(t, backend)
+	})
+
 	// Run the various tests. (Ordering matters)
 	for _, v := range rtStates {
 		t.Run("GenesisBlock/"+v.id, func(t *testing.T) {
@@ -118,6 +122,14 @@ func RootHashImplementationTests(t *testing.T, backend api.Backend, consensus co
 	t.Run("EquivocationEvidence", func(t *testing.T) {
 		testSubmitEquivocationEvidence(t, backend, consensus, identity, rtStates)
 	})
+}
+
+func testConsensusParameters(t *testing.T, backend api.Backend) {
+	ctx := context.Background()
+
+	params, err := backend.ConsensusParameters(ctx, consensusAPI.HeightLatest)
+	require.NoError(t, err, "ConsensusParameters")
+	require.EqualValues(t, 32, params.MaxRuntimeMessages, "expected max runtime messages value")
 }
 
 func testGenesisBlock(t *testing.T, backend api.Backend, state *runtimeState) {

@@ -16,6 +16,7 @@ type Query interface {
 	GenesisBlock(context.Context, common.Namespace) (*block.Block, error)
 	RuntimeState(context.Context, common.Namespace) (*roothash.RuntimeState, error)
 	Genesis(context.Context) (*roothash.Genesis, error)
+	ConsensusParameters(context.Context) (*roothash.ConsensusParameters, error)
 }
 
 // QueryFactory is the roothash query factory.
@@ -54,6 +55,10 @@ func (rq *rootHashQuerier) GenesisBlock(ctx context.Context, id common.Namespace
 
 func (rq *rootHashQuerier) RuntimeState(ctx context.Context, id common.Namespace) (*roothash.RuntimeState, error) {
 	return rq.state.RuntimeState(ctx, id)
+}
+
+func (rq *rootHashQuerier) ConsensusParameters(ctx context.Context) (*roothash.ConsensusParameters, error) {
+	return rq.state.ConsensusParameters(ctx)
 }
 
 func (app *rootHashApplication) QueryFactory() interface{} {
