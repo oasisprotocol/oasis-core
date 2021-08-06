@@ -17,12 +17,15 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/pubsub"
 	"github.com/oasisprotocol/oasis-core/go/common/version"
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
+	governanceAPI "github.com/oasisprotocol/oasis-core/go/governance/api"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/env"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/log"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/oasis"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/oasis/cli"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/scenario"
 	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
+	roothashAPI "github.com/oasisprotocol/oasis-core/go/roothash/api"
+	stakingAPI "github.com/oasisprotocol/oasis-core/go/staking/api"
 	upgrade "github.com/oasisprotocol/oasis-core/go/upgrade/api"
 	"github.com/oasisprotocol/oasis-core/go/upgrade/migrations"
 )
@@ -70,9 +73,76 @@ func (d *dummyUpgradeChecker) PostUpgradeFn(ctx context.Context, ctrl *oasis.Con
 	return nil
 }
 
+type noOpUpgradeChecker struct{}
+
+func (n *noOpUpgradeChecker) PreUpgradeFn(ctx context.Context, ctrl *oasis.Controller) error {
+	return nil
+}
+
+func (n *noOpUpgradeChecker) PostUpgradeFn(ctx context.Context, ctrl *oasis.Controller) error {
+	return nil
+}
+
+type upgrade202108Checker struct{}
+
+func (n *upgrade202108Checker) PreUpgradeFn(ctx context.Context, ctrl *oasis.Controller) error {
+	return nil
+}
+
+func (n *upgrade202108Checker) PostUpgradeFn(ctx context.Context, ctrl *oasis.Controller) error {
+	// Check updated staking parameters.
+	stakeParams, err := ctrl.Staking.ConsensusParameters(ctx, consensus.HeightLatest)
+	if err != nil {
+		return fmt.Errorf("can't get staking consensus parameters: %w", err)
+	}
+	if stakeParams.MaxAllowances != 16 {
+		return fmt.Errorf("max allowances not updated")
+	}
+	if stakeParams.GasCosts[stakingAPI.GasOpAmendCommissionSchedule] != 1000 ||
+		stakeParams.GasCosts[stakingAPI.GasOpAllow] != 1000 ||
+		stakeParams.GasCosts[stakingAPI.GasOpWithdraw] != 1000 {
+		return fmt.Errorf("staking gas costs not updated")
+	}
+
+	// Check updated governance parameters.
+	govParams, err := ctrl.Governance.ConsensusParameters(ctx, consensus.HeightLatest)
+	if err != nil {
+		return fmt.Errorf("can't get governance consensus parameters: %w", err)
+	}
+	if govParams.GasCosts[governanceAPI.GasOpCastVote] != 1000 ||
+		govParams.GasCosts[governanceAPI.GasOpSubmitProposal] != 1000 {
+		return fmt.Errorf("governance gas costs not updated")
+	}
+
+	// Check updated roothash parameters.
+	roothashParams, err := ctrl.Roothash.ConsensusParameters(ctx, consensus.HeightLatest)
+	if err != nil {
+		return fmt.Errorf("can't get roothash consensus parameters: %w", err)
+	}
+	if roothashParams.GasCosts[roothashAPI.GasOpProposerTimeout] != 5000 ||
+		roothashParams.GasCosts[roothashAPI.GasOpEvidence] != 5000 {
+		return fmt.Errorf("roothash gas costs not updated")
+	}
+
+	// Check updated scheduler parameters.
+	schedParams, err := ctrl.Consensus.Scheduler().ConsensusParameters(ctx, consensus.HeightLatest)
+	if err != nil {
+		return fmt.Errorf("can't get scheduler consensus parameters: %w", err)
+	}
+	if schedParams.MaxValidators != 110 {
+		return fmt.Errorf("max validators not updated")
+	}
+
+	return nil
+}
+
 var (
 	// NodeUpgradeDummy is the node upgrade dummy scenario.
 	NodeUpgradeDummy scenario.Scenario = newNodeUpgradeImpl(migrations.DummyUpgradeHandler, &dummyUpgradeChecker{})
+	// NodeUpgradeMaxAllowances is the node upgrade max allowances scenario.
+	NodeUpgradeMaxAllowances scenario.Scenario = newNodeUpgradeImpl(migrations.ConsensusMaxAllowances16Handler, &noOpUpgradeChecker{})
+	// NodeUpgradeConsensus202108 is the node consensus upgrade 202108 scenario.
+	NodeUpgradeConsensus202108 scenario.Scenario = newNodeUpgradeImpl(migrations.ConsensusParamsUpdate202108, &upgrade202108Checker{})
 
 	malformedDescriptor = []byte(`{
 		"v": 1,
