@@ -121,19 +121,19 @@ func New(
 	return s, nil
 }
 
-func (s *Worker) registerRuntime(dataDir string, commonNode *committeeCommon.Node, checkpointerCfg *checkpoint.CheckpointerConfig) error {
+func (w *Worker) registerRuntime(dataDir string, commonNode *committeeCommon.Node, checkpointerCfg *checkpoint.CheckpointerConfig) error {
 	id := commonNode.Runtime.ID()
-	s.logger.Info("registering new runtime",
+	w.logger.Info("registering new runtime",
 		"runtime_id", id,
 	)
 
-	rp, err := s.registration.NewRuntimeRoleProvider(node.RoleStorageWorker, id)
+	rp, err := w.registration.NewRuntimeRoleProvider(node.RoleStorageWorker, id)
 	if err != nil {
 		return fmt.Errorf("failed to create role provider: %w", err)
 	}
 	var rpRPC registration.RoleProvider
 	if viper.GetBool(CfgWorkerPublicRPCEnabled) {
-		rpRPC, err = s.registration.NewRuntimeRoleProvider(node.RoleStorageRPC, id)
+		rpRPC, err = w.registration.NewRuntimeRoleProvider(node.RoleStorageRPC, id)
 		if err != nil {
 			return fmt.Errorf("failed to create rpc role provider: %w", err)
 		}
@@ -151,12 +151,12 @@ func (s *Worker) registerRuntime(dataDir string, commonNode *committeeCommon.Nod
 
 	node, err := committee.NewNode(
 		commonNode,
-		s.grpcPolicy,
-		s.fetchPool,
-		s.watchState,
+		w.grpcPolicy,
+		w.fetchPool,
+		w.watchState,
 		rp,
 		rpRPC,
-		s.commonWorker.GetConfig(),
+		w.commonWorker.GetConfig(),
 		localStorage,
 		checkpointerCfg,
 		viper.GetBool(CfgWorkerCheckpointSyncDisabled),
@@ -166,9 +166,9 @@ func (s *Worker) registerRuntime(dataDir string, commonNode *committeeCommon.Nod
 	}
 	commonNode.Runtime.RegisterStorage(newSyncedLocalStorage(node, localStorage))
 	commonNode.AddHooks(node)
-	s.runtimes[id] = node
+	w.runtimes[id] = node
 
-	s.logger.Info("new runtime registered",
+	w.logger.Info("new runtime registered",
 		"runtime_id", id,
 	)
 
@@ -176,97 +176,97 @@ func (s *Worker) registerRuntime(dataDir string, commonNode *committeeCommon.Nod
 }
 
 // Name returns the service name.
-func (s *Worker) Name() string {
+func (w *Worker) Name() string {
 	return "storage worker"
 }
 
 // Enabled returns if worker is enabled.
-func (s *Worker) Enabled() bool {
-	return s.enabled
+func (w *Worker) Enabled() bool {
+	return w.enabled
 }
 
 // Initialized returns a channel that will be closed when the storage worker
 // is initialized and ready to service requests.
-func (s *Worker) Initialized() <-chan struct{} {
-	return s.initCh
+func (w *Worker) Initialized() <-chan struct{} {
+	return w.initCh
 }
 
 // Start starts the storage service.
-func (s *Worker) Start() error {
-	if !s.enabled {
-		s.logger.Info("not starting storage worker as it is disabled")
+func (w *Worker) Start() error {
+	if !w.enabled {
+		w.logger.Info("not starting storage worker as it is disabled")
 
 		// In case the worker is not enabled, close the init channel immediately.
-		close(s.initCh)
+		close(w.initCh)
 
 		return nil
 	}
 
 	// Wait for all runtimes to terminate.
 	go func() {
-		defer close(s.quitCh)
+		defer close(w.quitCh)
 
-		for _, r := range s.runtimes {
+		for _, r := range w.runtimes {
 			<-r.Quit()
 		}
-		if s.fetchPool != nil {
-			<-s.fetchPool.Quit()
+		if w.fetchPool != nil {
+			<-w.fetchPool.Quit()
 		}
 	}()
 
 	// Start all runtimes and wait for initialization.
 	go func() {
-		s.logger.Info("starting storage sync services", "num_runtimes", len(s.runtimes))
+		w.logger.Info("starting storage sync services", "num_runtimes", len(w.runtimes))
 
-		for _, r := range s.runtimes {
+		for _, r := range w.runtimes {
 			_ = r.Start()
 		}
 
 		// Wait for runtimes to be initialized and the node to be registered.
-		for _, r := range s.runtimes {
+		for _, r := range w.runtimes {
 			<-r.Initialized()
 		}
 
-		<-s.registration.InitialRegistrationCh()
+		<-w.registration.InitialRegistrationCh()
 
-		s.logger.Info("storage worker started")
+		w.logger.Info("storage worker started")
 
-		close(s.initCh)
+		close(w.initCh)
 	}()
 
 	return nil
 }
 
 // Stop halts the service.
-func (s *Worker) Stop() {
-	if !s.enabled {
-		close(s.quitCh)
+func (w *Worker) Stop() {
+	if !w.enabled {
+		close(w.quitCh)
 		return
 	}
 
-	for _, r := range s.runtimes {
+	for _, r := range w.runtimes {
 		r.Stop()
 	}
-	if s.fetchPool != nil {
-		s.fetchPool.Stop()
+	if w.fetchPool != nil {
+		w.fetchPool.Stop()
 	}
-	if s.watchState != nil {
-		s.watchState.Close()
+	if w.watchState != nil {
+		w.watchState.Close()
 	}
 }
 
 // Quit returns a channel that will be closed when the service terminates.
-func (s *Worker) Quit() <-chan struct{} {
-	return s.quitCh
+func (w *Worker) Quit() <-chan struct{} {
+	return w.quitCh
 }
 
 // Cleanup performs the service specific post-termination cleanup.
-func (s *Worker) Cleanup() {
+func (w *Worker) Cleanup() {
 }
 
 // GetRuntime returns a storage committee node for the given runtime (if available).
 //
 // In case the runtime with the specified id was not configured for this node it returns nil.
-func (s *Worker) GetRuntime(id common.Namespace) *committee.Node {
-	return s.runtimes[id]
+func (w *Worker) GetRuntime(id common.Namespace) *committee.Node {
+	return w.runtimes[id]
 }

@@ -50,7 +50,7 @@ func checkRegistry(ctx *abciAPI.Context, now beacon.EpochTime) error {
 	// Check runtimes.
 	runtimes, err := st.Runtimes(ctx)
 	if err != nil {
-		return fmt.Errorf("Runtimes: %w", err)
+		return fmt.Errorf("Runtimes(): %w", err)
 	}
 	suspendedRuntimes, err := st.SuspendedRuntimes(ctx)
 	if err != nil {
@@ -81,7 +81,7 @@ func checkRootHash(ctx *abciAPI.Context, now beacon.EpochTime) error {
 	// Check blocks.
 	runtimes, err := st.Runtimes(ctx)
 	if err != nil {
-		return fmt.Errorf("Runtimes: %w", err)
+		return fmt.Errorf("Runtimes(): %w", err)
 	}
 
 	blocks := make(map[common.Namespace]*block.Block)
@@ -143,13 +143,13 @@ func checkStaking(ctx *abciAPI.Context, now beacon.EpochTime) error {
 	var total quantity.Quantity
 	addresses, err := st.Addresses(ctx)
 	if err != nil {
-		return fmt.Errorf("Addresses: %w", err)
+		return fmt.Errorf("Addresses(): %w", err)
 	}
 	var acct *staking.Account
 	for _, addr := range addresses {
 		acct, err = st.Account(ctx, addr)
 		if err != nil {
-			return fmt.Errorf("Account: %w", err)
+			return fmt.Errorf("Account(): %w", err)
 		}
 		err = staking.SanityCheckAccount(&total, parameters, now, addr, acct)
 		if err != nil {
@@ -186,12 +186,12 @@ func checkStaking(ctx *abciAPI.Context, now beacon.EpochTime) error {
 	// All shares of all delegations for a given account must add up to account's Escrow.Active.TotalShares.
 	addressesDelegationsMap, err := st.Delegations(ctx)
 	if err != nil {
-		return fmt.Errorf("Delegations: %w", err)
+		return fmt.Errorf("Delegations(): %w", err)
 	}
 	for address, delegations := range addressesDelegationsMap {
 		acct, err = st.Account(ctx, address)
 		if err != nil {
-			return fmt.Errorf("Account %s: %w", address, err)
+			return fmt.Errorf("Account() %s: %w", address, err)
 		}
 		if err = staking.SanityCheckDelegations(address, acct, delegations); err != nil {
 			return err
@@ -206,7 +206,7 @@ func checkStaking(ctx *abciAPI.Context, now beacon.EpochTime) error {
 	for address, debondingDelegations := range addressesDebondingDelegationsMap {
 		acct, err = st.Account(ctx, address)
 		if err != nil {
-			return fmt.Errorf("Account %s: %w", address, err)
+			return fmt.Errorf("Account() %s: %w", address, err)
 		}
 		if err = staking.SanityCheckDebondingDelegations(address, acct, debondingDelegations); err != nil {
 			return err
@@ -217,7 +217,7 @@ func checkStaking(ctx *abciAPI.Context, now beacon.EpochTime) error {
 	for _, addr := range addresses {
 		acct, err = st.Account(ctx, addr)
 		if err != nil {
-			return fmt.Errorf("Account: %w", err)
+			return fmt.Errorf("Account(): %w", err)
 		}
 		if err = staking.SanityCheckAccountShares(
 			addr, acct, addressesDelegationsMap[addr],
@@ -235,7 +235,7 @@ func checkKeyManager(ctx *abciAPI.Context, now beacon.EpochTime) error {
 
 	statuses, err := st.Statuses(ctx)
 	if err != nil {
-		return fmt.Errorf("Statuses: %w", err)
+		return fmt.Errorf("Statuses(): %w", err)
 	}
 	err = keymanager.SanityCheckStatuses(statuses)
 	if err != nil {
@@ -264,7 +264,7 @@ func checkGovernance(ctx *abciAPI.Context, epoch beacon.EpochTime) error {
 	// Sanity check proposals.
 	proposals, err := st.Proposals(ctx)
 	if err != nil {
-		return fmt.Errorf("Proposals: %w", err)
+		return fmt.Errorf("Proposals(): %w", err)
 	}
 	err = governance.SanityCheckProposals(proposals, epoch, govDeposits)
 	if err != nil {
@@ -275,11 +275,11 @@ func checkGovernance(ctx *abciAPI.Context, epoch beacon.EpochTime) error {
 		var votes []*governance.VoteEntry
 		votes, err = st.Votes(ctx, p.ID)
 		if err != nil {
-			return fmt.Errorf("Votes: %w", err)
+			return fmt.Errorf("Votes(): %w", err)
 		}
 		err = governance.SanityCheckVotes(p, votes)
 		if err != nil {
-			return fmt.Errorf("SanityCheck Votes: %w", err)
+			return fmt.Errorf("SanityCheckVotes: %w", err)
 		}
 	}
 	// Sanity check pending upgrades.

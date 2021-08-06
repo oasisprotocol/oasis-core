@@ -37,6 +37,7 @@ func SchedulerImplementationTests(t *testing.T, name string, backend api.Backend
 
 	// Query genesis parameters.
 	_, err = backend.ConsensusParameters(ctx, consensusAPI.HeightLatest)
+	require.NoError(err, "ConsensusParameters")
 
 	ch, sub, err := backend.WatchCommittees(ctx)
 	require.NoError(err, "WatchCommittees")

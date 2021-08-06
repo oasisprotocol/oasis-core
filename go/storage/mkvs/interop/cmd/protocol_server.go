@@ -18,7 +18,6 @@ import (
 	genesisTestHelpers "github.com/oasisprotocol/oasis-core/go/genesis/tests"
 	"github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/background"
 	"github.com/oasisprotocol/oasis-core/go/storage/api"
-	storage "github.com/oasisprotocol/oasis-core/go/storage/api"
 	"github.com/oasisprotocol/oasis-core/go/storage/database"
 	badgerNodedb "github.com/oasisprotocol/oasis-core/go/storage/mkvs/db/badger"
 	"github.com/oasisprotocol/oasis-core/go/storage/mkvs/interop/fixtures"
@@ -79,7 +78,7 @@ func doProtoServer(cmd *cobra.Command, args []string) {
 	}
 
 	// Initialize a dummy storage backend.
-	storageCfg := storage.Config{
+	storageCfg := api.Config{
 		Backend:            database.BackendNameBadgerDB,
 		DB:                 dataDir,
 		Signer:             ident.NodeSigner,

@@ -12,7 +12,6 @@ import (
 
 	"github.com/oasisprotocol/oasis-core/go/common"
 	"github.com/oasisprotocol/oasis-core/go/common/identity"
-	"github.com/oasisprotocol/oasis-core/go/storage/api"
 	storage "github.com/oasisprotocol/oasis-core/go/storage/api"
 	"github.com/oasisprotocol/oasis-core/go/storage/database"
 	"github.com/oasisprotocol/oasis-core/go/storage/mkvs/checkpoint"
@@ -57,7 +56,7 @@ func newStorageNode(id *identity.Identity, namespace common.Namespace, datadir s
 	initCh := make(chan struct{})
 	defer close(initCh)
 
-	cfg := &api.Config{
+	cfg := &storage.Config{
 		Backend:           database.BackendNameBadgerDB,
 		DB:                filepath.Join(datadir, database.DefaultFileName(database.BackendNameBadgerDB)),
 		Signer:            id.NodeSigner,

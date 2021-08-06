@@ -13,7 +13,6 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/keyformat"
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
 	"github.com/oasisprotocol/oasis-core/go/common/quantity"
-	"github.com/oasisprotocol/oasis-core/go/consensus/tendermint/api"
 	abciAPI "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/api"
 	staking "github.com/oasisprotocol/oasis-core/go/staking/api"
 	"github.com/oasisprotocol/oasis-core/go/storage/mkvs"
@@ -768,7 +767,7 @@ func (s *MutableState) SlashEscrow(
 	}
 
 	if !ctx.IsCheckOnly() {
-		ctx.EmitEvent(api.NewEventBuilder(AppName).TypedAttribute(&staking.TakeEscrowEvent{
+		ctx.EmitEvent(abciAPI.NewEventBuilder(AppName).TypedAttribute(&staking.TakeEscrowEvent{
 			Owner:  fromAddr,
 			Amount: *totalSlashed,
 		}))
@@ -848,7 +847,7 @@ func (s *MutableState) TransferFromCommon(
 
 			// Emit non commissioned reward event.
 			if !ctx.IsCheckOnly() {
-				ctx.EmitEvent(api.NewEventBuilder(AppName).TypedAttribute(&staking.AddEscrowEvent{
+				ctx.EmitEvent(abciAPI.NewEventBuilder(AppName).TypedAttribute(&staking.AddEscrowEvent{
 					Owner:  staking.CommonPoolAddress,
 					Escrow: toAddr,
 					Amount: *transferred,
@@ -882,13 +881,13 @@ func (s *MutableState) TransferFromCommon(
 			// Emit events.
 			// Commission was transferred to the account, and automatically escrowed.
 			if !ctx.IsCheckOnly() {
-				ctx.EmitEvent(api.NewEventBuilder(AppName).TypedAttribute(&staking.TransferEvent{
+				ctx.EmitEvent(abciAPI.NewEventBuilder(AppName).TypedAttribute(&staking.TransferEvent{
 					From:   staking.CommonPoolAddress,
 					To:     toAddr,
 					Amount: *com,
 				}))
 
-				ctx.EmitEvent(api.NewEventBuilder(AppName).TypedAttribute(&staking.AddEscrowEvent{
+				ctx.EmitEvent(abciAPI.NewEventBuilder(AppName).TypedAttribute(&staking.AddEscrowEvent{
 					Owner:     toAddr,
 					Escrow:    toAddr,
 					Amount:    *com,
@@ -898,7 +897,7 @@ func (s *MutableState) TransferFromCommon(
 		}
 	case false:
 		if !ctx.IsCheckOnly() {
-			ctx.EmitEvent(api.NewEventBuilder(AppName).TypedAttribute(&staking.TransferEvent{
+			ctx.EmitEvent(abciAPI.NewEventBuilder(AppName).TypedAttribute(&staking.TransferEvent{
 				From:   staking.CommonPoolAddress,
 				To:     toAddr,
 				Amount: *transferred,
@@ -920,7 +919,7 @@ func (s *MutableState) TransferFromCommon(
 // TransferToGovernanceDeposits transfers the amount from the submitter to the
 // governance deposits pool.
 func (s *MutableState) TransferToGovernanceDeposits(
-	ctx *api.Context,
+	ctx *abciAPI.Context,
 	fromAddr staking.Address,
 	amount *quantity.Quantity,
 ) error {
@@ -946,7 +945,7 @@ func (s *MutableState) TransferToGovernanceDeposits(
 	}
 
 	if !ctx.IsCheckOnly() {
-		ctx.EmitEvent(api.NewEventBuilder(AppName).TypedAttribute(&staking.TransferEvent{
+		ctx.EmitEvent(abciAPI.NewEventBuilder(AppName).TypedAttribute(&staking.TransferEvent{
 			From:   fromAddr,
 			To:     staking.GovernanceDepositsAddress,
 			Amount: *amount,
@@ -959,7 +958,7 @@ func (s *MutableState) TransferToGovernanceDeposits(
 // TransferFromGovernanceDeposits transfers the amount from the governance
 // deposits pool to the specified address.
 func (s *MutableState) TransferFromGovernanceDeposits(
-	ctx *api.Context,
+	ctx *abciAPI.Context,
 	toAddr staking.Address,
 	amount *quantity.Quantity,
 ) error {
@@ -985,7 +984,7 @@ func (s *MutableState) TransferFromGovernanceDeposits(
 	}
 
 	if !ctx.IsCheckOnly() {
-		ctx.EmitEvent(api.NewEventBuilder(AppName).TypedAttribute(&staking.TransferEvent{
+		ctx.EmitEvent(abciAPI.NewEventBuilder(AppName).TypedAttribute(&staking.TransferEvent{
 			From:   staking.GovernanceDepositsAddress,
 			To:     toAddr,
 			Amount: *amount,
@@ -998,7 +997,7 @@ func (s *MutableState) TransferFromGovernanceDeposits(
 // DiscardGovernanceDeposit discards the amount from the governance
 // deposits pool to the common pool.
 func (s *MutableState) DiscardGovernanceDeposit(
-	ctx *api.Context,
+	ctx *abciAPI.Context,
 	amount *quantity.Quantity,
 ) error {
 	commonPool, err := s.CommonPool(ctx)
@@ -1023,7 +1022,7 @@ func (s *MutableState) DiscardGovernanceDeposit(
 	}
 
 	if !ctx.IsCheckOnly() {
-		ctx.EmitEvent(api.NewEventBuilder(AppName).TypedAttribute(&staking.TransferEvent{
+		ctx.EmitEvent(abciAPI.NewEventBuilder(AppName).TypedAttribute(&staking.TransferEvent{
 			From:   staking.GovernanceDepositsAddress,
 			To:     staking.CommonPoolAddress,
 			Amount: *amount,
@@ -1110,7 +1109,7 @@ func (s *MutableState) AddRewards(
 			if err = quantity.Move(&ent.Escrow.Active.Balance, commonPool, q); err != nil {
 				return fmt.Errorf("tendermint/staking: failed transferring to active escrow balance from common pool: %w", err)
 			}
-			ctx.EmitEvent(api.NewEventBuilder(AppName).TypedAttribute(&staking.AddEscrowEvent{
+			ctx.EmitEvent(abciAPI.NewEventBuilder(AppName).TypedAttribute(&staking.AddEscrowEvent{
 				Owner:  staking.CommonPoolAddress,
 				Escrow: addr,
 				Amount: *q,
@@ -1139,13 +1138,13 @@ func (s *MutableState) AddRewards(
 			// Above, we directly desposit from the common pool into the delegation,
 			// which is a shorthand for transferring to the account and immediately
 			// escrowing it. Explicitly emit both events.
-			ctx.EmitEvent(api.NewEventBuilder(AppName).TypedAttribute(&staking.TransferEvent{
+			ctx.EmitEvent(abciAPI.NewEventBuilder(AppName).TypedAttribute(&staking.TransferEvent{
 				From:   staking.CommonPoolAddress,
 				To:     addr,
 				Amount: *com,
 			}))
 
-			ctx.EmitEvent(api.NewEventBuilder(AppName).TypedAttribute(&staking.AddEscrowEvent{
+			ctx.EmitEvent(abciAPI.NewEventBuilder(AppName).TypedAttribute(&staking.AddEscrowEvent{
 				Owner:     addr,
 				Escrow:    addr,
 				Amount:    *com,
@@ -1250,7 +1249,7 @@ func (s *MutableState) AddRewardSingleAttenuated(
 		if err = quantity.Move(&acct.Escrow.Active.Balance, commonPool, q); err != nil {
 			return fmt.Errorf("tendermint/staking: failed transferring to active escrow balance from common pool: %w", err)
 		}
-		ctx.EmitEvent(api.NewEventBuilder(AppName).TypedAttribute(&staking.AddEscrowEvent{
+		ctx.EmitEvent(abciAPI.NewEventBuilder(AppName).TypedAttribute(&staking.AddEscrowEvent{
 			Owner:  staking.CommonPoolAddress,
 			Escrow: address,
 			Amount: *q,
@@ -1279,13 +1278,13 @@ func (s *MutableState) AddRewardSingleAttenuated(
 		// Above, we directly desposit from the common pool into the delegation,
 		// which is a shorthand for transferring to the account and immediately
 		// escrowing it. Explicitly emit both events.
-		ctx.EmitEvent(api.NewEventBuilder(AppName).TypedAttribute(&staking.TransferEvent{
+		ctx.EmitEvent(abciAPI.NewEventBuilder(AppName).TypedAttribute(&staking.TransferEvent{
 			From:   staking.CommonPoolAddress,
 			To:     address,
 			Amount: *com,
 		}))
 
-		ctx.EmitEvent(api.NewEventBuilder(AppName).TypedAttribute(&staking.AddEscrowEvent{
+		ctx.EmitEvent(abciAPI.NewEventBuilder(AppName).TypedAttribute(&staking.AddEscrowEvent{
 			Owner:     address,
 			Escrow:    address,
 			Amount:    *com,
