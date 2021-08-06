@@ -122,6 +122,9 @@ type Backend interface {
 	// StateToGenesis returns the genesis state at specified block height.
 	StateToGenesis(ctx context.Context, height int64) (*Genesis, error)
 
+	// ConsensusParameters returns the roothash consensus parameters.
+	ConsensusParameters(ctx context.Context, height int64) (*ConsensusParameters, error)
+
 	// GetEvents returns the events at specified block height.
 	GetEvents(ctx context.Context, height int64) ([]*Event, error)
 
