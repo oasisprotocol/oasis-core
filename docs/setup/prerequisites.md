@@ -147,6 +147,19 @@ Core:
   GO111MODULE=on ${OASIS_GO:-go} get golang.org/x/tools/cmd/goimports
   ```
 
+* (**OPTIONAL**) [golangci-lint].
+
+  Required if you plan to change any of the Go code in order for automated code
+  linting (`make lint`) to work.
+
+  Download and install it with:
+
+  ```
+  curl -sSfL \
+  https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh \
+   | sh -s -- -b $(${OASIS_GO:-go} env GOPATH)/bin v1.41.1
+  ```
+
 * (**OPTIONAL**) [protoc-gen-go].
 
   Download and install it with:
@@ -213,6 +226,7 @@ where the code has been checked out.
 [Fortanix Rust EDP]: https://edp.fortanix.com
 [gofumpt]: https://github.com/mvdan/gofumpt
 [goimports]: https://pkg.go.dev/golang.org/x/tools/cmd/goimports
+[golangci-lint]: https://golangci-lint.run/
 [protoc-gen-go]: https://github.com/golang/protobuf
 [jemalloc]: https://github.com/jemalloc/jemalloc
 
