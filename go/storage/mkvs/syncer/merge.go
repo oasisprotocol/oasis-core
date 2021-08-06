@@ -8,8 +8,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/storage/mkvs/node"
 )
 
-type SubtreeMerger struct {
-}
+type SubtreeMerger struct{}
 
 // MergeVerifiedSubtree merges a previously verified subtree with an
 // existing tree.

@@ -10,7 +10,6 @@ import (
 	beacon "github.com/oasisprotocol/oasis-core/go/beacon/api"
 	"github.com/oasisprotocol/oasis-core/go/common/cbor"
 	"github.com/oasisprotocol/oasis-core/go/common/quantity"
-	"github.com/oasisprotocol/oasis-core/go/upgrade/api"
 	upgrade "github.com/oasisprotocol/oasis-core/go/upgrade/api"
 )
 
@@ -258,7 +257,7 @@ func TestPendingUpgradesFromProposals(t *testing.T) {
 			State: StatePassed,
 			Content: ProposalContent{
 				Upgrade: &UpgradeProposal{
-					Descriptor: api.Descriptor{
+					Descriptor: upgrade.Descriptor{
 						Versioned: cbor.NewVersioned(upgrade.LatestDescriptorVersion),
 						Handler:   "in past",
 						Epoch:     beacon.EpochTime(10),
@@ -272,7 +271,7 @@ func TestPendingUpgradesFromProposals(t *testing.T) {
 			State: StatePassed,
 			Content: ProposalContent{
 				Upgrade: &UpgradeProposal{
-					Descriptor: api.Descriptor{
+					Descriptor: upgrade.Descriptor{
 						Versioned: cbor.NewVersioned(upgrade.LatestDescriptorVersion),
 						Handler:   "canceled",
 						Epoch:     beacon.EpochTime(30),
@@ -286,7 +285,7 @@ func TestPendingUpgradesFromProposals(t *testing.T) {
 			State: StateActive,
 			Content: ProposalContent{
 				Upgrade: &UpgradeProposal{
-					Descriptor: api.Descriptor{
+					Descriptor: upgrade.Descriptor{
 						Versioned: cbor.NewVersioned(upgrade.LatestDescriptorVersion),
 						Handler:   "not passed",
 						Epoch:     beacon.EpochTime(30),
@@ -300,7 +299,7 @@ func TestPendingUpgradesFromProposals(t *testing.T) {
 			State: StatePassed,
 			Content: ProposalContent{
 				Upgrade: &UpgradeProposal{
-					Descriptor: api.Descriptor{
+					Descriptor: upgrade.Descriptor{
 						Versioned: cbor.NewVersioned(upgrade.LatestDescriptorVersion),
 						Handler:   "passed",
 						Epoch:     beacon.EpochTime(40),
@@ -314,7 +313,7 @@ func TestPendingUpgradesFromProposals(t *testing.T) {
 			State: StatePassed,
 			Content: ProposalContent{
 				Upgrade: &UpgradeProposal{
-					Descriptor: api.Descriptor{
+					Descriptor: upgrade.Descriptor{
 						Versioned: cbor.NewVersioned(upgrade.LatestDescriptorVersion),
 						Handler:   "passed2",
 						Epoch:     beacon.EpochTime(50),

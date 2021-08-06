@@ -94,8 +94,7 @@ type FailedToStartEvent struct {
 }
 
 // StoppedEvent is a runtime stopped event.
-type StoppedEvent struct {
-}
+type StoppedEvent struct{}
 
 // UpdatedEvent is a runtime metadata updated event.
 type UpdatedEvent struct {

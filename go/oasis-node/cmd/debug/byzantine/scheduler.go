@@ -37,7 +37,7 @@ func schedulerGetCommittee(ht *honestTendermint, height int64, kind scheduler.Co
 		Height:    height,
 	})
 	if err != nil {
-		return nil, fmt.Errorf("Scheduler GetCommittees() error: %w", err)
+		return nil, fmt.Errorf("GetCommittees() error: %w", err)
 	}
 
 	for _, committee := range committees {

@@ -17,8 +17,7 @@ import (
 	mkvsNode "github.com/oasisprotocol/oasis-core/go/storage/mkvs/node"
 )
 
-type provisioner struct {
-}
+type provisioner struct{}
 
 // Implements host.Provisioner.
 func (p *provisioner) NewRuntime(ctx context.Context, cfg host.Config) (host.Runtime, error) {

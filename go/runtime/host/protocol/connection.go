@@ -78,8 +78,7 @@ type Notifier interface {
 }
 
 // NoOpNotifier is the default no-op runtime notifier implementation.
-type NoOpNotifier struct {
-}
+type NoOpNotifier struct{}
 
 // Start the no-op notifier.
 func (n *NoOpNotifier) Start() error {

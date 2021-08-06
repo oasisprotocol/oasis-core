@@ -21,17 +21,13 @@ var (
 
 // Request types
 
-type MultiPingUnaryRequest struct {
-}
+type MultiPingUnaryRequest struct{}
 
-type MultiPingUnaryResponse struct {
-}
+type MultiPingUnaryResponse struct{}
 
-type MultiPingStreamRequest struct {
-}
+type MultiPingStreamRequest struct{}
 
-type MultiPingStreamResponse struct {
-}
+type MultiPingStreamResponse struct{}
 
 func sendMultiPings(stream grpc.ServerStream) uint32 {
 	for i := uint32(0); i < numMultiPings; i++ {

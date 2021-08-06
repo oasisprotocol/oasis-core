@@ -17,11 +17,9 @@ import (
 
 var errTest = errors.New("test/grpc/errors", 1, "just testing errors")
 
-type ErrorTestRequest struct {
-}
+type ErrorTestRequest struct{}
 
-type ErrorTestResponse struct {
-}
+type ErrorTestResponse struct{}
 
 type ErrorTestService interface {
 	ErrorTest(context.Context, *ErrorTestRequest) (*ErrorTestResponse, error)
@@ -29,8 +27,7 @@ type ErrorTestService interface {
 	ErrorStatusTest(context.Context, *ErrorTestRequest) (*ErrorTestResponse, error)
 }
 
-type errorTestServer struct {
-}
+type errorTestServer struct{}
 
 func (s *errorTestServer) ErrorTest(ctx context.Context, req *ErrorTestRequest) (*ErrorTestResponse, error) {
 	return &ErrorTestResponse{}, errTest

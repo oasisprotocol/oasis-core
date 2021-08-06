@@ -1,30 +1,55 @@
 linters-settings:
-  gofmt:
-    simplify: false
+  goimports:
+    # Put local imports after 3rd-party packages.
+    local-prefixes: github.com/oasisprotocol/oasis-core
+  gosec:
+    excludes:
+      # https://github.com/securego/gosec#available-rules
+      - G402
+      - G404
   govet:
     check-shadowing: true
-  maligned:
-    suggest-new: true
+    # Enable once suggested fixes are shown: https://github.com/golangci/golangci-lint/issues/2134
+    #enable:
+    #  - fieldalignment
+  stylecheck:
+    go: "1.16"
+    # https://staticcheck.io/docs/options#checks
+    checks:
+      - all
+      # https://staticcheck.io/docs/checks#ST1003
+      - -ST1003
+      # https://staticcheck.io/docs/checks#ST1023
+      - -ST1023
 
 linters:
   disable-all: true
   enable:
+    - bodyclose
     - deadcode
+    - depguard
     - errcheck
+    - exportloopref
+    - gas
     - goconst
     - gocyclo
     - gofumpt
-    - golint
-    - gas
-    - typecheck
+    - goimports
+    - goprintffuncname
+    - gosec
+    - gosimple
+    - govet
     - ineffassign
     - megacheck
-    - structcheck
-    - unconvert
-    - varcheck
-    - govet
-    - maligned
     - misspell
+    - rowserrcheck
+    - staticcheck
+    - structcheck
+    - stylecheck
+    - typecheck
+    - unconvert
+    - unused
+    - varcheck
 
 run:
   skip-dirs:

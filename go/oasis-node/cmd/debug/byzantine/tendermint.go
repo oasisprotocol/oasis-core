@@ -80,7 +80,6 @@ func (ht honestTendermint) stop() error {
 	logger.Debug("honest Tendermint service waiting for quit")
 	<-ht.service.Quit()
 	logger.Debug("honest Tendermint service quit done")
-	ht.service = nil
 
 	return nil
 }

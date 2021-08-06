@@ -66,7 +66,6 @@ import (
 	workerKeymanager "github.com/oasisprotocol/oasis-core/go/worker/keymanager"
 	"github.com/oasisprotocol/oasis-core/go/worker/registration"
 	workerSentry "github.com/oasisprotocol/oasis-core/go/worker/sentry"
-	"github.com/oasisprotocol/oasis-core/go/worker/storage"
 	workerStorage "github.com/oasisprotocol/oasis-core/go/worker/storage"
 )
 
@@ -792,7 +791,6 @@ func init() {
 		cmdGrpc.ServerLocalFlags,
 		cmdSigner.Flags,
 		pprof.Flags,
-		storage.Flags,
 		tendermint.Flags,
 		seed.Flags,
 		ias.Flags,
