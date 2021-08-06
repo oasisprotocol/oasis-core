@@ -124,7 +124,7 @@ var (
 	// MethodRegisterEntity is the method name for entity registrations.
 	MethodRegisterEntity = transaction.NewMethodName(ModuleName, "RegisterEntity", entity.SignedEntity{})
 	// MethodDeregisterEntity is the method name for entity deregistrations.
-	MethodDeregisterEntity = transaction.NewMethodName(ModuleName, "DeregisterEntity", nil)
+	MethodDeregisterEntity = transaction.NewMethodName(ModuleName, "DeregisterEntity", DeregisterEntity{})
 	// MethodRegisterNode is the method name for node registrations.
 	MethodRegisterNode = transaction.NewMethodName(ModuleName, "RegisterNode", node.MultiSignedNode{})
 	// MethodUnfreezeNode is the method name for unfreezing nodes.
@@ -250,6 +250,9 @@ type ConsensusAddressQuery struct {
 	Height  int64  `json:"height"`
 	Address []byte `json:"address"`
 }
+
+// DeregisterEntity is a request to deregister an entity.
+type DeregisterEntity struct{}
 
 // NewRegisterEntityTx creates a new register entity transaction.
 func NewRegisterEntityTx(nonce uint64, fee *transaction.Fee, sigEnt *entity.SignedEntity) *transaction.Transaction {
