@@ -8,7 +8,6 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/accessctl"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	"github.com/oasisprotocol/oasis-core/go/common/grpc"
-	cmnGrpc "github.com/oasisprotocol/oasis-core/go/common/grpc"
 	"github.com/oasisprotocol/oasis-core/go/common/grpc/policy"
 	"github.com/oasisprotocol/oasis-core/go/common/node"
 )
@@ -46,5 +45,5 @@ type LocalBackend interface {
 	Backend
 
 	// GetPolicyChecker returns the current access policy checker for the given service.
-	GetPolicyChecker(context.Context, cmnGrpc.ServiceName) (*policy.DynamicRuntimePolicyChecker, error)
+	GetPolicyChecker(context.Context, grpc.ServiceName) (*policy.DynamicRuntimePolicyChecker, error)
 }

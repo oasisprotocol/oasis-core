@@ -8,7 +8,6 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
 	abciAPI "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/api"
-	tmapi "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/api"
 	registryState "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/apps/registry/state"
 	roothashState "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/apps/roothash/state"
 	schedulerState "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/apps/scheduler/state"
@@ -265,7 +264,7 @@ func (app *rootHashApplication) executorCommit(
 			},
 		}
 		ctx.EmitEvent(
-			tmapi.NewEventBuilder(app.Name()).
+			abciAPI.NewEventBuilder(app.Name()).
 				Attribute(KeyExecutorCommitted, cbor.Marshal(evV)).
 				Attribute(KeyRuntimeID, ValueRuntimeID(cc.ID)),
 		)

@@ -10,7 +10,6 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/oasis"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/scenario"
 	"github.com/oasisprotocol/oasis-core/go/runtime/client/api"
-	runtimeClient "github.com/oasisprotocol/oasis-core/go/runtime/client/api"
 	runtimeTransaction "github.com/oasisprotocol/oasis-core/go/runtime/transaction"
 )
 
@@ -64,7 +63,7 @@ func (sc *clientExpireImpl) Run(childEnv *env.Env) error {
 		return err
 	}
 
-	err = nodeCtrl.RuntimeClient.SubmitTxNoWait(ctx, &runtimeClient.SubmitTxRequest{
+	err = nodeCtrl.RuntimeClient.SubmitTxNoWait(ctx, &api.SubmitTxRequest{
 		RuntimeID: runtimeID,
 		Data: cbor.Marshal(&runtimeTransaction.TxnCall{
 			Method: "insert",

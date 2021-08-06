@@ -230,7 +230,7 @@ func (q *queries) doConsensusQueries(ctx context.Context, rng *rand.Rand, height
 				"height", block.Height,
 				"epoch_interval", params.Interval,
 			)
-			return fmt.Errorf("Invalid epoch: %d", epoch)
+			return fmt.Errorf("invalid epoch: %d", epoch)
 		}
 	}
 
@@ -332,7 +332,7 @@ func (q *queries) doSchedulerQueries(ctx context.Context, rng *rand.Rand, height
 		return fmt.Errorf("GetValidators at height %d: %w", height, err)
 	}
 	if len(validators) < q.schedulerParams.MinValidators {
-		return fmt.Errorf("Not enough validators at height %d, expected at least: %d, got: %d", height, q.schedulerParams.MinValidators, len(validators))
+		return fmt.Errorf("not enough validators at height %d, expected at least: %d, got: %d", height, q.schedulerParams.MinValidators, len(validators))
 	}
 
 	// Query commiteess for the runtime.
@@ -514,7 +514,7 @@ func (q *queries) doStakingQueries(ctx context.Context, rng *rand.Rand, height i
 			"threshold", threshold,
 			"height", height,
 		)
-		return fmt.Errorf("Invalid treshold")
+		return fmt.Errorf("invalid treshold")
 	}
 
 	addresses, err := q.staking.Addresses(ctx, height)
@@ -739,7 +739,7 @@ func (q *queries) doRuntimeQueries(ctx context.Context, rng *rand.Rand) error {
 			"round_hash", block.Header.EncodedHash(),
 			"hash", block2.Header.EncodedHash(),
 		)
-		return fmt.Errorf("Expected equal blocks, got: byRound: %s byHash: %s", block.Header.EncodedHash(), block2.Header.EncodedHash())
+		return fmt.Errorf("expected equal blocks, got: byRound: %s byHash: %s", block.Header.EncodedHash(), block2.Header.EncodedHash())
 	}
 
 	_, err = q.runtime.QueryTxs(ctx, &runtimeClient.QueryTxsRequest{
@@ -904,11 +904,11 @@ func (q *queries) Run(
 			"err", err,
 			"runtime_id", viper.GetString(CfgRuntimeID),
 		)
-		return fmt.Errorf("Runtime unmarshal: %w", err)
+		return fmt.Errorf("runtime unmarshal: %w", err)
 	}
 	resp, err := q.runtime.GetGenesisBlock(ctx, q.runtimeID)
 	if err != nil {
-		return fmt.Errorf("Error querying runtime genesis block: %w", err)
+		return fmt.Errorf("error querying runtime genesis block: %w", err)
 	}
 	q.runtimeGenesisRound = resp.Header.Round
 

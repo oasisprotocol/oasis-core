@@ -689,7 +689,7 @@ func (r *runtime) Run(
 			"err", err,
 			"runtime_id", viper.GetString(CfgRuntimeID),
 		)
-		return fmt.Errorf("Runtime unmarshal: %w", err)
+		return fmt.Errorf("runtime unmarshal: %w", err)
 	}
 	r.reckonedKeyValueState = make(map[string]string)
 

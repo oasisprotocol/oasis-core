@@ -9,7 +9,6 @@ import (
 
 	"github.com/oasisprotocol/oasis-core/go/common/cbor"
 	"github.com/oasisprotocol/oasis-core/go/common/version"
-	"github.com/oasisprotocol/oasis-core/go/upgrade/api"
 	upgrade "github.com/oasisprotocol/oasis-core/go/upgrade/api"
 )
 
@@ -43,7 +42,7 @@ func TestValidateBasic(t *testing.T) {
 			msg: "upgrade with valid proposal conent should not fail",
 			p: &ProposalContent{
 				Upgrade: &UpgradeProposal{
-					Descriptor: api.Descriptor{
+					Descriptor: upgrade.Descriptor{
 						Versioned: cbor.NewVersioned(upgrade.LatestDescriptorVersion),
 						Handler:   "api_test_handler",
 						Target:    version.Versions,
@@ -81,12 +80,12 @@ func TestProposalContentEquals(t *testing.T) {
 			msg: "upgrade proposals should be equal",
 			p1: &ProposalContent{
 				Upgrade: &UpgradeProposal{
-					Descriptor: api.Descriptor{Handler: "test"},
+					Descriptor: upgrade.Descriptor{Handler: "test"},
 				},
 			},
 			p2: &ProposalContent{
 				Upgrade: &UpgradeProposal{
-					Descriptor: api.Descriptor{Handler: "test"},
+					Descriptor: upgrade.Descriptor{Handler: "test"},
 				},
 			},
 			equals: true,
@@ -95,12 +94,12 @@ func TestProposalContentEquals(t *testing.T) {
 			msg: "upgrade proposals should not be equal",
 			p1: &ProposalContent{
 				Upgrade: &UpgradeProposal{
-					Descriptor: api.Descriptor{Handler: "test"},
+					Descriptor: upgrade.Descriptor{Handler: "test"},
 				},
 			},
 			p2: &ProposalContent{
 				Upgrade: &UpgradeProposal{
-					Descriptor: api.Descriptor{Handler: "test2"},
+					Descriptor: upgrade.Descriptor{Handler: "test2"},
 				},
 			},
 			equals: false,
@@ -109,7 +108,7 @@ func TestProposalContentEquals(t *testing.T) {
 			msg: "cancel upgrade and upgrade proposal should not be equal",
 			p1: &ProposalContent{
 				Upgrade: &UpgradeProposal{
-					Descriptor: api.Descriptor{Handler: "test"},
+					Descriptor: upgrade.Descriptor{Handler: "test"},
 				},
 			},
 			p2: &ProposalContent{
@@ -151,7 +150,7 @@ func TestProposalContentPrettyPrint(t *testing.T) {
 			expRegex: "^Upgrade:",
 			p: &ProposalContent{
 				Upgrade: &UpgradeProposal{
-					Descriptor: api.Descriptor{Handler: "test"},
+					Descriptor: upgrade.Descriptor{Handler: "test"},
 				},
 			},
 		},
@@ -169,7 +168,7 @@ func TestProposalContentPrettyPrint(t *testing.T) {
 			expRegex: ProposalContentInvalidText,
 			p: &ProposalContent{
 				Upgrade: &UpgradeProposal{
-					Descriptor: api.Descriptor{Handler: "test"},
+					Descriptor: upgrade.Descriptor{Handler: "test"},
 				},
 				CancelUpgrade: &CancelUpgradeProposal{ProposalID: 42},
 			},

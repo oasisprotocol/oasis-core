@@ -400,10 +400,8 @@ func testStorage(t *testing.T, node *testNode) {
 	backend, err := storageWorker.NewLocalBackend(dataDir, testRuntimeID, node.Identity)
 	require.NoError(t, err, "storage.New")
 	defer backend.Cleanup()
-	// We are always testing a local storage backend here.
-	localBackend := backend.(storageAPI.LocalBackend)
 
-	storageTests.StorageImplementationTests(t, localBackend, backend, testRuntimeID, 0)
+	storageTests.StorageImplementationTests(t, backend, backend, testRuntimeID, 0)
 }
 
 func testRegistry(t *testing.T, node *testNode) {

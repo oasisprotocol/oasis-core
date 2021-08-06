@@ -101,7 +101,7 @@ func (p *parallel) Run(
 		Gas: txGasAmount,
 	}
 	if err = fee.Amount.FromUint64(uint64(txGasAmount) * gasPrice); err != nil {
-		return fmt.Errorf("Fee amount error: %w", err)
+		return fmt.Errorf("fee amount error: %w", err)
 	}
 
 	for i := uint64(1); ; i++ {
