@@ -10,6 +10,7 @@ import (
 	governance "github.com/oasisprotocol/oasis-core/go/governance/api"
 	keymanager "github.com/oasisprotocol/oasis-core/go/keymanager/api"
 	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
+	roothash "github.com/oasisprotocol/oasis-core/go/roothash/api"
 	runtimeClient "github.com/oasisprotocol/oasis-core/go/runtime/client/api"
 	staking "github.com/oasisprotocol/oasis-core/go/staking/api"
 	storage "github.com/oasisprotocol/oasis-core/go/storage/api"
@@ -27,6 +28,7 @@ type Controller struct {
 	Staking       staking.Backend
 	Governance    governance.Backend
 	Registry      registry.Backend
+	Roothash      roothash.Backend
 	RuntimeClient runtimeClient.RuntimeClient
 	Storage       storage.Backend
 	Keymanager    *keymanager.KeymanagerClient
@@ -61,6 +63,7 @@ func NewController(socketPath string) (*Controller, error) {
 		Staking:         staking.NewStakingClient(conn),
 		Governance:      governance.NewGovernanceClient(conn),
 		Registry:        registry.NewRegistryClient(conn),
+		Roothash:        roothash.NewRootHashClient(conn),
 		RuntimeClient:   runtimeClient.NewRuntimeClient(conn),
 		Storage:         storage.NewStorageClient(conn),
 		Keymanager:      keymanager.NewKeymanagerClient(conn),

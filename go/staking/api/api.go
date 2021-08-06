@@ -179,7 +179,7 @@ type Backend interface {
 	// StateToGenesis returns the genesis state at specified block height.
 	StateToGenesis(ctx context.Context, height int64) (*Genesis, error)
 
-	// Paremeters returns the staking consensus parameters.
+	// ConsensusParameters returns the staking consensus parameters.
 	ConsensusParameters(ctx context.Context, height int64) (*ConsensusParameters, error)
 
 	// GetEvents returns the events at specified block height.
