@@ -33,6 +33,7 @@ type ClientCfg struct {
 func (client *Client) AddArgs(args *argBuilder) error {
 	args.debugDontBlameOasis().
 		debugAllowTestKeys().
+		debugSetRlimit().
 		debugEnableProfiling(client.Node.pprofPort).
 		runtimeProvisioner(client.runtimeProvisioner).
 		tendermintPrune(client.consensus.PruneNumKept).
