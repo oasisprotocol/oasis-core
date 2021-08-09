@@ -60,7 +60,7 @@ require (
 	golang.org/x/crypto v0.0.0-20210506145944-38f3c27a63bf
 	golang.org/x/net v0.0.0-20210525063256-abc453219eb5
 	google.golang.org/genproto v0.0.0-20210602131652-f16073e35f0c
-	google.golang.org/grpc v1.39.0
+	google.golang.org/grpc v1.39.1
 	google.golang.org/grpc/security/advancedtls v0.0.0-20200902210233-8630cac324bf
 	google.golang.org/protobuf v1.27.1
 )
