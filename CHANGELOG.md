@@ -12,6 +12,74 @@ The format is inspired by [Keep a Changelog].
 
 <!-- TOWNCRIER -->
 
+## 21.2.8 (2021-08-09)
+
+| Protocol          | Version   |
+|:------------------|:---------:|
+| Consensus         | 4.0.0     |
+| Runtime Host      | 3.0.0     |
+| Runtime Committee | 2.0.0     |
+
+### Upgrading From 21.1.x
+
+Due to a database backend upgrade introduced in version 21.2 (see below for
+details), initial startup time will be longer as a full database migration needs
+to be performed for each of the internal databases. *The migration may take
+several minutes and requires enough free disk space to accommodate a copy of the
+node's data directory. It may also require additional free memory.*
+
+This version also adds a check that makes sure the file descriptor limit is set
+to an appropriately high value (at least 50000). While previous versions only
+warned in case the limit was set too low, this version will refuse to start.
+Follow the [File Descriptor Limit] documentation page for details on how to
+increase the limit on your system.
+
+### Features
+
+- go/registry/api: Add its own body type to `MethodDeregisterEntity`
+  ([#4177](https://github.com/oasisprotocol/oasis-core/issues/4177))
+
+- upgrade/migrations: add `consensus-params-update-2021-08` upgrade handler
+  ([#4180](https://github.com/oasisprotocol/oasis-core/issues/4180))
+
+- go/roothash/api: add `ConsensusParameters` method
+  ([#4187](https://github.com/oasisprotocol/oasis-core/issues/4187))
+
+- Prevent startup when file descriptor limit is too low
+  ([#4192](https://github.com/oasisprotocol/oasis-core/issues/4192))
+
+  Before, a warning was emitted if file descriptor limit was low (below 1024).
+  Since low file descriptor limit can cause problems with BadgerDB, a
+  high enough limit is now required on node startup (at least 50000).
+
+  Follow the [File Descriptor Limit] documentation page for details on how to
+  increase the limit on your system.
+
+  <!-- markdownlint-disable line-length -->
+  [File Descriptor Limit]:
+    https://docs.oasis.dev/general/run-a-node/prerequisites/system-configuration#file-descriptor-limit
+  <!-- markdownlint-enable line-length -->
+
+### Internal Changes
+
+- go/registry/gen_vectors: Stop generating register transactions for v1 entities
+  ([#4167](https://github.com/oasisprotocol/oasis-core/issues/4167))
+
+- go: update gofumpt to 0.1.1
+  ([#4176](https://github.com/oasisprotocol/oasis-core/issues/4176))
+
+- go/registry/gen_vectors: Add vectors for deregister entity transactions
+  ([#4177](https://github.com/oasisprotocol/oasis-core/issues/4177))
+
+- go/oasis-test-runner: support for testing upgrade handlers
+  ([#4179](https://github.com/oasisprotocol/oasis-core/issues/4179))
+
+- rust: bump tokio to v1.9.0
+  ([#4182](https://github.com/oasisprotocol/oasis-core/issues/4182))
+
+- go: update golangci-lint to v1.41.1
+  ([#4190](https://github.com/oasisprotocol/oasis-core/issues/4190))
+
 ## 21.2.7 (2021-07-07)
 
 | Protocol          | Version   |
