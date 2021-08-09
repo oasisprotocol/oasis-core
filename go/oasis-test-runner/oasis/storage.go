@@ -129,6 +129,7 @@ func (worker *Storage) PauseCheckpointer(ctx context.Context, runtimeID common.N
 func (worker *Storage) AddArgs(args *argBuilder) error {
 	args.debugDontBlameOasis().
 		debugAllowTestKeys().
+		debugSetRlimit().
 		debugEnableProfiling(worker.Node.pprofPort).
 		workerCertificateRotation(!worker.disableCertRotation).
 		tendermintCoreAddress(worker.consensusPort).

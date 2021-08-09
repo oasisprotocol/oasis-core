@@ -263,6 +263,7 @@ func (km *Keymanager) AddArgs(args *argBuilder) error {
 
 	args.debugDontBlameOasis().
 		debugAllowTestKeys().
+		debugSetRlimit().
 		debugEnableProfiling(km.Node.pprofPort).
 		workerCertificateRotation(true).
 		tendermintCoreAddress(km.consensusPort).

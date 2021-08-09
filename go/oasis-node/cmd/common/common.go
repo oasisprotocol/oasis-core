@@ -34,7 +34,9 @@ const (
 	CfgConfigFile = "config"
 	CfgDataDir    = "datadir"
 
-	badDefaultRlimit = 1024
+	// RequiredRLimit is the minimum required RLIMIT_NOFILE as too low of a
+	// limit can cause problems with BadgerDB.
+	RequiredRlimit = 50_000
 )
 
 var (
@@ -201,28 +203,22 @@ func initRlimit() error {
 
 	var rlim syscall.Rlimit
 	if err := syscall.Getrlimit(syscall.RLIMIT_NOFILE, &rlim); err != nil {
-		// Log, but don't return the error, this is only used for testing
-		// and to warn the user if it's set too low.
-		rootLog.Warn("failed to query RLIMIT_NOFILE",
-			"err", err,
-		)
-		return nil
-	}
-
-	if rlim.Cur <= badDefaultRlimit {
-		rootLog.Warn("the node user has a very low RLIMIT_NOFILE, consider increasing",
-			"cur", rlim.Cur,
-			"max", rlim.Max,
-		)
+		return fmt.Errorf("failed to query RLIMIT_NOFILE: %w", err)
 	}
 
 	desiredLimit := viper.GetUint64(CfgDebugRlimit)
-	if !flags.DebugDontBlameOasis() || desiredLimit == 0 {
-		return nil
+	if flags.DebugDontBlameOasis() && desiredLimit > 0 && desiredLimit != rlim.Cur {
+		rlim.Cur = desiredLimit
+		if err := syscall.Setrlimit(syscall.RLIMIT_NOFILE, &rlim); err != nil {
+			return fmt.Errorf("failed setting RLIMIT_NOFILE: %w", err)
+		}
 	}
 
-	rlim.Cur = desiredLimit
-	return syscall.Setrlimit(syscall.RLIMIT_NOFILE, &rlim)
+	if rlim.Cur < RequiredRlimit {
+		return fmt.Errorf("too low RLIMIT_NOFILE, current: %d required: %d", rlim.Cur, RequiredRlimit)
+	}
+
+	return nil
 }
 
 // GetOutputWriter will create a file if the config string is set,

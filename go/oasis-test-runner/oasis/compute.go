@@ -83,6 +83,7 @@ func (worker *Compute) AddArgs(args *argBuilder) error {
 
 	args.debugDontBlameOasis().
 		debugAllowTestKeys().
+		debugSetRlimit().
 		debugEnableProfiling(worker.Node.pprofPort).
 		workerCertificateRotation(true).
 		tendermintCoreAddress(worker.consensusPort).
