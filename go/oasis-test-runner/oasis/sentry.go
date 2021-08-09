@@ -72,6 +72,7 @@ func (sentry *Sentry) AddArgs(args *argBuilder) error {
 
 	args.debugDontBlameOasis().
 		debugAllowTestKeys().
+		debugSetRlimit().
 		debugEnableProfiling(sentry.Node.pprofPort).
 		workerCertificateRotation(false).
 		workerSentryEnabled().

@@ -115,6 +115,14 @@ func (args *argBuilder) debugAllowTestKeys() *argBuilder {
 	return args
 }
 
+func (args *argBuilder) debugSetRlimit() *argBuilder {
+	args.vec = append(args.vec, Argument{
+		Name:   cmdCommon.CfgDebugRlimit,
+		Values: []string{strconv.Itoa(int(cmdCommon.RequiredRlimit))},
+	})
+	return args
+}
+
 func (args *argBuilder) debugEnableProfiling(port uint16) *argBuilder {
 	if port == 0 {
 		return args

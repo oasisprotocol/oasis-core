@@ -25,6 +25,7 @@ type iasProxy struct {
 func (ias *iasProxy) AddArgs(args *argBuilder) error {
 	args.debugDontBlameOasis().
 		debugAllowTestKeys().
+		debugSetRlimit().
 		grpcServerPort(ias.grpcPort).
 		grpcWait()
 

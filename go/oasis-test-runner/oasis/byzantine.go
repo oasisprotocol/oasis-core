@@ -37,6 +37,7 @@ type ByzantineCfg struct {
 func (worker *Byzantine) AddArgs(args *argBuilder) error {
 	args.debugDontBlameOasis().
 		debugAllowTestKeys().
+		debugSetRlimit().
 		debugEnableProfiling(worker.Node.pprofPort).
 		tendermintDebugAllowDuplicateIP().
 		tendermintCoreAddress(worker.consensusPort).
