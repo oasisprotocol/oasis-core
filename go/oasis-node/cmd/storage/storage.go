@@ -60,7 +60,7 @@ type displayHelper struct {
 	lastProgress bool
 }
 
-func (dh *displayHelper) display(base, format string, args ...interface{}) {
+func (dh *displayHelper) displayf(base, format string, args ...interface{}) {
 	dh.lastTime = time.Time{}
 	if pretty {
 		if dh.lastProgress {
@@ -76,19 +76,19 @@ func (dh *displayHelper) display(base, format string, args ...interface{}) {
 }
 
 func (dh *displayHelper) Display(msg string) {
-	dh.display(msg, "- %s\n", msg)
+	dh.displayf(msg, "- %s\n", msg)
 }
 
 func (dh *displayHelper) DisplayStepBegin(msg string) {
-	dh.display(msg, "- %s... ", msg)
+	dh.displayf(msg, "- %s... ", msg)
 }
 
 func (dh *displayHelper) DisplayStepEnd(msg string) {
-	dh.display(msg, "\r- %s: %s\n", dh.lastStatus, msg)
+	dh.displayf(msg, "\r- %s: %s\n", dh.lastStatus, msg)
 }
 
 func (dh *displayHelper) DisplayStep(msg string) {
-	dh.display(msg, "- %s...\n", msg)
+	dh.displayf(msg, "- %s...\n", msg)
 }
 
 func (dh *displayHelper) DisplayProgress(msg string, current, total uint64) {

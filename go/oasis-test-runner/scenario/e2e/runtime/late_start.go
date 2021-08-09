@@ -11,7 +11,6 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/oasis"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/scenario"
 	"github.com/oasisprotocol/oasis-core/go/runtime/client/api"
-	runtimeClient "github.com/oasisprotocol/oasis-core/go/runtime/client/api"
 	runtimeTransaction "github.com/oasisprotocol/oasis-core/go/runtime/transaction"
 )
 
@@ -78,7 +77,7 @@ func (sc *lateStartImpl) Run(childEnv *env.Env) error {
 	if err != nil {
 		return fmt.Errorf("failed to create controller for client: %w", err)
 	}
-	err = ctrl.RuntimeClient.SubmitTxNoWait(ctx, &runtimeClient.SubmitTxRequest{
+	err = ctrl.RuntimeClient.SubmitTxNoWait(ctx, &api.SubmitTxRequest{
 		RuntimeID: runtimeID,
 		Data: cbor.Marshal(&runtimeTransaction.TxnCall{
 			Method: "insert",
@@ -94,7 +93,7 @@ func (sc *lateStartImpl) Run(childEnv *env.Env) error {
 	if !errors.Is(err, api.ErrNotSynced) {
 		return fmt.Errorf("expected error: %v, got: %v", api.ErrNotSynced, err)
 	}
-	_, err = ctrl.RuntimeClient.SubmitTx(ctx, &runtimeClient.SubmitTxRequest{
+	_, err = ctrl.RuntimeClient.SubmitTx(ctx, &api.SubmitTxRequest{
 		RuntimeID: runtimeID,
 		Data: cbor.Marshal(&runtimeTransaction.TxnCall{
 			Method: "insert",

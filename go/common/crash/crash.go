@@ -163,11 +163,11 @@ func (c *Crasher) Here(crashPointID string) {
 			"caller_filename", callerFilename,
 			"caller_line", callerLine,
 		)
-		panic(fmt.Errorf(`Unknown crash point "%s"`, crashPointID))
+		panic(fmt.Errorf(`unknown crash point "%s"`, crashPointID))
 	}
 	crashPointProbability, ok := cfg.(float64)
 	if !ok {
-		panic(fmt.Errorf("Invalid crash point config: %d", cfg))
+		panic(fmt.Errorf("invalid crash point config: %d", cfg))
 	}
 	// Do nothing if the probability of crashing is set to a value 0 or less.
 	if crashPointProbability <= 0 {
@@ -194,7 +194,7 @@ func Config(crashPointConfig map[string]float64) {
 func (c *Crasher) Config(crashPointConfig map[string]float64) {
 	for crashPointID, crashProbability := range crashPointConfig {
 		if _, loaded := c.CrashPointConfig.Load(crashPointID); !loaded {
-			panic(fmt.Errorf(`Attempted to configure unregistered crash point "%s"`, crashPointID))
+			panic(fmt.Errorf(`attempted to configure unregistered crash point "%s"`, crashPointID))
 		}
 		c.CrashPointConfig.Store(crashPointID, crashProbability)
 	}
