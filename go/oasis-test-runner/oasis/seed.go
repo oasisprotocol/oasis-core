@@ -37,6 +37,7 @@ func (seed *Seed) AddArgs(args *argBuilder) error {
 
 	args.debugDontBlameOasis().
 		debugAllowTestKeys().
+		debugSetRlimit().
 		workerCertificateRotation(true).
 		tendermintCoreAddress(seed.consensusPort).
 		appendSeedNodes(otherSeeds).
