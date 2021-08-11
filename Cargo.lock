@@ -2227,6 +2227,7 @@ dependencies = [
  "anyhow",
  "byteorder",
  "io-context",
+ "oasis-cbor",
  "oasis-core-client",
  "oasis-core-keymanager-api-common",
  "oasis-core-keymanager-client",
@@ -2234,6 +2235,7 @@ dependencies = [
  "oasis-core-tools",
  "simple-keymanager",
  "simple-keyvalue-api",
+ "thiserror",
 ]
 
 [[package]]

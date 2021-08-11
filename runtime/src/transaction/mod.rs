@@ -2,7 +2,6 @@
 
 pub mod context;
 pub mod dispatcher;
-pub mod macros;
 pub mod rwset;
 pub mod tags;
 pub mod tree;
