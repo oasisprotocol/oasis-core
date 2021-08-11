@@ -307,11 +307,10 @@ steps:
       <<: *docker_plugin_sgx
 
   ####################################
-  # Rust coverage job (only on master)
+  # Rust coverage job.
   ####################################
 
   - label: Coverage Rust crates
-    branches: master stable/*
     command:
       # Build storage interoperability test helpers first.
       - make build-helpers

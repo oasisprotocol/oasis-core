@@ -45,13 +45,16 @@ git checkout -B ${BUILDKITE_BRANCH}
 # Calculate coverage.
 set +x
 cargo tarpaulin \
+  --locked \
   --ignore-tests \
   --out Xml \
   --all \
+  --avoid-cfg-tarpaulin \
   --exclude simple-keyvalue \
   --exclude-files '*generated*' \
   --exclude-files tests \
   --exclude-files runtime/src/storage/mkvs/interop \
+  --exclude-files tools \
   --coveralls ${coveralls_api_token} \
   -v
 set -x
