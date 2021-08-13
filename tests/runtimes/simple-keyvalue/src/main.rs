@@ -38,8 +38,9 @@ use oasis_core_runtime::{
     storage::{StorageContext, MKVS},
     transaction::{
         dispatcher::{Dispatcher, ExecuteBatchResult, ExecuteTxResult},
+        rwset::ReadWriteSet,
         tags::Tags,
-        types::{TxnBatch, TxnCall, TxnCheckResult, TxnOutput},
+        types::TxnBatch,
         Context as TxnContext,
     },
     types::{CheckTxResult, Error as RuntimeError},
@@ -87,6 +88,31 @@ macro_rules! register_runtime_txn_methods {
             );
         )*
     }
+}
+
+/// Transaction call.
+#[derive(Clone, Debug, cbor::Encode, cbor::Decode)]
+pub struct TxnCall {
+    /// Method name.
+    pub method: String,
+    /// Method arguments.
+    pub args: cbor::Value,
+}
+
+/// Transaction call output.
+#[derive(Clone, Debug, cbor::Encode, cbor::Decode)]
+pub enum TxnOutput {
+    /// Call invoked successfully.
+    Success(cbor::Value),
+    /// Call raised an error.
+    Error(String),
+}
+
+/// The result of a successful CheckTx call.
+#[derive(Clone, Debug, Default, cbor::Encode, cbor::Decode)]
+pub struct TxnCheckResult {
+    /// Predicted read/write set.
+    pub predicted_rw_set: ReadWriteSet,
 }
 
 /// Dispatch error.

@@ -4,36 +4,6 @@ use std::{
     ops::{Deref, DerefMut},
 };
 
-use super::rwset::ReadWriteSet;
-
-/// Transaction call.
-#[derive(Clone, Debug, cbor::Encode, cbor::Decode)]
-#[deprecated(note = "see oasis-core#3572")]
-pub struct TxnCall {
-    /// Method name.
-    pub method: String,
-    /// Method arguments.
-    pub args: cbor::Value,
-}
-
-/// Transaction call output.
-#[derive(Clone, Debug, cbor::Encode, cbor::Decode)]
-#[deprecated(note = "see oasis-core#3572")]
-pub enum TxnOutput {
-    /// Call invoked successfully.
-    Success(cbor::Value),
-    /// Call raised an error.
-    Error(String),
-}
-
-/// The result of a successful CheckTx call.
-#[derive(Clone, Debug, Default, cbor::Encode, cbor::Decode)]
-#[deprecated(note = "see oasis-core#3572")]
-pub struct TxnCheckResult {
-    /// Predicted read/write set.
-    pub predicted_rw_set: ReadWriteSet,
-}
-
 /// Batch of transaction inputs/outputs.
 #[derive(Clone, Debug, Default, Eq, PartialEq, cbor::Encode, cbor::Decode)]
 #[cbor(transparent)]
