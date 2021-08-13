@@ -103,7 +103,7 @@ pub use self::{
     enclave_rpc::{demux::Demux as RpcDemux, dispatcher::Dispatcher as RpcDispatcher},
     init::start_runtime,
     protocol::Protocol,
-    transaction::dispatcher::{Dispatcher as TxnDispatcher, MethodDispatcher as TxnMethDispatcher},
+    transaction::dispatcher::Dispatcher as TxnDispatcher,
 };
 
 // Re-export the cbor crate.
