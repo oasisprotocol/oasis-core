@@ -81,6 +81,7 @@ func testFailSubmitTransaction(
 	c api.RuntimeClient,
 	input string,
 ) {
+	// Failures during CheckTx.
 	resp, err := c.SubmitTxMeta(ctx, &api.SubmitTxRequest{Data: mock.CheckTxFailInput, RuntimeID: runtimeID})
 	require.NoError(t, err, "SubmitTxMeta")
 	require.EqualValues(t, &protocol.Error{
@@ -90,6 +91,14 @@ func testFailSubmitTransaction(
 
 	_, err = c.SubmitTx(ctx, &api.SubmitTxRequest{Data: mock.CheckTxFailInput, RuntimeID: runtimeID})
 	require.Error(t, err, "SubmitTx should fail check tx")
+
+	// Failures for unsupported runtimes.
+	var unsupportedRuntimeID common.Namespace
+	err = unsupportedRuntimeID.UnmarshalHex("0000000000000000BADF00BADF00BADF00BADF00BADF00BADF00BADF00BADF00")
+	require.NoError(t, err, "UnmarshalHex")
+
+	_, err = c.SubmitTx(ctx, &api.SubmitTxRequest{Data: []byte("irrelevant"), RuntimeID: unsupportedRuntimeID})
+	require.Error(t, err, "SubmitTx should fail for unsupported runtime")
 }
 
 func testQuery(
