@@ -85,6 +85,12 @@ func (c *runtimeClient) submitTx(ctx context.Context, request *api.SubmitTxReque
 		return nil, fmt.Errorf("client: cannot submit transaction, p2p disabled")
 	}
 
+	// Make sure that the runtime is actually among the supported runtimes for this node as
+	// otherwise we will not be able to actually get any results back.
+	if _, err := c.common.runtimeRegistry.GetRuntime(request.RuntimeID); err != nil {
+		return nil, fmt.Errorf("client: cannot resolve runtime: %w", err)
+	}
+
 	// Make sure consensus is synced.
 	select {
 	case <-c.common.consensus.Synced():
