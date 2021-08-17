@@ -35,7 +35,7 @@ tokio = { version = "1", features = ["rt"] }
 tendermint = { git = "https://github.com/informalsystems/tendermint-rs", rev = "1efe42c8625045fd99072718faf96e81aeb9c6e6" }
 tendermint-proto = { git = "https://github.com/informalsystems/tendermint-rs", rev = "1efe42c8625045fd99072718faf96e81aeb9c6e6" }
 io-context = "0.2.0"
-curve25519-dalek = "3.1.0"
+curve25519-dalek = "3.2.0"
 x25519-dalek = "1.1.0"
 ed25519-dalek = "1.0.1"
 deoxysii = "0.2.2"
