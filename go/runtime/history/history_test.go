@@ -41,6 +41,10 @@ func TestHistory(t *testing.T) {
 	require.Error(err, "GetBlock should fail for non-indexed block")
 	require.Equal(roothash.ErrNotFound, err)
 
+	_, err = history.GetAnnotatedBlock(context.Background(), 10)
+	require.Error(err, "GetAnnotatedBlock should fail for non-indexed block")
+	require.Equal(roothash.ErrNotFound, err)
+
 	_, err = history.GetLatestBlock(context.Background())
 	require.Error(err, "GetLatestBlock should fail for no indexed block")
 	require.Equal(roothash.ErrNotFound, err)
@@ -84,6 +88,7 @@ func TestHistory(t *testing.T) {
 	blk.Block.Header.Round = 5
 	err = history.Commit(&blk, roundResults)
 	require.Error(err, "Commit should fail for a lower round")
+	blk.Block.Header.Round = 10
 
 	lastHeight, err = history.LastConsensusHeight()
 	require.NoError(err, "LastConsensusHeight")
@@ -92,6 +97,10 @@ func TestHistory(t *testing.T) {
 	gotBlk, err := history.GetBlock(context.Background(), 10)
 	require.NoError(err, "GetBlock")
 	require.Equal(&putBlk, gotBlk, "GetBlock should return the correct block")
+
+	gotAnnBlk, err := history.GetAnnotatedBlock(context.Background(), 10)
+	require.NoError(err, "GetAnnotatedBlock")
+	require.Equal(&blk, gotAnnBlk, "GetAnnotatedBlock should return the correct block")
 
 	gotLatestBlk, err := history.GetLatestBlock(context.Background())
 	require.NoError(err, "GetLatestBlock")
@@ -121,6 +130,10 @@ func TestHistory(t *testing.T) {
 	gotBlk, err = history.GetBlock(context.Background(), 10)
 	require.NoError(err, "GetBlock")
 	require.Equal(&putBlk, gotBlk, "GetBlock should return the correct block")
+
+	gotAnnBlk, err = history.GetAnnotatedBlock(context.Background(), 10)
+	require.NoError(err, "GetAnnotatedBlock")
+	require.Equal(&blk, gotAnnBlk, "GetAnnotatedBlock should return the correct block")
 
 	gotLatestBlk, err = history.GetLatestBlock(context.Background())
 	require.NoError(err, "GetLatestBlock")

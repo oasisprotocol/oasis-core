@@ -233,10 +233,34 @@ func testQuery(
 		Method:    "hello",
 	})
 	require.NoError(t, err, "Query")
-	var decMethod string
-	err = cbor.Unmarshal(rsp.Data, &decMethod)
+	var decResp string
+	err = cbor.Unmarshal(rsp.Data, &decResp)
 	require.NoError(t, err, "cbor.Unmarshal(<QueryResponse.Data>)")
-	require.EqualValues(t, "hello world", decMethod, "Query response should be correct")
+	require.True(t, strings.HasPrefix(decResp, "hello world"), "Query response should be correct")
+
+	rsp, err = c.Query(ctx, &api.QueryRequest{
+		RuntimeID: runtimeID,
+		Round:     1,
+		Method:    "hello",
+	})
+	require.NoError(t, err, "Query")
+	var decResp2 string
+	err = cbor.Unmarshal(rsp.Data, &decResp2)
+	require.NoError(t, err, "cbor.Unmarshal(<QueryResponse.Data>)")
+	require.True(t, strings.HasPrefix(decResp2, "hello world"), "Query response at round 1 should be correct")
+	require.NotEqualValues(t, decResp, decResp2, "Query responses for different rounds should not be equal (round consensus height should be included in response)")
+
+	rsp, err = c.Query(ctx, &api.QueryRequest{
+		RuntimeID: runtimeID,
+		Round:     1,
+		Method:    "hello",
+	})
+	require.NoError(t, err, "Query")
+	var decResp3 string
+	err = cbor.Unmarshal(rsp.Data, &decResp3)
+	require.NoError(t, err, "cbor.Unmarshal(<QueryResponse.Data>)")
+	require.True(t, strings.HasPrefix(decResp3, "hello world"), "Query response at round 1 should be correct")
+	require.EqualValues(t, decResp2, decResp3, "Query responses for same round should be equal (round consensus height should be included in response)")
 
 	// Execute CheckTx using the mock runtime host.
 	err = c.CheckTx(ctx, &api.CheckTxRequest{

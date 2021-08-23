@@ -419,33 +419,34 @@ func (c *runtimeClient) GetBlockByHash(ctx context.Context, request *api.GetBloc
 
 // Implements api.RuntimeClient.
 func (c *runtimeClient) Query(ctx context.Context, request *api.QueryRequest) (*api.QueryResponse, error) {
-	hrt, ok := c.hosts[request.RuntimeID]
+	clientHost, ok := c.hosts[request.RuntimeID]
 	if !ok {
 		return nil, api.ErrNoHostedRuntime
 	}
-	rt := hrt.GetHostedRuntime()
-	if rt == nil {
+	hrt := clientHost.GetHostedRuntime()
+	if hrt == nil {
 		return nil, api.ErrNoHostedRuntime
 	}
-
-	// Get current blocks.
-	rs, err := c.common.consensus.RootHash().GetRuntimeState(ctx, &roothash.RuntimeRequest{
-		RuntimeID: request.RuntimeID,
-		Height:    consensus.HeightLatest,
-	})
+	rt, err := c.common.runtimeRegistry.GetRuntime(request.RuntimeID)
 	if err != nil {
-		return nil, fmt.Errorf("client: failed to get runtime %s state: %w", request.RuntimeID, err)
+		return nil, err
 	}
-	lb, err := c.common.consensus.GetLightBlock(ctx, rs.CurrentBlockHeight)
+	annBlk, err := rt.History().GetAnnotatedBlock(ctx, request.Round)
 	if err != nil {
-		return nil, fmt.Errorf("client: failed to get light block at height %d: %w", rs.CurrentBlockHeight, err)
-	}
-	epoch, err := c.common.consensus.Beacon().GetEpoch(ctx, rs.CurrentBlockHeight)
-	if err != nil {
-		return nil, fmt.Errorf("client: failed to get epoch at height %d: %w", rs.CurrentBlockHeight, err)
+		return nil, fmt.Errorf("client: failed to fetch annotated block from history: %w", err)
 	}
 
-	data, err := rt.Query(ctx, rs.CurrentBlock, lb, epoch, request.Method, request.Args)
+	// Get consensus state at queried round.
+	lb, err := c.common.consensus.GetLightBlock(ctx, annBlk.Height)
+	if err != nil {
+		return nil, fmt.Errorf("client: failed to get light block at height %d: %w", annBlk.Height, err)
+	}
+	epoch, err := c.common.consensus.Beacon().GetEpoch(ctx, annBlk.Height)
+	if err != nil {
+		return nil, fmt.Errorf("client: failed to get epoch at height %d: %w", annBlk.Height, err)
+	}
+
+	data, err := hrt.Query(ctx, annBlk.Block, lb, epoch, request.Method, request.Args)
 	if err != nil {
 		return nil, err
 	}
