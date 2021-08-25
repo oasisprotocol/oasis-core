@@ -4,8 +4,8 @@ Thank you for your interest in contributing to Oasis Core! There are many ways
 to contribute, and this document should not be considered encompassing.
 
 If you have a general question on how to use and deploy our software, please
-read our [Operator Docs](https://docs.oasis.dev/) or join our
-[community Slack](oasiscommunity.slack.com).
+read our [General Documentation](https://docs.oasis.dev) or join our
+[community Slack](https://oasiscommunity.slack.com).
 
 For concrete feature requests and/or bug reports, please file an issue in this
 repository as described below.
