@@ -80,10 +80,6 @@ func (h *nopHistory) GetAnnotatedBlock(ctx context.Context, round uint64) (*root
 	return nil, errNopHistory
 }
 
-func (h *nopHistory) GetLatestBlock(ctx context.Context) (*block.Block, error) {
-	return nil, errNopHistory
-}
-
 func (h *nopHistory) GetRoundResults(ctx context.Context, round uint64) (*roothash.RoundResults, error) {
 	return nil, errNopHistory
 }
@@ -147,15 +143,25 @@ func (h *runtimeHistory) LastConsensusHeight() (int64, error) {
 	return meta.LastConsensusHeight, nil
 }
 
-func (h *runtimeHistory) GetBlock(ctx context.Context, round uint64) (*block.Block, error) {
-	if ctx.Err() != nil {
-		return nil, ctx.Err()
+func (h *runtimeHistory) resolveRound(round uint64) (uint64, error) {
+	switch round {
+	case roothash.RoundLatest:
+		// Determine the last round in case RoundLatest has been passed.
+		meta, err := h.db.metadata()
+		if err != nil {
+			return roothash.RoundInvalid, err
+		}
+		return meta.LastRound, nil
+	default:
+		return round, nil
 	}
-	annBlk, err := h.db.getBlock(round)
+}
+
+func (h *runtimeHistory) GetBlock(ctx context.Context, round uint64) (*block.Block, error) {
+	annBlk, err := h.GetAnnotatedBlock(ctx, round)
 	if err != nil {
 		return nil, err
 	}
-
 	return annBlk.Block, nil
 }
 
@@ -163,30 +169,22 @@ func (h *runtimeHistory) GetAnnotatedBlock(ctx context.Context, round uint64) (*
 	if ctx.Err() != nil {
 		return nil, ctx.Err()
 	}
-	return h.db.getBlock(round)
-}
-
-func (h *runtimeHistory) GetLatestBlock(ctx context.Context) (*block.Block, error) {
-	if ctx.Err() != nil {
-		return nil, ctx.Err()
-	}
-	meta, err := h.db.metadata()
+	resolvedRound, err := h.resolveRound(round)
 	if err != nil {
 		return nil, err
 	}
-	annBlk, err := h.db.getBlock(meta.LastRound)
-	if err != nil {
-		return nil, err
-	}
-
-	return annBlk.Block, nil
+	return h.db.getBlock(resolvedRound)
 }
 
 func (h *runtimeHistory) GetRoundResults(ctx context.Context, round uint64) (*roothash.RoundResults, error) {
 	if ctx.Err() != nil {
 		return nil, ctx.Err()
 	}
-	return h.db.getRoundResults(round)
+	resolvedRound, err := h.resolveRound(round)
+	if err != nil {
+		return nil, err
+	}
+	return h.db.getRoundResults(resolvedRound)
 }
 
 func (h *runtimeHistory) Pruner() Pruner {

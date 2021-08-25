@@ -2,7 +2,6 @@ package api
 
 import (
 	"context"
-	"math"
 
 	"github.com/oasisprotocol/oasis-core/go/common"
 	"github.com/oasisprotocol/oasis-core/go/common/cbor"
@@ -21,7 +20,7 @@ const (
 	ModuleName = "runtime/client"
 
 	// RoundLatest is a special round number always referring to the latest round.
-	RoundLatest uint64 = math.MaxUint64
+	RoundLatest = roothash.RoundLatest
 )
 
 var (

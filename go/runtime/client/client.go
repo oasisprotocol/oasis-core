@@ -280,13 +280,7 @@ func (c *runtimeClient) GetBlock(ctx context.Context, request *api.GetBlockReque
 	if err != nil {
 		return nil, err
 	}
-
-	switch request.Round {
-	case api.RoundLatest:
-		return rt.History().GetLatestBlock(ctx)
-	default:
-		return rt.History().GetBlock(ctx, request.Round)
-	}
+	return rt.History().GetBlock(ctx, request.Round)
 }
 
 func (c *runtimeClient) getTxnTree(blk *block.Block) *transaction.Tree {
