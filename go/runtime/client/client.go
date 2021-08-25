@@ -120,7 +120,7 @@ func (c *runtimeClient) submitTx(ctx context.Context, request *api.SubmitTxReque
 		return nil, api.ErrNotSynced
 	}
 
-	respCh := make(chan *txResult)
+	respCh := make(chan *txResult, 1)
 
 	// Perform a local transaction check when a hosted runtime is available.
 	if _, ok := c.hosts[request.RuntimeID]; ok {
@@ -132,14 +132,12 @@ func (c *runtimeClient) submitTx(ctx context.Context, request *api.SubmitTxReque
 			return nil, err
 		}
 		if !resp.IsSuccess() {
-			go func() {
-				respCh <- &txResult{
-					result: &api.SubmitTxMetaResponse{
-						CheckTxError: &resp.Error,
-					},
-				}
-				close(respCh)
-			}()
+			respCh <- &txResult{
+				result: &api.SubmitTxMetaResponse{
+					CheckTxError: &resp.Error,
+				},
+			}
+			close(respCh)
 			return respCh, nil
 		}
 	}
