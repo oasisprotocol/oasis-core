@@ -170,13 +170,11 @@ func (app *schedulerApplication) BeginBlock(ctx *api.Context, request types.Requ
 		// Handle the validator election first, because no consensus is
 		// catastrophic, while failing to elect other committees is not.
 		var validatorEntities map[staking.Address]bool
-		if !params.DebugStaticValidators {
-			if validatorEntities, err = app.electValidators(ctx, entropy, stakeAcc, entitiesEligibleForReward, nodes, params); err != nil {
-				// It is unclear what the behavior should be if the validator
-				// election fails.  The system can not ensure integrity, so
-				// presumably manual intervention is required...
-				return fmt.Errorf("tendermint/scheduler: couldn't elect validators: %w", err)
-			}
+		if validatorEntities, err = app.electValidators(ctx, entropy, stakeAcc, entitiesEligibleForReward, nodes, params); err != nil {
+			// It is unclear what the behavior should be if the validator
+			// election fails.  The system can not ensure integrity, so
+			// presumably manual intervention is required...
+			return fmt.Errorf("tendermint/scheduler: couldn't elect validators: %w", err)
 		}
 
 		kinds := []scheduler.CommitteeKind{

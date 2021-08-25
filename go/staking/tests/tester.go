@@ -19,7 +19,6 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/quantity"
 	consensusAPI "github.com/oasisprotocol/oasis-core/go/consensus/api"
 	tendermintTests "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/tests"
-	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
 	"github.com/oasisprotocol/oasis-core/go/roothash/api/block"
 	"github.com/oasisprotocol/oasis-core/go/staking/api"
 )
@@ -879,7 +878,7 @@ func testEscrowHelper( // nolint: gocyclo
 
 	// Advance epoch to trigger debonding.
 	timeSource := consensus.Beacon().(beacon.SetableBackend)
-	beaconTests.MustAdvanceEpoch(t, timeSource, 1)
+	beaconTests.MustAdvanceEpoch(t, timeSource)
 
 	// Wait for debonding period to pass.
 	select {
@@ -1115,15 +1114,16 @@ func testSlashConsensusEquivocation(
 	entSigner signature.Signer,
 	runtimeID common.Namespace,
 ) {
+	ctx := context.Background()
 	require := require.New(t)
 
 	accData := state.accounts.getAccount(1)
 
-	// Delegate some stake to the validator so we can check if slashing works.
-	acc, err := backend.Account(context.Background(), &api.OwnerQuery{Owner: accData.Address, Height: consensusAPI.HeightLatest})
+	// Delegate some stake to the test validator so we can check if slashing works.
+	acc, err := backend.Account(ctx, &api.OwnerQuery{Owner: accData.Address, Height: consensusAPI.HeightLatest})
 	require.NoError(err, "Account")
 
-	ch, sub, err := backend.WatchEvents(context.Background())
+	ch, sub, err := backend.WatchEvents(ctx)
 	require.NoError(err, "WatchEvents")
 	defer sub.Close()
 
@@ -1136,11 +1136,11 @@ func testSlashConsensusEquivocation(
 		Amount:  *amount,
 	}
 	tx := api.NewAddEscrowTx(acc.General.Nonce, nil, escrow)
-	err = consensusAPI.SignAndSubmitTx(context.Background(), consensus, accData.Signer, tx)
+	err = consensusAPI.SignAndSubmitTx(ctx, consensus, accData.Signer, tx)
 	require.NoError(err, "AddEscrow")
 
 	// Query updated validator account state.
-	entAcc, err := backend.Account(context.Background(), &api.OwnerQuery{Owner: entAddr, Height: consensusAPI.HeightLatest})
+	entAcc, err := backend.Account(ctx, &api.OwnerQuery{Owner: entAddr, Height: consensusAPI.HeightLatest})
 	require.NoError(err, "Account")
 
 	select {
@@ -1159,15 +1159,19 @@ func testSlashConsensusEquivocation(
 	}
 
 	// Subscribe to roothash blocks.
-	blocksCh, blocksSub, err := consensus.RootHash().WatchBlocks(context.Background(), runtimeID)
+	blocksCh, blocksSub, err := consensus.RootHash().WatchBlocks(ctx, runtimeID)
 	require.NoError(err, "WatchBlocks")
 	defer blocksSub.Close()
 
 	// Broadcast evidence. This is Tendermint-specific, if we ever have more than one
 	// consensus backend, we need to change this part.
-	blk, err := consensus.GetBlock(context.Background(), 1)
+	blk, err := consensus.GetBlock(ctx, 1)
 	require.NoError(err, "GetBlock")
-	err = consensus.SubmitEvidence(context.Background(), tendermintTests.MakeConsensusEquivocationEvidence(t, ident, blk))
+
+	genesis, err := consensus.GetGenesisDocument(ctx)
+	require.NoError(err, "GetGenesisDocument")
+
+	err = consensus.SubmitEvidence(ctx, tendermintTests.MakeConsensusEquivocationEvidence(t, ident, blk, genesis))
 	require.NoError(err, "SubmitEvidence")
 
 	// Wait for the node to get slashed.
@@ -1189,19 +1193,7 @@ WaitLoop:
 			t.Fatalf("failed to receive slash event")
 		}
 	}
-
-	// Make sure the node is frozen.
-	nodeStatus, err := consensus.Registry().GetNodeStatus(context.Background(), &registry.IDQuery{ID: ident.NodeSigner.Public(), Height: consensusAPI.HeightLatest})
-	require.NoError(err, "GetNodeStatus")
-	require.False(nodeStatus.ExpirationProcessed, "ExpirationProcessed should be false")
-	require.True(nodeStatus.IsFrozen(), "IsFrozen() should return true")
-
-	// Make sure node cannot be unfrozen.
-	tx = registry.NewUnfreezeNodeTx(0, nil, &registry.UnfreezeNode{
-		NodeID: ident.NodeSigner.Public(),
-	})
-	err = consensusAPI.SignAndSubmitTx(context.Background(), consensus, entSigner, tx)
-	require.Error(err, "UnfreezeNode should fail")
+	// XXX: no freezing is configured for this.
 
 	// Wait for roothash block as re-scheduling must have taken place due to slashing.
 	select {
@@ -1210,24 +1202,4 @@ WaitLoop:
 	case <-time.After(recvTimeout):
 		t.Fatalf("failed to receive roothash block")
 	}
-
-	// Advance epoch to make the freeze period expire.
-	timeSource := consensus.Beacon().(beacon.SetableBackend)
-	beaconTests.MustAdvanceEpoch(t, timeSource, 1)
-
-	// Unfreeze node (now it should work).
-	tx = registry.NewUnfreezeNodeTx(0, nil, &registry.UnfreezeNode{
-		NodeID: ident.NodeSigner.Public(),
-	})
-	err = consensusAPI.SignAndSubmitTx(context.Background(), consensus, entSigner, tx)
-	require.NoError(err, "UnfreezeNode")
-
-	// Advance epoch to restore committees.
-	beaconTests.MustAdvanceEpoch(t, timeSource, 1)
-
-	// Make sure the node is no longer frozen.
-	nodeStatus, err = consensus.Registry().GetNodeStatus(context.Background(), &registry.IDQuery{ID: ident.NodeSigner.Public(), Height: consensusAPI.HeightLatest})
-	require.NoError(err, "GetNodeStatus")
-	require.False(nodeStatus.ExpirationProcessed, "ExpirationProcessed should be false")
-	require.False(nodeStatus.IsFrozen(), "IsFrozen() should return false")
 }

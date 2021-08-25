@@ -283,10 +283,6 @@ type ConsensusParameters struct {
 	// the staking related checks and operations.
 	DebugBypassStake bool `json:"debug_bypass_stake,omitempty"`
 
-	// DebugStaticValidators is true iff the scheduler should use
-	// a static validator set instead of electing anything.
-	DebugStaticValidators bool `json:"debug_static_validators,omitempty"`
-
 	// RewardFactorEpochElectionAny is the factor for a reward
 	// distributed per epoch to entities that have any node considered
 	// in any election.
@@ -295,7 +291,7 @@ type ConsensusParameters struct {
 
 // SanityCheck does basic sanity checking on the genesis state.
 func (g *Genesis) SanityCheck(stakingTotalSupply *quantity.Quantity) error {
-	unsafeFlags := g.Parameters.DebugBypassStake || g.Parameters.DebugStaticValidators
+	unsafeFlags := g.Parameters.DebugBypassStake
 	if unsafeFlags && !flags.DebugDontBlameOasis() {
 		return fmt.Errorf("scheduler: sanity check failed: one or more unsafe debug flags set")
 	}

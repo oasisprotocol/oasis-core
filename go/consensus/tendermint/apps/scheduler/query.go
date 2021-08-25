@@ -3,7 +3,6 @@ package scheduler
 import (
 	"context"
 
-	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	abciAPI "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/api"
 	registryState "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/apps/registry/state"
 	schedulerState "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/apps/scheduler/state"
@@ -51,39 +50,23 @@ func (sq *schedulerQuerier) Validators(ctx context.Context) ([]*scheduler.Valida
 		return nil, err
 	}
 
-	params, err := sq.state.ConsensusParameters(ctx)
-	if err != nil {
-		return nil, err
-	}
-
 	ret := make([]*scheduler.Validator, 0, len(vals))
 	for v, power := range vals {
-		var id signature.PublicKey
-
-		if params.DebugStaticValidators {
-			// This must be unit tests.  While this call is specified to
-			// return node IDs, the map for making such queries is not
-			// guaranteed to be populated in the registry.
-			id = v
-		} else {
-			// The validator list uses consensus addresses, so convert them
-			// to node identifiers.
-			//
-			// This is probably better than switching the scheduler to use
-			// node identifiers for validators, because user queries are
-			// likely more infrequent than all the business of actually
-			// scheduling...
-			node, err := sq.regState.NodeBySubKey(ctx, v)
-			if err != nil {
-				// Should NEVER happen.
-				return nil, err
-			}
-
-			id = node.ID
+		// The validator list uses consensus addresses, so convert them
+		// to node identifiers.
+		//
+		// This is probably better than switching the scheduler to use
+		// node identifiers for validators, because user queries are
+		// likely more infrequent than all the business of actually
+		// scheduling...
+		node, err := sq.regState.NodeBySubKey(ctx, v)
+		if err != nil {
+			// Should NEVER happen.
+			return nil, err
 		}
 
 		ret = append(ret, &scheduler.Validator{
-			ID:          id,
+			ID:          node.ID,
 			VotingPower: power,
 		})
 	}

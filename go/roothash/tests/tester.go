@@ -62,7 +62,7 @@ func RootHashImplementationTests(t *testing.T, backend api.Backend, consensus co
 			rtStates[0].rt.Cleanup(t, consensus.Registry(), consensus)
 		}
 
-		registryTests.EnsureRegistryEmpty(t, consensus.Registry())
+		registryTests.EnsureRegistryClean(t, consensus.Registry())
 	}()
 
 	// Populate the registry.
@@ -202,7 +202,7 @@ func testEpochTransitionBlock(t *testing.T, backend api.Backend, consensus conse
 
 	// Advance the epoch.
 	timeSource := consensus.Beacon().(beacon.SetableBackend)
-	beaconTests.MustAdvanceEpoch(t, timeSource, 1)
+	beaconTests.MustAdvanceEpoch(t, timeSource)
 
 	// Check for the expected post-epoch transition events.
 	for i, state := range states {
@@ -593,7 +593,7 @@ WaitForRoundTimeoutBlocks:
 
 	// Trigger an epoch transition while the timeout is armed.
 	timeSource := consensus.Beacon().(beacon.SetableBackend)
-	beaconTests.MustAdvanceEpoch(t, timeSource, 1)
+	beaconTests.MustAdvanceEpoch(t, timeSource)
 
 	// Ensure that the epoch transition was processed correctly.
 	for {

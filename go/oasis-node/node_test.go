@@ -21,9 +21,11 @@ import (
 	fileSigner "github.com/oasisprotocol/oasis-core/go/common/crypto/signature/signers/file"
 	"github.com/oasisprotocol/oasis-core/go/common/entity"
 	cmnGrpc "github.com/oasisprotocol/oasis-core/go/common/grpc"
+	"github.com/oasisprotocol/oasis-core/go/common/identity"
 	consensusAPI "github.com/oasisprotocol/oasis-core/go/consensus/api"
 	tendermintCommon "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/common"
 	tendermintFull "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/full"
+	tmTestGenesis "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/tests/genesis"
 	consensusTests "github.com/oasisprotocol/oasis-core/go/consensus/tests"
 	governance "github.com/oasisprotocol/oasis-core/go/governance/api"
 	governanceTests "github.com/oasisprotocol/oasis-core/go/governance/tests"
@@ -185,6 +187,23 @@ func newTestNode(t *testing.T) *testNode {
 		viper.Set(kv.key, kv.value)
 	}
 
+	// Generate the test node identity.
+	nodeSignerFactory, err := fileSigner.NewFactory(dataDir, signature.SignerNode, signature.SignerP2P, signature.SignerConsensus)
+	require.NoError(err, "create node file signer")
+	identity, err := identity.LoadOrGenerate(dataDir, nodeSignerFactory, false)
+	require.NoError(err, "create test node identity")
+	// Include node in entity.
+	entity.Nodes = append(entity.Nodes, identity.NodeSigner.Public())
+
+	// Generate genesis and save it to file.
+	genesisPath := filepath.Join(dataDir, "genesis.json")
+	genesis, err := tmTestGenesis.NewTestNodeGenesisProvider(identity, entity, entitySigner)
+	require.NoError(err, "test genesis provision")
+	doc, err := genesis.GetGenesisDocument()
+	require.NoError(err, "test entity genesis document")
+	require.NoError(doc.WriteFileJSON(genesisPath))
+	viper.Set(cmdCommonFlags.CfgGenesisFile, genesisPath)
+
 	n := &testNode{
 		runtimeID:    testRuntime.ID,
 		dataDir:      dataDir,
@@ -193,7 +212,7 @@ func newTestNode(t *testing.T) *testNode {
 		start:        time.Now(),
 	}
 	t.Logf("starting node, data directory: %v", dataDir)
-	n.Node, err = node.NewTestNode()
+	n.Node, err = node.NewNode()
 	require.NoError(err, "start node")
 
 	// Add the testNode to the newly generated entity's list of nodes
@@ -249,8 +268,7 @@ func TestNode(t *testing.T) {
 		// Runtime client tests also need a functional runtime.
 		{"RuntimeClient", testRuntimeClient},
 
-		// Governance requires a registered node that is a validator and was
-		// not slashed.
+		// Governance requires a registered node that is a validator that was not slashed.
 		{"Governance", testGovernance},
 
 		// Staking requires a registered node that is a validator.
@@ -261,11 +279,9 @@ func TestNode(t *testing.T) {
 		// connected to this node.
 		{"TestStorageClientWithNode", testStorageClientWithNode},
 
-		// Clean up and ensure the registry is empty for the following tests.
-		{"DeregisterTestEntityRuntime", testDeregisterEntityRuntime},
-
 		{"Consensus", testConsensus},
 		{"ConsensusClient", testConsensusClient},
+
 		{"Beacon", testBeacon},
 		{"Storage", testStorage},
 		{"Registry", testRegistry},
@@ -312,66 +328,6 @@ func testRegisterEntityRuntime(t *testing.T, node *testNode) {
 	node.executorCommitteeNode = executorRT
 }
 
-func testDeregisterEntityRuntime(t *testing.T, node *testNode) {
-	// Stop the registration service and wait for it to fully stop. This is required
-	// as otherwise it will re-register the node on each epoch transition.
-	node.RegistrationWorker.Stop()
-	<-node.RegistrationWorker.Quit()
-
-	// Subscribe to node deregistration event.
-	nodeCh, sub, err := node.Node.Consensus.Registry().WatchNodes(context.Background())
-	require.NoError(t, err, "WatchNodes")
-	defer sub.Close()
-
-	// Perform an epoch transition to expire the node as otherwise there is no way
-	// to deregister the entity.
-	require.Implements(t, (*beacon.SetableBackend)(nil), node.Consensus.Beacon(), "epoch time backend is mock")
-	timeSource := (node.Consensus.Beacon()).(beacon.SetableBackend)
-	_ = beaconTests.MustAdvanceEpoch(t, timeSource, 2+1+1) // 2 epochs for expiry, 1 for debonding, 1 for removal.
-
-WaitLoop:
-	for {
-		select {
-		case ev := <-nodeCh:
-			// NOTE: There can be in-flight registrations from before the registration worker
-			//       was stopped. Make sure to skip them.
-			if ev.IsRegistration {
-				continue
-			}
-
-			require.Equal(t, ev.Node.ID, node.Identity.NodeSigner.Public(), "expected node deregistration event")
-			break WaitLoop
-		case <-time.After(1 * time.Second):
-			t.Fatalf("Failed to receive node deregistration event")
-		}
-	}
-
-	// Subscribe to entity deregistration event.
-	entityCh, sub, err := node.Node.Consensus.Registry().WatchEntities(context.Background())
-	require.NoError(t, err, "WatchEntities")
-	defer sub.Close()
-
-	tx := registry.NewDeregisterEntityTx(0, nil)
-	err = consensusAPI.SignAndSubmitTx(context.Background(), node.Consensus, node.entitySigner, tx)
-	require.NoError(t, err, "deregister test entity")
-
-	select {
-	case ev := <-entityCh:
-		require.False(t, ev.IsRegistration, "expected entity deregistration event")
-	case <-time.After(1 * time.Second):
-		t.Fatalf("Failed to receive entity deregistration event")
-	}
-
-	// Deregistering the test entity should fail as it has runtimes.
-	_, testEntitySigner, _ := entity.TestEntity()
-	tx = registry.NewDeregisterEntityTx(0, nil)
-	err = consensusAPI.SignAndSubmitTx(context.Background(), node.Consensus, testEntitySigner, tx)
-	require.Error(t, err, "deregister should fail when an entity has runtimes")
-	require.Equal(t, err, registry.ErrEntityHasRuntimes)
-
-	registryTests.EnsureRegistryEmpty(t, node.Node.Consensus.Registry())
-}
-
 func testConsensus(t *testing.T, node *testNode) {
 	consensusTests.ConsensusImplementationTests(t, node.Consensus)
 }
@@ -405,11 +361,11 @@ func testStorage(t *testing.T, node *testNode) {
 }
 
 func testRegistry(t *testing.T, node *testNode) {
-	registryTests.RegistryImplementationTests(t, node.Consensus.Registry(), node.Consensus)
+	registryTests.RegistryImplementationTests(t, node.Consensus.Registry(), node.Consensus, node.entity.ID)
 }
 
 func testScheduler(t *testing.T, node *testNode) {
-	schedulerTests.SchedulerImplementationTests(t, "", node.Consensus.Scheduler(), node.Consensus)
+	schedulerTests.SchedulerImplementationTests(t, "", node.Identity, node.Consensus.Scheduler(), node.Consensus)
 }
 
 func testSchedulerClient(t *testing.T, node *testNode) {
@@ -419,7 +375,7 @@ func testSchedulerClient(t *testing.T, node *testNode) {
 	defer conn.Close()
 
 	client := scheduler.NewSchedulerClient(conn)
-	schedulerTests.SchedulerImplementationTests(t, "client", client, node.Consensus)
+	schedulerTests.SchedulerImplementationTests(t, "client", node.Identity, client, node.Consensus)
 }
 
 func testStaking(t *testing.T, node *testNode) {

@@ -69,7 +69,6 @@ const (
 	cfgSchedulerMaxValidators          = "scheduler.max_validators"
 	cfgSchedulerMaxValidatorsPerEntity = "scheduler.max_validators_per_entity"
 	cfgSchedulerDebugBypassStake       = "scheduler.debug.bypass_stake" // nolint: gosec
-	cfgSchedulerDebugStaticValidators  = "scheduler.debug.static_validators"
 
 	// Governance config flags.
 	CfgGovernanceMinProposalDeposit        = "governance.min_proposal_deposit"
@@ -224,7 +223,6 @@ func doInitGenesis(cmd *cobra.Command, args []string) {
 			MaxValidators:          viper.GetInt(cfgSchedulerMaxValidators),
 			MaxValidatorsPerEntity: viper.GetInt(cfgSchedulerMaxValidatorsPerEntity),
 			DebugBypassStake:       viper.GetBool(cfgSchedulerDebugBypassStake),
-			DebugStaticValidators:  viper.GetBool(cfgSchedulerDebugStaticValidators),
 		},
 	}
 
@@ -767,9 +765,7 @@ func init() {
 	initGenesisFlags.Int(cfgSchedulerMaxValidators, 100, "maximum number of validators")
 	initGenesisFlags.Int(cfgSchedulerMaxValidatorsPerEntity, 1, "maximum number of validators per entity")
 	initGenesisFlags.Bool(cfgSchedulerDebugBypassStake, false, "bypass all stake checks and operations (UNSAFE)")
-	initGenesisFlags.Bool(cfgSchedulerDebugStaticValidators, false, "bypass all validator elections (UNSAFE)")
 	_ = initGenesisFlags.MarkHidden(cfgSchedulerDebugBypassStake)
-	_ = initGenesisFlags.MarkHidden(cfgSchedulerDebugStaticValidators)
 
 	// Governance config flags.
 	initGenesisFlags.Uint64(CfgGovernanceMinProposalDeposit, 100, "proposal deposit for governance proposals")

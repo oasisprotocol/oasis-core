@@ -14,11 +14,11 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/identity"
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
 	tmcrypto "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/crypto"
-	genesisTestHelpers "github.com/oasisprotocol/oasis-core/go/genesis/tests"
+	genesis "github.com/oasisprotocol/oasis-core/go/genesis/api"
 )
 
 // MakeConsensusEquivocationEvidence creates consensus evidence of equivocation.
-func MakeConsensusEquivocationEvidence(t *testing.T, ident *identity.Identity, blk *consensus.Block) *consensus.Evidence {
+func MakeConsensusEquivocationEvidence(t *testing.T, ident *identity.Identity, blk *consensus.Block, genesis *genesis.Document) *consensus.Evidence {
 	require := require.New(t)
 
 	// Create empty directory for private validator metadata.
@@ -58,13 +58,14 @@ func MakeConsensusEquivocationEvidence(t *testing.T, ident *identity.Identity, b
 			Hash:  []byte("partshashpartshashpartshashpart2"),
 		},
 	}
+	chainID := genesis.ChainContext()[:tmtypes.MaxChainIDLen]
+
 	ev := &tmtypes.DuplicateVoteEvidence{
 		Timestamp:        blk.Time,
 		TotalVotingPower: 1,
 		ValidatorPower:   1,
-		// NOTE: ChainID must match the unit test genesis block.
-		VoteA: makeVote(pv1, genesisTestHelpers.TestChainID, 0, blk.Height, 2, 1, blockID1, blk.Time),
-		VoteB: makeVote(pv2, genesisTestHelpers.TestChainID, 0, blk.Height, 2, 1, blockID2, blk.Time),
+		VoteA:            makeVote(pv1, chainID, 0, blk.Height, 2, 1, blockID1, blk.Time),
+		VoteB:            makeVote(pv2, chainID, 0, blk.Height, 2, 1, blockID2, blk.Time),
 	}
 
 	proto, err := tmtypes.EvidenceToProto(ev)
