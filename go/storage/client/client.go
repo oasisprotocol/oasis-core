@@ -70,6 +70,15 @@ type storageClientBackend struct {
 	backendOverrides map[signature.PublicKey]api.Backend
 }
 
+func (b *storageClientBackend) ensureInitialized(ctx context.Context) error {
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-b.Initialized():
+	}
+	return nil
+}
+
 // Implements api.StorageClient.
 func (b *storageClientBackend) GetConnectedNodes() []*node.Node {
 	var nodes []*node.Node
@@ -99,6 +108,10 @@ func (b *storageClientBackend) writeWithClient( // nolint: gocyclo
 	expectedNewRootTypes []api.RootType,
 	expectedNewRoots []hash.Hash,
 ) ([]*api.Receipt, error) {
+	if err := b.ensureInitialized(ctx); err != nil {
+		return nil, err
+	}
+
 	conns := b.nodesClient.GetConnectionsWithMeta()
 	n := len(conns)
 	if n == 0 {
@@ -334,6 +347,10 @@ func (b *storageClientBackend) readWithClient(
 	ns common.Namespace,
 	fn func(context.Context, api.Backend) (interface{}, error),
 ) (interface{}, error) {
+	if err := b.ensureInitialized(ctx); err != nil {
+		return nil, err
+	}
+
 	var resp interface{}
 	op := func() error {
 		conns := b.nodesClient.GetConnectionsMap()
