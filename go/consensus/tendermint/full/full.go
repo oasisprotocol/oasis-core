@@ -1388,9 +1388,13 @@ func (t *fullService) syncWorker() {
 					return
 				}
 
+				if tmBlock == nil {
+					continue
+				}
+
 				now := time.Now()
-				// No committed blocks or latest block within threshold.
-				if tmBlock == nil || now.Sub(tmBlock.Header.Time) < syncWorkerLastBlockTimeDiffThreshold {
+				// Latest block within threshold.
+				if now.Sub(tmBlock.Header.Time) < syncWorkerLastBlockTimeDiffThreshold {
 					t.Logger.Info("Tendermint Node finished initial sync")
 					close(t.syncedCh)
 					return

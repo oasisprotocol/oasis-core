@@ -16,7 +16,8 @@ type RuntimeHostNode struct {
 	factory  RuntimeHostHandlerFactory
 	notifier protocol.Notifier
 
-	runtime host.RichRuntime
+	runtime       host.RichRuntime
+	runtimeNotify chan struct{}
 }
 
 // ProvisionHostedRuntime provisions the configured runtime.
@@ -43,6 +44,8 @@ func (n *RuntimeHostNode) ProvisionHostedRuntime(ctx context.Context) (host.Rich
 	n.notifier = notifier
 	n.Unlock()
 
+	close(n.runtimeNotify)
+
 	return rr, notifier, nil
 }
 
@@ -52,6 +55,17 @@ func (n *RuntimeHostNode) GetHostedRuntime() host.RichRuntime {
 	rt := n.runtime
 	n.Unlock()
 	return rt
+}
+
+// WaitHostedRuntime waits for the hosted runtime to be provisioned and returns it.
+func (n *RuntimeHostNode) WaitHostedRuntime(ctx context.Context) (host.RichRuntime, error) {
+	select {
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	case <-n.runtimeNotify:
+	}
+
+	return n.GetHostedRuntime(), nil
 }
 
 // RuntimeHostHandlerFactory is an interface that can be used to create new runtime handlers and
@@ -69,5 +83,8 @@ type RuntimeHostHandlerFactory interface {
 
 // NewRuntimeHostNode creates a new runtime host node.
 func NewRuntimeHostNode(factory RuntimeHostHandlerFactory) (*RuntimeHostNode, error) {
-	return &RuntimeHostNode{factory: factory}, nil
+	return &RuntimeHostNode{
+		factory:       factory,
+		runtimeNotify: make(chan struct{}),
+	}, nil
 }

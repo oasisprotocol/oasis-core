@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"sync"
+	"time"
 
 	flag "github.com/spf13/pflag"
 	"github.com/spf13/viper"
@@ -22,6 +23,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/roothash/api/block"
 	"github.com/oasisprotocol/oasis-core/go/runtime/client/api"
 	enclaverpc "github.com/oasisprotocol/oasis-core/go/runtime/enclaverpc/api"
+	"github.com/oasisprotocol/oasis-core/go/runtime/host"
 	"github.com/oasisprotocol/oasis-core/go/runtime/host/protocol"
 	runtimeRegistry "github.com/oasisprotocol/oasis-core/go/runtime/registry"
 	"github.com/oasisprotocol/oasis-core/go/runtime/tagindexer"
@@ -36,6 +38,10 @@ const (
 	CfgMaxTransactionAge = "runtime.client.max_transaction_age"
 
 	minMaxTransactionAge = 30
+
+	// hostedRuntimeProvisionTimeout is the maximum amount of time to wait for the hosted runtime
+	// to be provisioned before cancelling the request.
+	hostedRuntimeProvisionTimeout = 30 * time.Second
 )
 
 var (
@@ -80,6 +86,20 @@ func (c *runtimeClient) tagIndexer(runtimeID common.Namespace) (tagindexer.Query
 	return rt.TagIndexer(), nil
 }
 
+func (c *runtimeClient) getHostedRuntime(ctx context.Context, runtimeID common.Namespace) (host.RichRuntime, error) {
+	clientHost, ok := c.hosts[runtimeID]
+	if !ok {
+		return nil, api.ErrNoHostedRuntime
+	}
+	wrtCtx, cancel := context.WithTimeout(ctx, hostedRuntimeProvisionTimeout)
+	hrt, err := clientHost.WaitHostedRuntime(wrtCtx)
+	cancel()
+	if err != nil {
+		return nil, api.ErrNoHostedRuntime
+	}
+	return hrt, nil
+}
+
 func (c *runtimeClient) submitTx(ctx context.Context, request *api.SubmitTxRequest) (<-chan *txResult, error) {
 	if c.common.p2p == nil {
 		return nil, fmt.Errorf("client: cannot submit transaction, p2p disabled")
@@ -100,10 +120,10 @@ func (c *runtimeClient) submitTx(ctx context.Context, request *api.SubmitTxReque
 		return nil, api.ErrNotSynced
 	}
 
-	respCh := make(chan *txResult)
+	respCh := make(chan *txResult, 1)
 
 	// Perform a local transaction check when a hosted runtime is available.
-	if hrt, ok := c.hosts[request.RuntimeID]; ok && hrt.GetHostedRuntime() != nil {
+	if _, ok := c.hosts[request.RuntimeID]; ok {
 		resp, err := c.checkTx(ctx, &api.CheckTxRequest{
 			RuntimeID: request.RuntimeID,
 			Data:      request.Data,
@@ -112,14 +132,12 @@ func (c *runtimeClient) submitTx(ctx context.Context, request *api.SubmitTxReque
 			return nil, err
 		}
 		if !resp.IsSuccess() {
-			go func() {
-				respCh <- &txResult{
-					result: &api.SubmitTxMetaResponse{
-						CheckTxError: &resp.Error,
-					},
-				}
-				close(respCh)
-			}()
+			respCh <- &txResult{
+				result: &api.SubmitTxMetaResponse{
+					CheckTxError: &resp.Error,
+				},
+			}
+			close(respCh)
 			return respCh, nil
 		}
 	}
@@ -201,13 +219,9 @@ func (c *runtimeClient) SubmitTxNoWait(ctx context.Context, request *api.SubmitT
 }
 
 func (c *runtimeClient) checkTx(ctx context.Context, request *api.CheckTxRequest) (*protocol.CheckTxResult, error) {
-	hrt, ok := c.hosts[request.RuntimeID]
-	if !ok {
-		return nil, api.ErrNoHostedRuntime
-	}
-	rt := hrt.GetHostedRuntime()
-	if rt == nil {
-		return nil, api.ErrNoHostedRuntime
+	rt, err := c.getHostedRuntime(ctx, request.RuntimeID)
+	if err != nil {
+		return nil, err
 	}
 
 	// Get current blocks.
@@ -419,13 +433,9 @@ func (c *runtimeClient) GetBlockByHash(ctx context.Context, request *api.GetBloc
 
 // Implements api.RuntimeClient.
 func (c *runtimeClient) Query(ctx context.Context, request *api.QueryRequest) (*api.QueryResponse, error) {
-	clientHost, ok := c.hosts[request.RuntimeID]
-	if !ok {
-		return nil, api.ErrNoHostedRuntime
-	}
-	hrt := clientHost.GetHostedRuntime()
-	if hrt == nil {
-		return nil, api.ErrNoHostedRuntime
+	hrt, err := c.getHostedRuntime(ctx, request.RuntimeID)
+	if err != nil {
+		return nil, err
 	}
 	rt, err := c.common.runtimeRegistry.GetRuntime(request.RuntimeID)
 	if err != nil {
