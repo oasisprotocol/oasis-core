@@ -24,7 +24,6 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/runtime/history"
 	runtimeHost "github.com/oasisprotocol/oasis-core/go/runtime/host"
 	"github.com/oasisprotocol/oasis-core/go/runtime/localstorage"
-	"github.com/oasisprotocol/oasis-core/go/runtime/tagindexer"
 	storageAPI "github.com/oasisprotocol/oasis-core/go/storage/api"
 	"github.com/oasisprotocol/oasis-core/go/storage/client"
 )
@@ -102,9 +101,6 @@ type Runtime interface {
 	// History returns the history for this runtime.
 	History() history.History
 
-	// TagIndexer returns the tag indexer backend.
-	TagIndexer() tagindexer.QueryableBackend
-
 	// Storage returns the per-runtime storage backend.
 	Storage() storageAPI.Backend
 
@@ -132,9 +128,7 @@ type runtime struct { // nolint: maligned
 	storage      storageAPI.Backend
 	localStorage localstorage.LocalStorage
 
-	history        history.History
-	tagIndexer     *tagindexer.Service
-	indexerStarted bool
+	history history.History
 
 	cancelCtx                  context.CancelFunc
 	registryDescriptorCh       chan struct{}
@@ -224,10 +218,6 @@ func (r *runtime) History() history.History {
 	return r.history
 }
 
-func (r *runtime) TagIndexer() tagindexer.QueryableBackend {
-	return r.tagIndexer
-}
-
 func (r *runtime) Storage() storageAPI.Backend {
 	r.RLock()
 	defer r.RUnlock()
@@ -272,11 +262,6 @@ func (r *runtime) stop() {
 	// Close storage backend.
 	if r.storage != nil {
 		r.storage.Cleanup()
-	}
-	// Close tag indexer service.
-	if r.tagIndexer != nil && r.indexerStarted {
-		r.tagIndexer.Stop()
-		<-r.tagIndexer.Quit()
 	}
 	// Close history keeper.
 	r.history.Close()
@@ -401,11 +386,6 @@ func (r *runtime) finishInitialization(ctx context.Context, ident *identity.Iden
 		}
 		r.storage = storageBackend
 	}
-
-	if err := r.tagIndexer.Start(r.storage); err != nil {
-		return fmt.Errorf("runtime/registry: cannot start tag indexer for runtime %s: %w", r.id, err)
-	}
-	r.indexerStarted = true
 
 	return nil
 }
@@ -556,12 +536,6 @@ func (r *runtimeRegistry) addSupportedRuntime(ctx context.Context, id common.Nam
 	var ns common.Namespace
 	copy(ns[:], id[:])
 
-	// Create runtime tag indexer (to be started later).
-	tagIndexer, err := tagindexer.New(path, r.cfg.TagIndexer, history, r.consensus.RootHash())
-	if err != nil {
-		return fmt.Errorf("runtime/registry: cannot create tag indexer for runtime %s: %w", id, err)
-	}
-
 	// Start tracking this runtime.
 	if err = r.consensus.RootHash().TrackRuntime(ctx, history); err != nil {
 		return fmt.Errorf("runtime/registry: cannot track runtime %s: %w", id, err)
@@ -569,7 +543,6 @@ func (r *runtimeRegistry) addSupportedRuntime(ctx context.Context, id common.Nam
 
 	rt.localStorage = localStorage
 	rt.history = history
-	rt.tagIndexer = tagIndexer
 	r.runtimes[id] = rt
 
 	return nil

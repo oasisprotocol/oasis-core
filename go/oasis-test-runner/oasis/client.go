@@ -49,9 +49,6 @@ func (client *Client) AddArgs(args *argBuilder) error {
 		args.runtimeClientMaxTransactionAge(client.maxTransactionAge)
 	}
 
-	if len(client.runtimes) > 0 {
-		args.runtimeTagIndexerBackend("bleve")
-	}
 	for _, idx := range client.runtimes {
 		v := client.net.runtimes[idx]
 		// XXX: could support configurable binary idx if ever needed.

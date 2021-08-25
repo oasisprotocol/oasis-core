@@ -21,7 +21,6 @@ import (
 	hostProtocol "github.com/oasisprotocol/oasis-core/go/runtime/host/protocol"
 	hostSandbox "github.com/oasisprotocol/oasis-core/go/runtime/host/sandbox"
 	hostSgx "github.com/oasisprotocol/oasis-core/go/runtime/host/sgx"
-	"github.com/oasisprotocol/oasis-core/go/runtime/tagindexer"
 )
 
 const (
@@ -58,9 +57,6 @@ const (
 	// CfgHistoryPrunerKeepLastNum configures the number of last kept
 	// rounds when using the "keep last" pruner strategy.
 	CfgHistoryPrunerKeepLastNum = "runtime.history.pruner.num_kept"
-
-	// CfgTagIndexerBackend configures the history tag indexer backend.
-	CfgTagIndexerBackend = "runtime.history.tag_indexer.backend"
 )
 
 // Flags has the configuration flags.
@@ -89,9 +85,6 @@ type RuntimeConfig struct {
 
 	// History configures the runtime history keeper.
 	History history.Config
-
-	// TagIndexer configures the tag indexer backend.
-	TagIndexer tagindexer.BackendFactory
 }
 
 // RuntimeHostConfig is configuration for a node that hosts runtimes.
@@ -254,16 +247,6 @@ func newConfig(consensus consensus.Backend, ias ias.Endpoint) (*RuntimeConfig, e
 		return nil, fmt.Errorf("runtime/registry: history prune interval must be >= 1s (got %s)", cfg.History.PruneInterval)
 	}
 
-	tagIndexer := viper.GetString(CfgTagIndexerBackend)
-	switch strings.ToLower(tagIndexer) {
-	case "":
-		cfg.TagIndexer = tagindexer.NewNopBackend()
-	case tagindexer.BleveBackendName:
-		cfg.TagIndexer = tagindexer.NewBleveBackend()
-	default:
-		return nil, fmt.Errorf("runtime/registry: unknown tag indexer backend: %s", tagIndexer)
-	}
-
 	return &cfg, nil
 }
 
@@ -279,8 +262,6 @@ func init() {
 	Flags.String(CfgHistoryPrunerStrategy, history.PrunerStrategyNone, "History pruner strategy")
 	Flags.Duration(CfgHistoryPrunerInterval, 2*time.Minute, "History pruning interval")
 	Flags.Uint64(CfgHistoryPrunerKeepLastNum, 600, "Keep last history pruner: number of last rounds to keep")
-
-	Flags.String(CfgTagIndexerBackend, "", "Runtime tag indexer backend (disabled by default)")
 
 	_ = viper.BindPFlags(Flags)
 }

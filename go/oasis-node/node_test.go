@@ -178,7 +178,6 @@ func newTestNode(t *testing.T) *testNode {
 	viper.Set("datadir", dataDir)
 	viper.Set("log.file", filepath.Join(dataDir, "test-node.log"))
 	viper.Set(runtimeRegistry.CfgSupported, testRuntimeID.String())
-	viper.Set(runtimeRegistry.CfgTagIndexerBackend, "bleve")
 	viper.Set(runtimeRegistry.CfgRuntimePaths, map[string]string{
 		testRuntimeID.String(): "mock-runtime",
 	})

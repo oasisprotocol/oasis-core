@@ -19,17 +19,19 @@ replace (
 )
 
 require (
-	github.com/blevesearch/bleve v1.0.14
 	github.com/btcsuite/btcutil v1.0.2
 	github.com/cenkalti/backoff/v4 v4.1.1
 	github.com/dgraph-io/badger/v2 v2.2007.2
 	github.com/dgraph-io/badger/v3 v3.2103.1
 	github.com/eapache/channels v1.1.0
+	github.com/facebookgo/ensure v0.0.0-20200202191622-63f1cf65ac4c // indirect
+	github.com/facebookgo/subset v0.0.0-20200203212716-c811ad88dec4 // indirect
 	github.com/fxamacker/cbor/v2 v2.2.1-0.20200820021930-bafca87fa6db
 	github.com/go-kit/log v0.1.0
 	github.com/golang/protobuf v1.5.2
 	github.com/golang/snappy v0.0.4
 	github.com/google/btree v1.0.1
+	github.com/gopherjs/gopherjs v0.0.0-20190910122728-9d188e94fb99 // indirect
 	github.com/hashicorp/go-hclog v0.16.2
 	github.com/hashicorp/go-multierror v1.1.1
 	github.com/hashicorp/go-plugin v1.4.2
