@@ -8,6 +8,7 @@ edition = "2018"
 clap = "2.29.1"
 failure = "0.1.5"
 futures = { version = "0.3.16", features = ["compat", "io-compat"] }
+# NOTE: The version of tokio is constrained by what the upstream enclave-runner is using.
 tokio = { version = "0.2", features = ["full"] }
 
 [target.'cfg(target_os = "linux")'.dependencies]
