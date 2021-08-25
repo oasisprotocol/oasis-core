@@ -262,6 +262,18 @@ func testQuery(
 	require.True(t, strings.HasPrefix(decResp3, "hello world"), "Query response at round 1 should be correct")
 	require.EqualValues(t, decResp2, decResp3, "Query responses for same round should be equal (round consensus height should be included in response)")
 
+	// Make sure that using api.RoundLatest works for queries.
+	rsp, err = c.Query(ctx, &api.QueryRequest{
+		RuntimeID: runtimeID,
+		Round:     api.RoundLatest,
+		Method:    "hello",
+	})
+	require.NoError(t, err, "Query")
+	var decResp4 string
+	err = cbor.Unmarshal(rsp.Data, &decResp4)
+	require.NoError(t, err, "cbor.Unmarshal(<QueryResponse.Data>)")
+	require.True(t, strings.HasPrefix(decResp4, "hello world"), "Query response at latest round should be correct")
+
 	// Execute CheckTx using the mock runtime host.
 	err = c.CheckTx(ctx, &api.CheckTxRequest{
 		RuntimeID: runtimeID,

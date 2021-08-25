@@ -497,7 +497,7 @@ func (sc *serviceClient) reindexBlocks(currentHeight int64, bh api.BlockHistory)
 
 	if lastRound == api.RoundInvalid {
 		sc.logger.Debug("no new round reindexed, return latest known round")
-		switch blk, err := bh.GetLatestBlock(sc.ctx); err {
+		switch blk, err := bh.GetBlock(sc.ctx, api.RoundLatest); err {
 		case api.ErrNotFound:
 		case nil:
 			lastRound = blk.Header.Round

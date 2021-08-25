@@ -7,6 +7,9 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/roothash/api/block"
 )
 
+// RoundLatest is a special round number always referring to the latest round.
+const RoundLatest = RoundInvalid
+
 // BlockHistory is the root hash block history keeper interface.
 //
 // All methods operate on a specific runtime.
@@ -31,14 +34,17 @@ type BlockHistory interface {
 	LastConsensusHeight() (int64, error)
 
 	// GetBlock returns the block at a specific round.
+	//
+	// Passing the special value `RoundLatest` will return the latest block.
 	GetBlock(ctx context.Context, round uint64) (*block.Block, error)
 
 	// GetAnnotatedBlock returns the annotated block at a specific round.
+	//
+	// Passing the special value `RoundLatest` will return the latest annotated block.
 	GetAnnotatedBlock(ctx context.Context, round uint64) (*AnnotatedBlock, error)
 
-	// GetLatestBlock returns the block at latest round.
-	GetLatestBlock(ctx context.Context) (*block.Block, error)
-
 	// GetRoundResults returns the round results for the given round.
+	//
+	// Passing the special value `RoundLatest` will return results for the latest round.
 	GetRoundResults(ctx context.Context, round uint64) (*RoundResults, error)
 }

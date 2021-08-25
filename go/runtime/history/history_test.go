@@ -45,8 +45,8 @@ func TestHistory(t *testing.T) {
 	require.Error(err, "GetAnnotatedBlock should fail for non-indexed block")
 	require.Equal(roothash.ErrNotFound, err)
 
-	_, err = history.GetLatestBlock(context.Background())
-	require.Error(err, "GetLatestBlock should fail for no indexed block")
+	_, err = history.GetBlock(context.Background(), roothash.RoundLatest)
+	require.Error(err, "GetBlock(RoundLatest) should fail for no indexed block")
 	require.Equal(roothash.ErrNotFound, err)
 
 	err = history.ConsensusCheckpoint(42)
@@ -102,9 +102,9 @@ func TestHistory(t *testing.T) {
 	require.NoError(err, "GetAnnotatedBlock")
 	require.Equal(&blk, gotAnnBlk, "GetAnnotatedBlock should return the correct block")
 
-	gotLatestBlk, err := history.GetLatestBlock(context.Background())
-	require.NoError(err, "GetLatestBlock")
-	require.Equal(&putBlk, gotLatestBlk, "GetLatestBlock should return the correct block")
+	gotLatestBlk, err := history.GetBlock(context.Background(), roothash.RoundLatest)
+	require.NoError(err, "GetBlock(RoundLatest)")
+	require.Equal(&putBlk, gotLatestBlk, "GetBlock(RoundLatest) should return the correct block")
 
 	gotResults, err := history.GetRoundResults(context.Background(), 10)
 	require.NoError(err, "GetRoundResults")
@@ -135,9 +135,9 @@ func TestHistory(t *testing.T) {
 	require.NoError(err, "GetAnnotatedBlock")
 	require.Equal(&blk, gotAnnBlk, "GetAnnotatedBlock should return the correct block")
 
-	gotLatestBlk, err = history.GetLatestBlock(context.Background())
-	require.NoError(err, "GetLatestBlock")
-	require.Equal(&putBlk, gotLatestBlk, "GetLatestBlock should return the correct block")
+	gotLatestBlk, err = history.GetBlock(context.Background(), roothash.RoundLatest)
+	require.NoError(err, "GetBlock(RoundLatest)")
+	require.Equal(&putBlk, gotLatestBlk, "GetBlock(RoundLatest) should return the correct block")
 
 	gotResults, err = history.GetRoundResults(context.Background(), 10)
 	require.NoError(err, "GetRoundResults")
