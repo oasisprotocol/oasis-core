@@ -130,7 +130,7 @@ func (r *runtime) Call(ctx context.Context, body *protocol.Body) (*protocol.Body
 			}}, nil
 		default:
 			return &protocol.Body{RuntimeQueryResponse: &protocol.RuntimeQueryResponse{
-				Data: cbor.Marshal(rq.Method + " world"),
+				Data: cbor.Marshal(rq.Method + " world at:" + fmt.Sprintf("%d", rq.ConsensusBlock.Height)),
 			}}, nil
 		}
 	default:

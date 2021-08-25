@@ -76,6 +76,10 @@ func (h *nopHistory) GetBlock(ctx context.Context, round uint64) (*block.Block, 
 	return nil, errNopHistory
 }
 
+func (h *nopHistory) GetAnnotatedBlock(ctx context.Context, round uint64) (*roothash.AnnotatedBlock, error) {
+	return nil, errNopHistory
+}
+
 func (h *nopHistory) GetLatestBlock(ctx context.Context) (*block.Block, error) {
 	return nil, errNopHistory
 }
@@ -153,6 +157,13 @@ func (h *runtimeHistory) GetBlock(ctx context.Context, round uint64) (*block.Blo
 	}
 
 	return annBlk.Block, nil
+}
+
+func (h *runtimeHistory) GetAnnotatedBlock(ctx context.Context, round uint64) (*roothash.AnnotatedBlock, error) {
+	if ctx.Err() != nil {
+		return nil, ctx.Err()
+	}
+	return h.db.getBlock(round)
 }
 
 func (h *runtimeHistory) GetLatestBlock(ctx context.Context) (*block.Block, error) {
