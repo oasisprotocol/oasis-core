@@ -63,12 +63,6 @@ const (
 	// treating that as an error instead.
 	queriesIterationTimeout = 300 * time.Second
 
-	// queriesNumAllowedQueryTxsHistoricalFailures is the number of allowed failures of histortical
-	// `QueryTxs` requests. A historical `QueryTxs` request can fail in case available storage
-	// nodes have gap in history for the queried height, due to restoring from checkpoint. See also:
-	// https://github.com/oasisprotocol/oasis-core/issues/3337
-	queriesNumAllowedQueryTxsHistoricalFailures = 5
-
 	// doQueryAllProposalsEvery configures how often the queries workload should query all (including)
 	// past proposals.
 	doQueryAllProposalsEvery = 10
@@ -93,9 +87,6 @@ type queries struct {
 	scheduler  scheduler.Backend
 	governance governance.Backend
 	runtime    runtimeClient.RuntimeClient
-
-	// queryTxsHistoricalFailures is a counter of historical QueryTxs queries that failed.
-	queryTxsHistoricalFailures uint64
 
 	runtimeGenesisRound uint64
 
@@ -696,67 +687,6 @@ func (q *queries) doRuntimeQueries(ctx context.Context, rng *rand.Rand) error {
 			"err", err,
 		)
 		return fmt.Errorf("runtimeClient.GetBlock, round: %d: %w", round, err)
-	}
-	// GetBlockByHash requires that the block was actually indexed, so wait for it.
-	err = q.runtime.WaitBlockIndexed(ctx, &runtimeClient.WaitBlockIndexedRequest{
-		RuntimeID: q.runtimeID,
-		Round:     round,
-	})
-	if err != nil {
-		q.logger.Error("runtime WaitBlockIndexed failure",
-			"round", round,
-			"err", err,
-		)
-		return fmt.Errorf("runtimeClient.WaitBlockIndexed, round: %d: %w", round, err)
-	}
-	block2, err := q.runtime.GetBlockByHash(ctx, &runtimeClient.GetBlockByHashRequest{
-		RuntimeID: q.runtimeID,
-		BlockHash: block.Header.EncodedHash(),
-	})
-	if err != nil {
-		q.logger.Error("runtime GetBlockByHash failure",
-			"hash", block.Header.EncodedHash(),
-			"latest_round", latestRound,
-			"err", err,
-		)
-		return fmt.Errorf("runtimeClient.GetBlockByHash, hash: %s: %w", block.Header.EncodedHash(), err)
-	}
-	if block.Header.EncodedHash() != block2.Header.EncodedHash() {
-		q.logger.Error("runtime block header hash mismatch",
-			"round", round,
-			"latest_round", latestRound,
-			"round_hash", block.Header.EncodedHash(),
-			"hash", block2.Header.EncodedHash(),
-		)
-		return fmt.Errorf("expected equal blocks, got: byRound: %s byHash: %s", block.Header.EncodedHash(), block2.Header.EncodedHash())
-	}
-
-	_, err = q.runtime.QueryTxs(ctx, &runtimeClient.QueryTxsRequest{
-		RuntimeID: q.runtimeID,
-		Query: runtimeClient.Query{
-			RoundMin: q.runtimeGenesisRound,
-			RoundMax: round,
-		},
-	})
-	if err != nil {
-		q.logger.Error("runtime QueryTxs failure",
-			"round", round,
-			"latest_round", latestRound,
-			"err", err,
-		)
-
-		switch round == latestRound {
-		case false:
-			q.queryTxsHistoricalFailures++
-			// Historical queries are allowed to fail few times.
-			if q.queryTxsHistoricalFailures <= queriesNumAllowedQueryTxsHistoricalFailures {
-				break
-			}
-			fallthrough
-		case true:
-			// Query for latest round should never fail.
-			return fmt.Errorf("runtimeClient.QueryTxs: %w", err)
-		}
 	}
 
 	q.logger.Debug("done runtime queries",

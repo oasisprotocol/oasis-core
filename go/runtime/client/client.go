@@ -11,7 +11,6 @@ import (
 	"github.com/spf13/viper"
 
 	"github.com/oasisprotocol/oasis-core/go/common"
-	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
 	"github.com/oasisprotocol/oasis-core/go/common/errors"
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
 	"github.com/oasisprotocol/oasis-core/go/common/pubsub"
@@ -26,7 +25,6 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/runtime/host"
 	"github.com/oasisprotocol/oasis-core/go/runtime/host/protocol"
 	runtimeRegistry "github.com/oasisprotocol/oasis-core/go/runtime/registry"
-	"github.com/oasisprotocol/oasis-core/go/runtime/tagindexer"
 	"github.com/oasisprotocol/oasis-core/go/runtime/transaction"
 	storage "github.com/oasisprotocol/oasis-core/go/storage/api"
 	"github.com/oasisprotocol/oasis-core/go/worker/common/p2p"
@@ -75,15 +73,6 @@ type runtimeClient struct {
 	maxTransactionAge int64
 
 	logger *logging.Logger
-}
-
-func (c *runtimeClient) tagIndexer(runtimeID common.Namespace) (tagindexer.QueryableBackend, error) {
-	rt, err := c.common.runtimeRegistry.GetRuntime(runtimeID)
-	if err != nil {
-		return nil, err
-	}
-
-	return rt.TagIndexer(), nil
 }
 
 func (c *runtimeClient) getHostedRuntime(ctx context.Context, runtimeID common.Namespace) (host.RichRuntime, error) {
@@ -294,73 +283,6 @@ func (c *runtimeClient) getTxnTree(blk *block.Block) *transaction.Tree {
 	return transaction.NewTree(c.common.storage, ioRoot)
 }
 
-func (c *runtimeClient) getTxnByHash(ctx context.Context, blk *block.Block, txHash hash.Hash) (*transaction.Transaction, error) {
-	tree := c.getTxnTree(blk)
-	defer tree.Close()
-
-	return tree.GetTransaction(ctx, txHash)
-}
-
-// Implements api.RuntimeClient.
-func (c *runtimeClient) GetTx(ctx context.Context, request *api.GetTxRequest) (*api.TxResult, error) {
-	tagIndexer, err := c.tagIndexer(request.RuntimeID)
-	if err != nil {
-		return nil, err
-	}
-
-	blk, err := c.GetBlock(ctx, &api.GetBlockRequest{RuntimeID: request.RuntimeID, Round: request.Round})
-	if err != nil {
-		return nil, err
-	}
-
-	txHash, err := tagIndexer.QueryTxnByIndex(ctx, blk.Header.Round, request.Index)
-	if err != nil {
-		return nil, err
-	}
-
-	tx, err := c.getTxnByHash(ctx, blk, txHash)
-	if err != nil {
-		return nil, err
-	}
-
-	return &api.TxResult{
-		Block:  blk,
-		Index:  request.Index,
-		Input:  tx.Input,
-		Output: tx.Output,
-	}, nil
-}
-
-// Implements api.RuntimeClient.
-func (c *runtimeClient) GetTxByBlockHash(ctx context.Context, request *api.GetTxByBlockHashRequest) (*api.TxResult, error) {
-	tagIndexer, err := c.tagIndexer(request.RuntimeID)
-	if err != nil {
-		return nil, err
-	}
-
-	blk, err := c.GetBlockByHash(ctx, &api.GetBlockByHashRequest{RuntimeID: request.RuntimeID, BlockHash: request.BlockHash})
-	if err != nil {
-		return nil, err
-	}
-
-	txHash, err := tagIndexer.QueryTxnByIndex(ctx, blk.Header.Round, request.Index)
-	if err != nil {
-		return nil, err
-	}
-
-	tx, err := c.getTxnByHash(ctx, blk, txHash)
-	if err != nil {
-		return nil, err
-	}
-
-	return &api.TxResult{
-		Block:  blk,
-		Index:  request.Index,
-		Input:  tx.Input,
-		Output: tx.Output,
-	}, nil
-}
-
 // Implements api.RuntimeClient.
 func (c *runtimeClient) GetTransactions(ctx context.Context, request *api.GetTransactionsRequest) ([][]byte, error) {
 	blk, err := c.GetBlock(ctx, &api.GetBlockRequest{RuntimeID: request.RuntimeID, Round: request.Round})
@@ -411,21 +333,6 @@ func (c *runtimeClient) GetEvents(ctx context.Context, request *api.GetEventsReq
 }
 
 // Implements api.RuntimeClient.
-func (c *runtimeClient) GetBlockByHash(ctx context.Context, request *api.GetBlockByHashRequest) (*block.Block, error) {
-	tagIndexer, err := c.tagIndexer(request.RuntimeID)
-	if err != nil {
-		return nil, err
-	}
-
-	round, err := tagIndexer.QueryBlock(ctx, request.BlockHash)
-	if err != nil {
-		return nil, err
-	}
-
-	return c.GetBlock(ctx, &api.GetBlockRequest{RuntimeID: request.RuntimeID, Round: round})
-}
-
-// Implements api.RuntimeClient.
 func (c *runtimeClient) Query(ctx context.Context, request *api.QueryRequest) (*api.QueryResponse, error) {
 	hrt, err := c.getHostedRuntime(ctx, request.RuntimeID)
 	if err != nil {
@@ -455,98 +362,6 @@ func (c *runtimeClient) Query(ctx context.Context, request *api.QueryRequest) (*
 		return nil, err
 	}
 	return &api.QueryResponse{Data: data}, nil
-}
-
-// Implements api.RuntimeClient.
-func (c *runtimeClient) QueryTx(ctx context.Context, request *api.QueryTxRequest) (*api.TxResult, error) {
-	tagIndexer, err := c.tagIndexer(request.RuntimeID)
-	if err != nil {
-		return nil, err
-	}
-
-	round, txHash, txIndex, err := tagIndexer.QueryTxn(ctx, request.Key, request.Value)
-	if err != nil {
-		return nil, err
-	}
-
-	blk, err := c.GetBlock(ctx, &api.GetBlockRequest{RuntimeID: request.RuntimeID, Round: round})
-	if err != nil {
-		return nil, err
-	}
-
-	tx, err := c.getTxnByHash(ctx, blk, txHash)
-	if err != nil {
-		return nil, err
-	}
-
-	return &api.TxResult{
-		Block:  blk,
-		Index:  txIndex,
-		Input:  tx.Input,
-		Output: tx.Output,
-	}, nil
-}
-
-// Implements api.RuntimeClient.
-func (c *runtimeClient) QueryTxs(ctx context.Context, request *api.QueryTxsRequest) ([]*api.TxResult, error) {
-	tagIndexer, err := c.tagIndexer(request.RuntimeID)
-	if err != nil {
-		return nil, err
-	}
-
-	results, err := tagIndexer.QueryTxns(ctx, request.Query)
-	if err != nil {
-		return nil, err
-	}
-
-	output := []*api.TxResult{}
-	for round, txResults := range results {
-		// Fetch block for the given round.
-		var blk *block.Block
-		blk, err = c.GetBlock(ctx, &api.GetBlockRequest{RuntimeID: request.RuntimeID, Round: round})
-		if err != nil {
-			return nil, fmt.Errorf("failed to fetch block: %w", err)
-		}
-
-		tree := c.getTxnTree(blk)
-		defer tree.Close()
-
-		// Extract transaction data for the specified indices.
-		var txHashes []hash.Hash
-		for _, txResult := range txResults {
-			txHashes = append(txHashes, txResult.TxHash)
-		}
-
-		txes, err := tree.GetTransactionMultiple(ctx, txHashes)
-		if err != nil {
-			return nil, fmt.Errorf("failed to fetch transaction data: %w", err)
-		}
-		for _, txResult := range txResults {
-			tx, ok := txes[txResult.TxHash]
-			if !ok {
-				return nil, fmt.Errorf("transaction %s not found", txResult.TxHash)
-			}
-
-			output = append(output, &api.TxResult{
-				Block:  blk,
-				Index:  txResult.TxIndex,
-				Input:  tx.Input,
-				Output: tx.Output,
-			})
-		}
-	}
-
-	return output, nil
-}
-
-// Implements api.RuntimeClient.
-func (c *runtimeClient) WaitBlockIndexed(ctx context.Context, request *api.WaitBlockIndexedRequest) error {
-	tagIndexer, err := c.tagIndexer(request.RuntimeID)
-	if err != nil {
-		return err
-	}
-
-	return tagIndexer.WaitBlockIndexed(ctx, request.Round)
 }
 
 // Implements enclaverpc.Transport.

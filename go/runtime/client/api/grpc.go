@@ -32,24 +32,12 @@ var (
 	methodGetGenesisBlock = serviceName.NewMethod("GetGenesisBlock", common.Namespace{})
 	// methodGetBlock is the GetBlock method.
 	methodGetBlock = serviceName.NewMethod("GetBlock", GetBlockRequest{})
-	// methodGetBlockByHash is the GetBlockByHash method.
-	methodGetBlockByHash = serviceName.NewMethod("GetBlockByHash", GetBlockByHashRequest{})
-	// methodGetTx is the GetTx method.
-	methodGetTx = serviceName.NewMethod("GetTx", GetTxRequest{})
-	// methodGetTxByBlockHash is the GetTxByBlockHash method.
-	methodGetTxByBlockHash = serviceName.NewMethod("GetTxByBlockHash", GetTxByBlockHashRequest{})
 	// methodGetTransactions is the GetTransactions method.
 	methodGetTransactions = serviceName.NewMethod("GetTransactions", GetTransactionsRequest{})
 	// methodGetEvents is the GetEvents method.
 	methodGetEvents = serviceName.NewMethod("GetEvents", GetEventsRequest{})
 	// methodQuery is the Query method.
 	methodQuery = serviceName.NewMethod("Query", QueryRequest{})
-	// methodQueryTx is the QueryTx method.
-	methodQueryTx = serviceName.NewMethod("QueryTx", QueryTxRequest{})
-	// methodQueryTxs is the QueryTxs method.
-	methodQueryTxs = serviceName.NewMethod("QueryTxs", QueryTxsRequest{})
-	// methodWaitBlockIndexed is the WaitBlockIndexed method.
-	methodWaitBlockIndexed = serviceName.NewMethod("WaitBlockIndexed", WaitBlockIndexedRequest{})
 
 	// methodWatchBlocks is the WatchBlocks method.
 	methodWatchBlocks = serviceName.NewMethod("WatchBlocks", common.Namespace{})
@@ -84,18 +72,6 @@ var (
 				Handler:    handlerGetBlock,
 			},
 			{
-				MethodName: methodGetBlockByHash.ShortName(),
-				Handler:    handlerGetBlockByHash,
-			},
-			{
-				MethodName: methodGetTx.ShortName(),
-				Handler:    handlerGetTx,
-			},
-			{
-				MethodName: methodGetTxByBlockHash.ShortName(),
-				Handler:    handlerGetTxByBlockHash,
-			},
-			{
 				MethodName: methodGetTransactions.ShortName(),
 				Handler:    handlerGetTransactions,
 			},
@@ -106,18 +82,6 @@ var (
 			{
 				MethodName: methodQuery.ShortName(),
 				Handler:    handlerQuery,
-			},
-			{
-				MethodName: methodQueryTx.ShortName(),
-				Handler:    handlerQueryTx,
-			},
-			{
-				MethodName: methodQueryTxs.ShortName(),
-				Handler:    handlerQueryTxs,
-			},
-			{
-				MethodName: methodWaitBlockIndexed.ShortName(),
-				Handler:    handlerWaitBlockIndexed,
 			},
 		},
 		Streams: []grpc.StreamDesc{
@@ -299,81 +263,6 @@ func handlerGetBlock( // nolint: golint
 	return interceptor(ctx, &rq, info, handler)
 }
 
-func handlerGetBlockByHash( // nolint: golint
-	srv interface{},
-	ctx context.Context,
-	dec func(interface{}) error,
-	interceptor grpc.UnaryServerInterceptor,
-) (interface{}, error) {
-	var rq GetBlockByHashRequest
-	if err := dec(&rq); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		rsp, err := srv.(RuntimeClient).GetBlockByHash(ctx, &rq)
-		return rsp, errorWrapNotFound(err)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: methodGetBlockByHash.FullName(),
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		rsp, err := srv.(RuntimeClient).GetBlockByHash(ctx, req.(*GetBlockByHashRequest))
-		return rsp, errorWrapNotFound(err)
-	}
-	return interceptor(ctx, &rq, info, handler)
-}
-
-func handlerGetTx( // nolint: golint
-	srv interface{},
-	ctx context.Context,
-	dec func(interface{}) error,
-	interceptor grpc.UnaryServerInterceptor,
-) (interface{}, error) {
-	var rq GetTxRequest
-	if err := dec(&rq); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		rsp, err := srv.(RuntimeClient).GetTx(ctx, &rq)
-		return rsp, errorWrapNotFound(err)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: methodGetTx.FullName(),
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		rsp, err := srv.(RuntimeClient).GetTx(ctx, req.(*GetTxRequest))
-		return rsp, errorWrapNotFound(err)
-	}
-	return interceptor(ctx, &rq, info, handler)
-}
-
-func handlerGetTxByBlockHash( // nolint: golint
-	srv interface{},
-	ctx context.Context,
-	dec func(interface{}) error,
-	interceptor grpc.UnaryServerInterceptor,
-) (interface{}, error) {
-	var rq GetTxByBlockHashRequest
-	if err := dec(&rq); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		rsp, err := srv.(RuntimeClient).GetTxByBlockHash(ctx, &rq)
-		return rsp, errorWrapNotFound(err)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: methodGetTxByBlockHash.FullName(),
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		rsp, err := srv.(RuntimeClient).GetTxByBlockHash(ctx, req.(*GetTxByBlockHashRequest))
-		return rsp, errorWrapNotFound(err)
-	}
-	return interceptor(ctx, &rq, info, handler)
-}
-
 func handlerGetTransactions( // nolint: golint
 	srv interface{},
 	ctx context.Context,
@@ -441,77 +330,6 @@ func handlerQuery( // nolint: golint
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		rsp, err := srv.(RuntimeClient).Query(ctx, req.(*QueryRequest))
 		return rsp, errorWrapNotFound(err)
-	}
-	return interceptor(ctx, &rq, info, handler)
-}
-
-func handlerQueryTx( // nolint: golint
-	srv interface{},
-	ctx context.Context,
-	dec func(interface{}) error,
-	interceptor grpc.UnaryServerInterceptor,
-) (interface{}, error) {
-	var rq QueryTxRequest
-	if err := dec(&rq); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		rsp, err := srv.(RuntimeClient).QueryTx(ctx, &rq)
-		return rsp, errorWrapNotFound(err)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: methodQueryTx.FullName(),
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		rsp, err := srv.(RuntimeClient).QueryTx(ctx, req.(*QueryTxRequest))
-		return rsp, errorWrapNotFound(err)
-	}
-	return interceptor(ctx, &rq, info, handler)
-}
-
-func handlerQueryTxs( // nolint: golint
-	srv interface{},
-	ctx context.Context,
-	dec func(interface{}) error,
-	interceptor grpc.UnaryServerInterceptor,
-) (interface{}, error) {
-	var rq QueryTxsRequest
-	if err := dec(&rq); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(RuntimeClient).QueryTxs(ctx, &rq)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: methodQueryTxs.FullName(),
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(RuntimeClient).QueryTxs(ctx, req.(*QueryTxsRequest))
-	}
-	return interceptor(ctx, &rq, info, handler)
-}
-
-func handlerWaitBlockIndexed( // nolint: golint
-	srv interface{},
-	ctx context.Context,
-	dec func(interface{}) error,
-	interceptor grpc.UnaryServerInterceptor,
-) (interface{}, error) {
-	var rq WaitBlockIndexedRequest
-	if err := dec(&rq); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return nil, srv.(RuntimeClient).WaitBlockIndexed(ctx, &rq)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: methodWaitBlockIndexed.FullName(),
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return nil, srv.(RuntimeClient).WaitBlockIndexed(ctx, req.(*WaitBlockIndexedRequest))
 	}
 	return interceptor(ctx, &rq, info, handler)
 }
@@ -596,30 +414,6 @@ func (c *runtimeClient) GetBlock(ctx context.Context, request *GetBlockRequest) 
 	return &rsp, nil
 }
 
-func (c *runtimeClient) GetBlockByHash(ctx context.Context, request *GetBlockByHashRequest) (*block.Block, error) {
-	var rsp block.Block
-	if err := c.conn.Invoke(ctx, methodGetBlockByHash.FullName(), request, &rsp); err != nil {
-		return nil, err
-	}
-	return &rsp, nil
-}
-
-func (c *runtimeClient) GetTx(ctx context.Context, request *GetTxRequest) (*TxResult, error) {
-	var rsp TxResult
-	if err := c.conn.Invoke(ctx, methodGetTx.FullName(), request, &rsp); err != nil {
-		return nil, err
-	}
-	return &rsp, nil
-}
-
-func (c *runtimeClient) GetTxByBlockHash(ctx context.Context, request *GetTxByBlockHashRequest) (*TxResult, error) {
-	var rsp TxResult
-	if err := c.conn.Invoke(ctx, methodGetTxByBlockHash.FullName(), request, &rsp); err != nil {
-		return nil, err
-	}
-	return &rsp, nil
-}
-
 func (c *runtimeClient) GetTransactions(ctx context.Context, request *GetTransactionsRequest) ([][]byte, error) {
 	var rsp [][]byte
 	if err := c.conn.Invoke(ctx, methodGetTransactions.FullName(), request, &rsp); err != nil {
@@ -642,26 +436,6 @@ func (c *runtimeClient) Query(ctx context.Context, request *QueryRequest) (*Quer
 		return nil, err
 	}
 	return &rsp, nil
-}
-
-func (c *runtimeClient) QueryTx(ctx context.Context, request *QueryTxRequest) (*TxResult, error) {
-	var rsp TxResult
-	if err := c.conn.Invoke(ctx, methodQueryTx.FullName(), request, &rsp); err != nil {
-		return nil, err
-	}
-	return &rsp, nil
-}
-
-func (c *runtimeClient) QueryTxs(ctx context.Context, request *QueryTxsRequest) ([]*TxResult, error) {
-	var rsp []*TxResult
-	if err := c.conn.Invoke(ctx, methodQueryTxs.FullName(), request, &rsp); err != nil {
-		return nil, err
-	}
-	return rsp, nil
-}
-
-func (c *runtimeClient) WaitBlockIndexed(ctx context.Context, request *WaitBlockIndexedRequest) error {
-	return c.conn.Invoke(ctx, methodWaitBlockIndexed.FullName(), request, nil)
 }
 
 func (c *runtimeClient) WatchBlocks(ctx context.Context, runtimeID common.Namespace) (<-chan *roothash.AnnotatedBlock, pubsub.ClosableSubscription, error) {

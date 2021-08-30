@@ -64,30 +64,34 @@ func (sc *runtimeMessageImpl) Run(childEnv *env.Env) error {
 	ctx := context.Background()
 	c := sc.Net.ClientController().RuntimeClient
 
-	// We should be at round 2 after the epoch transitions, plus 1 for the genesis block.
-	waitCtx, cancel := context.WithTimeout(ctx, waitTimeout)
-	defer cancel()
-	if err = c.WaitBlockIndexed(waitCtx, &api.WaitBlockIndexedRequest{RuntimeID: runtimeID, Round: 3}); err != nil {
-		return err
-	}
-
-	// Save latest round.
-	sc.Logger.Debug("querying latest round")
-	round, err := c.GetBlock(ctx, &api.GetBlockRequest{RuntimeID: runtimeID, Round: api.RoundLatest})
-	if err != nil {
-		return err
-	}
-	latestRound := round.Header.Round
-	sc.Logger.Debug("latest runtime round", "round", latestRound)
-	if latestRound != 3 {
-		return fmt.Errorf("unexpected latest round, got: %d, expected: %d", latestRound, 3)
-	}
-
 	blkCh, sub, err := c.WatchBlocks(ctx, runtimeID)
 	if err != nil {
 		return err
 	}
 	defer sub.Close()
+
+	// We should be at round 2 after the epoch transitions, plus 1 for the genesis block.
+	sc.Logger.Debug("querying latest round")
+	const expectedRound uint64 = 2 + 1
+WaitLatestRound:
+	for {
+		select {
+		case blk := <-blkCh:
+			round := blk.Block.Header.Round
+			sc.Logger.Debug("seen runtime round", "round", round)
+
+			if round < expectedRound {
+				continue
+			}
+			if round > expectedRound {
+				return fmt.Errorf("unexpected latest round, got: %d, expected: %d", round, expectedRound)
+			}
+			break WaitLatestRound
+		case <-time.After(waitTimeout):
+			return fmt.Errorf("timed out waiting for runtime rounds")
+		}
+	}
+	latestRound := expectedRound
 
 	// Submit a consensus transfer transaction. This should result in two runtime
 	// rounds:

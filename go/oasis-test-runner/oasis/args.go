@@ -310,14 +310,6 @@ func (args *argBuilder) tendermintSupplementarySanity(interval uint64) *argBuild
 	return args
 }
 
-func (args *argBuilder) runtimeTagIndexerBackend(backend string) *argBuilder {
-	args.vec = append(args.vec, Argument{
-		Name:   runtimeRegistry.CfgTagIndexerBackend,
-		Values: []string{backend},
-	})
-	return args
-}
-
 func (args *argBuilder) runtimeClientMaxTransactionAge(maxTxAge int64) *argBuilder {
 	args.vec = append(args.vec, Argument{
 		Name:   runtimeClient.CfgMaxTransactionAge,
