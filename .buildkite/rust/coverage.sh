@@ -53,6 +53,7 @@ cargo tarpaulin \
   --exclude simple-keyvalue \
   --exclude-files '*generated*' \
   --exclude-files tests \
+  --exclude-files runtime/fuzz \
   --exclude-files runtime/src/storage/mkvs/interop \
   --exclude-files tools \
   --coveralls ${coveralls_api_token} \

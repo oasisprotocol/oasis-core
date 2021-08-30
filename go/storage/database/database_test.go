@@ -11,6 +11,7 @@ import (
 
 	"github.com/oasisprotocol/oasis-core/go/common"
 	memorySigner "github.com/oasisprotocol/oasis-core/go/common/crypto/signature/signers/memory"
+	genesisTestHelpers "github.com/oasisprotocol/oasis-core/go/genesis/tests"
 	"github.com/oasisprotocol/oasis-core/go/storage/api"
 	"github.com/oasisprotocol/oasis-core/go/storage/tests"
 )
@@ -54,5 +55,6 @@ func doTestImpl(t *testing.T, backend string) {
 	defer impl.Cleanup()
 	localBackend := impl.(api.LocalBackend)
 
+	genesisTestHelpers.SetTestChainContext()
 	tests.StorageImplementationTests(t, localBackend, impl, testNs, 0)
 }

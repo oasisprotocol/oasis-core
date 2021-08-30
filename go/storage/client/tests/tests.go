@@ -66,7 +66,7 @@ func ClientWorkerTests(
 
 	// Advance the epoch.
 	timeSource := consensus.Beacon().(beacon.SetableBackend)
-	beaconTests.MustAdvanceEpoch(t, timeSource, 1)
+	beaconTests.MustAdvanceEpoch(t, timeSource)
 
 	// Wait for initialization.
 	select {

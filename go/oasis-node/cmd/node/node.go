@@ -26,12 +26,10 @@ import (
 	consensusAPI "github.com/oasisprotocol/oasis-core/go/consensus/api"
 	"github.com/oasisprotocol/oasis-core/go/consensus/tendermint"
 	"github.com/oasisprotocol/oasis-core/go/consensus/tendermint/seed"
-	tendermintTestsGenesis "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/tests/genesis"
 	"github.com/oasisprotocol/oasis-core/go/control"
 	controlAPI "github.com/oasisprotocol/oasis-core/go/control/api"
 	genesisAPI "github.com/oasisprotocol/oasis-core/go/genesis/api"
 	genesisFile "github.com/oasisprotocol/oasis-core/go/genesis/file"
-	genesisTestHelpers "github.com/oasisprotocol/oasis-core/go/genesis/tests"
 	governanceAPI "github.com/oasisprotocol/oasis-core/go/governance/api"
 	"github.com/oasisprotocol/oasis-core/go/ias"
 	iasAPI "github.com/oasisprotocol/oasis-core/go/ias/api"
@@ -492,21 +490,10 @@ func (n *Node) startRuntimeWorkers() error {
 	return nil
 }
 
-func (n *Node) initGenesis(testNode bool) error {
+func (n *Node) initGenesis() error {
 	var err error
 	n.Genesis, err = genesisFile.DefaultFileProvider()
 	if err != nil {
-		if os.IsNotExist(err) && testNode {
-			// Well, there wasn't a genesis document and we're running unit tests,
-			// so use a test node one.
-			if n.Genesis, err = tendermintTestsGenesis.NewTestNodeGenesisProvider(n.Identity); err != nil {
-				return fmt.Errorf("initGenesis: failed to create test node genesis: %w", err)
-			}
-
-			// In case of a test node, always use the test chain context.
-			genesisTestHelpers.SetTestChainContext()
-			return nil
-		}
 		return fmt.Errorf("initGenesis: failed to create local genesis file provider: %w", err)
 	}
 
@@ -545,21 +532,10 @@ func (n *Node) dumpGenesis(ctx context.Context, blockHeight int64, epoch beacon.
 //
 // WARNING: This will misbehave iff cmd != RootCommand().  This is exposed
 // for the benefit of tests and the interface is not guaranteed to be stable.
-func NewNode() (*Node, error) {
-	return newNode(false)
-}
-
-// NewTestNode initializes and launches the (test) Oasis node service.
 //
-// The test node uses a test genesis block and should only be used in
-// unit tests.
-func NewTestNode() (*Node, error) {
-	return newNode(true)
-}
-
 // Note: the reason for having the named err return value here is for the
 // deferred func below to propagate the error.
-func newNode(testNode bool) (node *Node, err error) { // nolint: gocyclo
+func NewNode() (node *Node, err error) { // nolint: gocyclo
 	logger := cmdCommon.Logger()
 
 	node = &Node{
@@ -695,7 +671,7 @@ func newNode(testNode bool) (node *Node, err error) { // nolint: gocyclo
 	}
 
 	// Initialize the genesis provider.
-	if err = node.initGenesis(testNode); err != nil {
+	if err = node.initGenesis(); err != nil {
 		logger.Error("failed to initialize the genesis provider",
 			"err", err,
 		)

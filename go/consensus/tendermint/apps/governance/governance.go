@@ -290,9 +290,6 @@ func (app *governanceApplication) validatorsEscrow(
 	for valID := range currentValidators {
 		var node *node.Node
 		node, err = registryState.NodeBySubKey(ctx, valID)
-		// XXX: in unit tests where DebugStaticValidators is used, the node
-		// might actually not exist in registry - causing a consensus panic here.
-		// Make sure all validators are registered in governance unit tests.
 		if err != nil {
 			return nil, nil, fmt.Errorf("failed to query validator node: %w", err)
 		}

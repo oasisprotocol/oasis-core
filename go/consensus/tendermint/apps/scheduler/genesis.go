@@ -26,42 +26,6 @@ func (app *schedulerApplication) InitChain(ctx *abciAPI.Context, req types.Reque
 		return fmt.Errorf("failed to set consensus parameters: %w", err)
 	}
 
-	if doc.Scheduler.Parameters.DebugStaticValidators {
-		ctx.Logger().Warn("static validators are configured")
-
-		staticValidators := make(map[signature.PublicKey]int64)
-		for _, v := range req.Validators {
-			tmPk := v.GetPubKey()
-			pk := tmPk.GetEd25519()
-
-			if pk == nil {
-				ctx.Logger().Error("invalid static validator public key type",
-					"type", v.GetPubKey(),
-				)
-				return fmt.Errorf("scheduler: invalid static validator public key type: '%v'", v.GetPubKey())
-			}
-
-			var id signature.PublicKey
-			if err = id.UnmarshalBinary(pk); err != nil {
-				ctx.Logger().Error("invalid static validator public key",
-					"err", err,
-					"public_key", hex.EncodeToString(pk),
-				)
-				return fmt.Errorf("scheduler: invalid static validator public key: %w", err)
-			}
-
-			// Use a flat vote weight in this simplified configuration.
-			staticValidators[id] = 1
-		}
-
-		// Add the current validator set to ABCI, so that we can query it later.
-		if err = state.PutCurrentValidators(ctx, staticValidators); err != nil {
-			return fmt.Errorf("failed to set validator set: %w", err)
-		}
-
-		return nil
-	}
-
 	if doc.Scheduler.Parameters.MinValidators <= 0 {
 		return fmt.Errorf("tendermint/scheduler: minimum number of validators not configured")
 	}

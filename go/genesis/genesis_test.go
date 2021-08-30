@@ -80,7 +80,6 @@ func testDoc() genesis.Document {
 				MaxValidators:          100,
 				MaxValidatorsPerEntity: 100,
 				DebugBypassStake:       true,
-				DebugStaticValidators:  true,
 				// Zero RewardFactorEpochElectionAny is normal.
 			},
 		},
@@ -140,7 +139,7 @@ func TestGenesisChainContext(t *testing.T) {
 
 	// Having to update this every single time the genesis structure
 	// changes isn't annoying at all.
-	require.Equal(t, "4f50ffb995638282d3b3637315bb22be1d3ff4162e0df206991ebc637cc34729", stableDoc.ChainContext())
+	require.Equal(t, "7b6c3cd2cfb52d3bfa7a68ca0dfeb3cf43d4c5b4b3fcc0026436c110db125eba", stableDoc.ChainContext())
 }
 
 func TestGenesisSanityCheck(t *testing.T) {

@@ -11,6 +11,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common"
 	"github.com/oasisprotocol/oasis-core/go/common/crash"
 	memorySigner "github.com/oasisprotocol/oasis-core/go/common/crypto/signature/signers/memory"
+	genesisTestHelpers "github.com/oasisprotocol/oasis-core/go/genesis/tests"
 	"github.com/oasisprotocol/oasis-core/go/storage/api"
 	"github.com/oasisprotocol/oasis-core/go/storage/database"
 	"github.com/oasisprotocol/oasis-core/go/storage/tests"
@@ -49,5 +50,6 @@ func TestCrashingBackendDoNotInterfere(t *testing.T) {
 		"storage.read.after":   0.0,
 	})
 
+	genesisTestHelpers.SetTestChainContext()
 	tests.StorageImplementationTests(t, localBackend, backend, testNs, 0)
 }

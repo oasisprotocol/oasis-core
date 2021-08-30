@@ -39,6 +39,11 @@ const (
 	recvTimeout = 5 * time.Second
 
 	testRuntimeNodeExpiration beacon.EpochTime = 15
+
+	// Runtime owning test entity and validator node entity.
+	preExistingEntities = 2
+	// Validator node.
+	preExistingNodes = 1
 )
 
 var (
@@ -52,8 +57,8 @@ var (
 //
 // WARNING: This assumes that the registry is empty, and will leave
 // a Runtime registered.
-func RegistryImplementationTests(t *testing.T, backend api.Backend, consensus consensusAPI.Backend) {
-	EnsureRegistryEmpty(t, backend)
+func RegistryImplementationTests(t *testing.T, backend api.Backend, consensus consensusAPI.Backend, validatorEntityID signature.PublicKey) {
+	EnsureRegistryClean(t, backend)
 
 	// We need a runtime ID as otherwise the registry will not allow us to
 	// register nodes for roles which require runtimes.
@@ -62,7 +67,7 @@ func RegistryImplementationTests(t *testing.T, backend api.Backend, consensus co
 		runtimeID, runtimeEWID = testRegistryRuntime(t, backend, consensus)
 	})
 
-	testRegistryEntityNodes(t, backend, consensus, runtimeID, runtimeEWID)
+	testRegistryEntityNodes(t, backend, consensus, runtimeID, runtimeEWID, validatorEntityID)
 }
 
 // Add node's ID to node list if it's not already on it.
@@ -90,6 +95,7 @@ func testRegistryEntityNodes( // nolint: gocyclo
 	consensus consensusAPI.Backend,
 	runtimeID common.Namespace,
 	runtimeEWID common.Namespace,
+	validatorEntityID signature.PublicKey,
 ) {
 	ctx := context.Background()
 
@@ -213,13 +219,17 @@ func testRegistryEntityNodes( // nolint: gocyclo
 		var registeredEntities []*entity.Entity
 		registeredEntities, err = backend.GetEntities(ctx, consensusAPI.HeightLatest)
 		require.NoError(err, "GetEntities")
-		// NOTE: The test entity is alway present as it controls a runtime and cannot be removed.
 		testEntity, _, _ := entity.TestEntity()
-		require.Len(registeredEntities, len(entities)+1, "entities after registration")
+		require.Len(registeredEntities, len(entities)+preExistingEntities, "entities after registration")
 
 		seen := make(map[signature.PublicKey]bool)
 		for _, ent := range registeredEntities {
+			// Skip test entity.
 			if ent.ID.Equal(testEntity.ID) {
+				continue
+			}
+			// Skip validator entity.
+			if ent.ID.Equal(validatorEntityID) {
 				continue
 			}
 
@@ -232,7 +242,7 @@ func testRegistryEntityNodes( // nolint: gocyclo
 					break
 				}
 			}
-			require.True(isValid, "bulk retrieved entity was one registered")
+			require.True(isValid, "bulk retrieved entity was the one registered")
 		}
 		require.Len(seen, len(entities), "unique bulk retrieved entities")
 	})
@@ -336,7 +346,7 @@ func testRegistryEntityNodes( // nolint: gocyclo
 
 	getExpectedNodeList := func() []*node.Node {
 		// Derive the expected node list.
-		l := make([]*node.Node, 0, numNodes+len(whitelistedNodes))
+		l := make([]*node.Node, 0, numNodes+len(whitelistedNodes)+preExistingNodes)
 		for _, tns := range nodes {
 			for _, tn := range tns {
 				l = append(l, tn.UpdatedNode)
@@ -354,10 +364,18 @@ func testRegistryEntityNodes( // nolint: gocyclo
 		require := require.New(t)
 
 		expectedNodeList := getExpectedNodeList()
-		epoch = beaconTests.MustAdvanceEpoch(t, timeSource, 1)
+		epoch = beaconTests.MustAdvanceEpoch(t, timeSource)
 
 		registeredNodes, nerr := backend.GetNodes(ctx, consensusAPI.HeightLatest)
 		require.NoError(nerr, "GetNodes")
+
+		// Remove the pre-exiting validator node.
+		for i, nd := range registeredNodes {
+			if nd.EntityID.Equal(validatorEntityID) {
+				registeredNodes = append(registeredNodes[:i], registeredNodes[i+1:]...)
+				break
+			}
+		}
 		require.EqualValues(expectedNodeList, registeredNodes, "node list")
 	})
 
@@ -409,11 +427,18 @@ func testRegistryEntityNodes( // nolint: gocyclo
 		expectedDeregEvents := len(nodes[0])
 		deregisteredNodes := make(map[signature.PublicKey]*node.Node)
 
-		epoch = beaconTests.MustAdvanceEpoch(t, timeSource, 1)
+		epoch = beaconTests.MustAdvanceEpoch(t, timeSource)
 
-		for i := 0; i < expectedDeregEvents; i++ {
+		var deregEvents int
+		for deregEvents < expectedDeregEvents {
 			select {
 			case ev := <-nodeCh:
+				// Skip events by the pre-existing validator node.
+				if ev.Node.EntityID.Equal(validatorEntityID) {
+					continue
+				}
+
+				deregEvents++
 				require.False(ev.IsRegistration, "event is deregistration")
 				deregisteredNodes[ev.Node.ID] = ev.Node
 
@@ -454,6 +479,13 @@ func testRegistryEntityNodes( // nolint: gocyclo
 		expectedNodeList := getExpectedNodeList()
 		registeredNodes, nerr := backend.GetNodes(ctx, consensusAPI.HeightLatest)
 		require.NoError(nerr, "GetNodes")
+		// Remove the pre-exiting validator node.
+		for i, nd := range registeredNodes {
+			if nd.EntityID.Equal(validatorEntityID) {
+				registeredNodes = append(registeredNodes[:i], registeredNodes[i+1:]...)
+				break
+			}
+		}
 		require.EqualValues(expectedNodeList, registeredNodes, "node list")
 
 		// Ensure that registering an expired node will fail.
@@ -476,7 +508,7 @@ func testRegistryEntityNodes( // nolint: gocyclo
 		}
 
 		// Advance the epoch to trigger 0th entity nodes to be removed.
-		_ = beaconTests.MustAdvanceEpoch(t, timeSource, 1)
+		_ = beaconTests.MustAdvanceEpoch(t, timeSource)
 
 		// At this point it should only be possible to deregister 0th entity nodes.
 		err := entities[0].Deregister(consensus)
@@ -514,7 +546,7 @@ func testRegistryEntityNodes( // nolint: gocyclo
 		}
 
 		// Advance the epoch to trigger all nodes to expire and be removed.
-		_ = beaconTests.MustAdvanceEpoch(t, timeSource, uint64(len(entities)+2))
+		_ = beaconTests.MustAdvanceEpochMulti(t, timeSource, consensus.Registry(), uint64(len(entities)+2))
 
 		// Now it should be possible to deregister all remaining entities.
 		for _, v := range entities[1:] {
@@ -558,9 +590,16 @@ func testRegistryEntityNodes( // nolint: gocyclo
 
 		deregisteredNodes := make(map[signature.PublicKey]*node.Node)
 
-		for i := 0; i < numNodes+len(whitelistedNodes); i++ {
+		var deregEvents int
+		for deregEvents < numNodes+len(whitelistedNodes) {
 			select {
 			case ev := <-nodeCh:
+				// Skip events by the pre-existing validator node.
+				if ev.Node.EntityID.Equal(validatorEntityID) {
+					continue
+				}
+
+				deregEvents++
 				require.False(ev.IsRegistration, "event is deregistration")
 				deregisteredNodes[ev.Node.ID] = ev.Node
 			case <-time.After(recvTimeout):
@@ -585,7 +624,7 @@ func testRegistryEntityNodes( // nolint: gocyclo
 
 	// TODO: Test the various failures. (ErrNoSuchEntity is already covered)
 
-	EnsureRegistryEmpty(t, backend)
+	EnsureRegistryClean(t, backend)
 }
 
 func testRegistryRuntime(t *testing.T, backend api.Backend, consensus consensusAPI.Backend) (common.Namespace, common.Namespace) {
@@ -922,21 +961,17 @@ func testRegistryRuntime(t *testing.T, backend api.Backend, consensus consensusA
 	return rtMapByName["WithoutKM"].ID, rtMapByName["EntityWhitelist"].ID
 }
 
-// EnsureRegistryEmpty enforces that the registry has no entities or nodes
-// registered.
-//
-// Note: Runtimes and their owning entities are allowed, as there is no way to deregister them.
-func EnsureRegistryEmpty(t *testing.T, backend api.Backend) {
+// EnsureRegistryClean enforces that the registry is in a clean state before running the registry tests.
+func EnsureRegistryClean(t *testing.T, backend api.Backend) {
 	registeredEntities, err := backend.GetEntities(context.Background(), consensusAPI.HeightLatest)
 	require.NoError(t, err, "GetEntities")
-	// Allow one runtime-controlling entity (the test entity).
-	testEntity, _, _ := entity.TestEntity()
-	require.Len(t, registeredEntities, 1, "registered entities")
-	require.Equal(t, testEntity.ID, registeredEntities[0].ID, "only the test entity can remain registered")
+	// Allow runtime-controlling and the validator node entities.
+	require.Len(t, registeredEntities, preExistingEntities, "registered entities")
 
+	// Allow validator node registered.
 	registeredNodes, err := backend.GetNodes(context.Background(), consensusAPI.HeightLatest)
 	require.NoError(t, err, "GetNodes")
-	require.Len(t, registeredNodes, 0, "registered nodes")
+	require.Len(t, registeredNodes, preExistingNodes, "registered nodes")
 }
 
 // TestEntity is a testing Entity and some common pre-generated/signed
@@ -1561,7 +1596,7 @@ func BulkPopulate(t *testing.T, backend api.Backend, consensus consensusAPI.Back
 	require := require.New(t)
 
 	require.True(len(runtimes) > 0, "at least one runtime")
-	EnsureRegistryEmpty(t, backend)
+	EnsureRegistryClean(t, backend)
 
 	// Create the one entity that has ownership of every single node.
 	entityCh, entitySub, err := backend.WatchEntities(context.Background())
@@ -1687,7 +1722,7 @@ func (rt *TestRuntime) Cleanup(t *testing.T, backend api.Backend, consensus cons
 
 	// Make sure all nodes expire so we can remove the entity.
 	timeSource := consensus.Beacon().(beacon.SetableBackend)
-	_ = beaconTests.MustAdvanceEpoch(t, timeSource, uint64(testRuntimeNodeExpiration+2))
+	_ = beaconTests.MustAdvanceEpochMulti(t, timeSource, consensus.Registry(), uint64(testRuntimeNodeExpiration+2))
 
 	err = rt.entity.Deregister(consensus)
 	require.NoError(err, "DeregisterEntity")
@@ -1704,6 +1739,17 @@ func (rt *TestRuntime) Cleanup(t *testing.T, backend api.Backend, consensus cons
 	for numDereg < len(rt.nodes) {
 		select {
 		case ev := <-nodeCh:
+			// Skip events not by runtime nodes.
+			var found bool
+			for _, nRt := range ev.Node.Runtimes {
+				if nRt.ID.Equal(&rt.Runtime.ID) {
+					found = true
+					break
+				}
+			}
+			if !found {
+				continue
+			}
 			require.False(ev.IsRegistration, "event is deregistration")
 			numDereg++
 		case <-time.After(recvTimeout):
@@ -1711,7 +1757,7 @@ func (rt *TestRuntime) Cleanup(t *testing.T, backend api.Backend, consensus cons
 		}
 	}
 
-	EnsureRegistryEmpty(t, backend)
+	EnsureRegistryClean(t, backend)
 	rt.entity = nil
 	rt.nodes = nil
 }

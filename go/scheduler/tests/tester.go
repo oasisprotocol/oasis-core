@@ -12,6 +12,7 @@ import (
 	beacon "github.com/oasisprotocol/oasis-core/go/beacon/api"
 	beaconTests "github.com/oasisprotocol/oasis-core/go/beacon/tests"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
+	"github.com/oasisprotocol/oasis-core/go/common/identity"
 	"github.com/oasisprotocol/oasis-core/go/common/node"
 	consensusAPI "github.com/oasisprotocol/oasis-core/go/consensus/api"
 	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
@@ -23,7 +24,7 @@ const recvTimeout = 5 * time.Second
 
 // SchedulerImplementationTests exercises the basic functionality of a
 // scheduler backend.
-func SchedulerImplementationTests(t *testing.T, name string, backend api.Backend, consensus consensusAPI.Backend) {
+func SchedulerImplementationTests(t *testing.T, name string, identity *identity.Identity, backend api.Backend, consensus consensusAPI.Backend) {
 	ctx := context.Background()
 	seed := []byte("SchedulerImplementationTests/" + name)
 
@@ -45,7 +46,7 @@ func SchedulerImplementationTests(t *testing.T, name string, backend api.Backend
 
 	// Advance the epoch.
 	timeSource := consensus.Beacon().(beacon.SetableBackend)
-	epoch := beaconTests.MustAdvanceEpoch(t, timeSource, 1)
+	epoch := beaconTests.MustAdvanceEpoch(t, timeSource)
 
 	ensureValidCommittees := func(expectedExecutor, expectedStorage int) {
 		var executor, storage *api.Committee
@@ -126,7 +127,7 @@ func SchedulerImplementationTests(t *testing.T, name string, backend api.Backend
 	rt.Runtime.Storage.MinWriteReplication = 1
 	rt.MustRegister(t, consensus.Registry(), consensus)
 
-	epoch = beaconTests.MustAdvanceEpoch(t, timeSource, 1)
+	epoch = beaconTests.MustAdvanceEpoch(t, timeSource)
 
 	ensureValidCommittees(
 		3,
@@ -136,14 +137,11 @@ func SchedulerImplementationTests(t *testing.T, name string, backend api.Backend
 	// Cleanup the registry.
 	rt.Cleanup(t, consensus.Registry(), consensus)
 
-	// Since the integration tests run with validator elections disabled,
-	// the GetValidator query is special cased to return the node's consensus
-	// identity instead of node identities.
 	validators, err := backend.GetValidators(context.Background(), consensusAPI.HeightLatest)
 	require.NoError(err, "GetValidators")
 
-	require.Len(validators, 1, "should be only one static validator")
-	require.Equal(consensus.ConsensusKey(), validators[0].ID)
+	require.Len(validators, 1, "should be only one validator")
+	require.Equal(identity.NodeSigner.Public(), validators[0].ID)
 	require.EqualValues(1, validators[0].VotingPower)
 }
 

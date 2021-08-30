@@ -59,7 +59,7 @@ func WorkerImplementationTests(
 
 func testInitialEpochTransition(t *testing.T, stateCh <-chan committee.NodeState, beacon beacon.SetableBackend) {
 	// Perform an epoch transition, so that the node gets elected leader.
-	beaconTests.MustAdvanceEpoch(t, beacon, 1)
+	beaconTests.MustAdvanceEpoch(t, beacon)
 
 	// Node should transition to WaitingForBatch state.
 	waitForNodeTransition(t, stateCh, committee.WaitingForBatch)

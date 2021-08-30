@@ -279,7 +279,7 @@ func testProposalClose(t *testing.T, backend api.Backend, consensus consensusAPI
 	timeSource := consensus.Beacon().(beacon.SetableBackend)
 	currentEpoch, err := timeSource.GetEpoch(ctx, consensusAPI.HeightLatest)
 	require.NoError(err, "GetEpoch")
-	beaconTests.MustAdvanceEpoch(t, timeSource, uint64(testState.proposalCloseEpoch.AbsDiff(currentEpoch)))
+	beaconTests.MustAdvanceEpochMulti(t, timeSource, consensus.Registry(), uint64(testState.proposalCloseEpoch.AbsDiff(currentEpoch)))
 
 	for {
 		select {
@@ -392,7 +392,7 @@ WaitForSubmittedVote:
 	timeSource := consensus.Beacon().(beacon.SetableBackend)
 	currentEpoch, err := timeSource.GetEpoch(ctx, consensusAPI.HeightLatest)
 	require.NoError(err, "GetEpoch")
-	beaconTests.MustAdvanceEpoch(t, timeSource, uint64(cancelProposal.ClosesAt.AbsDiff(currentEpoch)))
+	beaconTests.MustAdvanceEpochMulti(t, timeSource, consensus.Registry(), uint64(cancelProposal.ClosesAt.AbsDiff(currentEpoch)))
 
 	// Ensure pending upgrade was removed.
 	for {
