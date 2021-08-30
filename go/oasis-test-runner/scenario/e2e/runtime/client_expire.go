@@ -10,7 +10,6 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/oasis"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/scenario"
 	"github.com/oasisprotocol/oasis-core/go/runtime/client/api"
-	runtimeTransaction "github.com/oasisprotocol/oasis-core/go/runtime/transaction"
 )
 
 // ClientExpire is the ClientExpire node scenario.
@@ -65,7 +64,7 @@ func (sc *clientExpireImpl) Run(childEnv *env.Env) error {
 
 	err = nodeCtrl.RuntimeClient.SubmitTxNoWait(ctx, &api.SubmitTxRequest{
 		RuntimeID: runtimeID,
-		Data: cbor.Marshal(&runtimeTransaction.TxnCall{
+		Data: cbor.Marshal(&TxnCall{
 			Method: "insert",
 			Args: struct {
 				Key   string `json:"key"`
