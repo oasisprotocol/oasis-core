@@ -11,7 +11,6 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/oasis"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/scenario"
 	"github.com/oasisprotocol/oasis-core/go/runtime/client/api"
-	runtimeTransaction "github.com/oasisprotocol/oasis-core/go/runtime/transaction"
 )
 
 // LateStart is the LateStart node basic scenario.
@@ -79,7 +78,7 @@ func (sc *lateStartImpl) Run(childEnv *env.Env) error {
 	}
 	err = ctrl.RuntimeClient.SubmitTxNoWait(ctx, &api.SubmitTxRequest{
 		RuntimeID: runtimeID,
-		Data: cbor.Marshal(&runtimeTransaction.TxnCall{
+		Data: cbor.Marshal(&TxnCall{
 			Method: "insert",
 			Args: struct {
 				Key   string `json:"key"`
@@ -95,7 +94,7 @@ func (sc *lateStartImpl) Run(childEnv *env.Env) error {
 	}
 	_, err = ctrl.RuntimeClient.SubmitTx(ctx, &api.SubmitTxRequest{
 		RuntimeID: runtimeID,
-		Data: cbor.Marshal(&runtimeTransaction.TxnCall{
+		Data: cbor.Marshal(&TxnCall{
 			Method: "insert",
 			Args: struct {
 				Key   string `json:"key"`

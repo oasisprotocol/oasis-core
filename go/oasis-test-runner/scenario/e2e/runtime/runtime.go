@@ -19,7 +19,6 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/scenario/e2e"
 	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
 	runtimeClient "github.com/oasisprotocol/oasis-core/go/runtime/client/api"
-	runtimeTransaction "github.com/oasisprotocol/oasis-core/go/runtime/transaction"
 	scheduler "github.com/oasisprotocol/oasis-core/go/scheduler/api"
 	staking "github.com/oasisprotocol/oasis-core/go/staking/api"
 	"github.com/oasisprotocol/oasis-core/go/storage/database"
@@ -56,6 +55,22 @@ var (
 	_            = runtimeID.UnmarshalHex("8000000000000000000000000000000000000000000000000000000000000000")
 	_            = keymanagerID.UnmarshalHex("c000000000000000ffffffffffffffffffffffffffffffffffffffffffffffff")
 )
+
+// TxnCall is a transaction call in the test runtime.
+type TxnCall struct {
+	// Method is the called method name.
+	Method string `json:"method"`
+	// Args are the method arguments.
+	Args interface{} `json:"args"`
+}
+
+// TxnOutput is a transaction call output in the test runtime.
+type TxnOutput struct {
+	// Success can be of any type.
+	Success cbor.RawMessage
+	// Error is a string describing the error message.
+	Error *string
+}
 
 // runtimeImpl is a base class for tests involving oasis-node with runtime.
 type runtimeImpl struct {
@@ -341,10 +356,10 @@ func (sc *runtimeImpl) submitRuntimeTx(ctx context.Context, id common.Namespace,
 	c := sc.Net.ClientController().RuntimeClient
 
 	// Submit a transaction and check the result.
-	var rsp runtimeTransaction.TxnOutput
+	var rsp TxnOutput
 	rawRsp, err := c.SubmitTx(ctx, &runtimeClient.SubmitTxRequest{
 		RuntimeID: id,
-		Data: cbor.Marshal(&runtimeTransaction.TxnCall{
+		Data: cbor.Marshal(&TxnCall{
 			Method: method,
 			Args:   args,
 		}),

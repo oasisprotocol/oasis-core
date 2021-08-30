@@ -18,7 +18,6 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/quantity"
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
 	runtimeClient "github.com/oasisprotocol/oasis-core/go/runtime/client/api"
-	runtimeTransaction "github.com/oasisprotocol/oasis-core/go/runtime/transaction"
 	staking "github.com/oasisprotocol/oasis-core/go/staking/api"
 )
 
@@ -71,6 +70,22 @@ var runtimeRequestWeights = map[runtimeRequest]int{
 // RuntimeFlags are the runtime workload flags.
 var RuntimeFlags = flag.NewFlagSet("", flag.ContinueOnError)
 
+// TxnCall is a transaction call in the test runtime.
+type TxnCall struct {
+	// Method is the called method name.
+	Method string `json:"method"`
+	// Args are the method arguments.
+	Args interface{} `json:"args"`
+}
+
+// TxnOutput is a transaction call output in the test runtime.
+type TxnOutput struct {
+	// Success can be of any type.
+	Success cbor.RawMessage
+	// Error is a string describing the error message.
+	Error *string
+}
+
 type runtime struct {
 	BaseWorkload
 
@@ -107,7 +122,7 @@ func (r *runtime) generateVal(rng *rand.Rand, existingKey bool) string {
 	return fmt.Sprintf("%X", b)
 }
 
-func (r *runtime) validateResponse(key string, rsp *runtimeTransaction.TxnOutput) error {
+func (r *runtime) validateResponse(key string, rsp *TxnOutput) error {
 	var keyExists bool
 	if _, ok := r.reckonedKeyValueState[key]; ok {
 		keyExists = true
@@ -174,8 +189,8 @@ func (r *runtime) validateEvents(ctx context.Context, rtc runtimeClient.RuntimeC
 	return nil
 }
 
-func (r *runtime) submitRuntimeRquest(ctx context.Context, rtc runtimeClient.RuntimeClient, req *runtimeTransaction.TxnCall) (*runtimeTransaction.TxnOutput, uint64, error) {
-	var rsp runtimeTransaction.TxnOutput
+func (r *runtime) submitRuntimeRquest(ctx context.Context, rtc runtimeClient.RuntimeClient, req *TxnCall) (*TxnOutput, uint64, error) {
+	var rsp TxnOutput
 	rtx := &runtimeClient.SubmitTxRequest{
 		RuntimeID: r.runtimeID,
 		Data:      cbor.Marshal(req),
@@ -211,7 +226,7 @@ func (r *runtime) doInsertRequest(ctx context.Context, rng *rand.Rand, rtc runti
 	value := r.generateVal(rng, false)
 
 	// Submit request.
-	req := &runtimeTransaction.TxnCall{
+	req := &TxnCall{
 		Method: "insert",
 		Args: struct {
 			Key   string `json:"key"`
@@ -264,7 +279,7 @@ func (r *runtime) doGetRequest(ctx context.Context, rng *rand.Rand, rtc runtimeC
 	key := r.generateVal(rng, existing)
 
 	// Submit request.
-	req := &runtimeTransaction.TxnCall{
+	req := &TxnCall{
 		Method: "get",
 		Args: struct {
 			Key   string `json:"key"`
@@ -312,7 +327,7 @@ func (r *runtime) doRemoveRequest(ctx context.Context, rng *rand.Rand, rtc runti
 	key := r.generateVal(rng, existing)
 
 	// Submit request.
-	req := &runtimeTransaction.TxnCall{
+	req := &TxnCall{
 		Method: "remove",
 		Args: struct {
 			Key   string `json:"key"`
@@ -468,7 +483,7 @@ func (r *runtime) assertBalanceInvariants(ctx context.Context) error {
 func (r *runtime) doWithdrawRequest(ctx context.Context, rng *rand.Rand, rtc runtimeClient.RuntimeClient) error {
 	// Submit message request.
 	amount := *quantity.NewFromUint64(1)
-	req := &runtimeTransaction.TxnCall{
+	req := &TxnCall{
 		Method: "consensus_withdraw",
 		Args: struct {
 			Withdraw staking.Withdraw `json:"withdraw"`
@@ -513,7 +528,7 @@ func (r *runtime) doTransferRequest(ctx context.Context, rng *rand.Rand, rtc run
 
 	// Submit message request.
 	amount := *quantity.NewFromUint64(1)
-	req := &runtimeTransaction.TxnCall{
+	req := &TxnCall{
 		Method: "consensus_transfer",
 		Args: struct {
 			Transfer staking.Transfer `json:"transfer"`
@@ -558,7 +573,7 @@ func (r *runtime) doAddEscrowRequest(ctx context.Context, rng *rand.Rand, rtc ru
 
 	// Submit message request.
 	amount := *quantity.NewFromUint64(1)
-	req := &runtimeTransaction.TxnCall{
+	req := &TxnCall{
 		Method: "consensus_add_escrow",
 		Args: struct {
 			Escrow staking.Escrow `json:"escrow"`
@@ -605,7 +620,7 @@ func (r *runtime) doReclaimEscrowRequest(ctx context.Context, rng *rand.Rand, rt
 	// Shares should match balance in the test account, as the account is not
 	// getting any rewards or is being slashed.
 	amount := *quantity.NewFromUint64(1)
-	req := &runtimeTransaction.TxnCall{
+	req := &TxnCall{
 		Method: "consensus_reclaim_escrow",
 		Args: struct {
 			ReclaimEscrow staking.ReclaimEscrow `json:"reclaim_escrow"`
