@@ -4,10 +4,8 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
-	"testing"
 	"time"
 
-	"github.com/stretchr/testify/require"
 	tmproto "github.com/tendermint/tendermint/proto/tendermint/types"
 	tmtypes "github.com/tendermint/tendermint/types"
 
@@ -18,26 +16,34 @@ import (
 )
 
 // MakeConsensusEquivocationEvidence creates consensus evidence of equivocation.
-func MakeConsensusEquivocationEvidence(t *testing.T, ident *identity.Identity, blk *consensus.Block, genesis *genesis.Document) *consensus.Evidence {
-	require := require.New(t)
-
+func MakeConsensusEquivocationEvidence(ident *identity.Identity, blk *consensus.Block, genesis *genesis.Document, totalVotingPower, votingPower int64) (*consensus.Evidence, error) {
 	// Create empty directory for private validator metadata.
 	tmpDir, err := ioutil.TempDir("", "oasis-slash-test")
-	require.NoError(err, "TempDir")
+	if err != nil {
+		return nil, err
+	}
 	defer os.RemoveAll(tmpDir)
 
 	// Create two private validators that share the same key as otherwise
 	// double signing will fail.
 	pv1Path := filepath.Join(tmpDir, "pv1")
 	err = os.Mkdir(pv1Path, 0o700)
-	require.NoError(err, "Mkdir")
+	if err != nil {
+		return nil, err
+	}
 	pv1, err := tmcrypto.LoadOrGeneratePrivVal(pv1Path, ident.ConsensusSigner)
-	require.NoError(err, "LoadOrGeneratePrivVal")
+	if err != nil {
+		return nil, err
+	}
 	pv2Path := filepath.Join(tmpDir, "pv2")
 	err = os.Mkdir(pv2Path, 0o700)
-	require.NoError(err, "Mkdir")
+	if err != nil {
+		return nil, err
+	}
 	pv2, err := tmcrypto.LoadOrGeneratePrivVal(pv2Path, ident.ConsensusSigner)
-	require.NoError(err, "LoadOrGeneratePrivVal")
+	if err != nil {
+		return nil, err
+	}
 
 	// Generate fake Tendermint-specific double-signing evidence for the
 	// current node (as this node is the only validator during tests).
@@ -62,18 +68,22 @@ func MakeConsensusEquivocationEvidence(t *testing.T, ident *identity.Identity, b
 
 	ev := &tmtypes.DuplicateVoteEvidence{
 		Timestamp:        blk.Time,
-		TotalVotingPower: 1,
-		ValidatorPower:   1,
+		TotalVotingPower: totalVotingPower,
+		ValidatorPower:   votingPower,
 		VoteA:            makeVote(pv1, chainID, 0, blk.Height, 2, 1, blockID1, blk.Time),
 		VoteB:            makeVote(pv2, chainID, 0, blk.Height, 2, 1, blockID2, blk.Time),
 	}
 
 	proto, err := tmtypes.EvidenceToProto(ev)
-	require.NoError(err, "EvidenceToProto")
+	if err != nil {
+		return nil, err
+	}
 	meta, err := proto.Marshal()
-	require.NoError(err, "proto.Marshal")
+	if err != nil {
+		return nil, err
+	}
 
-	return &consensus.Evidence{Meta: meta}
+	return &consensus.Evidence{Meta: meta}, nil
 }
 
 // makeVote copied from Tendermint test suite.
