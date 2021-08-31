@@ -550,6 +550,13 @@ fn check_nonce(nonce: u64, ctx: &mut TxnContext) -> Result<()> {
     })
 }
 
+fn check_max_messages(ctx: &mut TxnContext) -> Result<()> {
+    if ctx.max_messages < 1 {
+        return Err(anyhow!("message limit too low"));
+    }
+    Ok(())
+}
+
 /// Queries all consensus accounts.
 /// Note: this is a transaction but could be a query in a non-test runtime.
 fn consensus_accounts(
@@ -581,6 +588,7 @@ fn consensus_accounts(
 /// Withdraw from the consensus layer into the runtime account.
 fn consensus_withdraw(args: &Withdraw, ctx: &mut TxnContext) -> Result<()> {
     check_nonce(args.nonce, ctx)?;
+    check_max_messages(ctx)?;
 
     if ctx.check_only {
         return Err(CheckOnlySuccess::default().into());
@@ -605,6 +613,7 @@ fn consensus_withdraw(args: &Withdraw, ctx: &mut TxnContext) -> Result<()> {
 /// Transfer from the runtime account to another account in the consensus layer.
 fn consensus_transfer(args: &Transfer, ctx: &mut TxnContext) -> Result<()> {
     check_nonce(args.nonce, ctx)?;
+    check_max_messages(ctx)?;
 
     if ctx.check_only {
         return Err(CheckOnlySuccess::default().into());
@@ -629,6 +638,7 @@ fn consensus_transfer(args: &Transfer, ctx: &mut TxnContext) -> Result<()> {
 /// Add escrow from the runtime account to an account in the consensus layer.
 fn consensus_add_escrow(args: &AddEscrow, ctx: &mut TxnContext) -> Result<()> {
     check_nonce(args.nonce, ctx)?;
+    check_max_messages(ctx)?;
 
     if ctx.check_only {
         return Err(CheckOnlySuccess::default().into());
@@ -653,6 +663,7 @@ fn consensus_add_escrow(args: &AddEscrow, ctx: &mut TxnContext) -> Result<()> {
 /// Reclaim escrow to the runtime account.
 fn consensus_reclaim_escrow(args: &ReclaimEscrow, ctx: &mut TxnContext) -> Result<()> {
     check_nonce(args.nonce, ctx)?;
+    check_max_messages(ctx)?;
 
     if ctx.check_only {
         return Err(CheckOnlySuccess::default().into());
@@ -677,6 +688,7 @@ fn consensus_reclaim_escrow(args: &ReclaimEscrow, ctx: &mut TxnContext) -> Resul
 /// Update existing runtime with given descriptor.
 fn update_runtime(args: &UpdateRuntime, ctx: &mut TxnContext) -> Result<()> {
     check_nonce(args.nonce, ctx)?;
+    check_max_messages(ctx)?;
 
     if ctx.check_only {
         return Err(CheckOnlySuccess::default().into());

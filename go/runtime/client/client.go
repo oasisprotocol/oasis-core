@@ -229,8 +229,9 @@ func (c *runtimeClient) checkTx(ctx context.Context, request *api.CheckTxRequest
 	if err != nil {
 		return nil, fmt.Errorf("client: failed to get current epoch: %w", err)
 	}
+	maxMessages := rs.Runtime.Executor.MaxMessages
 
-	resp, err := rt.CheckTx(ctx, rs.CurrentBlock, lb, epoch, transaction.RawBatch{request.Data})
+	resp, err := rt.CheckTx(ctx, rs.CurrentBlock, lb, epoch, maxMessages, transaction.RawBatch{request.Data})
 	if err != nil {
 		return nil, fmt.Errorf("client: local transaction check failed: %w", err)
 	}
@@ -357,7 +358,14 @@ func (c *runtimeClient) Query(ctx context.Context, request *api.QueryRequest) (*
 		return nil, fmt.Errorf("client: failed to get epoch at height %d: %w", annBlk.Height, err)
 	}
 
-	data, err := hrt.Query(ctx, annBlk.Block, lb, epoch, request.Method, request.Args)
+	// Fetch the active descriptor so we can get the current message limits.
+	rtDsc, err := rt.ActiveDescriptor(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("client: failed to get active runtime descriptor: %w", err)
+	}
+	maxMessages := rtDsc.Executor.MaxMessages
+
+	data, err := hrt.Query(ctx, annBlk.Block, lb, epoch, maxMessages, request.Method, request.Args)
 	if err != nil {
 		return nil, err
 	}

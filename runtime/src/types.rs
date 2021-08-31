@@ -162,6 +162,7 @@ pub enum Body {
         inputs: TxnBatch,
         block: Block,
         epoch: EpochTime,
+        max_messages: u32,
     },
     RuntimeCheckTxBatchResponse {
         results: Vec<CheckTxResult>,
@@ -189,6 +190,7 @@ pub enum Body {
         consensus_block: LightBlock,
         header: Header,
         epoch: EpochTime,
+        max_messages: u32,
         method: String,
         #[cbor(optional)]
         args: cbor::Value,

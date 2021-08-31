@@ -276,6 +276,7 @@ impl Dispatcher {
                     inputs,
                     block,
                     epoch,
+                    max_messages,
                 } => {
                     let light_block = consensus_block.decode_meta()?;
                     let consensus_state = ConsensusState::from_protocol(
@@ -296,7 +297,7 @@ impl Dispatcher {
                         block,
                         epoch,
                         Default::default(),
-                        0,
+                        max_messages,
                         true,
                     )
                 }
@@ -308,6 +309,7 @@ impl Dispatcher {
                     consensus_block,
                     header,
                     epoch,
+                    max_messages,
                     method,
                     args,
                 } => {
@@ -327,6 +329,7 @@ impl Dispatcher {
                         ctx,
                         header,
                         epoch,
+                        max_messages,
                         method,
                         args,
                     )
@@ -365,6 +368,7 @@ impl Dispatcher {
         ctx: Context,
         header: Header,
         epoch: EpochTime,
+        max_messages: u32,
         method: String,
         args: cbor::Value,
     ) -> Result<Body, Error> {
@@ -405,7 +409,7 @@ impl Dispatcher {
             &header,
             epoch,
             &results,
-            0,
+            max_messages,
             true,
         );
         let mut overlay = OverlayTree::new(&mut cache.mkvs);

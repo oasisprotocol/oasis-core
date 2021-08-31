@@ -211,6 +211,10 @@ type RuntimeCheckTxBatchRequest struct {
 	Block block.Block `json:"block"`
 	// Epoch is the current epoch number.
 	Epoch beacon.EpochTime `json:"epoch"`
+
+	// MaxMessages is the maximum number of messages that can be emitted in this
+	// round. Any more messages will be rejected by the consensus layer.
+	MaxMessages uint32 `json:"max_messages"`
 }
 
 // CheckTxResult contains the result of a CheckTx operation.
@@ -320,6 +324,10 @@ type RuntimeQueryRequest struct {
 	Header block.Header `json:"header"`
 	// Epoch is the current epoch number.
 	Epoch beacon.EpochTime `json:"epoch"`
+
+	// MaxMessages is the maximum number of messages that can be emitted in this
+	// round. Any more messages will be rejected by the consensus layer.
+	MaxMessages uint32 `json:"max_messages"`
 
 	Method string          `json:"method"`
 	Args   cbor.RawMessage `json:"args,omitempty"`
