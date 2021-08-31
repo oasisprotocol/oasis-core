@@ -31,6 +31,7 @@ source .buildkite/rust/common.sh
 #####################################################################
 if [ ! -x ${CARGO_INSTALL_ROOT}/bin/cargo-elf2sgxs ]; then
     cargo install \
+        --locked \
         --force \
         --path tools \
         --debug
