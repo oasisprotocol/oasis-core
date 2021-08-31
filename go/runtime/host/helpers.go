@@ -32,6 +32,7 @@ type RichRuntime interface {
 		rb *block.Block,
 		lb *consensus.LightBlock,
 		epoch beacon.EpochTime,
+		maxMessages uint32,
 		batch transaction.RawBatch,
 	) ([]protocol.CheckTxResult, error)
 
@@ -41,6 +42,7 @@ type RichRuntime interface {
 		rb *block.Block,
 		lb *consensus.LightBlock,
 		epoch beacon.EpochTime,
+		maxMessages uint32,
 		method string,
 		args cbor.RawMessage,
 	) (cbor.RawMessage, error)
@@ -64,6 +66,7 @@ func (r *richRuntime) CheckTx(
 	rb *block.Block,
 	lb *consensus.LightBlock,
 	epoch beacon.EpochTime,
+	maxMessages uint32,
 	batch transaction.RawBatch,
 ) ([]protocol.CheckTxResult, error) {
 	if rb == nil || lb == nil {
@@ -76,6 +79,7 @@ func (r *richRuntime) CheckTx(
 			Inputs:         batch,
 			Block:          *rb,
 			Epoch:          epoch,
+			MaxMessages:    maxMessages,
 		},
 	})
 	switch {
@@ -95,6 +99,7 @@ func (r *richRuntime) Query(
 	rb *block.Block,
 	lb *consensus.LightBlock,
 	epoch beacon.EpochTime,
+	maxMessages uint32,
 	method string,
 	args cbor.RawMessage,
 ) (cbor.RawMessage, error) {
@@ -107,6 +112,7 @@ func (r *richRuntime) Query(
 			ConsensusBlock: *lb,
 			Header:         rb.Header,
 			Epoch:          epoch,
+			MaxMessages:    maxMessages,
 			Method:         method,
 			Args:           args,
 		},
@@ -127,7 +133,7 @@ func (r *richRuntime) QueryBatchLimits(
 	lb *consensus.LightBlock,
 	epoch beacon.EpochTime,
 ) (map[transaction.Weight]uint64, error) {
-	resp, err := r.Query(ctx, rb, lb, epoch, protocol.MethodQueryBatchWeightLimits, nil)
+	resp, err := r.Query(ctx, rb, lb, epoch, 0, protocol.MethodQueryBatchWeightLimits, nil)
 	if err != nil {
 		return nil, err
 	}

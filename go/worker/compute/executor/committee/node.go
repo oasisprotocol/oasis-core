@@ -607,8 +607,18 @@ func (n *Node) checkTxBatch() {
 	currentEpoch := n.commonNode.Group.GetEpochSnapshot().GetEpochNumber()
 	n.commonNode.CrossNode.Unlock()
 
+	// Fetch the active descriptor so we can get the current message limits.
+	rtDsc, err := n.commonNode.Runtime.ActiveDescriptor(n.ctx)
+	if err != nil {
+		n.logger.Error("failed to get active runtime descriptor",
+			"err", err,
+		)
+		return
+	}
+	currentMaxMessages := rtDsc.Executor.MaxMessages
+
 	// Check transaction batch.
-	results, err := rt.CheckTx(n.ctx, currentBlock, currentConsensusBlock, currentEpoch, batch)
+	results, err := rt.CheckTx(n.ctx, currentBlock, currentConsensusBlock, currentEpoch, currentMaxMessages, batch)
 	if err != nil {
 		n.logger.Error("transaction batch check tx error", "err", err)
 		return
