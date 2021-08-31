@@ -14,7 +14,6 @@
 #![feature(box_into_pin)]
 #![feature(arbitrary_self_types)]
 #![feature(iter_map_while)]
-#![feature(int_error_matching)]
 // Allow until oasis-core#3572.
 #![allow(deprecated)]
 
