@@ -13,8 +13,7 @@ build-targets := build-tools build-runtimes build-rust build-go
 
 build-tools:
 	@$(ECHO) "$(MAGENTA)*** Building Rust tools...$(OFF)"
-	@# Suppress "binary already exists" error by redirecting stderr and stdout to /dev/null.
-	@CARGO_TARGET_DIR=target/default cargo install --path tools >/dev/null 2>&1 || true
+	@CARGO_TARGET_DIR=target/default cargo install --locked --path tools
 
 # NOTE: We epxplictly set CARGO_TARGET_DIR as a workaround to avoid
 #       recompilations in newer cargo nightly builds.

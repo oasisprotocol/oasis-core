@@ -434,6 +434,8 @@ func RegisterScenarios() error {
 		ByzantineBeaconHonest,
 		ByzantineBeaconCommitStraggler,
 		ByzantineBeaconRevealStraggler,
+		// ValidatorEquivocation test.
+		ValidatorEquivocation,
 	} {
 		if err := cmd.Register(s); err != nil {
 			return err

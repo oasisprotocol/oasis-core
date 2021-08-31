@@ -1171,7 +1171,9 @@ func testSlashConsensusEquivocation(
 	genesis, err := consensus.GetGenesisDocument(ctx)
 	require.NoError(err, "GetGenesisDocument")
 
-	err = consensus.SubmitEvidence(ctx, tendermintTests.MakeConsensusEquivocationEvidence(t, ident, blk, genesis))
+	evidence, err := tendermintTests.MakeConsensusEquivocationEvidence(ident, blk, genesis, 1, 1)
+	require.NoError(err, "MakeConsensusEquivocationEvidence")
+	err = consensus.SubmitEvidence(ctx, evidence)
 	require.NoError(err, "SubmitEvidence")
 
 	// Wait for the node to get slashed.
