@@ -82,9 +82,8 @@ type ConsensusParameters struct {
 
 // VRFParameters are the VRF scheduler parameters.
 type VRFParameters struct {
-  // GenesisAlpha is the alpha_string value to be used for the genesis
-  // epoch.
-  GenesisAlpha []byte `json:"genesis_alpha"`
+  // GenesisEpoch is the first epoch which the VRF based elections will occur.
+  GenesisEpoch epochtime.EpochTime `json:"genesis_epoch"`
 
   // ProofSubmissionDelay is the wait period in blocks after an epoch
   // transition that nodes MUST wait before attempting to submit a
@@ -92,16 +91,6 @@ type VRFParameters struct {
   ProofSubmissionDelay uint64 `json:"proof_delay"`
 }
 ```
-
-How to pick a sensible genesis alpha value is beyond the scope of this document,
-beyond emphasising that it should be hard to predict and influence.  Presumably
-something like the genesis chain context could be used.  Note that while the
-genesis epoch will gather VRF outputs, they are not used to elect committees
-at all.
-
-As an alternative to specifying an alpha, nodes could cooperate and generate
-the initial alpha value using a mechanism similar to the existing random beacon
-at the expense of dramatically increased code complexity.
 
 ### Consensus State, Events, and Transactions
 
@@ -148,9 +137,11 @@ type VRFProve struct {
 
 ### VRF Operation
 
-For the genesis epoch, let the VRF alpha_string input be the hard-coded
-GenesisAlpha parameter.  For every subsequent epoch, let alpha_string be
-derived as:
+For the genesis epoch, let the VRF alpha_string input be derived as:
+
+  `TupleHash256("oasis-core:vrf/alpha", chain_context, I2OSP(epoch,8))`
+
+For every subsequent epoch, let alpha_string be derived as:
 
   `TupleHash256("oasis-core:vrf/alpha", chain_context, I2OSP(epoch, 8), beta_0, ... beta_n)`
 
@@ -208,7 +199,7 @@ For each committee:
 
 Committee elections MUST be skipped for the genesis and subsequent epoch,
 as the genesis epoch has no VRF proofs, and proofs submitted during the
-genesis epoch are based on the hard-coded bootstrap alpha_string.
+genesis epoch are based on the bootstrap alpha_string.
 
 ### VRF Validator Elections
 
@@ -227,6 +218,10 @@ When this situation occurs the validator is selected as follows:
 
   3. Select the node that produced the 0th sortition string in the sorted
      list as the validator.
+
+This is safe to do with beta values generated via the bootstrap alpha string
+as it is up to the entity running the nodes in question as to which ones
+are a validator anyway.
 
 ### Timekeeping Changes
 
