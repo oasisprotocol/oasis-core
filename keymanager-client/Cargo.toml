@@ -11,7 +11,7 @@ oasis-core-keymanager-api-common = { path = "../keymanager-api-common" }
 cbor = { version = "0.1.0", package = "oasis-cbor" }
 
 # Third party.
-futures = "0.3.16"
+futures = "0.3.17"
 io-context = "0.2.0"
 lru = "0.6.6"
 thiserror = "1.0"
