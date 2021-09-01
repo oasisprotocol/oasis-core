@@ -139,11 +139,11 @@ type VRFProve struct {
 
 For the genesis epoch, let the VRF alpha_string input be derived as:
 
-  `TupleHash256("oasis-core:vrf/alpha", chain_context, I2OSP(epoch,8))`
+  `TupleHash256((chain_context, I2OSP(epoch,8)), 256, "oasis-core:vrf/alpha")`
 
 For every subsequent epoch, let alpha_string be derived as:
 
-  `TupleHash256("oasis-core:vrf/alpha", chain_context, I2OSP(epoch, 8), beta_0, ... beta_n)`
+  `TupleHash256((chain_context, I2OSP(epoch, 8), beta_0, ... beta_n), 256, "oasis-core:vrf/alpha")`
 
 where beta_0 through beta_n are the beta_string outputs gathered from
 all valid pi_strings submitted during the previous epoch (after the
@@ -190,7 +190,7 @@ For each committee:
  2. For each eligible (node, commitee kind, committe role) tuple, derive
     a sortition string as:
 
-    `s_n = TupleHash256("oasis-core:vrf/committee", chain_context, I2OSP(epoch, 8), runtime_id, I2OSP(kind, 1), I2OSP(role, 1), beta_n)`
+    `s_n = TupleHash256((chain_context, I2OSP(epoch, 8), runtime_id, I2OSP(kind, 1), I2OSP(role, 1), beta_n), 256, "oasis-core:vrf/committee")`
 
  3. Sort s_0 ... s_n in ascending lexographical order.
 
@@ -212,7 +212,7 @@ When this situation occurs the validator is selected as follows:
   1. For all validator-eligible nodes controlled by the given entity,
      derive a sortition string as:
 
-     `s_n = TupleHash256("oasis-core:vrf/validator", chain_context, I2OSP(epoch, 8), beta_n)`
+     `s_n = TupleHash256((chain_context, I2OSP(epoch, 8), beta_n), 256, "oasis-core:vrf/validator")`
 
   2. Sort s_0 ... s_n, in ascending lexographic order.
 
