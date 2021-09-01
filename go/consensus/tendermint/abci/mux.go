@@ -99,7 +99,10 @@ func (a *ApplicationServer) Start() error {
 	if a.mux.state.timeSource == nil {
 		return fmt.Errorf("mux: timeSource not defined")
 	}
-	return a.mux.checkDependencies()
+	if err := a.mux.checkDependencies(); err != nil {
+		return err
+	}
+	return a.mux.finishInitialization()
 }
 
 // Stop stops the ApplicationServer.
@@ -1140,6 +1143,24 @@ func (mux *abciMux) checkDependencies() error {
 	if missingDeps != nil {
 		return fmt.Errorf("mux: missing dependencies %v", missingDeps)
 	}
+	return nil
+}
+
+func (mux *abciMux) finishInitialization() error {
+	if mux.state.BlockHeight() >= mux.state.InitialHeight() {
+		// Notify applications that state has been synced. This is used to make sure that things
+		// like pending upgrade descriptors are refreshed immediately.
+		ctx := mux.state.NewContext(api.ContextEndBlock, mux.currentTime)
+		defer ctx.Close()
+
+		if err := mux.md.Publish(ctx, api.MessageStateSyncCompleted, nil); err != nil {
+			mux.logger.Error("failed to dispatch state sync completed message",
+				"err", err,
+			)
+			return err
+		}
+	}
+
 	return nil
 }
 

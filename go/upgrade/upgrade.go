@@ -38,11 +38,15 @@ type upgradeManager struct {
 
 // Implements api.Backend.
 func (u *upgradeManager) SubmitDescriptor(ctx context.Context, descriptor *api.Descriptor) error {
+	if descriptor == nil {
+		return api.ErrBadDescriptor
+	}
+
 	u.Lock()
 	defer u.Unlock()
 
 	for _, pu := range u.pending {
-		if pu.Descriptor == descriptor {
+		if pu.Descriptor.Equals(descriptor) {
 			return api.ErrAlreadyPending
 		}
 	}
@@ -89,6 +93,10 @@ func (u *upgradeManager) HasPendingUpgradeAt(ctx context.Context, height int64) 
 
 // Implements api.Backend.
 func (u *upgradeManager) CancelUpgrade(ctx context.Context, descriptor *api.Descriptor) error {
+	if descriptor == nil {
+		return api.ErrBadDescriptor
+	}
+
 	u.Lock()
 	defer u.Unlock()
 
@@ -118,6 +126,10 @@ func (u *upgradeManager) CancelUpgrade(ctx context.Context, descriptor *api.Desc
 
 // Implements api.Backend.
 func (u *upgradeManager) GetUpgrade(ctx context.Context, descriptor *api.Descriptor) (*api.PendingUpgrade, error) {
+	if descriptor == nil {
+		return nil, api.ErrBadDescriptor
+	}
+
 	u.Lock()
 	defer u.Unlock()
 

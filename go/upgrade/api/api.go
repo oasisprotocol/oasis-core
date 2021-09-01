@@ -80,6 +80,9 @@ var (
 	// ErrUpgradeNotFound is the error returned when the upgrade in question cannot be found.
 	ErrUpgradeNotFound = errors.New(ModuleName, 7, "upgrade: not found")
 
+	// ErrBadDescriptor is the error returned when the provided descriptor is bad.
+	ErrBadDescriptor = errors.New(ModuleName, 8, "upgrade: bad descriptor")
+
 	_ prettyprint.PrettyPrinter = (*Descriptor)(nil)
 )
 
