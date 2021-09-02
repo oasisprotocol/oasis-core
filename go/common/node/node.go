@@ -24,6 +24,11 @@ import (
 )
 
 var (
+	// ErrInvalidRole is the error returned when a node role is invalid.
+	ErrInvalidRole = errors.New("node: invalid role")
+	// ErrDuplicateRole is the error returned when a node role is duplicated.
+	ErrDuplicateRole = errors.New("node: duplicate role")
+
 	// ErrInvalidTEEHardware is the error returned when a TEE hardware
 	// implementation is invalid.
 	ErrInvalidTEEHardware = errors.New("node: invalid TEE implementation")
@@ -109,6 +114,16 @@ const (
 	// RoleReserved are all the bits of the Oasis node roles bitmask
 	// that are reserved and must not be used.
 	RoleReserved RolesMask = ((1 << 32) - 1) & ^((RoleStorageRPC << 1) - 1)
+
+	// Human friendly role names.
+	RoleComputeWorkerName = "compute"
+	RoleStorageWorkerName = "storage"
+	RoleKeyManagerName    = "key-manager"
+	RoleValidatorName     = "validator"
+	RoleConsensusRPCName  = "consensus-rpc"
+	RoleStorageRPCName    = "storage-rpc"
+
+	rolesMaskStringSep = ","
 )
 
 // Roles returns a list of available valid roles.
@@ -136,25 +151,80 @@ func (m RolesMask) String() string {
 
 	var ret []string
 	if m&RoleComputeWorker != 0 {
-		ret = append(ret, "compute")
+		ret = append(ret, RoleComputeWorkerName)
 	}
 	if m&RoleStorageWorker != 0 {
-		ret = append(ret, "storage")
+		ret = append(ret, RoleStorageWorkerName)
 	}
 	if m&RoleKeyManager != 0 {
-		ret = append(ret, "key-manager")
+		ret = append(ret, RoleKeyManagerName)
 	}
 	if m&RoleValidator != 0 {
-		ret = append(ret, "validator")
+		ret = append(ret, RoleValidatorName)
 	}
 	if m&RoleConsensusRPC != 0 {
-		ret = append(ret, "consensus-rpc")
+		ret = append(ret, RoleConsensusRPCName)
 	}
 	if m&RoleStorageRPC != 0 {
-		ret = append(ret, "storage-rpc")
+		ret = append(ret, RoleStorageRPCName)
 	}
 
-	return strings.Join(ret, ",")
+	return strings.Join(ret, rolesMaskStringSep)
+}
+
+// MarshalText encodes a RolesMask into text form.
+func (m RolesMask) MarshalText() ([]byte, error) {
+	return []byte(m.String()), nil
+}
+
+func checkDuplicateRole(newRole RolesMask, curRoles RolesMask) error {
+	if curRoles&newRole != 0 {
+		return fmt.Errorf("%w: '%s'", ErrDuplicateRole, newRole)
+	}
+	return nil
+}
+
+// UnmarshalText decodes a text slice into a RolesMask.
+func (m *RolesMask) UnmarshalText(text []byte) error {
+	*m = 0
+	roles := strings.Split(string(text), rolesMaskStringSep)
+	for _, role := range roles {
+		switch role {
+		case RoleComputeWorkerName:
+			if err := checkDuplicateRole(RoleComputeWorker, *m); err != nil {
+				return err
+			}
+			*m |= RoleComputeWorker
+		case RoleStorageWorkerName:
+			if err := checkDuplicateRole(RoleStorageWorker, *m); err != nil {
+				return err
+			}
+			*m |= RoleStorageWorker
+		case RoleKeyManagerName:
+			if err := checkDuplicateRole(RoleKeyManager, *m); err != nil {
+				return err
+			}
+			*m |= RoleKeyManager
+		case RoleValidatorName:
+			if err := checkDuplicateRole(RoleValidator, *m); err != nil {
+				return err
+			}
+			*m |= RoleValidator
+		case RoleConsensusRPCName:
+			if err := checkDuplicateRole(RoleConsensusRPC, *m); err != nil {
+				return err
+			}
+			*m |= RoleConsensusRPC
+		case RoleStorageRPCName:
+			if err := checkDuplicateRole(RoleStorageRPC, *m); err != nil {
+				return err
+			}
+			*m |= RoleStorageRPC
+		default:
+			return fmt.Errorf("%w: '%s'", ErrInvalidRole, role)
+		}
+	}
+	return nil
 }
 
 // ValidateBasic performs basic descriptor validity checks.
