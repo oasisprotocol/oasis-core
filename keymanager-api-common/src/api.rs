@@ -6,6 +6,7 @@ use std::{
 use rand::{rngs::OsRng, Rng};
 use thiserror::Error;
 use x25519_dalek;
+use zeroize::Zeroize;
 
 use oasis_core_runtime::{
     common::{
@@ -17,10 +18,37 @@ use oasis_core_runtime::{
 };
 
 impl_bytes!(KeyPairId, 32, "A 256-bit key pair identifier.");
-impl_bytes!(PrivateKey, 32, "A private key.");
 impl_bytes!(PublicKey, 32, "A public key.");
-impl_bytes!(StateKey, 32, "A state key.");
-impl_bytes!(MasterSecret, 32, "A 256 bit master secret.");
+
+/// A private key.
+#[derive(Clone, Default, cbor::Encode, cbor::Decode, Zeroize)]
+#[cbor(transparent)]
+#[zeroize(drop)]
+pub struct PrivateKey(pub [u8; 32]);
+
+/// A state encryption key.
+#[derive(Clone, Default, cbor::Encode, cbor::Decode, Zeroize)]
+#[cbor(transparent)]
+#[zeroize(drop)]
+pub struct StateKey(pub [u8; 32]);
+
+impl AsRef<[u8]> for StateKey {
+    fn as_ref(&self) -> &[u8] {
+        &self.0
+    }
+}
+
+/// A 256-bit master secret.
+#[derive(Clone, Default, cbor::Encode, cbor::Decode, Zeroize)]
+#[cbor(transparent)]
+#[zeroize(drop)]
+pub struct MasterSecret(pub [u8; 32]);
+
+impl AsRef<[u8]> for MasterSecret {
+    fn as_ref(&self) -> &[u8] {
+        &self.0
+    }
+}
 
 /// Key manager initialization request.
 #[derive(Clone, cbor::Encode, cbor::Decode)]
@@ -124,7 +152,7 @@ impl KeyPair {
     /// Create a `KeyPair`.
     pub fn new(pk: PublicKey, sk: PrivateKey, k: StateKey, sum: Vec<u8>) -> Self {
         Self {
-            input_keypair: InputKeyPair::new(pk, sk),
+            input_keypair: InputKeyPair { pk, sk },
             state_key: k,
             checksum: sum,
         }
@@ -133,7 +161,10 @@ impl KeyPair {
     /// Create a `KeyPair` with only the public key.
     pub fn from_public_key(k: PublicKey, sum: Vec<u8>) -> Self {
         Self {
-            input_keypair: InputKeyPair::new(k, PrivateKey::default()),
+            input_keypair: InputKeyPair {
+                pk: k,
+                sk: PrivateKey::default(),
+            },
             state_key: StateKey::default(),
             checksum: sum,
         }
@@ -142,24 +173,10 @@ impl KeyPair {
 
 #[derive(Clone, cbor::Encode, cbor::Decode)]
 pub struct InputKeyPair {
-    /// Pk
-    pk: PublicKey,
-    /// sk
-    sk: PrivateKey,
-}
-
-impl InputKeyPair {
-    pub fn new(pk: PublicKey, sk: PrivateKey) -> Self {
-        Self { pk, sk }
-    }
-
-    pub fn get_pk(&self) -> PublicKey {
-        self.pk
-    }
-
-    pub fn get_sk(&self) -> PrivateKey {
-        self.sk
-    }
+    /// Public key.
+    pub pk: PublicKey,
+    /// Private key.
+    pub sk: PrivateKey,
 }
 
 /// Context used for the public key signature.

@@ -53,7 +53,7 @@ impl KeyManagerClient for MockClient {
     ) -> BoxFuture<Result<Option<SignedPublicKey>, KeyManagerError>> {
         Box::pin(self.get_or_create_keys(ctx, key_pair_id).and_then(|ck| {
             future::ok(Some(SignedPublicKey {
-                key: ck.input_keypair.get_pk(),
+                key: ck.input_keypair.pk,
                 checksum: vec![],
                 signature: Signature::default(),
             }))

@@ -1,5 +1,8 @@
-///! Key Derivation Function.
-use std::sync::{Arc, RwLock};
+//! Key Derivation Function.
+use std::{
+    convert::TryInto,
+    sync::{Arc, RwLock},
+};
 
 use anyhow::Result;
 use io_context::Context as IoContext;
@@ -111,7 +114,7 @@ impl Inner {
         // State (storage) key.
         let mut k = [0u8; 32];
         xof.squeeze(&mut k);
-        let state_key = StateKey::from(k.to_vec());
+        let state_key = StateKey(k);
 
         // Public/private keypair.
         xof.squeeze(&mut k);
@@ -342,7 +345,7 @@ impl Kdf {
     /// Get the public part of the key.
     pub fn get_public_key(&self, req: &RequestIds) -> Result<Option<PublicKey>> {
         let contract_keys = self.get_or_create_keys(req)?;
-        Ok(Some(contract_keys.input_keypair.get_pk()))
+        Ok(Some(contract_keys.input_keypair.pk))
     }
 
     /// Signs the public key using the key manager key.
@@ -371,7 +374,9 @@ impl Kdf {
         let inner = self.inner.read().unwrap();
 
         match inner.master_secret {
-            Some(master_secret) => Ok(ReplicateResponse { master_secret }),
+            Some(ref master_secret) => Ok(ReplicateResponse {
+                master_secret: master_secret.clone(),
+            }),
             None => Err(KeyManagerError::NotInitialized.into()),
         }
     }
@@ -401,7 +406,7 @@ impl Kdf {
             .open(&nonce, ciphertext.to_vec(), runtime_id.as_ref().to_vec())
             .expect("persisted state is corrupted");
 
-        Some(MasterSecret::from(plaintext))
+        Some(MasterSecret(plaintext.try_into().unwrap()))
     }
 
     fn save_master_secret(master_secret: &MasterSecret, runtime_id: &Namespace) {
@@ -431,7 +436,7 @@ impl Kdf {
         // TODO: Support static keying for debugging.
         let mut master_secret = [0u8; 32];
         rng.fill(&mut master_secret);
-        let master_secret = MasterSecret::from(master_secret.to_vec());
+        let master_secret = MasterSecret(master_secret);
 
         Self::save_master_secret(&master_secret, runtime_id);
 
