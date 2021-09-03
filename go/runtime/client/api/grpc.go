@@ -13,7 +13,6 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/pubsub"
 	roothash "github.com/oasisprotocol/oasis-core/go/roothash/api"
 	"github.com/oasisprotocol/oasis-core/go/roothash/api/block"
-	enclaverpc "github.com/oasisprotocol/oasis-core/go/runtime/enclaverpc/api"
 )
 
 var (
@@ -369,8 +368,6 @@ func RegisterService(server *grpc.Server, service RuntimeClient) {
 }
 
 type runtimeClient struct {
-	enclaverpc.Transport
-
 	conn *grpc.ClientConn
 }
 
@@ -476,7 +473,6 @@ func (c *runtimeClient) WatchBlocks(ctx context.Context, runtimeID common.Namesp
 // NewRuntimeClient creates a new gRPC runtime client service.
 func NewRuntimeClient(c *grpc.ClientConn) RuntimeClient {
 	return &runtimeClient{
-		Transport: enclaverpc.NewTransportClient(c),
-		conn:      c,
+		conn: c,
 	}
 }

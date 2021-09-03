@@ -2,28 +2,27 @@ package client
 
 import (
 	"context"
-	"errors"
 	"fmt"
+	"sync"
 
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
+	keymanagerClient "github.com/oasisprotocol/oasis-core/go/keymanager/client"
+	keymanagerClientApi "github.com/oasisprotocol/oasis-core/go/keymanager/client/api"
+	"github.com/oasisprotocol/oasis-core/go/roothash/api/block"
 	"github.com/oasisprotocol/oasis-core/go/runtime/host"
 	"github.com/oasisprotocol/oasis-core/go/runtime/host/protocol"
 	runtimeRegistry "github.com/oasisprotocol/oasis-core/go/runtime/registry"
-	storage "github.com/oasisprotocol/oasis-core/go/storage/api"
-	"github.com/oasisprotocol/oasis-core/go/storage/mkvs/syncer"
-)
-
-var (
-	errMethodNotSupported   = errors.New("method not supported")
-	errEndpointNotSupported = errors.New("endpoint not supported")
 )
 
 type clientHost struct {
+	sync.Mutex
+
 	*runtimeRegistry.RuntimeHostNode
 
-	runtime   runtimeRegistry.Runtime
-	consensus consensus.Backend
+	runtime          runtimeRegistry.Runtime
+	consensus        consensus.Backend
+	keyManagerClient keymanagerClientApi.Client
 
 	stopCh chan struct{}
 	quitCh chan struct{}
@@ -54,65 +53,45 @@ func (h *clientHost) GetRuntime() runtimeRegistry.Runtime {
 
 // Implements runtimeRegistry.RuntimeHostHandlerFactory.
 func (h *clientHost) NewRuntimeHostHandler() protocol.Handler {
-	return h
+	return runtimeRegistry.NewRuntimeHostHandler(h, h.runtime, h.consensus)
 }
 
 // Implements runtimeRegistry.RuntimeHostHandlerFactory.
-func (h *clientHost) NewNotifier(ctx context.Context, host host.Runtime) protocol.Notifier {
-	return nil
+func (h *clientHost) NewRuntimeHostNotifier(ctx context.Context, host host.Runtime) protocol.Notifier {
+	return runtimeRegistry.NewRuntimeHostNotifier(ctx, h.runtime, host, h.consensus)
 }
 
-// Implements protocol.Handler.
-func (h *clientHost) Handle(ctx context.Context, body *protocol.Body) (*protocol.Body, error) {
-	switch {
-	// Storage.
-	case body.HostStorageSyncRequest != nil:
-		rq := body.HostStorageSyncRequest
+// Implements runtimeRegistry.RuntimeHostHandlerEnvironment.
+func (h *clientHost) GetCurrentBlock(ctx context.Context) (*block.Block, error) {
+	return nil, fmt.Errorf("not available")
+}
 
-		var rs syncer.ReadSyncer
-		switch rq.Endpoint {
-		case protocol.HostStorageEndpointRuntime:
-			// Runtime storage.
-			rs = h.runtime.Storage()
-		case protocol.HostStorageEndpointConsensus:
-			// Consensus state storage.
-			rs = h.consensus.State()
-		default:
-			return nil, errEndpointNotSupported
-		}
+// Implements runtimeRegistry.RuntimeHostHandlerEnvironment.
+func (h *clientHost) GetKeyManagerClient(ctx context.Context) (keymanagerClientApi.Client, error) {
+	h.Lock()
+	defer h.Unlock()
 
-		var rsp *storage.ProofResponse
-		var err error
-		switch {
-		case rq.SyncGet != nil:
-			rsp, err = rs.SyncGet(ctx, rq.SyncGet)
-		case rq.SyncGetPrefixes != nil:
-			rsp, err = rs.SyncGetPrefixes(ctx, rq.SyncGetPrefixes)
-		case rq.SyncIterate != nil:
-			rsp, err = rs.SyncIterate(ctx, rq.SyncIterate)
-		default:
-			return nil, errMethodNotSupported
-		}
-		if err != nil {
-			return nil, err
-		}
-
-		return &protocol.Body{HostStorageSyncResponse: &protocol.HostStorageSyncResponse{ProofResponse: rsp}}, nil
-	// Local storage.
-	case body.HostLocalStorageGetRequest != nil:
-		value, err := h.runtime.LocalStorage().Get(body.HostLocalStorageGetRequest.Key)
-		if err != nil {
-			return nil, err
-		}
-		return &protocol.Body{HostLocalStorageGetResponse: &protocol.HostLocalStorageGetResponse{Value: value}}, nil
-	case body.HostLocalStorageSetRequest != nil:
-		if err := h.runtime.LocalStorage().Set(body.HostLocalStorageSetRequest.Key, body.HostLocalStorageSetRequest.Value); err != nil {
-			return nil, err
-		}
-		return &protocol.Body{HostLocalStorageSetResponse: &protocol.Empty{}}, nil
-	default:
-		return nil, errMethodNotSupported
+	// If any existing key manager client is available, just reuse it.
+	if h.keyManagerClient != nil {
+		return h.keyManagerClient, nil
 	}
+
+	// Otherwise create a fresh one on demand.
+	cliCtx, cancel := context.WithCancel(context.Background())
+	go func() {
+		<-h.stopCh
+		cancel()
+	}()
+
+	var err error
+	h.keyManagerClient, err = keymanagerClient.New(cliCtx, h.runtime, h.consensus, nil)
+	if err != nil {
+		h.logger.Error("failed to create key manager client instance",
+			"err", err,
+		)
+		return nil, fmt.Errorf("failed to create key manager client: %w", err)
+	}
+	return h.keyManagerClient, nil
 }
 
 func (h *clientHost) worker() {
