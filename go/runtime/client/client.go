@@ -15,13 +15,10 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
 	"github.com/oasisprotocol/oasis-core/go/common/pubsub"
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
-	keymanagerAPI "github.com/oasisprotocol/oasis-core/go/keymanager/api"
-	keymanager "github.com/oasisprotocol/oasis-core/go/keymanager/client"
 	cmdFlags "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/flags"
 	roothash "github.com/oasisprotocol/oasis-core/go/roothash/api"
 	"github.com/oasisprotocol/oasis-core/go/roothash/api/block"
 	"github.com/oasisprotocol/oasis-core/go/runtime/client/api"
-	enclaverpc "github.com/oasisprotocol/oasis-core/go/runtime/enclaverpc/api"
 	"github.com/oasisprotocol/oasis-core/go/runtime/host"
 	"github.com/oasisprotocol/oasis-core/go/runtime/host/protocol"
 	runtimeRegistry "github.com/oasisprotocol/oasis-core/go/runtime/registry"
@@ -43,8 +40,7 @@ const (
 )
 
 var (
-	_ api.RuntimeClient    = (*runtimeClient)(nil)
-	_ enclaverpc.Transport = (*runtimeClient)(nil)
+	_ api.RuntimeClient = (*runtimeClient)(nil)
 
 	// Flags has the flags used by the runtime client.
 	Flags = flag.NewFlagSet("", flag.ContinueOnError)
@@ -68,7 +64,6 @@ type runtimeClient struct {
 
 	hosts        map[common.Namespace]*clientHost
 	txSubmitters map[common.Namespace]*txSubmitter
-	kmClients    map[common.Namespace]*keymanager.Client
 
 	maxTransactionAge int64
 
@@ -372,42 +367,6 @@ func (c *runtimeClient) Query(ctx context.Context, request *api.QueryRequest) (*
 	return &api.QueryResponse{Data: data}, nil
 }
 
-// Implements enclaverpc.Transport.
-func (c *runtimeClient) CallEnclave(ctx context.Context, request *enclaverpc.CallEnclaveRequest) ([]byte, error) {
-	switch request.Endpoint {
-	case keymanagerAPI.EnclaveRPCEndpoint:
-		// Key manager.
-		rt, err := c.common.runtimeRegistry.GetRuntime(request.RuntimeID)
-		if err != nil {
-			return nil, err
-		}
-
-		var km *keymanager.Client
-		c.Lock()
-		if km = c.kmClients[rt.ID()]; km == nil {
-			c.logger.Debug("creating new key manager client instance")
-
-			km, err = keymanager.New(c.common.ctx, rt, c.common.consensus, nil)
-			if err != nil {
-				c.Unlock()
-				c.logger.Error("failed to create key manager client instance",
-					"err", err,
-				)
-				return nil, api.ErrInternal
-			}
-			c.kmClients[rt.ID()] = km
-		}
-		c.Unlock()
-
-		return km.CallRemote(ctx, request.Payload)
-	default:
-		c.logger.Warn("failed to route EnclaveRPC call",
-			"endpoint", request.Endpoint,
-		)
-		return nil, fmt.Errorf("unknown EnclaveRPC endpoint: %s", request.Endpoint)
-	}
-}
-
 // Implements service.BackgroundService.
 func (c *runtimeClient) Name() string {
 	return "runtime client"
@@ -482,7 +441,6 @@ func New(
 		quitCh:            make(chan struct{}),
 		hosts:             make(map[common.Namespace]*clientHost),
 		txSubmitters:      make(map[common.Namespace]*txSubmitter),
-		kmClients:         make(map[common.Namespace]*keymanager.Client),
 		maxTransactionAge: maxTransactionAge,
 		logger:            logging.GetLogger("runtime/client"),
 	}

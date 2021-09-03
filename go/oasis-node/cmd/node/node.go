@@ -45,7 +45,6 @@ import (
 	roothashAPI "github.com/oasisprotocol/oasis-core/go/roothash/api"
 	runtimeClient "github.com/oasisprotocol/oasis-core/go/runtime/client"
 	runtimeClientAPI "github.com/oasisprotocol/oasis-core/go/runtime/client/api"
-	enclaverpc "github.com/oasisprotocol/oasis-core/go/runtime/enclaverpc/api"
 	runtimeRegistry "github.com/oasisprotocol/oasis-core/go/runtime/registry"
 	scheduler "github.com/oasisprotocol/oasis-core/go/scheduler/api"
 	"github.com/oasisprotocol/oasis-core/go/sentry"
@@ -244,7 +243,6 @@ func (n *Node) startRuntimeServices() error {
 	}
 	n.svcMgr.Register(n.RuntimeClient)
 	runtimeClientAPI.RegisterService(n.grpcInternal.Server(), n.RuntimeClient)
-	enclaverpc.RegisterService(n.grpcInternal.Server(), n.RuntimeClient)
 
 	// Start workers (requires NodeController for checking, if nodes are synced).
 	if err = n.startRuntimeWorkers(); err != nil {

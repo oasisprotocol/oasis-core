@@ -11,7 +11,6 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/service"
 	roothash "github.com/oasisprotocol/oasis-core/go/roothash/api"
 	"github.com/oasisprotocol/oasis-core/go/roothash/api/block"
-	enclaverpc "github.com/oasisprotocol/oasis-core/go/runtime/enclaverpc/api"
 	"github.com/oasisprotocol/oasis-core/go/runtime/host/protocol"
 )
 
@@ -41,8 +40,6 @@ var (
 
 // RuntimeClient is the runtime client interface.
 type RuntimeClient interface {
-	enclaverpc.Transport
-
 	// SubmitTx submits a transaction to the runtime transaction scheduler and waits
 	// for transaction execution results.
 	SubmitTx(ctx context.Context, request *SubmitTxRequest) ([]byte, error)

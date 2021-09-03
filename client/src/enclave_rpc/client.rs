@@ -228,10 +228,8 @@ impl RpcClient {
             if session.inner.is_connected() {
                 return Ok(());
             }
-            if session.inner.is_closed() {
-                // In case the session is closed, reset it.
-                session.reset();
-            }
+            // Make sure the session is reset for a new connection.
+            session.reset();
 
             // Handshake1 -> Handshake2
             session

@@ -135,7 +135,7 @@ func (w *Worker) GetRuntime() runtimeRegistry.Runtime {
 }
 
 // Implements workerCommon.RuntimeHostHandlerFactory.
-func (w *Worker) NewNotifier(ctx context.Context, host host.Runtime) protocol.Notifier {
+func (w *Worker) NewRuntimeHostNotifier(ctx context.Context, host host.Runtime) protocol.Notifier {
 	return &protocol.NoOpNotifier{}
 }
 
