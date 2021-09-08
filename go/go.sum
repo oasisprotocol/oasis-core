@@ -927,8 +927,8 @@ github.com/neelance/sourcemap v0.0.0-20151028013722-8c68805598ab/go.mod h1:Qr6/a
 github.com/nxadm/tail v1.4.4/go.mod h1:kenIhsEOeOJmVchQTgglprH7qJGnHDVpk1VPCcaMI8A=
 github.com/nxadm/tail v1.4.8 h1:nPr65rt6Y5JFSKQO7qToXr7pePgD6Gwiw05lkbyAQTE=
 github.com/nxadm/tail v1.4.8/go.mod h1:+ncqLTQzXmGhMZNUePPaPqPvBxHAIsmXswZKocGu+AU=
-github.com/oasisprotocol/curve25519-voi v0.0.0-20210505121811-294cf0fbfb43 h1:qnvTxmtjcuRH5NiI0Kiku6TXi2VReR/PxHFf3ahFYrg=
-github.com/oasisprotocol/curve25519-voi v0.0.0-20210505121811-294cf0fbfb43/go.mod h1:TLJifjWF6eotcfzDjKZsDqWJ+73Uvj/N85MvVyrvynM=
+github.com/oasisprotocol/curve25519-voi v0.0.0-20210908142542-2a44edfcaeb0 h1:mhi9nviuY1liEwHRApVyaY/5B7JQMU2/vpm/qHk7pdc=
+github.com/oasisprotocol/curve25519-voi v0.0.0-20210908142542-2a44edfcaeb0/go.mod h1:WUcXjUd98qaCVFb6j8Xc87MsKeMCXDu9Nk8JRJ9SeC8=
 github.com/oasisprotocol/deoxysii v0.0.0-20200527154044-851aec403956 h1:etZXZf8f2xLJFivW4tTg87nSV3KLszQ7oYot3UNcmF0=
 github.com/oasisprotocol/deoxysii v0.0.0-20200527154044-851aec403956/go.mod h1:cE5EgXTIhq5oAVdZ7LZd1FjTRLALPEzv93CWzBtDkyI=
 github.com/oasisprotocol/ed25519 v0.0.0-20210127160119-f7017427c1ea h1:r4MhxgqQ1bed0fQhRINBM50Rbwsgma6oEjG4zQ444Lw=
@@ -1271,7 +1271,6 @@ golang.org/x/crypto v0.0.0-20200510223506-06a226fb4e37/go.mod h1:LzIPMQfyMNhhGPh
 golang.org/x/crypto v0.0.0-20200602180216-279210d13fed/go.mod h1:LzIPMQfyMNhhGPhUkYOs5KpL4U8rLKemX1yGLhDgUto=
 golang.org/x/crypto v0.0.0-20200622213623-75b288015ac9/go.mod h1:LzIPMQfyMNhhGPhUkYOs5KpL4U8rLKemX1yGLhDgUto=
 golang.org/x/crypto v0.0.0-20201117144127-c1f2f97bffc9/go.mod h1:jdWPYTVW3xRLrWPugEBEK3UY2ZEsg3UU495nc5E+M+I=
-golang.org/x/crypto v0.0.0-20201221181555-eec23a3978ad/go.mod h1:jdWPYTVW3xRLrWPugEBEK3UY2ZEsg3UU495nc5E+M+I=
 golang.org/x/crypto v0.0.0-20210220033148-5ea612d1eb83/go.mod h1:jdWPYTVW3xRLrWPugEBEK3UY2ZEsg3UU495nc5E+M+I=
 golang.org/x/crypto v0.0.0-20210322153248-0c34fe9e7dc2/go.mod h1:T9bdIzuCu7OtxOm1hfPfRQxPLYneinmdGuTeoZ9dtd4=
 golang.org/x/crypto v0.0.0-20210506145944-38f3c27a63bf/go.mod h1:P+XmwS30IXTQdn5tA2iutPOUgjI07+tq3H3K9MVA1s8=
