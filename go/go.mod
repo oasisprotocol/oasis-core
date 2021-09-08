@@ -55,7 +55,6 @@ require (
 	github.com/tyler-smith/go-bip39 v1.1.0
 	github.com/whyrusleeping/go-logging v0.0.1
 	gitlab.com/yawning/dynlib.git v0.0.0-20210614104444-f6a90d03b144
-	go.dedis.ch/kyber/v3 v3.0.13
 	golang.org/x/crypto v0.0.0-20210817164053-32db794688a5
 	golang.org/x/net v0.0.0-20210813160813-60bc85c4be6d
 	google.golang.org/genproto v0.0.0-20210828152312-66f60bf46e71
@@ -191,7 +190,6 @@ require (
 	github.com/x448/float16 v0.8.4 // indirect
 	gitlab.com/yawning/bsaes.git v0.0.0-20190805113838-0a714cd429ec // indirect
 	gitlab.com/yawning/slice.git v0.0.0-20190714152416-bc4ae2510529 // indirect
-	go.dedis.ch/fixbuf v1.0.3 // indirect
 	go.etcd.io/bbolt v1.3.5 // indirect
 	go.opencensus.io v0.23.0 // indirect
 	go.uber.org/atomic v1.9.0 // indirect

@@ -149,6 +149,9 @@ func getNodeDesc(rng *rand.Rand, nodeIdentity *identity.Identity, entityID signa
 				ID: runtimeID,
 			},
 		},
+		VRF: &node.VRFInfo{
+			ID: nodeIdentity.VRFSigner.Public(),
+		},
 	}
 	return &nodeDesc
 }
@@ -160,6 +163,7 @@ func signNode(identity *identity.Identity, nodeDesc *node.Node) (*node.MultiSign
 			identity.P2PSigner,
 			identity.ConsensusSigner,
 			identity.GetTLSSigner(),
+			identity.VRFSigner,
 		},
 		registry.RegisterNodeSignatureContext,
 		nodeDesc,

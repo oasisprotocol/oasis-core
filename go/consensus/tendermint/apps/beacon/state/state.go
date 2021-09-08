@@ -21,6 +21,10 @@ var (
 	//
 	// Value is CBOR-serialized epoch time state.
 	epochFutureKeyFmt = keyformat.New(0x41)
+	// epochPendingMockKeyFmt is the pending mock epoch key format.
+	//
+	// Value is CBOR-serialized epoch time.
+	epochPendingMockKeyFmt = keyformat.New(0x45)
 
 	// beaconKeyFmt is the random beacon key format.
 	//
@@ -106,6 +110,32 @@ func (s *ImmutableState) ConsensusParameters(ctx context.Context) (*beacon.Conse
 	return &params, nil
 }
 
+func (s *ImmutableState) PendingMockEpoch(ctx context.Context) (*beacon.EpochTime, error) {
+	data, err := s.is.Get(ctx, epochPendingMockKeyFmt.Encode())
+	if err != nil {
+		return nil, abciAPI.UnavailableStateError(err)
+	}
+	if data == nil {
+		return nil, nil
+	}
+
+	var pendingEpoch beacon.EpochTime
+	if err = cbor.Unmarshal(data, &pendingEpoch); err != nil {
+		return nil, abciAPI.UnavailableStateError(err)
+	}
+	return &pendingEpoch, nil
+}
+
+func (s *MutableState) SetPendingMockEpoch(ctx context.Context, epoch beacon.EpochTime) error {
+	err := s.ms.Insert(ctx, epochPendingMockKeyFmt.Encode(), cbor.Marshal(epoch))
+	return abciAPI.UnavailableStateError(err)
+}
+
+func (s *MutableState) ClearPendingMockEpoch(ctx context.Context) error {
+	err := s.ms.Remove(ctx, epochPendingMockKeyFmt.Encode())
+	return abciAPI.UnavailableStateError(err)
+}
+
 // MutableState is a mutable beacon state wrapper.
 type MutableState struct {
 	*ImmutableState
@@ -118,6 +148,14 @@ func (s *MutableState) SetBeacon(ctx context.Context, newBeacon []byte) error {
 		return fmt.Errorf("tendermint/beacon: unexpected beacon size: %d", l)
 	}
 
+	err := s.ms.Insert(ctx, beaconKeyFmt.Encode(), newBeacon)
+	return abciAPI.UnavailableStateError(err)
+}
+
+// DebugForceSetBeacon sets the beacon to an arbitrary byte-string, ignoring
+// the length requirements.  See ../../scheduler/scheduler_test.go for why
+// this exists.
+func (s *MutableState) DebugForceSetBeacon(ctx context.Context, newBeacon []byte) error {
 	err := s.ms.Insert(ctx, beaconKeyFmt.Encode(), newBeacon)
 	return abciAPI.UnavailableStateError(err)
 }

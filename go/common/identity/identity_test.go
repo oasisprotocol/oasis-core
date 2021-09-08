@@ -17,7 +17,7 @@ func TestLoadOrGenerate(t *testing.T) {
 	require.NoError(t, err, "create data dir")
 	defer os.RemoveAll(dataDir)
 
-	factory, err := fileSigner.NewFactory(dataDir, signature.SignerNode, signature.SignerP2P, signature.SignerConsensus)
+	factory, err := fileSigner.NewFactory(dataDir, RequiredSignerRoles...)
 	require.NoError(t, err, "NewFactory")
 
 	// Generate a new identity.
@@ -34,6 +34,7 @@ func TestLoadOrGenerate(t *testing.T) {
 	require.EqualValues(t, identity.NodeSigner, identity2.NodeSigner)
 	require.EqualValues(t, identity.P2PSigner, identity2.P2PSigner)
 	require.EqualValues(t, identity.ConsensusSigner, identity2.ConsensusSigner)
+	require.EqualValues(t, identity.VRFSigner, identity2.VRFSigner)
 	require.EqualValues(t, identity.GetTLSSigner(), identity2.GetTLSSigner())
 	require.NotEqual(t, identity.GetTLSCertificate(), identity2.GetTLSCertificate())
 	require.EqualValues(t, identity.GetTLSPubKeys(), identity2.GetTLSPubKeys())
@@ -61,6 +62,7 @@ func TestLoadOrGenerate(t *testing.T) {
 	require.EqualValues(t, identity3.NodeSigner, identity4.NodeSigner)
 	require.EqualValues(t, identity3.P2PSigner, identity4.P2PSigner)
 	require.EqualValues(t, identity3.ConsensusSigner, identity4.ConsensusSigner)
+	require.EqualValues(t, identity3.VRFSigner, identity4.VRFSigner)
 	require.NotEqual(t, identity.GetTLSSigner(), identity3.GetTLSSigner())
 	require.NotEqual(t, identity2.GetTLSSigner(), identity3.GetTLSSigner())
 	require.Equal(t, identity3.GetTLSSigner(), identity4.GetTLSSigner())

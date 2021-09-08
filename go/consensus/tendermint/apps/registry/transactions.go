@@ -8,6 +8,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/entity"
 	"github.com/oasisprotocol/oasis-core/go/common/node"
 	"github.com/oasisprotocol/oasis-core/go/consensus/tendermint/api"
+	beaconState "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/apps/beacon/state"
 	registryApi "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/apps/registry/api"
 	registryState "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/apps/registry/state"
 	stakingState "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/apps/staking/state"
@@ -412,18 +413,23 @@ func (app *registryApplication) registerNode( // nolint: gocyclo
 		return fmt.Errorf("failed to set node: %w", err)
 	}
 
-	if isNewNode || isExpiredNode {
-		// Node doesn't exist (or is expired), initialize/update node status.
-		var status *registry.NodeStatus
-		if existingNode != nil {
-			// Node exists but is expired, fetch existing status.
-			if status, err = state.NodeStatus(ctx, newNode.ID); err != nil {
-				ctx.Logger().Error("RegisterNode: failed to get node status",
-					"err", err,
-				)
-				return registry.ErrInvalidArgument
-			}
+	// Query the current node status if it exists.
+	var status *registry.NodeStatus
+	if existingNode != nil {
+		if status, err = state.NodeStatus(ctx, newNode.ID); err != nil {
+			ctx.Logger().Error("RegisterNode: failed to get node status",
+				"err", err,
+			)
+			return registry.ErrInvalidArgument
+		}
+	}
 
+	// Initialize/update the node status depending on what has changed.
+	var statusDirty bool
+	if isNewNode || isExpiredNode {
+		// Node doesn't exist (or is expired).
+		statusDirty = true
+		if status != nil {
 			// Reset expiration processed flag as the node is live again.
 			status.ExpirationProcessed = false
 		} else {
@@ -435,6 +441,35 @@ func (app *registryApplication) registerNode( // nolint: gocyclo
 		// on a non-validator committee.
 		status.ElectionEligibleAfter = beacon.EpochInvalid
 
+	} else {
+		// Node exists, and the registration is just getting renewed.
+		var beaconParams *beacon.ConsensusParameters
+		beaconState := beaconState.NewMutableState(ctx.State())
+		if beaconParams, err = beaconState.ConsensusParameters(ctx); err != nil {
+			return fmt.Errorf("tendermint/registry: couldn't get beacon parameters: %w", err)
+		}
+		if beaconParams.Backend == beacon.BackendVRF {
+			// If the VRF backend is active, and the node's VRF key has
+			// changed, reset election eligibility.
+			vrfChanged := func() bool {
+				if existingNode.VRF == nil || newNode.VRF == nil {
+					return false
+				}
+				if existingNode.VRF == nil && newNode.VRF != nil {
+					return true
+				}
+				if existingNode.VRF != nil && newNode.VRF == nil {
+					return true
+				}
+				return !existingNode.VRF.ID.Equal(newNode.VRF.ID)
+			}()
+
+			if statusDirty = vrfChanged; statusDirty {
+				status.ElectionEligibleAfter = beacon.EpochInvalid
+			}
+		}
+	}
+	if statusDirty {
 		if err = state.SetNodeStatus(ctx, newNode.ID, status); err != nil {
 			ctx.Logger().Error("RegisterNode: failed to set node status",
 				"err", err,

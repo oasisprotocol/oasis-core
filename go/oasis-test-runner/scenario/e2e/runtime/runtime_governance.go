@@ -242,7 +242,8 @@ func (sc *runtimeGovernanceImpl) Run(childEnv *env.Env) error {
 	}
 
 	// Wait for all nodes to start.
-	if err = sc.initialEpochTransitions(fixture); err != nil {
+	var epoch beacon.EpochTime
+	if epoch, err = sc.initialEpochTransitions(fixture); err != nil {
 		return err
 	}
 
@@ -259,7 +260,7 @@ func (sc *runtimeGovernanceImpl) Run(childEnv *env.Env) error {
 	}
 
 	// Submit transactions.
-	epoch := beacon.EpochTime(3)
+	epoch++
 
 	rt := crt[0]
 

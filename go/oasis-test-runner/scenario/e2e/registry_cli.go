@@ -511,7 +511,7 @@ func (sc *registryCLIImpl) initNode(childEnv *env.Env, ent *entity.Entity, entDi
 	testNode.TLS.NextPubKey = n.TLS.NextPubKey
 	testNode.P2P.ID = n.P2P.ID
 	testNode.Consensus.ID = n.Consensus.ID
-	testNode.Beacon = n.Beacon
+	testNode.VRF = n.VRF
 	for idx := range testNode.TLS.Addresses {
 		testNode.TLS.Addresses[idx].PubKey = n.TLS.PubKey
 	}

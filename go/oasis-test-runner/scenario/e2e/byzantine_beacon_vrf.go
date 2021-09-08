@@ -4,8 +4,6 @@ import (
 	"context"
 	"fmt"
 
-	beacon "github.com/oasisprotocol/oasis-core/go/beacon/api"
-	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	"github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/debug/byzantine"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/env"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/log"
@@ -16,50 +14,50 @@ import (
 const byzantineBeaconIdentitySeed = "ekiden byzantine node worker"
 
 var (
-	// ByzantineBeaconHonest is the honest byzantine beacon scenario.
-	ByzantineBeaconHonest scenario.Scenario = &byzantineBeaconImpl{
-		E2E: *NewE2E("byzantine/beacon-honest"),
+	// ByzantineVRFBeaconHonest is the honest byzantine VRF beacon scenario.
+	ByzantineVRFBeaconHonest scenario.Scenario = &byzantineVRFBeaconImpl{
+		E2E: *NewE2E("byzantine/beacon-vrf-honest"),
 		extraArgs: []oasis.Argument{
-			{Name: byzantine.CfgBeaconMode, Values: []string{byzantine.ModeBeaconHonest.String()}},
+			{Name: byzantine.CfgVRFBeaconMode, Values: []string{byzantine.ModeVRFBeaconHonest.String()}},
 		},
 		identitySeed: byzantineBeaconIdentitySeed,
 	}
 
-	// ByzantineBeaconCommitStraggler is the commit straggler byzantine beacon scenario.
-	ByzantineBeaconCommitStraggler scenario.Scenario = &byzantineBeaconImpl{
-		E2E: *NewE2E("byzantine/beacon-commit-straggler"),
+	// ByzantineVRFBeaconEarly is the early-proof byzantine beacon scenario.
+	ByzantineVRFBeaconEarly scenario.Scenario = &byzantineVRFBeaconImpl{
+		E2E: *NewE2E("byzantine/beacon-vrf-early"),
 		extraArgs: []oasis.Argument{
-			{Name: byzantine.CfgBeaconMode, Values: []string{byzantine.ModeBeaconCommitStraggler.String()}},
+			{Name: byzantine.CfgVRFBeaconMode, Values: []string{byzantine.ModeVRFBeaconEarly.String()}},
 		},
 		identitySeed: byzantineBeaconIdentitySeed,
 	}
 
-	// ByzantineBeaconRevealStraggler is the reveal straggler byzantine beacon scenario.
-	ByzantineBeaconRevealStraggler scenario.Scenario = &byzantineBeaconImpl{
-		E2E: *NewE2E("byzantine/beacon-reveal-straggler"),
+	// ByzantineVRFBeaconMissing is the missing-proof byzantine beacon scenario.
+	ByzantineVRFBeaconMissing scenario.Scenario = &byzantineVRFBeaconImpl{
+		E2E: *NewE2E("byzantine/beacon-vrf-missing"),
 		extraArgs: []oasis.Argument{
-			{Name: byzantine.CfgBeaconMode, Values: []string{byzantine.ModeBeaconRevealStraggler.String()}},
+			{Name: byzantine.CfgVRFBeaconMode, Values: []string{byzantine.ModeVRFBeaconMissing.String()}},
 		},
 		identitySeed: byzantineBeaconIdentitySeed,
 	}
 )
 
-type byzantineBeaconImpl struct {
+type byzantineVRFBeaconImpl struct {
 	E2E
 
 	extraArgs    []oasis.Argument
 	identitySeed string
 }
 
-func (sc *byzantineBeaconImpl) Clone() scenario.Scenario {
-	return &byzantineBeaconImpl{
+func (sc *byzantineVRFBeaconImpl) Clone() scenario.Scenario {
+	return &byzantineVRFBeaconImpl{
 		E2E:          sc.E2E.Clone(),
 		extraArgs:    sc.extraArgs,
 		identitySeed: sc.identitySeed,
 	}
 }
 
-func (sc *byzantineBeaconImpl) Fixture() (*oasis.NetworkFixture, error) {
+func (sc *byzantineVRFBeaconImpl) Fixture() (*oasis.NetworkFixture, error) {
 	f, err := sc.E2E.Fixture()
 	if err != nil {
 		return nil, err
@@ -73,7 +71,7 @@ func (sc *byzantineBeaconImpl) Fixture() (*oasis.NetworkFixture, error) {
 	// Provision a Byzantine node.
 	f.ByzantineNodes = []oasis.ByzantineFixture{
 		{
-			Script:          "beacon",
+			Script:          "vrfbeacon",
 			ExtraArgs:       sc.extraArgs,
 			IdentitySeed:    sc.identitySeed,
 			Entity:          1,
@@ -86,26 +84,16 @@ func (sc *byzantineBeaconImpl) Fixture() (*oasis.NetworkFixture, error) {
 	if l := len(f.ByzantineNodes); l != 1 {
 		return nil, fmt.Errorf("byzantine/beacon: unexpected number of byzantine nodes: %d", l)
 	}
-	node := f.ByzantineNodes[0]
-	pks, err := oasis.GenerateDeterministicNodeKeys(nil, node.IdentitySeed, []signature.SignerRole{signature.SignerNode})
-	if err != nil {
-		return nil, fmt.Errorf("byzantine/beacon: failed to derive node identity: %w", err)
-	}
-	f.Network.Beacon.PVSSParameters = &beacon.PVSSParameters{
-		DebugForcedParticipants: []signature.PublicKey{
-			pks[0],
-		},
-	}
 
 	// Make sure the byzantine node does at least 1 round (in)correctly.
 	f.ByzantineNodes[0].LogWatcherHandlerFactories = []log.WatcherHandlerFactory{
-		oasis.LogAssertEvent(byzantine.LogEventBeaconRoundCompleted, "byzantine node executed no rounds"),
+		oasis.LogAssertEvent(byzantine.LogEventVRFBeaconRoundCompleted, "byzantine node executed no rounds"),
 	}
 
 	return f, nil
 }
 
-func (sc *byzantineBeaconImpl) Run(childEnv *env.Env) error {
+func (sc *byzantineVRFBeaconImpl) Run(childEnv *env.Env) error {
 	if err := sc.Net.Start(); err != nil {
 		return err
 	}

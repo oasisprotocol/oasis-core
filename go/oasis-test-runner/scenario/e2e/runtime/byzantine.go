@@ -17,24 +17,17 @@ import (
 	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
 	"github.com/oasisprotocol/oasis-core/go/roothash/api/block"
 	runtimeClient "github.com/oasisprotocol/oasis-core/go/runtime/client/api"
+	scheduler "github.com/oasisprotocol/oasis-core/go/scheduler/api"
 	staking "github.com/oasisprotocol/oasis-core/go/staking/api"
 	"github.com/oasisprotocol/oasis-core/go/storage/mkvs"
 )
 
 var (
-	// Permutations generated in the epoch 2 election are
-	// executor worker:            1 (w+s), 3 (w), 0 (-), 2 (-)
-	// executor backup worker:     0   (b), 3 (-), 2 (-), 1 (-)
-	// storage worker:             0   (w), 1 (w)
-	// w = worker and not scheduler in first round
-	// w+s = worker and scheduler in first round
-	// b = backup
-	// - = not elected for this role
-	//
-	//
-	// For executor scripts, it suffices to be index 3.
-	// For executor and scheduler scripts, it suffices to be index 1.
-	// For storage worker scripts suffices to be index 0.
+	// We force the result of each election such that the byzantine node
+	// will be elected as:
+	//  * Executor: Non-scheduler worker
+	//  * Executor+Scheduler: Scheduler worker
+	//  * Storage: Storage worker
 
 	// ByzantineExecutorHonest is the byzantine executor honest scenario.
 	ByzantineExecutorHonest scenario.Scenario = newByzantineImpl(
@@ -45,6 +38,10 @@ var (
 		false,
 		nil,
 		nil,
+		scheduler.ForceElectCommitteeRole{
+			Kind: scheduler.KindComputeExecutor,
+			Role: scheduler.RoleWorker,
+		},
 	)
 	// ByzantineExecutorSchedulerHonest is the byzantine executor scheduler honest scenario.
 	ByzantineExecutorSchedulerHonest scenario.Scenario = newByzantineImpl(
@@ -56,6 +53,11 @@ var (
 		nil,
 		[]oasis.Argument{
 			{Name: byzantine.CfgSchedulerRoleExpected},
+		},
+		scheduler.ForceElectCommitteeRole{
+			Kind:        scheduler.KindComputeExecutor,
+			Role:        scheduler.RoleWorker,
+			IsScheduler: true,
 		},
 	)
 	// ByzantineExecutorWrong is the byzantine executor wrong scenario.
@@ -77,6 +79,10 @@ var (
 		[]oasis.Argument{
 			{Name: byzantine.CfgExecutorMode, Values: []string{byzantine.ModeExecutorWrong.String()}},
 		},
+		scheduler.ForceElectCommitteeRole{
+			Kind: scheduler.KindComputeExecutor,
+			Role: scheduler.RoleWorker,
+		},
 	)
 	// ByzantineExecutorSchedulerWrong is the byzantine executor wrong scheduler scenario.
 	ByzantineExecutorSchedulerWrong scenario.Scenario = newByzantineImpl(
@@ -96,6 +102,11 @@ var (
 			{Name: byzantine.CfgSchedulerRoleExpected},
 			{Name: byzantine.CfgExecutorMode, Values: []string{byzantine.ModeExecutorWrong.String()}},
 		},
+		scheduler.ForceElectCommitteeRole{
+			Kind:        scheduler.KindComputeExecutor,
+			Role:        scheduler.RoleWorker,
+			IsScheduler: true,
+		},
 	)
 	// ByzantineExecutorStraggler is the byzantine executor straggler scenario.
 	ByzantineExecutorStraggler scenario.Scenario = newByzantineImpl(
@@ -112,6 +123,10 @@ var (
 		nil,
 		[]oasis.Argument{
 			{Name: byzantine.CfgExecutorMode, Values: []string{byzantine.ModeExecutorStraggler.String()}},
+		},
+		scheduler.ForceElectCommitteeRole{
+			Kind: scheduler.KindComputeExecutor,
+			Role: scheduler.RoleWorker,
 		},
 	)
 	// ByzantineExecutorSchedulerStraggler is the byzantine executor scheduler straggler scenario.
@@ -132,6 +147,11 @@ var (
 			{Name: byzantine.CfgSchedulerRoleExpected},
 			{Name: byzantine.CfgExecutorMode, Values: []string{byzantine.ModeExecutorStraggler.String()}},
 		},
+		scheduler.ForceElectCommitteeRole{
+			Kind:        scheduler.KindComputeExecutor,
+			Role:        scheduler.RoleWorker,
+			IsScheduler: true,
+		},
 	)
 	// ByzantineExecutorFailureIndicating is the byzantine executor that submits failure indicating
 	// commitments scenario.
@@ -149,6 +169,10 @@ var (
 		nil,
 		[]oasis.Argument{
 			{Name: byzantine.CfgExecutorMode, Values: []string{byzantine.ModeExecutorFailureIndicating.String()}},
+		},
+		scheduler.ForceElectCommitteeRole{
+			Kind: scheduler.KindComputeExecutor,
+			Role: scheduler.RoleWorker,
 		},
 	)
 	// ByzantineExecutorSchedulerFailureIndicating is the byzantine executor scheduler failure indicating scenario.
@@ -169,6 +193,11 @@ var (
 			{Name: byzantine.CfgSchedulerRoleExpected},
 			{Name: byzantine.CfgExecutorMode, Values: []string{byzantine.ModeExecutorFailureIndicating.String()}},
 		},
+		scheduler.ForceElectCommitteeRole{
+			Kind:        scheduler.KindComputeExecutor,
+			Role:        scheduler.RoleWorker,
+			IsScheduler: true,
+		},
 	)
 	// ByzantineStorageHonest is the byzantine storage honest scenario.
 	ByzantineStorageHonest scenario.Scenario = newByzantineImpl(
@@ -179,6 +208,10 @@ var (
 		false,
 		nil,
 		nil,
+		scheduler.ForceElectCommitteeRole{
+			Kind: scheduler.KindStorage,
+			Role: scheduler.RoleWorker,
+		},
 	)
 	// ByzantineStorageFailApply is the byzantine storage scenario where storage node fails
 	// first 5 Apply requests.
@@ -194,6 +227,10 @@ var (
 		[]oasis.Argument{
 			// Fail first 5 ApplyBatch requests.
 			{Name: byzantine.CfgNumStorageFailApply, Values: []string{strconv.Itoa(5)}},
+		},
+		scheduler.ForceElectCommitteeRole{
+			Kind: scheduler.KindStorage,
+			Role: scheduler.RoleWorker,
 		},
 	)
 	// ByzantineStorageFailApplyBatch is the byzantine storage scenario where storage node fails
@@ -214,6 +251,10 @@ var (
 			// Fail first 3 ApplyBatch requests - from the 2 executor workers and 1 backup node.
 			{Name: byzantine.CfgNumStorageFailApplyBatch, Values: []string{strconv.Itoa(3)}},
 		},
+		scheduler.ForceElectCommitteeRole{
+			Kind: scheduler.KindStorage,
+			Role: scheduler.RoleWorker,
+		},
 	)
 	// ByzantineStorageFailRead is the byzantine storage node scenario that fails all read requests.
 	ByzantineStorageFailRead scenario.Scenario = newByzantineImpl(
@@ -233,6 +274,10 @@ var (
 			// Fail all read requests.
 			{Name: byzantine.CfgFailReadRequests},
 		},
+		scheduler.ForceElectCommitteeRole{
+			Kind: scheduler.KindStorage,
+			Role: scheduler.RoleWorker,
+		},
 	)
 	// ByzantineStorageCorruptGetDiff is the byzantine storage node scenario that corrupts GetDiff
 	// responses.
@@ -248,11 +293,17 @@ var (
 			// Corrupt all GetDiff responses.
 			{Name: byzantine.CfgCorruptGetDiff},
 		},
+		scheduler.ForceElectCommitteeRole{
+			Kind: scheduler.KindStorage,
+			Role: scheduler.RoleWorker,
+		},
 	)
 )
 
 type byzantineImpl struct {
 	runtimeImpl
+
+	schedParams scheduler.ForceElectCommitteeRole
 
 	script    string
 	extraArgs []oasis.Argument
@@ -275,8 +326,9 @@ func newByzantineImpl(
 	skipStorageWait bool,
 	expectedSlashes map[staking.SlashReason]uint64,
 	extraArgs []oasis.Argument,
+	schedParams scheduler.ForceElectCommitteeRole,
 ) scenario.Scenario {
-	return &byzantineImpl{
+	sc := &byzantineImpl{
 		runtimeImpl:                *newRuntimeImpl("byzantine/"+name, nil),
 		script:                     script,
 		extraArgs:                  extraArgs,
@@ -284,7 +336,15 @@ func newByzantineImpl(
 		identitySeed:               identitySeed,
 		logWatcherHandlerFactories: logWatcherHandlerFactories,
 		expectedSlashes:            expectedSlashes,
+		schedParams:                schedParams,
 	}
+
+	// The byzantine node code and our tests are extremely sensitive
+	// to timekeeping being exactly how it was when the tests were
+	// written.
+	sc.debugNoRandomInitialEpoch = true
+	sc.debugWeakAlphaOk = true
+	return sc
 }
 
 func (sc *byzantineImpl) Clone() scenario.Scenario {
@@ -296,6 +356,7 @@ func (sc *byzantineImpl) Clone() scenario.Scenario {
 		identitySeed:               sc.identitySeed,
 		logWatcherHandlerFactories: sc.logWatcherHandlerFactories,
 		expectedSlashes:            sc.expectedSlashes,
+		schedParams:                sc.schedParams,
 	}
 }
 
@@ -346,19 +407,23 @@ func (sc *byzantineImpl) Fixture() (*oasis.NetworkFixture, error) {
 	// The byzantine scenario requires mock epochtime as the byzantine node
 	// doesn't know how to handle epochs in which it is not scheduled.
 	f.Network.SetMockEpoch()
+	// The byzantine node requires allowing weak alphas.
+	f.Network.SchedulerWeakAlphaOk = true
 	// Change the default network log watcher handler factories if configured.
 	if sc.logWatcherHandlerFactories != nil {
 		f.Network.DefaultLogWatcherHandlerFactories = sc.logWatcherHandlerFactories
 	}
 	// Provision a Byzantine node.
+	schedParams := sc.schedParams // Copy
 	f.ByzantineNodes = []oasis.ByzantineFixture{
 		{
-			Script:          sc.script,
-			ExtraArgs:       sc.extraArgs,
-			IdentitySeed:    sc.identitySeed,
-			Entity:          2,
-			ActivationEpoch: 1,
-			Runtime:         1,
+			Script:           sc.script,
+			ExtraArgs:        sc.extraArgs,
+			IdentitySeed:     sc.identitySeed,
+			Entity:           2,
+			ActivationEpoch:  1,
+			Runtime:          1,
+			ForceElectParams: &schedParams,
 		},
 	}
 	return f, nil
@@ -383,14 +448,18 @@ func (sc *byzantineImpl) Run(childEnv *env.Env) error {
 	}
 	defer blkSub.Close()
 
-	if err = sc.initialEpochTransitions(fixture); err != nil {
+	if _, err = sc.initialEpochTransitions(fixture); err != nil {
 		return err
 	}
+
+	sc.Logger.Info("getting genesis block")
 
 	genesisBlk, err := sc.Net.ClientController().RuntimeClient.GetGenesisBlock(ctx, runtimeID)
 	if err != nil {
 		return fmt.Errorf("failed to get genesis block: %w", err)
 	}
+
+	sc.Logger.Info("waiting for a successful round")
 
 	// NOTE: There is no need to submit any transactions as the nodes are proposing a block
 	//       immediately after genesis. We just wait for a successful round.
@@ -408,11 +477,14 @@ WatchBlocksLoop:
 		}
 	}
 
+	sc.Logger.Info("checking log watchers")
+
 	if err = sc.Net.CheckLogWatchers(); err != nil {
 		return err
 	}
 
 	// Ensure entity has expected stake.
+	sc.Logger.Info("ensuring entity has sufficient stake")
 	acc, err := sc.Net.ClientController().Staking.Account(ctx, &staking.OwnerQuery{
 		Height: consensus.HeightLatest,
 		Owner:  e2e.DeterministicEntity2,
@@ -436,6 +508,7 @@ WatchBlocksLoop:
 	}
 
 	if sc.skipStorageSyncWait {
+		sc.Logger.Info("storage sync wait set, bailing")
 		return nil
 	}
 

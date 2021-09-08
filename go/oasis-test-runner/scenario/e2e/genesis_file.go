@@ -51,7 +51,7 @@ func (s *genesisFileImpl) Fixture() (*oasis.NetworkFixture, error) {
 	// A single validator is enough for this scenario.
 	//
 	// WARNING: Once the insecure backend goes away, it will no longer
-	// be possible to run this configuration as the PVSS backend
+	// be possible to run this configuration as the VRF backend
 	// currently requires multiple validators.
 	f.Validators = []oasis.ValidatorFixture{
 		{Entity: 1, Consensus: oasis.ConsensusFixture{EnableConsensusRPCWorker: true, SupplementarySanityInterval: 1}},

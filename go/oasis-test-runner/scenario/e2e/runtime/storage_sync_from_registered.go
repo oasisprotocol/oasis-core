@@ -87,11 +87,10 @@ func (sc *storageSyncFromRegisteredImpl) Run(childEnv *env.Env) error {
 		return err
 	}
 
-	if err = sc.initialEpochTransitions(fixture); err != nil {
+	if nextEpoch, err = sc.initialEpochTransitions(fixture); err != nil {
 		return err
 	}
-	// We're at epoch 2 after the initial transitions
-	nextEpoch = beacon.EpochTime(3)
+	nextEpoch++
 
 	// Wait for the client to exit.
 	if err = sc.waitTestClientOnly(); err != nil {

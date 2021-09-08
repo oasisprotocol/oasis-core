@@ -15,7 +15,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/storage/database"
 )
 
-const checkpointInterval = 5
+const checkpointInterval = 15
 
 // StorageSyncInconsistent is the inconsistent storage sync scenario.
 var StorageSyncInconsistent scenario.Scenario = newStorageSyncInconsistentImpl()
@@ -27,12 +27,14 @@ type storageSyncInconsistentImpl struct {
 }
 
 func newStorageSyncInconsistentImpl() scenario.Scenario {
-	return &storageSyncInconsistentImpl{
+	sc := &storageSyncInconsistentImpl{
 		runtimeImpl: *newRuntimeImpl(
 			"storage-sync-inconsistent",
 			NewKeyValueTestClient().WithRepeat(),
 		),
 	}
+	sc.runtimeImpl.debugNoRandomInitialEpoch = true // I give up.
+	return sc
 }
 
 func (sc *storageSyncInconsistentImpl) Clone() scenario.Scenario {
@@ -106,7 +108,7 @@ func (sc *storageSyncInconsistentImpl) Run(childEnv *env.Env) error {
 		return err
 	}
 
-	if err = sc.initialEpochTransitions(fixture); err != nil {
+	if _, err = sc.initialEpochTransitions(fixture); err != nil {
 		return err
 	}
 

@@ -26,10 +26,6 @@ var (
 	//
 	// The format is (height, runtimeID). Value is runtimeID.
 	roundTimeoutQueueKeyFmt = keyformat.New(0x22, int64(0), keyformat.H(&common.Namespace{}))
-	// rejectTransactionsKeyFmt is the key format used to disable transactions.
-	//
-	// Value is a CBOR-serialized `true`.
-	rejectTransactionsKeyFmt = keyformat.New(0x23)
 	// evidenceKeyFmt is the key format used for storing valid misbehaviour evidence.
 	//
 	// Key format is: 0x24 <H(runtime-id) (hash.Hash)> <round (uint64)> <evidence-hash (hash.Hash)>
@@ -42,8 +38,6 @@ var (
 	//
 	// Value is the runtime's latest I/O root.
 	ioRootKeyFmt = keyformat.New(0x26, keyformat.H(&common.Namespace{}))
-
-	cborTrue = cbor.Marshal(true)
 )
 
 // ImmutableState is the immutable roothash state wrapper.
@@ -189,20 +183,6 @@ func (s *ImmutableState) ConsensusParameters(ctx context.Context) (*roothash.Con
 	return &params, nil
 }
 
-// RejectTransactions returns true iff all transactions should be rejected.
-func (s *ImmutableState) RejectTransactions(ctx context.Context) (bool, error) {
-	raw, err := s.is.Get(ctx, rejectTransactionsKeyFmt.Encode())
-	if err != nil {
-		return false, api.UnavailableStateError(err)
-	}
-	if raw == nil {
-		return false, nil
-	}
-
-	// This only ever will be true if present.
-	return true, nil
-}
-
 // EvidenceHashExists returns true if the evidence hash for the runtime exists.
 func (s *ImmutableState) EvidenceHashExists(ctx context.Context, runtimeID common.Namespace, round uint64, hash hash.Hash) (bool, error) {
 	data, err := s.is.Get(ctx, evidenceKeyFmt.Encode(&runtimeID, round, &hash))
@@ -266,18 +246,6 @@ func (s *MutableState) ScheduleRoundTimeout(ctx context.Context, runtimeID commo
 // ClearRoundTimeout clears a previously scheduled round timeout at a given height.
 func (s *MutableState) ClearRoundTimeout(ctx context.Context, runtimeID common.Namespace, height int64) error {
 	err := s.ms.Remove(ctx, roundTimeoutQueueKeyFmt.Encode(height, &runtimeID))
-	return api.UnavailableStateError(err)
-}
-
-// SetRejectTransactions sets the transaction disable.
-func (s *MutableState) SetRejectTransactions(ctx context.Context) error {
-	err := s.ms.Insert(ctx, rejectTransactionsKeyFmt.Encode(), cborTrue)
-	return api.UnavailableStateError(err)
-}
-
-// ClearRejectTransactions clears the transaction disable.
-func (s *MutableState) ClearRejectTransactions(ctx context.Context) error {
-	err := s.ms.Remove(ctx, rejectTransactionsKeyFmt.Encode())
 	return api.UnavailableStateError(err)
 }
 

@@ -16,7 +16,6 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common"
 	"github.com/oasisprotocol/oasis-core/go/common/badger"
 	"github.com/oasisprotocol/oasis-core/go/common/crash"
-	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	"github.com/oasisprotocol/oasis-core/go/common/grpc"
 	"github.com/oasisprotocol/oasis-core/go/common/identity"
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
@@ -600,7 +599,7 @@ func NewNode() (node *Node, err error) { // nolint: gocyclo
 	}
 
 	// Generate/Load the node identity.
-	signerFactory, err := cmdSigner.NewFactory(cmdSigner.Backend(), dataDir, signature.SignerNode, signature.SignerP2P, signature.SignerConsensus)
+	signerFactory, err := cmdSigner.NewFactory(cmdSigner.Backend(), dataDir, identity.RequiredSignerRoles...)
 	if err != nil {
 		logger.Error("failed to initialize signer backend",
 			"err", err,

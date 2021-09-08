@@ -119,6 +119,10 @@ func initializeAndRegisterByzantineNode(
 		return nil, fmt.Errorf("init default identity failed: %w", err)
 	}
 
+	b.logger.Debug("node identity generated",
+		"id", b.identity.NodeSigner.Public(),
+	)
+
 	// Setup tendermint.
 	b.tendermint = newHonestTendermint()
 	if err = b.tendermint.start(b.identity, cmdCommon.DataDir()); err != nil {
@@ -169,11 +173,26 @@ func initializeAndRegisterByzantineNode(
 		return b, nil
 	}
 
+	committeeStartEpoch := activationEpoch + 1
+	b.logger.Debug("waiting for VRF election epoch transition",
+		"wait_till", committeeStartEpoch,
+	)
+
+	if err = waitForEpoch(b.tendermint.service, committeeStartEpoch); err != nil {
+		return nil, fmt.Errorf("waitForEpoch(VRF electionDelay): %w", err)
+	}
+
+	b.logger.Debug("getting next election committee",
+		"epoch", committeeStartEpoch,
+	)
+
 	// Get next election committee.
-	b.electionHeight, err = schedulerNextElectionHeight(b.tendermint.service, activationEpoch+1)
+	b.electionHeight, err = schedulerNextElectionHeight(b.tendermint.service, committeeStartEpoch)
 	if err != nil {
 		return nil, fmt.Errorf("scheduler next election height failed: %w", err)
 	}
+
+	b.logger.Debug("ensuring executor worker role")
 
 	// Ensure we have the expected executor worker role.
 	b.executorCommittee, err = schedulerGetCommittee(b.tendermint, b.electionHeight, scheduler.KindComputeExecutor, b.runtimeID)

@@ -15,7 +15,7 @@ type Query interface {
 	FutureEpoch(context.Context) (*beacon.EpochTimeState, error)
 	Genesis(context.Context) (*beacon.Genesis, error)
 	ConsensusParameters(context.Context) (*beacon.ConsensusParameters, error)
-	PVSSState(context.Context) (*beacon.PVSSState, error)
+	VRFState(context.Context) (*beacon.VRFState, error)
 }
 
 // QueryFactory is the beacon query factory.
@@ -52,8 +52,8 @@ func (bq *beaconQuerier) ConsensusParameters(ctx context.Context) (*beacon.Conse
 	return bq.state.ConsensusParameters(ctx)
 }
 
-func (bq *beaconQuerier) PVSSState(ctx context.Context) (*beacon.PVSSState, error) {
-	return bq.state.PVSSState(ctx)
+func (bq *beaconQuerier) VRFState(ctx context.Context) (*beacon.VRFState, error) {
+	return bq.state.VRFState(ctx)
 }
 
 func (app *beaconApplication) QueryFactory() interface{} {

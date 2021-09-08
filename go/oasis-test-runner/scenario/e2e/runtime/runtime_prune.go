@@ -69,7 +69,7 @@ func (sc *runtimePruneImpl) Run(childEnv *env.Env) error {
 		return err
 	}
 
-	if err = sc.initialEpochTransitions(fixture); err != nil {
+	if _, err = sc.initialEpochTransitions(fixture); err != nil {
 		return err
 	}
 

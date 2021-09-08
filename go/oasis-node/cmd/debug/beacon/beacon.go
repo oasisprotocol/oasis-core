@@ -67,20 +67,8 @@ func doBeaconStatus(cmd *cobra.Command, args []string) {
 	// scrape the beacon.  Oh well.
 	prettyOut := struct {
 		Beacon []byte
-		State  *beacon.PVSSState
 	}{
 		Beacon: b,
-	}
-
-	pvssClient, ok := client.(beacon.PVSSBackend)
-	if ok {
-		prettyOut.State, err = pvssClient.GetPVSSState(context.Background(), consensus.HeightLatest)
-		if err != nil {
-			logger.Error("failed to query PVSS backend state",
-				"err", err,
-			)
-			os.Exit(1)
-		}
 	}
 
 	prettyJSON, err := cmdCommon.PrettyJSONMarshal(prettyOut)

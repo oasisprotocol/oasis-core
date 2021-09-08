@@ -432,12 +432,12 @@ func RegisterScenarios() error {
 		MultipleSeeds,
 		// Seed API test.
 		SeedAPI,
-		// Byzantine beacon tests.
-		ByzantineBeaconHonest,
-		ByzantineBeaconCommitStraggler,
-		ByzantineBeaconRevealStraggler,
 		// ValidatorEquivocation test.
 		ValidatorEquivocation,
+		// Byzantine VRF beacon tests.
+		ByzantineVRFBeaconHonest,
+		ByzantineVRFBeaconEarly,
+		ByzantineVRFBeaconMissing,
 	} {
 		if err := cmd.Register(s); err != nil {
 			return err

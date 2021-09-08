@@ -21,7 +21,7 @@ var (
 	HaltRestoreSuspended scenario.Scenario = newHaltRestoreImpl(true)
 )
 
-const haltEpoch = 3
+const haltEpoch = 10
 
 type haltRestoreImpl struct {
 	runtimeImpl
@@ -79,11 +79,11 @@ func (sc *haltRestoreImpl) Run(childEnv *env.Env) error {
 	if err != nil {
 		return err
 	}
-	if err = sc.initialEpochTransitions(fixture); err != nil {
+	var nextEpoch beacon.EpochTime
+	if nextEpoch, err = sc.initialEpochTransitions(fixture); err != nil {
 		return err
 	}
-	// We're at epoch 2 after the initial transitions
-	nextEpoch := beacon.EpochTime(3)
+	nextEpoch++ // Next, after initial transitions.
 
 	// Wait for the client to exit.
 	if err = sc.waitTestClientOnly(); err != nil {

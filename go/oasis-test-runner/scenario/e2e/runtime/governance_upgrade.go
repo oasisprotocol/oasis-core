@@ -321,12 +321,10 @@ func (sc *governanceConsensusUpgradeImpl) Run(childEnv *env.Env) error { // noli
 	}
 
 	// Wait for the nodes.
-	if err = sc.initialEpochTransitions(fixture); err != nil {
+	if sc.currentEpoch, err = sc.initialEpochTransitions(fixture); err != nil {
 		return err
 	}
 
-	// We're at epoch 2 after the initial transitions.
-	sc.currentEpoch = beacon.EpochTime(2)
 	// Wait for the client to exit.
 	if err = sc.waitTestClientOnly(); err != nil {
 		return err

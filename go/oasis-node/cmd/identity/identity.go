@@ -57,7 +57,7 @@ func doNodeInit(cmd *cobra.Command, args []string) {
 	}
 
 	// Provision the node identity.
-	nodeSignerFactory, err := fileSigner.NewFactory(dataDir, signature.SignerNode, signature.SignerP2P, signature.SignerConsensus)
+	nodeSignerFactory, err := fileSigner.NewFactory(dataDir, identity.RequiredSignerRoles...)
 	if err != nil {
 		logger.Error("failed to create identity signer factory",
 			"err", err,
@@ -85,7 +85,7 @@ func doShowPubkey(cmd *cobra.Command, args []string, sentry bool) {
 		os.Exit(1)
 	}
 
-	nodeSignerFactory, err := fileSigner.NewFactory(dataDir, signature.SignerNode, signature.SignerP2P, signature.SignerConsensus)
+	nodeSignerFactory, err := fileSigner.NewFactory(dataDir, identity.RequiredSignerRoles...)
 	if err != nil {
 		logger.Error("failed to create node identity signer factory",
 			"err", err,

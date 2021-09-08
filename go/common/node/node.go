@@ -15,7 +15,6 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common"
 	"github.com/oasisprotocol/oasis-core/go/common/cbor"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
-	"github.com/oasisprotocol/oasis-core/go/common/crypto/pvss"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	"github.com/oasisprotocol/oasis-core/go/common/prettyprint"
 	"github.com/oasisprotocol/oasis-core/go/common/sgx"
@@ -80,12 +79,13 @@ type Node struct { // nolint: maligned
 	// consensus member.
 	Consensus ConsensusInfo `json:"consensus"`
 
-	// Beacon contains information for this node's participation
-	// in the random beacon protocol.
-	//
-	// TODO: This is optional for now, make mandatory once enough
-	// nodes provide this field.
-	Beacon *BeaconInfo `json:"beacon,omitempty"`
+	// VRF contains information for this node's participation in VRF
+	// based elections.
+	VRF *VRFInfo `json:"vrf,omitempty"`
+
+	// DeprecatedBeacon contains information for this node's
+	// participation in the old PVSS based random beacon protocol.
+	DeprecatedBeacon cbor.RawMessage `json:"beacon,omitempty"`
 
 	// Runtimes are the node's runtimes.
 	Runtimes []*Runtime `json:"runtimes"`
@@ -367,11 +367,11 @@ type ConsensusInfo struct {
 	Addresses []ConsensusAddress `json:"addresses"`
 }
 
-// BeaconInfo contains information for this node's participation in
-// the random beacon protocol.
-type BeaconInfo struct {
-	// Point is the elliptic curve point used for the PVSS algorithm.
-	Point pvss.Point `json:"point"`
+// VRFInfo contains information for this node's participation in
+// VRF based elections.
+type VRFInfo struct {
+	// ID is the unique identifier of the node used to generate VRF proofs.
+	ID signature.PublicKey `json:"id"`
 }
 
 // Capabilities represents a node's capabilities.
