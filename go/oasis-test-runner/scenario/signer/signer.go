@@ -11,10 +11,10 @@ import (
 // BasicTests ensures basic signer factory sanity.
 //
 // Note: The factory must be configured to service signature.SignerRoles.
-func BasicTests(factory signature.SignerFactory, logger *logging.Logger) error {
+func BasicTests(factory signature.SignerFactory, logger *logging.Logger, roles []signature.SignerRole) error {
 	// EnsureRole()
 	logger.Info("testing EnsureRole")
-	for _, v := range signature.SignerRoles {
+	for _, v := range roles {
 		if err := factory.EnsureRole(v); err != nil {
 			return fmt.Errorf("failed to EnsureRole(%v): %w", v, err)
 		}
@@ -24,7 +24,7 @@ func BasicTests(factory signature.SignerFactory, logger *logging.Logger) error {
 
 	// Test each sub-key.
 	pkMap := make(map[signature.PublicKey]bool)
-	for _, v := range signature.SignerRoles {
+	for _, v := range roles {
 		// Load()
 		si, err := factory.Load(v)
 		if err != nil {
@@ -53,7 +53,7 @@ func BasicTests(factory signature.SignerFactory, logger *logging.Logger) error {
 	}
 
 	// Ensure that the signer uses unique sub-keys.
-	if len(pkMap) != len(signature.SignerRoles) {
+	if len(pkMap) != len(roles) {
 		return fmt.Errorf("signer not using unique public keys: %v distinct found", len(pkMap))
 	}
 

@@ -153,7 +153,7 @@ func TestSignerRoles(t *testing.T) {
 	// Make sure invalid roles return appropriate string representation.
 	invalidRoles := []SignerRole{
 		SignerUnknown,
-		SignerRole(5),
+		SignerRole(6),
 		SignerRole(-1),
 	}
 	for _, role := range invalidRoles {

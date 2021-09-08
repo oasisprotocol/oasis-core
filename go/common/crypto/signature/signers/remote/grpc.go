@@ -22,6 +22,7 @@ var (
 
 	methodPublicKeys = serviceName.NewMethod("PublicKeys", nil)
 	methodSign       = serviceName.NewMethod("Sign", SignRequest{})
+	methodProve      = serviceName.NewMethod("Prove", ProveRequest{})
 
 	serviceDesc = grpc.ServiceDesc{
 		ServiceName: string(serviceName),
@@ -34,6 +35,10 @@ var (
 			{
 				MethodName: methodSign.ShortName(),
 				Handler:    handlerSign,
+			},
+			{
+				MethodName: methodProve.ShortName(),
+				Handler:    handlerProve,
 			},
 		},
 	}
@@ -52,10 +57,17 @@ type SignRequest struct {
 	Message []byte               `json:"message"`
 }
 
+// ProveRequest is a VRF proof request.
+type ProveRequest struct {
+	Role  signature.SignerRole `json:"role"`
+	Alpha []byte               `json:"alpha"`
+}
+
 // Backend is the remote signer backend interface.
 type Backend interface {
 	PublicKeys(context.Context) ([]PublicKey, error)
 	Sign(context.Context, *SignRequest) ([]byte, error)
+	Prove(context.Context, *ProveRequest) ([]byte, error)
 }
 
 type wrapper struct {
@@ -81,6 +93,21 @@ func (w *wrapper) Sign(ctx context.Context, req *SignRequest) ([]byte, error) {
 		return nil, signature.ErrNotExist
 	}
 	return signer.ContextSign(signature.Context(req.Context), req.Message)
+}
+
+func (w *wrapper) Prove(ctx context.Context, req *ProveRequest) ([]byte, error) {
+	signer, ok := w.signers[req.Role]
+	if !ok {
+		return nil, signature.ErrNotExist
+	}
+	vrfSigner, ok := signer.(signature.VRFSigner)
+	if !ok {
+		return nil, fmt.Errorf("signature/signer/remote: signer does not support VRF prove")
+	}
+	if req.Role != signature.SignerVRF {
+		return nil, signature.ErrInvalidRole
+	}
+	return vrfSigner.Prove(req.Alpha)
 }
 
 func handlerPublicKeys( // nolint: golint
@@ -121,6 +148,29 @@ func handlerSign( // nolint: golint
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(Backend).Sign(ctx, req.(*SignRequest))
+	}
+	return interceptor(ctx, &req, info, handler)
+}
+
+func handlerProve( // nolint: golint
+	srv interface{},
+	ctx context.Context,
+	dec func(interface{}) error,
+	interceptor grpc.UnaryServerInterceptor,
+) (interface{}, error) {
+	var req ProveRequest
+	if err := dec(&req); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(Backend).Prove(ctx, &req)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: methodProve.FullName(),
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(Backend).Prove(ctx, req.(*ProveRequest))
 	}
 	return interceptor(ctx, &req, info, handler)
 }

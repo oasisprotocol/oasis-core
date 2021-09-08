@@ -37,6 +37,10 @@ var (
 	// ErrInvalidRole is the error returned when the signer role is invalid.
 	ErrInvalidRole = errors.New("signature: invalid signer role")
 
+	// ErrVRFNotSupported is the error returned when the signer is not capable
+	// of generating VRF proofs.
+	ErrVRFNotSupported = errors.New("signature: VRF proofs not supported")
+
 	errMalformedContext    = errors.New("signature: malformed context")
 	errUnregisteredContext = errors.New("signature: unregistered context")
 	errNoChainContext      = errors.New("signature: chain domain separation context not set")
@@ -55,6 +59,7 @@ var (
 		SignerNode,
 		SignerP2P,
 		SignerConsensus,
+		SignerVRF,
 	}
 
 	_ encoding.TextMarshaler   = (*SignerRole)(nil)
@@ -209,11 +214,13 @@ const (
 	SignerNode      SignerRole = 2
 	SignerP2P       SignerRole = 3
 	SignerConsensus SignerRole = 4
+	SignerVRF       SignerRole = 5
 
 	SignerEntityName    = "entity"
 	SignerNodeName      = "node"
 	SignerP2PName       = "p2p"
 	SignerConsensusName = "consensus"
+	SignerVRFName       = "vrf"
 )
 
 // String returns the string representation of a SignerRole.
@@ -227,6 +234,8 @@ func (role SignerRole) String() string {
 		return SignerP2PName
 	case SignerConsensus:
 		return SignerConsensusName
+	case SignerVRF:
+		return SignerVRFName
 	default:
 		return "[unknown signer role]"
 	}
@@ -248,6 +257,8 @@ func (role *SignerRole) UnmarshalText(text []byte) error {
 		*role = SignerP2P
 	case SignerConsensusName:
 		*role = SignerConsensus
+	case SignerVRFName:
+		*role = SignerVRF
 	default:
 		return fmt.Errorf("%w: %s", ErrInvalidRole, string(text))
 	}
