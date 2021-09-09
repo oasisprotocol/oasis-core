@@ -34,6 +34,8 @@ tokio = { version = "1", features = ["rt"] }
 # https://github.com/informalsystems/tendermint-rs/pull/926
 tendermint = { git = "https://github.com/informalsystems/tendermint-rs", rev = "1efe42c8625045fd99072718faf96e81aeb9c6e6" }
 tendermint-proto = { git = "https://github.com/informalsystems/tendermint-rs", rev = "1efe42c8625045fd99072718faf96e81aeb9c6e6" }
+tendermint-light-client = { git = "https://github.com/informalsystems/tendermint-rs", rev = "1efe42c8625045fd99072718faf96e81aeb9c6e6", default-features = false }
+tendermint-rpc = { git = "https://github.com/informalsystems/tendermint-rs", rev = "1efe42c8625045fd99072718faf96e81aeb9c6e6", default-features = false }
 io-context = "0.2.0"
 curve25519-dalek = "3.2.0"
 x25519-dalek = "1.1.0"
@@ -55,6 +57,7 @@ x509-parser = "0.11.0"
 oid-registry = "0.1.5"
 rsa = "0.5.0"
 base64-serde = "0.6.1"
+lru = "0.6.6"
 
 [dev-dependencies]
 # For storage interoperability tests only.

@@ -5,6 +5,9 @@ import (
 	"errors"
 	"fmt"
 	"sync"
+	"time"
+
+	"github.com/eapache/channels"
 
 	"github.com/oasisprotocol/oasis-core/go/common/cbor"
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
@@ -18,6 +21,9 @@ import (
 	storage "github.com/oasisprotocol/oasis-core/go/storage/api"
 	"github.com/oasisprotocol/oasis-core/go/storage/mkvs/syncer"
 )
+
+// notifyTimeout is the maximum time to wait for a notification to be processed by the runtime.
+const notifyTimeout = 10 * time.Second
 
 // RuntimeHostNode provides methods for nodes that need to host runtimes.
 type RuntimeHostNode struct {
@@ -196,6 +202,16 @@ func (h *runtimeHostHandler) Handle(ctx context.Context, body *protocol.Body) (*
 		}
 		return &protocol.Body{HostLocalStorageSetResponse: &protocol.Empty{}}, nil
 	}
+	// Consensus light client.
+	if body.HostFetchConsensusBlockRequest != nil {
+		lb, err := h.consensus.GetLightBlock(ctx, int64(body.HostFetchConsensusBlockRequest.Height))
+		if err != nil {
+			return nil, err
+		}
+		return &protocol.Body{HostFetchConsensusBlockResponse: &protocol.HostFetchConsensusBlockResponse{
+			Block: *lb,
+		}}, nil
+	}
 
 	return nil, errMethodNotSupported
 }
@@ -280,7 +296,9 @@ func (n *runtimeHostNotifier) watchPolicyUpdates() {
 			SignedPolicyRaw: raw,
 		}}
 
-		response, err := n.host.Call(n.ctx, req)
+		ctx, cancel := context.WithTimeout(n.ctx, notifyTimeout)
+		response, err := n.host.Call(ctx, req)
+		cancel()
 		if err != nil {
 			n.logger.Error("failed dispatching key manager policy update to runtime",
 				"err", err,
@@ -288,6 +306,63 @@ func (n *runtimeHostNotifier) watchPolicyUpdates() {
 			continue
 		}
 		n.logger.Debug("key manager policy updated dispatched", "response", response)
+	}
+}
+
+func (n *runtimeHostNotifier) watchConsensusLightBlocks() {
+	rawCh, sub, err := n.consensus.WatchBlocks(n.ctx)
+	if err != nil {
+		n.logger.Error("failed to subscribe to consensus block updates",
+			"err", err,
+		)
+		return
+	}
+	defer sub.Close()
+
+	// Create a ring channel with a capacity of one as we only care about the latest block.
+	blkCh := channels.NewRingChannel(channels.BufferCap(1))
+	go func() {
+		for blk := range rawCh {
+			blkCh.In() <- blk
+		}
+		blkCh.Close()
+	}()
+
+	n.logger.Debug("watching consensus layer blocks")
+
+	for {
+		select {
+		case <-n.ctx.Done():
+			n.logger.Debug("context canceled")
+			return
+		case <-n.stopCh:
+			n.logger.Debug("termination requested")
+			return
+		case rawBlk, ok := <-blkCh.Out():
+			if !ok {
+				return
+			}
+			blk := rawBlk.(*consensus.Block)
+
+			// Notify the runtime that a new consensus layer block is available.
+			req := &protocol.Body{RuntimeConsensusSyncRequest: &protocol.RuntimeConsensusSyncRequest{
+				Height: uint64(blk.Height),
+			}}
+
+			ctx, cancel := context.WithTimeout(n.ctx, notifyTimeout)
+			_, err = n.host.Call(ctx, req)
+			cancel()
+			if err != nil {
+				n.logger.Error("failed to notify runtime of a new consensus layer block",
+					"err", err,
+					"height", blk.Height,
+				)
+				continue
+			}
+			n.logger.Debug("runtime notified of new consensus layer block",
+				"height", blk.Height,
+			)
+		}
 	}
 }
 
@@ -302,6 +377,7 @@ func (n *runtimeHostNotifier) Start() error {
 	n.started = true
 
 	go n.watchPolicyUpdates()
+	go n.watchConsensusLightBlocks()
 
 	return nil
 }

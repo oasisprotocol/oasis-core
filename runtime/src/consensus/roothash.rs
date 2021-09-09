@@ -4,6 +4,8 @@
 //!
 //! This **MUST** be kept in sync with go/roothash/api.
 //!
+use thiserror::Error;
+
 use crate::{
     common::{
         crypto::{
@@ -13,8 +15,18 @@ use crate::{
         namespace::Namespace,
         versioned::Versioned,
     },
-    consensus::{registry, staking},
+    consensus::{registry, staking, state::StateError},
 };
+
+/// Errors emitted by the roothash module.
+#[derive(Debug, Error)]
+pub enum Error {
+    #[error("roothash: invalid runtime {0}")]
+    InvalidRuntime(Namespace),
+
+    #[error(transparent)]
+    State(#[from] StateError),
+}
 
 /// Runtime block.
 #[derive(Clone, Debug, Default, PartialEq, Eq, Hash, cbor::Encode, cbor::Decode)]

@@ -5,7 +5,7 @@
 //! To create a minimal runtime that doesn't expose any APIs to the
 //! outside world, you need to call the `start_runtime` function:
 //! ```rust,ignore
-//! oasis_core_runtime::start_runtime(Some(Box::new(reg)));
+//! oasis_core_runtime::start_runtime(Some(Box::new(reg)), version, Some(trust_root));
 //! ```
 //!
 //! This will start the required services needed to communicate with

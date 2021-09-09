@@ -9,7 +9,7 @@ use std::sync::{atomic::AtomicBool, Arc};
 use oasis_core_keymanager_client::KeyManagerClient;
 use oasis_core_runtime::{
     common::version::Version,
-    consensus::roothash::Message,
+    consensus::{roothash::Message, verifier::TrustRoot},
     protocol::HostInfo,
     rak::RAK,
     transaction::{
@@ -262,6 +262,18 @@ pub fn main() {
         Some(Box::new(dispatcher))
     };
 
+    // Determine test trust root based on build settings.
+    let trust_root = option_env!("OASIS_TESTS_CONSENSUS_TRUST_HEIGHT").map(|height| {
+        let hash = option_env!("OASIS_TESTS_CONSENSUS_TRUST_HASH").unwrap();
+        let runtime_id = option_env!("OASIS_TESTS_CONSENSUS_TRUST_RUNTIME_ID").unwrap();
+
+        TrustRoot {
+            height: u64::from_str_radix(height, 10).unwrap(),
+            hash: hash.to_string(),
+            runtime_id: runtime_id.into(),
+        }
+    });
+
     // Start the runtime.
-    oasis_core_runtime::start_runtime(Box::new(init), version_from_cargo!());
+    oasis_core_runtime::start_runtime(Box::new(init), version_from_cargo!(), trust_root);
 }

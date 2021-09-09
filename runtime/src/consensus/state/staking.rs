@@ -1,3 +1,4 @@
+//! Staking state in the consensus layer.
 use std::collections::BTreeMap;
 
 use anyhow::anyhow;

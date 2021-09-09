@@ -41,7 +41,7 @@ impl HostReadSyncer {
                 Ok(response)
             }
             Ok(_) => Err(ProtocolError::InvalidResponse.into()),
-            Err(error) => Err(error),
+            Err(error) => Err(error.into()),
         }
     }
 }

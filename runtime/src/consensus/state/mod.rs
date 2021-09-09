@@ -11,6 +11,7 @@ use crate::{
     types::HostStorageEndpoint,
 };
 
+pub mod roothash;
 pub mod staking;
 
 #[derive(Error, Debug)]
@@ -32,7 +33,7 @@ impl ConsensusState {
 
     /// Creates consensus state using host protocol.
     pub fn from_protocol(protocol: Arc<Protocol>, root: Root) -> Self {
-        let read_syncer = HostReadSyncer::new(protocol.clone(), HostStorageEndpoint::Consensus);
+        let read_syncer = HostReadSyncer::new(protocol, HostStorageEndpoint::Consensus);
         Self {
             mkvs: Tree::make()
                 .with_capacity(100_000, 10_000_000)
