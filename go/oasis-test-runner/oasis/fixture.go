@@ -155,6 +155,8 @@ type NodeFixture struct {
 	// to automatically instantiate a dedicated node with a default name.
 	Name string `json:"node_name,omitempty"`
 
+	NoAutoStart bool `json:"no_auto_start,omitempty"`
+
 	ExtraArgs []Argument `json:"extra_args,omitempty"`
 }
 
@@ -170,8 +172,6 @@ type ValidatorFixture struct { // nolint: maligned
 
 	AllowEarlyTermination bool `json:"allow_early_termination"`
 	AllowErrorTermination bool `json:"allow_error_termination"`
-
-	NoAutoStart bool `json:"no_auto_start,omitempty"`
 
 	CrashPointsProbability float64 `json:"crash_points_probability,omitempty"`
 
@@ -316,8 +316,6 @@ type KeymanagerFixture struct {
 	AllowEarlyTermination bool `json:"allow_early_termination"`
 	AllowErrorTermination bool `json:"allow_error_termination"`
 
-	NoAutoStart bool `json:"no_auto_start,omitempty"`
-
 	EnableProfiling bool `json:"enable_profiling"`
 
 	Sentries []int `json:"sentries,omitempty"`
@@ -375,8 +373,6 @@ type StorageWorkerFixture struct { // nolint: maligned
 
 	AllowEarlyTermination bool `json:"allow_early_termination"`
 	AllowErrorTermination bool `json:"allow_error_termination"`
-
-	NoAutoStart bool `json:"no_auto_start,omitempty"`
 
 	EnableProfiling bool `json:"enable_profiling"`
 
@@ -445,8 +441,6 @@ type ComputeWorkerFixture struct {
 
 	AllowEarlyTermination bool `json:"allow_early_termination"`
 	AllowErrorTermination bool `json:"allow_error_termination"`
-
-	NoAutoStart bool `json:"no_auto_start,omitempty"`
 
 	EnableProfiling bool `json:"enable_profiling"`
 
@@ -529,6 +523,7 @@ func (f *SentryFixture) Create(net *Network) (*Sentry, error) {
 	return net.NewSentry(&SentryCfg{
 		NodeCfg: NodeCfg{
 			Name:                        f.Name,
+			NoAutoStart:                 f.NoAutoStart,
 			LogWatcherHandlerFactories:  f.LogWatcherHandlerFactories,
 			CrashPointsProbability:      f.CrashPointsProbability,
 			SupplementarySanityInterval: f.Consensus.SupplementarySanityInterval,
@@ -573,6 +568,7 @@ func (f *ClientFixture) Create(net *Network) (*Client, error) {
 			Consensus:                   f.Consensus,
 			AllowErrorTermination:       f.AllowErrorTermination,
 			AllowEarlyTermination:       f.AllowEarlyTermination,
+			NoAutoStart:                 f.NoAutoStart,
 			SupplementarySanityInterval: f.Consensus.SupplementarySanityInterval,
 			EnableProfiling:             f.EnableProfiling,
 			ExtraArgs:                   f.ExtraArgs,

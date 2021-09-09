@@ -62,9 +62,11 @@ func (sc *storageSyncFromRegisteredImpl) Fixture() (*oasis.NetworkFixture, error
 			AllowEarlyTermination:   true,
 		},
 		{
+			NodeFixture: oasis.NodeFixture{
+				NoAutoStart: true,
+			},
 			Backend:               database.BackendNameBadgerDB,
 			Entity:                1,
-			NoAutoStart:           true,
 			CheckpointSyncEnabled: true,
 		},
 	}
