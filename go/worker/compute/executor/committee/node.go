@@ -1477,8 +1477,8 @@ func (n *Node) proposeBatch(
 	}
 
 	// Submit commitment.
-	n.commonNode.Group.Lock()
-	defer n.commonNode.Group.Unlock()
+	n.commonNode.CrossNode.Lock()
+	defer n.commonNode.CrossNode.Unlock()
 
 	// Make sure we are still in the right state/round.
 	state, ok := n.state.(StateProcessingBatch)
