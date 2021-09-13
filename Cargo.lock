@@ -2238,16 +2238,7 @@ dependencies = [
  "oasis-core-runtime",
  "oasis-core-tools",
  "simple-keymanager",
- "simple-keyvalue-api",
  "thiserror",
-]
-
-[[package]]
-name = "simple-keyvalue-api"
-version = "0.0.0"
-dependencies = [
- "oasis-cbor",
- "oasis-core-runtime",
 ]
 
 [[package]]

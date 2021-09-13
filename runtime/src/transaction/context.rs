@@ -1,16 +1,16 @@
 //! Runtime call context.
-use std::{any::Any, sync::Arc};
+use std::sync::Arc;
 
 use io_context::Context as IoContext;
 
-use super::tags::{Tag, Tags};
-use crate::consensus::{
-    beacon::EpochTime,
-    roothash::{Header, Message, RoundResults},
-    state::ConsensusState,
+use crate::{
+    consensus::{
+        beacon::EpochTime,
+        roothash::{Header, RoundResults},
+        state::ConsensusState,
+    },
+    storage::MKVS,
 };
-
-struct NoRuntimeContext;
 
 /// Transaction context.
 pub struct Context<'a> {
@@ -20,6 +20,8 @@ pub struct Context<'a> {
     pub tokio: &'a tokio::runtime::Runtime,
     /// Consensus state tree.
     pub consensus_state: ConsensusState,
+    /// Runtime state.
+    pub runtime_state: &'a mut dyn MKVS,
     /// The block header accompanying this transaction.
     pub header: &'a Header,
     /// Epoch corresponding to the currently processed block.
@@ -28,18 +30,9 @@ pub struct Context<'a> {
     pub round_results: &'a RoundResults,
     /// The maximum number of messages that can be emitted in this round.
     pub max_messages: u32,
-    /// Runtime-specific context.
-    pub runtime: Box<dyn Any>,
-
     /// Flag indicating whether to only perform transaction check rather than
     /// running the transaction.
     pub check_only: bool,
-
-    /// List of emitted tags for each transaction.
-    tags: Tags,
-
-    /// List of emitted messages.
-    messages: Vec<Message>,
 }
 
 impl<'a> Context<'a> {
@@ -48,6 +41,7 @@ impl<'a> Context<'a> {
         io_ctx: Arc<IoContext>,
         tokio: &'a tokio::runtime::Runtime,
         consensus_state: ConsensusState,
+        runtime_state: &'a mut dyn MKVS,
         header: &'a Header,
         epoch: EpochTime,
         round_results: &'a RoundResults,
@@ -58,47 +52,12 @@ impl<'a> Context<'a> {
             io_ctx,
             tokio,
             consensus_state,
+            runtime_state,
             header,
             epoch,
             round_results,
             max_messages,
-            runtime: Box::new(NoRuntimeContext),
             check_only,
-            tags: Tags::new(),
-            messages: Vec::new(),
         }
-    }
-
-    /// Close the context and return the sent roothash messages.
-    pub fn close(self) -> Vec<Message> {
-        self.messages
-    }
-
-    /// Takes the tags accumulated so far and replaces them with an empty set.
-    pub fn take_tags(&mut self) -> Tags {
-        std::mem::take(&mut self.tags)
-    }
-
-    /// Emit a runtime-specific indexable tag refering to the specific
-    /// transaction which is being processed.
-    ///
-    /// If multiple tags with the same key are emitted for a transaction, only
-    /// the last one will be indexed.
-    pub fn emit_txn_tag<K, V>(&mut self, key: K, value: V)
-    where
-        K: AsRef<[u8]>,
-        V: AsRef<[u8]>,
-    {
-        self.tags
-            .push(Tag::new(key.as_ref().to_vec(), value.as_ref().to_vec()))
-    }
-
-    /// Emit a message as part of the current round.
-    ///
-    /// Returns the index of the emitted message which is needed to check for the result of the
-    /// emitted message in the next round.
-    pub fn emit_message(&mut self, message: Message) -> u32 {
-        self.messages.push(message);
-        self.messages.len() as u32 - 1
     }
 }

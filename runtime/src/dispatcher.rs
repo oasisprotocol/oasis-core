@@ -24,7 +24,7 @@ use crate::{
     },
     consensus::{
         beacon::EpochTime,
-        roothash::{self, Block, ComputeResultsHeader, Header, COMPUTE_RESULTS_HEADER_CONTEXT},
+        roothash::{self, ComputeResultsHeader, Header, COMPUTE_RESULTS_HEADER_CONTEXT},
         state::ConsensusState,
     },
     enclave_rpc::{
@@ -35,12 +35,9 @@ use crate::{
     },
     protocol::{Protocol, ProtocolUntrustedLocalStorage},
     rak::RAK,
-    storage::{
-        mkvs::{
-            sync::{HostReadSyncer, NoopReadSyncer},
-            OverlayTree, Root, RootType, Tree,
-        },
-        StorageContext,
+    storage::mkvs::{
+        sync::{HostReadSyncer, NoopReadSyncer},
+        OverlayTree, Root, RootType, Tree,
     },
     transaction::{
         dispatcher::{Dispatcher as TxnDispatcher, NoopDispatcher as TxnNoopDispatcher},
@@ -103,6 +100,16 @@ impl Drop for AbortOnPanic {
             process::abort();
         }
     }
+}
+
+struct TxDispatchState<'a> {
+    tokio_rt: &'a tokio::runtime::Runtime,
+    consensus_state: ConsensusState,
+    header: Header,
+    epoch: EpochTime,
+    round_results: roothash::RoundResults,
+    max_messages: u32,
+    check_only: bool,
 }
 
 /// Runtime call dispatcher.
@@ -256,19 +263,21 @@ impl Dispatcher {
 
                     // Transaction execution.
                     self.dispatch_txn(
+                        ctx,
                         &mut cache,
                         &mut txn_dispatcher,
                         &protocol,
-                        &tokio_rt,
-                        consensus_state,
-                        ctx,
                         io_root,
                         inputs.unwrap_or_default(),
-                        block,
-                        epoch,
-                        round_results,
-                        max_messages,
-                        false,
+                        TxDispatchState {
+                            tokio_rt: &tokio_rt,
+                            consensus_state,
+                            header: block.header,
+                            epoch,
+                            round_results,
+                            max_messages,
+                            check_only: false,
+                        },
                     )
                 }
                 Body::RuntimeCheckTxBatchRequest {
@@ -286,19 +295,21 @@ impl Dispatcher {
 
                     // Transaction check.
                     self.dispatch_txn(
+                        ctx,
                         &mut cache_check,
                         &mut txn_dispatcher,
                         &protocol,
-                        &tokio_rt,
-                        consensus_state,
-                        ctx,
                         Hash::default(),
                         inputs,
-                        block,
-                        epoch,
-                        Default::default(),
-                        max_messages,
-                        true,
+                        TxDispatchState {
+                            tokio_rt: &tokio_rt,
+                            consensus_state,
+                            header: block.header,
+                            epoch,
+                            round_results: Default::default(),
+                            max_messages,
+                            check_only: true,
+                        },
                     )
                 }
                 Body::RuntimeKeyManagerPolicyUpdateRequest { signed_policy_raw } => {
@@ -321,17 +332,21 @@ impl Dispatcher {
 
                     // Query.
                     self.dispatch_query(
+                        ctx,
                         &mut cache_check,
                         &mut txn_dispatcher,
                         &protocol,
-                        &tokio_rt,
-                        consensus_state,
-                        ctx,
-                        header,
-                        epoch,
-                        max_messages,
                         method,
                         args,
+                        TxDispatchState {
+                            tokio_rt: &tokio_rt,
+                            consensus_state,
+                            header,
+                            epoch,
+                            round_results: Default::default(),
+                            max_messages,
+                            check_only: true,
+                        },
                     )
                 }
                 Body::RuntimeAbortRequest {} => {
@@ -360,29 +375,25 @@ impl Dispatcher {
 
     fn dispatch_query(
         &self,
+        ctx: Context,
         cache: &mut Cache,
         txn_dispatcher: &mut dyn TxnDispatcher,
         protocol: &Arc<Protocol>,
-        tokio_rt: &tokio::runtime::Runtime,
-        consensus_state: ConsensusState,
-        ctx: Context,
-        header: Header,
-        epoch: EpochTime,
-        max_messages: u32,
         method: String,
         args: cbor::Value,
+        state: TxDispatchState,
     ) -> Result<Body, Error> {
         debug!(self.logger, "Received query request";
-            "state_root" => ?header.state_root,
-            "round" => ?header.round,
+            "state_root" => ?state.header.state_root,
+            "round" => ?state.header.round,
         );
 
         // Verify that the runtime ID matches the block's namespace. This is a protocol violation
         // as the compute node should never change the runtime ID.
-        if header.namespace != protocol.get_runtime_id() {
+        if state.header.namespace != protocol.get_runtime_id() {
             panic!(
                 "block namespace does not match runtime id (namespace: {:?} runtime ID: {:?})",
-                header.namespace,
+                state.header.namespace,
                 protocol.get_runtime_id(),
             );
         }
@@ -390,50 +401,51 @@ impl Dispatcher {
         // Create a new context and dispatch the batch.
         let ctx = ctx.freeze();
         cache.maybe_replace(Root {
-            namespace: header.namespace,
-            version: header.round,
+            namespace: state.header.namespace,
+            version: state.header.round,
             root_type: RootType::State,
-            hash: header.state_root,
+            hash: state.header.state_root,
         });
 
-        let untrusted_local = Arc::new(ProtocolUntrustedLocalStorage::new(
-            Context::create_child(&ctx),
-            protocol.clone(),
-        ));
-
-        let results = Default::default();
+        let mut overlay = OverlayTree::new(&mut cache.mkvs);
         let txn_ctx = TxnContext::new(
             ctx.clone(),
-            tokio_rt,
-            consensus_state,
-            &header,
-            epoch,
-            &results,
-            max_messages,
-            true,
+            state.tokio_rt,
+            state.consensus_state,
+            &mut overlay,
+            &state.header,
+            state.epoch,
+            &state.round_results,
+            state.max_messages,
+            state.check_only,
         );
-        let mut overlay = OverlayTree::new(&mut cache.mkvs);
-        let result = StorageContext::enter(&mut overlay, untrusted_local, || {
-            txn_dispatcher.query(txn_ctx, &method, args)
-        });
-
-        result.map(|data| Body::RuntimeQueryResponse { data })
+        txn_dispatcher
+            .query(txn_ctx, &method, args)
+            .map(|data| Body::RuntimeQueryResponse { data })
     }
 
     fn txn_check_batch(
         &self,
-        _ctx: Arc<Context>,
+        ctx: Arc<Context>,
         cache: &mut Cache,
         txn_dispatcher: &mut dyn TxnDispatcher,
-        txn_ctx: TxnContext,
-        untrusted_local: Arc<ProtocolUntrustedLocalStorage>,
         inputs: TxnBatch,
         _io_root: Hash,
+        state: TxDispatchState,
     ) -> Result<Body, Error> {
         let mut overlay = OverlayTree::new(&mut cache.mkvs);
-        let results = StorageContext::enter(&mut overlay, untrusted_local.clone(), || {
-            txn_dispatcher.check_batch(txn_ctx, &inputs)
-        });
+        let txn_ctx = TxnContext::new(
+            ctx.clone(),
+            state.tokio_rt,
+            state.consensus_state,
+            &mut overlay,
+            &state.header,
+            state.epoch,
+            &state.round_results,
+            state.max_messages,
+            state.check_only,
+        );
+        let results = txn_dispatcher.check_batch(txn_ctx, &inputs);
 
         debug!(self.logger, "Transaction batch check complete");
 
@@ -445,16 +457,24 @@ impl Dispatcher {
         ctx: Arc<Context>,
         cache: &mut Cache,
         txn_dispatcher: &mut dyn TxnDispatcher,
-        txn_ctx: TxnContext,
-        untrusted_local: Arc<ProtocolUntrustedLocalStorage>,
         mut inputs: TxnBatch,
         io_root: Hash,
+        state: TxDispatchState,
     ) -> Result<Body, Error> {
-        let header = txn_ctx.header.clone();
+        let header = &state.header;
         let mut overlay = OverlayTree::new(&mut cache.mkvs);
-        let mut results = StorageContext::enter(&mut overlay, untrusted_local.clone(), || {
-            txn_dispatcher.execute_batch(txn_ctx, &inputs)
-        })?;
+        let txn_ctx = TxnContext::new(
+            ctx.clone(),
+            state.tokio_rt,
+            state.consensus_state,
+            &mut overlay,
+            header,
+            state.epoch,
+            &state.round_results,
+            state.max_messages,
+            state.check_only,
+        );
+        let mut results = txn_dispatcher.execute_batch(txn_ctx, &inputs)?;
 
         // Finalize state.
         let (state_write_log, new_state_root) = overlay
@@ -561,33 +581,27 @@ impl Dispatcher {
 
     fn dispatch_txn(
         &self,
+        ctx: Context,
         cache: &mut Cache,
         txn_dispatcher: &mut dyn TxnDispatcher,
         protocol: &Arc<Protocol>,
-        tokio_rt: &tokio::runtime::Runtime,
-        consensus_state: ConsensusState,
-        ctx: Context,
         io_root: Hash,
         inputs: TxnBatch,
-        block: Block,
-        epoch: EpochTime,
-        round_results: roothash::RoundResults,
-        max_messages: u32,
-        check_only: bool,
+        state: TxDispatchState,
     ) -> Result<Body, Error> {
         debug!(self.logger, "Received transaction batch request";
-            "state_root" => ?block.header.state_root,
-            "round" => block.header.round + 1,
-            "round_results" => ?round_results,
-            "check_only" => check_only,
+            "state_root" => ?state.header.state_root,
+            "round" => state.header.round + 1,
+            "round_results" => ?state.round_results,
+            "check_only" => state.check_only,
         );
 
         // Verify that the runtime ID matches the block's namespace. This is a protocol violation
         // as the compute node should never change the runtime ID.
-        if block.header.namespace != protocol.get_runtime_id() {
+        if state.header.namespace != protocol.get_runtime_id() {
             panic!(
                 "block namespace does not match runtime id (namespace: {:?} runtime ID: {:?})",
-                block.header.namespace,
+                state.header.namespace,
                 protocol.get_runtime_id(),
             );
         }
@@ -595,46 +609,16 @@ impl Dispatcher {
         // Create a new context and dispatch the batch.
         let ctx = ctx.freeze();
         cache.maybe_replace(Root {
-            namespace: block.header.namespace,
-            version: block.header.round,
+            namespace: state.header.namespace,
+            version: state.header.round,
             root_type: RootType::State,
-            hash: block.header.state_root,
+            hash: state.header.state_root,
         });
 
-        let untrusted_local = Arc::new(ProtocolUntrustedLocalStorage::new(
-            Context::create_child(&ctx),
-            protocol.clone(),
-        ));
-        let txn_ctx = TxnContext::new(
-            ctx.clone(),
-            tokio_rt,
-            consensus_state,
-            &block.header,
-            epoch,
-            &round_results,
-            max_messages,
-            check_only,
-        );
-        if check_only {
-            self.txn_check_batch(
-                ctx,
-                cache,
-                txn_dispatcher,
-                txn_ctx,
-                untrusted_local,
-                inputs,
-                io_root,
-            )
+        if state.check_only {
+            self.txn_check_batch(ctx, cache, txn_dispatcher, inputs, io_root, state)
         } else {
-            self.txn_execute_batch(
-                ctx,
-                cache,
-                txn_dispatcher,
-                txn_ctx,
-                untrusted_local,
-                inputs,
-                io_root,
-            )
+            self.txn_execute_batch(ctx, cache, txn_dispatcher, inputs, io_root, state)
         }
     }
 
@@ -684,20 +668,18 @@ impl Dispatcher {
 
                     // Request, dispatch.
                     let ctx = ctx.freeze();
-                    let mut mkvs = Tree::make()
-                        .with_root_type(RootType::IO)
-                        .new(Box::new(NoopReadSyncer));
-                    let mut overlay = OverlayTree::new(&mut mkvs);
                     let untrusted_local = Arc::new(ProtocolUntrustedLocalStorage::new(
                         Context::create_child(&ctx),
                         protocol.clone(),
                     ));
-                    let rpc_ctx =
-                        RpcContext::new(ctx.clone(), tokio_rt, self.rak.clone(), session_info);
-                    let response =
-                        StorageContext::enter(&mut overlay, untrusted_local.clone(), || {
-                            rpc_dispatcher.dispatch(req, rpc_ctx)
-                        });
+                    let rpc_ctx = RpcContext::new(
+                        ctx.clone(),
+                        tokio_rt,
+                        self.rak.clone(),
+                        session_info,
+                        &untrusted_local,
+                    );
+                    let response = rpc_dispatcher.dispatch(req, rpc_ctx);
                     let response = RpcMessage::Response(response);
 
                     // Note: MKVS commit is omitted, this MUST be global side-effect free.
@@ -756,18 +738,18 @@ impl Dispatcher {
 
         // Request, dispatch.
         let ctx = ctx.freeze();
-        let mut mkvs = Tree::make()
-            .with_root_type(RootType::IO)
-            .new(Box::new(NoopReadSyncer));
-        let mut overlay = OverlayTree::new(&mut mkvs);
         let untrusted_local = Arc::new(ProtocolUntrustedLocalStorage::new(
             Context::create_child(&ctx),
             protocol.clone(),
         ));
-        let rpc_ctx = RpcContext::new(ctx.clone(), tokio_rt, self.rak.clone(), None);
-        let response = StorageContext::enter(&mut overlay, untrusted_local.clone(), || {
-            rpc_dispatcher.dispatch_local(req, rpc_ctx)
-        });
+        let rpc_ctx = RpcContext::new(
+            ctx.clone(),
+            tokio_rt,
+            self.rak.clone(),
+            None,
+            &untrusted_local,
+        );
+        let response = rpc_dispatcher.dispatch_local(req, rpc_ctx);
         let response = RpcMessage::Response(response);
 
         // Note: MKVS commit is omitted, this MUST be global side-effect free.

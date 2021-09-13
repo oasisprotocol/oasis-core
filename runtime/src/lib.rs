@@ -14,8 +14,6 @@
 #![feature(box_into_pin)]
 #![feature(arbitrary_self_types)]
 #![feature(iter_map_while)]
-// Allow until oasis-core#3572.
-#![allow(deprecated)]
 
 use lazy_static::lazy_static;
 #[cfg(target_env = "sgx")]

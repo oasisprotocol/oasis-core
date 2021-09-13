@@ -4,7 +4,7 @@ use std::{any::Any, sync::Arc};
 use io_context::Context as IoContext;
 
 use super::session::SessionInfo;
-use crate::rak::RAK;
+use crate::{rak::RAK, storage::KeyValue};
 
 struct NoRuntimeContext;
 
@@ -20,6 +20,8 @@ pub struct Context<'a> {
     pub session_info: Option<Arc<SessionInfo>>,
     /// Runtime-specific context.
     pub runtime: Box<dyn Any>,
+    /// Untrusted local storage.
+    pub untrusted_local_storage: &'a dyn KeyValue,
 }
 
 impl<'a> Context<'a> {
@@ -29,6 +31,7 @@ impl<'a> Context<'a> {
         tokio: &'a tokio::runtime::Runtime,
         rak: Arc<RAK>,
         session_info: Option<Arc<SessionInfo>>,
+        untrusted_local_storage: &'a dyn KeyValue,
     ) -> Self {
         Self {
             io_ctx,
@@ -36,6 +39,7 @@ impl<'a> Context<'a> {
             rak,
             session_info,
             runtime: Box::new(NoRuntimeContext),
+            untrusted_local_storage,
         }
     }
 }
