@@ -4,6 +4,7 @@ import (
 	"io/ioutil"
 	"os"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 
@@ -24,6 +25,9 @@ func TestLoadOrGenerate(t *testing.T) {
 	require.NoError(t, err, "LoadOrGenerate")
 	require.EqualValues(t, []signature.PublicKey{identity.GetTLSSigner().Public()}, identity.GetTLSPubKeys())
 
+	// Sleep to make sure that any regenerated TLS certificates will have different expiration.
+	time.Sleep(2 * time.Second)
+
 	// Load an existing identity.
 	identity2, err := LoadOrGenerate(dataDir, factory, false)
 	require.NoError(t, err, "LoadOrGenerate (2)")
@@ -33,6 +37,8 @@ func TestLoadOrGenerate(t *testing.T) {
 	require.EqualValues(t, identity.GetTLSSigner(), identity2.GetTLSSigner())
 	require.EqualValues(t, identity.GetTLSCertificate(), identity2.GetTLSCertificate())
 	require.EqualValues(t, identity.GetTLSPubKeys(), identity2.GetTLSPubKeys())
+	require.NotEqual(t, identity.TLSSentryClientCertificate, identity2.TLSSentryClientCertificate)
+	require.EqualValues(t, identity.TLSSentryClientCertificate.PrivateKey, identity2.TLSSentryClientCertificate.PrivateKey)
 
 	dataDir2, err := ioutil.TempDir("", "oasis-identity-test2_")
 	require.NoError(t, err, "create data dir (2)")
@@ -45,6 +51,9 @@ func TestLoadOrGenerate(t *testing.T) {
 		identity3.GetTLSSigner().Public(),
 		identity3.GetNextTLSSigner().Public(),
 	}, identity3.GetTLSPubKeys())
+
+	// Sleep to make sure that any regenerated TLS certificates will have different expiration.
+	time.Sleep(2 * time.Second)
 
 	// Load it back.
 	identity4, err := LoadOrGenerate(dataDir2, factory, false)
@@ -60,4 +69,6 @@ func TestLoadOrGenerate(t *testing.T) {
 	// Private key for identity4 must be the same, but the certificate might be regenerated
 	// and different if the wall clock minute changed.
 	require.Equal(t, identity3.GetTLSCertificate().PrivateKey, identity4.GetTLSCertificate().PrivateKey)
+	require.NotEqual(t, identity3.TLSSentryClientCertificate, identity4.TLSSentryClientCertificate)
+	require.EqualValues(t, identity4.TLSSentryClientCertificate.PrivateKey, identity4.TLSSentryClientCertificate.PrivateKey)
 }

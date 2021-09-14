@@ -322,8 +322,11 @@ func doLoadOrGenerate(dataDir string, signerFactory signature.SignerFactory, sho
 
 	// Load or generate the sentry client certificate for this node.
 	tlsSentryClientCertPath, tlsSentryClientKeyPath := TLSSentryClientCertPaths(dataDir)
-	sentryClientCert, err := tlsCert.Load(tlsSentryClientCertPath, tlsSentryClientKeyPath)
+	sentryClientCert, err := tlsCert.LoadFromKey(tlsSentryClientKeyPath, CommonName)
 	if err != nil {
+		if !os.IsNotExist(err) {
+			return nil, fmt.Errorf("identity: unable to read sentry client key from file: %w", err)
+		}
 		// Load failed, generate fresh sentry client cert.
 		sentryClientCert, err = tlsCert.Generate(CommonName)
 		if err != nil {
