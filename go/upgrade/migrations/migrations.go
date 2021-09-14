@@ -49,7 +49,10 @@ type Context struct {
 }
 
 // Register registers a new migration handler, by upgrade name.
-func Register(name string, handler Handler) {
+func Register(name upgradeApi.HandlerName, handler Handler) {
+	if err := name.ValidateBasic(); err != nil {
+		panic(fmt.Errorf("migration handler name error: %w", err))
+	}
 	if _, isRegistered := registeredHandlers.Load(name); isRegistered {
 		panic(fmt.Errorf("migration handler already registered: %s", name))
 	}
@@ -66,7 +69,7 @@ func NewContext(upgrade *upgradeApi.PendingUpgrade, dataDir string) *Context {
 }
 
 // GetHandler returns the handler associated with the upgrade described in the context.
-func GetHandler(name string) (Handler, error) {
+func GetHandler(name upgradeApi.HandlerName) (Handler, error) {
 	h, exists := registeredHandlers.Load(name)
 	if !exists {
 		return nil, ErrMissingMigrationHandler

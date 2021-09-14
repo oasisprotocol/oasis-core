@@ -19,7 +19,7 @@ import (
 	upgrade "github.com/oasisprotocol/oasis-core/go/upgrade/api"
 )
 
-func valideSubmitProposal(v uint16, epoch uint64, handler string, target version.ProtocolVersions) bool {
+func valideSubmitProposal(v uint16, epoch uint64, handler upgrade.HandlerName, target version.ProtocolVersions) bool {
 	if v < upgrade.MinDescriptorVersion || v > upgrade.MaxDescriptorVersion ||
 		epoch < uint64(upgrade.MinUpgradeEpoch) || epoch > uint64(upgrade.MaxUpgradeEpoch) ||
 		len(handler) < upgrade.MinUpgradeHandlerLength || len(handler) > upgrade.MaxUpgradeHandlerLength {
@@ -61,7 +61,7 @@ func main() {
 			// Generate upgrade proposal transactions.
 			for _, v := range []uint16{0, upgrade.LatestDescriptorVersion} {
 				for _, epoch := range []uint64{0, 1000, 10_000_000, math.MaxUint64 - 1, math.MaxUint64} {
-					for _, handler := range []string{"", "descriptor-handler", "tooooooo-long-33-char-description"} {
+					for _, handler := range []upgrade.HandlerName{"", "descriptor-handler", "tooooooo-long-33-char-description"} {
 						for _, target := range []version.ProtocolVersions{
 							{},
 							{ConsensusProtocol: version.Version{Major: 1, Minor: 2, Patch: 3}},
