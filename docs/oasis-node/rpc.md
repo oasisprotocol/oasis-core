@@ -89,7 +89,6 @@ The following gRPC services are exposed (with links to API documentation):
 * **Runtime Layer**
   * [Storage] (`oasis-core.Storage`)
   * [Runtime Client] (`oasis-core.RuntimeClient`)
-  * [EnclaveRPC] (`oasis-core.EnclaveRPC`)
 
 For more details about what the exposed services do see the respective
 documentation sections. The Go API also provides gRPC client implementations for
@@ -122,5 +121,4 @@ err := cc.SubmitTx(ctx, &tx)
 [Beacon]: https://pkg.go.dev/github.com/oasisprotocol/oasis-core/go/beacon/api?tab=doc#Backend
 [Storage]: https://pkg.go.dev/github.com/oasisprotocol/oasis-core/go/storage/api?tab=doc#Backend
 [Runtime Client]: https://pkg.go.dev/github.com/oasisprotocol/oasis-core/go/runtime/client/api?tab=doc#RuntimeClient
-[EnclaveRPC]: https://pkg.go.dev/github.com/oasisprotocol/oasis-core/go/runtime/enclaverpc/api?tab=doc#Transport
 <!-- markdownlint-enable line-length -->
