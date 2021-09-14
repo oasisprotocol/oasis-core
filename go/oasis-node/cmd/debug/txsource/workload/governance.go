@@ -157,7 +157,7 @@ func (g *governanceWorkload) doUpgradeProposal() error {
 		Upgrade: &governance.UpgradeProposal{
 			Descriptor: upgrade.Descriptor{
 				Versioned: cbor.NewVersioned(upgrade.LatestDescriptorVersion),
-				Handler:   fmt.Sprintf("test-upgrade_%s", hex.EncodeToString(nameSuffix)),
+				Handler:   upgrade.HandlerName(fmt.Sprintf("test-upgrade_%s", hex.EncodeToString(nameSuffix))),
 				Target:    version.Versions,
 				Epoch:     upgradeEpoch,
 			},

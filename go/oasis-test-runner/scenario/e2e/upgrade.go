@@ -100,7 +100,7 @@ type nodeUpgradeImpl struct {
 	ctx          context.Context
 	currentEpoch beacon.EpochTime
 
-	handlerName    string
+	handlerName    upgrade.HandlerName
 	upgradeChecker upgradeChecker
 }
 
@@ -153,9 +153,9 @@ func (sc *nodeUpgradeImpl) restart(wait bool) error {
 	}
 }
 
-func newNodeUpgradeImpl(handlerName string, upgradeChecker upgradeChecker) scenario.Scenario {
+func newNodeUpgradeImpl(handlerName upgrade.HandlerName, upgradeChecker upgradeChecker) scenario.Scenario {
 	sc := &nodeUpgradeImpl{
-		E2E:            *NewE2E("node-upgrade-" + handlerName),
+		E2E:            *NewE2E("node-upgrade-" + string(handlerName)),
 		ctx:            context.Background(),
 		handlerName:    handlerName,
 		upgradeChecker: upgradeChecker,

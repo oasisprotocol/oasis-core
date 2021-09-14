@@ -86,12 +86,28 @@ var (
 	_ prettyprint.PrettyPrinter = (*Descriptor)(nil)
 )
 
+// HandlerName is the name of the upgrade descriptor handler.
+type HandlerName string
+
+// ValidateBasic does basic validation checks of the upgrade descriptor handler name.
+func (h HandlerName) ValidateBasic() error {
+	if len(h) < MinUpgradeHandlerLength || len(h) > MaxUpgradeHandlerLength {
+		return fmt.Errorf("invalid length: %d (min: %d max: %d)",
+			len(h),
+			MinUpgradeHandlerLength,
+			MaxUpgradeHandlerLength,
+		)
+	}
+
+	return nil
+}
+
 // Descriptor describes an upgrade.
 type Descriptor struct { // nolint: maligned
 	cbor.Versioned
 
 	// Handler is the name of the upgrade handler.
-	Handler string `json:"handler"`
+	Handler HandlerName `json:"handler"`
 	// Target is upgrade's target version.
 	Target version.ProtocolVersions `json:"target"`
 	// Epoch is the epoch at which the upgrade should happen.
@@ -124,12 +140,8 @@ func (d Descriptor) ValidateBasic() error {
 			MaxDescriptorVersion,
 		)
 	}
-	if len(d.Handler) < MinUpgradeHandlerLength || len(d.Handler) > MaxUpgradeHandlerLength {
-		return fmt.Errorf("invalid upgrade descriptor handler length: %d (min: %d max: %d)",
-			len(d.Handler),
-			MinUpgradeHandlerLength,
-			MaxUpgradeHandlerLength,
-		)
+	if err := d.Handler.ValidateBasic(); err != nil {
+		return fmt.Errorf("invalid upgrade descriptor handler: %w", err)
 	}
 	if err := d.Target.ValidateBasic(); err != nil {
 		return fmt.Errorf("invalid upgrade descriptor target version: %w", err)
