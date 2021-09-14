@@ -204,5 +204,5 @@ func TestErrorMapping(t *testing.T) {
 	st := GetErrorStatus(err)
 	require.NotNil(st, "GetErrorStatus should not be nil")
 	s, _ := status.FromError(io.ErrUnexpectedEOF)
-	require.EqualValues(s, st, "GetErrorStatus.Status should be io.ErrUnexpectedEOF")
+	require.Equal(s.Err().Error(), st.Err().Error(), "GetErrorStatus.Status should be io.ErrUnexpectedEOF")
 }
