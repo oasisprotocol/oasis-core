@@ -3,11 +3,10 @@ use std::sync::Arc;
 
 use anyhow::Result;
 
-pub mod context;
 pub mod mkvs;
 
 // Re-exports.
-pub use self::{context::StorageContext, mkvs::MKVS};
+pub use self::mkvs::MKVS;
 
 /// Trivial Key/Value storage.
 pub trait KeyValue: Send + Sync {

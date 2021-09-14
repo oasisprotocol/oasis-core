@@ -20,7 +20,7 @@ use oasis_core_runtime::{
     },
     enclave_rpc::Context as RpcContext,
     runtime_context,
-    storage::StorageContext,
+    storage::KeyValue,
 };
 
 use crate::context::Context as KmContext;
@@ -68,7 +68,7 @@ impl Policy {
         // If there is no existing policy, attempt to load from local storage.
         let old_policy = match inner.policy.as_ref() {
             Some(old_policy) => old_policy.clone(),
-            None => match Self::load_policy() {
+            None => match Self::load_policy(ctx.untrusted_local_storage) {
                 Some(old_policy) => old_policy,
                 None => CachedPolicy::default(),
             },
@@ -98,7 +98,7 @@ impl Policy {
         }
 
         // Persist then apply the new policy.
-        Self::save_raw_policy(raw_policy);
+        Self::save_raw_policy(ctx.untrusted_local_storage, raw_policy);
         let new_checksum = new_policy.checksum.clone();
         inner.policy = Some(new_policy);
 
@@ -168,11 +168,8 @@ impl Policy {
         }
     }
 
-    fn load_policy() -> Option<CachedPolicy> {
-        let ciphertext = StorageContext::with_current(|_mkvs, untrusted_local| {
-            untrusted_local.get(POLICY_STORAGE_KEY.to_vec())
-        })
-        .unwrap();
+    fn load_policy(untrusted_local: &dyn KeyValue) -> Option<CachedPolicy> {
+        let ciphertext = untrusted_local.get(POLICY_STORAGE_KEY.to_vec()).unwrap();
 
         unseal(Keypolicy::MRENCLAVE, &POLICY_SEAL_CONTEXT, &ciphertext).map(|plaintext| {
             // Deserialization failures are fatal, because it is state corruption.
@@ -180,14 +177,13 @@ impl Policy {
         })
     }
 
-    fn save_raw_policy(raw_policy: &Vec<u8>) {
+    fn save_raw_policy(untrusted_local: &dyn KeyValue, raw_policy: &Vec<u8>) {
         let ciphertext = seal(Keypolicy::MRENCLAVE, &POLICY_SEAL_CONTEXT, &raw_policy);
 
         // Persist the encrypted master secret.
-        StorageContext::with_current(|_mkvs, untrusted_local| {
-            untrusted_local.insert(POLICY_STORAGE_KEY.to_vec(), ciphertext)
-        })
-        .expect("failed to persist master secret");
+        untrusted_local
+            .insert(POLICY_STORAGE_KEY.to_vec(), ciphertext)
+            .expect("failed to persist master secret");
     }
 }
 

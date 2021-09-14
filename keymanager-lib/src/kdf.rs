@@ -31,7 +31,7 @@ use oasis_core_runtime::{
     },
     enclave_rpc::Context as RpcContext,
     runtime_context,
-    storage::StorageContext,
+    storage::KeyValue,
     BUILD_INFO,
 };
 
@@ -219,28 +219,29 @@ impl Kdf {
             // once.
 
             // Attempt to load the master secret.
-            let (master_secret, did_replicate) = match Self::load_master_secret(&km_runtime_id) {
-                Some(master_secret) => (master_secret, false),
-                None => {
-                    // Couldn't load, fetch the master secret from another
-                    // enclave instance.
+            let (master_secret, did_replicate) =
+                match Self::load_master_secret(ctx.untrusted_local_storage, &km_runtime_id) {
+                    Some(master_secret) => (master_secret, false),
+                    None => {
+                        // Couldn't load, fetch the master secret from another
+                        // enclave instance.
 
-                    let rctx = runtime_context!(ctx, KmContext);
+                        let rctx = runtime_context!(ctx, KmContext);
 
-                    let km_client = RemoteClient::new_runtime_with_enclave_identities(
-                        rctx.runtime_id,
-                        Policy::global().may_replicate_from(),
-                        rctx.protocol.clone(),
-                        ctx.rak.clone(),
-                        1, // Not used, doesn't matter.
-                    );
+                        let km_client = RemoteClient::new_runtime_with_enclave_identities(
+                            rctx.runtime_id,
+                            Policy::global().may_replicate_from(),
+                            rctx.protocol.clone(),
+                            ctx.rak.clone(),
+                            1, // Not used, doesn't matter.
+                        );
 
-                    let result =
-                        km_client.replicate_master_secret(IoContext::create_child(&ctx.io_ctx));
-                    let master_secret = ctx.tokio.block_on(result)?;
-                    (master_secret.unwrap(), true)
-                }
-            };
+                        let result =
+                            km_client.replicate_master_secret(IoContext::create_child(&ctx.io_ctx));
+                        let master_secret = ctx.tokio.block_on(result)?;
+                        (master_secret.unwrap(), true)
+                    }
+                };
 
             let checksum = Self::checksum_master_secret(&master_secret, &km_runtime_id);
             if req.checksum != checksum {
@@ -253,7 +254,11 @@ impl Kdf {
             // The loaded/replicated master secret is consistent with the rest
             // of the world.   Ok to proceed.
             if did_replicate {
-                Self::save_master_secret(&master_secret, &km_runtime_id);
+                Self::save_master_secret(
+                    ctx.untrusted_local_storage,
+                    &master_secret,
+                    &km_runtime_id,
+                );
             }
             inner.master_secret = Some(master_secret);
             inner.checksum = Some(checksum);
@@ -264,17 +269,18 @@ impl Kdf {
 
             // Attempt to load the master secret, the caller may just be
             // behind the rest of the world.
-            let master_secret = match Self::load_master_secret(&km_runtime_id) {
-                Some(master_secret) => master_secret,
-                None => {
-                    // Unable to load, perhaps we can generate?
-                    if !req.may_generate {
-                        return Err(KeyManagerError::ReplicationRequired.into());
-                    }
+            let master_secret =
+                match Self::load_master_secret(ctx.untrusted_local_storage, &km_runtime_id) {
+                    Some(master_secret) => master_secret,
+                    None => {
+                        // Unable to load, perhaps we can generate?
+                        if !req.may_generate {
+                            return Err(KeyManagerError::ReplicationRequired.into());
+                        }
 
-                    Self::generate_master_secret(&km_runtime_id)
-                }
-            };
+                        Self::generate_master_secret(ctx.untrusted_local_storage, &km_runtime_id)
+                    }
+                };
 
             // Loaded or generated a master secret.  There is no checksum to
             // compare against, but that is expected when bootstrapping or
@@ -381,11 +387,13 @@ impl Kdf {
         }
     }
 
-    fn load_master_secret(runtime_id: &Namespace) -> Option<MasterSecret> {
-        let ciphertext = StorageContext::with_current(|_mkvs, untrusted_local| {
-            untrusted_local.get(MASTER_SECRET_STORAGE_KEY.to_vec())
-        })
-        .unwrap();
+    fn load_master_secret(
+        untrusted_local: &dyn KeyValue,
+        runtime_id: &Namespace,
+    ) -> Option<MasterSecret> {
+        let ciphertext = untrusted_local
+            .get(MASTER_SECRET_STORAGE_KEY.to_vec())
+            .unwrap();
 
         match ciphertext.len() {
             0 => return None,
@@ -409,7 +417,11 @@ impl Kdf {
         Some(MasterSecret(plaintext.try_into().unwrap()))
     }
 
-    fn save_master_secret(master_secret: &MasterSecret, runtime_id: &Namespace) {
+    fn save_master_secret(
+        untrusted_local: &dyn KeyValue,
+        master_secret: &MasterSecret,
+        runtime_id: &Namespace,
+    ) {
         let mut rng = OsRng {};
 
         // Encrypt the master secret.
@@ -424,13 +436,15 @@ impl Kdf {
         ciphertext.extend_from_slice(&nonce);
 
         // Persist the encrypted master secret.
-        StorageContext::with_current(|_mkvs, untrusted_local| {
-            untrusted_local.insert(MASTER_SECRET_STORAGE_KEY.to_vec(), ciphertext)
-        })
-        .expect("failed to persist master secret");
+        untrusted_local
+            .insert(MASTER_SECRET_STORAGE_KEY.to_vec(), ciphertext)
+            .expect("failed to persist master secret");
     }
 
-    fn generate_master_secret(runtime_id: &Namespace) -> MasterSecret {
+    fn generate_master_secret(
+        untrusted_local: &dyn KeyValue,
+        runtime_id: &Namespace,
+    ) -> MasterSecret {
         let mut rng = OsRng {};
 
         // TODO: Support static keying for debugging.
@@ -438,7 +452,7 @@ impl Kdf {
         rng.fill(&mut master_secret);
         let master_secret = MasterSecret(master_secret);
 
-        Self::save_master_secret(&master_secret, runtime_id);
+        Self::save_master_secret(untrusted_local, &master_secret, runtime_id);
 
         master_secret
     }
