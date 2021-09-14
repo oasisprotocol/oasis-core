@@ -8,7 +8,6 @@ use std::{
     },
 };
 
-use anyhow::{anyhow, Result};
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 use crossbeam::channel;
 use io_context::Context;
@@ -17,11 +16,14 @@ use thiserror::Error;
 
 use crate::{
     common::{logger::get_logger, namespace::Namespace, version::Version},
-    consensus::tendermint,
+    consensus::{
+        tendermint,
+        verifier::{TrustRoot, Verifier},
+    },
     dispatcher::Dispatcher,
     rak::RAK,
     storage::KeyValue,
-    types::{Body, Error, Message, MessageType},
+    types::{Body, Error, Message, MessageType, RuntimeInfoRequest, RuntimeInfoResponse},
     BUILD_INFO,
 };
 
@@ -48,6 +50,22 @@ pub enum ProtocolError {
     HostInfoNotConfigured,
     #[error("incompatible consensus backend")]
     IncompatibleConsensusBackend,
+    #[error("invalid runtime id (expected: {0} got: {1})")]
+    InvalidRuntimeId(Namespace, Namespace),
+    #[error("already initialized")]
+    AlreadyInitialized,
+    #[error("channel closed")]
+    ChannelClosed,
+}
+
+impl From<ProtocolError> for Error {
+    fn from(err: ProtocolError) -> Self {
+        Self {
+            module: "protocol".to_string(),
+            code: 1,
+            message: err.to_string(),
+        }
+    }
 }
 
 /// Information about the host environment.
@@ -87,6 +105,8 @@ pub struct Protocol {
     pending_out_requests: Mutex<HashMap<u64, channel::Sender<Body>>>,
     /// Runtime version.
     runtime_version: Version,
+    /// Consensus layer trust root.
+    trust_root: Option<TrustRoot>,
     /// Host environment information.
     host_info: Mutex<Option<HostInfo>>,
 }
@@ -98,6 +118,7 @@ impl Protocol {
         rak: Arc<RAK>,
         dispatcher: Arc<Dispatcher>,
         runtime_version: Version,
+        trust_root: Option<TrustRoot>,
     ) -> Self {
         let logger = get_logger("runtime/protocol");
 
@@ -109,7 +130,8 @@ impl Protocol {
             stream,
             last_request_id: AtomicUsize::new(0),
             pending_out_requests: Mutex::new(HashMap::new()),
-            runtime_version: runtime_version,
+            runtime_version,
+            trust_root,
             host_info: Mutex::new(None),
         }
     }
@@ -161,7 +183,7 @@ impl Protocol {
     }
 
     /// Make a new request to the worker host and wait for the response.
-    pub fn make_request(&self, _ctx: Context, body: Body) -> Result<Body> {
+    pub fn make_request(&self, _ctx: Context, body: Body) -> Result<Body, Error> {
         let id = self.last_request_id.fetch_add(1, Ordering::SeqCst) as u64;
         let message = Message {
             id,
@@ -177,16 +199,19 @@ impl Protocol {
         }
 
         // Write message to stream and wait for the response.
-        self.encode_message(message)?;
+        self.encode_message(message).map_err(Error::from)?;
 
-        match rx.recv()? {
-            Body::Error(Error { message, .. }) => Err(anyhow!("{}", message)),
+        let result = rx
+            .recv()
+            .map_err(|_| Error::from(ProtocolError::ChannelClosed))?;
+        match result {
+            Body::Error(err) => Err(err),
             body => Ok(body),
         }
     }
 
     /// Send an async response to a previous request back to the worker host.
-    pub fn send_response(&self, id: u64, body: Body) -> Result<()> {
+    pub fn send_response(&self, id: u64, body: Body) -> anyhow::Result<()> {
         self.encode_message(Message {
             id,
             body,
@@ -194,7 +219,7 @@ impl Protocol {
         })
     }
 
-    fn decode_message<R: Read>(&self, mut reader: R) -> Result<Message> {
+    fn decode_message<R: Read>(&self, mut reader: R) -> anyhow::Result<Message> {
         let length = reader.read_u32::<BigEndian>()? as usize;
         if length > MAX_MESSAGE_SIZE {
             return Err(ProtocolError::MessageTooLarge.into());
@@ -207,7 +232,7 @@ impl Protocol {
         Ok(cbor::from_slice(&buffer)?)
     }
 
-    fn encode_message(&self, message: Message) -> Result<()> {
+    fn encode_message(&self, message: Message) -> anyhow::Result<()> {
         let _guard = self.outgoing_mutex.lock().unwrap();
         let mut writer = BufWriter::new(&self.stream);
 
@@ -222,7 +247,7 @@ impl Protocol {
         Ok(())
     }
 
-    fn handle_message<R: Read>(self: &Arc<Protocol>, reader: R) -> Result<()> {
+    fn handle_message<R: Read>(self: &Arc<Protocol>, reader: R) -> anyhow::Result<()> {
         let message = self.decode_message(reader)?;
 
         match message.message_type {
@@ -279,49 +304,11 @@ impl Protocol {
         ctx: Context,
         id: u64,
         request: Body,
-    ) -> Result<Option<Body>> {
+    ) -> anyhow::Result<Option<Body>> {
         match request {
-            Body::RuntimeInfoRequest {
-                runtime_id,
-                consensus_backend,
-                consensus_protocol_version,
-                consensus_chain_context,
-                local_config,
-            } => {
-                info!(self.logger, "Received host environment information";
-                    "runtime_id" => ?runtime_id,
-                    "consensus_backend" => &consensus_backend,
-                    "consensus_protocol_version" => ?consensus_protocol_version,
-                    "consensus_chain_context" => &consensus_chain_context,
-                    "local_config" => ?local_config,
-                );
-
-                if tendermint::BACKEND_NAME != &consensus_backend {
-                    return Err(ProtocolError::IncompatibleConsensusBackend.into());
-                }
-                if !BUILD_INFO
-                    .consensus_version
-                    .is_compatible_with(&consensus_protocol_version)
-                {
-                    return Err(ProtocolError::IncompatibleConsensusBackend.into());
-                }
-
-                // Configure the host environment info.
-                *self.host_info.lock().unwrap() = Some(HostInfo {
-                    runtime_id,
-                    consensus_backend,
-                    consensus_protocol_version,
-                    consensus_chain_context,
-                    local_config,
-                });
-
-                self.dispatcher.start(self.clone());
-
-                Ok(Some(Body::RuntimeInfoResponse {
-                    protocol_version: BUILD_INFO.protocol_version,
-                    runtime_version: self.runtime_version,
-                }))
-            }
+            Body::RuntimeInfoRequest(request) => Ok(Some(Body::RuntimeInfoResponse(
+                self.initialize_guest(request)?,
+            ))),
             Body::RuntimePingRequest {} => Ok(Some(Body::Empty {})),
             Body::RuntimeShutdownRequest {} => {
                 info!(self.logger, "Received worker shutdown request");
@@ -367,45 +354,91 @@ impl Protocol {
                 self.rak.set_avr(avr)?;
                 Ok(Some(Body::RuntimeCapabilityTEERakAvrResponse {}))
             }
-            req @ Body::RuntimeRPCCallRequest { .. } => {
+            Body::RuntimeRPCCallRequest { .. }
+            | Body::RuntimeLocalRPCCallRequest { .. }
+            | Body::RuntimeCheckTxBatchRequest { .. }
+            | Body::RuntimeExecuteTxBatchRequest { .. }
+            | Body::RuntimeKeyManagerPolicyUpdateRequest { .. }
+            | Body::RuntimeQueryRequest { .. }
+            | Body::RuntimeConsensusSyncRequest { .. } => {
                 self.can_handle_runtime_requests()?;
-                self.dispatcher.queue_request(ctx, id, req)?;
+                self.dispatcher.queue_request(ctx, id, request)?;
                 Ok(None)
             }
-            req @ Body::RuntimeLocalRPCCallRequest { .. } => {
-                self.can_handle_runtime_requests()?;
-                self.dispatcher.queue_request(ctx, id, req)?;
-                Ok(None)
-            }
-            req @ Body::RuntimeCheckTxBatchRequest { .. } => {
-                self.can_handle_runtime_requests()?;
-                self.dispatcher.queue_request(ctx, id, req)?;
-                Ok(None)
-            }
-            req @ Body::RuntimeExecuteTxBatchRequest { .. } => {
-                self.can_handle_runtime_requests()?;
-                self.dispatcher.queue_request(ctx, id, req)?;
-                Ok(None)
-            }
-            req @ Body::RuntimeKeyManagerPolicyUpdateRequest { .. } => {
-                info!(self.logger, "Received key manager policy update request");
-                self.can_handle_runtime_requests()?;
-                self.dispatcher.queue_request(ctx, id, req)?;
-                Ok(None)
-            }
-            req @ Body::RuntimeQueryRequest { .. } => {
-                self.can_handle_runtime_requests()?;
-                self.dispatcher.queue_request(ctx, id, req)?;
-                Ok(None)
-            }
-            req => {
-                warn!(self.logger, "Received unsupported request"; "req" => format!("{:?}", req));
+            _ => {
+                warn!(self.logger, "Received unsupported request"; "req" => format!("{:?}", request));
                 Err(ProtocolError::MethodNotSupported.into())
             }
         }
     }
 
-    fn can_handle_runtime_requests(&self) -> Result<()> {
+    fn initialize_guest(
+        self: &Arc<Protocol>,
+        host_info: RuntimeInfoRequest,
+    ) -> anyhow::Result<RuntimeInfoResponse> {
+        info!(self.logger, "Received host environment information";
+            "runtime_id" => ?host_info.runtime_id,
+            "consensus_backend" => &host_info.consensus_backend,
+            "consensus_protocol_version" => ?host_info.consensus_protocol_version,
+            "consensus_chain_context" => &host_info.consensus_chain_context,
+            "local_config" => ?host_info.local_config,
+        );
+
+        if tendermint::BACKEND_NAME != &host_info.consensus_backend {
+            return Err(ProtocolError::IncompatibleConsensusBackend.into());
+        }
+        if !BUILD_INFO
+            .consensus_version
+            .is_compatible_with(&host_info.consensus_protocol_version)
+        {
+            return Err(ProtocolError::IncompatibleConsensusBackend.into());
+        }
+        let mut local_host_info = self.host_info.lock().unwrap();
+        if local_host_info.is_some() {
+            return Err(ProtocolError::AlreadyInitialized.into());
+        }
+
+        // Create and start the consensus verifier.
+        let consensus_verifier: Box<dyn Verifier> = if let Some(ref trust_root) = self.trust_root {
+            // Make sure that the host environment matches the trust root.
+            if host_info.runtime_id != trust_root.runtime_id {
+                return Err(ProtocolError::InvalidRuntimeId(
+                    trust_root.runtime_id,
+                    host_info.runtime_id,
+                )
+                .into());
+            }
+
+            // Create the Tendermint consensus layer verifier and spawn it in a separate thread.
+            let verifier = tendermint::verifier::Verifier::new(self.clone(), trust_root.clone());
+            let handle = verifier.handle();
+            verifier.start();
+
+            Box::new(handle)
+        } else {
+            // Create a no-op verifier.
+            Box::new(tendermint::verifier::NopVerifier::new(self.clone()))
+        };
+
+        // Configure the host environment info.
+        *local_host_info = Some(HostInfo {
+            runtime_id: host_info.runtime_id,
+            consensus_backend: host_info.consensus_backend,
+            consensus_protocol_version: host_info.consensus_protocol_version,
+            consensus_chain_context: host_info.consensus_chain_context,
+            local_config: host_info.local_config,
+        });
+
+        // Start the dispatcher.
+        self.dispatcher.start(self.clone(), consensus_verifier);
+
+        Ok(RuntimeInfoResponse {
+            protocol_version: BUILD_INFO.protocol_version,
+            runtime_version: self.runtime_version,
+        })
+    }
+
+    fn can_handle_runtime_requests(&self) -> anyhow::Result<()> {
         if self.host_info.lock().unwrap().is_none() {
             return Err(ProtocolError::HostInfoNotConfigured.into());
         }
@@ -443,29 +476,27 @@ impl ProtocolUntrustedLocalStorage {
 }
 
 impl KeyValue for ProtocolUntrustedLocalStorage {
-    fn get(&self, key: Vec<u8>) -> Result<Vec<u8>> {
+    fn get(&self, key: Vec<u8>) -> Result<Vec<u8>, Error> {
         let ctx = Context::create_child(&self.ctx);
 
         match self
             .protocol
-            .make_request(ctx, Body::HostLocalStorageGetRequest { key })
+            .make_request(ctx, Body::HostLocalStorageGetRequest { key })?
         {
-            Ok(Body::HostLocalStorageGetResponse { value }) => Ok(value),
-            Ok(_) => Err(ProtocolError::InvalidResponse.into()),
-            Err(error) => Err(error),
+            Body::HostLocalStorageGetResponse { value } => Ok(value),
+            _ => Err(ProtocolError::InvalidResponse.into()),
         }
     }
 
-    fn insert(&self, key: Vec<u8>, value: Vec<u8>) -> Result<()> {
+    fn insert(&self, key: Vec<u8>, value: Vec<u8>) -> Result<(), Error> {
         let ctx = Context::create_child(&self.ctx);
 
         match self
             .protocol
-            .make_request(ctx, Body::HostLocalStorageSetRequest { key, value })
+            .make_request(ctx, Body::HostLocalStorageSetRequest { key, value })?
         {
-            Ok(Body::HostLocalStorageSetResponse {}) => Ok(()),
-            Ok(_) => Err(ProtocolError::InvalidResponse.into()),
-            Err(error) => Err(error),
+            Body::HostLocalStorageSetResponse {} => Ok(()),
+            _ => Err(ProtocolError::InvalidResponse.into()),
         }
     }
 }

@@ -23,24 +23,18 @@ func (t *fullService) GetLightBlock(ctx context.Context, height int64) (*consens
 	if err != nil {
 		return nil, err
 	}
-	commit, err := t.client.Commit(ctx, &tmHeight)
-	if err != nil {
-		return nil, fmt.Errorf("%w: tendermint: header query failed: %s", consensusAPI.ErrVersionNotFound, err.Error())
-	}
 
-	if commit.Header == nil {
-		return nil, fmt.Errorf("tendermint: header is nil")
-	}
+	var lb tmtypes.LightBlock
 
 	// Don't use the client as that imposes stupid pagination. Access the state database directly.
-	vals, err := t.stateStore.LoadValidators(tmHeight)
+	lb.ValidatorSet, err = t.stateStore.LoadValidators(tmHeight)
 	if err != nil {
 		return nil, consensusAPI.ErrVersionNotFound
 	}
 
-	lb := tmtypes.LightBlock{
-		SignedHeader: &commit.SignedHeader,
-		ValidatorSet: vals,
+	if commit, cerr := t.client.Commit(ctx, &tmHeight); cerr == nil && commit.Header != nil {
+		lb.SignedHeader = &commit.SignedHeader
+		tmHeight = commit.Header.Height
 	}
 	protoLb, err := lb.ToProto()
 	if err != nil {
@@ -52,7 +46,7 @@ func (t *fullService) GetLightBlock(ctx context.Context, height int64) (*consens
 	}
 
 	return &consensusAPI.LightBlock{
-		Height: commit.Header.Height,
+		Height: tmHeight,
 		Meta:   meta,
 	}, nil
 }

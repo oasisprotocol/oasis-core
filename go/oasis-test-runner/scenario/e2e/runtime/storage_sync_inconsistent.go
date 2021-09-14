@@ -59,9 +59,11 @@ func (sc *storageSyncInconsistentImpl) Fixture() (*oasis.NetworkFixture, error) 
 
 	// One more storage worker for later, this is the one we'll be messing with.
 	f.StorageWorkers = append(f.StorageWorkers, oasis.StorageWorkerFixture{
+		NodeFixture: oasis.NodeFixture{
+			NoAutoStart: true,
+		},
 		Backend:               database.BackendNameBadgerDB,
 		Entity:                1,
-		NoAutoStart:           false,
 		CheckpointSyncEnabled: true,
 	})
 	sc.messyStorage = len(f.StorageWorkers) - 1

@@ -25,7 +25,8 @@ use crate::{
     consensus::{
         beacon::EpochTime,
         roothash::{self, ComputeResultsHeader, Header, COMPUTE_RESULTS_HEADER_CONTEXT},
-        state::ConsensusState,
+        verifier::Verifier,
+        LightBlock,
     },
     enclave_rpc::{
         demux::Demux as RpcDemux,
@@ -102,14 +103,22 @@ impl Drop for AbortOnPanic {
     }
 }
 
+/// State related to dispatching a runtime transaction.
 struct TxDispatchState<'a> {
     tokio_rt: &'a tokio::runtime::Runtime,
-    consensus_state: ConsensusState,
+    consensus_block: LightBlock,
+    consensus_verifier: &'a Box<dyn Verifier>,
     header: Header,
     epoch: EpochTime,
     round_results: roothash::RoundResults,
     max_messages: u32,
     check_only: bool,
+}
+
+/// State provided by the protocol upon successful initialization.
+struct State {
+    protocol: Arc<Protocol>,
+    consensus_verifier: Box<dyn Verifier>,
 }
 
 /// Runtime call dispatcher.
@@ -118,10 +127,11 @@ pub struct Dispatcher {
     queue_tx: channel::Sender<QueueItem>,
     abort_tx: channel::Sender<()>,
     abort_rx: channel::Receiver<()>,
-    protocol: Mutex<Option<Arc<Protocol>>>,
-    protocol_cond: Condvar,
     rak: Arc<RAK>,
     abort_batch: Arc<AtomicBool>,
+
+    state: Mutex<Option<State>>,
+    state_cond: Condvar,
 }
 
 impl Dispatcher {
@@ -135,10 +145,10 @@ impl Dispatcher {
             queue_tx: tx,
             abort_tx: abort_tx,
             abort_rx: abort_rx,
-            protocol: Mutex::new(None),
-            protocol_cond: Condvar::new(),
             rak,
             abort_batch: Arc::new(AtomicBool::new(false)),
+            state: Mutex::new(None),
+            state_cond: Condvar::new(),
         });
 
         let d = dispatcher.clone();
@@ -151,10 +161,13 @@ impl Dispatcher {
     }
 
     /// Start the dispatcher.
-    pub fn start(&self, protocol: Arc<Protocol>) {
-        let mut p = self.protocol.lock().unwrap();
-        *p = Some(protocol);
-        self.protocol_cond.notify_one();
+    pub fn start(&self, protocol: Arc<Protocol>, consensus_verifier: Box<dyn Verifier>) {
+        let mut s = self.state.lock().unwrap();
+        *s = Some(State {
+            protocol,
+            consensus_verifier,
+        });
+        self.state_cond.notify_one();
     }
 
     /// Queue a new request to be dispatched.
@@ -179,11 +192,14 @@ impl Dispatcher {
         initializer: Box<dyn Initializer>,
         rx: channel::Receiver<QueueItem>,
     ) -> AnyResult<()> {
-        // Wait for the protocol instance to be available.
-        let protocol = {
-            let mut guard = self.protocol.lock().unwrap();
+        // Wait for the state to be available.
+        let State {
+            protocol,
+            consensus_verifier,
+        } = {
+            let mut guard = self.state.lock().unwrap();
             while guard.is_none() {
-                guard = self.protocol_cond.wait(guard).unwrap();
+                guard = self.state_cond.wait(guard).unwrap();
             }
 
             guard.take().unwrap()
@@ -217,7 +233,8 @@ impl Dispatcher {
             // was aborted and reset the abort flag.
             if self
                 .abort_batch
-                .compare_and_swap(true, false, Ordering::SeqCst)
+                .compare_exchange(true, false, Ordering::SeqCst, Ordering::SeqCst)
+                .is_ok()
             {
                 self.abort_tx.try_send(())?;
             }
@@ -255,12 +272,6 @@ impl Dispatcher {
                     epoch,
                     max_messages,
                 } => {
-                    let light_block = consensus_block.decode_meta()?;
-                    let consensus_state = ConsensusState::from_protocol(
-                        protocol.clone(),
-                        light_block.get_state_root(),
-                    );
-
                     // Transaction execution.
                     self.dispatch_txn(
                         ctx,
@@ -271,7 +282,8 @@ impl Dispatcher {
                         inputs.unwrap_or_default(),
                         TxDispatchState {
                             tokio_rt: &tokio_rt,
-                            consensus_state,
+                            consensus_block,
+                            consensus_verifier: &consensus_verifier,
                             header: block.header,
                             epoch,
                             round_results,
@@ -287,12 +299,6 @@ impl Dispatcher {
                     epoch,
                     max_messages,
                 } => {
-                    let light_block = consensus_block.decode_meta()?;
-                    let consensus_state = ConsensusState::from_protocol(
-                        protocol.clone(),
-                        light_block.get_state_root(),
-                    );
-
                     // Transaction check.
                     self.dispatch_txn(
                         ctx,
@@ -303,7 +309,8 @@ impl Dispatcher {
                         inputs,
                         TxDispatchState {
                             tokio_rt: &tokio_rt,
-                            consensus_state,
+                            consensus_block,
+                            consensus_verifier: &consensus_verifier,
                             header: block.header,
                             epoch,
                             round_results: Default::default(),
@@ -324,12 +331,6 @@ impl Dispatcher {
                     method,
                     args,
                 } => {
-                    let light_block = consensus_block.decode_meta()?;
-                    let consensus_state = ConsensusState::from_protocol(
-                        protocol.clone(),
-                        light_block.get_state_root(),
-                    );
-
                     // Query.
                     self.dispatch_query(
                         ctx,
@@ -340,7 +341,8 @@ impl Dispatcher {
                         args,
                         TxDispatchState {
                             tokio_rt: &tokio_rt,
-                            consensus_state,
+                            consensus_block,
+                            consensus_verifier: &consensus_verifier,
                             header,
                             epoch,
                             round_results: Default::default(),
@@ -349,6 +351,10 @@ impl Dispatcher {
                         },
                     )
                 }
+                Body::RuntimeConsensusSyncRequest { height } => consensus_verifier
+                    .sync(height)
+                    .map_err(Into::into)
+                    .map(|_| Body::RuntimeConsensusSyncResponse {}),
                 Body::RuntimeAbortRequest {} => {
                     // We handle the RuntimeAbortRequest here so that we break
                     // the recv loop and re-check abort flag.
@@ -398,6 +404,12 @@ impl Dispatcher {
             );
         }
 
+        // For queries we don't do any consensus layer integrity verification.
+        let consensus_state = state
+            .consensus_verifier
+            .unverified_state(state.consensus_block)
+            .expect("verification must succeed");
+
         // Create a new context and dispatch the batch.
         let ctx = ctx.freeze();
         cache.maybe_replace(Root {
@@ -411,7 +423,7 @@ impl Dispatcher {
         let txn_ctx = TxnContext::new(
             ctx.clone(),
             state.tokio_rt,
-            state.consensus_state,
+            consensus_state,
             &mut overlay,
             &state.header,
             state.epoch,
@@ -433,11 +445,16 @@ impl Dispatcher {
         _io_root: Hash,
         state: TxDispatchState,
     ) -> Result<Body, Error> {
+        // For check-only we don't do any consensus layer integrity verification.
+        let consensus_state = state
+            .consensus_verifier
+            .unverified_state(state.consensus_block)?;
+
         let mut overlay = OverlayTree::new(&mut cache.mkvs);
         let txn_ctx = TxnContext::new(
             ctx.clone(),
             state.tokio_rt,
-            state.consensus_state,
+            consensus_state,
             &mut overlay,
             &state.header,
             state.epoch,
@@ -461,12 +478,17 @@ impl Dispatcher {
         io_root: Hash,
         state: TxDispatchState,
     ) -> Result<Body, Error> {
+        // Verify consensus state and runtime state root integrity before execution.
+        let consensus_state = state
+            .consensus_verifier
+            .verify(state.consensus_block, state.header.clone())?;
+
         let header = &state.header;
         let mut overlay = OverlayTree::new(&mut cache.mkvs);
         let txn_ctx = TxnContext::new(
             ctx.clone(),
             state.tokio_rt,
-            state.consensus_state,
+            consensus_state,
             &mut overlay,
             header,
             state.epoch,
@@ -548,6 +570,12 @@ impl Dispatcher {
             state_root: Some(new_state_root),
             messages_hash: Some(roothash::Message::messages_hash(&results.messages)),
         };
+
+        // Since we've computed the batch, we can trust it.
+        state
+            .consensus_verifier
+            .trust(&header)
+            .expect("trusting a computed header must succeed");
 
         debug!(self.logger, "Transaction batch execution complete";
             "previous_hash" => ?header.previous_hash,

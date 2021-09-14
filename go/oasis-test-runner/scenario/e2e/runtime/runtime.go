@@ -353,7 +353,11 @@ func (sc *runtimeImpl) Run(childEnv *env.Env) error {
 }
 
 func (sc *runtimeImpl) submitRuntimeTx(ctx context.Context, id common.Namespace, method string, args interface{}) (cbor.RawMessage, error) {
-	c := sc.Net.ClientController().RuntimeClient
+	ctrl := sc.Net.ClientController()
+	if ctrl == nil {
+		return nil, fmt.Errorf("client controller not available")
+	}
+	c := ctrl.RuntimeClient
 
 	// Submit a transaction and check the result.
 	var rsp TxnOutput
@@ -619,6 +623,8 @@ func RegisterScenarios() error {
 		RuntimeUpgrade,
 		// HistoryReindex test.
 		HistoryReindex,
+		// TrustRoot test.
+		TrustRoot,
 	} {
 		if err := cmd.Register(s); err != nil {
 			return err

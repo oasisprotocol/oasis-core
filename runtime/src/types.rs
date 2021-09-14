@@ -16,7 +16,7 @@ use crate::{
     consensus::{
         beacon::EpochTime,
         roothash::{self, Block, ComputeResultsHeader, Header},
-        tendermint::LightBlock,
+        LightBlock,
     },
     storage::mkvs::{sync, WriteLog},
     transaction::types::TxnBatch,
@@ -26,7 +26,7 @@ use crate::{
 pub const BATCH_WEIGHT_LIMIT_QUERY_METHOD: &'static str = "internal.BatchWeightLimits";
 
 /// Computed batch.
-#[derive(Debug, cbor::Encode, cbor::Decode)]
+#[derive(Clone, Debug, cbor::Encode, cbor::Decode)]
 pub struct ComputedBatch {
     /// Compute results header.
     pub header: ComputeResultsHeader,
@@ -112,21 +112,8 @@ pub enum Body {
     Error(Error),
 
     // Runtime interface.
-    RuntimeInfoRequest {
-        runtime_id: Namespace,
-        consensus_backend: String,
-        consensus_protocol_version: Version,
-        consensus_chain_context: String,
-
-        #[cbor(optional)]
-        #[cbor(default)]
-        #[cbor(skip_serializing_if = "BTreeMap::is_empty")]
-        local_config: BTreeMap<String, cbor::Value>,
-    },
-    RuntimeInfoResponse {
-        protocol_version: Version,
-        runtime_version: Version,
-    },
+    RuntimeInfoRequest(RuntimeInfoRequest),
+    RuntimeInfoResponse(RuntimeInfoResponse),
     RuntimePingRequest {},
     RuntimeShutdownRequest {},
     RuntimeAbortRequest {},
@@ -198,6 +185,10 @@ pub enum Body {
     RuntimeQueryResponse {
         data: cbor::Value,
     },
+    RuntimeConsensusSyncRequest {
+        height: u64,
+    },
+    RuntimeConsensusSyncResponse {},
 
     // Host interface.
     HostRPCCallRequest {
@@ -220,6 +211,12 @@ pub enum Body {
         value: Vec<u8>,
     },
     HostLocalStorageSetResponse {},
+    HostFetchConsensusBlockRequest {
+        height: u64,
+    },
+    HostFetchConsensusBlockResponse {
+        block: LightBlock,
+    },
 }
 
 /// A serializable error.
@@ -248,6 +245,37 @@ impl Error {
             message: msg.to_owned(),
         }
     }
+}
+
+impl From<anyhow::Error> for Error {
+    fn from(err: anyhow::Error) -> Self {
+        Self {
+            module: "unknown".to_string(),
+            code: 1,
+            message: err.to_string(),
+        }
+    }
+}
+
+/// Runtime information request.
+#[derive(Clone, Debug, cbor::Encode, cbor::Decode)]
+pub struct RuntimeInfoRequest {
+    pub runtime_id: Namespace,
+    pub consensus_backend: String,
+    pub consensus_protocol_version: Version,
+    pub consensus_chain_context: String,
+
+    #[cbor(optional)]
+    #[cbor(default)]
+    #[cbor(skip_serializing_if = "BTreeMap::is_empty")]
+    pub local_config: BTreeMap<String, cbor::Value>,
+}
+
+/// Runtime information response.
+#[derive(Clone, Debug, cbor::Encode, cbor::Decode)]
+pub struct RuntimeInfoResponse {
+    pub protocol_version: Version,
+    pub runtime_version: Version,
 }
 
 /// Result of a CheckTx operation.

@@ -53,6 +53,8 @@ ${test_runner_binary} \
     --e2e/runtime.runtime.loader ${WORKDIR}/target/default/debug/oasis-core-runtime-loader \
     --e2e/runtime.tee_hardware ${OASIS_TEE_HARDWARE:-""} \
     --e2e/runtime.ias.mock=${ias_mock} \
+    --e2e/runtime/trust-root.runtime.source_dir ${WORKDIR}/tests/runtimes \
+    --e2e/runtime/trust-root.runtime.target_dir ${WORKDIR}/target \
     --remote-signer.binary ${WORKDIR}/go/oasis-remote-signer/oasis-remote-signer \
     --plugin-signer.name example \
     --plugin-signer.binary ${WORKDIR}/go/oasis-test-runner/scenario/pluginsigner/example_signer_plugin/example_signer_plugin \

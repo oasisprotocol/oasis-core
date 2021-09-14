@@ -70,17 +70,21 @@ func (sc *storageSyncImpl) Fixture() (*oasis.NetworkFixture, error) {
 
 	// One more storage worker for later, so it can do an initial sync with the snapshots.
 	f.StorageWorkers = append(f.StorageWorkers, oasis.StorageWorkerFixture{
+		NodeFixture: oasis.NodeFixture{
+			NoAutoStart: true,
+		},
 		Backend:                    database.BackendNameBadgerDB,
 		Entity:                     1,
-		NoAutoStart:                true,
 		CheckpointSyncEnabled:      true,
 		LogWatcherHandlerFactories: []log.WatcherHandlerFactory{oasis.LogAssertCheckpointSync()},
 	})
 	// And one more storage worker that will sync the consensus layer via state sync.
 	f.StorageWorkers = append(f.StorageWorkers, oasis.StorageWorkerFixture{
+		NodeFixture: oasis.NodeFixture{
+			NoAutoStart: true,
+		},
 		Backend:               database.BackendNameBadgerDB,
 		Entity:                1,
-		NoAutoStart:           true,
 		CheckpointSyncEnabled: true,
 		LogWatcherHandlerFactories: []log.WatcherHandlerFactory{
 			oasis.LogAssertCheckpointSync(),

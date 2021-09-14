@@ -56,7 +56,7 @@ impl Transport for RuntimeTransport {
         );
 
         match rsp {
-            Err(err) => Box::pin(future::err(err)),
+            Err(err) => Box::pin(future::err(err.into())),
             Ok(Body::HostRPCCallResponse { response }) => Box::pin(future::ok(response)),
             Ok(_) => Box::pin(future::err(anyhow!("bad response type"))),
         }

@@ -74,7 +74,13 @@ func (sc *runtimeUpgradeImpl) Fixture() (*oasis.NetworkFixture, error) {
 		f.ComputeWorkers[i].Runtimes = []int{computeIndex}
 	}
 	for i := 0; i < sc.firstNewWorker; i++ {
-		f.ComputeWorkers = append(f.ComputeWorkers, oasis.ComputeWorkerFixture{Entity: 1, NoAutoStart: true, Runtimes: []int{newComputeIndex}})
+		f.ComputeWorkers = append(f.ComputeWorkers, oasis.ComputeWorkerFixture{
+			NodeFixture: oasis.NodeFixture{
+				NoAutoStart: true,
+			},
+			Entity:   1,
+			Runtimes: []int{newComputeIndex},
+		})
 	}
 
 	// The runtime ID stays the same, so pass only one instance to the storage workers.

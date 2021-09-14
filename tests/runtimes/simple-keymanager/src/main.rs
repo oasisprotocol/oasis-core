@@ -5,5 +5,5 @@ mod api;
 
 pub fn main() {
     let init = new_keymanager(api::trusted_policy_signers());
-    oasis_core_runtime::start_runtime(init, version_from_cargo!());
+    oasis_core_runtime::start_runtime(init, version_from_cargo!(), None);
 }

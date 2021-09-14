@@ -1,5 +1,9 @@
 //! Hash type.
+use std::convert::TryInto;
+
 use sha2::{Digest, Sha512Trunc256};
+
+use crate::common::key_format::KeyFormatAtom;
 
 impl_bytes!(Hash, 32, "A 32-byte SHA-512/256 hash.");
 
@@ -43,5 +47,22 @@ impl Hash {
     /// Hash truncated to the given number of bytes.
     pub fn truncated(&self, n: usize) -> &[u8] {
         &self.0[..n]
+    }
+}
+
+impl KeyFormatAtom for Hash {
+    fn size() -> usize {
+        Hash::len()
+    }
+
+    fn encode_atom(self) -> Vec<u8> {
+        self.as_ref().to_vec()
+    }
+
+    fn decode_atom(data: &[u8]) -> Self
+    where
+        Self: Sized,
+    {
+        Hash(data.try_into().expect("hash: invalid decode atom data"))
     }
 }

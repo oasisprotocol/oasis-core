@@ -158,10 +158,11 @@ impl RpcClient {
         request: types::Request,
     ) -> Result<types::Response, RpcClientError> {
         // Spawn a new controller if we haven't spawned one yet.
-        if !self
+        if self
             .inner
             .has_controller
-            .compare_and_swap(false, true, Ordering::SeqCst)
+            .compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst)
+            .is_ok()
         {
             let mut rx = self
                 .inner

@@ -9,13 +9,18 @@ use crate::{
         logger::{get_logger, init_logger},
         version::Version,
     },
+    consensus::verifier::TrustRoot,
     dispatcher::{Dispatcher, Initializer},
     protocol::{Protocol, Stream},
     rak::RAK,
 };
 
 /// Starts the runtime.
-pub fn start_runtime(initializer: Box<dyn Initializer>, version: Version) {
+pub fn start_runtime(
+    initializer: Box<dyn Initializer>,
+    version: Version,
+    trust_root: Option<TrustRoot>,
+) {
     // Output backtraces.
     env::set_var("RUST_BACKTRACE", "1");
 
@@ -50,15 +55,17 @@ pub fn start_runtime(initializer: Box<dyn Initializer>, version: Version) {
         Ok(stream) => stream,
     };
 
-    // Start handling protocol messages. This blocks the main thread forever
-    // (or until we get a shutdown request).
+    // Initialize the protocol handler loop.
     let protocol = Arc::new(Protocol::new(
         stream,
         rak.clone(),
         dispatcher.clone(),
         version,
+        trust_root,
     ));
 
+    // Start handling protocol messages. This blocks the main thread forever
+    // (or until we get a shutdown request).
     protocol.start();
 
     info!(logger, "Protocol handler terminated, shutting down");

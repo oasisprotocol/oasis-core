@@ -102,6 +102,33 @@ func (rt *Runtime) GetEnclaveIdentity() *sgx.EnclaveIdentity {
 	return nil
 }
 
+// RefreshEnclaveIdentity refreshes the enclave identity for the runtime.
+func (rt *Runtime) RefreshEnclaveIdentity() error {
+	switch rt.teeHardware {
+	case node.TEEHardwareIntelSGX:
+		var mrEnclaves []*sgx.MrEnclave
+		enclaveIdentities := []sgx.EnclaveIdentity{}
+		for _, binary := range rt.binaries[node.TEEHardwareIntelSGX] {
+			var (
+				mrEnclave *sgx.MrEnclave
+				err       error
+			)
+			if mrEnclave, err = deriveMrEnclave(binary); err != nil {
+				return err
+			}
+			enclaveIdentities = append(enclaveIdentities, sgx.EnclaveIdentity{MrEnclave: *mrEnclave, MrSigner: *rt.mrSigner})
+			mrEnclaves = append(mrEnclaves, mrEnclave)
+		}
+		rt.descriptor.Version.TEE = cbor.Marshal(sgx.Constraints{
+			Enclaves: enclaveIdentities,
+		})
+		rt.mrEnclaves = mrEnclaves
+		return nil
+	default:
+		return nil
+	}
+}
+
 func (rt *Runtime) toGenesisArgs() []string {
 	if rt.excludeFromGenesis {
 		return []string{}
@@ -183,31 +210,9 @@ func (net *Network) NewRuntime(cfg *RuntimeCfg) (*Runtime, error) {
 		descriptor.Genesis.State = log
 	}
 
-	var mrEnclaves []*sgx.MrEnclave
-	if cfg.TEEHardware == node.TEEHardwareIntelSGX {
-		enclaveIdentities := []sgx.EnclaveIdentity{}
-		for _, binary := range cfg.Binaries[node.TEEHardwareIntelSGX] {
-			var mrEnclave *sgx.MrEnclave
-			if mrEnclave, err = deriveMrEnclave(binary); err != nil {
-				return nil, err
-			}
-			enclaveIdentities = append(enclaveIdentities, sgx.EnclaveIdentity{MrEnclave: *mrEnclave, MrSigner: *cfg.MrSigner})
-			mrEnclaves = append(mrEnclaves, mrEnclave)
-		}
-		descriptor.Version.TEE = cbor.Marshal(sgx.Constraints{
-			Enclaves: enclaveIdentities,
-		})
-	}
 	if cfg.Keymanager != nil {
 		descriptor.KeyManager = new(common.Namespace)
 		*descriptor.KeyManager = cfg.Keymanager.id
-	}
-
-	// Save runtime descriptor into file.
-	rtDescStr, _ := json.Marshal(descriptor)
-	path := filepath.Join(rtDir.String(), rtDescriptorFile)
-	if err := ioutil.WriteFile(path, rtDescStr, 0o600); err != nil {
-		return nil, fmt.Errorf("failed to write runtime descriptor to file: %w", err)
 	}
 
 	rt := &Runtime{
@@ -216,13 +221,24 @@ func (net *Network) NewRuntime(cfg *RuntimeCfg) (*Runtime, error) {
 		kind:               cfg.Kind,
 		binaries:           cfg.Binaries,
 		teeHardware:        cfg.TEEHardware,
-		mrEnclaves:         mrEnclaves,
 		mrSigner:           cfg.MrSigner,
 		pruner:             cfg.Pruner,
 		excludeFromGenesis: cfg.ExcludeFromGenesis,
 		descriptor:         descriptor,
 		genesisState:       genesisStatePath,
 	}
+
+	if err := rt.RefreshEnclaveIdentity(); err != nil {
+		return nil, err
+	}
+
+	// Save runtime descriptor into file.
+	rtDescStr, _ := json.Marshal(rt.descriptor)
+	path := filepath.Join(rtDir.String(), rtDescriptorFile)
+	if err := ioutil.WriteFile(path, rtDescStr, 0o600); err != nil {
+		return nil, fmt.Errorf("failed to write runtime descriptor to file: %w", err)
+	}
+
 	net.runtimes = append(net.runtimes, rt)
 
 	return rt, nil

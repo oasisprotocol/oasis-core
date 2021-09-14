@@ -1,40 +1,53 @@
+//! Tendermint consensus layer backend.
+
+mod store;
+pub mod verifier;
+
 use std::convert::{TryFrom, TryInto};
 
 use anyhow::{anyhow, Result};
-use tendermint::block::signed_header::SignedHeader as TMSignedHeader;
+use tendermint::{
+    block::signed_header::SignedHeader as TMSignedHeader, validator::Set as TMValidatorSet,
+};
 use tendermint_proto::{types::LightBlock as RawLightBlock, Protobuf};
 
 use crate::{
     common::{crypto::hash::Hash, namespace::Namespace},
+    consensus::LightBlock,
     storage::mkvs::{Root, RootType},
 };
 
 /// Tendermint consensus backend name.
 pub const BACKEND_NAME: &str = "tendermint";
 
-/// Light consensus block.
-#[derive(Debug, cbor::Encode, cbor::Decode)]
-pub struct LightBlock {
-    pub height: i64,
-    pub meta: Vec<u8>,
-}
+/// The domain separation context used by Oasis Core for Tendermint cryptography.
+pub const TENDERMINT_CONTEXT: &[u8] = b"oasis-core/tendermint";
 
-impl LightBlock {
-    pub fn decode_meta(self) -> Result<LightBlockMeta> {
-        LightBlockMeta::decode_vec(&self.meta).map_err(|e| anyhow!("{}", e))
-    }
+/// Decode the light block metadata as a Tendermint light block.
+pub fn decode_light_block(light_block: LightBlock) -> Result<LightBlockMeta> {
+    LightBlockMeta::decode_vec(&light_block.meta).map_err(|e| anyhow!("{}", e))
 }
 
 /// Tendermint light consensus block metadata.
 #[derive(Debug, Clone)]
 pub struct LightBlockMeta {
-    pub signed_header: TMSignedHeader,
-    // TODO: add other fields if/when needed.
+    pub signed_header: Option<TMSignedHeader>,
+    pub validators: TMValidatorSet,
 }
 
 impl LightBlockMeta {
+    /// State root specified by this light block.
+    ///
+    /// # Panics
+    ///
+    /// The signed header must be present and the application hash must be a valid Oasis Core
+    /// application hash (state root hash).
     pub fn get_state_root(&self) -> Root {
-        let header = self.signed_header.header();
+        let header = self
+            .signed_header
+            .as_ref()
+            .expect("signed header should be present")
+            .header();
         let height: u64 = header.height.into();
         let hash: [u8; 32] = header
             .app_hash
@@ -61,7 +74,12 @@ impl TryFrom<RawLightBlock> for LightBlockMeta {
         Ok(LightBlockMeta {
             signed_header: value
                 .signed_header
-                .ok_or(anyhow!("missing signed header"))?
+                .map(TryInto::try_into)
+                .transpose()
+                .map_err(|error| anyhow!("{}", error))?,
+            validators: value
+                .validator_set
+                .ok_or(anyhow!("missing validator set"))?
                 .try_into()
                 .map_err(|error| anyhow!("{}", error))?,
         })
@@ -71,8 +89,8 @@ impl TryFrom<RawLightBlock> for LightBlockMeta {
 impl From<LightBlockMeta> for RawLightBlock {
     fn from(value: LightBlockMeta) -> Self {
         RawLightBlock {
-            signed_header: Some(value.signed_header.into()),
-            validator_set: None,
+            signed_header: value.signed_header.map(Into::into),
+            validator_set: Some(value.validators.into()),
         }
     }
 }

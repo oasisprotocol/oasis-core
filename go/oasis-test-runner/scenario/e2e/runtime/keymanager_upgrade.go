@@ -61,7 +61,13 @@ func (sc *kmUpgradeImpl) Fixture() (*oasis.NetworkFixture, error) {
 	f.Keymanagers[0].AllowEarlyTermination = true
 
 	// Add the upgraded keymanager, will be started later.
-	f.Keymanagers = append(f.Keymanagers, oasis.KeymanagerFixture{Runtime: 2, Entity: 1, NoAutoStart: true})
+	f.Keymanagers = append(f.Keymanagers, oasis.KeymanagerFixture{
+		NodeFixture: oasis.NodeFixture{
+			NoAutoStart: true,
+		},
+		Runtime: 2,
+		Entity:  1,
+	})
 
 	return f, nil
 }

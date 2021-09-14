@@ -44,9 +44,11 @@ func (sc *consensusStateSyncImpl) Fixture() (*oasis.NetworkFixture, error) {
 	// Add an extra validator.
 	f.Validators = append(f.Validators,
 		oasis.ValidatorFixture{
-			NoAutoStart: true,
-			Entity:      1,
-			Consensus:   oasis.ConsensusFixture{EnableConsensusRPCWorker: true},
+			NodeFixture: oasis.NodeFixture{
+				NoAutoStart: true,
+			},
+			Entity:    1,
+			Consensus: oasis.ConsensusFixture{EnableConsensusRPCWorker: true},
 			LogWatcherHandlerFactories: []log.WatcherHandlerFactory{
 				oasis.LogEventABCIStateSyncComplete(),
 			},

@@ -90,16 +90,20 @@ type Body struct {
 	RuntimeKeyManagerPolicyUpdateResponse *Empty                                 `json:",omitempty"`
 	RuntimeQueryRequest                   *RuntimeQueryRequest                   `json:",omitempty"`
 	RuntimeQueryResponse                  *RuntimeQueryResponse                  `json:",omitempty"`
+	RuntimeConsensusSyncRequest           *RuntimeConsensusSyncRequest           `json:",omitempty"`
+	RuntimeConsensusSyncResponse          *Empty                                 `json:",omitempty"`
 
 	// Host interface.
-	HostRPCCallRequest          *HostRPCCallRequest          `json:",omitempty"`
-	HostRPCCallResponse         *HostRPCCallResponse         `json:",omitempty"`
-	HostStorageSyncRequest      *HostStorageSyncRequest      `json:",omitempty"`
-	HostStorageSyncResponse     *HostStorageSyncResponse     `json:",omitempty"`
-	HostLocalStorageGetRequest  *HostLocalStorageGetRequest  `json:",omitempty"`
-	HostLocalStorageGetResponse *HostLocalStorageGetResponse `json:",omitempty"`
-	HostLocalStorageSetRequest  *HostLocalStorageSetRequest  `json:",omitempty"`
-	HostLocalStorageSetResponse *Empty                       `json:",omitempty"`
+	HostRPCCallRequest              *HostRPCCallRequest              `json:",omitempty"`
+	HostRPCCallResponse             *HostRPCCallResponse             `json:",omitempty"`
+	HostStorageSyncRequest          *HostStorageSyncRequest          `json:",omitempty"`
+	HostStorageSyncResponse         *HostStorageSyncResponse         `json:",omitempty"`
+	HostLocalStorageGetRequest      *HostLocalStorageGetRequest      `json:",omitempty"`
+	HostLocalStorageGetResponse     *HostLocalStorageGetResponse     `json:",omitempty"`
+	HostLocalStorageSetRequest      *HostLocalStorageSetRequest      `json:",omitempty"`
+	HostLocalStorageSetResponse     *Empty                           `json:",omitempty"`
+	HostFetchConsensusBlockRequest  *HostFetchConsensusBlockRequest  `json:",omitempty"`
+	HostFetchConsensusBlockResponse *HostFetchConsensusBlockResponse `json:",omitempty"`
 }
 
 // Type returns the message type by determining the name of the first non-nil member.
@@ -338,6 +342,11 @@ type RuntimeQueryResponse struct {
 	Data cbor.RawMessage `json:"data,omitempty"`
 }
 
+// RuntimeConsensusSyncRequest is a runtime consensus block synchronization request message body.
+type RuntimeConsensusSyncRequest struct {
+	Height uint64 `json:"height"`
+}
+
 // HostRPCCallRequest is a host RPC call request message body.
 type HostRPCCallRequest struct {
 	Endpoint string `json:"endpoint"`
@@ -388,4 +397,14 @@ type HostLocalStorageGetResponse struct {
 type HostLocalStorageSetRequest struct {
 	Key   []byte `json:"key"`
 	Value []byte `json:"value"`
+}
+
+// HostFetchConsensusBlockRequest is a request to host to fetch the given consensus light block.
+type HostFetchConsensusBlockRequest struct {
+	Height uint64 `json:"height"`
+}
+
+// HostFetchConsensusBlockResponse is a response from host fetching the given consensus light block.
+type HostFetchConsensusBlockResponse struct {
+	Block consensus.LightBlock `json:"block"`
 }
