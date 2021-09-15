@@ -37,24 +37,21 @@ func TestBIP173(t *testing.T) {
 			"decoding bech32 failed: invalid bech32 string length 91",
 		},
 		// No separator character.
-		{"pzry9x0s0muk", false, "decoding bech32 failed: invalid index of 1"},
+		{"pzry9x0s0muk", false, "decoding bech32 failed: invalid separator index -1"},
 		// Empty HRP.
-		{"1pzry9x0s0muk", false, "decoding bech32 failed: invalid index of 1"},
+		{"1pzry9x0s0muk", false, "decoding bech32 failed: invalid separator index 0"},
 		// Invalid data character.
-		{
-			"x1b4n0q5v", false,
-			"decoding bech32 failed: failed converting data to bytes: invalid character not part of charset: 98",
-		},
+		{"x1b4n0q5v", false, "decoding bech32 failed: invalid character not part of charset: 98"},
 		// Too short checksum.
-		{"li1dgmt3", false, "decoding bech32 failed: invalid index of 1"},
+		{"li1dgmt3", false, "decoding bech32 failed: invalid separator index 2"},
 		// Invalid character in checksum.
 		{"de1lg7wt\xFF", false, "decoding bech32 failed: invalid character in string: 'ÿ'"},
 		// Checksum calculated with uppercase form of HRP.
-		{"A1G7SGD8", false, "decoding bech32 failed: checksum failed. Expected 2uel5l, got g7sgd8."},
+		{"A1G7SGD8", false, "decoding bech32 failed: invalid checksum (expected 2uel5l got g7sgd8)"},
 		// Empty HRP.
 		{"10a06t8", false, "decoding bech32 failed: invalid bech32 string length 7"},
 		// Empty HRP.
-		{"1qzzfhee", false, "decoding bech32 failed: invalid index of 1"},
+		{"1qzzfhee", false, "decoding bech32 failed: invalid separator index 0"},
 	}
 
 	for _, vector := range testVectors {

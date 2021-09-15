@@ -19,7 +19,7 @@ replace (
 )
 
 require (
-	github.com/btcsuite/btcutil v1.0.2
+	github.com/btcsuite/btcutil v1.0.3-0.20201208143702-a53e38424cce
 	github.com/cenkalti/backoff/v4 v4.1.1
 	github.com/dgraph-io/badger/v2 v2.2007.2
 	github.com/dgraph-io/badger/v3 v3.2103.1
@@ -37,10 +37,10 @@ require (
 	github.com/hashicorp/go-plugin v1.4.2
 	github.com/hpcloud/tail v1.0.0
 	github.com/ianbruene/go-difflib v1.2.0
-	github.com/libp2p/go-libp2p v0.14.4
-	github.com/libp2p/go-libp2p-core v0.8.6
+	github.com/libp2p/go-libp2p v0.15.0
+	github.com/libp2p/go-libp2p-core v0.9.0
 	github.com/libp2p/go-libp2p-pubsub v0.5.4
-	github.com/multiformats/go-multiaddr v0.3.3
+	github.com/multiformats/go-multiaddr v0.4.0
 	github.com/oasisprotocol/curve25519-voi v0.0.0-20210505121811-294cf0fbfb43
 	github.com/oasisprotocol/deoxysii v0.0.0-20200527154044-851aec403956
 	github.com/powerman/rpc-codec v1.2.2
@@ -59,8 +59,8 @@ require (
 	github.com/whyrusleeping/go-logging v0.0.1
 	gitlab.com/yawning/dynlib.git v0.0.0-20210614104444-f6a90d03b144
 	go.dedis.ch/kyber/v3 v3.0.13
-	golang.org/x/crypto v0.0.0-20210506145944-38f3c27a63bf
-	golang.org/x/net v0.0.0-20210525063256-abc453219eb5
+	golang.org/x/crypto v0.0.0-20210813211128-0a44fdfbc16e
+	golang.org/x/net v0.0.0-20210813160813-60bc85c4be6d
 	google.golang.org/genproto v0.0.0-20210602131652-f16073e35f0c
 	google.golang.org/grpc v1.40.0
 	google.golang.org/grpc/security/advancedtls v0.0.0-20200902210233-8630cac324bf
