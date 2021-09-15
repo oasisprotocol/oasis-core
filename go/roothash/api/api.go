@@ -462,7 +462,7 @@ func SanityCheckBlocks(blocks map[common.Namespace]*block.Block) error {
 	for _, blk := range blocks {
 		hdr := blk.Header
 
-		if hdr.Timestamp > uint64(time.Now().Unix()+61*60) {
+		if hdr.Timestamp > block.Timestamp(time.Now().Unix()+61*60) {
 			return fmt.Errorf("roothash: sanity check failed: block header timestamp is more than 1h1m in the future")
 		}
 	}
