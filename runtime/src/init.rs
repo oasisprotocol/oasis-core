@@ -5,22 +5,15 @@ use log;
 use slog::{error, info};
 
 use crate::{
-    common::{
-        logger::{get_logger, init_logger},
-        version::Version,
-    },
-    consensus::verifier::TrustRoot,
+    common::logger::{get_logger, init_logger},
+    config::Config,
     dispatcher::{Dispatcher, Initializer},
     protocol::{Protocol, Stream},
     rak::RAK,
 };
 
 /// Starts the runtime.
-pub fn start_runtime(
-    initializer: Box<dyn Initializer>,
-    version: Version,
-    trust_root: Option<TrustRoot>,
-) {
+pub fn start_runtime(initializer: Box<dyn Initializer>, config: Config) {
     // Output backtraces.
     env::set_var("RUST_BACKTRACE", "1");
 
@@ -60,8 +53,7 @@ pub fn start_runtime(
         stream,
         rak.clone(),
         dispatcher.clone(),
-        version,
-        trust_root,
+        config,
     ));
 
     // Start handling protocol messages. This blocks the main thread forever

@@ -5,7 +5,7 @@
 //! To create a minimal runtime that doesn't expose any APIs to the
 //! outside world, you need to call the `start_runtime` function:
 //! ```rust,ignore
-//! oasis_core_runtime::start_runtime(Some(Box::new(reg)), version, Some(trust_root));
+//! oasis_core_runtime::start_runtime(Some(Box::new(reg)), config);
 //! ```
 //!
 //! This will start the required services needed to communicate with
@@ -24,6 +24,7 @@ extern crate base64_serde;
 
 #[macro_use]
 pub mod common;
+pub mod config;
 pub mod consensus;
 pub mod dispatcher;
 pub mod enclave_rpc;

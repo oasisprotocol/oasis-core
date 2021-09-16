@@ -818,9 +818,13 @@ impl Cache {
     }
 
     fn new_tree(protocol: &Arc<Protocol>, root: Root) -> Tree {
+        let config = protocol.get_config();
         let read_syncer = HostReadSyncer::new(protocol.clone(), HostStorageEndpoint::Runtime);
         Tree::make()
-            .with_capacity(100_000, 10_000_000)
+            .with_capacity(
+                config.storage.cache_node_capacity,
+                config.storage.cache_value_capacity,
+            )
             .with_root(root)
             .new(Box::new(read_syncer))
     }
