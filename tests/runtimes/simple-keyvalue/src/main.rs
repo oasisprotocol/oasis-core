@@ -9,6 +9,7 @@ use std::sync::{atomic::AtomicBool, Arc};
 use oasis_core_keymanager_client::KeyManagerClient;
 use oasis_core_runtime::{
     common::version::Version,
+    config::Config,
     consensus::{roothash::Message, verifier::TrustRoot},
     protocol::HostInfo,
     rak::RAK,
@@ -275,5 +276,12 @@ pub fn main() {
     });
 
     // Start the runtime.
-    oasis_core_runtime::start_runtime(Box::new(init), version_from_cargo!(), trust_root);
+    oasis_core_runtime::start_runtime(
+        Box::new(init),
+        Config {
+            version: version_from_cargo!(),
+            trust_root,
+            ..Default::default()
+        },
+    );
 }

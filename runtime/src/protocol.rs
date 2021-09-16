@@ -16,10 +16,8 @@ use thiserror::Error;
 
 use crate::{
     common::{logger::get_logger, namespace::Namespace, version::Version},
-    consensus::{
-        tendermint,
-        verifier::{TrustRoot, Verifier},
-    },
+    config::Config,
+    consensus::{tendermint, verifier::Verifier},
     dispatcher::Dispatcher,
     rak::RAK,
     storage::KeyValue,
@@ -103,23 +101,15 @@ pub struct Protocol {
     last_request_id: AtomicUsize,
     /// Pending outgoing requests.
     pending_out_requests: Mutex<HashMap<u64, channel::Sender<Body>>>,
-    /// Runtime version.
-    runtime_version: Version,
-    /// Consensus layer trust root.
-    trust_root: Option<TrustRoot>,
+    /// Runtime configuration.
+    config: Config,
     /// Host environment information.
     host_info: Mutex<Option<HostInfo>>,
 }
 
 impl Protocol {
     /// Create a new protocol handler instance.
-    pub fn new(
-        stream: Stream,
-        rak: Arc<RAK>,
-        dispatcher: Arc<Dispatcher>,
-        runtime_version: Version,
-        trust_root: Option<TrustRoot>,
-    ) -> Self {
+    pub fn new(stream: Stream, rak: Arc<RAK>, dispatcher: Arc<Dispatcher>, config: Config) -> Self {
         let logger = get_logger("runtime/protocol");
 
         Self {
@@ -130,10 +120,14 @@ impl Protocol {
             stream,
             last_request_id: AtomicUsize::new(0),
             pending_out_requests: Mutex::new(HashMap::new()),
-            runtime_version,
-            trust_root,
+            config,
             host_info: Mutex::new(None),
         }
+    }
+
+    /// The supplied runtime configuration.
+    pub fn get_config(&self) -> &Config {
+        &self.config
     }
 
     /// The runtime identifier for this instance.
@@ -141,7 +135,7 @@ impl Protocol {
     /// # Panics
     ///
     /// Panics, if the host environment information is not set.
-    pub fn get_runtime_id(self: &Protocol) -> Namespace {
+    pub fn get_runtime_id(&self) -> Namespace {
         self.host_info
             .lock()
             .unwrap()
@@ -155,7 +149,7 @@ impl Protocol {
     /// # Panics
     ///
     /// Panics, if the host environment information is not set.
-    pub fn get_host_info(self: &Protocol) -> HostInfo {
+    pub fn get_host_info(&self) -> HostInfo {
         self.host_info
             .lock()
             .unwrap()
@@ -399,7 +393,9 @@ impl Protocol {
         }
 
         // Create and start the consensus verifier.
-        let consensus_verifier: Box<dyn Verifier> = if let Some(ref trust_root) = self.trust_root {
+        let consensus_verifier: Box<dyn Verifier> = if let Some(ref trust_root) =
+            self.config.trust_root
+        {
             // Make sure that the host environment matches the trust root.
             if host_info.runtime_id != trust_root.runtime_id {
                 return Err(ProtocolError::InvalidRuntimeId(
@@ -434,7 +430,7 @@ impl Protocol {
 
         Ok(RuntimeInfoResponse {
             protocol_version: BUILD_INFO.protocol_version,
-            runtime_version: self.runtime_version,
+            runtime_version: self.config.version,
         })
     }
 
