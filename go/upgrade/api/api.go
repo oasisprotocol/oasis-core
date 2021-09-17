@@ -161,10 +161,10 @@ func (d Descriptor) ValidateBasic() error {
 // EnsureCompatible checks if currently running binary is compatible with
 // the upgrade descriptor.
 func (d *Descriptor) EnsureCompatible() error {
-	ownVersion := version.Versions
-
-	if !ownVersion.Compatible(d.Target) {
-		return fmt.Errorf("binary version not compatible: own: %s, required: %s", ownVersion, d.Target)
+	ownConsensus := version.Versions.ConsensusProtocol
+	targetConsensus := d.Target.ConsensusProtocol
+	if ownConsensus.MaskNonMajor() != targetConsensus.MaskNonMajor() {
+		return fmt.Errorf("binary consensus version not compatible: own: %s, required: %s", ownConsensus, targetConsensus)
 	}
 	return nil
 }
