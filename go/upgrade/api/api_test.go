@@ -230,10 +230,19 @@ func TestEnsureCompatible(t *testing.T) {
 			msg: "different target should fail",
 			d: &Descriptor{
 				Versioned: cbor.NewVersioned(LatestDescriptorVersion),
-				Target:    version.ProtocolVersions{RuntimeHostProtocol: version.FromU64(42)},
+				Target:    version.ProtocolVersions{ConsensusProtocol: version.FromU64(42)},
 				Epoch:     100,
 			},
 			shouldErr: true,
+		},
+		{
+			msg: "different runtime target should not fail",
+			d: &Descriptor{
+				Versioned: cbor.NewVersioned(LatestDescriptorVersion),
+				Target:    version.ProtocolVersions{ConsensusProtocol: version.ConsensusProtocol, RuntimeHostProtocol: version.FromU64(42)},
+				Epoch:     100,
+			},
+			shouldErr: false,
 		},
 		{
 			msg: "matching identifier should not fail",
