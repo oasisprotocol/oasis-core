@@ -264,8 +264,14 @@ func signAndWriteEntityGenesis(dataDir string, signer signature.Signer, ent *ent
 	}
 
 	// Write out the signed entity registration.
-	b, _ := json.Marshal(signed)
-	if err = ioutil.WriteFile(filepath.Join(dataDir, entityGenesisFilename), b, 0o600); err != nil {
+	prettySigned, err := cmdCommon.PrettyJSONMarshal(signed)
+	if err != nil {
+		logger.Error("failed to get pretty JSON of signed entity genesis registration",
+			"err", err,
+		)
+		os.Exit(1)
+	}
+	if err = ioutil.WriteFile(filepath.Join(dataDir, entityGenesisFilename), prettySigned, 0o600); err != nil {
 		logger.Error("failed to write signed entity genesis registration",
 			"err", err,
 		)
@@ -337,16 +343,24 @@ func doList(cmd *cobra.Command, args []string) {
 	}
 
 	for _, ent := range entities {
-		var s string
+		var entString string
 		switch cmdFlags.Verbose() {
 		case true:
-			b, _ := json.Marshal(ent)
-			s = string(b)
+			prettyEnt, err := cmdCommon.PrettyJSONMarshal(ent)
+			if err != nil {
+				logger.Error("failed to get pretty JSON of entity",
+					"err", err,
+					"entity ID", ent.ID.String(),
+				)
+				entString = fmt.Sprintf("[invalid pretty JSON for entity %s]", ent.ID)
+			} else {
+				entString = string(prettyEnt)
+			}
 		default:
-			s = ent.ID.String()
+			entString = ent.ID.String()
 		}
 
-		fmt.Printf("%v\n", s)
+		fmt.Println(entString)
 	}
 }
 

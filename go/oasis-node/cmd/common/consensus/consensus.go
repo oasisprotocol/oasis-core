@@ -3,7 +3,6 @@ package consensus
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -142,15 +141,15 @@ func SignAndSaveTx(ctx context.Context, tx *transaction.Transaction, signer sign
 		os.Exit(1)
 	}
 
-	rawTx, err := json.Marshal(sigTx)
+	prettySigTx, err := cmdCommon.PrettyJSONMarshal(sigTx)
 	if err != nil {
-		logger.Error("failed to marshal transaction",
+		logger.Error("failed to get pretty JSON of signed transaction",
 			"err", err,
 		)
 		os.Exit(1)
 	}
-	if err = ioutil.WriteFile(viper.GetString(CfgTxFile), rawTx, 0o600); err != nil {
-		logger.Error("failed to save transaction",
+	if err = ioutil.WriteFile(viper.GetString(CfgTxFile), prettySigTx, 0o600); err != nil {
+		logger.Error("failed to save signed transaction",
 			"err", err,
 		)
 		os.Exit(1)

@@ -3,7 +3,6 @@ package dumpdb
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -254,14 +253,14 @@ func doDumpDB(cmd *cobra.Command, args []string) {
 	if shouldClose {
 		defer w.Close()
 	}
-	raw, err := json.Marshal(doc)
+	prettyDoc, err := cmdCommon.PrettyJSONMarshal(doc)
 	if err != nil {
 		logger.Error("failed to marshal state dump into JSON",
 			"err", err,
 		)
 		return
 	}
-	if _, err := w.Write(raw); err != nil {
+	if _, err := w.Write(prettyDoc); err != nil {
 		logger.Error("failed to write state dump file",
 			"err", err,
 		)
