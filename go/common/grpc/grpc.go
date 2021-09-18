@@ -675,7 +675,11 @@ func Dial(target string, opts ...grpc.DialOption) (*grpc.ClientConn, error) {
 	logger := logging.GetLogger("grpc/client")
 	logAdapter := newGrpcLogAdapter(logger)
 	dialOpts := []grpc.DialOption{
-		grpc.WithDefaultCallOptions(grpc.ForceCodec(&CBORCodec{})),
+		grpc.WithDefaultCallOptions(
+			grpc.ForceCodec(&CBORCodec{}),
+			grpc.MaxCallSendMsgSize(maxSendMsgSize),
+			grpc.MaxCallRecvMsgSize(maxRecvMsgSize),
+		),
 		grpc.WithChainUnaryInterceptor(logAdapter.unaryClientLogger, clientUnaryErrorMapper),
 		grpc.WithChainStreamInterceptor(logAdapter.streamClientLogger, clientStreamErrorMapper),
 	}
