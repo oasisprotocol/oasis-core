@@ -32,7 +32,12 @@ use tendermint_rpc::error::Error as RpcError;
 
 use super::store::LruStore;
 use crate::{
-    common::{crypto::hash::Hash, logger::get_logger, sgx::seal, time},
+    common::{
+        crypto::hash::Hash,
+        logger::get_logger,
+        sgx::{avr::EnclaveIdentity, seal},
+        time,
+    },
     consensus::{
         roothash::{ComputeResultsHeader, Header},
         state::{roothash::ImmutableState as RoothashState, ConsensusState},
@@ -47,8 +52,10 @@ use crate::{
 
 /// Maximum number of times to retry initialization.
 const MAX_INITIALIZATION_RETRIES: usize = 3;
-/// Storage key under which the sealed trust root is stored in untrusted local storage.
-const TRUST_ROOT_STORAGE_KEY: &[u8] = b"tendermint.verifier.trust_root";
+/// Storage key prefix under which the sealed trust root is stored in untrusted local storage.
+///
+/// The actual key includes the MRENCLAVE to support upgrades.
+const TRUST_ROOT_STORAGE_KEY_PREFIX: &str = "tendermint.verifier.trust_root";
 /// Domain separation context for the trust root.
 const TRUST_ROOT_CONTEXT: &[u8] = b"oasis-core/verifier: trust root";
 /// Trust root save interval (in consensus blocks).
@@ -319,13 +326,27 @@ impl Verifier {
         });
     }
 
+    fn derive_trust_root_storage_key() -> Vec<u8> {
+        // Namespace storage key by MRENCLAVE as we can only unseal our own sealed data and we need
+        // to support upgrades. We assume that an upgrade will include an up-to-date trust root
+        // anyway.
+        format!(
+            "{}.{:x}",
+            TRUST_ROOT_STORAGE_KEY_PREFIX,
+            EnclaveIdentity::current()
+                .map(|eid| eid.mr_enclave)
+                .unwrap_or_default()
+        )
+        .into_bytes()
+    }
+
     fn load_trust_root(
         &self,
         untrusted_local_store: &ProtocolUntrustedLocalStorage,
     ) -> Result<TrustRoot, Error> {
         // Attempt to load the previously sealed trust root.
         let untrusted_value = untrusted_local_store
-            .get(TRUST_ROOT_STORAGE_KEY.to_vec())
+            .get(Self::derive_trust_root_storage_key())
             .map_err(|_| Error::TrustRootLoadingFailed)?;
         if untrusted_value.is_empty() {
             // No previously stored trust root is available, use the embedded root.
@@ -354,7 +375,7 @@ impl Verifier {
 
         // Store the trust root.
         untrusted_local_store
-            .insert(TRUST_ROOT_STORAGE_KEY.to_vec(), sealed)
+            .insert(Self::derive_trust_root_storage_key(), sealed)
             .unwrap();
     }
 
