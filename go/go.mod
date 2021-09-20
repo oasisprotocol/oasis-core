@@ -27,7 +27,7 @@ require (
 	github.com/facebookgo/ensure v0.0.0-20200202191622-63f1cf65ac4c // indirect
 	github.com/facebookgo/subset v0.0.0-20200203212716-c811ad88dec4 // indirect
 	github.com/fxamacker/cbor/v2 v2.2.1-0.20200820021930-bafca87fa6db
-	github.com/go-kit/log v0.1.0
+	github.com/go-kit/log v0.2.0
 	github.com/golang/protobuf v1.5.2
 	github.com/golang/snappy v0.0.4
 	github.com/google/btree v1.0.1
