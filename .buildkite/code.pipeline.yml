@@ -93,13 +93,6 @@ steps:
     plugins:
       <<: *docker_plugin
 
-  - label: Lint Rust crate versions
-    command: .buildkite/rust/lint_crate_versions.sh
-    retry:
-      <<: *retry_agent_failure
-    plugins:
-      <<: *docker_plugin
-
   - label: Audit Rust dependencies for vulnerabilities
     command: .buildkite/rust/cargo_audit.sh
     retry:
