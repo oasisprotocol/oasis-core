@@ -16,8 +16,6 @@ use crate::{
 pub struct Context<'a> {
     /// I/O context.
     pub io_ctx: Arc<IoContext>,
-    /// Tokio runtime.
-    pub tokio: &'a tokio::runtime::Runtime,
     /// Consensus state tree.
     pub consensus_state: ConsensusState,
     /// Runtime state.
@@ -39,7 +37,6 @@ impl<'a> Context<'a> {
     /// Construct new transaction context.
     pub fn new(
         io_ctx: Arc<IoContext>,
-        tokio: &'a tokio::runtime::Runtime,
         consensus_state: ConsensusState,
         runtime_state: &'a mut dyn MKVS,
         header: &'a Header,
@@ -50,7 +47,6 @@ impl<'a> Context<'a> {
     ) -> Self {
         Self {
             io_ctx,
-            tokio,
             consensus_state,
             runtime_state,
             header,

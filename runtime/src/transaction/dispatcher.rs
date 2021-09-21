@@ -15,7 +15,7 @@ use crate::{
 ///
 /// It defines the interface used by the runtime call dispatcher
 /// to process transactions.
-pub trait Dispatcher {
+pub trait Dispatcher: Send + Sync {
     /// Execute the transactions in the given batch.
     fn execute_batch(
         &self,
@@ -79,6 +79,41 @@ impl<T: Dispatcher + ?Sized> Dispatcher for Box<T> {
 
     fn set_abort_batch_flag(&mut self, abort_batch: Arc<AtomicBool>) {
         T::set_abort_batch_flag(&mut *self, abort_batch)
+    }
+
+    fn query(
+        &self,
+        ctx: Context,
+        method: &str,
+        args: cbor::Value,
+    ) -> Result<cbor::Value, RuntimeError> {
+        T::query(&*self, ctx, method, args)
+    }
+}
+
+impl<T: Dispatcher + ?Sized> Dispatcher for Arc<T> {
+    fn execute_batch(
+        &self,
+        ctx: Context,
+        batch: &TxnBatch,
+    ) -> Result<ExecuteBatchResult, RuntimeError> {
+        T::execute_batch(&*self, ctx, batch)
+    }
+
+    fn check_batch(
+        &self,
+        ctx: Context,
+        batch: &TxnBatch,
+    ) -> Result<Vec<CheckTxResult>, RuntimeError> {
+        T::check_batch(&*self, ctx, batch)
+    }
+
+    fn finalize(&self, new_storage_root: Hash) {
+        T::finalize(&*self, new_storage_root)
+    }
+
+    fn set_abort_batch_flag(&mut self, _abort_batch: Arc<AtomicBool>) {
+        unimplemented!()
     }
 
     fn query(

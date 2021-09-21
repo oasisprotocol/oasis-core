@@ -93,8 +93,10 @@ pub struct Protocol {
     rak: Arc<RAK>,
     /// Incoming request dispatcher.
     dispatcher: Arc<Dispatcher>,
-    /// Mutex for sending outgoing messages.
-    outgoing_mutex: Mutex<()>,
+    /// Channel for sending outgoing messages.
+    outgoing_tx: channel::Sender<Message>,
+    /// Channel for receiving outgoing messages.
+    outgoing_rx: channel::Receiver<Message>,
     /// Stream to the runtime host.
     stream: Stream,
     /// Outgoing request identifier generator.
@@ -112,11 +114,14 @@ impl Protocol {
     pub fn new(stream: Stream, rak: Arc<RAK>, dispatcher: Arc<Dispatcher>, config: Config) -> Self {
         let logger = get_logger("runtime/protocol");
 
+        let (outgoing_tx, outgoing_rx) = channel::unbounded();
+
         Self {
             logger,
             rak,
             dispatcher,
-            outgoing_mutex: Mutex::new(()),
+            outgoing_tx,
+            outgoing_rx,
             stream,
             last_request_id: AtomicUsize::new(0),
             pending_out_requests: Mutex::new(HashMap::new()),
@@ -160,7 +165,17 @@ impl Protocol {
 
     /// Start the protocol handler loop.
     pub fn start(self: &Arc<Protocol>) {
-        info!(self.logger, "Starting protocol handler");
+        // Spawn write end in a separate thread.
+        let protocol = self.clone();
+        let write_thread = std::thread::spawn(move || protocol.io_write());
+
+        // Run read end in the current thread.
+        self.io_read();
+        write_thread.join().unwrap();
+    }
+
+    fn io_read(self: &Arc<Protocol>) {
+        info!(self.logger, "Starting protocol reader thread");
         let mut reader = BufReader::new(&self.stream);
 
         'recv: loop {
@@ -173,7 +188,19 @@ impl Protocol {
             }
         }
 
-        info!(self.logger, "Protocol handler is terminating");
+        info!(self.logger, "Protocol reader thread is terminating");
+    }
+
+    fn io_write(self: &Arc<Protocol>) {
+        info!(self.logger, "Starting protocol writer thread");
+
+        while let Ok(message) = self.outgoing_rx.recv() {
+            if let Err(error) = self.write_message(message) {
+                warn!(self.logger, "Failed to write message"; "err" => %error);
+            }
+        }
+
+        info!(self.logger, "Protocol writer thread is terminating");
     }
 
     /// Make a new request to the worker host and wait for the response.
@@ -193,7 +220,7 @@ impl Protocol {
         }
 
         // Write message to stream and wait for the response.
-        self.encode_message(message).map_err(Error::from)?;
+        self.send_message(message).map_err(Error::from)?;
 
         let result = rx
             .recv()
@@ -206,11 +233,15 @@ impl Protocol {
 
     /// Send an async response to a previous request back to the worker host.
     pub fn send_response(&self, id: u64, body: Body) -> anyhow::Result<()> {
-        self.encode_message(Message {
+        self.send_message(Message {
             id,
             body,
             message_type: MessageType::Response,
         })
+    }
+
+    fn send_message(&self, message: Message) -> anyhow::Result<()> {
+        self.outgoing_tx.send(message).map_err(|err| err.into())
     }
 
     fn decode_message<R: Read>(&self, mut reader: R) -> anyhow::Result<Message> {
@@ -226,15 +257,13 @@ impl Protocol {
         Ok(cbor::from_slice(&buffer)?)
     }
 
-    fn encode_message(&self, message: Message) -> anyhow::Result<()> {
-        let _guard = self.outgoing_mutex.lock().unwrap();
-        let mut writer = BufWriter::new(&self.stream);
-
+    fn write_message(&self, message: Message) -> anyhow::Result<()> {
         let buffer = cbor::to_vec(message);
         if buffer.len() > MAX_MESSAGE_SIZE {
             return Err(ProtocolError::MessageTooLarge.into());
         }
 
+        let mut writer = BufWriter::new(&self.stream);
         writer.write_u32::<BigEndian>(buffer.len() as u32)?;
         writer.write_all(&buffer)?;
 
@@ -263,7 +292,7 @@ impl Protocol {
                 };
 
                 // Send response back.
-                self.encode_message(Message {
+                self.send_message(Message {
                     id,
                     message_type: MessageType::Response,
                     body,
@@ -308,10 +337,10 @@ impl Protocol {
                 info!(self.logger, "Received worker shutdown request");
                 Err(ProtocolError::MethodNotSupported.into())
             }
-            req @ Body::RuntimeAbortRequest {} => {
+            Body::RuntimeAbortRequest {} => {
                 info!(self.logger, "Received worker abort request");
                 self.can_handle_runtime_requests()?;
-                self.dispatcher.abort_and_wait(ctx, id, req)?;
+                self.dispatcher.abort_and_wait()?;
                 info!(self.logger, "Handled worker abort request");
                 Ok(Some(Body::RuntimeAbortResponse {}))
             }

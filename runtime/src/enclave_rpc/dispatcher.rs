@@ -68,7 +68,7 @@ struct MethodHandlerDispatchImpl<Rq, Rsp> {
     /// Method descriptor.
     descriptor: MethodDescriptor,
     /// Method handler.
-    handler: Box<dyn MethodHandler<Rq, Rsp>>,
+    handler: Box<dyn MethodHandler<Rq, Rsp> + Send + Sync>,
 }
 
 impl<Rq, Rsp> MethodHandlerDispatch for MethodHandlerDispatchImpl<Rq, Rsp>
@@ -93,7 +93,7 @@ where
 /// RPC method dispatcher implementation.
 pub struct Method {
     /// Method dispatcher.
-    dispatcher: Box<dyn MethodHandlerDispatch>,
+    dispatcher: Box<dyn MethodHandlerDispatch + Send + Sync>,
 }
 
 impl Method {
@@ -102,7 +102,7 @@ impl Method {
     where
         Rq: cbor::Decode + 'static,
         Rsp: cbor::Encode + 'static,
-        Handler: MethodHandler<Rq, Rsp> + 'static,
+        Handler: MethodHandler<Rq, Rsp> + Send + Sync + 'static,
     {
         Method {
             dispatcher: Box::new(MethodHandlerDispatchImpl {
@@ -124,7 +124,7 @@ impl Method {
 }
 
 /// Key manager policy update handler callback.
-pub type KeyManagerPolicyHandler = dyn Fn(Vec<u8>) -> ();
+pub type KeyManagerPolicyHandler = dyn Fn(Vec<u8>) -> () + Send + Sync;
 
 /// RPC call dispatcher.
 pub struct Dispatcher {
@@ -135,7 +135,7 @@ pub struct Dispatcher {
     /// Registered key manager policy handler.
     km_policy_handler: Option<Box<KeyManagerPolicyHandler>>,
     /// Registered context initializer.
-    ctx_initializer: Option<Box<dyn ContextInitializer>>,
+    ctx_initializer: Option<Box<dyn ContextInitializer + Send + Sync>>,
 }
 
 impl Dispatcher {
@@ -160,7 +160,7 @@ impl Dispatcher {
     /// Configure context initializer.
     pub fn set_context_initializer<I>(&mut self, initializer: I)
     where
-        I: ContextInitializer + 'static,
+        I: ContextInitializer + Send + Sync + 'static,
     {
         self.ctx_initializer = Some(Box::new(initializer));
     }
