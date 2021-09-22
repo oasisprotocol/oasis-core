@@ -99,6 +99,16 @@ impl Drop for AbortOnPanic {
     }
 }
 
+impl From<tokio::task::JoinError> for Error {
+    fn from(e: tokio::task::JoinError) -> Self {
+        Error::new(
+            "dispatcher",
+            1,
+            &format!("error while processing request: {}", e),
+        )
+    }
+}
+
 /// State related to dispatching a runtime transaction.
 struct TxDispatchState {
     consensus_block: LightBlock,
@@ -420,6 +430,7 @@ impl Dispatcher {
         state: TxDispatchState,
     ) -> Result<Body, Error> {
         debug!(self.logger, "Received query request";
+            "method" => &method,
             "state_root" => ?state.header.state_root,
             "round" => ?state.header.round,
         );
@@ -471,8 +482,7 @@ impl Dispatcher {
                 .query(txn_ctx, &method, args)
                 .map(|data| Body::RuntimeQueryResponse { data })
         })
-        .await
-        .unwrap()
+        .await?
     }
 
     fn txn_check_batch(
@@ -703,8 +713,7 @@ impl Dispatcher {
                 )
             }
         })
-        .await
-        .unwrap()
+        .await?
     }
 
     async fn dispatch_rpc(
@@ -770,8 +779,7 @@ impl Dispatcher {
                         let response = rpc_dispatcher.dispatch(req, rpc_ctx);
                         RpcMessage::Response(response)
                     })
-                    .await
-                    .unwrap();
+                    .await?;
 
                     // Note: MKVS commit is omitted, this MUST be global side-effect free.
 
@@ -853,8 +861,7 @@ impl Dispatcher {
             let response = cbor::to_vec(response);
             Ok(Body::RuntimeLocalRPCCallResponse { response })
         })
-        .await
-        .unwrap()
+        .await?
     }
 
     fn handle_km_policy_update(
