@@ -9,12 +9,13 @@ use std::{
     thread,
 };
 
-use anyhow::{anyhow, Result as AnyResult};
-use crossbeam::channel;
+use anyhow::Result as AnyResult;
 use io_context::Context;
 use slog::{debug, error, info, warn, Logger};
+use tokio::sync::mpsc;
 
 use crate::{
+    cache,
     common::{
         crypto::{
             hash::Hash,
@@ -36,17 +37,14 @@ use crate::{
     },
     protocol::{Protocol, ProtocolUntrustedLocalStorage},
     rak::RAK,
-    storage::mkvs::{
-        sync::{HostReadSyncer, NoopReadSyncer},
-        OverlayTree, Root, RootType, Tree,
-    },
+    storage::mkvs::{sync::NoopReadSyncer, OverlayTree, Root, RootType},
     transaction::{
         dispatcher::{Dispatcher as TxnDispatcher, NoopDispatcher as TxnNoopDispatcher},
         tree::Tree as TxnTree,
         types::TxnBatch,
         Context as TxnContext,
     },
-    types::{Body, ComputedBatch, Error, HostStorageEndpoint},
+    types::{Body, ComputedBatch, Error},
 };
 
 /// Maximum amount of requests that can be in the dispatcher queue.
@@ -86,8 +84,6 @@ where
     }
 }
 
-type QueueItem = (Context, u64, Body);
-
 /// A guard that will abort the process if dropped while panicking.
 ///
 /// This is to ensure that the runtime will terminate in case there is
@@ -104,10 +100,9 @@ impl Drop for AbortOnPanic {
 }
 
 /// State related to dispatching a runtime transaction.
-struct TxDispatchState<'a> {
-    tokio_rt: &'a tokio::runtime::Runtime,
+struct TxDispatchState {
     consensus_block: LightBlock,
-    consensus_verifier: &'a Box<dyn Verifier>,
+    consensus_verifier: Arc<dyn Verifier>,
     header: Header,
     epoch: EpochTime,
     round_results: roothash::RoundResults,
@@ -116,45 +111,78 @@ struct TxDispatchState<'a> {
 }
 
 /// State provided by the protocol upon successful initialization.
-struct State {
+struct ProtocolState {
     protocol: Arc<Protocol>,
     consensus_verifier: Box<dyn Verifier>,
+}
+
+/// State held by the dispatcher, shared between all async tasks.
+#[derive(Clone)]
+struct State {
+    protocol: Arc<Protocol>,
+    consensus_verifier: Arc<dyn Verifier>,
+    dispatcher: Arc<Dispatcher>,
+    rpc_demux: Arc<Mutex<RpcDemux>>,
+    rpc_dispatcher: Arc<RpcDispatcher>,
+    txn_dispatcher: Arc<dyn TxnDispatcher>,
+    cache_set: cache::CacheSet,
+}
+
+#[derive(Debug)]
+enum Command {
+    Request(Context, u64, Body),
+    Abort(mpsc::Sender<()>),
 }
 
 /// Runtime call dispatcher.
 pub struct Dispatcher {
     logger: Logger,
-    queue_tx: channel::Sender<QueueItem>,
-    abort_tx: channel::Sender<()>,
-    abort_rx: channel::Receiver<()>,
+    queue_tx: mpsc::Sender<Command>,
     rak: Arc<RAK>,
     abort_batch: Arc<AtomicBool>,
 
-    state: Mutex<Option<State>>,
+    state: Mutex<Option<ProtocolState>>,
     state_cond: Condvar,
+
+    tokio_runtime: tokio::runtime::Runtime,
 }
 
 impl Dispatcher {
+    #[cfg(target_env = "sgx")]
+    fn new_tokio_runtime() -> tokio::runtime::Runtime {
+        // In an SGX environment we use a single-threaded Tokio runtime.
+        tokio::runtime::Builder::new_current_thread()
+            .max_blocking_threads(2) // Limited in SGX.
+            .thread_keep_alive(std::time::Duration::from_secs(120))
+            .build()
+            .unwrap()
+    }
+
+    #[cfg(not(target_env = "sgx"))]
+    fn new_tokio_runtime() -> tokio::runtime::Runtime {
+        // Otherwise we use a fully-fledged Tokio runtime.
+        tokio::runtime::Runtime::new().unwrap()
+    }
+
     /// Create a new runtime call dispatcher.
     pub fn new(initializer: Box<dyn Initializer>, rak: Arc<RAK>) -> Arc<Self> {
-        let (tx, rx) = channel::bounded(BACKLOG_SIZE);
-        let (abort_tx, abort_rx) = channel::bounded(1);
+        let (tx, rx) = mpsc::channel(BACKLOG_SIZE);
 
         let dispatcher = Arc::new(Dispatcher {
             logger: get_logger("runtime/dispatcher"),
             queue_tx: tx,
-            abort_tx: abort_tx,
-            abort_rx: abort_rx,
             rak,
             abort_batch: Arc::new(AtomicBool::new(false)),
             state: Mutex::new(None),
             state_cond: Condvar::new(),
+            tokio_runtime: Self::new_tokio_runtime(),
         });
 
+        // Spawn the dispatcher processing thread.
         let d = dispatcher.clone();
         thread::spawn(move || {
             let _guard = AbortOnPanic;
-            d.run(initializer, rx)
+            d.run(initializer, rx);
         });
 
         dispatcher
@@ -163,7 +191,7 @@ impl Dispatcher {
     /// Start the dispatcher.
     pub fn start(&self, protocol: Arc<Protocol>, consensus_verifier: Box<dyn Verifier>) {
         let mut s = self.state.lock().unwrap();
-        *s = Some(State {
+        *s = Some(ProtocolState {
             protocol,
             consensus_verifier,
         });
@@ -172,28 +200,25 @@ impl Dispatcher {
 
     /// Queue a new request to be dispatched.
     pub fn queue_request(&self, ctx: Context, id: u64, body: Body) -> AnyResult<()> {
-        self.queue_tx.try_send((ctx, id, body))?;
+        self.queue_tx
+            .blocking_send(Command::Request(ctx, id, body))?;
         Ok(())
     }
 
     /// Signals to dispatcher that it should abort and waits for the abort to
     /// complete.
-    pub fn abort_and_wait(&self, ctx: Context, id: u64, req: Body) -> AnyResult<()> {
+    pub fn abort_and_wait(&self) -> AnyResult<()> {
         self.abort_batch.store(true, Ordering::SeqCst);
-        // Queue the request to break the dispatch loop in case nothing is
-        // being processed at the moment.
-        self.queue_request(ctx, id, req)?;
-        // Wait for abort.
-        self.abort_rx.recv().map_err(|error| anyhow!("{}", error))
+        // Queue an abort command and wait for it to be processed.
+        let (tx, mut rx) = mpsc::channel(1);
+        self.queue_tx.blocking_send(Command::Abort(tx))?;
+        rx.blocking_recv();
+        Ok(())
     }
 
-    fn run(
-        &self,
-        initializer: Box<dyn Initializer>,
-        rx: channel::Receiver<QueueItem>,
-    ) -> AnyResult<()> {
+    fn run(self: &Arc<Self>, initializer: Box<dyn Initializer>, mut rx: mpsc::Receiver<Command>) {
         // Wait for the state to be available.
-        let State {
+        let ProtocolState {
             protocol,
             consensus_verifier,
         } = {
@@ -218,172 +243,177 @@ impl Dispatcher {
         };
         txn_dispatcher.set_abort_batch_flag(self.abort_batch.clone());
 
-        // Create the single-threaded Tokio runtime that can be used to schedule async I/O.
-        let tokio_rt = tokio::runtime::Builder::new_current_thread()
-            .build()
-            .unwrap();
+        let state = State {
+            protocol: protocol.clone(),
+            consensus_verifier: Arc::from(consensus_verifier),
+            dispatcher: self.clone(),
+            rpc_demux: Arc::new(Mutex::new(rpc_demux)),
+            rpc_dispatcher: Arc::new(rpc_dispatcher),
+            txn_dispatcher: Arc::from(txn_dispatcher),
+            cache_set: cache::CacheSet::new(protocol.clone()),
+        };
 
-        // Create common MKVS to use as a cache as long as the root stays the same. Use separate
-        // caches for executing and checking transactions.
-        let mut cache = Cache::new(protocol.clone());
-        let mut cache_check = Cache::new(protocol.clone());
+        // Start the async message processing task.
+        self.tokio_runtime.block_on(async move {
+            while let Some(cmd) = rx.recv().await {
+                // Process received command.
+                match cmd {
+                    Command::Request(ctx, id, request) => {
+                        // Process request in its own task.
+                        let state = state.clone();
 
-        'dispatch: loop {
-            // Check if abort was requested and if so, signal that the batch
-            // was aborted and reset the abort flag.
-            if self
-                .abort_batch
-                .compare_exchange(true, false, Ordering::SeqCst, Ordering::SeqCst)
-                .is_ok()
-            {
-                self.abort_tx.try_send(())?;
+                        tokio::spawn(async move {
+                            let protocol = state.protocol.clone();
+                            let dispatcher = state.dispatcher.clone();
+                            let result = dispatcher.handle_request(state, ctx, request).await;
+
+                            // Send response.
+                            let response = match result {
+                                Ok(body) => body,
+                                Err(error) => Body::Error(error),
+                            };
+                            protocol.send_response(id, response).unwrap();
+                        });
+                    }
+                    Command::Abort(tx) => {
+                        // Request to abort processing.
+                        tx.send(()).await.unwrap();
+                    }
+                }
             }
-
-            let (ctx, id, request) = match rx.recv() {
-                Ok(data) => data,
-                Err(error) => {
-                    error!(self.logger, "Error while waiting for request"; "err" => %error);
-                    break 'dispatch;
-                }
-            };
-
-            let result = match request {
-                Body::RuntimeRPCCallRequest { request } => {
-                    // RPC call.
-                    self.dispatch_rpc(
-                        &mut rpc_demux,
-                        &mut rpc_dispatcher,
-                        &protocol,
-                        &tokio_rt,
-                        ctx,
-                        request,
-                    )
-                }
-                Body::RuntimeLocalRPCCallRequest { request } => {
-                    // Local RPC call.
-                    self.dispatch_local_rpc(&mut rpc_dispatcher, &protocol, &tokio_rt, ctx, request)
-                }
-                Body::RuntimeExecuteTxBatchRequest {
-                    consensus_block,
-                    round_results,
-                    io_root,
-                    inputs,
-                    block,
-                    epoch,
-                    max_messages,
-                } => {
-                    // Transaction execution.
-                    self.dispatch_txn(
-                        ctx,
-                        &mut cache,
-                        &mut txn_dispatcher,
-                        &protocol,
-                        io_root,
-                        inputs.unwrap_or_default(),
-                        TxDispatchState {
-                            tokio_rt: &tokio_rt,
-                            consensus_block,
-                            consensus_verifier: &consensus_verifier,
-                            header: block.header,
-                            epoch,
-                            round_results,
-                            max_messages,
-                            check_only: false,
-                        },
-                    )
-                }
-                Body::RuntimeCheckTxBatchRequest {
-                    consensus_block,
-                    inputs,
-                    block,
-                    epoch,
-                    max_messages,
-                } => {
-                    // Transaction check.
-                    self.dispatch_txn(
-                        ctx,
-                        &mut cache_check,
-                        &mut txn_dispatcher,
-                        &protocol,
-                        Hash::default(),
-                        inputs,
-                        TxDispatchState {
-                            tokio_rt: &tokio_rt,
-                            consensus_block,
-                            consensus_verifier: &consensus_verifier,
-                            header: block.header,
-                            epoch,
-                            round_results: Default::default(),
-                            max_messages,
-                            check_only: true,
-                        },
-                    )
-                }
-                Body::RuntimeKeyManagerPolicyUpdateRequest { signed_policy_raw } => {
-                    // KeyManager policy update local RPC call.
-                    self.handle_km_policy_update(&mut rpc_dispatcher, ctx, signed_policy_raw)
-                }
-                Body::RuntimeQueryRequest {
-                    consensus_block,
-                    header,
-                    epoch,
-                    max_messages,
-                    method,
-                    args,
-                } => {
-                    // Query.
-                    self.dispatch_query(
-                        ctx,
-                        &mut cache_check,
-                        &mut txn_dispatcher,
-                        &protocol,
-                        method,
-                        args,
-                        TxDispatchState {
-                            tokio_rt: &tokio_rt,
-                            consensus_block,
-                            consensus_verifier: &consensus_verifier,
-                            header,
-                            epoch,
-                            round_results: Default::default(),
-                            max_messages,
-                            check_only: true,
-                        },
-                    )
-                }
-                Body::RuntimeConsensusSyncRequest { height } => consensus_verifier
-                    .sync(height)
-                    .map_err(Into::into)
-                    .map(|_| Body::RuntimeConsensusSyncResponse {}),
-                Body::RuntimeAbortRequest {} => {
-                    // We handle the RuntimeAbortRequest here so that we break
-                    // the recv loop and re-check abort flag.
-                    info!(self.logger, "Received abort request");
-                    continue 'dispatch;
-                }
-                _ => {
-                    error!(self.logger, "Unsupported request type");
-                    break 'dispatch;
-                }
-            };
-
-            let response = match result {
-                Ok(body) => body,
-                Err(error) => Body::Error(error),
-            };
-            protocol.send_response(id, response).unwrap();
-        }
+        });
 
         info!(self.logger, "Runtime call dispatcher is terminating");
-
-        Ok(())
     }
 
-    fn dispatch_query(
+    async fn handle_request(
+        self: &Arc<Self>,
+        state: State,
+        ctx: Context,
+        request: Body,
+    ) -> Result<Body, Error> {
+        match request {
+            Body::RuntimeRPCCallRequest { request } => {
+                // RPC call.
+                self.dispatch_rpc(
+                    &state.rpc_demux,
+                    &state.rpc_dispatcher,
+                    &state.protocol,
+                    ctx,
+                    request,
+                )
+                .await
+            }
+            Body::RuntimeLocalRPCCallRequest { request } => {
+                // Local RPC call.
+                self.dispatch_local_rpc(&state.rpc_dispatcher, &state.protocol, ctx, request)
+                    .await
+            }
+            Body::RuntimeExecuteTxBatchRequest {
+                consensus_block,
+                round_results,
+                io_root,
+                inputs,
+                block,
+                epoch,
+                max_messages,
+            } => {
+                // Transaction execution.
+                self.dispatch_txn(
+                    ctx,
+                    state.cache_set,
+                    &state.txn_dispatcher,
+                    &state.protocol,
+                    io_root,
+                    inputs.unwrap_or_default(),
+                    TxDispatchState {
+                        consensus_block,
+                        consensus_verifier: state.consensus_verifier,
+                        header: block.header,
+                        epoch,
+                        round_results,
+                        max_messages,
+                        check_only: false,
+                    },
+                )
+                .await
+            }
+            Body::RuntimeCheckTxBatchRequest {
+                consensus_block,
+                inputs,
+                block,
+                epoch,
+                max_messages,
+            } => {
+                // Transaction check.
+                self.dispatch_txn(
+                    ctx,
+                    state.cache_set,
+                    &state.txn_dispatcher,
+                    &state.protocol,
+                    Hash::default(),
+                    inputs,
+                    TxDispatchState {
+                        consensus_block,
+                        consensus_verifier: state.consensus_verifier,
+                        header: block.header,
+                        epoch,
+                        round_results: Default::default(),
+                        max_messages,
+                        check_only: true,
+                    },
+                )
+                .await
+            }
+            Body::RuntimeQueryRequest {
+                consensus_block,
+                header,
+                epoch,
+                max_messages,
+                method,
+                args,
+            } => {
+                // Query.
+                self.dispatch_query(
+                    ctx,
+                    state.cache_set,
+                    &state.txn_dispatcher,
+                    &state.protocol,
+                    method,
+                    args,
+                    TxDispatchState {
+                        consensus_block,
+                        consensus_verifier: state.consensus_verifier,
+                        header,
+                        epoch,
+                        round_results: Default::default(),
+                        max_messages,
+                        check_only: true,
+                    },
+                )
+                .await
+            }
+            Body::RuntimeKeyManagerPolicyUpdateRequest { signed_policy_raw } => {
+                // KeyManager policy update local RPC call.
+                self.handle_km_policy_update(&state.rpc_dispatcher, ctx, signed_policy_raw)
+            }
+            Body::RuntimeConsensusSyncRequest { height } => state
+                .consensus_verifier
+                .sync(height)
+                .map_err(Into::into)
+                .map(|_| Body::RuntimeConsensusSyncResponse {}),
+            _ => {
+                error!(self.logger, "Unsupported request type");
+                Err(Error::new("dispatcher", 1, "Unsupported request type"))
+            }
+        }
+    }
+
+    async fn dispatch_query(
         &self,
         ctx: Context,
-        cache: &mut Cache,
-        txn_dispatcher: &mut dyn TxnDispatcher,
+        cache_set: cache::CacheSet,
+        txn_dispatcher: &Arc<dyn TxnDispatcher>,
         protocol: &Arc<Protocol>,
         method: String,
         args: cbor::Value,
@@ -397,52 +427,60 @@ impl Dispatcher {
         // Verify that the runtime ID matches the block's namespace. This is a protocol violation
         // as the compute node should never change the runtime ID.
         if state.header.namespace != protocol.get_runtime_id() {
-            panic!(
-                "block namespace does not match runtime id (namespace: {:?} runtime ID: {:?})",
-                state.header.namespace,
-                protocol.get_runtime_id(),
-            );
+            return Err(Error::new(
+                "dispatcher",
+                1,
+                &format!(
+                    "block namespace does not match runtime id (namespace: {:?} runtime ID: {:?})",
+                    state.header.namespace,
+                    protocol.get_runtime_id(),
+                ),
+            ));
         }
 
-        // For queries we don't do any consensus layer integrity verification.
-        let consensus_state = state
-            .consensus_verifier
-            .unverified_state(state.consensus_block)
-            .expect("verification must succeed");
+        let txn_dispatcher = txn_dispatcher.clone();
 
-        // Create a new context and dispatch the batch.
-        let ctx = ctx.freeze();
-        cache.maybe_replace(Root {
-            namespace: state.header.namespace,
-            version: state.header.round,
-            root_type: RootType::State,
-            hash: state.header.state_root,
-        });
+        tokio::task::spawn_blocking(move || {
+            // For queries we don't do any consensus layer integrity verification.
+            let consensus_state = state
+                .consensus_verifier
+                .unverified_state(state.consensus_block)
+                .unwrap();
 
-        let mut overlay = OverlayTree::new(&mut cache.mkvs);
-        let txn_ctx = TxnContext::new(
-            ctx.clone(),
-            state.tokio_rt,
-            consensus_state,
-            &mut overlay,
-            &state.header,
-            state.epoch,
-            &state.round_results,
-            state.max_messages,
-            state.check_only,
-        );
-        txn_dispatcher
-            .query(txn_ctx, &method, args)
-            .map(|data| Body::RuntimeQueryResponse { data })
+            let cache = cache_set.query(Root {
+                namespace: state.header.namespace,
+                version: state.header.round,
+                root_type: RootType::State,
+                hash: state.header.state_root,
+            });
+            let mut cache = cache.borrow_mut();
+            let mut overlay = OverlayTree::new(cache.tree_mut());
+
+            let txn_ctx = TxnContext::new(
+                ctx.freeze(),
+                consensus_state,
+                &mut overlay,
+                &state.header,
+                state.epoch,
+                &state.round_results,
+                state.max_messages,
+                state.check_only,
+            );
+
+            txn_dispatcher
+                .query(txn_ctx, &method, args)
+                .map(|data| Body::RuntimeQueryResponse { data })
+        })
+        .await
+        .unwrap()
     }
 
     fn txn_check_batch(
         &self,
         ctx: Arc<Context>,
-        cache: &mut Cache,
-        txn_dispatcher: &mut dyn TxnDispatcher,
+        cache_set: cache::CacheSet,
+        txn_dispatcher: &dyn TxnDispatcher,
         inputs: TxnBatch,
-        _io_root: Hash,
         state: TxDispatchState,
     ) -> Result<Body, Error> {
         // For check-only we don't do any consensus layer integrity verification.
@@ -450,10 +488,16 @@ impl Dispatcher {
             .consensus_verifier
             .unverified_state(state.consensus_block)?;
 
-        let mut overlay = OverlayTree::new(&mut cache.mkvs);
+        let mut cache = cache_set.check(Root {
+            namespace: state.header.namespace,
+            version: state.header.round,
+            root_type: RootType::State,
+            hash: state.header.state_root,
+        });
+        let mut overlay = OverlayTree::new(cache.tree_mut());
+
         let txn_ctx = TxnContext::new(
             ctx.clone(),
-            state.tokio_rt,
             consensus_state,
             &mut overlay,
             &state.header,
@@ -472,8 +516,8 @@ impl Dispatcher {
     fn txn_execute_batch(
         &self,
         ctx: Arc<Context>,
-        cache: &mut Cache,
-        txn_dispatcher: &mut dyn TxnDispatcher,
+        cache_set: cache::CacheSet,
+        txn_dispatcher: &dyn TxnDispatcher,
         mut inputs: TxnBatch,
         io_root: Hash,
         state: TxDispatchState,
@@ -484,10 +528,17 @@ impl Dispatcher {
             .verify(state.consensus_block, state.header.clone())?;
 
         let header = &state.header;
-        let mut overlay = OverlayTree::new(&mut cache.mkvs);
+
+        let mut cache = cache_set.execute(Root {
+            namespace: state.header.namespace,
+            version: state.header.round,
+            root_type: RootType::State,
+            hash: state.header.state_root,
+        });
+        let mut overlay = OverlayTree::new(cache.tree_mut());
+
         let txn_ctx = TxnContext::new(
             ctx.clone(),
-            state.tokio_rt,
             consensus_state,
             &mut overlay,
             header,
@@ -607,11 +658,11 @@ impl Dispatcher {
         })
     }
 
-    fn dispatch_txn(
-        &self,
+    async fn dispatch_txn(
+        self: &Arc<Self>,
         ctx: Context,
-        cache: &mut Cache,
-        txn_dispatcher: &mut dyn TxnDispatcher,
+        cache_set: cache::CacheSet,
+        txn_dispatcher: &Arc<dyn TxnDispatcher>,
         protocol: &Arc<Protocol>,
         io_root: Hash,
         inputs: TxnBatch,
@@ -634,28 +685,33 @@ impl Dispatcher {
             );
         }
 
-        // Create a new context and dispatch the batch.
         let ctx = ctx.freeze();
-        cache.maybe_replace(Root {
-            namespace: state.header.namespace,
-            version: state.header.round,
-            root_type: RootType::State,
-            hash: state.header.state_root,
-        });
+        let dispatcher = self.clone();
+        let txn_dispatcher = txn_dispatcher.clone();
 
-        if state.check_only {
-            self.txn_check_batch(ctx, cache, txn_dispatcher, inputs, io_root, state)
-        } else {
-            self.txn_execute_batch(ctx, cache, txn_dispatcher, inputs, io_root, state)
-        }
+        tokio::task::spawn_blocking(move || {
+            if state.check_only {
+                dispatcher.txn_check_batch(ctx, cache_set, &txn_dispatcher, inputs, state)
+            } else {
+                dispatcher.txn_execute_batch(
+                    ctx,
+                    cache_set,
+                    &txn_dispatcher,
+                    inputs,
+                    io_root,
+                    state,
+                )
+            }
+        })
+        .await
+        .unwrap()
     }
 
-    fn dispatch_rpc(
+    async fn dispatch_rpc(
         &self,
-        rpc_demux: &mut RpcDemux,
-        rpc_dispatcher: &mut RpcDispatcher,
+        rpc_demux: &Arc<Mutex<RpcDemux>>,
+        rpc_dispatcher: &Arc<RpcDispatcher>,
         protocol: &Arc<Protocol>,
-        tokio_rt: &tokio::runtime::Runtime,
         ctx: Context,
         request: Vec<u8>,
     ) -> Result<Body, Error> {
@@ -663,7 +719,11 @@ impl Dispatcher {
 
         // Process frame.
         let mut buffer = vec![];
-        let result = match rpc_demux.process_frame(request, &mut buffer) {
+        let result = match rpc_demux
+            .lock()
+            .unwrap()
+            .process_frame(request, &mut buffer)
+        {
             Ok(result) => result,
             Err(error) => {
                 error!(self.logger, "Error while processing frame"; "err" => %error);
@@ -696,26 +756,33 @@ impl Dispatcher {
 
                     // Request, dispatch.
                     let ctx = ctx.freeze();
-                    let untrusted_local = Arc::new(ProtocolUntrustedLocalStorage::new(
-                        Context::create_child(&ctx),
-                        protocol.clone(),
-                    ));
-                    let rpc_ctx = RpcContext::new(
-                        ctx.clone(),
-                        tokio_rt,
-                        self.rak.clone(),
-                        session_info,
-                        &untrusted_local,
-                    );
-                    let response = rpc_dispatcher.dispatch(req, rpc_ctx);
-                    let response = RpcMessage::Response(response);
+                    let rak = self.rak.clone();
+                    let protocol = protocol.clone();
+                    let rpc_dispatcher = rpc_dispatcher.clone();
+
+                    let response = tokio::task::spawn_blocking(move || {
+                        let untrusted_local = Arc::new(ProtocolUntrustedLocalStorage::new(
+                            Context::create_child(&ctx),
+                            protocol.clone(),
+                        ));
+                        let rpc_ctx =
+                            RpcContext::new(ctx.clone(), rak, session_info, &untrusted_local);
+                        let response = rpc_dispatcher.dispatch(req, rpc_ctx);
+                        RpcMessage::Response(response)
+                    })
+                    .await
+                    .unwrap();
 
                     // Note: MKVS commit is omitted, this MUST be global side-effect free.
 
                     debug!(self.logger, "RPC call dispatch complete");
 
                     let mut buffer = vec![];
-                    match rpc_demux.write_message(session_id, response, &mut buffer) {
+                    match rpc_demux
+                        .lock()
+                        .unwrap()
+                        .write_message(session_id, response, &mut buffer)
+                    {
                         Ok(_) => {
                             // Transmit response.
                             Ok(Body::RuntimeRPCCallResponse { response: buffer })
@@ -729,7 +796,7 @@ impl Dispatcher {
                 RpcMessage::Close => {
                     // Session close.
                     let mut buffer = vec![];
-                    match rpc_demux.close(session_id, &mut buffer) {
+                    match rpc_demux.lock().unwrap().close(session_id, &mut buffer) {
                         Ok(_) => {
                             // Transmit response.
                             Ok(Body::RuntimeRPCCallResponse { response: buffer })
@@ -751,11 +818,10 @@ impl Dispatcher {
         }
     }
 
-    fn dispatch_local_rpc(
-        &self,
-        rpc_dispatcher: &mut RpcDispatcher,
+    async fn dispatch_local_rpc(
+        self: &Arc<Self>,
+        rpc_dispatcher: &Arc<RpcDispatcher>,
         protocol: &Arc<Protocol>,
-        tokio_rt: &tokio::runtime::Runtime,
         ctx: Context,
         request: Vec<u8>,
     ) -> Result<Body, Error> {
@@ -766,31 +832,34 @@ impl Dispatcher {
 
         // Request, dispatch.
         let ctx = ctx.freeze();
-        let untrusted_local = Arc::new(ProtocolUntrustedLocalStorage::new(
-            Context::create_child(&ctx),
-            protocol.clone(),
-        ));
-        let rpc_ctx = RpcContext::new(
-            ctx.clone(),
-            tokio_rt,
-            self.rak.clone(),
-            None,
-            &untrusted_local,
-        );
-        let response = rpc_dispatcher.dispatch_local(req, rpc_ctx);
-        let response = RpcMessage::Response(response);
+        let protocol = protocol.clone();
+        let dispatcher = self.clone();
+        let rpc_dispatcher = rpc_dispatcher.clone();
 
-        // Note: MKVS commit is omitted, this MUST be global side-effect free.
+        tokio::task::spawn_blocking(move || {
+            let untrusted_local = Arc::new(ProtocolUntrustedLocalStorage::new(
+                Context::create_child(&ctx),
+                protocol.clone(),
+            ));
+            let rpc_ctx =
+                RpcContext::new(ctx.clone(), dispatcher.rak.clone(), None, &untrusted_local);
+            let response = rpc_dispatcher.dispatch_local(req, rpc_ctx);
+            let response = RpcMessage::Response(response);
 
-        debug!(self.logger, "Local RPC call dispatch complete");
+            // Note: MKVS commit is omitted, this MUST be global side-effect free.
 
-        let response = cbor::to_vec(response);
-        Ok(Body::RuntimeLocalRPCCallResponse { response })
+            debug!(dispatcher.logger, "Local RPC call dispatch complete");
+
+            let response = cbor::to_vec(response);
+            Ok(Body::RuntimeLocalRPCCallResponse { response })
+        })
+        .await
+        .unwrap()
     }
 
     fn handle_km_policy_update(
         &self,
-        rpc_dispatcher: &mut RpcDispatcher,
+        rpc_dispatcher: &RpcDispatcher,
         _ctx: Context,
         signed_policy_raw: Vec<u8>,
     ) -> Result<Body, Error> {
@@ -799,47 +868,5 @@ impl Dispatcher {
         debug!(self.logger, "KM policy update request complete");
 
         Ok(Body::RuntimeKeyManagerPolicyUpdateResponse {})
-    }
-}
-
-struct Cache {
-    protocol: Arc<Protocol>,
-    mkvs: Tree,
-    root: Root,
-}
-
-impl Cache {
-    fn new(protocol: Arc<Protocol>) -> Self {
-        Self {
-            mkvs: Self::new_tree(&protocol, Default::default()),
-            root: Default::default(),
-            protocol,
-        }
-    }
-
-    fn new_tree(protocol: &Arc<Protocol>, root: Root) -> Tree {
-        let config = protocol.get_config();
-        let read_syncer = HostReadSyncer::new(protocol.clone(), HostStorageEndpoint::Runtime);
-        Tree::make()
-            .with_capacity(
-                config.storage.cache_node_capacity,
-                config.storage.cache_value_capacity,
-            )
-            .with_root(root)
-            .new(Box::new(read_syncer))
-    }
-
-    fn maybe_replace(&mut self, root: Root) {
-        if self.root == root {
-            return;
-        }
-
-        self.mkvs = Self::new_tree(&self.protocol, root);
-        self.root = root;
-    }
-
-    fn commit(&mut self, version: u64, root_hash: Hash) {
-        self.root.version = version;
-        self.root.hash = root_hash;
     }
 }

@@ -24,6 +24,7 @@ extern crate base64_serde;
 
 #[macro_use]
 pub mod common;
+pub mod cache;
 pub mod config;
 pub mod consensus;
 pub mod dispatcher;

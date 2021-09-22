@@ -294,10 +294,7 @@ impl Methods {
             .parent
             .key_manager
             .get_or_create_keys(io_ctx, key_pair_id);
-        let key = ctx
-            .parent
-            .core
-            .tokio
+        let key = tokio::runtime::Handle::current()
             .block_on(result)
             .map_err(|err| err.to_string())?;
 

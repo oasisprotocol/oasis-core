@@ -238,7 +238,7 @@ impl Kdf {
 
                         let result =
                             km_client.replicate_master_secret(IoContext::create_child(&ctx.io_ctx));
-                        let master_secret = ctx.tokio.block_on(result)?;
+                        let master_secret = tokio::runtime::Handle::current().block_on(result)?;
                         (master_secret.unwrap(), true)
                     }
                 };
