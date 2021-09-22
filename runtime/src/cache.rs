@@ -56,7 +56,7 @@ impl CacheSet {
 
     /// Cache used for queries.
     pub fn query(&self, root: Root) -> Rc<RefCell<Cache>> {
-        QUERY_CACHE.with(|caches| {
+        let cache = QUERY_CACHE.with(|caches| {
             let mut caches = caches.borrow_mut();
             if let Some(cache) = caches.get(&root.version) {
                 return cache.clone();
@@ -65,7 +65,9 @@ impl CacheSet {
             let cache = Rc::new(RefCell::new(Cache::new(&self.protocol)));
             caches.put(root.version, cache.clone());
             cache
-        })
+        });
+        cache.borrow_mut().maybe_replace(&self.protocol, root);
+        cache
     }
 }
 
