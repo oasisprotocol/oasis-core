@@ -27,7 +27,7 @@ impl HostReadSyncer {
         }
     }
 
-    fn make_request_with_proof(
+    fn call_host_with_proof(
         &self,
         ctx: Context,
         request: StorageSyncRequest,
@@ -36,7 +36,7 @@ impl HostReadSyncer {
             endpoint: self.endpoint,
             request,
         });
-        match self.protocol.make_request(ctx, request) {
+        match self.protocol.call_host(ctx, request) {
             Ok(Body::HostStorageSyncResponse(StorageSyncResponse::ProofResponse(response))) => {
                 Ok(response)
             }
@@ -52,7 +52,7 @@ impl ReadSync for HostReadSyncer {
     }
 
     fn sync_get(&mut self, ctx: Context, request: GetRequest) -> Result<ProofResponse> {
-        self.make_request_with_proof(ctx, StorageSyncRequest::SyncGet(request))
+        self.call_host_with_proof(ctx, StorageSyncRequest::SyncGet(request))
     }
 
     fn sync_get_prefixes(
@@ -60,10 +60,10 @@ impl ReadSync for HostReadSyncer {
         ctx: Context,
         request: GetPrefixesRequest,
     ) -> Result<ProofResponse> {
-        self.make_request_with_proof(ctx, StorageSyncRequest::SyncGetPrefixes(request))
+        self.call_host_with_proof(ctx, StorageSyncRequest::SyncGetPrefixes(request))
     }
 
     fn sync_iterate(&mut self, ctx: Context, request: IterateRequest) -> Result<ProofResponse> {
-        self.make_request_with_proof(ctx, StorageSyncRequest::SyncIterate(request))
+        self.call_host_with_proof(ctx, StorageSyncRequest::SyncIterate(request))
     }
 }

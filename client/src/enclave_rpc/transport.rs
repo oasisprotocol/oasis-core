@@ -47,7 +47,7 @@ impl Transport for RuntimeTransport {
     ) -> BoxFuture<Result<Vec<u8>, AnyError>> {
         // NOTE: This is not actually async in SGX, but futures should be
         //       dispatched on the current thread anyway.
-        let rsp = self.protocol.make_request(
+        let rsp = self.protocol.call_host(
             ctx,
             Body::HostRPCCallRequest {
                 endpoint: self.endpoint.clone(),

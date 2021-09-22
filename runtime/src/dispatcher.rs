@@ -449,6 +449,7 @@ impl Dispatcher {
             ));
         }
 
+        let protocol = protocol.clone();
         let txn_dispatcher = txn_dispatcher.clone();
 
         tokio::task::spawn_blocking(move || {
@@ -469,6 +470,7 @@ impl Dispatcher {
 
             let txn_ctx = TxnContext::new(
                 ctx.freeze(),
+                protocol,
                 consensus_state,
                 &mut overlay,
                 &state.header,
@@ -488,6 +490,7 @@ impl Dispatcher {
     fn txn_check_batch(
         &self,
         ctx: Arc<Context>,
+        protocol: Arc<Protocol>,
         cache_set: cache::CacheSet,
         txn_dispatcher: &dyn TxnDispatcher,
         inputs: TxnBatch,
@@ -508,6 +511,7 @@ impl Dispatcher {
 
         let txn_ctx = TxnContext::new(
             ctx.clone(),
+            protocol,
             consensus_state,
             &mut overlay,
             &state.header,
@@ -526,6 +530,7 @@ impl Dispatcher {
     fn txn_execute_batch(
         &self,
         ctx: Arc<Context>,
+        protocol: Arc<Protocol>,
         cache_set: cache::CacheSet,
         txn_dispatcher: &dyn TxnDispatcher,
         mut inputs: TxnBatch,
@@ -549,6 +554,7 @@ impl Dispatcher {
 
         let txn_ctx = TxnContext::new(
             ctx.clone(),
+            protocol,
             consensus_state,
             &mut overlay,
             header,
@@ -696,15 +702,17 @@ impl Dispatcher {
         }
 
         let ctx = ctx.freeze();
+        let protocol = protocol.clone();
         let dispatcher = self.clone();
         let txn_dispatcher = txn_dispatcher.clone();
 
         tokio::task::spawn_blocking(move || {
             if state.check_only {
-                dispatcher.txn_check_batch(ctx, cache_set, &txn_dispatcher, inputs, state)
+                dispatcher.txn_check_batch(ctx, protocol, cache_set, &txn_dispatcher, inputs, state)
             } else {
                 dispatcher.txn_execute_batch(
                     ctx,
+                    protocol,
                     cache_set,
                     &txn_dispatcher,
                     inputs,
