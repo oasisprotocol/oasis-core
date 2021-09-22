@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"net"
 	"os"
@@ -751,17 +752,14 @@ func (sc *registryCLIImpl) listRuntimes(childEnv *env.Env, includeSuspended bool
 	if err != nil {
 		return nil, fmt.Errorf("failed to list runtimes: error: %w output: %s", err, out.String())
 	}
-	runtimesStr := strings.Split(out.String(), "\n")
 
+	dec := json.NewDecoder(bytes.NewReader(out.Bytes()))
 	runtimes := map[common.Namespace]registry.Runtime{}
-	for _, rtStr := range runtimesStr {
-		// Ignore last newline.
-		if rtStr == "" {
-			continue
-		}
-
+	for {
 		var rt registry.Runtime
-		if err = json.Unmarshal([]byte(rtStr), &rt); err != nil {
+		if err = dec.Decode(&rt); err == io.EOF {
+			break
+		} else if err != nil {
 			return nil, err
 		}
 		runtimes[rt.ID] = rt

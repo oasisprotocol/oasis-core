@@ -4,7 +4,6 @@ package keymanager
 import (
 	"bytes"
 	"encoding/hex"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io/ioutil"
@@ -316,8 +315,14 @@ func verifyPolicyFromFlags() error {
 
 	// Output policy content in JSON, if verbose switch given.
 	if cmdFlags.Verbose() {
-		c, _ := json.Marshal(policy)
-		fmt.Printf("%s\n", string(c))
+		prettyPolicy, err := cmdCommon.PrettyJSONMarshal(policy)
+		if err != nil {
+			logger.Error("failed to get pretty JSON of policy",
+				"err", err,
+			)
+			os.Exit(1)
+		}
+		fmt.Println(string(prettyPolicy))
 	}
 
 	// Check the signatures of the policy. Public key is taken from the PEM
@@ -364,7 +369,7 @@ func doInitStatus(cmd *cobra.Command, args []string) {
 		cmdCommon.EarlyLogAndExit(err)
 	}
 
-	s, err := statusFromFlags()
+	status, err := statusFromFlags()
 	if err != nil {
 		logger.Error("failed to generate status",
 			"err", err,
@@ -372,8 +377,14 @@ func doInitStatus(cmd *cobra.Command, args []string) {
 		os.Exit(1)
 	}
 
-	c, _ := json.Marshal(s)
-	if err = ioutil.WriteFile(viper.GetString(CfgStatusFile), c, 0o644); err != nil { // nolint: gosec
+	prettyStatus, err := cmdCommon.PrettyJSONMarshal(status)
+	if err != nil {
+		logger.Error("failed to get pretty JSON of key manager status",
+			"err", err,
+		)
+		os.Exit(1)
+	}
+	if err = ioutil.WriteFile(viper.GetString(CfgStatusFile), prettyStatus, 0o644); err != nil { // nolint: gosec
 		logger.Error("failed to write key manager status json file",
 			"err", err,
 			"CfgStatusFile", viper.GetString(CfgStatusFile),
@@ -382,7 +393,7 @@ func doInitStatus(cmd *cobra.Command, args []string) {
 	}
 
 	logger.Info("generated key manager status file",
-		"Status.ID", s.ID,
+		"Status.ID", status.ID,
 	)
 }
 

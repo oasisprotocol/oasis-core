@@ -220,14 +220,14 @@ func doStatus(cmd *cobra.Command, args []string) {
 		)
 		os.Exit(128)
 	}
-	formatted, err := json.MarshalIndent(status, "", "  ")
+	prettyStatus, err := cmdCommon.PrettyJSONMarshal(status)
 	if err != nil {
-		logger.Error("failed to format status",
+		logger.Error("failed to get pretty JSON of node status",
 			"err", err,
 		)
 		os.Exit(1)
 	}
-	fmt.Println(string(formatted))
+	fmt.Println(string(prettyStatus))
 }
 
 // Register registers the client sub-command and all of it's children.

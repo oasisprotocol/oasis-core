@@ -198,14 +198,20 @@ func doProposalInfo(cmd *cobra.Command, args []string) {
 	defer conn.Close()
 
 	ctx := context.Background()
-	p, err := client.Proposal(ctx, &governance.ProposalQuery{Height: consensus.HeightLatest, ProposalID: id})
+	proposal, err := client.Proposal(ctx, &governance.ProposalQuery{Height: consensus.HeightLatest, ProposalID: id})
 	if err != nil {
 		logger.Error("error querying proposal", "err", err)
 		os.Exit(1)
 	}
 
-	o, _ := json.Marshal(p)
-	fmt.Println(string(o))
+	prettyProposal, err := cmdCommon.PrettyJSONMarshal(proposal)
+	if err != nil {
+		logger.Error("failed to get pretty JSON of proposal",
+			"err", err,
+		)
+		os.Exit(1)
+	}
+	fmt.Println(string(prettyProposal))
 }
 
 func doProposalVotes(cmd *cobra.Command, args []string) {
@@ -229,8 +235,14 @@ func doProposalVotes(cmd *cobra.Command, args []string) {
 		os.Exit(1)
 	}
 
-	o, _ := json.Marshal(votes)
-	fmt.Println(string(o))
+	prettyVotes, err := cmdCommon.PrettyJSONMarshal(votes)
+	if err != nil {
+		logger.Error("failed to get pretty JSON of votes",
+			"err", err,
+		)
+		os.Exit(1)
+	}
+	fmt.Println(string(prettyVotes))
 }
 
 func doListProposals(cmd *cobra.Command, args []string) {
@@ -256,8 +268,14 @@ func doListProposals(cmd *cobra.Command, args []string) {
 		os.Exit(1)
 	}
 
-	o, _ := json.Marshal(proposals)
-	fmt.Println(string(o))
+	prettyProposals, err := cmdCommon.PrettyJSONMarshal(proposals)
+	if err != nil {
+		logger.Error("failed to get pretty JSON of proposals",
+			"err", err,
+		)
+		os.Exit(1)
+	}
+	fmt.Println(string(prettyProposals))
 }
 
 // Register registers the governance sub-command and all of it's children.

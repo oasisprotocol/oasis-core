@@ -3,7 +3,6 @@ package beacon
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"os"
 
@@ -84,14 +83,14 @@ func doBeaconStatus(cmd *cobra.Command, args []string) {
 		}
 	}
 
-	formatted, err := json.MarshalIndent(prettyOut, "", "  ")
+	prettyJSON, err := cmdCommon.PrettyJSONMarshal(prettyOut)
 	if err != nil {
-		logger.Error("failed to format state",
+		logger.Error("failed to get pretty JSON of beacon state",
 			"err", err,
 		)
 		os.Exit(1)
 	}
-	fmt.Println(string(formatted))
+	fmt.Println(string(prettyJSON))
 }
 
 // Register registers the beacon sub-command and all of it's children.

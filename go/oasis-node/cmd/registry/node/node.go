@@ -3,7 +3,6 @@ package node
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -258,8 +257,14 @@ func doInit(cmd *cobra.Command, args []string) { // nolint: gocyclo
 		)
 		os.Exit(1)
 	}
-	b, _ := json.Marshal(signed)
-	if err = ioutil.WriteFile(filepath.Join(dataDir, NodeGenesisFilename), b, 0o600); err != nil {
+	prettySigned, err := cmdCommon.PrettyJSONMarshal(signed)
+	if err != nil {
+		logger.Error("failed to get pretty JSON of signed node genesis registration",
+			"err", err,
+		)
+		os.Exit(1)
+	}
+	if err = ioutil.WriteFile(filepath.Join(dataDir, NodeGenesisFilename), prettySigned, 0o600); err != nil {
 		logger.Error("failed to write signed node genesis registration",
 			"err", err,
 		)
@@ -304,16 +309,24 @@ func doList(cmd *cobra.Command, args []string) {
 	}
 
 	for _, node := range nodes {
-		var s string
+		var nodeString string
 		switch cmdFlags.Verbose() {
 		case true:
-			b, _ := json.Marshal(node)
-			s = string(b)
+			prettyNode, err := cmdCommon.PrettyJSONMarshal(node)
+			if err != nil {
+				logger.Error("failed to get pretty JSON of node",
+					"err", err,
+					"node ID", node.ID.String(),
+				)
+				nodeString = fmt.Sprintf("[invalid pretty JSON for node %s]", node.ID)
+			} else {
+				nodeString = string(prettyNode)
+			}
 		default:
-			s = node.ID.String()
+			nodeString = node.ID.String()
 		}
 
-		fmt.Printf("%v\n", s)
+		fmt.Println(nodeString)
 	}
 }
 

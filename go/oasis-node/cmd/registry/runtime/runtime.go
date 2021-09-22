@@ -133,16 +133,24 @@ func doList(cmd *cobra.Command, args []string) {
 	}
 
 	for _, rt := range runtimes {
-		var s string
+		var rtString string
 		switch cmdFlags.Verbose() {
 		case true:
-			b, _ := json.Marshal(rt)
-			s = string(b)
+			prettyRt, err := cmdCommon.PrettyJSONMarshal(rt)
+			if err != nil {
+				logger.Error("failed to get pretty JSON of runtime",
+					"err", err,
+					"runtime ID", rt.ID.String(),
+				)
+				rtString = fmt.Sprintf("[invalid pretty JSON for runtime %s]", rt.ID)
+			} else {
+				rtString = string(prettyRt)
+			}
 		default:
-			s = rt.ID.String()
+			rtString = rt.ID.String()
 		}
 
-		fmt.Printf("%v\n", s)
+		fmt.Println(rtString)
 	}
 }
 

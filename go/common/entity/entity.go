@@ -129,7 +129,7 @@ func (e *Entity) Save(baseDir string) error {
 	entityPath := filepath.Join(baseDir, entityFilename)
 
 	// Write to disk.
-	b, err := json.Marshal(e)
+	b, err := json.MarshalIndent(e, "", "  ")
 	if err != nil {
 		return err
 	}

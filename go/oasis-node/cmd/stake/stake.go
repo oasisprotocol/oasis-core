@@ -3,7 +3,6 @@ package stake
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"os"
 
@@ -282,20 +281,28 @@ func doList(cmd *cobra.Command, args []string) {
 	}
 
 	for _, addr := range addresses {
-		var s string
+		var acctString string
 		switch cmdFlags.Verbose() {
 		case true:
 			// NOTE: getAccount()'s output doesn't contain an account's address,
 			// so we need to add it manually.
-			acctMap := make(map[api.Address]*api.Account)
-			acctMap[addr] = getAccount(ctx, cmd, addr, client)
-			b, _ := json.Marshal(acctMap)
-			s = string(b)
+			acctWithAddr := make(map[api.Address]*api.Account)
+			acctWithAddr[addr] = getAccount(ctx, cmd, addr, client)
+			prettyAcct, err := cmdCommon.PrettyJSONMarshal(acctWithAddr)
+			if err != nil {
+				logger.Error("failed to get pretty JSON of account",
+					"err", err,
+					"address", addr,
+				)
+				acctString = fmt.Sprintf("[invalid pretty JSON for account %s]", addr)
+			} else {
+				acctString = string(prettyAcct)
+			}
 		default:
-			s = addr.String()
+			acctString = addr.String()
 		}
 
-		fmt.Printf("%v\n", s)
+		fmt.Println(acctString)
 	}
 }
 
