@@ -6,7 +6,6 @@ import (
 
 	beacon "github.com/oasisprotocol/oasis-core/go/beacon/api"
 	"github.com/oasisprotocol/oasis-core/go/common"
-	"github.com/oasisprotocol/oasis-core/go/common/cbor"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	"github.com/oasisprotocol/oasis-core/go/common/errors"
@@ -333,13 +332,13 @@ type RuntimeQueryRequest struct {
 	// round. Any more messages will be rejected by the consensus layer.
 	MaxMessages uint32 `json:"max_messages"`
 
-	Method string          `json:"method"`
-	Args   cbor.RawMessage `json:"args,omitempty"`
+	Method string `json:"method"`
+	Args   []byte `json:"args,omitempty"`
 }
 
 // RuntimeQueryRequest is a runtime query response message body.
 type RuntimeQueryResponse struct {
-	Data cbor.RawMessage `json:"data,omitempty"`
+	Data []byte `json:"data,omitempty"`
 }
 
 // RuntimeConsensusSyncRequest is a runtime consensus block synchronization request message body.

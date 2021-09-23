@@ -179,11 +179,12 @@ pub enum Body {
         epoch: EpochTime,
         max_messages: u32,
         method: String,
-        #[cbor(optional)]
-        args: cbor::Value,
+        #[cbor(optional, default)]
+        args: Vec<u8>,
     },
     RuntimeQueryResponse {
-        data: cbor::Value,
+        #[cbor(optional, default)]
+        data: Vec<u8>,
     },
     RuntimeConsensusSyncRequest {
         height: u64,

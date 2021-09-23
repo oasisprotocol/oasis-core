@@ -41,12 +41,7 @@ pub trait Dispatcher: Send + Sync {
     }
 
     /// Process a query.
-    fn query(
-        &self,
-        _ctx: Context,
-        _method: &str,
-        _args: cbor::Value,
-    ) -> Result<cbor::Value, RuntimeError> {
+    fn query(&self, _ctx: Context, _method: &str, _args: Vec<u8>) -> Result<Vec<u8>, RuntimeError> {
         // Default implementation returns an error.
         Err(RuntimeError::new(
             "rhp/dispatcher",
@@ -81,12 +76,7 @@ impl<T: Dispatcher + ?Sized> Dispatcher for Box<T> {
         T::set_abort_batch_flag(&mut *self, abort_batch)
     }
 
-    fn query(
-        &self,
-        ctx: Context,
-        method: &str,
-        args: cbor::Value,
-    ) -> Result<cbor::Value, RuntimeError> {
+    fn query(&self, ctx: Context, method: &str, args: Vec<u8>) -> Result<Vec<u8>, RuntimeError> {
         T::query(&*self, ctx, method, args)
     }
 }
@@ -116,12 +106,7 @@ impl<T: Dispatcher + ?Sized> Dispatcher for Arc<T> {
         unimplemented!()
     }
 
-    fn query(
-        &self,
-        ctx: Context,
-        method: &str,
-        args: cbor::Value,
-    ) -> Result<cbor::Value, RuntimeError> {
+    fn query(&self, ctx: Context, method: &str, args: Vec<u8>) -> Result<Vec<u8>, RuntimeError> {
         T::query(&*self, ctx, method, args)
     }
 }
@@ -151,11 +136,11 @@ pub struct ExecuteBatchResult {
 ///
 /// This is mainly used by the runtime dispatcher as a fallback in case
 /// the runtime's initializer doesn't produce its own dispatcher object.
-pub struct NoopDispatcher {}
+pub struct NoopDispatcher;
 
 impl NoopDispatcher {
-    pub fn new() -> NoopDispatcher {
-        NoopDispatcher {}
+    pub fn new() -> Self {
+        NoopDispatcher
     }
 }
 
@@ -179,13 +164,5 @@ impl Dispatcher for NoopDispatcher {
         _batch: &TxnBatch,
     ) -> Result<Vec<CheckTxResult>, RuntimeError> {
         Ok(Vec::new())
-    }
-
-    fn finalize(&self, _new_storage_root: Hash) {
-        // Nothing to do here.
-    }
-
-    fn set_abort_batch_flag(&mut self, _abort_batch: Arc<AtomicBool>) {
-        // Nothing to abort.
     }
 }

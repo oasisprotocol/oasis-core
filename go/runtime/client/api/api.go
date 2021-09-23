@@ -4,7 +4,6 @@ import (
 	"context"
 
 	"github.com/oasisprotocol/oasis-core/go/common"
-	"github.com/oasisprotocol/oasis-core/go/common/cbor"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
 	"github.com/oasisprotocol/oasis-core/go/common/errors"
 	"github.com/oasisprotocol/oasis-core/go/common/pubsub"
@@ -140,10 +139,10 @@ type QueryRequest struct {
 	RuntimeID common.Namespace `json:"runtime_id"`
 	Round     uint64           `json:"round"`
 	Method    string           `json:"method"`
-	Args      cbor.RawMessage  `json:"args"`
+	Args      []byte           `json:"args"`
 }
 
 // QueryResponse is a response to the runtime query.
 type QueryResponse struct {
-	Data cbor.RawMessage `json:"data"`
+	Data []byte `json:"data"`
 }
