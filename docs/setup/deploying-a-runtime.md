@@ -117,7 +117,7 @@ cat << EOF > "${RUNTIME_DESCRIPTOR}"
   "id": "${RUNTIME_ID}",
   "entity_id": "${ENTITY_ID}",
   "genesis": {
-    "state_root": "xnK40e9W7Sirh8NiLFEUBpvdOte4+XN0mNDAHs7wlno=",
+    "state_root": "c672b8d1ef56ed28ab87c3622c5114069bdd3ad7b8f9737498d0c01ecef0967a",
     "state": null,
     "storage_receipts": null,
     "round": 0
@@ -227,7 +227,7 @@ Should give output similar to
   "id": "8000000000000000000000000000000000000000000000000000000001234567",
   "entity_id": "+MJpnSTzc11dNI5emMa+asCJH5cxBiBCcpbYE4XBdso=",
   "genesis": {
-    "state_root": "xnK40e9W7Sirh8NiLFEUBpvdOte4+XN0mNDAHs7wlno=",
+    "state_root": "c672b8d1ef56ed28ab87c3622c5114069bdd3ad7b8f9737498d0c01ecef0967a",
     "state": null,
     "storage_receipts": null,
     "round": 0
