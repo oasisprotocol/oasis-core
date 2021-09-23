@@ -44,8 +44,8 @@ type RichRuntime interface {
 		epoch beacon.EpochTime,
 		maxMessages uint32,
 		method string,
-		args cbor.RawMessage,
-	) (cbor.RawMessage, error)
+		args []byte,
+	) ([]byte, error)
 
 	// QueryBatchLimits requests the runtime to answer the batch limits query.
 	QueryBatchLimits(
@@ -101,8 +101,8 @@ func (r *richRuntime) Query(
 	epoch beacon.EpochTime,
 	maxMessages uint32,
 	method string,
-	args cbor.RawMessage,
-) (cbor.RawMessage, error) {
+	args []byte,
+) ([]byte, error) {
 	if rb == nil {
 		return nil, ErrInvalidArgument
 	}
@@ -133,7 +133,7 @@ func (r *richRuntime) QueryBatchLimits(
 	lb *consensus.LightBlock,
 	epoch beacon.EpochTime,
 ) (map[transaction.Weight]uint64, error) {
-	resp, err := r.Query(ctx, rb, lb, epoch, 0, protocol.MethodQueryBatchWeightLimits, nil)
+	resp, err := r.Query(ctx, rb, lb, epoch, 0, protocol.MethodQueryBatchWeightLimits, cbor.Marshal(nil))
 	if err != nil {
 		return nil, err
 	}

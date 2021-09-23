@@ -426,7 +426,7 @@ impl Dispatcher {
         txn_dispatcher: &Arc<dyn TxnDispatcher>,
         protocol: &Arc<Protocol>,
         method: String,
-        args: cbor::Value,
+        args: Vec<u8>,
         state: TxDispatchState,
     ) -> Result<Body, Error> {
         debug!(self.logger, "Received query request";
