@@ -214,9 +214,9 @@ dependencies = [
 
 [[package]]
 name = "base64ct"
-version = "1.0.0"
+version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d0d27fb6b6f1e43147af148af49d49329413ba781aa0d5e10979831c210173b5"
+checksum = "40a96587c05c810ddbb79e2674d519cff1379517e7b91d166dff7a7cc0e9af6e"
 
 [[package]]
 name = "bech32"
@@ -569,9 +569,9 @@ checksum = "7a81dae078cea95a014a339291cec439d2f232ebe854a9d672b796c6afafa9b7"
 
 [[package]]
 name = "crypto-bigint"
-version = "0.2.2"
+version = "0.2.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b32a398eb1ccfbe7e4f452bc749c44d38dd732e9a253f19da224c416f00ee7f4"
+checksum = "d12477e115c0d570c12a2dfd859f80b55b60ddb5075df210d3af06d133a69f45"
 dependencies = [
  "generic-array",
  "rand_core 0.6.3",
@@ -1518,9 +1518,9 @@ dependencies = [
 
 [[package]]
 name = "oasis-cbor"
-version = "0.1.8"
+version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7134e2d7da8cd90a1928a9121419ede09624d18bb0a3fcbcac7e7b6232317e3f"
+checksum = "620f90b431654029f927635656e82f18e9815812e88ce781d9c09a7a40ea0b1b"
 dependencies = [
  "impl-trait-for-tuples",
  "oasis-cbor-derive",
@@ -1530,9 +1530,9 @@ dependencies = [
 
 [[package]]
 name = "oasis-cbor-derive"
-version = "0.1.8"
+version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "64bbc791abda671bb0c970a8e1b9adeb24689c91a8fe99fc42876a792c99861f"
+checksum = "5c7782197fedc097f3abb1148715e3a0ac440c38bec2666893bedb114d42b1c8"
 dependencies = [
  "darling",
  "proc-macro-crate",
