@@ -90,9 +90,8 @@ set up environment variables to simplify instructions.
   `/tmp/runtime-example/net-runner/network/genesis.json`).
 - `RUNTIME_ID` - See [runtime identifiers] on how to choose a runtime
   identifier. In this example we use
-  `gAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAEjRWc=`, which is the `base64` encoded:
-  `8000000000000000000000000000000000000000000000000000000001234567` - a test
-  identifier that will not work outside local tests.
+  `8000000000000000000000000000000000000000000000000000000001234567` which is a
+  test identifier that will not work outside local tests.
 - `RUNTIME_GENESIS_JSON` - Path to the runtime genesis state file. The runtime
   used in this example does not use a genesis file.
 - `NONCE` - Entity account nonce. If you followed the guide, nonce `0` would be
@@ -104,7 +103,7 @@ set up environment variables to simplify instructions.
 export ENTITY_DIR=/tmp/runtime-example/net-runner/network/entity-2/
 export ENTITY_ID=+MJpnSTzc11dNI5emMa+asCJH5cxBiBCcpbYE4XBdso=
 export GENESIS_JSON=/tmp/runtime-example/net-runner/network/genesis.json
-export RUNTIME_ID=gAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAEjRWc=
+export RUNTIME_ID=8000000000000000000000000000000000000000000000000000000001234567
 export RUNTIME_DESCRIPTOR=/tmp/runtime-example/runtime_descriptor.json
 export NONCE=0
 ```
@@ -222,13 +221,56 @@ oasis-node registry runtime list \
 
 Should give output similar to
 
-<!-- markdownlint-disable line-length -->
-
 ```
-{"v":2,"id":"gAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAEjRWc=","entity_id":"+MJpnSTzc11dNI5emMa+asCJH5cxBiBCcpbYE4XBdso=","genesis":{"state_root":"xnK40e9W7Sirh8NiLFEUBpvdOte4+XN0mNDAHs7wlno=","state":null,"storage_receipts":null,"round":0},"kind":1,"tee_hardware":0,"versions":{"version":{}},"executor":{"group_size":1,"group_backup_size":0,"allowed_stragglers":0,"round_timeout":5,"max_messages":32},"txn_scheduler":{"algorithm":"simple","batch_flush_timeout":1000000000,"max_batch_size":1000,"max_batch_size_bytes":16777216,"propose_batch_timeout":5},"storage":{"group_size":1,"min_write_replication":1,"max_apply_write_log_entries":100000,"max_apply_ops":2,"checkpoint_interval":10000,"checkpoint_num_kept":2,"checkpoint_chunk_size":8388608},"admission_policy":{"entity_whitelist":{"entities":{"+MJpnSTzc11dNI5emMa+asCJH5cxBiBCcpbYE4XBdso=":{}}}},"staking":{},"governance_model":"entity"}
+{
+  "v": 2,
+  "id": "8000000000000000000000000000000000000000000000000000000001234567",
+  "entity_id": "+MJpnSTzc11dNI5emMa+asCJH5cxBiBCcpbYE4XBdso=",
+  "genesis": {
+    "state_root": "xnK40e9W7Sirh8NiLFEUBpvdOte4+XN0mNDAHs7wlno=",
+    "state": null,
+    "storage_receipts": null,
+    "round": 0
+  },
+  "kind": 1,
+  "tee_hardware": 0,
+  "versions": {
+    "version": {}
+  },
+  "executor": {
+    "group_size": 1,
+    "group_backup_size": 0,
+    "allowed_stragglers": 0,
+    "round_timeout": 5,
+    "max_messages": 32
+  },
+  "txn_scheduler": {
+    "algorithm": "simple",
+    "batch_flush_timeout": 1000000000,
+    "max_batch_size": 1000,
+    "max_batch_size_bytes": 16777216,
+    "propose_batch_timeout": 5
+  },
+  "storage": {
+    "group_size": 1,
+    "min_write_replication": 1,
+    "max_apply_write_log_entries": 100000,
+    "max_apply_ops": 2,
+    "checkpoint_interval": 10000,
+    "checkpoint_num_kept": 2,
+    "checkpoint_chunk_size": 8388608
+  },
+  "admission_policy": {
+    "entity_whitelist": {
+      "entities": {
+        "+MJpnSTzc11dNI5emMa+asCJH5cxBiBCcpbYE4XBdso=": {}
+      }
+    }
+  },
+  "staking": {},
+  "governance_model": "entity"
+}
 ```
-
-<!-- markdownlint-enable line-length -->
 
 {% hint style="info" %} Since we did not setup any runtime nodes, the runtime
 will get [suspended] until nodes for the runtime register. {% endhint %}
