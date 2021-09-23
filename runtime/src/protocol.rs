@@ -172,11 +172,10 @@ impl Protocol {
     pub(crate) fn start(self: &Arc<Protocol>) {
         // Spawn write end in a separate thread.
         let protocol = self.clone();
-        let write_thread = std::thread::spawn(move || protocol.io_write());
+        std::thread::spawn(move || protocol.io_write());
 
         // Run read end in the current thread.
         self.io_read();
-        write_thread.join().unwrap();
     }
 
     fn io_read(self: &Arc<Protocol>) {
