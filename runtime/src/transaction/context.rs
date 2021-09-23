@@ -9,6 +9,7 @@ use crate::{
         roothash::{Header, RoundResults},
         state::ConsensusState,
     },
+    protocol::Protocol,
     storage::MKVS,
 };
 
@@ -16,6 +17,8 @@ use crate::{
 pub struct Context<'a> {
     /// I/O context.
     pub io_ctx: Arc<IoContext>,
+    /// Low-level access to the underlying Runtime Host Protocol.
+    pub protocol: Arc<Protocol>,
     /// Consensus state tree.
     pub consensus_state: ConsensusState,
     /// Runtime state.
@@ -37,6 +40,7 @@ impl<'a> Context<'a> {
     /// Construct new transaction context.
     pub fn new(
         io_ctx: Arc<IoContext>,
+        protocol: Arc<Protocol>,
         consensus_state: ConsensusState,
         runtime_state: &'a mut dyn MKVS,
         header: &'a Header,
@@ -47,6 +51,7 @@ impl<'a> Context<'a> {
     ) -> Self {
         Self {
             io_ctx,
+            protocol,
             consensus_state,
             runtime_state,
             header,

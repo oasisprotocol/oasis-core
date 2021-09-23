@@ -535,7 +535,7 @@ impl Io {
 
         let result = self
             .protocol
-            .make_request(
+            .call_host(
                 Context::background(),
                 Body::HostFetchConsensusBlockRequest { height },
             )

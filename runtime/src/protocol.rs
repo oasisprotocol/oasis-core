@@ -111,7 +111,12 @@ pub struct Protocol {
 
 impl Protocol {
     /// Create a new protocol handler instance.
-    pub fn new(stream: Stream, rak: Arc<RAK>, dispatcher: Arc<Dispatcher>, config: Config) -> Self {
+    pub(crate) fn new(
+        stream: Stream,
+        rak: Arc<RAK>,
+        dispatcher: Arc<Dispatcher>,
+        config: Config,
+    ) -> Self {
         let logger = get_logger("runtime/protocol");
 
         let (outgoing_tx, outgoing_rx) = channel::unbounded();
@@ -164,7 +169,7 @@ impl Protocol {
     }
 
     /// Start the protocol handler loop.
-    pub fn start(self: &Arc<Protocol>) {
+    pub(crate) fn start(self: &Arc<Protocol>) {
         // Spawn write end in a separate thread.
         let protocol = self.clone();
         let write_thread = std::thread::spawn(move || protocol.io_write());
@@ -203,8 +208,8 @@ impl Protocol {
         info!(self.logger, "Protocol writer thread is terminating");
     }
 
-    /// Make a new request to the worker host and wait for the response.
-    pub fn make_request(&self, _ctx: Context, body: Body) -> Result<Body, Error> {
+    /// Make a new request to the runtime host and wait for the response.
+    pub fn call_host(&self, _ctx: Context, body: Body) -> Result<Body, Error> {
         let id = self.last_request_id.fetch_add(1, Ordering::SeqCst) as u64;
         let message = Message {
             id,
@@ -231,7 +236,7 @@ impl Protocol {
         }
     }
 
-    /// Send an async response to a previous request back to the worker host.
+    /// Send an async response to a previous request back to the host.
     pub fn send_response(&self, id: u64, body: Body) -> anyhow::Result<()> {
         self.send_message(Message {
             id,
@@ -506,7 +511,7 @@ impl KeyValue for ProtocolUntrustedLocalStorage {
 
         match self
             .protocol
-            .make_request(ctx, Body::HostLocalStorageGetRequest { key })?
+            .call_host(ctx, Body::HostLocalStorageGetRequest { key })?
         {
             Body::HostLocalStorageGetResponse { value } => Ok(value),
             _ => Err(ProtocolError::InvalidResponse.into()),
@@ -518,7 +523,7 @@ impl KeyValue for ProtocolUntrustedLocalStorage {
 
         match self
             .protocol
-            .make_request(ctx, Body::HostLocalStorageSetRequest { key, value })?
+            .call_host(ctx, Body::HostLocalStorageSetRequest { key, value })?
         {
             Body::HostLocalStorageSetResponse {} => Ok(()),
             _ => Err(ProtocolError::InvalidResponse.into()),
