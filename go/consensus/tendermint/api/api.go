@@ -188,7 +188,7 @@ func NewBlock(blk *tmtypes.Block) *consensus.Block {
 
 	return &consensus.Block{
 		Height: blk.Header.Height,
-		Hash:   blk.Header.Hash(),
+		Hash:   hash.LoadFromHexBytes(blk.Header.Hash()),
 		Time:   blk.Header.Time,
 		StateRoot: mkvsNode.Root{
 			Version: uint64(blk.Header.Height) - 1,

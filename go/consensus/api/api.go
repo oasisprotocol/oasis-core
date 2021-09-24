@@ -9,6 +9,7 @@ import (
 
 	beacon "github.com/oasisprotocol/oasis-core/go/beacon/api"
 	"github.com/oasisprotocol/oasis-core/go/common/cbor"
+	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	"github.com/oasisprotocol/oasis-core/go/common/errors"
 	"github.com/oasisprotocol/oasis-core/go/common/node"
@@ -163,7 +164,7 @@ type Block struct {
 	// Height contains the block height.
 	Height int64 `json:"height"`
 	// Hash contains the block header hash.
-	Hash []byte `json:"hash"`
+	Hash hash.Hash `json:"hash"`
 	// Time is the second-granular consensus time.
 	Time time.Time `json:"time"`
 	// StateRoot is the Merkle root of the consensus state tree.
@@ -187,7 +188,7 @@ type Status struct { // nolint: maligned
 	// LatestHeight is the height of the latest block.
 	LatestHeight int64 `json:"latest_height"`
 	// LatestHash is the hash of the latest block.
-	LatestHash []byte `json:"latest_hash"`
+	LatestHash hash.Hash `json:"latest_hash"`
 	// LatestTime is the timestamp of the latest block.
 	LatestTime time.Time `json:"latest_time"`
 	// LatestEpoch is the epoch of the latest block.
@@ -198,12 +199,12 @@ type Status struct { // nolint: maligned
 	// GenesisHeight is the height of the genesis block.
 	GenesisHeight int64 `json:"genesis_height"`
 	// GenesisHash is the hash of the genesis block.
-	GenesisHash []byte `json:"genesis_hash"`
+	GenesisHash hash.Hash `json:"genesis_hash"`
 
 	// LastRetainedHeight is the height of the oldest retained block.
 	LastRetainedHeight int64 `json:"last_retained_height"`
 	// LastRetainedHash is the hash of the oldest retained block.
-	LastRetainedHash []byte `json:"last_retained_hash"`
+	LastRetainedHash hash.Hash `json:"last_retained_hash"`
 
 	// ChainContext is the chain domain separation context.
 	ChainContext string `json:"chain_context"`
