@@ -50,17 +50,28 @@ func (h *Hash) UnmarshalBinary(data []byte) error {
 
 // MarshalText encodes a Hash into text form.
 func (h Hash) MarshalText() (data []byte, err error) {
-	return []byte(base64.StdEncoding.EncodeToString(h[:])), nil
+	return h.MarshalHex()
 }
 
 // UnmarshalText decodes a text marshaled Hash.
 func (h *Hash) UnmarshalText(text []byte) error {
-	b, err := base64.StdEncoding.DecodeString(string(text))
+	err := h.UnmarshalHex(string(text))
 	if err != nil {
-		return err
+		// For backwards compatibility (e.g. to be able to load the
+		// Cobalt Upgrade genesis file), fallback to accepting
+		// Base64-encoded Hash values.
+		b, err := base64.StdEncoding.DecodeString(string(text))
+		if err != nil {
+			return err
+		}
+		return h.UnmarshalBinary(b)
 	}
+	return nil
+}
 
-	return h.UnmarshalBinary(b)
+// MarshalHex encodes a Hash into a hexadecimal form.
+func (h *Hash) MarshalHex() ([]byte, error) {
+	return []byte(hex.EncodeToString(h[:])), nil
 }
 
 // UnmarshalHex deserializes a hexadecimal text string into the given type.
