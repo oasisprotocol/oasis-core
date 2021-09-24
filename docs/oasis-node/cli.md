@@ -13,45 +13,54 @@ oasis-node control status
 to get information like the following (example taken from a runtime compute
 node):
 
+<!-- markdownlint-disable line-length -->
 ```json
 {
-  "software_version": "20.10",
+  "software_version": "21.3",
   "identity": {
-    "node": "kO/mEZfAnnRnGqpA5JqlZLaIf+bMTIZAriivJdWSTco=",
-    "p2p": "EwriyXpMKatrC1X2Z+KsDRkdu0NXWV4/25TRSa59z8o=",
-    "consensus": "4AaxFrlyZwQhGmk58+Up/gDg5eY1mwJpFEE9WXulg9Q=",
+    "node": "iWq6Nft6dU2GWAr9U7ICbhXWwmAINIniKzMMblSo5Xs=",
+    "p2p": "dGd+pGgIlkJb0dnkBQ7vI2EWWG81pF5M1G+jL2/6pyA=",
+    "consensus": "QaMdKVwX1da0Uf82cp0DDukQQwrSjr8BwlIxc//ANE8=",
     "tls": [
-      "1ZWRWMA/gx0nfGH6xJNKAlYUPaGkBz2LxTe552bCO68=",
-      "XGOH0m3CQVSG1J9AFxefgSWF+YP6eRnxmjM5zmj2gLs="
+      "Kj8ANHwfMzcWoA1vx0OMhn4oGv8Y0vc46xMOdQUIh5c=",
+      "1C8rWqyuARkSxNXuPbDPh9XID/SiYAU3GxGk6nMwR0Q="
     ]
   },
   "consensus": {
-    "consensus_version": "1.0.0",
+    "version": {
+      "major": 4
+    },
     "backend": "tendermint",
     "features": 3,
     "node_peers": [
-      "5c8272d22b3bc0ee282c9e21682b22ce6d68078c@127.0.0.1:20000"
+      "5ab8074ce3053ef9b72d664c73e39972241442e3@57.71.39.73:26658",
+      "abb66e8780f3815d87bad488a2892b4d4b2221e3@108.15.34.59:50716"
     ],
-    "latest_height": 185,
-    "latest_hash": "N6dmMPB2A+n4EkCv684TAtARRGrxcobouHfq1daXoBk=",
-    "latest_time": "2020-09-08T11:18:54+02:00",
+    "latest_height": 5960191,
+    "latest_hash": "091c29c3d588c52421a4f215268c6b4ab1a7762c429a98fec5de9251f8907add",
+    "latest_time": "2021-09-24T21:42:29+02:00",
+    "latest_epoch": 10489,
     "latest_state_root": {
-      "ns": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
-      "version": 184,
-      "hash": "ITfGAos0wY40Y1qmf7vr7f2jvA+cMRPswql3RqhTyDc="
+      "ns": "0000000000000000000000000000000000000000000000000000000000000000",
+      "version": 5960190,
+      "root_type": 1,
+      "hash": "c34581dcec59d80656d6082260d63f3206aef0a1b950c1f2c06d1eaa36a22ec3"
     },
-    "genesis_height": 1,
-    "genesis_hash": "fYbBfC987n0RXS1TsicvCVViOWjBe/9gwyEW6kTev/c=",
-    "is_validator": false
+    "genesis_height": 5891596,
+    "genesis_hash": "e9d9fb99baefc3192a866581c35bf43d7f0499c64e1c150171e87b2d5dc35087",
+    "last_retained_height": 5891596,
+    "last_retained_hash": "e9d9fb99baefc3192a866581c35bf43d7f0499c64e1c150171e87b2d5dc35087",
+    "chain_context": "9ee492b63e99eab58fd979a23dfc9b246e5fc151bfdecd48d3ba26a9d0712c2b",
+    "is_validator": true
   },
   "runtimes": {
-    "gAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=": {
+    "0000000000000000000000000000000000000000000000000000000000000001": {
       "descriptor": {
-        "v": 1,
-        "id": "gAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
-        "entity_id": "TqUyj5Q+9vZtqu10yw6Zw7HEX3Ywe0JQA9vHyzY47TU=",
+        "v": 2,
+        "id": "0000000000000000000000000000000000000000000000000000000000000001",
+        "entity_id": "Ldzg8aeLiUBrMYxidd5DqEzpamyV2cprmRH0pG8d/Jg=",
         "genesis": {
-          "state_root": "xnK40e9W7Sirh8NiLFEUBpvdOte4+XN0mNDAHs7wlno=",
+          "state_root": "c672b8d1ef56ed28ab87c3622c5114069bdd3ad7b8f9737498d0c01ecef0967a",
           "state": null,
           "storage_receipts": null,
           "round": 0
@@ -59,101 +68,154 @@ node):
         "kind": 1,
         "tee_hardware": 0,
         "versions": {
-          "version": {}
+          "version": {
+            "minor": 2
+          }
         },
-        "key_manager": "wAAAAAAAAAD///////////////////////////////8=",
         "executor": {
-          "group_size": 2,
-          "group_backup_size": 1,
-          "allowed_stragglers": 0,
-          "round_timeout": 20
+          "group_size": 3,
+          "group_backup_size": 3,
+          "allowed_stragglers": 1,
+          "round_timeout": 5,
+          "max_messages": 256
         },
         "txn_scheduler": {
           "algorithm": "simple",
-          "batch_flush_timeout": 20000000000,
-          "max_batch_size": 1,
-          "max_batch_size_bytes": 16777216,
-          "propose_batch_timeout": 20
+          "batch_flush_timeout": 1000000000,
+          "max_batch_size": 100,
+          "max_batch_size_bytes": 1048576,
+          "propose_batch_timeout": 2
         },
         "storage": {
-          "group_size": 1,
-          "min_write_replication": 1,
-          "max_apply_write_log_entries": 100000,
+          "group_size": 3,
+          "min_write_replication": 2,
+          "max_apply_write_log_entries": 10000,
           "max_apply_ops": 2,
-          "checkpoint_interval": 0,
-          "checkpoint_num_kept": 0,
-          "checkpoint_chunk_size": 0
+          "checkpoint_interval": 100,
+          "checkpoint_num_kept": 2,
+          "checkpoint_chunk_size": 8388608
         },
         "admission_policy": {
           "any_node": {}
         },
-        "staking": {}
+        "constraints": {
+          "executor": {
+            "backup-worker": {
+              "max_nodes": {
+                "limit": 1
+              },
+              "min_pool_size": {
+                "limit": 3
+              }
+            },
+            "worker": {
+              "max_nodes": {
+                "limit": 1
+              },
+              "min_pool_size": {
+                "limit": 3
+              }
+            }
+          },
+          "storage": {
+            "worker": {
+              "max_nodes": {
+                "limit": 1
+              },
+              "min_pool_size": {
+                "limit": 3
+              }
+            }
+          }
+        },
+        "staking": {},
+        "governance_model": "entity"
       },
-      "latest_round": 5,
-      "latest_hash": "3chaVOZUeJwPBZNbFUh622STrvtrEVlIee7unu/S880=",
-      "latest_time": 1599556729,
+      "latest_round": 1355,
+      "latest_hash": "2a11820c0524a8a753f7f4a268ee2d0a4f4588a89121f92a43f4be9cc6acca7e",
+      "latest_time": "2021-09-24T21:41:29+02:00",
       "latest_state_root": {
-        "ns": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
-        "version": 5,
-        "hash": "xnK40e9W7Sirh8NiLFEUBpvdOte4+XN0mNDAHs7wlno="
+        "ns": "0000000000000000000000000000000000000000000000000000000000000000",
+        "version": 1355,
+        "root_type": 1,
+        "hash": "45168e11548ac5322a9a206abff4368983b5cf676b1bcb2269f5dfbdf9df7be3"
       },
       "genesis_round": 0,
-      "genesis_hash": "T4zq6ris0pGNvkgfhGmPnnDMzbMo+8rUPhfxbyAZ2tg=",
+      "genesis_hash": "aed94c03ebd2d16dfb5f6434021abf69c8c15fc69b6b19554d23da8a5a053776",
       "committee": {
-        "latest_round": 5,
-        "latest_height": 180,
-        "last_committee_update_height": 180,
-        "executor_role": "worker",
-        "storage_role": "invalid",
-        "is_txn_scheduler": true,
+        "latest_round": 1355,
+        "latest_height": 5960180,
+        "last_committee_update_height": 5960174,
+        "executor_roles": [
+          "worker",
+          "backup-worker"
+        ],
+        "storage_roles": [
+          "worker"
+        ],
+        "is_txn_scheduler": false,
         "peers": [
-          "/ip4/172.25.0.2/tcp/20015/p2p/12D3KooWQ6gDSgYBYqUfERm8BQdFtozJ5Wg6LQeLwQz1LCPPx8B4",
-          "/ip4/127.0.0.1/tcp/20012/p2p/12D3KooWQEjvQjwweWxv8mH7YbsQxJaQB7VqYu1QopWvmoFSZ6Pi"
+          "/ip4/57.71.39.73/tcp/41002/p2p/12D3KooWJvL8mYzHbcLtj91bf5sHhtrB7C8CWND5sV6Kk24eUdpQ",
+          "/ip4/108.67.32.45/tcp/26648/p2p/12D3KooWBKgcH7TGMSLuxzLxK41nTwk6DsxHRpb7HpWQXJzLurcv"
         ]
       },
-      "storage": null
+      "storage": {
+        "last_finalized_round": 1355
+      }
     }
   },
   "registration": {
-    "last_registration": "2020-09-08T11:18:51+02:00",
+    "last_registration": "2021-09-24T21:41:08+02:00",
     "descriptor": {
       "v": 1,
-      "id": "kO/mEZfAnnRnGqpA5JqlZLaIf+bMTIZAriivJdWSTco=",
-      "entity_id": "wmYfQjpQHaOj9SSmWL/oYx1kHnatBI9so+eH33E0qig=",
-      "expiration": 8,
+      "id": "iWq6Nft6dU2GWAr9U7ICbhXWwmAINIniKzMMblSo5Xs=",
+      "entity_id": "4G4ISI8hANvMRYTbxdXU+0r9m/6ZySHERR+2RDbNOU8=",
+      "expiration": 10491,
       "tls": {
-        "pub_key": "1ZWRWMA/gx0nfGH6xJNKAlYUPaGkBz2LxTe552bCO68=",
-        "next_pub_key": "XGOH0m3CQVSG1J9AFxefgSWF+YP6eRnxmjM5zmj2gLs=",
+        "pub_key": "Kj8ANHwfMzcWoA1vx0OMhn4oGv8Y0vc46xMOdQUIh5c=",
+        "next_pub_key": "1C8rWqyuARkSxNXuPbDPh9XID/SiYAU3GxGk6nMwR0Q=",
         "addresses": [
-          "XGOH0m3CQVSG1J9AFxefgSWF+YP6eRnxmjM5zmj2gLs=@172.25.0.2:20008"
+          "Kj8ANHwfMzcWoA1vx0OMhn4oGv8Y0vc46xMOdQUIh5c=@128.89.215.24:30001",
+          "1C8rWqyuARkSxNXuPbDPh9XID/SiYAU3GxGk6nMwR0Q=@128.89.215.24:30001"
         ]
       },
       "p2p": {
-        "id": "EwriyXpMKatrC1X2Z+KsDRkdu0NXWV4/25TRSa59z8o=",
+        "id": "dGd+pGgIlkJb0dnkBQ7vI2EWWG81pF5M1G+jL2/6pyA=",
         "addresses": [
-          "172.25.0.2:20009",
-          "127.0.0.1:20009"
+          "159.89.215.24:30002"
         ]
       },
       "consensus": {
-        "id": "4AaxFrlyZwQhGmk58+Up/gDg5eY1mwJpFEE9WXulg9Q=",
-        "addresses": null
+        "id": "QaMdKVwX1da0Uf82cp0DDukQQwrSjr8BwlIxc//ANE8=",
+        "addresses": [
+          "dGd+pGgIlkJb0dnkBQ7vI2EWWG81pF5M1G+jL2/6pyA=@128.89.215.24:26656"
+        ]
+      },
+      "beacon": {
+        "point": "BHg8TOqKD4wV8UCu9nICvJt7rhXFd8CxXuYiHa6X/NnzlIndzGNEJyyTr00s5rgKwX25yPmv+r2xRFbcQK6hGLE="
       },
       "runtimes": [
         {
-          "id": "gAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
+          "id": "0000000000000000000000000000000000000000000000000000000000000001",
           "version": {
-            "minor": 3
+            "minor": 2
           },
           "capabilities": {},
           "extra_info": null
         }
       ],
-      "roles": 1
+      "roles": "compute,storage,validator"
+    },
+    "node_status": {
+      "expiration_processed": false,
+      "freeze_end_time": 0,
+      "election_eligible_after": 9810
     }
-  }
+  },
+  "pending_upgrades": []
 }
 ```
+<!-- markdownlint-enable line-length -->
 
 ## `genesis`
 
