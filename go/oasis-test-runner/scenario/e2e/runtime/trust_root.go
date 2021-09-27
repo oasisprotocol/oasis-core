@@ -2,7 +2,6 @@ package runtime
 
 import (
 	"context"
-	"encoding/hex"
 	"fmt"
 	"path/filepath"
 	"strconv"
@@ -203,7 +202,7 @@ func (sc *trustRootImpl) Run(childEnv *env.Env) (err error) {
 
 	sc.Logger.Info("got some blocks, building runtime with given trust root",
 		"trust_root_height", blk.Height,
-		"trust_root_hash", hex.EncodeToString(blk.Hash),
+		"trust_root_hash", blk.Hash.Hex(),
 		"trust_root_runtime_id", runtimeID.String(),
 	)
 
@@ -213,7 +212,7 @@ func (sc *trustRootImpl) Run(childEnv *env.Env) (err error) {
 	teeHardware, _ := sc.getTEEHardware()
 	builder := rust.NewBuilder(childEnv, teeHardware, trustRootRuntime, filepath.Join(buildDir, trustRootRuntime), targetDir)
 	builder.SetEnv("OASIS_TESTS_CONSENSUS_TRUST_HEIGHT", strconv.FormatInt(blk.Height, 10))
-	builder.SetEnv("OASIS_TESTS_CONSENSUS_TRUST_HASH", hex.EncodeToString(blk.Hash))
+	builder.SetEnv("OASIS_TESTS_CONSENSUS_TRUST_HASH", blk.Hash.Hex())
 	builder.SetEnv("OASIS_TESTS_CONSENSUS_TRUST_RUNTIME_ID", runtimeID.String())
 	if err = builder.Build(); err != nil {
 		return fmt.Errorf("failed to build runtime '%s' with trust root: %w", trustRootRuntime, err)

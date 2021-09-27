@@ -10,6 +10,8 @@ import (
 	"errors"
 	"hash"
 
+	tmbytes "github.com/tendermint/tendermint/libs/bytes"
+
 	"github.com/oasisprotocol/oasis-core/go/common/cbor"
 )
 
@@ -117,9 +119,14 @@ func (h *Hash) IsEmpty() bool {
 	return subtle.ConstantTimeCompare(h[:], emptyHash[:]) == 1
 }
 
+// Hex returns the hex-encoded representation of a hash.
+func (h *Hash) Hex() string {
+	return hex.EncodeToString(h[:])
+}
+
 // String returns the string representation of a hash.
 func (h Hash) String() string {
-	return hex.EncodeToString(h[:])
+	return h.Hex()
 }
 
 // Truncate returns the first n bytes of a hash.
@@ -139,6 +146,13 @@ func NewFrom(v interface{}) (h Hash) {
 // NewFromBytes creates a new hash by hashing the provided byte string(s).
 func NewFromBytes(data ...[]byte) (h Hash) {
 	h.FromBytes(data...)
+	return
+}
+
+// LoadFromHexBytes creates a new hash by loading it from the given Tendermint
+// HexBytes byte array.
+func LoadFromHexBytes(data tmbytes.HexBytes) (h Hash) {
+	_ = h.UnmarshalBinary(data[:])
 	return
 }
 

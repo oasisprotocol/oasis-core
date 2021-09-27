@@ -2,7 +2,6 @@ package e2e
 
 import (
 	"context"
-	"encoding/hex"
 	"fmt"
 	"time"
 
@@ -93,7 +92,7 @@ func (sc *consensusStateSyncImpl) Run(childEnv *env.Env) error {
 
 	sc.Logger.Info("got some blocks, starting the validator that needs to sync",
 		"trust_height", blk.Height,
-		"trust_hash", hex.EncodeToString(blk.Hash),
+		"trust_hash", blk.Hash.Hex(),
 	)
 
 	// The last validator configured by the fixture is the one that is stopped and will sync.
@@ -135,7 +134,7 @@ func (sc *consensusStateSyncImpl) Run(childEnv *env.Env) error {
 	val.SetConsensusStateSync(&oasis.ConsensusStateSyncCfg{
 		ConsensusNodes: consensusNodes,
 		TrustHeight:    uint64(blk.Height),
-		TrustHash:      hex.EncodeToString(blk.Hash),
+		TrustHash:      blk.Hash.Hex(),
 	})
 
 	if err = val.Start(); err != nil {

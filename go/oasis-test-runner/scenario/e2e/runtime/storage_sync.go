@@ -2,7 +2,6 @@ package runtime
 
 import (
 	"context"
-	"encoding/hex"
 	"fmt"
 	"strings"
 	"time"
@@ -268,7 +267,7 @@ func (sc *storageSyncImpl) Run(childEnv *env.Env) error { //nolint: gocyclo
 		consensusNodes = append(consensusNodes, string(rawAddress))
 
 		trustHeight = uint64(status.Consensus.LatestHeight)
-		trustHash = hex.EncodeToString(status.Consensus.LatestHash)
+		trustHash = status.Consensus.LatestHash.Hex()
 	}
 
 	// Configure state sync for the last storage node.
