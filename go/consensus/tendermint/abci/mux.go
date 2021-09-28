@@ -36,7 +36,10 @@ import (
 )
 
 const (
-	stateKeyGenesisDigest   = "OasisGenesisDigest"
+	// StateKeyGenesisDigest is the state key where the genesis digest
+	// aka chain context is stored.
+	StateKeyGenesisDigest = "OasisGenesisDigest"
+
 	stateKeyInitChainEvents = "OasisInitChainEvents"
 
 	metricsUpdateInterval = 10 * time.Second
@@ -302,7 +305,7 @@ func (mux *abciMux) InitChain(req types.RequestInitChain) types.ResponseInitChai
 	// clearly separating chain instances based on the initialization
 	// state, forever.
 	chainContext := st.ChainContext()
-	err = mux.state.deliverTxTree.Insert(mux.state.ctx, []byte(stateKeyGenesisDigest), []byte(chainContext))
+	err = mux.state.deliverTxTree.Insert(mux.state.ctx, []byte(StateKeyGenesisDigest), []byte(chainContext))
 	if err != nil {
 		panic(err)
 	}
