@@ -262,7 +262,7 @@ func doLoadOrGenerate(dataDir string, signerFactory signature.SignerFactory, sho
 
 	// First, check if we can load the TLS certificate from disk.
 	tlsCertPath, tlsKeyPath := TLSCertPaths(dataDir)
-	cert, err := tlsCert.Load(tlsCertPath, tlsKeyPath)
+	cert, err := tlsCert.LoadFromKey(tlsKeyPath, CommonName)
 	if err == nil {
 		// Load successful, ensure that we won't ever rotate the certificates.
 		dnr = true
