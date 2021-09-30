@@ -529,9 +529,12 @@ func (n *Node) fetchDiff(round uint64, prevRoot, thisRoot storageApi.Root) {
 				"new_root", thisRoot,
 			)
 
+			ctx, cancel := context.WithCancel(n.ctx)
+			defer cancel()
+
 			// Prioritize committee nodes.
 			var selectedNode *node.Node
-			ctx := storageApi.WithNodeSelectionCallback(n.ctx, func(n *node.Node) {
+			ctx = storageApi.WithNodeSelectionCallback(ctx, func(n *node.Node) {
 				selectedNode = n
 			})
 			if committee := n.commonNode.Group.GetEpochSnapshot().GetStorageCommittee(); committee != nil {
