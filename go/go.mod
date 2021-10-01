@@ -36,7 +36,7 @@ require (
 	github.com/hashicorp/go-plugin v1.4.2
 	github.com/hpcloud/tail v1.0.0
 	github.com/ianbruene/go-difflib v1.2.0
-	github.com/libp2p/go-libp2p v0.15.0
+	github.com/libp2p/go-libp2p v0.15.1
 	github.com/libp2p/go-libp2p-core v0.9.0
 	github.com/libp2p/go-libp2p-pubsub v0.5.4
 	github.com/multiformats/go-multiaddr v0.4.1
