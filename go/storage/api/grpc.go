@@ -416,17 +416,19 @@ func receiveWriteLogIterator(ctx context.Context, stream grpc.ClientStream) Writ
 		for {
 			var chunk SyncChunk
 			err := stream.RecvMsg(&chunk)
-			if err == io.EOF {
-				break
-			}
-			if err != nil {
+			switch err {
+			case nil:
+			case io.EOF:
+				return
+			default:
 				_ = pipe.PutError(err)
-				continue
+				return
 			}
 
 			for i := range chunk.WriteLog {
 				if err := pipe.Put(&chunk.WriteLog[i]); err != nil {
-					_ = pipe.PutError(err)
+					// Context cancelled.
+					return
 				}
 			}
 
