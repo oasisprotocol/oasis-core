@@ -35,7 +35,7 @@ func TestLoadOrGenerate(t *testing.T) {
 	require.EqualValues(t, identity.P2PSigner, identity2.P2PSigner)
 	require.EqualValues(t, identity.ConsensusSigner, identity2.ConsensusSigner)
 	require.EqualValues(t, identity.GetTLSSigner(), identity2.GetTLSSigner())
-	require.EqualValues(t, identity.GetTLSCertificate(), identity2.GetTLSCertificate())
+	require.NotEqual(t, identity.GetTLSCertificate(), identity2.GetTLSCertificate())
 	require.EqualValues(t, identity.GetTLSPubKeys(), identity2.GetTLSPubKeys())
 	require.NotEqual(t, identity.TLSSentryClientCertificate, identity2.TLSSentryClientCertificate)
 	require.EqualValues(t, identity.TLSSentryClientCertificate.PrivateKey, identity2.TLSSentryClientCertificate.PrivateKey)
