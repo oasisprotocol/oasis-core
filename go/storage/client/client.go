@@ -385,6 +385,10 @@ func (b *storageClientBackend) readWithClient(
 		// from the connected nodes:
 		// https://github.com/oasisprotocol/oasis-core/issues/1815.
 		rng := rand.New(mathrand.New(cryptorand.Reader))
+		priorityNodes := nodes[:prioritySlots]
+		rng.Shuffle(len(priorityNodes), func(i, j int) {
+			priorityNodes[i], priorityNodes[j] = priorityNodes[j], priorityNodes[i]
+		})
 		ordinaryNodes := nodes[prioritySlots:]
 		rng.Shuffle(len(ordinaryNodes), func(i, j int) {
 			ordinaryNodes[i], ordinaryNodes[j] = ordinaryNodes[j], ordinaryNodes[i]
