@@ -143,6 +143,17 @@ func testQuery(
 	// Check for values from TestNode/Client/SubmitTx
 	require.EqualValues(t, testInput, txns[0])
 
+	// Transactions with results (check the mock worker for content).
+	txnsWithResults, err := c.GetTransactionsWithResults(ctx, &api.GetTransactionsRequest{RuntimeID: runtimeID, Round: blk.Header.Round})
+	require.NoError(t, err, "GetTransactionsWithResults")
+	require.Len(t, txnsWithResults, 1)
+	// Check for values from TestNode/Client/SubmitTx
+	require.EqualValues(t, testInput, txnsWithResults[0].Tx)
+	require.EqualValues(t, testInput, txnsWithResults[0].Result)
+	require.Len(t, txnsWithResults[0].Events, 1)
+	require.EqualValues(t, []byte("txn_foo"), txnsWithResults[0].Events[0].Key)
+	require.EqualValues(t, []byte("txn_bar"), txnsWithResults[0].Events[0].Value)
+
 	// Check events query (see mock worker for emitted events).
 	events, err := c.GetEvents(ctx, &api.GetEventsRequest{RuntimeID: runtimeID, Round: 3})
 	require.NoError(t, err, "GetEvents")

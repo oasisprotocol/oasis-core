@@ -11,6 +11,7 @@ import (
 	"github.com/spf13/viper"
 
 	"github.com/oasisprotocol/oasis-core/go/common"
+	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
 	"github.com/oasisprotocol/oasis-core/go/common/errors"
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
 	"github.com/oasisprotocol/oasis-core/go/common/pubsub"
@@ -300,6 +301,45 @@ func (c *runtimeClient) GetTransactions(ctx context.Context, request *api.GetTra
 	}
 
 	return inputs, nil
+}
+
+// Implements api.RuntimeClient.
+func (c *runtimeClient) GetTransactionsWithResults(ctx context.Context, request *api.GetTransactionsRequest) ([]*api.TransactionWithResults, error) {
+	blk, err := c.GetBlock(ctx, &api.GetBlockRequest{RuntimeID: request.RuntimeID, Round: request.Round})
+	if err != nil {
+		return nil, err
+	}
+
+	tree := c.getTxnTree(blk)
+	defer tree.Close()
+
+	txs, err := tree.GetTransactions(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	tags, err := tree.GetTags(ctx)
+	if err != nil {
+		return nil, err
+	}
+	eventsByHash := make(map[hash.Hash][]*api.PlainEvent)
+	for _, tag := range tags {
+		eventsByHash[tag.TxHash] = append(eventsByHash[tag.TxHash], &api.PlainEvent{
+			Key:   tag.Key,
+			Value: tag.Value,
+		})
+	}
+
+	var results []*api.TransactionWithResults
+	for _, tx := range txs {
+		results = append(results, &api.TransactionWithResults{
+			Tx:     tx.Input,
+			Result: tx.Output,
+			Events: eventsByHash[tx.Hash()],
+		})
+	}
+
+	return results, nil
 }
 
 // Implements api.RuntimeClient.

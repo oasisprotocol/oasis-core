@@ -33,6 +33,8 @@ var (
 	methodGetBlock = serviceName.NewMethod("GetBlock", GetBlockRequest{})
 	// methodGetTransactions is the GetTransactions method.
 	methodGetTransactions = serviceName.NewMethod("GetTransactions", GetTransactionsRequest{})
+	// methodGetTransactionsWithResults is the GetTransactionsWithResults method.
+	methodGetTransactionsWithResults = serviceName.NewMethod("GetTransactionsWithResults", GetTransactionsRequest{})
 	// methodGetEvents is the GetEvents method.
 	methodGetEvents = serviceName.NewMethod("GetEvents", GetEventsRequest{})
 	// methodQuery is the Query method.
@@ -73,6 +75,10 @@ var (
 			{
 				MethodName: methodGetTransactions.ShortName(),
 				Handler:    handlerGetTransactions,
+			},
+			{
+				MethodName: methodGetTransactionsWithResults.ShortName(),
+				Handler:    handlerGetTransactionsWithResults,
 			},
 			{
 				MethodName: methodGetEvents.ShortName(),
@@ -285,6 +291,29 @@ func handlerGetTransactions( // nolint: golint
 	return interceptor(ctx, &rq, info, handler)
 }
 
+func handlerGetTransactionsWithResults( // nolint: golint
+	srv interface{},
+	ctx context.Context,
+	dec func(interface{}) error,
+	interceptor grpc.UnaryServerInterceptor,
+) (interface{}, error) {
+	var rq GetTransactionsRequest
+	if err := dec(&rq); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(RuntimeClient).GetTransactionsWithResults(ctx, &rq)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: methodGetTransactionsWithResults.FullName(),
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(RuntimeClient).GetTransactionsWithResults(ctx, req.(*GetTransactionsRequest))
+	}
+	return interceptor(ctx, &rq, info, handler)
+}
+
 func handlerGetEvents( // nolint: golint
 	srv interface{},
 	ctx context.Context,
@@ -414,6 +443,14 @@ func (c *runtimeClient) GetBlock(ctx context.Context, request *GetBlockRequest) 
 func (c *runtimeClient) GetTransactions(ctx context.Context, request *GetTransactionsRequest) ([][]byte, error) {
 	var rsp [][]byte
 	if err := c.conn.Invoke(ctx, methodGetTransactions.FullName(), request, &rsp); err != nil {
+		return nil, err
+	}
+	return rsp, nil
+}
+
+func (c *runtimeClient) GetTransactionsWithResults(ctx context.Context, request *GetTransactionsRequest) ([]*TransactionWithResults, error) {
+	var rsp []*TransactionWithResults
+	if err := c.conn.Invoke(ctx, methodGetTransactionsWithResults.FullName(), request, &rsp); err != nil {
 		return nil, err
 	}
 	return rsp, nil
