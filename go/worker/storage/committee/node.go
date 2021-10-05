@@ -96,6 +96,9 @@ const (
 	// The number of rounds ahead of consensus that the worker will allow round waiters to wait.
 	// Trying to wait for rounds further in the future will return an error immediately.
 	roundWaitConsensusOffset = uint64(1)
+
+	// getDiffTimeout is the timeout for fetching a diff from a node.
+	getDiffTimeout = 15 * time.Second
 )
 
 type roundItem interface {
@@ -529,7 +532,7 @@ func (n *Node) fetchDiff(round uint64, prevRoot, thisRoot storageApi.Root) {
 				"new_root", thisRoot,
 			)
 
-			ctx, cancel := context.WithCancel(n.ctx)
+			ctx, cancel := context.WithTimeout(n.ctx, getDiffTimeout)
 			defer cancel()
 
 			// Prioritize committee nodes.

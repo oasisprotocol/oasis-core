@@ -66,6 +66,10 @@ type RuntimeClient interface {
 	// GetTransactions fetches all runtime transactions in a given block.
 	GetTransactions(ctx context.Context, request *GetTransactionsRequest) ([][]byte, error)
 
+	// GetTransactionsWithResults fetches all runtime transactions in a given block together with
+	// its results (outputs and emitted events).
+	GetTransactionsWithResults(ctx context.Context, request *GetTransactionsRequest) ([]*TransactionWithResults, error)
+
 	// GetEvents returns all events emitted in a given block.
 	GetEvents(ctx context.Context, request *GetEventsRequest) ([]*Event, error)
 
@@ -119,6 +123,13 @@ type GetTransactionsRequest struct {
 	Round     uint64           `json:"round"`
 }
 
+// TransactionWithResults is a transaction with its raw result and emitted events.
+type TransactionWithResults struct {
+	Tx     []byte        `json:"tx"`
+	Result []byte        `json:"result"`
+	Events []*PlainEvent `json:"events,omitempty"`
+}
+
 // GetEventsRequest is a GetEvents request.
 type GetEventsRequest struct {
 	RuntimeID common.Namespace `json:"runtime_id"`
@@ -132,6 +143,15 @@ type Event struct {
 	Key    []byte    `json:"key"`
 	Value  []byte    `json:"value"`
 	TxHash hash.Hash `json:"tx_hash"`
+}
+
+// PlainEvent is an event emitted by a runtime in the form of a runtime transaction tag. It
+// does not include the transaction hash.
+//
+// Key and value semantics are runtime-dependent.
+type PlainEvent struct {
+	Key   []byte `json:"key"`
+	Value []byte `json:"value"`
 }
 
 // QueryRequest is a Query request.
