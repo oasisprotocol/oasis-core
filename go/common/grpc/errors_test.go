@@ -190,13 +190,13 @@ func TestErrorMapping(t *testing.T) {
 
 	_, err = client.ErrorTest(context.Background(), &ErrorTestRequest{})
 	require.Error(err, "ErrorTest should return an error")
-	require.Equal(err, errTest, "errors should be properly mapped")
+	require.Equal(errTest, err, "errors should be properly mapped")
 
 	_, err = client.ErrorTestWithContext(context.Background(), &ErrorTestRequest{})
 	require.Error(err, "ErrorTestWithContext should return an error")
 	require.True(errors.Is(err, errTest), "errors should be properly mapped")
-	require.Equal(err.Error(), "just testing errors: my test context")
-	require.Equal(errors.Context(err), "my test context")
+	require.Equal("just testing errors: my test context", err.Error())
+	require.Equal("my test context", errors.Context(err))
 
 	_, err = client.ErrorStatusTest(context.Background(), &ErrorTestRequest{})
 	require.Error(err, "ErrorStatusTest should return an error")

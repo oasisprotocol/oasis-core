@@ -25,34 +25,34 @@ func TestErrors(t *testing.T) {
 	module, code, context := Code(errTest1)
 	require.Equal("test/errors", module)
 	require.EqualValues(1, code)
-	require.Equal(context, "")
+	require.Equal("", context)
 
 	module, code, context = Code(errTest2)
 	require.Equal("test/errors", module)
 	require.EqualValues(2, code)
-	require.EqualValues(context, "")
+	require.EqualValues("", context)
 
 	// Map wrapped error to module and code.
 	module, code, context = Code(fmt.Errorf("wrapped: %w", errTest1))
 	require.Equal("test/errors", module)
 	require.EqualValues(1, code)
-	require.EqualValues(context, "")
+	require.EqualValues("", context)
 
 	module, code, context = Code(fmt.Errorf("wrapped: %w", errTest2))
 	require.Equal("test/errors", module)
 	require.EqualValues(2, code)
-	require.EqualValues(context, "")
+	require.EqualValues("", context)
 
 	// Map error with context to module and code.
 	module, code, context = Code(WithContext(errTest1, "test context 1"))
 	require.Equal("test/errors", module)
 	require.EqualValues(1, code)
-	require.Equal(context, "test context 1")
+	require.Equal("test context 1", context)
 
 	module, code, context = Code(fmt.Errorf("wrapped: %w", WithContext(errTest1, "test context 1")))
 	require.Equal("test/errors", module)
 	require.EqualValues(1, code)
-	require.Equal(context, "test context 1")
+	require.Equal("test context 1", context)
 
 	// Map unknown error to module and code.
 	module, code, context = Code(fmt.Errorf("a different kind of error"))
@@ -71,7 +71,7 @@ func TestErrors(t *testing.T) {
 
 	// Unknown module and code.
 	err = FromCode("test/does-not-exist", 5, "")
-	require.Equal(err, New("test/does-not-exist", 5, ""))
+	require.Equal(New("test/does-not-exist", 5, ""), err)
 	err = FromCode("test/errors", 3, "a test error occurred")
-	require.Equal(err, WithContext(New("test/errors", 3, "a test error occurred"), "a test error occurred"))
+	require.Equal(WithContext(New("test/errors", 3, "a test error occurred"), "a test error occurred"), err)
 }
