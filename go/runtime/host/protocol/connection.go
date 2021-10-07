@@ -365,12 +365,12 @@ func (c *connection) workerOutgoing() {
 }
 
 func errorToBody(err error) *Body {
-	module, code, context := errors.Code(err)
+	module, code := errors.Code(err)
 	return &Body{
 		Error: &Error{
 			Module:  module,
 			Code:    code,
-			Message: context,
+			Message: err.Error(),
 		},
 	}
 }

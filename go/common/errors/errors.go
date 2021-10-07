@@ -5,6 +5,7 @@ package errors
 import (
 	"errors"
 	"fmt"
+	"strings"
 	"sync"
 )
 
@@ -105,16 +106,26 @@ func New(module string, code uint32, msg string) error {
 // and code.
 //
 // In case an error cannot be resolved, this method returns a new
-// error with its message equal to the passed context string.
-func FromCode(module string, code uint32, context string) error {
-	err, exists := registeredErrors.Load(errorKey(module, code))
-	if !exists || err == errUnknownError {
-		return WithContext(&codedError{
+// error with its message equal to the passed message string.
+func FromCode(module string, code uint32, message string) error {
+	e, exists := registeredErrors.Load(errorKey(module, code))
+	if !exists || e == errUnknownError {
+		return &codedError{
 			module: module,
 			code:   code,
-			msg:    context,
-		}, context)
+			msg:    message,
+		}
 	}
+	err := e.(error)
+
+	if message == err.Error() {
+		// No added context, return exactly this error.
+		return err
+	}
+
+	// Message contains the coded message and the context. Extract only the context.
+	prefix := fmt.Sprintf("%v: ", err)
+	context := strings.TrimPrefix(message, prefix)
 
 	return WithContext(err.(*codedError), context)
 }
@@ -126,28 +137,17 @@ func FromCode(module string, code uint32, context string) error {
 //
 // In case the error is nil, an empty module name and CodeNoError
 // are returned.
-func Code(err error) (string, uint32, string) {
+func Code(err error) (string, uint32) {
 	if err == nil {
-		return "", CodeNoError, ""
-	}
-
-	// First try to see if there is a context attached.
-	var (
-		cec     *codedErrorWithContext
-		context string
-	)
-	if As(err, &cec) {
-		context = cec.context
-		err = cec.err
+		return "", CodeNoError
 	}
 
 	var ce *codedError
 	if !As(err, &ce) {
 		ce = errUnknownError.(*codedError)
-		context = err.Error()
 	}
 
-	return ce.module, ce.code, context
+	return ce.module, ce.code
 }
 
 func errorKey(module string, code uint32) string {
