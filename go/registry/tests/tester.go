@@ -307,7 +307,7 @@ func testRegistryEntityNodes( // nolint: gocyclo
 				for _, v := range tn.invalidAfter {
 					err = tn.Register(consensus, v.signed)
 					require.Error(err, v.descr)
-					require.Equal(err, api.ErrInvalidArgument)
+					require.ErrorIs(err, api.ErrInvalidArgument)
 				}
 
 				err = tn.Register(consensus, tn.SignedValidReRegistration)

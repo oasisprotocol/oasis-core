@@ -671,7 +671,7 @@ func (mux *abciMux) CheckTx(req types.RequestCheckTx) types.ResponseCheckTx {
 	defer ctx.Close()
 
 	if err := mux.executeTx(ctx, req.Tx); err != nil {
-		module, code, context := errors.Code(err)
+		module, code := errors.Code(err)
 
 		if req.Type == types.CheckTxType_Recheck {
 			// This is a re-check and the transaction just failed validation. Since
@@ -688,7 +688,7 @@ func (mux *abciMux) CheckTx(req types.RequestCheckTx) types.ResponseCheckTx {
 		return types.ResponseCheckTx{
 			Codespace: module,
 			Code:      code,
-			Log:       context,
+			Log:       err.Error(),
 			GasWanted: int64(ctx.Gas().GasWanted()),
 			GasUsed:   int64(ctx.Gas().GasUsed()),
 		}
@@ -714,12 +714,12 @@ func (mux *abciMux) DeliverTx(req types.RequestDeliverTx) types.ResponseDeliverT
 			)
 			panic(err)
 		}
-		module, code, context := errors.Code(err)
+		module, code := errors.Code(err)
 
 		return types.ResponseDeliverTx{
 			Codespace: module,
 			Code:      code,
-			Log:       context,
+			Log:       err.Error(),
 			Events:    ctx.GetEvents(),
 			GasWanted: int64(ctx.Gas().GasWanted()),
 			GasUsed:   int64(ctx.Gas().GasUsed()),

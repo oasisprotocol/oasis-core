@@ -48,7 +48,7 @@ func errorToGrpc(err error) error {
 	}
 
 	// Convert the error.
-	module, code, context := errors.Code(err)
+	module, code := errors.Code(err)
 	if module == errors.UnknownModule {
 		// If the error is not known, just pass the original error.
 		return err
@@ -60,7 +60,7 @@ func errorToGrpc(err error) error {
 	return status.FromProto(&spb.Status{
 		// We keep any set gRPC error code (with fallback to codes.Unknown).
 		Code:    int32(status.Code(err)),
-		Message: context,
+		Message: err.Error(),
 		Details: []*any.Any{
 			{
 				// Double serialization seems ugly, but there is no way around
