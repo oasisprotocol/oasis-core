@@ -1267,7 +1267,7 @@ func StakeClaimForNode(id signature.PublicKey) staking.StakeClaim {
 
 // StakeClaimForRuntime generates a new stake claim for a specific runtime registration.
 func StakeClaimForRuntime(id common.Namespace) staking.StakeClaim {
-	return staking.StakeClaim(fmt.Sprintf(StakeClaimRegisterRuntime, id))
+	return staking.StakeClaim(fmt.Sprintf(StakeClaimRegisterRuntime, id.Hex()))
 }
 
 // StakeThresholdsForNode returns the staking thresholds for the given node.
