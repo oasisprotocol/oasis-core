@@ -12,6 +12,44 @@ The format is inspired by [Keep a Changelog].
 
 <!-- TOWNCRIER -->
 
+## 21.3.1 (2021-10-08)
+
+| Protocol          | Version   |
+|:------------------|:---------:|
+| Consensus         | 4.0.0     |
+| Runtime Host      | 4.0.0     |
+| Runtime Committee | 3.0.0     |
+
+### Features
+
+- go/runtime/client: Add missing `GetTransactionsWithResults()` method
+  ([#4295](https://github.com/oasisprotocol/oasis-core/issues/4295))
+
+- go/common: Use entire error as error message
+  ([#4298](https://github.com/oasisprotocol/oasis-core/issues/4298))
+
+### Bug Fixes
+
+- go/common/identity: Don't forget to refresh TLS certificate
+  ([#4289](https://github.com/oasisprotocol/oasis-core/issues/4289))
+
+- go/worker/storage: Fix potential memory leak through context
+  ([#4290](https://github.com/oasisprotocol/oasis-core/issues/4290))
+
+- go/storage/api: Handle context cancellation in `receiveWriteLogIterator()`
+  ([#4292](https://github.com/oasisprotocol/oasis-core/issues/4292))
+
+- go/worker/storage: Configure `GetDiff` timeout
+  ([#4296](https://github.com/oasisprotocol/oasis-core/issues/4296))
+
+- go: Make sure correct `Namespace`/`Hash` text serialization is used
+  ([#4303](https://github.com/oasisprotocol/oasis-core/issues/4303))
+
+### Internal Changes
+
+- go: bump github.com/dgraph-io/badger/v3 to 3.2103.2
+  ([#4301](https://github.com/oasisprotocol/oasis-core/issues/4301))
+
 ## 21.3 (2021-09-27)
 
 | Protocol          | Version   |
