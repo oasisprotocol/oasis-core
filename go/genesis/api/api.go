@@ -65,7 +65,7 @@ func (d *Document) Hash() hash.Hash {
 // Currently this uses the hex-encoded cryptographic hash of the encoded
 // genesis document.
 func (d *Document) ChainContext() string {
-	return d.Hash().String()
+	return d.Hash().Hex()
 }
 
 // SetChainContext configures the global chain domain separation context.

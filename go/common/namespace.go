@@ -106,7 +106,17 @@ func (n *Namespace) Equal(cmp *Namespace) bool {
 	return bytes.Equal(n[:], cmp[:])
 }
 
-// String returns the string representation of a chain namespace identifier.
+// Base64 returns the base64 string representation of a namespace identifier.
+func (n Namespace) Base64() string {
+	return base64.StdEncoding.EncodeToString(n[:])
+}
+
+// Hex returns the hexadecimal string representation of a namespace identifier.
+func (n Namespace) Hex() string {
+	return hex.EncodeToString(n[:])
+}
+
+// String returns the string representation of a namespace identifier.
 func (n Namespace) String() string {
 	return hex.EncodeToString(n[:])
 }
