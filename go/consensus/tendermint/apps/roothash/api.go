@@ -61,8 +61,7 @@ func QueryForRuntime(runtimeID common.Namespace) tmpubsub.Query {
 // ValueRuntimeID returns the value that should be stored under KeyRuntimeID.
 func ValueRuntimeID(runtimeID common.Namespace) []byte {
 	// This needs to be a text field as Tendermint does not support non-text queries.
-	tagRuntimeID, _ := runtimeID.MarshalText()
-	return tagRuntimeID
+	return []byte(runtimeID.Base64())
 }
 
 // ValueExecutorCommitted is the value component of a KeyExecutorCommitted.

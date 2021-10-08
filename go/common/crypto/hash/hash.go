@@ -120,7 +120,7 @@ func (h *Hash) IsEmpty() bool {
 }
 
 // Hex returns the hex-encoded representation of a hash.
-func (h *Hash) Hex() string {
+func (h Hash) Hex() string {
 	return hex.EncodeToString(h[:])
 }
 
