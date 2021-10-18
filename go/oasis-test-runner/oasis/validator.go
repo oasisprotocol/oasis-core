@@ -25,6 +25,8 @@ type Validator struct {
 	sentryPubKey  signature.PublicKey
 	consensusPort uint16
 	clientPort    uint16
+
+	disableCertRotation bool
 }
 
 // ValidatorCfg is the Oasis validator provisioning configuration.
@@ -32,6 +34,8 @@ type ValidatorCfg struct {
 	NodeCfg
 
 	Sentries []*Sentry
+
+	DisableCertRotation bool
 }
 
 func (val *Validator) toGenesisArgs() []string {
@@ -74,7 +78,7 @@ func (val *Validator) AddArgs(args *argBuilder) error {
 		debugAllowTestKeys().
 		debugSetRlimit().
 		debugEnableProfiling(val.Node.pprofPort).
-		workerCertificateRotation(true).
+		workerCertificateRotation(!val.disableCertRotation).
 		consensusValidator().
 		tendermintCoreAddress(val.consensusPort).
 		tendermintMinGasPrice(val.consensus.MinGasPrice).
@@ -109,10 +113,11 @@ func (net *Network) NewValidator(cfg *ValidatorCfg) (*Validator, error) {
 	}
 
 	val := &Validator{
-		Node:          host,
-		sentries:      cfg.Sentries,
-		consensusPort: host.getProvisionedPort(nodePortConsensus),
-		clientPort:    host.getProvisionedPort(nodePortClient),
+		Node:                host,
+		sentries:            cfg.Sentries,
+		consensusPort:       host.getProvisionedPort(nodePortConsensus),
+		clientPort:          host.getProvisionedPort(nodePortClient),
+		disableCertRotation: cfg.DisableCertRotation,
 	}
 
 	var consensusAddrs []interface{ String() string }
