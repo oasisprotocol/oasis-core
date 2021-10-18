@@ -320,7 +320,6 @@ oasis-node \
   --worker.compute.enabled \
   --runtime.provisioner unconfined \
   --runtime.supported $RUNTIME_ID \
-  --runtime.history.tag_indexer.backend bleve \
   --runtime.paths $RUNTIME_ID=$RUNTIME_BINARY \
   --consensus.tendermint.debug.addr_book_lenient \
   --consensus.tendermint.debug.allow_duplicate_ip \
