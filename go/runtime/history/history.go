@@ -80,6 +80,10 @@ func (h *nopHistory) GetAnnotatedBlock(ctx context.Context, round uint64) (*root
 	return nil, errNopHistory
 }
 
+func (h *nopHistory) GetEarliestBlock(ctx context.Context) (*block.Block, error) {
+	return nil, errNopHistory
+}
+
 func (h *nopHistory) GetRoundResults(ctx context.Context, round uint64) (*roothash.RoundResults, error) {
 	return nil, errNopHistory
 }
@@ -174,6 +178,17 @@ func (h *runtimeHistory) GetAnnotatedBlock(ctx context.Context, round uint64) (*
 		return nil, err
 	}
 	return h.db.getBlock(resolvedRound)
+}
+
+func (h *runtimeHistory) GetEarliestBlock(ctx context.Context) (*block.Block, error) {
+	if ctx.Err() != nil {
+		return nil, ctx.Err()
+	}
+	annBlk, err := h.db.getEarliestBlock()
+	if err != nil {
+		return nil, err
+	}
+	return annBlk.Block, nil
 }
 
 func (h *runtimeHistory) GetRoundResults(ctx context.Context, round uint64) (*roothash.RoundResults, error) {

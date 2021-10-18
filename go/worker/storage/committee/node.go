@@ -990,9 +990,79 @@ func (n *Node) worker() { // nolint: gocyclo
 		// Check if we actually have information about that round. This assumes that any reindexing
 		// was already performed (the common node would not indicate being initialized otherwise).
 		_, err = n.commonNode.Runtime.History().GetBlock(n.ctx, iterativeSyncStart)
+	SyncStartCheck:
 		switch {
 		case err == nil:
 		case errors.Is(err, roothashApi.ErrNotFound):
+			// No information is available about the initial round. Query the earliest historic
+			// block and check if that block has the genesis state root and empty I/O root.
+			var earlyBlk *block.Block
+			earlyBlk, err = n.commonNode.Runtime.History().GetEarliestBlock(n.ctx)
+			switch err {
+			case nil:
+				// Make sure the state root is still the same as at genesis time.
+				if !earlyBlk.Header.StateRoot.Equal(&genesisBlock.Header.StateRoot) {
+					break
+				}
+				// Make sure the I/O root is empty.
+				if !earlyBlk.Header.IORoot.IsEmpty() {
+					break
+				}
+
+				// If this is the case, we can start syncing from this round instead. Fill in the
+				// remaining versions to make sure they actually exist in the database.
+				n.logger.Debug("filling in versions to genesis",
+					"genesis_round", genesisBlock.Header.Round,
+					"earliest_round", earlyBlk.Header.Round,
+				)
+				for v := genesisBlock.Header.Round; v < earlyBlk.Header.Round; v++ {
+					_, err = n.localStorage.Apply(n.ctx, &storageApi.ApplyRequest{
+						Namespace: n.commonNode.Runtime.ID(),
+						RootType:  storageApi.RootTypeState,
+						SrcRound:  v,
+						SrcRoot:   genesisBlock.Header.StateRoot,
+						DstRound:  v + 1,
+						DstRoot:   genesisBlock.Header.StateRoot,
+						WriteLog:  nil, // No changes.
+					})
+					switch err {
+					case nil:
+					case storageApi.ErrAlreadyFinalized:
+						// Ignore already finalized versions.
+						continue
+					default:
+						n.logger.Error("failed to fill in version",
+							"version", v,
+							"err", err,
+						)
+						return
+					}
+
+					err = n.localStorage.NodeDB().Finalize(n.ctx, []storageApi.Root{{
+						Namespace: n.commonNode.Runtime.ID(),
+						Version:   v + 1,
+						Type:      storageApi.RootTypeState,
+						Hash:      genesisBlock.Header.StateRoot,
+						// We can ignore I/O roots.
+					}})
+					if err != nil {
+						n.logger.Error("failed to finalize filled in version",
+							"version", v,
+							"err", err,
+						)
+						return
+					}
+				}
+				cachedLastRound = earlyBlk.Header.Round
+				// No need to force a checkpoint sync.
+				break SyncStartCheck
+			default:
+				// This should never happen as the block should exist.
+				n.logger.Warn("failed to query earliest block in local history",
+					"err", err,
+				)
+			}
+
 			// No information is available about this round, force checkpoint sync.
 			n.logger.Warn("forcing checkpoint sync as we don't have authoritative block info",
 				"round", iterativeSyncStart,

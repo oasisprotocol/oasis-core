@@ -177,6 +177,8 @@ type ValidatorFixture struct { // nolint: maligned
 
 	EnableProfiling bool `json:"enable_profiling"`
 
+	DisableCertRotation bool `json:"disable_cert_rotation"`
+
 	Entity int `json:"entity"`
 
 	LogWatcherHandlerFactories []log.WatcherHandlerFactory `json:"-"`
@@ -212,7 +214,8 @@ func (f *ValidatorFixture) Create(net *Network) (*Validator, error) {
 			Entity:                      entity,
 			ExtraArgs:                   f.ExtraArgs,
 		},
-		Sentries: sentries,
+		Sentries:            sentries,
+		DisableCertRotation: f.DisableCertRotation,
 	})
 }
 
