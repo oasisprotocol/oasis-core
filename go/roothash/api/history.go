@@ -43,6 +43,9 @@ type BlockHistory interface {
 	// Passing the special value `RoundLatest` will return the latest annotated block.
 	GetAnnotatedBlock(ctx context.Context, round uint64) (*AnnotatedBlock, error)
 
+	// GetEarliestBlock returns the earliest known block.
+	GetEarliestBlock(ctx context.Context) (*block.Block, error)
+
 	// GetRoundResults returns the round results for the given round.
 	//
 	// Passing the special value `RoundLatest` will return results for the latest round.

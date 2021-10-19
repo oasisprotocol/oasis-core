@@ -583,6 +583,7 @@ func RegisterScenarios() error {
 		StorageSync,
 		StorageSyncFromRegistered,
 		StorageSyncInconsistent,
+		StorageEarlyStateSync,
 		// Sentry test.
 		Sentry,
 		SentryEncryption,
