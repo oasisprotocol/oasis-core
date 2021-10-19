@@ -205,8 +205,8 @@ steps:
   # E2E test jobs
   ###############
   - label: E2E tests
-    parallelism: 7
-    timeout_in_minutes: 32
+    parallelism: 30
+    timeout_in_minutes: 15
     command:
       - .buildkite/scripts/download_e2e_test_artifacts.sh
       - .buildkite/scripts/test_e2e.sh
@@ -258,8 +258,8 @@ steps:
 
   - label: E2E tests - intel-sgx (full)
     branches: master stable/*
-    parallelism: 5
-    timeout_in_minutes: 40
+    parallelism: 10
+    timeout_in_minutes: 30
     command:
       - .buildkite/scripts/download_e2e_test_artifacts.sh
       # Needed as the trust-root test rebuilds the enclave with embedded trust root data.
