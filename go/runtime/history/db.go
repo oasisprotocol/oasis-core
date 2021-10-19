@@ -230,6 +230,27 @@ func (d *DB) getBlock(round uint64) (*roothash.AnnotatedBlock, error) {
 	return &blk, nil
 }
 
+func (d *DB) getEarliestBlock() (*roothash.AnnotatedBlock, error) {
+	var blk roothash.AnnotatedBlock
+	txErr := d.db.View(func(tx *badger.Txn) error {
+		prefix := blockKeyFmt.Encode()
+		it := tx.NewIterator(badger.IteratorOptions{Prefix: prefix})
+		defer it.Close()
+
+		for it.Rewind(); it.Valid(); it.Next() {
+			item := it.Item()
+			return item.Value(func(val []byte) error {
+				return cbor.UnmarshalTrusted(val, &blk)
+			})
+		}
+		return roothash.ErrNotFound
+	})
+	if txErr != nil {
+		return nil, txErr
+	}
+	return &blk, nil
+}
+
 func (d *DB) getRoundResults(round uint64) (*roothash.RoundResults, error) {
 	var roundResults *roothash.RoundResults
 	txErr := d.db.View(func(tx *badger.Txn) error {
