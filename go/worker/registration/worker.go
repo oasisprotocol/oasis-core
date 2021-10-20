@@ -90,6 +90,9 @@ type Delegate interface {
 //
 // An unavailable role provider will prevent the node from being (re-)registered.
 type RoleProvider interface {
+	// IsAvailable returns true if the role provider is available.
+	IsAvailable() bool
+
 	// SetAvailable signals that the role provider is available and that node registration can
 	// thus proceed.
 	SetAvailable(hook RegisterNodeHook)
@@ -116,6 +119,13 @@ type roleProvider struct {
 	runtimeID *common.Namespace
 	hook      RegisterNodeHook
 	cb        RegisterNodeCallback
+}
+
+func (rp *roleProvider) IsAvailable() bool {
+	rp.Lock()
+	available := (rp.hook != nil)
+	rp.Unlock()
+	return available
 }
 
 func (rp *roleProvider) SetAvailable(hook RegisterNodeHook) {

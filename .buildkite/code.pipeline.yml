@@ -111,6 +111,7 @@ steps:
   # Build jobs
   ############
   - label: Build Go node
+    key: build-go
     command:
       - .buildkite/go/build.sh
       - .buildkite/go/upload_artifacts.sh
@@ -120,6 +121,7 @@ steps:
       <<: *docker_plugin
 
   - label: Build Rust runtime loader
+    key: build-rust-runtime-loader
     command:
       - .buildkite/rust/build_generic.sh /workdir -p oasis-core-runtime-loader
 
@@ -134,7 +136,8 @@ steps:
   ####################
   # Runtime build jobs
   ####################
-  - label: Build key manager runtime
+  - label: Build runtimes
+    key: build-rust-runtimes
     command:
       - .buildkite/rust/build_runtime.sh tests/runtimes/simple-keymanager
       - .buildkite/rust/build_runtime.sh tests/runtimes/simple-keyvalue
@@ -169,10 +172,6 @@ steps:
     plugins:
       <<: *docker_plugin
 
-  # Wait for all jobs defined before this point
-  # to finish running in parallel before continuing.
-  - wait
-
   ###################################################
   # Test that build-fuzz still works (only on master)
   ###################################################
@@ -191,6 +190,8 @@ steps:
   # Test jobs requiring build artifacts
   #####################################
   - label: Test Go node
+    depends_on:
+      - "build-rust-runtimes"
     command:
       - .buildkite/go/test_and_coverage.sh
     artifact_paths:
@@ -205,8 +206,12 @@ steps:
   # E2E test jobs
   ###############
   - label: E2E tests
-    parallelism: 7
-    timeout_in_minutes: 32
+    depends_on:
+      - "build-go"
+      - "build-rust-runtime-loader"
+      - "build-rust-runtimes"
+    parallelism: 30
+    timeout_in_minutes: 15
     command:
       - .buildkite/scripts/download_e2e_test_artifacts.sh
       - .buildkite/scripts/test_e2e.sh
@@ -230,6 +235,10 @@ steps:
   # E2E test jobs - intel-sgx
   ###########################
   - label: E2E tests - intel-sgx (basic)
+    depends_on:
+      - "build-go"
+      - "build-rust-runtime-loader"
+      - "build-rust-runtimes"
     branches: "!master !stable/*"
     timeout_in_minutes: 40
     command:
@@ -257,9 +266,13 @@ steps:
       <<: *docker_plugin_sgx
 
   - label: E2E tests - intel-sgx (full)
+    depends_on:
+      - "build-go"
+      - "build-rust-runtime-loader"
+      - "build-rust-runtimes"
     branches: master stable/*
-    parallelism: 5
-    timeout_in_minutes: 40
+    parallelism: 10
+    timeout_in_minutes: 30
     command:
       - .buildkite/scripts/download_e2e_test_artifacts.sh
       # Needed as the trust-root test rebuilds the enclave with embedded trust root data.
