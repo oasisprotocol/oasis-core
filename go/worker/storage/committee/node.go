@@ -1053,7 +1053,7 @@ func (n *Node) worker() { // nolint: gocyclo
 						return
 					}
 				}
-				cachedLastRound = earlyBlk.Header.Round
+				cachedLastRound = n.flushSyncedState(summaryFromBlock(earlyBlk))
 				// No need to force a checkpoint sync.
 				break SyncStartCheck
 			default:
