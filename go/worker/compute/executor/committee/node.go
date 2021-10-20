@@ -136,7 +136,9 @@ var (
 type Node struct { // nolint: maligned
 	*runtimeRegistry.RuntimeHostNode
 
-	runtimeVersion version.Version
+	runtimeReady         bool
+	runtimeVersion       version.Version
+	runtimeCapabilityTEE *node.CapabilityTEE
 
 	lastScheduledCache    *lru.Cache
 	scheduleMaxTxPoolSize uint64
@@ -481,6 +483,8 @@ func (n *Node) HandleNewBlockEarlyLocked(blk *block.Block) {
 	// If we have seen a new block while a batch was processing, we need to
 	// abort it no matter what as any processed state may be invalid.
 	n.abortBatchLocked(errSeenNewerBlock)
+	// Update our availability.
+	n.nudgeAvailability(false)
 }
 
 // HandleNewBlockLocked implements NodeHooks.
@@ -1643,35 +1647,57 @@ func (n *Node) handleExternalBatchLocked(batch *unresolvedBatch, hdr block.Heade
 	return nil
 }
 
-func (n *Node) handleRuntimeHostEvent(ev *host.Event) {
+// nudeAvailability checks whether the executor worker should declare itself available.
+func (n *Node) nudgeAvailability(force bool) {
+	// Check availability of the last round which is needed for round processing.
+	_, _, err := n.getRtStateAndRoundResults(n.ctx, consensus.HeightLatest)
+	lastRoundAvailable := (err == nil)
+
 	switch {
-	case ev.Started != nil:
-		// We are now able to service requests for this runtime.
-		n.runtimeVersion = ev.Started.Version
+	case n.runtimeReady && lastRoundAvailable:
+		// Executor is ready to process requests.
+		if n.roleProvider.IsAvailable() && !force {
+			break
+		}
 
 		n.roleProvider.SetAvailable(func(nd *node.Node) error {
 			rt := nd.AddOrUpdateRuntime(n.commonNode.Runtime.ID())
 			rt.Version = n.runtimeVersion
-			rt.Capabilities.TEE = ev.Started.CapabilityTEE
+			rt.Capabilities.TEE = n.runtimeCapabilityTEE
 			return nil
 		})
+	default:
+		// Executor is not ready to process requests.
+		if !n.roleProvider.IsAvailable() && !force {
+			break
+		}
+
+		n.roleProvider.SetUnavailable()
+	}
+}
+
+func (n *Node) handleRuntimeHostEvent(ev *host.Event) {
+	switch {
+	case ev.Started != nil:
+		// We are now able to service requests for this runtime.
+		n.runtimeReady = true
+		n.runtimeVersion = ev.Started.Version
+		n.runtimeCapabilityTEE = ev.Started.CapabilityTEE
 	case ev.Updated != nil:
 		// Update runtime capabilities.
-		n.roleProvider.SetAvailable(func(nd *node.Node) error {
-			rt := nd.AddOrUpdateRuntime(n.commonNode.Runtime.ID())
-			rt.Version = n.runtimeVersion
-			rt.Capabilities.TEE = ev.Updated.CapabilityTEE
-			return nil
-		})
+		n.runtimeReady = true
+		n.runtimeCapabilityTEE = ev.Updated.CapabilityTEE
 	case ev.FailedToStart != nil, ev.Stopped != nil:
 		// Runtime failed to start or was stopped -- we can no longer service requests.
-		n.roleProvider.SetUnavailable()
+		n.runtimeReady = false
 	default:
 		// Unknown event.
 		n.logger.Warn("unknown worker event",
 			"ev", ev,
 		)
 	}
+
+	n.nudgeAvailability(true)
 }
 
 func (n *Node) handleProcessedBatch(batch *processedBatch, processingCh chan *processedBatch) {
