@@ -104,9 +104,10 @@ func (n *Node) GetRuntimeStatus(ctx context.Context) (map[common.Namespace]contr
 			status.LatestHash = blk.Header.EncodedHash()
 			status.LatestTime = blk.Header.Timestamp
 			status.LatestStateRoot = storage.Root{
-				Version: blk.Header.Round,
-				Type:    storage.RootTypeState,
-				Hash:    blk.Header.StateRoot,
+				Namespace: blk.Header.Namespace,
+				Version:   blk.Header.Round,
+				Type:      storage.RootTypeState,
+				Hash:      blk.Header.StateRoot,
 			}
 		default:
 			n.logger.Error("failed to fetch latest runtime block",
