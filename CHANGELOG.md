@@ -12,6 +12,32 @@ The format is inspired by [Keep a Changelog].
 
 <!-- TOWNCRIER -->
 
+## 21.3.2 (2021-10-20)
+
+| Protocol          | Version   |
+|:------------------|:---------:|
+| Consensus         | 4.0.0     |
+| Runtime Host      | 4.0.0     |
+| Runtime Committee | 3.0.0     |
+
+### Bug Fixes
+
+- go/worker/storage: Handle state sync before runtime is operational
+  ([#4311](https://github.com/oasisprotocol/oasis-core/issues/4311))
+
+  Previously there was an edge case that was not handled when the runtime was
+  registered in the consensus layer but not yet operational (e.g., there have
+  been no normal blocks yet). If a new node used state sync to quickly catch up
+  with the consensus layer and sync to a height after runtime's genesis, the
+  node would never register as it would keep waiting for storage checkpoints
+  (which wouldn't exist yet).
+
+- go/oasis-node/cmd: Add missing namespace to `LatestStateRoot`
+  ([#4317](https://github.com/oasisprotocol/oasis-core/issues/4317))
+
+- go/worker/compute: Handle round results at genesis
+  ([#4317](https://github.com/oasisprotocol/oasis-core/issues/4317))
+
 ## 21.3.1 (2021-10-08)
 
 | Protocol          | Version   |
