@@ -237,13 +237,15 @@ func (app *rootHashApplication) suspendUnpaidRuntime(
 		return err
 	}
 
-	rtState.Suspended = true
-	rtState.ExecutorPool = nil
-
 	// Emity an empty block signalling that the runtime was suspended.
 	if err := app.emitEmptyBlock(ctx, rtState, block.Suspended); err != nil {
 		return fmt.Errorf("failed to emit empty block: %w", err)
 	}
+
+	// Make sure to only reset the executor pool after any timeouts have been cleared as otherwise
+	// the emitEmptyBlock method will forget to clear them.
+	rtState.Suspended = true
+	rtState.ExecutorPool = nil
 
 	return nil
 }
@@ -514,6 +516,14 @@ func (app *rootHashApplication) processRoundTimeout(ctx *tmapi.Context, state *r
 	rtState, err := state.RuntimeState(ctx, runtimeID)
 	if err != nil {
 		return fmt.Errorf("failed to get runtime state: %w", err)
+	}
+
+	if rtState.ExecutorPool == nil {
+		// This should NEVER happen as the timeout should be cleared before the pool is reset.
+		ctx.Logger().Error("no executor pool",
+			"runtime_id", runtimeID,
+		)
+		return fmt.Errorf("no executor pool")
 	}
 
 	if !rtState.ExecutorPool.IsTimeout(ctx.BlockHeight()) {
