@@ -12,6 +12,23 @@ The format is inspired by [Keep a Changelog].
 
 <!-- TOWNCRIER -->
 
+## 21.3.3 (2021-10-21)
+
+| Protocol          | Version   |
+|:------------------|:---------:|
+| Consensus         | 4.0.0     |
+| Runtime Host      | 4.0.0     |
+| Runtime Committee | 3.0.0     |
+
+### Bug Fixes
+
+- go/consensus/tendermint: Only reset executor pool after emitting block
+  ([#4323](https://github.com/oasisprotocol/oasis-core/issues/4323))
+
+  Make sure to only reset the executor pool after any timeouts have been
+  cleared (e.g. when an empty block is emitted) as otherwise there could be a
+  stale timeout.
+
 ## 21.3.2 (2021-10-20)
 
 | Protocol          | Version   |
