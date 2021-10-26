@@ -195,7 +195,12 @@ func (w *Worker) registrationLoop() { // nolint: gocyclo
 	if len(w.sentryAddresses) > 0 {
 		pubKeys := w.identity.GetTLSPubKeys()
 		for _, sentryAddr := range w.sentryAddresses {
+			var pushRetries int
 			pushCerts := func() error {
+				w.logger.Debug("attempting to push certs",
+					"retries", pushRetries,
+				)
+				pushRetries++
 				client, err := sentryClient.New(sentryAddr, w.identity)
 				if err != nil {
 					return err
@@ -223,11 +228,13 @@ func (w *Worker) registrationLoop() { // nolint: gocyclo
 	// Delay node registration till after the consensus service has
 	// finished initial synchronization if applicable.
 	if w.consensus != nil {
+		w.logger.Debug("waiting for consensus sync")
 		select {
 		case <-w.stopCh:
 			return
 		case <-w.consensus.Synced():
 		}
+		w.logger.Debug("consensus synced, entering registration loop")
 	}
 
 	// (re-)register the node on each epoch transition. This doesn't
@@ -346,6 +353,8 @@ Loop:
 			w.RLock()
 			defer w.RUnlock()
 
+			w.logger.Debug("enumerating role provider hooks")
+
 			for _, rp := range w.roleProviders {
 				rp.Lock()
 				role := rp.role
@@ -354,7 +363,18 @@ Loop:
 				ver := rp.version
 				rp.Unlock()
 
+				w.logger.Debug("role provider hook",
+					"ver", ver,
+					"role", role,
+					"hook", hook,
+					"cb", cb,
+				)
+
 				if hook == nil {
+					w.logger.Debug("nil hook for role",
+						"role", role,
+						"ver", ver,
+					)
 					return nil, nil, nil
 				}
 
@@ -368,6 +388,7 @@ Loop:
 			return
 		}()
 		if hooks == nil {
+			w.logger.Debug("not registering, no role provider hooks")
 			continue Loop
 		}
 
@@ -583,6 +604,10 @@ func (w *Worker) NewRuntimeRoleProvider(role node.RolesMask, runtimeID common.Na
 }
 
 func (w *Worker) newRoleProvider(role node.RolesMask, runtimeID *common.Namespace) (RoleProvider, error) {
+	w.logger.Debug("new role provider",
+		"id", runtimeID,
+		"role", role,
+	)
 	if !role.IsSingleRole() {
 		return nil, fmt.Errorf("RegisterRole: registration role mask does not encode a single role. RoleMask: '%s'", role)
 	}

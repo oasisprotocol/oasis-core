@@ -148,19 +148,6 @@ func (sc *storageSyncFromRegisteredImpl) Run(childEnv *env.Env) error {
 		return fmt.Errorf("can't start storage worker 1: %w", err)
 	}
 
-	sc.Logger.Info("waiting for storage worker 1 to register")
-	// Wait that the storage worker is registered.
-	if err = sc.Net.Controller().WaitNodesRegistered(ctx, sc.Net.NumRegisterNodes()-1); err != nil {
-		return err
-	}
-
-	sc.Logger.Info("ensuring storage worker 1 is elected in committee")
-	// Another epoch transition so node is elected into storage committee.
-	if err = sc.Net.Controller().SetEpoch(ctx, nextEpoch); err != nil {
-		return fmt.Errorf("failed to set epoch %d: %w", nextEpoch, err)
-	}
-	nextEpoch++
-
 	sc.Logger.Info("starting again storage worker 0")
 	// Start back the storage 0 so it registers and storage worker 1 can sync.
 	err = storage0.Start()
@@ -173,6 +160,19 @@ func (sc *storageSyncFromRegisteredImpl) Run(childEnv *env.Env) error {
 	if err = storage1.WaitReady(ctx); err != nil {
 		return fmt.Errorf("error waiting for late storage worker to become ready: %w", err)
 	}
+
+	sc.Logger.Info("waiting for storage worker 1 to register")
+	// Wait that the storage worker is registered.
+	if err = sc.Net.Controller().WaitNodesRegistered(ctx, sc.Net.NumRegisterNodes()-1); err != nil {
+		return err
+	}
+
+	sc.Logger.Info("ensuring storage worker 1 is elected in committee")
+	// Another epoch transition so node is elected into storage committee.
+	if err = sc.Net.Controller().SetEpoch(ctx, nextEpoch); err != nil {
+		return fmt.Errorf("failed to set epoch %d: %w", nextEpoch, err)
+	}
+	nextEpoch++
 
 	sc.Logger.Info("ensuring storage worker 1 REALLY is elected in committee")
 	// Another epoch transition so node is REALLY elected into storage committee
