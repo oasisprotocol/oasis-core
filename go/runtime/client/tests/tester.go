@@ -89,6 +89,9 @@ func testFailSubmitTransaction(
 	_, err = c.SubmitTx(ctx, &api.SubmitTxRequest{Data: mock.CheckTxFailInput, RuntimeID: runtimeID})
 	require.Error(t, err, "SubmitTx should fail check tx")
 
+	err = c.SubmitTxNoWait(ctx, &api.SubmitTxRequest{Data: mock.CheckTxFailInput, RuntimeID: runtimeID})
+	require.Error(t, err, "SubmitTxNoWait should fail check tx")
+
 	// Failures for unsupported runtimes.
 	var unsupportedRuntimeID common.Namespace
 	err = unsupportedRuntimeID.UnmarshalHex("0000000000000000BADF00BADF00BADF00BADF00BADF00BADF00BADF00BADF00")

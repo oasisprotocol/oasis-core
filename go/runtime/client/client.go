@@ -85,27 +85,25 @@ func (c *runtimeClient) getHostedRuntime(ctx context.Context, runtimeID common.N
 	return hrt, nil
 }
 
-func (c *runtimeClient) submitTx(ctx context.Context, request *api.SubmitTxRequest) (<-chan *txResult, error) {
+func (c *runtimeClient) submitTx(ctx context.Context, request *api.SubmitTxRequest) (<-chan *txResult, *protocol.Error, error) {
 	if c.common.p2p == nil {
-		return nil, fmt.Errorf("client: cannot submit transaction, p2p disabled")
+		return nil, nil, fmt.Errorf("client: cannot submit transaction, p2p disabled")
 	}
 
 	// Make sure that the runtime is actually among the supported runtimes for this node as
 	// otherwise we will not be able to actually get any results back.
 	if _, err := c.common.runtimeRegistry.GetRuntime(request.RuntimeID); err != nil {
-		return nil, fmt.Errorf("client: cannot resolve runtime: %w", err)
+		return nil, nil, fmt.Errorf("client: cannot resolve runtime: %w", err)
 	}
 
 	// Make sure consensus is synced.
 	select {
 	case <-c.common.consensus.Synced():
 	case <-ctx.Done():
-		return nil, ctx.Err()
+		return nil, nil, ctx.Err()
 	default:
-		return nil, api.ErrNotSynced
+		return nil, nil, api.ErrNotSynced
 	}
-
-	respCh := make(chan *txResult, 1)
 
 	// Perform a local transaction check when a hosted runtime is available.
 	if _, ok := c.hosts[request.RuntimeID]; ok {
@@ -114,16 +112,10 @@ func (c *runtimeClient) submitTx(ctx context.Context, request *api.SubmitTxReque
 			Data:      request.Data,
 		})
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 		if !resp.IsSuccess() {
-			respCh <- &txResult{
-				result: &api.SubmitTxMetaResponse{
-					CheckTxError: &resp.Error,
-				},
-			}
-			close(respCh)
-			return respCh, nil
+			return nil, &resp.Error, nil
 		}
 	}
 
@@ -138,6 +130,7 @@ func (c *runtimeClient) submitTx(ctx context.Context, request *api.SubmitTxReque
 	c.Unlock()
 
 	// Send a request for watching a new runtime transaction.
+	respCh := make(chan *txResult, 1)
 	req := &txRequest{
 		ctx:    ctx,
 		respCh: respCh,
@@ -147,14 +140,14 @@ func (c *runtimeClient) submitTx(ctx context.Context, request *api.SubmitTxReque
 	select {
 	case <-ctx.Done():
 		// The context we're working in was canceled, abort.
-		return nil, ctx.Err()
+		return nil, nil, ctx.Err()
 	case <-c.common.ctx.Done():
 		// Client is shutting down.
-		return nil, fmt.Errorf("client: shutting down")
+		return nil, nil, fmt.Errorf("client: shutting down")
 	case submitter.newCh <- req:
 	}
 
-	return respCh, nil
+	return respCh, nil, nil
 }
 
 // Implements api.RuntimeClient.
@@ -171,9 +164,14 @@ func (c *runtimeClient) SubmitTx(ctx context.Context, request *api.SubmitTxReque
 
 // Implements api.RuntimeClient.
 func (c *runtimeClient) SubmitTxMeta(ctx context.Context, request *api.SubmitTxRequest) (*api.SubmitTxMetaResponse, error) {
-	respCh, err := c.submitTx(ctx, request)
+	respCh, checkTxErr, err := c.submitTx(ctx, request)
 	if err != nil {
 		return nil, err
+	}
+	if checkTxErr != nil {
+		return &api.SubmitTxMetaResponse{
+			CheckTxError: checkTxErr,
+		}, nil
 	}
 
 	// Wait for result.
@@ -199,8 +197,14 @@ func (c *runtimeClient) SubmitTxMeta(ctx context.Context, request *api.SubmitTxR
 
 // Implements api.RuntimeClient.
 func (c *runtimeClient) SubmitTxNoWait(ctx context.Context, request *api.SubmitTxRequest) error {
-	_, err := c.submitTx(ctx, request)
-	return err
+	_, checkTxErr, err := c.submitTx(ctx, request)
+	if err != nil {
+		return err
+	}
+	if checkTxErr != nil {
+		return errors.WithContext(api.ErrCheckTxFailed, checkTxErr.String())
+	}
+	return nil
 }
 
 func (c *runtimeClient) checkTx(ctx context.Context, request *api.CheckTxRequest) (*protocol.CheckTxResult, error) {
