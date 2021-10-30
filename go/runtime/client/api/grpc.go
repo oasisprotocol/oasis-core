@@ -31,6 +31,8 @@ var (
 	methodGetGenesisBlock = serviceName.NewMethod("GetGenesisBlock", common.Namespace{})
 	// methodGetBlock is the GetBlock method.
 	methodGetBlock = serviceName.NewMethod("GetBlock", GetBlockRequest{})
+	// methodGetLastRetainedBlock is the GetLastRetainedBlock method.
+	methodGetLastRetainedBlock = serviceName.NewMethod("GetLastRetainedBlock", common.Namespace{})
 	// methodGetTransactions is the GetTransactions method.
 	methodGetTransactions = serviceName.NewMethod("GetTransactions", GetTransactionsRequest{})
 	// methodGetTransactionsWithResults is the GetTransactionsWithResults method.
@@ -71,6 +73,10 @@ var (
 			{
 				MethodName: methodGetBlock.ShortName(),
 				Handler:    handlerGetBlock,
+			},
+			{
+				MethodName: methodGetLastRetainedBlock.ShortName(),
+				Handler:    handlerGetLastRetainedBlock,
 			},
 			{
 				MethodName: methodGetTransactions.ShortName(),
@@ -268,6 +274,31 @@ func handlerGetBlock( // nolint: golint
 	return interceptor(ctx, &rq, info, handler)
 }
 
+func handlerGetLastRetainedBlock( // nolint: golint
+	srv interface{},
+	ctx context.Context,
+	dec func(interface{}) error,
+	interceptor grpc.UnaryServerInterceptor,
+) (interface{}, error) {
+	var runtimeID common.Namespace
+	if err := dec(&runtimeID); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		rsp, err := srv.(RuntimeClient).GetLastRetainedBlock(ctx, runtimeID)
+		return rsp, errorWrapNotFound(err)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: methodGetLastRetainedBlock.FullName(),
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		rsp, err := srv.(RuntimeClient).GetLastRetainedBlock(ctx, req.(common.Namespace))
+		return rsp, errorWrapNotFound(err)
+	}
+	return interceptor(ctx, runtimeID, info, handler)
+}
+
 func handlerGetTransactions( // nolint: golint
 	srv interface{},
 	ctx context.Context,
@@ -435,6 +466,14 @@ func (c *runtimeClient) GetGenesisBlock(ctx context.Context, runtimeID common.Na
 func (c *runtimeClient) GetBlock(ctx context.Context, request *GetBlockRequest) (*block.Block, error) {
 	var rsp block.Block
 	if err := c.conn.Invoke(ctx, methodGetBlock.FullName(), request, &rsp); err != nil {
+		return nil, err
+	}
+	return &rsp, nil
+}
+
+func (c *runtimeClient) GetLastRetainedBlock(ctx context.Context, runtimeID common.Namespace) (*block.Block, error) {
+	var rsp block.Block
+	if err := c.conn.Invoke(ctx, methodGetLastRetainedBlock.FullName(), runtimeID, &rsp); err != nil {
 		return nil, err
 	}
 	return &rsp, nil

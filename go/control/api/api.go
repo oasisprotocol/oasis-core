@@ -123,6 +123,11 @@ type RuntimeStatus struct {
 	// GenesisHash is the hash of the genesis runtime block.
 	GenesisHash hash.Hash `json:"genesis_hash"`
 
+	// LastRetainedRound is the round of the oldest retained block.
+	LastRetainedRound uint64 `json:"last_retained_round"`
+	// LastRetainedHash is the hash of the oldest retained block.
+	LastRetainedHash hash.Hash `json:"last_retained_hash"`
+
 	// Committee contains the runtime worker status in case this node is a (candidate) member of a
 	// runtime committee (e.g., compute or storage).
 	Committee *commonWorker.Status `json:"committee"`
