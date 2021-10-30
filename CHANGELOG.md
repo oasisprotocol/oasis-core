@@ -12,6 +12,27 @@ The format is inspired by [Keep a Changelog].
 
 <!-- TOWNCRIER -->
 
+## 21.3.4 (2021-10-30)
+
+| Protocol          | Version   |
+|:------------------|:---------:|
+| Consensus         | 4.0.0     |
+| Runtime Host      | 4.0.0     |
+| Runtime Committee | 3.0.0     |
+
+### Features
+
+- go/runtime/client: Add last retained round query
+  ([#4334](https://github.com/oasisprotocol/oasis-core/issues/4334))
+
+  This allows clients to query what is the earliest runtime round that the
+  give node is storing.
+
+### Bug Fixes
+
+- go/runtime/client: `SubmitTxNoWait` should propagate CheckTx error
+  ([#4328](https://github.com/oasisprotocol/oasis-core/issues/4328))
+
 ## 21.3.3 (2021-10-21)
 
 | Protocol          | Version   |
