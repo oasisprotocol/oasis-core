@@ -273,6 +273,15 @@ func (c *runtimeClient) GetBlock(ctx context.Context, request *api.GetBlockReque
 	return rt.History().GetBlock(ctx, request.Round)
 }
 
+// Implements api.RuntimeClient.
+func (c *runtimeClient) GetLastRetainedBlock(ctx context.Context, runtimeID common.Namespace) (*block.Block, error) {
+	rt, err := c.common.runtimeRegistry.GetRuntime(runtimeID)
+	if err != nil {
+		return nil, err
+	}
+	return rt.History().GetEarliestBlock(ctx)
+}
+
 func (c *runtimeClient) getTxnTree(blk *block.Block) *transaction.Tree {
 	ioRoot := storage.Root{
 		Namespace: blk.Header.Namespace,

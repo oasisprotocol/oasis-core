@@ -63,6 +63,9 @@ type RuntimeClient interface {
 	// GetBlock fetches the given runtime block.
 	GetBlock(ctx context.Context, request *GetBlockRequest) (*block.Block, error)
 
+	// GetLastRetainedBlock returns the last retained block.
+	GetLastRetainedBlock(ctx context.Context, runtimeID common.Namespace) (*block.Block, error)
+
 	// GetTransactions fetches all runtime transactions in a given block.
 	GetTransactions(ctx context.Context, request *GetTransactionsRequest) ([][]byte, error)
 
