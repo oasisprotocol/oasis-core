@@ -139,6 +139,11 @@ func testQuery(
 	_, err = c.GetBlock(ctx, &api.GetBlockRequest{RuntimeID: runtimeID, Round: expectedLatestRound + 1})
 	require.Error(t, err, "GetBlock")
 
+	// Last retained block.
+	blkLr, err := c.GetLastRetainedBlock(ctx, runtimeID)
+	require.NoError(t, err, "GetLastRetainedBlock")
+	require.EqualValues(t, genBlk.Header.Round, blkLr.Header.Round)
+
 	// Transactions (check the mock worker for content).
 	txns, err := c.GetTransactions(ctx, &api.GetTransactionsRequest{RuntimeID: runtimeID, Round: blk.Header.Round})
 	require.NoError(t, err, "GetTransactions")
