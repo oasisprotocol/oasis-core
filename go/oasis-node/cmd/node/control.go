@@ -132,6 +132,19 @@ func (n *Node) GetRuntimeStatus(ctx context.Context) (map[common.Namespace]contr
 			)
 		}
 
+		// Fetch the oldest retained block.
+		blk, err = rt.History().GetEarliestBlock(ctx)
+		switch err {
+		case nil:
+			status.LastRetainedRound = blk.Header.Round
+			status.LastRetainedHash = blk.Header.EncodedHash()
+		default:
+			n.logger.Error("failed to fetch last retained runtime block",
+				"err", err,
+				"runtime_id", rt.ID(),
+			)
+		}
+
 		// Fetch common committee worker status.
 		if rtNode := n.CommonWorker.GetRuntime(rt.ID()); rtNode != nil {
 			status.Committee, err = rtNode.GetStatus(ctx)
