@@ -206,6 +206,17 @@ func TestStakeAccumulator(t *testing.T) {
 	err = acct.CheckStakeClaims(thresholds)
 	require.NoError(err, "escrow account should check out")
 
+	// Add claim with empty threshold list.
+	err = acct.AddStakeClaim(thresholds, StakeClaim("claimEmptyList"), []StakeThreshold{})
+	require.NoError(err, "adding an empty list stake claim should work")
+	err = acct.RemoveStakeClaim(StakeClaim("claimEmptyList"))
+	require.NoError(err, "removing an empty claim should work")
+
+	err = acct.AddStakeClaim(thresholds, StakeClaim("claimNilList"), nil)
+	require.NoError(err, "adding an nil list stake claim should work")
+	err = acct.RemoveStakeClaim(StakeClaim("claimNilList"))
+	require.NoError(err, "removing an nil claim should work")
+
 	// Reduce stake.
 	acct.Active.Balance = *quantity.NewFromUint64(5_000)
 	err = acct.CheckStakeClaims(thresholds)

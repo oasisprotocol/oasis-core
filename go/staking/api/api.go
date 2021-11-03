@@ -835,7 +835,7 @@ func (sa *StakeAccumulator) AddClaimUnchecked(claim StakeClaim, thresholds []Sta
 //
 // It is an error if the stake claim does not exist.
 func (sa *StakeAccumulator) RemoveClaim(claim StakeClaim) error {
-	if sa.Claims == nil || sa.Claims[claim] == nil {
+	if _, exists := sa.Claims[claim]; !exists {
 		return fmt.Errorf("staking: claim does not exist: %s", claim)
 	}
 
