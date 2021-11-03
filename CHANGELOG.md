@@ -12,6 +12,19 @@ The format is inspired by [Keep a Changelog].
 
 <!-- TOWNCRIER -->
 
+## 21.3.5 (2021-11-03)
+
+| Protocol          | Version   |
+|:------------------|:---------:|
+| Consensus         | 4.0.0     |
+| Runtime Host      | 4.0.0     |
+| Runtime Committee | 3.0.0     |
+
+### Bug Fixes
+
+- go/staking: Fix incorrect non-existence check
+  ([#4340](https://github.com/oasisprotocol/oasis-core/issues/4340))
+
 ## 21.3.4 (2021-10-30)
 
 | Protocol          | Version   |
