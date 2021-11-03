@@ -46,6 +46,8 @@ var (
 	methodGetChainContext = serviceName.NewMethod("GetChainContext", nil)
 	// methodGetStatus is the GetStatus method.
 	methodGetStatus = serviceName.NewMethod("GetStatus", nil)
+	// methodGetNextBlockState is the GetNextBlockState method.
+	methodGetNextBlockState = serviceName.NewMethod("GetNextBlockState", nil)
 
 	// methodWatchBlocks is the WatchBlocks method.
 	methodWatchBlocks = serviceName.NewMethod("WatchBlocks", nil)
@@ -113,6 +115,10 @@ var (
 			{
 				MethodName: methodGetStatus.ShortName(),
 				Handler:    handlerGetStatus,
+			},
+			{
+				MethodName: methodGetNextBlockState.ShortName(),
+				Handler:    handlerGetNextBlockState,
 			},
 		},
 		Streams: []grpc.StreamDesc{
@@ -394,6 +400,25 @@ func handlerGetStatus( // nolint: golint
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(ClientBackend).GetStatus(ctx)
+	}
+	return interceptor(ctx, nil, info, handler)
+}
+
+func handlerGetNextBlockState( // nolint: golint
+	srv interface{},
+	ctx context.Context,
+	dec func(interface{}) error,
+	interceptor grpc.UnaryServerInterceptor,
+) (interface{}, error) {
+	if interceptor == nil {
+		return srv.(ClientBackend).GetNextBlockState(ctx)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: methodGetNextBlockState.FullName(),
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ClientBackend).GetNextBlockState(ctx)
 	}
 	return interceptor(ctx, nil, info, handler)
 }
@@ -751,6 +776,14 @@ func (c *consensusClient) GetChainContext(ctx context.Context) (string, error) {
 func (c *consensusClient) GetStatus(ctx context.Context) (*Status, error) {
 	var rsp Status
 	if err := c.conn.Invoke(ctx, methodGetStatus.FullName(), nil, &rsp); err != nil {
+		return nil, err
+	}
+	return &rsp, nil
+}
+
+func (c *consensusClient) GetNextBlockState(ctx context.Context) (*NextBlockState, error) {
+	var rsp NextBlockState
+	if err := c.conn.Invoke(ctx, methodGetNextBlockState.FullName(), nil, &rsp); err != nil {
 		return nil, err
 	}
 	return &rsp, nil

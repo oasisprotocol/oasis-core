@@ -137,6 +137,9 @@ type ClientBackend interface {
 	// GetStatus returns the current status overview.
 	GetStatus(ctx context.Context) (*Status, error)
 
+	// GetNextBlockState returns the state of the next block being voted on by validators.
+	GetNextBlockState(ctx context.Context) (*NextBlockState, error)
+
 	// Beacon returns the beacon backend.
 	Beacon() beacon.Backend
 
@@ -171,6 +174,32 @@ type Block struct {
 	StateRoot mkvsNode.Root `json:"state_root"`
 	// Meta contains the consensus backend specific block metadata.
 	Meta cbor.RawMessage `json:"meta"`
+}
+
+// NextBlockState has the state of the next block being voted on by validators.
+type NextBlockState struct {
+	Height int64 `json:"height"`
+
+	NumValidators uint64 `json:"num_validators"`
+	VotingPower   uint64 `json:"voting_power"`
+
+	Prevotes   Votes `json:"prevotes"`
+	Precommits Votes `json:"precommits"`
+}
+
+// Votes are the votes for the next block.
+type Votes struct {
+	VotingPower uint64  `json:"voting_power"`
+	Ratio       float64 `json:"ratio"`
+	Votes       []Vote  `json:"votes"`
+}
+
+// Vote contains metadata about a vote for the next block.
+type Vote struct {
+	NodeID        signature.PublicKey `json:"node_id"`
+	EntityID      signature.PublicKey `json:"entity_id"`
+	EntityAddress staking.Address     `json:"entity_address"`
+	VotingPower   uint64              `json:"voting_power"`
 }
 
 // Status is the current status overview.
