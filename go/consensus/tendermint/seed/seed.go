@@ -149,6 +149,11 @@ func (srv *seedService) GetStatus(ctx context.Context) (*consensus.Status, error
 }
 
 // Implements Backend.
+func (srv *seedService) GetNextBlockState(ctx context.Context) (*consensus.NextBlockState, error) {
+	return nil, consensus.ErrUnsupported
+}
+
+// Implements Backend.
 func (srv *seedService) GetGenesisDocument(ctx context.Context) (*genesis.Document, error) {
 	return srv.doc, nil
 }
