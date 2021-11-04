@@ -15,6 +15,9 @@ const (
 	PrunerStrategyNone = "none"
 	// PrunerStrategyKeepLast is the name of the keep last pruner strategy.
 	PrunerStrategyKeepLast = "keep_last"
+
+	// maxBatchSize is the maximum number of rounds to prune in one pass.
+	maxBatchSize = 64
 )
 
 // PrunerFactory is the runtime history pruner factory interface.
@@ -104,7 +107,7 @@ func (p *keepLastPruner) Prune(ctx context.Context, latestRound uint64) error {
 
 		// Start with the smallest round and proceed forward.
 		var pruned []uint64
-		for it.Rewind(); it.Valid(); it.Next() {
+		for it.Rewind(); it.Valid() && len(pruned) < maxBatchSize; it.Next() {
 			item := it.Item()
 
 			var round uint64
