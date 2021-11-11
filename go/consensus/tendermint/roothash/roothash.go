@@ -406,7 +406,8 @@ func (sc *serviceClient) reindexBlocks(currentHeight int64, bh api.BlockHistory)
 		return lastRound, nil
 	}
 
-	logger := sc.logger.With("runtime_id", bh.RuntimeID())
+	runtimeID := bh.RuntimeID()
+	logger := sc.logger.With("runtime_id", runtimeID)
 
 	var err error
 	var lastHeight int64
@@ -482,8 +483,8 @@ func (sc *serviceClient) reindexBlocks(currentHeight int64, bh api.BlockHistory)
 						return 0, fmt.Errorf("failed to unmarshal finalized event: %w", err)
 					}
 
-					// Only process finalized events for tracked runtimes.
-					if sc.trackedRuntime[value.ID] == nil {
+					// Only process finalized events for the given runtime.
+					if !value.ID.Equal(&runtimeID) {
 						continue
 					}
 					if err = sc.processFinalizedEvent(sc.ctx, height, value.ID, &value.Event.Round, false); err != nil {
