@@ -44,7 +44,7 @@ require (
 	github.com/oasisprotocol/deoxysii v0.0.0-20200527154044-851aec403956
 	github.com/powerman/rpc-codec v1.2.2
 	github.com/prometheus/client_golang v1.11.0
-	github.com/prometheus/common v0.31.1
+	github.com/prometheus/common v0.32.1
 	github.com/prometheus/procfs v0.7.3
 	github.com/seccomp/libseccomp-golang v0.9.1
 	github.com/spf13/cobra v1.2.1
