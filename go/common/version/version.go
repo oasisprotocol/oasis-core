@@ -47,15 +47,50 @@ func (v Version) ToU64() uint64 {
 // FromU64 returns the version from platform-dependent uint64.
 func FromU64(v uint64) Version {
 	return Version{
-		Major: uint16((v >> 32) & 0xff),
-		Minor: uint16((v >> 16) & 0xff),
-		Patch: uint16(v & 0xff),
+		Major: uint16((v >> 32) & 0xffff),
+		Minor: uint16((v >> 16) & 0xffff),
+		Patch: uint16(v & 0xffff),
 	}
 }
 
 // String returns the protocol version as a string.
 func (v Version) String() string {
 	return fmt.Sprintf("%d.%d.%d", v.Major, v.Minor, v.Patch)
+}
+
+// FromString parses version in semver format. e.g. "1.0.0"
+func FromString(s string) (Version, error) {
+	// Trim potential pre-release suffix.
+	s = strings.Split(s, "-")[0]
+	// Trim potential git commit.
+	s = strings.Split(s, "+")[0]
+	split := strings.SplitN(s, ".", 4)
+	if len(split) != 3 {
+		return Version{}, fmt.Errorf("version: failed to parse SemVer '%s': exactly three components are required", s)
+	}
+
+	var semVers []uint16 = []uint16{0, 0, 0}
+	for i, v := range split {
+		if i >= 3 {
+			break
+		}
+		ver, err := strconv.ParseUint(v, 10, 16)
+		if err != nil {
+			return Version{}, fmt.Errorf("version: failed to parse SemVer '%s': %w", s, err)
+		}
+		semVers[i] = uint16(ver)
+	}
+
+	return Version{Major: semVers[0], Minor: semVers[1], Patch: semVers[2]}, nil
+}
+
+// MustFromString parses version in semver format and panics, if there is an error.
+func MustFromString(s string) Version {
+	ver, err := FromString(s)
+	if err != nil {
+		panic(err)
+	}
+	return ver
 }
 
 // MaskNonMajor masks all non-major version segments to 0 and returns a new
@@ -111,7 +146,7 @@ var (
 	TendermintAppVersion = ConsensusProtocol.MaskNonMajor().ToU64()
 
 	// Toolchain is the version of the Go compiler/standard library.
-	Toolchain = parseSemVerStr(strings.TrimPrefix(runtime.Version(), "go"))
+	Toolchain = MustFromString(strings.TrimPrefix(runtime.Version(), "go"))
 )
 
 // ProtocolVersions are the protocol versions.
@@ -176,26 +211,6 @@ var Versions = ProtocolVersions{
 	ConsensusProtocol,
 	RuntimeHostProtocol,
 	RuntimeCommitteeProtocol,
-}
-
-func parseSemVerStr(s string) Version {
-	// Trim potential pre-release suffix.
-	s = strings.Split(s, "-")[0]
-	split := strings.SplitN(s, ".", 4)
-
-	var semVers []uint16 = []uint16{0, 0, 0}
-	for i, v := range split {
-		if i >= 3 {
-			break
-		}
-		ver, err := strconv.ParseUint(v, 10, 16)
-		if err != nil {
-			panic(fmt.Errorf("version: failed to parse SemVer '%s': %w", s, err))
-		}
-		semVers[i] = uint16(ver)
-	}
-
-	return Version{Major: semVers[0], Minor: semVers[1], Patch: semVers[2]}
 }
 
 var goModulesVersionRegex = regexp.MustCompile(`v0.(?P<year>[0-9]{2})(?P<minor>[0-9]{2}).(?P<micro>[0-9]+)`)
