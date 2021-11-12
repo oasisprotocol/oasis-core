@@ -14,6 +14,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
 	"github.com/oasisprotocol/oasis-core/go/common/node"
 	"github.com/oasisprotocol/oasis-core/go/common/sgx"
+	"github.com/oasisprotocol/oasis-core/go/common/version"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/env"
 	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
 	scheduler "github.com/oasisprotocol/oasis-core/go/scheduler/api"
@@ -52,6 +53,7 @@ type RuntimeCfg struct { // nolint: maligned
 	Keymanager  *Runtime
 	TEEHardware node.TEEHardware
 	MrSigner    *sgx.MrSigner
+	Version     version.Version
 
 	Binaries         map[node.TEEHardware][]string
 	GenesisState     storage.WriteLog
@@ -152,6 +154,7 @@ func (net *Network) NewRuntime(cfg *RuntimeCfg) (*Runtime, error) {
 		EntityID:        cfg.Entity.entity.ID,
 		Kind:            cfg.Kind,
 		TEEHardware:     cfg.TEEHardware,
+		Version:         registry.VersionInfo{Version: cfg.Version},
 		Executor:        cfg.Executor,
 		TxnScheduler:    cfg.TxnScheduler,
 		Storage:         cfg.Storage,
