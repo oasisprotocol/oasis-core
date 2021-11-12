@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
+	"os"
 	"path/filepath"
 	"sync"
 	"time"
@@ -145,6 +146,23 @@ func (s *sgxProvisioner) loadEnclaveBinaries(rtCfg host.Config) ([]byte, []byte,
 	return sgxs, sig, nil
 }
 
+func (s *sgxProvisioner) discoverSGXDevice() (string, error) {
+	// Different versions of Intel SGX drivers provide different names for
+	// the SGX device.  Autodetect which one actually exists.
+	sgxDevices := []string{"/dev/sgx", "/dev/sgx/enclave", "/dev/sgx_enclave", "/dev/isgx"}
+	for _, dev := range sgxDevices {
+		fi, err := os.Stat(dev)
+		if err != nil {
+			continue
+		}
+		if fi.Mode()&os.ModeDevice != 0 {
+			return dev, nil
+		}
+	}
+
+	return "", fmt.Errorf("no SGX device was found on this system")
+}
+
 func (s *sgxProvisioner) getSandboxConfig(rtCfg host.Config, socketPath, runtimeDir string) (process.Config, error) {
 	// To try to avoid bad things from happening if the signature/enclave
 	// binaries change out from under us, and because the enclave binary
@@ -161,6 +179,12 @@ func (s *sgxProvisioner) getSandboxConfig(rtCfg host.Config, socketPath, runtime
 		return process.Config{}, fmt.Errorf("host/sgx: failed to load enclave/signature: %w", err)
 	}
 
+	sgxDev, err := s.discoverSGXDevice()
+	if err != nil {
+		return process.Config{}, fmt.Errorf("host/sgx: %w", err)
+	}
+	s.logger.Info("found SGX device", "path", sgxDev)
+
 	return process.Config{
 		Path: s.cfg.LoaderPath,
 		Args: []string{
@@ -173,8 +197,7 @@ func (s *sgxProvisioner) getSandboxConfig(rtCfg host.Config, socketPath, runtime
 			aesmdSocketPath: "/var/run/aesmd/aesm.socket",
 		},
 		BindDev: map[string]string{
-			// TODO: Support different kinds of SGX drivers.
-			"/dev/isgx": "/dev/isgx",
+			sgxDev: sgxDev,
 		},
 		BindData: map[string]io.Reader{
 			runtimePath:   bytes.NewReader(sgxs),
