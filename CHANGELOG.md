@@ -12,6 +12,31 @@ The format is inspired by [Keep a Changelog].
 
 <!-- TOWNCRIER -->
 
+## 21.3.6 (2021-11-15)
+
+| Protocol          | Version   |
+|:------------------|:---------:|
+| Consensus         | 4.0.0     |
+| Runtime Host      | 4.0.0     |
+| Runtime Committee | 3.0.0     |
+
+### Features
+
+- go/runtime/host/sgx: Autodetect SGX device name
+  ([#4333](https://github.com/oasisprotocol/oasis-core/issues/4333))
+
+### Bug Fixes
+
+- go/runtime/history: Limit batch size when pruning rounds
+  ([#4345](https://github.com/oasisprotocol/oasis-core/issues/4345))
+
+- go/consensus/tendermint/roothash: Only index the correct runtime
+  ([#4351](https://github.com/oasisprotocol/oasis-core/issues/4351))
+
+  In case multiple runtimes were being tracked, the indexing process could
+  incorrectly set the last indexed round which could make it skip to index a
+  round.
+
 ## 21.3.5 (2021-11-03)
 
 | Protocol          | Version   |
