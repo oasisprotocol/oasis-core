@@ -1437,9 +1437,9 @@ dependencies = [
 
 [[package]]
 name = "num-bigint"
-version = "0.4.2"
+version = "0.4.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "74e768dff5fb39a41b3bcd30bb25cf989706c90d028d1ad71971987aa309d535"
+checksum = "f93ab6289c7b344a8a9f60f88d80aa20032336fe78da341afc91c8a2341fc75f"
 dependencies = [
  "autocfg 1.0.1",
  "num-integer",
@@ -1552,7 +1552,7 @@ dependencies = [
  "oasis-cbor",
  "oasis-core-runtime",
  "thiserror",
- "tokio 1.10.1",
+ "tokio 1.14.0",
 ]
 
 [[package]]
@@ -1601,7 +1601,7 @@ dependencies = [
  "sgx-isa",
  "sp800-185",
  "tiny-keccak 2.0.2",
- "tokio 1.10.1",
+ "tokio 1.14.0",
  "x25519-dalek",
  "zeroize",
 ]
@@ -1657,7 +1657,7 @@ dependencies = [
  "tendermint-rpc",
  "thiserror",
  "tiny-keccak 2.0.2",
- "tokio 1.10.1",
+ "tokio 1.14.0",
  "x25519-dalek",
  "x509-parser",
  "zeroize",
@@ -1673,7 +1673,7 @@ dependencies = [
  "failure",
  "futures 0.3.17",
  "sgxs-loaders",
- "tokio 0.2.25",
+ "tokio 1.14.0",
 ]
 
 [[package]]
@@ -2385,7 +2385,7 @@ dependencies = [
  "oasis-core-tools",
  "simple-keymanager",
  "thiserror",
- "tokio 1.10.1",
+ "tokio 1.14.0",
 ]
 
 [[package]]
@@ -2762,9 +2762,9 @@ dependencies = [
 
 [[package]]
 name = "tokio"
-version = "1.10.1"
+version = "1.14.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "92036be488bb6594459f2e03b60e42df6f937fe6ca5c5ffdcb539c6b84dc40f5"
+checksum = "70e992e41e0d2fb9f755b37446f20900f64446ef54874f40a60c78f021ac6144"
 dependencies = [
  "autocfg 1.0.1",
  "bytes 1.0.1",
@@ -2776,7 +2776,7 @@ dependencies = [
  "parking_lot",
  "pin-project-lite 0.2.7",
  "signal-hook-registry",
- "tokio-macros 1.3.0",
+ "tokio-macros 1.6.0",
  "winapi 0.3.9",
 ]
 
@@ -2804,9 +2804,9 @@ dependencies = [
 
 [[package]]
 name = "tokio-macros"
-version = "1.3.0"
+version = "1.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "54473be61f4ebe4efd09cec9bd5d16fa51d70ea0192213d754d2d500457db110"
+checksum = "c9efc1aba077437943f7515666aa2b882dfabfbfdf89c819ea75a8d6e9eaba5e"
 dependencies = [
  "proc-macro2",
  "quote",
