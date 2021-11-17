@@ -73,10 +73,15 @@ func TestFromString(t *testing.T) {
 		{"1.2.3", Version{1, 2, 3}},
 		{"1.2.3-alpha", Version{1, 2, 3}},
 		{"1.2.3-alpha+git0253df22", Version{1, 2, 3}},
+		{"1.2.3-alpha+git0253df22-devbranch", Version{1, 2, 3}},
 		{"1.2.3+git0253df22", Version{1, 2, 3}},
+		{"1.2.3+git0253df22-devbranch", Version{1, 2, 3}},
 		{"1.2.3-beta.1", Version{1, 2, 3}},
 		{"300.400.500", Version{300, 400, 500}},
 		{"30000.40000.50000", Version{30000, 40000, 50000}},
+		{"1.0", Version{1, 0, 0}},
+		{"1", Version{1, 0, 0}},
+		{"1.2.3.4", Version{1, 2, 3}},
 	} {
 		version, err := FromString(v.semver)
 		require.NoError(err)
@@ -88,7 +93,6 @@ func TestFromString(t *testing.T) {
 		"",
 		"100000.0.0", "0.100000.0", "0.0.100000",
 		"-1.0.0", "0.-1.0", "0.0.-1",
-		"1.0", "1",
 		"a.b.c",
 	} {
 		_, err := FromString(v)
