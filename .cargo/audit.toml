@@ -2,4 +2,5 @@
 ignore = [
     "RUSTSEC-2020-0071", # Remove once upstream dependencies are updated.
     "RUSTSEC-2020-0159", # Remove once upstream dependencies are updated.
+    "RUSTSEC-2021-0124", # Remove once upstream dependencies are updated.
 ]
