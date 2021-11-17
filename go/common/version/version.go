@@ -59,19 +59,20 @@ func (v Version) String() string {
 }
 
 // FromString parses version in semver format. e.g. "1.0.0"
+// major.minor.patch components are considered where major is mandatory.
+// Any component following patch is ignored.
 func FromString(s string) (Version, error) {
 	// Trim potential pre-release suffix.
 	s = strings.Split(s, "-")[0]
 	// Trim potential git commit.
 	s = strings.Split(s, "+")[0]
+	// Take at most four components: major.minor.patch.remainder.
 	split := strings.SplitN(s, ".", 4)
-	if len(split) != 3 {
-		return Version{}, fmt.Errorf("version: failed to parse SemVer '%s': exactly three components are required", s)
-	}
 
-	var semVers []uint16 = []uint16{0, 0, 0}
+	semVers := []uint16{0, 0, 0}
 	for i, v := range split {
 		if i >= 3 {
+			// Ignore any components following major.minor.patch.
 			break
 		}
 		ver, err := strconv.ParseUint(v, 10, 16)
