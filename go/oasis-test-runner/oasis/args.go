@@ -3,6 +3,7 @@ package oasis
 import (
 	"encoding/hex"
 	"fmt"
+	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -40,6 +41,14 @@ import (
 	workerGrpcSentry "github.com/oasisprotocol/oasis-core/go/worker/sentry/grpc"
 	workerStorage "github.com/oasisprotocol/oasis-core/go/worker/storage"
 )
+
+// EnvNoSandbox is the env var to be set to 1 to force-disable sandboxing
+// runtimes.
+const EnvNoSandbox = "OASIS_UNSAFE_TESTS_NO_SANDBOX"
+
+func isNoSandbox() bool {
+	return os.Getenv(EnvNoSandbox) == "1"
+}
 
 const generatedConfigFilename = "config.yml"
 
