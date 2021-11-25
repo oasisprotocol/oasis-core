@@ -3,7 +3,6 @@ package commitment
 import (
 	"context"
 
-	"github.com/oasisprotocol/oasis-core/go/common/cbor"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	"github.com/oasisprotocol/oasis-core/go/common/errors"
@@ -88,7 +87,7 @@ type Pool struct {
 	Round uint64 `json:"round"`
 	// ExecuteCommitments are the commitments in the pool iff Committee.Kind
 	// is scheduler.KindComputeExecutor.
-	ExecuteCommitments map[signature.PublicKey]OpenExecutorCommitment `json:"execute_commitments,omitempty"`
+	ExecuteCommitments map[signature.PublicKey]*ExecutorCommitment `json:"execute_commitments,omitempty"`
 	// Discrepancy is a flag signalling that a discrepancy has been detected.
 	Discrepancy bool `json:"discrepancy"`
 	// NextTimeout is the time when the next call to TryFinalize(true) should
@@ -160,7 +159,7 @@ func (p *Pool) isScheduler(id signature.PublicKey) bool {
 func (p *Pool) ResetCommitments(round uint64) {
 	p.Round = round
 	if p.ExecuteCommitments == nil || len(p.ExecuteCommitments) > 0 {
-		p.ExecuteCommitments = make(map[signature.PublicKey]OpenExecutorCommitment)
+		p.ExecuteCommitments = make(map[signature.PublicKey]*ExecutorCommitment)
 	}
 	p.Discrepancy = false
 	p.NextTimeout = TimeoutNever
@@ -185,13 +184,13 @@ func (p *Pool) getCommitment(id signature.PublicKey) (OpenCommitment, bool) {
 	return com, ok
 }
 
-func (p *Pool) addOpenExecutorCommitment( // nolint: gocyclo
+func (p *Pool) addVerifiedExecutorCommitment( // nolint: gocyclo
 	ctx context.Context,
 	blk *block.Block,
 	sv SignatureVerifier,
 	nl NodeLookup,
 	msgValidator MessageValidator,
-	openCom *OpenExecutorCommitment,
+	commit *ExecutorCommitment,
 ) error {
 	if p.Committee == nil {
 		return ErrNoCommittee
@@ -200,23 +199,18 @@ func (p *Pool) addOpenExecutorCommitment( // nolint: gocyclo
 		return ErrInvalidCommitteeKind
 	}
 
-	id := openCom.Signature.PublicKey
-
 	// Ensure that the node is actually a committee member. We do not enforce specific
 	// roles based on current discrepancy state to allow commitments arriving in any
 	// order (e.g., a backup worker can submit a commitment even before there is a
 	// discrepancy).
-	if !p.isMember(id) {
+	if !p.isMember(commit.NodeID) {
 		return ErrNotInCommittee
 	}
 
 	// Ensure the node did not already submit a commitment.
-	if _, ok := p.ExecuteCommitments[id]; ok {
+	if _, ok := p.ExecuteCommitments[commit.NodeID]; ok {
 		return ErrAlreadyCommitted
 	}
-
-	body := openCom.Body
-	header := &body.Header
 
 	if p.Runtime == nil {
 		return ErrNoRuntime
@@ -230,18 +224,17 @@ func (p *Pool) addOpenExecutorCommitment( // nolint: gocyclo
 	}
 
 	// Check if the block is based on the previous block.
-	if !header.IsParentOf(&blk.Header) {
+	if !commit.Header.IsParentOf(&blk.Header) {
 		logger.Debug("executor commitment is not based on correct block",
-			"node_id", id,
+			"node_id", commit.NodeID,
 			"expected_previous_hash", blk.Header.EncodedHash(),
-			"previous_hash", header.PreviousHash,
+			"previous_hash", commit.Header.PreviousHash,
 		)
 		return ErrNotBasedOnCorrectBlock
 	}
 
-	if err := body.ValidateBasic(); err != nil {
+	if err := commit.ValidateBasic(); err != nil {
 		logger.Debug("executor commitment validate basic error",
-			"body", body,
 			"err", err,
 		)
 		return ErrBadExecutorCommitment
@@ -249,17 +242,17 @@ func (p *Pool) addOpenExecutorCommitment( // nolint: gocyclo
 
 	// TODO: Check for evidence of equivocation (oasis-core#3685).
 
-	switch openCom.IsIndicatingFailure() {
+	switch commit.IsIndicatingFailure() {
 	case true:
 	default:
 		// Verify RAK-attestation.
 		if p.Runtime.TEEHardware != node.TEEHardwareInvalid {
-			n, err := nl.Node(ctx, id)
+			n, err := nl.Node(ctx, commit.NodeID)
 			if err != nil {
 				// This should never happen as nodes cannot disappear mid-epoch.
 				logger.Warn("unable to fetch node descriptor to verify RAK-attestation",
 					"err", err,
-					"node_id", id,
+					"node_id", commit.NodeID,
 				)
 				return ErrNotInCommittee
 			}
@@ -270,59 +263,54 @@ func (p *Pool) addOpenExecutorCommitment( // nolint: gocyclo
 				// Still, it's prudent to check.
 				logger.Warn("committee member not registered with this runtime",
 					"runtime_id", p.Runtime.ID,
-					"node_id", id,
+					"node_id", commit.NodeID,
 				)
 				return ErrNotInCommittee
 			}
 
-			rak := rt.Capabilities.TEE.RAK
-			var rakSig signature.RawSignature
-			if body.RakSig != nil {
-				rakSig = *body.RakSig
-			}
-			if !rak.Verify(ComputeResultsHeaderSignatureContext, cbor.Marshal(header), rakSig[:]) {
+			if err = commit.Header.VerifyRAK(rt.Capabilities.TEE.RAK); err != nil {
 				return ErrRakSigInvalid
 			}
 		}
 
 		// Check emitted runtime messages.
-		switch p.isScheduler(id) {
+		switch p.isScheduler(commit.NodeID) {
 		case true:
 			// The transaction scheduler can include messages.
-			if uint32(len(body.Messages)) > p.Runtime.Executor.MaxMessages {
+			if uint32(len(commit.Messages)) > p.Runtime.Executor.MaxMessages {
 				logger.Debug("executor commitment from scheduler has too many messages",
-					"node_id", id,
-					"num_messages", len(body.Messages),
+					"node_id", commit.NodeID,
+					"num_messages", len(commit.Messages),
 					"max_messages", p.Runtime.Executor.MaxMessages,
 				)
 				return ErrInvalidMessages
 			}
-			if h := message.MessagesHash(body.Messages); !h.Equal(header.MessagesHash) {
+			if h := message.MessagesHash(commit.Messages); !h.Equal(commit.Header.MessagesHash) {
 				logger.Debug("executor commitment from scheduler has invalid messages hash",
-					"node_id", id,
+					"node_id", commit.NodeID,
 					"expected_hash", h,
-					"messages_hash", header.MessagesHash,
+					"messages_hash", commit.Header.MessagesHash,
 				)
 				return ErrInvalidMessages
 			}
 
 			// Perform custom message validation and propagate the error unchanged.
-			if msgValidator != nil && len(body.Messages) > 0 {
-				err := msgValidator(body.Messages)
+			if msgValidator != nil && len(commit.Messages) > 0 {
+				err := msgValidator(commit.Messages)
 				if err != nil {
 					logger.Debug("executor commitment from scheduler has invalid messages",
 						"err", err,
-						"node_id", id,
+						"node_id", commit.NodeID,
 					)
 					return err
 				}
 			}
 		case false:
 			// Other workers cannot include any messages.
-			if len(body.Messages) > 0 {
+			if len(commit.Messages) > 0 {
 				logger.Debug("executor commitment from non-scheduler contains messages",
-					"node_id", id,
-					"num_messages", len(body.Messages),
+					"node_id", commit.NodeID,
+					"num_messages", len(commit.Messages),
 				)
 				return ErrInvalidMessages
 			}
@@ -330,9 +318,9 @@ func (p *Pool) addOpenExecutorCommitment( // nolint: gocyclo
 	}
 
 	if p.ExecuteCommitments == nil {
-		p.ExecuteCommitments = make(map[signature.PublicKey]OpenExecutorCommitment)
+		p.ExecuteCommitments = make(map[signature.PublicKey]*ExecutorCommitment)
 	}
-	p.ExecuteCommitments[id] = *openCom
+	p.ExecuteCommitments[commit.NodeID] = commit
 
 	return nil
 }
@@ -343,19 +331,19 @@ func (p *Pool) AddExecutorCommitment(
 	blk *block.Block,
 	sv SignatureVerifier,
 	nl NodeLookup,
-	commitment *ExecutorCommitment,
+	commit *ExecutorCommitment,
 	msgValidator MessageValidator,
 ) error {
 	if p.Runtime == nil {
 		return ErrNoRuntime
 	}
-	// Check the commitment signature and de-serialize into header.
-	openCom, err := commitment.Open(p.Runtime.ID)
-	if err != nil {
+
+	// Check executor commitment signature.
+	if err := commit.Verify(p.Runtime.ID); err != nil {
 		return p2pError.Permanent(err)
 	}
 
-	return p.addOpenExecutorCommitment(ctx, blk, sv, nl, msgValidator, openCom)
+	return p.addVerifiedExecutorCommitment(ctx, blk, sv, nl, msgValidator, commit)
 }
 
 // ProcessCommitments performs a single round of commitment checks. If there are enough commitments
@@ -617,14 +605,6 @@ func (p *Pool) TryFinalize(
 	default:
 		return nil, err
 	}
-}
-
-// GetExecutorCommitments returns a list of executor commitments in the pool.
-func (p *Pool) GetExecutorCommitments() (result []ExecutorCommitment) {
-	for _, c := range p.ExecuteCommitments {
-		result = append(result, c.ExecutorCommitment)
-	}
-	return
 }
 
 // IsTimeout returns true if the time is up for pool's TryFinalize to be called.

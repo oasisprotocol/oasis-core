@@ -315,8 +315,11 @@ func (cbc *computeBatchContext) createCommitment(
 		StateRoot:    &cbc.newStateRoot,
 		MessagesHash: &msgsHash,
 	}
-	computeBody := &commitment.ComputeBody{
-		Header: header,
+	ec := &commitment.ExecutorCommitment{
+		NodeID: id.NodeSigner.Public(),
+		Header: commitment.ExecutorCommitmentHeader{
+			ComputeResultsHeader: header,
+		},
 	}
 	if rak != nil {
 		rakSig, err := signature.Sign(rak, commitment.ComputeResultsHeaderSignatureContext, cbor.Marshal(header))
@@ -324,18 +327,18 @@ func (cbc *computeBatchContext) createCommitment(
 			return fmt.Errorf("signature Sign RAK: %w", err)
 		}
 
-		computeBody.RakSig = &rakSig.Signature
+		ec.Header.RAKSignature = &rakSig.Signature
 	}
 
 	if failure != commitment.FailureNone {
-		computeBody.SetFailure(failure)
+		ec.Header.SetFailure(failure)
 	}
 
-	var err error
-	cbc.commit, err = commitment.SignExecutorCommitment(id.NodeSigner, cbc.runtimeID, computeBody)
+	err := ec.Sign(id.NodeSigner, cbc.runtimeID)
 	if err != nil {
 		return fmt.Errorf("commitment sign executor commitment: %w", err)
 	}
+	cbc.commit = ec
 
 	return nil
 }

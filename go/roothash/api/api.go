@@ -191,7 +191,7 @@ func (ev *Evidence) Hash() (hash.Hash, error) {
 	case ev.EquivocationBatch != nil:
 		return hash.NewFromBytes([]byte{EvidenceKindEquivocation}, ev.EquivocationBatch.BatchA.Signature.PublicKey[:]), nil
 	case ev.EquivocationExecutor != nil:
-		return hash.NewFromBytes([]byte{EvidenceKindEquivocation}, ev.EquivocationExecutor.CommitA.Signature.PublicKey[:]), nil
+		return hash.NewFromBytes([]byte{EvidenceKindEquivocation}, ev.EquivocationExecutor.CommitA.NodeID[:]), nil
 	default:
 		return hash.Hash{}, fmt.Errorf("cannot compute hash, invalid evidence")
 	}
@@ -221,47 +221,49 @@ type EquivocationExecutorEvidence struct {
 //
 // Particularly evidence is not verified to not be expired as this requires stateful checks.
 func (ev *EquivocationExecutorEvidence) ValidateBasic(id common.Namespace) error {
-	if ev.CommitA.Equal(&ev.CommitB) {
+	if ev.CommitA.Header.MostlyEqual(&ev.CommitB.Header) {
 		return fmt.Errorf("commits are equal, no sign of equivocation")
 	}
 
-	if !ev.CommitA.Signature.PublicKey.Equal(ev.CommitB.Signature.PublicKey) {
+	if !ev.CommitA.NodeID.Equal(ev.CommitB.NodeID) {
 		return fmt.Errorf("equivocation executor evidence signature public keys don't match")
 	}
 
-	a, err := ev.CommitA.Open(id)
-	if err != nil {
-		return fmt.Errorf("opening CommitA: %w", err)
-	}
-	b, err := ev.CommitB.Open(id)
-	if err != nil {
-		return fmt.Errorf("opening CommitB: %w", err)
-	}
-
-	if a.Body.Header.Round != b.Body.Header.Round {
+	if ev.CommitA.Header.Round != ev.CommitB.Header.Round {
 		return fmt.Errorf("equivocation evidence commit headers not for same round")
 	}
 
-	if err := a.Body.ValidateBasic(); err != nil {
+	if err := ev.CommitA.ValidateBasic(); err != nil {
 		return fmt.Errorf("equivocation evidence commit A not valid: %w", err)
 	}
-	if err := b.Body.ValidateBasic(); err != nil {
+	if err := ev.CommitB.ValidateBasic(); err != nil {
 		return fmt.Errorf("equivocation evidence commit B not valid: %w", err)
 	}
 
+	a := ev.CommitA.Header
+	b := ev.CommitB.Header
+
 	switch {
-	// Note: ValidBasics checks above ensure that none of these fields are nil.
-	case a.Body.Failure == commitment.FailureNone && b.Body.Failure == commitment.FailureNone:
-		if a.Body.Header.PreviousHash.Equal(&b.Body.Header.PreviousHash) &&
-			a.Body.Header.IORoot.Equal(b.Body.Header.IORoot) &&
-			a.Body.Header.StateRoot.Equal(b.Body.Header.StateRoot) &&
-			a.Body.Header.MessagesHash.Equal(b.Body.Header.MessagesHash) {
+	// Note: ValidateBasic checks above ensure that none of these fields are nil.
+	case a.Failure == commitment.FailureNone && b.Failure == commitment.FailureNone:
+		if a.PreviousHash.Equal(&b.PreviousHash) &&
+			a.IORoot.Equal(b.IORoot) &&
+			a.StateRoot.Equal(b.StateRoot) &&
+			a.MessagesHash.Equal(b.MessagesHash) {
 			return fmt.Errorf("equivocation evidence commit headers match, no sign of equivocation")
 		}
 	default:
-		if a.Body.Failure == b.Body.Failure {
+		if a.Failure == b.Failure {
 			return fmt.Errorf("equivocation evidence failure indication fields match, no sign of equivocation")
 		}
+	}
+
+	// Verify signatures.
+	if err := ev.CommitA.Verify(id); err != nil {
+		return fmt.Errorf("invalid signature for commit A: %w", err)
+	}
+	if err := ev.CommitB.Verify(id); err != nil {
+		return fmt.Errorf("invalid signature for commit B: %w", err)
 	}
 
 	return nil

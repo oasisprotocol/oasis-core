@@ -326,21 +326,23 @@ func (s *runtimeState) generateExecutorCommitments(t *testing.T, consensus conse
 	// Generate all the executor commitments.
 	executorNodes = append([]*registryTests.TestNode{}, executorCommittee.workers...)
 	for _, node := range executorNodes {
-		commitBody := commitment.ComputeBody{
-			Header: commitment.ComputeResultsHeader{
-				Round:        parent.Header.Round,
-				PreviousHash: parent.Header.PreviousHash,
-				IORoot:       &parent.Header.IORoot,
-				StateRoot:    &parent.Header.StateRoot,
-				MessagesHash: &msgsHash,
+		ec := commitment.ExecutorCommitment{
+			NodeID: node.Signer.Public(),
+			Header: commitment.ExecutorCommitmentHeader{
+				ComputeResultsHeader: commitment.ComputeResultsHeader{
+					Round:        parent.Header.Round,
+					PreviousHash: parent.Header.PreviousHash,
+					IORoot:       &parent.Header.IORoot,
+					StateRoot:    &parent.Header.StateRoot,
+					MessagesHash: &msgsHash,
+				},
 			},
 		}
 
-		// `err` shadows outside.
-		commit, err := commitment.SignExecutorCommitment(node.Signer, s.rt.Runtime.ID, &commitBody) // nolint: vetshadow
-		require.NoError(err, "SignExecutorCommitment")
+		err = ec.Sign(node.Signer, s.rt.Runtime.ID)
+		require.NoError(err, "ec.Sign")
 
-		executorCommits = append(executorCommits, *commit)
+		executorCommits = append(executorCommits, ec)
 	}
 	return
 }

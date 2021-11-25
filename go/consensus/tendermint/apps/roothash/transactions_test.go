@@ -183,24 +183,27 @@ func TestMessagesGasEstimation(t *testing.T) {
 	}
 	msgsHash := message.MessagesHash(msgs)
 
-	body := commitment.ComputeBody{
-		Header: commitment.ComputeResultsHeader{
-			Round:        newBlk.Header.Round,
-			PreviousHash: newBlk.Header.PreviousHash,
-			IORoot:       &newBlk.Header.IORoot,
-			StateRoot:    &newBlk.Header.StateRoot,
-			MessagesHash: &msgsHash,
+	ec := commitment.ExecutorCommitment{
+		NodeID: sk.Public(),
+		Header: commitment.ExecutorCommitmentHeader{
+			ComputeResultsHeader: commitment.ComputeResultsHeader{
+				Round:        newBlk.Header.Round,
+				PreviousHash: newBlk.Header.PreviousHash,
+				IORoot:       &newBlk.Header.IORoot,
+				StateRoot:    &newBlk.Header.StateRoot,
+				MessagesHash: &msgsHash,
+			},
 		},
 		Messages: msgs,
 	}
 
-	commit, err := commitment.SignExecutorCommitment(sk, runtime.ID, &body)
-	require.NoError(err, "SignExecutorCommitment")
+	err = ec.Sign(sk, runtime.ID)
+	require.NoError(err, "ec.Sign")
 
 	// Generate executor commit transaction body.
 	cc := &roothash.ExecutorCommit{
 		ID:      runtime.ID,
-		Commits: []commitment.ExecutorCommitment{*commit},
+		Commits: []commitment.ExecutorCommitment{ec},
 	}
 
 	err = app.executorCommit(ctx, roothashState, cc)
@@ -391,20 +394,24 @@ func TestEvidence(t *testing.T) {
 	require.NoError(err, "ProposalHeader.Sign")
 
 	// Executor commit.
-	body := commitment.ComputeBody{
-		Header: commitment.ComputeResultsHeader{
-			Round:        blk.Header.Round,
-			PreviousHash: blk.Header.PreviousHash,
-			IORoot:       &blk.Header.IORoot,
-			StateRoot:    &blk.Header.StateRoot,
-			MessagesHash: &hash.Hash{},
+	signedCommitment1 := commitment.ExecutorCommitment{
+		NodeID: sk.Public(),
+		Header: commitment.ExecutorCommitmentHeader{
+			ComputeResultsHeader: commitment.ComputeResultsHeader{
+				Round:        blk.Header.Round,
+				PreviousHash: blk.Header.PreviousHash,
+				IORoot:       &blk.Header.IORoot,
+				StateRoot:    &blk.Header.StateRoot,
+				MessagesHash: &hash.Hash{},
+			},
 		},
 	}
-	signedCommitment1, err := commitment.SignExecutorCommitment(sk, runtime.ID, &body)
-	require.NoError(err, "SignExecutorCommitment")
-	body.Header.PreviousHash = hash.NewFromBytes([]byte("invalid ioroot"))
-	signedCommitment2, err := commitment.SignExecutorCommitment(sk, runtime.ID, &body)
-	require.NoError(err, "SignExecutorCommitment")
+	err = signedCommitment1.Sign(sk, runtime.ID)
+	require.NoError(err, "signedCommitment1.Sign")
+	signedCommitment2 := signedCommitment1
+	signedCommitment2.Header.PreviousHash = hash.NewFromBytes([]byte("invalid ioroot"))
+	err = signedCommitment2.Sign(sk, runtime.ID)
+	require.NoError(err, "signedCommitment2.Sign")
 
 	// Expired evidence.
 	blk2.Header.Round = 25
@@ -423,20 +430,24 @@ func TestEvidence(t *testing.T) {
 	expiredB2, err := expired2.Sign(sk, runtime.ID)
 	require.NoError(err, "ProposalHeader.Sign")
 
-	expiredBody := commitment.ComputeBody{
-		Header: commitment.ComputeResultsHeader{
-			Round:        blk2.Header.Round,
-			PreviousHash: blk2.Header.PreviousHash,
-			IORoot:       &blk2.Header.IORoot,
-			StateRoot:    &blk2.Header.StateRoot,
-			MessagesHash: &hash.Hash{},
+	expiredCommitment1 := commitment.ExecutorCommitment{
+		NodeID: sk.Public(),
+		Header: commitment.ExecutorCommitmentHeader{
+			ComputeResultsHeader: commitment.ComputeResultsHeader{
+				Round:        blk2.Header.Round,
+				PreviousHash: blk2.Header.PreviousHash,
+				IORoot:       &blk2.Header.IORoot,
+				StateRoot:    &blk2.Header.StateRoot,
+				MessagesHash: &hash.Hash{},
+			},
 		},
 	}
-	expiredCommitment1, err := commitment.SignExecutorCommitment(sk, runtime.ID, &expiredBody)
-	require.NoError(err, "SignExecutorCommitment")
-	expiredBody.Header.PreviousHash = hash.NewFromBytes([]byte("invalid ioroot"))
-	expiredCommitment2, err := commitment.SignExecutorCommitment(sk, runtime.ID, &expiredBody)
-	require.NoError(err, "SignExecutorCommitment")
+	err = expiredCommitment1.Sign(sk, runtime.ID)
+	require.NoError(err, "expiredCommitment1.Sign")
+	expiredCommitment2 := expiredCommitment1
+	expiredCommitment2.Header.PreviousHash = hash.NewFromBytes([]byte("invalid ioroot"))
+	err = expiredCommitment2.Sign(sk, runtime.ID)
+	require.NoError(err, "expiredCommitment2.Sign")
 	var md testMsgDispatcher
 	app := rootHashApplication{appState, &md}
 
@@ -492,8 +503,8 @@ func TestEvidence(t *testing.T) {
 			&roothash.Evidence{
 				ID: runtime.ID,
 				EquivocationExecutor: &roothash.EquivocationExecutorEvidence{
-					CommitA: *expiredCommitment1,
-					CommitB: *expiredCommitment2,
+					CommitA: expiredCommitment1,
+					CommitB: expiredCommitment2,
 				},
 			},
 			roothash.ErrInvalidEvidence,
@@ -525,8 +536,8 @@ func TestEvidence(t *testing.T) {
 			&roothash.Evidence{
 				ID: runtime.ID,
 				EquivocationExecutor: &roothash.EquivocationExecutorEvidence{
-					CommitA: *signedCommitment1,
-					CommitB: *signedCommitment2,
+					CommitA: signedCommitment1,
+					CommitB: signedCommitment2,
 				},
 			},
 			nil,

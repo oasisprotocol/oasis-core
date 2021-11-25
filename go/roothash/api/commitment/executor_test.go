@@ -41,116 +41,110 @@ func TestValidateBasic(t *testing.T) {
 	var emptyHeaderHash hash.Hash
 	_ = emptyHeaderHash.UnmarshalHex("57d73e02609a00fcf4ca43cbf8c9f12867c46942d246fb2b0bce42cbdb8db844")
 
-	body := ComputeBody{
-		Header: ComputeResultsHeader{
-			Round:        42,
-			PreviousHash: emptyHeaderHash,
-			IORoot:       &emptyRoot,
-			StateRoot:    &emptyRoot,
-			MessagesHash: &emptyRoot,
+	body := ExecutorCommitment{
+		Header: ExecutorCommitmentHeader{
+			ComputeResultsHeader: ComputeResultsHeader{
+				Round:        42,
+				PreviousHash: emptyHeaderHash,
+				IORoot:       &emptyRoot,
+				StateRoot:    &emptyRoot,
+				MessagesHash: &emptyRoot,
+			},
+			RAKSignature: &signature.RawSignature{},
 		},
-		RakSig:   &signature.RawSignature{},
 		Messages: nil,
 	}
 
 	for _, tc := range []struct {
 		name      string
-		fn        func(ComputeBody) ComputeBody
+		fn        func(ExecutorCommitment) ExecutorCommitment
 		shouldErr bool
 	}{
 		{
 			"Ok",
-			func(b ComputeBody) ComputeBody { return b },
+			func(ec ExecutorCommitment) ExecutorCommitment { return ec },
 			false,
 		},
 		{
 			"Bad IORoot",
-			func(b ComputeBody) ComputeBody {
-				b.Header.IORoot = nil
-				return b
+			func(ec ExecutorCommitment) ExecutorCommitment {
+				ec.Header.IORoot = nil
+				return ec
 			},
 			true,
 		},
 		{
 			"Bad StateRoot",
-			func(b ComputeBody) ComputeBody {
-				b.Header.StateRoot = nil
-				return b
+			func(ec ExecutorCommitment) ExecutorCommitment {
+				ec.Header.StateRoot = nil
+				return ec
 			},
 			true,
 		},
 		{
 			"Bad MessagesHash",
-			func(b ComputeBody) ComputeBody {
-				b.Header.MessagesHash = nil
-				return b
+			func(ec ExecutorCommitment) ExecutorCommitment {
+				ec.Header.MessagesHash = nil
+				return ec
 			},
 			true,
 		},
 		{
 			"Bad runtime messages",
-			func(b ComputeBody) ComputeBody {
-				b.Messages = []message.Message{
+			func(ec ExecutorCommitment) ExecutorCommitment {
+				ec.Messages = []message.Message{
 					{}, // A message without any variant is invalid.
 				}
-				return b
+				return ec
 			},
 			true,
 		},
 		{
 			"Bad Failure",
-			func(b ComputeBody) ComputeBody {
-				b.SetFailure(10)
-				return b
-			},
-			true,
-		},
-		{
-			"Bad Failure (multiple fields set)",
-			func(b ComputeBody) ComputeBody {
-				b.Failure = FailureUnknown
-				return b
+			func(ec ExecutorCommitment) ExecutorCommitment {
+				ec.Header.SetFailure(10)
+				return ec
 			},
 			true,
 		},
 		{
 			"Bad Failure (existing IORoot)",
-			func(b ComputeBody) ComputeBody {
-				b.Failure = FailureUnknown
-				// b.Header.IORoot is set.
-				b.Header.StateRoot = nil
-				b.Header.MessagesHash = nil
-				return b
+			func(ec ExecutorCommitment) ExecutorCommitment {
+				ec.Header.Failure = FailureUnknown
+				// ec.Header.IORoot is set.
+				ec.Header.StateRoot = nil
+				ec.Header.MessagesHash = nil
+				return ec
 			},
 			true,
 		},
 		{
 			"Bad Failure (existing StateRoot)",
-			func(b ComputeBody) ComputeBody {
-				b.Failure = FailureUnknown
-				b.Header.IORoot = nil
-				// b.Header.StateRoot is set.
-				b.Header.MessagesHash = nil
-				return b
+			func(ec ExecutorCommitment) ExecutorCommitment {
+				ec.Header.Failure = FailureUnknown
+				ec.Header.IORoot = nil
+				// ec.Header.StateRoot is set.
+				ec.Header.MessagesHash = nil
+				return ec
 			},
 			true,
 		},
 		{
 			"Bad Failure (existing MessagesHash)",
-			func(b ComputeBody) ComputeBody {
-				b.Failure = FailureUnknown
-				b.Header.IORoot = nil
-				b.Header.StateRoot = nil
-				// b.Header.MessagesHash is set.
-				return b
+			func(ec ExecutorCommitment) ExecutorCommitment {
+				ec.Header.Failure = FailureUnknown
+				ec.Header.IORoot = nil
+				ec.Header.StateRoot = nil
+				// ec.Header.MessagesHash is set.
+				return ec
 			},
 			true,
 		},
 		{
 			"Ok Failure",
-			func(b ComputeBody) ComputeBody {
-				b.SetFailure(FailureUnknown)
-				return b
+			func(ec ExecutorCommitment) ExecutorCommitment {
+				ec.Header.SetFailure(FailureUnknown)
+				return ec
 			},
 			false,
 		},

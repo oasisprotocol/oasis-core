@@ -52,17 +52,20 @@ func TestEvidenceHash(t *testing.T) {
 	require.NoError(err, "ProposalHeader.Sign")
 
 	// Executor commit.
-	body := commitment.ComputeBody{
-		Header: commitment.ComputeResultsHeader{
-			Round:        blk.Header.Round,
-			PreviousHash: blk.Header.PreviousHash,
-			IORoot:       &blk.Header.IORoot,
-			StateRoot:    &blk.Header.StateRoot,
-			MessagesHash: &hash.Hash{},
+	ec := commitment.ExecutorCommitment{
+		NodeID: sk.Public(),
+		Header: commitment.ExecutorCommitmentHeader{
+			ComputeResultsHeader: commitment.ComputeResultsHeader{
+				Round:        blk.Header.Round,
+				PreviousHash: blk.Header.PreviousHash,
+				IORoot:       &blk.Header.IORoot,
+				StateRoot:    &blk.Header.StateRoot,
+				MessagesHash: &hash.Hash{},
+			},
 		},
 	}
-	signedCommitment1, err := commitment.SignExecutorCommitment(sk, runtimeID, &body)
-	require.NoError(err, "SignExecutorCommitment")
+	err = ec.Sign(sk, runtimeID)
+	require.NoError(err, "ec.Sign")
 
 	ev = Evidence{
 		ID: runtimeID,
@@ -78,8 +81,8 @@ func TestEvidenceHash(t *testing.T) {
 		ID: runtimeID,
 		EquivocationExecutor: &EquivocationExecutorEvidence{
 			// Same round and same signer as above evidence, hash should match.
-			CommitA: *signedCommitment1,
-			CommitB: *signedCommitment1,
+			CommitA: ec,
+			CommitB: ec,
 		},
 	}
 	h2, err := ev.Hash()
@@ -124,21 +127,25 @@ func TestEvidenceValidateBasic(t *testing.T) {
 	signedB2, err := rtBatch2.Sign(sk, rtID)
 	require.NoError(err, "ProposalHeader.Sign")
 
-	body := commitment.ComputeBody{
-		Header: commitment.ComputeResultsHeader{
-			Round:        rtBlk.Header.Round + 1,
-			PreviousHash: rtBlk.Header.EncodedHash(),
-			IORoot:       &rtBlk.Header.IORoot,
-			StateRoot:    &rtBlk.Header.StateRoot,
-			MessagesHash: &hash.Hash{},
+	signedCommitment1 := commitment.ExecutorCommitment{
+		NodeID: sk.Public(),
+		Header: commitment.ExecutorCommitmentHeader{
+			ComputeResultsHeader: commitment.ComputeResultsHeader{
+				Round:        rtBlk.Header.Round + 1,
+				PreviousHash: rtBlk.Header.EncodedHash(),
+				IORoot:       &rtBlk.Header.IORoot,
+				StateRoot:    &rtBlk.Header.StateRoot,
+				MessagesHash: &hash.Hash{},
+			},
 		},
 	}
-	signedCommitment1, err := commitment.SignExecutorCommitment(sk, rtID, &body)
-	require.NoError(err, "SignExecutorCommitment")
+	err = signedCommitment1.Sign(sk, rtID)
+	require.NoError(err, "signedCommitment1.Sign")
 
-	body.Header.PreviousHash = hash.NewFromBytes([]byte("invalid hash"))
-	signedCommitment2, err := commitment.SignExecutorCommitment(sk, rtID, &body)
-	require.NoError(err, "SignExecutorCommitment")
+	signedCommitment2 := signedCommitment1
+	signedCommitment2.Header.PreviousHash = hash.NewFromBytes([]byte("invalid hash"))
+	err = signedCommitment2.Sign(sk, rtID)
+	require.NoError(err, "signedCommitment2.Sign")
 
 	for _, ev := range []struct {
 		ev        Evidence
@@ -154,8 +161,8 @@ func TestEvidenceValidateBasic(t *testing.T) {
 			Evidence{
 				ID: rtID,
 				EquivocationExecutor: &EquivocationExecutorEvidence{
-					CommitA: *signedCommitment1,
-					CommitB: *signedCommitment2,
+					CommitA: signedCommitment1,
+					CommitB: signedCommitment2,
 				},
 				EquivocationBatch: &EquivocationBatchEvidence{
 					BatchA: *signedB1,
@@ -169,8 +176,8 @@ func TestEvidenceValidateBasic(t *testing.T) {
 			Evidence{
 				ID: rtID,
 				EquivocationExecutor: &EquivocationExecutorEvidence{
-					CommitA: *signedCommitment1,
-					CommitB: *signedCommitment2,
+					CommitA: signedCommitment1,
+					CommitB: signedCommitment2,
 				},
 			},
 			false,
@@ -397,68 +404,82 @@ func TestEquivocationExecutorEvidenceValidateBasic(t *testing.T) {
 	rt1Blk2 := block.NewEmptyBlock(rt1Blk1, 0, block.Normal)
 	rt2ID := common.NewTestNamespaceFromSeed([]byte("roothash/api_test: runtime2"), 0)
 
-	body := commitment.ComputeBody{
-		Header: commitment.ComputeResultsHeader{
-			Round:        rt1Blk2.Header.Round,
-			PreviousHash: rt1Blk2.Header.PreviousHash,
-			IORoot:       &rt1Blk2.Header.IORoot,
-			StateRoot:    &rt1Blk2.Header.StateRoot,
-			MessagesHash: &hash.Hash{},
+	signed1Commitment := commitment.ExecutorCommitment{
+		NodeID: sk.Public(),
+		Header: commitment.ExecutorCommitmentHeader{
+			ComputeResultsHeader: commitment.ComputeResultsHeader{
+				Round:        rt1Blk2.Header.Round,
+				PreviousHash: rt1Blk2.Header.PreviousHash,
+				IORoot:       &rt1Blk2.Header.IORoot,
+				StateRoot:    &rt1Blk2.Header.StateRoot,
+				MessagesHash: &hash.Hash{},
+			},
 		},
 	}
-	signed1Commitment, err := commitment.SignExecutorCommitment(sk, rt1ID, &body)
-	require.NoError(err, "SignExecutorCommitment")
-	signed2Commitment, err := commitment.SignExecutorCommitment(sk2, rt1ID, &body)
-	require.NoError(err, "SignExecutorCommitment")
+	err = signed1Commitment.Sign(sk, rt1ID)
+	require.NoError(err, "signed1Commitment.Sign")
+	signed2Commitment := signed1Commitment
+	signed2Commitment.NodeID = sk2.Public()
+	err = signed2Commitment.Sign(sk2, rt1ID)
+	require.NoError(err, "signed2Commitment.Sign")
 
-	body2 := commitment.ComputeBody{
-		Header: commitment.ComputeResultsHeader{
-			Round:        rt1Blk2.Header.Round,
-			PreviousHash: hash.NewFromBytes([]byte("invalid hash")),
-			IORoot:       &rt1Blk2.Header.IORoot,
-			StateRoot:    &rt1Blk2.Header.StateRoot,
-			MessagesHash: &hash.Hash{},
+	signed1Commitment2 := commitment.ExecutorCommitment{
+		NodeID: sk.Public(),
+		Header: commitment.ExecutorCommitmentHeader{
+			ComputeResultsHeader: commitment.ComputeResultsHeader{
+				Round:        rt1Blk2.Header.Round,
+				PreviousHash: hash.NewFromBytes([]byte("invalid hash")),
+				IORoot:       &rt1Blk2.Header.IORoot,
+				StateRoot:    &rt1Blk2.Header.StateRoot,
+				MessagesHash: &hash.Hash{},
+			},
 		},
 	}
-	signed1Commitment2, err := commitment.SignExecutorCommitment(sk, rt1ID, &body2)
-	require.NoError(err, "SignExecutorCommitment")
+	err = signed1Commitment2.Sign(sk, rt1ID)
+	require.NoError(err, "signed1Commitment2.Sign")
 
 	// Different round.
-	body3 := commitment.ComputeBody{
-		Header: commitment.ComputeResultsHeader{
-			Round:        rt1Blk2.Header.Round + 1,
-			PreviousHash: hash.NewFromBytes([]byte("invalid hash")),
-			IORoot:       &rt1Blk2.Header.IORoot,
-			StateRoot:    &rt1Blk2.Header.StateRoot,
-			MessagesHash: &hash.Hash{},
+	signed1Commitment3 := commitment.ExecutorCommitment{
+		NodeID: sk.Public(),
+		Header: commitment.ExecutorCommitmentHeader{
+			ComputeResultsHeader: commitment.ComputeResultsHeader{
+				Round:        rt1Blk2.Header.Round + 1,
+				PreviousHash: hash.NewFromBytes([]byte("invalid hash")),
+				IORoot:       &rt1Blk2.Header.IORoot,
+				StateRoot:    &rt1Blk2.Header.StateRoot,
+				MessagesHash: &hash.Hash{},
+			},
 		},
 	}
-	signed1Commitment3, err := commitment.SignExecutorCommitment(sk, rt1ID, &body3)
-	require.NoError(err, "SignExecutorCommitment")
+	err = signed1Commitment3.Sign(sk, rt1ID)
+	require.NoError(err, "signed1Commitment3.Sign")
 
 	// Invalid.
-	invalidBody := commitment.ComputeBody{
-		Header: commitment.ComputeResultsHeader{
-			Round:        rt1Blk2.Header.Round,
-			PreviousHash: hash.NewFromBytes([]byte("invalid hash")),
-			IORoot:       nil,
-			StateRoot:    &rt1Blk2.Header.StateRoot,
-			MessagesHash: nil,
+	signed1Invalid := commitment.ExecutorCommitment{
+		NodeID: sk.Public(),
+		Header: commitment.ExecutorCommitmentHeader{
+			ComputeResultsHeader: commitment.ComputeResultsHeader{
+				Round:        rt1Blk2.Header.Round,
+				PreviousHash: hash.NewFromBytes([]byte("invalid hash")),
+				IORoot:       nil,
+				StateRoot:    &rt1Blk2.Header.StateRoot,
+				MessagesHash: nil,
+			},
 		},
 	}
-	signed1Invalid, err := commitment.SignExecutorCommitment(sk, rt1ID, &invalidBody)
-	require.NoError(err, "SignExecutorCommitment")
+	err = signed1Invalid.Sign(sk, rt1ID)
+	require.NoError(err, "signed1Invalid.Sign")
 
 	// Failure indicating.
-	failureBody1 := body
-	failureBody1.SetFailure(commitment.FailureStateUnavailable)
-	signedFailure1, err := commitment.SignExecutorCommitment(sk, rt1ID, &failureBody1)
-	require.NoError(err, "SignExecutorCommitment")
+	signedFailure1 := signed1Commitment
+	signedFailure1.Header.SetFailure(commitment.FailureStateUnavailable)
+	err = signedFailure1.Sign(sk, rt1ID)
+	require.NoError(err, "signedFailure1.Sign")
 
-	failureBody2 := body
-	failureBody2.SetFailure(commitment.FailureUnknown)
-	signedFailure2, err := commitment.SignExecutorCommitment(sk, rt1ID, &failureBody2)
-	require.NoError(err, "SignExecutorCommitment")
+	signedFailure2 := signed1Commitment
+	signedFailure2.Header.SetFailure(commitment.FailureUnknown)
+	err = signedFailure2.Sign(sk, rt1ID)
+	require.NoError(err, "signedFailure2.Sign")
 
 	for _, ev := range []struct {
 		rtID      common.Namespace
@@ -475,7 +496,7 @@ func TestEquivocationExecutorEvidenceValidateBasic(t *testing.T) {
 		{
 			rt1ID,
 			EquivocationExecutorEvidence{
-				CommitA: *signed1Commitment,
+				CommitA: signed1Commitment,
 			},
 			true,
 			"empty evidence should error",
@@ -483,7 +504,7 @@ func TestEquivocationExecutorEvidenceValidateBasic(t *testing.T) {
 		{
 			rt1ID,
 			EquivocationExecutorEvidence{
-				CommitB: *signed1Commitment,
+				CommitB: signed1Commitment,
 			},
 			true,
 			"empty evidence should error",
@@ -491,8 +512,8 @@ func TestEquivocationExecutorEvidenceValidateBasic(t *testing.T) {
 		{
 			rt1ID,
 			EquivocationExecutorEvidence{
-				CommitA: *signed1Commitment,
-				CommitB: *signed1Commitment,
+				CommitA: signed1Commitment,
+				CommitB: signed1Commitment,
 			},
 			true,
 			"same signed commitment is not valid evidence",
@@ -500,8 +521,8 @@ func TestEquivocationExecutorEvidenceValidateBasic(t *testing.T) {
 		{
 			rt1ID,
 			EquivocationExecutorEvidence{
-				CommitA: *signed1Commitment,
-				CommitB: *signed1Commitment3,
+				CommitA: signed1Commitment,
+				CommitB: signed1Commitment3,
 			},
 			true,
 			"signed commitments for different rounds is not valid evidence",
@@ -509,8 +530,8 @@ func TestEquivocationExecutorEvidenceValidateBasic(t *testing.T) {
 		{
 			rt1ID,
 			EquivocationExecutorEvidence{
-				CommitA: *signed1Commitment,
-				CommitB: *signed1Invalid,
+				CommitA: signed1Commitment,
+				CommitB: signed1Invalid,
 			},
 			true,
 			"non valid commitment is not valid evidence",
@@ -518,8 +539,8 @@ func TestEquivocationExecutorEvidenceValidateBasic(t *testing.T) {
 		{
 			rt1ID,
 			EquivocationExecutorEvidence{
-				CommitA: *signed1Invalid,
-				CommitB: *signed1Commitment,
+				CommitA: signed1Invalid,
+				CommitB: signed1Commitment,
 			},
 			true,
 			"non valid commitment not valid evidence",
@@ -527,8 +548,8 @@ func TestEquivocationExecutorEvidenceValidateBasic(t *testing.T) {
 		{
 			rt1ID,
 			EquivocationExecutorEvidence{
-				CommitA: *signedFailure1,
-				CommitB: *signedFailure1,
+				CommitA: signedFailure1,
+				CommitB: signedFailure1,
 			},
 			true,
 			"same failure indicating is not valid evidence",
@@ -536,8 +557,8 @@ func TestEquivocationExecutorEvidenceValidateBasic(t *testing.T) {
 		{
 			rt1ID,
 			EquivocationExecutorEvidence{
-				CommitA: *signedFailure1,
-				CommitB: *signedFailure2,
+				CommitA: signedFailure1,
+				CommitB: signedFailure2,
 			},
 			false,
 			"different failure indicating reason is valid evidence",
@@ -545,8 +566,8 @@ func TestEquivocationExecutorEvidenceValidateBasic(t *testing.T) {
 		{
 			rt1ID,
 			EquivocationExecutorEvidence{
-				CommitA: *signed1Commitment,
-				CommitB: *signed2Commitment,
+				CommitA: signed1Commitment,
+				CommitB: signed2Commitment,
 			},
 			true,
 			"different signer is not valid evidence",
@@ -554,8 +575,8 @@ func TestEquivocationExecutorEvidenceValidateBasic(t *testing.T) {
 		{
 			rt1ID,
 			EquivocationExecutorEvidence{
-				CommitA: *signed1Commitment,
-				CommitB: *signed1Commitment2,
+				CommitA: signed1Commitment,
+				CommitB: signed1Commitment2,
 			},
 			false,
 			"valid evidence",
@@ -563,8 +584,8 @@ func TestEquivocationExecutorEvidenceValidateBasic(t *testing.T) {
 		{
 			rt1ID,
 			EquivocationExecutorEvidence{
-				CommitA: *signed1Commitment,
-				CommitB: *signedFailure1,
+				CommitA: signed1Commitment,
+				CommitB: signedFailure1,
 			},
 			false,
 			"valid evidence",
@@ -572,8 +593,8 @@ func TestEquivocationExecutorEvidenceValidateBasic(t *testing.T) {
 		{
 			rt2ID,
 			EquivocationExecutorEvidence{
-				CommitA: *signed1Commitment,
-				CommitB: *signedFailure1,
+				CommitA: signed1Commitment,
+				CommitB: signedFailure1,
 			},
 			true,
 			"valid evidence for wrong runtime is invalid",

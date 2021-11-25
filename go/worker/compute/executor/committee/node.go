@@ -1398,15 +1398,18 @@ func (n *Node) proposeBatch(
 		"batch_size", len(processed.raw),
 	)
 
-	// Generate proposed compute results.
+	// Generate executor commitment.
 	rakSig := batch.RakSig
-	proposedResults := &commitment.ComputeBody{
-		Header: batch.Header,
-		RakSig: &rakSig,
+	ec := &commitment.ExecutorCommitment{
+		NodeID: n.commonNode.Identity.NodeSigner.Public(),
+		Header: commitment.ExecutorCommitmentHeader{
+			ComputeResultsHeader: batch.Header,
+			RAKSignature:         &rakSig,
+		},
 	}
 	// If we are the transaction scheduler also include all the emitted messages.
 	if epoch.IsTransactionScheduler(lastHeader.Round) {
-		proposedResults.Messages = batch.Messages
+		ec.Messages = batch.Messages
 	}
 
 	// Commit I/O and state write logs to storage.
@@ -1450,7 +1453,7 @@ func (n *Node) proposeBatch(
 		n.logger.Error("storage failure, submitting failure indicating commitment",
 			"err", storageErr,
 		)
-		proposedResults.SetFailure(commitment.FailureUnknown)
+		ec.Header.SetFailure(commitment.FailureUnknown)
 	}
 
 	// Submit commitment.
@@ -1468,9 +1471,9 @@ func (n *Node) proposeBatch(
 		return
 	}
 
-	if err := n.signAndSubmitCommitment(roundCtx, proposedResults); err != nil {
+	if err := n.signAndSubmitCommitment(roundCtx, ec); err != nil {
 		n.logger.Error("failed to sign and submit the commitment",
-			"commit", proposedResults,
+			"commit", ec,
 			"err", err,
 		)
 		n.abortBatchLocked(err)
@@ -1482,7 +1485,7 @@ func (n *Node) proposeBatch(
 		n.transitionLocked(StateWaitingForFinalize{
 			batchStartTime: state.batchStartTime,
 			raw:            processed.raw,
-			proposedIORoot: *proposedResults.Header.IORoot,
+			proposedIORoot: *ec.Header.IORoot,
 		})
 	default:
 		n.abortBatchLocked(storageErr)
@@ -1491,17 +1494,17 @@ func (n *Node) proposeBatch(
 	crash.Here(crashPointBatchProposeAfter)
 }
 
-func (n *Node) signAndSubmitCommitment(roundCtx context.Context, body *commitment.ComputeBody) error {
-	commit, err := commitment.SignExecutorCommitment(n.commonNode.Identity.NodeSigner, n.commonNode.Runtime.ID(), body)
+func (n *Node) signAndSubmitCommitment(roundCtx context.Context, ec *commitment.ExecutorCommitment) error {
+	err := ec.Sign(n.commonNode.Identity.NodeSigner, n.commonNode.Runtime.ID())
 	if err != nil {
 		n.logger.Error("failed to sign commitment",
-			"commit", body,
+			"commit", ec,
 			"err", err,
 		)
 		return err
 	}
 
-	tx := roothash.NewExecutorCommitTx(0, nil, n.commonNode.Runtime.ID(), []commitment.ExecutorCommitment{*commit})
+	tx := roothash.NewExecutorCommitTx(0, nil, n.commonNode.Runtime.ID(), []commitment.ExecutorCommitment{*ec})
 	go func() {
 		commitErr := consensus.SignAndSubmitTx(roundCtx, n.commonNode.Consensus, n.commonNode.Identity.NodeSigner, tx)
 		switch commitErr {
@@ -1509,7 +1512,7 @@ func (n *Node) signAndSubmitCommitment(roundCtx context.Context, body *commitmen
 			n.logger.Info("executor commit finalized")
 		default:
 			n.logger.Error("failed to submit executor commit",
-				"commit", body,
+				"commit", ec,
 				"err", commitErr,
 			)
 		}
@@ -1689,13 +1692,16 @@ func (n *Node) handleProcessedBatch(batch *processedBatch, processingCh chan *pr
 
 	// Unsuccessful batch processing.
 	n.logger.Warn("worker has aborted batch processing")
-	commit := &commitment.ComputeBody{
-		Header: commitment.ComputeResultsHeader{
-			Round:        lastHeader.Round + 1,
-			PreviousHash: lastHeader.EncodedHash(),
+	commit := &commitment.ExecutorCommitment{
+		NodeID: n.commonNode.Identity.NodeSigner.Public(),
+		Header: commitment.ExecutorCommitmentHeader{
+			ComputeResultsHeader: commitment.ComputeResultsHeader{
+				Round:        lastHeader.Round + 1,
+				PreviousHash: lastHeader.EncodedHash(),
+			},
 		},
 	}
-	commit.SetFailure(commitment.FailureUnknown)
+	commit.Header.SetFailure(commitment.FailureUnknown)
 
 	n.logger.Debug("submitting failure indicating commitment",
 		"commitment", commit,

@@ -301,10 +301,9 @@ func (app *rootHashApplication) submitEvidence(
 	var pk signature.PublicKey
 	switch {
 	case evidence.EquivocationExecutor != nil:
-		// Evidence validity check ensures this can open.
-		commitA, _ := evidence.EquivocationExecutor.CommitA.Open(evidence.ID)
+		commitA := evidence.EquivocationExecutor.CommitA
 
-		if commitA.Body.Header.Round+params.MaxEvidenceAge < rtState.CurrentBlock.Header.Round {
+		if commitA.Header.Round+params.MaxEvidenceAge < rtState.CurrentBlock.Header.Round {
 			ctx.Logger().Error("Evidence: commitment equivocation evidence expired",
 				"evidence", evidence.EquivocationExecutor,
 				"current_round", rtState.CurrentBlock.Header.Round,
@@ -312,8 +311,8 @@ func (app *rootHashApplication) submitEvidence(
 			)
 			return fmt.Errorf("%w: equivocation evidence expired", roothash.ErrInvalidEvidence)
 		}
-		round = commitA.Body.Header.Round
-		pk = commitA.Signature.PublicKey
+		round = commitA.Header.Round
+		pk = commitA.NodeID
 	case evidence.EquivocationBatch != nil:
 		// Evidence validity check ensures this can open.
 		var batchA commitment.ProposalHeader

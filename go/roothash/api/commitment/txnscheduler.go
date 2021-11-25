@@ -41,6 +41,7 @@ func (ph *ProposalHeader) Sign(signer signature.Signer, runtimeID common.Namespa
 	return &SignedProposalHeader{Signed: *signed}, nil
 }
 
+// SignedProposalHeader is a signed ProposalHeader.
 type SignedProposalHeader struct {
 	signature.Signed
 }

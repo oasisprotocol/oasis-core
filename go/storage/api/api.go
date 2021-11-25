@@ -227,6 +227,12 @@ type Backend interface {
 // LocalBackend is a storage implementation with a local backing store.
 type LocalBackend interface {
 	Backend
+
+	// Apply applies a set of operations against the MKVS.  The root may refer
+	// to a nil node, in which case a new root will be created.
+	// The expected new root is used to check if the new root after all the
+	// operations are applied already exists in the local DB.  If it does, the
+	// Apply is ignored.
 	Apply(ctx context.Context, request *ApplyRequest) error
 
 	// Checkpointer returns the checkpoint creator/restorer for this storage backend.
