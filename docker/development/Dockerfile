@@ -1,22 +1,23 @@
 FROM ubuntu:20.04
 
 # Package versions.
-ARG GO_VERSION=1.16.3
+ARG GO_VERSION=1.17.3
 ARG GO_NANCY_VERSION=1.0.0
 ARG GO_NANCY_CHECKSUM=13804837a34c07e7a933b0d6f52c5e580b03ccb209e38fc3d6394b791b414c33
 ARG GO_PROTOC_VERSION=3.6.1
 ARG GO_PROTOC_GEN_GO_VERSION=1.21.0
 ARG GOLANGCILINT_VERSION=1.41.1
 ARG GOCOVMERGE_VERSION=b5bfa59ec0adc420475f97f89b58045c721d761c
-ARG GOFUMPT_VERSION=v0.1.1
-ARG RUST_NIGHTLY_VERSION=2021-08-17
+ARG GOFUMPT_VERSION=v0.2.0
+ARG GOIMPORTS_VERSION=v0.1.7
+ARG RUST_NIGHTLY_VERSION=2021-11-04
 ARG JEMALLOC_VERSION=5.2.1
 ARG JEMALLOC_CHECKSUM=34330e5ce276099e2e8950d9335db5a875689a4c6a56751ef3b1d8c537f887f6
 
 ARG DEBIAN_FRONTEND=noninteractive
 
 RUN apt-get update -qq && apt-get upgrade -qq && apt-get install -qq \
-    build-essential git gdb cmake \
+    build-essential git gdb cmake clang-11 \
     curl wget unzip \
     pkg-config software-properties-common \
     python3 python3-pyelftools \
@@ -58,20 +59,20 @@ RUN wget https://dl.google.com/go/go${GO_VERSION}.linux-amd64.tar.gz && \
     rm go${GO_VERSION}.linux-amd64.tar.gz && \
     mkdir -p /go/bin && \
     # Install a specific version of protoc-gen-go.
-    GO111MODULE=on go get google.golang.org/protobuf/cmd/protoc-gen-go@v${GO_PROTOC_GEN_GO_VERSION} && \
+    go install google.golang.org/protobuf/cmd/protoc-gen-go@v${GO_PROTOC_GEN_GO_VERSION} && \
     # Install golangci-lint.
     curl -sfL https://install.goreleaser.com/github.com/golangci/golangci-lint.sh | bash -s -- -b /tmp/bin v${GOLANGCILINT_VERSION} && \
     mv /tmp/bin/golangci-lint /go/bin && \
     # Install gocovmerge for e2e coverage.
-    GO111MODULE=on go get github.com/wadey/gocovmerge@${GOCOVMERGE_VERSION} && \
+    go install github.com/wadey/gocovmerge@${GOCOVMERGE_VERSION} && \
     # Install nancy for auditing dependencies.
     curl -sfL -o nancy https://github.com/sonatype-nexus-community/nancy/releases/download/v${GO_NANCY_VERSION}/nancy-linux.amd64-v${GO_NANCY_VERSION} && \
     echo "${GO_NANCY_CHECKSUM} nancy" | sha256sum -c && \
     mv nancy /go/bin/nancy && \
     chmod +x /go/bin/nancy && \
     # Install gofumpt for code formatting.
-    GO111MODULE=on go get mvdan.cc/gofumpt@${GOFUMPT_VERSION} && \
-    GO111MODULE=on go get golang.org/x/tools/cmd/goimports
+    go install mvdan.cc/gofumpt@${GOFUMPT_VERSION} && \
+    go install golang.org/x/tools/cmd/goimports@${GOIMPORTS_VERSION}
 
 # Install jemalloc (used by BadgerDB).
 RUN wget -O jemalloc.tar.bz2 \
