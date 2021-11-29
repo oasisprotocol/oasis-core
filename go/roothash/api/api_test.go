@@ -8,7 +8,6 @@ import (
 
 	"github.com/oasisprotocol/oasis-core/go/common"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
-	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	memorySigner "github.com/oasisprotocol/oasis-core/go/common/crypto/signature/signers/memory"
 	genesisTestHelpers "github.com/oasisprotocol/oasis-core/go/genesis/tests"
 	"github.com/oasisprotocol/oasis-core/go/roothash/api/block"
@@ -32,25 +31,25 @@ func TestEvidenceHash(t *testing.T) {
 	require.NoError(err, "NewSigner")
 	runtimeID := common.NewTestNamespaceFromSeed([]byte("roothash/api_test/hash: runtime"), 0)
 	blk := block.NewGenesisBlock(runtimeID, 0)
-	batch1 := &commitment.ProposedBatch{
-		IORoot:            blk.Header.IORoot,
-		StorageSignatures: []signature.Signature{},
-		Header:            blk.Header,
+	batch1 := &commitment.ProposalHeader{
+		Round:        blk.Header.Round + 1,
+		PreviousHash: blk.Header.EncodedHash(),
+		BatchHash:    blk.Header.IORoot,
 	}
-	signedBatch1, err := commitment.SignProposedBatch(sk, runtimeID, batch1)
-	require.NoError(err, "SignProposedBatch")
-	signed2Batch1, err := commitment.SignProposedBatch(sk2, runtimeID, batch1)
-	require.NoError(err, "SignedProposedBatch")
+	signedBatch1, err := batch1.Sign(sk, runtimeID)
+	require.NoError(err, "ProposalHeader.Sign")
+	signed2Batch1, err := batch1.Sign(sk2, runtimeID)
+	require.NoError(err, "ProposalHeader.Sign")
 
-	batch2 := &commitment.ProposedBatch{
-		IORoot:            hash.NewFromBytes([]byte("invalid root")),
-		StorageSignatures: []signature.Signature{},
-		Header:            blk.Header,
+	batch2 := &commitment.ProposalHeader{
+		Round:        blk.Header.Round + 1,
+		PreviousHash: blk.Header.EncodedHash(),
+		BatchHash:    hash.NewFromBytes([]byte("invalid root")),
 	}
-	signedBatch2, err := commitment.SignProposedBatch(sk, runtimeID, batch2)
-	require.NoError(err, "SignProposedBatch")
-	signed2Batch2, err := commitment.SignProposedBatch(sk2, runtimeID, batch2)
-	require.NoError(err, "SignedProposedBatch")
+	signedBatch2, err := batch2.Sign(sk, runtimeID)
+	require.NoError(err, "ProposalHeader.Sign")
+	signed2Batch2, err := batch2.Sign(sk2, runtimeID)
+	require.NoError(err, "ProposalHeader.Sign")
 
 	// Executor commit.
 	body := commitment.ComputeBody{
@@ -109,26 +108,26 @@ func TestEvidenceValidateBasic(t *testing.T) {
 
 	rtID := common.NewTestNamespaceFromSeed([]byte("roothash/api_test: runtime1"), 0)
 	rtBlk := block.NewGenesisBlock(rtID, 0)
-	rtBatch1 := &commitment.ProposedBatch{
-		IORoot:            rtBlk.Header.IORoot,
-		StorageSignatures: []signature.Signature{},
-		Header:            rtBlk.Header,
+	rtBatch1 := &commitment.ProposalHeader{
+		Round:        rtBlk.Header.Round + 1,
+		PreviousHash: rtBlk.Header.EncodedHash(),
+		BatchHash:    rtBlk.Header.IORoot,
 	}
-	signedB1, err := commitment.SignProposedBatch(sk, rtID, rtBatch1)
-	require.NoError(err, "SignProposedBatch")
+	signedB1, err := rtBatch1.Sign(sk, rtID)
+	require.NoError(err, "ProposalHeader.Sign")
 
-	rtBatch2 := &commitment.ProposedBatch{
-		IORoot:            hash.NewFromBytes([]byte("invalid root")),
-		StorageSignatures: []signature.Signature{},
-		Header:            rtBlk.Header,
+	rtBatch2 := &commitment.ProposalHeader{
+		Round:        rtBlk.Header.Round + 1,
+		PreviousHash: rtBlk.Header.EncodedHash(),
+		BatchHash:    hash.NewFromBytes([]byte("invalid root")),
 	}
-	signedB2, err := commitment.SignProposedBatch(sk, rtID, rtBatch2)
-	require.NoError(err, "SignProposedBatch")
+	signedB2, err := rtBatch2.Sign(sk, rtID)
+	require.NoError(err, "ProposalHeader.Sign")
 
 	body := commitment.ComputeBody{
 		Header: commitment.ComputeResultsHeader{
-			Round:        rtBlk.Header.Round,
-			PreviousHash: rtBlk.Header.PreviousHash,
+			Round:        rtBlk.Header.Round + 1,
+			PreviousHash: rtBlk.Header.EncodedHash(),
 			IORoot:       &rtBlk.Header.IORoot,
 			StateRoot:    &rtBlk.Header.StateRoot,
 			MessagesHash: &hash.Hash{},
@@ -220,56 +219,56 @@ func TestEquivocationBatchEvidenceValidateBasic(t *testing.T) {
 	rt2Blk2 := block.NewEmptyBlock(rt2Blk1, 0, block.Invalid)
 
 	// Prepare test signed batches.
-	rt1Batch1 := &commitment.ProposedBatch{
-		IORoot:            rt1Blk1.Header.IORoot,
-		StorageSignatures: []signature.Signature{},
-		Header:            rt1Blk1.Header,
+	rt1Batch1 := &commitment.ProposalHeader{
+		Round:        rt1Blk1.Header.Round + 1,
+		BatchHash:    rt1Blk1.Header.IORoot,
+		PreviousHash: rt1Blk1.Header.EncodedHash(),
 	}
-	signedR1B1, err := commitment.SignProposedBatch(sk, rt1ID, rt1Batch1)
-	require.NoError(err, "SignProposedBatch")
+	signedR1B1, err := rt1Batch1.Sign(sk, rt1ID)
+	require.NoError(err, "ProposalHeader.Sign")
 
-	rt1Batch2 := &commitment.ProposedBatch{
-		IORoot:            rt1Blk2.Header.IORoot,   // Different IO root.
-		StorageSignatures: []signature.Signature{}, // Same storage signatures.
-		Header:            rt1Blk2.Header,          // Different header.
+	rt1Batch2 := &commitment.ProposalHeader{
+		Round:        rt1Blk2.Header.Round + 1,     // Different round.
+		BatchHash:    rt1Blk2.Header.IORoot,        // Different batch hash.
+		PreviousHash: rt1Blk2.Header.EncodedHash(), // Different header.
 	}
-	signedR1B2, err := commitment.SignProposedBatch(sk, rt1ID, rt1Batch2)
-	require.NoError(err, "SignProposedBatch")
+	signedR1B2, err := rt1Batch2.Sign(sk, rt1ID)
+	require.NoError(err, "ProposalHeader.Sign")
 
-	rt1Batch3 := &commitment.ProposedBatch{
-		IORoot:            hash.NewFromBytes([]byte("invalid root")), // Different IO root.
-		StorageSignatures: []signature.Signature{},                   // Same storage signatures.
-		Header:            rt1Blk1.Header,                            // Same header.
+	rt1Batch3 := &commitment.ProposalHeader{
+		Round:        rt1Blk1.Header.Round + 1,                  // Same round.
+		BatchHash:    hash.NewFromBytes([]byte("invalid root")), // Different batch hash.
+		PreviousHash: rt1Blk1.Header.EncodedHash(),              // Same header.
 	}
-	signedR1B3, err := commitment.SignProposedBatch(sk, rt1ID, rt1Batch3)
-	require.NoError(err, "SignProposedBatch")
+	signedR1B3, err := rt1Batch3.Sign(sk, rt1ID)
+	require.NoError(err, "ProposalHeader.Sign")
 
-	rt1Batch4 := &commitment.ProposedBatch{
-		IORoot:            rt1Batch1.IORoot,          // Same IO root.
-		StorageSignatures: []signature.Signature{{}}, // Different storage signatures.
-		Header:            rt1Batch1.Header,          // Same header.
+	rt1Batch4 := &commitment.ProposalHeader{
+		Round:        rt1Batch1.Round,        // Same round.
+		BatchHash:    rt1Batch1.BatchHash,    // Same batch hash.
+		PreviousHash: rt1Batch1.PreviousHash, // Same header.
 	}
-	signedR1B4, err := commitment.SignProposedBatch(sk, rt1ID, rt1Batch4)
-	require.NoError(err, "SignProposedBatch")
+	signedR1B4, err := rt1Batch4.Sign(sk, rt1ID)
+	require.NoError(err, "ProposalHeader.Sign")
 
-	rt1Batch5 := &commitment.ProposedBatch{
-		IORoot:            rt1Batch1.IORoot,        // Same IO root.
-		StorageSignatures: []signature.Signature{}, // Same storage signatures.
-		Header:            rt1Blk3.Header,          // Different header for same round.
+	rt1Batch5 := &commitment.ProposalHeader{
+		Round:        rt1Blk3.Header.Round + 1,     // Same round.
+		BatchHash:    rt1Batch1.BatchHash,          // Same batch hash.
+		PreviousHash: rt1Blk3.Header.EncodedHash(), // Different header for same round.
 	}
-	signedR1B5, err := commitment.SignProposedBatch(sk, rt1ID, rt1Batch5)
-	require.NoError(err, "SignProposedBatch")
+	signedR1B5, err := rt1Batch5.Sign(sk, rt1ID)
+	require.NoError(err, "ProposalHeader.Sign")
 
-	signed2R1B3, err := commitment.SignProposedBatch(sk2, rt1ID, rt1Batch3)
-	require.NoError(err, "SignProposedBatch")
+	signed2R1B3, err := rt1Batch3.Sign(sk2, rt1ID)
+	require.NoError(err, "ProposalHeader.Sign")
 
-	rt2Batch1 := &commitment.ProposedBatch{
-		IORoot:            rt2Blk2.Header.IORoot,
-		StorageSignatures: []signature.Signature{},
-		Header:            rt2Blk2.Header,
+	rt2Batch1 := &commitment.ProposalHeader{
+		Round:        rt2Blk2.Header.Round + 1,
+		BatchHash:    rt2Blk2.Header.IORoot,
+		PreviousHash: rt2Blk2.Header.EncodedHash(),
 	}
-	signedR2B1, err := commitment.SignProposedBatch(sk, rt2ID, rt2Batch1)
-	require.NoError(err, "SignProposedBatch")
+	signedR2B1, err := rt2Batch1.Sign(sk, rt2ID)
+	require.NoError(err, "ProposalHeader.Sign")
 
 	for _, ev := range []struct {
 		rtID      common.Namespace
@@ -452,7 +451,7 @@ func TestEquivocationExecutorEvidenceValidateBasic(t *testing.T) {
 
 	// Failure indicating.
 	failureBody1 := body
-	failureBody1.SetFailure(commitment.FailureStorageUnavailable)
+	failureBody1.SetFailure(commitment.FailureStateUnavailable)
 	signedFailure1, err := commitment.SignExecutorCommitment(sk, rt1ID, &failureBody1)
 	require.NoError(err, "SignExecutorCommitment")
 

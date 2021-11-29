@@ -5,7 +5,6 @@ import (
 	"github.com/spf13/viper"
 
 	workerCommon "github.com/oasisprotocol/oasis-core/go/worker/common"
-	"github.com/oasisprotocol/oasis-core/go/worker/compute"
 	"github.com/oasisprotocol/oasis-core/go/worker/registration"
 )
 
@@ -26,7 +25,6 @@ func New(
 ) (*Worker, error) {
 	return newWorker(
 		dataDir,
-		compute.Enabled(),
 		commonWorker,
 		registration,
 		viper.GetUint64(cfgMaxTxPoolSize),

@@ -29,16 +29,6 @@ func (s *syncedStorage) wait(ctx context.Context, root storage.Root) error {
 	}
 }
 
-func (s *syncedStorage) Apply(ctx context.Context, request *storage.ApplyRequest) ([]*storage.Receipt, error) {
-	// Don't wait for write operations, since they may be required before the worker is "synced".
-	return s.wrapped.Apply(ctx, request)
-}
-
-func (s *syncedStorage) ApplyBatch(ctx context.Context, request *storage.ApplyBatchRequest) ([]*storage.Receipt, error) {
-	// Don't wait for write operations, since they may be required before the worker is "synced".
-	return s.wrapped.ApplyBatch(ctx, request)
-}
-
 func (s *syncedStorage) GetDiff(ctx context.Context, request *storage.GetDiffRequest) (storage.WriteLogIterator, error) {
 	if err := s.wait(ctx, request.EndRoot); err != nil {
 		return nil, fmt.Errorf("worker/storage: GetDiff to local storage failed: %w", err)
@@ -73,6 +63,10 @@ func (s *syncedStorage) GetCheckpoints(ctx context.Context, request *checkpoint.
 
 func (s *syncedStorage) GetCheckpointChunk(ctx context.Context, chunk *checkpoint.ChunkMetadata, w io.Writer) error {
 	return s.wrapped.GetCheckpointChunk(ctx, chunk, w)
+}
+
+func (s *syncedStorage) Apply(ctx context.Context, request *storage.ApplyRequest) error {
+	return s.wrapped.Apply(ctx, request)
 }
 
 func (s *syncedStorage) Checkpointer() checkpoint.CreateRestorer {

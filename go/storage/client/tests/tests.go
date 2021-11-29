@@ -75,8 +75,8 @@ func ClientWorkerTests(
 		t.Fatalf("failed to wait for client initialization")
 	}
 
-	// Get scheduled storage nodes.
-	scheduledStorageNodes := []*node.Node{}
+	// Get scheduled executor nodes (all have the storage RPC role set).
+	scheduledComputeNodes := []*node.Node{}
 	ch, sub, err := consensus.Scheduler().WatchCommittees(ctx)
 	require.NoError(err, "WatchCommittees")
 	defer sub.Close()
@@ -84,7 +84,7 @@ recvLoop:
 	for {
 		select {
 		case cm := <-ch:
-			if cm.Kind != scheduler.KindStorage {
+			if cm.Kind != scheduler.KindComputeExecutor {
 				continue
 			}
 			if cm.RuntimeID != rt.Runtime.ID {
@@ -93,7 +93,7 @@ recvLoop:
 			for _, cn := range cm.Members {
 				for _, n := range nodes {
 					if n.ID == cn.PublicKey {
-						scheduledStorageNodes = append(scheduledStorageNodes, n)
+						scheduledComputeNodes = append(scheduledComputeNodes, n)
 					}
 				}
 			}
@@ -107,7 +107,9 @@ recvLoop:
 	connectedNodes := client.(api.ClientBackend).GetConnectedNodes()
 
 	// Check that all scheduled storage nodes are connected to.
-	require.ElementsMatch(scheduledStorageNodes, connectedNodes, "storage client should be connected to scheduled storage nodes")
+	for _, scheduledNode := range scheduledComputeNodes {
+		require.Contains(connectedNodes, scheduledNode, "storage client should be connected to scheduled compute nodes")
+	}
 
 	// Try getting path.
 	// TimeOut is expected, as test nodes do not actually start storage worker.

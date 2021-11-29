@@ -23,7 +23,6 @@ func TestConsensusParameters(t *testing.T) {
 		KindEntity:            *quantity.NewQuantity(),
 		KindNodeValidator:     *quantity.NewQuantity(),
 		KindNodeCompute:       *quantity.NewQuantity(),
-		KindNodeStorage:       *quantity.NewQuantity(),
 		KindNodeKeyManager:    *quantity.NewQuantity(),
 		KindRuntimeCompute:    *quantity.NewQuantity(),
 		KindRuntimeKeyManager: *quantity.NewQuantity(),
@@ -49,7 +48,7 @@ func TestConsensusParameters(t *testing.T) {
 func TestThresholdKind(t *testing.T) {
 	require := require.New(t)
 
-	for k := ThresholdKind(0); k <= KindMax; k++ {
+	for _, k := range ThresholdKinds {
 		enc, err := k.MarshalText()
 		require.NoError(err, "MarshalText")
 
@@ -117,9 +116,8 @@ func TestStakeAccumulator(t *testing.T) {
 		KindEntity:            *quantity.NewFromUint64(1_000),
 		KindNodeValidator:     *quantity.NewFromUint64(10_000),
 		KindNodeCompute:       *quantity.NewFromUint64(5_000),
-		KindNodeStorage:       *quantity.NewFromUint64(2_000),
 		KindNodeKeyManager:    *quantity.NewFromUint64(50_000),
-		KindRuntimeCompute:    *quantity.NewFromUint64(100_000),
+		KindRuntimeCompute:    *quantity.NewFromUint64(2_000),
 		KindRuntimeKeyManager: *quantity.NewFromUint64(1_000_000),
 	}
 
@@ -153,22 +151,22 @@ func TestStakeAccumulator(t *testing.T) {
 	require.Error(err, "updating a stake claim with insufficient stake should fail")
 	require.Equal(err, ErrInsufficientStake)
 
-	err = acct.AddStakeClaim(thresholds, StakeClaim("claim1"), GlobalStakeThresholds(KindEntity, KindNodeStorage))
+	err = acct.AddStakeClaim(thresholds, StakeClaim("claim1"), GlobalStakeThresholds(KindEntity, KindRuntimeCompute))
 	require.NoError(err, "updating a stake claim with sufficient stake should work")
 
-	err = acct.AddStakeClaim(thresholds, StakeClaim("claim1"), GlobalStakeThresholds(KindEntity, KindNodeStorage))
+	err = acct.AddStakeClaim(thresholds, StakeClaim("claim1"), GlobalStakeThresholds(KindEntity, KindRuntimeCompute))
 	require.NoError(err, "updating a stake claim with sufficient stake should work")
 	err = acct.CheckStakeClaims(thresholds)
 	require.NoError(err, "escrow account should check out")
 
 	// Add another claim.
-	err = acct.AddStakeClaim(thresholds, StakeClaim("claim2"), GlobalStakeThresholds(KindNodeStorage))
+	err = acct.AddStakeClaim(thresholds, StakeClaim("claim2"), GlobalStakeThresholds(KindRuntimeCompute))
 	require.Error(err, "updating a stake claim with insufficient stake should fail")
 	require.Equal(err, ErrInsufficientStake)
 
 	acct.Active.Balance = *quantity.NewFromUint64(13_000)
 
-	err = acct.AddStakeClaim(thresholds, StakeClaim("claim2"), GlobalStakeThresholds(KindNodeStorage))
+	err = acct.AddStakeClaim(thresholds, StakeClaim("claim2"), GlobalStakeThresholds(KindRuntimeCompute))
 	require.NoError(err, "adding a stake claim with sufficient stake should work")
 	err = acct.CheckStakeClaims(thresholds)
 	require.NoError(err, "escrow account should check out")

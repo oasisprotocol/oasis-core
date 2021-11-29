@@ -13,8 +13,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/persistent"
 	"github.com/oasisprotocol/oasis-core/go/common/workerpool"
 	genesis "github.com/oasisprotocol/oasis-core/go/genesis/api"
-	"github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/flags"
-	"github.com/oasisprotocol/oasis-core/go/runtime/registry"
+	runtimeRegistry "github.com/oasisprotocol/oasis-core/go/runtime/registry"
 	"github.com/oasisprotocol/oasis-core/go/storage/api"
 	"github.com/oasisprotocol/oasis-core/go/storage/mkvs/checkpoint"
 	workerCommon "github.com/oasisprotocol/oasis-core/go/worker/common"
@@ -25,11 +24,6 @@ import (
 )
 
 var workerStorageDBBucketName = "worker/storage/watchers"
-
-// Enabled reads our enabled flag from viper.
-func Enabled() bool {
-	return viper.GetBool(CfgWorkerEnabled)
-}
 
 // Worker is a worker handling storage operations.
 type Worker struct {
@@ -57,8 +51,17 @@ func New(
 	genesis genesis.Provider,
 	commonStore *persistent.CommonStore,
 ) (*Worker, error) {
+	var enabled bool
+	switch commonWorker.RuntimeRegistry.Mode() {
+	case runtimeRegistry.RuntimeModeCompute, runtimeRegistry.RuntimeModeClient:
+		// When configured in compute or stateful client mode, enable the storage worker.
+		enabled = true
+	default:
+		enabled = false
+	}
+
 	s := &Worker{
-		enabled:      viper.GetBool(CfgWorkerEnabled),
+		enabled:      enabled,
 		commonWorker: commonWorker,
 		registration: registration,
 		logger:       logging.GetLogger("worker/storage"),
@@ -67,56 +70,57 @@ func New(
 		runtimes:     make(map[common.Namespace]*committee.Node),
 	}
 
-	if s.enabled {
-		var err error
+	if !enabled {
+		return s, nil
+	}
 
-		s.fetchPool = workerpool.New("storage_fetch")
-		s.fetchPool.Resize(viper.GetUint(cfgWorkerFetcherCount))
+	var err error
 
-		s.watchState, err = commonStore.GetServiceStore(workerStorageDBBucketName)
-		if err != nil {
+	s.fetchPool = workerpool.New("storage_fetch")
+	s.fetchPool.Resize(viper.GetUint(cfgWorkerFetcherCount))
+
+	s.watchState, err = commonStore.GetServiceStore(workerStorageDBBucketName)
+	if err != nil {
+		return nil, err
+	}
+
+	// Attach storage interface to gRPC server.
+	localRouter := runtimeRegistry.NewStorageRouter(
+		func(ns common.Namespace) (api.Backend, error) {
+			node := s.GetRuntime(ns)
+			if node == nil {
+				return nil, fmt.Errorf("worker/storage: runtime %s is not supported", ns)
+			}
+			return node.GetLocalStorage(), nil
+		},
+		func() {
+			for _, node := range s.runtimes {
+				<-node.Initialized()
+			}
+		},
+	)
+	s.grpcPolicy = policy.NewDynamicRuntimePolicyChecker(api.ServiceName, s.commonWorker.GrpcPolicyWatcher)
+	api.RegisterService(s.commonWorker.Grpc.Server(), &storageService{
+		w:       s,
+		storage: localRouter,
+	})
+
+	var checkpointerCfg *checkpoint.CheckpointerConfig
+	if !viper.GetBool(CfgWorkerCheckpointerDisabled) {
+		checkpointerCfg = &checkpoint.CheckpointerConfig{
+			CheckInterval: viper.GetDuration(CfgWorkerCheckpointCheckInterval),
+		}
+	}
+
+	// Start storage node for every runtime.
+	for _, rt := range s.commonWorker.GetRuntimes() {
+		if err := s.registerRuntime(commonWorker.DataDir, rt, checkpointerCfg); err != nil {
 			return nil, err
 		}
-
-		// Attach storage interface to gRPC server.
-		localRouter := registry.NewStorageRouter(
-			func(ns common.Namespace) (api.Backend, error) {
-				node := s.GetRuntime(ns)
-				if node == nil {
-					return nil, fmt.Errorf("worker/storage: runtime %s is not supported", ns)
-				}
-				return node.GetLocalStorage(), nil
-			},
-			func() {
-				for _, node := range s.runtimes {
-					<-node.Initialized()
-				}
-			},
-		)
-		s.grpcPolicy = policy.NewDynamicRuntimePolicyChecker(api.ServiceName, s.commonWorker.GrpcPolicyWatcher)
-		api.RegisterService(s.commonWorker.Grpc.Server(), &storageService{
-			w:                  s,
-			storage:            localRouter,
-			debugRejectUpdates: viper.GetBool(CfgWorkerDebugIgnoreApply) && flags.DebugDontBlameOasis(),
-		})
-
-		var checkpointerCfg *checkpoint.CheckpointerConfig
-		if !viper.GetBool(CfgWorkerCheckpointerDisabled) {
-			checkpointerCfg = &checkpoint.CheckpointerConfig{
-				CheckInterval: viper.GetDuration(CfgWorkerCheckpointCheckInterval),
-			}
-		}
-
-		// Start storage node for every runtime.
-		for _, rt := range s.commonWorker.GetRuntimes() {
-			if err := s.registerRuntime(commonWorker.DataDir, rt, checkpointerCfg); err != nil {
-				return nil, err
-			}
-		}
-
-		// Attach the storage worker's internal GRPC interface.
-		storageWorkerAPI.RegisterService(grpcInternal.Server(), s)
 	}
+
+	// Attach the storage worker's internal GRPC interface.
+	storageWorkerAPI.RegisterService(grpcInternal.Server(), s)
 
 	return s, nil
 }
@@ -127,7 +131,7 @@ func (w *Worker) registerRuntime(dataDir string, commonNode *committeeCommon.Nod
 		"runtime_id", id,
 	)
 
-	rp, err := w.registration.NewRuntimeRoleProvider(node.RoleStorageWorker, id)
+	rp, err := w.registration.NewRuntimeRoleProvider(node.RoleComputeWorker, id)
 	if err != nil {
 		return fmt.Errorf("failed to create role provider: %w", err)
 	}
@@ -139,7 +143,7 @@ func (w *Worker) registerRuntime(dataDir string, commonNode *committeeCommon.Nod
 		}
 	}
 
-	path, err := registry.EnsureRuntimeStateDir(dataDir, id)
+	path, err := runtimeRegistry.EnsureRuntimeStateDir(dataDir, id)
 	if err != nil {
 		return err
 	}

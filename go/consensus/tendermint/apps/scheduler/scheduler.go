@@ -36,7 +36,6 @@ var (
 	_ api.Application = (*schedulerApplication)(nil)
 
 	RNGContextExecutor   = []byte("EkS-ABCI-Compute")
-	RNGContextStorage    = []byte("EkS-ABCI-Storage")
 	RNGContextValidators = []byte("EkS-ABCI-Validators")
 	RNGContextEntities   = []byte("EkS-ABCI-Entities")
 
@@ -188,7 +187,6 @@ func (app *schedulerApplication) BeginBlock(ctx *api.Context, request types.Requ
 
 		kinds := []scheduler.CommitteeKind{
 			scheduler.KindComputeExecutor,
-			scheduler.KindStorage,
 		}
 		for _, kind := range kinds {
 			if err = app.electAllCommittees(
@@ -345,19 +343,6 @@ func (app *schedulerApplication) isSuitableExecutorWorker(ctx *api.Context, n *n
 			}
 			return true
 		}
-	}
-	return false
-}
-
-func (app *schedulerApplication) isSuitableStorageWorker(ctx *api.Context, n *node.Node, rt *registry.Runtime) bool {
-	if !n.HasRoles(node.RoleStorageWorker) {
-		return false
-	}
-	for _, nrt := range n.Runtimes {
-		if !nrt.ID.Equal(&rt.ID) {
-			continue
-		}
-		return true
 	}
 	return false
 }

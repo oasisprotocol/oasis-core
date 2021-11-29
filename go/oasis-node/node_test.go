@@ -48,7 +48,6 @@ import (
 	storageClientTests "github.com/oasisprotocol/oasis-core/go/storage/client/tests"
 	storageTests "github.com/oasisprotocol/oasis-core/go/storage/tests"
 	workerCommon "github.com/oasisprotocol/oasis-core/go/worker/common"
-	"github.com/oasisprotocol/oasis-core/go/worker/compute"
 	executorCommittee "github.com/oasisprotocol/oasis-core/go/worker/compute/executor/committee"
 	executorWorkerTests "github.com/oasisprotocol/oasis-core/go/worker/compute/executor/tests"
 	storageWorker "github.com/oasisprotocol/oasis-core/go/worker/storage"
@@ -71,10 +70,9 @@ var (
 		{cmdCommonFlags.CfgConsensusValidator, true},
 		{cmdCommonFlags.CfgDebugDontBlameOasis, true},
 		{storageWorker.CfgBackend, "badger"},
-		{compute.CfgWorkerEnabled, true},
+		{runtimeRegistry.CfgRuntimeMode, string(runtimeRegistry.RuntimeModeCompute)},
 		{runtimeRegistry.CfgRuntimeProvisioner, runtimeRegistry.RuntimeProvisionerMock},
 		{workerCommon.CfgClientPort, workerClientPort},
-		{storageWorker.CfgWorkerEnabled, true},
 		{storageWorker.CfgWorkerPublicRPCEnabled, true},
 		{tendermintCommon.CfgCoreListenAddress, "tcp://0.0.0.0:27565"},
 		{tendermintFull.CfgSupplementarySanityEnabled, true},
@@ -99,24 +97,11 @@ var (
 			BatchFlushTimeout: 20 * time.Second,
 			ProposerTimeout:   20,
 		},
-		Storage: registry.StorageParameters{
-			GroupSize:               1,
-			MinWriteReplication:     1,
-			MaxApplyWriteLogEntries: 100_000,
-			MaxApplyOps:             2,
-		},
 		AdmissionPolicy: registry.RuntimeAdmissionPolicy{
 			AnyNode: &registry.AnyNodeRuntimeAdmissionPolicy{},
 		},
 		Constraints: map[scheduler.CommitteeKind]map[scheduler.Role]registry.SchedulingConstraints{
 			scheduler.KindComputeExecutor: {
-				scheduler.RoleWorker: {
-					MinPoolSize: &registry.MinPoolSizeConstraint{
-						Limit: 1,
-					},
-				},
-			},
-			scheduler.KindStorage: {
 				scheduler.RoleWorker: {
 					MinPoolSize: &registry.MinPoolSizeConstraint{
 						Limit: 1,

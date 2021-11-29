@@ -80,7 +80,7 @@ func doVRFBeaconScenario(cmd *cobra.Command, args []string) {
 		panic(err)
 	}
 
-	b, err := initializeAndRegisterByzantineNode(runtimeID, node.RoleValidator, scheduler.RoleInvalid, scheduler.RoleInvalid, false, true)
+	b, err := initializeAndRegisterByzantineNode(runtimeID, node.RoleValidator, scheduler.RoleInvalid, false, true)
 	if err != nil {
 		panic(fmt.Sprintf("error initializing node: %+v", err))
 	}

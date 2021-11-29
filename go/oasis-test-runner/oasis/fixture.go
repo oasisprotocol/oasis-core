@@ -13,7 +13,6 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/log"
 	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
 	scheduler "github.com/oasisprotocol/oasis-core/go/scheduler/api"
-	storage "github.com/oasisprotocol/oasis-core/go/storage/api"
 )
 
 // NetworkFixture describes configuration for the test Oasis network and
@@ -26,7 +25,6 @@ type NetworkFixture struct {
 	Validators         []ValidatorFixture        `json:"validators,omitempty"`
 	Keymanagers        []KeymanagerFixture       `json:"keymanagers,omitempty"`
 	KeymanagerPolicies []KeymanagerPolicyFixture `json:"keymanager_policies,omitempty"`
-	StorageWorkers     []StorageWorkerFixture    `json:"storage_workers,omitempty"`
 	ComputeWorkers     []ComputeWorkerFixture    `json:"compute_workers,omitempty"`
 	Sentries           []SentryFixture           `json:"sentries,omitempty"`
 	Clients            []ClientFixture           `json:"clients,omitempty"`
@@ -94,13 +92,6 @@ func (f *NetworkFixture) Create(env *env.Env) (*Network, error) {
 
 	// Provision key managers.
 	for _, fx := range f.Keymanagers {
-		if _, err = fx.Create(net); err != nil {
-			return nil, err
-		}
-	}
-
-	// Provision the storage workers.
-	for _, fx := range f.StorageWorkers {
 		if _, err = fx.Create(net); err != nil {
 			return nil, err
 		}
@@ -228,10 +219,8 @@ type RuntimeFixture struct { // nolint: maligned
 	Keymanager int                  `json:"keymanager"`
 	Version    version.Version      `json:"version"`
 
-	Binaries         map[node.TEEHardware][]string `json:"binaries"`
-	GenesisState     storage.WriteLog              `json:"genesis_state,omitempty"`
-	GenesisStatePath string                        `json:"genesis_state_path,omitempty"`
-	GenesisRound     uint64                        `json:"genesis_round,omitempty"`
+	Binaries     map[node.TEEHardware][]string `json:"binaries"`
+	GenesisRound uint64                        `json:"genesis_round,omitempty"`
 
 	Executor     registry.ExecutorParameters     `json:"executor"`
 	TxnScheduler registry.TxnSchedulerParameters `json:"txn_scheduler"`
@@ -281,8 +270,6 @@ func (f *RuntimeFixture) Create(netFixture *NetworkFixture, net *Network) (*Runt
 		AdmissionPolicy:    f.AdmissionPolicy,
 		Staking:            f.Staking,
 		Binaries:           f.Binaries,
-		GenesisState:       f.GenesisState,
-		GenesisStatePath:   f.GenesisStatePath,
 		GenesisRound:       f.GenesisRound,
 		Pruner:             f.Pruner,
 		ExcludeFromGenesis: f.ExcludeFromGenesis,
@@ -370,73 +357,6 @@ func (f *KeymanagerFixture) Create(net *Network) (*Keymanager, error) {
 	})
 }
 
-// StorageWorkerFixture is a storage worker fixture.
-type StorageWorkerFixture struct { // nolint: maligned
-	NodeFixture
-
-	Backend string `json:"backend"`
-	Entity  int    `json:"entity"`
-
-	AllowEarlyTermination bool `json:"allow_early_termination"`
-	AllowErrorTermination bool `json:"allow_error_termination"`
-
-	EnableProfiling bool `json:"enable_profiling"`
-
-	DisableCertRotation bool `json:"disable_cert_rotation"`
-	DisablePublicRPC    bool `json:"disable_public_rpc"`
-
-	LogWatcherHandlerFactories []log.WatcherHandlerFactory `json:"-"`
-
-	Sentries []int `json:"sentries,omitempty"`
-
-	// Consensus contains configuration for the consensus backend.
-	Consensus ConsensusFixture `json:"consensus"`
-
-	CheckpointCheckInterval time.Duration `json:"checkpoint_check_interval,omitempty"`
-	IgnoreApplies           bool          `json:"ignore_applies,omitempty"`
-	CheckpointSyncEnabled   bool          `json:"checkpoint_sync_enabled,omitempty"`
-
-	CrashPointsProbability float64 `json:"crash_points_probability,omitempty"`
-
-	// Runtimes contains the indexes of the runtimes to enable. Leave
-	// empty or nil for the default behaviour (i.e. include all runtimes).
-	Runtimes []int `json:"runtimes,omitempty"`
-}
-
-// Create instantiates the storage worker described by the fixture.
-func (f *StorageWorkerFixture) Create(net *Network) (*Storage, error) {
-	entity, err := resolveEntity(net, f.Entity)
-	if err != nil {
-		return nil, err
-	}
-
-	return net.NewStorage(&StorageCfg{
-		NodeCfg: NodeCfg{
-			Name:                        f.Name,
-			AllowEarlyTermination:       f.AllowEarlyTermination,
-			AllowErrorTermination:       f.AllowErrorTermination,
-			CrashPointsProbability:      f.CrashPointsProbability,
-			SupplementarySanityInterval: f.Consensus.SupplementarySanityInterval,
-			EnableProfiling:             f.EnableProfiling,
-			NoAutoStart:                 f.NoAutoStart,
-			LogWatcherHandlerFactories:  f.LogWatcherHandlerFactories,
-			Consensus:                   f.Consensus,
-			Entity:                      entity,
-			ExtraArgs:                   f.ExtraArgs,
-		},
-		Backend:                 f.Backend,
-		SentryIndices:           f.Sentries,
-		CheckpointCheckInterval: f.CheckpointCheckInterval,
-		IgnoreApplies:           f.IgnoreApplies,
-		// The checkpoint syncing flag is intentionally flipped here.
-		// Syncing should normally be enabled, but normally disabled in tests.
-		CheckpointSyncDisabled: !f.CheckpointSyncEnabled,
-		DisableCertRotation:    f.DisableCertRotation,
-		DisablePublicRPC:       f.DisablePublicRPC,
-		Runtimes:               f.Runtimes,
-	})
-}
-
 // ComputeWorkerFixture is a compute worker fixture.
 type ComputeWorkerFixture struct {
 	NodeFixture
@@ -450,12 +370,21 @@ type ComputeWorkerFixture struct {
 
 	EnableProfiling bool `json:"enable_profiling"`
 
+	StorageBackend      string `json:"storage_backend,omitempty"`
+	DisableCertRotation bool   `json:"disable_cert_rotation"`
+	DisablePublicRPC    bool   `json:"disable_public_rpc"`
+
 	// Consensus contains configuration for the consensus backend.
 	Consensus ConsensusFixture `json:"consensus"`
 
 	CrashPointsProbability float64 `json:"crash_point_probability"`
 
 	LogWatcherHandlerFactories []log.WatcherHandlerFactory `json:"-"`
+
+	Sentries []int `json:"sentries,omitempty"`
+
+	CheckpointCheckInterval time.Duration `json:"checkpoint_check_interval,omitempty"`
+	CheckpointSyncEnabled   bool          `json:"checkpoint_sync_enabled,omitempty"`
 
 	// Runtimes contains the indexes of the runtimes to enable.
 	Runtimes []int `json:"runtimes,omitempty"`
@@ -485,9 +414,17 @@ func (f *ComputeWorkerFixture) Create(net *Network) (*Compute, error) {
 			Entity:                      entity,
 			ExtraArgs:                   f.ExtraArgs,
 		},
-		RuntimeProvisioner: f.RuntimeProvisioner,
-		Runtimes:           f.Runtimes,
-		RuntimeConfig:      f.RuntimeConfig,
+		RuntimeProvisioner:      f.RuntimeProvisioner,
+		StorageBackend:          f.StorageBackend,
+		SentryIndices:           f.Sentries,
+		CheckpointCheckInterval: f.CheckpointCheckInterval,
+		// The checkpoint syncing flag is intentionally flipped here.
+		// Syncing should normally be enabled, but normally disabled in tests.
+		CheckpointSyncDisabled: !f.CheckpointSyncEnabled,
+		DisableCertRotation:    f.DisableCertRotation,
+		DisablePublicRPC:       f.DisablePublicRPC,
+		Runtimes:               f.Runtimes,
+		RuntimeConfig:          f.RuntimeConfig,
 	})
 }
 
@@ -520,7 +457,7 @@ type SentryFixture struct {
 	Consensus ConsensusFixture `json:"consensus"`
 
 	Validators        []int `json:"validators"`
-	StorageWorkers    []int `json:"storage_workers"`
+	ComputeWorkers    []int `json:"compute_workers"`
 	KeymanagerWorkers []int `json:"keymanager_workers"`
 }
 
@@ -537,7 +474,7 @@ func (f *SentryFixture) Create(net *Network) (*Sentry, error) {
 			ExtraArgs:                   f.ExtraArgs,
 		},
 		ValidatorIndices:  f.Validators,
-		StorageIndices:    f.StorageWorkers,
+		ComputeIndices:    f.ComputeWorkers,
 		KeymanagerIndices: f.KeymanagerWorkers,
 	})
 }
@@ -656,16 +593,16 @@ func resolveValidators(net *Network, indices []int) ([]*Validator, error) {
 	return validators, nil
 }
 
-func resolveStorageWorkers(net *Network, indices []int) ([]*Storage, error) {
-	allStorageWorkers := net.StorageWorkers()
-	var storageWorkers []*Storage
+func resolveComputeWorkers(net *Network, indices []int) ([]*Compute, error) {
+	allComputeWorkers := net.ComputeWorkers()
+	var computeWorkers []*Compute
 	for _, index := range indices {
-		if index < 0 || index >= len(allStorageWorkers) {
-			return nil, fmt.Errorf("invalid storage index: %d", index)
+		if index < 0 || index >= len(allComputeWorkers) {
+			return nil, fmt.Errorf("invalid compute index: %d", index)
 		}
-		storageWorkers = append(storageWorkers, allStorageWorkers[index])
+		computeWorkers = append(computeWorkers, allComputeWorkers[index])
 	}
-	return storageWorkers, nil
+	return computeWorkers, nil
 }
 
 func resolveKeymanagerWorkers(net *Network, indices []int) ([]*Keymanager, error) {

@@ -6,6 +6,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/oasisprotocol/oasis-core/go/common/cbor"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	memorySigner "github.com/oasisprotocol/oasis-core/go/common/crypto/signature/signers/memory"
 	"github.com/oasisprotocol/oasis-core/go/common/entity"
@@ -35,7 +36,8 @@ func TestValidatorConversionTopK(t *testing.T) {
 	mkent := func(num int) (entity.Entity, *entity.SignedEntity) {
 		ents := memorySigner.NewTestSigner(fmt.Sprintf("test entity %d", num))
 		e := entity.Entity{
-			ID: ents.Public(),
+			Versioned: cbor.NewVersioned(entity.LatestDescriptorVersion),
+			ID:        ents.Public(),
 		}
 		se, err := entity.SignEntity(ents, registry.RegisterGenesisEntitySignatureContext, &e)
 		if err != nil {
@@ -47,6 +49,7 @@ func TestValidatorConversionTopK(t *testing.T) {
 	mknod := func(ent entity.Entity, num int, expired bool) *node.MultiSignedNode {
 		nods := memorySigner.NewTestSigner(fmt.Sprintf("test node %d", num))
 		n := node.Node{
+			Versioned:  cbor.NewVersioned(node.LatestNodeDescriptorVersion),
 			ID:         nods.Public(),
 			EntityID:   ent.ID,
 			Expiration: 1000,

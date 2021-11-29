@@ -523,40 +523,6 @@ func TestElectCommittee(t *testing.T) {
 			},
 			true,
 		},
-		{
-			"storage: should elect single node with no constraints",
-			scheduler.KindStorage,
-			[]*node.Node{
-				{
-					ID: nodeID1,
-					Runtimes: []*node.Runtime{
-						{ID: rtID1}, // Matching runtime ID.
-					},
-					Roles: node.RoleStorageWorker,
-				},
-				{
-					ID:       nodeID2,
-					Runtimes: []*node.Runtime{},  // No runtimes.
-					Roles:    node.RoleValidator, // Validator.
-				},
-				{
-					ID: nodeID3,
-					Runtimes: []*node.Runtime{
-						{ID: rtID2}, // Different runtime ID.
-					},
-					Roles: node.RoleStorageWorker,
-				},
-			},
-			map[staking.Address]bool{},
-			registry.Runtime{
-				ID:   rtID1,
-				Kind: registry.KindCompute,
-				Storage: registry.StorageParameters{
-					GroupSize: 1,
-				},
-			},
-			true,
-		},
 	} {
 		err := app.electCommittee(
 			ctx,

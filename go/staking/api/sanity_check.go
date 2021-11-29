@@ -13,7 +13,7 @@ import (
 // SanityCheck performs a sanity check on the consensus parameters.
 func (p *ConsensusParameters) SanityCheck() error {
 	// Thresholds.
-	for kind := KindEntity; kind <= KindMax; kind++ {
+	for _, kind := range ThresholdKinds {
 		val, ok := p.Thresholds[kind]
 		if !ok {
 			return fmt.Errorf("threshold for kind '%s' not defined", kind)

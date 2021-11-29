@@ -26,8 +26,6 @@ pub enum CommitteeKind {
     Invalid = 0,
     /// A compute executor committee.
     ComputeExecutor = 1,
-    /// A storage committee.
-    Storage = 2,
 }
 
 impl Default for CommitteeKind {

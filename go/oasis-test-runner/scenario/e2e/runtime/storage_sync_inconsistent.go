@@ -12,7 +12,6 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/env"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/oasis"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/scenario"
-	"github.com/oasisprotocol/oasis-core/go/storage/database"
 )
 
 const checkpointInterval = 15
@@ -56,24 +55,24 @@ func (sc *storageSyncInconsistentImpl) Fixture() (*oasis.NetworkFixture, error) 
 	f.Runtimes[1].Storage.CheckpointInterval = checkpointInterval
 	f.Runtimes[1].Storage.CheckpointNumKept = 100
 
-	f.StorageWorkers = append(f.StorageWorkers, f.StorageWorkers[0])
-	f.StorageWorkers[0].CheckpointCheckInterval = 1 * time.Second
+	f.ComputeWorkers = append(f.ComputeWorkers, f.ComputeWorkers[0])
+	f.ComputeWorkers[0].CheckpointCheckInterval = 1 * time.Second
 
-	// One more storage worker for later, this is the one we'll be messing with.
-	f.StorageWorkers = append(f.StorageWorkers, oasis.StorageWorkerFixture{
+	// One more compute worker for later, this is the one we'll be messing with.
+	f.ComputeWorkers = append(f.ComputeWorkers, oasis.ComputeWorkerFixture{
 		NodeFixture: oasis.NodeFixture{
 			NoAutoStart: true,
 		},
-		Backend:               database.BackendNameBadgerDB,
 		Entity:                1,
+		Runtimes:              []int{1},
 		CheckpointSyncEnabled: true,
 	})
-	sc.messyStorage = len(f.StorageWorkers) - 1
+	sc.messyStorage = len(f.ComputeWorkers) - 1
 
 	return f, nil
 }
 
-func (sc *storageSyncInconsistentImpl) waitForSegment(ctx context.Context, worker *oasis.Storage, seg, offset int) error {
+func (sc *storageSyncInconsistentImpl) waitForSegment(ctx context.Context, worker *oasis.Compute, seg, offset int) error {
 	round := uint64(seg*checkpointInterval + offset)
 	sc.Logger.Info("waiting for round", "round", round)
 	waitedRound, err := worker.WaitForRound(ctx, sc.runtimeID, round)
@@ -81,7 +80,7 @@ func (sc *storageSyncInconsistentImpl) waitForSegment(ctx context.Context, worke
 		return fmt.Errorf("error waiting for round %d: %w", round, err)
 	}
 	if waitedRound > round {
-		return fmt.Errorf("storage worker was already ahead (at round %d instead of %d), increase the checkpointing interval",
+		return fmt.Errorf("compute worker was already ahead (at round %d instead of %d), increase the checkpointing interval",
 			waitedRound,
 			round,
 		)
@@ -94,8 +93,8 @@ func (sc *storageSyncInconsistentImpl) wipe(ctx context.Context, worker *oasis.N
 }
 
 func (sc *storageSyncInconsistentImpl) Run(childEnv *env.Env) error {
-	storage0 := sc.Net.StorageWorkers()[0]
-	messyWorker := sc.Net.StorageWorkers()[sc.messyStorage]
+	compute0 := sc.Net.ComputeWorkers()[0]
+	messyWorker := sc.Net.ComputeWorkers()[sc.messyStorage]
 	sc.runtimeID = sc.Net.Runtimes()[1].ID()
 	ctx := context.Background()
 
@@ -113,12 +112,12 @@ func (sc *storageSyncInconsistentImpl) Run(childEnv *env.Env) error {
 	}
 
 	// Kill the messy worker just before the first checkpoint is due.
-	if err = sc.waitForSegment(ctx, storage0, 1, 2); err != nil {
+	if err = sc.waitForSegment(ctx, compute0, 1, 2); err != nil {
 		return err
 	}
 
 	sc.Logger.Info("pausing checkpointers in all storage workers")
-	for _, worker := range sc.Net.StorageWorkers() {
+	for _, worker := range sc.Net.ComputeWorkers() {
 		if worker == messyWorker {
 			continue
 		}

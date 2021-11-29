@@ -25,7 +25,7 @@ type runtimeUpgradeImpl struct {
 
 	nonce uint64
 
-	firstNewWorker int
+	upgradedRuntimeIndex int
 }
 
 func newRuntimeUpgradeImpl() scenario.Scenario {
@@ -64,29 +64,8 @@ func (sc *runtimeUpgradeImpl) Fixture() (*oasis.NetworkFixture, error) {
 
 	// The upgraded runtime will be registered later.
 	runtimeFix.ExcludeFromGenesis = true
-	newComputeIndex := len(f.Runtimes)
+	sc.upgradedRuntimeIndex = len(f.Runtimes)
 	f.Runtimes = append(f.Runtimes, runtimeFix)
-
-	// Add the upgraded compute runtimes to the compute workers, will be started later.
-	sc.firstNewWorker = len(f.ComputeWorkers)
-	for i := range f.ComputeWorkers {
-		f.ComputeWorkers[i].AllowEarlyTermination = true // Allow stopping the worker early.
-		f.ComputeWorkers[i].Runtimes = []int{computeIndex}
-	}
-	for i := 0; i < sc.firstNewWorker; i++ {
-		f.ComputeWorkers = append(f.ComputeWorkers, oasis.ComputeWorkerFixture{
-			NodeFixture: oasis.NodeFixture{
-				NoAutoStart: true,
-			},
-			Entity:   1,
-			Runtimes: []int{newComputeIndex},
-		})
-	}
-
-	// The runtime ID stays the same, so pass only one instance to the storage workers.
-	for i := range f.StorageWorkers {
-		f.StorageWorkers[i].Runtimes = []int{computeIndex}
-	}
 
 	return f, nil
 }
@@ -206,36 +185,13 @@ func (sc *runtimeUpgradeImpl) Run(childEnv *env.Env) error {
 		return fmt.Errorf("updating policies: %w", err)
 	}
 
-	// Stop old compute workers, making sure they deregister.
-	sc.Logger.Info("stopping old runtimes")
-	for i := 0; i < sc.firstNewWorker; i++ {
-		worker := sc.Net.ComputeWorkers()[i]
-		if err := worker.RequestShutdown(ctx, false); err != nil {
-			return fmt.Errorf("failed to request shutdown: %w", err)
-		}
-	}
-	// Wait for all old workers to exit.
-	for i := 0; i < sc.firstNewWorker; i++ {
-		worker := sc.Net.ComputeWorkers()[i]
-		if err := <-worker.Exit(); err != env.ErrEarlyTerm {
-			return fmt.Errorf("compute worker exited with error: %w", err)
-		}
-	}
-
-	// Start the new compute workers.
-	sc.Logger.Info("starting new runtimes")
-	for i := sc.firstNewWorker; i < len(sc.Net.ComputeWorkers()); i++ {
-		newWorker := sc.Net.ComputeWorkers()[i]
-		if err := newWorker.Start(); err != nil {
-			return fmt.Errorf("starting new compute worker: %w", err)
-		}
-	}
-
 	// Update runtime to include the new enclave identity.
 	sc.Logger.Info("updating runtime descriptor")
-	newRt := sc.Net.Runtimes()[len(sc.Net.Runtimes())-1]
+	newRt := sc.Net.Runtimes()[sc.upgradedRuntimeIndex]
+	newRtDsc := newRt.ToRuntimeDescriptor()
+
 	newTxPath := filepath.Join(childEnv.Dir(), "register_update_compute_runtime.json")
-	if err := cli.Registry.GenerateRegisterRuntimeTx(childEnv.Dir(), newRt.ToRuntimeDescriptor(), sc.nonce, newTxPath); err != nil {
+	if err := cli.Registry.GenerateRegisterRuntimeTx(childEnv.Dir(), newRtDsc, sc.nonce, newTxPath); err != nil {
 		return fmt.Errorf("failed to generate register compute runtime tx: %w", err)
 	}
 	sc.nonce++
@@ -243,11 +199,32 @@ func (sc *runtimeUpgradeImpl) Run(childEnv *env.Env) error {
 		return fmt.Errorf("failed to update compute runtime: %w", err)
 	}
 
+	// Stop old compute workers, making sure they deregister.
+	sc.Logger.Info("stopping old runtime")
+	for _, worker := range sc.Net.ComputeWorkers() {
+		if err := worker.Stop(); err != nil {
+			return fmt.Errorf("failed to stop node: %w", err)
+		}
+	}
+
+	// Update worker configuration.
+	for _, worker := range sc.Net.ComputeWorkers() {
+		worker.UpdateRuntimes([]int{sc.upgradedRuntimeIndex})
+	}
+
+	// Start the compute workers back.
+	sc.Logger.Info("starting new runtime")
+	for _, worker := range sc.Net.ComputeWorkers() {
+		if err := worker.Start(); err != nil {
+			return fmt.Errorf("starting new compute worker: %w", err)
+		}
+	}
+
 	// Wait for the new nodes to register.
 	sc.Logger.Info("waiting for new compute workers to be ready")
-	for i := sc.firstNewWorker; i < len(sc.Net.ComputeWorkers()); i++ {
-		if err := sc.Net.ComputeWorkers()[i].WaitReady(ctx); err != nil {
-			return fmt.Errorf("error waiting for compute node to become ready: %w", err)
+	for _, worker := range sc.Net.ComputeWorkers() {
+		if err := worker.WaitReady(ctx); err != nil {
+			return fmt.Errorf("error waiting for compute node '%s' to become ready: %w", worker.Name, err)
 		}
 	}
 

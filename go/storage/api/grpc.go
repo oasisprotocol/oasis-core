@@ -50,27 +50,6 @@ var (
 			return r.Tree.Root.Namespace, nil
 		}).
 		WithAccessControl(cmnGrpc.AccessControlAlways)
-	// MethodApply is the Apply method.
-	MethodApply = ServiceName.NewMethod("Apply", ApplyRequest{}).
-			WithNamespaceExtractor(func(ctx context.Context, req interface{}) (common.Namespace, error) {
-			r, ok := req.(*ApplyRequest)
-			if !ok {
-				return common.Namespace{}, errInvalidRequestType
-			}
-			return r.Namespace, nil
-		}).
-		WithAccessControl(cmnGrpc.AccessControlAlways)
-
-	// MethodApplyBatch is the ApplyBatch method.
-	MethodApplyBatch = ServiceName.NewMethod("ApplyBatch", ApplyBatchRequest{}).
-				WithNamespaceExtractor(func(ctx context.Context, req interface{}) (common.Namespace, error) {
-			r, ok := req.(*ApplyBatchRequest)
-			if !ok {
-				return common.Namespace{}, errInvalidRequestType
-			}
-			return r.Namespace, nil
-		}).
-		WithAccessControl(cmnGrpc.AccessControlAlways)
 
 	// MethodGetDiff is the GetDiff method.
 	MethodGetDiff = ServiceName.NewMethod("GetDiff", GetDiffRequest{})
@@ -97,14 +76,6 @@ var (
 			{
 				MethodName: MethodSyncIterate.ShortName(),
 				Handler:    handlerSyncIterate,
-			},
-			{
-				MethodName: MethodApply.ShortName(),
-				Handler:    handlerApply,
-			},
-			{
-				MethodName: MethodApplyBatch.ShortName(),
-				Handler:    handlerApplyBatch,
 			},
 			{
 				MethodName: MethodGetCheckpoints.ShortName(),
@@ -191,52 +162,6 @@ func handlerSyncIterate( // nolint: golint
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(Backend).SyncIterate(ctx, req.(*IterateRequest))
-	}
-	return interceptor(ctx, &req, info, handler)
-}
-
-func handlerApply( // nolint: golint
-	srv interface{},
-	ctx context.Context,
-	dec func(interface{}) error,
-	interceptor grpc.UnaryServerInterceptor,
-) (interface{}, error) {
-	var req ApplyRequest
-	if err := dec(&req); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(Backend).Apply(ctx, &req)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: MethodApply.FullName(),
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(Backend).Apply(ctx, req.(*ApplyRequest))
-	}
-	return interceptor(ctx, &req, info, handler)
-}
-
-func handlerApplyBatch( // nolint: golint
-	srv interface{},
-	ctx context.Context,
-	dec func(interface{}) error,
-	interceptor grpc.UnaryServerInterceptor,
-) (interface{}, error) {
-	var req ApplyBatchRequest
-	if err := dec(&req); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(Backend).ApplyBatch(ctx, &req)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: MethodApplyBatch.FullName(),
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(Backend).ApplyBatch(ctx, req.(*ApplyBatchRequest))
 	}
 	return interceptor(ctx, &req, info, handler)
 }
@@ -381,22 +306,6 @@ func (c *storageClient) SyncIterate(ctx context.Context, request *IterateRequest
 		return nil, err
 	}
 	return &rsp, nil
-}
-
-func (c *storageClient) Apply(ctx context.Context, request *ApplyRequest) ([]*Receipt, error) {
-	var rsp []*Receipt
-	if err := c.conn.Invoke(ctx, MethodApply.FullName(), request, &rsp); err != nil {
-		return nil, err
-	}
-	return rsp, nil
-}
-
-func (c *storageClient) ApplyBatch(ctx context.Context, request *ApplyBatchRequest) ([]*Receipt, error) {
-	var rsp []*Receipt
-	if err := c.conn.Invoke(ctx, MethodApplyBatch.FullName(), request, &rsp); err != nil {
-		return nil, err
-	}
-	return rsp, nil
 }
 
 func (c *storageClient) GetCheckpoints(ctx context.Context, request *checkpoint.GetCheckpointsRequest) ([]*checkpoint.Metadata, error) {

@@ -216,7 +216,6 @@ func newWorker(
 	cancelCtx context.CancelFunc,
 	hostNode control.ControlledNode,
 	dataDir string,
-	enabled bool,
 	identity *identity.Identity,
 	consensus consensus.Backend,
 	grpc *grpc.Server,
@@ -224,10 +223,19 @@ func newWorker(
 	p2p *p2p.P2P,
 	ias ias.Endpoint,
 	keyManager keymanagerApi.Backend,
-	runtimeRegistry runtimeRegistry.Registry,
+	rtRegistry runtimeRegistry.Registry,
 	cfg Config,
 	genesisDoc *genesis.Document,
 ) (*Worker, error) {
+	var enabled bool
+	switch rtRegistry.Mode() {
+	case runtimeRegistry.RuntimeModeCompute, runtimeRegistry.RuntimeModeKeymanager:
+		// When configured in compute or keymanager mode, enable the common worker.
+		enabled = true
+	default:
+		enabled = false
+	}
+
 	w := &Worker{
 		enabled:           enabled,
 		cfg:               cfg,
@@ -240,7 +248,7 @@ func newWorker(
 		P2P:               p2p,
 		IAS:               ias,
 		KeyManager:        keyManager,
-		RuntimeRegistry:   runtimeRegistry,
+		RuntimeRegistry:   rtRegistry,
 		GenesisDoc:        genesisDoc,
 		runtimes:          make(map[common.Namespace]*committee.Node),
 		ctx:               ctx,
@@ -250,12 +258,14 @@ func newWorker(
 		logger:            logging.GetLogger("worker/common"),
 	}
 
-	if enabled {
-		for _, rt := range runtimeRegistry.Runtimes() {
-			// Register all configured runtimes.
-			if err := w.registerRuntime(rt); err != nil {
-				return nil, err
-			}
+	if !enabled {
+		return w, nil
+	}
+
+	for _, rt := range rtRegistry.Runtimes() {
+		// Register all configured runtimes.
+		if err := w.registerRuntime(rt); err != nil {
+			return nil, err
 		}
 	}
 
@@ -266,7 +276,6 @@ func newWorker(
 func New(
 	hostNode control.ControlledNode,
 	dataDir string,
-	enabled bool,
 	identity *identity.Identity,
 	consensus consensus.Backend,
 	p2p *p2p.P2P,
@@ -299,7 +308,6 @@ func New(
 		cancelCtx,
 		hostNode,
 		dataDir,
-		enabled,
 		identity,
 		consensus,
 		grpc,

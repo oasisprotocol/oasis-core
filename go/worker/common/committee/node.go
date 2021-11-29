@@ -179,9 +179,6 @@ func (n *Node) GetStatus(ctx context.Context) (*api.Status, error) {
 	if cmte := epoch.GetExecutorCommittee(); cmte != nil {
 		status.ExecutorRoles = cmte.Roles
 	}
-	if cmte := epoch.GetStorageCommittee(); cmte != nil {
-		status.StorageRoles = cmte.Roles
-	}
 	status.IsTransactionScheduler = epoch.IsTransactionScheduler(status.LatestRound)
 
 	status.Peers = n.Group.Peers()

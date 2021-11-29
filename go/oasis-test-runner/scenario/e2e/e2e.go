@@ -137,9 +137,6 @@ func (sc *E2E) GetExportedGenesisFiles(skipCompute bool) ([]string, error) {
 			nodes = append(nodes, n)
 		}
 	}
-	for _, n := range sc.Net.StorageWorkers() {
-		nodes = append(nodes, n)
-	}
 	for _, n := range sc.Net.Keymanagers() {
 		nodes = append(nodes, n)
 	}
@@ -197,7 +194,7 @@ func (sc *E2E) ResetConsensusState(childEnv *env.Env) error {
 		}
 	}
 	for _, cw := range sc.Net.ComputeWorkers() {
-		if err := cli.UnsafeReset(cw.DataDir(), false, false); err != nil {
+		if err := cli.UnsafeReset(cw.DataDir(), true, false); err != nil {
 			return err
 		}
 	}
@@ -213,11 +210,6 @@ func (sc *E2E) ResetConsensusState(childEnv *env.Env) error {
 	}
 	for _, se := range sc.Net.Sentries() {
 		if err := cli.UnsafeReset(se.DataDir(), false, false); err != nil {
-			return err
-		}
-	}
-	for _, sw := range sc.Net.StorageWorkers() {
-		if err := cli.UnsafeReset(sw.DataDir(), true, false); err != nil {
 			return err
 		}
 	}
@@ -264,12 +256,12 @@ func (sc *E2E) DumpRestoreNetwork(
 		}
 	}
 
-	if len(sc.Net.StorageWorkers()) > 0 {
+	if len(sc.Net.ComputeWorkers()) > 0 {
 		// Dump storage.
 		args = []string{
 			"debug", "storage", "export",
 			"--genesis.file", dumpPath,
-			"--datadir", sc.Net.StorageWorkers()[0].DataDir(),
+			"--datadir", sc.Net.ComputeWorkers()[0].DataDir(),
 			"--storage.export.dir", filepath.Join(childEnv.Dir(), "storage_dumps"),
 			"--debug.dont_blame_oasis",
 			"--debug.allow_test_keys",

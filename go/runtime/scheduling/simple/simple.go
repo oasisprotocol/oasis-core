@@ -49,6 +49,10 @@ func (s *scheduler) GetBatch(force bool) []*transaction.CheckedTransaction {
 	return s.txPool.GetBatch(force)
 }
 
+func (s *scheduler) GetKnownBatch(batch []hash.Hash) ([]*transaction.CheckedTransaction, map[hash.Hash]int) {
+	return s.txPool.GetKnownBatch(batch)
+}
+
 func (s *scheduler) UnscheduledSize() uint64 {
 	return s.txPool.Size()
 }

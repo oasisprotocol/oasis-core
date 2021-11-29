@@ -141,12 +141,10 @@ var (
 
 	// RuntimesRequiredRoles are the Node roles that require runtimes.
 	RuntimesRequiredRoles = node.RoleComputeWorker |
-		node.RoleStorageWorker |
 		node.RoleKeyManager
 
 	// ComputeRuntimeAllowedRoles are the Node roles that allow compute runtimes.
-	ComputeRuntimeAllowedRoles = node.RoleComputeWorker |
-		node.RoleStorageWorker
+	ComputeRuntimeAllowedRoles = node.RoleComputeWorker
 
 	// KeyManagerRuntimeAllowedRoles are the Node roles that allow key manager runtimes.
 	KeyManagerRuntimeAllowedRoles = node.RoleKeyManager
@@ -156,7 +154,6 @@ var (
 
 	// TLSAddressRequiredRoles are the Node roles that require TLS Address.
 	TLSAddressRequiredRoles = node.RoleComputeWorker |
-		node.RoleStorageWorker |
 		node.RoleKeyManager |
 		node.RoleConsensusRPC
 
@@ -457,15 +454,6 @@ func VerifyRegisterNodeArgs( // nolint: gocyclo
 		return nil, nil, ErrInvalidArgument
 	}
 
-	// Determine which key should be expected to have signed the node descriptor.
-	var inEntityNodeList bool
-	for _, v := range entity.Nodes {
-		if n.ID.Equal(v) {
-			inEntityNodeList = true
-			break
-		}
-	}
-
 	// Descriptors will always be signed by the node identity key.
 	var expectedSigners []signature.PublicKey
 	if !sigNode.MultiSigned.IsSignedBy(n.ID) {
@@ -476,7 +464,7 @@ func VerifyRegisterNodeArgs( // nolint: gocyclo
 		return nil, nil, fmt.Errorf("%w: registration not signed by node identity", ErrInvalidArgument)
 	}
 	expectedSigners = append(expectedSigners, n.ID)
-	if !inEntityNodeList && (!isSanityCheck || isGenesis) {
+	if !entity.HasNode(n.ID) && (!isSanityCheck || isGenesis) {
 		logger.Error("RegisterNode: node public key not found in entity's node list",
 			"signed_node", sigNode,
 			"node", n,
@@ -497,20 +485,6 @@ func VerifyRegisterNodeArgs( // nolint: gocyclo
 			"max_expiration", maxExpiration,
 		)
 		return nil, nil, fmt.Errorf("%w: expiration period greater than allowed", ErrInvalidArgument)
-	}
-
-	// Make sure that a node has at least one valid role.
-	switch {
-	case n.Roles == 0:
-		logger.Error("RegisterNode: no roles specified",
-			"node", n,
-		)
-		return nil, nil, fmt.Errorf("%w: no roles specified", ErrInvalidArgument)
-	case n.HasRoles(node.RoleReserved):
-		logger.Error("RegisterNode: invalid role specified",
-			"node", n,
-		)
-		return nil, nil, fmt.Errorf("%w: invalid role specified", ErrInvalidArgument)
 	}
 
 	// TODO: Key manager nodes maybe should be restricted to only being a
@@ -1284,9 +1258,6 @@ func StakeThresholdsForNode(n *node.Node, rts []*Runtime) (thresholds []staking.
 		}
 		if n.HasRoles(node.RoleComputeWorker) {
 			roleThresholds = append(roleThresholds, staking.KindNodeCompute)
-		}
-		if n.HasRoles(node.RoleStorageWorker) {
-			roleThresholds = append(roleThresholds, staking.KindNodeStorage)
 		}
 
 		rtThresholds := rt.Staking.Thresholds

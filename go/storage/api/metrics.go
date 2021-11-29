@@ -49,7 +49,6 @@ var (
 	}
 
 	labelApply           = prometheus.Labels{"call": "apply"}
-	labelApplyBatch      = prometheus.Labels{"call": "apply_batch"}
 	labelSyncGet         = prometheus.Labels{"call": "sync_get"}
 	labelSyncGetPrefixes = prometheus.Labels{"call": "sync_get_prefixes"}
 	labelSyncIterate     = prometheus.Labels{"call": "sync_iterate"}
@@ -59,46 +58,6 @@ var (
 
 type metricsWrapper struct {
 	Backend
-}
-
-func (w *metricsWrapper) Apply(ctx context.Context, request *ApplyRequest) ([]*Receipt, error) {
-	start := time.Now()
-	receipts, err := w.Backend.Apply(ctx, request)
-	storageLatency.With(labelApply).Observe(time.Since(start).Seconds())
-
-	var size int
-	for _, entry := range request.WriteLog {
-		size += len(entry.Key) + len(entry.Value)
-	}
-	storageValueSize.With(labelApply).Observe(float64(size))
-	if err != nil {
-		storageFailures.With(labelApply).Inc()
-		return nil, err
-	}
-
-	storageCalls.With(labelApply).Inc()
-	return receipts, err
-}
-
-func (w *metricsWrapper) ApplyBatch(ctx context.Context, request *ApplyBatchRequest) ([]*Receipt, error) {
-	start := time.Now()
-	receipts, err := w.Backend.ApplyBatch(ctx, request)
-	storageLatency.With(labelApplyBatch).Observe(time.Since(start).Seconds())
-
-	var size int
-	for _, op := range request.Ops {
-		for _, entry := range op.WriteLog {
-			size += len(entry.Key) + len(entry.Value)
-		}
-	}
-	storageValueSize.With(labelApplyBatch).Observe(float64(size))
-	if err != nil {
-		storageFailures.With(labelApplyBatch).Inc()
-		return nil, err
-	}
-
-	storageCalls.With(labelApplyBatch).Inc()
-	return receipts, err
 }
 
 func (w *metricsWrapper) SyncGet(ctx context.Context, request *GetRequest) (*ProofResponse, error) {
@@ -142,6 +101,25 @@ func (w *metricsWrapper) SyncIterate(ctx context.Context, request *IterateReques
 
 type localMetricsWrapper struct {
 	metricsWrapper
+}
+
+func (w *metricsWrapper) Apply(ctx context.Context, request *ApplyRequest) error {
+	start := time.Now()
+	err := w.Backend.(LocalBackend).Apply(ctx, request)
+	storageLatency.With(labelApply).Observe(time.Since(start).Seconds())
+
+	var size int
+	for _, entry := range request.WriteLog {
+		size += len(entry.Key) + len(entry.Value)
+	}
+	storageValueSize.With(labelApply).Observe(float64(size))
+	if err != nil {
+		storageFailures.With(labelApply).Inc()
+		return err
+	}
+
+	storageCalls.With(labelApply).Inc()
+	return nil
 }
 
 func (w *localMetricsWrapper) Checkpointer() checkpoint.CreateRestorer {

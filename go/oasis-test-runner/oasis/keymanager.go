@@ -271,11 +271,11 @@ func (km *Keymanager) AddArgs(args *argBuilder) error {
 		tendermintPrune(km.consensus.PruneNumKept).
 		tendermintRecoverCorruptedWAL(km.consensus.TendermintRecoverCorruptedWAL).
 		workerClientPort(km.workerClientPort).
+		runtimeMode(runtimeRegistry.RuntimeModeKeymanager).
 		runtimeProvisioner(km.runtimeProvisioner).
 		runtimeSGXLoader(km.net.cfg.RuntimeSGXLoaderBinary).
 		// XXX: could support configurable binary idx if ever needed.
 		runtimePath(km.runtime.id, runtimeBinaries[0]).
-		workerKeymanagerEnabled().
 		workerKeymanagerRuntimeID(km.runtime.id).
 		configureDebugCrashPoints(km.crashPointsProbability).
 		tendermintSupplementarySanity(km.supplementarySanityInterval).

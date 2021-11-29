@@ -30,7 +30,6 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/roothash/api/message"
 	scheduler "github.com/oasisprotocol/oasis-core/go/scheduler/api"
 	staking "github.com/oasisprotocol/oasis-core/go/staking/api"
-	storage "github.com/oasisprotocol/oasis-core/go/storage/api"
 )
 
 type testMsgDispatcher struct{}
@@ -142,18 +141,6 @@ func TestMessagesGasEstimation(t *testing.T) {
 	}
 	err = schedulerState.PutCommittee(ctx, &executorCommittee)
 	require.NoError(err, "PutCommittee")
-	storageCommittee := scheduler.Committee{
-		RuntimeID: runtime.ID,
-		Kind:      scheduler.KindStorage,
-		Members: []*scheduler.CommitteeNode{
-			{
-				Role:      scheduler.RoleWorker,
-				PublicKey: sk.Public(),
-			},
-		},
-	}
-	err = schedulerState.PutCommittee(ctx, &storageCommittee)
-	require.NoError(err, "PutCommittee")
 
 	// Initialize roothash state.
 	roothashState := roothashState.NewMutableState(ctx.State())
@@ -206,28 +193,6 @@ func TestMessagesGasEstimation(t *testing.T) {
 		},
 		Messages: msgs,
 	}
-
-	// Generate storage receipts.
-	receiptBody := storage.ReceiptBody{
-		Version:   1,
-		Namespace: newBlk.Header.Namespace,
-		Round:     newBlk.Header.Round,
-		RootTypes: body.RootTypesForStorageReceipt(),
-		Roots:     body.RootsForStorageReceipt(),
-	}
-	signedReceipt, err := signature.SignSigned(sk, storage.ReceiptSignatureContext, &receiptBody)
-	require.NoError(err, "SignSigned")
-	body.StorageSignatures = []signature.Signature{signedReceipt.Signature}
-
-	// Generate txn scheduler signature.
-	dispatch := &commitment.ProposedBatch{
-		IORoot:            body.InputRoot,
-		StorageSignatures: body.InputStorageSigs,
-		Header:            blk.Header,
-	}
-	signedDispatch, err := commitment.SignProposedBatch(sk, runtime.ID, dispatch)
-	require.NoError(err, "SignProposedBatch")
-	body.TxnSchedSig = signedDispatch.Signature
 
 	commit, err := commitment.SignExecutorCommitment(sk, runtime.ID, &body)
 	require.NoError(err, "SignExecutorCommitment")
@@ -336,18 +301,6 @@ func TestEvidence(t *testing.T) {
 	}
 	err = schedulerState.PutCommittee(ctx, &executorCommittee)
 	require.NoError(err, "PutCommittee")
-	storageCommittee := scheduler.Committee{
-		RuntimeID: runtime.ID,
-		Kind:      scheduler.KindStorage,
-		Members: []*scheduler.CommitteeNode{
-			{
-				Role:      scheduler.RoleWorker,
-				PublicKey: sk.Public(),
-			},
-		},
-	}
-	err = schedulerState.PutCommittee(ctx, &storageCommittee)
-	require.NoError(err, "PutCommittee")
 
 	// Initialize roothash state.
 	roothashState := roothashState.NewMutableState(ctx.State())
@@ -405,37 +358,37 @@ func TestEvidence(t *testing.T) {
 	blk2 := block.NewEmptyBlock(blk, 0, block.Normal)
 
 	// Proposed batch.
-	batch1 := &commitment.ProposedBatch{
-		IORoot:            blk2.Header.IORoot,
-		StorageSignatures: []signature.Signature{},
-		Header:            blk2.Header,
+	proposalHeader1 := &commitment.ProposalHeader{
+		Round:        blk2.Header.Round,
+		PreviousHash: blk2.Header.PreviousHash,
+		BatchHash:    blk2.Header.IORoot,
 	}
-	signedBatch1, err := commitment.SignProposedBatch(sk, runtime.ID, batch1)
-	require.NoError(err, "SignProposedBatch")
-	noSlashingRtB1, err := commitment.SignProposedBatch(sk, runtimeNoSlashing.ID, batch1)
-	require.NoError(err, "SignProposedBatch")
-	zeroSlashingRtB1, err := commitment.SignProposedBatch(sk, runtimeZeroSlashing.ID, batch1)
-	require.NoError(err, "SignProposedBatch")
-	nonExistingSignerBatch1, err := commitment.SignProposedBatch(nonExistingSigner, runtime.ID, batch1)
-	require.NoError(err, "SignProposedBatch")
-	uninitializedRtB1, err := commitment.SignProposedBatch(sk, uninitializedRtID, batch1)
-	require.NoError(err, "SignProposedBatch")
+	signedBatch1, err := proposalHeader1.Sign(sk, runtime.ID)
+	require.NoError(err, "ProposalHeader.Sign")
+	noSlashingRtB1, err := proposalHeader1.Sign(sk, runtimeNoSlashing.ID)
+	require.NoError(err, "ProposalHeader.Sign")
+	zeroSlashingRtB1, err := proposalHeader1.Sign(sk, runtimeZeroSlashing.ID)
+	require.NoError(err, "ProposalHeader.Sign")
+	nonExistingSignerBatch1, err := proposalHeader1.Sign(nonExistingSigner, runtime.ID)
+	require.NoError(err, "ProposalHeader.Sign")
+	uninitializedRtB1, err := proposalHeader1.Sign(sk, uninitializedRtID)
+	require.NoError(err, "ProposalHeader.Sign")
 
-	batch2 := &commitment.ProposedBatch{
-		IORoot:            hash.NewFromBytes([]byte("invalid root")),
-		StorageSignatures: []signature.Signature{},
-		Header:            blk2.Header,
+	proposalHeader2 := &commitment.ProposalHeader{
+		Round:        blk2.Header.Round,
+		PreviousHash: blk2.Header.PreviousHash,
+		BatchHash:    hash.NewFromBytes([]byte("invalid root")),
 	}
-	signedBatch2, err := commitment.SignProposedBatch(sk, runtime.ID, batch2)
-	require.NoError(err, "SignProposedBatch")
-	noSlashingRtB2, err := commitment.SignProposedBatch(sk, runtimeNoSlashing.ID, batch2)
-	require.NoError(err, "SignProposedBatch")
-	zeroSlashingRtB2, err := commitment.SignProposedBatch(sk, runtimeZeroSlashing.ID, batch2)
-	require.NoError(err, "SignProposedBatch")
-	nonExistingSignerBatch2, err := commitment.SignProposedBatch(nonExistingSigner, runtime.ID, batch2)
-	require.NoError(err, "SignProposedBatch")
-	uninitializedRtB2, err := commitment.SignProposedBatch(sk, uninitializedRtID, batch2)
-	require.NoError(err, "SignProposedBatch")
+	signedBatch2, err := proposalHeader2.Sign(sk, runtime.ID)
+	require.NoError(err, "ProposalHeader.Sign")
+	noSlashingRtB2, err := proposalHeader2.Sign(sk, runtimeNoSlashing.ID)
+	require.NoError(err, "ProposalHeader.Sign")
+	zeroSlashingRtB2, err := proposalHeader2.Sign(sk, runtimeZeroSlashing.ID)
+	require.NoError(err, "ProposalHeader.Sign")
+	nonExistingSignerBatch2, err := proposalHeader2.Sign(nonExistingSigner, runtime.ID)
+	require.NoError(err, "ProposalHeader.Sign")
+	uninitializedRtB2, err := proposalHeader2.Sign(sk, uninitializedRtID)
+	require.NoError(err, "ProposalHeader.Sign")
 
 	// Executor commit.
 	body := commitment.ComputeBody{
@@ -455,20 +408,20 @@ func TestEvidence(t *testing.T) {
 
 	// Expired evidence.
 	blk2.Header.Round = 25
-	expired1 := &commitment.ProposedBatch{
-		IORoot:            blk2.Header.IORoot,
-		StorageSignatures: []signature.Signature{},
-		Header:            blk2.Header,
+	expired1 := &commitment.ProposalHeader{
+		Round:        blk2.Header.Round,
+		PreviousHash: blk2.Header.PreviousHash,
+		BatchHash:    blk2.Header.IORoot,
 	}
-	expiredB1, err := commitment.SignProposedBatch(sk, runtime.ID, expired1)
-	require.NoError(err, "SignProposedBatch")
-	expired2 := &commitment.ProposedBatch{
-		IORoot:            hash.NewFromBytes([]byte("invalid root")),
-		StorageSignatures: []signature.Signature{},
-		Header:            blk2.Header,
+	expiredB1, err := expired1.Sign(sk, runtime.ID)
+	require.NoError(err, "ProposalHeader.Sign")
+	expired2 := &commitment.ProposalHeader{
+		Round:        blk2.Header.Round,
+		PreviousHash: blk2.Header.PreviousHash,
+		BatchHash:    hash.NewFromBytes([]byte("invalid root")),
 	}
-	expiredB2, err := commitment.SignProposedBatch(sk, runtime.ID, expired2)
-	require.NoError(err, "SignProposedBatch")
+	expiredB2, err := expired2.Sign(sk, runtime.ID)
+	require.NoError(err, "ProposalHeader.Sign")
 
 	expiredBody := commitment.ComputeBody{
 		Header: commitment.ComputeResultsHeader{
@@ -489,6 +442,8 @@ func TestEvidence(t *testing.T) {
 
 	ctx = appState.NewContext(abciAPI.ContextDeliverTx, now)
 	defer ctx.Close()
+
+	_, _ = expiredB1, expiredB2
 
 	for _, ev := range []struct {
 		ev  *roothash.Evidence
@@ -535,6 +490,7 @@ func TestEvidence(t *testing.T) {
 		},
 		{
 			&roothash.Evidence{
+				ID: runtime.ID,
 				EquivocationExecutor: &roothash.EquivocationExecutorEvidence{
 					CommitA: *expiredCommitment1,
 					CommitB: *expiredCommitment2,
@@ -545,6 +501,7 @@ func TestEvidence(t *testing.T) {
 		},
 		{
 			&roothash.Evidence{
+				ID: runtime.ID,
 				EquivocationBatch: &roothash.EquivocationBatchEvidence{
 					BatchA: *expiredB1,
 					BatchB: *expiredB2,
@@ -599,6 +556,7 @@ func TestEvidence(t *testing.T) {
 		},
 		{
 			&roothash.Evidence{
+				ID: runtime.ID,
 				EquivocationBatch: &roothash.EquivocationBatchEvidence{
 					BatchA: *nonExistingSignerBatch1,
 					BatchB: *nonExistingSignerBatch2,

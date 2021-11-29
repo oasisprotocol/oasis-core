@@ -38,8 +38,8 @@ func TestMessageHash(t *testing.T) {
 			AdmissionPolicy: registry.RuntimeAdmissionPolicy{
 				AnyNode: &registry.AnyNodeRuntimeAdmissionPolicy{},
 			},
-		}}}}, "bc26afcca2efa9ba8138d2339a38389482466163b5bda0e1dac735b03c879905"},
-		{[]Message{{Registry: &RegistryMessage{UpdateRuntime: rt}}}, "37a855783495d6699d3d229146b70f31b3da72a2a752e4cb4ded6dfe2d774382"},
+		}}}}, "24f5e1502f9cfaa64404cc4fea4a4b6f799baefad6f18c9c805b82b727e15d25"},
+		{[]Message{{Registry: &RegistryMessage{UpdateRuntime: rt}}}, "ba161c59194e6991af9ba2ae2efe77e3dd245956185bcb82ff2db226fed63cdb"},
 	} {
 		var h hash.Hash
 		err := h.UnmarshalHex(tc.expectedHash)
@@ -103,19 +103,12 @@ func newTestRuntime() *registry.Runtime {
 			MaxBatchSizeBytes: 1024,
 			ProposerTimeout:   5,
 		},
-		Storage: registry.StorageParameters{
-			GroupSize:               3,
-			MinWriteReplication:     3,
-			MaxApplyWriteLogEntries: 100000,
-			MaxApplyOps:             2,
-		},
 		AdmissionPolicy: registry.RuntimeAdmissionPolicy{
 			EntityWhitelist: &registry.EntityWhitelistRuntimeAdmissionPolicy{
 				Entities: map[signature.PublicKey]registry.EntityWhitelistConfig{
 					ent.ID: {
 						MaxNodes: map[node.RolesMask]uint16{
 							node.RoleComputeWorker: 2,
-							node.RoleStorageWorker: 4,
 						},
 					},
 				},
@@ -135,21 +128,10 @@ func newTestRuntime() *registry.Runtime {
 					},
 				},
 			},
-			scheduler.KindStorage: {
-				scheduler.RoleWorker: {
-					MinPoolSize: &registry.MinPoolSizeConstraint{
-						Limit: 9,
-					},
-					MaxNodes: &registry.MaxNodesConstraint{
-						Limit: 1,
-					},
-				},
-			},
 		},
 		Staking: registry.RuntimeStakingParameters{
 			Thresholds: map[staking.ThresholdKind]quantity.Quantity{
 				staking.KindNodeCompute: q,
-				staking.KindNodeStorage: q,
 			},
 		},
 		GovernanceModel: registry.GovernanceEntity,

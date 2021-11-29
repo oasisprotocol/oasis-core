@@ -19,6 +19,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/roothash/api/commitment"
 	scheduler "github.com/oasisprotocol/oasis-core/go/scheduler/api"
 	storageAPI "github.com/oasisprotocol/oasis-core/go/storage/api"
+	executorAPI "github.com/oasisprotocol/oasis-core/go/worker/compute/executor/api"
 )
 
 type byzantine struct {
@@ -67,17 +68,23 @@ func (b *byzantine) receiveAndScheduleTransactions(ctx context.Context, cbc *com
 		return false, fmt.Errorf("failed getting latest roothash block: %w", err)
 	}
 
-	// Prepare transaction batch.
-	var proposedBatch *commitment.SignedProposedBatch
-	proposedBatch, err = cbc.prepareTransactionBatch(ctx, b.storageClients, block, txs, b.identity, mode == ModeExecutorWrong)
-	if err != nil {
+	// Include transactions that nobody else has when configured to do so.
+	if viper.GetBool(CfgExecutorProposeBogusTx) {
+		logger.Debug("executor scheduler: including bogus transactions")
+		txs = append(txs, &executorAPI.Tx{
+			Data: []byte("this is a bogus transction nr. 1"),
+		})
+	}
+
+	// Prepare proposal.
+	if err = cbc.prepareProposal(ctx, block, txs, b.identity); err != nil {
 		panic(fmt.Sprintf("executor proposing batch: %+v", err))
 	}
 
 	if mode == ModeExecutorFailureIndicating {
 		// Submit failure indicating commitment and stop.
 		logger.Debug("executor failure indicating: submitting commitment and stopping")
-		if err = cbc.createCommitment(b.identity, nil, b.executorCommittee.EncodedMembersHash(), commitment.FailureStorageUnavailable); err != nil {
+		if err = cbc.createCommitment(b.identity, nil, commitment.FailureUnknown); err != nil {
 			panic(fmt.Sprintf("compute create failure indicating commitment failed: %+v", err))
 		}
 		if err = cbc.publishToChain(b.tendermint.service, b.identity); err != nil {
@@ -87,7 +94,7 @@ func (b *byzantine) receiveAndScheduleTransactions(ctx context.Context, cbc *com
 	}
 
 	// Publish batch.
-	cbc.publishTransactionBatch(ctx, b.p2p, b.electionHeight, proposedBatch)
+	cbc.publishProposal(ctx, b.p2p, b.electionHeight)
 	logger.Debug("executor scheduler: dispatched transactions", "transactions", txs)
 
 	// If we're in ModeExecutorWrong, stop after publishing the batch.
@@ -97,7 +104,6 @@ func (b *byzantine) receiveAndScheduleTransactions(ctx context.Context, cbc *com
 func initializeAndRegisterByzantineNode(
 	runtimeID common.Namespace,
 	nodeRoles node.RolesMask,
-	expectedStorageRole scheduler.Role,
 	expectedExecutorRole scheduler.Role,
 	shouldBeExecutorProposer bool,
 	noCommittees bool,
@@ -142,7 +148,7 @@ func initializeAndRegisterByzantineNode(
 	}
 
 	// Setup storage.
-	storage, err := newStorageNode(b.identity, b.runtimeID, cmdCommon.DataDir())
+	storage, err := newStorageNode(b.runtimeID, cmdCommon.DataDir())
 	if err != nil {
 		return nil, fmt.Errorf("initializing storage node failed: %w", err)
 	}
@@ -164,7 +170,16 @@ func initializeAndRegisterByzantineNode(
 			return nil, fmt.Errorf("initFakeCapabilitiesSGX: %w", err)
 		}
 	}
-	if err = registryRegisterNode(b.tendermint.service, b.identity, cmdCommon.DataDir(), getGrpcAddress(), b.p2p.service.Addresses(), b.runtimeID, b.capabilities, nodeRoles); err != nil {
+	if err = registryRegisterNode(
+		b.tendermint.service,
+		b.identity,
+		cmdCommon.DataDir(),
+		getGrpcAddress(),
+		b.p2p.service.Addresses(),
+		b.runtimeID,
+		b.capabilities,
+		nodeRoles,
+	); err != nil {
 		return nil, fmt.Errorf("registryRegisterNode: %w", err)
 	}
 
@@ -208,23 +223,13 @@ func initializeAndRegisterByzantineNode(
 	// Ensure we have the expected executor transaction scheduler role.
 	isTxScheduler := schedulerCheckTxScheduler(b.executorCommittee, b.identity.NodeSigner.Public(), 0)
 	if shouldBeExecutorProposer != isTxScheduler {
-		return nil, fmt.Errorf("not expected executor scheduler role. expected: 'is_scheduler=%v'", viper.GetBool(CfgSchedulerRoleExpected))
+		return nil, fmt.Errorf("not in expected executor transaction scheduler role")
 	}
 	b.logger.Debug("executor tx scheduler role ok")
 
-	// Ensure we have the expected storage worker role.
-	storageCommittee, err := schedulerGetCommittee(b.tendermint, b.electionHeight, scheduler.KindStorage, b.runtimeID)
-	if err != nil {
-		return nil, fmt.Errorf("scheduler get committee %s failed: %+v", scheduler.KindStorage, err)
-	}
-	if err = schedulerCheckScheduled(storageCommittee, b.identity.NodeSigner.Public(), expectedStorageRole); err != nil {
-		return nil, fmt.Errorf("scheduler check scheduled failed: %w", err)
-	}
-	b.logger.Debug("executor schedule ok")
-
-	// Connect to storage committee.
+	// Connect storage clients to executor committee as we don't store anything locally.
 	b.logger.Debug("connecting to storage committee")
-	b.storageClients, err = storageConnectToCommittee(b.tendermint, b.electionHeight, storageCommittee, scheduler.RoleWorker, b.identity)
+	b.storageClients, err = storageConnectToCommittee(b.tendermint, b.electionHeight, b.executorCommittee, scheduler.RoleWorker, b.identity)
 	if err != nil {
 		return nil, fmt.Errorf("storage connect to committee failed: %w", err)
 	}

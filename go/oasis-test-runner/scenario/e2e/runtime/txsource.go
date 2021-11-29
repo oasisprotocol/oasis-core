@@ -34,7 +34,6 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/scenario/e2e"
 	scheduler "github.com/oasisprotocol/oasis-core/go/scheduler/api"
 	staking "github.com/oasisprotocol/oasis-core/go/staking/api"
-	"github.com/oasisprotocol/oasis-core/go/storage/database"
 )
 
 const (
@@ -74,7 +73,6 @@ var TxSourceMultiShort scenario.Scenario = &txSourceImpl{
 	consensusPruneMaxKept:             200,
 	numValidatorNodes:                 4,
 	numKeyManagerNodes:                2,
-	numStorageNodes:                   2,
 	numComputeNodes:                   4,
 	numClientNodes:                    2,
 }
@@ -104,7 +102,6 @@ var TxSourceMultiShortSGX scenario.Scenario = &txSourceImpl{
 	// more nodes that are currently configured.
 	numValidatorNodes:  3,
 	numKeyManagerNodes: 1,
-	numStorageNodes:    2,
 	numComputeNodes:    4,
 	numClientNodes:     1,
 }
@@ -143,9 +140,6 @@ var TxSourceMulti scenario.Scenario = &txSourceImpl{
 	// Use 2 keymanagers so that at least one keymanager is accessible when
 	// the other one is being killed or shut down.
 	numKeyManagerNodes: 2,
-	// Use 4 storage nodes so runtime continues to work when one of the nodes
-	// is shut down.
-	numStorageNodes: 4,
 	// In tests with long restarts we want to have 3 worker nodes in the runtime
 	// executor worker committee. That is so that each published runtime
 	// transaction will be received by at least one active executor worker.
@@ -181,15 +175,6 @@ type txSourceImpl struct { // nolint: maligned
 	numKeyManagerNodes int
 	numComputeNodes    int
 	numClientNodes     int
-
-	// Configurable number of storage nodes. If running tests with long node
-	// shutdowns enabled, make sure this is at least `MinWriteReplication+1`,
-	// so that the runtime continues to work, even if one of the nodes is shut
-	// down.
-	// XXX: this is configurable because SGX E2E test instances cannot handle
-	// more test nodes that we already use, and we don't need additional storage
-	// nodes in the short test variant.
-	numStorageNodes int
 
 	rng  *rand.Rand
 	seed string
@@ -424,11 +409,6 @@ func (sc *txSourceImpl) Fixture() (*oasis.NetworkFixture, error) {
 	f.Runtimes[1].Storage.CheckpointNumKept = 2
 	f.Runtimes[1].Storage.CheckpointChunkSize = 1024 * 1024
 
-	// Storage committee.
-	f.Runtimes[1].Storage.GroupSize = uint16(sc.numStorageNodes)
-	f.Runtimes[1].Constraints[scheduler.KindStorage][scheduler.RoleWorker].MinPoolSize.Limit = uint16(sc.numStorageNodes)
-	f.Runtimes[1].Storage.MinWriteReplication = f.Runtimes[1].Storage.GroupSize
-
 	// Executor committee.
 	f.Runtimes[1].Executor.GroupBackupSize = 1
 	f.Runtimes[1].Executor.GroupSize = uint16(sc.numComputeNodes) -
@@ -437,12 +417,6 @@ func (sc *txSourceImpl) Fixture() (*oasis.NetworkFixture, error) {
 	f.Runtimes[1].Constraints[scheduler.KindComputeExecutor][scheduler.RoleBackupWorker].MinPoolSize.Limit = f.Runtimes[1].Executor.GroupBackupSize
 
 	if sc.nodeLongRestartInterval > 0 {
-		// One storage node could be offline.
-		f.Runtimes[1].Storage.GroupSize--
-		f.Runtimes[1].Constraints[scheduler.KindStorage][scheduler.RoleWorker].MinPoolSize.Limit--
-		// Storage node that is part of the committee could be offline.
-		f.Runtimes[1].Storage.MinWriteReplication = f.Runtimes[1].Storage.GroupSize - 1
-
 		// One executor can be offline.
 		f.Runtimes[1].Executor.GroupSize--
 		f.Runtimes[1].Constraints[scheduler.KindComputeExecutor][scheduler.RoleWorker].MinPoolSize.Limit--
@@ -485,14 +459,6 @@ func (sc *txSourceImpl) Fixture() (*oasis.NetworkFixture, error) {
 		})
 	}
 	f.ComputeWorkers = computeWorkers
-	var storageWorkers []oasis.StorageWorkerFixture
-	for i := 0; i < sc.numStorageNodes; i++ {
-		storageWorkers = append(storageWorkers, oasis.StorageWorkerFixture{
-			Backend: database.BackendNameBadgerDB,
-			Entity:  1,
-		})
-	}
-	f.StorageWorkers = storageWorkers
 	var clients []oasis.ClientFixture
 	for i := 0; i < sc.numClientNodes; i++ {
 		c := oasis.ClientFixture{}
@@ -531,18 +497,6 @@ func (sc *txSourceImpl) Fixture() (*oasis.NetworkFixture, error) {
 		sc.generateConsensusFixture(&f.Keymanagers[i].Consensus, false)
 		if i > 0 && sc.enableCrashPoints {
 			f.Keymanagers[i].CrashPointsProbability = crashPointProbability
-		}
-	}
-	for i := range f.StorageWorkers {
-		f.StorageWorkers[i].Consensus.SubmissionGasPrice = txSourceGasPrice
-		// Enable recovery from corrupted WAL.
-		f.StorageWorkers[i].Consensus.TendermintRecoverCorruptedWAL = sc.tendermintRecoverCorruptedWAL
-		sc.generateConsensusFixture(&f.StorageWorkers[i].Consensus, false)
-		if i > 0 {
-			f.StorageWorkers[i].CheckpointSyncEnabled = true
-			if sc.enableCrashPoints {
-				f.StorageWorkers[i].CrashPointsProbability = crashPointProbability
-			}
 		}
 	}
 	for i := range f.ComputeWorkers {
@@ -594,9 +548,6 @@ func (sc *txSourceImpl) manager(env *env.Env, errCh chan error) {
 	// Keep one of each types of nodes always running.
 	for _, v := range sc.Net.Validators()[1:] {
 		restartableNodes = append(restartableNodes, v.Node)
-	}
-	for _, s := range sc.Net.StorageWorkers()[1:] {
-		restartableNodes = append(restartableNodes, s.Node)
 	}
 	for _, c := range sc.Net.ComputeWorkers()[1:] {
 		restartableNodes = append(restartableNodes, c.Node)
@@ -823,7 +774,6 @@ func (sc *txSourceImpl) Clone() scenario.Scenario {
 		enableCrashPoints:                 sc.enableCrashPoints,
 		numValidatorNodes:                 sc.numValidatorNodes,
 		numKeyManagerNodes:                sc.numKeyManagerNodes,
-		numStorageNodes:                   sc.numStorageNodes,
 		numComputeNodes:                   sc.numComputeNodes,
 		numClientNodes:                    sc.numClientNodes,
 		seed:                              sc.seed,

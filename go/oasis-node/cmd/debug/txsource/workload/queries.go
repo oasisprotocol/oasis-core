@@ -491,7 +491,7 @@ func (q *queries) doStakingQueries(ctx context.Context, rng *rand.Rand, height i
 		return fmt.Errorf("staking.GovernanceDeposits: %w", err)
 	}
 
-	thKind := staking.ThresholdKind(rng.Intn(int(staking.KindMax)))
+	thKind := staking.ThresholdKinds[rng.Intn(len(staking.ThresholdKinds))]
 	threshold, err := q.staking.Threshold(ctx, &staking.ThresholdQuery{
 		Height: height,
 		Kind:   thKind,

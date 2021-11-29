@@ -202,7 +202,6 @@ func testThresholds(t *testing.T, state *stakingTestsState, backend api.Backend,
 	for _, kind := range []api.ThresholdKind{
 		api.KindNodeValidator,
 		api.KindNodeCompute,
-		api.KindNodeStorage,
 		api.KindNodeKeyManager,
 		api.KindRuntimeCompute,
 		api.KindRuntimeKeyManager,

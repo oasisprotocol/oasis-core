@@ -158,11 +158,6 @@ func (h *runtimeHostHandler) Handle(ctx context.Context, body *protocol.Body) (*
 		case protocol.HostStorageEndpointRuntime:
 			// Runtime storage.
 			rs = h.runtime.Storage()
-
-			// Prioritize nodes that signed the last storage receipts.
-			if blk, _ := h.env.GetCurrentBlock(ctx); blk != nil {
-				ctx = storage.WithNodePriorityHintFromSignatures(ctx, blk.Header.StorageSignatures)
-			}
 		case protocol.HostStorageEndpointConsensus:
 			// Consensus state storage.
 			rs = h.consensus.State()

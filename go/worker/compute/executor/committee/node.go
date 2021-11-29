@@ -1,7 +1,6 @@
 package committee
 
 import (
-	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -13,10 +12,8 @@ import (
 
 	beacon "github.com/oasisprotocol/oasis-core/go/beacon/api"
 	"github.com/oasisprotocol/oasis-core/go/common/cache/lru"
-	"github.com/oasisprotocol/oasis-core/go/common/cbor"
 	"github.com/oasisprotocol/oasis-core/go/common/crash"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
-	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
 	"github.com/oasisprotocol/oasis-core/go/common/node"
 	"github.com/oasisprotocol/oasis-core/go/common/pubsub"
@@ -33,7 +30,6 @@ import (
 	schedulingAPI "github.com/oasisprotocol/oasis-core/go/runtime/scheduling/api"
 	"github.com/oasisprotocol/oasis-core/go/runtime/scheduling/simple/orderedmap"
 	"github.com/oasisprotocol/oasis-core/go/runtime/transaction"
-	scheduler "github.com/oasisprotocol/oasis-core/go/scheduler/api"
 	storage "github.com/oasisprotocol/oasis-core/go/storage/api"
 	commonWorker "github.com/oasisprotocol/oasis-core/go/worker/common"
 	"github.com/oasisprotocol/oasis-core/go/worker/common/committee"
@@ -46,14 +42,14 @@ var (
 	errSeenNewerBlock     = fmt.Errorf("executor: seen newer block")
 	errRuntimeAborted     = fmt.Errorf("executor: runtime aborted batch processing")
 	errIncompatibleHeader = p2pError.Permanent(fmt.Errorf("executor: incompatible header"))
-	errInvalidReceipt     = p2pError.Permanent(fmt.Errorf("executor: invalid storage receipt"))
+	errBatchTooLarge      = p2pError.Permanent(fmt.Errorf("executor: batch too large"))
 	errIncorrectRole      = fmt.Errorf("executor: incorrect role")
 	errIncorrectState     = fmt.Errorf("executor: incorrect state")
 	errMsgFromNonTxnSched = fmt.Errorf("executor: received txn scheduler dispatch msg from non-txn scheduler")
 
 	// Transaction scheduling errors.
-	errNoBlocks        = fmt.Errorf("executor: no blocks")
-	errNotTxnScheduler = fmt.Errorf("executor: not transaction scheduler in this round")
+	errNoBlocks    = fmt.Errorf("executor: no blocks")
+	errNotExecutor = fmt.Errorf("executor: not executor in this round")
 
 	// proposeTimeoutDelay is the duration to wait before submitting the propose timeout request.
 	proposeTimeoutDelay = 2 * time.Second
@@ -181,6 +177,8 @@ type Node struct { // nolint: maligned
 	roundCtx       context.Context
 	roundCancelCtx context.CancelFunc
 
+	storage storage.LocalBackend
+
 	stateTransitions *pubsub.Broker
 	// Bump this when we need to change what the worker selects over.
 	reselect chan struct{}
@@ -195,6 +193,17 @@ func (n *Node) Name() string {
 
 // Start starts the service.
 func (n *Node) Start() error {
+	// Make sure we are running with a compatible storage backend.
+	lsb, ok := n.commonNode.Runtime.Storage().(storage.LocalBackend)
+	if !ok {
+		return fmt.Errorf("executor requires a local storage backend")
+	}
+	// Make sure to unwrap the local backend as we need the raw local backend here.
+	if wrapped, ok := lsb.(storage.WrappedLocalBackend); ok {
+		lsb = wrapped.Unwrap()
+	}
+	n.storage = lsb
+
 	go n.worker()
 	return nil
 }
@@ -282,35 +291,35 @@ func (n *Node) HandlePeerMessage(ctx context.Context, message *p2p.Message, isOw
 		n.checkTxCh.In() <- struct{}{}
 		return true, nil
 
-	case message.ProposedBatch != nil:
-		// Ignore own messages as those are handled via handleInternalBatchLocked.
+	case message.Proposal != nil:
+		// Ignore own messages as those are handled separately.
 		if isOwn {
 			return true, nil
 		}
 		crash.Here(crashPointBatchReceiveAfter)
 
-		sbd := message.ProposedBatch
+		proposal := message.Proposal
 
 		epoch := n.commonNode.Group.GetEpochSnapshot()
 		n.commonNode.CrossNode.Lock()
 		round := n.commonNode.CurrentBlock.Header.Round
 		n.commonNode.CrossNode.Unlock()
 
-		// Before opening the signed dispatch message, verify that it was
-		// actually signed by the current transaction scheduler.
-		if err := epoch.VerifyTxnSchedulerSigner(sbd.Signature, round); err != nil {
-			// Not signed by a current txn scheduler!
+		// Before opening the signed dispatch message, verify that it was actually signed by the
+		// current transaction scheduler.
+		if err := epoch.VerifyTxnSchedulerSigner(proposal.SignedProposalHeader.Signature, round); err != nil {
+			// Not signed by the current txn scheduler.
 			return false, errMsgFromNonTxnSched
 		}
 
-		// Transaction scheduler checks out, open the signed dispatch message
-		// and add it to the processing queue.
-		var bd commitment.ProposedBatch
-		if err := sbd.Open(&bd, n.commonNode.Runtime.ID()); err != nil {
+		// Transaction scheduler checks out, open the signed dispatch message and add it to the
+		// processing queue.
+		var proposalHeader commitment.ProposalHeader
+		if err := proposal.SignedProposalHeader.Open(n.commonNode.Runtime.ID(), &proposalHeader); err != nil {
 			return false, p2pError.Permanent(err)
 		}
 
-		err := n.queueBatchBlocking(ctx, bd.IORoot, bd.StorageSignatures, bd.Header, sbd.Signature)
+		err := n.queueBatchBlocking(ctx, proposal, &proposalHeader)
 		if err != nil {
 			return false, err
 		}
@@ -322,29 +331,9 @@ func (n *Node) HandlePeerMessage(ctx context.Context, message *p2p.Message, isOw
 
 func (n *Node) queueBatchBlocking(
 	ctx context.Context,
-	ioRootHash hash.Hash,
-	storageSignatures []signature.Signature,
-	hdr block.Header,
-	txnSchedSig signature.Signature,
+	proposal *commitment.Proposal,
+	proposalHeader *commitment.ProposalHeader,
 ) error {
-	// Quick check to see if header is compatible.
-	rtID := n.commonNode.Runtime.ID()
-	if !bytes.Equal(hdr.Namespace[:], rtID[:]) {
-		n.logger.Warn("received incompatible header in external batch",
-			"header", hdr,
-		)
-		return errIncompatibleHeader
-	}
-
-	// Verify storage receipt signatures.
-	epoch := n.commonNode.Group.GetEpochSnapshot()
-	if err := epoch.VerifyCommitteeSignatures(scheduler.KindStorage, storageSignatures); err != nil {
-		n.logger.Warn("received bad storage signature",
-			"err", err,
-		)
-		return errInvalidReceipt
-	}
-	// Make sure there are enough signatures.
 	rt, err := n.commonNode.Runtime.ActiveDescriptor(ctx)
 	if err != nil {
 		n.logger.Warn("failed to fetch active runtime descriptor",
@@ -352,66 +341,25 @@ func (n *Node) queueBatchBlocking(
 		)
 		return p2pError.Permanent(err)
 	}
-	if len(storageSignatures) < int(rt.Storage.MinWriteReplication) {
-		n.logger.Warn("received external batch with not enough storage receipts",
-			"min_write_replication", rt.Storage.MinWriteReplication,
-			"num_receipts", len(storageSignatures),
+
+	// Do a quick check on the batch size.
+	if uint64(len(proposal.Batch)) > rt.TxnScheduler.MaxBatchSize {
+		n.logger.Warn("received proposed batch contained too many transactions",
+			"max_batch_size", rt.TxnScheduler.MaxBatchSize,
+			"batch_size", len(proposal.Batch),
 		)
-		return errInvalidReceipt
+		return errBatchTooLarge
 	}
 
-	receiptBody := storage.ReceiptBody{
-		Version:   1,
-		Namespace: hdr.Namespace,
-		Round:     hdr.Round + 1,
-		RootTypes: []storage.RootType{storage.RootTypeIO},
-		Roots:     []hash.Hash{ioRootHash},
-	}
-	if !signature.VerifyManyToOne(storage.ReceiptSignatureContext, cbor.Marshal(receiptBody), storageSignatures) {
-		n.logger.Warn("received invalid storage receipt signature in external batch")
-		return errInvalidReceipt
-	}
-
-	// Defer fetching inputs from storage to when we actually start processing a batch.
 	batch := &unresolvedBatch{
-		ioRoot: storage.Root{
-			Namespace: hdr.Namespace,
-			Version:   hdr.Round + 1,
-			Type:      storage.RootTypeIO,
-			Hash:      ioRootHash,
-		},
-		txnSchedSignature: txnSchedSig,
-		storageSignatures: storageSignatures,
-		maxBatchSize:      rt.TxnScheduler.MaxBatchSize,
+		proposal:          proposal,
+		proposalHeader:    proposalHeader,
 		maxBatchSizeBytes: rt.TxnScheduler.MaxBatchSizeBytes,
 	}
 
 	n.commonNode.CrossNode.Lock()
 	defer n.commonNode.CrossNode.Unlock()
-	return n.handleExternalBatchLocked(batch, hdr)
-}
-
-// handleInternalBatchLocked processes a batch from the internal transaction scheduler.
-// Guarded by n.commonNode.CrossNode.
-func (n *Node) handleInternalBatchLocked(
-	ioRoot hash.Hash,
-	batch transaction.RawBatch,
-	txnSchedSig signature.Signature,
-	inputStorageSigs []signature.Signature,
-) {
-	n.maybeStartProcessingBatchLocked(
-		&unresolvedBatch{
-			ioRoot: storage.Root{
-				Namespace: n.commonNode.CurrentBlock.Header.Namespace,
-				Version:   n.commonNode.CurrentBlock.Header.Round + 1,
-				Type:      storage.RootTypeIO,
-				Hash:      ioRoot,
-			},
-			txnSchedSignature: txnSchedSig,
-			storageSignatures: inputStorageSigs,
-			batch:             batch,
-		},
-	)
+	return n.handleExternalBatchLocked(batch)
 }
 
 func (n *Node) bumpReselect() {
@@ -502,7 +450,8 @@ func (n *Node) HandleNewBlockLocked(blk *block.Block) {
 	switch state := n.state.(type) {
 	case StateWaitingForBlock:
 		// Check if this was the block we were waiting for.
-		if header.MostlyEqual(state.header) {
+		currentHash := header.EncodedHash()
+		if currentHash.Equal(&state.batch.proposalHeader.PreviousHash) {
 			n.logger.Info("received block needed for batch processing")
 			n.maybeStartProcessingBatchLocked(state.batch)
 			break
@@ -512,7 +461,7 @@ func (n *Node) HandleNewBlockLocked(blk *block.Block) {
 		// one we are waiting for. In this case, we should abort as the
 		// block will never be seen.
 		curRound := header.Round
-		waitRound := state.header.Round
+		waitRound := state.batch.proposalHeader.Round - 1
 		if curRound >= waitRound {
 			n.logger.Warn("seen newer block while waiting for block")
 			n.transitionLocked(StateWaitingForBatch{})
@@ -524,6 +473,10 @@ func (n *Node) HandleNewBlockLocked(blk *block.Block) {
 			"current_round", curRound,
 			"wait_round", waitRound,
 		)
+	case StateWaitingForTxs:
+		// Stop waiting for transactions and start a new round.
+		n.logger.Warn("considering previous proposal invalid due to missing transactions")
+		n.transitionLocked(StateWaitingForBatch{})
 	case StateWaitingForEvent:
 		// Block finalized without the need for a backup worker.
 		n.logger.Info("considering the round finalized",
@@ -664,6 +617,24 @@ func (n *Node) queueTxBatch(txs []*transaction.CheckedTransaction) {
 	}
 
 	incomingQueueSize.With(n.getMetricLabels()).Set(float64(n.scheduler.UnscheduledSize()))
+
+	// Check if we are waiting for new transactions.
+	n.commonNode.CrossNode.Lock()
+	defer n.commonNode.CrossNode.Unlock()
+
+	state, ok := n.state.(StateWaitingForTxs)
+	if !ok {
+		return
+	}
+
+	for _, tx := range txs {
+		delete(state.batch.missingTxs, tx.Hash())
+	}
+	if len(state.batch.missingTxs) == 0 {
+		// We have all transactions, signal the node to start processing the batch.
+		n.logger.Info("received all transactions needed for batch processing")
+		n.startProcessingBatchLocked(state.batch)
+	}
 }
 
 // removeTxBatch removes a batch from scheduling queue.
@@ -792,7 +763,18 @@ func (n *Node) proposeTimeoutLocked(roundCtx context.Context) error {
 
 		// Make sure we are still in the right state/round.
 		n.commonNode.CrossNode.Lock()
-		if _, ok := n.state.(StateWaitingForBatch); !ok || round != n.commonNode.CurrentBlock.Header.Round {
+		// Make sure we are still in the right state.
+		var invalidState bool
+		switch n.state.(type) {
+		case StateWaitingForBatch, StateWaitingForTxs:
+		default:
+			invalidState = true
+		}
+		// Make sure we are still processing the right round.
+		if round != n.commonNode.CurrentBlock.Header.Round {
+			invalidState = true
+		}
+		if invalidState {
 			n.logger.Info("not requesting proposer timeout",
 				"height", n.commonNode.Height,
 				"current_block_round", n.commonNode.CurrentBlock.Header.Round,
@@ -878,10 +860,18 @@ func (n *Node) handleScheduleBatch(force bool) {
 		defer n.commonNode.CrossNode.Unlock()
 		roundCtx := n.roundCtx
 
-		// If we are not waiting for a batch, don't do anything.
-		if _, ok := n.state.(StateWaitingForBatch); !ok {
+		// Check if we are in a suitable state for scheduling a batch.
+		switch n.state.(type) {
+		case StateWaitingForBatch:
+			// We are waiting for a batch.
+		case StateWaitingForTxs:
+			// We are waiting for transactions. Note that this means we are not a transaction
+			// scheduler and so we won't actually be able to schedule anything. But we should still
+			// propose a timeout if the transaction scheduler proposed something that nobody has.
+		default:
 			return roundCtx, nil, nil, nil, nil, nil, errIncorrectState
 		}
+
 		if n.commonNode.CurrentBlock == nil {
 			return roundCtx, nil, nil, nil, nil, nil, errNoBlocks
 		}
@@ -889,7 +879,7 @@ func (n *Node) handleScheduleBatch(force bool) {
 
 		// If we are not an executor worker in this epoch, we don't need to do anything.
 		if !epoch.IsExecutorWorker() {
-			return roundCtx, nil, nil, nil, nil, nil, errNotTxnScheduler
+			return roundCtx, nil, nil, nil, nil, nil, errNotExecutor
 		}
 
 		rtState, roundResults, err := n.getRtStateAndRoundResults(roundCtx, n.commonNode.CurrentBlockHeight)
@@ -941,8 +931,15 @@ func (n *Node) handleScheduleBatch(force bool) {
 			n.commonNode.CrossNode.Lock()
 			defer n.commonNode.CrossNode.Unlock()
 
-			// Make sure we are still in the right state/round.
-			if _, ok := n.state.(StateWaitingForBatch); !ok || blk.Header.Round != n.commonNode.CurrentBlock.Header.Round {
+			// Make sure we are still in the right state.
+			switch n.state.(type) {
+			case StateWaitingForBatch:
+			case StateWaitingForTxs:
+			default:
+				return errIncorrectState
+			}
+			// Make sure we are still processing the right round.
+			if blk.Header.Round != n.commonNode.CurrentBlock.Header.Round {
 				return errIncorrectState
 			}
 			return n.proposeTimeoutLocked(roundCtx)
@@ -982,6 +979,7 @@ func (n *Node) handleScheduleBatch(force bool) {
 	defer ioTree.Close()
 
 	rawBatch := make(transaction.RawBatch, len(batch))
+	txHashes := make([]hash.Hash, len(batch))
 	for idx, tx := range batch {
 		if err = ioTree.AddTransaction(roundCtx, transaction.Transaction{Input: tx.Raw(), BatchOrder: uint32(idx)}, nil); err != nil {
 			n.logger.Error("failed to create I/O tree",
@@ -990,6 +988,7 @@ func (n *Node) handleScheduleBatch(force bool) {
 			return
 		}
 		rawBatch[idx] = tx.Raw()
+		txHashes[idx] = tx.Hash()
 	}
 
 	ioWriteLog, ioRoot, err := ioTree.Commit(roundCtx)
@@ -1000,9 +999,9 @@ func (n *Node) handleScheduleBatch(force bool) {
 		return
 	}
 
-	// Commit I/O tree to storage and obtain receipts.
+	// Commit I/O tree to local storage.
 
-	ioReceipts, err := n.commonNode.Group.Storage().Apply(roundCtx, &storage.ApplyRequest{
+	err = n.storage.Apply(roundCtx, &storage.ApplyRequest{
 		Namespace: blk.Header.Namespace,
 		RootType:  storage.RootTypeIO,
 		SrcRound:  blk.Header.Round + 1,
@@ -1018,23 +1017,23 @@ func (n *Node) handleScheduleBatch(force bool) {
 		return
 	}
 
-	// Dispatch batch to group.
-	ioReceiptSignatures := []signature.Signature{}
-	for _, receipt := range ioReceipts {
-		ioReceiptSignatures = append(ioReceiptSignatures, receipt.Signature)
+	// Create new proposal.
+	proposalHeader := &commitment.ProposalHeader{
+		Round:        blk.Header.Round + 1,
+		PreviousHash: blk.Header.EncodedHash(),
+		BatchHash:    ioRoot,
 	}
-
-	dispatchMsg := &commitment.ProposedBatch{
-		IORoot:            ioRoot,
-		StorageSignatures: ioReceiptSignatures,
-		Header:            blk.Header,
-	}
-	signedDispatchMsg, err := commitment.SignProposedBatch(n.commonNode.Identity.NodeSigner, n.commonNode.Runtime.ID(), dispatchMsg)
+	signedProposalHeader, err := proposalHeader.Sign(n.commonNode.Identity.NodeSigner, blk.Header.Namespace)
 	if err != nil {
-		n.logger.Error("failed to sign txn scheduler batch",
+		n.logger.Error("failed to sign proposal header",
 			"err", err,
 		)
 		return
+	}
+
+	proposal := &commitment.Proposal{
+		SignedProposalHeader: *signedProposalHeader,
+		Batch:                txHashes,
 	}
 
 	n.commonNode.CrossNode.Lock()
@@ -1057,7 +1056,7 @@ func (n *Node) handleScheduleBatch(force bool) {
 
 	err = n.commonNode.Group.Publish(
 		&p2p.Message{
-			ProposedBatch: signedDispatchMsg,
+			Proposal: proposal,
 		},
 	)
 	if err != nil {
@@ -1069,12 +1068,11 @@ func (n *Node) handleScheduleBatch(force bool) {
 	crash.Here(crashPointBatchPublishAfter)
 
 	// Also process the batch locally.
-	n.handleInternalBatchLocked(
-		ioRoot,
-		rawBatch,
-		signedDispatchMsg.Signature,
-		ioReceiptSignatures,
-	)
+	n.maybeStartProcessingBatchLocked(&unresolvedBatch{
+		proposal:       proposal,
+		proposalHeader: proposalHeader,
+		batch:          rawBatch,
+	})
 }
 
 // Guarded by n.commonNode.CrossNode.
@@ -1098,7 +1096,7 @@ func (n *Node) maybeStartProcessingBatchLocked(batch *unresolvedBatch) {
 		n.transitionLocked(StateWaitingForEvent{batch: batch})
 	default:
 		// Currently not a member of an executor committee, log.
-		n.logger.Warn("not an executor committee member, ignoring batch")
+		n.logger.Debug("not an executor committee member, ignoring batch")
 	}
 }
 
@@ -1109,13 +1107,6 @@ func (n *Node) startLocalStorageReplication(
 	batch transaction.RawBatch,
 ) <-chan error {
 	ch := make(chan error, 1)
-	lsb := n.commonNode.Group.StorageLocal()
-	if lsb == nil {
-		// In case there is no local storage backend to replicate to, finish early.
-		ch <- nil
-		close(ch)
-		return ch
-	}
 
 	ioRoot := storage.Root{
 		Namespace: blk.Header.Namespace,
@@ -1132,7 +1123,7 @@ func (n *Node) startLocalStorageReplication(
 		defer close(replicateIO)
 
 		// Check if the root is already present as in this case no replication is needed.
-		if lsb.NodeDB().HasRoot(ioRoot) {
+		if n.storage.NodeDB().HasRoot(ioRoot) {
 			replicateIO <- nil
 			return
 		}
@@ -1174,7 +1165,7 @@ func (n *Node) startLocalStorageReplication(
 			return
 		}
 
-		_, err = lsb.Apply(ctx, &storage.ApplyRequest{
+		err = n.storage.Apply(ctx, &storage.ApplyRequest{
 			Namespace: ioRoot.Namespace,
 			RootType:  ioRoot.Type,
 			SrcRound:  ioRoot.Version,
@@ -1207,7 +1198,6 @@ func (n *Node) startLocalStorageReplication(
 				combinedErr = fmt.Errorf("failed to replicate I/O root: %w", err)
 			}
 		}
-		// TODO: We should also wait for state replication to avoid extra fetches.
 
 		n.logger.Debug("local storage replication done",
 			"io_root", ioRoot,
@@ -1225,8 +1215,27 @@ func (n *Node) startProcessingBatchLocked(batch *unresolvedBatch) {
 		panic("attempted to start processing batch with a nil block")
 	}
 
+	// Try to resolve the batch first.
+	n.logger.Debug("attempting to resolve batch", "batch", batch.String())
+
+	// TODO: Add metrics for how long it takes to receive the complete batch.
+	resolvedBatch, err := batch.resolve(n.scheduler)
+	if err != nil {
+		n.logger.Error("refusing to process bad batch", "err", err)
+		// TODO: We should indicate failure.
+		return
+	}
+	if resolvedBatch == nil {
+		// Some transactions are missing so we cannot start processing the batch just yet.
+		// Transition into StateWaitingForTxs and request transactions from peers.
+		n.logger.Debug("some transactions are missing", "num_missing", len(batch.missingTxs))
+		// TODO: Actually request transactions from peers.
+		n.transitionLocked(StateWaitingForTxs{batch})
+		return
+	}
+
 	n.logger.Debug("processing batch",
-		"batch_size", len(batch.batch),
+		"batch_size", len(resolvedBatch),
 	)
 
 	// Create batch processing context and channel for receiving the response.
@@ -1265,32 +1274,20 @@ func (n *Node) startProcessingBatchLocked(batch *unresolvedBatch) {
 			return
 		}
 
-		// Resolve the batch and dispatch it to the runtime.
-		readStartTime := time.Now()
-		resolvedBatch, err := batch.resolve(ctx, n.commonNode.Group.Storage())
-		if err != nil {
-			n.logger.Error("failed to resolve batch",
-				"err", err,
-				"batch_size", len(batch.batch),
-			)
-			return
-		}
-
 		// Optionally start local storage replication in parallel to batch dispatch.
-		replicateCh := n.startLocalStorageReplication(ctx, blk, batch.ioRoot.Hash, resolvedBatch)
+		replicateCh := n.startLocalStorageReplication(ctx, blk, batch.hash(), resolvedBatch)
 
 		rq := &protocol.Body{
 			RuntimeExecuteTxBatchRequest: &protocol.RuntimeExecuteTxBatchRequest{
 				ConsensusBlock: *consensusBlk,
 				RoundResults:   roundResults,
-				IORoot:         batch.ioRoot.Hash,
+				IORoot:         batch.hash(),
 				Inputs:         resolvedBatch,
 				Block:          *blk,
 				Epoch:          epoch.GetEpochNumber(),
 				MaxMessages:    state.Runtime.Executor.MaxMessages,
 			},
 		}
-		batchReadTime.With(n.getMetricLabels()).Observe(time.Since(readStartTime).Seconds())
 		batchSize.With(n.getMetricLabels()).Observe(float64(len(resolvedBatch)))
 
 		rtStartTime := time.Now()
@@ -1349,8 +1346,7 @@ func (n *Node) startProcessingBatchLocked(batch *unresolvedBatch) {
 				n.logger.Error("local storage replication failed",
 					"err", err,
 				)
-				// We can still continue as other nodes may have the storage replicated. If this is
-				// not the case, generating a commit will fail in propose.
+				return
 			}
 		}
 
@@ -1405,11 +1401,8 @@ func (n *Node) proposeBatch(
 	// Generate proposed compute results.
 	rakSig := batch.RakSig
 	proposedResults := &commitment.ComputeBody{
-		Header:           batch.Header,
-		RakSig:           &rakSig,
-		TxnSchedSig:      unresolved.txnSchedSignature,
-		InputRoot:        unresolved.ioRoot.Hash,
-		InputStorageSigs: unresolved.storageSignatures,
+		Header: batch.Header,
+		RakSig: &rakSig,
 	}
 	// If we are the transaction scheduler also include all the emitted messages.
 	if epoch.IsTransactionScheduler(lastHeader.Round) {
@@ -1421,68 +1414,35 @@ func (n *Node) proposeBatch(
 		start := time.Now()
 		defer storageCommitLatency.With(n.getMetricLabels()).Observe(time.Since(start).Seconds())
 
-		ctx, cancel := context.WithTimeout(roundCtx, n.commonCfg.StorageCommitTimeout)
+		ctx, cancel := context.WithCancel(roundCtx)
 		defer cancel()
 
-		// NOTE: Order is important for verifying the receipt.
-		applyOps := []storage.ApplyOp{
-			// I/O root.
-			{
-				RootType: storage.RootTypeIO,
-				SrcRound: lastHeader.Round + 1,
-				SrcRoot:  unresolved.ioRoot.Hash,
-				DstRoot:  *batch.Header.IORoot,
-				WriteLog: batch.IOWriteLog,
-			},
-			// State root.
-			{
-				RootType: storage.RootTypeState,
-				SrcRound: lastHeader.Round,
-				SrcRoot:  lastHeader.StateRoot,
-				DstRoot:  *batch.Header.StateRoot,
-				WriteLog: batch.StateWriteLog,
-			},
-		}
-
-		receipts, err := n.commonNode.Group.Storage().ApplyBatch(ctx, &storage.ApplyBatchRequest{
+		// Store final I/O root.
+		err := n.storage.Apply(ctx, &storage.ApplyRequest{
 			Namespace: lastHeader.Namespace,
+			RootType:  storage.RootTypeIO,
+			SrcRound:  lastHeader.Round + 1,
+			SrcRoot:   unresolved.hash(),
 			DstRound:  lastHeader.Round + 1,
-			Ops:       applyOps,
+			DstRoot:   *batch.Header.IORoot,
+			WriteLog:  batch.IOWriteLog,
 		})
 		if err != nil {
-			n.logger.Error("failed to apply to storage",
-				"err", err,
-			)
 			return err
 		}
-
-		// Verify storage receipts.
-		signatures := []signature.Signature{}
-		for _, receipt := range receipts {
-			var receiptBody storage.ReceiptBody
-			if err = receipt.Open(&receiptBody); err != nil {
-				n.logger.Error("failed to open receipt",
-					"receipt", receipt,
-					"err", err,
-				)
-				return err
-			}
-			if err = proposedResults.VerifyStorageReceipt(lastHeader.Namespace, &receiptBody); err != nil {
-				n.logger.Error("failed to validate receipt body",
-					"receipt body", receiptBody,
-					"err", err,
-				)
-				return err
-			}
-			signatures = append(signatures, receipt.Signature)
-		}
-		if err := epoch.VerifyCommitteeSignatures(scheduler.KindStorage, signatures); err != nil {
-			n.logger.Error("failed to validate receipt signer",
-				"err", err,
-			)
+		// Update state root.
+		err = n.storage.Apply(ctx, &storage.ApplyRequest{
+			Namespace: lastHeader.Namespace,
+			RootType:  storage.RootTypeState,
+			SrcRound:  lastHeader.Round,
+			SrcRoot:   lastHeader.StateRoot,
+			DstRound:  lastHeader.Round + 1,
+			DstRoot:   *batch.Header.StateRoot,
+			WriteLog:  batch.StateWriteLog,
+		})
+		if err != nil {
 			return err
 		}
-		proposedResults.StorageSignatures = signatures
 
 		return nil
 	}()
@@ -1490,7 +1450,7 @@ func (n *Node) proposeBatch(
 		n.logger.Error("storage failure, submitting failure indicating commitment",
 			"err", storageErr,
 		)
-		proposedResults.SetFailure(commitment.FailureStorageUnavailable)
+		proposedResults.SetFailure(commitment.FailureUnknown)
 	}
 
 	// Submit commitment.
@@ -1607,7 +1567,7 @@ func (n *Node) HandleNodeUpdateLocked(update *nodes.NodeUpdate, snapshot *commit
 }
 
 // Guarded by n.commonNode.CrossNode.
-func (n *Node) handleExternalBatchLocked(batch *unresolvedBatch, hdr block.Header) error {
+func (n *Node) handleExternalBatchLocked(batch *unresolvedBatch) error {
 	// If we are not waiting for a batch, don't do anything.
 	if _, ok := n.state.(StateWaitingForBatch); !ok {
 		return errIncorrectState
@@ -1622,7 +1582,8 @@ func (n *Node) handleExternalBatchLocked(batch *unresolvedBatch, hdr block.Heade
 	}
 
 	// Check if we have the correct block -- in this case, start processing the batch.
-	if n.commonNode.CurrentBlock.Header.MostlyEqual(&hdr) {
+	currentHash := n.commonNode.CurrentBlock.Header.EncodedHash()
+	if currentHash.Equal(&batch.proposalHeader.PreviousHash) {
 		n.maybeStartProcessingBatchLocked(batch)
 		return nil
 	}
@@ -1630,18 +1591,18 @@ func (n *Node) handleExternalBatchLocked(batch *unresolvedBatch, hdr block.Heade
 	// Check if the current block is older than what is expected we base our batch
 	// on. In case it is equal or newer, but different, discard the batch.
 	curRound := n.commonNode.CurrentBlock.Header.Round
-	waitRound := hdr.Round
+	waitRound := batch.proposalHeader.Round - 1
 	if curRound >= waitRound {
 		n.logger.Warn("got external batch based on incompatible header",
-			"header", hdr,
+			"previous_hash", batch.proposalHeader.PreviousHash,
+			"round", batch.proposalHeader.Round,
 		)
 		return errIncompatibleHeader
 	}
 
 	// Wait for the correct block to arrive.
 	n.transitionLocked(StateWaitingForBlock{
-		batch:  batch,
-		header: &hdr,
+		batch: batch,
 	})
 
 	return nil
@@ -1733,9 +1694,6 @@ func (n *Node) handleProcessedBatch(batch *processedBatch, processingCh chan *pr
 			Round:        lastHeader.Round + 1,
 			PreviousHash: lastHeader.EncodedHash(),
 		},
-		TxnSchedSig:      state.batch.txnSchedSignature,
-		InputRoot:        state.batch.ioRoot.Hash,
-		InputStorageSigs: state.batch.storageSignatures,
 	}
 	commit.SetFailure(commitment.FailureUnknown)
 

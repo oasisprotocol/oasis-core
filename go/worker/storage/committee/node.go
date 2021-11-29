@@ -13,7 +13,6 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 
 	"github.com/oasisprotocol/oasis-core/go/common/accessctl"
-	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
 	"github.com/oasisprotocol/oasis-core/go/common/grpc/policy"
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
 	"github.com/oasisprotocol/oasis-core/go/common/node"
@@ -271,8 +270,8 @@ func NewNode(
 		nodes.WithAllFilters(
 			// Ignore self.
 			nodes.IgnoreNodeFilter(n.commonNode.Identity.NodeSigner.Public()),
-			// Only storage nodes.
-			nodes.TagFilter(nodes.TagsForRoleMask(node.RoleStorageWorker)[0]),
+			// Only compute nodes.
+			nodes.TagFilter(nodes.TagsForRoleMask(node.RoleComputeWorker)[0]),
 		),
 	)
 	storageNodesGrpc, err := grpc.NewNodesClient(
@@ -545,7 +544,7 @@ func (n *Node) fetchDiff(round uint64, prevRoot, thisRoot storageApi.Root) {
 			ctx = storageApi.WithNodeSelectionCallback(ctx, func(n *node.Node) {
 				selectedNode = n
 			})
-			if committee := n.commonNode.Group.GetEpochSnapshot().GetStorageCommittee(); committee != nil {
+			if committee := n.commonNode.Group.GetEpochSnapshot().GetExecutorCommittee(); committee != nil {
 				ctx = storageApi.WithNodePriorityHintFromMap(ctx, committee.PublicKeys)
 			}
 			it, err := n.storageClient.GetDiff(ctx, &storageApi.GetDiffRequest{StartRoot: prevRoot, EndRoot: thisRoot})
@@ -634,7 +633,7 @@ func (n *Node) initGenesis(rt *registryApi.Runtime, genesisBlock *block.Block) e
 				"latest_version", latestVersion,
 			)
 			for v := latestVersion; v < stateRoot.Version; v++ {
-				_, err = n.localStorage.Apply(n.ctx, &storageApi.ApplyRequest{
+				err = n.localStorage.Apply(n.ctx, &storageApi.ApplyRequest{
 					Namespace: rt.ID,
 					RootType:  storageApi.RootTypeState,
 					SrcRound:  v,
@@ -666,8 +665,7 @@ func (n *Node) initGenesis(rt *registryApi.Runtime, genesisBlock *block.Block) e
 	}
 
 	// If we are incompatible and the database is not empty, we cannot do anything. If the database
-	// is empty we can either apply genesis state from the runtime descriptor (if relevant) or we
-	// assume the node will sync from a different node.
+	// is empty we assume the node will sync from a different node.
 	if !compatible && latestVersion > 0 {
 		n.logger.Error("existing state is incompatible with runtime genesis state",
 			"genesis_state_root", genesisBlock.Header.StateRoot,
@@ -677,35 +675,9 @@ func (n *Node) initGenesis(rt *registryApi.Runtime, genesisBlock *block.Block) e
 		return fmt.Errorf("existing state is incompatible with runtime genesis state")
 	}
 
-	// Check if the genesis round in the descriptor matches the current genesis round and if so,
-	// whether genesis state exists in the descriptor. Note that the rounds may not match in case a
-	// dump/restore of consensus layer state has been performed.
-	if genesisBlock.Header.Round == rt.Genesis.Round && rt.Genesis.State != nil {
-		var emptyRoot hash.Hash
-		emptyRoot.Empty()
-
-		n.logger.Info("applying genesis state",
-			"state_root", rt.Genesis.StateRoot,
-		)
-
-		_, err := n.localStorage.Apply(n.ctx, &storageApi.ApplyRequest{
-			Namespace: rt.ID,
-			RootType:  storageApi.RootTypeState,
-			SrcRound:  rt.Genesis.Round,
-			SrcRoot:   emptyRoot,
-			DstRound:  rt.Genesis.Round,
-			DstRoot:   rt.Genesis.StateRoot,
-			WriteLog:  rt.Genesis.State,
-		})
-		if err != nil {
-			return fmt.Errorf("failed to apply genesis state: %w", err)
-		}
-		compatible = true
-	}
-
 	if !compatible {
 		// Database is empty, so assume the state will be replicated from another node.
-		n.logger.Warn("non-empty state root but no state specified, assuming replication",
+		n.logger.Warn("non-empty state root but no state available, assuming replication",
 			"state_root", genesisBlock.Header.StateRoot,
 		)
 		n.checkpointSyncForced = true
@@ -747,33 +719,11 @@ func (n *Node) updateExternalServicePolicy(rtComputeNodes nodes.NodeDescriptorLo
 		sentryNodesPolicy.AddPublicKeyPolicy(&policy, addr.PubKey)
 	}
 
-	executorCommitteePolicy.AddRulesForNodeRoles(&policy, rtComputeNodes.GetNodes(), node.RoleComputeWorker)
-
-	switch {
-	// If public storage RPC was enabled in the config, then the normally gated methods need to be allowed
-	// for everyone.
-	case n.rpcRoleProvider != nil:
-		for _, act := range storageNodesPolicy.Actions {
+	// If public storage RPC was enabled in the config, then the normally gated methods need to be
+	// allowed for everyone.
+	if n.rpcRoleProvider != nil {
+		for _, act := range storageRpcNodesPolicy.Actions {
 			policy.AllowAll(act)
-		}
-
-	// If not configured otherwise, state access should be restricted to storage committee members.
-	default:
-		// TODO: Query registry only for storage nodes after
-		// https://github.com/oasisprotocol/oasis-core/issues/1923 is implemented.
-		nodes, err := n.commonNode.Consensus.Registry().GetNodes(n.ctx, consensus.HeightLatest)
-		if err != nil {
-			n.logger.Error("couldn't get nodes from registry", "err", err)
-		}
-		if len(nodes) > 0 {
-			// Only include storage nodes for our runtime.
-			var storageNodes []*node.Node
-			for _, nd := range nodes {
-				if nd.GetRuntime(n.commonNode.Runtime.ID()) != nil && nd.HasRoles(node.RoleStorageWorker) {
-					storageNodes = append(storageNodes, nd)
-				}
-			}
-			storageNodesPolicy.AddRulesForNodeRoles(&policy, storageNodes, node.RoleStorageWorker)
 		}
 	}
 
@@ -1107,7 +1057,7 @@ func (n *Node) worker() { // nolint: gocyclo
 					"earliest_round", earlyBlk.Header.Round,
 				)
 				for v := genesisBlock.Header.Round; v < earlyBlk.Header.Round; v++ {
-					_, err = n.localStorage.Apply(n.ctx, &storageApi.ApplyRequest{
+					err = n.localStorage.Apply(n.ctx, &storageApi.ApplyRequest{
 						Namespace: n.commonNode.Runtime.ID(),
 						RootType:  storageApi.RootTypeState,
 						SrcRound:  v,
@@ -1319,7 +1269,7 @@ mainLoop:
 			// Apply the write log if one exists.
 			err = nil
 			if lastDiff.fetched {
-				_, err = n.localStorage.Apply(n.ctx, &storageApi.ApplyRequest{
+				err = n.localStorage.Apply(n.ctx, &storageApi.ApplyRequest{
 					Namespace: lastDiff.thisRoot.Namespace,
 					RootType:  lastDiff.thisRoot.Type,
 					SrcRound:  lastDiff.prevRoot.Version,

@@ -638,24 +638,31 @@ func (p *SharePool) Withdraw(stakeDst, shareSrc, shareAmount *quantity.Quantity)
 type ThresholdKind int
 
 const (
-	KindEntity            ThresholdKind = 0
-	KindNodeValidator     ThresholdKind = 1
-	KindNodeCompute       ThresholdKind = 2
-	KindNodeStorage       ThresholdKind = 3
+	KindEntity        ThresholdKind = 0
+	KindNodeValidator ThresholdKind = 1
+	KindNodeCompute   ThresholdKind = 2
+	// Threshold kind 3 is reserved for future use.
 	KindNodeKeyManager    ThresholdKind = 4
 	KindRuntimeCompute    ThresholdKind = 5
 	KindRuntimeKeyManager ThresholdKind = 6
 
-	KindMax = KindRuntimeKeyManager
-
 	KindEntityName            = "entity"
 	KindNodeValidatorName     = "node-validator"
 	KindNodeComputeName       = "node-compute"
-	KindNodeStorageName       = "node-storage"
 	KindNodeKeyManagerName    = "node-keymanager"
 	KindRuntimeComputeName    = "runtime-compute"
 	KindRuntimeKeyManagerName = "runtime-keymanager"
 )
+
+// ThresholdKinds are the valid threshold kinds.
+var ThresholdKinds = []ThresholdKind{
+	KindEntity,
+	KindNodeValidator,
+	KindNodeCompute,
+	KindNodeKeyManager,
+	KindRuntimeCompute,
+	KindRuntimeKeyManager,
+}
 
 // String returns the string representation of a ThresholdKind.
 func (k ThresholdKind) String() string {
@@ -666,8 +673,6 @@ func (k ThresholdKind) String() string {
 		return KindNodeValidatorName
 	case KindNodeCompute:
 		return KindNodeComputeName
-	case KindNodeStorage:
-		return KindNodeStorageName
 	case KindNodeKeyManager:
 		return KindNodeKeyManagerName
 	case KindRuntimeCompute:
@@ -693,8 +698,6 @@ func (k *ThresholdKind) UnmarshalText(text []byte) error {
 		*k = KindNodeValidator
 	case KindNodeComputeName:
 		*k = KindNodeCompute
-	case KindNodeStorageName:
-		*k = KindNodeStorage
 	case KindNodeKeyManagerName:
 		*k = KindNodeKeyManager
 	case KindRuntimeComputeName:

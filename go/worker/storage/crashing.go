@@ -24,46 +24,39 @@ func init() {
 }
 
 type crashingWrapper struct {
-	api.Backend
+	api.LocalBackend
 }
 
 func (w *crashingWrapper) SyncGet(ctx context.Context, request *api.GetRequest) (*api.ProofResponse, error) {
 	crash.Here(crashPointReadBefore)
-	res, err := w.Backend.SyncGet(ctx, request)
+	res, err := w.LocalBackend.SyncGet(ctx, request)
 	crash.Here(crashPointReadAfter)
 	return res, err
 }
 
 func (w *crashingWrapper) SyncGetPrefixes(ctx context.Context, request *api.GetPrefixesRequest) (*api.ProofResponse, error) {
 	crash.Here(crashPointReadBefore)
-	res, err := w.Backend.SyncGetPrefixes(ctx, request)
+	res, err := w.LocalBackend.SyncGetPrefixes(ctx, request)
 	crash.Here(crashPointReadAfter)
 	return res, err
 }
 
 func (w *crashingWrapper) SyncIterate(ctx context.Context, request *api.IterateRequest) (*api.ProofResponse, error) {
 	crash.Here(crashPointReadBefore)
-	res, err := w.Backend.SyncIterate(ctx, request)
+	res, err := w.LocalBackend.SyncIterate(ctx, request)
 	crash.Here(crashPointReadAfter)
 	return res, err
 }
 
-func (w *crashingWrapper) Apply(ctx context.Context, request *api.ApplyRequest) ([]*api.Receipt, error) {
+func (w *crashingWrapper) Apply(ctx context.Context, request *api.ApplyRequest) error {
 	crash.Here(crashPointWriteBefore)
-	res, err := w.Backend.Apply(ctx, request)
+	err := w.LocalBackend.Apply(ctx, request)
 	crash.Here(crashPointWriteAfter)
-	return res, err
+	return err
 }
 
-func (w *crashingWrapper) ApplyBatch(ctx context.Context, request *api.ApplyBatchRequest) ([]*api.Receipt, error) {
-	crash.Here(crashPointWriteBefore)
-	res, err := w.Backend.ApplyBatch(ctx, request)
-	crash.Here(crashPointWriteAfter)
-	return res, err
-}
-
-func newCrashingWrapper(base api.Backend) api.Backend {
+func newCrashingWrapper(base api.LocalBackend) api.LocalBackend {
 	return &crashingWrapper{
-		Backend: base,
+		LocalBackend: base,
 	}
 }

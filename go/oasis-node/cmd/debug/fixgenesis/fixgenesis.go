@@ -14,6 +14,7 @@ import (
 
 	beacon "github.com/oasisprotocol/oasis-core/go/beacon/api"
 	"github.com/oasisprotocol/oasis-core/go/common"
+	"github.com/oasisprotocol/oasis-core/go/common/cbor"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	"github.com/oasisprotocol/oasis-core/go/common/entity"
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
@@ -60,7 +61,7 @@ type v4Document struct {
 	// ChainID is the ID of the chain.
 	ChainID string `json:"chain_id"`
 	// Registry is the registry genesis state.
-	Registry registry.Genesis `json:"registry"`
+	Registry v4RegistryGenesis `json:"registry"`
 	// RootHash is the roothash genesis state.
 	RootHash roothash.Genesis `json:"roothash"`
 	// Staking is the staking genesis state.
@@ -119,9 +120,100 @@ type v4BeaconPVSSParameters struct {
 	DebugForcedParticipants []signature.PublicKey `json:"debug_forced_participants,omitempty"`
 }
 
+type v4RegistryGenesis struct {
+	// Runtimes is the initial list of runtimes.
+	Runtimes []*v4Runtime `json:"runtimes,omitempty"`
+	// SuspendedRuntimes is the list of suspended runtimes.
+	SuspendedRuntimes []*v4Runtime `json:"suspended_runtimes,omitempty"`
+
+	// Everything below is unchanged.
+
+	// Parameters are the registry consensus parameters.
+	Parameters registry.ConsensusParameters `json:"params"`
+
+	// Entities is the initial list of entities.
+	Entities []*entity.SignedEntity `json:"entities,omitempty"`
+
+	// Nodes is the initial list of nodes.
+	Nodes []*node.MultiSignedNode `json:"nodes,omitempty"`
+
+	// NodeStatuses is a set of node statuses.
+	NodeStatuses map[signature.PublicKey]*registry.NodeStatus `json:"node_statuses,omitempty"`
+}
+
+type v4Runtime struct { // nolint: maligned
+	cbor.Versioned
+
+	// ID is a globally unique long term identifier of the runtime.
+	ID common.Namespace `json:"id"`
+
+	// EntityID is the public key identifying the Entity controlling
+	// the runtime.
+	EntityID signature.PublicKey `json:"entity_id"`
+
+	// Genesis is the runtime genesis information.
+	Genesis registry.RuntimeGenesis `json:"genesis"`
+
+	// Kind is the type of runtime.
+	Kind registry.RuntimeKind `json:"kind"`
+
+	// TEEHardware specifies the runtime's TEE hardware requirements.
+	TEEHardware node.TEEHardware `json:"tee_hardware"`
+
+	// Version is the runtime version information.
+	Version registry.VersionInfo `json:"versions"`
+
+	// KeyManager is the key manager runtime ID for this runtime.
+	KeyManager *common.Namespace `json:"key_manager,omitempty"`
+
+	// Executor stores parameters of the executor committee.
+	Executor registry.ExecutorParameters `json:"executor,omitempty"`
+
+	// TxnScheduler stores transaction scheduling parameters of the executor
+	// committee.
+	TxnScheduler registry.TxnSchedulerParameters `json:"txn_scheduler,omitempty"`
+
+	// Storage stores parameters of the storage committee.
+	Storage registry.StorageParameters `json:"storage,omitempty"`
+
+	// AdmissionPolicy sets which nodes are allowed to register for this runtime.
+	// This policy applies to all roles.
+	AdmissionPolicy registry.RuntimeAdmissionPolicy `json:"admission_policy"`
+
+	// Constraints are the node scheduling constraints.
+	Constraints map[v4SchedulerCommitteeKind]map[scheduler.Role]registry.SchedulingConstraints `json:"constraints,omitempty"`
+
+	// Staking stores the runtime's staking-related parameters.
+	Staking registry.RuntimeStakingParameters `json:"staking,omitempty"`
+
+	// GovernanceModel specifies the runtime governance model.
+	GovernanceModel registry.RuntimeGovernanceModel `json:"governance_model"`
+}
+
+type v4SchedulerCommitteeKind scheduler.CommitteeKind
+
+const v4SchedulerCommitteeKindStorage = v4SchedulerCommitteeKind(scheduler.CommitteeKind(2))
+
+func (k *v4SchedulerCommitteeKind) UnmarshalText(text []byte) error {
+	// v4 supported storage nodes which we should remove.
+	if string(text) == "storage" {
+		*k = v4SchedulerCommitteeKindStorage
+		return nil
+	}
+
+	var ck scheduler.CommitteeKind
+	if err := ck.UnmarshalText(text); err != nil {
+		return err
+	}
+	*k = v4SchedulerCommitteeKind(ck)
+	return nil
+}
+
 type v4StakingGenesis struct {
 	// Parameters are the staking consensus parameters.
 	Parameters v4StakingConsensusParameters `json:"params"`
+
+	// Everything below is unchanged.
 
 	// TokenSymbol is the token's ticker symbol.
 	// Only upper case A-Z characters are allowed.
@@ -150,16 +242,19 @@ type v4StakingGenesis struct {
 	DebondingDelegations map[staking.Address]map[staking.Address][]*staking.DebondingDelegation `json:"debonding_delegations,omitempty"`
 }
 
-type v4StakingConsensusParameters struct { // nolint: maligned
-	Thresholds                        map[staking.ThresholdKind]quantity.Quantity `json:"thresholds,omitempty"`
-	DebondingInterval                 beacon.EpochTime                            `json:"debonding_interval,omitempty"`
-	RewardSchedule                    []staking.RewardStep                        `json:"reward_schedule,omitempty"`
-	SigningRewardThresholdNumerator   uint64                                      `json:"signing_reward_threshold_numerator,omitempty"`
-	SigningRewardThresholdDenominator uint64                                      `json:"signing_reward_threshold_denominator,omitempty"`
-	CommissionScheduleRules           staking.CommissionScheduleRules             `json:"commission_schedule_rules,omitempty"`
-	Slashing                          map[string]staking.Slash                    `json:"slashing,omitempty"`
-	GasCosts                          transaction.Costs                           `json:"gas_costs,omitempty"`
-	MinDelegationAmount               quantity.Quantity                           `json:"min_delegation"`
+type v4StakingConsensusParameters struct {
+	Thresholds map[v4StakingThresholdKind]quantity.Quantity `json:"thresholds,omitempty"`
+	Slashing   map[string]staking.Slash                     `json:"slashing,omitempty"`
+
+	// Everything below is unchanged.
+
+	DebondingInterval                 beacon.EpochTime                `json:"debonding_interval,omitempty"`
+	RewardSchedule                    []staking.RewardStep            `json:"reward_schedule,omitempty"`
+	SigningRewardThresholdNumerator   uint64                          `json:"signing_reward_threshold_numerator,omitempty"`
+	SigningRewardThresholdDenominator uint64                          `json:"signing_reward_threshold_denominator,omitempty"`
+	CommissionScheduleRules           staking.CommissionScheduleRules `json:"commission_schedule_rules,omitempty"`
+	GasCosts                          transaction.Costs               `json:"gas_costs,omitempty"`
+	MinDelegationAmount               quantity.Quantity               `json:"min_delegation"`
 
 	DisableTransfers       bool                     `json:"disable_transfers,omitempty"`
 	DisableDelegation      bool                     `json:"disable_delegation,omitempty"`
@@ -185,6 +280,25 @@ type v4StakingConsensusParameters struct { // nolint: maligned
 	// RewardFactorBlockProposed is the factor for a reward distributed per block
 	// to the entity that proposed the block.
 	RewardFactorBlockProposed quantity.Quantity `json:"reward_factor_block_proposed"`
+}
+
+type v4StakingThresholdKind staking.ThresholdKind
+
+const v4StakingThresholdKindNodeStorage = v4StakingThresholdKind(staking.ThresholdKind(3))
+
+func (k *v4StakingThresholdKind) UnmarshalText(text []byte) error {
+	// v4 supported storage nodes which we should remove.
+	if string(text) == "node-storage" {
+		*k = v4StakingThresholdKindNodeStorage
+		return nil
+	}
+
+	var st staking.ThresholdKind
+	if err := st.UnmarshalText(text); err != nil {
+		return err
+	}
+	*k = v4StakingThresholdKind(st)
+	return nil
 }
 
 func doFixGenesis(cmd *cobra.Command, args []string) {
@@ -253,13 +367,110 @@ func doFixGenesis(cmd *cobra.Command, args []string) {
 	}
 }
 
+func updateStakingGenesis(old *v4StakingGenesis) (staking.Genesis, error) {
+	new := staking.Genesis{
+		TokenSymbol:          old.TokenSymbol,
+		TokenValueExponent:   old.TokenValueExponent,
+		TotalSupply:          old.TotalSupply,
+		CommonPool:           old.CommonPool,
+		LastBlockFees:        old.LastBlockFees,
+		GovernanceDeposits:   old.GovernanceDeposits,
+		Ledger:               old.Ledger,
+		Delegations:          old.Delegations,
+		DebondingDelegations: old.DebondingDelegations,
+	}
+
+	// With parameters we need to remove the old storage-related thresholds and beacon-related
+	// slashing parameters.
+	new.Parameters = staking.ConsensusParameters{
+		Thresholds: make(map[staking.ThresholdKind]quantity.Quantity),
+		Slashing:   make(map[staking.SlashReason]staking.Slash),
+
+		// Everything else below is just copied over unchanged.
+
+		DebondingInterval:                 old.Parameters.DebondingInterval,
+		RewardSchedule:                    old.Parameters.RewardSchedule,
+		SigningRewardThresholdNumerator:   old.Parameters.SigningRewardThresholdNumerator,
+		SigningRewardThresholdDenominator: old.Parameters.SigningRewardThresholdDenominator,
+		CommissionScheduleRules:           old.Parameters.CommissionScheduleRules,
+		GasCosts:                          old.Parameters.GasCosts,
+		MinDelegationAmount:               old.Parameters.MinDelegationAmount,
+
+		DisableTransfers:       old.Parameters.DisableTransfers,
+		DisableDelegation:      old.Parameters.DisableDelegation,
+		UndisableTransfersFrom: old.Parameters.UndisableTransfersFrom,
+
+		AllowEscrowMessages: old.Parameters.AllowEscrowMessages,
+
+		MaxAllowances: old.Parameters.MaxAllowances,
+
+		FeeSplitWeightPropose:     old.Parameters.FeeSplitWeightPropose,
+		FeeSplitWeightVote:        old.Parameters.FeeSplitWeightVote,
+		FeeSplitWeightNextPropose: old.Parameters.FeeSplitWeightNextPropose,
+
+		RewardFactorEpochSigned:   old.Parameters.RewardFactorEpochSigned,
+		RewardFactorBlockProposed: old.Parameters.RewardFactorBlockProposed,
+	}
+
+	// Convert thresholds.
+	delete(old.Parameters.Thresholds, v4StakingThresholdKindNodeStorage)
+	for t, v := range old.Parameters.Thresholds {
+		new.Parameters.Thresholds[staking.ThresholdKind(t)] = v
+	}
+
+	// Convert slashing parameters.
+	for reason, slash := range old.Parameters.Slashing {
+		switch reason {
+		case slashBeaconInvalidCommitName, slashBeaconInvalidRevealName, slashBeaconNonparticipationName:
+			// These conditions no longer exist.
+		default:
+			var newReason staking.SlashReason
+			if err := newReason.UnmarshalText([]byte(reason)); err != nil {
+				return staking.Genesis{}, fmt.Errorf("failed to parse slash reason: %w", err)
+			}
+			new.Parameters.Slashing[newReason] = slash
+		}
+	}
+
+	return new, nil
+}
+
+func updateRegistryRuntime(old *v4Runtime) (registry.Runtime, error) {
+	new := registry.Runtime{
+		Versioned:   cbor.NewVersioned(registry.LatestRuntimeDescriptorVersion),
+		Constraints: make(map[scheduler.CommitteeKind]map[scheduler.Role]registry.SchedulingConstraints),
+
+		// Everything else below is just copied over unchanged.
+
+		ID:              old.ID,
+		EntityID:        old.EntityID,
+		Genesis:         old.Genesis,
+		Kind:            old.Kind,
+		TEEHardware:     old.TEEHardware,
+		Version:         old.Version,
+		KeyManager:      old.KeyManager,
+		Executor:        old.Executor,
+		TxnScheduler:    old.TxnScheduler,
+		Storage:         old.Storage,
+		AdmissionPolicy: old.AdmissionPolicy,
+		Staking:         old.Staking,
+		GovernanceModel: old.GovernanceModel,
+	}
+
+	delete(old.Constraints, v4SchedulerCommitteeKindStorage)
+	for k, v := range old.Constraints {
+		new.Constraints[scheduler.CommitteeKind(k)] = v
+	}
+
+	return new, nil
+}
+
 func updateGenesisDoc(oldDoc v4Document) (*genesis.Document, error) {
 	// Create the new genesis document template.
 	newDoc := &genesis.Document{
 		Height:     oldDoc.Height,
 		Time:       oldDoc.Time,
 		ChainID:    oldDoc.ChainID,
-		Registry:   oldDoc.Registry,
 		RootHash:   oldDoc.RootHash,
 		KeyManager: oldDoc.KeyManager,
 		Scheduler:  oldDoc.Scheduler,
@@ -277,9 +488,31 @@ func updateGenesisDoc(oldDoc v4Document) (*genesis.Document, error) {
 		return nil, err
 	}
 
-	// Fix up the staking state.
-	if newDoc.Staking, err = updateStakeGenesis(&oldDoc); err != nil {
+	// Update staking genesis.
+	if newDoc.Staking, err = updateStakingGenesis(&oldDoc.Staking); err != nil {
 		return nil, err
+	}
+
+	// Update registry genesis.
+	newDoc.Registry = registry.Genesis{
+		Parameters:   oldDoc.Registry.Parameters,
+		NodeStatuses: oldDoc.Registry.NodeStatuses,
+	}
+
+	// Update runtimes.
+	for _, oldRt := range oldDoc.Registry.Runtimes {
+		var newRt registry.Runtime
+		if newRt, err = updateRegistryRuntime(oldRt); err != nil {
+			return nil, fmt.Errorf("failed to update runtime %s: %w", oldRt.ID, err)
+		}
+		newDoc.Registry.Runtimes = append(newDoc.Registry.Runtimes, &newRt)
+	}
+	for _, oldRt := range oldDoc.Registry.SuspendedRuntimes {
+		var newRt registry.Runtime
+		if newRt, err = updateRegistryRuntime(oldRt); err != nil {
+			return nil, fmt.Errorf("failed to update suspended runtime %s: %w", oldRt.ID, err)
+		}
+		newDoc.Registry.SuspendedRuntimes = append(newDoc.Registry.SuspendedRuntimes, &newRt)
 	}
 
 	newDoc.Registry.Entities = make([]*entity.SignedEntity, 0)
@@ -318,6 +551,7 @@ func updateGenesisDoc(oldDoc v4Document) (*genesis.Document, error) {
 	}
 
 	removedEntities := make(map[signature.PublicKey]*entity.Entity)
+	entityMap := make(map[signature.PublicKey]*entity.Entity)
 	for _, sigEntity := range oldDoc.Registry.Entities {
 		var entity entity.Entity
 		if err := sigEntity.Open(registry.RegisterEntitySignatureContext, &entity); err != nil {
@@ -343,6 +577,7 @@ func updateGenesisDoc(oldDoc v4Document) (*genesis.Document, error) {
 			continue
 		}
 		newDoc.Registry.Entities = append(newDoc.Registry.Entities, sigEntity)
+		entityMap[entity.ID] = &entity
 	}
 	for _, sigNode := range oldDoc.Registry.Nodes {
 		var node node.Node
@@ -351,6 +586,13 @@ func updateGenesisDoc(oldDoc v4Document) (*genesis.Document, error) {
 		}
 		if ent := removedEntities[node.EntityID]; ent != nil {
 			logger.Warn("removing node as owning entity doesn't pass stake claims",
+				"entity_id", node.EntityID,
+				"node_id", node.ID,
+			)
+			continue
+		}
+		if !entityMap[node.EntityID].HasNode(node.ID) {
+			logger.Warn("removing node as owning entity does not have it in its whitelist",
 				"entity_id", node.EntityID,
 				"node_id", node.ID,
 			)
@@ -458,36 +700,6 @@ func updateBeaconGenesis(old *v4Document) (beacon.Genesis, error) {
 			},
 		},
 	}, nil
-}
-
-func updateStakeGenesis(old *v4Document) (staking.Genesis, error) {
-	var newS staking.Genesis
-
-	oldS := old.Staking // Shallow copy
-
-	// Instead of doing something as error-prone as copying every field
-	// apart from the slashing parameters, do this instead.
-	newSlash := make(map[string]staking.Slash)
-	for reason, slash := range oldS.Parameters.Slashing {
-		switch reason {
-		case slashBeaconInvalidCommitName, slashBeaconInvalidRevealName, slashBeaconNonparticipationName:
-			// These conditions no longer exist.
-		default:
-			newSlash[reason] = slash
-		}
-	}
-	oldS.Parameters.Slashing = newSlash
-
-	b, err := json.Marshal(oldS)
-	if err != nil {
-		return staking.Genesis{}, fmt.Errorf("failed to reserialize patched stake: %w", err)
-	}
-
-	if err = json.Unmarshal(b, &newS); err != nil {
-		return staking.Genesis{}, fmt.Errorf("failed to deserialize patched stake: %w", err)
-	}
-
-	return newS, nil
 }
 
 // Register registers the fix-genesis sub-command and all of it's children.

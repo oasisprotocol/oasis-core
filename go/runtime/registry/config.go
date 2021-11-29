@@ -57,6 +57,9 @@ const (
 	// CfgHistoryPrunerKeepLastNum configures the number of last kept
 	// rounds when using the "keep last" pruner strategy.
 	CfgHistoryPrunerKeepLastNum = "runtime.history.pruner.num_kept"
+
+	// CfgRuntimeMode configures how the runtime workers should behave on this node.
+	CfgRuntimeMode = "runtime.mode"
 )
 
 // Flags has the configuration flags.
@@ -77,8 +80,51 @@ const (
 	RuntimeProvisionerSandboxed = "sandboxed"
 )
 
+// RuntimeMode defines the behavior of runtime workers on this node.
+type RuntimeMode string
+
+const (
+	// RuntimeModeNone is the runtime mode where runtime support is disabled and only consensus
+	// layer services are enabled.
+	RuntimeModeNone RuntimeMode = "none"
+	// RuntimeModeCompute is the runtime mode where the node participates as a compute and storage
+	// node for all the configured runtimes.
+	RuntimeModeCompute RuntimeMode = "compute"
+	// RuntimeModeKeymanager is the runtime mode where the node participates as a keymanager node.
+	RuntimeModeKeymanager RuntimeMode = "keymanager"
+	// RuntimeModeClient is the runtime mode where the node does not register and is only a stateful
+	// client for all the configured runtimes. Stateful means that it keeps all runtime state.
+	RuntimeModeClient RuntimeMode = "client"
+	// RuntimeModeClientStateless is the runtime mode where the node does not register and is only a
+	// stateless client for all the configured runtimes. No state is kept locally and the node must
+	// connect to remote nodes to perform any runtime queries.
+	RuntimeModeClientStateless RuntimeMode = "client-stateless"
+)
+
+// UnmarshalText decodes a text marshaled runtime mode.
+func (m *RuntimeMode) UnmarshalText(text []byte) error {
+	switch string(text) {
+	case string(RuntimeModeNone):
+		*m = RuntimeModeNone
+	case string(RuntimeModeCompute):
+		*m = RuntimeModeCompute
+	case string(RuntimeModeKeymanager):
+		*m = RuntimeModeKeymanager
+	case string(RuntimeModeClient):
+		*m = RuntimeModeClient
+	case string(RuntimeModeClientStateless):
+		*m = RuntimeModeClientStateless
+	default:
+		return fmt.Errorf("invalid mode: %s", string(text))
+	}
+	return nil
+}
+
 // RuntimeConfig is the node runtime configuration.
 type RuntimeConfig struct {
+	// Mode is the runtime mode for this node.
+	Mode RuntimeMode
+
 	// Host contains configuration for the runtime host. It may be nil if no runtimes are to be
 	// hosted by the current node.
 	Host *RuntimeHostConfig
@@ -99,6 +145,11 @@ type RuntimeHostConfig struct {
 
 func newConfig(consensus consensus.Backend, ias ias.Endpoint) (*RuntimeConfig, error) {
 	var cfg RuntimeConfig
+
+	// Parse configured runtime mode.
+	if err := cfg.Mode.UnmarshalText([]byte(viper.GetString(CfgRuntimeMode))); err != nil {
+		return nil, fmt.Errorf("failed to parse mode: %w", err)
+	}
 
 	// Check if any runtimes are configured to be hosted.
 	if viper.IsSet(CfgRuntimePaths) {
@@ -262,6 +313,8 @@ func init() {
 	Flags.String(CfgHistoryPrunerStrategy, history.PrunerStrategyNone, "History pruner strategy")
 	Flags.Duration(CfgHistoryPrunerInterval, 2*time.Minute, "History pruning interval")
 	Flags.Uint64(CfgHistoryPrunerKeepLastNum, 600, "Keep last history pruner: number of last rounds to keep")
+
+	Flags.String(CfgRuntimeMode, string(RuntimeModeNone), "Runtime mode (none, compute, keymanager, client, client-stateless)")
 
 	_ = viper.BindPFlags(Flags)
 }

@@ -20,6 +20,12 @@ type Scheduler interface {
 	// GetBatch returns a batch of scheduled transactions (if any is available).
 	GetBatch(force bool) []*transaction.CheckedTransaction
 
+	// GetKnownBatch gets a set of known transactions from the transaction pool.
+	//
+	// For any missing transactions nil will be returned in their place and the map of missing
+	// transactions will be populated accoordingly.
+	GetKnownBatch(batch []hash.Hash) ([]*transaction.CheckedTransaction, map[hash.Hash]int)
+
 	// UnscheduledSize returns number of unscheduled items.
 	UnscheduledSize() uint64
 

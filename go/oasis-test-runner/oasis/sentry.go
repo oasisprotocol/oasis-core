@@ -14,7 +14,7 @@ type Sentry struct {
 	*Node
 
 	validatorIndices  []int
-	storageIndices    []int
+	computeIndices    []int
 	keymanagerIndices []int
 
 	p2pPublicKey  signature.PublicKey
@@ -30,7 +30,7 @@ type SentryCfg struct {
 	NodeCfg
 
 	ValidatorIndices  []int
-	StorageIndices    []int
+	ComputeIndices    []int
 	KeymanagerIndices []int
 }
 
@@ -60,7 +60,7 @@ func (sentry *Sentry) AddArgs(args *argBuilder) error {
 		return err
 	}
 
-	storageWorkers, err := resolveStorageWorkers(sentry.net, sentry.storageIndices)
+	computeWorkers, err := resolveComputeWorkers(sentry.net, sentry.computeIndices)
 	if err != nil {
 		return err
 	}
@@ -90,14 +90,14 @@ func (sentry *Sentry) AddArgs(args *argBuilder) error {
 		args.addValidatorsAsSentryUpstreams(validators)
 	}
 
-	if len(storageWorkers) > 0 || len(keymanagerWorkers) > 0 {
+	if len(computeWorkers) > 0 || len(keymanagerWorkers) > 0 {
 		args.workerGrpcSentryEnabled().
 			workerSentryGrpcClientAddress([]string{fmt.Sprintf("127.0.0.1:%d", sentry.sentryPort)}).
 			workerSentryGrpcClientPort(sentry.sentryPort)
 	}
 
-	if len(storageWorkers) > 0 {
-		args.addSentryStorageWorkers(storageWorkers)
+	if len(computeWorkers) > 0 {
+		args.addSentryComputeWorkers(computeWorkers)
 	}
 
 	if len(keymanagerWorkers) > 0 {
@@ -140,7 +140,7 @@ func (net *Network) NewSentry(cfg *SentryCfg) (*Sentry, error) {
 	sentry := &Sentry{
 		Node:              host,
 		validatorIndices:  cfg.ValidatorIndices,
-		storageIndices:    cfg.StorageIndices,
+		computeIndices:    cfg.ComputeIndices,
 		keymanagerIndices: cfg.KeymanagerIndices,
 		p2pPublicKey:      sentryP2PPublicKey,
 		tlsPublicKey:      sentryTLSPublicKey,

@@ -19,7 +19,6 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/scenario/e2e"
 	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
 	staking "github.com/oasisprotocol/oasis-core/go/staking/api"
-	"github.com/oasisprotocol/oasis-core/go/storage/database"
 	upgrade "github.com/oasisprotocol/oasis-core/go/upgrade/api"
 	"github.com/oasisprotocol/oasis-core/go/upgrade/migrations"
 )
@@ -141,10 +140,6 @@ func (sc *governanceConsensusUpgradeImpl) Fixture() (*oasis.NetworkFixture, erro
 	}
 	f.Keymanagers = []oasis.KeymanagerFixture{
 		{Runtime: 0, Entity: 1, AllowErrorTermination: true},
-	}
-	f.StorageWorkers = []oasis.StorageWorkerFixture{
-		{Backend: database.BackendNameBadgerDB, Entity: 1, AllowErrorTermination: true},
-		{Backend: database.BackendNameBadgerDB, Entity: 1, AllowErrorTermination: true},
 	}
 	f.ComputeWorkers = []oasis.ComputeWorkerFixture{
 		{Entity: 1, Runtimes: []int{1}, AllowErrorTermination: true},

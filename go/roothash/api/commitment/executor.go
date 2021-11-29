@@ -2,7 +2,6 @@
 package commitment
 
 import (
-	"bytes"
 	"errors"
 	"fmt"
 
@@ -12,7 +11,6 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	"github.com/oasisprotocol/oasis-core/go/roothash/api/block"
 	"github.com/oasisprotocol/oasis-core/go/roothash/api/message"
-	storage "github.com/oasisprotocol/oasis-core/go/storage/api"
 )
 
 var (
@@ -71,9 +69,9 @@ const (
 	FailureNone ExecutorCommitmentFailure = 0
 	// FailureUnknown indicates a generic failure.
 	FailureUnknown ExecutorCommitmentFailure = 1
-	// FailureStorageUnavailable indicates that batch processing failed due to
-	// storage being unavailable.
-	FailureStorageUnavailable ExecutorCommitmentFailure = 2
+	// FailureStateUnavailable indicates that batch processing failed due to the state being
+	// unavailable.
+	FailureStateUnavailable ExecutorCommitmentFailure = 2
 )
 
 // ComputeBody holds the data signed in a compute worker commitment.
@@ -81,15 +79,10 @@ type ComputeBody struct {
 	Header  ComputeResultsHeader      `json:"header"`
 	Failure ExecutorCommitmentFailure `json:"failure,omitempty"`
 
-	TxnSchedSig      signature.Signature   `json:"txn_sched_sig"`
-	InputRoot        hash.Hash             `json:"input_root"`
-	InputStorageSigs []signature.Signature `json:"input_storage_sigs"`
-
 	// Optional fields (may be absent for failure indication).
 
-	StorageSignatures []signature.Signature   `json:"storage_signatures,omitempty"`
-	RakSig            *signature.RawSignature `json:"rak_sig,omitempty"`
-	Messages          []message.Message       `json:"messages,omitempty"`
+	RakSig   *signature.RawSignature `json:"rak_sig,omitempty"`
+	Messages []message.Message       `json:"messages,omitempty"`
 }
 
 // SetFailure sets failure reason and clears any fields that should be clear
@@ -98,53 +91,9 @@ func (m *ComputeBody) SetFailure(failure ExecutorCommitmentFailure) {
 	m.Header.IORoot = nil
 	m.Header.StateRoot = nil
 	m.Header.MessagesHash = nil
-	m.StorageSignatures = nil
 	m.RakSig = nil
 	m.Messages = nil
 	m.Failure = failure
-}
-
-// VerifyTxnSchedSignature rebuilds the batch dispatch message from the data
-// in the ComputeBody struct and verifies if the txn scheduler signature
-// matches what we're seeing.
-func (m *ComputeBody) VerifyTxnSchedSignature(runtimeID common.Namespace, header block.Header) (bool, error) {
-	ctx, err := ProposedBatchSignatureContext.WithSuffix(runtimeID.String())
-	if err != nil {
-		return false, fmt.Errorf("proposed batch signature context error: %w", err)
-	}
-	dispatch := &ProposedBatch{
-		IORoot:            m.InputRoot,
-		StorageSignatures: m.InputStorageSigs,
-		Header:            header,
-	}
-	return m.TxnSchedSig.Verify(ctx, cbor.Marshal(dispatch)), nil
-}
-
-// RootsForStorageReceipt gets the merkle roots that must be part of
-// a storage receipt.
-func (m *ComputeBody) RootsForStorageReceipt() []hash.Hash {
-	var ioRoot hash.Hash
-	var stateRoot hash.Hash
-	if m.Header.IORoot != nil {
-		ioRoot = *m.Header.IORoot
-	}
-	if m.Header.StateRoot != nil {
-		stateRoot = *m.Header.StateRoot
-	}
-	return []hash.Hash{
-		ioRoot,
-		stateRoot,
-	}
-}
-
-// RootTypesForStorageReceipt gets the storage root types that must be part
-// of a storage receipt.
-func (m *ComputeBody) RootTypesForStorageReceipt() []storage.RootType {
-	// NOTE: Keep these in the same order as in RootsForStorageReceipt above!
-	return []storage.RootType{
-		storage.RootTypeIO,
-		storage.RootTypeState,
-	}
 }
 
 // ValidateBasic performs basic executor commitment validity checks.
@@ -169,12 +118,7 @@ func (m *ComputeBody) ValidateBasic() error {
 				return fmt.Errorf("bad runtime message %d: %w", i, err)
 			}
 		}
-	case FailureStorageUnavailable, FailureUnknown:
-		// In case of failure indicating commitment make sure storage signatures are empty.
-		if len(m.StorageSignatures) > 0 {
-			return fmt.Errorf("failure indicating commitment includes storage receipts")
-		}
-
+	case FailureUnknown, FailureStateUnavailable:
 		// Ensure header fields are empty.
 		if header.IORoot != nil {
 			return fmt.Errorf("failure indicating body includes IORoot")
@@ -195,59 +139,6 @@ func (m *ComputeBody) ValidateBasic() error {
 		}
 	default:
 		return fmt.Errorf("invalid failure: %d", m.Failure)
-	}
-
-	return nil
-}
-
-// VerifyStorageReceiptSignatures validates that the storage receipt signatures
-// match the signatures for the current merkle roots.
-//
-// Note: Ensuring that the signature is signed by the keypair(s) that are
-// expected is the responsibility of the caller.
-func (m *ComputeBody) VerifyStorageReceiptSignatures(ns common.Namespace) error {
-	receiptBody := storage.ReceiptBody{
-		Version:   1,
-		Namespace: ns,
-		Round:     m.Header.Round,
-		RootTypes: m.RootTypesForStorageReceipt(),
-		Roots:     m.RootsForStorageReceipt(),
-	}
-
-	if !signature.VerifyManyToOne(storage.ReceiptSignatureContext, cbor.Marshal(receiptBody), m.StorageSignatures) {
-		return signature.ErrVerifyFailed
-	}
-
-	return nil
-}
-
-// VerifyStorageReceipt validates that the provided storage receipt
-// matches the header.
-func (m *ComputeBody) VerifyStorageReceipt(ns common.Namespace, receipt *storage.ReceiptBody) error {
-	if !receipt.Namespace.Equal(&ns) {
-		return errors.New("roothash: receipt has unexpected namespace")
-	}
-
-	if receipt.Round != m.Header.Round {
-		return errors.New("roothash: receipt has unexpected round")
-	}
-
-	roots := m.RootsForStorageReceipt()
-	types := m.RootTypesForStorageReceipt()
-	if len(receipt.Roots) != len(roots) {
-		return errors.New("roothash: receipt has unexpected number of roots")
-	}
-	if len(receipt.RootTypes) != len(types) {
-		return errors.New("roothash: receipt has unexpected number of root types")
-	}
-
-	for idx, v := range roots {
-		if types[idx] != receipt.RootTypes[idx] {
-			return errors.New("roothash: receipt has unexpected root types")
-		}
-		if !bytes.Equal(v[:], receipt.Roots[idx][:]) {
-			return errors.New("roothash: receipt has unexpected roots")
-		}
 	}
 
 	return nil

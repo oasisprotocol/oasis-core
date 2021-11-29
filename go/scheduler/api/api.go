@@ -93,15 +93,12 @@ const (
 	KindInvalid CommitteeKind = 0
 	// KindComputeExecutor is an executor committee.
 	KindComputeExecutor CommitteeKind = 1
-	// KindStorage is a storage committee.
-	KindStorage CommitteeKind = 2
 
 	// MaxCommitteeKind is a dummy value used for iterating all committee kinds.
-	MaxCommitteeKind = 3
+	MaxCommitteeKind = 2
 
 	KindInvalidName         = "invalid"
 	KindComputeExecutorName = "executor"
-	KindStorageName         = "storage"
 )
 
 // MarshalText encodes a CommitteeKind into text form.
@@ -111,8 +108,6 @@ func (k CommitteeKind) MarshalText() ([]byte, error) {
 		return []byte(KindInvalidName), nil
 	case KindComputeExecutor:
 		return []byte(KindComputeExecutorName), nil
-	case KindStorage:
-		return []byte(KindStorageName), nil
 	default:
 		return nil, fmt.Errorf("invalid role: %d", k)
 	}
@@ -123,8 +118,6 @@ func (k *CommitteeKind) UnmarshalText(text []byte) error {
 	switch string(text) {
 	case KindComputeExecutorName:
 		*k = KindComputeExecutor
-	case KindStorageName:
-		*k = KindStorage
 	default:
 		return fmt.Errorf("invalid role: %s", string(text))
 	}
@@ -138,8 +131,6 @@ func (k CommitteeKind) String() string {
 		return KindInvalidName
 	case KindComputeExecutor:
 		return KindComputeExecutorName
-	case KindStorage:
-		return KindStorageName
 	default:
 		return fmt.Sprintf("[unknown kind: %d]", k)
 	}

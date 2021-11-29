@@ -35,7 +35,6 @@ func GenesisState() api.Genesis {
 				api.KindEntity:            *quantity.NewFromUint64(1),
 				api.KindNodeValidator:     *quantity.NewFromUint64(2),
 				api.KindNodeCompute:       *quantity.NewFromUint64(3),
-				api.KindNodeStorage:       *quantity.NewFromUint64(4),
 				api.KindNodeKeyManager:    *quantity.NewFromUint64(5),
 				api.KindRuntimeCompute:    *quantity.NewFromUint64(6),
 				api.KindRuntimeKeyManager: *quantity.NewFromUint64(7),

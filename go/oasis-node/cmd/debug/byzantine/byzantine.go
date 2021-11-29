@@ -5,7 +5,6 @@ import (
 	"encoding/binary"
 	"fmt"
 	"strings"
-	"time"
 
 	"github.com/spf13/cobra"
 	flag "github.com/spf13/pflag"
@@ -19,6 +18,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/flags"
 	"github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/grpc"
 	"github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/metrics"
+	"github.com/oasisprotocol/oasis-core/go/roothash/api/block"
 	"github.com/oasisprotocol/oasis-core/go/roothash/api/commitment"
 	"github.com/oasisprotocol/oasis-core/go/runtime/transaction"
 	scheduler "github.com/oasisprotocol/oasis-core/go/scheduler/api"
@@ -36,9 +36,12 @@ const (
 	// CfgActivationEpoch configures the epoch at which the Byzantine node activates.
 	CfgActivationEpoch = "activation_epoch"
 	// CfgSchedulerRoleExpected configures if the executor scheduler role is expected.
-	CfgSchedulerRoleExpected = "scheduler_role_expected"
+	CfgSchedulerRoleExpected = "executor.scheduler_role_expected"
 	// CfgExecutorMode configures the byzantine executor mode.
-	CfgExecutorMode = "executor_mode"
+	CfgExecutorMode = "executor.mode"
+	// CfgExecutorProposeBogusTx configures whether the executor in scheduler role should propose
+	// transactions that nobody else has.
+	CfgExecutorProposeBogusTx = "executor.propose_bogus_tx"
 	// CfgVRFBeaconMode configures the byzantine VRF beacon mode.
 	CfgVRFBeaconMode = "vrf_beacon_mode"
 
@@ -102,15 +105,10 @@ var (
 		Short:            "run some node behaviors for testing, often not honest",
 		PersistentPreRun: activateCommonConfig,
 	}
-	executorHonestCmd = &cobra.Command{
+	executorCmd = &cobra.Command{
 		Use:   "executor",
-		Short: "act as an honest executor worker",
+		Short: "act as an executor",
 		Run:   doExecutorScenario,
-	}
-	storageCmd = &cobra.Command{
-		Use:   "storage",
-		Short: "act as a storage worker",
-		Run:   doStorageScenario,
 	}
 	vrfBeaconCmd = &cobra.Command{
 		Use:   "vrfbeacon",
@@ -124,24 +122,6 @@ func activateCommonConfig(cmd *cobra.Command, args []string) {
 	// Set this so we don't reject things when we run without real IAS.
 	ias.SetSkipVerify()
 	ias.SetAllowDebugEnclaves()
-}
-
-func doStorageScenario(cmd *cobra.Command, args []string) {
-	var runtimeID common.Namespace
-	if err := runtimeID.UnmarshalHex(viper.GetString(CfgRuntimeID)); err != nil {
-		panic(fmt.Errorf("error initializing node: failed to parse runtime ID: %w", err))
-	}
-
-	b, err := initializeAndRegisterByzantineNode(runtimeID, node.RoleStorageWorker, scheduler.RoleWorker, scheduler.RoleInvalid, false, false)
-	if err != nil {
-		panic(fmt.Sprintf("error initializing node: %+v", err))
-	}
-	defer func() {
-		_ = b.stop()
-	}()
-
-	// Serve storage request for the next 120 seconds, then exit.
-	time.Sleep(120 * time.Second)
 }
 
 func doExecutorScenario(cmd *cobra.Command, args []string) { //nolint: gocyclo
@@ -159,7 +139,13 @@ func doExecutorScenario(cmd *cobra.Command, args []string) { //nolint: gocyclo
 	}
 
 	isTxScheduler := viper.GetBool(CfgSchedulerRoleExpected)
-	b, err := initializeAndRegisterByzantineNode(runtimeID, node.RoleComputeWorker, scheduler.RoleInvalid, scheduler.RoleWorker, isTxScheduler, false)
+	b, err := initializeAndRegisterByzantineNode(
+		runtimeID,
+		node.RoleComputeWorker,
+		scheduler.RoleWorker,
+		isTxScheduler,
+		false,
+	)
 	if err != nil {
 		panic(fmt.Sprintf("error initializing node: %+v", err))
 	}
@@ -175,6 +161,7 @@ func doExecutorScenario(cmd *cobra.Command, args []string) { //nolint: gocyclo
 	cbc := newComputeBatchContext(runtimeID)
 	switch isTxScheduler {
 	case true:
+		// If we are the transaction scheduler, we wait for transactions and schedule them.
 		var cont bool
 		cont, err = b.receiveAndScheduleTransactions(ctx, cbc, executorMode)
 		if err != nil {
@@ -184,14 +171,21 @@ func doExecutorScenario(cmd *cobra.Command, args []string) { //nolint: gocyclo
 			return
 		}
 	case false:
-		// If we are not the scheduler, receive the proposed batch.
-		if err = cbc.receiveBatch(b.p2p); err != nil {
-			panic(fmt.Sprintf("compute receive batch failed: %+v", err))
+		// If we are not the scheduler, receive transactions and the proposal.
+		if err = cbc.receiveProposal(b.p2p); err != nil {
+			panic(fmt.Sprintf("compute receive proposal failed: %+v", err))
 		}
-		logger.Debug("executor: received batch", "bd", cbc.bd)
+		logger.Debug("executor: received proposal", "proposal", cbc.proposal)
 	}
 
-	if err = cbc.openTrees(ctx, b.storageClients[0]); err != nil {
+	// Get latest roothash block.
+	var blk *block.Block
+	blk, err = getRoothashLatestBlock(ctx, b.tendermint.service, runtimeID)
+	if err != nil {
+		panic(fmt.Errorf("failed getting latest roothash block: %w", err))
+	}
+
+	if err = cbc.openTrees(ctx, blk, b.storageClients[0]); err != nil {
 		panic(fmt.Sprintf("compute open trees failed: %+v", err))
 	}
 	defer cbc.closeTrees()
@@ -264,16 +258,13 @@ func doExecutorScenario(cmd *cobra.Command, args []string) { //nolint: gocyclo
 		"mode", executorMode,
 	)
 
-	if err = cbc.uploadBatch(ctx, b.storageClients); err != nil {
-		panic(fmt.Sprintf("compute upload batch failed: %+v", err))
-	}
 	switch executorMode {
 	case ModeExecutorFailureIndicating:
-		if err = cbc.createCommitment(b.identity, b.rak, b.executorCommittee.EncodedMembersHash(), commitment.FailureUnknown); err != nil {
+		if err = cbc.createCommitment(b.identity, b.rak, commitment.FailureUnknown); err != nil {
 			panic(fmt.Sprintf("compute create commitment failed: %+v", err))
 		}
 	default:
-		if err = cbc.createCommitment(b.identity, b.rak, b.executorCommittee.EncodedMembersHash(), commitment.FailureNone); err != nil {
+		if err = cbc.createCommitment(b.identity, b.rak, commitment.FailureNone); err != nil {
 			panic(fmt.Sprintf("compute create commitment failed: %+v", err))
 		}
 
@@ -287,8 +278,7 @@ func doExecutorScenario(cmd *cobra.Command, args []string) { //nolint: gocyclo
 
 // Register registers the byzantine sub-command and all of its children.
 func Register(parentCmd *cobra.Command) {
-	byzantineCmd.AddCommand(executorHonestCmd)
-	byzantineCmd.AddCommand(storageCmd)
+	byzantineCmd.AddCommand(executorCmd)
 	byzantineCmd.AddCommand(vrfBeaconCmd)
 	parentCmd.AddCommand(byzantineCmd)
 }
@@ -301,12 +291,11 @@ func init() {
 	fs.Uint64(CfgActivationEpoch, 0, "epoch at which the Byzantine node should activate")
 	fs.Bool(CfgSchedulerRoleExpected, false, "is executor node expected to be scheduler or not")
 	fs.String(CfgExecutorMode, ModeExecutorHonest.String(), "configures executor mode")
+	fs.Bool(CfgExecutorProposeBogusTx, false, "whether the executor should propose bogus transactions")
 	fs.String(CfgVRFBeaconMode, ModeVRFBeaconHonest.String(), "configures VRF beacon mode")
 	_ = viper.BindPFlags(fs)
 	byzantineCmd.PersistentFlags().AddFlagSet(fs)
 
-	storageFlags.Uint64(CfgNumStorageFailApplyBatch, 0, "Number of ApplyBatch requests to fail")
-	storageFlags.Uint64(CfgNumStorageFailApply, 0, "Number of Apply requests to fail")
 	storageFlags.Bool(CfgFailReadRequests, false, "Whether the storage node should fail read requests")
 	storageFlags.Bool(CfgCorruptGetDiff, false, "Whether the storage node should corrupt GetDiff responses")
 	_ = viper.BindPFlags(storageFlags)

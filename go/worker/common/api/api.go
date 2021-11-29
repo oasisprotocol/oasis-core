@@ -16,8 +16,6 @@ type Status struct {
 
 	// ExecutorRoles are the node's roles in the executor committee.
 	ExecutorRoles []scheduler.Role `json:"executor_roles"`
-	// StorageRole are the node's roles in the storage committee.
-	StorageRoles []scheduler.Role `json:"storage_roles"`
 
 	// IsTransactionScheduler indicates whether the node is a transaction scheduler in this round.
 	IsTransactionScheduler bool `json:"is_txn_scheduler"`

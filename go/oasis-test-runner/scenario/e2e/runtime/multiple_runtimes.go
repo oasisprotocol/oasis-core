@@ -99,12 +99,6 @@ func (sc *multipleRuntimesImpl) Fixture() (*oasis.NetworkFixture, error) {
 				BatchFlushTimeout: 1 * time.Second,
 				ProposerTimeout:   10,
 			},
-			Storage: registry.StorageParameters{
-				GroupSize:               1,
-				MinWriteReplication:     1,
-				MaxApplyWriteLogEntries: 100_000,
-				MaxApplyOps:             2,
-			},
 			AdmissionPolicy: registry.RuntimeAdmissionPolicy{
 				AnyNode: &registry.AnyNodeRuntimeAdmissionPolicy{},
 			},
@@ -113,13 +107,6 @@ func (sc *multipleRuntimesImpl) Fixture() (*oasis.NetworkFixture, error) {
 					scheduler.RoleWorker: {
 						MinPoolSize: &registry.MinPoolSizeConstraint{
 							Limit: executorGroupSize,
-						},
-					},
-				},
-				scheduler.KindStorage: {
-					scheduler.RoleWorker: {
-						MinPoolSize: &registry.MinPoolSizeConstraint{
-							Limit: 1,
 						},
 					},
 				},

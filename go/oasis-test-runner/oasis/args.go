@@ -33,7 +33,6 @@ import (
 	runtimeRegistry "github.com/oasisprotocol/oasis-core/go/runtime/registry"
 	workerCommon "github.com/oasisprotocol/oasis-core/go/worker/common"
 	"github.com/oasisprotocol/oasis-core/go/worker/common/p2p"
-	"github.com/oasisprotocol/oasis-core/go/worker/compute"
 	workerConsensusRPC "github.com/oasisprotocol/oasis-core/go/worker/consensusrpc"
 	"github.com/oasisprotocol/oasis-core/go/worker/keymanager"
 	"github.com/oasisprotocol/oasis-core/go/worker/registration"
@@ -373,8 +372,11 @@ func (args *argBuilder) workerP2pPort(port uint16) *argBuilder {
 	return args
 }
 
-func (args *argBuilder) workerP2pEnabled() *argBuilder {
-	args.vec = append(args.vec, Argument{Name: p2p.CfgP2PEnabled})
+func (args *argBuilder) runtimeMode(mode runtimeRegistry.RuntimeMode) *argBuilder {
+	args.vec = append(args.vec, Argument{
+		Name:   runtimeRegistry.CfgRuntimeMode,
+		Values: []string{string(mode)},
+	})
 	return args
 }
 
@@ -400,16 +402,6 @@ func (args *argBuilder) runtimePath(id common.Namespace, fn string) *argBuilder 
 		Values:      []string{id.String() + "=" + fn},
 		MultiValued: true,
 	})
-	return args
-}
-
-func (args *argBuilder) workerComputeEnabled() *argBuilder {
-	args.vec = append(args.vec, Argument{Name: compute.CfgWorkerEnabled})
-	return args
-}
-
-func (args *argBuilder) workerKeymanagerEnabled() *argBuilder {
-	args.vec = append(args.vec, Argument{Name: keymanager.CfgEnabled})
 	return args
 }
 
@@ -477,21 +469,9 @@ func (args *argBuilder) workerSentryUpstreamTLSKeys(keys []string) *argBuilder {
 	return args
 }
 
-func (args *argBuilder) workerStorageEnabled() *argBuilder {
-	args.vec = append(args.vec, Argument{Name: workerStorage.CfgWorkerEnabled})
-	return args
-}
-
 func (args *argBuilder) workerStoragePublicRPCEnabled(enabled bool) *argBuilder {
 	if enabled {
 		args.vec = append(args.vec, Argument{Name: workerStorage.CfgWorkerPublicRPCEnabled})
-	}
-	return args
-}
-
-func (args *argBuilder) workerStorageDebugIgnoreApplies(ignore bool) *argBuilder {
-	if ignore {
-		args.vec = append(args.vec, Argument{Name: workerStorage.CfgWorkerDebugIgnoreApply})
 	}
 	return args
 }
@@ -561,13 +541,13 @@ func (args *argBuilder) addValidatorsAsSentryUpstreams(validators []*Validator) 
 	return args.tendermintSentryUpstreamAddress(addrs).workerSentryUpstreamTLSKeys(sentryPubKeys)
 }
 
-func (args *argBuilder) addSentryStorageWorkers(storageWorkers []*Storage) *argBuilder {
+func (args *argBuilder) addSentryComputeWorkers(computeWorkers []*Compute) *argBuilder {
 	var addrs, ids, tmAddrs, sentryPubKeys []string
-	for _, storageWorker := range storageWorkers {
-		addrs = append(addrs, fmt.Sprintf("127.0.0.1:%d", storageWorker.clientPort))
-		ids = append(ids, storageWorker.NodeID.String())
-		tmAddrs = append(tmAddrs, fmt.Sprintf("%s@127.0.0.1:%d", storageWorker.tmAddress, storageWorker.consensusPort))
-		key, _ := storageWorker.sentryPubKey.MarshalText()
+	for _, computeWorker := range computeWorkers {
+		addrs = append(addrs, fmt.Sprintf("127.0.0.1:%d", computeWorker.clientPort))
+		ids = append(ids, computeWorker.NodeID.String())
+		tmAddrs = append(tmAddrs, fmt.Sprintf("%s@127.0.0.1:%d", computeWorker.tmAddress, computeWorker.consensusPort))
+		key, _ := computeWorker.sentryPubKey.MarshalText()
 		sentryPubKeys = append(sentryPubKeys, string(key))
 	}
 	return args.grpcSentryUpstreamAddresses(addrs).

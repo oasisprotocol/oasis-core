@@ -22,9 +22,6 @@ import (
 )
 
 const (
-	// CfgEnabled enables the key manager worker.
-	CfgEnabled = "worker.keymanager.enabled"
-
 	// CfgRuntimeID configures the runtime ID.
 	CfgRuntimeID = "worker.keymanager.runtime.id"
 	// CfgMayGenerate allows the enclave to generate a master secret.
@@ -34,11 +31,6 @@ const (
 // Flags has the configuration flags.
 var Flags = flag.NewFlagSet("", flag.ContinueOnError)
 
-// Enabled reads our enabled flag from viper.
-func Enabled() bool {
-	return viper.GetBool(CfgEnabled)
-}
-
 // New constructs a new key manager worker.
 func New(
 	dataDir string,
@@ -47,6 +39,15 @@ func New(
 	r *registration.Worker,
 	backend api.Backend,
 ) (*Worker, error) {
+	var enabled bool
+	switch commonWorker.RuntimeRegistry.Mode() {
+	case runtimeRegistry.RuntimeModeKeymanager:
+		// When configured in keymanager mode, enable the keymanager worker.
+		enabled = true
+	default:
+		enabled = false
+	}
+
 	ctx, cancelFn := context.WithCancel(context.Background())
 
 	w := &Worker{
@@ -60,58 +61,54 @@ func New(
 		commonWorker: commonWorker,
 		backend:      backend,
 		grpcPolicy:   policy.NewDynamicRuntimePolicyChecker(enclaverpc.ServiceName, commonWorker.GrpcPolicyWatcher),
-		enabled:      Enabled(),
+		enabled:      enabled,
 		mayGenerate:  viper.GetBool(CfgMayGenerate),
 	}
 
-	if w.enabled {
-		if !w.commonWorker.Enabled() {
-			panic("common worker should have been enabled for key manager worker")
-		}
-
-		var runtimeID common.Namespace
-		if err := runtimeID.UnmarshalHex(viper.GetString(CfgRuntimeID)); err != nil {
-			return nil, fmt.Errorf("worker/keymanager: failed to parse runtime ID: %w", err)
-		}
-
-		// Create local storage for the key manager.
-		path, err := runtimeRegistry.EnsureRuntimeStateDir(dataDir, runtimeID)
-		if err != nil {
-			return nil, fmt.Errorf("worker/keymanager: failed to ensure runtime state directory: %w", err)
-		}
-		localStorage, err := localstorage.New(path, runtimeRegistry.LocalStorageFile, runtimeID)
-		if err != nil {
-			return nil, fmt.Errorf("worker/keymanager: cannot create local storage: %w", err)
-		}
-
-		w.roleProvider, err = r.NewRuntimeRoleProvider(node.RoleKeyManager, runtimeID)
-		if err != nil {
-			return nil, fmt.Errorf("worker/keymanager: failed to create role provider: %w", err)
-		}
-
-		w.runtime, err = commonWorker.RuntimeRegistry.NewUnmanagedRuntime(ctx, runtimeID)
-		if err != nil {
-			return nil, fmt.Errorf("worker/keymanager: failed to create runtime registry entry: %w", err)
-		}
-
-		w.runtimeHostHandler = newHostHandler(w, commonWorker, localStorage)
-
-		// Prepare the runtime host node helpers.
-		w.RuntimeHostNode, err = runtimeRegistry.NewRuntimeHostNode(w)
-		if err != nil {
-			return nil, fmt.Errorf("worker/keymanager: failed to create runtime host helpers: %w", err)
-		}
-
-		// Register the Keymanager EnclaveRPC transport gRPC service.
-		enclaverpc.RegisterService(w.commonWorker.Grpc.Server(), w)
+	if !w.enabled {
+		return w, nil
 	}
+
+	var runtimeID common.Namespace
+	if err := runtimeID.UnmarshalHex(viper.GetString(CfgRuntimeID)); err != nil {
+		return nil, fmt.Errorf("worker/keymanager: failed to parse runtime ID: %w", err)
+	}
+
+	// Create local storage for the key manager.
+	path, err := runtimeRegistry.EnsureRuntimeStateDir(dataDir, runtimeID)
+	if err != nil {
+		return nil, fmt.Errorf("worker/keymanager: failed to ensure runtime state directory: %w", err)
+	}
+	localStorage, err := localstorage.New(path, runtimeRegistry.LocalStorageFile, runtimeID)
+	if err != nil {
+		return nil, fmt.Errorf("worker/keymanager: cannot create local storage: %w", err)
+	}
+
+	w.roleProvider, err = r.NewRuntimeRoleProvider(node.RoleKeyManager, runtimeID)
+	if err != nil {
+		return nil, fmt.Errorf("worker/keymanager: failed to create role provider: %w", err)
+	}
+
+	w.runtime, err = commonWorker.RuntimeRegistry.NewUnmanagedRuntime(ctx, runtimeID)
+	if err != nil {
+		return nil, fmt.Errorf("worker/keymanager: failed to create runtime registry entry: %w", err)
+	}
+
+	w.runtimeHostHandler = newHostHandler(w, commonWorker, localStorage)
+
+	// Prepare the runtime host node helpers.
+	w.RuntimeHostNode, err = runtimeRegistry.NewRuntimeHostNode(w)
+	if err != nil {
+		return nil, fmt.Errorf("worker/keymanager: failed to create runtime host helpers: %w", err)
+	}
+
+	// Register the Keymanager EnclaveRPC transport gRPC service.
+	enclaverpc.RegisterService(w.commonWorker.Grpc.Server(), w)
 
 	return w, nil
 }
 
 func init() {
-	Flags.Bool(CfgEnabled, false, "Enable key manager worker")
-
 	Flags.String(CfgRuntimeID, "", "Key manager Runtime ID")
 	Flags.Bool(CfgMayGenerate, false, "Key manager may generate new master secret")
 

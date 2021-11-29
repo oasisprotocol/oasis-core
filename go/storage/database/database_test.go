@@ -1,7 +1,6 @@
 package database
 
 import (
-	"crypto/rand"
 	"io/ioutil"
 	"os"
 	"path/filepath"
@@ -10,7 +9,6 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/oasisprotocol/oasis-core/go/common"
-	memorySigner "github.com/oasisprotocol/oasis-core/go/common/crypto/signature/signers/memory"
 	genesisTestHelpers "github.com/oasisprotocol/oasis-core/go/genesis/tests"
 	"github.com/oasisprotocol/oasis-core/go/storage/api"
 	"github.com/oasisprotocol/oasis-core/go/storage/tests"
@@ -33,17 +31,13 @@ func doTestImpl(t *testing.T, backend string) {
 
 	var (
 		cfg = api.Config{
-			Backend:           backend,
-			ApplyLockLRUSlots: 100,
-			Namespace:         testNs,
-			MaxCacheSize:      16 * 1024 * 1024,
-			NoFsync:           true,
+			Backend:      backend,
+			Namespace:    testNs,
+			MaxCacheSize: 16 * 1024 * 1024,
+			NoFsync:      true,
 		}
 		err error
 	)
-
-	cfg.Signer, err = memorySigner.NewSigner(rand.Reader)
-	require.NoError(err, "NewSigner()")
 
 	cfg.DB, err = ioutil.TempDir("", "oasis-storage-database-test")
 	require.NoError(err, "TempDir()")
@@ -53,8 +47,7 @@ func doTestImpl(t *testing.T, backend string) {
 	impl, err := New(&cfg)
 	require.NoError(err, "New()")
 	defer impl.Cleanup()
-	localBackend := impl.(api.LocalBackend)
 
 	genesisTestHelpers.SetTestChainContext()
-	tests.StorageImplementationTests(t, localBackend, impl, testNs, 0)
+	tests.StorageImplementationTests(t, impl, impl, testNs, 0)
 }

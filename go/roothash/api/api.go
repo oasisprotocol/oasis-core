@@ -269,8 +269,8 @@ func (ev *EquivocationExecutorEvidence) ValidateBasic(id common.Namespace) error
 
 // EquivocationBatchEvidence is evidence of executor proposed batch equivocation.
 type EquivocationBatchEvidence struct {
-	BatchA commitment.SignedProposedBatch `json:"batch_a"`
-	BatchB commitment.SignedProposedBatch `json:"batch_b"`
+	BatchA commitment.SignedProposalHeader `json:"batch_a"`
+	BatchB commitment.SignedProposalHeader `json:"batch_b"`
 }
 
 // ValidateBasic performs stateless batch evidence validation checks.
@@ -285,19 +285,19 @@ func (ev *EquivocationBatchEvidence) ValidateBasic(id common.Namespace) error {
 		return fmt.Errorf("equivocation batch evidence signature public keys don't match")
 	}
 
-	var a, b commitment.ProposedBatch
-	if err := ev.BatchA.Open(&a, id); err != nil {
+	var a, b commitment.ProposalHeader
+	if err := ev.BatchA.Open(id, &a); err != nil {
 		return fmt.Errorf("opening BatchA: %w", err)
 	}
-	if err := ev.BatchB.Open(&b, id); err != nil {
+	if err := ev.BatchB.Open(id, &b); err != nil {
 		return fmt.Errorf("opening BatchB: %w", err)
 	}
 
-	if a.Header.Round != b.Header.Round {
+	if a.Round != b.Round {
 		return fmt.Errorf("equivocation evidence batch header rounds don't match")
 	}
 
-	if a.IORoot.Equal(&b.IORoot) && a.Header.MostlyEqual(&b.Header) {
+	if a.BatchHash.Equal(&b.BatchHash) && a.PreviousHash.Equal(&b.PreviousHash) {
 		return fmt.Errorf("equivocation evidence batch io roots match, no sign of equivocation")
 	}
 

@@ -15,7 +15,7 @@ type Message struct {
 	// non-matching group versions will be discarded.
 	GroupVersion int64 `json:"group_version,omitempty"`
 
-	ProposedBatch  *commitment.SignedProposedBatch `json:",omitempty"`
-	ExecutorCommit *commitment.ExecutorCommitment  `json:",omitempty"`
-	Tx             *executor.Tx                    `json:",omitempty"`
+	Proposal       *commitment.Proposal           `json:",omitempty"`
+	ExecutorCommit *commitment.ExecutorCommitment `json:",omitempty"`
+	Tx             *executor.Tx                   `json:",omitempty"`
 }

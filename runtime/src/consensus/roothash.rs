@@ -8,10 +8,7 @@ use thiserror::Error;
 
 use crate::{
     common::{
-        crypto::{
-            hash::Hash,
-            signature::{PublicKey, SignatureBundle},
-        },
+        crypto::{hash::Hash, signature::PublicKey},
         namespace::Namespace,
         versioned::Versioned,
     },
@@ -171,8 +168,6 @@ pub struct Header {
     pub state_root: Hash,
     /// Messages hash.
     pub messages_hash: Hash,
-    /// Storage receipt signatures.
-    pub storage_signatures: Option<Vec<SignatureBundle>>,
 }
 
 impl Header {
@@ -228,7 +223,7 @@ mod tests {
         let empty = Header::default();
         assert_eq!(
             empty.encoded_hash(),
-            Hash::from("f7f340550630426b4962c3054cb7f21cf3662bd916642daff4efc9a00b4aab3f")
+            Hash::from("4a7526c9ce073f69f9bbc3f88170aaee91c63c4cf929b2ef2f758fc26d23d78b")
         );
 
         let populated = Header {
@@ -245,7 +240,7 @@ mod tests {
         };
         assert_eq!(
             populated.encoded_hash(),
-            Hash::from("e5f8d6958fdedf15e705cb8fc8e2515d870c79d80dd2fa17f35c9e307ca4215a")
+            Hash::from("cf1971df10ea8202fbdfaf567179ace4dea9987199ff3e6ccef1be1ab43e757a")
         );
     }
 
@@ -281,11 +276,9 @@ mod tests {
 
         let mut st = BTreeMap::new();
         st.insert(staking::ThresholdKind::KindNodeCompute, q.clone());
-        st.insert(staking::ThresholdKind::KindNodeStorage, q.clone());
 
         let mut wlc = BTreeMap::new();
         wlc.insert(registry::RolesMask::RoleComputeWorker, 2);
-        wlc.insert(registry::RolesMask::RoleStorageWorker, 4);
 
         let mut wl = BTreeMap::new();
         wl.insert(
@@ -296,13 +289,11 @@ mod tests {
         );
 
         let rt = registry::Runtime {
-            v: 2,
+            v: registry::LATEST_RUNTIME_DESCRIPTOR_VERSION,
             id: Namespace::default(),
             entity_id: test_ent_id,
             genesis: registry::RuntimeGenesis {
                 state_root: Hash::empty_hash(),
-                state: None,
-                storage_receipts: None,
                 round: 0,
             },
             kind: registry::RuntimeKind::KindCompute,
@@ -324,10 +315,6 @@ mod tests {
                 propose_batch_timeout: 5,
             },
             storage: registry::StorageParameters {
-                group_size: 3,
-                min_write_replication: 3,
-                max_apply_write_log_entries: 100000,
-                max_apply_ops: 2,
                 checkpoint_interval: 0,
                 checkpoint_num_kept: 0,
                 checkpoint_chunk_size: 0,
@@ -355,18 +342,6 @@ mod tests {
                         },
                     );
                     ce
-                });
-                cs.insert(scheduler::CommitteeKind::Storage, {
-                    let mut st = BTreeMap::new();
-                    st.insert(
-                        scheduler::Role::Worker,
-                        registry::SchedulingConstraints {
-                            min_pool_size: Some(registry::MinPoolSizeConstraint { limit: 9 }),
-                            max_nodes: Some(registry::MaxNodesConstraint { limit: 1 }),
-                            ..Default::default()
-                        },
-                    );
-                    st
                 });
 
                 Some(cs)
@@ -416,14 +391,14 @@ mod tests {
                     0,
                     RegistryMessage::UpdateRuntime(registry::Runtime::default()),
                 ))],
-                "bc26afcca2efa9ba8138d2339a38389482466163b5bda0e1dac735b03c879905",
+                "24f5e1502f9cfaa64404cc4fea4a4b6f799baefad6f18c9c805b82b727e15d25",
             ),
             (
                 vec![Message::Registry(Versioned::new(
                     0,
                     RegistryMessage::UpdateRuntime(rt),
                 ))],
-                "37a855783495d6699d3d229146b70f31b3da72a2a752e4cb4ded6dfe2d774382",
+                "ba161c59194e6991af9ba2ae2efe77e3dd245956185bcb82ff2db226fed63cdb",
             ),
         ];
         for (msgs, expected_hash) in tcs {

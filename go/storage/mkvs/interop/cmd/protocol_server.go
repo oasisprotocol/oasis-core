@@ -12,8 +12,6 @@ import (
 	flag "github.com/spf13/pflag"
 	"github.com/spf13/viper"
 
-	memorySigner "github.com/oasisprotocol/oasis-core/go/common/crypto/signature/signers/memory"
-	"github.com/oasisprotocol/oasis-core/go/common/identity"
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
 	genesisTestHelpers "github.com/oasisprotocol/oasis-core/go/genesis/tests"
 	"github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/background"
@@ -68,23 +66,11 @@ func doProtoServer(cmd *cobra.Command, args []string) {
 
 	genesisTestHelpers.SetTestChainContext()
 
-	// Generate dummy identity.
-	ident, err := identity.LoadOrGenerate(dataDir, memorySigner.NewFactory(), false)
-	if err != nil {
-		logger.Error("failed to generate identity",
-			"err", err,
-		)
-		return
-	}
-
 	// Initialize a dummy storage backend.
 	storageCfg := api.Config{
-		Backend:            database.BackendNameBadgerDB,
-		DB:                 dataDir,
-		Signer:             ident.NodeSigner,
-		ApplyLockLRUSlots:  1,
-		InsecureSkipChecks: false,
-		MaxCacheSize:       16 * 1024 * 1024,
+		Backend:      database.BackendNameBadgerDB,
+		DB:           dataDir,
+		MaxCacheSize: 16 * 1024 * 1024,
 	}
 
 	if fixtureName := viper.GetString(cfgServerFixture); fixtureName != "" {

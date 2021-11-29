@@ -31,7 +31,6 @@ const (
 	cfgRuntimeID               = "fixture.default.runtime.id"
 	cfgRuntimeBinary           = "fixture.default.runtime.binary"
 	cfgRuntimeProvisioner      = "fixture.default.runtime.provisioner"
-	cfgRuntimeGenesisState     = "fixture.default.runtime.genesis_state"
 	cfgRuntimeLoader           = "fixture.default.runtime.loader"
 	cfgSetupRuntimes           = "fixture.default.setup_runtimes"
 	cfgTEEHardware             = "fixture.default.tee_hardware"
@@ -140,9 +139,6 @@ func newDefaultFixture() (*oasis.NetworkFixture, error) {
 				{Runtime: 0, Entity: 1, RuntimeProvisioner: runtimeProvisioner},
 			}
 		}
-		fixture.StorageWorkers = []oasis.StorageWorkerFixture{
-			{Backend: "badger", Entity: 1},
-		}
 		fixture.ComputeWorkers = []oasis.ComputeWorkerFixture{
 			{Entity: 1, Runtimes: []int{}, RuntimeProvisioner: runtimeProvisioner},
 			{Entity: 1, Runtimes: []int{}, RuntimeProvisioner: runtimeProvisioner},
@@ -157,14 +153,10 @@ func newDefaultFixture() (*oasis.NetworkFixture, error) {
 			}
 			runtimeIDs = append(runtimeIDs, rt)
 		}
-		rtGenesisStates := viper.GetStringSlice(cfgRuntimeGenesisState)
 
 		runtimes := viper.GetStringSlice(cfgRuntimeBinary)
 		if l1, l2 := len(runtimeIDs), len(runtimes); l1 < l2 {
 			cmdCommon.EarlyLogAndExit(fmt.Errorf("missing runtime IDs, provided: %d, required: %d", l1, l2))
-		}
-		if l1, l2 := len(rtGenesisStates), len(runtimes); l1 < l2 {
-			cmdCommon.EarlyLogAndExit(fmt.Errorf("missing runtime genesis states, provided: %d, required: %d", l1, l2))
 		}
 
 		keymanagerIdx := -1
@@ -195,18 +187,11 @@ func newDefaultFixture() (*oasis.NetworkFixture, error) {
 					BatchFlushTimeout: 20 * time.Second,
 					ProposerTimeout:   20,
 				},
-				Storage: registry.StorageParameters{
-					GroupSize:               1,
-					MinWriteReplication:     1,
-					MaxApplyWriteLogEntries: 100_000,
-					MaxApplyOps:             2,
-				},
 				AdmissionPolicy: registry.RuntimeAdmissionPolicy{
 					AnyNode: &registry.AnyNodeRuntimeAdmissionPolicy{},
 				},
-				GenesisStatePath: rtGenesisStates[i],
-				GenesisRound:     0,
-				GovernanceModel:  registry.GovernanceEntity,
+				GenesisRound:    0,
+				GovernanceModel: registry.GovernanceEntity,
 			})
 
 			for j := range fixture.ComputeWorkers {
@@ -230,8 +215,6 @@ func init() {
 	DefaultFixtureFlags.StringSlice(cfgRuntimeID, []string{"8000000000000000000000000000000000000000000000000000000000000000"}, "runtime ID")
 	DefaultFixtureFlags.StringSlice(cfgRuntimeBinary, []string{"simple-keyvalue"}, "path to the runtime binary")
 	DefaultFixtureFlags.String(cfgRuntimeProvisioner, "sandboxed", "the runtime provisioner: mock, unconfined, or sandboxed")
-	// []string{""} as default doesn't work and ends up as an empty slice.
-	DefaultFixtureFlags.StringSlice(cfgRuntimeGenesisState, []string{"", ""}, "path to the runtime genesis state")
 	DefaultFixtureFlags.String(cfgRuntimeLoader, "oasis-core-runtime-loader", "path to the runtime loader")
 	DefaultFixtureFlags.String(cfgTEEHardware, "", "TEE hardware to use")
 	DefaultFixtureFlags.Uint64(cfgHaltEpoch, math.MaxUint64, "halt epoch height")

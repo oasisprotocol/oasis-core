@@ -1,49 +1,62 @@
 package committee
 
 import (
-	"context"
 	"fmt"
 
-	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
+	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
+	"github.com/oasisprotocol/oasis-core/go/roothash/api/commitment"
+	schedulingAPI "github.com/oasisprotocol/oasis-core/go/runtime/scheduling/api"
 	"github.com/oasisprotocol/oasis-core/go/runtime/transaction"
-	storage "github.com/oasisprotocol/oasis-core/go/storage/api"
 )
 
 // unresolvedBatch is a batch that may still need to be resolved (fetched from storage).
 type unresolvedBatch struct {
-	// ioRoot is the I/O root from the transaction scheduler containing the inputs.
-	ioRoot storage.Root
-	// txnSchedSignatures is the transaction scheduler signature of the dispatched batch.
-	txnSchedSignature signature.Signature
-	// storageSignatures are the storage node signatures of storage receipts for the I/O root.
-	storageSignatures []signature.Signature
+	proposal       *commitment.Proposal
+	proposalHeader *commitment.ProposalHeader
 
-	batch transaction.RawBatch
+	batch      transaction.RawBatch
+	missingTxs map[hash.Hash]int
 
-	maxBatchSize      uint64
 	maxBatchSizeBytes uint64
 }
 
 func (ub *unresolvedBatch) String() string {
-	return fmt.Sprintf("UnresolvedBatch{ioRoot: %s}", ub.ioRoot)
+	return fmt.Sprintf("UnresolvedBatch{hash: %s}", ub.proposalHeader.BatchHash)
 }
 
-func (ub *unresolvedBatch) resolve(ctx context.Context, sb storage.Backend) (transaction.RawBatch, error) {
+func (ub *unresolvedBatch) hash() hash.Hash {
+	return ub.proposalHeader.BatchHash
+}
+
+func (ub *unresolvedBatch) resolve(scheduler schedulingAPI.Scheduler) (transaction.RawBatch, error) {
 	if ub.batch != nil {
-		// In case we already have a resolved batch, just return it.
 		return ub.batch, nil
 	}
+	if len(ub.proposal.Batch) == 0 {
+		return transaction.RawBatch{}, nil
+	}
 
-	// Prioritize nodes that signed the storage receipt.
-	ctx = storage.WithNodePriorityHintFromSignatures(ctx, ub.storageSignatures)
+	resolvedBatch, missingTxs := scheduler.GetKnownBatch(ub.proposal.Batch)
+	if len(missingTxs) > 0 {
+		ub.missingTxs = missingTxs
+		return nil, nil
+	}
+	ub.missingTxs = nil
 
-	txs := transaction.NewTree(sb, ub.ioRoot)
-	defer txs.Close()
+	var (
+		batch          transaction.RawBatch
+		totalSizeBytes uint64
+	)
+	for _, checkedTx := range resolvedBatch {
+		totalSizeBytes = totalSizeBytes + checkedTx.Size()
+		if ub.maxBatchSizeBytes > 0 && totalSizeBytes > ub.maxBatchSizeBytes {
+			return nil, fmt.Errorf("batch too large (max: %d size: >=%d)", ub.maxBatchSizeBytes, totalSizeBytes)
+		}
+		// TODO: Also check against weight limits.
 
-	batch, err := txs.GetInputBatch(ctx, ub.maxBatchSize, ub.maxBatchSizeBytes)
-	if err != nil {
-		return nil, fmt.Errorf("failed to fetch inputs from storage: %w", err)
+		batch = append(batch, checkedTx.Raw())
 	}
 	ub.batch = batch
+
 	return batch, nil
 }

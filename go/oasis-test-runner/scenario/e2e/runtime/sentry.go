@@ -23,7 +23,6 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/scenario"
 	"github.com/oasisprotocol/oasis-core/go/sentry/api"
 	storage "github.com/oasisprotocol/oasis-core/go/storage/api"
-	"github.com/oasisprotocol/oasis-core/go/storage/database"
 	"github.com/oasisprotocol/oasis-core/go/storage/mkvs/checkpoint"
 	"github.com/oasisprotocol/oasis-core/go/storage/mkvs/syncer"
 )
@@ -90,11 +89,11 @@ func (s *sentryImpl) Fixture() (*oasis.NetworkFixture, error) {
 	// +-------------+          +----------+
 	//
 	// +-----------+            +----------+
-	// | Storage 0 +<---------->+ Sentry 3 |
+	// | Compute 0 +<---------->+ Sentry 3 |
 	// +-----------+            +----------+
 	//
 	// +-----------+            +----------+
-	// | Storage 1 +<---------->+ Sentry 4 |
+	// | Compute 1 +<---------->+ Sentry 4 |
 	// +-----------+            +----------+
 	//
 	// +------------+           +----------+
@@ -112,10 +111,10 @@ func (s *sentryImpl) Fixture() (*oasis.NetworkFixture, error) {
 			Validators: []int{1, 2},
 		},
 		{
-			StorageWorkers: []int{0},
+			ComputeWorkers: []int{0},
 		},
 		{
-			StorageWorkers: []int{1},
+			ComputeWorkers: []int{1},
 		},
 		{
 			KeymanagerWorkers: []int{0},
@@ -141,21 +140,21 @@ func (s *sentryImpl) Fixture() (*oasis.NetworkFixture, error) {
 		},
 	}
 
-	f.StorageWorkers = []oasis.StorageWorkerFixture{
+	f.ComputeWorkers = []oasis.ComputeWorkerFixture{
 		{
-			Backend:  database.BackendNameBadgerDB,
 			Entity:   1,
 			Sentries: []int{3},
-			// Disable cert rotation on one of the storage nodes so we can use
+			// Disable cert rotation on one of the compute nodes so we can use
 			// its TLS certificates in the access control sanity checks.
 			DisableCertRotation: true,
 			// Also disable public RPC on one, so we can check access control.
 			DisablePublicRPC: true,
+			Runtimes:         []int{1},
 		},
 		{
-			Backend:  database.BackendNameBadgerDB,
 			Entity:   1,
 			Sentries: []int{4},
+			Runtimes: []int{1},
 		},
 	}
 
@@ -199,34 +198,34 @@ func (s *sentryImpl) Run(childEnv *env.Env) error { // nolint: gocyclo
 	sentry3, sentry3Address, _, _ := loadSentryNodeInfo(s.Net.Sentries()[3])
 	sentry4, sentry4Address, _, _ := loadSentryNodeInfo(s.Net.Sentries()[4])
 
-	storage0 := s.Net.StorageWorkers()[0]
-	storage0Identity, err := storage0.LoadIdentity()
+	compute0 := s.Net.ComputeWorkers()[0]
+	compute0Identity, err := compute0.LoadIdentity()
 	if err != nil {
-		return fmt.Errorf("sentry: error loading storage node identity: %w", err)
+		return fmt.Errorf("sentry: error loading compute node identity: %w", err)
 	}
-	// Make sure storage0 has disabled certificate rotation.
-	if !storage0Identity.DoNotRotateTLS {
-		return fmt.Errorf("sentry: storage-0 does not have disabled certificate rotation")
+	// Make sure compute0 has disabled certificate rotation.
+	if !compute0Identity.DoNotRotateTLS {
+		return fmt.Errorf("sentry: compute-0 does not have disabled certificate rotation")
 	}
 
-	storage1 := s.Net.StorageWorkers()[1]
-	storage1Identity, err := storage0.LoadIdentity()
+	compute1 := s.Net.ComputeWorkers()[1]
+	compute1Identity, err := compute0.LoadIdentity()
 	if err != nil {
-		return fmt.Errorf("sentry: error loading storage node identity: %w", err)
+		return fmt.Errorf("sentry: error loading compute node identity: %w", err)
 	}
-	storage1Address := storage1.GetClientAddress()
-	// Query for storage 1 TLS public keys.
-	storage1Ctrl, err := oasis.NewController(storage1.SocketPath())
+	compute1Address := compute1.GetClientAddress()
+	// Query for compute 1 TLS public keys.
+	compute1Ctrl, err := oasis.NewController(compute1.SocketPath())
 	if err != nil {
 		return err
 	}
-	storage1Status, err := storage1Ctrl.GetStatus(ctx)
+	compute1Status, err := compute1Ctrl.GetStatus(ctx)
 	if err != nil {
-		return fmt.Errorf("failed to get status for storage1: %w", err)
+		return fmt.Errorf("failed to get status for compute1: %w", err)
 	}
-	storage1ServerPublicKeys := make(map[signature.PublicKey]bool)
-	for _, key := range storage1Status.Identity.TLS {
-		storage1ServerPublicKeys[key] = true
+	compute1ServerPublicKeys := make(map[signature.PublicKey]bool)
+	for _, key := range compute1Status.Identity.TLS {
+		compute1ServerPublicKeys[key] = true
 	}
 
 	validator0 := s.Net.Validators()[0]
@@ -321,47 +320,46 @@ func (s *sentryImpl) Run(childEnv *env.Env) error { // nolint: gocyclo
 		return errors.New("sentry0 control endpoint should allow connection with validator0 certificate")
 	}
 
-	// Sanity check storage endpoints. Only committee and configured upstream sentry nodes
-	// are allowed to access corresponding storage node write endpoints.
+	// Sanity check storage endpoints.
 
-	// Check Storage-1 endpoint with Validator-0 client certificates.
+	// Check Compute-1 endpoint with Validator-0 client certificates.
 	opts = &cmnGrpc.ClientOptions{
 		CommonName:    identity.CommonName,
-		ServerPubKeys: storage1ServerPublicKeys,
+		ServerPubKeys: compute1ServerPublicKeys,
 		Certificates:  []tls.Certificate{*validator0Identity.TLSSentryClientCertificate},
 	}
-	conn, err = s.dial(storage1Address, opts)
+	conn, err = s.dial(compute1Address, opts)
 	if err != nil {
 		return fmt.Errorf("sentry: dial error: %w", err)
 	}
 	defer conn.Close()
-	storage1Client := storage.NewStorageClient(conn)
-	_, err = storage1Client.GetCheckpoints(ctx, emptyGetCheckpointsReq)
-	s.Logger.Debug("storage1.GetCheckpoints with validator0 cert", "err", err)
+	compute1Client := storage.NewStorageClient(conn)
+	_, err = compute1Client.GetCheckpoints(ctx, emptyGetCheckpointsReq)
+	s.Logger.Debug("compute1.GetCheckpoints with validator0 cert", "err", err)
 	if err != nil {
-		return errors.New("storage1 checkpoint endpoint should allow connection with validator0 certificate")
+		return errors.New("compute1 checkpoints endpoint should allow connection with validator0 certificate")
 	}
 
-	// Check Storage-1 endpoint with Storage-0 client certificates.
+	// Check Compute-1 endpoint with Compute-0 client certificates.
 	opts = &cmnGrpc.ClientOptions{
 		CommonName:    identity.CommonName,
-		ServerPubKeys: storage1ServerPublicKeys,
-		Certificates:  []tls.Certificate{*storage0Identity.GetTLSCertificate()},
+		ServerPubKeys: compute1ServerPublicKeys,
+		Certificates:  []tls.Certificate{*compute0Identity.GetTLSCertificate()},
 	}
-	conn, err = s.dial(storage1Address, opts)
+	conn, err = s.dial(compute1Address, opts)
 	if err != nil {
 		return fmt.Errorf("sentry: dial error: %w", err)
 	}
 	defer conn.Close()
-	storage1Client = storage.NewStorageClient(conn)
-	_, err = storage1Client.GetCheckpoints(ctx, emptyGetCheckpointsReq)
-	s.Logger.Debug("storage1.GetCheckpoints with storage0 cert", "err", err)
+	compute1Client = storage.NewStorageClient(conn)
+	_, err = compute1Client.GetCheckpoints(ctx, emptyGetCheckpointsReq)
+	s.Logger.Debug("compute1.GetCheckpoints with compute0 cert", "err", err)
 	if err != nil {
-		return errors.New("storage1 checkpoints endpoint should allow connection with storage0 certificate")
+		return errors.New("compute1 checkpoints endpoint should allow connection with compute0 certificate")
 	}
 
 	// Sanity check Sentry-3 storage endpoint. All nodes are allowed to access
-	// storage sentry read only endpoints. Only active storage committee nodes
+	// storage sentry read only endpoints. Only active executor committee nodes
 	// are allowed to access state access endpoints.
 
 	// Check Sentry-3 storage endpoint with Validator-0 client certificates.
@@ -389,13 +387,13 @@ func (s *sentryImpl) Run(childEnv *env.Env) error { // nolint: gocyclo
 		return errors.New("sentry3 storage checkpoint endpoint should allow connection with validator0 sentry certificate")
 	}
 
-	// Check Sentry-3 storage endpoint with Storage-0 client certificates.
+	// Check Sentry-3 storage endpoint with Compute-0 client certificates.
 	opts = &cmnGrpc.ClientOptions{
 		CommonName: identity.CommonName,
 		ServerPubKeys: map[signature.PublicKey]bool{
 			sentry4.GetTLSPubKey(): true,
 		},
-		Certificates: []tls.Certificate{*storage1Identity.GetTLSCertificate()},
+		Certificates: []tls.Certificate{*compute1Identity.GetTLSCertificate()},
 	}
 	conn, err = s.dial(sentry3Address, opts)
 	if err != nil {
@@ -404,18 +402,18 @@ func (s *sentryImpl) Run(childEnv *env.Env) error { // nolint: gocyclo
 	defer conn.Close()
 	sentry3Client = storage.NewStorageClient(conn)
 	_, err = sentry3Client.SyncGet(ctx, emptySyncGetReq)
-	s.Logger.Debug("sentry3.SyncGet with storage1 cert", "err", err)
+	s.Logger.Debug("sentry3.SyncGet with compute1 cert", "err", err)
 	if status.Code(err) == codes.PermissionDenied {
-		return errors.New("sentry3 storage read-only endpoint should allow connections with storage1 certificate")
+		return errors.New("sentry3 storage read-only endpoint should allow connections with compute1 certificate")
 	}
 	_, err = sentry3Client.GetCheckpoints(ctx, emptyGetCheckpointsReq)
-	s.Logger.Debug("sentry3.GetCheckpoints with storage1 cert", "err", err)
+	s.Logger.Debug("sentry3.GetCheckpoints with compute1 cert", "err", err)
 	if status.Code(err) == codes.PermissionDenied {
-		return errors.New("sentry3 storage checkpoints endpoint should allow connection with storage1 certificate")
+		return errors.New("sentry3 storage checkpoints endpoint should allow connection with compute1 certificate")
 	}
 
 	// Sanity check Sentry-4 storage endpoint. All nodes are allowed to access
-	// storage sentry read only endpoints. Only active storage committee nodes
+	// storage sentry read only endpoints. Only active executor committee nodes
 	// are allowed to access state access endpoints.
 
 	// Check Sentry-4 storage endpoint with Validator-0 client certificates.
@@ -443,13 +441,13 @@ func (s *sentryImpl) Run(childEnv *env.Env) error { // nolint: gocyclo
 		return errors.New("sentry4 storage checkpoint endpoint should allow connection with validator0 sentry certificate")
 	}
 
-	// Check Sentry-4 storage endpoint with Storage-0 client certificates.
+	// Check Sentry-4 storage endpoint with Compute-0 client certificates.
 	opts = &cmnGrpc.ClientOptions{
 		CommonName: identity.CommonName,
 		ServerPubKeys: map[signature.PublicKey]bool{
 			sentry4.GetTLSPubKey(): true,
 		},
-		Certificates: []tls.Certificate{*storage0Identity.GetTLSCertificate()},
+		Certificates: []tls.Certificate{*compute0Identity.GetTLSCertificate()},
 	}
 	conn, err = s.dial(sentry4Address, opts)
 	if err != nil {
@@ -458,14 +456,14 @@ func (s *sentryImpl) Run(childEnv *env.Env) error { // nolint: gocyclo
 	defer conn.Close()
 	sentry4Client = storage.NewStorageClient(conn)
 	_, err = sentry4Client.SyncGet(ctx, emptySyncGetReq)
-	s.Logger.Debug("sentry4.SyncGet with storage0 cert", "err", err)
+	s.Logger.Debug("sentry4.SyncGet with compute0 cert", "err", err)
 	if status.Code(err) == codes.PermissionDenied {
-		return errors.New("sentry4 storage read-only endpoint should allow connections with storage0 certificate")
+		return errors.New("sentry4 storage read-only endpoint should allow connections with compute0 certificate")
 	}
 	_, err = sentry4Client.GetCheckpoints(ctx, emptyGetCheckpointsReq)
-	s.Logger.Debug("sentry4.GetCheckpoints with storage0 cert", "err", err)
+	s.Logger.Debug("sentry4.GetCheckpoints with compute0 cert", "err", err)
 	if err != nil {
-		return errors.New("sentry4 storage checkpoints endpoint should allow connection with storage0 certificate")
+		return errors.New("sentry4 storage checkpoints endpoint should allow connection with compute0 certificate")
 	}
 
 	// Sanity check validator peers - only sentry nodes should be present.

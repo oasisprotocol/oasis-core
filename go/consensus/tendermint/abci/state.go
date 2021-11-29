@@ -467,8 +467,7 @@ func InitStateStorage(ctx context.Context, cfg *ApplicationConfig) (storage.Loca
 	if err != nil {
 		return nil, nil, nil, err
 	}
-	ldb := db.(storage.LocalBackend)
-	ndb := ldb.NodeDB()
+	ndb := db.NodeDB()
 
 	// Make sure to close the database in case we fail.
 	var ok bool
@@ -508,7 +507,7 @@ func InitStateStorage(ctx context.Context, cfg *ApplicationConfig) (storage.Loca
 
 	ok = true
 
-	return ldb, ndb, stateRoot, nil
+	return db, ndb, stateRoot, nil
 }
 
 func newApplicationState(ctx context.Context, upgrader upgrade.Backend, cfg *ApplicationConfig) (*applicationState, error) {

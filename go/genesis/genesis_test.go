@@ -34,7 +34,6 @@ import (
 	staking "github.com/oasisprotocol/oasis-core/go/staking/api"
 	"github.com/oasisprotocol/oasis-core/go/staking/api/token"
 	stakingTests "github.com/oasisprotocol/oasis-core/go/staking/tests"
-	storage "github.com/oasisprotocol/oasis-core/go/storage/api"
 	upgrade "github.com/oasisprotocol/oasis-core/go/upgrade/api"
 )
 
@@ -148,7 +147,6 @@ func TestGenesisSanityCheck(t *testing.T) {
 
 	// First, set up a few things we'll need in the tests below.
 	signer := memorySigner.NewTestSigner("genesis sanity checks signer")
-	signer2 := memorySigner.NewTestSigner("another genesis sanity checks signer")
 	nodeSigner := memorySigner.NewTestSigner("node genesis sanity checks signer")
 	nodeConsensusSigner := memorySigner.NewTestSigner("node consensus genesis sanity checks signer")
 	nodeP2PSigner := memorySigner.NewTestSigner("node P2P genesis sanity checks signer")
@@ -216,24 +214,11 @@ func TestGenesisSanityCheck(t *testing.T) {
 			MaxBatchSizeBytes: 1024,
 			ProposerTimeout:   20,
 		},
-		Storage: registry.StorageParameters{
-			GroupSize:               1,
-			MinWriteReplication:     1,
-			MaxApplyWriteLogEntries: 100_000,
-			MaxApplyOps:             2,
-		},
 		AdmissionPolicy: registry.RuntimeAdmissionPolicy{
 			AnyNode: &registry.AnyNodeRuntimeAdmissionPolicy{},
 		},
 		Constraints: map[scheduler.CommitteeKind]map[scheduler.Role]registry.SchedulingConstraints{
 			scheduler.KindComputeExecutor: {
-				scheduler.RoleWorker: {
-					MinPoolSize: &registry.MinPoolSizeConstraint{
-						Limit: 1,
-					},
-				},
-			},
-			scheduler.KindStorage: {
 				scheduler.RoleWorker: {
 					MinPoolSize: &registry.MinPoolSizeConstraint{
 						Limit: 1,
@@ -365,79 +350,23 @@ func TestGenesisSanityCheck(t *testing.T) {
 	d.RootHash.RuntimeStates = make(map[common.Namespace]*roothash.GenesisRuntimeState)
 	d.RootHash.RuntimeStates[validNS] = &roothash.GenesisRuntimeState{
 		RuntimeGenesis: registry.RuntimeGenesis{
-			StateRoot: nonEmptyHash,
-			// Empty list of storage receipts.
-			StorageReceipts: []signature.Signature{},
+			StateRoot: emptyHash,
+			Round:     0,
 		},
 	}
-	require.Error(rtsSanityCheck(d.RootHash, false), "empty StorageReceipts for StateRoot should be rejected")
-	require.NoError(rtsSanityCheck(d.RootHash, true), "empty StorageReceipts for StateRoot should be ignored, if isGenesis=true")
+	require.NoError(rtsSanityCheck(d.RootHash, false), "empty StateRoot should pass")
+	require.NoError(rtsSanityCheck(d.RootHash, true), "empty StateRoot should pass")
 
 	d = testDoc()
 	d.RootHash.RuntimeStates = make(map[common.Namespace]*roothash.GenesisRuntimeState)
 	d.RootHash.RuntimeStates[validNS] = &roothash.GenesisRuntimeState{
 		RuntimeGenesis: registry.RuntimeGenesis{
 			StateRoot: nonEmptyHash,
-			// List with one empty (invalid) storage receipt.
-			StorageReceipts: []signature.Signature{{}},
+			Round:     0,
 		},
 	}
-	require.Error(rtsSanityCheck(d.RootHash, false), "empty StorageReceipt for StateRoot should be rejected")
-	require.NoError(rtsSanityCheck(d.RootHash, true), "empty StorageReceipt for StateRoot should be ignored, if isGenesis=true")
-
-	d = testDoc()
-	signature.SetChainContext("test: oasis-core tests")
-	stateRootSig, _ := signature.Sign(signer, storage.ReceiptSignatureContext, nonEmptyHash[:])
-	stateRootSig2, _ := signature.Sign(signer2, storage.ReceiptSignatureContext, nonEmptyHash[:])
-	wrongSig, _ := signature.Sign(signer, storage.ReceiptSignatureContext, []byte{1, 2, 3})
-	d.RootHash.RuntimeStates = make(map[common.Namespace]*roothash.GenesisRuntimeState)
-	d.RootHash.RuntimeStates[validNS] = &roothash.GenesisRuntimeState{
-		RuntimeGenesis: registry.RuntimeGenesis{
-			StateRoot: nonEmptyHash,
-			// Some non-empty signature, but not related to StateRoot.
-			StorageReceipts: []signature.Signature{*wrongSig, *stateRootSig, *stateRootSig2},
-		},
-	}
-	require.Error(rtsSanityCheck(d.RootHash, false), "some incorrect StorageReceipt for StateRoot should be rejected")
-	require.NoError(rtsSanityCheck(d.RootHash, true), "some incorrect StorageReceipt for StateRoot should be ignored, if isGenesis=true")
-
-	d = testDoc()
-	d.RootHash.RuntimeStates = make(map[common.Namespace]*roothash.GenesisRuntimeState)
-	d.RootHash.RuntimeStates[validNS] = &roothash.GenesisRuntimeState{
-		RuntimeGenesis: registry.RuntimeGenesis{
-			StateRoot:       nonEmptyHash,
-			StorageReceipts: []signature.Signature{*stateRootSig, *stateRootSig2},
-		},
-	}
-	require.NoError(rtsSanityCheck(d.RootHash, false), "non-empty StateRoot with all correct StorageReceipts should pass")
-	require.NoError(rtsSanityCheck(d.RootHash, true), "non-empty StateRoot with all correct StorageReceipts should pass, if isGenesis=true")
-
-	d = testDoc()
-	nonEmptyState := storage.WriteLog{storage.LogEntry{
-		Key:   []byte{1, 2, 3},
-		Value: []byte{1, 2, 3},
-	}}
-	d.RootHash.RuntimeStates = make(map[common.Namespace]*roothash.GenesisRuntimeState)
-	d.RootHash.RuntimeStates[validNS] = &roothash.GenesisRuntimeState{
-		RuntimeGenesis: registry.RuntimeGenesis{
-			State:           nonEmptyState,
-			StateRoot:       nonEmptyHash,
-			StorageReceipts: []signature.Signature{*wrongSig, *stateRootSig, *stateRootSig2},
-		},
-	}
-	require.NoError(rtsSanityCheck(d.RootHash, false), "non-empty StateRoot with non-empty State and some invalid StorageReceipt should pass")
-	require.NoError(rtsSanityCheck(d.RootHash, true), "non-empty StateRoot with non-empty State and some invalid StorageReceipt should pass, if isGenesis=true")
-
-	d.RootHash.RuntimeStates = make(map[common.Namespace]*roothash.GenesisRuntimeState)
-	d.RootHash.RuntimeStates[validNS] = &roothash.GenesisRuntimeState{
-		RuntimeGenesis: registry.RuntimeGenesis{
-			State:           nonEmptyState,
-			StateRoot:       nonEmptyHash,
-			StorageReceipts: []signature.Signature{*stateRootSig, *stateRootSig2},
-		},
-	}
-	require.NoError(rtsSanityCheck(d.RootHash, false), "non-empty StateRoot with non-empty State and all valid StorageReceipts should pass")
-	require.NoError(rtsSanityCheck(d.RootHash, true), "non-empty StateRoot with non-empty State and all valid StorageReceipts should pass, if isGenesis=true")
+	require.NoError(rtsSanityCheck(d.RootHash, false), "non-empty StateRoot should pass")
+	require.NoError(rtsSanityCheck(d.RootHash, true), "non-empty StateRoot should pass")
 
 	// Test registry genesis checks.
 	d = testDoc()
@@ -708,20 +637,6 @@ func TestGenesisSanityCheck(t *testing.T) {
 	d.Registry.Runtimes = []*registry.Runtime{testKMRuntime, testRuntime}
 	d.Registry.Nodes = []*node.MultiSignedNode{signedComputeTestNode}
 	require.NoError(d.SanityCheck(), "compute node with compute runtime should pass")
-
-	d = testDoc()
-	tn = *testNode
-	tn.Roles = node.RoleStorageWorker
-	tn.Runtimes = []*node.Runtime{
-		{
-			ID: testRuntime.ID,
-		},
-	}
-	signedStorageTestNode := signNodeOrDie(nodeSigners, &tn)
-	d.Registry.Entities = []*entity.SignedEntity{signedEntityWithTestNode}
-	d.Registry.Runtimes = []*registry.Runtime{testKMRuntime, testRuntime}
-	d.Registry.Nodes = []*node.MultiSignedNode{signedStorageTestNode}
-	require.NoError(d.SanityCheck(), "storage node with compute runtime should pass")
 
 	// Test staking genesis checks.
 

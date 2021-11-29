@@ -43,6 +43,9 @@ var ErrRuntimeHostNotConfigured = errors.New("runtime/registry: runtime host not
 
 // Registry is the running node's runtime registry interface.
 type Registry interface {
+	// Mode returns the configured behavior of runtime workers on this node.
+	Mode() RuntimeMode
+
 	// GetRuntime returns the per-runtime interface if the runtime is supported.
 	GetRuntime(runtimeID common.Namespace) (Runtime, error)
 
@@ -402,6 +405,10 @@ type runtimeRegistry struct {
 	identity  *identity.Identity
 
 	runtimes map[common.Namespace]*runtime
+}
+
+func (r *runtimeRegistry) Mode() RuntimeMode {
+	return r.cfg.Mode
 }
 
 func (r *runtimeRegistry) GetRuntime(runtimeID common.Namespace) (Runtime, error) {

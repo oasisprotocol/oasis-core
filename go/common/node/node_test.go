@@ -21,35 +21,32 @@ func TestRolesMask(t *testing.T) {
 	}{
 		// Valid single roles.
 		{"compute", 1, true, true, ""},
-		{"storage", 2, true, true, ""},
 		{"key-manager", 4, true, true, ""},
 		{"validator", 8, true, true, ""},
 		{"consensus-rpc", 16, true, true, ""},
 		{"storage-rpc", 32, true, true, ""},
 		// Valid multiple roles.
-		{"compute,storage", 3, true, true, ""},
-		{"compute,storage,validator", 11, true, true, ""},
-		{"compute,storage,validator,consensus-rpc", 27, true, true, ""},
+		{"compute,validator", 9, true, true, ""},
+		{"compute,validator,consensus-rpc", 25, true, true, ""},
 		{"validator,consensus-rpc", 24, true, true, ""},
-		{"storage,storage-rpc", 34, true, true, ""},
+		{"compute,storage-rpc", 33, true, true, ""},
 
 		// Invalid - extra spaces.
 		{"compute ", 1, false, false, "node: invalid role: 'compute '"},
 		{"compute ,", 1, false, false, "node: invalid role: 'compute '"},
 		{" validator", 1, false, false, "node: invalid role: ' validator'"},
-		{"compute, storage", 1, false, false, "node: invalid role: ' storage'"},
+		{"compute, storage-rpc", 1, false, false, "node: invalid role: ' storage-rpc'"},
 		// Invalid - unknown role.
 		{"master", 1, false, false, "node: invalid role: 'master'"},
 		// Invalid - role mask string not in canonical order.
-		{"storage-rpc,storage", 34, true, false, ""},
+		{"storage-rpc,compute", 33, true, false, ""},
 		// Invalid - duplicate role in role mask string.
 		{"compute,compute", 8, false, false, "node: duplicate role: 'compute'"},
-		{"storage,storage", 8, false, false, "node: duplicate role: 'storage'"},
 		{"key-manager,key-manager", 8, false, false, "node: duplicate role: 'key-manager'"},
 		{"validator,validator", 8, false, false, "node: duplicate role: 'validator'"},
 		{"consensus-rpc,consensus-rpc", 8, false, false, "node: duplicate role: 'consensus-rpc'"},
 		{"storage-rpc,storage-rpc", 8, false, false, "node: duplicate role: 'storage-rpc'"},
-		{"compute,storage,compute", 1, false, false, "node: duplicate role: 'compute'"},
+		{"compute,storage-rpc,compute", 1, false, false, "node: duplicate role: 'compute'"},
 	}
 
 	for _, v := range testVectors {
@@ -87,14 +84,15 @@ func TestNodeDescriptor(t *testing.T) {
 	require := require.New(t)
 
 	n := Node{
+		Versioned:  cbor.NewVersioned(LatestNodeDescriptorVersion),
 		Expiration: 42,
 	}
 
 	require.False(n.HasRoles(RoleComputeWorker))
-	require.False(n.HasRoles(RoleStorageWorker))
+	require.False(n.HasRoles(RoleStorageRPC))
 	n.AddRoles(RoleComputeWorker)
 	require.True(n.HasRoles(RoleComputeWorker))
-	require.False(n.HasRoles(RoleStorageWorker))
+	require.False(n.HasRoles(RoleStorageRPC))
 
 	require.False(n.IsExpired(0))
 	require.False(n.IsExpired(10))
@@ -113,4 +111,52 @@ func TestNodeDescriptor(t *testing.T) {
 	err := cbor.Unmarshal(b, &n2)
 	require.NoError(err, "deserialize descriptor")
 	require.EqualValues(n, n2, "s11n roundtrip")
+}
+
+func TestReservedRoles(t *testing.T) {
+	require := require.New(t)
+
+	n := Node{
+		Versioned: cbor.NewVersioned(LatestNodeDescriptorVersion),
+		Roles:     0xFFFFFFFF,
+	}
+	err := n.ValidateBasic(false)
+	require.Error(err, "ValidateBasic should fail for reserved roles")
+
+	n.Roles = 0
+	err = n.ValidateBasic(false)
+	require.Error(err, "ValidateBasic should fail for empty roles")
+}
+
+func TestNodeDescriptorV1(t *testing.T) {
+	require := require.New(t)
+
+	v1 := Node{
+		Versioned: cbor.NewVersioned(1),
+		Roles:     RoleComputeWorker | roleReserved2,
+	}
+	raw := cbor.Marshal(v1)
+
+	var v2 Node
+	err := cbor.Unmarshal(raw, &v2)
+	require.NoError(err, "cbor.Unmarshal")
+
+	err = v2.ValidateBasic(false)
+	require.NoError(err, "ValidateBasic")
+	require.True(v2.HasRoles(RoleComputeWorker))
+	require.False(v2.HasRoles(roleReserved2))
+
+	v1 = Node{
+		Versioned: cbor.NewVersioned(1),
+		Roles:     RoleComputeWorker,
+	}
+	raw = cbor.Marshal(v1)
+
+	err = cbor.Unmarshal(raw, &v2)
+	require.NoError(err, "cbor.Unmarshal")
+
+	err = v2.ValidateBasic(false)
+	require.NoError(err, "ValidateBasic")
+	require.True(v2.HasRoles(RoleComputeWorker))
+	require.False(v2.HasRoles(roleReserved2))
 }

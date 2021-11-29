@@ -25,38 +25,6 @@ type roothashSignatureVerifier struct {
 	ctx       *abciAPI.Context
 	runtimeID common.Namespace
 	scheduler *schedulerState.MutableState
-	registry  *registryState.MutableState
-}
-
-// VerifyCommitteeSignatures verifies that the given signatures come from
-// the current committee members of the given kind.
-//
-// Implements commitment.SignatureVerifier.
-func (sv *roothashSignatureVerifier) VerifyCommitteeSignatures(kind scheduler.CommitteeKind, sigs []signature.Signature) error {
-	if len(sigs) == 0 {
-		return nil
-	}
-
-	committee, err := sv.scheduler.Committee(sv.ctx, kind, sv.runtimeID)
-	if err != nil {
-		return err
-	}
-	if committee == nil {
-		return roothash.ErrInvalidRuntime
-	}
-
-	// TODO: Consider caching this set?
-	pks := make(map[signature.PublicKey]bool)
-	for _, m := range committee.Members {
-		pks[m.PublicKey] = true
-	}
-
-	for _, sig := range sigs {
-		if !pks[sig.PublicKey] {
-			return fmt.Errorf("roothash: signature is not from a valid committee member")
-		}
-	}
-	return nil
 }
 
 // VerifyTxnSchedulerSigner verifies that the given signature comes from
@@ -105,7 +73,6 @@ func (app *rootHashApplication) getRuntimeState(
 		ctx:       ctx,
 		runtimeID: id,
 		scheduler: schedulerState.NewMutableState(ctx.State()),
-		registry:  registryState.NewMutableState(ctx.State()),
 	}
 
 	// Create node lookup.
@@ -349,10 +316,10 @@ func (app *rootHashApplication) submitEvidence(
 		pk = commitA.Signature.PublicKey
 	case evidence.EquivocationBatch != nil:
 		// Evidence validity check ensures this can open.
-		var batchA commitment.ProposedBatch
-		_ = evidence.EquivocationBatch.BatchA.Open(&batchA, evidence.ID)
+		var batchA commitment.ProposalHeader
+		_ = evidence.EquivocationBatch.BatchA.Open(evidence.ID, &batchA)
 
-		if batchA.Header.Round+params.MaxEvidenceAge < rtState.CurrentBlock.Header.Round {
+		if batchA.Round+params.MaxEvidenceAge < rtState.CurrentBlock.Header.Round {
 			ctx.Logger().Error("Evidence: proposed batch equivocation evidence expired",
 				"evidence", evidence.EquivocationExecutor,
 				"current_round", rtState.CurrentBlock.Header.Round,
@@ -360,7 +327,7 @@ func (app *rootHashApplication) submitEvidence(
 			)
 			return fmt.Errorf("%w: equivocation evidence expired", roothash.ErrInvalidEvidence)
 		}
-		round = batchA.Header.Round
+		round = batchA.Round
 		pk = evidence.EquivocationBatch.BatchA.Signature.PublicKey
 	default:
 		// This should never happen due to ValidateBasic check above.

@@ -55,7 +55,6 @@ type Network struct { // nolint: maligned
 	validators     []*Validator
 	runtimes       []*Runtime
 	keymanagers    []*Keymanager
-	storageWorkers []*Storage
 	computeWorkers []*Compute
 	sentries       []*Sentry
 	clients        []*Client
@@ -193,11 +192,6 @@ func (net *Network) Keymanagers() []*Keymanager {
 	return net.keymanagers
 }
 
-// StorageWorkers returns the storage worker nodes associated with the network.
-func (net *Network) StorageWorkers() []*Storage {
-	return net.storageWorkers
-}
-
 // ComputeWorkers returns the compute worker nodes associated with the network.
 func (net *Network) ComputeWorkers() []*Compute {
 	return net.computeWorkers
@@ -227,9 +221,6 @@ func (net *Network) Nodes() []*Node {
 	var nodes []*Node
 	for _, v := range net.Validators() {
 		nodes = append(nodes, v.Node)
-	}
-	for _, s := range net.StorageWorkers() {
-		nodes = append(nodes, s.Node)
 	}
 	for _, c := range net.ComputeWorkers() {
 		nodes = append(nodes, c.Node)
@@ -320,7 +311,6 @@ func (net *Network) SetClientController(ctrl *Controller) {
 func (net *Network) NumRegisterNodes() int {
 	return len(net.validators) +
 		len(net.keymanagers) +
-		len(net.storageWorkers) +
 		len(net.computeWorkers) +
 		len(net.byzantine)
 }

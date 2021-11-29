@@ -43,7 +43,6 @@ type runtimeState struct {
 	genesisBlock *block.Block
 
 	executorCommittee *testCommittee
-	storageCommittee  *testCommittee
 }
 
 // RootHashImplementationTests exercises the basic functionality of a
@@ -230,7 +229,7 @@ func (s *runtimeState) refreshCommittees(t *testing.T, consensus consensusAPI.Ba
 	epoch, err := consensus.Beacon().GetEpoch(context.Background(), consensusAPI.HeightLatest)
 	require.NoError(t, err, "GetEpoch")
 
-	s.executorCommittee, s.storageCommittee = mustGetCommittee(t, s.rt, epoch, consensus.Scheduler(), nodes)
+	s.executorCommittee = mustGetCommittee(t, s.rt, epoch, consensus.Scheduler(), nodes)
 }
 
 func (s *runtimeState) testEpochTransitionBlock(t *testing.T, consensus consensusAPI.Backend, ch <-chan *api.AnnotatedBlock) {
@@ -300,7 +299,7 @@ func (s *runtimeState) generateExecutorCommitments(t *testing.T, consensus conse
 	defer tree.Close()
 	err = tree.AddTransaction(ctx, transaction.Transaction{Input: []byte("testInput"), Output: []byte("testOutput")}, nil)
 	require.NoError(err, "tree.AddTransaction")
-	ioWriteLog, ioRootHash, err := tree.Commit(ctx)
+	_, ioRootHash, err := tree.Commit(ctx)
 	require.NoError(err, "tree.Commit")
 
 	var emptyRoot hash.Hash
@@ -320,18 +319,6 @@ func (s *runtimeState) generateExecutorCommitments(t *testing.T, consensus conse
 		},
 	}
 	require.True(parent.Header.IsParentOf(&child.Header), "parent is parent of child")
-	parent.Header.StorageSignatures = mustStore(
-		t,
-		storageBackend,
-		s.storageCommittee,
-		child.Header.Namespace,
-		child.Header.Round+1,
-		[]storageAPI.ApplyOp{
-			{RootType: storageAPI.RootTypeIO, SrcRound: child.Header.Round + 1, SrcRoot: emptyRoot, DstRoot: ioRootHash, WriteLog: ioWriteLog},
-			// NOTE: Twice to get a receipt over both roots which we set to the same value.
-			{RootType: storageAPI.RootTypeState, SrcRound: child.Header.Round, SrcRoot: emptyRoot, DstRoot: ioRootHash, WriteLog: ioWriteLog},
-		},
-	)
 
 	var msgsHash hash.Hash
 	msgsHash.Empty()
@@ -347,37 +334,7 @@ func (s *runtimeState) generateExecutorCommitments(t *testing.T, consensus conse
 				StateRoot:    &parent.Header.StateRoot,
 				MessagesHash: &msgsHash,
 			},
-			StorageSignatures: parent.Header.StorageSignatures,
-			InputRoot:         hash.Hash{},
-			InputStorageSigs:  []signature.Signature{},
 		}
-
-		// Fake txn scheduler signature.
-		dispatch := &commitment.ProposedBatch{
-			IORoot:            commitBody.InputRoot,
-			StorageSignatures: commitBody.InputStorageSigs,
-			Header:            child.Header,
-		}
-
-		// Get scheduler at round.
-		var scheduler *scheduler.CommitteeNode
-		scheduler, err = commitment.GetTransactionScheduler(s.executorCommittee.committee, child.Header.Round)
-		require.NoError(err, "roothash.TransactionScheduler")
-		// Get scheduler test node.
-		var schedulerNode *registryTests.TestNode
-		for _, node := range s.executorCommittee.workers {
-			if node.Signer.Public().Equal(scheduler.PublicKey) {
-				nd := node
-				schedulerNode = nd
-				break
-			}
-		}
-		require.NotNil(schedulerNode, "TransactionScheduler missing in test nodes")
-
-		var signedDispatch *commitment.SignedProposedBatch
-		signedDispatch, err = commitment.SignProposedBatch(schedulerNode.Signer, s.rt.Runtime.ID, dispatch)
-		require.NoError(err, "SignProposedBatch")
-		commitBody.TxnSchedSig = signedDispatch.Signature
 
 		// `err` shadows outside.
 		commit, err := commitment.SignExecutorCommitment(node.Signer, s.rt.Runtime.ID, &commitBody) // nolint: vetshadow
@@ -728,7 +685,6 @@ func mustGetCommittee(
 	nodes map[signature.PublicKey]*registryTests.TestNode,
 ) (
 	executorCommittee *testCommittee,
-	storageCommittee *testCommittee,
 ) {
 	require := require.New(t)
 
@@ -764,8 +720,6 @@ func mustGetCommittee(
 			case scheduler.KindComputeExecutor:
 				groupSize = int(rt.Runtime.Executor.GroupSize)
 				groupBackupSize = int(rt.Runtime.Executor.GroupBackupSize)
-			case scheduler.KindStorage:
-				groupSize = int(rt.Runtime.Storage.GroupSize)
 			}
 
 			require.Len(ret.workers, groupSize, "workers exist")
@@ -774,11 +728,9 @@ func mustGetCommittee(
 			switch committee.Kind {
 			case scheduler.KindComputeExecutor:
 				executorCommittee = &ret
-			case scheduler.KindStorage:
-				storageCommittee = &ret
 			}
 
-			if executorCommittee == nil || storageCommittee == nil {
+			if executorCommittee == nil {
 				continue
 			}
 
@@ -787,42 +739,6 @@ func mustGetCommittee(
 			t.Fatalf("failed to receive committee event")
 		}
 	}
-}
-
-func mustStore(
-	t *testing.T,
-	store storageAPI.Backend,
-	committee *testCommittee,
-	ns common.Namespace,
-	round uint64,
-	ops []storageAPI.ApplyOp,
-) []signature.Signature {
-	require := require.New(t)
-
-	receipts, err := store.ApplyBatch(context.Background(), &storageAPI.ApplyBatchRequest{
-		Namespace: ns,
-		DstRound:  round,
-		Ops:       ops,
-	})
-	require.NoError(err, "ApplyBatch")
-	require.NotEmpty(receipts, "ApplyBatch must return some storage receipts")
-
-	// We need to fake the storage signatures as the storage committee under test
-	// does not contain the key of the actual storage backend.
-
-	var body storageAPI.ReceiptBody
-	err = receipts[0].Open(&body)
-	require.NoError(err, "Open")
-
-	var signatures []signature.Signature
-	for _, node := range committee.workers {
-		var receipt *storageAPI.Receipt
-		receipt, err = storageAPI.SignReceipt(node.Signer, ns, round, body.RootTypes, body.Roots)
-		require.NoError(err, "SignReceipt")
-
-		signatures = append(signatures, receipt.Signed.Signature)
-	}
-	return signatures
 }
 
 // MustTransitionEpoch waits till the roothash's view is past the epoch
@@ -882,21 +798,21 @@ func testSubmitEquivocationEvidence(t *testing.T, backend api.Backend, consensus
 
 	// Generate evidence of executor equivocation.
 	node := s.executorCommittee.workers[0]
-	batch1 := &commitment.ProposedBatch{
-		IORoot:            child.Header.IORoot,
-		StorageSignatures: []signature.Signature{},
-		Header:            child.Header,
+	batch1 := &commitment.ProposalHeader{
+		Round:        child.Header.Round + 1,
+		BatchHash:    child.Header.IORoot,
+		PreviousHash: child.Header.EncodedHash(),
 	}
-	signedBatch1, err := commitment.SignProposedBatch(node.Signer, s.rt.Runtime.ID, batch1)
-	require.NoError(err, "SignProposedBatch")
+	signedBatch1, err := batch1.Sign(node.Signer, s.rt.Runtime.ID)
+	require.NoError(err, "ProposalHeader.Sign")
 
-	batch2 := &commitment.ProposedBatch{
-		IORoot:            hash.NewFromBytes([]byte("different root")),
-		StorageSignatures: []signature.Signature{},
-		Header:            child.Header,
+	batch2 := &commitment.ProposalHeader{
+		Round:        child.Header.Round + 1,
+		BatchHash:    hash.NewFromBytes([]byte("different root")),
+		PreviousHash: child.Header.EncodedHash(),
 	}
-	signedBatch2, err := commitment.SignProposedBatch(node.Signer, s.rt.Runtime.ID, batch2)
-	require.NoError(err, "SignProposedBatch")
+	signedBatch2, err := batch2.Sign(node.Signer, s.rt.Runtime.ID)
+	require.NoError(err, "ProposalHeader.Sign")
 
 	ch, sub, err := consensus.Staking().WatchEvents(ctx)
 	require.NoError(err, "staking.WatchEvents")

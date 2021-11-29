@@ -7,6 +7,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common"
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
 	"github.com/oasisprotocol/oasis-core/go/common/node"
+	runtimeRegistry "github.com/oasisprotocol/oasis-core/go/runtime/registry"
 	workerCommon "github.com/oasisprotocol/oasis-core/go/worker/common"
 	committeeCommon "github.com/oasisprotocol/oasis-core/go/worker/common/committee"
 	"github.com/oasisprotocol/oasis-core/go/worker/compute/executor/committee"
@@ -42,7 +43,7 @@ func (w *Worker) Name() string {
 // Start starts the service.
 func (w *Worker) Start() error {
 	if !w.enabled {
-		w.logger.Info("not starting executor worker as it is disabled")
+		w.logger.Debug("not starting executor worker as it is disabled")
 
 		// In case the worker is not enabled, close the init channel immediately.
 		close(w.initCh)
@@ -173,7 +174,6 @@ func (w *Worker) registerRuntime(commonNode *committeeCommon.Node) error {
 
 func newWorker(
 	dataDir string,
-	enabled bool,
 	commonWorker *workerCommon.Worker,
 	registration *registration.Worker,
 	scheduleMaxTxPoolSize uint64,
@@ -181,6 +181,15 @@ func newWorker(
 	checkTxMaxBatchSize uint64,
 ) (*Worker, error) {
 	ctx, cancelCtx := context.WithCancel(context.Background())
+
+	var enabled bool
+	switch commonWorker.RuntimeRegistry.Mode() {
+	case runtimeRegistry.RuntimeModeCompute:
+		// When configured in compute mode, enable the executor worker.
+		enabled = true
+	default:
+		enabled = false
+	}
 
 	w := &Worker{
 		enabled:               enabled,
@@ -197,16 +206,14 @@ func newWorker(
 		logger:                logging.GetLogger("worker/executor"),
 	}
 
-	if enabled {
-		if !w.commonWorker.Enabled() {
-			panic("common worker should have been enabled for executor worker")
-		}
+	if !enabled {
+		return w, nil
+	}
 
-		// Register all configured runtimes.
-		for _, rt := range commonWorker.GetRuntimes() {
-			if err := w.registerRuntime(rt); err != nil {
-				return nil, err
-			}
+	// Register all configured runtimes.
+	for _, rt := range commonWorker.GetRuntimes() {
+		if err := w.registerRuntime(rt); err != nil {
+			return nil, err
 		}
 	}
 

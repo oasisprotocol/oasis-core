@@ -74,7 +74,7 @@ func (svc *dbRPCService) Cleanup() {}
 
 func newDbRPCService(
 	ln net.Listener,
-	backend storage.Backend,
+	backend storage.LocalBackend,
 ) *dbRPCService {
 	return &dbRPCService{
 		ln: ln,
@@ -87,7 +87,7 @@ func newDbRPCService(
 
 type Database struct {
 	ctx   context.Context
-	inner storage.Backend
+	inner storage.LocalBackend
 }
 
 // Don't ask.  I think this is stupid too, and I wrote it.
@@ -119,8 +119,7 @@ func (db *Database) Apply(request ApplyRequest, response *ApplyResponse) error {
 		return fmt.Errorf("Apply: invalid request payload: %w", err)
 	}
 
-	_, err := db.inner.Apply(db.ctx, &req)
-	// Rust ignores this anyway.
+	err := db.inner.Apply(db.ctx, &req)
 	return err
 }
 

@@ -20,7 +20,6 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/roothash/api/message"
 	scheduler "github.com/oasisprotocol/oasis-core/go/scheduler/api"
 	staking "github.com/oasisprotocol/oasis-core/go/staking/api"
-	storage "github.com/oasisprotocol/oasis-core/go/storage/api"
 )
 
 var nopSV = &nopSignatureVerifier{}
@@ -28,34 +27,12 @@ var nopSV = &nopSignatureVerifier{}
 // nopSignatureVerifier is a no-op storage verifier.
 type nopSignatureVerifier struct{}
 
-func (n *nopSignatureVerifier) VerifyCommitteeSignatures(kind scheduler.CommitteeKind, sigs []signature.Signature) error {
-	return nil
-}
-
 func (n *nopSignatureVerifier) VerifyTxnSchedulerSigner(sig signature.Signature, round uint64) error {
 	return nil
 }
 
 type staticSignatureVerifier struct {
-	storagePublicKey      signature.PublicKey
 	txnSchedulerPublicKey signature.PublicKey
-}
-
-func (n *staticSignatureVerifier) VerifyCommitteeSignatures(kind scheduler.CommitteeKind, sigs []signature.Signature) error {
-	var pk signature.PublicKey
-	switch kind {
-	case scheduler.KindStorage:
-		pk = n.storagePublicKey
-	default:
-		return errors.New("unsupported committee kind")
-	}
-
-	for _, sig := range sigs {
-		if !sig.PublicKey.Equal(pk) {
-			return errors.New("unknown public key")
-		}
-	}
-	return nil
 }
 
 func (n *staticSignatureVerifier) VerifyTxnSchedulerSigner(sig signature.Signature, round uint64) error {
@@ -123,10 +100,6 @@ func TestPoolSingleCommitment(t *testing.T) {
 		ID:          rtID,
 		Kind:        registry.KindCompute,
 		TEEHardware: node.TEEHardwareInvalid,
-		Storage: registry.StorageParameters{
-			GroupSize:           1,
-			MinWriteReplication: 1,
-		},
 		Executor: registry.ExecutorParameters{
 			MaxMessages: 32,
 		},
@@ -156,12 +129,9 @@ func TestPoolSingleCommitment(t *testing.T) {
 	}
 
 	// Generate a commitment.
-	childBlk, parentBlk, body := generateComputeBody(t, pool.Round)
+	childBlk, _, body := generateComputeBody(t, pool.Round)
 
-	sv := &staticSignatureVerifier{
-		storagePublicKey:      body.StorageSignatures[0].PublicKey,
-		txnSchedulerPublicKey: body.TxnSchedSig.PublicKey,
-	}
+	sv := &staticSignatureVerifier{}
 	nl := &staticNodeLookup{
 		runtime: &node.Runtime{
 			ID: rtID,
@@ -176,15 +146,12 @@ func TestPoolSingleCommitment(t *testing.T) {
 	}{
 		{"BlockBadRound", func(b *ComputeBody) { b.Header.Round-- }, ErrNotBasedOnCorrectBlock},
 		{"BlockBadPreviousHash", func(b *ComputeBody) { b.Header.PreviousHash.FromBytes([]byte("invalid")) }, ErrNotBasedOnCorrectBlock},
-		{"StorageSigs1", func(b *ComputeBody) { b.StorageSignatures = nil }, ErrBadStorageReceipts},
 		{"MissingIORootHash", func(b *ComputeBody) { b.Header.IORoot = nil }, ErrBadExecutorCommitment},
 		{"MissingStateRootHash", func(b *ComputeBody) { b.Header.StateRoot = nil }, ErrBadExecutorCommitment},
 		{"MissingMessagesHash", func(b *ComputeBody) { b.Header.MessagesHash = nil }, ErrBadExecutorCommitment},
-		{"BadFailureIndicating", func(b *ComputeBody) { b.Failure = FailureStorageUnavailable }, ErrBadExecutorCommitment},
+		{"BadFailureIndicating", func(b *ComputeBody) { b.Failure = FailureUnknown }, ErrBadExecutorCommitment},
 	} {
 		_, _, invalidBody := generateComputeBody(t, pool.Round)
-		invalidBody.StorageSignatures = append([]signature.Signature{}, body.StorageSignatures...)
-		invalidBody.TxnSchedSig = body.TxnSchedSig
 
 		tc.fn(&invalidBody)
 
@@ -223,35 +190,6 @@ func TestPoolSingleCommitment(t *testing.T) {
 	})
 	require.Error(t, err, "AddExecutorCommitment should propagate message validator failure")
 	require.Equal(t, errMsgVal, err, "AddExecutorCommitment should propagate message validator failure")
-
-	// Adding a commitment having a storage receipt signed with an incorrect
-	// public key should fail.
-	bodyIncorrectStorageSig := body
-	// This generates a new signing key so verification should fail.
-	bodyIncorrectStorageSig.StorageSignatures[0] = generateStorageReceiptSignature(t, parentBlk, &bodyIncorrectStorageSig)
-	incorrectCommit, err = SignExecutorCommitment(sk, rtID, &bodyIncorrectStorageSig)
-	require.NoError(t, err, "SignExecutorCommitment")
-	err = pool.AddExecutorCommitment(context.Background(), childBlk, sv, nl, incorrectCommit, nil)
-	require.Error(t, err, "AddExecutorCommitment")
-
-	// Adding a commitment having not enough storage receipts should fail.
-	bodyNotEnoughStorageSig := body
-	bodyNotEnoughStorageSig.StorageSignatures = []signature.Signature{}
-	incorrectCommit, err = SignExecutorCommitment(sk, rtID, &bodyNotEnoughStorageSig)
-	require.NoError(t, err, "SignExecutorCommitment")
-	err = pool.AddExecutorCommitment(context.Background(), childBlk, sv, nl, incorrectCommit, nil)
-	require.Error(t, err, "AddExecutorCommitment")
-	require.Equal(t, ErrBadStorageReceipts, err, "AddExecutorCommitment")
-
-	// Adding a commitment having txn scheduler inputs signed with an incorrect
-	// public key should fail.
-	bodyIncorrectTxnSchedSig := body
-	// This generates a new signing key so verification should fail.
-	bodyIncorrectTxnSchedSig.TxnSchedSig = generateTxnSchedulerSignature(t, childBlk, rt.ID, &bodyIncorrectTxnSchedSig)
-	incorrectCommit, err = SignExecutorCommitment(sk, rtID, &bodyIncorrectTxnSchedSig)
-	require.NoError(t, err, "SignExecutorCommitment")
-	err = pool.AddExecutorCommitment(context.Background(), childBlk, sv, nl, incorrectCommit, nil)
-	require.Error(t, err, "AddExecutorCommitment")
 
 	// Adding a commitment should succeed.
 	err = pool.AddExecutorCommitment(context.Background(), childBlk, sv, nl, commit, nil)
@@ -362,10 +300,6 @@ func TestPoolStragglers(t *testing.T) {
 	rt, sks, committee, nl := generateMockCommittee(t, &registry.Runtime{
 		Kind:        registry.KindCompute,
 		TEEHardware: node.TEEHardwareInvalid,
-		Storage: registry.StorageParameters{
-			GroupSize:           1,
-			MinWriteReplication: 1,
-		},
 		Executor: registry.ExecutorParameters{
 			GroupSize:         2,
 			GroupBackupSize:   1,
@@ -669,9 +603,8 @@ func TestPoolFailureIndicatingCommitment(t *testing.T) {
 				Round:        body.Header.Round,
 				PreviousHash: body.Header.PreviousHash,
 			},
-			Failure: FailureStorageUnavailable,
+			Failure: FailureUnknown,
 		}
-		failedBody.TxnSchedSig = generateTxnSchedulerSignature(t, childBlk, rt.ID, &failedBody)
 		commit2, err := SignExecutorCommitment(sk2, rt.ID, &failedBody)
 		require.NoError(t, err, "SignExecutorCommitment")
 
@@ -1022,10 +955,6 @@ func generateMockCommittee(t *testing.T, rtTemplate *registry.Runtime) (
 		rt = &registry.Runtime{
 			Kind:        registry.KindCompute,
 			TEEHardware: node.TEEHardwareInvalid,
-			Storage: registry.StorageParameters{
-				GroupSize:           1,
-				MinWriteReplication: 1,
-			},
 			Executor: registry.ExecutorParameters{
 				GroupSize:       2,
 				GroupBackupSize: 1,
@@ -1093,48 +1022,7 @@ func generateComputeBody(t *testing.T, round uint64) (*block.Block, *block.Block
 		},
 	}
 
-	// Generate dummy storage receipt signature.
-	sig := generateStorageReceiptSignature(t, parentBlk, &body)
-	body.StorageSignatures = []signature.Signature{sig}
-	parentBlk.Header.StorageSignatures = []signature.Signature{sig}
-
-	// Generate dummy txn scheduler signature.
-	body.TxnSchedSig = generateTxnSchedulerSignature(t, childBlk, id, &body)
-
 	return childBlk, parentBlk, body
-}
-
-func generateStorageReceiptSignature(t *testing.T, blk *block.Block, body *ComputeBody) signature.Signature {
-	sk, err := memorySigner.NewSigner(rand.Reader)
-	require.NoError(t, err, "NewSigner")
-
-	receiptBody := storage.ReceiptBody{
-		Version:   1,
-		Namespace: blk.Header.Namespace,
-		Round:     blk.Header.Round,
-		RootTypes: body.RootTypesForStorageReceipt(),
-		Roots:     body.RootsForStorageReceipt(),
-	}
-	signed, err := signature.SignSigned(sk, storage.ReceiptSignatureContext, &receiptBody)
-	require.NoError(t, err, "SignSigned")
-
-	return signed.Signature
-}
-
-func generateTxnSchedulerSignature(t *testing.T, childBlk *block.Block, rtID common.Namespace, body *ComputeBody) signature.Signature {
-	body.InputRoot = hash.Hash{}
-	body.InputStorageSigs = []signature.Signature{}
-	dispatch := &ProposedBatch{
-		IORoot:            body.InputRoot,
-		StorageSignatures: body.InputStorageSigs,
-		Header:            childBlk.Header,
-	}
-	sk, err := memorySigner.NewSigner(rand.Reader)
-	require.NoError(t, err, "NewSigner")
-	signedDispatch, err := SignProposedBatch(sk, rtID, dispatch)
-	require.NoError(t, err, "SignProposedBatch")
-
-	return signedDispatch.Signature
 }
 
 func setupDiscrepancy(
@@ -1166,7 +1054,6 @@ func setupDiscrepancy(
 	// Update state root and fix the storage receipt.
 	badHash := hash.NewFromBytes([]byte("discrepancy"))
 	body.Header.StateRoot = &badHash
-	body.StorageSignatures = []signature.Signature{generateStorageReceiptSignature(t, parentBlk, &body)}
 
 	commit2, err := SignExecutorCommitment(sk2, rt.ID, &body)
 	require.NoError(t, err, "SignExecutorCommitment")

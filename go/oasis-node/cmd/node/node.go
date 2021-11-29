@@ -55,7 +55,6 @@ import (
 	workerBeacon "github.com/oasisprotocol/oasis-core/go/worker/beacon"
 	workerCommon "github.com/oasisprotocol/oasis-core/go/worker/common"
 	"github.com/oasisprotocol/oasis-core/go/worker/common/p2p"
-	"github.com/oasisprotocol/oasis-core/go/worker/compute"
 	"github.com/oasisprotocol/oasis-core/go/worker/compute/executor"
 	workerConsensusRPC "github.com/oasisprotocol/oasis-core/go/worker/consensusrpc"
 	workerKeymanager "github.com/oasisprotocol/oasis-core/go/worker/keymanager"
@@ -266,24 +265,6 @@ func (n *Node) initRuntimeWorkers() error {
 		return err
 	}
 
-	// Initialize the P2P worker if it's enabled or if compute worker is enabled.
-	// Since the P2P layer does not have a separate Start method and starts
-	// listening immediately when created, make sure that we don't start it if
-	// it is not needed.
-	//
-	// Currently, only executor and runtime client need P2P transport.
-	if p2p.Enabled() || compute.Enabled() {
-		p2pCtx, p2pSvc := service.NewContextCleanup(context.Background())
-		if genesisDoc.Registry.Parameters.DebugAllowUnroutableAddresses {
-			p2p.DebugForceAllowUnroutableAddresses()
-		}
-		n.P2P, err = p2p.New(p2pCtx, n.Identity, n.Consensus)
-		if err != nil {
-			return err
-		}
-		n.svcMgr.RegisterCleanupOnly(p2pSvc, "worker p2p")
-	}
-
 	// Initialize the IAS proxy client.
 	n.IAS, err = ias.New(n.Identity)
 	if err != nil {
@@ -301,11 +282,26 @@ func (n *Node) initRuntimeWorkers() error {
 	n.svcMgr.RegisterCleanupOnly(n.RuntimeRegistry, "runtime registry")
 	storageAPI.RegisterService(n.grpcInternal.Server(), n.RuntimeRegistry.StorageRouter())
 
+	// Initialize the P2P worker if any runtime mode is configured.
+	// Since the P2P layer does not have a separate Start method and starts
+	// listening immediately when created, make sure that we don't start it if
+	// it is not needed.
+	if n.RuntimeRegistry.Mode() != runtimeRegistry.RuntimeModeNone {
+		p2pCtx, p2pSvc := service.NewContextCleanup(context.Background())
+		if genesisDoc.Registry.Parameters.DebugAllowUnroutableAddresses {
+			p2p.DebugForceAllowUnroutableAddresses()
+		}
+		n.P2P, err = p2p.New(p2pCtx, n.Identity, n.Consensus)
+		if err != nil {
+			return err
+		}
+		n.svcMgr.RegisterCleanupOnly(p2pSvc, "worker p2p")
+	}
+
 	// Initialize the common worker.
 	n.CommonWorker, err = workerCommon.New(
 		n,
 		dataDir,
-		compute.Enabled() || workerStorage.Enabled() || workerKeymanager.Enabled(),
 		n.Identity,
 		n.Consensus,
 		n.P2P,
@@ -315,7 +311,7 @@ func (n *Node) initRuntimeWorkers() error {
 		genesisDoc,
 	)
 	if err != nil {
-		n.logger.Error("failed to start common worker",
+		n.logger.Error("failed to initialize common worker",
 			"err", err,
 		)
 		return err
@@ -756,7 +752,6 @@ func init() {
 		ias.Flags,
 		workerKeymanager.Flags,
 		runtimeRegistry.Flags,
-		compute.Flags,
 		p2p.Flags,
 		registration.Flags,
 		runtimeClient.Flags,
