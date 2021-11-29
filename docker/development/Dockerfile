@@ -17,7 +17,7 @@ ARG JEMALLOC_CHECKSUM=34330e5ce276099e2e8950d9335db5a875689a4c6a56751ef3b1d8c537
 ARG DEBIAN_FRONTEND=noninteractive
 
 RUN apt-get update -qq && apt-get upgrade -qq && apt-get install -qq \
-    build-essential git gdb cmake \
+    build-essential git gdb cmake clang-11 \
     curl wget unzip \
     pkg-config software-properties-common \
     python3 python3-pyelftools \

@@ -45,6 +45,8 @@ pushd $src_dir
     CARGO_TARGET_DIR="${CARGO_TARGET_DIR}/default" OASIS_UNSAFE_SKIP_KM_POLICY="1" cargo build --locked
 
     # Build SGX runtime.
+    export CFLAGS_x86_64_fortanix_unknown_sgx="-isystem/usr/include/x86_64-linux-gnu -mlvi-hardening -mllvm -x86-experimental-lvi-inline-asm-hardening"
+    export CC_x86_64_fortanix_unknown_sgx=clang-11
     unset OASIS_UNSAFE_SKIP_KM_POLICY
     CARGO_TARGET_DIR="${CARGO_TARGET_DIR}/sgx" cargo build --locked --target x86_64-fortanix-unknown-sgx
     CARGO_TARGET_DIR="${CARGO_TARGET_DIR}/sgx" cargo elf2sgxs
