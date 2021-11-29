@@ -81,16 +81,15 @@ func (st *AppendableStakingState) AppendTo(doc *genesis.Document) error {
 	// Set zero thresholds for all staking kinds, if none set.
 	if len(st.State.Parameters.Thresholds) == 0 {
 		sq := *quantity.NewFromUint64(0)
-		st.State.Parameters.Thresholds =
-			map[staking.ThresholdKind]quantity.Quantity{
-				staking.KindEntity:            sq,
-				staking.KindNodeValidator:     sq,
-				staking.KindNodeCompute:       sq,
-				staking.KindNodeStorage:       sq,
-				staking.KindNodeKeyManager:    sq,
-				staking.KindRuntimeCompute:    sq,
-				staking.KindRuntimeKeyManager: sq,
-			}
+		st.State.Parameters.Thresholds = map[staking.ThresholdKind]quantity.Quantity{
+			staking.KindEntity:            sq,
+			staking.KindNodeValidator:     sq,
+			staking.KindNodeCompute:       sq,
+			staking.KindNodeStorage:       sq,
+			staking.KindNodeKeyManager:    sq,
+			staking.KindRuntimeCompute:    sq,
+			staking.KindRuntimeKeyManager: sq,
+		}
 	}
 
 	doc.Staking = st.State

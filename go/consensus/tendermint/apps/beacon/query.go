@@ -15,7 +15,6 @@ type Query interface {
 	FutureEpoch(context.Context) (*beacon.EpochTimeState, error)
 	Genesis(context.Context) (*beacon.Genesis, error)
 	ConsensusParameters(context.Context) (*beacon.ConsensusParameters, error)
-
 	PVSSState(context.Context) (*beacon.PVSSState, error)
 }
 

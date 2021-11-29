@@ -15,6 +15,8 @@ type CleanupAble interface {
 
 // BackgroundService is a background service.
 type BackgroundService interface {
+	CleanupAble
+
 	// Name returns the service name.
 	Name() string
 
@@ -26,8 +28,6 @@ type BackgroundService interface {
 
 	// Quit returns a channel that will be closed when the service terminates.
 	Quit() <-chan struct{}
-
-	CleanupAble
 }
 
 // BaseBackgroundService is a base implementation of BackgroundService.

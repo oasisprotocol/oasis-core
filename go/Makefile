@@ -63,7 +63,7 @@ staking/gen_account_vectors_extended:
 # Format code.
 fmt:
 	@$(ECHO) "$(CYAN)*** Running Go formatters...$(OFF)"
-	@gofumpt -s -w .
+	@gofumpt -w .
 	@goimports -w -local github.com/oasisprotocol/oasis-core .
 
 # Lint.
