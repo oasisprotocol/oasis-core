@@ -22,6 +22,8 @@ const (
 	// Parameters from https://docs.oasis.dev/general/oasis-network/network-parameters.
 	latestMainnetGenesisURL          = "https://github.com/oasisprotocol/mainnet-artifacts/releases/download/2021-04-28/genesis.json"
 	latestMainnetGenesisDocumentHash = "53852332637bacb61b91b6411ab4095168ba02a50be4c3f82448438826f23898"
+
+	latestMainnetNeedsUpgrade = true
 )
 
 // GenesisFile is the scenario for testing the correctness of marshalled genesis
@@ -108,39 +110,41 @@ func (s *genesisFileImpl) Run(childEnv *env.Env) error {
 		return fmt.Errorf("e2e/genesis-file: failed to download latest Mainnet genesis "+
 			"file at '%s': %w", latestMainnetGenesisURL, err)
 	}
-	_, err = s.runGenesisCheckCmd(childEnv, latestMainnetGenesis)
-	expectedError := "genesis file is not in canonical form, see the diff on stderr"
-	switch {
-	case err == nil:
-		return fmt.Errorf("e2e/genesis-file: running genesis check for the latest Mainnet"+
-			" genesis file at '%s' should fail with '%s'",
-			latestMainnetGenesisURL, expectedError,
-		)
-	case !strings.Contains(err.Error(), expectedError):
-		return fmt.Errorf(
-			"e2e/genesis-file: running genesis check for the latest Mainnet genesis "+
-				"file should fail with an error containing: '%s' (actual error: %s)",
-			expectedError, err,
-		)
-	default:
-		s.Logger.Info("latest Mainnet genesis file is OK, but is not in canonical form")
+	if !latestMainnetNeedsUpgrade {
+		_, err = s.runGenesisCheckCmd(childEnv, latestMainnetGenesis)
+		expectedError := "genesis file is not in canonical form, see the diff on stderr"
+		switch {
+		case err == nil:
+			return fmt.Errorf("e2e/genesis-file: running genesis check for the latest Mainnet"+
+				" genesis file at '%s' should fail with '%s'",
+				latestMainnetGenesisURL, expectedError,
+			)
+		case !strings.Contains(err.Error(), expectedError):
+			return fmt.Errorf(
+				"e2e/genesis-file: running genesis check for the latest Mainnet genesis "+
+					"file should fail with an error containing: '%s' (actual error: %s)",
+				expectedError, err,
+			)
+		default:
+			s.Logger.Info("latest Mainnet genesis file is OK, but is not in canonical form")
+		}
 	}
 
 	// Convert latest Mainnet genesis file to canonical form and ensure its Genesis document's
 	// hash matches the authoritative one.
-	latestMainnetGenesisCanonical := filepath.Join(childEnv.Dir(), "genesis_mainnet_canonical.json")
-	if err = s.runFixGenesisCmd(childEnv, latestMainnetGenesis, latestMainnetGenesisCanonical); err != nil {
+	latestMainnetGenesisFixed := filepath.Join(childEnv.Dir(), "genesis_mainnet_fixed.json")
+	if err = s.runFixGenesisCmd(childEnv, latestMainnetGenesis, latestMainnetGenesisFixed); err != nil {
 		return fmt.Errorf("e2e/genesis-file: failed run fix-genesis on latest Mainnet genesis "+
 			"file at '%s': %w", latestMainnetGenesisURL, err)
 	}
-	checkOut, err := s.runGenesisCheckCmd(childEnv, latestMainnetGenesisCanonical)
+	checkOut, err := s.runGenesisCheckCmd(childEnv, latestMainnetGenesisFixed)
 	switch {
 	case err != nil:
 		return fmt.Errorf("e2e/genesis-file: running genesis check for the latest Mainnet"+
 			" genesis file at '%s' converted to canonical form failed: %w",
 			latestMainnetGenesisURL, err,
 		)
-	case !strings.Contains(checkOut, latestMainnetGenesisDocumentHash):
+	case !latestMainnetNeedsUpgrade && !strings.Contains(checkOut, latestMainnetGenesisDocumentHash):
 		return fmt.Errorf(
 			"e2e/genesis-file: running genesis check for the latest Mainnet genesis "+
 				"file converted to canonical form should return the correct "+
@@ -158,7 +162,7 @@ func (s *genesisFileImpl) Run(childEnv *env.Env) error {
 		return fmt.Errorf("e2e/genesis-file: creating uncanonical genesis file failed: %w", err)
 	}
 	_, err = s.runGenesisCheckCmd(childEnv, uncanonicalGenesis)
-	expectedError = "genesis file is not in canonical form, see the diff on stderr"
+	expectedError := "genesis file is not in canonical form, see the diff on stderr"
 	switch {
 	case err == nil:
 		return fmt.Errorf("e2e/genesis-file: running genesis check for an uncanonical "+
