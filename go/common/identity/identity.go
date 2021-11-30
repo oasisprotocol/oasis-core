@@ -320,23 +320,33 @@ func doLoadOrGenerate(dataDir string, signerFactory signature.SignerFactory, sho
 		}
 	}
 
-	// Load or generate the sentry client certificate for this node.
+	// Re-generate the sentry client TLS certificate for this node.
+	// NOTE: This will reuse the sentry client's private key (if it exists)
+	// and re-generate the TLS certificate with a validity of 1 year.
+	// NOTE: The node needs to be restarted at least once a year so the TLS
+	// certificate doesn't expire.
 	tlsSentryClientCertPath, tlsSentryClientKeyPath := TLSSentryClientCertPaths(dataDir)
 	sentryClientCert, err := tlsCert.LoadFromKey(tlsSentryClientKeyPath, CommonName)
 	if err != nil {
 		if !os.IsNotExist(err) {
 			return nil, fmt.Errorf("identity: unable to read sentry client key from file: %w", err)
 		}
-		// Load failed, generate fresh sentry client cert.
+		// Loading sentry client's private key failed, generate a new
+		// private key and the corresponding TLS certificate.
 		sentryClientCert, err = tlsCert.Generate(CommonName)
 		if err != nil {
 			return nil, err
 		}
-		// And save it to disk.
+		// And save them to disk.
 		err = tlsCert.Save(tlsSentryClientCertPath, tlsSentryClientKeyPath, sentryClientCert)
 		if err != nil {
 			return nil, err
 		}
+	}
+	// Save the re-generated TLS certificate to disk.
+	err = tlsCert.Save(tlsSentryClientCertPath, tlsSentryClientKeyPath, sentryClientCert)
+	if err != nil {
+		return nil, err
 	}
 
 	// Load or generate the beacon scalar for this node.
