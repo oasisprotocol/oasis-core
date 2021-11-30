@@ -179,7 +179,7 @@ type Evidence struct {
 	ID common.Namespace `json:"id"`
 
 	EquivocationExecutor *EquivocationExecutorEvidence `json:"equivocation_executor,omitempty"`
-	EquivocationBatch    *EquivocationBatchEvidence    `json:"equivocation_batch,omitempty"`
+	EquivocationProposal *EquivocationProposalEvidence `json:"equivocation_prop,omitempty"`
 }
 
 // Hash computes the evidence hash.
@@ -188,8 +188,8 @@ type Evidence struct {
 // Assumes evidence has been validated.
 func (ev *Evidence) Hash() (hash.Hash, error) {
 	switch {
-	case ev.EquivocationBatch != nil:
-		return hash.NewFromBytes([]byte{EvidenceKindEquivocation}, ev.EquivocationBatch.BatchA.Signature.PublicKey[:]), nil
+	case ev.EquivocationProposal != nil:
+		return hash.NewFromBytes([]byte{EvidenceKindEquivocation}, ev.EquivocationProposal.ProposalA.NodeID[:]), nil
 	case ev.EquivocationExecutor != nil:
 		return hash.NewFromBytes([]byte{EvidenceKindEquivocation}, ev.EquivocationExecutor.CommitA.NodeID[:]), nil
 	default:
@@ -200,12 +200,12 @@ func (ev *Evidence) Hash() (hash.Hash, error) {
 // ValidateBasic performs basic evidence validity checks.
 func (ev *Evidence) ValidateBasic() error {
 	switch {
-	case ev.EquivocationExecutor != nil && ev.EquivocationBatch != nil:
+	case ev.EquivocationExecutor != nil && ev.EquivocationProposal != nil:
 		return fmt.Errorf("evidence has multiple fields set")
 	case ev.EquivocationExecutor != nil:
 		return ev.EquivocationExecutor.ValidateBasic(ev.ID)
-	case ev.EquivocationBatch != nil:
-		return ev.EquivocationBatch.ValidateBasic(ev.ID)
+	case ev.EquivocationProposal != nil:
+		return ev.EquivocationProposal.ValidateBasic(ev.ID)
 	default:
 		return fmt.Errorf("evidence content has no fields set")
 	}
@@ -231,6 +231,10 @@ func (ev *EquivocationExecutorEvidence) ValidateBasic(id common.Namespace) error
 
 	if ev.CommitA.Header.Round != ev.CommitB.Header.Round {
 		return fmt.Errorf("equivocation evidence commit headers not for same round")
+	}
+
+	if len(ev.CommitA.Messages) > 0 || len(ev.CommitB.Messages) > 0 {
+		return fmt.Errorf("messages should be empty for equivocation evidence")
 	}
 
 	if err := ev.CommitA.ValidateBasic(); err != nil {
@@ -269,38 +273,40 @@ func (ev *EquivocationExecutorEvidence) ValidateBasic(id common.Namespace) error
 	return nil
 }
 
-// EquivocationBatchEvidence is evidence of executor proposed batch equivocation.
-type EquivocationBatchEvidence struct {
-	BatchA commitment.SignedProposalHeader `json:"batch_a"`
-	BatchB commitment.SignedProposalHeader `json:"batch_b"`
+// EquivocationProposalEvidence is evidence of executor proposed batch equivocation.
+type EquivocationProposalEvidence struct {
+	ProposalA commitment.Proposal `json:"prop_a"`
+	ProposalB commitment.Proposal `json:"prop_b"`
 }
 
 // ValidateBasic performs stateless batch evidence validation checks.
 //
 // Particularly evidence is not verified to not be expired as this requires stateful checks.
-func (ev *EquivocationBatchEvidence) ValidateBasic(id common.Namespace) error {
-	if ev.BatchA.Equal(&ev.BatchB) {
-		return fmt.Errorf("batches are equal, no sign of equivocation")
+func (ev *EquivocationProposalEvidence) ValidateBasic(id common.Namespace) error {
+	if ev.ProposalA.Header.Equal(&ev.ProposalB.Header) {
+		return fmt.Errorf("proposal headers are equal, no sign of equivocation")
 	}
 
-	if !ev.BatchA.Signature.PublicKey.Equal(ev.BatchB.Signature.PublicKey) {
-		return fmt.Errorf("equivocation batch evidence signature public keys don't match")
+	if !ev.ProposalA.NodeID.Equal(ev.ProposalB.NodeID) {
+		return fmt.Errorf("equivocation proposal evidence signature public keys don't match")
 	}
 
-	var a, b commitment.ProposalHeader
-	if err := ev.BatchA.Open(id, &a); err != nil {
-		return fmt.Errorf("opening BatchA: %w", err)
-	}
-	if err := ev.BatchB.Open(id, &b); err != nil {
-		return fmt.Errorf("opening BatchB: %w", err)
+	if ev.ProposalA.Header.Round != ev.ProposalB.Header.Round {
+		return fmt.Errorf("equivocation evidence proposal header rounds don't match")
 	}
 
-	if a.Round != b.Round {
-		return fmt.Errorf("equivocation evidence batch header rounds don't match")
+	if len(ev.ProposalA.Batch) > 0 || len(ev.ProposalB.Batch) > 0 {
+		return fmt.Errorf("batch should be empty for equivocation evidence")
 	}
 
-	if a.BatchHash.Equal(&b.BatchHash) && a.PreviousHash.Equal(&b.PreviousHash) {
-		return fmt.Errorf("equivocation evidence batch io roots match, no sign of equivocation")
+	// Since we did the Equal check above, either BatchHash or PreviousHash must be different.
+
+	// Verify signatures.
+	if err := ev.ProposalA.Verify(id); err != nil {
+		return fmt.Errorf("invalid signature for proposal A: %w", err)
+	}
+	if err := ev.ProposalB.Verify(id); err != nil {
+		return fmt.Errorf("invalid signature for proposal B: %w", err)
 	}
 
 	return nil

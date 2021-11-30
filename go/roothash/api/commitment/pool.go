@@ -60,7 +60,7 @@ var logger *logging.Logger = logging.GetLogger("roothash/commitment/pool")
 type SignatureVerifier interface {
 	// VerifyTxnSchedulerSigner verifies that the given signature comes from
 	// the transaction scheduler at provided round.
-	VerifyTxnSchedulerSigner(sig signature.Signature, round uint64) error
+	VerifyTxnSchedulerSigner(id signature.PublicKey, round uint64) error
 }
 
 // NodeLookup is an interface for looking up registry node descriptors.

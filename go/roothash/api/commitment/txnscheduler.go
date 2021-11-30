@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/oasisprotocol/oasis-core/go/common"
+	"github.com/oasisprotocol/oasis-core/go/common/cbor"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	scheduler "github.com/oasisprotocol/oasis-core/go/scheduler/api"
@@ -29,44 +30,74 @@ type ProposalHeader struct {
 }
 
 // Sign signs the proposal header.
-func (ph *ProposalHeader) Sign(signer signature.Signer, runtimeID common.Namespace) (*SignedProposalHeader, error) {
+func (ph *ProposalHeader) Sign(signer signature.Signer, runtimeID common.Namespace) (*signature.RawSignature, error) {
 	sigCtx, err := ProposalSignatureContext.WithSuffix(runtimeID.String())
 	if err != nil {
 		return nil, fmt.Errorf("signature context error: %w", err)
 	}
-	signed, err := signature.SignSigned(signer, sigCtx, ph)
+
+	signature, err := signature.Sign(signer, sigCtx, cbor.Marshal(ph))
 	if err != nil {
 		return nil, err
 	}
-	return &SignedProposalHeader{Signed: *signed}, nil
+	return &signature.Signature, nil
 }
 
-// SignedProposalHeader is a signed ProposalHeader.
-type SignedProposalHeader struct {
-	signature.Signed
-}
-
-// Equal compares vs another SignedProposalHeader for equality.
-func (sp *SignedProposalHeader) Equal(cmp *SignedProposalHeader) bool {
-	return sp.Signed.Equal(&cmp.Signed)
-}
-
-// Open first verifies the signed prpoposal header and then unmarshals it.
-func (sp *SignedProposalHeader) Open(runtimeID common.Namespace, header *ProposalHeader) error {
-	sigCtx, err := ProposalSignatureContext.WithSuffix(runtimeID.String())
-	if err != nil {
-		return fmt.Errorf("signature context error: %w", err)
+// Equal compares against another proposal header for equality.
+func (ph *ProposalHeader) Equal(other *ProposalHeader) bool {
+	if ph.Round != other.Round {
+		return false
 	}
-	return sp.Signed.Open(sigCtx, header)
+	if !ph.PreviousHash.Equal(&other.PreviousHash) {
+		return false
+	}
+	if !ph.BatchHash.Equal(&other.BatchHash) {
+		return false
+	}
+	return true
 }
 
 // Proposal is a batch proposal.
 type Proposal struct {
-	// SignedProposalHeader is the proposal header signed by the transaction scheduler.
-	SignedProposalHeader SignedProposalHeader `json:"header"`
+	// NodeID is the public key of the node that generated this proposal.
+	NodeID signature.PublicKey `json:"node_id"`
 
-	// Batch is an ordered list of all transaction hashes that should be in a batch.
+	// Header is the proposal header.
+	Header ProposalHeader `json:"header"`
+
+	// Signature is the proposal header signature.
+	Signature signature.RawSignature `json:"sig"`
+
+	// Batch is an ordered list of all transaction hashes that should be in a batch. In case of
+	// the proposal being submitted as equivocation evidence, this field should be omitted.
 	Batch []hash.Hash `json:"batch,omitempty"`
+}
+
+// Sign signs the proposal header and sets the signature on the proposal.
+func (p *Proposal) Sign(signer signature.Signer, runtimeID common.Namespace) error {
+	if !p.NodeID.Equal(signer.Public()) {
+		return fmt.Errorf("node ID does not match signer (ID: %s signer: %s)", p.NodeID, signer.Public())
+	}
+
+	sig, err := p.Header.Sign(signer, runtimeID)
+	if err != nil {
+		return err
+	}
+	p.Signature = *sig
+	return nil
+}
+
+// Verify verifies that the header signature is valid.
+func (p *Proposal) Verify(runtimeID common.Namespace) error {
+	sigCtx, err := ProposalSignatureContext.WithSuffix(runtimeID.String())
+	if err != nil {
+		return fmt.Errorf("roothash/commitment: signature context error: %w", err)
+	}
+
+	if !p.NodeID.Verify(sigCtx, cbor.Marshal(p.Header), p.Signature[:]) {
+		return fmt.Errorf("roothash/commitment: signature verification failed")
+	}
+	return nil
 }
 
 // GetTransactionScheduler returns the transaction scheduler of the provided

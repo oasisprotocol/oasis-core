@@ -31,24 +31,34 @@ func TestEvidenceHash(t *testing.T) {
 	require.NoError(err, "NewSigner")
 	runtimeID := common.NewTestNamespaceFromSeed([]byte("roothash/api_test/hash: runtime"), 0)
 	blk := block.NewGenesisBlock(runtimeID, 0)
-	batch1 := &commitment.ProposalHeader{
-		Round:        blk.Header.Round + 1,
-		PreviousHash: blk.Header.EncodedHash(),
-		BatchHash:    blk.Header.IORoot,
+	signedBatch1 := commitment.Proposal{
+		NodeID: sk.Public(),
+		Header: commitment.ProposalHeader{
+			Round:        blk.Header.Round + 1,
+			PreviousHash: blk.Header.EncodedHash(),
+			BatchHash:    blk.Header.IORoot,
+		},
 	}
-	signedBatch1, err := batch1.Sign(sk, runtimeID)
+	err = signedBatch1.Sign(sk, runtimeID)
 	require.NoError(err, "ProposalHeader.Sign")
-	signed2Batch1, err := batch1.Sign(sk2, runtimeID)
+	signed2Batch1 := signedBatch1
+	signed2Batch1.NodeID = sk2.Public()
+	err = signed2Batch1.Sign(sk2, runtimeID)
 	require.NoError(err, "ProposalHeader.Sign")
 
-	batch2 := &commitment.ProposalHeader{
-		Round:        blk.Header.Round + 1,
-		PreviousHash: blk.Header.EncodedHash(),
-		BatchHash:    hash.NewFromBytes([]byte("invalid root")),
+	signedBatch2 := commitment.Proposal{
+		NodeID: sk.Public(),
+		Header: commitment.ProposalHeader{
+			Round:        blk.Header.Round + 1,
+			PreviousHash: blk.Header.EncodedHash(),
+			BatchHash:    hash.NewFromBytes([]byte("invalid root")),
+		},
 	}
-	signedBatch2, err := batch2.Sign(sk, runtimeID)
+	err = signedBatch2.Sign(sk, runtimeID)
 	require.NoError(err, "ProposalHeader.Sign")
-	signed2Batch2, err := batch2.Sign(sk2, runtimeID)
+	signed2Batch2 := signedBatch2
+	signed2Batch2.NodeID = sk2.Public()
+	err = signed2Batch2.Sign(sk2, runtimeID)
 	require.NoError(err, "ProposalHeader.Sign")
 
 	// Executor commit.
@@ -69,9 +79,9 @@ func TestEvidenceHash(t *testing.T) {
 
 	ev = Evidence{
 		ID: runtimeID,
-		EquivocationBatch: &EquivocationBatchEvidence{
-			BatchA: *signedBatch1,
-			BatchB: *signedBatch2,
+		EquivocationProposal: &EquivocationProposalEvidence{
+			ProposalA: signedBatch1,
+			ProposalB: signedBatch2,
 		},
 	}
 	h1, err := ev.Hash()
@@ -91,9 +101,9 @@ func TestEvidenceHash(t *testing.T) {
 
 	ev = Evidence{
 		ID: runtimeID,
-		EquivocationBatch: &EquivocationBatchEvidence{
-			BatchA: *signed2Batch1,
-			BatchB: *signed2Batch2,
+		EquivocationProposal: &EquivocationProposalEvidence{
+			ProposalA: signed2Batch1,
+			ProposalB: signed2Batch2,
 		},
 	}
 	h3, err := ev.Hash()
@@ -111,20 +121,26 @@ func TestEvidenceValidateBasic(t *testing.T) {
 
 	rtID := common.NewTestNamespaceFromSeed([]byte("roothash/api_test: runtime1"), 0)
 	rtBlk := block.NewGenesisBlock(rtID, 0)
-	rtBatch1 := &commitment.ProposalHeader{
-		Round:        rtBlk.Header.Round + 1,
-		PreviousHash: rtBlk.Header.EncodedHash(),
-		BatchHash:    rtBlk.Header.IORoot,
+	signedB1 := commitment.Proposal{
+		NodeID: sk.Public(),
+		Header: commitment.ProposalHeader{
+			Round:        rtBlk.Header.Round + 1,
+			PreviousHash: rtBlk.Header.EncodedHash(),
+			BatchHash:    rtBlk.Header.IORoot,
+		},
 	}
-	signedB1, err := rtBatch1.Sign(sk, rtID)
+	err = signedB1.Sign(sk, rtID)
 	require.NoError(err, "ProposalHeader.Sign")
 
-	rtBatch2 := &commitment.ProposalHeader{
-		Round:        rtBlk.Header.Round + 1,
-		PreviousHash: rtBlk.Header.EncodedHash(),
-		BatchHash:    hash.NewFromBytes([]byte("invalid root")),
+	signedB2 := commitment.Proposal{
+		NodeID: sk.Public(),
+		Header: commitment.ProposalHeader{
+			Round:        rtBlk.Header.Round + 1,
+			PreviousHash: rtBlk.Header.EncodedHash(),
+			BatchHash:    hash.NewFromBytes([]byte("invalid root")),
+		},
 	}
-	signedB2, err := rtBatch2.Sign(sk, rtID)
+	err = signedB2.Sign(sk, rtID)
 	require.NoError(err, "ProposalHeader.Sign")
 
 	signedCommitment1 := commitment.ExecutorCommitment{
@@ -164,9 +180,9 @@ func TestEvidenceValidateBasic(t *testing.T) {
 					CommitA: signedCommitment1,
 					CommitB: signedCommitment2,
 				},
-				EquivocationBatch: &EquivocationBatchEvidence{
-					BatchA: *signedB1,
-					BatchB: *signedB2,
+				EquivocationProposal: &EquivocationProposalEvidence{
+					ProposalA: signedB1,
+					ProposalB: signedB2,
 				},
 			},
 			true,
@@ -186,9 +202,9 @@ func TestEvidenceValidateBasic(t *testing.T) {
 		{
 			Evidence{
 				ID: rtID,
-				EquivocationBatch: &EquivocationBatchEvidence{
-					BatchA: *signedB1,
-					BatchB: *signedB2,
+				EquivocationProposal: &EquivocationProposalEvidence{
+					ProposalA: signedB1,
+					ProposalB: signedB2,
 				},
 			},
 			false,
@@ -205,7 +221,7 @@ func TestEvidenceValidateBasic(t *testing.T) {
 	}
 }
 
-func TestEquivocationBatchEvidenceValidateBasic(t *testing.T) {
+func TestEquivocationProposalEvidenceValidateBasic(t *testing.T) {
 	require := require.New(t)
 
 	genesisTestHelpers.SetTestChainContext()
@@ -226,153 +242,173 @@ func TestEquivocationBatchEvidenceValidateBasic(t *testing.T) {
 	rt2Blk2 := block.NewEmptyBlock(rt2Blk1, 0, block.Invalid)
 
 	// Prepare test signed batches.
-	rt1Batch1 := &commitment.ProposalHeader{
-		Round:        rt1Blk1.Header.Round + 1,
-		BatchHash:    rt1Blk1.Header.IORoot,
-		PreviousHash: rt1Blk1.Header.EncodedHash(),
+	signedR1B1 := commitment.Proposal{
+		NodeID: sk.Public(),
+		Header: commitment.ProposalHeader{
+			Round:        rt1Blk1.Header.Round + 1,
+			BatchHash:    rt1Blk1.Header.IORoot,
+			PreviousHash: rt1Blk1.Header.EncodedHash(),
+		},
 	}
-	signedR1B1, err := rt1Batch1.Sign(sk, rt1ID)
+	err = signedR1B1.Sign(sk, rt1ID)
 	require.NoError(err, "ProposalHeader.Sign")
 
-	rt1Batch2 := &commitment.ProposalHeader{
-		Round:        rt1Blk2.Header.Round + 1,     // Different round.
-		BatchHash:    rt1Blk2.Header.IORoot,        // Different batch hash.
-		PreviousHash: rt1Blk2.Header.EncodedHash(), // Different header.
+	signedR1B2 := commitment.Proposal{
+		NodeID: sk.Public(),
+		Header: commitment.ProposalHeader{
+			Round:        rt1Blk2.Header.Round + 1,     // Different round.
+			BatchHash:    rt1Blk2.Header.IORoot,        // Different batch hash.
+			PreviousHash: rt1Blk2.Header.EncodedHash(), // Different header.
+		},
 	}
-	signedR1B2, err := rt1Batch2.Sign(sk, rt1ID)
+	err = signedR1B2.Sign(sk, rt1ID)
 	require.NoError(err, "ProposalHeader.Sign")
 
-	rt1Batch3 := &commitment.ProposalHeader{
-		Round:        rt1Blk1.Header.Round + 1,                  // Same round.
-		BatchHash:    hash.NewFromBytes([]byte("invalid root")), // Different batch hash.
-		PreviousHash: rt1Blk1.Header.EncodedHash(),              // Same header.
+	signedR1B3 := commitment.Proposal{
+		NodeID: sk.Public(),
+		Header: commitment.ProposalHeader{
+			Round:        rt1Blk1.Header.Round + 1,                  // Same round.
+			BatchHash:    hash.NewFromBytes([]byte("invalid root")), // Different batch hash.
+			PreviousHash: rt1Blk1.Header.EncodedHash(),              // Same header.
+		},
 	}
-	signedR1B3, err := rt1Batch3.Sign(sk, rt1ID)
+	err = signedR1B3.Sign(sk, rt1ID)
 	require.NoError(err, "ProposalHeader.Sign")
 
-	rt1Batch4 := &commitment.ProposalHeader{
-		Round:        rt1Batch1.Round,        // Same round.
-		BatchHash:    rt1Batch1.BatchHash,    // Same batch hash.
-		PreviousHash: rt1Batch1.PreviousHash, // Same header.
+	signedR1B4 := commitment.Proposal{
+		NodeID: sk.Public(),
+		Header: commitment.ProposalHeader{
+			Round:        signedR1B1.Header.Round,        // Same round.
+			BatchHash:    signedR1B1.Header.BatchHash,    // Same batch hash.
+			PreviousHash: signedR1B1.Header.PreviousHash, // Same header.
+		},
 	}
-	signedR1B4, err := rt1Batch4.Sign(sk, rt1ID)
+	err = signedR1B4.Sign(sk, rt1ID)
 	require.NoError(err, "ProposalHeader.Sign")
 
-	rt1Batch5 := &commitment.ProposalHeader{
-		Round:        rt1Blk3.Header.Round + 1,     // Same round.
-		BatchHash:    rt1Batch1.BatchHash,          // Same batch hash.
-		PreviousHash: rt1Blk3.Header.EncodedHash(), // Different header for same round.
+	signedR1B5 := commitment.Proposal{
+		NodeID: sk.Public(),
+		Header: commitment.ProposalHeader{
+			Round:        rt1Blk3.Header.Round + 1,     // Same round.
+			BatchHash:    signedR1B1.Header.BatchHash,  // Same batch hash.
+			PreviousHash: rt1Blk3.Header.EncodedHash(), // Different header for same round.
+		},
 	}
-	signedR1B5, err := rt1Batch5.Sign(sk, rt1ID)
+	err = signedR1B5.Sign(sk, rt1ID)
 	require.NoError(err, "ProposalHeader.Sign")
 
-	signed2R1B3, err := rt1Batch3.Sign(sk2, rt1ID)
+	signed2R1B3 := signedR1B3
+	signed2R1B3.NodeID = sk2.Public()
+	err = signed2R1B3.Sign(sk2, rt1ID)
 	require.NoError(err, "ProposalHeader.Sign")
 
-	rt2Batch1 := &commitment.ProposalHeader{
-		Round:        rt2Blk2.Header.Round + 1,
-		BatchHash:    rt2Blk2.Header.IORoot,
-		PreviousHash: rt2Blk2.Header.EncodedHash(),
+	signedR2B1 := commitment.Proposal{
+		NodeID: sk.Public(),
+		Header: commitment.ProposalHeader{
+			Round:        rt2Blk2.Header.Round + 1,
+			BatchHash:    rt2Blk2.Header.IORoot,
+			PreviousHash: rt2Blk2.Header.EncodedHash(),
+		},
 	}
-	signedR2B1, err := rt2Batch1.Sign(sk, rt2ID)
+	err = signedR2B1.Sign(sk, rt2ID)
 	require.NoError(err, "ProposalHeader.Sign")
 
 	for _, ev := range []struct {
 		rtID      common.Namespace
-		ev        EquivocationBatchEvidence
+		ev        EquivocationProposalEvidence
 		shouldErr bool
 		msg       string
 	}{
 		{
 			rt1ID,
-			EquivocationBatchEvidence{},
+			EquivocationProposalEvidence{},
 			true,
 			"empty evidence should error",
 		},
 		{
 			rt1ID,
-			EquivocationBatchEvidence{
-				BatchA: *signedR1B1,
+			EquivocationProposalEvidence{
+				ProposalA: signedR1B1,
 			},
 			true,
 			"empty evidence should error",
 		},
 		{
 			rt1ID,
-			EquivocationBatchEvidence{
-				BatchB: *signedR1B1,
+			EquivocationProposalEvidence{
+				ProposalB: signedR1B1,
 			},
 			true,
 			"empty evidence should error",
 		},
 		{
 			rt1ID,
-			EquivocationBatchEvidence{
-				BatchA: *signedR1B1,
-				BatchB: *signedR1B1,
+			EquivocationProposalEvidence{
+				ProposalA: signedR1B1,
+				ProposalB: signedR1B1,
 			},
 			true,
 			"same signed batch is not valid evidence",
 		},
 		{
 			rt1ID,
-			EquivocationBatchEvidence{
-				BatchA: *signedR1B1,
-				BatchB: *signedR1B2,
+			EquivocationProposalEvidence{
+				ProposalA: signedR1B1,
+				ProposalB: signedR1B2,
 			},
 			true,
 			"signed batches for different heights is not valid evidence",
 		},
 		{
 			rt1ID,
-			EquivocationBatchEvidence{
-				BatchA: *signedR1B1,
-				BatchB: *signedR2B1,
+			EquivocationProposalEvidence{
+				ProposalA: signedR1B1,
+				ProposalB: signedR2B1,
 			},
 			true,
 			"signed batches for different runtimes is not valid evidence",
 		},
 		{
 			rt1ID,
-			EquivocationBatchEvidence{
-				BatchA: *signedR1B1,
-				BatchB: *signedR1B3,
+			EquivocationProposalEvidence{
+				ProposalA: signedR1B1,
+				ProposalB: signedR1B3,
 			},
 			false,
 			"same round different IORoot is valid evidence",
 		},
 		{
 			rt1ID,
-			EquivocationBatchEvidence{
-				BatchA: *signedR1B1,
-				BatchB: *signed2R1B3,
+			EquivocationProposalEvidence{
+				ProposalA: signedR1B1,
+				ProposalB: signed2R1B3,
 			},
 			true,
 			"different signer is not valid evidence",
 		},
 		{
 			rt1ID,
-			EquivocationBatchEvidence{
-				BatchA: *signedR1B1,
-				BatchB: *signedR1B4,
+			EquivocationProposalEvidence{
+				ProposalA: signedR1B1,
+				ProposalB: signedR1B4,
 			},
 			true,
 			"same round, io root and same header is not valid evidence",
 		},
 		{
 			rt1ID,
-			EquivocationBatchEvidence{
-				BatchA: *signedR1B1,
-				BatchB: *signedR1B5,
+			EquivocationProposalEvidence{
+				ProposalA: signedR1B1,
+				ProposalB: signedR1B5,
 			},
 			false,
 			"same round and io root but different header is valid evidence",
 		},
 		{
 			rt2ID,
-			EquivocationBatchEvidence{
-				BatchA: *signedR1B1,
-				BatchB: *signedR1B5,
+			EquivocationProposalEvidence{
+				ProposalA: signedR1B1,
+				ProposalB: signedR1B5,
 			},
 			true,
 			"valid evidence for wrong runtime is invalid",

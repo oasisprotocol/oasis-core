@@ -307,19 +307,17 @@ func (n *Node) HandlePeerMessage(ctx context.Context, message *p2p.Message, isOw
 
 		// Before opening the signed dispatch message, verify that it was actually signed by the
 		// current transaction scheduler.
-		if err := epoch.VerifyTxnSchedulerSigner(proposal.SignedProposalHeader.Signature, round); err != nil {
+		if err := epoch.VerifyTxnSchedulerSigner(proposal.NodeID, round); err != nil {
 			// Not signed by the current txn scheduler.
 			return false, errMsgFromNonTxnSched
 		}
 
-		// Transaction scheduler checks out, open the signed dispatch message and add it to the
-		// processing queue.
-		var proposalHeader commitment.ProposalHeader
-		if err := proposal.SignedProposalHeader.Open(n.commonNode.Runtime.ID(), &proposalHeader); err != nil {
+		// Transaction scheduler checks out, verify signature.
+		if err := proposal.Verify(n.commonNode.Runtime.ID()); err != nil {
 			return false, p2pError.Permanent(err)
 		}
 
-		err := n.queueBatchBlocking(ctx, proposal, &proposalHeader)
+		err := n.queueBatchBlocking(ctx, proposal)
 		if err != nil {
 			return false, err
 		}
@@ -329,11 +327,7 @@ func (n *Node) HandlePeerMessage(ctx context.Context, message *p2p.Message, isOw
 	return false, nil
 }
 
-func (n *Node) queueBatchBlocking(
-	ctx context.Context,
-	proposal *commitment.Proposal,
-	proposalHeader *commitment.ProposalHeader,
-) error {
+func (n *Node) queueBatchBlocking(ctx context.Context, proposal *commitment.Proposal) error {
 	rt, err := n.commonNode.Runtime.ActiveDescriptor(ctx)
 	if err != nil {
 		n.logger.Warn("failed to fetch active runtime descriptor",
@@ -353,7 +347,6 @@ func (n *Node) queueBatchBlocking(
 
 	batch := &unresolvedBatch{
 		proposal:          proposal,
-		proposalHeader:    proposalHeader,
 		maxBatchSizeBytes: rt.TxnScheduler.MaxBatchSizeBytes,
 	}
 
@@ -451,7 +444,7 @@ func (n *Node) HandleNewBlockLocked(blk *block.Block) {
 	case StateWaitingForBlock:
 		// Check if this was the block we were waiting for.
 		currentHash := header.EncodedHash()
-		if currentHash.Equal(&state.batch.proposalHeader.PreviousHash) {
+		if currentHash.Equal(&state.batch.proposal.Header.PreviousHash) {
 			n.logger.Info("received block needed for batch processing")
 			n.maybeStartProcessingBatchLocked(state.batch)
 			break
@@ -461,7 +454,7 @@ func (n *Node) HandleNewBlockLocked(blk *block.Block) {
 		// one we are waiting for. In this case, we should abort as the
 		// block will never be seen.
 		curRound := header.Round
-		waitRound := state.batch.proposalHeader.Round - 1
+		waitRound := state.batch.proposal.Header.Round - 1
 		if curRound >= waitRound {
 			n.logger.Warn("seen newer block while waiting for block")
 			n.transitionLocked(StateWaitingForBatch{})
@@ -1018,22 +1011,20 @@ func (n *Node) handleScheduleBatch(force bool) {
 	}
 
 	// Create new proposal.
-	proposalHeader := &commitment.ProposalHeader{
-		Round:        blk.Header.Round + 1,
-		PreviousHash: blk.Header.EncodedHash(),
-		BatchHash:    ioRoot,
+	proposal := &commitment.Proposal{
+		NodeID: n.commonNode.Identity.NodeSigner.Public(),
+		Header: commitment.ProposalHeader{
+			Round:        blk.Header.Round + 1,
+			PreviousHash: blk.Header.EncodedHash(),
+			BatchHash:    ioRoot,
+		},
+		Batch: txHashes,
 	}
-	signedProposalHeader, err := proposalHeader.Sign(n.commonNode.Identity.NodeSigner, blk.Header.Namespace)
-	if err != nil {
+	if err = proposal.Sign(n.commonNode.Identity.NodeSigner, blk.Header.Namespace); err != nil {
 		n.logger.Error("failed to sign proposal header",
 			"err", err,
 		)
 		return
-	}
-
-	proposal := &commitment.Proposal{
-		SignedProposalHeader: *signedProposalHeader,
-		Batch:                txHashes,
 	}
 
 	n.commonNode.CrossNode.Lock()
@@ -1069,9 +1060,8 @@ func (n *Node) handleScheduleBatch(force bool) {
 
 	// Also process the batch locally.
 	n.maybeStartProcessingBatchLocked(&unresolvedBatch{
-		proposal:       proposal,
-		proposalHeader: proposalHeader,
-		batch:          rawBatch,
+		proposal: proposal,
+		batch:    rawBatch,
 	})
 }
 
@@ -1586,7 +1576,7 @@ func (n *Node) handleExternalBatchLocked(batch *unresolvedBatch) error {
 
 	// Check if we have the correct block -- in this case, start processing the batch.
 	currentHash := n.commonNode.CurrentBlock.Header.EncodedHash()
-	if currentHash.Equal(&batch.proposalHeader.PreviousHash) {
+	if currentHash.Equal(&batch.proposal.Header.PreviousHash) {
 		n.maybeStartProcessingBatchLocked(batch)
 		return nil
 	}
@@ -1594,11 +1584,11 @@ func (n *Node) handleExternalBatchLocked(batch *unresolvedBatch) error {
 	// Check if the current block is older than what is expected we base our batch
 	// on. In case it is equal or newer, but different, discard the batch.
 	curRound := n.commonNode.CurrentBlock.Header.Round
-	waitRound := batch.proposalHeader.Round - 1
+	waitRound := batch.proposal.Header.Round - 1
 	if curRound >= waitRound {
 		n.logger.Warn("got external batch based on incompatible header",
-			"previous_hash", batch.proposalHeader.PreviousHash,
-			"round", batch.proposalHeader.Round,
+			"previous_hash", batch.proposal.Header.PreviousHash,
+			"round", batch.proposal.Header.Round,
 		)
 		return errIncompatibleHeader
 	}

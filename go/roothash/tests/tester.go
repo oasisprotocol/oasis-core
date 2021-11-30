@@ -800,20 +800,26 @@ func testSubmitEquivocationEvidence(t *testing.T, backend api.Backend, consensus
 
 	// Generate evidence of executor equivocation.
 	node := s.executorCommittee.workers[0]
-	batch1 := &commitment.ProposalHeader{
-		Round:        child.Header.Round + 1,
-		BatchHash:    child.Header.IORoot,
-		PreviousHash: child.Header.EncodedHash(),
+	signedBatch1 := commitment.Proposal{
+		NodeID: node.Signer.Public(),
+		Header: commitment.ProposalHeader{
+			Round:        child.Header.Round + 1,
+			BatchHash:    child.Header.IORoot,
+			PreviousHash: child.Header.EncodedHash(),
+		},
 	}
-	signedBatch1, err := batch1.Sign(node.Signer, s.rt.Runtime.ID)
+	err = signedBatch1.Sign(node.Signer, s.rt.Runtime.ID)
 	require.NoError(err, "ProposalHeader.Sign")
 
-	batch2 := &commitment.ProposalHeader{
-		Round:        child.Header.Round + 1,
-		BatchHash:    hash.NewFromBytes([]byte("different root")),
-		PreviousHash: child.Header.EncodedHash(),
+	signedBatch2 := commitment.Proposal{
+		NodeID: node.Signer.Public(),
+		Header: commitment.ProposalHeader{
+			Round:        child.Header.Round + 1,
+			BatchHash:    hash.NewFromBytes([]byte("different root")),
+			PreviousHash: child.Header.EncodedHash(),
+		},
 	}
-	signedBatch2, err := batch2.Sign(node.Signer, s.rt.Runtime.ID)
+	err = signedBatch2.Sign(node.Signer, s.rt.Runtime.ID)
 	require.NoError(err, "ProposalHeader.Sign")
 
 	ch, sub, err := consensus.Staking().WatchEvents(ctx)
@@ -833,9 +839,9 @@ func testSubmitEquivocationEvidence(t *testing.T, backend api.Backend, consensus
 	// Submit evidence of executor equivocation.
 	tx = api.NewEvidenceTx(0, nil, &api.Evidence{
 		ID: s.rt.Runtime.ID,
-		EquivocationBatch: &api.EquivocationBatchEvidence{
-			BatchA: *signedBatch1,
-			BatchB: *signedBatch2,
+		EquivocationProposal: &api.EquivocationProposalEvidence{
+			ProposalA: signedBatch1,
+			ProposalB: signedBatch2,
 		},
 	})
 	submitter := s.executorCommittee.workers[1]

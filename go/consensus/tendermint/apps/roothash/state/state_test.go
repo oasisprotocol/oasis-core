@@ -43,7 +43,7 @@ func TestEvidence(t *testing.T) {
 			rt1ID,
 			10,
 			api.Evidence{
-				EquivocationBatch: &api.EquivocationBatchEvidence{},
+				EquivocationProposal: &api.EquivocationProposalEvidence{},
 			},
 		},
 		{
@@ -64,7 +64,7 @@ func TestEvidence(t *testing.T) {
 			rt2ID,
 			10,
 			api.Evidence{
-				EquivocationBatch: &api.EquivocationBatchEvidence{},
+				EquivocationProposal: &api.EquivocationProposalEvidence{},
 			},
 		},
 		{

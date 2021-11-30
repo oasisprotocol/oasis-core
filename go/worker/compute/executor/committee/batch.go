@@ -11,8 +11,7 @@ import (
 
 // unresolvedBatch is a batch that may still need to be resolved (fetched from storage).
 type unresolvedBatch struct {
-	proposal       *commitment.Proposal
-	proposalHeader *commitment.ProposalHeader
+	proposal *commitment.Proposal
 
 	batch      transaction.RawBatch
 	missingTxs map[hash.Hash]int
@@ -21,11 +20,11 @@ type unresolvedBatch struct {
 }
 
 func (ub *unresolvedBatch) String() string {
-	return fmt.Sprintf("UnresolvedBatch{hash: %s}", ub.proposalHeader.BatchHash)
+	return fmt.Sprintf("UnresolvedBatch{hash: %s}", ub.proposal.Header.BatchHash)
 }
 
 func (ub *unresolvedBatch) hash() hash.Hash {
-	return ub.proposalHeader.BatchHash
+	return ub.proposal.Header.BatchHash
 }
 
 func (ub *unresolvedBatch) resolve(scheduler schedulingAPI.Scheduler) (transaction.RawBatch, error) {

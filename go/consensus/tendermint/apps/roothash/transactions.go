@@ -31,7 +31,7 @@ type roothashSignatureVerifier struct {
 // the transaction scheduler at provided round.
 //
 // Implements commitment.SignatureVerifier.
-func (sv *roothashSignatureVerifier) VerifyTxnSchedulerSigner(sig signature.Signature, round uint64) error {
+func (sv *roothashSignatureVerifier) VerifyTxnSchedulerSigner(id signature.PublicKey, round uint64) error {
 	committee, err := sv.scheduler.Committee(sv.ctx, scheduler.KindComputeExecutor, sv.runtimeID)
 	if err != nil {
 		return err
@@ -43,7 +43,7 @@ func (sv *roothashSignatureVerifier) VerifyTxnSchedulerSigner(sig signature.Sign
 	if err != nil {
 		return fmt.Errorf("roothash: error getting transaction scheduler: %w", err)
 	}
-	if !scheduler.PublicKey.Equal(sig.PublicKey) {
+	if !scheduler.PublicKey.Equal(id) {
 		return fmt.Errorf("roothash: signature is not from a valid transaction scheduler")
 	}
 	return nil
@@ -313,21 +313,19 @@ func (app *rootHashApplication) submitEvidence(
 		}
 		round = commitA.Header.Round
 		pk = commitA.NodeID
-	case evidence.EquivocationBatch != nil:
-		// Evidence validity check ensures this can open.
-		var batchA commitment.ProposalHeader
-		_ = evidence.EquivocationBatch.BatchA.Open(evidence.ID, &batchA)
+	case evidence.EquivocationProposal != nil:
+		proposalA := evidence.EquivocationProposal.ProposalA
 
-		if batchA.Round+params.MaxEvidenceAge < rtState.CurrentBlock.Header.Round {
-			ctx.Logger().Error("Evidence: proposed batch equivocation evidence expired",
+		if proposalA.Header.Round+params.MaxEvidenceAge < rtState.CurrentBlock.Header.Round {
+			ctx.Logger().Error("Evidence: proposal equivocation evidence expired",
 				"evidence", evidence.EquivocationExecutor,
 				"current_round", rtState.CurrentBlock.Header.Round,
 				"max_evidence_age", params.MaxEvidenceAge,
 			)
 			return fmt.Errorf("%w: equivocation evidence expired", roothash.ErrInvalidEvidence)
 		}
-		round = batchA.Round
-		pk = evidence.EquivocationBatch.BatchA.Signature.PublicKey
+		round = proposalA.Header.Round
+		pk = proposalA.NodeID
 	default:
 		// This should never happen due to ValidateBasic check above.
 		return roothash.ErrInvalidEvidence

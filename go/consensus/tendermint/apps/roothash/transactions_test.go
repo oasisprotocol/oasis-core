@@ -361,36 +361,52 @@ func TestEvidence(t *testing.T) {
 	blk2 := block.NewEmptyBlock(blk, 0, block.Normal)
 
 	// Proposed batch.
-	proposalHeader1 := &commitment.ProposalHeader{
-		Round:        blk2.Header.Round,
-		PreviousHash: blk2.Header.PreviousHash,
-		BatchHash:    blk2.Header.IORoot,
+	signedBatch1 := commitment.Proposal{
+		NodeID: sk.Public(),
+		Header: commitment.ProposalHeader{
+			Round:        blk2.Header.Round,
+			PreviousHash: blk2.Header.PreviousHash,
+			BatchHash:    blk2.Header.IORoot,
+		},
 	}
-	signedBatch1, err := proposalHeader1.Sign(sk, runtime.ID)
+	err = signedBatch1.Sign(sk, runtime.ID)
 	require.NoError(err, "ProposalHeader.Sign")
-	noSlashingRtB1, err := proposalHeader1.Sign(sk, runtimeNoSlashing.ID)
+	noSlashingRtB1 := signedBatch1
+	err = noSlashingRtB1.Sign(sk, runtimeNoSlashing.ID)
 	require.NoError(err, "ProposalHeader.Sign")
-	zeroSlashingRtB1, err := proposalHeader1.Sign(sk, runtimeZeroSlashing.ID)
+	zeroSlashingRtB1 := signedBatch1
+	err = zeroSlashingRtB1.Sign(sk, runtimeZeroSlashing.ID)
 	require.NoError(err, "ProposalHeader.Sign")
-	nonExistingSignerBatch1, err := proposalHeader1.Sign(nonExistingSigner, runtime.ID)
+	nonExistingSignerBatch1 := signedBatch1
+	nonExistingSignerBatch1.NodeID = nonExistingSigner.Public()
+	err = nonExistingSignerBatch1.Sign(nonExistingSigner, runtime.ID)
 	require.NoError(err, "ProposalHeader.Sign")
-	uninitializedRtB1, err := proposalHeader1.Sign(sk, uninitializedRtID)
+	uninitializedRtB1 := signedBatch1
+	err = uninitializedRtB1.Sign(sk, uninitializedRtID)
 	require.NoError(err, "ProposalHeader.Sign")
 
-	proposalHeader2 := &commitment.ProposalHeader{
-		Round:        blk2.Header.Round,
-		PreviousHash: blk2.Header.PreviousHash,
-		BatchHash:    hash.NewFromBytes([]byte("invalid root")),
+	signedBatch2 := commitment.Proposal{
+		NodeID: sk.Public(),
+		Header: commitment.ProposalHeader{
+			Round:        blk2.Header.Round,
+			PreviousHash: blk2.Header.PreviousHash,
+			BatchHash:    hash.NewFromBytes([]byte("invalid root")),
+		},
 	}
-	signedBatch2, err := proposalHeader2.Sign(sk, runtime.ID)
+	err = signedBatch2.Sign(sk, runtime.ID)
 	require.NoError(err, "ProposalHeader.Sign")
-	noSlashingRtB2, err := proposalHeader2.Sign(sk, runtimeNoSlashing.ID)
+	noSlashingRtB2 := signedBatch2
+	err = noSlashingRtB2.Sign(sk, runtimeNoSlashing.ID)
 	require.NoError(err, "ProposalHeader.Sign")
-	zeroSlashingRtB2, err := proposalHeader2.Sign(sk, runtimeZeroSlashing.ID)
+	zeroSlashingRtB2 := signedBatch2
+	err = zeroSlashingRtB2.Sign(sk, runtimeZeroSlashing.ID)
 	require.NoError(err, "ProposalHeader.Sign")
-	nonExistingSignerBatch2, err := proposalHeader2.Sign(nonExistingSigner, runtime.ID)
+	nonExistingSignerBatch2 := signedBatch2
+	nonExistingSignerBatch2.NodeID = nonExistingSigner.Public()
+	err = nonExistingSignerBatch2.Sign(nonExistingSigner, runtime.ID)
 	require.NoError(err, "ProposalHeader.Sign")
-	uninitializedRtB2, err := proposalHeader2.Sign(sk, uninitializedRtID)
+	uninitializedRtB2 := signedBatch2
+	err = uninitializedRtB2.Sign(sk, uninitializedRtID)
 	require.NoError(err, "ProposalHeader.Sign")
 
 	// Executor commit.
@@ -415,19 +431,25 @@ func TestEvidence(t *testing.T) {
 
 	// Expired evidence.
 	blk2.Header.Round = 25
-	expired1 := &commitment.ProposalHeader{
-		Round:        blk2.Header.Round,
-		PreviousHash: blk2.Header.PreviousHash,
-		BatchHash:    blk2.Header.IORoot,
+	expiredB1 := commitment.Proposal{
+		NodeID: sk.Public(),
+		Header: commitment.ProposalHeader{
+			Round:        blk2.Header.Round,
+			PreviousHash: blk2.Header.PreviousHash,
+			BatchHash:    blk2.Header.IORoot,
+		},
 	}
-	expiredB1, err := expired1.Sign(sk, runtime.ID)
+	err = expiredB1.Sign(sk, runtime.ID)
 	require.NoError(err, "ProposalHeader.Sign")
-	expired2 := &commitment.ProposalHeader{
-		Round:        blk2.Header.Round,
-		PreviousHash: blk2.Header.PreviousHash,
-		BatchHash:    hash.NewFromBytes([]byte("invalid root")),
+	expiredB2 := commitment.Proposal{
+		NodeID: sk.Public(),
+		Header: commitment.ProposalHeader{
+			Round:        blk2.Header.Round,
+			PreviousHash: blk2.Header.PreviousHash,
+			BatchHash:    hash.NewFromBytes([]byte("invalid root")),
+		},
 	}
-	expiredB2, err := expired2.Sign(sk, runtime.ID)
+	err = expiredB2.Sign(sk, runtime.ID)
 	require.NoError(err, "ProposalHeader.Sign")
 
 	expiredCommitment1 := commitment.ExecutorCommitment{
@@ -454,8 +476,6 @@ func TestEvidence(t *testing.T) {
 	ctx = appState.NewContext(abciAPI.ContextDeliverTx, now)
 	defer ctx.Close()
 
-	_, _ = expiredB1, expiredB2
-
 	for _, ev := range []struct {
 		ev  *roothash.Evidence
 		err error
@@ -469,9 +489,9 @@ func TestEvidence(t *testing.T) {
 		{
 			&roothash.Evidence{
 				ID: runtimeNoSlashing.ID,
-				EquivocationBatch: &roothash.EquivocationBatchEvidence{
-					BatchA: *signedBatch1,
-					BatchB: *signedBatch2,
+				EquivocationProposal: &roothash.EquivocationProposalEvidence{
+					ProposalA: signedBatch1,
+					ProposalB: signedBatch2,
 				},
 			},
 			roothash.ErrInvalidEvidence,
@@ -480,9 +500,9 @@ func TestEvidence(t *testing.T) {
 		{
 			&roothash.Evidence{
 				ID: runtimeNoSlashing.ID,
-				EquivocationBatch: &roothash.EquivocationBatchEvidence{
-					BatchA: *noSlashingRtB1,
-					BatchB: *noSlashingRtB2,
+				EquivocationProposal: &roothash.EquivocationProposalEvidence{
+					ProposalA: noSlashingRtB1,
+					ProposalB: noSlashingRtB2,
 				},
 			},
 			roothash.ErrRuntimeDoesNotSlash,
@@ -491,9 +511,9 @@ func TestEvidence(t *testing.T) {
 		{
 			&roothash.Evidence{
 				ID: runtimeZeroSlashing.ID,
-				EquivocationBatch: &roothash.EquivocationBatchEvidence{
-					BatchA: *zeroSlashingRtB1,
-					BatchB: *zeroSlashingRtB2,
+				EquivocationProposal: &roothash.EquivocationProposalEvidence{
+					ProposalA: zeroSlashingRtB1,
+					ProposalB: zeroSlashingRtB2,
 				},
 			},
 			roothash.ErrRuntimeDoesNotSlash,
@@ -513,9 +533,9 @@ func TestEvidence(t *testing.T) {
 		{
 			&roothash.Evidence{
 				ID: runtime.ID,
-				EquivocationBatch: &roothash.EquivocationBatchEvidence{
-					BatchA: *expiredB1,
-					BatchB: *expiredB2,
+				EquivocationProposal: &roothash.EquivocationProposalEvidence{
+					ProposalA: expiredB1,
+					ProposalB: expiredB2,
 				},
 			},
 			roothash.ErrInvalidEvidence,
@@ -524,9 +544,9 @@ func TestEvidence(t *testing.T) {
 		{
 			&roothash.Evidence{
 				ID: uninitializedRtID,
-				EquivocationBatch: &roothash.EquivocationBatchEvidence{
-					BatchA: *uninitializedRtB1,
-					BatchB: *uninitializedRtB2,
+				EquivocationProposal: &roothash.EquivocationProposalEvidence{
+					ProposalA: uninitializedRtB1,
+					ProposalB: uninitializedRtB2,
 				},
 			},
 			roothash.ErrInvalidRuntime,
@@ -546,9 +566,9 @@ func TestEvidence(t *testing.T) {
 		{
 			&roothash.Evidence{
 				ID: runtime.ID,
-				EquivocationBatch: &roothash.EquivocationBatchEvidence{
-					BatchA: *signedBatch1,
-					BatchB: *signedBatch2,
+				EquivocationProposal: &roothash.EquivocationProposalEvidence{
+					ProposalA: signedBatch1,
+					ProposalB: signedBatch2,
 				},
 			},
 			nil,
@@ -557,9 +577,9 @@ func TestEvidence(t *testing.T) {
 		{
 			&roothash.Evidence{
 				ID: runtime.ID,
-				EquivocationBatch: &roothash.EquivocationBatchEvidence{
-					BatchA: *signedBatch1,
-					BatchB: *signedBatch2,
+				EquivocationProposal: &roothash.EquivocationProposalEvidence{
+					ProposalA: signedBatch1,
+					ProposalB: signedBatch2,
 				},
 			},
 			roothash.ErrDuplicateEvidence,
@@ -568,9 +588,9 @@ func TestEvidence(t *testing.T) {
 		{
 			&roothash.Evidence{
 				ID: runtime.ID,
-				EquivocationBatch: &roothash.EquivocationBatchEvidence{
-					BatchA: *nonExistingSignerBatch1,
-					BatchB: *nonExistingSignerBatch2,
+				EquivocationProposal: &roothash.EquivocationProposalEvidence{
+					ProposalA: nonExistingSignerBatch1,
+					ProposalB: nonExistingSignerBatch2,
 				},
 			},
 			roothash.ErrInvalidEvidence,

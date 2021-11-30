@@ -27,7 +27,7 @@ var nopSV = &nopSignatureVerifier{}
 // nopSignatureVerifier is a no-op storage verifier.
 type nopSignatureVerifier struct{}
 
-func (n *nopSignatureVerifier) VerifyTxnSchedulerSigner(sig signature.Signature, round uint64) error {
+func (n *nopSignatureVerifier) VerifyTxnSchedulerSigner(id signature.PublicKey, round uint64) error {
 	return nil
 }
 
@@ -35,8 +35,8 @@ type staticSignatureVerifier struct {
 	txnSchedulerPublicKey signature.PublicKey
 }
 
-func (n *staticSignatureVerifier) VerifyTxnSchedulerSigner(sig signature.Signature, round uint64) error {
-	if !sig.PublicKey.Equal(n.txnSchedulerPublicKey) {
+func (n *staticSignatureVerifier) VerifyTxnSchedulerSigner(id signature.PublicKey, round uint64) error {
+	if !id.Equal(n.txnSchedulerPublicKey) {
 		return errors.New("unknown public key")
 	}
 

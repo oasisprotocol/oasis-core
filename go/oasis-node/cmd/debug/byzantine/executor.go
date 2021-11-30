@@ -26,8 +26,7 @@ import (
 type computeBatchContext struct {
 	runtimeID common.Namespace
 
-	proposal       *commitment.Proposal
-	proposalHeader *commitment.ProposalHeader
+	proposal *commitment.Proposal
 
 	txs       []*transaction.Transaction
 	ioTree    *transaction.Tree
@@ -136,23 +135,20 @@ func (cbc *computeBatchContext) prepareProposal(
 
 	// NOTE: The Byzantine node does not apply to local storage.
 
-	proposalHeader := &commitment.ProposalHeader{
-		Round:        lastHeader.Round + 1,
-		PreviousHash: lastHeader.EncodedHash(),
-		BatchHash:    ioRoot,
+	proposal := &commitment.Proposal{
+		NodeID: identity.NodeSigner.Public(),
+		Header: commitment.ProposalHeader{
+			Round:        lastHeader.Round + 1,
+			PreviousHash: lastHeader.EncodedHash(),
+			BatchHash:    ioRoot,
+		},
+		Batch: txHashes,
 	}
-	signedProposalHeader, err := proposalHeader.Sign(identity.NodeSigner, lastHeader.Namespace)
-	if err != nil {
+	if err = proposal.Sign(identity.NodeSigner, lastHeader.Namespace); err != nil {
 		return fmt.Errorf("failed to sign proposal header: %w", err)
 	}
 
-	proposal := &commitment.Proposal{
-		SignedProposalHeader: *signedProposalHeader,
-		Batch:                txHashes,
-	}
-
 	cbc.proposal = proposal
-	cbc.proposalHeader = proposalHeader
 	cbc.txs = txs
 
 	return nil
@@ -205,13 +201,11 @@ ReceiveProposal:
 		}
 	}
 
-	var proposalHeader commitment.ProposalHeader
-	if err := proposal.SignedProposalHeader.Open(cbc.runtimeID, &proposalHeader); err != nil {
-		return fmt.Errorf("failed to open received SignedProposalHeader: %w", err)
+	if err := proposal.Verify(cbc.runtimeID); err != nil {
+		return fmt.Errorf("failed to verify received proposal header signature: %w", err)
 	}
 
 	cbc.proposal = proposal
-	cbc.proposalHeader = &proposalHeader
 
 	cbc.txs = nil
 	for idx, txHash := range proposal.Batch {
@@ -227,9 +221,9 @@ ReceiveProposal:
 func (cbc *computeBatchContext) openTrees(ctx context.Context, blk *block.Block, rs syncer.ReadSyncer) error {
 	cbc.ioTree = transaction.NewTree(nil, storage.Root{
 		Namespace: cbc.runtimeID,
-		Version:   cbc.proposalHeader.Round,
+		Version:   cbc.proposal.Header.Round,
 		Type:      storage.RootTypeIO,
-		Hash:      cbc.proposalHeader.BatchHash,
+		Hash:      cbc.proposal.Header.BatchHash,
 	})
 
 	// Add all transactions to the I/O tree.
@@ -288,7 +282,7 @@ func (cbc *computeBatchContext) addResultError(ctx context.Context, tx *transact
 
 func (cbc *computeBatchContext) commitTrees(ctx context.Context) error {
 	var err error
-	cbc.stateWriteLog, cbc.newStateRoot, err = cbc.stateTree.Commit(ctx, cbc.runtimeID, cbc.proposalHeader.Round)
+	cbc.stateWriteLog, cbc.newStateRoot, err = cbc.stateTree.Commit(ctx, cbc.runtimeID, cbc.proposal.Header.Round)
 	if err != nil {
 		return fmt.Errorf("state tree Commit: %w", err)
 	}
@@ -309,8 +303,8 @@ func (cbc *computeBatchContext) createCommitment(
 	// TODO: allow script to set roothash messages?
 	msgsHash := message.MessagesHash(nil)
 	header := commitment.ComputeResultsHeader{
-		Round:        cbc.proposalHeader.Round,
-		PreviousHash: cbc.proposalHeader.PreviousHash,
+		Round:        cbc.proposal.Header.Round,
+		PreviousHash: cbc.proposal.Header.PreviousHash,
 		IORoot:       &cbc.newIORoot,
 		StateRoot:    &cbc.newStateRoot,
 		MessagesHash: &msgsHash,
