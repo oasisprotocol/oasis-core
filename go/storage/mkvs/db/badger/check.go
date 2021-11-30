@@ -162,9 +162,11 @@ func checkSanityInternal(ctx context.Context, db *badgerNodeDB, display DisplayH
 				if !ok {
 					return fmt.Errorf("mkvs/badger/check: missing target root (%s -> %s)", rootHash, dstRoot)
 				}
-				_, err = txn.Get(writeLogKeyFmt.Encode(dstVersion, &dstRoot, &rootHash)) //nolint: gosec
-				if err != nil {
-					return fmt.Errorf("mkvs/badger/check: missing write log (%d, %s, %s)", dstVersion, dstRoot, rootHash)
+				if !dstRoot.Equal(&rootHash) {
+					_, err = txn.Get(writeLogKeyFmt.Encode(dstVersion, &dstRoot, &rootHash)) //nolint: gosec
+					if err != nil {
+						return fmt.Errorf("mkvs/badger/check: missing write log (%d, %s, %s)", dstVersion, dstRoot, rootHash)
+					}
 				}
 			}
 		}
