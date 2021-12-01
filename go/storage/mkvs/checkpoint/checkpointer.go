@@ -163,6 +163,11 @@ func (c *checkpointer) checkpoint(ctx context.Context, version uint64, params *C
 		}
 	}()
 
+	c.logger.Debug("found roots to create for checkpoint",
+		"version", version,
+		"num_roots", len(roots),
+	)
+
 	for _, root := range roots {
 		c.logger.Info("creating new checkpoint",
 			"root", root,

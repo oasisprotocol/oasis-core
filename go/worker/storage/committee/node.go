@@ -18,6 +18,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
 	"github.com/oasisprotocol/oasis-core/go/common/node"
 	"github.com/oasisprotocol/oasis-core/go/common/persistent"
+	"github.com/oasisprotocol/oasis-core/go/common/pubsub"
 	"github.com/oasisprotocol/oasis-core/go/common/workerpool"
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
 	commonFlags "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/flags"
@@ -849,6 +850,22 @@ func (n *Node) consensusCheckpointSyncer() {
 		return
 	}
 
+	// Wait for the common node to be initialized.
+	select {
+	case <-n.commonNode.Initialized():
+	case <-n.ctx.Done():
+		return
+	}
+
+	// Determine the maximum number of consensus checkpoints to keep.
+	consensusParams, err := n.commonNode.Consensus.GetParameters(n.ctx, consensus.HeightLatest)
+	if err != nil {
+		n.logger.Error("failed to fetch consensus parameters",
+			"err", err,
+		)
+		return
+	}
+
 	ch, sub, err := consensusCp.WatchCheckpoints()
 	if err != nil {
 		n.logger.Error("failed to watch checkpoints",
@@ -858,6 +875,18 @@ func (n *Node) consensusCheckpointSyncer() {
 	}
 	defer sub.Close()
 
+	var (
+		versions []uint64
+		blkCh    <-chan *consensus.Block
+		blkSub   pubsub.ClosableSubscription
+	)
+	defer func() {
+		if blkCh != nil {
+			blkSub.Close()
+			blkSub = nil
+			blkCh = nil
+		}
+	}()
 	for {
 		select {
 		case <-n.quitCh:
@@ -865,27 +894,85 @@ func (n *Node) consensusCheckpointSyncer() {
 		case <-n.ctx.Done():
 			return
 		case version := <-ch:
-			// Lookup what runtime round corresponds to the given consensus layer version and make
-			// sure we checkpoint it.
-			blk, err := n.commonNode.Consensus.RootHash().GetLatestBlock(n.ctx, &roothashApi.RuntimeRequest{
-				RuntimeID: n.commonNode.Runtime.ID(),
-				Height:    int64(version),
-			})
-			if err != nil {
-				n.logger.Error("failed to get runtime block corresponding to consensus checkpoint",
-					"err", err,
-					"height", version,
-				)
+			// We need to wait for the next version as that is what will be in the consensus
+			// checkpoint.
+			versions = append(versions, version+1)
+			// Make sure that we limit the size of the checkpoint queue.
+			if uint64(len(versions)) > consensusParams.Parameters.StateCheckpointNumKept {
+				versions = versions[1:]
+			}
+
+			n.logger.Debug("consensus checkpoint detected, queuing runtime checkpoint",
+				"version", version+1,
+				"num_versions", len(versions),
+			)
+
+			if blkCh == nil {
+				blkCh, blkSub, err = n.commonNode.Consensus.WatchBlocks(n.ctx)
+				if err != nil {
+					n.logger.Error("failed to watch blocks",
+						"err", err,
+					)
+					continue
+				}
+			}
+		case blk := <-blkCh:
+			// If there's nothing remaining, unsubscribe.
+			if len(versions) == 0 {
+				n.logger.Debug("no more queued consensus checkpoint versions")
+
+				blkSub.Close()
+				blkSub = nil
+				blkCh = nil
 				continue
 			}
 
-			// Force runtime storage checkpointer to create a checkpoint at this round.
-			n.logger.Info("consensus checkpoint, force runtime checkpoint",
-				"height", version,
-				"round", blk.Header.Round,
-			)
+			var newVersions []uint64
+			for idx, version := range versions {
+				if version > uint64(blk.Height) {
+					// We need to wait for further versions.
+					newVersions = versions[idx:]
+					break
+				}
 
-			n.checkpointer.ForceCheckpoint(blk.Header.Round)
+				// Lookup what runtime round corresponds to the given consensus layer version and make
+				// sure we checkpoint it.
+				blk, err := n.commonNode.Consensus.RootHash().GetLatestBlock(n.ctx, &roothashApi.RuntimeRequest{
+					RuntimeID: n.commonNode.Runtime.ID(),
+					Height:    int64(version),
+				})
+				if err != nil {
+					n.logger.Error("failed to get runtime block corresponding to consensus checkpoint",
+						"err", err,
+						"height", version,
+					)
+					continue
+				}
+
+				// We may have not yet synced the corresponding runtime round locally. In this case
+				// we need to wait until this is the case.
+				n.syncedLock.RLock()
+				lastSyncedRound := n.syncedState.LastBlock.Round
+				n.syncedLock.RUnlock()
+				if blk.Header.Round > lastSyncedRound {
+					n.logger.Debug("runtime round not available yet for checkpoint, waiting",
+						"height", version,
+						"round", blk.Header.Round,
+						"last_synced_round", lastSyncedRound,
+					)
+					newVersions = versions[idx:]
+					break
+				}
+
+				// Force runtime storage checkpointer to create a checkpoint at this round.
+				n.logger.Info("consensus checkpoint, force runtime checkpoint",
+					"height", version,
+					"round", blk.Header.Round,
+				)
+
+				n.checkpointer.ForceCheckpoint(blk.Header.Round)
+			}
+			versions = newVersions
 		}
 	}
 }
