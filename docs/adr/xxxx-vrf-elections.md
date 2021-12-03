@@ -20,7 +20,7 @@ cryptographic sortition of Verifiable Random Function (VRF) outputs.
 ### Cryptographic Primitives
 
 Let the VRF to be used across the system be ECVRF-EDWARDS25519-SHA512-ELL2
-from the [Verifiable Random Functions (VRFs) draft (v09)][1], with the
+from the [Verifiable Random Functions (VRFs) draft (v10)][1], with the
 following additions and extra clarifications:
 
 - All public keys MUST be validated via the "ECVRF Validate Key" procedure
@@ -35,6 +35,7 @@ following additions and extra clarifications:
   within the range 0 <= i < L.  This change will make proofs
   non-malleable.  Note that this check is unneeded for the c scalar
   as it is 128-bits, and thus will always lie within the valid range.
+  This check was not present in the IETF draft prior to version 10.
 
 - Implementations MAY choose to incorporate additional randomness into
   the ECVRF_nonce_generation_RFC8032 function.  Note that proofs (pi_string)
@@ -55,7 +56,12 @@ type Node struct {
   // ... existing fields omitted ...
 
   // VRF is the public key used by the node to generate VRF proofs.
-  VRF signature.PublicKey `json:"vrf"`
+  VRF *VRFInfo `json:"vrf,omitempty"`
+}
+
+type VRFInfo struct {
+  // ID is the unique identifier of the node used to generate VRF proofs.
+  ID signature.PublicKey `json:"id"`
 }
 ```
 
@@ -82,13 +88,19 @@ type ConsensusParameters struct {
 
 // VRFParameters are the VRF scheduler parameters.
 type VRFParameters struct {
-  // GenesisEpoch is the first epoch which the VRF based elections will occur.
-  GenesisEpoch epochtime.EpochTime `json:"genesis_epoch"`
+  // AlphaHighQualityThreshold is the minimum number of proofs (Pi)
+  // that must be received for the next input (Alpha) to be considered
+  // high quality.  If the VRF input is not high quality, runtimes will
+  // be disabled for the next epoch.
+  AlphaHighQualityThreshold uint64 `json:"alpha_hq_threshold,omitempty"`
 
-  // ProofSubmissionDelay is the wait period in blocks after an epoch
+  // Interval is the epoch interval (in blocks).
+  Interval int64 `json:"interval,omitempty"`
+
+  // ProofSubmissionDelay is the wait peroid in blocks after an epoch
   // transition that nodes MUST wait before attempting to submit a
-  // VRF output for the next epoch.
-  ProofSubmissionDelay uint64 `json:"proof_delay"`
+  // VRF proof for the next epoch's elections.
+  ProofSubmissionDelay int64 `json:"proof_delay,omitempty"`
 }
 ```
 
@@ -100,11 +112,22 @@ consensus state.
 ```golang
 // VRFState is the VRF scheduler state.
 type VRFState struct {
-  // Alpha is the current epoch's VRF alpha_string input.
+  // Epoch is the epoch for which this alpha is valid.
+  Epoch EpochTime `json:"epoch"`
+
+  // Alpha is the active VRF alpha_string input.
   Alpha []byte `json:"alpha"`
 
-  // Pi is the current epoch's accumulated pi_string outputs.
-  Pi map[signature.PublicKey][]byte `json:"pi"`
+  // Pi is the accumulated pi_string (VRF proof) outputs.
+  Pi map[signature.PublicKey]*signature.Proof `json:"pi,omitempty"`
+
+  // AlphaIsHighQuality is true iff the alpha was generated from
+  // high quality input such that elections will be possible.
+  AlphaIsHighQuality bool `json:"alpha_hq"`
+
+  // SubmitAfter is the block height after which nodes may submit
+  // VRF proofs for the current epoch.
+  SubmitAfter int64 `json:"submit_after"`
 }
 ```
 
@@ -117,8 +140,15 @@ Upon epoch transition, the scheduler will emit the following event.
 ```golang
 // VRFEvent is the VRF scheduler event.
 type VRFEvent struct {
-  // Alpha is the new epoch's VRF alpha_string input.
-  Alpha []byte `json:"alpha"`
+  // Epoch is the epoch that Alpha is valid for.
+  Epoch EpochTime `json:"epoch,omitempty"`
+
+  // Alpha is the active VRF alpha_string input.
+  Alpha []byte `json:"alpha,omitempty"`
+
+  // SubmitAfter is the block height after which nodes may submit
+  // VRF proofs for the current epoch.
+  SubmitAfter int64 `json:"submit_after"`
 }
 
 ```
@@ -128,8 +158,6 @@ type VRFProve struct {
   // Epoch is the epoch that this VRF proof is for.
   Epoch epochtime.EpochTime `json:"epoch"`
 
-  // VRFKey is the key used to generate pi.
-  VRFKey signature.PublicKey `json:"key"`
   // Pi is the VRF proof for the current epoch.
   Pi     []byte              `json:"pi"`
 }
@@ -148,7 +176,12 @@ For every subsequent epoch, let alpha_string be derived as:
 where beta_0 through beta_n are the beta_string outputs gathered from
 all valid pi_strings submitted during the previous epoch (after the
 on-transition culling is complete), in ascending lexographic order by
-VRF key.
+VRF key.  If the number of beta values incorporated into the TupleHash
+computation is greater than or equal to AlphaHighQuality threshold,
+the alpha is considered "strong", and committee elections are allowed
+based on the proofs generated with this alpha.  If the alpha value is
+weak (insufficient nodes submitted proofs), only validator elections
+are allowed.
 
 Upon receiving a VRFEvent, all eligible nodes MUST wait a minimum of
 ProofSubmissionDelay blocks, and then submit a VRFProve transaction,
@@ -164,22 +197,25 @@ Upon receiving a VRFProve transaction, the scheduler does the following:
 
       * Not frozen.
 
-      * Has registered the VRFKey used to generate the proof prior to
-        the transition into the current epoch (May slash).
+      * Has registered the VRF.ID used to generate the proof prior
+        to the transition into the current epoch (May slash).
 
       * Has not already submitted a proof for the current epoch
         (May slash if proof is different).
 
-  3. Validates the proof, and if valid, stores the VRFKey + pi_string
+  3. Validates the proof, and if valid, stores the VRF.ID + pi_string
      in the consensus state.
 
 ### VRF Committee Elections
 
 The following changes are made to the committee election process.
 
-On epoch transition, re-validate node eligibility for all nodes that
-submitted a VRF proof (Not frozen, VRFKey has not changed), and cull
+On epoch transition, as long as the alpha used to generate the proofs
+is considered strong re-validate node eligibility for all nodes that
+submitted a VRF proof (Not frozen, VRF.ID has not changed), and cull
 proofs from nodes that are now ineligible.
+
+If the alpha value is considered weak, no commitee elections are allowed.
 
 For each committee:
 
@@ -222,6 +258,17 @@ When this situation occurs the validator is selected as follows:
 This is safe to do with beta values generated via the bootstrap alpha string
 as it is up to the entity running the nodes in question as to which ones
 are a validator anyway.
+
+As a concession for the transition process, if the number of validators
+that submit proofs is less than the minimum number of validators configured
+in the scheduler, validator tie-breaks (and only validator tie-breaks)
+will be done by permuting the node list (as in the current PVSS beacon),
+using entropy from the block hash.
+
+As nodes are required to submit a VRF public key as part of non-genesis
+registrations, and each node will attempt to submit a VRF proof, this
+backward compatibility hack should only be triggered on the genesis
+epoch, and can be removed on the next major upgrade.
 
 ### Timekeeping Changes
 
