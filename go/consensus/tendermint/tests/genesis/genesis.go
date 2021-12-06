@@ -6,7 +6,6 @@ import (
 	"net"
 	"time"
 
-	tmproto "github.com/tendermint/tendermint/proto/tendermint/types"
 	tmtypes "github.com/tendermint/tendermint/types"
 
 	beacon "github.com/oasisprotocol/oasis-core/go/beacon/api"
@@ -185,7 +184,7 @@ func NewTestNodeGenesisProvider(identity *identity.Identity, ent *entity.Entity,
 		ConsensusParams: tmtypes.DefaultConsensusParams(),
 		AppState:        b,
 	}
-	tmDoc.ConsensusParams.Version = tmproto.VersionParams{
+	tmDoc.ConsensusParams.Version = tmtypes.VersionParams{
 		AppVersion: version.TendermintAppVersion,
 	}
 

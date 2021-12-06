@@ -55,11 +55,11 @@ func (a *logAdapter) With(keyvals ...interface{}) tmlog.Logger {
 	if childIdx < 0 {
 		// "module" was not specified for this child, use the one belonging
 		// to the parent.
-		if parentIdx < 0 {
-			// This should *NEVER* happen, if it does, it means that tendermint
-			// called `With()` on the base logAdapter without setting a module.
-			panic("With(): tendermint core logger, no sensible parent 'module'")
-		}
+		//
+		// Previously, there was a check to make sure that the parent module
+		// exists, but since Tendermint changed their logging, this is no longer
+		// guaranteed.  Related Tendermint PR:
+		// https://github.com/tendermint/tendermint/pull/6534
 		childKeyVals = append(childKeyVals, keyvals...)
 	} else if parentIdx < 0 {
 		// No parent logger, this must be a child of the base logAdapter.

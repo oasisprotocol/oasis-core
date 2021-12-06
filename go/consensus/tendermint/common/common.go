@@ -9,6 +9,8 @@ import (
 	flag "github.com/spf13/pflag"
 	"github.com/spf13/viper"
 
+	tminternal "github.com/tendermint/tendermint/uninternal"
+
 	"github.com/oasisprotocol/oasis-core/go/common"
 )
 
@@ -43,18 +45,47 @@ const (
 
 	// CfgP2PSeed configures tendermint's seed node(s).
 	CfgP2PSeed = "consensus.tendermint.p2p.seed"
-	// CfgP2PMaxNumInboundPeers configures the max number of inbound peers.
-	CfgP2PMaxNumInboundPeers = "consensus.tendermint.p2p.max_num_inbound_peers"
-	// CfgP2PMaxNumOutboundPeers configures the max number of outbound peers, excluding persistent peers.
-	CfgP2PMaxNumOutboundPeers = "consensus.tendermint.p2p.max_num_outbound_peers"
+	// CfgP2PMaxConnections configures the max number of connected peers (inbound and outbound).
+	CfgP2PMaxConnections = "consensus.tendermint.p2p.max_connections"
+	// CfgP2PMaxPeers configures the max number of peers.
+	CfgP2PMaxPeers = "consensus.tendermint.p2p.max_peers"
+	// CfgP2PWhitelistedPeers configures the whitelisted peers.
+	CfgP2PWhitelistedPeers = "consensus.tendermint.p2p.whitelisted_peers"
+	// CfgP2PBlacklistedPeerIPs configures the blacklisted peer IPs.
+	CfgP2PBlacklistedPeerIPs = "consensus.tendermint.p2p.blacklisted_peer_ips"
 	// CfgP2PSendRate is the rate at which packets can be sent, in bytes/second.
 	CfgP2PSendRate = "consensus.tendermint.p2p.send_rate"
 	// CfgP2PRecvRate is the rate at which packets can be received, in bytes/second.
 	CfgP2PRecvRate = "consensus.tendermint.p2p.recv_rate"
+	// CfgP2PSentryPeers automatically sets CfgP2PWhitelistedPeers,
+	// CfgP2PMaxPeers, and CfgP2PMaxConnections accordingly.
+	// Format is the same as for whitelisted peers.
+	CfgP2PSentryPeers = "consensus.tendermint.p2p.sentry_peers"
 )
 
 // Flags has the configuration flags.
 var Flags = flag.NewFlagSet("", flag.ContinueOnError)
+
+// GetPeersFromRPCEnvironment returns the node's peers.
+func GetPeersFromRPCEnvironment(env *tminternal.RPCEnvironment) []string {
+	if env != nil {
+		if env.PeerManager != nil {
+			p2pPeers := env.PeerManager.Peers()
+			if p2pPeers != nil {
+				peers := make([]string, 0, len(p2pPeers))
+				for _, peer := range p2pPeers {
+					addrs := env.PeerManager.Addresses(peer)
+					for _, addr := range addrs {
+						peers = append(peers, addr.String())
+					}
+				}
+				return peers
+			}
+		}
+	}
+
+	return []string{}
+}
 
 // GetExternalAddress returns the configured tendermint external address.
 func GetExternalAddress() (*url.URL, error) {
@@ -121,8 +152,11 @@ func init() {
 	Flags.Bool(CfgDebugP2PAllowDuplicateIP, false, "Allow multiple connections from the same IP")
 
 	Flags.StringSlice(CfgP2PSeed, []string{}, "Tendermint seed node(s) of the form ID@host:port")
-	Flags.Int(CfgP2PMaxNumInboundPeers, 100, "Max number of inbound peers")
-	Flags.Int(CfgP2PMaxNumOutboundPeers, 20, "Max number of outbound peers (excluding persistent peers)")
+	Flags.Uint16(CfgP2PMaxConnections, 120, "Max number of peer connections (inbound and outbound)")
+	Flags.Uint16(CfgP2PMaxPeers, 1000, "Max number of peers to keep track of")
+	Flags.StringSlice(CfgP2PWhitelistedPeers, []string{}, "Tendermint whitelisted peers")
+	Flags.StringSlice(CfgP2PBlacklistedPeerIPs, []string{}, "Tendermint blacklisted peer IPs")
+	Flags.StringSlice(CfgP2PSentryPeers, []string{}, "Tendermint sentry peers (automatically adds the sentry peers to whitelisted peers and sets max connections and max peers to total number of whitelisted peers)")
 	Flags.Int64(CfgP2PSendRate, 5120000, "Rate at which packets can be sent (bytes/sec)")
 	Flags.Int64(CfgP2PRecvRate, 5120000, "Rate at which packets can be received (bytes/sec)")
 

@@ -8,7 +8,7 @@ import (
 	"github.com/hashicorp/go-multierror"
 	tmabcitypes "github.com/tendermint/tendermint/abci/types"
 	tmpubsub "github.com/tendermint/tendermint/libs/pubsub"
-	tmrpctypes "github.com/tendermint/tendermint/rpc/core/types"
+	tmrpctypes "github.com/tendermint/tendermint/rpc/coretypes"
 	tmtypes "github.com/tendermint/tendermint/types"
 
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
@@ -213,7 +213,7 @@ func EventsFromTendermint(
 			case eventsAPI.IsAttributeKind(key, &api.ProposalSubmittedEvent{}):
 				// Proposal submitted event.
 				var e api.ProposalSubmittedEvent
-				if err := eventsAPI.DecodeValue(string(val), &e); err != nil {
+				if err := eventsAPI.DecodeValue(val, &e); err != nil {
 					errs = multierror.Append(errs, fmt.Errorf("governance: corrupt ProposalSubmitted event: %w", err))
 					continue
 				}
@@ -223,7 +223,7 @@ func EventsFromTendermint(
 			case eventsAPI.IsAttributeKind(key, &api.ProposalExecutedEvent{}):
 				//  Proposal executed event.
 				var e api.ProposalExecutedEvent
-				if err := eventsAPI.DecodeValue(string(val), &e); err != nil {
+				if err := eventsAPI.DecodeValue(val, &e); err != nil {
 					errs = multierror.Append(errs, fmt.Errorf("governance: corrupt ProposalExecuted event: %w", err))
 					continue
 				}
@@ -233,7 +233,7 @@ func EventsFromTendermint(
 			case eventsAPI.IsAttributeKind(key, &api.ProposalFinalizedEvent{}):
 				// Proposal finalized event.
 				var e api.ProposalFinalizedEvent
-				if err := eventsAPI.DecodeValue(string(val), &e); err != nil {
+				if err := eventsAPI.DecodeValue(val, &e); err != nil {
 					errs = multierror.Append(errs, fmt.Errorf("governance: corrupt ProposalFinalized event: %w", err))
 					continue
 				}
@@ -243,7 +243,7 @@ func EventsFromTendermint(
 			case eventsAPI.IsAttributeKind(key, &api.VoteEvent{}):
 				// Vote event.
 				var e api.VoteEvent
-				if err := eventsAPI.DecodeValue(string(val), &e); err != nil {
+				if err := eventsAPI.DecodeValue(val, &e); err != nil {
 					errs = multierror.Append(errs, fmt.Errorf("governance: corrupt Vote event: %w", err))
 					continue
 				}

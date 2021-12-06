@@ -12,7 +12,7 @@ import (
 func TestServiceDescriptor(t *testing.T) {
 	require := require.New(t)
 
-	q1 := tmquery.MustParse("a='b'")
+	q1 := tmquery.MustCompile("a='b'")
 
 	sd := NewStaticServiceDescriptor("test", "test_type", []tmpubsub.Query{q1})
 	require.Equal("test", sd.Name())

@@ -7,12 +7,11 @@ import (
 	"sync/atomic"
 
 	"github.com/spf13/viper"
-	tmcore "github.com/tendermint/tendermint/rpc/core"
-	tmcoretypes "github.com/tendermint/tendermint/rpc/core/types"
+	tmcli "github.com/tendermint/tendermint/rpc/client"
+	tmcoretypes "github.com/tendermint/tendermint/rpc/coretypes"
 	tmrpctypes "github.com/tendermint/tendermint/rpc/jsonrpc/types"
-	"github.com/tendermint/tendermint/state"
-	"github.com/tendermint/tendermint/store"
 	tmtypes "github.com/tendermint/tendermint/types"
+	tminternal "github.com/tendermint/tendermint/uninternal"
 	tmdb "github.com/tendermint/tm-db"
 
 	beaconAPI "github.com/oasisprotocol/oasis-core/go/beacon/api"
@@ -52,6 +51,11 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/storage/mkvs/checkpoint"
 )
 
+type rpcClient interface {
+	tmcli.Client
+	RPCEnvironment() *tminternal.RPCEnvironment
+}
+
 // commonNode implements the common tendermint node functionality shared between
 // full and archive nodes.
 type commonNode struct {
@@ -71,7 +75,8 @@ type commonNode struct {
 
 	genesis *genesisAPI.Document
 
-	mux *abci.ApplicationServer
+	client rpcClient
+	mux    *abci.ApplicationServer
 
 	beacon     beaconAPI.Backend
 	governance governanceAPI.Backend
@@ -82,8 +87,8 @@ type commonNode struct {
 	staking    stakingAPI.Backend
 
 	// These stores must be populated by the parent before the node is deemed ready.
-	blockStoreDB tmdb.DB
-	stateStore   state.Store
+	blockStoreDB tmdb.DB // nolint: structcheck
+	stateStore   tminternal.Store
 	dbCloser     *db.Closer
 
 	state     uint32
@@ -502,6 +507,9 @@ func (n *commonNode) GetTendermintBlock(ctx context.Context, height int64) (*tmt
 	if err := n.ensureStarted(ctx); err != nil {
 		return nil, err
 	}
+	if n.client == nil {
+		return nil, nil
+	}
 
 	tmHeight, err := n.heightToTendermintHeight(height)
 	switch err {
@@ -513,7 +521,7 @@ func (n *commonNode) GetTendermintBlock(ctx context.Context, height int64) (*tmt
 	default:
 		return nil, err
 	}
-	result, err := tmcore.Block(n.rpcCtx, &tmHeight)
+	result, err := n.client.Block(ctx, &tmHeight)
 	if err != nil {
 		return nil, fmt.Errorf("tendermint: block query failed: %w", err)
 	}
@@ -525,12 +533,15 @@ func (n *commonNode) GetBlockResults(ctx context.Context, height int64) (*tmcore
 	if err := n.ensureStarted(ctx); err != nil {
 		return nil, err
 	}
+	if n.client == nil {
+		return nil, nil
+	}
 
 	tmHeight, err := n.heightToTendermintHeight(height)
 	if err != nil {
 		return nil, err
 	}
-	result, err := tmcore.BlockResults(n.rpcCtx, &tmHeight)
+	result, err := n.client.BlockResults(ctx, &tmHeight)
 	if err != nil {
 		return nil, fmt.Errorf("tendermint: block results query failed: %w", err)
 	}
@@ -543,8 +554,16 @@ func (n *commonNode) GetLastRetainedVersion(ctx context.Context) (int64, error) 
 	if err := n.ensureStarted(ctx); err != nil {
 		return -1, err
 	}
-	state := store.LoadBlockStoreState(n.blockStoreDB)
-	return state.Base, nil
+	if n.client == nil {
+		return -1, nil
+	}
+
+	base := n.client.RPCEnvironment().BlockStore.Base()
+	earliest := n.mux.State().Storage().NodeDB().GetEarliestVersion()
+	if int64(earliest) > base {
+		return int64(earliest), nil
+	}
+	return base, nil
 }
 
 // Implements consensusAPI.Backend.

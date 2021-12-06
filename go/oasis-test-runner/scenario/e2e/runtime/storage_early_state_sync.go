@@ -9,7 +9,6 @@ import (
 	beacon "github.com/oasisprotocol/oasis-core/go/beacon/api"
 	"github.com/oasisprotocol/oasis-core/go/common/quantity"
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
-	control "github.com/oasisprotocol/oasis-core/go/control/api"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/env"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/log"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/oasis"
@@ -137,58 +136,41 @@ func (sc *storageEarlyStateSyncImpl) Run(childEnv *env.Env) error { // nolint: g
 	compRtDesc := compRt.ToRuntimeDescriptor()
 	compRtDesc.Deployments[0].ValidFrom = epoch + 1
 	txPath := filepath.Join(childEnv.Dir(), "register_compute_runtime.json")
-	if err := cli.Registry.GenerateRegisterRuntimeTx(childEnv.Dir(), compRtDesc, 0, txPath); err != nil {
-		return fmt.Errorf("failed to generate register compute runtime tx: %w", err)
+	if grr := cli.Registry.GenerateRegisterRuntimeTx(childEnv.Dir(), compRtDesc, 0, txPath); grr != nil {
+		return fmt.Errorf("failed to generate register compute runtime tx: %w", grr)
 	}
-	if err := cli.Consensus.SubmitTx(txPath); err != nil {
-		return fmt.Errorf("failed to register compute runtime: %w", err)
+	if grr := cli.Consensus.SubmitTx(txPath); grr != nil {
+		return fmt.Errorf("failed to register compute runtime: %w", grr)
 	}
 
 	// Wait some epoch transitions.
 	sc.Logger.Info("waiting some epoch transitions",
 		"epoch", epoch+5,
 	)
-	if err := sc.Net.Controller().Beacon.WaitEpoch(ctx, epoch+5); err != nil {
+	if err = sc.Net.Controller().Beacon.WaitEpoch(ctx, epoch+5); err != nil {
 		return fmt.Errorf("failed to wait for epoch: %w", err)
 	}
 
-	// TODO: Make sure we have enough blocks.
+	// Let the network run for 50 blocks. This should generate some checkpoints.
+	blockCh, blockSub, err := sc.Net.Controller().Consensus.WatchBlocks(ctx)
+	if err != nil {
+		return err
+	}
+	defer blockSub.Close()
 
-	// Get the TLS public key from the validators.
-	var (
-		consensusNodes []string
-		trustHeight    uint64
-		trustHash      string
-	)
-	for _, v := range sc.Net.Validators() {
-		ctrl, err := oasis.NewController(v.SocketPath())
-		if err != nil {
-			return fmt.Errorf("failed to create controller for validator %s: %w", v.Name, err)
+	sc.Logger.Info("waiting for some blocks")
+	var blk *consensus.Block
+	for {
+		select {
+		case blk = <-blockCh:
+			if blk.Height < 50 {
+				continue
+			}
+		case <-time.After(30 * time.Second):
+			return fmt.Errorf("timed out waiting for blocks")
 		}
 
-		var status *control.Status
-		status, err = ctrl.GetStatus(ctx)
-		if err != nil {
-			return fmt.Errorf("failed to get status for validator %s: %w", v.Name, err)
-		}
-
-		if status.Registration.Descriptor == nil {
-			return fmt.Errorf("validator %s has not registered", v.Name)
-		}
-		if len(status.Registration.Descriptor.TLS.Addresses) == 0 {
-			return fmt.Errorf("validator %s has no TLS addresses", v.Name)
-		}
-
-		var rawAddress []byte
-		tlsAddress := status.Registration.Descriptor.TLS.Addresses[0]
-		rawAddress, err = tlsAddress.MarshalText()
-		if err != nil {
-			return fmt.Errorf("failed to marshal TLS address: %w", err)
-		}
-		consensusNodes = append(consensusNodes, string(rawAddress))
-
-		trustHeight = uint64(status.Consensus.LatestHeight)
-		trustHash = status.Consensus.LatestHash.Hex()
+		break
 	}
 
 	// Start the second (non-state syncing) compute node.
@@ -198,12 +180,10 @@ func (sc *storageEarlyStateSyncImpl) Run(childEnv *env.Env) error { // nolint: g
 	}
 
 	// Configure state sync for the compute node.
-	sc.Logger.Info("starting compute node with state sync")
 	worker := sc.Net.ComputeWorkers()[0]
 	worker.SetConsensusStateSync(&oasis.ConsensusStateSyncCfg{
-		ConsensusNodes: consensusNodes,
-		TrustHeight:    trustHeight,
-		TrustHash:      trustHash,
+		TrustHeight: uint64(blk.Height),
+		TrustHash:   blk.Hash.Hex(),
 	})
 
 	if err := worker.Start(); err != nil {

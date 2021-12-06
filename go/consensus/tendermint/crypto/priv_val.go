@@ -196,6 +196,7 @@ package crypto
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
@@ -205,10 +206,10 @@ import (
 	_ "unsafe" // For go:linkname.
 
 	tmcrypto "github.com/tendermint/tendermint/crypto"
-	"github.com/tendermint/tendermint/libs/tempfile"
 	"github.com/tendermint/tendermint/privval"
 	tmproto "github.com/tendermint/tendermint/proto/tendermint/types"
 	tmtypes "github.com/tendermint/tendermint/types"
+	tminternal "github.com/tendermint/tendermint/uninternal"
 
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 )
@@ -242,7 +243,7 @@ func voteToStep(vote *tmproto.Vote) int8 {
 	case tmproto.PrecommitType:
 		return stepPrecommit
 	default:
-		panic("Unknown vote type")
+		panic(fmt.Sprintf("Unknown vote type: %v", vote.Type))
 	}
 }
 
@@ -254,11 +255,11 @@ type privVal struct {
 	signer   signature.Signer
 }
 
-func (pv *privVal) GetPubKey() (tmcrypto.PubKey, error) {
+func (pv *privVal) GetPubKey(ctx context.Context) (tmcrypto.PubKey, error) {
 	return PublicKeyToTendermint(&pv.PublicKey), nil
 }
 
-func (pv *privVal) SignVote(chainID string, vote *tmproto.Vote) error {
+func (pv *privVal) SignVote(ctx context.Context, chainID string, vote *tmproto.Vote) error {
 	height, round, step := vote.Height, vote.Round, voteToStep(vote)
 
 	equivocation, err := pv.CheckHRS(height, round, step)
@@ -291,7 +292,7 @@ func (pv *privVal) SignVote(chainID string, vote *tmproto.Vote) error {
 	return nil
 }
 
-func (pv *privVal) SignProposal(chainID string, proposal *tmproto.Proposal) error {
+func (pv *privVal) SignProposal(ctx context.Context, chainID string, proposal *tmproto.Proposal) error {
 	height, round, step := proposal.Height, proposal.Round, stepPropose
 
 	equivocation, err := pv.CheckHRS(height, round, step)
@@ -338,7 +339,7 @@ func (pv *privVal) save() error {
 	if err != nil {
 		return err
 	}
-	if err = tempfile.WriteFileAtomic(pv.filePath, b, 0o600); err != nil {
+	if err = tminternal.WriteFileAtomic(pv.filePath, b, 0o600); err != nil {
 		return fmt.Errorf("tendermint/crypto: failed to save private validator file: %w", err)
 	}
 

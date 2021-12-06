@@ -346,11 +346,12 @@ func (mux *abciMux) InitChain(req types.RequestInitChain) types.ResponseInitChai
 		}
 	}
 
-	mux.logger.Debug("InitChain: initializing of applications complete", "num_collected_events", len(ctx.GetEvents()))
+	events := ctx.GetEventsAsByte()
+	mux.logger.Debug("InitChain: initializing of applications complete", "num_collected_events", len(events))
 
 	// Since returning emitted events doesn't work for InitChain() response yet,
 	// we store those and return them in BeginBlock().
-	evBinary := cbor.Marshal(ctx.GetEvents())
+	evBinary := cbor.Marshal(events)
 	err = ctx.State().Insert(ctx, []byte(stateKeyInitChainEvents), evBinary)
 	if err != nil {
 		panic(err)
@@ -503,11 +504,16 @@ func (mux *abciMux) BeginBlock(req types.RequestBeginBlock) types.ResponseBeginB
 
 func (mux *abciMux) decodeTx(ctx *api.Context, rawTx []byte) (*transaction.Transaction, *transaction.SignedTransaction, error) {
 	if mux.state.haltMode {
-		ctx.Logger().Debug("executeTx: in halt, rejecting all transactions")
+		ctx.Logger().Debug("decodeTx: in halt, rejecting all transactions")
 		return nil, nil, fmt.Errorf("halt mode, rejecting all transactions")
 	}
 
 	params := mux.state.ConsensusParameters()
+	if params == nil {
+		ctx.Logger().Debug("decodeTx: state not yet initialized")
+		return nil, nil, consensus.ErrNoCommittedBlocks
+	}
+
 	if params.MaxTxSize > 0 && uint64(len(rawTx)) > params.MaxTxSize {
 		// This deliberately avoids logging the rawTx since spamming the
 		// logs is also bad.
@@ -795,7 +801,7 @@ func (mux *abciMux) EndBlock(req types.RequestEndBlock) types.ResponseEndBlock {
 	resp.Events = ctx.GetEvents()
 
 	// Update version to what we are actually running.
-	resp.ConsensusParamUpdates = &types.ConsensusParams{
+	resp.ConsensusParamUpdates = &tmproto.ConsensusParams{
 		Version: &tmproto.VersionParams{
 			AppVersion: version.TendermintAppVersion,
 		},

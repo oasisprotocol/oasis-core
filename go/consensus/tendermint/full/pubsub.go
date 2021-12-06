@@ -33,11 +33,15 @@ func newTendermintPubsubBuffer(tmSubscription tmtypes.Subscription) *tendermintP
 	return ps
 }
 
+func (ps *tendermintPubsubBuffer) ID() string {
+	return ps.tmSubscription.ID()
+}
+
 func (ps *tendermintPubsubBuffer) Out() <-chan tmpubsub.Message {
 	return ps.outCh
 }
 
-func (ps *tendermintPubsubBuffer) Cancelled() <-chan struct{} {
+func (ps *tendermintPubsubBuffer) Canceled() <-chan struct{} {
 	return ps.cancelCh
 }
 
@@ -56,7 +60,7 @@ func (ps *tendermintPubsubBuffer) reader() {
 				return
 			}
 			ps.messageBuffer.In() <- &msg
-		case <-ps.tmSubscription.Cancelled():
+		case <-ps.tmSubscription.Canceled():
 			return
 		}
 	}

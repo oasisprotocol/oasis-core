@@ -18,20 +18,13 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/consensus/tendermint/crypto"
 	control "github.com/oasisprotocol/oasis-core/go/control/api"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/env"
-	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/log"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/oasis"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/scenario"
 	"github.com/oasisprotocol/oasis-core/go/sentry/api"
 )
 
-var (
-	// Sentry is the Sentry node basic scenario.
-	Sentry scenario.Scenario = newSentryImpl("sentry", BasicKVTestClient)
-
-	validatorExtraLogWatcherHandlerFactories = []log.WatcherHandlerFactory{
-		oasis.LogAssertPeerExchangeDisabled(),
-	}
-)
+// Sentry is the Sentry node basic scenario.
+var Sentry scenario.Scenario = newSentryImpl("sentry", BasicKVTestClient)
 
 const sentryChecksContextTimeout = 30 * time.Second
 
@@ -100,20 +93,17 @@ func (s *sentryImpl) Fixture() (*oasis.NetworkFixture, error) {
 
 	f.Validators = []oasis.ValidatorFixture{
 		{
-			Entity:                     1,
-			LogWatcherHandlerFactories: validatorExtraLogWatcherHandlerFactories,
-			Sentries:                   []int{0, 1},
-			Consensus:                  oasis.ConsensusFixture{SupplementarySanityInterval: 1},
+			Entity:    1,
+			Sentries:  []int{0, 1},
+			Consensus: oasis.ConsensusFixture{SupplementarySanityInterval: 1},
 		},
 		{
-			Entity:                     1,
-			LogWatcherHandlerFactories: validatorExtraLogWatcherHandlerFactories,
-			Sentries:                   []int{2},
+			Entity:   1,
+			Sentries: []int{2},
 		},
 		{
-			Entity:                     1,
-			LogWatcherHandlerFactories: validatorExtraLogWatcherHandlerFactories,
-			Sentries:                   []int{2},
+			Entity:   1,
+			Sentries: []int{2},
 		},
 	}
 
@@ -300,8 +290,8 @@ func (s *sentryImpl) Run(childEnv *env.Env) error { // nolint: gocyclo
 	validator0ConsensusPeers := consensusTendermintAddrs(validator0Status)
 	if err = sanityCheckValidatorPeers(validator0ExpectedPeerKeys, validator0ConsensusPeers); err != nil {
 		s.Logger.Error("validator0 invalid consensus peers",
-			"expected", validator0ExpectedPeerKeys,
-			"actual", validator0ConsensusPeers,
+			"expected", strings.Join(validator0ExpectedPeerKeys, ","),
+			"actual", strings.Join(validator0ConsensusPeers, ","),
 		)
 		return err
 	}
@@ -314,8 +304,8 @@ func (s *sentryImpl) Run(childEnv *env.Env) error { // nolint: gocyclo
 	validator1ConsensusPeers := consensusTendermintAddrs(validator1Status)
 	if err = sanityCheckValidatorPeers(validator12ExpectedPeerKeys, validator1ConsensusPeers); err != nil {
 		s.Logger.Error("validator1 invalid consensus peers",
-			"expected", validator12ExpectedPeerKeys,
-			"actual", validator1ConsensusPeers,
+			"expected", strings.Join(validator12ExpectedPeerKeys, ","),
+			"actual", strings.Join(validator1ConsensusPeers, ","),
 		)
 		return err
 	}
@@ -328,8 +318,8 @@ func (s *sentryImpl) Run(childEnv *env.Env) error { // nolint: gocyclo
 	validator2ConsensusPeers := consensusTendermintAddrs(validator2Status)
 	if err = sanityCheckValidatorPeers(validator12ExpectedPeerKeys, validator2ConsensusPeers); err != nil {
 		s.Logger.Error("validator2 invalid consensus peers",
-			"expected", validator12ExpectedPeerKeys,
-			"actual", validator2ConsensusPeers,
+			"expected", strings.Join(validator12ExpectedPeerKeys, ","),
+			"actual", strings.Join(validator2ConsensusPeers, ","),
 		)
 		return err
 	}
@@ -346,28 +336,31 @@ func loadSentryNodeInfo(s *oasis.Sentry) (*oasis.Sentry, string, string, signatu
 
 func consensusTendermintAddrs(status *control.Status) (consensusPeers []string) {
 	for _, np := range status.Consensus.NodePeers {
-		consensusPeers = append(consensusPeers, strings.Split(np, "@")[0])
+		cp := strings.ReplaceAll(strings.Split(np, "@")[0], "mconn://", "")
+		consensusPeers = append(consensusPeers, cp)
 	}
 	return
 }
 
 func sanityCheckValidatorPeers(expected, actual []string) error {
-	if len(expected) != len(actual) {
-		return fmt.Errorf("consensus peers length mismatch, expected: %d, actual: %d",
-			len(expected), len(actual))
+	// Of the actual peers, only peers from the expected list should be present.
+	// It's OK if the actual list is smaller, since the node might not have
+	// managed to establish connections to all its peers at the time of the
+	// GetStatus call.
+	if len(actual) == 0 {
+		return fmt.Errorf("no consensus peers connected")
 	}
-	for _, expect := range expected {
+	for _, a := range actual {
 		var found bool
-		for _, key := range actual {
-			if key == expect {
+		for _, e := range expected {
+			if e == a {
 				found = true
 				break
 			}
 		}
 		if !found {
-			return fmt.Errorf("expected consensus peer missing: %s", expect)
+			return fmt.Errorf("unexpected consensus peer: %s", a)
 		}
 	}
-
 	return nil
 }

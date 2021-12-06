@@ -10,12 +10,8 @@ import (
 	"github.com/spf13/viper"
 	abcicli "github.com/tendermint/tendermint/abci/client"
 	tmconfig "github.com/tendermint/tendermint/config"
-	tmsync "github.com/tendermint/tendermint/libs/sync"
-	tmnode "github.com/tendermint/tendermint/node"
-	tmproxy "github.com/tendermint/tendermint/proxy"
-	tmcore "github.com/tendermint/tendermint/rpc/core"
-	"github.com/tendermint/tendermint/state"
-	"github.com/tendermint/tendermint/store"
+	tmcli "github.com/tendermint/tendermint/rpc/client/mock"
+	tminternal "github.com/tendermint/tendermint/uninternal"
 	tdbm "github.com/tendermint/tm-db"
 
 	"github.com/oasisprotocol/oasis-core/go/common/identity"
@@ -180,7 +176,7 @@ func NewArchive(
 
 	// Setup needed tendermint services.
 	logger := tmcommon.NewLogAdapter(!viper.GetBool(tmcommon.CfgLogDebug))
-	srv.abciClient = abcicli.NewLocalClient(new(tmsync.Mutex), srv.mux.Mux())
+	srv.abciClient = abcicli.NewLocalClient(new(tminternal.Mutex), srv.mux.Mux())
 
 	dbProvider, err := db.GetProvider()
 	if err != nil {
@@ -192,7 +188,7 @@ func NewArchive(
 
 	// NOTE: DBContext uses a full tendermint config but the only thing that is actually used
 	// is the data dir field.
-	srv.blockStoreDB, err = dbProvider(&tmnode.DBContext{ID: "blockstore", Config: tmConfig})
+	srv.blockStoreDB, err = dbProvider(&tmconfig.DBContext{ID: "blockstore", Config: tmConfig})
 	if err != nil {
 		return nil, err
 	}
@@ -201,12 +197,12 @@ func NewArchive(
 	// NOTE: DBContext uses a full tendermint config but the only thing that is actually used
 	// is the data dir field.
 	var stateDB tdbm.DB
-	stateDB, err = dbProvider(&tmnode.DBContext{ID: "state", Config: tmConfig})
+	stateDB, err = dbProvider(&tmconfig.DBContext{ID: "state", Config: tmConfig})
 	if err != nil {
 		return nil, err
 	}
 	stateDB = db.WithCloser(stateDB, srv.dbCloser)
-	srv.stateStore = state.NewStore(stateDB)
+	srv.stateStore = tminternal.NewStore(stateDB)
 
 	tmGenDoc, err := api.GetTendermintGenesisDocument(genesisProvider)
 	if err != nil {
@@ -214,12 +210,12 @@ func NewArchive(
 	}
 
 	// Setup minimal tendermint environment needed to support consensus queries.
-	tmcore.SetEnvironment(&tmcore.Environment{
-		ProxyAppQuery:    tmproxy.NewAppConnQuery(srv.abciClient),
+	env := tminternal.RPCEnvironment{
+		ProxyAppQuery:    tminternal.NewAppConnQuery(srv.abciClient, tminternal.NopMetrics()),
 		ProxyAppMempool:  nil,
 		StateStore:       srv.stateStore,
-		BlockStore:       store.NewBlockStore(srv.blockStoreDB),
-		EvidencePool:     state.EmptyEvidencePool{},
+		BlockStore:       tminternal.NewBlockStore(srv.blockStoreDB),
+		EvidencePool:     tminternal.EmptyEvidencePool{},
 		ConsensusState:   nil,
 		GenDoc:           tmGenDoc,
 		Logger:           logger,
@@ -228,11 +224,11 @@ func NewArchive(
 		P2PPeers:         nil,
 		P2PTransport:     nil,
 		PubKey:           nil,
-		TxIndexer:        nil,
-		BlockIndexer:     nil,
 		ConsensusReactor: nil,
 		Mempool:          nil,
-	})
+	}
+
+	srv.commonNode.client = tmcli.NewWithEnv(&env)
 
 	return srv, srv.initialize()
 }

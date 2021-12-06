@@ -8,7 +8,7 @@ import (
 	"path/filepath"
 	"time"
 
-	tmstore "github.com/tendermint/tendermint/store"
+	tmstore "github.com/tendermint/tendermint/uninternal"
 
 	"github.com/oasisprotocol/oasis-core/go/beacon/api"
 	"github.com/oasisprotocol/oasis-core/go/common/entity"

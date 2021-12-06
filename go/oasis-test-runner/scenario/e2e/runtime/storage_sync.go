@@ -200,58 +200,35 @@ func (sc *storageSyncImpl) Run(childEnv *env.Env) error { //nolint: gocyclo
 
 	sc.Logger.Info("running second late compute worker")
 
-	// Get the TLS public key from the validators.
-	var (
-		consensusNodes []string
-		trustHeight    uint64
-		trustHash      string
-	)
-	for _, v := range sc.Net.Validators() {
-		var ctrl *oasis.Controller
-		ctrl, err = oasis.NewController(v.SocketPath())
-		if err != nil {
-			return fmt.Errorf("failed to create controller for validator %s: %w", v.Name, err)
-		}
-
-		var status *control.Status
-		status, err = ctrl.GetStatus(ctx)
-		if err != nil {
-			return fmt.Errorf("failed to get status for validator %s: %w", v.Name, err)
-		}
-
-		if status.Registration.Descriptor == nil {
-			return fmt.Errorf("validator %s has not registered", v.Name)
-		}
-		if len(status.Registration.Descriptor.TLS.Addresses) == 0 {
-			return fmt.Errorf("validator %s has no TLS addresses", v.Name)
-		}
-
-		var rawAddress []byte
-		tlsAddress := status.Registration.Descriptor.TLS.Addresses[0]
-		rawAddress, err = tlsAddress.MarshalText()
-		if err != nil {
-			return fmt.Errorf("failed to marshal TLS address: %w", err)
-		}
-		consensusNodes = append(consensusNodes, string(rawAddress))
-
-		trustHeight = uint64(status.Consensus.LatestHeight)
-		trustHash = status.Consensus.LatestHash.Hex()
+	ctrl, err = oasis.NewController(sc.Net.Validators()[0].SocketPath())
+	if err != nil {
+		return fmt.Errorf("failed to create controller for validator: %w", err)
 	}
+
+	var status *control.Status
+	status, err = ctrl.GetStatus(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to get status for validator: %w", err)
+	}
+
+	trustHeight := uint64(status.Consensus.LatestHeight)
+	trustHash := status.Consensus.LatestHash.Hex()
 
 	// Configure state sync for the last compute node.
 	lateWorker = sc.Net.ComputeWorkers()[4]
 	lateWorker.SetConsensusStateSync(&oasis.ConsensusStateSyncCfg{
-		ConsensusNodes: consensusNodes,
-		TrustHeight:    trustHeight,
-		TrustHash:      trustHash,
+		TrustHeight: trustHeight,
+		TrustHash:   trustHash,
 	})
 
 	if err = lateWorker.Start(); err != nil {
 		return fmt.Errorf("can't start second late compute worker: %w", err)
 	}
+	sc.Logger.Info("waiting for second late compute worker to become ready")
 	if err = lateWorker.WaitReady(ctx); err != nil {
 		return fmt.Errorf("error waiting for second late compute worker to become ready: %w", err)
 	}
+	sc.Logger.Info("second late compute worker is ready")
 
 	// Wait a bit to give the logger in the node time to sync; the message has already been
 	// logged by this point, it just might not be on disk yet.

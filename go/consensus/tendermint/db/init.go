@@ -8,7 +8,7 @@ import (
 	flag "github.com/spf13/pflag"
 	"github.com/spf13/viper"
 
-	"github.com/tendermint/tendermint/node"
+	tmconfig "github.com/tendermint/tendermint/config"
 	dbm "github.com/tendermint/tm-db"
 
 	"github.com/oasisprotocol/oasis-core/go/consensus/tendermint/db/badger"
@@ -25,7 +25,7 @@ func GetBackendName() string {
 }
 
 // GetProvider returns the currently configured Tendermint DBProvider.
-func GetProvider() (node.DBProvider, error) {
+func GetProvider() (tmconfig.DBProvider, error) {
 	backend := viper.GetString(cfgBackend)
 
 	switch strings.ToLower(backend) {

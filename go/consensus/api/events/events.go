@@ -1,7 +1,6 @@
 package events
 
 import (
-	"bytes"
 	"encoding/base64"
 	"fmt"
 
@@ -28,8 +27,8 @@ type CustomTypedAttribute interface {
 }
 
 // IsAttributeKind checks whether the given attribute key corresponds to the passed typed attribute.
-func IsAttributeKind(key []byte, kind TypedAttribute) bool {
-	return bytes.Equal(key, []byte(kind.EventKind()))
+func IsAttributeKind(key string, kind TypedAttribute) bool {
+	return key == kind.EventKind()
 }
 
 // DecodeValue decodes the attribute event value.

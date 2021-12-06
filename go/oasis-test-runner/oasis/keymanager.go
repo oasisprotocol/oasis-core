@@ -287,8 +287,7 @@ func (km *Keymanager) AddArgs(args *argBuilder) error {
 
 	// Sentry configuration.
 	if len(sentries) > 0 {
-		args.addSentries(sentries).
-			tendermintDisablePeerExchange()
+		args.addSentries(sentries)
 	} else {
 		args.appendSeedNodes(km.net.seeds)
 	}

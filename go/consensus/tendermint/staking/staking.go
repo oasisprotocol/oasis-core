@@ -8,7 +8,7 @@ import (
 	"github.com/hashicorp/go-multierror"
 	tmabcitypes "github.com/tendermint/tendermint/abci/types"
 	tmpubsub "github.com/tendermint/tendermint/libs/pubsub"
-	tmrpctypes "github.com/tendermint/tendermint/rpc/core/types"
+	tmrpctypes "github.com/tendermint/tendermint/rpc/coretypes"
 	tmtypes "github.com/tendermint/tendermint/types"
 
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
@@ -331,7 +331,7 @@ func EventsFromTendermint(
 			case eventsAPI.IsAttributeKind(key, &api.TakeEscrowEvent{}):
 				// Take escrow event.
 				var e api.TakeEscrowEvent
-				if err := eventsAPI.DecodeValue(string(val), &e); err != nil {
+				if err := eventsAPI.DecodeValue(val, &e); err != nil {
 					errs = multierror.Append(errs, fmt.Errorf("staking: corrupt TakeEscrow event: %w", err))
 					continue
 				}
@@ -341,7 +341,7 @@ func EventsFromTendermint(
 			case eventsAPI.IsAttributeKind(key, &api.TransferEvent{}):
 				// Transfer event.
 				var e api.TransferEvent
-				if err := eventsAPI.DecodeValue(string(val), &e); err != nil {
+				if err := eventsAPI.DecodeValue(val, &e); err != nil {
 					errs = multierror.Append(errs, fmt.Errorf("staking: corrupt Transfer event: %w", err))
 					continue
 				}
@@ -351,7 +351,7 @@ func EventsFromTendermint(
 			case eventsAPI.IsAttributeKind(key, &api.ReclaimEscrowEvent{}):
 				// Reclaim escrow event.
 				var e api.ReclaimEscrowEvent
-				if err := eventsAPI.DecodeValue(string(val), &e); err != nil {
+				if err := eventsAPI.DecodeValue(val, &e); err != nil {
 					errs = multierror.Append(errs, fmt.Errorf("staking: corrupt ReclaimEscrow event: %w", err))
 					continue
 				}
@@ -361,7 +361,7 @@ func EventsFromTendermint(
 			case eventsAPI.IsAttributeKind(key, &api.AddEscrowEvent{}):
 				// Add escrow event.
 				var e api.AddEscrowEvent
-				if err := eventsAPI.DecodeValue(string(val), &e); err != nil {
+				if err := eventsAPI.DecodeValue(val, &e); err != nil {
 					errs = multierror.Append(errs, fmt.Errorf("staking: corrupt AddEscrow event: %w", err))
 					continue
 				}
@@ -371,7 +371,7 @@ func EventsFromTendermint(
 			case eventsAPI.IsAttributeKind(key, &api.DebondingStartEscrowEvent{}):
 				// Debonding start escrow event.
 				var e api.DebondingStartEscrowEvent
-				if err := eventsAPI.DecodeValue(string(val), &e); err != nil {
+				if err := eventsAPI.DecodeValue(val, &e); err != nil {
 					errs = multierror.Append(errs, fmt.Errorf("staking: corrupt DebondingStart escrow event: %w", err))
 					continue
 				}
@@ -381,7 +381,7 @@ func EventsFromTendermint(
 			case eventsAPI.IsAttributeKind(key, &api.BurnEvent{}):
 				// Burn event.
 				var e api.BurnEvent
-				if err := eventsAPI.DecodeValue(string(val), &e); err != nil {
+				if err := eventsAPI.DecodeValue(val, &e); err != nil {
 					errs = multierror.Append(errs, fmt.Errorf("staking: corrupt Burn event: %w", err))
 					continue
 				}
@@ -391,7 +391,7 @@ func EventsFromTendermint(
 			case eventsAPI.IsAttributeKind(key, &api.AllowanceChangeEvent{}):
 				// Allowance change event.
 				var e api.AllowanceChangeEvent
-				if err := eventsAPI.DecodeValue(string(val), &e); err != nil {
+				if err := eventsAPI.DecodeValue(val, &e); err != nil {
 					errs = multierror.Append(errs, fmt.Errorf("staking: corrupt AllowanceChange event: %w", err))
 					continue
 				}

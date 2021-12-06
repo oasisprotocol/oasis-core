@@ -188,8 +188,7 @@ func (worker *Compute) AddArgs(args *argBuilder) error {
 	}
 
 	if len(sentries) > 0 {
-		args.addSentries(sentries).
-			tendermintDisablePeerExchange()
+		args.addSentries(sentries)
 	} else {
 		args.appendSeedNodes(worker.net.seeds)
 	}

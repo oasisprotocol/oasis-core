@@ -329,6 +329,45 @@ func (c *Context) GetEvents() []types.Event {
 	return c.events
 }
 
+// LegacyEventAttribute is the pre-0.35 tendermint format for event attributes.
+// The pre-0.35 versions used []byte for the keys and values, while 0.35 and
+// later use strings.
+type LegacyEventAttribute struct {
+	Key   []byte `protobuf:"bytes,1,opt,name=key,proto3" json:"key,omitempty"`
+	Value []byte `protobuf:"bytes,2,opt,name=value,proto3" json:"value,omitempty"`
+	Index bool   `protobuf:"varint,3,opt,name=index,proto3" json:"index,omitempty"`
+}
+
+// LegacyEvent is the pre-0.35 tendermint format for events.
+type LegacyEvent struct {
+	Type       string                 `protobuf:"bytes,1,opt,name=type,proto3" json:"type,omitempty"`
+	Attributes []LegacyEventAttribute `protobuf:"bytes,2,rep,name=attributes,proto3" json:"attributes,omitempty"`
+}
+
+// GetEventsAsByte returns the ABCI event vector corresponding to the tags
+// using the legacy Tendermint representation (this is only used in abci/mux.go).
+func (c *Context) GetEventsAsByte() []LegacyEvent {
+	// Convert the new representation into the old one.
+	evs := c.GetEvents()
+	out := make([]LegacyEvent, 0, len(evs))
+	for _, ev := range evs {
+		nev := LegacyEvent{
+			Type:       ev.Type,
+			Attributes: make([]LegacyEventAttribute, 0, len(ev.Attributes)),
+		}
+		for _, attr := range ev.Attributes {
+			nattr := LegacyEventAttribute{
+				Key:   []byte(attr.Key),
+				Value: []byte(attr.Value),
+				Index: attr.Index,
+			}
+			nev.Attributes = append(nev.Attributes, nattr)
+		}
+		out = append(out, nev)
+	}
+	return out
+}
+
 // hasEvent checks if a specific event has been emitted.
 func (c *Context) hasEvent(app string, key []byte) bool {
 	evType := EventTypeForApp(app)
@@ -339,7 +378,7 @@ func (c *Context) hasEvent(app string, key []byte) bool {
 		}
 
 		for _, pair := range ev.Attributes {
-			if bytes.Equal(pair.GetKey(), key) {
+			if bytes.Equal([]byte(pair.GetKey()), key) {
 				return true
 			}
 		}
@@ -357,7 +396,7 @@ func (c *Context) DecodeEvent(index int, ev events.TypedAttribute) error {
 	raw := c.events[index]
 	for _, pair := range raw.Attributes {
 		if events.IsAttributeKind(pair.GetKey(), ev) {
-			return events.DecodeValue(string(pair.GetValue()), ev)
+			return events.DecodeValue(pair.GetValue(), ev)
 		}
 	}
 	return fmt.Errorf("incompatible event")

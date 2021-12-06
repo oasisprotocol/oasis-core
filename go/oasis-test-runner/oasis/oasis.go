@@ -54,9 +54,8 @@ const (
 
 // ConsensusStateSyncCfg is a node's consensus state sync configuration.
 type ConsensusStateSyncCfg struct {
-	ConsensusNodes []string
-	TrustHeight    uint64
-	TrustHash      string
+	TrustHeight uint64
+	TrustHash   string
 }
 
 // Feature is a feature or worker hosted by a concrete oasis-node process.

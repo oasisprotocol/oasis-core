@@ -108,13 +108,13 @@ func (t *fullService) serviceClientWorker(ctx context.Context, svc api.ServiceCl
 			// Transform events.
 			buffer := channels.NewInfiniteChannel()
 			go func() {
-				defer t.node.EventBus().Unsubscribe(ctx, tmSubscriberID, query) // nolint: errcheck
+				defer t.node.EventBus().Unsubscribe(ctx, tmpubsub.UnsubscribeArgs{Subscriber: tmSubscriberID, Query: query}) // nolint: errcheck
 				defer buffer.Close()
 
 				for {
 					select {
 					// Should not return on ctx.Done() as that could lead to a deadlock.
-					case <-sub.Cancelled():
+					case <-sub.Canceled():
 						// Subscription cancelled.
 						return
 					case v := <-sub.Out():
@@ -189,12 +189,7 @@ func (t *fullService) serviceClientWorker(ctx context.Context, svc api.ServiceCl
 				}
 				// Skip all events not matching the initial query. This is required as we get all
 				// events not only those matching the query so we need to do a separate pass.
-				tagMap := make(map[string][]string)
-				for _, attr := range tmEv.Attributes {
-					compositeTag := fmt.Sprintf("%s.%s", tmEv.Type, string(attr.Key))
-					tagMap[compositeTag] = append(tagMap[compositeTag], string(attr.Value))
-				}
-				if matches, _ := query.Matches(tagMap); !matches {
+				if matches, _ := query.Matches([]tmabcitypes.Event{tmEv}); !matches {
 					continue
 				}
 

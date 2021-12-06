@@ -32,5 +32,5 @@ var (
 // limited to a specific runtime.
 func QueryForRuntime(runtimeID common.Namespace) tmpubsub.Query {
 	ev := roothash.RuntimeIDAttribute{ID: runtimeID}
-	return tmquery.MustParse(fmt.Sprintf("%s AND %s.%s='%s'", QueryApp, EventType, ev.EventKind(), ev.EventValue()))
+	return tmquery.MustCompile(fmt.Sprintf("%s AND %s.%s='%s'", QueryApp, EventType, ev.EventKind(), ev.EventValue()))
 }

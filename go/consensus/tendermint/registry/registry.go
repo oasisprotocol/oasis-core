@@ -9,7 +9,7 @@ import (
 	"github.com/hashicorp/go-multierror"
 	tmabcitypes "github.com/tendermint/tendermint/abci/types"
 	tmpubsub "github.com/tendermint/tendermint/libs/pubsub"
-	tmrpctypes "github.com/tendermint/tendermint/rpc/core/types"
+	tmrpctypes "github.com/tendermint/tendermint/rpc/coretypes"
 	tmtypes "github.com/tendermint/tendermint/types"
 
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
@@ -293,7 +293,7 @@ func EventsFromTendermint(
 			case eventsAPI.IsAttributeKind(key, &api.RuntimeEvent{}):
 				// Runtime registered event.
 				var e api.RuntimeEvent
-				if err := eventsAPI.DecodeValue(string(val), &e); err != nil {
+				if err := eventsAPI.DecodeValue(val, &e); err != nil {
 					errs = multierror.Append(errs, fmt.Errorf("registry: corrupt Runtime event: %w", err))
 					continue
 				}
@@ -302,7 +302,7 @@ func EventsFromTendermint(
 			case eventsAPI.IsAttributeKind(key, &api.EntityEvent{}):
 				// Entity event.
 				var e api.EntityEvent
-				if err := eventsAPI.DecodeValue(string(val), &e); err != nil {
+				if err := eventsAPI.DecodeValue(val, &e); err != nil {
 					errs = multierror.Append(errs, fmt.Errorf("registry: corrupt Entity event: %w", err))
 					continue
 				}
@@ -311,7 +311,7 @@ func EventsFromTendermint(
 			case eventsAPI.IsAttributeKind(key, &api.NodeEvent{}):
 				// Node event.
 				var e api.NodeEvent
-				if err := eventsAPI.DecodeValue(string(val), &e); err != nil {
+				if err := eventsAPI.DecodeValue(val, &e); err != nil {
 					errs = multierror.Append(errs, fmt.Errorf("registry: corrupt Node event: %w", err))
 					continue
 				}
@@ -320,7 +320,7 @@ func EventsFromTendermint(
 			case eventsAPI.IsAttributeKind(key, &api.NodeUnfrozenEvent{}):
 				// Node unfrozen event.
 				var e api.NodeUnfrozenEvent
-				if err := eventsAPI.DecodeValue(string(val), &e); err != nil {
+				if err := eventsAPI.DecodeValue(val, &e); err != nil {
 					errs = multierror.Append(errs, fmt.Errorf("registry: corrupt NodeUnfrozen event: %w", err))
 					continue
 				}

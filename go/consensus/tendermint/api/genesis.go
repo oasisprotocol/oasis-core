@@ -6,7 +6,6 @@ import (
 	"sort"
 	"time"
 
-	tmproto "github.com/tendermint/tendermint/proto/tendermint/types"
 	tmtypes "github.com/tendermint/tendermint/types"
 
 	beacon "github.com/oasisprotocol/oasis-core/go/beacon/api"
@@ -46,11 +45,6 @@ func GetTendermintGenesisDocument(provider genesis.Provider) (*tmtypes.GenesisDo
 	if err != nil {
 		return nil, fmt.Errorf("tendermint: failed to create genesis document: %w", err)
 	}
-
-	// HACK: Certain test cases use TimeoutCommit < 1 sec, and care about the
-	// BFT view of time pulling ahead.
-	timeoutCommit := doc.Consensus.Parameters.TimeoutCommit
-	tmGenDoc.ConsensusParams.Block.TimeIotaMs = int64(timeoutCommit / time.Millisecond)
 
 	return tmGenDoc, nil
 }
@@ -113,7 +107,7 @@ func genesisToTendermint(d *genesis.Document) (*tmtypes.GenesisDoc, error) {
 		return nil, fmt.Errorf("tendermint: unable to determine epoch interval")
 	}
 
-	var evCfg tmproto.EvidenceParams
+	var evCfg tmtypes.EvidenceParams
 	evCfg.MaxBytes = int64(d.Consensus.Parameters.MaxEvidenceSize)
 	evCfg.MaxAgeNumBlocks = debondingInterval * epochInterval
 	evCfg.MaxAgeDuration = time.Duration(evCfg.MaxAgeNumBlocks) * (d.Consensus.Parameters.TimeoutCommit + 1*time.Second)
@@ -122,17 +116,16 @@ func genesisToTendermint(d *genesis.Document) (*tmtypes.GenesisDoc, error) {
 		ChainID:       d.ChainContext()[:tmtypes.MaxChainIDLen],
 		GenesisTime:   d.Time,
 		InitialHeight: d.Height,
-		ConsensusParams: &tmproto.ConsensusParams{
-			Block: tmproto.BlockParams{
-				MaxBytes:   int64(d.Consensus.Parameters.MaxBlockSize),
-				MaxGas:     maxBlockGas,
-				TimeIotaMs: 1000,
+		ConsensusParams: &tmtypes.ConsensusParams{
+			Block: tmtypes.BlockParams{
+				MaxBytes: int64(d.Consensus.Parameters.MaxBlockSize),
+				MaxGas:   maxBlockGas,
 			},
 			Evidence: evCfg,
-			Validator: tmproto.ValidatorParams{
+			Validator: tmtypes.ValidatorParams{
 				PubKeyTypes: []string{tmtypes.ABCIPubKeyTypeEd25519},
 			},
-			Version: tmproto.VersionParams{
+			Version: tmtypes.VersionParams{
 				AppVersion: version.TendermintAppVersion,
 			},
 		},

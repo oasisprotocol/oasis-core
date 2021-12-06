@@ -92,8 +92,7 @@ func (val *Validator) AddArgs(args *argBuilder) error {
 		appendEntity(val.entity)
 
 	if len(val.sentries) > 0 {
-		args.addSentries(val.sentries).
-			tendermintDisablePeerExchange()
+		args.addSentries(val.sentries)
 	} else {
 		args.appendSeedNodes(val.net.seeds)
 	}

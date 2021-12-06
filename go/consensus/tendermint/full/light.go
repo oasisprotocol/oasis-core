@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 
-	tmcore "github.com/tendermint/tendermint/rpc/core"
 	tmtypes "github.com/tendermint/tendermint/types"
 
 	"github.com/oasisprotocol/oasis-core/go/common/cbor"
@@ -33,7 +32,7 @@ func (n *commonNode) GetLightBlock(ctx context.Context, height int64) (*consensu
 		return nil, consensusAPI.ErrVersionNotFound
 	}
 
-	if commit, cerr := tmcore.Commit(n.rpcCtx, &tmHeight); cerr == nil && commit.Header != nil {
+	if commit, cerr := n.client.Commit(ctx, &tmHeight); cerr == nil && commit.Header != nil {
 		lb.SignedHeader = &commit.SignedHeader
 		tmHeight = commit.Header.Height
 	}
@@ -70,13 +69,14 @@ func (n *commonNode) GetParameters(ctx context.Context, height int64) (*consensu
 		return nil, err
 	}
 	// Query consensus parameters directly from the state store, as fetching
-	// via tmcore.ConsensusParameters also tries fetching latest uncommitted
+	// via n.client.ConsensusParameters also tries fetching latest uncommitted
 	// block which wont work with the archive node setup.
 	consensusParams, err := n.stateStore.LoadConsensusParams(tmHeight)
 	if err != nil {
 		return nil, fmt.Errorf("%w: tendermint: consensus params query failed: %s", consensusAPI.ErrVersionNotFound, err.Error())
 	}
-	meta, err := consensusParams.Marshal()
+	conParamsPb := consensusParams.ToProto()
+	meta, err := conParamsPb.Marshal()
 	if err != nil {
 		return nil, fmt.Errorf("tendermint: failed to marshal consensus params: %w", err)
 	}

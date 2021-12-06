@@ -1,6 +1,7 @@
 package tests
 
 import (
+	"context"
 	"io/ioutil"
 	"os"
 	"path/filepath"
@@ -88,7 +89,7 @@ func MakeConsensusEquivocationEvidence(ident *identity.Identity, blk *consensus.
 
 // makeVote copied from Tendermint test suite.
 func makeVote(val tmtypes.PrivValidator, chainID string, valIndex int32, height int64, round int32, step int, blockID tmtypes.BlockID, ts time.Time) *tmtypes.Vote {
-	pk, err := val.GetPubKey()
+	pk, err := val.GetPubKey(context.Background())
 	if err != nil {
 		panic(err)
 	}
@@ -103,7 +104,7 @@ func makeVote(val tmtypes.PrivValidator, chainID string, valIndex int32, height 
 		Timestamp:        ts,
 	}
 	vpb := v.ToProto()
-	err = val.SignVote(chainID, vpb)
+	err = val.SignVote(context.Background(), chainID, vpb)
 	if err != nil {
 		panic(err)
 	}

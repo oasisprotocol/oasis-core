@@ -110,7 +110,7 @@ func (sc *serviceClient) DeliverEvent(ctx context.Context, height int64, tx tmty
 	for _, pair := range ev.GetAttributes() {
 		if events.IsAttributeKind(pair.GetKey(), &api.ElectedEvent{}) {
 			var e api.ElectedEvent
-			if err := events.DecodeValue(string(pair.GetValue()), &e); err != nil {
+			if err := events.DecodeValue(pair.GetValue(), &e); err != nil {
 				sc.logger.Error("worker: malformed elected committee types event",
 					"err", err,
 				)

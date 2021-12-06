@@ -81,7 +81,7 @@ func (sc *serviceClient) DeliverEvent(ctx context.Context, height int64, tx tmty
 	for _, pair := range ev.GetAttributes() {
 		if events.IsAttributeKind(pair.GetKey(), &api.StatusUpdateEvent{}) {
 			var event api.StatusUpdateEvent
-			if err := events.DecodeValue(string(pair.GetValue()), &event); err != nil {
+			if err := events.DecodeValue(pair.GetValue(), &event); err != nil {
 				sc.logger.Error("worker: failed to get statuses from tag",
 					"err", err,
 				)

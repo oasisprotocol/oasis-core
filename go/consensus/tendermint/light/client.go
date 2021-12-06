@@ -170,11 +170,12 @@ func (lc *lightClient) GetVerifiedParameters(ctx context.Context, height int64) 
 	}
 
 	// Decode Tendermint-specific parameters.
-	var params tmproto.ConsensusParams
-	if err = params.Unmarshal(p.Meta); err != nil {
+	var protoParams tmproto.ConsensusParams
+	if err = protoParams.Unmarshal(p.Meta); err != nil {
 		return nil, fmt.Errorf("malformed parameters: %w", err)
 	}
-	if err = tmtypes.ValidateConsensusParams(params); err != nil {
+	params := tmtypes.ConsensusParamsFromProto(protoParams)
+	if err = params.ValidateConsensusParams(); err != nil {
 		return nil, fmt.Errorf("malformed parameters: %w", err)
 	}
 
@@ -185,14 +186,14 @@ func (lc *lightClient) GetVerifiedParameters(ctx context.Context, height int64) 
 	}
 
 	// Verify hash.
-	if localHash := tmtypes.HashConsensusParams(params); !bytes.Equal(localHash, l.ConsensusHash) {
+	if localHash := params.HashConsensusParams(); !bytes.Equal(localHash, l.ConsensusHash) {
 		return nil, fmt.Errorf("mismatched parameters hash (expected: %X got: %X)",
 			l.ConsensusHash,
 			localHash,
 		)
 	}
 
-	return &params, nil
+	return &protoParams, nil
 }
 
 func (lc *lightClient) getPrimary() consensus.LightClientBackend {
@@ -218,10 +219,9 @@ func NewClient(ctx context.Context, cfg ClientConfig) (Client, error) {
 		ctx,
 		cfg.GenesisDocument.ChainID,
 		cfg.TrustOptions,
-		providers[0],                       // Primary provider.
-		providers[1:],                      // Witnesses.
-		tmlightdb.New(tmdb.NewMemDB(), ""), // TODO: Make the database configurable.
-		tmlight.MaxRetryAttempts(5),        // TODO: Make this configurable.
+		providers[0],                   // Primary provider.
+		providers[1:],                  // Witnesses.
+		tmlightdb.New(tmdb.NewMemDB()), // TODO: Make the database configurable.
 		tmlight.Logger(common.NewLogAdapter(!viper.GetBool(common.CfgLogDebug))),
 	)
 	if err != nil {

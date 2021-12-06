@@ -283,9 +283,12 @@ func (sc *serviceClient) DeliverBlock(ctx context.Context, height int64) error {
 
 func (sc *serviceClient) DeliverEvent(ctx context.Context, height int64, tx tmtypes.Tx, ev *tmabcitypes.Event) error {
 	for _, pair := range ev.GetAttributes() {
-		if events.IsAttributeKind(pair.GetKey(), &beaconAPI.EpochEvent{}) {
+		key := pair.GetKey()
+		val := pair.GetValue()
+
+		if events.IsAttributeKind(key, &beaconAPI.EpochEvent{}) {
 			var event beaconAPI.EpochEvent
-			if err := events.DecodeValue(string(pair.GetValue()), &event); err != nil {
+			if err := events.DecodeValue(val, &event); err != nil {
 				sc.logger.Error("epochtime: malformed epoch event value",
 					"err", err,
 				)
@@ -296,9 +299,9 @@ func (sc *serviceClient) DeliverEvent(ctx context.Context, height int64, tx tmty
 				sc.epochNotifier.Broadcast(event.Epoch)
 			}
 		}
-		if events.IsAttributeKind(pair.GetKey(), &beaconAPI.VRFEvent{}) {
+		if events.IsAttributeKind(key, &beaconAPI.VRFEvent{}) {
 			var event beaconAPI.VRFEvent
-			if err := events.DecodeValue(string(pair.GetValue()), &event); err != nil {
+			if err := events.DecodeValue(val, &event); err != nil {
 				sc.logger.Error("beacon: malformed VRF event",
 					"err", err,
 				)

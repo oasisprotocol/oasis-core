@@ -11,7 +11,7 @@ import (
 
 	"github.com/dgraph-io/badger/v3"
 	"github.com/dgraph-io/badger/v3/options"
-	"github.com/tendermint/tendermint/node"
+	tmconfig "github.com/tendermint/tendermint/config"
 	dbm "github.com/tendermint/tm-db"
 
 	cmnBadger "github.com/oasisprotocol/oasis-core/go/common/badger"
@@ -31,13 +31,13 @@ var (
 
 	// DBProvider is a DBProvider to be used when initializing
 	// a tendermint node.
-	DBProvider node.DBProvider = badgerDBProvider
+	DBProvider tmconfig.DBProvider = badgerDBProvider
 
 	dbVersionStart = []byte{dbVersion}
 	dbVersionEnd   = []byte{dbVersion + 1}
 )
 
-func badgerDBProvider(ctx *node.DBContext) (dbm.DB, error) {
+func badgerDBProvider(ctx *tmconfig.DBContext) (dbm.DB, error) {
 	// BadgerDB can handle dealing with the directory for us.
 	return New(filepath.Join(ctx.Config.DBDir(), ctx.ID), false)
 }
