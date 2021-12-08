@@ -178,8 +178,6 @@ func (e *EpochSnapshot) Node(ctx context.Context, id signature.PublicKey) (*node
 
 // VerifyTxnSchedulerSigner verifies that the given signature comes from
 // the transaction scheduler at provided round.
-//
-// Implements commitment.SignatureVerifier.
 func (e *EpochSnapshot) VerifyTxnSchedulerSigner(id signature.PublicKey, round uint64) error {
 	if e.executorCommittee == nil || e.executorCommittee.Committee == nil {
 		return fmt.Errorf("epoch: no active transaction scheduler")

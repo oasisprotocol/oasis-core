@@ -55,14 +55,6 @@ const (
 
 var logger *logging.Logger = logging.GetLogger("roothash/commitment/pool")
 
-// SignatureVerifier is an interface for verifying transaction scheduler signatures against the
-// active committees.
-type SignatureVerifier interface {
-	// VerifyTxnSchedulerSigner verifies that the given signature comes from
-	// the transaction scheduler at provided round.
-	VerifyTxnSchedulerSigner(id signature.PublicKey, round uint64) error
-}
-
 // NodeLookup is an interface for looking up registry node descriptors.
 type NodeLookup interface {
 	// Node looks up a node descriptor.
@@ -187,7 +179,6 @@ func (p *Pool) getCommitment(id signature.PublicKey) (OpenCommitment, bool) {
 func (p *Pool) addVerifiedExecutorCommitment( // nolint: gocyclo
 	ctx context.Context,
 	blk *block.Block,
-	sv SignatureVerifier,
 	nl NodeLookup,
 	msgValidator MessageValidator,
 	commit *ExecutorCommitment,
@@ -329,7 +320,6 @@ func (p *Pool) addVerifiedExecutorCommitment( // nolint: gocyclo
 func (p *Pool) AddExecutorCommitment(
 	ctx context.Context,
 	blk *block.Block,
-	sv SignatureVerifier,
 	nl NodeLookup,
 	commit *ExecutorCommitment,
 	msgValidator MessageValidator,
@@ -343,7 +333,7 @@ func (p *Pool) AddExecutorCommitment(
 		return p2pError.Permanent(err)
 	}
 
-	return p.addVerifiedExecutorCommitment(ctx, blk, sv, nl, msgValidator, commit)
+	return p.addVerifiedExecutorCommitment(ctx, blk, nl, msgValidator, commit)
 }
 
 // ProcessCommitments performs a single round of commitment checks. If there are enough commitments
@@ -498,7 +488,6 @@ func (p *Pool) ProcessCommitments(didTimeout bool) (OpenCommitment, error) {
 func (p *Pool) CheckProposerTimeout(
 	ctx context.Context,
 	block *block.Block,
-	sv SignatureVerifier,
 	nl NodeLookup,
 	id signature.PublicKey,
 	round uint64,

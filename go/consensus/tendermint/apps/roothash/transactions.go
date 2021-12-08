@@ -10,44 +10,12 @@ import (
 	abciAPI "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/api"
 	registryState "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/apps/registry/state"
 	roothashState "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/apps/roothash/state"
-	schedulerState "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/apps/scheduler/state"
 	roothash "github.com/oasisprotocol/oasis-core/go/roothash/api"
 	"github.com/oasisprotocol/oasis-core/go/roothash/api/block"
 	"github.com/oasisprotocol/oasis-core/go/roothash/api/commitment"
 	"github.com/oasisprotocol/oasis-core/go/roothash/api/message"
-	scheduler "github.com/oasisprotocol/oasis-core/go/scheduler/api"
 	staking "github.com/oasisprotocol/oasis-core/go/staking/api"
 )
-
-var _ commitment.SignatureVerifier = (*roothashSignatureVerifier)(nil)
-
-type roothashSignatureVerifier struct {
-	ctx       *abciAPI.Context
-	runtimeID common.Namespace
-	scheduler *schedulerState.MutableState
-}
-
-// VerifyTxnSchedulerSigner verifies that the given signature comes from
-// the transaction scheduler at provided round.
-//
-// Implements commitment.SignatureVerifier.
-func (sv *roothashSignatureVerifier) VerifyTxnSchedulerSigner(id signature.PublicKey, round uint64) error {
-	committee, err := sv.scheduler.Committee(sv.ctx, scheduler.KindComputeExecutor, sv.runtimeID)
-	if err != nil {
-		return err
-	}
-	if committee == nil {
-		return roothash.ErrInvalidRuntime
-	}
-	scheduler, err := commitment.GetTransactionScheduler(committee, round)
-	if err != nil {
-		return fmt.Errorf("roothash: error getting transaction scheduler: %w", err)
-	}
-	if !scheduler.PublicKey.Equal(id) {
-		return fmt.Errorf("roothash: signature is not from a valid transaction scheduler")
-	}
-	return nil
-}
 
 // getRuntimeState fetches the current runtime state and performs common
 // processing and error handling.
@@ -55,30 +23,23 @@ func (app *rootHashApplication) getRuntimeState(
 	ctx *abciAPI.Context,
 	state *roothashState.MutableState,
 	id common.Namespace,
-) (*roothash.RuntimeState, commitment.SignatureVerifier, commitment.NodeLookup, error) {
+) (*roothash.RuntimeState, commitment.NodeLookup, error) {
 	// Fetch current runtime state.
 	rtState, err := state.RuntimeState(ctx, id)
 	if err != nil {
-		return nil, nil, nil, fmt.Errorf("roothash: failed to fetch runtime state: %w", err)
+		return nil, nil, fmt.Errorf("roothash: failed to fetch runtime state: %w", err)
 	}
 	if rtState.Suspended {
-		return nil, nil, nil, roothash.ErrRuntimeSuspended
+		return nil, nil, roothash.ErrRuntimeSuspended
 	}
 	if rtState.ExecutorPool == nil {
-		return nil, nil, nil, roothash.ErrNoExecutorPool
-	}
-
-	// Create signature verifier.
-	sv := &roothashSignatureVerifier{
-		ctx:       ctx,
-		runtimeID: id,
-		scheduler: schedulerState.NewMutableState(ctx.State()),
+		return nil, nil, roothash.ErrNoExecutorPool
 	}
 
 	// Create node lookup.
 	nl := registryState.NewMutableState(ctx.State())
 
-	return rtState, sv, nl, nil
+	return rtState, nl, nil
 }
 
 func (app *rootHashApplication) executorProposerTimeout(
@@ -107,7 +68,7 @@ func (app *rootHashApplication) executorProposerTimeout(
 		return nil
 	}
 
-	rtState, sv, nl, err := app.getRuntimeState(ctx, state, rpt.ID)
+	rtState, nl, err := app.getRuntimeState(ctx, state, rpt.ID)
 	if err != nil {
 		return err
 	}
@@ -125,7 +86,7 @@ func (app *rootHashApplication) executorProposerTimeout(
 	}
 
 	// Ensure request is valid.
-	if err = rtState.ExecutorPool.CheckProposerTimeout(ctx, rtState.CurrentBlock, sv, nl, ctx.TxSigner(), rpt.Round); err != nil {
+	if err = rtState.ExecutorPool.CheckProposerTimeout(ctx, rtState.CurrentBlock, nl, ctx.TxSigner(), rpt.Round); err != nil {
 		ctx.Logger().Error("failed requesting proposer round timeout",
 			"err", err,
 			"round", rtState.CurrentBlock.Header.Round,
@@ -173,7 +134,7 @@ func (app *rootHashApplication) executorCommit(
 		return err
 	}
 
-	rtState, sv, nl, err := app.getRuntimeState(ctx, state, cc.ID)
+	rtState, nl, err := app.getRuntimeState(ctx, state, cc.ID)
 	if err != nil {
 		return err
 	}
@@ -191,7 +152,6 @@ func (app *rootHashApplication) executorCommit(
 		if err = rtState.ExecutorPool.AddExecutorCommitment(
 			ctx,
 			rtState.CurrentBlock,
-			sv,
 			nl,
 			&commit, // nolint: gosec
 			msgGasAccountant,
@@ -275,7 +235,7 @@ func (app *rootHashApplication) submitEvidence(
 		return nil
 	}
 
-	rtState, _, _, err := app.getRuntimeState(ctx, state, evidence.ID)
+	rtState, _, err := app.getRuntimeState(ctx, state, evidence.ID)
 	if err != nil {
 		return err
 	}
