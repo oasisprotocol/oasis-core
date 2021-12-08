@@ -279,7 +279,28 @@ func (c *runtimeClient) GetLastRetainedBlock(ctx context.Context, runtimeID comm
 	if err != nil {
 		return nil, err
 	}
-	return rt.History().GetEarliestBlock(ctx)
+	blk, err := rt.History().GetEarliestBlock(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	// If the client is stateful, take storage into account to avoid returning a block for which
+	// we don't actually have state available. This may be because there is only a later checkpoint
+	// available.
+	if lsb, ok := rt.Storage().(storage.LocalBackend); ok {
+		version, err := lsb.NodeDB().GetEarliestVersion(ctx)
+		if err != nil {
+			return nil, err
+		}
+
+		if version > blk.Header.Round {
+			blk, err = rt.History().GetBlock(ctx, version)
+			if err != nil {
+				return nil, err
+			}
+		}
+	}
+	return blk, nil
 }
 
 func (c *runtimeClient) getTxnTree(blk *block.Block) *transaction.Tree {
