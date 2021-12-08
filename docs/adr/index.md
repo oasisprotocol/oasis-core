@@ -83,4 +83,5 @@ The following records currently exist:
 * [ADR 0009](0009-ed25519-semantics.md) - Ed25519 Signature Verification Semantics
 * [ADR 0010](0010-vrf-elections.md) - VRF-based Committee Elections
 * [ADR 0011](0011-incoming-runtime-messages.md) - Incoming Runtime Messages
+* [ADR 0012](0012-runtime-message-results.md) - Runtime Message Results
 <!-- markdownlint-enable line-length -->
