@@ -19,7 +19,8 @@ import (
 )
 
 func initDefaultIdentity(dataDir string) (*identity.Identity, error) {
-	signerFactory, err := fileSigner.NewFactory(dataDir, signature.SignerNode, signature.SignerP2P, signature.SignerEntity, signature.SignerConsensus)
+	signerRoles := append([]signature.SignerRole{signature.SignerEntity}, identity.RequiredSignerRoles...)
+	signerFactory, err := fileSigner.NewFactory(dataDir, signerRoles...)
 	if err != nil {
 		return nil, fmt.Errorf("identity NewFactory: %w", err)
 	}

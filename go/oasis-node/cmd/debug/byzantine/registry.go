@@ -57,8 +57,8 @@ func registryRegisterNode(svc consensus.Backend, id *identity.Identity, dataDir 
 		Consensus: node.ConsensusInfo{
 			ID: id.ConsensusSigner.Public(),
 		},
-		Beacon: &node.BeaconInfo{
-			Point: id.BeaconScalar.Point(),
+		VRF: &node.VRFInfo{
+			ID: id.VRFSigner.Public(),
 		},
 		Runtimes: runtimes,
 		Roles:    roles,
@@ -76,6 +76,7 @@ func registryRegisterNode(svc consensus.Backend, id *identity.Identity, dataDir 
 			registrationSigner,
 			id.P2PSigner,
 			id.ConsensusSigner,
+			id.VRFSigner,
 			id.GetTLSSigner(),
 		},
 		registry.RegisterGenesisNodeSignatureContext,

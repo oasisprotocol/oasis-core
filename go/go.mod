@@ -38,7 +38,7 @@ require (
 	github.com/libp2p/go-libp2p-core v0.9.0
 	github.com/libp2p/go-libp2p-pubsub v0.5.5
 	github.com/multiformats/go-multiaddr v0.4.1
-	github.com/oasisprotocol/curve25519-voi v0.0.0-20210505121811-294cf0fbfb43
+	github.com/oasisprotocol/curve25519-voi v0.0.0-20210908142542-2a44edfcaeb0
 	github.com/oasisprotocol/deoxysii v0.0.0-20200527154044-851aec403956
 	github.com/powerman/rpc-codec v1.2.2
 	github.com/prometheus/client_golang v1.11.0
@@ -55,7 +55,6 @@ require (
 	github.com/tyler-smith/go-bip39 v1.1.0
 	github.com/whyrusleeping/go-logging v0.0.1
 	gitlab.com/yawning/dynlib.git v0.0.0-20210614104444-f6a90d03b144
-	go.dedis.ch/kyber/v3 v3.0.13
 	golang.org/x/crypto v0.0.0-20210817164053-32db794688a5
 	golang.org/x/net v0.0.0-20210813160813-60bc85c4be6d
 	google.golang.org/genproto v0.0.0-20210828152312-66f60bf46e71
@@ -191,7 +190,6 @@ require (
 	github.com/x448/float16 v0.8.4 // indirect
 	gitlab.com/yawning/bsaes.git v0.0.0-20190805113838-0a714cd429ec // indirect
 	gitlab.com/yawning/slice.git v0.0.0-20190714152416-bc4ae2510529 // indirect
-	go.dedis.ch/fixbuf v1.0.3 // indirect
 	go.etcd.io/bbolt v1.3.5 // indirect
 	go.opencensus.io v0.23.0 // indirect
 	go.uber.org/atomic v1.9.0 // indirect

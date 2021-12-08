@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 
 	"github.com/oasisprotocol/curve25519-voi/primitives/ed25519"
+	"github.com/oasisprotocol/curve25519-voi/primitives/ed25519/extra/ecvrf"
 
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	"github.com/oasisprotocol/oasis-core/go/common/pem"
@@ -28,6 +29,7 @@ var (
 	_ signature.SignerFactoryCtor = NewFactory
 	_ signature.SignerFactory     = (*Factory)(nil)
 	_ signature.Signer            = (*Signer)(nil)
+	_ signature.VRFSigner         = (*Signer)(nil)
 
 	// FileEntityKey is the entity key filename.
 	FileEntityKey = "entity.pem"
@@ -37,12 +39,15 @@ var (
 	FileP2PKey = "p2p.pem"
 	// FileConsensusKey is the consensus key filename.
 	FileConsensusKey = "consensus.pem"
+	// FileVRFKey is the vrf key filename.
+	FileVRFKey = "vrf.pem"
 
 	rolePEMFiles = map[signature.SignerRole]string{
 		signature.SignerEntity:    FileEntityKey,
 		signature.SignerNode:      FileIdentityKey,
 		signature.SignerP2P:       FileP2PKey,
 		signature.SignerConsensus: FileConsensusKey,
+		signature.SignerVRF:       FileVRFKey,
 	}
 )
 
@@ -200,6 +205,14 @@ func (s *Signer) Reset() {
 	for idx := range s.privateKey {
 		s.privateKey[idx] = 0
 	}
+}
+
+// Prove generates a VRF proof with the private key over the alpha.
+func (s *Signer) Prove(alphaString []byte) ([]byte, error) {
+	if s.role != signature.SignerVRF {
+		return nil, signature.ErrInvalidRole
+	}
+	return ecvrf.Prove(s.privateKey, alphaString), nil
 }
 
 func (s *Signer) marshalPEM() ([]byte, error) {

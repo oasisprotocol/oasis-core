@@ -69,6 +69,8 @@ const (
 	cfgSchedulerMaxValidators          = "scheduler.max_validators"
 	cfgSchedulerMaxValidatorsPerEntity = "scheduler.max_validators_per_entity"
 	cfgSchedulerDebugBypassStake       = "scheduler.debug.bypass_stake" // nolint: gosec
+	CfgSchedulerDebugForceElect        = "scheduler.debug.force_elect"
+	CfgSchedulerDebugAllowWeakAlpha    = "scheduler.debug.allow_weak_alpha"
 
 	// Governance config flags.
 	CfgGovernanceMinProposalDeposit        = "governance.min_proposal_deposit"
@@ -80,15 +82,11 @@ const (
 
 	// Beacon config flags.
 	CfgBeaconBackend                    = "beacon.backend"
-	CfgBeaconDebugDeterministic         = "beacon.debug.deterministic"
 	CfgBeaconDebugMockBackend           = "beacon.debug.mock_backend"
 	CfgBeaconInsecureTendermintInterval = "beacon.insecure.tendermint.interval"
-	CfgBeaconPVSSParticipants           = "beacon.pvss.participants"
-	CfgBeaconPVSSThreshold              = "beacon.pvss.threshold"
-	CfgBeaconPVSSCommitInterval         = "beacon.pvss.commit_interval"
-	CfgBeaconPVSSRevealInterval         = "beacon.pvss.reveal_interval"
-	CfgBeaconPVSSTransitionDelay        = "beacon.pvss.transition_delay"
-	CfgBeaconPVSSDebugForcedParticipant = "beacon.pvss.debug.forced_participant"
+	CfgBeaconVRFAlphaThreshold          = "beacon.vrf.alpha_threshold"
+	CfgBeaconVRFInterval                = "beacon.vrf.interval"
+	CfgBeaconVRFProofSubmissionDelay    = "beacon.vrf.submission_delay"
 
 	// Roothash config flags.
 	cfgRoothashDebugDoNotSuspendRuntimes = "roothash.debug.do_not_suspend_runtimes"
@@ -223,7 +221,75 @@ func doInitGenesis(cmd *cobra.Command, args []string) {
 			MaxValidators:          viper.GetInt(cfgSchedulerMaxValidators),
 			MaxValidatorsPerEntity: viper.GetInt(cfgSchedulerMaxValidatorsPerEntity),
 			DebugBypassStake:       viper.GetBool(cfgSchedulerDebugBypassStake),
+			DebugAllowWeakAlpha:    viper.GetBool(CfgSchedulerDebugAllowWeakAlpha),
 		},
+	}
+	if forceElectStrs := viper.GetStringSlice(CfgSchedulerDebugForceElect); forceElectStrs != nil {
+		m := make(map[common.Namespace]map[signature.PublicKey]*scheduler.ForceElectCommitteeRole)
+		for _, s := range forceElectStrs {
+			subS := strings.Split(s, ",")
+			if len(subS) != 5 {
+				tmp, _ := json.Marshal(subS)
+				logger.Error("malformed forced scheduler elect directive",
+					"directive", s,
+					"sub_s", string(tmp),
+				)
+				return
+			}
+			var (
+				ns common.Namespace
+				pk signature.PublicKey
+			)
+			if err := ns.UnmarshalText([]byte(subS[0])); err != nil {
+				logger.Error("failed to parse namespace for forced election",
+					"err", err,
+					"ns_str", subS[0],
+				)
+				return
+			}
+			if err := pk.UnmarshalText([]byte(subS[1])); err != nil {
+				logger.Error("failed to parse public key for forced election",
+					"err", err,
+					"pk_str", subS[1],
+				)
+				return
+			}
+			i, err := strconv.Atoi(subS[2])
+			if err != nil {
+				logger.Error("failed to parse kind for forced election",
+					"err", err,
+					"kind_str", subS[2],
+				)
+				return
+			}
+			j, err := strconv.Atoi(subS[3])
+			if err != nil {
+				logger.Error("failed to parse role for forced election",
+					"err", err,
+					"role_str", subS[3],
+				)
+				return
+			}
+			k, err := strconv.ParseBool(subS[4])
+			if err != nil {
+				logger.Error("failed to parse is_scheduler for forced election",
+					"err", err,
+					"is_scheduler_str", subS[4],
+				)
+				return
+			}
+			subM := m[ns]
+			if subM == nil {
+				subM = make(map[signature.PublicKey]*scheduler.ForceElectCommitteeRole)
+				m[ns] = subM
+			}
+			m[ns][pk] = &scheduler.ForceElectCommitteeRole{
+				Kind:        scheduler.CommitteeKind(i),
+				Role:        scheduler.Role(j),
+				IsScheduler: k,
+			}
+		}
+		doc.Scheduler.Parameters.DebugForceElect = m
 	}
 
 	doc.Governance = governance.Genesis{
@@ -240,9 +306,8 @@ func doInitGenesis(cmd *cobra.Command, args []string) {
 
 	doc.Beacon = beacon.Genesis{
 		Parameters: beacon.ConsensusParameters{
-			Backend:            viper.GetString(CfgBeaconBackend),
-			DebugDeterministic: viper.GetBool(CfgBeaconDebugDeterministic),
-			DebugMockBackend:   viper.GetBool(CfgBeaconDebugMockBackend),
+			Backend:          viper.GetString(CfgBeaconBackend),
+			DebugMockBackend: viper.GetBool(CfgBeaconDebugMockBackend),
 		},
 	}
 	switch doc.Beacon.Parameters.Backend {
@@ -250,24 +315,18 @@ func doInitGenesis(cmd *cobra.Command, args []string) {
 		doc.Beacon.Parameters.InsecureParameters = &beacon.InsecureParameters{
 			Interval: viper.GetInt64(CfgBeaconInsecureTendermintInterval),
 		}
-	case beacon.BackendPVSS:
-		var forcedParticipants []signature.PublicKey
-		forcedParticipants, err := parsePublicKeyStringSlice(CfgBeaconPVSSDebugForcedParticipant)
-		if err != nil {
-			logger.Error("failed to parse PVSS forced public key",
-				"err", err,
-			)
-			return
+	case beacon.BackendVRF:
+		doc.Beacon.Parameters.VRFParameters = &beacon.VRFParameters{
+			AlphaHighQualityThreshold: viper.GetUint64(CfgBeaconVRFAlphaThreshold),
+			Interval:                  viper.GetInt64(CfgBeaconVRFInterval),
+			ProofSubmissionDelay:      viper.GetInt64(CfgBeaconVRFProofSubmissionDelay),
+			GasCosts:                  beacon.DefaultVRFGasCosts, // TODO: configurable.
 		}
-
-		doc.Beacon.Parameters.PVSSParameters = &beacon.PVSSParameters{
-			Participants:            viper.GetUint32(CfgBeaconPVSSParticipants),
-			Threshold:               viper.GetUint32(CfgBeaconPVSSThreshold),
-			CommitInterval:          viper.GetInt64(CfgBeaconPVSSCommitInterval),
-			RevealInterval:          viper.GetInt64(CfgBeaconPVSSRevealInterval),
-			TransitionDelay:         viper.GetInt64(CfgBeaconPVSSTransitionDelay),
-			DebugForcedParticipants: forcedParticipants,
-		}
+	default:
+		logger.Error("unsupported beacon backend",
+			"backend", doc.Beacon.Parameters.Backend,
+		)
+		return
 	}
 
 	pkBlacklist, pkErr := parsePublicKeyStringSlice(cfgConsensusBlacklistPublicKey)
@@ -765,7 +824,11 @@ func init() {
 	initGenesisFlags.Int(cfgSchedulerMaxValidators, 100, "maximum number of validators")
 	initGenesisFlags.Int(cfgSchedulerMaxValidatorsPerEntity, 1, "maximum number of validators per entity")
 	initGenesisFlags.Bool(cfgSchedulerDebugBypassStake, false, "bypass all stake checks and operations (UNSAFE)")
+	initGenesisFlags.StringSlice(CfgSchedulerDebugForceElect, nil, "force elect the (runtime, node, role) tuple(s) (UNSAFE)")
+	initGenesisFlags.Bool(CfgSchedulerDebugAllowWeakAlpha, false, "bypass alpha strength check for VRF elections (UNSAFE)")
 	_ = initGenesisFlags.MarkHidden(cfgSchedulerDebugBypassStake)
+	_ = initGenesisFlags.MarkHidden(CfgSchedulerDebugForceElect)
+	_ = initGenesisFlags.MarkHidden(CfgSchedulerDebugAllowWeakAlpha)
 
 	// Governance config flags.
 	initGenesisFlags.Uint64(CfgGovernanceMinProposalDeposit, 100, "proposal deposit for governance proposals")
@@ -777,18 +840,12 @@ func init() {
 
 	// Beacon config flags.
 	initGenesisFlags.String(CfgBeaconBackend, "insecure", "beacon backend")
-	initGenesisFlags.Bool(CfgBeaconDebugDeterministic, false, "enable deterministic beacon output (UNSAFE)")
 	initGenesisFlags.Bool(CfgBeaconDebugMockBackend, false, "use debug mock Epoch time backend")
 	initGenesisFlags.Int64(CfgBeaconInsecureTendermintInterval, 86400, "Epoch interval (in blocks)")
-	initGenesisFlags.Uint32(CfgBeaconPVSSParticipants, 10, "number of participants in a PVSS round")
-	initGenesisFlags.Uint32(CfgBeaconPVSSThreshold, 7, "threshold entropy contributors")
-	initGenesisFlags.Int64(CfgBeaconPVSSCommitInterval, 43200, "PVSS round commit interval (in blocks)")
-	initGenesisFlags.Int64(CfgBeaconPVSSRevealInterval, 34560, "PVSS round reveal interval (in blocks)")
-	initGenesisFlags.Int64(CfgBeaconPVSSTransitionDelay, 8639, "PVSS round transition delay (in blocks)")
-	initGenesisFlags.StringSlice(CfgBeaconPVSSDebugForcedParticipant, nil, "PVSS forced participant public keys")
-	_ = initGenesisFlags.MarkHidden(CfgBeaconDebugDeterministic)
+	initGenesisFlags.Uint64(CfgBeaconVRFAlphaThreshold, 1, "Number of proofs required to allow runtime elections")
+	initGenesisFlags.Int64(CfgBeaconVRFInterval, 86300, "Epoch interval (in blocks)")
+	initGenesisFlags.Int64(CfgBeaconVRFProofSubmissionDelay, 43150, "Proof submission delay (in blocks)")
 	_ = initGenesisFlags.MarkHidden(CfgBeaconDebugMockBackend)
-	_ = initGenesisFlags.MarkHidden(CfgBeaconPVSSDebugForcedParticipant)
 
 	// Roothash config flags.
 	initGenesisFlags.Bool(cfgRoothashDebugDoNotSuspendRuntimes, false, "do not suspend runtimes (UNSAFE)")

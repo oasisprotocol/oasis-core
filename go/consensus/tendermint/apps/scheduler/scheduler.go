@@ -98,16 +98,25 @@ func (app *schedulerApplication) BeginBlock(ctx *api.Context, request types.Requ
 			return nil
 		}
 
-		beacState := beaconState.NewMutableState(ctx.State())
-		beaconParameters, err := beacState.ConsensusParameters(ctx)
+		state := schedulerState.NewMutableState(ctx.State())
+		params, err := state.ConsensusParameters(ctx)
+		if err != nil {
+			ctx.Logger().Error("failed to fetch consensus parameters",
+				"err", err,
+			)
+			return err
+		}
+
+		beaconState := beaconState.NewMutableState(ctx.State())
+		beaconParameters, err := beaconState.ConsensusParameters(ctx)
 		if err != nil {
 			return fmt.Errorf("tendermint/scheduler: couldn't get beacon parameters: %w", err)
 		}
-		filterCommitteeNodes := beaconParameters.Backend == beacon.BackendPVSS
-		entropy, err := beacState.Beacon(ctx)
-		if err != nil {
-			return fmt.Errorf("tendermint/scheduler: couldn't get beacon: %w", err)
-		}
+		// If weak alphas are allowed then skip the eligibility check as
+		// well because the byzantine node and associated tests are extremely
+		// fragile, and breaks in hard-to-debug ways if timekeeping isn't
+		// exactly how it expects.
+		filterCommitteeNodes := beaconParameters.Backend == beacon.BackendVRF && !params.DebugAllowWeakAlpha
 
 		regState := registryState.NewMutableState(ctx.State())
 		runtimes, err := regState.Runtimes(ctx)
@@ -143,15 +152,6 @@ func (app *schedulerApplication) BeginBlock(ctx *api.Context, request types.Requ
 			}
 		}
 
-		state := schedulerState.NewMutableState(ctx.State())
-		params, err := state.ConsensusParameters(ctx)
-		if err != nil {
-			ctx.Logger().Error("failed to fetch consensus parameters",
-				"err", err,
-			)
-			return err
-		}
-
 		var stakeAcc *stakingState.StakeAccumulatorCache
 		if !params.DebugBypassStake {
 			stakeAcc, err = stakingState.NewStakeAccumulatorCache(ctx)
@@ -170,7 +170,16 @@ func (app *schedulerApplication) BeginBlock(ctx *api.Context, request types.Requ
 		// Handle the validator election first, because no consensus is
 		// catastrophic, while failing to elect other committees is not.
 		var validatorEntities map[staking.Address]bool
-		if validatorEntities, err = app.electValidators(ctx, entropy, stakeAcc, entitiesEligibleForReward, nodes, params); err != nil {
+		if validatorEntities, err = app.electValidators(
+			ctx,
+			app.state,
+			beaconState,
+			beaconParameters,
+			stakeAcc,
+			entitiesEligibleForReward,
+			nodes,
+			params,
+		); err != nil {
 			// It is unclear what the behavior should be if the validator
 			// election fails.  The system can not ensure integrity, so
 			// presumably manual intervention is required...
@@ -184,9 +193,10 @@ func (app *schedulerApplication) BeginBlock(ctx *api.Context, request types.Requ
 		for _, kind := range kinds {
 			if err = app.electAllCommittees(
 				ctx,
-				request,
-				epoch,
-				entropy,
+				app.state,
+				params,
+				beaconState,
+				beaconParameters,
 				stakeAcc,
 				entitiesEligibleForReward,
 				validatorEntities,
@@ -363,230 +373,33 @@ func GetPerm(beacon []byte, runtimeID common.Namespace, rngCtx []byte, nrNodes i
 }
 
 // Operates on consensus connection.
-// Return error if node should crash.
-// For non-fatal problems, save a problem condition to the state and return successfully.
-func (app *schedulerApplication) electCommittee( //nolint: gocyclo
-	ctx *api.Context,
-	epoch beacon.EpochTime,
-	beacon []byte,
-	stakeAcc *stakingState.StakeAccumulatorCache,
-	entitiesEligibleForReward map[staking.Address]bool,
-	validatorEntities map[staking.Address]bool,
-	rt *registry.Runtime,
-	nodes []*node.Node,
-	kind scheduler.CommitteeKind,
-) error {
-	// Only generic compute runtimes need to elect all the committees.
-	if !rt.IsCompute() && kind != scheduler.KindComputeExecutor {
-		return nil
-	}
-
-	// Determine the context, committee size, and pre-filter the node-list
-	// based on eligibility and entity stake.
-	var (
-		err error
-
-		rngCtx       []byte
-		isSuitableFn func(*api.Context, *node.Node, *registry.Runtime) bool
-	)
-
-	groupSizes := make(map[scheduler.Role]int)
-	switch kind {
-	case scheduler.KindComputeExecutor:
-		rngCtx = RNGContextExecutor
-		isSuitableFn = app.isSuitableExecutorWorker
-		groupSizes[scheduler.RoleWorker] = int(rt.Executor.GroupSize)
-		groupSizes[scheduler.RoleBackupWorker] = int(rt.Executor.GroupBackupSize)
-	case scheduler.KindStorage:
-		rngCtx = RNGContextStorage
-		isSuitableFn = app.isSuitableStorageWorker
-		groupSizes[scheduler.RoleWorker] = int(rt.Storage.GroupSize)
-	default:
-		return fmt.Errorf("tendermint/scheduler: invalid committee type: %v", kind)
-	}
-
-	// Ensure that it is theoretically possible to elect a valid committee.
-	if groupSizes[scheduler.RoleWorker] == 0 {
-		ctx.Logger().Error("empty committee not allowed",
-			"kind", kind,
-			"runtime_id", rt.ID,
-		)
-		if err = schedulerState.NewMutableState(ctx.State()).DropCommittee(ctx, kind, rt.ID); err != nil {
-			return fmt.Errorf("failed to drop committee: %w", err)
-		}
-		return nil
-	}
-
-	// Decode per-role constraints.
-	cs := rt.Constraints[kind]
-
-	// Perform pre-election eligiblity filtering.
-	nodeLists := make(map[scheduler.Role][]*node.Node)
-	for _, n := range nodes {
-		// Check if an entity has enough stake.
-		entAddr := staking.NewAddress(n.EntityID)
-		if stakeAcc != nil {
-			if err = stakeAcc.CheckStakeClaims(entAddr); err != nil {
-				continue
-			}
-		}
-		// Check general node compatibility.
-		if !isSuitableFn(ctx, n, rt) {
-			continue
-		}
-
-		// Check pre-election scheduling constraints.
-		var eligible bool
-		for _, role := range []scheduler.Role{scheduler.RoleWorker, scheduler.RoleBackupWorker} {
-			if groupSizes[role] == 0 {
-				continue
-			}
-
-			// Validator set membership constraint.
-			if cs[role].ValidatorSet != nil {
-				if !validatorEntities[entAddr] {
-					// Not eligible if not in the validator set.
-					continue
-				}
-			}
-
-			nodeLists[role] = append(nodeLists[role], n)
-			eligible = true
-		}
-		if !eligible {
-			continue
-		}
-
-		if entitiesEligibleForReward != nil {
-			entitiesEligibleForReward[entAddr] = true
-		}
-	}
-
-	// Perform election.
-	var members []*scheduler.CommitteeNode
-	for _, role := range []scheduler.Role{scheduler.RoleWorker, scheduler.RoleBackupWorker} {
-		if groupSizes[role] == 0 {
-			continue
-		}
-
-		nrNodes := len(nodeLists[role])
-
-		// Check election scheduling constraints.
-		var minPoolSize int
-		if cs[role].MinPoolSize != nil {
-			minPoolSize = int(cs[role].MinPoolSize.Limit)
-		}
-
-		if nrNodes < minPoolSize {
-			ctx.Logger().Error("not enough eligible nodes",
-				"kind", kind,
-				"role", role,
-				"runtime_id", rt.ID,
-				"nr_nodes", nrNodes,
-				"min_pool_size", minPoolSize,
-			)
-			if err = schedulerState.NewMutableState(ctx.State()).DropCommittee(ctx, kind, rt.ID); err != nil {
-				return fmt.Errorf("failed to drop committee: %w", err)
-			}
-			return nil
-		}
-
-		wantedNodes := groupSizes[role]
-		if wantedNodes > nrNodes {
-			ctx.Logger().Error("committee size exceeds available nodes",
-				"kind", kind,
-				"runtime_id", rt.ID,
-				"wanted_nodes", wantedNodes,
-				"nr_nodes", nrNodes,
-			)
-			if err = schedulerState.NewMutableState(ctx.State()).DropCommittee(ctx, kind, rt.ID); err != nil {
-				return fmt.Errorf("failed to drop committee: %w", err)
-			}
-			return nil
-		}
-
-		// Do the actual election.
-		rngCtxRole := append([]byte{}, rngCtx...)
-		switch role {
-		case scheduler.RoleWorker:
-			rngCtxRole = append(rngCtxRole, RNGContextRoleWorker...)
-		case scheduler.RoleBackupWorker:
-			rngCtxRole = append(rngCtxRole, RNGContextRoleBackupWorker...)
-		default:
-			return fmt.Errorf("unsupported role: %v", role)
-		}
-
-		var idxs []int
-		idxs, err = GetPerm(beacon, rt.ID, rngCtxRole, nrNodes)
-		if err != nil {
-			return fmt.Errorf("failed to derive permutation: %w", err)
-		}
-
-		var elected []*scheduler.CommitteeNode
-		nodesPerEntity := make(map[signature.PublicKey]int)
-		for _, idx := range idxs {
-			n := nodeLists[role][idx]
-
-			// Check election-time scheduling constraints.
-			if mn := cs[role].MaxNodes; mn != nil {
-				if nodesPerEntity[n.EntityID] >= int(mn.Limit) {
-					continue
-				}
-				nodesPerEntity[n.EntityID]++
-			}
-
-			elected = append(elected, &scheduler.CommitteeNode{
-				Role:      role,
-				PublicKey: n.ID,
-			})
-			if len(elected) >= wantedNodes {
-				break
-			}
-		}
-
-		if len(elected) != wantedNodes {
-			ctx.Logger().Error("insufficient nodes that satisfy constraints to elect",
-				"kind", kind,
-				"role", role,
-				"runtime_id", rt.ID,
-				"available", len(elected),
-			)
-			if err = schedulerState.NewMutableState(ctx.State()).DropCommittee(ctx, kind, rt.ID); err != nil {
-				return fmt.Errorf("failed to drop committee: %w", err)
-			}
-			return nil
-		}
-
-		members = append(members, elected...)
-	}
-
-	err = schedulerState.NewMutableState(ctx.State()).PutCommittee(ctx, &scheduler.Committee{
-		Kind:      kind,
-		RuntimeID: rt.ID,
-		Members:   members,
-		ValidFor:  epoch,
-	})
-	if err != nil {
-		return fmt.Errorf("failed to save committee: %w", err)
-	}
-	return nil
-}
-
-// Operates on consensus connection.
 func (app *schedulerApplication) electAllCommittees(
 	ctx *api.Context,
-	request types.RequestBeginBlock,
-	epoch beacon.EpochTime,
-	beacon []byte,
+	appState api.ApplicationQueryState,
+	schedulerParameters *scheduler.ConsensusParameters,
+	beaconState *beaconState.MutableState,
+	beaconParameters *beacon.ConsensusParameters,
 	stakeAcc *stakingState.StakeAccumulatorCache,
 	entitiesEligibleForReward map[staking.Address]bool,
 	validatorEntities map[staking.Address]bool,
 	runtimes []*registry.Runtime,
-	nodes []*node.Node,
+	nodeList []*node.Node,
 	kind scheduler.CommitteeKind,
 ) error {
 	for _, runtime := range runtimes {
-		if err := app.electCommittee(ctx, epoch, beacon, stakeAcc, entitiesEligibleForReward, validatorEntities, runtime, nodes, kind); err != nil {
+		if err := app.electCommittee(
+			ctx,
+			appState,
+			schedulerParameters,
+			beaconState,
+			beaconParameters,
+			stakeAcc,
+			entitiesEligibleForReward,
+			validatorEntities,
+			runtime,
+			nodeList,
+			kind,
+		); err != nil {
 			return err
 		}
 	}
@@ -595,7 +408,9 @@ func (app *schedulerApplication) electAllCommittees(
 
 func (app *schedulerApplication) electValidators(
 	ctx *api.Context,
-	beacon []byte,
+	appState api.ApplicationQueryState,
+	beaconState *beaconState.MutableState,
+	beaconParameters *beacon.ConsensusParameters,
 	stakeAcc *stakingState.StakeAccumulatorCache,
 	entitiesEligibleForReward map[staking.Address]bool,
 	nodes []*node.Node,
@@ -621,31 +436,31 @@ func (app *schedulerApplication) electValidators(
 
 	// Sort all of the entities that are actually running eligible validator
 	// nodes by descending stake.
-	sortedEntities, err := stakingAddressMapToSliceByStake(entities, stakeAcc, beacon)
+	weakEntropy, err := beaconState.Beacon(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("tendermint/scheduler: couldn't get beacon: %w", err)
+	}
+	sortedEntities, err := stakingAddressMapToSliceByStake(entities, stakeAcc, weakEntropy)
 	if err != nil {
 		return nil, err
 	}
 
 	// Shuffle the node list.
-	drbg, err := drbg.New(crypto.SHA512, beacon, nil, RNGContextValidators)
+	shuffledNodes, err := shuffleValidators(ctx, appState, params, beaconState, beaconParameters, nodeList)
 	if err != nil {
-		return nil, fmt.Errorf("tendermint/scheduler: couldn't instantiate DRBG: %w", err)
+		return nil, err
 	}
-	rngSrc := mathrand.New(drbg)
-	rng := rand.New(rngSrc)
-
-	idxs := rng.Perm(len(nodeList))
 
 	// Gather all the entities nodes.  If the entity has more than one node,
 	// ordering will be deterministically random due to the shuffle.
 	entityNodesMap := make(map[staking.Address][]*node.Node)
-	for i := 0; i < len(idxs); i++ {
-		n := nodeList[idxs[i]]
-		entAddr := staking.NewAddress(n.EntityID)
+	for i := range shuffledNodes {
+		n := shuffledNodes[i] // This is due to the use of append.
 
-		entNodes := entityNodesMap[entAddr]
-		entNodes = append(entNodes, n)
-		entityNodesMap[entAddr] = entNodes
+		entityAddress := staking.NewAddress(n.EntityID)
+		entityNodes := entityNodesMap[entityAddress]
+		entityNodes = append(entityNodes, n)
+		entityNodesMap[entityAddress] = entityNodes
 	}
 
 	// Go down the list of entities running nodes by stake, picking one node

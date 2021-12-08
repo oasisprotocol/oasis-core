@@ -4,8 +4,11 @@ import (
 	"fmt"
 
 	beacon "github.com/oasisprotocol/oasis-core/go/beacon/api"
+	"github.com/oasisprotocol/oasis-core/go/common"
+	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	"github.com/oasisprotocol/oasis-core/go/common/node"
 	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
+	scheduler "github.com/oasisprotocol/oasis-core/go/scheduler/api"
 )
 
 // Byzantine is an Oasis byzantine node.
@@ -27,6 +30,8 @@ type ByzantineCfg struct {
 
 	Script    string
 	ExtraArgs []Argument
+
+	ForceElectParams *scheduler.ForceElectCommitteeRole
 
 	IdentitySeed string
 
@@ -110,6 +115,22 @@ func (net *Network) NewByzantine(cfg *ByzantineCfg) (*Byzantine, error) {
 
 	net.byzantine = append(net.byzantine, worker)
 	host.features = append(host.features, worker)
+
+	if cfg.Runtime >= 0 {
+		rt := net.runtimes[cfg.Runtime].id
+		pk := host.nodeSigner
+
+		if net.cfg.SchedulerForceElect == nil {
+			net.cfg.SchedulerForceElect = make(map[common.Namespace]map[signature.PublicKey]*scheduler.ForceElectCommitteeRole)
+		}
+		if net.cfg.SchedulerForceElect[rt] == nil {
+			net.cfg.SchedulerForceElect[rt] = make(map[signature.PublicKey]*scheduler.ForceElectCommitteeRole)
+		}
+		if params := cfg.ForceElectParams; params != nil {
+			tmpParams := *params
+			net.cfg.SchedulerForceElect[rt][pk] = &tmpParams
+		}
+	}
 
 	return worker, nil
 }

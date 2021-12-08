@@ -38,6 +38,9 @@ func TestCompositeCtor(t *testing.T) {
 	err = sf.EnsureRole(signature.SignerP2P)
 	require.Equal(signature.ErrRoleMismatch, err, "EnsureRole: not configured (p2p)")
 
+	err = sf.EnsureRole(signature.SignerVRF)
+	require.Equal(signature.ErrRoleMismatch, err, "EnsureRole: not configured (VRF)")
+
 	err = sf.EnsureRole(signature.SignerConsensus)
 	require.NoError(err, "EnsureRole: memory")
 

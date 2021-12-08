@@ -3,7 +3,6 @@ package oasis
 import (
 	"fmt"
 
-	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	fileSigner "github.com/oasisprotocol/oasis-core/go/common/crypto/signature/signers/file"
 	"github.com/oasisprotocol/oasis-core/go/common/identity"
 	"github.com/oasisprotocol/oasis-core/go/consensus/tendermint/crypto"
@@ -61,7 +60,7 @@ func (net *Network) NewSeed(cfg *SeedCfg) (*Seed, error) {
 	// Pre-provision the node identity, so that we can figure out what
 	// to pass all the actual nodes in advance, instead of having to
 	// start the node and fork out to `oasis-node debug tendermint show-node-id`.
-	signerFactory, err := fileSigner.NewFactory(host.dir.String(), signature.SignerNode, signature.SignerP2P, signature.SignerConsensus)
+	signerFactory, err := fileSigner.NewFactory(host.dir.String(), identity.RequiredSignerRoles...)
 	if err != nil {
 		return nil, fmt.Errorf("oasis/seed: failed to create seed signer factory: %w", err)
 	}

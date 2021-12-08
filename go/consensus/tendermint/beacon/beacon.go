@@ -5,6 +5,7 @@ package beacon
 import (
 	"bytes"
 	"context"
+	"encoding/hex"
 	"fmt"
 	"sync"
 
@@ -48,9 +49,9 @@ type serviceClient struct {
 	epoch             beaconAPI.EpochTime
 	epochCurrentBlock int64
 
-	pvssNotifier     *pubsub.Broker
-	pvssLastNotified hash.Hash
-	pvssEvent        *beaconAPI.PVSSEvent
+	vrfNotifier     *pubsub.Broker
+	vrfLastNotified hash.Hash
+	vrfEvent        *beaconAPI.VRFEvent
 
 	initialNotify bool
 
@@ -193,18 +194,18 @@ func (sc *serviceClient) GetBeacon(ctx context.Context, height int64) ([]byte, e
 	return q.Beacon(ctx)
 }
 
-func (sc *serviceClient) GetPVSSState(ctx context.Context, height int64) (*beaconAPI.PVSSState, error) {
+func (sc *serviceClient) GetVRFState(ctx context.Context, height int64) (*beaconAPI.VRFState, error) {
 	q, err := sc.querier.QueryAt(ctx, height)
 	if err != nil {
 		return nil, err
 	}
 
-	return q.PVSSState(ctx)
+	return q.VRFState(ctx)
 }
 
-func (sc *serviceClient) WatchLatestPVSSEvent(ctx context.Context) (<-chan *beaconAPI.PVSSEvent, *pubsub.Subscription, error) {
-	typedCh := make(chan *beaconAPI.PVSSEvent)
-	sub := sc.pvssNotifier.Subscribe()
+func (sc *serviceClient) WatchLatestVRFEvent(ctx context.Context) (<-chan *beaconAPI.VRFEvent, *pubsub.Subscription, error) {
+	typedCh := make(chan *beaconAPI.VRFEvent)
+	sub := sc.vrfNotifier.Subscribe()
 	sub.Unwrap(typedCh)
 
 	return typedCh, sub, nil
@@ -263,17 +264,17 @@ func (sc *serviceClient) DeliverBlock(ctx context.Context, height int64) error {
 		sc.epochNotifier.Broadcast(epoch)
 	}
 
-	var pvssState *beaconAPI.PVSSState
-	pvssState, err = q.PVSSState(ctx)
+	var vrfState *beaconAPI.VRFState
+	vrfState, err = q.VRFState(ctx)
 	if err != nil {
-		return fmt.Errorf("beacon: failed to query PVSS state: %w", err)
+		return fmt.Errorf("beacon: failed to query VRF state: %w", err)
 	}
-	if pvssState != nil {
-		var event beaconAPI.PVSSEvent
-		event.FromState(pvssState)
+	if vrfState != nil {
+		var event beaconAPI.VRFEvent
+		event.FromState(vrfState)
 
-		if sc.updateCachedPVSSEvent(&event) {
-			sc.pvssNotifier.Broadcast(&event)
+		if sc.updateCachedVRFEvent(&event) {
+			sc.vrfNotifier.Broadcast(&event)
 		}
 	}
 
@@ -296,16 +297,16 @@ func (sc *serviceClient) DeliverEvent(ctx context.Context, height int64, tx tmty
 				sc.epochNotifier.Broadcast(epoch)
 			}
 		}
-		if tmAPI.IsAttributeKind(pair.GetKey(), &beaconAPI.PVSSEvent{}) {
-			var event beaconAPI.PVSSEvent
+		if tmAPI.IsAttributeKind(pair.GetKey(), &beaconAPI.VRFEvent{}) {
+			var event beaconAPI.VRFEvent
 			if err := cbor.Unmarshal(pair.GetValue(), &event); err != nil {
-				sc.logger.Error("beacon: malformed PVSS round",
+				sc.logger.Error("beacon: malformed VRF event",
 					"err", err,
 				)
 				continue
 			}
-			if sc.updateCachedPVSSEvent(&event) {
-				sc.pvssNotifier.Broadcast(&event)
+			if sc.updateCachedVRFEvent(&event) {
+				sc.vrfNotifier.Broadcast(&event)
 			}
 		}
 	}
@@ -331,21 +332,20 @@ func (sc *serviceClient) updateCachedEpoch(height int64, epoch beaconAPI.EpochTi
 	return false
 }
 
-func (sc *serviceClient) updateCachedPVSSEvent(event *beaconAPI.PVSSEvent) bool {
+func (sc *serviceClient) updateCachedVRFEvent(event *beaconAPI.VRFEvent) bool {
 	sc.Lock()
 	defer sc.Unlock()
 
-	sc.pvssEvent = event
+	sc.vrfEvent = event
 	cmp := hash.NewFrom(event)
 
-	if !cmp.Equal(&sc.pvssLastNotified) {
-		sc.logger.Debug("PVSS round event",
+	if !cmp.Equal(&sc.vrfLastNotified) {
+		sc.logger.Debug("VRF round event",
 			"epoch", event.Epoch,
-			"round", event.Round,
-			"state", event.State,
-			"height", event.Height,
+			"alpha", hex.EncodeToString(event.Alpha),
+			"submit_after", event.SubmitAfter,
 		)
-		sc.pvssLastNotified = cmp
+		sc.vrfLastNotified = cmp
 		return true
 	}
 
@@ -381,12 +381,12 @@ func New(ctx context.Context, backend tmAPI.Backend) (ServiceClient, error) {
 			ch.In() <- sc.epoch
 		}
 	})
-	sc.pvssNotifier = pubsub.NewBrokerEx(func(ch channels.Channel) {
+	sc.vrfNotifier = pubsub.NewBrokerEx(func(ch channels.Channel) {
 		sc.RLock()
 		defer sc.RUnlock()
 
-		if sc.pvssEvent != nil {
-			ch.In() <- sc.pvssEvent
+		if sc.vrfEvent != nil {
+			ch.In() <- sc.vrfEvent
 		}
 	})
 

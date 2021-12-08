@@ -13,7 +13,6 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
 	"github.com/oasisprotocol/oasis-core/go/consensus/api/transaction"
 	tmapi "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/api"
-	beaconapp "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/apps/beacon"
 	registryApi "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/apps/registry/api"
 	registryState "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/apps/registry/state"
 	roothashApi "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/apps/roothash/api"
@@ -72,9 +71,6 @@ func (app *rootHashApplication) OnCleanup() {
 }
 
 func (app *rootHashApplication) BeginBlock(ctx *tmapi.Context, request types.RequestBeginBlock) error {
-	// Check if the beacon has failed in a way that runtimes should be
-	// disabled.
-	beaconFailed := ctx.HasEvent(beaconapp.AppName, beaconapp.KeyDisableRuntimes)
 	// Check if rescheduling has taken place.
 	rescheduled := ctx.HasEvent(schedulerapp.AppName, schedulerapp.KeyElected)
 	// Check if there was an epoch transition.
@@ -83,18 +79,7 @@ func (app *rootHashApplication) BeginBlock(ctx *tmapi.Context, request types.Req
 	state := roothashState.NewMutableState(ctx.State())
 
 	switch {
-	case beaconFailed:
-		ctx.Logger().Warn("disabling all transactions, beacon failed")
-
-		if err := state.SetRejectTransactions(ctx); err != nil {
-			return fmt.Errorf("failed to set tx disable: %w", err)
-		}
-	case epochChanged:
-		if err := state.ClearRejectTransactions(ctx); err != nil {
-			return fmt.Errorf("failed to clear tx disable: %w", err)
-		}
-		fallthrough
-	case rescheduled:
+	case epochChanged, rescheduled:
 		return app.onCommitteeChanged(ctx, state, epoch)
 	}
 
@@ -364,25 +349,17 @@ func (app *rootHashApplication) verifyRuntimeUpdate(ctx *tmapi.Context, rt *regi
 func (app *rootHashApplication) ExecuteTx(ctx *tmapi.Context, tx *transaction.Transaction) error {
 	state := roothashState.NewMutableState(ctx.State())
 
-	rejectTransactions, err := state.RejectTransactions(ctx)
-	if err != nil {
-		return err
-	}
-	if rejectTransactions {
-		return fmt.Errorf("roothash: refusing to process transactions, beacon failed")
-	}
-
 	switch tx.Method {
 	case roothash.MethodExecutorCommit:
 		var xc roothash.ExecutorCommit
-		if err = cbor.Unmarshal(tx.Body, &xc); err != nil {
+		if err := cbor.Unmarshal(tx.Body, &xc); err != nil {
 			return err
 		}
 
 		return app.executorCommit(ctx, state, &xc)
 	case roothash.MethodExecutorProposerTimeout:
 		var xc roothash.ExecutorProposerTimeoutRequest
-		if err = cbor.Unmarshal(tx.Body, &xc); err != nil {
+		if err := cbor.Unmarshal(tx.Body, &xc); err != nil {
 			return err
 		}
 

@@ -8,6 +8,7 @@ import (
 	"io"
 
 	"github.com/oasisprotocol/curve25519-voi/primitives/ed25519"
+	"github.com/oasisprotocol/curve25519-voi/primitives/ed25519/extra/ecvrf"
 
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 )
@@ -23,6 +24,7 @@ const (
 var (
 	_ signature.SignerFactory = (*Factory)(nil)
 	_ signature.Signer        = (*Signer)(nil)
+	_ signature.UnsafeSigner  = (*Signer)(nil)
 )
 
 // Factory is a memory backed SignerFactory.
@@ -98,6 +100,19 @@ func (s *Signer) Reset() {
 // MUST be removed for HSM support.
 func (s *Signer) UnsafeBytes() []byte {
 	return s.privateKey[:]
+}
+
+// UnsafeSetRole force-sets the role of the signer.
+func (s *Signer) UnsafeSetRole(role signature.SignerRole) {
+	s.role = role
+}
+
+// Prove generates a VRF proof with the private key over the alpha.
+func (s *Signer) Prove(alphaString []byte) ([]byte, error) {
+	if s.role != signature.SignerVRF {
+		return nil, signature.ErrInvalidRole
+	}
+	return ecvrf.Prove(s.privateKey, alphaString), nil
 }
 
 // NewSigner creates a new signer.

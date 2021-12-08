@@ -118,7 +118,7 @@ func (net *Network) NewSentry(cfg *SentryCfg) (*Sentry, error) {
 	// Pre-provision node's identity to pass the sentry node's consensus
 	// address to the validator so it can configure the sentry node's consensus
 	// address as its consensus address.
-	signerFactory, err := fileSigner.NewFactory(host.dir.String(), signature.SignerNode, signature.SignerP2P, signature.SignerConsensus)
+	signerFactory, err := fileSigner.NewFactory(host.dir.String(), identity.RequiredSignerRoles...)
 	if err != nil {
 		net.logger.Error("failed to create sentry signer factory",
 			"err", err,

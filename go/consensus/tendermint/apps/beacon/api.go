@@ -39,8 +39,7 @@ var (
 	// Methods is a list of all methods supported by the beacon application.
 	Methods = []transaction.MethodName{
 		MethodSetEpoch,
-		beacon.MethodPVSSCommit,
-		beacon.MethodPVSSReveal,
+		beacon.MethodVRFProve,
 	}
 )
 

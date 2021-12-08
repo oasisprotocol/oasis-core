@@ -4,7 +4,6 @@ package api
 import (
 	"context"
 	"fmt"
-	"math"
 
 	"github.com/oasisprotocol/oasis-core/go/common/errors"
 	"github.com/oasisprotocol/oasis-core/go/common/pubsub"
@@ -24,8 +23,8 @@ const (
 	// BackendInsecure is the name of the insecure backend.
 	BackendInsecure = "insecure"
 
-	// BackendPVSS is the name of the PVSS backend.
-	BackendPVSS = "pvss"
+	// BackendVRF is the name of the VRF backend.
+	BackendVRF = "vrf"
 )
 
 // ErrBeaconNotAvailable is the error returned when a beacon is not
@@ -129,14 +128,11 @@ type ConsensusParameters struct {
 	// DebugMockBackend is flag for enabling the mock epochtime backend.
 	DebugMockBackend bool `json:"debug_mock_backend,omitempty"`
 
-	// DebugDeterministic is true iff the output should be deterministic.
-	DebugDeterministic bool `json:"debug_deterministic,omitempty"`
-
 	// InsecureParameters are the beacon parameters for the insecure backend.
 	InsecureParameters *InsecureParameters `json:"insecure_parameters,omitempty"`
 
-	// PVSSParameters are the beacon parameters for the PVSS backend.
-	PVSSParameters *PVSSParameters `json:"pvss_parameters,omitempty"`
+	// VRFParamenters are the beacon parameters for the VRF backend.
+	VRFParameters *VRFParameters `json:"vrf_parameters,omitempty"`
 }
 
 // InsecureParameters are the beacon parameters for the insecure backend.
@@ -157,39 +153,29 @@ func (g *Genesis) SanityCheck() error {
 		if params.Interval <= 0 && !g.Parameters.DebugMockBackend {
 			return fmt.Errorf("beacon: sanity check failed: epoch interval must be > 0")
 		}
-	case BackendPVSS:
-		params := g.Parameters.PVSSParameters
+	case BackendVRF:
+		params := g.Parameters.VRFParameters
 		if params == nil {
-			return fmt.Errorf("beacon: sanity check failed: PVSS backend not configured")
+			return fmt.Errorf("beacon: sanity check failed: VRF backend not configured")
 		}
 
-		if params.Participants <= 1 {
-			return fmt.Errorf("beacon: sanity check failed: PVSS participants must be > 1")
+		if params.AlphaHighQualityThreshold == 0 {
+			return fmt.Errorf("beacon: sanity check failed: alpha threshold must be > 0")
 		}
-		if params.Participants > math.MaxInt32 {
-			return fmt.Errorf("beacon: sanity check failed: PVSS participants must be < %d", math.MaxInt32)
+		if params.Interval <= 0 {
+			return fmt.Errorf("beacon: sanity check failed: epoch interval must be > 0")
 		}
-		if n := params.Threshold; n <= 1 || n > params.Participants {
-			return fmt.Errorf("beacon: sanity check failed: PVSS threshold must be > 1 and <= participants")
+		if params.ProofSubmissionDelay <= 0 {
+			return fmt.Errorf("beacon: sanity check failed: submission delay must be > 0")
 		}
-
-		if params.CommitInterval <= 0 {
-			return fmt.Errorf("beacon: sanity check failed: PVSS commit interval must be > 0")
-		}
-		if params.RevealInterval <= 0 {
-			return fmt.Errorf("beacon: sanity check failed: PVSS reveal interval must be > 0")
-		}
-		if params.TransitionDelay <= 0 {
-			return fmt.Errorf("beacon: sanity check failed: PVSS transition delay must be > 0")
-		}
-		if len(params.DebugForcedParticipants) > 0 && !flags.DebugDontBlameOasis() {
-			return fmt.Errorf("beacon: sanity check failed: PVSS forced participants set")
+		if params.ProofSubmissionDelay >= params.Interval {
+			return fmt.Errorf("beacon: sanity check failed: submission delay must be < epoch interval")
 		}
 	default:
 		return fmt.Errorf("beacon: sanity check failed: unknown backend: '%s'", g.Parameters.Backend)
 	}
 
-	unsafeFlags := g.Parameters.DebugMockBackend || g.Parameters.DebugDeterministic
+	unsafeFlags := g.Parameters.DebugMockBackend
 	if unsafeFlags && !flags.DebugDontBlameOasis() {
 		return fmt.Errorf("beacon: sanity check failed: one or more unsafe debug flags set")
 	}

@@ -114,46 +114,28 @@ func (impl *backendInsecure) onEpochChangeBeacon(
 	epoch beacon.EpochTime,
 	req types.RequestBeginBlock,
 ) error {
-	var entropyCtx, entropy []byte
+	var entropy []byte
 
-	switch params.DebugDeterministic {
-	case false:
-		entropyCtx = prodEntropyCtx
-
-		height := ctx.BlockHeight()
-		if height <= ctx.InitialHeight() {
-			// No meaningful previous commit, use the block hash.  This isn't
-			// fantastic, but it's only for one epoch.
-			ctx.Logger().Debug("onBeaconEpochChange: using block hash as entropy")
-			entropy = req.Hash
-		} else {
-			// Use the previous commit hash as the entropy input, under the theory
-			// that the merkle root of all the commits that went into the last
-			// block is harder for any single validator to game than the block
-			// hash.
-			//
-			// Note: This is still insecure, and is vulnerable to adversarial
-			// manipulation.  If this is a problem, don't use this backend.
-			ctx.Logger().Debug("onBeaconEpochChange: using commit hash as entropy")
-			entropy = req.Header.GetLastCommitHash()
-		}
-		if len(entropy) == 0 {
-			return fmt.Errorf("beacon: failed to obtain entropy")
-		}
-	case true:
-		// UNSAFE/DEBUG - Deterministic beacon.
-		entropyCtx = DebugEntropyCtx
-		// We're setting this random seed so that we have suitable
-		// committee schedules for Byzantine E2E scenarios, where we
-		// want nodes to be scheduled for only one committee.
+	entropyCtx := prodEntropyCtx
+	height := ctx.BlockHeight()
+	if height <= ctx.InitialHeight() {
+		// No meaningful previous commit, use the block hash.  This isn't
+		// fantastic, but it's only for one epoch.
+		ctx.Logger().Debug("onBeaconEpochChange: using block hash as entropy")
+		entropy = req.Hash
+	} else {
+		// Use the previous commit hash as the entropy input, under the theory
+		// that the merkle root of all the commits that went into the last
+		// block is harder for any single validator to game than the block
+		// hash.
 		//
-		// The permutations derived from this on the first epoch
-		// need to have (i) an index that's compute worker only and
-		// (ii) an index that's merge worker only. See
-		// go/oasis-test-runner/scenario/e2e/byzantine.go for the
-		// permutations generated from this seed. These permutations
-		// are generated independently of the deterministic node IDs.
-		entropy = DebugEntropy
+		// Note: This is still insecure, and is vulnerable to adversarial
+		// manipulation.  If this is a problem, don't use this backend.
+		ctx.Logger().Debug("onBeaconEpochChange: using commit hash as entropy")
+		entropy = req.Header.GetLastCommitHash()
+	}
+	if len(entropy) == 0 {
+		return fmt.Errorf("beacon: failed to obtain entropy")
 	}
 
 	b := GetBeacon(epoch, entropyCtx, entropy)

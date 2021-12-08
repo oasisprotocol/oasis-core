@@ -26,9 +26,6 @@ func (app *beaconApplication) InitChain(ctx *api.Context, req types.RequestInitC
 	if err := state.SetConsensusParameters(ctx, params); err != nil {
 		return fmt.Errorf("beacon: failed to set consensus parameters: %w", err)
 	}
-	if params.DebugDeterministic {
-		ctx.Logger().Warn("Determistic beacon entropy is NOT FOR PRODUCTION USE")
-	}
 
 	// Do the per-backend genesis initialization.
 	if err := app.doInitBackend(params); err != nil {
@@ -50,8 +47,8 @@ func (app *beaconApplication) doInitBackend(params *beacon.ConsensusParameters) 
 	switch backendName {
 	case beacon.BackendInsecure:
 		app.backend = &backendInsecure{app}
-	case beacon.BackendPVSS:
-		app.backend = &backendPVSS{app}
+	case beacon.BackendVRF:
+		app.backend = &backendVRF{app}
 	default:
 		return fmt.Errorf("beacon: unsupported backend: '%s'", backendName)
 	}

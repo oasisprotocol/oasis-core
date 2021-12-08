@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"time"
 
+	beacon "github.com/oasisprotocol/oasis-core/go/beacon/api"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/env"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/oasis"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/scenario"
@@ -57,7 +58,8 @@ func (sc *runtimeMessageImpl) Run(childEnv *env.Env) error {
 		return err
 	}
 
-	if err = sc.initialEpochTransitions(fixture); err != nil {
+	var epoch beacon.EpochTime
+	if epoch, err = sc.initialEpochTransitions(fixture); err != nil {
 		return err
 	}
 
@@ -70,38 +72,25 @@ func (sc *runtimeMessageImpl) Run(childEnv *env.Env) error {
 	}
 	defer sub.Close()
 
-	// We should be at round 2 after the epoch transitions, plus 1 for the genesis block.
-	sc.Logger.Debug("querying latest round")
-	const expectedRound uint64 = 2 + 1
-WaitLatestRound:
-	for {
-		select {
-		case blk := <-blkCh:
-			round := blk.Block.Header.Round
-			sc.Logger.Debug("seen runtime round", "round", round)
-
-			if round < expectedRound {
-				continue
-			}
-			if round > expectedRound {
-				return fmt.Errorf("unexpected latest round, got: %d, expected: %d", round, expectedRound)
-			}
-			break WaitLatestRound
-		case <-time.After(waitTimeout):
-			return fmt.Errorf("timed out waiting for runtime rounds")
-		}
-	}
-	latestRound := expectedRound
-
 	// Submit a consensus transfer transaction. This should result in two runtime
 	// rounds:
 	//   - in first round the consensus transfer transaction should be executed
 	//   - in the second round there should be no transactions, the round should
 	//     contain message results of the consensus transfer.
 	sc.Logger.Debug("submitting consensus_transfer runtime transaction")
-	if err = sc.submitConsensusXferTx(ctx, runtimeID, staking.Transfer{}, 0); err != nil {
+	var txMetaResponse *api.SubmitTxMetaResponse
+	if txMetaResponse, err = sc.submitConsensusXferTxMeta(ctx, runtimeID, staking.Transfer{}, 0); err != nil {
 		return err
 	}
+	if _, err = unpackRawTxResp(txMetaResponse.Output); err != nil {
+		return err
+	}
+
+	sc.Logger.Debug("transaction successful",
+		"epoch", epoch,
+		"round", txMetaResponse.Round,
+	)
+	latestRound := txMetaResponse.Round
 
 	sc.Logger.Debug("watching runtime round transitions")
 	var reachedMsgRound bool
@@ -111,10 +100,10 @@ WaitLatestRound:
 			round := blk.Block.Header.Round
 			sc.Logger.Debug("round transition", "round", round, "header", blk.Block.Header)
 			switch {
-			case round <= latestRound:
+			case round < latestRound:
 				// Skip old rounds.
 				continue
-			case round > latestRound+2:
+			case round > latestRound+1:
 				// Only two rounds are expected.
 				return fmt.Errorf("unexpected runtime round: %d", round)
 			default:
@@ -129,12 +118,12 @@ WaitLatestRound:
 					return err
 				}
 				switch round {
-				case latestRound + 1:
+				case latestRound:
 					// Round with the submitted consensus_transfer transaction.
 					if len(txs) != 1 {
 						return fmt.Errorf("expected 1 transaction at round: %d, got: %d", round, len(txs))
 					}
-				case latestRound + 2:
+				case latestRound + 1:
 					// Round with no transactions - triggered due to message results.
 					if len(txs) != 0 {
 						return fmt.Errorf("expected 0 transactions at round: %d, got: %d", round, len(txs))

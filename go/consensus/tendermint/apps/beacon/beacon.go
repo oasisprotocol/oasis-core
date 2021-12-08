@@ -19,9 +19,6 @@ import (
 var (
 	prodEntropyCtx = []byte("EkB-tmnt")
 
-	DebugEntropyCtx = []byte("Ekb-Dumm")
-	DebugEntropy    = []byte("If you change this, you will fuck up the byzantine tests!!")
-
 	_ api.Application = (*beaconApplication)(nil)
 )
 

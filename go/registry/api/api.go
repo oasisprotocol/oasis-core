@@ -13,7 +13,6 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common"
 	"github.com/oasisprotocol/oasis-core/go/common/cbor"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
-	"github.com/oasisprotocol/oasis-core/go/common/crypto/pvss"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	"github.com/oasisprotocol/oasis-core/go/common/entity"
 	"github.com/oasisprotocol/oasis-core/go/common/errors"
@@ -325,9 +324,6 @@ type NodeLookup interface {
 	// NodeBySubKey looks up a specific node by its consensus, P2P or TLS key.
 	NodeBySubKey(ctx context.Context, key signature.PublicKey) (*node.Node, error)
 
-	// NodeByBeaconPoint looks up a specific node by its beacon point.
-	NodeByBeaconPoint(ctx context.Context, point pvss.Point) (*node.Node, error)
-
 	// Returns a list of all nodes.
 	Nodes(ctx context.Context) ([]*node.Node, error)
 }
@@ -595,6 +591,33 @@ func VerifyRegisterNodeArgs( // nolint: gocyclo
 		return nil, nil, err
 	}
 
+	// Validate VRFInfo, DeprecatedBeacon.
+	if n.VRF != nil {
+		if !sigNode.MultiSigned.IsSignedBy(n.VRF.ID) {
+			logger.Error("RegisterNode: not signed by VRF ID",
+				"signed_node", sigNode,
+				"node", n,
+			)
+			return nil, nil, fmt.Errorf("%w: registration not signed by VRF ID", ErrInvalidArgument)
+		}
+		expectedSigners = append(expectedSigners, n.VRF.ID)
+	}
+	switch isGenesis {
+	case true:
+		// Allow legacy entries without a VRF public key, and with the old PVSS
+		// curve point to be in the genesis document, to ease transition.
+		//
+		// All new (re)registrations will require a VRF public key, and reject
+		// descriptors with the old PVSS curve point.
+	case false:
+		if n.VRF == nil {
+			return nil, nil, fmt.Errorf("%w: registration missing VRF ID", ErrInvalidArgument)
+		}
+		if n.DeprecatedBeacon != nil {
+			return nil, nil, fmt.Errorf("%w: registration contains deprecated PVSS field", ErrInvalidArgument)
+		}
+	}
+
 	// Validate TLSInfo.
 	if !n.TLS.PubKey.IsValid() {
 		logger.Error("RegisterNode: invalid TLS public key",
@@ -646,83 +669,52 @@ func VerifyRegisterNodeArgs( // nolint: gocyclo
 		return nil, nil, err
 	}
 
-	// Make sure that the consensus, TLS and P2P keys are unique (between
-	// themselves and compared to other nodes).
+	// Make sure that the consensus, TLS, P2P, and VRF keys are unique
+	// (between themselves and compared to other nodes).
 	//
 	// Note that if a key exists and belongs to the same node ID, this is not
 	// counted as an error, since it is possible that the node descriptor is
 	// just being updated (this check is called in both cases).
-	if n.Consensus.ID.Equal(n.P2P.ID) || n.Consensus.ID.Equal(n.TLS.PubKey) || n.P2P.ID.Equal(n.TLS.PubKey) {
-		logger.Error("RegisterNode: node consensus, P2P and TLS keys must differ",
-			"node", n,
-		)
-		return nil, nil, fmt.Errorf("%w: P2P, consensus and TLS keys not unique", ErrInvalidArgument)
+	type nodeSubKey struct {
+		descr string
+		id    signature.PublicKey
 	}
 
-	existingNode, err := nodeLookup.NodeBySubKey(ctx, n.Consensus.ID)
-	if err != nil && err != ErrNoSuchNode {
-		logger.Error("RegisterNode: failed to get node by consensus ID",
-			"err", err,
-			"consensus_id", n.Consensus.ID.String(),
-		)
-		return nil, nil, fmt.Errorf("failed to lookup node by subkey: %w", err)
+	subKeyDedup := make(map[signature.PublicKey]bool)
+	subKeys := []nodeSubKey{
+		{"consensus ID", n.Consensus.ID},
+		{"P2P ID", n.P2P.ID},
+		{"TLS public key", n.TLS.PubKey},
 	}
-	if existingNode != nil && existingNode.ID != n.ID {
-		logger.Error("RegisterNode: duplicate node consensus ID",
-			"node_id", n.ID,
-			"existing_node_id", existingNode.ID,
-		)
-		return nil, nil, fmt.Errorf("%w: duplicate node consensus ID", ErrInvalidArgument)
+	if n.VRF != nil {
+		subKeys = append(subKeys, nodeSubKey{"VRF ID", n.VRF.ID})
 	}
 
-	existingNode, err = nodeLookup.NodeBySubKey(ctx, n.P2P.ID)
-	if err != nil && err != ErrNoSuchNode {
-		logger.Error("RegisterNode: failed to get node by P2P ID",
-			"err", err,
-			"p2p_id", n.P2P.ID.String(),
-		)
-		return nil, nil, fmt.Errorf("failed to lookup node by subkey: %w", err)
-	}
-	if existingNode != nil && existingNode.ID != n.ID {
-		logger.Error("RegisterNode: duplicate node P2P ID",
-			"node_id", n.ID,
-			"existing_node_id", existingNode.ID,
-		)
-		return nil, nil, fmt.Errorf("%w: duplicate node P2P ID", ErrInvalidArgument)
-	}
+	for _, subKey := range subKeys {
+		subKeyDedup[subKey.id] = true
 
-	existingNode, err = nodeLookup.NodeBySubKey(ctx, n.TLS.PubKey)
-	if err != nil && err != ErrNoSuchNode {
-		logger.Error("RegisterNode: failed to get node by TLS public key",
-			"err", err,
-			"tls_pub_key", n.TLS.PubKey.String(),
-		)
-		return nil, nil, fmt.Errorf("failed to lookup node by subkey: %w", err)
-	}
-	if existingNode != nil && existingNode.ID != n.ID {
-		logger.Error("RegisterNode: duplicate node TLS public key",
-			"node_id", n.ID,
-			"existing_node_id", existingNode.ID,
-		)
-		return nil, nil, fmt.Errorf("%w: duplicate node TLS public key", ErrInvalidArgument)
-	}
-
-	if n.Beacon != nil {
-		existingNode, err = nodeLookup.NodeByBeaconPoint(ctx, n.Beacon.Point)
+		existingNode, err := nodeLookup.NodeBySubKey(ctx, subKey.id)
 		if err != nil && err != ErrNoSuchNode {
-			logger.Error("RegisterNode: failed to lookup node by beacon point",
+			logger.Error(fmt.Sprintf("RegisterNode: failed to get node by %s", subKey.descr),
 				"err", err,
-				"beacon_point", n.Beacon.Point,
+				"subkey_id", subKey.id.String(),
 			)
-			return nil, nil, fmt.Errorf("failed to lookup node by point: %w", err)
 		}
+
 		if existingNode != nil && existingNode.ID != n.ID {
-			logger.Error("RegisterNode: duplicate node beacon point",
+			logger.Error(fmt.Sprintf("RegisterNode: duplicate node %s", subKey.descr),
 				"node_id", n.ID,
 				"existing_node_id", existingNode.ID,
 			)
-			return nil, nil, fmt.Errorf("%w: duplicate node beacon point", ErrInvalidArgument)
+			return nil, nil, fmt.Errorf("%w: duplicate node %s", ErrInvalidArgument, subKey.descr)
 		}
+	}
+
+	if len(subKeyDedup) != len(subKeys) {
+		logger.Error("RegisterNode: node consensus, P2P, VRF and TLS keys must differ",
+			"node", n,
+		)
+		return nil, nil, fmt.Errorf("%w: node consensus, P2P, VRF and TLS keys not unique", ErrInvalidArgument)
 	}
 
 	// Ensure that only the expected signatures are present, and nothing more.

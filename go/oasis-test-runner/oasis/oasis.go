@@ -32,11 +32,10 @@ const (
 	defaultHaltEpoch                   = math.MaxUint64
 
 	defaultConsensusTimeoutCommit = 1 * time.Second
-	defaultPVSSParticipants       = 3
-	defaultPVSSThreshold          = 2
-	defaultPVSSCommitInterval     = 15
-	defaultPVSSRevealInterval     = 10
-	defaultPVSSTransitionDelay    = 4
+
+	defaultVRFAlphaThreshold  = 3
+	defaultVRFInterval        = 20
+	defaultVRFSubmissionDelay = 5
 
 	logNodeFile        = "node.log"
 	logConsoleFile     = "console.log"
@@ -176,7 +175,7 @@ func (n *Node) DataDir() string {
 
 // LoadIdentity loads the node's identity.
 func (n *Node) LoadIdentity() (*identity.Identity, error) {
-	factory, err := fileSigner.NewFactory(n.dir.String(), signature.SignerNode, signature.SignerP2P, signature.SignerConsensus)
+	factory, err := fileSigner.NewFactory(n.dir.String(), identity.RequiredSignerRoles...)
 	if err != nil {
 		return nil, err
 	}

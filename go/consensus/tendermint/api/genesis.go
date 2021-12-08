@@ -98,12 +98,14 @@ func genesisToTendermint(d *genesis.Document) (*tmtypes.GenesisDoc, error) {
 			// and we are using debug mode.
 			epochInterval = 100
 		}
-	case beacon.BackendPVSS:
-		// Note: This assumes no protocol failures (the common case).
-		// In the event of a failure, it is entirely possible that epochs
-		// can drag on for significantly longer.
-		params := d.Beacon.Parameters.PVSSParameters
-		epochInterval = params.CommitInterval + params.RevealInterval + params.TransitionDelay
+	case beacon.BackendVRF:
+		params := d.Beacon.Parameters.VRFParameters
+		epochInterval = params.Interval
+		if epochInterval == 0 && cmdFlags.DebugDontBlameOasis() && d.Beacon.Parameters.DebugMockBackend {
+			// Use a default of 100 blocks in case epoch interval is unset
+			// and we are using debug mode.
+			epochInterval = 100
+		}
 	default:
 		return nil, fmt.Errorf("tendermint: unknown beacon backend: '%s'", d.Beacon.Parameters.Backend)
 	}

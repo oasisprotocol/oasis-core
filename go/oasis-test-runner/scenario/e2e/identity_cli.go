@@ -3,7 +3,6 @@ package e2e
 import (
 	"fmt"
 
-	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	fileSigner "github.com/oasisprotocol/oasis-core/go/common/crypto/signature/signers/file"
 	"github.com/oasisprotocol/oasis-core/go/common/identity"
 	"github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common"
@@ -82,7 +81,7 @@ func (sc *identityCLIImpl) Run(childEnv *env.Env) error {
 func (sc *identityCLIImpl) loadIdentity() error {
 	sc.Logger.Info("loading generated entity")
 
-	factory, err := fileSigner.NewFactory(sc.dataDir, signature.SignerNode, signature.SignerP2P, signature.SignerConsensus)
+	factory, err := fileSigner.NewFactory(sc.dataDir, identity.RequiredSignerRoles...)
 	if err != nil {
 		return fmt.Errorf("failed to create identity file signer: %w", err)
 	}

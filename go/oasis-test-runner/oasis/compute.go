@@ -127,6 +127,9 @@ func (net *Network) NewCompute(cfg *ComputeCfg) (*Compute, error) {
 	if cfg.RuntimeProvisioner == "" {
 		cfg.RuntimeProvisioner = runtimeRegistry.RuntimeProvisionerSandboxed
 	}
+	if isNoSandbox() {
+		cfg.RuntimeProvisioner = runtimeRegistry.RuntimeProvisionerUnconfined
+	}
 
 	worker := &Compute{
 		Node:               host,

@@ -601,6 +601,8 @@ type ByzantineFixture struct { // nolint: maligned
 	ActivationEpoch beacon.EpochTime `json:"activation_epoch"`
 	Runtime         int              `json:"runtime"`
 
+	ForceElectParams *scheduler.ForceElectCommitteeRole `json:"scheduler_force_params,omitempty"`
+
 	// Consensus contains configuration for the consensus backend.
 	Consensus ConsensusFixture `json:"consensus"`
 
@@ -625,11 +627,12 @@ func (f *ByzantineFixture) Create(net *Network) (*Byzantine, error) {
 			AllowEarlyTermination:                    true,
 			Entity:                                   entity,
 		},
-		Script:          f.Script,
-		ExtraArgs:       f.ExtraArgs,
-		IdentitySeed:    f.IdentitySeed,
-		ActivationEpoch: f.ActivationEpoch,
-		Runtime:         f.Runtime,
+		Script:           f.Script,
+		ExtraArgs:        f.ExtraArgs,
+		IdentitySeed:     f.IdentitySeed,
+		ActivationEpoch:  f.ActivationEpoch,
+		Runtime:          f.Runtime,
+		ForceElectParams: f.ForceElectParams,
 	})
 }
 

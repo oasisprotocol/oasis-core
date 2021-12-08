@@ -7,7 +7,6 @@ import (
 	"io/ioutil"
 
 	"github.com/oasisprotocol/oasis-core/go/common"
-	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature/signers/file"
 	commonFuzz "github.com/oasisprotocol/oasis-core/go/common/fuzz"
 	"github.com/oasisprotocol/oasis-core/go/common/identity"
@@ -27,7 +26,7 @@ var (
 )
 
 func init() {
-	signerFactory, err := file.NewFactory(identityDir, signature.SignerNode, signature.SignerP2P, signature.SignerConsensus)
+	signerFactory, err := file.NewFactory(identityDir, identity.RequiredSignerRoles...)
 	if err != nil {
 		panic(err)
 	}

@@ -124,7 +124,7 @@ func (sc *basicImpl) Run(childEnv *env.Env) error {
 	}
 
 	// Run basic common signer tests.
-	if err = signerTests.BasicTests(sf, sc.logger); err != nil {
+	if err = signerTests.BasicTests(sf, sc.logger, signature.SignerRoles); err != nil {
 		return err
 	}
 

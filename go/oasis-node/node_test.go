@@ -187,7 +187,7 @@ func newTestNode(t *testing.T) *testNode {
 	}
 
 	// Generate the test node identity.
-	nodeSignerFactory, err := fileSigner.NewFactory(dataDir, signature.SignerNode, signature.SignerP2P, signature.SignerConsensus)
+	nodeSignerFactory, err := fileSigner.NewFactory(dataDir, identity.RequiredSignerRoles...)
 	require.NoError(err, "create node file signer")
 	identity, err := identity.LoadOrGenerate(dataDir, nodeSignerFactory, false)
 	require.NoError(err, "create test node identity")

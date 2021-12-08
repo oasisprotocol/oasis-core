@@ -69,6 +69,9 @@ func (net *Network) NewClient(cfg *ClientCfg) (*Client, error) {
 	if cfg.RuntimeProvisioner == "" {
 		cfg.RuntimeProvisioner = runtimeRegistry.RuntimeProvisionerSandboxed
 	}
+	if isNoSandbox() {
+		cfg.RuntimeProvisioner = runtimeRegistry.RuntimeProvisionerUnconfined
+	}
 
 	client := &Client{
 		Node:               host,

@@ -8,11 +8,13 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/tendermint/tendermint/abci/types"
 
+	beacon "github.com/oasisprotocol/oasis-core/go/beacon/api"
 	"github.com/oasisprotocol/oasis-core/go/common"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
 	"github.com/oasisprotocol/oasis-core/go/common/node"
 	"github.com/oasisprotocol/oasis-core/go/consensus/tendermint/api"
+	beaconState "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/apps/beacon/state"
 	schedulerState "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/apps/scheduler/state"
 	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
 	scheduler "github.com/oasisprotocol/oasis-core/go/scheduler/api"
@@ -85,9 +87,17 @@ func TestElectCommittee(t *testing.T) {
 		state: appState,
 	}
 
-	schedState := schedulerState.NewMutableState(ctx.State())
+	schedulerParameters := &scheduler.ConsensusParameters{}
 
-	mockBeacon := []byte("mock random beacon mock random beacon mock random beacon!!")
+	schedulerState := schedulerState.NewMutableState(ctx.State())
+
+	beaconState := beaconState.NewMutableState(ctx.State())
+	_ = beaconState.DebugForceSetBeacon(ctx, []byte("mock random beacon mock random beacon mock random beacon!!"))
+	_ = beaconState.SetEpoch(ctx, 1, 69)
+
+	beaconParameters := &beacon.ConsensusParameters{
+		Backend: beacon.BackendInsecure,
+	}
 
 	rtID1 := common.NewTestNamespaceFromSeed([]byte("runtime 1"), 0)
 	rtID2 := common.NewTestNamespaceFromSeed([]byte("runtime 2"), 0)
@@ -548,10 +558,22 @@ func TestElectCommittee(t *testing.T) {
 			true,
 		},
 	} {
-		err := app.electCommittee(ctx, 1, mockBeacon, nil, nil, tc.validatorEntities, &tc.rt, tc.nodes, tc.kind)
+		err := app.electCommittee(
+			ctx,
+			app.state,
+			schedulerParameters,
+			beaconState,
+			beaconParameters,
+			nil,
+			nil,
+			tc.validatorEntities,
+			&tc.rt,
+			tc.nodes,
+			tc.kind,
+		)
 		require.NoError(err, "committee election should not fail")
 
-		c, err := schedState.Committee(ctx, tc.kind, tc.rt.ID)
+		c, err := schedulerState.Committee(ctx, tc.kind, tc.rt.ID)
 		require.NoError(err, "Committee")
 		if !tc.shouldElect {
 			require.Nil(c, "Committee should not have been elected (%s)", tc.msg)

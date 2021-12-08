@@ -164,14 +164,15 @@ func (sc *multipleRuntimesImpl) Run(childEnv *env.Env) error {
 	}
 
 	// Wait for the nodes.
-	if err = sc.initialEpochTransitions(fixture); err != nil {
+	var epoch beacon.EpochTime
+	if epoch, err = sc.initialEpochTransitions(fixture); err != nil {
 		return err
 	}
 
 	ctx := context.Background()
 
 	// Submit transactions.
-	epoch := beacon.EpochTime(3)
+	epoch++ // Want to advance the epoch.
 	numComputeRuntimeTxns, _ := sc.Flags.GetInt(cfgNumComputeRuntimeTxns)
 	for _, r := range sc.Net.Runtimes() {
 		rt := r.ToRuntimeDescriptor()

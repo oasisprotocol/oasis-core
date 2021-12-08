@@ -38,6 +38,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/env"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/log"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/oasis/cli"
+	scheduler "github.com/oasisprotocol/oasis-core/go/scheduler/api"
 	staking "github.com/oasisprotocol/oasis-core/go/staking/api"
 )
 
@@ -123,6 +124,12 @@ type NetworkCfg struct { // nolint: maligned
 
 	// GovernanceParameters are the governance consensus parameters.
 	GovernanceParameters *governance.ConsensusParameters `json:"governance_parameters,omitempty"`
+
+	// SchedulerWeakAlpkaOk is for disabling the VRF alpha entropy requirement.
+	SchedulerWeakAlphaOk bool `json:"scheduler_weak_alpha_ok,omitempty"`
+
+	// SchedulerForceElect are the rigged committee elections.
+	SchedulerForceElect map[common.Namespace]map[signature.PublicKey]*scheduler.ForceElectCommitteeRole `json:"scheduler_force_elect,omitempty"`
 
 	// A set of log watcher handler factories used by default on all nodes
 	// created in this test network.
@@ -535,11 +542,7 @@ func (net *Network) generateDeterministicIdentity(dir *env.Dir, rawSeed string, 
 }
 
 func (net *Network) generateDeterministicNodeIdentity(dir *env.Dir, rawSeed string) error {
-	return net.generateDeterministicIdentity(dir, rawSeed, []signature.SignerRole{
-		signature.SignerNode,
-		signature.SignerP2P,
-		signature.SignerConsensus,
-	})
+	return net.generateDeterministicIdentity(dir, rawSeed, identity.RequiredSignerRoles)
 }
 
 // GenerateDeterministicNodeKeys generates and returns deterministic node keys.
@@ -722,29 +725,22 @@ func (net *Network) MakeGenesis() error {
 		args = append(args, []string{
 			"--" + genesis.CfgBeaconInsecureTendermintInterval, strconv.FormatInt(net.cfg.Beacon.InsecureParameters.Interval, 10),
 		}...)
-	case beacon.BackendPVSS:
+	case beacon.BackendVRF:
 		args = append(args, []string{
-			"--" + genesis.CfgBeaconPVSSParticipants, strconv.FormatUint(uint64(net.cfg.Beacon.PVSSParameters.Participants), 10),
-			"--" + genesis.CfgBeaconPVSSThreshold, strconv.FormatUint(uint64(net.cfg.Beacon.PVSSParameters.Threshold), 10),
-			"--" + genesis.CfgBeaconPVSSCommitInterval, strconv.FormatInt(net.cfg.Beacon.PVSSParameters.CommitInterval, 10),
-			"--" + genesis.CfgBeaconPVSSRevealInterval, strconv.FormatInt(net.cfg.Beacon.PVSSParameters.RevealInterval, 10),
-			"--" + genesis.CfgBeaconPVSSTransitionDelay, strconv.FormatInt(net.cfg.Beacon.PVSSParameters.TransitionDelay, 10),
+			"--" + genesis.CfgBeaconVRFAlphaThreshold, strconv.FormatUint(net.cfg.Beacon.VRFParameters.AlphaHighQualityThreshold, 10),
+			"--" + genesis.CfgBeaconVRFInterval, strconv.FormatUint(uint64(net.cfg.Beacon.VRFParameters.Interval), 10),
+			"--" + genesis.CfgBeaconVRFProofSubmissionDelay, strconv.FormatUint(uint64(net.cfg.Beacon.VRFParameters.ProofSubmissionDelay), 10),
 		}...)
-		if pks := net.cfg.Beacon.PVSSParameters.DebugForcedParticipants; len(pks) > 0 {
-			for _, pk := range pks {
-				args = append(args, []string{
-					"--" + genesis.CfgBeaconPVSSDebugForcedParticipant, pk.String(),
-				}...)
-			}
+		if net.cfg.SchedulerWeakAlphaOk {
+			args = append(args, []string{
+				"--" + genesis.CfgSchedulerDebugAllowWeakAlpha, "true",
+			}...)
 		}
 	default:
 		return fmt.Errorf("oasis: unsupported beacon backend: %s", net.cfg.Beacon.Backend)
 	}
 	if net.cfg.Beacon.DebugMockBackend {
 		args = append(args, "--"+genesis.CfgBeaconDebugMockBackend)
-	}
-	if net.cfg.Beacon.DebugDeterministic || net.cfg.DeterministicIdentities {
-		args = append(args, "--"+genesis.CfgBeaconDebugDeterministic)
 	}
 	if cfg := net.cfg.GovernanceParameters; cfg != nil {
 		args = append(args, []string{
@@ -755,6 +751,16 @@ func (net *Network) MakeGenesis() error {
 			"--" + genesis.CfgGovernanceUpgradeMinEpochDiff, strconv.FormatUint(uint64(cfg.UpgradeMinEpochDiff), 10),
 			"--" + genesis.CfgGovernanceVotingPeriod, strconv.FormatUint(uint64(cfg.VotingPeriod), 10),
 		}...)
+	}
+	if cfg := net.cfg.SchedulerForceElect; cfg != nil {
+		for rt, pkMap := range cfg {
+			for pk, ri := range pkMap {
+				args = append(args, []string{
+					"--" + genesis.CfgSchedulerDebugForceElect,
+					"\"" + rt.String() + "," + pk.String() + "," + strconv.FormatUint(uint64(ri.Kind), 10) + "," + strconv.FormatUint(uint64(ri.Role), 10) + "," + strconv.FormatBool(ri.IsScheduler) + "\"",
+				}...)
+			}
+		}
 	}
 	for _, v := range net.entities {
 		args = append(args, v.toGenesisDescriptorArgs()...)
@@ -873,7 +879,7 @@ func (net *Network) provisionNodeIdentity(dataDir *env.Dir, seed string, persist
 		}
 	}
 
-	signerFactory, err := fileSigner.NewFactory(dataDir.String(), signature.SignerNode, signature.SignerP2P, signature.SignerConsensus)
+	signerFactory, err := fileSigner.NewFactory(dataDir.String(), identity.RequiredSignerRoles...)
 	if err != nil {
 		return signature.PublicKey{}, signature.PublicKey{}, nil, fmt.Errorf("oasis: failed to create node file signer factory: %w", err)
 	}
@@ -907,7 +913,7 @@ func New(env *env.Env, cfg *NetworkCfg) (*Network, error) {
 		cfgCopy.Consensus.Parameters.GasCosts = make(transaction.Costs)
 	}
 	if cfgCopy.Beacon.Backend == "" {
-		cfgCopy.Beacon.Backend = beacon.BackendPVSS
+		cfgCopy.Beacon.Backend = beacon.BackendVRF
 	}
 	switch cfgCopy.Beacon.Backend {
 	case beacon.BackendInsecure:
@@ -917,24 +923,18 @@ func New(env *env.Env, cfg *NetworkCfg) (*Network, error) {
 		if cfgCopy.Beacon.InsecureParameters.Interval == 0 {
 			cfgCopy.Beacon.InsecureParameters.Interval = defaultEpochtimeTendermintInterval
 		}
-	case beacon.BackendPVSS:
-		if cfgCopy.Beacon.PVSSParameters == nil {
-			cfgCopy.Beacon.PVSSParameters = new(beacon.PVSSParameters)
+	case beacon.BackendVRF:
+		if cfgCopy.Beacon.VRFParameters == nil {
+			cfgCopy.Beacon.VRFParameters = new(beacon.VRFParameters)
 		}
-		if cfgCopy.Beacon.PVSSParameters.Participants == 0 {
-			cfgCopy.Beacon.PVSSParameters.Participants = defaultPVSSParticipants
+		if cfgCopy.Beacon.VRFParameters.AlphaHighQualityThreshold == 0 {
+			cfgCopy.Beacon.VRFParameters.AlphaHighQualityThreshold = defaultVRFAlphaThreshold
 		}
-		if cfgCopy.Beacon.PVSSParameters.Threshold == 0 {
-			cfgCopy.Beacon.PVSSParameters.Threshold = defaultPVSSThreshold
+		if cfgCopy.Beacon.VRFParameters.Interval == 0 {
+			cfgCopy.Beacon.VRFParameters.Interval = defaultVRFInterval
 		}
-		if cfgCopy.Beacon.PVSSParameters.CommitInterval == 0 {
-			cfgCopy.Beacon.PVSSParameters.CommitInterval = defaultPVSSCommitInterval
-		}
-		if cfgCopy.Beacon.PVSSParameters.RevealInterval == 0 {
-			cfgCopy.Beacon.PVSSParameters.RevealInterval = defaultPVSSRevealInterval
-		}
-		if cfgCopy.Beacon.PVSSParameters.TransitionDelay == 0 {
-			cfgCopy.Beacon.PVSSParameters.TransitionDelay = defaultPVSSTransitionDelay
+		if cfgCopy.Beacon.VRFParameters.ProofSubmissionDelay == 0 {
+			cfgCopy.Beacon.VRFParameters.ProofSubmissionDelay = defaultVRFSubmissionDelay
 		}
 	}
 	if cfgCopy.InitialHeight == 0 {

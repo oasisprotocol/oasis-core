@@ -31,12 +31,6 @@ const (
 
 	// SlashConsensusEquivocationName is the string representation of SlashConsensusEquivocation.
 	SlashConsensusEquivocationName = "consensus-equivocation"
-	// SlashBeaconInvalidCommitName is the string representation of SlashBeaconInvalidCommit.
-	SlashBeaconInvalidCommitName = "beacon-invalid-commit"
-	// SlashBeaconInvalidRevealName is the string representation of SlashBeaconInvalidReveal.
-	SlashBeaconInvalidRevealName = "beacon-invalid-reveal"
-	// SlashBeaconNonparticipationName is the string representation of SlashBeaconNonparticipation.
-	SlashBeaconNonparticipationName = "beacon-nonparticipation"
 	// SlashConsensusLightClientAttackName is the string representation of SlashConsensusLightClientAttack.
 	SlashConsensusLightClientAttackName = "consensus-light-client-attack"
 	// SlashRuntimeIncorrectResultsName is the string representation of SlashRuntimeIncorrectResultsName.
@@ -55,12 +49,6 @@ func (s SlashReason) checkedString() (string, error) {
 	switch s {
 	case SlashConsensusEquivocation:
 		return SlashConsensusEquivocationName, nil
-	case SlashBeaconInvalidCommit:
-		return SlashBeaconInvalidCommitName, nil
-	case SlashBeaconInvalidReveal:
-		return SlashBeaconInvalidRevealName, nil
-	case SlashBeaconNonparticipation:
-		return SlashBeaconNonparticipationName, nil
 	case SlashConsensusLightClientAttack:
 		return SlashConsensusLightClientAttackName, nil
 	case SlashRuntimeIncorrectResults:
@@ -87,12 +75,6 @@ func (s *SlashReason) UnmarshalText(text []byte) error {
 	switch string(text) {
 	case SlashConsensusEquivocationName:
 		*s = SlashConsensusEquivocation
-	case SlashBeaconInvalidCommitName:
-		*s = SlashBeaconInvalidCommit
-	case SlashBeaconInvalidRevealName:
-		*s = SlashBeaconInvalidReveal
-	case SlashBeaconNonparticipationName:
-		*s = SlashBeaconNonparticipation
 	case SlashConsensusLightClientAttackName:
 		*s = SlashConsensusLightClientAttack
 	case SlashRuntimeIncorrectResultsName:

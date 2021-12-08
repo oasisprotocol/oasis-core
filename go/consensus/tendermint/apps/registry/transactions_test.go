@@ -6,6 +6,7 @@ import (
 
 	requirePkg "github.com/stretchr/testify/require"
 
+	beacon "github.com/oasisprotocol/oasis-core/go/beacon/api"
 	"github.com/oasisprotocol/oasis-core/go/common"
 	"github.com/oasisprotocol/oasis-core/go/common/cbor"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
@@ -14,6 +15,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/node"
 	"github.com/oasisprotocol/oasis-core/go/common/quantity"
 	abciAPI "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/api"
+	beaconState "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/apps/beacon/state"
 	registryState "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/apps/registry/state"
 	stakingState "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/apps/staking/state"
 	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
@@ -33,6 +35,7 @@ func TestRegisterNode(t *testing.T) {
 	app := registryApplication{appState, &md}
 	state := registryState.NewMutableState(ctx.State())
 	stakeState := stakingState.NewMutableState(ctx.State())
+	beaconState := beaconState.NewMutableState(ctx.State())
 
 	// Set up default staking consensus parameters.
 	defaultStakeParameters := staking.ConsensusParameters{
@@ -46,11 +49,18 @@ func TestRegisterNode(t *testing.T) {
 			staking.KindRuntimeKeyManager: *quantity.NewFromUint64(0),
 		},
 	}
+
 	// Set up registry consensus parameters.
 	err := state.SetConsensusParameters(ctx, &registry.ConsensusParameters{
 		MaxNodeExpiration: 5,
 	})
 	require.NoError(err, "registry.SetConsensusParameters")
+
+	// Setup beacon consensus parameters.
+	err = beaconState.SetConsensusParameters(ctx, &beacon.ConsensusParameters{
+		Backend: beacon.BackendInsecure,
+	})
+	require.NoError(err, "beacon.SetConsensusParameters")
 
 	// Store all successful registrations in a map for easier reference in later test cases.
 	type testCaseData struct {
@@ -60,6 +70,7 @@ func TestRegisterNode(t *testing.T) {
 		consensusSigner signature.Signer
 		p2pSigner       signature.Signer
 		tlsSigner       signature.Signer
+		vrfSigner       signature.VRFSigner
 
 		// Node descriptor.
 		node node.Node
@@ -397,12 +408,14 @@ func TestRegisterNode(t *testing.T) {
 			require.NoError(err, "staking.SetConsensusParameters")
 
 			// Prepare default signers.
+			vrfSigner := memorySigner.NewTestSigner("consensus/tendermint/apps/registry: vrf signer: " + tc.name).(signature.VRFSigner)
 			tcd := &testCaseData{
 				entitySigner:    memorySigner.NewTestSigner("consensus/tendermint/apps/registry: entity signer: " + tc.name),
 				nodeSigner:      memorySigner.NewTestSigner("consensus/tendermint/apps/registry: node signer: " + tc.name),
 				consensusSigner: memorySigner.NewTestSigner("consensus/tendermint/apps/registry: consensus signer: " + tc.name),
 				p2pSigner:       memorySigner.NewTestSigner("consensus/tendermint/apps/registry: p2p signer: " + tc.name),
 				tlsSigner:       memorySigner.NewTestSigner("consensus/tendermint/apps/registry: tls signer: " + tc.name),
+				vrfSigner:       vrfSigner,
 			}
 
 			// Prepare a test entity that owns the nodes.
@@ -442,11 +455,14 @@ func TestRegisterNode(t *testing.T) {
 						{PubKey: tcd.tlsSigner.Public(), Address: address},
 					},
 				},
+				VRF: &node.VRFInfo{
+					ID: tcd.vrfSigner.Public(),
+				},
 			}
 			if tc.prepareFn != nil {
 				tc.prepareFn(tcd)
 			}
-			signers := []signature.Signer{tcd.nodeSigner, tcd.p2pSigner, tcd.consensusSigner, tcd.tlsSigner}
+			signers := []signature.Signer{tcd.nodeSigner, tcd.p2pSigner, tcd.consensusSigner, tcd.tlsSigner, tcd.vrfSigner}
 
 			// Sign the node.
 			sigNode, err := node.MultiSignNode(signers, registry.RegisterNodeSignatureContext, &tcd.node)
