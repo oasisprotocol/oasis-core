@@ -81,4 +81,5 @@ The following records currently exist:
 * [ADR 0007](0007-improved-random-beacon.md) - Improved Random Beacon
 * [ADR 0008](0008-standard-account-key-generation.md) - Standard Account Key Generation
 * [ADR 0009](0009-ed25519-semantics.md) - Ed25519 Signature Verification Semantics
+* [ADR 0010](0010-vrf-elections.md) - VRF-based Committee Elections
 <!-- markdownlint-enable line-length -->
