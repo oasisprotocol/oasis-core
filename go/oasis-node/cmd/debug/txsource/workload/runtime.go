@@ -726,10 +726,10 @@ func (r *runtime) Run(
 	// Set up the runtime client.
 	rtc := runtimeClient.NewRuntimeClient(conn)
 
-	// Wait for 2nd epoch, so that runtimes are up and running.
-	r.Logger.Info("waiting for 2nd epoch")
-	if err := beacon.WaitEpoch(ctx, 2); err != nil {
-		return fmt.Errorf("failed waiting for 2nd epoch: %w", err)
+	// Wait for 3rd epoch, so that runtimes are up and running.
+	r.Logger.Info("waiting for 3rd epoch")
+	if err := beacon.WaitEpoch(ctx, 3); err != nil {
+		return fmt.Errorf("failed waiting for 3rd epoch: %w", err)
 	}
 
 	var totalWeight int
