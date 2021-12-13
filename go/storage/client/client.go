@@ -14,7 +14,6 @@ import (
 
 	"github.com/oasisprotocol/oasis-core/go/common"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/mathrand"
-	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
 	"github.com/oasisprotocol/oasis-core/go/common/node"
 	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
@@ -40,18 +39,6 @@ const (
 // Option is a storage client option.
 type Option func(b *storageClientBackend)
 
-// WithBackendOverride overrides the storage backend for the specified node. The passed backend is
-// used instead of the gRPC backend when performing storage requests.
-func WithBackendOverride(nodeID signature.PublicKey, backend api.Backend) Option {
-	return func(b *storageClientBackend) {
-		if b.backendOverrides == nil {
-			b.backendOverrides = make(map[signature.PublicKey]api.Backend)
-		}
-
-		b.backendOverrides[nodeID] = backend
-	}
-}
-
 // storageClientBackend contains all information about the client storage API
 // backend, including the backend state and the connected storage nodes' state.
 type storageClientBackend struct {
@@ -61,10 +48,6 @@ type storageClientBackend struct {
 
 	nodesClient grpc.NodesClient
 	runtime     registry.RuntimeDescriptorProvider
-
-	// backendOverrides is a map of per-node storage backend overrides. This map can only be mutated
-	// during initialization via options so no lock is needed.
-	backendOverrides map[signature.PublicKey]api.Backend
 }
 
 func (b *storageClientBackend) ensureInitialized(ctx context.Context) error {
@@ -144,24 +127,18 @@ func (b *storageClientBackend) readWithClient(
 
 		var err error
 		for _, conn := range nodes {
-			// If a backend override is configured, use it instead of going through gRPC.
-			var backend api.Backend
-			if override, ok := b.backendOverrides[conn.Node.ID]; ok {
-				backend = override
-			} else {
-				backend = api.NewStorageClient(conn.ClientConn)
-			}
+			backend := api.NewStorageClient(conn.ClientConn)
 
 			resp, err = fn(ctx, backend)
-			if ctx.Err() != nil {
-				return backoff.Permanent(ctx.Err())
-			}
 			if err != nil {
 				b.logger.Error("failed to get response from a storage node",
 					"node", conn.Node,
 					"err", err,
 					"runtime_id", ns,
 				)
+				if ctx.Err() != nil {
+					return backoff.Permanent(ctx.Err())
+				}
 				continue
 			}
 			cb := api.NodeSelectionCallbackFromContext(ctx)
