@@ -7,6 +7,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/oasisprotocol/oasis-core/go/common/cbor"
+	"github.com/oasisprotocol/oasis-core/go/common/node"
 	"github.com/oasisprotocol/oasis-core/go/common/sgx"
 	"github.com/oasisprotocol/oasis-core/go/common/sgx/ias"
 )
@@ -15,7 +16,7 @@ func TestFakeCapabilitySGX(t *testing.T) {
 	_, fakeCapabilitiesSGX, err := initFakeCapabilitiesSGX()
 	require.NoError(t, err, "initFakeCapabilitiesSGX failed")
 
-	cs := cbor.Marshal(sgx.Constraints{
+	cs := cbor.Marshal(node.SGXConstraints{
 		Enclaves: []sgx.EnclaveIdentity{{}},
 	})
 
