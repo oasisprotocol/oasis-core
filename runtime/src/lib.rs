@@ -65,7 +65,7 @@ lazy_static! {
             //
             // Rationale: This is how IAS signifies that the host environment
             // is insecure (eg: SMT is enabled when it should not be).
-            let maybe_secure = maybe_secure && option_env!("OASIS_STRICT_AVR_VERIFY").is_some();
+            let maybe_secure = maybe_secure && option_env!("OASIS_UNSAFE_LAX_AVR_VERIFY").is_none();
 
             // The enclave MUST NOT be a debug one.
             let maybe_secure = maybe_secure && !Report::for_self().attributes.flags.contains(AttributesFlags::DEBUG);

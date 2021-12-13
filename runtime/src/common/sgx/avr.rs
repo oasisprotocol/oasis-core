@@ -224,7 +224,7 @@ impl ParsedAVR {
 /// Verify attestation report.
 pub fn verify(avr: &AVR) -> Result<AuthenticatedAVR> {
     let unsafe_skip_avr_verification = option_env!("OASIS_UNSAFE_SKIP_AVR_VERIFY").is_some();
-    let strict_avr_verification = option_env!("OASIS_STRICT_AVR_VERIFY").is_some();
+    let unsafe_lax_avr_verification = option_env!("OASIS_UNSAFE_LAX_AVR_VERIFY").is_some();
 
     // Get the time.
     let timestamp_now = insecure_posix_time();
@@ -257,7 +257,7 @@ pub fn verify(avr: &AVR) -> Result<AuthenticatedAVR> {
         | "CONFIGURATION_NEEDED"
         | "SW_HARDENING_NEEDED"
         | "CONFIGURATION_AND_SW_HARDENING_NEEDED" => {
-            if strict_avr_verification {
+            if !unsafe_lax_avr_verification {
                 return Err(AVRError::QuoteStatusInvalid {
                     status: quote_status.to_owned(),
                 }
