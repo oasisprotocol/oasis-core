@@ -396,6 +396,10 @@ impl BlockHandler {
                     // ReclaimEscrow.
                 }
 
+                Some(b"update_runtime") => {
+                    // UpdateRuntime.
+                }
+
                 meta => panic!("unexpected message metadata: {:?}", meta),
             }
         }
