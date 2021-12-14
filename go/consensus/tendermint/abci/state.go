@@ -408,8 +408,15 @@ func (s *applicationState) metricsWorker() {
 	}
 }
 
+func (s *applicationState) startPruner() error {
+	go s.pruneWorker()
+	return nil
+}
+
 func (s *applicationState) pruneWorker() {
 	defer close(s.prunerClosedCh)
+
+	s.logger.Debug("state pruner is starting")
 
 	for {
 		select {
@@ -527,7 +534,7 @@ func newApplicationState(ctx context.Context, upgrader upgrade.Backend, cfg *App
 	checkTxTree := mkvs.NewWithRoot(nil, ndb, *stateRoot, mkvs.WithoutWriteLog())
 
 	// Initialize the state pruner.
-	statePruner, err := newStatePruner(&cfg.Pruning, ndb, latestVersion)
+	statePruner, err := newStatePruner(&cfg.Pruning, ndb)
 	if err != nil {
 		return nil, fmt.Errorf("state: failed to create pruner: %w", err)
 	}
@@ -589,7 +596,6 @@ func newApplicationState(ctx context.Context, upgrader upgrade.Backend, cfg *App
 	}
 
 	go s.metricsWorker()
-	go s.pruneWorker()
 
 	return s, nil
 }

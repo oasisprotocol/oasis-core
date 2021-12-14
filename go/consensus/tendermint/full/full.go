@@ -1125,6 +1125,10 @@ func (t *fullService) ConsensusKey() signature.PublicKey {
 	return t.identity.ConsensusSigner.Public()
 }
 
+func (t *fullService) Pruner() api.StatePruner {
+	return t.mux.Pruner()
+}
+
 func (t *fullService) lazyInit() error {
 	if t.isInitialized {
 		return nil
