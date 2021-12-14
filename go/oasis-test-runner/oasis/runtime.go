@@ -121,7 +121,7 @@ func (rt *Runtime) RefreshEnclaveIdentity() error {
 			enclaveIdentities = append(enclaveIdentities, sgx.EnclaveIdentity{MrEnclave: *mrEnclave, MrSigner: *rt.mrSigner})
 			mrEnclaves = append(mrEnclaves, mrEnclave)
 		}
-		rt.descriptor.Version.TEE = cbor.Marshal(sgx.Constraints{
+		rt.descriptor.Version.TEE = cbor.Marshal(node.SGXConstraints{
 			Enclaves: enclaveIdentities,
 		})
 		rt.mrEnclaves = mrEnclaves

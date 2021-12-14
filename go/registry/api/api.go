@@ -19,7 +19,6 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
 	"github.com/oasisprotocol/oasis-core/go/common/node"
 	"github.com/oasisprotocol/oasis-core/go/common/pubsub"
-	"github.com/oasisprotocol/oasis-core/go/common/sgx"
 	"github.com/oasisprotocol/oasis-core/go/consensus/api/transaction"
 	staking "github.com/oasisprotocol/oasis-core/go/staking/api"
 )
@@ -996,7 +995,7 @@ func VerifyRuntime( // nolint: gocyclo
 	if rt.TEEHardware != node.TEEHardwareInvalid {
 		switch rt.TEEHardware {
 		case node.TEEHardwareIntelSGX:
-			var cs sgx.Constraints
+			var cs node.SGXConstraints
 			if err := cbor.Unmarshal(rt.Version.TEE, &cs); err != nil {
 				logger.Error("RegisterRuntime: invalid SGX TEE constraints",
 					"err", err,

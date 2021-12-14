@@ -775,7 +775,7 @@ func testRegistryRuntime(t *testing.T, backend api.Backend, consensus consensusA
 				rt.Kind = api.KindKeyManager
 				rt.TEEHardware = node.TEEHardwareIntelSGX
 
-				cs := sgx.Constraints{
+				cs := node.SGXConstraints{
 					Enclaves: []sgx.EnclaveIdentity{{}},
 				}
 				rt.Version.TEE = cbor.Marshal(cs)
@@ -812,7 +812,7 @@ func testRegistryRuntime(t *testing.T, backend api.Backend, consensus consensusA
 				rt.KeyManager = &rtMapByName["KeyManager"].ID
 				rt.TEEHardware = node.TEEHardwareIntelSGX
 
-				cs := sgx.Constraints{
+				cs := node.SGXConstraints{
 					Enclaves: []sgx.EnclaveIdentity{{}},
 				}
 				rt.Version.TEE = cbor.Marshal(cs)

@@ -40,6 +40,10 @@ var (
 	// identity doesn't match the required values.
 	ErrBadEnclaveIdentity = errors.New("node: bad TEE enclave identity")
 
+	// ErrConstraintViolation the error returned when the TEE attestation
+	// fails to conform to the optional additional constraints.
+	ErrConstraintViolation = errors.New("node: TEE constraint violation")
+
 	teeHashContext = []byte("oasis-core/node: TEE RAK binding")
 
 	_ prettyprint.PrettyPrinter = (*MultiSignedNode)(nil)
@@ -436,6 +440,37 @@ type CapabilityTEE struct {
 	Attestation []byte `json:"attestation"`
 }
 
+// SGXConstraints are the Intel SGX TEE constraints.
+type SGXConstraints struct {
+	// Enclaves is the allowed MRENCLAVE/MRSIGNER pairs.
+	Enclaves []sgx.EnclaveIdentity `json:"enclaves,omitempty"`
+
+	// AllowedQuoteStatuses are the allowed quote statuses for the node
+	// to be scheduled as a compute worker.
+	//
+	// Note: QuoteOK is ALWAYS allowed, and does not need to be specified.
+	AllowedQuoteStatuses []ias.ISVEnclaveQuoteStatus `json:"allowed_quote_statuses,omitempty"`
+}
+
+func (constraints *SGXConstraints) quoteStatusAllowed(avr *ias.AttestationVerificationReport) bool {
+	status := avr.ISVEnclaveQuoteStatus
+
+	// Always allow "OK".
+	if status == ias.QuoteOK {
+		return true
+	}
+
+	// Search through the constraints to see if the AVR quote status is
+	// explicitly allowed.
+	for _, v := range constraints.AllowedQuoteStatuses {
+		if v == status {
+			return true
+		}
+	}
+
+	return false
+}
+
 // RAKHash computes the expected AVR report hash bound to a given public RAK.
 func RAKHash(rak signature.PublicKey) hash.Hash {
 	hData := make([]byte, 0, len(teeHashContext)+signature.PublicKeySize)
@@ -468,7 +503,7 @@ func (c *CapabilityTEE) Verify(ts time.Time, constraints []byte) error {
 
 		// Ensure that the MRENCLAVE/MRSIGNER match what is specified
 		// in the TEE-specific constraints field.
-		var cs sgx.Constraints
+		var cs SGXConstraints
 		if err := cbor.Unmarshal(constraints, &cs); err != nil {
 			return fmt.Errorf("node: malformed SGX constraints: %w", err)
 		}
@@ -491,6 +526,11 @@ func (c *CapabilityTEE) Verify(ts time.Time, constraints []byte) error {
 		_ = avrRAKHash.UnmarshalBinary(q.Report.ReportData[:hash.Size])
 		if !rakHash.Equal(&avrRAKHash) {
 			return ErrRAKHashMismatch
+		}
+
+		// Ensure that the quote status is acceptable.
+		if !cs.quoteStatusAllowed(avr) {
+			return ErrConstraintViolation
 		}
 
 		// The last 32 bytes of the quote ReportData are deliberately
