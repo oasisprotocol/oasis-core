@@ -195,11 +195,12 @@ func (args *argBuilder) tendermintSubmissionGasPrice(price uint64) *argBuilder {
 	return args
 }
 
-func (args *argBuilder) tendermintPrune(numKept uint64) *argBuilder {
+func (args *argBuilder) tendermintPrune(numKept uint64, interval time.Duration) *argBuilder {
 	if numKept > 0 {
 		args.vec = append(args.vec, []Argument{
 			{tendermintFull.CfgABCIPruneStrategy, []string{abci.PruneKeepN.String()}, false},
 			{tendermintFull.CfgABCIPruneNumKept, []string{strconv.FormatUint(numKept, 10)}, false},
+			{tendermintFull.CfgABCIPruneInterval, []string{interval.String()}, false},
 		}...)
 	} else {
 		args.vec = append(args.vec, Argument{

@@ -155,7 +155,7 @@ func (worker *Compute) AddArgs(args *argBuilder) error {
 		workerCertificateRotation(!worker.disableCertRotation).
 		tendermintCoreAddress(worker.consensusPort).
 		tendermintSubmissionGasPrice(worker.consensus.SubmissionGasPrice).
-		tendermintPrune(worker.consensus.PruneNumKept).
+		tendermintPrune(worker.consensus.PruneNumKept, worker.consensus.PruneInterval).
 		tendermintRecoverCorruptedWAL(worker.consensus.TendermintRecoverCorruptedWAL).
 		workerClientPort(worker.clientPort).
 		workerP2pPort(worker.p2pPort).

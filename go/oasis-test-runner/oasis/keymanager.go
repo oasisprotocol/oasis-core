@@ -268,7 +268,7 @@ func (km *Keymanager) AddArgs(args *argBuilder) error {
 		workerCertificateRotation(true).
 		tendermintCoreAddress(km.consensusPort).
 		tendermintSubmissionGasPrice(km.consensus.SubmissionGasPrice).
-		tendermintPrune(km.consensus.PruneNumKept).
+		tendermintPrune(km.consensus.PruneNumKept, km.consensus.PruneInterval).
 		tendermintRecoverCorruptedWAL(km.consensus.TendermintRecoverCorruptedWAL).
 		workerClientPort(km.workerClientPort).
 		runtimeMode(runtimeRegistry.RuntimeModeKeymanager).

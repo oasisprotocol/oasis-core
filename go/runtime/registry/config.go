@@ -294,8 +294,9 @@ func newConfig(consensus consensus.Backend, ias ias.Endpoint) (*RuntimeConfig, e
 	}
 
 	cfg.History.PruneInterval = viper.GetDuration(CfgHistoryPrunerInterval)
-	if cfg.History.PruneInterval.Seconds() < 1.0 {
-		return nil, fmt.Errorf("runtime/registry: history prune interval must be >= 1s (got %s)", cfg.History.PruneInterval)
+	const minPruneInterval = 1 * time.Second
+	if cfg.History.PruneInterval < minPruneInterval {
+		cfg.History.PruneInterval = minPruneInterval
 	}
 
 	return &cfg, nil

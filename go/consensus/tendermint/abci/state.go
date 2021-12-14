@@ -50,6 +50,7 @@ type applicationState struct { // nolint: maligned
 	statePruner    StatePruner
 	prunerClosedCh chan struct{}
 	prunerNotifyCh *channels.RingChannel
+	pruneInterval  time.Duration
 
 	checkpointer checkpoint.Checkpointer
 	upgrader     upgrade.Backend
@@ -418,17 +419,29 @@ func (s *applicationState) pruneWorker() {
 
 	s.logger.Debug("state pruner is starting")
 
+	ticker := time.NewTicker(s.pruneInterval)
+	defer ticker.Stop()
+
 	for {
 		select {
 		case <-s.ctx.Done():
+			s.logger.Debug("state pruner is terminating")
 			return
-		case r := <-s.prunerNotifyCh.Out():
-			round := r.(uint64)
+		case <-ticker.C:
+			var v interface{}
+			select {
+			case v = <-s.prunerNotifyCh.Out():
+			case <-s.ctx.Done():
+				s.logger.Debug("state pruner is terminating")
+				return
+			}
 
-			if err := s.statePruner.Prune(s.ctx, round); err != nil {
+			version := v.(uint64)
+
+			if err := s.statePruner.Prune(s.ctx, version); err != nil {
 				s.logger.Warn("failed to prune state",
 					"err", err,
-					"block_height", round,
+					"block_height", version,
 				)
 			}
 		}
@@ -558,6 +571,7 @@ func newApplicationState(ctx context.Context, upgrader upgrade.Backend, cfg *App
 		statePruner:        statePruner,
 		prunerClosedCh:     make(chan struct{}),
 		prunerNotifyCh:     channels.NewRingChannel(1),
+		pruneInterval:      cfg.Pruning.PruneInterval,
 		upgrader:           upgrader,
 		haltEpochHeight:    cfg.HaltEpochHeight,
 		minGasPrice:        minGasPrice,

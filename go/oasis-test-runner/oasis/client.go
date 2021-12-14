@@ -37,7 +37,7 @@ func (client *Client) AddArgs(args *argBuilder) error {
 		debugEnableProfiling(client.Node.pprofPort).
 		runtimeMode(runtimeRegistry.RuntimeModeClientStateless).
 		runtimeProvisioner(client.runtimeProvisioner).
-		tendermintPrune(client.consensus.PruneNumKept).
+		tendermintPrune(client.consensus.PruneNumKept, client.consensus.PruneInterval).
 		tendermintRecoverCorruptedWAL(client.consensus.TendermintRecoverCorruptedWAL).
 		tendermintCoreAddress(client.consensusPort).
 		appendNetwork(client.net).

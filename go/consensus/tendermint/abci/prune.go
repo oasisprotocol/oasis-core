@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
 	"github.com/oasisprotocol/oasis-core/go/consensus/tendermint/api"
@@ -65,6 +66,9 @@ type PruneConfig struct {
 
 	// NumKept is the number of versions retained when applicable.
 	NumKept uint64
+
+	// PruneInterval configures the pruning interval.
+	PruneInterval time.Duration
 }
 
 // StatePruner is a concrete ABCI mux state pruner implementation.

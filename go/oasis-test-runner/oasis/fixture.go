@@ -130,6 +130,8 @@ type ConsensusFixture struct { // nolint: maligned
 
 	// PruneNumKept is the number of blocks to keep (zero disables pruning).
 	PruneNumKept uint64 `json:"prune_num_kept"`
+	// PruneInterval is the prune interval.
+	PruneInterval time.Duration `json:"prune_interval"`
 
 	// TendermintRecoverCorruptedWAL enables automatic recovery of corrupted Tendermint's WAL.
 	TendermintRecoverCorruptedWAL bool `json:"tendermint_recover_corrupted_wal"`

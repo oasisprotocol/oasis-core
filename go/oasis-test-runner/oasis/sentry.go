@@ -78,7 +78,7 @@ func (sentry *Sentry) AddArgs(args *argBuilder) error {
 		workerSentryEnabled().
 		workerSentryControlPort(sentry.controlPort).
 		tendermintCoreAddress(sentry.consensusPort).
-		tendermintPrune(sentry.consensus.PruneNumKept).
+		tendermintPrune(sentry.consensus.PruneNumKept, sentry.consensus.PruneInterval).
 		tendermintRecoverCorruptedWAL(sentry.consensus.TendermintRecoverCorruptedWAL).
 		configureDebugCrashPoints(sentry.crashPointsProbability).
 		tendermintSupplementarySanity(sentry.supplementarySanityInterval).
