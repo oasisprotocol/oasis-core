@@ -25,6 +25,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/runtime/nodes/grpc"
 	"github.com/oasisprotocol/oasis-core/go/storage/api"
 	"github.com/oasisprotocol/oasis-core/go/storage/mkvs/checkpoint"
+	"github.com/oasisprotocol/oasis-core/go/storage/mkvs/writelog"
 )
 
 var (
@@ -477,7 +478,29 @@ func (b *storageClientBackend) GetDiff(ctx context.Context, request *api.GetDiff
 		ctx,
 		request.StartRoot.Namespace,
 		func(ctx context.Context, c api.Backend) (interface{}, error) {
-			return c.GetDiff(ctx, request)
+			it, err := c.GetDiff(ctx, request)
+			if err != nil {
+				return nil, err
+			}
+
+			// Convert everything into a static write log iterator so we catch all errors early.
+			var wl api.WriteLog
+			for {
+				more, err := it.Next()
+				if err != nil {
+					return nil, err
+				}
+				if !more {
+					break
+				}
+
+				chunk, err := it.Value()
+				if err != nil {
+					return nil, err
+				}
+				wl = append(wl, chunk)
+			}
+			return writelog.NewStaticIterator(wl), nil
 		},
 	)
 	if err != nil {
