@@ -2,22 +2,26 @@ package committee
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sync"
 
 	"github.com/prometheus/client_golang/prometheus"
 
+	beacon "github.com/oasisprotocol/oasis-core/go/beacon/api"
 	"github.com/oasisprotocol/oasis-core/go/common/identity"
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
 	control "github.com/oasisprotocol/oasis-core/go/control/api"
 	keymanagerApi "github.com/oasisprotocol/oasis-core/go/keymanager/api"
 	keymanagerClient "github.com/oasisprotocol/oasis-core/go/keymanager/client"
+	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
 	roothash "github.com/oasisprotocol/oasis-core/go/roothash/api"
 	"github.com/oasisprotocol/oasis-core/go/roothash/api/block"
-	"github.com/oasisprotocol/oasis-core/go/runtime/nodes"
 	"github.com/oasisprotocol/oasis-core/go/runtime/host"
+	"github.com/oasisprotocol/oasis-core/go/runtime/nodes"
 	runtimeRegistry "github.com/oasisprotocol/oasis-core/go/runtime/registry"
+	"github.com/oasisprotocol/oasis-core/go/runtime/txpool"
 	"github.com/oasisprotocol/oasis-core/go/worker/common/api"
 	"github.com/oasisprotocol/oasis-core/go/worker/common/p2p"
 	p2pError "github.com/oasisprotocol/oasis-core/go/worker/common/p2p/error"
@@ -85,7 +89,6 @@ type NodeHooks interface {
 	HandleNewEventLocked(*roothash.Event)
 	// Guarded by CrossNode.
 	HandleNodeUpdateLocked(*nodes.NodeUpdate, *EpochSnapshot)
-
 	HandleRuntimeHostEvent(*host.Event)
 
 	// Initialized returns a channel that will be closed when the worker is initialized and ready
@@ -106,6 +109,7 @@ type Node struct {
 	KeyManagerClient *keymanagerClient.Client
 	Consensus        consensus.Backend
 	Group            *Group
+	TxPool           txpool.TransactionPool
 
 	ctx       context.Context
 	cancelCtx context.CancelFunc
@@ -122,6 +126,8 @@ type Node struct {
 	CurrentBlock          *block.Block
 	CurrentBlockHeight    int64
 	CurrentConsensusBlock *consensus.LightBlock
+	CurrentDescriptor     *registry.Runtime
+	CurrentEpoch          beacon.EpochTime
 	Height                int64
 
 	logger *logging.Logger
@@ -138,13 +144,21 @@ func (n *Node) Start() error {
 		return fmt.Errorf("failed to start group services: %w", err)
 	}
 
+	// Start the transaction pool.
+	if err := n.TxPool.Start(); err != nil {
+		return fmt.Errorf("failed to start transaction pool: %w", err)
+	}
+
 	go n.worker()
 	return nil
 }
 
 // Stop halts the service.
 func (n *Node) Stop() {
-	n.stopOnce.Do(func() { close(n.stopCh) })
+	n.stopOnce.Do(func() {
+		close(n.stopCh)
+		n.TxPool.Stop()
+	})
 }
 
 // Quit returns a channel that will be closed when the service terminates.
@@ -272,6 +286,34 @@ func (n *Node) handleNewBlockLocked(blk *block.Block, height int64) {
 	n.CurrentBlockHeight = height
 	n.CurrentConsensusBlock = consensusBlk
 
+	// Update active descriptor on epoch transitions.
+	if firstBlockReceived || header.HeaderType == block.EpochTransition {
+		var ad *registry.Runtime
+		ad, err = n.Consensus.Registry().GetRuntime(n.ctx, &registry.NamespaceQuery{
+			ID:     n.Runtime.ID(),
+			Height: height,
+		})
+		switch {
+		case err == nil:
+			n.CurrentDescriptor = ad
+		case errors.Is(err, registry.ErrNoSuchRuntime):
+			// Runtime was probably suspended, just keep the current descriptor as is.
+		default:
+			n.logger.Error("failed to query runtime descriptor",
+				"err", err,
+			)
+			return
+		}
+
+		n.CurrentEpoch, err = n.Consensus.Beacon().GetEpoch(n.ctx, height)
+		if err != nil {
+			n.logger.Error("failed to fetch current epoch",
+				"err", err,
+			)
+			return
+		}
+	}
+
 	for _, hooks := range n.hooks {
 		hooks.HandleNewBlockEarlyLocked(blk)
 	}
@@ -308,6 +350,18 @@ func (n *Node) handleNewBlockLocked(blk *block.Block, height int64) {
 			"block", blk,
 		)
 		return
+	}
+
+	err = n.TxPool.ProcessBlock(&txpool.BlockInfo{
+		RuntimeBlock:     n.CurrentBlock,
+		ConsensusBlock:   n.CurrentConsensusBlock,
+		Epoch:            n.CurrentEpoch,
+		ActiveDescriptor: n.CurrentDescriptor,
+	})
+	if err != nil {
+		n.logger.Error("failed to process block in transaction pool",
+			"err", err,
+		)
 	}
 
 	for _, hooks := range n.hooks {
@@ -364,6 +418,10 @@ func (n *Node) worker() {
 	}
 
 	n.logger.Info("runtime is registered with the registry")
+
+	// Initialize the CurrentDescriptor to make sure there is one even if the runtime gets
+	// suspended.
+	n.CurrentDescriptor = rt
 
 	// If the runtime requires a key manager, wait for the key manager to actually become available
 	// before processing any requests.
@@ -536,6 +594,7 @@ func NewNode(
 	keymanager keymanagerApi.Backend,
 	consensus consensus.Backend,
 	p2p *p2p.P2P,
+	txPoolCfg *txpool.Config,
 ) (*Node, error) {
 	metricsOnce.Do(func() {
 		prometheus.MustRegister(nodeCollectors...)
@@ -564,11 +623,19 @@ func NewNode(
 	}
 	n.RuntimeHostNode = rhn
 
+	// Prepare committee group services.
 	group, err := NewGroup(ctx, identity, runtime, n, consensus, p2p)
 	if err != nil {
 		return nil, err
 	}
 	n.Group = group
+
+	// Prepare transaction pool.
+	txPool, err := txpool.New(txPoolCfg, n, group)
+	if err != nil {
+		return nil, fmt.Errorf("error creating transaction pool: %w", err)
+	}
+	n.TxPool = txPool
 
 	return n, nil
 }

@@ -755,7 +755,6 @@ func init() {
 		p2p.Flags,
 		registration.Flags,
 		runtimeClient.Flags,
-		executor.Flags,
 		workerCommon.Flags,
 		workerStorage.Flags,
 		workerSentry.Flags,

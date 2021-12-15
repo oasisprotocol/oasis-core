@@ -19,6 +19,7 @@ import (
 	scheduler "github.com/oasisprotocol/oasis-core/go/scheduler/api"
 	"github.com/oasisprotocol/oasis-core/go/worker/common/p2p"
 	p2pError "github.com/oasisprotocol/oasis-core/go/worker/common/p2p/error"
+	executor "github.com/oasisprotocol/oasis-core/go/worker/compute/executor/api"
 )
 
 const (
@@ -475,6 +476,25 @@ func (g *Group) Publish(msg *p2p.Message) error {
 	g.p2p.Publish(pubCtx, g.runtime.ID(), msg)
 
 	return nil
+}
+
+// PublishTx publishes a transaction to the P2P network.
+func (g *Group) PublishTx(ctx context.Context, tx []byte) error {
+	return g.Publish(&p2p.Message{
+		Tx: &executor.Tx{
+			Data: tx,
+		},
+	})
+}
+
+// GetMinRepublishInterval returns the minimum republish interval that needs to be respected by
+// the caller when publishing the same message. If Publish is called for the same message more
+// quickly, the message may be dropped and not published.
+func (g *Group) GetMinRepublishInterval() time.Duration {
+	if g.p2p == nil {
+		return 0
+	}
+	return g.p2p.GetMinRepublishInterval()
 }
 
 // Peers returns a list of connected P2P peers.

@@ -18,10 +18,6 @@ import (
 type Worker struct {
 	enabled bool
 
-	scheduleMaxTxPoolSize uint64
-	scheduleTxCacheSize   uint64
-	checkTxMaxBatchSize   uint64
-
 	commonWorker *workerCommon.Worker
 	registration *registration.Worker
 
@@ -154,9 +150,6 @@ func (w *Worker) registerRuntime(commonNode *committeeCommon.Node) error {
 		commonNode,
 		w.commonWorker.GetConfig(),
 		rp,
-		w.scheduleMaxTxPoolSize,
-		w.scheduleTxCacheSize,
-		w.checkTxMaxBatchSize,
 	)
 	if err != nil {
 		return err
@@ -172,13 +165,11 @@ func (w *Worker) registerRuntime(commonNode *committeeCommon.Node) error {
 	return nil
 }
 
-func newWorker(
+// New creates a new executor worker.
+func New(
 	dataDir string,
 	commonWorker *workerCommon.Worker,
 	registration *registration.Worker,
-	scheduleMaxTxPoolSize uint64,
-	scheduleTxCacheSize uint64,
-	checkTxMaxBatchSize uint64,
 ) (*Worker, error) {
 	ctx, cancelCtx := context.WithCancel(context.Background())
 
@@ -192,18 +183,15 @@ func newWorker(
 	}
 
 	w := &Worker{
-		enabled:               enabled,
-		commonWorker:          commonWorker,
-		scheduleMaxTxPoolSize: scheduleMaxTxPoolSize,
-		scheduleTxCacheSize:   scheduleTxCacheSize,
-		checkTxMaxBatchSize:   checkTxMaxBatchSize,
-		registration:          registration,
-		runtimes:              make(map[common.Namespace]*committee.Node),
-		ctx:                   ctx,
-		cancelCtx:             cancelCtx,
-		quitCh:                make(chan struct{}),
-		initCh:                make(chan struct{}),
-		logger:                logging.GetLogger("worker/executor"),
+		enabled:      enabled,
+		commonWorker: commonWorker,
+		registration: registration,
+		runtimes:     make(map[common.Namespace]*committee.Node),
+		ctx:          ctx,
+		cancelCtx:    cancelCtx,
+		quitCh:       make(chan struct{}),
+		initCh:       make(chan struct{}),
+		logger:       logging.GetLogger("worker/executor"),
 	}
 
 	if !enabled {

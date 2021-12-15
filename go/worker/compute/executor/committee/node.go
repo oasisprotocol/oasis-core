@@ -7,11 +7,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/eapache/channels"
 	"github.com/prometheus/client_golang/prometheus"
 
 	beacon "github.com/oasisprotocol/oasis-core/go/beacon/api"
-	"github.com/oasisprotocol/oasis-core/go/common/cache/lru"
 	"github.com/oasisprotocol/oasis-core/go/common/crash"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
@@ -25,10 +23,8 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/runtime/host"
 	"github.com/oasisprotocol/oasis-core/go/runtime/host/protocol"
 	"github.com/oasisprotocol/oasis-core/go/runtime/nodes"
-	"github.com/oasisprotocol/oasis-core/go/runtime/scheduling"
-	schedulingAPI "github.com/oasisprotocol/oasis-core/go/runtime/scheduling/api"
-	"github.com/oasisprotocol/oasis-core/go/runtime/scheduling/simple/orderedmap"
 	"github.com/oasisprotocol/oasis-core/go/runtime/transaction"
+	"github.com/oasisprotocol/oasis-core/go/runtime/txpool"
 	storage "github.com/oasisprotocol/oasis-core/go/storage/api"
 	commonWorker "github.com/oasisprotocol/oasis-core/go/worker/common"
 	"github.com/oasisprotocol/oasis-core/go/worker/common/committee"
@@ -133,23 +129,9 @@ type Node struct { // nolint: maligned
 	runtimeVersion       version.Version
 	runtimeCapabilityTEE *node.CapabilityTEE
 
-	lastScheduledCache    *lru.Cache
-	scheduleMaxTxPoolSize uint64
-
-	checkTxCh    *channels.RingChannel
-	checkTxQueue *orderedmap.OrderedMap
-
-	// The scheduler mutex is here to protect the initialization
-	// of the scheduler variable and updates to scheduler parameters.
-	schedulerMutex sync.RWMutex
-	scheduler      schedulingAPI.Scheduler
-	// Guarded by schedulerMutex.
-	// roundWeightLimits are the per round batch weight limits.
-	roundWeightLimits map[transaction.Weight]uint64
+	limitsLastUpdateLock sync.Mutex
 	// limitsLastUpdate is the round of the last update of the round weight limits.
 	limitsLastUpdate uint64
-	// schedulerAlgorithm is the scheduler algorithm.
-	schedulerAlgorithm string
 
 	// Guarded by .commonNode.CrossNode.
 	proposingTimeout bool
@@ -185,7 +167,7 @@ type Node struct { // nolint: maligned
 
 // Name returns the service name.
 func (n *Node) Name() string {
-	return "committee node"
+	return "executor committee node"
 }
 
 // Start starts the service.
@@ -242,10 +224,7 @@ func (n *Node) getMetricLabels() prometheus.Labels {
 
 // Assumes scheduler is initialized.
 func (n *Node) clearQueuedTxs() {
-	n.scheduler.Clear()
-	if n.lastScheduledCache != nil {
-		n.lastScheduledCache.Clear()
-	}
+	n.commonNode.TxPool.Clear()
 	incomingQueueSize.With(n.getMetricLabels()).Set(0)
 }
 
@@ -255,6 +234,11 @@ func (n *Node) HandlePeerMessage(ctx context.Context, message *p2p.Message, isOw
 
 	switch {
 	case message.Tx != nil:
+		// Ignore own messages as those are handled separately.
+		if isOwn {
+			return true, nil
+		}
+
 		rawTx := message.Tx.Data
 
 		// Note: if an epoch transition is just about to happen we can be out of
@@ -267,25 +251,10 @@ func (n *Node) HandlePeerMessage(ctx context.Context, message *p2p.Message, isOw
 			return true, nil
 		}
 
-		// Skip recently scheduled transactions.
-		if n.lastScheduledCache != nil {
-			if _, b := n.lastScheduledCache.Get(hash.NewFromBytes(rawTx)); b {
-				n.logger.Debug("not scheduling duplicate transaction", "tx", rawTx)
-				return true, nil
-			}
-		}
-		// Queue transaction for checks.
-		n.logger.Debug("queuing transaction for check",
-			"tx", rawTx,
-		)
-		if err := n.checkTxQueue.Add(rawTx); err != nil {
-			n.logger.Error("unable to queue transaction",
-				"tx", rawTx,
-				"err", err,
-			)
+		if err := n.commonNode.TxPool.SubmitTxNoWait(ctx, rawTx, &txpool.TransactionMeta{Local: false}); err != nil {
 			return true, err
 		}
-		n.checkTxCh.In() <- struct{}{}
+
 		return true, nil
 
 	case message.Proposal != nil:
@@ -391,13 +360,6 @@ func (n *Node) transitionLocked(state NodeState) {
 // HandleEpochTransitionLocked implements NodeHooks.
 // Guarded by n.commonNode.CrossNode.
 func (n *Node) HandleEpochTransitionLocked(epoch *committee.EpochSnapshot) {
-	n.schedulerMutex.RLock()
-	defer n.schedulerMutex.RUnlock()
-	if n.scheduler == nil {
-		n.logger.Error("scheduling algorithm not available yet")
-		return
-	}
-
 	switch {
 	case epoch.IsExecutorWorker():
 		if !n.prevEpochWorker {
@@ -418,6 +380,7 @@ func (n *Node) HandleEpochTransitionLocked(epoch *committee.EpochSnapshot) {
 // Guarded by n.commonNode.CrossNode.
 func (n *Node) HandleNewBlockEarlyLocked(blk *block.Block) {
 	crash.Here(crashPointRoothashReceiveAfter)
+
 	// If we have seen a new block while a batch was processing, we need to
 	// abort it no matter what as any processed state may be invalid.
 	n.abortBatchLocked(errSeenNewerBlock)
@@ -520,9 +483,9 @@ func (n *Node) HandleNewBlockLocked(blk *block.Block) {
 	if header.HeaderType != block.Normal {
 		// If last round was not successful, make sure we re-query the round weight limits
 		// before scheduling a batch as ExecuteTxResponse could have set invalid weights.
-		n.schedulerMutex.Lock()
+		n.limitsLastUpdateLock.Lock()
 		n.limitsLastUpdate = header.Round - 1
-		n.schedulerMutex.Unlock()
+		n.limitsLastUpdateLock.Unlock()
 	}
 
 	// Check if we are a proposer and if so try to immediately schedule a new batch.
@@ -531,82 +494,12 @@ func (n *Node) HandleNewBlockLocked(blk *block.Block) {
 			"round", blk.Header.Round,
 		)
 
-		n.checkTxCh.In() <- struct{}{}
+		n.commonNode.TxPool.WakeupScheduler()
 	}
 }
 
-// checkTxBatch requests the runtime to check the validity of a transaction batch.
-// Transactions that pass the check are queued for scheduling.
-func (n *Node) checkTxBatch() {
-	batch := n.checkTxQueue.GetBatch()
-	if len(batch) == 0 {
-		return
-	}
-	rt := n.commonNode.GetHostedRuntime()
-	if rt == nil {
-		n.logger.Debug("CheckTx: hosted runtime not initialized")
-		return
-	}
-
-	n.commonNode.CrossNode.Lock()
-	currentBlock := n.commonNode.CurrentBlock
-	currentConsensusBlock := n.commonNode.CurrentConsensusBlock
-	currentEpoch := n.commonNode.Group.GetEpochSnapshot().GetEpochNumber()
-	n.commonNode.CrossNode.Unlock()
-
-	// Fetch the active descriptor so we can get the current message limits.
-	rtDsc, err := n.commonNode.Runtime.ActiveDescriptor(n.ctx)
-	if err != nil {
-		n.logger.Error("failed to get active runtime descriptor",
-			"err", err,
-		)
-		return
-	}
-	currentMaxMessages := rtDsc.Executor.MaxMessages
-
-	// Check transaction batch.
-	results, err := rt.CheckTx(n.ctx, currentBlock, currentConsensusBlock, currentEpoch, currentMaxMessages, batch)
-	if err != nil {
-		n.logger.Error("transaction batch check tx error", "err", err)
-		return
-	}
-
-	txs := make([]*transaction.CheckedTransaction, 0, len(results))
-	for i, res := range results {
-		if !res.IsSuccess() {
-			n.logger.Warn("check tx failed", "tx", batch[i], "result", res)
-			continue
-		}
-
-		txs = append(txs, res.ToCheckedTransaction(batch[i]))
-	}
-
-	// Remove the checked transaction batch.
-	n.checkTxQueue.RemoveBatch(batch)
-
-	// Queue checked transactions for scheduling.
-	n.queueTxBatch(txs)
-}
-
-// queueTxBatch queues a runtime transaction batch for scheduling.
-func (n *Node) queueTxBatch(txs []*transaction.CheckedTransaction) {
-	for _, tx := range txs {
-		if err := n.scheduler.QueueTx(tx); err != nil {
-			n.logger.Error("unable to schedule transaction", "tx", tx)
-			continue
-		}
-		if n.lastScheduledCache != nil {
-			if err := n.lastScheduledCache.Put(tx.Hash(), true); err != nil {
-				// cache.Put can only error if capacity in bytes is used and the
-				// inserted value is too large. This should never happen in here.
-				n.logger.Error("cache put error",
-					"err", err,
-				)
-			}
-		}
-	}
-
-	incomingQueueSize.With(n.getMetricLabels()).Set(float64(n.scheduler.UnscheduledSize()))
+func (n *Node) handleNewCheckedTransactions(txs []*transaction.CheckedTransaction) {
+	incomingQueueSize.With(n.getMetricLabels()).Set(float64(n.commonNode.TxPool.Scheduler().UnscheduledSize()))
 
 	// Check if we are waiting for new transactions.
 	n.commonNode.CrossNode.Lock()
@@ -633,57 +526,24 @@ func (n *Node) removeTxBatch(batch transaction.RawBatch) error {
 	for i, b := range batch {
 		hashes[i] = hash.NewFromBytes(b)
 	}
-	// XXX: remove batch can only happen after a batch was already scheduled, meaning
-	// the scheduler already exists and there is no need for the scheduler mutex.
-	if err := n.scheduler.RemoveTxBatch(hashes); err != nil {
+
+	if err := n.commonNode.TxPool.Scheduler().RemoveTxBatch(hashes); err != nil {
 		return err
 	}
 
-	incomingQueueSize.With(n.getMetricLabels()).Set(float64(n.scheduler.UnscheduledSize()))
-
-	return nil
-}
-
-// Assumes n.schedulerMutex lock is held.
-func (n *Node) updateRoundWeightLimitsLocked(newBatchLimits map[transaction.Weight]uint64, round uint64) error {
-	// Remove batch custom weight limits that don't exist anymore.
-	for w := range n.roundWeightLimits {
-		// Skip non custom runtime weights.
-		if !w.IsCustom() {
-			continue
-		}
-
-		if _, exists := newBatchLimits[w]; !exists {
-			delete(n.roundWeightLimits, w)
-		}
-	}
-	// Update batch weight limits.
-	for w, l := range newBatchLimits {
-		n.roundWeightLimits[w] = l
-	}
-
-	if err := n.scheduler.UpdateParameters(n.schedulerAlgorithm, n.roundWeightLimits); err != nil {
-		return fmt.Errorf("updating scheduler parameters: %w", err)
-	}
-	n.limitsLastUpdate = round
-
-	n.logger.Debug("updated round batch weight limits",
-		"last_update_round", n.limitsLastUpdate,
-		"weight_limits", n.roundWeightLimits,
-	)
+	incomingQueueSize.With(n.getMetricLabels()).Set(float64(n.commonNode.TxPool.Scheduler().UnscheduledSize()))
 
 	return nil
 }
 
 func (n *Node) updateBatchWeightLimits(ctx context.Context, blk *block.Block, lb *consensus.LightBlock, epoch beacon.EpochTime) error {
-	n.schedulerMutex.Lock()
-	defer n.schedulerMutex.Unlock()
+	n.limitsLastUpdateLock.Lock()
+	defer n.limitsLastUpdateLock.Unlock()
 
 	if n.limitsLastUpdate != 0 && n.limitsLastUpdate >= blk.Header.Round {
 		n.logger.Debug("skipping querying batch weight limits",
 			"last_update_round", n.limitsLastUpdate,
 			"round", blk.Header.Round,
-			"weight_limits", n.roundWeightLimits,
 		)
 		// Already queried weights for this round.
 		return nil
@@ -700,7 +560,12 @@ func (n *Node) updateBatchWeightLimits(ctx context.Context, blk *block.Block, lb
 		return fmt.Errorf("querying batch round limits: %w", err)
 	}
 
-	return n.updateRoundWeightLimitsLocked(batchLimits, blk.Header.Round)
+	if err := n.commonNode.TxPool.UpdateWeightLimits(batchLimits); err != nil {
+		return err
+	}
+	n.limitsLastUpdate = blk.Header.Round
+
+	return nil
 }
 
 func (n *Node) proposeTimeoutLocked(roundCtx context.Context) error {
@@ -894,7 +759,7 @@ func (n *Node) handleScheduleBatch(force bool) {
 
 	// Ask the scheduler to get a batch of transactions for us and see if we should be proposing
 	// a new batch to other nodes.
-	batch := n.scheduler.GetBatch(force)
+	batch := n.commonNode.TxPool.Scheduler().GetBatch(force)
 	switch {
 	case len(batch) > 0:
 		// We have some transactions, schedule batch.
@@ -1206,7 +1071,7 @@ func (n *Node) startProcessingBatchLocked(batch *unresolvedBatch) {
 	n.logger.Debug("attempting to resolve batch", "batch", batch.String())
 
 	// TODO: Add metrics for how long it takes to receive the complete batch.
-	resolvedBatch, err := batch.resolve(n.scheduler)
+	resolvedBatch, err := batch.resolve(n.commonNode.TxPool.Scheduler())
 	if err != nil {
 		n.logger.Error("refusing to process bad batch", "err", err)
 		// TODO: We should indicate failure.
@@ -1214,9 +1079,8 @@ func (n *Node) startProcessingBatchLocked(batch *unresolvedBatch) {
 	}
 	if resolvedBatch == nil {
 		// Some transactions are missing so we cannot start processing the batch just yet.
-		// Transition into StateWaitingForTxs and request transactions from peers.
+		// Transition into StateWaitingForTxs and wait for peers to republish transactions.
 		n.logger.Debug("some transactions are missing", "num_missing", len(batch.missingTxs))
-		// TODO: Actually request transactions from peers.
 		n.transitionLocked(StateWaitingForTxs{batch})
 		return
 	}
@@ -1246,7 +1110,7 @@ func (n *Node) startProcessingBatchLocked(batch *unresolvedBatch) {
 	blk := n.commonNode.CurrentBlock
 	consensusBlk := n.commonNode.CurrentConsensusBlock
 	height := n.commonNode.CurrentBlockHeight
-	epoch := n.commonNode.Group.GetEpochSnapshot()
+	epoch := n.commonNode.CurrentEpoch
 
 	go func() {
 		defer close(done)
@@ -1271,7 +1135,7 @@ func (n *Node) startProcessingBatchLocked(batch *unresolvedBatch) {
 				IORoot:         batch.hash(),
 				Inputs:         resolvedBatch,
 				Block:          *blk,
-				Epoch:          epoch.GetEpochNumber(),
+				Epoch:          epoch,
 				MaxMessages:    state.Runtime.Executor.MaxMessages,
 			},
 		}
@@ -1315,13 +1179,14 @@ func (n *Node) startProcessingBatchLocked(batch *unresolvedBatch) {
 		}
 
 		// Update round batch weight limits.
-		n.schedulerMutex.Lock()
-		if err = n.updateRoundWeightLimitsLocked(rsp.RuntimeExecuteTxBatchResponse.BatchWeightLimits, blk.Header.Round+1); err != nil {
+		n.limitsLastUpdateLock.Lock()
+		if err = n.commonNode.TxPool.UpdateWeightLimits(rsp.RuntimeExecuteTxBatchResponse.BatchWeightLimits); err != nil {
 			n.logger.Error("failed updating batch weight limits",
 				"err", err,
 			)
 		}
-		n.schedulerMutex.Unlock()
+		n.limitsLastUpdate = blk.Header.Round + 1
+		n.limitsLastUpdateLock.Unlock()
 
 		// Wait for replication to complete before proposing a batch to ensure that we can cleanly
 		// apply any updates.
@@ -1717,49 +1582,13 @@ func (n *Node) worker() {
 
 	n.logger.Info("starting committee node")
 
-	// Initialize transaction scheduling algorithm with latest registry desctiptor.
-	// Note: in case the runtime is already running, the correct active descriptor
-	// is the version at the last epoch transition.
-	// This case will be handled by the first tick from the descriptor updates
-	// channel bellow, which will update the parameters.
-	runtime, err := n.commonNode.Runtime.ActiveDescriptor(n.ctx)
-	if err != nil {
-		n.logger.Error("failed to fetch runtime registry descriptor",
-			"err", err,
-		)
-		return
-	}
+	// Subscribe to notifications of new transactions being available in the pool.
+	txSub, txCh := n.commonNode.TxPool.WatchCheckedTransactions()
+	defer txSub.Close()
 
-	n.schedulerMutex.Lock()
-	n.schedulerAlgorithm = runtime.TxnScheduler.Algorithm
-	scheduler, err := scheduling.New(
-		n.scheduleMaxTxPoolSize,
-		n.schedulerAlgorithm,
-		n.roundWeightLimits,
-	)
-	if err != nil {
-		n.logger.Error("failed to create new transaction scheduler algorithm",
-			"err", err,
-		)
-		n.schedulerMutex.Unlock()
-		return
-	}
-	n.scheduler = scheduler
-	n.schedulerMutex.Unlock()
-
-	// Check incoming queue every FlushTimeout.
-	txnScheduleTicker := time.NewTicker(runtime.TxnScheduler.BatchFlushTimeout)
-	defer txnScheduleTicker.Stop()
-
-	// Watch runtime descriptor updates.
-	rtCh, rtSub, err := n.commonNode.Runtime.WatchActiveDescriptor()
-	if err != nil {
-		n.logger.Error("failed to watch runtimes",
-			"err", err,
-		)
-		return
-	}
-	defer rtSub.Close()
+	// Subscribe to scheduler notifications.
+	schedSub, schedCh := n.commonNode.TxPool.WatchScheduler()
+	defer schedSub.Close()
 
 	// We are initialized.
 	close(n.initCh)
@@ -1785,38 +1614,12 @@ func (n *Node) worker() {
 		case batch := <-processingDoneCh:
 			// Batch processing has finished.
 			n.handleProcessedBatch(batch, processingDoneCh)
-		case runtime := <-rtCh:
-			// XXX: Once there is more than one scheduling algorithm available
-			// this might need to recreate the scheduler and reinsert
-			// the transactions.
-			// At that point also update the schedulerMutex usage across the
-			// code, as it will be no longer be true that the scheduler
-			// variable never gets updated.
-
-			// Update per round weight limits.
-			n.schedulerMutex.Lock()
-			n.roundWeightLimits[transaction.WeightConsensusMessages] = uint64(runtime.Executor.MaxMessages)
-			n.roundWeightLimits[transaction.WeightSizeBytes] = runtime.TxnScheduler.MaxBatchSizeBytes
-			n.roundWeightLimits[transaction.WeightCount] = runtime.TxnScheduler.MaxBatchSize
-			n.schedulerAlgorithm = runtime.TxnScheduler.Algorithm
-			if err = n.scheduler.UpdateParameters(n.schedulerAlgorithm, n.roundWeightLimits); err != nil {
-				n.logger.Error("error updating scheduler parameters",
-					"err", err,
-				)
-				n.schedulerMutex.Unlock()
-				return
-			}
-			n.schedulerMutex.Unlock()
-
-			// Update batch flush timeout ticker.
-			txnScheduleTicker.Reset(runtime.TxnScheduler.BatchFlushTimeout)
-		case <-txnScheduleTicker.C:
-			// Force scheduling a batch if possible.
-			n.handleScheduleBatch(true)
-		case <-n.checkTxCh.Out():
-			// Check any queued transactions and attempt regular scheduling.
-			n.checkTxBatch()
-			n.handleScheduleBatch(false)
+		case force := <-schedCh:
+			// Attempt scheduling.
+			n.handleScheduleBatch(force)
+		case txs := <-txCh:
+			// Check any queued transactions.
+			n.handleNewCheckedTransactions(txs)
 		case <-n.reselect:
 			// Recalculate select set.
 		}
@@ -1828,43 +1631,26 @@ func NewNode(
 	commonNode *committee.Node,
 	commonCfg commonWorker.Config,
 	roleProvider registration.RoleProvider,
-	scheduleMaxTxPoolSize uint64,
-	lastScheduledCacheSize uint64,
-	checkTxMaxBatchSize uint64,
 ) (*Node, error) {
 	metricsOnce.Do(func() {
 		prometheus.MustRegister(nodeCollectors...)
 	})
 
-	var cache *lru.Cache
-	if lastScheduledCacheSize > 0 {
-		var err error
-		cache, err = lru.New(lru.Capacity(lastScheduledCacheSize, false))
-		if err != nil {
-			return nil, fmt.Errorf("error creating cache: %w", err)
-		}
-	}
-
 	ctx, cancel := context.WithCancel(context.Background())
 
 	n := &Node{
-		commonNode:            commonNode,
-		commonCfg:             commonCfg,
-		roleProvider:          roleProvider,
-		scheduleMaxTxPoolSize: scheduleMaxTxPoolSize,
-		lastScheduledCache:    cache,
-		checkTxQueue:          orderedmap.New(scheduleMaxTxPoolSize, checkTxMaxBatchSize),
-		roundWeightLimits:     make(map[transaction.Weight]uint64),
-		checkTxCh:             channels.NewRingChannel(1),
-		ctx:                   ctx,
-		cancelCtx:             cancel,
-		stopCh:                make(chan struct{}),
-		quitCh:                make(chan struct{}),
-		initCh:                make(chan struct{}),
-		state:                 StateNotReady{},
-		stateTransitions:      pubsub.NewBroker(false),
-		reselect:              make(chan struct{}, 1),
-		logger:                logging.GetLogger("worker/executor/committee").With("runtime_id", commonNode.Runtime.ID()),
+		commonNode:       commonNode,
+		commonCfg:        commonCfg,
+		roleProvider:     roleProvider,
+		ctx:              ctx,
+		cancelCtx:        cancel,
+		stopCh:           make(chan struct{}),
+		quitCh:           make(chan struct{}),
+		initCh:           make(chan struct{}),
+		state:            StateNotReady{},
+		stateTransitions: pubsub.NewBroker(false),
+		reselect:         make(chan struct{}, 1),
+		logger:           logging.GetLogger("worker/executor/committee").With("runtime_id", commonNode.Runtime.ID()),
 	}
 
 	// Register prune handler.

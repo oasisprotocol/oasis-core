@@ -205,6 +205,13 @@ func (p *P2P) topicIDForRuntime(runtimeID common.Namespace) string {
 	)
 }
 
+// GetMinRepublishInterval returns the minimum republish interval that needs to be respected by
+// the caller when publishing the same message. If Publish is called for the same message more
+// quickly, the message may be dropped and not published.
+func (p *P2P) GetMinRepublishInterval() time.Duration {
+	return pubsub.TimeCacheDuration
+}
+
 // New creates a new P2P node.
 func New(ctx context.Context, identity *identity.Identity, consensus consensus.Backend) (*P2P, error) {
 	// Instantiate the libp2p host.

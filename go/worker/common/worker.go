@@ -175,6 +175,7 @@ func (w *Worker) registerRuntime(runtime runtimeRegistry.Runtime) error {
 		w.KeyManager,
 		w.Consensus,
 		w.P2P,
+		&w.cfg.TxPool,
 	)
 	if err != nil {
 		return err
