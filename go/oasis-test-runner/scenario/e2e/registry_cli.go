@@ -22,6 +22,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/entity"
 	"github.com/oasisprotocol/oasis-core/go/common/node"
 	"github.com/oasisprotocol/oasis-core/go/common/quantity"
+	"github.com/oasisprotocol/oasis-core/go/common/version"
 	cmdCommon "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common"
 	"github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/consensus"
 	"github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/flags"
@@ -428,7 +429,8 @@ func (sc *registryCLIImpl) newTestNode(entityID signature.PublicKey) (*node.Node
 				ID: common.Namespace{}, // ID is set below.
 			},
 		},
-		Roles: node.RoleValidator,
+		Roles:           node.RoleValidator,
+		SoftwareVersion: version.SoftwareVersion,
 	}
 	_ = testNode.Runtimes[0].ID.UnmarshalHex("8000000000000000000000000000000000000000000000000000000000000000")
 

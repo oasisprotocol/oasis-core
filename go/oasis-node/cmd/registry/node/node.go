@@ -20,6 +20,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/identity"
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
 	"github.com/oasisprotocol/oasis-core/go/common/node"
+	"github.com/oasisprotocol/oasis-core/go/common/version"
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
 	cmdCommon "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common"
 	cmdFlags "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/flags"
@@ -163,6 +164,7 @@ func doInit(cmd *cobra.Command, args []string) { // nolint: gocyclo
 		VRF: &node.VRFInfo{
 			ID: nodeIdentity.VRFSigner.Public(),
 		},
+		SoftwareVersion: version.SoftwareVersion,
 	}
 	if n.Roles, err = argsToRolesMask(); err != nil {
 		logger.Error("failed to parse node roles mask",

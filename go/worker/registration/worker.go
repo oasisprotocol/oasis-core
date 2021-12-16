@@ -23,6 +23,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
 	"github.com/oasisprotocol/oasis-core/go/common/node"
 	"github.com/oasisprotocol/oasis-core/go/common/persistent"
+	"github.com/oasisprotocol/oasis-core/go/common/version"
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
 	control "github.com/oasisprotocol/oasis-core/go/control/api"
 	"github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/flags"
@@ -757,6 +758,7 @@ func (w *Worker) registerNode(epoch beacon.EpochTime, hook RegisterNodeHook) err
 		VRF: &node.VRFInfo{
 			ID: w.identity.VRFSigner.Public(),
 		},
+		SoftwareVersion: version.SoftwareVersion,
 	}
 
 	if err := hook(&nodeDesc); err != nil {

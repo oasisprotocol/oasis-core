@@ -96,6 +96,9 @@ type Node struct { // nolint: maligned
 
 	// Roles is a bitmask representing the node roles.
 	Roles RolesMask `json:"roles"`
+
+	// SoftwareVersion is the node's oasis-node software version.
+	SoftwareVersion string `json:"software_version,omitempty"`
 }
 
 // RolesMask is Oasis node roles bitmask.
