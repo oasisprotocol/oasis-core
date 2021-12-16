@@ -107,7 +107,7 @@ func (e *ExecutorParameters) ValidateBasic() error {
 		return fmt.Errorf("number of allowed stragglers too large")
 	}
 
-	if e.RoundTimeout < 5 {
+	if e.RoundTimeout <= 0 {
 		return fmt.Errorf("round timeout too small")
 	}
 
