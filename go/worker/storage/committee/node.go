@@ -98,6 +98,10 @@ const (
 	// Trying to wait for rounds further in the future will return an error immediately.
 	roundWaitConsensusOffset = uint64(1)
 
+	// maxInFlightRounds is the maximum number of rounds that should be fetched before waiting
+	// for them to be applied.
+	maxInFlightRounds = 100
+
 	// getDiffTimeout is the timeout for fetching a diff from a node.
 	getDiffTimeout = 15 * time.Second
 )
@@ -1243,6 +1247,10 @@ func (n *Node) worker() { // nolint: gocyclo
 			}
 
 			if !ok {
+				if len(syncingRounds) >= maxInFlightRounds {
+					break
+				}
+
 				syncing = &inFlight{
 					awaitingRetry: outstandingMaskFull,
 				}
