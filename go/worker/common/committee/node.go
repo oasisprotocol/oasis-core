@@ -16,6 +16,7 @@ import (
 	roothash "github.com/oasisprotocol/oasis-core/go/roothash/api"
 	"github.com/oasisprotocol/oasis-core/go/roothash/api/block"
 	"github.com/oasisprotocol/oasis-core/go/runtime/nodes"
+	"github.com/oasisprotocol/oasis-core/go/runtime/host"
 	runtimeRegistry "github.com/oasisprotocol/oasis-core/go/runtime/registry"
 	"github.com/oasisprotocol/oasis-core/go/worker/common/api"
 	"github.com/oasisprotocol/oasis-core/go/worker/common/p2p"
@@ -85,6 +86,8 @@ type NodeHooks interface {
 	// Guarded by CrossNode.
 	HandleNodeUpdateLocked(*nodes.NodeUpdate, *EpochSnapshot)
 
+	HandleRuntimeHostEvent(*host.Event)
+
 	// Initialized returns a channel that will be closed when the worker is initialized and ready
 	// to service requests.
 	Initialized() <-chan struct{}
@@ -92,6 +95,8 @@ type NodeHooks interface {
 
 // Node is a committee node.
 type Node struct {
+	*runtimeRegistry.RuntimeHostNode
+
 	Runtime runtimeRegistry.Runtime
 
 	HostNode control.ControlledNode
@@ -328,6 +333,12 @@ func (n *Node) handleNodeUpdateLocked(update *nodes.NodeUpdate) {
 	}
 }
 
+func (n *Node) handleRuntimeHostEvent(ev *host.Event) {
+	for _, hooks := range n.hooks {
+		hooks.HandleRuntimeHostEvent(ev)
+	}
+}
+
 func (n *Node) worker() {
 	n.logger.Info("starting committee node")
 
@@ -419,6 +430,40 @@ func (n *Node) worker() {
 	}
 	defer nodeUpsSub.Close()
 
+	// Provision the hosted runtime.
+	hrt, hrtNotifier, err := n.ProvisionHostedRuntime(n.ctx)
+	if err != nil {
+		n.logger.Error("failed to provision hosted runtime",
+			"err", err,
+		)
+		return
+	}
+
+	hrtEventCh, hrtSub, err := hrt.WatchEvents(n.ctx)
+	if err != nil {
+		n.logger.Error("failed to subscribe to hosted runtime events",
+			"err", err,
+		)
+		return
+	}
+	defer hrtSub.Close()
+
+	if err = hrt.Start(); err != nil {
+		n.logger.Error("failed to start hosted runtime",
+			"err", err,
+		)
+		return
+	}
+	defer hrt.Stop()
+
+	if err = hrtNotifier.Start(); err != nil {
+		n.logger.Error("failed to start runtime notifier",
+			"err", err,
+		)
+		return
+	}
+	defer hrtNotifier.Stop()
+
 	initialized := false
 	for {
 		select {
@@ -477,6 +522,9 @@ func (n *Node) worker() {
 				defer n.CrossNode.Unlock()
 				n.handleNodeUpdateLocked(up)
 			}()
+		case ev := <-hrtEventCh:
+			// Received a hosted runtime event.
+			n.handleRuntimeHostEvent(ev)
 		}
 	}
 }
@@ -508,6 +556,13 @@ func NewNode(
 		initCh:     make(chan struct{}),
 		logger:     logging.GetLogger("worker/common/committee").With("runtime_id", runtime.ID()),
 	}
+
+	// Prepare the runtime host node helpers.
+	rhn, err := runtimeRegistry.NewRuntimeHostNode(n)
+	if err != nil {
+		return nil, err
+	}
+	n.RuntimeHostNode = rhn
 
 	group, err := NewGroup(ctx, identity, runtime, n, consensus, p2p)
 	if err != nil {

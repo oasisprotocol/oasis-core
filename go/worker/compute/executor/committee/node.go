@@ -25,7 +25,6 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/runtime/host"
 	"github.com/oasisprotocol/oasis-core/go/runtime/host/protocol"
 	"github.com/oasisprotocol/oasis-core/go/runtime/nodes"
-	runtimeRegistry "github.com/oasisprotocol/oasis-core/go/runtime/registry"
 	"github.com/oasisprotocol/oasis-core/go/runtime/scheduling"
 	schedulingAPI "github.com/oasisprotocol/oasis-core/go/runtime/scheduling/api"
 	"github.com/oasisprotocol/oasis-core/go/runtime/scheduling/simple/orderedmap"
@@ -130,8 +129,6 @@ var (
 
 // Node is a committee node.
 type Node struct { // nolint: maligned
-	*runtimeRegistry.RuntimeHostNode
-
 	runtimeReady         bool
 	runtimeVersion       version.Version
 	runtimeCapabilityTEE *node.CapabilityTEE
@@ -545,7 +542,7 @@ func (n *Node) checkTxBatch() {
 	if len(batch) == 0 {
 		return
 	}
-	rt := n.GetHostedRuntime()
+	rt := n.commonNode.GetHostedRuntime()
 	if rt == nil {
 		n.logger.Debug("CheckTx: hosted runtime not initialized")
 		return
@@ -692,7 +689,7 @@ func (n *Node) updateBatchWeightLimits(ctx context.Context, blk *block.Block, lb
 		return nil
 	}
 
-	rt := n.GetHostedRuntime()
+	rt := n.commonNode.GetHostedRuntime()
 	if rt == nil {
 		return fmt.Errorf("updating runtime weight limits while hosted runtime is not initialized")
 	}
@@ -1235,7 +1232,7 @@ func (n *Node) startProcessingBatchLocked(batch *unresolvedBatch) {
 	batchStartTime := time.Now()
 	n.transitionLocked(StateProcessingBatch{batch, batchStartTime, cancel, done})
 
-	rt := n.GetHostedRuntime()
+	rt := n.commonNode.GetHostedRuntime()
 	if rt == nil {
 		// This should not happen as we only register to be an executor worker
 		// once the hosted runtime is ready.
@@ -1630,7 +1627,7 @@ func (n *Node) nudgeAvailability(force bool) {
 	}
 }
 
-func (n *Node) handleRuntimeHostEvent(ev *host.Event) {
+func (n *Node) HandleRuntimeHostEvent(ev *host.Event) {
 	switch {
 	case ev.Started != nil:
 		// We are now able to service requests for this runtime.
@@ -1720,40 +1717,6 @@ func (n *Node) worker() {
 
 	n.logger.Info("starting committee node")
 
-	// Provision the hosted runtime.
-	hrt, hrtNotifier, err := n.ProvisionHostedRuntime(n.ctx)
-	if err != nil {
-		n.logger.Error("failed to provision hosted runtime",
-			"err", err,
-		)
-		return
-	}
-
-	hrtEventCh, hrtSub, err := hrt.WatchEvents(n.ctx)
-	if err != nil {
-		n.logger.Error("failed to subscribe to hosted runtime events",
-			"err", err,
-		)
-		return
-	}
-	defer hrtSub.Close()
-
-	if err = hrt.Start(); err != nil {
-		n.logger.Error("failed to start hosted runtime",
-			"err", err,
-		)
-		return
-	}
-	defer hrt.Stop()
-
-	if err = hrtNotifier.Start(); err != nil {
-		n.logger.Error("failed to start runtime notifier",
-			"err", err,
-		)
-		return
-	}
-	defer hrtNotifier.Stop()
-
 	// Initialize transaction scheduling algorithm with latest registry desctiptor.
 	// Note: in case the runtime is already running, the correct active descriptor
 	// is the version at the last epoch transition.
@@ -1819,8 +1782,6 @@ func (n *Node) worker() {
 		case <-n.stopCh:
 			n.logger.Info("termination requested")
 			return
-		case ev := <-hrtEventCh:
-			n.handleRuntimeHostEvent(ev)
 		case batch := <-processingDoneCh:
 			// Batch processing has finished.
 			n.handleProcessedBatch(batch, processingDoneCh)
@@ -1875,14 +1836,9 @@ func NewNode(
 		prometheus.MustRegister(nodeCollectors...)
 	})
 
-	// Prepare the runtime host node helpers.
-	rhn, err := runtimeRegistry.NewRuntimeHostNode(commonNode)
-	if err != nil {
-		return nil, err
-	}
-
 	var cache *lru.Cache
 	if lastScheduledCacheSize > 0 {
+		var err error
 		cache, err = lru.New(lru.Capacity(lastScheduledCacheSize, false))
 		if err != nil {
 			return nil, fmt.Errorf("error creating cache: %w", err)
@@ -1892,7 +1848,6 @@ func NewNode(
 	ctx, cancel := context.WithCancel(context.Background())
 
 	n := &Node{
-		RuntimeHostNode:       rhn,
 		commonNode:            commonNode,
 		commonCfg:             commonCfg,
 		roleProvider:          roleProvider,

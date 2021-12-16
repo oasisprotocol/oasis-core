@@ -24,6 +24,7 @@ import (
 	registryApi "github.com/oasisprotocol/oasis-core/go/registry/api"
 	roothashApi "github.com/oasisprotocol/oasis-core/go/roothash/api"
 	"github.com/oasisprotocol/oasis-core/go/roothash/api/block"
+	"github.com/oasisprotocol/oasis-core/go/runtime/host"
 	"github.com/oasisprotocol/oasis-core/go/runtime/nodes"
 	"github.com/oasisprotocol/oasis-core/go/runtime/nodes/grpc"
 	scheduler "github.com/oasisprotocol/oasis-core/go/scheduler/api"
@@ -487,6 +488,10 @@ func (n *Node) HandleNewEventLocked(*roothashApi.Event) {
 func (n *Node) HandleNodeUpdateLocked(update *nodes.NodeUpdate, snapshot *committee.EpochSnapshot) {
 	// Nothing to do here.
 	// Storage worker uses a separate watcher.
+}
+
+func (n *Node) HandleRuntimeHostEvent(ev *host.Event) {
+	// Nothing to do here.
 }
 
 // Watcher implementation.
