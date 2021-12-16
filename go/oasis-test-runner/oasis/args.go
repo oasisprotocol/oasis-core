@@ -299,15 +299,6 @@ func (args *argBuilder) storageBackend(backend string) *argBuilder {
 	return args
 }
 
-func (args *argBuilder) runtimeSupported(id common.Namespace) *argBuilder {
-	args.vec = append(args.vec, Argument{
-		Name:        runtimeRegistry.CfgSupported,
-		Values:      []string{id.String()},
-		MultiValued: true,
-	})
-	return args
-}
-
 func (args *argBuilder) tendermintSupplementarySanity(interval uint64) *argBuilder {
 	if interval > 0 {
 		args.vec = append(args.vec, Argument{Name: tendermintFull.CfgSupplementarySanityEnabled})
@@ -633,8 +624,7 @@ func (args *argBuilder) appendRuntimePruner(p *RuntimePrunerCfg) *argBuilder {
 }
 
 func (args *argBuilder) appendHostedRuntime(rt *Runtime, tee node.TEEHardware, binaryIdx int, localConfig map[string]interface{}) *argBuilder {
-	args = args.runtimeSupported(rt.id).
-		runtimePath(rt.id, rt.binaries[tee][binaryIdx]).
+	args = args.runtimePath(rt.id, rt.binaries[tee][binaryIdx]).
 		appendRuntimePruner(&rt.pruner)
 
 	// When local runtime config is set, we need to generate a config file.

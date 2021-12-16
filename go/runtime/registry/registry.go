@@ -9,8 +9,6 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/spf13/viper"
-
 	"github.com/oasisprotocol/oasis-core/go/common"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
 	"github.com/oasisprotocol/oasis-core/go/common/identity"
@@ -601,11 +599,14 @@ func New(ctx context.Context, dataDir string, consensus consensus.Backend, ident
 		runtimes:  make(map[common.Namespace]*runtime),
 	}
 
-	runtimes, err := ParseRuntimeMap(viper.GetStringSlice(CfgSupported))
-	if err != nil {
-		return nil, err
+	switch cfg.Mode {
+	case RuntimeModeNone:
+		r.logger.Info("runtime support is disabled")
+	default:
+		r.logger.Info("runtime support is enabled")
 	}
-	for id := range runtimes {
+
+	for _, id := range cfg.Runtimes() {
 		r.logger.Info("adding supported runtime",
 			"id", id,
 		)
@@ -617,10 +618,6 @@ func New(ctx context.Context, dataDir string, consensus consensus.Backend, ident
 			)
 			return nil, fmt.Errorf("failed to add runtime %s: %w", id, err)
 		}
-	}
-
-	if len(runtimes) == 0 {
-		r.logger.Info("no supported runtimes configured")
 	}
 
 	return r, nil

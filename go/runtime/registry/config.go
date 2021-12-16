@@ -24,9 +24,6 @@ import (
 )
 
 const (
-	// CfgSupported configures a supported runtime ID.
-	CfgSupported = "runtime.supported"
-
 	// CfgRuntimeProvisioner configures the runtime provisioner.
 	//
 	// The same provisioner is used for all runtimes.
@@ -133,6 +130,18 @@ type RuntimeConfig struct {
 	History history.Config
 }
 
+// Runtimes returns a list of configured runtimes.
+func (cfg *RuntimeConfig) Runtimes() (runtimes []common.Namespace) {
+	if cfg.Host == nil || cfg.Mode == RuntimeModeKeymanager {
+		return
+	}
+
+	for id := range cfg.Host.Runtimes {
+		runtimes = append(runtimes, id)
+	}
+	return
+}
+
 // RuntimeHostConfig is configuration for a node that hosts runtimes.
 type RuntimeHostConfig struct {
 	// Provisioners contains a set of supported runtime provisioners, based on TEE hardware.
@@ -149,6 +158,20 @@ func newConfig(consensus consensus.Backend, ias ias.Endpoint) (*RuntimeConfig, e
 	// Parse configured runtime mode.
 	if err := cfg.Mode.UnmarshalText([]byte(viper.GetString(CfgRuntimeMode))); err != nil {
 		return nil, fmt.Errorf("failed to parse mode: %w", err)
+	}
+
+	// Validate configured runtimes based on the runtime mode.
+	switch cfg.Mode {
+	case RuntimeModeNone:
+		// No runtimes should be configured.
+		if viper.IsSet(CfgRuntimePaths) && !cmdFlags.DebugDontBlameOasis() {
+			return nil, fmt.Errorf("no runtimes should be configured when not in runtime mode")
+		}
+	default:
+		// In any other mode, at least one runtime should be configured.
+		if !viper.IsSet(CfgRuntimePaths) && !cmdFlags.DebugDontBlameOasis() {
+			return nil, fmt.Errorf("at least one runtime must be configured when in runtime mode")
+		}
 	}
 
 	// Check if any runtimes are configured to be hosted.
@@ -303,8 +326,6 @@ func newConfig(consensus consensus.Backend, ias ias.Endpoint) (*RuntimeConfig, e
 }
 
 func init() {
-	Flags.StringSlice(CfgSupported, nil, "Add supported runtime ID (hex-encoded)")
-
 	Flags.String(CfgRuntimeProvisioner, RuntimeProvisionerSandboxed, "Runtime provisioner to use")
 	Flags.StringToString(CfgRuntimePaths, nil, "Paths to runtime resources (format: <rt1-ID>=<path>,<rt2-ID>=<path>)")
 	Flags.String(CfgSandboxBinary, "/usr/bin/bwrap", "Path to the sandbox binary (bubblewrap)")

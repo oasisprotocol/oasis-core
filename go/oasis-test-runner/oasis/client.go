@@ -35,7 +35,6 @@ func (client *Client) AddArgs(args *argBuilder) error {
 		debugAllowTestKeys().
 		debugSetRlimit().
 		debugEnableProfiling(client.Node.pprofPort).
-		runtimeMode(runtimeRegistry.RuntimeModeClientStateless).
 		runtimeProvisioner(client.runtimeProvisioner).
 		tendermintPrune(client.consensus.PruneNumKept, client.consensus.PruneInterval).
 		tendermintRecoverCorruptedWAL(client.consensus.TendermintRecoverCorruptedWAL).
@@ -44,6 +43,10 @@ func (client *Client) AddArgs(args *argBuilder) error {
 		appendSeedNodes(client.net.seeds).
 		workerP2pPort(client.p2pPort).
 		tendermintSupplementarySanity(client.supplementarySanityInterval)
+
+	if len(client.runtimes) > 0 {
+		args = args.runtimeMode(runtimeRegistry.RuntimeModeClientStateless)
+	}
 
 	if client.maxTransactionAge != 0 {
 		args.runtimeClientMaxTransactionAge(client.maxTransactionAge)
