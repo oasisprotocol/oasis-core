@@ -847,6 +847,47 @@ func (t *fullService) GetStatus(ctx context.Context) (*consensusAPI.Status, erro
 	return status, nil
 }
 
+func (t *fullService) GetNextBlockState(ctx context.Context) (*consensusAPI.NextBlockState, error) {
+	if !t.started() {
+		return nil, fmt.Errorf("tendermint: not yet started")
+	}
+
+	rs := t.node.ConsensusState().GetRoundState()
+	nbs := &consensusAPI.NextBlockState{
+		Height: rs.Height,
+
+		NumValidators: uint64(rs.Validators.Size()),
+		VotingPower:   uint64(rs.Validators.TotalVotingPower()),
+	}
+
+	for i, val := range rs.Validators.Validators {
+		var vote consensusAPI.Vote
+		valNode, err := t.Registry().GetNodeByConsensusAddress(ctx, &registryAPI.ConsensusAddressQuery{
+			Height:  consensusAPI.HeightLatest,
+			Address: val.Address,
+		})
+		if err == nil {
+			vote.NodeID = valNode.ID
+			vote.EntityID = valNode.EntityID
+			vote.EntityAddress = stakingAPI.NewAddress(valNode.EntityID)
+		}
+		vote.VotingPower = uint64(val.VotingPower)
+
+		if prevote := rs.Votes.Prevotes(rs.Round).GetByIndex(int32(i)); prevote != nil {
+			nbs.Prevotes.Votes = append(nbs.Prevotes.Votes, vote)
+			nbs.Prevotes.VotingPower = nbs.Prevotes.VotingPower + vote.VotingPower
+		}
+		if precommit := rs.Votes.Precommits(rs.Round).GetByIndex(int32(i)); precommit != nil {
+			nbs.Precommits.Votes = append(nbs.Precommits.Votes, vote)
+			nbs.Precommits.VotingPower = nbs.Precommits.VotingPower + vote.VotingPower
+		}
+	}
+	nbs.Prevotes.Ratio = float64(nbs.Prevotes.VotingPower) / float64(nbs.VotingPower)
+	nbs.Precommits.Ratio = float64(nbs.Precommits.VotingPower) / float64(nbs.VotingPower)
+
+	return nbs, nil
+}
+
 func (t *fullService) WatchBlocks(ctx context.Context) (<-chan *consensusAPI.Block, pubsub.ClosableSubscription, error) {
 	ch, sub := t.WatchTendermintBlocks()
 	mapCh := make(chan *consensusAPI.Block)
