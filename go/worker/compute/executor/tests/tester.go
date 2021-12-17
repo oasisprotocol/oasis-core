@@ -133,8 +133,8 @@ blockLoop:
 			blk := annBlk.Block
 			require.EqualValues(t, block.Normal, blk.Header.HeaderType)
 
-			if blk.Header.Round <= 2 {
-				// Round <= 2 - genesis round.
+			if blk.Header.IORoot.IsEmpty() {
+				// Skip blocks without transactions.
 				continue
 			}
 

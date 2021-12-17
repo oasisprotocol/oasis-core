@@ -5,8 +5,8 @@ import (
 
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
 	"github.com/oasisprotocol/oasis-core/go/roothash/api/commitment"
-	schedulingAPI "github.com/oasisprotocol/oasis-core/go/runtime/scheduling/api"
 	"github.com/oasisprotocol/oasis-core/go/runtime/transaction"
+	"github.com/oasisprotocol/oasis-core/go/runtime/txpool"
 )
 
 // unresolvedBatch is a batch that may still need to be resolved (fetched from storage).
@@ -27,7 +27,7 @@ func (ub *unresolvedBatch) hash() hash.Hash {
 	return ub.proposal.Header.BatchHash
 }
 
-func (ub *unresolvedBatch) resolve(scheduler schedulingAPI.Scheduler) (transaction.RawBatch, error) {
+func (ub *unresolvedBatch) resolve(txPool txpool.TransactionPool) (transaction.RawBatch, error) {
 	if ub.batch != nil {
 		return ub.batch, nil
 	}
@@ -35,7 +35,7 @@ func (ub *unresolvedBatch) resolve(scheduler schedulingAPI.Scheduler) (transacti
 		return transaction.RawBatch{}, nil
 	}
 
-	resolvedBatch, missingTxs := scheduler.GetKnownBatch(ub.proposal.Batch)
+	resolvedBatch, missingTxs := txPool.GetKnownBatch(ub.proposal.Batch)
 	if len(missingTxs) > 0 {
 		ub.missingTxs = missingTxs
 		return nil, nil

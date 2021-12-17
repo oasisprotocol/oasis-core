@@ -500,9 +500,6 @@ type ClientFixture struct {
 
 	// RuntimeConfig contains the per-runtime node-local configuration.
 	RuntimeConfig map[int]map[string]interface{} `json:"runtime_config,omitempty"`
-
-	// MaxTransactionAge configures the MaxTransactionAge configuration of the client.
-	MaxTransactionAge int64 `json:"max_transaction_age"`
 }
 
 // Create instantiates the client node described by the fixture.
@@ -518,7 +515,6 @@ func (f *ClientFixture) Create(net *Network) (*Client, error) {
 			EnableProfiling:             f.EnableProfiling,
 			ExtraArgs:                   f.ExtraArgs,
 		},
-		MaxTransactionAge:  f.MaxTransactionAge,
 		Runtimes:           f.Runtimes,
 		RuntimeProvisioner: f.RuntimeProvisioner,
 		RuntimeConfig:      f.RuntimeConfig,

@@ -1,45 +1,40 @@
-package executor
+// Package client contains the runtime client worker.
+package client
 
 import (
-	"context"
-	"fmt"
-
 	"github.com/oasisprotocol/oasis-core/go/common"
+	"github.com/oasisprotocol/oasis-core/go/common/grpc"
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
-	"github.com/oasisprotocol/oasis-core/go/common/node"
+	"github.com/oasisprotocol/oasis-core/go/runtime/client/api"
 	runtimeRegistry "github.com/oasisprotocol/oasis-core/go/runtime/registry"
+	"github.com/oasisprotocol/oasis-core/go/worker/client/committee"
 	workerCommon "github.com/oasisprotocol/oasis-core/go/worker/common"
 	committeeCommon "github.com/oasisprotocol/oasis-core/go/worker/common/committee"
-	"github.com/oasisprotocol/oasis-core/go/worker/compute/executor/committee"
-	"github.com/oasisprotocol/oasis-core/go/worker/registration"
 )
 
-// Worker is an executor worker handling many runtimes.
+// Worker is a runtime client worker handling many runtimes.
 type Worker struct {
 	enabled bool
 
 	commonWorker *workerCommon.Worker
-	registration *registration.Worker
 
 	runtimes map[common.Namespace]*committee.Node
 
-	ctx       context.Context
-	cancelCtx context.CancelFunc
-	quitCh    chan struct{}
-	initCh    chan struct{}
+	quitCh chan struct{}
+	initCh chan struct{}
 
 	logger *logging.Logger
 }
 
 // Name returns the service name.
 func (w *Worker) Name() string {
-	return "executor worker"
+	return "client worker"
 }
 
 // Start starts the service.
 func (w *Worker) Start() error {
 	if !w.enabled {
-		w.logger.Debug("not starting executor worker as it is disabled")
+		w.logger.Debug("not starting client worker as it is disabled")
 
 		// In case the worker is not enabled, close the init channel immediately.
 		close(w.initCh)
@@ -47,24 +42,20 @@ func (w *Worker) Start() error {
 		return nil
 	}
 
-	// Wait for all runtimes and all proxies to terminate.
+	// Wait for all runtimes to terminate.
 	go func() {
 		defer close(w.quitCh)
-		defer (w.cancelCtx)()
 
 		for _, rt := range w.runtimes {
 			<-rt.Quit()
 		}
 	}()
 
-	// Wait for all runtimes to be initialized and for the node
-	// to be registered for the current epoch.
+	// Wait for all runtimes to be initialized.
 	go func() {
 		for _, rt := range w.runtimes {
 			<-rt.Initialized()
 		}
-
-		<-w.registration.InitialRegistrationCh()
 
 		close(w.initCh)
 	}()
@@ -120,37 +111,21 @@ func (w *Worker) Cleanup() {
 	}
 }
 
-// Initialized returns a channel that will be closed when the executor worker
+// Initialized returns a channel that will be closed when the client worker
 // is initialized and ready to service requests.
 func (w *Worker) Initialized() <-chan struct{} {
 	return w.initCh
 }
 
-// GetRuntime returns a registered runtime.
-//
-// In case the runtime with the specified id was not registered it
-// returns nil.
-func (w *Worker) GetRuntime(id common.Namespace) *committee.Node {
-	return w.runtimes[id]
-}
-
 func (w *Worker) registerRuntime(commonNode *committeeCommon.Node) error {
 	id := commonNode.Runtime.ID()
+
 	w.logger.Info("registering new runtime",
 		"runtime_id", id,
 	)
 
-	rp, err := w.registration.NewRuntimeRoleProvider(node.RoleComputeWorker, id)
-	if err != nil {
-		return fmt.Errorf("failed to create role provider: %w", err)
-	}
-
 	// Create committee node for the given runtime.
-	node, err := committee.NewNode(
-		commonNode,
-		w.commonWorker.GetConfig(),
-		rp,
-	)
+	node, err := committee.NewNode(commonNode)
 	if err != nil {
 		return err
 	}
@@ -165,32 +140,24 @@ func (w *Worker) registerRuntime(commonNode *committeeCommon.Node) error {
 	return nil
 }
 
-// New creates a new executor worker.
-func New(
-	commonWorker *workerCommon.Worker,
-	registration *registration.Worker,
-) (*Worker, error) {
-	ctx, cancelCtx := context.WithCancel(context.Background())
-
+// New creates a new runtime client worker.
+func New(grpcInternal *grpc.Server, commonWorker *workerCommon.Worker) (*Worker, error) {
 	var enabled bool
 	switch commonWorker.RuntimeRegistry.Mode() {
-	case runtimeRegistry.RuntimeModeCompute:
-		// When configured in compute mode, enable the executor worker.
-		enabled = true
-	default:
+	case runtimeRegistry.RuntimeModeNone, runtimeRegistry.RuntimeModeKeymanager:
 		enabled = false
+	default:
+		// When configured in one of the runtime modes, enable the client worker.
+		enabled = true
 	}
 
 	w := &Worker{
 		enabled:      enabled,
 		commonWorker: commonWorker,
-		registration: registration,
 		runtimes:     make(map[common.Namespace]*committee.Node),
-		ctx:          ctx,
-		cancelCtx:    cancelCtx,
 		quitCh:       make(chan struct{}),
 		initCh:       make(chan struct{}),
-		logger:       logging.GetLogger("worker/executor"),
+		logger:       logging.GetLogger("worker/client"),
 	}
 
 	if !enabled {
@@ -203,6 +170,9 @@ func New(
 			return nil, err
 		}
 	}
+
+	// Attach the runtime client worker's internal GRPC interface.
+	api.RegisterService(grpcInternal.Server(), &service{w: w})
 
 	return w, nil
 }

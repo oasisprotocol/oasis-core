@@ -42,8 +42,6 @@ import (
 	cmdSigner "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/signer"
 	registryAPI "github.com/oasisprotocol/oasis-core/go/registry/api"
 	roothashAPI "github.com/oasisprotocol/oasis-core/go/roothash/api"
-	runtimeClient "github.com/oasisprotocol/oasis-core/go/runtime/client"
-	runtimeClientAPI "github.com/oasisprotocol/oasis-core/go/runtime/client/api"
 	runtimeRegistry "github.com/oasisprotocol/oasis-core/go/runtime/registry"
 	scheduler "github.com/oasisprotocol/oasis-core/go/scheduler/api"
 	"github.com/oasisprotocol/oasis-core/go/sentry"
@@ -53,6 +51,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/upgrade"
 	upgradeAPI "github.com/oasisprotocol/oasis-core/go/upgrade/api"
 	workerBeacon "github.com/oasisprotocol/oasis-core/go/worker/beacon"
+	workerClient "github.com/oasisprotocol/oasis-core/go/worker/client"
 	workerCommon "github.com/oasisprotocol/oasis-core/go/worker/common"
 	"github.com/oasisprotocol/oasis-core/go/worker/common/p2p"
 	"github.com/oasisprotocol/oasis-core/go/worker/compute/executor"
@@ -110,11 +109,11 @@ type Node struct {
 	IAS      iasAPI.Endpoint
 
 	RuntimeRegistry runtimeRegistry.Registry
-	RuntimeClient   runtimeClientAPI.RuntimeClientService
 
 	CommonWorker       *workerCommon.Worker
 	ExecutorWorker     *executor.Worker
 	StorageWorker      *workerStorage.Worker
+	ClientWorker       *workerClient.Worker
 	SentryWorker       *workerSentry.Worker
 	P2P                *p2p.P2P
 	RegistrationWorker *registration.Worker
@@ -159,6 +158,11 @@ func (n *Node) waitReady() {
 	if err := n.NodeController.WaitSync(context.Background()); err != nil {
 		n.logger.Error("failed while waiting for node consensus sync", "err", err)
 		return
+	}
+
+	// Wait for client worker.
+	if n.ClientWorker.Enabled() {
+		<-n.ClientWorker.Initialized()
 	}
 
 	// Wait for storage worker.
@@ -227,20 +231,6 @@ func (n *Node) startRuntimeServices() error {
 		)
 		return err
 	}
-
-	// Initialize the runtime client.
-	n.RuntimeClient, err = runtimeClient.New(
-		n.svcMgr.Ctx,
-		cmdCommon.DataDir(),
-		n.Consensus,
-		n.RuntimeRegistry,
-		n.P2P,
-	)
-	if err != nil {
-		return err
-	}
-	n.svcMgr.Register(n.RuntimeClient)
-	runtimeClientAPI.RegisterService(n.grpcInternal.Server(), n.RuntimeClient)
 
 	// Start workers (requires NodeController for checking, if nodes are synced).
 	if err = n.startRuntimeWorkers(); err != nil {
@@ -390,7 +380,6 @@ func (n *Node) initRuntimeWorkers() error {
 
 	// Initialize the executor worker.
 	n.ExecutorWorker, err = executor.New(
-		dataDir,
 		n.CommonWorker,
 		n.RegistrationWorker,
 	)
@@ -398,6 +387,13 @@ func (n *Node) initRuntimeWorkers() error {
 		return err
 	}
 	n.svcMgr.Register(n.ExecutorWorker)
+
+	// Initialize the client worker.
+	n.ClientWorker, err = workerClient.New(n.grpcInternal, n.CommonWorker)
+	if err != nil {
+		return err
+	}
+	n.svcMgr.Register(n.ClientWorker)
 
 	// Initialize the sentry worker.
 	n.SentryWorker, err = workerSentry.New(
@@ -425,9 +421,9 @@ func (n *Node) startRuntimeWorkers() error {
 		return err
 	}
 
-	// Start the runtime client service.
-	if err := n.RuntimeClient.Start(); err != nil {
-		return fmt.Errorf("failed to start runtime client service: %w", err)
+	// Start the runtime client worker.
+	if err := n.ClientWorker.Start(); err != nil {
+		return err
 	}
 
 	// Start the storage worker.
@@ -754,7 +750,6 @@ func init() {
 		runtimeRegistry.Flags,
 		p2p.Flags,
 		registration.Flags,
-		runtimeClient.Flags,
 		workerCommon.Flags,
 		workerStorage.Flags,
 		workerSentry.Flags,

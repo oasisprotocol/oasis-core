@@ -81,6 +81,7 @@ func (q *checkTxQueue) RemoveBatch(batch []*pendingTx) {
 		if pair, ok := q.transactions[item.TxHash]; ok {
 			q.queue.Remove(pair.element)
 			delete(q.transactions, item.TxHash)
+			pair.element = nil
 		}
 	}
 	if len(q.transactions) != q.queue.Len() {

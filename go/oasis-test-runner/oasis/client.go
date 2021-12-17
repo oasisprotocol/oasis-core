@@ -14,7 +14,6 @@ type Client struct {
 	runtimes           []int
 	runtimeProvisioner string
 	runtimeConfig      map[int]map[string]interface{}
-	maxTransactionAge  int64
 
 	consensusPort uint16
 	p2pPort       uint16
@@ -27,7 +26,6 @@ type ClientCfg struct {
 	Runtimes           []int
 	RuntimeProvisioner string
 	RuntimeConfig      map[int]map[string]interface{}
-	MaxTransactionAge  int64
 }
 
 func (client *Client) AddArgs(args *argBuilder) error {
@@ -45,11 +43,7 @@ func (client *Client) AddArgs(args *argBuilder) error {
 		tendermintSupplementarySanity(client.supplementarySanityInterval)
 
 	if len(client.runtimes) > 0 {
-		args = args.runtimeMode(runtimeRegistry.RuntimeModeClientStateless)
-	}
-
-	if client.maxTransactionAge != 0 {
-		args.runtimeClientMaxTransactionAge(client.maxTransactionAge)
+		args.runtimeMode(runtimeRegistry.RuntimeModeClientStateless)
 	}
 
 	for _, idx := range client.runtimes {
@@ -81,7 +75,6 @@ func (net *Network) NewClient(cfg *ClientCfg) (*Client, error) {
 		runtimes:           cfg.Runtimes,
 		runtimeProvisioner: cfg.RuntimeProvisioner,
 		runtimeConfig:      cfg.RuntimeConfig,
-		maxTransactionAge:  cfg.MaxTransactionAge,
 		consensusPort:      host.getProvisionedPort(nodePortConsensus),
 		p2pPort:            host.getProvisionedPort(nodePortP2P),
 	}

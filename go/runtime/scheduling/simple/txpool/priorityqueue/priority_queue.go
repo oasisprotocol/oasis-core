@@ -168,7 +168,27 @@ func (q *priorityQueue) GetKnownBatch(batch []hash.Hash) ([]*transaction.Checked
 }
 
 // Implements api.TxPool.
-func (q *priorityQueue) RemoveBatch(batch []hash.Hash) error {
+func (q *priorityQueue) GetTransactions(limit int) []*transaction.CheckedTransaction {
+	q.Lock()
+	defer q.Unlock()
+
+	count := len(q.transactions)
+	if limit > 0 && limit < count {
+		count = limit
+	}
+
+	result := make([]*transaction.CheckedTransaction, 0, count)
+	for _, item := range q.transactions {
+		if len(result) >= count {
+			break
+		}
+		result = append(result, item.tx)
+	}
+	return result
+}
+
+// Implements api.TxPool.
+func (q *priorityQueue) RemoveBatch(batch []hash.Hash) {
 	q.Lock()
 	defer q.Unlock()
 
@@ -187,8 +207,6 @@ func (q *priorityQueue) RemoveBatch(batch []hash.Hash) error {
 	if mlen, plen := uint64(len(q.transactions)), q.poolWeights[transaction.WeightCount]; mlen != plen {
 		panic(fmt.Errorf("inconsistent sizes of the map (%v) and pool weight count (%v) after RemoveBatch", mlen, plen))
 	}
-
-	return nil
 }
 
 // Implements api.TxPool.
@@ -208,7 +226,7 @@ func (q *priorityQueue) Size() uint64 {
 }
 
 // Implements api.TxPool.
-func (q *priorityQueue) UpdateConfig(cfg api.Config) error {
+func (q *priorityQueue) UpdateConfig(cfg api.Config) {
 	q.Lock()
 	defer q.Unlock()
 
@@ -216,8 +234,6 @@ func (q *priorityQueue) UpdateConfig(cfg api.Config) error {
 	q.weightLimits = cfg.WeightLimits
 
 	// Any transaction not within the new limits will get removed during GetBatch iteration.
-
-	return nil
 }
 
 // Implements api.TxPool.

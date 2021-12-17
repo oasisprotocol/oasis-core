@@ -27,20 +27,18 @@ func SchedulerImplementationTests(t *testing.T, scheduler api.Scheduler) {
 }
 
 func testScheduleTransactions(t *testing.T, scheduler api.Scheduler) {
-	err := scheduler.UpdateParameters(
-		scheduler.Name(),
+	scheduler.UpdateParameters(
 		map[transaction.Weight]uint64{
 			transaction.WeightCount:     100,
 			transaction.WeightSizeBytes: 1000,
 		},
 	)
-	require.NoError(t, err, "UpdateParameters")
 
 	require.EqualValues(t, 0, scheduler.UnscheduledSize(), "no transactions should be scheduled")
 
 	// Test QueueTx.
 	testTx := transaction.NewCheckedTransaction([]byte("hello world"), 10, make(map[transaction.Weight]uint64))
-	err = scheduler.QueueTx(testTx)
+	err := scheduler.QueueTx(testTx)
 	require.NoError(t, err, "QueueTx(testTx)")
 	require.True(t, scheduler.IsQueued(testTx.Hash()), "IsQueued(tx)")
 
@@ -59,8 +57,7 @@ func testScheduleTransactions(t *testing.T, scheduler api.Scheduler) {
 	for i, tx := range batch {
 		hashes[i] = tx.Hash()
 	}
-	err = scheduler.RemoveTxBatch(hashes)
-	require.NoError(t, err, "RemoveTxBatch")
+	scheduler.RemoveTxBatch(hashes)
 	require.False(t, scheduler.IsQueued(testTx.Hash()), "IsQueued(tx)")
 	require.EqualValues(t, 0, scheduler.UnscheduledSize(), "no transactions should remain")
 
@@ -73,14 +70,12 @@ func testScheduleTransactions(t *testing.T, scheduler api.Scheduler) {
 	require.Empty(t, batch, "non-forced GetBatch should not return any transactions")
 	require.EqualValues(t, 1, scheduler.UnscheduledSize(), "transaction should remain in the queue")
 	// Update configuration to BatchSize=1.
-	err = scheduler.UpdateParameters(
-		scheduler.Name(),
+	scheduler.UpdateParameters(
 		map[transaction.Weight]uint64{
 			transaction.WeightCount:     1,
 			transaction.WeightSizeBytes: 10000,
 		},
 	)
-	require.NoError(t, err, "UpdateParameters")
 
 	// TestTx should remain queued.
 	require.True(t, scheduler.IsQueued(testTx.Hash()), "transaction should remain in the queue")
@@ -97,57 +92,44 @@ func testScheduleTransactions(t *testing.T, scheduler api.Scheduler) {
 	for i, tx := range batch {
 		hashes[i] = tx.Hash()
 	}
-	require.NoError(t, scheduler.RemoveTxBatch(hashes))
+	scheduler.RemoveTxBatch(hashes)
 	// Make sure queue is empty now.
 	batch = scheduler.GetBatch(true)
 	require.Empty(t, batch, "queue should be empty")
 
 	// Test update clear transactions.
 	// Update configuration back to BatchSize=10.
-	err = scheduler.UpdateParameters(
-		scheduler.Name(),
+	scheduler.UpdateParameters(
 		map[transaction.Weight]uint64{
 			transaction.WeightCount:     10,
 			transaction.WeightSizeBytes: 10000,
 		},
 	)
-	require.NoError(t, err, "UpdateParameters")
 	// Insert a transaction.
 	err = scheduler.QueueTx(testTx)
 	require.NoError(t, err, "QueueTx(testTx)")
 	// Make sure transaction is queued.
 	require.EqualValues(t, 1, scheduler.UnscheduledSize(), "one transaction queued")
 	// Update configuration to MaxBatchSizeBytes=1.
-	err = scheduler.UpdateParameters(
-		scheduler.Name(),
+	scheduler.UpdateParameters(
 		map[transaction.Weight]uint64{
 			transaction.WeightCount:     10,
 			transaction.WeightSizeBytes: 1,
 		},
 	)
-	require.NoError(t, err, "UpdateParameters")
 
 	// Make sure is removed from the pool.
 	batch = scheduler.GetBatch(true)
 	require.Empty(t, batch, "queue should be empty")
 	require.EqualValues(t, 0, scheduler.UnscheduledSize(), "transaction should get removed on update")
 
-	// Test invalid udpate.
-	err = scheduler.UpdateParameters(
-		"invalid",
-		map[transaction.Weight]uint64{},
-	)
-	require.Error(t, err, "UpdateParameters invalid udpate")
-
 	// Test priorities.
-	err = scheduler.UpdateParameters(
-		scheduler.Name(),
+	scheduler.UpdateParameters(
 		map[transaction.Weight]uint64{
 			transaction.WeightCount:     1,
 			transaction.WeightSizeBytes: 1000,
 		},
 	)
-	require.NoError(t, err, "UpdateParameters")
 	txs := make([]*transaction.CheckedTransaction, 50)
 	perm := rand.Perm(50)
 	for i := 0; i < 50; i++ {
@@ -159,7 +141,7 @@ func testScheduleTransactions(t *testing.T, scheduler api.Scheduler) {
 	for i := 0; i < 50; i++ {
 		returned[i] = scheduler.GetBatch(false)[0]
 		prios[i] = returned[i].Priority()
-		require.NoError(t, scheduler.RemoveTxBatch([]hash.Hash{returned[i].Hash()}))
+		scheduler.RemoveTxBatch([]hash.Hash{returned[i].Hash()})
 	}
 	require.ElementsMatch(t, txs, returned, "all transactions should be returned")
 	require.IsDecreasing(t, prios, "transactions should be sorted by priority")
@@ -184,7 +166,7 @@ func (t *noOpDispatcher) Dispatch(batch []*transaction.CheckedTransaction) {
 	for i, tx := range batch {
 		hashes[i] = tx.Hash()
 	}
-	_ = t.scheduler.RemoveTxBatch(hashes)
+	t.scheduler.RemoveTxBatch(hashes)
 }
 
 func (t *noOpDispatcher) DispatchedSize() int {
@@ -208,7 +190,7 @@ func (t *delayDispatcher) Dispatch(batch []*transaction.CheckedTransaction) {
 	for i, tx := range batch {
 		hashes[i] = tx.Hash()
 	}
-	_ = t.scheduler.RemoveTxBatch(hashes)
+	t.scheduler.RemoveTxBatch(hashes)
 }
 
 func (t *delayDispatcher) DispatchedSize() int {

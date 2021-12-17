@@ -102,13 +102,6 @@ var (
 		},
 		[]string{"runtime"},
 	)
-	incomingQueueSize = prometheus.NewGaugeVec(
-		prometheus.GaugeOpts{
-			Name: "oasis_worker_incoming_queue_size",
-			Help: "Size of the incoming queue (number of entries).",
-		},
-		[]string{"runtime"},
-	)
 	nodeCollectors = []prometheus.Collector{
 		discrepancyDetectedCount,
 		abortedBatchCount,
@@ -117,7 +110,6 @@ var (
 		batchProcessingTime,
 		batchRuntimeProcessingTime,
 		batchSize,
-		incomingQueueSize,
 	}
 
 	metricsOnce sync.Once
@@ -220,12 +212,6 @@ func (n *Node) getMetricLabels() prometheus.Labels {
 	return prometheus.Labels{
 		"runtime": n.commonNode.Runtime.ID().String(),
 	}
-}
-
-// Assumes scheduler is initialized.
-func (n *Node) clearQueuedTxs() {
-	n.commonNode.TxPool.Clear()
-	incomingQueueSize.With(n.getMetricLabels()).Set(0)
 }
 
 // HandlePeerMessage implements NodeHooks.
@@ -365,7 +351,7 @@ func (n *Node) HandleEpochTransitionLocked(epoch *committee.EpochSnapshot) {
 		if !n.prevEpochWorker {
 			// Clear incoming queue and cache of any stale transactions in case
 			// we were not part of the compute committee in previous epoch.
-			n.clearQueuedTxs()
+			n.commonNode.TxPool.Clear()
 		}
 		fallthrough
 	case epoch.IsExecutorBackupWorker():
@@ -499,8 +485,6 @@ func (n *Node) HandleNewBlockLocked(blk *block.Block) {
 }
 
 func (n *Node) handleNewCheckedTransactions(txs []*transaction.CheckedTransaction) {
-	incomingQueueSize.With(n.getMetricLabels()).Set(float64(n.commonNode.TxPool.Scheduler().UnscheduledSize()))
-
 	// Check if we are waiting for new transactions.
 	n.commonNode.CrossNode.Lock()
 	defer n.commonNode.CrossNode.Unlock()
@@ -527,11 +511,8 @@ func (n *Node) removeTxBatch(batch transaction.RawBatch) error {
 		hashes[i] = hash.NewFromBytes(b)
 	}
 
-	if err := n.commonNode.TxPool.Scheduler().RemoveTxBatch(hashes); err != nil {
-		return err
-	}
-
-	incomingQueueSize.With(n.getMetricLabels()).Set(float64(n.commonNode.TxPool.Scheduler().UnscheduledSize()))
+	// Remove transactions from the transaction pool.
+	n.commonNode.TxPool.RemoveTxBatch(hashes)
 
 	return nil
 }
@@ -759,7 +740,7 @@ func (n *Node) handleScheduleBatch(force bool) {
 
 	// Ask the scheduler to get a batch of transactions for us and see if we should be proposing
 	// a new batch to other nodes.
-	batch := n.commonNode.TxPool.Scheduler().GetBatch(force)
+	batch := n.commonNode.TxPool.GetScheduledBatch(force)
 	switch {
 	case len(batch) > 0:
 		// We have some transactions, schedule batch.
@@ -1071,7 +1052,7 @@ func (n *Node) startProcessingBatchLocked(batch *unresolvedBatch) {
 	n.logger.Debug("attempting to resolve batch", "batch", batch.String())
 
 	// TODO: Add metrics for how long it takes to receive the complete batch.
-	resolvedBatch, err := batch.resolve(n.commonNode.TxPool.Scheduler())
+	resolvedBatch, err := batch.resolve(n.commonNode.TxPool)
 	if err != nil {
 		n.logger.Error("refusing to process bad batch", "err", err)
 		// TODO: We should indicate failure.

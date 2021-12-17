@@ -431,11 +431,6 @@ func testStorageWorker(t *testing.T, node *testNode) {
 }
 
 func testRuntimeClient(t *testing.T, node *testNode) {
-	// Directly.
-	t.Run("Direct", func(t *testing.T) {
-		clientTests.ClientImplementationTests(t, node.RuntimeClient, node.runtimeID)
-	})
-
 	// Over gRPC.
 	t.Run("OverGrpc", func(t *testing.T) {
 		// Create a client backend connected to the local node's internal socket.

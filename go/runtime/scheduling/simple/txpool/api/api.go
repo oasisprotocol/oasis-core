@@ -39,8 +39,14 @@ type TxPool interface {
 	// transactions will be populated accoordingly.
 	GetKnownBatch(batch []hash.Hash) ([]*transaction.CheckedTransaction, map[hash.Hash]int)
 
+	// GetTransactions returns the given number of transactions from the transaction pool without
+	// taking any batch limits or priorities into account.
+	//
+	// Specifying a zero limit will return all transactions.
+	GetTransactions(limit int) []*transaction.CheckedTransaction
+
 	// RemoveBatch removes a batch from the transaction pool.
-	RemoveBatch(batch []hash.Hash) error
+	RemoveBatch(batch []hash.Hash)
 
 	// IsQueued returns whether a transaction is in the queue already.
 	IsQueued(txHash hash.Hash) bool
@@ -49,7 +55,7 @@ type TxPool interface {
 	Size() uint64
 
 	// UpdateConfig updates the transaction pool config.
-	UpdateConfig(Config) error
+	UpdateConfig(cfg Config)
 
 	// Clear clears the transaction pool.
 	Clear()

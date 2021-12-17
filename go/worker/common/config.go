@@ -27,6 +27,7 @@ var (
 	cfgMaxTxPoolSize       = "worker.tx_pool.schedule_max_tx_pool_size"
 	cfgScheduleTxCacheSize = "worker.tx_pool.schedule_tx_cache_size"
 	cfgCheckTxMaxBatchSize = "worker.tx_pool.check_tx_max_batch_size"
+	cfgRecheckInterval     = "worker.tx_pool.recheck_interval"
 
 	// Flags has the configuration flags.
 	Flags = flag.NewFlagSet("", flag.ContinueOnError)
@@ -96,8 +97,9 @@ func NewConfig() (*Config, error) {
 			MaxLastSeenCacheSize: viper.GetUint64(cfgScheduleTxCacheSize),
 
 			// TODO: Make these configurable.
-			RepublishInterval:     60 * time.Second,
-			MaxRepublishBatchSize: 32,
+			RepublishInterval: 60 * time.Second,
+
+			RecheckInterval: viper.GetUint64(cfgRecheckInterval),
 		},
 		logger: logging.GetLogger("worker/config"),
 	}
@@ -113,6 +115,7 @@ func init() {
 	Flags.Uint64(cfgMaxTxPoolSize, 10_000, "Maximum size of the scheduling transaction pool")
 	Flags.Uint64(cfgScheduleTxCacheSize, 10_000, "Cache size of recently scheduled transactions to prevent re-scheduling")
 	Flags.Uint64(cfgCheckTxMaxBatchSize, 10_000, "Maximum check tx batch size")
+	Flags.Uint64(cfgRecheckInterval, 32, "Transaction recheck interval (in rounds)")
 
 	_ = viper.BindPFlags(Flags)
 }

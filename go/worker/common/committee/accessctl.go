@@ -11,8 +11,8 @@ type AccessPolicy struct {
 	Actions []accessctl.Action
 }
 
-// AddRulesForCommittee augments the given policy by allowing actions in the current AccessPolicy
-// for the nodes in the given committee.
+// AddRulesForNodes augments the given policy by allowing actions in the current AccessPolicy for
+// the specified list of nodes.
 func (ap AccessPolicy) AddRulesForNodes(policy *accessctl.Policy, nodes []*node.Node) {
 	for _, node := range nodes {
 		// Allow the node to perform actions from the given access policy.

@@ -7,7 +7,6 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
 	"github.com/oasisprotocol/oasis-core/go/common/errors"
 	"github.com/oasisprotocol/oasis-core/go/common/pubsub"
-	"github.com/oasisprotocol/oasis-core/go/common/service"
 	roothash "github.com/oasisprotocol/oasis-core/go/roothash/api"
 	"github.com/oasisprotocol/oasis-core/go/roothash/api/block"
 	"github.com/oasisprotocol/oasis-core/go/runtime/host/protocol"
@@ -83,10 +82,10 @@ type RuntimeClient interface {
 	WatchBlocks(ctx context.Context, runtimeID common.Namespace) (<-chan *roothash.AnnotatedBlock, pubsub.ClosableSubscription, error)
 }
 
-// RuntimeClientService is the runtime client service interface.
-type RuntimeClientService interface {
-	RuntimeClient
-	service.BackgroundService
+// SubmitTxResult is the raw result of submitting a transaction for processing.
+type SubmitTxResult struct {
+	Error  error
+	Result *SubmitTxMetaResponse
 }
 
 // SubmitTxRequest is a SubmitTx request.

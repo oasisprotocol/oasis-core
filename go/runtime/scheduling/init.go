@@ -13,7 +13,7 @@ import (
 func New(maxTxPoolSize uint64, algo string, weightLimits map[transaction.Weight]uint64) (api.Scheduler, error) {
 	switch algo {
 	case simple.Name:
-		return simple.New(priorityqueue.Name, maxTxPoolSize, algo, weightLimits)
+		return simple.New(priorityqueue.Name, maxTxPoolSize, weightLimits)
 	default:
 		return nil, fmt.Errorf("invalid transaction scheduler algorithm: %s", algo)
 	}

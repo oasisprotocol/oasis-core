@@ -631,7 +631,7 @@ func NewNode(
 	n.Group = group
 
 	// Prepare transaction pool.
-	txPool, err := txpool.New(txPoolCfg, n, group)
+	txPool, err := txpool.New(runtime.ID(), txPoolCfg, n, group)
 	if err != nil {
 		return nil, fmt.Errorf("error creating transaction pool: %w", err)
 	}

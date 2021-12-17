@@ -207,11 +207,11 @@ func newWorker(
 ) (*Worker, error) {
 	var enabled bool
 	switch rtRegistry.Mode() {
-	case runtimeRegistry.RuntimeModeCompute, runtimeRegistry.RuntimeModeKeymanager:
-		// When configured in compute or keymanager mode, enable the common worker.
-		enabled = true
-	default:
+	case runtimeRegistry.RuntimeModeNone:
 		enabled = false
+	default:
+		// When configured in runtime mode, enable the common worker.
+		enabled = true
 	}
 
 	w := &Worker{
