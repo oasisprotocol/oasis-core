@@ -12,6 +12,41 @@ The format is inspired by [Keep a Changelog].
 
 <!-- TOWNCRIER -->
 
+## 21.3.7 (2021-12-17)
+
+| Protocol          | Version   |
+|:------------------|:---------:|
+| Consensus         | 4.0.0     |
+| Runtime Host      | 4.0.0     |
+| Runtime Committee | 3.0.0     |
+
+### Bug Fixes
+
+- oasis-node: Make semver parsing less strict
+  ([#4366](https://github.com/oasisprotocol/oasis-core/issues/4366))
+
+  Semver parsing behavior changed in #4343 was too strict. This hotfix changes
+  parsing of versions so that only major component is required whereas minor and
+  patch are optional and any remaining components are ignored.
+
+- go/worker/storage: Checkpoint correct round on consensus checkpoint
+  ([#4387](https://github.com/oasisprotocol/oasis-core/issues/4387))
+
+- go/runtime/client: Take storage into account in GetLastRetainedBlock
+  ([#4387](https://github.com/oasisprotocol/oasis-core/issues/4387))
+
+- go/storage/client: Catch GetDiff errors early
+  ([#4397](https://github.com/oasisprotocol/oasis-core/issues/4397))
+
+- go/worker/storage: Limit number of rounds to fetch before applying them
+  ([#4403](https://github.com/oasisprotocol/oasis-core/issues/4403))
+
+  Previously, when a node was syncing from genesis, it would try to fetch all
+  unapplied rounds before applying them.
+  This could mean trying to fetch 100k+ rounds before applying them.
+  In combination with failing to fetch rounds and random retrying, this could
+  make the syncing process unbearably slow.
+
 ## 21.3.6 (2021-11-15)
 
 | Protocol          | Version   |
