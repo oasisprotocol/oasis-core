@@ -260,13 +260,13 @@ func TestOnRuntimeIncorrectResults(t *testing.T) {
 
 	// TODO: No reward nodes.
 
-	// Multiple slash and reward nodes.
+	// Multiple slash and reward entities.
 	var toSlash, toReward []signature.PublicKey
 	for i, nod := range testNodes {
 		if i < numSlashed {
-			toSlash = append(toSlash, nod.ID)
+			toSlash = append(toSlash, nod.EntityID)
 		} else {
-			toReward = append(toReward, nod.ID)
+			toReward = append(toReward, nod.EntityID)
 		}
 	}
 	err = onRuntimeIncorrectResults(
@@ -278,7 +278,7 @@ func TestOnRuntimeIncorrectResults(t *testing.T) {
 	)
 	require.NoError(err, "should not fail")
 	runtimePercentage := quantity.NewFromUint64(uint64(runtime.Staking.RewardSlashBadResultsRuntimePercent))
-	// Ensure nodes were slash, and rewards were distributed.
+	// Ensure entities were slash, and rewards were distributed.
 	for i, nod := range testNodes {
 		acc, err := stakeState.Account(ctx, staking.NewAddress(nod.EntityID))
 		require.NoError(err, "stakeState.Account")

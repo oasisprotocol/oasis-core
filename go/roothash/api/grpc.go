@@ -21,6 +21,8 @@ var (
 	methodGetLatestBlock = serviceName.NewMethod("GetLatestBlock", RuntimeRequest{})
 	// methodGetRuntimeState is the GetRuntimeState method.
 	methodGetRuntimeState = serviceName.NewMethod("GetRuntimeState", RuntimeRequest{})
+	// methodGetLastRoundResults is the GetLastRoundResults method.
+	methodGetLastRoundResults = serviceName.NewMethod("GetLastRoundResults", RuntimeRequest{})
 	// methodStateToGenesis is the StateToGenesis method.
 	methodStateToGenesis = serviceName.NewMethod("StateToGenesis", int64(0))
 	// methodConsensusParameters is the ConsensusParameters method.
@@ -49,6 +51,10 @@ var (
 			{
 				MethodName: methodGetRuntimeState.ShortName(),
 				Handler:    handlerGetRuntimeState,
+			},
+			{
+				MethodName: methodGetLastRoundResults.ShortName(),
+				Handler:    handlerGetLastRoundResults,
 			},
 			{
 				MethodName: methodStateToGenesis.ShortName(),
@@ -143,6 +149,29 @@ func handlerGetRuntimeState( // nolint: golint
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(Backend).GetRuntimeState(ctx, req.(*RuntimeRequest))
+	}
+	return interceptor(ctx, &rq, info, handler)
+}
+
+func handlerGetLastRoundResults( // nolint: golint
+	srv interface{},
+	ctx context.Context,
+	dec func(interface{}) error,
+	interceptor grpc.UnaryServerInterceptor,
+) (interface{}, error) {
+	var rq RuntimeRequest
+	if err := dec(&rq); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(Backend).GetLastRoundResults(ctx, &rq)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: methodGetLastRoundResults.FullName(),
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(Backend).GetLastRoundResults(ctx, req.(*RuntimeRequest))
 	}
 	return interceptor(ctx, &rq, info, handler)
 }
@@ -302,6 +331,14 @@ func (c *roothashClient) GetLatestBlock(ctx context.Context, request *RuntimeReq
 func (c *roothashClient) GetRuntimeState(ctx context.Context, request *RuntimeRequest) (*RuntimeState, error) {
 	var rsp RuntimeState
 	if err := c.conn.Invoke(ctx, methodGetRuntimeState.FullName(), request, &rsp); err != nil {
+		return nil, err
+	}
+	return &rsp, nil
+}
+
+func (c *roothashClient) GetLastRoundResults(ctx context.Context, request *RuntimeRequest) (*RoundResults, error) {
+	var rsp RoundResults
+	if err := c.conn.Invoke(ctx, methodGetLastRoundResults.FullName(), request, &rsp); err != nil {
 		return nil, err
 	}
 	return &rsp, nil

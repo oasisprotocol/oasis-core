@@ -401,8 +401,6 @@ func (s *runtimeState) testSuccessfulRound(t *testing.T, backend api.Backend, co
 			// First event is Finalized.
 			fev := evts[0].Finalized
 			require.EqualValues(header.Round, fev.Round, "finalized event should have the right round")
-			require.Empty(fev.BadComputeNodes, "there should be no bad compute nodes")
-			require.Len(fev.GoodComputeNodes, len(executorNodes), "all nodes should be good (round %d)", fev.Round)
 			for i, ev := range evts[1:] {
 				switch {
 				case ev.ExecutorCommitted != nil:

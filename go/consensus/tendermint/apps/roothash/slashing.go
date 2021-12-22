@@ -75,27 +75,11 @@ func onRuntimeIncorrectResults(
 	runtime *registry.Runtime,
 	penaltyAmount *quantity.Quantity,
 ) error {
-	regState := registryState.NewMutableState(ctx.State())
 	stakeState := stakingState.NewMutableState(ctx.State())
 
 	var totalSlashed quantity.Quantity
 	for _, pk := range discrepancyCausers {
-		// Lookup the node entity.
-		node, err := regState.Node(ctx, pk)
-		if err == registry.ErrNoSuchNode {
-			ctx.Logger().Error("runtime node not found by commitment signature public key",
-				"public_key", pk,
-			)
-			continue
-		}
-		if err != nil {
-			ctx.Logger().Error("failed to get runtime node by commitment signature public key",
-				"public_key", pk,
-				"err", err,
-			)
-			return fmt.Errorf("tendermint/roothash: getting node %s: %w", pk, err)
-		}
-		entityAddr := staking.NewAddress(node.EntityID)
+		entityAddr := staking.NewAddress(pk)
 
 		// Slash entity.
 		slashed, err := stakeState.SlashEscrow(ctx, entityAddr, penaltyAmount)
@@ -125,21 +109,7 @@ func onRuntimeIncorrectResults(
 	// Determine who the backup workers' entities to reward are.
 	var rewardEntities []staking.Address
 	for _, pk := range discrepancyResolvers {
-		node, err := regState.Node(ctx, pk)
-		if err == registry.ErrNoSuchNode {
-			ctx.Logger().Error("runtime node not found by commitment signature public key",
-				"public_key", pk,
-			)
-			continue
-		}
-		if err != nil {
-			ctx.Logger().Error("failed to get runtime node by commitment signature public key",
-				"public_key", pk,
-				"err", err,
-			)
-			return fmt.Errorf("tendermint/roothash: getting node %s: %w", pk, err)
-		}
-		rewardEntities = append(rewardEntities, staking.NewAddress(node.EntityID))
+		rewardEntities = append(rewardEntities, staking.NewAddress(pk))
 	}
 
 	// Distribute slashed funds to runtime and backup workers' entities.

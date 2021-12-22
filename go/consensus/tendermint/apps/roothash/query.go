@@ -15,6 +15,7 @@ type Query interface {
 	LatestBlock(context.Context, common.Namespace) (*block.Block, error)
 	GenesisBlock(context.Context, common.Namespace) (*block.Block, error)
 	RuntimeState(context.Context, common.Namespace) (*roothash.RuntimeState, error)
+	LastRoundResults(context.Context, common.Namespace) (*roothash.RoundResults, error)
 	Genesis(context.Context) (*roothash.Genesis, error)
 	ConsensusParameters(context.Context) (*roothash.ConsensusParameters, error)
 }
@@ -55,6 +56,10 @@ func (rq *rootHashQuerier) GenesisBlock(ctx context.Context, id common.Namespace
 
 func (rq *rootHashQuerier) RuntimeState(ctx context.Context, id common.Namespace) (*roothash.RuntimeState, error) {
 	return rq.state.RuntimeState(ctx, id)
+}
+
+func (rq *rootHashQuerier) LastRoundResults(ctx context.Context, id common.Namespace) (*roothash.RoundResults, error) {
+	return rq.state.LastRoundResults(ctx, id)
 }
 
 func (rq *rootHashQuerier) ConsensusParameters(ctx context.Context) (*roothash.ConsensusParameters, error) {

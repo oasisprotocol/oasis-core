@@ -38,6 +38,10 @@ var (
 	//
 	// Value is the runtime's latest I/O root.
 	ioRootKeyFmt = keyformat.New(0x26, keyformat.H(&common.Namespace{}))
+	// lastRoundResultsKeyFmt is the key format used for last normal round results.
+	//
+	// Value is CBOR-serialized roothash.RoundResults.
+	lastRoundResultsKeyFmt = keyformat.New(0x27, keyformat.H(&common.Namespace{}))
 )
 
 // ImmutableState is the immutable roothash state wrapper.
@@ -114,6 +118,23 @@ func (s *ImmutableState) RuntimeState(ctx context.Context, id common.Namespace) 
 		return nil, api.UnavailableStateError(err)
 	}
 	return &state, nil
+}
+
+// LastRoundResults returns the last normal round results for a specific runtime.
+func (s *ImmutableState) LastRoundResults(ctx context.Context, id common.Namespace) (*roothash.RoundResults, error) {
+	raw, err := s.is.Get(ctx, lastRoundResultsKeyFmt.Encode(&id))
+	if err != nil {
+		return nil, api.UnavailableStateError(err)
+	}
+	if raw == nil {
+		return &roothash.RoundResults{}, nil
+	}
+
+	var results roothash.RoundResults
+	if err = cbor.Unmarshal(raw, &results); err != nil {
+		return nil, api.UnavailableStateError(err)
+	}
+	return &results, nil
 }
 
 func (s *ImmutableState) getRoot(ctx context.Context, id common.Namespace, kf *keyformat.KeyFormat) (hash.Hash, error) {
@@ -223,6 +244,12 @@ func (s *MutableState) SetRuntimeState(ctx context.Context, state *roothash.Runt
 		return api.UnavailableStateError(err)
 	}
 	return nil
+}
+
+// SetLastRoundResults sets a runtime's last normal round results.
+func (s *MutableState) SetLastRoundResults(ctx context.Context, runtimeID common.Namespace, results *roothash.RoundResults) error {
+	err := s.ms.Insert(ctx, lastRoundResultsKeyFmt.Encode(&runtimeID), cbor.Marshal(results))
+	return api.UnavailableStateError(err)
 }
 
 // SetConsensusParameters sets roothash consensus parameters.
