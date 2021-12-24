@@ -98,7 +98,7 @@ func NewLocalBackend(
 		impl = newCrashingWrapper(impl)
 	}
 
-	return api.NewMetricsWrapper(impl), nil
+	return api.NewMetricsWrapper(impl).(api.LocalBackend), nil
 }
 
 func init() {
