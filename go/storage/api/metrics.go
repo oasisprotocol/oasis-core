@@ -54,28 +54,11 @@ var (
 	labelSyncGetPrefixes = prometheus.Labels{"call": "sync_get_prefixes"}
 	labelSyncIterate     = prometheus.Labels{"call": "sync_iterate"}
 
-	_ LocalBackend  = (*metricsWrapper)(nil)
-	_ ClientBackend = (*metricsWrapper)(nil)
-
 	metricsOnce sync.Once
 )
 
 type metricsWrapper struct {
 	Backend
-}
-
-func (w *metricsWrapper) GetConnectedNodes() []*node.Node {
-	if clientBackend, ok := w.Backend.(ClientBackend); ok {
-		return clientBackend.GetConnectedNodes()
-	}
-	return []*node.Node{}
-}
-
-func (w *metricsWrapper) EnsureCommitteeVersion(ctx context.Context, version int64) error {
-	if clientBackend, ok := w.Backend.(ClientBackend); ok {
-		return clientBackend.EnsureCommitteeVersion(ctx, version)
-	}
-	return ErrUnsupported
 }
 
 func (w *metricsWrapper) Apply(ctx context.Context, request *ApplyRequest) ([]*Receipt, error) {
@@ -157,28 +140,43 @@ func (w *metricsWrapper) SyncIterate(ctx context.Context, request *IterateReques
 	return res, err
 }
 
-func (w *metricsWrapper) Checkpointer() checkpoint.CreateRestorer {
-	localBackend, ok := w.Backend.(LocalBackend)
-	if !ok {
-		return nil
-	}
-	return localBackend.Checkpointer()
+type localMetricsWrapper struct {
+	metricsWrapper
 }
 
-func (w *metricsWrapper) NodeDB() NodeDB {
-	localBackend, ok := w.Backend.(LocalBackend)
-	if !ok {
-		return nil
-	}
-	return localBackend.NodeDB()
+func (w *localMetricsWrapper) Checkpointer() checkpoint.CreateRestorer {
+	return w.Backend.(LocalBackend).Checkpointer()
 }
 
-func NewMetricsWrapper(base Backend) LocalBackend {
+func (w *localMetricsWrapper) NodeDB() NodeDB {
+	return w.Backend.(LocalBackend).NodeDB()
+}
+
+type clientMetricsWrapper struct {
+	metricsWrapper
+}
+
+func (w *clientMetricsWrapper) GetConnectedNodes() []*node.Node {
+	return w.Backend.(ClientBackend).GetConnectedNodes()
+}
+
+func (w *clientMetricsWrapper) EnsureCommitteeVersion(ctx context.Context, version int64) error {
+	return w.Backend.(ClientBackend).EnsureCommitteeVersion(ctx, version)
+}
+
+func NewMetricsWrapper(base Backend) Backend {
 	metricsOnce.Do(func() {
 		prometheus.MustRegister(storageCollectors...)
 	})
 
-	w := &metricsWrapper{Backend: base}
+	w := metricsWrapper{Backend: base}
 
-	return w
+	switch base.(type) {
+	case LocalBackend:
+		return &localMetricsWrapper{w}
+	case ClientBackend:
+		return &clientMetricsWrapper{w}
+	default:
+		return &w
+	}
 }
