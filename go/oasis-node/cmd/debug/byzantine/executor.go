@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"time"
 
+	beacon "github.com/oasisprotocol/oasis-core/go/beacon/api"
 	"github.com/oasisprotocol/oasis-core/go/common"
 	"github.com/oasisprotocol/oasis-core/go/common/cbor"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
@@ -20,7 +21,6 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/storage/mkvs/syncer"
 	"github.com/oasisprotocol/oasis-core/go/storage/mkvs/writelog"
 	"github.com/oasisprotocol/oasis-core/go/worker/common/p2p"
-	"github.com/oasisprotocol/oasis-core/go/worker/compute/executor/api"
 )
 
 type computeBatchContext struct {
@@ -46,25 +46,25 @@ func newComputeBatchContext(runtimeID common.Namespace) *computeBatchContext {
 	}
 }
 
-func (cbc *computeBatchContext) receiveTransactions(ph *p2pHandle, timeout time.Duration) []*api.Tx {
-	var req p2pReqRes
-	txs := []*api.Tx{}
+func (cbc *computeBatchContext) receiveTransactions(ph *p2pHandle, timeout time.Duration) [][]byte {
+	var txs [][]byte
 	existing := make(map[hash.Hash]bool)
 
 ReceiveTransactions:
 	for {
 		select {
-		case req = <-ph.requests:
+		case req := <-ph.requests:
 			req.responseCh <- nil
-			if req.msg.Tx == nil {
+			tx, ok := req.msg.([]byte)
+			if !ok {
 				continue
 			}
-			txHash := hash.NewFromBytes(req.msg.Tx.Data)
+			txHash := hash.NewFromBytes(tx)
 			if existing[txHash] {
 				continue
 			}
 
-			txs = append(txs, req.msg.Tx)
+			txs = append(txs, tx)
 			existing[txHash] = true
 		case <-time.After(timeout):
 			break ReceiveTransactions
@@ -77,18 +77,18 @@ ReceiveTransactions:
 func (cbc *computeBatchContext) publishProposal(
 	ctx context.Context,
 	p2pH *p2pHandle,
-	groupVersion int64,
+	epoch beacon.EpochTime,
 ) {
 	if cbc.proposal == nil {
 		panic("no prepared proposal")
 	}
 
-	p2pH.service.Publish(
+	p2pH.service.PublishCommittee(
 		ctx,
 		cbc.runtimeID,
-		&p2p.Message{
-			GroupVersion: groupVersion,
-			Proposal:     cbc.proposal,
+		&p2p.CommitteeMessage{
+			Epoch:    epoch,
+			Proposal: cbc.proposal,
 		},
 	)
 }
@@ -96,7 +96,7 @@ func (cbc *computeBatchContext) publishProposal(
 func (cbc *computeBatchContext) prepareProposal(
 	ctx context.Context,
 	currentBlock *block.Block,
-	batch []*api.Tx,
+	batch [][]byte,
 	identity *identity.Identity,
 ) error {
 	// Generate the initial I/O root containing only the inputs (outputs and
@@ -118,13 +118,13 @@ func (cbc *computeBatchContext) prepareProposal(
 	)
 	for idx, rawTx := range batch {
 		tx := transaction.Transaction{
-			Input:      rawTx.Data,
+			Input:      rawTx,
 			BatchOrder: uint32(idx),
 		}
 		if err := ioTree.AddTransaction(ctx, tx, nil); err != nil {
 			return err
 		}
-		txHashes = append(txHashes, hash.NewFromBytes(rawTx.Data))
+		txHashes = append(txHashes, hash.NewFromBytes(rawTx))
 		txs = append(txs, &tx)
 	}
 
@@ -156,7 +156,7 @@ func (cbc *computeBatchContext) prepareProposal(
 
 func (cbc *computeBatchContext) receiveProposal(ph *p2pHandle) error {
 	var proposal *commitment.Proposal
-	existing := make(map[hash.Hash]*api.Tx)
+	existing := make(map[hash.Hash][]byte)
 	missing := make(map[hash.Hash]bool)
 
 ReceiveProposal:
@@ -164,26 +164,29 @@ ReceiveProposal:
 		req := <-ph.requests
 		req.responseCh <- nil
 
-		switch {
-		case req.msg.Tx != nil:
+		switch msg := req.msg.(type) {
+		case []byte:
 			// Transaction.
-			txHash := hash.NewFromBytes(req.msg.Tx.Data)
+			txHash := hash.NewFromBytes(msg)
 			if existing[txHash] != nil {
 				continue
 			}
-			existing[txHash] = req.msg.Tx
+			existing[txHash] = msg
 			delete(missing, txHash)
 
 			// If we have the proposal and all transactions, stop.
 			if proposal != nil && len(missing) == 0 {
 				break ReceiveProposal
 			}
-		case req.msg.Proposal != nil:
+		case *p2p.CommitteeMessage:
 			// Proposal.
+			if msg.Proposal == nil {
+				continue
+			}
 			if proposal != nil {
 				return fmt.Errorf("received multiple proposals while only expecting one")
 			}
-			proposal = req.msg.Proposal
+			proposal = msg.Proposal
 
 			// Check if any transactions are missing.
 			for _, txHash := range proposal.Batch {
@@ -197,7 +200,6 @@ ReceiveProposal:
 			if len(missing) == 0 {
 				break ReceiveProposal
 			}
-			// TODO: Actually request transactions from peers.
 		}
 	}
 
@@ -210,7 +212,7 @@ ReceiveProposal:
 	cbc.txs = nil
 	for idx, txHash := range proposal.Batch {
 		cbc.txs = append(cbc.txs, &transaction.Transaction{
-			Input:      existing[txHash].Data,
+			Input:      existing[txHash],
 			BatchOrder: uint32(idx),
 		})
 	}

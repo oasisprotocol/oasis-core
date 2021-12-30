@@ -11,9 +11,6 @@ type Status struct {
 	// LatestHeight is the consensus layer height containing the runtime block for the latest round.
 	LatestHeight int64 `json:"latest_height"`
 
-	// LastCommitteeUpdateHeight is the consensus layer height of the last committee update.
-	LastCommitteeUpdateHeight int64 `json:"last_committee_update_height"`
-
 	// ExecutorRoles are the node's roles in the executor committee.
 	ExecutorRoles []scheduler.Role `json:"executor_roles"`
 

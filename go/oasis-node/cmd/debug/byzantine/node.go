@@ -19,7 +19,6 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/roothash/api/commitment"
 	scheduler "github.com/oasisprotocol/oasis-core/go/scheduler/api"
 	storageAPI "github.com/oasisprotocol/oasis-core/go/storage/api"
-	executorAPI "github.com/oasisprotocol/oasis-core/go/worker/compute/executor/api"
 )
 
 type byzantine struct {
@@ -38,6 +37,7 @@ type byzantine struct {
 	rak          signature.Signer
 
 	electionHeight    int64
+	electionEpoch     beacon.EpochTime
 	executorCommittee *scheduler.Committee
 }
 
@@ -71,9 +71,7 @@ func (b *byzantine) receiveAndScheduleTransactions(ctx context.Context, cbc *com
 	// Include transactions that nobody else has when configured to do so.
 	if viper.GetBool(CfgExecutorProposeBogusTx) {
 		logger.Debug("executor scheduler: including bogus transactions")
-		txs = append(txs, &executorAPI.Tx{
-			Data: []byte("this is a bogus transction nr. 1"),
-		})
+		txs = append(txs, []byte("this is a bogus transction nr. 1"))
 	}
 
 	// Prepare proposal.
@@ -94,7 +92,7 @@ func (b *byzantine) receiveAndScheduleTransactions(ctx context.Context, cbc *com
 	}
 
 	// Publish batch.
-	cbc.publishProposal(ctx, b.p2p, b.electionHeight)
+	cbc.publishProposal(ctx, b.p2p, b.electionEpoch)
 	logger.Debug("executor scheduler: dispatched transactions", "transactions", txs)
 
 	// If we're in ModeExecutorWrong, stop after publishing the batch.
@@ -202,7 +200,7 @@ func initializeAndRegisterByzantineNode(
 	)
 
 	// Get next election committee.
-	b.electionHeight, err = schedulerNextElectionHeight(b.tendermint.service, committeeStartEpoch)
+	b.electionHeight, b.electionEpoch, err = schedulerNextElectionHeight(b.tendermint.service, committeeStartEpoch)
 	if err != nil {
 		return nil, fmt.Errorf("scheduler next election height failed: %w", err)
 	}

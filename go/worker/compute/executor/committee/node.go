@@ -22,9 +22,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/roothash/api/commitment"
 	"github.com/oasisprotocol/oasis-core/go/runtime/host"
 	"github.com/oasisprotocol/oasis-core/go/runtime/host/protocol"
-	"github.com/oasisprotocol/oasis-core/go/runtime/nodes"
 	"github.com/oasisprotocol/oasis-core/go/runtime/transaction"
-	"github.com/oasisprotocol/oasis-core/go/runtime/txpool"
 	storage "github.com/oasisprotocol/oasis-core/go/storage/api"
 	commonWorker "github.com/oasisprotocol/oasis-core/go/worker/common"
 	"github.com/oasisprotocol/oasis-core/go/worker/common/committee"
@@ -212,71 +210,6 @@ func (n *Node) getMetricLabels() prometheus.Labels {
 	return prometheus.Labels{
 		"runtime": n.commonNode.Runtime.ID().String(),
 	}
-}
-
-// HandlePeerMessage implements NodeHooks.
-func (n *Node) HandlePeerMessage(ctx context.Context, message *p2p.Message, isOwn bool) (bool, error) {
-	n.logger.Debug("received peer message", "message", message, "is_own", isOwn)
-
-	switch {
-	case message.Tx != nil:
-		// Ignore own messages as those are handled separately.
-		if isOwn {
-			return true, nil
-		}
-
-		rawTx := message.Tx.Data
-
-		// Note: if an epoch transition is just about to happen we can be out of
-		// the committee by the time we queue the transaction, but this is fine
-		// as scheduling is aware of this.
-		if es := n.commonNode.Group.GetEpochSnapshot(); !es.IsExecutorWorker() {
-			n.logger.Debug("unable to handle transaction message, not execution worker",
-				"current_epoch", es.GetEpochNumber(),
-			)
-			return true, nil
-		}
-
-		if err := n.commonNode.TxPool.SubmitTxNoWait(ctx, rawTx, &txpool.TransactionMeta{Local: false}); err != nil {
-			return true, err
-		}
-
-		return true, nil
-
-	case message.Proposal != nil:
-		// Ignore own messages as those are handled separately.
-		if isOwn {
-			return true, nil
-		}
-		crash.Here(crashPointBatchReceiveAfter)
-
-		proposal := message.Proposal
-
-		epoch := n.commonNode.Group.GetEpochSnapshot()
-		n.commonNode.CrossNode.Lock()
-		round := n.commonNode.CurrentBlock.Header.Round
-		n.commonNode.CrossNode.Unlock()
-
-		// Before opening the signed dispatch message, verify that it was actually signed by the
-		// current transaction scheduler.
-		if err := epoch.VerifyTxnSchedulerSigner(proposal.NodeID, round); err != nil {
-			// Not signed by the current txn scheduler.
-			return false, errMsgFromNonTxnSched
-		}
-
-		// Transaction scheduler checks out, verify signature.
-		if err := proposal.Verify(n.commonNode.Runtime.ID()); err != nil {
-			return false, p2pError.Permanent(err)
-		}
-
-		err := n.queueBatchBlocking(ctx, proposal)
-		if err != nil {
-			return false, err
-		}
-		return true, nil
-	}
-
-	return false, nil
 }
 
 func (n *Node) queueBatchBlocking(ctx context.Context, proposal *commitment.Proposal) error {
@@ -748,7 +681,7 @@ func (n *Node) handleScheduleBatch(force bool) {
 		// We have runtime message results (and batch timeout expired), schedule batch.
 	case rtState.LastNormalRound == rtState.GenesisBlock.Header.Round:
 		// This is the runtime genesis, schedule batch.
-	case force && rtState.LastNormalHeight < epoch.GetGroupVersion():
+	case force && rtState.LastNormalHeight < epoch.GetEpochHeight():
 		// No block in this epoch processed by runtime yet, schedule batch.
 	default:
 		// No need to schedule a batch.
@@ -888,17 +821,10 @@ func (n *Node) handleScheduleBatch(force bool) {
 		"batch_size", len(batch),
 	)
 
-	err = n.commonNode.Group.Publish(
-		&p2p.Message{
-			Proposal: proposal,
-		},
-	)
-	if err != nil {
-		n.logger.Error("failed to publish batch to committee",
-			"err", err,
-		)
-		return
-	}
+	n.commonNode.P2P.PublishCommittee(roundCtx, n.commonNode.Runtime.ID(), &p2p.CommitteeMessage{
+		Epoch:    n.commonNode.CurrentEpoch,
+		Proposal: proposal,
+	})
 	crash.Here(crashPointBatchPublishAfter)
 
 	// Also process the batch locally.
@@ -1396,12 +1322,6 @@ func (n *Node) HandleNewEventLocked(ev *roothash.Event) {
 	}
 }
 
-// HandleNodeUpdateLocked implements NodeHooks.
-// Guarded by n.commonNode.CrossNode.
-func (n *Node) HandleNodeUpdateLocked(update *nodes.NodeUpdate, snapshot *committee.EpochSnapshot) {
-	// Nothing to do here.
-}
-
 // Guarded by n.commonNode.CrossNode.
 func (n *Node) handleExternalBatchLocked(batch *unresolvedBatch) error {
 	// If we are not waiting for a batch, don't do anything.
@@ -1636,6 +1556,9 @@ func NewNode(
 
 	// Register prune handler.
 	commonNode.Runtime.History().Pruner().RegisterHandler(&pruneHandler{commonNode: commonNode})
+
+	// Register committee message handler.
+	commonNode.P2P.RegisterHandler(commonNode.Runtime.ID(), p2p.TopicKindCommittee, &committeeMsgHandler{n})
 
 	return n, nil
 }

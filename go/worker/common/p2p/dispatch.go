@@ -2,9 +2,7 @@ package p2p
 
 import (
 	"context"
-	"errors"
 	"fmt"
-	"sync"
 	"sync/atomic"
 	"time"
 
@@ -14,7 +12,6 @@ import (
 
 	"github.com/oasisprotocol/oasis-core/go/common"
 	cmnBackoff "github.com/oasisprotocol/oasis-core/go/common/backoff"
-	"github.com/oasisprotocol/oasis-core/go/common/cbor"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
 	p2pError "github.com/oasisprotocol/oasis-core/go/worker/common/p2p/error"
@@ -24,6 +21,9 @@ const (
 	redispatchMaxWorkers = 10
 	redispatchMaxRetries = 5
 	rawMsgQueueSize      = 50
+
+	// peerMessageProcessTimeout is the maximum time that peer message processing can take.
+	peerMessageProcessTimeout = 10 * time.Second
 )
 
 type rawMessage struct {
@@ -32,37 +32,23 @@ type rawMessage struct {
 
 // Handler is a handler for P2P messages.
 type Handler interface {
-	// AuthenticatePeer handles authenticating a peer that send an
-	// incoming message.
+	// DecodeMessage decodes the given incoming message.
+	DecodeMessage(msg []byte) (interface{}, error)
+
+	// AuthorizeMessage handles authorizing an incoming message.
 	//
-	// The message handler will be re-invoked on error with a periodic
-	// backoff unless errors are wrapped via `p2pError.Permanent`.
-	AuthenticatePeer(peerID signature.PublicKey, msg *Message) error
+	// The message handler will be re-invoked on error with a periodic backoff unless errors are
+	// wrapped via `p2pError.Permanent`.
+	AuthorizeMessage(ctx context.Context, peerID signature.PublicKey, msg interface{}) error
 
-	// HandlePeerMessage handles an incoming message from a peer.
+	// HandleMessage handles an incoming message from a peer.
 	//
-	// The message handler will be re-invoked on error with a periodic
-	// backoff unless errors are wrapped via `p2pError.Permanent`.
-	HandlePeerMessage(peerID signature.PublicKey, msg *Message, isOwn bool) error
-}
-
-// BaseHandler handler is a P2P handler that can be used in publishing-only
-// clients.
-type BaseHandler struct{}
-
-// AuthenticatePeer implements p2p Handler.
-func (h *BaseHandler) AuthenticatePeer(peerID signature.PublicKey, msg *Message) error {
-	return nil
-}
-
-// HandlePeerMessage implements p2p Handler.
-func (h *BaseHandler) HandlePeerMessage(peerID signature.PublicKey, msg *Message, isOwn bool) error {
-	return nil
+	// The message handler will be re-invoked on error with a periodic backoff unless errors are
+	// wrapped via `p2pError.Permanent`.
+	HandleMessage(ctx context.Context, peerID signature.PublicKey, msg interface{}, isOwn bool) error
 }
 
 type topicHandler struct {
-	handlersLock sync.RWMutex
-
 	ctx context.Context
 
 	p2p *P2P
@@ -70,7 +56,7 @@ type topicHandler struct {
 	topic       *pubsub.Topic
 	host        core.Host
 	cancelRelay pubsub.RelayCancelFunc
-	handlers    []Handler
+	handler     Handler
 
 	numWorkers uint64
 
@@ -82,7 +68,7 @@ type topicHandler struct {
 type queuedMsg struct {
 	peerID core.PeerID
 	from   signature.PublicKey
-	msg    *Message
+	msg    interface{}
 }
 
 func (h *topicHandler) topicMessageValidator(ctx context.Context, unused core.PeerID, envelope *pubsub.Message) bool {
@@ -104,8 +90,8 @@ func (h *topicHandler) topicMessageValidator(ctx context.Context, unused core.Pe
 		return false
 	}
 
-	var msg Message
-	if err = cbor.Unmarshal(envelope.GetData(), &msg); err != nil {
+	var msg interface{}
+	if msg, err = h.handler.DecodeMessage(envelope.GetData()); err != nil {
 		h.logger.Error("error while parsing message from peer",
 			"err", err,
 			"peer_id", peerID,
@@ -120,7 +106,7 @@ func (h *topicHandler) topicMessageValidator(ctx context.Context, unused core.Pe
 	m := &queuedMsg{
 		peerID: peerID,
 		from:   id,
-		msg:    &msg,
+		msg:    msg,
 	}
 
 	// If the message will never become valid, do not relay.
@@ -170,45 +156,28 @@ func (h *topicHandler) dispatchMessage(peerID core.PeerID, m *queuedMsg, isIniti
 		}
 	}()
 
-	var err error
+	ctx, cancel := context.WithTimeout(context.Background(), peerMessageProcessTimeout)
+	defer cancel()
 
-	h.handlersLock.RLock()
-	defer h.handlersLock.RUnlock()
-
-	// Authenticate the peer if it's not us.
+	// Run authorization handler if the message is not from us.
 	if m.peerID != h.p2p.host.ID() {
-		for _, handler := range h.handlers {
-			// Perhaps this should reject the message, but it is possible that
-			// the local node is just behind.  This does result in stale messages
-			// getting retried though.
-			if err = handler.AuthenticatePeer(m.from, m.msg); err != nil {
-				return err
-			}
+		// Perhaps this should reject the message, but it is possible that
+		// the local node is just behind.  This does result in stale messages
+		// getting retried though.
+		if err := h.handler.AuthorizeMessage(ctx, m.from, m.msg); err != nil {
+			return err
 		}
 	}
 
 	h.logger.Debug("handling message", "message", m.msg, "from", m.from)
-	handled := false
-	var lastError error
-	for _, handler := range h.handlers {
-		// Dispatch the message to the handler.
-		err = handler.HandlePeerMessage(m.from, m.msg, m.peerID == h.p2p.host.ID())
-		if !errors.Is(err, p2pError.ErrUnhandledMessage) {
-			handled = true
-		}
-		switch {
-		case errors.Is(err, p2pError.ErrUnhandledMessage):
-			// Nothing to do here, continue to next handler.
-		case err != nil:
-			h.logger.Error("failed to handle message", "message", m.msg, "from", m.from, "err", err)
-			lastError = err
-		}
-	}
-	if !handled {
-		return p2pError.EnsurePermanent(p2pError.ErrUnhandledMessage)
+
+	// Dispatch the message to the handler.
+	if err := h.handler.HandleMessage(ctx, m.from, m.msg, m.peerID == h.p2p.host.ID()); err != nil {
+		h.logger.Warn("failed to handle message", "message", m.msg, "from", m.from, "err", err)
+		return err
 	}
 
-	return lastError
+	return nil
 }
 
 func (h *topicHandler) retryWorker(m *queuedMsg) {
@@ -296,8 +265,8 @@ func (h *topicHandler) pendingMessagesWorker() {
 	}
 }
 
-func newTopicHandler(p *P2P, runtimeID common.Namespace, handlers []Handler) (string, *topicHandler, error) {
-	topicID := p.topicIDForRuntime(runtimeID)
+func newTopicHandler(p *P2P, runtimeID common.Namespace, kind TopicKind, handler Handler) (string, *topicHandler, error) {
+	topicID := p.topicIDForRuntime(runtimeID, kind)
 	topic, err := p.pubsub.Join(topicID) // Note: Disallows duplicates.
 	if err != nil {
 		return "", nil, fmt.Errorf("worker/common/p2p: failed to join topic '%s': %w", topicID, err)
@@ -308,7 +277,7 @@ func newTopicHandler(p *P2P, runtimeID common.Namespace, handlers []Handler) (st
 		p2p:          p,
 		topic:        topic,
 		host:         p.host,
-		handlers:     handlers,
+		handler:      handler,
 		pendingQueue: make(chan *rawMessage, rawMsgQueueSize),
 		logger:       logging.GetLogger("worker/common/p2p/" + topicID),
 	}

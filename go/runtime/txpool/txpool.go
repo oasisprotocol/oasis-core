@@ -285,6 +285,8 @@ func (t *txPool) ProcessBlock(bi *BlockInfo) error {
 		}
 
 		t.epoCh.In() <- struct{}{}
+		// Force recheck on epoch transitions.
+		t.recheckTxCh.In() <- struct{}{}
 	}
 
 	t.blockInfo = bi
@@ -663,16 +665,19 @@ func (t *txPool) republishWorker() {
 		txs := t.scheduler.GetTransactions(0)
 		t.schedulerLock.Unlock()
 
-		if len(txs) == 0 {
-			continue
-		}
-
 		// Filter transactions based on whether they can already be republished.
 		var republishedCount int
+		nextPendingRepublish := republishInterval
 		for _, tx := range txs {
 			ts, seen := t.seenCache.Peek(tx.Hash())
-			if !force && seen && time.Since(ts.(time.Time)) < republishInterval {
-				continue
+			if !force && seen {
+				sinceLast := time.Since(ts.(time.Time))
+				if sinceLast < republishInterval {
+					if remaining := republishInterval - sinceLast; remaining < nextPendingRepublish {
+						nextPendingRepublish = remaining + 1*time.Second
+					}
+					continue
+				}
 			}
 
 			if err := t.txPublisher.PublishTx(ctx, tx.Raw()); err != nil {
@@ -690,8 +695,12 @@ func (t *txPool) republishWorker() {
 			republishedCount++
 		}
 
+		// Reschedule ticker for next republish.
+		ticker.Reset(nextPendingRepublish)
+
 		t.logger.Debug("republished transactions",
 			"num_txs", republishedCount,
+			"next_republish", nextPendingRepublish,
 		)
 	}
 }

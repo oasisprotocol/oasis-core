@@ -27,14 +27,12 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/runtime/host"
 	"github.com/oasisprotocol/oasis-core/go/runtime/nodes"
 	"github.com/oasisprotocol/oasis-core/go/runtime/nodes/grpc"
-	scheduler "github.com/oasisprotocol/oasis-core/go/scheduler/api"
 	storageApi "github.com/oasisprotocol/oasis-core/go/storage/api"
 	"github.com/oasisprotocol/oasis-core/go/storage/client"
 	"github.com/oasisprotocol/oasis-core/go/storage/mkvs/checkpoint"
 	mkvsDB "github.com/oasisprotocol/oasis-core/go/storage/mkvs/db/api"
 	workerCommon "github.com/oasisprotocol/oasis-core/go/worker/common"
 	"github.com/oasisprotocol/oasis-core/go/worker/common/committee"
-	"github.com/oasisprotocol/oasis-core/go/worker/common/p2p"
 	"github.com/oasisprotocol/oasis-core/go/worker/registration"
 	"github.com/oasisprotocol/oasis-core/go/worker/storage/api"
 )
@@ -202,9 +200,8 @@ type Node struct { // nolint: maligned
 	ctx       context.Context
 	ctxCancel context.CancelFunc
 
-	quitCh          chan struct{}
-	rtWatcherQuitCh chan struct{}
-	workerQuitCh    chan struct{}
+	quitCh       chan struct{}
+	workerQuitCh chan struct{}
 
 	initCh chan struct{}
 }
@@ -244,10 +241,9 @@ func NewNode(
 		diffCh:     make(chan *fetchedDiff),
 		finalizeCh: make(chan finalizeResult),
 
-		quitCh:          make(chan struct{}),
-		rtWatcherQuitCh: make(chan struct{}),
-		workerQuitCh:    make(chan struct{}),
-		initCh:          make(chan struct{}),
+		quitCh:       make(chan struct{}),
+		workerQuitCh: make(chan struct{}),
+		initCh:       make(chan struct{}),
 	}
 
 	n.syncedState.LastBlock.Round = defaultUndefinedRound
@@ -348,6 +344,9 @@ func NewNode(
 		logger: n.logger,
 		node:   n,
 	})
+
+	// Update service policy.
+	n.updateExternalServicePolicy()
 
 	prometheusOnce.Do(func() {
 		prometheus.MustRegister(storageWorkerCollectors...)
@@ -458,9 +457,9 @@ func (n *Node) GetLocalStorage() storageApi.LocalBackend {
 
 // NodeHooks implementation.
 
-func (n *Node) HandlePeerMessage(context.Context, *p2p.Message, bool) (bool, error) {
+func (n *Node) HandlePeerTx(ctx context.Context, tx []byte) error {
 	// Nothing to do here.
-	return false, nil
+	return nil
 }
 
 // Guarded by CrossNode.
@@ -482,12 +481,6 @@ func (n *Node) HandleNewBlockLocked(blk *block.Block) {
 // Guarded by CrossNode.
 func (n *Node) HandleNewEventLocked(*roothashApi.Event) {
 	// Nothing to do here.
-}
-
-// Guarded by CrossNode.
-func (n *Node) HandleNodeUpdateLocked(update *nodes.NodeUpdate, snapshot *committee.EpochSnapshot) {
-	// Nothing to do here.
-	// Storage worker uses a separate watcher.
 }
 
 func (n *Node) HandleRuntimeHostEvent(ev *host.Event) {
@@ -715,7 +708,7 @@ func (n *Node) flushSyncedState(summary *blockSummary) uint64 {
 	return n.syncedState.LastBlock.Round
 }
 
-func (n *Node) updateExternalServicePolicy(rtComputeNodes nodes.NodeDescriptorLookup) {
+func (n *Node) updateExternalServicePolicy() {
 	// Create new storage gRPC access policy for the current runtime.
 	policy := accessctl.NewPolicy()
 
@@ -737,66 +730,9 @@ func (n *Node) updateExternalServicePolicy(rtComputeNodes nodes.NodeDescriptorLo
 	n.logger.Debug("set new storage gRPC access policy", "policy", policy)
 }
 
-func (n *Node) runtimeNodesWatcher() {
-	defer close(n.rtWatcherQuitCh)
-
-	// Watch registry for runtime node updates and update external gRPC policies.
-	// Policy updates are made on:
-	// * any updates to the runtime executor committee nodes
-	// * any updates to the registered storage nodes for the runtime
-	//   (this includes nodes not in committee)
-
-	n.logger.Info("starting runtime nodes watcher")
-
-	committeeNodes := nodes.NewFilteredNodeLookup(
-		n.commonNode.Group.Nodes(),
-		nodes.TagFilter(committee.TagForCommittee(scheduler.KindComputeExecutor)),
-	)
-	// Start watching compute node updates for the current committee.
-	committeeNodeUps, committeeNodeUpsSub, err := committeeNodes.WatchNodeUpdates()
-	if err != nil {
-		n.logger.Error("failed to subscribe to node updates",
-			"err", err,
-		)
-		return
-	}
-	defer committeeNodeUpsSub.Close()
-
-	// Watch registered storage node updates for the runtime.
-	storageNodeUps, storageNodeUpsSub, err := n.storageNodes.WatchNodeUpdates()
-	if err != nil {
-		n.logger.Error("failed to subscribe to node storage node updates",
-			"err", err,
-		)
-		return
-	}
-	defer storageNodeUpsSub.Close()
-
-	for {
-		select {
-		case <-n.ctx.Done():
-			return
-		case u := <-committeeNodeUps:
-			if u.Update == nil {
-				continue
-			}
-			// Update policy (handled bellow).
-		case u := <-storageNodeUps:
-			if u.Update == nil {
-				continue
-			}
-			// Update policy (handled bellow).
-		}
-		n.updateExternalServicePolicy(committeeNodes)
-	}
-}
-
 func (n *Node) watchQuit() {
 	// Close quit channel on any worker quitting.
-	select {
-	case <-n.workerQuitCh:
-	case <-n.rtWatcherQuitCh:
-	}
+	<-n.workerQuitCh
 	close(n.quitCh)
 }
 
@@ -974,9 +910,6 @@ func (n *Node) worker() { // nolint: gocyclo
 		close(n.initCh)
 		return
 	}
-
-	// Start runtime node watcher.
-	go n.runtimeNodesWatcher()
 
 	n.logger.Info("starting committee node")
 

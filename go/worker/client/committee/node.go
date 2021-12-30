@@ -17,12 +17,10 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/runtime/client/api"
 	"github.com/oasisprotocol/oasis-core/go/runtime/host"
 	"github.com/oasisprotocol/oasis-core/go/runtime/host/protocol"
-	"github.com/oasisprotocol/oasis-core/go/runtime/nodes"
 	"github.com/oasisprotocol/oasis-core/go/runtime/transaction"
 	"github.com/oasisprotocol/oasis-core/go/runtime/txpool"
 	storage "github.com/oasisprotocol/oasis-core/go/storage/api"
 	"github.com/oasisprotocol/oasis-core/go/worker/common/committee"
-	"github.com/oasisprotocol/oasis-core/go/worker/common/p2p"
 )
 
 type pendingTx struct {
@@ -76,8 +74,9 @@ func (n *Node) Initialized() <-chan struct{} {
 	return n.initCh
 }
 
-func (n *Node) HandlePeerMessage(context.Context, *p2p.Message, bool) (bool, error) {
-	return true, nil
+func (n *Node) HandlePeerTx(ctx context.Context, tx []byte) error {
+	// Nothing to do here.
+	return nil
 }
 
 // Guarded by CrossNode.
@@ -96,10 +95,6 @@ func (n *Node) HandleNewBlockLocked(blk *block.Block) {
 
 // Guarded by CrossNode.
 func (n *Node) HandleNewEventLocked(*roothash.Event) {
-}
-
-// Guarded by CrossNode.
-func (n *Node) HandleNodeUpdateLocked(*nodes.NodeUpdate, *committee.EpochSnapshot) {
 }
 
 func (n *Node) HandleRuntimeHostEvent(*host.Event) {
