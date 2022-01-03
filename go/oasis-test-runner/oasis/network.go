@@ -587,7 +587,7 @@ func GenerateDeterministicNodeKeys(dir *env.Dir, rawSeed string, roles []signatu
 // This function is used to obtain shorter socket path than the one in datadir since that one might
 // be too long for unix socket path.
 func (net *Network) generateTempSocketPath() string {
-	return "@" + uuid.New()
+	return "@" + uuid.New().String()
 	/*
 		f, err := ioutil.TempFile(env.GetRootDir().String(), "internal-*.sock")
 		if err != nil {
