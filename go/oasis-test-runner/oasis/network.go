@@ -14,6 +14,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/spf13/viper"
 
 	beacon "github.com/oasisprotocol/oasis-core/go/beacon/api"
@@ -586,12 +587,15 @@ func GenerateDeterministicNodeKeys(dir *env.Dir, rawSeed string, roles []signatu
 // This function is used to obtain shorter socket path than the one in datadir since that one might
 // be too long for unix socket path.
 func (net *Network) generateTempSocketPath() string {
-	f, err := ioutil.TempFile(env.GetRootDir().String(), "internal-*.sock")
-	if err != nil {
-		return ""
-	}
-	defer f.Close()
-	return f.Name()
+	return "@" + uuid.New()
+	/*
+		f, err := ioutil.TempFile(env.GetRootDir().String(), "internal-*.sock")
+		if err != nil {
+			return ""
+		}
+		defer f.Close()
+		return f.Name()
+	*/
 }
 
 func (net *Network) startOasisNode(
