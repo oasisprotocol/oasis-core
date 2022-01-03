@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math"
 	"reflect"
+	"time"
 
 	beacon "github.com/oasisprotocol/oasis-core/go/beacon/api"
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
@@ -13,6 +14,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/oasis"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/scenario"
 	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
+	"github.com/oasisprotocol/oasis-core/go/roothash/api/block"
 )
 
 var (
@@ -70,7 +72,7 @@ func (sc *haltRestoreImpl) Fixture() (*oasis.NetworkFixture, error) {
 	return f, nil
 }
 
-func (sc *haltRestoreImpl) Run(childEnv *env.Env) error {
+func (sc *haltRestoreImpl) Run(childEnv *env.Env) error { // nolint: gocyclo
 	ctx := context.Background()
 	if err := sc.startNetworkAndTestClient(ctx, childEnv); err != nil {
 		return err
@@ -92,9 +94,39 @@ func (sc *haltRestoreImpl) Run(childEnv *env.Env) error {
 	}
 
 	if sc.suspendRuntime {
+		// Make sure all compute nodes are synced before stopping them. This can otherwise cause
+		// problems due to incompatible stale state.
+		sc.Logger.Info("waiting for message results to be processed")
+
+		blkCh, blkSub, blkErr := sc.Net.Controller().Roothash.WatchBlocks(ctx, fixture.Runtimes[1].ID)
+		if blkErr != nil {
+			return fmt.Errorf("failed to watch blocks: %w", blkErr)
+		}
+		defer blkSub.Close()
+
+		var latestBlk *block.Block
+		for {
+			select {
+			case annBlk := <-blkCh:
+				latestBlk = annBlk.Block
+			case <-time.After(30 * time.Second):
+				return fmt.Errorf("timeout while waiting for block")
+			}
+
+			if latestBlk.Header.MessagesHash.IsEmpty() {
+				break
+			}
+		}
+
 		// Stop compute nodes.
-		sc.Logger.Info("stopping compute nodes")
+		sc.Logger.Info("stopping compute nodes",
+			"latest_round", latestBlk.Header.Round,
+			"latest_state_root", latestBlk.Header.StateRoot,
+		)
 		for _, n := range sc.Net.ComputeWorkers() {
+			if _, err = n.WaitForRound(ctx, fixture.Runtimes[1].ID, latestBlk.Header.Round); err != nil {
+				return fmt.Errorf("failed to wait for round: %w", err)
+			}
 			if err = n.Stop(); err != nil {
 				return fmt.Errorf("failed to stop node: %w", err)
 			}
