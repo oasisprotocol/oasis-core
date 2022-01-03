@@ -499,9 +499,13 @@ func (sc *runtimeImpl) waitNodesSynced() error {
 }
 
 func (sc *runtimeImpl) initialEpochTransitions(fixture *oasis.NetworkFixture) (beacon.EpochTime, error) {
+	return sc.initialEpochTransitionsWith(fixture, 0)
+}
+
+func (sc *runtimeImpl) initialEpochTransitionsWith(fixture *oasis.NetworkFixture, baseEpoch beacon.EpochTime) (beacon.EpochTime, error) {
 	ctx := context.Background()
 
-	epoch := beacon.EpochTime(1)
+	epoch := baseEpoch + 1
 	advanceEpoch := func() error {
 		sc.Logger.Info("triggering epoch transition",
 			"epoch", epoch,

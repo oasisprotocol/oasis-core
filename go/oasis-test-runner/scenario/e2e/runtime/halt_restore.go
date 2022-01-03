@@ -3,6 +3,7 @@ package runtime
 import (
 	"context"
 	"fmt"
+	"math"
 	"reflect"
 
 	beacon "github.com/oasisprotocol/oasis-core/go/beacon/api"
@@ -184,9 +185,7 @@ func (sc *haltRestoreImpl) Run(childEnv *env.Env) error {
 		)
 		return err
 	}
-	genesisDoc.HaltEpoch *= 2
-	// Don't need mock epoch anymore.
-	genesisDoc.Beacon.Parameters.DebugMockBackend = false
+	genesisDoc.HaltEpoch = math.MaxUint64
 	if err = genesisDoc.WriteFileJSON(files[0]); err != nil {
 		sc.Logger.Error("failed to update genesis",
 			"err", err,
@@ -233,5 +232,16 @@ func (sc *haltRestoreImpl) Run(childEnv *env.Env) error {
 
 	newTestClient := sc.testClient.Clone().(*LongTermTestClient)
 	sc.runtimeImpl.testClient = newTestClient.WithMode(ModePart2).WithSeed("second_seed")
-	return sc.runtimeImpl.Run(childEnv)
+
+	// Start the new network again and run the test client.
+	if err = sc.startNetworkAndWaitForClientSync(ctx); err != nil {
+		return err
+	}
+	if _, err = sc.initialEpochTransitionsWith(fixture, genesisDoc.Beacon.Base); err != nil {
+		return err
+	}
+	if err = sc.startTestClientOnly(ctx, childEnv); err != nil {
+		return err
+	}
+	return sc.waitTestClientOnly()
 }
