@@ -26,6 +26,7 @@ var (
 
 	cfgMaxTxPoolSize       = "worker.tx_pool.schedule_max_tx_pool_size"
 	cfgScheduleTxCacheSize = "worker.tx_pool.schedule_tx_cache_size"
+	cfgStaleTxCacheSize    = "worker.tx_pool.stale_tx_cache_size"
 	cfgCheckTxMaxBatchSize = "worker.tx_pool.check_tx_max_batch_size"
 	cfgRecheckInterval     = "worker.tx_pool.recheck_interval"
 
@@ -95,6 +96,7 @@ func NewConfig() (*Config, error) {
 			MaxPoolSize:          viper.GetUint64(cfgMaxTxPoolSize),
 			MaxCheckTxBatchSize:  viper.GetUint64(cfgCheckTxMaxBatchSize),
 			MaxLastSeenCacheSize: viper.GetUint64(cfgScheduleTxCacheSize),
+			MaxStaleCacheSize:    viper.GetUint64(cfgStaleTxCacheSize),
 
 			// TODO: Make these configurable.
 			RepublishInterval: 60 * time.Second,
@@ -113,7 +115,8 @@ func init() {
 	Flags.StringSlice(CfgSentryAddresses, []string{}, "Address(es) of sentry node(s) to connect to of the form [PubKey@]ip:port (where PubKey@ part represents base64 encoded node TLS public key)")
 
 	Flags.Uint64(cfgMaxTxPoolSize, 10_000, "Maximum size of the scheduling transaction pool")
-	Flags.Uint64(cfgScheduleTxCacheSize, 10_000, "Cache size of recently scheduled transactions to prevent re-scheduling")
+	Flags.Uint64(cfgScheduleTxCacheSize, 10_000, "Maximum cache size of recently scheduled transactions to prevent re-scheduling")
+	Flags.Uint64(cfgStaleTxCacheSize, 64, "Maximum cache size of recently cleared transactions")
 	Flags.Uint64(cfgCheckTxMaxBatchSize, 10_000, "Maximum check tx batch size")
 	Flags.Uint64(cfgRecheckInterval, 32, "Transaction recheck interval (in rounds)")
 

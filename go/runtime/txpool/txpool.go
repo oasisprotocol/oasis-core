@@ -29,6 +29,7 @@ type Config struct {
 	MaxPoolSize          uint64
 	MaxCheckTxBatchSize  uint64
 	MaxLastSeenCacheSize uint64
+	MaxStaleCacheSize    uint64
 
 	RepublishInterval time.Duration
 
@@ -154,6 +155,9 @@ type txPool struct {
 	// seenCache maps from transaction hashes to time.Time that specifies when the transaction was
 	// last published.
 	seenCache *lru.Cache
+	// staleCache maps from transaction hashes to *transaction.CheckedTransaction. It is populated
+	// when clearing the txpool and consulted only when fetching known batches.
+	staleCache *lru.Cache
 
 	checkTxCh       *channels.RingChannel
 	checkTxQueue    *checkTxQueue
@@ -256,6 +260,9 @@ func (t *txPool) RemoveTxBatch(txs []hash.Hash) {
 	defer t.schedulerLock.Unlock()
 
 	t.scheduler.RemoveTxBatch(txs)
+	for _, txHash := range txs {
+		_ = t.staleCache.Remove(txHash)
+	}
 
 	pendingScheduleSize.With(t.getMetricLabels()).Set(float64(t.scheduler.UnscheduledSize()))
 }
@@ -271,7 +278,20 @@ func (t *txPool) GetKnownBatch(batch []hash.Hash) ([]*transaction.CheckedTransac
 	t.schedulerLock.Lock()
 	defer t.schedulerLock.Unlock()
 
-	return t.scheduler.GetKnownBatch(batch)
+	// First consult the scheduler.
+	txs, missing := t.scheduler.GetKnownBatch(batch)
+
+	// Check the stale cache for any missing transactions.
+	for txHash, idx := range missing {
+		tx, exists := t.staleCache.Get(txHash)
+		if !exists {
+			continue
+		}
+
+		txs[idx] = tx.(*transaction.CheckedTransaction)
+		delete(missing, txHash)
+	}
+	return txs, missing
 }
 
 func (t *txPool) ProcessBlock(bi *BlockInfo) error {
@@ -387,6 +407,12 @@ func (t *txPool) Clear() {
 	defer t.schedulerLock.Unlock()
 
 	if t.scheduler != nil {
+		// Before clearing, move some transactions to the stale cache.
+		txs := t.scheduler.GetTransactions(int(t.cfg.MaxStaleCacheSize))
+		for _, tx := range txs {
+			_ = t.staleCache.Put(tx.Hash(), tx)
+		}
+
 		t.scheduler.Clear()
 	}
 	t.seenCache.Clear()
@@ -774,6 +800,11 @@ func New(
 		return nil, fmt.Errorf("error creating seen cache: %w", err)
 	}
 
+	staleCache, err := lru.New(lru.Capacity(cfg.MaxStaleCacheSize, false))
+	if err != nil {
+		return nil, fmt.Errorf("error creating stale cache: %w", err)
+	}
+
 	return &txPool{
 		logger:            logging.GetLogger("runtime/txpool"),
 		stopCh:            make(chan struct{}),
@@ -784,6 +815,7 @@ func New(
 		host:              host,
 		txPublisher:       txPublisher,
 		seenCache:         seenCache,
+		staleCache:        staleCache,
 		checkTxQueue:      newCheckTxQueue(cfg.MaxPoolSize, cfg.MaxCheckTxBatchSize),
 		checkTxCh:         channels.NewRingChannel(1),
 		checkTxNotifier:   pubsub.NewBroker(false),
